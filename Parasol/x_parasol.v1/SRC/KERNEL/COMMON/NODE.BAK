@@ -1,0 +1,356 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	error;
+include	kprintf;
+include	arena;
+include	alys;
+include	format;
+include	object;
+include	vmemory;
+include	hardware, list;
+include	process;
+include	timer;
+include	disk;
+include	karena;
+include	memory;
+
+HOST_SLOT:	const int = 22;
+
+myHost_:	public	() ref far Node =
+	{
+	return ref far Node(alysNode.objectId);
+	}
+
+initHost:	public	() =
+	{
+	BootContext.localObject[HOST_SLOT] =
+				publishKernel("Host", ":model.alys.node",
+				&alysNode, 
+				AR_ANY, AR_ANY, AR_ANY, AR_ANY);
+	BootContext.forkAction[HOST_SLOT] = FA_STATIC;
+	Loaders makeEmpty();
+	}
+
+alysNode:	public	inherit	Node {
+	public:
+
+	kernelVersion:		unsigned[16];
+	name:			[33] char;
+
+	root:			ref far directory;
+
+	userTime:		Tick;
+	sysTime:		Tick;
+	idleTime:		Tick;
+
+	diskRetries:		long;
+	cacheHits:		long;
+	cacheMisses:		long;
+
+time:			gate	() Time = 
+	{
+	return Now;
+	}
+
+setTime:		gate	(t: Time) = 
+	{
+	Now = t;
+	}
+
+close:	gate	() boolean =
+	{
+	return FALSE;
+	}
+
+lastClose:	gate	() boolean =
+	{
+	return FALSE;
+	}
+
+copy:	gate	() ref far External =
+	{
+	return objectId;
+	}
+
+	// Process management calls
+
+spawn:			gate	(cmd: [:] char, args: [:] char) 
+							ref far External =
+	{
+	l:	ref loader;
+	x:	ref far External;
+
+//	printf("spawn(%S, %S)\n", cmd, args);
+	for	(l = ref loader(Loaders.next); l != &Loaders; 
+					l = ref loader(l->next))
+		try	{
+			return l load(messageHeader->sender, 0, cmd, args);
+			}
+		except	{
+			}
+	reject(ERRNOTRUNFILE);
+	}
+
+spawnDebug:		gate	(cmd: [:] char, args: [:] char) 
+							debug_t =
+	{
+	l:	ref loader;
+	d:	debug_t;
+
+	for	(l = ref loader(Loaders.next); l != &Loaders; 
+					l = ref loader(l->next)){
+		if	(l debugLoad(messageHeader->sender, &d, 0, cmd, args))
+			return d;
+		}
+	reject(ERRNOTRUNFILE);
+	}
+
+nullDebug:		gate	() debug_t =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+getProcess:	gate	(pid: int) process_t = 
+	{
+	p:	process_t;
+
+	memSet(&p, 0, sizeof p);
+	if	(pid < 0 || pid > NPROCS)
+		p.status = PINVALID;
+	else if	(pid == 0)
+		CurProc describe(&p);
+	else if	(ProcessTable[pid - 1] == 0)
+		p.status = PFREE;
+	else
+		ProcessTable[pid - 1] describe(&p);
+	return p;
+	}
+
+getObject:	gate	(oid: ref far External) object_t = 
+	{
+	o:	object_t;
+	op:	ref object;
+
+//	kprintf("oid = %d\n", oid);
+	memSet(&o, 0, sizeof o);
+	op = objectEntry(oid);
+	if	(op)
+		op describe(&o);
+	return o;
+	}
+
+getObjectName:	gate	(oid: ref far External) [] char = 
+	{
+	op:	ref object;
+
+//	kprintf("oid = %d\n", oid);
+	op = objectEntry(oid);
+	if	(op)
+		return op->name;
+	else
+		return "";
+	}
+
+getObjectType:	gate	(oid: ref far External) [] char = 
+	{
+	op:	ref object;
+
+//	kprintf("oid = %d\n", oid);
+	op = objectEntry(oid);
+	if	(op)
+		return op->typeString;
+	else
+		return "";
+	}
+
+getSegment:	gate	(sid: int) segment_t =
+	{
+	s:	segment_t;
+
+	if	(describeSegment(sid, &s))
+		return s;
+	else
+		reject(0);
+	}
+
+setCacheSize:	gate	(newSize: unsigned[32]) int =
+	{
+	return resizeCache(newSize);
+	}
+
+describe:	gate	() NodeState =
+	{
+	n:	NodeState;
+
+	n.kernelVersion = kernelVersion;
+	n.name [:]= name;
+	n.root = root;
+	n.userTime = userTime;
+	n.sysTime = sysTime;
+	n.idleTime = idleTime;
+	n.diskRetries = diskRetries;
+	n.cacheHits = cacheHits;
+	n.cacheMisses = cacheMisses;
+	n.availableRAM = FreePages.pageCount * PAGE_SIZE;
+	n.dosMemory = CSbase;
+	n.kernelCode = CSsize;
+	n.kernelData = paddr_t(_brklvl);
+	n.diskCache = CacheSegment->length;
+	n.netBuffers = 0;
+//	n.netBuffers = NetBufferSize;
+	return n;
+	}
+
+killObject:	gate	(oid: ref far External) int =
+	{
+	o:	ref object;
+	n:	threadLock;
+
+	n lock();
+	o = objectEntry(oid);
+	if	(o == 0){
+		n unlock();
+		return ERRNOTFOUND;
+		}
+	o->useCount = 1;
+	oid close();
+	n unlock();
+	}
+
+setUserid:	gate	(u: userId, g: userId) =
+	{
+	o:	ref object;
+	n:	threadLock;
+
+	n lock();
+	o = objectEntry(messageHeader->sender);
+	if	(o == 0){
+		n unlock();
+		reject(ERRNOTFOUND);
+		}
+	if	(!o setUserid(u, g)){
+		n unlock();
+		reject(ERRPERMISSION);
+		}
+	n unlock();
+	}
+
+timer:	gate	(n: milliseconds_t) =
+	{
+	o:	ref object;
+
+	o = objectEntry(messageHeader->sender);
+	if	(o)
+		new alarmTimer[ millisecondsToTicks(n), o ];
+	else
+		reject(ERRNOTFOUND);
+	}
+
+kernelCoreDump:	gate	(f: [:] char) =
+	{
+	KernelArena kernelCoreDump(f);
+	}
+
+reparent:	gate	(child: ref far External, nparent: ref far External) =
+	{
+	x, par, och, onp:	ref object;
+	parent:			ref far External;
+	n:			threadLock;
+
+	parent = messageHeader->sender;
+	n lock();
+	par = objectEntry(parent);
+	if	(par == 0){
+		n unlock();
+		reject(ERRNOTFOUND);
+		return;
+		}
+	if	(child != 0){
+		och = objectEntry(child);
+		if	(och == 0){
+			n unlock();
+			reject(ERRNOTFOUND);
+			return;
+			}
+		}
+
+			// An object can reparent itself
+
+	else	{
+		child = parent;
+		och = par;
+		parent = och->parent;
+		par = objectEntry(och->parent);
+		if	(par == 0){
+			n unlock();
+			reject(ERRNOTFOUND);
+			return;
+			}
+		}
+	onp = objectEntry(nparent);
+	if	(onp == 0){
+		n unlock();
+		reject(ERRNOTFOUND);
+		return;
+		}
+	if	(parent != och->parent){
+		n unlock();
+		reject(ERRPERMISSION);
+		return;
+		}
+	if	(onp == och){
+		n unlock();
+		reject(ERRINVALIDDATA);
+		return;
+		}
+	if	(par == onp){
+		n unlock();
+		return;
+		}
+	for	(x = onp; x && x->parent; x = objectEntry(x->parent)){
+		if	(x->parent == child){
+			n unlock();
+			reject(ERRINVALIDDATA);
+			return;
+			}
+		}
+	och->parent = nparent;
+	n unlock();
+	}
+
+	};
+
+Loaders:	public	queue;
+LoaderTrap:	Trap;
+
+loader:	public	type	inherit	queue	{
+	public:
+/*
+	This function raises an exception if there is an error loading the
+	image.
+ */
+load:	dynamic	(par: ref far External, d: ref far directory, cmd: [:] char, 
+					args: [:] char) ref far External =
+	{
+	LoaderTrap raise();
+	}
+
+debugLoad:	dynamic	(par: ref far External, d: ref debug_t, 
+				d: ref far directory, cmd: [:] char, 
+				args: [:] char) boolean =
+	{
+	LoaderTrap raise();
+	}
+
+register:	() =
+	{
+	Loaders enqueue(self);
+	}
+
+	};
+

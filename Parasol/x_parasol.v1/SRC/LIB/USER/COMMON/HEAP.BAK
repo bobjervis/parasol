@@ -1,0 +1,290 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	_startup;
+
+BLOCKSIZE:	const	int = 2048;
+
+header:	type	{
+	public:
+
+	size:	Size;			/* Size of this free block */
+	next:	ref header;		/* Pointer to next header */
+
+nextHeader:	() ref header =
+	{
+	return ref header(long(self) + size);
+	}
+
+	};
+
+SharedHeap:	public	sharedHeap;
+
+sharedHeap:	type	inherit threadHeap {
+	slock:	Lock;
+
+	public:
+
+alloc:	dynamic	(size: Size) pointer =
+	{
+	p:	pointer;
+
+	critical(slock)
+		p = super alloc(size);
+	return p;
+	}
+
+_free:	dynamic	(p: pointer) =
+	{
+	critical(slock)
+		super _free(p);
+	}
+
+freeListSize:	dynamic	() Size =
+	{
+	s:	Size;
+
+	critical(slock)
+		s = super freeListSize();
+	return s;
+	}
+
+	};
+/*
+heapBlock:	type	{
+	public:
+
+	next:		* heapBlock;
+	freelist:	* header;
+	size:		unsigned;
+	data:		[] char;
+	};
+
+subHeap:	public	type	inherit	Heap	{
+	private:
+
+	blks:		* heapBlock;
+	parent:		* Heap;
+
+	public:
+
+constructor:	(p: * Heap) =
+	{
+	blks = 0;
+	if	(p)
+		parent = p;
+	else
+		parent = CurrentHeap;
+	}
+
+alloc:	dynamic	(size: Size) pointer =
+	{
+	p:	* header;
+	q:	* header;
+	cp:	* char;
+
+	size = (size + sizeof Size + sizeof header - 1) &
+				~(sizeof header - 1);
+
+	hb:	* heapBlock;
+
+	for	(hb = blks; hb; hb = hb->next){
+		for	(q = 0, p = hb->freelist; p; q = p, p = p->next){
+			if	(p->size >= size){
+				if	(p->size <= size + sizeof header){
+					if	(q)
+						q->next = p->next;
+					else
+						hb->freelist = p->next;
+					}
+				else	{
+					p->size -= size;
+					p = p nextHeader();
+					p->size = size;
+					}
+				return &p->next;
+				}
+			}
+		}
+
+	u:	unsigned;
+
+	if	(size >= BLOCKSIZE)
+		u = size + sizeof heapBlock;
+	else
+		u = BLOCKSIZE + sizeof heapBlock;
+	hb = parent alloc(u);
+	hb->next = blks;
+	hb->freelist = 0;
+	hb->size = u;
+	blks = hb;
+	p = ref header(&hb->data);
+	p->size = size;
+	if	(size < BLOCKSIZE){
+		q = p nextHeader();
+		q->size = BLOCKSIZE - size;
+		free(&q->next);
+		}
+	return &p->next;
+	}
+
+free:	dynamic	(block: pointer) =
+	{
+	p:	* header;
+	q:	* header;
+
+	p = ref header(long(block) - sizeof Size);
+
+	hb:	* heapBlock;
+
+	hb = blks;
+	while	(pointer(hb) >= p ||
+		 p >= pointer(&hb->data[hb->size])){
+		hb = hb->next;
+		if	(hb == 0){
+			MemTrap.cause = H_CORRUPT;
+			MemTrap raise();
+			}
+		}
+	q = hb->freelist;
+	if	(p < q){
+		if	(p nextHeader() == q){
+			p->next = q->next;
+			p->size += q->size;
+			}
+		else
+			p->next = q;
+		hb->freelist = p;
+		return;
+		}
+
+	for	(; p >= q->next; q = q->next)
+		if	(q->next == 0)
+			break;
+
+	if	(p nextHeader() == q->next){
+		p->size += q->next->size;
+		p->next = q->next->next;
+		}
+	else
+		p->next = q->next;
+	if	(q nextHeader() == p){
+		q->size += p->size;
+		q->next = p->next;
+		p = q;
+		}
+	else
+		q->next = p;
+	}
+
+freeAll:	dynamic	() =
+	{
+	hb:	* heapBlock;
+	hbn:	* heapBlock;
+
+	for	(hb = blks; hb; hb = hbn){
+		hbn = hb->next;
+		parent free(hb);
+		}
+	new(parent);
+	}
+
+freeListSize:	dynamic	() long =
+	{
+	j:	int;
+	p:	* header;
+	q:	* header;
+	hb:	* heapBlock;
+
+	j = 0;
+	for	(hb = blks; hb; hb = hb->next)
+		for	(p = hb->freelist; p; p = p->next)
+			j += p->size;
+	return j;
+	}
+
+	};
+ */
+incrementalBlock:	type	{
+	public:
+
+	next:		ref incrementalBlock;
+	used:		unsigned;
+	data:		[] char;
+	};
+
+incrementalHeap:	public	type	inherit	Heap	{
+	private:
+
+	blks:		ref incrementalBlock;
+	parent:		ref Heap;
+
+	public:
+
+constructor:	(p: ref Heap) =
+	{
+	blks = 0;
+	if	(p)
+		parent = p;
+	else
+		parent = currentHeap();
+	}
+
+alloc:	dynamic	(size: Size) pointer =
+	{
+	p:	ref header;
+	q:	ref header;
+	cp:	ref char;
+
+	size = (size + 3) & ~3;			// make full word in size
+	hb:	ref incrementalBlock;
+
+	for	(hb = blks; hb; hb = hb->next)
+		if	(hb->used + size <= BLOCKSIZE){
+			cp = &hb->data[hb->used];
+			hb->used += size;
+			return cp;
+			}
+
+	u:	unsigned;
+
+	if	(size >= BLOCKSIZE)
+		u = size + sizeof incrementalBlock;
+	else
+		u = BLOCKSIZE + sizeof incrementalBlock;
+	hb = parent alloc(u);
+	hb->next = blks;
+	hb->used = size;
+	blks = hb;
+	return &hb->data;
+	}
+
+freeAll:	dynamic	() =
+	{
+	hb:	ref incrementalBlock;
+	hbn:	ref incrementalBlock;
+
+	for	(hb = blks; hb; hb = hbn){
+		hbn = hb->next;
+		parent delete hb;
+		}
+	constructor(parent);
+	}
+
+freeListSize:	dynamic	() Size =
+	{
+	j:	Size;
+	hb:	ref incrementalBlock;
+
+	j = 0;
+	for	(hb = blks; hb; hb = hb->next)
+		if	(hb->used < BLOCKSIZE)
+			j += BLOCKSIZE - hb->used;
+	return j;
+	}
+
+	};

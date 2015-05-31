@@ -1,0 +1,173 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	string;
+include	file, format;
+include	alys, hardware;
+include	symtab;
+include	monitor;
+include	stack;
+
+trace:	public	(fb: ref frameBuffer, db: ref debugArena) =
+	{
+	nsp:		paddr_t;
+	nbp:		paddr_t;
+	thread:		paddr_t;
+	t:		task_t;
+	tctx:		ref _ThreadContext;
+	r:		[:] byte;
+	sBase, sTop:	paddr_t;
+
+	t = *db fetchTask();
+	thread = db fetchPointer(RunHeader->threadLoc);
+	if	(thread == ~0){
+		specialFrame(fb, "Thread location corrupted");
+		return;
+		}
+	r = db fetchData(thread, sizeof _ThreadContext);
+	if	(|r < sizeof _ThreadContext){
+		specialFrame(fb, "Thread descriptor not addressable");
+		return;
+		}
+	tctx = ref _ThreadContext(r);
+//	printf("exception frame %08x object %08x\nstack [%08x-%08x] heap %08x\n",
+//			tctx->exceptionFrame, tctx->myThread,
+//			tctx->myStack, tctx->endStack, tctx->currentHeap);
+	if	(tctx->myStack){
+		sBase = unsigned(tctx->myStack);
+		sTop = unsigned(tctx->endStack);
+		}
+	else	{
+		sBase = RunHeader->dataInitLen;
+		sTop = RunHeader->sp;
+		}
+	s:	ref symbol;
+
+	s = stackFrame(db, fb, &t, FALSE);
+/*
+	if	(CoreLen < RunHeader->dataTotalLen){
+		printf("Data segment too small\n");
+		exit(1);
+		}
+ */
+	while	(s != Start){
+		if	(s &&
+			 s hasFullStackFrame()){
+			if	(t.ebp == 0)
+				break;
+			}
+		if	(t.esp < sBase){
+			specialFrame(fb, "Stack overflow");
+			}
+		if	(t.esp > sTop){
+			specialFrame(fb, "Stack underflow");
+			break;
+			}
+		if	(s == 0){
+			specialFrame(fb, "Unknown function");
+			break;
+			}
+		b:	boolean;
+
+		b = s hasFullStackFrame();
+		if	(b){
+			if	(t.ebp < t.esp ||
+				 t.ebp > sTop - 4){
+				specialFrame(fb, 
+					"Frame pointer is not valid");
+				break;
+				}
+			nbp = db fetchPointer(t.ebp);
+			}
+		else if	(s isInterruptFunction()){
+			nbp = db fetchPointer(t.ebp + 16);
+			b = TRUE;
+			}
+		else
+			nbp = t.ebp;
+		if	(nbp &&
+			 nbp < t.ebp){
+			specialFrame(fb, "Frames are not ascending");
+			break;
+			}
+		t.state = TS_RUN;
+		if	(s == MachineTrapRaise){
+			t.eip = db fetchPointer(t.ecx - 8);
+			t.esp = t.ecx - 4;
+			MachineTrapRaise restoreRegisters(db, &t, t.ecx - 8);
+			}
+		else	{
+			if	(s isInterruptFunction()){
+				nsp = t.ebp + 40;
+				t.state = TS_INTERRUPT;
+				}
+			else
+				nsp = s locateReturnAddress(t.ebp, t.esp);
+			if	(nsp > sTop - 4){
+				specialFrame(fb, "Could not find return address");
+				break;
+				}
+			t.ebp = nbp;
+			s restoreRegisters(db, &t, nsp);
+			t.eip = db fetchPointer(nsp);
+			t.cs = db fetchPointer(nsp + 4);
+			t.eflags = db fetchPointer(nsp + 8);
+			t.esp = nsp + 12;
+			}
+		s = stackFrame(db, fb, &t, !b);
+		}
+	}
+
+stackFrame:	(db: ref debugArena, fb: ref frameBuffer, t: ref task_t, 
+						guessed: boolean) ref symbol =
+	{
+	f:	ref frame;
+	s:	ref symbol;
+	buf:	[100] char;
+	sf:	stringEmitter = [ buf ];
+
+	s = Symbols findSymbol(t->eip, TRUE);
+	if	(guessed)
+		sf printf("? ");
+	f = new frame[ 0, 0, t->eip, *t ];
+	if	(s){
+		if	(s == MachineTrapRaise){
+			sym:	ref symbol;
+
+			sf printf("*** trap ");
+			sym = Symbols findSymbol(t->esi, FALSE);
+			if	(sym)
+				sym format(&sf, t->esi);
+			else
+				sf printf("%08x", t->esi);
+			sf printf(" raised ***");
+			}
+		else if	(s isInterruptFunction()){
+			sf printf("*** interrupt ");
+			s format(&sf, t->eip);
+			sf printf(" ***");
+			}
+		else	{
+			sf printf("    ");
+			s format(&sf, t->eip);
+			}
+		}
+	else
+		sf printf("%08x", t->eip);
+	f->function = stringDup(sf result());
+	fb previousFrame(f);
+	return s;
+	}
+
+specialFrame:	(fb: ref frameBuffer, lab: [:] char) =
+	{
+	f:	ref frame;
+
+	f = new frame[ ];
+	f->function = lab;
+	fb previousFrame(f);
+	}

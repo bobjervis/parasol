@@ -1,0 +1,166 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	hardware;
+include	alys;
+include	limits;
+
+debugger:	public	type	inherit	External {
+	public:
+
+	// Kernel events to report to the debugger
+
+step:		gate	(ref far objectProbe, state: task_t);
+startDebugging:	gate	(ref far objectProbe, state: task_t);
+dead:		gate	(ref far objectProbe, exitCOde: int, state: task_t);
+breakpoint:	gate	(ref far objectProbe, state: task_t);
+
+	};
+
+debugMonitor:	public	type	inherit	External {
+	public:
+
+attachArena:	gate	(x: ref far External, dbg: ref far debugger) 
+				ref far arenaProbe;
+
+attachObject:	gate	(x: ref far External, dbg: ref far debugger)
+				ref far objectProbe;
+	};
+
+arenaProbe:	public	type	inherit External {
+	public:
+
+describe:	gate	() arena_t;
+suspend:	gate	();
+resume:		gate	();
+writeCode:	gate	(addr: vaddr_t, code: [:] byte);
+writeData:	gate	(addr: vaddr_t, data: [:] byte);
+readCode:	gate	(addr: vaddr_t) [] byte;
+readData:	gate	(addr: vaddr_t) [] byte;
+	};
+
+objectProbe:	public	type	inherit	External {
+	public:
+
+describe:	gate	() object_t;
+suspend:	gate	();
+resume:		gate	();
+machineState:	gate	() task_t;
+
+	};
+
+arena_t:	public	type	{
+	public:
+
+	semaphoreCount:		int;
+	threadAddress:		vaddr_t;
+	codeLength:		vaddr_t;
+	codeOffset:		vaddr_t;
+	dataLength:		vaddr_t;
+	dataOffset:		vaddr_t;
+	staticLength:		vaddr_t;
+	threadCount:		int;
+	};
+
+heapWalker:	public	type	inherit	External {
+	public:
+
+beginSweep:	gate	();
+next:		gate	() vaddr_t;
+size:		gate	() vaddr_t;		// size of current block
+peekPointer:	gate	(vaddr_t) vaddr_t;	// peek at memory
+
+	};
+
+messageLogger:	public	type	inherit	External {
+	public:
+
+enable:		gate	();			// start logging
+
+disable:	gate	();			// end logging
+
+//
+//	The caller should assume there might be more data to be flushed 
+//	unless the return length is zero.
+//
+collect:	gate	() [] byte; // collect log info
+//
+//	If the size is zero, the logging segment is removed and logging is
+//	not allowed.  If the size 
+logBuffer:	gate	(size: Size);
+
+	};
+
+mlogType_t:	public	type	byte = {
+	ML_ERROR,			// Erroneous data
+	ML_SEND,			// send
+	ML_REJECT,			// rejection
+	ML_REPLY,			// reply
+	ML_OVERFLOW,			// marker when the intenral buffers
+					// overflow
+	ML_MARK,			// spacer when no data is available
+	ML_THREAD,			// new thread event
+
+	ML_NEWOBJECT,
+	ML_NEWJOB,
+	ML_DISOWN,
+
+	ML_TYPE = 0x0f,
+	ML_WAIT = 0x40,
+	ML_SIGNAL = 0x80
+	};
+
+SEQ_INCREMENT:	public	const int = BYTE_MAX + 1;
+
+mlogRecord_t:	public	type	union { public:
+	sendRecord:	packed { public:
+		seq:		unsigned[32];
+		sender:		ref far External;
+		target:		ref far External;
+		realTarget:	ref far External;
+		func:		int;
+		expectedReply:	unsigned[32];
+		length:		unsigned[32];
+		};
+	replyRecord:	packed { public:
+		seq:		unsigned[32];
+		length:		unsigned[32];
+		};
+	rejectRecord:	packed { public:
+		seq:		unsigned[32];
+		code:		unsigned[32];
+		};
+	threadRecord:	packed { public:
+		spacer:		unsigned[32];
+		parent:		ref far External;
+		child:		ref far External;
+		};
+	objectRecord:	packed { public:
+		spacer:		unsigned[32];
+		id:		ref far External;
+		parent:		ref far External;
+		nameLength:	int;
+		typeLength:	int;
+		};
+	newJobRecord:	packed { public:
+		spacer:		unsigned[32];
+		id:		ref far External;
+		oldJob:		ref far Job;
+		newJob:		ref far Job;
+		};
+	disownRecord:	packed { public:
+		spacer:		unsigned[32];
+		parent:		ref far External;
+		child:		ref far External;
+		caller:		ref far External;
+		x:		ref far External;
+		result:		int;
+		};
+	specialRecord:	packed { public:
+		rtype:		unsigned[32];
+		};
+	};

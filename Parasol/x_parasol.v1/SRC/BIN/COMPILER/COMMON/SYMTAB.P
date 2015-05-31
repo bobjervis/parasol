@@ -1,0 +1,2246 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	error, file, filesys, format, heap, string;
+
+include	errmsg;
+include	hash;
+include	parser;
+include	ptree, backend;
+include	sbuffer;
+include	scanner;
+include	tparams, target;
+include	value;
+include	image;
+include	types, functype;
+include	build;
+
+CurrentContext:	public	ref messageContext;
+ChattyOutput:	public	boolean = TRUE;
+
+compilePhases:	public	type	byte = {
+	PH_CARVE,
+	PH_INTERFACE,
+	PH_NO_MESSAGES = 255
+	};
+
+uRecType:	public	type	char = {
+/*
+	U_HEADER = 0xa3,
+ */
+	U_PROJECT,
+	U_LIBUNIT,
+	U_SRCUNIT,
+	U_INCLUDE,
+	U_SYMBOL,
+/*
+	U_MESSAGE,
+ */
+	U_PARAMETER,
+	U_VALUE,
+	U_XVALUE,
+	U_VFIXUP,
+	U_RFIXUP,
+	U_DFIXUP,
+	U_LFIXUP,
+	U_LITERAL,
+/*
+	U_LINE,
+	U_MSGLIST,
+ */
+	U_ERROR_TYPE,
+	U_VOID_TYPE,
+	U_TYPE_TYPE,
+	U_NUMBER_TYPE,
+	U_NAMED_TYPE,
+	U_STRUCT_TYPE,
+	U_PTR_TYPE,
+	U_ARRAY_TYPE,
+	U_FUNCTION_TYPE,
+	U_DESCRIPTOR_TYPE,
+	U_SYMFILE,
+	U_SYMUNIT,
+	U_SVALUE,
+	U_SINCLUDE,
+	U_ALIAS_SYMBOL,
+	};
+
+DebugList:	public	boolean;
+
+start:	entry	() =
+	{
+	defineLoadFuncs(U_LIBUNIT, loadFunction(&libraryUnit_s.load),
+					sizeof libraryUnit_s);
+	defineLoadFuncs(U_INCLUDE, loadFunction(&include_s.load),
+					sizeof include_s);
+	defineLoadFuncs(U_SINCLUDE, loadFunction(&include_s.loadSym),
+					sizeof include_s);
+	defineLoadFuncs(U_SYMBOL, loadFunction(&symbol_s.load),
+					sizeof symbol_s);
+	defineLoadFuncs(U_ALIAS_SYMBOL, loadFunction(&symbol_s.aliasLoad),
+					sizeof symbol_s);
+	defineLoadFuncs(U_VOID_TYPE, loadFunction(&void_z.load),
+					sizeof void_z);
+	defineLoadFuncs(U_NUMBER_TYPE, loadFunction(&number_z.load),
+					sizeof number_z);
+	defineLoadFuncs(U_ERROR_TYPE, loadFunction(&error_z.load),
+					sizeof error_z);
+	defineLoadFuncs(U_NAMED_TYPE, loadFunction(&named_z.load),
+					sizeof named_z);
+	defineLoadFuncs(U_STRUCT_TYPE, loadFunction(&struct_z.load),
+					sizeof struct_z);
+	defineLoadFuncs(U_PTR_TYPE, loadFunction(&ptr_z.load),
+					sizeof ptr_z);
+	defineLoadFuncs(U_ARRAY_TYPE, loadFunction(&array_z.load),
+					sizeof array_z);
+	defineLoadFuncs(U_DESCRIPTOR_TYPE, loadFunction(&descriptor_z.load),
+					sizeof descriptor_z);
+	defineLoadFuncs(U_SYMUNIT, loadFunction(&symbolUnit_s.load),
+					sizeof symbolUnit_s);
+	NameEmitter = new stringEmitter[ Name ];
+	}
+
+SymbolTable:	public	symbolTable_s;
+
+saveStyles_t:	public	type	byte = {
+	SS_PROJECT,
+	SS_LIBRARY,
+	SS_SYMBOL
+	};
+
+symbolTable_s:	public	type	{
+	public:
+
+	units:		ref unit_s;
+	globalChange:	boolean;
+	saveStyle:	saveStyles_t;
+	saveUnit:	ref unit_s;
+	linkOrder:	ref linkOrder_t;
+
+	machineUnit:	ref unit_s;
+	varArgsType:	ref type_s;
+	trapPtrType:	ref type_s;
+	allocSymbol:	ref symbol_s;
+	freeSymbol:	ref symbol_s;
+	heapType:	ref type_s;
+	exceptContextType:ref type_s;
+	exceptFrameType:ref type_s;
+	lockType:	ref type_s;
+	exit_tType:	ref type_s;
+	threadValue:	ref value;
+	symbolValue:	ref value;
+	exceptionFrame:	ref symbol_s;
+	selfSymbol:	ref symbol_s;
+	startupSymbol:	ref symbol_s;
+
+addUnit:	(n: ref unit_s) =
+	{
+	u:	ref unit_s;
+	last:	ref unit_s;
+
+	last = 0;
+	for	(u = units; u; last = u, u = u->next){
+		if	(n->name compare(u->name) < 0)
+			break;
+		}
+	n->next = u;
+	if	(last)
+		last->next = n;
+	else
+		units = n;
+	}
+
+locateUnit:	(n: ref identifier) ref unit_s =
+	{
+	u:	ref unit_s;
+
+	for	(u = units; u; u = u->next)
+		if	(n == u->name)
+			return u;
+	return 0;
+	}
+
+saveSymbols:	(ifile: ref imageFile) =
+	{
+	;
+	u:	ref unit_s;
+
+	ifile address(units);
+	for	(u = units; u; u = u->next)
+		u saveSymbols(ifile);
+	}
+
+	};
+
+linkOrder_t:	public	type	{
+	public:
+
+	next:		ref linkOrder_t;
+	unit:		ref unit_s;
+	level:		int;
+
+dispose:	() =
+	{
+	while	(self){
+		s:	ref linkOrder_t;
+
+		s = next;
+		delete self;
+		self = s;
+		}
+	}
+
+	};
+
+unitClass_t:	public	type	byte = {
+	UC_SOURCE,
+	UC_LIBRARY,
+	UC_SYMBOL
+	};
+
+unit_s:	public	type	inherit	scope_s {
+	public:
+	next:		ref unit_s;
+	name:		ref identifier;
+	includes:	ref include_s;
+	changed:	boolean;
+	codeSize:	addr_t;
+	dataSize:	addr_t;
+	bssSize:	addr_t;
+	index:		unsigned;
+	built:		boolean;
+
+constructor:	(nm: ref identifier) =
+	{
+	super constructor(0, 0);
+	next = 0;
+	name = nm;
+	includes = 0;
+	changed = FALSE;
+	codeSize = 0;
+	dataSize = 0;
+	bssSize = 0;
+	index = 0;
+	built = FALSE;
+	}
+
+unitClass:	dynamic	() unitClass_t =
+	{
+	}
+
+saveLibrary:	dynamic	([:] char) =
+	{
+	}
+
+saveProject:	dynamic	(ref imageFile) =
+	{
+	}
+
+saveSymbols:	dynamic	(ifile: ref imageFile) =
+	{
+	SymbolTable.saveUnit = self;
+	if	(!ifile beginRecord(U_SYMUNIT, self, sizeof symbolUnit_s))
+		return;
+	ifile address(next);
+	ifile address(symbols);
+	ifile putstring(name spelling());
+	ifile address(includes);
+	ifile integer(changed);
+	ifile uinteger(codeSize);
+	ifile uinteger(dataSize);
+	ifile uinteger(bssSize);
+	if	(symbols)
+		symbols save(ifile);
+	if	(includes)
+		includes save(ifile);
+	}
+
+locateMagicSymbols:	() =
+	{
+
+		// Only the machine unit does this code
+
+	s:	ref symbol_s;
+	vat:	ref identifier;
+	efi:	ref identifier;
+	eci:	ref identifier;
+	efoi:	ref identifier;
+	ti:	ref identifier;
+	ai:	ref identifier;
+	fi:	ref identifier;
+	tci:	ref identifier;
+	tpi:	ref identifier;
+	efmi:	ref identifier;
+	lti:	ref identifier;
+	rst:	ref identifier;
+	hp:	ref identifier;
+	xt:	ref identifier;
+
+		// These are all the 'magic' symbols that the compiler expects
+		// to find in the machine unit.
+
+	tpi =   hash("_Thread");
+	lti =   hash("Lock");
+	hp =	hash("Heap");
+	vat = 	hash("ArgumentList");
+	efi = 	hash("_ExceptionFrame");
+	eci = 	hash("ExceptionContext");
+	efmi =	hash("exceptionFrame");
+	tci =   hash("_ThreadContext");
+	rst =	hash("__symbols");		// Runtime Symbol Table
+	ti = 	hash("Trap");
+	ai = 	hash("alloc");
+	fi = 	hash("_free");
+	xt =	hash("ExitCode");
+	for	(s = symbols; s; s = s->next)
+		if	(s->name == vat)
+			SymbolTable.varArgsType = s->dtype;
+		else if	(s->name == efi)
+			SymbolTable.exceptFrameType = s->dtype;
+		else if	(s->name == lti)
+			SymbolTable.lockType = s->dtype;
+		else if	(s->name == eci)
+			SymbolTable.exceptContextType = s->dtype;
+		else if	(s->name == tpi)
+			SymbolTable.threadValue = s->currentValue;
+		else if	(s->name == rst)
+			SymbolTable.symbolValue = s->currentValue;
+		else if	(s->name == tci)
+			SymbolTable.exceptionFrame = 
+					s->dtype lookupLocal(efmi, s->dtype);
+		else if	(s->name == ti)
+			SymbolTable.trapPtrType = ptr_z 
+						create(FALSE, s->dtype, 0);
+		else if	(s->name == ai)
+			SymbolTable.allocSymbol = s;
+		else if	(s->name == fi)
+			SymbolTable.freeSymbol = s;
+		else if	(s->name == hp)
+			SymbolTable.heapType = s->dtype;
+		else if	(s->name == xt)
+			SymbolTable.exit_tType = s->dtype;
+	}
+
+lookup:	dynamic	(n: ref identifier, context: ref scope_s) ref symbol_s =
+	{
+	s:	ref symbol_s;
+	i:	ref include_s;
+
+	s = super lookup(n, context);
+	if	(s)
+		return s;
+	for	(i = includes; i; i = i->next){
+		if	(i->unit == 0)
+			continue;
+		s = i->unit lookupExported(n, context);
+		if	(s)
+			return s;
+		}
+	return 0;
+	}
+
+lookupExported:	dynamic	(n: ref identifier, context: ref scope_s) ref symbol_s =
+	{
+	return super lookup(n, context);
+	}
+
+clearChanges:	() =
+	{
+	changed = FALSE;
+	}
+
+objectName:	dynamic	() [:] char =
+	{
+	return name spelling();
+	}
+
+fileName:	dynamic	() [:] char =
+	{
+	return "";
+	}
+
+scopeName:	dynamic	() =
+	{
+	NameEmitter printf("%S::", name spelling());
+	}
+
+csourceName:	dynamic	(fd: ref stream) =
+	{
+	fd printf("%S_", name spelling());
+	}
+
+hasChanged:	dynamic	() boolean =
+	{
+	return FALSE;
+	}
+
+parse:	dynamic	() =
+	{
+	}
+
+sourceEverExisted:	dynamic	() boolean =
+	{
+	return FALSE;
+	}
+
+getUnit:	dynamic	() ref unit_s =
+	{
+	return self;
+	}
+
+	};
+
+symbolUnit_s:	public	type	inherit unit_s {
+	connected:		boolean;
+
+	public:
+
+unitClass:	dynamic	() unitClass_t =
+	{
+	return UC_SYMBOL;
+	}
+
+load:	factory	(lu: pointer, image: ref loader) =
+	{
+	self = lu;
+	self = [ 0, 0 ];
+	next = image address();
+	symbols = image address();
+	name = hash(image string());
+	includes = image address();
+	changed = image integer();
+	codeSize = image uinteger();
+	dataSize = image uinteger();
+	bssSize = image uinteger();
+	connected = FALSE;
+	}
+
+sourceEverExisted:	dynamic	() boolean =
+	{
+	return TRUE;
+	}
+
+reconnectInterfaces:	dynamic	() =
+	{
+	s:	ref symbol_s;
+
+	if	(!connected){
+		connected = TRUE;
+		for	(s = symbols; s; s = s->next)
+			s reconnectInterface();
+		}
+	}
+
+	};
+
+/*
+	A source unit object is the main symbol table entry for a unit.
+	Amongst other things, this object contains a description of the
+	current state of the source file for the unit.  At the minimum,
+	the sourceFile member contains the name of the source file for the
+	unit.  By default, it is the unit name with a .p extension.  The
+	source file name is stored explicitly to allow future expansion
+	where the source file name can be any arbitrary path.
+
+	If the source file has ever been parsed, then the lastBuiltAge 
+	member contains the file time stamp for the source file used in
+	the build.  If the source member points at a source buffer, then
+	that buffer is the source actually used.
+
+	When the project is written, baseline source file backups need to
+	be written for each source file parsed since the last save.  The
+	project need not be written first.  If the backup source file does
+	not exist, or else doesn't match the project's version of the time
+	stamp, then the entire unit must be built from scratch.
+
+	A separate everBuilt flag must be used to insure that the initial
+	creation of the unit doesn't accidentally pick up some old backup
+	file.  This might arise if you want to force a rebuild from
+	scratch for the whole project.  It might also happen if the project
+	directory hasn't been scrubbed clean since a previous project was
+	built there.
+ */
+sourceUnit_s:	public	type	inherit	unit_s	{
+	public:
+
+	sourceFile:		[:] char;
+	source:			ref sourceParser;
+	lastBuiltAge:		long;
+	everBuilt:		boolean;
+
+constructor:	(nm: ref identifier, srcFile: [:] char) =
+	{
+	super constructor(nm);
+	sourceFile = stringDup(srcFile);
+	lastBuiltAge = 0;
+	everBuilt = FALSE;
+	source = 0;
+	changed = TRUE;
+	SymbolTable addUnit(self);
+	}
+
+unitClass:	dynamic	() unitClass_t =
+	{
+	return UC_SOURCE;
+	}
+
+fileName:	dynamic	() [:] char =
+	{
+	return sourceFile;
+	}
+
+saveLibrary:	dynamic	(path: [:] char) =
+	{
+	ifile:		imageFile;
+	fpath:		[MAXPATH] char;
+	f:		[:] char;
+	i:		int;
+
+	f = makePath(fpath, path, name spelling(), ".u");	
+						// Make up a unit file name
+	i = ifile create(f, 0);
+	if	(i){
+		printf("Could not create unit file");
+		return;
+		}
+	SymbolTable.saveStyle = SS_LIBRARY;
+	SymbolTable.saveUnit = self;
+	save(&ifile, U_LIBUNIT, sizeof libraryUnit_s);
+	ifile close();
+	}
+
+saveProject:	dynamic	(ifile: ref imageFile) =
+	{
+	save(ifile, U_SRCUNIT, sizeof *self);
+	}
+
+save:	(ifile: ref imageFile, x: uRecType, sz: Size) =
+	{
+	if	(!ifile beginRecord(x, self, sz))
+		return;
+	ifile address(next);
+	ifile address(symbols);
+	ifile putstring(name spelling());
+	ifile address(includes);
+	ifile integer(changed);
+	ifile uinteger(codeSize);
+	ifile uinteger(dataSize);
+	ifile uinteger(bssSize);
+	ifile putstring(sourceFile);
+	ifile integer(lastBuiltAge);
+	ifile integer(everBuilt);
+	if	(symbols)
+		symbols save(ifile);
+	if	(includes)
+		includes save(ifile);
+	}
+
+lineno:		dynamic	(f: fileOffset) int =
+	{
+	if	(f == NO_LINE)
+		return 0;
+	else if	(source)
+		return source tellLine(f);
+	else
+		return 0;
+	}
+
+sourceFilename:	dynamic	() [:] char =
+	{
+	return sourceFile;
+	}
+/*
+	A source unit that has no source file for it will produce error 
+	messages at the places where it is included.  Of course, after it
+	has been built once, if it disappears the include statements won't
+	necessarily be revisited, so a message should be generated here.
+ */
+hasChanged:	dynamic	() boolean =
+	{
+	i:	int;
+
+	i = FileSystem access(sourceFile, AR_READ);
+	if	(i){
+		if	(everBuilt)
+			CurrentContext errorX("ErrUnitNotFound", 
+						name spelling(), "", 0);
+		return FALSE;		// couldn't find the file, don't
+					// read it.
+		}
+	if	(everBuilt)
+		return FALSE;
+	else
+		return TRUE;
+	}
+
+sourceEverExisted:	dynamic	() boolean =
+	{
+	if	(everBuilt)
+		return TRUE;
+	if	(FileSystem access(sourceFile, AR_READ))
+		return FALSE;
+	else
+		return TRUE;
+	}
+
+addInclude:	dynamic	(ref identifier, fileOffset) =
+	{
+	}
+
+addDeclaration:	(n: ref identifier, off: fileOffset,
+				hasError: boolean, d: ref declaration_p) =
+	{
+	sym:	ref symbol_s;
+	nsym:	ref symbol_s;
+
+	sym = symbol_s create(self, n, off, hasError, d);
+	if	(symbols == 0)
+		symbols = sym;
+	else	{
+		for	(nsym = symbols; nsym->next; nsym = nsym->next)
+			;
+		nsym->next = sym;
+		}
+	}
+
+constructValues:	dynamic	() =
+	{
+	s:	ref symbol_s;
+
+	if	(ChattyOutput)
+		printf("%-32S cg\r", name spelling());
+	Func startValue(self);
+	for	(s = symbols; s; s = s->next)
+		s constructValue(TRUE);
+	Func endValue();
+	}
+
+getSourceBuffer:	dynamic	() ref sourceParser =
+ 	{
+	return source;
+	}
+
+	};
+
+libraryUnit_s:	public	type	inherit	unit_s	{
+	public:
+
+	sourceFile:		[:] char;
+	unitFile:		[:] char;
+	lastBuiltAge:		long;
+	everBuilt:		boolean;
+	connected:		boolean;
+
+unitClass:	dynamic	() unitClass_t =
+	{
+	return UC_LIBRARY;
+	}
+
+load:	factory	(lu: pointer, image: ref loader) =
+	{
+	self = lu;
+	self = [ 0 ];
+	next = image address();
+	symbols = image address();
+	name = hash(image string());
+	includes = image address();
+	changed = image integer();
+	codeSize = image uinteger();
+	dataSize = image uinteger();
+	bssSize = image uinteger();
+	sourceFile = heapFile(image string(), "");
+	lastBuiltAge = image integer();
+	everBuilt = image integer();
+	connected = FALSE;
+	}
+
+fileName:	dynamic	() [:] char =
+	{
+	return unitFile;
+	}
+
+saveProject:	dynamic	(ifile: ref imageFile) =
+	{
+	if	(!ifile beginRecord(U_LIBUNIT, self, sizeof *self))
+		return;
+	ifile address(next);
+	ifile address(symbols);
+	ifile putstring(name spelling());
+	ifile address(includes);
+	ifile integer(changed);
+	ifile uinteger(codeSize);
+	ifile uinteger(dataSize);
+	ifile uinteger(bssSize);
+	ifile putstring(sourceFile);
+	ifile integer(lastBuiltAge);
+	ifile integer(everBuilt);
+	if	(symbols)
+		symbols save(ifile);
+	if	(includes)
+		includes save(ifile);
+	}
+
+sourceEverExisted:	dynamic	() boolean =
+	{
+	return TRUE;
+	}
+
+reconnectInterfaces:	dynamic	() =
+	{
+	s:	ref symbol_s;
+
+	if	(!connected){
+		connected = TRUE;
+		for	(s = symbols; s; s = s->next)
+			s reconnectInterface();
+		}
+	}
+
+	};
+
+Deferred:	ref deferredInterfaces;
+DeferredHeap:	ref incrementalHeap;
+DeferFlag:	boolean;
+
+deferredInterfaces:	type	{
+	dtype:		ref type_s;
+	enclosing:	ref scope_s;
+	msg:		ref messageGenerator;
+	varAllowed:	boolean;
+
+	public:
+
+	next:		ref deferredInterfaces;
+
+create:	factory	(d: ref type_s, b: boolean, e: ref scope_s) =
+	{
+	self = DeferredHeap alloc(sizeof deferredInterfaces);
+	next = Deferred;
+	Deferred = self;
+	dtype = d;
+	enclosing = e;
+	msg = CurrentContext->obj;
+	varAllowed = b;
+	}
+
+constructInterface:	() =
+	{
+	objsave:	ref messageGenerator;
+
+	objsave = CurrentContext->obj;
+	CurrentContext->obj = msg;
+	dtype constructInterface(enclosing, varAllowed);
+	CurrentContext->obj = objsave;
+	}
+
+	};
+
+scope_s:	public	type	inherit	messageGenerator {
+	public:
+
+	enclosing:		ref scope_s;
+	symbols:		ref symbol_s;
+	thisHeap:		ref Heap;
+	reservedInScope:	RegisterMask;
+
+constructor:	(e: ref scope_s, s: ref symbol_s) =
+	{
+	enclosing = e;
+	symbols = s;
+	thisHeap = currentHeap();
+	reservedInScope = 0;
+	}
+
+lookup:	dynamic	(n: ref identifier, context: ref scope_s) ref symbol_s =
+	{
+	s:	ref symbol_s;
+
+	for	(s = symbols; s; s = s->next)
+		if	(s->name == n){
+			if	(s->visibility != V_PRIVATE)
+				return s;
+			if	(encloses(context))
+				return s;
+			else
+				return 0;
+			}
+	if	(enclosing)
+		return enclosing lookup(n, context);
+	else
+		return 0;
+	}
+
+encloses:	(sc: ref scope_s) boolean =
+	{
+	while	(sc){
+		if	(self == sc)
+			return TRUE;
+		sc = sc->enclosing;
+		}
+	return FALSE;
+	}
+
+lookupLocal:	(n: ref identifier, context: ref scope_s) ref symbol_s =
+	{
+	s:	ref symbol_s;
+
+	for	(s = symbols; s; s = s->next)
+		if	(s->name == n){
+			if	(s->visibility != V_PRIVATE)
+				return s;
+			if	(encloses(context))
+				return s;
+			else
+				return 0;
+			return s;
+			}
+	return 0;
+	}
+/*
+	This function appends its name to the Name buffer for display
+	purposes.
+ */
+scopeName:	dynamic	() =
+	{
+	}
+
+csourceName:	dynamic	(ref stream) =
+	{
+	}
+
+cDynamicName:	dynamic	(ref stream) =
+	{
+	}
+
+returnTypeOf:	dynamic	() ref type_s =
+	{
+	return 0;
+	}
+
+getSourceBuffer:	dynamic	() ref sourceParser =
+ 	{
+	if	(enclosing)
+		return enclosing getSourceBuffer();
+	else
+		return 0;
+	}
+
+getUnit:	dynamic	() ref unit_s =
+	{
+	if	(enclosing)
+		return enclosing getUnit();
+	else
+		return 0;
+	}
+
+getEnclosingType:	dynamic	() ref type_s =
+	{
+	if	(enclosing)
+		return enclosing getEnclosingType();
+	else
+		return 0;
+	}
+
+reconnectInterfaces:	dynamic	() =
+	{
+	}
+
+constructInterfaces:	dynamic	() =
+	{
+	s:	ref symbol_s;
+	i:	incrementalHeap = [ threadHeap() ];
+
+	Deferred = 0;
+	DeferredHeap = &i;
+	DeferFlag = TRUE;
+
+	for	(s = symbols; s; s = s->next)
+		s constructInterface();
+
+	d:	ref deferredInterfaces;
+
+	while	(Deferred){
+		d = Deferred;
+		Deferred = d->next;
+		d constructInterface();
+		}
+
+	DeferFlag = FALSE;
+	i freeAll();
+	for	(s = symbols; s; s = s->next)
+		s checkEntryCleanup();
+	}
+
+constructValues:	dynamic	() =
+	{
+	}
+
+deferInterface:	(d: ref type_s, b:boolean) =
+	{
+	if	(DeferFlag)
+		deferredInterfaces create(d, b, self);
+	else
+		d constructInterface(self, b);
+	}
+
+addErrorDeclaration:	(n: ref identifier) =
+	{
+	sym:	ref symbol_s;
+
+	sym = symbol_s createError(self, n, thisHeap);
+	sym->next = symbols;
+	symbols = sym;
+	}
+
+unnamedLocal:	(t: ref type_s) ref symbol_s =
+	{
+	sym:	ref symbol_s;
+
+	sym = symbol_s createUnnamed(self, t, thisHeap);
+	sym->next = symbols;
+	symbols = sym;
+	return sym;
+	}
+
+unnamedStatic:	(t: ref type_s) ref symbol_s =
+	{
+	sym:	ref symbol_s;
+
+	sym = symbol_s createUnnamedStatic(self, t, thisHeap);
+	sym->next = symbols;
+	symbols = sym;
+	return sym;
+	}
+
+foldStaticValues:	dynamic	(v: ref value) =
+	{
+	sym:	ref symbol_s;
+
+	for	(sym = symbols; sym; sym = sym->next){
+//		if	(sym->dtype)
+//			sym->dtype foldStaticValues(v);
+		v addRelatedValue(sym->currentValue);
+		}
+	}
+
+threadChild:	dynamic	(ref blockScope) =
+	{
+	}
+
+findLabel:	dynamic	(ref identifier) ref label_x =
+	{
+	return 0;
+	}
+
+countValues:	dynamic	() int =
+	{
+	sym:		ref symbol_s;
+	vCount:		int;
+
+	vCount = 0;
+	for	(sym = symbols; sym; sym = sym->next){
+		if	(sym->currentValue)
+			vCount += sym->currentValue countRelated();
+		if	(sym->dtype)
+			vCount += sym->dtype countValues();
+		}
+	return vCount;
+	}
+
+enumerateValues:	dynamic	() =
+	{
+	sym:		ref symbol_s;
+
+	for	(sym = symbols; sym; sym = sym->next){
+		if	(sym->currentValue)
+			sym->currentValue enumerateValues();
+		if	(sym->dtype)
+			sym->dtype enumerateValues();
+		}
+	}
+
+	};
+
+blockScope:	public	type	inherit	scope_s {
+	public:
+
+	child:			ref blockScope;
+	sibling:		ref blockScope;
+	labels:			ref label_s;
+	function:		ref symbol_s;
+	usedInScope:		RegisterMask;
+
+constructor:	(e: ref scope_s, f: ref symbol_s) =
+	{
+	super constructor(e, 0);
+	child = 0;
+	sibling = 0;
+	labels = 0;
+	if	(e)
+		e threadChild(self);
+	function = f;
+	usedInScope = 0;
+	}
+
+create:	factory	() ref blockScope =
+	{
+	s:	ref blockScope;
+
+	self = alloc(sizeof blockScope);
+	self = [ 0, 0 ];
+	return self;
+	}
+
+constructValues:	dynamic	() =
+	{
+	s:		ref symbol_s;
+
+	for	(s = symbols; s; s = s->next)
+		s constructValue(TRUE);
+	}
+
+defineParameters:	(parm: ref parameter_s, fQual: dQualifiers) =
+	{
+	s:		ref symbol_s;
+	d:		ref type_s;
+
+	if	(fQual == DQ_MEMBERFUNC){
+		d = refTo(enclosing getEnclosingType());
+		SymbolTable.selfSymbol = symbol_s createParameter(self, 
+							hash("self"), 0, d);
+		}
+	for	(; parm; parm = parm->next){
+		if	(parm->pType->topType == T_ARRAY)
+			d = refTo(parm->pType elementOf());
+		else
+			d = parm->pType getType();
+		s = symbol_s createParameter(self, parm->name, 
+							parm->offset, d);
+		s->next = symbols;
+		symbols = s;
+		}
+	if	(fQual == DQ_MEMBERFUNC|DQ_FACTORY){
+		d = refTo(enclosing getEnclosingType());
+		SymbolTable.selfSymbol = unnamedLocal(d);
+		SymbolTable.selfSymbol->name = hash("self");
+		SymbolTable.selfSymbol->var->dtype = d;
+		}
+	}
+
+foldStaticValues:	dynamic	(v: ref value) =
+	{
+	while	(self){
+		super foldStaticValues(v);
+		if	(child)
+			child foldStaticValues(v);
+		self = sibling;
+		}
+	}
+
+returnTypeOf:	dynamic	() ref type_s =
+	{
+	if	(function){
+		if	(function->dtype)
+			return function->dtype returnTypeOf();
+		else
+			return 0;
+		}
+	else if	(enclosing)
+		return enclosing returnTypeOf();
+	else
+		return 0;
+	}
+
+threadChild:	dynamic	(s: ref blockScope) =
+	{
+	s->sibling = child;
+	child = s;
+	}
+
+addDeclaration:	(d: ref declaration_p) =
+	{
+	n:	ref name_p;
+
+	for	(n = d->idList; n; n = n->next){
+		sym:	ref symbol_s;
+
+		for	(sym = symbols; sym; sym = sym->next)
+			if	(n->name == sym->name){
+				CurrentContext->offset = n->offset;
+				CurrentContext errorX("ErrRedecl", 
+						n->name spelling(), "", 0);
+				sym->dtype = ErrorType;
+				break;
+				}
+		if	(sym)
+			continue;
+		sym = symbol_s create(self, n->name, n->offset, 
+							n->hasError, d);
+		sym->next = symbols;
+		symbols = sym;
+		}
+	}
+
+addLabel:	(i: ref identifier, t: ref label_x) =
+	{
+	lab:	ref label_s;
+
+	for	(lab = labels; lab; lab = lab->next)
+		if	(lab->name == i){
+			lab->loc = 0;		// discard old label
+			CurrentContext errorX("ErrRedecl", i spelling(), "", 0);
+			return;
+			}
+	lab = label_s create(i, t);
+	lab->next = labels;
+	labels = lab;
+	}
+
+findLabel:	dynamic	(n: ref identifier) ref label_x =
+	{
+	lab:	ref label_s;
+
+	for	(lab = labels; lab; lab = lab->next)
+		if	(lab->name == n)
+			return lab->loc;
+	if	(enclosing)
+		return enclosing findLabel(n);
+	else
+		return 0;
+	}
+
+scopeName:	dynamic	() =
+	{
+	if	(function){
+		s:	[:] char;
+
+		s = function objectName();
+		NameEmitter putc('.');
+		}
+	else if	(enclosing)
+		enclosing scopeName();
+	}
+
+sourceFilename:	dynamic	() [:] char =
+	{
+	if	(enclosing)
+		return enclosing sourceFilename();
+	else
+		return "";
+	}
+
+	};
+
+label_s:	public	type	{
+	public:
+
+	name:		ref identifier;
+	loc:		ref label_x;
+	next:		ref label_s;
+
+create:	factory	(i: ref identifier, t: ref label_x) ref label_s =
+	{
+	self = alloc(sizeof label_s);
+	self = [ i, t ];
+	return self;
+	}
+
+	};
+
+storageClasses:	public	type	char = {
+	SC_STATIC,
+	SC_TYPE,
+	SC_MEMBER,
+	SC_INTRINSIC,
+	SC_REGISTER,
+	SC_AUTO,
+	SC_REMOTE,
+	SC_EXTERN,
+	SC_PARM,
+	SC_BASED,
+	SC_ALIAS,
+	};
+
+dQualifiers:	public	type	byte = {
+	DQ_CONST	= 0x01,
+	DQ_VOLATILE	= 0x02,
+	DQ_ENTRY	= 0x04,
+	DQ_CLEANUP	= 0x08,
+	DQ_DYNAMIC	= 0x10,
+	DQ_FAR		= 0x20,
+	DQ_FACTORY	= 0x40,
+	DQ_MEMBERFUNC	= 0x80
+	};
+
+AliasPlaceHolder:	type	{
+	public:
+
+	str:		[:] char;
+
+constructor:	(cp: [:] char) =
+	{
+	str = stringDup(cp);
+	}
+
+	};
+
+symbol_s:	public	type	inherit	messageGenerator {
+	public:
+
+	next:		ref symbol_s;
+	name:		ref identifier;
+	offset:		fileOffset;
+	visibility:	visibilities;
+	storageClass:	storageClasses;
+	qualifier:	dQualifiers;
+	location:	ref identifier;
+	dtype:		ref type_s;
+	initializer:	textRange;
+	initBase:	int;			// A base value for
+	ifaceChanged:	boolean;
+	chksDone:	boolean;
+	valueChanged:	boolean;
+	working:	boolean;
+	declEmitted:	boolean;
+	enclosing:	ref scope_s;
+	currentValue:	ref value;
+	var:		ref variable;
+	alias:		ref symbol_s;
+	bitOffset:	addr_t;
+
+create:	factory	(e: ref scope_s, n: ref identifier, 
+				off: fileOffset,
+				hasError: boolean, 
+				d: ref declaration_p) ref symbol_s =
+	{
+	t:	ref type_s;
+
+	self = new symbol_s;
+	if	(hasError)
+		t = ErrorType;
+	else if	(d->dtype)
+		t = d->dtype symbolTableCopy(e);
+	else
+		t = ErrorType;
+	self = [ 0, n, off, d->visibility, 
+				d->storageClass, d->qualifier,
+				d->location, t ];
+	initializer = d->initializer;
+	initBase = d->initBase;
+	ifaceChanged = TRUE;
+	chksDone = FALSE;
+	valueChanged = TRUE;
+	enclosing = e;
+	working = FALSE;
+	declEmitted = FALSE;
+	currentValue = 0;
+	alias = 0;
+	if	(storageClass == SC_STATIC ||
+		 (storageClass == SC_INTRINSIC &&
+		  dtype &&
+		  dtype->topType != T_FUNC)){		// not a function
+		if	(dtype == 0 ||
+			 dtype->topType != T_FUNC ||
+			 (qualifier & DQ_DYNAMIC == 0 &&
+			  !dtype isGateFunction()) ||
+			 initializer.end)
+			currentValue = value create(self, dtype, qualifier);
+		}
+	bitOffset = 0;
+	if	(storageClass == SC_AUTO ||
+		 storageClass == SC_PARM)
+		var = variable create(self);
+	else
+		var = 0;
+	return self;
+	}
+
+createC:	factory	(e: ref scope_s, n: ref identifier, 
+				off: fileOffset,
+				hasError: boolean, 
+				d: ref declaration_p,
+				dt: ref type_s) ref symbol_s =
+	{
+	t:	ref type_s;
+
+	self = new symbol_s;
+	if	(hasError)
+		t = ErrorType;
+	else if	(dt)
+		t = dt;
+	else
+		t = ErrorType;
+	self = [ 0, n, off, d->visibility, 
+				d->storageClass, d->qualifier,
+				d->location, t ];
+	initializer = d->initializer;
+	initBase = d->initBase;
+	ifaceChanged = TRUE;
+	chksDone = FALSE;
+	valueChanged = TRUE;
+	enclosing = e;
+	working = FALSE;
+	declEmitted = FALSE;
+	currentValue = 0;
+	if	(storageClass == SC_STATIC ||
+		 (storageClass == SC_INTRINSIC &&
+		  dtype &&
+		  dtype->topType != T_FUNC)){		// not a function
+		if	(dtype == 0 ||
+			 dtype->topType != T_FUNC ||
+			 (qualifier & DQ_DYNAMIC == 0 &&
+			  !dtype isGateFunction()) ||
+			 initializer.end)
+			currentValue = value create(self, dtype, qualifier);
+		}
+	bitOffset = 0;
+	if	(storageClass == SC_AUTO ||
+		 storageClass == SC_PARM)
+		var = variable create(self);
+	else
+		var = 0;
+	return self;
+	}
+
+createError:	factory	(e: ref scope_s, n: ref identifier, 
+						h: ref Heap) ref symbol_s =
+	{
+	self = h alloc(sizeof symbol_s);
+	self = [ 0, n, 0, V_PRIVATE, SC_STATIC, 0, 0, ErrorType ];
+	initializer = [ 0, 0 ];
+	initBase = 0;
+	ifaceChanged = FALSE;
+	chksDone = TRUE;
+	valueChanged = FALSE;
+	declEmitted = FALSE;
+	enclosing = e;
+	working = FALSE;
+	currentValue = 0;
+	var = 0;
+	return self;
+	}
+
+createUnnamed:	factory	(e: ref scope_s, t: ref type_s, 
+						h: ref Heap) ref symbol_s =
+	{
+	self = h alloc(sizeof symbol_s);
+	self = [ 0, 0, 0, V_PRIVATE, SC_AUTO, 0, 0, t ];
+	initializer = [ 0, 0 ];
+	initBase = 0;
+	ifaceChanged = FALSE;
+	chksDone = TRUE;
+	valueChanged = FALSE;
+	declEmitted = FALSE;
+	enclosing = e;
+	working = FALSE;
+	currentValue = 0;
+	var = variable create(self);
+	return self;
+	}
+
+createUnnamedStatic:	factory	(e: ref scope_s, t: ref type_s, 
+						h: ref Heap) ref symbol_s =
+	{
+	self = h alloc(sizeof symbol_s);
+	self = [ 0, 0, 0, V_PRIVATE, SC_STATIC, 0, 0, t ];
+	initializer = [ 0, 0 ];
+	initBase = 0;
+	ifaceChanged = FALSE;
+	chksDone = TRUE;
+	valueChanged = FALSE;
+	enclosing = e;
+	working = FALSE;
+	declEmitted = FALSE;
+	currentValue = value create(self, dtype, 0);
+	bitOffset = 0;
+	var = 0;
+	return self;
+	}
+
+createParameter:	factory	(e: ref scope_s, n: ref identifier, 
+				off: fileOffset, t: ref type_s) ref symbol_s =
+	{
+	self = alloc(sizeof symbol_s);
+	self = [ 0, n, off, V_PRIVATE, SC_PARM, 0, 0, t ];
+	initializer = [ 0, 0 ];
+	initBase = 0;
+	ifaceChanged = FALSE;
+	chksDone = TRUE;
+	valueChanged = FALSE;
+	declEmitted = FALSE;
+	enclosing = e;
+	working = FALSE;
+	currentValue = 0;
+	var = variable create(self);
+	var->dtype = t;
+	return self;
+	}
+
+createBased:	factory	(e: ref scope_s, n: ref identifier, 
+				off: fileOffset, t: ref type_s) ref symbol_s =
+	{
+	self = alloc(sizeof symbol_s);
+	self = [ 0, n, off, V_PRIVATE, SC_BASED, 0, 0, t ];
+	initializer = [ 0, 0 ];
+	initBase = 0;
+	ifaceChanged = FALSE;
+	chksDone = TRUE;
+	valueChanged = FALSE;
+	declEmitted = FALSE;
+	enclosing = e;
+	working = FALSE;
+	currentValue = 0;
+	var = 0;
+	return self;
+	}
+
+load:	factory	(s: pointer, image: ref loader) =
+	{
+	cp:	[:] char;
+
+	self = s;
+	self = [ 0 ];
+	next = image address();
+	cp = image string();
+	if	(|cp)
+		name = hash(cp);
+	else
+		name = 0;
+	offset = image uinteger();
+	visibility = image integer();
+	storageClass = image integer();
+	qualifier = image integer();
+	cp = image string();
+	if	(|cp)
+		location = hash(cp);
+	else
+		location = 0;
+	dtype = image address();
+	initializer.start = image uinteger();
+	initializer.end = image uinteger();
+	initBase = image integer();
+	enclosing = image address();
+	currentValue = image address();
+	bitOffset = image uinteger();
+	if	(storageClass == SC_ALIAS){
+		cp = image string();
+		if	(|cp){
+//			if	(name)
+//				printf("alias: %S value: %S\n", name spelling(),
+//								cp);
+			alias = ref symbol_s(new AliasPlaceHolder[ cp ]);
+			}
+		else
+			alias = 0;
+		}
+	chksDone = TRUE;
+	}
+
+aliasLoad:	factory	(s: pointer, image: ref loader) =
+	{
+	cp:	[:] char;
+
+	self = s;
+	self = [ 0 ];
+	next = image address();
+	cp = image string();
+	if	(|cp)
+		name = hash(cp);
+	else
+		name = 0;
+	offset = image uinteger();
+	visibility = image integer();
+	storageClass = image integer();
+	qualifier = image integer();
+	cp = image string();
+	if	(|cp)
+		location = hash(cp);
+	else
+		location = 0;
+	dtype = image address();
+	initializer.start = image uinteger();
+	initializer.end = image uinteger();
+	initBase = image integer();
+	enclosing = image address();
+	currentValue = image address();
+	bitOffset = image uinteger();
+	cp = image string();
+	if	(|cp){
+//		if	(name)
+//			printf("alias: %S value: %S\n", name spelling(),
+//							cp);
+		alias = ref symbol_s(new AliasPlaceHolder[ cp ]);
+		}
+	else
+		alias = 0;
+	chksDone = TRUE;
+	}
+
+save:	(ifile: ref imageFile) =
+	{
+	for	(; self; self = next){
+		if	(storageClass == SC_ALIAS){
+			if	(!ifile beginRecord(U_ALIAS_SYMBOL, 
+							self, sizeof *self))
+				continue;
+			}
+		else	{
+			if	(!ifile beginRecord(U_SYMBOL, 
+							self, sizeof *self))
+				continue;
+			}
+		ifile address(next);
+		if	(name)
+			ifile putstring(name spelling());
+		else
+			ifile putc(0);
+		ifile uinteger(offset);
+		ifile integer(visibility);
+		ifile integer(storageClass);
+		ifile integer(qualifier);
+		if	(location)
+			ifile putstring(location spelling());
+		else
+			ifile putc(0);
+		ifile address(dtype);
+		ifile uinteger(initializer.start);
+		ifile uinteger(initializer.end);
+		ifile integer(initBase);
+		ifile address(enclosing);
+		ifile address(currentValue);
+		ifile uinteger(bitOffset);
+		if	(storageClass == SC_ALIAS){
+			if	(alias)
+				ifile putstring(alias objectName());
+			else
+				ifile putc(0);
+			}
+		if	(dtype)
+			dtype save(ifile);
+		if	(currentValue)
+			currentValue save(ifile);
+		}
+	}
+
+outputHeader:	(isDefinition: boolean, fd: ref stream) =
+	{
+	t:	ref type_s;
+
+	if	(dtype == 0)
+		return;
+	if	(dtype->topType == T_ERROR)
+		return;
+	switch	(storageClass){
+	case	SC_TYPE:
+		t = dtype getType();
+		if	(t == 0)
+			return;
+		if	(t->topType != T_STRUCT)
+			return;
+		break;
+
+	case	SC_INTRINSIC:
+	case	SC_REGISTER:
+		return;
+
+	case	SC_EXTERN:
+		if	(dtype->topType == T_FUNC)
+			break;
+		if	(!isDefinition)
+			fd printf("extern ");
+		else if	(visibility == V_PRIVATE)
+			fd printf("static ");
+		break;
+
+	case	SC_STATIC:
+		if	(dtype->topType == T_FUNC)
+			break;
+		if	(visibility == V_PRIVATE)
+			fd printf("static ");
+		else if (!isDefinition)
+			fd printf("extern ");
+		}
+	if	(qualifier & DQ_MEMBERFUNC)
+		enclosing getEnclosingType() emitStructTags(fd);
+	dtype outputHeaderPrefix(fd);
+	if	(storageClass != SC_TYPE)
+		outputHeaderName(fd);
+	dtype outputHeaderSuffix(fd, qualifier, enclosing);
+	}
+
+outputHeaderName:	(fd: ref stream) =
+	{
+	if	(storageClass == SC_MEMBER)
+		fd printf("M_%d", bitOffset);
+	else if	(storageClass != SC_EXTERN &&
+		 storageClass != SC_REGISTER){
+		if	(enclosing &&
+			 storageClass != SC_AUTO)
+			enclosing csourceName(fd);
+		if	(name)
+			fd printf("%S_", name spelling());
+		else
+			fd printf("V_%x", self);
+		}
+	else if (name)
+		fd printf("%S", name spelling());
+	else
+		fd printf("V_%x", self);
+	}
+
+emitNeededDeclaration:	(fd: ref stream) =
+	{
+
+		// Local static declarations need to be suppressed.
+
+	if	(storageClass == SC_STATIC &&
+		 Func->rootScope &&
+		 Func->rootScope encloses(enclosing))
+		return;
+	if	(!declEmitted){
+		declEmitted = TRUE;
+		if	(dtype)
+			dtype emitNeededTypedefs(fd);
+		outputHeader(FALSE, fd);
+		fd printf(";\n");
+		}
+	}
+
+clearChanges:	() =
+	{
+	ifaceChanged = FALSE;
+	chksDone = TRUE;
+	valueChanged = FALSE;
+	}
+
+objectName:	dynamic	() [:] char =
+	{
+	NameEmitter = [ Name ];
+	if	(enclosing)
+		enclosing scopeName();
+
+	if	(name)
+		NameEmitter printf(name spelling());
+	else
+		NameEmitter printf("<no name>");
+	return NameEmitter result();
+	}
+
+lineno:	dynamic	(o: fileOffset) int =
+	{
+	if	(enclosing)
+		return enclosing getUnit() lineno(o);
+	else
+		return 0;
+	}
+
+sourceFilename:	dynamic	() [:] char =
+	{
+	if	(enclosing)
+		return enclosing sourceFilename();
+	else
+		return "";
+	}
+
+display:	() =
+	{
+	if	(name)
+		printf("%S", name spelling());
+	if	(offset != NO_LINE)
+		printf(" %d", lineno(offset));
+	printf(":");
+	if	(ifaceChanged)
+		printf(" *iface");
+	if	(!chksDone)
+		printf(" *chk");
+	if	(valueChanged)
+		printf(" *value");
+	switch	(visibility){
+	case	V_PUBLIC:	printf(" public");	break;
+	case	V_VISIBLE: 	printf(" visible");	break;
+		}
+	switch	(storageClass){
+	case	SC_ALIAS:	printf(" alias");	break;
+	case	SC_STATIC:	printf(" static");	break;
+	case	SC_TYPE:	printf(" type");	break;
+	case	SC_MEMBER:	printf(" member");	break;
+	case	SC_INTRINSIC:	printf(" intrinsic");	break;
+	case	SC_REGISTER:	printf(" __reg__");	break;
+	case	SC_REMOTE:	printf(" remote");	break;
+		}
+	if	(qualifier & DQ_CONST)		printf(" const");
+	if	(qualifier & DQ_VOLATILE)	printf(" volatile");
+	if	(qualifier & DQ_ENTRY)		printf(" entry");
+	if	(qualifier & DQ_CLEANUP)	printf(" cleanup");
+	if	(qualifier & DQ_DYNAMIC)	printf(" dynamic");
+	if	(qualifier & DQ_FAR)		printf(" far");
+	if	(qualifier & DQ_FACTORY)	printf(" factory");
+	if	(qualifier & DQ_MEMBERFUNC)	printf(" memberfunc");
+	if	(location)
+		printf(" loc %S", location spelling());
+	if	(storageClass == SC_MEMBER)
+		printf(" bit %d", bitOffset);
+	if	(dtype)
+		dtype display(TRUE);
+	if	(initializer.start){
+		printf(" = init [ %d, %d ]", initializer.start, initializer.end);
+		if	(initBase)
+			printf(" + %d;", initBase);
+		}
+	else if	(initBase)
+		printf(" = %d;", initBase);
+	}
+
+reconnectInterface:	() =
+	{
+	objsave:	ref messageGenerator;
+
+	working = TRUE;
+	objsave = CurrentContext->obj;
+	CurrentContext->obj = self;
+	CurrentContext->offset = offset;
+	if	(dtype){
+		dtype setTypeName(name);
+		dtype reconnectInterface(enclosing);
+		}
+	if	(storageClass == SC_ALIAS && alias){
+		a:	ref AliasPlaceHolder = ref AliasPlaceHolder(alias);
+		v:	valueClass_t;
+
+		mapExternString(a->str, &v, &alias);
+		}
+	CurrentContext->obj = objsave;
+	working = FALSE;
+	}
+
+constructInterface:	() =
+	{
+	if	(ifaceChanged){
+		objsave:	ref messageGenerator;
+
+		working = TRUE;
+		objsave = CurrentContext->obj;
+		CurrentContext->obj = self;
+		CurrentContext->offset = offset;
+		if	(dtype){
+			dtype setTypeName(name);
+			dtype constructInterface(enclosing, FALSE);
+			}
+		ifaceChanged = FALSE;
+		chksDone = FALSE;
+		working = FALSE;
+		if	(storageClass == SC_REMOTE){
+			if	(initializer.start)
+				bitOffset = constantExpression(initializer, 
+								enclosing);
+			else
+				bitOffset = initBase;
+			}
+		else if	(storageClass == SC_AUTO && dtype){
+			d:	ref type_s;
+
+			d = dtype getType();
+			if	(d hasDestructor())
+				CurrentContext errorX("ErrAutoDestructor",
+					name spelling(), "", 0);
+			}
+		checkSpellingStyle();
+		CurrentContext->obj = objsave;
+		}
+	}
+
+checkSpellingStyle:	() =
+	{
+	i:		int;
+	cp:		[:] char;
+
+	if	(!Build.warnAboutStyle)
+		return;
+	if	(name == 0)
+		return;
+	cp = name spelling();
+	i = 0;
+	while	(i < |cp && cp[i] == '_')
+		i++;
+	if	(storageClass == SC_TYPE){
+		if	(i < |cp && !isupper(cp[i]))
+			CurrentContext warnX("WarnBadTypeSpelling", 
+					cp, "", 0);
+		}
+	else if (qualifier & DQ_CONST){
+		for	(; i < |cp; i++){
+			if	(islower(cp[i])){
+//				if	(dtype &&
+//					 dtype->topType 
+				CurrentContext warnX("WarnBadConstantSpelling", 
+						cp, "", 0);
+				return;
+				}
+			}
+		}
+	else	{
+		if	(i < |cp && !islower(cp[i]))
+			CurrentContext warnX("WarnBadVariableSpelling", 
+						cp, "", 0);
+		}
+	}
+/*
+	This check is performed when a symbol changes interface.  It checks
+	entry and cleanup functions to determine whether these functions
+	are declared with acceptable arguments and return type.
+ */
+checkEntryCleanup:	() =
+	{
+	if	(!chksDone){
+		objsave:	ref messageGenerator;
+
+		objsave = CurrentContext->obj;
+		CurrentContext->obj = self;
+		CurrentContext->offset = offset;
+		chksDone = TRUE;
+		if	(storageClass == SC_STATIC &&
+			 dtype->topType == T_FUNC){
+			if	(qualifier & DQ_CLEANUP)
+				ref function_z(dtype) checkCleanupSignature();
+			else if	(qualifier & DQ_ENTRY)
+				ref function_z(dtype) checkEntrySignature();
+			}
+		CurrentContext->obj = objsave;
+		}
+	}
+
+constructValue:	(forceOutput: boolean) boolean =
+	{
+	if	(dtype == 0 ||
+		 dtype == ErrorType){
+		valueChanged = FALSE;
+		return FALSE;
+		}
+	dtype constructValue(enclosing);
+	if	(valueChanged || forceOutput){
+		objsave:	ref messageGenerator;
+
+		objsave = CurrentContext->obj;
+		CurrentContext->obj = self;
+		if	(currentValue){
+			mainHeap:	ref Heap;
+			symsave:	ref symbol_s;
+
+			if	(dtype && dtype getType() hasConstructor()){
+				CurrentContext->offset = offset;
+				CurrentContext errorX("ErrStaticConstructor", 
+						name spelling(), "", 0);
+				}
+			if	(dtype && dtype getType() hasDestructor()){
+				CurrentContext->offset = offset;
+				CurrentContext errorX("ErrStaticDestructor", 
+						name spelling(), "", 0);
+				}
+
+			tempHeap:	incrementalHeap = [ threadHeap() ];
+			mainHeap = tempHeap activate();
+			symsave = SymbolTable.selfSymbol;
+			SymbolTable.selfSymbol = 0;
+			if	(DebugList){
+				display();
+				printf("\n");
+				}
+			if	(dtype->topType == T_FUNC)	// a function
+				functionDefinition();
+			else	{				// data
+				b:	boolean;
+
+				b = Func->staticInitializer;
+				Func->staticInitializer = TRUE;
+				Func generateData(self);
+				Func->staticInitializer = b;
+				}
+			SymbolTable.selfSymbol = symsave;
+			mainHeap activate();
+			tempHeap freeAll();
+			}
+		else if	(storageClass == SC_ALIAS)
+			getAlias();
+		CurrentContext->obj = objsave;
+		valueChanged = FALSE;
+		}
+	return TRUE;
+	}
+/*
+	This function is called after it is determined that the symbol
+	is a constant integer, signed or unsigned, and the value is
+	valid.
+ */
+constantInteger:	() ref tree_p =
+	{
+	if	(constructValue(FALSE) &&
+		 currentValue)
+		return currentValue constantInteger();
+	else
+		return ErrorTree;
+	}
+
+constantFloat:	(staticInit: boolean) ref tree_p =
+	{
+	if	(constructValue(FALSE) &&
+		 currentValue)
+		return currentValue constantFloat(staticInit);
+	else
+		return ErrorTree;
+	}
+
+functionDefinition:	() =
+	{
+	src:		ref sourceParser;
+	x:		ref stmt_x;
+	ft:		ref function_z;
+
+	src = enclosing getSourceBuffer();
+	if	(src == 0)
+		return;
+	sc: blockScope = [ enclosing, self ];
+	ft = ref function_z(dtype);
+	Func startFunction(&sc, ft, self);
+	x = src parseFunctionBody(initializer);
+//	Build.compiledLines += src linesScanned();
+	if	(x == 0)
+		return;
+	x assignTypes(&sc, FALSE);
+	Func generateCode(self, x, &sc);
+	}
+
+getAlias:	() ref symbol_s =
+	{
+	if	(dtype == ErrorType)
+		return 0;
+	if	(alias)
+		return alias;
+	if	(storageClass == SC_ALIAS){
+		src:		ref sourceParser;
+		x:		ref tree_p;
+		ft:		ref function_z;
+		objsave:	ref messageGenerator;
+
+		objsave = CurrentContext->obj;
+		CurrentContext->obj = self;
+		CurrentContext->offset = offset;
+
+		src = enclosing getSourceBuffer();
+		if	(src == 0){
+			CurrentContext->obj = objsave;
+			return 0;
+			}
+		ft = ref function_z(dtype);
+		x = src parseWholeExpression(initializer);
+		if	(x == 0){
+			CurrentContext->obj = objsave;
+			return 0;
+			}
+		x assignTypes(enclosing, TRUE);
+		x = x fold();
+		sym:	ref symbol_s;
+
+		sym = x getAlias();
+		if	(sym == 0){
+			CurrentContext->offset = offset;
+			CurrentContext errorX("ErrBadAlias", 
+						name spelling(), "", 0);
+			dtype = ErrorType;
+			CurrentContext->obj = objsave;
+			return 0;
+			}
+		if	(!typeMatch(sym->dtype, dtype)){
+			CurrentContext->offset = offset;
+			CurrentContext errorX("ErrBadAliasType", 
+						name spelling(), "", 0);
+			dtype = ErrorType;
+			CurrentContext->obj = objsave;
+			return 0;
+			}
+		alias = sym resolveAlias();
+		CurrentContext->obj = objsave;
+		return alias;
+		}
+	else
+		return 0;
+	}
+
+resolveAlias:	() ref symbol_s =
+	{
+	if	(storageClass != SC_ALIAS)
+		return self;
+	if	(working){
+		CurrentContext->offset = offset;
+		CurrentContext errorX("ErrCircularAlias", 
+						name spelling(), "", 0);
+		dtype = ErrorType;
+		working = FALSE;
+		return 0;
+		}
+	sym:	ref symbol_s;
+
+	working = TRUE;
+	sym = getAlias();
+	working = FALSE;
+	return sym;
+	}
+
+	};
+/*
+	A return value of zero with the symbol pointer also zero indicates an
+	error.
+ */
+mapExternString:	public (xstring: [:] char, 
+				vp: ref valueClass_t,
+				symp: ref ref symbol_s) ref value =
+	{
+	i, j:		int;
+
+		// isolate the unit name first
+
+	*symp = 0;
+	i = stringScan(xstring, ':');
+	if	(i < 0){
+//		printf("No colon in name '%S'\n", xstring);
+		return 0;
+		}
+	sc:	ref scope_s;
+
+	sc = SymbolTable locateUnit(hash(xstring[:i]));
+
+	if	(sc == 0){
+		printf("Couldn't find unit '%S'\n", xstring[:i]);
+		return 0;
+		}
+
+	while	(i < |xstring && xstring[i] == ':')
+		i++;
+
+	nm:		[:] char;
+	sym:		ref symbol_s;
+	n:		ref identifier;
+
+	nm = xstring[i:];
+	for	(;;){
+		i = stringScan(nm, '.');
+		if	(i < 0)
+			break;
+		n = hash(nm[:i]);
+		sym = sc lookupLocal(n, sc);
+		if	(sym == 0){
+			printf("Couldn't find symbol '%S' in '%S'\n", 
+								nm, xstring);
+			return 0;
+			}
+
+			// An external reference to a dynamic function vector
+
+		if	(i == |nm - 1){
+			t:	ref type_s;
+
+			t = sym->dtype getType();
+			if	(t->topType != T_STRUCT){
+				printf("Not a class '%S'\n", xstring);
+				return 0;
+				}
+			*vp = VC_CONST;
+			*symp = 0;
+			return ref struct_z(t)->dynamicVector;
+			}
+		sc = sym->dtype;
+		nm = nm[i + 1:];
+		}
+
+		// An external reference to a gate function vector
+
+	if	(stringCompare(nm, "gate") == 0){
+		t:	ref type_s;
+
+		t = sym->dtype getType();
+		if	(t->topType != T_STRUCT){
+			printf("Not a class '%S' for a gate\n", xstring);
+			return 0;
+			}
+		*vp = VC_CONST;
+		*symp = 0;
+		return ref struct_z(t)->gateVector;
+		}
+
+		// An external reference to a normal symbol
+
+	n = hash(nm);
+	sym = sc lookupLocal(n, sc);
+	if	(sym == 0){
+		printf("Not a normal symbol '%S' in '%S'\n", nm, xstring);
+		return 0;
+		}
+	*symp = sym;
+	if	(sym->currentValue){
+		*vp = sym->currentValue->valueClass;
+		return sym->currentValue;
+		}
+	else	{
+		*vp = VC_INTRINSIC;
+		return 0;
+		}
+	}
+
+include_s:	public	type	{
+	public:
+
+	next:		ref include_s;
+	offset:		fileOffset;		// offset of include statement
+	name:		ref identifier;
+	unit:		ref unit_s;
+
+public:
+
+load:	factory	(i: pointer, image: ref loader) =
+	{
+	self = i;
+	next = image address();
+	offset = image uinteger();
+	name = hash(image string());
+	unit = 0;
+	}
+
+loadSym:	factory	(i: pointer, image: ref loader) =
+	{
+	self = i;
+	next = image address();
+	offset = image uinteger();
+	name = hash(image string());
+	unit = image address();
+	}
+
+save:	(ifile: ref imageFile) =
+	{
+	if	(!ifile beginRecord(U_SINCLUDE, self, sizeof *self))
+		return;
+	ifile address(next);
+	ifile uinteger(offset);
+	ifile putstring(name spelling());
+	ifile address(unit);
+	if	(next)
+		next save(ifile);
+	}
+
+checkForSources:	() =
+	{
+	while	(self){
+		if	(unit == 0 ||
+			 !unit sourceEverExisted()){
+			CurrentContext->offset = offset;
+			CurrentContext errorX("ErrUnitNotFound", 
+						unit->name spelling(), "", 0);
+			}
+		self = next;
+		}
+	}
+
+findInclude:	(n: ref identifier) ref include_s =
+	{
+	while	(self &&
+		 name != n)
+		self = next;
+	return self;
+	}
+
+display:	(u: ref unit_s) =
+	{
+	i:	int;
+
+	i = u lineno(offset);
+	if	(i)
+		printf("%4d: ", i);
+	else
+		printf("      ");
+	printf("include %S;", name spelling());
+	}
+
+	};
+
+heapFile:	public	(cp: [:] char, extension: [:] char) [:] char =
+	{
+	fpath:		[MAXPATH] char;
+	fext:		[:] char;
+	n:		[:] char;
+
+	if	(|extension){
+		fext = getExtension(cp);
+		if	(|fext == 0)
+			cp = makePath(fpath, "", cp, extension);
+		}
+	n = new [|cp] char;
+	n [:]= cp;
+	return n;
+	}
+
+/*
+ *	FUNCTION:	constantExpression
+ *
+ *	DESCRIPTION:
+ *		This function parses a constant expression and if
+ *		successful sets Token.i.icon (global integer constant) to the
+ *		expression's value.  A context parameter determines the
+ *		terminator required for the expression.  Exact error handling
+ *		and scan position depends on the context.
+ *
+ *		In any of the contexts, if the expression parse
+ *		failed, or the terminator was not acceptable, a resync
+ *		occurs.  If the expression
+ *		failed in type checking, or a case statement was missing the
+ *		colon, no resync occurs, Token.i.icon is set to zero.
+ *
+ *		In general, this returns zero if and only if a resync has
+ *		taken place.
+ */
+
+constantExpression:	public	(source: textRange, ctx: ref scope_s) long =
+	{
+	t:		ref tree_p;
+	mainHeap:	ref Heap;
+	src:		ref sourceParser;
+
+	src = ctx getSourceBuffer();
+	if	(src == 0)
+		return 0;
+
+	tempHeap: incrementalHeap = [ threadHeap() ];
+	mainHeap = tempHeap activate();
+	t = src parseWholeExpression(source);
+	i:	long;
+
+	i = 0;
+	if	(t){
+		t = t assignTypes(ctx, FALSE);
+		t = t fold();
+		if	(t->operator == O_ICON)
+			i = t integerValue();
+		else if	(t->operator != O_ERROR){
+//			t display(0);
+			CurrentContext error("ErrConstantExpr");
+			}
+		}
+	tempHeap freeAll();
+	mainHeap activate();
+	return i;
+	}
+
+extractExpression:	public	(source: textRange, 
+					ctx: ref scope_s) ref tree_p =
+	{
+	src:		ref sourceParser;
+
+	src = ctx getSourceBuffer();
+	if	(src == 0)
+		return ErrorTree;
+	return src parseWholeExpression(source);
+	}
+
+NameEmitter:	public	ref stringEmitter;
+Name:		public	[256] char;

@@ -1,0 +1,171 @@
+include	debugger, file, alys;
+include	kdriver;
+include	object, arena, hardware;
+
+main:	entry	() =
+	{
+	id:	ref far debugMonitor;
+
+	id = ref far debugMonitor(publishKernel("debugger", 
+				":model.debugger.debugMonitor",
+				&DebugMonitor, 
+				AR_ANY, AR_ANY, AR_ANY, AR_ANY));
+	FileSystem register(id, "/service/debug", 
+				":model.debugger.debugMonitor");
+	Driver makeResident();
+	disown(Driver);
+	disown(id);
+	}
+
+DebugMonitor:	inherit	debugMonitor {
+	public:
+
+attachArena:	gate	(x: ref far External, dbg: ref far debugger) 
+				ref far arenaProbe =
+	{
+	o:	ref object;
+	a:	ref arenaProbe;
+	af:	ref far arenaProbe;
+
+	o = objectEntry(x);
+	if	(o == 0)
+		return 0;
+	if	(o->where == 0)
+		return 0;
+	if	(o->where->myDebugger)
+		return 0;
+	a = new userArenaProbe[ dbg, o->where ];
+	af = ref far arenaProbe(jobPublishKernel("arenaProbe", 
+					":model.debugger.arenaProbe",
+					a, AR_ANY));
+	return af;
+	}
+
+attachObject:	gate	(x: ref far External, dbg: ref far debugger)
+				ref far objectProbe =
+	{
+	o:	ref object;
+	p:	ref objectProbe;
+	pf:	ref far objectProbe;
+
+	o = objectEntry(x);
+	if	(o == 0)
+		return 0;
+	if	(o->where == 0)
+		return 0;
+	if	(o->myDebugger)
+		return 0;
+	if	(o->where->myDebugger != dbg)
+		return 0;
+	p = new userObjectProbe[ dbg, o ];
+	pf = ref far objectProbe(jobPublishKernel("objectProbe", 
+					":model.debugger.objectProbe",
+					p, AR_ANY));
+	return pf;
+	}
+
+	};
+
+userArenaProbe:	type	inherit	arenaProbe {
+	myDebugger:	ref far debugger;
+	myArena:	ref arena;
+
+	public:
+
+constructor:	(dbg: ref far debugger, ar: ref arena) =
+	{
+	myDebugger = dbg;
+	myArena = ar;
+	ar->myDebugger = dbg;
+	}
+
+suspend:	gate	() =
+	{
+	myArena suspend();
+	}
+
+resume:		gate	() =
+	{
+	myArena resume();
+	}
+
+lastClose:	gate	() boolean =
+	{
+	myArena->myDebugger = 0;
+	return TRUE;
+	}
+
+readData:	gate	(addr: vaddr_t) [] byte =
+	{
+	rem, i, res:	int;
+	buffer:		[64] byte;
+
+	rem = messageHeader->expected;
+	while	(rem){
+		if	(rem > 64)
+			i = |buffer;
+		else
+			i = rem;
+		res = myArena read(addr, buffer, i);
+		if	(res != SUCCESS)
+			break;
+		replyPartial(buffer, i);
+		rem -= i;
+		}
+	}
+
+	};
+
+userObjectProbe:	type	inherit	objectProbe {
+	myDebugger:	ref far debugger;
+	myObject:	ref object;
+
+	public:
+
+constructor:	(dbg: ref far debugger, obj: ref object) =
+	{
+	myDebugger = dbg;
+	myObject = obj;
+	obj->myDebugger = dbg;
+	}
+
+suspend:	gate	() =
+	{
+	if	(myObject->animator)
+		myObject->animator suspend();
+	}
+
+resume:		gate	() =
+	{
+	if	(myObject->animator)
+		myObject->animator resume();
+	}
+
+machineState:	gate	() task_t =
+	{
+	t:	task_t;
+
+
+	if	(myObject->animator){
+		b:	ref byte;
+		ifr:	ref InterruptFrame;
+
+		b = myObject->animator kernelStackBottom() -
+						(sizeof InterruptFrame + 8);
+		
+		ifr = pointer(b);
+		t trigger(&myObject->animator->task, ifr, 17, 0);
+		}
+	else	{
+		memSet(&t, 0, sizeof t);
+		}
+	return t;
+	}
+
+lastClose:	gate	() boolean =
+	{
+	myObject->myDebugger = 0;
+	return TRUE;
+	}
+
+	};

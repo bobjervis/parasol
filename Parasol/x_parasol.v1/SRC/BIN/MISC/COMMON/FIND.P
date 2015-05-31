@@ -1,0 +1,126 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	string;
+include	alys;
+include	file, time;
+include	error;
+include	filesys;
+
+ListDetail:	boolean = TRUE;
+
+main:	entry	() =
+	{
+	fpath:	[MAXPATH] char;
+	fp:	[:] char;
+	cp:	ref char;
+	root:	[:] char;
+
+	fp = fpath;
+	if	(|commandLine.arguments != 1 &&
+		 |commandLine.arguments != 2){
+		printf("Use is: find [ path ] pattern\n");
+		exit(1);
+		}
+	if	(|commandLine.arguments == 2){
+		root = commandLine.arguments[0];
+		commandLine shiftArguments();
+		}
+	else
+		root = "/";
+	searchDirectories(root, commandLine.arguments[0]);
+	exit(EX_SUCCESS);
+	}
+
+searchDirectories:	(path: [:] char, pattern: [:] char) =
+	{
+//	printf("path = %S pattern = %S\n", path, pattern);
+	lookFor(path, pattern);
+	expandsubpath(path, pattern);
+	}
+
+lookFor:	(path: [:] char, pattern: [:] char) =
+	{
+	ff:	finder;
+
+	if	(ff open(path, pattern, 0) != SUCCESS)
+		return;
+
+		// Copy the directory part of the path
+
+	while	(ff next() == SUCCESS){
+		if	(ListDetail){
+			hour:	int;
+			c:	char;
+			d:	Date;
+
+			if	(ff.attrib & FA_NETNODE)
+				printf("  <node>");
+			else if	(ff.attrib & FA_DIR)
+				printf("   <dir>");
+			else
+				printf("%8d", ff.size);
+			d decode(ff.ftime);
+			hour = d.hour;
+			if	(hour >= 12){
+				c = 'p';
+				hour -= 12;
+				}
+			else
+				c = 'a';
+			if	(hour == 0)
+				hour = 12;
+			printf("  %2d-%02d-%02d %2d:%02d%c   ",
+				d.month + 1,
+				d.monthday, 
+				d.year,
+				hour, d.minute, 
+				c);
+/*
+			hour = ff.ftime >> 11 & 0x1f;
+			if	(hour >= 12){
+				c = 'p';
+				hour -= 12;
+				}
+			else
+				c = 'a';
+			printf(" %2d-%02d-%02d %2d:%02d%c   ",
+				ff.ftime >> 21 & 0x0f,
+				ff.ftime >> 16 & 0x1f, 
+				((ff.ftime >> 25 & 0x7f) + 80) % 100,
+				hour, ff.ftime >> 5 & 0x3f, 
+				c);
+ */
+			}
+		printf("%S\n", ff.pathname);
+		}
+	ff close();
+	}
+
+expandsubpath:	(path: [:] char, pattern: [:] char) =
+	{
+	ff:	finder;
+
+	if	(ff open(path, "*", FA_DIR|FA_HIDDEN|FA_SYSTEM) != SUCCESS)
+		return;
+
+		/* Copy the directory part of the path */
+
+	while	(ff next() == SUCCESS){
+		fn:	[:] char;
+
+		if	((ff.attrib & FA_DIR) == 0)
+			continue;
+		fn = stripDirectory(ff.pathname);
+		if	(stringCompare(fn, ".") == 0 ||
+			 stringCompare(fn, "..") == 0)
+			continue;
+		searchDirectories(ff.pathname, pattern);
+		}
+	ff close();
+	}	
+

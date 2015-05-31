@@ -1,0 +1,867 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	debugger;
+include	hardware;
+include	file;
+include	filesys, string;
+include	symtab;
+include	alys;
+include	error;
+include	stack, instruct, data, msglog;
+
+include	monitor, postmort, i386mon;
+
+include	edserver, console, window;
+/*
+	This debugger is built around a few principles.  It is a screen
+	based debugger in which basic information is managed primarily
+	through editor files.
+ */
+ARGS_LEN:	const	int = 4000;
+
+//PostMortem:	boolean;
+
+main:	entry	() =
+	{
+	core:		ref char;
+	map:		[:] char;
+	mbuf:		[MAXPATH] char;
+	runf:		[:] char;
+	rbuf:		[MAXPATH] char;
+	buf:		[256] char;
+	cmd:		[:] char;
+	line:		[:] char;
+	cp:		ref char;
+	sym:		ref symbol;
+	arg, file:	[:] char;
+	base:		[:] char;
+	attachTo:	int;
+	pe:		process_t;
+	i:		int;
+
+	if	(|commandLine.arguments < 1)
+		commandHelp();
+	attachTo = 0;
+	for	(i = 0; i < |commandLine.arguments; i++){
+		arg = commandLine.arguments[i];
+		if	(arg[0] != '-')
+			break;
+		switch	(arg[1]){
+		case	'a':
+			base = arg[2:];
+
+			sc:	stringConverter = [ base ];
+
+			attachTo = sc encodeUnsigned();
+			if	(!sc.success){
+				printf("Incorrect process id format: %S\n", arg);
+				commandHelp();
+				}
+
+			pid:	int;
+
+			for	(pid = 1; pid < 300; pid++){
+				pe = myHost() getProcess(pid);
+				if	(attachTo == int(pe.mainObject))
+					break;
+				}
+			if	(pid >= 300){
+				printf("Can't find process %d\n", attachTo);
+				commandHelp();
+				}
+			break;
+
+		default:
+			printf("Unknown option: %S", arg);
+			commandHelp();
+			}
+		}
+	if	(i >= |commandLine.arguments)
+		commandHelp();
+	file = arg;
+	i++;
+	base = stripExtension(file);
+	map = makePath(mbuf, "", base, ".map");
+	runf = makePath(rbuf, "", base, ".run");
+	loadMap(map);
+	loadRun(runf);
+	if	(i < |commandLine.arguments){
+		TestArena = new postMortemArena[ commandLine.arguments[i] ];
+		i++;
+		if	(attachTo)
+			commandHelp();
+		}
+	else
+		TestArena = new monitorArena[ attachTo ];
+	if	(i < |commandLine.arguments)
+		commandHelp();
+
+	Display = new display[ runf ];
+	Display configure([ 70, 8 ]);
+	Display open();
+
+	TestArena initializeDisplays();
+	CodeAddress = TestArena displayState(Display);
+/*
+	for	(;;){
+		i:	int;
+		x:	unsigned;
+
+		printf("> ");
+		cmd = stdin gets(buf);
+		if	(|cmd == 0)
+			break;
+		if	(|cmd >= |buf)
+			|cmd = |buf - 1;
+		buf[|cmd] = 0;
+		for	(cp = buf; isspace(*cp); cp++)
+			;
+		if	(*cp == 'q')
+			break;
+		switch	(*cp){
+		case	0:	break;		// noop
+
+		case	'f':
+			if	(!Debugging)
+				printf("Not debugging\n");
+			else	{
+				ref process(DB.pid) flush();
+				Debugging = FALSE;
+				}
+			break;
+
+		case	'b':
+			if	(!Debugging){
+				printf("Not debugging\n");
+				break;
+				}
+			cp++;
+			while	(isspace(*cp))
+				cp++;
+			if	(*cp == 0){
+				BreakPoints listAll();
+				break;
+				}
+			sym = translateAddress(cp, TRUE, -1);
+			if	(LastAddress == INV_ADDRESS){
+				printf("Invalid address\n");
+				break;
+				}
+			setBreakPoint(LastAddress);
+			break;
+
+		case	'c':
+			if	(!Debugging){
+				printf("Not debugging\n");
+				break;
+				}
+			cp++;
+			while	(isspace(*cp))
+				cp++;
+			if	(*cp == 0)
+				BreakPoints clearAll();
+			else	{
+				sym = translateAddress(cp, TRUE, -1);
+				if	(LastAddress == INV_ADDRESS){
+					printf("Invalid address\n");
+					break;
+					}
+				clearBreakPoint(LastAddress);
+				}
+			break;
+
+		case	'g':
+			if	(!Debugging){
+				printf("Not debugging\n");
+				break;
+				}
+			cp++;
+			while	(isspace(*cp))
+				cp++;
+			if	(*cp == 0){
+				x = DB.eip;
+				BreakPoints disable(x);
+				singleStep(DB.pid, &DB);
+				BreakPoints enable(x);
+				run(DB.pid, &DB);
+				CodeAddress = TestArena displayState();
+				break;
+				}
+			sym = translateAddress(cp, TRUE, -1);
+			if	(LastAddress == INV_ADDRESS){
+				printf("Invalid address\n");
+				break;
+				}
+			x = DB.eip;
+			BreakPoints disable(x);
+			singleStep(DB.pid, &DB);
+			BreakPoints enable(x);
+			runTo(LastAddress);
+			CodeAddress = TestArena displayState();
+			break;
+
+		case	't':
+			if	(!Debugging)
+				printf("Not debugging\n");
+			else	{
+				x = DB.eip;
+				BreakPoints disable(x);
+				singleStep(DB.pid, &DB);
+				BreakPoints enable(x);
+				CodeAddress = TestArena displayState();
+				}
+			break;
+
+		case	'x':
+			if	(Debugging){
+				printf("Already running\n");
+				break;
+				}
+			for	(cp++; isspace(*cp); cp++)
+				;
+			i = cp - buf;
+			processCommand(runf, cp[:|buf - i]);
+			if	(Debugging)
+				CodeAddress = TestArena displayState();
+			break;
+
+		default:
+			printf("Bad command: %S", cp);
+			helpScreen();
+			}
+		}
+ */
+	}
+
+Display:	public	ref display;
+
+display:	type	inherit	applicationShell	{
+	runfile:	[:] char;
+
+	public:
+
+//	files:	treeEditor;
+
+constructor:	(filename: [:] char) =
+	{
+	m:		ref menubar;
+	file, win:	ref popupMenu;
+
+	super constructor(filename);
+	iconLabel("-debug-", C_TITLE);
+	useFooter();
+	m = new menubar[];
+	setMenu(m);
+
+	file = new popupMenu[ m ];
+	file button("Exit       Alt-X",	'x', [ self, &closeApplication ]);
+
+	win = new popupMenu[ m ];
+	win button("Code",	'c', [ self, &openCodeWindow ]);
+	win button("Data",	'd', [ self, &openDataWindow ]);
+	win button("Stack",	's', [ self, &openStackWindow ]);
+	win button("Messages",	'm', [ self, &openMessageWindow ]);
+
+	m pulldown("File", 			'f', file);
+	m pulldown("Windows", 			'w', win);
+
+	runfile = filename;
+	}
+
+expose:	dynamic	(x: rectangle_t) =
+	{
+	TestArena displayState(self);
+	}
+
+openStackWindow:	() =
+	{
+	if	(Stack == 0)
+		Stack = new stackWindow[ self ];
+	Stack toTop();
+	}
+
+openCodeWindow:		() =
+	{
+	if	(Instructions == 0)
+		Instructions = new instructionWindow[ self,
+						TestArena codeBuffer() ];
+	Instructions toTop();
+	}
+
+openDataWindow:		() =
+	{
+	if	(Data == 0)
+		Data = new dataWindow[ self ];
+	Data toTop();
+	}
+
+openMessageWindow:	() =
+	{
+	if	(MessageLog == 0)
+		MessageLog = new messageLogWindow[ self ];
+	MessageLog toTop();
+	}
+
+	};
+
+EditServer:	ref far editorServer;
+
+commandHelp:	() =
+	{
+	printf(	"Use is: DEBUG [ -a# ] run_file [ core_file ]\n"
+		"	-a#	Attach to given process id.\n"
+		"You cannot provide both an attach pid and a core file in one command.\n"
+			);
+	exit(0);
+	}
+
+translateAddress:	public	(cp: ref char, codesyms: boolean, 
+					lastp: ref vaddr_t,
+					last: vaddr_t) ref symbol =
+	{
+	sym:	ref symbol;
+
+	while	(isspace(*cp))
+		cp++;
+	if	(isalpha(*cp) ||
+		 *cp == '_'){
+		nm:	[:] char;
+		x:	unsigned;
+
+		nm = cp[:1];
+		while	(isalnum(*cp) ||
+			 *cp == '_' ||
+			 *cp == '.' ||
+			 *cp == ':')
+			cp++;
+		if	(*cp == '+')
+			x = xtou(cp + 1);
+		else
+			x = 0;
+		|nm = cp - nm;
+		sym = Symbols findName(nm);
+		if	(sym &&
+			 sym isCodeSymbol() == codesyms){
+			*lastp = sym->address + x;
+			return sym;
+			}
+		else	{
+			*lastp = INV_ADDRESS;
+			return 0;
+			}
+		}
+	else if	(*cp == '$'){
+		last = Start->address;
+		return Start;
+		}
+	else if	(isdigit(*cp))
+		last = xtou(cp);
+	else if	(*cp != 0){
+		*lastp = INV_ADDRESS;
+		return 0;
+		}
+	*lastp = last;
+	sym = Symbols findSymbol(last, codesyms);
+	if	(sym)
+		return sym;
+	else
+		return 0;
+	}
+
+xtou:	(cp: ref char) unsigned =
+	{
+	x:	long;
+
+	x = 0;
+	while	(isxdigit(*cp)){
+		x <<= 4;
+		if	(isdigit(*cp))
+			x += *cp - '0';
+		else
+			x += tolower(*cp) - 'a' + 10;
+		cp++;
+		}
+	return x;
+	}
+
+CodeAddress:	paddr_t;
+DataAddress:	paddr_t;
+
+INV_ADDRESS:	public	unsigned = -1;
+
+helpScreen:	() =
+	{
+	printf(	"?		Display this screen\n"
+		"b		List breakpoints\n"
+		"b addr		Set breakpoint at addr\n"
+		"c		CLear all breakpoints\n"
+		"c addr		Clear breakpoint at addr\n"
+		"d [ addr ]	Display data at addr\n"
+		"f		Flush test\n"
+		"g [ addr ]	Go to addr\n"
+		"q		Quit\n"
+		"r		Display registers\n"
+		"s		Stack trace\n"
+		"t		Single step\n"
+		"u [ addr ]	Unassemble at addr\n"
+		"x args		Execute program\n"
+		"\n"
+		"args are a sequence of command line arguments including\n"
+		"redirection."
+		"addr is a machine address, either in code or data space\n"
+		"	if the address begin with a letter, it is a symbol\n"
+		"	name.  A $ represents the program start address.\n"
+		"	A string beginning with a digit is a hex value.\n"
+		);
+	}
+
+Debugging:		boolean = FALSE;
+TestArena:	public	ref debugArena;
+Target:			ref far debugger;
+
+processCommand:	(runfile: [:] char, args: [:] char) =
+	{
+	spawnCommand(runfile, args);
+	}
+
+spawnCommand:	(cmd: [:] char, arg: [:] char) =
+	{
+	infile:		[:] char;
+	outfile:	[:] char;
+	appendout:	char;
+	i:		int;
+	cp:		ref char;
+	c:		char;
+
+	cmdClear();
+	infile = "";
+	outfile = "";
+	appendout = 0;
+	i = 0;
+	c = cmd[i++];
+	while	(isspace(c))
+		c = cmd[i++];
+	if	(c == 0)
+		return;
+	while	(!isspace(c) && c != 0){
+		cdeposit(c);
+		c = cmd[i++];
+		}
+	while	(isspace(c))
+		c = cmd[i++];
+	for	(;;){
+		if	(c == 0)
+			break;
+		else if	(isspace(c)){
+			c = cmd[i++];
+			continue;
+			}
+		else if	(c == '"'){
+			c = cmd[i++];
+			while	(c != 0 && c != '"'){
+				adeposit(c);
+				c = cmd[i++];
+				}
+			adeposit(0);
+			if	(c != '"')
+				break;
+			c = cmd[i++];
+			}
+		else if	(c == '<'){
+			c = cmd[i++];
+			while	(isspace(c))
+				c = cmd[i++];
+			cp = RedirIn;
+			while	(c != 0 &&
+				 !isspace(c)){
+				*cp++ = c;
+				c = cmd[i++];
+				}
+			infile = RedirIn[:cp - RedirIn];
+			if	(c == 0)
+				break;
+			}
+		else if	(c == '>'){
+			c = cmd[i++];
+			if	(c == '>'){
+				appendout = 1;
+				c = cmd[i++];		// >> is append
+				}
+			while	(isspace(c))
+				c = cmd[i++];
+			cp = RedirOut;
+			while	(c != 0 &&
+				 !isspace(c)){
+				*cp++ = c;
+				c = cmd[i++];
+				}
+			outfile = RedirOut[:cp - RedirOut];
+			if	(c == 0)
+				break;
+			}
+		else	{
+			do	{
+				adeposit(c);
+				c = cmd[i++];
+				}
+				while	(c != 0 &&
+					 !isspace(c));
+			adeposit(0);
+			if	(c == 0)
+				break;
+			c = cmd[i++];
+			}
+		}
+	p:		ref far External;
+	fcmd:		[:] char;
+	lookup:		PathList = [];
+
+	try
+		lookup useEnvironment("PATH");
+	fcmd = lookup search(cstring(), ".run", ".com", ".exe", 0);
+	if	(|fcmd == 0){
+		printf("Unknown command: %S\n", cstring());
+		return;
+		}
+	if	(|infile ||
+		 |outfile)
+		forkArena();
+
+	fd:	ref far channel;
+
+	if	(|infile){
+		fd = FileSystem open(infile, AR_READ);
+		if	(fd == 0){
+			printf("Couldn't open '%S'\n", infile);
+			return;
+			}
+		makeLocal(fd, ref far channel(0));
+		}
+	if	(|outfile){
+		if	(appendout){
+			fd = FileSystem open(outfile, AR_WRITE);
+			fd seek(0, SEEK_END);
+			}
+		else
+			fd = FileSystem create(outfile, 0);
+		if	(fd == 0){
+			printf("Couldn't create '%S'\n", outfile);
+			return;
+			}
+		makeLocal(fd, ref far channel(1));
+		}
+	try	{
+		args:	[:] char;
+
+		args = astring();
+		p = FileSystem spawn(0, fcmd, args);
+		if	(|infile ||
+			 |outfile)
+			discardArena();
+		if	(p)
+			Debugger wait(&External.childExit);
+		}
+	except	{
+		printf("Spawn failed\n");
+		if	(|infile ||
+			 |outfile)
+			discardArena();
+		}
+	}
+
+cmdClear:	() =
+	{
+	ArgPtr = Arguments;
+	CmdPtr = Command;
+	}
+
+cdeposit:	(c: char) =
+	{
+	if	(CmdPtr < Command + |Command)
+		*CmdPtr++ = c;
+	}
+
+cstring:	() [:] char =
+	{
+	return Command[:CmdPtr - Command];
+	}
+
+adeposit:	(c: char) =
+	{
+	if	(ArgPtr < Arguments + |Arguments)
+		*ArgPtr++ = c;
+	}
+
+astring:	() [:] char =
+	{
+	return Arguments[:ArgPtr - Arguments];
+	}
+
+Arguments:	[ARGS_LEN] char;
+ArgPtr:		ref char;
+Command:	[MAXPATH] char;
+CmdPtr:		ref char;
+RedirIn:	[MAXPATH] char;
+RedirOut:	[MAXPATH] char;
+
+breakPoint:	type	{
+	public:
+
+	next:		ref breakPoint;
+	location:	unsigned;
+
+create:	factory	(loc: unsigned) ref breakPoint =
+	{
+	return new breakPoint[ 0, loc ];
+	}
+
+listAll:	() =
+	{
+	while	(self){
+		sym:	ref symbol;
+
+		sym = Symbols findSymbol(location, TRUE);
+		printf("Break at ");
+		if	(sym == 0)
+			printf("%08x", location);
+		else
+			sym display(location);
+		printf("\n");
+		self = next;
+		}
+	}
+
+defined:	(loc: unsigned) boolean =
+	{
+	while	(self){
+		if	(loc == location)
+			return TRUE;
+		self = next;
+		}
+	return FALSE;
+	}
+/*
+disable:	(loc: unsigned) =
+	{
+	while	(self){
+		if	(loc == location){
+			DB.codeFD exchangeByte(loc, Code[loc]);
+			return;
+			}
+		self = next;
+		}
+	}
+
+enable:	(loc: unsigned) =
+	{
+	while	(self){
+		if	(loc == location){
+			DB.codeFD exchangeByte(loc, 0xcc);
+			return;
+			}
+		self = next;
+		}
+	}
+
+delete:	(loc: unsigned) =
+	{
+	if	(BreakPoints == 0)
+		return;
+	self = BreakPoints;
+	if	(location == loc){
+		BreakPoints = next;
+		free(self);
+		return;
+		}
+	while	(next){
+		if	(loc == next->location){
+			xb:	ref breakPoint;
+
+			xb = next;
+			DB.codeFD exchangeByte(xb->location, 
+							Code[xb->location]);
+			next = xb->next;
+			free(xb);
+			return;
+			}
+		self = next;
+		}
+	}
+
+clearAll:	() =
+	{
+	b:	ref breakPoint;
+
+	while	(self){
+		b = next;
+		DB.codeFD exchangeByte(location, Code[location]);
+		free(self);
+		self = b;
+		}
+	}
+ */
+	};
+
+BreakPoints:	ref breakPoint;
+/*
+setBreakPoint:	(addr: unsigned) =
+	{
+	printf("Break point at %x\n", addr);
+	if	(isBreakPoint(addr)){
+		printf("Already set\n");
+		return;
+		}
+	b:	ref breakPoint;
+
+	b = breakPoint create(addr);
+	b->next = BreakPoints;
+	BreakPoints = b;
+	DB.codeFD exchangeByte(addr, 0xcc);
+	}
+
+clearBreakPoint:	(addr: unsigned) =
+	{
+	if	(!isBreakPoint(addr)){
+		printf("Not set\n");
+		return;
+		}
+	BreakPoints delete(addr);
+	DB.codeFD exchangeByte(addr, Code[addr]);
+	}
+
+runTo:	(addr: unsigned) =
+	{
+	if	(addr >= RunHeader->codeLen){
+		printf("Cannot run to that address\n");
+		return;
+		}
+	if	(isBreakPoint(addr)){
+//		run(DB.pid, &DB);
+		return;
+		}
+	DB.codeFD exchangeByte(addr, 0xcc);
+//	run(DB.pid, &DB);
+	DB.codeFD exchangeByte(addr, Code[addr]);
+	}
+ */
+isBreakPoint:	public	(addr: unsigned) boolean =
+	{
+	return BreakPoints defined(addr);
+	}
+
+header:	type	{
+	public:
+
+	size:	unsigned;
+	next:	ref header;
+	};
+
+dumpXData: public	(addr: unsigned, len: int) =
+	{
+	cp:	ref byte;
+	i:	int;
+	j:	int;
+	line:	unsigned;
+
+	line = addr & ~0xf;
+	len += addr - line;
+	cp = pointer(line);
+	while	(len){
+		printf("%08x: ", line);
+		i = 8;
+		j = 0;
+		while	(i && len){
+			if	(line + j >= addr)
+				printf("%02x ", cp[8 - i]);
+			else
+				printf("   ");
+			i--;
+			j++;
+			len--;
+			}
+		while	(i){
+			printf("   ");
+			i--;
+			}
+		i = 8;
+		printf(" ");
+		while	(i && len){
+			if	(line + j >= addr)
+				printf("%02x ", cp[16 - i]);
+			else
+				printf("   ");
+			i--;
+			j++;
+			len--;
+			}
+		while	(i){
+			printf("   ");
+			i--;
+			}
+		printf("  ");
+		for	(i = 0; i < j; i++){
+			if	(line + i >= addr){
+				if	(isprint(cp[i]))
+					printf("%c", cp[i]);
+				else
+					stdout putc('.');
+				}
+			else
+				stdout putc(' ');
+			}
+		line += 16;
+		cp += 16;
+		printf("\n");
+		}
+	}
+/*
+breakKey:	interrupt (ifr: interruptFrame) =
+	{
+	catchSignal(SigBreak, &breakKey);
+	setSignalThreshold(ifr.threshold);
+	}
+ */
+
+Debugger:	inherit External { public:
+
+attention:	gate!	() = 
+	{ 
+	}
+/*
+rejectedMessage:	gate!	(code: int) =
+	{
+	e:	ref __exceptionFrame;
+
+	printf("Rejected message: %d _Except = %x\n", code, _ExceptionFrame);
+	for	(e = _ExceptionFrame; e; e = e->next){
+		printf("frame = [ %x, %x, %x, %x ]\n",
+			e->next, e->addr, e->bp, e->sp);
+		}
+	RejectTrap raise(code);
+	}
+ */
+childExit:	gate	(exitCode: unsigned) =
+	{
+	if	(exitCode){
+		if	(exitCode & EX_CAUSE){
+			if	(exitCode & EX_CAUSE == EX_ABORT)
+				printf("Aborted: ");
+			else if	(exitCode & EX_CAUSE == EX_RAISE)
+				printf("Uncaught exception: ");
+			}
+		if	(exitCode == EX_FAIL)
+			printf("Failed");
+		else
+			printf("Exit: 0x%x", exitCode & EX_LEVEL);
+		if	(exitCode & EX_CORE)
+			printf(" - Core dumped");
+		printf("\n");
+		}
+	}
+
+	};

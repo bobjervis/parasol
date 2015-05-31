@@ -1,0 +1,188 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+include	backend;
+include	xstmt;
+include	target;
+include	i386back;
+
+//changed:		int;
+
+optimizeJumps:	public	(x: ref stmt_x) ref stmt_x =
+	{
+	if	(x->operator != O_BLOCK)
+		return x;
+
+	f:	flattener = [ ref block_x(x) ];
+	s:	ref stmt_x;
+
+	Func->asmLabels = 0;
+	do	{
+		TargetData.changed = FALSE;
+		for	(s = ref block_x(x)->stmts; s; s = s->next)
+			s->asmLabel = 0;
+		for	(s = ref block_x(x)->stmts; s; s = s->next){
+			s cleanupLabels();
+			switch	(s->operator){
+			case	O_JUMP:
+				j:	ref jump_x;
+
+				j = ref jump_x(s);
+				if	(j->target == j->next){
+					j remove();
+					if	(s->prev == 0)
+						ref block_x(x)->stmts = 
+								s->next;
+					break;
+					}
+				if	(j->jumpCond != JC_JUMP)
+					break;
+
+			case	O_CONTEX:
+			case	O_RETURN:
+				while	(s->next->operator != O_LABEL &&
+					 s->next->operator != O_EXIT)
+					s->next remove();
+				break;
+
+			case	O_TEST:
+				t:	ref test_x;
+				cmp:	ref tree_p;
+
+				t = ref test_x(s);
+				if	(t->next->operator != O_JUMP)
+					break;
+				j = ref jump_x(t->next);
+				if	(j->jumpCond != JC_JUMP)
+					break;
+				if	(j->next != t->target)
+					break;
+				t->target = lastLabel(j->target);
+				cmp = t->test;
+				if	(cmp)
+					cmp->operator =
+						negateCondition(cmp->operator);
+				j remove();
+				}
+			}
+
+			// trim out unreferenced labels
+
+		s = ref block_x(x)->stmts;
+		while	(s->operator == O_LABEL &&
+			 s->asmLabel == 0)
+			s = s->next;
+		s->prev = 0;
+		ref block_x(x)->stmts = s;
+		while	(s){
+			if	(s->operator == O_LABEL &&
+				 s->asmLabel == 0)
+				s remove();
+			s = s->next;
+			}
+		}
+		while	(TargetData.changed);
+
+		/* This following sequence removes unreachable statements.
+
+		   First, clear all the 'reached' flags (using asmLabel for
+		   that purpose).
+		 */
+
+	for	(s = ref block_x(x)->stmts; s; s = s->next)
+		s->asmLabel = 0;
+
+		/* Now, make the first statement reachable and propagate
+		   using traceLabels.
+		 */
+
+	s = ref block_x(x)->stmts;
+	s->asmLabel = 1;
+	do	{
+		TargetData.changed = FALSE;
+		for	(s = ref block_x(x)->stmts; s; s = s->next)
+			s traceLabels();
+		}
+		while	(TargetData.changed);
+
+		// Now, trim out unreachable code
+
+	for	(s = ref block_x(x)->stmts; s; s = s->next)
+		if	(s->asmLabel == 0)
+			s remove();
+
+	i:	int;
+
+	i = 0;
+	for	(s = ref block_x(x)->stmts; s; s = s->next)
+		if	(s->operator == O_LABEL)
+			s->asmLabel = ++i;
+	Func->asmLabels = i;
+	return x;
+	}
+
+flattener:	type	{
+	first:	ref stmt_x;
+	last:	ref stmt_x;
+
+	public:
+
+constructor:	(x: ref block_x) =
+	{
+	first = 0;
+	last = 0;
+	flatten(x);
+	append(funcExit_x create());
+	x->stmts = first;
+	}
+
+	private:
+
+flatten:	(b: ref block_x) =
+	{
+	s:	ref stmt_x;
+	sn:	ref stmt_x;
+
+	for	(s = b->stmts; s; s = sn){
+		sn = s->next;
+		switch	(s->operator){
+		case	O_BLOCK:
+			flatten(ref block_x(s));
+			break;
+
+		case	O_GOTO:
+			sg:	ref goto_x;
+
+			sg = ref goto_x(s);
+			s = Func jump(sg->target, sg->source);
+			append(s);
+			break;
+
+		case	O_DECL:
+			if	(ref decl_x(s)->initTree == 0)
+				break;
+
+		default:
+			append(s);
+			}
+		}
+	}
+
+append:	(s: ref stmt_x) =
+	{
+	if	(first)
+		last->next = s;
+	else
+		first = s;
+	s->next = 0;
+	s->prev = last;
+	last = s;
+	s->asmLabel = 0;
+	}
+
+	};

@@ -1,0 +1,177 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	target;
+include	symtab, types;
+include	i386back;
+
+assignRegisterVariables:	public	() int =
+	{
+	s:		ref blockScope;
+	i:		unsigned;
+	rootscope:	ref blockScope;
+	regmask:	unsigned;
+	sc:		ref scope_s;
+	winscope:	ref blockScope;
+	winvar:		ref variable;
+	winrank:	unsigned;
+	thisrank:	unsigned;
+	thisreg:	regNum;
+	winreg:		regNum;
+	winmask:	RegisterMask;
+	assignedAny:	boolean;
+
+	assignedAny = FALSE;
+	rootscope = I386Func.rootScope;
+	TargetData.reservedRegisters |=
+		(TargetData.reservedRegisters & (AHmask|BHmask|CHmask|DHmask)) >> 1;
+	for	(;;){
+		winrank = 1;
+		winvar = 0;
+		winscope = 0;
+		winreg = 0;
+
+			/* Find the busiest qualified variable
+			   in any un-tiled scope */
+
+		findhighest(rootscope, &winrank, &winvar, &winscope, &winreg);
+
+			/* Convert it to a register variable. */
+
+		if	(winvar == 0)
+			break;
+		winvar->flags |= VF_REG;
+		assignedAny = TRUE;
+		winvar->reg = winreg;
+
+			/* Now tile the affected scopes. */
+
+			/* First the chain of ancestor scopes */
+
+		winmask = getRegMask(winreg);
+		TargetData.usedRegisters |= winmask;
+		winscope->usedInScope |= winmask;
+		for	(sc = winscope; sc; sc = sc->enclosing)
+			sc->reservedInScope |= winmask;
+
+			/* Now the forest of sub-scopes */
+
+		tiledown(winscope->child, winmask);
+		}
+	return assignedAny;
+	}
+
+findhighest:	(s: ref blockScope, winrankp: ref unsigned,
+				    winvarp: ref ref variable,
+				    winscopep: ref ref blockScope,
+				    winregp: ref regNum) =
+	{
+	v:		ref variable;
+	i:		unsigned;
+	thisreg:	regNum;
+	r:		RegisterMask;
+
+	if	(s == 0)
+		return;
+	r = ~(s->reservedInScope | TargetData.reservedRegisters |
+			(ESmask|SSmask|CSmask|SPmask|BPmask|DSmask|
+			 AHmask|BHmask|CHmask|DHmask));
+	if	(r){
+		for	(v = TargetData.vars; v; v = v->next){
+			if	(v->declaredScope != s)
+				continue;
+			i = rank(v, &thisreg, r);
+			if	(i >= *winrankp){
+				*winvarp = v;
+				*winscopep = s;
+				*winrankp = i;
+				*winregp = thisreg;
+				}
+			}
+		}
+	for	(s = s->child; s; s = s->sibling)
+		findhighest(s, winrankp, winvarp, winscopep, winregp);
+	}
+
+tiledown:	(s: ref blockScope, winmask: RegisterMask) =
+	{
+	while	(s){
+		s->reservedInScope |= winmask;
+		s->usedInScope |= winmask;
+		tiledown(s->child, winmask);
+		s = s->sibling;
+		}
+	}
+
+lowestReg:	(regmask: RegisterMask) unsigned =
+	{
+	winreg:		unsigned;
+	r:		regNum;
+
+	assert(regmask != 0);
+	r = 0;
+	for	(winreg = 1; (winreg & regmask) == 0; winreg <<= 1, r++)
+		;
+	return(r);
+	}
+
+rank:	(var: ref variable, thisregp: ref regNum, 
+					regmask: RegisterMask) unsigned =
+	{
+	x:	unsigned;
+	i:	int;
+	r:	RegisterMask;
+
+	if	(var->flags & (VF_NIXREG|VF_REG))
+		return 0;
+	if	(regmask == 0)
+		return 0;
+	switch	(var->dtype->topType){
+	case	T_UNSIGNED:
+	case	T_SIGNED:
+
+			// If the variable is a byte variable or if it
+			// was used as a byte variable, we need a 'byte'
+			// register.
+
+		if	(var->dtype sizeOf() == 1 ||
+			 var->flags & VF_BYTEREG){
+			r = ALmask|BLmask|CLmask|DLmask;
+			if	(!overlaps(r, regmask))
+				return 0;
+			regmask &= r;
+			if	(var->shiftCount &&
+				 overlaps(CLmask, regmask))
+				regmask = CLmask;
+			}
+
+	case	T_REF:
+		*thisregp = lowestReg(regmask);
+		break;
+
+	default:
+		return 0;
+		}
+	if	(fits(var->preferredReg, regmask)){
+		x = 2;
+		*thisregp = var->preferredReg;
+		}
+	else
+		x = 0;
+	x += var->totalCount;
+	if	(fits(*thisregp, CXmask))
+		x += var->shiftCount;
+	if	(var->declaration &&
+		 var->declaration->storageClass == SC_PARM)
+		i = 2;
+	else
+		i = 1;
+	if	(x < i)
+		return 0;
+	return x - i;
+	}
+

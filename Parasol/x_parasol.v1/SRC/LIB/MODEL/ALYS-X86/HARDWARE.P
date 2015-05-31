@@ -1,0 +1,985 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+BYTE_BITS:	public	const unsigned = 8;	// Size of byte in bits
+CHAR_BITS:	public	const unsigned = 8;	// Size of char in bits
+SHORT_BITS:	public	const unsigned = 16;	// Size of short in bits
+INT_BITS:	public	const unsigned = 32;	// Size of int in bits
+LONG_BITS:	public	const unsigned = 32;	// Size of long in bits
+FLOAT_BITS:	public	const unsigned = 32;	// Size of float in bits
+DOUBLE_BITS:	public	const unsigned = 64;	// Size of double in bits
+EXTENDED_BITS:	public	const unsigned = 80;	// Size of extended in bits
+
+MILLISECONDS_BITS:
+		public	const unsigned = 32;	// Size of Milliseconds in bits
+
+BIG_ENDIAN:	public	const	int = 0;		// little endian = 0
+							// big endian = 1
+KERNEL_STACK:	public	const int = 5120;
+NODE_BITS:	public	const int = 10;		// Number of node bits in id
+OBJ_BITS:	public	const int = 16;		// Number of obj bits in id
+NET_SHIFT:	public	const int = NODE_BITS;
+NET_MASK:	public	const int = ~(1 << NODE_BITS - 1);
+NODE_SHIFT:	public	const int = OBJ_BITS;
+NODE_MASK:	public	const int = ~(1 << OBJ_BITS - 1);
+KERNEL_VIRTUAL_ADDRESS:	
+		public	const	paddr_t = 0x80000000;
+
+vaddr_t:	public	type	unsigned[32];	// virtual address
+paddr_t:	public	type	unsigned[32];	// physical address
+
+taskState_t:	public	type	byte = {
+	TS_ERROR,				// Not used - error condition
+	TS_RUN,					// Normal running
+	TS_TRAP,				// Hardware trap encountered
+	TS_REJECT,				// Message rejected
+	TS_INTERRUPT,				// Message interrupted
+	TS_ABORT,				// Abort called
+	TS_EXCEPTION,				// Uncaught exception
+	TS_EXIT,				// Exit called
+	TS_BREAK,				// Breakpoint
+	TS_STEP,				// Single step
+	};
+
+task_t:	public	type	packed	{
+	public:
+
+	backlink:	unsigned[32];		// offset of page fault
+	esp0:		unsigned[32];
+	ss0:		unsigned[32];
+	esp1:		unsigned[32];
+	ss1:		unsigned[32];
+	esp2:		unsigned[32];
+	ss2:		unsigned[32];
+	cr3:		unsigned[32];
+	eip:		unsigned[32];
+	eflags:		unsigned[32];
+	eax:		unsigned[32];
+	ecx:		unsigned[32];
+	edx:		unsigned[32];
+	ebx:		unsigned[32];
+	esp:		unsigned[32];
+	ebp:		unsigned[32];
+	esi:		unsigned[32];
+	edi:		unsigned[32];
+	es:		unsigned[32];
+	cs:		unsigned[32];
+	ss:		unsigned[32];
+	ds:		unsigned[32];
+	fs:		unsigned[32];
+	gs:		unsigned[32];
+	ldt:		unsigned[32];
+	ioperm:		unsigned[32];
+	fpu:		fpu_t;
+	pageTable0:	paddr_t;		// error word from interrupt
+	idt:		paddr_t;		// interrupt cause
+	state:		taskState_t;
+	pfaultSeg:	byte;			// 0 = code, 1 = data
+			[2] byte;
+	errorCode:	signed[32];
+
+clear:	() =
+	{
+	memSet(self, 0, sizeof task_t);
+	}
+
+trigger:	(base: ref task_t, ifr: ref InterruptFrame, intr: int, 
+						errword: int) =
+	{
+	tf:	ref i386trapFrame;
+
+	*self = *base;
+	idt = intr;
+	pageTable0 = 0;
+
+	if	(errword){
+		tf = ref i386trapFrame(&ifr->cs);
+		pageTable0 = ifr->eip;
+		}
+	else
+		tf = ref i386trapFrame(&ifr->eip);
+
+	eflags = tf->eflags;
+	eip = tf->eip;
+
+	eax = ifr->eax;
+	ebx = ifr->ebx;
+	ecx = ifr->ecx;
+	edx = ifr->edx;
+	ebp = ifr->ebp;
+	esi = ifr->esi;
+	edi = ifr->edi;
+
+	cs = tf->cs;
+	ds = ifr->ds;
+	es = ifr->es;
+	fs = ifr->fs;
+	gs = ifr->gs;
+
+		// Page fault, extract linear address
+
+	if	(intr == 0x0e){
+		_emit(0x0f, 0x20, 0xd0);		// mov eax,cr2
+		backlink = _EAX;
+		}
+	if	(calledFromUserMode()){
+		esp = tf->esp;
+		ss = tf->ss;
+		}
+	else	{
+		esp = unsigned(&tf->esp);
+		ss = _SS;
+		}
+	}
+
+calledFromUserMode:	() boolean =
+	{
+	if	(eflags & VM ||				// v8086 mode
+		 cs & RING == USER_RING)		// ring == 3
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+load:	public	(ncs: int, nds: int, nss: int, 
+		 neip: int, nesp: int, dsegLength: paddr_t,
+		 selfObjectID: ref far External) =
+	{
+	cs = ncs;
+	ds = nds;
+	es = nds;
+	fs = nds;
+	gs = nds;
+	ss = nss;
+	eip = neip;
+	esp = nesp;
+	esi = dsegLength;
+	edi = int(selfObjectID);
+	}
+
+	};
+
+RING:		const	int = 3;
+USER_RING:	const	int = 3;
+
+VM:	const	unsigned = 0x20000;		// v8086 mode
+
+i386trapFrame:	public	type	packed	{
+	public:
+
+	eip:			unsigned[32];
+	cs:			unsigned[16];
+	extra:			unsigned[16];
+	eflags:			unsigned[32];
+	esp:			unsigned[32];
+	ss:			unsigned[16];
+				unsigned[16];
+	};
+
+i386gateFrame:	public	type	packed	{
+	public:
+
+	eip:			unsigned[32];
+	cs:			unsigned[16];
+	extra:			unsigned[16];
+	esp:			unsigned[32];
+	ss:			unsigned[16];
+				unsigned[16];
+	};
+
+fpu_t:	public	type	packed	{
+	public:
+	environ:	Fenv;
+	st:		[8] extended;
+	};
+
+interruptVector_t:	public	type	packed	{
+	public:
+	itype:		ivType_t;
+	attribute:	byte;
+	selector:	unsigned[16];
+	address:	unsigned[32];
+	pointer0:	pointer;
+	pointer1:	pointer;
+	};
+
+ivType_t:	public	type	char = {
+	IVT_UNUSED,
+	IVT_CALLOUT,
+	IVT_EVENT,
+	IVT_SPECIAL
+	};
+/*
+	The following functions and primitives provide controls to enable
+	and disable hardware interrupts.  Note that on the 80386 these can
+	only be used in kernel mode.
+ */
+ENABLE_I:		const	byte = 0xFB;
+DISABLE_I:		const	byte = 0xFA;
+_IDLE_:			const	signed[16] 		= 0x00EB;
+
+allowInterrupts:	public	() =
+	{
+	_emit(ENABLE_I);
+	_emit(_IDLE_);
+	_emit(DISABLE_I);
+	}
+
+enableAll:	public	() =
+	{
+	_emit(ENABLE_I);
+	}
+
+disableAll:	public	() =
+	{
+	_emit(DISABLE_I);
+	}
+
+threadLock:	public	type	{
+	intrMask:	unsigned[16];
+
+	public:
+
+lock:	() =
+	{
+	intrMask = _FLAGS;
+	_emit(DISABLE_I);
+	}
+
+unlock:	() =
+	{
+	_FLAGS = intrMask;
+	}
+
+	};
+
+DSbase:		public	paddr_t;
+CSbase:		public	paddr_t;
+MapBase:	public	paddr_t;
+PhysicalBase:	public	paddr_t;
+
+physicalToAddressable:	public	(src: paddr_t) pointer =
+	{
+	return pointer(src + PhysicalBase);
+	}
+
+addressableToPhysical:	public	(src: pointer) paddr_t =
+	{
+	dest:	paddr_t;
+
+	dest = paddr_t(src) - PhysicalBase;
+	return(dest);
+	}
+
+addressableToMapped:	public	(src: pointer) paddr_t =
+	{
+	dest:	paddr_t;
+
+	dest = paddr_t(src) - MapBase;
+	return(dest);
+	}
+
+mappedToAddressable:	public	(src: paddr_t) pointer =
+	{
+	dest:	pointer;
+
+	dest = ref char(src + MapBase);
+	return dest;
+	}
+
+mappedToCodeAddress:	public	(src: paddr_t) paddr_t =
+	{
+	return paddr_t(src) + KERNEL_VIRTUAL_ADDRESS;
+	}
+
+codeAddressToMapped:	public	(src: paddr_t) paddr_t =
+	{
+	return src - KERNEL_VIRTUAL_ADDRESS;
+	}
+
+TIM_INCR:	public	const unsigned = 4096L;
+TIM_ROLL:	public	const unsigned = 298295L;
+CLOCK_HZ:	public	const int = TIM_ROLL / TIM_INCR;
+
+SPLIT_BITS:	const int = 12;
+
+secondsToTicks:	public	(sec: Time) Tick =
+	{
+	secHi:		unsignedLong;
+	secLo:		unsignedLong;
+	t:		Tick;
+
+	secLo = sec & (1 << SPLIT_BITS - 1);
+	secHi = unsignedLong(sec) >> SPLIT_BITS;
+	t = (secLo * TIM_ROLL) / TIM_INCR;
+	t += (secHi * TIM_ROLL) / (TIM_INCR / (1 << SPLIT_BITS));
+	return t;
+	}
+
+millisecondsToTicks:	public	(msec: signed[32]) Tick =
+	{
+	msecHi:		unsignedLong;
+	msecLo:		unsignedLong;
+	t:		Tick;
+
+	msecLo = msec & (1 << SPLIT_BITS - 1);
+	msecHi = unsignedLong(msec) >> SPLIT_BITS;
+	t = (msecLo * TIM_ROLL) / (TIM_INCR * 1000);
+	t += (msecHi * TIM_ROLL) / ((TIM_INCR * 1000) / (1 << SPLIT_BITS));
+	return t;
+	}
+
+ticksToMilliseconds:	public	(t: Tick) signed[32] =
+	{
+	thi, tlo:	Tick;
+	m:		signed[32];
+
+//	m = 1000 * t * TIM_INCR / TIM_ROLL
+
+	tlo = t & (1 << 10 - 1);
+	thi = unsignedLong(t) >> 10;
+	m = (tlo * (TIM_INCR * 1000)) / TIM_ROLL;
+	m += ((thi * (TIM_INCR * 1000)) / TIM_ROLL) << 10;
+	return m;
+	}
+
+//
+// Built in functions of Parasol
+//
+_abs:		public	(x: int) int = $1;
+_memScan:	public	(s: pointer, c: byte, len: Size) pointer = $5;
+_memCopy:	public	(dest: pointer, src: pointer, len: Size) = $6;
+_memSet:	public	(s: pointer, c: byte, len: Size) = $7;
+_rotateLeft:	public	(value: unsigned, shiftAmt: byte)
+				unsigned = $8;
+_rotateRight:	public	(value: unsigned, shiftAmt: byte)
+				unsigned = $9;
+_fabs:		public	(x: extended) extended = $10;
+_exchangeByte:	public	(x: ref byte, y: byte) byte = $11;
+_exchangeInt:	public	(x: ref int, y: int) int = $12;
+_exchangeShort:	public	(x: ref signed[16], y: short) short = $13;
+_roundInt:	public	(x: extended) extended = $14;
+__cvtBCD:	public	(x: extended, buf: ref byte) = $15;
+
+_bitScanForward:	public	(u: unsigned) int =
+	{
+	_EAX = u;
+	_emit(0x0F, 0xBC, 0xC0);		// BSR EAX,EAX
+	return _EAX;
+	}
+
+_memCompare:	public	(ps1: pointer, ps2: pointer, n: Size) int =
+	{
+	s1:	ref byte;
+	s2:	ref byte;
+
+	s1 = ps1;
+	s2 = ps2;
+	while	(n > 0){
+		n--;
+		if	(*s1 < *s2)
+			return -1;
+		else if	(*s1 > *s2)
+			return 1;
+		s1++;
+		s2++;
+		}
+	return 0;
+	}
+
+_memMove:	public	(dst: pointer, src: pointer, len: Size) =
+	{
+	_emit(CLD);
+	if	(src < dst){
+		_ESI = int(src) + len - 1;
+		_EDI = int(dst) + len - 1;
+		_emit(STD);
+		}
+	else	{
+		_ESI = int(src);
+		_EDI = int(dst);
+		}
+	_ECX = len;
+	_emit(REP_MOVSB);
+	_emit(CLD);
+	}
+
+CLD:		const	byte  = 0xfc;
+STD:		const	byte  = 0xfd;
+REP_MOVSB:	const	unsigned[16] = 0xa4f3;
+
+_bsearch:	public	(key: pointer, base: pointer, nelem: int, width: int,
+				fcmp: ref (pointer, pointer) int) pointer =
+	{
+	kmin:	ref char;
+	probe:	ref char;
+	i:	int;
+	j:	int;
+
+	kmin = base;
+	while	(nelem > 0){
+		i = nelem >> 1;
+		probe = kmin + i * width;
+		j = (*fcmp)(key, probe);
+		if	(j == 0)
+			return probe;
+		else if	(j < 0)
+			nelem = i;
+		else	{
+			kmin = probe + width;
+			nelem -= i + 1;
+			}
+		}
+	return 0;
+	}
+
+_exit:	public	(code: ExitCode) =
+	{
+	ip:	ref _CleanupVector;
+	i:	int;
+
+	--_threadCount_;
+	if	(_threadCount_ == 0){
+		for	(ip = _activeCleanup_ - 1;
+				ip >= _cleanup_;
+				ip--)
+			code = (*ip)(code);
+		}
+	_EBX = code;
+	_emit(0x9a, _null, _GDT_EXIT);
+	}
+//
+//	This routine stops execution without executing the cleanup sequence.
+//
+_abort:	public	(code: ExitCode) =
+	{
+	--_threadCount_;
+	_EBX = code;
+	_emit(0x9a, _null, _GDT_ABORT);
+	}
+//
+//	Scan a string, looking for the first occurance of a character
+//
+//	Returns -1 on no match, index otherwise.
+//
+_stringScan:	public	(s: [:] char, c: char) int =
+	{
+	xp:	ref char;
+
+	xp = memScan(s, c, |s);
+	if	(_FLAGS & 0x40)
+		return (xp - s) - 1;
+	else
+		return -1;
+	}
+
+_stringReverseScan:	public	(s: [:] char, c: char) int =
+	{
+
+		// If we have a non-empty string, scan it
+
+	if	(|s){
+		_EDI = int(&s[|s - 1]);
+		_ECX = |s;
+		_AL = c;	
+		_emit(0xfd, 0xf2, 0xae, 0xfc);	//	std; repnz; scasb; cld	
+		if	(_FLAGS & 0x40)
+			return (ref char(_EDI) - s) + 1;
+		}
+	return -1;
+	}
+/*
+	Convert a string to a float.  The string must be formatted according
+	to the following syntax:
+
+        float ::=	  realnum [ exponent ]
+
+        realnum ::=	  digits 
+			| digits '.' [ digits ]
+			| '.' digits
+
+        exponent ::=	  'e' [ sign ] digits
+ 			| 'E' [ sign ] digits
+
+	digits ::=	  digit
+			| digits digit
+
+	digit ::=	  '0' | '1' | '2' | '3' | '4' 
+			| '5' | '6' | '7' | '8' | '9'
+
+	sign ::=	  '+'
+			| '-'
+
+	The format of the string is checked, and if there is a format error,
+	the function returns NaN and sets success to FALSE.
+
+	If the number is too large or too tiny then the result is infinity 
+	or zero, and success is set to FALSE.
+ 
+METHOD
+------
+
+	The conversion is performed in three phases:
+
+	- The realnum part is scanned, the digits are converted to a
+	  64 unsigned integer (with 18 decimal digits accuracy).  The
+	  position of the decimal point is remembered.
+
+	- Any exponent is parsed.  The resulting exponent adjusts decimal
+	  position from phase 1.
+
+	- The integer is converted to floating point and the exponent is
+	  factored in using the following computation:
+
+		result = integer * 10 ^ exponent
+
+The following diagram may be helpful with undestanding the relations
+between the variables:
+
+   000012345789012345.098765432109876E+99
+      |---decimals-->|
+      |--------------.----digits---->|   not counting the '.'
+ 
+	Decimals are counted negative if the '.' is left of the first digit.
+	Digits are positive unless no non-zero digit is ever seen.
+ */
+_atof:	public (buffer: [:] char, success: ref boolean) extended =
+	{
+	exponent, decimals, digits:		int;
+	expNegative, pointSeen:			boolean;
+	actual:					int;
+	c:					char;
+	pow, result:				extended;
+	fraction:				[2] unsigned[32];
+	i:					int;
+
+	pointSeen = FALSE;
+	decimals = 0;
+	digits = 0;
+
+	fraction[0] = 0;
+	fraction[1] = 0;
+	for	(i = 0; i < |buffer; i++){
+		c = buffer[i];
+		if	(c == '.'){
+			if	(pointSeen){
+				*success = FALSE;
+				return NaN;
+				}
+			pointSeen = TRUE;
+			decimals = digits;
+			continue;
+			}
+		if	(!isdigit(c))
+			break;
+		c -= '0';
+		if	(digits == 0){
+			if	(c == 0)
+				decimals--;
+			else	{
+				fraction[0] = c;
+				actual = digits = 1;
+				}
+			}
+		else	{
+			digits++;
+			if	(digits > 9){
+				if	(fraction[1] >= 0xCCC0000)
+					continue;
+				fraction[1] *= 10;
+				_EAX = fraction[0];
+				_EDX = 10;
+				_emit(0xf7, 0xe2);	// mul eax,edx
+				fraction[0] = _EAX;
+				fraction[1] += _EDX;
+				fraction[0] += c;
+				if	(_FLAGS & 1)
+					fraction[1]++;
+				}
+			else
+				fraction[0] = fraction[0] * 10 + c;
+			actual = digits;
+			}
+		}
+
+		// If there are no non-zero digits, the answer must be zero
+		// and we don't care what the exponent is.
+
+	if	(digits == 0)
+		return 0.0;
+	if	(!pointSeen)
+		decimals = digits;
+
+	exponent = 0;
+	expNegative = FALSE;
+	if	(i < |buffer &&
+		 tolower(c) == 'e'){
+		c = buffer[++i];
+		if	(i >= |buffer){
+			*success = FALSE;
+			return NaN;
+			}
+		if	(c == '-'){
+			expNegative = TRUE;
+			i++;
+			}
+		else if	(c == '+')
+			i++;
+		if	(i >= |buffer){
+			*success = FALSE;
+			return NaN;
+			}
+		for	(; i < |buffer; i++){
+			c = buffer[i];
+			if	(!isdigit(c))
+				break;
+			c -= '0';
+			exponent = exponent * 10 + c;
+
+				// large exponents become infinity
+
+			if	(exponent > 9999)
+				exponent = 9999;
+			}
+		if	(expNegative)
+			exponent = -exponent;
+		}
+
+	x:	int;
+
+	x = decimals + exponent;
+
+		// Check for overflow and underflow
+
+	if	(x >= 308)
+		return INFINITY;
+	if	(x <= -306)
+		return 0.0;
+
+	exponent += decimals - actual;
+
+	result = _fromUnsigned64(fraction);
+	if	(exponent){
+		pow = _pow10(abs(exponent));
+		if	(exponent < 0)
+			result /= pow;
+		else
+			result *= pow;
+ 		}
+	return result;
+	}
+
+_pow10:	public	(p: unsigned) extended =
+	{
+	x:	extended;
+
+	if	(p == 0)
+		return 1.0;
+
+	if	(p > 511)
+		return INFINITY;
+
+	x = smallPowers[p & 0x7];
+
+	if	(p < 8)
+		return x;
+
+	if	(p & 0x008)
+		x *= e8;
+
+	if	(p & 0x010)
+		x *= e16;
+
+	if	(p & 0x020)
+		x *= e32;
+
+	if	(p & 0x040)
+		x *= e64;
+
+	if	(p & 0x080)
+		x *= e128;
+
+	if	(p & 0x100)
+		x *= e256;
+	return x;
+	}
+
+smallPowers:	const   [8] long =
+		[ 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000 ];
+
+e8:		const	extended = 0x0.BEBC2000p27L;
+e16:		const   extended = 0x0.8E1BC9BF04p54L;
+e32:		const   extended = 0x0.9DC5ADA82B70B59Ep107L;
+e64:		const   extended = 0x0.C2781F49FFCFA6D5p213L;
+e128:		const   extended = 0x0.93BA47C980E98CDFp426L;
+e256:		const   extended = 0x0.AA7EEBFB9DF9DE8Cp851L;
+
+EXTEND_EXP_BIAS:	const	int = 0x3fff;
+DOUBLE_EXP_BIAS:	const	int = 0x3ff;
+FLOAT_EXP_BIAS:		const	int = 0x3f;
+INFINITE_EXP:		const	int = 0x7fff;
+
+/*
+	This function converts a 64-bit unsigned integer, represented as
+	an array of two 32-bit integers, to an extendedReal value.
+*/
+_fromUnsigned64:	(src: [2] unsigned[32]) extended =
+	{
+	x, a, b:	int;
+	u:		union	{ public:
+				x:	extended;
+				y:	packed { public:
+					frac:	[2] unsigned;
+					exp:	unsigned[16];
+					};
+				};
+
+	a = src[0];
+	b = src[1];
+	x = 64;
+	if	(b == 0){
+		if	(a == 0)
+			return 0.0;
+		b = a;
+		a = 0;
+		x = 32;
+		}
+	while	(b >= 0){		// normalize b, 
+		b <<= 1;
+		if	(a < 0)
+			b++;
+		a <<= 1;
+		x--;
+		}
+	u.y.exp = x + EXTEND_EXP_BIAS - 1;
+	u.y.frac[0] = a;
+	u.y.frac[1] = b;
+	return u.x;
+	}
+/*
+------------------------------------------------------------------------------
+		Job implementation
+ */
+_newJob:	public	() ref far External =
+	{
+	_emit(0x9a, _null, _GDT_NEWJOB);
+	}
+
+_myJob:		public	() ref far External =
+	{
+	_emit(0x9a, _null, _GDT_MYJOB);
+	}
+
+_myHost:	public	() ref far External =
+	{
+	_emit(0x9a, _null, _GDT_MYHOST);
+	}
+
+_disown:	public	(x: ref far External) int =
+	{
+	_EBX = int(x);
+	_emit(0x9a, _null, _GDT_DISOWN);
+	return _EAX;
+	}
+
+/*
+------------------------------------------------------------------------------
+		Semaphore implementation
+ */
+_semaphoreConstruct:	public	(c: int) int =
+	{
+	_EBX = c;
+	_emit(0x9a, _null, _GDT_SEMAPHORE_CONSTRUCT);
+	return _EAX;
+	}
+
+_semaphoreDown:		public	(index: int) int =
+	{
+	_EBX = index;
+	_emit(0x9a, _null, _GDT_SEMAPHORE_DOWN);
+	return _EAX;
+	}
+
+_semaphoreDownNowait:	public	(index: int) boolean =
+	{
+	_EBX = index;
+	_emit(0x9a, _null, _GDT_SEMAPHORE_DOWNNOWAIT);
+	return _AL;
+	}
+
+_semaphoreUp:		public	(index: int) =
+	{
+	_EBX = index;
+	_emit(0x9a, _null, _GDT_SEMAPHORE_UP);
+	}
+
+_semaphoreWakeup:	public	(index: int) =
+	{
+	_EBX = index;
+	_emit(0x9a, _null, _GDT_SEMAPHORE_WAKEUP);
+	}
+
+_semaphoreEmpty:	public	(index: int) =
+	{
+	_EBX = index;
+	_emit(0x9a, _null, _GDT_SEMAPHORE_EMPTY);
+	}
+
+_semaphoreClose:	public	(index: int) =
+	{
+	_EBX = index;
+	_emit(0x9a, _null, _GDT_SEMAPHORE_CLOSE);
+	}
+/*
+------------------------------------------------------------------------------
+		Non-portable built-in functions
+
+	These are machine specific built-in functions for the 80386:
+ */
+_softInterrupt:	public	(intr: byte) = $0;
+_outportByte:	public	(port: unsigned[16], value: byte) = $2;
+_inportByte:	public	(port: unsigned[16]) byte = $3;
+_emit:		public	(...) = $4;
+
+/*
+------------------------------------------------------------------------------
+		80386 machine registers
+
+	These are the 80386 machine registers:
+ */
+_AL:	public	__reg__ byte		= $0;
+_AH:	public	__reg__ byte		= $1;
+_DL:	public	__reg__ byte		= $2;
+_DH:	public	__reg__ byte		= $3;
+_BL:	public	__reg__ byte		= $4;
+_BH:	public	__reg__ byte		= $5;
+_CL:	public	__reg__ byte		= $6;
+_CH:	public	__reg__ byte		= $7;
+
+_SI:	public	__reg__ unsigned[16]	= $8;
+_DI:	public	__reg__ unsigned[16]	= $9;
+_BP:	public	__reg__ unsigned[16]	= $10;
+_SP:	public	__reg__ unsigned[16]	= $11;
+
+_ES:	public	__reg__ unsigned[16]	= $12;
+_DS:	public	__reg__ unsigned[16]	= $13;
+_CS:	public	__reg__ unsigned[16]	= $14;
+_SS:	public	__reg__ unsigned[16]	= $15;
+
+//_FS:	public	__reg__ unsigned[16]	= $16;
+//_GS:	public	__reg__ unsigned[16]	= $17;
+
+_AX:	public	__reg__ unsigned[16]	= $0;
+_BX:	public	__reg__ unsigned[16]	= $4;
+_CX:	public	__reg__ unsigned[16]	= $6;
+_DX:	public	__reg__ unsigned[16]	= $2;
+
+_ESI:	public	__reg__ unsigned	= $8;
+_EDI:	public	__reg__ unsigned	= $9;
+_EBP:	public	__reg__ unsigned	= $10;
+_ESP:	public	__reg__ unsigned	= $11;
+
+_EAX:	public	__reg__ unsigned	= $0;
+_EBX:	public	__reg__ unsigned	= $4;
+_ECX:	public	__reg__ unsigned	= $6;
+_EDX:	public	__reg__ unsigned	= $2;
+
+_FLAGS:	public	__reg__ unsigned	= $0xFF;
+
+/*
+------------------------------------------------------------------------------
+		ALYS Kernel Interface
+
+	These constants define the specific selectors used for ALYS kernel
+	entry points in the GDT.  Rather than mediating system calls through
+	software interrupts, ALYS uses gate functions.  The following 
+	constants define the GDT selectors.  The selector ranges are chosen
+	so that selectos 0x0000 - 0x00F8 are reserved for kernel internal
+	selectors.  Selectors 0x0100 - 0x03F8 are the kernel entry points.
+	Selectors 0x0400 - 0x7F8 are reserved for TSS and LDT selectors.  The
+	number of these selectors declared here actually limits the size of 
+	the process table.
+ */
+_KERNEL_PROCS:	public	const	int = 128;	
+					// Number of processes in ALYS kernel
+
+_null:		public	const	unsigned[32] = 0;
+
+_GDTSelectors:	public	type	unsigned[16] = {
+
+	_GDT_KERNEL_CODE		= 0x0008,
+	_GDT_KERNEL_DATA		= 0x0010,
+	_GDT_KERNEL_PHYSICAL		= 0x0018,
+
+		// Message calls
+
+	_GDT_PERMIT			= 0x0100,
+	_GDT_SEND_ANY			= 0x0108,
+	_GDT_SEND_INT			= 0x0110,
+	_GDT_SEND_VOID			= 0x0118,
+	_GDT_RECEIVE			= 0x0120,
+	_GDT_READTEXT			= 0x0128,
+	_GDT_DISCARDTEXT		= 0x0130,
+	_GDT_REPLY			= 0x0138,
+	_GDT_REPLYPARTIAL		= 0x0140,
+	_GDT_REJECT			= 0x0148,
+
+		// System calls
+
+	_GDT_ALARM			= 0x0150,
+	_GDT_GROW			= 0x0158,
+	_GDT_EXIT			= 0x0160,
+	_GDT_FORKARENA			= 0x0168,
+	_GDT_DISCARDARENA		= 0x0170,
+	_GDT_CATCHSIGNAL		= 0x0178,
+	_GDT_SETSIGNALTHRESHOLD 	= 0x0180,
+	_GDT_PAUSE			= 0x0188,
+	_GDT_MAKELOCAL			= 0x0190,
+	_GDT_MAKEANYLOCAL		= 0x0198,
+	_GDT_SETFORKACTION		= 0x01a0,
+	_GDT_SIGNALINFO			= 0x01a8,
+	_GDT_ABORT			= 0x01b0,
+	_GDT_RAISE			= 0x01b8,
+	_GDT_PROBEOBJECT		= 0x01c0,
+	_GDT_NEWJOB			= 0x01c8,
+	_GDT_MYJOB			= 0x01d0,
+
+		// Thread management code
+
+	_GDT_THREADLAUNCH		= 0x01d8,
+	_GDT_KERNELBLOCK		= 0x01e0,
+	_GDT_KERNELUNBLOCK		= 0x01e8,
+	_GDT_KERNELDOWN			= 0x01f0,
+	_GDT_KERNELUP			= 0x01f8,
+
+	_GDT_SENSEMESSAGES		= 0x0200,
+//	_GDT_MESSAGELOGGING		= 0x0208,
+	_GDT_DISOWN			= 0x0210,
+
+	_GDT_SEMAPHORE_CONSTRUCT	= 0x0218,
+	_GDT_SEMAPHORE_DOWN		= 0x0220,
+	_GDT_SEMAPHORE_UP		= 0x0228,
+	_GDT_SEMAPHORE_WAKEUP		= 0x0230,
+	_GDT_SEMAPHORE_EMPTY		= 0x0238,
+	_GDT_SEMAPHORE_DOWNNOWAIT	= 0x0240,
+	_GDT_SEMAPHORE_CLOSE		= 0x0248,
+
+		// Security/accounting support
+
+	_GDT_GETUSERID			= 0x0250,
+	_GDT_GETGROUPID			= 0x0258,
+
+	_GDT_SIGNAL_SEND_ANY		= 0x0260,
+	_GDT_SIGNAL_SEND_INT		= 0x0268,
+	_GDT_SIGNAL_SEND_VOID		= 0x0270,
+
+	_GDT_MYHOST			= 0x0278,
+
+	_GDT_TSS_BASE			= 0x0400,
+	_GDT_TSS_TOP			= _GDT_TSS_BASE + 0x10 * _KERNEL_PROCS,
+	_GDT_END			= _GDT_TSS_TOP
+	};

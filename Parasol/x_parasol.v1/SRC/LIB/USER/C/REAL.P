@@ -1,0 +1,309 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+
+Infinity:	public	real;
+NaN:		public	real;
+Zero:		public	real = [ 0.0 ];
+One:		public	real = [ 1.0 ];
+
+start:	entry	() =
+	{
+	Infinity.value = machine::Infinity;
+	NaN.value = machine::xNaN;
+	}
+
+real:	public	type	{
+	public:
+
+	value:		extended;
+
+fromSigned32:	(i: signed[32]) =
+	{
+	value = i;
+	}
+
+fromUnsigned32:	(i: unsigned[32]) =
+	{
+	value = i;
+	}
+/*
+	This function converts a 64-bit signed integer, represented as
+	an array of two 32-bit integers, to an extendedReal value.
+*/
+fromSigned64:	(src: [2] unsigned[32]) =
+	{
+//	x:	signed[64];
+
+//	x = signed[64](src[1]) << 32 + src[0];
+//	value = x;
+	}
+/*
+	This function converts a 64-bit unsigned integer, represented as
+	an array of two 32-bit integers, to an extendedReal value.
+*/
+fromUnsigned64:	(src: [2] unsigned[32]) =
+	{
+//	x:	unsigned[64];
+
+//	x = unsigned[64](src[1]) << 32 + src[0];
+//	value = x;
+	}
+/*
+	This function converts an extended to a 64 bit signed integer,
+	truncating any result.
+ */
+toSigned64:	(dest: [2] unsigned) =
+	{
+//	x:	signed[64];
+
+//	x = value;
+//	dest[0] = x;
+//	dest[1] = x >> 32;
+	}
+
+toSigned32:	() signed[32] =
+	{
+	return value;
+	}
+
+toDouble:	(dp: ref byte) =
+	{
+	*ref double(dp) = value;
+	}
+
+toFloat:	(fp: ref byte) =
+	{
+	*ref float(fp) = value;
+	}
+
+fromFloat:	(fp: ref byte) =
+	{
+	value = *ref float(fp);
+	}
+
+fromDouble:	(dp: ref byte) =
+	{
+	value = *ref double(dp);
+	}
+
+roundDouble:	() =
+	{
+	value = double(value);
+	}
+
+roundFloat:	() =
+	{
+	value = float(value);
+	}
+
+negate:	() =
+	{
+	value = -value;
+	}
+
+add:	(b: ref real) =
+	{
+	value += b->value;
+	}
+ 
+subtract:	(b: ref real) =
+	{
+	value -= b->value;
+	}
+
+multiply:	(b: ref real) =
+	{
+	value *= b->value;
+	}
+
+divide:	(b: ref real) =
+	{
+	value /= b->value;
+	}
+
+isInfinity:	() boolean =
+	{
+	if	(value == machine::Infinity)
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+isNaN:		() boolean =
+	{
+//	if	(value !<>= 0.0)
+//		return TRUE;
+//	else
+		return FALSE;
+	}
+
+display:	(fd: ref stream, width: int) =
+	{
+	c:	char;
+
+	if	(value == machine::Infinity){
+		if	(width > 64)
+			fd printf("(long double)");
+		else if (width == 32)
+			fd printf("(float)");
+		fd printf("(1.0/0.0)");
+		return;
+		}
+/*
+	if	(value !<>= 0.0){
+		if	(width > 64)
+			fd printf("(long double)");
+		else if (width == 32)
+			fd printf("(float)");
+		fd printf("(0.0/0.0)");
+		return;
+		}
+ */
+	if	(width > 64)
+		c = 'L';
+	else if	(width == 32)
+		c = 'F';
+	else
+		c = ' ';
+	fd printf("%lg%c", value, c);
+	}
+
+	};
+
+stringToFloat:	public	(r: ref real, src: ref char) =
+	{
+	cp:	ref char;
+
+	r->value = strtod(src, &cp);
+	}
+//
+//	C library function
+//
+strtod:	extern	(ref char, ref ref char) double;
+
+hexToFloat:	public	(r: ref real, src: ref char) =
+	{
+	r->value = 0;
+/*
+	exponent, decimals, digits:		int;
+	precision:				char;
+	expNegative, pointSeen:			boolean;
+	actual:					int;
+	c:					char;
+	pow, result:				real;
+	fraction:				[2] unsigned;
+
+	pointSeen = FALSE;
+	decimals = 0;
+	digits = 0;
+
+	fraction[0] = 0;
+	fraction[1] = 0;
+	while	(*src == '0')
+		src++;
+	for	(;;){
+		c = *src++;
+		if	(c == '.'){
+			if	(pointSeen)
+				break;
+			pointSeen = TRUE;
+			decimals = digits;
+			continue;
+			}
+		if	(!isxdigit(c))
+			break;
+		if	(isdigit(c))
+			c -= '0';
+		else
+			c = tolower(c) - 'a' + 10;
+		if	(fraction[1] & 0xF0000000)
+			continue;
+		if	(digits == 0 && c == 0){
+			decimals -= 4;
+			continue;
+			}
+		digits += 4;
+		fraction[1] <<= 4;
+		fraction[1] += fraction[0] >> 28;
+		fraction[0] <<= 4;
+		fraction[0] += c;
+		actual = digits;
+		}
+
+		// If there are no non-zero digits, the answer must be zero
+		// and we don't care what the exponent is.
+
+	if	(digits == 0){
+		*r = Zero;
+		return;
+		}
+	if	(!pointSeen)
+		decimals = digits;
+
+	exponent = 0;
+	expNegative = FALSE;
+	if	(c == 'P' || c == 'p'){
+		c = *src++;
+		if	(c == '-'){
+			expNegative = TRUE;
+			c = *src++;
+			}
+		else if	(c == '+')
+			c = *src++;
+		for	(;;){
+			if	(!isdigit(c))
+				break;
+			c -= '0';
+			exponent = exponent * 10 + c;
+
+				// large exponents become infinity
+
+			if	(exponent > 99999)
+				exponent = 99999;
+			c = *src++;
+			}
+		if	(exponent == 97081){	// magic value!
+			if	(expNegative)
+				*r = NaN;
+			else
+				*r = Infinity;
+			return;
+			}
+		if	(expNegative)
+			exponent = -exponent;
+		}
+	precision = tolower(c);		// in case it's 'f' or 'l'
+
+	x:	int;
+
+	exponent += decimals;
+
+		// Check for overflow and underflow
+
+	if	(exponent > 0x3FFF){
+		*r = Infinity;
+		return;
+		}
+	if	(exponent <= -0x3FFF){
+		*r = Zero;
+		return;
+		}
+
+	exponent -= actual;
+	result fromUnsigned64(fraction);
+	result.exp += exponent;
+	if	(precision == 'f')
+		result roundFloat();
+	else if	(precision != 'l')
+		result roundDouble();
+	*r = result;
+	return;
+ */
+	}
+

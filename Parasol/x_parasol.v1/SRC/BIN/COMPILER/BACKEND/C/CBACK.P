@@ -1,0 +1,1709 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+include	filesys;
+
+include	symtab, types, functype, etables;
+include	sbuffer, ptree, hash;
+include	backend, real;
+include	xcall, xstmt, xtree, value;
+include	tparams, target;
+
+enableCbackend:	public	(iet: boolean) =
+	{
+	Func = &CFunc;
+	CFunc.ReferenceData = 0;
+	CFunc.InFunction = FALSE;
+	CFunc.IncludeEntryTables = iet;
+	}
+
+CFunc:	inherit	functionBody	{
+	public:
+
+	Cfd:			stream;
+	ObjectTemps:		int;
+	DescriptorTemps:	int;
+	VarArgsTemps:		ref varArgsTemp;
+	VarArgsIndex:		int;
+	VarArgsSeen:		boolean;
+	EllipsisUsed:		boolean;
+	AssertUsed:		boolean;
+	ReferenceData:		ref dataList;
+	InFunction:		boolean;
+	IncludeEntryTables:	boolean;
+
+startValue:	dynamic	(u: ref unit_s) =
+	{
+	fpath:	[MAXPATH] char;
+	f:	[:] char;
+
+	super startValue(u);
+	f = makePath(fpath, "", u->name spelling(), ".c");
+	if	(Cfd create(f, AR_WRITE|AR_READ)){
+		printf("Couldn't create '%S'\n", f);
+		return;
+		}
+	VarArgsSeen = FALSE;
+	AssertUsed = FALSE;
+	Cfd printf(	"#include <stddef.h>\n"
+			"typedef struct { char *addr; size_t mlen, clen; } p_descriptor;\n"
+			"typedef unsigned long p_far_pointer;\n"
+			"typedef char *p_obj_T;\n"
+			"void *memcpy();\n"
+			"#define D_L(t, l, d) (t.addr=l,t.mlen=t.clen=d,t)\n"
+			"#define D_D(t, x, v, o, m) t=x,((*(struct v**)((char*)t+o))->m)\n"
+			"#define V_A(t, i, a, ty) ((*(ty)&t[i])=(a))\n"
+		);
+	}
+
+endValue:	dynamic	() =
+	{
+	d:	ref dataList;
+
+	for	(d = ReferenceData; d; d = d->next)
+		emitData(d->sym);
+	if	(IncludeEntryTables){
+		collectEntryAndCleanupFunctions(currentUnit, 0, 1);
+
+		sl:	ref symbolList;
+
+		EntryFunctions startTraversal();
+		while	((sl = EntryFunctions next()) != 0)
+			sl->sym emitNeededDeclaration(&Cfd);
+
+		CleanupFunctions startTraversal();
+		while	((sl = CleanupFunctions next()) != 0)
+			sl->sym emitNeededDeclaration(&Cfd);
+
+		Cfd printf("static struct entryTable{\n"
+			"void(*func)(void);\n"
+			"int cleanupIndex;\n"
+			"}EntryTable[] = {\n"
+			);
+		EntryFunctions startTraversal();
+		while	((sl = EntryFunctions next()) != 0){
+			Cfd putc('{');
+			sl->sym outputHeaderName(&Cfd);
+			Cfd printf(",%d},\n", sl->refCount);
+			}
+		Cfd printf("};\n");
+		if	(CleanupFunctions.count){
+			Cfd printf("int(*ParasolCleanupTable[])(int)={\n");
+			CleanupFunctions startTraversal();
+			while	((sl = CleanupFunctions next()) != 0){
+				sl->sym outputHeaderName(&Cfd);
+				Cfd printf(",\n");
+				}
+			Cfd printf("};\n");
+			}
+		else
+			Cfd printf("int(*ParasolCleanupTable[])(int) = {0};\n");
+		Cfd printf(
+			"int ParasolCleanupIndex = 0;\n"
+			"void machine__parasolArguments_(int,char**);\n"
+			"void machine_exit_(");
+
+			t:	ref number_z;
+
+			t = number_z create(T_UNSIGNED, [ 0, 0 ], 32);
+			t outputHeaderPrefix(&Cfd);
+		Cfd printf(");\n"
+			"int main(int argc, char **argv){\n"
+			"struct entryTable*e;\n"
+
+			"machine__parasolArguments_(argc, argv);\n"
+			"for	(e = EntryTable; e < &EntryTable[%d]; e++){\n"
+			"	e->func();\n"
+			"	ParasolCleanupIndex = e->cleanupIndex;\n"
+			"	}\n"
+			"machine_exit_(0);\n"
+			"}\n"
+				, EntryFunctions.count);
+		}
+	Cfd close();
+	}
+
+startFunction:	dynamic	(sc: ref blockScope, ft: ref function_z, 
+						sym: ref symbol_s) =
+	{
+	super startFunction(sc, ft, sym);
+	sc defineParameters(ft->parameters, sym->qualifier &
+					(DQ_MEMBERFUNC|DQ_FACTORY));
+	}
+
+generateCode:	dynamic	(sym: ref symbol_s, x: ref stmt_x, 
+						sc: ref blockScope) =
+	{
+	v, vn:	ref varArgsTemp;
+
+//	for	(v = VarArgsTemps; v; v = vn){
+//		vn = v->next;
+//		free(v);
+//		}
+	VarArgsTemps = 0;
+	VarArgsIndex = 0;
+	ObjectTemps = 0;
+	DescriptorTemps = 0;
+	EllipsisUsed = FALSE;
+	InFunction = TRUE;
+	x fold();
+	x computeBenefits(0);
+	if	(sym->qualifier & DQ_MEMBERFUNC){
+		sym->enclosing getEnclosingType() 
+					emitNeededTypedefs(&Cfd);
+		}
+	sym->dtype emitNeededTypedefs(&Cfd);
+	sym->dtype outputHeaderPrefix(&Cfd);
+	sym outputHeaderName(&Cfd);
+	sym->dtype outputHeaderSuffix(&Cfd, sym->qualifier, sym->enclosing);
+	Cfd printf("{\n");
+	if	(sym->qualifier & DQ_FACTORY){
+		d:	ref type_s;
+
+		d = sym->dtype returnTypeOf();
+		d outputHeaderPrefix(&Cfd);
+		Cfd printf("(*self_)");
+		d outputHeaderSuffix(&Cfd, 0, 0);
+		Cfd printf(";\n");
+		}
+//	if	(EllipsisUsed)
+//		Cfd printf("struct machine_varArgs_ V_va;\n");
+	i:	int;
+	for	(i = 0; i < ObjectTemps; i++)
+		Cfd printf("p_obj_T p_obj_T%d;\n", i);
+	for	(i = 0; i < DescriptorTemps; i++)
+		Cfd printf("p_descriptor p_desc_T%d;\n", i);
+	for	(v = VarArgsTemps; v; v = v->next)
+		Cfd printf("unsigned char p_var_T%d[%d];\n",
+							v->index, v->size);
+	if	(DebugList)
+		x display(0);
+	x generateCode();
+	InFunction = FALSE;
+	Cfd printf("}\n");
+	rootScope = 0;
+	}
+
+generateData:	dynamic	(sym: ref symbol_s) =
+	{
+	x, y:		ref tree_p;
+	u:		ref tree_p;
+	t:		ref type_s;
+	initTree:	ref tree_p;
+
+	x = initializerExpression(sym);
+	if	(sym->qualifier & DQ_CONST){
+		if	(x)
+			x initialize(0, sym->currentValue);
+		else
+			sym->currentValue recordValueSize();
+		}
+	if	(rootScope)
+		return;
+	if	(InFunction)
+		emitData(sym);
+	else	{
+		d:	ref dataList;
+
+		if	(sym->enclosing &&
+			 sym->enclosing getUnit() != currentUnit)
+			return;
+		for	(d = ReferenceData; d; d = d->next)
+			if	(d->sym == sym)
+				return;
+		ReferenceData = threadHeap() new dataList[ ReferenceData, sym ];
+		}
+	}
+
+emitData:	(sym: ref symbol_s) =
+	{
+	x, y:		ref tree_p;
+
+	sym->dtype emitNeededTypedefs(&Cfd);
+	x = initializerExpression(sym);
+	if	(x){
+		sym outputHeader(TRUE, &Cfd);
+		Cfd putc('=');
+		if	(DebugList){
+			sym outputHeader(TRUE, &stdout);
+			printf("\n");
+			x display(0);
+			}
+		x initialize(0, 0);
+		}
+	else	{
+		d:	ref type_s;
+
+		sym outputHeader(TRUE, &Cfd);
+		d = sym->dtype getType();
+		if	(d needsDynamicVectors()){
+			Cfd putc('=');
+			d defaultInitializer(&Cfd);
+			}
+		}
+	Cfd printf(";\n");
+	}
+
+argument:	dynamic	(l: ref tree_p, r: ref tree_p, 
+				o: fileOffset) ref tree_p =
+	{
+	return new argument_C[ l, r, o ];
+	}
+
+assert_:	dynamic	(x: ref tree_p, s: textRange) ref stmt_x =
+	{
+	return new assert_C[ x, s ];
+	}
+
+auto:	dynamic	(sym: ref symbol_s, adjust: int) ref auto_x =
+	{
+	return new auto_C[ sym, adjust ];
+	}
+
+binary:	dynamic	(op: operators, l: ref tree_p, 
+				r: ref tree_p, 
+				o: fileOffset) ref binary_x =
+	{
+	return new binary_C[ op, l, r, o ];
+	}
+
+block:	dynamic	(x: ref stmt_x) ref stmt_x =
+	{
+	return new block_C[ x ];
+	}
+
+cast:	dynamic	(d: ref type_p, t: ref tree_p, o: fileOffset) ref tree_p =
+	{
+	return new cast_C[ d, t, o ];
+	}
+
+conditional:	dynamic	(t: ref tree_p, tp: ref tree_p, 
+				fp: ref tree_p, 
+				o: fileOffset) ref tree_p =
+	{
+	return new conditional_C[ t, tp, fp , o ];
+	}
+
+continueExcept:	dynamic	() ref stmt_x =
+	{
+	return continueExcept_x create();
+	}
+
+decl:	dynamic	(d: ref declaration_p, s: textRange) ref stmt_x =
+	{
+	return new decl_C[ d, s ];
+	}
+
+dynamicVectorPointer:	dynamic	(st: ref struct_z) ref tree_p =
+	{
+	return new dynamicVectorPointer_C[ st ];
+	}
+
+ellipsis:	dynamic	() ref tree_p =
+	{
+	return new ellipsis_C[];
+	}
+
+endExcept:	dynamic	(m: ref try_x) ref stmt_x =
+	{
+	return endExcept_x create(m);
+	}
+
+endTry:	dynamic	(x: ref try_x) ref stmt_x =
+	{
+	return new endTry_x[ x ];
+	}
+
+error:	dynamic	() ref tree_p =
+	{
+	return error_x create();
+	}
+
+errorStmt:	dynamic	(o: fileOffset) ref stmt_x =
+	{
+	return errorStmt_x create(o);
+	}
+
+exceptClause:	dynamic	(m: ref try_x, x: ref tree_p, 
+						s: textRange) ref except_x =
+	{
+	return new except_x[ m, x, s ];
+	}
+
+expr:	dynamic	(x: ref tree_p, s: textRange) ref stmt_x =
+	{
+	return new expr_C[ x, s ];
+	}
+
+fcon:	dynamic	(v: ref real, w: int) ref tree_p =
+	{
+	return new fcon_C [ v, w ];
+	}
+
+goto_:	dynamic	(id: ref identifier, s: textRange) ref stmt_x =
+	{
+	return goto_x create(id, s);
+	}
+
+icon:	dynamic	(v: long, w: int) ref tree_p =
+	{
+	return new icon_C[ v, w ];
+	}
+
+iden:	dynamic	(unitName: ref identifier, uno: fileOffset,
+		 id: ref identifier, o: fileOffset) ref tree_p =
+	{
+	return new iden_C[ unitName, uno, id, o ];
+	}
+
+jump:	dynamic	(t: ref label_x, s: textRange) ref jump_x =
+	{
+	return new jump_C[ t, s ];
+	}
+
+label_:	dynamic	() ref label_x =
+	{
+	return new label_C[ O_LABEL, 0, 0 ];
+	}
+
+literal:	dynamic	() ref literal_x =
+	{
+	return new literal_C[];
+	}
+
+methodCall:	dynamic	(l: ref tree_p, id: ref identifier,
+				r: ref tree_p,
+				o: fileOffset,
+				s: boolean) ref methodCall_x =
+	{
+	return new methodCall_C[ r, o, s, l, id ];
+	}
+
+namedLabel:	dynamic	(id: ref identifier, o: fileOffset) ref label_x =
+	{
+	return new label_C[ O_LABEL, id, o ];
+	}
+
+new_:	dynamic	(h: ref tree_p, d: ref type_p, t: ref tree_p, o: fileOffset) ref tree_p =
+	{
+	return new_x create(h, d, t, o);
+	}
+
+offsetof_:	dynamic	(d: ref type_p, id: ref identifier) ref tree_p =
+	{
+	return Offsetof_x create(d, id);
+	}
+
+reference:	dynamic	(op: operators, l: ref tree_p, 
+				id: ref identifier,
+				o: fileOffset) ref tree_p =
+	{
+	return reference_x create(op, l, id, o);
+	}
+
+remoteCall:	dynamic	(obj: ref tree_p, d: ref function_z, m: ref symbol_s,
+				a: ref tree_p, s: ref scope_s,
+				offset: fileOffset, sig: boolean) ref remoteCall_x =
+	{
+	return new remoteCall_x[ obj, d, m, a, s, offset, sig ];
+	}
+
+reply_:	dynamic	(x: ref tree_p, s: textRange) ref stmt_x =
+	{
+	return reply_x create(x, s);
+	}
+
+return_:	dynamic	(x: ref tree_p, s: textRange) ref stmt_x =
+	{
+	return new return_C[ x, s ];
+	}
+
+sconst:	dynamic	(c: ref tree_p, o: fileOffset) ref tree_p =
+	{
+	return new sconst_C[ c, o ];
+	}
+
+self_:	dynamic	(op: operators, o: fileOffset) ref tree_p =
+	{
+	return new Self_x[ op, o ];
+	}
+
+sizeof_:dynamic	(d: ref type_p) ref tree_p =
+	{
+	return sizeof_x create(d);
+	}
+
+slice:	dynamic	(t: ref tree_p, l: ref tree_p, r: ref tree_p, o: fileOffset)
+							ref tree_p =
+	{
+	return new slice_C[ t, l, r, o ];
+	}
+
+staticCall:	dynamic	(l: ref tree_p, r: ref tree_p,
+				o: fileOffset) ref staticCall_x =
+	{
+	return new staticCall_C[ l, r, o ];
+	}
+
+switch_:	dynamic	(x: ref tree_p, s: textRange) ref switch_x =
+	{
+	return new switch_C[ x, s ];
+	}
+
+test:	dynamic	(t: ref tree_p, destination: ref label_x, 
+					s: textRange) ref stmt_x =
+	{
+	return new test_C[ t, destination, s ];
+	}
+
+testFalse:	dynamic	(t: ref tree_p, destination: ref label_x, 
+					s: textRange) ref stmt_x =
+	{
+	return new testFalse_C[ t, destination, s ];
+	}
+
+try_:	dynamic	(x: ref label_x) ref try_x =
+	{
+	return new try_x[ x ];
+	}
+
+varArgsNode:	(varArgs: ref tree_p, varIndex: ref int) ref tree_p =
+	{
+	if	(varArgs){
+		sz:	addr_t;
+
+		sz = varArgs varArgsSize();
+		*varIndex = VarArgsIndex++;
+		VarArgsTemps = new varArgsTemp[ VarArgsTemps, *varIndex, sz ];
+		return new varArgsTemp_C[ *varIndex, sz ];
+		}
+	else
+		return new icon_C[ 0, PTRBITS ];
+	}
+
+	};
+
+dataList:	type	{ public:
+	next:		ref dataList;
+	sym:		ref symbol_s;
+	};
+
+argument_C:	type	inherit	argument_x {
+
+generateCode:	dynamic	() =
+	{
+	if	(left == 0){
+		if	(right)
+			right generateCode();
+		}
+	else	{
+		left generateCode();
+		if	(right){
+			CFunc.Cfd printf(", ");
+			right generateCode();
+			}
+		}
+	}
+
+computeBenefits:	dynamic (int) =
+	{
+	if	(left)
+		left computeBenefits(0);
+	if	(right)
+		right computeBenefits(0);
+	}
+
+varArgsSize:	dynamic	() addr_t =
+	{
+	x:	addr_t;
+
+	x = left->dtype sizeOf() + 3;
+	x &= ~3;
+	return x + right varArgsSize();
+	}
+
+	};
+
+assert_C:	type	inherit assert_x {
+
+generateCode:	dynamic	() =
+	{
+	if	(test){
+		CFunc.Cfd printf("assert(");
+		test generateCode();
+		CFunc.Cfd printf(");\n");
+		}
+	}
+
+computeBenefits:	dynamic (int) =
+	{
+	if	(!CFunc.AssertUsed){
+		CFunc.AssertUsed = TRUE;
+		CFunc.Cfd printf("#include <assert.h>\n");
+		}
+	}
+
+	};
+
+auto_C:	type	inherit	auto_x {
+
+generateCode:	dynamic	() =
+	{
+	reald:	ref type_s;
+
+	if	(symbol &&
+		 symbol->dtype)
+		reald = symbol->dtype getType();
+	else
+		reald = 0;
+	if	(adjust ||
+		 reald != dtype){
+		CFunc.Cfd printf("*(");
+		dtype outputHeaderPrefix(&CFunc.Cfd);
+		CFunc.Cfd printf("(*)");
+		dtype outputHeaderSuffix(&CFunc.Cfd, 0, 0);
+		CFunc.Cfd printf(")((char *)&");
+		}
+	if	(symbol){
+		if	(symbol->name)
+			CFunc.Cfd printf("%S_", symbol->name spelling());
+		else 
+			CFunc.Cfd printf("A_%x", symbol);
+		}
+	else
+		CFunc.Cfd printf("auto <nil>");
+	if	(adjust)
+		CFunc.Cfd printf("+0x%x)", adjust);
+	else if (reald != dtype)
+		CFunc.Cfd putc(')');
+	}
+
+computeBenefits:	dynamic (int) =
+	{
+	if	(symbol &&
+		 symbol->dtype)
+		dtype emitNeededTypedefs(&CFunc.Cfd);
+	}
+
+	};
+
+block_C:	type	inherit	block_x {
+
+generateCode:	dynamic	() =
+	{
+	s:	ref stmt_x;
+	sym:	ref symbol_s;
+
+	CFunc.Cfd printf("{\n");
+	for	(sym = scope->symbols; sym; sym = sym->next){
+		if	(sym->dtype == 0)
+			continue;
+		if	(sym->storageClass == SC_EXTERN)
+			continue;
+		if	(sym->storageClass == SC_STATIC){
+			sc:	ref blockScope;
+
+			sc = CFunc.rootScope;
+			CFunc.rootScope = 0;
+			sym constructValue(TRUE);
+			CFunc.rootScope = sc;
+			}
+		else	{
+			sym->dtype outputHeaderPrefix(&CFunc.Cfd);
+			if	(sym->name)
+				CFunc.Cfd printf(" %S_", 
+							sym->name spelling());
+			else
+				CFunc.Cfd printf(" A_%x", sym);
+			sym->dtype outputHeaderSuffix(&CFunc.Cfd, 0, 0);
+			CFunc.Cfd printf(";\n");
+			}
+		}
+	for	(s = stmts; s; s = s->next)
+		s generateCode();
+	CFunc.Cfd printf("}\n");
+	}
+
+computeBenefits:	dynamic (int) =
+	{
+	s:	ref stmt_x;
+	sym:	ref symbol_s;
+
+	for	(sym = scope->symbols; sym; sym = sym->next){
+		if	(sym->dtype == 0 || sym->name == 0)
+			continue;
+		sym->dtype emitNeededTypedefs(&CFunc.Cfd);
+		}
+	for	(s = stmts; s; s = s->next)
+		s computeBenefits(0);
+	}
+
+	};
+
+binary_C:	type	inherit	binary_x {
+
+generateCode:	dynamic	() =
+	{
+	p:	char;
+	pn, po:	char;
+
+	if	(operator == O_UNORD){
+		CFunc.Cfd putc('0');
+		return;
+		}
+	else if	(operator == O_ORD){
+		CFunc.Cfd putc('1');
+		return;
+		}
+	p = Cprecedence[operator];
+	if	(dtype &&
+		 dtype->topType == T_REF){
+		if	(operator == O_ADD ||
+			 operator == O_SUB){
+			CFunc.Cfd printf("((char*)(");
+			left generateCode();
+			CFunc.Cfd putc(')');
+			CFunc.Cfd printf(" %s ", Cspelling[operator]);
+			right generateCode();
+			CFunc.Cfd putc(')');
+			return;
+			}
+		else if	(operator == O_ADA ||
+			 operator == O_SBA){
+			CFunc.Cfd printf("(*(char**)&(");
+			left generateCode();
+			CFunc.Cfd putc(')');
+			CFunc.Cfd printf("%s ", Cspelling[operator]);
+			right generateCode();
+			CFunc.Cfd putc(')');
+			return;
+			}
+		else if	(operator == O_INA ||
+			 operator == O_DEA){
+			CFunc.Cfd printf("((*(char(**)[");
+			right generateCode();
+			CFunc.Cfd printf("])&(");
+			left generateCode();
+			CFunc.Cfd printf("))%s", Cspelling[operator]);
+			CFunc.Cfd putc(')');
+			return;
+			}
+		}
+	CFunc.Cfd putc('(');
+	if	(right){
+		if	(left)
+			left generateCode();
+		CFunc.Cfd printf(" %s ", Cspelling[operator]);
+		if	(operator != O_INA &&
+			 operator != O_DEA)
+			right generateCode();
+		}
+	else	{
+		if	(operator == O_ADR){
+			CFunc.Cfd putc('(');
+			dtype outputCast(&CFunc.Cfd);
+			CFunc.Cfd putc(')');
+			}
+		CFunc.Cfd printf("%s ", Cspelling[operator]);
+		if	(operator == O_IND){
+			CFunc.Cfd putc('(');
+			dtype outputHeaderPrefix(&CFunc.Cfd);
+			CFunc.Cfd printf("(*)");
+			dtype outputHeaderSuffix(&CFunc.Cfd, 0, 0);
+			CFunc.Cfd putc(')');
+			}
+		if	(left)
+			left generateCode();
+		}		
+	CFunc.Cfd putc(')');
+	}
+
+computeBenefits:	dynamic (int) =
+	{
+	if	(left)
+		left computeBenefits(0);
+	if	(right)
+		right computeBenefits(0);
+	}
+
+	};
+
+cast_C:	type	inherit	cast_x {
+	index:	int;
+
+generateCode:	dynamic	() =
+	{
+	if	(opnd == 0)
+		return;
+	if	(dtype->topType == T_DESCRIPTOR){
+		if	(opnd->dtype->topType == T_ARRAY){
+			CFunc.Cfd printf("D_L(p_desc_T%d,", index);
+			opnd generateCode();
+			CFunc.Cfd printf(",%d)", opnd->dtype sizeOf());
+			}
+		else if	(opnd->dtype->topType == T_DESCRIPTOR)
+			opnd generateCode();
+		return;
+		}
+	CFunc.Cfd printf("(");
+	dtype outputCast(&CFunc.Cfd);
+	CFunc.Cfd printf(")");
+	if	(opnd)
+		opnd generateCode();
+	if	(opnd &&
+		 opnd->dtype->topType == T_DESCRIPTOR &&
+		 dtype->topType == T_REF)
+		CFunc.Cfd printf(".addr");
+	}
+
+initialize:	dynamic	(offset: addr_t, v: ref value) =
+	{
+	if	(v)
+		return;			// const initialization - ignore it
+	if	(opnd == 0)
+		return;			// some error - ignore it
+	if	(dtype->topType != T_DESCRIPTOR)
+		return;			// some other error - ignore it
+	if	(opnd->dtype->topType != T_ARRAY)
+		return;			// still another error - ignore it too
+	i:	int;
+
+	i = ref array_z(opnd->dtype)->dimension;
+	CFunc.Cfd putc('{');
+	opnd generateCode();
+	CFunc.Cfd printf(",%d,%d}", i, i);
+	}
+
+computeBenefits:	dynamic (int) =
+	{
+	dtype emitNeededTypedefs(&CFunc.Cfd);
+	if	(opnd){
+		opnd computeBenefits(0);
+		if	(dtype->topType == T_DESCRIPTOR &&
+			 opnd->dtype->topType == T_ARRAY){
+			index = CFunc.DescriptorTemps;
+			CFunc.DescriptorTemps++;
+			}
+		}
+	}
+
+	};
+
+conditional_C:	type	inherit	conditional_x {
+
+generateCode:	dynamic	() =
+	{
+	CFunc.Cfd putc('(');
+	test generateCode();
+	CFunc.Cfd putc('?');
+	truePart generateCode();
+	CFunc.Cfd putc(':');
+	falsePart generateCode();
+	CFunc.Cfd putc(')');
+	}
+
+	};
+
+decl_C:	type	inherit decl_x {
+
+generateCode:	dynamic	() =
+	{
+	if	(declaration->initializer.start == 0)
+		return;
+	if	(declaration->storageClass != SC_AUTO)
+		return;
+	if	(declaration->idList == 0)
+		return;
+	if	(initTree){
+		initTree generateCode();
+		CFunc.Cfd printf(";\n");
+		}
+	}
+
+computeBenefits:	dynamic	(int) =
+	{
+	if	(initTree)
+		initTree computeBenefits(0);
+	}
+
+	};
+
+dynamicVectorPointer_C:	type	inherit	tree_p {
+	vtype:		ref struct_z;
+
+	public:
+
+constructor:	(v: ref struct_z) =
+	{
+	super constructor(O_ID);
+	vtype = v;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	printf("%*cdynamic-vector-pointer", indent, ' ');
+	vtype display(FALSE);
+	printf("\n");
+	}
+
+generateCode:	dynamic	() =
+	{
+	vtype cDynamicName(&CFunc.Cfd);
+	}
+
+computeBenefits:	dynamic (int) =
+	{
+	vtype emitNeededTypedefs(&CFunc.Cfd);
+	}
+
+	};
+
+ellipsis_C:	type	inherit ellipsis_x {
+
+generateCode:	dynamic () =
+	{
+	p:	ref parameter_s;
+	i:	int;
+
+	CFunc.Cfd printf("(*(struct machine_varArgs_ *)&pVar)");
+	}
+
+computeBenefits:	dynamic	(int) =
+	{
+	if	(!CFunc.VarArgsSeen){
+		CFunc.VarArgsSeen = TRUE;
+		CFunc.Cfd printf("\n#include <stdarg.h>\n");
+		}
+	CFunc.EllipsisUsed = TRUE;
+	}
+
+	};
+
+expr_C:	type	inherit expr_x {
+
+generateCode:	dynamic	() =
+	{
+	expr generateCode();
+	CFunc.Cfd printf(";\n");
+	}
+
+computeBenefits:	dynamic (int) =
+	{
+	expr computeBenefits(0);
+	}
+
+	};
+
+fcon_C:	type	inherit	fcon_x {
+
+generateCode:	dynamic () =
+	{
+	fvalue display(&CFunc.Cfd, width);
+	}
+
+	};
+
+icon_C:	type	inherit	icon_x {
+
+generateCode:	dynamic	() =
+	{
+	CFunc.Cfd printf("0x%x", integer);
+	}
+
+	};
+
+iden_C:	type	inherit	iden_x {
+
+generateCode:	dynamic	() =
+	{
+	reald:	ref type_s;
+
+	if	(symbol)
+		reald = symbol->dtype getType();
+	else
+		reald = 0;
+	if	(adjust ||
+		 reald != dtype){
+		CFunc.Cfd printf("*(");
+		dtype outputHeaderPrefix(&CFunc.Cfd);
+		CFunc.Cfd printf("(*)");
+		dtype outputHeaderSuffix(&CFunc.Cfd, 0, 0);
+		CFunc.Cfd printf(")((char *)&");
+		}
+	if	(symbol)
+		symbol outputHeaderName(&CFunc.Cfd);
+	else if (name)
+		CFunc.Cfd printf("%S", name spelling());
+	else
+		CFunc.Cfd printf("iden <nil>");
+	if	(adjust)
+		CFunc.Cfd printf("+0x%x)", adjust);
+	else if (reald != dtype)
+		CFunc.Cfd putc(')');
+	}
+
+computeBenefits:	dynamic (int) =
+	{
+	if	(symbol)
+		symbol emitNeededDeclaration(&CFunc.Cfd);
+	}
+
+	};
+
+jump_C:	type	inherit	jump_x {
+
+generateCode:	dynamic	() =
+	{
+	CFunc.Cfd printf("goto L_%d;\n", target->asmLabel);
+	}
+
+	};
+
+label_C:	type	inherit	label_x {
+
+generateCode:	dynamic	() =
+	{
+	CFunc.Cfd printf("L_%d:;\n", asmLabel);
+	}
+
+	};
+
+literal_C:	type	inherit literal_x {
+
+generateCode:	dynamic	() =
+	{
+	li:	ref literalItem_p;
+	cp:	ref char;
+	i:	int;
+
+	for	(li = literals; li; li = li->next){
+		CFunc.Cfd putc('"');
+		for	(i = 0, cp = li->value; i < li->length; i++, cp++){
+			if	(!isprint(*cp)){
+				CFunc.Cfd printf("\\%03o", *cp);
+				if	(i < li->length - 1 &&
+					 isdigit(cp[1]))
+					CFunc.Cfd printf("\"\"");
+				}
+			else
+				CFunc.Cfd putc(*cp);
+			}
+		CFunc.Cfd putc('"');
+		}
+	}
+
+initialize:	dynamic	(offset: addr_t, v: ref value) =
+	{
+	if	(v == 0)
+		generateCode();
+	}
+
+	};
+
+methodCall_C:	type	inherit	methodCall_x {
+	varIndex:	int;
+	varArgs:	ref tree_p;
+	index:		int;
+	objRef:		ref tree_p;
+
+constructor:	(r: ref tree_p, o: fileOffset, s: boolean, l: ref tree_p, 
+						id: ref identifier) =
+	{
+	super constructor(O_MCALL);
+	signaling = s;
+	args = r;
+	objectRef = l;
+	offset = o;
+	name = id;
+	objRef = 0;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	if	(objRef)
+		objRef display(indent + INDENT_AMOUNT);
+	}
+
+generateCode:	dynamic	() =
+	{
+	if	(varArgs)
+		generateVarArgsCode(varArgs, varIndex);
+	if	(objectRef->operator == O_DYNAMIC){
+		dyn:	ref dynamic_x;
+
+		dyn = ref dynamic_x(objectRef);
+		CFunc.Cfd printf("(D_D(p_obj_T%d,", index);
+		if	(objRef)
+			objRef generateCode();
+		else
+			CFunc.Cfd printf("ERROR_");
+		CFunc.Cfd putc(',');
+		dyn->symbol->enclosing cDynamicName(&CFunc.Cfd);
+		CFunc.Cfd printf(",%d,", dyn->dynamicOffset);
+		dyn->symbol outputHeaderName(&CFunc.Cfd);
+		CFunc.Cfd printf(")((void*)p_obj_T%d", index);
+		if	(args){
+			CFunc.Cfd putc(',');
+			args generateCode();
+			}
+		CFunc.Cfd printf("))");
+		}
+	else	{
+		objectRef generateCode();
+		CFunc.Cfd putc('(');
+		if	(args)
+			args generateCode();
+		CFunc.Cfd putc(')');
+		}
+	if	(varArgs)
+		CFunc.Cfd putc(')');
+	}
+
+computeBenefits:	dynamic (int) =
+	{
+	ft:	ref function_z;
+
+	if	(objectRef->operator == O_DYNAMIC){
+		dyn:	ref dynamic_x;
+		d:	ref type_s;
+
+		dyn = ref dynamic_x(objectRef);
+		d = ref struct_z(dyn->symbol->enclosing);
+		d emitNeededTypedefs(&CFunc.Cfd);
+		}
+	if	(objRef)
+		objRef computeBenefits(0);
+	if	(args)
+		args computeBenefits(0);
+	if	(objectRef){
+		objectRef computeBenefits(0);
+		ft = ref function_z(objectRef->dtype);
+
+			// We cannot use the C var args mechanism for parasol
+			// functions.
+
+		if	(ft->callingConvention == FC_NORMAL &&
+			 !ft->fixedCalls){
+			b, c:		ref tree_p;
+
+			varArgs = splitVarArgs(ft fixedArgsOf() + 1, 
+								&args, &b);
+			c = CFunc varArgsNode(varArgs, &varIndex);
+			if	(b)
+				ref argument_C(b)->right = c;
+			else
+				args = c;
+			}
+		}
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	op:	ref objectTemp_C;
+	n:	int;
+	x:	ref tree_p;
+
+	if	(objRef)
+		return self;
+	x = super fold();
+	if	(x != self)
+		return x;
+	if	(objectRef->operator != O_DYNAMIC){
+		d:	ref type_s;
+
+		d = refTo(0);
+		if	(args && args->operator == O_ARG){
+			x = ref argument_x(args)->left;
+			x = cast_x createKnown(d, x, 0);
+			ref argument_x(args)->left = x;
+			}
+		else
+			args = cast_x createKnown(d, args, 0);
+		return self;
+		}
+
+		// Properly initialize the method selector
+
+	n = CFunc.ObjectTemps;
+	op = new objectTemp_C[ n ];
+	if	(args && args->operator == O_ARG){
+		objRef = ref argument_x(args)->left;
+		args = ref argument_x(args)->right;
+		}
+	else	{
+		objRef = args;
+		args = 0;
+		}
+	CFunc.ObjectTemps++;
+	index = n;
+	return self;
+	}
+
+	};
+
+objectTemp_C:	type	inherit tree_p {
+	index:	int;
+
+	public:
+
+constructor:	(n: int) =
+	{
+	super constructor(O_AUTO);
+	index = n;
+	dtype = IntType;
+	}
+
+generateCode:	dynamic	() =
+	{
+	CFunc.Cfd printf("p_obj_T%d", index);
+	}
+
+	};
+
+return_C:	type	inherit return_x {
+
+generateCode:	dynamic	() =
+	{
+	CFunc.Cfd printf("return ");
+	if	(expr){
+		expr = cast_x createKnown(CFunc.currentSymbol->dtype
+						returnTypeOf(), expr, 0);
+		expr generateCode();
+		}
+	CFunc.Cfd printf(";\n");
+	}
+
+	};
+
+sconst_C:	type	inherit sconst_x {
+
+initialize:	dynamic	(addr_t, v: ref value) =
+	{
+	if	(v)
+		return;			// const initializer - ignore it
+	if	(dtype->topType == T_ARRAY){
+		x:	ref tree_p;
+
+		CFunc.Cfd putc ('{');
+		x = components;
+		while	(x && x->operator == O_ARG){
+			ref argument_x(x)->left initialize(0, 0);
+			x = ref argument_x(x)->right;
+			CFunc.Cfd putc(',');
+			}
+		if	(x)
+			x initialize(0, 0);
+		CFunc.Cfd putc('}');
+		}
+	else	{			// must be a struct
+
+			// Needs code to handle struct initializers properly.
+
+		CFunc.Cfd putc ('{');
+		components generateCode();
+		CFunc.Cfd putc('}');
+		}
+	}
+
+	};
+
+slice_C:	type	inherit slice_x {
+	index:	int;
+
+generateCode:	dynamic	() =
+	{
+	if	(arrayRef == 0)
+		return;
+	if	(left == 0){
+		if	(right == 0){
+			arrayRef generateCode();
+			return;
+			}
+		CFunc.Cfd printf("D_L(p_desc_T%d,", index);
+		arrayRef generateCode();
+		if	(arrayRef->dtype->topType == T_DESCRIPTOR)
+			CFunc.Cfd printf(".addr");
+		CFunc.Cfd putc(',');
+		right generateCode();
+		CFunc.Cfd putc(')');
+		}
+	}
+
+computeBenefits:	dynamic (int) =
+	{
+	if	(arrayRef)
+		arrayRef computeBenefits(0);
+	if	(left)
+		left computeBenefits(0);
+	if	(right)
+		right computeBenefits(0);
+	index = CFunc.DescriptorTemps;
+	CFunc.DescriptorTemps++;
+	}
+
+	};
+
+staticCall_C:	type	inherit	staticCall_x {
+	varIndex:	int;
+	varArgs:	ref tree_p;
+
+generateCode:	dynamic	() =
+	{
+	if	(varArgs)
+		generateVarArgsCode(varArgs, varIndex);
+	if 	(operator == O_MCOPY)
+		CFunc.Cfd printf("memcpy");
+	else if	(func)
+		func generateCode();
+	CFunc.Cfd printf("(");
+	if	(args)
+		args generateCode();
+	CFunc.Cfd printf(")");
+	if	(varArgs)
+		CFunc.Cfd printf(")");
+	}
+
+computeBenefits:	dynamic (int) =
+	{
+	ft:	ref function_z;
+
+	if	(args)
+		args computeBenefits(0);
+	if	(func){
+		func computeBenefits(0);
+		ft = ref function_z(func->dtype);
+
+			// We cannot use the C var args mechanism for parasol
+			// functions.
+
+		if	(ft->callingConvention == FC_NORMAL &&
+			 !ft->fixedCalls){
+			b, c:	ref tree_p;
+
+			varArgs = splitVarArgs(ft fixedArgsOf(), &args, &b);
+			c = CFunc varArgsNode(varArgs, &varIndex);
+			if	(b)
+				ref argument_C(b)->right = c;
+			else
+				args = c;
+			}
+		}
+	}
+
+	};
+
+switch_C:	type	inherit switch_x {
+
+generateCode:	dynamic	() =
+	{
+	if	(expr){
+		CFunc.Cfd printf("switch(");
+		expr generateCode();
+		CFunc.Cfd printf("){\n");
+		sw:	ref switchCases;
+
+		for	(sw = cases; sw; sw = sw->next){
+			CFunc.Cfd printf("case ");
+			sw->caseValue generateCode();
+			CFunc.Cfd printf(": goto L_%d;\n", 
+						sw->target->asmLabel);
+			}
+		CFunc.Cfd printf("default: goto L_%d;\n}\n", 
+						defaultCase->asmLabel);
+		}
+	}
+
+	};
+
+test_C:	type	inherit	test_x {
+
+generateCode:	dynamic	() =
+	{
+	CFunc.Cfd printf("if (");
+	if	(test)
+		test generateCode();
+	CFunc.Cfd printf(") goto L_%d;\n", target->asmLabel);
+	}
+
+computeBenefits:	dynamic (int) =
+	{
+	if	(test)
+		test computeBenefits(0);
+	}
+
+	};
+
+testFalse_C:	type	inherit	test_C {
+
+generateCode:	dynamic	() =
+	{
+	CFunc.Cfd printf("if (!(");
+	if	(test)
+		test generateCode();
+	CFunc.Cfd printf(")) goto L_%d;\n", target->asmLabel);
+	}
+
+	};
+
+varArgsTemp_C:	type	inherit tree_p {
+	index:	int;
+
+	public:
+
+constructor:	(n: int, sz: int) =
+	{
+	t:	ref number_z;
+
+	super constructor(O_AUTO);
+	index = n;
+	t = number_z create(T_UNSIGNED, [ 0, 0 ], C_CHARBITS);
+	dtype = array_z create([ 0, 0 ], sz, t);
+	}
+
+generateCode:	dynamic	() =
+	{
+	CFunc.Cfd printf("p_var_T%d", index);
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf(" p_var_T%d\n", index);
+	}
+
+	};
+
+varArgsTemp:	type	{ public:
+	next:	ref varArgsTemp;
+	index:	int;
+	size:	addr_t;
+	};
+
+splitVarArgs:	(argCount: int, args: ref ref tree_p, 
+					b: ref ref tree_p) ref tree_p =
+	{
+	i:	int;
+	a, d:	ref tree_p;
+
+	for	(a = *args, *b = 0; a; *b = a, a = ref argument_C(a)->right){
+		if	(argCount == 0)
+			break;
+		if	(a->operator != O_ARG){
+			d = new argument_C[ a, 0, 0 ];
+			if	(*b)
+				ref argument_C(*b)->right = d;
+			else
+				*args = d;
+			*b = d;
+			return 0;
+			}
+		argCount--;
+		}
+	return a;
+	}
+
+generateVarArgsCode:	(args: ref tree_p, varIndex: int) =
+	{
+	b:	ref tree_p;
+	i:	int;
+	t:	ref type_s;
+
+	CFunc.Cfd printf("(");
+	i = 0;
+	while	(args){
+		if	(args->operator == O_ARG){
+			b = ref argument_C(args)->left;
+			args = ref argument_C(args)->right;
+			}
+		else	{
+			b = args;
+			args = 0;
+			}
+		CFunc.Cfd printf("V_A(p_var_T%d,%d,", varIndex, i);
+		b generateCode();
+		CFunc.Cfd printf(",");
+		t = refTo(b->dtype);
+		t outputHeaderPrefix(&CFunc.Cfd);
+		t outputHeaderSuffix(&CFunc.Cfd, 0, 0);
+		i += b varArgsSize();
+		CFunc.Cfd printf("),");
+		}
+	}
+
+Cprecedence:	const [] char = [
+	0,			//	O_ERROR,
+
+	99,			//	O_ID,
+	99,			//	O_ICON,
+	99,			//	O_FCON,
+	99,			//	O_SELF,
+	99,			//	O_SUPER,
+	99,			//	O_TOS,
+/*
+	O_REG,
+ */
+	99,			//	O_AUTO,
+	99,			//	O_DYNAMIC,
+	99,			//	O_REMOTE,		// remote call
+	99,			//	O_TYPE,
+	99,			//	O_SCONST,
+	99,			//	O_LITERAL,
+	99,			//	O_ELLIPSIS,
+
+	    /* Binary operators */
+
+	14,			//	O_ADD,			/* + */
+	14,			//	O_SUB,			/* - */
+	15,			//	O_MUL,			/* * */
+	15,			//	O_DIV,			/* / */
+	15,			//	O_MOD,			/* % */
+	13,			//	O_LSH,			/* << */
+	13,			//	O_RSH,			/* >> */
+	10,			//	O_AND,			/* & */
+	8,			//	O_OR,			/* | */
+	9,			//	O_XOR,			/* ^ */
+	3,			//	O_ASG,			/* = */
+	3,			//	O_ADA,			/* += */
+	3,			//	O_SBA,			/* -= */
+	3,			//	O_MUA,			/* *= */
+	3,			//	O_DVA,			/* /= */
+	3,			//	O_MOA,			/* %= */
+	3,			//	O_LSA,			/* <<= */
+	3,			//	O_RSA,			/* >>= */
+	3,			//	O_ANA,			/* &= */
+	3,			//	O_ORA,			/* |= */
+	3,			//	O_XRA,			/* ^= */
+	11,			//	O_EQ,			/* == */
+	11,			//	O_NE,			/* != */
+	12,			//	O_GT,			/* > */
+	12,			//	O_LT,			/* < */
+	12,			//	O_GE,			/* >= */
+	12,			//	O_LE,			/* <= */
+	12,			//	O_ORD,			// <>=
+	12,			//	O_UNORD,		// !<>=
+	12,			//	O_NLT,			// !<
+	12,			//	O_NLE,			// !<=
+	12,			//	O_NGT,			// !>
+	12,			//	O_NGE,			// !>=
+	11,			//	O_LT_GT,		// <>
+	11,			//	O_NLT_GT,		// !<>
+	88,			//	O_INA,			/* increment after */
+	88,			//	O_DEA,			/* decrement after */
+	5,			//	O_QUES,			/* ?: */
+	7,			//	O_LAND,			/* && */
+	6,			//	O_LOR,			/* || */
+//	O_LSEQ,			/* left-valued sequential execution */
+	1,			//	O_SEQ,			/* sequential execution */
+	2,			//	O_ARG,			/* function argument */
+	4,			//	O_IOARROW,		/* <- */
+	3,			//	O_INIT,			// auto initializer
+
+	   /* Unary operators */
+
+
+	77,			//	O_NEG,			/* - */
+	77,			//	O_PLUS,			/* + (unary) */
+	77,			//	O_COM,			/* ~ */
+	77,			//	O_NOT,			/* ! */
+	77,			//	O_IND,			/* * */
+	77,			//	O_ADR,			/* & */
+
+	   /* Special operators */
+
+	77,			//	O_FLD,			/* bit field */
+/*
+	O_COPY,			/* structure copy */
+ */
+	77,			//	O_CAST,			/* type cast */
+	88,			//	O_SCALL,			/* function call */
+	88,			//	O_MCALL,		// member call
+	88,			//	O_RCALL,		// member call
+	88,			//	O_DOT,			/* . */
+	88,			//	O_ARROW,		/* -> */
+	88,			//	O_SUBSCRIPT,		/* x[y] */
+	88,			//	O_SLICE,		// a[:n] and a[n1:n2] array slices
+	77,			//	O_BOUND,		// |a
+	77,			//	O_MBOUND,		// ||a
+	77,			//	O_SIZEOF,		/* sizeof */
+
+		/* Code generation operations */
+
+	0,			//	O_INTRPT,		/* Interrupt instruction */
+	0,			//	O_ABS,			/* Absolute value */
+	0,			//	O_OUT,			/* OutportByte */
+	0,			//	O_IN,			/* InportByte */
+	0,			//	O_EMIT,			/* Emit */
+	0,			//	O_MSCAN,		/* MemScan */
+	0,			//	O_MCOPY,		/* MemCopy */
+	0,			//	O_MSET,			/* MemSet */
+	0,			//	O_ROL,			/* RotateLeft */
+	0,			//	O_ROR,			/* RotateRight */
+	0,			//	O_FABS,			/* Fabs */
+	0,			//	O_XCHG,			/* exchange */
+	0,			//	O_TEST,			/* test */
+	0,			//	O_ALLOCTOS,		// allocate tos var
+	0,			//	O_NEW
+	0,			//	O_TYPELEN,		/* sizeof ref type */
+	0,			//	O_OFFSETOF,		/* offsetof */
+	0,			//	O_TYPEOF,		// typeof
+	0,			//	O_SEND,			// send
+	0,			//	O_BLOCK
+	0,			//	O_DECL,			// declaration
+	0,			//	O_GOTO,			// goto
+	0,			//	O_ASSERT,		// assertion
+	0,			//	O_LABEL,		// goto label
+	0,			//	O_RETURN,		// return
+	0,			//	O_ENDTRY,		// end of try clause
+	0,			//	O_REPLY,		// reply
+	0,			//	O_JUMP,			// jump instruction
+	0,			//	O_TEST,			// test and jump
+	0,			//	O_STMT,			// statement
+	0,			//	O_SWITCH,		// switch statement
+	0,			//	O_TRY,			// try statement
+	0,			//	O_EXCEPT,		// except clause
+	0,			//	O_ENDEX			// end of except clause
+	0,			//	O_CONTEX
+	0,			//	O_EXIT
+	];
+
+Cspelling:	const [] ref char = [
+	"error",		//	O_ERROR,
+
+	"id",			//	O_ID,
+	"icon",			//	O_ICON,
+	"fcon",			//	O_FCON,
+	"self",			//	O_SELF,
+	"super",		//	O_SUPER,
+	"tos",			//	O_TOS,
+	"reg",			//	O_REG,
+	"auto",			//	O_AUTO,
+	"dynamic",		//	O_DYNAMIC,
+	"remote",		//	O_REMOTE,		// remote call
+	"type",			//	O_TYPE,
+	"sconst",		//	O_SCONST,
+	"literal",		//	O_LITERAL,
+	"ellipsis",		//	O_ELLIPSIS,
+
+	    /* Binary operators */
+
+	"+",			//	O_ADD,			/* + */
+	"-",			//	O_SUB,			/* - */
+	"*",			//	O_MUL,			/* * */
+	"/",			//	O_DIV,			/* / */
+	"%",			//	O_MOD,			/* % */
+	"<<",			//	O_LSH,			/* << */
+	">>",			//	O_RSH,			/* >> */
+	"&",			//	O_AND,			/* & */
+	"|",			//	O_OR,			/* | */
+	"^",			//	O_XOR,			/* ^ */
+	"=",			//	O_ASG,			/* = */
+	"+=",			//	O_ADA,			/* += */
+	"-=",			//	O_SBA,			/* -= */
+	"*=",			//	O_MUA,			/* *= */
+	"/=",			//	O_DVA,			/* /= */
+	"%=",			//	O_MOA,			/* %= */
+	"<<=",			//	O_LSA,			/* <<= */
+	">>=",			//	O_RSA,			/* >>= */
+	"&=",			//	O_ANA,			/* &= */
+	"|=",			//	O_ORA,			/* |= */
+	"^=",			//	O_XRA,			/* ^= */
+	"==",			//	O_EQ,			/* == */
+	"!=",			//	O_NE,			/* != */
+	">",			//	O_GT,			/* > */
+	"<",			//	O_LT,			/* < */
+	">=",			//	O_GE,			/* >= */
+	"<=",			//	O_LE,			/* <= */
+	"<>=",			//	O_ORD,			// <>=
+	"!<>=",			//	O_UNORD,		// !<>=
+	">=",			//	O_NLT,			// !<
+	">",			//	O_NLE,			// !<=
+	"<=",			//	O_NGT,			// !>
+	"<",			//	O_NGE,			// !>=
+	"!=",			//	O_LT_GT,		// <>
+	"==",			//	O_NLT_GT,		// !<>
+	"++",			//	O_INA,			/* increment after */
+	"--",			//	O_DEA,			/* decrement after */
+	"?",			//	O_QUES,			/* ?: */
+	"&&",			//	O_LAND,			/* && */
+	"||",			//	O_LOR,			/* || */
+//	O_LSEQ,			/* left-valued sequential execution */
+	",",			//	O_SEQ,			/* sequential execution */
+	",",			//	O_ARG,			/* function argument */
+	"<-",			//	O_IOARROW,		/* <- */
+	"=",			//	O_INIT,			// auto initializer
+
+	   /* Unary operators */
+
+
+	"-",			//	O_NEG,			/* - */
+	"+",			//	O_PLUS,			/* + (unary) */
+	"~",			//	O_COM,			/* ~ */
+	"!",			//	O_NOT,			/* ! */
+	"*",			//	O_IND,			/* * */
+	"&",			//	O_ADR,			/* & */
+
+	   /* Special operators */
+
+	"fld",			//	O_FLD,			/* bit field */
+/*
+	O_COPY,			/* structure copy */
+ */
+	"()",			//	O_CAST,			/* type cast */
+	"()",			//	O_SCALL,		/* function call */
+	"id()",			//	O_MCALL,		// member call
+	"rem()",		//	O_RCALL,		// member call
+	".",			//	O_DOT,			/* . */
+	"->",			//	O_ARROW,		/* -> */
+	"[]",			//	O_SUBSCRIPT,		/* x[y] */
+	"[:]",			//	O_SLICE,		// a[:n] and a[n1:n2] array slices
+	"bound",		//	O_BOUND,		// |a
+	"mbound",		//	O_MBOUND,		// ||a
+	"sizeof",		//	O_SIZEOF,		/* sizeof */
+
+		/* Code generation operations */
+
+	"interrupt",		//	O_INTRPT,		/* Interrupt instruction */
+	"abs",			//	O_ABS,			/* Absolute value */
+	"out",			//	O_OUT,			/* OutportByte */
+	"in",			//	O_IN,			/* InportByte */
+	"emit",			//	O_EMIT,			/* Emit */
+	"mscan",		//	O_MSCAN,		/* MemScan */
+	"mcopy",		//	O_MCOPY,		/* MemCopy */
+	"mset",			//	O_MSET,			/* MemSet */
+	"rol",			//	O_ROL,			/* RotateLeft */
+	"ror",			//	O_ROR,			/* RotateRight */
+	"fabs",			//	O_FABS,			/* Fabs */
+	"xchg",			//	O_XCHG,			/* exchange */
+	"tst",			//	O_TEST,			/* test */
+
+	"alloctos",		//	O_ALLOCTOS,		// allocate tos var
+	"new",			//	O_NEW,
+	"typelen",		//	O_TYPELEN,		/* sizeof ref type */
+	"offsetof",		//	O_OFFSETOF,		/* offsetof */
+	"typeof",		//	O_TYPEOF,		// typeof
+	"send",			//	O_SEND,			// send
+	"block",		//	O_BLOCK
+	"decl",			//	O_DECL,			// declaration
+	"goto",			//	O_GOTO,			// goto
+	"assert",		//	O_ASSERT,		// assertion
+	"label",		//	O_LABEL,		// goto label
+	"return",		//	O_RETURN,		// return
+	"endtry",		//	O_ENDTRY,		// end of try clause
+	"reply",		//	O_REPLY,		// reply
+	"jump",			//	O_JUMP,			// jump instruction
+	"test",			//	O_TEST,			// test and jump
+	"stmt",			//	O_STMT,			// statement
+	"switch",		//	O_SWITCH,		// switch statement
+	"try",			//	O_TRY,			// try statement
+	"except",		//	O_EXCEPT,		// except clause
+	"endex",		//	O_ENDEX			// end of except clause
+	"contex",		//	O_CONTEX		// continue exception
+	"exit",			//	O_EXIT
+	];
+

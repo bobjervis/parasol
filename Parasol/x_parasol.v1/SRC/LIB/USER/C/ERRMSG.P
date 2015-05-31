@@ -1,0 +1,113 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file, format, filesys, string;
+
+NO_LINE:	public	const	fileOffset = ~0;
+
+messageGenerator:	public	type	{
+	public:
+
+objectName:	dynamic	() [:] char =
+	{
+	return "";
+	}
+
+lineno:		dynamic	(fileOffset) int =
+	{
+	return 0;
+	}
+
+sourceFilename:	dynamic	() [:] char =
+	{
+	return "";
+	}
+
+	};
+
+messageContext:	public	type	{
+	public:
+
+	errorCount:	int;
+	phase:		byte;
+	obj:		ref messageGenerator;
+					// object associated with the
+					// message
+	offset:		fileOffset;	// offset in source file
+
+constructor:	() =
+	{
+	errorCount = 0;
+	phase = 0;
+	obj = 0;
+	offset = 0;
+	}
+
+clear:	() =
+	{
+	obj = 0;
+	offset = 0;
+	}
+
+fatal:	(s: [:] char) =
+	{
+	fatalX(s, "", "", 0);
+	}
+
+error:	(s: [:] char) =
+	{
+	errorX(s, "", "", 0);
+	}
+
+warn:	(s: [:] char) =
+	{
+	warnX(s, "", "", 0);
+	}
+
+fatalX:	(msgid: [:] char, s: [:] char, a: [:] char, d: int) =
+	{
+	prefix(msgid, "Fatal", s, a, d);
+	errorCount++;
+	exit(1);
+	}
+
+errorX:	(msgid: [:] char, s: [:] char, a: [:] char, d: int) =
+	{
+	prefix(msgid, "Error", s, a, d);
+	errorCount++;
+	}
+
+warnX:	(msgid: [:] char, s: [:] char, a: [:] char, d: int) =
+	{
+	prefix(msgid, "Warning", s, a, d);
+	}
+
+
+printf:	(fmt: [:] char, ...) =
+	{
+	stdout vprintf(fmt, ...);
+	}
+
+prefix:	dynamic	(msgid: [:] char, msgClass: [:] char, s: [:] char,
+				a: [:] char, d: int) =
+	{
+	file:	[:] char;
+	o:	[:] char;
+
+	if	(obj){
+		file = obj sourceFilename();
+		o = obj objectName();
+		}
+	else	{
+		file = "";
+		o = "";
+		}
+	stdout printf("%S %S @ %S %d (%S) %S %S %d\n", msgClass, msgid, file,
+							offset, o, s, a, d);
+	}
+
+	};

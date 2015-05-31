@@ -1,0 +1,501 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	string;
+include	error;
+include	file;
+include	filesys;
+include	runfile;
+include	alys;
+include	hardware;
+
+SCtable:	[] ref char = [
+	"static",
+	"type",
+	"const",
+	"extern",
+	"member",
+	"intrinsic",
+	"register",
+	"auto",
+	"parm",
+	"dynamic",
+	"label"
+	];
+
+Ttable:		[] ref char = [
+	"void",
+	"bit",
+	"unsignedBit",
+	"char",
+	"unsignedChar",
+	"short",
+	"unsignedShort",
+	"long",
+	"unsignedLong",
+	"float",
+	"double",
+	"extended",		/* Long double */
+	"*",			/* pointer */
+	"array",
+	"function",
+	"struct",
+	"extern"
+	];
+
+Ltable:		[] ref char = [
+	"normal",
+	"interrupt",
+	];
+
+SRtable:	[] ref char = [
+	"header",
+	"usage",
+	"symbol",
+	"type",
+	"param",
+	"member",
+	"bit",
+	"value",
+	"data",
+	"fixup",
+	"literal",
+	"line",
+	"tcode",
+	"debug"
+	];
+
+DumpDetail:	int = 0;
+DumpSummary:	int = 0;
+
+main:	entry	() =
+        {
+	args:		[:] char;
+
+	printf("Dump Version 1.4  (c) Copyright 1993 Robert Jervis\n");
+	if	(|commandLine.arguments == 0){
+		printf(	"Syntax is: DUMP [ option(s) ] filename(s)\n"
+			"Options may appear before each filename and filenames may have wildcards\n"
+			"\tOptions:\n"
+			"\t\t-s\tSummary only\n"
+			"\t\t-s-\tDump all records (default)\n"
+			"\t\t-v\tVerbose dump\n"
+			"\t\t-v-\tDo not dump fixups and line #'s (default)\n");
+		exit(0);
+		}
+	while	(|commandLine.arguments){
+		args = commandLine.arguments[0];
+		commandLine shiftArguments();
+		if	(args[0] == '-'){
+			switch	(args[1]){
+			case	'v':
+				if	(args[2] == '-')
+					DumpDetail = 0;
+				else
+					DumpDetail = 1;
+				break;
+
+			case	's':
+				if	(args[2] == '-')
+					DumpSummary = 0;
+				else
+					DumpSummary = 1;
+				}
+			}
+		dumpFiles(args);
+		}
+	exit(EX_SUCCESS);
+	}
+
+dumpFiles:	(filename: [:] char) =
+	{
+	ff:	finder;
+	i:	int;
+	dir, pattern:	[:] char;
+
+	dir = getDirectory(filename);
+	pattern = stripDirectory(filename);
+	if	(i = ff open(dir, pattern, 0)){
+		printf("Could not find %s: %s\n", filename, cmdError(i));
+		return;
+		}
+	while	(ff next() == SUCCESS)
+		dumpFile(ff.pathname);
+	ff close();
+	}
+
+dumpFile:	(filename: [:] char) =
+	{
+	fext:	[:] char;
+
+	fext = getExtension(filename);
+	if	(|fext == 0)
+		dumpCoreDump(filename);
+	else if	(stringCompare(fext, ".run") == 0)
+		dumpRunFile(filename);
+	else if	(stringCompare(fext, ".lod") == 0)
+		dumpLodFile(filename);
+	}
+
+rhead:	runHeader;
+lhead:	lodHeader;
+
+descKinds:	[] ref char = [
+	"DATA_SEG",
+	"CODE_SEG",
+	"SVC_SEL ",
+	"GATE_SEL",
+	"GRP_BODY"
+	];
+
+segClasses:	public	type	char = {
+//	DATA_SEG,
+	CODE_SEG = 1,
+//	SVC_SEL,
+//	GATE_SEL,
+//	GRP_BODY,
+	};
+
+dumpRunFile:	(rf: [:] char) =
+	{
+	fd:	stream;
+	i:	long;
+	j:	long;
+	fix:	long;
+	n:	int;
+	dig:	int;
+	dc:	int;
+	d:	debugUnitHeader;
+	xp:	pointer;
+	cp:	ref char;
+	desc:	type	packed	{
+		public:
+
+		kind:		segClasses;
+		imageOff:	long;
+		initLen:	long;
+		totalLen:	long;
+		};
+	dp:	ref desc;
+
+	if	(fd open(rf, AR_READ)){
+		printf("Couldn't open file %S\n", rf);
+		exit(1);
+		}
+	i = fd seek(0, 2);
+	fd seek(0, 0);
+	if	(fd read(ref byte(&rhead)[:sizeof rhead]) != sizeof rhead){
+		printf("Couldn't read header for %S\n", rf);
+		exit(1);
+		}
+	if	(rhead.magic != RUN_MAGIC){
+		printf("Runfile magic number is not correct in %s\n", rf);
+		exit(1);
+		}
+	printf("\nRun file version %d      File %S\n\n", rhead.version, rf);
+	printf("cs:ip =   %04x:%08x\n", rhead.cs, rhead.ip);
+	printf("ss:sp =   %04x:%08x\n", rhead.ss, rhead.sp);
+	printf("ds =      %04x\n", rhead.ds);
+	printf("symbols =      %08x\n", rhead.symbols);
+	printf("thread =       %08x\n\n", rhead.threadLoc);
+	printf("image =        %08x\n", rhead.image);
+	printf("debug info =   %08x\n", rhead.debugInfo);
+	printf("file length  = %08x (%dK)\n\n", i, (i + 512) / 1024);
+	printf("code base    = %08x (%dK)\n", rhead.codeOffset, (rhead.codeOffset + 512) / 1024);
+	printf("code length  = %08x (%dK)\n", rhead.codeLen, (rhead.codeLen + 512) / 1024);
+	printf("data base    = %08x (%dK)\n", rhead.dataOffset, (rhead.dataOffset + 512) / 1024);
+	printf("const length = %08x (%dK)\n", rhead.dataConstLen, (rhead.dataConstLen + 512) / 1024);
+	printf("init length  = %08x (%dK)\n", rhead.dataInitLen, (rhead.dataInitLen + 512) / 1024);
+	printf("data length  = %08x (%dK)\n\n", rhead.dataTotalLen, (rhead.dataTotalLen + 512) / 1024);
+	fd close();
+	}
+
+dumpCoreDump:	(rf: [:] char) =
+	{
+	fd:	stream;
+	i:	long;
+	j:	long;
+	fix:	long;
+	n:	int;
+	dig:	int;
+	dc:	int;
+	drec:	coreDumpHeader;
+	d:	debugUnitHeader;
+	xp:	pointer;
+	cp:	ref char;
+	desc:	type	packed	{
+		public:
+
+		kind:		segClasses;
+		imageOff:	long;
+		initLen:	long;
+		totalLen:	long;
+		};
+	dp:	ref desc;
+
+	if	(fd open(rf, AR_READ)){
+		printf("Couldn't open file %S\n", rf);
+		exit(1);
+		}
+	i = fd seek(0, 2);
+	fd seek(0, 0);
+	if	(fd read(ref byte(&drec)[:sizeof drec]) != sizeof drec){
+		printf("Couldn't read header for %S\n", rf);
+		exit(1);
+		}
+	if	(drec.magic != COR_MAGIC){
+		printf("Core dump magic number is not correct in %s\n", rf);
+		exit(1);
+		}
+	printf("\nCore dump version %d      File %S\n\n", drec.version, rf);
+
+	if	(drec.task.state == TS_TRAP){
+		i:	int;
+
+		i = drec.task.errorCode;
+		if	(i < int(&External.kill) ||
+			 i > int(&External.alarmExpired))
+			printf("Unknown trap (%x)", i);
+		else
+			printf("%s trap", TrapNames[i - int(&External.kill)]);
+		}
+	else if	(drec.task.state == TS_EXIT)
+		printf("exit(%d)", drec.task.errorCode);
+	else if	(drec.task.state == TS_ABORT)
+		printf("abort(%d)", drec.task.errorCode);
+	else
+		printf("%s", TaskStateMessages[drec.task.state]);
+	printf(" at %04x:%08x\n", drec.task.cs & 0xffff, drec.task.eip);
+
+	printf("  eax %08x ebx %08x ecx %08x edx %08x\n", drec.task.eax,
+			drec.task.ebx,
+			drec.task.ecx,
+			drec.task.edx);
+	printf("  esp %08x ebp %08x esi %08x edi %08x\n", 
+			drec.task.esp,
+			drec.task.ebp,
+			drec.task.esi,
+			drec.task.edi);
+	printf("   ds     %04x  es     %04x  fs     %04x  gs     %04x\n",
+			drec.task.ds & 0xFFFF,
+			drec.task.es & 0xFFFF,
+			drec.task.fs & 0xFFFF,
+			drec.task.gs & 0xFFFF);
+	printf("               ");
+	if	(drec.task.eflags & 1)
+		printf("CY ");
+	else
+		printf("NC ");
+	if	(drec.task.eflags & 4)
+		printf("PA ");
+	else
+		printf("NP ");
+	if	(drec.task.eflags & 0x10)
+		printf("AC ");
+	else
+		printf("NA ");
+	if	(drec.task.eflags & 0x40)
+		printf("ZF ");
+	else
+		printf("NZ ");
+	if	(drec.task.eflags & 0x80)
+		printf("SG ");
+	else
+		printf("NS ");
+	if	(drec.task.eflags & 0x100)
+		printf("TF ");
+	else
+		printf("NT ");
+	if	(drec.task.eflags & 0x200)
+		printf("IE ");
+	else
+		printf("NI ");
+	if	(drec.task.eflags & 0x400)
+		printf("DN ");
+	else
+		printf("UP ");
+	if	(drec.task.eflags & 0x800)
+		printf("OV ");
+	else
+		printf("NO ");
+	if	(drec.task.eflags & 0x4000)
+		printf("NT ");
+	if	(drec.task.eflags & 0x10000)
+		printf("RF ");
+	if	(drec.task.eflags & 0x20000)
+		printf("VM ");
+	printf("iopl = %x\n\n", drec.task.eflags >> 12 & 3);
+	printf("file length = %08x (%dK)\n", i, (i + 512) / 1024);
+	i -= sizeof drec;
+	printf("data length = %08x (%dK)\n", i, (i + 512) / 1024);
+	fd close();
+	}
+
+TaskStateMessages:	[] ref char = [
+	"Error",
+	"Running",				// TS_RUN
+	"Trapped",				// TS_TRAP
+	"Rejected",				// TS_REJECT
+	"Interrupted",				// TS_INTERRUPT
+	"Aborted",				// TS_ABORT
+	"Uncaught exception",			// TS_EXCEPTION
+	"Exit called",				// TS_EXIT
+	"Breakpoint",				// TS_BREAK
+	"Single-step",				// TS_STEP
+	];
+
+StateMessages:	[] ref char = [
+	"",					// DEB_STEP
+	"New",					// DEB_NEW
+	"Program finished",			// DEB_DEAD
+	"",					// DEB_BKPT
+	"Signal raised",			// DEB_SIG
+	"Trapped",				// DEB_TRAP
+	];
+
+TrapNames:	[] ref char = [
+	"Kill",
+	"Illegal instruction",
+	"Memory error",
+	"Page fault",
+	"Array bounds",
+	"System call",
+	"Math",
+	"Integer overflow",
+	"Reject",
+	"Interrupt",
+	"Power failure",
+	"Hangup",
+	"Attention",
+	"Quit",
+	"Broken send",
+	"Alarm expired",
+	];
+
+dumpLodFile:	(rf: [:] char) =
+	{
+	fd:	stream;
+	i:	long;
+	j:	long;
+	fix:	long;
+	n:	int;
+	dig:	int;
+	dc:	int;
+	d:	debugUnitHeader;
+	xp:	pointer;
+	cp:	ref char;
+	desc:	type	packed	{
+		public:
+
+		kind:		segClasses;
+		imageOff:	long;
+		initLen:	long;
+		totalLen:	long;
+		};
+	dp:	ref desc;
+
+	if	(fd open(rf, AR_READ)){
+		printf("Couldn't open file %S\n", rf);
+		exit(1);
+		}
+	i = fd seek(0, 2);
+	fd seek(0, 0);
+	if	(fd read(ref byte(&lhead)[:sizeof lhead]) != sizeof lhead){
+		printf("Couldn't read header for %S\n", rf);
+		exit(1);
+		}
+	if	(lhead.magic != LOD_MAGIC){
+		printf("Runfile magic number is not correct in %s\n", rf);
+		exit(1);
+		}
+	printf("\nLoad file version %d      File %s\n\n", lhead.version, rf);
+	printf("image =            %08x\n", lhead.image);
+	printf("symbols =          %08x\n", lhead.symbols);
+	printf("fixups =           %08x\n", lhead.fixups);
+	printf("symbolic fixups =  %08x\n", lhead.symbolicFixups);
+	printf("symbolic strings = %08x\n\n", lhead.symbolicStrings);
+	printf("entry funcs =      %8d\n", lhead.entryFuncs);
+	printf("cleanup funcs =    %8d\n", lhead.cleanupFuncs);
+	printf("file length =      %08x (%dK)\n\n", i, (i + 512) / 1024);
+	printf("code length =      %08x (%dK)\n", lhead.codeLen, (lhead.codeLen + 512) / 1024);
+	printf("const length =     %08x (%dK)\n", lhead.dataConstLen, (lhead.dataConstLen + 512) / 1024);
+	printf("init length =      %08x (%dK)\n", lhead.dataInitLen, (lhead.dataInitLen + 512) / 1024);
+	printf("data length =      %08x (%dK)\n\n", lhead.dataTotalLen, (lhead.dataTotalLen + 512) / 1024);
+	if	(lhead.version != LOD_VERSION){
+		fd close();
+		return;
+		}
+	fd seek(lhead.fixups, 0);
+	j = lhead.fixups;
+	printf("\nFixups (%d entries)\n\n", (i - j) / 4);
+	n = 0;
+	while	(j < lhead.symbolicStrings){
+		fd read(ref byte(&fix)[:sizeof fix]);
+		j += sizeof fix;
+		if	(fix & 0x40000000)
+			printf("  D");
+		else
+			printf("  C");
+		printf("->");
+		if	(fix & 0x80000000)
+			printf("D");
+		else
+			printf("C");
+		printf(" %08x", fix & 0x3fffffff);
+		n++;
+		if	(n == 5){
+			n = 0;
+			printf("\n");
+			}
+		}
+	if	(n)
+		printf("\n");
+	strings:	[:] char;
+
+	j = lhead.symbolicFixups - lhead.symbolicStrings;
+	strings = new [j] char;
+	fd seek(lhead.symbolicStrings, 0);
+	fd read(strings);
+	fd seek(lhead.symbolicFixups, 0);
+	j = lhead.symbolicFixups;
+	sfix:	packed	{ public:
+		loc:	unsigned[32];
+		off:	unsigned[32];
+		};
+
+	printf("\n");
+	while	(j < i){
+		fd read(ref byte(&sfix)[:sizeof sfix]);
+		j += sizeof sfix;
+		if	(sfix.loc & 0x40000000)
+			printf("  D");
+		else
+			printf("  C");
+		printf("->");
+		if	(sfix.loc & 0x80000000)
+			printf("s");
+		else
+			printf("a");
+		printf(" %08x %s\n", sfix.loc & 0x3fffffff, 
+							strings + sfix.off);
+		}
+	fd close();
+	delete strings;
+	}
+
+hexout:	(value: int) =
+	{
+	dc:	int;
+	dig:	int;
+
+	for	(dc = 0; dc < 4; dc++){
+		dig = value >> 12 & 0xf;
+		printf("%x", dig);
+		value <<= 4;
+		}
+	}
+

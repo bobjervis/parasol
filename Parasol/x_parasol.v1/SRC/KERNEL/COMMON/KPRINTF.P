@@ -1,0 +1,89 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	hardware;
+include	format;
+
+dumpData:	public	(p: pointer, len: int) =
+	{
+	cp:	ref byte;
+	i:	int;
+	j:	int;
+
+	cp = p;
+	while	(len){
+		kprintf("%08x: ", cp);
+		i = 8;
+		j = 0;
+		while	(i){
+			if	(len){
+				kprintf("%02x ", *cp);
+				j--;
+				len--;
+				cp++;
+				}
+			else
+				kprintf("   ");
+			i--;
+			}
+		i = 8;
+		kprintf(" ");
+		while	(i){
+			if	(len){
+				kprintf("%02x ", *cp);
+				j--;
+				len--;
+				cp++;
+				}
+			else
+				kprintf("   ");
+			i--;
+			}
+		kprintf("  ");
+		for	(i = j; i < 0; i++){
+			if	(cp[i] == 0 ||
+				 cp[i] == '\n' ||
+				 cp[i] == '\t' ||
+				 cp[i] == '\r')
+				kprintf(".");
+			else
+				kprintf("%c", cp[i]);
+			}
+		kprintf("\n");
+		}
+	}
+
+PrintfConsole:	public	ref Emitter;		// console emitter for
+						// kernel printf's
+
+PanicButton:	public	boolean;		// set TRUE when panic taken
+/*
+   These functions provide a simple debugging device for kernel operations,
+   while also usable for a primitive event log.
+ */
+kprintf:		public	(fmt: [:] char, ...) =
+	{
+	if	(PrintfConsole)
+		PrintfConsole format(fmt, ...);
+	}
+
+vkprintf:	public	(fmt: [:] char, ap: ArgumentList) =
+	{
+	if	(PrintfConsole)
+		PrintfConsole format(fmt, ap);
+	}
+
+enableI:		const	byte = 0xFB;
+
+panic:	public	(fmt: [:] char, ...) =
+	{
+	vkprintf(fmt, ...);
+	PanicButton = TRUE;
+	_emit(enableI);
+	for	(;;)
+		;
+	}

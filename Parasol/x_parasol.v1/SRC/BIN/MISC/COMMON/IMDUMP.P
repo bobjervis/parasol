@@ -1,0 +1,279 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file, error, filesys, limits, string;
+
+include	hash;
+include	errmsg;
+include	image;
+include	imparser;
+
+PathBuffer:	[512] char;
+StartRecord:	int = 1;
+EndRecord:	int = INT_MAX;
+
+main:	entry	() =
+	{
+	if	(|commandLine.arguments == 0)
+		help();
+
+	cp:	[:] char;
+	n:	long;
+	format:	[:] char;
+	path:	PathList = [];
+
+	path useEnvironment("PATH");
+	format = path search("parasol.imf");
+	n = long(_brklvl);
+	while	(|commandLine.arguments > 1){
+		cp = commandLine.arguments[0];
+		commandLine shiftArguments();
+		if	(*cp != '-'){
+			printf("Invalid argument: %S\n", cp);
+			help();
+			}
+		else if	(cp[1] == 'f'){
+			if	(|cp == 2){
+				printf("-f argument needs a filename\n");
+				help();
+				}
+			format = cp[2:];
+			}
+		else if	(cp[1] == '['){
+			x:	int;
+			range:	[:] char;
+
+			range = cp[2:];
+			x = stringScan(range, ':');
+			if	(x < 0){
+				printf("Range needed: %S\n", cp);
+				help();
+				}
+			printf("range - '%S' x = %d\n", range, x);
+
+			sc: stringConverter = [ range[:x] ];
+
+			StartRecord = sc encodeSigned();
+			if	(!sc.success){
+				printf("First number in range is invalid: %S\n", cp);
+				help();
+				}
+			range = range[x + 1:];
+			if	(|range == 0 ||
+				 range[|range - 1] != ']'){
+				printf("Range needed: %S\n", cp);
+				help();
+				}
+			printf("range - '%S'\n", range);
+			sc = [ range[:|range - 1] ];
+			EndRecord = sc encodeSigned();
+			if	(!sc.success){
+				printf("Second number in range is invalid: %S\n", cp);
+				help();
+				}
+			}
+		else	{
+			printf("Invalid argument: %S\n", cp);
+			help();
+			}
+		}
+	if	(|format == 0){
+		printf("Couldn't find 'parasol.imf'\n");
+		exit(1);
+		}
+
+	rt:		ref recordTypes;
+	in:		ref sourceParser;
+
+	in = sourceParser create(format);
+
+	x:	ExceptionContext;
+
+	try	{
+		rt = in parseFile();
+		if	(rt)
+			rt dump(commandLine.arguments[0]);
+		}
+	except	(x){
+		printf("Trap raised %x\n", x.raised);
+		if	(x.raised == &memTrap){
+			cause:	int;
+			size:	unsigned;
+
+			x.context nextArg(&cause, sizeof cause);
+			x.context nextArg(&size, sizeof size);
+			printf("cause = %d size = 0x%x\n", cause, size);
+			}
+		}
+	printf("Heap size = %ldK Free list = %ldK\n", 
+				((long(_brklvl) - n) + 512) / 1024, 
+				(threadHeap() freeListSize() + 512) / 1024);
+	exit(EX_SUCCESS);
+	}
+
+help:	() =
+	{
+	printf( "Use is: IMDUMP [ options ] file_name\n"
+			"Options:\n"
+			"	-[#1:#2]	Dump records from #1 through #2\n"
+			"	-fxxx		File format description\n"
+			);
+	exit(1);
+	}
+
+recordTypes:	public	type	{
+	public:
+
+	next:		ref recordTypes;
+	typeId:		byte;
+	name:		ref identifier;
+	fields:		ref field;
+
+create:	factory	(list: ref recordTypes, id: ref identifier, tid: byte,
+					f: ref field) ref recordTypes =
+	{
+	rt:	ref recordTypes;
+
+	self = alloc(sizeof recordTypes);
+	self = [ 0, tid, id, f ];
+	if	(list == 0)
+		return self;
+	rt = list;
+	for	(;;){
+		if	(id == rt->name){
+			CurrentContext errorX("ErrRedecl", 
+						id spelling(), "", 0);
+			return list;
+			}
+		if	(rt->next == 0){
+			rt->next = self;
+			return list;
+			}
+		rt = rt->next;
+		}
+	return self;
+	}
+
+dump:	(f: [:] char) =
+	{
+	d:	loader;
+	i:	int;
+	r:	ref recordMap;
+
+	i = d open(f);
+	if	(i){
+		printf("Couldn't dump '%S': %S\n", f, cmdError(i));
+		return;
+		}
+	for	(i = StartRecord; i < EndRecord; i++){
+		r = d getRecordMap(i);
+		if	(r == 0){
+			d close();
+			return;
+			}
+		printf("%5d: @%05x [%04x] ", i, r->FileOffset, r->X.Length);
+		c:	byte;
+		list:	ref recordTypes;
+
+		if	(r->FileOffset == 0){
+			printf("- no object\n");
+			continue;
+			}
+		d seek(r->FileOffset);
+		c = d getRecordType();
+		for	(list = self; list; list = list->next){
+			if	(list->typeId == c){
+				printf("%s {\n", list->name spelling());
+				list->fields dump(&d);
+				printf("\t}\n");
+				break;
+				}
+			}
+		if	(list == 0)
+			printf("- Not a valid record type 0x%02x\n", c);
+		}
+	}
+
+	};
+
+field:	public	type	{
+	public:
+
+	next:		ref field;
+	name:		ref identifier;
+	fType:		fTypes;
+
+create:	factory	(list: ref field, id: ref identifier, ft: fTypes) ref field =
+	{
+	f:	ref field;
+
+	self = alloc(sizeof field);
+	self = [ 0, id, ft ];
+	if	(list == 0)
+		return self;
+	f = list;
+	for	(;;){
+		if	(id == f->name){
+			CurrentContext errorX("ErrRedecl", 
+						id spelling(), "", 0);
+			return list;
+			}
+		if	(f->next == 0){
+			f->next = self;
+			return list;
+			}
+		f = f->next;
+		}
+	}
+
+dump:	(d: ref loader) =
+	{
+	while	(self){
+		i:	long;
+		cp:	ref char;
+
+		printf("\t%16s: ", name spelling());
+		switch	(fType){
+		case	F_INTEGER:
+			i = d integer();
+			printf("0x%x\n", i);
+			break;
+
+		case	F_UNSIGNED:
+			i = d uinteger();
+			printf("0x%xu\n", i);
+			break;
+
+		case	F_POINTER:
+			i = d integer();
+			printf("obj %d\n", i);
+			break;
+
+		case	F_STRING:
+			cp = d string();
+			printf("'%s'\n", cp);
+			break;
+
+		case	F_LITERAL:
+			i = d integer();
+			printf("\n");
+			d literal(i);
+			}
+		self = next;
+		}
+	}
+
+	};
+
+fTypes:	public	type	char = {
+	F_INTEGER,
+	F_UNSIGNED,
+	F_STRING,
+	F_LITERAL,
+	F_POINTER
+	};
+

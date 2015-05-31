@@ -1,0 +1,2303 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+
+include	backend;
+include	xtree, xstmt, xcall;
+include	target;
+include	errmsg;
+include	ptree;
+include	symtab;
+include	types;
+
+temporary:	type	{
+	public:
+
+	next:		ref temporary;
+	node:		ref tree_p;
+	reg:		regNum;
+	currentReg:	regNum;
+	desired:	RegisterMask;
+	};
+
+Avail:		RegisterMask;
+FreeRegisters:	RegisterMask;
+TempRegs:	RegisterMask;
+FreeTemps:	ref temporary;
+Temps:		ref temporary;
+Oldest:		ref temporary;
+LastTemp:	ref temporary;
+
+assignTempRegisters:	public	(t: ref tree_p, kind: operators) =
+	{
+	FreeTemps = 0;
+	LastTemp = 0;
+	Temps = 0;
+	FreeRegisters = rLong;
+	Avail = rLong;
+	switch	(kind){
+	case	O_RETURN:
+	case	O_REPLY:
+		if	(t == 0)
+			break;
+		if	(t->dtype &&
+			 t->dtype->topType == T_FLOAT)
+			assignFloatTemp(t);
+		else if	(usesIndirectReturn())
+			assignVoidContext(t);
+		else
+			assignIntegerTemp(t, AXmask);
+		break;
+/*
+	case	O_EXCEPT:	// for now we don't need to do anything here
+		break;
+ */
+	case	O_CRITICAL:
+	case	O_STMT:
+	case	O_DECL:
+		assignVoidContext(t);
+		break;
+
+	case	O_SWITCH:
+		assignIntegerTemp(t, AXmask);
+		break;
+
+	case	O_TRY:
+	case	O_ENDTRY:
+		consumeRegs(rLong);
+		break;
+
+	case	O_ENDEX:
+		assignIntegerTemp(t, rLong);
+		break;
+		}
+	}
+/*
+extraTestJump:	public	(tst: ref test_x) signedByte =
+	{
+	b:	ref binary_x;
+
+	if	(tst == 0 ||
+		 tst->operator == O_ERROR ||
+		 tst->test == 0)
+		return 0;
+	b = ref binary_x(tst->test);
+	if	(b->operator < O_EQ ||
+		 b->operator > O_NLT_GT)
+		return 0;
+	return extraJp(b->operator, b->left->dtype);
+	}
+ */
+assignVoidContext:	(t: ref tree_p) =
+	{
+	newest:		ref temporary;
+	args:		ref argument_x;
+	dest:		ref tree_p;
+	src:		ref tree_p;
+	len:		ref tree_p;
+	b:		ref binary_x;
+
+	if	(t == 0)
+		return;
+	if	(t->dtype &&
+		 t->dtype->topType == T_ERROR)
+		return;
+	newest = LastTemp;
+	b = ref binary_x(t);
+	switch	(t->operator){
+	default:
+		CurrentContext
+			printf("Unexpected operator in assignVoidContext\n");
+		t display(0);
+		exit(1);
+
+	case	O_SYNC:
+		assignVoidContext(b->left);
+		return;
+
+	case	O_ERROR:
+	case	O_ALLOCTOS:
+		return;
+
+	case	O_DVA:
+	case	O_MOA:
+		if	(b->dtype->topType == T_FLOAT){
+			if	(b->sethi < 0){
+				assignFloatTemp(b->left);
+				assignFloatTemp(b->right);
+				}
+			else	{
+				assignFloatTemp(b->right);
+				assignFloatTemp(b->left);
+				}
+			if	(!b->left->addrMode)
+				b->left->reg = 0;
+			if	(!b->right->addrMode)
+				b->right->reg = 0;
+			popFloatStack();
+			}
+		else	{
+			if	(b->sethi < 0){
+				assignIntegerTemp(b->left, AXmask);
+				assignIntegerTemp(b->right, 
+						rLong & ~(AXmask|DXmask));
+				}
+			else	{
+				assignIntegerTemp(b->right, 
+						rLong & ~(AXmask|DXmask));
+				assignIntegerTemp(b->left, AXmask);
+				}
+			}
+		cleanupTemps(b, newest);
+		break;
+
+	case	O_LSA:
+	case	O_RSA:
+		if	(b->sethi < 0){
+			assignLvalueTemps(b->left);
+			assignIntegerTemp(b->right, CLmask);
+			}
+		else	{
+			assignIntegerTemp(b->right, CLmask);
+			assignLvalueTemps(b->left);
+			}
+		cleanupTemps(b, newest);
+		break;
+
+	case	O_ASG:
+	case	O_ADA:
+	case	O_SBA:
+	case	O_MUA:
+	case	O_ANA:
+	case	O_ORA:
+	case	O_XRA:
+		if	(b->dtype->topType == T_FLOAT){
+			if	(b->sethi < 0){
+				assignFloatTemp(b->left);
+				assignFloatTemp(b->right);
+				}
+			else	{
+				assignFloatTemp(b->right);
+				assignFloatTemp(b->left);
+				}
+			if	(!b->left->addrMode)
+				b->left->reg = 0;
+			if	(!b->right->addrMode)
+				b->right->reg = 0;
+			popFloatStack();
+			}
+		else	{
+			if	(b->sethi < 0){
+				assignLvalueTemps(b->left);
+				assignIntegerTemp(b->right, rLong);
+				}
+			else	{
+				assignIntegerTemp(b->right, rLong);
+				assignLvalueTemps(b->left);
+				}
+			}
+		cleanupTemps(b, newest);
+		break;
+
+	case	O_SEQ:
+		assignVoidContext(b->left);
+		assignVoidContext(b->right);
+		break;
+
+	case	O_INTRPT:
+	case	O_EMIT:
+		break;
+
+	case	O_ABS:
+		assignIntegerTemp(ref bcall_x(t)->args, rLong);
+		cleanupTemps(t, newest);
+		break;
+
+	case	O_CVTBCD:
+		if	(b->sethi < 0){
+			assignFloatTemp(b->left);
+			assignIntegerTemp(b->right, rLong);
+			}
+		else	{
+			assignIntegerTemp(b->right, rLong);
+			assignFloatTemp(b->left);
+			}
+		cleanupTemps(b, newest);
+		break;
+		
+	case	O_MCOPY:
+		args = ref argument_x(ref bcall_x(t)->args);
+		dest = args->left;
+		src = ref argument_x(args->right)->left;
+		len = ref argument_x(args->right)->right;
+		assignIntegerTemp(len, CXmask);
+		assignIntegerTemp(src, SImask);
+		assignIntegerTemp(dest, DImask);
+		cleanupTemps(t, newest);
+		break;
+
+	case	O_MSCAN:
+		args = ref argument_x(ref bcall_x(t)->args);
+		dest = args->left;
+		src = ref argument_x(args->right)->left;
+		len = ref argument_x(args->right)->right;
+		assignIntegerTemp(len, CXmask);		// the max length
+		assignIntegerTemp(src, ALmask);		// the scan char
+		assignIntegerTemp(dest, DImask);	// the search string
+		cleanupTemps(t, newest);
+		break;
+
+	case	O_MSET:
+		args = ref argument_x(ref bcall_x(t)->args);
+		dest = args->left;
+		src = ref argument_x(args->right)->left;
+		len = ref argument_x(args->right)->right;
+		assignIntegerTemp(len, CXmask);		// the max length
+		assignIntegerTemp(src, ALmask);		// the set char
+		assignIntegerTemp(dest, DImask);	// the search string
+		cleanupTemps(t, newest);
+		break;
+
+	case	O_OUT:
+		args = ref argument_x(ref bcall_x(t)->args);
+		dest = args->left;
+		src = args->right;
+		assignIntegerTemp(src, ALmask);
+		assignIntegerTemp(dest, DXmask);
+		cleanupTemps(t, newest);
+		break;
+
+	case	O_IN:
+		src = ref bcall_x(t)->args;
+		assignIntegerTemp(src, DXmask);		// the scan char
+		cleanupTemps(t, newest);
+		break;
+
+	case	O_SCALL:
+		if	(t->dtype->topType == T_FLOAT){
+			assignFloatTemp(t);
+			popFloatStack();
+			}
+		else
+			assignIntegerTemp(t, rLong);
+		cleanupTemps(t, newest);
+		t->reg = nullReg;
+		break;
+
+	case	O_MCALL:
+	case	O_RCALL:
+		mc:	ref methodCall_x;
+
+		mc = ref methodCall_x(t);
+		if	(mc->operator == O_RCALL){
+			targ:	ref tree_p;
+			n:	ref temporary;
+			rc:	ref remoteCall_x;
+
+			rc = ref remoteCall_x(mc);
+			n = LastTemp;
+			assignIntegerTemp(rc->objectRef, rLong);
+			cleanupTemps(rc->objectRef, n);
+			if	(rc->retnAddr){
+				n = LastTemp;
+				assignIntegerTemp(rc->retnLen, SImask);
+				cleanupTemps(rc->objectRef, n);
+				n = LastTemp;
+				assignIntegerTemp(rc->retnAddr, DImask);
+				cleanupTemps(rc->objectRef, n);
+				}
+			if	(rc->frameSize)
+				rc->frameSize->reg = getreg(mc, BXmask, BXmask);
+			}
+		else if	(mc->objectRef->operator == O_DYNAMIC)
+			mc->objectRef->reg = getreg(mc, rLong, rLong);
+		if	(mc->dtype->topType == T_FLOAT){
+			assignFloatTemp(mc);
+			popFloatStack();
+			}
+		else
+			assignIntegerTemp(mc, rLong);
+		cleanupTemps(mc, newest);
+		mc->reg = nullReg;
+		break;
+
+	case	O_TST:
+	case	O_EQ:
+	case	O_NE:
+	case	O_LT:
+	case	O_GT:
+	case	O_LE:
+	case	O_GE:
+	case	O_ORD:			// <>=
+	case	O_UNORD:		// !<>=
+	case	O_NLT:			// !<
+	case	O_NLE:			// !<=
+	case	O_NGT:			// !>
+	case	O_NGE:			// !>=
+	case	O_LT_GT:		// <>
+	case	O_NLT_GT:		// !<>
+		t->reg = nullReg;
+		if	(b->dtype->topType == T_FLOAT){
+			assignFloatTemp(b);
+			popFloatStack();
+			break;
+			}
+		newest = LastTemp;
+		if	(b->sethi < 0){
+			assignIntegerTemp(b->left, rLong);
+			assignIntegerTemp(b->right, rLong);
+			}
+		else	{
+			assignIntegerTemp(b->right, rLong);
+			assignIntegerTemp(b->left, rLong);
+			}
+		cleanupTemps(b, newest);
+		break;
+
+	case	O_LSH:
+	case	O_RSH:
+	case	O_ROL:
+	case	O_ROR:
+		if	(b->sethi < 0){
+			if	(b->left->addrMode)
+				assignLvalueTemps(b->left);
+			else
+				assignIntegerTemp(b->left, rLong);
+			if	(b->right->addrMode)
+				assignLvalueTemps(b->right);
+			else
+				assignIntegerTemp(b->right, CLmask);
+			}
+		else	{
+			if	(b->right->addrMode)
+				assignLvalueTemps(b->right);
+			else
+				assignIntegerTemp(b->right, rLong);
+			if	(b->left->addrMode)
+				assignLvalueTemps(b->left);
+			else
+				assignIntegerTemp(b->left, CLmask);
+			}
+		cleanupTemps(b, newest);
+		break;
+
+	case	O_ADD:
+	case	O_SUB:
+	case	O_AND:
+	case	O_OR:
+	case	O_XOR:
+		if	(b->sethi < 0){
+			if	(b->left->addrMode)
+				assignLvalueTemps(b->left);
+			else
+				assignIntegerTemp(b->left, rLong);
+			if	(b->right->addrMode)
+				assignLvalueTemps(b->right);
+			else
+				assignIntegerTemp(b->right, rLong);
+			}
+		else	{
+			if	(b->right->addrMode)
+				assignLvalueTemps(b->right);
+			else
+				assignIntegerTemp(b->right, rLong);
+			if	(b->left->addrMode)
+				assignLvalueTemps(b->left);
+			else
+				assignIntegerTemp(b->left, rLong);
+			}
+		cleanupTemps(b, newest);
+		break;
+
+	case	O_NOT:
+	case	O_COM:
+	case	O_NEG:
+		assignIntegerTemp(b->left, rLong);
+		cleanupTemps(b, newest);
+		break;
+
+	case	O_LAND:
+	case	O_LOR:
+		assignVoidContext(b->left);
+		assignVoidContext(b->right);
+		break;
+
+	case	O_QUES:
+		assignVoidContext(ref conditional_x(t)->test);
+		assignVoidContext(ref conditional_x(t)->truePart);
+		assignVoidContext(ref conditional_x(t)->falsePart);
+		}
+	}
+
+assignFloatTemp:	(t: ref tree_p) =
+	{
+	v:		ref variable;
+	i:		unsigned;
+	right:		ref tree_p;
+	modeComplexity:	int;
+	qClass:		int;
+	newest:		ref temporary;
+	n:		ref temporary;
+	args:		ref argument_x;
+	dest:		ref tree_p;
+	src:		ref tree_p;
+	len:		ref tree_p;
+	b:		ref binary_x;
+	c:		ref bcall_x;
+	d:		ref type_s;
+
+	if	(t == 0)
+		return;
+	if	(t->dtype &&
+		 t->dtype->topType == T_ERROR)
+		return;
+	if	(t->addrMode){
+		assignLvalueTemps(t);
+		return;
+		}
+	newest = LastTemp;
+	b = ref binary_x(t);
+	c = ref bcall_x(t);
+	switch	(t->operator){
+	default:
+		CurrentContext
+			printf("Unexpected operator in assignFloatTemp\n");
+		t display(0);
+		exit(1);
+
+	case	O_ERROR:
+		return;
+
+//	case	O_DISPLAY:
+
+	case	O_IND:
+		assignLvalueTemps(t);
+		cleanupTemps(t, newest);
+
+	case	O_ID:
+	case	O_ICON:
+	case	O_FCON:
+	case	O_REG:
+	case	O_AUTO:
+	case	O_DYNAMIC:
+	case	O_LITERAL:
+	case	O_ELLIPSIS:
+	case	O_ADR:
+	case	O_TOS:
+	case	O_ALLOCTOS:
+		pushFloatStack(t);
+		break;
+
+	case	O_SEQ:
+		assignVoidContext(b->left);
+		assignFloatTemp(b->right);
+		if	(!b->right->addrMode)
+			b->right->reg = 0;
+		break;
+
+	case	O_EQ:
+	case	O_LT:
+	case	O_NE:
+	case	O_GT:
+	case	O_LE:
+	case	O_GE:
+	case	O_ORD:			// <>=
+	case	O_UNORD:		// !<>=
+	case	O_NLT:			// !<
+	case	O_NLE:			// !<=
+	case	O_NGT:			// !>
+	case	O_NGE:			// !>=
+	case	O_LT_GT:		// <>
+	case	O_NLT_GT:		// !<>
+		if	(b->sethi < 0){
+			assignFloatTemp(b->left);
+			assignFloatTemp(b->right);
+			}
+		else	{
+			assignFloatTemp(b->right);
+			assignFloatTemp(b->left);
+			}
+		if	(!b->left->addrMode)
+			b->left->reg = 0;
+		if	(!b->right->addrMode)
+			b->right->reg = 0;
+		popFloatStack();
+		popFloatStack();
+		cleanupTemps(t, newest);
+		break;
+
+	case	O_MUL:
+	case	O_DIV:
+	case	O_ADD:
+	case	O_SUB:
+	case	O_ASG:
+	case	O_ADA:
+	case	O_SBA:
+	case	O_MUA:
+	case	O_DVA:
+		if	(b->sethi < 0){
+			assignFloatTemp(b->left);
+			assignFloatTemp(b->right);
+			}
+		else	{
+			assignFloatTemp(b->right);
+			assignFloatTemp(b->left);
+			}
+		if	(!b->left->addrMode)
+			b->left->reg = 0;
+		if	(!b->right->addrMode)
+			b->right->reg = 0;
+		popFloatStack();
+		popFloatStack();
+		cleanupTemps(t, newest);
+		pushFloatStack(t);
+		break;
+
+	case	O_RNDINT:
+	case	O_FABS:
+		assignFloatTemp(c->args);
+		popFloatStack();
+		cleanupTemps(c, newest);
+		pushFloatStack(t);
+		if	(!c->args->addrMode)
+			c->args->reg = 0;
+		break;
+
+	case	O_NEG:
+		assignFloatTemp(b->left);
+		popFloatStack();
+		cleanupTemps(t, newest);
+		pushFloatStack(t);
+		if	(!b->left->addrMode)
+			b->left->reg = 0;
+		break;
+
+	case	O_SCALL:
+		clobberSomeRegs(c, 0);
+		assignArgumentTemps(c);
+		assignLvalueTemps(ref staticCall_x(c)->func);
+		cleanupTemps(c, newest);
+		pushFloatStack(t);
+		break;
+
+	case	O_RCALL:
+	case	O_MCALL:
+		mc:	ref methodCall_x;
+
+		mc = ref methodCall_x(t);
+		clobberSomeRegs(c, 0);
+		assignArgumentTemps(c);
+		if	(c->operator == O_RCALL){
+			killSet:	RegisterMask;
+			rc:	ref remoteCall_x;
+
+			rc = ref remoteCall_x(mc);
+			consumeRegs(AXmask|BXmask|CXmask|DXmask);
+			FreeRegisters |= AXmask|BXmask|CXmask|DXmask;
+			if	(rc->retnAddr)
+				killSet = AXmask|BXmask|CXmask|DXmask|SImask|
+								DImask;
+			else
+				killSet = AXmask|BXmask|CXmask|DXmask;
+			consumeRegs(killSet);
+			FreeRegisters |= killSet;
+			targ:	ref tree_p;
+			n:	ref temporary;
+			n = LastTemp;
+			assignIntegerTemp(rc->objectRef, rLong);
+			cleanupTemps(rc->objectRef, n);
+			if	(rc->retnAddr){
+				n = LastTemp;
+				assignIntegerTemp(rc->retnLen, SImask);
+				cleanupTemps(rc->objectRef, n);
+				n = LastTemp;
+				assignIntegerTemp(rc->retnAddr, DImask);
+				cleanupTemps(rc->objectRef, n);
+				}
+			}
+		else	{
+			if	(mc->objectRef->operator == O_DYNAMIC)
+				mc->objectRef->reg = getreg(mc->objectRef, rLong, rLong);
+			else
+				assignLvalueTemps(mc->objectRef);
+			}
+		cleanupTemps(c, newest);
+		pushFloatStack(t);
+		break;
+
+	case	O_QUES:
+		q:	ref conditional_x;
+
+		q = ref conditional_x(t);
+		assignVoidContext(q->test);
+		n = LastTemp;
+		assignFloatTemp(q->truePart);
+		cleanupTemps(q->truePart, n);
+		q->truePart->reg = 0;
+		popFloatStack();
+		n = LastTemp;
+		assignFloatTemp(q->falsePart);
+		cleanupTemps(q->falsePart, n);
+		q->falsePart->reg = 0;
+		popFloatStack();
+		pushFloatStack(t);
+		break;
+
+	case	O_CAST:
+		if	(ref cast_x(t)->opnd->dtype->topType == T_FLOAT){
+			assignFloatTemp(ref cast_x(t)->opnd);
+			if	(!ref cast_x(t)->opnd->addrMode)
+				ref cast_x(t)->opnd->reg = 0;
+			}
+		else
+			assignIntegerTemp(ref cast_x(t)->opnd, rLong);
+		cleanupTemps(t, newest);
+		pushFloatStack(t);
+		break;
+
+	case	O_INA:
+	case	O_DEA:
+		assignLvalueTemps(b->left);
+		assignFloatTemp(b->right);
+		if	(!b->right->addrMode)
+			b->right->reg = 0;
+		popFloatStack();
+		cleanupTemps(b, newest);
+		pushFloatStack(t);
+		}
+	}
+
+assignLvalueTemps:	(t: ref tree_p) =
+	{
+	v:		ref variable;
+	i:		unsigned;
+	right:		ref tree_p;
+	modeComplexity:	int;
+	qClass:		int;
+
+	if	(t == 0)
+		return;
+	if	(t->dtype &&
+		 t->dtype->topType == T_ERROR)
+		return;
+	switch	(t->operator){
+	default:
+		CurrentContext
+			printf("Unexpected operator in assignLvalueTemps\n");
+		t display(0);
+		exit(1);
+
+	case	O_ERROR:
+		return;
+
+//	case	O_DISPLAY:
+
+	case	O_ID:
+	case	O_ICON:
+	case	O_REG:
+	case	O_AUTO:
+	case	O_DYNAMIC:
+	case	O_LITERAL:
+	case	O_ELLIPSIS:
+	case	O_ADR:
+	case	O_ALLOCTOS:
+	case	O_TOS:
+		return;
+
+	case	O_IND:
+		if	(ref binary_x(t)->left->addrMode)
+			assignLvalueTemps(ref binary_x(t)->left);
+		else
+			assignIntegerTemp(ref binary_x(t)->left, rLong);
+		return;
+
+	case	O_ADD:
+	case	O_SUB:
+
+	case	O_LSH:
+	case	O_RSH:
+
+	case	O_MUL:
+		if	(ref binary_x(t)->left->addrMode)
+			assignLvalueTemps(ref binary_x(t)->left);
+		else
+			assignIntegerTemp(ref binary_x(t)->left, rLong);
+		if	(ref binary_x(t)->right->addrMode)
+			assignLvalueTemps(ref binary_x(t)->right);
+		else
+			assignIntegerTemp(ref binary_x(t)->right, rLong);
+		return;
+		}
+	}
+
+assignIntegerTemp:	(t: ref tree_p, regClass: RegisterMask) =
+	{
+	v:		ref variable;
+	i:		unsigned;
+	right:		ref tree_p;
+	modeComplexity:	int;
+	qClass:		int;
+	newest:		ref temporary;
+	n:		ref temporary;
+	rhsMask:	RegisterMask;
+	args:		ref argument_x;
+	dest:		ref tree_p;
+	src:		ref tree_p;
+	len:		ref tree_p;
+	b:		ref binary_x;
+	c:		ref bcall_x;
+	d:		ref type_s;
+
+	if	(t == 0)
+		return;
+	if	(t->dtype &&
+		 t->dtype->topType == T_ERROR)
+		return;
+	if	(t->addrMode){
+		assignLvalueTemps(t);
+		return;
+		}
+	newest = LastTemp;
+	b = ref binary_x(t);	// in case we need it
+	c = ref bcall_x(t);	// in case we need it
+	switch	(t->operator){
+	default:
+		CurrentContext
+			printf("Unexpected operator in assignIntegerTemp\n");
+		t display(0);
+		exit(1);
+
+	case	O_ERROR:
+		return;
+
+//	case	O_DISPLAY:
+
+	case	O_FLD:
+		bf:	ref bitField_x;
+
+		bf = ref bitField_x(t);
+		assignIntegerTemp(bf->enclosingWord, regClass);
+		cleanupTemps(t, newest);
+		t->reg = bf->enclosingWord->reg;
+		break;
+
+	case	O_IND:
+		assignLvalueTemps(t);
+		cleanupTemps(t, newest);
+
+	case	O_ID:
+	case	O_ICON:
+	case	O_FCON:
+	case	O_REG:
+	case	O_AUTO:
+	case	O_DYNAMIC:
+	case	O_LITERAL:
+	case	O_ELLIPSIS:
+	case	O_ADR:
+	case	O_TOS:
+	case	O_ALLOCTOS:
+		t->reg = getreg(t, rLong, regClass);
+		break;
+
+	case	O_SEQ:
+		assignVoidContext(b->left);
+		assignIntegerTemp(b->right, regClass);
+		cleanupTemps(t, newest);
+		t->reg = latestResult(b->right);
+		break;
+
+	case	O_LOR:
+	case	O_LAND:
+		assignVoidContext(b->left);
+		assignVoidContext(b->right);
+		t->reg = getreg(t, rLong, regClass);
+		break;
+
+	case	O_EQ:
+	case	O_LT:
+	case	O_NE:
+	case	O_GT:
+	case	O_LE:
+	case	O_GE:
+	case	O_ORD:			// <>=
+	case	O_UNORD:		// !<>=
+	case	O_NLT:			// !<
+	case	O_NLE:			// !<=
+	case	O_NGT:			// !>
+	case	O_NGE:			// !>=
+	case	O_LT_GT:		// <>
+	case	O_NLT_GT:		// !<>
+		rhsMask = rLong;
+		if	(regClass != rLong)
+			rhsMask &= ~regClass;
+		if	(b->sethi < 0){
+			assignIntegerTemp(b->left, regClass);
+			assignIntegerTemp(b->right, rhsMask);
+			}
+		else	{
+			assignIntegerTemp(b->right, rhsMask);
+			assignIntegerTemp(b->left, regClass);
+			}
+		cleanupTemps(t, newest);
+		t->reg = getreg(t,rLong, regClass);
+		break;
+
+	case	O_MUL:
+
+		rhsMask = rLong;
+		if	(regClass != rLong)
+			rhsMask &= ~regClass;
+		if	(b->sethi < 0){
+			assignIntegerTemp(b->left, regClass);
+			assignIntegerTemp(b->right, rhsMask);
+			}
+		else	{
+			assignIntegerTemp(b->right, rhsMask);
+			assignIntegerTemp(b->left, regClass);
+			}
+		cleanupTemps(t, newest);
+		t->reg = latestResult(b->left);
+		break;
+
+	case	O_DIV:
+	case	O_MOD:
+		if	(b->dtype sizeOf() > 1){
+			if	(b->sethi < 3){
+				b->sethi = -1;
+				assignIntegerTemp(b->left, AXmask);
+				reserveReg(t, DX, DXmask);
+				assignIntegerTemp(b->right,
+					rLong & ~(AXmask|DXmask));
+				}
+			else	{
+				assignIntegerTemp(b->right,
+					rLong & ~(AXmask|DXmask));
+				reserveReg(t, DX, DXmask);
+				assignIntegerTemp(b->left, AXmask);
+				}
+			cleanupTemps(t, newest);
+			t->reg = (t->operator == O_DIV ? AX : DX);
+			}
+		else	{
+			if	(b->sethi < 0){
+				assignIntegerTemp(b->left, AXmask);
+				assignIntegerTemp(b->right,
+					rLong & ~(AXmask|DXmask));
+				}
+			else	{
+				assignIntegerTemp(b->right,
+					rLong & ~(AXmask|DXmask));
+				assignIntegerTemp(b->left, AXmask);
+				}
+			cleanupTemps(t, newest);
+			t->reg = (t->operator == O_DIV ? AL : AH);
+			}
+		break;
+
+	case	O_LSH:
+	case	O_RSH:
+	case	O_ROL:
+	case	O_ROR:
+		if	(regClass == CLmask)
+			regClass = rLong & ~CLmask;
+		if	(b->sethi < 0){
+			assignIntegerTemp(b->left, regClass);
+			assignIntegerTemp(b->right, CLmask);
+			}
+		else	{
+			assignIntegerTemp(b->right, CLmask);
+			assignIntegerTemp(b->left, regClass);
+			}
+		cleanupTemps(t, newest);
+		t->reg = latestResult(b->left);
+		break;
+
+	case	O_ADD:
+
+			// look for special case, this can be generated as an
+			// LEA instruction
+
+		if	(b->left->reg != nullReg &&
+			 b->right->operator == O_ICON){
+			t->reg = getreg(t, rLong, regClass);
+			break;
+			}
+
+	case	O_SUB:
+	case	O_AND:
+	case	O_OR:
+	case	O_XOR:
+		rhsMask = rLong;
+		if	(regClass != rLong)
+			rhsMask &= ~regClass;
+		if	(b->sethi < 0){
+			assignIntegerTemp(b->left, regClass);
+			assignIntegerTemp(b->right, rhsMask);
+			}
+		else	{
+			assignIntegerTemp(b->right, rhsMask);
+			assignIntegerTemp(b->left, regClass);
+			}
+		cleanupTemps(b, newest);
+		b->reg = latestResult(b->left);
+		break;
+
+	case	O_NOT:
+	case	O_COM:
+	case	O_NEG:
+		assignIntegerTemp(b->left, regClass);
+		cleanupTemps(b, newest);
+		b->reg = latestResult(b->left);
+		break;
+
+	case	O_ABS:
+		assignIntegerTemp(c->args, AXmask);
+		ref staticCall_x(c)->func->reg = 
+			getreg(ref staticCall_x(c)->func, DXmask, DXmask);
+		reserveReg(ref staticCall_x(c)->func, DX, DXmask);
+		cleanupTemps(c, newest);
+		c->reg = getreg(c, AXmask, AXmask);
+		break;
+
+	case	O_MSCAN:
+		args = ref argument_x(c->args);
+		dest = args->left;
+		src = ref argument_x(args->right)->left;
+		len = ref argument_x(args->right)->right;
+		assignIntegerTemp(len, CXmask);		// the max length
+		assignIntegerTemp(src, ALmask);		// the scan char
+		assignIntegerTemp(dest, DImask);	// the search string
+		cleanupTemps(c, newest);
+		c->reg = getreg(c, DImask, DImask);
+		break;
+
+	case	O_IN:
+		src = c->args;
+		assignIntegerTemp(src, DXmask);		// the scan char
+		cleanupTemps(c, newest);
+		c->reg = getreg(c, ALmask, ALmask);
+		break;
+
+	case	O_SCALL:
+		rhsMask = 0;
+		d = c->dtype;
+		if	(d->topType == T_UNSIGNED ||
+			 d->topType == T_SIGNED ||
+			 (d->topType == T_STRUCT &&
+			  d sizeOf() <= 4))
+			rhsMask = AXmask;
+		clobberSomeRegs(c, rhsMask);
+		assignArgumentTemps(c);
+		assignLvalueTemps(ref staticCall_x(c)->func);
+		cleanupTemps(c, newest);
+		if	(d->topType)
+			c->reg = getreg(c, AXmask, AXmask);
+		else
+			c->reg = nullReg;
+		break;
+
+	case	O_RCALL:
+	case	O_MCALL:
+		mc:	ref methodCall_x;
+
+		mc = ref methodCall_x(t);
+		rhsMask = 0;
+		d = c->dtype;
+		if	(d->topType == T_UNSIGNED ||
+			 d->topType == T_SIGNED ||
+			 (d->topType == T_STRUCT &&
+			  d sizeOf() <= 4))
+			rhsMask = AXmask;
+		clobberSomeRegs(c, rhsMask);
+		assignArgumentTemps(c);
+		if	(c->operator == O_RCALL){
+			killSet:	RegisterMask;
+			rc:	ref remoteCall_x;
+
+			rc = ref remoteCall_x(mc);
+			consumeRegs(AXmask|BXmask|CXmask|DXmask);
+			FreeRegisters |= AXmask|BXmask|CXmask|DXmask;
+			if	(rc->retnAddr)
+				killSet = AXmask|BXmask|CXmask|DXmask|SImask|
+								DImask;
+			else
+				killSet = AXmask|BXmask|CXmask|DXmask;
+			consumeRegs(killSet);
+			FreeRegisters |= killSet;
+			targ:	ref tree_p;
+			n:	ref temporary;
+			n = LastTemp;
+			assignIntegerTemp(rc->objectRef, rLong);
+			cleanupTemps(rc->objectRef, n);
+			if	(rc->retnAddr){
+				n = LastTemp;
+				assignIntegerTemp(rc->retnLen, SImask);
+				cleanupTemps(rc->objectRef, n);
+				n = LastTemp;
+				assignIntegerTemp(rc->retnAddr, DImask);
+				cleanupTemps(rc->objectRef, n);
+				}
+			if	(rc->frameSize)
+				rc->frameSize->reg = getreg(mc, BXmask, BXmask);
+			}
+		else	{
+			if	(mc->objectRef->operator == O_DYNAMIC)
+				mc->objectRef->reg = getreg(mc->objectRef, rLong, rLong);
+			else
+				assignLvalueTemps(mc->objectRef);
+			}
+		cleanupTemps(c, newest);
+		if	(d->topType)
+			c->reg = getreg(c, AXmask, AXmask);
+		else
+			c->reg = nullReg;
+		break;
+
+	case	O_QUES:
+		q:	ref conditional_x;
+
+		q = ref conditional_x(t);
+		assignVoidContext(q->test);
+		n = LastTemp;
+		assignIntegerTemp(q->truePart, rLong);
+		cleanupTemps(q->truePart, n);
+		n = LastTemp;
+		assignIntegerTemp(q->falsePart, getRegMask(q->truePart->reg));
+		cleanupTemps(q->falsePart, n);
+		t->reg = q->falsePart->reg;
+		break;
+
+	case	O_CAST:
+		if	(ref cast_x(t)->opnd->dtype->topType == T_FLOAT){
+			assignFloatTemp(ref cast_x(t)->opnd);
+			t->reg = getreg(t, rLong, rLong);
+			}
+		else	{
+			assignIntegerTemp(ref cast_x(t)->opnd, regClass);
+			cleanupTemps(t, newest);
+			t->reg = getreg(t, rLong, regClass);
+			}
+		break;
+
+	case	O_ASG:
+		if	(b->sethi < 0){
+			assignLvalueTemps(b->left);
+			assignIntegerTemp(b->right, regClass);
+			}
+		else	{
+			assignIntegerTemp(b->right, regClass);
+			assignLvalueTemps(b->left);
+			}
+		cleanupTemps(b, newest);
+		b->reg = latestResult(b->left);
+		if	(b->reg == nullReg)
+			b->reg = getreg(b, rLong, regClass);
+		break;
+
+	case	O_LSA:
+	case	O_RSA:
+		if	(b->sethi < 0){
+			assignLvalueTemps(b->left);
+			assignIntegerTemp(b->right, CLmask);
+			}
+		else	{
+			assignIntegerTemp(b->right, CLmask);
+			assignLvalueTemps(b->left);
+			}
+		cleanupTemps(b, newest);
+		b->reg = getreg(b, rLong, rLong);
+		break;
+
+	case	O_INA:
+	case	O_DEA:
+		assignLvalueTemps(b->left);
+		assignIntegerTemp(b->right, rLong);
+		i = getreg(b, rLong, rLong);
+		cleanupTemps(b, newest);
+		b->reg = i;
+		break;
+
+	case	O_ADA:
+	case	O_SBA:
+	case	O_ANA:
+	case	O_XRA:
+	case	O_ORA:
+	case	O_MUA:
+		if	(b->sethi < 0){
+			assignLvalueTemps(b->left);
+			assignIntegerTemp(b->right, rLong);
+			}
+		else	{
+			assignIntegerTemp(b->right, rLong);
+			assignLvalueTemps(b->left);
+			}
+		cleanupTemps(b, newest);
+		b->reg = getreg(b, rLong, rLong);
+		break;
+
+	case	O_DVA:
+	case	O_MOA:
+		rhsMask = rLong;
+		if	(regClass != rLong)
+			rhsMask &= ~regClass;
+		rhsMask &= ~(AXmask|DXmask);
+		if	(b->sethi < 0){
+			assignIntegerTemp(b->left, AXmask);
+			assignIntegerTemp(b->right, rhsMask);
+			}
+		else	{
+			assignIntegerTemp(b->right, rhsMask);
+			assignIntegerTemp(b->left, AXmask);
+			}
+		cleanupTemps(b, newest);
+		if	(b->operator == O_DVA)
+			rhsMask = AXmask;
+		else
+			rhsMask = DXmask;
+		b->reg = getreg(b, rhsMask, rhsMask);
+		}
+	if	(b->reg != nullReg)
+		reserveReg(b, b->reg, regClass);
+	}
+
+assignArgumentTemps:	(c: ref bcall_x) =
+	{
+	args:	ref tree_p;
+	n:	ref temporary;
+
+	args = c->args;
+	if	(args == 0)
+		return;
+	while	(args->operator == O_ARG){
+		n = LastTemp;
+		assignIntegerTemp(ref argument_x(args)->left, rLong);
+		cleanupTemps(c, n);
+		args = ref argument_x(args)->right;
+		if	(args == 0)
+			break;
+		}
+	n = LastTemp;
+	assignIntegerTemp(args, rLong);
+	cleanupTemps(c, n);
+	}
+
+cleanupTemps:	(t: ref tree_p, newest: ref temporary) =
+	{
+	tm:	ref temporary;
+	n:	ref temporary;
+
+	if	(newest == 0){
+		newest = Temps;
+		Temps = 0;
+		LastTemp = 0;
+		}
+	else	{
+		tm = newest;
+		newest = newest->next;
+		tm->next = 0;
+		LastTemp = tm;
+		}
+	if	(newest == 0)
+		return;
+	tm = newest;
+	cleanupOperands(t, newest);
+
+/*
+#if	defined(PRO)
+	for	(i = 0, tp = Temps; i < TempCount; tp++, i++){
+		quadPtr	q2;
+
+		q2 = getQuad(tp->qi);
+		if	((q2->r.w.targetClass & 0x80) &&
+			 isInSet(varQ(q2)->variableNumber, LiveSet)){
+			variableDeath(varQ(q2));
+			q2->r.w.targetClass &= 0x3f;
+			}
+		}
+#endif
+ */
+	while	(tm){
+//		quadPtr	q2;
+
+		if	(fits(tm->currentReg, Avail))
+			FreeRegisters |= getRegMask(tm->currentReg);
+/*
+#if	defined(PRO)
+		q2 = getQuad(tp->qi);
+		if	((q2->r.w.targetClass & 0x80)){
+
+				/* Deaths were accounted for above. */
+
+			assert(!isInSet(varQ(q2)->variableNumber, LiveSet));
+			variableBirth(varQ(q2));
+			q2->r.w.targetClass &= 0x3f;
+			}
+#endif
+ */
+		if	(tm == Oldest)
+			Oldest = 0;
+		newest = tm->next;
+		tm->next = FreeTemps;
+		FreeTemps = tm;
+		tm = newest;
+		}
+	TempRegs = 0;
+	}
+/*
+temp:	{
+	quadId	qi;
+	regNum	currentReg;
+	char	allowedSet;
+	char	targetSet;
+	RegisterMask	allowed;
+	RegisterMask	target;
+	int	refCount;
+	};
+
+Temps:	[4] temp;
+ */
+TempCount:		int;
+DoesFit:		char;
+AnyPushed:		char;
+/*
+	TempCount will have the number of temps that must be cleaned up
+	in the instruction.
+
+	DoesFit is the count of temps that fit in their respective operands.
+
+	AnyPushed is the count of temps on the stack.
+
+	The TempRegs is a mask of the registers currently containing the
+	temps (if any are in registers).
+ */
+cleanupOperands:	(t: ref tree_p, tm: ref temporary) =
+	{
+//	struct	temp	*tp2;
+//	int		tCount;
+	didAnything:	int;
+	n:		ref temporary;
+	tp1:		ref temporary;
+	i:		int;
+	j:		int;
+
+	TempCount = 0;
+	DoesFit = 0;
+	TempRegs = 0;
+	AnyPushed = 0;
+
+	for	(n = tm; n; n = n->next){
+		TempCount++;
+		if	(n->currentReg == nullReg)
+			AnyPushed++;
+		else	{
+			if	(fits(n->currentReg, n->desired))
+				DoesFit++;
+			TempRegs |= getRegMask(n->currentReg);
+			}
+		}
+
+		/* No temps at all, a not uncommon situation,
+		   implies we do nothing.
+		 */
+
+	if	(TempCount == 0)
+		return;
+
+		/* All the temps fit their needed allowed sets.  Here
+		   we only need to post any multiply referenced temps.
+		 */
+
+	if	(DoesFit == TempCount)
+		return;
+
+		/* We have exactly one temp, no effort required.  We just
+		   clean it up.
+		 */
+
+	else if	(TempCount == 1){
+		tm->currentReg = cleanupTemp(t, tm);
+		return;
+		}
+
+		/* All the temps are on the stack, just pop them any
+		   old way.
+		 */
+
+	else if	(AnyPushed >= TempCount){
+		for	(n = tm; n; n = n->next)
+			n->currentReg = cleanupTemp(t, n);
+		return;
+		}
+
+	for	(;;){
+
+			/* First, clean up any temps that do not depend
+			   on other temps being resolved.
+			 */
+
+		didAnything = 0;
+		for	(n = tm; n; n = n->next){
+
+				/* If the temp is on the stack,
+				   ignore it for now. */
+
+			if	(n->currentReg == nullReg)
+				continue;
+			if	(!fits(n->currentReg, n->desired) &&
+				 !overlaps(n->desired, TempRegs)){
+				n->currentReg = cleanupTemp(t, n);
+				n->desired = getRegMask(n->currentReg);
+				DoesFit++;
+				didAnything = 1;
+				}
+			}
+
+		if	(DoesFit == TempCount - AnyPushed)
+			break;
+
+		if	(didAnything)
+			continue;
+
+			/* If exactly two temps can be resolved by an
+			   exchange, do it and stop.
+			 */
+
+		for	(n = tm; n; n = n->next){
+			if	(fits(n->currentReg, n->desired))
+				continue;
+			for	(tp1 = tm; tp1; tp1 = tp1->next)
+				if	(fits(n->currentReg, tp1->desired))
+					break;
+			if	(tp1){
+				makeSpill(SPK_XCHG, t, tp1->currentReg,
+					n->node, tp1->node);
+				i = tp1->currentReg;
+				tp1->currentReg = n->currentReg;
+				n->currentReg = i;
+				DoesFit++;
+				if	(fits(tp1->currentReg, tp1->desired) &&
+					 !fits(n->currentReg, tp1->desired))
+					DoesFit++;
+				}
+			else	{
+				CurrentContext printf(
+					"Cleaning up at node %p\n", t);
+				CurrentContext fatal("ErrRegAlloc");
+				}
+			break;
+			}
+		if	(DoesFit == TempCount - AnyPushed)
+			break;
+		}
+
+		/* Now clean up the stack. */
+
+	for	(n = tm; n; n = n->next)
+		if	(n->currentReg == nullReg)
+			n->currentReg = cleanupTemp(t, n);
+	}
+
+cleanupTemp:	(t: ref tree_p, tm: ref temporary) regNum =
+	{
+	allowedClass:	RegisterMask;
+	rx:		RegisterMask;
+	r:		regNum;
+	rnew:		regNum;
+
+		/* The temp may be on the stack */
+
+	if	(tm->currentReg == nullReg){
+		if	(tm->next &&
+			 tm->next->currentReg == nullReg)
+			tm->next->currentReg = cleanupTemp(t, tm->next);
+		rx = tm->desired;
+		if	(rx & FreeRegisters)
+			r = getreg(t, rx, rx);
+		else
+			CurrentContext fatal("ErrRegAlloc");
+		makeSpill(SPK_POP, t, r, tm->node, 0);
+		consumeRegs(getRegMask(r));
+		}
+
+		/* Check for the possibility that the temp
+		   is not in the right register.
+		 */
+
+	r = latestResult(tm->node);
+	if	(r == nullReg)
+		return(r);
+
+		/*
+		   This says that if the register is not where
+		   we want it and also not where we can use it,
+		   spill a temp.
+		 */
+
+	if	(!fits(r, tm->desired)){
+		rnew = getreg(t, tm->desired, tm->desired);
+		makeSpill(SPK_MOVE, t, rnew, tm->node, 0);
+		FreeRegisters |= getRegMask(r) & Avail;
+		TempRegs &= ~getRegMask(r);
+		TempRegs |= getRegMask(rnew);
+		consumeRegs(getRegMask(rnew));
+		r = rnew;
+		}
+	return(r);
+	}
+/*
+	latestResult
+
+	This function is called when one is interested in the latest register
+	that holds the temp.  Although it is unlikely,
+	there is no reason why a given temp cannot be pushed, popped, moved
+	and otherwise abused during the course of code generation.  As a
+	result, to get the current register of a given temp, one must scan the
+	spills for anything that affects the current quad.
+
+	Of course, should there be no related spills, then the register value
+	itself is used.  The number of spills is typically very small.  Since
+	many functions generate no spills at all, the whole for loop will be
+	skipped.  When there are spills, more often than not the last spill
+	will have been generated before the temp in question even came into
+	existence, so the first iteration will fail.  In those rare
+	circumstances when there are a bunch of recent spills then the loop
+	must be executed several times, but these circumstances are the ones
+	most likely to contain spills affecting the quad being examined.
+ */
+latestResult:	(t: ref tree_p) regNum =
+	{
+	s:	ref spill;
+
+	for	(s = TargetData.lastSpill; s; s = s->prev){
+		if	(s->affected == t){
+			assert( s->spillKind == SPK_MOVE ||
+				s->spillKind == SPK_XCHG ||
+				s->spillKind == SPK_POP);
+			if	(s->spillKind == SPK_XCHG){
+				t = s->other;
+				continue;
+				}
+			assert(s->newRegister != nullReg);
+			return(s->newRegister);
+			}
+		else if	(s->spillKind == SPK_XCHG &&
+			 s->other == t)
+			t = s->affected;
+		}
+	return(t->reg);
+	}
+
+clobberSomeRegs:	(t: ref tree_p, r: RegisterMask) =
+	{
+	rsave:	RegisterMask;
+
+	while	(Oldest &&
+		 (FreeRegisters & r) != r)
+		spillOldest(t);
+	}
+
+spillOldest:	(t: ref tree_p) =
+	{
+	if	(Oldest == 0){
+		CurrentContext printf("t = %lx\n", t);
+		CurrentContext fatal("ErrRegAlloc");
+		}
+	makeSpill(SPK_PUSH, t, nullReg, Oldest->node, 0);
+	FreeRegisters |= 1 << Oldest->reg;
+	Oldest->currentReg = nullReg;
+	Oldest = Oldest->next;
+	}
+
+getreg:	(t: ref tree_p, required: RegisterMask, desired: RegisterMask) regNum =
+	{
+	ri:	regNum;
+	r:	RegisterMask;
+	rNeg:	RegisterMask;
+	tm:	ref temporary;
+	asked:	RegisterMask;
+
+	asked = desired;
+	while	(required & FreeRegisters == 0)
+		spillOldest(t);
+	if	(desired & required)
+		desired &= required;
+	if	(desired & FreeRegisters)
+		r = desired & FreeRegisters;
+	else
+		r = required & FreeRegisters;
+	rNeg = 1;
+	assert(r != 0);
+	for	(ri = 0; r & 1 == 0; ri++, r >>= 1, rNeg <<= 1)
+		;
+	return(ri);
+	}
+
+consumeRegs:	(rNeg: RegisterMask) =
+	{
+	FreeRegisters &= ~rNeg;			// Reserve the register
+	TargetData.usedRegisters |= rNeg;
+//	if	(!LiveData){
+		sc:	ref scope_s;
+
+		assert(TargetData.currentScope != 0);
+		for	(sc = TargetData.currentScope; sc; sc = sc->enclosing)
+			sc->reservedInScope |= rNeg;
+//		}
+	}
+
+reserveReg:	(t: ref tree_p, actual: regNum, asked: RegisterMask) =
+	{
+	rNeg:	RegisterMask;
+
+//	RecentlyConsumed |= r;
+	rNeg = 1 << actual;
+	consumeRegs(rNeg);
+	makeTemp(t, actual, asked);
+	}
+
+makeTemp:	(x: ref tree_p, ri: regNum, rm: RegisterMask) ref temporary =
+	{
+	t:	ref temporary;
+
+	if	(FreeTemps){
+		t = FreeTemps;
+		FreeTemps = t->next;
+		}
+	else
+		t = alloc(sizeof (temporary));
+	t = [ 0, x, ri, ri, rm ];
+	if	(LastTemp)
+		LastTemp->next = t;
+	else	{
+		Temps = t;
+		Oldest = t;
+		}
+	LastTemp = t;
+	return(t);
+	}
+
+/*
+#define	isInSet(i, s)		(((s)[(i) >> 3]) &  (1 << ((i) & 7)))
+#define	turnOffSet(i, s)	(((s)[(i) >> 3]) &= ~(1 << ((i) & 7)))
+#define	turnOnSet(i, s)		(((s)[(i) >> 3]) |= (1 << ((i) & 7)))
+
+#define	maxLiveDelta()	((liveDeltaPtr)sizeofRegion(&LiveSeg))
+
+cleanupContext:	type	enum	{
+	CC_KILL_LIVE,
+	CC_PRESERVE_LIVE
+	};
+
+addReference:		(quadId);
+assembleTargetClass:	(quadPtr, int);
+assignTempRegistersQ:	(stmtitemPtr);
+cleanupOperands:	(quadPtr, cleanupContext);
+cleanupSubTree:		(quadId, cleanupContext, int) regNum;
+clobberSomeRegs:	(RegisterMask);
+consumeRegs:		(RegisterMask);
+dumpActiveTemps:	(stmtitemPtr);
+getreg:			(RegisterMask, RegisterMask) regNum;
+killRememberedVar:	(quadPtr);
+latestResult:		(quadId) regNum;
+markCSEVariable:	();
+markInLiveVars:		();
+markLiveVariable:	(quadPtr);
+markNeededResultsQ:	(stmtitemPtr);
+orSet:			(* unsignedChar, * unsignedChar);
+releaseReg:		(quadId, int) regNum;
+rememberVariable:	(quadPtr);
+shuffleRegisters:	(RegisterMask) regNum;
+variableBirth:		(variablePtr);
+variableDeath:		(variablePtr);
+
+InterferenceGraph:	public	graphPtr;
+VarMap:			public	varNumPtr;
+CurrentQuadNum:		public	quadId;
+ComputeInterference:	char;
+LiveData:		char;
+FreeRegisters:		RegisterMask;
+Avail:			RegisterMask;
+PreviouslyFreed:	RegisterMask;
+RecentlyConsumed:	RegisterMask;
+MustKeep:		RegisterMask;
+CurrentScope:		stmtitemPtr;
+ResultLeft:		regNum;
+ResultRight:		regNum;
+LiveSet:		livePtr;
+LiveDeltas:		liveDeltaPtr;
+
+regIsUsed:	(r: RegisterMask, qi: quadId) int =
+	{
+	q:	quadPtr;
+	qd:	* near quadDescriptor;
+
+	if	(qi == 0)
+		return(0);
+	q = getQuad(qi);
+	qd = _Quads + q->operation;
+	if	(qd->quadClass & QC_SYMBOL){
+		if	(varQ(q)->flags & VF_REG)
+			return(r == getRegMask(varQ(q)->reg));
+		else
+			return(0);
+		}
+	else if	(qd->quadClass & (QC_CONST|QC_REG))
+		return(0);
+	else
+		return(regIsUsed(r,leftQ(q)) || regIsUsed(r,rightQ(q)));
+	}
+
+assignTempRegistersQ:	(s: stmtitemPtr) =
+	{
+	q:		quadPtr;
+	q2:		quadPtr;
+	remainingCount:	unsigned;
+	resultleft:	RegisterMask;
+	resultright:	RegisterMask;
+	x:		* unsigned;
+	y:		* unsigned;
+	target:		RegisterMask;
+	allowed:	RegisterMask;
+	qd:		* quadDescriptor;
+	r:		RegisterMask;
+	previouslyAvail:RegisterMask;
+	leftAllowed:	int;
+	rightAllowed:	int;
+	cv:		CSEvarPtr;
+	lv:		livePtr;
+	ld:		liveDeltaPtr;
+	i:		int;
+	v:		variablePtr;
+	g:		graphPtr;
+	gn:		graphPtr;
+
+	if	(ComputeInterference){
+		LiveSet = lv = getStmtLive(s, &LiveDeltas);
+		for	(i = 0, gn = InterferenceGraph; i < Coder.maxVar;
+					i++, gn += Coder.setSize){
+			if	(isInSet(i, lv))
+				orSet(gn, lv);
+			}
+		}
+	else if	(LiveData){
+		LiveSet = lv = getStmtLive(s, &LiveDeltas);
+		previouslyAvail = Avail;
+		Avail = availableToLiveTemps();
+		r = 0;
+		previouslyAvail = Avail & ~previouslyAvail;
+		for	(i = 0; i < Coder.maxVar; i++){
+			if	(isInSet(i, lv) &&
+				 VarMap[i]->flags & VF_REG)
+				r |= getRegMask(VarMap[i]->reg);
+			}
+
+			/* Turn on the set of things that become free at
+			   the start of the block, and turn off the set of
+			   things that become used at the start of the
+			   block.
+			 */
+
+		FreeRegisters |= previouslyAvail;
+		FreeRegisters &= ~r;
+		Avail &= ~r;
+		}
+	remainingCount = s->quadCount;
+	CurrentQuadNum = s->quadIndex;
+	q = getQuad(CurrentQuadNum);
+	PreviouslyFreed = 0;
+	RecentlyConsumed = 0;
+	for	(; remainingCount;
+				markCSEVariable(),
+				remainingCount--, q++, CurrentQuadNum++){
+		qd = _Quads + q->operation;
+
+			/* Mark up I386_VARx quads that are at live range
+			   boundaries.
+			 */
+
+		if	(waitForNextQuad(q)){
+			addReference(leftQ(q));
+			addReference(rightQ(q));
+			}
+		if	(qd->quadClass & QC_SYMBOL){
+			if	(ComputeInterference)
+				rememberVariable(q);
+			else if	(LiveData){
+				if	(q->flags & QF_AMODE){
+					rememberVariable(q);
+					continue;
+					}
+				else
+					markLiveVariable(q);
+				}
+			}
+		if	(q->flags & QF_AMODE)
+			continue;
+		if	(q->operation == I386_LINE || q->flags & QF_IGNORE)
+			continue;
+		ResultLeft = nullReg;
+		ResultRight = nullReg;
+		MustKeep = 0;
+		if	((qd->quadClass & (QC_SYMBOL|QC_CONST|QC_REG)) == 0 &&
+			 (q->operation != I386_MERGOP || rightQ(q) == 0)){
+			if	(PreviouslyFreed){
+				FreeRegisters |= PreviouslyFreed;
+				PreviouslyFreed = 0;
+				}
+ 			if	(remainingCount <= 1 ||
+				 !waitForNextQuad(q)){
+				cleanupOperands(q, CC_KILL_LIVE);
+				PreviouslyFreed &= Avail;
+				FreeRegisters |= PreviouslyFreed;
+				MustKeep &= ~PreviouslyFreed;
+				PreviouslyFreed = 0;
+				}
+			else
+				cleanupOperands(q, CC_PRESERVE_LIVE);
+			}
+		if	(qd->quadClass & QC_FLOAT){
+			/* isn't true for I386_MERGE assert(q->r.w.result == 0);*/
+			q->r.w.result = nullReg;
+			if	((qd->quadClass & QC_SYMBOL) == 0)
+				cleanup8087Operands(q,CurrentQuadNum);
+			if	((q->flags & (QF_AMODE|QF_USED)) == QF_USED)
+				push8087(CurrentQuadNum);
+			continue;
+			}
+
+		if	(qd->tempsUsed)
+			clobberSomeRegs(_Used[qd->tempsUsed]);
+		else if	(q->operation == I386_CLOBBER)
+			clobberSomeRegs(ivalueQ(q));
+
+				/* Direct call */
+
+		else if	((qd->quadClass & (QC_SYMBOL|QC_CALL)) ==
+						(QC_SYMBOL|QC_CALL))
+			clobberSomeRegs(offsetQ(q));
+		if	((q->flags & QF_USED) == 0){
+			if	(q->operation == I386_SPILL){
+				while	(Coder.spilledReg < Coder.newestReg &&
+					 (FreeRegisters & ivalueQ(q)) !=
+						ivalueQ(q))
+					spillOldest();
+				spill8087(CurrentQuadNum);
+				}
+			else if	(q->operation == I386_MERGE)
+				cleanup8087Operands(q,CurrentQuadNum);
+			else	{
+				if	(qd->quadClass & QC_LEFT){
+					r = getRegMask(ResultLeft);
+					consumeRegs(r);
+					FreeRegisters |= r & Avail;
+					}
+				cv = getCSEvar(CurrentQuadNum);
+				if	(cv >= maxCSEvar() ||
+					 *cv == 0)
+					continue;
+				allowed = _Results[qd->resultsAllowed];
+				if	(qd->quadClass & QC_LEFT){
+					assert(fits(ResultLeft, allowed));
+					q->r.w.result = ResultLeft;
+					}
+				else
+					q->r.w.result = getreg(allowed, allowed);
+				}
+			continue;
+			}
+		if	(q->operation == I386_MERGOP){
+			rnum:	regNum;
+			qi:	quadId;
+
+			if	(rightQ(q)){
+				rnum = latestResult(rightQ(q));
+				q2 = getQuad(leftQ(q));
+				q2->r.w.targetClass =
+					regTargetClass(rnum,
+						_Quads[q2->operation].qType);
+				}
+			cleanupOperands(q, CC_KILL_LIVE);
+			FreeRegisters |= PreviouslyFreed;
+			PreviouslyFreed = 0;
+			if	(rightQ(q) == 0)
+				cleanup8087Operands(q,CurrentQuadNum);
+			q->r.w.result = latestResult(leftQ(q));
+			continue;
+			}
+		else if	(q->operation == I386_MERGE)
+			q->r.w.result = getQuad(leftQ(q))->r.w.result;
+		else if	(qd->resultsAllowed){
+			allowed = _Results[qd->resultsAllowed];
+			if	(q->r.w.targetClass & 0x3f)
+				target = _Results[q->r.w.targetClass & 0x3f];
+			else
+				target = allowed;
+
+				/* This can only come about because of an
+				   assignment to a hi byte register using
+				   pseudo-register variables.
+				 */
+
+			if	(overlaps(target, HiByteRegs) == target &&
+				 overlaps(target, allowed)){
+				q->r.w.result = (q->r.w.targetClass & 0x3f) - 1;
+				continue;
+				}
+			if	((q->flags & QF_ASGOP) == 0 &&
+				 (qd->quadClass & QC_LEFT)){
+				if	(fits(ResultLeft, allowed))
+					q->r.w.result = ResultLeft;
+				else	{
+					q->r.w.result = getreg(target, allowed);
+					makeSpill(SPK_MOVE,
+							_WordResult[qd->resultsAllowed],
+							q->r.w.result, leftQ(q));
+					}
+				}
+			else
+				q->r.w.result = getreg(target, allowed);
+			}
+		else
+			continue;
+		reserveRegs(CurrentQuadNum, q->r.w.result);
+		}
+	if	(ComputeInterference &&
+		 RecentlyConsumed){
+		markInLiveVars();
+		RecentlyConsumed = 0;
+		}
+	if	(s->flags & ST_LONGCMP)
+		dumpActiveTemps(s);
+	}
+
+ */
+/*
+getResult:	public	(t: ref tree_p) regNum =
+	{
+
+	if	(t == 0)
+		return(nullReg);
+	if	(t->flags & TF_AMODE)
+		return(nullReg);
+	else
+		return(t->reg);
+	}
+ */
+/*
+killRememberedVar:	(q: quadPtr) =
+	{
+	q->r.w.targetClass &= 0x3f;
+	if	(ComputeInterference || LiveData){
+		if	(isInSet(varQ(q)->variableNumber, LiveSet))
+			variableDeath(varQ(q));
+		else
+			variableBirth(varQ(q));
+		}
+	}
+
+getreg:	(target: RegisterMask, allowed: RegisterMask) regNum =
+	{
+	y:		RegisterMask;
+	z:		RegisterMask;
+	x:		regNum;
+	k:		int;
+
+	if	(overlaps(target, allowed)){
+		y = allowed & target;
+		if	(((y & MustKeep) != y) && (y & Avail) != 0)
+			allowed = y;
+		}
+	for	(;;){
+		z = FreeRegisters & allowed;
+
+			/*
+			   For functions with register parameters, try to
+			   avoid an incoming register if we can do so.
+
+		if	(z & ~IncomingRegs)
+			z &= ~IncomingRegs;
+			 */
+
+		x = 0;
+		if	(z){
+			for	(y = 1; y; y <<= 1, x++)
+				if	((y & z) == y)
+					return(x);
+			}
+		spillOldest();
+		}
+	}
+
+ */
+
+makeSpill:	(sKind: spillKinds, t: ref tree_p, r: regNum, affected: ref tree_p,
+			other: ref tree_p) =
+	{
+	s:	ref spill;
+
+/*
+	if	(DebugFlag){
+		printf("spilling sKind = ");
+		switch	(sKind){
+		case	SPK_PUSH:
+			printf("SPK_PUSH affected:");
+			affected display(0);
+			break;
+
+		case	SPK_POP:
+			printf("SPK_POP %d affected:\n", r);
+			affected display(0);
+			break;
+
+		case	SPK_MOVE:
+			printf("SPK_MOVE to %d affected:\n", r);
+			affected display(0);
+			break;
+
+		case	SPK_XCHG:
+			printf("SPK_XCHG affected:\n");
+			affected display(0);
+			printf("other:\n");
+			other display(0);
+			break;
+
+		case	SPK_FPSPILL:
+			printf("SPK_FPSPILL affected:\n");
+			affected display(0);
+			break;
+
+		case	SPK_FPRELOAD:
+			printf("SPK_FPRELOAD affected:\n");
+			affected display(0);
+			break;
+			}
+		printf("marked at:\n");
+		t display(0);
+		}
+ */
+	s = alloc(sizeof (spill));
+	i:	int;
+
+	i = affected->dtype bitSizeOf();
+	if	(sKind == SPK_XCHG){
+		j:	int;
+
+		j = other->dtype bitSizeOf();
+		if	(j > i)
+			i = j;
+		}
+	s = [ 0, TargetData.lastSpill, sKind, i, r, t, affected, other, 0 ];
+	if	(TargetData.lastSpill)
+		TargetData.lastSpill->next = s;
+	else
+		TargetData.spills = s;
+	TargetData.lastSpill = s;
+	}
+
+/*
+
+releaseReg:	(qi: quadId, allowedClass: int) regNum =
+	{
+	q:		quadPtr;
+	qcur:		quadPtr;
+	alloc:		regUsagePtr;
+	p:		regUsagePtr;
+	allowedSet:	int;
+	s:		spillPtr;
+	r:		regNum;
+	rnew:		regNum;
+	rx:		RegisterMask;
+	target:		RegisterMask;
+	qd:		* near quadDescriptor;
+
+	if	(qi == 0)
+		return(nullReg);
+	if	(Coder.newestReg == 0)
+		return(nullReg);
+	alloc = Coder.newestReg - 1;
+	for	(;;){
+		if	(alloc->qi == qi)
+			break;
+		if	(alloc == 0)
+			return(nullReg);
+		alloc--;
+		}
+	q = getQuad(qi);
+	r = q->r.w.result;
+	MustKeep |= getRegMask(r);
+	alloc->refCount--;
+
+	if	(r == nullReg)
+		return(nullReg);
+
+	allowedSet = q->r.w.targetClass & 0x3f;
+	target = _Results[allowedSet];
+
+		/* If we are releasing a spilled register, reload it and
+		   any others that are above it in the stack.
+		 */
+
+	if	(alloc < Coder.spilledReg){
+		while	(alloc < Coder.spilledReg){
+			Coder.spilledReg--;
+			rx = _Results[getQuad(Coder.spilledReg->qi)->r.w.targetClass & 0x3f];
+			if	(rx & FreeRegisters)
+				r = getreg(rx, rx);
+			else
+				r = shuffleRegisters(rx);
+			makeSpill(SPK_POP, 0, r, Coder.spilledReg->qi);
+			consumeRegs(getRegMask(r));
+			}
+		}
+
+		/* Otherwise, check for the possibility that the output
+		   of the previous quad was not in the right register.
+		 */
+
+	else	{
+
+			/* First make sure that the register hasn't
+			   been reloaded by a spill.
+			 */
+
+		r = latestResult(qi);
+
+		if	(!fits(r, target)){
+
+				/* Pull out the current quad, because
+				   it hasn't been pushed and we don't
+				   want it pushed.
+				 */
+
+			if	(alloc->refCount == 0){
+				Coder.newestReg--;
+				memmove(alloc, alloc + 1,
+					(int)Coder.newestReg - (int)alloc);
+				shrinkRegion(&RegUsageSeg, (unsigned)Coder.newestReg);
+				if	((target & MustKeep) == target)
+					target = _Results[allowedClass];
+				rnew = getreg(target, target);
+				makeSpill(SPK_MOVE, _WordResult[allowedSet], rnew, qi);
+				FreeRegisters |= getRegMask(r) & Avail;
+				consumeRegs(getRegMask(rnew));
+				return(rnew);
+				}
+			else	{
+				if	((target & MustKeep) == target)
+					target = _Results[allowedClass];
+				rnew = getreg(target, target);
+				makeSpill(SPK_MOVE, _WordResult[allowedSet], rnew, qi);
+				FreeRegisters |= getRegMask(r) & Avail;
+				consumeRegs(getRegMask(rnew));
+				return(nullReg);
+				}
+			}
+		}
+
+		/* Now clean up the register usage segment. */
+
+	if	(alloc->refCount > 0)
+		return(nullReg);
+	Coder.newestReg--;
+	memmove(alloc, alloc + 1, (int)Coder.newestReg - (int)alloc);
+	shrinkRegion(&RegUsageSeg, (unsigned)Coder.newestReg);
+	return(r);
+	}
+
+orSet:	(target: * unsignedChar, src: * unsignedChar) =
+	{
+	i:	int;
+
+	for	(i = 0; i < Coder.setSize; i++, target++, src++)
+		*target |= *src;
+	}
+
+markInLiveVars:	() =
+	{
+	i:	int;
+
+	for	(i = 0; i < Coder.maxVar; i++)
+		if	(isInSet(i, LiveSet))
+			VarMap[i]->liveTemps |= RecentlyConsumed;
+	}
+
+startRange:	(v: variablePtr, q: quadPtr) =
+	{
+	r:	RegisterMask;
+	r2:	RegisterMask;
+
+	r = v->liveTemps;
+	variableBirth(v);
+	r2 = getRegMask(q->r.w.result);
+
+		/* If variableBirth turned on the current
+		   result register, then clear it from the
+		   set of live temps.  If that register is
+		   never re-introduced into the live temps,
+		   it can be used.
+		 */
+
+	if	(!overlaps(r2, r))
+		v->liveTemps &= ~r2;
+	}
+
+markCSEVariable:	() =
+	{
+	v:	variablePtr;
+	r:	RegisterMask;
+	r2:	RegisterMask;
+	g:	graphPtr;
+	i:	int;
+	cv:	CSEvarPtr;
+	q:	quadPtr;
+
+	if	(!(ComputeInterference || LiveData))
+		return;
+	cv = getCSEvar(CurrentQuadNum);
+	q = getQuad(CurrentQuadNum);
+	if	(cv >= maxCSEvar() ||
+		 *cv == 0){
+		if	(q->r.w.targetClass & 0x40){
+			q->r.w.targetClass &= ~0x40;
+			startRange(varQ(q), q);
+			}
+		v = 0;
+		}
+	else
+		v = (variablePtr)*cv;
+	for	(; LiveDeltas->where == CurrentQuadNum; LiveDeltas--){
+		if	(LiveDeltas->toggledVar != v)
+			continue;
+
+		assert(!isInSet(v->variableNumber, LiveSet));
+
+		startRange(v, q);
+
+		v->preferredReg = q->r.w.result;
+		}
+	}
+
+markLiveVariable:	(q: quadPtr) =
+	{
+	v:	variablePtr;
+	r:	RegisterMask;
+	g:	graphPtr;
+	i:	int;
+
+	for	(; LiveDeltas->where == CurrentQuadNum; LiveDeltas--){
+		if	(LiveDeltas->toggledVar != varQ(q))
+			continue;
+		v = LiveDeltas->toggledVar;
+
+		if	(!isInSet(v->variableNumber, LiveSet)){
+			assert((_Quads[q->operation].quadClass & QC_CONST) == 0);
+			variableBirth(v);
+			}
+		else
+			variableDeath(v);
+		}
+	}
+
+rememberVariable:	(q: quadPtr) =
+	{
+	if	((q->flags & QF_USED) == 0)
+		return;
+	for	(; LiveDeltas->where == CurrentQuadNum; LiveDeltas--)
+		if	(LiveDeltas->toggledVar == varQ(q))
+			q->r.w.targetClass |= 0x80;
+
+	if	((q->flags & QF_AMODE) == 0 &&
+		 (_Quads[q->operation].quadClass & QC_CONST) == 0 &&
+		 isInSet(varQ(q)->variableNumber, LiveSet)){
+		variableDeath(varQ(q));
+		q->r.w.targetClass |= 0x40;
+		}
+	}
+
+variableBirth:	(v: variablePtr) =
+	{
+	r:	RegisterMask;
+	g:	graphPtr;
+	i:	int;
+
+	if	(ComputeInterference){
+		if	(RecentlyConsumed){
+			markInLiveVars();
+			RecentlyConsumed = MustKeep;
+			}
+		orSet(InterferenceGraph + v->variableNumber *
+						Coder.setSize, LiveSet);
+		g = InterferenceGraph;
+		for	(i = 0; i < Coder.maxVar; i++){
+			if	(isInSet(i, LiveSet))
+				turnOnSet(v->variableNumber, g);
+			g += Coder.setSize;
+			}
+		turnOnSet(v->variableNumber, LiveSet);
+		v->liveTemps |= (Avail & ~FreeRegisters) | MustKeep;
+		}
+	else if	(LiveData){
+		turnOnSet(v->variableNumber, LiveSet);
+		if	(v->flags & VF_REG){
+			r = getRegMask(v->reg);
+			Avail &= ~r;
+			FreeRegisters &= ~r;
+			}
+		}
+	}
+
+variableDeath:	(v: variablePtr) =
+	{
+	r:	RegisterMask;
+
+	if	(ComputeInterference){
+		if	(RecentlyConsumed){
+			markInLiveVars();
+			RecentlyConsumed = MustKeep;
+			}
+		}
+	else if	(LiveData){
+		if	(v->flags & VF_REG){
+			r = getRegMask(v->reg);
+			Avail |= r;
+			FreeRegisters |= r;
+			}
+		}
+	turnOffSet(v->variableNumber, LiveSet);
+	}
+
+addReference:	(qi: quadId) =
+	{
+	q:	quadPtr;
+	ru:	regUsagePtr;
+
+	if	(qi == 0)
+		return;
+	q = getQuad(qi);
+	if	(q->r.w.result != nullReg){
+		for	(ru = Coder.spilledReg; ru < Coder.newestReg; ru++)
+			if	(ru->qi == qi){
+				ru->refCount++;
+				return;
+				}
+		}
+	else if	(_Quads[q->operation].quadClass & (QC_SYMBOL|QC_CONST|QC_REG))
+		return;
+	else	{
+		addReference(leftQ(q));
+		addReference(rightQ(q));
+		}
+	}
+ */
+pushFloatStack:	(t: ref tree_p) =
+	{
+	}
+
+popFloatStack:	() =
+	{
+	}

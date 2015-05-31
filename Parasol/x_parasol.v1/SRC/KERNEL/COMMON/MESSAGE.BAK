@@ -1,0 +1,520 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	kprintf;
+include	hardware, list;
+include	error;
+include	object;
+include	process;
+include	arena, karena;
+
+NMESSAGES:	const	int = 256;		// must be a power of two
+
+MessageTable:	[NMESSAGES] message;
+FreeMsg:	queue;
+FreeControl:	kernelSemaphore;
+
+mD:	(ref kernelSemaphore, d: pointer) =
+	{
+	m:	ref message;
+
+	m = d;
+	m semdisp();
+	}
+
+message:	public	type	inherit queue {
+	sendBuf:	buffer_t;
+	replyBuf:	buffer_t;
+	destination:	ref object;
+	source:		ref object;
+	control:	kernelSemaphore;
+
+	visible:
+
+	cumReply:	Size;
+	errorCode:	int;
+	state:		messageState;
+
+	public:
+
+	dumpOnAbort:	boolean;
+	freeWhenDone:	boolean;
+	header:		MessageHeader;
+
+semdisp:	() =
+	{
+	kprintf("%d->%d.control", header.sender, destination->me);
+	}
+
+display:	() =
+	{
+	kprintf("%s %d -> %d cum %d error %d ", MessageState[state],
+			header.sender, 
+			destination->me, cumReply, errorCode);
+	kprintf("%d: %d bytes\n", header.func, header.len);
+	if	(header.len)
+		sendBuf.where dumpHex(sendBuf.address, sendBuf.length);
+	}
+
+create:	factory	(dest: ref object, r: unsigned[16], sid: ref far External, 
+					func: unsigned[32],
+					buf: buffer_t,
+					rbuf: buffer_t) ref message =
+	{
+	n:	threadLock;
+
+	if	(!FreeControl down(TRUE))
+		return 0;
+	n lock();
+	self = ref message(FreeMsg dequeue());
+	n unlock();
+	header.rights = r;
+	header.sender = sid;
+	header.expected = rbuf.length;
+	header.len = buf.length;
+	header.func = func;
+	header.sequence = dest->sequence++;
+	destination = dest;
+	source = CurProc->animates;
+	cumReply = 0;
+	errorCode = 0;
+	sendBuf = buf;
+	replyBuf = rbuf;
+	state = MS_SENT;
+	control initialize(0, &mD, self);
+	dumpOnAbort = FALSE;
+	freeWhenDone = FALSE;
+	return self;
+	}
+//
+//	Copy the send buffer - this is for asynchronous messages
+//
+createCopy:	factory	(dest: ref object, r: unsigned[16], 
+					sid: ref far External, 
+					func: unsigned[32],
+					buf: buffer_t) ref message =
+	{
+	n:	threadLock;
+	kbuf:	ref byte;
+
+	if	(!FreeControl down(TRUE))
+		return 0;
+	n lock();
+	self = ref message(FreeMsg dequeue());
+	n unlock();
+	header.rights = r;
+	header.sender = sid;
+	header.expected = 0;
+	header.len = buf.length;
+	header.func = func;
+	header.sequence = dest->sequence++;
+	destination = dest;
+	source = 0;
+	cumReply = 0;
+	errorCode = 0;
+	if	(buf.length){
+		sendBuf.where = &KernelArena;
+		kbuf = alloc(buf.length);
+		buf.where read(buf.address, kbuf, buf.length);
+		sendBuf.address = vaddr_t(kbuf);
+		sendBuf.length = buf.length;
+		}
+	else
+		sendBuf = NODATA;
+	replyBuf = NODATA;
+	state = MS_SENT;
+	control initialize(0, &mD, self);
+	dumpOnAbort = FALSE;
+	freeWhenDone = TRUE;
+	return self;
+	}
+
+createSelfGenerated:	factory	(dest: ref object, func: unsigned[32],
+					buf: buffer_t) ref message =
+	{
+	n:	threadLock;
+
+	if	(!FreeControl down(TRUE))
+		return 0;
+	n lock();
+	self = ref message(FreeMsg dequeue());
+	n unlock();
+	header.rights = AR_ANY;
+	header.sender = 0;
+	header.expected = 0;
+	header.len = buf.length;
+	header.func = func;
+	header.sequence = dest->sequence++;
+	destination = dest;
+	source = 0;
+	cumReply = 0;
+	errorCode = 0;
+	sendBuf = buf;
+	replyBuf = NODATA;
+	state = MS_SENT;
+	control initialize(0, &mD, self);
+	dumpOnAbort = FALSE;
+	freeWhenDone = TRUE;
+	return self;
+	}
+
+kernelSend:	(dest: ref object, func: int, r: unsigned[16], 
+				src: ref object, 
+				buf: buffer_t,
+				rbuf: buffer_t) =
+	{
+	memSet(self, 0, sizeof *self);
+	header.id = MessageId(self);
+	header.rights = r;
+	if	(src)
+		header.sender = src->me;
+	header.expected = rbuf.length;
+	header.len = buf.length;
+	header.func = func;
+	cumReply = 0;
+	errorCode = 0;
+	destination = dest;
+	source = src;
+	sendBuf = buf;
+	replyBuf = rbuf;
+	state = MS_SENT;
+	control initialize(0, &mD, self);
+	dumpOnAbort = FALSE;
+	}
+
+waitForDone:	(src: ref object) int =
+	{
+	retn:	int;
+	s:	messageState;
+	e:	int;
+
+	if	(!control down(TRUE)){
+		src rejectedSend(ERRINTERRUPTED);
+		retn = 0;		// possibly reject
+		}
+	else
+		retn = cumReply;
+	wrapup();
+
+		// copy these out of the message because we are freeing it up
+
+	s = state;
+	e = errorCode;
+
+		// free the message
+
+	close();
+	if	(s == MS_REJECTED){
+		src rejectedSend(e);
+		return 0;
+		}
+	else
+		return retn;
+	}
+/*
+	This code is just a safeguard to make sure that a message has
+	processed a reply or a reject.
+ */
+wrapup:	() =
+	{
+	if	(state == MS_SENT ||
+		 state == MS_RECEIVED)
+		reply_(0, 0);
+	}
+
+reply_:	(buf: vaddr_t, len: Size) =
+	{
+	n:	threadLock;
+
+	discardText();
+	if	(header.func == int(&External.childExit)){
+		n lock();
+		extract();
+		state = MS_REPLIED;
+		n unlock();
+		if	(source)
+			source processTermination();
+		close();
+		}
+	else if	(source == 0){			// an asynchronous message
+		n lock();
+		extract();
+		state = MS_REPLIED;
+		n unlock();
+		close();
+		}
+	else	{
+		replyPartial(buf, len);
+		n lock();
+		extract();
+		state = MS_REPLIED;
+		n unlock();
+		control up();
+		}
+	}
+
+reject:	(code: int) =
+	{
+	n:	threadLock;
+
+	discardText();
+	n lock();
+	extract();
+	state = MS_REJECTED;
+	errorCode = code;
+	n unlock();
+	if	(header.func == int(&External.childExit)){
+		if	(source)
+			source processTermination();
+		close();
+		}
+	else if	(source == 0)		// an asynchronous message
+		close();
+	else
+		control up();
+	}
+
+readText:	(offs: vaddr_t, buf: pointer, len: Size) int =
+	{
+
+		// Can't read past the message text
+
+	if	(offs >= header.len)
+		return 0;
+	if	(offs + len > header.len)
+		len = header.len - offs;
+	return sendBuf.where read(sendBuf.address + offs, buf, len);
+	}
+
+discardText:	() =
+	{
+	if	(freeWhenDone &&
+		 sendBuf.length){
+		freeWhenDone = FALSE;
+		delete pointer(sendBuf.address);
+		}
+	sendBuf.length = 0;
+	}
+
+replyPartial:	(buf: vaddr_t, len: Size) =
+	{
+	if	(len && cumReply < header.expected){
+		if	(cumReply + len > header.expected)
+			len = header.expected - cumReply;
+		replyPtr:	pointer;
+
+		replyPtr = replyBuf.where obtainWrite(replyBuf.address, len);
+		replyBuf.address += len;
+		cumReply += len;
+		if	(replyPtr == 0)
+			return;
+		destination->where read(buf, replyPtr, len);
+		replyBuf.where unlock();
+		}
+	}
+
+close:	() =
+	{
+	discardText();
+	if	(self >= MessageTable &&
+		 self < &MessageTable[NMESSAGES]){
+		n:	threadLock;
+
+		n lock();
+		state = MS_FREE;
+		FreeMsg enqueue(self);
+		n unlock();
+		FreeControl up();
+		header.id += NMESSAGES;
+		}
+	}
+
+	};
+
+messageState:	public	type	byte = {
+	MS_FREE,
+	MS_SENT,
+	MS_RECEIVED,
+	MS_REPLIED,
+	MS_REJECTED,
+	};
+
+displayMessages:	public	() =
+	{
+	i:	int;
+	m:	ref message;
+	q:	ref queue;
+
+	for	(i = 0; i < NMESSAGES; i++){
+		m = &MessageTable[i];
+		if	(m->state != MS_FREE)
+			m display();
+		}
+	kprintf("%24d count\r", FreeControl.count);
+	for	(q = FreeMsg.next, i = 0; q != &FreeMsg; q = q->next, i++)
+		kprintf("%4d: %8p\r", i, q);
+	kprintf("\n");
+	displayKernelMessages();
+	}
+
+MessageState:	public	[] ref char = [
+	"MS_FREE",
+	"MS_SENT",
+	"MS_RECEIVED",
+	"MS_REPLIED",
+	"MS_REJECTED",
+	];
+
+messageClass:	public	type	byte = {
+	MC_LOCAL,
+	MC_KERNEL,
+	MC_INCOMING,
+	MC_OUTGOING
+	};
+
+m_reject:	public	(seq: _sequence_t, code: int) =
+	{
+	m:	ref message;
+
+	m = getMessage(seq);
+	if	(m)
+		m reject(code);
+	}
+
+m_readText:	public	(seq: _sequence_t, offs: vaddr_t, buf: vaddr_t, len: Size) int =
+	{
+	m:	ref message;
+
+	m = getMessage(seq);
+	if	(m == 0)
+		return ERRINVALIDARGUMENT;
+
+		// Can't read past the message text
+
+	bufp:	pointer;
+
+	bufp = CurArena obtainWrite(buf, len);
+	if	(bufp == 0)
+		return ERRINVALIDDATA;
+
+	i:	int;
+	i = m readText(offs, bufp, len);
+	CurArena unlock();
+	return i;
+	}
+
+m_discardText:	public	(seq: _sequence_t) =
+	{
+	m:	ref message;
+
+	m = getMessage(seq);
+	if	(m)
+		m discardText();
+	}
+
+m_reply:	public	(seq: _sequence_t, buf: vaddr_t, len: Size) =
+	{
+	m:	ref message;
+
+	m = getMessage(seq);
+	if	(m)
+		m reply_(buf, len);
+	}
+
+m_replyPartial:	public	(seq: _sequence_t, buf: vaddr_t, len: Size) =
+	{
+	m:	ref message;
+
+	m = getMessage(seq);
+	if	(m)
+		m replyPartial(buf, len);
+	}
+
+local_receive:	public	(hdr: ref MessageHeader) int =
+	{
+	return CurProc->animates receive(vaddr_t(hdr));
+	}
+
+local_reject:	public	(seq: _sequence_t, code: int) =
+	{
+	m:	ref message;
+
+	m = getMessage(seq);
+	if	(m)
+		m reject(code);
+	}
+
+local_readText:	public	(seq: _sequence_t, offs: unsigned, buf: pointer, len: int) int =
+	{
+	m:	ref message;
+
+	if	(len < 0)
+		return ERRINVALIDARGUMENT;
+	m = getMessage(seq);
+	if	(m == 0)
+		return ERRINVALIDARGUMENT;
+
+		// Can't read past the message text
+
+	return m readText(offs, buf, len);
+	}
+
+local_discardText:	public	(seq: _sequence_t) =
+	{
+	m:	ref message;
+
+	m = getMessage(seq);
+	if	(m)
+		m discardText();
+	}
+/*
+	This function handles replies from kernel objects.  In this
+	case the messageId is actually a pointer to the message object
+	itself.
+ */
+local_reply:	public	(seq: _sequence_t, buf: pointer, len: int) =
+	{
+	m:	ref message;
+
+	m = getMessage(seq);
+	if	(m)
+		m reply_(vaddr_t(buf), len);
+	}
+
+local_replyPartial:	public	(seq: _sequence_t, buf: pointer, len: int) =
+	{
+	m:	ref message;
+
+	m = getMessage(seq);
+	if	(m)
+		m replyPartial(vaddr_t(buf), len);
+	}
+
+getMessage:	(seq: _sequence_t) ref message =
+	{
+	m:	ref message;
+
+	m = pointer(CurProc->animates->msgs.next);
+	if	(m == &CurProc->animates->msgs ||
+		 m->state != MS_RECEIVED ||
+		 m->header.sequence != seq)
+		return 0;
+	else
+		return m;
+	}
+
+initMessages:	public	() =
+	{
+	i:	int;
+
+	FreeMsg makeEmpty();
+	for	(i = 0; i < NMESSAGES; i++){
+		MessageTable[i].header.id = i;
+		FreeMsg enqueue(&MessageTable[i]);
+		}
+	FreeControl initialize(NMESSAGES, 0, 0);
+	}

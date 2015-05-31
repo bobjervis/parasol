@@ -1,0 +1,257 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	kprintf;
+include	vmemory;
+include	error;
+include	hardware, list;
+include	process;
+include	alys;
+
+NSEGS:	const	int = _KERNEL_PROCS * 2 + 2;
+
+SegBusy:	kernelSemaphore;
+PageAcquire:	kernelSemaphore;
+Segfree:	queue;
+SegmentTable:	[NSEGS] ref segment;
+
+displaySegments:	public	() =
+	{
+	i:	int;
+	s:	ref segment;
+
+	for	(i = 0; i < NSEGS; i++){
+		s = SegmentTable[i];
+		if	(s)
+			kprintf("%3d: %08x [%08x]\n", i, s->address, s->length);
+		}
+	}
+
+describeSegment:	public	(sid: int, s: ref segment_t) boolean =
+	{
+	x:	Trap;
+	n:	threadLock;
+
+	n lock();
+	if	(sid < 0 || sid > NSEGS ||
+		 SegmentTable[sid] == 0){
+		n unlock();
+		return FALSE;
+		}
+	seg:	ref segment;
+
+	seg = SegmentTable[sid];
+	s->address = seg->address;
+	s->length = seg->length;
+	s->isCode = FALSE;
+	s->status = SG_INCORE;
+	if	(seg->lockCount)
+		s->status |= SG_LOCK;
+	n unlock();
+	return TRUE;
+	}
+
+segment:	public	type	{
+
+	public:
+
+	index:		unsigned[16];
+	lockCount:	unsigned[16];
+	offset:		vaddr_t;
+	address:	vaddr_t;
+	length:		vaddr_t;
+	useCount:	int;
+
+create:	factory	(off: vaddr_t, constLen: vaddr_t, 
+				min: vaddr_t, max: vaddr_t) ref segment =
+	{
+	self = segment getseg(off);
+	if	(self == 0)
+		return 0;
+	if	(range(min, max)){
+		close();
+		return 0;
+		}
+	if	(constLen > length)
+		constLen = length;
+	markReadonly(address, constLen);
+	return self;
+	}
+
+getseg:	factory	(off: vaddr_t) ref segment =
+	{
+	i:	int;
+
+	SegBusy down(FALSE);
+	for	(i = 0;; i++){
+		if	(i >= NSEGS){
+			SegBusy up();
+			return 0;
+			}
+		if	(SegmentTable[i] == 0)
+			break;
+		}
+	self = new segment[ i, 0, off, 0, 0, 1 ];
+	SegmentTable[i] = self;
+	SegBusy up();
+	return self;
+	}
+/*
+	This function expands or contracts an existing segment.  If the segment
+	must be moved to allow expansion, this routine orchestrates the work.
+ */
+grow:	(newSize: vaddr_t) boolean =
+	{
+	n:		vaddr_t;
+	copy:		vaddr_t;
+	old:		vaddr_t;
+	cp:		pointer;
+	oldBlks:	unsigned;
+	newBlks:	unsigned;
+	i:		int;
+
+	if	(newSize < offset)
+		return FALSE;
+	if	(length >= newSize){
+		freePages(address + newSize, length - newSize);
+		length = newSize;
+		return TRUE;
+		}
+	old = address;
+	PageAcquire down(FALSE);
+	if	(old == 0 ||
+		 !growMapped(old, length, newSize)){
+		n = allocMapped(old, length, offset, newSize);
+		if	(n == 0){
+			PageAcquire up();
+			return FALSE;
+			}
+		address = n;
+		}
+	else
+		n = address;
+	PageAcquire up();
+	cp = mappedToAddressable(n + length);
+/*
+	if	(newSize - length > 0x20000){
+		kprintf("old = %p n = %p newSize = %x length = %x\n",
+				old, n, newSize, length);
+		dumpData(PageDir, 16);
+		dumpData(physicalToAddressable(PageDir[2]) - 7, newSize >> 10 + 4);
+		}
+ */
+	memSet(cp, 0, newSize - length);
+	length = newSize;
+	return TRUE;
+	}
+
+/*
+	This function creates a segment of some minimum up to a maximum,
+	depending on available memory.
+ */
+range:	(min: vaddr_t, max: vaddr_t) int =
+	{
+	n:		vaddr_t;
+	p:		vaddr_t;
+	i:		int;
+
+	PageAcquire down(FALSE);
+	n = FreePages.pageCount * PAGE_SIZE;
+	if	(n < min){
+		PageAcquire up();
+		return ERRNOMEMORY;	// not enough, give up now
+		}
+	if	(n > max)
+		n = max;
+	p = allocMapped(address, length, offset, n);
+	PageAcquire up();
+	if	(p){
+		address = p;
+		length = n;
+		return SUCCESS;
+		}
+	else
+		return ERRNOMEMORY;
+	}
+
+dup:	() =
+	{
+	useCount++;
+	}
+
+close:	() =
+	{
+	useCount--;
+	if	(useCount)
+		return;
+	SegmentTable[index] = 0;
+	if	(address)
+		freePages(address, length);
+	delete self;
+	}
+
+lock:	(addr: vaddr_t) pointer =
+	{
+	lockCount++;
+	return mappedToAddressable(address + addr);
+	}
+
+unlock:	() =
+	{
+	lockCount--;
+	}
+
+pokeThread:	(addr: vaddr_t, value: vaddr_t) =
+	{
+	tp:	ref vaddr_t;
+
+	tp = mappedToAddressable(address + addr);
+	*tp = value;
+	}
+
+peekThread:	(addr: vaddr_t) vaddr_t =
+	{
+	tp:	ref vaddr_t;
+
+	tp = mappedToAddressable(address + addr);
+	return *tp;
+	}
+
+contains:	(addr: pointer) boolean =
+	{
+	offs:	vaddr_t;
+
+	if	(addr == 0)
+		return FALSE;
+	offs = addressableToMapped(addr);
+	if	(offs < address + offset)
+		return FALSE;
+	else if	(offs >= address + length)
+		return FALSE;
+	else
+		return TRUE;
+	}
+
+checkPageIntegrity:	() Size =
+	{
+	x, y:		paddr_t;
+
+	x = pagesValid(address, offset, length);
+	y = length - offset;
+	if	(x > y)
+		return y;
+	else
+		return x;
+	}
+
+	};
+
+initMemory:	public	() =
+	{
+	SegBusy initialize(1, 0, 0);
+	PageAcquire initialize(1, 0, 0);
+	}

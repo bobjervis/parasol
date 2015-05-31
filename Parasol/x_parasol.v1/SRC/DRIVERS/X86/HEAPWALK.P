@@ -1,0 +1,59 @@
+include	hardware, file, alys;
+include	karena;
+include	debugger;
+include	kdriver, object;
+
+main:	entry	() =
+	{
+	id:	ref far External;
+
+	id = publishKernel("heapWalker", ":model.debugger.heapWalker",
+				&HeapWalker,
+				AR_ANY, AR_ANY, AR_ANY, AR_ANY);
+	FileSystem register(id, "/service/heapWalker",
+				":model.debugger.heapWalker");
+	Driver makeResident();
+	disown(Driver);
+	disown(id);
+	}
+
+HeapWalker:	inherit	heapWalker	{
+	operation:	int;
+	location:	ref kernelHeapHeader;
+
+	public:
+
+beginSweep:	gate	() =
+	{
+	operation = KernelHeap.operation;
+	location = pointer(_heapbase_);
+	}
+
+next:		gate	() vaddr_t =
+	{
+	if	(operation != KernelHeap.operation)
+		return ~0;
+	location = location nextHeader();
+	if	(location >= _brklvl)
+		return 0;
+	else
+		return vaddr_t(location);
+	}
+
+size:		gate	() vaddr_t =
+	{
+	if	(operation != KernelHeap.operation)
+		return ~0;
+	else
+		return location->size;
+	}
+
+peekPointer:	gate	(p: vaddr_t) vaddr_t =
+	{
+	if	(operation != KernelHeap.operation)
+		return ~0;
+	else
+		return * ref vaddr_t(p);
+	}
+
+	};

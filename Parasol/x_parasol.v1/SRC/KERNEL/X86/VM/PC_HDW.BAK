@@ -1,0 +1,301 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	hardware;
+
+	// PC Hardware interrupt vector numbers
+
+DEV_BLOCK_A:	public	const	int = 0x40;
+TIMER_INT:	public	const	int = DEV_BLOCK_A;
+KEYBD_INT:	public	const	int = DEV_BLOCK_A + 1;
+COM2_INT:	public	const	int = DEV_BLOCK_A + 3;
+COM1_INT:	public	const	int = DEV_BLOCK_A + 4;
+LPT2_INT:	public	const	int = DEV_BLOCK_A + 5;
+FDISK_INT:	public	const	int = DEV_BLOCK_A + 6;
+LPT1_INT:	public	const	int = DEV_BLOCK_A + 7;
+
+DEV_BLOCK_B:	public	const	int = 0x48;
+HDISK_INT:	public	const	int = DEV_BLOCK_B + 6;
+
+PR_KEYBD:	public	const	int = 16 - 1;
+PR_HDISK:	public	const	int = 16 - 2;
+PR_FDISK:	public	const	int = 16 - 6;
+
+	// PC I/O port registers
+
+	// DMA Controller 1, 8237A-5		0x0000 - 0x001f
+
+DMA_ADDR:	public	const int = 0x04;
+DMA_COUNT:	public	const int = 0x05;
+DMA_INIT:	public	const int = 0x0a;
+DMA_M1:		public	const int = 0x0b;
+DMA_M2:		public	const int = 0x0c;
+
+	// Interrupt controller 1, 8259A	0x0020 - 0x003f
+
+PRI_8259:	public	const int = 0x20;
+
+	// Timer, 8254.2			0x0040 - 0x005f
+
+	// 8042 Keyboard controller		0x0060 - 0x006f
+
+KB_DATA:	public	const int = 0x60;
+KB_CTL:		public	const int = 0x61;
+KB_STATUS:	public	const int = 0x64;
+
+	// CMOS parameters, NMI mask		0x0070 - 0x007f
+
+CMOS_PORT:	public	const int = 0x70;
+
+	// DMA Page register 74LS612		0x0080 - 0x009f
+
+DMA_TOP:	public	const int = 0x81;
+
+	// Interrupt controller 2, 8259A	0x00a0 - 0x00bf
+
+SEC_8259:	public	const int = 0xa0;
+
+	// DMA Controller 2, 8237A-5		0x00c0 - 0x00df
+
+	// CLear math coprocessor busy		0x00f0
+	// Reset math coprocessor		0x00f1
+	// Math coprocessor			0x00f8 - 0x00ff
+
+	// Hard disk controller			0x01f0 - 0x01f8
+
+HD_PORT:	public	const	int = 0x1f0;
+
+	// Floppy disk controller		0x03f0 - 0x03f7
+
+FD_PORT:	public	const	int = 0x3f0;
+FD_DOR:		public	const	int = 0x3f2;
+FD_STATUS:	public	const	int = 0x3f4;
+FD_DATA:	public	const	int = 0x3f5;
+FD_CONTROL:	public	const	int = 0x3f6;
+FD_RATE:	public	const	int = 0x3f7;
+FD_DIR:		public	const	int = 0x3f7;
+
+	// User mode selector values
+
+USER_CS:	public	const	int = 0x0007;
+USER_DS:	public	const	int = 0x000f;
+
+	// Kernel mode selector values
+
+DEFAULT_FLAGS:	public	const	unsigned[16] = 0x0202;
+
+AVAIL_TSS:	public	const int = 0x89;
+LDT_DESC:	public	const int = 0x82;
+CODE_DESCR:	public	const int = 0x409A;
+DATA_DESCR:	public	const int = 0x4092;
+CALL_GATE:	public	const int = 0x00EC;	// 80386 Call Gate
+
+USER_DESCR:	public	const int = 0x0060;
+
+USER_RING:	public	const int = 3;
+
+PAGE_PRESENT:	public	const int = 0x1;	// page is present
+PAGE_WRITE:	public	const int = 0x2;	// page is writeable
+PAGE_USER:	public	const int = 0x4;	// page is user accessable
+
+TI:			const int = 0x04;
+RING:			const int = 0x03;	// The ring portion of a
+						// selector
+
+localContext_t:	public	type	[2] descriptor;		// The ALYS LDT
+
+setMapping:	public	(ldt: pointer, 	base: unsigned[32], 
+					selector: unsigned[16],
+					attributes: unsigned[16], 
+					offset: unsigned[32],
+					length: unsigned[32]) =
+	{
+	d:		ref descriptor;
+	nd:		unsigned;
+
+	if	(selector & TI)
+		d = ldt;
+	else
+		d = ref descriptor(&_GDT_);
+	d += selector >> 3;
+	if	(length){
+		length--;		/* The limit, when not zero is the
+					   last legal offset.
+					 */
+		if	(length > 0xfffff)
+			attributes |= 0x8000;
+		}
+	else	{
+		attributes &= ~0x80;	/* Clear the present bit for zero
+					   length segments */
+		}
+	if	(base)
+		offset += base;
+	else
+		offset = addressableToMapped(pointer(offset));
+
+		// Round to nearest page size when granularity is PAGE
+
+	if	(attributes & 0x8000){
+		length >>= 12;
+		}
+	d->sa.limit = length;
+	d->sa.reserved = ((length >> 16) & 0xf) | (attributes >> 8);
+	d->sa.base = offset;
+	d->sa.base16 = offset >> 16;
+	d->sa.base24 = offset >> 24;
+	d->sa.attribute = attributes;
+	}
+
+kernelCall:	public	(selector: unsigned[16], func: pointer, args: int) =
+	{
+	d:		ref descriptor;
+
+	d = ref descriptor(&_GDT_) + selector >> 3;
+	d->g.offsetLo = unsigned(func);
+	d->g.offsetHi = unsigned(func) >> 16;
+	d->g.selector = _GDT_KERNEL_CODE;
+	d->g.acount = args;
+	d->g.attribute = CALL_GATE;
+	}
+/*
+setGateMapping:	public	(ldt: pointer, selector: unsigned[16],
+					attributes: unsigned[16], 
+					offset: unsigned[32], acount: int) =
+	{
+	d:		ref descriptor;
+	nd:		unsigned;
+
+	if	(selector & TI)
+		d = ldt;
+	else
+		d = ref descriptor(&_GDT_);
+	d += selector >> 3;
+	d->g.offsetLo = offset;
+	d->g.offsetHi = offset >> 16;
+	d->g.selector = 0x0008;
+	d->g.acount = acount;
+	d->g.attribute = attributes;
+	}
+ */
+selectorRing:	public	(r: unsigned[16]) unsigned[16] =
+	{
+	return(r & RING);
+	}
+
+descriptor:	public	type	union	{
+	public:
+
+	sa:	packed	{
+		public:
+		limit:		unsigned[16];
+		base:		unsigned[16];
+		base16:		byte;
+		attribute:	byte;
+		reserved:	byte;
+		base24:		byte;
+		};
+	g:	packed	{
+		public:
+		offsetLo:	unsigned[16];
+		selector:	unsigned[16];
+		acount:		byte;
+		attribute:	byte;
+		offsetHi:	unsigned[16];
+		};
+/*
+	sp:	packed	{
+		public:
+		limit:		unsigned[16];
+		base:		unsigned[16];
+		base16:		unsigned[8];
+		stype:		unsigned[4];
+		s:		unsigned[1];
+		dpl:		unsigned[2];
+		p:		unsigned[1];
+		reserved:	unsigned[16];
+		};
+ */
+	};
+
+gateFrame_t:	public	type	{
+	public:
+
+	ebp:		unsigned[32];
+	gs:		unsigned[16];
+	fs:		unsigned[16];
+	es:		unsigned[16];
+	ds:		unsigned[16];
+
+calledFromUserMode:	() boolean =
+	{
+	if	(ds & RING == USER_RING)
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+	};
+
+kernelInterruptFrame:	public	type	inherit	InterruptFrame packed {
+	public:
+
+	user_esp:	unsigned;
+	user_ss:	unsigned[16];
+	};
+
+_idle_:		public	const	signed[16] 		= 0x00EB;
+
+getCMOSbyte:	public	(addr: int) byte =
+	{
+	_outportByte(CMOS_PORT, addr | 0x80);
+	_emit(_idle_);
+	return _inportByte(CMOS_PORT + 1);
+	}
+
+setCMOSbyte:	public	(addr: int, val: byte) =
+	{
+	_outportByte(CMOS_PORT, addr | 0x80);
+	_emit(_idle_);
+	_outportByte(CMOS_PORT + 1, val);
+	}
+
+STACK_MARGIN:	public	const int = 200;	// Stack warning zone
+
+realToPhysical:	public	(r: realModePtr) paddr_t =
+	{
+	return paddr_t(r.segment) << 4 + r.offset;
+	}
+
+realModePtr:	public	type	packed	{
+	public:
+	offset:		unsigned[16];
+	segment:	unsigned[16];
+	};
+
+copyIn:		public	(dest: pointer, src: paddr_t, len: paddr_t) =
+	{
+	n:	threadLock;
+
+	n lock();
+	_DS = _GDT_KERNEL_PHYSICAL;
+	memCopy(ref char(dest), ref char(src), len);
+	_DS = _GDT_KERNEL_DATA;
+	n unlock();
+	}
+
+copyOut:	public	(dest: paddr_t, src: pointer, len: paddr_t) =
+	{
+	n:	threadLock;
+
+	n lock();
+	_ES = _GDT_KERNEL_PHYSICAL;
+	memCopy(ref char(dest), ref char(src), len);
+	_ES = _GDT_KERNEL_DATA;
+	n unlock();
+	}
+

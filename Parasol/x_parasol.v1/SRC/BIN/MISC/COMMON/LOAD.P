@@ -1,0 +1,85 @@
+/*
+	Copyright (c) 1994 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	filesys;
+include	alys;
+include	file;
+include	error;
+
+PathFound:	int;				// Set by searchPath to:
+Path:		[512] char;
+
+RUN_PATH:	const	int = 0;		// Path was a .RUN file
+EXE_PATH:	const	int = 1;		// Path was an .EXE file
+
+main:	entry	() =
+	{
+	cmd:		[:] char;
+	arg0:		[:] char;
+	tm1:		Tick;
+	tm2:		Tick;
+//	p:		process_t;
+	e:		ref far External;
+	pid:		processId;
+	nBefore:	NodeState;
+	nAfter:		NodeState;
+
+	if	(|commandLine.arguments == 0){
+		printf("Use is: LOAD driver arg(s)\n");
+		return;
+		}
+	mainExternal(&Loader);
+	arg0 = commandLine.arguments[0];
+	commandLine shiftArguments();
+
+	lookup:	PathList = [];
+
+	lookup useEnvironment("PATH");
+	cmd = lookup search(arg0, ".lod", 0);
+	if	(|cmd == 0){
+		printf("Couldn't find command '%S'\n", arg0);
+		return;
+		}
+	arg0 = argumentString(commandLine.arguments);
+	try	{
+		FileSystem spawn(0, cmd, arg0);
+		}
+	except	{
+		printf("Spawn failed: %S\n", cmd);
+		exit(1);
+		}
+	Loader wait(&External.childExit);
+	exit(EX_SUCCESS);
+	}
+
+Loader:	inherit	External {
+
+childExit:	gate	(exitCode: unsigned) =
+	{
+	if	(exitCode){
+		if	(exitCode & EX_CAUSE){
+			if	(exitCode & EX_CAUSE == EX_ABORT)
+				printf("Aborted: ");
+			else if	(exitCode & EX_CAUSE == EX_RAISE)
+				printf("Uncaught exception: ");
+			}
+		if	(exitCode == EX_FAIL)
+			printf("Failed");
+		else
+			printf("Exit: 0x%x", exitCode & EX_LEVEL);
+		if	(exitCode & EX_CORE)
+			printf(" - Core dumped");
+		printf("\n");
+		}
+	}
+
+attention:	gate!	() =
+	{
+	}
+
+};
+

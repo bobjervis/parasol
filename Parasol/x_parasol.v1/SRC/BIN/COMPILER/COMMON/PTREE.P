@@ -1,0 +1,909 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+include	hash;
+include	errmsg;
+include	sbuffer;
+include	symtab;
+include	types, functype;
+
+CurrentUnit:	public	ref unit_p;
+OldSource:		ref sourceBuffer;
+NewSource:		ref sourceBuffer;
+
+scope_p:	public	type	{
+	public:
+
+	declList:	ref declaration_p;
+
+addDecl:	(d: ref declaration_p) =
+	{
+	dl:	ref declaration_p;
+
+	if	(declList){
+		for	(dl = declList; dl->next; dl = dl->next)
+			;
+		dl->next = d;
+		}
+	else
+		declList = d;
+	}
+
+checkForDuplicates:	(nm: ref name_p) =
+	{
+	dl:	ref declaration_p;
+	n:	ref name_p;
+
+	for	(dl = declList; dl; dl = dl->next)
+		for	(n = dl->idList; n; n = n->next)
+			if	(n->name == nm->name &&
+				 n != nm){
+				n->hasError = TRUE;
+				nm->hasError = TRUE;
+				CurrentContext errorX("ErrRedecl", 
+						nm->name spelling(), "", 0);
+				return;
+				}
+	}
+
+isDuplicated:	(id: ref identifier) boolean =
+	{
+	dl:	ref declaration_p;
+	n:	ref name_p;
+
+	for	(dl = declList; dl; dl = dl->next)
+		for	(n = dl->idList; n; n = n->next)
+			if	(n->name == id){
+				n->hasError = TRUE;
+				CurrentContext errorX("ErrRedecl", id spelling(), "", 0);
+				return TRUE;
+				}
+	return FALSE;
+	}
+
+	};
+
+unit_p:	public	type	inherit	scope_p	{
+	public:
+
+	name:		ref identifier;
+	incList:	ref include_p;
+	source:		ref sourceBuffer;
+
+create:	factory	(n: ref identifier, src: ref sourceBuffer) ref unit_p =
+	{
+	self = alloc(sizeof unit_p);
+	self = [ 0, n, 0, src ];
+	return self;
+	}
+
+generateDifferences:	(newUnit: ref unit_p, dest: ref sourceUnit_s) =
+	{
+
+		// First, check the includes for any changes
+
+	oldi:	ref include_p;
+	newi:	ref include_p;
+
+	oldi = incList;
+	newi = newUnit->incList;
+	while	(oldi &&
+		 newi &&
+		 oldi->name == newi->name){
+		oldi = oldi->next;
+		newi = newi->next;
+		}
+	i:	ref include_p;
+	for	(i = newi; i; i = i->next)
+		i->encountered = FALSE;
+	for	(; oldi; oldi = oldi->next){
+		for	(i = newi; i; i = i->next){
+			if	(i->name == oldi->name){
+				i->encountered = TRUE;
+				if	(i == newi)
+					newi = newi->next;
+				break;
+				}
+			}
+		if	(i == 0){		// not found
+			printf("Include dropped: ");
+			oldi display(source);
+			printf("\n");
+			}
+		}
+	for	(i = newi; i; i = i->next)
+		if	(!i->encountered)
+			dest addInclude(i->name, i->offset);
+
+		// Now check the list of declarations
+
+	oldd:	ref declaration_p;
+	newd:	ref declaration_p;
+
+	oldd = declList;
+	newd = newUnit->declList;
+	while	(oldd &&
+		 newd &&
+		 oldd sameAs(newd)){
+		oldd = oldd->next;
+		newd = newd->next;
+		}
+	d:	ref declaration_p;
+	n:	ref name_p;
+
+	OldSource = source;
+	NewSource = newUnit->source;
+	for	(d = newd; d; d = d->next)
+		for	(n = d->idList; n; n = n->next)
+			n->encountered = FALSE;
+	for	(; oldd; oldd = oldd->next){
+		for	(n = oldd->idList; n; n = n->next){	
+			dx:	ref declaration_p;
+			dx = newd locateName(n->name);
+			if	(dx == 0){
+				printf("Declaration dropped ");
+				n display(source);
+				oldd displayDeclarator();
+				printf("\n");
+				continue;
+				}
+			if	(!oldd sameDeclarator(dx)){
+				printf("Changed declaration ");
+				n display(source);
+				dx displayDeclarator();
+				printf("\n");
+				continue;
+				}
+
+			xn:	ref name_p;
+
+			for	(xn = dx->idList; xn; xn = xn->next)
+				if	(xn->name == n->name){
+					if	(!n sameAs(xn)){
+						printf("Changed declaration ");
+						n display(source);
+						dx displayDeclarator();
+						printf("\n");
+						}
+					else if	(!oldd sameValue(dx)){
+						printf("Changed value ");
+						n display(source);
+						printf("\n");
+						}
+					break;
+					}
+			}
+		}
+	for	(d = newd; d; d = d->next)
+		for	(n = d->idList; n; n = n->next)
+			if	(!n->encountered)
+				dest addDeclaration(n->name, n->offset, 
+							n->hasError, d);
+	}
+
+includeUnit:	(n: ref identifier, i: int) =
+	{
+	iu:	ref include_p;
+	last:	ref include_p;
+
+	for	(iu = incList, last = 0; iu; last = iu, iu = iu->next)
+		;
+	iu = include_p create(n, i);
+	if	(last == 0)
+		incList = iu;
+	else
+		last->next = iu;
+	}
+
+display:	() =
+	{
+	iu:	ref include_p;
+	dl:	ref declaration_p;
+
+	for	(iu = incList; iu; iu = iu->next)
+		iu display(source);
+	for	(dl = declList; dl; dl = dl->next)
+		dl display(source);
+	}
+
+	};
+
+include_p:	public	type	{
+	public:
+
+	next:		ref include_p;
+	name:		ref identifier;
+	offset:		fileOffset;
+	encountered:	boolean;
+
+create:	factory	(n: ref identifier, i: fileOffset) ref include_p =
+	{
+	self = alloc(sizeof include_p);
+	self = [ 0, n, i ];
+	return self;
+	}
+
+display:	(src: ref sourceBuffer) =
+	{
+	printf("%4d: include %S;\n", src tellLine(offset), name spelling());
+	}
+
+	};
+
+declaration_p:	public	type	{
+	public:
+
+	next:		ref declaration_p;
+	offset:		fileOffset;
+	idList:		ref name_p;
+	visibility:	visibilities;
+	storageClass:	storageClasses;
+	qualifier:	dQualifiers;
+	location:	ref identifier;
+	dtype:		ref type_p;
+	initializer:	textRange;
+	initBase:	int;			// A base value for
+						// initialization.  For
+						// register vars, the value
+						// is the register number.
+						// For intrinsics, it is the
+						// intrinsic function number.
+						// For enum constants, it is
+						// a value to add to the 
+						// value produced by the 
+						// initializer string.
+
+create:	factory	(off: fileOffset, vis: visibilities, 
+				sc: storageClasses) ref declaration_p =
+	{
+	self = alloc(sizeof declaration_p);
+	self = [ 0, off, 0, vis, sc, 0, 0, 0, [ 0, 0 ], 0 ];
+	return self;
+	}
+
+display:	(src: ref sourceBuffer) =
+	{
+	nm:	ref name_p;
+
+	nm = idList;
+	if	(nm && nm->next == 0)
+		nm display(src);
+	else	{
+		for	(; nm; nm = nm->next){
+			nm display(src);
+			printf("\n");
+			}
+		}
+	displayDeclarator();
+	}
+
+displayDeclarator:	() =
+	{
+	printf(" v %d sc %d", visibility, storageClass);
+	if	(qualifier)
+		printf(" q %x", qualifier);
+	if	(location)
+		printf(" loc %S", location spelling());
+	printf(" dtype = %x", dtype);
+	if	(dtype)
+		dtype display();
+	if	(initializer.start){
+		printf(" = init [ %d, %d ]", initializer.start, initializer.end);
+		if	(initBase)
+			printf(" + %d;", initBase);
+		}
+	else if	(initBase)
+		printf(" = %d;", initBase);
+	}
+
+sameAs:	(d: ref declaration_p) boolean =
+	{
+	n1:	ref name_p;
+	n2:	ref name_p;
+
+	for	(n1 = idList, n2 = d->idList; n1 && n2; n1 = n1->next, 
+						n2 = n2->next)
+		if	(!n1 sameAs(n2))
+			return FALSE;
+	if	(n1 || n2)
+		return FALSE;
+	return sameDeclarator(d);
+	}
+
+sameDeclarator:	(d: ref declaration_p) boolean =
+	{
+	if	(visibility != d->visibility ||
+		 storageClass != d->storageClass ||
+		 qualifier != d->qualifier ||
+		 location != d->location ||
+		 !dtype sameAs(d->dtype))
+		return FALSE;
+	else
+		return TRUE;
+	}
+
+sameValue:	(d: ref declaration_p) boolean =
+	{
+
+		// If only one has source, or if they both have source that
+		// doesn't match, then the types are not the same.
+
+	if	(initializer.start){
+		if	(d->initializer.start == 0)
+			return FALSE;
+		if	(!OldSource sameText(initializer, NewSource, 
+							d->initializer))
+			return FALSE;
+		}
+	else if	(d->initializer.start)
+		return FALSE;
+	else if	(initBase != d->initBase)
+		return FALSE;
+
+		// This code is only called if the declarators do match.
+
+	if	(!dtype sameParameters(d->dtype))
+		return FALSE;
+	else
+		return TRUE;
+	}
+
+addName:	(n: ref identifier, i: int) ref name_p =
+	{
+	id:	ref name_p;
+	last:	ref name_p;
+
+	id = name_p create(n, i, FALSE);
+	if	(idList){
+		for	(last = idList; last->next; last = last->next)
+			;
+		last->next = id;
+		}
+	else
+		idList = id;
+	return id;
+	}
+
+locateName:	(n: ref identifier) ref declaration_p =
+	{
+	nn:	ref name_p;
+
+	while	(self){
+		for	(nn = idList; nn; nn = nn->next)
+			if	(nn->name == n){
+				nn->encountered = TRUE;
+				return self;
+				}
+		self = next;
+		}
+	return 0;
+	}
+
+flagError:	() =
+	{
+	n:	ref name_p;
+
+	for	(n = idList; n; n = n->next)
+		n->hasError = TRUE;
+	}
+
+	};
+
+visibilities:	public	type	char = {
+	V_PUBLIC,
+	V_PRIVATE,
+	V_VISIBLE
+	};
+
+name_p:	public	type	{
+	public:
+
+	next:		ref name_p;
+	name:		ref identifier;
+	offset:		fileOffset;
+	hasError:	boolean;
+	encountered:	boolean;
+
+create:	factory	(n: ref identifier, 
+		 i: fileOffset, inError: boolean) ref name_p =
+	{
+	self = alloc(sizeof name_p);
+	self = [ 0, n, i, inError ];
+	return self;
+	}
+
+display:	(src: ref sourceBuffer) =
+	{
+	printf("%4d: %S", src tellLine(offset), name spelling());
+	if	(hasError)
+		printf(" <error>");
+	printf(":");
+	}
+
+sameAs:	(n: ref name_p) boolean =
+	{
+	if	(name != n->name ||
+		 hasError != n->hasError)
+		return FALSE;
+	else
+		return TRUE;
+	}
+
+	};
+
+type_p:	public	type	inherit	scope_p {
+	public:
+
+	topType:	topTypes;
+
+constructor:	(t: topTypes) =
+	{
+	topType = t;
+	declList = 0;
+	}
+
+display:	dynamic	() =
+	{
+	}
+
+commaCount:	dynamic	(int) =
+	{
+	}
+
+sameAs:	dynamic	(x: ref type_p) boolean =
+	{
+	return topType == x->topType;
+	}
+
+sameParameters:	dynamic	(ref type_p) boolean =
+	{
+	return FALSE;
+	}
+
+symbolTableCopy:	dynamic	(ref scope_s) ref type_s =
+	{
+	return 0;
+	}
+
+	};
+
+numberType_p:	public	type	inherit	type_p	{
+	public:
+
+	source:		textRange;
+	width:		int;
+
+create:	factory	(t: topTypes, sourc: textRange, w: int) ref numberType_p =
+	{
+	self = alloc(sizeof numberType_p);
+	self = [ t ];
+	source = sourc;
+	width = w;
+	return self;
+	}
+
+symbolTableCopy:	dynamic	(ref scope_s) ref type_s =
+	{
+	return number_z create(topType, source, width);
+	}
+
+display:	dynamic	() =
+	{
+	if	(topType == T_SIGNED)
+		printf(" signed");
+	else if	(topType == T_UNSIGNED)
+		printf(" unsigned");
+	else
+		printf(" float");
+	if	(source.start)
+		printf("[%d,%d]", source.start, source.end);
+	else
+		printf("[%d]", width);
+	}
+
+sameAs:	dynamic	(x: ref type_p) boolean =
+	{
+	if	(topType != x->topType)
+		return FALSE;
+	n:	ref numberType_p = ref numberType_p(x);
+
+		// If only one has source, or if they both have source that
+		// doesn't match, then the types are not the same.
+
+	if	(source.start){
+		if	(n->source.start == 0)
+			return FALSE;
+		if	(!OldSource sameText(source, NewSource, n->source))
+			return FALSE;
+		}
+	else if	(n->source.start)
+		return FALSE;
+	else		// width only matters if no source is present
+		return width == n->width;
+	}
+
+	};
+
+namedType_p:	public	type	inherit	type_p	{
+	public:
+
+	name:		ref identifier;
+	offset:		fileOffset;
+
+create:	factory	(id: ref identifier, off: fileOffset) ref namedType_p =
+	{
+	self = alloc(sizeof namedType_p);
+	self = [ T_NAME, id, off ];
+	return self;
+	}
+
+symbolTableCopy:	dynamic	(ref scope_s) ref type_s =
+	{
+	return named_z create(name, offset);
+	}
+
+display:	dynamic	() =
+	{
+	printf(" %S", name spelling());
+	}
+
+sameAs:	dynamic	(x: ref type_p) boolean =
+	{
+	if	(x->topType != T_NAME)
+		return FALSE;
+	n:	ref namedType_p = ref namedType_p(x);
+	return name == n->name;
+	}
+
+	};
+
+ptrType_p:	public	type	inherit	type_p	{
+	public:
+
+	referTo:	ref type_p;
+	qualifier:	dQualifiers;
+	owns:		boolean;
+
+create:	factory	(p: boolean, r: ref type_p, q: dQualifiers) ref ptrType_p =
+	{
+	self = alloc(sizeof ptrType_p);
+	self = [ T_REF, r, q, p ];
+	return self;
+	}
+
+symbolTableCopy:	dynamic	(s: ref scope_s) ref type_s =
+	{
+	t:	ref type_s;
+
+	t = referTo symbolTableCopy(s);
+	return ptr_z create(owns, t, qualifier);
+	}
+
+display:	dynamic	() =
+	{
+	printf(" ref");
+	if	(owns)
+		printf(" owns");
+	if	(qualifier)
+		printf(" q %x", qualifier);
+	referTo display();
+	}
+
+sameAs:	dynamic	(x: ref type_p) boolean =
+	{
+	if	(x->topType != T_REF)
+		return FALSE;
+	p:	ref ptrType_p = ref ptrType_p(x);
+	if	(qualifier != p->qualifier ||
+		 owns != p->owns)
+		return FALSE;
+	return referTo sameAs(p->referTo);
+	}
+
+	};
+
+arrayType_p:	public	type	inherit	type_p	{
+	public:
+
+	element:	ref type_p;
+	source:		textRange;
+	dimension:	int;
+
+create:	factory	(tok: topTypes, sourc: textRange, dim: int, 
+				elementType: ref type_p) ref arrayType_p =
+	{
+	self = alloc(sizeof arrayType_p);
+	self = [ tok, elementType ];
+	source = sourc;
+	dimension = dim;
+	return self;
+	}
+
+symbolTableCopy:	dynamic	(s: ref scope_s) ref type_s =
+	{
+	t:	ref type_s;
+
+	t = element symbolTableCopy(s);
+	if	(topType == T_DESCRIPTOR)
+		return descriptor_z create(source, dimension, t);
+	else
+		return array_z create(source, dimension, t);
+	}
+
+display:	dynamic	() =
+	{
+	if	(topType == T_ARRAY)
+		printf(" array");
+	else
+		printf(" var array");
+	if	(source.start)
+		printf(" bounds [ %d, %d ]", source.start, source.end);
+	else if	(dimension)
+		printf("[%d]", dimension);
+	element display();
+	}
+
+commaCount:	dynamic	(cc: int) =
+	{
+	if	(source.start == 0 &&
+		 dimension == 0)
+		dimension = cc + 1;
+	}
+
+sameAs:	dynamic	(x: ref type_p) boolean =
+	{
+	if	(topType != x->topType)
+		return FALSE;
+	a:	ref arrayType_p = ref arrayType_p(x);
+
+		// If only one has source, or if they both have source that
+		// doesn't match, then the types are not the same.
+
+	if	(source.start){
+		if	(a->source.start == 0)
+			return FALSE;
+		if	(!OldSource sameText(source, NewSource, a->source))
+			return FALSE;
+		}
+	else if	(a->source.start)
+		return FALSE;
+	else if	(dimension != a->dimension)
+		return FALSE;
+	return element sameAs(a->element);
+	}
+
+	};
+
+voidType_p:	public	type	inherit	type_p	{
+	public:
+
+
+create:	factory	() ref voidType_p =
+	{
+	self = alloc(sizeof voidType_p);
+	self = [ T_VOID ];
+	return self;
+	}
+
+symbolTableCopy:	dynamic	(ref scope_s) ref type_s =
+	{
+	return void_z create();
+	}
+
+	};
+
+packingMethods:	public	type	char = {
+	PM_PACKED,
+	PM_STRUCT,
+	PM_UNION
+	};
+
+structType_p:	public	type	inherit	type_p	{
+	public:
+
+	base:		ref type_p;
+	packing:	packingMethods;
+
+create:	factory	(parent: ref type_p, p: packingMethods) ref structType_p =
+	{
+	self = alloc(sizeof structType_p);
+	self = [ T_STRUCT, parent, p ];
+	return self;
+	}
+
+symbolTableCopy:	dynamic	(e: ref scope_s) ref type_s =
+	{
+	t:	ref type_s;
+	s:	ref struct_z;
+	d:	ref declaration_p;
+	n:	ref name_p;
+
+	if	(base)
+		t = base symbolTableCopy(e);
+	else
+		t = 0;
+	s = struct_z create(e, t, packing);
+	for	(d = declList; d; d = d->next){
+		if	(d->idList){
+			for	(n = d->idList; n; n = n->next)
+				s addDeclaration(n->name, n->offset, 
+							n->hasError, d);
+			}
+		else if	(packing == PM_PACKED)
+			s addDeclaration(0, 0, 0, d);
+		else	{
+			CurrentContext->offset = d->offset;
+			CurrentContext warn("WarnWastedMember");
+			}
+		}
+	return s;
+	}
+
+display:	dynamic	() =
+	{
+	switch	(packing){
+	case	PM_PACKED:	printf(" packed");	break;
+	case	PM_UNION:	printf(" union");	break;
+		}
+	printf(" {");
+	printf("}");
+	}
+/*
+	All structure types are unique by definition.
+ */
+sameAs:	dynamic	(ref type_p) boolean =
+	{
+	return FALSE;
+	}
+
+	};
+
+functionType_p:	public	type	inherit	type_p	{
+	public:
+
+	returnType:		ref type_p;
+	fixedCalls:		boolean;
+	callingConvention:	fConventions;
+	parameters:		ref parameter_p;
+
+create:	factory	(cc: int) ref functionType_p =
+	{
+	self = alloc(sizeof functionType_p);
+	self = [ T_FUNC, 0, TRUE, cc, 0 ];
+	return self;
+	}
+
+symbolTableCopy:	dynamic	(s: ref scope_s) ref type_s =
+	{
+	t:	ref type_s;
+	p:	ref parameter_s;
+
+	t = returnType symbolTableCopy(s);
+	if	(parameters)
+		p = parameters symbolTableCopy(s);
+	else
+		p = 0;
+	return function_z create(t, fixedCalls, callingConvention, p);
+	}
+
+sameAs:	dynamic	(x: ref type_p) boolean =
+	{
+	if	(topType != x->topType)
+		return FALSE;
+	f:	ref functionType_p = ref functionType_p(x);
+	if	(fixedCalls != f->fixedCalls ||
+		 callingConvention != f->callingConvention)
+		return FALSE;
+	if	(!parameters sameAs(f->parameters))
+		return FALSE;
+	return returnType sameAs(f->returnType);
+	}
+
+sameParameters:	dynamic	(x: ref type_p) boolean =
+	{
+	if	(topType != x->topType)
+		return FALSE;
+	f:	ref functionType_p = ref functionType_p(x);
+	return parameters sameNamesAs(f->parameters);
+	}
+
+display:	dynamic	() =
+	{
+	printf(" func");
+	if	(!fixedCalls)
+		printf(" var");
+	if	(callingConvention != FC_NORMAL)
+		printf(" calls %d", callingConvention);
+	printf(" (");
+	p:	ref parameter_p;
+	for	(p = parameters; p; p = p->next){
+		p display();
+		if	(p->next)
+			printf(", ");
+		}
+	printf(")");
+	returnType display();
+	}
+
+	};
+
+parameter_p:	public	type	{
+	public:
+
+	next:		ref parameter_p;
+	name:		ref identifier;
+	offset:		fileOffset;
+	pType:		ref type_p;
+
+create:	factory	(plist: ref parameter_p, n: ref identifier, i: fileOffset, 
+				d: ref type_p) ref parameter_p =
+	{
+	self = alloc(sizeof parameter_p);
+	self = [ 0, n, i, d ];
+	if	(plist){
+		r:	ref parameter_p;
+
+		r = plist;
+		while	(plist->next)
+			plist = plist->next;
+		plist->next = self;
+		return r;
+		}
+	else
+		return self;
+	}
+
+symbolTableCopy:	(s: ref scope_s) ref parameter_s =
+	{
+	p:	ref parameter_s;
+	t:	ref type_s;
+
+	if	(next)
+		p = next symbolTableCopy(s);
+	else
+		p = 0;
+	t = pType symbolTableCopy(s);
+	return parameter_s create(p, name, offset, t);
+	}
+
+display:	() =
+	{
+	if	(name)
+		printf("%S(%d):", name spelling(), offset);
+	pType display();
+	}
+
+sameAs:	(p: ref parameter_p) boolean =
+	{
+	while	(self && p){
+		if	(!pType sameAs(p->pType))
+			return FALSE;
+		self = next;
+		p = p->next;
+		}
+	if	(self || p)
+		return FALSE;
+	else
+		return TRUE;
+	}
+
+sameNamesAs:	(p: ref parameter_p) boolean =
+	{
+	while	(self && p){
+		if	(name != p->name)
+			return FALSE;
+		self = next;
+		p = p->next;
+		}
+	if	(self || p)
+		return FALSE;
+	else
+		return TRUE;
+	}
+
+	};

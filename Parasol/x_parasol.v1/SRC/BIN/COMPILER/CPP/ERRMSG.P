@@ -1,0 +1,185 @@
+include	file;
+//include	format;
+//include	project;
+//include	cdata, unit;
+
+		// in cpp.p
+
+ErrBadDirective:	public	[] char = "Incorrect directive '%s'";
+ErrJunkInDirective:	public	[] char = "Extra text in directive";
+ErrErrorDirective:	public	[] char = "Error Directive: %s";
+ErrUnmatchedTest:	public	[] char = "#%s Directive without #endif";
+ErrDefineArgSyntax:	public	[] char = "Define arguments are not correct";
+ErrStringizeSyntax:	public	[] char = "Stringize syntax";
+ErrNotArgument:		public	[] char = "Stringizing '%s' is not an argument";
+ErrIncludeSyntax:	public	[] char = "Include directive syntax";
+ErrUnexpectedEof:	public	[] char = "Unexpected end of file";
+
+		// in parser.p
+
+ErrOpen:		public	[] char = "Unable to open input file '%s'";
+ErrExpressionSyntax:	public	[] char = "Expression syntax";
+
+		// in sbuffer.p
+
+ErrStringNoTerm:	public	[] char = "Unterminated string or character constant";
+ErrBadEscape:		public	[] char = "Unknown escape character %c (0x%x)";
+WarnHexTooBig:		public	[] char = "Hexadecimal constant too large";
+ErrNumLarge:		public	[] char = "Numeric constant too large";
+ErrEofInComment:	public	[] char = "Unexpected end of file in comment";
+
+		// in scanner.p
+
+ErrBadChar:		public	[] char = "Incorrect character '%c' (0x%x)";
+ErrBadNumber:		public	[] char = "Incorrect number format";
+ErrFloat:		public	[] char = "Floating point numbers not allowed";
+ErrNotOctalDigit:	public	[] char = "Not an octal digit";
+ErrCConstLong:		public	[] char = "Character constant too long";
+
+NO_LINE:	public	const	fileOffset = ~0;
+
+messageGenerator:	public	type	{
+	public:
+
+objectName:	dynamic	() ref char =
+	{
+	return 0;
+	}
+
+lineno:		dynamic	(fileOffset) int =
+	{
+	return 0;
+	}
+
+	};
+
+messageContext:	public	type	{
+	public:
+	obj:		ref messageGenerator;
+					// object associated with the
+					// message
+	offset:		fileOffset;	// offset in source file
+
+clear:	() =
+	{
+	obj = 0;
+	offset = 0;
+	}
+
+	};
+
+CurrentContext:	public	messageContext;
+ErrorCount:	public	int;
+
+messageClasses:	type	char = {
+	MSG_WARN,
+	MSG_ERROR,
+	MSG_FATAL
+	};
+
+fatal:	public	(s: [:] char, ...) =
+	{
+	ap:	ArgumentList;
+
+	ap = ...;
+	prefix("Fatal", MSG_FATAL, &CurrentContext, ap, s);
+	ErrorCount++;
+	MsgTrap raise();
+	exit(1);
+	}
+
+MsgTrap:	Trap;
+
+error:	public	(s: [:] char, ...) =
+	{
+	ap:	ArgumentList;
+
+	ap = ...;
+	prefix("Error", MSG_ERROR, &CurrentContext, ap, s);
+	ErrorCount++;
+	}
+
+errorAt:	public	(m: ref messageContext, s: [:] char, ...) =
+	{
+	ap:	ArgumentList;
+
+	ap = ...;
+	prefix("Error", MSG_ERROR, m, ap, s);
+	ErrorCount++;
+	}
+
+warn:	public	(s: [:] char, ...) =
+	{
+	ap:	ArgumentList;
+
+	ap = ...;
+	prefix("Warning", MSG_WARN, &CurrentContext, ap, s);
+	}
+
+prefix:	(m: [:] char, msgClass: messageClasses, mm: ref messageContext, 
+					ap: ArgumentList, s: [:] char) =
+	{
+	printf(m);
+	if	(mm->obj){
+		printf(" %s", mm->obj objectName());
+		if	(mm->offset != NO_LINE)
+			printf(" %d", mm->obj lineno(mm->offset));
+		}
+	printf(": ");
+	vprintf(s, ap);
+	stdout putc('\n');
+/*
+	msgLen:		int;
+	me:		messageEmitter;
+	mBuf:		[256] char;
+
+	me = [ &mBuf, sizeof mBuf - 1 ];
+	me printf(m);
+	if	(u)
+		me printf(" %s", &u->name->spelling);
+	if	(line)
+		me printf(" %d", line);
+	me printf(": ");
+	me format(Messages[s], ap);
+	if	(Funcname)
+		me printf(" in function %s", Funcname);
+	me putc(0);
+	mBuf[sizeof mBuf - 1] = 0;
+	Project.messages insertMessage(u, CurrentContext.phase, 
+						line, msgClass, &mBuf);
+ */
+	}
+/*
+messageEmitter:	type	inherit emitter	{
+	public:
+
+buf:	* char;
+rem:	int;
+
+putc:	dynamic	(c: char) =
+	{
+	if	(rem){
+		*buf = c;
+		buf++;
+		rem--;
+		}
+	}
+
+write:	dynamic	(data: *, len: int) =
+	{
+	if	(rem){
+		if	(rem < len)
+			len = rem;
+		memCopy(buf, data, len);
+		buf += len;
+		rem -= len;
+		}
+	}
+
+printf:	(fmt: * char, ...) =
+	{
+	format(fmt, ...);
+	}
+
+};
+ */

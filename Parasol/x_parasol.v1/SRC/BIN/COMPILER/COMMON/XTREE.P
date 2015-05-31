@@ -1,0 +1,4078 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+//		Expression trees
+include	backend;
+include	types;
+include	file;
+include	hash;
+include	scanner;
+include	ptree;
+include	symtab;
+include	errmsg;
+include	sbuffer;
+include	tparams, target;
+include	value;
+include	real;
+include	xcall;
+
+Verbose:	const	int = 0;
+/*
+/*
+	This code handles the setting of USE, DEF and ADR bits in symbols.
+	This sort of information comes in handy for generating some nice
+	bug catching warnings.  There are also various issues for code
+	generation and optimization like identifying unreferenced symbols.
+	The techniques are not perfect and tend to be conservative, but they
+	do provide useful information.
+ */
+descendCheck:	(t: * tree) =
+	{
+	lval:	* tree;
+	v:	* variable;
+
+	for	(;;){
+		switch	(t->operator){
+		case	O_AUTO:
+			v = t->n.v.var;
+			if	(v->declaration == 0)
+				return;
+			if	((v->declaration->flags & SY_DEF) == 0 &&
+				 v->declaration->name)
+				CurrentContext warn("WarnUseBeforeDef", 
+					&v->declaration->name->spelling);
+			v->declaration->flags |= SY_USE;
+			return;
+
+		case	O_ID:
+			if	(t->n.a.val)
+				t->n.a.val->owner->flags |= SY_USE;
+			return;
+
+		case	O_INIT:
+		case	O_ASG:
+			lval = t->n.o.left;
+			if	(lval->operator == O_FLD)
+				lval = lval->n.f.operand;
+			if	(lval->operator == O_ID){
+				lval->n.a.val->owner->flags |= SY_DEF;
+				}
+			else if	(lval->operator == O_AUTO){
+				v = lval->n.v.var;
+				v->declaration->flags |= SY_DEF;
+				}
+			t = lval;
+			break;
+
+		case	O_ADR:
+			lval = t->n.o.left;
+			if	(lval->operator == O_ID){
+				v:	* value;
+
+				v = lval->n.a.val;
+				if	(v->owner)
+					v->owner->flags |= SY_DEF|SY_ADR|SY_USE;
+				return;
+				}
+			else if	(lval->operator == O_AUTO){
+				v = lval->n.v.var;
+				v->declaration->flags |= SY_DEF|SY_ADR|SY_USE;
+				v->flags |= VF_NIXREG;
+				return;
+				}
+			}
+		}
+	}
+ */
+binary_x:	public	type	inherit	tree_p	{
+	public:
+
+	left:		ref tree_p;
+	right:		ref tree_p;
+	offset:		fileOffset;
+	sethi:		signedByte;
+
+constructor:	(op: operators, l: ref tree_p, 
+				r: ref tree_p, 
+				o: fileOffset) =
+	{
+	super constructor(op);
+	left = l;
+	right = r;
+	offset = o;
+	}
+/*
+createKnown:	factory	(op: operators, d: ref type_s, l: ref tree_p, 
+				r: ref tree_p) ref binary_x =
+	{
+	self = Func binary(op, l, r, 0);
+	dtype = d;
+	return self;
+	}
+ */
+display:	dynamic	(indent: int) =
+	{
+	if	(left)
+		left display(left->operator == O_SEQ ? 
+						indent :
+						indent + INDENT_AMOUNT);
+	super display(indent);
+	printf(" su = %d\n", sethi);
+	if	(right)
+		right display(indent + INDENT_AMOUNT);
+	}
+
+checkStaticInitializer:	dynamic	() ref tree_p =
+	{
+	if	(operator == O_ADR)
+		return self;
+	CurrentContext error("ErrBadInit");
+	return ErrorTree;
+	}
+
+copyFixup:	dynamic	(v: ref value, off: addr_t, len: addr_t) =
+	{
+		// Must be an O_ADR node
+
+	left copyFixup(v, off, len);
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	left = left fold();
+	if	(right)
+		right = right fold();
+	switch	(operator){
+	case	O_MUL:
+	case	O_ADD:
+	case	O_AND:
+	case	O_OR:
+	case	O_XOR:
+		if	(left->operator != operator &&
+			 right->operator != operator)
+			break;
+		if	(dtype->topType != T_FLOAT)
+			return combineCommutativeOps();
+		break;
+
+	case	O_SUB:
+		right = right fold();
+		if	(right->operator != O_ICON ||
+			 left->operator != O_ADD)
+			break;
+		operator = O_ADD;
+		ref icon_x(right)->integer = -ref icon_x(right)->integer;
+		return combineCommutativeOps();
+		}
+	switch	(operator){
+	case	O_MUL:
+		if	(left integerValue() == 1)
+			return right;
+		if	(right integerValue() == 1)
+			return left;
+		break;
+
+	case	O_ADD:
+		if	(left->operator == O_ADR){
+			if	(right->operator == O_ICON){
+				ref binary_x(left)->left 
+					addAdjustment(right integerValue());
+				return left;
+				}
+			fishForConstants(left, right);
+			}
+		else if	(right->operator == O_ADR)
+			fishForConstants(right, left);
+		break;
+
+	case	O_NOT:
+		switch	(left->operator){
+		case	O_EQ:
+		case	O_NE:
+		case	O_LT:
+		case	O_GT:
+		case	O_LE:
+		case	O_GE:
+		case	O_ORD:			// <>=
+		case	O_UNORD:		// !<>=
+		case	O_NLT:			// !<
+		case	O_NLE:			// !<=
+		case	O_NGT:			// !>
+		case	O_NGE:			// !>=
+		case	O_LT_GT:		// <>
+		case	O_NLT_GT:		// !<>
+			left->operator = negateCondition(left->operator);
+			return left;
+
+		case	O_NOT:
+			return ref binary_x(left)->left;
+
+		case	O_LAND:
+			right = ref binary_x(left)->right;
+			left = ref binary_x(left)->left;
+			left = binop(O_NOT, left->dtype, left, 0);
+			left = left fold();
+			right = binop(O_NOT, right->dtype, right, 0);
+			right = right fold();
+			operator = O_LOR;
+			break;
+
+		case	O_LOR:
+			right = ref binary_x(left)->right;
+			left = ref binary_x(left)->left;
+			left = binop(O_NOT, left->dtype, left, 0);
+			left = left fold();
+			right = binop(O_NOT, right->dtype, right, 0);
+			right = right fold();
+			operator = O_LAND;
+			}
+		break;
+
+	case	O_IND:
+		if	(left->operator == O_ADR){
+			t:	ref tree_p;
+
+			t = ref binary_x(left)->left;
+			t->dtype = dtype;
+			return t;
+			}
+		break;
+
+	case	O_ADR:
+		if	(left->operator == O_IND){
+			t:	ref tree_p;
+
+			t = cast_x createKnown(dtype, 
+						ref binary_x(left)->left, offset);
+			return t fold();
+			}
+		break;
+
+	case	O_OR:
+		if	(left integerValue() == 0)
+			return right;
+		if	(right &&
+			 right integerValue() == 0)
+			return left;
+		break;
+
+	case	O_SEQ:
+		CurrentContext->offset = offset;
+		left = left checkForNoEffect();
+		if	(left == 0)
+			return right;
+		break;
+		}
+	if	(left->operator == O_FCON){
+		if	(right && right->operator != O_FCON)
+			return self;
+		dest:	ref fcon_x;
+		src:	ref fcon_x;
+
+		dest = ref fcon_x(left);
+		src = ref fcon_x(right);
+		switch	(operator){
+		case	O_MUL:	
+			dest->fvalue multiply(&src->fvalue);
+			break;
+
+		case	O_DIV:
+			dest->fvalue divide(&src->fvalue);
+			break;
+
+		case	O_ADD:
+			dest->fvalue add(&src->fvalue);
+			break;
+
+		case	O_SUB:
+			dest->fvalue subtract(&src->fvalue);
+			break;
+
+		case	O_NEG:
+			dest->fvalue negate();
+			break;
+
+		default:
+			return self;
+			}
+		return dest;
+		}
+	if	(left->operator != O_ICON)
+		return self;
+	if	(right && right->operator != O_ICON)
+		return self;
+	dest:	ref icon_x;
+	src:	ref icon_x;
+
+	dest = ref icon_x(left);
+	src = ref icon_x(right);
+
+	i:	long;
+
+	i = dest->integer;
+	switch	(operator){
+	case	O_MUL:	i *= src->integer;		break;
+	case	O_DIV:
+		if	(src->integer == 0){
+			CurrentContext->offset = offset;
+			CurrentContext warn("WarnDivByZero");
+			}
+		else
+			i /= src->integer;
+		break;
+
+	case	O_MOD:
+		if	(src->integer == 0){
+			CurrentContext->offset = offset;
+			CurrentContext warn("WarnDivByZero");
+			}
+		else
+			i %= src->integer;
+		break;
+
+	case	O_ADD:	i += src->integer;		break;
+	case	O_SUB:	i -= src->integer;		break;
+	case	O_AND:	i &= src->integer;		break;
+	case	O_OR:	i |= src->integer;		break;
+	case	O_LSH:	i <<= src->integer;		break;
+	case	O_RSH:	i >>= src->integer;		break;
+	case	O_NEG:	i = -i;				break;
+	case	O_COM:	i = ~i;				break;
+	default:
+		return self;
+		}
+	dest->integer = integerConstant(i, dest->width);
+	return dest;
+	}
+
+combineCommutativeOps:	() ref tree_p =
+	{
+	term1, term2:	ref tree_p;
+	iconNode:	ref icon_x;
+	spare, top, x:	ref binary_x;
+	list:		ref binary_x;
+
+	spare = 0;
+	list = 0;
+	iconNode = 0;
+	top = self;
+	for	(;;){
+		term1 = top->left;
+		term2 = top->right;
+
+			// Regroup the right hand side if it has the desired
+			// operators in it.
+
+		if	(term2->operator == operator){
+//			term2 = ref binary_x(term2) combineCommutativeOps();
+
+				// Now put each right-hand node into the list
+
+			while	(term2->operator == operator){
+				x = ref binary_x(term2);
+				term2 = x->left;
+				if	(x->right->operator == O_ICON){
+					iconNode = ref icon_x(x->right);
+					if	(spare){
+						spare->left = iconNode;
+						iconNode = ref 
+							icon_x(spare fold());
+						}
+					else
+						spare = x;
+					spare->right = iconNode;
+					}
+				else
+					list = rippleDown(list, x, x->right);
+				}
+			}
+		else
+			term2 = term2 fold();
+
+			// If the last right-hand node is a constant don't
+			// merge it into the list, but set it aside.
+
+		if	(term2->operator == O_ICON){
+			iconNode = ref icon_x(term2);
+
+				// We've had some constants before, combine
+				// them.
+
+			if	(spare){
+				spare->left = iconNode;
+				iconNode = ref icon_x(spare fold());
+				}
+			else
+				spare = top;
+			spare->right = iconNode;
+			}
+		else	{
+			top->sethi = abs(term2 sethiUllman());
+			list = rippleDown(list, top, term2);
+			}
+		if	(term1->operator != operator)
+			break;
+		top = ref binary_x(term1);
+		}
+
+		// If the final term is a constant, combine it with others
+		// and forget the spare node.
+
+	term1 = term1 fold();
+	if	(term1->operator == O_ICON){
+		if	(spare){
+			spare->left = term1;
+			term1 = spare fold();
+			}
+		spare = 0;
+		}
+
+		// If we have a list, add in the final term.
+
+	if	(list){
+		list = rippleDown(list, 0, term1);
+		term1 = list;
+		}
+
+		// If we have a spare, then we had constants somewhere on the
+		// right side.  The spare node becomes the top node of the
+		// tree.
+
+	if	(spare){
+		spare->left = term1;
+		return spare;
+		}
+	else
+		return term1;
+	}
+
+hasSimpleShape:	dynamic	() boolean =
+	{
+	if	(operator != O_IND)
+		return FALSE;
+	if	(left->operator == O_IND)
+		return FALSE;
+	return left hasSimpleShape();
+	}
+
+dup:	dynamic	(effects: int) ref tree_p =
+	{
+	x:	ref binary_x;
+
+	x = alloc(sizeof binary_x);
+	*x = *self;
+	if	(x->left)
+		x->left = left dup(effects);
+	if	(x->right)
+		x->right = right dup(effects);
+	return x;
+	}
+
+removeNoEffectCode:	dynamic	() ref tree_p =
+	{
+
+		/* If this operator modifies its operands, has cannot be
+		   removed.
+		 */
+
+	if	(Opdope[operator - O_ADD] & MODIFIES)
+		return self;
+	left = left removeNoEffectCode();
+	if	(right)
+		right = right removeNoEffectCode();
+	return concatOps(left, right);
+	}
+
+checkForNoEffect:	dynamic	() ref tree_p =
+	{
+	if	(operator == O_SEQ){
+		if	(right == 0){
+			if	(left)
+				return left checkForNoEffect();
+			}
+		else
+			right = right checkForNoEffect();
+		return self;
+		}
+	if	(Opdope[operator - O_ADD] & MODIFIES)
+		return self;
+	CurrentContext warn("WarnNoEffect");
+	return removeNoEffectCode();
+	}
+
+hasSideEffects:	dynamic	() boolean =
+	{
+	opdope:	int;
+
+	if	(Opdope[operator - O_ADD] & MODIFIES)
+		return TRUE;
+	if	(left &&
+		 left hasSideEffects())
+		return TRUE;
+	if	(right &&
+		 right hasSideEffects())
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, resultUsed: boolean) ref tree_p =
+	{
+	if	(dtype)
+		return self;
+	if	(left){
+		if	(operator == O_SEQ)
+			left = left assignTypes(s, FALSE);
+		else
+			left = left assignTypes(s, TRUE);
+		}
+	else
+		left = ErrorTree;
+	if	(right){
+		if	(operator == O_SEQ)
+			right = right assignTypes(s, resultUsed);
+		else
+			right = right assignTypes(s, TRUE);
+		if	(right->operator == O_ERROR)
+			return right;
+		}
+	if	(left->operator == O_ERROR)
+		return left;
+	opdope:	int;
+
+	CurrentContext->offset = offset;
+	opdope = Opdope[operator - O_ADD];
+
+		/* Check for pointers */
+
+	if	(opdope & (ARRAY_OK|ANY_OK) == 0){
+		left = left promoteArrays();
+		if	(right)
+			right = right promoteArrays();
+		}
+
+		// Now we had better have a lvalue
+
+	if	(opdope & REQ_LVAL &&
+		 !left isLvalue()){
+		CurrentContext error("ErrLvalueRequired");
+		return ErrorTree;
+		}
+/*
+	if	(opdope & MODIFIES){
+		if	(left->flags & TF_READONLY){
+			CurrentContext error("ErrModifyConst");
+			return(qualError());
+			}
+		}
+ */
+	if	(left->dtype->topType == T_REF)
+		opdope &= ~FLT_OK;
+	if	(right && right->dtype->topType == T_REF)
+		opdope &= ~FLT_OK;
+	if	(!left checkType(opdope)){
+		return ErrorTree;
+		}
+	if	(operator == O_ASG || operator == O_INIT){
+		if	(right == 0)
+			return classInitializer(s);
+		if	(right->operator == O_SCONST)
+			return compoundLiteralAssignment(s, resultUsed);
+		}
+	if	(right &&
+		 (operator != O_SEQ || resultUsed) &&
+		 !right checkType(opdope)){
+		return ErrorTree;
+		}
+	switch	(operator){
+	case	O_DELETE:
+		heapOpnd, ptrOpnd, deact:	ref tree_p;
+
+		if	(right == 0){
+			ptrOpnd = left;
+			heapOpnd = 0;
+			}
+		else	{
+			ptrOpnd = right;
+			heapOpnd = left;
+			}
+		if	(ptrOpnd->dtype->topType == T_DESCRIPTOR){
+			ptrOpnd = ptrOpnd promoteArrays();
+			}
+		if	(heapOpnd){
+			dx:	ref type_s;
+
+			if	(heapOpnd->dtype->topType == T_REF)
+				dx = heapOpnd->dtype targetOf();
+			else	{
+				dx = heapOpnd->dtype;
+				heapOpnd = heapOpnd takeAddress(dx);
+				}
+
+			if	(!dx inherits(SymbolTable.heapType)){
+				CurrentContext error("ErrNotHeapInDelete");
+				return ErrorTree;
+				}
+			}
+		deact = 0;
+		if	(ptrOpnd->dtype->topType != T_REF){
+			CurrentContext error("ErrDeletePtr");
+			ptrOpnd = ErrorTree;
+			}
+		else
+			ptrOpnd = checkForDestructor(ptrOpnd, heapOpnd, 
+								&deact, s);
+
+			// If we needed to call a destructor, don't compute the
+			// heap operand more than once.
+
+		if	(deact)
+			heapOpnd = 0;
+		if	(heapOpnd){
+			fc:	ref bcall_x;
+
+			fc = Func methodCall(heapOpnd, hash("_free"), ptrOpnd, 
+							offset, FALSE);
+			right = ref bcall_x(fc assignTypes(s, TRUE));
+			if	(right->operator == O_ERROR)
+				return ErrorTree;
+			}
+		else	{
+			a:	ref tree_p;
+			sym:	ref symbol_s;
+
+			sym = SymbolTable.freeSymbol;
+			a = iden_x createKnown(O_ID, sym->dtype, 
+						sym, sym->currentValue, 0);
+			right = Func staticCall(a, ptrOpnd, offset);
+			ref staticCall_x(right) checkFunctionCall(s, 
+							sym->name, sym);
+			right->dtype = void_z create();
+			}
+		if	(ptrOpnd->operator == O_ERROR)
+			return ptrOpnd;
+		right = concatOps(right, deact);
+		if	(left == 0)
+			return right;
+		if	(left->operator == O_ERROR)
+			return left;
+		operator = O_SEQ;
+		dtype = right->dtype;
+		break;
+
+	case	O_SYNC:
+		return synchronousCall();
+
+	case	O_IND:
+		if	(left->dtype->topType != T_REF){
+			CurrentContext error("ErrBadIndirec");
+			return ErrorTree;
+			}
+		dtype = left->dtype targetOf();
+		if	(dtype->topType == T_VOID){
+			CurrentContext error("ErrBadType");
+			return ErrorTree;
+			}
+		if	(dtype->topType == T_ERROR)
+			return ErrorTree;
+		break;
+
+	case	O_ADR:
+/*
+		if	(left->operator == O_FLD){
+			CurrentContext error("ErrAddr");
+			return ErrorTree;
+			}
+ */
+		left->attributes |= TA_LVALUE;
+		dtype = refTo(left->dtype);
+		break;
+
+	case	O_SEQ:
+		dtype = right->dtype;
+		break;
+
+	case	O_INIT:
+		operator = O_ASG;
+
+	case	O_ASG:
+		return processAssignment(s, resultUsed);
+
+	case	O_ADD:
+		if	(left->dtype->topType == T_REF){
+			if	(right->dtype->topType == T_REF){
+				CurrentContext error("ErrBadPointerAdd");
+				return ErrorTree;
+				}
+			right = right scale(left);
+			dtype = left->dtype;
+			}
+		else if	(right->dtype->topType == T_REF){
+			x = left scale(right);
+			left = right;
+			right = x;
+			dtype = left->dtype;
+			}
+		else
+			usualArithmeticConversions();
+		break;
+
+	case	O_ADA:
+		if	(left->dtype->topType == T_REF){
+			if	(right->dtype->topType == T_REF){
+				CurrentContext error("ErrBadPointerAdd");
+				return ErrorTree;
+				}
+			right = right scale(left);
+			}
+		else if	(right->dtype->topType == T_REF){
+			CurrentContext error("ErrBadPointerOp");
+			return ErrorTree;
+			}
+		else
+			right = right convert(left->dtype);
+		dtype = left->dtype;
+		break;
+
+	case	O_SUB:
+	case	O_SBA:
+		if	(left->dtype->topType == T_REF){
+			if	(right->dtype->topType != T_REF){
+				right = right scale(left);
+				dtype = left->dtype;
+				return self;
+				}
+			if	(operator == O_SBA){
+				CurrentContext error("ErrBadPointerSub");
+				return ErrorTree;
+				}
+			right = right convert(left->dtype);
+			dtype = IntType;
+			if	(left->dtype targetOf() sizeOf() > 1){
+				x = left getsize() convert(IntType);
+				self = binop(O_DIV, IntType, self, x);
+				}
+			break;
+			}
+		else if	(right->dtype->topType == T_REF){
+			CurrentContext error("ErrBadPointerSub");
+			return ErrorTree;
+			}
+		if	(operator == O_SBA){
+			right = right convert(left->dtype);
+			dtype = left->dtype;
+			}
+		else
+			usualArithmeticConversions();
+		break;
+
+	case	O_INA:
+	case	O_DEA:
+		if	(left->dtype->topType == T_REF)
+			right = left getsize();
+		else
+			right = Func icon(1, INTBITS) 
+						convert(left->dtype);
+		dtype = left->dtype;
+		if	(!resultUsed){
+			if	(operator == O_INA)
+				operator = O_ADA;
+			else
+				operator = O_SBA;
+			}
+		break;
+
+	case	O_LSH:
+	case	O_RSH:
+		left = left integralPromote();
+
+	case	O_LSA:
+	case	O_RSA:
+		right = right convert(number_z create(T_SIGNED, NO_RANGE, SHIFT_BITS));
+		dtype = left->dtype;
+		break;
+
+	case	O_MUA:
+	case	O_DVA:
+	case	O_MOA:
+	case	O_ANA:
+	case	O_ORA:
+	case	O_XRA:
+		right = right convert(left->dtype);
+		dtype = left->dtype;
+		break;
+
+	case	O_LAND:
+	case	O_LOR:
+		left = left makelogical();
+		right = right makelogical();
+		dtype = IntType;
+		break;
+
+	case	O_EQ:
+	case	O_NE:
+	case	O_LT:
+	case	O_GT:
+	case	O_LE:
+	case	O_GE:
+	case	O_ORD:			// <>=
+	case	O_UNORD:		// !<>=
+	case	O_NLT:			// !<
+	case	O_NLE:			// !<=
+	case	O_NGT:			// !>
+	case	O_NGE:			// !>=
+	case	O_LT_GT:		// <>
+	case	O_NLT_GT:		// !<>
+		if	(left->dtype->topType == T_REF){
+			if	(right integerValue() == 0)
+				right->dtype = left->dtype;
+			else if	(right->dtype->topType == T_REF){
+				dleft:		ref type_s;
+				dright:		ref type_s;
+
+				dleft = left->dtype;
+				dright = right->dtype;
+				if	(!ptrmatch(dleft, dright) &&
+					 !ptrmatch(dright, dleft)){
+					CurrentContext error("ErrBadImplicit");
+					return ErrorTree;
+					}
+				}
+			else	{
+				CurrentContext error("ErrBadImplicit");
+				return ErrorTree;
+				}
+			}
+		else if	(right->dtype->topType == T_REF){
+			if	(left integerValue() == 0)
+				left->dtype = right->dtype;
+			else	{
+				CurrentContext error("ErrBadImplicit");
+				return ErrorTree;
+				}
+			}
+		else	{
+			left shrink(swapCompare(operator), right->dtype);
+			right shrink(operator, left->dtype);
+			left = left widen(right->dtype);
+			right = right widen(left->dtype);
+			}
+		dtype = IntType;
+		break;
+
+	case	O_DIV:
+	case	O_MUL:
+	case	O_MOD:
+	case	O_AND:
+	case	O_OR:
+	case	O_XOR:
+		usualArithmeticConversions();
+		break;
+
+	case	O_SIZEOF:
+		if	(!left hasSize()){
+			CurrentContext error("ErrNoSize");
+			return ErrorTree;
+			}
+		return Func icon(left sizeOf(), INTBITS);
+
+	case	O_BOUND:
+		if	(left->dtype->topType == T_ARRAY)
+			return Func icon(ref array_z(left->dtype)->dimension, INTBITS);
+		else	{
+			dt:	ref descriptor_z;
+
+			dt = ref descriptor_z(left->dtype);
+			return nameBound(left, DescrBoundOffset);
+			}
+
+	case	O_MBOUND:
+		if	(left->dtype->topType == T_ARRAY)
+			return Func icon(ref array_z(left->dtype)->dimension, INTBITS);
+		else
+			return nameBound(left, DescrMaxBoundOffset);
+		break;
+
+	case	O_SUBSCRIPT:
+		x:	ref tree_p;
+
+		if	(left->operator == O_TYPE)
+			return ref type_x(left) structConstant(right, offset);
+		else if	(left->dtype->topType != T_REF){
+			CurrentContext error("ErrBadSubscript");
+			return ErrorTree;
+			}
+		et:	ref type_s;
+
+		et = left->dtype targetOf();
+		if	(et bitSizeOf() == 1){
+			CurrentContext error("ErrUnfinished");
+			return ErrorTree;
+			}
+		right = right scale(left);
+		operator = O_ADD;
+		dtype = left->dtype;
+		x = binop(O_IND, et, self, 0);
+		if	(x->dtype->topType == T_ERROR)
+			return ErrorTree;
+		return x;
+
+	case	O_ARG:
+		break;
+
+	case	O_NOT:
+		left = left makelogical();
+		dtype = IntType;
+		break;
+
+	case	O_PLUS:
+		usualArithmeticConversions();
+		return left;
+
+	case	O_NEG:
+	case	O_COM:
+		usualArithmeticConversions();
+		break;
+
+	default:
+		return super assignTypes(s, resultUsed);
+		}
+	return self;
+	}
+
+checkForDestructor:	(t: ref tree_p, heapOpnd: ref tree_p, 
+			 deactp: ref ref tree_p, s: ref scope_s) ref tree_p =
+	{
+	d:		ref type_s;
+	st:		ref struct_z;
+	sym:		ref symbol_s;
+
+	left = 0;
+	d = t->dtype targetOf();		// get the base type
+
+		/* Look for a member function 'destructor' */
+
+	while	(d){
+		st = ref struct_z(d getType());
+		if	(st->topType != T_STRUCT)
+			break;
+		for	(sym = st->symbols; sym; sym = sym->next){
+			if	(sym->name &&
+				 sym->name isSpelled("destructor") &&
+				 sym->dtype->topType == T_FUNC){
+				hsym:	ref symbol_s;
+				x, y:	ref tree_p;
+				fc:	ref bcall_x;
+
+				y = destructorCall(t, sym, s);
+				if	(heapOpnd){
+					hsym = s unnamedLocal(heapOpnd->dtype);
+
+					fc = Func methodCall(heapOpnd, 
+							hash("activate"), 
+							0, offset, FALSE);
+					fc = ref bcall_x(fc assignTypes(s, 
+									TRUE));
+					if	(fc->operator == O_ERROR)
+						return ErrorTree;
+					x = Func auto(hsym, 0);
+					x = binop(O_ASG, x->dtype, x, fc);
+					left = concatOps(x, left);
+					x = Func auto(hsym, 0);
+					fc = Func methodCall(x, 
+							hash("activate"), 
+							0, offset, FALSE);
+					fc = ref bcall_x(fc assignTypes(s, 
+									TRUE));
+					if	(fc->operator == O_ERROR)
+						return ErrorTree;
+					*deactp = fc;
+					}
+				return y;
+				}
+			}
+		d = st->base;
+		}
+	return t;
+	}
+
+destructorCall:	(ptrOpnd: ref tree_p, sym: ref symbol_s, 
+					s: ref scope_s) ref tree_p =
+	{
+	x, y:		ref tree_p;
+
+	if	(!ptrOpnd hasSimpleShape()){
+		sym:	ref symbol_s;
+
+		sym = s unnamedLocal(ptrOpnd->dtype);
+		x = Func binary(O_ASG, Func auto(sym, 0), ptrOpnd, 0);
+		x = x assignTypes(s, FALSE);
+
+			// ptrOpnd now has simple shape
+
+		ptrOpnd = Func auto(sym, 0);
+		}
+	else
+		x = 0;
+
+		// Generate a static call to the destructor.
+
+	y = methodCall_x createKnown(ptrOpnd, sym, 0, offset, 
+							sym->dtype, FALSE, s);
+	left = concatOps(x, y);
+	return ptrOpnd dup(0);
+	}
+
+synchronousCall:	() ref tree_p =
+	{
+	t, u, v:	ref tree_p;
+
+	dtype = void_z create();
+	t = self;
+	u = left;
+	if	(u->operator == O_SEQ){
+		t = left;
+		u->dtype = dtype;
+		while	(ref binary_x(u)->right->operator == O_SEQ){
+			u = ref binary_x(u)->right;
+			u->dtype = dtype;
+			}
+		v = ref binary_x(u)->right;
+		ref binary_x(u)->right = self;
+		left = v;
+		}
+	if	(left->operator != O_SCALL &&
+		 left->operator != O_MCALL &&
+		 left->operator != O_RCALL){
+		CurrentContext error("ErrNotCall");
+		return ErrorTree;
+		}
+	return t;
+	}
+
+processAssignment:	(s: ref scope_s, resultUsed: boolean) ref tree_p =
+	{
+	if	(right->operator == O_SEQ){
+		seq:	ref binary_x;
+
+		seq = ref binary_x(right);
+		right = seq->right;
+		seq->right = processAssignment(s, resultUsed);
+		return seq;
+		}
+
+	if	(left->operator == O_FLD){
+		CurrentContext error("ErrUnfinished");
+		return ErrorTree;
+		}
+	left->attributes |= TA_LVALUE;
+	if	(left->operator == O_SLICE)
+		return assignToSlice(s, resultUsed);
+	else if	(right->operator == O_SLICE)
+		return assignFromSlice(s, resultUsed);
+	if	(left->dtype->topType == T_REF)
+		right = right promoteArrays();
+	if	(left->dtype->topType == T_DESCRIPTOR){
+		if	(right->dtype->topType == T_DESCRIPTOR){
+			right = cast_x createCheck(left->dtype, right);
+			dtype = left->dtype;
+			return self;
+			}
+		if	(right->dtype->topType != T_ARRAY){
+			incomp(right->dtype, left->dtype);
+			return ErrorTree;
+			}
+		if	(right->operator != O_LITERAL &&
+			 !right isLvalue()){
+			CurrentContext error("ErrBadRvalueArray");
+			return ErrorTree;
+			}
+		if	(!typeMatch(left->dtype elementOf(), 
+					right->dtype elementOf())){
+			incomp(right->dtype, left->dtype);
+			return ErrorTree;
+			}
+		i:	addr_t;
+		dest:	ref tree_p;
+		init:	ref tree_p;
+		c:	ref tree_p;
+
+		i = ref array_z(right->dtype)->dimension;
+		right = right promoteArrays();
+		dest = left dup(-1);
+		dest->dtype = right->dtype;
+		init = binop(O_ASG, right->dtype, dest, right);
+		c = Func icon(i, INTBITS);
+		dest = structRef(left, DescrBoundOffset * BYTEBITS, IntType);
+		dest = binop(O_ASG, c->dtype, dest, c);
+		init = binop(O_SEQ, c->dtype, init, dest);
+		i *= left->dtype elementOf() sizeOf();
+		c = Func icon(i, INTBITS);
+		dest = structRef(left, DescrMaxBoundOffset * BYTEBITS, IntType);
+		dest = binop(O_ASG, c->dtype, dest, c);
+		init = binop(O_SEQ, c->dtype, init, dest);
+		if	(resultUsed){
+			CurrentContext error("ErrUnfinished");
+			return ErrorTree;
+			}
+		return init;
+		}
+	if	(left->dtype->topType == T_ARRAY){
+		incomp(right->dtype, left->dtype);
+		return ErrorTree;
+		}
+	right = cast_x createCheck(left->dtype, right);
+	dtype = left->dtype;
+	return self;
+	}
+
+/*
+	The possible kinds of slice assignment are quite large.  This is
+	due to the complex nature of descriptors, arrays and remote calls
+	in Parasol.
+
+	Let us look at the possible shapes of the tree:
+
+			void
+			 |
+			asg
+		      /     \
+		slice	   mcall.array
+		  |	    /       \
+	       x.descr   remote     args
+
+	This tree rewrites as:
+
+			asg.int
+		      /         \
+		bound             div
+		  |             /     \
+                  x        mcall.int   sizeof x.element
+                         /           \
+                      remote        args
+		     /      \
+		   &x      mbound
+			     |
+			     x
+
+	A variation of the tree (that covers arrays and pointers) is:
+
+			void
+			 |
+			asg
+		      /     \
+		slice	   mcall.array
+		  |	    /       \
+	        x.ptr    remote     args
+
+	This rewrites as:
+
+	             mcall.int
+                   /           \
+                remote        args
+	       /      \
+	     &x    slice.right
+
+	Of course, this tree cannot discover the actual size of the array.
+
+	Of course, if the slice is complicated, it may be necessary to
+	generate a temp to hold it.  If the result of the assignment is
+	use, then that may be another reason to create a temp to hold the
+	resulting descriptor.
+ */
+assignToSlice:	(s: ref scope_s, resultUsed: boolean) ref tree_p =
+	{
+	sl:	ref slice_x;
+	slOpnd:	ref tree_p;
+
+	if	(right->dtype->topType != T_ARRAY &&
+		 right->dtype->topType != T_DESCRIPTOR){
+		CurrentContext error("ErrSliceAssign");
+		return ErrorTree;
+		}
+	sl = ref slice_x(left);
+	slOpnd = sl->arrayRef;
+	if	(!typeMatch(right->dtype elementOf(), 
+						left->dtype elementOf())){
+		incomp(right->dtype, left->dtype);
+		return ErrorTree;
+		}
+
+		// Look for the remote call case
+
+	if	(right->operator == O_RCALL){
+		rcall:	ref remoteCall_x;
+		rcall = ref remoteCall_x(right);
+		prefix:	ref tree_p;
+
+		prefix = 0;
+		if	(!slOpnd hasSimpleShape()){
+			if	(slOpnd isLvalue()){
+				x, y:	ref tree_p;
+				sym:	ref symbol_s;
+
+				x = slOpnd takeAddress(slOpnd->dtype);
+				sym = s unnamedLocal(x->dtype);
+				y = Func auto(sym, 0);
+				x = Func binary(O_ASG, y, x, 0);
+				prefix = x assignTypes(s, FALSE);
+				y = Func auto(sym, 0);
+				y = Func binary(O_IND, y, 0, 0);
+				slOpnd = y assignTypes(s, FALSE);
+				}
+			else	{
+				CurrentContext error("ErrUnfinished");
+				return ErrorTree;
+				}
+			}
+		if	(slOpnd->dtype->topType == T_DESCRIPTOR){
+			replyLen, replyBuf:	ref tree_p;
+			x:			Size;
+
+			replyBuf = slOpnd dup(0);
+			replyBuf->dtype = refTo(slOpnd->dtype elementOf());
+			replyLen = nameBound(slOpnd, DescrMaxBoundOffset);
+			x = slOpnd->dtype elementOf() sizeOf();
+
+//				multiple reply length by array element size
+
+			if	(x > 1){
+				m:	ref tree_p;
+
+				m = Func icon(x, INTBITS);
+				replyLen = binop(O_MUL, replyLen->dtype, 
+								replyLen, m);
+				}
+			rcall declareReturn(replyBuf, replyLen);
+
+			actualLen:	ref tree_p;
+			dt:	ref descriptor_z;
+
+			dt = ref descriptor_z(slOpnd->dtype);
+			actualLen = nameBound(slOpnd, DescrBoundOffset);
+			left = actualLen;
+			rcall->dtype = actualLen->dtype;
+			dtype = actualLen->dtype;
+			prefix = concatOps(prefix, self);
+			if	(resultUsed)
+				return concatOps(prefix, slOpnd);
+			else
+				return prefix;
+			}
+		else	{
+			CurrentContext error("ErrUnfinished");
+			return ErrorTree;
+			}
+		}
+
+		// Straight array copy
+
+	if	(right->dtype->topType == T_ARRAY){
+		i, j:	addr_t;
+		slBound:	ref tree_p;
+
+		i = ref array_z(right->dtype)->dimension;
+		if	(sl->left){
+			CurrentContext error("ErrUnfinished");
+			return ErrorTree;
+			}
+		if	(resultUsed){
+			CurrentContext error("ErrUnfinished");
+			return ErrorTree;
+			}
+		if	(slOpnd->dtype->topType == T_DESCRIPTOR){
+			slBound = slOpnd dup(0);
+			slOpnd = slOpnd promoteArrays();
+			}
+		else	{
+			slBound = 0;
+			if	(sl->right->operator == O_ICON &&
+				 sl->left == 0){
+				j = sl->right integerValue();
+				if	(i != j){
+					incomp(right->dtype, slOpnd->dtype);
+					return ErrorTree;
+					}
+				}
+			}
+		if	(right isLvalue() ||
+			 right->operator == O_LITERAL){
+			sz:	ref tree_p;
+			args:	ref tree_p;
+			t:	ref tree_p;
+			dest1:	ref tree_p;
+			dest2:	ref tree_p;
+
+			right = right promoteArrays();
+			if	(resultUsed){
+				dest1 = slOpnd dup(-1);
+				dest2 = slOpnd dup(1);
+				}
+			else
+				dest1 = slOpnd;
+			sz = Func icon(i, INTBITS);
+			args = Func argument(right, sz, 0);
+			args = Func argument(dest1, args, 0);
+			t = Func staticCall(0, args, 0);
+			t->operator = O_MCOPY;
+			if	(slBound){
+				sz = Func icon(i, INTBITS);
+				dest1 = structRef(slBound, 
+						DescrBoundOffset * BYTEBITS, 
+						IntType);
+				dest1 = binop(O_ASG, sz->dtype, dest1, sz);
+				t = binop(O_SEQ, sz->dtype, t, dest1);
+				}
+			if	(resultUsed)
+				t = binop(O_SEQ, dtype, t, dest2);
+			return t;
+			}
+		}
+
+		// Descriptor to pointer copy
+
+	if	(right->dtype->topType == T_DESCRIPTOR &&
+		 slOpnd->dtype->topType == T_REF){
+		i, j:	addr_t;
+
+		if	(right->operator == O_SLICE)
+			right = ref slice_x(right)->arrayRef;
+		if	(right isLvalue()){
+			sz:	ref tree_p;
+			args:	ref tree_p;
+			t:	ref tree_p;
+			dest1:	ref tree_p;
+			dest2:	ref tree_p;
+
+			right->dtype = slOpnd->dtype;
+			if	(resultUsed){
+				dest1 = slOpnd dup(-1);
+				dest2 = slOpnd dup(1);
+				}
+			else
+				dest1 = slOpnd;
+			sz = sl->right;
+			args = Func argument(right, sz, 0);
+			args = Func argument(dest1, args, 0);
+			t = Func staticCall(0, args, 0);
+			t->operator = O_MCOPY;
+			if	(resultUsed)
+				t = binop(O_SEQ, dtype, t, dest2);
+			return t;
+			}
+		}
+
+		// Descriptor to descriptor copy
+
+	if	(right->dtype->topType == T_DESCRIPTOR &&
+		 slOpnd->dtype->topType == T_DESCRIPTOR){
+		prefix, suffix:	ref tree_p;
+		p, sx: 	ref tree_p;
+		rref, rdim:	ref tree_p;
+
+		if	(!slOpnd isLvalue()){
+			CurrentContext error("ErrLvalueRequired");
+			return ErrorTree;
+			}
+		prefix = 0;
+		suffix = 0;
+		if	(right->operator == O_SLICE){
+			s:	ref slice_x;
+
+			s = ref slice_x(right);
+			if	(s->left){
+				CurrentContext error("ErrUnfinished");
+				return ErrorTree;
+				}
+			rref = s->arrayRef;
+			if	(!rref isLvalue()){
+				CurrentContext error("ErrUnfinished");
+				return ErrorTree;
+				}
+			rref->dtype = refTo(0);
+			rdim = s->right;
+			}
+		else	{
+			if	(right isLvalue()){
+				if	(!right hasSimpleShape()){
+					p = right dup(-1);
+					sx = right dup(+1);
+					right = right dup(0);
+					p = p removeNoEffectCode();
+					sx = sx removeNoEffectCode();
+					prefix = concatOps(prefix, p);
+					suffix = concatOps(suffix, sx);
+					}
+				}
+			else	{
+				sym:	ref symbol_s;
+
+				sym = s unnamedLocal(right->dtype);
+				p = Func auto(sym, 0);
+				p = Func binary(O_ASG, p, right, offset);
+				p = p assignTypes(s, FALSE);
+				prefix = concatOps(prefix, p);
+				right = Func auto(sym, 0);
+				}
+			rdim = structRef(right, DescrBoundOffset * BYTEBITS, IntType);
+			right->dtype = refTo(0);
+			rref = right;
+			}
+		if	(!slOpnd hasSimpleShape()){
+			prefix = slOpnd dup(-1);
+			suffix = slOpnd dup(+1);
+			slOpnd = slOpnd dup(0);
+			prefix = prefix removeNoEffectCode();
+			suffix = suffix removeNoEffectCode();
+			}
+		if	(resultUsed){
+			sl->arrayRef = slOpnd dup(0);
+			suffix = concatOps(suffix, sl);
+			}
+		ldim:	ref tree_p;
+		ldim = structRef(slOpnd, DescrBoundOffset * BYTEBITS, IntType);
+		slOpnd->dtype = refTo(0);
+		d:	ref type_s;
+		i:	addr_t;
+		a:	ref tree_p;
+
+		d = sl->dtype elementOf();
+		rdim = binop(O_ASG, IntType, ldim, rdim);
+		i = d sizeOf();
+		if	(i != 1){
+			a = Func icon(i, INTBITS);
+			rdim = binop(O_MUL, IntType, rdim, a);
+			}
+		a = Func argument(rref, rdim, 0);
+		a = Func argument(slOpnd, a, 0);
+		a = Func staticCall(0, a, 0);
+		a->operator = O_MCOPY;
+		a = concatOps(prefix, a);
+		a = concatOps(a, suffix);
+		return a;
+		}
+	else	{
+		CurrentContext error("ErrUnfinished");
+		return ErrorTree;
+		}
+	return self;
+	}
+/*
+	This function is called when the left is not a slice operator and
+	the right is.
+ */
+assignFromSlice:	(s: ref scope_s, resultUsed: boolean) ref tree_p =
+	{
+	sl = ref slice_x(right);
+	if	(left->dtype->topType == T_REF){
+		if	(!typeMatch(left->dtype targetOf(), 
+					right->dtype elementOf())){
+			incomp(right->dtype, left->dtype);
+			return ErrorTree;
+			}
+		right = sl->arrayRef;
+		return processAssignment(s, resultUsed);
+		}
+	if	(!typeMatch(left->dtype, right->dtype)){
+		incomp(right->dtype, left->dtype);
+		return ErrorTree;
+		}
+
+		// Must be compatible descriptor types (since a slice has
+		// descriptor type).
+
+
+	sl:	ref slice_x;
+	rt:	ref descriptor_z;
+	pt:	ref type_s;
+	dest:	ref tree_p;
+	init:	ref tree_p;
+	src:	ref tree_p;
+
+	if	(!sl->arrayRef hasSimpleShape()){
+		if	(sl->arrayRef->dtype->topType != T_REF){
+			CurrentContext error("ErrUnfinished");
+			return ErrorTree;
+			}
+		}
+	rt = ref descriptor_z(sl->dtype);
+	dest = left dup(-1);
+	if	(sl->arrayRef->dtype->topType == T_REF){
+		pt = sl->arrayRef->dtype;
+		src = sl->arrayRef;
+		}
+	else	{			// must be descriptor
+		pt = refTo(rt elementOf());
+		if	(sl->right == 0){
+			src = sl->arrayRef dup(+1);
+			sl->right = structRef(src, 
+					DescrBoundOffset * BYTEBITS, IntType);
+			src = sl->arrayRef dup(-1);
+			}
+		else
+			src = sl->arrayRef;
+		src->dtype = pt;
+		}
+	if	(sl->left){
+		src->dtype = pt;
+		sl->right = binop(O_SUB, IntType, sl->right, sl->left dup(1));
+		sl->left = sl->left dup(-1) scale(src);
+		src = binop(O_ADD, pt, src, sl->left);
+		}
+	dest->dtype = pt;
+	init = binop(O_ASG, pt, dest, src);
+
+	x:	ref tree_p;
+
+	x = structRef(dest, DescrBoundOffset * BYTEBITS, IntType);
+	x = binop(O_ASG, IntType, x, sl->right);
+	x = x scale(src);
+	x = binop(O_ASG, IntType, 
+			structRef(dest, 
+				DescrMaxBoundOffset * BYTEBITS, IntType), x);
+	init = binop(O_SEQ, IntType, init, x);
+	dest = left dup(+1);
+	if	(resultUsed)
+		init = binop(O_SEQ, dest->dtype, init, dest);
+	else
+		init = concatOps(init, dest removeNoEffectCode());
+	return init;
+	}
+
+compoundLiteralAssignment:	(s: ref scope_s, 
+					resultUsed: boolean) ref tree_p =
+	{
+	if	(left->dtype->topType == T_REF){
+		d:	ref type_s;
+
+		d = left->dtype;
+		left = binop(O_IND, d targetOf(), left, 0);
+		}
+	if	(left->dtype->topType != T_STRUCT &&
+		 left->dtype->topType != T_DESCRIPTOR &&
+		 left->dtype->topType != T_ARRAY){
+		CurrentContext error("ErrBadStructOp");
+		return ErrorTree;
+		}
+
+	x:	ref tree_p;
+
+	x = left;
+	dtype = left->dtype;
+	if	(left hasSimpleShape())
+		left = itemAssignment(left, dtype, offset, right, s);
+	else	{
+		sym:	ref symbol_s;
+		t:	ref tree_p;
+
+		left = left takeAddress(dtype);
+		sym = s unnamedLocal(left->dtype);
+		t = Func auto(sym, 0);
+		left = binop(O_ASG, left->dtype, t, left);
+		t = Func auto(sym, 0);
+		t = binop(O_IND, dtype, t, 0);
+		t = itemAssignment(t, dtype, offset, right, s);
+		left = binop(O_SEQ, dtype, left, t);
+		}
+	if	(resultUsed){
+		operator = O_SEQ;
+		right = x;
+		return self;
+		}
+	else
+		return left;
+	}
+
+classInitializer:	(s: ref scope_s) ref tree_p =
+	{
+	if	(left->dtype->topType != T_STRUCT &&
+		 left->dtype->topType != T_DESCRIPTOR &&
+		 left->dtype->topType != T_ARRAY){
+		CurrentContext error("ErrBadStructOp");
+		return ErrorTree;
+		}
+
+	left = vectorInit(left, left->dtype, offset, s);
+	return left;
+	}
+
+usualArithmeticConversions:	() =
+	{
+	left = left integralPromote();
+	if	(right){
+		right = right integralPromote();
+		left = left widen(right->dtype);
+		right = right widen(left->dtype);
+		}
+	dtype = left->dtype;
+	}
+
+takeAddress:	dynamic	(t: ref type_s) ref tree_p =
+	{
+	if	(operator == O_SEQ){
+		right = right takeAddress(t);
+		dtype = right->dtype;
+		return self;
+		}
+	return super takeAddress(t);
+	}
+
+isLvalue:	dynamic	() boolean =
+	{
+	if	(operator == O_IND)
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+	};
+
+slice_x:	public	type	inherit tree_p {
+	public:
+
+	arrayRef:	ref tree_p;
+	left:		ref tree_p;
+	right:		ref tree_p;
+	offset:		fileOffset;
+
+constructor:	(t: ref tree_p, l: ref tree_p, r: ref tree_p, o: fileOffset) =
+	{
+	super constructor(O_SLICE);
+	arrayRef = t;
+	left = l;
+	right = r;
+	offset = o;
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, resultUsed: boolean) ref tree_p =
+	{
+	if	(dtype)
+		return self;
+	if	(arrayRef)
+		arrayRef = arrayRef assignTypes(s, TRUE);
+	else
+		return ErrorTree;
+	if	(left){
+		left = left assignTypes(s, TRUE);
+		left = left convert(IntType);
+		}
+	if	(right){
+		right = right assignTypes(s, TRUE);
+		if	(right->operator == O_ERROR)
+			return right;
+		right = right convert(IntType);
+		}
+	if	(arrayRef->operator == O_ERROR)
+		return arrayRef;
+	if	(left && left->operator == O_ERROR)
+		return left;
+
+	CurrentContext->offset = offset;
+
+	if	(arrayRef->dtype->topType == T_ARRAY){
+		if	(right == 0)
+			right = Func icon(ref array_z(arrayRef->dtype)->dimension, INTBITS);
+		arrayRef = arrayRef promoteArrays();
+		}
+	if	(!arrayRef checkType(PTR_OK|DESCR_OK))
+		return ErrorTree;
+	if	(left && !left checkType(0))
+		return ErrorTree;
+	if	(right && !right checkType(0))
+		return ErrorTree;
+	if	(arrayRef->dtype->topType != T_REF &&
+		 arrayRef->dtype->topType != T_DESCRIPTOR){
+		CurrentContext error("ErrBadSubscript");
+		return ErrorTree;
+		}
+	de:	ref type_s;
+
+	if	(arrayRef->dtype->topType == T_DESCRIPTOR){
+		dt:	ref descriptor_z;
+
+		dt = ref descriptor_z(arrayRef->dtype);
+/*
+		if	(right == 0){
+			right = nameBound(arrayRef, DescrBoundOffset +
+					(dt->rank - 1) * DESCRIPTOR_RANK_SIZE);
+//			right = nameBound(left, DescrMaxBoundOffset);
+			}
+ */
+		de = dt elementOf();
+		}
+	else	{
+		if	(right == 0){
+			CurrentContext error("ErrSliceNeedsBound");
+			return ErrorTree;
+			}
+		de = arrayRef->dtype targetOf();
+		}
+/*
+	if	(left)
+		left = left scale(arrayRef);
+	if	(right)
+		right = right scale(arrayRef);
+ */
+	dtype = descriptor_z create(NO_RANGE, 0, de);
+	return self;
+	}
+
+coerce:	dynamic	(t: ref type_s) ref tree_p =
+	{
+	dtype = t;
+	return self;
+	}
+
+dup:	dynamic	(effects: int) ref tree_p =
+	{
+	x:	ref slice_x;
+
+	x = alloc(sizeof slice_x);
+	*x = *self;
+	if	(x->left)
+		x->left = left dup(effects);
+	if	(x->right)
+		x->right = right dup(effects);
+	if	(x->arrayRef)
+		x->arrayRef = arrayRef dup(effects);
+	return x;
+	}
+
+removeNoEffectCode:	dynamic	() ref tree_p =
+	{
+	x:	ref tree_p;
+
+	if	(left)
+		left = left removeNoEffectCode();
+	if	(right)
+		right = right removeNoEffectCode();
+	if	(arrayRef)
+		arrayRef = arrayRef removeNoEffectCode();
+	x = concatOps(left, right);
+	return concatOps(x, arrayRef);
+	}
+
+isLvalue:	dynamic	() boolean =
+	{
+	return TRUE;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	printf("%*c[\n", indent + INDENT_AMOUNT, ' ');
+	if	(left)
+		left display(indent + INDENT_AMOUNT);
+	printf("%*c:\n", indent + INDENT_AMOUNT, ' ');
+	if	(right)
+		right display(indent + INDENT_AMOUNT);
+	printf("%*c]\n", indent + INDENT_AMOUNT, ' ');
+	super display(indent);
+	printf("\n");
+	arrayRef display(indent + INDENT_AMOUNT);
+	}
+
+	};
+
+vectorInit:	public	(dest: ref tree_p, t: ref type_s, offset: fileOffset, 
+						s: ref scope_s) ref tree_p =
+	{
+	d:		ref type_s;
+	u:		ref tree_p;
+	index:		addr_t;
+	i:		int;
+	hasamemberflag:	int;
+	mask:		int;
+	ad:		ref array_z;
+	copyTree:	ref tree_p;
+	voffset:	addr_t;
+
+	copyTree = 0;
+	switch	(t->topType){
+	case	T_ARRAY:
+	case	T_DESCRIPTOR:
+		ad = ref array_z(t);
+		t = t elementOf();
+		esize:	addr_t;
+
+		esize = t sizeOf();
+		voffset = 0;
+		index = 0;
+		while	(index < ad->dimension){
+			u = vectorInit(arrayElement(dest, voffset), t, 
+								offset, s);
+			copyTree = concatOps(copyTree, u);
+			voffset += esize;
+			index++;
+			}
+		break;
+
+	case	T_STRUCT:
+		st:	ref struct_z;
+
+		st = ref struct_z(t);
+		if	(st hasDynamicVector())
+			copyTree = assignDynamicVector(dest, st);
+		if	(st->gateCount){
+			m:	ref symbol_s;
+			y:	ref tree_p;
+			z:	ref tree_p;
+
+			z = iden_x createKnown(O_ID, IntType, 0,
+							st->gateVector, 0);
+			z = z takeAddress(IntType);
+			m = st lookupMember(hash("__td__"), st);
+			if	(m){
+				y = structRef(dest, m->bitOffset, 
+							IntType);
+				y = binop(O_ASG, IntType, y, z);
+				copyTree = concatOps(copyTree, y);
+				}
+			}
+		}
+	return copyTree;
+	}
+
+itemAssignment:	public	(dest: ref tree_p, t: ref type_s, offset: fileOffset, 
+						x: ref tree_p, 
+						s: ref scope_s) ref tree_p =
+	{
+	d:		ref type_s;
+	u:		ref tree_p;
+	index:		addr_t;
+	i:		int;
+	hasamemberflag:	int;
+	mask:		int;
+	ad:		ref array_z;
+	copyTree:	ref tree_p;
+	voffset:	addr_t;
+
+	copyTree = 0;
+	switch	(t->topType){
+	case	T_ARRAY:
+	case	T_DESCRIPTOR:
+		if	(x && x->operator != O_SCONST){
+			if	(t->topType == T_DESCRIPTOR){
+				x = Func binary(O_ASG, dest, x, offset);
+				return x assignTypes(s, FALSE);
+				}
+			CurrentContext error("ErrBadInit");
+			return ErrorTree;
+			}
+		ad = ref array_z(t);
+		t = t elementOf();
+		esize:	addr_t;
+
+		esize = t sizeOf();
+		if	(x)
+			x = ref sconst_x(x)->components;
+		voffset = 0;
+		for	(index = 0; x && index < ad->dimension; index++){
+			if	(x->operator == O_ARG){
+				u = ref binary_x(x)->left;
+				x = ref binary_x(x)->right;
+				}
+			else	{
+				u = x;
+				x = 0;
+				}
+			u = itemAssignment(arrayElement(dest, voffset), t, 
+								offset, u, s);
+			copyTree = concatOps(copyTree, u);
+			voffset += esize;
+			}
+		if	(x)
+			CurrentContext error("ErrTooManyInit");
+		while	(index < ad->dimension){
+			u = itemAssignment(arrayElement(dest, voffset), t, 
+								offset, 0, s);
+			copyTree = concatOps(copyTree, u);
+			voffset += esize;
+			index++;
+			}
+		return copyTree;
+
+	case	T_STRUCT:
+		st:	ref struct_z;
+
+		st = ref struct_z(t);
+		if	(x){
+			if	(x->operator != O_SCONST){
+				x = Func binary(O_ASG, dest, x, offset);
+				return x assignTypes(s, FALSE);
+				}
+			x = ref sconst_x(x)->components;
+			}
+		if	(st hasDynamicVector())
+			copyTree = assignDynamicVector(dest, st);
+		x = structItemAssignment(&copyTree, dest, offset, x, st, s);
+		if	(st->gateCount){
+			m:	ref symbol_s;
+			y:	ref tree_p;
+			z:	ref tree_p;
+
+			z = iden_x createKnown(O_ID, IntType, 0,
+							st->gateVector, 0);
+			z = z takeAddress(IntType);
+			m = st lookupMember(hash("__td__"), st);
+			if	(m){
+				y = structRef(dest, m->bitOffset, 
+							IntType);
+				y = binop(O_ASG, IntType, y, z);
+				copyTree = concatOps(copyTree, y);
+				}
+			}
+		if	(x){
+			CurrentContext error("ErrTooManyInit");
+			copyTree = ErrorTree;
+			}
+		return copyTree;
+
+	case	T_FUNC:
+		CurrentContext error("ErrBadInit");
+		return ErrorTree;
+
+	default:
+		if	(x == 0)
+			x = Func icon(0, INTBITS);
+		x = x promoteArrays();
+		x = cast_x createCheck(t, x);
+		return binop(O_ASG, t, dest, x);
+		}
+	}
+
+arrayElement:	public	(a: ref tree_p, off: addr_t) ref tree_p =
+	{
+	x:	ref tree_p;
+
+	a = a dup(0);
+	a = a promoteArrays();
+	x = Func icon(off, INTBITS);
+	x = binop(O_ADD, a->dtype, a, x);
+	return binop(O_IND, a->dtype targetOf(), x, 0);
+	}
+
+nameBound:	(descr: ref tree_p, offs: addr_t) ref tree_p =
+	{
+	t:	ref type_s;
+
+	t = number_z create(T_UNSIGNED, NO_RANGE, INTBITS);
+	return structRef(descr, offs * BYTEBITS, t);
+	}
+
+structRef:	public	(s: ref tree_p, bitOffset: addr_t, 
+						t: ref type_s) ref tree_p =
+	{
+	x:	ref tree_p;
+
+	if	(t->topType == T_ERROR)
+		return ErrorTree;
+	s = s dup(0);
+	s = s takeAddress(t);
+	if	(bitOffset){
+		x = Func icon(bitOffset / BYTEBITS, INTBITS);
+		s = binop(O_ADD, s->dtype, s, x);
+		}
+	x = binop(O_IND, t, s, 0);
+/*
+	if	(sym->bitWidth)
+		t = buildBitField(t, m, sym->bitWidth, sym->bitOffset);
+ */
+	return x;
+	}
+
+structItemAssignment:	(copyTreeP: ref ref tree_p, dest: ref tree_p, 
+				offset: fileOffset,
+				x: ref tree_p, 
+				d: ref struct_z,
+				s: ref scope_s) ref tree_p =
+	{
+	t:		ref tree_p;
+	u:		ref tree_p;
+	sz:		addr_t;
+	bitsz:		addr_t;
+	mt:		ref type_s;
+	sym:		ref symbol_s;
+	i:		int;
+	j:		int;
+	mask:		int;
+
+	/* Look for a member function 'constructor' */
+
+	for	(sym = d->symbols; sym; sym = sym->next){
+		if	(sym->name &&
+			 sym->name isSpelled("constructor")){
+			if	(sym->dtype->topType == T_FUNC)
+				return constructorCall(copyTreeP, dest, d, 
+							offset, x, sym, s);
+			break;
+			}
+		}
+	if	(d->base){
+		sup:	ref type_s;
+
+		sup = d->base getType();
+
+				// structure base classes use special init code
+
+		if	(sup->topType == T_STRUCT)
+			x = structItemAssignment(copyTreeP, dest, offset, x, 
+						ref struct_z(sup), s);
+		else	{
+
+				// other base classes use the first initializer
+
+			if	(x && x->operator == O_ARG){
+				u = ref argument_x(x)->left;
+				x = ref argument_x(x)->right;
+				}
+			else	{
+				u = x;
+				x = 0;
+				}
+			u = itemAssignment(structRef(dest, 0, sup), sup, 
+								offset, u, s);
+			*copyTreeP = concatOps(*copyTreeP, u);
+			}
+		}
+	for	(sym = d->symbols; sym; sym = sym->next){
+
+			/* Skip member functions and static members */
+
+		if	(sym->storageClass != SC_MEMBER)
+			continue;
+
+			// Structure constants inside a type should
+			// include the private members of that type,
+			// since the rule is you can initialize anything
+			// that is visible to the constant.
+
+		if	(sym->visibility == V_PRIVATE &&
+			 !d encloses(s))
+			continue;
+
+			// You can't initialize an unnamed member
+
+		if	(sym->name == 0)
+			continue;
+
+		if	(x &&
+			 x->operator == O_ARG){
+			u = ref argument_x(x)->left;
+			x = ref argument_x(x)->right;
+			}
+		else	{
+			u = x;
+			x = 0;
+			}
+		mt = sym->dtype;
+		if	(mt == 0 ||
+			 mt->topType == T_ERROR)
+			continue;
+		mt = mt getType();
+		u = itemAssignment(structRef(dest, sym->bitOffset, mt), mt, 
+								offset, u, s);
+		*copyTreeP = concatOps(*copyTreeP, u);
+		}
+	return x;
+	}
+
+new_x:	public	type	inherit	tree_p {
+	public:
+
+	heapArg:	ref tree_p;
+	ptype:		ref type_p;
+	opnd:		ref tree_p;
+	offset:		fileOffset;
+
+		// assigned type information
+
+create:	factory	(h: ref tree_p, d: ref type_p, t: ref tree_p, 
+						o: fileOffset) ref new_x =
+	{
+	return new new_x[ O_NEW, h, d, t, o ];
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, resultUsed: boolean) ref tree_p =
+	{
+	d:			ref type_s;
+	preamble, deact:	ref tree_p;
+
+	d = ptype symbolTableCopy(s);
+	if	(d)
+		d constructInterface(s, TRUE);
+	d = d getType();
+	if	(heapArg){
+		heapArg = heapArg assignTypes(s, TRUE);
+		if	(heapArg->operator == O_ERROR)
+			return ErrorTree;
+		}
+	if	(opnd){
+		opnd = opnd assignTypes(s, TRUE);
+		if	(opnd->operator == O_ERROR)
+			return ErrorTree;
+		}
+	if	(d->topType == T_ERROR)
+		return ErrorTree;
+
+	x:	ref tree_p;
+	fc:	ref bcall_x;
+	sym:	ref symbol_s;
+	a:	ref tree_p;
+
+	x = d exprSizeOf();
+	x = x assignTypes(s, TRUE);
+	preamble = 0;
+	deact = 0;
+	if	(heapArg){
+		dx:	ref type_s;
+
+		if	(heapArg->operator == O_ERROR)
+			return ErrorTree;
+		if	(heapArg->dtype->topType == T_REF)
+			dx = heapArg->dtype targetOf();
+		else	{
+			dx = heapArg->dtype;
+			heapArg = heapArg takeAddress(dx);
+			}
+
+		if	(!dx inherits(SymbolTable.heapType)){
+			CurrentContext error("ErrNotHeapInNew");
+			return ErrorTree;
+			}
+		if	(d hasConstructor()){
+			hsym:	ref symbol_s;
+			t, u:	ref tree_p;
+
+			hsym = s unnamedLocal(heapArg->dtype);
+
+			fc = Func methodCall(heapArg, hash("activate"), 
+							0, offset, FALSE);
+			fc = ref bcall_x(fc assignTypes(s, TRUE));
+			if	(fc->operator == O_ERROR)
+				return ErrorTree;
+			t = Func auto(hsym, 0);
+			preamble = binop(O_ASG, t->dtype, t, fc);
+			t = Func auto(hsym, 0);
+			fc = Func methodCall(t, hash("activate"), 
+							0, offset, FALSE);
+			fc = ref bcall_x(fc assignTypes(s, TRUE));
+			if	(fc->operator == O_ERROR)
+				return ErrorTree;
+			deact = fc;
+			heapArg = 0;
+			}
+		}
+	if	(heapArg){
+		fc = Func methodCall(heapArg, hash("alloc"), x, 
+							offset, FALSE);
+		fc = ref bcall_x(fc assignTypes(s, TRUE));
+		if	(fc->operator == O_ERROR)
+			return ErrorTree;
+		x = fc;
+		}
+	else	{
+		sym = SymbolTable.allocSymbol;
+		a = iden_x createKnown(O_ID, sym->dtype, sym, sym->currentValue, 0);
+		fc = Func staticCall(a, x, offset);
+		ref staticCall_x(fc) checkFunctionCall(s, sym->name, sym);
+		x = fc;
+		}
+	if	(d->topType == T_ARRAY){
+		fc->dtype = refTo(d elementOf());
+		x = new slice_x[ fc, 0, d exprDimension(), offset ];
+		x = x assignTypes(s, TRUE);
+		}
+	else
+		fc->dtype = refTo(d);
+	if	(opnd == 0){
+		if	(d hasConstructor()){
+			CurrentContext errorX("ErrNeedsConstructor",
+					ref struct_z(d)->name spelling(),
+					"", 0);
+			return ErrorTree;
+			}
+		if	(!d needsDynamicVectors())
+			return x;
+		}
+	if	(x->operator == O_SLICE){
+		CurrentContext error("ErrUnfinished");
+		return ErrorTree;
+		}
+	if	(opnd == 0)
+		opnd = Func sconst(0, offset);
+
+		// new with constructor
+
+	sym = s unnamedLocal(fc->dtype);
+	a = Func auto(sym, 0);
+	t:	ref tree_p;
+	t = binop(O_ASG, fc->dtype, a, fc);
+	a = Func auto(sym, 0);
+	b:	ref binary_x;
+	b = Func binary(O_ASG, a, opnd, offset);
+	a = b compoundLiteralAssignment(s, FALSE);
+	t = concatOps(preamble, t);
+	t = concatOps(t, a);
+	t = concatOps(t, deact);
+	if	(resultUsed){
+		a = Func auto(sym, 0);
+		t = concatOps(t, a);
+		}
+	return t;
+	}
+
+	};
+
+sconst_x:	public	type	inherit	tree_p	{
+	public:
+
+	components:	ref tree_p;
+	offset:		fileOffset;
+
+constructor:	(c: ref tree_p, o: fileOffset) ref sconst_x =
+	{
+	super constructor(O_SCONST);
+	components = c;
+	offset = o;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	if	(components)
+		components display(indent + INDENT_AMOUNT);
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	if	(components)
+		components = components fold();
+	return self;
+	}
+
+computeBenefits:	dynamic	(nesting: int) =
+	{
+	if	(components)
+		components computeBenefits(nesting);
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	if	(dtype)
+		return self;
+	if	(components){
+		components = components assignTypes(s, TRUE);
+//		components = components promoteArrays();
+		if	(components->operator == O_ERROR)
+			return components;
+		}
+	dtype = IntType;
+	return self;
+	}
+
+removeNoEffectCode:	dynamic	() ref tree_p =
+	{
+	if	(components)
+		components = components removeNoEffectCode();
+	return components;
+	}
+
+initialize:	dynamic	(offset: addr_t, v: ref value) =
+	{
+	u, x:	ref tree_p;
+
+	if	(dtype->topType == T_ARRAY){
+		ad:	ref array_z;
+		t:	ref type_s;
+		index:	int;
+
+		ad = ref array_z(dtype);
+
+			// From here we have already verified an SCONST node
+
+		esize:	addr_t;
+
+		esize = dtype elementOf() sizeOf();
+		x = components;
+		for	(index = 0; x && index < ad->dimension; index++){
+			if	(x->operator == O_ARG){
+				u = ref argument_x(x)->left;
+				x = ref argument_x(x)->right;
+				}
+			else	{
+				u = x;
+				x = 0;
+				}
+			u initialize(offset, v);
+			offset += esize;
+			}
+		}
+	else	// Must be a structure
+		structInit(offset, v, components, ref struct_z(dtype));
+		
+	}
+
+structInit:	(offset: addr_t, v: ref value, x: ref tree_p, 
+					d: ref struct_z) ref tree_p =
+	{
+	t:		ref tree_p;
+	u:		ref tree_p;
+	sz:		addr_t;
+	bitsz:		addr_t;
+	mt:		ref type_s;
+	sym:		ref symbol_s;
+	i:		int;
+	j:		int;
+	mask:		int;
+
+		/* Look for a member function 'constructor' */
+
+	if	(d->base){
+		sup:	ref type_s;
+
+		sup = d->base getType();
+
+				// structure base classes use special init code
+
+		if	(sup->topType == T_STRUCT)
+			x = structInit(offset, v, x, ref struct_z(sup));
+		}
+	if	(x == 0)
+		return x;
+	for	(sym = d->symbols; sym; sym = sym->next){
+
+			/* Skip member functions and static members */
+
+		if	(sym->storageClass != SC_MEMBER)
+			continue;
+
+			// If the member is private, then allow a static
+			// initializer of a private member only for objects
+			// defined inside the type itself.  This should be
+			// a rare case.
+
+		if	(sym->visibility == V_PRIVATE){
+			if	(v->owner &&
+				 !d encloses(v->owner->enclosing))
+				continue;
+			}
+		if	(sym->name == 0)
+			continue;
+		if	(x && x->operator == O_ARG){
+			u = ref argument_x(x)->left;
+			x = ref argument_x(x)->right;
+			}
+		else	{
+			u = x;
+			x = 0;
+			}
+		mt = sym->dtype;
+		if	(mt == 0 ||
+			 mt->topType == T_ERROR)
+			continue;
+		mt = mt getType();
+		if	(u == 0)
+			continue;
+		if	(u->operator != O_ICON)
+			u initialize(offset + sym->bitOffset / BYTEBITS, v);
+		else	{ // maybe a bit field
+			off:	addr_t;
+			bitoff:	int;
+			mask:	long;
+			ip:	ref long;
+
+			bitsz = mt bitSizeOf();
+			off = offset + sym->bitOffset / BYTEBITS;
+			bitoff = sym->bitOffset % BYTEBITS;
+			mask = (1UL << bitsz - 1) << bitoff;
+			ip = ref long(v->data + off);
+			*ip &= ~mask;
+			*ip |= ref icon_x(u)->integer << bitoff;
+			}
+		}
+	return x;
+	}
+
+	};
+
+ptrmatch:	public	(d1: ref type_s, d2: ref type_s) boolean =
+	{
+	if	(d1 == 0 ||
+		 d2 == 0)
+		return FALSE;
+	d1 = d1 targetOf();
+	d2 = d2 targetOf();
+	if	(d1 == 0 ||
+		 d2 == 0)
+		return FALSE;
+	if	(d1->topType == T_VOID ||
+		 d2->topType == T_VOID)
+		return TRUE;
+	if	(d1->topType == T_ERROR ||
+		 d2->topType == T_ERROR)
+		return TRUE;
+	if	(typeMatch(d1, d2))
+		return TRUE;
+	return d1 inherits(d2);
+	}
+
+conditional_x:	public	type	inherit	tree_p	{
+	public:
+
+	test:		ref tree_p;
+	truePart:	ref tree_p;
+	falsePart:	ref tree_p;
+	offset:		fileOffset;
+
+constructor:	(t: ref tree_p, tp: ref tree_p, 
+				fp: ref tree_p, 
+				o: fileOffset) ref conditional_x =
+	{
+	super constructor(O_QUES);
+	test = t;
+	truePart = tp;
+	falsePart = fp;
+	offset = o;
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, resultUsed: boolean) ref tree_p =
+	{
+	if	(dtype)
+		return self;
+	if	(test){
+		test = test assignTypes(s, TRUE);
+		test = test makelogical();
+		}
+	dt:	ref type_s = 0;
+	df:	ref type_s = 0;
+	t:	ref type_s;
+
+	if	(truePart){
+		truePart = truePart assignTypes(s, resultUsed);
+		truePart = truePart promoteArrays();
+		dt = truePart->dtype;
+		}
+	if	(falsePart){
+		falsePart = falsePart assignTypes(s, resultUsed);
+		falsePart = falsePart promoteArrays();
+		df = falsePart->dtype;
+		}
+	if	(resultUsed){
+		if	(dt == 0){
+			dtype = df;
+			return self;
+			}
+		else if	(df == 0){
+			dtype = dt;
+			return self;
+			}
+		if	(typeMatch(df, dt)){
+			dtype = dt;
+			return self;
+			}
+		if	(df->topType == T_ERROR)
+			return falsePart;
+		if	(dt->topType == T_ERROR)
+			return truePart;
+		t = dt commonBaseType(df);
+		if	(t){
+			truePart = truePart convert(t);
+			falsePart = falsePart convert(t);
+			dtype = t;
+			return self;
+			}
+		if	(dt->topType == T_STRUCT){
+
+				// a struct here means unrelated structs are
+				// present.
+
+			if	(df->topType == T_STRUCT){
+				incomp(df, dt);
+				return ErrorTree;
+				}
+			dt = truePart->dtype;
+			}
+		else if	(df->topType == T_STRUCT){
+			df = falsePart->dtype;
+			}
+		if	(df->topType == T_REF &&
+			 truePart integerValue() == 0){
+			truePart coerce(df);
+			dtype = df;
+			return self;
+			}
+		switch	(dt->topType){
+		case	T_REF:
+			if	(falsePart integerValue() == 0){
+				falsePart coerce(dt);
+				dtype = dt;
+				return self;
+				}
+			t = ref ptr_z(dt) commonPointerType(df);
+			truePart = truePart convert(t);
+			falsePart = falsePart convert(t);
+			dtype = t;
+			return self;
+
+		case	T_UNSIGNED:
+		case	T_SIGNED:
+			truePart = truePart integralPromote();
+			falsePart = falsePart integralPromote();
+			dt = truePart->dtype;
+			df = falsePart->dtype;
+
+		case	T_FLOAT:
+			truePart = truePart widen(df);
+			falsePart = falsePart widen(dt);
+			dtype = truePart->dtype;
+			return self;
+
+		case	T_FUNC:		// they don't match, so error
+			incomp(df, dt);
+			return ErrorTree;
+			}
+		}
+	else
+		dtype = dt;
+	return self;
+	}
+
+checkForNoEffect:	dynamic	() ref tree_p =
+	{
+	if	(truePart)
+		truePart = truePart checkForNoEffect();
+	if	(falsePart)
+		falsePart = falsePart checkForNoEffect();
+	return self;
+	}
+
+hasSideEffects:	dynamic	() boolean =
+	{
+	if	(truePart &&
+		 truePart hasSideEffects())
+		return TRUE;
+	else if	(falsePart &&
+		 falsePart hasSideEffects())
+		return TRUE;
+	else if	(test)
+		return test hasSideEffects();
+	else
+		return FALSE;
+	}
+
+removeNoEffectCode:	dynamic	() ref tree_p =
+	{
+	if	(truePart)
+		truePart = truePart removeNoEffectCode();
+	if	(falsePart)
+		falsePart = falsePart removeNoEffectCode();
+	if	(truePart == 0 &&
+		 falsePart == 0){
+		if	(test)
+			test = test removeNoEffectCode();
+		return test;
+		}
+	return self;
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	if	(test)
+		test = test fold();
+	if	(truePart)
+		truePart = truePart fold();
+	if	(falsePart)
+		falsePart = falsePart fold();
+	return self;
+	}
+
+computeBenefits:	dynamic	(nesting: int) =
+	{
+	if	(test)
+		test computeBenefits(nesting);
+	if	(truePart)
+		truePart computeBenefits(nesting);
+	if	(falsePart)
+		falsePart computeBenefits(nesting);
+	}
+
+sethiUllman:	dynamic	() signedByte =
+	{
+	tp:	int;
+	tl:	int;
+	tr:	int;
+	sul:	int;
+	sur:	int;
+	sup:	int;
+	i:	int;
+
+	i = 0;
+	if	(test)
+		i = abs(test sethiUllman());
+	if	(truePart)
+		i = max(i, abs(truePart sethiUllman()));
+	if	(falsePart)
+		i = max(i, abs(falsePart sethiUllman()));
+	return i;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	}
+
+	};
+
+reference_x:	public	type	inherit	tree_p	{
+	public:
+
+	left:		ref tree_p;
+	name:		ref identifier;
+	offset:		fileOffset;
+
+create:	factory	(op: operators, l: ref tree_p, 
+				id: ref identifier,
+				o: fileOffset) ref reference_x =
+	{
+	self = alloc(sizeof reference_x);
+	self = [ op, l, id, o ];
+	return self;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf(" %S\n", name spelling());
+	if	(left)
+		left display(indent + INDENT_AMOUNT);
+	}
+
+isLvalue:	dynamic	() boolean =
+	{
+	return TRUE;
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	st:	ref type_s;
+
+	left = left assignTypes(s, TRUE);
+	if	(left->operator == O_ERROR)
+		return left;
+	CurrentContext->offset = offset;
+	if	(operator == O_DOT){
+		st = left->dtype;
+		if	(left->operator == O_TYPE){
+			st = ref type_x(left)->ttype;
+			if	(st->topType != T_STRUCT){
+				CurrentContext error("ErrBadStructOp");
+				return ErrorTree;
+				}
+			sym = st lookupMember(name, s);
+			if	(sym == 0){
+				CurrentContext errorX("ErrUndefSym", 
+						name spelling(), "", 0);
+				return ErrorTree;
+				}
+			st = sym->dtype getType();
+			if	(sym->storageClass != SC_STATIC){
+				CurrentContext error("ErrBadStructOp");
+				return ErrorTree;
+				}
+			return iden_x createKnown(O_ID, st, sym,
+							sym->currentValue, 0);
+			}
+		if	(left->operator == O_SCONST){
+			if	(st == IntType){
+				CurrentContext error("ErrSconstNeedsType");
+				return ErrorTree;
+				}
+			left = left sconstTemp(s, st);
+			}
+		if	(st->topType != T_STRUCT){
+			CurrentContext error("ErrBadStructOp");
+			return ErrorTree;
+			}
+		left = left takeAddress(left->dtype);
+		}
+	else	{		// O_ARROW
+		st = left->dtype targetOf();
+		if	(left->dtype->topType != T_REF){
+			CurrentContext error("ErrPtrArrow");
+			return ErrorTree;
+			}
+		if	(st->topType == T_ERROR)
+			return ErrorTree;
+		if	(st->topType != T_STRUCT){
+			CurrentContext error("ErrPtrArrow");
+			return ErrorTree;
+			}
+		}
+	sym:		ref symbol_s;
+	x:		ref tree_p;
+	off:		addr_t;
+
+	sym = st lookupMember(name, s);
+	if	(sym == 0){
+		CurrentContext errorX("ErrUndefSym", name spelling(), "", 0);
+		return ErrorTree;
+		}
+
+	m:		ref type_s;
+
+	m = sym->dtype getType();
+	if	(m->topType == T_ERROR)
+		return ErrorTree;
+	if	(sym->storageClass == SC_STATIC)
+		return iden_x createKnown(O_ID, m, sym, sym->currentValue, 0);
+	left = left convert(refTo(m));
+	off = 0;
+	if	(sym->bitOffset){
+		off = sym->bitOffset / BYTEBITS;
+		x = Func icon(off, INTBITS);
+		left = binop(O_ADD, left->dtype, left, x);
+		}
+	x = binop(O_IND, m, left, 0);
+	if	(ref struct_z(st)->packing == PM_PACKED &&
+		 isBitField(sym->bitOffset, m))
+		x = bitField_x create(x, m, sym->bitOffset % BYTEBITS);
+	return x;
+	}
+
+	};
+
+bitField_x:	public	type	inherit	tree_p {
+	public:
+	enclosingWord:		ref tree_p;
+	bitOffset:		int;
+	bitWidth:		int;
+
+create:	factory	(x: ref tree_p, t: ref type_s, o: int) ref bitField_x =
+	{
+	self = alloc(sizeof bitField_x);
+	self = [ O_FLD, x, o, t bitSizeOf() ];
+	dtype = number_z create(t->topType, NO_RANGE, INTBITS);
+	return self;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf(" %d:%d\n", bitOffset, bitWidth);
+	enclosingWord display(indent + INDENT_AMOUNT);
+	}
+
+isLvalue:	dynamic	() boolean =
+	{
+	return TRUE;
+	}
+
+sethiUllman:	dynamic	() signedByte =
+	{
+	return enclosingWord sethiUllman();
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	enclosingWord = enclosingWord fold();
+	return self;
+	}
+
+	};
+
+iden_x:	public	type	inherit	tree_p	{
+	public:
+
+	unitName:	ref identifier;
+	unitOffset:	fileOffset;
+	name:		ref identifier;
+	offset:		fileOffset;
+
+		// Type information
+
+	symbol:		ref symbol_s;
+	currentValue:	ref value;
+	adjust:		int;
+
+constructor:	(un: ref identifier, uno: fileOffset, 
+		 id: ref identifier, o: fileOffset) =
+	{
+	super constructor(O_ID);
+	unitName = un;
+	unitOffset = uno;
+	name = id;
+	offset = o;
+	symbol = 0;
+	currentValue = 0;
+	adjust = 0;
+	}
+
+createKnown:	factory	(op: operators, t: ref type_s, sym: ref symbol_s, 
+						v: ref value, 
+						x: addr_t) ref iden_x =
+	{
+	self = ref iden_x(Func iden(0, 0, 0, 0));
+	operator = op;
+	symbol = sym;
+	currentValue = v;
+	adjust = x;
+	dtype = t;
+	return self;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	if	(name)
+		printf(" %S", name spelling());
+	if	(adjust)
+		printf("+%d", adjust);
+	printf("\n");
+	}
+
+checkStaticInitializer:	dynamic	() ref tree_p =
+	{
+	return self;
+	}
+
+copyFixup:	dynamic	(v: ref value, off: addr_t, addr_t) =
+	{
+	v valueFixup(off, currentValue, adjust);
+	}
+
+addAdjustment:	dynamic	(a: int) =
+	{
+	adjust += a;
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	t:	ref type_s;
+	x:	ref tree_p;
+
+	if	(dtype)
+		return self;
+	if	(unitName){
+		u:	ref unit_s;
+
+		u = SymbolTable locateUnit(unitName);
+		if	(u == 0){
+			CurrentContext errorX("ErrUnitNotFound", 
+						unitName spelling(), "", 0);
+			return ErrorTree;
+			}
+		symbol = u lookupExported(name, s);
+		}
+	else
+		symbol = s lookup(name, s);
+	if	(symbol == 0){
+		CurrentContext->offset = offset;
+		CurrentContext errorX("ErrUndefSym", name spelling(), "", 0);
+		s addErrorDeclaration(name);
+		return ErrorTree;
+		}
+	symbol constructInterface();
+	if	(symbol->dtype == 0)
+		return ErrorTree;
+	dtype = symbol->dtype getType();
+	if	(dtype->topType == T_ERROR)
+		return ErrorTree;
+ 	switch	(symbol->storageClass){
+	case	SC_ALIAS:
+		do	{
+			oldsym:	ref symbol_s;
+
+			oldsym = symbol;
+			symbol = symbol getAlias();
+			if	(symbol == 0){
+				printf("Bad alias 2: ");
+				oldsym display();
+				printf("\n");
+				return ErrorTree;
+				}
+			symbol constructInterface();
+			if	(symbol->dtype == 0)
+				return ErrorTree;
+			} while	(symbol->storageClass == SC_ALIAS);
+//		symbol display();
+//		printf("\n");
+
+	case	SC_INTRINSIC:
+	case	SC_EXTERN:
+	case	SC_STATIC:
+		currentValue = symbol->currentValue;
+		break;
+
+	case	SC_PARM:
+	case	SC_AUTO:
+		return Func auto(symbol, 0);
+
+	case	SC_MEMBER:
+		x = Func auto(SymbolTable.selfSymbol, 0);
+		if	(symbol->bitOffset){
+			s:	ref tree_p;
+
+			s = Func icon(symbol->bitOffset / BYTEBITS, INTBITS);
+			x = binop(O_ADD, SymbolTable.selfSymbol->dtype, x, s);
+			}
+		return binop(O_IND, dtype, x, 0);
+
+	case	SC_TYPE:
+		return type_x create(dtype, name);
+
+	case	SC_BASED:
+	case	SC_REGISTER:
+		break;
+
+	default:
+		CurrentContext error("ErrBadSClass");
+		return ErrorTree;
+		}
+	return self;
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	if	(attributes & TA_LVALUE)
+		return self;
+	if	(symbol &&
+		 symbol->qualifier & DQ_CONST){
+		if	(dtype->topType == T_SIGNED ||
+			 dtype->topType == T_UNSIGNED)
+			return symbol constantInteger();
+		else if	(dtype->topType == T_FLOAT){
+			x:	ref tree_p;
+
+			x = symbol 
+				constantFloat(Func->staticInitializer);
+			if	(x)
+				return x;
+			}
+		}
+	return self;
+	}
+
+isLvalue:	dynamic	() boolean =
+	{
+	return TRUE;
+	}
+
+hasSimpleShape:	dynamic	() boolean =
+	{
+	return TRUE;
+	}
+
+dup:	dynamic	(int) ref tree_p =
+	{
+	x:	ref iden_x;
+
+	x = alloc(sizeof iden_x);
+	*x = *self;
+	return x;
+	}
+
+getAlias:	dynamic	() ref symbol_s =
+	{
+	return symbol;
+	}
+
+	};
+
+auto_x:	public	type	inherit	tree_p	{
+	public:
+
+		// Type information
+
+	symbol:		ref symbol_s;
+	var:		ref variable;
+	adjust:		int;
+
+constructor:	(sym: ref symbol_s, adj: int) =
+	{
+	super constructor(O_AUTO);
+	symbol = sym;
+	adjust = adj;
+	if	(sym){
+		var = sym->var;
+		dtype = sym->dtype getType();
+		}
+	else	{
+		var = 0;
+		dtype = 0;
+		}
+	}
+
+createVar:	factory	(v: ref variable) ref auto_x =
+	{
+	self = Func auto(0, 0);
+	var = v;
+	dtype = v->dtype;
+	return self;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	if	(symbol->name)
+		printf(" %S", symbol->name spelling());
+	printf("\n");
+	}
+
+addAdjustment:	dynamic	(a: int) =
+	{
+	adjust += a;
+	}
+
+isLvalue:	dynamic	() boolean =
+	{
+	return TRUE;
+	}
+
+hasSimpleShape:	dynamic	() boolean =
+	{
+	return TRUE;
+	}
+
+dup:	dynamic	(int) ref tree_p =
+	{
+	x:	ref auto_x;
+
+	x = alloc(sizeof auto_x);
+	*x = *self;
+	return x;
+	}
+
+assignTypes:	dynamic	(ref scope_s, boolean) ref tree_p =
+	{
+	return self;
+	}
+
+	};
+
+type_x:	public	type	inherit tree_p {
+	public:
+
+	ttype:		ref type_s;
+	name:		ref identifier;
+
+create:	factory	(d: ref type_s, n: ref identifier) ref type_x =
+	{
+	self = alloc(sizeof type_x);
+	self = [ O_TYPE, d, n ];
+	dtype = TypeType;
+	return self;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf(" '%S' ", name spelling());
+	ttype display(FALSE);
+	printf("\n");
+	}
+
+structConstant:	(x: ref tree_p, off: fileOffset) ref tree_p =
+	{
+	if	(ttype->topType != T_STRUCT){
+		incomp(x->dtype, ttype);
+		return ErrorTree;
+		}
+	x = Func sconst(x, off);
+	x->dtype = ttype;
+	return x;
+	}
+
+assignTypes:	dynamic	(ref scope_s, boolean) ref tree_p =
+	{
+	return self;
+	}
+
+lookupMember:	dynamic	(n: ref identifier, s: ref scope_s) ref symbol_s = 
+	{
+	if	(ttype){
+		sym:	ref symbol_s;
+
+		sym = ttype lookupLocal(n, s);
+		if	(sym &&
+			 sym->visibility == V_PRIVATE &&
+			 !sym->enclosing encloses(s))
+			return 0;
+		return sym;
+		}
+	else
+		return 0;
+	}
+
+hasSize:	dynamic	() boolean =
+	{
+	if	(ttype->topType == T_FUNC ||		// function
+		 ttype->topType == T_VOID)			// void type
+		return FALSE;
+	else
+		return TRUE;
+	}
+
+sizeOf:		dynamic	() addr_t =
+	{
+	return ttype sizeOf();
+	}
+
+	};
+
+sizeof_x:	public	type	inherit	tree_p	{
+	public:
+
+	ptype:		ref type_p;
+
+create:	factory	(d: ref type_p) ref sizeof_x =
+	{
+	self = alloc(sizeof sizeof_x);
+	self = [ O_TYPELEN, d ];
+	return self;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, resultUsed: boolean) ref tree_p =
+	{
+	dtype = ptype symbolTableCopy(s);
+	if	(dtype){
+		dtype constructInterface(s, TRUE);
+		if	(dtype getType()->topType == T_ERROR)
+			return ErrorTree;
+		x:	ref tree_p;
+		x = dtype exprSizeOf();
+		return x assignTypes(s, resultUsed);
+		}
+	else
+		return ErrorTree;
+	}
+
+	};
+
+Offsetof_x:	public	type	inherit	tree_p	{
+	public:
+
+	otype:		ref type_p;
+	member:		ref identifier;
+
+create:	factory	(d: ref type_p, id: ref identifier) ref Offsetof_x =
+	{
+	return new Offsetof_x[ O_OFFSETOF, d, id ];
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	t:	ref type_s;
+	m:	ref symbol_s;
+
+	t = otype symbolTableCopy(s);
+	if	(t){
+		t constructInterface(s, FALSE);
+		t = t getType();
+		if	(t == 0 || t->topType == T_ERROR)
+			return ErrorTree;
+		if	(t->topType != T_STRUCT){
+			CurrentContext error("ErrBadOffsetof");
+			return ErrorTree;
+			}
+		m = t lookupMember(member, s);
+		if	(m == 0){
+			CurrentContext errorX("ErrUndefSym", member spelling(), "", 0);
+			return ErrorTree;
+			}
+		if	(m->bitOffset % BYTEBITS){
+			CurrentContext errorX("ErrHasNoAddress", member spelling(), "", 0);
+			return ErrorTree;
+			}
+		return Func icon(m->bitOffset / BYTEBITS, INTBITS);
+		}
+	else
+		return ErrorTree;
+	}
+
+	};
+
+AllocTos_x:	public	type	inherit	tree_p	{
+	public:
+
+	otype:		ref type_s;
+
+create:	factory	(t: ref type_s) ref AllocTos_x =
+	{
+	return new AllocTos_x[ O_ALLOCTOS, t ];
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	}
+
+checkForNoEffect:	dynamic	() ref tree_p =
+	{
+	return self;
+	}
+
+hasSideEffects:	dynamic	() boolean =
+	{
+	return TRUE;
+	}
+
+	};
+
+Tos_x:	public	type	inherit	tree_p	{
+	public:
+
+	adjust:		addr_t;
+
+create:	factory	(t: ref type_s) ref Tos_x =
+	{
+	self = new Tos_x[ O_TOS, 0 ];
+	dtype = t;
+	return self;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	if	(adjust > 0)
+		printf("%+d", adjust);
+	printf("\n");
+	}
+
+addAdjustment:	dynamic	(a: int) =
+	{
+	adjust += a;
+	}
+
+hasSimpleShape:	dynamic	() boolean =
+	{
+	return TRUE;
+	}
+
+dup:	dynamic	(int) ref tree_p =
+	{
+	x:	ref Tos_x;
+
+	x = alloc(sizeof Tos_x);
+	*x = *self;
+	return x;
+	}
+
+isLvalue:	dynamic	() boolean =
+	{
+	return TRUE;
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	return self;
+	}
+
+	};
+
+icon_x:	public	type	inherit	tree_p	{
+	public:
+
+	integer:	long;
+	width:		int;
+
+	public:
+
+constructor:	(v: long, w: int) =
+	{
+	super constructor(O_ICON);
+	integer = integerConstant(v, w);
+	width = w;
+	if	(width < 0)
+		dtype = number_z create(T_SIGNED, NO_RANGE, -width);
+	else
+		dtype = number_z create(T_UNSIGNED, NO_RANGE, width);
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf(" width %d = %d\n", width, integer);
+	}
+
+integerValue:	dynamic	() long =
+	{
+	return integer;
+	}
+
+copyFixup:	dynamic	(v: ref value, off: addr_t, len: addr_t) =
+	{
+	v storeInteger(integer, off, len);
+	}
+
+dup:	dynamic	(int) ref tree_p =
+	{
+	x:	ref icon_x;
+
+	x = alloc(sizeof icon_x);
+	*x = *self;
+	return x;
+	}
+
+checkStaticInitializer:	dynamic	() ref tree_p =
+	{
+	return self;
+	}
+
+assignTypes:	dynamic	(ref scope_s, boolean) ref tree_p =
+	{
+	return self;
+	}
+
+coerce:	dynamic	(t: ref type_s) ref tree_p =
+	{
+	switch	(t->topType){
+	case	T_SIGNED:
+		width = -ref number_z(t)->width;
+		integer = integerConstant(integer, width);
+		break;
+
+	case	T_UNSIGNED:
+		width = ref number_z(t)->width;
+		integer = integerConstant(integer, width);
+		break;
+
+	case	T_REF:
+		width = PTRBITS;
+		break;
+
+	case	T_FLOAT:
+		v:	real;
+		x:	ref tree_p;
+
+		if	(dtype->topType == T_SIGNED)
+			v fromSigned32(integer);
+		else
+			v fromUnsigned32(integer);
+		x = Func fcon(&v, ref number_z(t)->width);
+		x->dtype = t;
+		return x;
+
+	default:
+		return 0;
+		}
+	dtype = t;
+	return self;
+	}
+
+shrink:	dynamic	(op: operators, t: ref type_s) =
+	{
+	w:	int;
+
+	if	(t->topType == T_UNSIGNED){
+		v:	unsignedLong;
+
+		w = ref number_z(t)->width;
+		if	(w >= RNG_CHECK_BITS)
+			v = ~0;
+		else
+			v = 1 << w - 1;
+		if	(unsignedLong(integer) > v){
+			CurrentContext warn("WarnConstRange");
+			return;
+			}
+		if	((op == O_GE || op == O_NLT) && integer == 0){
+			CurrentContext warn("WarnConstRange");
+			return;
+			}
+		if	((op == O_LE || op == O_NGT) && integer == v){
+			CurrentContext warn("WarnConstRange");
+			return;
+			}
+		}
+
+		// Note: this code works for 1's and 2's complement only
+
+	else if	(t->topType == T_SIGNED){
+		v:	long;
+
+		w = ref number_z(t)->width;
+		v = 1 << (w - 1) - 1;
+		if	(integer < ~v ||
+			 integer > v){
+			CurrentContext warn("WarnConstRange");
+			return;
+			}
+		if	((op == O_GE || op == O_NLT) && integer == ~v){
+			CurrentContext warn("WarnConstRange");
+			return;
+			}
+		if	((op == O_LE || op == O_NGT) && integer == v){
+			CurrentContext warn("WarnConstRange");
+			return;
+			}
+		}
+	else
+		return;
+	integer = integerConstant(integer, w);
+	dtype = t;
+	}
+
+coercible:	dynamic	(t: ref type_s) boolean =
+	{
+	if	(dtype == t)
+		return TRUE;
+/*
+	Possible conversions are:
+
+	From:
+
+		T_REF		pointer		- restricted, but possible
+		T_SIGNED		signed integer	- fairly flexible
+		T_UNSIGNED	unsigned integer- fairly flexible
+		T_FLOAT		floating	- fairly flexible
+
+		ID		type name	- doesn't appear here
+		T_ARRAY		fixed array	- can't cast
+		T_DESCRIPTOR		variable array	- can't cast
+		T_FUNC		function	- can't cast
+		T_STRUCT		structure	- can't cast
+		T_TYPE		type-type	- can't cast
+		0		void		- doesn't matter
+		T_ERROR		error		- doesn't matter
+ */
+	switch	(t->topType){
+	case	T_REF:
+		if	(dtype->topType == T_REF)
+			return TRUE;
+		else if	(integer == 0)
+			return TRUE;
+
+	case	T_NAME:
+	case	T_ARRAY:
+	case	T_DESCRIPTOR:
+	case	T_STRUCT:
+	case	T_FUNC:
+	case	T_TYPE:
+		return FALSE;
+		}
+	return TRUE;
+	}
+
+	};
+
+fcon_x:	public	type	inherit	tree_p	{
+	public:
+
+	fvalue:		real;
+	width:		int;
+
+constructor:	(v: ref real, w: int) =
+	{
+	super constructor(O_FCON);
+	fvalue = *v;
+	width = w;
+	dtype = number_z create(T_FLOAT, NO_RANGE, width);
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf(" width %d\n", width);
+	}
+
+checkStaticInitializer:	dynamic	() ref tree_p =
+	{
+	return self;
+	}
+
+copyFixup:	dynamic	(v: ref value, off: addr_t, len: addr_t) =
+	{
+	p:	pointer;
+
+	switch	(width){
+	case	FLOATBITS:
+		fvalue toFloat(&v->data[off]);
+		break;
+
+	case	DOUBLEBITS:
+		fvalue toDouble(&v->data[off]);
+		break;
+
+	case	EXTENDBITS:
+		memCopy(&v->data[off], &fvalue, EXTENDBITS / BYTEBITS);
+		}
+	}
+
+makeLiteral:	() ref literal_x =
+	{
+	lt:	ref literal_x;
+	buf:	ref byte;
+	len:	int;
+
+	switch	(width){
+	case	FLOATBITS:
+		len = FLOATBITS / BYTEBITS;
+		buf = alloc(len);
+		fvalue toFloat(buf);
+		break;
+
+	case	DOUBLEBITS:
+		len = DOUBLEBITS / BYTEBITS;
+		buf = alloc(len);
+		fvalue toDouble(buf);
+		break;
+
+	case	EXTENDBITS:
+		len = EXTENDBITS / BYTEBITS;
+		buf = alloc(len);
+		memCopy(buf, &fvalue, len);
+		}
+	lt = Func literal();
+	lt addStringItem(buf, len);
+	lt->dtype = dtype;
+	return lt;
+	}
+
+assignTypes:	dynamic	(ref scope_s, boolean) ref tree_p =
+	{
+	return self;
+	}
+
+coerce:	dynamic	(t: ref type_s) ref tree_p =
+	{
+	i:	long;
+
+	switch	(t->topType){
+	case	T_SIGNED:
+		i = fvalue toSigned32();
+		return Func icon(i, -ref number_z(t)->width);
+
+	case	T_UNSIGNED:
+		i = fvalue toSigned32();
+		return Func icon(i, ref number_z(t)->width);
+
+	case	T_FLOAT:
+		width = ref number_z(t)->width;
+		if	(width == 32)
+			fvalue roundFloat();
+		else if	(width == 64)
+			fvalue roundDouble();
+		dtype = t;
+		return self;
+
+	default:
+		return 0;
+		}
+	dtype = t;
+	return self;
+	}
+
+	};
+
+cast_x:	public	type	inherit	tree_p	{
+	public:
+
+	ptype:	ref type_p;
+	opnd:	ref tree_p;
+	offset:	fileOffset;
+
+		// assigned type information
+
+constructor:	(d: ref type_p, t: ref tree_p, o: fileOffset) =
+	{
+	super constructor(O_CAST);
+	ptype = d;
+	opnd = t;
+	offset = o;
+	}
+
+createKnown:	factory	(d: ref type_s, t: ref tree_p, 
+					o: fileOffset) ref cast_x =
+	{
+	self = ref cast_x(Func cast(0, t, o));
+	dtype = d;
+	return self;
+	}
+
+createCheck:	factory	(d: ref type_s, t: ref tree_p) ref tree_p =
+	{
+	self = ref cast_x(Func cast(0, t, 0));
+	dtype = d;
+	return checkCast(FALSE);
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	if	(opnd)
+		opnd display(indent + INDENT_AMOUNT);
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	if	(opnd)
+		opnd = opnd fold();
+	x:	ref tree_p;
+
+	x = opnd coerce(dtype);
+	if	(x)
+		return x;
+/*
+	if	(opnd isLvalue() &&
+		 dtype->topType == T_REF &&
+		 opnd->dtype->topType == T_REF){
+		opnd->dtype = dtype;
+		return opnd;
+		}
+ */
+	switch	(opnd->operator){
+	case	O_SEQ:
+		b:	ref binary_x;
+
+		b = ref binary_x(opnd);
+		opnd = b->right;
+		b->right = fold();
+		b->dtype = dtype;
+		return b;
+
+	case	O_ADD:
+	case	O_CAST:
+		if	(dtype->topType == T_REF &&
+			 opnd->dtype->topType == T_REF){
+			opnd->dtype = dtype;
+			return opnd;
+			}
+		break;
+
+	case	O_ADR:
+		opnd->dtype = dtype;
+		return opnd;
+		}
+	return self;
+	}
+
+computeBenefits:	dynamic	(nesting: int) =
+	{
+	if	(opnd)
+		opnd computeBenefits(nesting);
+	}
+
+sethiUllman:	dynamic	() signedByte =
+	{
+	if	(opnd)
+		return opnd sethiUllman();
+	else
+		return 0;
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	if	(dtype)
+		return self;
+	dtype = ptype symbolTableCopy(s);
+	if	(dtype)
+		dtype constructInterface(s, FALSE);
+	if	(opnd == 0)
+		return ErrorTree;
+	CurrentContext->offset = offset;
+	opnd = opnd assignTypes(s, TRUE);
+	if	(opnd->dtype->topType == T_ERROR)
+		return opnd;
+	return checkCast(TRUE);
+	}
+/*
+	This function handles checking of conversions.
+ */
+checkCast:	(isExplicit: boolean) ref tree_p =
+	{
+	if	(opnd == 0 ||
+		 opnd->operator == O_ERROR)
+		return opnd;
+	if	(opnd->operator == O_SCONST &&
+		 opnd->dtype == IntType){
+		if	(dtype->topType != T_STRUCT){
+			incomp(opnd->dtype, dtype);
+			return ErrorTree;
+			}
+//		checkSconstComponents(opnd, dtype);
+		opnd->dtype = dtype;
+		return opnd;
+		}
+	if	(opnd->dtype == dtype)
+		return opnd;
+	if	(opnd->dtype inherits(dtype))
+		return self;
+
+	dsrc:		ref type_s;
+	srcType:	topTypes;
+	destType:	topTypes;
+
+	destType = dtype->topType;
+	if	(destType != T_ARRAY &&
+		 destType != T_DESCRIPTOR)
+		opnd = opnd promoteArrays();
+	dsrc = opnd->dtype;
+	srcType = dsrc->topType;
+/*
+	Possible conversions are:
+
+	From:
+
+		T_REF		pointer		- restricted, but possible
+		T_SIGNED	signed integer	- fairly flexible
+		T_UNSIGNED	unsigned integer- fairly flexible
+		T_FLOAT		floating	- fairly flexible
+
+		T_ARRAY		fixed array	- can convert from array to
+		T_DESCRIPTOR	variable array	- array type
+
+		ID		type name	- doesn't appear here
+		T_FUNC		function	- can't cast
+		T_STRUCT	structure	- can't cast
+		T_TYPE		type-type	- can't cast
+		0		void		- doesn't matter
+		T_ERROR		error		- doesn't matter
+ */
+	if	(offset)
+		CurrentContext->offset = offset;
+	switch	(srcType){
+	case	T_STRUCT:
+	case	T_FUNC:
+	case	T_TYPE:
+	case	T_NAME:
+	case	T_VOID:
+		if	(Verbose){
+			dsrc display(FALSE);
+			printf(" -> ");
+			dtype display(FALSE);
+			printf("\n");
+			}
+		incomp(dsrc, dtype);
+
+	case	T_ERROR:
+		return ErrorTree;
+
+	case	T_DESCRIPTOR:
+	case	T_ARRAY:
+		if	(destType != T_ARRAY &&
+			 destType != T_DESCRIPTOR){
+			incomp(dsrc, dtype);
+			return ErrorTree;
+			}
+		if	(!typeMatch(dsrc elementOf(), dtype elementOf())){
+			incomp(dsrc, dtype);
+			return ErrorTree;
+			}
+		if	(srcType == destType){
+			if	(destType == T_ARRAY){
+				if	(ref array_z(dtype)->dimension)
+					opnd->dtype = dtype;
+				}
+			return opnd;
+			}
+		else
+			return self;
+		}
+	switch	(destType){
+	case	T_ARRAY:
+	case	T_DESCRIPTOR:
+	case	T_FUNC:
+	case	T_STRUCT:
+	case	T_TYPE:
+	case	T_NAME:
+		incomp(dsrc, dtype);
+
+	case	T_VOID:
+	case	T_ERROR:
+		return ErrorTree;
+
+	case	T_FLOAT:
+		if	(srcType == T_REF){
+			incomp(dsrc, dtype);
+			return ErrorTree;
+			}
+		if	(typeMatch(dtype, opnd->dtype))
+			return opnd;
+		if	(srcType == T_SIGNED ||
+			 srcType == T_UNSIGNED){
+			if	(ref number_z(opnd->dtype)->width <= BYTEBITS)
+				opnd = opnd convert(IntType);
+			}
+		break;
+
+	case	T_SIGNED:
+	case	T_UNSIGNED:
+		if	(srcType == T_REF){
+			if	(!isExplicit){
+				CurrentContext error("ErrBadImplicit");
+				return ErrorTree;
+				}
+			}
+		if	(typeMatch(dtype, opnd->dtype))
+			return opnd;
+		break;
+
+	case	T_REF:
+		if	(srcType == T_FLOAT){
+			incomp(dsrc, dtype);
+			return ErrorTree;
+			}
+		else if	(dtype isFarPointer()){
+			if	(srcType == T_REF &&
+				 !dsrc isFarPointer()){
+				incomp(dsrc, dtype);
+				return ErrorTree;
+				}
+			}
+		else if	(dsrc isFarPointer()){
+			incomp(dsrc, dtype);
+			return ErrorTree;
+			}
+		if	(opnd integerValue() == 0){
+			opnd->dtype = dtype;
+			return opnd;
+			}
+		if	(!isExplicit){
+			if	(srcType == T_SIGNED ||
+				 srcType == T_UNSIGNED){
+				CurrentContext error("ErrBadImplicit");
+				return ErrorTree;
+				}
+			else if	(!ptrmatch(dsrc, dtype)){
+				CurrentContext error("ErrBadImplicit");
+				return ErrorTree;
+				}
+			}
+/*
+		if	(opnd->operator == O_ADR){
+			if	(srcType == destType &&
+				 typeMatch(dsrc targetOf(), d targetOf())){
+				opnd->typedef = d;
+				return(opnd);
+				}
+			}
+ */
+		}
+	x:	ref tree_p;
+
+	x = opnd coerce(dtype);
+	if	(x)
+		return x;
+	return self;
+	}
+
+dup:	dynamic	(effects: int) ref tree_p =
+	{
+	x:	ref cast_x;
+
+	x = alloc(sizeof cast_x);
+	*x = *self;
+	if	(opnd)
+		x->opnd = opnd dup(effects);
+	return x;
+	}
+
+removeNoEffectCode:	dynamic	() ref tree_p =
+	{
+	if	(opnd)
+		opnd = opnd removeNoEffectCode();
+	return opnd;
+	}
+
+	};
+
+incomp:	(from: ref type_s, to: ref type_s) =
+	{
+	CurrentContext error("ErrBadConvert");
+	reportType("\tExpected type:", to);
+	reportType("\t  Actual type:", from);
+	}
+
+Self_x:	public	type	inherit	tree_p	{
+	public:
+
+	offset:	fileOffset;
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	}
+
+isLvalue:	dynamic	() boolean =
+	{
+	return TRUE;
+	}
+
+assignTypes:	dynamic	(ref scope_s, boolean) ref tree_p =
+	{
+	t:	ref type_s;
+
+	CurrentContext->offset = offset;
+	if	(SymbolTable.selfSymbol == 0){
+		if	(operator == O_SELF)
+			CurrentContext error("ErrBadSelf");
+		else
+			CurrentContext error("ErrBadSuper");
+		return ErrorTree;
+		}
+	x:	ref tree_p;
+
+	x = Func auto(SymbolTable.selfSymbol, 0);
+	if	(operator == O_SUPER){
+		t = SymbolTable.selfSymbol->dtype targetOf();
+		t = ref struct_z(t)->base;
+		if	(t == 0){
+			CurrentContext error("ErrBadSuper");
+			return ErrorTree;
+			}
+		x->dtype = refTo(t);
+		}
+	return x;
+	}
+
+	};
+
+max:	public	(a: int, b: int) int = 
+	{
+	return a > b ? a : b;
+	}
+
+/*
+	The address node is an O_ADR node. The index side is some non-constant
+	expression.  It may, however, have factorable constants embedded
+	in the expression.
+ */
+fishForConstants:	(address: ref tree_p, index: ref tree_p) =
+	{
+	i:		int;
+	multiple:	long;
+	t:		ref binary_x;
+	u:		ref tree_p;
+	v:		ref tree_p;
+	b:		ref binary_x;
+
+	if	(address->operator != O_ADR)
+		return;
+	b = ref binary_x(index);
+	switch	(index->operator){
+	case	O_ADD:
+		fishForConstants(address, b->left);
+		fishForConstants(address, b->right);
+		break;
+
+	case	O_MUL:
+		if	(b->right->operator != O_ICON)
+			break;
+		multiple = b->right integerValue();
+		t = ref binary_x(b->left);
+		if	(t->operator != O_ADD)
+			break;
+		if	(t->right->operator != O_ICON)
+			break;
+		ref binary_x(address)->left addAdjustment(multiple * 
+			t->right integerValue());
+		b->left = t->left;
+		break;
+
+	case	O_LSH:
+		if	(b->right->operator != O_ICON)
+			break;
+		multiple = 1 << b->right integerValue();
+		t = ref binary_x(b->left);
+		if	(t->operator != O_ADD)
+			break;
+		if	(t->right->operator != O_ICON)
+			break;
+		ref binary_x(address)->left addAdjustment(multiple * 
+			t->right integerValue());
+		b->left = t->left;
+		break;
+		}
+	}
+/*
+	This function merges a right hand node into a list of commutative
+	operators.  The list is stored as a somewhat fractured tree.  The
+	left-most node pointer of the tree is null.  Otherwise each left
+	pointer points to the next item in the list, sorted in ascending
+	sethi-ullman magnitude.  The right pointer points to the terms in
+	the list.
+
+	If the top parameter is non-zero, the list might be zero (for a
+	first-time call).  If top is zero, then list is assumed to be 
+	non-zero.  If top is non-zero, then the top and right nodes are
+	paired up and inserted as a unit into the list.  If top is zero,
+	then the rright node is the last to be placed in the list.
+
+	When the last node is placed in the list, the other nodes are
+	rippled down and the left-most pointer is finally filled in.  After
+	the routine is finished at that point, the entire list is a properly
+	built tree.
+ */
+rippleDown:	(list: ref binary_x, top: ref binary_x, right: ref tree_p) 
+					ref binary_x =
+	{
+	sethi:	signedByte;
+	x, xprev:	ref binary_x;
+	t:	ref tree_p;
+
+	if	(top){
+		top->right = right;
+		sethi = top->sethi;
+		xprev = 0;
+		for	(x = list; x; xprev = x, x = ref binary_x(x->left))
+			if	(x->sethi > top->sethi)
+				break;
+		top->left = x;
+		if	(xprev)
+			xprev->left = top;
+		else
+			list = top;
+		}
+	else	{
+		if	(right->operator == O_ICON)
+			sethi = -1;
+		else
+			sethi = abs(right sethiUllman());
+		for	(x = list; x; xprev = x, x = ref binary_x(x->left))
+			if	(x->sethi > sethi){
+				i:	signedByte;
+
+				t = x->right;
+				i = sethi;
+				x->sethi = sethi;
+				x->right = right;
+				right = t;
+				sethi = i;
+				}
+		xprev->left = right;
+		}
+	return list;
+	}
+
+assignDynamicVector:	public	(dest: ref tree_p, 
+				 st: ref struct_z) ref tree_p =
+	{
+	destm:	ref tree_p;
+	dv:	ref tree_p;
+
+	dv = Func dynamicVectorPointer(st);
+	dv = binop(O_ADR, refTo(0), dv, 0);
+	destm = structRef(dest, st->vectorOffset, dv->dtype);
+	return binop(O_ASG, dv->dtype, destm, dv);
+	}

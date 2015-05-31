@@ -1,0 +1,848 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+//		Expression trees
+include	backend;
+include	types, functype;
+include	file;
+include	hash;
+include	scanner;
+include	ptree;
+include	symtab;
+include	errmsg;
+include	sbuffer;
+include	tparams, target;
+include	value;
+include	real;
+include	xtree;
+
+bcall_x:	public	type	inherit	tree_p	{
+	public:
+
+	args:		ref tree_p;
+	offset:		fileOffset;
+	signaling:	boolean;
+
+display:	dynamic	(indent: int) =
+	{
+	if	(args)
+		args display(indent + INDENT_AMOUNT);
+	super display(indent);
+	if	(signaling)
+		printf(" signal");
+	}
+
+computeBenefits:	dynamic	(nesting: int) =
+	{
+	if	(args)
+		args computeBenefits(nesting);
+	}
+
+sethiUllman:	dynamic	() signedByte =
+	{
+	if	(args)
+		args sethiUllman();
+	}
+
+checkForNoEffect:	dynamic	() ref tree_p =
+	{
+	return self;
+	}
+
+hasSideEffects:	dynamic	() boolean =
+	{
+	return TRUE;
+	}
+/*
+	This function examines a call tree after it has been type checked,
+	Any array slice arguments are re-processed according to whether 
+	the call is a remote or a local call.
+ */
+processDescriptors:	(s: ref scope_s) ref tree_p =
+	{
+	if	(args == 0)
+		return self;		// no args, no descriptors
+
+	a:	ref tree_p;
+	ar:	ref argument_x;
+
+	a = args;
+	if	(a->operator == O_ARG){
+		while	(a->operator == O_ARG){
+			ar = ref argument_x(a);
+			ar->left = convertDescriptors(s, ar->left);
+			if	(ar->right == 0)
+				break;
+			if	(ar->right->operator != O_ARG)
+				ar->right = convertDescriptors(s, ar->right);
+			a = ar->right;
+			}
+		}
+	else
+		args = convertDescriptors(s, args);
+	return self;
+	}
+
+	};
+
+methodCall_x:	public	type	inherit	bcall_x	{
+	public:
+
+	objectRef:	ref tree_p;
+	name:		ref identifier;
+
+createKnown:	factory	(l: ref tree_p, m: ref symbol_s,
+				r: ref tree_p,
+				o: fileOffset,
+				t: ref type_s, 
+				directCall: boolean,
+				s: ref scope_s) ref tree_p =
+	{
+	self = Func methodCall(l, m->name, r, o, FALSE);
+	return constructMethodCall(m, directCall, t, s);
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf(" %S\n", name spelling());
+	if	(objectRef)
+		objectRef display(indent + INDENT_AMOUNT);
+	}
+
+computeBenefits:	dynamic	(nesting: int) =
+	{
+	if	(objectRef)
+		objectRef computeBenefits(nesting);
+	super computeBenefits(nesting);
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	directCall:	boolean;
+
+	if	(dtype)
+		return self;
+
+		// calls to super should not be dynamic, they know where to
+		// go.
+
+	if	(objectRef->operator == O_SUPER)
+		directCall = TRUE;
+	else
+		directCall = FALSE;
+	if	(objectRef)
+		objectRef = objectRef assignTypes(s, TRUE);
+	if	(args)
+		args = args assignTypes(s, TRUE);
+	if	(objectRef == 0 || objectRef->operator == O_ERROR)
+		return ErrorTree;
+	CurrentContext->offset = offset;
+	if	(objectRef->operator == O_TYPE)
+		return factoryCall(s);
+
+	t:		ref type_s;
+
+	t = objectRef->dtype;
+	if	(objectRef->operator == O_SCONST){
+		if	(t == IntType){
+			CurrentContext error("ErrSconstNeedsType");
+			return ErrorTree;
+			}
+		objectRef = objectRef sconstTemp(s, t);
+		}
+	if	(t->topType == T_REF)
+		t = t targetOf();
+	else	{
+		objectRef = objectRef takeAddress(t);
+
+			// Since we know the real type of the object, we
+			// know where to go.
+
+		directCall = TRUE;
+		}
+	if	(t->topType == T_ERROR)
+		return ErrorTree;
+	if	(t->topType != T_STRUCT){
+		CurrentContext error("ErrBadStructOp");
+		return ErrorTree;
+		}
+
+	m:		ref symbol_s;
+
+	m = t lookupMember(name, s);
+	if	(m == 0){
+		CurrentContext errorX("ErrUndefSym", name spelling(), "", 0);
+		return ErrorTree;
+		}
+	return constructMethodCall(m, directCall, t, s);
+	}
+
+constructMethodCall:	dynamic	(m: ref symbol_s, directCall: boolean,
+					t: ref type_s, 
+					s: ref scope_s) ref tree_p =
+	{
+	ft:	ref function_z;
+
+	ft = ref function_z(m->dtype);
+	if	(ft == 0 ||
+		 ft->topType == T_ERROR)
+		return ErrorTree;
+	if	(ft->topType != T_FUNC){
+		CurrentContext error("ErrNotFunc");
+		return ErrorTree;
+		}
+	if	(m->qualifier & DQ_FACTORY){
+		CurrentContext errorX("ErrBadFactory", 
+						m->name spelling(), "", 0);
+		return ErrorTree;
+		}
+
+	x:		ref tree_p;
+	obj:		ref tree_p;
+
+	obj = objectRef;
+	if	(m->qualifier & DQ_DYNAMIC){
+		if	(directCall)
+			objectRef = iden_x createKnown(O_ID, ft, m,
+							m->currentValue, 0);
+		else
+			objectRef = dynamic_x create(O_DYNAMIC, ft, m, 
+							t dynamicOffset());
+		}
+	else if	(m->storageClass == SC_REMOTE ||
+		 ft->callingConvention == FC_GATE){
+		if	(!obj->dtype isFarPointer()){
+			CurrentContext error("ErrBadStructOp");
+			return ErrorTree;
+			}
+		r:	ref remoteCall_x;
+
+		r = Func remoteCall(obj, ft, m, args, s, offset, signaling);
+		return r processRemoteDescriptors(s);
+		}
+	else
+		objectRef = iden_x createKnown(O_ID, ft, m, m->currentValue, 0);
+	CurrentContext->offset = offset;
+	args = ft checkArguments(s, args, name);
+	dtype = ft returnTypeOf();
+	if	(args == 0)
+		args = obj;
+	else
+		args = Func argument(obj, args, offset);
+	return self;
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	if	(args)
+		args = args fold();
+	objectRef = objectRef fold();
+	return self;
+	}
+
+factoryCall:	(s: ref scope_s) ref tree_p =
+	{
+	sym:		ref symbol_s;
+	func:		ref tree_p;
+
+	sym = objectRef lookupMember(name, s);
+	if	(sym == 0){
+		CurrentContext errorX("ErrUndefSym", name spelling(), "", 0);
+		return ErrorTree;
+		}
+	if	(sym->qualifier & DQ_FACTORY == 0){
+		CurrentContext errorX("ErrNotFactory", name spelling(), "", 0);
+		return ErrorTree;
+		}
+	func = iden_x createKnown(O_ID, sym->dtype getType(), sym,
+							sym->currentValue, 0);
+
+	fc:	ref staticCall_x;
+
+	fc = ref staticCall_x(Func staticCall(func, args, offset));
+	return fc checkFunctionCall(s, name, sym);
+	}
+
+	};
+
+staticCall_x:	public	type	inherit	bcall_x	{
+	public:
+
+	func:		ref tree_p;
+
+constructor:	(l: ref tree_p, r: ref tree_p, o: fileOffset) =
+	{
+	super constructor(O_SCALL);
+	func = l;
+	args = r;
+	offset = o;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	if	(func)
+		func display(indent + INDENT_AMOUNT);
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	if	(args)
+		args = args fold();
+	if	(func)
+		func = func fold();
+	return self;
+	}
+
+computeBenefits:	dynamic	(nesting: int) =
+	{
+	if	(func)
+		func computeBenefits(nesting);
+	super computeBenefits(nesting);
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	id:			ref identifier;
+	sym:			ref symbol_s;
+	methodReferenceOk:	boolean;
+
+	if	(dtype)
+		return self;
+	if	(args)
+		args = args assignTypes(s, TRUE);
+	if	(func){
+		if	(func->operator == O_DOT ||
+			 func->operator == O_ARROW)
+			methodReferenceOk = FALSE;
+		else
+			methodReferenceOk = TRUE;
+		func = func assignTypes(s, TRUE);
+		}
+	else
+		return ErrorTree;
+	if	(func->operator == O_ERROR)
+		return func;
+	CurrentContext->offset = offset;
+	if	(func->operator == O_TYPE){
+		if	(args == 0){
+			CurrentContext error("ErrBadCast");
+			return ErrorTree;
+			}
+		c:	ref cast_x;
+
+		args = args convertArgsToCommas();
+		c = cast_x createKnown(ref type_x(func)->ttype, 
+								args, offset);
+		return c checkCast(TRUE);
+		}
+	if	(func->operator == O_ID){
+		id = ref iden_x(func)->name;
+		sym = ref iden_x(func)->symbol;
+		if	(sym->qualifier & DQ_MEMBERFUNC){
+			x:	ref tree_p;
+
+			if	(!methodReferenceOk){
+				CurrentContext error("ErrBadMethodOp");
+				return ErrorTree;
+				}
+			if	(sym->qualifier & DQ_FACTORY)
+				x = type_x create(s getEnclosingType(), 0);
+			else
+				x = Func auto(SymbolTable.selfSymbol, 0);
+			x = methodCall_x createKnown(x, sym, args, 
+					offset, s getEnclosingType(), FALSE, s);
+			return x;
+			}
+		}
+	else	{
+		id = 0;
+		sym = 0;
+		}
+	return checkFunctionCall(s, id, sym);
+	}
+
+checkFunctionCall:	dynamic	(s: ref scope_s, id: ref identifier, 
+					sym: ref symbol_s) ref tree_p =
+	{
+	t:	ref type_s;
+
+	t = func->dtype;
+	if	(t->topType == T_REF){
+		t = t targetOf();
+		func = binop(O_IND, t, func, 0);
+		}
+	if	(t->topType != T_FUNC){
+		CurrentContext error("ErrNotFunc");
+		return ErrorTree;
+		}
+	if	(args && args->operator == O_ERROR)
+		return args;
+
+	ft:	ref function_z;
+
+	ft = ref function_z(t);
+	dtype = ft returnTypeOf();
+	if	(id == 0 ||
+		 sym->storageClass != SC_INTRINSIC ||
+		 sym->initBase != 4)
+		args = ft checkArguments(s, args, id);
+	return self;
+	}
+
+	};
+
+argument_x:	public	type	inherit	tree_p	{
+	public:
+
+	left:		ref tree_p;
+	right:		ref tree_p;
+	offset:		fileOffset;
+
+constructor:	(l: ref tree_p, r: ref tree_p, o: fileOffset) =
+	{
+	super constructor(O_ARG);
+	left = l;
+	right = r;
+	offset = o;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	for	(;;){
+		if	(left)
+			left display(indent + INDENT_AMOUNT);
+		super display(indent);
+		printf("\n");
+		if	(right){
+			if	(right->operator == O_ARG){
+				self = ref argument_x(right);
+				continue;
+				}
+			else
+				right display(indent + INDENT_AMOUNT);
+			break;
+			}
+		else
+			break;
+		}
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	x:		ref tree_p;
+
+	x = self;
+	for	(;;){
+		if	(left)
+			left = left fold();
+		if	(right &&
+			 right->operator == O_ARG)
+			self = ref argument_x(right);
+		else
+			break;
+		}
+	if	(right)
+		right = right fold();
+	return x;
+	}
+
+computeBenefits:	dynamic	(nesting: int) =
+	{
+	if	(left)
+		left computeBenefits(nesting);
+	if	(right)
+		right computeBenefits(nesting);
+	}
+
+sethiUllman:	dynamic	() signedByte =
+	{
+	if	(right)
+		right sethiUllman();
+	if	(left)
+		left sethiUllman();
+	return 0;
+	}
+/*
+	This function converts O_ARG argument nodes to O_SEQ comma operator
+	nodes.  This is necessary in casts that looked like function calls.
+ */
+convertArgsToCommas:	dynamic	() ref tree_p =
+	{
+	left = left convertArgsToCommas();
+	right = right convertArgsToCommas();
+	return binop(O_SEQ, right->dtype, left, right);
+	}
+
+makeRightAssociative:	dynamic	() ref tree_p =
+	{
+	list2:	ref argument_x;
+
+	for	(;;){
+		list2 = self;
+		self = ref argument_x(left);
+		if	(operator != O_ARG)
+			break;
+		list2->left = right;
+		right = list2;
+		}
+	return list2;
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	errorSeen:	boolean;
+	x:		ref tree_p;
+
+	if	(dtype)
+		return self;
+	dtype = IntType;
+	errorSeen = FALSE;
+	x = self;
+	for	(;;){
+		if	(left){
+			left = left assignTypes(s, TRUE);
+			if	(left->operator == O_ERROR)
+				errorSeen = TRUE;
+			}
+		if	(right && right->operator == O_ARG)
+			self = ref argument_x(right);
+		else
+			break;
+		}
+	if	(right){
+		right = right assignTypes(s, TRUE);
+		if	(right->operator == O_ERROR)
+			return right;
+		}
+	if	(errorSeen)
+		return ErrorTree;
+	return x;
+	}
+
+checkArgument:	dynamic	(s: ref scope_s, p: ref parameter_s, pnum: int, 
+					id: ref identifier) ref tree_p =
+	{
+	CurrentContext->offset = offset;
+	left = left checkArgument(s, p, pnum, id);
+	if	(p)
+		p = p->next;
+	if	(right)
+		right = right checkArgument(s, p, pnum + 1, id);
+	return self;
+	}
+
+	};
+
+remoteCall_x:	public	type	inherit bcall_x {
+	public:
+
+	objectRef:	ref tree_p;
+	symbol:		ref symbol_s;
+	frameSize:	ref tree_p;
+	retnAddr:	ref tree_p;
+	retnLen:	ref tree_p;
+
+constructor:	(obj: ref tree_p, d: ref function_z, m: ref symbol_s, 
+			a: ref tree_p, s: ref scope_s,
+					offs: fileOffset, sig: boolean) =
+	{
+	super constructor(O_RCALL);
+	args = a;
+	offset = offs;
+	objectRef = obj;
+	symbol = m;
+	frameSize = 0;
+	retnAddr = 0;
+	retnLen = 0;
+	signaling = sig;
+	dtype = d returnTypeOf();
+	CurrentContext->offset = offset;
+	args = d checkArguments(s, args, m->name);
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	if	(retnAddr)
+		retnAddr display(indent + INDENT_AMOUNT);
+	if	(retnLen)
+		retnLen display(indent + INDENT_AMOUNT);
+	}
+
+declareReturn:	(addr: ref tree_p, len: ref tree_p) =
+	{
+	retnAddr = addr;
+	retnLen = len;
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	if	(args)
+		args = args fold();
+	if	(retnAddr)
+		retnAddr = retnAddr fold();
+	if	(retnLen)
+		retnLen = retnLen fold();
+	objectRef = objectRef fold();
+	return self;
+	}
+
+processRemoteDescriptors: dynamic	(s: ref scope_s) ref tree_p =
+	{
+	return self;		// no args, no descriptors
+	}
+
+	};
+
+dynamic_x:	public	type	inherit	tree_p {
+	public:
+
+	symbol:		ref symbol_s;
+	dynamicOffset:	addr_t;
+
+create:	factory	(op: operators, t: ref type_s, m: ref symbol_s, 
+					doff: addr_t) ref dynamic_x =
+	{
+	self = new dynamic_x[ op, m, doff ];
+	dtype = t;
+	return self;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf(" %S %x\n", symbol->name spelling(), dynamicOffset);
+	}
+
+	};
+
+ellipsis_x:	public	type	inherit	tree_p	{
+	public:
+
+constructor:	() =
+	{
+	super constructor(O_ELLIPSIS);
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	}
+
+assignTypes:	dynamic	(ref scope_s, boolean) ref tree_p =
+	{
+	if	(SymbolTable.varArgsType == 0){
+		CurrentContext error("ErrNoVarArgs");
+		return ErrorTree;
+		}
+	dtype = SymbolTable.varArgsType;
+	return self;
+	}
+
+	};
+
+convertDescriptors:	(s: ref scope_s, arg: ref tree_p) ref tree_p =
+	{
+	if	(arg->dtype->topType != T_DESCRIPTOR)
+		return arg;
+
+	if	(arg->operator == O_CAST){
+		c:	ref cast_x;
+
+		c = ref cast_x(arg);
+		return c->opnd descriptorArgument(s, c->dtype);
+		}
+
+	d:		ref type_s;
+	sym:		ref symbol_s;
+	dest, init:	ref tree_p;
+	dest2:		ref Tos_x;
+	src:		ref tree_p;
+
+	d = number_z create(T_UNSIGNED, NO_RANGE, INTBITS);
+
+	t, prefix, suffix, mlen, rlen:	ref tree_p;
+
+	prefix = 0;
+	if	(arg->operator == O_SLICE){
+		if	(ref slice_x(arg)->left){
+			CurrentContext error("ErrUnfinished");
+			return ErrorTree;
+			}
+		mlen = rlen = ref slice_x(arg)->right;
+		src = ref slice_x(arg)->arrayRef;
+		src = src promoteArrays();
+		}
+	else if	(arg->operator == O_SCALL ||
+		 arg->operator == O_MCALL){
+		sym:	ref symbol_s;
+		x, y:	ref tree_p;
+
+		sym = s unnamedLocal(arg->dtype);
+		x = Func auto(sym, 0);
+		rlen = structRef(x, DescrBoundOffset * BYTEBITS, d);
+		mlen = structRef(x, DescrMaxBoundOffset * BYTEBITS, d);
+		src = structRef(x, 0, d);
+		x = Func binary(O_ASG, x, arg, 0);
+		prefix = x assignTypes(s, FALSE);
+		}
+	else	{
+		rlen = structRef(arg, DescrBoundOffset * BYTEBITS, d);
+		mlen = structRef(arg, DescrMaxBoundOffset * BYTEBITS, d);
+		src = structRef(arg, 0, d);
+		}
+
+		// Now link in the code so far, then remember the location
+		// of the copy area
+
+	t = src dup(-1);
+	t = t removeNoEffectCode();
+	prefix = concatOps(prefix, t);
+	t = concatOps(prefix, AllocTos_x create(arg->dtype));
+	dest = Tos_x create(d);
+	t = concatOps(t, binop(O_ASG, d, dest, src));
+	dest2 = Tos_x create(d);
+	dest2->adjust = DescrMaxBoundOffset;
+	dest = binop(O_ASG, d, dest2, mlen);
+	if	(mlen == rlen)
+		rlen = dest;
+	else
+		t = concatOps(t, dest);
+	dest2 = Tos_x create(d);
+	dest2->adjust = DescrBoundOffset;
+	t = concatOps(t, binop(O_ASG, d, dest2, rlen));
+	suffix = src dup(+1);
+	suffix = suffix removeNoEffectCode();
+	t = concatOps(t, suffix);
+	dest = Tos_x create(arg->dtype);
+	t = binop(O_SEQ, dest->dtype, t, dest);
+	return t;
+	}
+
+constructorCall:	public (copyTreeP: ref ref tree_p, dest: ref tree_p, 
+				d: ref struct_z, 
+				offset: fileOffset,
+				x: ref tree_p, sym: ref symbol_s,
+				s: ref scope_s) ref tree_p =
+	{
+	i:		int;
+	fixedCalls:	boolean;
+	j:		int;
+	u:		ref tree_p;
+	t:		ref tree_p;
+	args:		ref tree_p;
+	saveList:	ref tree_p;
+	fd:		ref function_z;
+
+	vectorStructInit(copyTreeP, dest, d);
+	fd = ref function_z(sym->dtype);
+	i = fd fixedArgsOf();
+	fixedCalls = fd->fixedCalls;
+	u = x;
+	args = u;
+
+		/* Count off the display list fixed args. */
+
+	t = 0;
+	while	(i){
+		if	(u == 0){
+			CurrentContext error("ErrFewInitParms");
+			*copyTreeP = ErrorTree;
+			return 0;
+			}
+		t = u;
+		if	(u->operator == O_ARG)
+			u = ref argument_x(u)->right;
+		else
+			u = 0;
+		i--;
+		}
+
+		/* If we haved a fixed arg list, and there
+		   are more args after the last needed arg,
+		   trim off the link so that the call to new
+		   will work right.  Any excess args must be
+		   initializers for subtype public members.
+
+		   For var args functions, just consume all the arguments.
+		 */
+
+	if	(!fixedCalls)
+		u = 0;
+	else if	(t){
+		if	(t->operator == O_ARG)
+			ref argument_x(t)->right = 0;
+		}
+	else
+		args = 0;
+	x = u;
+	dest = dest takeAddress(dest->dtype);
+	t = methodCall_x createKnown(dest, sym, args, offset, d, TRUE, s);
+	*copyTreeP = concatOps(*copyTreeP, t);
+	return x;
+	}
+
+vectorStructInit:	(copyTreeP: ref ref tree_p, dest: ref tree_p, 
+						d: ref struct_z) =
+	{
+	sym:		ref symbol_s;
+	destm:		ref tree_p;
+	t:		ref type_s;
+
+	if	(d->base)
+		vectorStructInit(copyTreeP, dest, 
+				ref struct_z(d->base getType()));
+	for	(sym = d->symbols; sym; sym = sym->next){
+		if	(sym->storageClass != SC_MEMBER)
+			continue;
+		t = sym->dtype getType();
+		destm = structRef(dest, sym->bitOffset, t);
+		vectorInit(copyTreeP, destm, t);
+		}
+	}
+
+vectorInit:	(copyTreeP: ref ref tree_p, dest: ref tree_p, d: ref type_s) =
+	{
+	t:		ref tree_p;
+	i:		int;
+	dim:		addr_t;
+	esize:		addr_t;
+	voff:		addr_t;
+	e:		ref type_s;
+
+	switch	(d->topType){
+	case	T_ARRAY:
+	case	T_DESCRIPTOR:
+		dim = ref array_z(d)->dimension;
+		e = d elementOf();
+		esize = e sizeOf();
+		for	(i = 0, voff = 0; i < dim; i++, voff += esize){
+			t = arrayElement(dest, voff);
+			vectorInit(copyTreeP, t, e);
+			}
+		break;
+
+	case	T_STRUCT:
+		st:	ref struct_z;
+
+		st = ref struct_z(d);
+		if	(st->dynamicVector)
+			*copyTreeP = concatOps(*copyTreeP, 
+					assignDynamicVector(dest, st));
+		vectorStructInit(copyTreeP, dest, st);
+		break;
+
+	case	T_FUNC:
+		CurrentContext error("ErrBadInit");
+		}
+	}
+	

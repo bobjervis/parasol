@@ -1,0 +1,59 @@
+File FUNCOUT.P:
+                if      (b->sethi < 0){
+                if      (b->sethi < 0){
+                if      (b->sethi < 0){
+                        if      (b->sethi < 0 &&
+                if      (b->sethi < 0){
+                if      (b->sethi < 0){
+                if      (b->sethi < 0){
+                if      (b->sethi < 0){
+        if      (b->sethi < 0){
+                if      (b->sethi < 0 &&
+File I386BACK.P:
+sethiUllman:    dynamic () signedByte =
+                        sethi = 1;
+                        sethi = 0;
+                return sethi;
+                sethi(t->n.f.operand);
+                t->sethi = -t->n.f.operand->sethi;
+                sul = left sethiUllman();
+                sur = right sethiUllman();
+                sethi = -max(tp, sul);
+                return sethi;
+        sethi = max(sur, max(sul, max(tp, min(sur + tl, sul + tr))));
+                return sethi;
+                return sethi;
+        sethi = -sethi;
+        return sethi;
+sethiUllman:    dynamic () signedByte =
+        super sethiUllman();
+        objectRef sethiUllman();
+sethiUllman:    dynamic () signedByte =
+        super sethiUllman();
+        objectRef sethiUllman();
+sethiUllman:    dynamic () signedByte =
+        super sethiUllman();
+                func sethiUllman();
+File ALLOCTMP.P:
+                        if      (b->sethi < 0){
+                        if      (b->sethi < 0){
+                if      (b->sethi < 0){
+                        if      (b->sethi < 0){
+                        if      (b->sethi < 0){
+                if      (b->sethi < 0){
+                if      (b->sethi < 0){
+                if      (b->sethi < 0){
+                if      (b->sethi < 0){
+                if      (b->sethi < 0){
+                if      (b->sethi < 0){
+                if      (b->sethi < 0){
+                if      (b->sethi < 0){
+                        if      (b->sethi < 3){
+                                b->sethi = -1;
+                        if      (b->sethi < 0){
+                if      (b->sethi < 0){
+                if      (b->sethi < 0){
+                if      (b->sethi < 0){
+                if      (b->sethi < 0){
+                if      (b->sethi < 0){
+                if      (b->sethi < 0){

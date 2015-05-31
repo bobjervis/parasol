@@ -1,0 +1,205 @@
+include	file, editor, format;
+include	hardware;
+include	string;
+
+include	treeview;
+include	window;
+include	console;
+
+include	debug, symtab;
+
+Instructions:	public	ref instructionWindow;
+
+instructionWindow:	public	type	inherit	topLevelShell	{
+	buffer:		ref instructionBuffer;
+	code:		ref instructionEditor;
+	currentAddress:	vaddr_t;
+	currentFunc:	ref symbol;
+
+	public:
+
+constructor:	(s: ref shell, buf: ref instructionBuffer) =
+	{
+	m:	ref menubar;
+	view:	ref popupMenu;
+
+	super constructor("Instructions", s);
+	iconLabel("instruct", C_TITLE);
+	useFooter();
+	currentAddress = 0;
+	currentFunc = 0;
+	m = new menubar[ ];
+	setMenu(m);
+
+	view = new popupMenu[ m ];
+	view button("Goto Address  Ctrl-G", 'g', [ self, &gotoLocation ]);
+
+	m pulldown("View", 'v', view);
+
+	code = new instructionEditor[ ];
+	anchor(code);
+	buffer = buf;
+	code setScrap(&Scrap);
+	code connect(buffer);
+	configure([84, 12 ]);
+	code setTextFocus(); 
+	}
+
+destructor:	dynamic	() =
+	{
+	Instructions = 0;
+	super destructor();
+	}
+
+showAddress:	(address: vaddr_t) =
+	{
+	currentAddress = address;
+	showSource("");
+	}
+
+showSource:	(address: [:] char) =
+	{
+	sym:	ref symbol;
+	x:	vaddr_t;
+
+	currentFunc = translateAddress(address, TRUE, &x, currentAddress);
+	if	(x == INV_ADDRESS){
+		postFooter("Invalid address: %S", address);
+		return;
+		}
+	currentAddress = x;
+	buffer close();
+	if	(currentFunc){
+		buf:	[80] char;
+		se:	stringEmitter = [ buf ];
+
+		currentFunc format(&se, currentFunc->address);
+		newTitle(stringDup(se result()));
+		buffer disassemble(currentFunc->address);
+		}
+	else	{
+		newTitle("Code");
+		buffer disassemble(currentAddress);
+		}
+	code showAddress(currentAddress);
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	switch	(k){
+	case	CTRL_G:		gotoLocation();		break;
+
+	default:
+		return super processKeystroke(k);
+		}
+	return TRUE;
+	}
+
+gotoLocation:	() =
+	{
+	new gotoForm[ self ];
+	}
+
+	};
+
+instructionEditor:	type	inherit	textEditor	{
+	buffer:	ref instructionBuffer;
+	focus:	vaddr_t;
+
+	public:
+
+showAddress:	(address: vaddr_t) =
+	{
+	focus = buffer seekAddress(address);
+	gotoLine(focus + 1);
+	redraw();
+	}
+
+connect:	(buf: ref instructionBuffer) =
+	{
+	super connect(buf);
+	buffer = buf;
+	}
+
+depositColor:	dynamic	(ln: int, lineBuffer: [:] colorChar) =
+	{
+	c:	color_t;
+	i:	int;
+
+	if	(ln == focus)
+		c = C_TEXT;
+	else
+		c = C_READONLY;
+	for	(i = 0; i < box.size.x; i++)
+		lineBuffer[i].color = c;
+	}
+
+	};
+
+instructionBuffer:	public	type	inherit	editBuffer	{
+	public:
+
+disassemble:	dynamic	(address: vaddr_t);
+
+seekAddress:	dynamic	(address: vaddr_t) lineNum;
+
+	};
+
+LastAddress:	[:] char;
+
+startup:	entry	() =
+	{
+	LastAddress = new [0] char;
+	}
+
+gotoForm:	type	inherit popupShell {
+	typein:		ref textField;
+	address:	[:] char;
+
+	public:
+
+constructor:	(w: ref shell) =
+	{
+	g:	ref Grid;
+	d:	ref dialog;
+	rprop:	static	[] byte = [ 1 ];
+	cprop:	static	[] byte = [ 0, 1 ];
+
+	super constructor("Goto Address", w);
+
+		// Describe the form
+
+	g = new Grid[ 2, 1 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "Go to: ", C_READONLY, C_READONLY ]);
+	typein = new textField[ LastAddress, C_TEXT, C_READONLY ];
+	typein onEnterKey([ self, &ok ]);
+	g cell([ 1, 0 ], typein);
+
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g);
+	anchor(d);
+
+		// Draw it and accept input
+
+	configure([ 60, 1 ]);
+	typein setTextFocus();
+	open();
+	}
+
+ok:	() =
+	{
+	address:	[:] char;
+
+	delete LastAddress;
+	LastAddress = stringDup(typein getValue());
+	Instructions showSource(LastAddress);
+	delete self;
+	}
+
+	};
+

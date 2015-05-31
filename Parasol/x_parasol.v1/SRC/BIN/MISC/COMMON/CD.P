@@ -1,0 +1,27 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	filesys, file, error;
+
+main:	entry	() =
+	{
+	if	(|commandLine.arguments == 0){
+		printf("Usage is: cd path\n");
+		exit(1);
+		}
+	i:	int;
+	arg:	[:] char;
+
+	arg = commandLine.arguments[0];
+	i = FileSystem setCurrentDirectory(arg);
+	if	(i){
+		printf("Could not change to %S: %S\n", arg, cmdError(i));
+		exit(EX_FAIL);
+		}
+	else
+		exit(EX_SUCCESS);
+	}

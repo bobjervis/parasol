@@ -1,0 +1,863 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	alys, string;
+include	error;
+include	object, timer;
+include	kprintf;
+
+ALYS_NAME_LENGTH:	const	int = 32;
+
+alysDictionary:	public	type	inherit	directory {
+	dot:		ref alysDir;
+	dotdot:		ref alysDir;
+
+	public:
+	first:		ref alysFile;
+	last:		ref alysFile;
+	ftime:		Time;
+	parent:		ref alysDictionary;
+
+constructor:	(nm: [:] char, access: AccessRights, 
+						par: ref alysDictionary) =
+	{
+	ftime = Now;
+	first = 0;
+	parent = par;
+	publishKernel(nm, ":model.filesys.directory",
+					self, access, 
+					AR_ANY, AR_ANY, AR_ANY);
+	disown_(objectId);
+	dot = new alysDir[ ".", self ];
+	appendToDirectory(dot);
+	if	(parent){
+		dotdot = new alysDir[ "..", self ];
+		appendToDirectory(dotdot);
+		}
+	else
+		dotdot = 0;
+	}
+
+destructor:	() =
+	{
+	delete dot;
+	delete dotdot;
+	}
+
+mount:	(name: [:] char, dev: ref volume, dir: ref far directory) int =
+	{
+	af:	ref alysFile;
+
+	for	(af = first; af; af = af->next){
+		if	(stringIcompare(name, af->name) == 0)
+			return ERREXIST;
+		}
+
+	xdf:	ref alysVolume;
+	xdf = new alysVolume[ name, dev, dir ];
+	appendToDirectory(xdf);
+	kprintf("Mounting /%S\n", name);
+	return SUCCESS;
+	}
+
+createDevice:	(fname: [:] char, dev: ref file, attr: fAttributes_t) int =
+	{
+	xdv:	ref alysDevice;
+	af:	ref alysFile;
+
+	for	(af = first; af; af = af->next){
+		if	(stringIcompare(fname, af->name) == 0)
+			return ERREXIST;
+		}
+	xdv = new alysDevice[ fname, dev, attr ];
+	appendToDirectory(xdv);
+	kprintf("Defining /%S\n", fname);
+	return SUCCESS;
+	}
+
+appendToDirectory:	(xd: ref alysFile) =
+	{
+	if	(first){
+		last->next = xd;
+		xd->prev = last;
+		}
+	else	{
+		first = xd;
+		xd->prev = 0;
+		}
+	xd->next = 0;
+	last = xd;
+	}
+
+removeFromDirectory:	(xd: ref alysFile) =
+	{
+	if	(xd->prev)
+		xd->prev->next = xd->next;
+	else
+		first = xd->next;
+	if	(xd->next)
+		xd->next->prev = xd->prev;
+	else
+		last = xd->prev;
+	}
+
+isEmpty:	() boolean =
+	{
+	ad:	ref alysFile;
+
+	for	(ad = first; ad; ad = ad->next){
+		if	(stringCompare(".", ad->name) != 0 &&
+			 stringCompare("..", ad->name) != 0)
+			return FALSE;
+		}
+	return TRUE;
+	}
+	
+open:	gate	(fname: [:] char, opt: AccessRights) ref far channel = 
+	{
+	v:		ref alysFile;
+	ch:		ref far channel;
+
+//	kprintf("opening %S opt %x\n", fname, opt);
+	v = findDirectoryEntry(fname);
+	if	(v == 0)
+		return 0;
+	if	(v attach(opt)){
+		v close();
+		return 0;
+		}
+
+	ch = v open(opt);
+	if	(ch == 0)
+		v close();
+	return ch;
+	}
+/*
+create:			gate	(fname: [:] char, attr: [:] char) 
+							ref far channel = 
+	{
+	reject();
+	}
+ */
+makeDirectory:		gate	(fname: [:] char) int =
+	{
+	v:		ref alysFile;
+	a:		ref alysDictionary;
+	ad:		ref alysDir;
+	name:		[:] char;
+
+	v = findDirectoryEntry(fname);
+	if	(v){
+		v close();
+		return ERREXIST;
+		}
+	a = new alysDictionary[ fname, AR_ANY, self ];
+	name = stringDup(fname);
+	ad = new alysDir[ name, a ];
+	appendToDirectory(ad);
+	return SUCCESS;
+	}
+
+removeDirectory:	gate	(fname: [:] char) int =
+	{
+	v:		ref alysFile;
+	a:		ref alysDictionary;
+	ad:		ref alysDir;
+	name:		[:] char;
+	i:		int;
+
+	v = findDirectoryEntry(fname);
+	if	(v == 0)
+		return ERRNOFILE;
+	if	(v->attributes & FA_DIR == 0){
+		v close();
+		return ERRPERMISSION;
+		}
+	if	(v unlink()){
+		removeFromDirectory(v);
+		delete v;
+		return SUCCESS;
+		}
+	else	{
+		v close();
+		return ERRPERMISSION;
+		}
+	}
+
+unlink:			gate	(fname: [:] char) int =
+	{
+	v:		ref alysFile;
+
+	v = findDirectoryEntry(fname);
+	if	(v == 0)
+		return ERRNOFILE;
+	if	(v->attributes & FA_DIR){
+		v close();
+		return ERRPERMISSION;
+		}
+	if	(v unlink()){
+		removeFromDirectory(v);
+		delete v;
+		return SUCCESS;
+		}
+	else	{
+		v close();
+		return ERRPERMISSION;
+		}
+	}
+
+find:	gate	(fname: [:] char) ref far directory = 
+	{
+	v:		ref alysFile;
+	
+//	kprintf("In backbone find fname = %S\n", fname);
+	v = findDirectoryEntry(fname);
+	if	(v == 0)
+		return 0;
+	if	(v->attributes & FA_DIR == 0)
+		return 0;
+//	kprintf("v = %x v getDirectory = %d\n", v, v getDirectory());
+	d:	ref far directory;
+	d = v getDirectory();
+	dupObject(d);
+//	kprintf("d = %d\n", d);
+	return d;
+	}
+
+setFileAttributes:	gate	(fname: [:] char, attr: fAttributes_t) int =
+	{
+	v:		ref alysFile;
+	err:		int;
+
+	v = findDirectoryEntry(fname);
+	if	(v == 0)
+		return ERRNOFILE;
+/*
+	if	(CurProc->uid != v->user){
+		v close();
+		return ERRPERMISSION;
+		}
+ */
+	v->attributes = attr;
+	v close();
+	return SUCCESS;
+	}
+
+access:			gate	(fname: [:] char, opt: AccessRights) int =
+	{
+	v:		ref alysFile;
+
+	v = findDirectoryEntry(fname);
+	if	(v == 0)
+		return ERRNOFILE;
+
+	err:	int;
+
+	err = v attach(opt);
+	v close();
+	return err;
+	}
+
+stat:	gate	(fname: [:] char) file_t = 
+	{
+	v:		ref alysFile;
+	f:		file_t;
+
+//	kprintf("stat(%S)\n", fname);
+	v = findDirectoryEntry(fname);
+//	kprintf("v = %x\n", v);
+	if	(v == 0){
+		memSet(&f, 0, sizeof f);
+		f.id = -1;
+		return f;
+		}
+	f.attributes = v->attributes;
+	f.size = v->size;
+	f.ftime = v->ftime;
+	f.user = v->user;
+	f.group = v->group;
+	f.id = int(v);
+	v close();
+	return f;
+	}
+
+move:	gate	(fname1: [:] char, dr2x: ref far directory, 
+						fname2: [:] char) int =
+	{
+	d:		ref alysFile;
+	d2:		ref alysFile;
+	dr2:		ref alysDictionary;
+
+	dr2 = locateObject(dr2x);
+
+		// Make sure the target name doesn't already exist
+
+	d = dr2 findDirectoryEntry(fname2);
+	if	(d)
+		return ERREXIST;
+	d = findDirectoryEntry(fname1);
+	if	(d == 0)
+		return ERRNOFILE;
+		
+		// We are doing a simple rename of a file within the
+		// same directory.
+
+	if	(dr2 == self){
+		delete d->name;
+		d->name = new [|fname2] char;
+		d->name [:]= fname2;
+		}
+	else
+		return ERRPERMISSION;
+	return SUCCESS;
+	}
+
+getAbsolutePath:	gate	(fname: [:] char) [] char =
+	{
+	buf:		[ALYS_NAME_LENGTH + 1] char;
+
+	if	(|fname > ALYS_NAME_LENGTH)
+		reject(ERRINVALIDDATA);
+	replyPartial("/", 1);
+	if	(parent){
+		followDotDot(self);
+		if	(stringCompare(fname, ".")){
+			replyPartial("/", 1);
+			return fname;
+			}
+		}
+	else	{
+		if	(stringCompare(fname, "."))
+			return fname;
+		}
+	}
+
+register:		gate	(obj: ref far External, name: [:] char,
+					typ: [:] char) int =
+	{
+	v:		ref alysFile;
+	ns:		ref alysService;
+	op:		ref object;
+
+	v = findDirectoryEntry(name);
+	if	(v){
+		v close();
+		return ERREXIST;
+		}
+	op = objectEntry(obj);
+	if	(op == 0)
+		return ERRINVALIDDATA;
+	if	(op->nameDirectory)
+		return ERRPERMISSION;
+	op->nameDirectory = ref far directory(objectId);
+	ns = new alysService[ obj, name, typ, self ];
+	appendToDirectory(ns);
+	return SUCCESS;
+	}
+
+attach:			gate	(name: [:] char, 
+					typ: [:] char) ref far External =
+	{
+	v:		ref alysFile;
+	x:		ref far External;
+
+	v = findDirectoryEntry(name);
+	if	(v == 0)
+		return 0;
+	x = v connect(typ);
+	v close();
+	return x;
+	}
+
+detachObject:		gate	(obj: ref far External) =
+	{
+	af, afn:	ref alysFile;
+
+//	kprintf("detachObject(%d)\n", obj);
+	for	(af = first; af; af = afn){
+		afn = af->next;
+//		kprintf("%x: %S %x", af, af->name, af->attributes);
+		if	(af->attributes & FA_SERVICE){
+			as:	ref alysService;
+
+			as = ref alysService(af);
+//			as display();
+			if	(as namesObject(obj)){
+				removeFromDirectory(as);
+				delete as;
+				}
+			}
+//		kprintf("\n");
+		}
+	}
+
+followDotDot:	(targ: ref alysDictionary) =
+	{
+	af:	ref alysFile;
+	d:	ref far directory;
+
+	for	(af = targ->parent->first; af; af = af->next){
+		d = af getDirectory();
+		if	(d == targ->objectId){
+			if	(targ->parent->parent){
+				followDotDot(targ->parent);
+				replyPartial("/", 1);
+				}
+			replyPartial(af->name, |af->name);
+			return;
+			}
+		}
+	}
+
+findDirectoryEntry:	dynamic	(n: [:] char) ref alysFile =
+	{
+	af:	ref alysFile;
+
+	for	(af = first; af; af = af->next){
+		if	(stringIcompare(af->name, n) == 0){
+			af dup();
+			return af;
+			}
+		}
+	return 0;
+	}
+
+addReference:	gate	() =
+	{
+	}
+
+getDriveInfo:	gate	() drive_t =
+	{
+	return [ 0 ];
+	}
+
+scanDirectory:	gate	() ref far directoryScanner =
+	{
+	a:	ref alysScanner;
+	af:	ref far directoryScanner;
+
+	a = new alysScanner[ self ];
+	af = ref far directoryScanner(jobPublishKernel(dot->name, 
+					":model.filesys.directoryScanner",
+					a, AR_ANY));
+	if	(af == 0)
+		delete a;
+	return af;
+	}
+
+close:	gate	() boolean =
+	{
+//	kprintf("Rejecting close of /\n");
+	return FALSE;
+	}
+
+lastClose:	gate	() boolean =
+	{
+//	kprintf("Rejecting lastClose of /\n");
+	return FALSE;
+	}
+
+	};
+
+alysScanner:	type	inherit	directoryScanner {
+	here:	ref alysFile;
+
+	public:
+
+constructor:	(d: ref alysDictionary) =
+	{
+	here = d->first;
+	}
+
+next:	gate	() fileDescriptor_t =
+	{
+	fd:	fileDescriptor_t;
+
+	if	(here){
+		i:	int;
+		d:	ref alysFile;
+
+		d = here;
+		here = d->next;
+		fd.info.attributes = d->attributes;
+		fd.info.ftime = d->ftime;
+		fd.info.user = d->user;
+		fd.info.group = d->group;
+		fd.info.id = int(&d);
+		fd.info.size = d->size;
+		i = |d->name;
+		if	(i > sizeof fd.name)
+			i = sizeof fd.name;
+		memSet(fd.name, 0, sizeof fd.name);
+		fd.name [:]= d->name[:i];
+		fd.nlen = i;
+		}
+	else
+		memSet(&fd, 0, sizeof fd);
+	return fd;
+	}
+
+	};
+
+alysFile:	type	inherit file {
+	public:
+
+	next:		ref alysFile;
+	prev:		ref alysFile;
+	name:		[:] char;
+
+getDirectory:	dynamic	() ref far directory =
+	{
+	return 0;
+	}
+
+unlink:	dynamic	() boolean =
+	{
+	return TRUE;
+	}
+
+destructor:	dynamic	() =
+	{
+	delete name;
+	}
+
+connect:	dynamic	(typ: [:] char) ref far External =
+	{
+	return 0;
+	}
+
+	};
+
+alysVolume:	type	inherit	alysFile {
+	vol:		ref volume;
+	vdir:		ref far directory;
+
+	public:
+
+
+constructor:	(nm: [:] char, v: ref volume, vd: ref far directory) =
+	{
+	name = nm;
+	attributes = FA_DIR;
+	size = 0;
+	ftime = 0;
+	useCount = 1;
+	user = 0;
+	group = 0;
+	flags = 0;
+	vol = v;
+	vdir = vd;
+	next = 0;
+	prev = 0;
+	}
+
+getDirectory:	dynamic	() ref far directory =
+	{
+	return vdir;
+	}
+
+unlink:	dynamic	() boolean =
+	{
+	return FALSE;
+	}
+
+	};
+
+alysDir:	type	inherit	alysFile {
+	public:
+
+	vdir:		ref alysDictionary;
+
+constructor:	(nm: [:] char, vd: ref alysDictionary) =
+	{
+	name = stringDup(nm);
+	attributes = FA_DIR;
+	size = 0;
+	ftime = vd->ftime;
+	useCount = 1;
+	user = 0;
+	group = 0;
+	flags = 0;
+	vdir = vd;
+	next = 0;
+	prev = 0;
+	}
+
+getDirectory:	dynamic	() ref far directory =
+	{
+	return ref far directory(vdir->objectId);
+	}
+
+unlink:	dynamic	() boolean =
+	{
+	if	(vdir isEmpty()){
+		return super unlink();
+		}
+	else
+		return FALSE;
+	}
+
+destructor:	dynamic	() =
+	{
+	a, an:	ref alysFile;
+
+	delete name;
+	if	(stringCompare(".", name) != 0 &&
+		 stringCompare("..", name) != 0){
+		a, an:	ref alysFile;
+
+		for	(a = vdir->first; a; a = an){
+			an = a->next;
+			delete a;
+			}
+		delete vdir;
+		}
+	super destructor();
+	}
+
+	};
+
+alysDirChannel:	public	type	inherit	directoryChannel {
+	public:
+	owner:		ref alysDictionary;
+	filePos:	ref alysFile;
+
+constructor:	(dp: ref alysDictionary) =
+	{
+	super constructor(0);
+	owner = dp;
+	filePos = owner->first;
+	}
+
+dispose:	dynamic	() =
+	{
+	delete self;
+	}
+
+	};
+
+alysDevice:	type	inherit	alysFile {
+	public:
+
+	thisFile:	ref file;
+
+constructor:	(nm: [:] char, f: ref file, attr: fAttributes_t) =
+	{
+	name = nm;
+	attributes = attr;
+	thisFile = f;
+	size = 0;
+	ftime = Now;
+	useCount = 1;
+	user = 0;
+	group = 0;
+	flags = 0;
+	}
+
+open:	dynamic	(acc: AccessRights) ref far channel =
+	{
+	return thisFile open(acc);
+	}
+
+	};
+
+alysService:	type	inherit	alysFile {
+	object:		ref far External;
+	otype:		[:] char;
+	owner:		ref alysDictionary;
+
+	public:
+
+constructor:	(obj: ref far External, nm: [:] char, typ: [:] char,
+			o: ref alysDictionary) =
+	{
+	object = obj;
+	name = new [|nm] char;
+	name [:]= nm;
+	otype = new [|typ] char;
+	otype [:]= typ;
+	attributes = FA_SERVICE;
+	size = 0;
+	ftime = Now;
+	useCount = 1;
+	user = 0;
+	group = 0;
+	flags = 0;
+	owner = o;
+	}
+/*
+	This code says that the asked-for type (the function parameter)
+	must be exactly the declared type of the object, or else it is
+	a proper prefix.  The check for a : after the prefix insures that
+	the prefix matches a full sub-type name.
+
+	Note that the default Parasol root type is empty, so an empty type
+	string will match any object using the Parasol External object 
+	protocol.
+ */
+connect:	dynamic	(typ: [:] char) ref far External =
+	{
+	if	(|typ == |otype){
+		if	(stringCompare(typ, otype) == 0)
+			return object;
+		}
+	else if	(|typ < |otype){
+		if	(otype[|typ] != ':')
+			return 0;
+		if	(memCompare(typ, otype, |typ) == 0)
+			return object;
+		}
+	return 0;
+	}
+
+namesObject:	(obj: ref far External) boolean =
+	{
+	return obj == object;
+	}
+
+destructor:	dynamic	() =
+	{
+	delete otype;
+	super destructor();
+	}
+
+display:	() =
+	{
+	kprintf(" obj %d", object);
+	}
+
+	};
+/*
+alysNetNode:	type	inherit alysFile {
+	netNode:	* nodeDescriptor;
+	nodeId:		objectId;
+
+	public:
+
+constructor:	(nm: string, nn: * nodeDescriptor, ni: int) =
+	{
+	nodeId = ni;
+	name = nm;
+	attributes = FA_DIR|FA_READ|FA_NETNODE;
+	size = 0;
+	ftime = 0;
+	useCount = 1;
+	user = 0;
+	group = 0;
+	flags = 0;
+	netNode = nn;
+	}
+
+getDirectory:	dynamic	() * directory =
+	{
+	d:	* remoteDirectory;
+
+	if	(MyNetNodeId == 0){
+		CurProc->error = ERRNETDOWN;
+		return 0;
+		}
+	if	(netNode->state == ND_UNKNOWN){
+		err:	int;
+
+
+		err = probeNode(nodeId);
+		if	(err < 0){
+			CurProc->error = err;
+			return 0;
+			}
+		}
+	if	(netNode->state != ND_UP){
+		CurProc->error = ERRNODEDOWN;
+		return 0;
+		}
+	d = new remoteDirectory[ netNode, netNode->namer ];
+	return d;
+	}
+
+	};
+
+ */
+volume:	public	type	{
+	};
+
+file:	public	type	{
+	public:
+	attributes:		fAttributes_t;
+	userPermissions:	AccessRights;
+	groupPermissions:	AccessRights;
+	worldPermissions:	AccessRights;
+	size:			long;
+	ftime:			Time;
+	useCount:		signed[16];
+	user:			userId;
+	group:			userId;
+	flags:			fileFlags_t;
+
+attach:	(access: AccessRights) int =
+	{
+	i:	int;
+
+	i = AR_ANY;
+/*
+	if	(CurProc->uid == v->user)
+		i = v->userPermissions;
+	else if	(CurProc->groupid == v->group)
+		i = v->groupPermissions;
+	else
+		i = v->worldPermissions;
+ */
+	if	(access & i != access){
+		close();
+		return ERRPERMISSION;
+		}
+/*
+	if	(flags & F_LOCKED){
+		close();
+		return ERRPERMISSION;
+		}
+	if	(access & AR_EXCLUSIVE){
+		if	(useCount > 1){
+			close();
+			return ERRPERMISSION;
+			}
+		flags |= F_LOCKED;
+		}
+ */
+	return SUCCESS;
+	}
+
+dup:	() =
+	{
+	useCount++;
+	}
+
+open:	dynamic	(AccessRights) ref far channel = 
+	{
+	return 0;
+	}
+
+dispose:	dynamic	() =
+	{
+	}
+
+sync:	dynamic	() =
+	{
+	}
+
+close:	() =
+	{
+	useCount--;
+	if	(useCount == 0)
+		dispose();
+	}
+
+	};
+
+fileFlags_t:	public	type	byte = {
+	F_LOCKED	= 0x01,
+	F_CHANGED	= 0x02,
+	};

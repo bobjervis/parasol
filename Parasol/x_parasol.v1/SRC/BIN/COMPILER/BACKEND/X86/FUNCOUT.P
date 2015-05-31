@@ -1,0 +1,1862 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+
+include	types, functype;
+include	backend, xstmt, xtree, xcall;
+include	tparams, target, real;
+include	errmsg;
+include	ptree;
+include	encoder;
+include	symtab;
+include	value;
+include	pswitch;
+
+FixedArgsCount:		int;
+CurrentSpill:		ref spill;
+
+/*PPP an ugly little flag... */
+
+reversed8087opnds:	int = 0;
+ReturnLabel:		ref stmt_x;
+
+generateInstructions:	public	(x: ref stmt_x) boolean =
+	{
+	s:		ref stmt_x;
+	sn:		ref stmt_x;
+	t:		ref tree_p;
+	u:		ref tree_p;
+	i:		int;
+
+/*
+	if	(DebugFlag)
+		showVariables();
+ */
+	if	(DebugList)
+		x display(0);
+	SwitchTables = 0;
+	ReturnLabel = 0;
+	generateStatement(x);
+	if	(ReturnLabel){
+		if	(ReturnLabel->operator == O_LABEL)
+			Encoder generateLabel(ReturnLabel);
+		return TRUE;
+		}
+	else if	(!Func->optimize)
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+generateStatement:	(x: ref stmt_x) =
+	{
+	a:	ref auto_x;
+	id:	ref iden_x;
+
+	CurrentSpill = x->nextSpill;
+/*
+	if	(s->flags & ST_JTARGET)
+		Encoder generateLabel(s);
+ */
+	switch	(x->operator){
+	case	O_BLOCK:
+		for	(x = ref block_x(x)->stmts; x; x = x->next)
+			generateStatement(x);
+		return;
+
+	case	O_GOTO:
+		t:	ref stmt_x;
+
+		t = ref goto_x(x)->target;
+		if	(t)
+			Encoder generateJump(JC_JUMP, t);
+		else
+			Encoder inst(I386_ERROR);
+		break;
+
+	case	O_JUMP:
+//		if	(s->line1)
+//			Encoder recordLineNumber(0, s->line1);
+		Encoder generateJump(ref jump_x(x)->jumpCond, 
+						ref jump_x(x)->target);
+		break;
+
+	case	O_LABEL:
+//		if	(!Func->optimize)
+			Encoder generateLabel(x);
+		break;
+
+	case	O_STMT:
+//		if	(s->line1)
+//			Encoder recordLineNumber(0, s->line1);
+		generateQ(ref expr_x(x)->expr);
+		break;
+
+	case	O_DECL:
+		generateQ(ref decl_x(x)->initTree);
+		break;
+
+	case	O_RETURN:
+//		if	(s->line1)
+//			Encoder recordLineNumber(0, s->line1);
+		generateQ(ref return_x(x)->expr);
+		if	(x->next &&
+			 x->next->operator != O_EXIT){
+			if	(ReturnLabel == 0)
+				ReturnLabel = Func label_();
+			Encoder generateJump(JC_JUMP, ReturnLabel);
+			}
+		break;
+
+	case	O_REPLY:
+//		if	(s->line1)
+//			Encoder recordLineNumber(0, s->line1);
+		generateQ(ref reply_x(x)->expr);
+		break;
+
+	case	O_EXIT:
+		if	(ReturnLabel == 0)
+			ReturnLabel = x;
+		break;
+
+	case	O_TEST:
+//		if	(s->line1)
+//			Encoder recordLineNumber(0, s->line1);
+		generateTest(ref test_x(x)->test, 
+					ref test_x(x)->target, 0, -1);
+/*
+		generateQ(ref test_x(x)->test);
+		if	(ref test_x(x)->extraJump < 0){
+			s:	ref stmt_x;
+
+			s = Func label_();
+			Encoder generateJump(JC_PARITY, 
+						s);
+			Encoder generateJump(ref test_x(x)->jumpCond, 
+						ref test_x(x)->target);
+			Encoder generateLabel(s);
+			}
+		else	{
+			if	(ref test_x(x)->extraJump)
+				Encoder generateJump(JC_PARITY, 
+						ref test_x(x)->target);
+			Encoder generateJump(ref test_x(x)->jumpCond, 
+						ref test_x(x)->target);
+			}
+ */
+		break;
+
+	case	O_SWITCH:
+//		if	(s->line1)
+//			Encoder recordLineNumber(0, s->line1);
+		sw:	ref switch_x;
+
+		sw = ref switch_x(x);
+		generateQ(sw->expr);
+		if	(sw->expr &&
+			 sw->expr->operator != O_ERROR)
+			generateSwitch(sw->expr->reg, sw->cases, sw->defaultCase);
+		break;
+
+	case	O_TRY:
+		a = Func auto(ref try_x(x)->frameObject, ExceptFrameBPOffset);
+		asmoptr(I386_MOVL, a, EBP);
+		a->adjust = ExceptFrameSPOffset;
+		asmoptr(I386_MOVL, a, ESP);
+		id = iden_x createKnown(O_ID, 0, 0, SymbolTable.threadValue, 0);
+		asmoprt(I386_MOVL, EBX, id);
+		a->adjust = ExceptFrameNextOffset;
+		asmoprMember(I386_MOVL, EAX, EBX, 
+				SymbolTable.exceptionFrame->bitOffset / BYTEBITS);
+		asmoptr(I386_MOVL, a, EAX);
+		Encoder generateExStore(a->var, ref try_x(x)->target);
+		a->adjust = 0;
+		asmoprt(I386_LEA, EAX, a);
+		asmopMemberr(I386_MOVL, EBX, EAX, 
+				SymbolTable.exceptionFrame->bitOffset / BYTEBITS);
+		break;
+
+	case	O_ENDTRY:
+		sn:	ref try_x;
+
+		sn = ref endTry_x(x)->tryStmt;
+		a = Func auto(sn->frameObject, ExceptFrameNextOffset);
+		asmoprt(I386_MOVL, EAX, a);
+		id = iden_x createKnown(O_ID, 0, 0, SymbolTable.threadValue, 0);
+		asmoprt(I386_MOVL, EBX, id);
+		asmopMemberr(I386_MOVL, EBX, EAX, 
+				SymbolTable.exceptionFrame->bitOffset / BYTEBITS);
+		break;
+
+	case	O_ENDEX:
+		sn = ref endExcept_x(x)->myTry;
+		a = Func auto(sn->frameObject, ExceptFrameSPOffset);
+		asmoprt(I386_MOVL, ESP, a);
+		break;
+
+	case	O_CONTEX:
+		Encoder inst(I386_RET);
+		break;
+
+	case	O_EXCEPT:
+		v:	ref tree_p;
+
+		sn = ref except_x(x)->myTry;
+/*
+		icon_x create(ExceptContextTrapOffset, INTBITS);
+		icon_x create(ExceptContextVarOffset, INTBITS);
+		icon_x create(ExceptContextIVarOffset, INTBITS);
+		icon_x create(ExceptStackVarOffset, INTBITS);
+		icon_x create(ExceptStackTrapOffset, INTBITS);
+ */
+		v = ref except_x(x)->expr;
+		if	(v){
+			if	(v == ErrorTree){
+				generateQ(v);
+				v = Tos_x create(IntType);
+				v addAdjustment(ExceptStackTrapOffset);
+				}
+			else	{		// v is an auto node
+				n:	ref tree_p;
+
+				n = Tos_x create(IntType);
+				n addAdjustment(ExceptStackVarOffset);
+				a = ref auto_x(v);
+				asmoprt(I386_MOVL, EAX, n);
+				a->adjust = ExceptContextVarOffset;
+				asmoptr(I386_MOVL, a, EAX);
+				a->adjust = ExceptContextIVarOffset;
+				asmoptr(I386_MOVL, a, EAX);
+				n = Tos_x create(IntType);
+				n addAdjustment(ExceptStackTrapOffset);
+				asmoprt(I386_MOVL, EAX, n);
+				a->adjust = ExceptContextTrapOffset;
+				asmoptr(I386_MOVL, a, EAX);
+				v = a;
+				}
+			}
+		else	{
+			v = Tos_x create(IntType);
+			v addAdjustment(ExceptStackTrapOffset);
+			}
+
+		sc:	ref switchCases;
+
+		for	(sc = ref except_x(x)->cases; sc; sc = sc->next){
+			generateQ(sc->caseValue);
+			asmoptt(I386_CMPL, v, sc->caseValue);
+			Encoder generateJump(JC_EQ, sc->target);
+			}
+		break;
+
+	case	O_CRITICAL:
+		generateQ(ref critical_x(x)->expr);
+		break;
+
+	case	O_ENDCRITICAL:
+		generateQ(ref endCritical_x(x)->expr);
+		break;
+		}
+	}
+
+/*
+xx:	() =
+	{
+	s:		ref stmt_x;
+	q:		* quad;
+	sc:		switchCasesPtr;
+	scend:		switchCasesPtr;
+	i:		int;
+
+/*
+#if	defined(VALIDATE_CODER)
+	if	(DebugFlag){
+		showVariables();
+		showStmtList();
+		}
+#endif
+ */
+	for	(s = Coder.f.sList; s; s = s->next){
+		generateLabel(s);
+		CurrentSpill = s->nextSpill;
+		switch	(s->kind){
+		case	SK_QUADS:
+			generateQ(s);
+			if	(s->jumpCond != JC_NOOP){
+				generateJump(s->jumpCond, s->jumpTarget);
+				}
+			break;
+
+		case	SK_SWITCH:
+			generateQ(s);
+			if	(s->flags & ST_JUMPSW){
+				asmopri(I386_LSLI, BX, 1);
+				jumpToTable(s->swLoc);
+				}
+			else
+				generateJump(s->jumpCond, s->jumpTarget);
+			}
+		}
+	}
+ */
+
+generateQ:	public	(t: ref tree_p) =
+	{
+	left:			ref tree_p;
+	right:			ref tree_p;
+	vari:			ref tree_p;
+	varBytesPushed:		int;
+	fixedBytesPushed:	int;
+	args:			ref tree_p;
+	dest:			ref tree_p;
+	src:			ref tree_p;
+	len:			ref tree_p;
+	remainingQuads:		unsigned;
+	n:			unsigned;
+	i:			int;
+	j:			int;
+	v:			ref variable;
+	resultleft:		regNum;
+	r:			regNum;
+	s:			ref stmt_x;
+	s2:			ref stmt_x;
+	strue:			ref stmt_x;
+	op:			int;
+	b:			ref binary_x;
+
+	if	(t == 0)
+		return;
+	b = ref binary_x(t);
+	if	(t->dtype){
+		if	(t->dtype->topType == T_ERROR){
+			Encoder inst(I386_ERROR);
+			return;
+			}
+		i = typeCode(t->dtype);
+		}
+	else
+		i = -1;
+	switch	(t->operator){
+	default:
+		printf("Unexpected operator in generateQ\n");
+		printf("t = %x\n", t);
+		printf("t->operator = %d\n", t->operator);
+		t display(0);
+		exit(1);
+
+	case	O_ERROR:
+		Encoder inst(I386_ERROR);
+		return;
+
+//	case	O_DISPLAY:
+
+	case	O_SEQ:
+		generateQ(b->left);
+		generateQ(b->right);
+		break;
+
+	case	O_REG:
+		if	(ref iden_x(t)->adjust == nullReg){
+			Encoder inst(I386_PUSHF);
+			asmopr(I386_POPL, t->reg);
+			return;
+			}
+		if	(t->addrMode)
+			return;
+		r = t->reg;
+		t->reg = nullReg;
+		asmoprt(opcode(t), r, t);
+		t->reg = r;
+		return;
+
+	case	O_ALLOCTOS:
+		i = ref AllocTos_x(t)->otype sizeOf();
+		if	(i & 3){
+			i += 3;
+			i &= ~3;
+			}
+		asmopri(I386_SUBL, ESP, i);
+		return;
+
+	case	O_FLD:
+		bf:	ref bitField_x;
+
+		bf = ref bitField_x(t);
+		t = bf->enclosingWord;
+		generateQ(t);
+		if	(bf->dtype->topType == T_SIGNED){
+			i = 32 - (bf->bitWidth + bf->bitOffset);
+			if	(i)
+				asmopti(I386_LSLL, t, i);
+			asmopti(I386_ASRL, t, 32 - bf->bitWidth);
+			}
+		else	{
+			if	(bf->bitOffset)
+				asmopti(I386_LSRL, t, bf->bitOffset);
+			i = 1 << bf->bitWidth - 1;
+			asmopti(I386_ANDL, t, i);
+			}
+		return;
+
+	case	O_TOS:
+		return;
+
+	case	O_FCON:
+		floatConstant(t);
+		return;
+
+	case	O_IND:
+		generateQ(b->left);
+		doSpills(b);
+
+	case	O_ID:
+	case	O_ICON:
+	case	O_AUTO:
+	case	O_DYNAMIC:
+	case	O_REMOTE:
+	case	O_LITERAL:
+		if	(t->addrMode)
+			return;
+		r = t->reg;
+		t->reg = nullReg;
+		if	(t->dtype->topType == T_FLOAT)
+			asmopt(opcode(t), t);
+		else
+			asmoprt(opcode(t), r, t);
+		t->reg = r;
+		return;
+
+	case	O_ADR:
+		if	(b->addrMode)
+			return;
+		if	(b->left->operator == O_ID){
+			r = b->reg;
+			b->reg = nullReg;
+			asmoprt(opcode(b), r, b);
+			b->reg = r;
+			}
+		else
+			asmoprt(I386_LEA, b->reg, b->left);
+		return;
+
+	case	O_ELLIPSIS:
+		r = t->reg;
+		t->reg = nullReg;
+		asmoprt(I386_LEA, r, t);
+		t->reg = r;
+		return;
+
+	case	O_QUES:
+
+				// Comparison done for numerical result,
+				// we have to generate the jumps and loads
+				// appropriately.
+
+		s = Func label_();
+		s2 = Func label_();
+		strue = Func label_();
+		qt:	ref conditional_x;
+		qt = ref conditional_x(t);
+		generateTest(qt->test, strue, s, 1);
+		Encoder generateLabel(strue);
+		generateQ(qt->truePart);
+		Encoder generateJump(JC_JUMP, s2);
+		Encoder generateLabel(s);
+		generateQ(qt->falsePart);
+		Encoder generateLabel(s2);
+		return;
+
+	case	O_LAND:
+	case	O_LOR:
+		strue = Func label_();
+		s = Func label_();
+		s2 = Func label_();
+		generateTest(t, strue, s, 1);
+		Encoder generateLabel(strue);
+		asmopri(I386_MOVL, t->reg, 1);
+		Encoder generateJump(JC_JUMP, s2);
+		Encoder generateLabel(s);
+		asmopri(I386_MOVL, t->reg, 0);
+		Encoder generateLabel(s2);
+		return;
+
+	case	O_RSH:
+	case	O_ADD:
+	case	O_SUB:
+	case	O_AND:
+	case	O_OR:
+	case	O_XOR:
+	case	O_LSH:
+	case	O_ROL:
+	case	O_ROR:
+
+	case	O_MUL:
+		if	(b->addrMode){
+			generateQ(b->left);
+			generateQ(b->right);
+			return;
+			}
+		if	(b->sethi < 0){
+			generateQ(b->left);
+			generateQ(b->right);
+			}
+		else	{
+			generateQ(b->right);
+			generateQ(b->left);
+			}
+		doSpills(b);
+		if	(b->dtype->topType == T_FLOAT){
+			if	(leftIsTos(b))
+				asmopt(opcode(b), b->right);
+			else
+				asmopt(swappedOpcode(b), b->left);
+			return;
+			}
+		if	(b->operator == O_RSH &&
+			 b->dtype->topType == T_SIGNED)
+			asmoptt(I386_ASRC + typeCode(t->dtype), 
+						b->left, b->right);
+		else if	(b->operator == O_ADD &&
+			 b->reg != b->left->reg){
+			r = b->reg;
+			b->reg = nullReg;
+			b->addrMode = TRUE;
+
+			x:	ref tree_p;
+
+			x = binop(O_IND, IntType, b, 0);
+			asmoprt(I386_LEA, r, x);
+			b->reg = r;
+			b->addrMode = FALSE;
+			}
+		else
+			asmoptt(opcode(b), b->left, b->right);
+		return;
+
+	case	O_DIV:
+	case	O_MOD:
+		if	(b->addrMode){
+			generateQ(b->left);
+			generateQ(b->right);
+			return;
+			}
+		if	(b->sethi < 0){
+			generateQ(b->left);
+			generateQ(b->right);
+			}
+		else	{
+			generateQ(b->right);
+			generateQ(b->left);
+			}
+		doSpills(b);
+		if	(b->dtype->topType == T_FLOAT){
+			if	(leftIsTos(b))
+				asmopt(opcode(b), b->right);
+			else
+				asmopt(swappedOpcode(b), b->left);
+			return;
+			}
+		if	(i > 0){
+			if	(b->dtype->topType == T_UNSIGNED)
+				asmoprr(I386_XORL, DX, DX);
+			else if	(i == 2)
+				Encoder inst(I386_CDQ);
+			else
+				Encoder inst(I386_CWD);
+			}
+		else	{
+			if	(b->dtype->topType == T_UNSIGNED)
+				asmoprr(I386_XORC, AH, AH);
+			else
+				Encoder inst(I386_CBW);
+			}
+		asmoptt(opcode(b), b->left, b->right);
+		return;
+
+	case	O_TST:
+	case	O_LT:
+	case	O_GT:
+	case	O_EQ:
+	case	O_NE:
+	case	O_LE:
+	case	O_GE:
+	case	O_ORD:
+	case	O_UNORD:
+	case	O_NLT:
+	case	O_NGT:
+	case	O_LT_GT:
+	case	O_NLT_GT:
+	case	O_NLE:
+	case	O_NGE:
+		if	(b->sethi < 0){
+			generateQ(b->left);
+			generateQ(b->right);
+			}
+		else	{
+			generateQ(b->right);
+			generateQ(b->left);
+			}
+		b->dtype = b->left->dtype;
+		doSpills(b);
+		if	(b->dtype->topType == T_FLOAT){
+			if	(leftIsTos(b))
+				asmopt(opcode(b), b->right);
+			else
+				asmopt(swappedOpcode(b), b->left);
+			asmopr(I386_FSTSW, AX);
+			Encoder inst(I386_SAHF);
+			}
+		else	{
+			asmoptt(opcode(b), b->left, b->right);
+			}
+		if	(b->reg != nullReg){
+			op:	operators;
+			i:	int;
+
+				// Comparison done for numerical result,
+				// we have to generate the jumps and loads
+				// appropriately.
+
+			s = Func label_();
+			s2 = Func label_();
+			if	(b->sethi < 0 &&
+				 b->dtype->topType == T_FLOAT)
+				op = b->operator;
+			else
+				op = negateCondition(b->operator);
+			i = extraJp(op, b->left->dtype);
+			if	(i < 0){
+				s3:	ref stmt_x;
+
+				s3 = Func label_();
+				Encoder generateJump(JC_PARITY, s3);
+				Encoder generateJump(mapCondition(op, b->left->dtype), s);
+				Encoder generateLabel(s3);
+				}
+			else	{
+				if	(i)
+					Encoder generateJump(JC_PARITY, s);
+				Encoder generateJump(mapCondition(op, b->left->dtype), s);
+				}
+			asmopri(I386_MOVL, b->reg, 1);
+			Encoder generateJump(JC_JUMP, s2);
+			Encoder generateLabel(s);
+			asmopri(I386_MOVL, b->reg, 0);
+			Encoder generateLabel(s2);
+			}
+		t->dtype = IntType;
+		return;
+
+	case	O_NOT:
+	case	O_COM:
+	case	O_NEG:
+		generateQ(b->left);
+		if	(b->dtype->topType == T_FLOAT)
+			Encoder inst(I386_NEGLD);
+		else
+			asmopr(opcode(b), b->reg);
+		return;
+
+	case	O_INTRPT:
+		asmopt(I386_INTRPT, ref bcall_x(t)->args);
+		return;
+
+	case	O_MCOPY:
+		args = ref bcall_x(t)->args;
+		dest = ref argument_x(args)->left;
+		src = ref argument_x(ref argument_x(args)->right)->left;
+		len = ref argument_x(ref argument_x(args)->right)->right;
+		generateQ(len);
+		generateQ(src);
+		generateQ(dest);
+		doSpills(t);
+		Encoder inst(I386_CLD);
+		Encoder inst(I386_REP);
+		Encoder inst(I386_MOVSB);
+		return;
+
+	case	O_CVTBCD:
+		if	(b->sethi < 0){
+			generateQ(b->left);
+			generateQ(b->right);
+			}
+		else	{
+			generateQ(b->right);
+			generateQ(b->left);
+			}
+		doSpills(t);
+		asmopt(I386_FBSTP, b->right);
+		Encoder inst(I386_WAIT);
+		return;
+
+	case	O_RNDINT:
+		generateQ(ref bcall_x(t)->args);
+		doSpills(t);
+		Encoder inst(I386_RNDINT);
+		return;
+
+	case	O_FABS:
+		generateQ(ref bcall_x(t)->args);
+		doSpills(t);
+		Encoder inst(I386_FABS);
+		return;
+
+	case	O_ABS:
+		i = ref staticCall_x(t)->func->reg;
+		generateQ(ref bcall_x(t)->args);
+		doSpills(t);
+		Encoder inst(I386_CDQ);
+		asmoprr(I386_XORL, EAX, EDX);
+		asmoprr(I386_SUBL, EAX, EDX);
+		return;
+
+	case	O_MSCAN:
+		args = ref bcall_x(t)->args;
+		dest = ref argument_x(args)->left;
+		src = ref argument_x(ref argument_x(args)->right)->left;
+		len = ref argument_x(ref argument_x(args)->right)->right;
+		generateQ(len);
+		generateQ(src);
+		generateQ(dest);
+		doSpills(t);
+		Encoder inst(I386_CLD);
+		Encoder inst(I386_REPNZ);
+		Encoder inst(I386_SCASB);
+		return;
+
+	case	O_MSET:
+		args = ref bcall_x(t)->args;
+		dest = ref argument_x(args)->left;
+		src = ref argument_x(ref argument_x(args)->right)->left;
+		len = ref argument_x(ref argument_x(args)->right)->right;
+		generateQ(len);
+		generateQ(src);
+		generateQ(dest);
+		doSpills(t);
+		Encoder inst(I386_CLD);
+		Encoder inst(I386_REP);
+		Encoder inst(I386_STOSB);
+		return;
+
+	case	O_OUT:
+		args = ref bcall_x(t)->args;
+		dest = ref argument_x(args)->left;
+		src = ref argument_x(args)->right;
+		generateQ(src);
+		generateQ(dest);
+		asmoptt(I386_OUTC, dest, src);
+		return;
+
+	case	O_IN:
+		src = ref bcall_x(t)->args;
+		generateQ(src);
+		asmoprt(I386_INC, AL, src);
+		return;
+
+	case	O_EMIT:
+		_emitByte(ref bcall_x(t)->args);
+		return;
+
+	case	O_SYNC:
+	case	O_SCALL:
+	case	O_MCALL:
+	case	O_RCALL:
+		generateCall(ref bcall_x(t));
+		return;
+
+	case	O_CAST:
+		generateCast(ref cast_x(t));
+		return;
+
+	case	O_INA:
+	case	O_DEA:
+		generateQ(b->left);
+		doSpills(b);
+		if	(b->dtype->topType == T_FLOAT){
+			if	(leftIsTos(b))
+				asmopt(opcode(b), b->right);
+			else
+				asmopt(swappedOpcode(b), b->left);
+			return;
+			}
+		if	(b->reg != nullReg)
+			asmoprt(movecode(b), b->reg, b->left);
+		if	(b->right == 0)
+			asmopti(opcode(b), b->left, 1);
+		else
+			asmoptt(opcode(b), b->left, b->right);
+		return;
+
+	case	O_MUA:
+		if	(b->sethi < 0){
+			generateQ(b->left);
+			generateQ(b->right);
+			}
+		else	{
+			generateQ(b->right);
+			generateQ(b->left);
+			}
+		doSpills(b);
+		if	(b->dtype->topType == T_FLOAT){
+			floatAssignment(b);
+			return;
+			}
+		asmoptt(opcode(b), b->right, b->left);
+		asmoptt(movecode(b), b->left, b->right);
+		if	(b->reg != nullReg &&
+			 b->reg != b->right->reg)
+			asmoprt(movecode(b), b->reg, b->left);
+		return;
+
+	case	O_ASG:
+		if	(b->left->operator == O_REG &&
+			 ref iden_x(b->left)->adjust == nullReg){
+			generateQ(b->right);
+			doSpills(b);
+			asmopt(I386_PUSHL, b->right);
+			Encoder inst(I386_POPF);
+			return;
+			}
+
+	case	O_ADA:
+	case	O_SBA:
+	case	O_ANA:
+	case	O_XRA:
+	case	O_ORA:
+	case	O_LSA:
+	case	O_RSA:
+		if	(b->sethi < 0){
+			generateQ(b->left);
+			generateQ(b->right);
+			}
+		else	{
+			generateQ(b->right);
+			generateQ(b->left);
+			}
+		doSpills(b);
+		if	(b->dtype->topType == T_FLOAT){
+			floatAssignment(b);
+			return;
+			}
+		if	(b->right == 0)
+			asmopti(opcode(b), b->left, 1);
+		else	{
+//			printf("opcode of b = %d\n", opcode(b));
+//			b display(0);
+			asmoptt(opcode(b), b->left, b->right);
+			}
+		if	(b->reg != nullReg &&
+			 b->reg != b->left->reg)
+			asmoprt(movecode(b), b->reg, b->left);
+		return;
+
+	case	O_DVA:
+	case	O_MOA:
+		if	(b->sethi < 0){
+			generateQ(b->left);
+			generateQ(b->right);
+			}
+		else	{
+			generateQ(b->right);
+			generateQ(b->left);
+			}
+		doSpills(b);
+		if	(b->dtype->topType == T_FLOAT){
+			floatAssignment(b);
+			return;
+			}
+		r = b->left->reg;
+		b->left->reg = nullReg;
+		if	(i > 0){
+			if	(b->dtype->topType == T_UNSIGNED)
+				asmoprr(I386_XORL, EDX, EDX);
+			else if	(i == 2)
+				Encoder inst(I386_CDQ);
+			else
+				Encoder inst(I386_CWD);
+			asmoptt(opcode(b), b->left, b->right);
+			asmoptr(movecode(b), b->left, 
+				b->operator == O_DVA ? EAX : EDX);
+			}
+		else	{
+			if	(b->dtype->topType == T_UNSIGNED)
+				asmoprr(I386_XORC, AH, AH);
+			else
+				Encoder inst(I386_CBW);
+			asmoptt(opcode(b), b->left, b->right);
+			asmoptr(movecode(b), b->left, 
+				b->operator == O_DVA ? AL : AH);
+			}
+		b->left->reg = r;
+		return;
+		}
+	}
+
+floatConstant:	(t: ref tree_p) =
+	{
+	f:	ref fcon_x;
+
+	f = ref fcon_x(t);
+	if	(memCompare(&f->fvalue, &Zero, sizeof real) == 0)
+		Encoder inst(I386_FLDZ);
+	else if	(memCompare(&f->fvalue, &One, sizeof real) == 0)
+		Encoder inst(I386_FLD1);
+	else	{
+		lt:	ref literal_x;
+
+		lt = f makeLiteral();
+		asmopt(opcode(lt), lt);
+		}
+	}
+
+floatAssignment:	(b: ref binary_x) =
+	{
+	if	(b->operator != O_ASG){
+		if	(leftIsTos(b))
+			asmopt(opcode(b), b->right);
+		else
+			asmopt(swappedOpcode(b), b->left);
+		}
+	i:	i386opcode;
+	j:	int;
+	r:	regNum;
+
+	j = typeCode(b->dtype);
+	if	(b->reg == nullReg ||	// result not used
+		 j == 5)		// long double
+		i = I386_FSTPF + j - 3;
+	else
+		i = I386_FSTF + j - 3;
+	r = b->left->reg;
+	b->left->reg = nullReg;
+	asmopt(i, b->left);
+	b->left->reg = r;
+	if	(j == 5 &&
+		 b->reg != nullReg)
+		asmopt(I386_FLDLD, b->left);
+	}
+
+leftIsTos:	(b: ref binary_x) boolean =
+	{
+	if	(b->sethi < 0){
+
+			/* Left side was computed first */
+
+		if	(b->right->addrMode)
+			return TRUE;
+		else
+			return FALSE;
+		}
+	else	{	// Right side was computed first
+		if	(b->left->addrMode)
+			return FALSE;
+		else
+			return TRUE;
+		}
+	}
+
+generateCall:	(t: ref bcall_x) =
+	{
+	varBytesPushed:		int;
+	fixedBytesPushed:	int;
+	args:			ref tree_p;
+	left:			ref tree_p;
+	vari:			ref tree_p;
+	bigReturn:		boolean;
+	syncCall:		boolean;
+
+	if	(t->operator == O_SYNC){
+		syncCall = TRUE;
+		t = ref bcall_x(ref binary_x(t)->left);
+		}
+	else
+		syncCall = FALSE;
+	doSpills(t);
+	if	(t->operator == O_RCALL){
+		generateRemoteCall(syncCall, ref remoteCall_x(t));
+		return;
+		}
+	else if	(t->operator == O_MCALL)
+		left = ref methodCall_x(t)->objectRef;
+	else
+		left = ref staticCall_x(t)->func;
+	varBytesPushed = 0;
+	fixedBytesPushed = 0;
+	bigReturn = FALSE;
+	args = t->args;
+	if	(args){
+		FixedArgsCount = ref function_z(left->dtype) fixedArgsOf();
+		if	(t->operator == O_MCALL)
+			FixedArgsCount++;
+		if	(t->dtype sizeOf() > 4){
+			FixedArgsCount++;
+			bigReturn = TRUE;
+			}
+		if	(FixedArgsCount == 0){
+			vari = args;
+			args = 0;
+			}
+		else
+			vari = splitArgList(args);
+		if	(vari)
+			varBytesPushed = variableArgs(vari);
+
+		while	(args && args->operator == O_ARG){
+			fixedBytesPushed += 
+				generateStackArgument(
+						ref argument_x(args)->left);
+			args = ref argument_x(args)->right;
+			}
+		if	(args)
+			fixedBytesPushed += 
+				generateStackArgument(args);
+		}
+	if	(left->operator == O_IND){
+		generateQ(ref binary_x(left)->left);
+		asmopt(I386_ICALL, ref binary_x(left)->left);
+		}
+	else if	(left->operator == O_DYNAMIC){
+		dyn:	ref dynamic_x;
+
+		dyn = ref dynamic_x(left);
+		Encoder inst_dynamic(dyn->reg, fixedBytesPushed, 
+			dyn->dynamicOffset,
+			dyn->symbol->bitOffset, dyn->symbol->enclosing,
+			bigReturn);
+		}
+	else	{
+//		generateQ(left);
+		asmopt(I386_CALL, left);
+		}
+	if	(varBytesPushed)
+		asmopri(I386_ADDL, ESP, varBytesPushed);
+	}
+
+generateRemoteCall:	(syncCall: boolean, t: ref remoteCall_x) =
+	{
+	bytesPushed:		int;
+
+	bytesPushed = 0;
+	if	(t->args)
+		bytesPushed = pushArgument(t->args);
+	generateQ(t->objectRef);
+	asmoprt(I386_MOVL, ECX, t->objectRef);
+	if	(bytesPushed)
+		asmoprr(I386_MOVL, EDX, ESP);
+	if	(t->frameSize){
+		t->frameSize->reg = nullReg;
+		asmoprt(I386_MOVL, EBX, t->frameSize);
+		asmoprr(I386_SUBL, EBX, ESP);
+		}
+	else
+		asmopri(I386_MOVL, EBX, bytesPushed);
+	if	(t->symbol->storageClass == SC_REMOTE){
+		asmopri(I386_MOVL, EAX, t->symbol->bitOffset);
+		if	(t->dtype->topType == T_VOID)
+			asmopremote(0x28);
+		else
+			asmopremote(0x20);
+		}
+	else	{
+		i:	int;
+
+		i = t->dtype sizeOf();
+//		printf("remote call return = %d\n", i);
+//		t display(0);
+		if	(syncCall){
+			asmopri(I386_MOVL, ESI, 0);
+			asmopri(I386_MOVL, EDI, 0);
+			asmopri(I386_MOVL, EAX, t->symbol->bitOffset);
+			if	(t->signaling)
+				asmopremote(TARGET_GDT_SIGNAL_SEND_ANY);
+			else
+				asmopremote(TARGET_GDT_SEND_ANY);
+			}
+		else if	(t->retnAddr){
+			generateQ(t->retnLen);
+			generateQ(t->retnAddr);
+			asmopri(I386_MOVL, EAX, t->symbol->bitOffset);
+			if	(t->signaling)
+				asmopremote(TARGET_GDT_SIGNAL_SEND_ANY);
+			else
+				asmopremote(TARGET_GDT_SEND_ANY);
+			}
+		else if	(t->dtype->topType == T_VOID){
+			asmopri(I386_MOVL, EAX, t->symbol->bitOffset);
+			if	(t->signaling)
+				asmopremote(TARGET_GDT_SIGNAL_SEND_VOID);
+			else
+				asmopremote(TARGET_GDT_SEND_VOID);
+			}
+		else	{
+			asmopri(I386_MOVL, EAX, t->symbol->bitOffset);
+			if	(t->signaling)
+				asmopremote(TARGET_GDT_SIGNAL_SEND_INT);
+			else
+				asmopremote(TARGET_GDT_SEND_INT);
+			}
+		}
+	if	(t->frameSize)
+		asmoprr(I386_ADDL, ESP, EBX);
+	else if	(bytesPushed)
+		asmopri(I386_ADDL, ESP, bytesPushed);
+	}
+
+pushArgument:	(t: ref tree_p) int =
+	{
+	i:	int;
+
+	if	(t->operator == O_ARG){
+		i = pushArgument(ref argument_x(t)->right);
+		t = ref argument_x(t)->left;
+		}
+	else	
+		i = 0;
+	return generateStackArgument(t) + i;
+	}
+
+generateStackArgument:	(t: ref tree_p) int =
+	{
+	i:	int;
+	j:	int;
+	offset:	int;
+	reg:	int;
+
+	while	(t->operator == O_SEQ){
+		b:	ref binary_x;
+
+		b = ref binary_x(t);
+		generateQ(b->left);
+		t = b->right;
+		}
+	j = i = t->dtype sizeOf();
+	reg = t->reg;
+
+			// Round up to a full word
+
+	i += 3;
+	i &= ~3;
+	if	(t->operator == O_TOS)
+		return i;
+	switch	(t->dtype->topType){
+	case	T_ERROR:
+		Encoder inst(I386_ERROR);
+		break;
+
+	case	T_FLOAT:
+		generateQ(t);
+		asmopri(I386_SUBL, ESP, i);
+		asmopstack(I386_FSTPF + typeCode(t->dtype) - 3, 0);
+		break;
+
+	case	T_SIGNED:
+	case	T_UNSIGNED:
+	case	T_REF:
+		generateQ(t);
+		asmopt(I386_PUSHL, t);
+		break;
+
+	case	T_DESCRIPTOR:
+		if	(t->operator == O_ASG){
+			generateQ(t);
+			t = ref binary_x(t)->left;
+			}
+		else
+			generateQ(t);
+		t->reg = nullReg;
+		offset = i;
+		while	(j > 0){
+			j -= 4;
+			offset -= 4;
+			asmoprtOffset(I386_PUSHL, nullReg, t, offset);
+			}
+		break;
+
+	case	T_STRUCT:
+		if	(t->operator == O_ASG){
+			generateQ(t);
+			t = ref binary_x(t)->left;
+			}
+		else	{
+			generateQ(t);
+			if	(j <= 4){
+				asmopt(I386_PUSHL, t);
+				return 4;
+				}
+			if	(t->operator == O_ELLIPSIS ||
+				 t->operator == O_SCALL ||
+				 t->operator == O_RCALL ||
+				 t->operator == O_MCALL){
+				asmopr(I386_PUSHL, reg);
+				return 4;
+				}
+			}
+		t->reg = nullReg;
+		if	(i != j){
+			offset = i - 4;
+			if	(i - j == 3){
+					// implies a one byte remainder
+
+				asmoprtOffset(I386_MOVC, reg, t, offset);
+				asmopr(I386_PUSHL, reg);
+				}
+			else if	(i - j == 2){
+				asmoprtOffset(I386_MOVI, reg, t, offset);
+				asmopr(I386_PUSHL, reg);
+				}
+			else	{	// i - j == 1
+					// implies a three byte remainder
+				asmoprtOffset(I386_MOVC, reg, t, offset + 2);
+				asmopri(I386_LSLL, reg, 16);
+				asmoprtOffset(I386_MOVI, reg, t, offset);
+				asmopr(I386_PUSHL, reg);
+				}
+			j = offset;
+			}
+		else
+			offset = i;
+		while	(j > 0){
+			j -= 4;
+			offset -= 4;
+			asmoprtOffset(I386_PUSHL, nullReg, t, offset);
+			}
+		}
+	return i;
+	}
+
+generateCast:	(t: ref cast_x) =
+	{
+	dest:	ref type_s;
+	src:	ref type_s;
+	destt:	topTypes;
+	srct:	topTypes;
+
+	generateQ(t->opnd);
+	doSpills(t);
+	if	(t->dtype->topType == T_STRUCT)
+		return;
+	src = t->opnd->dtype;
+	srct = src->topType;
+	dest = t->dtype;
+	destt = dest->topType;
+	if	(srct == T_REF)
+		srct = T_UNSIGNED;
+	destw:	int;
+	srcw:	int;
+	op:	i386opcode;
+
+	destw = dest sizeOf();
+	srcw = src sizeOf();
+	if	(srct == T_FLOAT){
+		if	(t->opnd->addrMode)
+			asmopt(opcode(t->opnd), t->opnd);
+		if	(destt == T_FLOAT)
+			return;
+
+			// Convert from float, must be to int
+
+		if	(dest->topType == T_SIGNED){
+			asmopri(I386_SUBL, ESP, 4);
+			asmopstack(I386_FISTPI + typeCode(dest) - 1, 0);
+			Encoder inst(I386_WAIT);
+			asmopr(I386_POPL, t->reg);
+			}
+		else	{	// we need more bits for unsigned values
+			asmopri(I386_SUBL, ESP, 8);
+			asmopstack(I386_FISTPQ, 0);
+			Encoder inst(I386_WAIT);
+			asmopr(I386_POPL, t->reg);
+			asmopri(I386_ADDL, ESP, 4);
+			}
+		return;
+		}
+	if	(destt == T_FLOAT){
+		i:	int;
+
+			// Convert to float, must be from int
+
+		if	(t->opnd->addrMode &&
+			 t->opnd->reg == nullReg)
+			asmopt(I386_FILDI + typeCode(src) - 1, t->opnd);
+		else	{
+			asmopr(I386_PUSHL, t->opnd->reg);
+			asmopstack(I386_FILDI + typeCode(src) - 1, 0);
+			Encoder inst(I386_WAIT);
+			asmopri(I386_ADDL, ESP, 4);
+			}
+		return;
+		}
+	if	(srcw < destw){
+		if	(srcw == 1){
+			if	(srct == T_UNSIGNED){
+				if	(destw > 2)
+					op = I386_MOVZXCL;
+				else
+					op = I386_MOVZXCI;
+				}
+			else	{
+				if	(destw > 2)
+					op = I386_MOVSXCL;
+				else
+					op = I386_MOVSXCI;
+				}
+			}
+		else	{
+			if	(srct == T_UNSIGNED)
+				op = I386_MOVZXIL;
+			else
+				op = I386_MOVSXIL;
+			}
+		asmoprt(op, t->reg, t->opnd);
+		}
+	else
+		asmoprt(movecode(t), t->reg, t->opnd);
+	}
+/*
+	dir = -1 means the false label is following this test
+	dir = 1 means the true label is following this test
+ */
+generateTest:	(t: ref tree_p, strue: ref stmt_x, sfalse: ref stmt_x,
+			dir: int) =
+	{
+	s:	ref stmt_x;
+
+	switch	(t->operator){
+	case	O_LAND:
+		s = Func label_();
+		generateTest(ref binary_x(t)->left, s, sfalse, 1);
+		Encoder generateLabel(s);
+		generateTest(ref binary_x(t)->right, strue, sfalse, dir);
+		break;
+
+	case	O_LOR:
+		s = Func label_();
+		generateTest(ref binary_x(t)->left, strue, s, -1);
+		Encoder generateLabel(s);
+		generateTest(ref binary_x(t)->right, strue, sfalse, dir);
+		break;
+
+	case	O_NOT:
+		generateTest(t, sfalse, strue, -dir);
+		break;
+
+	case	O_LT:
+	case	O_GT:
+	case	O_EQ:
+	case	O_NE:
+	case	O_LE:
+	case	O_GE:
+	case	O_ORD:
+	case	O_UNORD:
+	case	O_NLT:
+	case	O_NGT:
+	case	O_LT_GT:
+	case	O_NLT_GT:
+	case	O_NLE:
+	case	O_NGE:
+		b:	ref binary_x;
+		j:	jumpCondition;
+		starg:	ref stmt_x;
+		op:	operators;
+		i:	signedByte;
+
+		b = ref binary_x(t);
+		if	(dir > 0){
+			op = negateCondition(b->operator);
+			starg = sfalse;
+			}
+		else	{
+			op = b->operator;
+			starg = strue;
+			}
+		if	(b->sethi < 0 &&
+			 b->left->dtype->topType == T_FLOAT)
+			op = swapCompare(op);
+		if	(shortcutTest(op, b, starg))
+			return;
+		generateQ(b);
+		i = extraJp(op, b->left->dtype);
+		j = mapCondition(op, b->left->dtype);
+		if	(i < 0){
+			s:	ref stmt_x;
+
+			s = Func label_();
+			Encoder generateJump(JC_PARITY, s);
+			Encoder generateJump(j, starg);
+			Encoder generateLabel(s);
+			}
+		else	{
+			if	(i)
+				Encoder generateJump(JC_PARITY, starg);
+			Encoder generateJump(j, starg);
+			}
+		break;
+
+	default:
+		generateQ(t);
+		if	(dir > 0){
+			op:	operators;
+
+			op = negateCondition(t->operator);
+			Encoder generateJump(mapCondition(op, t->dtype), 
+								sfalse);
+			}
+		else	{
+			Encoder generateJump(mapCondition(t->operator, 
+							t->dtype), strue);
+			}
+		}
+	}
+/*
+	This function assumes that the tree being passed has been 
+	converted to a canonical form in which the top node is a 
+	compare operator (O_EQ, O_NE, O_GT, O_LT, O_GE or O_LE).
+	It looks for a few key cases, such as compares with zero, for
+	circumstances where extra compare instructions can be avoided.
+
+	One of the key forms that is examined is a form in which the
+	hardware flags register is tested for specific bits, which can
+	be expressed in a single jump instruction.  This sort of thing
+	is very handy for very low level hardware bit twiddling and 
+	condition testing.
+ */
+shortcutTest:	(op: operators, b: ref binary_x, starg: ref stmt_x) boolean =
+	{
+	left:	ref tree_p;
+	right:	ref tree_p;
+	j:	jumpCondition;
+
+	right = b->right;
+	if	(right == 0 ||
+		 right->operator != O_ICON ||
+		 right integerValue() != 0)
+		return FALSE;
+	left = b->left;
+	j = mapCondition(op, left->dtype);
+	if	(setConditionCodes(j, left) == CC_USELESS)
+		return FALSE;
+
+			// Look for magic stuff with tests against _FLAGS
+
+	if	(left->operator == O_AND){
+		b = ref binary_x(left);
+		right = b->right;
+		if	(b->left->operator == O_REG &&
+			 ref iden_x(b->left)->adjust == nullReg &&
+			 right->operator == O_ICON &&
+			 (j == JC_EQ || j == JC_NE)){
+			j = testflags(j, power(right integerValue()));
+
+				// magic test, no temps needed at all
+
+			if	(j != JC_NOOP){
+				Encoder generateJump(j, starg);
+				return TRUE;
+				}
+			}
+		}
+
+		// The compare will be free, so just assign temps
+		// to the left expression.
+
+	generateQ(left);
+	Encoder generateJump(j, starg);
+	return TRUE;
+	}
+/*
+	This function characterizes the condition codes set by an
+	expression.  This function will only be called if the expression
+	t is compared with constant zero.  CC_USELESS is returned if the
+	opcodes do not reliably set the condition codes.  Other return
+	values indicate other considerations.  Due to the nature of the
+	comparisons involved, some compares may not be useful.
+ */
+conditionCodes:	public	type	int = {
+	CC_USELESS,
+	CC_ASSIGN,		// Condition code set in an assignment
+	CC_COMPUTE,		// Condition code set in a computation
+	CC_AZERO,		// Zero flag set in an assignment
+	CC_CZERO		// Zero flag set in a computation
+	};
+
+setConditionCodes:	public	(tst: jumpCondition, 
+					t: ref tree_p) conditionCodes =
+	{
+
+		// Unsigned compares that can't use the arithmetic condition
+		// codes to avoid a compare instruction
+
+	if	(t->dtype->topType == T_FLOAT)
+		return CC_USELESS;
+	if	(tst != JC_EQ &&
+		 tst != JC_NE &&
+		 (t->dtype->topType == T_UNSIGNED ||
+		  t->dtype->topType == T_REF))
+		return CC_USELESS;
+	switch	(t->operator){
+	case	O_ADD:
+	case	O_SUB:
+
+			// This following test could only be true for
+			// integer constant nodes, because other nodes
+			// return zero for integerValue
+
+		if	(ref binary_x(t)->right integerValue() == 1)
+			return CC_CZERO;
+
+	case	O_AND:
+	case	O_OR:
+	case	O_XOR:
+		return CC_COMPUTE;
+
+	case	O_ADA:
+	case	O_SBA:
+		if	(ref binary_x(t)->right integerValue() == 1)
+			return CC_AZERO;
+
+	case	O_ORA:
+	case	O_XRA:
+	case	O_ANA:
+		return CC_ASSIGN;
+		}
+	return CC_USELESS;
+	}
+
+variableArgs:	(t: ref tree_p) int =
+	{
+	if	(t == 0)
+		return 0;
+	if	(t->operator != O_ARG)
+		return generateStackArgument(t);
+	return variableArgs(ref argument_x(t)->right) +
+			variableArgs(ref argument_x(t)->left);
+	}
+
+splitArgList:	(t: ref tree_p) ref tree_p =
+	{
+	u:	ref tree_p;
+	i:	int;
+
+	for	(i = FixedArgsCount; i > 1 && t->operator == O_ARG; i--)
+		t = ref argument_x(t)->right;
+	if	(t->operator == O_ARG){
+		u = ref argument_x(t)->right;
+		ref argument_x(t)->right = 0;
+		return u;
+		}
+	else
+		return 0;
+	}
+/*
+multipleAssignment:	(t: ref tree_p) =
+	{
+	resultright:	regNum;
+	i:		regNum;
+
+	resultright = getResult(t->n.o.right);
+	i = getResult(t->n.o.left);
+	if	(_Quads[t->operator].quadClass & QC_MOVE){
+		if	((t->flags & TF_DEADSTORE) == 0)
+			asmoptt(opcode(t), t->n.o.left, t->n.o.right);
+		if	(resultright != t->reg){
+			if	(resultright != nullReg)
+				asmoprr(I386_MOVC + qd->qType - 1, t->reg, resultright);
+			else
+				asmoprt(I386_MOVC + qd->qType - 1, t->reg, t->n.o.left);
+			}
+		}
+	else if	(i != nullReg){
+		asmoprt(t->operator, i, t->n.o.right);
+		if	(i != t->reg)
+			asmoprr(I386_MOVC + qd->qType - 1, t->reg, i);
+		}
+	else	{
+		if	(t->reg != nullReg){
+			asmoptt(opcode(t), t->n.o.left, t->n.o.right);
+			asmoprt(I386_MOVC + qd->qType - 1, t->reg, t->n.o.left);
+			}
+		else
+			asmoprt(opcode(t), i, t->n.o.right);
+		}
+	}
+ */
+movecode:	(t: ref tree_p) int =
+	{
+	j:	int;
+
+	j = typeCode(t->dtype);
+	if	(j == -1){
+		t display(0);
+		CurrentContext fatalX("ErrInternal", "Incorrect type in operation", "", 0);
+		}
+	return I386_MOVC + j;
+	}
+
+opcode:	(t: ref tree_p) int =
+	{
+	i:	int;
+	j:	int;
+
+	i = Nodes[t->operator].nCode;
+	j = typeCode(t->dtype);
+	if	(j == -1){
+		t display(0);
+		CurrentContext fatalX("ErrInternal", "Incorrect type in operation", "", 0);
+		}
+//	printf("nCode = %d typeCode = %d\n", i, j);
+	return i + j;
+	}
+
+swappedOpcode:	(t: ref tree_p) int =
+	{
+	i:	int;
+	j:	int;
+
+	i = Nodes[t->operator].sCode;
+	j = typeCode(t->dtype);
+	if	(j == -1){
+		t display(0);
+		CurrentContext fatalX("ErrInternal", "Incorrect type in operation", "", 0);
+		}
+//	printf("nCode = %d typeCode = %d\n", i, j);
+	return i + j;
+	}
+
+regOpcode:	(t: ref tree_p) int =
+	{
+	i:	int;
+	j:	int;
+
+	i = Nodes[t->operator].nCode;
+	j = typeCode(t->dtype);
+	if	(j == -1){
+		t display(0);
+		CurrentContext fatalX("ErrInternal", "Incorrect type in operation", "", 0);
+		}
+//	printf("nCode = %d typeCode = %d\n", i, j);
+	return i + j;
+	}
+/*
+	This function returns a type modifier to be applied to opcodes.
+	Opcodes are numbered in groups according to operand type.  The
+	following type codes are added to the base opcode type (which is
+	char):
+
+		0 - char (8 bit integer)
+		1 - short (16 bit integer)
+		2 - long (32 bit integer)
+		3 - float (32 bit float)
+		4 - double (64 bit float)
+		5 - extended (80 bit float)
+ */
+typeCode:	(d: ref type_s) int =
+	{
+	w:	int;
+
+	if	(d)
+		w = d sizeOf();
+	else	{
+		printf("trying to get type code for no type\n");
+		w = 4;			// ???
+		}
+	switch	(d->topType){
+	case	T_STRUCT:
+	case	T_SIGNED:
+	case	T_UNSIGNED:
+		if	(w <= 1)
+			return 0;
+		else if	(w <= 2)
+			return 1;
+
+		// else fall thru to return 2 for pointers and longs
+
+	case	T_REF:
+		return 2;
+
+	case	T_FLOAT:
+		if	(w == 4)
+			return 3;
+		else if	(w == 8)
+			return 4;
+		else
+			return 5;
+
+	default:			// bogus type
+		return -1;
+		}
+	}
+/*
+	Try to perform any current spills.
+ */
+
+doSpills:	(t: ref tree_p) =
+	{
+	s:	ref spill;
+	u:	ref tree_p;
+	r:	regNum;
+	i:	int;
+	j:	int;
+
+	while	(CurrentSpill &&
+		 CurrentSpill->where == t){
+		u = CurrentSpill->affected;
+		r = CurrentSpill->newRegister;
+		i = CurrentSpill->width;
+		switch	(CurrentSpill->spillKind){
+		case	SPK_PUSH:
+			asmopr(I386_PUSHL, u->reg);
+			break;
+
+		case	SPK_POP:
+			u->reg = r;
+			asmopr(I386_POPL, r);
+			break;
+
+		case	SPK_XCHG:
+			if	(i <= BYTEBITS)
+				j = I386_XCHGC;
+			else if	(i <= 16)
+				j = I386_XCHGI;
+			else
+				j = I386_XCHGL;
+			asmoprr(j, r, u->reg);
+			CurrentSpill->other->reg = u->reg;
+			u->reg = r;
+			break;
+
+		case	SPK_MOVE:
+			if	(i <= BYTEBITS)
+				j = I386_MOVC;
+			else if	(i <= 16)
+				j = I386_MOVI;
+			else
+				j = I386_MOVL;
+			asmoprr(j, r, u->reg);
+			u->reg = r;
+			break;
+
+		case	SPK_FPSPILL:
+			asmopv(I386_FSTPLD, CurrentSpill->tempVar);
+			break;
+
+		case	SPK_FPRELOAD:
+			asmopv(I386_FLDLD, CurrentSpill->tempVar);
+			reversed8087opnds = r;
+			}
+
+		CurrentSpill = CurrentSpill->next;
+		}
+	}
+
+/*
+doCSEdefs:	(cv: CSEvarPtr, q: * quad) =
+	{
+	v:	* variable;
+
+	if	(cv >= maxCSEvar() ||
+		 *cv == 0)
+		return;
+	v = (* variable)*cv;
+	if	(v->topType == T_FLOAT)
+		asmopCSEr(I386_FSTF, v, 0);
+	else if	(v->topType == T_DOUBLE)
+		asmopCSEr(I386_FSTD, v, 0);
+	else if	(v->topType == T_LDBL){
+		asmopCSEr(I386_FSTPLD, v, 0);
+		asmopCSEr(I386_FLDLD, v, 0);
+		}
+	else
+		asmopCSEr(movecode(t->dtype), v, t->reg);
+	}
+ */
+_emitByte:	(args: ref tree_p) =
+	{
+	t:	ref tree_p;
+	d:	topTypes;
+	i:	int;
+
+	while	(args->operator == O_ARG){
+		_emitByte(ref argument_x(args)->left);
+		args = ref argument_x(args)->right;
+		}
+	switch	(args->operator){
+	case	O_ADR:
+		t = ref binary_x(args)->left;
+		if	(t->operator == O_AUTO){
+			i:	long;
+
+			i = ref auto_x(args)->adjust;
+			Encoder byte(i);
+			if	(i < -128 ||
+				 i > 127)
+				Encoder byte(i >> 8);
+			}
+		else
+			asmopt(I386_DD, t);
+/*
+			Encoder dwordInitializer(t->n.a.owner 
+					getValue(t->n.a.v_index),
+						 t->n.a.offset);
+ */
+		return;
+
+	case	O_LITERAL:
+		Encoder dwordInitializer(
+			fakeLiteralValue(ref literal_x(t)->literals), 0);
+		return;
+
+	case	O_ICON:
+		i:	long;
+		w:	int;
+
+		i = args integerValue();
+		w = args->dtype sizeOf();
+		if	(args->dtype->topType == T_SIGNED &&
+			 w == 4 &&
+			 i >= 0 &&
+			 i <= 255)
+			w = 1;
+		Encoder byte(i);
+		if	(w > 1){
+			Encoder byte(i >> 8);
+			if	(w > 2){
+				Encoder byte(i >> 16);	
+				Encoder byte(i >> 24);
+				}
+			}
+		return;
+
+//	case	O_FCON:
+
+	default:
+		CurrentContext error("ErrConstantExpr");
+		}
+	}
+
+_checkEmitByte:	(args: ref tree_p) =
+	{
+	while	(args->operator == O_ARG){
+		_checkEmitByte(ref argument_x(args)->left);
+		args = ref argument_x(args)->right;
+		}
+	for	(;;){
+		switch	(args->operator){
+		case	O_ADR:
+		case	O_ICON:
+		case	O_FCON:
+			return;
+
+		case	O_CAST:
+			args = ref cast_x(args)->opnd;
+			break;
+
+		default:
+			CurrentContext error("ErrConstantExpr");
+			}
+		}
+	}

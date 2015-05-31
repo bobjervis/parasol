@@ -1,0 +1,283 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	string;
+include	file, time;
+include	filesys, console;
+include	error;
+include	alys;
+include	list;
+
+ListDetail:	boolean = FALSE;
+SingleColumn:	boolean = FALSE;
+Width:		int = 80;
+ListAll:	boolean = FALSE;
+TotalSize:	unsigned;
+Directory:	[:] char;
+
+main:	entry	() =
+	{
+	arg:	[:] char;
+	listed:	int;
+	fileCount:	int;
+	i:	int;
+
+	listed = 0;
+	fileCount = 0;
+	Files = [];
+	i = stdout getClass();
+	if	(i == 0)
+		SingleColumn = TRUE;
+	else if	(i == CC_CONSOLE){
+		ch:	ref far consoleChannel;
+		p:	point;
+
+		ch = ref far consoleChannel(stdout getChannel());
+		p = ch windowSize();
+		Width = p.x;
+		}
+	else
+		Width = 80;
+	while	(|commandLine.arguments){
+		arg = commandLine.arguments[0];
+		commandLine shiftArguments();
+		if	(arg[0] == '-'){
+			if	(arg[1] == 'l'){
+				if	(arg[2] == '-')
+					ListDetail = FALSE;
+				else
+					ListDetail = TRUE;
+				}
+			else if	(arg[1] == 'a')
+				ListAll = TRUE;
+			else	{
+				printf("Illegal option: %S\n", arg);
+				exit(1);
+				}
+			}
+		else	{
+			fileCount += listName(arg);
+			listed++;
+			}
+		}
+	if	(listed == 0){
+		arg = "*";
+		fileCount += listName(arg);
+		}
+	dumpFiles();
+	if	(ListDetail){
+		if	(fileCount == 0)
+			printf("  No files");
+		else	{
+			printf("%4d File", fileCount);
+			if	(fileCount > 1)
+				printf("s");
+			else
+				printf(" ");
+			}
+		printf(" %10u Bytes Used", TotalSize);
+		if	(listed <= 1){
+			dx:	drive_t;
+
+			if	(|Directory == 0)
+				Directory = ".";
+			dx = FileSystem getDriveInfo(Directory);
+			printf(" %10u Bytes Free", 
+					dx.freeSectors * dx.sectorSize);
+			}
+		printf("\n");
+		}
+	exit(EX_SUCCESS);
+	}
+
+filename:	type	inherit	queue	{ public:
+	path:		[:] char;
+	attributes:	fAttributes_t;
+	size:		long;
+	ftime:		Time;
+	};
+
+Files:	inherit list {
+	public:
+
+compare:	dynamic	(p1: ref queue, p2: ref queue) int =
+	{
+	f1, f2:	 ref filename;
+
+	f1 = ref filename(p1);
+	f2 = ref filename(p2);
+	return stringCompare(f1->path, f2->path);
+	}
+
+addFile:	(p: [:] char, a: fAttributes_t, t: Time, s: long) =
+	{
+	f:	ref filename;
+
+	f = new filename;
+	f->path = new [|p] char;
+	f->path [:]= p;
+	f->attributes = a;
+	f->ftime = t;
+	f->size = s;
+	enqueue(f);
+	}
+
+};
+
+dumpFiles:	() =
+	{
+	f:	ref filename;
+	i:	int;
+	hour:	int;
+	d:	Date;
+	c:	char;
+
+	Files sort();
+	if	(ListDetail){
+		f = ref filename(Files index(1));
+		while	(f){
+			if	(f->attributes & FA_NETNODE)
+				printf("  <node>");
+			else if	(f->attributes & FA_SERVICE)
+				printf("<object>");
+			else if	(f->attributes & FA_DIR)
+				printf("   <dir>");
+			else
+				printf("%8d", f->size);
+			d decode(f->ftime);
+			hour = d.hour;
+			if	(hour >= 12){
+				c = 'p';
+				hour -= 12;
+				}
+			else
+				c = 'a';
+			if	(hour == 0)
+				hour = 12;
+			printf("  %2d-%02d-%02d %2d:%02d%c   ",
+				d.month + 1,
+				d.monthday, 
+				d.year,
+				hour, d.minute, 
+				c);
+/*
+			hour = f->ftime >> 11 & 0x1f;
+			if	(hour >= 12){
+				c = 'p';
+				hour -= 12;
+				}
+			else
+				c = 'a';
+			printf(" %2d-%02d-%02d %2d:%02d%c   ",
+				f->ftime >> 21 & 0x0f,
+				f->ftime >> 16 & 0x1f, 
+				((f->ftime >> 25 & 0x7f) + 80) % 100,
+				hour, f->ftime >> 5 & 0x3f, 
+				c);
+ */
+			printf("%S\n", f->path);
+			f = ref filename(Files seek(1));
+			}
+		}
+	else	{
+		n:	int;
+		cols:	int;
+		max:	int;
+		v:	ref list;
+		i, j:	int;
+
+		n = Files length();
+		if	(n == 0){
+			printf("- No match -\n");
+			return;
+			}
+		f = ref filename(Files index(1));
+		max = 0;
+		while	(f){
+			if	(|f->path > max)
+				max = |f->path;
+			f = ref filename(Files seek(1));
+			}
+		max += 2;		// allow 2 spaces between cols
+		if	(max >= Width || SingleColumn)
+			cols = 1;
+		else
+			cols = Width / max;
+		v = alloc(cols * sizeof list);
+		j = (n + cols - 1) / cols;
+		if	(n <= (cols - 1) * j)
+			cols = (n + j - 1) / j;
+		Files index(1);
+		for	(i = 0; i < cols - 1; i++){
+			v[i] = * ref list(&Files);
+			Files seek(j);
+			}
+		for	(; j > 0; j--){
+			for	(i = 0; i < cols; i++){
+				if	(i == cols - 1){
+					f = ref filename(Files seek(0));
+					if	(f)
+						Files seek(1);
+					}
+				else	{
+					f = ref filename(v[i] seek(0));
+					v[i] seek(1);
+					}
+				if	(f)	
+					printf("%-*S", max, f->path);
+				}
+			printf("\n");
+			}
+		}
+	}
+
+listName:	(path: [:] char) int =
+	{
+	hour:	int;
+	c:	char;
+	fCount:	int;
+	arg:	ref char;
+	i:	int;
+	fdir:	[:] char;
+	fpattern:	[:] char;
+	fext:	[:] char;
+	patha:	static	[MAXPATH] char;
+	pathb:	static	[MAXPATH] char;
+	xp:	ref char;
+	fp:	ref char;
+	f:	finder;
+	fs:	file_t;
+
+	fs = FileSystem stat(path);
+//	printf("path = %S\nfs = [ attr %x, sz %d, time %x user %d group %d id %d ]\n",
+//			path, fs.attributes, fs.size, fs.ftime, fs.user, fs.group, fs.id);
+	if	(fs.id != -1 &&
+		 fs.attributes & FA_DIR){
+		fdir = path;
+		fpattern = "*";
+//		printf("%S is a directory\n", path);
+		}
+	else	{
+		fdir = getDirectory(path);
+		fpattern = stripDirectory(path);
+		}
+	fCount = 0;
+	i = f open(fdir, fpattern, FA_DIR);
+	Directory = fdir;
+	if	(i){
+		printf("%S: %S\n", fdir, cmdError(i));
+		return 0;
+		}
+	f showDotFiles(ListAll);
+	while	(f next() == 0){
+		Files addFile(f.pathname, f.attrib, f.ftime, f.size);
+		TotalSize += f.size;
+		fCount++;
+		}
+	f close();
+	return fCount;
+	}

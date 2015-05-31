@@ -1,0 +1,316 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	string;
+include	file;
+
+Line1:	int;
+Line2:	int;
+Ldata1:	ref char;
+Ldata2:	ref char;
+File1:	[:] char;
+File2:	[:] char;
+
+diff:	entry	() =
+	{
+	data1:	ref char;
+	data2:	ref char;
+	refdata1:	ref char;
+	refdata2:	ref char;
+
+	if	(|commandLine.arguments != 2){
+		printf("Use is: DIFF file1 file2\n");
+		exit(EX_FAIL);
+		}
+	File1 = commandLine.arguments[0];
+	File2 = commandLine.arguments[1];
+	data1 = readFile(File1);
+	data2 = readFile(File2);
+
+	ln1:	ref lineDesc;
+	ln2:	ref lineDesc;
+	endln1:	ref lineDesc;
+	endln2:	ref lineDesc;
+//	s:	string;
+	cp:	ref char;
+	i:	int;
+
+	Line1 = 1;
+	Line2 = 1;
+	Ldata1 = data1;
+	Ldata2 = data2;
+	for	(;;){
+		if	(*data1 == *data2){
+			if	(*data1 == '\n'){
+				Line1++;
+				Line2++;
+				Ldata1 = data1 + 1;
+				Ldata2 = data2 + 1;
+				}
+			else if	(*data1 == 0)
+				break;
+			data1++;
+			data2++;
+			continue;
+			}
+
+		if	(*Ldata1 == 0){
+			i = 0;
+			for	(cp = Ldata2; *cp; cp++)
+				if	(*cp == '\n')
+					i++;
+			reportInsert(stringLength(Ldata2), Line2 + i);
+			break;
+			}
+		if	(*Ldata2 == 0){
+			i = 0;
+			for	(cp = Ldata1; *cp; cp++)
+				if	(*cp == '\n')
+					i++;
+			reportDelete(stringLength(Ldata1), Line1 + i);
+			break;
+			}
+		ln1 = newLine(Line1, Ldata1, 0);
+		ln2 = newLine(Line2, Ldata2, 0);
+		endln1 = ln1;
+		endln2 = ln2;
+		for	(;;){
+			endln1 = extendList(endln1);
+			endln2 = extendList(endln2);
+			if	(endln1 matches(ln2) ||
+				 endln2 matches(ln1))
+				break;
+			if	(*endln1->endPos == 0 &&
+				 *endln2->endPos == 0){
+				printf("Both at end of file\n");
+				exit(2);
+				}
+			}
+		len1:	long = 0;
+		len2:	long = 0;
+		ld:	ref lineDesc;
+
+		for	(; ln1->next; ln1 = ln1->next)
+			len1 += ln1->length + 1;
+		for	(; ln2->next; ln2 = ln2->next)
+			len2 += ln2->length + 1;
+		if	(len1 == 0)
+			reportInsert(len2, ln2->lineno);
+		else if	(len2 == 0)
+			reportDelete(len1, ln1->lineno);
+		else
+			reportChange(len1, len2, ln1->lineno, ln2->lineno);
+		Ldata1 = data1 = ln1->pos;
+		Ldata2 = data2 = ln2->pos;
+		Line1 = ln1->lineno;
+		Line2 = ln2->lineno;
+		}
+	exit(EX_SUCCESS);
+	}
+
+reportInsert:	(len2: int, eline2: int) =
+	{
+	printf("-- %S:%d:\n", File1, Line1);
+	printf("-- %S:%d", File2, Line2);
+	eline2--;
+	if	(eline2 > Line2)
+		printf("-%d", eline2);
+	printf(":\n");
+	stdout write(Ldata2[:len2]);
+	if	(Ldata2[len2 - 1] != '\n')
+		printf("\n");
+	printf("-----\n");
+	}
+
+reportDelete:	(len1: int, eline1: int) =
+	{
+	printf("-- %S:%d", File1, Line1);
+	eline1--;
+	if	(eline1 > Line1)
+		printf("-%d", eline1);
+	printf(":\n");
+	stdout write(Ldata1[:len1]);
+	if	(Ldata1[len1 - 1] != '\n')
+		printf("\n");
+	printf("-- %S:%d:\n", File2, Line2);
+	printf("-----\n");
+	}
+
+reportChange:	(len1: int, len2: int, eline1: int, eline2: int) =
+	{
+	printf("-- %S:%d", File1, Line1);
+	eline1--;
+	if	(eline1 > Line1)
+		printf("-%d", eline1);
+	printf(":\n");
+	stdout write(Ldata1[:len1]);
+	if	(Ldata1[len1 - 1] != '\n')
+		printf("\n");
+	printf("-- %S:%d", File2, Line2);
+	eline2--;
+	if	(eline2 > Line2)
+		printf("-%d", eline2);
+	printf(":\n");
+	stdout write(Ldata2[:len2]);
+	if	(Ldata2[len2 - 1] != '\n')
+		printf("\n");
+	printf("-----\n");
+	}
+
+extendList:	(p: ref lineDesc) ref lineDesc =
+	{
+	if	(p->next)
+		return p->next;
+	else if	(*p->endPos)
+		return newLine(p->lineno + 1, p->endPos + 1, p);
+	else
+		return p;
+	}
+
+newLine:	(ln: int, data: ref char, p: ref lineDesc) ref lineDesc =
+	{
+	ld:	ref lineDesc;
+
+	if	(p && p->next)
+		return p->next;
+	ld = alloc(sizeof lineDesc);
+	if	(ld == 0){
+		printf("-- No memory: differences starting at lines %d::%d\n",
+					Line1, Line2);
+		exit(1);
+		}
+	ld = [ ln, data, p ];
+	return ld;
+	}
+
+lineDesc:	type	{
+	checksum:	int;
+
+public:
+
+	pos:		ref char;
+	length:		int;
+	lineno:		int;
+	next:		ref lineDesc;
+	endPos:		ref char;
+
+constructor:	(ln: int, data: ref char, p: ref lineDesc) =
+	{
+	lineno = ln;
+	pos = data;
+	next = 0;
+	if	(p)
+		p->next = self;
+
+	cp:	ref char;
+	sum:	int;
+	rot:	int;
+	len:	int;
+
+	sum = 0;
+	rot = 0;
+	len = 0;
+	for	(cp = pos; *cp && *cp != '\n'; cp++, rot++){
+		if	(rot >= 24)
+			rot = 0;
+		sum += *cp << rot;
+		len++;
+		}
+	length = len;
+	checksum = sum;
+	endPos = cp;
+	}
+
+matches:	(ln: ref lineDesc) boolean =
+	{
+	for	(; ln; ln = ln->next){
+		if	(ln->checksum == checksum &&
+			 ln->length == length &&
+			 memCompare(ln->pos, pos, length) == 0)
+			break;
+		}
+	if	(ln == 0)
+		return FALSE;
+
+		// We have a possible resync.  We need a second line to 
+		// confirm.
+
+		// Fetch the next line, constructing it if necessary
+
+	extendList(self);
+	extendList(ln);
+
+		// Both lists are at end, count it as a confirm
+
+	if	(next == 0 &&
+		 ln->next == 0)
+		return TRUE;
+
+		// Only one list at end, not a confirmed resync
+
+	if	(next == 0)
+		return FALSE;
+	if	(ln->next == 0)
+		return FALSE;
+
+		// A match is a confirmed resync
+
+	if	(next->checksum == ln->next->checksum &&
+		 next->length == ln->next->length &&
+		 memCompare(next->pos, ln->next->pos, next->length) == 0){
+
+			// Now we have to dispose of the extra elements of
+			// the line chains
+
+		ld:	ref lineDesc;
+		ldn:	ref lineDesc;
+
+		for	(ld = next; ld; ld = ldn){
+			ldn = ld->next;
+			delete ld;
+			}
+		next = 0;
+		for	(ld = ln->next; ld; ld = ldn){
+			ldn = ld->next;
+			delete ld;
+			}
+		ln->next = 0;
+		return TRUE;
+		}
+	else
+		return FALSE;
+	}
+
+	};
+
+readFile:	(fname: [:] char) ref char =
+	{
+	fd:	stream;
+	len:	long;
+	i:	int;
+	data:	ref char;
+
+	if	(fd open(fname, AR_READ)){
+		printf("Couldn't open %S\n", fname);
+		exit(1);
+		}
+	len = fd seek(0, SEEK_END);
+	data = alloc(len + 1);
+	if	(data == 0){
+		printf("No memory for %S\n", fname);
+		exit(1);
+		}
+	data[len] = 0;
+	fd seek(0, SEEK_ABS);
+	i = fd read(data[:len]);
+	if	(i != len){
+		printf("Read size not consistent for %S: %d tried for %d\n", fname, i, len);
+		exit(1);
+		}
+	fd close();
+	return data;
+	}

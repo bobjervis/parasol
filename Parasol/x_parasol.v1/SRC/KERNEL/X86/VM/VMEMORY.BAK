@@ -1,0 +1,559 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	hardware;
+include	pc_hdw;
+
+PAGE_SIZE:	public	const int = 4096;
+
+KERNEL_CODE_SPACE:	public	const	paddr_t = 0x100000;
+
+CSsize:		public	paddr_t;
+CodeOffset:	public	paddr_t;
+DataOffset:	public	paddr_t;
+PageDirectory:	public	paddr_t;
+TopOfMemory:	public	paddr_t;		// top usable RAM address
+Conventional:	public	paddr_t;		// memory below 640K
+HighMemory:	public	paddr_t;		// memory above 1 meg
+FreePage:	public	paddr_t;
+PageDir:	public	ref paddr_t;
+StartCR0:	public	unsigned;
+/*
+	Note that newLength must be greater than oldLength in all calls to
+	the following function:
+ */
+growMapped:	public	(loc: paddr_t, oldLength: paddr_t, 
+					newLength: paddr_t) boolean =
+	{
+	page1:	paddr_t;
+	page2:	paddr_t;
+	ap:	ref paddr_t;
+	i:	int;
+	j:	int;
+	k:	int;
+
+	page1 = (oldLength + PAGE_SIZE - 1) >> 12;
+	page2 = (newLength + PAGE_SIZE - 1) >> 12;
+	if	(page1 == page2)
+		return TRUE;
+	if	(page2 - page1 > FreePages.pageCount)
+		return FALSE;
+	i = getPageOffset(loc);
+	ap = getPageTable(loc) + i;
+	if	(i + page2 > 1024)
+		return FALSE;			// too big to fit
+	for	(j = page1; j < page2; j++)
+		if	(ap[j])
+			return FALSE;
+	for	(j = page1; j < page2; j++)
+		ap[j] = FreePages get() +
+					(PAGE_USER|PAGE_WRITE|PAGE_PRESENT);
+	resetPageCache();
+	return TRUE;
+	}
+/*
+	This function is called when the current page table does not have
+	enough room in it to expand the indicated segment by the desired
+	amount.  So new room must be found somewhere, so the segment's pages
+	can be moved.  Note that the actual memory isn't moved, just the
+	page entries.
+
+	pCount		The new desired number of pages
+	oCount		The old actually mapped number of pages
+	skipCount	Number of prefix pages to leave unmapped - ALYS
+			leaves the low part of the address space unmapped
+			to catch NULL pointer references.
+ */
+allocMapped:	public	(loc: paddr_t, oldLength: paddr_t, offset: paddr_t,
+					length: paddr_t) paddr_t =
+	{
+	if	(length > 1024 * PAGE_SIZE)
+		return 0;			// Really big segments fail
+
+	pageD:		ref paddr_t;
+	ap:		ref paddr_t;
+	pageTableEntry:	int;
+	j:		int;
+	k:		int;
+	pCount:		int;
+	oCount:		int;
+	skipCount:	int;
+
+	pCount = (length + PAGE_SIZE - 1) >> 12;
+	pageD = PageDir;
+	oCount = (oldLength + PAGE_SIZE - 1) >> 12;
+	skipCount = offset >> 12;
+	if	(pCount - oCount > FreePages.pageCount)
+		return 0;
+	for	(pageTableEntry = 1; pageTableEntry < 512; pageTableEntry++){
+		if	(pageD[pageTableEntry]){
+			ap = physicalToAddressable(pageD[pageTableEntry] & ~0xFFF);
+
+			end:	int;
+
+			end = 1025 - pCount;
+			for	(j = 0; j < end; j++){
+				if	(ap[j] == 0){
+					for	(k = j + pCount - 1; k >= j; k--)
+						if	(ap[k])
+							break;
+					if	(k >= j)
+						continue;
+					k++;
+					break;
+					}
+				}
+			if	(j >= end)
+				continue;
+			}
+		else	{
+			pgt:	paddr_t;
+
+			if	(pCount - oCount >= FreePages.pageCount)
+				break;
+			pgt = FreePages get();
+			if	(pgt == 0)
+				break;
+			pageD[pageTableEntry] = pgt +
+					(PAGE_USER|PAGE_WRITE|PAGE_PRESENT);
+			ap = physicalToAddressable(pgt);
+			k = 0;
+			}
+
+		oldp:	ref paddr_t;
+
+		if	(oCount){
+			i:	int;
+
+			oldp = getPageTable(loc) + getPageOffset(loc);
+			i = oCount << 2;
+			memCopy(&ap[k], oldp, i);
+			memSet(oldp, 0, i);
+			}
+		else if	(skipCount){
+			oCount = skipCount;
+			for	(j = 0; j < skipCount; j++)
+				ap[k + j] = PAGE_USER;
+			}
+		for	(j = oCount; j < pCount; j++)
+			ap[k + j] = FreePages get() + 
+					(PAGE_USER|PAGE_WRITE|PAGE_PRESENT);
+		resetPageCache();
+		return (pageTableEntry << 22 + k << 12);
+		}
+	return 0;
+	}
+
+markReadonly:	public	(loc: paddr_t, length: paddr_t) =
+	{
+	if	(length > 1024 * PAGE_SIZE)
+		length = 1024 * PAGE_SIZE;	// Only mark the first 4 meg
+
+	ap:		ref paddr_t;
+	i, j:		int;
+	pCount:		int;
+
+	pCount = length >> 12;			// Round down to a full page
+	i = getPageOffset(loc);
+	ap = getPageTable(loc) + i;
+
+		// Clear the writeable page bits
+
+	for	(j = 0; j < pCount; j++)
+		ap[j] &= ~PAGE_WRITE;
+	resetPageCache();
+	}
+
+pagesValid:	public	(loc: paddr_t, offset: paddr_t, 
+						length: paddr_t) paddr_t =
+	{
+	if	(length > 1024 * PAGE_SIZE)
+		return FALSE;
+	loc += offset;
+	length -= offset;
+
+	ap:		ref paddr_t;
+	i, j:		int;
+	pCount:		int;
+	x:		paddr_t;
+
+	pCount = (length + PAGE_SIZE - 1) >> 12;
+	i = getPageOffset(loc);
+	ap = getPageTable(loc) + i;
+
+		// Check the page present bits
+
+	for	(j = 0, x = 0; j < pCount; j++, x += PAGE_SIZE)
+		if	(ap[j] & PAGE_PRESENT == 0)
+			break;
+	return x;
+	}
+
+resetPageCache:	public	() =
+	{
+	_emit(0x0f, 0x20, 0xD8);			// mov EAX,CR3
+	_emit(0x0f, 0x22, 0xD8);			// mov CR3,EAX
+	}
+
+freePages:	public	(mappe: paddr_t, len: int) =
+	{
+	pgt:	int;
+	ap:	ref paddr_t;
+	i:	int;
+
+	if	(mappe >= KERNEL_VIRTUAL_ADDRESS)
+		return;
+	ap = getPageTable(mappe);
+	if	(ap == 0)
+		return;
+	i = mappe & 0xfff;
+	if	(i){
+		len -= (PAGE_SIZE - i);
+		mappe += 0xfff;
+		}
+	pgt = getPageOffset(mappe);
+	while	(len > 0){
+		if	(ap[pgt] & PAGE_PRESENT)  // don't free a trap page
+			FreePages put(ap[pgt]);
+		ap[pgt] = 0;
+		pgt++;
+		len -= PAGE_SIZE;
+		}
+	}
+/*
+	This routine is the first called during kernel initialization.  When
+	this routine is called, the paging hardware is not enabled and the
+	IDT is not properly initialized.  Interrupts are disabled, so the
+	state of the IDT is unimportant.
+
+ */
+_initializeVirtualMemory:	public	() =
+	{
+	d:		ref descriptor;
+	xp:		ref unsigned;
+	physSpace:	paddr_t;
+	nextb:		paddr_t;
+	dataOffset:	paddr_t;
+
+	_emit(0x0f, 0x20, 0xc0);			// mov eax,cr0
+	StartCR0 = _EAX;
+//	beep();
+	d = ref descriptor(&_idt_) + 250;
+	xp = ref unsigned(d);
+
+	d = ref descriptor(&_gdt_);
+	CSbase = d[1].sa.base + paddr_t(d[1].sa.base16) << 16;
+	DSbase = d[2].sa.base + paddr_t(d[2].sa.base16) << 16;
+	MapBase = DSbase;
+
+	nextb = DSbase + paddr_t(_brklvl);
+
+	Conventional = xp[0] * 1024;
+	HighMemory = xp[1] * 1024;
+	CodeOffset = xp[2];
+	dataOffset = xp[3];
+	DataOffset = dataOffset;
+
+		// Now clear the IDT vector before anyone accidentally uses it.
+
+	xp[0] = 0;
+	xp[1] = 0;
+	xp[2] = 0;
+	xp[3] = 0;
+	if	(HighMemory)
+		TopOfMemory = HighMemory + 0x100000;
+	else
+		TopOfMemory = Conventional;
+/*
+	What sequence of events do we have to go through to establish the
+	kernel properly?
+
+	First, any arena which requires less than 4 megabytes of RAM
+	space shares the small arena page directory (SAPD).  Most
+	applications and device drivers will reside there.
+
+	So, at boot time we need to allocate and arrange the SAPD.
+
+	We need to construct the kernel page tables.  To cover the
+	transition phase, the low order page table of the SAPD should
+	be temporarily mapped to physical memory (which will include
+	the kernel).
+
+	The kernel page table needs to be created.
+
+	The kernel selectors can be redirected to the kernel page table.
+
+	The low-order page table can be erased.
+
+	The real memory page table is constructed.
+
+	The free list is constructed.
+ */
+	i:		int;
+	j:		int;
+	k:		int;
+	ap:		ref long;
+	dp:		ref long;
+	pagep:		ref long;
+	pageTable:	paddr_t;
+	dsEnd:		paddr_t;
+
+	dsEnd = (paddr_t(_brklvl) + 0xfff) & ~0xfff;
+	pageTable = DSbase + dsEnd;	// locate the SAPD
+/*
+	Here is how memory looks:
+
+		0 - CSbase		DOS etc. (available pages)
+		CSbase - DSbase		Kernel code
+		DSbase - pageTable	Kernel data
+		pageTable:		SAPD
+		pageTable + 4K:		real page table 0
+		pageTable + 8K - Conventional
+					available pages
+		0x100000 - TopOfMemory	available pages
+
+	Page tables are classified as mapped, kernel or real, depending
+	on where they appear in the address space.  Mapped page tables
+	appear in the range from 0 - 0x7FFFFFFF, while kernel page tables
+	appear in 0x80000000 - 0xBFFFFFFF, and real page tables appear
+	in 0xC0000000 - 0xFFFFFFFF.
+
+
+ */
+	PhysicalBase = -DSbase;
+	ap = physicalToAddressable(pageTable);
+	memSet(ap, 0, 0x1000);
+	dp = ap + (512 + 256);			// Real page table base
+	k = pageTable + 0x1007;
+	ap[0] = k;				// Page table direc 0
+	ap += (PAGE_SIZE / 4);
+	j = 0x400000;
+	i = 7;
+	for	(;;){
+		memSet(ap, 0, 0x1000);		// zero out the page table
+		pagep = ap + (PAGE_SIZE / 4);
+		*dp = k;			// Real page table 0
+		if	(TopOfMemory < j)
+			j = TopOfMemory;	// Fill in a bunch of the
+						// real page table
+		for	(; i < j; i += 0x1000, ap++)
+			*ap = i;
+		if	(TopOfMemory <= j)
+			break;
+		j += 0x400000;
+		k += 0x1000;
+		dp++;
+		}
+/*
+	Now the real memory page table has been mapped.  Also, the low order
+	conventional memory and then some has also been mapped low, so that
+	we can turn on paging and not freak anyone out.
+
+	pagep points at the kernel page table.
+
+	The kernel page table consists of the following arrangement:
+
+	- 1 megabyte reserved for kernel code pages.  Drivers go in mapped
+	  space, so this number of vastly more than needed.  Mostly I wanted
+	  a more or less round number as the starting addresses of mapped
+	  segments.
+
+	- 3 megabytes for kernel data.  The kernel heap goes here, this
+	  should be enough until somebody comes up with a specialized app.
+	  That way, I can add more page tables and expand up to nearly 1 GB
+	  for kernel heap.
+ */
+	ap = pagep;
+	memSet(ap, 0, 0x1000);			// zero out the kernel page table
+	CSsize = DSbase - CSbase;
+	CSsize += dataOffset;
+	j = (CSsize + 0xfff) >> 12;
+	i = CSbase + PAGE_PRESENT;
+	codeOffset:	paddr_t;
+	codeOffset = CodeOffset;
+	while	(j && codeOffset >= 0x1000){
+		j--;
+		*ap++ = 0;
+		i += 0x1000;
+		codeOffset -= 0x1000;
+		}
+	for	(; j; j--, i += 0x1000, ap++)
+		*ap = i;
+	ap = pagep + 0x100;			// skip one megabyte
+	dsEnd >>= 12;				// count the number of kernel
+						// data pages
+	i = DSbase + PAGE_PRESENT;
+	while	(dsEnd && dataOffset >= 0x1000){
+		dsEnd--;
+		*ap++ = 0;			// make kernel data page 0 
+						// not present.  This will
+						// trap NULL indirections
+		i += 0x1000;
+		dataOffset -= 0x1000;
+		}
+	for	(; dsEnd; dsEnd--, i += 0x1000, ap++)
+		*ap = i;
+	ap = physicalToAddressable(pageTable);
+	ap[512] = addressableToPhysical(pagep) + PAGE_PRESENT;
+						// map the kernel page table
+	pagep += (PAGE_SIZE / 4);
+/*
+	We now have the kernel page table mapped, as well as the
+	real page tables.  Also, xp points to the next available page
+	which will come in handy when we want to free memory.
+
+	So now turn on the paging mechanism.
+ */
+	_EAX = pageTable;
+	_emit(0x0f, 0x22, 0xD8);			// mov CR3,EAX
+	_emit(0x0f, 0x20, 0xc0);			// mov eax,cr0
+	_EAX |= 0x80000000;
+	_emit(0x0f, 0x22, 0xc0);			// mov CR0,EAX
+	PageDirectory = pageTable;
+	FreePage = addressableToPhysical(pagep);
+/*
+	OK, now we remap the data and code selectors.  This is possible
+	since the kernel code and data pages are mapped doubly.  We don't
+	have to worry about the prestidigitation involved.
+ */
+	setMapping(0, 0x80000000 + KERNEL_CODE_SPACE, 
+			_GDT_KERNEL_DATA,     DATA_DESCR, 0, 0xFFFFFFFF);
+	setMapping(0, 0x80000000 + KERNEL_CODE_SPACE, 
+			_GDT_KERNEL_PHYSICAL, DATA_DESCR, 0, 0xFFFFFFFF);
+	_AX = _GDT_KERNEL_PHYSICAL;
+	_DS = _AX;
+	_ES = _AX;
+	_SS = _AX;
+	_emit(0x16);		// Push SS
+	_emit(0x0f, 0xa1);	// Pop FS
+	_emit(0x16);		// Push SS
+	_emit(0x0f, 0xa9);	// Pop GS
+	_AX = _GDT_KERNEL_DATA;
+	_DS = _AX;
+	_ES = _AX;
+	_SS = _AX;
+	_emit(0x16);		// Push SS
+	_emit(0x0f, 0xa1);	// Pop FS
+	_emit(0x16);		// Push SS
+	_emit(0x0f, 0xa9);	// Pop GS
+	setMapping(0, 0x80000000, _GDT_KERNEL_CODE, CODE_DESCR, 0, 0xFFFFFFFF);
+	setMapping(0, 0x80000000, _GDT_KERNEL_PHYSICAL, CODE_DESCR, 0, CSsize);
+	PhysicalBase = 0x40000000 - KERNEL_CODE_SPACE;
+	MapBase = 0x80000000 - KERNEL_CODE_SPACE;
+	_AX = _GDT_KERNEL_PHYSICAL;
+	_emit(0x50);		// Push AX (simulate a far call)
+	fakeFarCall();
+	_AX = _GDT_KERNEL_CODE;
+	_emit(0x50);		// Push AX (simulate a far call)
+	fakeFarCall();
+	IDT.base = paddr_t(&_idt_) + 0x80000000 + KERNEL_CODE_SPACE;
+	GDT.base = paddr_t(&_gdt_) + 0x80000000 + KERNEL_CODE_SPACE;
+	GDT.limit = sizeof _GDT_;
+	_emit(0x0f, 0x01, 0x1D, &IDT);		// LIDT &IDT
+	_emit(0x0f, 0x01, 0x15, &GDT);		// LGDT &GDT
+/*
+	Now the mapped part of the SAPD is clean.  Everything is in order.
+	Now create the free page list.
+ */
+	FreePages.pageCount = 0;
+	FreePages.freeList = 0;
+	for	(i = FreePage; i < Conventional; i += PAGE_SIZE)
+		FreePages put(i);
+	for	(i = 0x100000; i < TopOfMemory; i += PAGE_SIZE)
+		FreePages put(i);
+	i = TopOfMemory;
+	if	(i < 0x100000)
+		i = 0x100000;
+	setMapping(0, 0xC0000000, _GDT_KERNEL_PHYSICAL, DATA_DESCR, 0, i);
+	PageDir = physicalToAddressable(PageDirectory);
+	PageDir[0] = 0;			// clear the low order SAPD page table
+//	beep();
+	}
+
+descriptorReg:	type	packed	{
+	public:
+
+	limit:	unsigned[16];
+	base:	long;
+	};
+
+IDT:	descriptorReg = [ 8 * 256 ];
+GDT:	descriptorReg = [ 8 * 64 ];
+
+fakeFarCall:	() =
+	{
+	_emit(0xcb);		// ret far
+	}
+
+FreePages:	public	{
+	public:
+	freeList:	paddr_t;
+	pageCount:	long;
+/*
+	This function gets a page from the FreePages pool
+ */
+get:	() paddr_t =
+	{
+	ap:	ref paddr_t;
+	n:	threadLock;
+	j:	paddr_t;
+
+	n lock();
+	j = freeList;
+	if	(j == 0){
+		n unlock();
+		return 0;
+		}
+	ap = physicalToAddressable(j);
+	freeList = ap[0];
+	pageCount--;
+	memSet(ap, 0, PAGE_SIZE);
+	n unlock();
+	return j;
+	}
+/*
+	This function puts a page into the FreePages pool
+ */
+put:	(phys: paddr_t) =
+	{
+	ap:	ref paddr_t;
+	n:	threadLock;
+
+	phys &= ~(PAGE_SIZE - 1);
+	ap = physicalToAddressable(phys);
+	n lock();
+	*ap = freeList;
+	freeList = phys;
+	pageCount++;
+	n unlock();
+	}
+
+	};
+
+virtualToPhysical:	public	(loc: paddr_t) paddr_t =
+	{
+	pt:	ref paddr_t;
+
+	pt = getPageTable(loc);
+	return (pt[getPageOffset(loc)] & ~0xFFF) + (loc & 0xFFF);
+	}
+
+getPageTable:	public	(loc: paddr_t) ref paddr_t =
+	{
+	p:	paddr_t;
+
+	p = PageDir[loc >> 22] & ~0xFFF;
+	if	(p == 0)
+		return 0;
+	return ref paddr_t(p + PhysicalBase);
+	}
+
+getPageOffset:	public	(loc: paddr_t) int =
+	{
+	return (loc >> 12) & 0x3ff;
+	}
+

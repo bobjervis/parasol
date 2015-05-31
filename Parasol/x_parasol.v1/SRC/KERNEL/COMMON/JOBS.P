@@ -1,0 +1,285 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	alys;
+include	process;
+include	hardware;
+include	object;
+include	string;
+
+newJob_:	public	() ref far Job =
+	{
+	src:		ref object;
+	oj, j:		ref KernelJob;
+	jf:		ref far Job;
+
+	src = CurProc->animates;
+	oj = locateObject(src->myJob);
+	j = new KernelJob[ oj ];
+	jf = ref far Job(jobPublishKernel("job object", ":model.alys.job",
+								j, AR_ANY));
+	src->context newJob(jf, src->user, src->group);
+	src->myJob close();
+	if	(LogVector)
+		LogVector newJob(src->me, src->myJob, jf);
+	src->myJob = jf;
+	CurProc->myJob = src->myJob;
+	processJob(jf);
+	return src->myJob;
+	}
+
+myJob_:	public	() ref far Job =
+	{
+	return CurProc->myJob;
+	}
+
+KernelJob:	public	type	inherit Job	{
+	change:		int;
+	aliases:	ref alias_t;
+
+	public:
+
+constructor:	(j: ref KernelJob) =
+	{
+	change = 0;
+	if	(j)
+		aliases = j dupAliases();
+	else
+		aliases = 0;
+	}
+
+broadcastAttention:	gate	() =
+	{
+	i:	int;
+	o:	ref object;
+	n:	threadLock;
+
+	for	(i = 0; i < NOBJECTS; i++){
+		n lock();
+		o = ObjectTable[i];
+		if	(o &&
+			 o->myJob == objectId &&
+			 o->me != messageHeader->sender &&
+			 o->me != objectId)
+			o sendAttention();
+		n unlock();
+		}
+	}
+
+lastClose:	gate	() boolean =
+	{
+	i:	int;
+	o:	ref object;
+	n:	threadLock;
+
+	for	(i = 0; i < NOBJECTS; i++){
+		n lock();
+		o = ObjectTable[i];
+		if	(o &&
+			 o->myJob == objectId &&
+			 o->me != messageHeader->sender &&
+			 o->me != objectId)
+			o sendQuit();
+		n unlock();
+		}
+
+	na, a:	ref alias_t;
+
+	for	(a = aliases; a; a = na){
+		na = a->next;
+		delete a;
+		}
+	return TRUE;
+	}
+
+dupAliases:	() ref alias_t =
+	{
+	a, n, x:	ref alias_t;
+
+	n = 0;
+	for	(a = aliases; a; a = a->next)
+		n = new alias_t[ n, a->name, a->value ];
+	return n;
+	}
+/*
+	This function defines a new name/value pair.  Names are case
+	insensitive, but values are not touched.
+
+	A return value of SUCCESS indicates that the definition was accepted.
+	If the name is already defined, the new value will replace the old.
+ */
+alias:	gate	(name: [:] char, value: [:] char) int =
+	{
+	a:	ref alias_t;
+
+	for	(a = aliases; a; a = a->next)
+		if	(stringCompare(a->name, name) == 0){
+			delete a->value;
+			a->value = stringDup(value);
+			change++;
+			return SUCCESS;
+			}
+	aliases = new alias_t[ aliases, name, value ];
+	change++;
+	return SUCCESS;
+	}
+/*
+	The probe function returns the length, in characters, of the value
+	string corresponding to the name.  If the name is not defined, the
+	call is rejected.
+ */
+probe:	gate	(name: [:] char) Size =
+	{
+	a:	ref alias_t;
+
+	for	(a = aliases; a; a = a->next)
+		if	(stringCompare(a->name, name) == 0)
+			return |a->value;
+	reject(ERRINVALIDFUNC);
+	}
+/*
+	This message requests the size of the name for the alias whose index
+	is passed as the argument.  All aliases
+	are accessible through an index.  The order of aliases is unspecified.
+	Aliases are numbered from zero and if an index greater than the highest
+	defined alias is requested, the message is rejected.
+ */
+probeNameByIndex:	gate	(index: int) Size =
+	{
+	i:	int;
+	a:	ref alias_t;
+
+	for	(i = 0, a = aliases; a && i < index; a = a->next, i++)
+		;
+	if	(a)
+		return |a->name;
+	else
+		reject(ERRINVALIDFUNC);
+	}
+/*
+	This message requests the size of the value for the alias whose index
+	is passed as the argument.  All aliases
+	are accessible through an index.  The order of aliases is unspecified.
+	Aliases are numbered from zero and if an index greater than the highest
+	defined alias is requested, the message is rejected.
+ */
+probeValueByIndex:	gate	(index: int) Size =
+	{
+	i:	int;
+	a:	ref alias_t;
+
+	for	(i = 0, a = aliases; a && i < index; a = a->next, i++)
+		;
+	if	(a)
+		return |a->value;
+	else
+		reject(ERRINVALIDFUNC);
+	}
+/*
+	This function returns the value string corresponding to the name, if
+	any.  If the name is not defined, the message is rejected.
+ */
+value:	gate	(name: [:] char) [] char =
+	{
+	a:	ref alias_t;
+
+	for	(a = aliases; a; a = a->next)
+		if	(stringCompare(a->name, name) == 0)
+			return a->value;
+	reject(ERRINVALIDFUNC);
+	}
+/*
+	Get by index has to return the value.  All aliases
+	are accessible through an index.  The order of aliases is unspecified.
+	Aliases are numbered from zero and if an index greater than the highest
+	defined alias is requested, the message is rejected.
+ */
+valueByIndex:	gate	(index: int) [] char =
+	{
+	i:	int;
+	a:	ref alias_t;
+
+	for	(i = 0, a = aliases; a && i < index; a = a->next, i++)
+		;
+	if	(a)
+		return a->value;
+	else
+		reject(ERRINVALIDFUNC);
+	}
+/*
+	Get by index has to return the name.  All aliases
+	are accessible through an index.  The order of aliases is unspecified.
+	Aliases are numbered from zero and if an index greater than the highest
+	defined alias is requested, the message is rejected.
+ */
+nameByIndex:	gate	(index: int) [] char =
+	{
+	i:	int;
+	a:	ref alias_t;
+
+	for	(i = 0, a = aliases; a && i < index; a = a->next, i++)
+		;
+	if	(a)
+		return a->name;
+	else
+		reject(ERRINVALIDFUNC);
+	}
+/*
+	This message deletes the alias for the given name.  Indices may not be
+	preserved when an alias is undefined.
+ */
+undefine:	gate	(name: [:] char) int =
+	{
+	p, a:	ref alias_t;
+
+	for	(a = aliases, p = 0; a; p = a, a = a->next)
+		if	(stringCompare(a->name, name) == 0){
+			if	(p)
+				p->next = a->next;
+			else
+				aliases = a->next;
+			delete a;
+			change++;
+			return SUCCESS;
+			}
+	reject(ERRINVALIDFUNC);
+	}
+/*
+	Changes to the list of aliases will affect the results of index
+	calls.  As a result, any program wishing to extract alias information
+	from a job should ask for the change count before and after extracting
+	information.  If the change count differs before and after, the entire
+	extraction operation should be retried.
+ */
+changeId:	gate	() int =
+	{
+	return change;
+	}
+
+	};
+
+alias_t:	type	{
+	public:
+
+	next:		ref alias_t;
+	name:		[:] char;
+	value:		[:] char;
+
+constructor:	(x: ref alias_t, n: [:] char, v: [:] char) =
+	{
+	name = stringDup(n);
+	value = stringDup(v);
+	next = x;
+	}
+
+destructor:	() =
+	{
+	delete name;
+	delete value;
+	}
+
+	};

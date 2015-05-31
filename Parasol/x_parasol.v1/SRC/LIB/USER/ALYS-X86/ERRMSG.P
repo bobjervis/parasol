@@ -1,0 +1,165 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file, format, filesys, string;
+include	msgboard;
+
+NO_LINE:	public	const	fileOffset = ~0;
+
+MessageBoardName:	public	[:] char = "/service/errorBrowser";
+MessageCatalogName:	public	[:] char;
+
+messageGenerator:	public	type	{
+	public:
+
+objectName:	dynamic	() [:] char =
+	{
+	return "";
+	}
+
+lineno:		dynamic	(fileOffset) int =
+	{
+	return 0;
+	}
+
+sourceFilename:	dynamic	() [:] char =
+	{
+	return "";
+	}
+
+	};
+
+messageContext:	public	type	{
+	myBoard:	ref far messageBoard;
+	catalog:	catalog_t;
+
+	public:
+
+	errorCount:	int;
+	phase:		byte;
+	obj:		ref messageGenerator;
+					// object associated with the
+					// message
+	offset:		fileOffset;	// offset in source file
+	displayEmitter:	ref stringEmitter;
+	displayBuffer:	[256] char;
+
+constructor:	() =
+	{
+	errorCount = 0;
+	phase = 0;
+	obj = 0;
+	offset = 0;
+	myBoard = 0;
+	displayEmitter = new stringEmitter[ displayBuffer ];
+	}
+
+destructor:	() =
+	{
+	delete displayEmitter;
+	}
+
+clear:	() =
+	{
+	obj = 0;
+	offset = 0;
+	}
+
+fatal:	(s: [:] char) =
+	{
+	fatalX(s, "", "", 0);
+	}
+
+error:	(s: [:] char) =
+	{
+	errorX(s, "", "", 0);
+	}
+
+warn:	(s: [:] char) =
+	{
+	warnX(s, "", "", 0);
+	}
+
+fatalX:	(msgid: [:] char, s: [:] char, a: [:] char, d: int) =
+	{
+	prefix(msgid, MSG_FATAL, s, a, d);
+	errorCount++;
+	exit(1);
+	}
+
+errorX:	(msgid: [:] char, s: [:] char, a: [:] char, d: int) =
+	{
+	prefix(msgid, MSG_ERROR, s, a, d);
+	errorCount++;
+	}
+
+warnX:	(msgid: [:] char, s: [:] char, a: [:] char, d: int) =
+	{
+	prefix(msgid, MSG_WARN, s, a, d);
+	}
+
+
+printf:	(fmt: [:] char, ...) =
+	{
+	sp:	[:] char;
+	i:	int;
+
+	displayEmitter format(fmt, ...);
+	sp = displayEmitter result();
+	if	(|sp > |displayBuffer - 50 ||
+		 stringScan(sp, '\n') != -1){
+		if	(myBoard == 0)
+			connect();
+//		printf("%S\n", sp);
+		myBoard newMessage(0, 0, 0, sp, "", 0, "");
+		displayEmitter = [ displayBuffer ];
+		}
+	}
+
+prefix:	dynamic	(msgid: [:] char, msgClass: messageClass_t, s: [:] char,
+				a: [:] char, d: int) =
+	{
+	buffer:	[256] char;
+	file:	[:] char;
+	f:	[MAXPATH] char;
+	sp:	[:] char;
+	se:	stringEmitter = [ buffer ];
+
+	if	(obj){
+		file = f;
+		sp = obj sourceFilename();
+		file [:]= FileSystem getAbsolutePath(sp);
+		se printf("object=%S\n", obj objectName());
+		}
+	else
+		file = "";
+	if	(|s)
+		se printf("s=%S\n", s);
+	if	(|a)
+		se printf("a=%S\n", a);
+	se printf("d=%d\n", d);
+	sp = se result();
+//	printf("%S %S %d %S", msgid, file, offset, sp);
+	if	(myBoard == 0)
+		connect();
+	myBoard newMessage(catalog, 0, msgClass, msgid, file, offset, sp);
+	}
+
+	private:
+
+connect:	() =
+	{
+	myBoard = ref far messageBoard(FileSystem 
+					attach(MessageBoardName,
+					":desktop.msgboard.messageBoard"));
+	catalog = myBoard lookupCatalog("pc-compiler");
+	if	(catalog == 0 && |MessageCatalogName)
+		catalog = myBoard defineCatalog("pc-compiler", 
+							MessageCatalogName);
+	}
+
+	};

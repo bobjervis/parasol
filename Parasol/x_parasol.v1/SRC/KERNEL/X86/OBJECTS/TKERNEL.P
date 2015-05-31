@@ -1,0 +1,242 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	string;
+include	process, hprocess;
+include	alys;
+include	node;
+include	runload, lodload;
+include	environ, kernenv;
+include	filesys, file;
+include	alysfs;
+include	backbone;
+include	kprintf;
+include	syscall;
+include	dos_vol;
+include	pc_video;
+include	pc_hdisk;
+include	pc_fdisk;
+include	pc_keybd;
+include	pc_comm;
+include	arena;
+include	object, message, memory;
+include	consfile;
+include	console;
+include	window;
+include	video;
+/*
+	This is the ALYS/386 boot sequence.  The ALYS message passing
+	kernel has been initialized by this point, so what needs to be
+	done now is to bring up the higher-level functions of the system.
+
+	The context at this point is as follows:
+
+		Object 32 - the 'boot' object
+		Object 33 - the Boot Job object
+		Object 34 - the Host object
+		Object 35 - the Console object
+		Object 36 - the File System root object /
+		Object 37 - The FIle System context object
+
+		Process 0 - animates object 32
+
+		Arena 0 - the kernel arena, an empty LDT
+ */
+boot:	entry	() =
+	{
+	CurProc->where = CurArena;
+	AlysNode.kernelVersion = 0x101;
+	kprintf("ALYS Version %d.%02d  Copyright (c) 1993,4 Robert Jervis    "
+						__DATE__ " " __TIME__ "\n\n", 
+						AlysNode.kernelVersion >> 8,
+						AlysNode.kernelVersion & 0xff);
+
+		// Load the disk partition tables
+
+	makeFileContext0();
+	pcFloppyDiskInitialization();
+	pcHardDiskInitialization();
+	mountDOSVolumes();
+	Root createDevice("con", &ConsoleFile, 
+				FA_DEVICE|FA_READ|FA_WRITE|FA_CONTROL);
+	defineHotKey(CTRL_CENTER, &cycleWindows);
+	defineHotKey(SYSREQ, &systemRequest);
+	defineHotKey(ALT_F1, &kernelDebugEvent2);
+	defineHotKey(CTRL_F1, &kernelDebugEvent3);
+	defineHotKey(SHFT_F1, &kernelDebugEvent4);
+	defineHotKey(F1, &kernelDebugEvent5);
+
+	x:	ref far external;
+
+	x = publishKernel("SystemEnvironment", &SystemEnvironment, AR_ANY,
+				AR_NONE, AR_NONE, AR_NONE);
+	BootContext makeLocal(x, Environment);
+	startComm();
+	loadEnvironment();
+	RunLoader register();
+	LodLoader register();
+
+	sbuf:	[MAXPATH] char;
+	shell:	[:] char;
+	shell = sbuf;
+	try
+		shell [:]= Environment get("BOOTCOM");
+	except
+		kprintf("No BOOTCOM environment string\n");
+	try
+		FileSystem spawn(0, shell, "-boot");
+	except
+		kprintf("Couldn't find '%S'\n", shell);
+	Boot loop();
+/*
+		// Sleep waiting for something to happen
+
+	KernelDebugger = [ 0, 0, 0 ];
+
+	myWindow:	ref PC_textWindow;
+	myWindowId:	ref far PC_textWindow;
+
+	myWindow = new PC_textWindow[ [ 80, 25 ], &ConsoleObject ];
+	myWindowId = ref far PC_textWindow(
+				jobPublishKernel("kernelConsoleWindow", 
+							myWindow, AR_ANY));
+	myWindowId zoom([ 0, 0 ], WZ_NORMAL);
+
+	ch:	ref PC_consoleChannel;
+
+	ch = new PC_consoleChannel[ myWindowId ];
+	KernelConsole = ref far channel(jobPublishKernel("kconChannel", ch, AR_ANY));
+
+	for	(;;){
+		buf:	[100] char;
+		s:	[:] char;
+		i:	int;
+
+//		KernelDebugger down(FALSE);
+		KernelConsole write("kernel-: ");
+		s = buf;
+		s [:]= KernelConsole read();
+		if	(|s &&
+			 s[|s-1] == '\n')
+			(|s)--;
+		if	(stringCompare(s, "o") == 0){
+			displayObjects();
+			}
+		else if	(stringCompare(s, "p") == 0){
+			displayProcesses();
+			}
+		else
+			help();
+		}
+ */
+	}
+
+KernelDebugger:	kernelSemaphore;
+KernelConsole:	ref far channel;
+
+kernelDebugEvent2:	(keystroke) =
+	{
+	displayObjects();
+	}
+
+kernelDebugEvent3:	(keystroke) =
+	{
+	displayMessages();
+	}
+
+kernelDebugEvent4:	(keystroke) =
+	{
+	LogSends = !LogSends;
+	}
+
+kernelDebugEvent5:	(keystroke) =
+	{
+	displayProcesses();
+	}
+
+SystemEnvironment:	public	kernelEnvironment;
+
+EOF_MARK:	const	char = 26;		// make ^Z an EOF
+
+loadEnvironment:	() =
+	{
+	fd:		ref far channel;
+	len:		int;
+	buf:		[:] byte;
+	cp:		* char;
+
+		/* Open the file */
+
+	fd = FileSystem open("/c/alys.env", AR_READ);
+	if	(fd == 0){
+		kprintf("Couldn't open '/c/alys.env'\n");
+		return;
+		}
+	len = fd seek(0, 2);
+	fd seek(0, 0);
+	buf = new [len + 1] byte;
+//	buf = ref byte(alloc(len + 1))[:len + 1];
+	buf [:]= fd read();
+	fd close();
+	if	(|buf != len)
+		return;			// something funny in the read
+	buf[len] = EOF_MARK;		// force an EOF mark
+	cp = ref char(buf);
+	for	(;;){
+		name:	[:] char;
+		value:	[:] char;
+		n:	ref char;
+
+		while	(isspace(*cp))
+			cp++;
+		if	(*cp == EOF_MARK)
+			break;
+		if	(*cp == '/'){
+			do
+				cp++;
+				while	(*cp != EOF_MARK &&
+					 *cp != '\n');
+			continue;
+			}
+		n = cp;
+		while	(!isspace(*cp) &&
+			 *cp != '\r' &&
+			 *cp != '=' &&
+			 *cp != EOF_MARK)
+			cp++;
+		name = n[:cp - n];
+		while	(*cp == ' ' || *cp == '\t')
+			cp++;
+		if	(*cp != '='){
+			while	(*cp != EOF_MARK &&
+				 *cp != '\n')
+				cp++;
+			continue;
+			}
+		cp++;
+		while	(*cp == ' ' || *cp == '\t')
+			cp++;
+		n = cp;
+		while	(*cp != EOF_MARK &&
+			 *cp != '\n' &&
+			 *cp != '\r')
+			cp++;
+		value = n[:cp - n];
+		Environment define(name, value);
+		while	(*cp != EOF_MARK &&
+			 *cp != '\n')
+			cp++;
+		}
+	free(buf);
+	}
+
+help:	() = {
+	KernelConsole write(
+		"o	Display object table\n"
+		"p	Display process table\n"
+		);
+	}

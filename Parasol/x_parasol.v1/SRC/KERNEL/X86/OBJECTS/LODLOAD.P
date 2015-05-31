@@ -1,0 +1,309 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	kprintf;
+include	string;
+include	hardware;
+include	vmemory;
+include	file, filesys;
+include	node;
+include	alys;
+include	process;
+include	runfile;
+include	arena;
+include	uarena;
+include	error;
+include	memory;
+include	object;
+include	hprocess;
+include	kdriver;
+/*
+	This loads ALYS version 2 .LOD files.  The load function creates
+	an object that acts as the primary object for the arena.  That
+	object id is returned.
+ */
+LodLoader:	public	inherit	loader	{
+
+load:	dynamic	(par: ref far External, d: ref far directory, cmd: [:] char, 
+					args: [:] char) ref far External =
+	{
+	ext:	[:] char;
+
+	ext = getExtension(cmd);
+
+		// Only load .RUN files
+
+	if	(stringIcompare(ext, ".lod") != 0)
+		LodLoadTrap raise();
+
+	p:	ref process;
+	i:	int;
+
+	p = process create();
+	if	(p == 0)
+		LodLoadTrap raise();
+	i = loadLodfile(par, p, d, cmd, args);
+	if	(i){
+		p free();
+		LodLoadTrap raise();
+		}
+//	kprintf("p->animates->where = %p\n", p->animates->where);
+//	kprintf("p->animates->me = %d\n", p->animates->me);
+	x: ref far External;
+
+	x = p->animates->me;
+	p setRunnable();
+	return x;
+	}
+
+debugLoad:	dynamic	(par: ref far External, d: ref debug_t, 
+				dr: ref far directory, cmd: [:] char, 
+				args: [:] char) boolean =
+	{
+	}
+
+	};
+
+loadLodfile:	public	(par: ref far External, p: ref process, 
+					d: ref far directory, 
+					rf: [:] char, args: [:] char) int =
+	{
+	fd:		ref far channel;
+
+		/* Open the file */
+
+	if	(d)
+		fd = d open(rf, AR_READ);
+	else
+		fd = FileSystem open(rf, AR_READ);
+//	kprintf("fd = %d file = %S\n", fd, rf);
+	if	(fd == 0)
+		LodLoadTrap raise();
+
+	Lh:		lodHeader;
+	r:		[:] byte;
+
+		// Read the header and verify it
+
+	r = ref byte(&Lh)[:sizeof Lh];
+	r [:]= fd read();
+	if	(|r != sizeof Lh){
+		fd close();
+		LodLoadTrap raise();
+		}
+//	kprintf("magic = %x version = %d\n", Lh.magic, Lh.version);
+	if	(Lh.magic != LOD_MAGIC ||
+		 Lh.version != LOD_VERSION){
+		fd close();
+		LodLoadTrap raise();
+		}
+
+	data, code:	ref segment;
+
+		// create the code segment
+
+	code = segment create(0, Lh.codeLen, Lh.codeLen, Lh.codeLen);
+	if	(code == 0){
+		fd close();
+		return ERRNOMEMORY;
+		}
+
+		// Read the code segment
+		// Note: the code segment is locked down.
+
+	fd seek(Lh.image, 0);
+	r = ref byte(code lock(0))[:Lh.codeLen];
+	r [:]= fd read();
+	if	(|r != ||r){
+		fd close();
+		code close();
+		return ERRNOTRUNFILE;
+		}
+//	kprintf("Code segment read\n");
+
+		// Create the data segment
+
+	j:	vaddr_t;
+
+	j = Lh.dataTotalLen + |args + MAXPATH + 7;
+	data = segment create(0, Lh.dataConstLen, j, j);
+	if	(data == 0){
+		fd close();
+		code close();
+		return ERRNOMEMORY;
+		}
+
+		// Read the data segment
+
+	r = ref byte(data lock(0))[:Lh.dataInitLen];
+	r [:]= fd read();
+	if	(|r != ||r){
+		fd close();
+		code close();
+		data close();
+		return ERRNOTRUNFILE;
+		}
+
+//	kprintf("Data segment read\n");
+	eof:		unsigned;
+	i:		unsigned;
+	b:		[:] byte;
+	fix:		ref unsigned[32];
+	loc:		ref pointer;
+	reloc:		pointer;
+	adj, off:	vaddr_t;
+	sfix_t:	type	packed	{ public:
+		loc:	unsigned[32];
+		off:	unsigned[32];
+		};
+
+	eof = fd seek(0, SEEK_END);
+	fd seek(Lh.fixups, SEEK_ABS);
+	i = eof - Lh.fixups;
+	r = new [i] byte;
+	r [:]= fd read();
+	fd close();
+//	kprintf("\n\n\n|r = %x ||r = %x Lh.fixups = %x eof = %x\n", |r, ||r,
+//			Lh.fixups, eof);
+	if	(|r != ||r){
+		code close();
+		data close();
+		return ERRNOTRUNFILE;
+		}
+
+		// Apply local fixups
+
+	fix = pointer(r);
+	i = Lh.fixups;
+	while	(i < Lh.symbolicStrings){
+		off = *fix & 0x3fffffff;
+		if	(*fix & 0x40000000){
+			if	(off + sizeof vaddr_t > data->length){
+				code close();
+				data close();
+				return ERRNOTRUNFILE;
+				}
+			off += data->address;
+			}
+		else	{
+			if	(off + sizeof vaddr_t > code->length){
+				code close();
+				data close();
+				return ERRNOTRUNFILE;
+				}
+			off += code->address;
+			}
+		loc = mappedToAddressable(off);
+		if	(*fix & 0x80000000)
+			reloc = mappedToAddressable(data->address + 
+					*ref vaddr_t(loc));
+		else
+			reloc = pointer(mappedToCodeAddress(code->address + 
+					*ref vaddr_t(loc)));
+//		kprintf("@%p(%x) -> %p (%x)\n", loc, off, reloc, *ref vaddr_t(loc));
+		*loc = reloc;
+		i += sizeof *fix;
+		fix++;
+		}
+//	kprintf("Local fixups applied\n");
+	strings:	ref char;
+	sfix:		ref sfix_t;
+
+		// Now apply external fixups
+
+	strings = r + Lh.symbolicStrings - Lh.fixups;
+	sfix = pointer(r + Lh.symbolicFixups - Lh.fixups);
+	i = Lh.symbolicFixups;
+	while	(i < eof){
+		off = sfix->loc & 0x3fffffff;
+		if	(sfix->loc & 0x40000000){
+			if	(off + sizeof vaddr_t > data->length){
+				code close();
+				data close();
+				return ERRNOTRUNFILE;
+				}
+			off += data->address;
+			}
+		else	{
+			if	(off + sizeof vaddr_t > code->length){
+				code close();
+				data close();
+				return ERRNOTRUNFILE;
+				}
+			off += code->address;
+			}
+		loc = mappedToAddressable(off);
+		adj = *ref vaddr_t(loc);
+
+		target:	ref byte;
+
+		target = __symbols lookup(strings + sfix->off);
+//		kprintf("'%s' target = %p\n", strings + sfix->off, target);
+		if	(target == 0){
+			code close();
+			data close();
+			return ERRNOTRUNFILE;
+			}
+		if	(sfix->loc & 0x80000000)
+			target = pointer(target - 
+				ref byte(mappedToCodeAddress(code->address)));
+		*loc = target + adj;
+		i += sizeof *sfix;
+		sfix++;
+		}
+	delete r;
+
+		// Copy the program arguments
+
+	strings = mappedToAddressable(data->address + Lh.dataTotalLen - 1);
+	copyArgs(d, rf, data, strings, args);
+
+		// Create the driver object
+
+	drvr:	ref alysDriver;
+	drvr = new alysDriver[ 	code,
+				data,
+				Lh.symbols, 
+				strings,
+				Lh.entryFuncs, 
+				Lh.cleanupFuncs ];
+
+	if	(!drvr success()){
+		drvr unload();
+		return ERRMDRIVER;
+		}
+
+	drvrInit:	ref driverInit;
+
+	drvrInit = new driverInit[ drvr ];
+	p kernelProcess(rf, ":", par, &executeDriver, drvrInit);
+	return SUCCESS;
+	}
+
+copyArgs:	(d: ref far directory, path: [:] char, dseg: ref segment, 
+				cp: ref char, args: [:] char) =
+	{
+	cmd:	[:] char;
+	ca:	[:] char;
+	ip:	ref int;
+
+	ip = ref int(cp);
+	cp += 8;
+	cmd = cp[:MAXPATH];
+	if	(d)
+		cmd [:]= d getAbsolutePath(path);
+	else
+		cmd [:]= FileSystem getAbsolutePath(path);
+	ip[0] = |cmd;
+	ip[1] = |args;
+	cp += |cmd;
+	ca = cp[:|args];
+	ca [:]= args;
+	dseg grow(vaddr_t(cp + |args));
+	}
+
+LodLoadTrap:	Trap;

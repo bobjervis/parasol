@@ -1,0 +1,129 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	alys;
+
+date_t:	public	type	{
+	public:
+
+	second:		byte;			// 0-61
+	minute:		byte;			// 0-59
+	hour:		byte;			// 0-23
+	monthday:	byte;			// 1-31
+	month:		byte;			// 0-11
+	year:		unsigned[16];		// year since 1900
+	weekday:	byte;			// 0-6
+	yearday:	unsigned[16];		// 0-365
+	isDST:		boolean;		// Daylight Savings Flag
+
+encode:	() Time =
+	{
+	day:		unsigned;
+	century:	unsigned;
+	yr:		unsigned;
+	i:		int;
+
+		// Copy the date and time from CMOS
+
+	day = monthday - 1;			// use zero based day count
+	for	(i = 0; i < month; i++)
+		day += monthDay[i];		// add in the months we're
+						// done with
+	century = (year + 1900) / 100;
+	if	(year & 3 == 0 &&		// every 4 years are leap years
+		 (year != 00 ||			// except century marks not
+		  century & 3 == 0) &&		// divisible by 400 
+			 month > 1)
+			day++;			// we're past the leap day
+	yr = year - 70;				// Use the UNIX era
+	day += (yr + 1) >> 2;			// add leap days
+	day -= (yr + 69) / 100;			// 	deduct centuries
+	day += (yr + 369) / 400;		// 	add back 4 centuries
+	day += yr * 365;			// now add the basic days
+
+		// day is now the number of days since Jan 1, 1970
+
+	return second + (minute + (hour + Time(day) * 24) * 60) * 60;
+	}
+/*
+ *	decodeUniversal - convert a time_t to a broken-down UST (universal
+ *	standard time).
+ */
+decodeUniversal:	(t: Time) =
+	{
+	decode(t);
+	}
+/*
+ *	decode - convert a time_t to a broken-down local time 
+ */
+decode:	(t: Time) =
+	{
+	leap:		boolean;
+
+	isDST = FALSE;
+	second = t % 60;
+	t /= 60;				// reduce t to minutes
+	minute = t % 60;
+	t /= 60;				// reduce t to hours
+	hour = t % 24;
+	t /= 24;				// reduce t to days
+
+	weekday = t % 7;
+	leap = FALSE;
+	if	(t < 365)
+		year = 70;
+	else if	(t < 365 * 2){
+		year = 71;
+		t -= 365;
+		}
+	else	{
+		t -= 365 * 2;
+		year = 72;
+		q:	unsigned;
+
+		q = t / (365 * 4 + 1);		// compute number of quad years
+		t %= (365 * 4 + 1);
+		year += q * 4;
+		if	(t < 366){
+			if	(t >= 59)	// past leap day?
+				leap = TRUE;	// subtract it out
+			}
+		else	{
+			year++;
+			t -= 366;
+			year += (t / 365);
+			t = t % 365;
+			}
+		}
+
+		// leap is TRUE if we need to adjust for leap day
+		// t is julian day (0-365)
+
+	i:	int;
+
+	yearday = t;
+	if	(leap)
+		t--;		// now drop any leap day
+
+	for	(i = 0; i < 12; i++){
+		if	(t < monthDay[i])
+			break;
+		t -= monthDay[i];
+		}
+	month = i;
+	monthday = t + 1;
+	}
+
+	};
+
+monthDay:	const	[12] byte = 
+			[ 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 ];
+
+time:	public	() Time =
+	{
+	return myHost() time();
+	}

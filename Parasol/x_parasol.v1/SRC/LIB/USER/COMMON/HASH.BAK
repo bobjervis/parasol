@@ -1,0 +1,126 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	string;
+include	file;
+
+hash:	public	(cp: [:] char) ref identifier =
+	{
+	return identifier create(cp, 0);
+	}
+
+IDHASH:		public	const unsigned = 1024;
+
+Idhash:	public	[IDHASH] * identifier;
+
+identifier:	public	type	packed	{
+	Next:		* identifier;
+	Globals:	byte;
+	Slength:	byte;
+
+	public:
+
+	Token:		byte;
+	Spelling:	private	[] char;
+
+create:	factory	(buf: [:] char, tok: int) ref identifier =
+	{
+	i:		ref identifier;
+	prev:		ref identifier;
+	a:		int;
+	j:		int;
+	cp:		ref char;
+
+//	Probes++;
+	j = a = |buf;
+	if	(a > 1)
+		a = (a << 6 + buf[0] + buf[a - 2] << 1)
+				% IDHASH;
+	else
+		a = buf[0];
+	i = Idhash[a];
+	for	(prev = 0; i; prev = i, i = i->Next){
+//		Compares++;
+		if	(stringCompare(buf, i->Spelling[:i->Slength]) == 0){
+//			if	(i->Token)		// a keyword
+//				Keywords++;
+			if	(prev){
+				prev->Next = i->Next;
+				i->Next = Idhash[a];
+				Idhash[a] = i;
+				}
+			return i;
+			}
+		}
+//	Inserts++;
+	self = threadHeap() alloc(sizeof identifier + j + 1);
+	Next = Idhash[a];
+	Idhash[a] = self;
+	Token = tok;
+	Globals = 0;
+	Slength = |buf;
+//	Spelling [:]= buf;
+	memCopy(Spelling, buf, Slength);
+	return self;
+	}
+/*
+checkIt:	factory	(x: int) =
+	{
+	i:	ref identifier;
+
+	i = ref identifier(0x9fa08);
+	if	(i + 1 <= _brklvl){
+		if	(i->Next != 0 && i->Next < pointer(0x1000))
+			exit(x);
+		}
+	}
+ */
+compare:	(id: ref identifier) int =
+	{
+	return stringCompare(Spelling[:Slength], id->Spelling[:id->Slength]);
+	}
+
+isSpelled:	(s: [:] char) boolean =
+	{
+	return stringCompare(Spelling[:Slength], s) == 0;
+	}
+
+spelling:	() [:] char =
+	{
+	return Spelling[:Slength];
+	}
+
+addGlobal:	() =
+	{
+	if	(Globals < 255)
+		Globals++;
+	}
+
+deleteGlobal:	() =
+	{
+	if	(Globals == 0)
+		printf("deleteGlobal without add: %s\n", Spelling);
+	else if	(Globals < 255)
+		Globals--;
+	}
+
+	};
+/*
+Probes:		int;
+Compares:	int;
+Keywords:	int;
+Inserts:	int;
+
+final:	cleanup	() =
+	{
+	printf("Probes =    %d\n", Probes);
+	printf("Compares =  %d\n", Compares);
+	printf("Ratio =     %f\n", float(Compares) / Probes);
+	printf("Inserts =   %d\n", Inserts);
+	printf("Keywords =  %d\n", Keywords);
+	}
+*/

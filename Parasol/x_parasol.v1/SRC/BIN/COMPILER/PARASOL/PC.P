@@ -1,0 +1,33 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+
+include	cmdline, symtab, build;
+
+main:	entry	() =
+	{
+	n:	Size;
+
+	if	(|commandLine.arguments == 0){
+		printf( "Use is: PC [ options ] project_name\n");
+		help();
+		}
+	n = long(_brklvl);
+	parseCommandLine();
+	compile();
+	printf("Lines parsed %ld Lines compiled %ld ", 
+				Build linesParsed(), 
+				Build linesCompiled());
+	printf("Heap size = %ldK Free list = %ldK\n", 
+				((long(_brklvl) - n) + 512) / 1024, 
+				(threadHeap() freeListSize() + 512) / 1024);
+	if	(CurrentContext->errorCount)
+		exit(EX_FAIL);
+	else
+		exit(EX_SUCCESS);
+	}

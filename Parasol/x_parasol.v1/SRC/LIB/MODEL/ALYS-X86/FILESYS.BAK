@@ -1,0 +1,427 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	alys;
+include	error;
+include	string;
+include	file;
+
+getExtension:	public	(path: [:] char) [:] char =
+	{
+	i:	int;
+
+	i = stringReverseScan(path, '/');
+	if	(i >= 0)
+		path = path[i + 1:];
+	i = stringReverseScan(path, '.');
+	if	(i < 0)
+		return "";
+	else if	(i == 0){
+		if	(|path == 1)
+			return "";		// filename is .
+		}
+	else if	(i == 1){
+		if	(|path == 2 &&
+			 path[0] == '.')	// filename is ..
+			return "";
+		}
+	return path[i:];
+	}
+
+getDirectory:	public	(path: [:] char) [:] char =
+	{
+	i:	int;
+
+	i = stringReverseScan(path, '/');
+	if	(i < 0 ||
+		 |path == 1)
+		return "";
+	else if	(i == 0)		// handle the root
+		i++;
+	return path[:i];
+	}
+
+getFilename:	public	(path: [:] char) [:] char =
+	{
+	i:	int;
+
+	i = stringReverseScan(path, '/');
+	if	(i >= 0){
+		if	(|path != 1)
+			path = path[i + 1:];
+		}
+	i = stringReverseScan(path, '.');
+	if	(i < 0)
+		return path;
+	else if	(i == 0){
+		if	(|path == 1)
+			return path;		// filename is .
+		}
+	else if	(i == 1){
+		if	(|path == 2 &&
+			 path[0] == '.')	// filename is ..
+			return path;
+		}
+	return path[:i];
+	}
+
+stripExtension:	public	(path: [:] char) [:] char =
+	{
+	s:	[:] char;
+	i, j:	int;
+
+	s = path;
+	j = stringReverseScan(path, '/');
+	if	(j >= 0)
+		path = path[j + 1:];
+	i = stringReverseScan(path, '.');
+	if	(i < 0)
+		return s;
+	else if	(i == 0){
+		if	(|path == 1)
+			return s;		// filename is .
+		}
+	else if	(i == 1){
+		if	(|path == 2 &&
+			 path[0] == '.')	// filename is ..
+			return s;
+		}
+	return s[:i + j + 1];
+	}
+
+stripDirectory:	public	(path: [:] char) [:] char =
+	{
+	i:	int;
+
+	i = stringReverseScan(path, '/');
+	if	(i < 0)
+		return path;
+	else if	(|path == 1)
+		return path;
+	else
+		return path[i + 1:];
+	}
+
+PathTrap:	public	Trap;
+
+makePath:	public	(path: [:] char, dir: [:] char, file: [:] char, 
+					ext: [:] char) [:] char =
+	{
+	len:	int;
+	extraSlash, extraDot: boolean;
+
+	extraSlash = FALSE;
+	extraDot = FALSE;
+	len = |dir + |file + |ext;
+	if	(|dir && dir[|dir - 1] != '/'){
+		len++;
+		extraSlash = TRUE;
+		}
+	if	(|ext && ext[0] != '.'){
+		len++;
+		extraDot = TRUE;
+		}
+	if	(len > ||path)
+		PathTrap raise();
+	path [:]= dir;
+	if	(extraSlash)
+		path = stringAppend(path, "/");
+	path = stringAppend(path, file);
+	if	(extraDot)
+		path = stringAppend(path, ".");
+	return stringAppend(path, ext);
+	}
+
+finder:	public	type	{
+	public:
+	pathname:	[:] char;
+	attrib:		fAttributes_t;
+	ftime:		long;
+	size:		long;
+	dotFilesFlag:	boolean;
+
+open:	(path: [:] char, fpattern: [:] char, attrib: int) int =
+	{
+	patternAttr = ~attrib &
+			 (FA_HIDDEN|FA_SYSTEM|FA_VLABEL|FA_DIR);
+	baseLen = |path;
+	pathname = fileBuf;
+	pathname [:]= path;
+	if	(baseLen == 1 &&
+		 path[0] == '/')
+		;
+	else if	(baseLen != 0){
+		fileBuf[baseLen] = '/';
+		baseLen++;
+		}
+	patternName = patternBuf;
+	patternName [:]= fpattern;
+
+	if	(|path == 0)
+		path = ".";
+	scanner = FileSystem scanDirectory(path);
+	dotFilesFlag = TRUE;
+	if	(scanner == 0)
+		return ERRNOPATH;
+	else	{
+		scanner = ref far directoryScanner(makeAnyLocal(scanner));
+		return SUCCESS;
+		}
+	}
+
+close:	() =
+	{
+	scanner close();
+	}
+
+showDotFiles:	(sdf: boolean) =
+	{
+	dotFilesFlag = sdf;
+	}
+
+next:	() int =
+	{
+	i:		int;
+	err:		int;
+	cp:		ref char;
+	n:		int;
+	filename:	[12] char;
+	x:		fileDescriptor_t;
+	fname:		[:] char;
+	nm:		[:] char;
+
+	for	(;;){
+		x = scanner next();
+		if	(x.nlen == 0)
+			return ERRNOFILE;
+
+		if	(x.info.attributes & patternAttr)
+			continue;
+		fname = x.name[:x.nlen];
+		if	(!dotFilesFlag &&
+			 patternName[0] != '.' &&
+			 fname[0] == '.')
+			continue;
+		if	(!match(fname, patternName))
+			continue;
+		break;
+		}
+	attrib = x.info.attributes;
+	ftime = x.info.ftime;
+	size = x.info.size;
+	nm = fileBuf[baseLen:];
+	nm [:]= fname;
+	pathname = fileBuf[:baseLen + |nm];
+	return SUCCESS;
+	}
+
+private:
+
+	patternName:	[:] char;
+	patternBuf:	[MAXPATH - MAXDIR] char;
+	patternAttr:	int;
+	baseLen:	byte;
+	fileBuf:	[MAXPATH] char;
+	scanner:	ref far directoryScanner;
+	};
+
+match:	(s: [:] char, pat: [:] char) boolean =
+	{
+	while	(|pat){
+		if	(pat[0] == '*'){
+			pat = pat[1:];
+			if	(|pat == 0)
+				return TRUE;
+			while	(|s){
+				if	(match(s, pat))
+					return TRUE;
+				s = s[1:];
+				}
+			return FALSE;
+			}
+		if	(|s == 0)
+			return FALSE;
+		if	(pat[0] != '?' &&
+			 pat[0] != s[0])
+			return FALSE;
+		pat = pat[1:];
+		s = s[1:];
+		}
+	return |s == 0;
+	}
+
+pathList:	public	type	{
+	Path:	[:] char;
+	Buffer:	[MAXPATH] char;
+
+	public:
+
+constructor:	() =
+	{
+	Path = stringDup("");
+	}
+
+useEnvironment:	(varName: [:] char) =
+	{
+	i:	Size;
+	j:	ref far Job;
+
+	j = myJob();
+	delete Path;
+	i = j probe(varName);
+	Path = new [i] char;
+	Path [:]= j value(varName);
+	}
+
+useString:	(path: [:] char) =
+	{
+	delete Path;
+	Path = stringDup(path);
+	}
+
+includeEnvironment:	(varName: [:] char) =
+	{
+	i:	Size;
+	p:	[:] char;
+	s:	[:] char;
+	j:	ref far Job;
+
+	if	(|Path == 0){
+		useEnvironment(varName);
+		return;
+		}
+	j = myJob();
+	i = j probe(varName);
+	p = new [|Path + i + 1] char;
+	p [:]= Path;
+	p = stringAppend(p, ";");
+	s = p[|Path + 1:];
+	s [:]= j value(varName);
+	|p = ||p;
+	delete Path;
+	Path = p;
+	}
+
+includeString:	(path: [:] char) =
+	{
+	p:	[:] char;
+
+	if	(|Path == 0){
+		useString(path);
+		return;
+		}
+	p = new [|Path + |path + 1] char;
+	p [:]= Path;
+	p = stringAppend(p, ";");
+	p = stringAppend(p, path);
+	delete Path;
+	Path = p;
+	}
+
+clearPath:	() =
+	{
+	delete Path;
+	}
+
+search:	(file: [:] char, ...) [:] char =
+	{
+	ffile:	[:] char;
+	ext:	[:] char;
+	dir:	[:] char;
+	i:	int;
+	ap:	ArgumentList;
+
+	ext = getExtension(file);
+	if	(|ext){
+		i = FileSystem access(file, AR_READ);
+		if	(i == SUCCESS)
+			return file;
+		}
+	else	{
+		ffile = searchExtensions(file, ...);
+		if	(|ffile)
+			return ffile;
+		}
+	dir = getDirectory(file);
+	if	(|dir)
+		return "";
+	pathp:	[:] char;
+	cp:	ref char;
+	next:	[:] char;
+
+	for	(pathp = Path; |pathp; ){
+		ffile = Buffer;
+		i = stringScan(pathp, ';');
+		if	(i >= 0){
+			ffile [:]= pathp[:i];
+			next = pathp[i + 1:];
+			}
+		else	{
+			ffile [:]= pathp;
+			next = "";
+			}
+		if	(|ffile && ffile[|ffile - 1] != '/')
+			ffile = stringAppend(ffile, "/");
+		ffile = stringAppend(ffile, file);
+		if	(|ext){
+			i = FileSystem access(ffile, AR_READ);
+			if	(i == SUCCESS)
+				return ffile;
+			}
+		else	{
+			ffile = searchExtensions(ffile, ...);
+			if	(|ffile)
+				return ffile;
+			}
+		if	(|next == 0)
+			break;
+		pathp = next;
+		}
+	return "";
+	}
+
+	};
+
+searchExtensions:	(f: [:] char, ap: ArgumentList) [:] char =
+	{
+	cp:	ref char;
+	buffer:	static	[MAXPATH] char;
+	file:	[:] char;
+	xp:	[:] char;
+	i:	int;
+	j:	int;
+
+	file = buffer;
+	file [:]= f;
+	xp = file[|file:MAXPATH];
+	j = |file;
+	for	(;;){
+		ap nextArg(&cp, sizeof cp);
+		if	(cp == 0)
+			break;
+		xp [:]= cp[:stringLength(cp)];
+		|file = j + |xp;
+		i = FileSystem access(file, AR_READ);
+		if	(i >= 0)
+			return file;
+		}
+	return "";
+	}
+
+typeStringInherits:	public	(x: [:] char, y: [:] char) boolean =
+	{
+	if	(|x < |y)
+		return FALSE;
+	else if	(|x > |y){
+		if	(y[|x] != ':')
+			return FALSE;
+		}
+	if	(memCompare(x, y, |y) == 0)
+		return TRUE;
+	else
+		return FALSE;
+	}

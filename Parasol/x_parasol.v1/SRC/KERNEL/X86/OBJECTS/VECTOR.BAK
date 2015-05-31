@@ -1,0 +1,904 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	alys;
+include	object;
+include	pc_hdw;
+include	arena;
+include	process, hprocess;
+include	kprintf;
+include	hardware, list;
+include	error;
+include	memory;
+include	timer;
+include	time;
+include	node;
+include	vmemory;
+
+LIVE_GATE:	public	const	byte = 0x8E;	// 80386 Interrupt Gate
+USER_TRAP:	public	const	byte = 0xEF;	// 80386 Trap Gate
+
+ivType:	type	char = {
+	IVT_UNUSED,
+	IVT_CALLOUT,
+	IVT_EVENT,
+	IVT_SPECIAL
+	};
+
+interruptVector:	public	type	packed	{
+	public:
+
+	itype:		ivType;
+	attribute:	byte;
+	selector:	unsigned[16];
+	address:	paddr_t;
+	pointer0:	pointer;
+	pointer1:	pointer;
+	};
+
+getInterruptVector:	public	(i: int, ivp: ref interruptVector, 
+							len: int) int =
+	{
+	d:	ref ivector;
+	j:	int;
+	iv:	interruptVector;
+
+	if	(i < 0 || i >= 256)
+		return ERRINVALIDARGUMENT;
+	if	(len > sizeof interruptVector)
+		len = sizeof interruptVector;
+	d = ref ivector(&_idt_);
+	d += i;
+	memSet(&iv, 0, sizeof iv);
+	if	(d->attribute){
+		iv.itype = IVT_SPECIAL;
+		if	(i){
+			for	(j = 0; j < N_CLINTS; j++)
+				if	(CalloutInts[j].vector == i){
+					iv.itype = IVT_CALLOUT;
+					iv.pointer0 = CalloutInts[j].calloutObject;
+					iv.pointer1 = CalloutInts[j].calloutFunc;
+					}
+			for	(j = 0; j < N_EVINTS; j++)
+				if	(SemaphoreInts[j].vector == i){
+					iv.itype = IVT_EVENT;
+					iv.pointer0 = pointer(j + 1);
+					}
+			}
+		iv.address = d->offlow + d->offhigh << 16;
+		iv.attribute = d->attribute;
+		iv.selector = d->selector;
+		}
+	memCopy(ivp, &iv, len);
+	return len;
+	}
+
+ivector:	type	packed	{
+	public:
+
+	offlow:		unsigned[16];
+	selector:	unsigned[16];
+	empty:		byte;
+	attribute:	byte;
+	offhigh:	unsigned[16];
+	};
+
+Vector:	public	vector;
+
+vector:	public	type	{
+	public:
+
+semaphoreInterrupt:	factory	(vect: int) ref kernelSemaphore =
+	{
+	ev:	ref semaphoreInt;
+
+	if	(vect == 0)
+		return 0;
+	for	(ev = SemaphoreInts; ev < &SemaphoreInts[N_EVINTS]; ev++)
+		if	(ev->vector == 0){
+			ev->semaphoreObj initialize(0, &siD, ev);
+			if	(newInterrupt(vect, LIVE_GATE, ev->func) == 
+								SUCCESS){
+				ev->vector = vect;
+				return &ev->semaphoreObj;
+				}
+			else
+				return 0;
+			}
+	return 0;
+	}
+
+calloutInterrupt:	factory	(vect: int, obj: pointer, iprio: priority_t,
+					func: ref (pointer)) boolean =
+	{
+	ev:	ref calloutInt;
+
+	if	(vect == 0)
+		return FALSE;
+	for	(ev = CalloutInts; ev < &CalloutInts[N_CLINTS]; ev++)
+		if	(ev->vector == 0){
+			if	(newInterrupt(vect, LIVE_GATE, ev->func) == 
+								SUCCESS){
+				ev->calloutObject = obj;
+				ev->calloutFunc = func;
+				ev->vector = vect;
+				ev->iprio = iprio;
+				return TRUE;
+				}
+			else
+				return FALSE;
+			}
+	return FALSE;
+	}
+
+unhook:	(b: pointer, len: paddr_t) =
+	{
+	d:	ref ivector;
+	i:	int;
+	j:	int;
+	v:	paddr_t;
+	base:	paddr_t;
+
+	base = paddr_t(b);
+	d = ref ivector(&_idt_);
+	for	(i = 0; i < 256; i++){
+		v = d->offlow + d->offhigh << 16;
+		if	(v >= base && v < base + len){
+			disposeInterrupt(i);
+			}
+		}
+	for	(j = 0; j < N_CLINTS; j++){
+		v = paddr_t(CalloutInts[j].calloutFunc);
+		if	(v >= base && v < base + len){
+			disposeInterrupt(CalloutInts[j].vector);
+			CalloutInts[j].vector = 0;
+			}
+		}
+	}
+
+	};
+
+siD:	(ref kernelSemaphore, s: pointer) =
+	{
+	si: 	ref semaphoreInt;
+
+	si = s;
+	kprintf("semaphoreInt[%x]", si->vector);
+	}
+
+semaphoreInt:	type	{
+	public:
+
+func:		ref interrupt ();
+semaphoreObj:	kernelSemaphore;
+vector:		int;
+	};
+
+calloutInt:	type	{
+	public:
+
+func:		ref interrupt ();
+calloutFunc:	ref (pointer);
+calloutObject:	pointer;
+vector:		int;
+iprio:		priority_t;
+	};
+
+N_EVINTS:	const	int = 8;
+N_CLINTS:	const	int = 8;
+
+SemaphoreInts:	[N_EVINTS] semaphoreInt = [
+	[ &ei0 ],
+	[ &ei1 ],
+	[ &ei2 ],
+	[ &ei3 ],
+	[ &ei4 ],
+	[ &ei5 ],
+	[ &ei6 ],
+	[ &ei7 ],
+	];
+
+ei0:	interrupt (ifr: InterruptFrame) =
+	{
+	SemaphoreInts[0].semaphoreObj up();
+	}
+
+ei1:	interrupt (ifr: InterruptFrame) =
+	{
+	SemaphoreInts[1].semaphoreObj up();
+	}
+
+ei2:	interrupt (ifr: InterruptFrame) =
+	{
+	SemaphoreInts[2].semaphoreObj up();
+	}
+
+ei3:	interrupt (ifr: InterruptFrame) =
+	{
+	SemaphoreInts[3].semaphoreObj up();
+	}
+
+ei4:	interrupt (ifr: InterruptFrame) =
+	{
+	SemaphoreInts[4].semaphoreObj up();
+	}
+
+ei5:	interrupt (ifr: InterruptFrame) =
+	{
+	SemaphoreInts[5].semaphoreObj up();
+	}
+
+ei6:	interrupt (ifr: InterruptFrame) =
+	{
+	SemaphoreInts[6].semaphoreObj up();
+	}
+
+ei7:	interrupt (ifr: InterruptFrame) =
+	{
+	SemaphoreInts[7].semaphoreObj up();
+	}
+
+CalloutInts:	[N_CLINTS] calloutInt = [
+	[ &ci0 ],
+	[ &ci1 ],
+	[ &ci2 ],
+	[ &ci3 ],
+	[ &ci4 ],
+	[ &ci5 ],
+	[ &ci6 ],
+	[ &ci7 ],
+	];
+
+ci0:	interrupt (ifr: InterruptFrame) =
+	{
+	p:	priority_t;
+
+	p = CurProc maskPriority(CalloutInts[0].iprio);
+	CalloutInts[0].calloutFunc(CalloutInts[0].calloutObject);
+	CurProc maskPriority(p);
+	}
+
+ci1:	interrupt (ifr: InterruptFrame) =
+	{
+	p:	priority_t;
+
+	p = CurProc maskPriority(CalloutInts[1].iprio);
+	CalloutInts[1].calloutFunc(CalloutInts[1].calloutObject);
+	CurProc maskPriority(p);
+	}
+
+ci2:	interrupt (ifr: InterruptFrame) =
+	{
+	p:	priority_t;
+
+	p = CurProc maskPriority(CalloutInts[2].iprio);
+	CalloutInts[2].calloutFunc(CalloutInts[2].calloutObject);
+	CurProc maskPriority(p);
+	}
+
+ci3:	interrupt (ifr: InterruptFrame) =
+	{
+	p:	priority_t;
+
+	p = CurProc maskPriority(CalloutInts[3].iprio);
+	CalloutInts[3].calloutFunc(CalloutInts[3].calloutObject);
+	CurProc maskPriority(p);
+	}
+
+ci4:	interrupt (ifr: InterruptFrame) =
+	{
+	p:	priority_t;
+
+	p = CurProc maskPriority(CalloutInts[4].iprio);
+	CalloutInts[4].calloutFunc(CalloutInts[4].calloutObject);
+	CurProc maskPriority(p);
+	}
+
+ci5:	interrupt (ifr: InterruptFrame) =
+	{
+	p:	priority_t;
+
+	p = CurProc maskPriority(CalloutInts[5].iprio);
+	CalloutInts[5].calloutFunc(CalloutInts[5].calloutObject);
+	CurProc maskPriority(p);
+	}
+
+ci6:	interrupt (ifr: InterruptFrame) =
+	{
+	p:	priority_t;
+
+	p = CurProc maskPriority(CalloutInts[6].iprio);
+	CalloutInts[6].calloutFunc(CalloutInts[6].calloutObject);
+	CurProc maskPriority(p);
+	}
+
+ci7:	interrupt (ifr: InterruptFrame) =
+	{
+	p:	priority_t;
+
+	p = CurProc maskPriority(CalloutInts[7].iprio);
+	CalloutInts[7].calloutFunc(CalloutInts[7].calloutObject);
+	CurProc maskPriority(p);
+	}
+
+newInterrupt:	public	(iNumber: int, attr: byte, 
+				iVector: ref interrupt ()) ErrorCode =
+	{
+	d:	ref ivector;
+
+	d = ref ivector(&_idt_);
+	if	(iNumber < 0 ||
+		 iNumber > 255 ||
+		 (attr != LIVE_GATE && attr != USER_TRAP))
+		return ERRINVALIDDATA;
+	d += iNumber;
+	if	(d->attribute)
+		return ERRPERMISSION;
+	d->attribute = attr;
+	d->selector = _GDT_KERNEL_CODE;
+	d->offlow = signed[16](iVector);
+	d->offhigh = unsigned(iVector) >> 16;
+	adjustHardwareInterrupts(iNumber, TRUE);
+//	dumpVector(iNumber);
+	return SUCCESS;
+	}
+
+disposeInterrupt:	public	(iNumber: int) =
+	{
+	d:	ref ivector;
+
+	if	(iNumber <= 0 || iNumber >= 256)
+		return;
+	adjustHardwareInterrupts(iNumber, FALSE);
+	d = ref ivector(&_idt_);
+	d += iNumber;
+	d->attribute = 0;
+	}
+
+dumpVector:	public	(iNumber: int) =
+	{
+	d:	ref ivector;
+	off:	long;
+
+	d = ref ivector(&_idt_);
+	d += iNumber;
+	off = d->offlow + long(d->offhigh) << 16;
+	kprintf("vector %02x: addr %04x:%08x attr %02x\n", 
+			iNumber, d->selector, off, 
+			d->attribute);
+	}
+
+trap0ISR:	interrupt (ifr: InterruptFrame) =
+	{
+	t:	task_t;
+
+	t trigger(&CurProc->task, &ifr, 0x00, 0);
+	CurProc->animates machineTrap(&t, int(&External.illegalInstruction));
+	}
+
+trap1ISR:	interrupt (ifr: InterruptFrame) =
+	{
+	t:	task_t;
+
+	t trigger(&CurProc->task, &ifr, 0x01, 0);
+/*
+	if	(CurArena->myDebugger &&
+		 t calledFromUserMode())
+		CurArena->myDebugger step(t);
+ */
+	CurProc->animates machineTrap(&t, int(&External.illegalInstruction));
+	}
+
+trap3ISR:	interrupt (ifr: InterruptFrame) =
+	{
+	t:	task_t;
+	buf:	ref byte;
+
+	t trigger(&CurProc->task, &ifr, 0x03, 0);
+	displayTask(&t);
+/*
+	buf = mappedToAddressable(ifr.eip - 1 + CurArena->code->address);
+	if	(CurArena canCall(ifr.eip - 1) &&
+		 *buf == 0xCC){			// Do we have an INT 3??
+		t.eip--;			// Back up over the INT 3
+		if	(CurArena->myDebugger &&
+			 t calledFromUserMode())
+			CurArena->myDebugger breakpoint(t);
+		}
+	else	{
+		t display(0x03, "Unexpected breakpoint", 0);
+/*
+		CurProc->animates machineTrap(int(&External.illegalInstruction));
+ */
+		}
+ */
+	}
+
+trap4ISR:	interrupt (ifr: InterruptFrame) =
+	{
+	t:	task_t;
+
+	t trigger(&CurProc->task, &ifr, 0x04, 0);
+	CurProc->animates machineTrap(&t, int(&External.integerOverflow));
+	}
+
+trap5ISR:	interrupt (ifr: InterruptFrame) =
+	{
+	t:	task_t;
+
+	t trigger(&CurProc->task, &ifr, 0x05, 0);
+	CurProc->animates machineTrap(&t, int(&External.arrayBounds));
+	}
+
+trap6ISR:	interrupt (ifr: InterruptFrame) =
+	{
+	t:	task_t;
+
+	t trigger(&CurProc->task, &ifr, 0x06, 0);
+	CurProc->animates machineTrap(&t, int(&External.illegalInstruction));
+	}
+
+trap7ISRfpu:	interrupt (ifr: InterruptFrame) =
+	{
+	n:	threadLock;
+
+	if	(StartCR0 & 4)
+	n lock();
+	_emit(0x0f, 0x06);		// CLTS
+	if	(FloatProc != CurProc){
+		if	(FloatProc){
+			_EAX = unsigned(&FloatProc->task.fpu);
+			_emit(0xDD, 0x30);	// FSAVE [eax]
+			}
+
+			// Check for an uninitialized FPU
+
+		if	(CurProc->task.fpu.environ.control == 0){
+			CurProc->task.fpu.environ.tag = 0xFFFF;		// start all empty
+			CurProc->task.fpu.environ.control = 0x037F;	// mask all
+			}
+		_EAX = unsigned(&CurProc->task.fpu);
+		_emit(0xDD, 0x20);		// FRSTOR [eax]
+		FloatProc = CurProc;
+		}
+	n unlock();
+	}
+
+trap7ISRno_fpu:	interrupt (ifr: InterruptFrame) =
+	{
+	t:	task_t;
+
+	t trigger(&CurProc->task, &ifr, 0x07, 0);
+	CurProc->animates machineTrap(&t, int(&External.illegalInstruction));
+	}
+
+trap8ISR:	interrupt! (ifr: InterruptFrame) =
+	{
+	t:	task_t;
+
+	t trigger(&CurProc->task, &ifr, 0x08, 1);
+	CurProc->animates machineTrap(&t, int(&External.memoryError));
+	}
+
+trap9ISR:	interrupt (ifr: InterruptFrame) =
+	{
+	t:	task_t;
+
+	t trigger(&CurProc->task, &ifr, 0x09, 0);
+	CurProc->animates machineTrap(&t, int(&External.memoryError));
+	}
+
+trapAISR:	interrupt! (ifr: InterruptFrame) =
+	{
+	t:	task_t;
+
+	t trigger(&CurProc->task, &ifr, 0x0a, 1);
+	displayTask(&t);
+	}
+
+trapBISR:	interrupt! (ifr: InterruptFrame) =
+	{
+	t:	task_t;
+
+	t trigger(&CurProc->task, &ifr, 0x0b, 1);
+	CurProc->animates machineTrap(&t, int(&External.memoryError));
+	}
+
+trapCISR:	interrupt! (ifr: InterruptFrame) =
+	{
+	t:	task_t;
+
+	t trigger(&CurProc->task, &ifr, 0x0c, 1);
+	CurProc->animates machineTrap(&t, int(&External.memoryError));
+	}
+
+trapDISR:	interrupt! (ifr: InterruptFrame) =
+	{
+	t:	task_t;
+
+	kprintf("before ifr = cs:eip = %x:%x eflags = %x\n", ifr.cs, ifr.eip,
+					ifr.eflags);
+	CurArena generalProtectionFault(&ifr);
+	t trigger(&CurProc->task, &ifr, 0x0d, 1);
+	CurProc->animates machineTrap(&t, int(&External.memoryError));
+	kprintf("after  ifr = cs:eip = %x:%x eflags = %x\n", ifr.cs, ifr.eip,
+					ifr.eflags);
+	}
+
+trapEISR:	interrupt! (ifr: InterruptFrame) =
+	{
+	t:	task_t;
+
+	t trigger(&CurProc->task, &ifr, 0x0e, 1);
+	CurProc->animates machineTrap(&t, int(&External.pageFault));
+	}
+
+trap10ISR:	interrupt (ifr: InterruptFrame) =
+	{
+	t:	task_t;
+
+	t trigger(&CurProc->task, &ifr, 0x10, 0);
+	CurProc->animates machineTrap(&t, int(&External.mathError));
+	}
+
+/*
+dumpPageTable:	(x: paddr_t, t: int, start: int, fin: int) =
+	{
+	ap:	* long;
+	i:	int;
+	k:	int;
+
+	ap = physicalToAddressable(x);
+	if	(t >= 0){
+		x = ap[t] & ~0xfff;
+		if	(x == 0)
+			return;
+		ap = physicalToAddressable(x);
+		}
+	k = 0;
+	for	(i = start; i < fin; i++){
+		if	(ap[i]){
+			kprintf("%4x: %8x ", i, ap[i]);
+			k++;
+			if	(k == 5){
+				k = 0;
+				kprintf("\n");
+				}
+			}
+		}
+	if	(k)
+		kprintf("\n");
+	}
+ */
+
+// The standard PC interrupt controller architecture involves two 8259
+// controller chips.  The primary interrupt controller chains its interrupt
+// 2 to a secondary controller (though I'm not at all sure why).  For that
+// reason, the interrupt 2 vector on the primary controller must be enabled
+// even though no interrupt handler is installed for it.
+
+Primary8259:	public	ref interruptController;
+Secondary8259:	public	ref interruptController;
+
+MASTER_LV_2:	const	int = 4;
+SLAVE_LV_2:	const	int = 2;
+
+initInterruptVectors:	public	() =
+	{
+
+		// Set the timer divisor to force ~80 ticks per second
+
+	_outportByte(0x43, 0x36);
+	_emit(_idle_);
+	_outportByte(0x40, 0x00);
+	_emit(_idle_);
+	_outportByte(0x40, 0x40);
+
+		// Define the hardware interrupt controllers
+
+	Primary8259 = 	new interruptController[ PRI_8259, MASTER_LV_2 ];
+	Secondary8259 = new interruptController[ SEC_8259, SLAVE_LV_2 ];
+
+		// Move the 8259 interrupt control addresses up
+
+	Primary8259 mapController(DEV_BLOCK_A);
+	Secondary8259 mapController(DEV_BLOCK_B);
+	Primary8259 enableInterrupt(2);		// this cascades to the
+						// secondary interrupt
+						// controller
+
+	newInterrupt(0x00, LIVE_GATE, &trap0ISR);
+	newInterrupt(0x01, LIVE_GATE, &trap1ISR);
+	newInterrupt(0x03, USER_TRAP, &trap3ISR);
+	newInterrupt(0x04, LIVE_GATE, &trap4ISR);
+	newInterrupt(0x05, LIVE_GATE, &trap5ISR);
+	newInterrupt(0x06, LIVE_GATE, &trap6ISR);
+
+		// If not emulating FP, set up the no co-processor trap
+
+	if	(StartCR0 & 4 == 0)
+		newInterrupt(0x07, LIVE_GATE, &trap7ISRfpu);
+	else
+		newInterrupt(0x07, LIVE_GATE, &trap7ISRno_fpu);
+	newInterrupt(0x08, LIVE_GATE, pointer(&trap8ISR));
+	newInterrupt(0x09, LIVE_GATE, &trap9ISR);
+	newInterrupt(0x0A, LIVE_GATE, pointer(&trapAISR));
+	newInterrupt(0x0B, LIVE_GATE, pointer(&trapBISR));
+	newInterrupt(0x0C, LIVE_GATE, pointer(&trapCISR));
+	newInterrupt(0x0D, LIVE_GATE, pointer(&trapDISR));
+	newInterrupt(0x0E, LIVE_GATE, pointer(&trapEISR));
+	newInterrupt(0x10, LIVE_GATE, &trap10ISR);
+	}
+
+adjustHardwareInterrupts:	(iNumber: byte, sense: boolean) =
+	{
+	ic:	ref interruptController;
+
+	if	(iNumber < DEV_BLOCK_A)
+		return;
+	if	(iNumber > 0x4f)
+		return;
+	if	(iNumber < DEV_BLOCK_B){
+		ic = Primary8259;
+		iNumber -= DEV_BLOCK_A;
+		}
+	else	{
+		ic = Secondary8259;
+		iNumber -= DEV_BLOCK_B;
+		}
+	if	(sense)
+		ic enableInterrupt(iNumber);
+	else
+		ic disableInterrupt(iNumber);
+	}
+
+interruptController:	type	{
+
+public:
+
+constructor:	(pa: unsigned[16], om: byte) =
+	{
+	portAddress = pa;
+	operatingMode = om;
+	vectorMask = 0xff;
+	interruptVector = 0;
+	}
+
+mapController:	(iv: byte) =
+	{
+	interruptVector = iv;
+	setController();
+	}
+
+clearInterrupt:	() =
+	{
+	_outportByte(portAddress, EOI);
+	}
+
+enableInterrupt:	(index: int) =
+	{
+	vectorMask &= ~(1 << index);
+	setController();
+	}
+
+disableInterrupt:	(index: int) =
+	{
+	vectorMask |= 1 << index;
+	setController();
+	}
+
+private:
+
+	vectorMask:		byte;
+	interruptVector:	byte;
+	operatingMode:		byte;
+	portAddress:		unsigned[16];
+
+setController:	() =
+	{
+	n:	threadLock;
+
+	n lock();
+	_outportByte(portAddress, MODE_SELECT);
+	_emit(_idle_);
+	_outportByte(portAddress + 1, interruptVector);
+	_emit(_idle_);
+	_outportByte(portAddress + 1, operatingMode);
+	_emit(_idle_);
+	_outportByte(portAddress + 1, 0x01);
+	_emit(_idle_);
+	_outportByte(portAddress + 1, vectorMask);
+	n unlock();
+	}
+
+	};
+
+	// 8259 commands
+
+EOI:		const	char = 0x20;	// End of interrupt
+MODE_SELECT:	const	char = 0x11;	// Chip mode select
+
+TI:			const int = 0x04;
+/*
+dumpMapping:	public	(selector: unsigned) =
+	{
+	d:		ref descriptor;
+	nd:		unsigned;
+	base:		paddr_t;
+	length:		unsigned;
+	attributes:	unsigned[16];
+	p:		pointer;
+
+	if	(selector & TI){
+		d = CurArena->context;
+		if	(selector > 0xf){
+			kprintf("Local selector %x out of range\n", selector);
+			return;
+			}
+		}
+	else	{
+		d = ref descriptor(_GDT_);
+		if	(selector >= 64 << 3){
+			kprintf("Global selector %x out of range\n", selector);
+			return;
+			}
+		}
+	d += selector >> 3;
+	attributes = d->sa.attribute;
+	attributes += unsigned[16](d->sa.reserved) << 8;
+
+		// If it's not a gate descriptor, display the fields
+
+	if	(attributes & 0x14 != 0x04){
+		length = d->sa.limit;
+		length += (paddr_t(d->sa.reserved) & 0x0f) << 16;
+		base = d->sa.base;
+		base += paddr_t(d->sa.base16) << 16;
+		base += paddr_t(d->sa.base24) << 24;
+//		p = physicalToAddressable(base);
+
+		// Round to nearest page size when granularity is PAGE
+
+		if	(attributes & 0x8000){
+			length <<= 12;
+			length += 0xfff;
+			}
+		kprintf("%04x segm: base %08x limit %08x attr %04x\n", 
+				selector, base, length,
+				attributes);
+		}
+	else	{
+		base = d->g.offsetLo + paddr_t(d->g.offsetHi) << 16;
+		kprintf("%04x gate: %04x:%08x acount %02x attr %04x\n",
+			selector, d->g.selector, base, d->g.acount, attributes);
+		}
+	}
+ */
+Tsecond:	Tick = 0;
+/*
+	This function reads the CMOS time of day entries and converts to a
+	UNIX era time (in seconds past Jan 1, 1970).
+ */
+initTimer:	public	() =
+	{
+	d:		date_t;
+	century:	unsigned;
+	year:		unsigned;
+
+		// Copy the date and time from CMOS
+
+	year =		fromBcd(getCMOSbyte(0x09));
+//	century =	fromBcd(getCMOSbyte(0x20));
+//	if	(century == 0)
+		century = 19;
+	d.year = (year + century * 100) - 1900;
+	d.month =	fromBcd(getCMOSbyte(0x08)) - 1;
+	d.monthday =	fromBcd(getCMOSbyte(0x07));
+	d.hour =	fromBcd(getCMOSbyte(0x04));
+	d.minute =	fromBcd(getCMOSbyte(0x02));
+	d.second =	fromBcd(getCMOSbyte(0x00));
+	Now = d encode();
+	newInterrupt(TIMER_INT, LIVE_GATE, &tick);
+	TickTriggerQueue makeEmpty();
+	initTimerQueue();
+	}
+
+fromBcd:	(bcd: unsigned) int =
+	{
+	res:	int;
+	i:	int;
+
+	res = 0;
+	for	(i = 0; i < 8; i++){
+		res *= 10;
+		res += bcd >> 28;
+		bcd <<= 4;
+		}
+	return(res);
+	}
+
+tickTrigger:	type	inherit queue {
+	public:
+
+	func:		ref ();
+	};
+
+TickTriggerQueue:	queue;
+
+declareTickTrigger:	public	(f: ref ()) =
+	{
+	t:	ref tickTrigger;
+
+	t = new tickTrigger;
+	t->func = f;
+	TickTriggerQueue push(t);
+	}
+
+tick:	interrupt (ifr: InterruptFrame) =
+	{
+	t:		ref tickTrigger;
+	ageProc:	boolean;
+	inKernel:	boolean;
+
+	Ticks++;
+	Tsecond += TIM_INCR;
+	if	(Tsecond >= TIM_ROLL){
+		Now++;
+		Tsecond -= TIM_ROLL;
+		}
+	if	(!ifr calledFromUserMode()){
+		if	(processorIdle()){
+			alysNode.idleTime++;
+			ageProc = FALSE;
+			}
+		else	{
+			alysNode.sysTime++;
+			ageProc = TRUE;
+			inKernel = TRUE;
+			}
+		}
+	else	{
+		alysNode.userTime++;
+		ageProc = TRUE;
+		inKernel = FALSE;
+		}
+//	if	(Ticks & 1)
+//		kprintf("tick\n");
+//	else
+//		kprintf("tock\n");
+	Primary8259 clearInterrupt();
+	for	(t = ref tickTrigger(TickTriggerQueue.next); 
+			t != &TickTriggerQueue; t = ref tickTrigger(t->next))
+		t->func();
+	if	(--Tcount <= 0)
+		timerExpires();
+	if	(ageProc)
+		CurProc ageProcess(inKernel);
+
+		// This ensures that the latching user process can't 
+		// lock up the system
+
+	if	(CurArena->latch){
+		CurArena->latch--;
+
+			// Force a context switch - give someone else
+			// a chance
+
+		if	(CurArena->latch == 0)
+			processSwitch();
+		}
+	}
+
+signalFrame:	public	type	packed	{
+	public:
+
+	eip:	unsigned;
+	cs:	unsigned[16];
+	extra:	_Sequence;
+	eflags:	unsigned;
+	};
+

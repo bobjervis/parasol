@@ -1,0 +1,1066 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+
+include	encoder;
+include	errmsg;
+include	symtab;
+include	value;
+include	tparams, target;
+include	backend;
+include	jumpdist;
+
+MEMORY_RM:	const	int = 5;	// This is the Mod-R/M byte value
+					// for a memory offset address mode.
+					// For the 8086 this value is 6.
+					// For the 80386 this value is 5.
+
+UnitEncoder:	public	inherit	encoder {
+	private:
+
+	vLength:		addr_t;
+	blockData:		ref char;
+	blockOffset:		addr_t;
+	curValue:		ref value;
+//	lines:			* lnum;
+//	lastLine:		* lnum;
+
+	public:
+
+linkBlock:	dynamic	(data: pointer) =
+	{
+	blockData = data;
+	}
+
+startupFunction:	dynamic	(ref value) =
+	{
+	startupJumpDist();
+	}
+
+openValue:	dynamic	(vp: ref value) int =
+	{
+	if	(vp == 0 || vp->vSize){
+		s:	[:] char;
+
+		s = "";
+		if	(vp){
+			if	(vp->owner)
+				s = vp->owner->name spelling();
+			}
+		CurrentContext fatalX("ErrInternal", ": Second call to openValue:", s, vp->address);
+		}
+	curValue = vp;
+	}
+
+sizeValue:	dynamic	(size: addr_t) int =
+	{
+	i:	int;
+	j:	int;
+	x:	addr_t;
+
+	curValue sizeValue(size, VC_CODE);
+	blockData = curValue->data;
+	vLength = 0;
+//	lastLine = 0;
+	}
+
+closeValue:	dynamic	() =
+	{
+	jumpDistanceOptimization(curValue);
+	}
+
+byte:	dynamic	(c: char) =
+	{
+	if	(TargetData.flags & TF_JDIST)
+		objbyte(c);
+	else
+		blockData[vLength] = c;
+	vLength++;
+	}
+
+block:	dynamic	(data: pointer, len: addr_t) =
+	{
+	memCopy(blockData + vLength, data, len);
+	vLength += len;
+	}
+
+dataAlign:	dynamic	(amount: int) =
+	{
+	vLength += amount - 1;
+	vLength &= ~(amount - 1);
+	}
+
+dataReserveBlock:	dynamic	(blockSize: addr_t) =
+	{
+	vLength += blockSize;
+	}
+
+newFixup:	dynamic	(t: fixupType, target: pointer, loc: addr_t, 
+							offs: addr_t) =
+	{
+	if	(t == FT_VAL_OFF)
+		curValue valueFixup(loc, target, offs);
+	else if	(t == FT_VAL_REL)
+		curValue selfRelativeFixup(loc, target, offs);
+	else if	(t == FT_DYNAMIC)
+		curValue dynamicFixup(loc, target, offs);
+	else if	(t == FT_DYNBYTE)
+		curValue dynamicFixup(loc, target, offs & 0xff);
+	else if	(t == FT_LIT_OFF)
+		curValue literalFixup(loc, target, offs, TRUE);
+	}
+
+dwordInitializer:	dynamic	(val: ref value, offset: addr_t) =
+	{
+	if	(val == &LiteralValue)
+		codeFixup(FT_LIT_OFF, pointer(val->data));
+	else
+	        codeFixup(FT_VAL_OFF, val);
+	byte(offset);
+	byte(offset >> 8);
+	byte(offset >> 16);
+	byte(offset >> 24);
+	}
+
+dataCodeOffset:	dynamic	(s: ref stmt_x) =
+	{
+	codeJump(JC_TABLE, s);
+	}
+
+dataCodeLabel:	dynamic	(s: ref stmt_x) =
+	{
+	codeBlockLabel(s);
+	}
+/*
+recordLineNumber:	dynamic	(off: addr_t, lineno: unsigned) =
+	{
+	l:		* lnum;
+
+	if	(Coder.flags & CD_FL_JDIST){
+		codeFixup(FT_LINE, pointer(lineno));
+		return;
+		}
+	lastLine = curValue newLine(lastLine, lineno, off, 0);
+	}
+ */
+generateLabel:	dynamic	(s: ref stmt_x) =
+	{
+	codeBlockLabel(s);
+	}
+
+generateJump:	dynamic	(jc: jumpCondition, s: ref stmt_x) =
+	{
+	codeJump(jc, s);
+	}
+
+generateExStore:	dynamic	(v: ref variable, st: ref stmt_x) =
+	{
+	i:	int;
+	j:	char;
+
+	i = v->offset + ExceptFrameAddrOffset;
+	objbyte(0xc7);			// MOV dword ptr mem,imm
+	j = 0x85;			// SS:[EBP+d32]
+	if	(i >= -128)
+		j -= 0x40;		// SS:[EBP+d8]
+	objbyte(j);
+	if	(i >= -128)
+		objbyte(i);
+	else
+		objdword(i);
+	codeFixup(FT_JUMP, st);
+	objdword(0);
+	}
+
+jumpToTable:	dynamic	(r: regNum, st: ref switchTable_t) =
+	{
+        objbyte(0x2e);
+        objbyte(0xff);                          /*      jmp     cs:@i[bx] */
+        objbyte(0xa0 + regid(r));
+	codeFixup(FT_JUMP, st);
+	objdword(0);
+	}
+
+switchTableLabel:	dynamic	(st: ref switchTable_t) =
+	{
+	codeBlockLabel(st);
+	}
+
+loadLookTable:	dynamic	(i: addr_t) =
+	{
+        objbyte(0xbb);                          /*      mov     bx,offset $i */
+	codeFixup(FT_VAL_OFF, 0);
+	objdword(i);
+	}
+
+loadDS:	dynamic	(reg: regNum) =
+	{
+                                                /* mov reg,ss
+                                                   mov ds,reg */
+	asmoprr(I386_MOVI, reg, SS);
+	asmoprr(I386_MOVI, DS, reg);
+	asmoprr(I386_MOVI, ES, reg);
+	asmoprr(I386_MOVI, FS, reg);
+	asmoprr(I386_MOVI, GS, reg);
+	}
+
+indirectLookJump:	dynamic	(i: int) =
+	{
+	objbyte(0x2e);
+	objbyte(0xff);                          /*      jmp     cs:i[bx] */
+	if      (i < 128){
+		objbyte(0x67);
+		objbyte(i);
+		}
+	else    {
+		objbyte(0xa7);
+		objdword(i);
+                }
+	}
+
+encodeInstruction:	dynamic	(op: int) =
+	{
+	i:		int;
+	j:		int;
+	ii:		ref instInfo;
+	segprefix:	regNum;
+	sym:		ref symbol_s;
+
+		/* Now output the instruction */
+
+	ii = &InstInfo[op];
+
+                /* Now output the instruction */
+
+                /* Output any needed segment override prefix */
+
+	segprefix = needseg(&LeftOpnd);
+	if	(segprefix == nullReg)
+		segprefix = needseg(&RightOpnd);
+	if	(segprefix != nullReg)
+		objbyte(segnum(segprefix) + 0x26);
+	if	(ii->optype == IT_WORD)
+		objbyte(0x66);			// Override default size
+	if      (ii->op1)
+		objbyte(ii->op1);
+						// to force 16 bit data
+        switch  (op){
+	default:
+		CurrentContext fatalX("ErrEncoding", "Opcode:", "", op);
+
+	case	I386_WDOFF:
+	case	I386_WDSEG:
+		RightOpnd = LeftOpnd;
+		immedout(ii->optype, 1);
+		break;
+
+	case	I386_DD:
+		if	(LeftOpnd.val){
+			if	(LeftOpnd.val == &LiteralValue)
+				codeFixup(FT_LIT_OFF, pointer(LeftOpnd.val->data));
+			else
+			        codeFixup(FT_VAL_OFF, LeftOpnd.val);
+			}
+		objdword(LeftOpnd.offset);
+		break;
+
+	case	I386_PUSHF:
+	case	I386_POPF:
+	case	I386_LEAVE:
+	case	I386_IRET:
+	case	I386_CBW:
+	case	I386_CDQ:
+	case	I386_SAHF:
+
+	case	I386_REP:
+	case	I386_REPNZ:
+
+	case	I386_SCASB:
+	case	I386_MOVSB:
+	case	I386_MOVSW:
+	case	I386_CMPSB:
+	case	I386_STOSB:
+	case	I386_STOSW:
+
+	case	I386_STD:
+	case	I386_CLD:
+	case	I386_PUSHA:
+	case	I386_POPA:
+	case	I386_WAIT:
+		break;
+
+	case	I386_ERROR:
+		objbyte(0xc3);
+		break;
+
+	case	I386_CWD:
+		objbyte(0x99);
+		break;
+
+	case	I386_BYTE:
+		objbyte(LeftOpnd.offset);
+		break;
+
+	case	I386_INTRPT:
+                if      (LeftOpnd.offset == 3)
+                        objbyte(0xcc);
+                else    {
+                        objbyte(0xcd);
+                        objbyte(LeftOpnd.offset);
+                        }
+                break;
+
+	case	I386_INC:
+	case	I386_INI:
+                if      (RightOpnd.address_mode == AM_ICON){
+                        objbyte(0xe4);
+                        objbyte(RightOpnd.offset);
+                        }
+                else
+                        objbyte(0xec);
+                break;
+
+	case	I386_OUTC:
+	case	I386_OUTI:
+                if      (LeftOpnd.address_mode != AM_REG){
+                        objbyte(0xe6);
+                        objbyte(LeftOpnd.offset);
+                        }
+                else
+                        objbyte(0xee);
+                break;
+
+        case    I386_CMPF:
+	case	I386_ADDF:
+	case	I386_SUBF:
+	case	I386_MULF:
+	case	I386_DIVF:
+	case	I386_CMPD:
+	case	I386_ADDD:
+	case	I386_SUBD:
+	case	I386_MULD:
+	case	I386_DIVD:
+        case    I386_TESTF:
+        case    I386_TESTD:
+        case    I386_TESTLD:
+	case	I386_FLDD:
+        case    I386_FFREE:
+        case	I386_FXCH1:
+        case    I386_FSTP0:
+	case	I386_FILDI:
+	case	I386_FILDL:
+	case	I386_FILDQ:
+	case    I386_FISTI:
+        case    I386_FISTL:
+        case    I386_FISTQ:
+	case    I386_FISTPI:
+	case    I386_FISTPL:
+	case    I386_FISTPQ:
+        case    I386_FLDF:
+        case    I386_FSTPF:
+        case    I386_FSTF:
+        case    I386_FLDLD:
+        case    I386_FSTPLD:
+        case    I386_FDECSP:
+	case    I386_FSTPD:
+	case    I386_FSTD:
+	case	I386_SUBRF:
+	case	I386_SUBRD:
+	case	I386_DIVRF:
+	case	I386_DIVRD:
+	case	I386_FLSTi:
+	case	I386_FBSTP:
+	        if      (LeftOpnd.address_mode == 0)
+        	        objword(ii->op4);
+	        else if (LeftOpnd.address_mode == AM_REG)
+        	        objword(ii->op4 + (LeftOpnd.base_register << 8));
+	        else    {
+        	        objbyte(ii->op2);
+                	disp(&LeftOpnd, ii->op3);
+	                }
+                break;
+
+	case	I386_NEGLD:
+	case	I386_CMPLD:
+	case	I386_ADDLD:
+	case	I386_SUBLD:
+	case	I386_MULLD:
+	case	I386_DIVLD:
+	case	I386_SUBRLD:
+	case	I386_DIVRLD:
+	case	I386_FLDZ:
+	case	I386_FLD1:
+	case	I386_FABS:
+	case	I386_RNDINT:
+        case    I386_FSTSW:
+		objbyte(ii->op2);
+		break;
+
+	case    I386_ENTER:
+                objword(RightOpnd.offset);
+                objbyte(0);
+                break;
+
+	case	I386_DECC:
+		objbyte(0xfe);
+                disp(&LeftOpnd, 0x08);
+                break;
+
+	case	I386_DECI:
+	case	I386_DECL:
+                if      (LeftOpnd.address_mode == AM_REG)
+                        objbyte(0x48 + regid(LeftOpnd.base_register));
+                else    {
+                        objbyte(0xff);
+                        disp(&LeftOpnd, 0x08);
+                        }
+                break;
+
+	case	I386_INCC:
+                objbyte(0xfe);
+                disp(&LeftOpnd, 0x00);
+                break;
+
+	case	I386_INCI:
+	case	I386_INCL:
+                if      (LeftOpnd.address_mode == AM_REG)
+                        objbyte(0x40 + regid(LeftOpnd.base_register));
+                else    {
+                        objbyte(0xff);
+                        disp(&LeftOpnd, 0x00);
+                        }
+                break;
+
+	case	I386_POPI:
+	case	I386_POPL:
+                if      (LeftOpnd.address_mode == AM_REG){
+			if	(isXSegReg(LeftOpnd.base_register)){
+				objbyte(0x0f);
+				objbyte(0x81 + segnum(LeftOpnd.base_register));
+				}
+			else if	(isSegReg(LeftOpnd.base_register))
+                                objbyte(0x07 +
+					segnum(LeftOpnd.base_register));
+                        else
+                                objbyte(0x58 + regid(LeftOpnd.base_register));
+                        }
+                else    {
+                        objbyte(0x8f);
+                        disp(&LeftOpnd, 0x00);
+                        }
+                break;
+
+        case    I386_PUSHI:
+        case    I386_PUSHL:
+		self encodePush(ii);
+                break;
+
+	case	I386_NEGC:
+	case	I386_NEGI:
+	case	I386_NEGL:
+	case	I386_COMC:
+	case	I386_COMI:
+	case	I386_COML:
+                disp(&LeftOpnd, ii->op2);
+                break;
+
+	case	I386_MULC:
+	case	I386_DIVC:
+	case	I386_DIVI:
+	case	I386_UMULI:
+	case	I386_UDIVI:
+	case	I386_DIVL:
+	case	I386_UMULL:
+	case	I386_UDIVL:
+                disp(&RightOpnd, ii->op2);
+                break;
+
+	case	I386_MULI:
+	case	I386_MULL:
+                if      (LeftOpnd.address_mode == AM_ICON){
+                        i = LeftOpnd.offset;
+                        if      (i <= 127 && i >= -128){
+                                objbyte(0x6b);
+                                objbyte(0xc0);
+                                objbyte(i & 0xff);
+                                }
+                        else    {
+                                objbyte(0x69);
+                                objbyte(0xc0);
+                                objword(i);
+                                }
+                        break;
+                        }
+		objbyte(0xaf);
+                disp(&RightOpnd, regid(LeftOpnd.base_register) << 3);
+                break;
+
+	case	I386_MOVSXCI:
+	case	I386_MOVSXCL:
+	case	I386_MOVZXCI:
+	case	I386_MOVZXCL:
+
+	case	I386_MOVSXIL:
+	case	I386_MOVZXIL:
+		objbyte(ii->op2);
+		disp(&RightOpnd, regid(LeftOpnd.base_register) << 3);
+		break;
+
+	case	I386_MOVC:
+		self encodeByteMove(ii);
+                break;
+
+	case	I386_MOVI:
+	case	I386_MOVL:
+		self encodeWordMove(ii);
+                break;
+
+	case	I386_XCHGI:
+	case	I386_XCHGL:
+	case	I386_XCHGC:
+        case    I386_TESTC:
+	case	I386_TESTI:
+	case	I386_TESTL:
+		if      (opimmed(op, ii))
+			break;
+                objbyte(ii->op2);
+		if      (LeftOpnd.address_mode == AM_REG)
+	                disp(&RightOpnd, regid(LeftOpnd.base_register) << 3);
+		else
+	                disp(&LeftOpnd, regid(RightOpnd.base_register) << 3);
+                break;
+
+	case	I386_ADDC:
+	case	I386_SUBC:
+	case	I386_CMPC:
+	case	I386_ANDC:
+	case	I386_ORC:
+	case	I386_XORC:
+	case	I386_ADDI:
+	case	I386_SUBI:
+	case	I386_CMPI:
+	case	I386_ANDI:
+	case	I386_ORI:
+	case	I386_XORI:
+	case	I386_ADDL:
+	case	I386_SUBL:
+	case	I386_CMPL:
+	case	I386_ANDL:
+	case	I386_ORL:
+	case	I386_XORL:
+		if      (opimmed(op, ii))
+			break;
+		i = ii->op2;
+		if      (LeftOpnd.address_mode == AM_REG){
+	                objbyte(i + 2);
+        	        disp(&RightOpnd, regid(LeftOpnd.base_register) << 3);
+			}
+		else    {
+	                objbyte(i);
+        	        disp(&LeftOpnd, regid(RightOpnd.base_register) << 3);
+                        }
+                break;
+
+                        /* Left side must be a register */
+
+        case    I386_LES:
+        case    I386_LEA:
+                disp(&RightOpnd, regid(LeftOpnd.base_register) << 3);
+                break;
+
+	case	I386_LSLC:
+	case	I386_LSLI:
+	case	I386_LSLL:
+	case	I386_LSRC:
+	case	I386_LSRI:
+	case	I386_LSRL:
+	case	I386_ASRC:
+	case	I386_ASRI:
+	case	I386_ASRL:
+//	case	I386_RCRI:
+//	case	I386_RCLI:
+	case	I386_ROLL:
+	case	I386_RORL:
+                if      (RightOpnd.address_mode == AM_ICON &&
+			 RightOpnd.offset != 1){
+                        i = 0xc0;
+			}
+                else    {
+                        i = 0xd0;
+                        if      (RightOpnd.address_mode != AM_ICON)
+                                i += 2;
+                        }
+                objbyte(i + ii->op2);
+                disp(&LeftOpnd, ii->op3);
+                if      (RightOpnd.address_mode == AM_ICON &&
+			 RightOpnd.offset != 1)
+                        objbyte(RightOpnd.offset & 0xff);
+                break;
+
+	case	I386_RETF:
+	case    I386_RET:
+                if      (RightOpnd.address_mode){	/* PL/M, Pascal */
+                        objbyte(ii->op2);
+                        objword(RightOpnd.offset);
+                        }
+                else	                              /* C */
+                        objbyte(ii->op3);
+                break;
+
+	case	I386_ICALL:
+	case	I386_ICALLF:
+                if      (LeftOpnd.address_mode == AM_REG)
+                        objbyte(0xd0 + regid(LeftOpnd.base_register));
+                else
+                        disp(&LeftOpnd, ii->op2);
+                break;
+
+	case	I386_CALL:
+	        codeFixup(FT_VAL_REL, LeftOpnd.val);
+		objdword(0);
+		break;
+
+	case	I386_CALLF:
+		objbyte(0x9a);
+		objdword(0);
+		objword(LeftOpnd.offset);
+/*
+                sym = LeftOpnd.sym;
+		if      (sym->storageClass != SC_EXTERN){
+			objbyte(0x0e);  /* push cs */
+			objbyte(0xe8);
+		        codeFixup(FT_VAL_REL, sym);
+			objdword(0);
+			}
+		else    {
+			objbyte(0x9a);
+		        codeFixup(FT_VAL_PTR, sym);
+			objdword(0);
+			objword(0);
+			}
+ */
+                break;
+		}
+	}
+
+private:
+
+encodePush:	(ii: ref instInfo) =
+	{
+	if      (LeftOpnd.address_mode == AM_REG){
+		if	(isXSegReg(LeftOpnd.base_register)){
+			objbyte(0x0f);
+			objbyte(0x80 + segnum(LeftOpnd.base_register));
+			}
+		else if	(isSegReg(LeftOpnd.base_register))
+ 			objbyte(0x06 + segnum(LeftOpnd.base_register));
+		else
+			objbyte(0x50 + regid(LeftOpnd.base_register));
+		}
+	else if (LeftOpnd.address_mode == AM_ICON){
+		if      (LeftOpnd.offset <= 127 &&
+			 LeftOpnd.offset >= -128){
+			objbyte(0x6a);
+			objbyte(LeftOpnd.offset);
+			}
+		else    {
+			objbyte(0x68);
+			objdword(LeftOpnd.offset);
+			}
+		}
+	else if	(LeftOpnd.address_mode == AM_OFFSET){
+		objbyte(0x68);
+		RightOpnd = LeftOpnd;
+		immedout(ii->optype, 0);
+		}
+	else    {
+		objbyte(0xff);
+		disp(&LeftOpnd, 0x30);
+		}
+	}
+
+encodeByteMove:	(ii: ref instInfo) =
+	{
+	i:	int;
+	j:	int;
+
+	if	(RightOpnd.address_mode == AM_ICON){
+		if      (LeftOpnd.address_mode == AM_REG)
+               	        objbyte(0xb0 + regid(LeftOpnd.base_register));
+               	else    {
+               	        objbyte(0xc6);
+       	               	disp(&LeftOpnd, 0);
+               	        }
+       		immedout(ii->optype, 0);
+		return;
+                }
+	i = 0x88;                       /* MOV */
+	if      (LeftOpnd.address_mode == AM_REG){
+		if      (RightOpnd.address_mode == AM_REG){
+                        if      (isSegReg(RightOpnd.base_register)){
+                                objbyte(0x8c);
+       	                        disp(&LeftOpnd,
+					segnum(RightOpnd.base_register));
+				return;
+				}
+			}
+
+		if      (LeftOpnd.base_register == AL &&
+			 RightOpnd.address_mode != AM_REG &&
+			 RightOpnd.base_register == nullReg &&
+			 RightOpnd.index_register == nullReg){
+			disp(&RightOpnd, 0xa0 - MEMORY_RM);
+                        return;
+			}
+		i += 2;
+		j = regid(LeftOpnd.base_register) << 3;
+		}
+	else    {
+		if      (RightOpnd.base_register == AL &&
+			 LeftOpnd.base_register == nullReg &&
+			 LeftOpnd.index_register == nullReg){
+			disp(&LeftOpnd, 0xa2 - MEMORY_RM);
+                        return;
+			}
+		j = regid(RightOpnd.base_register) << 3;
+		RightOpnd = LeftOpnd;
+		}
+	objbyte(i);
+        disp(&RightOpnd, j);
+	}
+
+encodeWordMove:	(ii: ref instInfo) =
+	{
+	i:	int;
+	j:	int;
+
+	if	(RightOpnd.address_mode == AM_ICON ||
+		 RightOpnd.address_mode == AM_OFFSET){
+		if      (LeftOpnd.address_mode == AM_REG){
+			i = 0xb8 + regid(LeftOpnd.base_register);
+               	        objbyte(i);
+			}
+               	else    {
+               	        objbyte(0xc7);
+       	               	disp(&LeftOpnd, 0);
+               	        }
+       		immedout(ii->optype, 1);
+               	return;
+                }
+	i = 0x89;                       /* MOV */
+	if      (LeftOpnd.address_mode == AM_REG){
+		if	(isXSegReg(LeftOpnd.base_register) ||
+			 isSegReg(LeftOpnd.base_register)){
+			objbyte(0x8e);
+			disp(&RightOpnd, segnum(LeftOpnd.base_register));
+			return;
+			}
+		if      (RightOpnd.address_mode == AM_REG){
+                        if      (isXSegReg(RightOpnd.base_register) ||
+				 isSegReg(RightOpnd.base_register)){
+                                objbyte(0x8c);
+       	                        disp(&LeftOpnd, segnum(RightOpnd.base_register));
+				return;
+				}
+			}
+
+		if      (LeftOpnd.base_register == AX &&
+			 RightOpnd.address_mode != AM_REG &&
+			 RightOpnd.base_register == nullReg &&
+			 RightOpnd.index_register == nullReg){
+
+			disp(&RightOpnd, 0xa1 - MEMORY_RM);
+			return;
+			}
+		i += 2;
+		j = regid(LeftOpnd.base_register) << 3;
+		}
+	else    {
+		if      (isSegReg(RightOpnd.base_register)){
+			objbyte(0x8c);
+			disp(&LeftOpnd, segnum(RightOpnd.base_register));
+			return;
+			}
+		if      (RightOpnd.base_register == AX &&
+			 LeftOpnd.base_register == nullReg &&
+			 LeftOpnd.index_register == nullReg){
+			disp(&LeftOpnd, 0xa3 - MEMORY_RM);
+			return;
+			}
+		j = regid(RightOpnd.base_register) << 3;
+		RightOpnd = LeftOpnd;
+		}
+	objbyte(i);
+	disp(&RightOpnd, j);
+	}
+
+	};
+/*
+createFixup:	(typ: unsignedShort, owner: ref value, here: addr_t, 
+					target: pointer, 
+					offset: addr_t) =
+	{
+	rp:	ref fixup;
+
+	rp = Heap alloc(sizeof fixup);
+	rp->next = owner->fixups;
+	owner->fixups = rp;
+	rp->loc = here;
+	rp->kind = typ;
+	rp->target = target;
+	rp->offset = offset;
+	}
+ */
+regid:	(r: regNum) int =
+	{
+	encoding:	static	[] char = [
+		0,		/* AX, AL */
+		4,		/* AH */
+		2,		/* DX, DL */
+		6,		/* DH */
+		3,		/* BX, BL */
+		7,		/* BH */
+		1,		/* CX, CL */
+		5,		/* CH */
+		6,		/* SI */
+		7,		/* DI */
+		5,		/* BP */
+		4,		/* SP */
+		];
+
+	if	(r > SP){
+		CurrentContext fatalX("ErrEncoding", 
+				"Register number:", "", r);
+		}
+	return encoding[r];
+        }
+
+needseg:	(o: ref operand) regNum =
+        {
+	if	(o->address_mode == AM_ADDRESS)
+		return(o->segment_override);
+	else
+		return(nullReg);
+        }
+
+segnum:		(segr: regNum) int =
+        {
+        switch  (segr){
+        case    ES:     return(0x00);
+        case    SS:     return(0x10);
+        case    DS:     return(0x18);
+        case    CS:     return(0x08);
+	case	FS:	return(0x20);
+	case	GS:	return(0x28);
+                }
+//	showVariables();
+//	showStmtList();
+	CurrentContext fatalX("ErrEncoding", "Segment number:", "", segr);
+        return(0x08);
+        }
+
+
+opimmed:	(op: int, ii: ref instInfo) int =
+        {
+	i:	addr_t;
+	j:	int;
+
+	switch	(RightOpnd.address_mode){
+	case	AM_ICON:
+	case	AM_OFFSET:
+               	if      (LeftOpnd.address_mode == AM_REG &&
+			 (LeftOpnd.base_register == AX ||
+			  LeftOpnd.base_register == AL)){
+		        objbyte(ii->op3);
+                        j = ii->op2 & 1;
+       	                }
+		else	{
+			if	(RightOpnd.address_mode == AM_ICON &&
+				 ii->optype != IT_BYTE &&
+				 op != I386_TESTI &&
+				 op != I386_TESTL &&
+				 (RightOpnd.offset <= 127 &&
+				  RightOpnd.offset >= -128))
+                	        j = 2;
+        	        else
+       	        	        j = 0;
+
+				/* Word operations are odd */
+
+			j += ii->op2 & 1;
+			if	(op == I386_TESTC ||
+				 op == I386_TESTI ||
+				 op == I386_TESTL){
+			        objbyte(0xf6 + j);
+			        disp(&LeftOpnd, 0x0);
+				}
+			else	{
+				objbyte(0x80 + j);
+				disp(&LeftOpnd, ii->op2 & ~1);
+				}
+			}
+        	immedout(ii->optype, j);
+                return(1);
+                }
+	return(0);
+        }
+
+immedout:	(optype: int, x: int) =
+        {
+	switch	(RightOpnd.address_mode){
+	case	AM_ICON:
+                objbyte(RightOpnd.offset & 0xff);
+                if      (x == 1){
+                        objbyte(RightOpnd.offset >> 8);
+			if	(optype == IT_LONG)
+				objword(RightOpnd.offset >> 16);
+			}
+		break;
+
+	case	AM_OFFSET:
+		if	(RightOpnd.val == &LiteralValue)
+			codeFixup(FT_LIT_OFF, pointer(RightOpnd.val->data));
+		else
+		        codeFixup(FT_VAL_OFF, RightOpnd.val);
+		objdword(RightOpnd.offset);
+		break;
+
+	case	AM_ADDRESS:	/* This is only for DW */
+		if	(RightOpnd.val)
+		        codeFixup(FT_VAL_OFF, RightOpnd.val);
+		objdword(RightOpnd.offset);
+		break;
+
+	default:		/* AM_SEG */
+		CurrentContext fatalX("ErrInternal", "Segment fixup:", "", 
+					RightOpnd.address_mode);
+                }
+        }
+
+disp:	(o: ref operand, byte: int) =
+        {
+	mod:	int;
+	rm:	int;
+	target:	pointer;
+
+	if	(o->address_mode == AM_REG){
+                objbyte(regid(o->base_register) + 0xc0 + byte);
+                return;
+                }
+	if	(o->address_mode == AM_DYNAMIC){
+		target = o->val;
+		o->val = 0;
+		}
+	if	(o->base_register == nullReg &&
+		 o->index_register == nullReg){
+		byte += MEMORY_RM;
+		mod = 0x80;
+		}
+	else	{
+		if	(o->val ||
+			 o->offset > 127 ||
+			 o->offset < -128)
+			mod = 0x80;
+		else if	(o->offset)
+			mod = 0x40;
+		else	{
+			if	(o->base_register == EBP &&
+				 o->index_register == nullReg)
+				mod = 0x40;
+			else
+				mod = 0;
+			}
+		byte |= mod;
+
+
+			/* We now must construct the r/m field of the
+			   addressing mode.  Note that we are relying
+			   heavily on the bit patterns of the various
+			   r/m codes.
+			 */
+
+			/*
+			   These following two tests cover all of the
+			   dual register cases, as well as some of the
+			   single register cases.
+			 */
+
+		if	(o->base_register != nullReg){
+			if	(o->base_register == ESP ||
+				 o->index_register != nullReg){
+				objbyte(byte | 4);
+				byte = o->scale_factor << 6;
+				if	(o->index_register != nullReg)
+					byte |= regid(o->index_register) << 3;
+				else
+					byte |= 0x20;
+				}
+			byte |= regid(o->base_register);
+			}
+		}
+	objbyte(byte);
+	if	(mod == 0x80){
+		if	(o->val){
+			if	(o->val == &LiteralValue)
+				codeFixup(FT_LIT_OFF, pointer(o->val->data));
+			else
+			        codeFixup(FT_VAL_OFF, o->val);
+			}
+		else if	(o->address_mode == AM_DYNAMIC)
+			codeFixup(FT_DYNAMIC, target);
+		objdword(o->offset);
+		}
+	else if	(mod == 0x40){
+		objbyte(o->offset);
+		if	(o->address_mode == AM_DYNAMIC)
+			codeFixup(FT_DYNBYTE, target);
+		}
+        }
+
+objbyte:	public	(c: char) =
+	{
+	codeBlockByte(c);
+	}
+
+objword:	public	(c: int) =
+	{
+	objbyte(c);
+	objbyte(c >> 8);
+	}
+
+objdword:	public	(c: long) =
+	{
+	objbyte(c);
+	objbyte(c >> 8);
+	objbyte(c >> 16);
+	objbyte(c >> 24);
+	}
+/*
+ADDRESS:	const	int = 0x11aff;
+
+dumpFrame:	(labl: * char, data: *, offset: addr_t, length: addr_t) int =
+	{
+	rem:	int;
+	cdata:	* unsignedChar;
+
+	if	(offset > ADDRESS ||
+		 offset + length <= ADDRESS)
+		return 0;
+	cdata = data;
+	printf("%s: 0x%x:  ", labl, ADDRESS);
+	cdata += ADDRESS - offset;
+	rem = (offset + length) - ADDRESS;
+	while	(rem > 0){
+		printf("%02x ", *cdata);
+		rem--;
+		cdata++;
+		}
+	printf("\n");
+	return 1;
+	}
+ */

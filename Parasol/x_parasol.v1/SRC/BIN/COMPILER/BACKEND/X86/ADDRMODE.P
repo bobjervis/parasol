@@ -1,0 +1,575 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	types;
+include	symtab;
+include	ptree;
+include	tparams, target;
+include	backend, xtree, xcall, i386back;
+include	xstmt;
+
+	/* Address mode contexts */
+
+MC_REG:		const	int =	1;
+MC_CONST:	const	int =	2;
+MC_ADDRESS:	const	int =	4;
+MC_SREG:	const	int =	8;
+MC_FULL:	const	int =	(MC_REG|MC_CONST|MC_ADDRESS);
+
+markExceptModes:	public	(s: ref except_x) =
+	{
+	sc:	ref switchCases;
+
+	if	(s->expr)
+		tryMakeMode(s->expr, MC_SREG|MC_REG|MC_ADDRESS, 0);
+	for	(sc = s->cases; sc; sc = sc->next)
+		tryMakeMode(sc->caseValue, MC_REG|MC_CONST, NC_IMMED);
+	}
+/*
+	When markAddressModes is first called, register variables have
+	not yet been assigned.  As a result, these markings are probably
+	conservative.  Nevertheless, this code tries to identify and mark
+	all machine supported address modes.
+ */
+markAddressModes:	public	(t: ref tree_p) =
+	{
+	i:		unsigned;
+	bt:		ref binary_x;
+	right:		ref tree_p;
+	left:		ref tree_p;
+	modeComplexity:	int;
+	nClass:		nClasses;
+
+	if	(t == 0)
+		return;
+	t->reg = nullReg;
+	nClass = Nodes[t->operator].nodeClass;
+	bt = ref binary_x(t);		// just in case we need it
+	modeComplexity = MC_REG|MC_CONST|MC_ADDRESS;
+	if	(t->dtype &&
+		 t->dtype->topType == T_ERROR)
+		return;
+	switch	(t->operator){
+	case	O_AUTO:
+		if	(t->dtype sizeOf() == 1)
+			ref auto_x(t)->var->flags |= VF_BYTEREG;
+
+	case	O_ERROR:
+	case	O_ID:
+	case	O_REG:
+	case	O_ELLIPSIS:
+	case	O_LITERAL:
+	case	O_DYNAMIC:
+	case	O_REMOTE:
+	case	O_ICON:
+	case	O_FCON:
+	case	O_ADR:
+	case	O_INTRPT:
+	case	O_EMIT:
+	case	O_ALLOCTOS:
+	case	O_TOS:
+	case	O_TYPE:
+		return;
+
+	case	O_FLD:
+		markAddressModes(ref bitField_x(t)->enclosingWord);
+		return;
+
+	case	O_IND:
+		tryMakeIndirectMode(bt->left);
+		return;
+
+	case	O_ROL:
+	case	O_ROR:
+	case	O_LSH:
+	case	O_RSH:
+	case	O_RSA:
+	case	O_LSA:
+		right = bt->right;
+		if	(right->operator == O_ICON)
+			right->addrMode = TRUE;
+		else if	(theRegisterOf(right) == CL)
+			right->addrMode = TRUE;
+		if	(t->operator == O_RSA ||
+			 t->operator == O_LSA)
+			tryMakeMode(bt->left, modeComplexity, nClass);
+		else
+			markAddressModes(bt->left);
+		markAddressModes(bt->right);
+		return;
+
+	case	O_DVA:
+	case	O_MOA:
+		markAddressModes(bt->left);
+		if	(t->dtype->topType == T_FLOAT &&
+			 ref number_z(t->dtype)->width == 80)
+			markAddressModes(bt->right);
+		else
+			tryMakeMode(bt->right, modeComplexity & ~MC_CONST, 
+							nClass);
+		return;
+
+	case	O_MCOPY:
+	case	O_MSCAN:
+	case	O_MSET:
+		args:	ref argument_x;
+		dest:	ref tree_p;
+		src:	ref tree_p;
+		len:	ref tree_p;
+
+		args = ref argument_x(ref bcall_x(t)->args);
+		dest = args->left;
+		src = ref argument_x(args->right)->left;
+		len = ref argument_x(args->right)->right;
+		markAddressModes(len);
+		markAddressModes(src);
+		markAddressModes(dest);
+		return;
+
+	case	O_OUT:
+		args = ref argument_x(ref bcall_x(t)->args);
+		dest = args->left;
+		src = args->right;
+		markAddressModes(src);
+		if	(dest->operator == O_ICON &&
+			 unsigned(dest integerValue()) < 0x100)
+			dest->addrMode = TRUE;
+		else
+			markAddressModes(dest);
+		return;
+
+	case	O_IN:
+		src = ref bcall_x(t)->args;
+		if	(src->operator == O_ICON &&
+			 unsigned(src integerValue()) < 0x100)
+			src->addrMode = TRUE;
+		else
+			markAddressModes(src);
+		return;
+
+	case	O_CVTBCD:
+		markAddressModes(bt->left);
+		tryMakeMode(bt->right, MC_ADDRESS, nClass);
+		return;
+
+	case	O_RNDINT:
+	case	O_FABS:
+	case	O_ABS:
+		src = ref bcall_x(t)->args;
+		markAddressModes(src);
+		return;
+
+	case	O_SCALL:
+		left = ref staticCall_x(t)->func;
+		if	(left && left->operator == O_IND){
+			tryMakeMode(ref binary_x(left)->left, 
+						modeComplexity, nClass);
+			left->addrMode = TRUE;
+			}
+		else
+			tryMakeMode(left, modeComplexity, nClass);
+		markCallArguments(ref bcall_x(t)->args);
+		return;
+
+	case	O_RCALL:
+		rc:	ref remoteCall_x;
+
+		rc = ref remoteCall_x(t);
+		tryMakeMode(rc->objectRef, modeComplexity, nClass);
+		if	(rc->retnAddr){
+			markAddressModes(rc->retnAddr);
+			markAddressModes(rc->retnLen);
+			}
+
+	case	O_MCALL:
+		markCallArguments(ref bcall_x(t)->args);
+		return;
+
+	case	O_INIT:
+	case	O_ASG:
+		modeComplexity = MC_SREG|MC_ADDRESS|MC_REG;
+		break;
+
+	case	O_INA:
+	case	O_DEA:
+		bt->right->addrMode = TRUE;
+		tryMakeMode(bt->left, modeComplexity, nClass);
+		return;
+
+	case	O_MUA:
+		if	(t->dtype->topType == T_FLOAT &&
+			 ref number_z(t->dtype)->width == 80)
+			markAddressModes(bt->left);
+		else
+			tryMakeMode(bt->left, modeComplexity & ~MC_CONST, 
+							nClass);
+		markAddressModes(bt->right);
+		return;
+
+	case	O_CAST:
+		tryMakeMode(ref cast_x(t)->opnd, modeComplexity, nClass);
+		return;
+
+	case	O_QUES:
+		markAddressModes(ref conditional_x(t)->test);
+		markAddressModes(ref conditional_x(t)->truePart);
+		markAddressModes(ref conditional_x(t)->falsePart);
+		return;
+
+	case	O_SEQ:
+	case	O_LAND:
+	case	O_LOR:
+		markAddressModes(bt->left);
+		markAddressModes(bt->right);
+		return;
+		}
+	if	(t->dtype->topType == T_FLOAT &&
+		 ref number_z(t->dtype)->width == 80){
+		if	(t->operator == O_ASG){
+			tryMakeMode(bt->left, modeComplexity & ~MC_CONST,
+						nClass);
+			markAddressModes(bt->right);
+			}
+		else	{
+			markAddressModes(bt->left);
+			markAddressModes(bt->right);
+			}
+		}
+	else if	(t->operator >= O_EQ &&
+		 t->operator <= O_NLT_GT &&
+		 bt->left->dtype->topType == T_FLOAT &&
+		 ref number_z(bt->left->dtype)->width == 80){
+		markAddressModes(bt->left);
+		markAddressModes(bt->right);
+		}
+	else if	(t->operator >= O_ASG &&
+		 t->operator <= O_NLT_GT){
+		modeComplexity = tryMakeMode(bt->left,
+						modeComplexity & ~MC_CONST,
+						nClass);
+		tryMakeMode(bt->right, modeComplexity, nClass);
+		}
+	else	{
+		tryMakeMode(bt->right, modeComplexity, nClass);
+		tryMakeMode(bt->left, 0, nClass);
+		}
+	}
+
+markCallArguments:	(args: ref tree_p) =
+	{
+	a:	ref argument_x;
+
+	for	(;;){
+		if	(args == 0)
+			return;
+		if	(args->operator != O_ARG)
+			break;
+		a = ref argument_x(args);
+		if	(a->left->dtype bitSizeOf() < INTBITS ||
+			 a->left->dtype->topType == T_FLOAT)
+			markAddressModes(a->left);
+		else
+			tryMakeMode(a->left, MC_SREG|MC_FULL, NC_IMMED);
+		args = a->right;
+		}
+	if	(args->dtype bitSizeOf() < INTBITS ||
+		 args->dtype->topType == T_FLOAT)
+		markAddressModes(args);
+	else
+		tryMakeMode(args, MC_SREG|MC_FULL, NC_IMMED);
+	}
+
+isIndexRegister:	(r: regNum) boolean =
+	{
+	switch	(r){
+	case	AX:
+	case	BX:
+	case	CX:
+	case	DX:
+	case	SI:
+	case	DI:
+	case	BP:
+	case	SP:
+		return TRUE;
+
+	default:
+		return FALSE;
+		}
+	}
+
+isCompileTimeConstant:	(t: ref tree_p) boolean =
+	{
+	if	(t->operator == O_ICON ||
+		 t->operator == O_LITERAL)
+		return TRUE;
+	if	(t->operator != O_ADR)
+		return FALSE;
+	t = ref binary_x(t)->left;
+	if	(t->operator == O_AUTO)
+		return FALSE;
+	else
+		return TRUE;
+	}
+
+/*
+	This returns 1 if the resulting operand has a simple address
+	mode (either a register, or a constant for immediate instructions).
+	It returns 0 is the address mode is complex.
+ */
+justRegs:	(x: int) int =
+	{
+	return x & (MC_REG|MC_SREG);
+	}
+
+tryMakeMode:	(t: ref tree_p, modeContext: int, nClass: nClasses) int =
+	{
+	v:		ref variable;
+
+	if	(t == 0)
+		return MC_FULL;
+	t->reg = nullReg;
+	if	(t->dtype &&
+		 t->dtype->topType == T_ERROR)
+		return MC_FULL;
+	switch	(t->operator){
+	case	O_ADR:
+		if	(!isCompileTimeConstant(t))
+			return MC_FULL;
+
+	case	O_LITERAL:
+	case	O_ICON:
+		if	((modeContext & MC_CONST) &&
+			 (nClass & NC_IMMED))
+			t->addrMode = TRUE;
+		return MC_FULL;
+
+	case	O_REG:
+		if	(ref iden_x(t)->adjust == nullReg)
+			return MC_FULL;
+		else if	(isSegReg(ref iden_x(t)->adjust)){
+			if	(modeContext & MC_SREG)
+				t->addrMode = TRUE;
+			t->reg = ref iden_x(t)->adjust;
+			return MC_REG|MC_ADDRESS;
+			}
+		else if	(modeContext & MC_REG){
+			t->addrMode = TRUE;
+			t->reg = ref iden_x(t)->adjust;
+			}
+		return MC_FULL;
+
+	case	O_IND:
+		if	(modeContext & MC_ADDRESS){
+			t->addrMode = TRUE;
+
+			tryMakeIndirectMode(ref binary_x(t)->left);
+			return justRegs(modeContext)|MC_CONST;
+			}
+		markAddressModes(t);
+		break;
+
+	case	O_TOS:
+		if	(modeContext & MC_ADDRESS){
+			t->addrMode = TRUE;
+			return justRegs(modeContext)|MC_CONST;
+			}
+		break;
+
+	case	O_AUTO:
+		v = ref auto_x(t)->var;
+		if	(t->dtype sizeOf() == 1)
+			ref auto_x(t)->var->flags |= VF_BYTEREG;
+		if	(v->flags & VF_REG){
+			t->reg = v->reg;
+			if	(isSegReg(v->reg)){
+				if	(modeContext & MC_SREG)
+					t->addrMode = TRUE;
+				return MC_REG|MC_ADDRESS;
+				}
+			if	(!isByteReg(v->reg)){
+				if	(modeContext & MC_REG &&
+					 t->dtype sizeOf() > 1)
+					t->addrMode = TRUE;
+				return MC_FULL;
+				}
+			if	(modeContext & MC_REG)
+				t->addrMode = TRUE;
+			return MC_FULL;
+			}
+		if	(modeContext & MC_ADDRESS){
+			t->addrMode = TRUE;
+			return justRegs(modeContext)|MC_CONST;
+			}
+		break;
+
+	case	O_ID:
+		if	(modeContext & MC_ADDRESS){
+			t->addrMode = TRUE;
+			return justRegs(modeContext)|MC_CONST;
+			}
+		break;
+
+	default:
+		markAddressModes(t);
+		}
+	return justRegs(modeContext)|MC_FULL;
+	}
+
+tryMakeIndirectMode:	(t: ref tree_p) =
+	{
+	r:		RegisterMask;
+	v:		ref variable;
+	left:		ref tree_p;
+	right:		ref tree_p;
+
+	t->reg = nullReg;
+	if	(t->dtype &&
+		 t->dtype->topType == T_ERROR)
+		return;
+	switch	(t->operator){
+	case	O_REG:
+		if	(isIndexRegister(ref iden_x(t)->adjust)){
+			t->addrMode = TRUE;
+			t->reg = ref iden_x(t)->adjust;
+			}
+		return;
+
+	case	O_AUTO:
+		v = ref auto_x(t)->var;
+		if	(v->flags & VF_REG == 0)
+			return;
+		if	(isIndexRegister(v->reg)){
+			t->addrMode = TRUE;
+			t->reg = v->reg;
+			}
+		return;
+
+	case	O_ICON:
+		t->addrMode = TRUE;
+		return;
+
+	case	O_ADD:
+		left  = ref binary_x(t)->left;
+		right = ref binary_x(t)->right;
+		if	(isCompileTimeConstant(right)){
+			tryMakeIndirectMode(left);
+			right->addrMode = TRUE;
+			right->reg = nullReg;
+			t->addrMode = TRUE;
+			t->reg = nullReg;
+			}
+		else if	(isCompileTimeConstant(left)){
+			tryMakeIndirectMode(right);
+			left->addrMode = TRUE;
+			left->reg = nullReg;
+			t->addrMode = TRUE;
+			t->reg = nullReg;
+			}
+		else if	(isIndexRegister(theRegisterOf(left))){
+			left->addrMode = TRUE;
+			left->reg = nullReg;
+			t->addrMode = TRUE;
+			t->reg = nullReg;
+			markAddressModes(right);
+			}
+		else if	(isIndexRegister(theRegisterOf(right))){
+			right->addrMode = TRUE;
+			right->reg = nullReg;
+			t->addrMode = TRUE;
+			t->reg = nullReg;
+			markAddressModes(left);
+			}
+		else	{
+			markAddressModes(right);
+			markAddressModes(left);
+			}
+		break;
+
+	default:
+		markAddressModes(t);
+		}
+	}
+
+theRegisterOf:	(t: ref tree_p) regNum =
+	{
+	if	(t->operator == O_REG)
+		return ref iden_x(t)->adjust;
+	else if	(t->operator == O_AUTO){
+		v:	ref variable;
+
+		v = ref auto_x(t)->var;
+		if	(v->flags & VF_REG)
+			return v->reg;
+		}
+	return nullReg;
+	}
+
+incomingRegs:	public	RegisterMask;
+OutgoingRegs:	public	RegisterMask;
+
+allocateParmRegisters:	public	() =
+	{
+	retSize:	addr_t;
+	d:		ref type_s;
+/*
+	i:		int;
+	v:		* variable;
+	tt:		topTypes;
+
+	i = 0;
+	for	(v = firstVariable(); v < maxVariable(); v++){
+		if	(v->declaration &&
+			 v->declaration->storageClass != SC_PARM)
+			continue;
+		switch	(v->topType){
+		case	T_CHAR:
+		case	T_UCHAR:
+		case	T_INT:
+		case	T_UINT:
+		case	T_SHORT:
+		case	T_USHORT:
+		case	T_NPTR:
+		case	T_SPTR:
+			if	(i > 6)
+				break;
+			v->preferredReg = i;
+			incomingRegs |= getRegMask(i);
+			i += 2;
+			if	(i == 4)
+				i = 6;
+			break;
+
+		case	T_FPTR:
+		case	T_LONG:
+		case	T_ULONG:
+			if	(i > 4)
+				break;
+			v->preferredReg = i;
+			incomingRegs |= getRegMask(i);
+			incomingRegs |= getRegMask(i + 2);
+			i += 4;
+			if	(i == 4)
+				i = 6;
+			else if	(i == 6)
+				i = 8;
+			}
+		}
+ */
+	d = I386Func.currentType->returnType getType();
+	switch	(d->topType){
+	case	T_STRUCT:
+		retSize = d sizeOf();
+		if	(retSize <= 4)
+			OutgoingRegs = AXmask;
+		break;
+
+	case	T_SIGNED:
+	case	T_UNSIGNED:
+	case	T_REF:
+		OutgoingRegs = AXmask;
+		}
+	}

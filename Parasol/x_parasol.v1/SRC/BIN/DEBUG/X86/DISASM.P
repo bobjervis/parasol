@@ -1,0 +1,1945 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file, format;
+include	symtab;
+include	hardware;
+
+include	editor;
+include	debug;
+include	instruct;
+
+AddrS:	addrSizes;
+DataS:	addrSizes;
+
+Disassembler:	public	ref disassembler;
+
+disassembler:	public	type	inherit	instructionBuffer {
+	imap:	[:] vaddr_t;
+	ibuf:	[200] char;
+	curr:	int;
+
+public:
+
+constructor:	() =
+	{
+	imap = new [0] vaddr_t;
+	}
+
+disassemble:	dynamic	(address: vaddr_t) =
+	{
+	i:	int;
+	addr, sz:	vaddr_t;
+
+	for	(i = 0, addr = address; addr < RunHeader->codeLen; ){
+		sz = instSize(addr);
+		i++;
+		if	(endOfFunction(addr) || sz == 0)
+			break;
+		addr += sz;
+		}
+	delete imap;
+	imap = new [i + 1] vaddr_t;
+	for	(i = 0, addr = address; addr < RunHeader->codeLen; ){
+		imap[i] = addr;
+		sz = instSize(addr);
+		i++;
+		if	(endOfFunction(addr) || sz == 0){
+			imap[i] = addr + sz;
+			break;
+			}
+		addr += sz;
+		}
+	}
+
+seekAddress:	dynamic	(address: vaddr_t) lineNum =
+	{
+	i:	int;
+
+	if	(|imap == 0)
+		return 0;
+	for	(i = |imap - 1; i > 0; i--)
+		if	(address >= imap[i])
+			break;
+	return i;
+	}
+
+fetchLine:	dynamic	(i: lineNum, off: int) ref char =
+	{
+	if	(|imap < 1)
+		return 0;
+	if	(i >= |imap - 1)
+		return 0;
+
+	cp:	[:] char;
+	se:	stringEmitter = [ ibuf ];
+
+	try
+		disasm::disassemble(&se, imap[i], imap[i + 1], FALSE);
+	cp = se result();
+	return cp;
+	}
+
+lineCount:	dynamic	() lineNum =
+	{
+	return |imap - 1;
+	}
+
+seek:	dynamic	(newPos: textPos, whence: int) textPos =
+	{
+	switch	(whence){
+	case	0:
+	case	3:		// go to line number
+		curr = newPos;
+		break;
+
+	case	1:
+		if	(newPos == 0)
+			return curr;
+		curr += newPos;
+		break;
+
+	case	2:
+		curr = |imap + newPos;
+		break;
+		}
+
+	if	(curr >= |imap)
+		curr = |imap - 1;
+	return curr;
+	}
+
+	};
+
+instSize:	public	(addr: unsigned) unsigned =
+	{
+	AddrS = AS_DWORD;
+	DataS = AS_DWORD;
+	return _instSize(addr);
+	}
+
+_instSize:	(addr: vaddr_t) unsigned =
+	{
+	iaddr:		vaddr_t;
+	code:		ref byte;
+	addrS:		addrSizes;
+	dataS:		addrSizes;
+	loc:		unsigned[32];
+	sym:		ref symbol;
+	instruction:	boolean;
+	prefix:		boolean;
+
+	iaddr = addr;			// initial address
+	if	(addr >= RunHeader->codeLen)
+		return 0;
+	addrS = AS_DWORD;
+	dataS = AS_DWORD;
+	code = Code + addr;
+	addr++;
+	instruction = TRUE;
+	prefix = FALSE;
+	switch	(*code){
+	case	0x00:
+	case	0x01:
+	case	0x02:
+	case	0x03:
+	case	0x04:
+	case	0x05:
+	case	0x08:
+	case	0x09:
+	case	0x0a:
+	case	0x0b:
+	case	0x0c:
+	case	0x0d:
+	case	0x10:
+	case	0x11:
+	case	0x12:
+	case	0x13:
+	case	0x14:
+	case	0x15:
+	case	0x18:
+	case	0x19:
+	case	0x1a:
+	case	0x1b:
+	case	0x1c:
+	case	0x1d:
+	case	0x20:
+	case	0x21:
+	case	0x22:
+	case	0x23:
+	case	0x24:
+	case	0x25:
+	case	0x28:
+	case	0x29:
+	case	0x2a:
+	case	0x2b:
+	case	0x2c:
+	case	0x2d:
+	case	0x30:
+	case	0x31:
+	case	0x32:
+	case	0x33:
+	case	0x34:
+	case	0x35:
+	case	0x38:
+	case	0x39:
+	case	0x3a:
+	case	0x3b:
+	case	0x3c:
+	case	0x3d:
+		addr += arithmeticSize(*code, addr);
+		break;
+
+	case	0x0f:
+		code++;
+		addr++;
+		switch	(*code){
+		case	0x20:
+		case	0xaf:
+		case	0xb6:
+		case	0xb7:
+		case	0xbe:
+		case	0xbf:
+			addr += modRmSize(code + 1);
+			break;
+
+		case	0x80:
+		case	0x81:
+		case	0x82:
+		case	0x83:
+		case	0x84:
+		case	0x85:
+		case	0x86:
+		case	0x87:
+		case	0x88:
+		case	0x89:
+		case	0x8a:
+		case	0x8b:
+		case	0x8c:
+		case	0x8d:
+		case	0x8e:
+		case	0x8f:
+			addr += 4;
+			break;
+
+		default:
+			break;
+			}
+		break;
+
+	case	0x66:				// data override
+		DataS = AS_WORD;
+		addr += _instSize(addr);
+		break;
+
+	case	0x67:				// address override
+		AddrS = AS_WORD;
+		addr += _instSize(addr);
+		break;
+
+	case	0x8d:
+		if	(code[1] == 0xc3){
+			addr++;
+			break;
+			}
+		addr += modRmSize(code + 1);
+		break;
+
+	case	0x9a:
+		if	(AddrS == AS_WORD)
+			addr += 4;
+		else
+			addr += 6;
+		break;
+
+	case	0x68:
+	case	0xa9:
+	case	0xb8:
+	case	0xb9:
+	case	0xba:
+	case	0xbb:
+	case	0xbc:
+	case	0xbd:
+	case	0xbe:
+	case	0xbf:
+		addr += immediateSize(DataS);
+		break;
+
+	case	0x80:
+	case	0x83:
+	case	0xc0:
+	case	0xc1:
+	case	0xc6:
+		addr += modRmSize(code + 1) + 1;
+		break;
+
+	case	0x81:
+	case	0xc7:
+		addr += modRmSize(code + 1) + immediateSize(DataS);
+		break;
+
+	case	0xc2:
+	case	0xca:
+		addr += 2;
+		break;
+
+	case	0x86:
+	case	0x87:
+	case	0x88:
+	case	0x89:
+	case	0x8a:
+	case	0x8b:
+	case	0x8c:
+	case	0x8e:
+	case	0xd0:
+	case	0xd1:
+	case	0xd2:
+	case	0xd3:
+	case	0xdb:
+	case	0xdc:
+	case	0xdd:
+		addr += modRmSize(code + 1);
+		break;
+
+	case	0xd8:
+	case	0xd9:
+	case	0xde:
+	case	0xdf:
+		if	(code[1] & 0xc0 == 0xc0){	// MOD == 11
+			addr++;
+			break;
+			}
+		addr += modRmSize(code + 1);
+		break;
+	
+	case	0xa0:
+	case	0xa1:
+	case	0xa2:
+	case	0xa3:
+	case	0xe8:
+	case	0xe9:
+		addr += displacementSize();
+		break;
+
+	case	0x6a:
+	case	0x70:
+	case	0x71:
+	case	0x72:
+	case	0x73:
+	case	0x74:
+	case	0x75:
+	case	0x76:
+	case	0x77:
+	case	0x78:
+	case	0x79:
+	case	0x7a:
+	case	0x7b:
+	case	0x7c:
+	case	0x7d:
+	case	0x7e:
+	case	0x7f:
+	case	0xa8:
+	case	0xb0:
+	case	0xb1:
+	case	0xb2:
+	case	0xb3:
+	case	0xb4:
+	case	0xb5:
+	case	0xb6:
+	case	0xb7:
+	case	0xcd:
+	case	0xe0:
+	case	0xe1:
+	case	0xe2:
+	case	0xe3:
+	case	0xe4:
+	case	0xe5:
+	case	0xe6:
+	case	0xe7:
+	case	0xeb:
+		addr++;
+		break;
+
+	case	0xf7:
+		switch	((code[1] >> 3) & 7){
+		case	2:
+		case	3:
+		case	4:
+		case	5:
+		case	6:
+		case	7:
+			addr += modRmSize(code + 1);
+			break;
+
+		default:
+			addr++;
+			}
+		break;
+
+	case	0xfe:
+		switch	((code[1] >> 3) & 7){
+		case	0:
+		case	1:
+			addr += modRmSize(code + 1);
+			break;
+
+		default:
+			addr++;
+			}
+		break;
+
+	case	0xff:
+		switch	((code[1] >> 3) & 7){
+		case	0:
+		case	1:
+		case	2:
+		case	4:
+		case	6:
+			addr += modRmSize(code + 1);
+			break;
+
+		default:
+			addr++;
+			}
+		}
+	return addr - iaddr;
+	}
+
+arithmeticSize:	(opcode: byte, addr: unsigned) int =
+	{
+	switch	(opcode & 7){
+	case	0:
+	case	1:
+	case	2:
+	case	3:	return modRmSize(Code + addr);
+	case	4:	return 1;
+	case	5:	return immediateSize(DataS);
+		}
+	return 0;
+	}
+
+immediateSize:	(showSize: addrSizes) int =
+	{
+	if	(showSize == AS_DWORD)
+		return 4;
+	else if	(showSize == AS_WORD)
+		return 2;
+	else
+		return 1;
+	}
+
+displacementSize:	() int =
+	{
+	if	(AddrS == AS_DWORD)
+		return 4;
+	else
+		return 2;
+	}
+
+modRmSize:	(code: ref char) int =
+	{
+	rm:	int;
+	mod:	int;
+	d:	int;
+	len:	int;
+
+	rm = *code & 7;
+	mod = (*code >> 6) & 3;
+	switch	(mod){
+	case	0x3:	return 1;	// register
+
+	case	0x1:			// base displacement
+		if	(AddrS == AS_DWORD &&
+			 rm == 4)
+			return 3;
+		else
+			return 2;
+
+	case	0x2:			// base displacement
+		if	(AddrS == AS_DWORD){
+			if	(rm == 4)
+				return 6;
+			else
+				return 5;
+			}
+		else
+			return 3;
+
+	case	0x0:
+		if	(AddrS == AS_DWORD){
+			if	(rm == 5)
+				return 5;
+			else if	(rm != 4)
+				return 1;
+
+				// two-byte mod/rm escape
+
+			if	((code[1] & 7) == 5)
+				return 6;
+			else
+				return 2;
+			}
+		else	{
+			if	(rm != 6)
+				return 1;
+			else
+				return 3;
+			}
+		}
+	}
+
+endOfFunction:	(addr: vaddr_t) boolean =
+	{
+	if	(addr >= RunHeader->codeLen)
+		return TRUE;
+	switch	(Code[addr]){
+	case	0xc2:			// ret
+	case	0xc3:			// ret
+	case	0xca:			// retf
+	case	0xcb:			// retf
+	case	0xcf:			// iret
+		return TRUE;
+
+	default:
+		return FALSE;
+		}
+	}
+
+//
+//---------------------------------------------------------------------------
+//
+//	The following code disassembles x86 machine code
+//
+//
+disassemble:	public	(e: ref Emitter, addr: unsigned, limit: unsigned, 
+						tag: boolean) unsigned =
+	{
+	code:		ref byte;
+	addrS:		addrSizes;
+	dataS:		addrSizes;
+	loc:		unsigned[32];
+	sym:		ref symbol;
+	instruction:	boolean;
+	prefix:		boolean;
+
+	AddrS = AS_DWORD;
+	DataS = AS_DWORD;
+	instruction = FALSE;
+	prefix = FALSE;
+	if	(tag){
+		sym = Symbols findSymbol(addr, TRUE);
+		if	(sym){
+			sym format(e, addr);
+			e printf(":\n");
+			}
+		}
+	for	(;;){
+		if	(addr >= RunHeader->codeLen){
+			e printf("Too large\n");
+			return addr;
+			}
+		if	(instruction && addr >= limit)
+			return addr;
+		addrS = AS_DWORD;
+		dataS = AS_DWORD;
+		code = Code + addr;
+		if	(!prefix){
+			if	(isBreakPoint(addr))
+				e printf("*");
+			else
+				e printf(" ");
+			e printf("%7x\t", addr);
+			}
+		addr++;
+		instruction = TRUE;
+		prefix = FALSE;
+		switch	(*code){
+		case	0x00:
+		case	0x01:
+		case	0x02:
+		case	0x03:
+		case	0x04:
+		case	0x05:
+			addr += arithmetic(e, "add", *code, addr);
+			break;
+
+		case	0x06:	e printf("push\tes\n");	break;
+		case	0x07:	e printf("pop\tes\n");	break;
+
+		case	0x08:
+		case	0x09:
+		case	0x0a:
+		case	0x0b:
+		case	0x0c:
+		case	0x0d:
+			addr += arithmetic(e, "or", *code, addr);
+			break;
+
+		case	0x0e:	e printf("push\tcs\n");	break;
+
+		case	0x0f:
+			code++;
+			addr++;
+			switch	(*code){
+			case	0x06:	e printf("clts\n");	break;
+
+			case	0x20:
+				e printf("mov\t");
+				addr += modRm(e, code + 1, AS_DWORD);
+				e printf(",cr%d\n", (code[1] >> 3) & 0x7);
+				break;
+
+			case	0x80:
+			case	0x81:
+			case	0x82:
+			case	0x83:
+			case	0x84:
+			case	0x85:
+			case	0x86:
+			case	0x87:
+			case	0x88:
+			case	0x89:
+			case	0x8a:
+			case	0x8b:
+			case	0x8c:
+			case	0x8d:
+			case	0x8e:
+			case	0x8f:
+				loc = * ref signed[32](code + 1);
+				addr += 4;
+				loc += addr;
+				e printf("%s\t%x\n", Jumps[*code & 0xf], loc);
+				break;
+
+			case	0xa0:	e printf("push\tfs\n");	break;
+			case	0xa1:	e printf("pop\tfs\n");	break;
+
+			case	0xa8:	e printf("push\tgs\n");	break;
+			case	0xa9:	e printf("pop\tgs\n");	break;
+
+			case	0xaf:
+				e printf("imul\t%S,", 
+					regName((code[1] >> 3) & 0x7, DataS));
+				addr += modRm(e, code + 1, DataS);
+				e printf("\n");
+				break;
+
+			case	0xb6:
+				e printf("movzx\t%S,",
+					regName((code[1] >> 3) & 0x7, DataS));
+				addr += modRm(e, code + 1, AS_BYTE);
+				e printf("\n");
+				break;
+
+			case	0xb7:
+				e printf("movzx\t%S,",
+					regName((code[1] >> 3) & 0x7, DataS));
+				addr += modRm(e, code + 1, AS_WORD);
+				e printf("\n");
+				break;
+
+			case	0xbe:
+				e printf("movsx\t%S,",
+					regName((code[1] >> 3) & 0x7, DataS));
+				addr += modRm(e, code + 1, AS_BYTE);
+				e printf("\n");
+				break;
+
+			case	0xbf:
+				e printf("movsx\t%S,",
+					regName((code[1] >> 3) & 0x7, DataS));
+				addr += modRm(e, code + 1, AS_WORD);
+				e printf("\n");
+				break;
+
+			default:
+				e printf("Unknown opcode %x:%x\n", code[-1], *code);
+				return addr + 1;
+				}
+			break;
+
+		case	0x10:
+		case	0x11:
+		case	0x12:
+		case	0x13:
+		case	0x14:
+		case	0x15:
+			addr += arithmetic(e, "adc", *code, addr);
+			break;
+
+		case	0x16:	e printf("push\tss\n");	break;
+		case	0x17:	e printf("pop\tss\n");	break;
+
+		case	0x18:
+		case	0x19:
+		case	0x1a:
+		case	0x1b:
+		case	0x1c:
+		case	0x1d:
+			addr += arithmetic(e, "sbb", *code, addr);
+			break;
+
+		case	0x1e:	e printf("push\tds\n");	break;
+		case	0x1f:	e printf("pop\tds\n");	break;
+
+		case	0x20:
+		case	0x21:
+		case	0x22:
+		case	0x23:
+		case	0x24:
+		case	0x25:
+			addr += arithmetic(e, "and", *code, addr);
+			break;
+
+		case	0x26:
+			e printf("es:\n");
+			instruction = FALSE;
+			break;
+
+		case	0x27:	e printf("\tdaa\n");	break;
+
+		case	0x28:
+		case	0x29:
+		case	0x2a:
+		case	0x2b:
+		case	0x2c:
+		case	0x2d:
+			addr += arithmetic(e, "sub", *code, addr);
+			break;
+
+		case	0x2e:
+			e printf("cs:\n");
+			instruction = FALSE;
+			break;
+
+		case	0x2f:	e printf("\tdas\n");	break;
+
+		case	0x30:
+		case	0x31:
+		case	0x32:
+		case	0x33:
+		case	0x34:
+		case	0x35:
+			addr += arithmetic(e, "xor", *code, addr);
+			break;
+
+		case	0x36:
+			e printf("ss:\n");
+			instruction = FALSE;
+			break;
+
+		case	0x37:	e printf("\taaa\n");	break;
+
+		case	0x38:
+		case	0x39:
+		case	0x3a:
+		case	0x3b:
+		case	0x3c:
+		case	0x3d:
+			addr += arithmetic(e, "cmp", *code, addr);
+			break;
+
+		case	0x3e:
+			e printf("ds:\n");
+			instruction = FALSE;
+			break;
+
+		case	0x3f:	e printf("\taas\n");	break;
+
+		case	0x40:
+		case	0x41:
+		case	0x42:
+		case	0x43:
+		case	0x44:
+		case	0x45:
+		case	0x46:
+		case	0x47:
+			e printf("inc\t%S\n", regName(*code & 7, DataS));
+			break;
+
+		case	0x48:
+		case	0x49:
+		case	0x4a:
+		case	0x4b:
+		case	0x4c:
+		case	0x4d:
+		case	0x4e:
+		case	0x4f:
+			e printf("dec\t%S\n", regName(*code & 7, DataS));
+			break;
+
+		case	0x50:
+		case	0x51:
+		case	0x52:
+		case	0x53:
+		case	0x54:
+		case	0x55:
+		case	0x56:
+		case	0x57:
+			e printf("push\t%S\n", regName(*code & 7, DataS));
+			break;
+
+		case	0x58:
+		case	0x59:
+		case	0x5a:
+		case	0x5b:
+		case	0x5c:
+		case	0x5d:
+		case	0x5e:
+		case	0x5f:
+			e printf("pop\t%S\n", regName(*code & 7, DataS));
+			break;
+		case	0x60:	e printf("pusha\n");	break;
+		case	0x61:	e printf("popa\n");	break;
+
+		case	0x64:
+			e printf("fs:\n");
+			instruction = FALSE;
+			break;
+
+		case	0x65:
+			e printf("gs:\n");
+			instruction = FALSE;
+			break;
+
+		case	0x66:				// data override
+			addrS = AddrS;
+			dataS = AS_WORD;
+			instruction = FALSE;
+			prefix = TRUE;
+			break;
+
+		case	0x67:				// address override
+			addrS = AS_WORD;
+			dataS = DataS;
+			instruction = FALSE;
+			prefix = TRUE;
+			break;
+
+		case	0x68:
+			e printf("push\t");
+			addr += immediate(e, addr, DataS, TRUE);
+			e printf("\n");
+			break;
+
+		case	0x6a:
+			e printf("push\t");
+			addr += immediate(e, addr, AS_BYTE, FALSE);
+			e printf("\n");
+			break;
+
+		case	0x70:
+		case	0x71:
+		case	0x72:
+		case	0x73:
+		case	0x74:
+		case	0x75:
+		case	0x76:
+		case	0x77:
+		case	0x78:
+		case	0x79:
+		case	0x7a:
+		case	0x7b:
+		case	0x7c:
+		case	0x7d:
+		case	0x7e:
+		case	0x7f:
+			loc = * ref signedByte(code + 1);
+			addr++;
+			loc += addr;
+			e printf("%s\t%x\n", Jumps[*code & 0xf], loc);
+			break;
+
+		case	0x80:
+			e printf("%s\t", Immediate[(code[1] >> 3) & 0x7]);
+			addr += modRm(e, code + 1, AS_BYTE);
+			e printf(",");
+			addr += immediate(e, addr, AS_BYTE, FALSE);
+			e printf("\n");
+			break;
+
+		case	0x81:
+			e printf("%s\t", Immediate[(code[1] >> 3) & 0x7]);
+			addr += modRm(e, code + 1, DataS);
+			e printf(",");
+			addr += immediate(e, addr, DataS, FALSE);
+			e printf("\n");
+			break;
+
+		case	0x83:
+			e printf("%s\t", Immediate[(code[1] >> 3) & 0x7]);
+			addr += modRm(e, code + 1, DataS);
+			e printf(",");
+			addr += immediate(e, addr, AS_BYTE, FALSE);
+			e printf("\n");
+			break;
+
+		case	0x86:
+			e printf("xchg\t%S,",
+				regName((code[1] >> 3) & 0x7, AS_BYTE));
+			addr += modRm(e, code + 1, AS_BYTE);
+			e printf("\n");
+			break;
+
+		case	0x87:
+			e printf("xchg\t%S,",
+				regName((code[1] >> 3) & 0x7, DataS));
+			addr += modRm(e, code + 1, DataS);
+			e printf("\n");
+			break;
+
+		case	0x88:
+			e printf("mov\t");
+			addr += modRm(e, code + 1, AS_BYTE);
+			e printf(",%S\n", regName((code[1] >> 3) & 0x7, AS_BYTE));
+			break;
+
+		case	0x89:
+			e printf("mov\t");
+			addr += modRm(e, code + 1, DataS);
+			e printf(",%S\n", regName((code[1] >> 3) & 0x7, DataS));
+			break;
+
+		case	0x8a:
+			e printf("mov\t%S,", 
+				regName((code[1] >> 3) & 0x7, AS_BYTE));
+			addr += modRm(e, code + 1, AS_BYTE);
+			e printf("\n");
+			break;
+
+		case	0x8b:
+			e printf("mov\t%S,",
+				regName((code[1] >> 3) & 0x7, DataS));
+			addr += modRm(e, code + 1, DataS);
+			e printf("\n");
+			break;
+
+		case	0x8c:
+			e printf("mov\t");
+			addr += modRm(e, code + 1, AS_WORD);
+			e printf(",%s\n", segRegName((code[1] >> 3) & 0x7));
+			break;
+
+		case	0x8d:
+			if	(code[1] == 0xc3){
+				e printf(".source error\n");
+				addr++;
+				break;
+				}
+			e printf("lea\t%S,", 
+				regName((code[1] >> 3) & 0x7, DataS));
+			addr += modRm(e, code + 1, DataS);
+			e printf("\n");
+			break;
+
+		case	0x8e:
+			e printf("mov\t%s,", segRegName((code[1] >> 3) & 0x7));
+			addr += modRm(e, code + 1, AS_WORD);
+			e printf("\n");
+			break;
+
+		case	0x90:	e printf("nop\n");	break;
+
+		case	0x98:	e printf("cbw\n");	break;
+		case	0x99:
+			if	(DataS == AS_WORD)
+				e printf("cwd\n");
+			else
+				e printf("cdq\n");
+			break;
+
+		case	0x9a:
+			e printf("callf\t");
+			if	(AddrS == AS_WORD){
+				e printf("%04x:%04x\n", 
+						* ref unsigned[16](code + 3), 
+						* ref unsigned[16](code + 1));
+				addr += 4;
+				}
+			else	{
+				e printf("%04x:%08x\n", 
+						* ref unsigned[16](code + 5),
+						* ref unsigned[32](code + 1));
+				addr += 6;
+				}
+			break;
+
+		case	0x9b:	e printf("wait\n");	break;
+		case	0x9c:	e printf("pushf\n");	break;
+		case	0x9d:	e printf("popf\n");	break;				
+		case	0x9e:	e printf("sahf\n");	break;
+		case	0x9f:	e printf("lahf\n");	break;
+		case	0xa0:
+			e printf("mov\tal,");
+			addr += displacement(e, code + 1);
+			e printf("\n");
+			break;
+
+		case	0xa1:
+			e printf("mov\t%S,", regName(0, DataS));
+			addr += displacement(e, code + 1);
+			e printf("\n");
+			break;
+
+		case	0xa2:
+			e printf("mov\t");
+			addr += displacement(e, code + 1);
+			e printf(",al\n");
+			break;
+
+		case	0xa3:
+			e printf("mov\t");
+			addr += displacement(e, code + 1);
+			e printf(",%S\n", regName(0, DataS));
+			break;
+
+		case	0xa4:	e printf("movsb\n");	break;
+		case	0xa5:	e printf("movs%c\n", DataS == AS_DWORD ? 'd' : 'w'); break;
+		case	0xa6:	e printf("cmpsb\n");	break;
+		case	0xa7:	e printf("cmps%c\n", DataS == AS_DWORD ? 'd' : 'w'); break;
+		case	0xa8:
+			e printf("test\tal,");
+			addr += immediate(e, addr, AS_BYTE, FALSE);
+			e printf("\n");
+			break;
+
+		case	0xa9:
+			e printf("test\t%S,", regName(0, DataS));
+			addr += immediate(e, addr, DataS, FALSE);
+			e printf("\n");
+			break;
+
+		case	0xaa:	e printf("stosb\n");	break;
+		case	0xab:	e printf("stos%c\n", DataS == AS_DWORD ? 'd' : 'w'); break;
+		case	0xac:	e printf("lodsb\n");	break;
+		case	0xad:	e printf("lods%c\n", DataS == AS_DWORD ? 'd' : 'w'); break;
+		case	0xae:	e printf("scasb\n");	break;
+		case	0xaf:	e printf("scas%c\n", DataS == AS_DWORD ? 'd' : 'w'); break;
+
+		case	0xb0:
+		case	0xb1:
+		case	0xb2:
+		case	0xb3:
+		case	0xb4:
+		case	0xb5:
+		case	0xb6:
+		case	0xb7:
+			e printf("mov\t%S,", regName(*code & 7, AS_BYTE));
+			addr += immediate(e, addr, AS_BYTE, FALSE);
+			e printf("\n");
+			break;
+
+		case	0xb8:
+		case	0xb9:
+		case	0xba:
+		case	0xbb:
+		case	0xbc:
+		case	0xbd:
+		case	0xbe:
+		case	0xbf:
+			e printf("mov\t%S,", regName(*code & 7, DataS));
+			addr += immediate(e, addr, DataS, TRUE);
+			e printf("\n");
+			break;
+
+		case	0xc0:
+			e printf("%s\t", Immediate2[(code[1] >> 3) & 0x7]);
+			addr += modRm(e, code + 1, AS_BYTE);
+			e printf(",");
+			addr += immediate(e, addr, AS_BYTE, FALSE);
+			e printf("\n");
+			break;
+
+		case	0xc1:
+			e printf("%s\t", Immediate2[(code[1] >> 3) & 0x7]);
+			addr += modRm(e, code + 1, DataS);
+			e printf(",");
+			addr += immediate(e, addr, AS_BYTE, FALSE);
+			e printf("\n");
+			break;
+
+		case	0xc2:
+			e printf("ret\t%x\n", * ref unsigned[16](code + 1));
+			return addr + 2;
+
+		case	0xc3:	e printf("ret\n");	return addr;
+
+		case	0xc6:
+			e printf("mov\t");
+			addr += modRm(e, code + 1, AS_BYTE);
+			e printf(",");
+			addr += immediate(e, addr, AS_BYTE, FALSE);
+			e printf("\n");
+			break;
+
+		case	0xc7:
+			e printf("mov\t");
+			addr += modRm(e, code + 1, DataS);
+			e printf(",");
+			addr += immediate(e, addr, DataS, TRUE);
+			e printf("\n");
+			break;
+
+		case	0xc9:	e printf("leave\n");	break;
+
+		case	0xca:
+			e printf("retf\t%x\n", * ref unsigned[16](code + 1));
+			return addr + 2;
+
+		case	0xcb:	e printf("retf\n");	return addr;
+		case	0xcc:	e printf("int\t3\n");	break;
+
+		case	0xcd:
+			e printf("int\t");
+			addr += immediate(e, addr, AS_BYTE, FALSE);
+			e printf("\n");
+			break;
+
+		case	0xce:	e printf("into\n");	break;
+		case	0xcf:	e printf("iret\n");	return addr;
+
+		case	0xd0:
+			e printf("%s\t", Immediate2[(code[1] >> 3) & 0x7]);
+			addr += modRm(e, code + 1, AS_BYTE);
+			e printf(",1\n");
+			break;
+
+		case	0xd1:
+			e printf("%s\t", Immediate2[(code[1] >> 3) & 0x7]);
+			addr += modRm(e, code + 1, DataS);
+			e printf(",1\n");
+			break;
+
+		case	0xd2:
+			e printf("%s\t", Immediate2[(code[1] >> 3) & 0x7]);
+			addr += modRm(e, code + 1, AS_BYTE);
+			e printf(",cl\n");
+			break;
+
+		case	0xd3:
+			e printf("%s\t", Immediate2[(code[1] >> 3) & 0x7]);
+			addr += modRm(e, code + 1, DataS);
+			e printf(",cl\n");
+			break;
+
+		case	0xd4:	e printf("aam\n");	break;
+		case	0xd5:	e printf("aad\n");	break;
+
+		case	0xd7:	e printf("xlat\n");	break;
+
+		case	0xd8:
+			if	(code[1] & 0xc0 == 0xc0){	// MOD == 11
+				switch	((code[1] >> 3) & 0x7){
+				case	0:	e printf("fadd\tst,st(%d)\n", code[1] & 7);	break;
+					}
+				addr++;
+				break;
+				}
+			switch	((code[1] >> 3) & 7){
+			case	0:	e printf("fadd\t");	break;
+			case	1:	e printf("fmul\t");	break;
+			case	2:	e printf("fcom\t");	break;
+			case	3:	e printf("fcomp\t");	break;
+			case	4:	e printf("fsub\t");	break;
+			case	5:	e printf("fsubr\t");	break;
+			case	6:	e printf("fdiv\t");	break;
+			case	7:	e printf("fdivr\t");	break;
+				}
+			addr += modRm(e, code + 1, AS_DWORD);
+			e printf("\n");
+			break;
+
+		case	0xd9:
+			if	(code[1] & 0xc0 == 0xc0){	// MOD == 11
+				switch	(code[1] & 0x3F){
+				case	0x24:	e printf("fld1\n");	break;
+				case	0x2E:	e printf("fldz\n");	break;
+				case	0x3C:	e printf("frndint\n");	break;
+					}
+				addr++;
+				break;
+				}
+			switch	((code[1] >> 3) & 7){
+			case	0:	e printf("fld\t");	break;
+			case	1:	e printf("d9,001\t");	break;
+			case	2:	e printf("fst\t");	break;
+			case	3:	e printf("fstp\t");	break;
+			case	4:	e printf("fldenv\t");	break;
+			case	5:	e printf("fldcw\t");	break;
+			case	6:	e printf("fstenv\t");	break;
+			case	7:	e printf("fstcw\t");	break;
+				}
+			addr += modRm(e, code + 1, AS_DWORD);
+			e printf("\n");
+			break;
+
+		case	0xdb:
+			switch	((code[1] >> 3) & 7){
+			case	0:
+				e printf("fild\t");
+				addr += modRm(e, code + 1, AS_DWORD);
+				break;
+
+			case	5:
+				e printf("fld\t");
+				addr += modRm(e, code + 1, AS_TBYTE);
+				break;
+
+			case	7:
+				e printf("fstp\t");
+				addr += modRm(e, code + 1, AS_TBYTE);
+				break;
+				}
+			e printf("\n");
+			break;
+
+		case	0xdc:
+			switch	((code[1] >> 3) & 7){
+			case	0:	e printf("fadd\t");	break;
+			case	1:	e printf("fmul\t");	break;
+			case	2:	e printf("fcom\t");	break;
+			case	3:	e printf("fcomp\t");	break;
+			case	4:	e printf("fsub\t");	break;
+			case	5:	e printf("fsubr\t");	break;
+			case	6:	e printf("fdiv\t");	break;
+			case	7:	e printf("fdivr\t");	break;
+				}
+			addr += modRm(e, code + 1, AS_QWORD);
+			e printf("\n");
+			break;
+
+		case	0xdd:
+			switch	((code[1] >> 3) & 7){
+			case	0:
+				e printf("fld\t");
+				addr += modRm(e, code + 1, AS_QWORD);
+				break;
+
+			case	3:
+				e printf("fstp\t");
+				addr += modRm(e, code + 1, AS_QWORD);
+				break;
+
+			case	4:
+				e printf("frstor\t");
+				addr += modRm(e, code + 1, AS_DWORD);
+				break;
+
+			case	6:
+				e printf("fsave\t");
+				addr += modRm(e, code + 1, AS_DWORD);
+				break;
+				}
+			e printf("\n");
+			break;
+
+		case	0xde:
+			if	(code[1] & 0xc0 == 0xc0){	// MOD == 11
+				switch	((code[1] >> 3) & 0x7){
+				case	0:	e printf("faddp\tst(%d),st\n", code[1] & 7);	break;
+				case	1:	e printf("fmulp\tst(%d),st\n", code[1] & 7);	break;
+				case	4:	e printf("fsubrp\tst(%d),st\n", code[1] & 7);	break;
+				case	5:	e printf("fsubp\tst(%d),st\n", code[1] & 7);	break;
+				case	6:	e printf("fdivrp\tst(%d),st\n", code[1] & 7);	break;
+				case	7:	e printf("fdivp\tst(%d),st\n", code[1] & 7);	break;
+				case	3:
+					if	(code[1] & 7 == 1){
+						e printf("fcompp\n");
+						break;
+						}
+				default:
+					e printf("de,%d\n", (code[1] >> 3) & 0x7);
+					}
+				addr++;
+				break;
+				}
+			switch	((code[1] >> 3) & 7){
+			case	0:
+				e printf("fiadd\t");
+				addr += modRm(e, code + 1, AS_WORD);
+				e printf("\n");
+				break;
+				}
+			break;
+
+		case	0xdf:
+			if	(code[1] & 0xc0 == 0xc0){	// MOD == 11
+				switch	((code[1] >> 3) & 0x7){
+				case	4:	e printf("fstsw\tax\n");	break;
+				default:
+					e printf("df,%d\n", (code[1] >> 3) & 0x7);
+					}
+				addr++;
+				break;
+				}
+			as:	addrSizes = AS_WORD;
+			switch	((code[1] >> 3) & 7){
+			case	0:	e printf("fild\t");	break;
+			case	1:	e printf("df,001\t");	break;
+			case	2:	e printf("fist\t");	break;
+			case	3:	e printf("fistp\t");	break;
+			case	4:	e printf("fbld\t");	break;
+			case	5:	
+				e printf("fild\t");
+				as = AS_QWORD;
+				break;
+
+			case	6:	e printf("fbstp\t");	break;
+			case	7:
+				e printf("fistp\t");
+				as = AS_QWORD;
+				break;
+				}
+			addr += modRm(e, code + 1, as);
+			e printf("\n");
+			break;
+
+			
+		case	0xe0:
+			loc = * ref signedByte(code + 1);
+			addr++;
+			loc += addr;
+			e printf("loopnz\t%x\n", loc);
+			break;
+
+		case	0xe1:
+			loc = * ref signedByte(code + 1);
+			addr++;
+			loc += addr;
+			e printf("loopz\t%x\n", loc);
+			break;
+
+		case	0xe2:
+			loc = * ref signedByte(code + 1);
+			addr++;
+			loc += addr;
+			e printf("loop\t%x\n", loc);
+			break;
+
+		case	0xe3:
+			loc = * ref signedByte(code + 1);
+			addr++;
+			loc += addr;
+			e printf("jcxz\t%x\n", loc);
+			break;
+
+		case	0xe4:
+			e printf("in\tal,%x\n", code[1]);
+			addr++;
+			break;
+
+		case	0xe5:
+			e printf("in\t%S,%x\n", regName(0, DataS), code[1]);
+			addr++;
+			break;
+
+		case	0xe6:
+			e printf("out\t%x,%S\n", code[1], regName(0, AS_BYTE));
+			addr++;
+			break;
+
+		case	0xe7:
+			e printf("out\t%x,%S\n", code[1], regName(0, DataS));
+			addr++;
+			break;
+
+		case	0xe8:
+			if	(AddrS == AS_DWORD){
+				loc = * ref signed[32](code + 1);
+				addr += 4;
+				}
+			else	{
+				loc = * ref signed[16](code + 1);
+				addr += 2;
+				}
+			loc += addr;
+			sym = Symbols findSymbol(loc, TRUE);
+			e printf("call\t");
+			if	(sym)
+				sym format(e, loc);
+			else
+				e printf("0x%x (%x)", loc, * ref signed[32](code + 1));
+			e printf("\n");
+			break;
+
+		case	0xe9:
+			if	(AddrS == AS_DWORD){
+				loc = * ref signed[32](code + 1);
+				addr += 4;
+				}
+			else	{
+				loc = * ref signed[16](code + 1);
+				addr += 2;
+				}
+			loc += addr;
+			e printf("jmp\t%x\n", loc);
+			break;
+
+		case	0xeb:
+			loc = * ref signedByte(code + 1);
+			addr++;
+			loc += addr;
+			e printf("jmp\t%x\n", loc);
+			break;
+
+		case	0xec:
+			e printf("in\tal,dx\n");
+			break;
+
+		case	0xed:
+			e printf("in\t%S,dx\n", regName(0, DataS));
+			break;
+
+		case	0xee:
+			e printf("out\tdx,al\n");
+			break;
+
+		case	0xef:
+			e printf("out\tdx,%S\n", regName(0, DataS));
+			break;
+
+		case	0xf0:
+			e printf("lock\n");
+			instruction = FALSE;
+			break;
+
+		case	0xf1:
+			e printf("Parasol error\n");
+			break;
+
+		case	0xf2:
+			e printf("repnz\n");
+			instruction = FALSE;
+			break;
+
+		case	0xf3:
+			e printf("repz\n");
+			instruction = FALSE;
+			break;
+
+		case	0xf4:	e printf("hlt\n");	break;
+		case	0xf5:	e printf("cmc\n");	break;
+
+		case	0xf6:
+			switch	((code[1] >> 3) & 7){
+			case	2:
+				e printf("not\t");
+				addr += modRm(e, code + 1, AS_BYTE);
+				e printf("\n");
+				break;
+
+			case	3:
+				e printf("neg\t");
+				addr += modRm(e, code + 1, AS_BYTE);
+				e printf("\n");
+				break;
+
+			case	4:
+				e printf("mul\tal,");
+				addr += modRm(e, code + 1, AS_BYTE);
+				e printf("\n");
+				break;
+
+			case	5:
+				e printf("imul\tal,");
+				addr += modRm(e, code + 1, AS_BYTE);
+				e printf("\n");
+				break;
+
+			case	6:
+				e printf("div\tal,");
+				addr += modRm(e, code + 1, AS_BYTE);
+				e printf("\n");
+				break;
+
+			case	7:
+				e printf("idiv\tal,");
+				addr += modRm(e, code + 1, AS_BYTE);
+				e printf("\n");
+				break;
+
+			default:
+				e printf("Unknown opcode: %x:%x\n", *code, code[1]);
+				return addr + 1;
+				}
+			break;
+
+		case	0xf7:
+			switch	((code[1] >> 3) & 7){
+			case	2:
+				e printf("not\t");
+				addr += modRm(e, code + 1, DataS);
+				e printf("\n");
+				break;
+
+			case	3:
+				e printf("neg\t");
+				addr += modRm(e, code + 1, DataS);
+				e printf("\n");
+				break;
+
+			case	4:
+				e printf("mul\t%S,", regName(0, DataS));
+				addr += modRm(e, code + 1, DataS);
+				e printf("\n");
+				break;
+
+			case	5:
+				e printf("imul\t%S,", regName(0, DataS));
+				addr += modRm(e, code + 1, DataS);
+				e printf("\n");
+				break;
+
+			case	6:
+				e printf("div\t%S,", regName(0, DataS));
+				addr += modRm(e, code + 1, DataS);
+				e printf("\n");
+				break;
+
+			case	7:
+				e printf("idiv\t%S,", regName(0, DataS));
+				addr += modRm(e, code + 1, DataS);
+				e printf("\n");
+				break;
+
+			default:
+				e printf("Unknown opcode: %x:%x\n", *code, code[1]);
+				return addr + 1;
+				}
+			break;
+
+		case	0xf8:	e printf("clc\n");	break;
+		case	0xf9:	e printf("stc\n");	break;
+		case	0xfa:	e printf("cli\n");	break;
+		case	0xfb:	e printf("sti\n");	break;
+		case	0xfc:	e printf("cld\n");	break;
+		case	0xfd:	e printf("std\n");	break;
+
+		case	0xfe:
+			switch	((code[1] >> 3) & 7){
+			case	0:
+				e printf("inc\t");
+				addr += modRm(e, code + 1, AS_BYTE);
+				e printf("\n");
+				break;
+
+			case	1:
+				e printf("dec\t");
+				addr += modRm(e, code + 1, AS_BYTE);
+				e printf("\n");
+				break;
+
+			default:
+				e printf("Unknown opcode: %x:%x\n", *code, code[1]);
+				return addr + 1;
+				}
+			break;
+
+		case	0xff:
+			switch	((code[1] >> 3) & 7){
+			case	0:
+				e printf("inc\t");
+				addr += modRm(e, code + 1, DataS);
+				e printf("\n");
+				break;
+
+			case	1:
+				e printf("dec\t");
+				addr += modRm(e, code + 1, DataS);
+				e printf("\n");
+				break;
+
+			case	2:
+				e printf("call\t");
+				addr += modRm(e, code + 1, AddrS);
+				e printf("\n");
+				break;
+
+			case	4:
+				e printf("jmp\t");
+				addr += modRm(e, code + 1, AddrS);
+				e printf("\n");
+				break;
+
+			case	6:
+				e printf("push\t");
+				addr += modRm(e, code + 1, DataS);
+				e printf("\n");
+				break;
+
+			default:
+				e printf("Unknown opcode: %x:%x\n", *code, code[1]);
+				return addr + 1;
+				}
+			break;
+
+		default:
+			e printf("Unknown opcode: %x\n", *code);
+			return addr;
+			}
+		AddrS = addrS;
+		DataS = dataS;
+		}
+	}
+
+Immediate:	const	[8] ref char = [
+		"add",
+		"or",
+		"adc",
+		"sbb",
+		"and",
+		"sub",
+		"xor",
+		"cmp"
+		];
+
+Immediate2:	const	[8] ref char = [
+		"rol",
+		"ror",
+		"rcl",
+		"rcr",
+		"shl",
+		"shr",
+		"",
+		"sar"
+		];
+
+displacement:	(e: ref Emitter, code: ref byte) int =
+	{
+	loc:	unsigned;
+	addr:	int;
+	x:	unsigned;
+
+	if	(AddrS == AS_DWORD){
+		loc = * ref unsigned[32](code);
+		addr = 4;
+		}
+	else	{
+		loc = * ref unsigned[16](code);
+		addr = 2;
+		}
+	e printf("[");
+	showAddress(e, loc);
+	e printf("]");
+	return addr;
+	}
+
+showAddress:	(e: ref Emitter, loc: unsigned) =
+	{
+	sym:	ref symbol;
+
+	sym = Symbols findSymbol(loc, FALSE);
+	if	(loc < RunHeader->dataTotalLen &&
+		 sym)
+		sym format(e, loc);
+	else
+		e printf("%x", loc);
+	}
+
+Jumps:	const	[16] ref char = [
+	"jo",
+	"jno",
+	"jb",
+	"jnb",
+	"jz",
+	"jnz",
+	"jbe",
+	"jnbe",
+	"js",
+	"jns",
+	"jp",
+	"jnp",
+	"jl",
+	"jnl",
+	"jle",
+	"jnle"
+	];
+
+arithmetic:	(e: ref Emitter, op: ref char, opcode: byte, 
+						addr: unsigned) int =
+	{
+	i:	int;
+	reg:	int;
+
+	reg = (Code[addr] >> 3) & 7;
+	e printf("%s\t", op);
+	switch	(opcode & 7){
+	case	0:
+		i = modRm(e, Code + addr, AS_BYTE);
+		e printf(",%S\n", regName(reg, AS_BYTE));
+		return i;
+
+	case	1:
+		i = modRm(e, Code + addr, DataS);
+		e printf(",%S\n", regName(reg, DataS));
+		return i;
+
+	case	2:
+		e printf("%S,", regName(reg, AS_BYTE));
+		i = modRm(e, Code + addr, AS_BYTE);
+		e printf("\n");
+		return i;
+
+	case	3:
+		e printf("%S,", regName(reg, DataS));
+		i = modRm(e, Code + addr, DataS);
+		e printf("\n");
+		return i;
+
+	case	4:
+		e printf("%S,", regName(0, AS_BYTE));
+		i = immediate(e, addr, AS_BYTE, FALSE);
+		e printf("\n");
+		return i;
+
+	case	5:
+		e printf("%S,", regName(0, DataS));
+		i = immediate(e, addr, DataS, FALSE);
+		e printf("\n");
+		return i;
+		}
+	e printf("Unexpected subcode: %x\n", opcode);
+	return 0;
+	}
+
+immediate:	(e: ref Emitter, addr: unsigned, showSize: addrSizes, 
+					possibleAddr: boolean) int =
+	{
+	if	(showSize == AS_DWORD){
+		if	(possibleAddr)
+			showAddress(e, * ref signed[32](Code + addr));
+		else
+			e printf("%x", * ref signed[32](Code + addr));
+		return 4;
+		}
+	else if	(showSize == AS_WORD){
+		e printf("%x", * ref signed[16](Code + addr));
+		return 2;
+		}
+	else	{
+		e printf("%x", * ref signedByte(Code + addr));
+		return 1;
+		}
+	}
+
+regName:	(reg: int, showSize: addrSizes) [:] char =
+	{
+	switch	(showSize){
+	case	AS_DWORD:		return DWordNames[reg];
+	case	AS_WORD:		return WordNames[reg];
+	case	AS_BYTE:		return ByteNames[reg];
+	default:			return "?";
+		}
+	}
+
+WordNames:	const	[8] [:] char = [
+			"ax",
+			"cx",
+			"dx",
+			"bx",
+			"sp",
+			"bp",
+			"si",
+			"di"
+			];
+DWordNames:	const	[8] [:] char = [
+			"eax",
+			"ecx",
+			"edx",
+			"ebx",
+			"esp",
+			"ebp",
+			"esi",
+			"edi"
+			];
+ByteNames:	const	[8] [:] char = [
+			"al",
+			"cl",
+			"dl",
+			"bl",
+			"ah",
+			"ch",
+			"dh",
+			"bh"
+			];
+segRegName:	(reg: int) ref char =
+	{
+	return SegNames[reg];
+	}
+
+SegNames:	const	[8] ref char = [
+			"es",
+			"cs",
+			"ss",
+			"ds",
+			"fs",
+			"gs",
+			"",
+			""
+			];
+
+addrSizes:	type	int = {
+	AS_BYTE,
+	AS_WORD,
+	AS_DWORD,
+	AS_QWORD,
+	AS_TBYTE
+	};
+
+modRm:	(e: ref Emitter, code: ref char, showSize: addrSizes) int =
+	{
+	rm:	int;
+	mod:	int;
+	d:	int;
+	len:	int;
+
+	rm = *code & 7;
+	mod = (*code >> 6) & 3;
+	switch	(mod){
+	case	0x3:			// register
+		e printf(regName(rm, showSize));
+		return 1;
+
+	case	0x1:			// base displacement
+		d = * ref signedByte(code + 1);
+		showSizePrefix(e, showSize);
+		if	(AddrS == AS_DWORD){
+			if	(rm != 4){
+				e printf("[%S", regName(rm, AddrS));
+				if	(d < 0)
+					e printf("-%x]", -d);
+				else
+					e printf("+%x]", d);
+				return 2;
+				}
+
+				// two-byte mod/rm escape
+
+			d = * ref signedByte(code + 2);
+			len = 3;
+			}
+		else	{
+			e printf("[%s", WordBases[rm]);
+			if	(d < 0)
+				e printf("-%x]", -d);
+			else
+				e printf("+%x]", d);
+			return 2;
+			}
+		break;
+
+	case	0x2:			// base displacement
+		showSizePrefix(e, showSize);
+		if	(AddrS == AS_DWORD){
+			if	(rm != 4){
+				e printf("[%S", regName(rm, AddrS));
+				d = * ref signed[32](code + 1);
+				if	(d < 0)
+					e printf("-%x]", -d);
+				else
+					e printf("+%x]", d);
+				return 5;
+				}
+
+				// two-byte mod/rm escape
+
+			d = * ref unsigned[32](code + 2);
+			len = 6;
+			}
+		else	{
+			e printf("[%s", WordBases[rm]);
+			d = * ref signed[16](code + 1);
+			if	(d < 0)
+				e printf("-%x]", -d);
+			else
+				e printf("+%x]", d);
+			return 3;
+			}
+		break;
+
+	case	0x0:
+		showSizePrefix(e, showSize);
+		if	(AddrS == AS_DWORD){
+			if	(rm == 5){
+				displacement(e, code + 1);
+				return 5;
+				}
+			else if	(rm != 4){
+				e printf("[%S]", regName(rm, AddrS));
+				return 1;
+				}
+
+				// two-byte mod/rm escape
+
+			d = 0;
+			len = 2;
+			if	((code[1] & 7) == 5){
+				d = * ref unsigned[32](code + 2);
+				len = 6;
+				}
+			}
+		else	{
+			if	(rm != 6){
+				e printf("[%s]", WordBases[rm]);
+				return 1;
+				}
+			else	{
+				displacement(e, code + 1);
+				return 3;
+				}
+			}
+		}
+	base:	int;
+	index:	int;
+	scale:	int;
+
+	base = code[1] & 7;
+	index = (code[1] >> 3) & 7;
+	scale = 1 << ((code[1] >> 6) & 3);
+	e printf("[");
+	if	(mod != 0 || base != 5){
+		e printf(regName(base, AS_DWORD));
+		if	(index != 4)
+			e printf("+");
+		}
+	if	(index != 4){
+		e printf("%S", regName(index, AS_DWORD));
+		if	(scale != 1)
+			e printf("*%d", scale);
+		}
+	if	(mod == 0 && base == 5 && index == 4)
+		e printf("%x", d);
+	else if	(d)
+		e printf("+%x", d);
+	e printf("]");
+	return len;
+	}
+
+WordBases:	const	[8] ref char = [
+			"bx+si",
+			"bx+di",
+			"bp+si",
+			"bp+di",
+			"si",
+			"di",
+			"bp",
+			"bx"
+			];
+
+showSizePrefix:	(e: ref Emitter, showSize: addrSizes) =
+	{
+	switch	(showSize){
+	case	AS_BYTE:	e printf("byte ptr ");	return;
+	case	AS_WORD:	e printf("word ptr ");	return;
+	case	AS_DWORD:	e printf("dword ptr ");	return;
+	case	AS_QWORD:	e printf("qword ptr ");	return;
+	case	AS_TBYTE:	e printf("tbyte ptr ");	return;
+	default:
+		return;
+		}
+	}
+

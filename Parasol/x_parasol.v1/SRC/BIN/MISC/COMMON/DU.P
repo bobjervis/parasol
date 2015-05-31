@@ -1,0 +1,115 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	string;
+include	file;
+include	error;
+include	filesys;
+include	alys;
+
+ClusterSize:		int;
+BlocksPerCluster:	int;
+Xsize:			unsigned;
+Kblock:			unsigned;
+
+dsize:	type	{
+	public:
+
+	thatsize:	unsigned;
+	subsize:	unsigned;
+	};
+
+main:	entry	() =
+	{
+	arg:	[:] char;
+	dx:	drive_t;
+	d:	dsize;
+	x:	unsigned;
+	fp:	[MAXPATH] char;
+	fpath:	[:] char;
+
+	fpath = fp;
+	if	(|commandLine.arguments > 1){
+		printf("Use is: du [ path ]\n");
+		exit(1);
+		}
+	if	(|commandLine.arguments == 1)
+		arg = commandLine.arguments[0];
+	else
+		arg = ".";
+	dx = FileSystem getDriveInfo(arg);
+	if	(dx.sectorSize == 0){
+		printf("Unknown file or not a disk file: %S\n", arg);
+		exit(1);
+		}
+	ClusterSize = dx.sectorSize;
+	x = diskuse(arg);
+	printf("           ");
+	showByteValue(x);
+	printf(" bytes used\n");
+	printf("           ");
+	showByteValue(dx.sectorSize * dx.freeSectors);
+	printf(" bytes free\n");
+
+//	printf("           %10.1f%%\n", (100.0 * Xsize) / (x * 512));
+//	printf("           %10.1f%%\n", (100.0 * Xsize) / Kblock);
+	exit(EX_SUCCESS);
+	}
+
+diskuse:	(path: [:] char) unsigned =
+	{
+	d:	dsize = [ 0, 0 ];
+	ff:	finder;
+
+	if	(ff open(path, "*", FA_DIR) != SUCCESS)
+		return 0;
+	while	(ff next() == SUCCESS){
+		d.thatsize += countf(ff.size);
+
+			// exclude normal files
+
+		if	(ff.attrib & FA_DIR){
+			cp:	[:] char;
+
+				// also exclude . and ..
+
+			cp = stripDirectory(ff.pathname);
+			if	(stringCompare(cp, ".") != 0 &&
+				 stringCompare(cp, "..") != 0)
+				d.subsize += diskuse(ff.pathname);
+			}
+		}
+	ff close();
+	if	(d.subsize){
+		printf("           ");
+		showByteValue(d.subsize + d.thatsize);
+		}
+	else	{
+		showByteValue(d.thatsize);
+		printf("           ");
+		}
+	printf(" %S\n", path);
+	return d.subsize + d.thatsize;
+	}
+
+countf:	(size: unsigned) unsigned =
+	{
+	k:	unsigned;
+
+	Xsize += size;
+	k = size + 1023;
+	k -= k & 0x3ff;
+	Kblock += k;
+	size += ClusterSize - 1;
+	size /= ClusterSize;
+	return size * ClusterSize;
+	}
+
+showByteValue:	(x: unsigned) =
+	{
+	printf("%9luK", x / 1024);
+	}

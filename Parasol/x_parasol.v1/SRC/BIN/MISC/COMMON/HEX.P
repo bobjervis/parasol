@@ -1,0 +1,227 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+
+main:	entry	() =
+	{
+	start, end:	int;
+
+	if	(|commandLine.arguments == 0){
+		printf("Use is: HEX [ options ] file\n"
+			"\tOptions:\n"
+			"\t\t-bxxxx\t\tBegin at offset xxxx\n"
+			"\t\t-exxxx\t\tEnd at offset xxxx\n"
+			"\t\t-rxxxx-yyyy\tDisplay from xxxx to yyyy\n");
+		exit(1);
+		}
+	start = 0;
+	end = -1;
+	opt, s:	[:] char;
+	while	(|commandLine.arguments > 1){
+		opt = commandLine.arguments[0];
+		commandLine shiftArguments();
+		if	(opt[0] != '-'){
+			printf("Bad option: %S\n", opt);
+			continue;
+			}
+		s = opt[2:];
+		switch	(opt[1]){
+		case	'b':
+			start = getHexValue(s);
+			break;
+
+		case	'e':
+			end = getHexValue(s);
+			break;
+
+		case	'r':
+			start = getHexValue(s);
+			opt = skipHexValue(s);
+			if	(opt[0] != '-'){
+				printf("Bad option: %S\n", opt);
+				continue;
+				}
+			s = opt[1:];
+			end = getHexValue(s);
+			break;
+
+		default:
+			printf("Bad option: %s\n", opt);
+			continue;
+			}
+		}
+	fname: [:] char;
+
+	fname = commandLine.arguments[0];
+
+	fd:	stream;
+	i:	int;
+
+	i = fd open(fname, AR_READ);
+	if	(i){
+		printf("Could not open '%S'\n", fname);
+		exit(1);
+		}
+
+	data:	[:] byte;
+
+	i = fd seek(0, SEEK_END);
+	if	(end < 0 || end > i)
+		end = i;
+	if	(start < 0 || start >= end){
+		printf("Nothing to print\n");
+		exit(1);
+		}
+	fd seek(0, SEEK_ABS);
+	data = new [i] byte;
+	if	(fd read(data) != i){
+		printf("Read failed\n");
+		exit(1);
+		}
+
+	fd close();
+
+	printf("%S: file length %x bytes\n", fname, i);
+	dumpData(data, start, end);
+	exit(EX_SUCCESS);
+	}
+
+getHexValue:	(cp: [:] char) int =
+	{
+	val:	int;
+
+	val = 0;
+	while	(|cp && isxdigit(cp[0])){
+		val <<= 4;
+		if	(isalpha(cp[0]))
+			val += tolower(cp[0]) - 'a' + 10;
+		else
+			val += cp[0] - '0';
+		cp = cp[1:];
+		}
+	return val;
+	}
+
+skipHexValue:	(cp: [:] char) [:] char =
+	{
+	while	(|cp && isxdigit(cp[0]))
+		cp = cp[1:];
+	return cp;
+	}
+
+/*
+doCommand:	(data: * char, len: unsigned) =
+	{
+	buf:	[100] char;
+	cp:	* char;
+	addr:	int;
+	cmd:	char;
+	start:	unsigned;
+	end:	unsigned;
+
+	printf(">");
+	if	(stdin gets(&buf, sizeof buf) == 0)
+		exit(0);
+	cp = &buf;
+	while	(isspace(*cp))
+		cp++;
+	cmd = *cp;
+	start = 0;
+	end = 0x100;
+	cp++;
+	while	(isspace(*cp))
+		cp++;
+	if	(*cp){
+		cp = scanHex(cp, &start);
+		while	(isspace(*cp))
+			cp++;
+		if	(*cp == '-'){
+			cp++;
+			while	(isspace(*cp))
+				cp++;
+			cp = scanHex(cp, &end);
+			}
+		}
+	switch	(cmd){
+	case	0:
+		return;
+
+	case	'q':
+		exit(0);
+
+	case	'd':
+		if	(end > len)
+			end = len;
+		if	(start > len)
+			start = len;
+		dumpData(data, start, start + end);
+		}
+	}
+ */
+dumpData:	(data: ref byte, start: int, end: int) =
+	{
+	i:	int;
+	c:	byte;
+
+	while	(start < end){
+		printf("%08x: ", start);
+		for	(i = 0; i < 8; i++){
+			if	(start + i < end)
+				printf(" %02x", data[start + i]);
+			else
+				printf("   ");
+			}
+		stdout putc(' ');
+		for	(i = 8; i < 16; i++){
+			if	(start + i < end)
+				printf(" %02x", data[start + i]);
+			else
+				printf("   ");
+			}
+		stdout putc(' ');
+		stdout putc(' ');
+		for	(i = 0; i < 16; i++){
+			if	(start + i < end)
+				c = data[start + i];
+			else
+				c = ' ';
+			if	(c < 0x20)
+				c = '.';
+			stdout putc(c);
+			}
+		stdout putc('\n');
+		start += 16;
+		}
+	}
+/*
+scanHex:	(cp: * char, xp: * unsigned) * char =
+	{
+	x:	int;
+	sum:	int;
+
+	x = 0;
+	sum = 0;
+	for	(;;){
+		c:	char;
+
+		c = tolower(*cp);
+		if	(c >= '0' && c <= '9')
+			x = c - '0';
+		else if	(c >= 'a' && c <= 'f')
+			x = c + 10 - 'a';
+		else
+			break;
+		sum <<= 4;
+		sum += x;
+		cp++;
+		}
+	*xp = sum;
+	return cp;
+	}
+ */
+

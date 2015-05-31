@@ -1,0 +1,10 @@
+include	web;
+
+HTMLParser:	public	type	{
+	public:
+
+constructor:	() =
+	{
+	}
+
+	};

@@ -1,0 +1,279 @@
+include	file, format, string, filesys, time, alys;
+
+MAXFMT:	const	int = 12;		// Line number formatter string len
+
+DoubleSpace:	boolean = FALSE;	// Default: no double spacing
+FullPageFF:	boolean = FALSE;	// A Full page doesn't need a form feed
+
+NumberLines:	boolean = FALSE;	// Whether each line is numbered
+Separator:	char = ' ';		// Number/text separator
+NumberWidth:	int = 5;		// Line numbering width
+TextWidth:	int = 80;		// Line width is 80 columns
+LeftMargin:	int = 0;		// Default left margin is 0
+PageLength:	int = 60;		// Default length is 60
+
+LineCount:	int;			// The current number of lines printed
+					// on a page
+WidthCount:	int;
+PageCount:	int;			// The current page number
+Pad:		int;
+Filename:	[:] char;		// File name being printed
+FileInfo:	file_t;
+FileDate:	Date;
+
+main:	entry	() =
+	{
+	ff:	finder;
+	i, j:	int;
+	dir:	[:] char;
+	patt:	[:] char;
+
+	if	(|commandLine.arguments == 0)
+		help("");
+	for	(i = 0; i < |commandLine.arguments; i++){
+		arg:	[:] char;
+
+		arg = commandLine.arguments[i];
+		if	(|arg > 0 &&
+			 arg[0] == '-')
+			processArgument(arg);
+		else	{
+			dir = getDirectory(arg);
+			patt = stripDirectory(arg);
+			j = ff open(dir, patt, 0);
+			if	(j == SUCCESS){
+				while	(ff next() == SUCCESS)
+					print(ff.pathname);
+				}
+			else
+				print(arg);
+			}
+		}
+	exit(EX_SUCCESS);
+	}
+
+processArgument:	(arg: [:] char) =
+	{
+	if	(|arg == 1)
+		help(arg);
+	try	{
+		argn:	[:] char; argn = arg[2:];
+		sc:	stringConverter = [ argn ];
+
+		switch	(arg[1]){
+		case	'd':	DoubleSpace = TRUE;	break;
+		case	'f':	FullPageFF = TRUE;	break;
+		case	'l':
+			PageLength = sc encodeUnsigned();
+			if	(!sc.success)
+				help(arg);
+			break;
+
+		case	'm':
+			LeftMargin = sc encodeUnsigned();
+			if	(!sc.success)
+				help(arg);
+			break;
+
+		case	'n':
+			NumberLines = TRUE;
+			if	(|arg == 2)
+				break;
+			if	(!isdigit(arg[2])){
+				Separator = arg[2];
+				argn = arg[3:];
+				}
+			if	(|argn > 0){
+				NumberWidth = sc encodeUnsigned();
+				if	(!sc.success)
+					help(arg);
+				}
+			break;
+
+		case	'w':
+			TextWidth = sc encodeUnsigned();
+			if	(!sc.success)
+				help(arg);
+			break;
+
+		default:
+			help(arg);
+			}
+		}
+	except	{
+		help(arg);
+		}
+	}
+
+help:	(arg: [:] char) =
+	{
+	if	(|arg)
+		stderr printf("Invalid parameter '%S'\n", arg);
+	printf(	"Use is: PR [ options ] files ...\n"
+		"Options:\n"
+		"	-d	Double space output (default single)\n"
+		"	-f	Use form feed between all pages (default: NO)\n"
+		"	-l#	Lines per page (default 60)\n"
+		"	-m#	Left margin (default 0)\n"
+		"	-n	Number each line, 5 columns wide followed by\n"
+		"		a space separator then the line\n"
+		"	-nS#	An optional separator character and the optional width\n"
+		"		of the line number\n"
+		"	-w#	The line width (default 80)\n"
+		);
+	if	(|arg)
+		exit(1);
+	else
+		exit(0);
+	}
+
+print:	(filename: [:] char) =
+	{
+	file:		stream;
+	c:		int;
+	cp:		ref char;
+	line:		[:] char;
+	lineno:		unsigned;
+	formatBuffer:	[MAXFMT] char;
+	formatString:	[:] char;
+	sf:		stringEmitter = [ formatBuffer ];
+
+	Filename = filename;
+	Pad = LeftMargin;
+	if	(NumberLines)
+		Pad += NumberWidth + 1;
+	sf printf("%%%dd%c", NumberWidth, Separator);
+	formatString = sf result();
+	if	(file open(filename, AR_READ)){
+		stderr printf("Couldn't open %S\n", filename);
+		return;
+		}
+	FileInfo = FileSystem stat(filename);
+	FileDate decode(FileInfo.ftime);
+	PageCount = 1;
+	lineno = 1;
+	pageBreak();
+
+		/* Now start accumulating lines of output */
+
+	while	((c = file getc()) != EOF){
+		if	(c == 26)
+			break;
+		if	(c == '\f'){
+			putchar('\f');
+			pageBreak();
+			continue;
+			}
+		checkForPageBreak();
+
+			/* Stuff in any line number and offset */
+
+		if	(LeftMargin)
+			printf("%*c", LeftMargin, ' ');
+		if	(NumberLines){
+			printf(formatString, lineno);
+			lineno++;
+			}
+
+			/* Now stuff in the characters - be sure to
+				expand tabs */
+
+		WidthCount = 0;
+		cp = line;
+		while	(c != '\n' && c != '\f' && c != EOF){
+
+			/* Check for end of line - do wraparound */
+
+			if	(c == '\t'){
+				c = 8 - (WidthCount & 7);/* spaces to pad */
+				while	(--c >= 0)
+					emitChar(' ');
+				}
+			else if	(c != '\r')
+				emitChar(c);
+			c = file getc();
+			}
+
+			/* Print the line and check for newpage */
+
+		endOfLine();
+		if	(c == '\f')
+			file ungetc();
+		}
+	putchar('\f');
+	file close();
+	delete line;
+	}
+
+emitChar:	(c: char) =
+	{
+	if	(WidthCount >= TextWidth - Pad){
+		endOfLine();
+		checkForPageBreak();
+		if	(Pad)
+			printf("%*c", Pad, ' ');
+		WidthCount = 0;
+		}
+	WidthCount++;
+	putchar(c);
+	}
+
+/*
+	Test for end of page.
+
+	LineCount is -1 for the first page of a file, and greater than zero
+	for subsequent pages.
+ */
+endOfLine:	() =
+	{
+
+		/* Put out form feeds after the first page */
+
+	putchar('\n');
+	LineCount++;
+	if	(DoubleSpace){
+		if	(LineCount < PageLength){
+			putchar('\n');
+			LineCount++;
+			}
+		}
+	}
+
+checkForPageBreak:	() =
+	{
+	if	(LineCount >= PageLength){
+		if	(FullPageFF)
+			putchar('\f');
+		pageBreak();
+		}
+	}
+
+pageBreak:	() =
+	{
+	if	(LeftMargin)
+		printf("%*c", LeftMargin, ' ');
+	printf("%s %d  %02d:%02d  %d  %S  page %d\n\n\n", 
+			Months[FileDate.month],
+			FileDate.monthday,
+			FileDate.hour,
+			FileDate.minute,
+			FileDate.year + 1900,
+			Filename,
+			PageCount++);
+	LineCount = 3;
+	}
+
+Months:	[] ref char = [
+	"Jan",
+	"Feb",
+	"Mar",
+	"Apr",
+	"May",
+	"Jun",
+	"Jul",
+	"Aug",
+	"Sep",
+	"Oct",
+	"Nov",
+	"Dec"
+	];

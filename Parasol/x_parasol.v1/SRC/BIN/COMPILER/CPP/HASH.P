@@ -1,0 +1,171 @@
+include	file;
+include	string;
+
+IDHASH:		public	const unsigned = 1024;
+
+Idhash:	public	[IDHASH] ref identifier;
+
+identifier:	public	type	{
+	public:
+	Next:		ref identifier;
+	Expansion:	ref char;
+	Arguments:	ref argument;
+	ArgCount:	int;
+	SpellingLength:	byte;
+	Spelling:	[] char;
+
+create:	factory	(buf: [:] char) ref identifier =
+	{
+	i:		ref identifier;
+	prev:		ref identifier;
+	a:		int;
+	j:		int;
+	cp:		ref char;
+
+	Probes++;
+	j = a = |buf;
+	if	(a > 1)
+		a = (a << 6 +
+			(ref unsigned[16](&buf[0]))[0] +
+			(* ref unsigned[16](&buf[a - 2]) << 1))
+				% IDHASH;
+	else
+		a = buf[0];
+	i = Idhash[a];
+	for	(prev = 0; i; prev = i, i = i->Next){
+		Compares++;
+		if	(stringCompare(buf, 
+					i->Spelling[:i->SpellingLength]) == 0){
+			if	(prev){
+				prev->Next = i->Next;
+				i->Next = Idhash[a];
+				Idhash[a] = i;
+				}
+			return i;
+			}
+		}
+	Inserts++;
+	self = threadHeap() alloc(sizeof identifier + j);
+	Next = Idhash[a];
+	Idhash[a] = self;
+	Expansion = 0;
+	Arguments = 0;
+	ArgCount = 0;
+	SpellingLength = j;
+	Spelling[:j] = buf;
+	return self;
+	}
+
+isDefined:	() boolean =
+	{
+	return Expansion != 0;
+	}
+
+needsArguments:	() boolean =
+	{
+	return ArgCount >= 0;
+	}
+
+undefine:	() =
+	{
+	if	(Expansion){
+		delete Expansion;
+		Expansion = 0;
+		}
+	delete Arguments;
+	Arguments = 0;
+	ArgCount = 0;
+	}
+
+define:	(x: [:] char, args: ref argument, argc: boolean) =
+	{
+	Expansion = new [ |x + 1 ] char;
+	Expansion[:|x] = x;
+	Expansion[|x] = 0;
+	Arguments = args;
+	if	(argc)
+		ArgCount = args count();
+	else
+		ArgCount = -1;
+	}
+/*
+compare:	(id: ref identifier) int =
+	{
+	return string[ Spelling ] compare([ id->Spelling ]);
+	}
+ */
+spelling:	() [:] char =
+	{
+	return Spelling[:SpellingLength];
+	}
+
+	};
+
+argument:	public	type	{
+	public:
+
+	next:		ref argument;
+	length:		byte;
+	name:		[] char;
+
+create:	factory	(n: [:] char) ref argument =
+	{
+	self = alloc(sizeof argument + |n);
+	length = |n;
+	name[:length] = n;
+	next = 0;
+	return self;
+	}
+
+lookup:	(s: [:] char) int =
+	{
+	i:	int;
+
+	for	(i = 1; self; i++, self = next)
+		if	(stringCompare(s, name[:length]) == 0)
+			return i;
+	return 0;
+	}
+
+count:	() int =
+	{
+	i:	int;
+
+	for	(i = 0; self; i++, self = next)
+		;
+	return i;
+	}
+
+display:	() =
+	{
+	i:	int;
+
+	for	(i = 0; self; i++, self = next){
+		printf("%d: self = %x: ", i, self);
+		printf("name = %s next = %x\n", &name, next);
+		}
+	}
+
+destructor:	() =
+	{
+	if	(next)
+		delete next;
+	}
+
+	};
+
+Probes:		int;
+Compares:	int;
+Inserts:	int;
+/*
+final:	cleanup	() =
+	{
+	printf("Probes =    %d\n", Probes);
+	printf("Compares =  %d\n", Compares);
+	if	(Probes)
+		printf("Ratio =     %d.%02d\n", Compares / Probes,
+			(Compares * 100 / Probes) % 100);
+	printf("Inserts =   %d\n", Inserts);
+	}
+
+ */

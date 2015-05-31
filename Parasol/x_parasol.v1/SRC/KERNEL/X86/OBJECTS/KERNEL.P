@@ -1,0 +1,209 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	string;
+include	hardware;
+include	alys;
+
+include	runload, lodload;
+include	node;
+include	consfile;
+include	file;		// Note: the file unit startup code is disabled in
+			// the kernel
+include	console;
+include kwindow;
+include	pc_keybd;
+include	pc_video;
+include	pc_comm;
+//
+include	alysfs;
+include	backbone;
+include	disk;
+include	dos_vol;
+include	vector;
+include	pc_hdisk;
+include	pc_fdisk;
+//
+include	syscall;
+include	kprintf;
+//
+include	karena;
+include	process;
+include hprocess;
+include	object;
+include	message;
+
+EnvFile:		[:] char = "/c/alys3.env";
+Root:			ref alysDictionary;
+
+/*
+	This is the ALYS/x86 boot sequence.
+ */
+boot:	entry	() =
+	{
+
+		// Initialize the basic virtual machine
+
+	initSystemCalls();		// now basic system calls work
+	initKernelArena();		// now new/delete work
+	initInterruptVectors();		// now kernel traps work
+	initTextScreen();		// enable kprintf
+
+		// Initialize the message switch
+
+	initObject0();			// The boot object exists
+	initProcesses();
+	initMessages();
+
+		// Now initialize the various objects of the kernel
+
+	initTimer();
+	CurProc setRunnable();		// the formal start of system
+	enableAll();			// enable interrupts
+
+	initHost();			// The Host object now exists
+	Console initialize();		// The PC Console device now exists
+	alysNode.kernelVersion = 0x300;
+	kprintf("ALYS Version %d.%02d  Copyright (c) 1993,94,95 Robert Jervis  "
+						__DATE__ " " __TIME__ "\n\n", 
+						alysNode.kernelVersion >> 8,
+						alysNode.kernelVersion & 0xff);
+
+		// Load the disk partition tables
+
+	Root = new alysDictionary[ "/", AR_ANY, 0 ];
+
+	d:	ref far directory = ref far directory(Root->objectId);
+
+	makeFileContext0(d);
+	initDiskCache();
+	pcFloppyDiskInitialization();
+	pcHardDiskInitialization();
+	mountDOSVolumes(Root);
+
+	d makeDirectory("dev");
+	Root createDevice("con", &ConsoleFile, FA_DEVICE);
+
+	d = d find("dev");
+	d register(Console.objectId, "console", ":model.console.console");
+
+	defineHotKey(CTRL_CENTER, &cycleWindows);
+	defineHotKey(SYSREQ, &systemRequest);
+	defineHotKey(ALT_F1, &kernelDebugEvent2);
+	defineHotKey(CTRL_F1, &kernelDebugEvent3);
+	defineHotKey(SHFT_F1, &kernelDebugEvent5);
+
+	startComm();
+
+	loadAliases();
+
+	RunLoader register();
+	LodLoader register();
+
+	sbuf:	[MAXPATH] char;
+	shell:	[:] char;
+	shell = sbuf;
+	try
+		shell [:]= BootObject->myJob value("BOOTCOM");
+	except
+		kprintf("No BOOTCOM environment string\n");
+	try
+		FileSystem spawn(0, shell, "-boot");
+	except
+		kprintf("Couldn't find '%S'\n", shell);
+
+		// The kernel idle loop
+
+	CurProc setPriority(0);
+	for	(;;){
+		if	(Boot senseMessages())
+			Boot wait(EXT_WAIT_FOR_ONE);
+		}
+	}
+
+kernelDebugEvent2:	(keystroke) =
+	{
+	displayObjects();
+	}
+
+kernelDebugEvent3:	(keystroke) =
+	{
+	displayMessages();
+	}
+
+kernelDebugEvent5:	(keystroke) =
+	{
+	displayProcesses();
+	}
+
+EOF_MARK:	const	char = 26;		// make ^Z an EOF
+
+loadAliases:	() =
+	{
+	fd:		ref far channel;
+	len:		int;
+	buf:		[:] byte;
+	orig:		[:] byte;
+	cp:		[:] char;
+
+		/* Open the file */
+
+	fd = FileSystem open(EnvFile, AR_READ);
+	if	(fd == 0){
+		kprintf("Couldn't open '%S'\n", EnvFile);
+		return;
+		}
+	len = fd seek(0, 2);
+	fd seek(0, 0);
+	buf = new [len] byte;
+	buf [:]= fd read();
+	fd close();
+	if	(|buf != len)
+		return;			// something funny in the read
+	orig = buf;
+	while	(|buf){
+		name:	[:] char;
+		value:	[:] char;
+		n:	ref char;
+		i:	int;
+
+		i = stringScan(buf, '\n');
+		if	(i < 0){
+			cp = buf;
+			buf = "";
+			}
+		else	{
+			cp = buf[:i];
+
+				// trim trailing carriage returns
+
+			if	(|cp &&
+				 cp[|cp - 1] == '\r')
+				(|cp)--;
+			buf = buf[i + 1:];
+			}
+
+			// Accept comments
+
+		cp = stringTrim(cp);
+		if	(|cp == 0 ||
+			 cp[0] == '#')
+			continue;
+
+			// Look for an = 
+
+		i = stringScan(cp, '=');
+		if	(i < 0)
+			continue;
+		name = cp[:i];
+		value = cp[i + 1:];
+		name = stringTrim(name);
+		value = stringTrim(value);
+		BootObject->myJob alias(name, value);
+		}
+	delete orig;
+	}

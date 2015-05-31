@@ -1,0 +1,21 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+include	time;
+
+main:	entry	() =
+	{
+	t:	Time;
+	d:	Date;
+
+	t = time();
+	d decode(t);
+	printf("%d:%02d:%02d %d/%d/%d\r\n", d.hour, d.minute, d.second, 
+				d.month + 1, d.monthday, d.year);
+	exit(EX_SUCCESS);
+	}

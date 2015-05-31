@@ -1,0 +1,65 @@
+include	time, window, console, alys, format, file;
+
+main:	entry	() =
+	{
+	vi: ref clockViewer = new clockViewer[ 0 ];
+	mainExternal(vi);
+	vi begin();
+	}
+
+clockViewer:	type	inherit	inputHandler {
+	cform:	ref clockWindow;
+
+	public:
+
+begin:	() =
+	{
+	cform = new clockWindow[ "Clock" ];
+	cform getInputFrom(self);
+	cform configure([ 20, 1 ]);
+	cform setLayout();
+	cform open();
+	alarm(1);
+	}
+
+attention:		gate!	() = { }	// Ignore break signals
+
+alarmExpired:		gate!	() = 
+	{
+	cform redraw();
+	alarm(1);
+	}
+
+	};
+
+clockWindow:	type	inherit applicationShell {
+	public:
+
+setLayout:	() =
+	{
+	sz:	point;
+
+	sz = viewport getConsoleSize();
+	at([ sz.x - (box.size.x + 1), 1 ]);
+	minimumSize = maximumSize = box.size;
+	hideCursor();
+	}
+
+expose:	dynamic	(x: rectangle_t) = 
+	{
+	d:	Date;
+	buf:	[18] char;
+	se:	stringEmitter = [ buf ];
+	s:	[:] char;
+
+	d decode(time());
+
+	se printf("%02d/%02d/%02d  %02d:%02d:%02d", 
+			d.month + 1, d.monthday, d.year, 
+			d.hour, d.minute, d.second);
+	s = buf[10:];
+	iconLabel(s, C_TITLE);
+	writecc([ 1, 0 ], buf, C_TITLE);
+	}
+
+	};

@@ -1,0 +1,179 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	alys;
+include	hardware;
+include	process;
+include	kprintf;
+
+MAXTIME:	public	const int = 1000000;	// Maximum time for zap timer
+
+Now:		public	Time;
+Tcount:		public	int;
+Ticks:		public	Tick;
+
+TimerQueue:	ref timer = 0;
+/*
+sleep:	public	(n: int) =
+	{
+	then:	time_t;
+
+	then = Now;
+	for	(;;){
+		if	(Now == then + n)
+			return;
+		}
+	}
+ */
+timer:	public	type	{
+	public:
+
+constructor:	(cnt: Tick) =
+	{
+	v:	ref ref timer;
+	s:	ref timer;
+	n:	threadLock;
+
+	count = cnt;
+	fired = 0;
+	v = &TimerQueue;
+	n lock();
+	s = TimerQueue;
+	if	(s)
+		s->count = Tcount;
+	while	(s && s->count <= count){
+		v = &s->next;
+		count -= s->count;
+		s = *v;
+		}
+	if	(v == &TimerQueue)
+		Tcount = count;
+	if	(s)
+		s->count -= count;
+	*v = self;
+	next = s;
+	n unlock();
+	}
+
+abort:	() =
+	{
+	n:	threadLock;
+	v:	ref ref timer;
+	s:	ref timer;
+
+	fired = 1;
+	v = &TimerQueue;
+	n lock();
+	s = TimerQueue;
+	while	(s != self){
+		if	(s == 0){		// must have fired
+			n unlock();
+			return;			// so we don't need to worry
+			}
+		v = &s->next;
+		s = *v;
+		}
+	s = next;				// s now points at the next, if any
+	if	(v == &TimerQueue){
+		if	(s)
+			Tcount += s->count;
+		}
+	else if	(s)
+		s->count += count;
+	*v = s;
+	n unlock();
+	}
+
+fire:	dynamic	() =
+	{
+	}
+
+dispose:	dynamic	() =
+	{
+	}
+
+	fired:		byte;
+	next:		ref timer;
+	count:		Tick;
+	};
+
+stD:	(ref kernelSemaphore, d: pointer) =
+	{
+	kprintf("semaphoreTimer %x", d);
+	}
+
+semaphoreTimer:	public	type	inherit timer {
+	public:
+
+	event:	kernelSemaphore;
+
+constructor:	(clk: Tick) =
+	{
+	event initialize(0, &stD, self);
+	super constructor(clk);
+	}
+
+wait:	() boolean =
+	{
+	if	(!event down(TRUE)){
+		abort();
+		return FALSE;
+		}
+	else
+		return TRUE;
+	}
+
+fire:	dynamic	() =
+	{
+	event up();
+	}
+
+	};
+
+zapTimer:	type	inherit timer {
+
+fire:	dynamic	() =
+	{
+	Zap = [ MAXTIME ];
+	}
+
+	};
+
+Zap:	zapTimer;
+
+initTimerQueue:	public	() =
+	{
+	x:	zapTimer;
+
+	Zap = [ MAXTIME ];
+	}
+/*
+	This function is called from the hardware clock timer whenever 
+	Tcount decrements to zero.  This routine is called with interrupts
+	disabled.
+ */
+timerExpires:	public	() =
+	{
+	t:	ref timer;
+	ty:	int;
+
+	do	{
+		t = TimerQueue;
+		TimerQueue = TimerQueue->next;
+
+			// Tcount is less than or equal to zero
+
+		Tcount += TimerQueue->count;
+		if	(!t->fired){
+			t->fired = 1;
+			t fire();
+			}
+		else
+			t dispose();
+		}
+		while	(Tcount <= 0);
+	}

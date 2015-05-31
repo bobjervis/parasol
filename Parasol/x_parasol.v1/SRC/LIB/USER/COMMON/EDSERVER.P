@@ -1,0 +1,51 @@
+/*
+	Copyright (c) 1994 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	msgboard;
+include	console;
+
+locator_t:	public	type	{ public:
+	version:	Time;
+	start:		position_t;
+	end:		position_t;
+	};
+
+position_t:	public	type	{ public:
+	location:	int;
+	increment:	int;
+	};
+
+style_t:	public	type	int;
+mark_t:		public	type	int;
+
+NoMark:		public	const	mark_t = 0;
+Invisible:	public	const	style_t = 0;
+
+editorServer:	public	type	inherit External {
+	public:
+
+load:		gate	(filename: [:] char);	// Load the named file into an
+						// editor.
+
+defineMessageBoard:	gate	(ref far messageBoard);
+
+defineStyle:	gate	(name: [:] char, glyph: [:] byte, color: color_t) style_t;
+
+lookupStyle:	gate	(name: [:] char) style_t;
+
+deleteStyle:	gate	(style_t);
+
+setMark:	gate	(file: [:] char, loc: locator_t, 
+					style: style_t) mark_t;
+
+gotoMark:	gate	(m: mark_t, message: [:] char);
+
+gotoLocation:	gate	(file: [:] char, version: Time, loc: position_t);
+
+deleteMark:	gate	(m: mark_t);
+
+	};

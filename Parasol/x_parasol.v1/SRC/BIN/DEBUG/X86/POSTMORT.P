@@ -1,0 +1,176 @@
+include	file, runfile, error, hardware, console;
+
+include	symtab;
+
+include	debug;
+include	monitor, instruct;
+include	disasm, i386mon;
+include	stack, trace;
+
+postMortemArena:	public	type	inherit	debugArena {
+	coreFile:	[:] char;
+	coreData:	ref byte;
+	coreLen:	paddr_t;
+	header:		ref coreDumpHeader;
+	current:	ref task_t;
+	frames:		ref frameBuffer;
+	inKernel:	boolean;
+
+	public:
+
+constructor:	(core: [:] char) =
+	{
+	coreFd:	stream;
+	i:	int;
+	len:	long;
+
+	coreFile = core;
+	i = coreFd open(core, AR_READ);
+	if	(i){
+		printf("Could not open '%S': %S\n", core, cmdError(i));
+		exit(1);
+		}
+	len = coreFd seek(0, SEEK_END);
+	coreFd seek(0, SEEK_ABS);
+	coreData = alloc(len);
+	i = coreFd read(coreData[:len]);
+	if	(i != len){
+		printf("Could not read '%S'\n", core);
+		exit(1);
+		}
+	header = ref coreDumpHeader(coreData);
+	if	(header->task.state == TS_ERROR)
+		header->task.state = TS_ABORT;
+	coreLen = len - sizeof coreDumpHeader;
+	coreData += sizeof coreDumpHeader;
+	if	(header->magic != COR_MAGIC ||
+		 header->version != COR_VERSION){
+		printf("Improper core file '%S'\n", core);
+		exit(1);
+		}
+	current = &header->task;
+
+	sym:	ref symbol;
+
+	sym = Symbols findName("_startup::_InKernel");
+	if	(sym == 0)
+		inKernel = FALSE;
+	else	{
+		b:	[:] byte;
+
+		b = fetchData(sym->address, sizeof boolean);
+		inKernel = b[0];
+		}
+	}
+
+setContext:	dynamic	(t: ref task_t) =
+	{
+	current = t;
+	}
+
+displayState:	dynamic	(w: ref frob) paddr_t =
+	{
+	w printf([ 1, 1 ], C_READONLY, "- Post Mortem - file: %S", coreFile);
+	if	(current == 0 ||
+		 current->state == TS_ERROR){
+		w rectangle([ [ 1, 2 ], 
+				[ w->box.size.x - 2, w->box.size.y - 3 ] ], 
+				C_BLACK);
+		return 0;
+		}
+	if	(coreLen + header->dataOffset != current->ss0)
+		printf("(%08x/%08x)", coreLen + header->dataOffset, 
+							current->ss0);
+	displayTask(w, current);
+	return current->eip;
+	}
+
+getDataLength:	dynamic	() paddr_t =
+	{
+	return coreLen;
+	}
+
+fetchData:	dynamic	(addr: paddr_t, len: paddr_t) [:] byte =
+	{
+
+		// Address out of range of mapped data
+
+	if	(addr < header->dataOffset)
+		return coreData[:0];
+	addr -= header->dataOffset;
+	if	(addr >= coreLen)
+		return coreData[:0];
+	if	(len > coreLen ||
+		 addr + len > coreLen)
+		len = coreLen - addr;
+	return (coreData + addr)[:len];
+	}
+
+fetchPointer:	dynamic	(addr: paddr_t) paddr_t =
+	{
+	x:	paddr_t;
+
+	if	(addr < header->dataOffset)
+		return ~0;
+	addr -= header->dataOffset;
+	if	(addr >= coreLen)
+		return ~0;
+	if	(sizeof paddr_t > coreLen ||
+		 addr + sizeof paddr_t > coreLen)
+		return ~0;
+	memCopy(&x, coreData + addr, sizeof x);
+	return x;
+	}
+
+fetchTask:	dynamic	() ref task_t =
+	{
+	return &header->task;
+	}
+
+initializeDisplays:	dynamic	() =
+	{
+	frames = new frameBuffer[];
+	Display openStackWindow();
+	trace(frames, self);
+	Stack connect(frames);
+	Stack top();
+	Display openCodeWindow();
+	Instructions showAddress(header->task.eip);
+	}
+
+codeBuffer:	dynamic	() ref instructionBuffer =
+	{
+	if	(Disassembler == 0)
+		Disassembler = new disassembler[];
+	return Disassembler;
+	}
+
+heapBlock:	dynamic	(addr: vaddr_t, b: ref block_t) vaddr_t =
+	{
+	if	(addr == 0){			// A value of zero means look
+						// for the first heap block
+		if	(inKernel){
+			sym:	ref symbol;
+
+			sym = Symbols findName("karena::KernelHeap");
+			if	(sym == 0)
+				return ~0;
+			}
+		}
+	if	(addr < header->dataOffset)
+		return ~0;
+	if	(addr + 12 >= coreLen)
+		return ~0;
+	if	(addr & 3)
+		return ~0;
+	b->class = BC_UNKNOWN;
+	b->address = addr + sizeof vaddr_t;
+	b->size = fetchPointer(addr);
+	b->word = fetchPointer(addr + sizeof vaddr_t);
+	if	(b->size == 0)
+		return coreLen + 1;
+	else
+		return addr + b->size;
+	}
+
+	};

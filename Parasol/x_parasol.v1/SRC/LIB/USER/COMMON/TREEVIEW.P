@@ -1,0 +1,846 @@
+/*
+	The editor operates by associating an internal object with a
+	window.  The association takes the form of a sequence of logical
+	lines.  The total number of lines is available to the editor.
+
+	Each line is numbered, from 0 through the number of lines - 1.
+	The editor acts by requesting the current value of a logical line,
+	which is returned as a null-terminated string of bytes.
+	The editor then formats the line into physical lines for display 
+	to the window system.
+
+	The editor will request enough logical lines to fill the current
+	screen.  The editor will maintain a cursor position within the
+	current window.  That position corresponds in turn to one of the
+	displayed logical lines, which becomes the 'active line'.
+
+	Edit events modify the current active line in various ways, such
+	as adding or deleting characters, splitting a line or deleting
+	it altogether.
+ */
+include	console;
+include	window;
+include	file;
+
+findAction:	type	char = {
+	adjustNewline,
+	adjustDeleteNewline,
+	adjustDeleteLine,
+	};
+
+treeEditor:	public	type	inherit	frob {
+	private:
+
+	lineOffset:	int;
+	lineStatus:	[60] int;
+	markedColor:	char;
+	unmarkedColor:	char;
+				
+	public:
+
+	display:	int;			// line # of top line in
+						// window
+	cursor:		int;			// current line #
+	buffer:		ref treeBuffer;
+/*
+	A tree editor is a variably sized text window capable of showing a
+	outline tree.  The constructor specifies the number of lines and
+	character positions that will be the default size of the window.
+ */
+constructor:	(buf: ref treeBuffer) =
+	{
+	super constructor();
+	buffer = buf;
+	if	(buf)
+		buf attach(self);
+	resetEditor();
+	}
+
+defaultConfiguration:	dynamic	() point =
+	{
+	return box.size;
+	}
+
+connect:	(buf: ref treeBuffer) =
+	{
+	buffer = buf;
+	buf attach(self);
+	resetEditor();
+	redraw();
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	switch	(k){
+
+		/* Navigation commands */
+
+	case	CTRL_HOME:	beginFile();		break;
+	case	CTRL_END:	endFile();		break;
+	case	PGUP:		upScreen();		break;
+	case	PGDN:		downScreen();		break;
+	case	CTRL_UP:	scrollDown();		break;
+	case    CTRL_DOWN:	scrollUp();		break;
+	case	CTRL_PGUP:	topScreen();		break;
+	case	CTRL_PGDN:	bottomScreen();		break;
+	case	GREY_TAB:	tab();			break;
+	case	CTRL_D:		deleteLine();		break;
+	case	GREY_PLUS:	enterKey();		break;
+	case	GREY_DASH:
+	case	CTRL_H:		closeItem();		break;
+
+			/* Miscellaneous commands */
+
+	default:
+		if	(32 <= k && k <= 255)
+			enterCharacter(k);
+		else
+			return super processKeystroke(k);
+		}
+	return TRUE;
+	}
+
+formatLine:	dynamic	(ln: int, colorBar: char) =
+	{
+	i:		int;
+	col:		int;
+	k:		int;
+	cp:		[:] char;
+	p:		point;
+	x:		int;
+	ch:		char;
+	attr:		char;
+	outp:		ref colorChar;
+	lineBuffer:	[160] colorChar;
+	foreColor:	char;
+
+	x = box.size.x * 2;
+	if	(buffer)
+		i = buffer seek(ln);
+	else
+		i = -1;
+	if	(colorBar)
+		memSet(&lineBuffer, colorBar, x);
+	else if	(buffer && buffer isMarked())
+		memSet(&lineBuffer, C_READONLY_SELECTED, x);
+	else
+		memSet(&lineBuffer, C_READONLY, x);
+	if	(i != ln){
+		lineBuffer[0].character = '\xb0';
+		for	(i = 1; i < box.size.x; i++)
+			lineBuffer[i].character = ' ';
+		write([ 0, ln - display ], lineBuffer[:box.size.x]);
+		return;
+		}
+	cp = buffer fetchLine();
+	if	(ln == cursor){
+		col = buffer tagIndent();
+		i = buffer tagLength();
+		if	(i && col < box.size.x){
+			outp = &lineBuffer[col];
+			i <<= 1;
+			if	(buffer isMarked())
+				memSet(outp, C_SELECTED, i);
+			else
+				memSet(outp, C_TEXT, i);
+			}
+		}
+	col = 0;
+	outp = lineBuffer;
+	i = 0;
+	x = 0;
+	do	{
+		ch = cp[i];
+		if	(i >= |cp ||
+			 ch == '\n' ||
+			 ch == EOF_MARK){
+			while	(x < box.size.x){
+				outp->character = ' ';
+				outp++;
+				x++;
+				}
+			break;
+			}
+		i++;
+		if	(ch == '\t'){
+			x2:	int;
+
+			x2 = (col + 8) & ~7;
+			while	(col < x2){
+				outp->character = ' ';
+				outp++;
+				x++;
+				col++;
+				}
+			}
+		else if	(ch == '\r')
+			;
+		else	{
+			outp->character = ch;
+			outp++;
+			x++;
+			col++;
+			}
+		}
+		while	(x < box.size.x);
+	write([ 0, ln - display ], lineBuffer[:box.size.x]);
+	}
+
+changeLine:	(ln: lineNum) =
+	{
+	if	(ln < display)
+		return;
+	if	(ln >= display + box.size.y)
+		return;
+	lineStatus[ln - display] = -1;
+	}
+
+expose:	dynamic	(x: rectangle_t) = 
+	{
+	i, j:	int;
+
+	for	(i = x.corner.y, j = x.size.y; i < box.size.y && j > 0; 
+								i++, j--)
+		lineStatus[i] = -1;
+	repaintDisplay();
+	if	(buffer)
+		buffer focus(cursor);
+	}
+
+refresh:	dynamic	() =
+	{
+	if	(buffer &&
+		 buffer refresh(cursor)){
+		cursor = buffer seek(-1);
+		redraw();
+		}
+	}
+
+close:	dynamic () =
+	{
+	if	(buffer)
+		buffer close();
+	super close();
+	}
+
+/*
+	This function resets the state of the editor to be at the top of the
+	file with no block active.  Then draw the buffer contents.
+ */
+resetEditor:	dynamic	() =
+	{
+	display = 0;
+	cursor = 0;
+	}
+
+click:		dynamic	(buttons: mouseButtons_t, location: point) =
+	{
+	if	(buttons & MB_LEFT){
+		changeLine(cursor);
+		cursor = display + location.y;
+		changeLine(cursor);
+		repaintDisplay();
+		if	(buffer)
+			buffer focus(cursor);
+		setTextFocus();
+		}
+	}
+
+doubleClick:		dynamic	(buttons: mouseButtons_t, location: point) =
+	{
+	if	(buttons & MB_LEFT)
+		enterKey();
+	}
+
+scrollUp:	dynamic	() =
+	{
+	if	(buffer == 0 ||
+		 display + box.size.y == buffer lineCount()){
+		bottomAlarm();
+		return;
+		}
+	if	(cursor <= display){
+		cursor++;
+		changeLine(cursor);
+		}
+	refreshDisplay(display + 1);
+	}
+
+scrollDown:	dynamic	() =
+	{
+	if	(display == 0){
+		topAlarm();
+		return;
+		}
+	if	(cursor >= display + box.size.y - 1){
+		cursor--;
+		changeLine(cursor);
+		}
+	refreshDisplay(display - 1);
+	}
+
+upArrow:	dynamic	() =
+	{
+	if	(cursor == 0){
+		topAlarm();
+		return;
+		}
+	changeLine(cursor);
+	cursor--;
+	changeLine(cursor);
+	if	(cursor < display)
+		refreshDisplay(display - 1);
+	else	{
+		updateCursor();
+		repaintDisplay();
+		if	(buffer)
+			buffer focus(cursor);
+		}
+	}
+
+downArrow:	dynamic	() =
+	{
+	p:	point;
+
+	if	(buffer == 0 ||
+		 cursor == buffer lineCount() - 1){
+		bottomAlarm();
+		return;
+		}
+	changeLine(cursor);
+	cursor++;
+	changeLine(cursor);
+	if	(cursor == display + box.size.y)
+		refreshDisplay(display + 1);
+	else	{
+		updateCursor();
+		repaintDisplay();
+		if	(buffer)
+			buffer focus(cursor);
+		}
+	}
+
+topScreen:	dynamic	() =
+	{
+	changeLine(cursor);
+	cursor = display;
+	changeLine(cursor);
+	updateCursor();
+	repaintDisplay();
+	if	(buffer)
+		buffer focus(cursor);
+	}
+
+bottomScreen:	dynamic	() =
+	{
+	lastLine:	int;
+
+	if	(buffer)
+		lastLine = buffer lineCount();
+	else
+		lastLine = 0;
+	changeLine(cursor);
+	cursor = display + box.size.y - 1;
+	if	(cursor >= lastLine){
+		cursor = lastLine - 1;
+		changeLine(cursor);
+		bottomAlarm();
+		}
+	updateCursor();
+	repaintDisplay();
+	if	(buffer)
+		buffer focus(cursor);
+	}
+
+upScreen:	dynamic	() =
+	{
+	p:	point;
+	i:	int;
+
+	p = box.size;
+	if	(cursor >= p.y)
+		cursor -= p.y;
+	else	{
+		topAlarm();
+		changeLine(cursor);
+		cursor = 0;
+		changeLine(cursor);
+		}
+	if	(display >= p.y)
+		i = display - p.y;
+	else
+		i = 0;
+	refreshDisplay(i);
+	}
+
+downScreen:	dynamic	() =
+	{
+	p:		point;
+	lastLine:	int;
+	i:		int;
+
+	p = box.size;
+	if	(buffer)
+		lastLine = buffer lineCount();
+	else
+		lastLine = 0;
+	changeLine(cursor);
+	cursor += p.y;
+	if	(cursor >= lastLine){
+		cursor = lastLine - 1;
+		changeLine(cursor);
+		bottomAlarm();
+		}
+	if	(p.y >= lastLine)
+		i = 0;
+	else if	(lastLine - cursor < p.y)
+		i = lastLine - p.y;
+	else
+		i = display + p.y;
+	refreshDisplay(i);
+	}
+
+beginFile:	dynamic	() =
+	{
+	changeLine(cursor);
+	cursor = 0;
+	changeLine(cursor);
+	refreshDisplay(0);
+	}
+
+endFile:	dynamic	() =
+	{
+	p:		point;
+	lastLine:	int;
+	i:		int;
+
+	p = box.size;
+	if	(buffer)
+		lastLine = buffer lineCount();
+	else
+		lastLine = 0;
+	changeLine(cursor);
+	cursor = lastLine - 1;
+	changeLine(cursor);
+	if	(p.y >= lastLine)
+		refreshDisplay(0);
+	else
+		refreshDisplay(lastLine - p.y);
+	}
+
+tab:	dynamic	() =
+	{
+	downArrow();
+	}
+
+enterKey:	dynamic	() =
+	{
+	if	(buffer){
+		buffer seek(cursor);
+		if	(buffer open(0))
+			redraw();
+		}
+	}
+
+markEntry:	() =
+	{
+	if	(buffer){
+		changeLine(cursor);
+		buffer seek(cursor);
+		buffer markEntry();
+		repaintDisplay();
+		buffer focus(cursor);
+		}
+	}
+
+startTextEdit:	() =
+	{
+	if	(buffer)
+		buffer startTextEdit(cursor);
+	}
+
+copyFiles:	() =
+	{
+	if	(buffer)
+		buffer copyFiles(cursor);
+	}
+
+closeItem:	() =
+	{
+	i:	int;
+
+	if	(buffer){
+		buffer closeItem(cursor);
+		for	(i = cursor - display; i < box.size.y; i++)
+			changeLine(display + i);
+		repaintDisplay();
+		}
+	}
+
+moveFiles:	() =
+	{
+	if	(buffer)
+		buffer moveFiles(cursor);
+	}
+
+renameFile:	() =
+	{
+	if	(buffer)
+		buffer renameFile(cursor - display, cursor);
+	}
+
+deleteLine:	dynamic	() =
+	{
+	if	(buffer)
+		buffer deleteFiles(cursor);
+	}
+
+launch:		() =
+	{
+	if	(buffer){
+		buffer seek(cursor);
+		if	(buffer launch(0))
+			redraw();
+		}
+	}
+
+launchParent:	(i: int) =
+	{
+	cp:	ref char;
+
+	if	(buffer){
+		buffer seek(cursor);
+		cp = buffer getTag();
+		changeLine(cursor);
+		cursor = buffer seekParent(i);
+		changeLine(cursor);
+		centerDisplay();
+		repaintDisplay();
+		buffer seek(cursor);
+		if	(buffer launch(cp))
+			redraw();
+		}
+	}
+
+launchChild:	(i: int, tag: [:] char) =
+	{
+	if	(buffer){
+		changeLine(cursor);
+		cursor = buffer seekChild(i, tag);
+		changeLine(cursor);
+		centerDisplay();
+		repaintDisplay();
+		launch();
+		}
+	}
+
+gotoTag:	(srch: [:] char) =
+	{
+	if	(buffer){
+		changeLine(cursor);
+		cursor = buffer seekSibling(srch);
+		changeLine(cursor);
+		centerDisplay();
+		repaintDisplay();
+		updateCursor();
+		}
+	}
+
+gotoLine:	(line: unsigned) =
+	{
+	if	(buffer == 0)
+		return;
+	if	(line < 1 ||
+		 line > buffer lineCount()){
+		getShell() postFooter("Line number not in list");
+		return;
+		}
+	changeLine(cursor);
+	cursor = line - 1;
+	changeLine(cursor);
+	centerDisplay();
+	repaintDisplay();
+	updateCursor();
+	getShell() clearFooter();
+	}
+
+setTextFocus:	dynamic	() =
+	{
+	updateCursor();
+	super setTextFocus();
+	}
+
+updateCursor:	() =
+	{
+	if	(buffer){
+		buffer seek(cursor);
+		textCursor([ buffer tagIndent(), cursor - display ]);
+		}
+	else
+		textCursor([ 0, 0 ]);
+	}
+
+findColumn:	(f: ref int, fa: findAction) =
+	{
+	i:	int;
+	ch:	char;
+	j:	int;
+	cp:	ref char;
+
+	switch	(fa){
+	case	adjustNewline:
+		if	(*f > cursor)
+			(*f)++;
+		break;
+
+	case	adjustDeleteNewline:
+		if	(*f > cursor + 1)
+			(*f)--;
+		else if	(*f == cursor + 1)
+			(*f)--;
+		break;
+
+	case	adjustDeleteLine:
+		if	(*f > cursor)
+			(*f)--;
+		}
+	}
+
+selectiveScroll:	(from: int, to: int, by: int) =
+	{
+	i:	int;
+
+	if	(by > 0){
+		for	(i = from + by; i < to; i++)
+			if	(lineStatus[i] == -1)
+				lineStatus[i - by] = -1;
+		lineStatus[to] = -1;
+		}
+	else	{
+		for	(i = from; i < to + by; i++)
+			if	(lineStatus[i] == -1)
+				lineStatus[i - by] = -1;
+		if	(from < box.size.y)
+			lineStatus[from] = -1;
+		}
+	}
+
+refreshDisplay:	(ln: int) =
+	{
+	i:	int;
+	j:	int;
+	k:	int;
+	cp:	ref char;
+	p:	point;
+	x:	int;
+
+	p = box.size;
+	j = p.y;
+	i = 0;
+	if	(ln <= display - p.y ||
+		 ln >= display + p.y)
+		clear();
+	else if	(ln < display){
+		j = display - ln;
+		verticalScroll([ 0, 0 ], box.size, -j);
+		memMove(&lineStatus[j], &lineStatus, (p.y - j) * sizeof int);
+		}
+	else if	(ln > display){
+		verticalScroll([ 0, 0 ], box.size, ln - display);
+		memMove(&lineStatus, &lineStatus[ln - display],
+				(p.y - (ln - display)) * sizeof (int));
+		i = p.y - (ln - display);
+		}
+	else
+		j = 0;
+	for	(; i < j; i++)
+		lineStatus[i] = -1;
+	display = ln;
+	updateCursor();
+	repaintDisplay();
+	if	(buffer)
+		buffer focus(cursor);
+	}
+
+centerDisplay:	() =
+	{
+	p:	point;
+	ln:	int;
+
+	p = box.size;
+	ln = cursor;
+	if	(ln < display ||
+		 ln >= display + p.y){
+		if	(ln < p.y / 2)
+			ln = 0;
+		else
+			ln -= p.y / 2;
+		refreshDisplay(ln);
+		}
+	}
+
+repaintDisplay:	() =
+	{
+	i:	int;
+	j:	int;
+
+	for	(i = 0, j = display; i < box.size.y; i++, j++){
+		if	(lineStatus[i] != j){
+			formatLine(j, 0);
+			lineStatus[i] = j;
+			}
+		}
+	}
+
+topAlarm:	() =
+	{
+	getShell() postFooter("Top of list");
+	}
+
+bottomAlarm:	() =
+	{
+	getShell() postFooter("Bottom of list");
+	}
+
+};
+
+lineNum:	public	type	int;
+
+EOF_MARK:	public	const	char = 0;
+
+treeBuffer:	public	type	{
+	editor:		ref treeEditor;
+
+	public:
+
+attach:	(t: ref treeEditor) =
+	{
+	editor = t;
+	}
+
+close:	dynamic	() =
+	{
+	}
+
+lineCount:	dynamic	() lineNum =
+	{
+	return 0;
+	}
+
+seek:	dynamic	(int) int =
+	{
+	return 0;
+	}
+
+seekParent:	dynamic	(int) int =
+	{
+	return 0;
+	}
+
+seekChild:	dynamic	(int, [:] char) int =
+	{
+	return 0;
+	}
+
+seekSibling:	dynamic	([:] char) int =
+	{
+	return 0;
+	}
+
+markEntry:	dynamic	() =
+	{
+	}
+
+isMarked:	dynamic () boolean =
+	{
+	return FALSE;
+	}
+
+isOpen:		dynamic	() boolean =
+	{
+	return TRUE;
+	}
+
+fetchLine:	dynamic	() [:] char = 
+					// line number and offset in line
+	{
+	return "";
+	}
+
+tagIndent:	dynamic	() int =
+	{
+	return 0;
+	}
+
+tagLength:	dynamic	() int =
+	{
+	return 0;
+	}
+
+open:	dynamic	(ref char) int =
+	{
+	return FALSE;
+	}
+
+launch:		dynamic	(ref char) int =
+	{
+	return FALSE;
+	}
+
+getLineno:	dynamic	(ref lineNum) =
+					// return current location in lines
+	{
+	}
+
+getTag:	dynamic	() [:] char = 
+	{
+	return "";
+	}
+
+focus:	dynamic	(int) =
+	{
+	}
+
+copyFiles:	dynamic	(int) =
+	{
+	if	(editor)
+		editor getShell() postFooter("Can't copy files from here");
+	}
+
+moveFiles:	dynamic	(int) =
+	{
+	if	(editor)
+		editor getShell() postFooter("Can't move files from here");
+	}
+
+deleteFiles:	dynamic	(int) =
+	{
+	if	(editor)
+		editor getShell() postFooter("Can't delete files from here");
+	}
+
+renameFile:	dynamic	(int, int) =
+	{
+	if	(editor)
+		editor getShell() postFooter("Can't rename this");
+	}
+
+/*
+	This function refreshes the contents of the buffer and returns 
+	TRUE if the window must be redrawn.
+ */
+refresh:	dynamic	(int) boolean =
+	{
+	return FALSE;
+	}
+
+closeItem:	dynamic	(int) int =
+	{
+	return FALSE;
+	}
+
+startTextEdit:	dynamic	(int) =
+	{
+	}
+
+	};

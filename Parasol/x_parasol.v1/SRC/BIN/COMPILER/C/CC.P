@@ -1,0 +1,218 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file, filesys, string;
+
+//include	compiler;
+//include	i386back, cback, backend;
+//include	symtab;
+//include	link;
+//include	cparser;
+//include	scanner, hash, errmsg;
+
+main:	entry	() =
+	{
+	aCount:	int = |commandLine.arguments;
+
+	if	(aCount == 0)
+		help();
+
+	cppArgs, cfeArgs, linkArgs:	ref [:] char;
+	files:				ref [:] char;
+	fileCount, cppArgCount,
+		cfeArgCount,
+		linkArgCount:		int;
+	i, j:				int;
+	cp:				[:] char;
+	n:				long;
+	optim:				boolean = TRUE;
+	fpath:				[:] char;
+	fbuf:				[MAXPATH] char;
+	doLink:				boolean;
+	preprocessOnly:			boolean;
+	keepOutput:			boolean;
+
+	mainExternal(&Compiler);
+	cppArgs = new [aCount] [:] char;
+	cfeArgs = new [aCount] [:] char;
+	linkArgs = new [aCount] [:] char;
+	files = new [aCount] [:] char;
+	fileCount = cppArgCount = cfeArgCount = linkArgCount = 0;
+	n = long(_brklvl);
+	Lookup = new PathList[];
+	try Lookup useEnvironment("PATH");
+	keepOutput = FALSE;
+	for	(i = 0; i < aCount; i++){
+		cp = commandLine.arguments[i];
+		if	(cp[0] != '-'){
+			doLink = TRUE;
+			files[fileCount] = cp;
+			fileCount++;
+			break;
+			}
+		switch	(cp[1]){
+		case	'c':
+			doLink = FALSE;
+			break;
+
+		case	'P':
+			preprocessOnly = TRUE;
+			break;
+
+		case	'e':
+			cppArgs[cppArgCount] = cp;
+			cppArgCount++;
+			keepOutput = TRUE;
+			break;
+
+		case	'C':
+		case	'D':
+		case	'U':
+		case	'I':
+			cppArgs[cppArgCount] = cp;
+			cppArgCount++;
+			break;
+
+		case	'f':
+		case	's':
+		case	'l':
+			linkArgs[linkArgCount] = cp;
+			linkArgCount++;
+			break;
+
+		case	'=':
+		case	'a':
+		case	'o':
+		case	'v':
+			cfeArgs[cfeArgCount] = cp;
+			cfeArgCount++;
+			break;
+
+		default:
+			printf("Invalid argument: %S\n", cp);
+			help();
+			}
+		}
+	for	(i = 0; i < fileCount; i++){
+		ok:	boolean;
+
+		cp = getExtension(files[i]);
+		if	(stringCompare(cp, ".u") == 0)
+			continue;
+		if	(!command("cpp", cppArgs, cppArgCount, &files[i], 1))
+			exit(EX_FAIL);
+		if	(preprocessOnly)
+			continue;
+		cp = stripExtension(files[i]);
+		fpath = makePath(fbuf, "", cp, ".i");
+		ok = command("cfe", cfeArgs, cfeArgCount, &fpath, 1);
+		if	(ok || !keepOutput)
+			FileSystem unlink(fpath);
+		if	(!ok)
+			exit(EX_FAIL);
+/*
+		printf("cfe ");
+		for	(j = 0; j < cfeArgCount; j++)
+			printf("%S ", cfeArgs[j]);
+		printf("%S\n", fpath);
+ */
+		}
+	if	(doLink){
+		printf("link ");
+		for	(j = 0; j < linkArgCount; j++)
+			printf("%S ", linkArgs[j]);
+		printf("-llibc ");
+		for	(i = 0; i < fileCount; i++){
+			cp = stripExtension(files[i]);
+			fpath = makePath(fbuf, "", cp, ".u");
+			printf("%S ", fpath);
+			}
+		printf("\n");
+		}
+	printf("Heap size = %ldK Free list = %ldK\n", 
+				((long(_brklvl) - n) + 512) / 1024, 
+				(threadHeap() freeListSize() + 512) / 1024);
+	exit(EX_SUCCESS);
+	}
+
+Lookup:	ref PathList;
+
+command:	(cmd: [:] char, args: ref [:] char, argCount: int,
+				files: ref [:] char, fileCount: int) boolean =
+	{
+	cp:	[:] char;
+	n, j:	int;
+	pid:	ref far External;
+	fcmd:	[:] char;
+	ok:	boolean;
+
+	for	(j = 0, n = 0; j < argCount; j++)
+		n += |args[j] + 1;
+	for	(j = 0; j < fileCount; j++)
+		n += |files[j] + 1;
+	cp = new [n] char;
+	for	(j = 0, n = 0; j < argCount; j++){
+		memCopy(cp + n, args[j], |args[j]);
+		cp[n + |args[j]] = 0;
+		n += |args[j] + 1;
+		}
+	for	(j = 0; j < fileCount; j++){
+//		printf("files[%d] = %S\n", j, files[j]);
+		memCopy(cp + n, files[j], |files[j]);
+		cp[n + |files[j]] = 0;
+		n += |files[j] + 1;
+		}
+//	printf("cp = %S\n", cp);
+	fcmd = Lookup search(cmd, ".run", 0);
+	ok = FALSE;
+	try	{
+		pid = FileSystem spawn(0, fcmd, cp);
+		if	(pid){
+			myExternal() wait(&External.childExit);
+			if	(ExitStatus == 0)
+				ok = TRUE;
+			}
+		else	{
+			printf("Spawn of %S failed\n", fcmd);
+			}
+		}
+	except	{
+		printf("Spawn of %S failed\n", fcmd);
+		}
+	delete cp;
+	return ok;
+	}
+
+ExitStatus:	ExitCode;
+
+Compiler:	inherit	External	{
+
+childExit:	gate	(status: ExitCode) =
+	{
+	ExitStatus = status;
+	}
+
+	};
+
+help:	() =
+	{
+	printf( "Use is: CC [ options ] file_name(s)\n"
+			"Options:\n\n"
+			"	-a	Output assembly\n"
+			"	-C		Allow nested comments\n"
+			"	-CL		Allow line comments (/" "/)\n"
+			"	-Dxxx		Define macro as nil\n"
+			"	-Dxxx=yyy	Define macro as string\n"
+			"	-e		Keep preprocessor output on error\n"
+			"	-Ixxx		Include directory\n"
+			"	-P		Preprocess only\n"
+			"	-Uxxx		Undefine macro\n"
+			"	-o-		Don't optimize\n"
+			"	-v		Produce debugging information\n"
+			);
+	exit(EX_FAIL);
+	}

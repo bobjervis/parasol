@@ -1,0 +1,745 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+
+include	symtab;
+include	ptree;
+include	types, functype;
+include	tparams, target;
+include	backend, xtree, i386back;
+include	value;
+
+SwitchTables:	public	ref switchTable_t;
+
+switchTable_t:	public	type	inherit stmt_x { public:
+	next:		ref switchTable_t;
+	cases:		ref switchCases;
+	jumpTableRow:	int;
+	defaultCase:	ref label_x;
+
+constructor:	(c: ref switchCases, j: int, d: ref label_x) =
+	{
+	memSet(self, 0, sizeof *self);
+	next = SwitchTables;
+	SwitchTables = self;
+	cases = c;
+	jumpTableRow = j;
+	defaultCase = d;
+	}
+
+	};
+
+encoder:	public	type	{
+	public:
+
+openValue:		dynamic	(ref value) int =
+	{
+	}
+
+sizeValue:		dynamic	(addr_t) int =
+	{
+	}
+
+closeValue:		dynamic () =
+	{
+	}
+
+startupFunction:	dynamic	(ref value) =
+	{
+	}
+
+asmLabel:		dynamic	(ref symbol_s) =
+	{
+	}
+
+dataAlign:		dynamic	(int) =
+	{
+	}
+
+dataReserveBlock:	dynamic	(addr_t) =
+	{
+	}
+
+byte:		dynamic	(char) =
+	{
+	}
+
+block:		dynamic	(pointer, addr_t) =
+	{
+	}
+
+linkBlock:	dynamic	(pointer) =
+	{
+	}
+
+newFixup:	dynamic (fixupType, pointer, addr_t, addr_t) =
+	{
+	}
+
+applyFixup:	dynamic	(unsigned[16], pointer, addr_t, addr_t) =
+	{
+	}
+
+dwordInitializer:	dynamic	(ref value, addr_t) =
+	{
+	}
+
+dataCodeOffset:		dynamic	(ref stmt_x) =
+	{
+	}
+
+dataCodeLabel:		dynamic	(ref stmt_x) =
+	{
+	}
+/*
+recordLineNumber:	dynamic	(addr_t, unsigned) =
+	{
+	}
+ */
+encodeInstruction:	dynamic	(int) =
+	{
+	}
+
+loadDS:			dynamic	(regNum) =
+	{
+	}
+
+generateLabel:		dynamic	(ref stmt_x) =
+	{
+	}
+
+generateJump:		dynamic	(jumpCondition, ref stmt_x) =
+	{
+	}
+
+generateExStore:	dynamic	(ref variable, ref stmt_x) =
+	{
+	}
+
+jumpToTable:		dynamic	(regNum, ref switchTable_t) =
+	{
+	}
+
+switchTableLabel:	dynamic	(ref switchTable_t) =
+	{
+	}
+
+inst:		(op: i386opcode) =
+	{
+	LeftOpnd.address_mode = AM_NONE;
+	RightOpnd.address_mode = AM_NONE;
+	microOptimize(op);
+	}
+
+inst_dynamic:	(reg: int, selfOffset: int,
+				objOffset: int, vectOffset: int, 
+				structure: pointer, bigReturn: boolean) =
+	{
+	LeftOpnd.address_mode = AM_REG;
+	LeftOpnd.base_register = reg;
+	RightOpnd.address_mode = AM_ADDRESS;
+	RightOpnd.base_register = ESP;
+	RightOpnd.segment_override = nullReg;
+	RightOpnd.index_register = nullReg;
+	RightOpnd.offset = selfOffset - 4;
+	if	(bigReturn)
+		RightOpnd.offset -= 4;
+	RightOpnd.val = 0;
+	microOptimize(I386_MOVL);
+	LeftOpnd.address_mode = AM_REG;
+	LeftOpnd.base_register = reg;
+	RightOpnd.address_mode = AM_ADDRESS;
+	RightOpnd.base_register = reg;
+	RightOpnd.segment_override = nullReg;
+	RightOpnd.index_register = nullReg;
+	RightOpnd.offset = objOffset;
+	RightOpnd.val = 0;
+	microOptimize(I386_MOVL);
+	LeftOpnd.address_mode = AM_DYNAMIC;
+	LeftOpnd.base_register = reg;
+	LeftOpnd.segment_override = nullReg;
+	LeftOpnd.index_register = nullReg;
+	LeftOpnd.offset = vectOffset;
+	LeftOpnd.val = structure;
+	RightOpnd.address_mode = AM_NONE;
+	microOptimize(I386_ICALL);
+	}
+
+};
+
+Encoder:	public	ref encoder;
+
+address_modes:	public	type	char = {
+	AM_NONE,
+	AM_REG,
+	AM_OFFSET,
+	AM_DYNAMIC,
+	AM_ICON,
+        AM_ADDRESS
+	};
+
+operand:	public	type	{
+	public:
+
+	address_mode:		address_modes;
+	segment_override:	regNum;
+	scale_factor:		char;
+	index_register:		regNum;
+	base_register:		regNum;	/* Also used for register in AM_REG */
+	offset:			long;
+	val:			ref value;
+	};
+
+LeftOpnd:	public	operand;
+RightOpnd:	public	operand;
+//ThirdOpnd:	public	operand;
+
+asmopremote:	public	(seg: int) =
+	{
+	LeftOpnd.address_mode = AM_NONE;
+	LeftOpnd.offset = seg;
+	RightOpnd.address_mode = AM_NONE;
+	microOptimize(I386_CALLF);
+	}
+
+asmopr:		public	(op: i386opcode, reg: regNum) =
+	{
+	LeftOpnd.address_mode = AM_REG;
+	LeftOpnd.base_register = reg;
+	RightOpnd.address_mode = AM_NONE;
+	microOptimize(op);
+	}
+
+asmopt:		public	(op: i386opcode, opnd: ref tree_p) =
+	{
+	buildOperand(&LeftOpnd, opnd);
+	RightOpnd.address_mode = AM_NONE;
+	microOptimize(op);
+	}
+
+asmoprr:	public	(op: i386opcode, reg1: regNum, reg2: regNum) =
+	{
+	if	(reg1 >= ES && reg2 >= ES){
+		asmopr(I386_PUSHL, reg2);
+		asmopr(I386_POPL, reg1);
+		}
+	else	{
+		LeftOpnd.address_mode = AM_REG;
+		LeftOpnd.base_register = reg1;
+		RightOpnd.address_mode = AM_REG;
+		RightOpnd.base_register = reg2;
+		microOptimize(op);
+		}
+	}
+
+asmoprt:	public	(op: i386opcode, reg: regNum, opnd: ref tree_p) =
+	{
+	LeftOpnd.address_mode = AM_REG;
+	LeftOpnd.base_register = reg;
+	buildOperand(&RightOpnd, opnd);
+	microOptimize(op);
+	}
+
+asmoprtOffset:	public	(op: i386opcode, reg: regNum, opnd: ref tree_p, 
+				offset: int) =
+	{
+	if	(reg != nullReg){
+		LeftOpnd.address_mode = AM_REG;
+		LeftOpnd.base_register = reg;
+		buildOperand(&RightOpnd, opnd);
+		RightOpnd.offset += offset;
+		}
+	else	{
+		buildOperand(&LeftOpnd, opnd);
+		LeftOpnd.offset += offset;
+		RightOpnd.address_mode = AM_NONE;
+		}
+	microOptimize(op);
+	}
+
+asmoprMember:	public	(op: i386opcode, reg1: regNum, reg2: regNum,
+				offset: int) =
+	{
+	LeftOpnd.address_mode = AM_REG;
+	LeftOpnd.base_register = reg1;
+	memSet(&RightOpnd, 0, sizeof RightOpnd);
+	RightOpnd.base_register = reg2;
+	RightOpnd.segment_override = nullReg;
+	RightOpnd.index_register = nullReg;
+	RightOpnd.offset = offset;
+	RightOpnd.address_mode = AM_ADDRESS;
+	microOptimize(op);
+	}
+
+asmopMemberr:	public	(op: i386opcode, reg1: regNum, reg2: regNum,
+				offset: int) =
+	{
+	memSet(&LeftOpnd, 0, sizeof LeftOpnd);
+	LeftOpnd.base_register = reg1;
+	LeftOpnd.segment_override = nullReg;
+	LeftOpnd.index_register = nullReg;
+	LeftOpnd.offset = offset;
+	LeftOpnd.address_mode = AM_ADDRESS;
+	RightOpnd.address_mode = AM_REG;
+	RightOpnd.base_register = reg2;
+	microOptimize(op);
+	}
+
+asmopri:	public	(op: i386opcode, reg: regNum, val: unsigned) =
+	{
+	LeftOpnd.address_mode = AM_REG;
+	LeftOpnd.base_register = reg;
+	RightOpnd.address_mode = AM_ICON;
+	RightOpnd.offset = val;
+	microOptimize(op);
+	}
+
+asmoptr:	public	(op: i386opcode, opnd: ref tree_p, reg: regNum) =
+	{
+	buildOperand(&LeftOpnd, opnd);
+	RightOpnd.address_mode = AM_REG;
+	RightOpnd.base_register = reg;
+	microOptimize(op);
+	}
+
+asmoptt:	public	(op: i386opcode, opnd1: ref tree_p, opnd2: ref tree_p) =
+	{
+	buildOperand(&LeftOpnd,  opnd1);
+	buildOperand(&RightOpnd, opnd2);
+	microOptimize(op);
+	}
+
+asmopti:	public	(op: i386opcode, opnd: ref tree_p, val: int) =
+	{
+	buildOperand(&LeftOpnd,  opnd);
+	RightOpnd.address_mode = AM_ICON;
+	RightOpnd.offset = val;
+	microOptimize(op);
+	}
+
+asmopv:		public	(op: i386opcode, v: ref variable) =
+	{
+	memSet(&LeftOpnd, 0, sizeof LeftOpnd);
+	LeftOpnd.address_mode = AM_ADDRESS;
+	LeftOpnd.base_register = BP;
+	LeftOpnd.segment_override = nullReg;
+	LeftOpnd.index_register = nullReg;
+	LeftOpnd.offset = v->offset;
+	RightOpnd.address_mode = AM_NONE;
+	microOptimize(op);
+	}
+
+asmopstack:	public	(op: i386opcode, offs: int) =
+	{
+	memSet(&LeftOpnd, 0, sizeof LeftOpnd);
+	LeftOpnd.address_mode = AM_ADDRESS;
+	LeftOpnd.base_register = SP;
+	LeftOpnd.segment_override = nullReg;
+	LeftOpnd.index_register = nullReg;
+	LeftOpnd.offset = offs;
+	RightOpnd.address_mode = AM_NONE;
+	microOptimize(op);
+	}
+
+microOptimize:	(op: i386opcode) =
+	{
+	i:		int;
+	adjustment:	int;
+	r:		regNum;
+	rlo:		regNum;
+	rhigh:		regNum;
+
+	switch	(op){
+	case	I386_RORL:
+	case	I386_ROLL:
+	case	I386_RCRL:
+	case	I386_RCLL:
+	case	I386_LSLC:
+	case	I386_LSLI:
+	case	I386_LSRC:
+	case	I386_LSRI:
+	case	I386_ASRC:
+	case	I386_ASRI:
+
+			/* This says shifts can only be by a register or
+			   constant amount.
+			 */
+
+		assert(RightOpnd.address_mode == AM_REG ||
+			RightOpnd.address_mode == AM_ICON);
+
+			/* This says that when the address mode is AM_REG,
+			   the register must be CL.
+			 */
+
+		assert(RightOpnd.address_mode != AM_REG ||
+			RightOpnd.base_register == CL);
+
+		break;
+
+	case	I386_CMPC:
+	case	I386_CMPL:
+	case	I386_CMPI:
+		if	(LeftOpnd.address_mode == AM_REG &&
+			 RightOpnd.address_mode == AM_ICON &&
+			 RightOpnd.offset == 0){
+			op += I386_ORC - I386_CMPC;
+			RightOpnd.address_mode = AM_REG;
+			RightOpnd.base_register = LeftOpnd.base_register;
+			}
+		break;
+
+	case	I386_MOVI:
+	case	I386_LOADI:
+		if	(LeftOpnd.address_mode == AM_REG &&
+			 RightOpnd.address_mode == AM_ICON &&
+			 RightOpnd.offset == 0){
+			op = I386_XORI;
+			RightOpnd.address_mode = AM_REG;
+			RightOpnd.base_register = LeftOpnd.base_register;
+			break;
+			}
+
+	case	I386_MOVL:
+	case	I386_MOVC:
+	case	I386_LOADC:
+		if	(LeftOpnd.address_mode == AM_REG &&
+			 RightOpnd.address_mode == AM_REG){
+			if	(LeftOpnd.base_register ==
+					 RightOpnd.base_register)
+				return;
+
+				/* This hack is a work around for the problem
+				   of auto variables being moved to a byte
+				   register.  This can come about when a
+				   cast of a word auto to byte size causes
+				   the generated code to include a byte
+				   reference to the auto.
+				 */
+
+			if	(op == I386_MOVI ||
+				 op == I386_MOVL ||
+				 op == I386_LOADI)
+				break;		/* Only byte moves */
+			if	(!isByteReg(RightOpnd.base_register)){
+				op = I386_MOVL;
+				LeftOpnd.base_register +=
+					(AX - AL);
+				}
+			}
+		break;
+
+	case	I386_ADDC:
+	case	I386_ADDI:
+	case	I386_ADDL:
+		if	(RightOpnd.address_mode == AM_ICON){
+			if	(RightOpnd.offset == 1){
+				RightOpnd.address_mode = AM_NONE;
+				op += I386_INCC - I386_ADDC;
+				}
+			else if	(RightOpnd.offset == 2 &&
+				 LeftOpnd.address_mode == AM_REG &&
+				 op == I386_ADDL){
+				RightOpnd.address_mode = AM_NONE;
+				op += I386_INCC - I386_ADDC;
+				microOptimize(op);
+				}
+			else if	(RightOpnd.offset == -1){
+				RightOpnd.address_mode = AM_NONE;
+				op += I386_DECC - I386_ADDC;
+				}
+			}
+		break;
+
+	case	I386_SUBC:
+	case	I386_SUBL:
+	case	I386_SUBI:
+		if	(RightOpnd.address_mode == AM_ICON){
+			if	(RightOpnd.offset == 1){
+				RightOpnd.address_mode = AM_NONE;
+				op += I386_DECC - I386_SUBC;
+				}
+			else if	(RightOpnd.offset == 2 &&
+				 LeftOpnd.address_mode == AM_REG &&
+				 op == I386_SUBL){
+				RightOpnd.address_mode = AM_NONE;
+				op += I386_DECC - I386_SUBC;
+				microOptimize(op);
+				}
+			else if	(RightOpnd.offset == -1){
+				RightOpnd.address_mode = AM_NONE;
+				op += I386_INCC - I386_SUBC;
+				}
+			}
+		break;
+
+	case	I386_BCALL:
+	case	I386_ADJUST:
+		return;
+
+	case	I386_CMPF:
+	case	I386_ADDF:
+	case	I386_SUBF:
+	case	I386_SUBRF:
+	case	I386_MULF:
+	case	I386_DIVF:
+	case	I386_DIVRF:
+		if	(LeftOpnd.address_mode != AM_ADDRESS)
+			op += 2;
+		break;
+
+	case	I386_CMPD:
+	case	I386_ADDD:
+	case	I386_SUBD:
+	case	I386_SUBRD:
+	case	I386_MULD:
+	case	I386_DIVD:
+	case	I386_DIVRD:
+		if	(LeftOpnd.address_mode != AM_ADDRESS)
+			op++;
+		break;
+
+		}
+	assert(RightOpnd.address_mode != AM_ADDRESS ||
+		LeftOpnd.address_mode != AM_ADDRESS);
+	Encoder encodeInstruction(op);
+	}
+
+buildOperand:	(o: ref operand, t: ref tree_p) =
+	{
+	i:		int;
+	save:		regNum;
+	v:		ref variable;
+
+	if	(t == 0){
+		printf("buildOperand(%p, %p)\n", o, t);
+		exit(1);
+		}
+	memSet(o, 0, sizeof *o);
+	o->segment_override = nullReg;
+	o->base_register = nullReg;
+	o->index_register = nullReg;
+	if	(t->reg != nullReg){
+		o->address_mode = AM_REG;
+		o->base_register = t->reg;
+		return;
+		}
+	switch	(t->operator){
+	default:
+		printf("Unexpected operator %d in address mode\n", t->operator);
+		t display(0);
+		exit(1);
+
+	case	O_SUPER:
+	case	O_ERROR:
+		o->base_register = EAX;
+		o->address_mode = AM_REG;
+		return;
+
+	case	O_TOS:
+		o->base_register = ESP;
+		o->offset = ref Tos_x(t)->adjust;
+		break;
+
+	case	O_SEQ:
+		buildOperand(o, ref binary_x(t)->right);
+		return;
+
+	case	O_REG:
+		o->address_mode = AM_REG;
+		o->base_register = ref iden_x(t)->adjust;
+		return;
+
+	case	O_AUTO:
+		v = ref auto_x(t)->var;
+		if	(v->flags & VF_REG){
+			o->base_register = v->reg;
+			o->address_mode = AM_REG;
+			return;
+			}
+		o->base_register = EBP;
+		o->offset = v->offset + ref auto_x(t)->adjust;
+		break;
+
+	case	O_LITERAL:
+		o->address_mode = AM_OFFSET;
+		o->val = fakeLiteralValue(ref literal_x(t)->literals);
+		return;
+
+	case	O_ADR:
+		t = ref binary_x(t)->left;
+		o->address_mode = AM_OFFSET;
+		if	(t->operator == O_ID){
+			id:	ref iden_x;
+
+			id = ref iden_x(t);
+			if	(id->symbol &&
+				 id->symbol->qualifier & DQ_MEMBERFUNC &&
+				 ref function_z(id->dtype)->callingConvention == FC_GATE){
+				o->address_mode = AM_ICON;
+				o->val = 0;
+				o->offset = id->symbol->bitOffset + id->adjust;
+				}
+			else	{
+				o->val = id->currentValue;
+				o->offset = id->adjust;
+				}
+			}
+		else if	(t->operator == O_LITERAL)
+			o->val = fakeLiteralValue(ref literal_x(t)->literals);
+		else	{
+			printf("Unexpected operator %d in address mode\n", t->operator);
+			t display(0);
+			exit(1);
+			}
+		return;
+
+	case	O_ID:
+		o->val = ref iden_x(t)->currentValue;
+		o->offset = ref iden_x(t)->adjust;
+		break;
+
+	case	O_ELLIPSIS:
+		o->offset = TargetData.parmCount + TargetData.parameterBaseOffset;
+		o->base_register = EBP;
+		break;
+
+	case	O_IND:
+		buildSubopnd(o, ref binary_x(t)->left);
+
+			/* This will clear a DS override from an
+			   instruction that does not use a BP
+			   base register.  Similarly, an SS override
+			   will be removed from address modes in which
+			   the base register is BP.
+
+			   In this way, a last minute optimization of
+			   segment overrides can be done.
+			 */
+
+		if	(o->segment_override == DS){
+			if	(o->base_register != BP &&
+				 o->base_register != SP)
+				o->segment_override = nullReg;
+			}
+		else if	(o->segment_override == SS){
+			if	(o->base_register == BP ||
+				 o->base_register == SP)
+				o->segment_override = nullReg;
+			}
+		break;
+
+	case	O_ICON:
+		o->address_mode = AM_ICON;
+		o->offset = t integerValue();
+		return;
+		}
+	o->address_mode = AM_ADDRESS;
+	}
+
+buildSubopnd:	(o: ref operand, t: ref tree_p) =
+	{
+	v:	ref variable;
+	bt:	ref binary_x;
+
+	if	(t->reg != nullReg){
+		assert(o->base_register == nullReg ||
+			 o->index_register == nullReg);
+		if	(o->base_register == nullReg)
+			o->base_register = t->reg;
+		else if	(t->reg == ESP){
+			o->index_register = o->base_register;
+			o->base_register = ESP;
+			o->scale_factor = 0;
+			}
+		else	{
+			o->index_register = t->reg;
+			o->scale_factor = 0;
+			}
+		return;
+		}
+	bt = ref binary_x(t);		// just in case we need to
+						// treat t as a binary tree node
+	switch	(t->operator){
+	case	O_AUTO:
+		v = ref auto_x(t)->var;
+		if	(v->flags & VF_REG){
+			o->address_mode = AM_REG;
+			if	(o->base_register == nullReg)
+				o->base_register = v->reg;
+			else	{
+				o->index_register = v->reg;
+				o->scale_factor = 0;
+				}
+			return;
+			}
+
+	default:
+		printf("Unexpected operator %d in indirect address mode\n",
+			t->operator);
+		t display(0);
+		exit(1);
+
+	case	O_ICON:
+		o->offset += t integerValue();
+		break;
+
+	case	O_LITERAL:
+		o->val = fakeLiteralValue(ref literal_x(t)->literals);
+		break;
+
+	case	O_ADR:
+		t = ref binary_x(t)->left;
+		o->offset += ref iden_x(t)->adjust;
+		o->val = ref iden_x(t)->currentValue;
+		break;
+
+	case	O_LSH:
+		assert(bt->right->operator == O_ICON);
+		assert(bt->left->reg != nullReg);
+		assert(bt->left->reg != ESP);
+		assert(o->index_register == nullReg);
+		o->index_register = bt->left->reg;
+		o->scale_factor = bt->right integerValue();
+		break;
+
+	case	O_ADD:
+		buildSubopnd(o, bt->left);
+		buildSubopnd(o, bt->right);
+		}
+	}
+
+/*
+reverseJumpLogic:	public	(jc: jumpCondition) jumpCondition =
+	{
+	reversedConditions:	static	[] jumpCondition = [
+			JC_JUMP,	/* JC_NOOP */
+			JC_NOOP,	/* JC_JUMP */
+			JC_GE,		/* JC_LT */
+			JC_LE,		/* JC_GT */
+			JC_UGE,		/* JC_ULT */
+			JC_ULE,		/* JC_UGT */
+			JC_GT,		/* JC_LE */
+			JC_LT,		/* JC_GE */
+			JC_UGT,		/* JC_ULE */
+			JC_ULT,		/* JC_UGE */
+			JC_NE,		/* JC_EQ */
+			JC_EQ,		/* JC_NE */
+			JC_NOCARRY,	/* JC_CARRY */
+			JC_CARRY,	/* JC_NOCARRY */
+			JC_NOOVERFLOW,	/* JC_OVERFLOW */
+			JC_OVERFLOW,	/* JC_NOOVERFLOW */
+			JC_NOSIGN,	/* JC_SIGN */
+			JC_SIGN,	/* JC_NOSIGN */
+			JC_NOPARITY,	/* JC_PARITY */
+			JC_PARITY	/* JC_NOPARITY */
+			];
+
+	return(reversedConditions[jc]);
+	}
+ */

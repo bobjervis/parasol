@@ -1,0 +1,48 @@
+<h1>Parasol Runtime</h1>
+<h2>Multi-Platform Support</h2>
+It is a goal of this runtime design to target the 64-bit Intel architecture primarily.  
+Nevertheless,
+attention is paid to designing language features and the runtime itself to make porting to different 
+environments feasible.
+<p>
+<h2>Memory Layout</h2>
+Since the objects manipulated by a Parasol program are the same, whether they are manipulated using the 
+byte-code interpreter or native code makes no difference. The language provides a variety of ways to  define static data storage:<p>
+<ul>
+	<li>String literals
+	<li>Vtables
+	<li>Static variables
+	<li>Code
+</ul>
+In order to avoid wasting much static storage, static variables are grouped according to the 
+memory alignment they require.  
+Thus, a byte variable will be placed alongside other byte variables, while int and unsigned 
+variables are similarly grouped.  
+Note that string literals are stored with an int length, so they are aligned with each other on 
+int boundaries, so a few gaps appear in string literal storage. 
+Similarly, functions are stored with a null address preceding the first instruction of the function. 
+This null value is used during a delete operation to discirminate between simple functions and closures.<p>
+Memory is arranged as follows: 
+<ol>
+	<li>code, 
+	<li>built-in addresses (static abstract function references),
+	<li>vtables, 
+	<li>8-aligned static variables, 
+	<li>literals (string, vector, long), 
+	<li>4-aligned static variables,
+	<li>2-aligned static variables,
+	<li>1-aligned static variables
+</ol>
+The code generator works by packing functions and thunks into the <b>_code</b> array as it finishes the 
+generation of each function. 
+It isn't possible, then, to know the offsets of the various literals and variables when the code is packed in.
+During code generation, a list of fixups is maintained.
+For example, each string literal referenced in code will use a 32-bit ip-relative address mode containing the offset to 
+the string literal itself.
+The offset must be computed once the full memory layout has been fixed.
+<p>
+Once the ip-relative offsets are resolved, any remaining absolute addresses in the image are then stored 
+as fixups in the
+PXI file.
+<p>
+A separate table outlines 

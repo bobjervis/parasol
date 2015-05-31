@@ -1,0 +1,176 @@
+/*
+	Copyright (c) 1993,1994 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+include	hash;
+include	scanner, sbuffer;
+include	string;
+include	errmsg;
+include	msgboard;
+
+messageCatalog:	public	type	{
+	messages:	ref textMessage;
+
+	public:
+
+	prefix:		[:] char;
+	success:	boolean;
+
+constructor:	(fname: [:] char) =
+	{
+	mp:	ref messageCatalogParser;
+
+	success = FALSE;
+	prefix = stringDup("");
+	messages = 0;
+	mp = new messageCatalogParser[ fname, self ];
+	if	(mp isNew()){
+		delete mp;
+		CatalogTrap raise();
+		}
+	try	{
+		if	(mp parse())
+			success = TRUE;
+		}
+	delete mp;
+	}
+
+defineMessage:	(id: ref identifier, terse: [:] char, verbose: [:] char) =
+	{
+	if	(stringCompare("_prefix_", id spelling()) == 0){
+		prefix = terse;
+		delete verbose;
+		return;
+		}
+	m:	ref textMessage;
+	m = new textMessage[ messages, id ];
+	m->terse = terse;
+	m->verbose = verbose;
+	m->next = messages;
+	messages = m;
+	}
+
+lookupMessage:	(name: [:] char) ref textMessage =
+	{
+	m:	ref textMessage;
+	id:	ref identifier;
+
+	id = hash(name);
+	for	(m = messages; m; m = m->next)
+		if	(m->name == id)
+			return m;
+	return 0;
+	}
+
+destructor:	() =
+	{
+	m, mnext:	ref textMessage;
+
+	for	(m = messages; m; m = mnext){
+		mnext = m->next;
+		delete m;
+		}
+	delete prefix;
+	}
+
+display:	() =
+	{
+	m:	ref textMessage;
+
+	printf("%s prefix \"%S\"\n", success ? "successful" : "failed", prefix);
+	for	(m = messages; m; m = m->next){
+		printf("\t%S: terse '%S' verbose '%S'\n",
+			m->name spelling(), m->terse, m->verbose);
+		}
+	}
+
+	};
+
+textMessage:	public	type	{
+	public:
+
+	next:		ref textMessage;
+	name:		ref identifier;
+	terse:		[:] char;
+	verbose:	[:] char;
+
+destructor:	() =
+	{
+	delete terse;
+	delete verbose;
+	}
+
+	};
+
+messageCatalogParser:	type	inherit	tokenStream {
+	catalog:	ref messageCatalog;
+
+	public:
+
+constructor:	(fname: [:] char, c: ref messageCatalog) =
+	{
+	catalog = c;
+	super constructor(fname);
+	errorContext = &CatalogContext;
+	}
+
+parse:	() boolean =
+	{
+	id:		ref identifier;
+	terse:		[:] char;
+	verbose:	[:] char;
+
+	openRange([ 0, BUF_SEEK_END ]);
+	for	(;;){
+		scan();
+		switch	(Token.lex){
+		case	EOF_TOK:
+			return TRUE;
+
+		case	ID:
+			id = Token.iden;
+			if	(scan() != CO)
+				return FALSE;
+			if	(scan() != STRING)
+				return FALSE;
+			s: [:] char;
+
+			s = Token.stringValue[:Token.stringLength];
+			terse = stringDup(s);
+			if	(scan() != SM){
+				if	(Token.lex != CM)
+					return FALSE;
+				s = Token.stringValue[:Token.stringLength];
+				verbose = stringDup(s);
+				if	(scan() != SM)
+					return FALSE;
+				}
+			else
+				verbose = stringDup("");
+			catalog defineMessage(id, terse, verbose);
+			break;
+
+		default:
+			return FALSE;
+			}
+		}
+	}
+
+	};
+
+CatalogTrap:	Trap;
+
+CatalogContext:	public	inherit	messageContext {
+	public:
+
+prefix:	dynamic	(msgid: [:] char, msgClass: messageClass_t, s: [:] char,
+				a: [:] char, d: int) =
+	{
+	CatalogTrap raise();	
+	}
+
+	};

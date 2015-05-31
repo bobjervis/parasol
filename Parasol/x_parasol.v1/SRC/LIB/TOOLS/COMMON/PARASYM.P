@@ -1,0 +1,297 @@
+include	file;
+include	hash;
+include	sbuffer;
+
+symbolTable:	public	type	{
+	units:		ref unit;
+};
+
+unit:	public	type	{
+	uScope:		unitScope;
+	next:		ref unit;
+	name:		ref identifier;
+	includes:	ref includeFile;
+	changed:	boolean;
+	codeSize:	Size;
+	dataSize:	Size;
+	bssSize:	Size;
+	};
+
+libraryUnit:	public	type	inherit unit {
+	sourceFile:	[:] char;
+	lastBuiltAge:	Time;
+	everBuilt:	boolean;
+	};
+
+sourceUnit:	public	type inherit unit {
+	sourceFile:	[:] char;
+	lastBuiltAge:	Time;
+	everBuilt:	boolean;
+	};
+
+includeFile:	public	type {
+	next:		ref includeFile;
+	offset:		fileOffset;
+	name:		ref identifier;
+	included:	ref unit;
+	};
+
+scope:	public	type	{
+	enclosing:	ref scope;
+	symbols:	ref symbol;
+	};
+
+classScope:	public	type	inherit scope {
+	class:		ref classType;
+	};
+
+unitScope:	public	type	inherit	scope {
+	eUnit:		ref unit;
+	};
+
+blockScope:	public	type	inherit	scope {
+	child:		ref blockScope;
+	sibling:	ref blockScope;
+	labels:		ref label_;
+	};
+
+label_:	public	type {
+	next:		ref label_;
+	name:		ref identifier;
+	address:	Size;
+	};
+
+symbol:	public	type	{
+	next:			ref symbol;
+	enclosing:		ref scope;
+	name:			ref identifier;
+	offset:			fileOffset;
+	dtype:			ref type_;
+	visibility:		visibilities;
+	storageClass:		storageClasses;
+	qualifier:		dQualifiers;
+	};
+
+memberSymbol:	public	type	inherit symbol {
+	bitOffset:		Size;
+	};
+
+initSymbol:	public	type	inherit symbol {
+	initializer:		textRange;
+	initBase:		int;
+	};
+
+autoSymbol:	public	type	inherit	initSymbol {
+//	var:			ref variable;
+	};
+
+staticSymbol:	public	type	inherit initSymbol {
+	location:		ref identifier;
+	currentValue:		ref value;
+	address:		Size;
+	};
+
+functionSymbol:	public	type	inherit	staticSymbol {
+	scopes:		ref blockScope;
+	statements:	ref statement;
+	};
+
+statement:	public	type	{
+	next:		ref statement;
+	address:	Size;
+	source:		textRange;
+	context:	ref blockScope;
+	};
+
+value:	public	type	{
+	};
+
+localValue:	public	type	inherit value {
+	owner:		ref staticSymbol;	// owning symbol
+	address:	Size;			// address in bytes
+
+	align:		byte;			// alignment in bits
+	data:		[:] byte;		// actual data of value
+	related:	ref localValue;		// The related-values chain
+	next:		ref localValue;
+	fixups:		ref fixup;		// fixups for this object
+	};
+
+externalValue:	public	type	inherit value {
+	name:		[:] char;
+	target:		ref value;
+	};
+
+fixup:	public	type	{
+	next:		ref fixup;
+	location:	Size;
+	adjust:		Size;
+	};
+
+valueFixup:	public	type	inherit	fixup	{
+	target:		ref value;
+	};
+
+selfRelativeFixup:	public	type	inherit	valueFixup	{
+	};
+
+dynamicFixup:	public	type	inherit	fixup	{
+	target:		ref classType;
+	index:		int;
+	};
+
+literalFixup:	public	type	inherit	fixup	{
+	target:		ref literal;
+	};
+
+literal:	public	type	{
+	address:	Size;
+	value:		[:] byte;
+	};
+
+type_:	public	type	{
+	topType:		topTypes;
+	};
+
+errorType:	public	type	inherit type_ {
+	};
+
+voidType:	public	type	inherit	type_ {
+	};
+
+typeType:	public	type	inherit	type_ {
+	};
+
+numberType:	public	type	inherit	type_ {
+	source:			textRange;
+	width:			unsigned;
+	size:			unsigned;
+	align:			unsigned;
+	};
+
+namedType:	public	type	inherit	type_ {
+	name:			ref identifier;
+	offset:			unsigned;
+	actualType:		pointer;
+	actualSymbol:		pointer;
+	};
+
+classType:	public	type	inherit	type_ {
+	cScope:			classScope;	
+	base:			ref classType;
+	packing:		packingMethods;
+	bitSize:		Size;
+	align:			byte;
+	vectorOffset:		unsigned;
+	vectorSize:		unsigned;
+	dynamicVector:		ref value;
+	gateVector:		ref value;
+	gateCount:		int;
+	};
+/*
+	A ptrType has one of two topTypes:
+
+		T_REF		for references
+		T_LINK		for links
+
+	The difference is that ref's can have arithmetic applied to them
+	and links are automatically chased when forming a closure for object
+	storage.
+ */
+ptrType:	public	type	inherit	type_ {
+	referTo:		ref type_;
+	qualifier:		dQualifiers;
+	owns:			boolean;
+	};
+
+arrayType:	public	type	inherit	type_ {
+	element:		ref type_;
+	source:			textRange;
+	dimension:		unsigned;
+	};
+
+functionType:	public	type	inherit	type_ {
+	returnType:		ref type_;
+	fixedCalls:		boolean;
+	callingConvention:	fConventions;
+	parameters:		ref parameter;
+	};
+
+parameter:	public	type	{
+	next:			ref parameter;
+	name:			ref identifier;
+	offset:			unsigned;
+	pType:			ref type_;
+	};
+
+descriptorType:	public	type	inherit	type_	{
+	element:		ref type_;
+	source:			textRange;
+	dimension:		unsigned;
+	};
+
+visibilities:	public	type	byte = {
+	V_PUBLIC,
+	V_PRIVATE,
+	V_VISIBLE
+	};
+
+storageClasses:	public	type	byte = {
+	SC_STATIC,
+	SC_TYPE,
+	SC_MEMBER,
+	SC_INTRINSIC,
+	SC_REGISTER,
+	SC_AUTO,
+	SC_REMOTE,
+	SC_EXTERN,
+	SC_PARM,
+	SC_BASED,
+	};
+
+dQualifiers:	public	type	byte = {
+	DQ_CONST	= 0x01,
+	DQ_VOLATILE	= 0x02,
+	DQ_ENTRY	= 0x04,
+	DQ_CLEANUP	= 0x08,
+	DQ_DYNAMIC	= 0x10,
+	DQ_FAR		= 0x20,
+	DQ_FACTORY	= 0x40,
+	DQ_MEMBERFUNC	= 0x80
+	};
+
+topTypes:	public	type	byte = {
+	T_ERROR,
+	T_NAME,
+	T_SIGNED,
+	T_UNSIGNED,
+	T_FLOAT,
+	T_VOID,
+	T_REF,
+	T_DESCRIPTOR,
+	T_ARRAY,
+	T_FUNC,
+	T_STRUCT,
+	T_TYPE,
+	T_LINK
+	};
+
+packingMethods:	public	type	byte = {
+	PM_PACKED,
+	PM_STRUCT,
+	PM_UNION
+	};
+/*
+	Function calling conventions.  These specify various attributes of
+	the way in which parameters and return values are communicated into
+	and out of a function.  These conventions also control the kinds of
+	instructions used to call and return from a function.
+ */
+fConventions:	public	type	byte = {
+	FC_NORMAL,
+	FC_GATE,
+	FC_INTERRUPT,
+	FC_INLINE,
+	FC_INTERRUPT2,
+	FC_C,
+	};

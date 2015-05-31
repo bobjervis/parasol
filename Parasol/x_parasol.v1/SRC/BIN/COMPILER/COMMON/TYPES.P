@@ -1,0 +1,2579 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	string;
+include	backend;
+include	tparams, target;
+include	hash;
+include	sbuffer;
+include	image;
+include	file;
+include	ptree;
+include	symtab;
+include	errmsg;
+include	value;
+include	xtree, xcall;
+/*
+	topType:
+
+		T_NAME		type name
+		T_FUNC		function
+		T_ARRAY		fixed array
+		T_DESCRIPTOR	array descriptor
+		T_REF		pointer
+		T_SIGNED	signed integer
+		T_UNSIGNED	unsigned integer
+		T_FLOAT		floating
+		T_VOID		void
+ */
+topTypes:	public	type	char = {
+	T_ERROR,
+	T_NAME,
+	T_SIGNED,
+	T_UNSIGNED,
+	T_FLOAT,
+	T_VOID,
+	T_REF,
+	T_DESCRIPTOR,
+	T_ARRAY,
+	T_FUNC,
+	T_STRUCT,
+	T_TYPE
+	};
+
+type_s:	public	type	inherit	scope_s	{
+	public:
+	topType:	topTypes;
+
+constructor:	(t: topTypes) =
+	{
+	super constructor(0, 0);
+	topType = t;
+	}
+
+save:	dynamic	(ref imageFile) =
+	{
+	}
+
+display:	dynamic	(boolean) =
+	{
+	}
+
+displayMessageFormat:	dynamic	() =
+	{
+	}
+/*
+	This function is called to construct the interface details for a
+	type.  The second boolean parameter is TRUE if variable length types
+	are allowed, FALSE otherwise.
+ */
+constructInterface:	dynamic	(ref scope_s, boolean) =
+	{
+	}
+
+reconnectInterface:	dynamic	(ref scope_s) =
+	{
+	}
+
+reconnectBase:	dynamic	(s: ref scope_s) =
+	{
+	}
+
+constructValue:	dynamic	(ref scope_s) =
+	{
+	}
+
+needsDynamicVectors:	dynamic	() boolean =
+	{
+	return FALSE;
+	}
+
+hasConstructor:	dynamic	() boolean =
+	{
+	return FALSE;
+	}
+
+hasDestructor:	dynamic	() boolean =
+	{
+	return FALSE;
+	}
+
+getType:	dynamic	() ref type_s =
+	{
+	return self;
+	}
+
+setTypeName:	dynamic	(ref identifier) =
+	{
+	}
+
+emitNeededTypedefs:	dynamic	(ref stream) =
+	{
+	}
+
+emitStructTags:		dynamic	(ref stream) =
+	{
+	}
+
+outputHeaderPrefix:	dynamic	(ref stream) =
+	{
+	}
+
+outputHeaderSuffix:	dynamic	(ref stream, dQualifiers, ref scope_s) =
+	{
+	}
+
+outputCast:		dynamic	(fd: ref stream) =
+	{
+	outputHeaderPrefix(fd);
+	outputHeaderSuffix(fd, 0, 0);
+	}
+
+defaultInitializer:	dynamic	(fd: ref stream) =
+	{
+	}
+
+lookupMember:	dynamic	(ref identifier, ref scope_s) ref symbol_s =
+	{
+	return 0;
+	}
+
+returnTypeOf:	dynamic	() ref type_s =
+	{
+	return 0;
+	}
+
+targetOf:	dynamic	() ref type_s =
+	{
+	return 0;
+	}
+
+elementOf:	dynamic	() ref type_s =
+	{
+	return 0;
+	}
+
+isGateFunction:	dynamic	() boolean =
+	{
+	return FALSE;
+	}
+
+isFarPointer:	dynamic	() boolean =
+	{
+	return FALSE;
+	}
+
+inherits:	dynamic	(ref type_s) boolean =
+	{
+	return FALSE;
+	}
+
+commonBaseType:	dynamic	(t: ref type_s) ref type_s =
+	{
+	if	(inherits(t))
+		return t;
+	else
+		return 0;
+	}
+
+hasDynamicVector:	dynamic	() boolean =
+	{
+	return FALSE;
+	}
+/*
+	This function returns the offset, in bytes, of the dynamic vector
+	offset within the object.
+ */
+dynamicOffset:	dynamic	() addr_t =
+	{
+	return 0;
+	}
+
+compare:	dynamic	(ref type_s) boolean =
+	{
+	return FALSE;
+	}
+
+sizeOf:	dynamic	() addr_t =
+	{
+	return 0;
+	}
+
+exprSizeOf:	dynamic	() ref tree_p =
+	{
+	return Func icon(sizeOf(), INTBITS);
+	}
+
+exprDimension:	dynamic	() ref tree_p =
+	{
+	return ErrorTree;
+	}
+
+bitSizeOf:	dynamic	() addr_t =
+	{
+	return 0;
+	}
+/*
+	This must return the type's preferred alignment in bits.
+ */
+alignmentOf:	dynamic	() addr_t =
+	{
+	return BYTEBITS;
+	}
+
+dynamicVectorName:	dynamic	(targ: ref value) [:] char =
+	{
+	return "";
+	}
+
+staticInitializer:	dynamic	(x: ref tree_p, s: ref scope_s) ref tree_p =
+	{
+	if	(x){
+		x = x promoteArrays();
+		x = x convert(self);
+		x = x fold();
+		}
+	return x checkStaticInitializer();
+	}
+
+	};
+
+typeMatch:	public	(d1: ref type_s, d2: ref type_s) boolean =
+	{
+	if	(d1 == 0 ||
+		 d2 == 0)
+		return FALSE;
+	d1 = d1 getType();
+	d2 = d2 getType();
+	if	(d1 == d2)
+		return TRUE;
+	if	(d1->topType != d2->topType)
+		return FALSE;
+	return d1 compare(d2);
+	}
+
+reportType:	public	(prefix: [:] char, d: ref type_s) =
+	{
+	CurrentContext printf(prefix);
+	d displayMessageFormat();
+	CurrentContext printf( "\n");
+	}
+
+error_z:	public	type	inherit type_s	{
+	public:
+
+create:	factory	() ref error_z =
+	{
+	self = alloc(sizeof error_z);
+	self = [ T_ERROR ];
+	return self;
+	}
+
+load:	factory	(n: pointer, image: ref loader) =
+	{
+	self = n;
+	self = [ T_ERROR ];
+	}
+
+display:	dynamic	(boolean) =
+	{
+	printf(" error-type");
+	}
+
+displayMessageFormat:	dynamic	() =
+	{
+	CurrentContext printf(" <error>");
+	}
+
+save:	dynamic	(ifile: ref imageFile) =
+	{
+	ifile beginRecord(U_ERROR_TYPE, self, sizeof *self);
+	}
+
+staticInitializer:	dynamic	(x: ref tree_p, s: ref scope_s) ref tree_p =
+	{
+	return x;
+	}
+
+	};
+
+type_z:	public	type	inherit type_s	{
+	public:
+
+create:	factory	() ref type_z =
+	{
+	self = alloc(sizeof type_z);
+	self = [ T_TYPE ];
+	return self;
+	}
+
+display:	dynamic	(boolean) =
+	{
+	printf(" type-type");
+	}
+
+displayMessageFormat:	dynamic	() =
+	{
+	CurrentContext printf(" type_t");
+	}
+
+compare:	dynamic	(ref type_s) boolean =
+	{
+	return TRUE;
+	}
+
+save:	dynamic	(ifile: ref imageFile) =
+	{
+	ifile beginRecord(U_TYPE_TYPE, self, sizeof *self);
+	}
+
+	};
+
+ErrorType:	public	ref error_z;
+IntType:	public	ref number_z;
+TypeType:	public	ref type_z;
+
+setup:	entry	() =
+	{
+	ErrorType = error_z create();
+	IntType = number_z create(T_SIGNED, NO_RANGE, INTBITS);
+	TypeType = type_z create();
+	}
+
+number_z:	public	type	inherit	type_s	{
+	public:
+
+	source:		textRange;
+	width:		int;
+	size:		byte;
+	align:		byte;
+
+create:	factory	(t: topTypes, sourc: textRange, w: int) ref number_z =
+	{
+	self = alloc(sizeof number_z);
+	self = [ t ];
+	source = sourc;
+	width = w;
+	size = 0;
+	align = BYTEBITS;
+	if	(source.start == 0)
+		constructInterface(0, FALSE);
+	return self;
+	}
+
+load:	factory	(n: pointer, image: ref loader) =
+	{
+	self = n;
+	self = [ image integer() ];
+	source.start = image uinteger();
+	source.end = image uinteger();
+	width = image uinteger();
+	size = image uinteger();
+	align = image uinteger();
+	}
+
+save:	dynamic	(ifile: ref imageFile) =
+	{
+	if	(ifile beginRecord(U_NUMBER_TYPE, self, sizeof *self)){
+		ifile integer(topType);
+		ifile uinteger(source.start);
+		ifile uinteger(source.end);
+		ifile uinteger(width);
+		ifile uinteger(size);
+		ifile uinteger(align);
+		}
+	}
+
+display:	dynamic	(boolean) =
+	{
+	if	(topType == T_SIGNED)
+		printf(" signed");
+	else if	(topType == T_UNSIGNED)
+		printf(" unsigned");
+	else
+		printf(" float");
+	if	(source.start)
+		printf("[%d,%d]", source.start, source.end);
+	else
+		printf("[%d]", width);
+	}
+
+displayMessageFormat:	dynamic	() =
+	{
+	if	(topType == T_SIGNED)
+		CurrentContext printf(" signed[%d]", width);
+	else if	(topType == T_UNSIGNED)
+		CurrentContext printf(" unsigned[%d]", width);
+	else
+		CurrentContext printf(" float[%d]", width);
+	}
+
+constructInterface:	dynamic	(s: ref scope_s, boolean) =
+	{
+	if	(source.start)
+		width = constantExpression(source, s);
+
+	ntd:	ref numberTypeDescriptor;
+
+	align = BYTEBITS;	// in case of error
+	switch	(topType){
+	case	T_FLOAT:
+		for	(ntd = FloatingTypes; ntd < 
+					&FloatingTypes[|FloatingTypes]; ntd++){
+			if	(ntd->bitSize >= width){
+				size = ntd->bitSize / BYTEBITS;
+				align = ntd->bitAlignment;
+				return;
+				}
+			}
+		CurrentContext error("ErrFloatWide");
+		break;
+
+	case	T_SIGNED:
+		for	(ntd = SignedTypes; ntd < 
+					&SignedTypes[|SignedTypes]; ntd++){
+			if	(ntd->bitSize >= width){
+				size = ntd->bitSize / BYTEBITS;
+				align = ntd->bitAlignment;
+				return;
+				}
+			}
+		CurrentContext error("ErrIntWide");
+		break;
+
+	case	T_UNSIGNED:
+		for	(ntd = UnsignedTypes; ntd < 
+					&UnsignedTypes[|UnsignedTypes]; ntd++){
+			if	(ntd->bitSize >= width){
+				size = ntd->bitSize / BYTEBITS;
+				align = ntd->bitAlignment;
+				return;
+				}
+			}
+		CurrentContext error("ErrIntWide");
+		break;
+		}
+	}
+
+defaultInitializer:	dynamic	(fd: ref stream) =
+	{
+	fd putc('0');
+	}
+
+outputHeaderPrefix:	dynamic	(fd: ref stream) =
+	{
+	if	(topType == T_SIGNED){
+		if	(width <= C_CHARBITS)
+			fd printf("signed char ");
+		else if	(width <= C_SHORTBITS)
+			fd printf("short ");
+		else if	(width <= C_INTBITS)
+			fd printf("int ");
+		else if	(width <= C_LONGBITS)
+			fd printf("long ");
+		else if	(width <= C_LONGLONGBITS)
+			fd printf("long long ");
+		}
+	else if	(topType == T_UNSIGNED){
+		if	(width <= C_CHARBITS)
+			fd printf("unsigned char ");
+		else if	(width <= C_SHORTBITS)
+			fd printf("unsigned short ");
+		else if	(width <= C_INTBITS)
+			fd printf("unsigned ");
+		else if	(width <= C_LONGBITS)
+			fd printf("unsigned long ");
+		else if	(width <= C_LONGLONGBITS)
+			fd printf("unsigned long long ");
+		}
+	else if	(topType == T_FLOAT){
+		if	(width <= FLOATBITS)
+			fd printf("float ");
+		else if	(width <= DOUBLEBITS)
+			fd printf("double ");
+		else if	(width <= EXTENDBITS)
+			fd printf("long double ");
+		}
+	}
+
+compare:	dynamic	(t: ref type_s) boolean =
+	{
+	nt:	ref number_z;
+
+	nt = ref number_z(t);
+	return width == nt->width;
+	}
+
+sizeOf:	dynamic	() addr_t =
+	{
+	return size;
+	}
+
+bitSizeOf:	dynamic	() addr_t =
+	{
+	if	(width < 0)
+		return -width;
+	else
+		return width;
+	}
+
+alignmentOf:	dynamic	() addr_t =
+	{
+	return align;
+	}
+
+	};
+
+named_z:	public	type	inherit	type_s	{
+	public:
+
+	name:		ref identifier;
+	offset:		fileOffset;
+
+		// Constructed information
+
+	actualType:	ref type_s;
+	actualSymbol:	ref symbol_s;
+
+create:	factory	(id: ref identifier, off: fileOffset) ref named_z =
+	{
+	self = alloc(sizeof named_z);
+	self = [ T_NAME, id, off ];
+	actualType = 0;
+	actualSymbol = 0;
+	return self;
+	}
+
+load:	factory	(n: pointer, image: ref loader) =
+	{
+	self = n;
+	self = [ T_NAME ];
+	name = identifier create(image string(), 0);
+	offset = image uinteger();
+	actualType = image address();
+	actualSymbol = image address();
+	}
+
+save:	dynamic	(ifile: ref imageFile) =
+	{
+	if	(ifile beginRecord(U_NAMED_TYPE, self, sizeof *self)){
+		ifile putstring(name spelling());
+		ifile uinteger(offset);
+		ifile address(actualType);
+		ifile address(actualSymbol);
+		}
+	}
+
+display:	dynamic	(boolean) =
+	{
+	printf(" %S", name spelling());
+	}
+
+displayMessageFormat:	dynamic	() =
+	{
+	CurrentContext printf(" %S", name spelling());
+	}
+
+emitNeededTypedefs:	dynamic	(fd: ref stream) =
+	{
+	if	(actualType)
+		actualType emitNeededTypedefs(fd);
+	}
+
+emitStructTags:		dynamic	(fd: ref stream) =
+	{
+	if	(actualType)
+		actualType emitStructTags(fd);
+	}
+
+constructInterface:	dynamic	(s: ref scope_s, boolean) =
+	{
+	sym:	ref symbol_s;
+	u:	ref unit_s;
+
+	sym = s lookup(name, s);
+	CurrentContext->offset = offset;
+	if	(sym == 0){
+		CurrentContext errorX("ErrUndefSym", name spelling(), "", 0);
+		actualType = ErrorType;
+		return;
+		}
+	if	(sym->storageClass != SC_TYPE){
+		CurrentContext errorX("ErrNotType", name spelling(), "", 0);
+		actualType = ErrorType;
+		return;
+		}
+	if	(sym->working){
+		CurrentContext errorX("ErrCircular", name spelling(), "", 0);
+		actualType = ErrorType;
+		return;
+		}
+//	addInterfaceDependency(sym);
+	sym constructInterface();
+	actualSymbol = sym;
+	actualType = sym->dtype;
+	}
+
+reconnectInterface:	dynamic	(s: ref scope_s) =
+	{
+	sym:	ref symbol_s;
+	u:	ref unit_s;
+
+	if	(actualType)
+		return;
+	sym = s lookup(name, s);
+	CurrentContext->offset = offset;
+	if	(sym == 0){
+		CurrentContext errorX("ErrUndefSym", name spelling(), "", 0);
+		actualType = ErrorType;
+		return;
+		}
+	if	(sym->storageClass != SC_TYPE){
+		CurrentContext errorX("ErrNotType", name spelling(), "", 0);
+		actualType = ErrorType;
+		return;
+		}
+	actualSymbol = sym;
+	actualType = sym->dtype;
+	if	(sym->working)
+		return;
+	sym reconnectInterface();
+	}
+
+reconnectBase:	dynamic	(s: ref scope_s) =
+	{
+	sym:	ref symbol_s;
+	u:	ref unit_s;
+
+	if	(actualType){
+		actualType reconnectBase(s);
+		return;
+		}
+	sym = s lookup(name, s);
+	CurrentContext->offset = offset;
+	if	(sym == 0){
+		CurrentContext errorX("ErrUndefSym", name spelling(), "", 0);
+		actualType = ErrorType;
+		return;
+		}
+	if	(sym->storageClass != SC_TYPE){
+		CurrentContext errorX("ErrNotType", name spelling(), "", 0);
+		actualType = ErrorType;
+		return;
+		}
+	actualSymbol = sym;
+	actualType = sym->dtype;
+	actualType reconnectBase(s);
+	}
+
+getType:	dynamic	() ref type_s =
+	{
+	if	(actualType)
+		return actualType getType();
+	else
+		return 0;
+	}
+
+outputHeaderPrefix:	dynamic	(fd: ref stream) =
+	{
+	if	(actualType)
+		actualType outputHeaderPrefix(fd);
+	else
+		fd printf("$%S$_ ", name spelling());
+	}
+
+outputHeaderSuffix:	dynamic	(fd: ref stream, q: dQualifiers, 
+						s: ref scope_s) =
+	{
+	if	(actualType)
+		actualType outputHeaderSuffix(fd, q, s);
+	}
+
+	};
+
+refTo:	public	(t: ref type_s) ref ptr_z =
+	{
+	return ptr_z create(FALSE, t, 0);
+	}
+
+ptr_z:	public	type	inherit	type_s	{
+	public:
+
+	referTo:	ref type_s;
+	qualifier:	dQualifiers;
+	owns:		boolean;
+
+create:	factory	(p: boolean, r: ref type_s, q: dQualifiers) ref ptr_z =
+	{
+	self = alloc(sizeof ptr_z);
+	self = [ T_REF, r, q, p ];
+	return self;
+	}
+
+load:	factory	(p: pointer, image: ref loader) =
+	{
+	self = p;
+	self = [ T_REF ];
+	referTo = image address();
+	qualifier = image integer();
+	owns = image integer();
+	}
+
+save:	dynamic	(ifile: ref imageFile) =
+	{
+	if	(ifile beginRecord(U_PTR_TYPE, self, sizeof *self)){
+		ifile address(referTo);
+		ifile integer(qualifier);
+		ifile integer(owns);
+		if	(referTo)
+			referTo save(ifile);
+		}
+	}
+
+commonPointerType:	dynamic	(t: ref type_s) ref type_s =
+	{
+	if	(t->topType != T_REF)
+		return 0;
+	p:	ref ptr_z = ref ptr_z(t);
+
+	if	(qualifier != p->qualifier)
+		return 0;
+	r1:	ref type_s;
+	r2:	ref type_s;
+
+	r1 = targetOf();
+	r2 = p targetOf();
+	if	(r1 == 0)
+		return 0;
+	if	(r2 == 0)
+		return 0;
+	if	(r1->topType == T_VOID)
+		return p;
+	if	(r2->topType == T_VOID)
+		return self;
+	if	(typeMatch(r1, r2))
+		return self;
+	else
+		return 0;
+	}
+
+isFarPointer:	dynamic	() boolean =
+	{
+	if	(qualifier & DQ_FAR)
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+constructInterface:	dynamic	(s: ref scope_s, boolean) =
+	{
+	if	(referTo)
+		s deferInterface(referTo, FALSE);
+	}
+
+reconnectInterface:	dynamic	(s: ref scope_s) =
+	{
+	if	(referTo)
+		referTo reconnectInterface(s);
+	}
+
+constructValue:	dynamic	(s: ref scope_s) =
+	{
+	if	(referTo)
+		referTo constructValue(s);
+	}
+
+display:	dynamic	(m: boolean) =
+	{
+	printf(" ref");
+	if	(owns)
+		printf(" owns");
+	if	(qualifier)
+		printf(" q %x", qualifier);
+	if	(referTo)
+		referTo display(m);
+	}
+
+displayMessageFormat:	dynamic	() =
+	{
+	if	(referTo &&
+		 referTo->topType != T_VOID){
+		CurrentContext printf(" ref");
+		if	(qualifier & DQ_FAR)
+			CurrentContext printf(" far");
+		if	(qualifier & DQ_CONST)
+			CurrentContext printf(" const");
+		if	(qualifier & DQ_VOLATILE)
+			CurrentContext printf(" volatile");
+		if	(qualifier & DQ_DYNAMIC)
+			CurrentContext printf(" dynamic");
+		referTo displayMessageFormat();
+		}
+	else	{
+		CurrentContext printf(" pointer");
+		if	(qualifier & DQ_FAR)
+			CurrentContext printf(" far");
+		}
+	}
+
+defaultInitializer:	dynamic	(fd: ref stream) =
+	{
+	fd putc('0');
+	}
+
+outputHeaderPrefix:	dynamic	(fd: ref stream) =
+	{
+	if	(referTo){
+		if	(qualifier & DQ_FAR)
+			fd printf("p_far_pointer ");
+		else	{
+			referTo outputHeaderPrefix(fd);
+			fd printf("(*");
+			}
+		}
+	else
+		fd printf("void(*");
+	}
+
+outputHeaderSuffix:	dynamic	(fd: ref stream, dQualifiers, ref scope_s) =
+	{
+	if	(qualifier & DQ_FAR == 0)
+		fd putc(')');
+	if	(referTo)
+		referTo outputHeaderSuffix(fd, 0, 0);
+	}
+
+emitNeededTypedefs:	dynamic	(fd: ref stream) =
+	{
+	if	(referTo)
+		referTo emitStructTags(fd);
+	}
+
+emitStructTags:		dynamic	(fd: ref stream) =
+	{
+	if	(referTo)
+		referTo emitStructTags(fd);
+	}
+
+targetOf:	dynamic	() ref type_s =
+	{
+	if	(referTo)
+		return referTo getType();
+	else
+		return 0;
+	}
+
+compare:	dynamic	(t: ref type_s) boolean =
+	{
+	pt:	ref ptr_z;
+
+	pt = ref ptr_z(t);
+	if	(qualifier != pt->qualifier)
+		return FALSE;
+	return typeMatch(referTo, pt->referTo);
+	}
+
+sizeOf:	dynamic	() addr_t =
+	{
+	return PTRBITS / BYTEBITS;
+	}
+
+bitSizeOf:	dynamic	() addr_t =
+	{
+	return PTRBITS;
+	}
+
+alignmentOf:	dynamic	() addr_t =
+	{
+	return PTRALIGN;
+	}
+
+	};
+
+array_z:	public	type	inherit	type_s	{
+	public:
+
+	element:	ref type_s;
+	source:		textRange;
+	dimension:	int;
+	xDimension:	ref tree_p;
+
+create:	factory	(sourc: textRange, dim: int, 
+				elementType: ref type_s) ref array_z =
+	{
+	return new array_z[ T_ARRAY, elementType, sourc, dim ];
+	}
+
+load:	factory	(a: pointer, image: ref loader) =
+	{
+	self = a;
+	self = [ image integer() ];
+	element = image address();
+	source.start = image uinteger();
+	source.end = image uinteger();
+	dimension = image uinteger();
+	}
+
+save:	dynamic	(ifile: ref imageFile) =
+	{
+	if	(ifile beginRecord(U_ARRAY_TYPE, self, sizeof *self)){
+		ifile integer(topType);
+		ifile address(element);
+		ifile uinteger(source.start);
+		ifile uinteger(source.end);
+		ifile uinteger(dimension);
+		if	(element)
+			element save(ifile);
+		}
+	}
+
+display:	dynamic	(m: boolean) =
+	{
+	if	(topType == T_ARRAY)
+		printf(" array");
+	else
+		printf(" var array");
+	if	(source.start)
+		printf(" bounds [ %d, %d ]", source.start, source.end);
+	else if	(dimension)
+		printf("[%d]", dimension);
+	if	(element)
+		element display(m);
+	}
+
+displayMessageFormat:	dynamic	() =
+	{
+	if	(dimension)
+		CurrentContext printf(" [%d]", dimension);
+	else
+		CurrentContext printf(" []");
+	if	(element)
+		element displayMessageFormat();
+	}
+
+constructInterface:	dynamic	(s: ref scope_s, b: boolean) =
+	{
+	if	(element)
+		element constructInterface(s, b);
+	if	(b){
+		if	(source.start)
+			xDimension = extractExpression(source, s);
+		}
+	else if	(source.start)
+		dimension = constantExpression(source, s);
+	}
+
+reconnectInterface:	dynamic	(s: ref scope_s) =
+	{
+	if	(element)
+		element reconnectInterface(s);
+	}
+
+constructValue:	dynamic	(s: ref scope_s) =
+	{
+	if	(element)
+		element constructValue(s);
+	}
+
+defaultInitializer:	dynamic	(fd: ref stream) =
+	{
+	if	(needsDynamicVectors()){
+		i:	addr_t;
+
+		fd putc('{');
+		for	(i = 0; i < dimension; i++){
+			element defaultInitializer(fd);
+			if	(i < dimension - 1)
+				fd putc(',');
+			}
+		fd putc('}');
+		}
+	else if	(dimension)
+		fd printf("{0}");
+	}
+
+outputHeaderPrefix:	dynamic	(fd: ref stream) =
+	{
+	if	(element)
+		element outputHeaderPrefix(fd);
+	}
+
+outputHeaderSuffix:	dynamic	(fd: ref stream, dQualifiers, ref scope_s) =
+	{
+	if	(dimension)
+		fd printf("[%d]", dimension);
+	else
+		fd printf("[]");
+	if	(element)
+		element outputHeaderSuffix(fd, 0, 0);
+	}
+
+outputCast:		dynamic	(fd: ref stream) =
+	{
+	if	(element){
+		element outputHeaderPrefix(fd);
+		fd printf("(*)");
+		element outputHeaderSuffix(fd, 0, 0);
+		}
+	else
+		fd printf("void*");
+	}
+
+
+emitNeededTypedefs:	dynamic	(fd: ref stream) =
+	{
+	if	(element)
+		element emitNeededTypedefs(fd);
+	}
+
+emitStructTags:		dynamic	(fd: ref stream) =
+	{
+	if	(element)
+		element emitStructTags(fd);
+	}
+
+compare:	dynamic	(t: ref type_s) boolean =
+	{
+	at:	ref array_z;
+
+	at = ref array_z(t);
+	if	(dimension &&
+		 at->dimension &&
+		 dimension != at->dimension)
+		return FALSE;
+	return typeMatch(element, at->element);
+	}
+
+elementOf:	dynamic	() ref type_s =
+	{
+	if	(element)
+		return element getType();
+	else
+		return 0;
+	}
+
+exprSizeOf:	dynamic	() ref tree_p =
+	{
+	e:	ref tree_p;
+
+	if	(xDimension == 0)
+		return Func icon(sizeOf(), INTBITS);
+	e = element getType() exprSizeOf();
+	return Func binary(O_MUL, xDimension dup(0), e, 0);
+	}
+
+exprDimension:	dynamic	() ref tree_p =
+	{
+	if	(xDimension == 0)
+		return Func icon(0, INTBITS);
+	else
+		return xDimension dup(0);
+	}
+
+sizeOf:	dynamic	() addr_t =
+	{
+	if	(dimension && element){
+		j:	addr_t;
+
+		j = element getType() sizeOf();
+		return dimension * j;
+		}
+	else
+		return 0;
+	}
+
+bitSizeOf:	dynamic	() addr_t =
+	{
+	if	(element){
+		j:	addr_t;
+
+		j = element getType() bitSizeOf();
+		return dimension * j;
+		}
+	else
+		return 0;
+	}
+
+alignmentOf:	dynamic	() addr_t =
+	{
+	if	(element)
+		return element getType() alignmentOf();
+	else
+		return BYTEBITS;
+	}
+
+needsDynamicVectors:	dynamic	() boolean =
+	{
+	if	(element)
+		return element getType() needsDynamicVectors();
+	else
+		return FALSE;
+	}
+
+staticInitializer:	dynamic	(x: ref tree_p, s: ref scope_s) ref tree_p =
+	{
+	t:	ref type_s;
+
+	if	(x == 0 || x->operator == O_ERROR)
+		return x;
+	t = elementOf();
+
+		// Character array initialized by a string literal
+
+	if	(x->operator == O_LITERAL){
+		if	(t->topType != T_SIGNED &&
+			 t->topType != T_UNSIGNED){
+			CurrentContext error("ErrBadInit");
+			return ErrorTree;
+			}
+
+		nt:	ref number_z;
+
+		nt = ref number_z(t);
+		if	(nt->width != CHARBITS){
+			CurrentContext error("ErrBadInit");
+			return ErrorTree;
+			}
+
+		if	(!typeMatch(t, x->dtype elementOf()) ||
+			 sizeOf() < x->dtype sizeOf()){
+			CurrentContext error("ErrBadInit");
+			return ErrorTree;
+			}
+
+		x->dtype = self;
+		return x;
+		}
+	else if	(x->operator != O_SCONST){
+		CurrentContext error("ErrBadInit");
+		return ErrorTree;
+		}
+
+	x->dtype = self;
+	xp:	ref ref tree_p;
+	a:	ref tree_p;
+	index:	int;
+
+	xp = &ref sconst_x(x)->components;
+	for	(index = 0; index < dimension; index++){
+		a = *xp;
+		if	(a->operator == O_ARG){
+			b:	ref argument_x;
+
+			b = ref argument_x(a);
+			b->left = t staticInitializer(b->left, s);
+			xp = &b->right;
+			}
+		else	{
+			*xp = t staticInitializer(a, s);
+			return x;
+			}
+		}
+	if	(*xp){
+		CurrentContext error("ErrTooManyInit");
+		return ErrorTree;
+		}
+	}
+
+	};
+
+descriptor_z:	public	type	inherit	type_s	{
+	public:
+
+	element:	ref type_s;
+	source:		textRange;
+	dimension:	int;
+
+create:	factory	(sourc: textRange, dim: int, 
+				elementType: ref type_s) ref descriptor_z =
+	{
+	self = alloc(sizeof descriptor_z);
+	self = [ T_DESCRIPTOR, elementType ];
+	source = sourc;
+	dimension = dim;
+	return self;
+	}
+
+load:	factory	(a: pointer, image: ref loader) =
+	{
+	self = a;
+	self = [ image integer() ];
+	element = image address();
+	source.start = image uinteger();
+	source.end = image uinteger();
+	dimension = image uinteger();
+	}
+
+save:	dynamic	(ifile: ref imageFile) =
+	{
+	if	(ifile beginRecord(U_DESCRIPTOR_TYPE, self, sizeof *self)){
+		ifile integer(topType);
+		ifile address(element);
+		ifile uinteger(source.start);
+		ifile uinteger(source.end);
+		ifile uinteger(dimension);
+		if	(element)
+			element save(ifile);
+		}
+	}
+
+display:	dynamic	(m: boolean) =
+	{
+	printf(" descriptor");
+	if	(source.start)
+		printf(" bounds [ %d, %d ]", source.start, source.end);
+	else if	(dimension)
+		printf("[%d]", dimension);
+	if	(element)
+		element display(m);
+	}
+
+displayMessageFormat:	dynamic	() =
+	{
+	if	(dimension)
+		CurrentContext printf(" [:%d]", dimension);
+	else
+		CurrentContext printf(" [:]");
+	if	(element)
+		element displayMessageFormat();
+	}
+
+constructInterface:	dynamic	(s: ref scope_s, boolean) =
+	{
+	if	(element)
+		element constructInterface(s, FALSE);
+	if	(source.start)
+		dimension = constantExpression(source, s);
+	}
+
+reconnectInterface:	dynamic	(s: ref scope_s) =
+	{
+	if	(element)
+		element reconnectInterface(s);
+	}
+
+constructValue:	dynamic	(s: ref scope_s) =
+	{
+	if	(element)
+		element constructValue(s);
+	}
+
+defaultInitializer:	dynamic	(fd: ref stream) =
+	{
+	fd printf("{0}");
+	}
+
+outputHeaderPrefix:	dynamic	(fd: ref stream) =
+	{
+	fd printf("p_descriptor ");
+	}
+
+
+outputHeaderSuffix:	dynamic	(fd: ref stream, dQualifiers, ref scope_s) =
+	{
+	}
+
+compare:	dynamic	(t: ref type_s) boolean =
+	{
+	return typeMatch(element, ref descriptor_z(t)->element);
+	}
+
+elementOf:	dynamic	() ref type_s =
+	{
+	if	(element)
+		return element getType();
+	else
+		return 0;
+	}
+
+sizeOf:	dynamic	() addr_t =
+	{
+	return DESCRIPTOR_BASE + DESCRIPTOR_RANK_SIZE;
+	}
+
+bitSizeOf:	dynamic	() addr_t =
+	{
+	return (DESCRIPTOR_BASE + DESCRIPTOR_RANK_SIZE) * BYTEBITS;
+	}
+
+alignmentOf:	dynamic	() addr_t =
+	{
+	return PTRBITS;
+	}
+
+staticInitializer:	dynamic	(x: ref tree_p, s: ref scope_s) ref tree_p =
+	{
+	if	(x == 0)
+		return x;
+	if	(x->operator == O_ID){
+		if	(x->dtype->topType != T_ARRAY){
+			CurrentContext error("ErrBadInit");
+			return ErrorTree;
+			}
+		}
+
+		// Only allow some slices
+
+	else if	(x->operator == O_SLICE){
+		s:	ref slice_x;
+
+		s = ref slice_x(x);
+		if	(s->arrayRef){
+			if	(s->arrayRef->dtype->topType != T_ARRAY ||
+				 (s->arrayRef->operator != O_LITERAL &&
+				  s->arrayRef->operator != O_ID)){
+				CurrentContext error("ErrBadInit");
+				return ErrorTree;
+				}
+			}
+		if	(s->left && s->left->operator != O_ICON){
+			CurrentContext error("ErrConstantExpr");
+			return ErrorTree;
+			}
+		if	(s->right && s->right->operator != O_ICON){
+			CurrentContext error("ErrConstantExpr");
+			return ErrorTree;
+			}
+		CurrentContext error("ErrUnfinished");
+		return ErrorTree;
+		}
+	else if	(x->operator != O_LITERAL){
+		CurrentContext error("ErrBadInit");
+		return ErrorTree;
+		}
+	return cast_x createCheck(self, x);
+	}
+
+	};
+
+void_z:	public	type	inherit	type_s	{
+	public:
+
+create:	factory	() ref void_z =
+	{
+	self = alloc(sizeof void_z);
+	self = [ T_VOID ];
+	return self;
+	}
+
+load:	factory	(v: pointer, ref loader) =
+	{
+	self = v;
+	self = [ T_VOID ];
+	}
+
+save:	dynamic	(ifile: ref imageFile) =
+	{
+	ifile beginRecord(U_VOID_TYPE, self, sizeof *self);
+	}
+
+outputHeaderPrefix:	dynamic	(fd: ref stream) =
+	{
+	fd printf("void ");
+	}
+
+compare:	dynamic	(ref type_s) boolean =
+	{
+	return TRUE;
+	}
+
+	};
+
+struct_z:	public	type	inherit	type_s	{
+	public:
+
+	base:		ref type_s;
+	packing:	packingMethods;
+
+		// Constructed information
+
+	name:		ref identifier;
+	bitSize:	addr_t;
+	align:		addr_t;
+	vectorOffset:	addr_t;
+	vectorSize:	addr_t;
+	dynamicVector:	ref value;
+	gateVector:	ref value;
+	gateCount:	int;
+	cDefined:	boolean;
+	cTagged:	boolean;
+	initializers:	ref structInitializerList;
+
+create:	factory	(e: ref scope_s, parent: ref type_s, 
+				p: packingMethods) ref struct_z =
+	{
+	self = alloc(sizeof struct_z);
+	self = [ T_STRUCT, parent, p, 0, FALSE, 0 ];
+	enclosing = e;
+	vectorOffset = 0;
+	vectorSize = 0;
+	dynamicVector = 0;
+	gateVector = 0;
+	gateCount = 0;
+	cDefined = FALSE;
+	cTagged = FALSE;
+	initializers = 0;
+	return self;
+	}
+
+load:	factory	(st: pointer, image: ref loader) =
+	{
+	self = st;
+	self = [ T_STRUCT ];
+	enclosing = image address();
+	base = image address();
+	symbols = image address();
+	packing = image integer();
+	bitSize = image uinteger();
+	align = image integer();
+	vectorOffset = image uinteger();
+	vectorSize = image uinteger();
+	dynamicVector = image address();
+	gateVector = image address();
+	gateCount = image integer();
+	cDefined = FALSE;
+	cTagged = FALSE;
+	initializers = 0;
+	}
+
+save:	dynamic	(ifile: ref imageFile) =
+	{
+	if	(ifile beginRecord(U_STRUCT_TYPE, self, sizeof *self)){
+		ifile address(enclosing);
+		ifile address(base);
+		ifile address(symbols);
+		ifile integer(packing);
+		ifile uinteger(bitSize);
+		ifile integer(align);
+		ifile uinteger(vectorOffset);
+		ifile uinteger(vectorSize);
+		ifile address(dynamicVector);
+		ifile address(gateVector);
+		ifile integer(gateCount);
+		if	(base)
+			base save(ifile);
+		if	(symbols)
+			symbols save(ifile);
+		if	(dynamicVector)
+			dynamicVector save(ifile);
+		if	(gateVector)
+			gateVector save(ifile);
+		}
+	}
+
+commonBaseType:	dynamic	(t: ref type_s) ref type_s =
+	{
+	for	(;;){
+		if	(t inherits(self))
+			return self;
+		if	(base){
+			b:	ref type_s;
+
+			b = base getType();
+			if	(b->topType != T_STRUCT){
+				if	(t inherits(b))
+					return b;
+				else
+					return 0;
+				}
+			self = ref struct_z(b);
+			}
+		else
+			return 0;
+		}
+	}
+
+inherits:	dynamic	(t: ref type_s) boolean =
+	{
+	if	(self == t)
+		return TRUE;
+	if	(base){
+		t2:	ref type_s;
+
+		t2 = base getType();
+		if	(typeMatch(t2, t))
+			return TRUE;
+		return t2 inherits(t);
+		}
+	else
+		return FALSE;
+	}
+
+lookupMember:	dynamic	(n: ref identifier, 
+					context: ref scope_s) ref symbol_s =
+	{
+	sym:	ref symbol_s;
+
+	sym = lookupLocal(n, self);
+	if	(sym == 0){
+		if	(base){
+			sym = base getType() lookupMember(n, context);
+			if	(sym == 0)
+				return sym;
+			}
+		else
+			return sym;
+		}
+	if	(sym->visibility != V_PRIVATE)
+		return sym;
+	if	(encloses(context))
+		return sym;
+	else
+		return 0;
+	}
+
+lookup:	dynamic	(n: ref identifier, context: ref scope_s) ref symbol_s =
+	{
+	s:	ref symbol_s;
+
+	s = lookupMember(n, context);
+	if	(s)
+		return s;
+	if	(enclosing)
+		return enclosing lookup(n, context);
+	else
+		return 0;
+	}
+
+objectName:	dynamic	() [:] char =
+	{
+	NameEmitter = [ Name ];
+	if	(enclosing)
+		enclosing scopeName();
+	if	(name)
+		NameEmitter printf(name spelling());
+	else
+		NameEmitter printf("<no name>");
+	return NameEmitter result();
+	}
+
+dynamicVectorName:	dynamic	(target: ref value) [:] char =
+	{
+	NameEmitter = [ Name ];
+	scopeName();
+	if	(target == gateVector)
+		NameEmitter printf("gate");
+	return NameEmitter result();
+	}
+
+lineno:	dynamic	(o: fileOffset) int =
+	{
+	if	(enclosing)
+		return enclosing getUnit() lineno(o);
+	else
+		return 0;
+	}
+
+sourceFilename:	dynamic	() [:] char =
+	{
+	if	(enclosing)
+		return enclosing sourceFilename();
+	else
+		return "";
+	}
+
+scopeName:	dynamic	() =
+	{
+	if	(enclosing)
+		enclosing scopeName();
+	if	(name)
+		NameEmitter printf("%S.", name spelling());
+	}
+
+csourceName:	dynamic	(fd: ref stream) =
+	{
+	if	(enclosing)
+		enclosing csourceName(fd);
+	if	(name)
+		fd printf("%S_", name spelling());
+	else
+		fd printf("_");
+	}
+
+cDynamicName:	dynamic	(fd: ref stream) =
+	{
+	if	(enclosing)
+		enclosing csourceName(fd);
+	if	(name)
+		fd printf("%S_dynamic_", name spelling());
+	else
+		fd printf("_");
+	}
+
+setTypeName:	dynamic	(n: ref identifier) =
+	{
+	name = n;
+	}
+
+getEnclosingType:	dynamic	() ref type_s =
+	{
+	return self;
+	}
+
+addDeclaration:	(n: ref identifier, off: fileOffset,
+				hasError: boolean, d: ref declaration_p) =
+	{
+	sym:	ref symbol_s;
+	last:	ref symbol_s;
+
+
+	sym = symbol_s create(self, n, off, hasError, d);
+	if	(symbols){
+		for	(last = symbols; last->next; last = last->next)
+			;
+		last->next = sym;
+		}
+	else
+		symbols = sym;
+	}
+
+constructInterface:	dynamic	(s: ref scope_s, boolean) =
+	{
+	sym:		ref symbol_s;
+	baseDyn:	boolean;
+	selfDyn:	boolean;
+	t:		ref type_s;
+	bitOff:		addr_t;
+
+	selfDyn = FALSE;
+	baseDyn = FALSE;
+	align = BYTEBITS;
+	bitOff = 0;
+	gateCount = 0;
+	if	(base){
+		base constructInterface(s, FALSE);
+		t = base getType();
+		if	(t->topType != T_STRUCT)
+			CurrentContext error("ErrBadBaseType");
+		gateCount = ref struct_z(t)->gateCount;
+		baseDyn = t hasDynamicVector();
+		align = t alignmentOf();
+		bitOff = t sizeOf() * BYTEBITS;
+		}
+	for	(sym = symbols; sym; sym = sym->next){
+		sym constructInterface();
+		if	(sym->qualifier & DQ_DYNAMIC)
+			selfDyn = TRUE;
+		if	(sym->dtype isGateFunction())
+			makeGateEntry(sym);
+		else
+			checkNonGateEntry(sym);
+		if	(sym->name &&
+			 sym->dtype &&
+			 sym->dtype getType() hasConstructor()){
+			CurrentContext errorX("ErrStructConstructor", 
+						sym->name spelling(), "", 0);
+			}
+		if	(sym->name &&
+			 sym->dtype &&
+			 sym->dtype getType()  hasDestructor()){
+			CurrentContext errorX("ErrStructDestructor", 
+						sym->name spelling(), "", 0);
+			}
+		}
+	if	(baseDyn){
+		selfDyn = FALSE;
+		vectorOffset = ref struct_z(t)->vectorOffset;
+		vectorSize = ref struct_z(t)->vectorSize;
+		}
+
+	j:	unsigned;
+
+	switch	(packing){
+	case	PM_PACKED:
+		if	(selfDyn){
+			vectorOffset = bitOff;
+			bitOff += PTRBITS;
+			}
+		for	(sym = symbols; sym; sym = sym->next){
+			if	(sym->storageClass != SC_MEMBER)
+				continue;
+			if	(sym->dtype == 0)
+				continue;
+			t = sym->dtype getType();
+			bitOff = packedAdjustment(bitOff, t);
+			sym->bitOffset = bitOff;
+			bitOff += t bitSizeOf();
+			}
+		break;
+
+	case	PM_STRUCT:
+		i:	int;
+
+		for	(i = 0; i < |StructLayout; i++){
+			if	(StructLayout[i] == -1){
+				if	(selfDyn){
+					vectorOffset = bitOff;
+					bitOff += PTRBITS;
+					}
+				continue;
+				}
+			for	(sym = symbols; sym; sym = sym->next){
+				if	(sym->storageClass != SC_MEMBER)
+					continue;
+				if	(sym->dtype == 0)
+					continue;
+				t = sym->dtype getType();
+				j = t alignmentOf();
+				if	(j != StructLayout[i])
+					continue;
+				if	(j > align)
+					align = j;
+
+					// Do any needed alignment -
+					// probably not necessary
+
+				j = bitOff % j;
+				if	(j)
+					bitOff += StructLayout[i] - j;
+				sym->bitOffset = bitOff;
+				bitOff += t sizeOf() * BYTEBITS;
+				}
+			}
+		break;
+
+		// Unions are already set, all symbols have bitOffset of zero
+
+	case	PM_UNION:
+		if	(selfDyn)
+			CurrentContext error("ErrNoDynamics");
+		for	(sym = symbols; sym; sym = sym->next){
+			if	(sym->storageClass != SC_MEMBER)
+				continue;
+			if	(sym->dtype == 0)
+				continue;
+			t = sym->dtype getType();
+			j = t alignmentOf();
+			if	(j > align)
+				align = j;
+
+				// Note that the loop computes size in bytes
+
+			j = t sizeOf();
+			if	(j > bitOff)
+				bitOff = j;
+			}
+
+			// The size must now be converted to bits
+
+		bitOff *= BYTEBITS;
+		break;
+		}
+
+		// Round the structure size up to an even alignment factor
+
+	j = align;			// an odd code gen bug happens
+					// if the divide is by align
+					// directly.
+	j = bitOff % j;
+	if	(j)
+		bitOff += align - j;
+	bitSize = bitOff;
+	if	(gateCount)
+		gateVector = value createVector();
+	if	(selfDyn || baseDyn){
+
+			// Reserve space in the vector for a pointer to
+			// the image tables.
+
+		if	(selfDyn)
+			vectorSize = PTRBITS;
+		dynamicVector = value createVector();
+
+			// Assign dynamic vector addresses to dynamic
+			// member functions
+
+		for	(sym = symbols; sym; sym = sym->next){
+			if	(sym->dtype->topType != T_FUNC)
+				continue;
+			if	(sym->qualifier & DQ_DYNAMIC)
+				makeDynamicEntry(sym);
+			else
+				checkNondynamicEntry(sym);
+			}
+		}
+	}
+
+findVectorEntry:	(offset: unsigned) ref symbol_s =
+	{
+	m:	ref symbol_s;
+	d:	ref type_s;
+
+	for	(;;){
+		for	(m = symbols; m; m = m->next){
+			if	((m->qualifier & DQ_DYNAMIC) &&
+				 m->bitOffset == offset)
+				return m;
+			}
+		if	(base == 0)
+			return 0;
+		d = base getType();
+		if	(d->topType != T_STRUCT)
+			return 0;
+		self = ref struct_z(d);
+		}
+	}
+
+findGateEntry:	(offset: unsigned) ref value =
+	{
+	m:	ref symbol_s;
+	d:	ref type_s;
+
+	for	(;;){
+		for	(m = symbols; m; m = m->next){
+			if	(m->dtype isGateFunction() &&
+				 m->bitOffset == offset)
+				return m->currentValue;
+			}
+		if	(base == 0)
+			return 0;
+		d = base getType();
+		if	(d->topType != T_STRUCT)
+			return 0;
+		self = ref struct_z(d);
+		}
+	}
+
+makeDynamicEntry:	(m: ref symbol_s) =
+	{
+	oldm:	ref symbol_s;
+	x:	ref type_s;
+
+	if	(base){
+		x = base getType();
+		oldm = x lookupMember(m->name, x);
+		if	(oldm && oldm->qualifier & DQ_DYNAMIC){
+			m->bitOffset = oldm->bitOffset;
+			return;
+			}
+		}
+	m->bitOffset = vectorSize;
+	vectorSize += DYNFUNC_SIZE;
+	}
+
+checkNondynamicEntry:	(m: ref symbol_s) =
+	{
+	oldm:	ref symbol_s;
+	x:	ref type_s;
+
+	if	(base == 0)
+		return;
+	x = base getType();
+	oldm = x lookupMember(m->name, x);
+	if	(oldm &&
+		 oldm->qualifier & DQ_DYNAMIC)
+		CurrentContext errorX("ErrFuncNotDynamic", 
+						m->name spelling(), "", 0);
+	}
+
+makeGateEntry:	(m: ref symbol_s) =
+	{
+	oldm:	ref symbol_s;
+	x:	ref type_s;
+
+	if	(base){
+		x = base getType();
+		oldm = x lookupMember(m->name, x);
+		if	(oldm &&
+			 oldm->dtype isGateFunction()){
+			m->bitOffset = oldm->bitOffset;
+			return;
+			}
+		}
+	m->bitOffset = MESSAGE_FUNCTION_BASE + gateCount;
+	gateCount++;
+	}
+
+checkNonGateEntry:	(m: ref symbol_s) =
+	{
+	oldm:	ref symbol_s;
+	x:	ref type_s;
+
+	if	(base == 0)
+		return;
+	x = base getType();
+	oldm = x lookupMember(m->name, x);
+	if	(oldm &&
+		 oldm->dtype isGateFunction())
+		CurrentContext errorX("ErrFuncNotGate", m->name spelling(), "", 0);
+	}
+
+reconnectInterface:	dynamic	(s: ref scope_s) =
+	{
+	sym:	ref symbol_s;
+
+	if	(base)
+		base reconnectBase(s);
+	for	(sym = symbols; sym; sym = sym->next)
+		sym reconnectInterface();
+	initializers = 0;
+	}
+
+reconnectBase:	dynamic	(s: ref scope_s) =
+	{
+	if	(base)
+		base reconnectBase(s);
+	}
+
+declareInC:	(fd: ref stream) boolean =
+	{
+	si:	ref structInitializerList;
+	i:	boolean;
+
+	buildInitializerList();
+	i = FALSE;
+	if	(base){
+		t:	ref struct_z;
+
+		t = ref struct_z(base getType());
+		i = t declareInC(fd);
+		}
+	for	(si = initializers; si; si = si->next){
+		if	(si->member){
+			if	(si->member->dtype &&
+				 si->member->dtype getType() sizeOf()){
+				si->member outputHeader(FALSE, fd);
+				fd printf(";\n");
+				i = TRUE;
+				}
+			}
+		else
+			fd printf("void*dynamic_;\n");
+		}
+	return i;
+	}
+
+initializeInC:	(x: ref tree_p, fd: ref stream) ref tree_p =
+	{
+	if	(base){
+		t:	ref struct_z;
+
+		t = ref struct_z(base getType());
+		x = t initializeInC(x, fd);
+		}
+	threadInitializers();
+	sym:	ref symbol_s;
+	si:	ref structInitializerList;
+
+	for	(sym = symbols; sym; sym = sym->next){
+		if	(sym->storageClass != SC_MEMBER)
+			continue;
+		if	(sym->dtype == 0)
+			continue;
+		if	(sym->currentValue == 0)
+			continue;
+		si = pointer(sym->currentValue);
+		}
+	for	(si = initializers; si; si = si->next){
+		if	(si->initializer)
+			si->member->currentValue = pointer(si);
+		}
+	unthreadInitializers();
+	}
+
+//		Rebuild the initializer list descriptors
+
+buildInitializerList:	() =
+	{
+	sym:		ref symbol_s;
+	last:		ref structInitializerList;
+	selfDyn:	boolean;
+	t:		ref type_s;
+
+//	if	(initializers)
+//		return;
+	selfDyn = hasDynamicVector();
+	if	(base &&
+		 base getType() hasDynamicVector())
+		selfDyn = FALSE;
+
+	initializers = 0;
+	last = 0;
+	switch	(packing){
+	case	PM_PACKED:
+		if	(selfDyn)
+			last = newInitializerItem(0, last);
+		for	(sym = symbols; sym; sym = sym->next){
+			if	(sym->storageClass != SC_MEMBER)
+				continue;
+			if	(sym->dtype == 0)
+				continue;
+			last = newInitializerItem(sym, last);
+			}
+		break;
+
+	case	PM_STRUCT:
+		i:	int;
+
+		for	(i = 0; i < |StructLayout; i++){
+			if	(StructLayout[i] == -1){
+				if	(selfDyn)
+					last = newInitializerItem(0, last);
+				continue;
+				}
+			for	(sym = symbols; sym; sym = sym->next){
+				if	(sym->storageClass != SC_MEMBER)
+					continue;
+				if	(sym->dtype == 0)
+					continue;
+				t = sym->dtype getType();
+				if	(t alignmentOf() == StructLayout[i])
+					last = newInitializerItem(sym, last);
+				}
+			}
+		break;
+
+		// Unions are already set, all symbols have bitOffset of zero
+
+	case	PM_UNION:
+		for	(sym = symbols; sym; sym = sym->next){
+			if	(sym->storageClass != SC_MEMBER)
+				continue;
+			if	(sym->dtype == 0)
+				continue;
+			t = sym->dtype getType();
+			newInitializerItem(sym, last);
+			break;
+			}
+		break;
+		}
+	}
+
+newInitializerItem:	(sym: ref symbol_s, last: ref structInitializerList) 
+				ref structInitializerList =
+	{
+	si:	ref structInitializerList;
+
+	si = new structInitializerList[ 0, 0, sym ];
+	if	(last)
+		last->next = si;
+	else
+		initializers = si;
+	return si;
+	}
+
+threadInitializers:	() =
+	{
+	si:	ref structInitializerList;
+
+	for	(si = initializers; si; si = si->next)
+		if	(si->member)
+			si->member->currentValue = pointer(si);
+	}
+
+unthreadInitializers:	() =
+	{
+	si:	ref structInitializerList;
+
+	for	(si = initializers; si; si = si->next)
+		if	(si->member)
+			si->member->currentValue = 0;
+	}
+
+display:	dynamic	(m: boolean) =
+	{
+	if	(base){
+		printf(" inherit ");
+		base display(m);
+		}
+	switch	(packing){
+	case	PM_PACKED:	printf(" packed");	break;
+	case	PM_UNION:	printf(" union");	break;
+		}
+	printf(" {");
+	if	(m){
+		printf("\n");
+		sym:	ref symbol_s;
+
+		for	(sym = symbols; sym; sym = sym->next){
+			sym display();
+			printf("\n");
+			}
+		}
+	printf("}");
+	}
+
+displayMessageFormat:	dynamic	() =
+	{
+	if	(name)
+		CurrentContext printf(" %S", name spelling());
+	if	(base){
+		CurrentContext printf(" inherit ");
+		base displayMessageFormat();
+		}
+	switch	(packing){
+	case	PM_PACKED:	CurrentContext printf(" packed");	break;
+	case	PM_UNION:	CurrentContext printf(" union");	break;
+		}
+	CurrentContext printf(" {}");
+	}
+
+constructValue:	dynamic	(s: ref scope_s) =
+	{
+	sym:	ref symbol_s;
+
+	if	(base)
+		base constructValue(s);
+	for	(sym = symbols; sym; sym = sym->next){
+		sym constructValue(FALSE);
+		if	(sym->qualifier & DQ_DYNAMIC)
+			checkDynamicEntry(sym);
+		if	(sym->dtype isGateFunction())
+			checkGateEntry(sym);
+		}
+	if	(dynamicVector)
+		dynamicVector constructVector(self);
+	if	(gateVector)
+		constructGateVector();
+	}
+
+constructGateVector:	() =
+	{
+	sz:	addr_t;
+
+	sz = gateCount * GATE_DESCR_SIZE + TYPE_DESCR_BASE_SIZE;
+	gateVector sizeValue(sz, VC_CONST);
+	gateVector depositInteger(64, 0, 4);
+	gateVector depositInteger(MESSAGE_FUNCTION_BASE, 4, 4);
+	gateVector depositInteger(gateCount, 10, 2);
+	i:	int;
+	offs:	addr_t;
+
+	offs = TYPE_DESCR_BASE_SIZE;
+	for	(i = 0; i < gateCount; i++, offs += GATE_DESCR_SIZE){
+		v:	ref value;
+
+		v = findGateEntry(i + MESSAGE_FUNCTION_BASE);
+		if	(v)
+			gateVector valueFixup(offs, v, 0);
+		gateVector depositInteger(~0, offs + 4, 4);
+		}
+	gateVector->dtype = self;
+	}
+
+checkDynamicEntry:	(m: ref symbol_s) =
+	{
+	oldm:	ref symbol_s;
+	x:	ref type_s;
+
+	if	(base == 0)
+		return;
+	x = base getType();
+	oldm = x lookupMember(m->name, x);
+	if	(oldm == 0 ||
+		 oldm->qualifier & DQ_DYNAMIC == 0)
+		return;
+	if	(!typeMatch(oldm->dtype, m->dtype)){
+/*
+		printf("oldm: ");
+		oldm->dtype display(TRUE);
+		printf("\n");
+		printf("   m: ");
+		m->dtype display(TRUE);
+		printf("\n");
+ */
+		CurrentContext->offset = m->offset;
+		CurrentContext->obj = m->enclosing;
+		CurrentContext errorX("ErrRedecl", m->name spelling(), "", 0);
+		reportType("\t   Base type:", oldm->dtype);
+		reportType("\tDerived type:", m->dtype);
+		}
+	}
+
+checkGateEntry:	(m: ref symbol_s) =
+	{
+	oldm:	ref symbol_s;
+	x:	ref type_s;
+
+	if	(base == 0)
+		return;
+	x = base getType();
+	oldm = x lookupMember(m->name, x);
+	if	(oldm == 0 ||
+		 !oldm->dtype isGateFunction())
+		return;
+	if	(!typeMatch(oldm->dtype, m->dtype)){
+/*
+		printf("oldm: ");
+		oldm->dtype display(TRUE);
+		printf("\n");
+		printf("   m: ");
+		m->dtype display(TRUE);
+		printf("\n");
+ */
+		CurrentContext->offset = m->offset;
+		CurrentContext->obj = m->enclosing;
+		CurrentContext errorX("ErrRedecl", m->name spelling(), "", 0);
+		}
+	}
+
+hasDynamicVector:	dynamic	() boolean =
+	{
+	if	(dynamicVector)
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+needsDynamicVectors:	dynamic	() boolean =
+	{
+	if	(dynamicVector ||
+		 gateVector)
+		return TRUE;
+
+	sym:	ref symbol_s;
+
+	if	(base &&
+		 base needsDynamicVectors())
+		return TRUE;
+	for	(sym = symbols; sym; sym = sym->next)
+		if	(sym->storageClass == SC_MEMBER &&
+			 sym->dtype &&
+			 sym->dtype needsDynamicVectors())
+			return TRUE;
+	return FALSE;
+	}
+
+hasConstructor:	dynamic	() boolean =
+	{
+	sym:		ref symbol_s;
+
+	for	(sym = symbols; sym; sym = sym->next){
+		if	(sym->name &&
+			 sym->name isSpelled("constructor")){
+			if	(sym->dtype->topType == T_FUNC)
+				return TRUE;
+			break;
+			}
+		}
+	if	(base &&
+		 base hasConstructor())
+		return TRUE;
+	return FALSE;
+	}
+
+hasDestructor:	dynamic	() boolean =
+	{
+	sym:		ref symbol_s;
+
+	for	(sym = symbols; sym; sym = sym->next){
+		if	(sym->name &&
+			 sym->name isSpelled("destructor")){
+			if	(sym->dtype->topType == T_FUNC)
+				return TRUE;
+			break;
+			}
+		}
+	if	(base &&
+		 base hasDestructor())
+		return TRUE;
+	return FALSE;
+	}
+
+dynamicOffset:	dynamic	() addr_t =
+	{
+	return vectorOffset / BYTEBITS;
+	}
+
+sizeOf:	dynamic	() addr_t =
+	{
+	return (bitSize + BYTEBITS - 1) / BYTEBITS;
+	}
+
+bitSizeOf:	dynamic	() addr_t =
+	{
+	return bitSize;
+	}
+
+alignmentOf:	dynamic	() addr_t =
+	{
+	return align;
+	}
+
+defaultInitializer:	dynamic	(fd: ref stream) =
+	{
+	if	(!needsDynamicVectors()){
+		fd printf("{0}");
+		return;
+		}
+	fd putc('{');
+	structInitializer(fd, self);
+	fd putc('}');
+	}
+
+structInitializer:	(fd: ref stream, st: ref struct_z) =
+	{
+	si:	ref structInitializerList;
+
+	buildInitializerList();
+	if	(base){
+		t:	ref struct_z;
+
+		t = ref struct_z(base getType());
+		t structInitializer(fd, st);
+		if	(initializers)
+			fd putc(',');
+		}
+	for	(si = initializers; si; si = si->next){
+		if	(si->member){
+			if	(si->member->dtype)
+				si->member->dtype getType() 
+						defaultInitializer(fd);
+			}
+		else	{
+			fd putc('&');
+			st cDynamicName(fd);
+			}
+		if	(si->next)
+			fd putc(',');
+		}
+	}
+
+outputHeaderPrefix:	dynamic	(fd: ref stream) =
+	{
+	sym:	ref symbol_s;
+
+	fd printf("struct ");
+	csourceName(fd);
+	fd putc(' ');
+	}
+
+emitStructTags:		dynamic	(fd: ref stream) =
+	{
+	if	(cDefined || cTagged)
+		return;
+	cTagged = TRUE;
+	fd printf("struct ");
+	csourceName(fd);
+	fd printf(";\n");
+	}
+
+emitNeededTypedefs:	dynamic	(fd: ref stream) =
+	{
+	sym:	ref symbol_s;
+
+	if	(cDefined)
+		return;
+	cDefined = TRUE;
+	if	(base)
+		base emitNeededTypedefs(fd);
+	for	(sym = symbols; sym; sym = sym->next){
+		if	(sym->storageClass == SC_MEMBER)
+			sym->dtype emitNeededTypedefs(fd);
+		}
+	if	(self == SymbolTable.varArgsType)
+		fd printf("#include <stdarg.h>\n");
+	fd printf("struct ");
+	csourceName(fd);
+	fd printf("{\n");
+	if	(self == SymbolTable.varArgsType)
+		fd printf("va_list args;\n");
+	else	{
+		if	(!declareInC(fd))
+			fd printf("char filler_0;\n");
+		}
+	fd printf("};");
+	if	(dynamicVector){
+		if	(getUnit() == Func->currentUnit){
+			for	(offset = 0; offset < vectorSize; 
+						offset += DYNFUNC_SIZE){
+				m = findVectorEntry(offset);
+				if	(m)
+					m emitNeededDeclaration(fd);
+				}
+			}
+		else	{
+			for	(offset = 0; offset < vectorSize; 
+						offset += DYNFUNC_SIZE){
+				m = findVectorEntry(offset);
+				if	(m)
+					m->dtype emitNeededTypedefs(fd);
+				}
+			}
+		fd printf("extern struct ");
+		cDynamicName(fd);
+		fd printf("{\n");
+
+		offset:	addr_t;
+		m:	ref symbol_s;
+
+		for	(offset = 0; offset < vectorSize; 
+						offset += DYNFUNC_SIZE){
+			d:	ref type_s;
+
+			m = findVectorEntry(offset);
+			if	(m){
+				m->dtype outputHeaderPrefix(fd);
+				fd printf("(*");
+				m outputHeaderName(fd);
+				fd putc(')');
+				m->dtype outputHeaderSuffix(fd, DQ_MEMBERFUNC, self);
+				fd printf(";\n");
+				}
+			else
+				fd printf("void *;\n");
+			}
+		fd putc('}');
+		cDynamicName(fd);
+		if	(getUnit() == Func->currentUnit){
+			fd printf("={");
+			for	(offset = 0; offset < vectorSize; 
+						offset += DYNFUNC_SIZE){
+				d:	ref type_s;
+
+				m = findVectorEntry(offset);
+				if	(m){
+					fd putc('(');
+					m->dtype outputHeaderPrefix(fd);
+					fd printf("(*)");
+					m->dtype outputHeaderSuffix(fd, 
+							DQ_MEMBERFUNC, self);
+					fd putc(')');
+					m outputHeaderName(fd);
+					fd printf(",\n");
+					}
+				else
+					fd printf("0,");
+				}
+			fd putc('}');
+			}
+		fd printf(";\n");
+		}
+	}
+
+countValues:	dynamic	() int =
+	{
+	vCount:		int;
+
+	vCount = super countValues();
+	if	(dynamicVector)
+		vCount += dynamicVector countRelated();
+	if	(gateVector)
+		vCount += gateVector countRelated();
+	return vCount;
+	}
+
+enumerateValues:	dynamic	() =
+	{
+	super enumerateValues();
+	if	(dynamicVector)
+		dynamicVector enumerateValues();
+	if	(gateVector)
+		gateVector enumerateValues();
+	}
+
+staticInitializer:	dynamic	(x: ref tree_p, s: ref scope_s) ref tree_p =
+	{
+	if	(x == 0)
+		return x;
+	if	(x->operator != O_SCONST){
+		CurrentContext error("ErrBadInit");
+		return ErrorTree;
+		}
+	x->dtype = self;
+	a:	ref ref tree_p;
+
+	a = checkBaseClasses(&ref sconst_x(x)->components, s);
+	if	(a){
+		if	(*a == ErrorTree)
+			return *a;
+		CurrentContext error("ErrTooManyInit");
+		return ErrorTree;
+		}
+	return x;
+	}
+
+checkBaseClasses:	(xp: ref ref tree_p, s: ref scope_s) ref ref tree_p =
+	{
+	sym:		ref symbol_s;
+
+	for	(sym = symbols; sym; sym = sym->next){
+		if	(sym->name &&
+			 sym->name isSpelled("constructor")){
+			if	(sym->dtype->topType == T_FUNC){
+				CurrentContext error("ErrBadInit");
+				*xp = ErrorTree;
+				return 0;
+				}
+			break;
+			}
+		}
+
+		// Check the base class initializer
+
+	if	(base){
+		sup:	ref type_s;
+
+		sup = base getType();
+
+				// structure base classes use special init code
+
+		if	(sup->topType == T_STRUCT)
+			xp = ref struct_z(sup) checkBaseClasses(xp, s);
+		else	{	// must be an error
+			*xp = ErrorTree;
+			return 0;
+			}
+		}
+	if	(xp == 0 || *xp == 0)
+		return 0;
+
+	a:	ref tree_p;
+
+	for	(sym = symbols; sym; sym = sym->next){
+
+			/* Skip member functions and static members */
+
+		if	(sym->storageClass != SC_MEMBER)
+			continue;
+		if	(sym->name == 0)
+			continue;
+
+			// If the member is private, then allow a static
+			// initializer of a private member only for objects
+			// defined inside the type itself.  This should be
+			// a rare case.
+
+		if	(sym->visibility == V_PRIVATE &&
+			 !encloses(s))
+			continue;
+
+		mt:		ref type_s;
+
+		mt = sym->dtype;
+		if	(mt == 0 ||
+			 mt->topType == T_ERROR){
+			*xp = ErrorTree;
+			return 0;
+			}
+		mt = mt getType();
+
+		a = *xp;
+		if	(a->operator == O_ARG){
+			b:	ref argument_x;
+
+			b = ref argument_x(a);
+			b->left = mt staticInitializer(b->left, s);
+			if	(b->right == 0)
+				return 0;
+			xp = &b->right;
+			}
+		else	{
+			*xp = mt staticInitializer(a, s);
+			return 0;
+			}
+		}
+	return xp;
+	}
+
+	};
+
+structInitializerList:	type	{ public:
+	next:		ref structInitializerList;
+	initializer:	ref tree_p;
+	member:		ref symbol_s;
+	};

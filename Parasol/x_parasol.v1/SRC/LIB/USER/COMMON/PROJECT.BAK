@@ -1,0 +1,153 @@
+include	filesys, alys, editor, window, environ, file, console;
+/*
+	A project is used for these things:
+
+		controlling builds
+		organizing documentation
+		browsing sources
+		maintaining version control
+
+	A project has a static description and a dynamic state.  The
+	static description is implemented as the project object.  The dynamic
+	state is implemented as the session object.
+
+	Image files are used for saving both projects and sessions.  This
+	way, the window states can be saved by using the expanded notions of
+	image files that use compiler assistance.
+ */
+MainMenu, FileMenu, ProjectMenu, OptionMenu, ViewMenu, WindowMenu:	menu;
+
+main:	entry	() =
+	{
+	mainExternal(&ProjectViewer);
+/*
+	if	(ArgumentCount == 0){
+		printf("Project Version 0.01 use is: PROJECT\n");
+		exit(0);
+		}
+ */
+	MainMenu submenu("File", &FileMenu);
+//	MainMenu submenu("View", &ViewMenu);
+	MainMenu submenu("Project", &ProjectMenu);
+//	MainMenu submenu("Options", &OptionMenu);
+//	MainMenu submenu("Window", &WindowMenu);
+
+	FileMenu button("Edit file...      F3", &editFile, 0);
+	FileMenu button("Shell", 	    &launchShell, 0);
+	FileMenu button("Quit           Alt-X", &shutDown, 0);
+
+	ProjectMenu button("New...", &newProject, 0);
+	ProjectMenu button("Open...", &openProject, 0);
+	ProjectMenu line(10);
+	ProjectMenu button("Make all", &makeProject, &ProjectLoaded);
+	ProjectMenu button("Build all", &buildProject, &ProjectLoaded);
+	esp:	ref projectWindow;
+
+	esp = new projectWindow[ "Untitled", "Untitled", [ 50, 3 ], 
+						WB_APPLICATION, &MainMenu ];
+	esp->minimumSize = esp->maximumSize = esp->box.size;
+//	esp setBorder(WB_DBL_TOP);
+//	esp->color = WHITE;
+//	esp->borderColor = BLUE;
+//	esp->titleColor = COLOR(HIGH|WHITE, BLACK);
+//	esp setScrap(&Scrap);
+	ProjectWindow = esp;
+	ProjectViewer = [ esp ];
+	esp zoom(WZ_NORMAL);
+
+//	GlobalMap defineFunction("editfile", "Open file editor",  &startSession, F3);
+
+	ProjectViewer loop();
+	}
+
+ProjectLoaded:	boolean;
+ProjectViewer:	inputHandler;
+ProjectWindow:	ref projectWindow;
+
+projectWindow:	type	inherit shell {
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	switch	(k){
+/*
+	case	CTRL_C:
+	case	CTRL_BREAK:
+		MyJob broadcastAttention();
+		break;
+ */
+	case	F3:
+		editFile(self);
+		break;
+
+	default:
+		return super processKeystroke(k);
+		}
+	return TRUE;
+	}
+
+closeApplication:	dynamic	() =
+	{
+	shutDown(self);
+	}
+
+redraw:	dynamic	() =
+	{
+//	clear();
+	}
+
+	};
+
+newProject:	(ref window) =
+	{
+	}
+
+openProject:	(ref window) =
+	{
+	}
+
+makeProject:	(ref window) =
+	{
+	}
+
+buildProject:	(ref window) =
+	{
+	}
+
+editFile:	(w: ref window) =
+	{
+	}
+
+shutDown:	(w: ref window) =
+	{
+	exit(0);
+	}
+
+launchShell:	(w: ref window) =
+	{
+	cmd:		[:] char;
+	lookup:		pathList;
+	shell:		[MAXPATH] char;
+	s:		[:] char;
+	p:		ref far external;
+
+	s = shell;
+	try
+		s [:]= Environment get("COMSPEC");
+	except	{
+		w getShell() postMessage("COMSPEC not defined - should name the shell");
+		return;
+		}
+	lookup useEnvironment("PATH");
+	cmd = lookup search("session.run", 0);
+	if	(|cmd == 0){
+		w getShell() postMessage("session not found");
+		return;
+		}
+	try	{
+		p = FileSystem spawn(0, cmd, s);
+		disown(p);
+		}
+	except	{
+		w getShell() postMessage("session spawn failed");
+		}
+	}

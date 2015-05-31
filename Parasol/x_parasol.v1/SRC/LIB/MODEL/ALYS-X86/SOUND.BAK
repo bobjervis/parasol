@@ -1,0 +1,16 @@
+
+speaker:	public	type	inherit external {
+	public:
+
+play:	gate	(notes: [:] note_t);
+
+pause:	gate	(sense: boolean);
+
+clear:	gate	();
+
+	};
+
+note_t:	public	type	packed	{ public:
+	divisor:	unsigned[16];
+	duration:	unsigned[16];		// in ticks
+	};

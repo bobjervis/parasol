@@ -1,0 +1,476 @@
+include	file;
+include	sbuffer;
+include	hash;
+include	pretarg;
+include	errmsg;
+include	string;
+
+tokenNames:	public	type	byte =	{
+
+		/* Punctuation */
+
+	EOF_TOK,			/* End of file token */
+	LP,				/* ( */
+	RP,				/* ) */
+	CO,				/* : */
+	CM,				/* , */
+
+		/* Operators */
+
+	ADD,				/* + */
+	SUB,				/* - */
+	MUL,				/* * */
+	DIV,				/* / */
+	MOD,				/* % */
+	AND,				/* & */
+	OR,				/* | */
+	XOR,				/* ^ */
+	LSH,				/* << */
+	RSH,				/* >> */
+	QUES,				/* ? */
+	LOR,				/* || */
+	LAND,				/* && */
+	EQ,				/* == */
+	NE,				/* != */
+	LT,				/* < */
+	GT,				/* > */
+	LE,				/* <= */
+	GE,				/* >= */
+	NOT,				/* ! */
+	COM,				/* ~ */
+
+		/* Multi-component tokens */
+
+	DEFINED,			/* defined */
+	ID,				/* normal identifier */
+	ICON,				/* integer constant */
+
+	lastToken
+	};
+/*
+	This function returns the precedence of the operator token passed
+	as an argument.  Note that if the token is not a binary operator,
+	the function returns zero.  Precedences range from 1 through 14
+	(varying from comma to multiply/divide/remainder).  A higher
+	numerical value indicates a higher precedence.
+ */
+precedence:	public	(t: tokenNames) int =
+	{
+	if	(t >= CM &&
+		 t <= GE)
+		return Prec[t - CM];
+	else
+		return 0;
+	}
+
+Prec:	[] char = [
+	1,					/* CM */
+	13,					/* ADD */
+	13,					/* SUB */
+	14,					/* MUL */
+	14,					/* DIV */
+	14,					/* MOD */
+	9,					/* AND */
+	7,					/* OR */
+	8,					/* XOR */
+	12,					/* LSH */
+	12,					/* RSH */
+	3,					/* QUES */
+	5,					/* LOR */
+	6,					/* LAND */
+	9,					/* EQ */
+	9,					/* NE */
+	10,					/* LT */
+	10,					/* GT */
+	10,					/* LE */
+	10,					/* GE */
+	];
+
+tokenStream:	public	type	{
+	public:
+
+	text:	ref char;
+
+constructor:	(cp: ref char) =
+	{
+	text = cp;
+	Backup = 0;
+	}
+
+getc:	() int =
+	{
+	return *text++;
+	}
+
+ungetc:	() =
+	{
+	text--;
+	}
+/*
+ *	FUNCTION:	scan
+ *
+ *	DESCRIPTION:
+ *		This function returns a stream of tokens.
+ */
+scan:	() tokenNames =
+	{
+	nxtc:	int;
+	ntype:	int;
+	a:	int;
+	cp:	ref char;
+	s:	[:] char;
+
+	if	(Backup){
+		Backup = 0;
+		return Token.lex;
+		}
+	for	(;;){
+		nxtc = getc();
+		ntype = CharacType[nxtc];
+		switch	(ntype){
+		case	A_LET:
+		        cp = text - 1;
+			do
+				nxtc = getc();
+				while	(CharacType[nxtc] == A_LET ||
+					 CharacType[nxtc] == A_DIG);
+		        ungetc();
+			s = cp[:text - cp];
+			if	(stringCompare(s, "defined") == 0)
+				Token.lex = DEFINED;
+			else	{
+				Token.lex = ID;
+				Token.iden = identifier create(s);
+				}
+			return Token.lex;
+
+		default:
+			return Token.lex = ntype;
+
+		case	A_ILL:
+			error(ErrBadChar, nxtc, nxtc);
+			break;
+
+		case	A_SKP:
+			break;
+
+		case	A_EQ:
+		case	A_EXC:
+		case	A_PCT:
+		case	A_AMP:
+		case	A_AST:
+		case	A_PLS:
+		case	A_UP:
+		case	A_BAR:
+		case	A_LT:
+		case	A_GT:
+			a = getc();
+			if	(Dbltok[ntype - A_EXC] && a == nxtc)
+				Token.lex = Dbltok[ntype - A_EXC];
+			else if	(a == '=')
+				Token.lex = Asgtok[ntype - A_EXC];
+			else	{
+				if	(a != EOF_MARK)
+					ungetc();
+				Token.lex = Sintok[ntype - A_EXC];
+				}
+			return Token.lex;
+
+		case	A_DIG:
+			number(nxtc);
+			return Token.lex = ICON;
+
+		case	A_APO:
+			getcc();
+			return Token.lex = ICON;
+			}
+		}
+	}
+
+mapc:	(delim: char) int =
+	{
+	c:		int;
+
+	for	(;;){
+		c = getc();
+		if	(c == EOF_MARK ||
+			 c == '\n'){
+			ust();
+			return -1;
+			}
+		if	(c == delim)
+			return -1;
+		else if	(c != '\\')
+			return c;
+		c = getc();
+		switch	(c){
+		case	EOF_MARK:
+		case	'\n':
+			ust();
+			return -1;
+
+		default:
+			error(ErrBadEscape, c, c);
+			return c;
+
+		case	'a':	return('\a');
+		case	't':	return('\t');
+		case	'n':	return('\n');
+		case	'b':	return('\b');
+		case	'r':	return('\r');
+		case	'f':	return('\f');
+		case	'v':	return('\v');
+		case	'\'':	return('\'');
+		case	'"':	return('"');
+		case	'\\':	return('\\');
+		case	'0':	return('\0');
+		case	'x':
+			overflow:	boolean = FALSE;
+			i:		int;
+			digs:		int;
+
+			c = getc();
+			if	(!isxdigit(c)){
+				ungetc();
+				error(ErrBadEscape, 'x', 'x');
+				return 'x';
+				}
+			for	(i = 0, digs = 1;; digs++){
+				i <<= 4;
+				if	(isdigit(c))
+					i += c - '0';
+				else
+					i += tolower(c) - 'a' + 10;
+				if	(!integerFits(i, CHARBITS))
+					overflow = TRUE;
+				c = getc();
+				if	(!isxdigit(c)){
+					ungetc();
+					if	(overflow)
+						error(ErrNumLarge);
+					else if	(digs > MAXHDIGS)
+						warn(WarnHexTooBig);
+					return i;
+					}
+				}
+			}
+		}
+	}
+
+/*
+ *	FUNCTION:	unscan
+ *
+ *	DESCRIPTION:
+ *		This function backs up the scan pointer so that the next
+ *		call to scan will return the same token again.
+ */
+unscan:	() =
+	{
+	Backup = 1;
+	}
+
+number:	(i: char) =
+	{
+	bigDigits:	boolean;
+	radix:		int;
+
+	bigDigits = FALSE;
+	if	(i == '0'){
+		i = getc();
+		if	(i == 'x' || i == 'X'){
+			i = getc();
+			radix = HEX_CON;
+			}
+		else
+			radix = OCTAL_CON;
+		}
+	else
+		radix = DECIMAL_CON;
+	Token.icon = 0;
+	for	(;; i = getc()){
+		i = tolower(i);			// ignore upper case distinctions
+		if	(CharacType[i] == A_DIG){
+			if	(i >= '8')
+				bigDigits = TRUE;
+			Token.icon = Token.icon * radix + (i - '0');
+			}
+		else if	(i == '.')
+			radix = FLOAT_CON;
+		else if	(i == 'e'){
+			if	(radix == HEX_CON){
+				Token.icon = Token.icon * radix + 14;
+				continue;
+				}
+			radix = FLOAT_CON;
+			i = getc();
+			if	(i == '-' || i == '+')
+				i = getc();
+			if	(CharacType[i] != A_DIG){
+				error(ErrBadNumber);
+				ungetc();
+				break;
+				}
+			}
+		else if	(i >= 'a' && i <= 'd'){
+			if	(radix != HEX_CON){
+				ungetc();
+				break;
+				}
+			Token.icon = Token.icon * radix + (i - 'a');
+			}
+		else if	(i == 'f'){
+			if	(radix != HEX_CON){
+				radix = FLOAT_CON;
+				break;
+				}
+			Token.icon = Token.icon * radix + 15;
+			}
+		else if	(i == 'l'){
+			if	(radix == FLOAT_CON)
+				break;
+			i = getc();
+			if	(i != 'u' && i != 'U')
+				ungetc();
+			break;
+			}
+		else if	(i == 'u'){
+			if	(radix == FLOAT_CON){
+				ungetc();
+				break;
+				}
+			i = getc();
+			if	(i != 'l' && i != 'L')
+				ungetc();
+			break;
+			}
+		else	{
+			ungetc();
+			break;
+			}
+		}
+	if	(radix == OCTAL_CON &&
+		 bigDigits)
+		error(ErrNotOctalDigit);
+	else if	(radix == FLOAT_CON)
+		error(ErrFloat);
+	}
+
+getcc:	() =
+	{
+	i:	int;
+	c:	int;
+	u:	union	{
+		public:
+
+		cx:	[CCLEN] char;
+		y:	long;
+		};
+
+	u.y = 0;
+	for	(i = 0; ; i++){
+		c = mapc('\'');
+		if	(c == -1)
+			break;
+		if	(i < CCLEN)
+			u.cx[i] = c;
+		}
+	if	(i > CCLEN)
+		error(ErrCConstLong);
+	if	(i == 1)
+		Token.icon = u.cx[0];
+	else
+		Token.icon = integerConstant(u.y, -INTBITS);
+	}
+
+private:
+
+Backup:		int;
+
+	};
+
+FLOAT_CON:	const	int = 0;
+OCTAL_CON:	const	int = 8;
+DECIMAL_CON:	const	int = 10;
+HEX_CON:	const	int = 16;
+
+	/* These are the tokens returned by the scanner */
+
+Sintok:	[] tokenNames = [ NOT, MOD,  AND, MUL, ADD, XOR,  OR,   0,  LT,  GT ];
+Asgtok:	[] tokenNames = [  NE,   0,    0,   0,   0,   0,   0,  EQ,  LE,  GE ];
+Dbltok:	[] tokenNames = [   0,   0, LAND,   0,   0,   0, LOR,  EQ, LSH, RSH ];
+
+Token:	public	{
+	public:
+	lex:		tokenNames;
+	offset:		fileOffset;
+	icon:		unsignedLong;
+	iden:		ref identifier;
+	};
+
+tokenClasses:	type	byte = {
+	A_SKP = lastToken,
+	A_EXC,
+	A_PCT,
+	A_AMP,
+	A_AST,
+	A_PLS,
+	A_UP,
+	A_BAR,
+	A_EQ,
+	A_LT,
+	A_GT,
+	A_LET,
+	A_DIG,
+	A_APO,
+	A_ILL,
+	};
+
+CharacType:	[] tokenClasses = [
+	EOF_TOK,A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_SKP,	A_SKP,	A_SKP,	A_SKP,	A_SKP,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+
+	A_SKP,	A_EXC,	A_ILL,	A_ILL,	A_ILL,	A_PCT,	A_AMP,	A_APO,
+	LP,	RP,	A_AST,	A_PLS,	CM,	SUB,	A_ILL,	DIV,
+	A_DIG,	A_DIG,	A_DIG,	A_DIG,	A_DIG,	A_DIG,	A_DIG,	A_DIG,
+	A_DIG,	A_DIG,	CO,	A_ILL,	A_LT,	A_EQ,	A_GT,	QUES,
+
+	A_ILL,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,
+	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,
+	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,
+	A_LET,	A_LET,	A_LET,	A_ILL,	A_ILL,	A_ILL,	A_UP,	A_LET,
+
+	A_ILL,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,
+	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,
+	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,
+	A_LET,	A_LET,	A_LET,	A_ILL,	A_BAR,	A_ILL,	COM,	A_ILL,
+
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	];
+
+MAXHDIGS:	const int = ((CHARBITS + 3) / 4);
+
+ust:	() = 
+	{
+	error(ErrStringNoTerm);
+	}
+

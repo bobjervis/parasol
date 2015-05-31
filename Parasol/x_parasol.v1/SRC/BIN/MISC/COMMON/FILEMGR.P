@@ -1,0 +1,1356 @@
+include	edserver;
+include	string;
+include	filesys;
+include	error;
+include	console, window;
+include	treeview;
+include	format;
+include	alys;
+include	file, time;
+include	editor;
+
+ExtensionTable:	[] { public:
+	spelling:	[:] char;
+	launch:		ref ([:] char) boolean;
+	} = [
+	[ ".p",		&extensionLaunch ],
+	[ ".c",		&extensionLaunch ],
+	[ ".h",		&extensionLaunch ],
+	[ ".dmp",	&extensionLaunch ],
+	[ ".map",	&extensionLaunch ],
+	[ ".txt",	&extensionLaunch ],
+	[ ".bak",	&extensionLaunch ],
+	[ ".bat",	&extensionLaunch ],
+	[ ".prj",	&builderLaunch ],
+	[ ".run",	&runLaunch ],
+	[ ".exe",	&runLaunch ],
+	[ ".com",	&runLaunch ],
+	];
+
+mainSetup:	entry	() =
+	{
+	arg:	[:] char;
+	i:	int;
+	x:	unsigned;
+
+	if	(|commandLine.arguments > 1){
+		printf("FILEMGR Version 2.0\n");
+		printf("Use is: filemgr [ path ]\n");
+		exit(1);
+		}
+	if	(|commandLine.arguments == 1)
+		arg = commandLine.arguments[0];
+	else
+		arg = ".";
+
+	MkdirData = stringDup("");
+	CopyData = stringDup("");
+	MoveData = stringDup("");
+
+	FileBuffer = new fileBuffer[ arg ];
+	Display = new display[ ];
+	Display configure([ 42, 30 ]);
+	Display open();
+	}
+
+Display:	ref display;
+
+display:	type	inherit	applicationShell	{
+	public:
+
+	files:	ref treeEditor;
+
+constructor:	() =
+	{
+	m:		ref menubar;
+	file, opt:	ref popupMenu;
+	sm:		ref pulldownMenu;
+
+	super constructor(FileBuffer->path);
+	iconLabel("file-mgr", C_TITLE);
+	useFooter();
+	m = new menubar[];
+	setMenu(m);
+
+	file = new popupMenu[ m ];
+	file button("Edit File...          F3",	'e', [ self, &startTextEdit ]);
+	file button("Copy...           Ctrl-C",	'c', [ self, &copyFiles ]);
+	file button("Delete            Ctrl-D",	'd', [ self, &deleteFiles ]);
+	file button("Move...           Ctrl-M",	'm', [ self, &moveFiles ]);
+	file button("Rename            Ctrl-R",	'r', [ self, &renameFile ]);
+	file button("New Directory...",		'n', [ self, &newDirec ]);
+	file line();
+	file button("OS-Shell              F6",	'o', [ self, &launchShell ]);
+	file button("Builder		   F9", 'b', [ self, &launchBuilder ]);
+	file button("Rescan Directory  Ctrl-F",	's', [ self, &filterDirectory ]);
+	file button("Exit               Alt-X",	'x', [ self, &closeApplication ]);
+
+	opt = new popupMenu[ m ];
+	opt toggle("Listing Detail",		'l', [ self, &listDetail ])
+			setValue(ListDetail, FALSE);
+	opt toggle("Sort By Date",		's', [ self, &dateSort ]);
+
+	m pulldown("File", 			'f', file);
+	m pulldown("Options", 			'o', opt);
+
+	files = new treeEditor[ FileBuffer ];
+	anchor(files);
+	files setTextFocus();
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	switch	(k){
+	case	F6:		launchShell();			break;
+	case	INS:		markEntry();			break;
+	case	CTRL_F:		filterDirectory();		break;
+	case	CTRL_C:		copyFiles();			break;
+	case	CTRL_D:		deleteFiles();			break;
+	case	CTRL_X:
+	case	CTRL_M:		moveFiles();			break;
+	case	CTRL_R:		renameFile();			break;
+	case	F3:		startTextEdit();		break;
+	default:
+		return super processKeystroke(k);
+		}
+	return TRUE;
+	}
+
+startTextEdit:	() =
+	{
+	FileBuffer editText(files->cursor);
+	}
+
+copyFiles:	() =
+	{
+	files copyFiles();
+	}
+
+deleteFiles:	() =
+	{
+	files deleteLine();
+	}
+
+moveFiles:	() =
+	{
+	files moveFiles();
+	}
+
+renameFile:	() =
+	{
+	files renameFile();
+	}
+
+newDirec:	() =
+	{
+	new mkdirForm[ ];
+	}
+
+filterDirectory:	() =
+	{
+	files refresh();
+	}
+
+launchShell:	() =
+	{
+	i:	int;
+	pid:	ref far External;
+	lookup:	PathList = [];
+	cmd:	[:] char;
+	path:	[:] char;
+
+	path = FileBuffer getPath();
+	FileSystem setCurrentDirectory(path);
+	lookup useEnvironment("PATH");
+	cmd = lookup search("session", ".run", 0);
+	if	(|cmd == 0){
+		postFooter("Couldn't find command 'session.run'");
+		return;
+		}
+	pid = FileSystem spawn(0, cmd, "shell");
+	if	(pid == 0){
+		postFooter("Can't spawn 'session.run'");
+		return;
+		}
+	disown(pid);
+	}
+
+launchBuilder:	() =
+	{
+	i:	int;
+	pid:	ref far External;
+	lookup:	PathList = [];
+	cmd:	[:] char;
+	path:	[:] char;
+
+	path = FileBuffer getPath();
+	FileSystem setCurrentDirectory(path);
+	lookup useEnvironment("PATH");
+	cmd = lookup search("builder", ".run", 0);
+	if	(|cmd == 0){
+		postFooter("Couldn't find command 'builder.run'");
+		return;
+		}
+	pid = FileSystem spawn(0, cmd, "");
+	if	(pid == 0){
+		postFooter("Can't spawn '%S'", cmd);
+		return;
+		}
+	disown(pid);
+	return;
+	}
+
+markEntry:	() =
+	{
+	files markEntry();
+	}
+
+listDetail:	(b: boolean) =
+	{
+	ListDetail = b;
+	redraw();
+	}
+
+dateSort:	(b: boolean) =
+	{
+	DateSort = b;
+	files refresh();
+	redraw();
+	}
+
+	};
+
+ListDetail:	boolean = TRUE;
+DateSort:	boolean = FALSE;
+
+FileBuffer:	ref fileBuffer;
+
+fileBuffer:	type	inherit	treeBuffer {
+	firstFile:	ref fileEntry;
+	lastFile:	ref fileEntry;
+	current:	ref fileEntry;
+	currentLine:	int;
+	entryCount:	int;
+	renameTypein:	ref renameField;
+
+	visible:
+
+	path:		[:] char;
+
+	public:
+
+constructor:	(p: [:] char) =
+	{
+	path = stringDup(p);
+	collectFiles(p);
+	renameTypein = 0;
+	}
+
+collectUpDirectory:	() =
+	{
+	cp:	[:] char;
+
+	cp = stringDup(stripDirectory(path));
+	collectFiles("..");
+	Display->files resetEditor();
+	Display->files gotoTag(cp);
+	delete cp;
+	}
+
+collectFiles:	(filename: [:] char) =
+	{
+	ff:	finder;
+	l:	ref fileEntry;
+	fabs:	[:] char;
+
+	firstFile = 0;
+	lastFile = 0;
+	entryCount = 0;
+	currentLine = 0;
+	current = 0;
+	fabs = constructFilename(filename);
+	delete path;
+	path = stringDup(fabs);
+	if	(ff open(fabs, "*", FA_DIR|FA_HIDDEN|FA_SYSTEM|FA_NETNODE) != SUCCESS){
+		Display postFooter("Couldn't scan directory");
+		Display->files resetEditor();
+		return;
+		}
+
+		/* Copy the directory part of the path */
+
+	while	(ff next() == SUCCESS)
+		logEntry(&ff);
+	ff close();
+	current = firstFile;
+	if	(Display)
+		Display newTitle(path);
+	}	
+
+constructFilename:	(p: [:] char) [:] char =
+	{
+	fbuf:	[MAXPATH] char;
+	fbuf2:	[MAXPATH] char;
+	fpath:	[:] char;
+	fabs:	[:] char;
+
+	if	(|p && p[0] == '/')
+		fpath = p;
+	else
+		fpath = makePath(fbuf, path, p, "");
+	fabs = fbuf2;
+	fabs [:]= FileSystem getAbsolutePath(fpath);
+	return stringDup(fabs);
+	}
+
+logEntry:	(ff: ref finder) =
+	{
+	i:	int;
+	l:	ref fileEntry;
+	cp:	[:] char;
+
+	cp = stripDirectory(ff->pathname);
+	if	(stringCompare(cp, ".") == 0)
+		return;
+	l = fileEntry create(cp, ff->attrib, ff->ftime, ff->size);
+	if	(lastFile){
+		x:	ref fileEntry;
+		sav:	boolean;
+
+		sav = DateSort;
+		DateSort = FALSE;
+		for	(x = firstFile; x; x = x->next){
+			if	(x compare(l) == 0){
+				x->attrib = ff->attrib;
+				x->ftime = ff->ftime;
+				x->size = ff->size;
+				DateSort = sav;
+				delete l;
+				return;
+				}
+			}
+		DateSort = sav;
+		for	(x = firstFile; x; x = x->next){
+			if	(x compare(l) > 0)
+				break;
+			}
+		if	(x){
+			l->next = x;
+			l->prev = x->prev;
+			if	(x->prev)
+				x->prev->next = l;
+			else
+				firstFile = l;
+			x->prev = l;
+			entryCount++;
+			}
+		else	{
+			l->prev = lastFile;
+			lastFile->next = l;
+			lastFile = l;
+			entryCount++;
+			}
+		}
+	else	{
+		firstFile = l;
+		lastFile = l;
+		entryCount = 1;
+		}
+	}
+
+getPath:	() [:] char =
+	{
+	return path;
+	}
+
+close:	dynamic	() =
+	{
+	l:	ref fileEntry;
+	v:	pointer;
+
+	l = firstFile;
+	while	(l){
+		v = l;
+		l = l->next;
+		delete v;
+		}
+	firstFile = 0;
+	lastFile = 0;
+	entryCount = 0;
+	currentLine = 0;
+	current = 0;
+	}
+
+refresh:	dynamic	(lin: int) boolean =
+	{
+	close();
+	collectFiles(".");
+	seek(lin);
+	return TRUE;
+	}
+
+seek:	dynamic	(line: int) int =
+	{
+	if	(line < 0)
+		return currentLine;
+	if	(currentLine > line){
+		while	(currentLine > line && current){
+			current = current->prev;
+			currentLine--;
+			}
+		if	(current == 0){
+			current = firstFile;
+			currentLine = 0;
+			}
+		}
+	else if	(currentLine < line){
+		while	(currentLine < line && current){
+			current = current->next;
+			currentLine++;
+			}
+		if	(current == 0){
+			current = lastFile;
+			if	(current)
+				currentLine = entryCount - 1;
+			else
+				currentLine = 0;
+			}
+		}
+	return currentLine;
+	}
+
+seekSibling:	dynamic	(srch: [:] char) int =
+	{
+	i:	int;
+	l:	ref fileEntry;
+
+	for	(i = 0, l = firstFile; l; l = l->next, i++)
+		if	(stringCompare(l->path, srch) == 0){
+			current = l;
+			currentLine = i;
+			break;
+			}
+	return currentLine;
+	}
+
+markEntry:	dynamic	() =
+	{
+	if	(current &&
+		 current->attrib & FA_DIR == 0)
+		current->marked = !current->marked;
+	}
+
+isMarked:	dynamic () boolean =
+	{
+	if	(current)
+		return current->marked;
+	else
+		return FALSE;
+	}
+
+editText:	dynamic	(lin: int) =
+	{
+	f:	[:] char;
+
+	seek(lin);
+	f = constructFilename(current->path);
+	new startForm[ Display, f ];
+	delete f;
+	}
+
+copyFiles:	dynamic	(lin: int) =
+	{
+	l:	ref fileEntry;
+	i:	int;
+
+	seek(lin);
+	for	(l = firstFile, i = 0; l; l = l->next)
+		if	(l->marked)
+			i++;
+	if	(i == 0){
+		if	(current){
+			if	(current->attrib & FA_DIR)
+				return;	// can't copy directories
+			}
+		else	{
+			super copyFiles(lin);
+			return;
+			}
+		}
+	new copyForm[ ];
+	}
+
+performCopies:	(target: [:] char) =
+	{
+	l:	ref fileEntry;
+	lx:	ref fileEntry;
+	i:	int;
+	lin:	int;
+
+	lin = seek(-1);
+	for	(l = firstFile, lx = 0, i = 0; l; l = l->next)
+		if	(l->marked){
+			i++;
+			lx = l;
+			}
+	if	(i == 0){
+		if	(current){
+			if	(current->attrib & FA_DIR)
+				return;		// can't copy directories
+			i = 1;
+			lx = current;
+			}
+		else
+			return;
+		}
+
+	fs:	file_t;
+
+	target = constructFilename(target);
+	try	{
+		fs = FileSystem stat(target);
+		if	(fs isValid() &&
+			 fs.attributes & FA_DIR){
+			if	(i == 1)
+				copyToDirectory(lx, target);
+			else	{
+				for	(l = firstFile; l; l = l->next)
+					if	(l->marked &&
+						 !copyToDirectory(l, target))
+						break;
+				}
+			Display->files refresh();
+			}
+		else if (i == 1){
+			cp:	[:] char;
+
+			cp = constructFilename(lx->path);
+			i = copyFile(target, cp);
+			if	(i)
+				Display postFooter("Copy %S to %S failed: %S",
+						lx->path, 
+						target, cmdError(i));
+			else
+				lx->marked = FALSE;
+			delete cp;
+			Display->files refresh();
+			}
+		else
+			Display postFooter("Can only copy one file here");
+		}
+	except	{
+		Display postFooter("Can't copy to '%S'", CopyData);
+		}
+	delete target;
+	}
+
+moveFiles:	dynamic	(lin: int) =
+	{
+	l:	ref fileEntry;
+	i:	int;
+
+	seek(lin);
+	for	(l = firstFile, i = 0; l; l = l->next)
+		if	(l->marked)
+			i++;
+	if	(i == 0){
+		if	(current){
+			if	(current->attrib & FA_DIR)
+				return;		// can't move directories
+			}
+		else	{
+			super moveFiles(lin);
+			return;
+			}
+		}
+	new moveForm[ ];
+	}
+
+performMoves:	(target: [:] char) =
+	{
+	l:	ref fileEntry;
+	lx:	ref fileEntry;
+	i:	int;
+	lin:	int;
+
+	lin = seek(-1);
+	for	(l = firstFile, lx = 0, i = 0; l; l = l->next)
+		if	(l->marked){
+			i++;
+			lx = l;
+			}
+	if	(i == 0){
+		if	(current){
+			if	(current->attrib & FA_DIR)
+				return;	// can't move directories
+			i = 1;
+			lx = current;
+			}
+		else	{
+			super moveFiles(lin);
+			return;
+			}
+		}
+	fs:	file_t;
+
+	target = constructFilename(target);
+	try	{
+		fs = FileSystem stat(target);
+		if	(fs isValid() &&
+			 fs.attributes & FA_DIR){
+			if	(i == 1)
+				moveToDirectory(lx, target);
+			else	{
+				for	(l = firstFile; l; l = l->next)
+					if	(l->marked &&
+						 !moveToDirectory(l, target))
+						break;
+				}
+			}
+		else if	(i == 1){
+			i = FileSystem move(lx->path, target);
+			if	(i)
+				Display postFooter("Move %S to %S failed: %S", 
+						lx->path, target, 
+						cmdError(i));
+			else
+				lx->marked = FALSE;
+			Display->files refresh();
+			}
+		else
+			Display postFooter("Can only move one file here");
+		}
+	except	{
+		Display postFooter("Can't move to '%S'", MoveData);
+		}
+	delete target;
+	}
+
+deleteFiles:	dynamic	(lin: int) =
+	{
+	l:	ref fileEntry;
+	lx:	ref fileEntry;
+	i:	int;
+	j:	int;
+
+	for	(l = firstFile, i = 0; l; l = l->next)
+		if	(l->marked)
+			i++;
+	if	(i == 0){
+		seek(lin);
+		if	(current){
+			if	(current->attrib & FA_DIR){
+				new deleteDirectoryConfirm[ current->path, 
+									lin ];
+				return;
+				}
+			i = 1;
+			}
+		else	{
+			super deleteFiles(lin);
+			return;
+			}
+		}
+	if	(i == 1)
+		new deleteFilesConfirm[ Display, "Delete this file?" ];
+	else
+		new deleteFilesConfirm[ Display, "Delete these files?" ];
+	}
+
+performDeletes:	() =
+	{
+	lin:	int;
+	l:	ref fileEntry;
+	count:	int;
+
+	lin = currentLine;
+	count = 0;
+	for	(l = firstFile; l; l = l->next){
+		if	(l->marked){
+			count++;
+			if	(!deleteOne(l))
+				break;
+			}
+		}
+	if	(count == 0){
+		if	(current)
+			count += deleteOne(current);
+		else
+			Display postFooter("No file to delete");
+		}
+	if	(count)
+		Display->files refresh();
+	}
+
+deleteOne:	(l: ref fileEntry) boolean =
+	{
+	j:	int;
+	cp:	[:] char;
+
+	cp = constructFilename(l->path);
+	j = FileSystem unlink(cp);
+	delete cp;
+	if	(j < 0){
+		Display postFooter("Couldn't delete: %S", l->path);
+		return FALSE;
+		}
+	l->marked = FALSE;
+	return TRUE;
+	}
+
+renameFile:	dynamic	(y: int, lin: int) =
+	{
+	p:	point;
+
+	if	(renameTypein)
+		return;
+	seek(lin);
+	renameTypein = new renameField[ lin, y, current->path ];
+	}
+
+doRename:	(target: [:] char, line: int) =
+	{
+	fileName:	[:] char;
+	cp:	[:] char;
+	j:	int;
+
+	fileName = constructFilename(target);
+	seek(line);
+	cp = constructFilename(current->path);
+	Display->files setTextFocus();
+	try	{
+		j = FileSystem move(cp, fileName);
+		if	(j < 0){
+			Display postFooter("Couldn't rename: %S", 
+								cmdError(j));
+			}
+		}
+	except	{
+		Display postFooter("Couldn't rename");
+		}
+	delete cp;
+	delete fileName;
+	renameDone();
+	}
+
+renameDone:	() =
+	{
+	delete renameTypein;
+	renameTypein = 0;
+	Display->files refresh();
+	}
+
+performRenames:	(fileName: [:] char, line: int) =
+	{
+	fs:	file_t;
+
+	}
+
+fetchLine:	dynamic	() [:] char =
+	{
+	if	(current == 0)
+		return "";
+	return current draw(LineBuffer);
+	}
+
+tagIndent:	dynamic	() int =
+	{
+	return 0;
+	}
+
+tagLength:	dynamic	() int =
+	{
+	return current drawLength();
+	}
+
+lineCount:	dynamic	() int =
+	{
+	return entryCount;
+	}
+
+open:		dynamic	(ref char) int =
+	{
+	if	(current == 0)
+		return FALSE;
+	if	(current->attrib & FA_DIR){
+		if	(stringCompare(current->path, ".") == 0)
+			return FALSE;
+		if	(stringCompare(current->path, "..") == 0){
+			close();
+			collectUpDirectory();
+			}
+		else	{
+			cp:	[:] char;
+
+			cp = stringDup(current->path);
+			close();
+			collectFiles(cp);
+			Display->files resetEditor();
+			delete cp;
+			}
+		return TRUE;
+		}
+	ext:	[:] char;
+	i:	int;
+
+	ext = getExtension(current->path);
+	for	(i = 0; i < |ExtensionTable; i++){
+		if	(stringCompare(ExtensionTable[i].spelling, ext) == 0)
+			return ExtensionTable[i].launch(
+					constructFilename(current->path));
+		}
+	return FALSE;
+	}
+
+launch:		dynamic	(x: ref char) int =
+	{
+	return open(x);
+	}
+
+	};
+
+renameField:	type	inherit	textField {
+	line:		int;
+
+constructor:	(lin: int, y: int, path: [:] char) =
+	{
+	super constructor(path, C_FOOTER, C_READONLY);
+	onEnterKey([ self, &renameDone ]);
+	Display->files anchor(self);
+	at([ ListDetail ? DETAIL_LENGTH : 0, y ]);
+	resize([ Display->files->box.size.x - box.corner.x, 1 ]);
+	setTextFocus();
+	redraw();
+	line = lin;
+	}
+
+renameDone:	() =
+	{
+	FileBuffer doRename(getValue(), line);
+	}
+
+escape:	dynamic	() =
+	{
+	FileBuffer renameDone();
+	}
+
+	};
+
+builderLaunch:	(fname: [:] char) boolean =
+	{
+	i:	int;
+	pid:	ref far External;
+	lookup:	PathList = [];
+	cmd:	[:] char;
+	path:	[:] char;
+
+	path = FileBuffer getPath();
+	FileSystem setCurrentDirectory(path);
+	lookup useEnvironment("PATH");
+	cmd = lookup search("builder", ".run", 0);
+	if	(|cmd == 0){
+		Display postFooter("Couldn't find command 'builder.run'");
+		return FALSE;
+		}
+	pid = FileSystem spawn(0, cmd, fname);
+	if	(pid == 0){
+		Display postFooter("Can't spawn '%S'", cmd);
+		return FALSE;
+		}
+	disown(pid);
+	return TRUE;
+	}
+
+runLaunch:	(fname: [:] char) boolean =
+	{
+	i:	int;
+	pid:	ref far External;
+	path:	[:] char;
+
+	path = FileBuffer getPath();
+	FileSystem setCurrentDirectory(path);
+	pid = FileSystem spawn(0, fname, "");
+	if	(pid == 0){
+		Display postFooter("Can't spawn '%S'", fname);
+		return FALSE;
+		}
+	disown(pid);
+	return TRUE;
+	}
+
+extensionLaunch:	(filename: [:] char) boolean =
+	{
+	launchEditor(filename);
+	return FALSE;
+	}
+
+launchEditor:	(filename: [:] char) =
+	{
+	f:	[MAXPATH] char;
+	fa:	[:] char;
+
+	fa = f;
+	fa [:]= FileSystem getAbsolutePath(filename);
+	if	(EditServer == 0)
+		EditServer = ref far editorServer(FileSystem 
+				attach("/service/editor",
+					":user.edserver.editorServer"));
+	EditServer load(fa);
+	}
+
+copyToDirectory:	(src: ref fileEntry, dest: [:] char) boolean =
+	{
+	destpath:	[MAXPATH] char;
+	i:		int;
+	cp:		[:] char;
+
+	dest = makePath(destpath, dest, src->path, "");
+	cp = FileBuffer constructFilename(src->path);
+	i = copyFile(dest, cp);
+	delete cp;
+	if	(i){
+		Display postFooter("Copy %S to %S failed: %S", src->path, 
+						destpath, cmdError(i));
+		return FALSE;
+		}
+	else	{
+		src->marked = FALSE;
+		return TRUE;
+		}
+	}
+
+moveToDirectory:	(src: ref fileEntry, dest: [:] char) boolean =
+	{
+	destpath:	[MAXPATH] char;
+	i:		int;
+	cp:		[:] char;
+
+	dest = makePath(destpath, dest, src->path, "");
+	cp = FileBuffer constructFilename(src->path);
+	i = FileSystem move(cp, dest);
+	delete cp;
+	if	(i){
+		Display postFooter("Move %S to %S failed: %S", 
+					src->path, destpath, cmdError(i));
+		return FALSE;
+		}
+	else	{
+		src->marked = FALSE;
+		return TRUE;
+		}
+	}
+
+fileEntry:	type	{
+	public:
+
+	next:		ref fileEntry;
+	prev:		ref fileEntry;
+	attrib:		fAttributes_t;
+	ftime:		Time;
+	size:		long;
+	marked:		boolean;
+	path:		[:] char;
+
+create:	factory	(fn: [:] char, attr: fAttributes_t, ft: long, sz: long) 
+						ref fileEntry =
+	{
+	self = new fileEntry;
+	path = stringDup(fn);
+	attrib = attr;
+	ftime = ft;
+	size = sz;
+	next = 0;
+	prev = 0;
+	marked = FALSE;
+	return self;
+	}
+
+drawLength:	() int =
+	{
+	if	(ListDetail)
+		return DETAIL_LENGTH + |path;
+	else
+		return |path;
+	}
+
+draw:	(buf: [:] char) [:] char =
+	{
+	i:	int;
+	c:	char;
+	se:	stringEmitter = [ buf ];
+	d:	Date;
+
+	if	(ListDetail){
+		hour:	int;
+
+		if	(attrib & FA_NETNODE)
+			se printf("   <node>");
+		else if	(attrib & FA_SERVICE)
+			se printf(" <object>");
+		else if	(attrib & FA_DIR)
+			se printf("    <dir>");
+		else
+			se printf(" %8d", size);
+		d decode(ftime);
+		hour = d.hour;
+		if	(hour >= 12){
+			c = 'p';
+			hour -= 12;
+			}
+		else
+			c = 'a';
+		if	(hour == 0)
+			hour = 12;
+		se printf("  %2d-%02d-%02d %2d:%02d%c   ",
+				d.month + 1,
+				d.monthday, 
+				d.year,
+				hour, d.minute, 
+				c);
+		}
+	se printf("%S", path);
+	return se result();
+	}
+
+compare:	(x: ref fileEntry) int =
+	{
+	if	(attrib & FA_DIR != x->attrib & FA_DIR)
+		return (x->attrib & FA_DIR) - (attrib & FA_DIR);
+	if	(DateSort)
+		return ftime - x->ftime;
+	else
+		return stringCompare(path, x->path);
+	}
+
+	};
+
+DETAIL_LENGTH:	const	int = 29;
+
+LineBuffer:	[800] char;
+
+deleteDirectoryConfirm:	type	inherit confirmWindow {
+	path:	[:] char;
+	line:	int;
+
+	public:
+
+constructor:	(a_path: [:] char, lin: int) =
+	{
+	path = a_path;
+	line = lin;
+	super constructor(Display, "Delete this directory?");
+	}
+
+yes:	dynamic	() =
+	{
+	i:	int;
+
+	i = FileSystem removeDirectory(path);
+	if	(i < 0){
+		Display postFooter("Couldn't delete '%S': %S", path, 
+						cmdError(i));
+		return;
+		}
+	Display->files refresh();
+	}
+
+	};
+
+deleteFilesConfirm:	type	inherit confirmWindow {
+	public:
+
+yes:	dynamic	() =
+	{
+	FileBuffer performDeletes();
+	}
+
+	};
+
+moveForm:	type	inherit	popupShell {
+	typein:		ref textField;
+
+	public:
+
+constructor:	() =
+	{
+	g:	ref Grid;
+	d:	ref dialog;
+	rprop:	static	[] byte = [ 1 ];
+	cprop:	static	[] byte = [ 0, 1 ];
+
+	super constructor("Move Files", Display);
+
+		// Describe the form
+
+	g = new Grid[ 2, 1 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "Move to: ", C_READONLY, C_READONLY ]);
+	typein = new textField[ CopyData, C_TEXT, C_READONLY ];
+	typein onEnterKey([ self, &ok ]);
+	g cell([ 1, 0 ], typein);
+
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g);
+	anchor(d);
+
+		// Draw it and accept input
+
+	configure([ 60, 1 ]);
+	typein setTextFocus();
+	open();
+	}
+
+ok:	() =
+	{
+	delete MoveData;
+	MoveData = stringDup(typein getValue());
+	if	(|MoveData)
+		FileBuffer performMoves(MoveData);
+	delete self;
+	}
+
+	};
+
+MoveData:	[:] char;
+
+copyForm:	type	inherit	popupShell {
+	typein:		ref textField;
+
+	public:
+
+constructor:	() =
+	{
+	g:	ref Grid;
+	d:	ref dialog;
+	rprop:	static	[] byte = [ 1 ];
+	cprop:	static	[] byte = [ 0, 1 ];
+
+	super constructor("Copy Files", Display);
+
+		// Describe the form
+
+	g = new Grid[ 2, 1 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "Copy to: ", C_READONLY, C_READONLY ]);
+	typein = new textField[ CopyData, C_TEXT, C_READONLY ];
+	typein onEnterKey([ self, &ok ]);
+	g cell([ 1, 0 ], typein);
+
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g);
+	anchor(d);
+	typein setTextFocus();
+
+		// Draw it and accept input
+
+	configure([ 60, 1 ]);
+	open();
+	}
+
+ok:	() =
+	{
+	delete CopyData;
+	CopyData = stringDup(typein getValue());
+	if	(|CopyData)
+		FileBuffer performCopies(CopyData);
+	delete self;
+	}
+
+	};
+
+CopyData:	[:] char;
+
+mkdirForm:	type	inherit popupShell {
+	typein:		ref textField;
+
+	public:
+
+constructor:	() =
+	{
+	g:	ref Grid;
+	d:	ref dialog;
+	rprop:	static	[] byte = [ 1 ];
+	cprop:	static	[] byte = [ 0, 1 ];
+
+	super constructor("New Directory", Display);
+
+		// Describe the form
+
+	g = new Grid[ 2, 1 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "Path: ", C_READONLY, C_READONLY ]);
+	typein = new textField[ MkdirData, C_TEXT, C_READONLY ];
+	typein onEnterKey([ self, &ok ]);
+	g cell([ 1, 0 ], typein);
+
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g);
+	anchor(d);
+	typein setTextFocus();
+
+		// Draw it and accept input
+
+	configure([ 60, 1 ]);
+	open();
+	}
+
+ok:	() =
+	{
+	j:	int;
+	cp:	[:] char;
+
+	delete MkdirData;
+	cp = typein getValue();
+	MkdirData = stringDup(cp);
+	cp = FileBuffer constructFilename(cp);
+	j = FileSystem makeDirectory(cp);
+	delete cp;
+	if	(j < 0)
+		Display postFooter("Couldn't make directory '%S': %S", 
+					MkdirData, cmdError(j));
+	else
+		Display->files refresh();
+	delete self;
+	}
+
+	};
+
+MkdirData:	[:] char;
+
+copyFile:	(dest: [:] char, src: [:] char) int =
+	{
+	ifd:	stream;
+	ofd:	stream;
+	i:	int;
+	j:	int;
+	fs:	file_t;
+	buf:	[:] byte;
+	buff:	static	[1024] byte;
+	buflen:	int;
+	copyAmount:	long;
+
+	fs = FileSystem stat(src);
+	fs.attributes &= ~FA_DIR;		// Don't create a directory
+						// with a copy call
+	if	(fs.id == -1){
+		fs.ftime = 0;
+		fs.size = 512;
+		}
+	i = ifd open(src, AR_READ);
+	if	(i)
+		return i;
+
+		// Make the buffer an even block length
+
+	buf = buff;
+	i = ofd create(dest, fs.attributes);
+	if	(i){
+		ifd close();
+		return i;
+		}
+	for	(copyAmount = 0;;){
+		i = ifd read(buf);
+		if	(i < 0){
+			ifd close();
+			ofd close();
+			FileSystem unlink(dest);
+			return i;
+			}
+		if	(i == 0)
+			break;
+		|buf = i;
+		copyAmount += i;
+		j = ofd write(buf);
+		if	(j != i){
+			printf("wrote i = %d |buf = %d j = %d\n", i, |buf, j);
+			ifd close();
+			ofd close();
+			FileSystem unlink(dest);
+			if	(j < 0)
+				return j;
+			return ERRDISKFULL;
+			}
+		}
+	if	(fs.ftime)
+		ofd setAge(fs.ftime);
+	ifd close();
+	ofd close();
+	return SUCCESS;
+	}
+
+startForm:	type	inherit popupShell {
+	typein:		ref textField;
+
+	public:
+
+constructor:	(w: ref frob, f: [:] char) =
+	{
+	g:	ref Grid;
+	d:	ref dialog;
+	rprop:	static	[] byte = [ 1 ];
+	cprop:	static	[] byte = [ 0, 1 ];
+
+	super constructor("Edit Text", Display);
+
+		// Describe the form
+
+	g = new Grid[ 2, 1 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "File: ", C_READONLY, C_READONLY ]);
+	typein = new textField[ f, C_TEXT, C_READONLY ];
+	typein onEnterKey([ self, &ok ]);
+	g cell([ 1, 0 ], typein);
+
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g);
+	anchor(d);
+	typein setTextFocus();
+
+		// Draw it and accept input
+
+	configure([ 60, 1 ]);
+	open();
+	}
+
+ok:	() =
+	{
+	filename:	[:] char;
+
+	filename = typein getValue();
+	if	(|filename){
+		f:	[MAXPATH] char;
+		fa:	[:] char;
+		cp:	[:] char;
+
+		if	(EditServer == 0)
+			EditServer = ref far editorServer(FileSystem 
+				attach("/service/editor",
+					":user.edserver.editorServer"));
+		fa = f;
+		cp = FileBuffer constructFilename(filename);
+		fa [:]= FileSystem getAbsolutePath(cp);
+		delete cp;
+		EditServer load(fa);
+		}
+	delete self;
+	}
+
+	};
+
+EditServer:	ref far editorServer;

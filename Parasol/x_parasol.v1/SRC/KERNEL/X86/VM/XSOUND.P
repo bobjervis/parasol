@@ -1,0 +1,43 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+KB_CTL:	const	int = 0x61;		/* miscellaneous control port */
+
+xbeep:	public	() =
+	{
+	tone(0x50, 0x4c0 * 40, 0x450 * 4);
+	}
+
+tone:	(duration: int, on: int, off: int) =
+	{
+	ctl_port:	int;
+	cycle:		int;
+	count:		int;
+
+		/* Get the current control port setting */
+
+	ctl_port = _inportByte(KB_CTL);
+
+	for	(cycle = duration; --cycle != 0; ){
+
+			/* Turn off the speaker for awhile */
+
+		_outportByte(KB_CTL, ctl_port & 0xfc);
+		for	(count = off; --count > 0; )
+			;
+
+			/* Now turn it on for some more time */
+
+		_outportByte(KB_CTL, (ctl_port & 0xfc) | 2);
+		for	(count = on; --count > 0; )
+			;
+		}
+
+		/* Restore the control port setting */
+
+	_outportByte(KB_CTL, ctl_port);
+	}

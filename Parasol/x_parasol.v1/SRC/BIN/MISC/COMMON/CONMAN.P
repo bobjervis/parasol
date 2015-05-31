@@ -1,0 +1,1265 @@
+include	password, alys, heap;
+include	file, filesys;
+include	console, window, editor;
+include	string, error;
+
+ICON_WIDTH:	const	int = 10;
+ICON_HEIGHT:	const	int = 3;
+
+PasswordsServer:	[:] char;
+ConsoleServer:		ref far External;
+
+main:	entry	() =
+	{
+	if	(|commandLine.arguments != 3){
+		printf("Use is: conman service-name console-device-name password-server\n");
+		exit(EX_FAIL);
+		}
+
+	x:	ref far External;
+	con:	[:] char;
+	svc:	[:] char;
+	c:	console_t;
+
+	mainExternal(&ActualConsoleManager);
+	svc = commandLine.arguments[0];
+	con = commandLine.arguments[1];
+	x = FileSystem attach(con, ":model.console.console");
+	if	(x == 0){
+		printf("Cannot connect to '%S' as the console\n", con);
+		exit(EX_FAIL);
+		}
+	MyConsole = ref far console(x);
+	ConsoleWindow = MyConsole setManager(
+			ref far consoleManager(ActualConsoleManager.objectId));
+	c = MyConsole describe();
+	MyConsoleSize = c.size;
+	PasswordsServer = commandLine.arguments[2];
+	FileSystem register(myExternal()->objectId, svc, 
+					":model.console.consoleManager");
+	ConsoleServer = thread(&ShellInput, 0);
+	ConsoleServer start();
+	}
+
+MyConsole:	ref far console;
+MyConsoleSize:	point;
+ConsoleWindow:	ref far textWindow;
+
+ActualConsoleManager:	inherit	consoleManager {
+	public:
+
+newAppShell:		gate	(title: [:] char) ref far textWindow =
+	{
+	winfo:	conmanWindows_t;
+
+	winfo = MyConsole newConmanShell(messageHeader->sender);
+	new cmAppShell[ winfo, title ];
+	return winfo.viewport;
+	}
+
+newPopupShell:		gate	(title: [:] char, 
+				 parent: ref far textWindow) 
+							ref far textWindow =
+	{
+	winfo:	conmanWindows_t;
+	s:	ref cmShell;
+
+	s = ref cmShell(findCookie(parent));
+	if	(s){
+		winfo = MyConsole newConmanShell(messageHeader->sender);
+		new cmPopupShell[ winfo, title, s ];
+		return winfo.viewport;
+		}
+	else
+		reject(ERRNOTFOUND);
+	}
+
+newMenuShell:		gate	() ref far textWindow =
+	{
+	winfo:	conmanWindows_t;
+
+	winfo = MyConsole newConmanShell(messageHeader->sender);
+	new cmMenuShell[ winfo, 0 ];
+	return winfo.viewport;
+	}
+
+setTitle:		gate	(w: ref far textWindow, str: [:] char) =
+	{
+	s:	ref cmShell;
+
+	s = ref cmShell(findCookie(w));
+	if	(s){
+		s cmTitle(str);
+		s redraw();
+		}
+	else
+		reject(ERRNOTFOUND);
+	}
+
+iconLabel:		gate	(w: ref far textWindow, str: [:] char,
+						c: color_t) =
+	{
+	s:	ref cmShell;
+
+	s = ref cmShell(findCookie(w));
+	if	(s)
+		s iconLabel(str, c);
+	else
+		reject(ERRNOTFOUND);
+	}
+
+minimize:		gate	(w: ref far textWindow) =
+	{
+	s:	ref cmShell;
+
+	s = ref cmShell(findCookie(w));
+	if	(s)
+		s minimize();
+	else
+		reject(ERRNOTFOUND);
+	}
+
+manages:		gate	() ref far console =
+	{
+	return MyConsole;
+	}
+
+configure:		gate	(w: ref far textWindow, sz: point) point =
+	{
+	s:	ref cmShell;
+
+	s = ref cmShell(findCookie(w));
+	if	(s){
+		if	(s->status & WS_SHOWING)
+			reject(ERRPERMISSION);
+		else	{
+			s configure(sz);
+			sz = [ s->box.size.x - 2, s->box.size.y - 2 ];
+			return sz;
+			}
+		}
+	else
+		reject(ERRNOTFOUND);
+	}
+
+askForResize:		gate	(w: ref far textWindow, sz: point) point =
+	{
+	s:	ref cmShell;
+
+	s = ref cmShell(findCookie(w));
+	if	(s){
+		s askForResize(sz);
+		sz = [ s->box.size.x - 2, s->box.size.y - 2 ];
+		return sz;
+		}
+	else
+		reject(ERRNOTFOUND);
+	}
+/*
+	If the console server process thread exits, then we should too.
+ */
+childExit:	gate	(c: ExitCode) =
+	{
+	if	(messageHeader->sender == ConsoleServer){
+		reply;
+		exit(EX_SUCCESS);
+		}
+	}
+
+	};
+
+ShellInput:	inherit	inputHandler	{
+	consoleShell:	ref cmConsoleShell;
+
+	public:
+
+start:	gate	() =
+	{
+	consoleShell = new cmConsoleShell[ self ];
+	}
+
+shutDown:	() =
+	{
+	delete consoleShell;
+	exit(EX_SUCCESS);
+	}
+
+	};
+
+cmConsoleShell:	type	inherit	cmShell {
+	floater:	ref floatingMenu;
+
+	public:
+
+constructor:	(v: ref inputHandler) =
+	{
+	super constructor([ ConsoleWindow, 0 ], 0);
+	box.size = ConsoleWindow getConsoleSize();
+	status = WS_CONFIGURED;
+	box.corner = [ 0, 0 ];
+	v manage(self, viewport, 0);
+	inputSource = v;
+	viewport registerWindowInput(
+				ref far inputHandler(inputSource->objectId));
+
+	floater = new floatingMenu[ self ];
+	floater button("Login",		'l', [ self, &startLogin ]);
+	floater button("Save State",	's', [ self, &saveState ]);
+	floater button("Exit",		'x', [ self, &quit ]);
+
+	}
+
+startLogin:	() =
+	{
+	vi:	ref loginViewer;
+
+	vi = new loginViewer[ ];
+	thread(vi, 0) start();
+	}
+
+saveState:	() =
+	{
+	stdout printf("saveStart()\n");
+	}
+
+quit:		() =
+	{
+	ShellInput shutDown();
+	}
+
+buttonDown:	dynamic	(buttons: mouseButtons_t, location: point) = 
+	{
+	if	(buttons & MB_RIGHT)
+		floater arm(location);
+	}
+
+focus:	dynamic	() =
+	{
+	}
+
+unfocus:	dynamic	() =
+	{
+	}
+
+expose:	dynamic	(rectangle_t) =
+	{
+	}
+
+	};
+
+cmAppShell:	type	inherit	cmTitledShell {
+	minimizeButton:		ref hotLink;
+	maximizeButton:		ref hotLink;
+	maximizeLabel:		ref caption;
+	iconShell:		ref cmIconShell;
+	normalCornerY:		int;
+	normalSizeY:		int;
+
+	visible:
+
+	maximized:		boolean;
+	icon:			[:] char;
+	iconColor:		color_t;
+
+	public:
+
+constructor:	(winfo: conmanWindows_t, title: [:] char) =
+	{
+	super constructor(winfo, title, 0);
+	minimumSize = [ 8, 2 ];
+	topWidget anchor(minimizeButton = new hotLink[ 
+				new caption[ "", C_TITLE, C_READONLY ],
+				[ self, &minimize ] ]);
+	maximizeLabel = new caption[ "", C_TITLE, C_READONLY ];
+	topWidget anchor(maximizeButton = new hotLink[ 
+				maximizeLabel, 
+				[ self, &maximize ] ]);
+	iconShell = 0;
+	newIconLabel(title, C_TITLE);
+	normalCornerY = 0;
+	normalSizeY = box.size.y;
+	maximized = FALSE;
+	}
+
+destructor:	dynamic	() =
+	{
+	delete icon;
+	if	(iconShell)
+		delete iconShell;
+	super destructor();
+	}
+
+defaultConfiguration:	dynamic	() point =
+	{
+	p:	point;
+
+	minimizeButton resize(minimizeButton defaultConfiguration());
+	maximizeButton resize(maximizeButton defaultConfiguration());
+	p = super defaultConfiguration();
+	return [ p.x + 8, 2 ];
+	}
+
+resizeChildren:	dynamic	(p: point) =
+	{
+	minimizeButton->box.corner.x = box.size.x - 4;
+	maximizeButton->box.corner.x = box.size.x - 2;
+	super resizeChildren(p);
+	}
+
+newIconLabel:	(str: [:] char, c: color_t) =
+	{
+	if	(|str > ICON_WIDTH - 2)
+		|str = ICON_WIDTH - 2;
+	icon = stringDup(str);
+	iconColor = c;
+	}
+
+minimize:	dynamic	() =
+	{
+	super minimize();
+	if	(iconShell == 0)
+		iconShell = new cmIconShell[ self ];
+	iconShell open();
+	}
+
+_acknowledgeOpen:	dynamic	() =
+	{
+	if	(iconShell &&
+		 iconShell->status & WS_SHOWING)
+		iconShell unminimize();
+	else
+		super _acknowledgeOpen();
+	}
+
+iconLabel:	dynamic	(str: [:] char, c: color_t) =
+	{
+	delete icon;
+	newIconLabel(str, c);
+	if	(iconShell &&
+		 iconShell->status & WS_SHOWING)
+		iconShell redraw();
+	}
+
+maximize:	() =
+	{
+	p:	point;
+
+	p = box.size;
+	if	(maximized){
+		viewport move([ 0, normalCornerY ]);
+		box.corner.y = normalCornerY;
+		p.y = normalSizeY;
+		maximizeLabel setValue("", C_TITLE, C_READONLY);
+		}
+	else	{
+		box.corner = viewport getCorner();
+		viewport move([ 0, -box.corner.y ]);
+		normalCornerY = box.corner.y;
+		box.corner.y = 0;
+		normalSizeY = box.size.y;
+		p.y = MyConsoleSize.y;
+		maximizeLabel setValue("", C_TITLE, C_READONLY);
+		}
+	maximized = !maximized;
+	resize(p);
+	}
+
+	};
+
+cmIconShell:	type	inherit	cmShell {
+	mainShell:	ref cmAppShell;
+	startBias:	point;
+
+	public:
+
+constructor:	(s: ref cmAppShell) =
+	{
+	p:	point;
+	t:	ref far textWindow;
+
+	p = [ ICON_WIDTH, ICON_HEIGHT ];
+	t = MyConsole newWindow(s->icon, p);
+	super constructor([ t, 0 ], 0);
+	mainShell = s;
+	box.size = p;
+	status = WS_CONFIGURED;
+	box.corner = MyConsole getIconSlot(viewport);
+	viewport move(box.corner);
+	ActualConsoleManager manage(self, viewport, 0);
+	inputSource = &ActualConsoleManager;
+	viewport registerWindowInput(
+				ref far inputHandler(inputSource->objectId));
+	}
+
+expose:	dynamic	(x: rectangle_t) =
+	{
+	viewport writecc([ 1, 1 ], mainShell->icon, mainShell->iconColor);
+	super expose(x);
+	}
+
+buttonDown:	dynamic	(mouseButtons_t, location: point) = 
+	{
+	startBias = location;
+	}
+
+drag:		dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	if	(buttons & MB_LEFT){
+		at.x -= startBias.x;
+		at.y -= startBias.y;
+		moveWindow(at);
+		}
+	}
+
+continueDrag:	dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	drag(buttons, at);
+	}
+
+drop:		dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	drag(buttons, at);
+	}
+
+click:		dynamic	(buttons: mouseButtons_t, point) =
+	{
+	if	(buttons & MB_LEFT)
+		toTop();
+	}
+
+doubleClick:	dynamic	(buttons: mouseButtons_t, point) =
+	{
+	if	(buttons & MB_LEFT)
+		unminimize();
+	}
+
+unminimize:	dynamic	() =
+	{
+	viewport hide();
+	mainShell unminimize();
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	if	(k == ALT_X){
+		delete mainShell;
+		return TRUE;
+		}
+	else
+		return FALSE;
+	}
+
+	};
+
+cmPopupShell:	type	inherit	cmTitledShell {
+	public:
+
+constructor:	(winfo: conmanWindows_t, str: [:] char, parent: ref cmShell) =
+	{
+	super constructor(winfo, str, parent);
+	minimumSize = [ 4, 2 ];
+	}
+
+defaultConfiguration:	dynamic	() point =
+	{
+	p:	point;
+
+	p = super defaultConfiguration();
+	return [ p.x + 4, 2 ];
+	}
+
+drawTitle:	dynamic	(b: ref borderDescriptor) =
+	{
+	p:	point;
+
+	super drawTitle(b);
+	p = [ box.size.x - 4, 0 ];
+	putcc(p, b->top, C_FRAME);
+	p.x += 2;
+	putcc(p, b->top, C_FRAME);
+	}
+
+	};
+
+cmTitledShell:	type	inherit	cmShell {
+	title:			[:] char;
+	desiredSize:		point;
+	rightWidget:		ref lockedResizeWindow;
+	lrCornerWidget:		ref lockedResizeWindow;
+	bottomWidget:		ref lockedResizeWindow;
+	leftWidget:		ref lockedLeftResizeWindow;
+	closeButton:		ref hotLink;
+
+	public:
+
+	topWidget:		ref lockedMoveWindow;
+
+constructor:	(winfo: conmanWindows_t, titl: [:] char, m: ref cmShell) =
+	{
+	super constructor(winfo, m);
+	title = stringDup(titl);
+	anchor(topWidget = new lockedMoveWindow[ self ]);
+	anchor(lrCornerWidget = new lockedResizeWindow[ self, TRUE, TRUE,
+					[ [ box.size.x - 1, box.size.y - 1 ],
+					  [ 1, 1 ] ] ]);
+	anchor(rightWidget = new lockedResizeWindow[ self, TRUE, FALSE,
+					[ [ box.size.x - 1, 1 ],
+					  [ 1, maximumSize.y ] ] ]);
+	anchor(bottomWidget = new lockedResizeWindow[ self, FALSE, TRUE,
+					[ [ 1, box.size.y - 1 ], 
+					  [ maximumSize.x, 1 ] ] ]);
+	anchor(leftWidget = new lockedLeftResizeWindow[ self ]);
+	topWidget anchor(closeButton = new closeLink[ self ]); 
+	closeButton at([ 1, 0 ]);
+	}
+
+_deleteRequest:	() =
+	{
+	viewport dismissRequest();
+	}
+
+//
+//	This is used to get the dynamic dispatch - so this calls the derived
+//	classes' delete method.
+//
+_delete:	() =
+	{
+	delete self;
+	}
+
+destructor:		dynamic	() =
+	{
+	delete title;
+	super destructor();
+	}
+
+defaultConfiguration:	dynamic	() point =
+	{
+	closeButton resize(closeButton defaultConfiguration());
+	return [ |title, 1 ];
+	}
+
+cmTitle:	dynamic	(str: [:] char) =
+	{
+	delete title;
+	title = stringDup(str);
+	}
+
+resizeChildren:	dynamic	(point) =
+	{
+	rightWidget->box.corner.x = box.size.x - 1;
+	lrCornerWidget->box.corner.x = box.size.x - 1;
+	lrCornerWidget->box.corner.y = box.size.y - 1;
+	bottomWidget->box.corner.y = box.size.y - 1;
+	}
+
+drawTitle:	dynamic	(b: ref borderDescriptor) =
+	{
+	len:	int;
+	i:	int;
+	j:	int;
+	p:	point;
+	s:	[:] char;
+
+	p = [ 2, 0 ];
+	i = box.size.x - 8;
+	if	(i < 0)
+		i = 0;
+	s = title;
+	if	(|s >= i)
+		|s = i;
+	i = box.size.x - (7 + |s);
+	for	(j = 0; j < i; j++){
+		putcc(p, b->top, C_FRAME);
+		p.x++;
+		}
+	if	(|s){
+		writecc(p, s, C_TITLE);
+		p.x += |s;
+		}
+	putcc(p, b->top, C_FRAME);
+	p.x += 2;
+	putcc(p, b->top, C_FRAME);
+	}
+
+	};
+
+cmMenuShell:	type	inherit	cmShell {
+	public:
+
+shellBorder:	dynamic	() borderStyles =
+	{
+	return WB_SINGLE;
+	}
+
+	};
+
+cmShell:	type	inherit	shell {
+	public:
+
+	innerViewport:	ref far textWindow;
+	cmParent:	ref cmShell;
+	cmChild:	ref cmShell;
+	cmSibling:	ref cmShell;
+
+constructor:	(winfo: conmanWindows_t, a_parent: ref cmShell) =
+	{
+	super constructor();
+	cmParent = a_parent;
+	if	(cmParent){
+		cmSibling = cmParent->cmChild;
+		cmParent->cmChild = self;
+		}
+	else
+		cmSibling = 0;
+	cmChild = 0;
+	box.size = [ 2, 2 ];
+	minimumSize = [ 2, 2 ];
+	_setViewport(winfo.frame);
+	innerViewport = winfo.viewport;
+	ActualConsoleManager manage(self, winfo.frame, winfo.viewport);
+	inputSource = &ActualConsoleManager;
+	viewport registerWindowInput(
+				ref far inputHandler(inputSource->objectId));
+	}
+
+destructor:	dynamic	() =
+	{
+	s, p:	ref cmShell;
+
+	if	(cmParent){
+		for	(p = 0, s = cmParent->cmChild; s; 
+						p = s, s = s->cmSibling){
+			if	(s == self){
+				if	(p)
+					p->cmSibling = cmSibling;
+				else
+					cmParent->cmChild = cmSibling;
+				break;
+				}
+			}
+		}
+	if	(cmChild){
+		for	(s = cmChild; s; s = p){
+			p = s->cmSibling;
+			delete s;
+			}
+		}
+	super destructor();
+	}
+
+configure:	dynamic	(preferredSize: point) =
+	{
+	p, deflt:	point;
+
+	if	(status & WS_CONFIGURED)
+		return;
+	status |= WS_CONFIGURED;
+	preferredSize.x += 2;
+	preferredSize.y += 2;
+	if	(preferredSize.x > MyConsoleSize.x)
+		preferredSize.x = MyConsoleSize.x;
+	if	(preferredSize.y > MyConsoleSize.y)
+		preferredSize.y = MyConsoleSize.y;
+
+	deflt = defaultConfiguration();
+
+	if	(deflt.x < preferredSize.x)
+		deflt.x = preferredSize.x;
+	if	(deflt.y < preferredSize.y)
+		deflt.y = preferredSize.y;
+
+	viewport configure(deflt);
+	p = box.size;
+	box.size = deflt;
+	resizeChildren(p);
+	}
+
+askForResize:	dynamic	(sz: point) =
+	{
+	config:	boolean = FALSE;
+	oldp:	point;
+
+	sz.x += 2;
+	sz.y += 2;
+	if	(sz.x > MyConsoleSize.x)
+		sz.x = MyConsoleSize.x;
+	if	(sz.y > MyConsoleSize.y)
+		sz.y = MyConsoleSize.y;
+	oldp = box.size;
+	if	(sz.x != box.size.x ||
+		 sz.y != box.size.y){
+		box.size = sz;
+		viewport configure(sz);
+		resizeChildren(oldp);
+		}
+	}
+
+cmTitle:	dynamic	(str: [:] char) =
+	{
+	}
+
+minimize:	dynamic	() =
+	{
+	s:	ref cmShell;
+
+	viewport hide();
+	for	(s = cmChild; s; s = s->cmSibling)
+		s minimize();
+	}
+
+unminimize:	dynamic	() =
+	{
+	s:	ref cmShell;
+
+	viewport open();
+	for	(s = cmChild; s; s = s->cmSibling)
+		s unminimize();
+	}
+
+iconLabel:	dynamic	([:] char, color_t) =
+	{
+	}
+
+focus:	dynamic	() =
+	{
+	drawBorder();
+	}
+
+unfocus:	dynamic	() =
+	{
+	drawBorder();
+	}
+
+expose:	dynamic	(x: rectangle_t) =
+	{
+	drawBorder();
+	}
+
+resize:	dynamic	(p: point) =
+	{
+
+		// If one dimension or another expands, draw a blank 
+		// rectangle over it.  Use the new box size since you're
+		// guaranteed that the rectangle will be big enough, and
+		// the clipping logic will catch any overflow.  Note that the
+		// lower right corner is not cleared twice.
+
+	if	(box.size.x < p.x)
+		rectangle([ [ box.size.x - 1, 0 ], p ], C_BLACK);
+	if	(box.size.y < p.y)
+		rectangle([ [ 0, box.size.y - 1 ], p ], C_BLACK);
+
+	if	(viewport)
+		viewport resize(p);
+	oldp:	point;
+
+	oldp = box.size;
+	box.size = p;
+	resizeChildren(oldp);
+	redraw();
+	}
+
+leftResize:	(p: point) =
+	{
+
+	oldp, oldop:	point;
+
+	oldp = box.size;
+	box.size = p;
+	if	(viewport)
+		viewport leftResize([ p.x - oldp.x, p.y - oldp.y ]);
+
+		// If one dimension or another expands, draw a blank 
+		// rectangle over it.  Use the new box size since you're
+		// guaranteed that the rectangle will be big enough, and
+		// the clipping logic will catch any overflow.  Note that the
+		// lower right corner is not cleared twice.
+
+	if	(oldp.x < box.size.x)
+		rectangle([ [ oldp.x - 1, 0 ], box.size ], C_BLACK);
+	if	(oldp.y < box.size.y)
+		rectangle([ [ 0, oldp.y - 1 ], box.size ], C_BLACK);
+	resizeChildren(oldp);
+	redraw();
+	}
+
+shellBorder:	dynamic	() borderStyles =
+	{
+	if	(hasFocus)
+		return WB_DOUBLE;
+	else
+		return WB_SINGLE;
+	}
+
+drawBorder:	dynamic	() =
+	{
+	bs:	borderStyles;
+	b:	ref borderDescriptor;
+	p:	point;
+	i:	int;
+
+	bs = shellBorder();
+	if	(bs == WB_NONE)
+		return;
+	b = &Borders[bs];
+	drawTitle(b);
+
+//		The various border corners
+
+	putcc([ 0, 0 ], b->uleft, C_FRAME);
+	putcc([ box.size.x - 1, 0 ], b->uright, C_FRAME);
+	putcc([ 0, box.size.y - 1 ], b->lleft, C_FRAME);
+	putcc([ box.size.x - 1, box.size.y - 1 ], b->lright, C_FRAME);
+
+//		Bottom of the border
+
+	for	(i = box.size.x - 2; i > 0; i--)
+		putcc([ i, box.size.y - 1 ], b->bottom, C_FRAME);
+
+//		Sides of the border
+
+	for	(i = box.size.y - 2; i > 0; i--){
+		putcc([ 0, i ], b->lside, C_FRAME);
+		putcc([ box.size.x - 1, i ], b->rside, C_FRAME);
+		}
+	}
+
+drawTitle:	dynamic	(b: ref borderDescriptor) =
+	{
+	j:	int;
+	p:	point;
+
+	p = [ 1, 0 ];
+	for	(j = 0; j < box.size.x - 2; j++){
+		putcc(p, b->top, C_FRAME);
+		p.x++;
+		}
+	}
+
+	};
+
+joinDescriptor_t:	type	{ public:
+	first:		char;
+	second:		char;
+	};
+
+HorizontalJoins:	[] joinDescriptor_t = [
+	[   0,   0 ],		// WB_NONE
+	[ 'Ã', '´' ],		// WB_SINGLE
+	[ 'Ç', '¶' ],		// WB_DOUBLE
+	[ 'Ã', '´' ],		// WB_DBL_TOP
+	[ 'Ç', '¶' ],		// WB_DBL_SIDE
+	[ 'Ã', '´' ]		// WB_PULL_DOWN
+	];
+
+VerticalJoins:	[] joinDescriptor_t = [
+	[   0,   0 ],		// WB_NONE
+	[ 'Â', 'Á' ],		// WB_SINGLE
+	[ 'Ñ', 'Ï' ],		// WB_DOUBLE
+	[ 'Ñ', 'Ï' ],		// WB_DBL_TOP
+	[ 'Â', 'Á' ],		// WB_DBL_SIDE
+	[ 'Â', 'Á' ]		// WB_PULL_DOWN
+	];
+
+/*
+	A lockedMoveWindow is created whenever a button down event is made
+	in the top of the frame of a main application window.  All keystrokes
+	and mouse events will get directed here temporarily.  This manager 
+	will then control the mouse.  Clicking the mouse will bring the window
+	forward..
+	Dragging the mouse will move the window to a new location.
+ */
+lockedMoveWindow:	type	inherit	frob	{
+	public:
+
+	wframe:		ref cmShell;
+	startBias:	point;
+
+constructor:	(w: ref cmShell) =
+	{
+	p, p2:	point;
+
+	super constructor();
+	box.size = [ w->maximumSize.x, 1 ];
+	at([ 0, 0 ]);
+	wframe = w;
+	}
+
+buttonDown:	dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	if	(buttons & MB_LEFT)
+		startBias = at;
+	}
+
+click:	dynamic	(buttons: mouseButtons_t, point) =
+	{
+	if	(buttons & MB_LEFT)
+		wframe toTop();
+	}
+
+drag:	dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	if	(buttons & MB_LEFT){
+		at.x -= startBias.x;
+		at.y -= startBias.y;
+		wframe moveWindow(at);
+		}
+	}
+
+continueDrag:	dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	drag(buttons, at);
+	}
+
+drop:	dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	drag(buttons, at);
+	}
+
+	};
+/*
+	A lockedResizeWindow is created whenever a button down event is made
+	in the rest of the frame of a main application window.  All keystrokes
+	and mouse events will get directed here temporarily.  This manager 
+	will then control the mouse.  Clicking the mouse will do nothing.
+	Dragging the mouse will resize the window, possibly moving to a new location.
+ */
+lockedResizeWindow:	type	inherit	frob	{
+	public:
+
+	resizing:		ref cmShell;
+	resizeVertical:		boolean;
+	resizeHorizontal:	boolean;
+
+constructor:	(w: ref cmShell, rh: boolean, rv: boolean, b: rectangle_t) =
+	{
+	super constructor();
+	box.size = b.size;
+	at(b.corner);
+	resizing = w;
+	resizeVertical = rv;
+	resizeHorizontal = rh;
+	}
+
+click:	dynamic	(buttons: mouseButtons_t, point) =
+	{
+	if	(buttons & MB_LEFT)
+		resizing toTop();
+	}
+
+drag:	dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	if	(buttons & MB_LEFT == 0)
+		return;
+
+		// Now ignore the parts of the resize that are not relevant
+
+	if	(!resizeHorizontal)
+		at.x = 0;
+	if	(!resizeVertical)
+		at.y = 0;
+	at.x += resizing->box.size.x;
+	at.y += resizing->box.size.y;
+	if	(at.x < resizing->minimumSize.x)
+		at.x = resizing->minimumSize.x;
+	else if	(at.x > resizing->maximumSize.x)
+		at.x = resizing->maximumSize.x;
+	if	(at.y < resizing->minimumSize.y)
+		at.y = resizing->minimumSize.y;
+	else if	(at.y > resizing->maximumSize.y)
+		at.y = resizing->maximumSize.y;
+	resizing resize(at);
+	}
+
+continueDrag:	dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	drag(buttons, at);
+	}
+
+drop:	dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	drag(buttons, at);
+	}
+
+	};
+
+/*
+	A lockedResizeWindow is created whenever a button down event is made
+	in the rest of the frame of a main application window.  All keystrokes
+	and mouse events will get directed here temporarily.  This manager 
+	will then control the mouse.  Clicking the mouse will do nothing.
+	Dragging the mouse will resize the window, possibly moving to a new location.
+ */
+lockedLeftResizeWindow:	type	inherit	frob	{
+	public:
+
+	startBias:		point;
+	resizing:		ref cmShell;
+	resizeVertical:		boolean;
+
+constructor:	(w: ref cmShell) =
+	{
+	super constructor();
+	box.size = [ 1, w->maximumSize.y ];
+	at([ 0, 1 ]);
+	resizing = w;
+	}
+
+buttonDown:	dynamic	(buttons: mouseButtons_t, loc: point) =
+	{
+	if	(buttons & MB_LEFT){
+		startBias = loc;
+		resizeVertical = (loc.y == resizing->box.size.y - 2);
+		}
+	}
+
+click:	dynamic	(buttons: mouseButtons_t, point) =
+	{
+	if	(buttons & MB_LEFT)
+		resizing toTop();
+	}
+
+drag:	dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	continueDrag(buttons, at);
+	}
+
+continueDrag:	dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	if	(buttons & MB_LEFT == 0)
+		return;
+
+		// Now ignore the parts of the resize that are not relevant
+
+	if	(!resizeVertical)
+		at.y = resizing->box.size.y;
+	else
+		at.y += 2;
+	at.x = resizing->box.size.x - at.x;
+	if	(at.x < resizing->minimumSize.x)
+		at.x = resizing->minimumSize.x;
+	else if	(at.x > resizing->maximumSize.x)
+		at.x = resizing->maximumSize.x;
+	if	(at.y < resizing->minimumSize.y)
+		at.y = resizing->minimumSize.y;
+	else if	(at.y > resizing->maximumSize.y)
+		at.y = resizing->maximumSize.y;
+	resizing leftResize(at);
+	}
+
+drop:	dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	continueDrag(buttons, at);
+	}
+/*
+	All keystrokes are ignored.
+ */
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	return TRUE;
+	}
+
+	};
+
+closeLink:	type	inherit hotLink {
+	public:
+
+constructor:	(s: ref cmTitledShell) =
+	{
+	super constructor(new caption[ "*", C_TITLE, C_READONLY ],
+				[ s, &cmTitledShell._delete ]);
+	}
+
+click:	dynamic	(buttons: mouseButtons_t, point) =
+	{
+	if	(buttons & MB_LEFT)
+		ref cmTitledShell(getShell()) _deleteRequest();
+	}
+
+doubleClick:	dynamic	(buttons: mouseButtons_t, p: point) =
+	{
+	super click(buttons, p);
+	}
+
+	};
+
+loginViewer:	type	inherit	inputHandler {
+	lshell:	ref loginShell;
+
+	public:
+
+constructor:	() =
+	{
+	super constructor(0);
+	lshell = new loginShell[ ];
+	super constructor(lshell);
+	}
+
+start:	gate	() =
+	{
+	lshell = new loginShell[ ];
+	lshell getInputFrom(self);
+	lshell setup();
+	}
+
+childExit:	gate	(ex: ExitCode) =
+	{
+	if	(ex)
+		lshell failed();
+	else
+		exit(EX_SUCCESS);
+	}
+
+	};
+
+loginShell:	type	inherit applicationShell {
+	userName:	ref textField;
+	passwd:		ref textField;
+
+	public:
+
+constructor:	() =
+	{
+	g:	ref Grid;
+	rprop:	static	[] byte = [ 0, 0 ];
+	cprop:	static	[] byte = [ 0, 1 ];
+
+	super constructor("Login");
+	useFooter();
+
+	userName = new textField[ "", C_TEXT, C_READONLY ];
+	userName onEnterKey([ self, &gotoPasswd ]);
+	passwd = new textField[ "", C_BLACK, C_BLACK ];
+	passwd onEnterKey([ self, &ok ]);
+
+	g = new Grid[ 2, 2 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "User name: ", C_READONLY, C_READONLY ]);
+	g cell([ 1, 0 ], userName);
+	g cell([ 0, 1 ], new caption[ " Password: ", C_READONLY, C_READONLY ]);
+	g cell([ 1, 1 ], passwd);
+
+	anchor(g);
+	configure([ 47, 2 ]);
+	userName setTextFocus();
+	}
+
+gotoPasswd:	() =
+	{
+	passwd setTextFocus();
+	}
+
+setup:	() =
+	{
+	at([ 20, 10 ]);
+	minimumSize = box.size;
+	maximumSize = box.size;
+	open();
+	}
+
+failed:	() =
+	{
+	postFooter("Failed: try again");
+	}
+
+ok:	() =
+	{
+	pf:	ref far loginAgent;
+	la:	ref loginAgent;
+
+	la = new loginAgent[];
+	pf = ref far loginAgent(thread(la, 0));
+	try	{
+		s, t:	[:] char;
+
+		s = userName getValue();
+		t = passwd getValue();
+		pf sendLogin(s, t);
+		getShell() postFooter("Trying to login...");
+		}
+	except
+		getShell() postFooter("Password connection failed");
+	}
+
+	};
+
+loginAgent:	type	inherit	login	{
+	passwd:	[:] char;
+	wind:	ref far loginViewer;
+
+	public:
+
+sendLogin:	gate	(userName: [:] char, pwd: [:] char) =
+	{
+	x:	ref far userCatalog;
+
+	reply;
+	wind = ref far loginViewer(messageHeader->sender);
+	passwd = new [|pwd] char;
+	passwd [:]= pwd;
+	x = ref far userCatalog(FileSystem attach(PasswordsServer,
+				":model.password.userCatalog"));
+	if	(x)
+		x tryToLogin(userName, PASSWORD_VERSION);
+	else
+		exit(EX_FAIL);
+	}
+
+askForPassword:	gate	(key: [:] byte) [] byte =
+	{
+	buf:	[256] byte;
+	out:	[:] byte;
+
+	out = encryptPassword(buf, passwd, key);
+	return out;
+	}
+
+ack:	gate	(uid: userId, gid: userId, homeDirectory: [:] char) =
+	{
+	reply;
+
+		// So, we are logged in.
+
+	try	{
+		p:	ref far External;
+		cmd:	[MAXPATH] char;
+		shell:	[:] char;
+		fcmd:	[:] char;
+		lookup:	PathList = [];
+
+		myHost() setUserid(uid, gid);
+		newJob();
+		FileSystem setCurrentDirectory(homeDirectory);
+		if	(FileSystem access("alogin.bat", AR_READ) == SUCCESS){
+			printf("alogin.bat found\n");
+			shell = cmd;
+			shell [:]= myJob() value("COMSPEC");
+			p = FileSystem spawn(0, shell, "-c\0alogin.bat\0");
+			}
+		else	{
+			lookup:		PathList = [];
+
+			try lookup useEnvironment("PATH");
+			fcmd = lookup search("navigate", ".run", 0);
+			if	(|fcmd == 0)
+				exit(EX_FAIL);
+			p = FileSystem spawn(0, fcmd, "/c");
+			}
+		if	(p){
+			myHost() reparent(myJob(), p);
+			disown(myJob());
+			disown(p);
+			exit(EX_SUCCESS);
+			}
+		}
+	exit(EX_FAIL);
+	}
+
+nack:	gate	() =
+	{
+	reply;
+	exit(EX_FAIL);
+	}
+
+	};

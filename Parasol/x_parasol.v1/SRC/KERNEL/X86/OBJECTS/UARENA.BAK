@@ -1,0 +1,502 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+
+include	kprintf;
+include	error;
+include	hardware;
+include	pc_hdw;
+include	process;
+include	memory;
+include	animobj, object, message;
+include	filesys;
+include	arena, karena;
+include	runfile;
+include	alys;
+include	vector;
+include	hprocess;
+
+userArena:	public	type	inherit	arena	{
+	public:
+	lcontext:		localContext_t;
+	code:			ref segment;
+	data:			ref segment;
+	staticLength:		Size;
+	threadPtr:		vaddr_t;
+	threadCount:		int;
+	mainProcess:		ref process;
+	codeSegment:		unsigned[16];
+	dataSegment:		unsigned[16];
+	stackSegment:		unsigned[16];
+	broken:			boolean;
+
+constructor:	() =
+	{
+	broken = FALSE;
+	super constructor();
+	}
+
+grow:	dynamic	(newLen: vaddr_t) boolean =
+	{
+	res:	int;
+
+		// Don't allow the arena to shrink below the thread pointer
+
+	if	(newLen < threadPtr + sizeof vaddr_t)
+		newLen = threadPtr + sizeof vaddr_t;
+
+	n:		threadLock;
+
+	n lock();
+	res = data grow(newLen);
+	if	(res)
+		setMapping(&lcontext, data->address, USER_DS, 
+				DATA_DESCR | USER_DESCR, 0, data->length);
+	n unlock();
+	return res;
+	}
+
+_free:	dynamic	() =
+	{
+	if	(code){
+		code close();
+		code = 0;
+		}
+	if	(data){
+		data close();
+		data = 0;
+		}
+	super _free();
+	}
+
+obtainWrite:	dynamic	(buf: vaddr_t, len: vaddr_t) pointer =
+	{
+	p:	pointer;
+
+//	if	(data == 0)
+//		for	(;;);
+	p = data lock(buf);
+	if	(!canWrite(buf, len)){
+		data unlock();
+		return 0;
+		}
+	return p;
+	}
+
+unlock:	dynamic	() =
+	{
+	data unlock();
+	}
+
+write:	dynamic	(offs: vaddr_t, src: pointer, len: vaddr_t) int =
+	{
+	p:	pointer;
+
+	p = data lock(offs);
+	if	(!canWrite(offs, len)){
+		data unlock();
+		return ERRINVALIDDATA;
+		}
+	memCopy(p, src, len);
+	data unlock();
+	return SUCCESS;
+	}
+
+read:	dynamic	(offs: vaddr_t, dest: pointer, len: vaddr_t) int =
+	{
+	p:	pointer;
+
+	p = data lock(offs);
+	if	(!canRead(offs, len)){
+		data unlock();
+		return ERRINVALIDDATA;
+		}
+	memCopy(dest, p, len);
+	data unlock();
+	return SUCCESS;
+	}
+
+dumpHex:	dynamic	(offs: vaddr_t, len: vaddr_t) =
+	{
+	p:	pointer;
+
+	p = data lock(offs);
+	if	(!canRead(offs, len))
+		kprintf("buffer %x[:%x] out of range %x\n", offs, len,
+					data->length);
+	else
+		dumpData(p, len);
+	data unlock();
+	}
+/*
+	This function tests whether the kernel can legitimately call the 
+	named code address.  The address is relative to the code segment.
+ */
+canCall:	dynamic	(addr: vaddr_t) boolean =
+	{
+	return addr < code->length && addr >= code->offset;
+	}
+/*
+	This function tests whether the kernel can legitimately read
+	the named data buffer in the arena.  The address is relative to
+	the data segment.
+ */
+canRead:	dynamic	(addr: vaddr_t, len: vaddr_t) boolean =
+	{
+	limit:	unsigned;
+	cp:	ref byte;
+	xp:	ref byte;
+
+	if	(addr < data->offset)
+		return FALSE;
+	limit = data->length;
+
+		// For null-terminated strings, make the limit into the
+		// maximum length of the string.
+
+	if	(len == -1){
+		if	(addr >= limit)
+			return FALSE;
+		limit -= addr;
+		}
+	else if	(len &&
+		 (addr >= limit || addr + len > limit))
+		return FALSE;
+	if	(len == -1){
+		cp = mappedToAddressable(addr + data->address);
+		xp = memScan(cp, 0, limit);
+		len = xp - cp;
+		if	(len < limit)
+			return TRUE;
+		if	(xp[-1])
+			return FALSE;
+		}
+	return TRUE;
+	}
+/*
+	This function tests whether the kernel can legitimately write to
+	the named data buffer in the arena.  The address is relative to
+	the data segment.
+ */
+canWrite:	dynamic	(addr: vaddr_t, len: vaddr_t) boolean =
+	{
+	limit:	unsigned;
+
+	if	(addr < data->offset)
+		return FALSE;
+	limit = data->length;
+	if	(len == 0 || 
+		 (addr < limit && addr + len <= limit))
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+peekThread:	dynamic	() vaddr_t =
+	{
+	if	(threadPtr)
+		return data peekThread(threadPtr);
+	else
+		return 0;
+	}
+
+pokeThread:	dynamic	(x: vaddr_t) =
+	{
+	if	(threadPtr)
+		data pokeThread(threadPtr, x);
+	}
+
+initializeThread:	dynamic	(p: ref process, th: vaddr_t, 
+					stack: vaddr_t, func: vaddr_t) =
+	{
+	threadCount++;
+	p setUserThread(th);
+	loadProcessState(p, &lcontext);
+	p->task load(codeSegment, 
+			dataSegment, stackSegment, 
+			func, stack, data->length, 0);
+	}
+
+threadCleanup:	dynamic	(p: ref process, u: vaddr_t) =
+	{
+	if	(broken)
+		return;
+	threadCount--;
+	if	(threadCount == 0 ||
+		 mainProcess == 0)
+		return;
+	if	(mainProcess == p){		// find a new main process
+		mainProcess = 0;
+		return;
+		}
+	up:	ref vaddr_t;
+
+	up = new vaddr_t;
+	*up = u;
+	selfSend(mainProcess->mainObject->me, 
+					int(&external._reclaimThreadContext),
+					vaddr_t(up), sizeof vaddr_t);
+	}
+
+recoverSendParameters:	dynamic	(a: ref task_t) =
+	{
+	xp:		ref byte;
+	gf:	ref i386gateFrame;
+
+	memSet(a, 0, sizeof *a);
+	xp = CurProc kernelStackBottom();
+	gf = ref i386gateFrame(xp) - 1;
+	a->eip = gf->eip;
+	a->cs = gf->cs;
+	a->esp = gf->esp;
+	a->eflags = DEFAULT_FLAGS;
+	}
+
+scheduleSignal:	dynamic	(ref object, p: ref process, seq: int) =
+	{
+	xp:		ref byte;
+	oldip:		vaddr_t;
+	oldcs:		vaddr_t;
+	oldflags:	vaddr_t;
+	sp:		vaddr_t;
+	uifp:		ref signalFrame;
+	n:		threadLock;
+
+	sp = -1;
+	xp = p kernelStackBottom();
+	if	(signalHandler == 0)
+		return;
+	if	(p != CurProc)
+		n lock();
+
+	if	(p != CurProc &&
+		 p->task.cs != _GDT_KERNEL_CODE){
+			// p is in user mode
+		sp = p->task.esp - sizeof signalFrame;
+		oldcs = p->task.cs;
+		oldip = p->task.eip;
+		oldflags = p->task.eflags;
+		p->task.cs = USER_CS;
+		p->task.eip = signalHandler;
+		p->task.esp = sp;
+//		kprintf("User mode - cs:eip = %x:%x flags = %x",
+//			oldcs, oldip, oldflags);
+		}
+	else	{
+		gf:	ref i386gateFrame;
+		ifp:	ref i386trapFrame;
+
+		gf = ref i386gateFrame(xp) - 1;
+		if	(gf->cs == USER_CS){
+			sp = gf->esp - sizeof signalFrame;
+			oldcs = gf->cs;
+			oldip = gf->eip;
+			oldflags = DEFAULT_FLAGS;
+			gf->eip = signalHandler;
+			gf->cs = USER_CS;
+			gf->esp = sp;
+			}
+		else	{
+			ifp = ref i386trapFrame(xp) - 1;
+			if	(ifp->cs == USER_CS){
+				sp = ifp->esp - sizeof signalFrame;
+				oldcs = ifp->cs;
+				oldip = ifp->eip;
+				oldflags = ifp->eflags;
+				ifp->eip = signalHandler;
+				ifp->cs = USER_CS;
+				ifp->esp = sp;
+				}
+			else	{
+				kprintf("Not an interrupt frame\n");
+				return;
+				}
+			}
+//		kprintf("Kernel mode - cs:eip = %x:%x flags = %x",
+//			oldcs, oldip, oldflags);
+		}
+//	kprintf(" sp = %x new ip = %x\n", sp, signalHandler);
+	if	(!canWrite(sp, sizeof signalFrame))
+		return;
+	uifp = data lock(sp);
+	if	(uifp){
+		uifp->cs = oldcs;
+		uifp->extra = seq;
+		uifp->eip = oldip;
+		uifp->eflags = oldflags;
+//		kprintf("Signal return address patched\n");
+		}
+	data unlock();
+	if	(p != CurProc)
+		n unlock();
+	}
+/*
+handleSignal:	dynamic	(ifr: ref interruptFrame_t, o: ref object,
+					sig: signal_t) boolean =
+	{
+	if	(!callHandler(ref kernelInterruptFrame(ifr), 
+						ref animatedObject(o)))
+		return FALSE;
+	if	(myDebugger){
+		t:	task_t;
+
+		t trigger(&CurProc->task, ifr, 0x100, 0);
+		myDebugger signal(sig, t);
+		}
+	return TRUE;
+	}
+ */
+callHandler:	(ifp: ref kernelInterruptFrame, o: ref animatedObject) boolean =
+	{
+	if	(signalHandler == 0)
+		return FALSE;
+	if	(ifp->user_esp < sizeof signalFrame)
+		return FALSE;
+
+	uifp:	ref signalFrame;
+	stackA:	paddr_t;
+
+	ifp->user_esp -= sizeof signalFrame;
+	stackA = data->address;
+	stackA += ifp->user_esp;
+	uifp = mappedToAddressable(stackA);
+	uifp->cs = ifp->cs;
+	uifp->eip = ifp->eip;
+	uifp->eflags = ifp->eflags;
+	ifp->eip = signalHandler;
+	ifp->cs = USER_CS;
+	return TRUE;
+	}
+
+coreDump:	dynamic	(t: ref task_t, xcode: unsigned) boolean =
+	{
+	fd:	stream;
+	i:	int;
+	ch:	coreDumpHeader;
+	didIt:	boolean;
+
+	broken = TRUE;
+	suspendArenaExceptMe(self);
+	dup();
+	KernelArena bind(CurProc);
+	try	{
+		i = fd create("core", 0);
+		if	(i){
+			close();
+			purgeArenaExceptMe(self, xcode);
+			return FALSE;
+			}
+		}
+	except	{
+		try	{
+			i = fd create("/c/core", 0);
+			if	(i){
+				close();
+				purgeArenaExceptMe(self, xcode);
+				return FALSE;
+				}
+			}
+		except	{
+			kprintf("create faulted\n");
+			close();
+			purgeArenaExceptMe(self, xcode);
+			return FALSE;
+			}
+		}
+
+		// We have a good core file
+
+	try	{
+		memSet(&ch, 0, sizeof ch);
+		ch.magic = COR_MAGIC;
+		ch.version = COR_VERSION;
+		if	(t)
+			ch.task = *t;
+
+			// Page fault diagnostic data.
+			//	Backlink is faulting virtual address
+			//	pfaultseg gets set to the code or
+			//		data segments, as needed.
+
+		if	(ch.task.idt == 0x0e){
+			if	(ch.task.backlink >= code->address &&
+				 ch.task.backlink <= code->address +
+							code->length){
+				ch.task.backlink -= code->address;
+				ch.task.pfaultSeg = 0;
+				}
+			else if	(ch.task.backlink >= data->address &&
+				 ch.task.backlink <= data->address +
+							data->length){
+				ch.task.backlink -= data->address;
+				ch.task.pfaultSeg = 1;
+				}
+			}
+		ch.dataOffset = data->offset;
+		ch.task.ss0 = data->length;
+		fd write(ref byte(&ch)[:sizeof ch]);
+		p:	ref byte;
+
+		// we must lock the segment before we can reliably use the
+		// length indicator
+
+		p = data lock(data->offset);
+		i:	Size;
+
+		i = data checkPageIntegrity();
+		try	{
+			while	(i){
+				rem:	Size;
+
+				if	(i > 256)
+					rem = 256;
+				else
+					rem = i;
+				fd write(p[:rem]);
+				p += rem;
+				i -= rem;
+				}
+			}
+		except	{
+			kprintf("data write faulted\n");
+			}
+		data unlock();
+		didIt = TRUE;
+		}
+	except	{
+		kprintf("header write faulted\n");
+		didIt = FALSE;
+		}
+	fd close();
+	close();
+	purgeArenaExceptMe(self, xcode);
+	return didIt;
+	}
+
+mapUserMode:	() =
+	{
+
+		// Map the user code segment
+
+	setMapping(&lcontext, code->address, USER_CS, 
+				CODE_DESCR | USER_DESCR, 0, code->length);
+
+		// Map the user data segment
+
+	setMapping(&lcontext, data->address, USER_DS, 
+				DATA_DESCR | USER_DESCR, 0, data->length);
+	}
+
+	};
+
+loadProcessState:	public	(p: ref process, ldtLoc: ref localContext_t) =
+	{
+	loadProcessHardware(p->index, &p->task, ldtLoc, 
+					&p->kernelStack[KERNEL_STACK]);
+	}
+

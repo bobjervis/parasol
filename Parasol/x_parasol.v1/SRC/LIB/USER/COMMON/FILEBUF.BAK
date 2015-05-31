@@ -1,0 +1,218 @@
+include	editor;
+
+fileBuffer:	public	type	inherit	textBuffer {
+	undoStack:	ref changeStack;
+	redoStack:	ref changeStack;
+
+	public:
+
+constructor:	() =
+	{
+	undoStack = new changeStack[];
+	redoStack = new changeStack[];
+	super constructor();
+	}
+
+	// Delete the data structures, delete undo and redo lists
+
+close:	dynamic	() =
+	{
+	super close();
+	delete undoStack;
+	delete redoStack;
+	undoStack = 0;
+	redoStack = 0;
+	}
+
+	// Reset the buffer to the empty state, delete the undo and redo lists.
+
+makeEmpty:	dynamic	() =
+	{
+	undoStack close();
+	redoStack close();
+	super makeEmpty();
+	}
+
+includeFile:	dynamic	(fname: [:] char) int =
+	{
+	i:	int;
+
+	i = super includeFile(fname);
+	if	(i == SUCCESS){
+		undoStack close();
+		redoStack close();
+		}
+	return i;
+	}
+
+	// Make a change record, then insert
+
+insert:	dynamic	(newData: ref char, len: int) =
+	{
+	x:	ref changeDescriptor;
+
+	x = alloc(sizeof changeDescriptor + len);
+	memCopy(x->data, newData, len);
+	x->length = len;
+	x->location = seek(0, 1);
+	x->kind = CH_INSERT;
+	undoStack push(x);
+	redoStack close();
+	super insert(newData, len);
+	}
+
+	// Make a change record, then delete
+
+deleteText:	dynamic	(len: int) =
+	{
+	x:	ref changeDescriptor;
+
+	x = alloc(sizeof changeDescriptor + len);
+	read(x->data, len);
+	x->length = len;
+	x->location = seek(0, 1);
+	x->kind = CH_DELETE;
+	undoStack push(x);
+	redoStack close();
+	super deleteText(len);
+	}
+
+	// Move a record from the undo stack, reverse it, and move it
+	// to the redo stack.
+
+undo:	dynamic	() textPos =
+	{
+	c:	ref changeDescriptor;
+
+	c = undoStack pop();
+	if	(c){
+		redoStack push(c);
+		if	(c->kind == CH_INSERT){
+			seek(c->location, 0);
+			super deleteText(c->length);
+			return c->location;
+			}
+		else	{	// kind == CH_DELETE
+			seek(c->location, 0);
+			super insert(c->data, c->length);
+			return c->location + c->length;
+			}
+		}
+	else
+		return -1;
+	}
+
+	// Move a record from the redo stack, reapply it, and move it
+	// to the undo stack.
+
+redo:	dynamic	() textPos =
+	{
+	c:	ref changeDescriptor;
+
+	c = redoStack pop();
+	if	(c){
+		undoStack push(c);
+		if	(c->kind == CH_INSERT){
+			seek(c->location, 0);
+			super insert(c->data, c->length);
+			return c->location + c->length;
+			}
+		else	{	// kind == CH_DELETE
+			seek(c->location, 0);
+			super deleteText(c->length);
+			return c->location;
+			}
+		}
+	else
+		return -1;
+	}
+
+lastEventWasInsert:	() boolean =
+	{
+	c:	ref changeDescriptor;
+
+	c = undoStack->list;
+	if	(c)
+		return c->kind == CH_INSERT;
+	else
+		return FALSE;
+	}
+
+lastEventSize:	() size_t =
+	{
+	c:	ref changeDescriptor;
+
+	c = undoStack->list;
+	if	(c)
+		return c->length;
+	else
+		return 0;
+	}
+
+	};
+
+changeDescriptor:	type	packed	{
+	public:
+
+	next:		ref changeDescriptor;
+	location:	textPos;
+	length:		int;
+	kind:		changeKind_t;
+	data:		[] char;
+	};
+
+changeStack:	type	{
+	visible:
+
+	list:	ref changeDescriptor;
+
+	public:
+
+constructor:	() =
+	{
+	list = 0;
+	}
+
+destructor:	() =
+	{
+	close();
+	}
+
+push:	(c: ref changeDescriptor) =
+	{
+	c->next = list;
+	list = c;
+	}
+
+pop:	() ref changeDescriptor =
+	{
+	c:	ref changeDescriptor;
+
+	c = list;
+	if	(c)
+		list = c->next;
+	return c;
+	}
+
+close:	() =
+	{
+	c:	ref changeDescriptor;
+
+	while	((c = list) != 0){
+		list = c->next;
+		delete c;
+		}
+	}
+
+	};
+
+changeKind_t:	type	byte = {
+	CH_INSERT_STREAM,
+	CH_DELETE_STREAM,
+					// a stream descriptor is a 
+					// sequence of contigupous single
+					// character operations, thus
+					// compressing the commonest cases
+	CH_INSERT,
+	CH_DELETE
+	};

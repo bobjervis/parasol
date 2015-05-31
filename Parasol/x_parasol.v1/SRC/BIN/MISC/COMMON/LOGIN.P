@@ -1,0 +1,174 @@
+include	password, file, filesys, window, console, alys, editor;
+
+main:	entry	() =
+	{
+	vi:	ref loginViewer;
+
+	vi = new loginViewer[ ];
+	mainExternal(vi);
+	vi setup();
+	}
+
+loginViewer:	type	inherit	inputHandler {
+	lshell:	ref loginShell;
+
+	public:
+
+constructor:	() =
+	{
+	lshell = new loginShell[ ];
+	super constructor(lshell);
+	}
+
+setup:	() =
+	{
+	lshell setup();
+	}
+
+childExit:	gate	(ex: ExitCode) =
+	{
+	if	(ex)
+		lshell failed();
+	else
+		exit(EX_SUCCESS);
+	}
+
+	};
+
+loginShell:	type	inherit applicationShell {
+	userName:	ref textField;
+	passwd:		ref textField;
+
+	public:
+
+constructor:	() =
+	{
+	g:	ref grid;
+	rprop:	static	[] byte = [ 0, 0 ];
+	cprop:	static	[] byte = [ 0, 1 ];
+
+	super constructor("Login");
+
+	userName = new textField[ "", C_TEXT, C_READONLY ];
+	userName onEnterKey([ self, &gotoPasswd ]);
+	passwd = new textField[ "", C_TEXT, C_READONLY ];
+	passwd onEnterKey([ self, &ok ]);
+
+	g = new grid[ 2, 2 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "User name: ", C_READONLY, C_READONLY ]);
+	g cell([ 1, 0 ], userName);
+	g cell([ 0, 1 ], new caption[ " Password: ", C_READONLY, C_READONLY ]);
+	g cell([ 1, 1 ], passwd);
+
+	anchor(g);
+	configure([ 47, 4 ]);
+	userName setTextFocus();
+	}
+
+gotoPasswd:	() =
+	{
+	passwd setTextFocus();
+	}
+
+setup:	() =
+	{
+	at([ 20, 10 ]);
+	minimumSize = box.size;
+	maximumSize = box.size;
+	open();
+	}
+
+failed:	() =
+	{
+	postFooter("Failed: try again");
+	}
+
+ok:	() =
+	{
+	pf:	ref far loginAgent;
+
+	pf = ref far loginAgent(thread(&LoginAgent, 0));
+	try	{
+		s, t:	[:] char;
+
+		s = userName getValue();
+		t = passwd getValue();
+		pf sendLogin(s, t);
+		getShell() postFooter("Trying to login...");
+		}
+	except
+		getShell() postFooter("Password connection failed");
+	}
+
+	};
+
+LoginAgent:	loginAgent;
+
+loginAgent:	type	inherit	login	{
+	passwd:	[:] char;
+	wind:	ref far loginViewer;
+
+	public:
+
+sendLogin:	gate	(userName: [:] char, pwd: [:] char) =
+	{
+	x:	ref far userCatalog;
+
+	reply;
+	wind = ref far loginViewer(messageHeader->sender);
+	passwd = new [|pwd] char;
+	passwd [:]= pwd;
+	x = ref far userCatalog(FileSystem attach("/service/password",
+				":model.password.userCatalog"));
+	if	(x)
+		x tryToLogin(userName, PASSWORD_VERSION);
+	else
+		exit(EX_FAIL);
+	}
+
+askForPassword:	gate	(key: [:] byte) [] byte =
+	{
+	buf:	[256] byte;
+	out:	[:] byte;
+
+	out = encryptPassword(buf, passwd, key);
+	return out;
+	}
+
+ack:	gate	(uid: userId, gid: userId, homeDirectory: [:] char) =
+	{
+	reply;
+
+		// So, we are logged in.
+
+	try	{
+		p:	ref far External;
+		cmd:	[MAXPATH] char;
+		shell:	[:] char;
+		fcmd:	[:] char;
+		lookup:	PathList = [];
+
+		myHost() setUserid(uid, gid);
+		try lookup useEnvironment("PATH");
+		fcmd = lookup search("lsession", ".run", 0);
+		if	(|fcmd == 0)
+			exit(EX_FAIL);
+		newJob();
+		p = FileSystem spawn(0, fcmd, homeDirectory);
+		if	(p){
+			printf("p = %d\n", p);
+			disown(p);
+			exit(EX_SUCCESS);
+			}
+		}
+	exit(EX_FAIL);
+	}
+
+nack:	gate	() =
+	{
+	reply;
+	exit(EX_FAIL);
+	}
+
+	};

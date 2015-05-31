@@ -1,0 +1,7 @@
+include	file;
+
+main:	entry	() =
+	{
+	printf("Hello, world\n");
+	exit(EX_SUCCESS);
+	}

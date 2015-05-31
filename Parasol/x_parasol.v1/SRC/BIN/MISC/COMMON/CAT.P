@@ -1,0 +1,62 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	error;
+include	file;
+include	filesys;
+
+main:	entry	() =
+	{
+	src:		[:] char;
+	ff:		finder;
+	catted:		boolean;
+	dir:		[:] char;
+	pattern:	[:] char;
+	i:		int;
+
+	if	(|commandLine.arguments == 0)
+		usage();
+	for	(i = 0; i < |commandLine.arguments; i++){
+		src = commandLine.arguments[i];
+		dir = getDirectory(src);
+		pattern = stripDirectory(src);
+		if	(ff open(dir, pattern, 0) != SUCCESS){
+			stderr printf("Incorrect path string: %S\n", src);
+			continue;
+			}
+		for	(catted = FALSE; ff next() == SUCCESS; catted = TRUE)
+			cat(ff.pathname);
+		if	(!catted)
+			stderr printf("No match: %S\n", src);
+		}
+	exit(EX_SUCCESS);
+	}
+
+usage:	() =
+	{
+	printf("Use is: cat file(s)\n");
+	exit(EX_FAIL);
+	}
+
+cat:	(fn: [:] char) =
+	{
+	fd:	stream;
+	i:	int;
+
+	i = fd open(fn, AR_READ);
+	if	(i){
+		stderr printf("%S: %S\n", cmdError(i), fn);
+		return;	
+		}
+	for	(;;){
+		i = fd getc();
+		if	(i == EOF || i == 26)
+			break;
+		putchar(i);
+		}
+	fd close();
+	}

@@ -1,0 +1,79 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+_ErrorCode:	type	int = {
+	public:
+	ERRNOFILE		= -9,	// File not found
+	ERRNOPATH		= -10,	// Path not found
+	ERRMFILE		= -11,	// Too many open files
+	ERRBADFILENUMBER	= -12,	// Bad file number
+	ERRINTERNAL		= -13,	// Kernel internal error
+	ERRNOMEMORY		= -14,	// Not enough core
+	ERRINVALIDFORMAT	= -15,	// Invalid format
+	ERRINVALIDDATA		= -16,	// Invalid data
+	ERRINVALIDDRIVE		= -17,	// Invalid drive specified
+	ERRNOTSAME		= -18,	// Not same device
+	ERRINVALIDARGUMENT	= -19,	// Invalid argument
+	ERRNOTRUNFILE		= -20,	// Run file format error
+	ERREXIST		= -21,	// File already exists
+	ERRPROCESSTABLEFULL	= -22,	// Too many active processes
+	ERRNOCHILDREN		= -23,	// No child processes
+	ERRNOTFOUND		= -24,	// Designated object not found
+	ERRINTERRUPTED		= -25,	// Operation was interrupted
+	ERRNOPARENTCONTEXT	= -26,	// discardArena with no parent
+	ERRDISKFULL		= -27,	// disk full on write
+	ERRNETBUSY		= -28,	// ALYSnet already enabled
+	ERRNODEDOWN		= -29,	// ALYSnet node is down
+	ERRNETDOWN		= -30,	// ALYSnet not enabled
+	ERRMDRIVER		= -31,	// Too many loaded drivers
+	ERRVERSION		= -32,	// Wrong version
+	ERRMAXMESSAGE		= -33	// Top of the error messages
+	};
+
+cmdError:	public	(i: int) [:] char =
+	{
+	if	(i <= ERRMAXMESSAGE || i > SUCCESS)
+		i = ERRMAXMESSAGE;
+	return ERR_STRING[-i];
+	}
+
+ERR_STRING:	const [] [:] char = [
+	"Success",
+	"Invalid function number",
+	"Permission denied",
+	"Exception raised",
+	"-- Unknown -- ",
+	"-- Unknown -- ",
+	"-- Unknown -- ",
+	"-- Unknown -- ",
+	"-- Unknown -- ",
+	"File not found",
+	"Path not found",
+	"Too many open files",
+	"Bad file number",
+	"Kernel internal error",
+	"Not enough core",
+	"Invalid format",
+	"Invalid data",
+	"Invalid drive specified",
+	"Not same device",
+	"Invalid argument",
+	"Not a Runfile or file contents garbled",
+	"Object already exists",
+	"Process Table full",
+	"No child processes",
+	"Object not found",
+	"Interrupted",
+	"No parent context",
+	"Disk full",
+	"Net already defined",
+	"Net node is unavailable",
+	"Net is not enabled",
+	"Too many drivers loaded",
+	"Wrong version",
+	"Unknown error"
+	];

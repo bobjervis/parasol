@@ -1,0 +1,173 @@
+include	kprintf;
+include	memory;
+include	driver;
+include	hardware;
+include	process, object;
+include	alys;
+
+NDRIVERS:	const int = 64;		// maximum number of drivers
+
+Driver:	public	ref far driver = ref far driver(23);
+
+DriverTable:	[NDRIVERS] ref driver;
+
+/*
+	driverInit
+
+	This class describes the object that is created to govern the
+	driver load process.
+ */
+driverInit:	public	type	inherit	external	{
+	public:
+
+	loadingDriver:	ref alysDriver;
+
+constructor:	(drvr: ref alysDriver) =
+	{
+	loadingDriver = drvr;
+	}
+
+	};
+
+alysDriver:	public	type	inherit	driver {
+	public:
+	code:			ref segment;
+	data:			ref segment;
+	resident:		boolean;	// TRUE for resident drivers
+	mainProcess:		ref process;
+	symbols:		ref __Symbols_t;
+	entryFuncs:		int;
+	cleanPtr:		vaddr_t;
+	arguments:		ref char;
+	index:			int;
+
+constructor:	(c: ref segment, d: ref segment, 
+				syms: vaddr_t, args: ref char,
+				ef: int, cf: int) =
+	{
+	n:	threadLock;
+
+	index = NDRIVERS;
+	n lock();
+	for	(index = 0; index < NDRIVERS; index++)
+		if	(DriverTable[index] == 0){
+			DriverTable[index] = self;
+			break;
+			}
+	n unlock();
+	resident = FALSE;
+	code = c;
+	data = d;
+	symbols = mappedToAddressable(data->address + syms);
+	arguments = args;
+	entryFuncs = ef;
+	cleanPtr = entryFuncs * sizeof _EntryVector + 
+					cf * sizeof _CleanupVector;
+	}
+
+lastClose:	gate	() boolean =
+	{
+	if	(resident)
+		return FALSE;
+	else	{
+		unload();
+		return TRUE;
+		}
+	}
+
+makeResident:	gate	() =
+	{
+	resident = TRUE;
+	}
+
+makeNonResident:	gate	() =
+	{
+	resident = FALSE;
+	}
+
+unload:	() =
+	{
+	ecode:	ExitCode;
+	f:	ref (ExitCode) ExitCode;
+
+		// The driver was properly loaded
+
+	if	(CurProc->animates->me == objectId)
+		ecode = CurProc->exitCode;
+	else
+		ecode = EX_SUCCESS;
+	if	(index < NDRIVERS){
+		DriverTable[index] = 0;
+		if	(ecode & EX_CAUSE == EX_NORMAL){
+			ep:	ref _CleanupVector;
+			eop:	ref _CleanupVector;
+
+			ep = mappedToAddressable(data->address + 
+					cleanPtr - sizeof _CleanupVector);
+			eop = mappedToAddressable(data->address + 
+					entryFuncs * sizeof _EntryVector);
+			while	(ep >= eop){
+				f = pointer(mappedToCodeAddress(code->address + 
+								vaddr_t(*ep)));
+				ecode = f(ecode);
+				ep--;
+				}
+			}
+		}
+	else if	(ecode == EX_SUCCESS)
+		ecode = EX_FAIL;
+	if	(CurProc->animates->me == objectId)
+		CurProc->exitCode = ecode;
+	unloadObjects(data);
+	data close();
+	code close();
+	delete self;
+	}
+
+success:	() boolean =
+	{
+	return index < NDRIVERS;
+	}
+
+grow:	(newLen: vaddr_t) boolean =
+	{
+	res:		boolean;
+	n:		threadLock;
+
+	n lock();
+	res = data grow(newLen);
+	n unlock();
+	return res;
+	}
+
+	};
+/*
+	This function is the entry point that the driver process runs in.
+	It is passed the pointer to the driver object the process is 
+	initializing.
+ */
+executeDriver:	public	() =
+	{
+	drvrInit:	ref driverInit;
+	drvr:		ref alysDriver;
+	ip:		ref _EntryVector;
+	i:		int;
+	code:		ExitCode;
+	f:		ref ();
+	x:		ref far external;
+
+	drvrInit = ref driverInit(CurProc->animates->actualObject);
+	drvr = drvrInit->loadingDriver;
+	x = publishKernel(CurProc->animates->name, ":model.driver.driver",
+				drvr, AR_ANY, AR_ANY, AR_NONE, AR_NONE);
+	CurProc->animates->context makeLocal(x, Driver);
+	ip = mappedToAddressable(drvr->data->address);
+	for	(i = 0; i < drvr->entryFuncs; i++, ip++){
+		drvr->cleanPtr = vaddr_t(ip->exit);
+		f = pointer(mappedToCodeAddress(drvr->code->address + 
+							vaddr_t(ip->func)));
+		f();
+		}
+	exit(EX_SUCCESS);
+	}
+

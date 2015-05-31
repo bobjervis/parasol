@@ -1,0 +1,21 @@
+include	console, file, window;
+
+main:	entry	() =
+	{
+	cons:	ref far console;
+
+	if	(|commandLine.arguments > 1){
+		printf("Use is: BEEP [ console-name ]\n");
+		exit(EX_FAIL);
+		}
+	else if	(|commandLine.arguments == 1)
+		cons = locateConsole(commandLine.arguments[0]);
+	else
+		cons = locateConsole("");
+	if	(cons == 0){
+		printf("Could not connect to console\n");
+		exit(EX_FAIL);
+		}
+	cons beep();
+	exit(EX_SUCCESS);
+	}

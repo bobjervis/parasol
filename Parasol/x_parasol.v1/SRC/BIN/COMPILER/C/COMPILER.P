@@ -1,0 +1,28 @@
+outputModes:	public	type	byte = {
+	OM_DBG =	0x01,
+	OM_ASM =	0x04,
+	OM_H = 		0x08,
+	OM_C =		0x10,
+	OM_MAKE =	0x20,
+	OM_SYM =	0x40,
+	OM_IMPL =	0x80,
+	};
+
+project:	public	type inherit External { public:
+
+build:	gate	(outputModes) int =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+compile:	gate	([:] char, outputModes) int =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+load:	gate	(outputModes) int =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+	};

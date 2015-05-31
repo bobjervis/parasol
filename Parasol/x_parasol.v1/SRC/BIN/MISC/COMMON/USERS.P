@@ -1,0 +1,42 @@
+include	password, file;
+
+main:	entry	() =
+	{
+	x:	ref far userCatalog;
+
+	x = ref far userCatalog(FileSystem attach("/service/password",
+				":model.password.userCatalog"));
+	if	(x == 0){
+		printf("Couldn't find the password server: /service/password\n");
+		exit(EX_FAIL);
+		}
+
+	i, ver:	int;
+	nbuf:		[USER_NAME_LENGTH] char;
+	name:		[:] char;
+	hbuf:		[MAXPATH] char;
+	homeDir:	[:] char;
+	u:		userDescriptor_t;
+
+	name = nbuf;
+	homeDir = hbuf;
+	ver = x startListing();
+	for	(i = 0;; i++){
+		try	{
+			name [:]= x listUserName(ver, i);
+			if	(|name == 0)
+				exit(EX_SUCCESS);
+			homeDir [:]= x listHomeDirectory(ver, i);
+			u = x listUser(ver, i);
+			printf("%*S: %5d %5d %S\n",
+					USER_NAME_LENGTH, name, 
+						u.userid, u.groupid,
+						homeDir);
+			}
+		except	{
+			printf("Users report interrupted: try again\n");
+			exit(EX_FAIL);
+			}
+		}
+	exit(EX_SUCCESS);
+	}

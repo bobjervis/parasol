@@ -1,0 +1,780 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	error;
+include	process;
+include	vmemory;
+include	memory;
+include	node;
+include	kprintf;
+include	hardware, list;
+
+SECTOR_SIZE:		public	const	int = 512;
+MAX_PARTITIONS:		public	const	int = 32;
+
+sector_t:	public	type	unsigned[32];
+cacheCluster_t:	public	type	unsigned[16];
+
+systemIndicators:	public	type	unsigned[16] = {
+	SI_DOS_12 =		0x001,
+	SI_XENIX2 = 		0x002,
+	SI_XENIX3 =		0x003,
+	SI_DOS_16 =		0x004,
+	SI_EXTENDED =		0x005,
+	SI_BIGDOS =		0x006,
+	SI_HPFS =		0x007,
+	SI_SPLIT =		0x008,
+	SI_BOOTMGR =		0x00a,			// OS/2 2.0 boot manager
+	SI_DOS_12_HIDDEN =	0x011,			// hidden by boot manager
+	SI_DOS_16_HIDDEN =	0x014,			// hidden by boot manager
+	SI_BIGDOS_HIDDEN = 	0x016,			// hidden by boot manager
+	SI_DM_RO =		0x050,
+	SI_DM_RW =		0x051,
+	SI_GB =			0x056,
+	SI_SPEED61 =		0x061,
+	SI_386IX =		0x063,
+	SI_NOVELL =		0x064,
+	SI_PCIX =		0x075,
+	SI_CPM =		0x0db,
+	SI_SPEEDE1 =		0x0e1,
+	SI_SPEEDE3 =		0x0e3,
+	SI_SPEEDF1 =		0x0f1,
+	SI_SPEEDF4 =		0x0f4,
+	SI_BBT =		0x1ff,
+
+		// DOS floppy media
+
+	SI_DOS_360K =		0x100,
+	SI_DOS_1_2M =		0x102,
+	SI_DOS_720K =		0x103,
+	SI_DOS_1_4M =		0x104,
+	};
+
+partitionTable:		public	[MAX_PARTITIONS] Partition;
+
+activePartitions:	public	() int =
+	{
+	i:	int;
+
+	for	(i = 0; i < MAX_PARTITIONS; i++)
+		if	(partitionTable[i].system == 0)
+			break;
+	return i;
+	}
+
+Partition:	public	type	{
+	public:
+
+	sectorCount:		sector_t;
+	sectorOffset:		sector_t;
+	system:			unsigned[16];
+	index:			byte;
+	drive:			ref DiskDrive;
+	removable:		boolean;
+
+create:	factory	(sys: unsigned[16], rem: boolean) ref Partition =
+	{
+	n:	threadLock;
+	i:	int;
+
+	n lock();
+	for	(i = 0; i < MAX_PARTITIONS; i++)
+		if	(partitionTable[i].system == 0){
+			partitionTable[i].system = sys;
+			partitionTable[i].index = i;
+			n unlock();
+			partitionTable[i].removable = rem;
+			return &partitionTable[i];
+			}
+	n unlock();
+	return 0;
+	}
+
+display:	() =
+	{
+	kprintf("Partition %2d sys %03x [%7d:%7d]\n", index,
+				system, sectorOffset, sectorCount);
+	}
+
+readDisk:	(sector: sector_t, buf: pointer, count: sector_t) =
+	{
+	drive read(sector + sectorOffset, buf, count);
+	}
+
+writeDisk:	(sector: sector_t, buf: pointer, count: sector_t) =
+	{
+//	kprintf("writeDisk(%x,,%d)\n", sector, count);
+	drive write(sector + sectorOffset, buf, count);
+	}
+
+read:	(psect: sector_t, buf: ref byte, sectCount: sector_t) =
+	{
+	c:		ref cache;
+	i:		int;
+	j:		int;
+
+	while	(sectCount > 0){
+		j = sectCount;
+		if	(j > 256)
+			j = 256;
+		for	(i = 0; i < j; i++){
+			c = findThisBlock(psect + i);
+			if	(c)
+				break;
+			}
+
+			// We've got some number of blocks to read, read them
+
+		if	(i){
+			readDisk(psect, buf, i);
+
+				// Now put the data into the cache
+
+			while	(i){
+				rfillSector(buf, psect);
+				i--;
+				buf += SECTOR_SIZE;
+				psect++;
+				sectCount--;
+				}
+			if	(sectCount == 0)
+				break;
+			}
+		memCopy(buf, CacheData + (c - Cache) * SECTOR_SIZE, SECTOR_SIZE);
+		c release();
+		sectCount--;
+		psect++;
+		buf += SECTOR_SIZE;
+		}
+	}
+
+/*
+	This routine is used for full-block disk writes.  Multiple block
+	writes are also executed here.
+ */
+write:	(psect: sector_t, buf: ref byte, sectCount: long, 
+						clust: cacheCluster_t) =
+	{
+	while	(sectCount > 0){
+		fillSector(buf, psect, clust);
+		buf += SECTOR_SIZE;
+		psect++;
+		sectCount--;
+		}
+	}
+/*
+	This routine is used for full-block disk fills.  Multiple block
+	fills are also executed here.
+ */
+fill:	(psect: sector_t, sectCount: long, clust: cacheCluster_t) =
+	{
+	while	(sectCount > 0){
+		emptySector(psect, clust);
+		psect++;
+		sectCount--;
+		}
+	}
+
+emptySector:	(psect: sector_t, clust: cacheCluster_t) =
+	{
+	c:		ref cache;
+	cp:		ref byte;
+
+	c = findSector(psect, FALSE);
+	cp = CacheData + (c - Cache) * SECTOR_SIZE;
+	memSet(cp, 0, SECTOR_SIZE);
+	if	(clust == 0)
+		writeDisk(psect, cp, 1);
+	else	{
+		c->status |= CS_DIRTY;
+		c->cluster = clust;
+		}
+	c release();
+	}
+
+rfillSector:	(buf: pointer, psect: long) =
+	{
+	c:		ref cache;
+	cp:		ref char;
+
+	c = findSector(psect, FALSE);
+	cp = CacheData + (c - Cache) * SECTOR_SIZE;
+	memCopy(cp, buf, SECTOR_SIZE);
+	c release();
+	}
+
+fillSector:	(buf: pointer, psect: long, clust: cacheCluster_t) =
+	{
+	c:		ref cache;
+	cp:		ref char;
+
+	c = findSector(psect, FALSE);
+	cp = CacheData + (c - Cache) * SECTOR_SIZE;
+	memCopy(cp, buf, SECTOR_SIZE);
+	if	(clust == 0)
+		writeDisk(psect, cp, 1);
+	else	{
+//		kprintf("fillSector(%p, %d, %d)\n", buf, psect, clust);
+//		kprintf("c->sector = %d\n", c->sector);
+		c->status |= CS_DIRTY;
+		c->cluster = clust;
+		}
+	c release();
+	}
+/*
+	This function writes a sector from the disk cache back to disk.
+	This routine is used for directory operations and for partial block
+	disk writes.
+
+	The correct protocol to read a sector into the cache, modify some
+	of it, and write it back out to disk is this:
+
+	Use readSector to get the data pointer into the cache entry.  Do
+	the data modification and call writeSector with the buffer pointer.
+	The sector and partition specification are found in the cache.
+ */
+writeSector:	(buf: pointer, clust: cacheCluster_t) =
+	{
+	c:		ref cache;
+
+	c = Cache + unsigned(ref char(buf) - CacheData) >> 9;
+	if	(clust == 0)
+		writeDisk(c->sector, buf, 1);
+	else	{
+		c->status |= CS_DIRTY;
+		c->cluster = clust;
+		}
+	c release();
+	}
+
+readSector:	(psect: long) pointer =
+	{
+	c:		ref cache;
+	cp:		ref char;
+
+	c = findSector(psect, TRUE);
+	return CacheData + (c - Cache) * SECTOR_SIZE;
+	}
+
+releaseSector:	(buf: pointer) =
+	{
+	c:		ref cache;
+
+	c = Cache + unsigned(ref byte(buf) - CacheData) >> 9;
+	c release();
+	}
+/*
+	A cluster value of zero forces a full blown sync for the whole 
+	partition.
+ */
+syncCluster:	(clust: cacheCluster_t) =
+	{
+	c, cn:	ref cache;
+	rq:	ref cache;
+
+		// Find the oldest available block in the cache
+
+	for	(;;){
+		for	(c = ref cache(CacheAge.next);; c = cn){
+			if	(c == &CacheAge)
+				return;
+			cn = ref cache(c->next);
+			if	((clust == 0 ||
+				  c->cluster == clust) &&
+				 c->partition == index &&
+				 c->status & CS_DIRTY)
+				break;
+			}
+		gatherRequest(c);
+		}
+	}
+
+getAddressing:	() AddressScheme =
+	{
+	if	(drive)
+		return drive getAddressing();
+	else
+		return AS_UNDEFINED;
+	}
+
+setAddressing:	(a: AddressScheme) =
+	{
+	if	(drive)
+		drive setAddressing(a);
+	}
+
+private:
+
+gatherRequest:	(rq: ref cache) =
+	{
+	c, cn:	ref cache;
+	i:	sector_t;
+	j:	int;
+
+	rq acquire();
+	c = ref cache(rq->next);
+	rq extract();
+	rq makeEmpty();			// make the request the head of a list
+	i = rq->sector + 1;
+//	kprintf("gatherRequest([ %d @ %p ])\n", rq->sector, rq dataAddress());
+	while	(c != &CacheAge){
+		cn = ref cache(c->next);
+		if	(c->sector == i &&
+			 c->cluster == rq->cluster &&
+			 c->partition == index &&
+			 c->status & CS_DIRTY){
+			if	(drive ioTooLarge(rq->sector + sectorOffset, 
+							sectorOffset + i))
+				break;
+			c acquire();
+			c extract();
+			rq enqueue(c);
+			i++;
+			}
+		c = cn;
+		}
+
+		// We have an I/O request to submit.
+
+	drive writeCache(sectorOffset, rq, i - rq->sector);
+	}
+
+findSector:	(sector: sector_t, readit: boolean) ref cache =
+	{
+	c:		ref cache;
+	cmap:		ref cache;
+	cp:		ref char;
+	i:		int;
+	j:		int;
+	lowClock:	unsigned[16];
+	lowCache:	ref cache;
+	lowData:	ref char;
+
+	j = sector % SPREAD;
+	CacheAcquire down(FALSE);
+	cmap = CacheMap[j];
+	for	(c = cmap; c; c = c->nextHash)
+		if	(c->sector == sector &&
+			 c->partition == index){
+
+				// Move the block to the new end of the age q
+
+			c extract();
+			CacheAge enqueue(c);
+			c acquire();
+			CacheAcquire up();
+			alysNode.cacheHits++;
+			return c;
+			}
+
+		// Find the oldest available block in the cache
+
+	c = findOldCache();
+	c acquire();
+	c extract();
+	lowCache = c;
+	i = lowCache->sector % SPREAD;
+
+		// Hash queues are changing!
+
+	if	(i != j){
+		cp, cn:	ref cache;
+
+			// Pull lowCache off its hash queue
+
+		cp = lowCache->prevHash;
+		cn = lowCache->nextHash;
+//		kprintf("c = %p cp = %p cn = %p sector = %d new sector = %d\n",
+//				c, cp, cn, c->sector, sector);
+		if	(cp)
+			cp->nextHash = cn;
+		if	(cn)
+			cn->prevHash = cp;
+		if	(CacheMap[i] == lowCache)
+			CacheMap[i] = cn;
+
+			// Put lowCache onto its new hash queue
+
+		if	(cmap)
+			cmap->prevHash = lowCache;
+		lowCache->nextHash = cmap;
+		lowCache->prevHash = 0;
+		CacheMap[j] = lowCache;
+		}
+	lowCache->sector = sector;
+	lowCache->partition = index;
+	lowCache->cluster = 0;
+	CacheAge enqueue(lowCache);
+	CacheAcquire up();
+	cp = CacheData + (lowCache - Cache) * SECTOR_SIZE;
+	if	(readit)
+		readDisk(sector, cp, 1);
+	alysNode.cacheMisses++;
+	return lowCache;
+	}
+
+findOldCache:	() ref cache =
+	{
+	c:	ref cache;
+
+		// First look for the oldest non-dirty, non-busy pages
+
+	for	(c = ref cache(CacheAge.next);; c = ref cache(c->next)){
+		if	(c == &CacheAge)	// entire cache is busy!
+			break;
+		if	(c->status & (CS_BUSY|CS_DIRTY) == 0)
+			return c;
+		}
+
+		// Ok, take any old cache block
+
+	for	(c = ref cache(CacheAge.next);; c = ref cache(c->next)){
+		if	(c == &CacheAge){	// entire cache is busy!
+			c = ref cache(CacheAge.next);
+			break;			// use the oldest to free up
+			}
+		if	(c->status & CS_BUSY == 0)
+			break;
+		}
+	if	(c->status & CS_DIRTY)
+		gatherRequest(c);
+	return c;
+	}
+
+findThisBlock:	(sector: sector_t) ref cache =
+	{
+	c:		ref cache;
+
+	for	(c = CacheMap[sector % SPREAD]; c; c = c->nextHash)
+		if	(c->sector == sector &&
+			 c->partition == index){
+
+			// Move the block to the new end of the cache
+
+			c extract();
+			CacheAge enqueue(c);
+			alysNode.cacheHits++;
+			return c;
+			}
+	return 0;
+	}
+
+	};
+
+countCache:	public	() int =
+	{
+	i:	int;
+	c:	ref cache;
+
+	i = 0;
+	for	(c = ref cache(CacheAge.next); c != &CacheAge; 
+						c = ref cache(c->next))
+		i++;
+	return i;
+	}
+/*
+	The resizeCache routine accepts a size in bytes.  This size is only
+	the size of actual data and does not include cache block headers.
+	This makes it easier for someone to calculate the number of blocks
+	in the cache from the requested size (if the cache header changes
+	the number of blocks in the cache won't).
+ */
+resizeCache:	public	(newSize: unsigned[32]) int =
+	{
+	newCacheSize:	unsigned[32];
+	i, j:		int;
+
+	newCacheSize = newSize / SECTOR_SIZE;
+	if	(newCacheSize < 1)
+		newCacheSize = 1;		// rock bottom minimum,
+						// very slow cache
+	newSize = newCacheSize * (SECTOR_SIZE + sizeof cache);
+	if	(!CacheAcquire down(TRUE))
+		return ERRINTERRUPTED;
+
+		// Now we control the cache, don't give it up until we're
+		// done.  No more cache entries will be allocated from now
+		// until we're done.
+
+		// First acquire all the blocks.  This will quiesce the cache
+		// and let us modify it without worry.  Any blocks already
+		// acquired will eventually free up.
+
+	for	(i = 0; i < CacheSize; i++)
+		Cache[i] acquire();
+
+	CacheSegment unlock();
+	j = CacheSegment grow(newSize);
+	if	(j < 0){			// couldn't grow the cache,
+						// it's unchanged.
+		CacheSegment lock(0);
+
+			// release the blocks
+
+		for	(i = 0; i < CacheSize; i++)
+			Cache[i] release();
+		}
+	else
+		prepareCache();
+	CacheAcquire up();
+	return SUCCESS;
+	}
+
+initDiskCache:	public	() =
+	{
+	i:		int;
+	c:		ref cache;
+	seg:		ref segment;
+
+	if	(HighMemory == 0)		// No extended RAM
+		i = 32;				//	16K of cache
+	else if	(HighMemory < 0x80000)		// < 512K of extended RAM
+		i = 128;			//	64K of cache
+	else if	(HighMemory < 0x100000)		// < 1024K of extended RAM
+		i = 256;			//	128K of cache
+	else if	(HighMemory < 0x200000)		// < 2048K of extended RAM
+		i = 512;			// 	256K of cache
+	else if	(HighMemory < 0x400000)		// < 4096K of extended RAM
+		i = 1024;			// 	512K of cache
+	else if	(HighMemory < 0x800000)		// < 8192K of extended RAM
+		i = 2048;			//	1 meg of cache
+	else					// >= 8192K of extended RAM
+		i = 4096;			// 	2 megs of cache
+	for	(;;){
+		j:	vaddr_t;
+
+		j = i * (sizeof cache + SECTOR_SIZE);
+		seg = segment create(0, 0, j, j);
+		if	(seg)
+			break;
+		i >>= 1;
+		}
+	if	(i < 16)
+		kprintf("No room for significant data caching\n");
+	CacheSegment = seg;
+	CacheAcquire initialize(1, 0, 0);
+	BlockAcquire initialize(0, 0, 0);
+	CacheSize = i;
+	prepareCache();
+	}
+
+prepareCache:	() =
+	{
+	i:	int;
+	c:	ref cache;
+
+	CacheData = CacheSegment lock(0);
+	Cache = ref cache(CacheData + CacheSize * SECTOR_SIZE);
+	memSet(Cache, 0, CacheSize * sizeof cache);
+	CacheAge makeEmpty();
+	for	(i = 0, c = Cache; i < CacheSize; i++, c++)
+		CacheAge enqueue(c);
+	memSet(&CacheMap, 0, sizeof CacheMap);
+	}
+/*
+	The ALYS Disk cache needs to satisfy the following requirements:
+
+	- Processes waiting on I/O activity must get prompt service.
+
+	- Unflushed output must be able to loiter in the cache as dirty
+	  buffers until the cache buffers are needed or the output is
+	  flushed.
+
+	- Output must be flushed when the file for that output is closed.
+
+	- File systems code must be able to perform I/O that bypasses the
+	  cache.  In particular, FAT sectors are managed by higher level
+	  logic, not by the general cache.
+
+	- The cache must be able to perform read-ahead when the file
+	  system requests it.
+
+	The ALYS version 1.0 cache was a write-through cache that did no
+	anticipatory I/O.  There was also no scheduling of disk I/O to
+	optimize throughput.  I/O was performed stictly in response to
+	process demand.
+
+	In scheduling I/O there are several issues to observe:
+
+	- The disk controller can perform only one operation at a time.
+
+	- Seeks cannot be overlapped on separate drives.  This means that
+	  there is no advantage issuing seek and read operations in two
+	  parts.
+
+	- An elevator algorithm should produce the best overall disk
+	  throughput.  OPerations in separate drives should be alternated 
+	  to insure balanced response.  Thus, each controller should
+	  maintain a combined I/O request list sorted by sector first and
+	  drive second.
+
+	Because disks are formatted for non-interleaved operations, the best
+	overall performance is attained by clustering I/O operations so
+	that full tracks are read or written as units.
+
+	The higher level logic will be able to identify contiguous strings
+	of blocks to read or write, so the low-level logic can do the 
+	operation scheduling.
+
+	The device drivers must support scatter / gather cache operations.
+
+
+	THe data structures are:
+
+	The CacheAge list starts out as a list of free blocks and eventually
+	becomes a list of live blocks.  This list is a strict queue.  If a
+	live block in the queue is accessed it is moved to the end of the
+	queue.  This effectively makes this an LRU cache.
+
+	The CacheMap points at blocks, whether they are live in the CacheAge
+	queue or in some i/o request queue.  
+
+	The algorithms are now:
+
+	- read operation
+
+		Obtain a list of cache blocks.  
+ */
+SPREAD:		const	unsigned = 128;
+
+cacheStatus_t:	type	byte = {
+	CS_BUSY		= 0x01,
+	CS_DIRTY	= 0x02,
+	CS_LIVE		= 0x04,
+	};
+
+cache:	public	type	inherit	queue	{
+	public:
+
+	nextHash:	ref cache;
+	prevHash:	ref cache;
+	partition:	byte;
+	sector:		sector_t;
+	status:		cacheStatus_t;
+	cluster:	cacheCluster_t;
+
+dataAddress:	() pointer =
+	{
+	return CacheData + (self - Cache) * SECTOR_SIZE;
+	}
+
+acquire:	() =
+	{
+	n:	threadLock;
+
+	n lock();
+	while	(status & CS_BUSY){
+		//kprintf("busy sector = %d\n", sector);
+		DesiredBlock = self;
+		BlockAcquire down(FALSE);
+		}
+	DesiredBlock = 0;
+	status |= CS_BUSY;
+	n unlock();
+	}
+
+finish:	() =
+	{
+	status &= ~CS_DIRTY;
+	extract();
+	CacheAge enqueue(self);
+	}
+
+release:	() =
+	{
+	n:	threadLock;
+
+	n lock();
+	status &= ~CS_BUSY;
+	if	(DesiredBlock == self)
+		BlockAcquire wakeup();
+	n unlock();
+	}
+
+	};
+
+CacheMap:	[SPREAD] ref cache;
+
+Cache:			ref cache;
+CacheAge:		queue;		// oldest cache blocks are at head
+CacheData:		ref char;
+CacheSize:		int;
+CacheSegment:	public	ref segment;
+CacheAcquire:		kernelSemaphore;
+BlockAcquire:		kernelSemaphore;
+DesiredBlock:		ref cache;
+
+DiskDrive:	public	type	{
+	public:
+
+read:		dynamic	(sector: sector_t, buffer: pointer, count: int) =
+	{
+	}
+
+write:		dynamic	(sector: sector_t, buffer: pointer, count: int) =
+	{
+	}
+
+readCache:	dynamic	(so: sector_t, c: ref cache, count: int) =
+	{
+	i:	int;
+
+	for	(i = 0; i < count; i++, c = ref cache(c->next))
+		read(c->sector + so, c dataAddress(), 1);
+	}
+
+writeCache:	dynamic	(so: sector_t, c: ref cache, count: int) =
+	{
+	i:	int;
+	cn:	ref cache;
+
+	for	(i = 0; i < count; i++, c = cn){
+		cn = ref cache(c->next);
+		write(c->sector + so, c dataAddress(), 1);
+		c finish();
+		c release();
+		}
+	}
+/*
+	This function returns TRUE if an i/o operation from sector start to
+	sector end would be 'too large'.  This is defined as either spanning
+	a cylinder boundary or being more sectors than the controller will
+	allow.
+ */
+ioTooLarge:	dynamic	(start: sector_t, end: sector_t) boolean =
+	{
+	return TRUE;			// force an operation per sector
+	}
+
+getAddressing:	dynamic	() AddressScheme =
+	{
+	return AS_UNDEFINED;
+	}
+
+setAddressing:	dynamic	(AddressScheme) =
+	{
+	}
+
+	};
+
+AddressScheme:	public	type	byte = {
+	AS_UNDEFINED,			// Not an IDE addressing drive
+	AS_UNKNOWN,			// Unknown sector addressing
+	AS_ORIGINAL,			// Original IDE addressing
+	AS_LINEAR,			// Linear (Super) IDE addressing
+	AS_EXTENDED,			// Extended IDE addressing
+	AS_LAST				// Last IDE addressing scheme
+	};
+
+addressingNames:	public	[] ref char = [
+	"undefined",
+	"unknown",
+	"original IDE",
+	"super IDE",
+	"extended IDE",
+	"last"
+	];

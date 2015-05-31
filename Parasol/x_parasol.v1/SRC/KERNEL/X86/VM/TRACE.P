@@ -1,0 +1,98 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	kprintf;
+include	vmemory;
+include	hardware;
+
+trace:	public	(esp: unsigned, ebp: unsigned, smin: unsigned, 
+			smax: unsigned) =
+	{
+	nsp:	unsigned;
+	nbp:	unsigned;
+	eip:	unsigned;
+
+	if	(ebp == 0){
+		if	(esp >= smin && esp < smax)
+			dumpData(pointer(esp), 0x60);
+		}
+	while	(1){
+		if	(ebp == 0)
+			break;
+		kprintf("esp: %08x%c ebp: %08x%c ", esp, esp & 3 ? '*' : ' ',
+						   ebp, ebp & 3 ? '*' : ' ');
+		if	(esp < smin){
+			kprintf("Stack overflow\n");
+			break;
+			}
+		if	(esp > smax){
+			kprintf("Stack underflow\n");
+			break;
+			}
+
+		if	(ebp < esp ||
+			 ebp > smax - 4){
+			kprintf("Frame pointer is not valid\n");
+			break;
+			}
+		nbp = * ref unsigned(ebp);
+		if	(nbp &&
+			 nbp < ebp){
+			kprintf("Frames are not ascending\n");
+			break;
+			}
+		nsp = locateReturnAddress(ebp, nbp, smax);
+		if	(nsp == 0 ||
+			 nsp > smax - 4){
+			kprintf("Could not find return address\n");
+			break;
+			}
+		eip = * ref unsigned(nsp);
+		kprintf("from %08x\n", eip);
+		esp = nsp + 4;
+		ebp = nbp;
+		}
+	}
+
+locateReturnAddress:	(oldframe: unsigned, newframe: unsigned,
+				maxframe: unsigned) unsigned =
+	{
+	retnp:	ref unsigned;
+
+	if	(newframe &&
+		 newframe < maxframe)
+		maxframe = newframe;
+	for	(retnp = ref unsigned(oldframe + 4); 
+			unsigned(retnp) < maxframe;
+			retnp++){
+		eip:	unsigned;
+
+		eip = *retnp;
+		if	(eip < CodeOffset ||
+			 eip >= CSsize)
+			continue;
+		if	(eip >= CodeOffset + 5){
+			bp:	ref byte;
+
+			bp = physicalToAddressable(CSbase + eip - 5);
+			if	(*bp == 0xe8)
+				return unsigned(retnp);
+			}
+		if	(eip >= CodeOffset + 7){
+			bp:	ref byte;
+			i:	unsigned;
+
+			bp = physicalToAddressable(CSbase + eip - 7);
+			for	(i = 0; i < 6; i++, bp++){
+				if	(*bp == 0xff &&
+					 (bp[1] >> 3) & 7 == 2)
+					return unsigned(retnp);
+				}
+			}
+		}
+	return 0;
+	}

@@ -1,0 +1,415 @@
+include	password, file, error, alys, string, filesys, heap;
+
+main:	entry	() =
+	{
+	svc:	[:] char;
+	pass:	[:] char;
+
+	if	(|commandLine.arguments != 1 &&
+		 |commandLine.arguments != 2)
+		help();
+	svc = commandLine.arguments[0];
+	if	(|commandLine.arguments == 2)
+		pass = commandLine.arguments[1];
+	else	{
+		buf:	[MAXPATH] char;
+		dir:	[:] char;
+
+		dir = getDirectory(commandLine.commandPath);
+		pass = stringDup(makePath(buf, dir, 
+						"../data/password.dat", ""));
+		}
+	loadPasswordFile(pass);
+	mainExternal(&UserCatalog);
+	permit(AR_ANY, AR_READ|AR_WRITE, AR_READ, AR_READ);
+	i:	int;
+
+	i = FileSystem register(UserCatalog.objectId, svc, 
+					":model.password.userCatalog");
+	if	(i){
+		printf("Unable to register as '%S': %S\n", svc, cmdError(i));
+		help();
+		}
+	}
+
+loadPasswordFile:	(pfile: [:] char) =
+	{
+	f:	stream;
+	i:	int;
+	s:	[:] char;
+	buf:	[512] char;
+	last:	ref userRecord;
+	count:	int;
+
+	i = f open(pfile, AR_READ);
+	if	(i != SUCCESS){
+		printf("Unable to open '%S': %S\n", pfile, cmdError(i));
+		help();
+		}
+	for	(count = 0;; count++){
+		name, passwd, uids, gids, home:	[:] char;
+		uid, gid:			userId;
+
+		s = f gets(buf);
+		if	(|s == 0)
+			break;
+		s = stringTrim(s);
+		i = stringScan(s, '#');
+		if	(i >= 0)
+			|s = i;
+		if	(|s == 0)
+			continue;
+		i = stringScan(s, ':');
+		if	(i < 0)
+			continue;
+		name = stringTrim(s[:i]);
+		s = s[i + 1:];
+		i = stringScan(s, ':');
+		if	(i < 0)
+			continue;
+		passwd = stringTrim(s[:i]);
+		s = s[i + 1:];
+		i = stringScan(s, ':');
+		if	(i < 0)
+			continue;
+		uids = stringTrim(s[:i]);
+		s = s[i + 1:];
+		i = stringScan(s, ':');
+		if	(i < 0)
+			continue;
+		gids = stringTrim(s[:i]);
+		s = s[i + 1:];
+		home = stringTrim(s);
+
+		sc:	stringConverter = [ uids ];
+
+		uid = sc encodeUnsigned();
+		if	(!sc.success)
+			continue;
+		sc = [ gids ];
+		gid = sc encodeUnsigned();
+		if	(!sc.success)
+			continue;
+		urec:	ref userRecord;
+
+		urec = new userRecord[ name, passwd, uid, gid, home ];
+		if	(Users)
+			last->next = urec;
+		else
+			Users = urec;
+		last = urec;
+		}
+	f close();
+	UserCount = count;
+	UserVector = new [count] ref userRecord;
+	for	(i = 0, last = Users; last; last = last->next, i++)
+		UserVector[i] = last;
+	PasswordFile = stringDup(pfile);
+	}
+
+writePasswordFile:	() int =
+	{
+	fd:	stream;
+	i:	int;
+	j:	int;
+	fbase:	[:] char;
+	fbak:	[MAXPATH] char;
+
+		/* If the file already exists, rename it to .BAK */
+
+	if	(FileSystem access(PasswordFile, AR_WRITE) == SUCCESS){
+		s:	[:] char;
+
+		fbase = stripExtension(PasswordFile);
+		s = makePath(fbak, "", fbase, ".bak");
+		FileSystem unlink(s);
+		FileSystem move(PasswordFile, s);
+		}
+	i = fd create(PasswordFile, FA_SEEKOK);
+	if	(i)
+		return i;
+	u:	ref userRecord;
+	for	(i = 0; i < UserCount; i++){
+		u = UserVector[i];
+		fd printf("%S:%S:%d:%d:%S\n", u->name, u->passwd, u->uid,
+				u->gid, u->home);
+		}
+	fd close();
+	return SUCCESS;
+	}
+
+PasswordFile:	[:] char;
+UserVector:	ref ref userRecord;
+UserCount:	int;
+Users:	ref userRecord;
+
+userRecord:	type	{
+	visible:
+
+	name, passwd, home:	[:] char;
+	uid, gid:		userId;
+
+	public:
+
+	next:			ref userRecord;
+
+constructor:	(nm: [:] char, p: [:] char, u: userId, g: userId, 
+							hm: [:] char) =
+	{
+	name = stringDup(nm);
+	passwd = stringDup(p);
+	uid = u;
+	gid = g;
+	home = stringDup(hm);
+	next = 0;
+	}
+
+display:	() =
+	{
+	printf("%S: %S [%d, %d] @ %S\n", name, passwd, uid, gid, home);
+	}
+
+	};
+
+UserCatalog:	inherit	userCatalog	{
+	pwordVer:	int;
+
+	public:
+
+tryToLogin:	gate	(name: [:] char, version: int) =
+	{
+	u, ux:	ref userRecord;
+	i:	int;
+	c:	ref challenger;
+
+	if	(version != PASSWORD_VERSION)
+		reject(ERRVERSION);
+	u = 0;
+	for	(i = 0; i < UserCount; i++){
+		ux = UserVector[i];
+		if	(stringCompare(name, ux->name) == 0){
+			u = ux;
+			break;
+			}
+		}
+	c = SharedHeap new challenger[ u, 
+				ref far login(messageHeader->sender),
+				CH_LOGIN ];
+	thread(c, 0) start();
+	}
+/*
+	This function notifies the password server that the given user is
+	logging out.
+ */
+logout:	gate	(user: userId) =
+	{
+	printf("logout(%d)\n", user);
+	}
+
+//
+//	Add a user to the user catalog
+//
+addUser:	gate	(uid: userId, gid: userId, 
+			 name: [:] char,
+			 passwd: [:] char,
+			 home: [:] char) int =
+	{
+	if	(messageHeader->rights & AR_WRITE == 0)
+		return ERRPERMISSION;
+	u:	ref userRecord;
+	i:	int;
+
+	for	(i = 0; i < UserCount; i++){
+		u = UserVector[i];
+		if	(stringCompare(name, u->name) == 0)
+			return ERREXIST;
+		}
+	u = new userRecord[ name, passwd, uid, gid, home ];
+	uv:	ref ref userRecord;
+
+	uv = new [UserCount + 1] ref userRecord;
+	memCopy(uv, UserVector, UserCount * sizeof ref userRecord);
+	UserVector[UserCount] = u;
+	UserCount++;
+	i = writePasswordFile();
+	if	(i)
+		return i;
+	pwordVer++;
+	return SUCCESS;
+	}
+//
+//	Initiate a verify password sequence.
+//
+verifyPassword:	gate	(name: [:] char, version: int) =
+	{
+	if	(version != PASSWORD_VERSION)
+		reject(ERRVERSION);
+	u, ux:	ref userRecord;
+	i:	int;
+	c:	ref challenger;
+
+	u = 0;
+	for	(i = 0; i < UserCount; i++){
+		ux = UserVector[i];
+		if	(stringCompare(name, ux->name) == 0){
+			u = ux;
+			break;
+			}
+		}
+	c = SharedHeap new challenger[ u, 
+				ref far login(messageHeader->sender),
+				CH_VERIFY ];
+	thread(c, 0) start();
+	}
+//
+//	Initiate a change password sequence.
+//
+changePassword:	gate	(name: [:] char, version: int) =
+	{
+	if	(version != PASSWORD_VERSION)
+		reject(ERRVERSION);
+	u, ux:	ref userRecord;
+	i:	int;
+	c:	ref challenger;
+
+	u = 0;
+	for	(i = 0; i < UserCount; i++){
+		ux = UserVector[i];
+		if	(stringCompare(name, ux->name) == 0){
+			u = ux;
+			break;
+			}
+		}
+	c = SharedHeap new challenger[ u, 
+				ref far login(messageHeader->sender),
+				CH_CHANGE ];
+	thread(c, 0) start();
+	}
+
+lastClose:	gate	() boolean =
+	{
+	printf("lastClose()\n");
+	reply TRUE;	
+	exit(EX_SUCCESS);
+	}
+
+startListing:	gate	() int =
+	{
+	return pwordVer;
+	}
+
+listUser:	gate	(ver: int, index: int) userDescriptor_t =
+	{
+	u:	userDescriptor_t;
+
+	checkArgs(ver, index);
+	u.userid = UserVector[index]->uid;
+	u.groupid = UserVector[index]->gid;
+	return u;
+	}
+
+listUserName:	gate	(ver: int, index: int) [] char =
+	{
+	s:	[:] char;
+
+	checkArgs(ver, 0);
+	if	(index >= UserCount)
+		return "";
+	checkArgs(ver, index);
+	s = UserVector[index]->name;
+	replyGeneric(s, |s);
+	}
+
+listHomeDirectory:	gate	(ver: int, index: int) [] char =
+	{
+	s:	[:] char;
+
+	checkArgs(ver, index);
+	s = UserVector[index]->home;
+	replyGeneric(s, |s);
+	}
+
+	private:
+
+checkArgs:	(ver: int, index: int) =
+	{
+	if	(ver != pwordVer)
+		reject(ERRVERSION);
+	if	(index < 0 ||
+		 index >= UserCount)
+		reject(ERRNOTFOUND);
+	}
+
+	};
+
+challenge_t:	type	byte = {
+	CH_LOGIN,
+	CH_CHANGE,
+	CH_VERIFY
+	};
+
+challenger:	type	inherit	External	{
+	loginProgram:	ref far login;
+	user:		ref userRecord;
+	kind:		challenge_t;
+
+	public:
+
+constructor:	(u: ref userRecord, log: ref far login, k: challenge_t) =
+	{
+	user = u;
+	loginProgram = log;
+	kind = k;
+	}
+
+start:	gate	() =
+	{
+	reply;				// Let the password server continue
+
+	enc:	[:] byte;
+	buf:	[100] byte;
+	key:	[10] byte;
+
+//	if	(user)
+//		printf("Challenging %d for user %S\n", loginProgram, user->name);
+//	else
+//		printf("Challenging %d deadfall\n", loginProgram);
+	try	{
+		enc = buf;
+		enc [:]= loginProgram askForPassword(key);
+		if	(user == 0 ||
+			 stringCompare(enc, user->passwd))
+			loginProgram nack();
+		else	{
+			switch	(kind){
+			case	CH_LOGIN:
+				loginProgram ack(user->uid, user->gid,
+							user->home);
+				break;
+
+			case	CH_CHANGE:
+				enc [:]= loginProgram askForNewPassword(key);
+				break;
+
+			case	CH_VERIFY:
+				loginProgram verified();
+				}
+			}
+		}
+	except	{
+//		printf("Challenge aborted\n");
+		}
+	exit(0);
+	}
+
+	};
+
+help:	() =
+	{
+	printf(	"Use is: userlog service-name [ password-file ]\n"
+		"	If password-file is omitted, the file is found\n"
+		"	at ../data/password.dat\n"
+		"	The file will be created if it does not exist.\n"
+		);
+	exit(1);
+	}

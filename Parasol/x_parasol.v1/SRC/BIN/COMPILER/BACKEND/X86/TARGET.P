@@ -1,0 +1,1405 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+
+include	tparams;
+include	types, functype;
+include	value;
+include	symtab;
+include	ptree;
+include	backend;
+
+/*
+	This function returns an updated bit offset given a starting
+	bit offset and a type.  The assumption is that the next member
+	of a structure to be allocated has type t, and the current
+	cumulative bit offset is given by bitOffset.  The return value
+	is the possibly padded bit offset.
+ */
+packedAdjustment:	public	(bitOffset: addr_t, t: ref type_s) addr_t =
+	{
+	width:		int;
+	bytePart:	int;
+
+	if	(t->topType != T_SIGNED &&
+		 t->topType != T_UNSIGNED)
+		return (bitOffset + 7) & ~7;
+	bytePart = bitOffset & 7;
+	width = t bitSizeOf();
+	if	(width + bytePart >= LONGBITS)
+		return (bitOffset + 7) & ~7;
+	else
+		return bitOffset;
+	}
+
+immediateSconstArgument: public	(ref tree_p, ref type_s) ref tree_p =
+	{
+	return 0;
+	}
+
+immediateDescriptorArgument: public	(ref tree_p, ref type_s) ref tree_p =
+	{
+	return 0;
+	}
+
+TargetData:	public	{
+	public:
+
+	autoCount:		addr_t;
+	parmCount:		addr_t;
+	bytesPushed:		addr_t;
+	parameterBaseOffset:	addr_t;
+	reservedRegisters:	RegisterMask;
+	usedRegisters:		RegisterMask;
+	flags:			targetFlags;
+	staticInitializer:	boolean;
+	ellipsisUsed:		boolean;
+	floatTempsUsed:		boolean;
+	busyFloatingInst:	boolean;
+	changed:		boolean;
+	vars:			ref variable;
+	gateArgsSymbol:		ref symbol_s;
+	indirectReturn:		ref symbol_s;
+	spills:			ref spill;
+	lastSpill:		ref spill;
+	currentScope:		ref blockScope;
+
+clearBenefitCounts:	() =
+	{
+	v:	ref variable;
+
+	for	(v = vars; v; v = v->next){
+		v->totalCount = 0;
+		v->shiftCount = 0;
+		}
+	}
+
+	};
+
+usesIndirectReturn:	public	() boolean =
+	{
+	t:	ref type_s;
+
+//	printf("GATE? %d size %d\n", TargetData.funcType->callingConvention == FC_GATE,
+//			TargetData.funcType->returnType sizeOf());
+	if	(Func->currentType->callingConvention == FC_GATE)
+		return FALSE;
+	t = Func->currentType->returnType getType();
+	if	(t->topType == T_FLOAT)
+		return FALSE;
+	else if (t sizeOf() > 4)
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+spillKinds:	public	type	char = {
+	SPK_PUSH,
+	SPK_POP,
+	SPK_MOVE,
+	SPK_XCHG,
+	SPK_FPSPILL,	/* floating point spills use: spillKind, flags, */
+	SPK_FPRELOAD	/* where, tempVar, newRegister			*/
+	};
+
+spill:	public	type	{
+	public:
+
+	next:		ref spill;
+	prev:		ref spill;
+	spillKind:	spillKinds;
+	width:		byte;		// spill width in bits
+	newRegister:	regNum;
+	where:		ref tree_p;
+	affected:	ref tree_p;
+	other:		ref tree_p;
+	tempVar:	ref variable;	/* for floating point spills:     */
+					/* var to spill to or reload from */
+
+display:	(x: ref tree_p) =
+	{
+	while	(self){
+		if	(where == x){
+			printf("%x: spill %d w %d reg %d\n", self, spillKind, 
+						width, newRegister);
+			}
+		self = next;
+		}
+	}
+
+	};
+
+targetFlags:	public	type	char = {
+	TF_JDIST	= 0x01,
+	TF_TRY		= 0x02,
+	TF_FULL_FRAME	= 0x04,
+	};
+/*
+	This function determines, for floating point comparisons, whether
+	the compare can be done with one jump or two.
+
+	Returns:
+
+	0	One jump will do
+	-1	NaN doesn't jump
+	1	NaN jumps
+ */
+extraJp:	public	(op: operators, tt: ref type_s) signedByte =
+	{
+	if	(tt->topType != T_FLOAT)
+		return 0;
+	switch	(op){
+	case	O_EQ:
+	case	O_LT:
+	case	O_LE:
+		return -1;
+
+	case	O_NLT_GT:
+	case	O_NE:
+	case	O_NLT:
+	case	O_NLE:
+	case	O_NGT:
+	case	O_NGE:
+		return 1;
+		}
+	return 0;
+	}
+
+mapCondition:	public	(op: operators, tt: ref type_s) jumpCondition =
+	{
+	ujcc:	static	[] jumpCondition = 
+				[ JC_EQ, JC_NE, JC_UGT,JC_ULT,JC_UGE,JC_ULE,
+				  JC_JUMP, JC_NOOP, 
+				  JC_UGE, JC_UGT, JC_ULE, JC_ULT,
+				  JC_NE, JC_EQ];
+	fjcc:	static	[] jumpCondition = 
+				[ JC_EQ, JC_NE, JC_UGT,JC_ULT,JC_UGE,JC_ULE,
+				  JC_NOPARITY, JC_PARITY, 
+				  JC_UGE, JC_UGT, JC_ULE, JC_ULT,
+				  JC_NE, JC_EQ];
+	jcc:	static	[] jumpCondition = 
+				[ JC_EQ, JC_NE, JC_GT, JC_LT, JC_GE, JC_LE,
+				  JC_JUMP, JC_NOOP, 
+				  JC_GE, JC_GT, JC_LE, JC_LT,
+				  JC_NE, JC_EQ];
+
+	if	(op < O_EQ ||
+		 op > O_NLT_GT)
+		return JC_NOOP;
+	switch	(tt->topType){
+	case	T_FLOAT:
+		return fjcc[op - O_EQ];
+
+	case	T_UNSIGNED:
+	case	T_REF:
+		return ujcc[op - O_EQ];
+
+	default:
+		return jcc[op - O_EQ];
+		}
+	}
+/*
+	testflags expects that t points to an expression that is
+	(_FLAGS & (expression)) in form, and must decide how to
+	proceed.  The oper is one of the six comparison operators
+	(O_EQ, O_NE, O_GT, O_LT, O_GE, or O_LE).  Only equal and
+	not equal compares are of interest.  Also only and operations
+	where the right hand side is some constant power of 2.
+
+	This function returns JC_NOOP if the test does not correspond to some
+	built in jump instruction.  Any other condition is the kind of jump
+	that should be generated.
+ */
+testflags:	public	(oper: jumpCondition, i: int) jumpCondition =
+	{
+        if	(i < 0)			/* check for not a power of 2 */
+		return JC_NOOP;
+
+		/* We have a power of two test against _FLAGS.  Now check
+		   to see that we are testing a flag that we are interested
+		   in.
+
+			i = 0	- CARRY
+			i = 2	- PARITY
+			i = 4	- AUXILIARY CARRY (not interesting)
+			i = 6	- ZERO
+			i = 7	- SIGN
+			i = 8	- TRACE (not interesting)
+			i = 9	- INTERRUPT (not interesting)
+			i = 10	- DIRECTION (not interesting)
+			i = 11	- OVERFLOW
+		 */
+
+	switch	(i){
+	case	0:	
+		oper = (oper == JC_EQ ? JC_NOCARRY    : JC_CARRY);
+		break;
+
+	case	2:
+		oper = (oper == JC_EQ ? JC_NOPARITY   : JC_PARITY);
+		break;
+
+	case	6:
+		oper = (oper == JC_EQ ? JC_NE         : JC_EQ);
+		break;
+
+	case	7:
+		oper = (oper == JC_EQ ? JC_NOSIGN     : JC_SIGN);
+		break;
+
+	case	11:
+		oper = (oper == JC_EQ ? JC_NOOVERFLOW : JC_OVERFLOW);
+		break;
+
+	default:
+		return JC_NOOP;
+		}
+	return oper;
+	}
+/*
+	This type records a register mask for register allocation operations.
+ */
+RegisterMask:	public	type	unsigned[16];
+/*
+	This function returns a non-zero value if the named register is
+	in the register mask given by res, zero otherwise.
+ */
+fits:	public	(reg: regNum, res: RegisterMask) RegisterMask = 
+	{
+	return getRegMask(reg) & res;
+	}
+/*
+	This function returns non-zero if the two register masks share
+	some common registers, zero otherwise.
+ */
+overlaps:	public	(rs1: RegisterMask, rs2: RegisterMask) RegisterMask = 
+	{
+	return rs1 & rs2;
+	}
+
+getRegMask:	public	(rx: regNum) RegisterMask = 
+	{
+	return 1 << rx;
+	}
+
+ALmask:	public	const	int = 0x0001;
+AHmask:	public	const	int = 0x0002;
+DLmask:	public	const	int = 0x0004;
+DHmask:	public	const	int = 0x0008;
+BLmask:	public	const	int = 0x0010;
+BHmask:	public	const	int = 0x0020;
+CLmask:	public	const	int = 0x0040;
+CHmask:	public	const	int = 0x0080;
+SImask:	public	const	int = 0x0100;
+DImask:	public	const	int = 0x0200;
+BPmask:	public	const	int = 0x0400;
+SPmask:	public	const	int = 0x0800;
+ESmask:	public	const	int = 0x1000;
+DSmask:	public	const	int = 0x2000;
+CSmask:	public	const	int = 0x4000;
+SSmask:	public	const	int = 0x8000;
+AXmask:	public	const	int = ALmask;
+BXmask:	public	const	int = BLmask;
+CXmask:	public	const	int = CLmask;
+DXmask:	public	const	int = DLmask;
+
+regNum:	public	type	char = {
+	AL,
+	AH,
+	DL,
+	DH,
+	BL,
+	BH,
+	CL,
+	CH,
+	SI,
+	DI,
+	BP,
+	SP,
+	ES,
+	DS,
+	CS,
+	SS,
+
+	FS,
+	GS,
+
+		// The floating point stack, in case we need it
+
+	FST0,
+	FST1,
+	FST2,
+	FST3,
+	FST4,
+	FST5,
+	FST6,
+	FST7,
+
+	AX = AL,
+	DX = DL,
+	BX = BL,
+	CX = CL,
+
+	EAX = AX,
+	EBX = BX,
+	ECX = CX,
+	EDX = DX,
+
+	ESI = SI,
+	EDI = DI,
+	EBP = BP,
+	ESP = SP,
+	nullReg = 0xFF
+	};
+
+RegNames:	public	const	[] ref char = [
+	"eax",
+	"ah",
+	"edx",
+	"dh",
+	"ebx",
+	"bh",
+	"ecx",
+	"ch",
+	"esi",
+	"edi",
+	"ebp",
+	"esp",
+	"es",
+	"ds",
+	"cs",
+	"ss",
+
+	"fs",
+	"gs",
+
+	"st(0)",
+	"st(1)",
+	"st(2)",
+	"st(3)",
+	"st(4)",
+	"st(5)",
+	"st(6)",
+	"st(7)",
+	];
+
+rLong:	public	const	int = AXmask|BXmask|CXmask|DXmask|SImask|DImask;
+
+/*
+	The operation field of a node acts as an index into the
+	_Nodes table, which is a static array of nodeDescriptors.
+
+	The nodeName string is used for debugging dumps of the node
+	blocks and has no affect on code generation.
+
+	The asmInstruction field is used for assembly language output
+	and is usually the mnemonic for the instruction.  In some cases
+	where the node takes no parameters, the instruction includes
+	both a mnemonic and a set of default parameters.
+
+	The instSize field contains the size estimate for the instruction,
+	apart from any address mode data.  Note that the estimate is
+	chosen to be conservative.  If there are special encodings for
+	certain operand values, these are not taken into account.
+
+	The nodeClass is a bit mask filled in with QC_ values.
+	Nodes can occur in three formats: operation, symbol and integer
+	constant.  Two bit values together determine the format of the
+	node.  Note that the format of the node is known from the
+	operation.
+
+		QC_SYMBOL	If set, this node has symbol format.
+
+		QC_CONST	If set, and QC_SYMBOL is not set, the
+				node has integer constant format.  Note
+				the QC_SYMBOL and QC_CONST are set for
+				offset and segment value nodes.
+
+	If neither of these values is set, the node is an operation
+	node.
+
+		QC_FLOAT	Indicates a floating point operation.
+
+		QC_MOVE		Indicates a move style operation.
+
+	Bits which are not used for machine independant information
+	are available for target dependant information.  In the 8086
+	code generator the following node class bits are defined:
+
+		QC_IMMED	The operation can take an immediate
+				constant right operand.
+
+		QC_BYTE		The operation is has a byte encoding
+				for small constant operands.
+
+	The qType field provides a relative index.  For example, there
+	are times when a move operation must be generated to move a temp
+	into the proper register for the node to work.  In such a case
+	the move corresponding to the node is found using this
+	information.  For example, using the 8086 code generator, if
+	you have a I386_CMPx node, you can get the corresponding move
+	node by computing the following expression (where qOp is the
+	node operation (I386_CMPx):
+
+			I386_MOVC + _Nodes[qOp].qType
+
+	The qType field describes the type of the result.  Perhaps we should
+	add a new field (qOpndType) for operand types and leave this as
+	the intuitively better 'type of the node', i.e. the result type?
+
+	The leftAllowed, rightAllowed and resultsAllowed fields give the
+	index within the _Results table where the prioritized list of
+	allowed registers are to be found for that node.
+
+	The tempsUsed field is the index within the _Used table which
+	contains a register mask of the register used internall to the
+	given node.
+
+	The op1, op2 and op3 fields are used in object file instruction
+	encoding and are filled in with very specific values.  Different
+	nodes assign different meanings to these fields.
+ */
+nodeDescriptor:	public	type	{
+	public:
+	nodeClass:	nClasses;
+	nCode:		i386opcode;
+	sCode:		i386opcode;	// swapped operands opcode
+	};
+
+nClasses:	public	type unsignedLong = {
+	NC_SYMBOL =	0x000001,
+	NC_FLOAT =	0x000002,
+	NC_MOVE =	0x000004,
+	NC_CONST =	0x000008,
+	NC_COMMU =	0x000010,	/* Commutative operation */
+//	NC_REG =	0x000020,
+	NC_CLEAN =	0x000040,	/* Operation doesn't modify operands */
+	NC_LEFT =	0x000100,	/* Prefer the left operand, if there is
+					   a choice.  Basically, if the node
+					   is not an assignment node, the left
+					   hand operand register is assigned to
+					   the result.
+					 */
+//	NC_VAR =	0x000200,	/* Node is a variable */
+//	NC_CALL =	0x000400,	/* Node is a call */
+//	NC_WAIT =	0x000800,	/* The node needs an FWAIT if one is 
+//					   pending */
+//	NC_SPCALL =	0x001000,	/* The node is a special internal 
+//					   call */
+	NC_FREE =	0x002000,	/* The node generates no code itself */
+	NC_IMMED =	0x004000,
+	NC_BYTE =	0x008000,
+	NC_LEFTOP =	0x010000L,
+	NC_RIGHTOP =	0x020000L,
+	NC_NLEAF =	(NC_LEFTOP|NC_RIGHTOP),
+	NC_NOCSE =	0x040000L,
+	};
+
+Nodes:	public	const	[] nodeDescriptor = [
+	[ NC_FREE ],				// O_ERROR
+	[ NC_SYMBOL,	I386_MOVC ],		// O_ID
+	[ NC_CONST,	I386_MOVC ],		// O_ICON
+	[ NC_CONST,	I386_MOVC ],		// O_FCON
+	[ NC_SYMBOL,	I386_MOVC ],		// O_SELF
+	[ NC_SYMBOL,	I386_MOVC ],		// O_SUPER
+	[ NC_SYMBOL,	I386_MOVC ],		// O_TOS
+	[ NC_SYMBOL,	I386_MOVC ],		// O_REG
+	[ NC_SYMBOL,	I386_MOVC ],		// O_AUTO
+	[ NC_SYMBOL,	I386_MOVC ],		// O_DYNAMIC
+	[ NC_SYMBOL,	I386_MOVC ],		// O_REMOTE
+	[ NC_SYMBOL,	I386_MOVC ],		// O_TYPE
+	[ NC_SYMBOL,	I386_MOVC ],		// O_SCONST
+	[ NC_SYMBOL,	I386_MOVC ],		// O_LITERAL
+	[ NC_CONST,	I386_MOVC ],		// O_ELLIPSIS
+
+	    /* Binary operators */
+
+	[ NC_NLEAF|NC_COMMU|NC_LEFT|NC_BYTE|NC_IMMED,
+			I386_ADDC, I386_ADDC ],		// O_ADD
+	[ NC_NLEAF|NC_LEFT|NC_BYTE|NC_IMMED,
+			I386_SUBC, I386_SUBRF - 3 ],	// O_SUB
+	[ NC_NLEAF|NC_COMMU, I386_MULC, I386_MULC ],	// O_MUL
+	[ NC_NLEAF, 	I386_DIVC, I386_DIVRF - 3 ],	// O_DIV
+	[ NC_NLEAF,	I386_DIVC ],			// O_MOD
+	[ NC_NLEAF|NC_LEFT, I386_LSLC ],		// O_LSH
+	[ NC_NLEAF|NC_LEFT, I386_LSRC ],		// O_RSH
+	[ NC_NLEAF|NC_COMMU|NC_LEFT|NC_BYTE|NC_IMMED,
+			I386_ANDC ],			// O_AND
+	[ NC_NLEAF|NC_COMMU|NC_LEFT|NC_BYTE|NC_IMMED,
+			I386_ORC ],			// O_OR
+	[ NC_NLEAF|NC_COMMU|NC_LEFT|NC_BYTE|NC_IMMED,
+			I386_XORC ],			// O_XOR
+
+	[ NC_NLEAF|NC_MOVE|NC_IMMED,
+			I386_MOVC ],			// O_ASG
+	[ NC_NLEAF|NC_LEFT|NC_BYTE|NC_IMMED,
+			I386_ADDC, I386_ADDC ],		// O_ADA
+	[ NC_NLEAF|NC_LEFT|NC_BYTE|NC_IMMED,
+			I386_SUBC, I386_SUBF - 3 ],	// O_SBA
+	[ NC_NLEAF,	I386_MULC, I386_MULC ],		// O_MUA
+	[ NC_NLEAF,	I386_DIVC, I386_DIVRF - 3 ],	// O_DVA
+	[ NC_NLEAF,	I386_DIVC ],			// O_MOA
+	[ NC_NLEAF|NC_LEFT, I386_LSLC ],		// O_LSA
+	[ NC_NLEAF|NC_LEFT, I386_LSRC ],		// O_RSA
+	[ NC_NLEAF|NC_LEFT|NC_BYTE|NC_IMMED,
+			I386_ANDC ],			// O_ANA
+	[ NC_NLEAF|NC_LEFT|NC_BYTE|NC_IMMED,
+			I386_ORC ],			// O_ORA
+	[ NC_NLEAF|NC_LEFT|NC_BYTE|NC_IMMED,
+			I386_XORC ],			// O_XRA
+	[ NC_NOCSE|NC_CLEAN|NC_BYTE|NC_IMMED,
+			I386_CMPC, I386_CMPC ],			// O_EQ
+	[ NC_NOCSE|NC_CLEAN|NC_BYTE|NC_IMMED,
+			I386_CMPC, I386_CMPC ],			// O_NE
+	[ NC_NOCSE|NC_CLEAN|NC_BYTE|NC_IMMED,
+			I386_CMPC, I386_CMPC ],			// O_GT
+	[ NC_NOCSE|NC_CLEAN|NC_BYTE|NC_IMMED,
+			I386_CMPC, I386_CMPC ],			// O_LT
+	[ NC_NOCSE|NC_CLEAN|NC_BYTE|NC_IMMED,
+			I386_CMPC, I386_CMPC ],			// O_GE
+	[ NC_NOCSE|NC_CLEAN|NC_BYTE|NC_IMMED,
+			I386_CMPC, I386_CMPC ],			// O_LE
+	[ NC_NOCSE|NC_CLEAN|NC_BYTE|NC_IMMED,
+			I386_CMPC, I386_CMPC ],			// O_ORD
+	[ NC_NOCSE|NC_CLEAN|NC_BYTE|NC_IMMED,
+			I386_CMPC, I386_CMPC ],			// O_UNORD
+	[ NC_NOCSE|NC_CLEAN|NC_BYTE|NC_IMMED,
+			I386_CMPC, I386_CMPC ],			// O_NLT
+	[ NC_NOCSE|NC_CLEAN|NC_BYTE|NC_IMMED,
+			I386_CMPC, I386_CMPC ],			// O_NLE
+	[ NC_NOCSE|NC_CLEAN|NC_BYTE|NC_IMMED,
+			I386_CMPC, I386_CMPC ],			// O_NGT
+	[ NC_NOCSE|NC_CLEAN|NC_BYTE|NC_IMMED,
+			I386_CMPC, I386_CMPC ],			// O_NGE
+	[ NC_NOCSE|NC_CLEAN|NC_BYTE|NC_IMMED,
+			I386_CMPC, I386_CMPC ],			// O_LT_GT
+	[ NC_NOCSE|NC_CLEAN|NC_BYTE|NC_IMMED,
+			I386_CMPC, I386_CMPC ],			// O_NLT_GT
+	[ NC_NLEAF|NC_LEFT|NC_BYTE|NC_IMMED,
+			I386_ADDC ],			// O_INA
+	[ NC_NLEAF|NC_LEFT|NC_BYTE|NC_IMMED,
+			I386_SUBC, I386_SUBRF - 3 ],	// O_DEA
+	[ 0 ],						// O_QUES
+	[ 0 ],						// O_LAND
+	[ 0 ],						// O_LOR
+	[ 0 ],						// O_SEQ
+	[ 0 ],						// O_ARG
+	[ 0 ],						// O_IOARROW
+	[ 0 ],						// O_INIT
+
+	   /* Unary operators */
+
+	[ NC_NLEAF|NC_LEFT, I386_NEGC ],		// O_NEG
+	[ NC_NLEAF|NC_LEFT, I386_NEGC ],		// O_PLUS
+	[ NC_NLEAF|NC_LEFT, I386_COMC ],		// O_COM
+	[ NC_NLEAF|NC_LEFT ],				// O_NOT
+	[ NC_NLEAF,	I386_MOVC ],			// O_IND
+	[ NC_CONST ],					// O_ADR
+
+	   /* Special operators */
+
+	[ 0 ],						// O_FLD
+	[ 0 ],						// O_CAST
+	[ NC_IMMED ],					// O_SCALL
+	[ NC_IMMED ],					// O_MCALL
+	[ NC_IMMED ],					// O_RCALL
+	[ 0 ],						// O_DOT
+	[ 0 ],						// O_ARROW
+	[ 0 ],						// O_SUBSCRIPT
+	[ 0 ],						// O_SLICE
+	[ 0 ],						// O_BOUND
+	[ 0 ],						// O_MBOUND
+	[ 0 ],						// O_SIZEOF
+
+		/* Code generation operations */
+
+	[ 0 ],						// O_INTRPT
+	[ 0 ],						// O_ABS
+	[ 0 ],						// O_OUT
+	[ 0 ],						// O_IN
+	[ 0 ],						// O_EMIT
+	[ 0 ],						// O_MSCAN
+	[ 0 ],						// O_MCOPY
+	[ 0 ],						// O_MSET
+	[ NC_NLEAF|NC_LEFT, I386_ROLL-2 ],		// O_ROL
+	[ NC_NLEAF|NC_LEFT, I386_RORL-2 ],		// O_ROR
+	[ 0 ],						// O_FABS
+	[ 0 ],						// O_XCHG
+	[ 0 ],						// O_RNDINT
+	[ 0 ],						// O_CVTBCD
+	[ NC_NOCSE|NC_CLEAN|NC_BYTE|NC_IMMED,
+				I386_TESTC ],		// O_TST
+
+	[ 0 ],						// O_ALLOCTOS
+	[ 0 ],						// O_NEW
+	[ 0 ],						// O_TYPELEN
+	[ 0 ],						// O_OFFSETOF
+	[ 0 ],						// O_TYPEOF
+	[ 0 ],						// O_SEND
+	[ 0 ],						// O_BLOCK
+	[ 0 ],						// O_DECL
+	[ 0 ],						// O_GOTO
+	[ 0 ],						// O_ASSERT
+	[ 0 ],						// O_LABEL
+	[ 0 ],						// O_RETURN
+	[ 0 ],						// O_ENDTRY
+	[ 0 ],						// O_REPLY
+	[ 0 ],						// O_JUMP
+	[ 0 ],						// O_TEST
+	[ 0 ],						// O_STMT
+	[ 0 ],						// O_SWITCH
+	[ 0 ],						// O_TRY
+	[ 0 ],						// O_EXCEPT
+	[ 0 ],						// O_ENDEX
+	];
+
+i386opcode:	public	type	int = {
+	I386_MOVC,
+	I386_MOVI,
+	I386_MOVL,
+	I386_FLDF,
+	I386_FLDD,
+	I386_FLDLD,
+	I386_PUSHI,
+	I386_PUSHL,
+	I386_PUSHA,
+	I386_PUSHF,
+	I386_POPI,
+	I386_POPL,
+	I386_POPA,
+	I386_POPF,
+	I386_RET,
+	I386_RETF,
+	I386_IRET,
+	I386_ICALL,
+	I386_ICALLF,
+	I386_CALL,
+	I386_CALLF,
+	I386_LEA,
+	I386_CLD,
+	I386_REP,
+	I386_REPNZ,
+	I386_MOVSB,
+	I386_SCASB,
+	I386_STOSB,
+	I386_CBW,
+	I386_CWD,
+	I386_CDQ,
+	I386_INTRPT,
+	I386_OUTC,
+	I386_OUTI,
+	I386_INC,
+	I386_INI,
+	I386_CMPC,
+	I386_CMPI,
+	I386_CMPL,
+	I386_CMPF,
+	I386_CMPD,
+	I386_CMPLD,
+	I386_TESTC,
+	I386_TESTI,
+	I386_TESTL,
+	I386_TESTF,
+	I386_TESTD,
+	I386_TESTLD,
+	I386_MOVSXCI,
+	I386_MOVSXCL,
+	I386_MOVSXIL,
+	I386_MOVZXCI,
+	I386_MOVZXCL,
+	I386_MOVZXIL,
+	I386_ADDC,
+	I386_ADDI,
+	I386_ADDL,
+	I386_ADDF,
+	I386_ADDD,
+	I386_ADDLD,
+	I386_SUBC,
+	I386_SUBI,
+	I386_SUBL,
+	I386_SUBF,
+	I386_SUBD,
+	I386_SUBLD,
+	I386_SUBRF,
+	I386_SUBRD,
+	I386_SUBRLD,
+	I386_MULC,
+	I386_MULI,
+	I386_MULL,
+	I386_MULF,
+	I386_MULD,
+	I386_MULLD,
+	I386_UMULI,
+	I386_UMULL,
+	I386_DIVC,
+	I386_DIVI,
+	I386_DIVL,
+	I386_DIVF,
+	I386_DIVD,
+	I386_DIVLD,
+	I386_DIVRF,
+	I386_DIVRD,
+	I386_DIVRLD,
+//	I386_UDIVC,
+	I386_UDIVI,
+	I386_UDIVL,
+	I386_LSLC,
+	I386_LSLI,
+	I386_LSLL,
+	I386_LSRC,
+	I386_LSRI,
+	I386_LSRL,
+	I386_ASRC,
+	I386_ASRI,
+	I386_ASRL,
+	I386_ANDC,
+	I386_ANDI,
+	I386_ANDL,
+	I386_ORC,
+	I386_ORI,
+	I386_ORL,
+	I386_XORC,
+	I386_XORI,
+	I386_XORL,
+	I386_NEGC,
+	I386_NEGI,
+	I386_NEGL,
+	I386_NEGLD,
+	I386_COMC,
+	I386_COMI,
+	I386_COML,
+	I386_ENTER,
+	I386_LEAVE,
+	I386_XCHGC,
+	I386_XCHGI,
+	I386_XCHGL,
+	I386_INCC,
+	I386_INCI,
+	I386_INCL,
+	I386_DECC,
+	I386_DECI,
+	I386_DECL,
+	I386_ROLL,
+	I386_RORL,
+	I386_FSTF,
+	I386_FSTD,
+	I386_FSTPF,
+	I386_FSTPD,
+	I386_FSTPLD,
+	I386_FILDI,
+	I386_FILDL,
+	I386_FILDQ,
+	I386_FISTPI,
+	I386_FISTPL,
+	I386_FISTPQ,
+	I386_FISTI,
+	I386_FISTL,
+	I386_FISTQ,
+	I386_WAIT,
+	I386_FLDZ,
+	I386_FLD1,
+	I386_FSTSW,
+	I386_SAHF,
+	I386_FABS,
+	I386_RNDINT,
+	I386_FBSTP,
+	I386_DD,
+	I386_ERROR,
+	I386_RCRL,
+	I386_RCLL,
+//	I386_ABS,
+//	I386_WORD,
+	I386_BYTE,
+	I386_WDSEG,
+	I386_WDOFF,
+//	I386_OFFSET,
+	I386_FLSTi,
+	I386_FFREE,
+	I386_FDECSP,
+	I386_FSTP0,
+	I386_FXCH1,
+	I386_LES,
+	I386_LOADC,
+	I386_LOADI,
+//	I386_LOADL,
+//	I386_LAHF,
+//	I386_CLEANUP,
+	I386_ADJUST,
+/*
+	I386_LOOK,
+	I386_LDLOOK,
+ */
+	I386_BCALL,
+/*
+	I386_TEMP,
+	I386_FST0,
+	I386_FRET,
+ */
+	I386_MOVSW,
+	I386_CMPSB,
+	I386_STOSW,
+	I386_STD,
+	};
+
+instTypes:	public	type	char =	{
+	IT_DONT_CARE,
+	IT_BYTE,
+	IT_WORD,
+	IT_LONG,
+	IT_FLT,
+	IT_DBL,
+	IT_LDBL,
+	};
+
+instInfo:	public	type	{
+	public:
+	mnemonic:	ref char;
+	optype:		instTypes;
+	op1:		byte;
+	op2:		byte;
+	op3:		byte;
+	op4:		byte;
+	};
+
+InstInfo:	public	const	[] instInfo = [
+	[ "mov",  IT_BYTE ],					// I386_MOVC
+	[ "mov",  IT_WORD ],					// I386_MOVI
+	[ "mov",  IT_LONG ],					// I386_MOVL
+	[ "fld",  IT_FLT,  0,    0xD9, 0x00 ],			// I386_FLDF
+	[ "fld",  IT_DBL,  0,    0xDD, 0x00 ],			// I386_FLDD
+	[ "fld",  IT_LDBL, 0,    0xDB, 0x28 ],			// I386_FLDLD
+	[ "push", IT_WORD ],					// I386_PUSHI
+	[ "push", IT_LONG ],					// I386_PUSHL
+	[ "pushad",0,	   0x60 ],				// I386_PUSHA
+	[ "pushf",0,	   0x9C ],				// I386_PUSHF
+	[ "pop",  IT_WORD ],					// I386_POPI
+	[ "pop",  IT_LONG ],					// I386_POPL
+	[ "popad",0,	   0x61 ],				// I386_POPA
+	[ "popf", 0,	   0x9D ],				// I386_POPF
+	[ "ret",  0,	   0,    0xC2, 0xC3 ],			// I386_RET
+	[ "retf", 0,	   0,    0xCA, 0xCB ],			// I386_RETF
+	[ "iret", 0,	   0xCF ],				// I386_IRET
+	[ "call", IT_LONG, 0xFF, 0x10 ],			// I386_ICALL
+	[ "call", IT_LONG, 0xFF, 0x18 ],			// I386_ICALLF
+	[ "call", 0,	   0xE8 ],				// I386_CALL
+	[ "callf",0,	   0    ],				// I386_CALLF
+	[ "lea",  IT_LONG, 0x8D ],				// I386_LEA
+	[ "cld",  0,	   0xFC ],				// I386_CLD
+	[ "rep",  0,	   0xF3 ],				// I386_REP
+	[ "repnz",0,	   0xF2 ],				// I386_REPNZ
+	[ "movsb",0,	   0xA4 ],				// I386_MOVSB
+	[ "scasb",0,	   0xAE ],				// I386_SCASB
+	[ "stosb",0,	   0xAA ],				// I386_STOSB
+	[ "cbw",  0,	   0x98 ],				// I386_CBW
+	[ "cwd",  0,	   0x66 ],				// I386_CWD
+	[ "cdq",  0,       0x99 ],				// I386_CDQ
+	[ "int",  0 ],						// I386_INTRPT
+	[ "out",  IT_BYTE ],					// I386_OUTC
+	[ "out",  IT_WORD ],					// I386_OUTI
+	[ "in",   IT_BYTE ],					// I386_INC
+	[ "in",   IT_WORD ],					// I386_INI
+	[ "cmp",  IT_BYTE, 0,    0x38, 0x3C ],			// I386_CMPC
+	[ "cmp",  IT_WORD, 0,    0x39, 0x3D ],			// I386_CMPI
+	[ "cmp",  IT_LONG, 0,    0x39, 0x3D ],			// I386_CMPL
+	[ "fcomp",IT_FLT,  0,    0xD8, 0x18 ],			// I386_CMPF
+	[ "fcomp",IT_DBL,  0,    0xDC, 0x18 ],			// I386_CMPD
+	[ "fcompp",IT_LDBL,0xDE, 0xD9 ],			// I386_CMPLD
+	[ "test", IT_BYTE, 0,    0x84, 0xA8 ],			// I386_TESTC
+	[ "test", IT_WORD, 0,    0x85, 0xA9 ],			// I386_TESTI
+	[ "test", IT_LONG, 0,    0x85, 0xA9 ],			// I386_TESTL
+	[ "ftest", IT_FLT ],					// I386_TESTF
+	[ "ftest", IT_DBL ],					// I386_TESTD
+	[ "ftest", IT_LDBL ],					// I386_TESTLD
+	[ "movsx",IT_WORD, 0x0F, 0xBE ],			// I386_MOVSXCI
+	[ "movsx",IT_LONG, 0x0F, 0xBE ],			// I386_MOVSXCL
+	[ "movsx",IT_LONG, 0x0F, 0xBF ],			// I386_MOVSXIL
+	[ "movzx",IT_WORD, 0x0F, 0xB6 ],			// I386_MOVZXCI
+	[ "movzx",IT_LONG, 0x0F, 0xB6 ],			// I386_MOVZXCL
+	[ "movzx",IT_LONG, 0x0F, 0xB7 ],			// I386_MOVZXIL
+	[ "add",  IT_BYTE, 0,    0x00, 0x04 ],			// I386_ADDC
+	[ "add",  IT_WORD, 0,    0x01, 0x05 ],			// I386_ADDI
+	[ "add",  IT_LONG, 0,    0x01, 0x05 ],			// I386_ADDL
+	[ "fadd", IT_FLT,  0,    0xD8, 0x00 ],			// I386_ADDF
+	[ "fadd", IT_DBL,  0,    0xDC, 0x00 ],			// I386_ADDD
+	[ "fadd", IT_LDBL, 0xDE, 0xC1 ],			// I386_ADDLD
+	[ "sub",  IT_BYTE, 0,    0x28, 0x2C ],			// I386_SUBC
+	[ "sub",  IT_WORD, 0,    0x29, 0x2D ],			// I386_SUBI
+	[ "sub",  IT_LONG, 0,    0x29, 0x2D ],			// I386_SUBL
+	[ "fsub", IT_FLT,  0,    0xD8, 0x20 ],			// I386_SUBF
+	[ "fsub", IT_DBL,  0,    0xDC, 0x20 ],			// I386_SUBD
+	[ "fsub", IT_LDBL, 0xDE, 0xE1 ],			// I386_SUBLD
+	[ "fsubr",IT_FLT,  0,    0xD8, 0x28 ],			// I386_SUBRF
+	[ "fsubr",IT_DBL,  0,    0xDC, 0x28 ],			// I386_SUBRD
+	[ "fsubr",IT_LDBL, 0xDE, 0xE9 ],			// I386_SUBRLD
+	[ "imul", IT_BYTE ],					// I386_MULC
+	[ "imul", IT_WORD, 0x0F ],				// I386_MULI
+	[ "imul", IT_LONG, 0x0F ],				// I386_MULL
+	[ "fmul", IT_FLT,  0,    0xD8, 0x08 ],			// I386_MULF
+	[ "fmul", IT_DBL,  0,    0xDC, 0x08 ],			// I386_MULD
+	[ "fmul", IT_LDBL, 0xDE, 0xC9 ],			// I386_MULLD
+	[ "mul",  IT_WORD ],					// I386_UMULI
+	[ "mul",  IT_LONG ],					// I386_UMULL
+	[ "idiv", IT_BYTE, 0xF6, 0x38 ],			// I386_DIVC
+	[ "idiv", IT_WORD, 0xF7, 0x38 ],			// I386_DIVI
+	[ "idiv", IT_LONG, 0xF7, 0x38 ],			// I386_DIVL
+	[ "fdiv", IT_FLT,  0,    0xD8, 0x30 ],			// I386_DIVF
+	[ "fdiv", IT_DBL,  0,    0xDC, 0x30 ],			// I386_DIVD
+	[ "fdiv", IT_LDBL, 0xDE, 0xF1 ],			// I386_DIVLD
+	[ "fdivr",IT_FLT,  0,    0xD8, 0x38 ],			// I386_DIVRF
+	[ "fdivr",IT_DBL,  0,    0xDC, 0x38 ],			// I386_DIVRD
+	[ "fdivr",IT_LDBL, 0xDE, 0xF9 ],			// I386_DIVRLD
+//	[ "div",  IT_BYTE, 0xF6, 0x30 ],			// I386_UDIVC
+	[ "div",  IT_WORD, 0xF7, 0x30 ],			// I386_UDIVI
+	[ "div",  IT_LONG, 0xF7, 0x30 ],			// I386_UDIVL
+	[ "sal",  IT_BYTE, 0,    0,    0x20 ],			// I386_LSLC
+	[ "sal",  IT_WORD, 0,    1,    0x20 ],			// I386_LSLI
+	[ "sal",  IT_LONG, 0,    1,    0x20 ],			// I386_LSLL
+	[ "shr",  IT_BYTE, 0,    0,    0x28 ],			// I386_LSRC
+	[ "shr",  IT_WORD, 0,    1,    0x28 ],			// I386_LSRI
+	[ "shr",  IT_LONG, 0,    1,    0x28 ],			// I386_LSRL
+	[ "sar",  IT_BYTE, 0,    0,    0x38 ],			// I386_ASRC
+	[ "sar",  IT_WORD, 0,    1,    0x38 ],			// I386_ASRI
+	[ "sar",  IT_LONG, 0,    1,    0x38 ],			// I386_ASRL
+	[ "and",  IT_BYTE, 0,    0x20, 0x24 ],			// I386_ANDC
+	[ "and",  IT_WORD, 0,    0x21, 0x25 ],			// I386_ANDI
+	[ "and",  IT_LONG, 0,    0x21, 0x25 ],			// I386_ANDL
+	[ "or",   IT_BYTE, 0,    0x08, 0x0C ],			// I386_ORC
+	[ "or",   IT_WORD, 0,    0x09, 0x0D ],			// I386_ORI
+	[ "or",   IT_LONG, 0,    0x09, 0x0D ],			// I386_ORL
+	[ "xor",  IT_BYTE, 0,    0x30, 0x34 ],			// I386_XORC
+	[ "xor",  IT_WORD, 0,    0x31, 0x35 ],			// I386_XORI
+	[ "xor",  IT_LONG, 0,    0x31, 0x35 ],			// I386_XORL
+	[ "neg",  IT_BYTE, 0xF6, 0x18 ],			// I386_NEGC
+	[ "neg",  IT_WORD, 0xF7, 0x18 ],			// I386_NEGI
+	[ "neg",  IT_LONG, 0xF7, 0x18 ],			// I386_NEGL
+	[ "fchs", IT_LDBL, 0xD9, 0xE0 ],			// I386_NEGLD
+	[ "not",  IT_BYTE, 0xF6, 0x10 ],			// I386_COMC
+	[ "not",  IT_WORD, 0xF7, 0x10 ],			// I386_COMI
+	[ "not",  IT_LONG, 0xF7, 0x10 ],			// I386_COML
+	[ "enter",0,	   0xC8 ],				// I386_ENTER
+	[ "leave",0,	   0xC9 ],				// I386_LEAVE
+	[ "xchg", IT_BYTE, 0,	 0x86 ],			// I386_XCHGC
+	[ "xchg", IT_WORD, 0,	 0x87 ],			// I386_XCHGI
+	[ "xchg", IT_LONG, 0,	 0x87 ],			// I386_XCHGL
+	[ "inc",  IT_BYTE ],					// I386_INCC
+	[ "inc",  IT_WORD ],					// I386_INCI
+	[ "inc",  IT_LONG ],					// I386_INCL
+	[ "dec",  IT_BYTE ],					// I386_DECC
+	[ "dec",  IT_WORD ],					// I386_DECI
+	[ "dec",  IT_LONG ],					// I386_DECL
+	[ "rol",  IT_LONG, 0,    1,    0x00 ],			// I386_ROLL
+	[ "ror",  IT_LONG, 0,    1,    0x08 ],			// I386_RORL
+	[ "fst",  IT_FLT ],					// I386_FSTF
+	[ "fst",  IT_DBL ],					// I386_FSTD
+	[ "fstp", IT_FLT,  0,    0xD9, 0x18 ],			// I386_FSTPF
+	[ "fstp", IT_DBL,  0,    0xDD, 0x18 ],			// I386_FSTPD
+	[ "fstp", IT_LDBL, 0,    0xDB, 0x38 ],			// I386_FSTPLD
+	[ "fild", IT_WORD, 0,	 0xDF, 0x00 ],			// I386_FILDI
+	[ "fild", IT_LONG, 0,	 0xDB, 0x00 ],			// I386_FILDL
+	[ "fild", IT_DBL,  0,    0xDF, 0x28 ],			// I386_FILDQ
+	[ "fistp",IT_WORD, 0,    0xDF, 0x18 ],			// I386_FISTPI
+	[ "fistp",IT_LONG, 0,    0xDB, 0x18 ],			// I386_FISTPL
+	[ "fistp",IT_DBL,  0,    0xDF, 0x38 ],			// I386_FISTPQ
+	[ "fist", IT_WORD ],					// I386_FISTI
+	[ "fist", IT_LONG ],					// I386_FISTL
+	[ "fist", IT_DBL ],					// I386_FISTQ
+	[ "wait", 0,	   0x9B ],				// I386_WAIT
+	[ "fldz", 0,       0xD9, 0xEE ],			// I386_FLDZ
+	[ "fld1", 0,       0xD9, 0xE8 ],			// I386_FLD1
+	[ "fstsw",IT_WORD, 0xDF, 0xE0 ],			// I386_FSTSW
+	[ "sahf", 0,       0x9E ],				// I386_SAHF
+	[ "fabs", 0,	   0xD9, 0xE1 ],			// I386_FABS
+	[ "frndint",0,	   0xD9, 0xFC ],			// I386_RNDINT
+	[ "fbstp",IT_LDBL, 0,	 0xDF, 0x30 ],			// I386_FBSTP
+	[ "dd",   IT_LONG ],					// I386_DD
+	[ ".error",0,	   0x8D ],				// I386_ERROR
+/*
+	I386_RCRL,
+	I386_RCLL,
+	I386_WAIT,
+	I386_INTRPT,
+	I386_PUSHF,
+	I386_WORD,
+	I386_BYTE,
+	I386_WDSEG,
+	I386_WDOFF,
+	I386_OFFSET,
+	I386_FLSTi,
+	I386_FFREE,
+	I386_FDECSP,
+	I386_FSTP0,
+	I386_FXCH1,
+	I386_LES,
+	I386_LOADC,
+	I386_LOADI,
+	I386_LOADL,
+	I386_CLI,
+	I386_STI,
+	I386_LAHF,
+	I386_CLEANUP,
+	I386_ADJUST,
+	I386_LOOK,
+	I386_LDLOOK,
+	I386_BCALL,
+	I386_TEMP,
+	I386_FST0,
+	I386_FRET,
+	I386_REP,
+	I386_REPZ,
+	I386_REPNZ,
+	I386_SCASB,
+	I386_MOVSB,
+	I386_MOVSW,
+	I386_CMPSB,
+	I386_STOSB,
+	I386_STOSW,
+	I386_STD,
+	I386_CLD,
+ */
+	];
+
+jumpCondition:	public	type	char =	{
+	JC_NOOP,
+	JC_JUMP,
+	JC_LT,
+	JC_GT,
+	JC_ULT,			/* Unsigned less than jump */
+	JC_UGT,
+	JC_LE,
+	JC_GE,
+	JC_ULE,
+	JC_UGE,
+	JC_EQ,
+	JC_NE,
+	JC_CARRY,
+	JC_NOCARRY,
+	JC_OVERFLOW,
+	JC_NOOVERFLOW,
+	JC_SIGN,
+	JC_NOSIGN,
+	JC_PARITY,
+	JC_NOPARITY,
+//	JC_LOOPZ,
+//	JC_LOOPNZ,
+//	JC_CXZ,
+//	JC_LOOP,
+	JC_TABLE		/* Special entry for code address tables */
+	};
+
+/*
+	A variable block is the basic unit of local variable allocation.
+	If a variable was created from a declared symbol, the declaration
+	field points to the parent symbol.  Only scalar symbols that may
+	be kept in registers need to be promoted in this way.
+
+	Common subexpressions or induction variables leave the
+	declaration field NULL.
+
+	The variables are stored as a single array.
+ */
+variable:	public	type	{
+	public:
+
+	next:		ref variable;
+	declaration:	ref symbol_s;
+	declaredScope:	ref scope_s;
+	reg:		regNum;
+	preferredReg:	regNum;
+	dtype:		ref type_s;
+	flags:		varFlags;
+	offset:		addr_t;
+	totalCount:	unsigned;
+	shiftCount:	unsigned;
+//	symbolclock:	unsigned;
+//	liveTemps:	RegisterMask;
+//	variableNumber:	unsigned;
+
+create:	factory	(sym: ref symbol_s) ref variable =
+	{
+	self = new variable[ TargetData.vars, sym, sym->enclosing, 
+			nullReg, nullReg, 0, 0, 0, 0, 0 ];
+	TargetData.vars = self;
+	if	(sym->storageClass == SC_PARM){
+		if	(Func->currentType->callingConvention == FC_INTERRUPT ||
+			 Func->currentType->callingConvention == FC_INTERRUPT2)
+			flags = VF_NIXREG;
+		flags |= VF_DEF;
+		}
+	return self;
+	}
+
+	};
+
+varFlags:	public	type	byte = {
+	VF_REG		= 0x01,		// Set for register vars
+	VF_NIXREG	= 0x02,		// Set for vars exempt from regs
+	VF_DEF		= 0x04,		// Has been defined
+	VF_BYTEREG	= 0x08,		// Set for vars where a byte access
+					// was done from a word object.  This
+					// restricts what can be done in terms
+					// of register variable allocation.
+					// for example, edi and esi cannot
+					// be used.
+	};
+
+fixupType:	public	type	char = {
+	FT_VAL_REL,		/* Relative offset of value */
+	FT_VAL_OFF,		/* Offset of value */
+
+	FT_LIT_OFF,		/* Offset of literal */
+	FT_DYNAMIC,		// reference to dynamic vector
+	FT_DYNBYTE,		// byte reference to dynamic vector
+
+	FT_JUMP,		/* Offset of jump table */
+	FT_LINE,		/* Lineno */
+	};
+
+isByteReg:	public	(rx: regNum) int =
+	{
+	return rx <= CH;
+	}
+
+isSegReg:	public	(rx: regNum) boolean = 
+	{
+	if	(rx >= ES && rx <= SS)
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+isXSegReg:	public	(rx: regNum) boolean = 
+	{
+	if	(rx == FS || rx == GS)
+		return TRUE;
+	else
+		return FALSE;
+	}
+/*
+	This function checks whether a member is a bit field.  The member
+	is known to be in a packed structure.  The bitOffset of the symbol
+	and the bitSizeOf its type are passed to this function.  Any offset
+	that is not a multiple of 8 must be bit field.  Any width that is
+	not a multiple of 8 also must be a bit field.  A 24 bit member is
+	also a bit field.
+ */
+isBitField:	public	(o: addr_t, m: ref type_s) boolean =
+	{
+	w:	unsigned;
+
+	if	(m->topType != T_SIGNED &&
+		 m->topType != T_UNSIGNED)
+		return FALSE;
+	w = m bitSizeOf();
+	if	(o & 7)
+		return TRUE;
+	else if	(w & 7)
+		return TRUE;
+	else if	(w == 24)
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+locateGateParameters:	public	(xsym: ref symbol_s) =
+	{
+	psize:		addr_t;
+	size:		addr_t;
+	sym:		ref symbol_s;
+
+	size = 0;
+	for	(sym = xsym; sym; sym = sym->next){
+		if	(sym->storageClass != SC_BASED)
+			continue;
+		psize = sym->dtype getType() sizeOf();
+		if	(DebugList){
+			printf("parameter ");
+			if	(sym->name)
+				printf("%S", sym->name spelling());
+			else
+				printf("<anon>");
+			printf(": size %d\n", psize);
+			}
+
+			/* This adjusts for odd-sized structs and
+			   char parameters
+			 */
+
+		psize += 3;
+		psize &= ~3;
+		sym->bitOffset = psize;
+		size += psize;
+		}
+	addr:		addr_t;
+
+	addr = size;
+	for	(sym = xsym; sym; sym = sym->next){
+		if	(sym->storageClass != SC_BASED)
+			continue;
+		addr -= sym->bitOffset;
+		sym->bitOffset = addr;
+		}
+	}
+/*
+	This function generates code for a function represented by the
+	expression tree x.  The resulting code and fixups are generated
+	in the value object v.
+
+	The expression tree x has already been checked for errors, locals
+	have been parsed and initializers created appropriately.  Static
+	objects have also been fully generated.
+ */
+regneeds:	public	(t: ref tree_p) int =
+	{
+	i:	int;
+
+	if	(t->dtype)
+		i = t->dtype->topType;
+	else
+		i = T_VOID;
+	return SethiUllmanTable[SethiUllmanClass[t->operator]][i];
+	}
+
+SethiUllmanTable:	const [][12 /*T_TYPE + 1*/ ] char = [
+	[ 0 ],						// Free operators
+	[ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ],		// Cheap operators
+	[ 1, 1, 2, 2, 1, 2, 2, 2, 2, 1, 1, 1 ],		// Expensive operators
+	[ 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5 ],		// Function calls
+	];
+
+SethiUllmanClass:	const [] char = [
+
+	    /* Leaf node operator id's */
+
+	0,				// O_ERROR
+
+	0,				/* O_ID */
+	0,				/* O_ICON */
+	0,				/* O_FCON */
+	0,				// O_SELF
+	0,				// O_SUPER
+	0,				// O_TOS
+	0,				// O_REG
+	0,				/* O_AUTO */
+	0,				/* O_DYNAMIC */
+	0,				// O_REMOTE
+	0,				// O_TYPE
+	0,				/* O_SCONST */
+	0,				/* O_LITERAL */
+	0,				/* O_ELLIPSIS */
+
+	    /* Binary operators */
+
+	1,				/* O_ADD */
+	1,				/* O_SUB */
+	2,				/* O_MUL */
+	2,				/* O_DIV */
+	2,				/* O_MOD */
+	2,				/* O_LSH */
+	2,				/* O_RSH */
+	1,				/* O_AND */
+	1,				/* O_OR */
+	1,				/* O_XOR */
+	1,				/* O_ASG */
+	1,				/* O_ADA */
+	1,				/* O_SBA */
+	2,				/* O_MUA */
+	2,				/* O_DVA */
+	2,				/* O_MOA */
+	2,				/* O_LSA */
+	2,				/* O_RSA */
+	1,				/* O_ANA */
+	1,				/* O_ORA */
+	1,				/* O_XRA */
+	1,				/* O_EQ */
+	1,				/* O_NE */
+	1,				/* O_GT */
+	1,				/* O_LT */
+	1,				/* O_GE */
+	1,				/* O_LE */
+	1,				// O_ORD,			// <>=
+	1,				// O_UNORD,		// !<>=
+	1,				// O_NLT,			// !<
+	1,				// O_NLE,			// !<=
+	1,				// O_NGT,			// !>
+	1,				// O_NGE,			// !>=
+	1,				// O_LT_GT,		// <>
+	1,				// O_NLT_GT,		// !<>
+	1,				/* O_INA */
+	1,				/* O_DEA */
+	1,				/* O_QUES */
+	1,				/* O_LAND */
+	1,				/* O_LOR */
+	0,				/* O_SEQ */
+	0,				/* O_ARG */
+	0,				/* O_IOARROW */
+	1,				// O_INIT
+
+	   /* Unary operators */
+
+	1,				/* O_NEG */
+	0,				// O_PLUS
+	1,				/* O_COM */
+	1,				/* O_NOT */
+	1,				/* O_IND */
+	1,				/* O_ADR */
+
+	   /* Special operators */
+
+	1,				// O_FLD
+	1,				/* O_CAST */
+	3,				/* O_SCALL */
+	3,				/* O_MCALL */
+	3,				/* O_RCALL */
+	0,				/* O_DOT */
+	0,				/* O_ARROW */
+	0,				/* O_SUBSCRIPT */
+	0,				// O_SLICE
+	0,				// O_BOUND
+	0,				// O_MBOUND
+	0,				/* O_SIZEOF */
+
+		/* Code generation operations */
+
+	1,				//	O_INTRPT,		/* Interrupt instruction */
+	2,				//	O_ABS,			/* Absolute value */
+	1,				//	O_OUT,			/* OutportByte */
+	1,				//	O_IN,			/* InportByte */
+	0,				//	O_EMIT,			/* Emit */
+	5,				//	O_MSCAN,		/* MemScan */
+	5,				//	O_MCOPY,		/* MemCopy */
+	5,				//	O_MSET,			/* MemSet */
+	1,				//	O_ROL,			/* RotateLeft */
+	1,				//	O_ROR,			/* RotateRight */
+	1,				//	O_FABS,			/* Fabs */
+	1,				//	O_XCHG,			/* exchange */
+	1,				//	O_RNDINT
+	1,				//	O_CVTBCD
+	1,				//	O_TST,			/* test */
+	0,				//	O_ALLOCTOS
+	0,				//	O_NEW
+	0,				//	O_TYPELEN
+	0,				//	O_OFFSETOF
+	0,				//	O_TYPEOF
+	0,				//	O_SEND
+	0,				//	O_BLOCK
+	0,				//	O_DECL
+	0,				//	O_GOTO
+	0,				//	O_ASSERT
+	0,				//	O_LABEL
+	0,				//	O_RETURN
+	0,				//	O_ENDTRY
+	0,				//	O_REPLY
+	0,				//	O_JUMP
+	0,				//	O_TEST
+	0,				//	O_STMT
+	0,				//	O_SWITCH
+	0,				//	O_TRY
+	0,				//	O_EXCEPT
+	0,				//	O_ENDEX
+	];
+

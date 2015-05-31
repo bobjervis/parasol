@@ -1,0 +1,1234 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	types;
+include	file, string;
+include	errmsg;
+include	tparams, target;
+include	symtab;
+include	backend;
+include	ptree;
+include	image;
+include	hash;
+include	real;
+
+FIXUP_SIZE:	const	int = 1024;
+
+BigEndian:	boolean;
+
+start:	entry	() =
+	{
+	x:	int;
+
+	x = 0;
+	* ref byte(&x) = ~0;
+	if	(x < 0)
+		BigEndian = TRUE;
+	else
+		BigEndian = FALSE;
+	defineLoadFuncs(U_VALUE, &value.load, sizeof value);
+	defineLoadFuncs(U_SVALUE, &symbolValue.load, sizeof symbolValue);
+	defineLoadFuncs(U_XVALUE, loadFunction(&externValue.load),
+					sizeof externValue);
+	defineLoadFuncs(U_LITERAL, loadFunction(&literalValue.load),
+					sizeof literalValue);
+	defineLoadFuncs(U_LFIXUP, loadFunction(&literalFixup_.load),
+					sizeof literalFixup_);
+	defineLoadFuncs(U_DFIXUP, loadFunction(&dynamicFixup_.load),
+					sizeof dynamicFixup_);
+	defineLoadFuncs(U_VFIXUP, loadFunction(&valueFixup_.load),
+					sizeof valueFixup_);
+	defineLoadFuncs(U_RFIXUP, loadFunction(&selfRelativeFixup_.load),
+					sizeof selfRelativeFixup_);
+/*
+	defineLoadFuncs(U_LINE, loadFunction(&ln.load));
+ */
+	}
+/*
+	Value classes identify the kinds of code or data stored in the value.
+	Note that the ordering was determined by the fact that this used to
+	be a boolean value.  To preserve existing .u files, VC_DATA was 
+	assigned 0 and VC_CODE was assigned 1.  That the old boolean value 
+	mapped onto serviceable new values.
+ */
+valueClass_t:	public	type	byte = {
+	VC_DATA,			// non-constant data
+	VC_CODE,			// code
+	VC_CONST,			// constant data
+	VC_INTRINSIC,			// intrinsic function - not really a
+					// value
+	};
+
+anyValue:	public	type	{
+	public:
+
+	owner:		ref symbol_s;
+	valueClass:	valueClass_t;
+
+markUsed:	dynamic	() =
+	{
+	}
+
+getAddress:	dynamic	() addr_t =
+	{
+	return 0;
+	}
+
+nameLength:	() Size =
+	{
+	if	(owner == 0 ||
+		 owner->name == 0)
+		return 0;
+	s:	[:] char;
+
+	s = owner objectName();
+	return |s;
+	}
+
+objectName:	() [:] char =
+	{
+	if	(owner &&
+		 owner->name)
+		return owner objectName();
+	else
+		return "";
+	}
+
+isSymbolValue:	dynamic	() boolean =
+	{
+	return FALSE;
+	}
+
+	};
+
+value:	public	type	inherit	anyValue {
+	public:
+
+	next:		ref value;
+	related:	ref value;
+	dtype:		ref type_s;
+	data:		ref char;
+	dataSize:	addr_t;
+	vSize:		addr_t;
+	fixups:		ref fixup;
+	align:		unsigned[16];		// alignment in bytes
+	linked:		boolean;
+	index:		unsigned;
+	used:		boolean;
+	address:	addr_t;
+/*
+	lines:		* lnum;
+ */
+create:	factory	(sym: ref symbol_s, t: ref type_s, q: dQualifiers) ref value =
+	{
+	self = threadHeap() alloc(sizeof value);
+	memSet(self, 0, sizeof value);
+	self = [ sym ];
+	dtype = t;
+	if	(q & DQ_CONST)
+		valueClass = VC_CONST;
+	return self;
+	}
+
+createVector:	factory	() ref value =
+	{
+	self = threadHeap() alloc(sizeof value);
+	memSet(self, 0, sizeof value);
+	self = [ 0 ];
+	align = PTRALIGN / BYTEBITS;
+	valueClass = VC_CONST;
+	return self;
+	}
+/*
+	This is called after the symbol's type has been registered, but
+	before the value is actually generated.  The data contents for the
+	value are allocated.
+ */
+registerType:	() =
+	{
+	x:	addr_t;
+	t:	ref type_s;
+
+	t = dtype getType();
+	vSize = t sizeOf();
+	align = t alignmentOf() / BYTEBITS;
+	if	(dataSize != vSize){
+		if	(data)
+			threadHeap() delete data;
+		if	(vSize)
+			data = threadHeap() alloc(vSize);
+		dataSize = vSize;
+		}
+	memSet(data, 0, dataSize);		// zero out the object
+	}
+
+recordValueSize:	() =
+	{
+	t:	ref type_s;
+
+	if	(data)
+		threadHeap() delete data;
+	t = dtype getType();
+	vSize = t sizeOf();
+	align = t alignmentOf() / BYTEBITS;
+	data = 0;
+	dataSize = 0;
+	}
+
+sizeValue:	(size: addr_t, valueC: valueClass_t) =
+	{
+	dataSize = size;
+	vSize = size;
+	valueClass = valueC;
+	align = FUNCALIGN / BYTEBITS;
+	data = threadHeap() alloc(size);
+	memSet(data, 0, size);
+//	lines = 0;
+	}
+
+markUsed:	dynamic	() =
+	{
+	used = TRUE;
+	}
+
+getAddress:	dynamic	() addr_t =
+	{
+	return address;
+	}
+
+depositInteger:	(v: int, offs: addr_t, len: addr_t) =
+	{
+	memCopy(&data[offs], &v, len);
+	}
+
+constructVector:	(t: ref struct_z) =
+	{
+	offset:	addr_t;
+	m:	ref symbol_s;
+	v:	ref value;
+
+	align = DYNFUNC_SIZE;
+	if	(data)
+		threadHeap() delete data;
+	vSize = dataSize = t->vectorSize;
+	data = threadHeap() alloc(dataSize);
+	memSet(data, 0, dataSize);
+	dtype = t;
+	for	(offset = 0; offset < t->vectorSize; offset += DYNFUNC_SIZE){
+		m = t findVectorEntry(offset);
+		if	(m && m->currentValue)
+			valueFixup(offset, m->currentValue, 0);
+		}
+	}
+/*
+	The value, assuming it has been correctly compiled, has been
+	determined to have integer type.  Note that the algorithm for
+	copying the data value out of a constant is designed for little-
+	endian machines.  Big-endian machines will need a different approach.
+ */
+constantInteger:	() ref tree_p =
+	{
+	x:	long;
+	t:	ref tree_p;
+
+	x = 0;
+	if	(dataSize <= sizeof long){
+		if	(BigEndian)
+			memCopy(ref byte(&x) + sizeof long - dataSize, 
+							data, dataSize);
+		else
+			memCopy(&x, data, dataSize);
+		}
+	t = Func icon(x, LONGBITS);
+	t convert(dtype getType());
+	return t;
+	}
+
+storeInteger:	(x: long, off: int, len: int) =
+	{
+	if	(BigEndian)
+		memCopy(&data[off], ref byte(&x) + sizeof long - len, len);
+	else
+		memCopy(&data[off], &x, len);
+	}
+/*
+	The value, assuming it has been correctly compiled, has been
+	determined to have float type.  
+ */
+constantFloat:	(staticInit: boolean) ref tree_p =
+	{
+	t:	ref tree_p;
+	r:	real;
+	d:	ref type_s;
+
+	if	(dataSize == 4)
+		r fromFloat(data);
+	else if	(dataSize == 8)
+		r fromDouble(data);
+	else
+		memCopy(&r, data, dataSize);
+	d = dtype getType();
+	if	(!staticInit &&
+		 memCompare(&One, &r, sizeof r) != 0 &&
+		 memCompare(&Zero, &r, sizeof r) != 0)
+		return 0;
+	t = Func fcon(&r, ref number_z(d)->width);
+	t->dtype = d;
+	return t;
+	}
+/*
+	This function does static initialization of gate and dynamic vectors
+	in a value.
+ */
+initialize:	() =
+	{
+	itemInitialize(0, dtype);
+	}
+
+itemInitialize:	(offset: addr_t, t: ref type_s) =
+	{
+	d:		ref type_s;
+	index:		addr_t;
+	i:		int;
+	hasamemberflag:	int;
+	mask:		int;
+
+	t = t getType();
+	switch	(t->topType){
+	case	T_ARRAY:
+		ad:		ref array_z;
+
+		ad = ref array_z(t);
+		t = t elementOf();
+
+			// From here we have already verified an SCONST node
+
+		esize:	addr_t;
+
+		esize = t sizeOf();
+		for	(index = 0; index < ad->dimension; index++){
+			itemInitialize(offset, t);
+			offset += esize;
+			}
+		break;
+
+	case	T_STRUCT:
+		st:	ref struct_z;
+		sym:		ref symbol_s;
+
+		st = ref struct_z(t);
+		structInitialize(offset, st);
+		if	(st->gateCount){
+			m:	ref symbol_s;
+			id:	ref identifier;
+
+			id = hash("__td__");
+			m = st lookupMember(id, st);
+			if	(m)
+				valueFixup(offset + m->bitOffset / BYTEBITS,
+							st->gateVector, 0);
+			}
+		if	(st hasDynamicVector())
+			valueFixup(offset + st->vectorOffset / BYTEBITS, 
+							st->dynamicVector, 0);
+		break;
+		}
+	}
+
+structInitialize:	(offset: addr_t, st: ref struct_z) =
+	{
+	sym:		ref symbol_s;
+
+	for	(sym = st->symbols; sym; sym = sym->next){
+		mt:		ref type_s;
+
+		if	(sym->storageClass != SC_MEMBER)
+			continue;
+		mt = sym->dtype;
+		if	(mt == 0)
+			continue;
+		itemInitialize(offset + sym->bitOffset / BYTEBITS, mt);
+		}
+	if	(st->base)
+		structInitialize(offset, ref struct_z(st->base getType()));
+	}
+
+load:	factory	(v: pointer, image: ref loader) =
+	{
+	self = v;
+	self = [ 0 ];
+	next = image address();
+	related = image address();
+	owner = image address();
+	dtype = image address();
+	fixups = image address();
+	address = image uinteger();
+	valueClass = image integer();
+	align = image uinteger();
+	vSize = image uinteger();
+	dataSize = image integer();
+	if	(dataSize){
+		data = threadHeap() alloc(dataSize);
+		image literal(data, dataSize);
+		}
+	else
+		data = 0;
+/*
+	lines = image list(offsetof lnum.next);
+ */
+	}
+
+save:	(ifile: ref imageFile) =
+	{
+	if	(SymbolTable.saveStyle != SS_SYMBOL){
+		if	(!ifile beginRecord(U_VALUE, self, sizeof *self))
+			return;			// already saved
+		ifile address(next);
+		ifile address(related);
+		ifile address(owner);
+		ifile address(dtype);
+		ifile address(fixups);
+		ifile uinteger(address);
+		ifile integer(valueClass);
+		ifile uinteger(align);
+		ifile uinteger(vSize);
+		ifile literal(data, dataSize);
+		if	(next)
+			next save(ifile);
+		if	(related)
+			related save(ifile);
+		if	(fixups)
+			fixups save(ifile);
+		}
+	else	{
+		if	(!ifile beginRecord(U_SVALUE, self, 
+							sizeof symbolValue))
+			return;			// already saved
+		ifile address(owner);
+		ifile address(dtype);
+		ifile uinteger(address);
+		ifile integer(valueClass);
+		ifile uinteger(align);
+		ifile uinteger(vSize);
+		if	(valueClass == VC_CONST)
+			ifile literal(data, dataSize);
+		}
+/*
+	l:	* lnum;
+
+	for	(l = lines; l; l = l->next)
+		l save(ifile);
+	ifile nullTag();
+ */
+	}
+
+addRelatedValue:	(v: ref value) =
+	{
+	if	(v == 0)
+		return;
+	v->next = related;
+	v->owner = 0;
+	v->dtype = 0;
+	related = v;
+	}
+
+countRelated:	() int =
+	{
+	v:	ref value;
+	i:	int;
+
+	index = ValueIndex++;
+	for	(i = 1, v = related; v; v = v->next, i++)
+		v->index = ValueIndex++;
+	return i;
+	}
+
+enumerateValues:	() =
+	{
+	v:	ref value;
+
+	index = ValueIndex;
+	ValueVector[ValueIndex++] = self;
+	for	(v = related; v; v = v->next){
+		v->index = ValueIndex;
+		ValueVector[ValueIndex++] = v;
+		}
+	}
+
+runlink:	() =
+	{
+	f:		ref fixup;
+
+	for	(f = fixups; f; f = f->next)
+		f applyFixup(self);
+	}
+
+writeLoadFixups:	(exeFile: ref stream) =
+	{
+	f:		ref fixup;
+
+	for	(f = fixups; f; f = f->next)
+		f applyLoadFixup(self, exeFile);
+	}
+
+writeSymbolicLoadFixups:	() =
+	{
+	f:		ref fixup;
+
+	for	(f = fixups; f; f = f->next)
+		f applySymbolicLoadFixup(self);
+	}
+/*
+newLine:	(lastLine: * lnum, lineno: int, off: addr_t, 
+						bkFlag: int) * lnum =
+	{
+	l:	* lnum;
+
+	if	(lastLine){
+		if	(lastLine->line == lineno)
+			return lastLine;
+		if	(lastLine->line > lineno){
+			for	(l = lines; l; l = l->next)
+				if	(l->line == lineno)
+					return lastLine;
+			}
+		if	(lastLine->offset == off){
+			lastLine->line = lineno;
+			return lastLine;
+			}
+		}
+	l = threadHeap() alloc(sizeof lnum);
+	if	(lastLine)
+		lastLine->next = l;
+	else
+		lines = l;
+	l->next = 0;
+	l->line = lineno;
+	l->offset = off;
+	l->breakFlag = bkFlag;
+	return l;
+	}
+
+dispose:	() =
+	{
+	uninitialize();
+	if	(next)
+		next dispose();
+	free(self);
+	}
+
+ */
+markReferencedValues:	() =
+	{
+	f:	ref fixup;
+
+	for	(f = fixups; f; f = f->next)
+		f markReferencedValue();
+	}
+
+valueFixup:	(location: addr_t, v: ref value, adjust: addr_t) =
+	{
+	if	(v == 0){
+		if	(owner){
+			printf("owner = %p ", owner);
+			if	(owner->name)
+				printf("'%S' ", owner->name spelling());
+			}
+		if	(dtype)
+			dtype display(FALSE);
+		printf("v = %x location = %x adj = %x\n", v, location, adjust);
+		return;
+		}
+	fixups = valueFixup_ create(fixups, location, v, adjust);
+	}
+
+selfRelativeFixup:	(location: addr_t, v: ref value, adjust: addr_t) =
+	{
+	fixups = selfRelativeFixup_ create(fixups, location, v, adjust);
+	}
+
+dynamicFixup:	(location: addr_t, s: ref struct_z, index: addr_t) =
+	{
+	fixups = dynamicFixup_ create(fixups, location, s, index);
+	}
+
+literalFixup:	(location: addr_t, lit: ref literalItem_p, adjust: addr_t,
+						nullTerminate: boolean) =
+	{
+	l:	ref literalValue;
+
+	l = literalValue create(lit, nullTerminate);
+	fixups = literalFixup_ create(fixups, location, l, adjust);
+	}
+
+	};
+
+externValue:	public	type	inherit	anyValue {
+	public:
+
+	target:		ref value;
+	name:		[:] char;
+
+load:	factory	(xv: pointer, image: ref loader) =
+	{
+	cp:	[:] char;
+
+	self = xv;
+	self = [ 0 ];
+	name = stringDup(image string());
+	target = image address();
+	}
+
+save:	(ifile: ref imageFile) =
+	{
+	if	(ifile beginRecord(U_XVALUE, self, sizeof externValue)){
+		ifile putstring(name);
+		ifile address(target);
+		}
+	}
+
+markUsed:	dynamic	() =
+	{
+		// Look up name.
+
+	cp:	ref char;
+
+	if	(target == 0){
+		sym:	ref symbol_s;
+
+		target = mapExternString(name, &valueClass, &sym);
+		if	(target == 0)
+			return;
+		}
+	target markUsed();
+	}
+
+getAddress:	dynamic	() addr_t =
+	{
+	if	(target)
+		return target getAddress();
+	else
+		return 0;
+	}
+
+	};
+
+symbolValue:	public	type	inherit	value {
+	public:
+
+isSymbolValue:	dynamic	() boolean =
+	{
+	return TRUE;
+	}
+
+load:	factory	(v: pointer, image: ref loader) =
+	{
+	self = v;
+	self = [ 0 ];
+	owner = image address();
+	dtype = image address();
+	address = image uinteger();
+	valueClass = image integer();
+	align = image uinteger();
+	vSize = image uinteger();
+	data = 0;
+	if	(valueClass == VC_CONST){
+		dataSize = image integer();
+		if	(dataSize){
+			data = threadHeap() alloc(dataSize);
+			image literal(data, dataSize);
+			}
+		}
+/*
+	lines = image list(offsetof lnum.next);
+ */
+	}
+
+save:	(ifile: ref imageFile) =
+	{
+	if	(!ifile beginRecord(U_SVALUE, self, sizeof symbolValue))
+		return;			// already saved
+	ifile address(owner);
+	ifile address(dtype);
+	ifile uinteger(address);
+	ifile integer(valueClass);
+	ifile uinteger(align);
+	ifile uinteger(vSize);
+	if	(valueClass == VC_CONST)
+		ifile literal(data, dataSize);
+/*
+	l:	* lnum;
+
+	for	(l = lines; l; l = l->next)
+		l save(ifile);
+	ifile nullTag();
+ */
+	}
+
+getAddress:	dynamic	() addr_t =
+	{
+	return 0;
+	}
+
+	};
+
+LiteralValue:	public	value;
+
+fakeLiteralValue:	public	(lit: ref literalItem_p) ref value =
+	{
+	LiteralValue.data = pointer(lit);
+	return &LiteralValue;
+	}
+
+literalValue:	public	type	{
+	public:
+
+	length:		int;
+	address:	addr_t;
+	value:		[] char;
+
+create:	factory	(lit: ref literalItem_p, 
+				nullTerminate: boolean) ref literalValue =
+	{
+	l:	ref literalItem_p;
+	i:	int;
+	cp:	ref char;
+
+	if	(nullTerminate)
+		i = 1;
+	else
+		i = 0;
+	for	(l = lit; l; l = l->next)
+		i += l->length;
+	self = threadHeap() alloc(sizeof literalValue + i);
+	self = [ i ];
+	for	(l = lit, cp = value; l; l = l->next){
+		memCopy(cp, l->value, l->length);
+		cp += l->length;
+		}
+	if	(nullTerminate)
+		*cp = 0;		// null terminate
+	return self;
+	}
+
+load:	factory	(lv: pointer, image: ref loader) =
+	{
+	self = lv;
+	length = image integer();
+	image literal(&value, length);
+	}
+
+save:	(ifile: ref imageFile) =
+	{
+	if	(ifile beginRecord(U_LITERAL, self, sizeof *self + length))
+		ifile literal(&value, length);
+	}
+
+	};
+
+/*
+lnum:	public	type	{
+	next:		* lnum;
+	offset:		unsigned;
+	line:		unsigned[16];
+	byteValue:	char;		// Byte at the location
+	breakFlag:	char;		// non-zero if the line has a breakpoint
+
+load:	factory	(image: * loadFile, byte) * lnum =
+	{
+	self = alloc(sizeof lnum);
+	line = image integer();
+	offset = image integer();
+	byteValue = 0;
+	breakFlag = 0;
+	return self;
+	}
+
+save:	(ifile: ref imageFile) =
+	{
+	ifile beginRecord(U_LINE);
+	ifile integer(line);
+	ifile integer(offset);
+	}
+
+dispose:	() =
+	{
+	n:	* lnum;
+
+	while	(self){
+		n = next;
+		free(self);
+		self = n;
+		}
+	}
+
+	};
+ */
+fixup:	public	type	{
+	public:
+
+	next:		ref fixup;
+	location:	addr_t;
+	adjust:		addr_t;
+
+save:	(ifile: ref imageFile) =
+	{
+	while	(self){
+		savePart(ifile);
+		self = next;
+		}
+	}
+
+savePart:	dynamic	(ref imageFile) =
+	{
+	}
+
+targetAddress:	dynamic	(ref value) addr_t =
+	{
+	return 0;
+	}
+
+applyFixup:	(val: ref value) =
+	{
+	*ref addr_t(&val->data[location]) = targetAddress(val) + adjust;
+	}
+
+applyLoadFixup:	(val: ref value, exeFile: ref stream) =
+	{
+	seg:	long;
+
+	seg = loadFixupSegment();
+	if	(seg == ~0)
+		return;				// default to no fixup
+	seg += location + val->address;
+	if	(val->valueClass != VC_CODE)
+		seg += 0x40000000;		// ref is in data
+	generateLoadFixup(seg, exeFile);
+	}
+
+applySymbolicLoadFixup:	dynamic	(val: ref value) =
+	{
+	}
+
+loadFixupSegment:	dynamic	() long =
+	{
+	return ~0;
+	}
+
+assignLiteralLocation:	dynamic	(addr_t) addr_t =
+	{
+	return 0;
+	}
+
+linkLiteral:	dynamic	(ref byte) addr_t =
+	{
+	return 0;
+	}
+
+markReferencedValue:	dynamic	() =
+	{
+	}
+
+	};
+
+valueFixup_:	public	type	inherit	fixup {
+	public:
+
+	target:		ref value;
+
+create:	factory	(n: ref fixup, loc: addr_t, t: ref value, 
+					adj: addr_t) ref valueFixup_ =
+	{
+	self = threadHeap() alloc(sizeof valueFixup_);
+	self = [ n, loc, adj, t ];
+	return self;
+	}
+
+load:	factory	(vf: pointer, image: ref loader) =
+	{
+	self = vf;
+	self = [ 0 ];
+	next = image address();
+	location = image uinteger();
+	adjust = image uinteger();
+	target = image address();
+	}
+
+savePart:	dynamic	(ifile: ref imageFile) =
+	{
+	if	(ifile beginRecord(U_VFIXUP, self, sizeof *self)){
+		ifile address(next);
+		ifile uinteger(location);
+		ifile uinteger(adjust);
+		spitValue(ifile, target);
+		}
+	}
+
+targetAddress:	dynamic	(ref value) addr_t =
+	{
+	return target getAddress();
+	}
+
+loadFixupSegment:	dynamic	() long =
+	{
+	if	(target isSymbolValue())
+		return ~0;
+	else if	(target->valueClass == VC_CODE)
+		return 0;			// ref to code
+	else
+		return 0x80000000;		// ref to data
+	}
+
+applySymbolicLoadFixup:	dynamic	(val: ref value) =
+	{
+	if	(!target isSymbolValue())
+		return;
+	seg:	addr_t;
+
+	seg = location + val->address;
+	if	(val->valueClass != VC_CODE)
+		seg += 0x40000000;		// ref is in data
+	generateSymbolicLoadFixup(seg, target);
+	}
+
+markReferencedValue:	dynamic	() =
+	{
+//	printf("target = %x", target);
+	target markUsed();
+	}
+
+	};
+
+selfRelativeFixup_:	public	type	inherit	fixup {
+	public:
+
+	target:		ref value;
+
+create:	factory	(n: ref fixup, loc: addr_t, t: ref value, 
+					adj: addr_t) ref selfRelativeFixup_ =
+	{
+	self = threadHeap() alloc(sizeof selfRelativeFixup_);
+	self = [ n, loc, adj, t ];
+	return self;
+	}
+
+load:	factory	(vf: pointer, image: ref loader) =
+	{
+	self = vf;
+	self = [ 0 ];
+	next = image address();
+	location = image uinteger();
+	adjust = image uinteger();
+	target = image address();
+	}
+
+savePart:	dynamic	(ifile: ref imageFile) =
+	{
+	if	(ifile beginRecord(U_RFIXUP, self, sizeof *self)){
+		ifile address(next);
+		ifile uinteger(location);
+		ifile uinteger(adjust);
+		spitValue(ifile, target);
+		}
+	}
+
+targetAddress:	dynamic	(v: ref value) addr_t =
+	{
+	return target getAddress() - (v->address + location + 4);
+	}
+
+markReferencedValue:	dynamic	() =
+	{
+	target markUsed();
+	}
+
+applySymbolicLoadFixup:	dynamic	(val: ref value) =
+	{
+	if	(!target isSymbolValue())
+		return;
+
+	seg:	addr_t;
+
+	seg = location + val->address + 0x80000000;
+	if	(val->valueClass != VC_CODE)
+		seg += 0x40000000;		// ref is in data
+	generateSymbolicLoadFixup(seg, target);
+	}
+
+	};
+
+literalFixup_:	public	type	inherit	fixup {
+	public:
+
+	target:		ref literalValue;
+	address:	addr_t;
+
+create:	factory	(n: ref fixup, loc: addr_t, t: ref literalValue,
+					adj: addr_t) ref literalFixup_ =
+	{
+	self = threadHeap() alloc(sizeof literalFixup_);
+	self = [ n, loc, adj, t, 0 ];
+	return self;
+	}
+
+load:	factory	(lf: pointer, image: ref loader) =
+	{
+	self = lf;
+	self = [ 0 ];
+	next = image address();
+	location = image uinteger();
+	adjust = image uinteger();
+	target = image address();
+	}
+
+savePart:	dynamic	(ifile: ref imageFile) =
+	{
+	if	(ifile beginRecord(U_LFIXUP, self, sizeof *self)){
+		ifile address(next);
+		ifile uinteger(location);
+		ifile uinteger(adjust);
+		ifile address(target);
+		if	(target)
+			target save(ifile);
+		}
+	}
+
+targetAddress:	dynamic	(ref value) addr_t =
+	{
+	return target->address;
+	}
+
+loadFixupSegment:	dynamic	() long =
+	{
+	return 0x80000000;		// ref to data
+	}
+
+assignLiteralLocation:	dynamic	(addr: addr_t) addr_t =
+	{
+	target->address = addr;
+	return target->length;
+	}
+
+linkLiteral:	dynamic	(dataBlock: ref byte) addr_t =
+	{
+	memCopy(dataBlock + target->address, &target->value, target->length);
+	return target->length;
+	}
+
+	};
+
+spitValue:	(ifile: ref imageFile, target: ref value) =
+	{
+		// Saving to a library unit needs special effort
+
+	if	(SymbolTable.saveStyle != SS_LIBRARY){
+		ifile address(target);
+		return;
+		}
+
+	u:	ref unit_s;
+
+	if	(target->owner)
+		u = target->owner->enclosing getUnit();
+	else if	(target->dtype)
+		u = target->dtype getUnit();
+	else
+		u = SymbolTable.saveUnit;
+	if	(SymbolTable.saveUnit == u){
+		ifile address(target);
+		return;
+		}
+	x:	pointer;
+	cp:	[:] char;
+
+	if	(target->owner)
+		cp = target->owner objectName();
+	else
+		cp = target->dtype dynamicVectorName(target);
+	x = ifile->saveHeap alloc(1);
+	ifile address(x);
+	if	(ifile beginRecord(U_XVALUE, x, 
+				sizeof externValue + 
+					|cp + 1)){
+		ifile putstring(cp);
+		ifile address(0);
+		}
+	}
+
+
+dynamicFixup_:	public	type	inherit	fixup {
+	public:
+
+	target:		ref struct_z;
+	index:		int;
+
+create:	factory	(n: ref fixup, loc: addr_t, s: ref struct_z, 
+					idx: int) ref dynamicFixup_ =
+	{
+	self = threadHeap() alloc(sizeof dynamicFixup_);
+	self = [ n, loc, 0, s, idx ];
+	return self;
+	}
+
+load:	factory	(lf: pointer, image: ref loader) =
+	{
+	self = lf;
+	self = [ 0 ];
+	next = image address();
+	location = image uinteger();
+	target = image address();
+	index = image integer();
+	}
+
+savePart:	dynamic	(ifile: ref imageFile) =
+	{
+	if	(ifile beginRecord(U_DFIXUP, self, sizeof *self)){
+		ifile address(next);
+		ifile uinteger(location);
+		ifile address(target);
+		ifile integer(index);
+		}
+	}
+
+targetAddress:	dynamic	(val: ref value) addr_t =
+	{
+	return * ref long(&val->data[location]) - adjust;
+	}
+
+	};
+
+FixupBuf:	ref long;
+EndFixups:	ref long;
+EndBuf:		ref long;
+
+startLoadFixups:	public	() =
+	{
+	FixupBuf = alloc(FIXUP_SIZE * sizeof long);
+	EndBuf = FixupBuf + FIXUP_SIZE;
+	EndFixups = FixupBuf;
+	}
+
+finishLoadFixups:	public	() =
+	{
+	delete FixupBuf;
+	}
+
+generateLoadFixup:	public	(v: long, exeFile: ref stream) =
+	{
+	*EndFixups = v;
+	EndFixups++;
+	if	(EndFixups >= EndBuf)
+		flushLoadFixups(exeFile);
+	}
+
+flushLoadFixups:	public	(exeFile: ref stream) =
+	{
+	if	(EndFixups != FixupBuf){
+		bp:	[:] byte;
+
+		bp = ref byte(FixupBuf)[:int(EndFixups) - int(FixupBuf)];
+		exeFile write(bp);
+		EndFixups = FixupBuf;
+		}
+	}
+
+startSymbolicLoadFixups:	public	() =
+	{
+	i:		int;
+	vp:		ref value;
+
+	for	(i = 0; i < ValueIndex; i++){
+		vp = ValueVector[i];
+		vp->used = FALSE;
+		}
+	SymbolicFixups = 0;
+	SymbolicFixupCount = 0;
+	}
+
+generateSymbolicLoadFixup:	(loc: addr_t, target: ref value) =
+	{
+	s:	ref symbolicFixup_t;
+
+	target->used = TRUE;
+	s = new symbolicFixup_t[ SymbolicFixups, loc, target ];
+	SymbolicFixups = s;
+	SymbolicFixupCount++;
+	}
+
+flushSymbolicLoadFixups:	public	(exeFile: ref stream) long =
+	{
+	s, ns:	ref symbolicFixup_t;
+	x:	packed	{ public:
+		loc:	unsigned[32];
+		refstr:	unsigned[32];
+		};
+
+	i:		int;
+	vp:		ref value;
+	strings:	long;
+
+	strings = 0;
+	for	(i = 0; i < ValueIndex; i++){
+		vp = ValueVector[i];
+		if	(vp->used){
+			cp:	[:] char;
+
+			if	(vp->owner)
+				cp = vp->owner objectName();
+			else
+				cp = vp->dtype dynamicVectorName(vp);
+			vp->index = strings;
+			strings += |cp + 1;
+			exeFile write(cp);
+			exeFile putc(0);
+			}
+		}
+	for	(s = SymbolicFixups; s; s = ns){
+		ns = s->next;
+		x.loc = s->location;
+		x.refstr = s->target->index;
+		exeFile write(ref byte(&x)[:sizeof x]);
+		delete s;
+		}
+	return strings;
+	}
+
+SymbolicFixups:		ref symbolicFixup_t;
+SymbolicFixupCount:	int;
+
+symbolicFixup_t:	type	{ public:
+	next:		ref symbolicFixup_t;
+	location:	addr_t;
+	target:		ref value;
+	};
+
+ValueIndex:	public	int;
+ValueVector:	public	ref ref value;
+
+buildValueVector:	public	() =
+	{
+	u:	ref unit_s;
+	i:	int;
+
+	i = 0;
+	for	(u = SymbolTable.units; u; u = u->next)
+		i += u countValues();
+	if	(ValueVector)
+		delete ValueVector;
+	ValueVector = 0;			// in case the next line traps
+	ValueIndex = 0;
+	if	(i == 0)
+		return;
+	ValueVector = new [i] ref value;
+	i = i * sizeof ref value;
+	memSet(ValueVector, 0, i);
+	for	(u = SymbolTable.units; u; u = u->next){
+		u->index = ValueIndex;
+		u enumerateValues();
+		}
+	}
+

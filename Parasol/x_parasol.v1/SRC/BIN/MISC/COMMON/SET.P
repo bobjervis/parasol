@@ -1,0 +1,67 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	string;
+include	file;
+include	alys;
+include	error;
+
+start:	entry	() =
+	{
+	i:	int;
+	j, k:	int;
+	a:	ref far Job;
+	n, v:	[:] char;
+
+	a = myJob();
+	if	(|commandLine.arguments == 0){
+
+			// An environment list report:
+
+		try	{
+			for	(i = 0; ; i++){
+				j = a probeNameByIndex(i);
+				k = a probeValueByIndex(i);
+				n = new [j] char;
+				v = new [k] char;
+				n [:]= a nameByIndex(i);
+				v [:]= a valueByIndex(i);
+				printf("%S = %S\n", n, v);
+				delete n;
+				delete v;
+				}
+			}
+		exit(EX_SUCCESS);
+		}
+
+			// Defining an environment variable:
+
+	p, nxt:	[:] char;
+	buf:	[1024] char;
+
+	p = buf;
+	|p = 0;
+	for	(i = 0; i < |commandLine.arguments; i++){
+		if	(i)
+			p = stringAppend(p, " ");
+		p = stringAppend(p, commandLine.arguments[i]);
+		}
+	p = stringTrim(p);
+	i = stringScan(p, '=');
+	if	(i < 0){
+		printf("Definition missing an equal sign: %S\n", p);
+		exit(EX_FAIL);
+		}
+	n = p[:i];
+	v = p[i + 1: ];
+	n = stringTrim(n);
+	v = stringTrim(v);
+
+	a alias(n, v);
+
+	exit(EX_SUCCESS);
+	}

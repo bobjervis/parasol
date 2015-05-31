@@ -1,0 +1,153 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+//include	alys;
+//include	hardware;
+
+DEBUGTABLES:	public	const	int = 16;	// Maximum # of debug tables
+						// in a unit.
+
+debugUnitHeader:	public	type	packed	{
+	public:
+	name:		[9] char;
+	nTables:	char;
+	flags:		unsigned[16];
+	codeOffset:	unsigned[32];
+	nextUnit:	unsigned[32];
+	tableOffsets:	[DEBUGTABLES] unsigned[32];
+	};
+
+G_SVC:		public	const	unsigned[8] =  0x00;
+G_GATE:		public	const	unsigned[8] =  0x01;
+
+RUN_MAGIC:	public	const	unsigned[16] = 0x8c6a;
+RUN_VERSION:	public	const	unsigned[8] =  0x11;
+RUN_VERSION_2:	public	const	unsigned[8] =  0x12;
+LOD_MAGIC:	public	const	unsigned[16] = 0x8c6b;
+LOD_VERSION:	public	const	unsigned[8] =  0x2;
+
+runHeader:	public	type	packed	{
+	public:
+	magic:		unsigned[16];		// A magic number for 
+						// validating the file type
+	version:	unsigned[8];		// THe file version number
+			unsigned[8];
+	cs:		unsigned[16];
+	ds:		unsigned[16];
+	ss:		unsigned[16];
+			unsigned[16];
+	ip:		unsigned[32];		// Starting code address
+	sp:		unsigned[32];		// Starting stack pointer
+	descriptors:	unsigned[32];		// obsolete
+	image:		unsigned[32];		// Offset of the code/data image 
+	fixups:		unsigned[32];		// obsolete
+	gates:		unsigned[32];		// obsolete
+	codeLen:	unsigned[32];		// Code length in bytes
+	dataInitLen:	unsigned[32];		// Initialized data length
+	dataTotalLen:	unsigned[32];		// Init + uninit data length
+	externGates:	unsigned[32];		// obsolete
+	debugInfo:	unsigned[32];		// Unused
+	codeOffset:	unsigned[32];		// see below Note on Offsets
+	dataOffset:	unsigned[32];
+	threadLoc:	unsigned[32];		// location of the thread
+						// data pointer
+	symbols:	unsigned[32];		// location of the runtime 
+						// symbol table
+	dataConstLen:	unsigned[32];		// Size of the constant part
+						// of the initialized data area
+	tables:		[45] unsigned[32];
+	};
+
+lodHeader:	public	type	packed	{
+	public:
+	magic:		unsigned[16];		// A magic number for 
+						// validating the file type
+	version:	unsigned[8];		// THe file version number
+			unsigned[8];
+	image:		unsigned[32];		// Offset of the code/data image 
+	fixups:		unsigned[32];		// Offset of local fixups
+	codeLen:	unsigned[32];		// Code length in bytes
+	dataInitLen:	unsigned[32];		// Initialized data length
+	dataTotalLen:	unsigned[32];		// Init + uninit data length
+	debugInfo:	unsigned[32];		// Unused
+	symbols:	unsigned[32];		// location of the runtime 
+						// symbol table
+	entryFuncs:	unsigned[16];		// number of entry functions
+	cleanupFuncs:	unsigned[16];		// number of cleanup functions
+						// These tables are stored at
+						// data offset zero.
+	dataConstLen:	unsigned[32];		// Size of the constant part
+						// of the initialized data area
+	symbolicFixups:	unsigned[32];		// Offset of symbolic fixups
+	symbolicStrings:unsigned[32];		// Offset of symbolic strings
+	tables:		[52] unsigned[32];
+	};
+/*
+	Note on Offsets
+
+	Code and Data segments may have any origin point.  That is, the code
+	segment as stored in the file is the codeLen - codeOffset in size.
+	The code is loaded at code address codeOffset.  Any whole pages of
+	address space below that point are marked as Not Present and accessing
+	data in that address range will trigger a memory fault.  The data
+	segment is similarly laid out, except that the data stored in the .RUN
+	file is only for initialized data.  All static data between 
+	dataInitLen and dataTotalLen are cleared to zero on program startup.
+
+	The Parasol compiler now sets the code and data offsets to 4K for the
+	x86.  This reserves one unmapped page at offset 0 of both code and
+	data offsets, thus guaranteeing that NULL pointer references will
+	cause a data access fault.
+ */
+/*
+	A core dump file consists of the following parts:
+
+	1. A core dump header.
+	2. A loader signature (identifying the exe file format).
+	3. The message list waiting on each object in the arena being
+	   dumped.
+	4. The writable memory contents.
+ */
+coreDumpHeader:	public	type	packed	{
+	public:
+
+	magic:		unsigned[16];
+	version:	byte;
+			byte;
+//	task:		task_t;
+	dataOffset:	unsigned[32];
+	objectCount:	unsigned[16];
+	};
+
+coreObjectHeader:	public	type	packed	{
+//	descriptor:	object_t;
+	messageCount:	unsigned[32];
+	messageText:	unsigned[32];		// The sum of the message
+						// sizes.
+	};
+
+coreMessageHeader:	public	type	packed	{
+//	header:		messageHeader;
+	signaling:	boolean;
+	dumpOnAbort:	boolean;
+	state:		messageState_t;
+	cumReply:	size_t;
+	errorCode:	int;
+	};
+
+messageState_t:	public	type	byte = {
+	MS_FREE,
+	MS_SENT,
+	MS_RECEIVED,
+	MS_REPLIED,
+	MS_REJECTED,
+	MS_INTERRUPTED,
+	};
+
+COR_MAGIC:	public	const	unsigned[16] = 0x8c6c;
+COR_VERSION:	public	const	unsigned[8] =  0x02;
+

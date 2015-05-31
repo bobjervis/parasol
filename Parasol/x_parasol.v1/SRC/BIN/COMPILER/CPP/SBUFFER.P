@@ -1,0 +1,327 @@
+include	file, filesys;
+include	error;
+include	errmsg;
+
+NestedComments:	public	boolean = FALSE;	// Command line switch to
+						// enable nested comments
+LineComments:	public	boolean = FALSE;	// Command line switch to
+						// enable line comments (//)
+
+lineNum:	public	type	int;
+
+EOF_MARK:	public	const	char = 0;
+BUF_SEEK_END:	public	const	int = 0x7FFFFFFF;
+
+textRange:	public	type	{
+	public:
+	start:		fileOffset;
+	end:		fileOffset;
+	};
+
+sourceBuffer:	public	type	{
+	public:
+
+	pos:			fileOffset;
+	endPos:			fileOffset;
+	textLength:		fileOffset;
+	text:			ref char;
+
+create:	factory	(fname: [:] char) ref sourceBuffer =
+	{
+	self = new sourceBuffer[ fname ];
+	if	(isNew()){
+		delete self;
+		return 0;
+		}
+	openRange([ 0, BUF_SEEK_END ]);
+	return self;
+	}
+
+constructor:	(fname: [:] char) =
+	{
+	fd:	stream;
+	i:	int;
+	cp:	ref char;
+	len:	int;
+
+	pos = 0;
+	endPos = 0;
+	textLength = 0;
+	text = 0;
+	len = 0;
+	i = fd open(fname, AR_READ);
+	if	(i != SUCCESS)
+		return;
+	len = fd seek(0, SEEK_END);
+	fd seek(0, 0);
+	text = alloc(len + 1);
+
+	s:	[:] byte;
+
+	s = ref byte(text)[:len + 1];
+	cp = text;
+	i = fd read(s);
+	fd close();
+	if	(i != len){
+		delete text;
+		text = 0;
+		return;
+		}
+	cp[len] = 0;
+	for	(i = 0; i < len; i++){
+		if	(cp[i] == 26 ||
+			 cp[i] == 0){
+			cp[i] = 0;
+			len = i;
+			break;
+			}
+		}
+	textLength = len;
+	}
+
+isNew:	() boolean =
+	{
+	return text == 0;
+	}
+
+save:	(filename: [:] char, age: long) int =
+	{
+	fd:	stream;
+	i:	int;
+
+	i = fd create(filename, AR_READ|AR_WRITE);
+	if	(i)
+		return i;
+	i = fd write(ref byte(text)[:textLength]);
+	fd setAge(age);
+	fd close();
+	if	(i != textLength)
+		return i;
+	else
+		return SUCCESS;
+	}
+
+tell:	() fileOffset =
+	{
+	return pos;
+	}
+
+tellLine:	(p: fileOffset) lineNum =
+	{
+	i:	fileOffset;
+	cp:	ref char;
+	line:	lineNum;
+
+	line = 1;
+	for	(i = 0, cp = text; i < p; i++, cp++){
+		if	(*cp == '\n')
+			line++;
+		else if	(*cp == 0)
+			break;
+		}
+	return line;
+	}
+
+seek:	(newPos: fileOffset, whence: int) fileOffset =
+	{
+	switch	(whence){
+	case	0:
+		pos = newPos;
+		break;
+
+	case	1:
+		pos += newPos;
+		break;
+
+	case	2:
+		pos = textLength + newPos;
+		break;
+
+	case	3:		// go to line number
+		cp:	ref char;
+
+		cp = text;
+		while	(newPos){
+			for	(;;){
+				if	(*cp == 0){
+					pos = textLength;
+					return pos;
+					}
+				if	(*cp++ == '\n')
+					break;
+				}
+			newPos--;
+			}
+		pos = cp - text;
+		break;
+		}
+	return pos;
+	}
+
+sameText:	(oldSrc: textRange, newBuf: ref sourceBuffer, 
+					newSrc: textRange) boolean =
+	{
+	len1:		fileOffset;
+	len2:		fileOffset;
+	ocp:		ref char;
+	ncp:		ref char;
+	thisCompare:	int;
+
+	len1 = newSrc.end - newSrc.start;
+	len2 = oldSrc.end - oldSrc.start;
+	if	(len1 != len2)
+		return FALSE;
+
+		// make sure the text ranges are well formed
+
+	if	(oldSrc.end > textLength)
+		return FALSE;
+	if	(oldSrc.start > textLength)
+		return FALSE;
+	if	(newSrc.end > newBuf->textLength)
+		return FALSE;
+	if	(newSrc.start > newBuf->textLength)
+		return FALSE;
+	if	(newSrc.start > newSrc.end)
+		return FALSE;
+	if	(oldSrc.start > oldSrc.end)
+		return FALSE;
+
+	ocp = text + oldSrc.start;
+	ncp = newBuf->text + newSrc.start;
+
+		// we know that the strings have equal length
+
+	if	(memCompare(ocp, ncp, len1))
+		return FALSE;
+	else
+		return TRUE;
+	}
+
+openRange:	(tr: textRange) =
+	{
+	if	(tr.end == BUF_SEEK_END)
+		endPos = textLength;
+	else
+		endPos = tr.end;
+	pos = tr.start;
+	}
+
+rawGetc:	() char =
+	{
+	if	(pos <= textLength)
+		return text[pos++];
+	else
+		return EOF_MARK;
+	}
+
+mappedGetc:	() char =
+	{
+	c:	char;
+
+	c = rawGetc();
+	if	(c == '\r')
+		return mappedGetc();
+	else if	(c == '?'){
+		c = rawGetc();
+		if	(c != '?'){
+			ungetc();
+			return '?';
+			}
+
+			// we have a ??, could be a trigraph
+
+		c = rawGetc();
+		switch	(c){
+		case	'=':	text[pos - 1] = '#';	return '#';
+		case	'(':	text[pos - 1] = '[';	return '[';
+		case	'/':	text[pos - 1] = '\\';	return '\\';
+		case	')':	text[pos - 1] = ']';	return ']';
+		case	'\'':	text[pos - 1] = '^';	return '^';
+		case	'<':	text[pos - 1] = '{';	return '{';
+		case	'!':	text[pos - 1] = '|';	return '|';
+		case	'>':	text[pos - 1] = '}';	return '}';
+		case	'-':	text[pos - 1] = '~';	return '~';
+
+		default:
+			ungetc();
+			ungetc();		// unget the second ?
+			return '?';
+			}
+		}
+	else
+		return c;
+	}
+
+getc:	() char =
+	{
+	c:	char;
+
+	for	(;;){
+		c = mappedGetc();
+		if	(c != '\\')
+			return c;
+		c = mappedGetc();
+		if	(c != '\n'){
+			ungetc();
+			return '\\';
+			}
+		}
+	}
+
+ungetc:	() =
+	{
+	pos--;
+	}
+
+skipToEol:	() =
+	{
+	c:	int;
+
+	do
+		c = getc();
+		while	(c != EOF_MARK &&
+			 c != '\n');
+	ungetc();
+	}
+
+skipComment:	public	() =
+	{
+	c:			int;
+	commentNestingLevel:	int;
+	m:			messageContext;
+
+	m = CurrentContext;
+	m.offset = tell();
+	commentNestingLevel = 0;
+	for	(;;){
+		switch	(c = getc()){
+		case	EOF_MARK:
+			errorAt(&m, ErrEofInComment);
+			return;
+
+		case	'/':
+			if	(!NestedComments)
+				break;
+			c = getc();
+			if	(c == '*')
+				commentNestingLevel++;
+			else if	(LineComments && c == '/')
+				skipToEol();
+			break;
+
+		case	'*':
+			c = getc();
+			if	(c == '/'){
+				commentNestingLevel--;
+				if	(commentNestingLevel < 0)
+					return;
+				}
+			else
+				ungetc();
+			}
+		}
+	}
+
+	};
+

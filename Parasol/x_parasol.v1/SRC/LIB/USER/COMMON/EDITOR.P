@@ -1,0 +1,3656 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+/*
+	The editor operates by associating an internal object with a
+	window.  The object is abstract, in that the editor does not
+	directly interact with the edited object.  Instead, it uses a
+	buffer object that accesses and modifies the object.  The buffer
+	object must present a sequence of lines of text to the editor.
+
+	Each line is numbered, from 0 through the number of lines - 1.
+	The editor acts by requesting the current value of a logical line,
+	which is returned as a null-terminated string of bytes.
+	The editor then formats the line into physical lines for display 
+	to the window system.
+
+	The editor will request enough logical lines to fill the current
+	screen.  The editor will maintain a cursor position within the
+	current window.  That position corresponds in turn to one of the
+	displayed logical lines, which becomes the 'active line'.
+
+	Edit events modify the current active line in various ways, such
+	as adding or deleting characters, splitting a line or deleting
+	it altogether.
+ */
+include	console, string, limits;
+include window;
+include	sound;
+include	regexp;
+include	file;
+include	filesys, alys;
+include	error;
+include	heap;
+
+editor:	public	type	inherit	frob {
+	desiredColumn:	int;
+	startBlock:	filePos;
+	endBlock:	filePos;
+	dragStart:	ref filePos;
+	lineStatus:	ref int;
+	scrap:		ref editBuffer;
+
+	public:
+
+	displayLine:	int;
+	displayColumn:	int;
+	cursor:		filePos;
+	buffer:		ref editBuffer;
+
+constructor:	() =
+	{
+	super constructor();
+	scrap = 0;
+	buffer = 0;
+	lineStatus = 0;
+	dragStart = &startBlock;
+	resetEditor();
+	}
+/*
+ *	This function resets the state of the editor to be at the top of the
+ *	file with no block active.  Then draw the buffer contents.
+ */
+resetEditor:	dynamic	() =
+	{
+	displayLine = 0;
+	displayColumn = 0;
+	desiredColumn = 0;
+	startBlock zero();
+	endBlock zero();
+	cursor zero();
+	}
+
+connect:	(buf: ref editBuffer) =
+	{
+	buffer = buf;
+	buffer manageMark(&cursor);
+	buffer manageMark(&startBlock);
+	buffer manageMark(&endBlock);
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	switch	(k){
+
+		/* Navigation commands */
+
+	case	NUM_2:		dragDown();		break;
+	case	NUM_8:		dragUp();		break;
+	case	NUM_4:		dragLeft();		break;
+	case	NUM_6:		dragRight();		break;
+	case	CTRL_HOME:	beginFile();		break;
+	case	CTRL_END:	endFile();		break;
+	case	PGUP:		upScreen();		break;
+	case	PGDN:		downScreen();		break;
+	case	CTRL_LEFT:	leftWord();		break;
+	case	CTRL_RIGHT:	rightWord();		break;
+	case	CTRL_UP:	scrollDown();		break;
+	case    CTRL_DOWN:	scrollUp();		break;
+	case	CTRL_PGUP:	topScreen();		break;
+	case	CTRL_PGDN:	bottomScreen();		break;
+
+			/* Block commands */
+
+	case	ALT_F7:		startOfBlock();		break;
+	case	ALT_F8:		endOfBlock();		break;
+	case	ALT_F2:		moveBlock();		break;
+	case	ALT_F4:		copyBlock();		break;
+
+	case	CTRL_A:		again();		break;
+	case	CTRL_C:		copyToScrap();		break;
+	case	CTRL_D:		deleteLine();		break;
+	case	CTRL_F:		search();		break;
+	case	CTRL_M:		replace();		break;
+	case	CTRL_R:		pasteFromFile();	break;
+	case	CTRL_T:		deleteWord();		break;
+	case	CTRL_V:		pasteFromScrap();	break;
+	case	CTRL_W:		writeBlock();		break;
+	case	CTRL_X:		cutToScrap();		break;
+	case	CTRL_Y:		deleteBlock();		break;
+
+			/* Miscellaneous commands */
+
+
+			/* Text entry commands */
+
+	case	GREY_TAB:	tab();			break;
+	case	BACK_TAB:	backtab();		break;
+	case	GREY_STAR:	enterCharacter('*');	break;
+	case	DEL:		deleteCharacter();	break;
+	case	GREY_BS:	backspace();		break;
+
+	default:
+		if	(32 <= k && k <= 255)
+			enterCharacter(k);
+		else
+			return super processKeystroke(k);
+		}
+	return TRUE;
+	}
+
+//rightCharacter:	dynamic	() = { beep(); }
+//leftCharacter:	dynamic	() = { beep(); }
+//deleteEndOfLine:dynamic	() = { beep(); }
+writeBlock:	dynamic () = { beep(); }
+pasteFromFile:	dynamic	() = { beep(); }
+backtab:	dynamic	() = { beep(); }
+search:		dynamic	() = { beep(); }
+replace:	dynamic	() = { beep(); }
+again:		dynamic	() = { beep(); }
+
+setTextFocus:	dynamic	() =
+	{
+	super setTextFocus();
+	updateTextCursor();
+	}
+
+formatLine:	dynamic	(ln: int) =
+	{
+	i:		int;
+	col:		int;
+	k:		int;
+	cp:		ref char;
+	p:		point;
+	x:		int;
+	ch:		char;
+	attr:		char;
+	outp:		ref colorChar;
+	lineBuffer:	[132] colorChar;
+
+	cp = buffer fetchLine(ln, 0);
+	memSet(lineBuffer, C_TEXT, sizeof lineBuffer);
+	if	(cp == 0){
+		lineBuffer[0].character = '\xb0';
+		for	(i = 1; i < box.size.x; i++)
+			lineBuffer[i].character = ' ';
+		write([ 0, ln - displayLine ], lineBuffer[:box.size.x]);
+		return;
+		}
+	col = 0;
+	outp = lineBuffer;
+	while	(col < displayColumn){
+		ch = *cp;
+		if	(ch == '\n' ||
+			 ch == EOF_MARK)
+			break;
+		cp++;
+		if	(ch == '\t'){
+			x2:	int;
+
+			x2 = (col + 8) & ~7;
+			if	(x2 <= displayColumn)
+				col = x2;
+			else	{
+				col = displayColumn;
+				cp--;
+				break;
+				}
+			}
+		else if	(ch == '\r')
+			;
+		else
+			col++;
+		}
+
+	x = 0;
+	do	{
+		ch = *cp;
+		if	(ch == '\n' ||
+			 ch == 0 ||
+			 ch == EOF_MARK){
+			while	(x < box.size.x){
+				outp->character = ' ';
+				outp++;
+				x++;
+				}
+			break;
+			}
+		cp++;
+		if	(ch == '\t'){
+			x2:	int;
+
+			x2 = (col + 8) & ~7;
+			while	(col < x2){
+				outp->character = ' ';
+				outp++;
+				x++;
+				col++;
+				}
+			}
+		else if	(ch == '\r')
+			;
+		else	{
+			outp->character = ch;
+			outp++;
+			x++;
+			col++;
+			}
+		}
+		while	(x < box.size.x);
+	depositColor(ln, lineBuffer);
+	write([ 0, ln - displayLine ], lineBuffer[:box.size.x]);
+	}
+
+depositColor:	dynamic	(ln: int, lineBuffer: [:] colorChar) =
+	{
+	col, i:		int;
+	outp:		ref colorChar;
+
+	if	(ln < startBlock.line ||
+		 ln > endBlock.line)
+		return;
+
+		// This line may contain some marked text
+
+	start, end:	int;
+	j:		int;
+
+	if	(ln == startBlock.line &&
+		 startBlock.column > displayColumn)
+		start = startBlock.column - displayColumn;
+	else
+		start = 0;
+	if	(ln == endBlock.line &&
+		 endBlock.column < displayColumn + box.size.x)
+		end = endBlock.column - displayColumn;
+	else
+		end = box.size.x;
+	for	(i = start; i < end; i++)
+		lineBuffer[i].color = C_SELECTED;
+	}
+
+centerCursor:	() =
+	{
+	centerDisplay();
+	findCursorColumn(findCurrentColumn);
+	repaintDisplay();
+	}
+
+changeLine:	(ln: lineNum) =
+	{
+	if	(ln < displayLine)
+		return;
+	if	(ln >= displayLine + box.size.y)
+		return;
+	lineStatus[ln - displayLine] = -1;
+	}
+
+expose:	dynamic	(x: rectangle_t) = 
+	{
+	i:	int;
+
+	for	(i = x.corner.y; i < box.size.y; i++)
+		lineStatus[i] = -1;
+	repaintDisplay();
+	}
+
+resizeChildren:	dynamic	(oldSize: point) =
+	{
+	if	(lineStatus)
+		delete lineStatus;
+	if	(box.size.y > 0){
+		i:	int = box.size.y;
+
+		lineStatus = new [i] int;
+		}
+	else
+		lineStatus = 0;
+	}
+
+setScrap:	(ns: ref editBuffer) =
+	{
+	scrap = ns;
+	}
+
+click:		dynamic	(buttons: mouseButtons_t, location: point) =
+	{
+	if	(buttons & MB_LEFT){
+		cursor.line = displayLine + location.y;
+		desiredColumn = displayColumn + location.x;
+		fixupColumn();
+		setTextFocus();
+		}
+	}
+
+scrollUp:	dynamic	() =
+	{
+	if	(displayLine + box.size.y == buffer lineCount()){
+		bottomAlarm();
+		return;
+		}
+	if	(cursor.line <= displayLine){
+		cursor.line++;
+		fixupColumn();
+		}
+	refreshDisplay(displayLine + 1);
+	}
+
+scrollDown:	dynamic	() =
+	{
+	if	(displayLine == 0){
+		topAlarm();
+		return;
+		}
+	if	(cursor.line >= displayLine + box.size.y - 1){
+		cursor.line--;
+		fixupColumn();
+		}
+	refreshDisplay(displayLine - 1);
+	}
+
+upArrow:	dynamic	() =
+	{
+	if	(cursor.line == 0){
+		topAlarm();
+		return;
+		}
+	cursor.line--;
+	fixupColumn();
+	if	(cursor.line < displayLine)
+		refreshDisplay(displayLine - 1);
+	else
+		updateTextCursor();
+	}
+
+downArrow:	dynamic	() =
+	{
+	p:	point;
+
+	if	(cursor.line == buffer lineCount() - 1){
+		bottomAlarm();
+		return;
+		}
+	else	{
+		cursor.line++;
+		fixupColumn();
+		if	(cursor.line == displayLine + box.size.y)
+			refreshDisplay(displayLine + 1);
+		else
+			updateTextCursor();
+		}
+	}
+
+topScreen:	dynamic	() =
+	{
+	cursor.line = displayLine;
+	fixupColumn();
+	updateTextCursor();
+	}
+
+bottomScreen:	dynamic	() =
+	{
+	cursor.line = displayLine + box.size.y - 1;
+	fixupColumn();
+	updateTextCursor();
+	}
+
+upScreen:	dynamic	() =
+	{
+	p:	point;
+	i:	int;
+
+	p = box.size;
+	if	(cursor.line >= p.y)
+		cursor.line -= p.y;
+	else	{
+		topAlarm();
+		cursor.line = 0;
+		}
+	if	(displayLine >= p.y)
+		i = displayLine - p.y;
+	else
+		i = 0;
+	fixupColumn();
+	refreshDisplay(i);
+	}
+
+downScreen:	dynamic	() =
+	{
+	p:		point;
+	lastLine:	int;
+	i:		int;
+
+	p = box.size;
+	lastLine = buffer lineCount();
+	cursor.line += p.y;
+	if	(cursor.line >= lastLine){
+		cursor.line = lastLine - 1;
+		bottomAlarm();
+		}
+	if	(p.y >= lastLine)
+		i = 0;
+	else if	(lastLine - cursor.line < p.y)
+		i = lastLine - p.y;
+	else
+		i = displayLine + p.y;
+	fixupColumn();
+	refreshDisplay(i);
+	}
+
+beginLine:	dynamic	() =
+	{
+	cursor.column = 0;
+	cursor.offset = 0;
+	findCursorColumn(findCurrentColumn);
+	}
+
+endLine:	dynamic	() =
+	{
+	findCursorColumn(findEndOfLine);
+	}
+
+rightArrow:	dynamic	() =
+	{
+	cp:	ref char;
+	i:	int;
+	ch:	char;
+
+	cp = buffer fetchLine(cursor.line, cursor.offset);
+	if	(cp == 0)
+		return;
+	if	(*cp == '\r')
+		cp++;
+	if	(*cp == EOF_MARK)
+		return;
+	else if	(*cp == '\n')
+		return;
+	else	{
+		cursor.offset++;
+		findCursorColumn(findCurrentColumn);
+		}
+	}
+
+leftArrow:	dynamic	() =
+	{
+	i:	int;
+
+	if	(cursor.offset > 0){
+		cursor.offset--;
+		findCursorColumn(findCurrentColumn);
+		}
+	}
+
+dragUp:		dynamic	() = 
+	{
+	ln:	int;
+	off:	int;
+
+	ln = cursor.line;
+	off = cursor.offset;
+	if	(cursor isEqual(&startBlock)){
+		upArrow();
+		if	(off)
+			changeLine(ln);
+		startBlock = cursor;
+		changeLine(cursor.line);
+		}
+	else if	(cursor isEqual(&endBlock) &&
+		 isBlockDefined()){
+		upArrow();
+		if	(off)
+			changeLine(ln);
+		endBlock = cursor;
+
+			/*
+			   This case covers what happens when backing up over
+			   the starting point of the block.  The two end points
+			   switch roles.
+			 */
+
+		if	(!isBlockDefined()){
+			endBlock = startBlock;
+			startBlock = cursor;
+			}
+		changeLine(cursor.line);
+		}
+	else	{
+		endBlock = cursor;
+		upArrow();
+		startOfBlock();
+		}
+	repaintDisplay();
+	}
+
+dragDown:	dynamic	() =
+	{
+	ln:	int;
+
+	ln = cursor.line;
+	if	(cursor isEqual(&endBlock)){
+		downArrow();
+		changeLine(ln);
+		endBlock = cursor;
+		if	(cursor.offset)
+			changeLine(cursor.line);
+		}
+	else if	(cursor isEqual(&startBlock) &&
+		 isBlockDefined()){
+		downArrow();
+		changeLine(ln);
+		startBlock = cursor;
+
+			/*
+			   This case covers what happens when backing up over
+			   the starting point of the block.  The two end points
+			   switch roles.
+			 */
+
+		if	(!isBlockDefined()){
+			startBlock = endBlock;
+			endBlock = cursor;
+			}
+		if	(cursor.offset)
+			changeLine(cursor.line);
+		}
+	else	{
+		startBlock = cursor;
+		downArrow();
+		endOfBlock();
+		}
+	repaintDisplay();
+	}
+
+dragRight:	dynamic	() =
+	{
+	if	(cursor isEqual(&endBlock)){
+		rightArrow();
+		endBlock = cursor;
+		changeLine(cursor.line);
+		}
+	else if	(cursor isEqual(&startBlock) &&
+		 isBlockDefined()){
+		rightArrow();
+		startBlock = cursor;
+		changeLine(cursor.line);
+		}
+	else	{
+		startBlock = cursor;
+		rightArrow();
+		endOfBlock();
+		}
+	repaintDisplay();
+	}
+
+dragLeft:	dynamic	() =
+	{
+	if	(cursor isEqual(&startBlock)){
+		leftArrow();
+		startBlock = cursor;
+		changeLine(cursor.line);
+		}
+	else if	(cursor isEqual(&endBlock) &&
+		 isBlockDefined()){
+		leftArrow();
+		endBlock = cursor;
+		changeLine(cursor.line);
+		}
+	else	{
+		endBlock = cursor;
+		leftArrow();
+		startOfBlock();
+		}
+	repaintDisplay();
+	}
+
+drag:		dynamic	(buttons: mouseButtons_t, location: point) =
+	{
+	if	(buttons & MB_LEFT){
+		x, y:	filePos;
+
+		x = cursor;
+		cursor.line = displayLine + location.y;
+		desiredColumn = displayColumn + location.x;
+		fixupColumn();
+		startBlock = cursor;
+		endBlock = cursor;
+		dragStart = &startBlock;
+		cursor = x;
+		redraw();
+		}
+	}
+
+continueDrag:	dynamic	(buttons: mouseButtons_t, location: point) =
+	{
+	if	(buttons & MB_LEFT){
+		x, y:	filePos;
+
+		x = cursor;
+		cursor.line = displayLine + location.y;
+		desiredColumn = displayColumn + location.x;
+		fixupColumn();
+		x = *dragStart;
+		if	(cursor.lpos + cursor.offset < dragStart->lpos +
+							dragStart->offset){
+			startBlock = cursor;
+			endBlock = x;
+			dragStart = &endBlock;
+			}
+		else	{
+			startBlock = x;
+			endBlock = cursor;
+			dragStart = &startBlock;
+			}
+		cursor = x;
+		redraw();
+		}
+	}
+
+drop:		dynamic	(buttons: mouseButtons_t, location: point) = 
+	{
+	continueDrag(buttons, location);
+	}
+
+rightWord:	dynamic () =
+	{
+	cp:	ref char;
+	i:	int;
+	ch:	char;
+
+	cp = buffer fetchLine(cursor.line, cursor.offset);
+	if	(cp == 0){
+		bottomAlarm();
+		return;
+		}
+	if	(*cp == '\r')
+		cp++;
+	if	(*cp == EOF_MARK){
+		bottomAlarm();
+		return;
+		}
+	else if	(*cp == '\n')
+		return;
+
+		/* If we are on a word, skip over it. */
+
+	while	(isalpha(*cp) || *cp == '_' || isdigit(*cp)){
+		cp++;
+		cursor.offset++;
+		}
+
+		/* Now advance to the next word */
+
+	for	(;;){
+		if	(*cp == EOF_MARK ||
+			 *cp == '\n' ||
+			 *cp == '_' ||
+			 isdigit(*cp) ||
+			 isalpha(*cp))
+			break;
+		cp++;
+		cursor.offset++;
+		}
+	findCursorColumn(findCurrentColumn);
+	}
+
+leftWord:	dynamic () =
+	{
+	cp:	ref char;
+	i:	int;
+	ch:	char;
+
+	cp = buffer fetchLine(cursor.line, cursor.offset);
+	if	(cp == 0 ||
+		 (cursor.line == 0 && cursor.offset == 0)){
+		topAlarm();
+		return;
+		}
+	if	(cursor.offset == 0)
+		return;
+
+		/* If we are on a word, back up at least 1 character */
+
+	if	(*cp == '_' ||
+		 isdigit(*cp) ||
+		 isalpha(*cp)){
+		cp--;
+		cursor.offset--;
+		}
+
+		/* Now back up to the previous word */
+
+	for	(;;){
+		if	(cursor.offset == 0 ||
+			 *cp == '_' ||
+			 isdigit(*cp) ||
+			 isalpha(*cp))
+			break;
+		cp--;
+		cursor.offset--;
+		}
+	if	(cursor.offset){
+
+			/* Now we are on a word, skip over it. */
+
+		for	(;;){
+			cp--;
+			cursor.offset--;
+			if	(*cp != '_' &&
+				 !isdigit(*cp) &&
+				 !isalpha(*cp))
+				break;
+			if	(cursor.offset == 0){
+				findCursorColumn(findCurrentColumn);
+				return;
+				}
+			}
+		cursor.offset++;
+		}
+	findCursorColumn(findCurrentColumn);
+	}
+//
+//	Return TRUE if the cursor is on a word.
+//
+inWord:	dynamic () boolean =
+	{
+	cp:	ref char;
+	i:	int;
+	ch:	char;
+
+	cp = buffer fetchLine(cursor.line, cursor.offset);
+
+		/* If we are on a word, back up at least 1 character */
+
+	if	(*cp == '_' ||
+		 isdigit(*cp) ||
+		 isalpha(*cp))
+		return TRUE;
+	else
+		return FALSE;
+	}
+//
+//	Move to the beginning of a word, if you are in one.
+//
+beginWord:	dynamic () =
+	{
+	cp:	ref char;
+	i:	int;
+	ch:	char;
+
+	cp = buffer fetchLine(cursor.line, cursor.offset);
+	if	(cp == 0)
+		return;
+	if	(cursor.offset == 0)
+		return;
+	if	(*cp != '_' &&
+		 !isdigit(*cp) &&
+		 !isalpha(*cp) &&
+		 cp[-1] != '_' &&
+		 !isdigit(cp[-1]) &&
+		 !isalpha(cp[-1]))
+		return;
+
+		// If we are on a word, back up to just past it.
+
+	cp--;
+	cursor.offset--;
+	while	(*cp == '_' ||
+		 isdigit(*cp) ||
+		 isalpha(*cp)){
+		if	(cursor.offset == 0){
+			findCursorColumn(findCurrentColumn);
+			return;
+			}
+		cp--;
+		cursor.offset--;
+		}
+
+		// Then move forward to the word again.
+
+	cursor.offset++;
+	findCursorColumn(findCurrentColumn);
+	}
+//
+//	Move to the beginning of a word, if you are in one.
+//
+endWord:	dynamic () =
+	{
+	cp:	ref char;
+	i:	int;
+	ch:	char;
+
+	cp = buffer fetchLine(cursor.line, cursor.offset);
+	if	(cp == 0)
+		return;
+	if	(cursor.offset == 0)
+		return;
+	if	(*cp != '_' &&
+		 !isdigit(*cp) &&
+		 !isalpha(*cp))
+		return;
+
+		// If we are on a word, skip forward to just past it.
+
+	while	(*cp == '_' ||
+		 isdigit(*cp) ||
+		 isalpha(*cp)){
+		cp++;
+		cursor.offset++;
+		}
+
+		// Then move back up to the word again.
+
+	cursor.offset--;
+	findCursorColumn(findCurrentColumn);
+	}
+
+beginFile:	dynamic	() =
+	{
+	cursor.line = 0;
+	cursor.lpos = 0;
+	if	(displayColumn)
+		redraw();
+	displayColumn = desiredColumn = cursor.column = 0;
+	cursor.offset = 0;
+	refreshDisplay(0);
+	}
+
+endFile:	dynamic	() =
+	{
+	p:		point;
+	lastLine:	int;
+	i:		int;
+
+	p = box.size;
+	lastLine = buffer lineCount();
+	cursor.line = lastLine - 1;
+	cursor.lpos = buffer seek(cursor.line, 3);
+	endLine();
+	if	(p.y >= lastLine)
+		refreshDisplay(0);
+	else
+		refreshDisplay(lastLine - p.y);
+	}
+/*
+setChanged:	() =
+	{
+
+		/* A zero length delete still sets the changed flag */
+
+	buffer seek(0, 0);
+	buffer delete(0);
+	}
+ */
+enterCharacter:	dynamic	(k: keystroke) =
+	{
+	if	(WordWrapSwitch &&
+		 cursor.column >= box.size.x &&
+		 !isspace(k)){
+		x, y:	textPos;
+
+		x = cursor.lpos + cursor.offset;
+		beginWord();
+		y = cursor.lpos + cursor.offset;
+		if	(cursor.offset)
+			enterKey();
+		if	(y < x){
+			cursor.offset += x - y;
+			findCursorColumn(findCurrentColumn);
+			}
+		}
+	changeLine(cursor.line);
+	buffer seek(cursor.lpos + cursor.offset, 0);
+	buffer insert(ref char(&k), 1);
+	rightArrow();
+	repaintDisplay();
+	}
+
+tab:	dynamic	() =
+	{
+	enterCharacter('\t');
+	}
+
+enterKey:	dynamic	() =
+	{
+	i:	int;
+	j:	int;
+	k:	int;
+	cp:	ref char;
+	p:	point;
+	x:	int;
+
+	buffer seek(cursor.lpos + cursor.offset, 0);
+	buffer insert("\r\n", 2);
+	p = box.size;
+	i = cursor.line - displayLine;
+	if	(i < p.y - 2)
+		verticalScroll([ 0, i + 1 ], box.size, -1);
+	selectiveScroll(i + 1, p.y - 1, -1);
+	changeLine(cursor.line);
+	beginLine();
+	downArrow();
+	repaintDisplay();
+	}
+
+deleteCharacter:dynamic	() =
+	{
+	i:	int;
+	j:	int;
+	p:	point;
+	cp:	ref char;
+
+	cp = buffer fetchLine(cursor.line, cursor.offset);
+	if	(cp == 0)
+		return;
+	i = *cp;
+	if	(i == EOF_MARK){
+		bottomAlarm();
+		return;
+		}
+	buffer seek(cursor.lpos + cursor.offset, 0);
+	if	(i == '\r'){
+		buffer deleteText(1);
+		i = *cp;
+		}
+	j = cursor.line - displayLine;
+	buffer deleteText(1);
+	if	(i == '\n'){
+		p = box.size;
+		if	(j < p.y - 2)
+			verticalScroll([ 0, j + 1 ], box.size, 1);
+		selectiveScroll(j + 1, p.y - 1, 1);
+		}
+	changeLine(cursor.line);
+	repaintDisplay();
+	}
+
+backspace:	dynamic	() =
+	{
+	if	(cursor.line == 0 && cursor.offset == 0)
+		topAlarm();
+	else if	(cursor.offset){
+		leftArrow();
+		deleteCharacter();
+		}
+	else	{
+		upArrow();
+		endLine();
+		deleteCharacter();
+		}
+	}
+
+deleteWord:	dynamic () =
+	{
+	cp:		ref char;
+	i:		int;
+	ch:		char;
+	delAmount:	int;
+
+	cp = buffer fetchLine(cursor.line, cursor.offset);
+	if	(cp == 0){
+		bottomAlarm();
+		return;
+		}
+	if	(*cp == '\r')
+		cp++;
+	if	(*cp == EOF_MARK){
+		bottomAlarm();
+		return;
+		}
+	else if	(*cp == '\n')
+		return;
+	cp++;
+	delAmount = 1;
+
+		/* If we are on a word, skip over it. */
+
+	while	(isalpha(*cp) || *cp == '_' || isdigit(*cp)){
+		cp++;
+		delAmount++;
+		}
+
+		/* Now advance to the next word */
+
+	for	(;;){
+		if	(*cp != ' ' &&
+			 *cp != '\t')
+			break;
+		cp++;
+		delAmount++;
+		}
+	if	(delAmount){
+		buffer seek(cursor.lpos + cursor.offset, 0);
+		buffer deleteText(delAmount);
+		changeLine(cursor.line);
+		repaintDisplay();
+		}
+	}
+
+deleteLine:	dynamic	() =
+	{
+	i:		int;
+	ch:		char;
+	p:		point;
+	delAmount:	int;
+	cp:		ref char;
+
+	cp = buffer fetchLine(cursor.line, 0);
+	if	(cp == 0)
+		return;
+	delAmount = 0;
+	for	(;;){
+		ch = *cp;
+		cp++;
+		if	(ch == EOF_MARK)
+			break;
+		delAmount++;
+		if	(ch == '\n')
+			break;
+		}
+	if	(delAmount){
+		buffer seek(cursor.lpos, 0);
+		buffer deleteText(delAmount);
+		}
+	p = box.size;
+	i = cursor.line - displayLine;
+	if	(i < p.y - 1)
+		verticalScroll( [ 0, i ], box.size, 1);
+	selectiveScroll(i, p.y - 1, 1);
+	fixupColumn();
+	updateTextCursor();
+	repaintDisplay();
+	}
+
+startOfBlock:	dynamic	() =
+	{
+	startBlock = cursor;
+	redraw();
+	}
+
+endOfBlock:	dynamic	() =
+	{
+	endBlock = cursor;
+	redraw();
+	}
+
+moveBlock:	dynamic	() =
+	{
+	i:	int;
+	size:	int;
+	spos:	textPos;
+	cpos:	textPos;
+
+	i = relativeLocation();
+	if	(i > -2 &&
+		 i < 2)
+		return;
+	spos = startBlock.lpos + startBlock.offset;
+	buffer seek(spos, 0);
+	size = endBlock.lpos + endBlock.offset - spos;
+
+	buffer extract(&Transfer, size);
+
+		/* If i < 0 it means the cursor is below the block,
+			otherwise the cursor is above the block. */
+
+	cpos = cursor.lpos + cursor.offset;
+	if	(i < 0){
+		buffer deleteText(size);
+		buffer seek(cpos, 0);
+		buffer merge(&Transfer);
+		endBlock zap(cpos + size);
+		}
+	else	{
+		buffer seek(cpos, 0);
+		buffer merge(&Transfer);
+		buffer seek(spos, 0);
+		buffer deleteText(size);
+		cursor zap(cpos - size);
+		cursor renormalize(buffer);
+		updateTextCursor();
+		endBlock zap(cpos);
+		}
+	startBlock = cursor;
+	Transfer makeEmpty();
+	redraw();
+	centerDisplay();
+	}
+
+copyBlock:	dynamic	() =
+	{
+	i:	int;
+	spos:	int;
+	cpos:	int;
+	size:	int;
+
+	i = relativeLocation();
+	if	(i == 0)
+		return;
+	spos = startBlock.lpos + startBlock.offset;
+	buffer seek(spos, 0);
+	size = endBlock.lpos + endBlock.offset - spos;
+
+	buffer extract(&Transfer, size);
+	cpos = cursor.lpos + cursor.offset;
+	buffer seek(cpos, 0);
+	buffer merge(&Transfer);
+	startBlock = cursor;
+	endBlock zap(cpos + size);
+	Transfer makeEmpty();
+	redraw();
+	}
+
+cutToScrap:	dynamic	() =
+	{
+	i:	int;
+	size:	int;
+	spos:	textPos;
+
+	i = relativeLocation();
+	if	(scrap == 0 ||
+		 !isBlockDefined()){
+		beep();
+		return;
+		}
+	spos = startBlock.lpos + startBlock.offset;
+	buffer seek(spos, 0);
+	size = endBlock.lpos + endBlock.offset - spos;
+	buffer extract(scrap, size);
+	buffer deleteText(size);
+	endBlock = startBlock;
+	cursor = startBlock;
+	cursor renormalize(buffer);
+	centerDisplay();
+	findCursorColumn(findCurrentColumn);
+	getShell() postFooter("Deleted %d characters", size);
+	redraw();
+	}
+
+deleteBlock:	dynamic	() =
+	{
+	i:	int;
+	size:	int;
+	spos:	textPos;
+
+	if	(!isBlockDefined())
+		return;
+	spos = startBlock.lpos + startBlock.offset;
+	buffer seek(spos, 0);
+	size = endBlock.lpos + endBlock.offset - spos;
+	buffer deleteText(size);
+	endBlock = startBlock;
+	cursor = startBlock;
+	cursor renormalize(buffer);
+	centerDisplay();
+	findCursorColumn(findCurrentColumn);
+	getShell() postFooter("Deleted %d characters", size);
+	redraw();
+	}
+
+copyToScrap:	dynamic	() =
+	{
+	if	(scrap == 0 ||
+		 !isBlockDefined()){
+		beep();
+		return;
+		}
+
+	spos:	textPos;
+	size:	int;
+
+	spos = startBlock.lpos + startBlock.offset;
+	size = endBlock.lpos + endBlock.offset - spos;
+
+	buffer seek(spos, 0);
+	buffer extract(scrap, size);
+	}
+
+pasteFromScrap:	dynamic	() =
+	{
+	if	(scrap == 0){
+		getShell() postFooter("No scrap");
+		return;
+		}
+	buffer seek(cursor.lpos + cursor.offset, 0);
+	textLen:	textPos;
+
+	scrap open();
+	textLen = scrap seek(0, 2);
+	buffer merge(scrap);
+	scrap operationDone();
+	startBlock = cursor;
+	endBlock zap(cursor.lpos + cursor.offset + textLen);
+	redraw();
+	}
+
+gotoLine:	(line: unsigned) =
+	{
+	sp:	filePos;
+
+	if	(line < 1 ||
+		 line > buffer lineCount()){
+		getShell() postFooter("Line number not in file");
+		return;
+		}
+	sp.line = line - 1;
+	sp.offset = 0;
+	sp.lpos = buffer seek(sp.line, 3);
+	cursor = sp;
+	centerDisplay();
+	findCursorColumn(findCurrentColumn);
+	getShell() clearFooter();
+	}
+
+positionText:	dynamic	(pos: filePos) =
+	{
+	cursor = pos;
+	findCursorColumn(findCurrentColumn);
+	}
+
+gotoTextOffset:	(pos: textPos) =
+	{
+	buffer seek(pos, 0);
+	buffer getLineno(&cursor.line, &cursor.offset);
+	cursor.lpos = pos - cursor.offset;
+	centerDisplay();
+	findCursorColumn(findCurrentColumn);
+	}
+
+insertText:	dynamic	(s: [:] char) =
+	{
+	i, lines:		int;
+	lpos:			textPos;
+
+	buffer seek(cursor.lpos + cursor.offset, 0);
+	lines = 0;
+	for	(i = 0; i < |s; i++)
+		if	(s[i] == '\n')
+			lines++;
+	buffer insert(s, |s);
+	cursor.line += lines;
+	if	(lines)
+		lpos = buffer seek(cursor.line, 3);
+	else
+		lpos = cursor.lpos;
+	cursor.offset += (cursor.lpos + |s) - lpos;
+	changeLine(cursor.line);
+	findCursorColumn(findCurrentColumn);
+	repaintDisplay();
+	}
+
+refreshDisplay:	(ln: int) =
+	{
+	i:	int;
+	j:	int;
+	k:	int;
+	cp:	ref char;
+	p:	point;
+	x:	int;
+
+	p = box.size;
+	j = p.y;
+	i = 0;
+	if	(ln <= displayLine - p.y ||
+		 ln >= displayLine + p.y)
+		clear();
+	else if	(ln < displayLine){
+		j = displayLine - ln;
+		verticalScroll([ 0, 0 ], box.size, -j);
+		memMove(&lineStatus[j], lineStatus, (p.y - j) * sizeof int);
+		}
+	else if	(ln > displayLine){
+		verticalScroll([ 0, 0 ], box.size, ln - displayLine);
+		memMove(lineStatus, &lineStatus[ln - displayLine],
+				(p.y - (ln - displayLine)) * sizeof (int));
+		i = p.y - (ln - displayLine);
+		}
+	else
+		j = 0;
+	for	(; i < j; i++)
+		lineStatus[i] = -1;
+	displayLine = ln;
+	updateTextCursor();
+	repaintDisplay();
+	}
+
+topAlarm:	dynamic	() =
+	{
+	getShell() postFooter("Top of file");
+	}
+
+bottomAlarm:	dynamic	() =
+	{
+	getShell() postFooter("Bottom of file");
+	}
+
+	private:
+
+centerDisplay:	() =
+	{
+	ln:		int;
+	lastLine:	int;
+
+	ln = cursor.line;
+	if	(ln < displayLine ||
+		 ln >= displayLine + box.size.y){
+		if	(ln < box.size.y / 2)
+			ln = 0;
+		else
+			ln -= box.size.y / 2;
+		lastLine = buffer lineCount();
+		if	(lastLine >= box.size.y &&
+			 ln + box.size.y > lastLine)
+			ln = lastLine - box.size.y;
+		refreshDisplay(ln);
+		}
+	}
+
+updateTextCursor:	() =
+	{
+	textCursor([ cursor.column - displayColumn, 
+				cursor.line - displayLine ]);
+	}
+
+isBlockDefined:		() int =
+	{
+	if	(startBlock.lpos + startBlock.offset <
+			endBlock.lpos + endBlock.offset)
+		return 1;
+	else
+		return 0;
+	}
+
+relativeLocation:	() int =
+	{
+	cpos:	int;
+	spos:	int;
+	epos:	int;
+
+	spos = startBlock.lpos + startBlock.offset;
+	epos = endBlock.lpos + endBlock.offset;
+	if	(spos >= epos)
+		return 0;
+	cpos = cursor.lpos + cursor.offset;
+	if	(cpos < spos)
+		return -2;
+	if	(cpos == spos)
+		return -1;
+	if	(cpos > epos)
+		return 2;
+	if	(cpos == epos)
+		return 1;
+	return 0;
+	}
+
+findColumn:	public	(f: ref filePos, fa: findAction) =
+	{
+	i:	int;
+	ch:	char;
+	j:	int;
+	cp:	ref char;
+
+	switch	(fa){
+	case	adjustNewCharacter:
+		if	(f->line == cursor.line &&
+			 f->offset > cursor.offset)
+			f->offset++;
+		else
+			return;
+		break;
+
+	case	adjustNewline:
+		if	(f->line > cursor.line){
+			f->line++;
+			f->lpos = buffer seek(f->line, 3);
+			return;
+			}
+		else if	(f->line == cursor.line &&
+			 f->offset > cursor.offset){
+			f->offset -= cursor.offset;
+			f->line++;
+			f->lpos = buffer seek(f->line, 3);
+			}
+		else
+			return;
+		break;
+
+	case	adjustDeleteCharacter:
+		if	(f->line == cursor.line &&
+			 f->offset > cursor.offset)
+			f->offset--;
+		else
+			return;
+		break;
+
+	case	adjustDeleteNewline:
+		if	(f->line > cursor.line + 1){
+			f->line--;
+			f->lpos = buffer seek(f->line, 3);
+			return;
+			}
+		else if	(f->line == cursor.line + 1){
+			f->offset += cursor.offset;
+			f->line--;
+			f->lpos = buffer seek(f->line, 3);
+			}
+		else
+			return;
+		break;
+
+	case	adjustDeleteLine:
+		if	(f->line > cursor.line){
+			f->line--;
+			f->lpos = buffer seek(f->line, 3);
+			}
+		else if	(f->line == cursor.line)
+			f->offset = f->column = 0;
+		return;
+		}
+	cp = buffer fetchLine(f->line, 0);
+	if	(cp == 0){
+		f->column = 0;
+		return;
+		}
+	if	(fa == findEndOfLine)
+		j = 0x7FFFFFFF;
+	else
+		j = f->offset;
+	f->column = 0;
+	for	(;j;){
+		ch = *cp;
+		cp++;
+		if	(fa == findEndOfLine &&
+			 (ch == '\n' ||
+			  ch == EOF_MARK)){
+			f->offset = 0x7FFFFFFF - j;
+			break;
+			}
+		if	(ch == '\t')
+			f->column = (f->column + 8) & ~7;
+		else if	(ch == '\n')
+			return;
+		else if	(ch == '\r')
+			continue;
+		else
+			f->column++;
+		j--;
+		}
+	}
+/*
+	relativeFlag:
+
+	 0 = find end of line.
+	 1 = find position relative to current location only, if we pass
+	     over a \n, then wrap to a new line.
+ */
+findCursorColumn:	(relativeFlag: findAction) =
+	{
+	findColumn(&cursor, relativeFlag);
+	if	(cursor.column < displayColumn){
+		displayColumn = cursor.column;
+		redraw();
+		}
+	else if	(cursor.column >= displayColumn + box.size.x){
+		displayColumn = 1 + cursor.column - box.size.x;
+		redraw();
+		}
+	desiredColumn = cursor.column;
+	updateTextCursor();
+//	repaintDisplay();
+	}
+
+fixupColumn:	() =
+	{
+	i:	int;
+	ch:	char;
+	j:	int;
+	cp:	ref char;
+
+	cp = buffer fetchLine(cursor.line, 0);
+	cursor.lpos = buffer seek(0, 1);
+	if	(cp == 0){
+		cursor.column = 0;
+		i = displayColumn;
+		displayColumn = desiredColumn = cursor.column;
+		if	(i)
+			redraw();
+		return;
+		}
+	cursor.column = 0;
+	cursor.offset = 0;
+	while	(cursor.column < desiredColumn){
+		ch = *cp;
+		cp++;
+		if	(ch == '\n' || ch == EOF_MARK)
+			break;
+		else if	(ch == '\t')
+			cursor.column = (cursor.column + 8) & ~7;
+		else if	(ch == '\r')
+			break;
+		else
+			cursor.column++;
+		cursor.offset++;
+		}
+	if	(cursor.column < displayColumn){
+		displayColumn = cursor.column;
+		redraw();
+		}
+	else if	(cursor.column >= displayColumn + box.size.x){
+		displayColumn = 1 + cursor.column - box.size.x;
+		redraw();
+		}
+	}
+
+selectiveScroll:	(from: int, to: int, by: int) =
+	{
+	i:	int;
+
+	if	(by > 0){
+		for	(i = from + by; i < to; i++)
+			if	(lineStatus[i] == -1)
+				lineStatus[i - by] = -1;
+		lineStatus[to] = -1;
+		}
+	else	{
+		for	(i = from; i < to + by; i++)
+			if	(lineStatus[i] == -1)
+				lineStatus[i - by] = -1;
+		if	(from < box.size.y)
+			lineStatus[from] = -1;
+		}
+	}
+
+repaintDisplay:	() =
+	{
+	i:	int;
+	j:	int;
+	k:	int;
+	cp:	ref char;
+	p:	point;
+	x:	int;
+
+	p = box.size;
+	if	(!startBlock.normal){
+		startBlock renormalize(buffer);
+		findColumn(&startBlock, findCurrentColumn);
+		}
+	if	(!endBlock.normal){
+		endBlock renormalize(buffer);
+		findColumn(&endBlock, findCurrentColumn);
+		}
+	for	(i = 0, j = displayLine; i < p.y; i++, j++){
+		if	(lineStatus[i] != j){
+//			if	(eventWaiting())
+//				return;
+			formatLine(j);
+			lineStatus[i] = j;
+			}
+		}
+	}
+
+};
+
+textField:	public	type	inherit	editor	{
+	enterAction:	callback;
+
+	visible:
+
+	textState:	textState_t;
+	buff:		ref simpleTextBuffer;
+	vColor:		color_t;
+	ivColor:	color_t;
+
+constructor:	(t: [:] char, c: color_t, ic: color_t) =
+	{
+	super constructor();
+	buff = new simpleTextBuffer[ t ];
+	vColor = c;
+	ivColor = ic;
+	connect(buff);
+	enterAction = [ 0, 0 ];
+	textState = TS_EDIT;
+	}
+
+destructor:	dynamic	() =
+	{
+	buff close();
+	delete buff;
+	super destructor();
+	}
+
+setTextFocus:	dynamic	() =
+	{
+	super setTextFocus();
+	textState = TS_PENDING;
+	redraw();
+	}
+
+onEnterKey:	(c: callback) =
+	{
+	enterAction = c;
+	}
+
+setValue:	(s: [:] char) =
+	{
+	resetEditor();
+	buff close();
+	buff = [ s ];
+	}
+
+getValue:	() [:] char =
+	{
+	s:	[:] char;
+
+	s = buff->data[:buff->usedLen - 1];
+	return s;
+	}
+
+enterKey:	dynamic	() =
+	{
+	if	(enterAction.func){
+		f:	ref (pointer);
+
+		f = enterAction.func;
+		f(enterAction.data);
+		}
+	else
+		super enterKey();
+	}
+
+depositColor:	dynamic	(ln: int, lineBuffer: [:] colorChar) =
+	{
+	i:	int;
+
+	for	(i = 0; i < |lineBuffer; i++){
+		if	(lineBuffer[i].color == C_TEXT){
+			if	(textState == TS_PENDING)
+				lineBuffer[i].color = C_PENDING_DELETE;
+			else
+				lineBuffer[i].color = vColor;
+			}
+		}
+	}
+
+leftArrow:	dynamic	() =
+	{
+	t:	textState_t;
+
+	t = textState;
+	textState = TS_EDIT;
+	if	(t == TS_PENDING)
+		redraw();
+//	if	(cursor.offset == 0)
+//		leaveField(FS_LEFT);
+//	else
+		super leftArrow();
+	}
+
+rightArrow:	dynamic	() =
+	{
+	t:	textState_t;
+
+	t = textState;
+	textState = TS_EDIT;
+	if	(t == TS_PENDING)
+		redraw();
+//	if	(cursor.column >= box.size.x - 1)
+//		leaveField(FS_RIGHT);
+//	else
+		super rightArrow();
+	}
+
+upArrow:	dynamic	() =
+	{
+	t:	textState_t;
+
+	t = textState;
+	textState = TS_EDIT;
+	if	(t == TS_PENDING)
+		redraw();
+//	if	(cursor.line == 0)
+//		leaveField(FS_UP);
+//	else
+		super upArrow();
+	}
+
+downArrow:	dynamic	() =
+	{
+	t:	textState_t;
+
+	t = textState;
+	textState = TS_EDIT;
+	if	(t == TS_PENDING)
+		redraw();
+//	if	(cursor.line >= box.size.y - 1)
+//		leaveField(FS_DOWN);
+//	else
+		super downArrow();
+	}
+
+deleteCharacter:	dynamic	() =
+	{
+	t:	textState_t;
+
+	t = textState;
+	textState = TS_EDIT;
+	if	(t == TS_PENDING)
+		redraw();
+	super deleteCharacter();
+	}
+
+backspace:	dynamic	() =
+	{
+	t:	textState_t;
+
+	t = textState;
+	textState = TS_EDIT;
+	if	(t == TS_PENDING)
+		redraw();
+	super backspace();
+	}
+
+enterCharacter:	dynamic	(k: keystroke) =
+	{
+	if	(textState == TS_PENDING){
+		buff deleteAll();
+		textState = TS_EDIT;
+		redraw();
+		}
+	super enterCharacter(k);
+	}
+
+	};
+
+textState_t:	public	type	byte = {
+	TS_PENDING,			// pending delete mode
+	TS_EDIT				// editing mode
+	};
+/*
+escape:	dynamic	() =
+	{
+	if	(owner->priorFocus){
+		buff close();
+		owner->priorFocus setTextFocus();
+		owner unanchor(self);
+		}
+	owner escape();
+	}
+
+enterKey:	dynamic	() =
+	{
+	leaveField(FS_SUCCESS);
+	}
+
+atLine:	(line: int) =
+	{
+	gotoLine(line + 1);
+	}
+
+atEndFile:	() =
+	{
+	super endFile();
+	}
+
+atEndLine:	() =
+	{
+	super endLine();
+	}
+
+tab:	dynamic	() =
+	{
+	leaveField(FS_TAB);
+	}
+
+backtab:	dynamic	() =
+	{
+	leaveField(FS_BTAB);
+	}
+
+beginFile:	dynamic	() =
+	{
+	leaveField(FS_HOME);
+	}
+
+endFile:	dynamic () =
+	{
+	leaveField(FS_END);
+	}
+
+beginLine:	dynamic	() =
+	{
+	leaveField(FS_BLINE);
+	}
+
+endLine:	dynamic	() =
+	{
+	leaveField(FS_ELINE);
+	}
+
+leaveField:	(action: formStatus) =
+	{
+	p2, p:		point;
+	successor:	ref field;
+
+	if	(buff save() != FS_SUCCESS)
+		return;
+	p = localToAbsolute([ cursor.column, cursor.line ]);
+	if	(action > FS_ACTIONS){
+		successor = owner locateField(0, p, action);
+		if	(successor == 0)
+			return;
+		if	(successor == buff.mappedField){
+			textState = TS_EDITING;
+			switch	(action){
+			case	FS_UP:
+				super upArrow();
+				break;
+
+			case	FS_DOWN:
+				super downArrow();
+				break;
+
+			case	FS_RIGHT:
+				super rightArrow();
+				break;
+
+			case	FS_HOME:
+			case	FS_TAB:
+			case	FS_BTAB:
+				super beginFile();
+				break;
+
+			case	FS_BLINE:
+				super beginLine();
+				break;
+
+			case	FS_END:
+				super endFile();
+				break;
+
+			case	FS_LEFT:
+				super leftArrow();
+				break;
+
+			case	FS_ELINE:
+				super endLine();
+				}
+			return;
+			}
+		buff close();
+		}
+	else	{
+		if	(owner->priorFocus){
+			buff close();
+			owner->priorFocus setTextFocus();
+			owner unanchor(self);
+			}
+		owner enterKey();
+		return;
+		}
+	connect(successor);
+
+	p2 = successor localToAbsolute([ 0, 0 ]);
+	switch	(action){
+	case	FS_BTAB:
+	case	FS_UP:
+		if	(p.y > p2.y)
+			atLine(p.y - p2.y - 1);	// go to the relative
+						// line, start of line
+		else
+			atLine(0);
+		break;
+
+	case	FS_RIGHT:
+	case	FS_TAB:
+	case	FS_DOWN:
+	case	FS_BLINE:
+		atLine(0);		// go to the relative
+						// line, start of line
+		break;
+
+	case	FS_END:
+		atEndFile();
+		break;
+
+	case	FS_LEFT:
+	case	FS_ELINE:
+		atLine(p.y - p2.y);		// go to the relative
+						// line, end of line
+		atEndLine();
+		}
+	}
+
+	};
+ */
+findAction:	public	type	char = {
+	findCurrentColumn,
+	findEndOfLine,
+	adjustNewCharacter,
+	adjustNewline,
+	adjustDeleteCharacter,
+	adjustDeleteNewline,
+	adjustDeleteLine,
+	};
+
+lineNum:	public	type	int;
+textPos:	public	type	long;
+
+EOF_MARK:	public	const	char = 0;
+
+editBuffer:	public	type	{
+	public:
+
+open:	dynamic	() =
+	{
+	}
+
+operationDone:	dynamic	() =
+	{
+	}
+
+close:	dynamic	() =
+	{
+	}
+
+makeEmpty:	dynamic	() =
+	{
+	}
+
+lineCount:	dynamic	() lineNum =
+	{
+	return 0;
+	}
+
+insert:	dynamic	(ref char, int) =	// buffer address and length
+	{
+	}
+
+merge:	dynamic	(buff: ref editBuffer) =	// edit buffer to merge
+	{
+	i:		int;
+	j:		int;
+	intermed:	[128] char;
+
+	i = buff seek(0, 2);
+	while	(i > 0){
+		if	(i > 128)
+			j = 128;
+		else
+			j = i;
+		buff seek(i - j, 0);
+		buff read(intermed, j);
+		insert(intermed, j);
+		i -= j;
+		}
+	}
+
+seek:	dynamic	(textPos, int) textPos =
+	{
+	}
+
+read:	dynamic	(pointer, int) int =	// buffer and len and actual copied
+	{
+	}
+
+fetchLine:	dynamic	(lineNum, int) ref char = 
+					// line number and offset in line
+	{
+	}
+
+getLineno:	dynamic	(ref lineNum, ref int) =
+					// return current location in lines
+	{
+	}
+
+extract:	dynamic	(ref editBuffer, int) =
+					// buffer to put the data in
+	{
+	}
+
+beginExtract:	dynamic	(textPos) =	// size
+	{
+	}
+
+write:	dynamic	(pointer, int) =	// block and length
+	{
+	}
+
+deleteText:	dynamic	(int) =			// amount to delete
+	{
+	}
+
+search:	dynamic	(ref searchPattern) fileRange_t =
+					// search pattern (compiled regular
+					// expression)
+	{
+	SearchTrap raise();		// default to search failed
+	}
+
+hasChanged:	dynamic	() int =
+	{
+	return 0;
+	}
+
+manageMark:	dynamic	(m: ref filePos) =
+	{
+	}
+
+unmanageMark:	dynamic	(m: ref filePos) =
+	{
+	}
+
+	};
+
+textEditor:	public	type	inherit	editor {
+	searchString:		[:] char;
+	replaceString:		[:] char;
+	lastOperation:		repeatableOps;
+	foundString:		fileRange_t;
+	sPattern:		ref searchPattern;
+
+	public:
+
+constructor:	() =
+	{
+	searchString = stringDup("");
+	replaceString = stringDup("");
+	lastOperation = 0;
+	sPattern = 0;
+	super constructor();
+	}
+
+search:	dynamic	() =
+	{
+	new searchForm[ self ];
+	}
+
+startSearch:	(ss: [:] char) =
+	{
+	delete searchString;
+	searchString = stringDup(ss);
+	performSearchReplace(RO_SEARCH);
+	}
+
+replace:	dynamic	() =
+	{
+	new replaceForm[ self ];
+	}
+
+startReplace:	(ss: [:] char, rs: [:] char) =
+	{
+	delete searchString;
+	searchString = stringDup(ss);
+	delete replaceString;
+	replaceString = stringDup(rs);
+	performSearchReplace(RO_REPLACE);
+	}
+
+again:	dynamic	() =
+	{
+	switch	(lastOperation){
+	case	RO_SEARCH:
+	case	RO_REPLACE:
+		performSearchReplace(lastOperation);
+		break;
+
+	default:
+		beep();
+		}
+	}
+
+patterns:	(b: boolean) =
+	{
+	RegularExpressionSwitch = b;
+	}
+
+performSearchReplace:	(op: repeatableOps) =
+	{
+	lastOperation = op;
+	if	(sPattern){
+		delete sPattern;
+		sPattern = 0;
+		}
+	sPattern = new searchPattern[ ];
+	sPattern->metaflag = RegularExpressionSwitch;
+
+		// Compile the search pattern into the shared heap
+
+	h:	ref Heap;
+
+	h = SharedHeap activate();
+	try	{
+		sPattern compile(searchString);
+		}
+	except	{
+		h activate();
+		getShell() postFooter("Improper regular expression");
+		return;
+		}
+	h activate();
+	getShell() clearFooter();
+	if	(!srFind())
+		return;
+	if	(lastOperation == RO_REPLACE)
+		new replaceAskForm[ self ];
+	}
+
+srFind:	() boolean =
+	{
+	sp:	filePos;
+	sx:	textPos;
+
+	showCursor();
+	getShell() postFooter("Searching...");
+	sp = cursor;
+	sx = cursor.lpos + cursor.offset;
+	buffer seek(sx, 0);
+	try	{
+		foundString = buffer search(sPattern);
+		}
+	except	{
+		getShell() postFooter("Not found");
+		return FALSE;
+		}
+
+	len:	int;
+
+	buffer getLineno(&cursor.line, &cursor.offset);
+	cursor.lpos = foundString.offset - cursor.offset;
+	cursor.offset += foundString.length;
+	getShell() clearFooter();
+	centerCursor();
+	return TRUE;
+	}
+
+applyReplace:	() =	
+	{
+	i:	int;
+	s, p:	[:] char;
+
+	buffer seek(foundString.offset, 0);
+	cursor.offset -= foundString.length;
+	buffer deleteText(foundString.length);
+	p = "";
+	s = sPattern replace(p, p, replaceString);
+	buffer insert(s, |s);
+	cursor.offset += |s;
+	delete s;
+	changeLine(cursor.line);
+	centerCursor();
+	}
+
+};
+
+start:	entry	() =
+	{
+	SearchString = SharedHeap new [0] char;
+	ReplaceString = SharedHeap new [0] char;
+	}
+
+Scrap:	public	scrapBuffer;
+
+scrapBuffer:	public	type	inherit	transferBuffer {
+	public:
+
+open:	dynamic	() =
+	{
+	if	(!findScrapFilename())
+		return;
+	scrapStream open(scrapFile, AR_READ);
+	}
+
+beginExtract:	dynamic	(textPos) =
+	{
+	if	(!findScrapFilename())
+		return;
+	scrapStream create(scrapFile, 0);
+	}
+
+seek:	dynamic	(newPos: textPos, whence: int) textPos =
+	{
+	if	(badScrap)
+		return 0;
+	return scrapStream seek(newPos, whence);
+	}
+
+read:	dynamic	(buf: pointer, len: int) int =
+					// buffer and len and actual copied
+	{
+	if	(badScrap)
+		return 0;
+	return scrapStream read(ref byte(buf)[:len]);
+	}
+
+write:	dynamic	(buf: pointer, len: int) =	// block and length
+	{
+	if	(!badScrap)
+		scrapStream write(ref byte(buf)[:len]);
+	}
+
+operationDone:	dynamic	() =
+	{
+	if	(!badScrap)
+		scrapStream close();
+	}
+
+	private:
+
+findScrapFilename:	() boolean =
+	{
+	if	(badScrap)
+		return FALSE;
+	if	(&scrapFile[0] == 0){
+		scrapFile = SharedHeap new [MAXPATH] char;
+		try
+			scrapFile [:]= myJob() value("SCRAP_BUFFER");
+		except	{
+			badScrap = TRUE;
+			return FALSE;
+			}
+		}
+	return TRUE;
+	}
+
+	badScrap:	boolean;
+	scrapFile:	[:] char;
+	scrapStream:	stream;
+	};
+
+Transfer:	transferBuffer;
+
+simpleTextBuffer:	public	type	inherit	transferBuffer	{
+
+	changed:	int;
+
+public:
+
+	usedLen:	int;
+
+constructor:	(s: [:] char) =
+	{
+	len:	int;
+
+	changed = 0;
+	len = |s + 1;
+	data = 0;
+	beginExtract(len);
+	memCopy(data, s, |s);
+	data[|s] = EOF_MARK;
+	usedLen = len;
+	}
+
+deleteAll:	() =
+	{
+	usedLen = 1;
+	data[0] = EOF_MARK;
+	}
+
+close:	dynamic	() =
+	{
+	makeEmpty();
+	changed = 0;
+	}
+
+makeEmpty:	dynamic	() =
+	{
+	usedLen = 0;
+	changed = 1;
+	super makeEmpty();
+	}
+
+insert:	dynamic	(buf: ref char, len: int) =	// buffer address and length
+	{
+	i:	int;
+	cp:	ref char;
+
+	if	(usedLen + len > dataLen){
+		i = usedLen + len + 5;
+		cp = new [i] char;
+		memCopy(cp, data, usedLen);
+		delete data;
+		data = cp;
+		}
+	if	(offset > usedLen)
+		offset = usedLen;
+	i = usedLen - offset;
+	cp = &data[offset];
+	if	(i)
+		memMove(&data[offset + len], cp, i);
+	memCopy(cp, buf, len);
+	usedLen += len;
+	changed = 1;
+	}
+
+deleteText:	dynamic	(len: int) =
+	{
+	rem:	int;
+
+	rem = usedLen - offset;
+	if	(len > rem)
+		len = rem;
+	memMove(&data[offset], &data[offset + len], rem - len);
+	usedLen -= len;
+	changed = 1;
+	}
+
+seek:	dynamic	(newPos: textPos, whence: int) textPos =
+	{
+	switch	(whence){
+	case	0:			// SEEK_ABS
+		offset = newPos;
+		break;
+
+	case	1:			// SEEK_CUR
+		offset += newPos;
+		break;
+
+	case	2:
+		offset = dataLen + newPos;
+		break;
+
+	case	3:
+		cp:	ref char;
+		i:	textPos;
+		lc:	lineNum;
+
+		lc = newPos;
+		i = 0;
+		if	(lc){
+			for	(i = 1, cp = data; i < usedLen; i++, cp++){
+				if	(*cp == '\n'){
+					lc--;
+					if	(lc == 0)
+						break;
+					}
+				}
+			}
+		offset = i;
+		break;
+		}
+	return offset;
+	}
+
+fetchLine:	dynamic	(ln: lineNum, col: int) ref char = 
+					// line number and offset in line
+	{
+	cp:	ref char;
+	off:	int;
+
+	off = seek(ln, 3);		// get to ln, column 0
+	cp = &data[off];
+	while	(col){
+		if	(off >= usedLen ||
+			 *cp == '\n')
+			return 0;
+		cp++;
+		off++;
+		col--;
+		}
+	offset = off;
+	return cp;
+	}
+
+getLineno:	dynamic	(lnp: ref lineNum, colp: ref int) =
+					// return current location in lines
+	{
+	cp:	ref char;
+	i:	textPos;
+	col:	int;
+	ln:	lineNum;
+
+	ln = 0;
+	i = 0;
+	col = 0;
+	for	(cp = data; i < offset; i++, cp++){
+		if	(*cp == '\n'){
+			col = i;
+			ln++;
+			}
+		}
+	*colp = i - (col + 1);
+	*lnp = ln;
+	}
+
+extract:	dynamic	(buff: ref editBuffer, len: int) =
+					// buffer to put the data in
+	{
+	buff beginExtract(len);
+	buff write(&data[offset], len);
+	}
+
+hasChanged:	dynamic	() int =
+	{
+	return 0;
+	}
+
+	};
+
+transferBuffer:	public	type	inherit	editBuffer {
+	public:
+
+	data:		ref char;
+	dataLen:	textPos;
+	offset:		textPos;
+
+makeEmpty:	dynamic	() =
+	{
+	if	(data)
+		delete data;
+	data = 0;
+	}
+
+lineCount:	dynamic	() lineNum =
+	{
+	cp:	ref char;
+	i:	textPos;
+	lc:	lineNum;
+
+	lc = 1;
+	for	(i = 0, cp = data; i < dataLen; i++, cp++){
+		if	(*cp == '\n')
+			lc++;
+		}
+	return lc;
+	}
+
+seek:	dynamic	(newPos: textPos, whence: int) textPos =
+	{
+	switch	(whence){
+	case	0:			// SEEK_ABS
+		offset = newPos;
+		break;
+
+	case	1:			// SEEK_CUR
+		offset += newPos;
+		break;
+
+	case	2:
+		offset = dataLen + newPos;
+		}
+	return offset;
+	}
+
+read:	dynamic	(buf: pointer, len: int) int =
+					// buffer and len and actual copied
+	{
+	if	(offset >= dataLen)
+		return 0;
+	if	(offset + len > dataLen)
+		len = dataLen - offset;
+	memCopy(buf, data + offset, len);
+	offset += len;
+	return len;
+	}
+
+beginExtract:	dynamic	(size: textPos) =
+	{
+	if	(data)
+		delete data;
+	data = alloc(size);
+	dataLen = size;
+	offset = 0;
+	}
+
+write:	dynamic	(buf: pointer, len: int) =	// block and length
+	{
+	if	(offset >= dataLen)
+		return;
+	if	(offset + len > dataLen)
+		len = dataLen - offset;
+	memCopy(data + offset, buf, len);
+	offset += len;
+	return;
+	}
+
+	};
+
+SearchString:	[:] char;
+ReplaceString:	[:] char;
+SearchLock:	Lock;
+
+searchForm:	type	inherit	popupShell {
+	ed:		ref textEditor;
+	typein:		ref textField;
+
+	public:
+
+constructor:	(w: ref textEditor) =
+	{
+	ed = w;
+
+		// Describe the form
+
+	g:	ref Grid;
+	d:	ref dialog;
+	rprop:	static	[] byte = [ 1 ];
+	cprop:	static	[] byte = [ 0, 1 ];
+
+	super constructor("Search", w getShell());
+	g = new Grid[ 2, 1 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "Search: ", C_READONLY, C_READONLY ]);
+	critical(SearchLock)
+		typein = new textField[ SearchString, C_TEXT, C_READONLY ];
+	typein onEnterKey([ self, &ok ]);
+	g cell([ 1, 0 ], typein);
+
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g);
+	anchor(d);
+	typein setTextFocus();
+
+		// Draw it and accept input
+
+	configure([ 60, 1 ]);
+	open();
+	}
+
+ok:	() =
+	{
+	searchString:	[:] char;
+
+	searchString = typein getValue();
+	critical(SearchLock){
+		SharedHeap delete SearchString;
+		SearchString = SharedHeap stringDup(searchString);
+		}
+	if	(|searchString)
+		ed startSearch(searchString);
+	delete self;
+	}
+
+	};
+
+replaceForm:	type	inherit	popupShell {
+	ed:		ref textEditor;
+	stypein:	ref textField;
+	rtypein:	ref textField;
+
+	public:
+
+constructor:	(w: ref textEditor) =
+	{
+	replaceString:	[:] char;
+	searchString:	[:] char;
+
+	ed = w;
+
+		// Create a default file name that is blank.
+
+	critical(SearchLock){
+		replaceString = stringDup(ReplaceString);
+		searchString = stringDup(SearchString);
+		}
+
+		// Describe the form
+
+	g:	ref Grid;
+	d:	ref dialog;
+	rprop:	static	[] byte = [ 0, 0 ];
+	cprop:	static	[] byte = [ 0, 1 ];
+
+	super constructor("Replace", w getShell());
+	g = new Grid[ 2, 2 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "Search: ", C_READONLY, C_READONLY ]);
+	stypein = new textField[ searchString, C_TEXT, C_READONLY ];
+	stypein onEnterKey([ self, &gotoReplace ]);
+	g cell([ 1, 0 ], stypein);
+	g cell([ 0, 1 ], new caption[ "Replace: ", C_READONLY, C_READONLY ]);
+	rtypein = new textField[ replaceString, C_TEXT, C_READONLY ];
+	rtypein onEnterKey([ self, &ok ]);
+	g cell([ 1, 1 ], rtypein);
+
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g);
+	anchor(d);
+	stypein setTextFocus();
+
+		// Draw it and accept input
+
+	configure([ 60, 2 ]);
+	open();
+	}
+
+gotoReplace:	() =
+	{
+	rtypein setTextFocus();
+	}
+
+ok:	() =
+	{
+	replaceString:	[:] char;
+	searchString:	[:] char;
+
+	searchString = stypein getValue();
+	replaceString = rtypein getValue();
+	critical(SearchLock){
+		SharedHeap delete SearchString;
+		SearchString = SharedHeap stringDup(searchString);
+		SharedHeap delete ReplaceString;
+		ReplaceString = SharedHeap stringDup(replaceString);
+		}
+	if	(|searchString)
+		ed startReplace(searchString, replaceString);
+	delete self;
+	}
+
+	};
+
+replaceAskForm:	type	inherit	frob {
+	ed:		ref textEditor;
+
+	public:
+
+constructor:	(w: ref textEditor) =
+	{
+	p:	point;
+
+	ed = w;
+	super constructor();
+	box.size = w->box.size;
+
+		// Draw it and accept input
+
+	w anchor(self);
+	redraw();
+	setTextFocus();
+//	exclusiveInput(EI_APPLICATION);
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	i:	int;
+	e:	ref textEditor;
+
+	switch	(k){
+	case	'y':
+	case	'Y':
+		ed applyReplace();
+
+	case	'n':
+	case	'N':
+		if	(!ed srFind())
+			delete self;
+		else
+			redraw();
+		break;
+
+	case	'a':
+	case	'A':
+		e = ed;
+		delete self;
+		do
+			e applyReplace();
+			while	(e srFind());
+		break;
+
+	case	ESC:
+	case	GREY_ESC:
+		getShell() clearFooter();
+		delete self;
+		break;
+
+	default:
+		beep();
+		}
+	return TRUE;
+	}
+
+expose:	dynamic	(x: rectangle_t) = 
+	{
+	getShell() postFooter("Replace?  Yes  No  All  Escape");
+	}
+
+	};
+
+RegularExpressionSwitch:	public	boolean = TRUE;
+WordWrapSwitch:			public	boolean = FALSE;
+
+repeatableOps:	type	char = {
+	RO_SEARCH = 1,
+	RO_REPLACE
+	};
+
+replaceActions:	type	char = {
+	RA_YES,
+	RA_SKIP,
+	RA_ALL,
+	RA_STOP
+	};
+
+BLOCKSIZE:	const	int = 2048;		// must be power of two
+
+textBuffer:	public	type	inherit	editBuffer	{
+
+		// Current seek position
+
+	accessBlock:		ref fileBlock;
+	accessOffset:		int;
+	accessPtr:		ref char;
+	accessLines:		unsigned;
+	pos:			textPos;
+
+		// Associated marks
+
+	markList:		ref markList_t;
+
+		// The text in the buffer
+
+	lnCount:		lineNum;
+	blocks:			ref fileBlock;
+	lastBlock:		ref fileBlock;
+	textLength:		textPos;
+	changed:		boolean;
+
+	public:
+
+constructor:	() =
+	{
+	changed = 0;
+	blocks = 0;
+	markList = 0;
+	makeEmpty();
+	}
+
+setChanged:	() =
+	{
+	changed = TRUE;
+	}
+
+clearChanged:	() =
+	{
+	changed = FALSE;
+	}
+
+close:	dynamic	() =
+	{
+	makeEmpty();
+	delete blocks;
+	blocks = 0;
+	lastBlock = 0;
+	}
+
+includeFile:	dynamic	(fname: [:] char) int =
+	{
+	fd:	stream;
+	i:	int;
+	buf:	[:] char;
+	len:	int;
+
+	try	{
+		i = fd open(fname, AR_READ);
+		if	(i)
+			return i;
+		}
+	except	{
+		return ERRNOTFOUND;
+		}
+	len = fd seek(0, SEEK_END);
+	fd seek(0, SEEK_ABS);
+	buf = new [len] char;
+	|buf = fd read(buf);
+	fd close();
+	insert(buf, |buf);
+	delete buf;
+	return SUCCESS;
+	}
+
+save:	dynamic	(filename: [:] char) int =
+	{
+	fd:	stream;
+	i:	int;
+	j:	int;
+	eb:	ref fileBlock;
+	fbase:	[:] char;
+	fbak:	[MAXPATH] char;
+
+		/* If the file already exists, rename it to .BAK */
+
+	if	(|filename == 0)
+		return ERRINVALIDDATA;
+	if	(FileSystem access(filename, AR_WRITE) == SUCCESS){
+		s:	[:] char;
+
+		fbase = stripExtension(filename);
+		s = makePath(fbak, "", fbase, ".bak");
+		FileSystem unlink(s);
+		FileSystem move(filename, s);
+		}
+	i = fd create(filename, 0);
+	if	(i)
+		return i;
+	for	(eb = blocks; eb; eb = eb->next){
+		if	(eb->next == 0)
+			j = eb->length - 1;	// Don't write the EOF mark
+		else
+			j = eb->length;
+		i = fd write(eb->text[:j]);
+		if	(i != j){
+			fd close();
+			return(i);
+			}
+		}
+	fd close();
+	changed = FALSE;
+	return SUCCESS;
+	}
+
+makeEmpty:	dynamic	() =
+	{
+	eb:	ref fileBlock;
+	vp:	pointer;
+
+	if	(blocks == 0){
+		eb = new fileBlock;
+		eb->next = 0;
+		eb->prev = 0;
+		eb->allocated = BLOCKSIZE;
+		blocks = eb;
+		}
+	eb = blocks;
+	lastBlock = eb;
+	eb->length = 1;
+	eb->lineCount = 1;
+	eb->text[0] = EOF_MARK;
+	lnCount = 1;
+	textLength = 1;
+	pos = 0;
+	accessLines = 0;
+	accessBlock = eb;
+	accessOffset = 0;
+	accessPtr = eb->text;
+	for	(eb = eb->next; eb;){
+		vp = eb;
+		eb = eb->next;
+		delete vp;
+		}
+	blocks->next = 0;
+	changed = FALSE;
+	}
+
+lineCount:	dynamic	() lineNum =
+	{
+	return lnCount;
+	}
+
+insert:	dynamic	(newData: ref char, len: int) =
+					// buffer address and length
+	{
+	i:		int;
+	j:		int;
+	cp:		ref char;
+	newlines:	int;
+	eb:		ref fileBlock;
+	neweb:		ref fileBlock;
+	filleb:		ref fileBlock;
+	off:		int;
+
+		// update the marks
+
+	ml:	ref markList_t;
+
+	for	(ml = markList; ml; ml = ml->next){
+		x:	textPos;
+
+		x = ml->mark->lpos + ml->mark->offset;
+		if	(x > pos)
+			ml->mark zap(x + len);
+		}
+	changed = TRUE;
+	do	{
+		eb = accessBlock;
+		if	(eb->length + len <= eb->allocated){
+			insertIntoBlock(eb, accessOffset, newData, len);
+			return;
+			}
+		i = splitBlock(newData, len);
+		newData += i;
+		len -= i;
+		}
+		while	(len > 0);
+	}
+
+seek:	dynamic	(newPos: textPos, whence: int) textPos =
+	{
+	eb:	ref fileBlock;
+	a:	textPos;
+
+	switch	(whence){
+	case	0:
+		pos = newPos;
+		break;
+
+	case	1:
+		if	(newPos == 0)
+			return pos;
+		pos += newPos;
+		break;
+
+	case	2:
+		pos = textLength + newPos;
+		break;
+
+	case	3:		// go to line number
+		a = 0;
+		for	(eb = blocks; eb; eb = eb->next){
+			if	(eb->lineCount > newPos)
+				break;
+			a += eb->length;
+			newPos -= eb->lineCount;
+			}
+
+		if	(eb == 0 || newPos == 0){
+			pos = a;
+			break;
+			}
+
+		cp:	ref char;
+		i:	int;
+
+		i = 0;
+		for	(cp = eb->text; i < eb->length; i++, cp++){
+			if	(*cp == '\n'){
+				newPos--;
+				if	(newPos == 0)
+					break;
+				}
+			}
+		pos = a + i + 1;
+		break;
+		}
+
+	accessLines = 0;
+	a = pos;
+	for	(eb = blocks; eb && eb->length <= a; eb = eb->next){
+		a -= eb->length;
+		accessLines += eb->lineCount;
+		}
+	accessBlock = eb;
+	if	(eb){
+		accessOffset = a;
+		accessPtr = &eb->text[accessOffset];
+		}
+	else	{
+		accessOffset = 0;
+		accessPtr = 0;
+		pos = textLength;
+		}
+	return pos;
+	}
+
+read:	dynamic	(buf: pointer, len: int) int =
+					// buffer and len and actual copied
+	{
+	if	(accessBlock == 0)
+		return 0;
+
+	eb:	ref fileBlock;
+	off:	int;
+	rem:	int;
+	count:	int;
+
+	off = accessOffset;
+	count = 0;
+	for	(eb = accessBlock; eb; eb = eb->next){
+		rem = eb->length - off;
+		if	(len < rem)
+			rem = len;
+		cp:	ref char;
+
+		cp = &eb->text[off];
+		memCopy(buf, cp, rem);
+		len -= rem;
+		count += rem;
+		if	(len == 0)
+			break;
+		off = 0;
+		}
+	return count;
+	}
+
+fetchLine:	dynamic	(ln: lineNum, off: int) ref char = 
+					// line number and offset in line
+	{
+	i:	int;
+
+	seek(ln, 3);
+	for	(i = 0; i < off; i++, accessPtr++){
+		if	(*accessPtr == '\n' ||
+			 *accessPtr == EOF_MARK)
+			break;
+		}
+	accessOffset += i;
+	pos += i;
+	return accessPtr;
+	}
+
+extract:	dynamic	(buff: ref editBuffer, len: int) =
+	{
+	i:	int;
+	j:	int;
+	cp:	ref char;
+	eb:	ref fileBlock;
+	ch:	char;
+	size:	int;
+	neweb:	ref fileBlock;
+	cutoff:	int;
+	off:	int;
+
+	if	(accessBlock == 0)
+		return;
+	buff makeEmpty();
+	buff beginExtract(len);
+	off = accessOffset;
+	for	(eb = accessBlock; len && eb; ){
+		i = eb->length - off;
+		if	(i > len)
+			i = len;
+		buff write(&eb->text[off], i);
+		off = 0;
+		eb = eb->next;
+		len -= i;
+		}
+	buff operationDone();
+	}
+
+beginExtract:	dynamic	(textPos) =	// size
+	{
+	makeEmpty();
+	}
+
+write:	dynamic	(buf: pointer, len: int) =	// block and length
+	{
+	insert(buf, len);
+	seek(len, 1);
+	}
+
+deleteText:	dynamic	(len: int) =			// amount to delete
+	{
+	vp:		pointer;
+	residue:	int;
+	newlines:	int;
+	final:		int;
+	i:		int;
+	eb:		ref fileBlock;
+	neb:		ref fileBlock;
+	nneb:		ref fileBlock;
+	loff:		int;
+	thislen:	int;
+	nextlen:	int;
+	off:		textPos;
+
+	if	(accessBlock == 0)
+		return;
+
+		// update the marks
+
+	ml:	ref markList_t;
+
+	for	(ml = markList; ml; ml = ml->next){
+		x:	textPos;
+
+		x = ml->mark->lpos + ml->mark->offset;
+		if	(x > pos){
+			if	(x >= pos + len)
+				ml->mark zap(x - len);
+			else
+				ml->mark zap(pos);
+			}
+		}
+	eb = accessBlock;
+	off = accessOffset;
+	textLength -= len;
+	newlines = 0;
+	changed = TRUE;
+	while	(len > 0 && eb){
+		final = off + len;
+		if	(final > eb->length)
+			final = eb->length;
+		for	(i = off; i < final; i++)
+			if	(eb->text[i] == '\n')
+				newlines++;
+		eb->lineCount -= newlines;
+		if	(final < eb->length){
+			memMove(&eb->text[off], &eb->text[final],
+					eb->length - final);
+			eb->length -= len;
+			lnCount -= newlines;
+			return;
+			}
+		len -= eb->length - off;
+		eb->length = off;
+		if	(eb->length == 0){
+			if	(eb->prev)
+				eb->prev->next = eb->next;
+			else
+				blocks = eb->next;
+			if	(eb->next == 0){
+				lastBlock = eb->prev;
+				delete eb;
+				break;
+				}
+			eb->next->prev = eb->prev;
+			vp = eb;
+			eb = eb->next;
+			accessBlock = blocks;
+			accessLines = 0;
+			delete vp;
+			}
+		else
+			eb = eb->next;
+		off = 0;
+		lnCount -= newlines;
+		newlines = 0;
+		}
+	if	(eb == 0 ||
+		 eb->prev == 0)
+		return;
+	neb = eb;
+	eb = eb->prev;
+
+		// Make sure the last block (where the last deletes occurred)
+		// ends in a newline.  If it doesn't, we have to merge lines.
+
+//	assert(eb->length);
+	final = eb->length - 1;
+	if	(eb->text[final] == '\n')
+		return;
+
+		// Ukk, we have to merge lines.
+
+	accessBlock = blocks;
+	accessLines = 0;
+	if	(eb->length + neb->length <= eb->allocated){
+		memMove(&eb->text[final + 1], &neb->text[0], neb->length);
+		eb->length += neb->length;
+		eb->lineCount += neb->lineCount;
+		vp = eb->next;
+		eb->next = neb->next;
+		if	(eb->next)
+			eb->next->prev = eb;
+		else
+			lastBlock = eb;
+		delete vp;
+		}
+
+		// Calculate the length of the splice pieces
+
+	for	(thislen = 0; final >= 0; thislen++, final--)
+		if	(eb->text[final] == '\n')
+			break;
+	for	(nextlen = 0; nextlen < neb->length; nextlen++)
+		if	(neb->text[nextlen] == '\n'){
+			nextlen++;
+			break;
+			}
+
+		// Can we copy the next block's data into this one?
+
+	if	(eb->length + nextlen < eb->allocated){
+//		assert(nextlen < neb->length);
+		insertIntoBlock(eb, eb->length, &neb->text[0], nextlen);
+		memMove(&neb->text[0], &neb->text[nextlen], 
+						neb->length - nextlen);
+		neb->length -= nextlen;
+		return;
+		}
+
+		// How about this block's data to the next block?
+
+	if	(neb->length + thislen < eb->allocated){
+//		assert(thislen < eb->length);
+		insertIntoBlock(neb, 0, &eb->text[eb->length - thislen], 
+						thislen);
+		eb->length -= thislen;
+		return;
+		}
+
+		// Double ukk, we've got to split the blocks!
+
+	nneb = addBlock(eb, &eb->text[eb->length - thislen], thislen);
+
+		// If we run out of memory, we're in big trouble
+
+	if	(nneb == 0)
+		return;
+	eb->length -= thislen;
+	nneb->lineCount = 0;
+	insertIntoBlock(nneb, nneb->length, &neb->text[0], nextlen);
+	neb->length -= nextlen;
+	neb->lineCount--;
+	memMove(&neb->text[0], &neb->text[nextlen], neb->length);
+//	printf("eb = %lx neb = %lx eb len = %d neb len = %d this = %d next = %d\n",
+//		eb, neb, eb->length, neb->length, thislen, nextlen);
+//	printf("nneb = %lx next = %lx len = %x text = %s\n", nneb, nneb->next,
+//			nneb->length, &nneb->text);
+	}
+
+getLineno:	dynamic	(line: ref lineNum, col: ref int) =
+	{
+	i:		int;
+	cp:		ref char;
+	lastline:	ref char;
+
+	if	(accessBlock == 0){
+		*line = 0;
+		*col = 0;
+		return;
+		}
+	i = accessLines;
+	for	(lastline = cp = accessBlock->text; cp < accessPtr; cp++)
+		if	(*cp == '\n'){
+			i++;
+			lastline = cp + 1;
+			}
+	*col = accessPtr - lastline;
+	*line = i;
+	}
+
+search:	dynamic	(sp: ref searchPattern) fileRange_t =	
+					// search pattern (compiled regular
+					// expression)
+	{
+	ln:		int;
+	offset:		int;
+	remainder:	int;
+	eb:		ref fileBlock;
+	blkp:		ref char;
+	cp:		ref char;
+	line:		ref char;
+	endp:		ref char;
+	srch:		[:] char;
+	i:		int;
+	match:		[:] char;
+	xpos:		int;
+	f:		fileRange_t;
+
+	if	(accessBlock == 0)
+		SearchTrap raise();
+	xpos = pos;
+	eb = accessBlock;
+	cp = accessPtr;
+	endp = &eb->text[eb->length];
+	for	(;;){
+		blkp = cp;
+		while	(cp < endp){
+			line = cp;
+			while	(cp < endp){
+				if	(*cp == '\n'){
+					cp++;
+					break;
+					}
+				cp++;
+				}
+			srch = line[:cp - line];
+			try	{
+				match = sp search(srch);
+				xpos += match - blkp;
+				seek(xpos, 0);
+				f = [ xpos, |match ];
+				return f;
+				}
+			}
+		xpos += endp - blkp;
+		eb = eb->next;
+		if	(eb == 0)
+			SearchTrap raise();
+		offset = 0;
+		cp = &eb->text[0];
+		endp = cp + eb->length;
+		}
+	}
+
+hasChanged:	dynamic	() int =
+	{
+	return changed;
+	}
+
+manageMark:	dynamic	(m: ref filePos) =
+	{
+	ml:	ref markList_t;
+
+	ml = new markList_t[ markList, m ];
+	markList = ml;
+	}
+
+unmanageMark:	dynamic	(m: ref filePos) =
+	{
+	ml, mlprev:	ref markList_t;
+
+	for	(mlprev = 0, ml = markList; ml; ml = ml->next){
+		if	(ml->mark == m){
+			if	(mlprev == 0)
+				markList = ml->next;
+			else
+				mlprev->next = ml->next;
+			delete ml;
+			break;
+			}
+		}
+	}
+
+private:
+
+newBlock:	(eb: ref fileBlock, newData: pointer, asize: unsigned,
+			len: unsigned, nls: int) ref fileBlock =
+	{
+	neweb:	ref fileBlock;
+	i:	int;
+
+	i = sizeof fileBlock + (asize & ~(BLOCKSIZE - 1));
+	neweb = alloc(i);
+	neweb->length = len;
+	neweb->allocated = i & ~(BLOCKSIZE - 1);
+	neweb->lineCount = nls;
+	lnCount += nls;
+	memMove(neweb->text, newData, len);
+	if	(eb){
+		neweb->prev = eb->prev;
+		neweb->next = eb;
+		if	(eb->prev == 0)
+			blocks = neweb;
+		else
+			eb->prev->next = neweb;
+		eb->prev = neweb;
+		}
+	return neweb;
+	}
+
+splitBlock:	(newData: ref char, len: int) int =
+	{
+	i, j, lastline:		int;
+	cp:			ref char;
+	neweb, eb:		ref fileBlock;
+
+	eb = accessBlock;
+	lastline = 0, j = 0;
+
+		// Find the last full line that will fit in a block
+
+	for	(i = 0, cp = newData; i < len; i++, cp++){
+		if	(i + accessOffset >= eb->allocated)
+			break;
+		if	(*cp == '\n'){
+			j++;
+			lastline = i + 1;
+			}
+		}
+
+		// We are inserting at the beginning of a block.  This
+		// is the case for reading large files.
+
+	if	(accessOffset == 0){
+
+			// The inserted text has no newlines in it
+
+		if	(j == 0){
+			while	(i < len){
+				i++;
+
+					// Inserted text starts with a
+					// long line.  Create a block
+					// to hold it.
+
+				if	(*cp == '\n'){
+					neweb = newBlock(eb, newData, 
+								i, i, 1);
+					return i;
+					}
+				cp++;
+				}
+
+				// The inserted text is very long and
+				// has no newlines in it.  Include the
+				// first part of the next line.
+
+			i = stringScan(eb->text[:eb->length], '\n');
+			if	(i < 0)
+				i = eb->length;
+			neweb = newBlock(eb, newData, len + i, len, 1);
+			memCopy(neweb->text + len, eb->text, i);
+			memMove(eb->text, eb->text + i, eb->length - i);
+			eb->length -= i;
+
+				// The whole block had to be merged.
+
+			if	(eb->length == 0){
+				neweb->next = eb->next;
+				if	(eb->next)
+					eb->next->prev = neweb;
+				else
+					lastBlock = neweb;
+				delete eb;
+				}
+			accessBlock = neweb;
+			accessPtr = neweb->text;
+			return len;
+			}
+
+			// Multiple lines inserted at the beginning of a
+			// block.  This is the common case for large files.
+
+		else	{
+			neweb = newBlock(eb, newData, lastline, lastline, j);
+			return lastline;
+			}
+		}
+
+		// We are inserting into a single line block.
+
+	if	(eb->lineCount <= 1){
+		neweb = newBlock(eb, eb->text, eb->length + len, 
+							eb->length, 
+							eb->lineCount);
+		neweb->next = eb->next;
+		if	(eb->next == 0)
+			lastBlock = neweb;
+		else
+			eb->next->prev = neweb;
+		delete eb;
+		insertIntoBlock(neweb, accessOffset, newData, len);
+		accessBlock = neweb;
+		accessPtr = neweb->text + accessOffset;
+		return len;
+		}
+	lastline = 0;
+	cp = eb->text;
+	i = 0;
+	j = 0;
+
+		// Find whole lines until you get past the midpoint.
+
+	do	{
+		i++;
+		if	(*cp == '\n'){
+			if	(i > BLOCKSIZE / 2){
+				if	(j == 0)
+					lastline = i;
+				break;
+				}
+			j++;
+			lastline = i;
+			}
+		cp++;
+		}
+		while	(i < eb->length);
+
+		// Split at lastLine
+
+	neweb = addBlock(eb, &eb->text[lastline], eb->length - lastline);
+	neweb->lineCount = eb->lineCount - j;
+	eb->lineCount = j;
+	eb->length = lastline;
+	if	(accessOffset > lastline){
+		accessBlock = neweb;
+		accessOffset -= lastline;
+		accessPtr = neweb->text + accessOffset;
+		}
+	return 0;
+	}
+
+addBlock:	(eb: ref fileBlock, newData: ref char, len: int) ref fileBlock =
+	{
+	neweb:	ref fileBlock;
+
+	neweb = newBlock(0, newData, len, len, 0);
+	neweb->prev = eb;
+	if	(eb){
+		if	(eb->next)
+			eb->next->prev = neweb;
+		else
+			lastBlock = neweb;
+		neweb->next = eb->next;
+		eb->next = neweb;
+		}
+	else	{
+		blocks->prev = neweb;
+		neweb->next = blocks;
+		blocks = neweb;
+		}
+	return neweb;
+	}
+
+insertIntoBlock: (eb: ref fileBlock, off: unsigned,
+				 newData: pointer, len: unsigned) =
+	{
+	if	(off < eb->length)
+		memMove(&eb->text[off + len], &eb->text[off],
+						eb->length - off);
+	memMove(&eb->text[off], newData, len);
+	eb->length += len;
+	textLength += len;
+
+	newlines:	int;
+	cp:		ref char;
+
+	newlines = 0;
+	for	(cp = newData; len > 0; len--, cp++)
+		if	(*cp == '\n')
+			newlines++;
+	eb->lineCount += newlines;
+	lnCount += newlines;
+	changed = TRUE;
+	}
+
+	};
+
+SearchTrap:	Trap;
+
+markList_t:	type	{ public:
+	next:		ref markList_t;
+	mark:		ref filePos;
+	};
+
+fileBlock:	public	type	{
+	public:
+
+	next:		ref fileBlock;
+	prev:		ref fileBlock;
+	length:		unsigned;
+	lineCount:	unsigned;
+	allocated:	unsigned;
+	text:		[BLOCKSIZE] char;
+	};
+
+editFlags:	type	char = {
+	CHANGED = 0x01,
+	NEWFILE = 0x02,
+	};
+/*
+------------------------------------------------------------------------------
+			Editor Marks: the filePos object
+
+An editor mark is a location in a source file that moves as edits occur
+around it.  A mark is never removed completely as a result of edits.  Instead,
+the mark moves with the text itself.  There are several specific rules that
+govern the model of marks.  
+
+First of all, a mark is not located on a character of the edit buffer.  It
+occurs between two adjacent characters.  The location recorded in a mark is 
+the zero-based index of the character to the right of the mark, or the total
+number of characters in the buffer if there is no character to the right.
+
+All editing operations that alter the buffer are reduced to primitive insert
+and delete operations.  If text is inserted or deleted at or above the mark, 
+the operation has no effect on the mark.  
+
+If the text is inserted at a point below the mark, the mark is moved up by
+the sze of the insertion.
+
+If the text is deleted and the mark is above the last character deleted, the
+mark is moved down by the number of characters deleted.  If the mark is
+below that point, but above the first character deleted, the mark is moved
+to the point just in front of the first character deleted.
+
+Undo operations clearly reverse this, but undo operations are performed at
+a layer above this one.  As a result, an undo sequence may not completely
+restore the state of the editor, because marks appearing within a deleted
+region will not be moved back to its prior position.
+
+
+ */
+filePos:	public	type	{
+	public:
+
+	normal:	boolean;
+	line:	lineNum;
+	column:	int;
+	offset:	int;
+	lpos:	textPos;
+
+zero:	() =
+	{
+	normal = TRUE;
+	line = 0;
+	column = 0;
+	offset = 0;
+	lpos = 0;
+	}
+
+isEqual:	(x: ref filePos) boolean =
+	{
+	if	(line == x->line &&
+		 offset == x->offset)
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+zap:	(n: textPos) =
+	{
+	normal = FALSE;
+	lpos = n;
+	offset = 0;
+	}
+
+renormalize:	(buf: ref editBuffer) =
+	{
+	if	(!normal){
+		x:	textPos;
+
+		x = lpos + offset;
+		buf seek(x, 0);
+		buf getLineno(&line, &offset);
+		lpos = x - offset;
+		normal = TRUE;
+		}
+	}
+
+	};
+
+fileRange_t:	type	{ public:
+	offset:		textPos;
+	length:		int;
+	};

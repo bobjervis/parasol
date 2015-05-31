@@ -1,0 +1,731 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	alys;
+include	hardware, list;
+include	hprocess;
+include	arena;
+include	object;
+include	kprintf;
+include	karena;
+
+NPROCS:		public	const int = (_GDT_TSS_TOP - _GDT_TSS_BASE) >> 4;
+MAXAGE:			const int = 7;		/* Maximum process aging */
+
+ProcAcquire:	kernelSemaphore;
+SuspendEvent:	kernelSemaphore;
+ProcessTable:	public	[NPROCS] ref process = [ &Process0 ];
+Process0:		process;
+CurProc:	public	ref process = 0;
+FloatProc:	public	ref process = 0;
+
+/*
+	This function establishes the RunQ, the queue of runnable
+	processes, it then sculpts process 0 from scratch (remember that
+	process 0 is pre-allocated above).  
+ */
+initProcesses:	public	() =
+	{
+	CurProc = &Process0;
+	CurProc->myJob = BootObject->myJob;
+	BootObject->animator = CurProc;
+	RunQ makeEmpty();
+	Process0 process0constructor();
+	ProcAcquire initialize(1, 0, 0);
+	SuspendEvent initialize(0, 0, 0);
+	}
+
+processorIdle:	public	() boolean =
+	{
+	return CurProc == &Process0;
+	}
+
+RunQ:			queue;
+
+resumeArena:	public	(ar: ref arena) =
+	{
+	i:	int;
+
+	for	(i = 0; i < NPROCS; i++){
+		p:	ref process;
+		n:	threadLock;
+
+		n lock();
+		p = ProcessTable[i];
+		if	(p){
+			if	(p->where == ar &&
+				 !p->suspended)
+				p resume();
+			}
+		n unlock();
+		}
+	}
+
+suspendArenaExceptMe:	public	(ar: ref arena) =
+	{
+	i:	int;
+
+	for	(i = 0; i < NPROCS; i++){
+		p:	ref process;
+		n:	threadLock;
+
+		n lock();
+		p = ProcessTable[i];
+		if	(p && p != CurProc){
+			if	(p->where == ar)
+				p suspend();
+			}
+		n unlock();
+		}
+	}
+
+purgeArenaExceptMe:	public	(ar: ref arena, code: unsigned) =
+	{
+	i:	int;
+
+	for	(i = 0; i < NPROCS; i++){
+		p:	ref process;
+		n:	threadLock;
+
+		n lock();
+		p = ProcessTable[i];
+		if	(p &&
+			 p != CurProc &&
+			 p->where == ar)
+			p abortProcess(code);
+		n unlock();
+		}
+	}
+
+process:	public	type	inherit	queue	{
+	visible:
+
+	index:		unsigned[16];
+
+		// CPU scheduling parameters
+
+	status:		pStatus_t;
+	basepriority:	byte;
+	cpu:		byte;
+	aging:		byte;
+	priority:	byte;
+
+		// Event wait info
+
+	alertable:	boolean;
+	resource:	ref kernelSemaphore;
+
+		// Timing info
+
+	times:		processTimes_t;
+	childtimes:	processTimes_t;
+
+		// Process hardware state
+
+	kernelStack:	[KERNEL_STACK] byte;
+	kernelThread:	_ThreadContext;
+	userThread:	vaddr_t;
+
+	public:
+
+	suspended:	boolean;
+	aborted:	boolean;
+	abortInProgress:boolean;
+	exitCode:	ExitCode;
+	task:		task_t;
+	myJob:		ref far job;
+	animates:	ref object;
+	mainObject:	ref object;
+	where:		ref arena;
+
+create:	factory	() ref process =
+	{
+	i:	int;
+	p:	ref process;
+
+	ProcAcquire down(FALSE);
+	for	(i = 0;; i++){
+		if	(i >= _KERNEL_PROCS){
+			ProcAcquire up();
+			return 0;
+			}
+		if	(ProcessTable[i] == 0)
+			break;
+		}
+	self = ProcessTable[i] = new process;
+	index = i;
+	ProcAcquire up();
+	status = PNEW;
+	basepriority = PR_NORMAL;
+	priority = PR_NORMAL;
+	suspended = FALSE;
+	aborted = FALSE;
+	cpu = 0;
+	aging = 0;
+	times = [ 0, 0 ];
+	childtimes = [ 0, 0 ];
+	task clear();
+	animates = 0;
+	mainObject = 0;
+	myJob = CurProc->myJob;
+	where = 0;
+	userThread = 0;
+	abortInProgress = FALSE;
+	kernelThread = [ 0, 0, 0, 0, &KernelHeap, &KernelHeap ];
+	return self;
+	}
+
+kernelProcess:	(nm: [:] char, ts: [:] char, 
+			par: ref far External, func: ref (), 
+						arg: ref External) =
+	{
+	x:	ref far External;
+
+	x = kernelThreadLaunch(nm, ts, par, self, arg);
+	loadKernelProcessHardware(index, &task, &kernelStack[KERNEL_STACK],
+						func, x);
+	}
+
+free:	() =
+	{
+	n:	threadLock;
+
+	n lock();
+	ProcessTable[index] = 0;
+	n unlock();
+	delete self;
+	}
+
+describe:	(p: ref process_t) =
+	{
+	p->status = status;
+	p->pid = index;
+	p->parent = mainObject->parent;
+	p->basepriority = basepriority;
+	p->priority = priority;
+	p->times = times;
+	p->childtimes = childtimes;
+	if	(animates)
+		p->currentObject = animates->me;
+	else
+		p->currentObject = 0;
+	if	(mainObject)
+		p->mainObject = mainObject->me;
+	else
+		p->mainObject = 0;
+	p->exitStatus = exitCode;
+	p->suspended = suspended;
+	}
+
+kernelStackBottom:	() ref byte =
+	{
+	return &kernelStack[KERNEL_STACK];
+	}
+
+setArena:	(ar: ref arena) =
+	{
+	where = ar;
+	userThread = ar peekThread();
+	}
+
+setUserThread:	(th: vaddr_t) =
+	{
+	userThread = th;
+	}
+/*
+	If a process is waiting on a resource, wake it up.
+ */
+alert:	() =
+	{
+	n:	threadLock;
+
+	n lock();
+	if	(status == PWAIT &&
+		 alertable)
+		resource abort(self);
+	n unlock();
+	}
+
+canAlert:	() boolean =
+	{
+	return alertable;
+	}
+
+markAlerted:	() =
+	{
+	alertable = FALSE;
+	}
+
+accumulateTimes:	(child: ref process) =
+	{
+	childtimes.user += child->times.user + child->childtimes.user;
+	childtimes.kernel += child->times.kernel + child->childtimes.kernel;
+	}
+
+setPriority:	(nprio: byte) int =
+	{
+	n:		threadLock;
+	b:		byte;
+
+//	if	(userid &&
+//		 nprio >= PR_LOW)
+//		return ERRPERMISSION;
+	b = basepriority;
+	basepriority = nprio;
+	n lock();
+	priority = basepriority;
+	extract();		// remove myself from the run queue
+	setRunnable();		// and reschedule at new priority
+	n unlock();
+	return b;
+	}
+
+maskPriority:	(nprio: byte) int =
+	{
+	b:		byte;
+	n:		threadLock;
+
+	n lock();
+	b = priority;
+	priority = nprio;
+
+		// If we're lowering our priority, check to see if we have
+		// to reschedule
+
+	if	(nprio < b){
+		p:	ref process;
+
+		p = ref process(next);
+		if	(status == PRUN &&
+			 p != &RunQ &&
+			 p->priority > nprio){
+//			kprintf("%d<-%d p = %d CurProc = %d\n",
+//				nprio, b, p->index, CurProc->index);
+			extract();
+			schedule();
+			}
+		}
+	n unlock();
+	return b;
+	}
+
+process0constructor:	() =
+	{
+	priority = basepriority = PR_NORMAL;
+	suspended = FALSE;
+	loadProc0Hardware(&task);
+	kernelThread = *_Thread;
+	_Thread = &kernelThread;
+	where = &KernelArena;
+	animates = BootObject;
+	mainObject = BootObject;
+	}
+
+suspend:	() =
+	{
+	suspended = TRUE;
+	}
+
+resume:		() =
+	{
+	n:	threadLock;
+
+	n lock();
+	suspended = FALSE;
+	if	(status == PWAIT &&
+		 resource == &SuspendEvent){
+		alertable = TRUE;
+		SuspendEvent abort(self);
+		}
+	n unlock();
+	}
+
+raise:	(t: ref task_t) =
+	{
+	code:	unsigned;
+
+	code = EX_RAISE;
+	if	(animates->where coreDump(t, EX_RAISE))
+		code |= EX_CORE;
+	exit(code);
+	}
+
+abort:	(code: unsigned) =
+	{
+	code |= EX_ABORT;
+	if	(animates coreDump(code))
+		code |= EX_CORE;
+	exit(code);
+	}
+
+exit:	(code: unsigned) =
+	{
+	exitCode = code;
+	CurArena threadCleanup(self, userThread);
+	setPriority(PR_HIGH);		// make uninterruptable
+	KernelArena bind(self);
+	animates exit();
+
+		// Tell the parent goodbye, and wait
+
+	= animates->parent childExit(code);
+
+		// At this point we have a scheduling problem.  The CurProc
+		// memory must be freed, but we are still executing on it.
+		// Therefore, the object switch has to kill the process and
+		// not let it regain control.  If somehow, control gets here,
+		// we drop our priority and idle.
+
+	kprintf("exit done\n");
+	setPriority(0);
+	for	(;;)
+		;
+	}
+/*
+	The parent process calls this function to clean up the child.
+	The child hopefully will never regain control.
+ */
+termination:	() =
+	{
+	if	(FloatProc == self)
+		FloatProc = 0;
+	free();
+	}
+
+abortProcess:	(code: unsigned) =
+	{
+	exitCode = EX_ABORT|code;
+	aborted = TRUE;
+	suspended = FALSE;
+	if	(status == PWAIT){
+		alertable = TRUE;
+		resource abort(self);
+		}
+	}
+
+ageProcess:	(inKernel: boolean) =
+	{
+	if	(inKernel)
+		times.kernel++;
+	else
+		times.user++;
+	if	(--cpu != 0 ||
+		 priority >= PR_HIGH)
+		return;
+	cpu = 1 << aging;
+	if	(aging < MAXAGE){
+		aging++;
+		if	(aging > basepriority)
+			aging = basepriority;
+		priority = basepriority - aging;
+		}
+	extract();
+	schedule();
+	}
+
+startWait:	(ks: ref kernelSemaphore, a: boolean) =
+	{
+	alertable = a;
+	resource = ks;
+	status = PWAIT;
+	priority = basepriority;
+	}
+/*
+ *	FUNCTION:	setRunnable
+ *
+ *	DESCRIPTION:
+ *		This function places a process on the run queue.
+
+		Note that this function cannot set the priority.  It must
+		be set outside this point, because the priority handling
+		scheme of ALYS means that when an asynchronous interrupt
+		occurs, the interrupt may make a process ready, but the
+		interrupt handler pushes the priority value of the current
+		process high enough to prevent a switch until the handler is
+		done.
+ *
+ *	INPUTS:
+ *		self		The process to be set runnable.
+ *
+ *	OUTPUTS:
+ *		None.
+ */
+setRunnable:	public	() =
+	{
+	status = PRUN;
+//	priority = basepriority;
+	aging = 0;
+	cpu = 1;
+	schedule();
+	}
+/*
+ *	FUNCTION:	schedule
+ *
+ *	DESCRIPTION:
+ *		This function places a process on the run queue.
+ *
+ *	INPUTS:
+ *		self		The process to be put on the process
+ *				queue.
+ *
+ *	OUTPUTS:
+ *		None.
+ */
+schedule:	() =
+	{
+	sp:	ref process;
+	n:	threadLock;
+
+	n lock();
+//	kprintf("schedule %x pri = %d RunQ %x\n", self, priority, RunQ.next);
+	for	(sp = pointer(RunQ.next); sp != &RunQ; sp = pointer(sp->next)){
+		if	(sp->priority < priority)
+			break;
+		}
+	sp insert(self);
+	n unlock();
+	processSwitch();		// switch processes if necessary
+	}
+
+arrangeCall:	(f: pointer) =
+	{
+	hardwarePushCall(f, &task);
+	}
+
+loadHardware:	() =
+	{
+	CurArena = where;
+	_Thread = &kernelThread;
+	if	(mainObject)
+		mainObject->where pokeThread(userThread);
+	hardwarePswitch(index, &task);
+	}
+
+	};
+/*
+	This function does a process switch.  If the new
+	process is not the same as the current process, an
+	assortment of pointers are replaced.
+
+	In short, a process context consists of the following:
+		1. An kernel stack.
+		2. An arena structure.
+		3. A user stack.
+		4. MMU settings.
+		5. FPP (80x87) save area (not used).
+		6. CurProc pointer.
+
+ *		Note that this function contains the system idle loop.
+ */
+processSwitch:	public	() =
+	{
+	n:		threadLock;
+
+	if	(PanicButton ||
+		 CurArena->latch)
+		return;
+	n lock();
+
+		// ALYS idle loop
+
+	while	(RunQ isEmpty())
+		allowInterrupts();
+
+	if	(pointer(RunQ.next) != CurProc){
+		CurProc = pointer(RunQ.next);
+		CurProc loadHardware();
+		}
+
+	if	(CurProc->suspended ||
+		 (CurProc->where &&
+		  CurProc->where->suspended))
+		SuspendEvent down(FALSE);
+	if	(CurProc->aborted){
+		CurProc->aborted = FALSE;
+		n unlock();
+		CurProc exit(CurProc->exitCode);
+		}
+	n unlock();
+	}
+/*
+	kernelSemaphore
+
+	This type of object implements kernel mode semaphores.  These are
+	distinguished from user mode semaphores by being more efficient (they
+	are directly wired into the scheduler) and restricted to not work
+	across a network.
+
+	The displayFunc and displayData values are strictly for debugging.
+	They allow the kernel mode process dump routine to display some
+	useful information about the semaphore.
+
+	The count is the initial state of the semaphore counter.  Any
+	value less than zero indicates that no resource is available and
+	any process must wait on a down operation.  So, the counter must
+	initially be greater than or equal to zero for most purposes.
+ */
+kernelSemaphore:	public	type	inherit	queue	{
+	public:
+
+	count:		int;
+	displayFunc:	ref (ref kernelSemaphore, pointer);
+	displayData:	pointer;
+
+initialize:	(n: int, dfunc: ref (ref kernelSemaphore, pointer), 
+				data: pointer) =
+	{
+	count = n;
+	displayFunc = dfunc;
+	displayData = data;
+	makeEmpty();
+	}
+
+display:	() =
+	{
+	if	(displayFunc)
+		displayFunc(self, displayData);
+	else
+		kprintf("sema %x", self);
+	}
+/*
+ *	FUNCTION:	down
+ *
+ *	DESCRIPTION:
+ *		This function decrements a resource count and suspends
+ *		the calling process until resources are available.
+ */
+down:	(alertable: boolean) boolean =
+	{
+	n:	threadLock;
+
+	n lock();
+	if	(--count < 0){
+		CurProc startWait(self, alertable);
+		CurProc extract();
+		enqueue(CurProc);
+		processSwitch();
+		n unlock();
+		if	(CurProc canAlert() == alertable)
+			return TRUE;
+		else
+			return FALSE;
+		}
+	else	{
+		n unlock();
+		return TRUE;
+		}
+	}
+/*
+ *	FUNCTION:	downNowait
+ *
+ *	DESCRIPTION:
+ *		This function decrements a resource count and returns
+ *		failure if none are currently available.
+ */
+downNowait:	() boolean =
+	{
+	n:	threadLock;
+
+	n lock();
+	if	(count <= 0){
+		n unlock();
+		return FALSE;
+		}
+	else	{
+		--count;
+		n unlock();
+		return TRUE;
+		}
+	}
+/*
+ *	FUNCTION:	up
+ *
+ *	DESCRIPTION:
+ *		This function gives a resource back, freeing the first
+ *		waiting process, if any.
+ */
+up:	() =
+	{
+	p:		ref process;
+	n:		threadLock;
+
+	n lock();
+	if	(count++ < 0){
+		p = pointer(dequeue());
+		p setRunnable();
+		}
+	n unlock();
+	}
+/*
+ *	FUNCTION:	wakeup
+ *
+ *	DESCRIPTION:
+ *		This function frees all processes currently blocked
+ *		on the resource.
+ */
+wakeup:	() =
+	{
+	while	(count < 0)
+		up();
+	}
+/*
+ *	FUNCTION:	empty
+ *
+ *	DESCRIPTION:
+ *		This function clears a resource, effectively
+ *		emptying a partially filled queue.  Note that if there
+ *		are waiting processes for an unavailable resource, this call
+ *		has no effect.
+ */
+empty:	() =
+	{
+	n:	threadLock;
+
+	n lock();
+	if	(count > 0)
+		count = 0;
+	n unlock();
+	}
+/*
+	This function aborts a process that is in an alertable wait.  By
+	clearing the value of alertable, this is a signal that the wait
+	aborted.
+ */
+abort:	(p: ref process) =
+	{
+	n:		threadLock;
+
+	n lock();
+	if	(p canAlert()){
+		count++;
+		p markAlerted();
+		p extract();
+		p setRunnable();
+		}
+	n unlock();
+	}
+/*
+	This function will break the waits on this kernelSemaphore.  
+	If there is a
+	process in an unbreakable wait, this function will only wake up
+	processes ahead of it in the queue.
+ */
+startle:	() =
+	{
+	n:	threadLock;
+	p:	ref process;
+
+	n lock();
+	if	(count < 0){
+		p = ref process(next);
+		if	(p canAlert())
+			abort(p);
+		}
+	n unlock();
+	}
+};
+

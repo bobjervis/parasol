@@ -1,0 +1,81 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file, filesys;
+
+include	compiler;
+include	symtab;
+include	runlink;
+include	cparser;
+include	scanner, hash, errmsg;
+
+main:	entry	() =
+	{
+	if	(|commandLine.arguments < 2)
+		help();
+
+	fpath:		[:] char;
+	keepOutput:	boolean;
+
+	Build = new build_s[];
+	keepOutput = FALSE;
+	parseCommandLine();
+	ChattyOutput = FALSE;
+	Build build();
+	if	(CurrentContext->errorCount)
+		exit(EX_FAIL);
+	else
+		exit(EX_SUCCESS);
+	}
+
+parseCommandLine:	() =
+	{
+	cp:		[:] char;
+	s:		[:] char;
+	i:		int;
+
+	Build = [];
+	for	(i = 0; i < |commandLine.arguments; i++){
+		cp = commandLine.arguments[i];
+		if	(cp[0] != '-')
+			break;
+		s = cp[2:];
+		switch	(cp[1]){
+		case	'a':	Build assemble(s);		break;
+		case	'O':	Build compile(s);		break;
+		case	'v':	Build debugging();		break;
+		case	'm':	MessageBoardName = s;		break;
+		case	'=':	DebugList = TRUE;		break;
+		case	'o':
+			if	(cp[2] == '-')
+				Build setOptimize(FALSE);
+			else if	(cp[2] == 0)
+				Build setOptimize(TRUE);
+			else
+				exit(32);
+			break;
+
+		default:	exit(32);
+			}
+		}
+	if	(i != |commandLine.arguments - 1)
+		help();
+	Build sourceFilename(cp);
+	}
+
+help:	() =
+	{
+	printf( "Use is: CFE [ options ] file_name\n"
+		"Options:\n\n"
+		"	-o-	Don't optimize\n"
+		"	-axxx	Output assembly\n"
+		"	-mxxx	Message board name\n"
+		"	-Oxxx	Output unit filename\n"
+		"	-v	Produce debugging information\n"
+		);
+	exit(EX_FAIL);
+	}

@@ -1,0 +1,11 @@
+include	file;
+
+main:	entry	() =
+	{
+	i:	int;
+
+	printf("ArgumentCount = %d\n", |commandLine.arguments);
+	for	(i = 0; i < |commandLine.arguments; i++)
+		printf("[%d] '%S'\n", i, commandLine.arguments[i]);
+	exit(EX_SUCCESS);
+	}

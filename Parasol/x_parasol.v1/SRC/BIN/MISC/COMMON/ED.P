@@ -1,0 +1,37 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	edserver;
+include	file, filesys;
+
+mainSetup:	entry	() =
+	{
+	fname:	[:] char;
+	x:	ref far editorServer;
+	i:	int;
+
+	if	(|commandLine.arguments == 0){
+		printf("ED Version 1.2 use is: ED filename[s]\n");
+		return;
+		}
+	x = ref far editorServer(FileSystem attach("/service/editor",
+					":user.edserver.editorServer"));
+	if	(x == 0){
+		printf("No editor server connection\n");
+		exit(EX_FAIL);
+		}
+	for	(i = 0; i < |commandLine.arguments; i++){
+		f:	[MAXPATH] char;
+		fa:	[:] char;
+
+		fa = f;
+		fa [:]= FileSystem getAbsolutePath(commandLine.arguments[i]);
+		x load(fa);
+		}
+	exit(EX_SUCCESS);
+	}
+

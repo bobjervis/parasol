@@ -1,0 +1,103 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+//include	compiler;
+include	build, symtab;
+//include	link;
+include	errmsg;
+
+compile:	public	() =
+	{
+	Build build();
+	}
+
+parseCommandLine:	public	() =
+	{
+	cp:		[:] char;
+	s:		[:] char;
+
+	if	(|commandLine.arguments == 0)
+		help();
+	Build initialize();
+	while	(|commandLine.arguments > 0){
+		cp = commandLine.arguments[0];
+		if	(cp[0] != '-')
+			break;
+		s = cp[2:];
+		switch	(cp[1]){
+		case	'c':	Build parasolToC(s);		break;
+		case	'C':	Build compile(s);		break;
+		case	'd':	Build driver(s);		break;
+		case	'l':	Build library(s);		break;
+		case	'r':	Build runfile(s);		break;
+		case	'u':	Build unit(s);			break;
+		case	'I':	Build interface(s);		break;
+		case	'a':	Build assemble(s);		break;
+		case	'f':	Build fullLink();		break;
+		case	'v':	Build debugging();		break;
+		case	'b':	Build sourceBase(s);		break;
+		case	'i':	Build includeLibrary(s);	break;
+		case	'P':	Build mainModule();		break;
+		case	'y':	Build useSymbolFile(s);		break;
+		case	's':	Build writeSymbolFile();	break;
+		case	'z':	Build generateStyleWarnings();	break;
+		case	'm':	MessageBoardName = s;		break;
+		case	'=':	DebugList = TRUE;		break;
+		case	'o':
+			if	(cp[2] == '-')
+				Build setOptimize(FALSE);
+			else if	(cp[2] == 0)
+				Build setOptimize(TRUE);
+			else
+				exit(EX_FAIL);
+			break;
+
+		default:
+			exit(EX_FAIL);
+			}
+		commandLine shiftArguments();
+		}
+	Build tidyUp(cp);
+	do	{
+		Build filename(commandLine.arguments[0]);
+		commandLine shiftArguments();
+		}
+		while	(|commandLine.arguments);
+	}
+
+help:	public	() =
+	{
+	printf(	"Options:\n\n"
+		"			Target type\n\n"
+		"	-axxx	Assembly file\n"
+		"	-cxxx	Parasol to C\n"
+		"	-Cxxx	Compile only\n"
+		"	-dxxx	Loadable driver\n"
+		"	-Ixxx	Interface file\n"
+		"	-lxxx	Library\n"
+		"	-rxxx	Run file\n"
+		"	-uxxx	Unit file\n"
+		"\n			Support options\n\n"
+		"	-f	Full link (disable smart link)\n"
+		"	-mxxx	Message board name\n"
+		"	-o-	Don't optimize\n"
+		"	-P	Include entry and cleanup function tables\n"
+		"	-v	Produce debugging information\n"
+		"	-s	Write symbol file\n"
+		"\n			Input Options\n\n"
+		"	-bxxx	Source base directory list\n"
+		"	-ixxx	Include library name list\n"
+		"	-yxxx	Symbol file name\n"
+		"\n			Style Options\n\n"
+		"	-z	Warn about spelling of symbols\n"
+		"\nNote: When compiling to C code, exactly one module of each\n"
+		"program must be compiled with the -P option.  This must be\n"
+		"the main module of the program.\n"
+		);
+	exit(EX_FAIL);
+	}

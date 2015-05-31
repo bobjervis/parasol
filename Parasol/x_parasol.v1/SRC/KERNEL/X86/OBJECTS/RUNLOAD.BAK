@@ -1,0 +1,225 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	kprintf;
+include	string;
+include	hardware;
+include	vmemory;
+include	file, filesys;
+include	node;
+include	alys;
+include	process;
+include	runfile;
+include	arena;
+include	uarena;
+include	error;
+include	memory;
+include	object;
+include	hprocess;
+/*
+	This loads ALYS version 18 .RUN files.  The load function creates
+	an object that acts as the primary object for the arena.  That
+	object id is returned.
+ */
+RunLoader:	public	inherit	loader	{
+
+load:	dynamic	(par: ref far external, d: ref far directory, cmd: [:] char, 
+					args: [:] char) ref far external =
+	{
+	ext:	[:] char;
+
+	ext = getExtension(cmd);
+
+		// Only load .RUN files
+
+	if	(stringIcompare(ext, ".run") != 0)
+		RunLoadTrap raise();
+
+	p:	ref process;
+	i:	int;
+
+	p = process create();
+	if	(p == 0)
+		RunLoadTrap raise();
+	i = loadRunfile(par, p, d, cmd, args);
+	if	(i){
+		p free();
+		RunLoadTrap raise();
+		}
+//	kprintf("p->animates->where = %p\n", p->animates->where);
+//	kprintf("p->animates->me = %d\n", p->animates->me);
+	x: ref far external;
+
+	x = p->animates->me;
+	p setRunnable();
+	return x;
+	}
+
+debugLoad:	dynamic	(par: ref far external, d: ref debug_t, 
+				dr: ref far directory, cmd: [:] char, 
+				args: [:] char) boolean =
+	{
+	}
+
+	};
+
+loadRunfile:	public	(par: ref far external, p: ref process, 
+					d: ref far directory, 
+					rf: [:] char, args: [:] char) int =
+	{
+	fd:		ref far channel;
+
+		/* Open the file */
+
+	if	(d)
+		fd = d open(rf, AR_READ);
+	else
+		fd = FileSystem open(rf, AR_READ);
+	if	(fd == 0)
+		RunLoadTrap raise();
+
+	Rh:		runHeader;
+	r:		[:] byte;
+
+		// Read the header and verify it
+
+	r = ref byte(&Rh)[:sizeof Rh];
+	r [:]= fd read();
+	if	(|r != sizeof Rh){
+		fd close();
+		RunLoadTrap raise();
+		}
+	if	(Rh.magic != RUN_MAGIC ||
+		 (Rh.version != RUN_VERSION_2 &&
+		  Rh.version != RUN_VERSION)){
+		fd close();
+		RunLoadTrap raise();
+		}
+
+		// Create the arena
+
+	ar:	ref userArena;
+	ar = new userArena[ ];
+
+		// create the code segment
+
+	ar->code = segment create(Rh.codeOffset, Rh.codeLen, Rh.codeLen, Rh.codeLen);
+	if	(ar->code == 0){
+		fd close();
+		ar close();
+		return ERRNOMEMORY;
+		}
+
+		// Read the code segment
+
+	fd seek(Rh.image, 0);
+	r = ref byte(ar->code lock(Rh.codeOffset))
+					[:Rh.codeLen - Rh.codeOffset];
+	r [:]= fd read();
+	if	(|r != ||r){
+		fd close();
+		ar close();
+		return ERRNOTRUNFILE;
+		}
+	ar->code unlock();
+
+		// Create the data segment
+
+	j:	vaddr_t;
+
+	j = Rh.dataTotalLen + |args + MAXPATH + 7;
+	ar->data = segment create(Rh.dataOffset, Rh.dataConstLen, j, j);
+	ar->staticLength = Rh.dataTotalLen;
+	if	(ar->data == 0){
+		fd close();
+		ar close();
+		return ERRNOMEMORY;
+		}
+
+		// Read the data segment
+
+	r = ref byte(ar->data lock(Rh.dataOffset))
+					[:Rh.dataInitLen - Rh.dataOffset];
+	r [:]= fd read();
+	fd close();
+//	kprintf("load fd closed = %d\n", fd);
+	if	(|r != ||r){
+		ar close();
+		return ERRNOTRUNFILE;
+		}
+
+		/* Copy the program arguments */
+
+	copyArgs(d, rf, ar->data, Rh.dataTotalLen - 1, args);
+	ar mapUserMode();
+	ar->data unlock();
+		// Now point the process at this arena, next time we switch 
+		// to this process, we will start the app.  Of course, if
+		// we are loading a new user app for the current process,
+		// we have to work differently.  The munge routine does
+		// some dirty work so that when the process returns to
+		// user mode, we have a well-defined stack.
+
+	xobj:	ref object;
+	o:	ref far external;
+//	oc:	ref objectContext;
+
+	xobj = p->animates;
+	if	(xobj)
+		xobj close();
+	o = userArenaStartup(rf, par, p, ar);
+//	printf("arguments copied\n");
+	ar->codeSegment = Rh.cs;
+	ar->dataSegment = Rh.ds;
+	ar->stackSegment = Rh.ss;
+	ar->threadPtr = Rh.threadLoc;
+	ar->threadCount = 1;
+	ar->mainProcess = p;
+	p setArena(ar);
+
+		// This entry point is for an exec.
+
+	if	(p == CurProc){
+		CurArena = ar;
+//		munge(p->index, &ar->context, 
+//			&p->kernelStack[KERNEL_STACK], Rh.cs, Rh.ds, Rh.ss, 
+//			Rh.ip, Rh.sp);
+		}
+	else	{
+		loadProcessState(p, &ar->lcontext);
+		p->task load(Rh.cs, Rh.ds, Rh.ss, Rh.ip, Rh.sp, 
+						ar->data->length, o);
+		}
+	return SUCCESS;
+	}
+
+copyArgs:	(d: ref far directory, path: [:] char, dseg: ref segment, 
+				destOffset: vaddr_t, args: [:] char) =
+	{
+	cp:	ref char;
+	cmd:	[:] char;
+	ca:	[:] char;
+	ip:	ref int;
+
+
+	cp = mappedToAddressable(dseg->address + destOffset);
+	ip = ref int(cp);
+	cp += 8;
+	cmd = cp[:MAXPATH];
+	if	(d)
+		cmd [:]= d getAbsolutePath(path);
+	else
+		cmd [:]= FileSystem getAbsolutePath(path);
+	ip[0] = |cmd;
+	ip[1] = |args;
+	cp += |cmd;
+	ca = cp[:|args];
+	ca [:]= args;
+	dseg grow(vaddr_t(cp + |args));
+	}
+
+RunLoadTrap:	Trap;

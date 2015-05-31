@@ -1,0 +1,937 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	console;
+include	pc_hdw;
+include	pc_video;
+include	process;
+include	vector;
+include	hardware, alys, list;
+include	kprintf;
+/*
+	The PC keyboard is actually a relatively complicated device.  You
+	can not only receive individual key events (press, release, repeat)
+	but you can send commands to the keyboard.  Commands sent to the
+	keyboard work by sending a byte then waiting for a reply from the
+	keyboard.  Since command replies are intermixed with key events, and
+	some key events elicit commands to the keyboard, the management is
+	relatively complicated.
+
+	The keyboard command output stream is managed with a character output
+	queue.  Whenever a command is being sent to the keyboard, this output
+	logic is used.  This approach avoids having to execute busy loops in
+	the kernel waiting for ACK characters.  The only real problem with 
+	this approach is that a lack of a response will not time-out.  This
+	will mean that we think we are waiting, even though the keyboard may
+	have been reset.  Consequently, we need some sort of callout timer
+	that clears the key command queue whenever it gets stuck.
+ */
+getShiftState:	public	() shiftStates =
+	{
+	return(ShiftState);
+	}
+
+setShiftState:	public	(newShiftState: shiftStates) =
+	{
+	ShiftState = newShiftState;
+	sendLED();
+	}
+
+setRepeatRate:	public	(newRate: byte) =
+	{
+	sendRate(newRate);
+	}
+
+resetKeyboardQueue:	public	() =
+	{
+	}
+
+registerConsole:	public	(c: ref console) =
+	{
+	MyConsole = c;
+	}
+	
+	/* This function deposits a key code into the typeahead buffer */
+
+genchar:	(x: int) =
+	{
+	n:	threadLock;
+
+	enableKeyboard();
+	n lock();
+	if	(!hotKey(x) &&
+		 MyConsole)
+		MyConsole keypress(x);
+	n unlock();
+	}
+
+HotKeys:	[KEYCOUNT] ref (keystroke);
+
+defineHotKey:	public	(k: keystroke, callBack: ref (keystroke)) =
+	{
+	HotKeys[k] = callBack;
+	}
+
+hotKey:	(k: keystroke) boolean =
+	{
+	if	(HotKeys[k]){
+		HotKeys[k](k);
+		return TRUE;
+		}
+	else
+		return FALSE;
+	}
+
+TYPE_AHEAD:	const	int = 256;
+
+
+
+				/* PC/AT keyboard clean up requires two
+				   activities: enabling the 8259
+				   interrupt controller (the two assembly
+				   language instructions do that.  And
+				   also a keyboard enable command must be
+				   sent to the keyboard interface unit.
+				 */
+
+	/* Special commands from keyboard */
+
+KB_RESEND:	const	int = 0xfe;		// PC/AT resend byte
+KB_ACK:		const	int = 0xfa;		// PC/AT ack byte
+
+	/* Status port bits */
+
+INPT_BUF_FULL:	const	int = 0x02;		/* Keyboard buffer full */
+
+
+	/* Assembly language constants */
+
+
+	/* Key codes */
+
+CTL_KEY:	const int = 29;		/* Ctrl key scan code */
+LEFT_KEY:	const int = 42;		/* Left Shift key scan code */
+RIGHT_KEY:	const int = 54;		/* Right Shift key scan code */
+ALT_KEY:	const int = 56;		/* Alt key scan code */
+CAPS_KEY:	const int = 58;		/* Caps Lock key scan code */
+NUM_KEY:	const int = 69;		/* Num Lock key scan code */
+SCROLL_KEY:	const int = 70;		/* Scroll Lock key scan code */
+DEL_KEY:	const int = 83;		/* Del key scan code */
+
+	/* Commands to keyboard */
+
+DIS_KBD:	const byte = 0xad;	/* Disable keyboard */
+ENA_KBD:	const byte = 0xae;	/* Enable keyboard */
+
+
+			/* Is true if Numeric Pad is shifted to use digits,
+			   rather than cursor pad functions.
+			 */
+
+isnumshift:	() int =
+	{
+	if	(ShiftState & (A_SHIFT|NUM_STATE) == NUM_STATE ||
+			 (ShiftState & A_SHIFT &&
+			  ShiftState & NUM_STATE == 0))
+		return(1);
+	else
+		return(0);
+	}
+
+			/* Is true if the Letter keys should be treated as
+			   upper case.
+			 */
+
+iscapsshift:	() int =
+	{
+	if	(ShiftState & (A_SHIFT|CAPS_STATE) == CAPS_STATE ||
+			 (ShiftState & A_SHIFT &&
+			  ShiftState & CAPS_STATE == 0))
+		return(1);
+	else
+		return(0);
+ 	}
+
+PLAIN_KEY:	const char = 0;		/* Normal key */
+LETTER_KEY:	const char = 1;		/* Affected by Caps Lock */
+NUMPAD_KEY:	const char = 2;		/* Affected by Num Lock */
+
+	/* A zero in this array indicates that the scan code is
+	   handled by special case code */
+
+Keytype:	const [] char = [
+	0,		PLAIN_KEY,	PLAIN_KEY,	PLAIN_KEY, /*  0- 3 */
+	PLAIN_KEY,	PLAIN_KEY,	PLAIN_KEY,	PLAIN_KEY, /*  4- 7 */
+	PLAIN_KEY,	PLAIN_KEY,	PLAIN_KEY,	PLAIN_KEY, /*  8-11 */
+	PLAIN_KEY,	PLAIN_KEY,	PLAIN_KEY,	PLAIN_KEY, /* 12-15 */
+	LETTER_KEY,	LETTER_KEY,	LETTER_KEY,	LETTER_KEY,/* 16-19 */
+	LETTER_KEY,	LETTER_KEY,	LETTER_KEY,	LETTER_KEY,/* 20-23 */
+	LETTER_KEY,	LETTER_KEY,	PLAIN_KEY,	PLAIN_KEY, /* 24-27 */
+	PLAIN_KEY,	0,		LETTER_KEY,	LETTER_KEY,/* 28-31 */
+	LETTER_KEY,	LETTER_KEY,	LETTER_KEY,	LETTER_KEY,/* 32-35 */
+	LETTER_KEY,	LETTER_KEY,	LETTER_KEY,	PLAIN_KEY, /* 36-39 */
+	PLAIN_KEY,	PLAIN_KEY,	0,		PLAIN_KEY, /* 40-43 */
+	LETTER_KEY,	LETTER_KEY,	LETTER_KEY,	LETTER_KEY,/* 44-47 */
+	LETTER_KEY,	LETTER_KEY,	LETTER_KEY,	PLAIN_KEY, /* 48-51 */
+	PLAIN_KEY,	PLAIN_KEY,	0,		PLAIN_KEY, /* 52-55 */
+	0,		PLAIN_KEY,	0,		PLAIN_KEY, /* 56-59 */
+	PLAIN_KEY,	PLAIN_KEY,	PLAIN_KEY,	PLAIN_KEY, /* 60-63 */
+	PLAIN_KEY,	PLAIN_KEY,	PLAIN_KEY,	PLAIN_KEY, /* 64-67 */
+	PLAIN_KEY,	0,		0,		NUMPAD_KEY,/* 68-71 */
+	NUMPAD_KEY,	NUMPAD_KEY,	PLAIN_KEY,	NUMPAD_KEY,/* 72-75 */
+	NUMPAD_KEY,	NUMPAD_KEY,	PLAIN_KEY,	NUMPAD_KEY,/* 76-79 */
+	NUMPAD_KEY,	NUMPAD_KEY,	NUMPAD_KEY,	NUMPAD_KEY,/* 80-83 */
+	PLAIN_KEY,	PLAIN_KEY,	PLAIN_KEY,	PLAIN_KEY, /* 84-87 */
+	PLAIN_KEY,						   /* 88 */
+	];
+
+	/* These are the key codes for unshifted keys */
+
+BaseCase:	const [] signed[16] = [
+	0,		GREY_ESC,	'1',		'2',
+	'3',		'4',		'5',		'6',
+	'7',		'8',		'9',		'0',
+	'-',		'=',		GREY_BS,	GREY_TAB,
+	'q',		'w',		'e',		'r',
+	't',		'y',		'u',		'i',
+	'o',		'p',		'[',		']',
+	GREY_CR,	CTL_KEY,	'a',		's',
+	'd',		'f',		'g',		'h',
+	'j',		'k',		'l',		';',
+	'\'',		'`',		LEFT_KEY,	'\\',
+	'z',		'x',		'c',		'v',
+	'b',		'n',		'm',		',',
+	'.',		'/',		RIGHT_KEY,	GREY_STAR,
+	ALT_KEY,	' ',		CAPS_KEY,	F1,
+	F2,		F3,		F4,		F5,
+	F6,		F7,		F8,		F9,
+	F10,		NUM_KEY,	SCROLL_KEY,	HOME,
+	UP_ARW,		PGUP,		GREY_DASH,	LEFT_ARW,
+	CENTER,		RIGHT_ARW,	GREY_PLUS,	END,
+	DOWN_ARW,	PGDN,		INS,		DEL,
+	SYSREQ,		-1,		-1,		F11,
+	F12
+	];
+
+	/* Shifted key codes.  Caps Lock and Num Lock affected keys
+	   use this key code table.
+	 */
+
+ShiftCase:	[] signed[16] = [
+	0,		GREY_ESC,	'!',		'@',
+	'#',		'$',		'%',		'^',
+	'&',		'*',		'(',		')',
+	'_',		'+',		GREY_BS,	BACK_TAB,
+	'Q',		'W',		'E',		'R',
+	'T',		'Y',		'U',		'I',
+	'O',		'P',		'{',		'}',
+	GREY_CR,        CTL_KEY,	'A',		'S',
+	'D',		'F',		'G',		'H',
+	'J',		'K',		'L',		':',
+	'"',		'~',            LEFT_KEY,	'|',
+	'Z',		'X',		'C',		'V',
+	'B',		'N',		'M',		'<',
+	'>',		'?',            RIGHT_KEY,	PRTSC,
+	ALT_KEY,	' ',		CAPS_KEY,	SHFT_F1,
+	SHFT_F2,	SHFT_F3,	SHFT_F4,	SHFT_F5,
+	SHFT_F6,	SHFT_F7,	SHFT_F8,	SHFT_F9,
+	SHFT_F10,	NUM_KEY,	SCROLL_KEY,     NUM_7,
+	NUM_8,		NUM_9,		GREY_DASH,	NUM_4,
+	NUM_5,		NUM_6,		GREY_PLUS,	NUM_1,
+	NUM_2,		NUM_3,		NUM_0,		NUM_DOT,
+	SYSREQ,		-1,		-1,		SHFT_F11,
+	SHFT_F12
+	];
+
+	/* Ctrl shifted key codes - a -1 indiactes no key code
+	   should be stored.
+	 */
+
+CtlCase:	const [] signed[16] = [
+	0,		GREY_ESC,	-1,		CTRL_AT,
+	-1,		-1,		-1,		30,
+	-1,		-1,		-1,		-1,
+	31,		-1,		GREY_BS,	-1,
+	CTRL_Q,		CTRL_W,		CTRL_E,		CTRL_R,
+	CTRL_T,		CTRL_Y,		CTRL_U,		CTRL_I,
+	CTRL_O,		CTRL_P,		ESC,		29,
+	CTRL_CR,	CTL_KEY,	CTRL_A,         CTRL_S,
+	CTRL_D,		CTRL_F,		CTRL_G,		CTRL_H,
+	CTRL_J,		CTRL_K,		CTRL_L,		-1,
+	-1,		-1,		LEFT_KEY,	28,
+	CTRL_Z,		CTRL_X,		CTRL_C,		CTRL_V,
+	CTRL_B,		CTRL_N,		CTRL_M,		-1,
+	-1,		-1,		RIGHT_KEY,	CTRL_PRTSC,
+	ALT_KEY,	' ',		CAPS_KEY,	CTRL_F1,
+	CTRL_F2,	CTRL_F3,	CTRL_F4,	CTRL_F5,
+	CTRL_F6,	CTRL_F7,	CTRL_F8,	CTRL_F9,
+	CTRL_F10,	NUM_KEY,	SCROLL_KEY,	CTRL_HOME,
+	CTRL_UP,	CTRL_PGUP,	-1,		CTRL_LEFT,
+	CTRL_CENTER,	CTRL_RIGHT,	-1,		CTRL_END,
+	CTRL_DOWN,	CTRL_PGDN,	-1,		-1,
+	SYSREQ,		-1,		-1,		CTRL_F11,
+	CTRL_F12
+	];
+
+	/* Alt case key codes.  Numeric pad key values used in computing
+	   the special extended character values.
+	 */
+
+AltCase:	const [] signed[16] = [
+	0,		-1,		ALT_1,		ALT_2,
+	ALT_3,		ALT_4,		ALT_5,		ALT_6,
+	ALT_7,		ALT_8,		ALT_9,		ALT_0,
+	ALT_DASH,	ALT_EQ,		-1,		-1,
+	ALT_Q,		ALT_W,		ALT_E,		ALT_R,
+	ALT_T,		ALT_Y,		ALT_U,		ALT_I,
+	ALT_O,		ALT_P,		-1,		-1,
+	-1,		CTL_KEY,	ALT_A,         ALT_S,
+	ALT_D,		ALT_F,		ALT_G,		ALT_H,
+	ALT_J,		ALT_K,		ALT_L,		-1,
+	-1,		-1,		LEFT_KEY,	-1,
+	ALT_Z,		ALT_X,		ALT_C,		ALT_V,
+	ALT_B,		ALT_N,		ALT_M,		-1,
+	-1,		-1,		RIGHT_KEY,	-1,
+	ALT_KEY,	' ',		CAPS_KEY,	ALT_F1,
+	ALT_F2,		ALT_F3,		ALT_F4,		ALT_F5,
+	ALT_F6,		ALT_F7,		ALT_F8,		ALT_F9,
+	ALT_F10,	NUM_KEY,	SCROLL_KEY,	7,
+	8,		9,		-1,		4,
+	5,		6,		-1,		1,
+	2,		3,		0,		-1,
+	SYSREQ,		-1,		-1,		ALT_F11,
+	ALT_F12
+	];
+
+MyConsole:	ref console;
+
+	/* Shift states */
+
+shiftStates:	public	type	byte = {
+	CAPS_STATE	= 0x40,		/* The CAPS lock toggle */
+	NUM_STATE	= 0x20,		/* Num lock toggle */
+	SCROLL_STATE	= 0x10,		/* Scroll lock toggle */
+	ALT_SHIFT	= 0x08,		/* Alt key */
+	CTL_SHIFT	= 0x04,		/* Ctrl key */
+	LEFT_SHIFT	= 0x02,		/* Left hand shift key */
+	RIGHT_SHIFT	= 0x01		/* Right hand shift key */
+	};
+
+LED_STATE:	const shiftStates = (SCROLL_STATE|NUM_STATE|CAPS_STATE);
+					/* keyboard LED states */
+A_SHIFT:	const shiftStates = (LEFT_SHIFT|RIGHT_SHIFT);
+					/* Non-zero if either shift is down */
+
+ShiftState:	shiftStates = 0;	/* The shift states */
+
+ControlFlow:	boolean = TRUE;		// ^S-^Q control flow enabled
+
+AltChar:	byte = 0;		/* The constructed key value as
+					   an Alt numeric pad sequence is
+					   typed
+					 */
+	/* Flags */
+
+keyFlags:	type	byte = {
+	CAPS_SHIFT	= 0x40,		/* CAPS lock key is down */
+	NUM_SHIFT	= 0x20,		/* NUM lock key is down */
+	SCROLL_SHIFT	= 0x10,		/* Scroll lock key is down */
+	HOLD_STATE	= 0x08,		/* Ctl-Num lock hold state on */
+	};
+
+Kb_flag:	keyFlags;		/* The internal keyboard flags */
+
+RawKeyMap:	const [] signed[16] = [
+	'\b',	'\t',	'+',	'-',
+	'*',	'0',	'1',	'2',
+	'3',	'4',	'5',	'6',
+	'7',	'8',	'9',	'.',
+	'\r',	ESC
+	];
+
+initKeyboard:	public	() =
+	{
+	i:	int;
+
+	CommandQ makeEmpty();
+	FreeCmdQ makeEmpty();
+	declareTickTrigger(&tickleKeyboard);	// do this every tick
+	i = getCMOSbyte(0x37);
+	if	(i & 1)				// Extended keyboard
+		ShiftCase[55] = SYSREQ;		// Move the basic SYSREQ key
+	vector calloutInterrupt(KEYBD_INT, 0, PR_DEVICE + PR_KEYBD, 
+							&keyboardISR);
+	sendLED();
+	}
+
+Restart:	unsigned[16] = 0x1234;
+
+	/* Keyboard hardware interrupt */
+
+keyboardISR:	(pointer) =
+	{
+	c:	byte;
+	k:	int;
+	repeat:	int;
+
+		/* Disable the keyboard */
+
+	disableKeyboard();
+
+		/* Wait for the byte to be read */
+
+	repeat = 0;
+	while	((_inportByte(KB_STATUS) & INPT_BUF_FULL) &&
+		 --repeat)
+		;
+
+		/* Get the character from the keyboard */
+
+	c = _inportByte(KB_DATA);
+	Primary8259 clearInterrupt();
+	enableAll();
+
+		/* A RESEND in response to a sendToKeyboard, below. */
+
+	if	(c == KB_RESEND){
+		disableAll();
+		if	(KeyboardBusy != KBB_IDLE)
+			ref keyCommand(CommandQ.next) error();
+		}
+
+		/* An ACK in response to a sendToKeyboard, below. */
+
+	else if	(c == KB_ACK){
+		disableAll();
+		if	(KeyboardBusy != KBB_IDLE)
+			ref keyCommand(CommandQ.next) ack();
+		}
+	else	{
+
+			/* There was a keyboard overrun */
+
+		if	(c == 0xff){
+			beep();
+			enableKeyboard();
+			return;
+			}
+
+			/* Here we are working with Break codes.  When
+			   a key is released, usually the only work we must
+			   do is clear key down flags.
+			 */
+
+		if	(c & 0x80){
+			switch	(c & 0x7f){
+			case	NUM_KEY:
+				Kb_flag &= ~NUM_SHIFT;
+				break;
+
+			case	SCROLL_KEY:
+				Kb_flag &= ~SCROLL_SHIFT;
+				break;
+
+			case	ALT_KEY:
+				ShiftState &= ~ALT_SHIFT;
+
+					/* Generate the Alt special
+					   character only when the
+					   Alt key goes up.
+					 */
+
+				if	(AltChar){
+					c:	char;
+
+					c = AltChar;
+					AltChar = 0;
+					genchar(c);
+					return;
+					}
+				break;
+
+			case	CTL_KEY:
+				ShiftState &= ~CTL_SHIFT;
+				break;
+
+			case	CAPS_KEY:
+				Kb_flag &= ~CAPS_SHIFT;
+				break;
+
+			case	LEFT_KEY:
+				ShiftState &= ~LEFT_SHIFT;
+				break;
+
+			case	RIGHT_KEY:
+				ShiftState &= ~RIGHT_SHIFT;
+				break;
+				}
+			enableKeyboard();
+			return;
+			}
+
+			// A key out of range is ignored
+
+		if	(c > 88){
+			enableKeyboard();
+			return;
+			}
+
+			// In case the CMOS wasn't right, add this logic
+			// so that pressing an F11 or F12 key will remap the
+			// SysReq key
+
+		else if	(c > 84)
+			ShiftCase[55] = SYSREQ;
+
+			/* From here on we work with Make codes.  A make
+			   code will start repeating after 1/2 second and
+			   repeat every 1/10 second until let up.  For toggle
+			   keys, an extra flag must be carried around to
+			   distinguish the first make from repeating makes.
+			 */
+
+		switch	(c){
+		case	NUM_KEY:
+
+				/* Ctl shift (Alt must be off) */
+
+			if	((ShiftState & CTL_SHIFT) &&
+				 (ShiftState & ALT_SHIFT) == 0){
+
+					/* Put system into hard idle loop
+					   here, until some 'normal' key is
+					   typed.
+					 */
+
+				Kb_flag |= HOLD_STATE;
+				enableKeyboard();
+				while	(Kb_flag & HOLD_STATE)
+					;
+				return;
+				}
+
+				/* Change state on the first make only */
+			else if	((Kb_flag & NUM_SHIFT) == 0){
+				ShiftState ^= NUM_STATE;
+				Kb_flag |= NUM_SHIFT;
+				sendLED();
+				return;
+				}
+			break;
+
+		case	SCROLL_KEY:
+
+				/* Ctl shift (Alt must be off) */
+
+			if	((ShiftState & CTL_SHIFT) &&
+				 (ShiftState & ALT_SHIFT) == 0){
+
+					/* Start break.  Clear the
+					   buffer, reset the hardware,
+					   issue the Break interrupt
+					   and then store a zero character
+					   too.
+					 */
+
+				genchar(CTRL_BREAK);
+				return;
+				}
+
+				/* Change state on the first make only */
+
+			else if	((Kb_flag & SCROLL_SHIFT) == 0){
+				ShiftState ^= SCROLL_STATE;
+				Kb_flag |= SCROLL_SHIFT;
+				sendLED();
+				return;
+				}
+			break;
+
+		case	ALT_KEY:
+			ShiftState |= ALT_SHIFT;
+			break;
+
+		case	CTL_KEY:
+			ShiftState |= CTL_SHIFT;
+			break;
+
+		case	CAPS_KEY:
+
+				/* Change state on the first make only */
+
+			if	((Kb_flag & CAPS_SHIFT) == 0){
+				ShiftState ^= CAPS_STATE;
+				Kb_flag |= CAPS_SHIFT;
+				sendLED();
+				return;
+				}
+			break;
+
+		case	LEFT_KEY:
+			ShiftState |= LEFT_SHIFT;
+			break;
+
+		case	RIGHT_KEY:
+			ShiftState |= RIGHT_SHIFT;
+			break;
+
+			/* Most keys go here */
+
+		default:
+
+				/* Check for a Num Lock freeze underway.
+				   If so, unfreeze and toss the character. */
+
+			if	(Kb_flag & HOLD_STATE){
+				Kb_flag &= ~HOLD_STATE;
+				break;
+				}
+
+				/* Alt shift takes precedence */
+
+			if	(ShiftState & ALT_SHIFT){
+
+					// Test for Ctl-Alt-Del to determine
+					// when to reboot.
+
+				if	(ShiftState & CTL_SHIFT &&
+					 c == DEL_KEY){
+
+						// Shutdown now
+
+					disableAll();
+					copyOut(0x472, &Restart, sizeof Restart);
+					setCMOSbyte(0x0f, 0);	// soft reset
+					if	(_inportByte(0x61) & 0xc0){
+						_outportByte(0x80, 1);
+						c = _inportByte(KB_CTL);
+						_emit(_idle_);
+						c |= 0x0c;
+						_outportByte(KB_CTL, c);
+						_emit(_idle_);
+						_outportByte(KB_CTL, 0xf3);
+						}
+	
+						/* gate the a20 line */
+
+					empty_8042();
+					_outportByte(0x64, 0xd1);
+					empty_8042();
+					_outportByte(0x60, 0xdd);
+					i:	char;
+					cnt:	unsigned[16];
+
+					cnt = 0;
+					do	{
+						i = _inportByte(0x64);
+						cnt--;
+						}
+						while	((i & 2) && cnt);
+					_outportByte(0x64, 0xfe);
+					for	(;;)
+						_emit(0xf4);
+					}
+
+					/* Check for special Numeric pad
+					   character entry.
+					 */
+
+				if	(Keytype[c] == NUMPAD_KEY){
+					AltChar = AltChar * 10 +
+						AltCase[c];
+					break;
+					}
+				else
+					k = AltCase[c];	/* normal Alt key */
+				}
+			else if	(ShiftState & CTL_SHIFT)
+				k = CtlCase[c];		/* normal Ctrl key */
+			else	{
+
+					/* Testing for shift case is more
+					   complicated. */
+
+					/* Numeric pad keys use Num Lock and
+					   the Shift keys.
+					 */
+
+				if	(Keytype[c] == NUMPAD_KEY){
+					if	(isnumshift())
+						k = ShiftCase[c];
+					else
+						k = BaseCase[c];
+					}
+
+					/* Letter keys use Caps Lock and
+					   the Shift keys.
+					 */
+
+				else if	(Keytype[c] == LETTER_KEY){
+					if	(iscapsshift())
+						k = ShiftCase[c];
+					else
+						k = BaseCase[c];
+					}
+
+					/* Must be a plain key, just use
+					   either Shift key.
+					 */
+
+				else if	(ShiftState & A_SHIFT)
+					k = ShiftCase[c];
+				else
+					k = BaseCase[c];
+				}
+
+				/* A key code of -1 is an ignored key
+				   combination.  Otherwise, hand it to an
+				   input handler.
+				 */
+
+			if	(k != -1){
+				genchar(k);
+				return;
+				}
+			break;
+			}
+		}
+	enableKeyboard();
+	}
+
+empty_8042:	() =
+	{
+	i:	char;
+	cnt:	unsigned[16];
+
+	cnt = 0;
+	do	{
+		i = _inportByte(0x64);
+		cnt--;
+		}
+		while	((i & 2) && cnt);
+	}
+
+	/* This routine sends an LED command to the keyboard */
+
+sendLED:	() =
+	{
+	keyCommand create(KC_LED, (ShiftState & LED_STATE) >> 4);
+	}
+
+
+	/* This routine sends a repeat rate command to the keyboard */
+
+sendRate:	(r: byte) =
+	{
+	keyCommand create(KC_RATE, r);
+	}
+
+KeyboardStatus:	boolean;	// TRUE if enabled
+
+disableKeyboard:	() =
+	{
+	KeyboardStatus = FALSE;
+	sendToKInterface(DIS_KBD);
+	}
+
+enableKeyboard:	() =
+	{
+	if	(KeyboardStatus == FALSE){
+		KeyboardStatus = TRUE;
+		sendToKInterface(ENA_KBD);
+		}
+	}
+
+	/* This routine sends characters to the Keyboard interface on the
+	   PC/AT.  There are only two characters sent to the interface.
+	   Immediately after a keystroke is received, a DIS_KBD is sent to
+	   disable the keyboard.  Then, just before leaving the interrupt
+	   handler, an ENA_KBD is sent to the interface to resume scanning.
+	 */
+
+sendToKInterface:	(c: byte) =
+	{
+	repeat:	int;
+	n:	threadLock;
+
+	repeat = 0;
+	n lock();
+	while	((_inportByte(KB_STATUS) & INPT_BUF_FULL) && --repeat)
+		;
+	_outportByte(KB_STATUS, c);
+	n unlock();
+	}
+
+kCmd_t:	type	byte = { 
+//	KC_DEFAULT	= 0xf6,		// keyboard reset to default byte
+	KC_ENABLE	= 0xf4,		// keyboard enable byte
+	KC_RATE		= 0xf3,		// repeat rate byte
+	KC_LED		= 0xed		// LED set command byte
+	};
+
+CommandQ:	queue;
+FreeCmdQ:	queue;
+KeyboardBusy:	byte;
+	KBB_IDLE:	const byte = 0;
+	KBB_BUSY:	const byte = 1;
+	KBB_STALE:	const byte = 2;
+
+keyCommand:	type	inherit	queue {
+	cmd:		kCmd_t;
+	opnd:		byte;
+	state:		byte;	// 0 - neither transmitted
+				// 1 - first transmitted
+				// 2 - second transmitted
+	retries:	byte;
+
+	public:
+
+create:	factory	(c: kCmd_t, o: byte) =
+	{
+	n:	threadLock;
+	b:	boolean;
+
+	if	(!FreeCmdQ isEmpty()){
+		n lock();
+		self = ref keyCommand(FreeCmdQ dequeue());
+		n unlock();
+		}
+	else
+		self = new keyCommand;
+	self = [ 0, 0, c, o, 0, 2 ];
+	n lock();
+	b = CommandQ isEmpty();
+	CommandQ enqueue(self);
+	n unlock();
+	if	(b)
+		trigger();
+	}
+/*
+	This function is called whenever a keyboard command needs to be
+	sent.  Completion of commands is handled through ack or error.
+	Setting the state must come first, since sendToKeyboard will cause
+	a response (so setting state after the call leads to a race).
+ */
+trigger:	() =
+	{
+	if	(state == 0){
+		state = 1;
+		sendToKeyboard(cmd);
+		}
+	else if	(state == 1){
+		state = 2;
+		sendToKeyboard(opnd);
+		}
+	}
+
+error:	() =
+	{
+	if	(retries){
+		retries--;
+		state--;
+		trigger();
+		}
+	else if	(cmd){			// the original command failed
+		cmd = 0;
+		KeyboardBusy = KBB_BUSY;
+		sendToKeyboard(KC_ENABLE);
+		}
+	else	{			// the final re-enable failed
+		KeyboardBusy = KBB_IDLE;
+		free();
+		}
+	}
+
+ack:	() =
+	{
+	KeyboardBusy = KBB_IDLE;
+	if	(state == 1){
+		trigger();
+		return;
+		}
+	free();
+	}
+
+free:	() =
+	{
+	n:	threadLock;
+	q:	ref queue;
+
+	n lock();
+	q = CommandQ dequeue();		// discard the command
+	FreeCmdQ enqueue(q);
+	if	(!CommandQ isEmpty())
+		ref keyCommand(CommandQ.next) trigger();
+	n unlock();
+	}
+
+	};
+
+sendToKeyboard:	(c: char) int =
+	{
+	repeat:	signed[16];
+	n:	threadLock;
+
+		/* Wait for the Keyboard interface buffer to clear. */
+
+	repeat = 0;
+	n lock();
+	while	((_inportByte(KB_STATUS) & INPT_BUF_FULL)){
+		--repeat;
+		if	(repeat == 0){
+			break;
+			}
+		}
+	_outportByte(KB_DATA, c);
+	KeyboardBusy = KBB_BUSY;
+	n unlock();
+	}
+
+tickleKeyboard:	public	() =
+	{
+	if	(KeyboardBusy == KBB_BUSY)
+		KeyboardBusy = KBB_STALE;
+	else if	(KeyboardBusy == KBB_STALE){
+		kprintf("Stale keyboard\n");
+		ref keyCommand(CommandQ.next) error();
+		}
+	}
+
+beep:	public	() =
+	{
+	tone(0x50, 0x4c0 * 40, 0x450 * 4);
+	}
+
+tone:	(duration: int, on: int, off: int) =
+	{
+	ctl_port:	int;
+	cycle:		int;
+	count:		int;
+
+		/* Get the current control port setting */
+
+	ctl_port = _inportByte(KB_CTL);
+
+	for	(cycle = duration; --cycle != 0; ){
+
+			/* Turn off the speaker for awhile */
+
+		_outportByte(KB_CTL, ctl_port & 0xfc);
+		for	(count = off; --count > 0; )
+			;
+
+			/* Now turn it on for some more time */
+
+		_outportByte(KB_CTL, (ctl_port & 0xfc) | 2);
+		for	(count = on; --count > 0; )
+			;
+		}
+
+		/* Restore the control port setting */
+
+	_outportByte(KB_CTL, ctl_port);
+	}

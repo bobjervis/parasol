@@ -1,0 +1,384 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	kprintf;
+include	error;
+include	hardware, debugger;
+include	process;
+include	object;
+include	alys;
+include	message;
+
+NARENAS:		public	const int = _KERNEL_PROCS;
+NSEMAS:			public	const int = 16;
+ARENA_LATCH_COUNT:	public	const int = 2;
+
+ArenaTable:		[NARENAS] ref arena;
+CurArena:	public	ref arena;
+
+eD:	(ref kernelSemaphore, d: pointer) =
+	{
+	e:	ref eventList;
+
+	kprintf("ev[%x].%x", e->partOf, e->event);
+	}
+
+arena:	public	type	{
+	useCount:		int;
+
+locateEvent:	(event: vaddr_t) ref eventList =
+	{
+	e:	ref eventList;
+	n:	threadLock;
+
+	n lock();
+	for	(e = elist; e; e = e->next)
+		if	(e->event == event)
+			return e;
+	e = new eventList;
+	e->next = elist;
+	elist = e;
+	e->partOf = self;
+	e->event = event;
+	e->sema initialize(0, &eD, e);
+	n unlock();
+	return e;
+	}
+
+	public:
+
+	suspended:		boolean;
+	myDebugger:		ref far debugger;
+	latch:			byte;
+	elist:			ref eventList;
+	signalHandler:		vaddr_t;
+	semaphores:		[NSEMAS] kernelSemaphore;
+	semaUsed:		[NSEMAS] byte;
+
+eventDown:	(event: vaddr_t) =
+	{
+	e:	ref eventList;
+
+	e = locateEvent(event);
+	latch = 0;
+	e->sema down(FALSE);
+	}
+
+suspend:	() =
+	{
+	suspended = TRUE;
+	}
+
+resume:	() =
+	{
+	suspended = FALSE;
+	resumeArena(self);
+	}
+
+eventUp:	(event: vaddr_t) _LatchValues =
+	{
+	e:	ref eventList;
+	n:	threadLock;
+	i:	_LatchValues;
+
+	e = locateEvent(event);
+	n lock();
+	e->sema up();
+	if	(e->sema.count >= 0)
+		i = _LATCH_CLOSED;
+	else
+		i = _LATCH_WAITERS;
+	n unlock();
+	return i;
+	}
+
+catchSignal:	(func: vaddr_t) vaddr_t =
+	{
+	p:	int;
+
+	p = signalHandler;
+	if	(canCall(func))
+		signalHandler = func;
+	return p;
+	}
+
+assignTableEntry:	factory	(ar: ref arena) int =
+	{
+	i:	int;
+	n:	threadLock;
+
+	n lock();
+	for	(i = 0; i < NARENAS; i++){
+		if	(ArenaTable[i] == 0){
+			ArenaTable[i] = ar;
+			n unlock();
+			return i;
+			}
+		}
+	n unlock();
+	return -1;
+	}
+
+constructor:	() =
+	{
+	useCount = 1;
+	latch = 0;
+	elist = 0;
+	suspended = FALSE;
+	myDebugger = 0;
+	memSet(semaUsed, 0, sizeof semaUsed);
+	}
+
+allocateSemaphore:	(count: int) int =
+	{
+	i:	int;
+
+	for	(i = 0; i < NSEMAS; i++){
+		if	(semaUsed[i] == 0){
+			semaphores[i] initialize(count, &oD, self);
+			semaUsed[i] = 1;
+			return i + 1;
+			}
+		}
+	return 0;
+	}
+
+identifySemaphore:	(index: int) ref kernelSemaphore =
+	{
+	if	(index < 1 || index > NSEMAS)
+		return 0;
+	else if	(semaUsed[index - 1] == 0)
+		return 0;
+	else
+		return &semaphores[index - 1];
+	}
+
+closeSemaphore:	(index: int) =
+	{
+	if	(index >= 1 && index <= NSEMAS)
+		semaUsed[index - 1] = 0;
+	}
+
+dup:	() =
+	{
+	useCount++;
+	}
+
+bind:	(p: ref process) =
+	{
+	ar: 	ref arena;
+	n:	threadLock;
+
+	ar = p->where;
+	n lock();
+	CurArena = p->where = p->animates->where = self;
+	n unlock();
+	useCount++;
+	ar close();
+	}
+
+generalProtectionFault:	dynamic	(ref InterruptFrame) =
+	{
+	}
+
+peekThread:	dynamic	() vaddr_t =
+	{
+	return 0;
+	}
+
+pokeThread:	dynamic	(x: vaddr_t) =
+	{
+	}
+
+dumpHex:	dynamic	(p: vaddr_t, len: vaddr_t) =
+	{
+	}
+
+initializeThread:	dynamic	(p: ref process, th: vaddr_t, 
+					stack: vaddr_t, func: vaddr_t) =
+	{
+	}
+
+grow:	dynamic	(newLen: vaddr_t) boolean =
+	{
+	return FALSE;
+	}
+
+threadCleanup:	dynamic	(p: ref process, u: vaddr_t) =
+	{
+	}
+
+close:	() =
+	{
+	n:	threadLock;
+
+	n lock();
+	useCount--;
+	if	(useCount == 0){
+		n unlock();
+		_free();
+		}
+	else
+		n unlock();
+	}
+
+_free:	dynamic	() =
+	{
+	enext, e:	ref eventList;
+
+	for	(e = elist; e; e = enext){
+		enext = e->next;
+		delete e;
+		}
+	delete self;
+	}
+
+obtainWrite:	dynamic	(buf: vaddr_t, len: vaddr_t) pointer =
+	{
+	return 0;
+	}
+
+unlock:	dynamic	() =
+	{
+	}
+
+write:	dynamic	(offs: vaddr_t, src: pointer, len: vaddr_t) int =
+	{
+	return ERRINVALIDFUNC;
+	}
+
+read:	dynamic	(offs: vaddr_t, dest: pointer, len: vaddr_t) int =
+	{
+	return ERRINVALIDFUNC;
+	}
+/*
+	This function tests whether the kernel can legitimately call the 
+	named code address.  The address is relative to the code segment.
+ */
+canCall:	dynamic	(addr: vaddr_t) boolean =
+	{
+	return FALSE;
+	}
+/*
+	This function tests whether the kernel can legitimately read
+	the named data buffer in the arena.  The address is relative to
+	the data segment.
+ */
+canRead:	dynamic	(addr: vaddr_t, len: vaddr_t) boolean =
+	{
+	return FALSE;
+	}
+/*
+	This function tests whether the kernel can legitimately write to
+	the named data buffer in the arena.  The address is relative to
+	the data segment.
+ */
+canWrite:	dynamic	(addr: vaddr_t, len: vaddr_t) boolean =
+	{
+	return FALSE;
+	}
+
+recoverSendParameters:	dynamic	(ref task_t) =
+	{
+	}
+
+scheduleSignal:	dynamic	(o: ref object, p: ref process, seq: int) =
+	{
+	}
+/*
+	This function returns TRUE if the signal was caught, FALSEif it was
+	not.
+ */
+/*
+handleSignal:	dynamic	(ifr: ref InterruptFrame, o: ref object,
+				sig: signal_t) boolean =
+	{
+	return FALSE;
+	}
+ */
+coreDump:	dynamic	(ref task_t, unsigned) boolean =
+	{
+	return FALSE;
+	}
+
+	};
+
+oD:	(s: ref kernelSemaphore, d: pointer) =
+	{
+	a:	ref arena;
+
+	a = d;
+	kprintf("arena[%d]", 1 + (s - a->semaphores));
+	}
+
+eventList:	type	{ public:
+	next:		ref eventList;
+	event:		vaddr_t;
+	partOf:		ref arena;
+	sema:		kernelSemaphore;
+	};
+
+semaphoreConstruct:	public	(count: int) int =
+	{
+	return CurArena allocateSemaphore(count);
+	}
+
+semaphoreDown:	public	(index: int) int =
+	{
+	s:	ref kernelSemaphore;
+
+	s = CurArena identifySemaphore(index);
+	if	(s == 0)
+		return -1;		// should be an exception
+	return s down(TRUE);
+	}
+
+semaphoreUp:	public	(index: int) =
+	{
+	s:	ref kernelSemaphore;
+
+	s = CurArena identifySemaphore(index);
+	if	(s == 0)
+		return;			// should be an exception
+	s up();
+	}
+
+semaphoreWakeup:	public	(index: int) =
+	{
+	s:	ref kernelSemaphore;
+
+	s = CurArena identifySemaphore(index);
+	if	(s == 0)
+		return;			// should be an exception
+	s wakeup();
+	}
+
+semaphoreEmpty:	public	(index: int) =
+	{
+	s:	ref kernelSemaphore;
+
+	s = CurArena identifySemaphore(index);
+	if	(s == 0)
+		return;			// should be an exception
+	s empty();
+	}
+
+semaphoreDownNowait:	public	(index: int) boolean =
+	{
+	s:	ref kernelSemaphore;
+
+	s = CurArena identifySemaphore(index);
+	if	(s == 0)
+		return -1;			// should be an exception
+	return s downNowait();
+	}
+
+semaphoreClose:	public	(index: int) =
+	{
+	CurArena closeSemaphore(index);
+	}
+

@@ -1,0 +1,2431 @@
+/*
+	Copyright (c) 1993-1995 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	console;
+include	format;
+include	alys;
+include	error;
+include	string;
+include	filesys;
+include	file;
+
+WindowTrap:	Trap;
+
+applicationShell:	public	type	inherit	topLevelShell	{
+	public:
+
+constructor:	(titl: [:] char) =
+	{
+	super constructor(titl, 0);
+	}
+
+closeApplication:	dynamic	() =
+	{
+	exit(EX_SUCCESS);
+	}
+
+	};
+
+topLevelShell:	public	type	inherit footedShell {
+	mainMenu:		ref menubar;
+	interior:		ref frob;
+
+	public:
+
+constructor:	(titl: [:] char, m: ref shell) =
+	{
+	super constructor();
+	mainMenu = 0;
+	interior = 0;
+	viewport = ConsoleManager newAppShell(titl);
+	if	(m)
+		getInputFrom(m->inputSource);
+	}
+
+anchor:	dynamic	(f: ref frob) =
+	{
+	if	(interior)
+		WindowTrap raise();
+	interior = f;
+	interior at([ 0, mainMenu ? 1 : 0 ]);
+	super anchor(f);
+	}
+
+unanchor:	dynamic	(f: ref frob) =
+	{
+	if	(f == interior)
+		interior = 0;
+	else if	(f == footer)
+		footer = 0;
+	else if	(f == mainMenu)
+		mainMenu = 0;
+	super unanchor(f);
+	}
+
+iconLabel:	(str: [:] char, c: color_t) =
+	{
+	ConsoleManager iconLabel(viewport, str, c);
+	}
+
+minimize:	dynamic	() =
+	{
+	ConsoleManager minimize(viewport);
+	}
+
+defaultConfiguration:	dynamic	() point =
+	{
+	sz:	point;
+
+	if	(mainMenu)
+		sz = mainMenu defaultConfiguration();
+	else
+		sz = [ 0, 0 ];
+	if	(interior){
+		p:	point;
+
+		p = interior defaultConfiguration();
+		if	(p.x > sz.x)
+			sz.x = p.x;
+		sz.y += p.y;
+		}
+	if	(footer){
+		sz.y++;
+		if	(sz.x < 3)
+			sz.x = 3;
+		}
+	return sz;
+	}
+
+resizeChildren:	dynamic	(oldSize: point) =
+	{
+	yadjust:	int;
+
+	yadjust = 0;
+	if	(mainMenu){
+		mainMenu resize([ box.size.x, 1 ]);
+		yadjust++;
+		}
+	if	(footer){
+		footer resize([ box.size.x, 1 ]);
+		footer at([ 0, box.size.y - 1 ]);
+		yadjust++;
+		}
+	if	(interior)
+		interior resize([ box.size.x, box.size.y - yadjust ]);
+	}
+
+dismiss:	dynamic	() =
+	{
+	closeApplication();
+	}
+
+closeApplication:	dynamic	() =
+	{
+	delete self;
+	}
+
+setMenu:	(mn: ref menubar) =
+	{
+	mainMenu = mn;
+	mn resize([ box.size.x, 1 ]);
+	super anchor(mn);
+	if	(interior)
+		interior at([ 0, 1 ]);
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	switch	(k){
+	case	F10:
+		if	(mainMenu)
+			mainMenu startUnselected();
+		break;
+
+	case	ALT_X:
+		closeApplication();
+		break;
+
+	case	ALT_A:
+	case	ALT_B:
+	case	ALT_C:
+	case	ALT_D:
+	case	ALT_E:
+	case	ALT_F:
+	case	ALT_G:
+	case	ALT_H:
+	case	ALT_I:
+	case	ALT_J:
+	case	ALT_K:
+	case	ALT_L:
+	case	ALT_M:
+	case	ALT_N:
+	case	ALT_O:
+	case	ALT_P:
+	case	ALT_Q:
+	case	ALT_R:
+	case	ALT_S:
+	case	ALT_T:
+	case	ALT_U:
+	case	ALT_V:
+	case	ALT_W:
+
+	case	ALT_Y:
+	case	ALT_Z:
+		if	(mainMenu)
+			mainMenu start(k);
+		break;
+
+	default:
+		return super processKeystroke(k);
+		}
+	return TRUE;
+	}
+
+	};
+
+popupShell:	public	type	inherit footedShell	{
+	master:		ref shell;
+	interior:	ref frob;
+
+	public:
+
+constructor:	(title: [:] char, m: ref shell) =
+	{
+	super constructor();
+	viewport = ConsoleManager newPopupShell(title, m->viewport);
+	master = m;
+	interior = 0;
+	getInputFrom(m->inputSource);
+	}
+
+open:	dynamic	() =
+	{
+	if	(status & WS_PLACED == 0){
+		p, s:	point;
+
+			// Center the popup over the parent
+
+		p = master->viewport getCorner();
+		s.x = p.x + (master->box.size.x - box.size.x) >> 1;
+		s.y = p.y + (master->box.size.y - box.size.y) >> 1;
+
+			// Adjust to guarantee that it's mostly on screen
+
+		p = viewport getConsoleSize();
+		if	(s.x + box.size.x >= p.x)
+			s.x = p.x - box.size.x;
+		if	(s.y + box.size.y >= p.y)
+			s.y = p.y - box.size.y;
+		if	(s.x < 1)
+			s.x = 1;
+		if	(s.y < 1)
+			s.y = 1;
+		at(s);
+		}
+	super open();
+	mouseCursor([ 0, 0 ]);
+	}
+
+anchor:	dynamic	(f: ref frob) =
+	{
+	if	(interior)
+		WindowTrap raise();
+	interior = f;
+	super anchor(f);
+	}
+
+unanchor:	dynamic	(f: ref frob) =
+	{
+	if	(f == interior)
+		interior = 0;
+	else if	(f == footer)
+		footer = 0;
+	super unanchor(f);
+	}
+
+defaultConfiguration:	dynamic	() point =
+	{
+	sz:	point;
+
+	sz = [ 0, 0 ];
+	if	(interior){
+		p:	point;
+
+		p = interior defaultConfiguration();
+		if	(p.x > sz.x)
+			sz.x = p.x;
+		sz.y += p.y;
+		}
+	if	(footer){
+		sz.y++;
+		if	(sz.x < 3)
+			sz.x = 3;
+		}
+	return sz;
+	}
+
+resizeChildren:	dynamic	(oldSize: point) =
+	{
+	yadjust:	int;
+
+	yadjust = 0;
+	if	(footer){
+		footer resize([ box.size.x, 1 ]);
+		footer at([ 0, box.size.y - 1 ]);
+		yadjust++;
+		}
+	if	(interior)
+		interior resize([ box.size.x, box.size.y - yadjust ]);
+	}
+
+escape:	dynamic	() =
+	{
+	cancel();
+	}
+
+cancel:	dynamic	() =
+	{
+	delete self;
+	}
+
+	};
+
+footedShell:	public	type	inherit shell	{
+	public:
+
+	footer:			ref caption;
+
+constructor:	() =
+	{
+	footer = 0;
+	super constructor();
+	if	(ConsoleManager == 0)
+		locateConsoleManager("");
+	}
+
+useFooter:	() =
+	{
+	if	(footer == 0){
+		footer = new caption[ "", C_FOOTER, C_READONLY ];
+		super anchor(footer);
+		}
+	}
+//----------------------------------------------------------------------------
+//
+//	Footer Management
+//
+//	The bottom line of a shell window, either application or popup, has
+//	a footer used for showing informational messages, usually errors,
+//	warnings or status of operations.
+//
+vpostFooter:	dynamic	(fmt: [:] char, ap: ArgumentList) =
+	{
+	if	(footer){
+		buf:	[512] char;
+		se:	stringEmitter = [ buf ];
+
+		se format(fmt, ap);
+		footer setValue(se result(), C_FOOTER, C_READONLY);
+		}
+	}
+
+clearFooter:	dynamic	() =
+	{
+	if	(footer)
+		footer setValue("", C_FOOTER, C_READONLY);
+	}
+
+	};
+
+hotLink:	public	type	inherit	frob	{
+	glyph:		ref frob;
+	action:		callback;
+
+	public:
+
+constructor:	(g: ref frob, a: callback) =
+	{
+	super constructor();
+	glyph = g;
+	glyph->ground = self;
+	action = a;
+	}
+
+destructor:	dynamic	() =
+	{
+	delete glyph;
+	super destructor();
+	}
+
+defaultConfiguration:	dynamic	() point =
+	{
+	return glyph defaultConfiguration();
+	}
+
+resizeChildren:	dynamic	(point) =
+	{
+	glyph resize(box.size);
+	}
+
+expose:	dynamic	(x: rectangle_t) =
+	{
+	glyph expose(x);
+	}
+
+sensitivityReaction:	dynamic	() =
+	{
+	glyph sensitivity(sensitive);
+	}
+
+click:	dynamic	(buttons: mouseButtons_t, point) =
+	{
+	if	(buttons & MB_LEFT){
+		if	(action.func){
+			f:	ref (pointer);
+
+			f = action.func;
+			f(action.data);
+			}
+		}
+	}
+
+drop:	dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	if	(buttons & MB_LEFT){
+		if	(box containsLocal(at)){
+			if	(action.func){
+				f:	ref (pointer);
+
+				f = action.func;
+				f(action.data);
+				}
+			}
+		}
+	}
+//
+//	If a hotLink gets text focus, it must be a part of some larger
+//	frob, like a menu.  If so, let that frob figure out the right
+//	thing to do.
+//
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	return FALSE;
+	}
+
+	};
+
+pushButton:	public	type	inherit	frob	{
+	glyph:		ref frob;
+	action:		callback;
+	armed:		boolean;
+
+	public:
+
+constructor:	(g: ref frob, a: callback) =
+	{
+	super constructor();
+	glyph = g;
+	glyph->ground = self;
+	glyph at([ 1, 1 ]);
+	action = a;
+	armed = FALSE;
+	}
+
+destructor:	dynamic	() =
+	{
+	delete glyph;
+	super destructor();
+	}
+
+defaultConfiguration:	dynamic	() point =
+	{
+	p:	point;
+
+	p = glyph defaultConfiguration();
+	p.x += 2;
+	p.y += 2;
+	return p;
+	}
+
+resizeChildren:	dynamic	(point) =
+	{
+	p:	point;
+
+	p = box.size;
+	if	(p.x > 2)
+		p.x -= 2;
+	if	(p.y > 2)
+		p.y -= 2;
+	glyph resize(p);
+	}
+
+expose:	dynamic	(x: rectangle_t) =
+	{
+	drawBorder(self, armed ? WB_TOP_SHADOW : WB_BOTTOM_SHADOW, 
+								C_READONLY);
+	x.corner.x--;
+	x.corner.y--;
+	glyph expose(x);
+	}
+
+sensitivityReaction:	dynamic	() =
+	{
+	glyph sensitivity(sensitive);
+	}
+
+buttonDown:	dynamic	(buttons: mouseButtons_t, point) =
+	{
+	if	(buttons & MB_LEFT){
+		armed = TRUE;
+		redraw();
+		}
+	}
+
+click:	dynamic	(buttons: mouseButtons_t, point) =
+	{
+	if	(buttons & MB_LEFT){
+		armed = FALSE;
+		redraw();
+		if	(action.func){
+			f:	ref (pointer);
+
+			f = action.func;
+			f(action.data);
+			}
+		}
+	}
+
+drop:	dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	if	(buttons & MB_LEFT){
+		armed = FALSE;
+		redraw();
+		if	(box containsLocal(at)){
+			if	(action.func){
+				f:	ref (pointer);
+
+				f = action.func;
+				f(action.data);
+				}
+			}
+		}
+	}
+//
+//	If a hotLink gets text focus, it must be a part of some larger
+//	frob, like a menu.  If so, let that frob figure out the right
+//	thing to do.
+//
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	return FALSE;
+	}
+
+	};
+
+Grid:	public	type	inherit frob	{
+	cells:		ref ref frob;
+	colProportions:	[:] byte;
+	rowProportions:	[:] byte;
+	colSizes:	[:] int;
+	rowSizes:	[:] int;
+	cpTotal:	int;
+	rpTotal:	int;
+	baseSize:	point;
+
+	public:
+
+constructor:	(c: int, r: int) =
+	{
+	i:	int;
+
+	if	(c == 0 || r == 0)
+		WindowTrap raise();
+	cells = new [c * r] ref frob;
+	colProportions = new [c] byte;
+	rowProportions = new [r] byte;
+	colSizes = new [c] int;
+	rowSizes = new [r] int;
+	for	(i = 0; i < c; i++)
+		colProportions[i] = 1;
+	for	(i = 0; i < r; i++)
+		rowProportions[i] = 1;
+	cpTotal = c;
+	rpTotal = r;
+	}
+
+anchor:		dynamic	(ref frob) =
+	{
+	WindowTrap raise();
+	}
+
+anchorFirst:	dynamic	(ref frob) =
+	{
+	WindowTrap raise();
+	}
+
+destructor:	dynamic	() =
+	{
+	delete cells;
+	delete colProportions;
+	delete rowProportions;
+	super destructor();
+	}
+
+cell:	(p: point, f: ref frob) =
+	{
+	i:	int;
+
+	if	(p.x < 0 || p.x >= |colProportions)
+		WindowTrap raise();
+	if	(p.y < 0 || p.y >= |rowProportions)
+		WindowTrap raise();
+	i = p.x + p.y * |colProportions;
+	if	(cells[i])
+		delete cells[i];
+	cells[i] = f;
+	super anchor(f);
+	}
+
+resizeProportions:	(cp: [:] byte, rp: [:] byte) =
+	{
+	i:	int;
+
+	if	(|cp != |colProportions)
+		WindowTrap raise();
+	if	(|rp != |rowProportions)
+		WindowTrap raise();
+	colProportions [:]= cp;
+	rowProportions [:]= rp;
+	cpTotal = 0;
+	rpTotal = 0;
+	for	(i = 0; i < |colProportions; i++)
+		cpTotal += colProportions[i];
+	for	(i = 0; i < |rowProportions; i++)
+		rpTotal += rowProportions[i];
+	}
+/*
+	This function changes the number of dimensions in a grid.  If it
+	grows, the existing frobs and proportions and base sizes are preserved.
+ */
+newDimensions:	(c: int, r: int) =
+	{
+	if	(c == |colProportions &&
+		 r == |rowProportions)
+		return;
+	i, j, k, l:	int;
+	min:		int;
+	cp, rp:		[:] byte;
+	cs, rs:		[:] int;
+	cx:		ref ref frob;
+	minc, minr:	int;
+
+	if	(c < |colProportions)
+		minc = c;
+	else
+		minc = |colProportions;
+	if	(r < |rowProportions)
+		minr = r;
+	else
+		minr = |rowProportions;
+	k = c * r;
+	cx = new [k] ref frob;
+	cp = new [c] byte;
+	rp = new [r] byte;
+	cs = new [c] int;
+	rs = new [r] int;
+	cpTotal = 0;
+	for	(i = 0; i < minc; i++){
+		cp[i] = colProportions[i];
+		cpTotal += cp[i];
+		cs[i] = colSizes[i];
+		}
+	for	(; i < c; i++){
+		cp[i] = 1;
+		cpTotal++;
+		}
+	rpTotal = 0;
+	for	(i = 0; i < minr; i++){
+		rp[i] = rowProportions[i];
+		rpTotal += rp[i];
+		rs[i] = rowSizes[i];
+		}
+	for	(; i < r; i++){
+		rp[i] = 1;
+		rpTotal++;
+		}
+	for	(i = 0; i < r; i++){
+		k = i * c;
+		l = i * |colProportions;
+		for	(j = 0; j < c; j++){
+			if	(i < minr &&
+				 j < minc){
+				cx[k + j] = cells[l + j];
+				cx[k + j]->box.size = [ 0, 0 ];
+				}
+			else
+				cx[k + j] = 0;
+			}
+		for	(; j < |colProportions; j++){
+			if	(i < minr &&
+				 cells[l + j])
+				delete cells[l + j];
+			}
+		}
+	for	(; i < |rowProportions; i++){
+		l = i * |colProportions;
+		for	(j = 0; j < |colProportions; j++){
+			if	(cells[l + j])
+				delete cells[l + j];
+			}
+		}
+	delete cells;
+	cells = cx;
+	delete rowProportions;
+	delete colProportions;
+	rowProportions = rp;
+	colProportions = cp;
+	delete colSizes;
+	delete rowSizes;
+	colSizes = cs;
+	rowSizes = rs;
+	}
+/*
+	The default configuration of a grid is the sum of the column and
+	row sizes.  Each column and each row is sized to the largest of 
+	each cell in the column or row.
+
+	The cells are resized to their appropriate column and row sizes.
+ */
+defaultConfiguration:	dynamic	() point =
+	{
+	i, j, k:	int;
+	p:		point;
+	accum:		point;
+	total:		point;
+
+	total = [ 0, 0 ];
+	for	(j = 0; j < |rowProportions; j++){
+		accum = [ 0, 0 ];
+		for	(i = 0; i < |colProportions; i++){
+			k = i + j * |colProportions;
+			if	(cells[k] == 0)
+				continue;
+			p = cells[k] defaultConfiguration();
+			if	(accum.y < p.y)
+				accum.y = p.y;
+			if	(colSizes[i] < p.x)
+				colSizes[i] = p.x;
+			}
+		for	(i = 0; i < |colProportions; i++){
+			k = i + j * |colProportions;
+			if	(cells[k] == 0)
+				continue;
+			cells[k] resize([ 0, accum.y ]);
+			}
+		rowSizes[j] = accum.y;
+		total.y += accum.y;
+		}
+	for	(i = 0; i < |colProportions; i++){
+		total.x += colSizes[i];
+		for	(j = 0; j < |rowProportions; j++){
+			k = i + j * |colProportions;
+			if	(cells[k] == 0)
+				continue;
+			cells[k] resize([ colSizes[i], cells[k]->box.size.y ]);
+			}
+		}
+	baseSize = total;
+	return total;
+	}
+
+resizeChildren:	dynamic	(point) =
+	{
+	delta:			point;
+	colResize, rowResize:	[:] int;
+	i, j, k:		int;
+	p, q:			point;
+
+	delta = [ box.size.x - baseSize.x, box.size.y - baseSize.y ];
+	colResize = new [|colProportions] int;
+	rowResize = new [|rowProportions] int;
+	if	(cpTotal){
+		for	(i = 0; i < |colProportions; i++){
+			j = (colProportions[i] * delta.x) / cpTotal;
+			colResize[i] = j;
+			delta.x -= j;
+			}
+
+			// Any uneven residue gets dumped into the last
+			// column.
+
+		colResize[i - 1] += delta.x;
+		}
+	else
+		colResize[0] = delta.x;
+	if	(rpTotal){
+		for	(i = 0; i < |rowProportions; i++){
+			j = (rowProportions[i] * delta.y) / rpTotal;
+			rowResize[i] = j;
+			delta.y -= j;
+			}
+
+			// Any uneven residue gets dumped into the last
+			// row.
+
+		rowResize[i - 1] += delta.y;
+		}
+	else
+		rowResize[0] = delta.y;
+
+		// Now apply the resizes.
+
+	p.x = 0;
+	for	(i = 0; i < |colProportions; i++){
+		p.y = 0;
+		for	(j = 0; j < |rowProportions; j++){
+			f:	ref frob;
+			hgt:	int;
+
+			k = i + j * |colProportions;
+			f = cells[k];
+			hgt = rowSizes[j] + rowResize[j];
+			if	(f == 0){
+				f at(p);
+				f resize([ colSizes[i] + colResize[i], hgt ]);
+				}
+			p.y += hgt;
+			}
+		p.x += colSizes[i] + colResize[i];
+		}
+	delete colResize;
+	delete rowResize;
+	}
+
+	};
+
+radioGroup:	public	type	inherit	frob {
+	selectedToggle:	ref radioToggle;
+	action:		callback;
+	baseValue:	int;
+
+	public:
+
+constructor:	(dims: point, base: int, deflt: int,
+				sColor: color_t, iColor: color_t,
+				sel: callback, ...) =
+	{
+	ap:		ArgumentList;
+	g:		ref Grid;
+	cnt:		int;
+	cp:		ref char;
+	i, j, k:	int;
+
+	ap = ...;
+	for	(cnt = 0; ; cnt++){
+		ap nextArg(&cp, sizeof cp);
+		if	(cp == 0)
+			break;
+		}
+	action = sel;
+	selectedToggle = 0;
+	baseValue = base;
+	if	(dims.x == 0){
+		if	(dims.y == 0)
+			WindowTrap raise();
+		dims.x = (cnt + dims.y - 1) / dims.y;
+		}
+	else if	(dims.y == 0)
+		dims.y = (cnt + dims.x - 1) / dims.x;
+	else if	(dims.x * dims.y < cnt)
+		WindowTrap raise();
+	g = new Grid[ dims.x, dims.y ];
+	ap = ...;
+	for	(i = 0, k = 0; i < dims.x && k < cnt; i++){
+		for	(j = 0; j < dims.y && k < cnt; j++, k++){
+			s:	[:] char;
+			r:	ref radioToggle;
+
+			ap nextArg(&cp, sizeof cp);
+			s = cp[:stringLength(cp)];
+			r = new radioToggle[ s, sColor, iColor, base + k, 
+									self ];
+			if	(deflt == base + k){
+				selectedToggle = r;
+				r select(TRUE);
+				}
+			g cell([ i, j ], r);
+			}
+		}
+	anchor(g);
+	}
+
+defaultConfiguration:	dynamic	() point =
+	{
+	return child defaultConfiguration();
+	}
+
+resizeChildren:	dynamic	(point) =
+	{
+	child resize(box.size);
+	}
+
+select:	(r: ref radioToggle, v: int) =
+	{
+	if	(selectedToggle)
+		selectedToggle select(FALSE);
+	selectedToggle = r;
+	r select(TRUE);
+	if	(action.func){
+		f:	ref (pointer, int);
+
+		f = action.func;
+		f(action.data, v);
+		}
+	}
+
+getValue:	() int =
+	{
+	if	(selectedToggle)
+		return selectedToggle->selValue;
+	else
+		return baseValue - 1;
+	}
+
+	};
+
+radioToggle:	type	inherit	frob {
+	visible:
+
+	value:		[:] char;
+	sColor:		color_t;	// sensitive color
+	iColor:		color_t;	// insensitive color
+	selValue:	int;
+	group:		ref radioGroup;
+	selected:	boolean;
+
+	public:
+
+constructor:	(lab: [:] char, s: color_t, i: color_t, ivalue: int, 
+						g: ref radioGroup) =
+	{
+	super constructor();
+	value = lab;
+	sColor = s;
+	iColor = i;
+	selValue = ivalue;
+	group = g;
+	selected = FALSE;
+	}
+
+select:	(v: boolean) =
+	{
+	selected = v;
+	redraw();
+	}
+
+setValue:	(str: [:] char, c: color_t, i: color_t) =
+	{
+	delete value;
+	value = stringDup(str);
+	sColor = c;
+	iColor = i;
+	redraw();
+	}
+
+defaultConfiguration:	dynamic	() point =
+	{
+	return [ |value + 2, 1 ];
+	}
+
+expose:	dynamic	(rectangle_t) =
+	{
+	putcc([ 0, 0 ], '\x4', selected ? C_TOGGLE_ON : C_TOGGLE_OFF);
+	putcc([ 1, 0 ], ' ', sensitive ? sColor : iColor);
+	writecc([ 2, 0 ], value, sensitive ? sColor : iColor);
+	}
+
+click:	dynamic	(buttons: mouseButtons_t, point) =
+	{
+	if	(buttons & MB_LEFT)
+		group select(self, selValue);
+	}
+
+	};
+
+simpleToggle:	public	type	inherit	frob {
+	func:		ref (pointer, boolean);
+	data:		pointer;
+	text:		[:] char;
+	sColor:		color_t;	// sensitive color
+	iColor:		color_t;	// insensitive color
+
+	visible:
+
+	value:	boolean;
+
+	public:
+
+constructor:	(lab: [:] char, s: color_t, i: color_t, ivalue: boolean, 
+						sel: callback) =
+	{
+	super constructor();
+	text = lab;
+	sColor = s;
+	iColor = i;
+	value = ivalue;
+	func = pointer(sel.func);
+	data = sel.data;
+	}
+
+setValue:	(b: boolean, doCallback: boolean) =
+	{
+	value = b;
+	redraw();
+	if	(doCallback && func)
+		func(data, value);
+	}
+
+getValue:	() boolean =
+	{
+	return value;
+	}
+
+setLabel:	(str: [:] char, c: color_t, i: color_t) =
+	{
+	delete text;
+	text = stringDup(str);
+	sColor = c;
+	iColor = i;
+	redraw();
+	}
+
+defaultConfiguration:	dynamic	() point =
+	{
+	return [ |text + 2, 1 ];
+	}
+
+expose:	dynamic	(rectangle_t) =
+	{
+	putcc([ 0, 0 ], '\xfe', value ? C_TOGGLE_ON : C_TOGGLE_OFF);
+	putcc([ 1, 0 ], ' ', sensitive ? sColor : iColor);
+	writecc([ 2, 0 ], text, sensitive ? sColor : iColor);
+	}
+
+click:	dynamic	(buttons: mouseButtons_t, point) =
+	{
+	if	(buttons & MB_LEFT){
+		value = !value;
+		if	(func)
+			func(data, value);
+		redraw();
+		}
+	}
+
+	};
+
+dialog:	public	type	inherit frob {
+	sep:		ref separator;
+	buttons:	ref dialogButton_t;
+	interior:	ref frob;
+	buttonsSize:	point;
+	buttonsCount:	int;
+
+	public:
+
+constructor:	() =
+	{
+	super constructor();
+	sep = new separator[ C_READONLY ];
+	super anchor(sep);
+	buttons = 0;
+	interior = 0;
+	}
+
+anchor:	dynamic	(f: ref frob) =
+	{
+	if	(interior)
+		WindowTrap raise();
+	interior = f;
+	super anchor(f);
+	}
+
+unanchor:	dynamic	(f: ref frob) =
+	{
+	if	(f == interior)
+		interior = 0;
+	super unanchor(f);
+	}
+
+button:	(f: ref frob) =
+	{
+	s, b:	ref dialogButton_t;
+
+	b = new dialogButton_t[ 0, f ];
+	if	(buttons){
+		for	(s = buttons; s->next; s = s->next)
+			;
+		s->next = b;
+		}
+	else
+		buttons = b;
+	super anchor(f);
+	}
+
+defaultConfiguration:	dynamic	() point =
+	{
+	b:	ref dialogButton_t;
+	x, p:	point;
+	i:	int;
+
+	p = [ 0, 0 ];
+	buttonsCount = 0;
+	for	(b = buttons; b; b = b->next){
+		x = b->button defaultConfiguration();
+		b->button resize(x);
+		if	(x.y > p.y)
+			p.y = x.y;
+		p.x += x.x;
+		buttonsCount++;
+		}
+	buttonsSize = p;
+	x = sep defaultConfiguration();
+	sep resize(x);
+	p.y += x.y;
+	x = interior defaultConfiguration();
+	p.y += x.y;
+	if	(x.x > p.x)
+		p.x = x.x;
+	return p;
+	}
+
+resizeChildren:	dynamic	(oldSize: point) =
+	{
+	r:	int;
+	b:	ref dialogButton_t;
+	i:	int;
+	p:	point;
+
+	r = box.size.y - sep->box.size.y - buttonsSize.y;
+	if	(r < 0)
+		r = 0;
+	if	(interior)
+		interior resize([ box.size.x, r ]);
+	sep->box.size.x = box.size.x;
+	sep->box.corner.y = r;
+	if	(buttonsCount == 0)
+		return;
+	i = (box.size.x - buttonsSize.x) / (buttonsCount + 1);
+	p = [ i, r + sep->box.size.y ];
+	for	(b = buttons; b; b = b->next){
+		b->button at(p);
+		p.x += b->button->box.size.x + i;
+		}
+	}
+
+expose:	dynamic	(x: rectangle_t) =
+	{
+	rectangle(x, C_BLACK);
+	}
+
+	};
+
+dialogButton_t:	type	{ public:
+	next:		ref dialogButton_t;
+	button:		ref frob;
+	};
+
+/*
+VoidFrame:	public	inherit	frame	{
+	public:
+
+textCursor:	dynamic	(point) =
+	{
+	}
+
+passCursor:	dynamic	(point) =
+	{
+	}
+
+showCursor:	dynamic	() =
+	{
+	}
+
+hideCursor:	dynamic	() =
+	{
+	}
+
+printf:	dynamic	(point, color_t, [:] char, ...) =
+	{
+	}
+
+vprintf:	dynamic	(point, color_t, [:] char, ArgumentList) =
+	{
+	}
+
+putcc:	dynamic	(point, char, color_t) =
+	{
+	}
+
+write:	dynamic	(point, [:] colorChar) =
+	{
+	}
+
+verticalScroll:	dynamic	(point, point, int) =
+	{
+	}
+
+rectangle:	dynamic	(rectangle_t, color_t) =
+	{
+	}
+
+horizontalScroll:	dynamic	(point, point, int) =
+	{
+	}
+
+beep:	dynamic	() =
+	{
+	}
+
+	};
+
+MinimizedSize:	const	point = [ 10, 3 ];
+ */
+windowInfo:	public	type	packed	{
+	public:
+
+	corner:		point;
+	size:		point;
+	color:		color_t;
+	status:		windowStatus_t;
+	title:		[80] char;
+	};
+
+menu:	public	type	inherit	frob	{
+	visible:
+
+	owner:			ref menu;
+	activeSubmenu:		ref menu;
+	current:		ref menuItem;
+
+	public:
+
+constructor:	(o: ref menu) =
+	{
+	super constructor();
+	owner = o;
+	current = 0;
+	activeSubmenu = 0;
+	}
+
+anchor:	dynamic	(ref frob) =
+	{
+	WindowTrap raise();
+	}
+
+anchorFirst:	dynamic	(ref frob) =
+	{
+	WindowTrap raise();
+	}
+
+dragButton:	dynamic () mouseButtons_t =
+	{
+	return MB_LEFT;
+	}
+
+_newItem:	dynamic	(m: ref menuItem) =
+	{
+	super anchor(m);
+	}
+
+pulldown:	(s: [:] char, c: char, pm: ref popupMenu) ref pulldownMenu =
+	{
+	m:	ref pulldownMenu;
+
+	_newItem(m = new pulldownMenu[ self, s, c, pm ]);
+	return m;
+	}
+
+pullright:	(s: [:] char, c: char, pm: ref popupMenu) ref pullrightMenu =
+	{
+	m:	ref pullrightMenu;
+
+	_newItem(m = new pullrightMenu[ self, s, c, pm ]);
+	return m;
+	}
+
+button:	(s: [:] char, c: char, a: callback) ref menuButton =
+	{
+	m:	ref menuButton;
+
+	_newItem(m = new menuButton[ self, s, c, a ]);
+	return m;
+	}
+
+line:	() ref menuSeparator =
+	{
+	m:	ref menuSeparator;
+
+	_newItem(m = new menuSeparator[ ]);
+	return m;
+	}
+
+toggle:	(s: [:] char, c: char, a: callback) ref menuToggle =
+	{
+	m:	ref menuToggle;
+
+	_newItem(m = new menuToggle[ self, s, c, a ]);
+	return m;
+	}
+
+activate:	dynamic	() =
+	{
+	}
+
+deactivateAll:	() =
+	{
+	if	(owner)
+		owner deactivateAll();
+	else
+		deactivate();
+	}
+
+deactivate:	dynamic	() =
+	{
+	}
+
+enterKey:	dynamic	() =
+	{
+	current trigger();
+	}
+
+locateButton:	(focusShell: ref shell, at: point) =
+	{
+	while	(owner)
+		self = owner;
+	_locateButton(focusShell, at);
+	}
+
+_locateButton:	(focusShell: ref shell, at: point) =
+	{
+	f:	ref frob;
+	p:	point;
+
+	p = absoluteToLocal(at);
+	for	(f = child; f; f = f->sibling)
+		if	(ref menuItem(f)->owner &&
+			 f->box contains(p)){
+			focusShell releaseMouse();
+			getShell() grabMouse(f);
+			f buttonDown(dragButton(), [ 0, 0 ]);
+			return;
+			}
+	if	(activeSubmenu)
+		activeSubmenu _locateButton(focusShell, at);
+	}
+/*
+	This function closes any active submenu and then switches the
+	selected menu item.
+ */
+newCurrent:	(f: ref menuItem) =
+	{
+	closeSubmenu();
+	if	(f && f == current){
+		if	(f->selected)
+			return;
+		}
+	if	(current)
+		current select(FALSE);
+	current = f;
+	if	(current)
+		current select(TRUE);
+	}
+
+openSubmenu:	(s: ref menu) =
+	{
+	activeSubmenu = s;
+	}
+
+closeSubmenu:	() =
+	{
+	if	(activeSubmenu){
+		activeSubmenu deactivate();
+		activeSubmenu = 0;
+		}
+	}
+
+setTextFocus:	dynamic	() =
+	{
+	hideCursor();
+	super setTextFocus();
+	}
+
+	};
+/*
+	menubar
+
+	This object not only serves as the display control object for the
+	main menu bar, it also holds transaction information needed by the
+	whole menu traversal process.  In particular, it remembers where
+	the textFocus was before the menus were opened.
+ */
+menubar:	public	type	inherit	menu	{
+	visible:
+
+	priorFocus:		ref frob;
+
+constructor:	() =
+	{
+	super constructor(0);
+	priorFocus = 0;
+	}
+
+defaultConfiguration:	dynamic	() point =
+	{
+	p, accum:	point;
+	f:		ref frob;
+
+	accum = [ 2, 0 ];
+	for	(f = child; f; f = f->sibling){
+		p = f defaultConfiguration();
+		f resize(p);
+		f at([ accum.x, 0 ]);
+		if	(accum.y < p.y)
+			accum.y = p.y;
+		accum.x += p.x;
+		if	(f->sibling)
+			accum.x += 2;
+		}
+	return accum;
+	}
+
+start:	(selection: keystroke) =
+	{
+	if	(priorFocus == 0){
+		f:	ref frob;
+
+		for	(f = child; f; f = f->sibling)
+			if	(f processKeystroke(selection)){
+				newCurrent(ref menuItem(f));
+				current trigger();
+				activate();
+				return;
+				}
+		beep();
+		}
+	}
+
+startUnselected:	() =
+	{
+	if	(priorFocus == 0){
+		if	(child){
+			if	(current == 0)
+				newCurrent(ref menuItem(child));
+			activate();
+			}
+		else
+			beep();
+		}
+	}
+
+activate:	dynamic	() =
+	{
+	if	(priorFocus == 0){
+		priorFocus = getTextFocus();
+		setTextFocus();
+		}
+	}
+
+deactivate:	dynamic	() =
+	{
+	closeSubmenu();
+	if	(priorFocus){
+		current select(FALSE);
+		priorFocus setTextFocus();
+		priorFocus = 0;
+		}
+	}
+
+rightArrow:	dynamic	() =
+	{
+	f:	ref frob;
+
+	f = current;
+	if	(f->sibling)
+		newCurrent(ref menuItem(f->sibling));
+	else
+		newCurrent(ref menuItem(child));
+	}
+
+leftArrow:	dynamic	() =
+	{
+	nf, f:	ref frob;
+
+	if	(current == child)
+		nf = 0;
+	else
+		nf = current;
+	for	(f = child; f->sibling != nf; f = f->sibling)
+		;
+	newCurrent(ref menuItem(f));
+	}
+
+upArrow:	dynamic () =
+	{
+	}
+
+beginLine:	dynamic	() =
+	{
+	newCurrent(ref menuItem(child));
+	}
+
+endLine:	dynamic	() =
+	{
+	current = ref menuItem(child);
+	leftArrow();
+	}
+
+enterCharacter:	dynamic	(k: keystroke) =
+	{
+	f:	ref frob;
+
+	for	(f = child; f; f = f->sibling)
+		if	(f processKeystroke(k)){
+			newCurrent(ref menuItem(f));
+			current trigger();
+			return;
+			}
+	beep();
+	}
+
+downArrow:	dynamic	() =
+	{
+	current trigger();
+	}
+
+escape:	dynamic	() =
+	{
+	deactivate();
+	}
+
+	};
+
+popupMenu:	public	type	inherit	menu {
+	public:
+
+close:	dynamic	() =
+	{
+	}
+
+defaultConfiguration:	dynamic	() point =
+	{
+	p, accum:	point;
+	f:		ref frob;
+	i:		int;
+	anyToggles:	boolean;
+
+	accum = [ 0, 0 ];
+	anyToggles = FALSE;
+	for	(f = child; f; f = f->sibling)
+		if	(ref menuItem(f) isToggle())
+			anyToggles = TRUE;
+	for	(f = child; f; f = f->sibling)
+		ref menuItem(f) setLeftPadding(anyToggles);
+	for	(i = 0, f = child; f; f = f->sibling){
+		p = f defaultConfiguration();
+		f resize(p);
+		f at([ 0, i ]);
+		i += f->box.size.y;
+		p.x++;
+		if	(accum.x < p.x)
+			accum.x = p.x;
+		accum.y += p.y;
+		}
+	return accum;
+	}
+
+resizeChildren:	dynamic	(point) =
+	{
+	p:		point;
+	f:		ref frob;
+
+	for	(f = child; f; f = f->sibling){
+		p = f->box.size;
+		p.x = box.size.x;
+		f resize(p);
+		}
+	}
+
+deactivate:	dynamic	() =
+	{
+	m:	ref frob;
+
+	m = parent;
+	if	(m){
+		m unanchor(self);
+		delete m;
+		}
+	}
+
+downArrow:	dynamic	() =
+	{
+	f, start:	ref frob;
+
+	if	(current == 0){
+		super downArrow();
+		return;
+		}
+	for	(f = start = current; ; ){
+		if	(f->sibling)
+			f = f->sibling;
+		else
+			f = child;
+		if	(f->sensitive)
+			break;
+		if	(f == start)
+			break;
+		}
+	newCurrent(ref menuItem(f));
+	}
+
+upArrow:	dynamic	() =
+	{
+	start, nf, f:	ref frob;
+
+	if	(current == 0){
+		super upArrow();
+		return;
+		}
+	for	(f = start = current; ; ){
+		if	(f == child)
+			nf = 0;
+		else
+			nf = f;
+		for	(f = child; f->sibling != nf; f = f->sibling)
+			;
+		if	(f->sensitive)
+			break;
+		if	(f == start)
+			break;
+		}
+	newCurrent(ref menuItem(f));
+	}
+
+beginLine:	dynamic	() =
+	{
+	f:	ref frob;
+
+	for	(f = child; f; f = f->sibling)
+		if	(f->sensitive)
+			break;
+	newCurrent(ref menuItem(f));
+	}
+
+endLine:	dynamic	() =
+	{
+	beginLine();
+	if	(current)
+		upArrow();
+	}
+
+escape:	dynamic	() =
+	{
+	deactivate();
+	}
+
+	};
+
+floatingMenu:	public	type	inherit	popupMenu {
+	owner:		ref shell;
+
+	public:
+
+constructor:	(s: ref shell) =
+	{
+	super constructor(0);
+	owner = s;
+	}
+
+dragButton:	dynamic	() mouseButtons_t =
+	{
+	return MB_RIGHT;
+	}
+
+arm:		(p: point) =
+	{
+	m:	ref menuShell;
+
+	if	(parent == 0){
+		m = new menuShell[ self, owner ];
+		m anchor(self);
+		m configure([ 0, 0 ]);
+		p = owner localToAbsolute(p);
+		m at(p);
+		m open();
+		owner releaseMouse();
+		m grabMouse(self);
+		newCurrent(ref menuItem(child));
+		}
+	}
+
+click:	dynamic	(buttons: mouseButtons_t, p: point) =
+	{
+	if	(buttons & MB_RIGHT){
+		exclusiveInput(EI_CONSOLE);
+		setTextFocus();
+		}
+	}
+
+drag:	dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	continueDrag(buttons, at);
+	}
+
+continueDrag:	dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	if	(buttons & MB_RIGHT)
+		locateButton(getShell(), localToAbsolute(at));
+	}
+
+drop:	dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	if	(buttons & MB_RIGHT)
+		deactivateAll();
+	}
+
+	};
+
+menuShell:	public	type	inherit shell	{
+	interior:	ref popupMenu;
+	master:		ref shell;
+
+	public:
+
+constructor:	(m: ref popupMenu, s: ref shell) =
+	{
+	super constructor();
+	if	(ConsoleManager == 0)
+		locateConsoleManager("");
+	viewport = ConsoleManager newMenuShell();
+	interior = m;
+	master = s;
+	getInputFrom(master->inputSource);
+	}
+
+defaultConfiguration:	dynamic	() point =
+	{
+	return interior defaultConfiguration();
+	}
+
+resizeChildren:	dynamic	(oldSize: point) =
+	{
+	interior resize(box.size);
+	}
+
+destructor:	dynamic	() =
+	{
+	if	(interior){
+		unanchor(interior);
+		interior deactivate();
+		}
+	super destructor();
+	}
+
+	};
+
+menuItem:	public	type	inherit	frob	{
+	visible:
+
+	accelColumn:	int;
+	accelerator:	keystroke;
+	value:		[:] char;
+	selected:	boolean;
+	owner:		ref menu;
+	leftPad:	byte;
+
+	public:
+
+constructor:	(o: ref menu, str: [:] char, accel: char) =
+	{
+	super constructor();
+	value = stringDup(str);
+	accelerator = accel;
+	locateAccelerator(accelerator);
+	owner = o;
+	leftPad = 0;
+	}
+
+setLeftPadding:	(set: boolean) =
+	{
+	if	(set)
+		leftPad = 2;
+	else
+		leftPad = 0;
+	}
+
+setValue:	(str: [:] char, a: char) =
+	{
+	delete value;
+	value = stringDup(str);
+	accelerator = a;
+	locateAccelerator(a);
+	redraw();
+	}
+
+isToggle:	dynamic	() boolean =
+	{
+	return FALSE;
+	}
+
+select:	(b: boolean) =
+	{
+	selected = b;
+	redraw();
+	}
+
+defaultConfiguration:	dynamic	() point =
+	{
+	return [ |value + leftPad, 1 ];
+	}
+
+expose:	dynamic	(rectangle_t) =
+	{
+	buf:	[132] colorChar;
+	s:	[:] colorChar;
+	i:	int;
+	c:	color_t;
+
+	if	(box.size.x < |buf)
+		i = box.size.x;
+	else
+		i = |buf;
+	s = buf[:i];
+	for	(i = 0; i < |s; i++){
+		if	(!sensitive)
+			s[i].color = C_MENU_DIMMED;
+		else if	(selected)
+			s[i].color = C_MENU_SELECTED;
+		else if	(i == accelColumn)
+			s[i].color = C_MENU_ACCELERATOR;
+		else
+			s[i].color = C_MENU_TEXT;
+		if	(i < |value)
+			s[i].character = value[i];
+		else
+			s[i].character = ' ';
+		}
+	if	(leftPad){
+		if	(!sensitive)
+			c = C_MENU_DIMMED;
+		else if	(selected)
+			c = C_MENU_SELECTED;
+		else
+			c = C_MENU_TEXT;
+		writecc([ 0, 0 ], "  ", c);
+		}
+	write([ leftPad, 0 ], s);
+	}
+
+arm:	dynamic	() =
+	{
+	owner activate();
+	owner newCurrent(self);
+	}
+//
+//	By default the trigger behavior is to activate the item and close
+//	the menus.
+//
+trigger:	dynamic	() =
+	{
+	owner deactivateAll();
+	execute();
+	}
+
+execute:	dynamic	() =
+	{
+	}
+
+destructor:	dynamic	() =
+	{
+	delete value;
+	super destructor();
+	}
+
+buttonDown:	dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	if	(buttons & owner dragButton())
+		arm();
+	}
+
+click:	dynamic	(buttons: mouseButtons_t, point) =
+	{
+	if	(buttons & (MB_LEFT | owner dragButton())){
+		owner deactivateAll();
+		execute();
+		}
+	}
+
+drag:	dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	continueDrag(buttons, at);
+	}
+
+continueDrag:	dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	if	(buttons & owner dragButton()){
+		if	(!box containsLocal(at)){
+
+				// Convert to absolute coordinates.
+				// And try to see if the controlling button
+				// must be switched.
+
+			owner locateButton(getShell(), localToAbsolute(at));
+			}
+		}
+	}
+
+drop:	dynamic	(buttons: mouseButtons_t, at: point) =
+	{
+	if	(buttons & owner dragButton()){
+		owner deactivateAll();
+		if	(box containsLocal(at))
+			execute();
+		}
+	}
+//
+//	If a hotLink gets text focus, it must be a part of some larger
+//	frob, like a menu.  If so, let that frob figure out the right
+//	thing to do.  Just respond that the accelerator, if any
+//
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	k2:	keystroke;
+
+	if	(accelerator){
+
+			// An exact match works
+
+		if	(k == accelerator)
+			return TRUE;
+
+			// Upper and lower case letters match
+
+		if	(tolower(k) == tolower(accelerator))
+			return TRUE;
+
+			// Alt keys match corresponding letters
+
+		k2 = tolower(accelerator) + (ALT_A - 'a');
+		if	(k == k2)
+			return TRUE;
+		}
+	return FALSE;
+	}
+
+	private:
+
+locateAccelerator:	(accel: char) =
+	{
+	accel = tolower(accel);
+	for	(accelColumn = 0; accelColumn < |value; accelColumn++)
+		if	(tolower(value[accelColumn]) == accelerator)
+			break;
+	}
+
+	};
+
+menuButton:	public	type	inherit	menuItem	{
+	action:		callback;
+
+	public:
+
+constructor:	(o: ref menu, s: [:] char, c: char, a: callback) =
+	{
+	super constructor(o, s, c);
+	action = a;
+	}
+
+execute:	dynamic	() =
+	{
+	if	(action.func){
+		f:	ref (pointer);
+
+		f = action.func;
+		f(action.data);
+		}
+	}
+
+	};
+
+menuToggle:	public	type	inherit	menuItem	{
+	func:		ref (pointer, boolean);
+	data:		pointer;
+
+	visible:
+
+	value:		boolean;
+
+	public:
+
+constructor:	(o: ref menu, s: [:] char, c: char, a: callback) =
+	{
+	super constructor(o, s, c);
+	func = pointer(a.func);
+	data = a.data;
+	value = FALSE;
+	}
+
+isToggle:	dynamic	() boolean =
+	{
+	return TRUE;
+	}
+
+setValue:	(b: boolean, doCallback: boolean) =
+	{
+	value = b;
+	if	(doCallback && func)
+		func(data, value);
+	}
+
+execute:	dynamic	() =
+	{
+	value = !value;
+	if	(func)
+		func(data, value);
+	}
+
+expose:	dynamic	(x: rectangle_t) =
+	{
+	c:	color_t;
+
+	super expose(x);
+	if	(!sensitive)
+		c = C_MENU_DIMMED;
+	else if	(selected)
+		c = C_MENU_SELECTED;
+	else
+		c = C_MENU_TEXT;
+	if	(value)
+		putcc([ 0, 0 ], 'û', c);
+	else
+		putcc([ 0, 0 ], ' ', c);
+	}
+
+	};
+
+menuSeparator:	public	type	inherit	menuItem {
+	public:
+
+constructor:	() =
+	{
+	super constructor(0, "", 0);
+	sensitivity(FALSE);
+	}
+
+defaultConfiguration:	dynamic	() point =
+	{
+	return [ 1, 1 ];
+	}
+
+expose:	dynamic	(x: rectangle_t) =
+	{
+	buf:	[132] char;
+	s:	[:] char;
+
+	s = buf[:box.size.x];
+	memSet(s, 'Ä', |s);
+	writecc([ 0, 0  ], s, C_MENU_TEXT);
+	}
+
+	};
+
+secondaryMenu:	public	type	inherit menuItem {
+	submenu:	ref popupMenu;
+
+	public:
+
+constructor:	(o: ref menu, s: [:] char, c: char, p: ref popupMenu) =
+	{
+	super constructor(o, s, c);
+	submenu = p;
+	}
+
+arm:	dynamic	() =
+	{
+	p:	point;
+	m:	ref menuShell;
+
+	super arm();
+	if	(submenu->parent == 0){
+		m = new menuShell[ submenu, getShell() ];
+		m anchor(submenu);
+		m configure([ 0, 0 ]);
+		m at(localToAbsolute(popupPoint()));
+		m open();
+		owner openSubmenu(submenu);
+		}
+	}
+
+popupPoint:	dynamic	() point;
+
+execute:	dynamic	() =
+	{
+	owner deactivateAll();
+	}
+
+trigger:	dynamic	() =
+	{
+	if	(submenu->parent == 0)
+		arm();
+	if	(submenu->parent){
+		getShell() releaseMouse();
+		submenu beginLine();
+		submenu exclusiveInput(EI_CONSOLE);
+		submenu setTextFocus();
+		}
+	}
+
+click:	dynamic	(buttons: mouseButtons_t, point) =
+	{
+	if	(buttons & MB_LEFT)
+		trigger();
+	}
+
+	};
+
+pulldownMenu:	public	type	inherit secondaryMenu {
+	public:
+
+popupPoint:	dynamic	() point =
+	{
+	return [ 0, 2 ];
+	}
+
+	};
+
+pullrightMenu:	public	type	inherit secondaryMenu {
+	public:
+
+popupPoint:	dynamic	() point =
+	{
+	return [ box.size.x, 0 ];
+	}
+
+	};
+
+MAXWIDTH:	const	int = 76;
+/*
+	confirmWindow
+
+	This frob pops up a confirm box on the named window, centered
+	and large enough to hold the message, which is displayed in the
+	indicated color.
+ */
+confirmWindow:	public	type	inherit	popupShell	{
+	public:
+
+constructor:	(w: ref shell, msg: [:] char) =
+	{
+	d:	ref dialog;
+	c:	ref caption;
+
+	super constructor("Yes or No", w);
+	c = new caption[ msg, C_READONLY, C_READONLY ];
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "Yes", C_TEXT, C_READONLY ],
+							[ self, &_yes ] ]);
+	d button(new pushButton[ new caption[ "No", C_TEXT, C_READONLY ],
+							[ self, &_no ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &_escape ] ]);
+	d anchor(c);
+	anchor(d);
+	configure([ 1, 1 ]);
+	hideCursor();
+	open();
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	switch	(k){
+	case	'n':
+	case	'N':		no();			break;
+	case	'y':
+	case	'Y':		yes();			break;
+	case	GREY_ESC:	escape();		break;
+
+	default:
+		return FALSE;
+		}
+	delete self;
+	return TRUE;
+	}
+
+no:	dynamic	() =
+	{
+	}
+
+yes:	dynamic	() =
+	{
+	}
+
+	private:
+
+_no:	() =
+	{
+	no();
+	delete self;
+	}
+
+_yes:	() =
+	{
+	yes();
+	delete self;
+	}
+
+_escape:	() =
+	{
+	escape();
+	delete self;
+	}
+
+	};
+
+shiftStates:	public	type	byte = {
+	CAPS_STATE	= 0x40,		/* The CAPS lock toggle */
+	NUM_STATE	= 0x20,		/* Num lock toggle */
+	SCROLL_STATE	= 0x10,		/* Scroll lock toggle */
+	ALT_SHIFT	= 0x08,		/* Alt key */
+	CTL_SHIFT	= 0x04,		/* Ctrl key */
+	LEFT_SHIFT	= 0x02,		/* Left hand shift key */
+	RIGHT_SHIFT	= 0x01		/* Right hand shift key */
+	};
+/*
+	The caption frob is the one used to display any captions for your
+	windows.  The caption frob will automatically scroll the contents
+	of the value if the display window is too small for the text.
+ */
+caption:	public	type	inherit frob	{
+	column:		int;
+
+	visible:
+
+	value:		[:] char;
+	vColor:		color_t;	// sensitive color
+	ivColor:	color_t;	// insensitive color
+
+	public:
+
+constructor:	(str: [:] char, c: color_t, i: color_t) =
+	{
+	super constructor();
+	value = stringDup(str);
+	vColor = c;
+	ivColor = i;
+	column = 0;
+	}
+
+setValue:	(str: [:] char, c: color_t, i: color_t) =
+	{
+
+		// Resetting to the same value does nothing.
+
+	if	(c == vColor &&
+		 stringCompare(value, str) == 0)
+		return;
+	delete value;
+	value = stringDup(str);
+	vColor = c;
+	ivColor = i;
+	column = 0;
+	redraw();
+	}
+
+resizeChildren:	dynamic	(oldSize: point) =
+	{
+	maxColumn:	int;
+
+	if	(|value > box.size.x){
+		maxColumn = |value - box.size.x;
+		if	(column > maxColumn + 1)
+			column = maxColumn + 1;
+		}
+	else
+		column = 0;
+	}
+
+defaultConfiguration:	dynamic	() point =
+	{
+	return [ |value, 1 ];
+	}
+
+expose:	dynamic	(rectangle_t) =
+	{
+	if	(|value <= box.size.x){
+		writecc([ 0, 0 ], value, sensitive ? vColor : ivColor);
+		if	(|value < box.size.x)
+			rectangle([ [ |value, 0 ], box.size ], C_BLACK);
+		}
+	else	{
+		s:		[:] char;
+		buttons:	int;
+		maxColumn:	int;
+		startx:		int;
+
+		buttons = 0;
+		startx = 0;
+		if	(column){
+			buttons++;
+			startx = 1;
+			putcc([ 0, 0 ], 0x11, sensitive ? vColor : ivColor);
+			}
+		if	(box.size.x <= 1)
+			return;
+		maxColumn = |value - box.size.x;
+		if	(column <= maxColumn){
+			buttons++;
+			putcc([ box.size.x - 1, 0 ], 0x10, 
+					sensitive ? vColor : ivColor);
+			}
+		s = value;
+		s = s[ column : box.size.x - buttons ];
+		writecc([ startx, 0 ], s, sensitive ? vColor : ivColor);
+		}
+	}
+
+click:		dynamic	(buttons: mouseButtons_t, location: point) = 
+	{
+	if	(buttons & MB_LEFT == 0)
+		return;
+	if	(|value <= box.size.x)
+		return;
+	if	(column > 0){
+		if	(location.x == 0){
+			column--;
+			if	(column == 1)
+				column = 0;
+			redraw();
+			return;
+			}
+		}
+	maxColumn:	int;
+
+	maxColumn = |value - box.size.x;
+	if	(column <= maxColumn){
+		if	(location.x == box.size.x - 1){
+			if	(column == 0)
+				column++;
+			column++;
+			redraw();
+			return;
+			}
+		}
+	}
+
+	};
+
+separator:	public	type	inherit	frob	{
+	sColor:	color_t;
+
+	public:
+
+constructor:	(c: color_t) =
+	{
+	super constructor();
+	sColor = c;
+	}
+
+defaultConfiguration:	dynamic	() point =
+	{
+	return [ 1, 1 ];
+	}
+
+expose:	dynamic	(x: rectangle_t) =
+	{
+	buf:	[132] char;
+	s:	[:] char;
+
+	s = buf[:box.size.x];
+	memSet(s, 'Ä', |s);
+	writecc([ 0, 0  ], s, sColor);
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	return FALSE;
+	}
+
+	};
+
+drawBorder:	(w: ref frob, style: borderStyles, c: color_t) =
+	{
+	b:	ref borderDescriptor;
+	i:	int;
+
+	b = &Borders[style];
+
+		// The various border corners
+
+	w putcc([ 0, 0 ], b->uleft, c);
+	w putcc([ w->box.size.x - 1, 0 ], b->uright, c);
+	w putcc([ 0, w->box.size.y - 1 ], b->lleft, c);
+	w putcc([ w->box.size.x - 1, w->box.size.y - 1 ], b->lright, c);
+
+		// Top of the border
+
+	for	(i = 1; i < w->box.size.x - 1; i++)
+		w putcc([ i, 0 ], b->top, c);
+
+		// Bottom of the border
+
+	for	(i = w->box.size.x - 2; i > 0; i--)
+		w putcc([ i, w->box.size.y - 1 ], b->bottom, c);
+
+		// Sides of the border
+
+	for	(i = w->box.size.y - 2; i > 0; i--){
+		w putcc([ 0, i ], b->lside, c);
+		w putcc([ w->box.size.x - 1, i ], b->rside, c);
+		}
+	}
+
+borderStyles:	public	type	byte = {
+	WB_NONE,
+	WB_SINGLE,
+	WB_DOUBLE,
+	WB_BOTTOM_SHADOW,
+	WB_TOP_SHADOW,
+	WB_DBL_TOP,
+	WB_DBL_SIDE,
+	};
+
+borderDescriptor:	public	type	{
+	public:
+
+	uleft:		byte;
+	uright:		byte;
+	lright:		byte;
+	lleft:		byte;
+	lside:		byte;
+	rside:		byte;
+	top:		byte;
+	bottom:		byte;
+	};
+
+Borders:	public	[] borderDescriptor = [
+	[   0,   0,   0,   0,   0,   0,   0,   0 ],	// WB_NONE
+	[ 'Ú', '¿', 'Ù', 'À', '³', '³', 'Ä', 'Ä' ],	// WB_SINGLE
+	[ 'É', '»', '¼', 'È', 'º', 'º', 'Í', 'Í' ],	// WB_DOUBLE
+	[ 'Ú', '·', '¼', 'Ô', '³', 'º', 'Ä', 'Í' ],	// WB_BOTTOM_SHADOW
+	[ 'É', '¸', 'Ù', 'Ó', 'º', '³', 'Í', 'Ä' ],	// WB_TOP_SHADOW
+	[ 'Õ', '¸', '¾', 'Ô', '³', '³', 'Í', 'Í' ],	// WB_DBL_TOP
+	[ 'Ö', '·', '½', 'Ó', 'º', 'º', 'Ä', 'Ä' ],	// WB_DBL_SIDE
+	];
+
+callback:	public	type	{ public:
+	data:		pointer;
+	func:		pointer;
+	};

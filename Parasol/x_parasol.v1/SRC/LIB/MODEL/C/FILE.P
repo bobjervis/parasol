@@ -1,0 +1,330 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	error;
+include	format, string;
+include	tparams;
+
+userId:		type	unsigned[16];
+MAXPATHLIST:	public	const	int = 4096;
+MAXPATH:	public	const int = 256;
+MAXDIR:		public	const int = 224;	// MAXPATH - 32
+
+AR_READ:	public	const accessRights_t = 0x0001;
+AR_WRITE:	public	const accessRights_t = 0x0002;
+AR_EXEC:	public	const accessRights_t = 0x0004;
+AR_DIREC:	public	const accessRights_t = 0x0040;
+
+AR_TEXT:	public	const accessRights_t = 0x4000;
+AR_DOS_TEXT:	public	const accessRights_t = 0x8000;
+
+FileSystem:	public	nameContext;
+
+nameContext:	public	type	{
+	public:
+
+makeDirectory:		(fname: [:] char) int = 
+	{
+	}
+
+removeDirectory:	(fname: [:] char) int = 
+	{
+	}
+
+unlink:			(fname: [:] char) int = 
+	{
+	}
+
+move:			(fname1: [:] char, fname2: [:] char) int = 
+	{
+	}
+
+access:			(fname: [:] char, a: accessRights_t) int =
+	{
+	access:	extern	(ref char, int) int;
+	s:		ref char;
+	x:		int;
+
+	s = _cString(fname);
+	x = 0;
+	if	(a & AR_READ)
+		x |= 4;
+	if	(a & AR_WRITE)
+		x |= 2;
+	if	(a & AR_EXEC)
+		x |= 1;
+	x = access(s, x);
+	free(s);
+	if	(x)
+		return ERRNOFILE;
+	else
+		return SUCCESS;
+	}
+
+setCurrentDirectory:	(fname: [:] char) int = 
+	{
+	}
+
+	};
+
+BUFSIZE:	public	const	int = 1024;	/* Buffer size for stdio */
+
+fileOffset:	public	type	long;
+
+EOF:		public	const	int = -1;	/* End of file indicator */
+
+printf:		public	(fmt: [:] char, ...) =
+	{
+	stdout format(fmt, ...);
+	}
+
+gets:	public	(s: [:] char) [:] char =
+	{
+	return stdin gets(s);
+	}
+
+getchar:	public	() int =
+	{
+	return stdin getc();
+	}
+
+putchar:	public	(c: int) int =
+	{
+	return stdout putc(c);
+	}
+
+SEEK_ABS:	public	const	int = 0;
+SEEK_CUR:	public	const	int = 1;
+SEEK_END:	public	const	int = 2;
+
+stdin:	public	stream;
+stdout:	public	stream;
+stderr:	public	stream;
+
+FILE:	type	{
+	};
+
+fopen:	extern	(filename: ref char, access: ref char) ref FILE;
+fclose:	extern	(ref FILE) int;
+setbuf:	extern	(ref FILE, ref char);
+fflush:	extern	(ref FILE) int;
+fgetc:	extern	(ref FILE) int;
+fgets:	extern	(ref char, int, ref FILE) ref char;
+ferror:	extern	(ref FILE) int;
+fputc:	extern	(int, ref FILE) int;
+fwrite:	extern	(pointer, size_t, size_t, ref FILE) int;
+fread:	extern	(pointer, size_t, size_t, ref FILE) int;
+fseek:	extern	(ref FILE, signed[C_LONGBITS], int) int;
+ftell:	extern	(ref FILE) signed[C_LONGBITS];
+ungetc:	extern	(int, ref FILE) int;
+
+	// These are special support functions to avoid needing C header
+	// macro values, or other non-portable thingies
+
+p_setvbuf:	extern	(ref FILE, ref char, size_t) int;
+p_getClass:	extern	(ref FILE) int;
+p_cStream:	extern	(int) ref FILE;
+
+stream:	public	type	inherit	emitter {
+	file:	ref FILE;
+	hold:	int;
+
+	public:
+
+create:	(pathname: [:] char, attr: int) int =
+	{
+	opt:	[4] char;
+	cp:	ref char;
+
+	cp = opt;
+	*cp++ = 'w';				// create a new file
+	if	(attr & AR_READ)
+		*cp++ = '+';
+	if	(attr & AR_DOS_TEXT == 0)
+		*cp++ = 'b';
+	*cp = 0;
+	cp = _cString(pathname);
+	file = fopen(cp, opt);
+	free(cp);
+	if	(file)
+		return SUCCESS;
+	else
+		return ERRINVALIDFUNC;		// generic failure
+	}
+
+open:	(filename: [:] char, attr: int) int =
+	{
+	opt:	[4] char;
+	cp:	ref char;
+
+	cp = opt;
+	*cp++ = 'r';				// open an existing file
+	if	(attr & AR_WRITE)
+		*cp = '+';
+	if	(attr & AR_DOS_TEXT == 0)
+		*cp++ = 'b';
+	*cp = 0;
+	cp = _cString(filename);
+	file = fopen(cp, opt);
+	free(cp);
+	if	(file)
+		return SUCCESS;
+	else
+		return ERRNOFILE;
+	}
+
+close:	() =
+	{
+	if	(file){
+		fclose(file);
+		file = 0;
+		}
+	}
+
+setAge:	(ftime: time_t) int =
+	{
+	flush();
+	}
+
+error:	() boolean = 
+	{
+	if	(ferror(file))
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+flush:	() int =
+	{
+	return fflush(file);
+	}
+
+getc:	() int =
+	{
+	return hold = fgetc(file);
+	}
+
+gets:	(s: [:] char) [:] char =
+	{
+	c:	int;
+	ret:	ref char;
+	n:	int;
+
+	ret = s;
+	n = ||s;
+	while	(--n >= 0){
+		c = getc();
+		if	(c == EOF)
+			break;
+		*ret++ = c;
+		if	(c == '\n')
+			break;
+		}
+	|s = ret - s;
+	return s;
+	}
+
+reopen:	(filename: [:] char, opt: int) int =
+	{
+	s:	stream;
+
+	if	(file == 0)
+		return ERRINVALIDARGUMENT;
+	if	(s open(filename, opt))
+		return ERRNOFILE;	// open failed
+	fclose(file);
+	file = s.file;
+	return SUCCESS;
+	}
+
+vprintf:	(fmt: [:] char, ap: varArgs) =
+	{
+	format(fmt, ap);
+	}
+
+putc:	dynamic	(c: char) int =
+	{
+	return fputc(c, file);
+	}
+
+puts:	(s: [:] char) int =
+	{
+	i:	int;
+
+	i = fwrite(s, sizeof char, |s, file);
+	if	(i != |s)
+		return ERRINVALIDFUNC;
+	else
+		return SUCCESS;
+	}
+
+read:	(buf: [:] byte) int =
+	{
+	i:	int;
+
+	i = fread(buf, sizeof byte, |buf, file);
+	if	(i)
+		hold = buf[i - 1];
+	return i;
+	}
+
+seek:	(offset: fileOffset, whence: int) fileOffset =
+	{
+	fseek(file, offset, whence);
+	return ftell(file);
+	}
+
+setBuffering:	(size: int) int =
+	{
+	return p_setvbuf(file, 0, size);
+	}
+
+useBuffer:	(buf: [:] byte) int =
+	{
+	return p_setvbuf(file, buf, ||buf);
+	}
+
+ungetc:	() =
+	{
+	_ungetc(hold, file);
+	}
+
+write:	dynamic	(buf: [:] byte) int =
+	{
+	return fwrite(buf, sizeof byte, |buf, file);
+	}
+
+getClass:	() int =
+	{
+	return p_getClass(file);
+	}
+
+constructor:	(fd_: ref FILE) =
+	{
+	file = fd_;
+	}
+
+};
+
+_ungetc:	(c: int, f: ref FILE) =
+	{
+	ungetc(c, f);
+	}
+
+SYS_OPEN:	public	const	int = 20;
+
+vprintf:	public	(fmt: [:] char, ap: varArgs) =
+	{
+	stdout format(fmt, ap);
+	}
+
+startup:	entry	() =
+	{
+	stdin = [ p_cStream(0) ];
+	stdout = [ p_cStream(1) ];
+	stderr = [ p_cStream(2) ];
+	}

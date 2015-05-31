@@ -1,0 +1,274 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	error, file;
+
+imageHeader:	type	packed	{
+	public:
+
+	magic:		unsigned[16];
+	version:	unsigned[16];
+	recordMap:	fileOffset;
+	};
+
+SAVE_MAGIC:	const	unsigned[16] = 0xD497;
+SAVE_VERSION:	const	unsigned[16] = 0x0100;
+
+LoadTrap:	Trap;
+
+RAW_LONG:	public	const byte = 0x7f;
+RAW_TRIPLE:	public	const byte = 0x7e;
+RAW_SHORT:	public	const byte = 0x7d;
+RAW_ULONG:	public	const byte = 0xff;
+RAW_UTRIPLE:	public	const byte = 0xfe;
+RAW_USHORT:	public	const byte = 0xfd;
+
+/*
+	A loader object loads a previously saved image file.  
+ */
+loader:	public	type	{
+	Buffer:		ref byte;
+	Cursor:		ref byte;
+	EndPtr:		ref byte;
+	RecordMap:	ref recordMap;
+	Records:	int;
+
+	public:
+
+uinteger:	() long =
+	{
+	c:	byte;
+	i:	unsignedLong;
+
+	c = *Cursor++;
+	switch	(c){
+	default:
+		return c;
+
+	case	RAW_USHORT:
+		i = *Cursor++;
+		i += *Cursor++ << 8;
+		return i;
+
+	case	RAW_UTRIPLE:
+		i = *Cursor++;
+		i += *Cursor++ << 8;
+		i += *Cursor++ << 16;
+		return i;
+
+	case	RAW_ULONG:
+		i = *Cursor++;
+		i += *Cursor++ << 8;
+		i += *Cursor++ << 16;
+		i += *Cursor++ << 24;
+		return i;
+		}
+	}
+
+integer:	() long =
+	{
+	c:	byte;
+	i:	long;
+
+	c = *Cursor++;
+	switch	(c){
+	default:
+		return signedByte(c);
+
+	case	RAW_SHORT:
+		i = *Cursor++;
+		i += *Cursor++ << 8;
+		return signed[16](i);
+
+	case	RAW_TRIPLE:
+		i = *Cursor++;
+		i += *Cursor++ << 8;
+		i += *Cursor++ << 16;
+		i <<= 8;
+		i >>= 8;
+		return i;
+
+	case	RAW_LONG:
+		i = *Cursor++;
+		i += *Cursor++ << 8;
+		i += *Cursor++ << 16;
+		i += *Cursor++ << 24;
+		return i;
+		}
+	}
+
+address:	() pointer =
+	{
+	index:	long;
+
+	index = integer();
+	if	(index > Records ||
+		 index <= 0)
+		return 0;
+	else
+		return RecordMap[index - 1].X.Location;
+	}
+
+literal:	(len: int) =
+	{
+	if	(EndPtr - Cursor < len)
+		LoadTrap raise();
+	dumpData(Cursor - Buffer, Cursor, len);
+	Cursor += len;
+	}
+
+string:	() ref char =
+	{
+	cp:	ref char;
+
+	cp = Cursor;
+	while	(*Cursor)
+		Cursor++;
+	Cursor++;
+	return cp;
+	}
+/*
+list:	(mode: byte, nxtp: int) * =
+	{
+	lx:	* char;
+	last:	* char;
+	items:	* char;
+
+	items = 0;
+	last = 0;
+	for	(;;){
+		lx = object(mode);
+		if	(lx == 0)
+			break;
+		if	(last)
+			* ref ref char(last + nxtp) = lx;
+		else
+			items = lx;
+		* ref ref char(lx + nxtp) = 0;
+		last = lx;
+		}
+	return items;
+	}
+ */
+open:	(filename: [:] char) int =
+	{
+	i:		int;
+	bufferLen:	int;
+	fd:		stream;
+	hdr:		ref imageHeader;
+	r:		ref recordMap;
+
+	i = fd open(filename, AR_READ);
+	if	(i)
+		return i;
+	bufferLen = fd seek(0, SEEK_END);
+	fd seek(0, SEEK_ABS);
+	Buffer = threadHeap() alloc(bufferLen);
+	fd read(Buffer[:bufferLen]);
+	fd close();
+	hdr = ref imageHeader(Buffer);
+	if	(hdr->magic != SAVE_MAGIC ||
+		 hdr->version != SAVE_VERSION)
+		LoadTrap raise();
+	RecordMap = ref recordMap(Buffer + hdr->recordMap);
+	EndPtr = Buffer + bufferLen;
+	Records = ref recordMap(EndPtr) - RecordMap;
+	return SUCCESS;
+	}
+
+getRecordMap:	(index: int) ref recordMap =
+	{
+	if	(index > Records ||
+		 index <= 0)
+		return 0;
+	else
+		return &RecordMap[index - 1];
+	}
+
+getRecordType:	() byte =
+	{
+	return *Cursor++;
+	}
+
+getObject:	(index: int) pointer =
+	{
+	if	(index > Records ||
+		 index <= 0)
+		return 0;
+	else
+		return RecordMap[index - 1].X.Location;
+	}
+
+seek:	(offset: long) =
+	{
+	Cursor = Buffer + offset;
+	}
+
+close:	() =
+	{
+	delete Buffer;
+	}
+
+	};
+
+recordMap:	public	type	{
+	public:
+
+	FileOffset:	fileOffset;
+	X:	union	{
+		public:
+
+		Length:		long;
+		Location:	pointer;
+		};
+	};
+
+dumpData: public	(x: unsignedLong, p: pointer, len: int) =
+	{
+	cp:	ref byte;
+	i:	int;
+	j:	int;
+
+	cp = p;
+	while	(len){
+		printf("\t\t%08x: ", x);
+		i = 8;
+		j = 0;
+		while	(i && len){
+			printf("%02x ", cp[8 - i]);
+			i--;
+			j++;
+			len--;
+			}
+		while	(i){
+			printf("   ");
+			i--;
+			}
+		i = 8;
+		printf(" ");
+		while	(i && len){
+			printf("%02x ", cp[16 - i]);
+			i--;
+			j++;
+			len--;
+			}
+		while	(i){
+			printf("   ");
+			i--;
+			}
+		printf("  ");
+		for	(i = 0; i < j; i++){
+			if	(isprint(cp[i]))
+				printf("%c", cp[i]);
+			else
+				stdout putc('.');
+			}
+		cp += 16;
+		x += 16;
+		printf("\n");
+		}
+	}

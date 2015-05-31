@@ -1,0 +1,3 @@
+INT_MAX:	public	const	int = 0x7fffffff;
+INT_MIN:	public	const	int = 0x80000000;
+BYTE_MAX:	public	const	byte = 0xff;

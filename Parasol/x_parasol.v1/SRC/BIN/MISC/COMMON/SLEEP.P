@@ -1,0 +1,32 @@
+include	string;
+include	alys;
+include	file;
+include	error;
+
+main:	entry	() =
+	{
+	i:	int;
+
+	if	(|commandLine.arguments != 1){
+		printf("Use is: SLEEP seconds\n");
+		exit(EX_FAIL);
+		}
+	sc:	stringConverter = [ commandLine.arguments[0] ];
+
+	i = sc encodeUnsigned();
+	if	(!sc.success){
+		printf("Seconds must be specified as an integer\n");
+		exit(EX_FAIL);
+		}
+	mainExternal(&Sleep);
+	alarm(i);
+	}
+
+Sleep:	inherit External {
+
+alarmExpired:	gate	() =
+	{
+	exit(EX_SUCCESS);
+	}
+
+	};

@@ -1,0 +1,187 @@
+include	string;
+include	error;
+include	filesys;
+include	file;
+include	heapsort;
+
+TotalWords:	long;
+
+main:	entry	() =
+	{
+	arg:	[:] char;
+	ff:	finder;
+	lines:	int;
+	i:	int;
+
+	if	(|commandLine.arguments == 0){
+		printf("Use is: lexicon filename(s)\n");
+		exit(1);
+		}
+	while	(|commandLine.arguments){
+		path, pattern:	[:] char;
+
+		arg = commandLine.arguments[0];
+		commandLine shiftArguments();
+		path = getDirectory(arg);
+		pattern = stripDirectory(arg);
+		i = ff open(path, pattern, 0);
+		if	(i == SUCCESS){
+			while	(ff next() == SUCCESS)
+				countLines(ff.pathname);
+			}
+		else
+			printf("Couldn't open %S: %S\n", arg, cmdError(i));
+		}
+	makeWordList();
+	heapsort(ref pointer(WordList), WordCount, &idenCompare);
+	for	(i = 0; i < WordCount; i++)
+		WordList[i] display();
+	printf("\nTotal Words %d   Different Words %d\n", TotalWords, WordCount);
+	exit(0);
+	}
+
+countLines:	(fn: [:] char) =
+	{
+	f:	stream;
+	i:	int;
+	words:	int;
+	inword:	int;
+	cp:	ref char;
+
+	i = f open(fn, AR_READ);
+	if	(i){
+		printf("Could not open: %s (%s)\n", fn, cmdError(i));
+		return;
+		}
+	words = 0;
+	inword = 0;
+	i = f getc();
+	for	(;;){
+		if	(i == EOF ||
+			 i == 26)
+			break;
+		if	(isalpha(i)){
+			cp = Accum;
+			do	{
+				*cp++ = i;
+				i = f getc();
+				}
+				while	(cp < &Accum[|Accum] &&
+					 isalnum(i));
+			s:	[:] char;
+
+			s = Accum[:cp - Accum];
+			stringTolower(s);
+			identifier create(s);
+			words++;
+			}
+		else if	(isdigit(i)){
+			radix:	int;
+
+			i = f getc();
+			if	(i == 'x' ||
+				 i == 'X'){
+				i = f getc();
+				radix = 16;
+				while	(isxdigit(i))
+					i = f getc();
+				}
+			else	{
+				while	(isdigit(i))
+					i = f getc();
+				}
+			}
+		else
+			i = f getc();
+		}
+	f close();
+	TotalWords += words;
+	}
+
+Accum:	[512] char;
+WordList:	ref ref identifier;
+WordCount:	int;
+
+makeWordList:	() =
+	{
+	i, j:	int;
+	id:	ref identifier;
+	count:	int;
+
+	count = 0;
+	for	(i = 0; i < IDHASH; i++)
+		for	(id = Idhash[i]; id; id = id->Next)
+			count++;
+	WordList = alloc(sizeof ref identifier * (count + 1));
+	for	(j = 0, i = 0; i < IDHASH; i++)
+		for	(id = Idhash[i]; id; id = id->Next)
+			WordList[j++] = id;
+	WordList[j] = 0;
+	WordCount = count;
+	}
+
+idenCompare:	(p1: pointer, p2: pointer) int =
+	{
+	id1, id2:	ref identifier;
+
+	id1 = p1;
+	id2 = p2;
+	return stringCompare(id1 spelling(), id2 spelling());
+	}
+
+IDHASH:		public	const unsigned = 1024;
+
+Idhash:	public	[IDHASH] ref identifier;
+
+identifier:	public	type	{
+	public:
+
+	Next:		ref identifier;
+	Count:		int;
+	Spelling:	[:] char;
+
+create:	factory	(buf: [:] char) ref identifier =
+	{
+	i:		ref identifier;
+	prev:		ref identifier;
+	a:		int;
+	j:		int;
+	cp:		ref char;
+
+	j = a = |buf;
+	if	(a > 1)
+		a = (a << 6 + buf[0] + buf[a - 2] << 1) % IDHASH;
+	else
+		a = buf[0];
+	i = Idhash[a];
+	for	(prev = 0; i; prev = i, i = i->Next){
+		if	(stringCompare(buf, i->Spelling) == 0){
+			if	(prev){
+				prev->Next = i->Next;
+				i->Next = Idhash[a];
+				Idhash[a] = i;
+				}
+			i->Count++;
+			return i;
+			}
+		}
+	self = new identifier;
+	Next = Idhash[a];
+	Count = 1;
+	Idhash[a] = self;
+	Spelling = stringDup(buf);
+	return self;
+	}
+
+display:	() =
+	{
+	printf("%5d: %S\n", Count, Spelling);
+	self = Next;
+	}
+
+spelling:	() [:] char =
+	{
+	return Spelling;
+	}
+
+	};

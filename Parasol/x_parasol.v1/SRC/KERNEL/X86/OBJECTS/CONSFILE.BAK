@@ -1,0 +1,150 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	alys;
+include	kprintf;
+include	object;
+include	console;
+include	kwindow;
+include	video;
+include	process;
+include	hardware;
+include	backbone;
+
+ConsoleFile:	public	inherit	file	{
+	public:
+
+open:	dynamic	(cf: accessRights_t) ref far channel = 
+	{
+	ch:	ref PC_consoleChannel;
+	fch:	ref far channel;
+
+	ch = new PC_consoleChannel[ ConsoleWindowId ];
+	fch = ref far channel(publishKernel("conChannel", 
+					":model.filesys.channel",
+					ch, cf, AR_NONE, AR_NONE, AR_NONE));
+	processJob(fch);
+	return fch;
+	}
+
+	};
+
+PC_consoleChannel:	public	type	inherit	consoleChannel	{
+	public:
+	screen:		ref far PC_textWindow;
+	cursor:		point;
+
+constructor:	(v: ref far PC_textWindow) =
+	{
+	screen = v;
+	cursor = [ 0, 0 ];
+	super constructor(1);
+	}
+
+read:	gate	() [] byte =
+	{
+	reject(ERRINVALIDFUNC);
+/*
+	i:	int;
+	line:	static	[256] char;
+	k:	keystroke;
+
+	i = 0;
+	for	(;;){
+		k = screen getKey();
+		if	(k == keystroke(-1))
+			return "";
+		cursor = Screen->cursor;
+		switch	(k){
+		case	'\n':
+		case	'\r':
+			putchar('\n');
+			line[i] = '\n';
+			screen textCursor(cursor);
+			return line[:i + 1];
+
+		case	'\b':
+			if	(i > 0){
+				i--;
+				putchar('\b');
+				putchar(' ');
+				putchar('\b');
+				screen textCursor(cursor);
+				}
+			break;
+
+		default:
+			if	(k >= 256)
+				continue;
+			putchar(k);
+			screen textCursor(cursor);
+			line[i] = k;
+			i++;
+			if	(i >= |line)
+				return line;
+			}
+		}
+ */
+	}
+
+write:	gate	(buf: [:] byte) int =
+	{
+	cp:	ref char;
+	i:	int;
+
+//	if	(screen != TopWindow)
+//		screen toTop();
+	cursor = Screen->cursor;
+	for	(i = 0; i < |buf; i++)
+		putchar(buf[i]);
+	screen textCursor(cursor);
+	return |buf;
+	}
+
+putchar:	(c: char) =
+	{
+ 	if	(c == '\r')
+		cursor.x = 0;
+	else if	(c == '\n'){
+		if	(cursor.y < 24)
+			cursor.y++;
+		else	{
+			screen verticalScroll([ 0, 0 ], [ 80, 25 ], 1);
+			}
+		cursor.x = 0;
+		}
+	else if	(c == '\b'){
+		if	(cursor.x > 0)
+			cursor.x--;
+		}
+	else if	(c == '\t'){
+		do	{
+			putchar(' ');
+			}
+			while	(cursor.x & 7);
+		}
+	else	{
+		screen putcc(cursor, c, RED);
+		cursor.x++;
+		if	(cursor.x >= 80){
+			if	(cursor.y < 24)
+				cursor.y++;
+			else	{
+				screen verticalScroll([ 0, 0 ], [ 80, 25 ], 1);
+				}
+			cursor.x = 0;
+			}
+		}
+	}
+
+appearsOn:	gate	() ref far console =
+	{
+	return screen appearsOn();
+	}
+
+	};
+

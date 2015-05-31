@@ -1,0 +1,106 @@
+include	file;
+include	alys;
+include	string;
+include	hardware;
+
+main:	entry	() =
+	{
+	pid:	int;
+	pe:	process_t;
+	i:	int;
+	pl:	ref pList;
+	l:	ref pList;
+	n:	ref far Node;
+
+	if	(|commandLine.arguments != 0){
+		printf("Use is: PS\n");
+		return;
+		}
+	pl = 0;
+	n = myHost();
+	for	(pid = 1; pid < 300; pid++){
+		pe = n getProcess(pid);
+		if	(pe.status == PINVALID)
+			break;
+		if	(pe.status == PFREE)
+			continue;
+
+		l = new pList;
+		l->p = pe;
+		l->next = pl;
+		pl = l;
+		}
+
+		// Now chain parent to children
+
+	for	(l = pl; l; l = l->next){
+		s:	ref pList;
+
+		for	(s = pl; s; s = s->next){
+			if	(s->p.mainObject == l->p.parent){
+				l->sibling = s->child;
+				s->child = l;
+				l->parent = s;
+				}
+			}
+		}
+	printf(" PID   state prio     times       child times   name\n");
+	for	(l = pl; l; l = l->next){
+		if	(l->parent == 0)
+			dump(l, 2);
+		}
+	exit(EX_SUCCESS);
+	}
+
+dump:	(l: ref pList, indent: int) =
+	{
+	n:	[:] char;
+	_n:	[256] char;
+
+	n = _n;
+	printf("%5d: %5s", l->p.mainObject, StatusNames[l->p.status]);
+	printf(" %4d", l->p.priority);
+//	printf(" %8x ", l->p.exitStatus);
+	pTime(l->p.times.user);
+	printf(":");
+	pTime(l->p.times.kernel);
+	printf("   ");
+	pTime(l->p.childtimes.user);
+	printf(":");
+	pTime(l->p.childtimes.kernel);
+	n [:]= myHost() getObjectName(l->p.mainObject);
+	printf("%*c%S", indent, ' ', n);
+	printf("\n");
+	for	(l = l->child; l; l = l->sibling)
+		dump(l, indent + 4);
+	}
+
+pList:	type	{
+	public:
+
+	next:		ref pList;
+	parent:		ref pList;
+	child:		ref pList;
+	sibling:	ref pList;
+	p:		process_t;
+	};
+
+pTime:	(x: Tick) =
+	{
+	milli:	long;
+
+	milli = ticksToMilliseconds(x);
+
+	printf("%4d.%01d", milli / 1000, (milli / 100) % 10);
+	}
+
+StatusNames:	[] ref char = [
+	"PFREE",
+	"PNEW",
+	"PRUN",
+	"PSPIN",
+	"PWAIT",
+	"PDEAD",
+	"PSTOP",
+	"** Illegal status **"
+	];

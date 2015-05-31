@@ -1,0 +1,872 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	hardware;
+/*
+	This is the code that starts a Parasol program.  It must determine
+	the actual size of the static data area, initialize the heap, load 
+	the command line description and call the entry functions.
+ */
+__startup__:	() =
+	{
+	cp:	ref char;
+	ip:	ref _EntryVector;
+	i:	unsigned[32];
+	x:	ref far External;
+
+	i = _ESI;
+	x = ref far External(_EDI);
+
+	i += 3;
+	i &= ~3;
+	_brklvl = pointer(i);		// align the actual heap base
+	_Thread->currentHeap = &threadHeap;
+	_Thread->threadHeap = &threadHeap;
+
+	_EBX = int(&catchSignal);
+	_emit(0x9a, _null, _GDT_CATCHSIGNAL);
+
+
+	al:	ref ArgList;
+	c, a:	[:] char;
+
+	al = pointer(_heapbase_);
+
+
+	c = al->text[:al->cmdLength];
+	a = (al->text + al->cmdLength)[:al->argsLength];
+	commandLine _initialize(c, a);
+
+	_activeCleanup_ = _cleanup_;
+
+		// We need a default object if the programmer doesn't provide
+		// one of their own.
+
+	mainExternal(&defaultObject);
+	defaultObject.objectId = x;
+	for	(ip = _entry_; ip < ref _EntryVector(_cleanup_); ip++){
+		_activeCleanup_ = ip->exit;
+		ip->func();
+		}
+	_activeCleanup_ = _endCleanup_;
+	myExternal() loop();
+	}
+
+defaultObject:	External;
+threadLock:	Lock;
+
+_threadLaunch:	public	(ex: ref External, func: ref (), ssize: Size,
+					ufunc: ref ()) =
+	{
+	t, n:	ref _ThreadContext;
+	th:	ref ThreadHeap;
+	p:	ref _PageDescriptor;
+
+	p = _page_alloc(ssize + sizeof _ThreadContext + sizeof ThreadHeap);
+	t = ref _ThreadContext(p + 1);
+	th = ref ThreadHeap(t + 1);
+	th = [];			// Set the dynamic table pointer
+	th initialize();
+	t->myThread = ex;
+	t->exceptionFrame = 0;
+	t->myStack = ref byte(th + 1);
+	t->endStack = ref byte(p) + p->length;
+	t->currentHeap = th;
+	t->threadHeap = th;
+	t->next = 0;
+	t->func = ufunc;
+	t->myJob = 0;
+	critical (threadLock){
+		for	(n = _threadList; n->next; n = n->next)
+			;
+		n->next = t;
+		}
+	ex->objectId = _threadLaunch_(ex, t, t->endStack, func);
+	}
+
+_threadReclaim:	public	(p: pointer) = 
+	{
+	t, n:	ref _ThreadContext;
+	pg:	ref _PageDescriptor;
+
+	t = p;
+	critical (threadLock){
+		if	(_threadList == t)
+			_threadList = t->next;
+		else	{
+			for	(n = _threadList; n->next; n = n->next)
+				if	(n->next == t){
+					n->next = t->next;
+					break;
+					}
+			}
+		}
+	if	(t->myStack){
+		ref ThreadHeap(t->threadHeap) _freeAll();
+		pg = ref _PageDescriptor(t) - 1;
+		_page_free(pg);
+		}
+	}
+
+_threadLaunch_:		(ex: ref External, t: ref _ThreadContext,
+				stackp: ref byte, 
+				func: ref ()) ref far External =
+	{
+	_EBX = int(ex);
+	_EDX = int(t);
+	_ECX = int(stackp);
+	_EAX = int(func);
+	_emit(0x9a, _null, _GDT_THREADLAUNCH);
+	return ref far External(_EAX);
+	}
+
+ArgList:	type	packed	{
+	public:
+
+	cmdLength:	unsigned[32];
+	argsLength:	unsigned[32];
+	text:		[] char;
+	};
+/*
+------------------------------------------------------------------------------
+		Critical region stuff
+ */
+_lock_enter:	public	(latch: ref _LatchValues) =
+	{
+	_emit(0x9a, _null, _GDT_KERNELBLOCK);
+	if	(*latch){
+		*latch = _LATCH_WAITERS;
+		_EBX = unsigned(latch);
+		_emit(0x9a, _null, _GDT_KERNELDOWN);
+		}
+	else	{
+		*latch = _LATCH_CLOSED;
+		_emit(0x9a, _null, _GDT_KERNELUNBLOCK);
+		}
+	}
+
+_lock_leave:	public	(latch: ref _LatchValues) =
+	{
+	_emit(0x9a, _null, _GDT_KERNELBLOCK);
+	if	(*latch == _LATCH_WAITERS){
+		_EBX = unsigned(latch);
+		_emit(0x9a, _null, _GDT_KERNELUP);
+		*latch = _EAX;
+		}
+	else
+		*latch = _LATCH_OPEN;
+	_emit(0x9a, _null, _GDT_KERNELUNBLOCK);
+	}
+/*
+------------------------------------------------------------------------------
+		Heap Management Stuff
+ */
+threadHeap:	ThreadHeap;
+
+ThreadHeap:	public	type	inherit	Heap {
+	pagelist:	ref ThreadHeapPage;
+
+	public:
+
+initialize:	() =
+	{
+	pagelist = 0;
+	}
+
+alloc:	dynamic	(size: Size) pointer =
+	{
+	fpg:	ref ThreadHeapPage;
+	p:	pointer;
+
+	size = (size + sizeof unsigned + sizeof Header - 1) &
+				~(sizeof Header - 1);
+	for	(fpg = pagelist; fpg; fpg = ref ThreadHeapPage(fpg->sublist)){
+		p = fpg alloc(size);
+		if	(p)
+			return p;
+		}
+	fpg = ref ThreadHeapPage(_page_alloc(size + sizeof ThreadHeapPage));
+	if	(fpg == 0)
+		memTrap raise(H_NOMEMORY, size);
+	fpg->sublist = pagelist;
+	pagelist = fpg;
+	return fpg init(size);
+	}
+
+_free:	dynamic	(block: pointer) =
+	{
+	fpg:	ref ThreadHeapPage;
+
+	for	(fpg = pagelist; fpg; fpg = ref ThreadHeapPage(fpg->sublist)){
+		if	(block > fpg &&
+			 block < ref byte(fpg) + fpg->length){
+			fpg free(block);
+			return;
+			}
+		}
+	}
+
+freeListSize:	dynamic	() Size =
+	{
+	j:	int;
+	fpg:	ref ThreadHeapPage;
+
+	j = 0;
+	for	(fpg = pagelist; fpg; fpg = ref ThreadHeapPage(fpg->sublist))
+		j += fpg freeListSize();
+	return j;
+	}
+/*
+	This is a special interface because thread heaps can only be cleaned 
+	up when their thread is dead.  This code is under the control of the
+	system code.
+ */
+_freeAll:	() =
+	{
+	fpg, npg:	ref ThreadHeapPage;
+
+	for	(fpg = pagelist; fpg; fpg = npg){
+		npg = ref ThreadHeapPage(fpg->sublist);
+		_page_free(fpg);
+		}
+	}
+
+	};
+
+Header:	type	{
+	public:
+
+	size:	Size;			/* Size of this free block */
+	next:	ref Header;		/* Pointer to next header */
+
+nextHeader:	() ref Header =
+	{
+	return ref Header(long(self) + size);
+	}
+
+	};
+
+ThreadHeapPage:	type	inherit _PageDescriptor { public:
+	base:		Header;
+	allocp:		ref Header;
+	waterMark:	Size;
+
+init:	(size: Size) pointer =
+	{
+	x:	ref Header;
+
+	base.size = 0;
+	base.next = &base;
+	allocp = &base;
+	waterMark = size + sizeof ThreadHeapPage;
+	x = ref Header(self + 1);
+	x->size = size;
+	memSet(&x->next, 0, x->size - sizeof x->size);
+	return &x->next;
+	}
+/*
+	The size already includes an allowance for the block header.
+ */
+alloc:	(size: Size) pointer =
+	{
+	p, max:			ref Header;
+	prior, priormax:	ref Header;
+	cp:			ref char;
+
+	prior = allocp;
+	max = &base;
+	for	(p = prior->next; ; prior = p, p = p->next){
+		if	(p > max){
+			priormax = prior;
+			max = p;
+			}
+		if	(p->size >= size){
+			allocp = prior;
+			if	(p->size <= size + sizeof Header)
+				prior->next = p->next;
+			else	{
+				q:	ref Header;
+
+				q = ref Header(ref byte(p) + size);
+				q->size = p->size - size;
+				q->next = p->next;
+				prior->next = q;
+				p->size = size;
+				}
+			memSet(&p->next, 0, p->size - sizeof p->size);
+			return &p->next;
+			}
+		if	(p == allocp)
+			break;
+		}
+	n:	Size;
+
+	n = length - waterMark;
+	if	(n < size){
+		if	(!_page_grow(self, size - n))
+			return 0;
+		}
+	p = ref Header(ref byte(self) + waterMark);
+	waterMark += size;
+	p->size = size;
+	memSet(&p->next, 0, p->size - sizeof p->size);
+	return &p->next;
+	}
+
+free:	(block: pointer) =
+	{
+	p:	ref Header;
+	q:	ref Header;
+
+	p = ref Header(long(block) - sizeof Size);
+	for	(q = &base; p >= q->next; q = q->next)
+		if	(q >= q->next)
+			break;
+
+	if	(p nextHeader() == q->next){
+		p->size += q->next->size;
+		p->next = q->next->next;
+		}
+	else
+		p->next = q->next;
+	if	(q nextHeader() == p){
+		q->size += p->size;
+		q->next = p->next;
+		p = q;
+		}
+	else
+		q->next = p;
+
+		// insert code here to shrink the page, or discard it
+
+	p1, p2:	ref byte;
+	x:	Size;
+
+	p2 = ref byte(self) + waterMark;
+	if	(ref byte(p) + p->size == p2){
+
+			/* Find the new end of list */
+
+		for	(q = p; q->next != p; q = q->next)
+			;
+		q->next = p->next;
+		waterMark = ref byte(p) - ref byte(self);
+		x = p2 - ref byte(p);
+		if	(x > PAGE_SIZE + sizeof Header){
+			x &= ~(PAGE_SIZE - 1);
+			_page_shrink(self, length - x);
+			}
+		}
+	allocp = q;
+	}
+
+freeListSize:	() Size =
+	{
+	j:	int;
+	p:	ref Header;
+
+	j = length - waterMark;
+	for	(p = base.next; p != &base; p = p->next)
+		j += p->size;
+	return j;
+	}
+
+	};
+
+PAGE_SIZE:	const	Size = 0x1000;	// 4K pages
+/*
+	The heap is divided into pages.  The first page may be some fractional
+	size because the starting value of _brklvl may not be an even multiple
+	of a page.  All other pages are some multiple of a hardware page in 
+	size.
+
+	The length is signed, so that a negative value can be used to
+	represent a free page, and a positive value for an allocated page.
+
+	Note: the next block can be constructed from the length value.
+	This, of course, assumes a contiguous heap.  If ALYS allows memory
+	mapped regions in user address spaces, this data structure will need
+	some adjustment (such as special framing pages just to mark the
+	mapped region to the heap manager).  Note that nothing in the
+	heap manager itself relies on pages being hardware multiples, so a
+	page the frames the mapped region can be constructed with a simple
+	header written just ahead of the mapped region itself.
+
+	The preference for hardware page multiples is to limit the amount
+	of kernel calls needed, along with making efficient use of system 
+	memory and also to keep separate threads operating on different
+	hardware pages.
+
+	Also, the sublist pointer chain works downward.  This makes checking
+	for coalescable blocks cheaper.
+ */
+_PageDescriptor:	public type	packed	{ public:
+	prev:		ref _PageDescriptor;
+	sublist:	ref _PageDescriptor;
+	length:		signed[32];
+	};
+
+pageList:	ref _PageDescriptor;
+ePageList:	ref _PageDescriptor;
+fPageList:	public ref _PageDescriptor;
+pageLock:	Lock;
+
+_page_grow:	public	(p: ref _PageDescriptor, size: Size) boolean =
+	{
+	b:	boolean;
+
+	if	(_threadCount_ > 1){
+		critical(pageLock)
+			b = __page_grow(p, size);
+		}
+	else
+		b = __page_grow(p, size);
+	return b;
+	}
+
+__page_grow:	(p: ref _PageDescriptor, size: Size) boolean =
+	{
+	if	(p != ePageList)
+		return FALSE;
+	size += (PAGE_SIZE - 1);
+	size &= ~(PAGE_SIZE - 1);
+
+	cp:	ref byte;
+
+	cp = _brklvl;
+	if	(!_grow(cp + size))
+		return FALSE;
+	_brklvl = cp + size;
+	p->length += size;
+	return TRUE;
+	}
+
+_page_shrink:	public	(p: ref _PageDescriptor, size: Size) =
+	{
+	b:	boolean;
+
+	if	(_threadCount_ > 1){
+		critical(pageLock)
+			__page_shrink(p, size);
+		}
+	else
+		__page_shrink(p, size);
+	}
+
+__page_shrink:	(p: ref _PageDescriptor, size: Size) =
+	{
+	if	(p != ePageList)
+		return;
+
+	cp:	ref byte;
+
+//	size += (PAGE_SIZE - 1);
+//	size &= ~(PAGE_SIZE - 1);
+	cp = ref byte(p) + size;
+	_grow(cp);
+	_brklvl = cp;
+	p->length = size;
+	}
+
+_page_alloc:	public	(size: Size) ref _PageDescriptor =
+	{
+	p:	ref _PageDescriptor;
+
+	if	(_threadCount_ > 1){
+		critical(pageLock)
+			p = __page_alloc(size);
+		}
+	else
+		p = __page_alloc(size);
+	return p;
+	}
+
+__page_alloc:	(size: Size) ref _PageDescriptor =
+	{
+	p:	ref _PageDescriptor;
+
+	if	(pageList == 0){
+		x:	Size;
+
+		x = Size(_brklvl) + size;
+		x += (PAGE_SIZE - 1);
+		x &= ~(PAGE_SIZE - 1);
+		p = _brklvl;
+		if	(!_grow(pointer(x)))
+			return 0;
+		_brklvl = pointer(x);
+		p->prev = 0;
+		p->sublist = 0;
+		p->length = x - Size(p);
+		pageList = p;
+		ePageList = p;
+		return p;
+		}
+
+	pp:	ref _PageDescriptor;
+
+	size += (PAGE_SIZE - 1);
+	size &= ~(PAGE_SIZE - 1);
+	pp = 0;
+	for	(p = fPageList; p; pp = p, p = p->sublist){
+		if	(-p->length > size){
+			np, nn:	ref _PageDescriptor;
+
+			if	(unsigned(p) & (PAGE_SIZE - 1) == 0){
+				np = pointer(ref byte(p) + size);
+				np->length = p->length + size;
+				if	(p != ePageList){
+					nn = ref _PageDescriptor(ref byte(p) - 
+								p->length);
+					nn->prev = np;
+					}
+				else
+					ePageList = np;
+				np->prev = p;
+				np->sublist = p->sublist;
+				p->length = size;
+				p->sublist = 0;
+				if	(pp == 0)
+					fPageList = np;
+				else
+					pp->sublist = np;
+				return p;
+				}
+			else	{
+				np = pointer(ref byte(p) - p->length - size);
+				np->length = size;
+				if	(p != ePageList){
+					nn = ref _PageDescriptor(ref byte(p) - 
+								p->length);
+					nn->prev = np;
+					}
+				else
+					ePageList = np;
+				np->prev = p;
+				np->sublist = 0;
+				p->length += size;
+				return np;
+				}
+			}
+		else if	(-p->length == size){
+			p->length = size;
+			if	(pp == 0)
+				fPageList = p->sublist;
+			else
+				pp->sublist = p->sublist;
+			p->sublist = 0;
+			return p;
+			}
+		}
+	cp:	ref byte;
+
+	pp = _brklvl;
+	cp = _brklvl;
+	if	(!_grow(cp + size))
+		return 0;
+	_brklvl = cp + size;
+	pp->prev = ePageList;
+	ePageList = pp;
+	pp->length = size;
+	pp->sublist = 0;
+	return pp;
+	}
+
+_page_free:	public	(p: ref _PageDescriptor) =
+	{
+	if	(_threadCount_ > 1){
+		critical(pageLock)
+			__page_free(p);
+		}
+	else
+		__page_free(p);
+	}
+/*
+	The algorithm recognizes a series fo special cases and deals with each 
+	one:
+
+		- The freed page is at the end of the heap.
+
+			In this case, it could be the very last allocated
+			page, or the first of a list.  If it's the first of
+			a list, it could be preceded by a free or an allocated
+			page.
+
+		- The freed page is at the bottom of the heap.
+
+			In this case, we already know that there is a list
+			of at least two blocks (because this one isn't the
+			end of list).
+
+			This will become the new end of free list.  The only
+			question is whether the next block in the page list is
+			is also free and should be merged.
+
+			Once merged, the end of the old free list is found
+			and linked to the new block.
+
+		- Or, the freed page is in the middle of the heap.
+
+			Either of the adjacent lbocks could be free, and
+			they could be the ends of the heap page list.
+
+			We check the previous block first, because if a
+			merger occurs there, the free list doesn't need
+			to be re-threaded (the previous block is already
+			at the right place in the list).
+
+			If there is no merge with the previous block, the
+			check on whether the free page list all occurs
+			below the block being freed takes care of a case
+			where re-threading of the free page list is not
+			needed.
+
+			Finally, if the next block is free, it must be
+			coalesced as well.  Whenever this happens the free
+			chain must be re-threaded.
+
+	Altogether, this is a fairly complicated list management algorithm.
+
+	Under what conditions does this algorithm perform well?
+
+	If the memory allocation pattern is strictly stack-like (last 
+	allocated/first deallocated), then the behavior is constant and
+	memory is released to the kernel whenever possible.
+
+	If the memory allocation is somewhat stack-like, that is where 
+	blocks are freed in reverse order of being allocated, except that
+	some blocks are never freed, the algorithm performs at its worst.
+	Except for the first block freed, the entire free list chain must
+	be traversed to locate the new end of list as blocks are freed.
+
+	If memory is freed in a queue-like manner, that is oldest blocks
+	are freed first and newer blocks released later, the discipline
+	is quite good.  Even if some blocks are never freed, when a block
+	is freed immediately above an already free block, the rechaining
+	is avoided.  The performance remains good because the free chain
+	is being built behind the block being freed, and the list ahead
+	remains or even shrinks as a sequence of deallocations proceeds.
+
+	If memory allocation and deallocation has a random distribution, 
+	rechaining is done fairly often and since it is a linear scan, about
+	half the list must be traversed.
+
+	So, the free operation is linear in the size of the free list over
+	a number of allocation patterns.  In particular, as a heap undergoes
+	repeated sweeps of allocation and deallocation, the exact patterns
+	may shift.  For example, in the almost stack-like pattern described
+	above, repeating sweeps of allocations and deallocations will tend
+	to turn the pattern into a moderately queue-like behavior and a
+	queue-like pattern will get turned into a moderately stack-like
+	behavior, because the free list is maintained in reverse order and
+	so freed blocks will tend to get reused from upper memory downward.
+
+	Of course, all of this speculation is not terribly interesting
+	because this allocation strategy is designed for the thread-level
+	heaps which will tend to get freed infrequently anyway.  In a
+	single threaded program, only one page block ever gets allocated
+	and it never gets freed.  So this algorithm only gets run in special
+	circumstances anyway.
+ */
+__page_free:	(p: ref _PageDescriptor) =
+	{
+	if	(p == ePageList){		// last page in the list?
+		ePageList = p->prev;
+		if	(ePageList == 0)
+			pageList = 0;		// only one on list
+		else	{
+
+				// previous page is free too!
+
+			if	(ePageList == fPageList){
+				p = ePageList;
+				ePageList = p->prev;
+				if	(ePageList == 0)
+					pageList = 0;
+
+					// Reset the start of the free list
+
+				fPageList = p->sublist;
+				}
+			}
+		_grow(p);
+		_brklvl = p;
+		}
+	else if	(p->prev == 0){			// first page of list?
+		nn:	ref _PageDescriptor;
+
+		nn = ref _PageDescriptor(ref byte(p) + p->length);
+		p->sublist = 0;
+		p->length = -p->length;
+		if	(nn->length < 0){
+			p->length += nn->length;
+			if	(ePageList == nn)
+				ePageList = p;
+			if	(fPageList == nn)
+				fPageList = p;
+			else	{
+				pp:	ref _PageDescriptor;
+
+				for	(pp = fPageList; pp->sublist != nn;
+							pp = pp->sublist)
+					;
+				pp->sublist = p;
+				}
+			if	(p != ePageList){
+				nn = ref _PageDescriptor(ref byte(p) - 
+								p->length);
+				nn->prev = p;
+				}
+			}
+		else	{			
+			if	(fPageList == 0)
+				fPageList = p;
+			else	{
+				pp:	ref _PageDescriptor;
+
+				for	(pp = fPageList; pp->sublist;
+							pp = pp->sublist)
+					;
+				pp->sublist = p;
+				}
+			}
+		}
+	else	{			// interior of list
+		pp:	ref _PageDescriptor;
+		nn:	ref _PageDescriptor;
+		mustRechain:	boolean;
+		intactSubchain:	boolean;
+
+		nn = ref _PageDescriptor(ref byte(p) + p->length);
+		pp = p->prev;
+		p->length = -p->length;
+
+			// The previous block is free!
+
+		if	(pp->length < 0){
+			pp->length += p->length;
+			nn->prev = pp;
+			p = pp;
+			mustRechain = FALSE;
+			intactSubchain = TRUE;
+			}
+		else	{
+			mustRechain = TRUE;
+			intactSubchain = FALSE;
+			}
+
+			// The next block is free too!
+
+		if	(nn->length < 0){
+			if	(!intactSubchain){
+				p->sublist = nn->sublist;
+				intactSubchain = TRUE;
+				}
+			p->length += nn->length;
+
+				// A free page can't be the last in the heap
+
+			pp = ref _PageDescriptor(ref byte(p) - p->length);
+			pp->prev = p;
+			if	(nn == fPageList){
+				fPageList = p;
+				mustRechain = FALSE;
+				}
+			else
+				mustRechain = TRUE;
+			}
+		else	{
+			if	(fPageList == 0 ||
+				 fPageList < p){
+				p->sublist = fPageList;
+				fPageList = p;
+				mustRechain = FALSE;
+				}
+			}
+		if	(mustRechain){
+			for	(pp = fPageList; pp->sublist > nn;
+							pp = pp->sublist)
+				;
+			if	(!intactSubchain)
+				p->sublist = pp->sublist;
+			pp->sublist = p;
+			}
+		}
+	}
+
+/*
+------------------------------------------------------------------------------
+		Kernel message interface
+
+	These functions perform the primitive message calls.  In order to
+	have access to the necessary information, this code will have to
+	somehow get access to the internal message handling logic.
+ */
+_receive:	public	(hdr: ref MessageHeader) int = 
+	{
+	_EBX = int(hdr);
+	_emit(0x9a, _null, _GDT_RECEIVE);
+	return _EAX;
+	}
+
+_reject:	public	(seq: _Sequence, code: int) = 
+	{
+	_BX = seq;
+	_EDX = code;
+	_emit(0x9a, _null, _GDT_REJECT);
+	}
+
+_readText:	public	(seq: _Sequence, offs: unsigned, buf: pointer, len: int) int = 
+	{
+	_BX = seq;
+	_ECX = len;
+	_EDX = int(buf);
+	_EAX = offs;
+	_emit(0x9a, _null, _GDT_READTEXT);
+	return _EAX;
+	}
+
+_reply:		public	(seq: _Sequence, buf: pointer, len: int) = 
+	{
+	_BX = seq;
+	_ECX = len;
+	_EDX = int(buf);
+	_emit(0x9a, _null, _GDT_REPLY);
+	}
+
+_replyPartial:	public	(seq: _Sequence, buf: pointer, len: int) = 
+	{
+	_BX = seq;
+	_ECX = len;
+	_EDX = int(buf);
+	_emit(0x9a, _null, _GDT_REPLYPARTIAL);
+	}
+
+_discardText:	public	(seq: _Sequence) =
+	{
+	_BX = seq;
+	_emit(0x9a, _null, _GDT_DISCARDTEXT);
+	}
+
+catchSignal:	interrupt	(ifr: InterruptFrame) =
+	{
+	obj:	ref External;
+
+	obj = _Thread->myThread;
+	if	(obj == 0)
+		abort(0);
+	obj _signal(ifr.extra);
+	}
+
+_grow:	public	(brk: pointer) boolean =
+	{
+	_EBX = unsigned(brk);
+	_emit(0x9a, _null, _GDT_GROW);
+	return _AL;
+	}
+
+_inKernel:	public	boolean = FALSE;

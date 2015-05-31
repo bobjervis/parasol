@@ -1,0 +1,523 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	string;
+include	alys;
+include	filesys;
+include	file;
+include	error;
+include	list;
+
+ARGS_LEN:	const int = 4096;
+Version:	const int = 3;
+
+InputCommand:	[ARGS_LEN + MAXPATH + 1] char;
+Buffer:		[MAXPATH] char;
+Prompt:		[:] char = Buffer;
+ExecutingBatch:	boolean = FALSE;
+EchoCmd:	boolean = FALSE;
+Path:		[:] char = PathBuf;
+PathValid:	boolean = FALSE;
+PathBuf:	[MAXPATH] char;
+RedirIn:	[MAXPATH] char;
+RedirOut:	[MAXPATH] char;
+LastChild:	ref far External;
+WaitChild:	ref far External;
+job:		ref far Job;
+
+RUN_PATH:	const	int = 0;		// Path was a .RUN file
+EXE_PATH:	const	int = 1;		// Path was an .EXE file
+BAT_PATH:	const	int = 2;		// Path was a .BAT file
+COM_PATH:	const	int = 3;		// Path was a .COM file
+
+cmdShell:	entry	() =
+	{
+	i:	int;
+	j:	int;
+	cp:	ref char;
+	cmd:	[:] char;
+	arg:	[:] char;
+	volid:	[10] char;
+
+	mainExternal(&ShellInterpreter);
+	job = myJob();
+	Path [:]= job value("PATH");
+	PendingNotices makeEmpty();
+	FinishedNotices makeEmpty();
+	while	(|commandLine.arguments){
+		arg = commandLine.arguments[0];
+		commandLine shiftArguments();
+		if	(arg[0] == '-'){
+			if	(arg[1] == 'c'){	// batch file!
+				arg = commandLine.arguments[0];
+				commandLine shiftArguments();
+				i = stdin reopen(arg, AR_READ);
+				if	(i){
+					printf("Couldn't start batch file %S: %S\n",
+							arg, cmdError(i));
+					exit(1);
+					}
+				ExecutingBatch = TRUE;
+				}
+			else if	(arg[1] == 'v')		// verbose output
+				EchoCmd = TRUE;
+			}
+		else
+			break;
+		}
+	if	(!ExecutingBatch || EchoCmd)
+		printf("ALYS Shell version 1.%02d\n", Version);
+	for	(;;){
+		while	(ShellInterpreter senseMessages())
+			ShellInterpreter wait(EXT_WAIT_FOR_ONE);
+		if	(!ExecutingBatch)
+			displayPrompt();
+		spawnCommand();
+		}
+	}
+
+displayPrompt:	() =
+	{
+	i:	int;
+	fbuf:	[MAXPATH] char;
+	f:	[:] char;
+
+	while	(!FinishedNotices isEmpty())
+		delete ref completionNotice(FinishedNotices dequeue());
+	try	{
+		Prompt [:]= job value("PROMPT");
+		if	(|Prompt > 80 || |Prompt == 0){
+			printf("Prompt = %P >", Prompt);
+			return;
+			}
+		for	(i = 0; i < |Prompt; i++){
+			if	(Prompt[i] != '$'){
+				stdout putc(Prompt[i]);
+				continue;
+				}
+			i++;
+			if	(i >= |Prompt){
+				stdout putc('$');
+				continue;
+				}
+			switch	(Prompt[i]){
+			case	'$':
+				stdout putc('$');
+				break;
+
+			case	'p':
+				f = fbuf;
+				f [:]= FileSystem getAbsolutePath(".");
+				stdout write(f);
+				break;
+				}
+			}
+		}
+	except	{
+		f = fbuf;
+		f [:]= FileSystem getAbsolutePath(".");
+		if	(|f < 80)
+			printf("%S >", f);
+		else
+			printf("f = %P >", f);
+		}
+	}
+
+spawnCommand:	() =
+	{
+	cmd, args:	[:] char;
+	asynch:		int;
+	infile:		[:] char;
+	outfile:	[:] char;
+	appendout:	char;
+	cp:		ref char;
+	c:		int;
+
+	asynch = 0;
+	for	(;;){
+		infile = "";
+		outfile = "";
+		appendout = 0;
+		cmdClear();
+		c = nextChar();
+		while	(c == ' ' || c == '\t' || c == '\r')
+			c = nextChar();
+		if	(c == EOF || c == 26 || c == '\n')
+			break;
+		while	(!isspace(c) && c != EOF && c != '\r'){
+			cdeposit(c);
+			c = nextChar();
+			}
+		while	(c == ' ' || c == '\t' || c == '\r')
+			c = nextChar();
+		for	(;;){
+			if	(c == ';' ||
+				 c == '\n' ||
+				 c == EOF)
+				break;
+			else if	(c == '\r'){
+				c = nextChar();
+				continue;
+				}
+			else if	(isspace(c)){
+				c = nextChar();
+				continue;
+				}
+			else if	(c == '"'){
+				c = nextChar();
+				while	(c != EOF && c != '"' && c != '\n'){
+					adeposit(c);
+					c = nextChar();
+					}
+				adeposit(0);
+				if	(c != '"')
+					break;
+				c = nextChar();
+				}
+			else if	(c == '<'){
+				c = nextChar();
+				while	(c == ' ' || c == '\t')
+					c = nextChar();
+				cp = RedirIn;
+				while	(c != EOF &&
+					 !isspace(c) &&
+					 c != '\r'){
+					*cp++ = c;
+					c = nextChar();
+					}
+				infile = RedirIn[:cp - RedirIn];
+				if	(c == EOF || c == 26 || c == '\n')
+					break;
+				}
+			else if	(c == '>'){
+				c = nextChar();
+				if	(c == '>'){
+					appendout = 1;
+					c = nextChar();		// >> is append
+					}
+				while	(c == ' ' || c == '\t')
+					c = nextChar();
+				cp = RedirOut;
+				while	(c != EOF &&
+					 !isspace(c) &&
+					 c != '\r'){
+					*cp++ = c;
+					c = nextChar();
+					}
+				outfile = RedirOut[:cp - RedirOut];
+				if	(c == EOF || c == 26 || c == '\n')
+					break;
+				}
+			else if	(c == '&'){
+				asynch = 1;
+				c = nextChar();
+				}
+			else	{
+				do	{
+					adeposit(c);
+					c = nextChar();
+					}
+					while	(c != EOF &&
+						 c != ';' &&
+						 !isspace(c) &&
+						 c != '\r');
+				adeposit(0);
+				if	(c == EOF || c == '\n' || c == ';')
+					break;
+				c = nextChar();
+				}
+			}
+		i:	int;
+		p:	ref far External;
+
+		if	(|infile ||
+			 |outfile)
+			forkArena();
+		try	{
+			p = launchApp(cstring(), astring(), infile, outfile, appendout);
+			if	(|infile ||
+				 |outfile)
+				discardArena();
+			if	(p){
+				LastChild = 0;
+				if	(asynch){
+					disown(p);
+					WaitChild = 0;
+					}
+				else
+					WaitChild = p;
+				new completionNotice[cstring(), p];
+				if	(!asynch){
+					do
+						ShellInterpreter wait(&External.childExit);
+						while	(p != LastChild);
+					}
+				}
+			}
+		except	{
+			printf("Spawn failed\n");
+			if	(|infile ||
+				 |outfile)
+				discardArena();
+			}
+		if	(c == '\n' ||
+			 c == EOF)
+			break;
+		}
+	if	(c == EOF)
+		exit(0);
+	}
+
+nextChar:	() int =
+	{
+	c:	int;
+
+	c = stdin getc();
+	if	(c == EOF)
+		return c;
+	if	(ExecutingBatch && EchoCmd)
+		stdout putc(c);
+	return c;
+	}
+
+cmdClear:	() =
+	{
+	ArgPtr = Arguments;
+	CmdPtr = Command;
+	}
+
+cdeposit:	(c: char) =
+	{
+	if	(CmdPtr < Command + |Command)
+		*CmdPtr++ = c;
+	}
+
+cstring:	() [:] char =
+	{
+	return Command[:CmdPtr - Command];
+	}
+
+adeposit:	(c: char) =
+	{
+	if	(ArgPtr < Arguments + |Arguments)
+		*ArgPtr++ = c;
+	}
+
+astring:	() [:] char =
+	{
+	return Arguments[:ArgPtr - Arguments];
+	}
+
+Arguments:	[ARGS_LEN] char;
+ArgPtr:		ref char;
+Command:	[MAXPATH] char;
+CmdPtr:		ref char;
+
+launchApp:	(cmd: [:] char, args: [:] char, infile: [:] char, 
+					outfile: [:] char,
+					appendout: boolean) ref far External =
+	{
+	ext:		[:] char;
+	pathFound:	int;
+	fcmd:		[:] char;
+	arg:		[:] char;
+	i:		int;
+
+	i = argCount(args);
+	arg = getArg(args, 0);
+	if	(ExecutingBatch){
+		if	(stringCompare(cmd, "echo") == 0){
+			printf("%S\n", args);
+			return 0;
+			}
+		else if	(stringCompare(cmd, "rem") == 0)
+			return 0;
+		}
+	if	(stringCompare(cmd, "exit") == 0)
+		exit(0);
+	else if	(stringCompare(cmd, "ver") == 0){
+		printf("Shell version: 1.%02d\n", Version);
+		return 0;
+		}
+
+	lookup: PathList = [];
+
+	try lookup useEnvironment("PATH");
+	fcmd = lookup search(cmd, ".run", ".com", ".exe", ".bat", 0);
+	if	(|fcmd == 0){
+		printf("Unknown command: %S\n", cmd);
+		return 0;
+		}
+	cmd = fcmd;
+	ext = getExtension(cmd);
+	if	(stringIcompare(ext, ".bat") == 0)
+		pathFound = BAT_PATH;
+	else
+		pathFound = RUN_PATH;
+
+	fd:	ref far channel;
+
+	if	(|infile){
+		fd = FileSystem open(infile, AR_READ);
+		if	(fd == 0){
+			printf("Couldn't open '%S'\n", infile);
+			return 0;
+			}
+		makeLocal(fd, ref far channel(0));
+		}
+	if	(|outfile){
+		if	(appendout){
+			fd = FileSystem open(outfile, AR_WRITE);
+			fd seek(0, SEEK_END);
+			}
+		else
+			fd = FileSystem create(outfile, 0);
+		if	(fd == 0){
+			printf("Couldn't open '%S'\n", outfile);
+			return 0;
+			}
+		makeLocal(fd, ref far channel(1));
+		}
+	if	(pathFound == RUN_PATH)
+		return FileSystem spawn(0, cmd, args);
+	else if	(pathFound == BAT_PATH){
+		shellBuffer:	static	[ARGS_LEN + MAXPATH + 4] char;
+		sh:		[:] char;
+
+		sh = shellBuffer;
+		sh [:]= "-c\0";
+		sh = stringAppend(sh, cmd);
+		sh[(|sh)++] = 0;
+		args = stringAppend(sh, args);
+		return FileSystem spawn(0, commandLine.commandPath, args);
+		}
+	else	{
+		printf("Could not execute command: %S\n", cmd);
+		return 0;
+		}
+	}
+
+ShellInterpreter:	inherit External {
+
+attention:	gate!	() = 
+	{ 
+	if	(ExecutingBatch)
+		abort(int(&attention));
+	}
+
+childExit:	gate	(exitCode: unsigned) =
+	{
+	n:	ref completionNotice;
+
+	LastChild = messageHeader->sender;
+	for	(n = ref completionNotice(PendingNotices.next); 
+					n != &PendingNotices; 
+					n = ref completionNotice(n->next)){
+		if	(LastChild == n->pid){
+			n finish(exitCode);
+			return;
+			}
+		}
+	}
+
+	};
+
+FinishedNotices:	queue;
+PendingNotices:		queue;
+
+completionNotice:	type	inherit	queue	{
+	public:
+
+	pid:		ref far External;
+	cmd:		[:] char;
+	exitCode:	unsigned;
+
+constructor:	(str: [:] char, x: ref far External) =
+	{
+	pid = x;
+	PendingNotices enqueue(self);
+	cmd = new [|str] char;
+	cmd [:]= str;
+	if	(pid != WaitChild)
+		printf("Spawned %d: %S\n", pid, cmd);
+	}
+
+finish:	(c: unsigned) =
+	{
+	exitCode = c;
+	extract();
+	FinishedNotices enqueue(self);
+	}
+
+destructor:	() =
+	{
+	if	(exitCode){
+		if	(pid != WaitChild)
+			printf("%d: %S ", pid, cmd);
+		if	(exitCode & EX_CAUSE){
+			if	(exitCode & EX_CAUSE == EX_ABORT)
+				printf("Aborted - ");
+			else if	(exitCode & EX_CAUSE == EX_RAISE)
+				printf("Uncaught exception - ");
+			}
+		if	(exitCode == EX_FAIL)
+			printf("Failed");
+		else
+			printf("Exit: 0x%x", exitCode & EX_LEVEL);
+		if	(exitCode & EX_CORE)
+			printf(" - Core dumped");
+		printf("\n");
+		}
+	else if	(pid != WaitChild)
+		printf("%d: %S done\n", pid, cmd);
+	extract();
+	delete cmd;
+	}
+
+	};
+
+argCount:	(args: [:] char) int =
+	{
+	i:	int;
+	count:	int;
+
+	for	(i = 0, count = 0; i < |args; i++)
+		if	(args[i] == 0)
+			count++;
+	return count;
+	}
+
+getArg:	(args: [:] char, idx: int) [:] char =
+	{
+	i, j:	int;
+	arg:	ref char;
+
+	for	(i = 0; idx && i < |args; i++)
+		if	(args[i] == 0)
+			idx--;
+	arg = args + i;
+	for	(j = 0; i < |args; i++, j++)
+		if	(args[i] == 0)
+			break;
+	return arg[:j];
+	}
+
+removeNulls:	(args: [:] char) [:] char =
+	{
+	i, j:	int;
+	arg:	ref char;
+
+	for	(i = 0; i < |args; i++)
+		if	(args[i] == 0){
+			if	(i + 1 == |args)
+				return args[:i];
+			else
+				args[i] = ' ';
+			}
+	return args;
+	}
+

@@ -1,0 +1,79 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+include	alys;
+include	hardware;
+
+main:	entry	() =
+	{
+	n:	node_t;
+
+	n = myHost() describe();
+	printf("ALYS Kernel version %d.%02d %s\n\n", n.kernelVersion >> 8,
+			n.kernelVersion & 0xff, n.name);
+
+	x:	long;
+	y:	long;
+
+	printf(	"Cumulative user time ");
+	pTime(n.userTime);
+	x = n.userTime;
+	y = x + n.sysTime + n.idleTime;
+	x = x * 1000 / y;
+	printf(	"  %3d.%d%%\n"
+		"         system time ", x / 10, x % 10);
+	pTime(n.sysTime);
+	x = n.sysTime;
+	y = x + n.userTime + n.idleTime;
+	x = x * 1000 / y;
+	printf(	"  %3d.%d%%\n"
+		"           idle time ", x / 10, x % 10);
+	pTime(n.idleTime);
+	x = n.idleTime;
+	y = x + n.userTime + n.sysTime;
+	x = x * 1000 / y;
+	printf(	"  %3d.%d%%\n", x / 10, x % 10);
+	printf("\n\tDisk Subsystem\n\n");
+	y = n.cacheHits + n.cacheMisses;
+	x = n.cacheHits * 1000 / y;
+	printf( "Cache hits %8d  %3d.%d%%\n"
+		"  total io %8d\n", n.cacheHits, 
+				x / 10, x % 10,
+				n.cacheMisses + n.cacheHits);
+	printf( "   retries %8d\n", n.diskRetries);
+	printf("\n\tMemory usage\n\n");
+	printf("Available memory            %6dK\n", n.availableRAM / 1024);
+	printf("DOS size                    %6dK\n", n.dosMemory / 1024);
+	printf("Kernel code                 %6dK\n", (n.kernelCode + 512) / 1024);
+	printf("       data                 %6dK\n", (n.kernelData + 512) / 1024);
+	printf("       disk cache           %6dK\n", (n.diskCache + 512) / 1024);
+	printf("       network buffers      %6dK\n", (n.netBuffers + 512) / 1024);
+/*
+	printf("Available RAM: %9d\n", n.availableRAM);
+	printf("Disk cache:    %9d\n", n.diskCache);
+	printf("Kernel code:   %9d\n", n.kernelCode);
+	printf("Kernel data:   %9d\n", n.kernelData);
+	printf("DOS Memory:    %9d\n", n.dosMemory);
+	printf("Net buffers:   %9d\n", n.netBuffers);
+ */
+	exit(EX_SUCCESS);
+	}
+
+pTime:	(x: Tick) =
+	{
+	milli:	long;
+	seconds, minutes:	int;
+
+	milli = ticksToMilliseconds(x);
+
+	seconds = milli / 1000;
+	minutes = seconds / 60;
+	seconds %= 60;
+	milli /= 100;
+	printf("%4d:%02d.%d", minutes, seconds, milli % 10);
+	}

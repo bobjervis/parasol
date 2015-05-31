@@ -1,0 +1,51 @@
+include	password, file, filesys, error, string;
+
+UID:		const	int = 0;
+GID:		const	int = 1;
+NAME:		const	int = 2;
+PASSWORD:	const	int = 3;
+HOME:		const	int = 4;
+
+main:	entry	() =
+	{
+	x:		ref far userCatalog;
+	s:		[:] char;
+	uid, gid:	int;
+	i:		int;
+	name:		[:] char;
+
+	if	(|commandLine.arguments != 5){
+		printf("Use is: NEWUSER uid gid name password home-directory\n");
+		exit(EX_FAIL);
+		}
+	x = ref far userCatalog(FileSystem attach("/service/password",
+				":model.password.userCatalog"));
+	if	(x == 0){
+		printf("Could not attach /service/password\n");
+		exit(EX_FAIL);
+		}
+	s = commandLine.arguments[UID];
+
+	sc: stringConverter = [ s ];
+
+	uid = sc encodeUnsigned();
+	if	(!sc.success){
+		printf("User id must be a valid number, not '%S'\n", s);
+		exit(EX_FAIL);
+		}
+	s = commandLine.arguments[GID];
+	sc = [ s ];
+	gid = sc encodeUnsigned();
+	if	(!sc.success){
+		printf("Group id must be a valid number, not '%S'\n", s);
+		exit(EX_FAIL);
+		}
+	name = commandLine.arguments[NAME];
+	i = x addUser(uid, gid, name,	commandLine.arguments[PASSWORD], 
+					commandLine.arguments[HOME]);
+	if	(i < 0){
+		printf("Couldn't add user '%S': %S\n", name, cmdError(i));
+		exit(EX_FAIL);
+		}
+	exit(EX_SUCCESS);
+	}

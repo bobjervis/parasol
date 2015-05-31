@@ -1,0 +1,6 @@
+include	kprintf;
+
+main:	entry	() =
+	{
+	kprintf("Hello kernel world\n\n\n\n");
+	}

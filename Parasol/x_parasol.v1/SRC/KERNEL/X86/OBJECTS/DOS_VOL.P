@@ -1,0 +1,1776 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	string;
+include	alys;
+include	kprintf;
+include	disk;
+include	backbone;
+include	error;
+include	pc_hdw;
+include	process, hprocess;
+include	timer;
+include	time;
+include	dos_file;
+include	object;
+
+MAX_FAT_SECTORS:	const	int = 256;
+
+FILE_DEL_CHAR:	public	const	byte = 0xE5;
+
+dirAttributes:	public	type	byte = {
+	DA_READONLY	= 0x01,
+	DA_HIDDEN	= 0x02,
+	DA_SYSTEM	= 0x04,
+	DA_VLABEL	= 0x08,
+	DA_DIR		= 0x10,
+	DA_ARCHIVE	= 0x20,
+	};
+
+FileTime:	public	type	unsigned[32];
+cluster_t:	public	type	unsigned[16];
+
+//MaxDrive:	public	byte = 2;
+
+END_OF_CHAIN:	public	const	cluster_t = 0xffff;
+
+FATKinds:	public	type	char = {
+	FAT12bit,
+	FAT16bit
+	};
+
+newFileTime:	public	() FileTime =
+	{
+	dx:		unsigned;
+	tx:		unsigned;
+	t:		Date;
+
+	t decode(Now);
+	dx = (t.year - 80) << 9 + (t.month + 1) << 5 + t.monthday;
+	tx = t.hour << 11 + t.minute << 5 + t.second >> 1;
+	return long(dx) << 16 + tx;
+	}
+
+dosToUnix:	public	(t: FileTime) Time =
+	{
+	d:		Date;
+
+	d.year = ((t >> 25 & 0x7f) + 80) % 100;
+	d.month = (t >> 21 & 0x0f) - 1;
+	d.monthday = t >> 16 & 0x1f;
+	d.hour = t >> 11 & 0x1f;
+	d.minute = t >> 5 & 0x3f;
+	d.second = (t & 0x1f) << 1;
+	return d encode();
+	}
+
+unixToDos:	public	(t: Time) FileTime =
+	{
+	d:		Date;
+	dx:		unsigned;
+	tx:		unsigned;
+
+	d decode(t);
+	dx = (d.year - 80) << 9 + (d.month + 1) << 5 + d.monthday;
+	tx = d.hour << 11 + d.minute << 5 + d.second >> 1;
+	return long(dx) << 16 + tx;
+	}
+
+dirOps:	public	type	char = {
+	D_LOOKUP,
+	D_DELETE,
+	D_DGROUP,			// delete a group of files
+//	D_RENAME,
+	D_CREATE,
+	D_FDIREC,
+	};
+
+diskDirectory:	public	type	packed	{
+	public:
+	filename:	[8] byte;
+	extension:	[3] byte;
+	attribute:	dirAttributes;
+ 			[10] char;
+	ftime:		FileTime;
+	cluster:	cluster_t;
+	size:		unsignedLong;
+	};
+
+incoreDirectory:	public	type {
+	public:
+	dd:		diskDirectory;
+	sector:		unsigned;
+	offset:		unsigned[16];
+	disk:		ref dosVolume_t;
+
+file:	() ref DOSfile =
+	{
+	fp:	ref DOSfile;
+	doff:	int;
+
+	doff = offset >> 5;
+	for	(fp = disk->files; fp; fp = fp->next){
+		if	(fp->dirSector == sector &&
+			 fp->dirOffset == doff){
+			fp dup();
+			return fp;
+			}
+		}
+	if	(dd.attribute & DA_DIR){
+		if	(dd.cluster == 0)		// root directory
+			return new DOSrootfile[ self ];
+
+		fdp:	ref DOSDirfile;			// other directory
+
+		fdp = new DOSDirfile[ self ];
+		return fdp;
+		}
+	else	{					// regular file
+		fp = new DOSfile[ self ];
+
+			// Guard against inappropriate directory entries
+
+		if	(dd.cluster < 2)
+			fp->size = 0;
+		return fp;
+		}
+	}
+
+
+	};
+
+dosDirectory:	type	inherit	directory {
+	public:
+
+	residesOn:	ref dosVolume_t;
+	cluster:	cluster_t;
+
+constructor:	(v: ref dosVolume_t, c: cluster_t) =
+	{
+	residesOn = v;
+	cluster = c;
+	}
+
+getDriveInfo:	gate	() drive_t =
+	{
+	di:	drive_t;
+	v:	ref dosVolume_t;
+	i:	int;
+	f:	int;
+
+	v = residesOn;
+	for	(f = 0, i = 2; i < v->clusterCount; i++)
+		if	(v getFATEntry(i) == 0)
+			f++;
+	di.sectors = v->clusterCount - 2;
+	di.sectorSize = SECTOR_SIZE * v->sectorsPerCluster;
+	di.freeSectors = f;
+	return di;
+	}
+
+scanDirectory:	gate	() ref far directoryScanner =
+	{
+	a:	ref dosScanner;
+	af:	ref far directoryScanner;
+
+	a = new dosScanner[ self ];
+	af = ref far directoryScanner(jobPublishKernel("dos dir scanner",
+					":model.filesys.directoryScanner", 
+					a, AR_ANY));
+	if	(af == 0)
+		delete a;
+//	kprintf("scanner built\n");
+	_addReference();
+	return af;
+	}
+
+find:	gate	(path: [:] char) ref far directory = 
+	{
+	d:		incoreDirectory;
+	err:		int;
+	ds:		ref dosSubDirectory;
+	x:		ref far directory;
+
+	err = findDirectoryEntry(&d, path, D_LOOKUP);
+	if	(err)
+		return 0;
+	if	(d.dd.cluster == 0){
+		dupObject(d.disk->rootDirObj);
+		return d.disk->rootDirObj;
+		}
+	ds = new dosSubDirectory[ d.disk, d.dd.cluster ];
+	x = ref far directory(publishKernel(path, ":model.filesys.directory",
+						ds, AR_ANY, AR_ANY, 
+						AR_ANY, AR_ANY));
+	disown(x);
+	return x;
+	}
+
+open:	gate	(path: [:] char, access: AccessRights) ref far channel =
+	{
+	d:		incoreDirectory;
+	fp:		ref DOSfile;
+	err:		int;
+
+	err = findDirectoryEntry(&d, path, D_LOOKUP);
+	if	(err)
+		return 0;
+	fp = d file();
+	if	(fp attach(access)){
+		fp close();
+		return 0;
+		}
+	ch:	ref far channel;
+
+	ch = fp open(access);
+	if	(int(ch) < 0){
+		kprintf("ch = %x access = %x\n", ch, access);
+		for	(;;);
+		}
+//	kprintf("%S ch = %x\n", path, ch);
+	if	(ch == 0)
+		fp close();
+	return ch;
+	}
+
+create:	gate	(path: [:] char, attr: fAttributes_t) ref far channel =
+	{
+	d:		incoreDirectory;
+	fp:		ref DOSfile;
+	err:		int;
+
+//	kprintf("DOS file create(%S, %x)\n", path, attr);
+	err = findDirectoryEntry(&d, path, D_CREATE);
+	if	(err)
+		reject(ERRNOPATH);
+//	kprintf("directory found at %x\n", d);
+	fp = d file();
+//	kprintf("dosFile fp = %p\n", fp);
+//	dumpData(fp, sizeof *fp);
+//	err = fp attach(AR_READ|AR_WRITE);
+//	if	(err)
+//		reject(ERRPERMISSION);
+//	kprintf("attached\n");
+	fp truncate(0);
+//	kprintf("truncated\n");
+	fp->attributes = attr;
+	fp sync();				// Writes the directory 
+						// Entry
+	ch:	ref far channel;
+
+	ch = fp open(AR_ANY);
+//	kprintf("%S ch = %x\n", path, ch);
+	if	(ch == 0)
+		fp close();
+	return ch;
+	}
+
+setFileAttributes:	gate	(fname: [:] char, attr: fAttributes_t) int =
+	{
+	d:		incoreDirectory;
+	fp:		ref file;
+	err:		int;
+
+	err = findDirectoryEntry(&d, fname, D_LOOKUP);
+	if	(err)
+		return err;
+	fp = d file();
+/*
+	err = fp attach(AR_WRITE);
+	if	(err){
+		fp close();
+		return err;
+		}
+ */
+	fp->attributes = attr;
+	fp->flags |= F_CHANGED;
+	fp close();
+	return SUCCESS;
+	}
+
+access:	gate	(fname: [:] char, access: AccessRights) int =
+	{
+	d:		incoreDirectory;
+	fp:		ref DOSfile;
+	err:		int;
+
+	err = findDirectoryEntry(&d, fname, D_LOOKUP);
+	if	(err)
+		return err;
+	fp = d file();
+	err = fp attach(access);
+	fp close();
+	return err;
+	}
+
+stat:	gate	(fname: [:] char) file_t = 
+	{
+	d:		incoreDirectory;
+	fp:		ref DOSfile;
+	err:		int;
+	f:		file_t;
+
+	err = findDirectoryEntry(&d, fname, D_LOOKUP);
+	if	(err)
+		f.id = -1;
+	else	{
+		fp = d file();
+		f.attributes = fp->attributes;
+		f.size = fp->size;
+		f.ftime = dosToUnix(fp->ftime);
+		f.user = fp->user;
+		f.group = fp->group;
+		f.id = fp->sCluster;
+		fp close();
+		}
+	return f;
+	}
+
+makeDirectory:	gate	(filename: [:] char) int =
+	{
+	d:		incoreDirectory;
+	fd:		int;
+	fp:		ref DOSfile;
+//	ch:		ref far external;
+	parTime:	int;
+	err:		int;
+	newTime:	int;
+
+		// File had better not exist 
+
+	err = findDirectoryEntry(&d, filename, D_LOOKUP);
+	if	(err == 0)
+		return ERREXIST;
+
+	err = findDirectoryEntry(&d, filename, D_CREATE);
+	if	(err)
+		return err;
+	newTime = newFileTime();
+	if	(cluster == 0)
+		parTime = newTime;
+	else	{
+		d2:	incoreDirectory;
+
+		d.disk getDirectoryEntry(&d2, cluster, 0);
+		parTime = d2.dd.ftime;
+		}
+	d.dd.cluster = d.disk createEmptyCluster(0);
+	d.disk syncFAT();
+	d.dd.attribute = DA_DIR;
+	d.dd.size = 0;
+	d.dd.ftime = newTime;
+	writeDirectoryEntry(&d);
+
+	sect:		unsigned;
+	dp:		ref diskDirectory;
+
+	sect = d.disk mapSector(0, d.dd.cluster);
+
+	dp = d.disk->partition readSector(sect);
+	memSet(dp, ' ', 11);
+	memSet(dp + 1, ' ', 11);
+	dp[0].filename[0] = '.';
+	dp[0].attribute = DA_DIR;
+	dp[0].ftime = newTime;
+	dp[0].cluster = d.dd.cluster;
+	dp[1].filename[0] = '.';
+	dp[1].filename[1] = '.';
+	dp[1].attribute = DA_DIR;
+	dp[1].ftime = parTime;
+	dp[1].cluster = cluster;
+	d.disk->partition writeSector(dp, 0);
+
+	return SUCCESS;
+	}
+
+removeDirectory:	gate	(path: [:] char) int =
+	{
+	err:		int;
+	d:		incoreDirectory;
+	d2:		incoreDirectory;
+	i:		int;
+
+	err = findDirectoryEntry(&d, path, D_LOOKUP);
+	if	(err)
+		return err;
+	if	(d.dd.attribute & DA_READONLY)
+		return ERRPERMISSION;
+	if	(d.dd.attribute & DA_DIR == 0)
+		return ERRPERMISSION;
+
+	for	(i = 0; ; i++){
+		err = d.disk getDirectoryEntry(&d2, d.dd.cluster, i);
+		if	(err)
+			break;
+
+			// Ignore deleted entries
+
+		if	(d2.dd.filename[0] == FILE_DEL_CHAR)
+			continue;
+
+			// Null byte entries signal end of directory
+
+		if	(d2.dd.filename[0] == 0)
+			break;
+
+			// If any entries are not . or .. abort
+
+		if	(d2.dd.filename[0] != '.')
+			return ERRPERMISSION;
+
+		if	(d2.dd.filename[1] != ' ' &&
+			 d2.dd.filename[1] != '.')
+			return ERRPERMISSION;
+		}
+	residesOn removeChain(d.dd.cluster);
+	residesOn syncFAT();
+	d.dd.filename[0] = FILE_DEL_CHAR;
+	writeDirectoryEntry(&d);
+	return SUCCESS;
+	}
+
+unlink:	gate	(path: [:] char) ErrorCode =
+	{
+	d:	incoreDirectory;
+	i:	int;
+
+	i = findDirectoryEntry(&d, path, D_DELETE);
+	if	(i == SUCCESS)
+		d.disk syncFAT();
+	return i;
+	}
+
+unlinkGroup:	gate	(path: [:] char) ErrorCode =
+	{
+	d:	incoreDirectory;
+	i:	int;
+
+	i = findDirectoryEntry(&d, path, D_DGROUP);
+	if	(i > 0){
+		d.disk syncFAT();
+		return SUCCESS;
+		}
+	else if	(i)
+		return i;
+	else
+		return ERRNOFILE;
+	}
+
+move:	gate	(path1: [:] char, dr2x: ref far directory, path2: [:] char) ErrorCode =
+	{
+	err:		int;
+	d:		incoreDirectory;
+	d2:		incoreDirectory;
+	diskd:		byte;
+	sclust:		int;
+	nclust:		int;
+	ftime:		int;
+	size:		int;
+	formatted:	[11] char;
+	attr:		char;
+	cp:		ref char;
+	dr2:		ref dosDirectory;
+
+//	kprintf("move(%S -> %x:%S)\n", path1, dr2x, path2);
+	dr2 = locateObject(dr2x);
+	if	(dr2 == 0)
+		return ERRNOPATH;
+	nclust = dr2->cluster;
+
+		// Make sure the target name doesn't already exist
+
+	err = dr2 findDirectoryEntry(&d2, path2, D_LOOKUP);
+	if	(err == 0)
+		return ERREXIST;
+	sclust = cluster;
+	err = findDirectoryEntry(&d, path1, D_LOOKUP);
+	if	(err)
+		return err;
+		
+		// We are doing a simple rename of a file within the
+		// same directory.
+
+//	kprintf("move(%S -> %S) src %x -> dest %x\n", path1, path2, sclust, 
+//						nclust);
+	if	(sclust == nclust){
+
+			// Skip any drive and path information in the new name
+
+		if	(!formatFilename(path2, d.dd.filename))
+			return ERRINVALIDFORMAT;
+		writeDirectoryEntry(&d);
+		}
+	else	{
+
+			// Can't move a directory between directories.
+
+		if	(d.dd.attribute & DA_DIR)
+			return ERRPERMISSION;
+
+			// Delete the old file
+
+		d.dd.filename[0] = FILE_DEL_CHAR;
+		writeDirectoryEntry(&d);
+
+			// Create the new file
+
+		err = dr2 findDirectoryEntry(&d2, path2, D_CREATE);
+		d2.dd.size = d.dd.size;
+		d2.dd.cluster = d.dd.cluster;
+		d2.dd.ftime = d.dd.ftime;
+		d2.dd.attribute = d.dd.attribute & ~DA_ARCHIVE;
+		writeDirectoryEntry(&d2);
+		}
+	d.disk syncFAT();
+	return SUCCESS;
+	}
+
+getAbsolutePath:	gate	(path: [:] char) [] char =
+	{
+	err:		int;
+	d:		incoreDirectory;
+	tail:		[:] char;
+
+//	kprintf("dos get absolute path\n");
+	tail = path;
+	if	(stringCompare(path, "..") == 0){
+		tail = "";			// make tail a null string
+		err = findDirectoryEntry(&d, path, D_LOOKUP);
+		if	(err)
+			reject(ERRNOPATH);
+		}
+	else	{
+		if	(stringCompare(path, ".") == 0)
+			tail = "";		// make tail a null string
+		d.dd.cluster = cluster;
+		d.disk = residesOn;
+		}
+//	kprintf("before fill in directory\n");
+	if	(!fillInDirectory(d.dd.cluster, d.disk))
+		reject(ERRNOPATH);
+//	for	(;;);
+	if	(|tail){
+		replyPartial("/", 1);
+		return tail;
+		}
+	}
+/*
+	This function fills in a directory path given the starting cluster
+	number of the last directory in the path.  Returns the actual length
+	of the pathname on success, or the negative of the error number for
+	the cause of the failure.
+ */
+fillInDirectory:	(clust: cluster_t, disk: ref dosVolume_t) boolean =
+	{
+//	kprintf("_ESP = %x kernel stack = %x\n", _ESP, CurProc->kernelStack);
+	if	(redlined())
+		return FALSE;
+	if	(clust == 0){
+		replyPartial("/", 1);
+		replyPartial(disk->name, |disk->name);
+		}
+	else	{
+		parent:		cluster_t;
+
+		parent = disk getParentCluster(clust);
+		if	(parent == END_OF_CHAIN ||
+			 !fillInDirectory(parent, disk) ||
+			 !buildPathComponent(parent, clust, disk))
+			return FALSE;
+		}
+	return TRUE;
+	}
+
+buildPathComponent:	(parent: cluster_t, clust: cluster_t, 
+					disk: ref dosVolume_t) boolean =
+	{
+	i:		int;
+	d:		incoreDirectory;
+	err:		int;
+	buf:		[13] char;
+	cp:		ref char;
+
+		// Now find the current entry
+
+	if	(parent)
+		i = 2;
+	else
+		i = 0;
+	for	(; ; i++){
+		err = disk getDirectoryEntry(&d, parent, i);
+
+			// We should always find an entry, so this
+			// shouldn't happen
+
+		if	(err)
+			return FALSE;
+
+			// Ignore deleted entries
+
+		if	(d.dd.filename[0] == FILE_DEL_CHAR)
+			continue;
+
+			// We have a hit!
+
+		if	(d.dd.cluster == clust)
+			break;
+		}
+	buf[0] = '/';
+	for	(cp = buf + 1, i = 0; i < 8; i++, cp++){
+		if	(d.dd.filename[i] == ' ')
+			break;
+		*cp = tolower(d.dd.filename[i]);
+		}
+	if	(d.dd.extension[0] != ' '){
+		*cp++ = '.';
+		for	(i = 0; i < 3; i++, cp++){
+			if	(d.dd.extension[i] == ' ')
+				break;
+			*cp = tolower(d.dd.extension[i]);
+			}
+		}
+	replyPartial(buf, cp - buf);
+	return TRUE;
+	}
+
+findDirectoryEntry:	dynamic	(ref incoreDirectory, [:] char, dirOps) int =
+	{
+	return ERRINVALIDFORMAT;
+	}
+
+_addReference:	dynamic	() =
+	{
+	}
+
+	};
+
+newSubDirectory:	(d: ref incoreDirectory) ref dosSubDirectory =
+	{
+	if	(d->dd.cluster)
+		return new dosSubDirectory[ d->disk, d->dd.cluster ];
+	else
+		return ref dosSubDirectory(&d->disk->rootDir);
+	}
+
+dosScanner:	type	inherit	directoryScanner {
+	index:	int;
+	dir:	ref dosDirectory;
+	done:	boolean;
+
+	public:
+
+constructor:	(d: ref dosDirectory) =
+	{
+	dir = d;
+	dupObject(dir->objectId);
+	index = 0;
+	done = FALSE;
+	}
+
+next:	gate	() fileDescriptor_t =
+	{
+	fd:	fileDescriptor_t;
+	d:	incoreDirectory;
+	i:	int;
+
+//	kprintf("dos next use = %d\n", ref dosSubDirectory(dir)->useCount);
+	memSet(&fd, 0, sizeof fd);
+	if	(done)
+		return fd;
+	for	(;;){
+//		kprintf("get index %d dir = %x r = %x\n", index, dir, dir->residesOn);
+		i = dir->residesOn getDirectoryEntry(&d, dir->cluster, index);
+		index++;
+//		kprintf("i = %d\n", i);
+		if	(i == SUCCESS){
+			if	(d.dd.filename[0] == FILE_DEL_CHAR)
+				continue;
+			fd.info.attributes = (int(d.dd.attribute) & 
+					(DA_HIDDEN|DA_SYSTEM|DA_VLABEL|
+							DA_DIR|DA_ARCHIVE))
+							<< 11;
+			fd.info.attributes |= FA_SEEKOK;
+//			if	(d.dd.attribute & (DA_READONLY|DA_DIR) == 0)
+//				fd.info.attributes |= FA_WRITE;
+			fd.info.ftime = dosToUnix(d.dd.ftime);
+			fd.info.user = 0;
+			fd.info.group = 0;
+			fd.info.id = d.dd.cluster;
+			fd.info.size = d.dd.size;
+			i = fillInName(&d.dd, fd.name, sizeof fd.name);
+			fd.nlen = i;
+//			kprintf("!\n");
+			return fd;
+			}
+		done = TRUE;
+//		kprintf("Scan done\n");
+		dir->objectId close();
+		break;
+		}
+//	kprintf("done\n");
+	return fd;
+	}
+
+	};
+
+dosRootDirectory:	type	inherit	dosDirectory	{
+	public:
+
+	rootDir:		incoreDirectory;
+
+findDirectoryEntry:	dynamic	(dp: ref incoreDirectory, path: [:] char, 
+						operation: dirOps) int =
+	{
+	formatted:	[12] char;	// Formatted file name
+	cp:		ref char;
+	fp:		ref char;
+	i:		int;
+	dp2:		ref diskDirectory;
+	deletedCount:	int;
+
+	deletedCount = 0;
+	memSet(dp, 0, sizeof diskDirectory);
+	dp->disk = residesOn;
+	if	(|path == 0){
+
+			// Fake up an appropriate directory entry
+
+		dp->dd.attribute = DA_DIR;
+		dp->dd.size = 0;
+		dp->dd.ftime = 0;
+		dp->dd.cluster = 0;
+		dp->sector = 0;
+		dp->offset = 0;
+		return SUCCESS;
+		}
+
+		/* Extract the first filename of the path and
+		   copy it to the formatted array.
+		 */
+
+//	kprintf("looking for %S\n", path);
+	if	(!formatFilename(path, formatted))
+		return ERRINVALIDFORMAT;
+//	kprintf("formatted:\n");
+//	dumpData(formatted, sizeof formatted);
+
+		/* formatted now contains the target filename
+		   properly padded and so forth.
+		 */
+
+	if	(operation == D_FDIREC){
+		dp->dd.cluster = 0;
+		dp->dd.attribute = DA_DIR | DA_READONLY;
+		return SUCCESS;
+		}
+
+		// A create operation has to first scan the 
+		// directory for an existing file, then if not
+		// found, try to create one.
+
+	if	(operation == D_CREATE){
+		if	(searchDirecFile(dp, formatted, D_LOOKUP, 0) == 
+								SUCCESS){
+
+				// Already exists and is
+				// protected
+
+			if	(dp->dd.attribute & (DA_DIR | DA_READONLY))
+				return ERRPERMISSION;
+			return SUCCESS;
+			}
+		}
+	i = searchDirecFile(dp, formatted, operation, &deletedCount);
+	if	(operation == D_DGROUP)
+		return deletedCount;
+	if	(i != SUCCESS)
+		return ERRNOFILE;
+	else
+		return SUCCESS;
+	}
+
+searchDirecFile:	(dp: ref incoreDirectory, formatted: ref char, 
+				operation: dirOps, 
+				delCountP: ref int) ErrorCode =
+	{
+	sect:		unsigned;
+	esect:		unsigned;
+	dp2:		ref diskDirectory;
+	i:		int;
+	nclust:		cluster_t;
+	disk:		ref dosVolume_t;
+
+		/* Root directory search */
+
+	if	(formatted[0] == '.' &&
+		 formatted[1] == ' '){
+
+			// Use the fake directory
+
+//		kprintf("Found dot\n");
+		memCopy(&dp->dd, formatted, 11);
+		dp->dd.attribute = DA_DIR;
+		dp->dd.size = 0;
+		dp->dd.ftime = 0;
+		dp->dd.cluster = 0;
+		dp->sector = 0;
+		dp->offset = 0;
+		return SUCCESS;
+		}
+	disk = residesOn;
+	i = disk searchSectorRange(disk->rootDirSector, 
+			disk->rootDirSector + disk->rootDirSize,
+				dp, formatted, operation, delCountP);
+	if	(i > 0)
+		return SUCCESS;
+	else
+		return ERRNOFILE;
+	}
+
+addReference:	gate	() =
+	{
+	}
+
+close:	gate	() boolean =
+	{
+//	kprintf("close of %S\n", residesOn->name);
+	return FALSE;
+	}
+
+lastClose:	gate	() boolean =
+	{
+//	kprintf("lastClose of %S\n", residesOn->name);
+	return FALSE;
+	}
+
+	};
+
+dosSubDirectory:	type	inherit	dosDirectory	{
+	public:
+
+	useCount:	int;
+
+constructor:	(v: ref dosVolume_t, c: cluster_t) =
+	{
+	super constructor(v, c);
+	useCount = 1;
+	}
+
+/*
+dispose:	dynamic	() =
+	{
+	free(self);
+	}
+ */
+findDirectoryEntry:	dynamic	(dp: ref incoreDirectory, path: [:] char, 
+						operation: dirOps) int =
+	{
+	formatted:	[12] char;	// Formatted file name
+	cp:		ref char;
+	fp:		ref char;
+	i:		int;
+	dp2:		ref diskDirectory;
+	deletedCount:	int;
+
+	if	(|path == 0)
+		return ERRINVALIDFORMAT;
+	deletedCount = 0;
+	memSet(dp, 0, sizeof incoreDirectory);
+	dp->disk = residesOn;
+
+		/* Extract the first filename of the path and
+		   copy it to the formatted array.
+		 */
+
+	if	(!formatFilename(path, formatted))
+		return ERRINVALIDFORMAT;
+
+		/* formatted now contains the target filename
+		   properly padded and so forth.
+		 */
+
+	if	(operation == D_FDIREC){
+		dp->dd.cluster = cluster;
+		dp->dd.attribute = DA_DIR | DA_READONLY;
+		return SUCCESS;
+		}
+
+		// A create operation has to first scan the 
+		// directory for an existing file, then if not
+		// found, try to create one.
+
+	if	(operation == D_CREATE){
+		if	(searchDirecFile(dp, formatted, D_LOOKUP, 0) == SUCCESS){
+
+				// Already exists and is
+				// protected
+
+			if	(dp->dd.attribute & (DA_DIR | DA_READONLY))
+				return ERRPERMISSION;
+			return SUCCESS;
+			}
+		}
+	i = searchDirecFile(dp, formatted, operation, &deletedCount);
+	if	(operation == D_DGROUP)
+		return deletedCount;
+	if	(i != SUCCESS)
+		return ERRNOFILE;
+	else
+		return SUCCESS;
+	}
+
+searchDirecFile:	(dp: ref incoreDirectory, formatted: ref char, 
+				operation: dirOps, delCountP: ref int) ErrorCode =
+	{
+	sect:		unsigned;
+	esect:		unsigned;
+	dp2:		ref diskDirectory;
+	i:		int;
+	nclust:		cluster_t;
+	sclust:		cluster_t;
+	disk:		ref dosVolume_t;
+
+	sclust = cluster;
+	disk = residesOn;
+	for	(;;){
+		sect = sclust * disk->sectorsPerCluster + disk->firstDataSector;
+		i = disk searchSectorRange(sect, sect + disk->sectorsPerCluster,
+				dp, formatted, operation, delCountP);
+		if	(i == 0)
+			return ERRNOFILE;
+		if	(i > 0)
+			return SUCCESS;
+		nclust = disk getFATEntry(sclust);
+		if	(nclust == 0xffff)
+			break;
+		sclust = nclust;
+		}
+	if	(operation == D_CREATE){
+		nclust = disk createEmptyCluster(sclust);
+		if	(nclust == 0)
+			return ERRNOMEMORY;
+		sect = unsigned(nclust) * disk->sectorsPerCluster +
+					disk->firstDataSector;
+		dp2 = disk->partition readSector(sect);
+		memCopy(dp2, formatted, 11);
+		dp2->attribute = 0;
+		dp2->size = 0;
+		dp2->ftime = newFileTime();
+		dp2->cluster = 0;
+		dp->dd = *dp2;
+		disk->partition writeSector(dp2, 0);
+		dp->sector = sect;
+		dp->offset = 0;
+		return SUCCESS;
+		}
+	return ERRNOFILE;
+	}
+
+addReference:	gate	() =
+	{
+	useCount++;
+	}
+
+_addReference:	dynamic	() =
+	{
+	useCount++;
+	}
+/*
+delete:	gate	() boolean =
+	{
+	kprintf("Delete of %d\n", objectId);
+	return TRUE;
+	}
+
+close:	gate	() boolean =
+	{
+	kprintf("Close of %d\n", objectId);
+	return TRUE;
+	}
+ */
+	};
+
+dosVolume_t:		public	type	inherit	volume	{
+	public:
+	name:			[:] char;
+	files:			ref DOSfile;
+	partition:		ref Partition;
+	FATKind:		FATKinds;
+	sectorCount:		long;
+	clusterCount:		long;
+	sectorsPerCluster:	byte;
+	FATCount:		byte;
+	firstDataSector:	unsigned[16];
+	rootDirSector:		unsigned[16];
+	rootDirSize:		unsigned[16];		// number of sectors
+	FATSector:		unsigned[16];
+	FATSize:		unsigned[16];
+	FATImage:		ref byte;
+	FATMap:			[MAX_FAT_SECTORS] char;
+	rootDir:		dosRootDirectory;
+	rootDirObj:		ref far dosRootDirectory;
+
+removeChain:	(sCluster: cluster_t) =
+	{
+	do
+		sCluster = setFATEntry(sCluster, 0);
+		while	(sCluster != END_OF_CHAIN);
+	}
+
+truncateChain:	(sCluster: cluster_t, newSize: long) =
+	{
+	clusterSize:	unsigned;
+	nCluster:	cluster_t;
+
+	if	(newSize == 0){
+		removeChain(sCluster);
+		return;
+		}
+	clusterSize = 512 * sectorsPerCluster;
+	for	(;;){
+		nCluster = getFATEntry(sCluster);
+		if	(clusterSize >= newSize){
+			if	(nCluster != END_OF_CHAIN){
+				setFATEntry(sCluster, END_OF_CHAIN);
+				removeChain(nCluster);
+				}
+			break;
+			}
+		newSize -= clusterSize;
+		sCluster = nCluster;
+		}
+	}
+
+extendChain:	(sCluster: cluster_t, newSize: long) cluster_t =
+	{
+	clusterSize:	unsigned;
+	nCluster:	cluster_t;
+	newChain:	cluster_t;
+	oldSize:	long;
+
+	if	(newSize == 0)
+		return 0;
+	clusterSize = SECTOR_SIZE * sectorsPerCluster;
+	newChain = sCluster;
+	oldSize = 0;
+	while	(sCluster){
+		nCluster = getFATEntry(sCluster);
+		oldSize += clusterSize;
+		if	(nCluster == END_OF_CHAIN)
+			break;
+		sCluster = nCluster;
+		}
+	nCluster = 0;
+	while	(oldSize < newSize){
+		nCluster = findFreeCluster();
+		if	(nCluster == 0)
+			return 0;
+		oldSize += clusterSize;
+		if	(sCluster == 0)
+			newChain = nCluster;
+		else
+			setFATEntry(sCluster, nCluster);
+		setFATEntry(nCluster, END_OF_CHAIN);
+		sCluster = nCluster;
+		}
+	return newChain;
+	}
+
+chainLength:	public	(sCluster: cluster_t) long =
+	{
+	clusterSize:	unsigned;
+	oldSize:	long;
+
+	clusterSize = SECTOR_SIZE * sectorsPerCluster;
+	oldSize = 0;
+	while	(sCluster){
+		sCluster = getFATEntry(sCluster);
+		oldSize += clusterSize;
+		if	(sCluster == END_OF_CHAIN)
+			break;
+		}
+	return oldSize;
+	}
+
+loadFAT:	() =
+	{
+	if	(FATImage)
+		return;
+
+	i:	unsigned;
+	cp:	ref byte;
+	xp:	pointer;
+	sect:	int;
+
+	i = FATSize * SECTOR_SIZE;		// Calculate FAT size in bytes
+	FATImage = alloc(i);			// Allocate the FAT area.
+
+		// Read the FAT
+
+	partition readDisk(FATSector, FATImage, FATSize);
+	memSet(&FATMap, 0, sizeof FATMap);
+	}
+
+syncFAT:	() =
+	{
+	i:		int;
+	j:		int;
+	size:		int;
+	cp:		ref byte;
+	fat2nd:		unsigned;
+
+	fat2nd = (rootDirSector - FATSector) / 2u;
+	for	(cp = FATImage, i = 0; i < MAX_FAT_SECTORS; i++, cp += SECTOR_SIZE){
+		if	(FATMap[i] == 0)
+			continue;
+		FATMap[i] = 0;
+		size = 1;
+		for	(j = i + 1; j < MAX_FAT_SECTORS; j++, size++){
+			if	(FATMap[j] == 0)
+				break;
+			FATMap[j] = 0;
+			}
+		partition writeDisk(FATSector + i, cp, size);
+		partition writeDisk(FATSector + i + fat2nd, cp, size);
+		}
+	}
+
+mapSector:	(lsect: unsigned, sCluster: cluster_t) unsigned =
+	{
+	lcluster:	cluster_t;
+	psect:		unsigned;
+
+	if	(sCluster == 0)
+		return rootDirSector + lsect;
+	lcluster = lsect / sectorsPerCluster;
+	while	(lcluster){
+		fbuf:		ref unsigned[16];
+
+		if	(FATKind == FAT16bit){
+			fbuf = ref unsigned[16](FATImage);
+			sCluster = fbuf[sCluster];
+			if	(sCluster == END_OF_CHAIN)
+				return(0);
+			}
+		else	{
+			fbuf = ref unsigned[16](&FATImage[sCluster + 
+								sCluster >> 1]);
+			if	(sCluster & 1)
+				sCluster = *fbuf >> 4;
+			else
+				sCluster = *fbuf & 0xfff;
+			if	(sCluster == 0xfff)
+				return 0;
+			}
+		lcluster--;
+		}
+	psect = lsect % sectorsPerCluster;
+	psect += firstDataSector + sCluster * sectorsPerCluster;
+	return psect;
+	}
+
+mapCluster:	(lsectp: ref unsigned[16], sClusterp: ref cluster_t) unsigned =
+	{
+	lcluster:	cluster_t;
+	lsect:		unsigned;
+	
+	if	(*sClusterp == 0)
+		return rootDirSector + *lsectp;
+	lcluster = *sClusterp;
+	lsect = *lsectp;
+	while	(lsect >= sectorsPerCluster){
+		lsect -= sectorsPerCluster;
+		lcluster = getFATEntry(lcluster);
+		if	(lcluster == END_OF_CHAIN)
+			return 0;
+		}
+	*sClusterp = lcluster;
+	*lsectp = lsect;
+	return lsect + firstDataSector + lcluster * sectorsPerCluster;
+	}
+
+getFATEntry:	(cluster: cluster_t) cluster_t =
+	{
+	fbuf:		ref unsigned[16];
+
+	loadFAT();
+	if	(FATKind == FAT16bit){
+		fbuf = ref unsigned[16](FATImage);
+		cluster = fbuf[cluster];
+		}
+	else	{
+		fbuf = ref unsigned[16](&FATImage[cluster + cluster >> 1]);
+		if	(cluster & 1)
+			cluster = *fbuf >> 4;
+		else
+			cluster = *fbuf & 0xfff;
+		if	(cluster == 0xfff)
+			return END_OF_CHAIN;
+		}
+	return cluster;
+	}
+
+setFATEntry:	(cluster: cluster_t, newCluster: cluster_t) cluster_t =
+	{
+	lcluster:	cluster_t;
+	psect:		unsigned;
+	fatsector:	unsigned;
+	fatoffset:	unsigned;
+	fbuf:		ref unsigned[16];
+	nCluster:	cluster_t;
+	buf:		pointer;
+	fat2nd:		unsigned;
+
+	loadFAT();
+	fat2nd = (rootDirSector - FATSector) / 2u;
+	if	(FATKind == FAT16bit){
+		fatsector = cluster / 256u;
+		fbuf = ref unsigned[16](FATImage);
+		nCluster = fbuf[cluster];
+		fbuf[cluster] = newCluster;
+		FATMap[fatsector] = 1;		// make the sector dirty
+		}
+	else	{
+		fatoffset = cluster + (cluster >> 1);
+		fatsector = fatoffset / SECTOR_SIZE;
+		fbuf = ref unsigned[16](FATImage + fatoffset);
+		if	(cluster & 1){
+			nCluster = *fbuf >> 4;
+			*fbuf &= 0x000f;
+			*fbuf |= newCluster << 4;
+			}
+		else	{
+			nCluster = *fbuf & 0xfff;
+			*fbuf &= 0xf000;
+			*fbuf |= newCluster & 0xfff;
+			}
+
+			/* A FAT entry spanning a sector needs
+			   an extra write.
+			 */
+
+		FATMap[fatsector] = 1;
+		if	(fatoffset == 511)
+			FATMap[fatsector + 1] = 1;
+		if	(nCluster == 0x0fff)
+			return(END_OF_CHAIN);
+		}
+	return(nCluster);
+	}
+
+findFreeCluster:	public	() cluster_t =
+	{
+	i:		cluster_t;
+
+	loadFAT();
+	if	(FATKind == FAT16bit){
+		fbuf:		ref unsigned[16];
+
+		fbuf = ref unsigned[16](FATImage + 4);
+		for	(i = 2; i < clusterCount; i++, fbuf++)
+			if	(*fbuf == 0)
+				return(i);
+		}
+	else	{
+		off:	unsigned;
+		f:	unsigned[16];
+
+		off = unsigned(FATImage + 3);
+		for	(i = 2; i < clusterCount; i++){
+			f = * ref unsigned[16](off);
+			if	(i & 1)
+				f >>= 4;
+			else
+				f &= 0xfff;
+			if	(f == 0)
+				return(i);
+			off++;
+			off += i & 1;
+			}
+		}
+	return(0);
+	}
+
+getDirectoryEntry:	(dp: ref incoreDirectory, sclust: cluster_t, 
+				entryIndex: int) int =
+	{
+	buf:		pointer;
+	dp2:		ref diskDirectory;
+	sect:		unsigned;
+	esect:		unsigned;
+	i:		int;
+	nclust:		cluster_t;
+
+		/* Root directory search */
+
+	esect = entryIndex >> 4;
+	if	(sclust == 0){
+		if	(esect >= rootDirSize)
+			return ERRNOFILE;
+		sect = rootDirSector;
+		}
+	else	{
+		for	(;;){
+			if	(esect < sectorsPerCluster){
+				sect = sclust * sectorsPerCluster +
+					firstDataSector;
+				break;
+				}
+			esect -= sectorsPerCluster;
+			if	(sclust == 0){
+				dumpData(FATImage, 160);
+				for	(;;)
+					;
+				return ERRNOFILE;
+				}
+			sclust = getFATEntry(sclust);
+			if	(sclust == 0xffff)
+				return ERRNOFILE;
+			}
+		}
+	buf = partition readSector(sect + esect);
+	dp2 = buf;
+	dp2 += entryIndex & 0xf;
+	if	(dp2->filename[0] == 0){
+		partition releaseSector(buf);
+		return ERRNOFILE;
+		}
+	else	{
+		dp->dd = *dp2;
+		partition releaseSector(buf);
+		return SUCCESS;
+		}
+	}
+
+getParentCluster:	(clust: cluster_t) cluster_t =
+	{
+	d:		incoreDirectory;
+	err:		int;
+
+		// Find the .. entry
+
+	err = getDirectoryEntry(&d, clust, 1);
+	if	(err)
+		return END_OF_CHAIN;
+	if	(d.dd.filename[0] != '.' || d.dd.filename[1] != '.')
+		return END_OF_CHAIN;
+	return d.dd.cluster;
+	}
+
+searchSectorRange:	(sect: unsigned, 
+				esect: unsigned, dp: ref incoreDirectory, 
+				formatted: ref char, operation: dirOps,
+				delCountP: ref int) int =
+	{
+	dp2:	ref diskDirectory;
+	i:	int;
+	buf:	pointer;
+
+	for	(; sect < esect; sect++){
+		dp2 = partition readSector(sect);
+		buf = dp2;
+		for	(i = 0; i < 16; i++, dp2++){
+			if	(dp2->attribute & DA_VLABEL)
+				continue;
+			if	(dp2->filename[0] == FILE_DEL_CHAR){
+				if	(operation == D_CREATE){
+					memCopy(dp2, formatted, 11);
+					dp2->attribute = 0;
+					dp2->size = 0;
+					dp2->ftime = newFileTime();
+					dp2->cluster = 0;
+					dp->dd = *dp2;
+					partition writeSector(buf, 0);
+					dp->sector = sect;
+					dp->offset = unsigned(dp2) - 
+							unsigned(buf);
+					return 1;
+					}
+				continue;
+				}
+			if	(operation == D_DGROUP){
+				if	(directoryMatches(dp2, formatted)){
+
+						// Exists, but is
+						// protected
+
+					if	(dp2->attribute & 
+							(DA_DIR | DA_READONLY))
+						continue;
+					dp2->filename[0] = FILE_DEL_CHAR;
+					if	(dp2->cluster)
+						removeChain(dp2->cluster);
+					partition writeDisk(sect, buf, 1);
+					(*delCountP)++;
+					continue;
+					}
+				}
+			else if	(memCompare(dp2, formatted, 11) == 0){
+				dp->dd = *dp2;
+				if	(operation == D_DELETE){
+
+						// Exists, but is
+						// protected
+
+					if	(dp2->attribute & 
+							(DA_DIR | DA_READONLY)){
+						partition releaseSector(buf);
+						return 0;
+						}
+					dp2->filename[0] = FILE_DEL_CHAR;
+					if	(dp2->cluster)
+						removeChain(dp2->cluster);
+					partition writeSector(buf, 0);
+					}
+				else	{
+					partition releaseSector(buf);
+					if	(operation == D_CREATE)
+						return 0;
+					}
+				dp->sector = sect;
+				dp->offset = unsigned(dp2) - unsigned(buf);
+				return 1;
+				}
+			if	(memCompare(dp2, &zeros, 11) == 0){
+				if	(operation == D_CREATE){
+					memCopy(dp2, formatted, 11);
+					dp2->attribute = 0;
+					dp2->size = 0;
+					dp2->ftime = newFileTime();
+					dp2->cluster = 0;
+					dp->dd = *dp2;
+					partition writeSector(buf, 0);
+					dp->sector = sect;
+					dp->offset = unsigned(dp2) - 
+							unsigned(buf);
+					return 1;
+					}
+				partition releaseSector(buf);
+				return 0;
+				}
+			}
+		partition releaseSector(buf);
+		}
+	return -1;
+	}
+
+createEmptyCluster:	public	(sclust: cluster_t) cluster_t =
+	{
+	dp:		pointer;
+	nclust:		cluster_t;
+	sect:		unsigned;
+	i:		int;
+
+	nclust = findFreeCluster();
+	if	(nclust == 0)
+		return 0;
+	if	(sclust)
+		setFATEntry(sclust, nclust);
+	setFATEntry(nclust, END_OF_CHAIN);
+	sect = mapSector(0, nclust);
+	for	(i = 0; i < sectorsPerCluster; i++)
+		partition emptySector(sect + i, 0);
+	return(nclust);
+	}
+
+	};
+
+zeros:		[11] char;		// initialized to zero
+
+DosDrive:	public	[26] dosVolume_t = [
+	[ "a" ],
+	[ "b" ],
+	[ "c" ],
+	[ "d" ],
+	[ "e" ],
+	[ "f" ],
+	[ "g" ],
+	[ "h" ],
+	[ "i" ],
+	[ "j" ],
+	[ "k" ],
+	[ "l" ],
+	[ "m" ],
+	[ "n" ],
+	[ "o" ],
+	[ "p" ],
+	[ "q" ],
+	[ "r" ],
+	[ "s" ],
+	[ "t" ],
+	[ "u" ],
+	[ "v" ],
+	[ "w" ],
+	[ "x" ],
+	[ "y" ],
+	[ "z" ],
+	];
+
+BPB:	type	packed	{
+	public:
+
+	jumpInst:		[3] byte;
+	name:			[8] char;
+	bytesPerSector:		unsigned[16];
+	sectorsPerCluster:	byte;
+	reserved:		unsigned[16];
+	nFats:			byte;
+	rootDirSize:		unsigned[16];
+	partSize:		unsigned[16];
+	media:			byte;
+	fatSize:		unsigned[16];
+	trackSize:		unsigned[16];
+	heads:			unsigned[16];
+	hidden:			unsigned[16];
+				[480] char;
+	signature:		unsigned[16];
+	};
+
+mountDOSVolumes:	public	(root: ref alysDictionary) =
+	{
+	i:		int;
+	fat0:		ref unsigned[16];
+	bpb:		BPB;
+	v:		ref dosVolume_t;
+	sectorMultiple:	int;
+	p:		ref Partition;
+	was, addr:	AddressScheme;
+
+	v = &DosDrive[2];
+	for	(i = 0; i < MAX_PARTITIONS; i++){
+		p = &partitionTable[i];
+
+			// Make sure we know what kind of partition it is
+
+		if	(p->system != SI_DOS_12 &&
+			 p->system != SI_DOS_16 &&
+			 p->system != SI_BIGDOS &&
+			 p->system != SI_DM_RO &&
+			 p->system != SI_DM_RW)
+			continue;			// others don't mount
+
+			// This logic cycles through the addressing schemes
+			// looking for a working scheme.
+
+		addr = was = p getAddressing();
+		if	(was == AS_UNKNOWN){
+			addr++;
+			p setAddressing(addr);
+			kprintf("Trying %s sector addressing\n", 
+							addressingNames[addr]);
+			}
+		for	(;;){
+			p readDisk(0, &bpb, 1);
+			if	(bpb.signature != 0xaa55){
+				if	(was != AS_UNKNOWN || addr >= AS_LAST)
+					break;
+				addr++;
+				p setAddressing(addr);
+				kprintf("Trying %s sector addressing\n", 
+							addressingNames[addr]);
+				continue;
+				}
+			break;
+			}
+		if	(bpb.signature != 0xaa55){
+			kprintf("Error: Partition %d has a bad boot block\n", i);
+			continue;
+			}
+		sectorMultiple = bpb.bytesPerSector / SECTOR_SIZE;
+		v->sectorsPerCluster = bpb.sectorsPerCluster * sectorMultiple;
+		if	(v->sectorsPerCluster == 0){
+			kprintf("Error: Partition %d has bad number of sectors per cluster\n", i);
+			continue;
+			}
+		v->sectorCount = p->sectorCount;
+		v->rootDirSize = (bpb.rootDirSize + 15) >> 4;
+		v->FATSector = bpb.reserved * sectorMultiple;
+		v->FATCount = bpb.nFats;
+		v->FATSize = bpb.fatSize * sectorMultiple;
+		if	(v->FATSize == 0){
+			kprintf("Partition %d FAT size is zero\n");
+			continue;
+			}
+		v->FATImage = 0;
+		p readDisk(v->FATSector, &bpb, 1);
+		if	(bpb.jumpInst[0] != 0xf8){
+			kprintf("Warning: FAT media byte is incorrect in partition %c:\n",
+					i + 'C');
+/*
+			kprintf("	   Continue (default)\n"
+				"	   Fix (F)\n"
+				"	or Skip (S) >");
+			x:	keystroke;
+
+			x = getKey();
+			if	(x == 's' ||
+				 x == 'S')
+				continue;
+			else if	(x == 'f' ||
+				 x == 'F'){
+				bpb.jumpInst[0] = 0xf8;
+				p writeDisk(v->FATSector, &bpb, 1);
+				}
+ */
+			}
+		v->partition = p;
+		v->rootDirSector = v->FATSector + v->FATCount * v->FATSize;
+		v->firstDataSector = v->rootDirSector + v->rootDirSize;
+
+			// Adjust the first data sector by the implicit
+			// cluster numbering.  Cluster 2 is the first
+			// actual cluster, so to make cluster counting
+			// zero based, we back up the first data sector
+			// to compensate.
+
+		v->firstDataSector -= 2 * v->sectorsPerCluster;
+		v->clusterCount = (v->sectorCount - v->firstDataSector) /
+					v->sectorsPerCluster;
+
+			// DM is brain-damaged.  The kind of FAT depends on
+			// the total number of clusters and the FAT size
+
+		if	(p->system == SI_DM_RO ||
+			 p->system == SI_DM_RW){
+			i:	unsigned;
+
+			i = v->clusterCount / v->FATSize;
+			if 	(i > 256)
+				v->FATKind = FAT12bit;
+			else
+				v->FATKind = FAT16bit;
+			}
+		else if	(p->system == SI_DOS_12)
+			v->FATKind = FAT12bit;
+		else
+			v->FATKind = FAT16bit;
+		v->rootDir = [ v, 0 ];
+		v->rootDirObj = ref far dosRootDirectory(
+				publishKernel(v->name, 
+					":model.filesys.directory",
+					&v->rootDir, AR_ANY,
+					AR_ANY, AR_ANY, AR_ANY));
+		root mount(v->name, v, v->rootDirObj);
+		v++;
+//		MaxDrive++;
+		}
+	}
+/*
+	This function transforms a filename (without any directory path 
+	prefix) into the form that is stored on disk.
+ */
+formatFilename:	public	(path: [:] char, formatted: ref char) boolean =
+	{
+	cp:		ref char;
+	c:		char;
+	i:		int;
+
+	if	(|path == 0)
+		return FALSE;
+
+		// Take care of the special case of . and ..
+
+	memSet(formatted, ' ', 11);
+	if	(path[0] == '.'){
+		if	(|path == 1){
+			formatted[0] = '.';
+			return TRUE;
+			}
+		else if	(path[1] == '.' &&
+			 |path == 2){
+			formatted[0] = '.';
+			formatted[1] = '.';
+			return TRUE;
+			}
+		}
+
+		// Copy the filename part
+
+	for	(cp = formatted, i = 0; i < |path; i++){
+		c = path[i];
+		if	(c == '.'){
+			i++;
+			break;
+			}
+		else if	(isFileChar(c)){
+			if	(cp < formatted + 8)
+				*cp++ = toupper(c);
+			}
+		else
+			return FALSE;
+		}
+
+		// We might have an extension, try to copy it
+
+	for	(cp = &formatted[8]; i < |path; i++){
+		c = path[i];
+		if	(isFileChar(c)){
+			if	(cp < formatted + 11)
+				*cp++ = toupper(c);
+			}
+		else
+			return FALSE;
+		}
+	return TRUE;
+	}
+
+directoryMatches:	(dp: ref diskDirectory, formatted: ref char) boolean =
+	{
+	i:	int;
+	cp:	ref char;
+
+	cp = dp->filename;
+	for	(i = 0; i < 11; i++, cp++, formatted++)
+		if	(*formatted != '?' &&
+			 *formatted != *cp)
+			return FALSE;
+	return TRUE;
+	}
+
+writeDirectoryEntry:	(dp: ref incoreDirectory) =
+	{
+	buf:	ref char;
+	dp2:	ref diskDirectory;
+
+	buf = dp->disk->partition readSector(dp->sector);
+	dp2 = ref diskDirectory(buf + dp->offset);
+	*dp2 = dp->dd;
+	dp->disk->partition writeSector(buf, 0);
+	}
+
+fillInName:	public	(dp: ref diskDirectory, cp: ref char, len: int) int =
+	{
+	i:	int;
+	actual:	int;
+
+	for	(i = 0; i < 8; i++, cp++, len--){
+		if	(dp->filename[i] == ' ')
+			break;
+		if	(len <= 1)
+			return ERRNOMEMORY;
+		*cp = tolower(dp->filename[i]);
+		}
+	if	(dp->extension[0] == ' '){
+		*cp = 0;
+		return i;
+		}
+	if	(len <= 1)
+		return ERRNOMEMORY;
+	*cp = '.';
+	cp++;
+	len--;
+	actual = i + 1;
+	for	(i = 0; i < 3; i++, cp++, len--){
+		if	(dp->extension[i] == ' ')
+			break;
+		if	(len <= 1)
+			return ERRNOMEMORY;
+		*cp = tolower(dp->extension[i]);
+		}
+	*cp = 0;
+	return actual + i;
+	}

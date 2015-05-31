@@ -1,0 +1,43 @@
+include	debugger, filesys, hardware, file;
+
+OBJS:	const	int = 100000;
+
+block_t:	type	{ public:
+	addr:	vaddr_t;
+	size:	vaddr_t;
+	word:	vaddr_t;
+	};
+
+main:	entry	() =
+	{
+	h:		ref far heapWalker;
+	b, blocks:	ref block_t;
+	i, j:		int;
+
+	h = ref far heapWalker(FileSystem attach("/service/heapWalker",
+					":model.debugger.heapWalker"));
+	blocks = new [OBJS] block_t;
+	h beginSweep();
+	for	(i = 0, b = blocks; i < OBJS; i++, b++){
+		x:	vaddr_t;
+		sz, p:	vaddr_t;
+
+		b->addr = h next();
+		if	(b->addr == 0){
+			for	(j = 0, b = blocks; j < i; j++, b++)
+				printf("%08x: [%d] %08x\n", b->addr, 
+						b->size, b->word);
+			exit(EX_SUCCESS);
+			}
+		if	(b->addr == ~0)
+			break;
+		b->size = h size();
+		if	(b->size == ~0)
+			break;
+		b->word = h peekPointer(b->addr + sizeof vaddr_t);
+		}
+	printf("Heap changed - aborted\n");
+	for	(j = 0, b = blocks; j < i; j++, b++)
+		printf("%08x: [%d] %08x\n", b->addr, b->size, b->word);
+	exit(EX_FAIL);
+	}

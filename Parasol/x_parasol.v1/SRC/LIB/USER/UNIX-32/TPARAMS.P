@@ -1,0 +1,199 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+
+/*
+	There may be any number of implementation supported integral
+	types.  The char, int and long sizes are guaranteed to exist.
+	The char size is the smallest size that can be stored.  The
+	int size is the smallest computational size.  The long size
+	is the largest supported size.
+ */
+BYTEBITS:	public	const	int = 8;	// bits per char
+CHARBITS:	public	const	int = 8;	// bits per char
+SHORTBITS:	public	const	int = 16;	// bits per short
+INTBITS:	public	const	int = 32;	// bits per int
+LONGBITS:	public	const	int = 32;	// bits per long
+PTRBITS:	public	const	int = 32;	// bits per pointer
+PTRALIGN:	public	const	int = 32;	// bit alignment of pointers
+FUNCALIGN:	public	const	int = 32;	// bit alignment of functions
+
+C_CHARBITS:	public	const	int = 8;	// bits per char
+C_SHORTBITS:	public	const	int = 16;	// bits per short
+C_INTBITS:	public	const	int = 32;	// bits per int
+C_LONGBITS:	public	const	int = 32;	// bits per long
+C_LONGLONGBITS:	public	const	int = 32;	// bits per long long
+
+RNG_CHECK_BITS:	public	const	int = 32;	// bits used to check for
+						// constant ranges
+addr_t:		public	type	unsigned;	// type needed to hold an address
+
+FLOATBITS:	public	const	int = 32;
+DOUBLEBITS:	public	const	int = 64;
+EXTENDBITS:	public	const	int = 128;
+
+DYNFUNC_SIZE:	public	const	int = 4;	// dynamic function pointer size
+						// in bytes
+
+CCLEN:		public	const	int = 4;	// max # of chars in character
+						// constant
+
+DESCRIPTOR_BASE:public	const	int = 8;	// bytes in each descriptor
+DESCRIPTOR_RANK_SIZE:
+		public	const	int = 4;	// bytes per rank
+
+MESSAGE_FUNCTION_BASE:	public	const	unsigned[32] = 0x100;
+GATE_DESCR_SIZE:	public	const	addr_t = 8;
+TYPE_DESCR_BASE_SIZE:	public	const	addr_t = 12;
+
+DescrPointerOffset:	public	const	addr_t = 0;
+DescrMaxBoundOffset:	public	const	addr_t = 4;
+DescrBoundOffset:	public	const	addr_t = 8;
+ExceptFrameNextOffset:	public	const	addr_t = 0;
+ExceptFrameAddrOffset:	public	const	addr_t = 4;
+ExceptFrameBPOffset:	public	const	addr_t = 8;
+ExceptFrameSPOffset:	public	const	addr_t = 12;
+ExceptContextTrapOffset:public	const	addr_t = 0;
+ExceptContextVarOffset:	public	const	addr_t = 4;
+ExceptContextIVarOffset:public	const	addr_t = 8;
+ExceptStackTrapOffset:	public	const	addr_t = 8;
+ExceptStackVarOffset:	public	const	addr_t = 4;
+
+TARGET_GDT_SEND_ANY:	public	const	addr_t = 0x0108;
+TARGET_GDT_SEND_INT:	public	const	addr_t = 0x0110;
+TARGET_GDT_SEND_VOID:	public	const	addr_t = 0x0118;
+/*
+	These constants describe the allocation parameters for stack automatic
+	variables.  The allocation strategy is to allocate small objects first,
+	so they are close to the frame pointer and get a more efficient
+	instruction encoding.  Large objects tend to be big arrays where the
+	frame pointer offset doesn't matter as much.
+
+	The BigObjectThreshold value is the largest 'small' object size in
+	bytes.
+
+	The StackFrameAlign value is the alignment, in bytes, of the stack
+	frame.  This value is used to determine the allocated size of a
+	frame.
+ */
+BigObjectThreshold:	public	const	int = 10;
+StackFrameAlign:	public	const	unsigned = 4;
+
+PUSH_TEMPS_ALLOWED:	public	const	boolean = FALSE;
+/*
+	This function accepts a long integer value and reduces it to a
+	value that is representable within the number of bits given by
+	the bits parameter.  If the bits value is negative, the number
+	should be treated as a signed quantity and the value should be
+	truncated to a signed integer value.
+
+	Limitations:
+
+	This code only works for 2's complement signed integers.
+
+	You can only truncate a value that can be represented as a
+	long.  Obviously, larger values must be handled differently.
+	This has significance when this code is used in a cross-compiler
+	that targets a machine with a larger long than the host's.
+ */
+integerConstant:	public	(i: long, bits: int) long =
+	{
+	mask:	long;
+	sign:	int;
+
+	sign = bits;			// remember the signedness
+	if	(bits < 0)
+		bits = -bits;		// force bits to positive
+	if	(bits >= 32)
+		return i;
+	mask = 1L << bits - 1;
+	i &= mask;
+	if	(sign < 0 && 
+		 i & (1 << (bits - 1)))
+		i |= ~mask;		// sign extend
+	return i;
+	}
+/*
+	This function determines whether the given value is representable
+	in the number of bits given.
+
+	Notes:
+
+	This code only works using 2's complement signed integers on the
+	host.  The target can use 1's complement.
+
+	The number of bits is reduced by one for signed integers, since
+	the extra bit is the sign.
+ */
+integerFits:	public	(i: long, bits: int) boolean =
+	{
+	mask:	long;
+	sign:	int;
+
+	sign = bits;			// remember the signedness
+	if	(bits < 0)
+		bits = -bits - 1;	// force bits to positive
+	mask = ~(1L << bits - 1);
+	i &= mask;
+	if	(i == 0)
+		return TRUE;		// a positive value!
+	if	(sign && i == mask)
+		return TRUE;		// a negative signed value!
+	else
+		return FALSE;		// not representable
+	}
+/*
+	SHIFT_BITS is the number of significant bits used in a shift
+	operation.  In an 80386, this is 8 since shift instructions use
+	8-bit registers.
+ */
+SHIFT_BITS:	public	const	int = 8;
+
+numberTypeDescriptor:	public	type	{
+	public:
+
+	bitSize:		unsigned[16];
+	bitAlignment:		unsigned[16];
+	};
+
+UnsignedTypes:	public	const	[] numberTypeDescriptor = [
+	[ 8,  8 ],					// char
+	[ 16, 16 ],					// short
+	[ 32, 32 ],					// int
+	];
+
+SignedTypes:	public	const	[] numberTypeDescriptor = [
+	[ 8,  8 ],					// char
+	[ 16, 16 ],					// short
+	[ 32, 32 ],					// int
+	];
+
+FloatingTypes:	public	const	[] numberTypeDescriptor = [
+	[ 32, 32 ],					// single
+	[ 64, 64 ],					// double
+	[ 128, 128 ]					// extend
+	];
+/*
+	This following array describes the order in which members
+	should be allocated in a structure.  In a union, all members
+	have offset zero.  In a packed structure, all members are
+	allocated in declaration order.  In an unpacked structure,
+	all members are allocated in descending order of alignment.
+	The following table indicates the alignments needed.  Note
+	that an entry of -1 indicates where the dynamic vector pointer
+	should be allocated.
+ */
+StructLayout:	public	const	[] int = [
+	128,
+	64,
+	-1,
+	32,
+	16,
+	8
+	];
+

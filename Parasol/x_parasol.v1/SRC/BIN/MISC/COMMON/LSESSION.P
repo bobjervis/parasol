@@ -1,0 +1,49 @@
+include	alys, file, filesys;
+//
+//	The Login Session program 
+main:	entry	() =
+	{
+	homeDirectory:	[:] char;
+	shell, fcmd:	[:] char;
+	cmd:		[MAXPATH] char;
+	p:		ref far External;
+
+	if	(|commandLine.arguments != 1){
+		printf("USE IS: lsession <home-directory>\n");
+		exit(EX_FAIL);
+		}
+	homeDirectory = commandLine.arguments[0];
+	newJob();
+	FileSystem setCurrentDirectory(homeDirectory);
+	if	(FileSystem access("alogin.bat", AR_READ) == SUCCESS){
+		printf("alogin.bat found\n");
+		shell = cmd;
+		shell [:]= myJob() value("COMSPEC");
+		p = FileSystem spawn(0, shell, "-c\0alogin.bat\0");
+		}
+	else	{
+		lookup:		PathList = [];
+
+		try lookup useEnvironment("PATH");
+		fcmd = lookup search("navigate", ".run", 0);
+		if	(|fcmd == 0)
+			exit(EX_FAIL);
+		p = FileSystem spawn(0, fcmd, "/c");
+		}
+	if	(p == 0)
+		exit(EX_FAIL);
+	mainExternal(&LoginSession);
+	}
+
+LoginSession:	inherit	External {
+	public:
+//
+//	We only spawn one child, so when it's done, we croak.  Eventually,	
+//	it will kill all jobs started from this login session.
+//
+childExit:	gate	(code: ExitCode) =
+	{
+	exit(code);
+	}
+
+	};

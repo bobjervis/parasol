@@ -1,0 +1,16 @@
+visualTool:	public	type	inherit	external {
+	public:
+
+shutdown:	gate	();
+
+checkpoint:	gate	(dir: [:] char);
+
+restart:	gate	(dir: [:] char);
+
+open:		gate	();
+
+iconify:	gate	();
+
+hide:		gate	();
+
+	};

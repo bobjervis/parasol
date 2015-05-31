@@ -1,0 +1,316 @@
+include	file, hardware, debugger, filesys, alys, window, editor;
+include	format, console;
+
+include	monitor, disasm, symtab, instruct;
+
+monitorArena:	public	type	inherit debugArena {
+	state:		task_t;
+	data:		[16] byte;		// data cache from the process
+	debugObject:	ref far External;
+	dMonitor:	ref far debugMonitor;
+	targetArena:	ref far arenaProbe;
+	objects:	ref objectProbeList;
+
+	public:
+
+constructor:	(pid: int) =
+	{
+	if	(pid){
+		dMonitor = ref far debugMonitor(FileSystem 
+				attach(	"/service/debug", 
+					":model.debugger.debugMonitor"));
+		if	(dMonitor == 0){
+			printf("Couldn't find /service/debug\n");
+			exit(1);
+			}
+		debugObject = ref far External(pid);
+		mainExternal(&I386Debugger);
+		targetArena = dMonitor attachArena(debugObject, 
+				ref far debugger(I386Debugger.objectId));
+		if	(targetArena == 0){
+			printf("Couldn't connect to arena for object %d\n",
+						debugObject);
+			exit(1);
+			}
+		objects = 0;
+
+		i:	int;
+		pe:	process_t;
+		op:	ref far objectProbe;
+
+		for	(i = 0; i < 300; i++){
+			pe = myHost() getProcess(i);
+			if	(pe.status == PINVALID)
+				break;
+			if	(pe.status == PFREE)
+				continue;
+			op = dMonitor attachObject(pe.mainObject,
+				ref far debugger(I386Debugger.objectId));
+			if	(op){
+				objects = new objectProbeList[ objects, 
+							op, pe.mainObject ];
+				printf("Debugging: %d with %d\n", 
+							pe.mainObject, op);
+				objects->thisProbe suspend();
+				}
+			}
+		}
+	else	{
+		debugObject = 0;
+		dMonitor = 0;
+		targetArena = 0;
+		objects = 0;
+		memSet(&state, 0, sizeof state);
+		}
+	}
+
+displayState:	dynamic	(w: ref frob) paddr_t =
+	{
+	if	(objects){
+		state = objects->thisProbe machineState();
+		state.idt = 17;
+		}
+	displayTask(w, &state);
+//	disassemble(&stdout, state.eip, state.eip, TRUE);
+	return state.eip;
+	}
+
+fetchData:	dynamic	(addr: paddr_t, len: paddr_t) [:] byte =
+	{
+	dp:	[:] byte;
+
+	dp = data;
+	||dp = len;
+	dp [:]= targetArena readData(addr);
+	return dp;
+	}
+
+fetchPointer:	dynamic	(addr: paddr_t) paddr_t =
+	{
+	x:	paddr_t;
+	dp:	[:] byte;
+
+	x = ~0;
+	dp = ref byte(&x)[:sizeof paddr_t];
+	dp [:]= targetArena readData(addr);
+	return x;
+	}
+
+fetchTask:	dynamic	() ref task_t =
+	{
+	if	(objects)
+		state = objects->thisProbe machineState();
+	return &state;
+	}
+
+codeBuffer:	dynamic	() ref instructionBuffer =
+	{
+	if	(Disassembler == 0)
+		Disassembler = new disassembler[];
+	return Disassembler;
+	}
+
+getDataLength:	dynamic	() paddr_t =
+	{
+	return 0;
+	}
+
+	};
+
+objectProbeList:	type	{
+	public:
+
+	next:		ref objectProbeList;
+	thisProbe:	ref far objectProbe;
+	thisObject:	ref far External;
+	};
+
+I386Debugger:	inherit debugger {
+	public:
+
+step:		gate	(ref far objectProbe, state: task_t) =
+	{
+	}
+
+startDebugging:	gate	(ref far objectProbe, state: task_t) =
+	{
+	}
+
+dead:		gate	(ref far objectProbe, exitCOde: int, state: task_t) =
+	{
+	}
+
+breakpoint:	gate	(ref far objectProbe, state: task_t) =
+	{
+	}
+
+	};
+
+displayTask:	public	(w: ref frob, t: ref task_t) =
+	{
+	lab:	static	[] ref char = [
+		"Divide error",
+		"Debug Exception",
+		"- 2 -",
+		"Unexpected breakpoint",
+		"Overflow instruction",
+		"Bounds check",
+		"Invalid opcode",
+		"Coprocessor trap",
+		"Double fault",
+		"Coprocessor segment overrun",
+		"Invalid TSS",
+		"Segment not present",
+		"Stack segment fault",
+		"General protection fault",
+		"Page fault",
+		"- 15 -",
+		"Coprocessor error",
+		"Suspended",
+		];
+	buf:	[80] char;
+	se:	stringEmitter = [ buf ];
+
+	switch	(t->state){
+	case	TS_EXCEPTION:
+		sym:	ref symbol;
+
+		se printf("Uncaught exception at %08x", t->eip);
+
+			// Find the trap
+
+		sym = Symbols findSymbol(t->esi, FALSE);
+		if	(sym){
+			se printf(": ");
+			sym format(&se, t->esi);
+			}
+		break;
+
+	case	TS_INTERRUPT:
+		se printf("Interrupted at %08x", t->eip);
+		break;
+
+	case	TS_RUN:
+		se printf("Stopped at %08x", t->eip);
+		break;
+
+	case	TS_ABORT:
+		se printf("%s at %08x", lab[t->idt], t->eip);
+		switch	(t->idt){
+		case	0x0e:
+			if	(t->pageTable0 & 4)
+				se printf(": user");
+			else
+				se printf(": kernel");
+			if	(t->pfaultSeg)
+				se printf(" data");
+			else
+				se printf(" code");
+			if	(t->pageTable0 & 2)
+				se printf(" write");
+			else
+				se printf(" read");
+			if	(t->pageTable0 & 1)
+				se printf(" protection error");
+			else
+				se printf(" not present error");
+			se printf(" at %x", t->backlink);
+			break;
+
+		case	0x08:
+		case	0x0a:
+		case	0x0b:
+		case	0x0c:
+			if	(t->pageTable0 & 2)
+				se printf(": bad IDT vector 0x%x", 
+							t->pageTable0 >> 3);
+			else if	(t->pageTable0 & 4)
+				se printf(": bad LDT selector 0x%04x", 
+							t->pageTable0 & ~3);
+			else if	(t->pageTable0 & ~7)
+				se printf(": bad GDT selector 0x%04x", 
+							t->pageTable0 & ~3);
+			else
+				se printf(": NULL selector");
+			if	(t->pageTable0 & 1)
+				se printf(" in a nested interrupt");
+			}
+		}
+	w rectangle([ [ 1, 2 ], [ w->box.size.x - 2, 1 ] ], C_BLACK);
+	w printf([ 1, 2 ], C_READONLY, se result());
+	se = [ buf ];
+	se printf("  eax %08x ebx %08x ecx %08x edx %08x", 
+				t->eax, t->ebx, t->ecx, t->edx);
+	w printf([ 1, 3 ], C_READONLY, se result());
+	se = [ buf ];
+	se printf("  esp %08x ebp %08x esi %08x edi %08x", 
+				t->esp, t->ebp, t->esi, t->edi);
+	w printf([ 1, 4 ], C_READONLY, se result());
+	if	(t->ds != 0x000f ||
+		 t->es != 0x000f ||
+		 t->fs != 0x000f ||
+		 t->gs != 0x000f){
+		se = [ buf ];
+		se printf("   ds     %04x  es     %04x  fs     %04x  gs     %04x",
+						t->ds, t->es, t->fs, t->gs);
+		w printf([ 1, 5 ], C_READONLY, se result());
+		}
+	else
+		w rectangle([ [ 1, 5 ], [ w->box.size.x - 2, 1 ] ], C_BLACK);
+	se = [ buf ];
+	if	(t->eflags & 1)
+		se printf("CY ");
+	else
+		se printf("NC ");
+	if	(t->eflags & 4)
+		se printf("PA ");
+	else
+		se printf("NP ");
+	if	(t->eflags & 0x10)
+		se printf("AC ");
+	else
+		se printf("NA ");
+	if	(t->eflags & 0x40)
+		se printf("ZF ");
+	else
+		se printf("NZ ");
+	if	(t->eflags & 0x80)
+		se printf("SG ");
+	else
+		se printf("NS ");
+	if	(t->eflags & 0x100)
+		se printf("TF ");
+	else
+		se printf("NT ");
+	if	(t->eflags & 0x200)
+		se printf("IE ");
+	else
+		se printf("NI ");
+	if	(t->eflags & 0x400)
+		se printf("DN ");
+	else
+		se printf("UP ");
+	if	(t->eflags & 0x800)
+		se printf("OV ");
+	else
+		se printf("NO ");
+	if	(t->eflags & 0x4000)
+		se printf("NT ");
+	else
+		se printf("   ");
+	if	(t->eflags & 0x10000)
+		se printf("RF ");
+	else
+		se printf("   ");
+	if	(t->eflags & VM)
+		se printf("VM ");
+	else
+		se printf("   ");
+	se printf("iopl = %x", t->eflags >> 12 & 3);
+	w printf([ 1, 6 ], C_READONLY, se result());
+	}
+
+RING:		const	int = 3;
+USER_RING:	const	int = 3;
+
+VM:	const	unsigned = 0x20000;		// v8086 mode

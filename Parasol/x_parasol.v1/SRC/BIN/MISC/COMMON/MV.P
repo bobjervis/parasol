@@ -1,0 +1,139 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+include	filesys;
+include	error;
+include	alys;
+/*
+		Renames a file, including moving to a different
+		directory.
+ */
+VerboseCopy:	boolean = FALSE;
+
+main:	entry	() =
+	{
+	dst:	[:] char;
+	src:	[:] char;
+	args:	ref [:] char;
+	sCount:	int;
+	i:	int;
+	fs:	file_t;
+
+	if	(|commandLine.arguments == 0)
+		usage();
+	while	(|commandLine.arguments > 0){
+		src = commandLine.arguments[0];
+		if	(|src == 0 ||
+			 src[0] != '-')
+			break;
+		commandLine shiftArguments();
+		if	(|src == 1){
+			printf("Unknown argument: %S\n", src);
+			usage();
+			}
+		switch	(src[1]){
+		case	'v':
+			VerboseCopy = TRUE;
+			break;
+
+		default:
+			printf("Unknown argument: %S\n", src);
+			usage();
+			}
+		if	(|commandLine.arguments == 0){
+			printf("No filenames given\n");
+			usage();
+			}
+		}
+	if	(|commandLine.arguments == 1){
+		args = &src;
+		moveToDirectory(args, 1, ".");
+		}
+	else	{
+		sCount = |commandLine.arguments - 1;
+		dst = commandLine.arguments[sCount];
+		fs = FileSystem stat(dst);
+		if	(fs.id != -1 &&
+			 fs.attributes & FA_DIR)
+			moveToDirectory(commandLine.arguments, sCount, dst);
+		else if	(sCount == 1){
+			i = moveFile(src, dst);
+			if	(i){
+				if	(!VerboseCopy)
+					printf("Move '%S' to '%S' ", 
+							src, dst);
+				printf("failed: %S\n", cmdError(i));
+				}
+			}
+		else
+			usage();
+		}
+	exit(EX_SUCCESS);
+	}
+
+moveToDirectory:	(srcs: ref [:] char, count: int, dest: [:] char) =
+	{
+	destpath:	[MAXPATH] char;
+	dir:		[:] char;
+	pattern:	[:] char;
+	i:		int;
+	j:		int;
+	ff:		finder;
+	fcount:		int;
+
+	for	(i = 0; i < count; i++){
+		dir = getDirectory(srcs[i]);
+		pattern = stripDirectory(srcs[i]);
+		j = ff open(dir, pattern, 0);
+		if	(j != SUCCESS){
+			printf("Could not find %S: %S\n", srcs[i], cmdError(j));
+			continue;
+			}
+		fcount = 0;
+		while	(ff next() == SUCCESS){
+			dfile:	[:] char;
+
+			dfile = stripDirectory(ff.pathname);
+			dfile = makePath(destpath, dest, dfile, "");
+			i = moveFile(ff.pathname, dfile);
+			if	(i){
+				if	(!VerboseCopy)
+					printf("Move '%S' to '%S' ", 
+							ff.pathname, dfile);
+				printf("failed: %S\n", cmdError(i));
+				}
+			fcount = 1;
+			}
+		if	(fcount == 0)
+			printf("Could not move %S to %S: %S\n",
+					srcs[i], dest, 
+					cmdError(ERRNOFILE));
+		}
+	}
+
+moveFile:	(src: [:] char, dest: [:] char) int =
+	{
+	i:	int;
+
+	if	(VerboseCopy)
+		printf("Copy '%S' to '%S' ... ", src, dest);
+	FileSystem unlink(dest);
+	return FileSystem move(src, dest);
+	}
+
+usage:	() =
+	{
+	printf( "Use is: mv [ -v ] src_file dest_file\n"
+		"\tmv [ -v ] src_file(s) dest_directory\n"
+		"\tmv [ -v ] src_file\n\n"
+		"\t\t-v\tDisplay file names as they are moved\n\n"
+		"Note: when there is only a source file given,"
+				" the implied destination is .\n");
+	exit(1);
+	}
+

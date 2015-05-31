@@ -1,0 +1,2440 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file, string;
+include	hash;
+include	scanner;
+include	errmsg;
+include	sbuffer;
+include	ptree;
+include	backend;
+include	tparams;
+
+include	symtab, types, functype;
+
+sourceParser:	public	type	inherit	tokenStream {
+	Curctx:			ref cntxt;
+	Curswitch:		ref switchCases;
+	DefaultCase:		ref label_x;
+	StatementList:		ref stmt_x;
+
+	public:
+
+create:	factory	(fname: [:] char, c: ref messageContext) ref sourceParser =
+	{
+	self = alloc(sizeof sourceParser);
+	self = [ fname ];
+	if	(isNew()){
+		delete self;
+		c clear();
+		c errorX("ErrOpen", fname, "", 0);
+		return 0;
+		}
+	errorContext = c;
+	return self;
+	}
+
+parseUnit:	(phase: byte, uname: ref identifier) ref unit_p =
+	{
+	offset:		int;
+	id:		ref identifier;
+	u:		ref unit_p;
+
+	errorContext->phase = phase;
+	u = unit_p create(uname, self);
+	if	(self == 0)
+		return u;
+	openRange([ 0, BUF_SEEK_END ]);
+	CurrentUnit = u;
+	if	(uname isSpelled("machine"))
+		BuildMachine = 1;
+	else	{
+		u includeUnit(hash("machine"), NO_LINE);
+		BuildMachine = 0;
+		}
+	for	(;;){
+		scan();
+		errorContext->offset = Token.offset;
+		switch	(Token.lex){
+		case	EOF_TOK:
+//			u display();
+			return u;
+
+		case	RC:
+			errorContext error("ErrDeclarationSyntax");
+			break;
+
+		case	SM:
+			break;
+
+		case	INCLUDE:
+			for	(;;){
+				if	(scan() != ID){
+					resync("ErrIncludeSyntax");
+					break;
+					}
+				name:	ref identifier;
+				offset:	int;
+
+				name = Token.iden;
+				errorContext->offset = Token.offset;
+				if	(scan() != SM && Token.lex != CM){
+					resync("ErrIncludeSyntax");
+					break;
+					}
+				u includeUnit(name, errorContext->offset);
+				if	(Token.lex == SM)
+					break;
+				}
+			break;
+
+		case	ID:
+			d:	ref declaration_p;
+
+			d = declaration_p create(Token.offset, V_PRIVATE, 
+								SC_STATIC);
+			u addDecl(d);
+			if	(parseIdList(u, d))
+				parseDeclarator(d, PX_FILE);
+			break;
+
+		default:
+			resync("ErrDeclarationSyntax");
+			}
+		}
+	}
+
+parseFunctionBody:	public	(source: textRange) ref stmt_x =
+	{
+	clearLoops();
+	openRange(source);
+	Curctx = 0;
+	scan();					// skip the LC token
+	return parseBlock();
+	}
+
+parseWholeExpression:	(r: textRange) ref tree_p =
+	{
+	openRange(r);
+	scan();
+	return parseExpression(0, 0, 0, XC_NORMAL);
+	}
+
+private:
+
+parseIdList:	(s: ref scope_p, d: ref declaration_p) boolean =
+	{
+	for	(;;){
+		n:	ref name_p;
+
+		errorContext->offset = Token.offset;
+		n = d addName(Token.iden, Token.offset);
+		if	(s)
+			s checkForDuplicates(n);
+		scan();
+		if	(Token.lex == CO)
+			return TRUE;
+		else if	(Token.lex == CM &&
+			 scan() == ID)
+			continue;
+		else	{
+			resync("ErrDeclarationSyntax");
+			return FALSE;
+			}
+		}
+	}
+
+parseDeclarator:	(d: ref declaration_p, context: parseContexts) = 
+	{
+	switch	(scan()){
+	case	PUBLIC:
+		if	(context == PX_FUNCTION)
+			errorContext error("ErrPublic");
+		d->visibility = V_PUBLIC;
+		break;
+
+	case	VISIBLE:
+		if	(context != PX_MEMBER)
+			errorContext errorX("ErrStructOnly", "visible", "", 0);
+		d->visibility = V_VISIBLE;
+		break;
+
+	case	PRIVATE:
+		if	(context != PX_MEMBER)
+			errorContext errorX("ErrStructOnly", "private", "", 0);
+		d->visibility = V_PRIVATE;
+		break;
+
+	default:
+		unscan();
+		}
+	d->qualifier = parseQualifiers();
+	if	(context != PX_MEMBER &&
+		 d->qualifier & DQ_DYNAMIC)
+		errorContext errorX("ErrStructOnly", "dynamic", "", 0);
+	if	(d->qualifier & DQ_CONST)
+		d->storageClass = SC_STATIC;
+	switch	(scan()){
+	case	ENTRY:
+		if	(context != PX_FILE)
+			errorContext errorX("ErrMisplacedToken", "entry", "", 0);
+		else
+			d->qualifier |= DQ_ENTRY;
+		break;
+
+	case	CLEANUP:
+		if	(context != PX_FILE)
+			errorContext errorX("ErrMisplacedToken", "cleanup", "", 0);
+		else
+			d->qualifier |= DQ_CLEANUP;
+		break;
+
+	case	REMOTE:
+		if	(context != PX_MEMBER)
+			errorContext errorX("ErrMisplacedToken", "remote", "", 0);
+		else
+			d->storageClass = SC_REMOTE;
+		break;
+
+	case	FACTORY:
+		if	(context != PX_MEMBER)
+			errorContext errorX("ErrMisplacedToken", "factory", "", 0);
+		else	{
+			d->storageClass = SC_STATIC;
+			d->qualifier |= DQ_FACTORY|DQ_MEMBERFUNC;
+			}
+		break;
+
+	case	EXTERN:
+		d->storageClass = SC_EXTERN;
+		break;
+
+	case	STATIC:
+		d->storageClass = SC_STATIC;
+		break;
+
+	case	TYPE:
+		d->storageClass = SC_TYPE;
+		break;
+
+	case	REGISTER:
+		if	(context != PX_FILE)
+			errorContext error("ErrRegister");
+		d->storageClass = SC_REGISTER;
+		break;
+
+	default:
+		unscan();
+		}
+	if	(scan() == DOT){
+		if	(scan() != ID){
+			resync("ErrDeclarationSyntax");
+			return;
+			}
+		d->location = Token.iden;
+		}
+	else
+		unscan();
+	d->dtype = parseType();
+	if	(d->dtype == 0)
+		return;
+
+	b:	balancedDescriptor;
+
+	if	(d->dtype->topType == T_FUNC){
+
+			// Functions inside structures have static storage
+			// class by default
+
+		if	(d->storageClass == SC_MEMBER){
+			d->storageClass = SC_STATIC;
+			d->qualifier |= DQ_MEMBERFUNC;
+			}
+		else if	(d->storageClass == SC_EXTERN){
+			ft:	ref function_z;
+
+			ft = ref function_z(d->dtype);
+			if	(ft->callingConvention == FC_NORMAL)
+				ft->callingConvention = FC_C;
+			}
+		}
+	if	(scan() == ASG){
+		if	(d->idList &&
+			 d->idList->next != 0){
+			resync("ErrInitDisallowed");
+			d flagError();
+			return;
+			}
+		switch	(d->storageClass){
+		case	SC_TYPE:
+			parseEnumeration(d);
+			break;
+
+		case	SC_REGISTER:
+			if	(scan() != MAGIC ||
+				 scan() != SM){
+				resync("ErrDeclarationSyntax");
+				d flagError();
+				return;
+				}
+			d->initBase = Token.icon;
+			break;
+
+		case	SC_AUTO:
+			d->initializer.start = tell();
+			unscan();
+			balanced(XC_NORMAL, &b);
+			d->initializer.end = b.source.end;
+			d->dtype commaCount(b.commaCount);
+			if	(Token.lex != SM)
+				resync("ErrDeclarationSyntax");
+			break;
+
+		case	SC_REMOTE:
+			d->initializer.start = tell();
+			balanced(XC_NORMAL, &b);
+			if	(b.singleConstant){
+				d->initializer.start = 0;
+				d->initBase = b.value;
+				}
+			else
+				d->initializer.end = b.source.end;
+			if	(Token.lex != SM)
+				resync("ErrDeclarationSyntax");
+			break;
+
+		default:
+			d->initializer.start = tell();
+			if	(scan() == MAGIC){
+				d->storageClass = SC_INTRINSIC;
+				d->initializer.start = 0;
+				d->initBase = Token.icon;
+				if	(scan() != SM)
+					resync("ErrDeclarationSyntax");
+				}
+			else if	(Token.lex == LC){
+				unscan();
+				balanced(XC_NORMAL, &b);
+				d->initializer.end = b.source.end;
+				}
+			else	{
+				unscan();
+				balanced(XC_NORMAL, &b);
+				if	(b.singleConstant){
+					d->initializer.start = 0;
+					d->initBase = b.value;
+					}
+				else
+					d->initializer.end = b.source.end;
+				d->dtype commaCount(b.commaCount);
+				if	(d->dtype->topType == T_FUNC)
+					d->storageClass = SC_ALIAS;
+				if	(Token.lex != SM)
+					resync("ErrDeclarationSyntax");
+				}
+			}
+		}
+	else if	(Token.lex != SM){
+		resync("ErrDeclarationSyntax");
+		return;
+		}
+	else	{
+		if	(d->dtype->topType == T_FUNC){
+			if	(context == PX_FUNCTION &&
+				 d->storageClass != SC_EXTERN){
+				errorContext errorX("ErrMisplacedToken", 
+						"function definition", "", 0);
+				return;
+				}
+			}
+//		if	(d->qualifier & DQ_DYNAMIC == 0)
+//			errorContext errorX("ErrDefinitionNeeded", ???, "", 0);
+		}
+/*
+	d:		* type_p;
+	sym:		* symbol;
+	symOffset:	addr_t;
+	i:		int;
+
+
+	if	(d->dtype->topType == LP){
+		if	(d->storageClass != SC_INTRINSIC &&
+			 d->storageClass != SC_REMOTE){
+			if	(s2 == 0){
+				errorContext errorX("ErrDefinitionNeeded", 
+						&d->idList->name->spelling, "", 0);
+				return;
+				}
+			if	(d->storageClass == SC_DYNAMIC)
+				flags |= SY_DYNAMIC;
+			d->storageClass = SC_STATIC;
+			if	(context == PX_MEMBER)
+				flags |= SY_MFUNC;
+			}
+		}
+	else	{
+		if	(d->qualifier & DQ_DYNAMIC){
+			errorContext error("ErrDynamicNotFunc");
+			d->qualifier &= ~DQ_DYNAMIC;
+			}
+		}
+ */
+	}
+
+parseQualifiers:	() dQualifiers =
+	{
+	q:	dQualifiers;
+
+	q = 0;
+	for	(;;){
+		switch	(scan()){
+		case	CONST:
+			if	(q & DQ_CONST)
+				errorContext errorX("ErrMisplacedToken", "const", "", 0);
+			q |= DQ_CONST;
+			break;
+
+		case	VOLATILE:
+			if	(q & DQ_VOLATILE)
+				errorContext errorX("ErrMisplacedToken", "volatile", "", 0);
+			q |= DQ_VOLATILE;
+			break;
+
+		case	DYNAMIC:
+			if	(q & DQ_DYNAMIC)
+				errorContext errorX("ErrMisplacedToken", "dynamic", "", 0);
+			q |= DQ_DYNAMIC;
+			break;
+
+		case	FAR:
+			if	(q & DQ_FAR)
+				errorContext errorX("ErrMisplacedToken", "far", "", 0);
+			q |= DQ_FAR;
+			break;
+
+		default:
+			unscan();
+			return q;
+			}
+		}
+	}
+
+parseEnumeration:	(d: ref declaration_p) =
+	{
+	source:		textRange;
+	x:		int;
+	v:		visibilities;
+	locv:		visibilities;
+	id:		ref identifier;
+	b:		balancedDescriptor;
+	dt:		ref type_p;
+
+	if	(scan() != LC){
+		resync("ErrDeclarationSyntax");
+		return;
+		}
+	b.source = NO_RANGE;
+	x = 0;
+	v = d->visibility;
+	if	(d->idList)
+		dt = namedType_p create(d->idList->name, d->idList->offset);
+	else
+		dt = 0;
+	while	(scan() != RC && Token.lex != 0){
+		if	(Token.lex == PUBLIC){
+			locv = V_PUBLIC;
+			scan();
+			if	(Token.lex == CO){
+				v = V_PUBLIC;
+				scan();
+				}
+			}
+		else if	(Token.lex == PRIVATE){
+			locv = V_PRIVATE;
+			scan();
+			if	(Token.lex == CO){
+				v = V_PRIVATE;
+				scan();
+				}
+			}
+		else
+			locv = v;
+		if	(Token.lex != ID)
+			break;
+		id = Token.iden;
+
+		offset:	int;
+
+		offset = Token.offset;
+		scan();
+		if	(Token.lex == ASG){
+			b.source.start = tell();
+			balanced(XC_ENUM, &b);
+			if	(b.singleConstant){
+				x = b.value;
+				b.source = NO_RANGE;
+				}
+			else
+				x = 0;
+			}
+
+		sym:	ref declaration_p;
+
+		sym = declaration_p create(offset, locv, SC_STATIC);
+		CurrentUnit addDecl(sym);
+		errorContext->offset = offset;
+		if	(!CurrentUnit isDuplicated(id))
+			sym addName(id, offset);
+		sym->dtype = dt;
+		sym->qualifier = DQ_CONST;
+		sym->initializer = b.source;
+		sym->initBase = x;
+		x++;
+		if	(Token.lex != CM)
+			break;
+		}
+	if	(Token.lex != RC){
+		resync("ErrEnumerationSyntax");
+		return;
+		}
+	scan();
+	if	(Token.lex != SM)
+		resync("ErrEnumerationSyntax");
+	}
+
+/*
+	FUNCTION:	parseType()
+
+	DESCRIPTION:
+
+		This function parses a type-specifier.
+
+	OUTPUTS:
+
+		The resulting type is returned.  A return value of 0 indicates
+		some sort of parsing error.
+
+		The next token scanned will be the first token of the type.
+		The scan point is left with
+		Token.lex containing the last token of the type-specifier.
+ */
+parseType:	() ref type_p =
+	{
+	callingConvention:	fConventions;
+	packflag:		packingMethods;
+	d:			ref type_p;
+	b:			balancedDescriptor;
+	offs:			fileOffset;
+	id:			ref identifier;
+
+	packflag = PM_STRUCT;
+	callingConvention = FC_NORMAL;
+	scan();
+	errorContext->offset = Token.offset;
+	switch	(Token.lex){
+	case	INHERIT:
+		d = parseType();
+		if	(d == 0)
+			return 0;
+		if	(scan() == PACKED){
+			packflag = PM_PACKED;
+			scan();
+			}
+		if	(Token.lex != LC){
+			resync("ErrSubtypeSyntax");
+			return 0;
+			}
+		return parseStructure(d, packflag);
+
+	case	PACKED:
+		packflag = PM_PACKED;
+		if	(scan() != LC){
+			resync("ErrDeclarationSyntax");
+			return 0;
+			}
+
+	case	LC:
+		return parseStructure(0, packflag);
+
+	case	UNION:
+		if	(scan() != LC){
+			resync("ErrDeclarationSyntax");
+			return 0;
+			}
+		return parseStructure(0, PM_UNION);
+
+	case	ID:
+		id = Token.iden;
+		offs = Token.offset;
+		if	(scan() == QUAL){
+			if	(scan() != ID){
+				resync("ErrDeclarationSyntax");
+				return 0;
+				}
+			return namedType_p create(Token.iden, Token.offset);
+			}
+		else	{
+			unscan();
+			return namedType_p create(id, offs);
+			}
+
+	case	SIGNED:
+	case	UNSIGNED:
+	case	FLOAT:
+		sv:	int;
+		tt:	topTypes;
+
+		b.source = NO_RANGE;
+		if	(Token.lex == FLOAT){
+			sv = FLOATBITS;
+			tt = T_FLOAT;
+			}
+		else	{
+			sv = INTBITS;
+			if	(Token.lex == SIGNED)
+				tt = T_SIGNED;
+			else
+				tt = T_UNSIGNED;
+			}
+		if	(scan() == LB){
+			b.source.start = tell();
+			balanced(XC_NORMAL, &b);
+			if	(b.singleConstant){
+				b.source = NO_RANGE;
+				sv = b.value;
+				}
+			if	(Token.lex != RB){
+				resync("ErrArraySyntax");
+				return 0;
+				}
+			}
+		else
+			unscan();
+		return numberType_p create(tt, b.source, sv);
+
+	case	REF:
+	case	LINK:
+//	case	MUL:
+		pToken:	boolean;
+		q:	dQualifiers;
+
+		pToken = Token.lex == LINK;
+		q = parseQualifiers();
+		d = parseType();
+		if	(d == 0)
+			return 0;
+		return ptrType_p create(pToken, d, q);
+
+	case	POINTER:
+		q = parseQualifiers();
+		d = voidType_p create();
+		return ptrType_p create(REF, d, q);
+
+	case	LANGUAGE:
+	case	INLINE:
+	case	GATE:
+	case	INTERRUPT:
+		if	(Token.lex == GATE){
+			callingConvention = FC_GATE;
+			if	(scan() != NOT)
+				unscan();
+			}
+		else if	(Token.lex == INLINE)
+			callingConvention = FC_INLINE;
+		else if	(Token.lex == LANGUAGE){
+			setScanMode(FALSE);
+			scan();
+			setScanMode(TRUE);
+			if	(Token.lex != STRING){
+				setScanMode(TRUE);
+				resync("ErrDeclarationSyntax");
+				return 0;
+				}
+
+			s:	[:] char;
+
+			s = Accum[:Token.stringLength];
+			if	(stringCompare(s, "C") == 0)
+				callingConvention = FC_C;
+			}
+		else	{
+			if	(scan() != NOT){
+				unscan();
+				callingConvention = FC_INTERRUPT;
+				}
+			else
+				callingConvention = FC_INTERRUPT2;
+			}
+		if	(scan() != LP){
+			resync("ErrDeclarationSyntax");
+			return 0;
+			}
+
+	case	LP:
+		func:	ref functionType_p;
+
+		func = functionType_p create(callingConvention);
+		if	(!parseFunctionParameters(func))
+			return 0;
+		scan();				// Look ahead to next token
+		unscan();			// but don't read it.
+		if	(isTypeToken(Token.lex)){
+			d = parseType();
+			if	(d == 0)
+				return 0;
+			if	(d->topType == T_FUNC){	// function
+				badtype();
+				break;
+				}
+			}
+		else
+			d = voidType_p create();
+		func->returnType = d;
+		return func;
+
+	case	LB:
+		vArray:		topTypes;
+
+		b.source.start = tell();
+		b.value = 0;
+		if	(scan() == CO){
+			scan();
+			vArray = T_DESCRIPTOR;
+			}
+		else
+			vArray = T_ARRAY;
+		if	(Token.lex != RB){
+			unscan();
+			balanced(XC_NORMAL, &b);
+			if	(b.singleConstant)
+				b.source = NO_RANGE;
+			if	(Token.lex != RB){
+				resync("ErrArraySyntax");
+				return 0;
+				}
+			}
+		else
+			b.source = NO_RANGE;
+		d = parseType();
+		if	(d == 0)
+			return 0;
+		if	(d->topType == T_FUNC)		// function
+			badtype();
+		return arrayType_p create(vArray, b.source, b.value, d);
+
+	default:
+		resync("ErrDeclarationSyntax");
+		return 0;
+		}
+	}
+
+parseStructure:	(par: ref type_p, packflag: packingMethods) ref type_p =
+	{
+	ds:	ref structType_p;
+	v:	visibilities;
+
+	ds = structType_p create(par, packflag);
+	v = V_PRIVATE;
+	while	(scan() != RC && Token.lex != 0){
+		if	(Token.lex == PUBLIC){
+			v = V_PUBLIC;
+			if	(scan() != CO){
+				resync("ErrDeclarationSyntax");
+				continue;
+				}
+			scan();
+			}
+		else if	(Token.lex == PRIVATE){
+			v = V_PRIVATE;
+			if	(scan() != CO){
+				resync("ErrDeclarationSyntax");
+				continue;
+				}
+			scan();
+			}
+		else if	(Token.lex == VISIBLE){
+			v = V_VISIBLE;
+			if	(scan() != CO){
+				resync("ErrDeclarationSyntax");
+				continue;
+				}
+			scan();
+			}
+
+		d:	ref declaration_p;
+
+		d = declaration_p create(Token.offset, v, SC_MEMBER);
+		ds addDecl(d);
+		if	(Token.lex == ID){
+			scan();
+			if	(Token.lex == CO ||
+				 Token.lex == CM){
+				unscan();
+				parseMember(ds, d);
+				}
+			else if	(Token.lex == QUAL)
+				resync("ErrUnfinished");
+			else if	(Token.lex == SM)
+				d->dtype = namedType_p create(Token.iden, 
+								Token.offset);
+			else
+				resync("ErrDeclarationSyntax");
+			}
+		else	{
+			unscan();
+			d->dtype = parseType();
+			if	(d->dtype == 0)
+				continue;
+			if	(scan() != SM)
+				resync("ErrDeclarationSyntax");
+			}
+		}
+	return ds;
+	}
+
+parseMember:	(ds: ref structType_p, d: ref declaration_p) =
+	{
+	if	(parseIdList(ds, d))
+		parseDeclarator(d, PX_MEMBER);
+	}
+
+parseFunctionParameters:	(func: ref functionType_p) boolean =
+	{
+	p:		ref parameter_p;
+	id:		ref identifier;
+	d:		ref type_p;
+	i:		int;
+
+       	if	(scan() == RP)
+		return TRUE;
+	p = 0;
+	for	(;;){
+		if	(Token.lex == ELLIPSIS){
+			scan();
+			func->fixedCalls = FALSE;
+			break;
+			}
+		if	(Token.lex == ID){
+			id = Token.iden;
+			i = Token.offset;
+			if	(scan() == QUAL){
+				resync("ErrUnfinished");
+				return FALSE;
+				}
+			if	(Token.lex != CO){
+				unscan();
+				d = namedType_p create(id, i);
+				id = 0;
+				}
+			else
+				d = parseType();
+			}
+		else	{
+			id = 0;
+			i = 0;
+			unscan();
+			d = parseType();
+			}
+		if	(d == 0)
+			return FALSE;
+		p = parameter_p create(p, id, i, d);
+		if	(scan() != CM)
+			break;
+		scan();
+		}
+	if	(Token.lex == RP){
+		func->parameters = p;
+		return TRUE;
+		}
+	resync("ErrDeclarationSyntax");
+	return FALSE;
+	}
+
+badtype:	() =
+	{
+	errorContext error("ErrBadType");
+	}
+
+balancedDescriptor:	type	{
+	public:
+
+	source:		textRange;
+	commaCount:	int;
+	singleConstant:	boolean;
+	value:		long;
+	};
+
+balanced:	(context: expressionContexts, 
+			b: ref balancedDescriptor) =
+	{
+	t:	int;
+
+	setScanMode(FALSE);
+	b->singleConstant = FALSE;
+	for	(t = 0;; t++){
+		switch	(scan()){
+		case	CM:
+			if	(context == XC_ENUM){
+				if	(t != 1)
+					b->singleConstant = FALSE;
+				b->source.end = Token.offset;
+				setScanMode(TRUE);
+				return;
+				}
+			break;
+
+		case	CO:
+			if	(context == XC_QUESCO){
+				if	(t != 1)
+					b->singleConstant = FALSE;
+				b->source.end = Token.offset;
+				setScanMode(TRUE);
+				return;
+				}
+			break;
+
+		case	LC:
+			parenthetical(RC);
+
+		case	EOF_TOK:
+		case	SM:
+		case	RP:
+		case	RB:
+		case	RC:
+			if	(t != 1)
+				b->singleConstant = FALSE;
+			b->source.end = tell();
+			setScanMode(TRUE);
+			return;
+
+		case	LP:
+			parenthetical(RP);
+			break;
+
+		case	LB:
+			cc:	int;
+
+			cc = parenthetical(RB);
+			if	(t == 0)
+				b->commaCount = cc;
+			break;
+
+		case	STRING:
+			if	(t == 0){
+				b->commaCount = Token.stringLength - 1;
+				while	(scan() == STRING)
+					b->commaCount += Token.stringLength;
+				unscan();
+				}
+			break;
+
+		case	ICON:
+			b->singleConstant = TRUE;
+			b->value = Token.icon;
+			}
+		}
+	}
+
+parenthetical:	(terminator: tokenNames) int =
+	{
+	cc:	int;
+
+	for	(cc = 0;;){
+		switch	(scan()){
+		case	EOF_TOK:
+			return cc;
+
+		case	LP:
+			parenthetical(RP);
+			break;
+
+		case	CM:
+
+				/*
+					Since an extra comma can appear 
+					before a right bracket, it should
+					not be counted.
+				 */
+
+			if	(terminator == RB){
+				if	(scan() == RB)
+					return cc;
+				unscan();
+				}
+			cc++;
+			break;
+
+		case	LB:
+			parenthetical(RB);
+			break;
+
+		case	LC:
+			parenthetical(RC);
+			break;
+
+		case	RC:
+			if	(terminator != RC)
+				unscan();
+			return cc;
+
+		default:
+			if	(Token.lex == terminator)
+				return cc;
+			}
+		}
+	}
+
+isTypeToken:	(tok: tokenNames) boolean =
+	{
+	switch	(tok){
+	case	LP:
+	case	LB:
+	case	LC:
+	case	MUL:
+	case	REF:
+	case	UNION:
+	case	INHERIT:
+	case	PACKED:
+	case	UNSIGNED:
+	case	SIGNED:
+	case	FLOAT:
+	case	POINTER:
+	case	ID:
+		return TRUE;
+		}
+	return FALSE;
+	}
+
+parseBlock:	() ref stmt_x =
+	{
+	x:	ref stmt_x;
+	y:	ref stmt_x;
+
+	x = StatementList;
+	StatementList = 0;
+	while	(scan() != RC && Token.lex != 0){
+		unscan();
+		parseStatement();
+		}
+	if	(Token.lex != RC)
+		errorContext error("ErrBlockMissingRC");
+	y = Func block(StatementList);
+	StatementList = x;
+	return y;
+	}
+
+post:	(x: ref stmt_x) =
+	{
+	if	(x == 0)
+		return;
+	if	(StatementList == 0)
+		StatementList = x;
+	else	{
+		y:	ref stmt_x;
+
+		y = StatementList->prev;
+		y->next = x;
+		x->prev = y;
+		}
+	while	(x->next)
+		x = x->next;
+	StatementList->prev = x;
+	}
+
+parseStatement:	() =
+	{
+	saveDefault:		ref tree_p;
+	p:			ref stmt_x;
+	q:			ref tree_p;
+	stest:			ref tree_p;
+	sincr:			ref tree_p;
+	stmt:			ref char;
+	lastCase:		ref switchCases;
+	saveCases:		ref switchCases;
+	sc:			ref switchCases;
+	t:			ref tree_p;
+	s:			ref tree_p;
+	x:			ref tree_p;
+	r:			int;
+	li:			int;
+	i:			int;
+	cxp:			ref cntxt;
+	offset:			fileOffset;
+	start_offset:		fileOffset;
+	end_offset:		fileOffset;
+	iden:			ref identifier;
+
+	for	(;;){
+		iden = 0;
+		scan();
+		errorContext->offset = Token.offset;
+		offset = Token.offset;
+		saveCases = Curswitch;
+		saveDefault = DefaultCase;
+		switch	(Token.lex){
+		case	CASE:
+			scan();
+			t = parseExpression(0, 0, 0, XC_QUESCO);
+			if	(t == 0){
+				post(Func errorStmt(offset));
+				return;
+				}
+			else if	(Token.lex != CO)
+				errorContext error("ErrCaseSyntax");
+			else if	(Curctx == 0 ||
+				 (Curctx->x_statement != SWITCH &&
+				  Curctx->x_statement != EXCEPT))
+				errorContext errorX("ErrMisplacedToken", "case", "", 0);
+			else	{
+				p:	ref label_x;
+
+				p = Func label_();
+				sc = alloc(sizeof switchCases);
+				sc->next = Curswitch;
+				Curswitch = sc;
+				sc->target = p;
+				sc->caseValue = t;
+				sc->offset = offset;
+				post(p);
+				}
+			break;
+
+		case	DEFAULT:
+			if	(scan() != CO){
+				errorContext error("ErrDefaultSyntax");
+				unscan();
+				}
+			else if	(Curctx == 0 ||
+				 (Curctx->x_statement != SWITCH &&
+				  Curctx->x_statement != EXCEPT))
+				errorContext errorX("ErrMisplacedToken", "default", "", 0);
+			else if	(DefaultCase)
+				errorContext error("ErrDuplicateDefault");
+			else	{
+				DefaultCase = Func label_();
+				post(DefaultCase);
+				}
+			break;
+
+		case	LABEL:
+			if	(scan() != ID){
+				resync("ErrGotoLabel");
+				post(Func errorStmt(Token.offset));
+				return;
+				}
+			post(Func namedLabel(Token.iden, Token.offset));
+			if	(scan() != CO){
+				errorContext error("ErrLabelSyntax");
+				unscan();
+				}
+			break;
+
+		case	SM:
+			return;
+
+		case	RC:
+			unscan();
+
+		case	EOF_TOK:
+			errorContext error("ErrStmtMissingSM");
+			post(Func errorStmt(offset));
+			return;
+
+		case	ELSE:
+			errorContext errorX("ErrMisplacedToken", "else", "", 0);
+			post(Func errorStmt(offset));
+			break;
+
+		case	TRY:	parseTry();		return;
+		case	IF:	parseIf();		return;
+		case	FOR:	parseFor();		return;
+		case	DO:	parseDo();		return;
+		case	WHILE:	parseWhile();		return;
+		case	SWITCH:	parseSwitch();		return;
+		case	RETURN:	parseReturn();		return;
+		case	CRITICAL:parseCritical();	return;
+
+		case	BREAK:
+			if	(scan() != SM){
+				resyncX("ErrMissingSM", "Break", "", 0);
+				post(Func errorStmt(Token.offset));
+				}
+			else if	(Curctx == 0 ||
+				 Curctx->x_brk == 0){
+				errorContext errorX("ErrMisplacedToken", "break", "", 0);
+				post(Func errorStmt(offset));
+				}
+			else	{
+				if	(Curctx->x_statement == TRY)
+					post(Func endTry(Curctx->x_try));
+				post(Func jump(Curctx->x_brk, 
+						[ offset, Token.offset ]));
+				}
+			return;
+
+		case	CONTINUE:
+			if	(scan() != SM){
+				resyncX("ErrMissingSM", "Continue", "", 0);
+				post(Func errorStmt(Token.offset));
+				}
+			else if	(Curctx == 0 ||
+				 Curctx->x_cont == 0){
+				errorContext errorX("ErrMisplacedToken", "continue", "", 0);
+				post(Func errorStmt(offset));
+				}
+			else
+				post(Func jump(Curctx->x_cont, 
+						[ offset, Token.offset ]));
+			return;
+
+		case	REPLY:
+			if	(scan() != SM){
+				t = parseExpression(0, 0, 0, XC_NORMAL);
+				if	(t == 0)
+					t = Func error();
+				else if	(Token.lex != SM){
+					resyncX("ErrMissingSM", "Reply", "", 0);
+					t = Func error();
+					}
+				}
+			else
+				t = 0;
+			post(Func reply_(t, [ offset, Token.offset ]));
+			return;
+
+		case	FORWARD:
+			scan();
+			t = parseExpression(0, 0, 0, XC_NORMAL);
+			if	(t == 0)
+				p = Func errorStmt(offset);
+			else if	(Token.lex != SM){
+				resyncX("ErrMissingSM", "Forward", "", 0);
+				p = Func errorStmt(Token.offset);
+				}
+//			else
+//				stmtForward(t, offset);
+			post(p);
+			return;
+
+		case	ASSERT:
+			scan();
+			t = parseExpression(0, 0, 0, XC_NORMAL);
+			if	(t == 0)
+				p = Func errorStmt(offset);
+			else if	(Token.lex != SM){
+				resyncX("ErrMissingSM", "Assert", "", 0);
+				p = Func errorStmt(Token.offset);
+				}
+			else
+				p = Func assert_(t, [ offset, Token.offset ]);
+			post(p);
+			return;
+
+		case	LC:
+			post(parseBlock());
+			return;
+
+		case	GOTO:
+			if	(scan() != ID){
+				resync("ErrGotoLabel");
+				post(Func errorStmt(Token.offset));
+				return;
+				}
+
+				// Check for any ill effects of try clauses
+
+			for	(cxp = Curctx; cxp; cxp = cxp->x_next){
+				if	(cxp->x_statement == TRY ||
+					 cxp->x_statement == EXCEPT)
+					errorContext warnX("ErrMisplacedToken", "goto inside try", "", 0);
+				}
+			if	(scan() != SM){
+				resyncX("ErrMissingSM", "Goto", "", 0);
+				p = Func errorStmt(Token.offset);
+				}
+			else
+				p = Func goto_(Token.iden, 
+						[ offset, Token.offset ]);
+			post(p);
+			return;
+
+		case	ID:
+			offset = Token.offset;
+			iden = Token.iden;
+			if	(scan() == CO ||
+				 Token.lex == CM){
+				d:	ref declaration_p;
+
+				d = declaration_p create(offset, V_PRIVATE, 
+								SC_AUTO);
+
+					/*
+					   This code fakes out the scanner.
+					   The identifier pointer is not
+					   touched by a comma or semicolon
+					   token, but the offset is, so it
+					   must be reset.
+					 */
+
+				unscan();
+				Token.offset = offset;
+				if	(parseIdList(0, d))
+					parseDeclarator(d, PX_FUNCTION);
+				post(Func decl(d, [ offset, Token.offset ]));
+				return;
+				}
+
+		default:
+			t = parseExpression(0, iden, offset, XC_NORMAL);
+			if	(t == 0)
+				t = Func error();
+			else if	(Token.lex != SM){
+				resync("ErrStmtMissingSM");
+				t = Func error();
+				}
+			post(Func expr(t, [ offset, Token.offset ]));
+			return;
+			}
+		}
+	}
+
+parseTry:	() =
+	{
+	offset:			fileOffset;
+	ctx:			cntxt;
+	t:			ref tree_p;
+	exceptClause:		ref label_x;
+	nextDefault:		ref label_x;
+	mergePoint:		ref label_x;
+	exceptBody:		ref label_x;
+	nextCases:		ref switchCases;
+
+	exceptClause = Func label_();
+	ctx.x_try = Func try_(exceptClause);
+	post(ctx.x_try);
+	ctx.x_next = Curctx;
+	ctx.x_statement = TRY;
+	ctx.x_brk = Func label_();
+	if	(Curctx)
+		ctx.x_cont = Curctx->x_cont;
+	else
+		ctx.x_cont = 0;
+	mergePoint = Func label_();
+	Curctx = &ctx;
+	parseStatement();
+	Curctx = ctx.x_next;
+	post(ctx.x_brk);
+	post(Func endTry(ctx.x_try));
+	post(Func jump(mergePoint, NO_RANGE));
+	post(exceptClause);
+
+		/* except clauses are optional.  The following are
+		   equivalent:
+
+			try A;
+			except ;
+
+			try A;
+		 */
+	if	(scan() != EXCEPT){
+		unscan();
+		post(Func exceptClause(ctx.x_try, 0, NO_RANGE));
+		post(Func endExcept(ctx.x_try));
+		post(mergePoint);
+		return;
+		}
+	if	(scan() == LP){
+		scan();
+		offset = Token.offset;
+		t = parseExpression(0, 0, 0, XC_NORMAL);
+		if	(t == 0){
+			post(Func errorStmt(offset));
+			return;
+			}
+		if	(Token.lex != RP){
+			resyncX("ErrMissingRP", "Try", "", 0);
+			post(Func errorStmt(Token.offset));
+			return;
+			}
+		}
+	else	{
+		unscan();
+		t = 0;
+		}
+
+	xx:	ref except_x;
+	jj:	ref jump_x;
+
+	xx = Func exceptClause(ctx.x_try, t, [ offset, Token.offset ]);
+	post(xx);
+	jj = Func jump(0, NO_RANGE);
+	post(jj);
+	ctx.x_brk = Func label_();
+	ctx.x_cont = Func label_();
+	exceptBody = Func label_();
+	post(ctx.x_cont);
+	post(Func continueExcept());
+	post(exceptBody);
+	ctx.x_statement = EXCEPT;
+	nextCases = Curswitch;
+	nextDefault = DefaultCase;
+	DefaultCase = 0;
+	Curswitch = 0;
+	Curctx = &ctx;
+	parseStatement();
+	if	(DefaultCase)
+		jj->target = DefaultCase;
+	else if	(Curswitch)
+		jj->target = ctx.x_cont;
+	else
+		jj->target = exceptBody;
+	Curctx = ctx.x_next;
+	xx table(Curswitch);
+	Curswitch = nextCases;
+	DefaultCase = nextDefault;
+	post(ctx.x_brk);
+	post(Func endExcept(ctx.x_try));
+	post(mergePoint);
+	}
+
+parseIf:	() =
+	{
+	offset:			fileOffset;
+	ctx:			cntxt;
+	p:			ref label_x;
+	q:			ref label_x;
+	s:			ref tree_p;
+	t:			ref tree_p;
+	stest:			ref tree_p;
+	sincr:			ref tree_p;
+	start_offset:		fileOffset;
+	end_offset:		fileOffset;
+
+	if	(scan() != LP){
+		resyncX("ErrMissingLP", "If", "", 0);
+		post(Func errorStmt(Token.offset));
+		return;
+		}
+	scan();
+	p = Func label_();
+	offset = Token.offset;
+	t = parseExpression(0, 0, 0, XC_NORMAL);
+	if	(t == 0){
+		post(Func errorStmt(offset));
+		return;
+		}
+	else if	(Token.lex != RP){
+		resyncX("ErrMissingRP", "If", "", 0);
+		post(Func errorStmt(Token.offset));
+		return;
+		}
+	post(Func testFalse(t, p, [ offset, Token.offset ]));
+	parseStatement();
+	offset = Token.offset;
+	if	(scan() == ELSE){
+		q = Func label_();
+		post(Func jump(q, [ offset, 0 ]));
+		post(p);
+		parseStatement();
+		post(q);
+		}
+	else	{
+		unscan();
+		post(p);
+		}
+	}
+
+parseCritical:	() =
+	{
+	offset:			fileOffset;
+	ctx:			cntxt;
+	p:			ref label_x;
+	q:			ref critical_x;
+	s:			ref tree_p;
+	t:			ref tree_p;
+	stest:			ref tree_p;
+	sincr:			ref tree_p;
+	range:			textRange;
+	start_offset:		fileOffset;
+	end_offset:		fileOffset;
+
+	if	(scan() == LP){
+		scan();
+		offset = Token.offset;
+		t = parseExpression(0, 0, 0, XC_NORMAL);
+		if	(t == 0){
+			post(Func errorStmt(offset));
+			return;
+			}
+		else if	(Token.lex != RP){
+			resyncX("ErrMissingRP", "Critical", "", 0);
+			post(Func errorStmt(Token.offset));
+			return;
+			}
+		range = [ offset, Token.offset ];
+		}
+	else	{
+		unscan();
+		t = 0;
+		range = [ 0, 0 ];
+		}
+	ctx.x_next = Curctx;
+	ctx.x_brk = Func label_();
+	ctx.x_try = 0;
+	ctx.x_cont = 0;
+	ctx.x_statement = CRITICAL;
+	ctx.x_critical = Func criticalRegion(t, range);
+	post(ctx.x_critical);
+	Curctx = &ctx;
+	parseStatement();
+	Curctx = ctx.x_next;
+	offset = Token.offset;
+	post(ctx.x_brk);
+	post(Func endCritical(ctx.x_critical));
+	}
+
+parseFor:	() =
+	{
+	offset:			fileOffset;
+	ctx:			cntxt;
+	p:			ref label_x;
+	q:			ref label_x;
+	s:			ref tree_p;
+	t:			ref tree_p;
+	stest:			ref stmt_x;
+	sincr:			ref stmt_x;
+	start_offset:		fileOffset;
+	end_offset:		fileOffset;
+
+	ctx.x_next = Curctx;
+	ctx.x_brk = Func label_();
+	ctx.x_try = 0;
+	ctx.x_cont = Func label_();
+	ctx.x_statement = FOR;
+	q = Func label_();
+	if	(scan() != LP){
+		resyncX("ErrMissingLP", "For", "", 0);
+		post(Func errorStmt(Token.offset));
+		return;
+		}
+	if	(scan() != SM){
+		offset = Token.offset;
+		t = parseExpression(0, 0, 0, XC_NORMAL);
+		if	(t == 0)
+			t = Func error();
+		post(Func expr(t, [ offset, Token.offset ]));
+		offset = Token.offset;
+		if	(Token.lex != SM){
+			resyncX("ErrMissingSM", "For", "", 0);
+			post(Func errorStmt(Token.offset));
+			return;
+			}
+		}
+	enterLoop();
+	if	(scan() != SM){
+		start_offset = Token.offset;
+		t = parseExpression(0, 0, 0, XC_NORMAL);
+		if	(t == 0)
+			t = Func error();
+		if	(Token.lex != SM){
+			resyncX("ErrMissingSM", "For", "", 0);
+			post(Func errorStmt(Token.offset));
+			return;
+			}
+		end_offset = Token.offset;
+		stest = Func test(t, q, [ start_offset, end_offset ]);
+		}
+	else
+		stest = 0;
+	if	(scan() != RP){
+		offset = Token.offset;
+		s = parseExpression(0, 0, 0, XC_NORMAL);
+		if	(s == 0)
+			s = Func error();
+		if	(Token.lex != RP){
+			resyncX("ErrMissingRP", "For", "", 0);
+			post(Func errorStmt(Token.offset));
+			return;
+			}
+		sincr = Func expr(s, [ offset, Token.offset ]);
+		}
+	else
+		sincr = 0;
+	if	(stest){
+		p = Func label_();
+		post(Func jump(p, NO_RANGE));
+		}
+	post(q);
+	Curctx = &ctx;
+	parseStatement();
+	exitLoop();
+	Curctx = ctx.x_next;
+	post(ctx.x_cont);
+	if	(sincr)
+		post(sincr);
+	if	(stest){
+		post(p);
+		post(stest);
+		}
+	else
+		post(Func jump(q, NO_RANGE));
+	post(ctx.x_brk);
+	}
+
+parseDo:	() =
+	{
+	offset:			fileOffset;
+	ctx:			cntxt;
+	p:			ref label_x;
+	t:			ref tree_p;
+
+	ctx.x_next = Curctx;
+	ctx.x_try = 0;
+	ctx.x_statement = DO;
+	ctx.x_cont = Func label_();
+	ctx.x_brk = Func label_();
+	p = Func label_();
+	post(p);
+	Curctx = &ctx;
+	enterLoop();
+	parseStatement();
+	Curctx = ctx.x_next;
+	if	(scan() != WHILE){
+		resync("ErrMissingWhile");
+		post(Func errorStmt(Token.offset));
+		return;
+		}
+	if	(scan() != LP){
+		resyncX("ErrMissingLP", "Do-while", "", 0);
+		post(Func errorStmt(Token.offset));
+		return;
+		}
+	scan();
+	offset = Token.offset;
+	post(ctx.x_cont);
+	t = parseExpression(0, 0, 0, XC_NORMAL);
+	if	(t == 0)
+		post(Func errorStmt(offset));
+	else
+		post(Func test(t, p, [ offset, Token.offset ]));
+	exitLoop();
+	post(ctx.x_brk);
+	if	(Token.lex != RP){
+		resyncX("ErrMissingRP", "Do-while", "", 0);
+		post(Func errorStmt(Token.offset));
+		return;
+		}
+	if	(scan() != SM){
+		resyncX("ErrMissingSM", "Do-while", "", 0);
+		post(Func errorStmt(Token.offset));
+		}
+	}
+
+parseWhile:	() =
+	{
+	offset:	fileOffset;
+	ctx:	cntxt;
+	t:	ref tree_p;
+	p:	ref label_x;
+	stest:	ref stmt_x;
+
+	if	(scan() != LP){
+		resyncX("ErrMissingLP", "While", "", 0);
+		post(Func errorStmt(Token.offset));
+		return;
+		}
+	ctx.x_next = Curctx;
+	ctx.x_try = 0;
+	ctx.x_statement = WHILE;
+	ctx.x_cont = Func label_();
+	ctx.x_brk = Func label_();
+	scan();
+	offset = Token.offset;
+	t = parseExpression(0, 0, 0, XC_NORMAL);
+	if	(t == 0)
+		t = Func error();
+	else if	(Token.lex != RP){
+		resyncX("ErrMissingRP", "While", "", 0);
+		post(Func errorStmt(Token.offset));
+		return;
+		}
+	post(Func jump(ctx.x_cont, [0, 0]));
+	p = Func label_();
+	post(p);
+	enterLoop();
+	stest = Func test(t, p, [ offset, Token.offset ]);
+	Curctx = &ctx;
+	parseStatement();
+	exitLoop();
+	Curctx = ctx.x_next;
+	post(ctx.x_cont);
+	post(stest);
+	post(ctx.x_brk);
+	}
+
+parseSwitch:	() =
+	{
+	offset:			fileOffset;
+	ctx:			cntxt;
+	p:			ref tree_p;
+	q:			ref tree_p;
+	s:			ref tree_p;
+	t:			ref tree_p;
+	nextDefault:		ref label_x;
+	nextCases:		ref switchCases;
+
+	if	(scan() != LP){
+		resyncX("ErrMissingLP", "Switch", "", 0);
+		post(Func errorStmt(Token.offset));
+		return;
+		}
+	scan();
+	offset = Token.offset;
+	t = parseExpression(0, 0, 0, XC_NORMAL);
+	if	(t == 0){
+		post(Func errorStmt(offset));
+		return;
+		}
+
+	sw:	ref switch_x;
+
+	sw = Func switch_(t, [ offset, Token.offset ]);
+	post(sw);
+	if	(Token.lex != RP){
+		resyncX("ErrMissingRP", "Switch", "", 0);
+		post(Func errorStmt(Token.offset));
+		return;
+		}
+	ctx.x_brk = Func label_();
+	if	(Curctx)
+		ctx.x_cont = Curctx->x_cont;
+	else
+		ctx.x_cont = 0;
+	ctx.x_next = Curctx;
+	ctx.x_try = 0;
+	ctx.x_statement = SWITCH;
+	nextCases = Curswitch;
+	nextDefault = DefaultCase;
+	DefaultCase = 0;
+	Curswitch = 0;
+	Curctx = &ctx;
+	parseStatement();
+	if	(DefaultCase == 0){
+		DefaultCase = Func label_();
+		post(DefaultCase);
+		}
+	sw table(DefaultCase, Curswitch);
+	Curswitch = nextCases;
+	DefaultCase = nextDefault;
+	Curctx = ctx.x_next;
+	post(ctx.x_brk);
+	}
+/*
+	Scanner state:
+
+		RETURN token scanned
+ */
+parseReturn:	() =
+	{
+	t:			ref tree_p;
+	cxp:			ref cntxt;
+	offset:			fileOffset;
+
+	offset = Token.offset;
+	if	(scan() != SM){
+		t = parseExpression(0, 0, 0, XC_NORMAL);
+		if	(t == 0)
+			t = Func error();
+		else if	(Token.lex != SM){
+			resyncX("ErrMissingSM", "Return", "", 0);
+			t = Func error();
+			}
+		}
+	else
+		t = 0;
+
+		// Undo any ill effects of try clauses
+
+	for	(cxp = Curctx; cxp; cxp = cxp->x_next){
+		if	(cxp->x_statement == TRY)
+			post(Func endTry(cxp->x_try));
+		else if	(cxp->x_statement == CRITICAL)
+			post(Func endCritical(cxp->x_critical));
+		}
+	post(Func return_(t, [ offset, Token.offset ]));
+	}
+/*
+	This method parses an expression
+
+	Scanner state:
+
+		first token of expression already scanned
+ */
+parseExpression:	(lastPrecedence: int, iden: ref identifier, 
+						offset: fileOffset,
+						context: int) ref tree_p =
+	{
+	t:		ref tree_p;
+	s:		ref tree_p;
+	u:		ref tree_p;
+	assoc:		int;
+	opos:		int;
+	op:		int;
+	newPrecedence:	int;
+
+//	printf("parseExpression line %d SP = %x\n", tellLine(tell()), _ESP);
+	if	(iden)
+		t = parseSuffix(iden, offset);
+	else
+		t = parseUnary();
+	if	(t == 0)
+		return 0;
+	assoc = Assoc[lastPrecedence];
+	for	(;;){
+		if	(context == XC_ENUM &&
+			 Token.lex == CM)
+			break;
+		if	(context == XC_QUESCO &&
+			 Token.lex == CO)
+			break;
+		newPrecedence = precedence(Token.lex);
+		if	(newPrecedence == 0)
+			break;
+		op = binaryOperator(Token.lex);
+		offset = Token.offset;
+		if	(lastPrecedence > newPrecedence)
+			break;
+		if	(lastPrecedence == newPrecedence &&
+			 assoc == LEFT)
+			break;
+		if	(op == O_QUES){
+			scan();
+			s = parseExpression(0, 0, 0, XC_QUESCO);
+			if	(s == 0)
+				return(0);
+			if	(Token.lex != CO){
+				errorContext->offset = Token.offset;
+				resync("ErrExpressionSyntax");
+				return 0;
+				}
+			scan();
+			u = parseExpression(precedence(QUES), 0, 0, context);
+			if	(u == 0)
+				return 0;
+			t = Func conditional(t, s, u, offset);
+			continue;
+			}
+		scan();
+		s = parseExpression(newPrecedence, 0, 0, context);
+		if	(s == 0)
+			return 0;
+		if	(op == O_SEQ &&
+			 context == XC_CALL)
+			t = Func argument(t, s, offset);
+		else
+			t = Func binary(op, t, s, offset);
+		}
+	return t;
+	}
+
+parseUnary:	() ref tree_p =
+	{
+	t:		ref tree_p;
+	s:		ref tree_p;
+	d:		ref type_p;
+	offset:		fileOffset;
+
+	offset = Token.offset;
+	switch	(Token.lex){
+	case	ASG:
+		scan();
+		t = parseUnary();
+		if	(t == 0)
+			return 0;
+		t = Func binary(O_SYNC, t, 0, offset);
+		break;
+
+	case	MUL:
+		scan();
+		t = parseUnary();
+		if	(t == 0)
+			return 0;
+		t = Func binary(O_IND, t, 0, offset);
+		break;
+
+	case	AND:
+		scan();
+		t = parseUnary();
+		if	(t == 0)
+			return 0;
+		t = Func binary(O_ADR, t, 0, offset);
+		break;
+
+	case	OR:
+		scan();
+		t = parseUnary();
+		if	(t == 0)
+			return 0;
+		t = Func binary(O_BOUND, t, 0, offset);
+		break;
+
+	case	LOR:
+		scan();
+		t = parseUnary();
+		if	(t == 0)
+			return 0;
+		t = Func binary(O_MBOUND, t, 0, offset);
+		break;
+
+	case	SUB:
+		scan();
+		t = parseUnary();
+		if	(t == 0)
+			return 0;
+		t = Func binary(O_NEG, t, 0, offset);
+		break;
+
+	case	ADD:
+		scan();
+		t = parseUnary();
+		if	(t == 0)
+			return 0;
+		t = Func binary(O_PLUS, t, 0, offset);
+		break;
+
+	case	NOT:
+		scan();
+		t = parseUnary();
+		if	(t == 0)
+			return 0;
+		t = Func binary(O_NOT, t, 0, offset);
+		break;
+
+	case	COM:
+		scan();
+		t = parseUnary();
+		if	(t == 0)
+			return 0;
+		t = Func binary(O_COM, t, 0, offset);
+		break;
+
+	case	INC:
+		scan();
+		t = parseUnary();
+		if	(t == 0)
+			return 0;
+		s = Func icon(1L, -INTBITS);
+		t = Func binary(O_ADA, t, s, offset);
+		break;
+
+	case	DEC:
+		scan();
+		t = parseUnary();
+		if	(t == 0)
+			return 0;
+		s = Func icon(1L, -INTBITS);
+		t = Func binary(O_SBA, t, s, offset);
+		break;
+
+	case	DELETE:
+		scan();
+		t = parseUnary();
+		if	(t == 0)
+			return 0;
+		t = Func binary(O_DELETE, t, 0, offset);
+		break;
+
+	case	SIZEOF:
+		scan();
+		if	(Token.lex == REF ||
+			 Token.lex == FLOAT ||
+			 Token.lex == POINTER ||
+			 Token.lex == SIGNED ||
+			 Token.lex == UNSIGNED){
+			unscan();
+			d = parseType();
+			if	(d == 0)
+				return 0;
+			scan();
+			t = Func sizeof_(d);
+			}
+		else	{
+			t = parseUnary();
+			if	(t == 0)
+				return 0;
+			t = Func binary(O_SIZEOF, t, 0, offset);
+			}
+		break;
+
+	case	OFFSETOF:
+		d = parseType();
+		if	(d == 0)
+			return 0;
+		scan();
+		if	(Token.lex != DOT){
+			errorContext->offset = Token.offset;
+			resync("ErrOffsetofSyntax");
+			return 0;
+			}
+		if	(scan() != ID){
+			errorContext->offset = Token.offset;
+			resync("ErrOffsetofSyntax");
+			return 0;
+			}
+		t = Func offsetof_(d, Token.iden);
+		scan();
+		break;
+
+	case	TYPEOF:
+		scan();
+		t = parseUnary();
+		if	(t == 0)
+			return 0;
+		t = Func binary(O_TYPEOF, t, 0, offset);
+		break;
+
+	case	SEND:
+		scan();
+		t = parseUnary();
+		if	(t == 0)
+			return 0;
+		t = Func binary(O_SEND, t, 0, offset);
+		break;
+
+	default:
+		t = parseSuffix(0, 0);
+		}
+	return t;
+	}
+
+parseSuffix:	(iden: ref identifier, offset: fileOffset) ref tree_p =
+	{
+	t:		ref tree_p;
+	s:		ref tree_p;
+	r:		ref tree_p;
+	d:		ref type_p;
+	isSlice:	boolean;
+	i:		int;
+
+	if	(iden == 0)
+		t = parsePrimary();
+	else	{
+		if	(Token.lex == QUAL){
+			if	(scan() != ID){
+				resync("ErrExpressionSyntax");
+				return 0;
+				}
+			t = Func iden(iden, offset, Token.iden, Token.offset);
+			scan();
+			}
+		else
+			t = Func iden(0, 0, iden, offset);
+		}
+	for	(;;){
+		errorContext->offset = Token.offset;
+		switch	(Token.lex){
+		case	INC:
+			t = Func binary(O_INA, t, 0, Token.offset);
+			break;
+
+		case	DEC:
+			t = Func binary(O_DEA, t, 0, Token.offset);
+			break;
+
+		case	LB:
+			offset = Token.offset;
+			r = 0;
+			s = 0;
+			isSlice = FALSE;
+			if	(scan() == CO){
+				isSlice = TRUE;
+				scan();
+				}
+			if	(Token.lex != RB){
+				s = parseExpression(0, 0, 0, XC_CALL);
+				if	(s == 0)
+					return 0;
+				if	(!isSlice &&
+					 Token.lex == CO){
+					r = s;
+					s = 0;
+					isSlice = TRUE;
+					scan();
+					if	(Token.lex != RB){
+						s = parseExpression(0, 0, 0, XC_CALL);
+						if	(s == 0)
+							return 0;
+						}
+					}
+				if	(Token.lex != RB){
+					errorContext->offset = Token.offset;
+					resync("ErrSubscriptSyntax");
+					return 0;
+					}
+				}
+			if	(isSlice)
+				t = Func slice(t, r, s, offset);
+			else
+				t = Func binary(O_SUBSCRIPT, t, s, offset);
+			break;
+ 
+		case	ID:
+			signaling:	boolean;
+
+			iden = Token.iden;
+			offset = Token.offset;
+			if	(scan() != NOT){
+				unscan();
+				signaling = FALSE;
+				}
+			else
+				signaling = TRUE;
+			if	(scan() != LP){
+				errorContext->offset = Token.offset;
+				resync("ErrMCallSyntax");
+				return 0;
+				}
+			if	(scan() == RP)
+				s = 0;
+			else	{
+				s = parseExpression(0, 0, 0, XC_CALL);
+				if	(s == 0)
+					return 0;
+				if	(Token.lex != RP){
+					errorContext->offset = Token.offset;
+					resync("ErrCallSyntax");
+					return 0;
+					}
+				}
+			t = Func methodCall(t, iden, s, offset, signaling);
+			break;
+
+		case	LP:
+			offset = Token.offset;
+			if	(scan() == RP)
+				s = 0;
+			else	{
+				s = parseExpression(0, 0, 0, XC_CALL);
+				if	(s == 0)
+					return 0;
+				if	(Token.lex != RP){
+					errorContext->offset = Token.offset;
+					resync("ErrCallSyntax");
+					return 0;
+					}
+				}
+			t = Func staticCall(t, s, offset);
+			break;
+
+		case	DOT:
+			if	(scan() != ID){
+				resync("ErrDotSyntax");
+				return 0;
+				}
+			t = Func reference(O_DOT, t, Token.iden, Token.offset);
+			break;
+
+		case	ARROW:
+			if	(scan() != ID){
+				resync("ErrArrowSyntax");
+				return 0;
+				}
+			t = Func reference(O_ARROW, t, Token.iden, Token.offset);
+			break;
+
+		case	NEW:
+			t = parseNewExpression(t);
+			break;
+
+		default:
+			return t;
+			}
+		scan();
+		}
+	}
+
+parsePrimary:	() ref tree_p =
+	{
+	t:		ref tree_p;
+	s:		ref tree_p;
+	d:		ref type_p;
+	offset:		fileOffset;
+	id:		ref identifier;
+
+	switch	(Token.lex){
+	case	ID:
+		offset = Token.offset;
+		id = Token.iden;
+		if	(scan() == QUAL){
+			if	(scan() != ID){
+				resync("ErrExpressionSyntax");
+				return 0;
+				}
+			t = Func iden(id, offset, Token.iden, Token.offset);
+			scan();
+			}
+		else
+			t = Func iden(0, 0, id, offset);
+		break;
+
+	case	ICON:
+		t = Func icon(Token.icon, Token.constType);
+		scan();
+		break;
+
+	case	FCON:
+		t = Func fcon(&Token.fcon, Token.constType);
+		scan();
+		break;
+
+	case	ELLIPSIS:
+		t = Func ellipsis();
+		scan();
+		break;
+
+	case	SELF:
+		t = Func self_(O_SELF, Token.offset);
+		scan();
+		break;
+
+	case	SUPER:
+		t = Func self_(O_SUPER, Token.offset);
+		scan();
+		break;
+
+	case	STRING:
+		lt:	ref literal_x;
+
+		lt = Func literal();
+		do
+			lt addStringItem(Token.stringValue, 
+							Token.stringLength);
+			while	(scan() == STRING);
+		t = lt;
+		break;
+
+	case	LB:		// A structure constant
+		offset = Token.offset;
+		if	(scan() == RB)
+			s = 0;
+		else	{
+			s = parseStrConst();
+			if	(s == 0)
+				return 0;
+			if	(Token.lex != RB){
+				errorContext->offset = Token.offset;
+				resync("ErrStrConstSyntax");
+				return 0;
+				}
+			}
+		t = Func sconst(s, offset);
+		scan();
+		break;
+
+	case	LP:
+		scan();
+		t = parseExpression(0, 0, 0, XC_NORMAL);
+		if	(t == 0)
+			return 0;
+		if	(Token.lex != RP){
+			errorContext->offset = Token.offset;
+			resync("ErrExpressionSyntax");
+			return 0;
+			}
+		scan();
+		break;
+
+	case	NEW:
+		t = parseNewExpression(0);
+		scan();
+		break;
+
+	case	SIGNED:
+	case	UNSIGNED:
+	case	FLOAT:
+	case	POINTER:
+	case	LINK:
+	case	REF:
+		offset = Token.offset;
+		unscan();
+		d = parseType();
+		if	(d == 0)
+			return 0;
+		if	(scan() != LP){
+			errorContext->offset = Token.offset;
+			resync("ErrExpressionSyntax");
+			return 0;
+			}
+		scan();
+		t = parseExpression(0, 0, 0, XC_NORMAL);
+		if	(t == 0)
+			return 0;
+		if	(Token.lex != RP){
+			errorContext->offset = Token.offset;
+			resync("ErrExpressionSyntax");
+			return 0;
+			}
+		scan();
+		t = Func cast(d, t, offset);
+		break;
+/*
+	case	ARRAY:
+		offset = Token.offset;
+		d = parseType();
+		if	(d == 0)
+			return 0;
+		if	(scan() != LP || isarray(d->topType)){
+			errorContext->offset = Token.offset;
+			resync("ErrExpressionSyntax");
+			return 0;
+			}
+		scan();
+		t = parseExpression(0, 0, 0, XC_NORMAL);
+		if	(t == 0)
+			return 0;
+		if	(Token.lex != RP){
+			errorContext->offset = Token.offset;
+			resync("ErrExpressionSyntax");
+			return 0;
+			}
+		scan();
+		t = Func cast(d, t, offset);
+		break;
+ */
+	default:
+		errorContext->offset = Token.offset;
+		resync("ErrExpressionSyntax");
+		return 0;
+		}
+	return t;
+	}
+
+parseNewExpression:	(heapArg: ref tree_p) ref tree_p =
+	{
+	t:		ref tree_p;
+	s:		ref tree_p;
+	d:		ref type_p;
+	offset:		fileOffset;
+
+	offset = Token.offset;
+	d = parseType();
+	if	(d == 0)
+		return 0;
+
+	s = 0;
+	if	(scan() == LB){
+		if	(scan() != RB){
+			s = parseStrConst();
+			if	(s == 0)
+				return 0;
+			if	(Token.lex != RB){
+				errorContext->offset = Token.offset;
+				resync("ErrStrConstSyntax");
+				return 0;
+				}
+			s = Func sconst(s, offset);
+			}
+		else
+			s = Func sconst(0, offset);
+		}
+	else
+		unscan();
+	return Func new_(heapArg, d, s, offset);
+	}
+
+parseStrConst:	() ref tree_p =
+	{
+	s:	ref tree_p;
+	list:	ref tree_p;
+	list2:	ref tree_p;
+
+	s = parseExpression(0, 0, 0, XC_ENUM);
+	if	(s == 0)
+		return 0;
+	if	(Token.lex == RB)
+		return s;
+	if	(Token.lex != CM){
+		errorContext->offset = Token.offset;
+		resync("ErrStrConstSyntax");
+		return 0;
+		}
+	scan();
+	if	(Token.lex == RB)
+		return s;
+	list = s;
+	for	(;;){
+		s = parseExpression(0, 0, 0, XC_ENUM);
+		if	(s == 0)
+			return 0;
+		list = Func argument(list, s, Token.offset);
+		if	(Token.lex == CM){
+			scan();
+			if	(Token.lex == RB)
+				break;
+			}
+		else if	(Token.lex == RB)
+			break;
+		else	{
+			errorContext->offset = Token.offset;
+			resync("ErrStrConstSyntax");
+			return 0;
+			}
+		}
+
+		/* Rearrange the list from a left-associative chain to
+		   a right-associative one.
+		 */
+
+	return list makeRightAssociative();
+	}
+
+	};
+
+parseContexts:	type	char = {
+	PX_FILE,
+	PX_FUNCTION,
+	PX_MEMBER
+	};
+
+expressionContexts:	type	int = {
+	XC_NORMAL,
+	XC_CALL,
+	XC_ENUM,
+	XC_QUESCO
+	};
+
+cntxt:	public	type	{
+	public:
+	x_next:		ref cntxt;
+	x_brk:		ref label_x;
+	x_cont:		ref label_x;
+	x_try:		ref try_x;
+	x_critical:	ref critical_x;
+	x_statement:	char;
+        };
+
+LEFT:	const	char = 1;
+RIGHT:	const	char = 2;
+
+Assoc:	const [] char = [
+	0,
+	RIGHT,					/* cm */
+	RIGHT,					/* asgop */
+	RIGHT,					/* ques */
+	RIGHT,					/* - unused - */
+	LEFT,					/* lor */
+	LEFT,					/* land */
+	LEFT,					/* eq ne */
+	LEFT,					/* relop */
+	LEFT,					/* or */
+	LEFT,					/* xor */
+	LEFT,					/* and */
+	LEFT,					/* add sub */
+	LEFT,					/* shift op */
+	LEFT					/* mul div mod */
+	];
+

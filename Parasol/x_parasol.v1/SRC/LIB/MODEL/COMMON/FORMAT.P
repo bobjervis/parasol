@@ -1,0 +1,362 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	string;
+
+Emitter:	public	type	{
+	public:
+
+printf:	(fmt: [:] char, ...) =
+	{
+	format(fmt, ...);
+	}
+
+format:	(fmts: [:] char, ap: ArgumentList) =
+	{
+	i:			long;
+	j:			int;
+	outString:		[:] char;
+	cp:			ref char;
+	rightJustify:		boolean;
+	signRequired:		boolean;
+	ch:			char;
+	pad:			char;
+	precisionPad:		char;
+	obuf:			[64] char;
+	length:			int;
+	precision:		int;
+	prefixSign:		char;
+	actualLength:		int;
+	k:			int;
+	fIndex:			int;
+	ep:			ref char;
+	fmt:			ref char;
+	longf:			boolean;
+	d:			double;
+	ex:			extended;
+	alternate:		boolean;
+
+	ep = &fmts[|fmts];
+	fmt = fmts;
+	while	(fmt < ep){
+		if	(*fmt != '%'){
+			cp = fmt;
+			do	
+				cp++;
+				while	(cp < ep && 
+					 *cp != '%');
+			j = cp - fmt;
+			write(fmt[:j]);
+			fmt = cp;
+			continue;
+			}
+		length = 0;
+		precision = -1;
+		precisionPad = '0';
+		rightJustify = TRUE;
+		signRequired = FALSE;
+		longf = FALSE;
+		pad = ' ';
+		alternate = FALSE;
+		prefixSign = 0;
+		fmt++;
+		for	(;;){
+			if	(*fmt == '-'){
+				rightJustify = FALSE;
+				fmt++;
+				}
+			else if	(*fmt == '+'){
+				signRequired = TRUE;
+				fmt++;
+				}
+			else if	(*fmt == '#'){
+				alternate = TRUE;
+				fmt++;
+				}
+			else
+				break;
+			}
+		if	(*fmt == '0'){
+			pad = '0';
+			fmt++;
+			}
+		if	(*fmt == '*'){
+			fmt++;
+			ap nextArg(&length, sizeof int);
+			}
+		else	{
+			while	(isdigit(*fmt)){
+				length = length * 10 + *fmt - '0';
+				fmt++;
+				}
+			}
+		if	(*fmt == '.'){
+			fmt++;
+			precision = 0;
+			if	(*fmt == '*'){
+				fmt++;
+				ap nextArg(&precision, sizeof int);
+				}
+			else	{
+				while	(isdigit(*fmt)){
+					precision = precision * 10 + *fmt - '0';
+					fmt++;
+					}
+				}
+			}
+		if	(*fmt == 'l'){
+			fmt++;
+			longf = TRUE;
+			}
+		switch	(*fmt++){
+		case	'd':
+			ap nextArg(&i, sizeof long);
+			if	(precision == -1)
+				precision = 1;
+			if	(i == 0x80000000L){
+				outString = "2147483648";
+				prefixSign = '-';
+				}
+			else	{
+				if	(i < 0){
+					prefixSign = '-';
+					i = -i;
+					}
+				else if	(signRequired)
+					prefixSign = '+';
+				cp = &obuf[sizeof obuf];
+				while	(i){
+					*--cp = '0' + i % 10;
+					i /= 10;
+					}
+				outString = cp[:&obuf[sizeof obuf] - cp];
+				}
+			break;
+
+		case	'u':
+			ui:	unsignedLong;
+
+			ap nextArg(&ui, sizeof unsignedLong);
+			if	(precision == -1)
+				precision = 1;
+			cp = &obuf[sizeof obuf];
+			while	(ui){
+				*--cp = '0' + ui % 10;
+				ui /= 10;
+				}
+			outString = cp[:&obuf[sizeof obuf] - cp];
+			break;
+
+		case	'P':
+			ap nextArg(&outString, sizeof outString);
+			printf("[%p,%d,%d]", outString);
+			length = 0;
+			precision = 0;
+			|outString = 0;
+			break;
+
+		case	'p':
+			up:	unsigned[8 * sizeof pointer];
+
+			ap nextArg(&up, sizeof pointer);
+			if	(precision == -1)
+				precision = 1;
+			cp = &obuf[sizeof obuf];
+			while	(up){
+				i = up & 0xf;
+				up >>= 4;
+				if	(i > 9)
+					*--cp = i + 'a' - 10;
+				else
+					*--cp = i + '0';
+				}
+			outString = cp[:&obuf[sizeof obuf] - cp];
+			break;
+
+		case	'x':
+			ap nextArg(&ui, sizeof unsignedLong);
+			if	(precision == -1)
+				precision = 1;
+			cp = &obuf[sizeof obuf];
+			while	(ui){
+				i = ui & 0xf;
+				ui >>= 4;
+				if	(i > 9)
+					*--cp = i + 'a' - 10;
+				else
+					*--cp = i + '0';
+				}
+			outString = cp[:&obuf[sizeof obuf] - cp];
+			break;
+
+		case	'o':
+			ap nextArg(&ui, sizeof unsignedLong);
+			if	(precision == -1)
+				precision = 1;
+			cp = &obuf[sizeof obuf];
+			while	(ui){
+				i = ui & 0x7;
+				ui >>= 3;
+				*--cp = i + '0';
+				}
+			outString = cp[:&obuf[sizeof obuf] - cp];
+			break;
+
+		case	'c':
+			ap nextArg(&i, sizeof long);
+			if	(precision == -1)
+				precision = 1;
+			precisionPad = ' ';
+			if	(i){
+				ch = i;
+				outString = (&ch)[:1];
+				}
+			else
+				outString = "<null>";
+			break;
+
+		case	'S':
+			ap nextArg(&outString, sizeof outString);
+			if	(&outString[0] == 0)
+				outString = "<null>";
+//			else if	(&outString[0] >= ref char(_brklvl))
+//				outString = "<illegal>";
+			if	(precision == -1)
+				precision = |outString;
+			else if	(precision < |outString)
+				|outString = precision;
+			precisionPad = ' ';
+			break;
+
+		case	's':
+			ap nextArg(&cp, sizeof cp);
+			if	(cp == 0)
+				outString = "<null>";
+//			else if	(cp >= ref char(_brklvl))
+//				outString = "<illegal>";
+			else	{
+				if	(precision == -1)
+					precision = stringLength(cp);
+				outString = cp[:precision];
+				}
+			precisionPad = ' ';
+			break;
+
+		case	'%':
+			outString = "%";
+			precisionPad = ' ';
+			break;
+
+		case	'f':
+		case	'e':
+		case	'E':
+		case	'g':
+		case	'G':
+			if	(precision == -1){
+				if	(tolower(fmt[-1]) == 'g')
+					precision = 1;
+				else
+					precision = 6;
+				}
+			prefixSign = 0;
+			if	(longf)
+				ap nextArg(&ex, sizeof extended);
+			else	{
+				ap nextArg(&d, sizeof double);
+				ex = d;
+				}
+			sc:	stringConverter = [ obuf ];
+			outString = sc decodeFloat(ex, fmt[-1], precision,
+						alternate);
+			break;
+
+		default:
+			return;
+			}
+		k = |outString + (prefixSign != 0);
+		if	(precision < k)
+			precision = k;
+		if	(rightJustify){
+			j = precision;
+			while	(j < length){
+				putc(pad);
+				j++;
+				}
+			}
+		if	(prefixSign)
+			putc(prefixSign);
+		while	(k < precision){
+			putc(precisionPad);
+			k++;
+			}
+		if	(|outString)
+			write(outString);
+		if	(!rightJustify){
+			j = precision;
+			while	(j < length){
+				putc(pad);
+				j++;
+				}
+			}
+		}
+	return;
+	}
+
+putc:	dynamic	(char) int =
+	{
+	return 0;
+	}
+
+write:	dynamic	(text: [:] char) int =
+	{
+	cp:	ref char;
+	i:	int;
+
+	cp = text;
+	for	(i = 0; i < |text; i++, cp++)
+		if	(putc(*cp))
+			break;
+	return i;
+	}
+
+};
+
+stringEmitter:	public	type	inherit	Emitter	{
+	private:
+
+	dest:	[:] char;
+
+	public:
+
+	putcTrap:	Trap;
+
+constructor:	(buf: [:] char) =
+	{
+	dest = buf;
+	|dest = 0;
+	}
+
+result:	() [:] char =
+	{
+	return dest;
+	}
+/*
+	Put a character and avoid overflow.  Raise an exception when you 
+	reach overflow.
+ */
+putc:	dynamic	(c: char) int =
+	{
+	if	(|dest < ||dest){
+		dest[|dest] = c;
+		(|dest)++;
+		}
+	else
+		putcTrap raise();
+	return 0;
+	}
+
+	};

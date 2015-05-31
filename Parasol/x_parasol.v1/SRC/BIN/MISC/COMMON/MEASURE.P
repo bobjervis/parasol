@@ -1,0 +1,329 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	filesys;
+include	alys;
+include	file;
+include	error;
+include	hardware;
+
+PathFound:	int;				// Set by searchPath to:
+Path:		[512] char;
+
+RUN_PATH:	const	int = 0;		// Path was a .RUN file
+EXE_PATH:	const	int = 1;		// Path was an .EXE file
+
+main:	entry	() =
+	{
+	cmd:		[:] char;
+	arg0:		[:] char;
+	tm1:		Tick;
+	tm2:		Tick;
+	p:		process_t;
+	e:		ref far External;
+	pid:		processId;
+	nBefore:	NodeState;
+	nAfter:		NodeState;
+
+//	catchSignal(SigBreak, &ignoreSignal);
+	if	(|commandLine.arguments == 0){
+		printf("Use is: MEASURE cmd arg(s)\n");
+		return;
+		}
+	arg0 = commandLine.arguments[0];
+
+	commandLine shiftArguments();
+
+	lookup:	PathList = [];
+
+	lookup useEnvironment("PATH");
+	cmd = lookup search(arg0, ".run", ".com", ".exe", 0);
+	if	(|cmd == 0){
+		printf("Couldn't find command '%S'\n", arg0);
+		return;
+		}
+	nBefore = myHost() describe();
+	tm1 = nBefore.userTime + nBefore.sysTime + nBefore.idleTime;
+	arg0 = argumentString(commandLine.arguments);
+	try	{
+		e = FileSystem spawn(0, cmd, arg0);
+		}
+	except	{
+		printf("Spawn failed: %S\n", cmd);
+		exit(1);
+		}
+	Measure wait(&External.childExit);
+	nAfter = myHost() describe();
+	tm2 = nAfter.userTime + nAfter.sysTime + nAfter.idleTime;
+	tm2 -= tm1;
+	p = myHost() getProcess(0);
+	printf("Consumed seconds: ");
+	pTime(p.childtimes.user);
+	printf(" user\n");
+	printf("                  ");
+	pTime(p.childtimes.kernel);
+	printf(" system\n");
+	printf("                  ");
+	pTime(tm2);
+	printf(" elapsed\n");
+	exit(EX_SUCCESS);
+	}
+
+pTime:	(x: Tick) =
+	{
+	milli:	long;
+	seconds, minutes:	int;
+
+	milli = ticksToMilliseconds(x);
+
+	seconds = milli / 1000;
+	minutes = seconds / 60;
+	seconds %= 60;
+	milli /= 100;
+	printf("%4d:%02d.%d", minutes, seconds, milli % 10);
+	}
+
+/*
+spawnCommand:	public	(cmd: * char, arg: * char) int =
+	{
+	cp:	* char;
+	acnt:	int;
+	args:	** char;
+	ap:	** char;
+	infile:		* char;
+	outfile:	* char;
+	appendout:	char;
+	i:	int;
+
+	if	(arg == 0)
+		arg = "";
+	while	(isspace(*arg))
+		arg++;
+
+	acnt = findArgumentCount(arg);
+	args = alloc(acnt * sizeof type * char);
+	if	(args == 0)
+		return ENOMEM;
+	ap = args;
+	infile = 0;
+	outfile = 0;
+	appendout = 0;
+	while	(*arg){
+		arg = parseNextArgument(arg, ap, &infile, &outfile, &appendout);
+		ap++;
+		}
+	if	(infile || outfile)
+		forkArena();
+
+	fd:	directFile;
+
+	if	(infile){
+		fd = [ 0 ];
+		fd close();
+		i = fd open(infile, AR_READ);
+		if	(i){
+			discardArena();
+			free(args);
+			return i;
+			}
+		}
+	if	(outfile){
+		fd = [ 1 ];
+		fd close();
+		if	(appendout){
+			i = fd open(outfile, AR_WRITE|AR_SEEK);
+			fd seek(0, SEEK_END);
+			}
+		else
+			i = fd create(outfile, FA_WRITE|FA_READ|FA_SEEKOK);
+		if	(i){
+			discardArena();
+			free(args);
+			return i;
+			}
+		}
+	i = spawn(cmd, args, acnt);
+	if	(infile || outfile)
+		discardArena();
+	if	(i < 0)
+		return -i;
+	else	{
+		j:	int;
+
+		do
+			j = wait();
+			while	(j == ErrInterrupted);
+		}
+	free(args);
+	return Success;
+	}
+
+parseNextArgument:	public	(args: * char, argp: ** char, infp: ** char, 
+					outfp: ** char, app: * char) * char =
+	{
+	cp:	* char;
+
+	for	(cp = args; *cp; ){
+		if	(*cp == '"'){
+			cp++;
+			if	(argp)
+				*argp = cp;
+			while	(*cp && *cp != '"')
+				cp++;
+			if	(*cp == 0)
+				break;
+			*cp = 0;
+			cp++;
+			break;
+			}
+		else if	(*cp == '<'){
+			cp++;
+			while	(isspace(*cp))
+				cp++;
+			if	(infp)
+				*infp = cp;
+			while	(*cp && !isspace(*cp))
+				cp++;
+			if	(*cp == 0)
+				break;
+			*cp = 0;
+			cp++;
+			}
+		else if	(*cp == '>'){
+			cp++;
+			if	(*cp == '>'){
+				if	(app)
+					*app = 1;
+				cp++;			// >> is append
+				}
+			while	(isspace(*cp))
+				cp++;
+			if	(outfp)
+				*outfp = cp;
+			while	(*cp && !isspace(*cp))
+				cp++;
+			if	(*cp == 0)
+				break;
+			*cp = 0;
+			}
+		else	{
+			if	(argp)
+				*argp = cp;
+			do
+				cp++;
+				while	(*cp && !isspace(*cp));
+			if	(*cp == 0)
+				break;
+			*cp = 0;
+			cp++;
+			break;
+			}
+		while	(isspace(*cp))
+			cp++;
+		}
+	return cp;
+	}
+
+findArgumentCount:	public	(args: * char) int =
+	{
+	acnt:	int;
+
+	while	(isspace(*args))
+		args++;
+	acnt = 0;
+	while	(*args){
+		acnt++;
+		if	(*args == '"'){
+			args++;
+			while	(*args && *args != '"')
+				args++;
+			}
+
+			// Skip any redirection directives
+
+		else if	(*args == '<' ||
+			 *args == '>'){
+			if	(*args == '>' &&
+				 args[1] == '>')
+				args++;			// >> is another redir
+			args++;
+			while	(isspace(*args))
+				args++;
+			while	(*args && !isspace(*args))
+				args++;
+			acnt--;				// redir's aren't args
+			}
+		else	{
+			do
+				args++;
+				while	(*args && !isspace(*args));
+			}
+		while	(isspace(*args))
+			args++;
+		}
+	return acnt;
+	}
+ */
+/*
+searchPath:	(cmd: string) string =
+	{
+	ext:	[MAXEXT] char;
+	buffer:	static	[MAXPATH] char;
+	file:	string;
+	comp:	int;			// The composition of the filename
+	i:	int;
+
+	comp = fnsplit(cmd.address, 0, 0, 0, ext) & EXTENSION;
+	file = [ buffer ];
+	file copy(cmd);
+	PathFound = RUN_PATH;
+	if	(comp == 0)
+		file append([ ".run" ]);
+	else if	(string[ ext ] icompare([ ".exe" ]) == 0)
+		PathFound = EXE_PATH;
+	i = access(file, AR_READ);
+	if	(i == SUCCESS)
+		return file;
+	if	(comp == 0){
+		file copy(cmd);
+		file append([ ".exe" ]);
+		i = access(file, AR_READ);
+		if	(i == SUCCESS){
+			PathFound = EXE_PATH;
+			return(file);
+			}
+		}
+/*
+	file copy([ &Path ]);
+	file append(cmd);
+	if	(comp == 0)
+		file append([ ".run" ]);
+	i = access(file, AR_READ);
+	if	(i == SUCCESS)
+		return(file);
+	if	(comp == 0){
+		file copy([ &Path ]);
+		file append(cmd);
+		file append([ ".exe" ]);
+		i = access(file, AR_READ);
+		if	(i == SUCCESS){
+			PathFound = EXE_PATH;
+			return(file);
+			}
+		}
+ */
+	return [ 0 ];
+	}
+ */
+Measure:	inherit	External {
+
+attention:	gate!	() =
+	{
+	}
+
+};
+

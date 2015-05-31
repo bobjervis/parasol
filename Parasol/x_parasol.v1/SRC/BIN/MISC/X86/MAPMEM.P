@@ -1,0 +1,80 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	alys;
+include	file;
+include	error;
+
+main:	entry	() =
+	{
+	n:	NodeState;
+	seg:	segment_t;
+//	p:	process_t;
+	px:	int;
+	i:	int;
+	s:	int;
+	cl:	ref char;
+
+	n = myHost() describe();
+	printf("Node                        %s\n", n.name);
+	printf("Running kernel version      %3d.%02d\n\n", n.kernelVersion >> 8,
+							n.kernelVersion & 0xff);
+	printf("Available memory            %6dK\n", n.availableRAM / 1024);
+	printf("DOS size                    %6dK\n", n.dosMemory / 1024);
+	printf("Kernel code                 %6dK\n", (n.kernelCode + 512) / 1024);
+	printf("       data                 %6dK\n", (n.kernelData + 512) / 1024);
+	printf("       disk cache           %6dK\n", (n.diskCache + 512) / 1024);
+	printf("       network buffers      %6dK\n", (n.netBuffers + 512) / 1024);
+	try
+	for	(s = 1; ; s++){
+		seg = myHost() getSegment(s);
+/*
+		if	(i == ERRPERMISSION)
+			continue;
+		if	(i == ERRINVALIDDATA)
+			break;
+ */
+		if	(seg.isCode)
+			cl = " code";
+		else
+			cl = " data";
+		printf("%2d: %s %08x-%08x %6dK ", s, cl, seg.address, 
+					seg.address + seg.length - 1,
+					(seg.length + 512) / 1024u);
+/*		if	(seg.isCode){
+			try
+			for	(px = -1; ; px--){
+				i = Host getProcessEntry(px, &p, sizeof p);
+				if	(i)
+					break;
+				if	(p.status == PFREE)
+					continue;
+				if	(p.codeSeg == s){
+					printf(" pid %d", p.processid);
+					break;
+					}
+				}
+			}
+		else	{
+			try
+			for	(px = -1; ; px--){
+				i = Host getProcessEntry(px, &p, sizeof p);
+				if	(i)
+					break;
+				if	(p.status == PFREE)
+					continue;
+				if	(p.dataSeg == s){
+					printf(" pid %d", p.processid);
+					break;
+					}
+				}
+			}
+ */
+		printf("\n");
+		}
+	exit(EX_SUCCESS);
+	}

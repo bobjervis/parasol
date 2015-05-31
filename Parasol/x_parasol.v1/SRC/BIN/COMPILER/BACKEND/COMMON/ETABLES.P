@@ -1,0 +1,101 @@
+/*
+	Copyright (c) 1994 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	ptree, symtab;
+
+EntryFunctions:		public	functionTable;
+CleanupFunctions:	public	functionTable;
+
+collectEntryAndCleanupFunctions:	
+		public	(u: ref unit_s, 
+			 last: ref linkOrder_t,
+			 level: int) ref linkOrder_t =
+	{
+	ux:		ref include_s;
+	sym:		ref symbol_s;
+	vCount:		int;
+	uclass:		unitClass_t;
+	n:		ref linkOrder_t;
+
+	if	(u->built)
+		return last;
+	u->built = TRUE;
+	uclass = u unitClass();
+	if	(uclass == UC_SYMBOL)
+		return last;
+
+		// Create the data for the link order map
+
+	n = new linkOrder_t[ 0, u, level ];
+	if	(last)
+		last->next = n;
+	else
+		SymbolTable.linkOrder = n;
+
+		// Now visit child units
+
+	for	(ux = u->includes; ux; ux = ux->next)
+		n = collectEntryAndCleanupFunctions(ux->unit, n, 
+								level + 1);
+	for	(sym = u->symbols; sym; sym = sym->next){
+		if	(sym->qualifier & DQ_ENTRY)
+			EntryFunctions log(sym);
+		else if	(sym->qualifier & DQ_CLEANUP)
+			CleanupFunctions log(sym);
+		}
+	return n;
+	}
+
+functionTable:	public	type	{
+	last:		ref symbolList;
+	current:	ref symbolList;
+
+	visible:
+
+	funcs:		ref symbolList;
+	count:		int;
+
+	public:
+
+log:	(sym: ref symbol_s) =
+	{
+	sl:	ref symbolList;
+
+	sl = threadHeap() new symbolList[ 0, sym, CleanupFunctions.count ];
+	if	(last)
+		last->next = sl;
+	else
+		funcs = sl;
+	last = sl;
+	count++;
+	}
+
+startTraversal:	() =
+	{
+	current = funcs;
+	}
+
+next:	() ref symbolList =
+	{
+	sl:	ref symbolList;
+
+	sl = current;
+	if	(sl)
+		current = sl->next;
+	return sl;
+	}
+
+	};
+
+symbolList:	public	type	{
+	public:
+
+	next:		ref symbolList;
+	sym:		ref symbol_s;
+	refCount:	int;
+	};
+

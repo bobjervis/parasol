@@ -1,0 +1,145 @@
+include	file, hardware, window, console, format, editor;
+
+include	instruct;
+
+debugArena:	public	type	{ public:
+
+initializeDisplays:	dynamic	() =
+	{
+	}
+
+displayState:	dynamic	(w: ref frob) paddr_t =
+	{
+	return 0;
+	}
+
+fetchData:	dynamic	(addr: paddr_t, len: paddr_t) [:] byte =
+	{
+	return "";
+	}
+
+fetchPointer:	dynamic	(addr: paddr_t) paddr_t =
+	{
+	return 0;
+	}
+
+fetchTask:	dynamic	() ref task_t =
+	{
+	return 0;
+	}
+
+codeBuffer:	dynamic	() ref instructionBuffer =
+	{
+	return 0;
+	}
+
+getDataLength:	dynamic	() paddr_t =
+	{
+	}
+
+setContext:	dynamic	(t: ref task_t) =
+	{
+	}
+/*
+	heapBlock.  If the first argument is zero, the function locates the
+	first block in the current heap.  The class, address, and size of the
+	block is filled in.  A new cookie is returned.  A value of ~0 means
+	the block contents are not valid.  This should be taken as a signal of
+	the end of the heap.
+ */
+heapBlock:	dynamic	(p: vaddr_t, b: ref block_t) vaddr_t =
+	{
+	return ~0;
+	}
+
+dumpData: (e: ref Emitter, addr: unsigned, len: int) =
+	{
+	cp:	[:] byte;
+	i:	int;
+	j:	int;
+	line:	unsigned;
+
+	line = addr & ~0xf;
+	len += addr - line;
+	cp = fetchData(line, 16);
+	if	(|cp < 16)
+		len = |cp;
+	if	(len == 0)
+		return;
+	e printf("%08x: ", line);
+	i = 8;
+	j = 0;
+	while	(i && len){
+		if	(line + j >= addr)
+			e printf("%02x ", cp[8 - i]);
+		else
+			e printf("   ");
+		i--;
+		j++;
+		len--;
+		}
+	while	(i){
+		e printf("   ");
+		i--;
+		}
+	i = 8;
+	e printf(" ");
+	while	(i && len){
+		if	(line + j >= addr)
+			e printf("%02x ", cp[16 - i]);
+		else
+			e printf("   ");
+		i--;
+		j++;
+		len--;
+		}
+	while	(i){
+		e printf("   ");
+		i--;
+		}
+	e printf("  ");
+	for	(i = 0; i < j; i++){
+		if	(line + i >= addr){
+			if	(isprint(cp[i]))
+				e putc(cp[i]);
+			else
+				e putc('.');
+			}
+		else
+			e putc(' ');
+		}
+	}
+
+	};
+
+block_t:	public	type	{ public:
+	next:		ref block_t;
+	prev:		ref block_t;
+	class:		blockClass_t;
+	address:	vaddr_t;
+	size:		Size;
+	word:		unsigned[32];
+
+display:	(e: ref Emitter) =
+	{
+	e printf("%08x: [%6d] %08x", address, size, word);
+	}
+
+draw:	(s: [:] char) =
+	{
+	se:	stringEmitter = [ s ];
+
+	se printf("%08x: [%6d] %08x", address, size, word);
+	s = se result();
+	s[|s] = 0;
+	}
+
+	};
+
+blockClass_t:	public	type	byte = {
+	BC_UNKNOWN,			// ??? unknown block type
+	BC_STRING,			// ascii string
+	BC_FREE,			// free block
+	BC_INTERNAL,			// internal object
+	BC_EXTERNAL,			// external object
+	};

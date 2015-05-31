@@ -1,0 +1,45 @@
+include	string, alys, file, error, driver, filesys;
+
+main:	entry	() =
+	{
+	i, j:	unsigned;
+	x:	ref far driver;
+	_ts:	[256] char;
+	ts:	[:] char;
+
+	ts = _ts;
+	if	(|commandLine.arguments == 0)
+		help();
+	for	(i = 0; i < |commandLine.arguments; i++){
+		s:	[:] char; 
+
+		s = commandLine.arguments[i];
+
+		sc:	stringConverter = [ s ];
+
+		j = sc encodeUnsigned();
+		if	(!sc.success){
+			printf("Object id must be a number: %S\n", s);
+			help();
+			}
+		x = ref far driver(j);
+		ts [:]= myHost() getObjectType(x);
+		if	(|ts == 0){
+			printf("Unknown object: %d\n", j);
+			help();
+			}
+		else if (!typeStringInherits(ts, ":model.driver.driver")){
+			printf("Object %d is not a driver", j);
+			help();
+			}
+		x makeNonResident();
+		x close();
+		}
+	exit(EX_SUCCESS);
+	}
+
+help:	() =
+	{
+	printf("Use is: UNLOAD driver_oid ...\n");
+	}
+

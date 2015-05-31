@@ -1,0 +1,639 @@
+include	edserver;
+include	string, format;
+include	file;
+include	error;
+include	filesys;
+include	treeview, editor;
+include	console, window;
+include	alys;
+
+mainSetup:	entry	() =
+	{
+	arg:	[:] char;
+	i:	int;
+	x:	unsigned;
+	fpathb:	[MAXPATH] char;
+	fpath:	[:] char;
+
+	if	(|commandLine.arguments > 1){
+		printf("NAVIGATOR Version 2.0\n");
+		printf("Use is: navigate [ path ]\n");
+		exit(1);
+		}
+	if	(|commandLine.arguments == 1)
+		arg = commandLine.arguments[0];
+	else
+		arg = ".";
+	fpath = fpathb;
+	fpath [:]= FileSystem getAbsolutePath(arg);
+
+	DirecBuffer = new directoryBuffer[ fpath ];
+
+	MkdirData = stringDup("");
+
+	Display = new display[ DirecBuffer ];
+	}
+
+Display:	ref display;
+
+display:	type	inherit	applicationShell	{
+	dirs:		ref treeEditor;
+
+	public:
+
+constructor:	(db: ref directoryBuffer) =
+	{
+	m:		ref menubar;
+	file, window:	ref popupMenu;
+
+	super constructor("Directories");
+	iconLabel("navigate", C_TITLE);
+	useFooter();
+	m = new menubar[];
+	setMenu(m);
+
+	file = new popupMenu[ m ];
+	file button("Hide Directory    Ctrl-H", 'h', [ self, &hideDirectory ]);
+	file button("New Directory...",		'n', [ self, &newDirectory ]);
+	file button("Refresh           Ctrl-R", 'r', [ self, &refresh ]);
+	file button("Exit               Alt-X",	'x', [ self, &closeApplication ]);
+
+	window = new popupMenu[ m ];
+	window button("File manager",		'f', [ self, &launchFiles ]);
+	window button("New shell      F6",	'n', [ self, &launchShell ]);
+
+	m pulldown("File",			'f', file);
+	m pulldown("Windows", 			'w', window);
+
+	dirs = new treeEditor[ db ];
+	anchor(dirs);
+	dirs setTextFocus();
+	configure([ 40, 30 ]);
+	open();
+	}
+
+refresh:	() =
+	{
+	dirs refresh();
+	}
+
+newDirectory:	() =
+	{
+	new mkdirForm[ ];
+	}
+
+hideDirectory:	() =
+	{
+	dirs closeItem();
+	}
+
+launchShell:	() =
+	{
+	i:	int;
+	pid:	ref far External;
+	lookup:	PathList = [];
+	cmd:	[:] char;
+	path:	[:] char;
+
+	path = DirecBuffer getPath();
+	i = FileSystem setCurrentDirectory(path);
+	if	(i < 0){
+		Display postFooter("Can't enter directory");
+		return;
+		}
+	lookup useEnvironment("PATH");
+	cmd = lookup search("session", ".run", 0);
+	if	(|cmd == 0){
+		Display postFooter("Couldn't find command 'session.run'");
+		return;
+		}
+	pid = FileSystem spawn(0, cmd, "shell");
+	if	(pid == 0){
+		Display postFooter("Can't spawn 'session.run'");
+		return;
+		}
+	disown(pid);
+	}
+
+launchFiles:	() =
+	{
+	dirs enterKey();
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	switch	(k){
+	case	F6:		launchShell();		break;
+	default:
+		return super processKeystroke(k);
+		}
+	return TRUE;
+	}
+
+	};
+
+directory:	type	{
+	child:		ref directory;
+	nextSibling:	ref directory;
+	prevSibling:	ref directory;
+	parent:		ref directory;
+
+	public:
+
+	isOpen:		boolean;
+	path:		[:] char;
+	attrib:		fAttributes_t;
+	tag:		[:] char;
+
+create:	factory	(par: ref directory, a_path: [:] char, 
+						attr: int) ref directory =
+	{
+	self = new directory;
+	path = stringDup(a_path);
+	tag = stringDup(stripDirectory(path));
+	attrib = attr;
+	parent = par;
+	child = 0;
+	isOpen = FALSE;
+	if	(par && par->child){
+		x:	ref directory;
+		lastx:	ref directory;
+
+		lastx = 0;
+		for	(x = par->child; x; lastx = x, x = x->nextSibling)
+			if	(compare(x) < 0)
+				break;
+		if	(x){
+			nextSibling = x;
+			prevSibling = x->prevSibling;
+			if	(x->prevSibling)
+				x->prevSibling->nextSibling = self;
+			else
+				par->child = self;
+			x->prevSibling = self;
+			}
+		else	{
+			nextSibling = 0;
+			prevSibling = lastx;
+			lastx->nextSibling = self;
+			}
+		}
+	else	{
+		if	(par)
+			par->child = self;
+		nextSibling = 0;
+		prevSibling = 0;
+		}
+	return self;
+	}
+
+open:	() =
+	{
+	d:	ref directory;
+
+	if	(child == 0)
+		expandsubpath(path, "*", self);
+	isOpen = TRUE;
+	if	(child){
+		for	(d = child; d; d = d->nextSibling){
+			if	(d->attrib & FA_NETNODE)
+				continue;
+			if	(d->child == 0){
+				expandsubpath(d->path, "*", d);
+				if	(d->child == 0)
+					d->isOpen = TRUE;
+				}
+			}
+		}
+	}
+
+close:	() int =
+	{
+	if	(isOpen && child){
+		isOpen = FALSE;
+		return TRUE;
+		}
+	else
+		return FALSE;
+	}
+
+compare:	(x: ref directory) int =
+	{
+	return stringCompare(tag, x->tag);
+	}
+
+draw:	(se: ref stringEmitter) =
+	{
+	drawParent(se, TRUE);
+	se write(tag);
+	if	(!isOpen)
+		se write(" ...");
+	}
+
+drawParent:	(se: ref stringEmitter, drawHoriz: boolean) =
+	{
+	if	(parent == 0)
+		return;
+	parent drawParent(se, FALSE);
+	if	(drawHoriz){
+		if	(nextSibling)
+			se putc(0xC3);
+		else
+			se putc(0xC0);
+		se putc(0xC4);
+		if (!isOpen){
+			se putc('+');
+			se putc(0xC4);
+			}
+		else if (child){
+			se putc('-');
+			se putc(0xC4);
+			}
+		se putc(' ');
+		}
+	else	{
+		if	(nextSibling)
+			se putc(0xB3);
+		else
+			se putc(' ');
+		se putc(' ');
+		}
+	}
+
+level:	() int =
+	{
+	d:	ref directory;
+	i:	int;
+
+	for	(i = 0, d = parent; d; d = d->parent, i++)
+		;
+	return i;
+	}
+
+totalDescendants:	() int =
+	{
+	d:	ref directory;
+	i:	int;
+
+	i = 1;						// count self
+	if	(isOpen){
+		for	(d = child; d; d = d->nextSibling)
+			i += d totalDescendants();	// count children
+		}
+	return i;
+	}
+/*
+	This function locates the nth directory.  The resulting directory
+	is returned in *dp.  If the n value is too high, the return value is
+	n minus the number of directories found.  Note that n starts counting
+	at 1.  Note that *dp is always the last directory found, even if the
+	count was too high.
+ */
+seek:	(n: int, dp: ref ref directory) int =
+	{
+	*dp = self;
+	if	(n <= 1)			// a hit
+		return 0;
+
+	d:	ref directory;
+
+	n--;					// count self
+	if	(isOpen){
+		for	(d = child; d; d = d->nextSibling){
+			n = d seek(n, dp);		// count children
+			if	(n == 0)
+				return 0;		// there was a hit
+			}
+		}
+	return n;
+	}
+
+seekParent:	() ref directory =
+	{
+	if	(parent)
+		return parent;
+	else
+		return self;
+	}
+
+seekChild:	(srch: [:] char) ref directory =
+	{
+	d:	ref directory;
+
+	if	(isOpen){
+		for	(d = child; d; d = d->nextSibling)
+			if	(stringCompare(d->tag, srch) == 0)
+				return d;
+		}
+	return self;
+	}
+
+indexOf:	(loc: ref directory, i: int) int =
+	{
+	if	(loc == self)
+		return i;
+	d:	ref directory;
+
+	if	(isOpen){
+		for	(d = child; d; d = d->nextSibling){
+			i = d indexOf(loc, i + 1);
+			if	(i >= 0)
+				return i;
+			i = -i;
+			}
+		}
+	return -i;
+	}
+
+	};
+
+expandsubpath:	(dir: [:] char, filename: [:] char, 
+						parent: ref directory) int =
+	{
+	ff:	finder;
+	i:	int;
+	fpath:	[MAXPATH] char;
+	cp:	ref char;
+	scp:	ref char;
+	d:	ref directory;
+
+	if	(ff open(dir, filename, FA_DIR) != SUCCESS)
+		return(-1);
+
+		/* Copy the directory part of the path */
+
+	while	(ff next() == SUCCESS){
+		s:	unsigned;
+		cp:	ref char;
+
+		if	(ff.attrib & FA_DIR == 0)
+			continue;
+//		if	(ff.attrib & FA_NETNODE)
+//			continue;
+		i = |ff.pathname;
+		cp = ff.pathname + i - 1;
+		if	(i > 1 &&
+			 cp[0] == '.'){
+			if	(cp[-1] == '.' ||
+				 cp[-1] == '/' ||
+				 cp[-1] == ':')
+				continue;
+			}
+		d = directory create(parent, ff.pathname, ff.attrib);
+		}
+	ff close();
+	return(1);
+	}	
+
+LineBuffer:	[800] char;
+
+DirecBuffer:	ref directoryBuffer;
+
+directoryBuffer:	type	inherit	treeBuffer	{
+	root:	ref directory;
+	loc:	ref directory;
+	ln:	int;
+	max:	int;
+	path:	[:] char;
+
+	public:
+
+constructor:	(p: [:] char) =
+	{
+	d:	ref directory;
+
+	path = p;
+	root = directory create(0, path, 0);
+	root open();
+	max = root totalDescendants();
+	loc = root;
+	ln = 0;
+	}
+
+constructFilename:	(p: [:] char) [:] char =
+	{
+	fbuf:	[MAXPATH] char;
+	fbuf2:	[MAXPATH] char;
+	fpath:	[:] char;
+	fabs:	[:] char;
+
+	if	(|p && p[0] == '/')
+		fpath = p;
+	else
+		fpath = makePath(fbuf, loc->path, p, "");
+	fabs = fbuf2;
+	fabs [:]= FileSystem getAbsolutePath(fpath);
+	return stringDup(fabs);
+	}
+//
+//	This function refreshes the directories.
+//
+refresh:	dynamic	(line: int) boolean =
+	{
+	return FALSE;
+	}
+
+seek:	dynamic	(line: int) int =
+	{
+	x:	int;
+
+	if	(ln == line)
+		return ln;
+	x = root seek(line + 1, &loc);
+	ln = line - x;
+	return ln;
+	}
+
+seekParent:	dynamic	(line: int) int =
+	{
+	x:	int;
+
+	if	(ln != line){
+		x = root seek(line + 1, &loc);
+		ln = line - x;
+		}
+	loc = loc seekParent();
+	ln = root indexOf(loc, 0);
+	return ln;
+	}
+
+seekChild:	dynamic	(line: int, tag: [:] char) int =
+	{
+	x:	int;
+
+	if	(ln != line){
+		x = root seek(line + 1, &loc);
+		ln = line - x;
+		}
+	loc = loc seekChild(tag);
+	ln = root indexOf(loc, 0);
+	return ln;
+	}
+
+fetchLine:	dynamic	() [:] char =
+	{
+
+	if	(loc == 0)
+		return "";
+
+	se: stringEmitter = [ LineBuffer ];
+
+	loc draw(&se);
+	return se result();
+	}
+
+tagIndent:	dynamic	() int =
+	{
+	return loc level() * 2 + 3;
+	}
+
+tagLength:	dynamic	() int =
+	{
+	return stringLength(loc->tag);
+	}
+
+open:		dynamic	(ref char) int =
+	{
+	if	(loc && loc->path){
+		if	(loc->isOpen)
+			launchFiles(loc->path);
+		else	{
+			loc open();
+			max = root totalDescendants();
+			return TRUE;
+			}
+		}
+	return FALSE;
+	}
+
+launch:		dynamic	(ref char) int =
+	{
+	if	(loc && loc->path)
+		launchFiles(loc->path);
+	return FALSE;
+	}
+
+lineCount:	dynamic	() int =
+	{
+	return max;
+	}
+
+getTag:	dynamic	() [:] char =
+	{
+	return loc->tag;
+	}
+
+getPath:	() [:] char =
+	{
+	return loc->path;
+	}
+
+focus:	dynamic	(i: int) =
+	{
+	seek(i);
+/*
+	if	(loc &&
+		 loc->path &&
+		 loc->attrib & FA_NETNODE == 0)
+		FileSystem setCurrentDirectory(loc->path);
+ */
+	}
+
+closeItem:	dynamic	(i: int) int =
+	{
+	r:	int;
+
+	seek(i);
+	r = loc close();
+	max = root totalDescendants();
+	return r;
+	}
+
+	};
+
+launchFiles:	(path: [:] char) =
+	{
+	i:	int;
+	pid:	ref far External;
+	lookup:	PathList = [];
+	cmd:	[:] char;
+
+	i = FileSystem setCurrentDirectory(path);
+	if	(i < 0){
+		Display postFooter("Can't enter directory");
+		return;
+		}
+	lookup useEnvironment("PATH");
+	cmd = lookup search("filemgr", ".run", 0);
+	if	(|cmd == 0){
+		Display postFooter("Couldn't find command 'filemgr.run'");
+		return;
+		}
+	pid = FileSystem spawn(0, cmd, path);
+	if	(pid == 0){
+		Display postFooter("Can't spawn '%S'", cmd);
+		return;
+		}
+	disown(pid);
+	}
+
+mkdirForm:	type	inherit popupShell {
+	typein:		ref textField;
+
+	public:
+
+constructor:	() =
+	{
+	g:	ref Grid;
+	d:	ref dialog;
+	rprop:	static	[] byte = [ 1 ];
+	cprop:	static	[] byte = [ 0, 1 ];
+
+	super constructor("New Directory", Display);
+
+		// Describe the form
+
+	g = new Grid[ 2, 1 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "Path: ", C_READONLY, C_READONLY ]);
+	typein = new textField[ MkdirData, C_TEXT, C_READONLY ];
+	typein onEnterKey([ self, &ok ]);
+	g cell([ 1, 0 ], typein);
+
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g);
+	anchor(d);
+	typein setTextFocus();
+
+		// Draw it and accept input
+
+	configure([ 60, 1 ]);
+	open();
+	}
+
+ok:	() =
+	{
+	j:	int;
+	cp:	[:] char;
+
+	delete MkdirData;
+	cp = typein getValue();
+	MkdirData = stringDup(cp);
+	cp = DirecBuffer constructFilename(cp);
+	j = FileSystem makeDirectory(cp);
+	delete cp;
+	if	(j < 0)
+		Display postFooter("Couldn't make directory '%S': %S", 
+					MkdirData, cmdError(j));
+	else
+		Display refresh();
+	delete self;
+	}
+
+	};
+
+MkdirData:	[:] char;

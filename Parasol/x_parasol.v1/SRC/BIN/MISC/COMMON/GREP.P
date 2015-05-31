@@ -1,0 +1,101 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	error;
+include	regexp;
+include	filesys;
+include	file;
+
+Pattern:	ref searchPattern;
+
+main:	entry	() =
+	{
+	Pattern = new searchPattern[ ];
+	if	(|commandLine.arguments >= 2){
+		try	{
+			Pattern compile(commandLine.arguments[0]);
+			}
+		except	{
+			printf("Improper pattern\n");
+			return;
+			}
+		i:	int;
+
+		for	(i = 1; i < |commandLine.arguments; i++)
+			expandsubpath(commandLine.arguments[i]);
+		}
+	else
+		printf("Use is: GREP pattern file(s)\n");
+	exit(EX_SUCCESS);
+	}
+
+expandsubpath:	(filename: [:] char) =
+	{
+	ff:	finder;
+	dir:	[:] char;
+	pat:	[:] char;
+
+	dir = getDirectory(filename);
+	pat = stripDirectory(filename);
+	if	(ff open(dir, pat, 0) != SUCCESS)
+		printf("Could not open %s\n", filename);
+	else	{
+		while	(ff next() == SUCCESS)
+			grepFile(ff.pathname);
+		}
+//	ff close();
+	}
+
+grepFile:	(s: [:] char) =
+	{
+	fd:	stream;
+	cp:	ref byte;
+	data:	ref byte;
+	buf:	[:] byte;
+	len:	long;
+
+	if	(fd open(s, AR_READ) != SUCCESS){
+		printf("Couldn't open %S\n", s);
+		return;			// Shouldn't happen
+		}
+	len = fd seek(0, SEEK_END);
+	fd seek(0, SEEK_ABS);
+	cp = alloc(len);
+	if	(cp == 0){
+		printf("Not enough memory for %S\n", s);
+		fd close();
+		return;
+		}
+	data = cp;
+	buf = cp[:len];
+	len = fd read(buf);
+//	printf("|buf = %d len = %d\n", |buf, len);
+	fd close();
+
+	endp:	ref char;
+
+	endp = cp + len;
+	while	(cp < endp){
+		match:		[:] char;
+		line:		ref char;
+		srch:		[:] char;
+
+		line = cp;
+		while	(cp < endp){
+			if	(*cp == '\n'){
+				cp++;
+				break;
+				}
+			cp++;
+			}
+		srch = line[:cp - line];
+		try	{
+			match = Pattern search(srch);
+			printf("%S: %S", s, srch);
+			}
+		}
+	}

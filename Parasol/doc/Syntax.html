@@ -1,0 +1,18 @@
+<h1>Parasol Language Syntax</h1>
+<h2>Tokenization</h2>
+Parasol programs are created as text files.
+The Parasol compiler processes these files in two stages: tokenization and parsing.
+These stages are completed before any semantic analysis of the parsed text is begun.
+<p>
+Parasol was designed to follow the syntactic conventions of many other languages, in order to make Parasol code easier to read.
+In the original design, most expressions read exactly as they would in C or C++, and since Parasol's creation, Java and javaScript along with other languages have followed similar patterns.
+Parasol did deviate significantly in declaration syntax, which proved to be a barrier for some.
+<p>
+In this version of the language, every effort has been made to keep basic declaration syntax as compatible with C, C++ and Java as possible.
+One aspect of the original Parasol language is retained however: type names are always normal symbols like any other and you can declare symbols with names like <b>int</b> without causing an immediate compilation error.
+In order to preserve this aspect of Parasol, small restrictions had to be put into the language syntax.
+<p>
+For example, white space is significant in more places than in Java or C.
+In every case, widespread coding standards for C and Java mandate white space in exactly the same locations as Parasol requires.
+As a result, programmer's accustomed to conforming to coding styles should not see much of an impediment.
+ 

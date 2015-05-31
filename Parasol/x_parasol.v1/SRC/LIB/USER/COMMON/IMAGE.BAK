@@ -1,0 +1,661 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	error, file, heap;
+
+imageHeader:	type	packed	{
+	public:
+
+	magic:		unsigned[16];
+	version:	unsigned[16];
+	recordMap:	fileOffset;
+	};
+
+SAVE_MAGIC:	const	unsigned[16] = 0xD497;
+SAVE_VERSION:	const	unsigned[16] = 0x0100;
+
+LoadTrap:	Trap;
+
+MINIMUM_TAG:	public	const byte = 0;
+RAW_LONG:	public	const byte = 0x7f;
+RAW_TRIPLE:	public	const byte = 0x7e;
+RAW_SHORT:	public	const byte = 0x7d;
+RAW_ULONG:	public	const byte = 0xff;
+RAW_UTRIPLE:	public	const byte = 0xfe;
+RAW_USHORT:	public	const byte = 0xfd;
+
+MAX_TINY:	public	const long =         0x7c;
+MIN_TINY:	public	const long =        -0x80;
+MAX_SHORT:	public	const long =       0x7fff;
+MIN_SHORT:	public	const long = 	  -0x8000;
+MAX_TRIPLE:	public	const long = 	 0x7fffff;
+MIN_TRIPLE:	public	const long = 	-0x800000;
+MAX_UTINY:	public	const long =         0xfc;
+MAX_USHORT:	public	const long =       0xffff;
+MAX_UTRIPLE:	public	const long = 	 0xffffff;
+NTAGS:		public	const int = 64;
+
+loadFunction:	public	type	ref (pointer, ref loader);
+LoadFunctions:	[NTAGS] loadFunction;
+MinimumSizes:	[NTAGS] Size;
+
+defineLoadFuncs:	public	(recId: byte, lf: loadFunction, sz: Size) =
+	{
+	recId -= MINIMUM_TAG;
+	if	(recId >= NTAGS)
+		return;
+	LoadFunctions[recId] = lf;
+	MinimumSizes[recId] = sz;
+	}
+/*
+	A imageFile is a special kind of file designed to hold a network
+	of objects.  The intention is that a collection of objects can be 
+	copied to the file and later copied from the file, preserving the
+	pointer structure in the process.  It is intended that this file
+	format should form the core of a persistent object database.  One
+	of the essential elements of the design is that the objects copied
+	to such a file and from such a file should be extractable selectively,
+	and should admit of extensions and field upgrades.
+
+	Wherever possible, the notion is that the entire object should be
+	copied unless specifically overridden by the presence of a save and
+	a restore function.
+
+	In the long run, this function will be expanded to encompass the
+	notion of a persistent object store.  The central question is how
+	the data structures are to be managed.  For example, is a persistent
+	object data base best viewed as being in memory images of objects
+	or should they be seen potentially as file formats also usable for
+	data exchange?
+
+	Field upgrades are an important issue in either perspective.
+
+	The ALYS model calls for persistent objects being identified in
+	the file system.  Such objects are assumed to be complex, with
+	many dynamically built sub-objects.  Thus, a word processing 
+	document, a spreadsheet, a drawing or a programming project are
+	objects suitable for representation in the ALYS environment.
+
+	There are several components to an image file.  The header provides
+	a magic number to verify the contents, along with a version number
+	and an animator id and version number.  The animator id and version
+	number are designed to quickly determine whether the image file was
+	created by this animator, or else some prior or alien version of the
+	animator.  For heterogeneous networks, the animator architecture may
+	be needed.  Most image files will be processed by the same animator
+	that created the file, so that pathway should be as efficient as
+	possible.
+
+	The main conversion that must take place is the translation of the
+	pointers to indices.
+
+	The second part of an image file is the stored objects themselves.
+
+	The third part of an image file is the object directory.  Each
+	distinct pointer value that was saved to the image file is assigned
+	a unique index.  The object directory maps indices onto object
+	offsets.  Note that a pointer value that was referenced but not 
+	actually saved will get an index, but when the image is reloaded, the
+	value will be NULL.
+
+	The fourth part of an image file are the object labels.  An application
+	can supply string labels for objects, if desired.  This way, one can
+	locate specific objects in an image file.  This part is not currently
+	supported.  For now, only object number 1 can be obtained.
+ */
+imageFile:	public	type	inherit	stream {
+	private:
+
+	allocated:	fileOffset;		// total allocated length
+
+	public:
+
+	saveHeap:	ref incrementalHeap;	// heap data for save info
+	typeIndex:	unsigned[16];
+
+create:	(f: [:] char, i: int) int =
+	{
+	i = super create(f, i);
+	allocated = sizeof imageHeader;
+	seek(sizeof imageHeader, SEEK_ABS);
+	memSet(&Savehash, 0, sizeof Savehash);
+	Savelist = 0;
+	saveHeap = new incrementalHeap[ threadHeap() ];
+	return i;
+	}
+/*
+	This function is called whenever another object should be saved to
+	the image file.  This function returns TRUE if the object has not yet
+	been saved, FALSE otherwise.
+ */
+beginRecord:	(tag: byte, loc: pointer, len: int) boolean =
+	{
+	s:	ref saveMap;
+
+	s = saveMap create(loc, saveHeap);
+	if	(s->FileOffset)
+		return FALSE;
+	s->FileOffset = allocated;
+	s->Length = len;
+	putc(tag);
+	return TRUE;
+	}
+
+putc:	dynamic	(c: char) int =
+	{
+	allocated++;
+	return super putc(c);
+	}
+
+uinteger:	(i: unsignedLong) =
+	{
+	if	(i <= MAX_UTINY)
+		putc(i);
+	else if	(i <= MAX_USHORT){
+		putc(RAW_USHORT);
+		putc(i);
+		putc(i >> 8);
+		}
+	else if	(i <= MAX_UTRIPLE){
+		putc(RAW_UTRIPLE);
+		putc(i);
+		putc(i >> 8);
+		putc(i >> 16);
+		}
+	else	{
+		putc(RAW_ULONG);
+		putc(i);
+		putc(i >> 8);
+		putc(i >> 16);
+		putc(i >> 24);
+		}
+	}
+
+integer:	(i: long) =
+	{
+	if	(i <= MAX_TINY &&
+		 i >= MIN_TINY)
+		putc(i);
+	else if	(i <= MAX_SHORT ||
+		 i >= MIN_SHORT){
+		putc(RAW_SHORT);
+		putc(i);
+		putc(i >> 8);
+		}
+	else if	(i <= MAX_TRIPLE ||
+		 i >= MIN_TRIPLE){
+		putc(RAW_TRIPLE);
+		putc(i);
+		putc(i >> 8);
+		putc(i >> 16);
+		}
+	else	{
+		putc(RAW_LONG);
+		putc(i);
+		putc(i >> 8);
+		putc(i >> 16);
+		putc(i >> 24);
+		}
+	}
+
+address:	(p: pointer) =
+	{
+	s:	ref saveMap;
+
+	if	(p){
+		s = saveMap create(p, saveHeap);
+		integer(s->Index);
+		}
+	else
+		integer(0);
+	}
+/*
+	This function is not needed for now.
+
+label:	(p: pointer, s: string) =
+	{
+	sm:	ref saveMap;
+
+	if	(p){
+		sm = saveMap create(p, saveHeap);
+		sm->Label = s;
+		}
+	}
+ */
+literal:	(data: pointer, len: int) =
+	{
+	integer(len);
+	allocated += len;
+	write(ref byte(data)[:len]);
+	}
+
+putstring:	(cp: [:] char) =
+	{
+	i:	int;
+
+	for	(i = 0; i < |cp; i++)
+		putc(cp[i]);
+	putc(0);
+	}
+
+close:	() int =
+	{
+	s:	ref saveMap;
+	r:	recordMap;
+	i:	int;
+	sh:	imageHeader;
+
+	sh.magic = SAVE_MAGIC;
+	sh.version = SAVE_VERSION;
+	sh.recordMap = seek(0, SEEK_END);
+	for	(s = Savelist; s; s = s->Link){
+		r.FileOffset = s->FileOffset;
+		r.X.Length = s->Length;
+		write(ref byte(&r)[:sizeof r]);
+		}
+	seek(0, SEEK_ABS);
+	write(ref byte(&sh)[:sizeof sh]);
+	memSet(&Savehash, 0, sizeof Savehash);
+	saveHeap freeAll();
+	delete saveHeap;
+	super close();
+	return SUCCESS;
+	}
+
+};
+/*
+	A loader object loads a previously saved image file.  
+ */
+loader:	public	type	{
+	Buffer:		ref byte;
+	Cursor:		ref byte;
+	EndPtr:		ref byte;
+	RecordMap:	ref recordMap;
+	Records:	int;
+
+	public:
+
+integer:	() long =
+	{
+	c:	signedByte;
+	i:	long;
+
+	c = *Cursor++;
+	switch	(c){
+	default:
+		return c;
+
+	case	RAW_SHORT:
+		i = *Cursor++;
+		i += *Cursor++ << 8;
+		return signed[16](i);
+
+	case	RAW_TRIPLE:
+		i = *Cursor++;
+		i += *Cursor++ << 8;
+		i += *Cursor++ << 16;
+		i <<= 8;
+		i >>= 8;
+		return i;
+
+	case	RAW_LONG:
+		i = *Cursor++;
+		i += *Cursor++ << 8;
+		i += *Cursor++ << 16;
+		i += *Cursor++ << 24;
+		return i;
+		}
+	}
+
+uinteger:	() long =
+	{
+	c:	byte;
+	i:	unsignedLong;
+
+	c = *Cursor++;
+	switch	(c){
+	default:
+		return byte(c);
+
+	case	RAW_USHORT:
+		i = *Cursor++;
+		i += *Cursor++ << 8;
+		return i;
+
+	case	RAW_UTRIPLE:
+		i = *Cursor++;
+		i += *Cursor++ << 8;
+		i += *Cursor++ << 16;
+		return i;
+
+	case	RAW_ULONG:
+		i = *Cursor++;
+		i += *Cursor++ << 8;
+		i += *Cursor++ << 16;
+		i += *Cursor++ << 24;
+		return i;
+		}
+	}
+
+address:	() pointer =
+	{
+	index:	long;
+
+	index = integer();
+	if	(index > Records ||
+		 index <= 0)
+		return 0;
+	else
+		return RecordMap[index - 1].X.Location;
+	}
+
+literal:	(buf: pointer, len: int) =
+	{
+	if	(EndPtr - Cursor < len){
+		printf("Literal too long: %d asked, %d present\n", len, 
+						EndPtr - Cursor);
+		LoadTrap raise();
+		}
+	memCopy(buf, Cursor, len);
+	Cursor += len;
+	}
+
+string:	() [:] char =
+	{
+	cp:	ref char;
+	s:	[:] char;
+
+	cp = Cursor;
+	while	(*Cursor)
+		Cursor++;
+	s = cp[:Cursor - cp];
+	Cursor++;
+	return s;
+	}
+/*
+list:	(mode: byte, nxtp: int) * =
+	{
+	lx:	* char;
+	last:	* char;
+	items:	* char;
+
+	items = 0;
+	last = 0;
+	for	(;;){
+		lx = object(mode);
+		if	(lx == 0)
+			break;
+		if	(last)
+			* ref ref char(last + nxtp) = lx;
+		else
+			items = lx;
+		* ref ref char(lx + nxtp) = 0;
+		last = lx;
+		}
+	return items;
+	}
+ */
+open:	(filename: [:] char) int =
+	{
+	i:		int;
+	bufferLen:	int;
+	fd:		stream;
+	hdr:		ref imageHeader;
+	r:		ref recordMap;
+	b:		[:] byte;
+
+	i = fd open(filename, AR_READ);
+	if	(i)
+		return i;
+	bufferLen = fd seek(0, SEEK_END);
+	fd seek(0, SEEK_ABS);
+	Buffer = threadHeap() alloc(bufferLen);
+	if	(Buffer == 0)
+		return ERRNOMEMORY;
+	fd read(Buffer[:bufferLen]);
+	fd close();
+	hdr = ref imageHeader(Buffer);
+	if	(hdr->magic != SAVE_MAGIC ||
+		 hdr->version != SAVE_VERSION){
+		printf("Invalid image header\n");
+		dumpData(Buffer, bufferLen);
+		LoadTrap raise();
+		}
+	RecordMap = ref recordMap(Buffer + hdr->recordMap);
+	EndPtr = Buffer + bufferLen;
+	Records = ref recordMap(EndPtr) - RecordMap;
+	return SUCCESS;
+	}
+
+decode:	() =
+	{
+	i:		int;
+	r:		ref recordMap;
+
+	for	(i = 1, r = RecordMap; i <= Records; i++, r++){
+		if	(r->FileOffset == 0){
+			r->X.Location = 0;
+			continue;
+			}
+		Cursor = Buffer + r->FileOffset;
+		if	(Cursor >= EndPtr){
+			printf("Record offset too large: asked %x has %x\n",
+						r->FileOffset, EndPtr - Buffer);
+			LoadTrap raise();
+			}
+
+		c:	byte;
+
+		c = *Cursor++ - MINIMUM_TAG;
+		if	(c >= NTAGS){
+			printf("Tag too large: %x\n", c);
+			LoadTrap raise();
+			}
+		if	(LoadFunctions[c]){
+			sz:	Size;
+			p:	pointer;
+
+			sz = MinimumSizes[c];
+			if	(r->X.Length > sz)
+				sz = r->X.Length;
+			p = alloc(sz);
+			memSet(p, 0, sz);
+			r->X.Location = p;
+			}
+		else	{
+			r->X.Location = 0;
+			printf("Unknown image record %d: @%x type %d\n", i, r->FileOffset, c + MINIMUM_TAG);
+			}
+		}
+	for	(i = 1, r = RecordMap; i <= Records; i++, r++){
+		if	(r->FileOffset == 0)
+			continue;
+		Cursor = Buffer + r->FileOffset;
+		if	(Cursor >= EndPtr){
+			printf("Record offset too large: asked %x has %x\n",
+						r->FileOffset, EndPtr - Buffer);
+			LoadTrap raise();
+			}
+
+		c:	byte;
+
+		c = *Cursor++ - MINIMUM_TAG;
+		if	(c >= NTAGS){
+			printf("Tag too large: %x\n", c);
+			LoadTrap raise();
+			}
+		if	(LoadFunctions[c])
+			LoadFunctions[c](r->X.Location, self);
+		}
+	}
+
+getObject:	(index: int) pointer =
+	{
+	if	(index > Records ||
+		 index <= 0)
+		return 0;
+	else
+		return RecordMap[index - 1].X.Location;
+	}
+
+seek:	(offset: long, whence: int) long =
+	{
+	switch	(whence){
+	case	SEEK_ABS:
+		Cursor = Buffer + offset;
+		break;
+
+	case	SEEK_CUR:
+		Cursor += offset;
+		break;
+
+	case	SEEK_END:
+		Cursor = EndPtr + offset;
+		break;
+		}
+	return Cursor - Buffer;
+	}
+
+close:	() =
+	{
+//	Heap free(Buffer);
+	}
+
+	};
+
+SAVEHASH:		public	const unsigned = 1024;
+
+Savehash:	public	[SAVEHASH] ref saveMap;
+Savelist:	ref saveMap;
+Saveend:	ref saveMap;
+Saveindex:	int;
+
+recordMap:	public	type	packed	{
+	public:
+
+	FileOffset:	fileOffset;
+	X:	union	{
+		public:
+
+		Length:		long;
+		Location:	pointer;
+		};
+	};
+
+saveMap:	public	type	{
+	public:
+
+	Next:		ref saveMap;
+	Link:		ref saveMap;
+	Location:	pointer;
+	FileOffset:	fileOffset;
+	Length:		int;
+	Index:		int;
+
+create:	factory	(loc: pointer, h: ref heap) ref saveMap =
+	{
+	i:		ref saveMap;
+	prev:		ref saveMap;
+	a:		int;
+	j:		int;
+	cp:		ref char;
+
+//	Probes++;
+	a = (unsigned(loc) >> 4) % SAVEHASH;
+					// strip off the low bits, which
+					// are not likely to give good
+					// separation
+	i = Savehash[a];
+	for	(prev = 0; i; prev = i, i = i->Next){
+//		Compares++;
+		if	(loc == i->Location){
+			if	(prev){
+				prev->Next = i->Next;
+				i->Next = Savehash[a];
+				Savehash[a] = i;
+				}
+			return i;
+			}
+		}
+//	Inserts++;
+	self = h alloc(sizeof saveMap);
+	Next = Savehash[a];
+	Savehash[a] = self;
+	if	(Savelist)
+		Saveend->Link = self;
+	else	{
+		Savelist = self;
+		Saveindex = 1;
+		}
+	Index = Saveindex++;
+	Saveend = self;
+	Link = 0;
+	FileOffset = 0;
+	Location = loc;
+	return self;
+	}
+
+	};
+/*
+Probes:		int;
+Compares:	int;
+Inserts:	int;
+
+final:	cleanup	() =
+	{
+	printf("Save Probes =    %6d   ", Probes);
+	printf("Compares =  %d\n", Compares);
+	if	(Probes)
+		printf("     Ratio =    %4d.%02d   ", Compares / Probes,
+			(Compares * 100 / Probes) % 100);
+	printf("Inserts =   %d\n", Inserts);
+	}
+ */
+dumpData: public	(p: pointer, len: int) =
+	{
+	cp:	ref byte;
+	i:	int;
+	j:	int;
+
+	cp = p;
+	while	(len){
+		printf("%08x: ", cp);
+		i = 8;
+		j = 0;
+		while	(i && len){
+			printf("%02x ", cp[8 - i]);
+			i--;
+			j++;
+			len--;
+			}
+		while	(i){
+			printf("   ");
+			i--;
+			}
+		i = 8;
+		printf(" ");
+		while	(i && len){
+			printf("%02x ", cp[16 - i]);
+			i--;
+			j++;
+			len--;
+			}
+		while	(i){
+			printf("   ");
+			i--;
+			}
+		printf("  ");
+		for	(i = 0; i < j; i++){
+			if	(isprint(cp[i]))
+				printf("%c", cp[i]);
+			else
+				stdout putc('.');
+			}
+		cp += 16;
+		printf("\n");
+		}
+	}

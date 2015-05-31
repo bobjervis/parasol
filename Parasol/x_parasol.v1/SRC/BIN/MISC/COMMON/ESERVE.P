@@ -1,0 +1,855 @@
+/*
+	Copyright (c) 1993,1994 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	edserver, msgboard;
+include	error;
+include	file, string;
+include	editor;
+include	alys;
+include	filebuf;
+include	filesys;
+include window;
+include	console;
+include	heap;
+
+main:	entry	() =
+	{
+	fname:	[:] char;
+	ename:	[:] char;
+
+	if	(|commandLine.arguments != 1)
+		help();
+
+		// Declare myself as an editorServer
+
+	ename = commandLine.arguments[0];
+	mainExternal(&EdServer);
+	permit(AR_ANY, AR_ANY, AR_ANY, AR_ANY);
+	i:int = FileSystem register(EdServer.objectId, ename,
+					":user.edserver.editorServer");
+	if	(i){
+
+			// Possibly because there already is one.
+
+		printf("Unable to register as %S: %S\n", ename,
+					cmdError(i));
+		help();
+		}
+	StartFileName = SharedHeap new [0] char;
+	EdServerPointer = ref far editorServer(EdServer.objectId);
+	}
+
+help:	() =
+	{
+	printf("Use is: ESERVE server-file\n");
+	exit(EX_FAIL);
+	}
+
+EdServerPointer:	ref far editorServer;
+MessageServer:		ref far messageBoard;
+/*
+	EdServer
+
+	Note: The use of reply statements is critical to the safe operation of
+	this code.  These operations potentially communicate with an existing
+	editor, so to avoid a potentially circularity, any such operation
+	will first reply to sender.  That way, if an existing editor does
+	indirectly send the server a message, the chain will not loop.
+ */
+EdServer:	inherit	editorServer {
+
+load:	gate	(filename: [:] char) =
+	{
+	reply;
+	FileList load(filename);
+	}
+
+defineMessageBoard:	gate	(x: ref far messageBoard) =
+	{
+	MessageServer = x;
+	}
+
+	// No styles supported
+
+defineStyle:	gate	(name: [:] char, glyph: [:] byte, 
+						color: color_t) style_t =
+	{
+	return 0;
+	}
+
+lookupStyle:	gate	(name: [:] char) style_t =
+	{
+	return 0;
+	}
+
+deleteStyle:	gate	(style_t) =
+	{
+	}
+
+setMark:	gate	(file: [:] char, loc: locator_t, 
+					style: style_t) mark_t =
+	{
+	md:	ref markDescriptor;
+
+	md = FileList defineMark(file, loc, style);
+	reply md->index;
+	md draw();
+	}
+
+gotoMark:	gate	(m: mark_t, message: [:] char) =
+	{
+	reply;
+	FileList gotoMark(m, message);
+	}
+
+deleteMark:	gate	(m: mark_t) =
+	{
+	reply;
+	FileList deleteMark(m);
+	}
+
+gotoLocation:	gate	(file: [:] char, version: Time, loc: position_t) =
+	{
+	reply;
+	FileList gotoLocation(file, version, loc);
+	}
+
+	};
+
+FileList:	{
+	listHead:	ref fileDescriptor;
+	listLock:	Lock;
+	markIndex:	int;
+	marks:		ref markDescriptor;
+
+	public:
+
+load:	(filename: [:] char) =
+	{
+	fd:	ref fileDescriptor;
+	f:	[MAXPATH] char;
+	fa:	[:] char;
+	i:	int;
+
+	try	{
+//		i = FileSystem access(filename, AR_READ);
+//		if	(i == 0){
+			fa = f;
+			fa [:]= FileSystem getAbsolutePath(filename);
+			critical(listLock){
+				fd = define(fa);
+				fd load();
+				}
+//			}
+		}
+	}
+
+defineMark:	(file: [:] char, loc: locator_t, 
+					style: style_t) ref markDescriptor =
+	{
+	fd:	ref fileDescriptor;
+	f:	[MAXPATH] char;
+	fa:	[:] char;
+	md:	ref markDescriptor;
+
+	fa = f;
+	fa [:]= FileSystem getAbsolutePath(file);
+	critical(listLock)
+		fd = define(fa);
+	markIndex++;
+	md = new markDescriptor[ marks, markIndex, fd, loc, style ];
+	marks = md;
+	return md;
+	}
+
+gotoMark:	(m: mark_t, message: [:] char) =
+	{
+	critical(listLock){
+		md:	ref markDescriptor;
+
+		for	(md = marks; md; md = md->next)
+			if	(md->index == m){
+				md->file gotoLocator(md->locator, message);
+				break;
+				}
+		}
+	}
+
+deleteMark:	(m: mark_t) =
+	{
+	}
+
+gotoLocation:	(file: [:] char, version: Time, loc: position_t) =
+	{
+	fd:	ref fileDescriptor;
+	f:	[MAXPATH] char;
+	fa:	[:] char;
+
+	fa = f;
+	fa [:]= FileSystem getAbsolutePath(file);
+
+	critical(listLock){
+		fd = define(fa);
+		fd gotoLocation(version, loc);
+		}
+	}
+
+define:	(fa: [:] char) ref fileDescriptor =
+	{
+	fd:	ref fileDescriptor;
+
+	for	(fd = listHead; fd; fd = fd->next)
+		if	(stringCompare(fa, fd->name) == 0)
+			return fd;
+
+	h:	ref Heap;
+	
+	h = SharedHeap activate();
+	fd = new fileDescriptor;
+	fd->next = listHead;
+	listHead = fd;
+	fd->name = stringDup(fa);
+	fd->viewer = 0;
+	fd->viewerClosed = FALSE;
+	h activate();
+	return fd;
+	}
+
+unload:	(fa: [:] char) =
+	{
+	fdprev, fd:	ref fileDescriptor;
+
+	critical(listLock){
+		for	(fdprev = 0, fd = listHead; fd; 
+						fdprev = fd, fd = fd->next)
+			if	(stringCompare(fa, fd->name) == 0){
+				if	(fdprev)
+					fdprev->next = fd->next;
+				else
+					listHead = fd->next;
+				fd->viewerClosed = TRUE;
+				break;
+				}
+		}
+	}
+
+	};
+
+fileDescriptor:	type	{ public:
+	next:		ref fileDescriptor;
+	name:		[:] char;
+	viewer:		ref fileViewer;
+	viewerClosed:	boolean;
+
+load:	() =
+	{
+	f:	ref far fileViewer;
+
+	if	(viewerClosed){
+		disown(thread(viewer, 0));
+		f = ref far fileViewer(viewer->objectId);
+		= f loadFile(name);
+		}
+	else if	(viewer)
+		viewer->editWindow toTop();
+	else	{
+		viewer = fileViewer create();
+		f = ref far fileViewer(viewer->objectId);
+		= f loadFile(name);
+		}
+	}
+
+gotoLocator:	(loc: locator_t, msg: [:] char) =
+	{
+	load();
+	viewer->editWindow gotoLocator(loc, msg);
+	}
+
+gotoLocation:	(version: Time, loc: position_t) =
+	{
+	load();
+	viewer->editWindow gotoLocation(version, loc);
+	}
+
+	};
+
+markDescriptor:	type	{ public:
+	next:		ref markDescriptor;
+	index:		mark_t;
+	file:		ref fileDescriptor;
+	locator:	locator_t;
+	style:		style_t;
+
+draw:	() =
+	{
+	}
+
+	};
+
+fileViewer:	public	type	inherit	inputHandler {
+	public:
+
+	editWindow:	ref fileEditor;
+
+create:	factory	() ref fileViewer =
+	{
+	self = SharedHeap new fileViewer[ ];
+	disown(thread(self, 0));
+	return self;
+	}
+
+constructor:	() =
+	{
+	editWindow = 0;
+	super constructor(0);
+	}
+
+loadFile:	gate	(filename: [:] char) =
+	{
+	esp:	ref fileEditor;
+
+	esp = new fileEditor[ filename ];
+	esp getInputFrom(self);
+	esp configure([ 80, 30 ]);
+	esp open();
+	esp reportFileStatus();
+	editWindow = esp;
+	}
+
+start:	gate	() =
+	{
+	}
+
+	// Ignore attention signals
+
+attention:		gate!	() = { }
+
+	};
+
+fileEditor:	public	type	inherit	applicationShell {
+	public:
+
+	filename:	[:] char;
+	buffer:		ref fileBuffer;
+	fileStatus:	int;
+	textArea:	ref textEditor;
+	fileLock:	Lock;
+
+constructor:	(filenm: [:] char) =
+	{
+	t, ic:				[:] char;
+	m:				ref menubar;
+	file, edit, view, option:	ref popupMenu;
+
+	buffer = 0;
+	fileLock = [];
+	t = stringDup(filenm);
+	super constructor(t);
+	iconLabel(getFilename(t), C_TITLE);
+	useFooter();
+	textArea = new textEditor[ ];
+	anchor(textArea);
+	connect(filenm);
+	textArea setScrap(&Scrap);
+	textArea setTextFocus();
+
+		// Describe the editor menus and shared data
+
+	m = new menubar[];
+	setMenu(m);
+
+	file = new popupMenu[ m ];
+	file button("Edit File...         F3",	'e', [ self, &startSession ]);
+	file button("Save File            F2",	's', [ self, &saveSession ]);
+	file button("Save All Files  Shft-F2",	'a', [ self, &saveAllSessions ]);
+	file button("Change Name...",		'c', [ self, &renameSession ]);
+	file button("Reread File",		'r', [ self, &reloadBuffer ]);
+	file button("Exit              Alt-X",	'x', [ self, &dismissRequest ]);
+
+	edit = new popupMenu[ m ];
+	edit button("Search...        Ctrl-F",	's', [ textArea, &textEditor.search ]);
+	edit button("Replace...       Ctrl-M",	'r', [ textArea, &textEditor.replace ]);
+	edit button("Last Again       Ctrl-A",	'a', [ textArea, &textEditor.again ]);
+	edit button("Goto Line...     Ctrl-G",	'g', [ self, &gotoLine ]);
+
+	view = new popupMenu[ m ];
+	view button("Next Error           F5",	'n', [ self, &nextErrorButton ]);
+	view button("Previous Error  Shft-F5",	'p', [ self, &previousErrorButton ]);
+
+	option = new popupMenu[ m ];
+	option toggle("Regular Expressions",	'r', [ self, &regularExprs ])
+				setValue(RegularExpressionSwitch, FALSE);
+	option toggle("Word Wrap",		'w', [ self, &wordWrap ]);
+
+	m pulldown("File",	'f', file);
+	m pulldown("Edit",	'e', edit);
+	m pulldown("View",	'v', view);
+	m pulldown("Options",	'o', option);
+	}
+
+connect:	(file: [:] char) =
+	{
+	filename = stringDup(file);
+	if	(buffer)
+		delete buffer;
+	buffer = new fileBuffer[ ];
+	fileStatus = buffer includeFile(filename);
+	buffer clearChanged();
+	textArea connect(buffer);
+	}
+
+toTop:	dynamic	() =
+	{
+	critical(fileLock)
+		super toTop();
+	}
+
+gotoLocation:	(version: Time, loc: position_t) =
+	{
+	critical(fileLock)
+		textArea gotoTextOffset(loc.location + loc.increment);
+	}
+
+gotoLocator:	(loc: locator_t, msg: [:] char) =
+	{
+	critical(fileLock){
+		textArea gotoTextOffset(loc.start.location + 
+							loc.start.increment);
+		clearFooter();
+		postFooter("%S", msg);
+		}
+	}
+
+reportFileStatus:	() =
+	{
+	if	(fileStatus)
+		postFooter("New file %S", filename);
+	}
+
+dismissRequest:	dynamic	() =
+	{
+	b:	boolean;
+
+	critical(fileLock){
+		if	(buffer hasChanged()){
+			open();
+			b = FALSE;
+			}
+		else
+			b = TRUE;
+		}
+	if	(b)
+		closeApplication();
+	else
+		new exitConfirm[ self ];
+	}
+
+closeApplication:	dynamic	() =
+	{
+	critical(fileLock){
+		buffer close();
+		delete buffer;
+		FileList unload(filename);
+		}
+	super closeApplication();
+	}
+
+undo:	() =
+	{
+	x:		textPos;
+	sz:		int;
+	wasInsert:	boolean;
+
+	wasInsert = buffer lastEventWasInsert();
+	sz = buffer lastEventSize();
+	x = buffer undo();
+	if	(x >= 0){
+		textArea gotoTextOffset(x);
+		textArea redraw();
+		if	(wasInsert)
+			postFooter("Deleted %d characters", sz);
+		else
+			postFooter("Inserted %d characters", sz);
+		}
+	else
+		postFooter("No more to undo");
+	}
+
+redo:	() =
+	{
+	x:	textPos;
+	sz:		int;
+	wasInsert:	boolean;
+
+	x = buffer redo();
+	if	(x >= 0){
+		textArea gotoTextOffset(x);
+		textArea redraw();
+		sz = buffer lastEventSize();
+		if	(buffer lastEventWasInsert())
+			postFooter("Re-inserted %d characters", sz);
+		else
+			postFooter("Re-deleted %d characters", sz);
+		}
+	else
+		postFooter("No more to redo");
+	}
+
+/*
+redraw:	dynamic	() =
+	{
+	stateFrame printf([ 0, 0 ], WHITE, 
+			"Line:       Column:           %s", &filename);
+	super redraw();
+	}
+
+expose:	dynamic	(x: rectangle_t) = 
+	{
+	super expose(x);
+	}
+ */
+saveBuffer:	() boolean =
+	{
+	b:	boolean;
+
+	critical(fileLock){
+		if	(buffer save(filename)){
+			postFooter("Could not save");
+			b = FALSE;
+			}
+		else
+			b = TRUE;
+		}
+	return b;
+	}
+
+reloadBuffer:	() =
+	{
+	critical(fileLock){
+		buffer close();
+		buffer = [ ];
+		buffer includeFile(filename);
+		buffer clearChanged();
+		textArea resetEditor();
+		textArea redraw();
+		}
+	}
+
+renameToFile:	(newName: [:] char) =
+	{
+	delete filename;
+	filename = stringDup(newName);
+	newTitle(filename);
+	buffer setChanged();
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	b:	boolean;
+
+	b = TRUE;
+	switch	(k){
+	case	F5:		nextErrorButton();		break;
+	case	SHFT_F5:	previousErrorButton();		break;
+	case	CTRL_G:		gotoLine();			break;
+	case	F2:		saveBuffer();			break;
+	case	SHFT_F2:	saveAllSessions();		break;
+	case	F3:		startSession();			break;
+
+	case	ALT_X:
+		dismissRequest();
+		break;
+
+	case	F9:
+		critical(fileLock)
+			undo();
+		break;
+
+	case	SHFT_F9:
+		critical(fileLock)
+			redo();
+		break;
+
+	default:
+		critical(fileLock)
+			b = super processKeystroke(k);
+		}
+	return b;
+	}
+
+startSession:	() =
+	{
+	new startForm[ self ];
+	}
+
+saveSession:	() =
+	{
+	saveBuffer();
+	}
+
+saveAllSessions:	() =
+	{
+	}
+
+renameSession:	() =
+	{
+	new renameForm[ self, filename ];
+	}
+
+gotoLine:	() =
+	{
+	new gotoForm[ self ];
+	}
+
+nextErrorButton:	() =
+	{
+	if	(MessageServer)
+		MessageServer nextMessage();
+	}
+
+previousErrorButton:	() =
+	{
+	if	(MessageServer)
+		MessageServer previousMessage();
+	}
+
+regularExprs:	(v: boolean) =
+	{
+	RegularExpressionSwitch = v;
+	}
+
+wordWrap:	(v: boolean) =
+	{
+	WordWrapSwitch = v;
+	}
+
+};
+
+StartFileName:	[:] char;
+StartFileLock:	Lock;
+
+startForm:	type	inherit popupShell {
+	typein:		ref textField;
+	edit:		ref fileEditor;
+
+	public:
+
+constructor:	(w: ref fileEditor) =
+	{
+	g:	ref Grid;
+	d:	ref dialog;
+	rprop:	static	[] byte = [ 1 ];
+	cprop:	static	[] byte = [ 0, 1 ];
+
+	edit = w;
+	super constructor("Edit Text", w);
+
+		// Describe the form
+
+	g = new Grid[ 2, 1 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "File: ", C_READONLY, C_READONLY ]);
+
+		// Protect multi-threaded access to the saved file name.
+
+	critical(StartFileLock)
+		typein = new textField[ StartFileName, C_TEXT, C_READONLY ];
+	typein onEnterKey([ self, &ok ]);
+	g cell([ 1, 0 ], typein);
+
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g);
+	anchor(d);
+	typein setTextFocus();
+
+		// Draw it and accept input
+
+	configure([ 60, 1 ]);
+	open();
+	}
+
+ok:	() =
+	{
+	filename:	[:] char;
+
+	filename = typein getValue();
+	critical(StartFileLock){
+		SharedHeap delete StartFileName;
+		StartFileName = SharedHeap stringDup(filename);
+		}
+	if	(|filename){
+		f:	[:] char;
+
+		f = syntheticFilename(edit, filename);
+		FileList load(f);
+		delete f;
+		}
+	delete self;
+	}
+
+	};
+
+gotoForm:	type	inherit popupShell {
+	typein:		ref textField;
+	edit:		ref fileEditor;
+
+	public:
+
+constructor:	(ed: ref fileEditor) =
+	{
+	g:	ref Grid;
+	d:	ref dialog;
+	rprop:	static	[] byte = [ 1 ];
+	cprop:	static	[] byte = [ 0, 1 ];
+	buf:	[20] char;
+	f:	[:] char;
+	sc:	stringConverter = [ buf ];
+
+	f = sc decodeUnsigned(ed->textArea->cursor.line + 1);
+	edit = ed;
+	super constructor("Goto Line", ed getShell());
+
+		// Describe the form
+
+	g = new Grid[ 2, 1 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "Line number: ", C_READONLY, C_READONLY ]);
+	typein = new textField[ f, C_TEXT, C_READONLY ];
+	typein onEnterKey([ self, &ok ]);
+	g cell([ 1, 0 ], typein);
+
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g);
+	anchor(d);
+	typein setTextFocus();
+
+		// Draw it and accept input
+
+	configure([ 30, 1 ]);
+	open();
+	}
+
+ok:	() =
+	{
+	line:	int;
+	sc:	stringConverter = [ typein getValue() ];
+
+	line = sc encodeSigned();
+	if	(!sc.success){
+		beep();
+		return;
+		}
+	edit->textArea gotoLine(line);
+	delete self;
+	}
+
+	};
+
+exitConfirm:	type	inherit confirmWindow {
+	editor:	ref fileEditor;
+
+	public:
+
+constructor:	(w: ref fileEditor) =
+	{
+	editor = w;
+	super constructor(w, "File has changes, save it?");
+	}
+
+no:	dynamic	() =
+	{
+	editor closeApplication();
+	}
+
+yes:	dynamic	() =
+	{
+	if	(editor saveBuffer())
+		editor closeApplication();
+	}
+
+escape:	dynamic	() =
+	{
+	editor postFooter("File not saved");
+	}
+
+	};
+
+renameForm:	type	inherit popupShell {
+	typein:		ref textField;
+	edit:		ref fileEditor;
+
+	public:
+
+constructor:	(ed: ref fileEditor, f: [:] char) =
+	{
+	g:	ref Grid;
+	d:	ref dialog;
+	rprop:	static	[] byte = [ 1 ];
+	cprop:	static	[] byte = [ 0, 1 ];
+
+	edit = ed;
+	super constructor("Rename File", ed getShell());
+
+		// Describe the form
+
+	g = new Grid[ 2, 1 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "New Name: ", C_READONLY, C_READONLY ]);
+	typein = new textField[ f, C_TEXT, C_READONLY ];
+	typein onEnterKey([ self, &ok ]);
+	g cell([ 1, 0 ], typein);
+
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g);
+	anchor(d);
+	typein setTextFocus();
+
+		// Draw it and accept input
+
+	configure([ 60, 1 ]);
+	open();
+	}
+
+ok:	() =
+	{
+	filename:	[:] char;
+
+	filename = typein getValue();
+	if	(|filename){
+		filename = syntheticFilename(edit, filename);
+		edit renameToFile(filename);
+		delete filename;
+		}
+	delete self;
+	}
+
+	};
+
+//	This function assumes |f > 0
+
+syntheticFilename:	(ed: ref fileEditor, f: [:] char) [:] char =
+	{
+	s:	[MAXPATH] char;
+	f2:	[:] char;
+
+	if	(f[0] == '/')
+		return f;
+	f2 = makePath(s, getDirectory(ed->filename), f, "");
+	return stringDup(f2);
+	}

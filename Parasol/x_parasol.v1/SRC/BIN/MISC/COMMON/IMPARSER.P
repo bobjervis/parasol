@@ -1,0 +1,172 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+
+include	hash;
+include	scanner;
+include	errmsg;
+include	sbuffer;
+include	imdump;
+
+imageTokens:	public	type	tokenNames = {
+	LITERAL = lastToken,
+	INTEGER
+	};
+
+CurrentContext:	public	ref messageContext;
+
+MsgObject:	public	inherit messageGenerator {
+	public:
+
+	buf:	ref sourceBuffer;
+	name:	[:] char;
+
+sourceFilename:	dynamic	() [:] char =
+	{
+	return name;
+	}
+
+objectName:	dynamic	() [:] char =
+	{
+	return name;
+	}
+
+lineno:	dynamic	(f: fileOffset) int =
+	{
+	return buf tellLine(f);
+	}
+
+};
+
+sourceParser:	public	type	inherit	tokenStream {
+	public:
+
+create:	factory	(fname: [:] char) ref sourceParser =
+	{
+	if	(CurrentContext)
+		CurrentContext = [];
+	else
+		CurrentContext = new messageContext[];
+	self = new sourceParser[ fname ];
+	if	(isNew()){
+		delete self;
+		CurrentContext clear();
+		CurrentContext errorX("ErrOpen", fname, "", 0);
+		return 0;
+		}
+	MsgObject.buf = self;
+	MsgObject.name = fname;
+	CurrentContext->obj = &MsgObject;
+	errorContext = CurrentContext;
+	identifier create("float",		FLOAT);
+	identifier create("integer",		INTEGER);
+	identifier create("literal",		LITERAL);
+	identifier create("pointer",		POINTER);
+	identifier create("string",		STRING);
+	identifier create("unsigned",		UNSIGNED);
+	return self;
+	}
+
+parseFile:	() ref recordTypes =
+	{
+	nextRecord:	byte;
+	rt:		ref recordTypes;
+
+	rt = 0;
+	nextRecord = 0;
+	openRange([ 0, BUF_SEEK_END ]);
+	for	(;;){
+		scan();
+		CurrentContext->offset = Token.offset;
+		switch	(Token.lex){
+		case	EOF_TOK:
+			return rt;
+
+		case	RC:
+			CurrentContext error("ErrDeclarationSyntax");
+			break;
+
+		case	SM:
+			break;
+
+		case	ICON:
+			nextRecord = Token.icon;
+			break;
+
+		case	ID:
+			id:	ref identifier;
+			f:	ref field;
+
+			id = Token.iden;
+			if	(scan() != LC){
+				resync("ErrIncludeSyntax");
+				continue;
+				}
+			f = parseFields();
+			rt = recordTypes create(rt, id, nextRecord, f);
+			nextRecord++;
+			break;
+
+		default:
+			resync("ErrDeclarationSyntax");
+			}
+		}
+	}
+
+private:
+
+parseFields:	() ref field =
+	{
+	f:	ref field;
+	id:	ref identifier;
+	ft:	fTypes;
+
+	f = 0;
+	for	(;;){
+		scan();
+		CurrentContext->offset = Token.offset;
+		if	(Token.lex == RC)
+			break;
+		if	(Token.lex == EOF_TOK){
+			CurrentContext error("ErrDeclarationSyntax");
+			break;
+			}
+		if	(Token.lex != ID){
+			resync("ErrDeclarationSyntax");
+			continue;
+			}
+		id = Token.iden;
+		if	(scan() != CO){
+			resync("ErrDeclarationSyntax");
+			continue;
+			}
+		scan();
+		if	(Token.lex == POINTER)
+			ft = F_POINTER;
+		else if	(Token.lex == INTEGER)
+			ft = F_INTEGER;
+		else if	(Token.lex == LITERAL)
+			ft = F_LITERAL;
+		else if	(Token.lex == STRING)
+			ft = F_STRING;
+		else if	(Token.lex == UNSIGNED)
+			ft = F_UNSIGNED;
+		else	{
+			printf("Decl syntax\n");
+			resync("ErrDeclarationSyntax");
+			continue;
+			}
+		if	(scan() != SM){
+			resync("ErrDeclarationSyntax");
+			continue;
+			}
+		f = field create(f, id, ft);
+		}
+	return f;
+	}
+};

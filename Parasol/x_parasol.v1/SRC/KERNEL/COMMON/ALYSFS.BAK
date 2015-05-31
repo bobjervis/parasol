@@ -1,0 +1,603 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	kprintf;
+include	string;
+include	error;
+include	file;
+include	object;
+include	arena;
+include	alys;
+include	backbone;
+include	karena;
+include	node;
+
+alysFileSystem:	public	type	inherit nameContext {
+	workingDirectory:	ref far directory;
+	rootDirectory:		ref far directory;
+
+	public:
+
+constructor:	(root: ref far directory, work: ref far directory) =
+	{
+	rootDirectory = root;
+	workingDirectory = work;
+	}
+
+open:			gate	(fname: [:] char, opt: accessRights_t) 
+							ref far channel = 
+	{
+	d:		ref far directory;
+	ch:		ref far channel;
+	path:		[:] char;
+	file:		[:] char;
+	i:		int;
+
+	i = splitPath(fname, &path, &file);
+	if	(i != SUCCESS){
+		reject(ERRINVALIDFORMAT);
+		return 0;
+		}
+	d = locateDirectory(path);
+	if	(d == 0)
+		return 0;
+	ch = d open(file, opt);
+	d close();
+	return ch;
+	}
+
+create:			gate	(fname: [:] char, attr: fAttributes_t) 
+							ref far channel = 
+	{
+	d:		ref far directory;
+	path:		[:] char;
+	file:		[:] char;
+	i:		int;
+	ch:		ref far channel;
+
+//	kprintf("create %S\n", fname);
+	i = splitPath(fname, &path, &file);
+	if	(i != SUCCESS){
+		reject(ERRINVALIDFORMAT);
+		return 0;
+		}
+	d = locateDirectory(path);
+//	kprintf("d = %x\n", d);
+	if	(d == 0)
+		return 0;
+	ch = d create(file, attr);
+//	kprintf("alysfs create ch = %x\n", ch);
+	d close();
+	return ch;
+	}
+
+	// Process management calls
+
+spawn:			gate	(host: ref far External, cmd: [:] char, 
+					args: [:] char) ref far External =
+	{
+	l:	ref loader;
+	x:	ref far External;
+	d:		ref far directory;
+	ch:		ref far channel;
+	path:		[:] char;
+	file:		[:] char;
+	i:		int;
+
+//	printf("spawn(%S, %S)\n", cmd, args);
+
+	i = splitPath(cmd, &path, &file);
+	if	(i != SUCCESS){
+		reject(ERRINVALIDFORMAT);
+		return 0;
+		}
+	d = locateDirectory(path);
+	if	(d == 0)
+		reject(ERRNOPATH);
+	for	(l = ref loader(Loaders.next); l != &Loaders; 
+					l = ref loader(l->next))
+		try	{
+//			kprintf("load(%d, %d, '%S', '%S')\n", 
+//					messageHeader->sender, d, file, args);
+			x = l load(messageHeader->sender, d, file, args);
+			dupObject(objectId);
+			d close();
+			return x;
+			}
+		except	{
+			}
+	d close();
+	reject(ERRNOTRUNFILE);
+	return 0;
+	}
+
+spawnDebug:		gate	(host: ref far External, cmd: [:] char, 
+					args: [:] char) ref far External =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+/*
+exec:			gate	(cmd: [:] char, 
+					args: [:] char) =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+ */
+register:		gate	(obj: ref far External, name: [:] char,
+					typ: [:] char) int =
+	{
+	d:		ref far directory;
+	path:		[:] char;
+	file:		[:] char;
+	i:		int;
+	ch:		ref far channel;
+
+//	kprintf("register %S(%S)\n", name, typ);
+	i = splitPath(name, &path, &file);
+	if	(i != SUCCESS)
+		return ERRINVALIDFORMAT;
+	d = locateDirectory(path);
+	if	(d == 0)
+		return ERRNOPATH;
+	i = d register(obj, file, typ);
+	d close();
+	return i;
+	}
+
+attach:			gate	(name: [:] char, 
+					typ: [:] char) ref far External =
+	{
+	d:		ref far directory;
+	path:		[:] char;
+	file:		[:] char;
+	i:		int;
+	x:		ref far External;
+
+//	kprintf("attach %S(%S)\n", name, typ);
+	i = splitPath(name, &path, &file);
+	if	(i != SUCCESS){
+		reject(ERRINVALIDFORMAT);
+		return 0;
+		}
+	d = locateDirectory(path);
+	if	(d == 0)
+		return 0;
+	x = d attach(file, typ);
+	d close();
+	return x;
+	}
+
+getDriveInfo:		gate	(fname: [:] char) drive_t = 
+	{
+	d:		ref far directory;
+	di:		drive_t;
+
+	d = locateDirectory(fname);
+	if	(d == 0)
+		di.sectorSize = 0;
+	else	{
+		di = d getDriveInfo();
+		d close();
+		}
+	return di;
+	}
+
+scanDirectory:		gate	(fname: [:] char) ref far directoryScanner =
+	{
+	d:		ref far directory;
+	ch:		ref far directoryScanner;
+
+	d = locateDirectory(fname);
+	if	(d == 0)
+		return 0;
+	ch = d scanDirectory();
+	d close();
+	return ch;
+	}
+
+stat:			gate	(fname: [:] char) file_t = 
+	{
+	d:		ref far directory;
+	path:		[:] char;
+	file:		[:] char;
+	i:		int;
+	fx:		file_t;
+
+	i = splitPath(fname, &path, &file);
+	if	(i != SUCCESS){
+		reject(ERRINVALIDFORMAT);
+		return fx;
+		}
+	d = locateDirectory(path);
+	if	(d == 0)
+		reject(ERRNOPATH);
+	else	{
+		fx = d stat(file);
+		d close();
+		}
+	return fx;
+	}
+
+makeDirectory:		gate	(fname: [:] char) int = 
+	{
+	d:		ref far directory;
+	path:		[:] char;
+	file:		[:] char;
+	i:		int;
+
+	i = splitPath(fname, &path, &file);
+	if	(i != SUCCESS){
+		reject(ERRINVALIDFORMAT);
+		return i;
+		}
+	d = locateDirectory(path);
+	if	(d == 0){
+		reject(ERRNOPATH);
+		return ERRNOPATH;
+		}
+	i = d makeDirectory(file);
+	d close();
+	return i;
+	}
+
+removeDirectory:	gate	(fname: [:] char) int = 
+	{
+	d:		ref far directory;
+	path:		[:] char;
+	file:		[:] char;
+	i:		int;
+
+	i = splitPath(fname, &path, &file);
+	if	(i != SUCCESS){
+		reject(ERRINVALIDFORMAT);
+		return i;
+		}
+	d = locateDirectory(path);
+	if	(d == 0)
+		return ERRNOPATH;
+	i = d removeDirectory(file);
+	d close();
+	return i;
+	}
+
+unlink:			gate	(fname: [:] char) int = 
+	{
+	d:		ref far directory;
+	path:		[:] char;
+	file:		[:] char;
+	i:		int;
+
+	i = splitPath(fname, &path, &file);
+	if	(i != SUCCESS){
+		reject(ERRINVALIDFORMAT);
+		return i;
+		}
+	d = locateDirectory(path);
+	if	(d == 0)
+		return ERRNOPATH;
+	i = d unlink(file);
+	d close();
+	return i;
+	}
+
+unlinkGroup:		gate	(fname: [:] char) int = 
+	{
+	d:		ref far directory;
+	path:		[:] char;
+	file:		[:] char;
+	i:		int;
+
+	i = splitPath(fname, &path, &file);
+	if	(i != SUCCESS){
+		reject(ERRINVALIDFORMAT);
+		return i;
+		}
+	d = locateDirectory(path);
+	if	(d == 0)
+		return ERRNOPATH;
+	i = d unlinkGroup(file);
+	d close();
+	return i;
+	}
+
+move:			gate	(fname1: [:] char, fname2: [:] char) int = 
+	{
+	d1:		ref far directory;
+	path1:		[:] char;
+	file1:		[:] char;
+	d2:		ref far directory;
+	path2:		[:] char;
+	file2:		[:] char;
+	i:		int;
+
+//	printf("move(%S, %S)\n", fname1, fname2);
+	i = splitPath(fname1, &path1, &file1);
+	if	(i != SUCCESS){
+		reject(ERRINVALIDFORMAT);
+		return i;
+		}
+	d1 = locateDirectory(path1);
+	if	(d1 == 0)
+		return ERRNOPATH;
+	i = splitPath(fname2, &path2, &file2);
+	if	(i != SUCCESS){
+		reject(ERRINVALIDFORMAT);
+		return i;
+		}
+	d2 = locateDirectory(path2);
+	if	(d2 == 0)
+		return ERRNOPATH;
+	if	(d1 access(file1, AR_READ) != SUCCESS)
+		return ERRNOFILE;
+/*
+
+		// The drives must be the same in both names
+
+	if	(d1->residesOn != d2->residesOn){
+		d1 close();
+		d2 close();
+		return ERRNOTSAME;
+		}
+ */
+	i = d1 move(file1, d2, file2);
+	d1 close();
+	d2 close();
+	return i;
+	}
+
+getAbsolutePath:	gate	(fname: [:] char) [] char = 
+	{
+	d:		ref far directory;
+	path:		[:] char;
+	file:		[:] char;
+	ap:		[MAXPATH] char;
+	apath:		[:] char;
+	i:		int;
+
+	apath = ap;
+	i = splitPath(fname, &path, &file);
+	if	(i != SUCCESS){
+		reject(ERRINVALIDFORMAT);
+		return "";
+		}
+	d = locateDirectory(path);
+	if	(d == 0)
+		return "";
+	apath[:] = d getAbsolutePath(file);
+//	printf("getting absolute path for %S\n", file);
+//	printf("result = %S\n", apath);
+	d close();
+	return apath;
+	}
+
+access:			gate	(fname: [:] char, opt: accessRights_t) int = 
+	{
+	d:		ref far directory;
+	path:		[:] char;
+	file:		[:] char;
+	i:		int;
+
+	i = splitPath(fname, &path, &file);
+	if	(i != SUCCESS){
+		reject(ERRINVALIDFORMAT);
+		return i;
+		}
+	d = locateDirectory(path);
+	if	(d == 0)
+		return ERRNOPATH;
+	i = d access(file, opt);
+	d close();
+	return i;
+	}
+
+setFileAttributes:	gate	(fname: [:] char, att: fAttributes_t) int =
+	{
+	d:		ref far directory;
+	path:		[:] char;
+	file:		[:] char;
+	i:		int;
+
+	i = splitPath(fname, &path, &file);
+	if	(i != SUCCESS){
+		reject(ERRINVALIDFORMAT);
+		return i;
+		}
+	d = locateDirectory(path);
+	if	(d == 0)
+		return ERRNOPATH;
+	i = d setFileAttributes(file, att);
+	d close();
+	return i;
+	}
+
+setCurrentDirectory:	gate	(fname: [:] char) int =
+	{
+	d:		ref far directory;
+	path:		[:] char;
+	file:		[:] char;
+	i:		int;
+
+	i = splitPath(fname, &path, &file);
+	if	(i != SUCCESS){
+		reject(ERRINVALIDFORMAT);
+		return i;
+		}
+	d = locateDirectory(fname);
+	if	(d == 0)
+		return ERRNOPATH;
+	if	(workingDirectory)
+		workingDirectory close();
+	workingDirectory = d;
+	return SUCCESS;
+	}
+
+getDrive:		gate	(fname: [:] char) int =
+	{
+	d:		ref far directory;
+	path:		[:] char;
+	file:		[:] char;
+	i:		int;
+
+	i = splitPath(fname, &path, &file);
+	if	(i != SUCCESS){
+		reject(ERRINVALIDFORMAT);
+		return i;
+		}
+	d = locateDirectory(path);
+	if	(d == 0)
+		return ERRNOPATH;
+	i = d getDrive(file);
+	d close();
+	return i;
+	}
+
+copy:	gate	() ref far External =
+	{
+	n:	ref alysFileSystem;
+	x:	ref far External;
+
+	n = new alysFileSystem[ rootDirectory, workingDirectory ];
+	x = jobPublishKernel("file system", ":model.filesys.nameContext",
+					n, AR_ANY);
+	rootDirectory dup();
+	workingDirectory dup();
+	return x;
+	}
+
+locateDirectory:	(path: [:] char) ref far directory =
+	{
+	d:	ref far directory;
+
+	if	(path[0] == '/'){
+		d = rootDirectory;
+		path = path[1:];
+		}
+	else
+		d = workingDirectory;
+//	printf("locate at %x path = %S\n", d, path);
+	d dup();
+	if	(|path){
+		i:	int;
+		d2:	ref far directory;
+
+		for	(;;){
+			i = stringScan(path, '/');
+			if	(i < 0)
+				break;
+			d2 = d find(path[:i]);
+			d close();
+			d = d2;
+			if	(d == 0)
+				return d;
+			path = path[i + 1:];
+			if	(|path == 0)
+				return 0;
+			}
+		d2 = d find(path);
+		d close();
+		d = d2;
+		}
+	return d;
+	}
+/*
+close:	gate	() boolean =
+	{
+	kprintf("Close of name context %d\n", objectId);
+	return TRUE;
+	}
+
+delete:	gate	() boolean =
+	{
+	kprintf("Delete of name context %d\n", objectId);
+	return TRUE;
+	}
+ */
+	};
+/*
+/*
+	The null device is a seekable device that always reports end of
+	file on input and full write on output.  Seeks always succeed and
+	seek to 0 and control operations always succeed and do nothing.
+ */
+NullDevice:	public	inherit	file	{
+
+open:	dynamic	(channelFlags) objectId = 
+	{
+	ob:	objectId;
+
+	NullChannel new(2, CH_READ|CH_WRITE|CH_CONTROL);
+	return &NullChannel;
+	}
+
+	} = [ FA_DEVICE|FA_READ|FA_WRITE|FA_CONTROL|FA_SEEKOK ];
+
+NullChannel:	inherit	channel	{
+
+control:	dynamic	(int, pointer, int) int =
+	{
+	return SUCCESS;
+	}
+
+read:	dynamic	(pointer, int) int =
+	{
+	return 0;
+	}
+
+write:	dynamic	(pointer, len: int) int =
+	{
+	return len;
+	}
+
+seek:	dynamic	(long, int) long =
+	{
+	return 0;
+	}
+
+	};
+ */
+splitPath:	(path: [:] char, dir: ref [:] char, fname: ref [:] char) int =
+	{
+	i:	int;
+
+	if	(|path == 0)
+		return ERRINVALIDFORMAT;
+
+		// Scan backwards for a slash
+
+	for	(i = |path - 1; i >= 0; i--)
+		if	(path[i] == '/')
+			break;
+	if	(i < 0){			// path is FFF
+		*dir = "";
+		*fname = path;
+		}
+	else if	(i == 0){			// path is /FFF so dir is /
+		*dir = path[:1];
+		if	(|path == 1)
+			*fname = ".";		// path is /, file must be .
+		else
+			*fname = path[1:];
+		}
+	else	{				// path is DDD/FFF
+		*dir = path[:i];
+		*fname = path[i + 1:];
+		if	(|*fname == 0)
+			return ERRINVALIDFORMAT;
+		}
+	return SUCCESS;
+	}
+
+makeFileContext0:	public	(root: ref far directory) =
+	{
+	afs:	ref alysFileSystem;
+	x:	ref far External;
+
+	afs = new alysFileSystem[ root, root ];
+	x = jobPublishKernel("file system", ":model.filesys.nameContext",
+						afs, AR_ANY);
+	makeLocal(x, FileSystem);
+	}

@@ -1,0 +1,102 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	hardware;
+include	message;
+include	vmemory;
+/*
+	Through a trick of the linker, this routine really is the real
+	starting point of the kernel.  __startup__ never gets called at all.
+ */
+__realStartup:	public	() int =
+	{
+	_AX = _GDT_KERNEL_DATA;
+	_SS = _AX;
+	_DS = _AX;
+	_ES = _AX;
+	_emit(0x16);		// Push SS
+	_emit(0x0f, 0xa1);	// Pop FS
+	_emit(0x16);		// Push SS
+	_emit(0x0f, 0xa9);	// Pop GS
+
+	ip:	ref _EntryVector;
+
+	_brklvl = _heapbase_;
+
+	_initializeVirtualMemory();
+	for	(ip = _entry_; ip < ref _EntryVector(_cleanup_); ip++){
+		_activeCleanup_ = ip->exit;
+		ip->func();
+		}
+	}
+/*
+------------------------------------------------------------------------------
+		Critical region stuff
+ */
+_lock_enter:	public	(latch: ref _LatchValues) =
+	{
+	*ref unsignedShort(latch) = _FLAGS;
+	_emit(disableI);
+	}
+
+_lock_leave:	public	(latch: ref _LatchValues) =
+	{
+	_FLAGS = *latch;
+	}
+
+disableI:		const	byte = 0xFA;
+/*
+------------------------------------------------------------------------------
+ */
+/*
+------------------------------------------------------------------------------
+		Kernel message interface
+
+	These functions perform the primitive message calls.  In order to
+	have access to the necessary information, this code uses a kludgy
+	set of function pointers (in order to avoid circular entry function
+	problems).
+ */
+_receive:	public	(hdr: ref MessageHeader) int = 
+	{
+	return local_receive(hdr);
+	}
+
+_reject:	public	(seq: _Sequence, code: int) = 
+	{
+	local_reject(seq, code);
+	}
+
+_readText:	public	(seq: _Sequence, offs: unsigned, buf: pointer, len: int) int = 
+	{
+	return local_readText(seq, offs, buf, len);
+	}
+
+_reply:		public	(seq: _Sequence, buf: pointer, len:int) = 
+	{
+	local_reply(seq, buf, len);
+	}
+
+_replyPartial:	public	(seq: _Sequence, buf: pointer, len: int) = 
+	{
+	local_replyPartial(seq, buf, len);
+	}
+
+_discardText:	public	(seq: _Sequence) =
+	{
+	local_discardText(seq);
+	}
+
+_threadReclaim:	public	(p: pointer) =
+	{
+	}
+
+_threadLaunch:	public	(ex: ref External, func: ref (), ssize: Size) =
+	{
+	}
+
+_inKernel:	public	boolean = TRUE;

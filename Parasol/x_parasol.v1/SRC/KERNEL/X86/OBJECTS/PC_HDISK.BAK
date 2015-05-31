@@ -1,0 +1,660 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	alys;
+include	process;
+include	pc_hdw;
+include	disk;
+include	node;
+include	kprintf;
+include	hardware;
+include	vector;
+
+pcHardDiskInitialization:	public	() =
+	{
+
+		// Initialize the controller
+
+	DiskController initialize(FD_CONTROL, HD_PORT, HDISK_INT);
+
+		// Define the disk drives
+
+	driveType:	byte;
+
+	driveType = getCMOSbyte(0x12);
+
+	DiskController.drive[0] = [ 0, driveType >> 4,	0x104 ];
+	DiskController.drive[1] = [ 1, driveType & 0xf,	0x118 ];
+	}
+/*
+	The DiskController object is the actual device driver for the
+	hard disk controller of a PC.  The controller needs three hardware
+	parameters: the control I/O port, the address of the block of eight
+	hard disk I/O ports, and the interrupt number used by the controller.
+
+	A controller object supports two operations: read and write.  The
+	controller can only issue one operation at a time, so only one drive
+	at a time can be used.
+
+	The acquire event is used to enforce serial access to the controller.
+
+	Note that the hardware does not use DMA to transfer data, but instead
+	requires the CPU to copy the data two bytes at a time.
+
+	Disk accesses are currently being performed on a first-come, first-
+	served basis.  In fact, disk accesses that change the cylinder
+	number are significantly slower than accesses that stay within a
+	cylinder, because the servo motor that moves the read/write heads is
+	much slower than the disk rotation speed.  As a result, in a disk
+	server on a LAN, considerable utilization improvements can be made
+	by minimizing the cylinder-to-cylinder movement of the heads.  For a
+	personal machine, such improvements may not be worth the trouble.  Of
+	course most elevator algorithms will work fine when access requests
+	are sequential.  Those algorithms involve minimal CPU overhead over a
+	simple first-come first-served strategy.
+
+	One can also separate the seek and transfer commands so that additional
+	reads or writes that arrive after a seek has been issued may be bundled
+	into a single transfer command.  Since adjacent sectors are frequently
+	accessed together, allowing additional transfers to accumulate while
+	a seek is underway may further help cut down on rotational latency.
+
+	This last improvement will require some experimentation since it does
+	involve more communications between the CPU and the disk controller,
+	and that extra work may be greater than the savings achieved through 
+	the added parallelism.
+ */
+DiskController:	public	{
+	public:
+
+acquire:		kernelSemaphore;
+busy:			boolean;
+wait:			kernelSemaphore;
+controlPort:		unsigned[16];
+diskPort:		unsigned[16];
+drive:			[2] hardDiskDrive;
+
+initialize:	(cp: unsigned[16], dp: unsigned[16], ivect: int) =
+	{
+	controlPort = cp;
+	diskPort = dp;
+	vector calloutInterrupt(ivect, 0, PR_DEVICE + PR_HDISK, 
+							&hdiskISR);
+	acquire initialize(1, &ciD, 0);
+	wait initialize(0, &diD, 0);
+	busy = FALSE;
+	}
+
+	};
+
+ciD:	(ref kernelSemaphore, pointer) =
+	{
+	kprintf("hard disk controller");
+	}
+
+diD:	(ref kernelSemaphore, pointer) =
+	{
+	kprintf("hard disk");
+	}
+
+
+DISK_READ:	const	int = 0x20;
+DISK_WRITE:	const	int = 0x30;
+DISK_RESET:	const	int = 0x00;
+DISK_XWRITE:	const	int = 0xC5;		// For Super IDE
+
+/*
+	The diskDrive object holds the drive characteristics for each drive
+	attached to the hard disk controller.
+ */
+hardDiskDrive:	type	inherit	DiskDrive {
+	controllerBusy:		boolean;
+	addressing:		AddressScheme;
+	driveSelect:		byte;
+	driveType:		byte;
+	heads:			byte;
+	sectors:		byte;
+	cylinders:		unsigned[16];
+	writePrecomp:		unsigned[16];
+	control:		byte;
+	landingZone:		unsigned[16];
+	sectorsPerCylinder:	sector_t;
+	
+	public:
+
+constructor:	(ds: byte, dType: byte, BIOSvect: unsigned) =
+	{
+	r:	realModePtr;
+	bd:	BIOSdisk;
+
+	driveSelect = ds;
+	driveType = dType;
+	if	(dType == 0)
+		return;
+	copyIn(&r, BIOSvect, sizeof r);
+	copyIn(&bd, realToPhysical(r), sizeof bd);
+	heads = bd.heads;
+	cylinders = bd.cylinders;
+	sectors = bd.sectors;
+	writePrecomp = bd.writePrecomp;
+	control = bd.control;
+	landingZone = bd.landingZone;
+	sectorsPerCylinder = heads * sectors;
+	addressing = AS_LINEAR;
+	loadPartition(0);
+	}
+
+/*
+	The read operation is carried out one sector at a time.  The
+	controller is started for each sector, then the reader waits for
+	an disk interrupt event to occur.  The hardware interrupt controllers
+	are reset, the sector-full of data is copied into the caller's buffer
+	and status is checked.  If there was some sort of failure, a retry
+	is started by looping back to the beginning of the function.  
+	Otherwise, the transfers increments to the next sector and operation
+	continues.
+ */
+read:	dynamic	(sector: sector_t, buf: pointer, count: int) =
+	{
+	DiskController.acquire down(FALSE);
+	DiskController.wait initialize(0, &diD, 0);
+	for	(;;){
+		waitForReady();
+//		kprintf("read(%d, -, %d)\n", sector, count);
+		executeIO(DISK_READ, sector, count);
+
+		for	(;;){
+			DiskController.wait down(FALSE);
+
+			_ECX = SECTOR_SIZE / 2;
+			_EDI = int(buf);
+			_DX = DiskController.diskPort;
+			_emit(0xfc);			// CLD
+			_emit(0xf3, 0x66, 0x6D);	// REP INSW
+
+				// Check status
+
+			i:	char;
+
+			i = _inportByte(DiskController.diskPort + 7);
+
+				// Controller still busy?
+
+			if	(i & 0x80){
+
+					// must be a multi-sector operation
+
+				count--;
+				buf = ref char(buf) + SECTOR_SIZE;
+				sector++;
+				}
+			else if	(i & 0x70 != 0x50){
+						// Drive ready, no write
+						// fault, seek complete
+						// indicates a good operation
+						// otherwise, retry the 
+						// operation
+				alysNode.diskRetries++;
+				break;
+				}
+			else	{
+				DiskController.acquire up();
+				return;		// Operation is complete
+				}
+			}
+		}
+	}
+/*
+	The write operation is carried out one sector at a time.  The
+	controller is started, then a sector-full of data is copied to
+	the controller data buffer.  The writer waits for a disk interrupt
+	event to happen, resets the interrupt controllers, and then status
+	is checked to determine whether the operation succeeded.  If not,
+	the sector is retried.  If so, the transfer is stepped to the next
+	sector until the transfer is complete.
+ */
+write:	dynamic	(sector: sector_t, buf: pointer, count: int) =
+	{
+	sectPerTransfer:	int;
+	tcount:			int;
+
+	DiskController.acquire down(FALSE);
+	DiskController.wait initialize(0, &diD, 0);
+	for	(;;){
+		waitForReady();
+//		kprintf("write(%d, -, %d)\n", sector, count);
+		if	(heads > 16){
+			executeIO(DISK_XWRITE, sector, count);
+			sectPerTransfer = 16;
+			if	(!waitForDataRequest()){
+				alysNode.diskRetries++;
+				continue;
+				}
+			}
+		else	{
+			sectPerTransfer = 1;
+			executeIO(DISK_WRITE, sector, count);
+			}
+		for	(;;){
+			if	(count > sectPerTransfer)
+				tcount = sectPerTransfer;
+			else
+				tcount = count;
+			_ECX = tcount * (SECTOR_SIZE / 2);
+			_ESI = int(buf);
+			_DX = DiskController.diskPort;
+			_emit(0xfc);			// CLD
+			_emit(0xf3, 0x66, 0x6F);	// REP OUTSW
+
+			DiskController.wait down(FALSE);
+
+				// Check status
+
+			i:	char;
+
+			i = _inportByte(DiskController.diskPort + 7);
+			if	(i & 0x70 != 0x50){
+						// Drive ready, no write
+						// fault, seek complete
+						// indicates a good operation
+						// otherwise, retry the 
+						// operation
+				alysNode.diskRetries++;
+				break;
+				}
+
+				// Controller waiting for data?
+
+			if	(count > tcount){
+
+					// must be a multi-sector operation
+
+				count -= tcount;
+				buf = ref byte(buf) + (tcount * SECTOR_SIZE);
+				sector += tcount;
+				if	(!waitForDataRequest()){
+					alysNode.diskRetries++;
+					break;
+					}
+				}
+			else	{
+				DiskController.acquire up();
+				return;		// Operation is complete
+				}
+			}
+		}
+	}
+/*
+	The writeCache operation is carried out one sector at a time.  The
+	controller is started, then a sector-full of data is copied to
+	the controller data buffer.  The writer waits for a disk interrupt
+	event to happen, resets the interrupt controllers, and then status
+	is checked to determine whether the operation succeeded.  If not,
+	the sector is retried.  If so, the transfer is stepped to the next
+	sector until the transfer is complete.
+ */
+writeCache:	dynamic	(so: sector_t, c: ref cache, count: int) =
+	{
+	sectPerTransfer:	int;
+	tcount:			int;
+
+	DiskController.acquire down(FALSE);
+	DiskController.wait initialize(0, &diD, 0);
+	for	(;;){
+		waitForReady();
+//		kprintf("writeCache(%d, -, %d)\n", so, count);
+		if	(heads > 16){
+			executeIO(DISK_XWRITE, c->sector + so, count);
+			sectPerTransfer = 16;
+			if	(!waitForDataRequest()){
+				alysNode.diskRetries++;
+				continue;
+				}
+			}
+		else	{
+			sectPerTransfer = 1;
+			executeIO(DISK_WRITE, c->sector + so, count);
+			}
+		for	(;;){
+			i:	int;
+			cx:	ref cache;
+
+			if	(count > sectPerTransfer)
+				tcount = sectPerTransfer;
+			else
+				tcount = count;
+			for	(i = 0, cx = c; i < tcount; 
+						i++, cx = ref cache(cx->next)){
+				_ESI = int(cx dataAddress());
+				_ECX = SECTOR_SIZE / 2;
+				_DX = DiskController.diskPort;
+				_emit(0xfc);			// CLD
+				_emit(0xf3, 0x66, 0x6F);	// REP OUTSW
+				}
+			DiskController.wait down(FALSE);
+
+				// Check status
+
+			n:	char;
+
+			n = _inportByte(DiskController.diskPort + 7);
+			if	(n & 0x70 != 0x50){
+						// Drive ready, no write
+						// fault, seek complete
+						// indicates a good operation
+						// otherwise, retry the 
+						// operation
+				alysNode.diskRetries++;
+				break;
+				}
+			cn:	ref cache;
+
+			for	(i = 0; i < tcount; i++){
+				cn = ref cache(c->next);
+				c finish();
+				c release();
+				c = cn;
+				}
+
+				// Controller waiting for data?
+
+			if	(count > tcount){
+
+				// must be a multi-sector operation
+
+				count -= tcount;
+				if	(!waitForDataRequest()){
+					alysNode.diskRetries++;
+					break;
+					}
+				}
+			else	{
+				DiskController.acquire up();
+				return;		// Operation is complete
+				}
+			}
+		}
+	}
+
+ioTooLarge:	dynamic	(s: sector_t, e: sector_t) boolean =
+	{
+	if	(e - s > 127)
+		return TRUE;
+	if	(e % sectorsPerCylinder == 0)
+		return TRUE;
+	return FALSE;
+	}
+
+getAddressing:	dynamic	() AddressScheme =
+	{
+	return addressing;
+	}
+
+setAddressing:	dynamic	(a: AddressScheme) =
+	{
+	addressing = a;
+	}
+
+private:
+/*
+	This function maps the logical sector number into a sector,
+	head, cylinder combination for the target drive.  The needed
+	values are written to the controller I/O port registers.  Note
+	that the command register is written last.  The controller will
+	not act on any of the other registers until a command is written.
+ */
+executeIO:	(op: int, sector: long, count: byte) =
+	{
+	nsect:		long;
+	cyl, head:	int;
+	hsector:	int;
+
+	_outportByte(DiskController.controlPort, control);
+//	_outportByte(DiskController.diskPort + 1, writePrecomp >> 2);
+	_outportByte(DiskController.diskPort + 1, 0xff);
+	_outportByte(DiskController.diskPort + 2, count);
+	switch	(addressing){
+	case	AS_UNKNOWN:
+	case	AS_ORIGINAL:
+		kprintf("original\n");
+		hsector = sector % sectors + 1;
+		sector /= sectors;
+		head = sector % heads;
+		cyl = sector / heads;
+		_outportByte(DiskController.diskPort + 3, hsector);
+		_outportByte(DiskController.diskPort + 4, cyl);
+		_outportByte(DiskController.diskPort + 5, cyl >> 8);
+		_outportByte(DiskController.diskPort + 6, 0xA0 + head + 
+							(driveSelect << 4));
+		break;
+
+	case	AS_LINEAR:
+		kprintf("linear\n");
+		_outportByte(DiskController.diskPort + 3, sector);
+		sector >>= 8;
+		_outportByte(DiskController.diskPort + 4, sector);
+		sector >>= 8;
+		_outportByte(DiskController.diskPort + 5, sector);
+		sector = (sector >> 8) & 0x0f;
+		_outportByte(DiskController.diskPort + 6, 0xE0 + sector + 
+							(driveSelect << 4));
+		break;
+
+	case	AS_EXTENDED:
+		kprintf("extended\n");
+		hsector = sector % sectors + 1;
+		sector /= sectors;
+		head = sector % heads;
+		cyl = sector / heads;
+		// cyl <<= N;
+		// cyl += head / NHEADS;
+		// head %= NHEADS;
+		cyl <<= 4;
+		cyl += head >> 4;
+		head &= 0x0f;
+		_outportByte(DiskController.diskPort + 3, hsector);
+		_outportByte(DiskController.diskPort + 4, cyl);
+		_outportByte(DiskController.diskPort + 5, cyl >> 8);
+		_outportByte(DiskController.diskPort + 6, 0xA0 + head + 
+							(driveSelect << 4));
+		}
+	_outportByte(DiskController.diskPort + 7, op);
+	}
+/*
+	This function loads a partition table and defines teh resulting 
+	partitions.
+ */
+loadPartition:	(sector: unsigned) =
+	{
+	b:	bootBlock;
+	p:	ref partitionDef;
+	plow:	ref partitionDef;
+	i:	int;
+	j:	int;
+	px:	ref Partition;
+	was:	AddressScheme;
+
+	was = addressing;
+	if	(sector != 0 && addressing == AS_UNKNOWN){
+		addressing++;
+		kprintf("Trying %s sector addressing\n", 
+						addressingNames[addressing]);
+		}
+	for	(;;){
+		read(sector, &b, 1);		// Read the partition table
+		if	(b.signature != 0xAA55){
+			if	(was == AS_UNKNOWN &&
+				 sector != 0){
+				addressing++;
+				if	(addressing < AS_LAST){
+					kprintf("Trying %s sector addressing\n", 
+						addressingNames[addressing]);
+					continue;
+					}
+				}
+			kprintf("Boot Signature not found\n");
+			return;
+			}
+		break;
+		}
+	for	(j = 0; j < 4; j++){
+		p = b.partitions;
+		plow = 0;
+		for	(i = 0; i < 4; i++, p++){
+			if	(p->sectCount == 0 ||
+				 p->systInd == 0)
+				continue;
+			if	(plow == 0 ||
+				 plow->relSect > p->relSect)
+				plow = p;
+			}
+		if	(plow == 0)
+			break;
+
+		u, v:	unsigned;
+		cyl, sect:	unsigned;
+		cyl = plow->bcyl + (plow->bsect & 0xc0) << 2;
+		sect = plow->bsect & 0x3f;
+		u = (cyl * heads + plow->bhead) * sectors + sect - 1;
+		cyl = plow->ecyl + (plow->esect & 0xc0) << 2;
+		sect = plow->esect & 0x3f;
+		v = (cyl * heads + plow->ehead) * sectors + sect - 1;
+		if	(plow->systInd == SI_EXTENDED){	// Extended partition
+
+				// recursively load it's partition table
+
+			loadPartition(u);
+			}
+		else	{
+			px = Partition create(plow->systInd, FALSE);
+			if	(px == 0)
+				return;
+			px->sectorCount = 1 + v - u;
+			px->sectorOffset = u;
+			px->drive = self;
+			px display();
+			}
+		plow->systInd = 0;		// drop the partition
+						// for the next round of
+						// searching
+		}
+	}
+
+waitForReady:	() boolean =
+	{
+	k:	int;
+	i:	char;
+
+	for	(k = 0; k < 50000; k++){
+		i = _inportByte(DiskController.diskPort + 7);
+		if	(i & 0x80 == 0){
+			if	(heads <= 0x10)
+				_outportByte(DiskController.diskPort + 6, 
+						0xA0 + (driveSelect << 4));
+			else
+				_outportByte(DiskController.diskPort + 6, 
+						0xE0 + (driveSelect << 4));
+			i = _inportByte(DiskController.diskPort + 7);
+			if	(i & 0x70 == 0x50)
+				return TRUE;
+			}
+		}
+	return FALSE;
+	}
+
+waitForDataRequest:	() boolean =
+	{
+	i:	int;
+	x:	byte;
+
+	for	(i = 0; i < 1000000; i++){
+		x = _inportByte(DiskController.diskPort + 7);
+		if	(x & 0x08)
+			return TRUE;
+		}
+	return FALSE;
+	}
+
+
+	};
+
+hdiskISR:	(pointer) =
+	{
+//	kprintf("*");
+	Secondary8259 clearInterrupt();
+	Primary8259 clearInterrupt();
+	DiskController.wait up();
+	}
+
+BIOSdisk:	type	packed	{
+	public:
+
+	cylinders:	unsigned[16];
+	heads:		byte;
+	fill:		unsigned[16];
+	writePrecomp:	unsigned[16];
+	fill2:		byte;
+	control:	byte;
+	fill3:		[3] byte;
+	landingZone:	unsigned[16];
+	sectors:	byte;
+	};
+
+/*
+driveDef:	type	{
+	public:
+
+	heads:		byte;
+	sectors:	byte;
+	cylinders:	unsigned[16];
+	writePrecomp:	unsigned[16];
+	control:	byte;
+	landingZone:	unsigned[16];
+	};
+
+DriveTable:	[] driveDef = [
+	[  0,   0,    0,    0,    0,    0 ],		// Drive type 0
+	[  4,  17,  306,  128,    0,  305 ],		// Drive type 1
+	[  4,  17,  615,  300,    0,  615 ],		// Drive type 2
+	[  6,  17,  615,  300,    0,  615 ],		// Drive type 3
+	[  8,  17,  940,  512,    0,  940 ],		// Drive type 4
+	[  6,  17,  940,  512,    0,  940 ],		// Drive type 5
+	[  4,  17,  615,   -1,    0,  615 ],		// Drive type 6
+	[  8,  17,  462,  256,    0,  511 ],		// Drive type 7
+	[  5,  17,  733,   -1,    0,  733 ],		// Drive type 8
+	[ 15,  17,  900,   -1,    8,  901 ],		// Drive type 9
+	[  3,  17,  820,   -1,    0,  820 ],		// Drive type 10
+	[  5,  17,  855,   -1,    0,  855 ],		// Drive type 11
+	[  7,  17,  855,   -1,    0,  855 ],		// Drive type 12
+	[  8,  17,  306,  128,    0,  319 ],		// Drive type 13
+	[  7,  17,  733,   -1,    0,  733 ],		// Drive type 14
+	[  0,   0,    0,    0,    0,    0 ]		// Drive type 15
+	];
+ */
+
+bootBlock:	type	packed	{
+			[0x1be] char;
+	public:
+	partitions:	[4] partitionDef;
+	signature:	unsigned[16];
+	};
+
+partitionDef:	type	packed	{
+	public:
+
+	bootInd:	byte;
+	bhead:		byte;
+	bsect:		byte;
+	bcyl:		byte;
+	systInd:	byte;
+	ehead:		byte;
+	esect:		byte;
+	ecyl:		byte;
+	relSect:	unsignedLong;
+	sectCount:	unsignedLong;
+	};
+

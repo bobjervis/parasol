@@ -1,0 +1,262 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	string;
+include	file, filesys;
+
+include	symtab;
+include	value;
+include	ptree;
+include	errmsg;
+include	heapsort;
+include	tparams;
+include	runlink, etables;
+
+Mapfile:	stream;
+
+writeMap:	public	(file: [:] char) =
+	{
+	if	(file == 0)
+		return;
+//	postMessage([ file ]);
+	if	(Mapfile create(file, 0))
+		CurrentContext fatalX("ErrCreate", file, "", 0);
+//	Mapfile setBuffering(4096);
+	sizeMap();
+	linkOrderMap();
+	entryMap();
+	cleanupMap();
+	valueMap();
+//	prtpubs();
+	Mapfile close();
+	}
+
+sizeMap:	() =
+	{
+	u:	ref unit_s;
+	cs:	unsigned;
+	ds:	unsigned;
+	bs:	unsigned;
+
+	cs = 0;
+	ds = 0;
+	bs = 0;
+	Mapfile printf("Sources\n\n");
+	for	(u = SymbolTable.units; u; u = u->next){
+		Mapfile printf("%-8S   %S\n", 
+				u->name spelling(), u fileName());
+		}
+	Mapfile printf("\nSizes		Code		 Data		  BSS\n\n");
+	for	(u = SymbolTable.units; u; u = u->next){
+		Mapfile printf("%-8S   %8x(%4dK)  %8x(%4dK)  %8x(%4dK)\n", 
+				u->name spelling(), 
+					u->codeSize, (u->codeSize + 512) >> 10,
+					u->dataSize, (u->dataSize + 512) >> 10,
+					u->bssSize, (u->bssSize + 512) >> 10);
+		cs += u->codeSize;
+		ds += u->dataSize;
+		bs += u->bssSize;
+		}
+	Mapfile printf("\nTotal      %8x(%4dK)  %8x(%4dK)  %8x(%4dK)\n", 
+					cs, (cs + 512) >> 10,
+					ds, (ds + 512) >> 10,
+					bs, (bs + 512) >> 10);
+	}
+
+linkOrderMap:	() =
+	{
+	l:	ref linkOrder_t;
+
+	Mapfile printf("\nLink Order\n\n");
+	for	(l = SymbolTable.linkOrder; l; l = l->next){
+		Mapfile printf("%2d:%*c%S\n", l->level, l->level * 2, ' ',
+				l->unit->name spelling());
+		}
+	}
+
+entryMap:	() =
+	{
+	i:	int;
+	s:	ref symbolList;
+
+	Mapfile printf("\nEntry Table\n\n");
+	for	(i = 0, s = EntryFunctions.funcs; 
+				i < EntryFunctions.count; 
+				i++, s = s->next)
+		displaySymbol(i + 1, s->sym->currentValue);
+	}
+
+cleanupMap:	() =
+	{
+	i:	int;
+	s:	ref symbolList;
+
+	Mapfile printf("\nCleanup Table\n\n");
+	for	(i = 0, s = CleanupFunctions.funcs; 
+				i < CleanupFunctions.count; 
+				i++, s = s->next)
+		displaySymbol(i + 1, s->sym->currentValue);
+	}
+/*
+	Note that the following function dumps values in address order.
+
+	Symbols beginning with double-underbar are omitted.  These are
+	implementation internal symbols.
+ */
+valueMap:	() =
+	{
+	u:	ref unit_s;
+	i:	int;
+	v:	ref value;
+	cp:	ref char;
+
+	buildValueVector();
+	heapsort(ref pointer(ValueVector), ValueIndex,
+			ref (pointer, pointer) int(&valueless));
+	Mapfile printf("\nCode\n\n");
+	for	(i = 0; i < ValueIndex; i++){
+		v = ValueVector[i];
+		if	(v->valueClass == VC_CODE)
+			displaySymbol(0, v);
+		}
+	Mapfile printf("\nData\n\n");
+	for	(i = 0; i < ValueIndex; i++){
+		v = ValueVector[i];
+		if	(v->valueClass != VC_CODE)
+			displaySymbol(0, v);
+		}
+	}
+
+displaySymbol:	(i: int, v: ref value) =
+	{
+	cp:		[:] char;
+	hasData:	char;
+
+	if	(!v->linked)
+		return;
+	if	(v->owner){
+		if	(v->owner->name == 0)
+			return;
+		cp = v->owner->name spelling();
+		if	(cp[0] == '_' && cp[1] == '_')
+			return;
+		cp = v->owner objectName();
+		}
+	else if	(v->dtype){
+		cp = v->dtype dynamicVectorName(v);
+		}
+	else
+		return;
+	switch	(v->valueClass){
+	case	VC_DATA:
+		if	(v->data)
+			hasData = 'i';		// i = initialized
+		else
+			hasData = 'u';		// u = uninitialized
+		break;
+
+	case	VC_CODE:
+		hasData = 'f';			// f = function
+		break;
+
+	case	VC_CONST:
+		if	(v->owner)
+			hasData = 'c';		// c = constant
+		else
+			hasData = 'v';		// v = dynamic vector
+		}
+	if	(i)
+		Mapfile printf("%4d: ", i);
+	Mapfile printf("%08x %c %S\n", v->address, hasData, cp);
+	}
+
+prtpubs:	() =
+	{
+	v:		ref symbol_s;
+	off:		unsigned;
+	seg:		unsigned;
+	symlist:	ref pointer;
+
+	symlist = makeSymList();
+	if	(symlist == 0){
+		Mapfile printf("No memory for symbols\n");
+		return;
+		}
+	heapsort(symlist, SymCount, ref (pointer, pointer) int(&nameless));
+	Mapfile printf("\n\n  Address         Publics by Name\n\n");
+	dumplist(symlist);
+	delete symlist;
+	}
+
+SymCount:	int;
+
+makeSymList:	() ref pointer =
+	{
+	s:	ref symbol_s;
+	u:	ref unit_s;
+	count:	int;
+	ss:	ref pointer;
+	ssp:	ref pointer;
+
+	count = 1;
+	for	(u = SymbolTable.units; u; u = u->next)
+		for	(s = u->symbols; s; s = s->next){
+			if	(s->name == 0)
+				continue;
+			if	(s->storageClass != SC_STATIC)
+				continue;
+			if	(s->currentValue == 0)
+				continue;
+			if	(!s->currentValue->linked)
+				continue;
+			count++;
+			}
+	ss = alloc(count * sizeof pointer);
+	if	(ss == 0)
+		return 0;
+	ssp = ss;
+	for	(u = SymbolTable.units; u; u = u->next)
+		for	(s = u->symbols; s; s = s->next){
+			if	(s->name == 0)
+				continue;
+			if	(s->storageClass != SC_STATIC)
+				continue;
+			if	(s->currentValue == 0)
+				continue;
+			if	(!s->currentValue->linked)
+				continue;
+			*ssp = s;
+			ssp++;
+			}
+	SymCount = count - 1;
+	*ssp = 0;
+	return ss;
+	}
+
+dumplist:	(symlist: ref pointer) =
+	{
+	v:	ref symbol_s;
+	off:	addr_t;
+	seg:	unsigned;
+	u:	ref unit_s;
+
+	for	(; *symlist; symlist++){
+		v = *symlist;
+		if	(v->currentValue)
+			displaySymbol(0, v->currentValue);
+		}
+	}
+
+nameless:	(v1: ref symbol_s, v2: ref symbol_s) int =
+	{
+	return stringIcompare(v1->name spelling(), v2->name spelling());
+	}
+
+valueless:	(v1: ref value, v2: ref value) int =
+	{
+	return v1->address - v2->address;
+	}

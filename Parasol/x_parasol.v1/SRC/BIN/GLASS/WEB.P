@@ -1,0 +1,79 @@
+Document:	public	type	inherits Tag {
+	};
+
+Tag:	public	type	{
+	public:
+
+	parent:		ref Tag;
+	child:		ref Tag;
+	sibling:	ref Tag;
+	name:		[:] char;
+	attributes:	ref Properties;
+
+	};
+
+Properties:	public	type	{
+	pairs:		[:] PropertyItems;
+
+	public:
+
+constructor:	() =
+	{
+	|pairs = 0;
+	}
+
+get:	(key: [:] char) pointer =
+	{
+	i:	int;
+
+	for	(i = 0; i < |pairs; i++)
+		if	(stringCompare(pairs[i].name, key) == 0)
+			return pairs[i].value;
+	return 0;
+	}
+
+put:	(key: [:] char, n: pointer) =
+	{
+	i:	int;
+
+	for	(i = 0; i < |pairs; i++)
+		if	(stringCompare(pairs[i].name, key) == 0){
+			pairs[i].value = n;
+			return;
+			}
+	if	(|pairs == 0){
+		pairs = new [8] PropertyItem;
+		|pairs = 0;
+		}
+	else if	(|pairs >= ||pairs){
+		x:	[:] PropertyItem;
+
+		x = new [|pairs * 2] PropertyItem;
+		x [:]= pairs;
+		delete pairs;
+		pairs = x;
+		}
+	pairs[i].name = stringDup(key);
+	pairs[i].value = n;
+	}
+
+destructor:	() =
+	{
+	if	(|pairs)
+		pairs delete;
+	}
+
+	};
+
+PropertyItem:	type	{
+	public:
+
+	name:		[:] char;
+	value:		pointer;
+
+destructor:	() =
+	{
+	delete name;
+	}
+
+	};

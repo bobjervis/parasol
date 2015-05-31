@@ -1,0 +1,54 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+include	filesys;
+include	error;
+/*
+	rm:	Deletes files.
+ */
+
+main:	entry	() =
+	{
+	src:		[:] char;
+	j:		int;
+	i:		int;
+	ff:		finder;
+	deleted:	boolean;
+	dir:		[:] char;
+	pattern:	[:] char;
+
+	if	(|commandLine.arguments == 0)
+		usage();
+	for	(i = 0; i < |commandLine.arguments; i++){
+		src = commandLine.arguments[i];
+		dir = getDirectory(src);
+		pattern = stripDirectory(src);
+		j = ff open(dir, pattern, 0);
+		if	(j != SUCCESS){
+			printf("Could not delete '%S': %S\n", src, cmdError(j));
+			continue;
+			}
+		deleted = FALSE;
+		while	(ff next() == SUCCESS){
+			j = FileSystem unlink(ff.pathname);
+			deleted = TRUE;
+			if	(j)
+				printf("Could not delete '%S': %S\n", 
+						ff.pathname, cmdError(j));
+			}
+		if	(!deleted)
+			printf("No match for '%S'\n", src);
+		}
+	exit(EX_SUCCESS);
+	}
+
+usage:	() =
+	{
+	printf( "Use is: rm file(s)\n");
+	exit(1);
+	}

@@ -1,0 +1,39 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	error;
+include	filesys;
+include	file;
+
+main:	entry	() =
+	{
+	arg:	[:] char;
+	i:	int;
+
+	if	(|commandLine.arguments == 0){
+		printf("Use is: mkdir directory(s)\n");
+		exit(1);
+		}
+	while	(|commandLine.arguments){
+		arg = commandLine.arguments[0];
+		commandLine shiftArguments();
+		try	{
+			i = FileSystem makeDirectory(arg);
+			if	(i){
+				printf("Could not create %S: %S\n", arg, 
+							cmdError(i));
+				exit(1);
+				}
+			}
+		except	{
+			printf("Could not create %S: rejected by file system\n", arg);
+			exit(1);
+			}
+		}
+	exit(EX_SUCCESS);
+	}
+

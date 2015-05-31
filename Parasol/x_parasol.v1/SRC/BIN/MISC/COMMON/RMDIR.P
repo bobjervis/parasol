@@ -1,0 +1,39 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	error;
+include	filesys;
+include	file;
+
+main:	entry	() =
+	{
+	args:	[:] char;
+	i, j:	int;
+
+	if	(|commandLine.arguments == 0){
+		printf("Use is: rmdir directory(s)\n");
+		exit(1);
+		}
+	for	(i = 0; i < |commandLine.arguments; i++){
+		args = commandLine.arguments[i];
+		try	{
+			j = FileSystem removeDirectory(args);
+			if	(j != SUCCESS){
+				printf("Cannot delete %S: %S\n", args, 
+						cmdError(j));
+				exit(1);
+				}
+			}
+		except	{
+			printf("Cannot delete %S: rejected by file system\n",
+						args);
+			exit(1);
+			}
+		}
+	exit(EX_SUCCESS);
+	}
+

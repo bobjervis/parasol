@@ -1,0 +1,9 @@
+
+driver:	public	type	inherit	External {
+	public:
+
+makeResident:	gate	();
+
+makeNonResident:	gate	();
+
+	};

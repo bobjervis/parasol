@@ -1,0 +1,48 @@
+include	console, alys, file;
+
+Colors:	[C_MAXCOLOR] color_t;
+
+main:	entry	() =
+	{
+	p:	ref far colorPalette;
+	cons:	ref far console;
+	x:	ref far External;
+	con:	[:] char;
+
+	if	(|commandLine.arguments != 1){
+		printf("Use is: CPALETTE console-device\n");
+		exit(EX_FAIL);
+		}
+	con = commandLine.arguments[0];
+	x = FileSystem attach(con, ":model.console.console");
+	if	(x == 0){
+		printf("Cannot connect to '%S' as the console\n", con);
+		exit(EX_FAIL);
+		}
+	cons = ref far console(x);
+	Colors[C_BLACK] = BLACK;			// force total black
+	Colors[C_TEXT] = HIGH|YELLOW;			// normal text color
+	Colors[C_READONLY] = WHITE;			// readonly text
+	Colors[C_SELECTED] = COLOR(HIGH|YELLOW, BLUE);	// selected text
+	Colors[C_READONLY_SELECTED] = COLOR(WHITE, BLUE);// readonly selected text
+	Colors[C_PENDING_DELETE] = HIGH|WHITE;		// text in pending delete
+	Colors[C_LABEL] = WHITE;			// text label
+	Colors[C_TITLE] = HIGH|WHITE;			// title text
+	Colors[C_FOOTER] = HIGH|WHITE;			// footer text
+	Colors[C_MENU_TEXT] = COLOR(HIGH|YELLOW, BLUE);	// normal menu text
+	Colors[C_MENU_ACCELERATOR] = COLOR(HIGH|CYAN, BLUE);
+							// menu accelerator color
+	Colors[C_MENU_SELECTED] = COLOR(HIGH|YELLOW, PURPLE);
+							// selected menu item
+	Colors[C_MENU_DIMMED] = COLOR(WHITE, BLUE);
+	Colors[C_FRAME] = BLUE;				// window frame color
+	Colors[C_MENU_FRAME] = BLUE;			// menu frame color
+	Colors[C_ICON] = WHITE;				// icon color
+	Colors[C_TOGGLE_ON] = HIGH|RED;			// selected toggle
+	Colors[C_TOGGLE_OFF] = WHITE;			// unselected toggle
+	p = cons newPalette(C_MAXCOLOR);
+	p textColors(0, Colors);
+	disown(p);
+	cons setDefaultPalette(p);
+	exit(EX_SUCCESS);
+	}

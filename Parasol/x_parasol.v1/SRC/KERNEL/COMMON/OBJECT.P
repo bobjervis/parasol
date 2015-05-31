@@ -1,0 +1,1038 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	string;
+include	alys;
+include	hardware, list, debugger;
+include	error;
+include	process, hprocess;
+include	arena;
+include	message;
+include	timer;
+include	kprintf;
+include	karena;
+include	memory;
+include	jobs;
+include	animobj, kernobj;
+include	objcntxt;
+
+NOBJECTS:	public	const	int = 512;
+OID_BASE:		const	int = NLOCALS;
+
+ObjectTable:	public	[NOBJECTS] ref object;
+Boot:		public	External;
+BootObject:	public	ref animatedObject;
+BootContext:	public	objectContext = [ 1 ];
+bootJob:	public	ref KernelJob;
+BootJobObject:	public	ref kernelObject;
+MyNetNodeId:	public	ObjectId;
+OutgoingObject:	public	ref object;
+LogVector:	public	ref logVector;
+
+initObject0:	public	() =
+	{
+	BootObject = new animatedObject[ "Boot", ":", vaddr_t(&Boot), 
+								0, 0, 0, 0 ];
+	BootObject object0constructor();
+	Boot.objectId = BootObject->me;
+	bootJob = new KernelJob[ 0 ];
+	BootJobObject = new kernelObject[ "Boot Job", ":model.alys.job",
+							bootJob,
+							AR_ANY, 0, 0, 0 ];
+	BootJobObject object1constructor();
+	BootJobObject->parent = BootObject->me;
+	BootObject->myJob = BootJobObject->myJob;
+	ObjectTable[0] = BootObject;
+	ObjectTable[1] = BootJobObject;
+	}
+
+oStatus_t:	public	type	byte = {
+	O_NEW,
+	O_RUN,
+	O_WAIT,
+	O_RECEIVE,
+	O_DEAD,
+	O_STOP
+	};
+
+object:	public	type	{
+	visible:
+
+	user:		userId;
+	group:		userId;
+
+	public:
+
+	name:		[:] char;
+	typeString:	[:] char;		// object type string
+	me:		ref far External;
+	parent:		ref far External;
+	myJob:		ref far Job;
+	jobRights:	AccessRights;
+	userRights:	AccessRights;
+	groupRights:	AccessRights;
+	worldRights:	AccessRights;
+	useCount:	int;
+	isKernel:	boolean;
+	isDisowned:	boolean;
+	nameDirectory:	ref far directory;
+	myDebugger:	ref far debugger;
+	where:		ref arena;
+	msgs:		queue;
+	alarm:		ref timer;
+	sequence:	_Sequence;
+	context:	ref objectContext;
+	animator:	ref process;
+	actualObject:	vaddr_t;
+
+constructor:	(n: [:] char, ts: [:] char,
+			k: boolean, jr: AccessRights, ur: AccessRights,
+				gr: AccessRights, wr: AccessRights) =
+	{
+	o:	ref object;
+
+	if	(CurProc){
+		o = CurProc->animates;
+		user = o->user;
+		group = o->group;
+		parent = CurProc->mainObject->me;
+		myJob = o->myJob;
+		animator = CurProc;
+		}
+	else	{
+		user = U_ALYS_SECURITY;
+		group = U_ALYS_SECURITY;
+		parent = 0;
+		myJob = 0;
+		}
+	name = stringDup(n);
+	typeString = stringDup(ts);
+	jobRights = jr;
+	userRights = ur;
+	groupRights = gr;
+	worldRights = wr;
+	useCount = 1;
+	isKernel = k;
+	isDisowned = FALSE;
+	nameDirectory = 0;
+	myDebugger = 0;
+	where = 0;
+	msgs makeEmpty();
+	alarm = 0;
+	sequence = 0;
+	context = 0;
+	actualObject = 0;
+	}
+
+setUserid:	(u: userId, g: userId) boolean =
+	{
+	if	(user == U_ALYS_SECURITY){
+		user = u;
+		group = g;
+		return TRUE;
+		}
+	else
+		return FALSE;
+	}
+
+reparent:	(o: ref object) =
+	{
+	parent = o->me;
+	myJob = o->myJob;
+	setUserid(o->user, o->group);
+	}
+
+describe:	(o: ref object_t) =
+	{
+	o->me = me;
+	o->parent = parent;
+	o->myJob = myJob;
+	o->user = user;
+	o->group = group;
+	o->jobRights = jobRights;
+	o->userRights = userRights;
+	o->groupRights = groupRights;
+	o->worldRights = worldRights;
+	o->useCount = useCount;
+	o->flags = 0;
+	if	(isKernel)
+		o->flags |= OF_KERNEL;
+	if	(isDisowned)
+		o->flags |= OF_DISOWNED;
+	o->alertable = 0;
+	}
+
+exit:	dynamic	() =
+	{
+	}
+/*
+	Returns the number of messages the parent can expect from killing
+	this child.
+ */
+killChild:	dynamic	() int =
+	{
+	return 0;
+	}
+
+receive:	dynamic	(mh: vaddr_t) int =
+	{
+	}
+
+_send:	dynamic	(ref far External, unsigned[16], int, buffer_t, buffer_t, sendFlags_t) int =
+	{
+	return ERRPERMISSION;
+	}
+
+selfSend:	dynamic	(int, vaddr_t, int) =
+	{
+	}
+
+sendAttention:	dynamic	() =
+	{
+	if	(useCount)
+		_send(0, AR_ANY, int(&External.attention), 
+						NODATA, NODATA, SF_SIGNAL);
+	}
+
+sendQuit:	dynamic	() =
+	{
+	if	(useCount)
+		_send(0, AR_ANY, int(&External.quit), 
+						NODATA, NODATA, SF_SIGNAL);
+	}
+
+rejectedSend:	dynamic	(code: int) =
+	{
+	}
+
+interruptedSend:dynamic	() =
+	{
+	}
+
+_forward:	dynamic	(ref message, ref far External, int, vaddr_t, int) int =
+	{
+	return ERRPERMISSION;
+	}
+
+ownerFree:	dynamic	(ref arena) boolean =
+	{
+	return FALSE;
+	}
+
+processTermination:	dynamic	() =
+	{
+	}
+
+kernelFree:	dynamic	(pointer, paddr_t) boolean =
+	{
+	return FALSE;
+	}
+
+dup:	dynamic	(ref far External) int =
+	{
+	useCount++;
+	return SUCCESS;
+	}
+
+newJob:	dynamic	(j: ref far Job, u: userId, g: userId) ref far External =
+	{
+	e:	ref far External;
+
+	e = me copy();
+	if	(e){
+		jo, o:	ref object;
+
+		o = objectEntry(e);
+		if	(o != self){
+			o->myJob = j;
+			o setUserid(u, g);
+			}
+		}
+	return e;
+	}
+
+setJob:	dynamic	(j: ref far Job) =
+	{
+	myJob = j;
+	}
+
+close:	dynamic	() boolean =
+	{
+	n:	threadLock;
+
+	n lock();
+	if	(useCount == 0){
+		n unlock();
+		return FALSE;
+		}
+	useCount--;
+	if	(useCount == 0){
+		target:	int;
+		m:	ref message;
+
+		target = int(me);
+		target &= ~NODE_MASK;
+		target -= NLOCALS;
+		ObjectTable[target] = 0;
+		n unlock();
+		while	(!msgs isEmpty()){
+			m = ref message(msgs.next);
+			m reject(ERRINVALIDARGUMENT);
+			}
+		if	(context){
+			context close();
+			context = 0;
+			}
+		delete name;
+		delete typeString;
+		delete self;
+		return TRUE;
+		}
+	else	{
+		n unlock();
+		return FALSE;
+		}
+	}
+
+senseMessages:	() int =
+	{
+	if	(msgs isEmpty())
+		return 0;
+	else
+		return 1;
+	}
+
+copyContext:	() =
+	{
+	context = context copy(self);
+	}
+
+closeContext:	() int =
+	{
+	if	(context->parent &&
+		 context->owner == self){
+		context->parent dup();
+		context = context close();
+		return SUCCESS;
+		}
+	else
+		return ERRNOPARENTCONTEXT;
+	}
+
+closeLocal:	(target: ref far External) =
+	{
+	if	(context)
+		context closeLocal(target);
+	}
+
+machineTrap:	dynamic	(t: ref task_t, func: int) int =
+	{
+	displayTask(t);
+	panic("Kernel mode trap - System halted");
+	}
+
+coreDump:	dynamic	(unsigned) boolean =
+	{
+	return FALSE;
+	}
+
+	};
+
+buffer_t:	public	type	packed { public:
+	where:		ref arena;
+	address:	vaddr_t;
+	length:		Size;
+	};
+
+NODATA:	public	buffer_t = [ 0, 0, 0 ];
+
+sendFlags_t:	public	type	byte = {
+	SF_WAIT		= 0x01,			// synchronous message
+	SF_SIGNAL	= 0x02,			// signaling send
+	};
+
+SequenceNumber:	int = SEQ_INCREMENT;
+
+_send:	public	(target: ref far External, func: int,
+					buf: buffer_t,
+					rbuf: buffer_t,
+					flags: sendFlags_t) int =
+	{
+	o:	ref object;
+	r:	unsigned[16];
+	src:	ref object;
+	n:	threadLock;
+	seq:	int;
+	i:	int;
+
+	src = CurProc->animates;
+	o = objectEntry(target);
+	n lock();
+	seq = SequenceNumber;
+	SequenceNumber += SEQ_INCREMENT;
+	n unlock();
+	if	(LogVector)
+		LogVector lsend(FALSE, TRUE, target, o, src, seq,
+							func, 
+							buf.address, 
+							buf.length, 
+							rbuf.length);
+	if	(o == 0){
+		if	(func != int(&External.childExit)){
+			if	(LogVector)
+				LogVector rejected(seq, o, src, 
+							ERRINVALIDARGUMENT);
+			src rejectedSend(ERRINVALIDARGUMENT);
+			if	(CurProc->mainObject == CurProc->animates){
+				if	(CurProc->abortInProgress)
+					CurProc exit(EX_ABORT);
+				}
+			return 0;
+			}
+		else	{
+			o = BootObject;
+			target = src->parent = o->me;
+			}
+		}
+	if	(o->useCount == 0)
+		r = 0;
+	else if	(func == int(&External.childExit)){
+		if	(src->parent == o->me)
+			r = ~0;
+		else
+			r = 0;
+		}
+	else if	(func == int(&External.kill) ||
+		 src->user == U_ALYS_SECURITY){
+		if	(src->user == o->user)
+			r = ~0;
+		else
+			r = 0;
+		}
+	else if	(CurProc->myJob == o->myJob)
+		r = o->jobRights;
+	else if	(src->user == o->user)
+		r = o->userRights;
+	else if	(src->group == o->group)
+		r = o->groupRights;
+	else
+		r = o->worldRights;
+	if	(r){
+		if	(func == int(&External.dup)){
+			o dup(o->me);
+			i = 0;
+			}
+		else if	(func == int(&External.close)){
+			if	(o->useCount == 0){
+				i = 0;
+				src closeLocal(target);
+				}
+			else if	(o->useCount == 1){
+				j:	int;
+
+				func = int(&External.lastClose);
+				j = o _send(target, r, func,
+						buf, rbuf, flags);
+				i = 0;
+				if	(j <= sizeof i)
+					rbuf.where read(rbuf.address,
+							&i, j);
+				}
+			else
+				i = 1;
+			if	(i){
+				n lock();
+				closeObject(target);
+				src closeLocal(target);
+				n unlock();
+				}
+			}
+		else
+			i = o _send(target, r, func, buf, rbuf, flags);
+		if	(LogVector)
+			LogVector replied(seq, o, src, rbuf, i);
+		}
+	else	{
+		if	(LogVector)
+			LogVector rejected(seq, o, src, ERRPERMISSION);
+		src rejectedSend(ERRPERMISSION);
+		i = 0;
+		}
+	if	(CurProc->mainObject == CurProc->animates){
+		if	(CurProc->abortInProgress)
+			CurProc exit(EX_ABORT);
+		}
+	return i;
+	}
+
+probeObject_:	public	(o: ref far External) ref far External =
+	{
+	op:	ref object;
+
+	op = objectEntry(o);
+	if	(op == 0)
+		return 0;
+	else
+		return op->me;
+	}
+
+objectSenseMessages:	public	(obj: ref far External) int =
+	{
+	op:	ref object;
+
+	op = objectEntry(obj);
+	if	(op == 0)
+		return 0;
+	else
+		return op senseMessages();
+	}
+
+objectEntry:	public	(obj: ref far External) ref object =
+	{
+	o:	int;
+
+	o = int(obj);
+	if	(o < 0)
+		return 0;
+	if	(o < NLOCALS){
+		if	(CurProc->animates->context == 0)
+			return 0;
+		o = int(CurProc->animates->context->localObject[o]);
+		if	(o == 0)
+			return 0;
+		}
+	if	(o & NODE_MASK){
+		if	(o & NODE_MASK != MyNetNodeId)
+			return OutgoingObject;
+		o &= ~NODE_MASK;
+		}
+	o -= NLOCALS;
+	if	(o >= NOBJECTS)
+		return 0;
+	return ObjectTable[o];
+	}
+
+locateObject:	public	(obj: ref far External) pointer =
+	{
+	o:	ref object;
+
+	o = objectEntry(obj);
+	if	(o == 0 ||
+		 o == OutgoingObject)
+		return 0;
+	if	(!o->isKernel)
+		return 0;
+	else
+		return ref kernelObject(o)->dispatcher;
+	}
+
+forkObject:	public	(o: ref far External) ref far External =
+	{
+	return o;
+	}
+
+dupObject:	public	(obj: ref far External) =
+	{
+	o:	ref object;
+
+	o = objectEntry(obj);
+	if	(o)
+		o dup(obj);
+	}
+
+closeObject:	public	(obj: ref far External) =
+	{
+	o:	ref object;
+
+	o = objectEntry(obj);
+	if	(o == 0)
+		return;
+	o close();
+	}
+
+setNewJobObject:	public	(obj: ref far External,
+				 j: ref far Job, u: userId, 
+				 g: userId) ref far External =
+	{
+	o:	ref object;
+
+	o = objectEntry(obj);
+	if	(o)
+		return o newJob(j, u, g);
+	else
+		return 0;
+	}
+
+getJobObject:	public	(obj: ref far External) ref far Job =
+	{
+	o:	ref object;
+
+	o = objectEntry(obj);
+	if	(o)
+		return o->myJob;
+	else
+		return 0;
+	}
+
+selfSend:	public	(xo: ref far External, func: int, 
+						addr: vaddr_t, len: Size) =
+	{
+	o:	ref object;
+	n:	threadLock;
+	seq:	int;
+
+	n lock();
+	seq = SequenceNumber;
+	SequenceNumber += SEQ_INCREMENT;
+	n unlock();
+	o = objectEntry(xo);
+	if	(LogVector)
+		LogVector lsend(FALSE, FALSE, xo, o, o, seq,
+							func, addr, len, 0);
+	if	(o)
+		o selfSend(func, addr, len);
+	else if	(LogVector)
+		LogVector rejected(seq, o, 0, ERRINVALIDARGUMENT);
+	}
+
+selfSendIfEmpty:	public	(xo: ref far External, func: int, 
+						addr: vaddr_t, len: Size,
+						sendIfEmpty: boolean) =
+	{
+	o:	ref object;
+	n:	threadLock;
+	seq:	int;
+
+	n lock();
+	seq = SequenceNumber;
+	SequenceNumber += SEQ_INCREMENT;
+	n unlock();
+	o = objectEntry(xo);
+	if	(LogVector)
+		LogVector lsend(FALSE, FALSE, xo, o, o, seq,
+							func, addr, len, 0);
+	if	(o == 0){
+		if	(LogVector)
+			LogVector rejected(seq, o, o, ERRINVALIDARGUMENT);
+		if	(len)
+			delete pointer(addr);
+		return;
+		}
+	if	(!sendIfEmpty ||
+		 o->msgs isEmpty())
+		o selfSend(func, addr, len);
+	else	{
+		if	(LogVector)
+			LogVector rejected(seq, o, o, ERREXIST);
+		if	(len)
+			delete pointer(addr);
+		}
+	}
+
+processJob:	public	(obj: ref far External) =
+	{
+	o:	ref object;
+
+	o = objectEntry(obj);
+	if	(o)
+		o setJob(CurProc->myJob);
+	}
+
+copyObjectContext:	(o: ref far External) ref objectContext =
+	{
+	parobj:	ref object;
+
+	parobj = objectEntry(o);
+	if	(parobj)
+		return parobj->context copy(0);
+	else
+		return 0;
+	}
+
+unloadObjects:	public	(data: ref segment) =
+	{
+	n:	threadLock;
+	o:	ref object;
+	i:	int;
+
+	for	(i = 0; i < NOBJECTS; i++){
+		n lock();
+		o = ObjectTable[i];
+		if	(o &&
+			 o->isKernel){
+			ox:	ref External;
+
+			ox = ref External(o->actualObject);
+			if	(ox &&
+				 (data contains(ox) ||
+				  data contains(ox->__td__))){
+				if	(o->nameDirectory)
+					o->nameDirectory detachObject(o->me);
+				o->useCount = 1;
+				o->me close();
+				}
+			}
+		n unlock();
+		}
+	}
+
+alarm_:	public	(sec: int) int =
+	{
+	new alarmTimer[ secondsToTicks(sec), CurProc->animates ];
+	return SUCCESS;
+	}
+
+
+alarmTimer:	public	type	inherit	timer	{
+	public:
+
+constructor:	(cnt: Tick, o: ref object) =
+	{
+	obj = o;
+	o->alarm = self;
+	super constructor(cnt);
+	}
+
+fire:	dynamic	() =
+	{
+	o:	ref object;
+
+	o = obj;
+	o->alarm = 0;
+	delete self;
+	selfSend(o->me, int(&External.alarmExpired), 0, 0);
+	}
+
+dispose:	dynamic	() =
+	{
+	obj->alarm = 0;
+	delete self;
+	}
+
+	private:
+
+	obj:		ref object;
+	};
+
+disown_:	public	(x: ref far External) int =
+	{
+	op:	ref object;
+
+		// disown(0) means disown myself from my parent
+
+	if	(x == 0){
+		if	(CurProc->animates->isDisowned){
+			if	(LogVector)
+				LogVector disown(CurProc->animates->parent,
+					CurProc->animates->me,
+					CurProc->animates->me, x,
+					ERRINVALIDARGUMENT);
+			return ERRINVALIDARGUMENT;
+			}
+		CurProc->animates->isDisowned = TRUE;
+		if	(LogVector)
+			LogVector disown(CurProc->animates->parent,
+					CurProc->animates->me,
+					CurProc->animates->me, x,
+					SUCCESS);
+		return SUCCESS;
+		}
+	op = objectEntry(x);
+	if	(op == 0){
+		if	(LogVector)
+			LogVector disown(CurProc->animates->parent,
+					CurProc->animates->me,
+					CurProc->animates->me, x,
+					ERRNOTFOUND);
+		return ERRNOTFOUND;
+		}
+	if	(op->parent == CurProc->mainObject->me){
+		if	(op->isDisowned){
+			if	(LogVector)
+				LogVector disown(CurProc->animates->me,
+					op->me,
+					CurProc->animates->me, x,
+					ERRINVALIDARGUMENT);
+			return ERRINVALIDARGUMENT;
+			}
+		op->isDisowned = TRUE;
+		if	(LogVector)
+			LogVector disown(CurProc->animates->me,
+					op->me,
+					CurProc->animates->me, x,
+					SUCCESS);
+		return SUCCESS;
+		}
+	else if	(op->me == CurProc->animates->parent){
+		if	(CurProc->animates->isDisowned){
+			if	(LogVector)
+				LogVector disown(CurProc->animates->parent,
+					CurProc->animates->me,
+					CurProc->animates->me, x,
+					ERRINVALIDARGUMENT);
+			return ERRINVALIDARGUMENT;
+			}
+		CurProc->animates->isDisowned = TRUE;
+		if	(LogVector)
+			LogVector disown(CurProc->animates->parent,
+					CurProc->animates->me,
+					CurProc->animates->me, x,
+					SUCCESS);
+		return SUCCESS;
+		}
+	else	{
+		if	(LogVector)
+			LogVector disown(0, 0,
+					CurProc->animates->me, x,
+					ERRPERMISSION);
+		return ERRPERMISSION;
+		}
+	}
+
+permit_:	public	(jr: AccessRights, ur: AccessRights, 
+				gr: AccessRights,
+				wr: AccessRights) =
+	{
+	op:	ref object;
+
+	op = CurProc->animates;
+	op->jobRights = jr;
+	op->userRights = ur;
+	op->groupRights = gr;
+	op->worldRights = wr;
+	}
+
+publishKernel:	public	(name: [:] char,
+			 typeString: [:] char,
+			 obj: ref External, 
+			 jobRights: AccessRights,
+			 userRights: AccessRights,
+			 groupRights: AccessRights,
+			 worldRights: AccessRights) ref far External =
+	{
+	ko:	ref kernelObject;
+	i:	int;
+	n:	threadLock;
+
+	ko = new kernelObject[ name, typeString, obj, 
+			jobRights, userRights, groupRights, worldRights ];
+	n lock();
+	for	(i = 0; i < NOBJECTS; i++)
+		if	(ObjectTable[i] == 0){
+			ObjectTable[i] = ko;
+			ko->me = ref far External(OID_BASE + i);
+			n unlock();
+			if	(LogVector)
+				LogVector newObject(ko->me, ko->parent,
+						ko->name, ko->typeString);
+			obj->objectId = ko->me;
+			return ko->me;
+			}
+	n unlock();
+	delete ko;
+	return 0;
+	}
+
+jobPublishKernel:	public	(name: [:] char,
+			 typeString: [:] char,
+			 obj: ref External, 
+			 jobRights: AccessRights) ref far External =
+	{
+	ko:	ref kernelObject;
+	i:	int;
+	n:	threadLock;
+
+	ko = new kernelObject[ name, typeString, obj, 
+				jobRights, AR_NONE, AR_NONE, AR_NONE ];
+	n lock();
+	for	(i = 0; i < NOBJECTS; i++)
+		if	(ObjectTable[i] == 0){
+			ObjectTable[i] = ko;
+			ko->me = ref far External(OID_BASE + i);
+			n unlock();
+			if	(LogVector)
+				LogVector newObject(ko->me, ko->parent,
+						ko->name, ko->typeString);
+			obj->objectId = ko->me;
+			ko->myJob = CurProc->myJob;
+			return ko->me;
+			}
+	n unlock();
+	delete ko;
+	return 0;
+	}
+
+ThreadTrap:	Trap;
+
+threadLaunch:	public	(ex: vaddr_t, th: vaddr_t, stack: vaddr_t,
+				func: vaddr_t) ref far External =
+	{
+	uo:	ref animatedObject;
+	i:	int;
+	n:	threadLock;
+	p:	ref process;
+
+	p = process create();
+	if	(p == 0)
+		ThreadTrap raise();
+	CurArena initializeThread(p, th, stack, func);
+	uo = new animatedObject[ "thread", ":",
+				ex, AR_ANY, AR_NONE, AR_NONE, AR_NONE ];
+	uo->context = CurProc->animates->context;
+	uo->context dup();
+	uo serves(CurProc->mainObject->me, p, CurArena);
+	n lock();
+	for	(i = 0; i < NOBJECTS; i++)
+		if	(ObjectTable[i] == 0){
+			ObjectTable[i] = uo;
+			uo->me = ref far External(OID_BASE + i);
+			n unlock();
+			if	(LogVector)
+				LogVector thread(CurProc->animates->me,
+							uo->me);
+			p setRunnable();
+			CurArena dup();
+			return uo->me;
+			}
+	n unlock();
+	delete uo;
+	return ref far External(ERRNOMEMORY);
+	}
+
+kernelThreadLaunch:	public	(nm: [:] char,
+				 ts: [:] char,
+				 par: ref far External, p: ref process, 
+				 ex: ref External) ref far External =
+	{
+	uo:	ref animatedObject;
+	i:	int;
+	n:	threadLock;
+
+	uo = new animatedObject[ nm, ts, vaddr_t(ex), 
+					AR_ANY, AR_NONE, AR_NONE, AR_NONE ];
+	uo->context = copyObjectContext(par);
+	uo serves(par, p, &KernelArena);
+	n lock();
+	for	(i = 0; i < NOBJECTS; i++)
+		if	(ObjectTable[i] == 0){
+			ObjectTable[i] = uo;
+			uo->me = ref far External(OID_BASE + i);
+			n unlock();
+			if	(LogVector)
+				LogVector newObject(uo->me, uo->parent,
+						uo->name, uo->typeString);
+			return uo->me;
+			}
+	n unlock();
+	delete uo;
+	return ref far External(ERRNOMEMORY);
+	}
+
+userArenaStartup:	public	(nm: [:] char, 
+				 par: ref far External, p: ref process, 
+				 ar: ref arena) ref far External =
+	{
+	uo:	ref animatedObject;
+	i:	int;
+	n:	threadLock;
+
+	uo = new animatedObject[ nm, ":", 0, 
+				AR_ANY, AR_NONE, AR_NONE, AR_NONE ];
+	uo->context = copyObjectContext(par);
+	uo serves(par, p, ar);
+	n lock();
+	for	(i = 0; i < NOBJECTS; i++)
+		if	(ObjectTable[i] == 0){
+			ObjectTable[i] = uo;
+			uo->me = ref far External(OID_BASE + i);
+			n unlock();
+			if	(LogVector)
+				LogVector newObject(uo->me, uo->parent,
+						uo->name, uo->typeString);
+			return uo->me;
+			}
+	n unlock();
+	delete uo;
+	return ref far External(ERRNOMEMORY);
+	}
+
+displayObjects:	public	() =
+	{
+	i:	int;
+	o:	ref object;
+
+	for	(i = 0; i < NOBJECTS; i++){
+		o = ObjectTable[i];
+		if	(o)
+			displayObject(o);
+		}
+	}
+
+displayKernelMessages:	public	() =
+	{
+	i:	int;
+	o:	ref object;
+	m:	ref message;
+
+	for	(i = 0; i < NOBJECTS; i++){
+		o = ObjectTable[i];
+		if	(o == 0)
+			continue;
+		if	(!o->isKernel)
+			continue;
+		if	(o->msgs isEmpty())
+			continue;
+		displayObject(o);
+		for	(m = ref message(o->msgs.next); m != &o->msgs;
+					m = ref message(m->next))
+			m display();
+		}
+	}
+
+displayObject:	public	(o: ref object) =
+	{
+	kprintf("%3d %3d %3d u%04x:g%04x %04x %04x %04x %04x %5d %c",
+			o->me, o->parent, o->myJob, o->group, o->user,
+			o->worldRights, o->groupRights, o->userRights,
+			o->jobRights, o->useCount, 
+			o->isKernel ? '-' : 'P');
+//			o->alertable ? 'A' : 'N');
+	kprintf(" %S\n", o->name);
+	}
+
+logVector:	public	type	{ public:
+
+lsend:		dynamic	(signaling: boolean, wait: boolean, 
+				target: ref far External,
+				o: ref object, source: ref object,
+				seq: int,
+				func: int, buf: vaddr_t, len: int, 
+				replyLen: int);
+
+rejected:	dynamic	(seq: int, o: ref object, source: ref object, 
+				code: int);
+
+intReply:	dynamic	(seq: int, o: ref object, source: ref object, 
+				result: int);
+
+replied:	dynamic	(seq: int, o: ref object, source: ref object, 
+				buf: buffer_t, len: int);
+
+thread:		dynamic (parent: ref far External, child: ref far External);
+
+newObject:	dynamic	(id: ref far External, parent: ref far External,
+				name: [:] char, typeString: [:] char);
+
+newJob:		dynamic	(id: ref far External, oldJob: ref far Job,
+				newJob: ref far Job);
+
+disown:		dynamic	(parent: ref far External, child: ref far External,
+			 caller: ref far External, x: ref far External,
+			 result: int);
+
+	};
+

@@ -1,0 +1,48 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+//Environment:	public	ref far environment = ref far environment(ENV_SLOT);
+Environment:	public	environment;
+
+environment:	public	type	{
+	public:
+/*
+get:	(name: [:] char) [] char =
+	{
+	}
+/*
+	Get by index has to return the full name and value pair.
+ */
+getByIndex:	(index: int) [] char =
+	{
+	}
+ */
+/*
+	This function defines a new name/value pair.  Names are case
+	insensitive, but values are not touched.
+ */
+define:	(name: [:] char, value: [:] char) int =
+	{
+	}
+
+undefine:	(name: [:] char) int =
+	{
+	}
+/*
+fork:	() ref far environment =
+	{
+	}
+
+copy:	gate	() ref far external =
+	{
+	}
+ */
+probe:	(name: [:] char) size_t =
+	{
+	}
+
+	};

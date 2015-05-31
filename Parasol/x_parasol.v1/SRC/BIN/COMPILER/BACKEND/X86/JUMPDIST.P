@@ -1,0 +1,373 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	encoder;
+include	tparams, target;
+include	backend;
+include	value;
+include	symtab;
+
+SHORT_FLAG:	const byte = 0x20;
+
+MAX_DATA_IN_CB:	const	int = 128;
+
+/*
+ *
+ *	When <fixupcount> is equal to 0xFFFF then this is a scope record;
+ *	   then if <size> is equal to 0xFFFF then this is scope begin,
+ *	   else this is scope end, and <size> is the ScopePtr value.
+ */
+
+codeBlock:	type	{
+	public:
+
+	next:		ref codeBlock;
+	size:		unsigned;		/* includes jump */
+	address:	unsigned;		/* offset in code segment */
+	jumptype:	jumpCondition;
+	jumptarget:	ref codeBlock;		/* target block */
+	fixuplist:	ref codeFixup_;		/* points to first fixup */
+	sizediff:	unsigned;
+	flags:		unsigned;		/* internal to JUMPDIST.C */
+	data:		[MAX_DATA_IN_CB] char;
+	};
+
+codeFixup_:	type	{
+	public:
+
+	next:		ref codeFixup_;
+	blockOffset:	addr_t;		/* offset within codeBlock */
+	target:		pointer;
+	typedef:	fixupType;
+	};
+
+CodeBlocks:		ref codeBlock;
+CCodeBlock:	public	ref codeBlock;
+LastFixup:		ref codeFixup_;
+CLength:		addr_t;
+
+startupJumpDist:	public	() =
+	{
+	CLength = 0;
+	newCodeBlock();
+	CodeBlocks = CCodeBlock;
+	TargetData.flags |= TF_JDIST;
+	}
+
+newCodeBlock:	public	() =
+	{
+	CCodeBlock = alloc(sizeof(codeBlock));
+	memSet(CCodeBlock, 0, sizeof (codeBlock));
+	CCodeBlock->address    = CLength;
+	CCodeBlock->jumptype   = JC_NOOP | SHORT_FLAG;
+	LastFixup = 0;
+	}
+
+linkCodeBlock:	public	() =
+	{
+	blkp:		ref codeBlock;
+
+	blkp = CCodeBlock;
+	newCodeBlock();
+	blkp->next = CCodeBlock;
+	}
+
+codeBlockByte:	public	(c: char) =
+	{
+	if	(CCodeBlock->size >= MAX_DATA_IN_CB)
+		linkCodeBlock();
+	CCodeBlock->data[CCodeBlock->size] = c;
+	CCodeBlock->size++;
+	CLength++;
+	}
+
+codeFixup:	public	(t: fixupType, target: pointer) =
+	{
+	fix:	ref codeFixup_;
+
+	fix = alloc(sizeof(codeFixup_));
+
+	if	(CCodeBlock->size > MAX_DATA_IN_CB - 4)
+		linkCodeBlock();
+	fix->blockOffset = CCodeBlock->size;
+	fix->target	 = target;
+	fix->typedef	 = t;
+	if	(CCodeBlock->fixuplist)
+		LastFixup->next = fix;
+	else
+		CCodeBlock->fixuplist = fix;
+	fix->next = 0;
+	LastFixup = fix;
+	}
+
+codeJump:	public	(jc: jumpCondition, s: ref stmt_x) =
+        {
+	jumpsize:	unsigned;
+
+	if	(jc == JC_TABLE){
+		jumpsize = 4;
+		jc |= SHORT_FLAG;
+		}
+	else
+	        jumpsize = (jc == JC_JUMP) ? 5 : 6;
+        CCodeBlock->jumptype = jc;
+	CCodeBlock->size += jumpsize;
+	CLength += jumpsize;
+        if	(s->codeaddr)
+                CCodeBlock->jumptarget = s->codeaddr;
+        else    {
+                CCodeBlock->jumptarget = s->fwdJumpList;
+                s->fwdJumpList = CCodeBlock;
+                }
+	linkCodeBlock();
+        }
+
+codeBlockLabel:	public	(s: ref stmt_x) =
+	{
+	blkp:		ref codeBlock;
+	next:		ref codeBlock;
+
+	if	(CCodeBlock->size)
+		linkCodeBlock();
+	s->codeaddr = CCodeBlock;
+	for	(blkp = s->fwdJumpList; blkp; ) {
+		next = blkp->jumptarget;
+		blkp->jumptarget = CCodeBlock;
+		blkp = next;
+		}
+	}
+
+jumpDistanceOptimization:	public	(v: ref value) =
+	{
+	jumpInstructions:	static	[] char = [
+			0,		/* JC_NOOP */
+			0xe9,		/* JC_JUMP */
+			0x8c,		/* JC_LT */
+			0x8f,		/* JC_GT */
+			0x82,		/* JC_ULT */
+			0x87,		/* JC_UGT */
+			0x8e,		/* JC_LE */
+			0x8d,		/* JC_GE */
+			0x86,		/* JC_ULE */
+			0x83,		/* JC_UGE */
+			0x84,		/* JC_EQ */
+			0x85,		/* JC_NE */
+			0x82,		/* JC_CARRY */
+			0x83,		/* JC_NOCARRY */
+			0x80,		/* JC_OVERFLOW */
+			0x81,		/* JC_NOOVERFLOW */
+			0x88,		/* JC_SIGN */
+			0x89,		/* JC_NOSIGN */
+			0x8a,		/* JC_PARITY */
+			0x8b,		/* JC_NOPARITY */
+			0,		/* JC_LOOPZ */
+			0,		/* JC_LOOPNZ */
+			0,		/* JC_CXZ */
+			0,		/* JC_LOOP */
+			0,		/* 24 */
+			0,		/* 25 */
+			0,		/* 26 */
+			0,		/* 27 */
+			0,		/* 28 */
+			0,		/* 29 */
+			0,		/* 30 */
+			0,		/* 31 */
+			0,		/* JC_NOOP|SHORT_FLAG */
+			0xeb,		/* JC_JUMP|SHORT_FLAG */
+			0x7c,		/* JC_LT|SHORT_FLAG */
+			0x7f,		/* JC_GT|SHORT_FLAG */
+			0x72,		/* JC_ULT|SHORT_FLAG */
+			0x77,		/* JC_UGT|SHORT_FLAG */
+			0x7e,		/* JC_LE|SHORT_FLAG */
+			0x7d,		/* JC_GE|SHORT_FLAG */
+			0x76,		/* JC_ULE|SHORT_FLAG */
+			0x73,		/* JC_UGE|SHORT_FLAG */
+			0x74,		/* JC_EQ|SHORT_FLAG */
+			0x75,		/* JC_NE|SHORT_FLAG */
+			0x72,		/* JC_CARRY|SHORT_FLAG */
+			0x73,		/* JC_NOCARRY|SHORT_FLAG */
+			0x70,		/* JC_OVERFLOW|SHORT_FLAG */
+			0x71,		/* JC_NOOVERFLOW|SHORT_FLAG */
+			0x78,		/* JC_SIGN|SHORT_FLAG */
+			0x79,		/* JC_NOSIGN|SHORT_FLAG */
+			0x7a,		/* JC_PARITY|SHORT_FLAG */
+			0x7b,		/* JC_NOPARITY|SHORT_FLAG */
+			0xE1,		/* JC_LOOPZ|SHORT_FLAG */
+			0xE0,		/* JC_LOOPNZ|SHORT_FLAG */
+			0xE3,		/* JC_CXZ|SHORT_FLAG */
+			0xE2,		/* JC_LOOP|SHORT_FLAG */
+			0,		/* 24 */
+			0,		/* 25 */
+			0,		/* 26 */
+			0,		/* 27 */
+			0,		/* 28 */
+			0,		/* 29 */
+			0,		/* 30 */
+			0,		/* 31 */
+			];
+
+	jumpsize:		unsigned;
+	distance:		int;
+
+	recbytes:		unsigned;
+	bytecount:		unsigned;
+
+	fixupcnt:		unsigned;
+	fixupptr:		ref codeFixup_;
+	codepos:		unsigned;
+	codeptr:		ref char;
+
+	first_scope:		int;
+	i:			int;
+
+	s:			ref stmt_x;
+	sblk:			ref codeBlock;
+
+	changed:		char;
+	morelongjumps:		char;
+	sizediff:		unsigned;
+	blkp:			ref codeBlock;
+	blockpos:		unsigned;
+	dstoffs:		unsigned;
+	sizechange:		unsigned;
+
+	jumptype:		jumpCondition;
+
+	if	(Func->optimize){
+		do	{
+			changed = sizediff = morelongjumps = 0;
+			for	(blkp = CodeBlocks; blkp; blkp = blkp->next){
+				blkp->address -= sizediff;
+/*
+				if	(blkp->fixupcount == 0xFFFF)
+					continue;
+ */
+				jumptype = blkp->jumptype;
+				if	(jumptype & SHORT_FLAG)
+					continue;
+
+					// We only care about long jumps
+
+				blockpos = blkp->address + blkp->size;
+				dstoffs = blkp->jumptarget->address;
+				sizechange = (jumptype == JC_JUMP) ? 3 : 4;
+				if	(dstoffs > blockpos)
+					dstoffs -= sizediff;
+				else
+					blockpos -= sizechange;
+				distance = dstoffs - blockpos;
+				if	(distance >= -128 && distance < 127){
+					changed = 1;
+					blkp->jumptype |= SHORT_FLAG;
+					blkp->size -= sizechange;
+					sizediff += sizechange;
+					}
+				else
+					morelongjumps = 1;
+				}
+			}
+			while	(changed && morelongjumps);
+		}
+
+	funcSize:	addr_t;
+
+	funcSize = 0;
+	for	(blkp = CodeBlocks; blkp; blkp = blkp->next) {
+		funcSize += blkp->size;
+		}
+
+	TargetData.flags &= ~TF_JDIST;
+	Encoder sizeValue(funcSize);
+	first_scope = 1;
+	blkp = CodeBlocks;
+	CLength = 0;
+	for	(; blkp; blkp = blkp->next) {
+/*
+		if	(blkp->fixupcount == 0xFFFF){
+			if	(blkp->size == 0xFFFF){
+				if	(first_scope){
+					first_scope = 0;
+					}
+				}
+			continue;
+			}
+ */
+		jumptype = blkp->jumptype;
+		if	(jumptype == (JC_NOOP|SHORT_FLAG))
+			jumpsize = 0;
+		else if	(jumptype == (JC_TABLE|SHORT_FLAG))
+			jumpsize = 4;
+		else if	(jumptype & SHORT_FLAG)
+			jumpsize = 2;
+		else if	(jumptype == JC_JUMP)
+			jumpsize = 5;
+		else
+			jumpsize = 6;
+
+		recbytes = blkp->size - jumpsize;
+		fixupptr = blkp->fixuplist;
+		codeptr  = &blkp->data[0];
+		codepos  = 0;
+		Encoder block(codeptr, recbytes);
+		while	(fixupptr){
+			xp:	ref long;
+
+			i = fixupptr->blockOffset;
+			xp = ref long(codeptr + i);
+			if	(fixupptr->typedef == FT_LINE){
+/*
+				Encoder recordLineNumber(CLength + i,
+							int(fixupptr->target));
+ */
+				fixupptr = fixupptr->next;
+				continue;
+				}
+			else if	(fixupptr->typedef == FT_JUMP){
+				s = ref stmt_x(fixupptr->target);
+				fixupptr->target = v;
+				sblk = s->codeaddr;
+				*xp = sblk->address;
+				fixupptr->typedef = FT_VAL_OFF;
+				}
+			else if	(fixupptr->target == 0){
+				*xp += CLength + i;
+				fixupptr->target = v;
+				fixupptr->typedef = FT_VAL_OFF;
+				}
+			Encoder newFixup(fixupptr->typedef, 
+					fixupptr->target, CLength + i, *xp);
+			fixupptr = fixupptr->next;
+			}
+		CLength += blkp->size;
+		if	(jumptype == (JC_NOOP|SHORT_FLAG))
+			continue;
+		distance = blkp->jumptarget->address -
+			  (blkp->address + blkp->size);
+		if	(jumptype == (JC_TABLE|SHORT_FLAG)){
+			distance = blkp->jumptarget->address;
+			Encoder newFixup(FT_VAL_OFF, 
+						v, CLength - 4, distance);
+			Encoder byte(0);
+			Encoder byte(0);
+			Encoder byte(0);
+			Encoder byte(0);
+			}
+		else if	(jumptype & SHORT_FLAG){
+			Encoder byte(jumpInstructions[jumptype]);
+			Encoder byte(distance);
+			}
+		else	{
+			if	(jumptype != JC_JUMP)
+				Encoder byte(0x0f);
+			Encoder byte(jumpInstructions[jumptype]);
+			Encoder byte(distance);
+			Encoder byte(distance >> 8);
+			Encoder byte(distance >> 16);
+			Encoder byte(distance >> 24);
+			}
+		}
+	}

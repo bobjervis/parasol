@@ -1,0 +1,327 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	kprintf;
+include	error;
+include	hardware;
+include	object;
+include	vmemory;
+include	arena;
+include	process;
+include	memory;
+include	file, runfile;
+
+initKernelArena:	public	() =
+	{
+	initMemory();
+	CurArena = &KernelArena;
+	KernelHeap initialize();
+	_Thread->currentHeap = &KernelHeap;
+	_Thread->threadHeap = &KernelHeap;
+	}
+
+KernelArena:	public	kernelArena;
+
+kernelArena:	public	type	inherit	arena	{
+	public:
+	threadPtr:		vaddr_t;
+
+generalProtectionFault:	dynamic	(ref InterruptFrame) =
+	{
+	}
+
+dumpHex:	dynamic	(p: vaddr_t, len: vaddr_t) =
+	{
+	dumpData(pointer(p), len);
+	}
+
+recoverSendParameters:	dynamic	(a: ref task_t) =
+	{
+	xp:		ref byte;
+	gf:	ref i386gateFrame;
+
+	memSet(a, 0, sizeof *a);
+/*
+	xp = &CurProc->kernelStack[|CurProc->kernelStack];
+	gf = ref i386gateFrame(xp) - 1;
+	a->eip = gf->eip;
+	a->cs = gf->cs;
+	a->esp = gf->esp;
+ */
+//	a->eflags = DEFAULT_FLAGS;
+	}
+
+grow:	dynamic	(newSize: vaddr_t) boolean =
+	{
+	p:	unsigned;
+	page1:	paddr_t;
+	page2:	paddr_t;
+	ap:	ref paddr_t;
+
+	page1 = getPageOffset(paddr_t(_brklvl) - 1) + KERNEL_CODE_SPACE >> 12;
+	page2 = getPageOffset(paddr_t(newSize) - 1) + KERNEL_CODE_SPACE >> 12;
+	if	(page1 == page2)
+		return TRUE;
+	ap = getPageTable(KERNEL_VIRTUAL_ADDRESS);
+	if	(_brklvl > pointer(newSize)){	// A shrink of the heap
+		while	(page1 > page2){
+			FreePages put(ap[page1]);
+			ap[page1] = 0;
+			page1--;
+			}
+		}
+	else	{				// a grow of the heap
+		if	(page2 - page1 > FreePages.pageCount)
+			return FALSE;
+		do	{
+			page1++;
+			ap[page1] = FreePages get() | 1;
+			}
+			while	(page1 < page2);
+		}
+	resetPageCache();
+	return TRUE;
+	}
+
+_free:	dynamic	() =
+	{
+	super _free();
+	}
+
+obtainWrite:	dynamic	(buf: vaddr_t, len: vaddr_t) pointer =
+	{
+	return pointer(buf);
+	}
+
+unlock:	dynamic	() =
+	{
+	}
+
+write:	dynamic	(offs: vaddr_t, src: pointer, len: vaddr_t) int =
+	{
+	memCopy(pointer(offs), src, len);
+	return SUCCESS;
+	}
+
+read:	dynamic	(offs: vaddr_t, dest: pointer, len: vaddr_t) int =
+	{
+	memCopy(dest, pointer(offs), len);
+	return SUCCESS;
+	}
+/*
+	This function tests whether the kernel can legitimately call the 
+	named code address.  The address is relative to the code segment.
+ */
+canCall:	dynamic	(addr: vaddr_t) boolean =
+	{
+	return addr < CSsize;
+	}
+/*
+	This function tests whether the kernel can legitimately read
+	the named data buffer in the arena.  The address is relative to
+	the data segment.
+ */
+canRead:	dynamic	(addr: vaddr_t, len: vaddr_t) boolean =
+	{
+	return TRUE;
+	}
+/*
+	This function tests whether the kernel can legitimately write to
+	the named data buffer in the arena.  The address is relative to
+	the data segment.
+ */
+canWrite:	dynamic	(addr: vaddr_t, len: vaddr_t) boolean =
+	{
+	return TRUE;
+	}
+
+kernelCoreDump:	(f: [:] char) =
+	{
+	fd:	stream;
+	i:	int;
+	ch:	coreDumpHeader;
+
+	try	{
+		i = fd create(f, 0);
+		if	(i)
+			return;
+		}
+	except
+		return;
+
+		// We have a good core file
+
+	try	{
+		memSet(&ch, 0, sizeof ch);
+		ch.magic = COR_MAGIC;
+		ch.version = COR_VERSION;
+		ch.dataOffset = DataOffset;
+		ch.task.ss0 = paddr_t(_brklvl);
+		fd write(ref byte(&ch)[:sizeof ch]);
+		p:	ref byte;
+
+		p = pointer(DataOffset);
+		i = paddr_t(_brklvl) - paddr_t(DataOffset);
+		try	{
+			while	(i){
+				rem:	Size;
+
+				if	(i > 512)
+					rem = 512;
+				else
+					rem = i;
+				fd write(p[:rem]);
+				p += rem;
+				i -= rem;
+				}
+			}
+		except	{
+			kprintf("kernel data write faulted\n");
+			}
+		}
+	except	{
+		kprintf("kenel header write faulted\n");
+		}
+	fd close();
+	return;
+	}
+
+	};
+
+KernelHeap:	public	inherit	Heap	{
+	allocp:		ref kernelHeapHeader;
+
+visible:
+
+	base:		kernelHeapHeader;	// Base of the heap
+	operation:	int;			// Used to validate heap walks
+
+public:
+
+initialize:	() =
+	{
+	base.next = &base;
+	allocp = &base;
+	operation = 0;
+	}
+
+alloc:	dynamic	(size: Size) pointer =
+	{
+	p:	ref kernelHeapHeader;
+	q:	ref kernelHeapHeader;
+	cp:	ref char;
+	n:	threadLock;
+	origSize:	Size;
+
+	operation++;
+	origSize = size;
+	size = (size + sizeof unsigned + sizeof kernelHeapHeader - 1) &
+				~(sizeof kernelHeapHeader - 1);
+	n lock();
+	q = allocp;
+	for	(p = q->next; ; q = p, p = p->next){
+		if	(p->size >= size){
+			if	(p->size <= size + sizeof kernelHeapHeader)
+				q->next = p->next;
+			else	{
+				p->size -= size;
+				p = p nextHeader();
+				p->size = size;
+				}
+			allocp = q;
+			n unlock();
+			memSet(&p->next, 0, origSize);
+			return &p->next;
+			}
+		if	(p == allocp)
+			break;
+		}
+	p = _brklvl;
+	cp = ref byte(p) + size;
+	if	(!KernelArena grow(vaddr_t(cp))){
+		n unlock();
+		MemTrap raise(H_NOMEMORY, size);
+		}
+	_brklvl = cp;
+	p->size = size;
+	n unlock();
+	memSet(&p->next, 0, origSize);
+	return &p->next;
+	}
+
+_free:	dynamic	(block: pointer) =
+	{
+	p:	ref kernelHeapHeader;
+	q:	ref kernelHeapHeader;
+	n:	threadLock;
+
+	operation++;
+	p = ref kernelHeapHeader(long(block) - sizeof Size);
+	n lock();
+	for	(q = &base; p >= q->next; q = q->next)
+		if	(q >= q->next)
+			break;
+
+	if	(p nextHeader() == q->next){
+		p->size += q->next->size;
+		p->next = q->next->next;
+		}
+	else
+		p->next = q->next;
+	if	(q nextHeader() == p){
+		q->size += p->size;
+		q->next = p->next;
+		p = q;
+		}
+	else
+		q->next = p;
+
+		/* If the block just freed is at the top of memory,
+			use growDS to free it up.
+		 */
+
+	if	(p nextHeader() == _brklvl){
+
+			/* Find the new end of list */
+
+		for	(q = p; q->next != p; q = q->next)
+			;
+		q->next = p->next;
+		KernelArena grow(vaddr_t(p));
+		_brklvl = p;
+		}
+	allocp = q;
+	n unlock();
+	}
+
+freeListSize:	dynamic	() Size =
+	{
+	j:	int;
+	p:	ref kernelHeapHeader;
+
+	j = 0;
+	for	(p = base.next; p != &base; p = p->next){
+		j += p->size;
+		}
+	return j;
+	}
+
+	};
+
+kernelHeapHeader:	public	type	{
+	public:
+
+	size:	Size;			/* Size of this free block */
+	next:	ref kernelHeapHeader;	/* Pointer to next header */
+
+nextHeader:	() ref kernelHeapHeader =
+	{
+	return ref kernelHeapHeader(long(self) + size);
+	}
+
+	};
+

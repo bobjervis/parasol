@@ -1,0 +1,630 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	error;
+include	format;
+include	filesys;
+include	alys;
+include	_startup;
+
+MAXPATHLIST:	public	const int = 4096;
+MAXPATH:	public	const int = 256;
+MAXDIR:		public	const int = 224;	// MAXPATH - 32
+
+AR_READ:	public	const AccessRights = 0x0001;
+AR_WRITE:	public	const AccessRights = 0x0002;
+AR_EXEC:	public	const AccessRights = 0x0004;
+AR_DIREC:	public	const AccessRights = 0x0040;
+
+AR_TEXT:	public	const AccessRights = 0x4000;
+AR_DOS_TEXT:	public	const AccessRights = 0x8000;
+
+FileSystem:	public	const	ref far nameContext = 
+//					ref far nameContext(FSYS_SLOT);
+					ref far nameContext(20);
+
+nameContext:	public	type	inherit	External {
+	public:
+
+open:			gate	(fname: [:] char, opt: AccessRights) 
+							ref far channel = 
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+stat:			gate	(fname: [:] char) file_t = 
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+create:			gate	(fname: [:] char, attr: fAttributes_t) 
+							ref far channel = 
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+makeDirectory:		gate	(fname: [:] char) int = 
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+removeDirectory:	gate	(fname: [:] char) int = 
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+unlink:			gate	(fname: [:] char) int = 
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+unlinkGroup:		gate	(fname: [:] char) int = 
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+move:			gate	(fname1: [:] char, fname2: [:] char) int = 
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+getAbsolutePath:	gate	(fname: [:] char) [] char = 
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+access:			gate	(fname: [:] char, AccessRights) int = 
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+setFileAttributes:	gate	(fname: [:] char, fAttributes_t) int = 
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+setCurrentDirectory:	gate	(fname: [:] char) int = 
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+getDriveInfo:		gate	(fname: [:] char) drive_t = 
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+scanDirectory:		gate	(fname: [:] char) ref far directoryScanner =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+	// Process management calls
+
+spawn:			gate	(host: ref far External, cmd: [:] char, 
+					args: [:] char) ref far External =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+spawnDebug:		gate	(host: ref far External, cmd: [:] char, 
+					args: [:] char) ref far External =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+exec:			gate	(cmd: [:] char, 
+					args: [:] char) =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+register:		gate	(obj: ref far External, name: [:] char,
+					typ: [:] char) int =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+attach:			gate	(name: [:] char, 
+					typ: [:] char) ref far External =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+	};
+
+BUFSIZE:	public	const	int = 1024;	/* Buffer size for stdio */
+
+fileOffset:	public	type	long;
+
+EOF:		public	const	int = -1;	/* End of file indicator */
+
+printf:		public	(fmt: [:] char, ...) =
+	{
+	stdout format(fmt, ...);
+	}
+
+gets:	public	(s: [:] char) [:] char =
+	{
+	return stdin gets(s);
+	}
+
+getchar:	public	() int =
+	{
+	return stdin getc();
+	}
+
+putchar:	public	(c: int) int =
+	{
+	return stdout putc(c);
+	}
+
+SEEK_ABS:	public	const	int = 0;
+SEEK_CUR:	public	const	int = 1;
+SEEK_END:	public	const	int = 2;
+
+stdin:	public	stream;
+stdout:	public	stream;
+stderr:	public	stream;
+
+stream:	public	type	inherit	Emitter {
+	fd:	ref far channel;
+
+	public:
+
+create:	(pathname: [:] char, attr: int) int =
+	{
+	buffer = new [BUFSIZE] byte;
+	fd = FileSystem create(pathname, attr);
+	if	(fd == 0)
+		return ERRNOFILE;
+	fd = ref far channel(makeAnyLocal(fd));
+	curp = buffer;
+	endp = buffer;
+	flags = WRIT|BUF|OPEN;
+	return SUCCESS;
+	}
+
+open:	(filename: [:] char, opt: int) int =
+	{
+	buffer = new [BUFSIZE] byte;
+	fd = FileSystem open(filename, opt);
+	if	(fd == 0)
+		return ERRNOFILE;
+	fd = ref far channel(makeAnyLocal(fd));
+	curp = buffer;
+	endp = buffer;
+        flags = OPEN|BUF;
+	flags |= opt & RDWR;
+	return SUCCESS;
+	}
+
+close:	() =
+	{
+	if	((flags & OPEN) == 0)
+		return;
+	flush();
+	if	(flags & BUF)
+		delete ref char(buffer);
+	flags = 0;				/* indicate closed */
+	fd close();
+	}
+
+dup:	() stream =
+	{
+	s:	stream;
+
+	flush();
+	s = *self;
+	s.flags &= ~BUF;
+	if	(buffer == &hold)
+		s setBuffering(0);
+	else
+		s setBuffering(||buffer);
+	s.fd = ref far channel(makeAnyLocal(fd));
+//	return s;
+	}
+
+dup2:	(newFd: ref far channel) stream =
+	{
+	s:	stream;
+
+	flush();
+	s = *self;
+	s.flags &= ~BUF;
+	if	(buffer == &hold)
+		s setBuffering(0);
+	else
+		s setBuffering(||buffer);
+	if	(makeLocal(fd, newFd) != 0)
+		s.fd = ref far channel(-1);
+	else
+		s.fd = newFd;
+//	return s;
+	}
+
+setAge:	(ftime: Time) int =
+	{
+	flush();
+	fd setAge(ftime);
+	}
+
+error:	() boolean = 
+	{
+	if	(flags & ERR)
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+flush:	() int =
+	{
+	if	(flags & IN)
+		return 0;
+	if	((flags & WRIT) == 0)
+		return 0;
+	return flushBuffer();
+	}
+
+getc:	() int =
+	{
+	if	(curp >= endp)
+		return fillBuffer();
+	else
+		return *curp++;
+	}
+
+gets:	(s: [:] char) [:] char =
+	{
+	c:	int;
+	ret:	ref char;
+	n:	int;
+
+	ret = s;
+	n = ||s;
+	while	(--n >= 0){
+		c = self getc();
+		if	(c == EOF)
+			break;
+		*ret++ = c;
+		if	(c == '\n')
+			break;
+		}
+	|s = ret - s;
+	return s;
+	}
+
+reopen:	(filename: [:] char, opt: int) int =
+	{
+	i:	int;
+	nfd:	ref far channel;
+	buf:	[:] char;
+
+	if	(flags & OPEN == 0)
+		return ERRINVALIDARGUMENT;
+	nfd = FileSystem open(filename, opt);
+	if	(nfd == 0)
+		return ERRNOFILE;
+	flush();
+	buf = new [BUFSIZE] byte;
+	if	(flags & BUF)
+		delete buffer;
+	buffer = buf;
+	fd close();
+	fd = ref far channel(makeAnyLocal(nfd));
+	curp = buffer;
+	endp = buffer;
+        flags = OPEN|BUF;
+	flags |= opt & RDWR;
+	return SUCCESS;
+	}
+
+_fd:	(nfd: ref far External, opt: int) int =
+	{
+	i:	int;
+	buf:	[:] char;
+
+	buf = new [BUFSIZE] byte;
+	if	(flags & OPEN){
+		flush();
+		if	(flags & BUF)
+			delete buffer;
+		fd close();
+		}
+	buffer = buf;
+	fd = ref far channel(makeAnyLocal(nfd));
+	curp = buffer;
+	endp = buffer;
+        flags = OPEN|BUF;
+	flags |= opt & RDWR;
+	return SUCCESS;
+	}
+
+putc:	dynamic	(c: char) int =
+	{
+	*curp++ = c;
+	if	(curp >= buffer + ||buffer)
+		return flushBuffer();
+	else
+		return 0;
+	}
+
+puts:	(s: [:] char) int =
+	{
+	res:	int;
+	i:	int;
+
+	for	(i = 0; i < |s; i++){
+		res = putc(s[i]);
+		if	(res)
+			return res;
+		}
+	return 0;
+	}
+
+read:	(buf: [:] byte) int =
+	{
+	blen:	int;
+	min:	int;
+	max:	Size;
+
+	blen = endp - curp;
+	if	(blen){
+		min = ||buf;
+		if	(min > blen)
+			min = blen;
+		memMove(buf, curp, min);
+		curp += min;
+		buf = buf[min:];
+		}
+	else
+		min = 0;
+	if	(||buf){
+		try	{
+			buf [:]= fd read();
+			}
+		except	{
+			if	(min)
+				return(min);
+			else
+				continue;
+			}
+		}
+	return |buf + min;
+	}
+
+seek:	(offset: fileOffset, whence: int) fileOffset =
+	{
+	x:	fileOffset;
+
+	flush();
+	if	(error())
+		return EOF;
+	if	(whence == SEEK_CUR &&
+		 (flags & IN))
+		offset -= endp - curp;
+	flags &= ~IN;
+	endp = buffer;
+	curp = buffer;
+	return fd seek(offset, whence);
+	}
+
+setBuffering:	(size: int) int =
+	{
+	if	(flags & BUF){
+		delete buffer;
+		flags &= ~BUF;
+		}
+	if	(size){
+		buffer = new [size] byte;
+		flags |= BUF;
+		}
+	else
+		buffer = (&hold)[:1];
+	curp = endp = buffer;
+	return 0;
+	}
+
+useBuffer:	(buf: [:] byte) int =
+	{
+	if	(flags & BUF){
+		delete buffer;
+		flags &= ~BUF;
+		}
+	if	(|buf)
+		buffer = buf;
+	else
+		buffer = (&hold)[:1];
+	curp = endp = buffer;
+	return 0;
+	}
+
+ungetc:	() =
+	{
+	--curp;
+	}
+
+vprintf:	(fmt: [:] char, ap: ArgumentList) =
+	{
+	format(fmt, ap);
+	}
+
+write:	dynamic	(buf: [:] byte) int =
+	{
+	blen:	int;
+	min:	int;
+	written:	int;
+	
+	written = 0;
+	if	(curp != buffer){
+		blen = ||buffer - (curp - buffer);
+		if	(blen){
+			min = |buf;
+			if	(min > blen)
+				min = blen;
+			memMove(curp, buf, min);
+			curp += min;
+			buf = buf[min:];
+			if	(curp >= buffer + ||buffer)
+				flushBuffer();
+			written = min;
+			}
+		}
+	if	(|buf >= ||buffer){
+		i:	int;
+
+			// This assures that for large buffers, we write
+			// an even number of blocks.  For small buffers
+			// we just write everything and let the OS do the
+			// buffering
+
+		if	(||buffer >= 512)
+			blen = |buf & ~0x1ff;
+		else
+			blen = |buf;
+		while	(blen){
+			res:	int;
+
+			if	(blen < BUFSIZE)
+				res = blen;
+			else
+				res = BUFSIZE;
+			i = fd write(buf[:res]);
+			if	(i != res){
+				flags |= ERR;
+				if	(i < 0)
+					return i;
+				else
+					return i + written;
+				}
+			written += res;
+			blen -= res;
+			buf = buf[res:];
+			}
+		}
+
+		// If we still have data to write, we have a partial buffer
+		// worth of data, and the buffer is empty.
+
+	if	(|buf){
+		memCopy(buffer, buf, |buf);
+		curp += |buf;
+		written += |buf;
+		}
+	return written;
+	}
+
+getClass:	() int =
+	{
+	if	(probeObject(fd) == 0)
+		return -1;
+	else
+		return fd getClass();
+	}
+
+_constructor:	(fd_: int, fl: flagValues) =
+	{
+	fd = ref far channel(fd_);
+	flags = fl;
+	buffer = (&hold)[:1];
+	curp = &hold;
+	endp = &hold;
+	}
+
+getChannel:	() ref far channel =
+	{
+	return fd;
+	}
+	
+private:
+
+	flags:		flagValues;	/* File status flags */
+	hold:		byte;		/* Ungetc hold character */
+	buffer:		[:] byte;	/* Data transfer buffer */
+	curp:		ref byte;	/* Current active pointer */
+	endp:		ref byte;	/* Current buffer end pointer */
+
+fillBuffer:	() int =
+	{
+	c:	int;
+
+	if	((flags & (READ|OPEN|ERR)) != (READ|OPEN)){
+		flags |= ERR;
+		return EOF;
+		}
+
+	flags |= IN;
+	buffer [:]= fd read();
+	if	(|buffer == 0){
+		flags &= ~IN;
+		curp = buffer;
+		endp = buffer;
+		return EOF;
+		}
+	curp = buffer;
+	endp = buffer + |buffer;
+	return *curp++;
+	}
+
+flushBuffer:	() unsigned =
+	{
+	i:	unsigned;
+
+	if	(curp > buffer){
+		diff:	unsigned;
+
+		diff = curp - buffer;
+		i = fd write(buffer[:diff]);
+		if	(i != diff){
+			flags |= ERR;
+			return i;
+			}
+		curp = buffer;
+		}
+	return 0;
+	}
+
+};
+
+SYS_OPEN:	public	const	int = 20;
+
+vprintf:	public	(fmt: [:] char, ap: ArgumentList) =
+	{
+	stdout format(fmt, ap);
+	}
+
+flagValues:	type	char = {
+	RDWR = 0x03,			/* Read/write flag */
+	READ = 0x01,			/* Read only file */
+	WRIT = 0x02,			/* Write only file */
+	BUF  = 0x04,			/* Alloc'ed Buffer data */
+//	HOLD = 0x08,			/* Holding an unget char */
+	ERR  = 0x10,			/* Error indicator */
+	IN   = 0x20,			/* Data is incoming */
+	OPEN = 0x40,			/* File open flag */
+//	TERM = 0x80			/* File is a terminal */
+	};
+
+startup:	entry	() =
+	{
+	if	(!_inKernel){
+		if	(stdin getClass() != -1){
+			stdin _constructor(0, READ|OPEN);
+			stdin setBuffering(512);
+			}
+		stdout _constructor(1, WRIT|OPEN);
+		if	(stdout getClass() == 0)
+			stdout setBuffering(BUFSIZE);
+		stderr _constructor(2, WRIT|OPEN);
+		}
+	}
+
+shutdown:	cleanup	(c: ExitCode) ExitCode =
+	{
+	stdout flush();
+	return c;
+	}
+

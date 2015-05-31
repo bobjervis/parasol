@@ -1,0 +1,511 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	string, format, hardware;
+include	file;
+include	runfile;
+include	error;
+
+include	monitor;
+
+loadMap:	public	(map: [:] char) =
+	{
+	mapFd:	stream;
+	i:	int;
+	buf:	[100] char;
+	s:	[:] char;
+
+	i = mapFd open(map, AR_READ);
+	if	(i){
+		printf("Couldn't open map file '%S': %S\n", map, cmdError(i));
+		exit(1);
+		}
+	for	(;;){
+		s = mapFd gets(buf);
+		if	(|s == 0)
+			break;
+		if	(stringCompare(s, "Code\n") == 0)
+			break;
+		}
+	for	(;;){
+		s = mapFd gets(buf);
+		if	(|s == 0)
+			break;
+		if	(stringCompare(s, "Data\n") == 0)
+			continue;
+		if	(stringCompare(s, 
+				"  Address         Publics by Name\n") == 0)
+			break;
+		if	(buf[0] == '\n')
+			continue;
+
+		cp:	ref char;
+
+		cp = buf;
+		while	(*cp == ' ')
+			cp++;
+		while	(isxdigit(*cp))
+			cp++;
+		if	(*cp == ' ')		// New map files
+			cp = buf;
+		else if	(*cp == ':'){		// Old map files
+			cp++;
+			while	(*cp == ' ')
+				cp++;
+			if	(*cp == 0)
+				continue;
+			}
+		else
+			continue;
+		hex:	unsigned;
+		digit:	int;
+
+		hex = 0;
+		while	(*cp && *cp != ' '){
+			if	(isdigit(*cp))
+				digit = *cp - '0';
+			else
+				digit = tolower(*cp) - 'a' + 10;
+			hex = hex << 4 + digit;
+			cp++;
+			}
+		while	(*cp == ' ')
+			cp++;
+		if	(*cp == 0)
+			continue;
+		symType:	char;
+
+		if	(islower(*cp) && cp[1] == ' '){
+			symType = *cp;
+			cp += 2;
+			}
+		else
+			symType = '?';
+
+		name:	ref char;
+
+		name = cp;
+		while	(*cp && *cp != '\n')
+			cp++;
+		Symbols = symbol create(hex, name[:cp - name], symType);
+		}
+	mapFd close();
+	MachineTrapRaise = Symbols findName("machine::trap.raise");
+	}
+
+Symbols:		public	ref symbol;
+Start:			public	ref symbol;
+Code:			public	ref byte;
+InitData:		public	ref byte;
+RunHeader:		public	ref runHeader;
+MachineTrapRaise:	public	ref symbol;
+
+symbol:	public	type	{
+	next:	public	ref symbol;
+	name:		[:] char;
+
+	public:
+
+	address:	Size;
+	symType:	char;
+
+create:	factory	(a: Size, n: [:] char, typ: char) ref symbol =
+	{
+	self = new symbol[ Symbols ];
+	address = a;
+	name = new [|n] char;
+	name [:]= n;
+	symType = typ;
+	return self;
+	}
+
+constructDmap:	() [:] data_t =
+	{
+	sym:		ref symbol;
+	i, j:		int;
+	addr, addr2:	vaddr_t;
+	dmap:		[:] data_t;
+
+	for	(sym = self, i = 0; sym; sym = sym->next)
+		if	(!sym isCodeSymbol())
+			i++;
+	dmap = new [i] data_t;
+	for	(sym = self, i = |dmap - 1; sym; sym = sym->next)
+		if	(!sym isCodeSymbol()){
+			dmap[i].sym = sym;
+			i--;
+			}
+	for	(i = 0; i < |dmap - 1; i++){
+		addr = dmap[i].sym->address;
+		addr2 = dmap[i + 1].sym->address;
+		dmap[i].len = addr2 - addr;
+		if	(addr == addr2){
+			dmap[i].lines = 1;
+			continue;
+			}
+		j = 1;
+		if	(addr & 0x0f)
+			j++;
+		addr = (addr + 0xf) & ~0xf;
+		if	(addr < addr2)
+			j += (0xf + addr2 - addr) >> 4;
+		dmap[i].lines = j;
+		}
+	dmap[i].lines = 1;
+	return dmap;
+	}
+
+isCodeSymbol:	() boolean =
+	{
+	return symType == 'f';
+	}
+
+findName:	(cp: [:] char) ref symbol =
+	{
+	while	(self){
+		if	(namesMatch(cp, name))
+			return self;
+		self = next;
+		}
+	return 0;
+	}
+
+findSymbol:	(a: unsigned, codeSym: boolean) ref symbol =
+	{
+	save:	ref symbol;
+
+	save = self;
+	while	(self){
+		if	(a >= address &&
+			 isCodeSymbol() == codeSym){
+			if	(save == Symbols &&
+				 Start->address >= address &&
+				 a >= Start->address)
+				return Start;
+			else
+				return self;
+			}
+		self = next;
+		}
+	if	(save == Symbols &&
+		 a >= Start->address &&
+		 codeSym)
+		return Start;
+	else
+		return 0;
+	}
+
+display:	(adjust: unsigned) =
+	{
+	printf("%S(@%x)", name, address);
+	if	(adjust != address)
+		printf("+%x", adjust - address);
+	}
+
+format:	(s: ref Emitter, adjust: unsigned) =
+	{
+	s printf("%S(@%x)", name, address);
+	if	(adjust != address)
+		s printf("+%x", adjust - address);
+	}
+
+hasFullStackFrame:	() boolean =
+	{
+	code:	ref byte;
+
+	code = Code + address;
+	for	(;;){
+		switch	(*code){
+		case	0x50:			// push eax
+		case	0x51:			// push ecx
+		case	0x52:			// push edx
+		case	0x53:			// push ebx
+		case	0x56:			// push esi
+		case	0x57:			// push edi
+			break;
+
+		case	0x55:			// push EBP
+		case	0xC8:			// enter
+			return TRUE;
+			
+		default:
+			return FALSE;
+			}
+		code++;
+		}
+	}
+
+isInterruptFunction:	() boolean =
+	{
+	code:	ref byte;
+
+	code = Code + address;
+	if	(*code == 0x60)			// pusha
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+locateReturnAddress:	(ebp: unsigned, esp: unsigned) unsigned =
+	{
+	code:	ref byte;
+
+	code = Code + address;
+	for	(;;){
+		switch	(*code){
+		case	0x06:			// push es
+		case	0x1e:			// push ds
+			ebp += 2;
+			esp += 2;
+			break;
+
+		case	0x0f:
+			if	(code[1] == 0xa0 ||	// push fs
+				 code[1] == 0xa8){	// push gs
+				code++;
+				ebp += 2;
+				esp += 2;
+				}
+			else
+				return esp;
+			break;
+
+		case	0x60:			// pusha
+			ebp += 8 * 4;
+			esp += 8 * 4;
+			break;
+
+		case	0x66:
+		case	0x67:
+			break;
+
+		case	0x50:			// push eax
+		case	0x51:			// push ecx
+		case	0x52:			// push edx
+		case	0x53:			// push ebx
+		case	0x56:			// push esi
+		case	0x57:			// push edi
+			ebp += 4;
+			esp += 4;
+			break;
+
+		case	0x55:			// push EBP
+		case	0xC8:			// enter
+			return ebp + 4;
+			
+		default:
+			return esp;
+			}
+		code++;
+		}
+	}
+
+restoreRegisters:	(db: ref debugArena, t: ref task_t, 
+						context: unsigned) =
+	{
+	code:	ref byte;
+	frame:	int;
+	offset:	int;
+
+	code = Code + address;
+	frame = 0;
+	offset = 0;
+	for	(;;){
+		switch	(*code){
+		case	0x06:			// push es
+		case	0x1e:			// push ds
+			context -= 2;
+			break;
+
+		case	0x0f:
+			if	(code[1] == 0xa0 ||	// push fs
+				 code[1] == 0xa8){	// push gs
+				code++;
+				offset++;
+				context -= 2;
+				}
+			else
+				goto done;
+			break;
+
+		case	0x50:			// push eax
+		case	0x51:			// push ecx
+		case	0x52:			// push edx
+		case	0x53:			// push ebx
+		case	0x56:			// push esi
+		case	0x57:			// push edi
+			context -= 4;
+			break;
+
+		case	0x60:			// pusha
+			context -= 8 * 4;
+			break;
+
+		case	0x66:
+		case	0x67:
+			break;
+
+		case	0x55:			// push EBP
+		case	0xC8:			// enter
+			context -= 4;
+			code++;
+			offset++;
+
+		default:
+		label	done:
+			while	(offset > 0){
+				x:	unsigned;
+
+				offset--;
+				code--;
+				x = db fetchPointer(context);
+				switch	(*code){
+				case	0x06:			// push es
+					t->es = x & 0xffff;
+					context -= 2;
+					break;
+
+				case	0x1e:			// push ds
+					t->ds = x & 0xffff;
+					context -= 2;
+					break;
+
+				case	0x50:			// push eax
+					t->eax = x;
+					break;
+
+				case	0x51:			// push ecx
+					t->ecx = x;
+					break;
+
+				case	0x52:			// push edx
+					t->edx = x;
+					break;
+
+				case	0x53:			// push ebx
+					t->ebx = x;
+					break;
+
+				case	0x56:			// push esi
+					t->esi = x;
+					break;
+
+				case	0x57:			// push edi
+					t->edi = x;
+					break;
+
+				case	0x60:			// pusha
+					t->edi = x;
+					t->esi = db fetchPointer(context + 4);
+					t->ebp = db fetchPointer(context + 8);
+					t->ebx = db fetchPointer(context + 16);
+					t->edx = db fetchPointer(context + 20);
+					t->ecx = db fetchPointer(context + 24);
+					t->eax = db fetchPointer(context + 28);
+					context += 28;
+					break;
+
+				case	0xa0:			// push fs
+					t->fs = x & 0xffff;
+					context -= 2;
+					break;
+
+				case	0xa8:			// push gs
+					t->gs = x & 0xffff;
+					context -= 2;
+					break;
+
+				case	0x55:			// push EBP
+				case	0xC8:			// enter
+					t->ebp = x;
+					break;
+
+				default:
+					context -= 4;
+					}
+				context += 4;
+				}
+			return;
+			}
+		code++;
+		offset++;
+		}
+	}
+};
+
+data_t:	public	type	{ public:
+	lines:	int;
+	sym:	ref symbol;
+	len:	vaddr_t;
+	};
+
+namesMatch:	(key: [:] char, fullName: [:] char) boolean =
+	{
+	i:		int;
+	j:		int;
+
+
+		// If the key has a unit, match it, otherwise ignore
+		// the unit of the fullName
+
+	i = stringSubstring(key, "::");
+	j = stringSubstring(fullName, "::");
+	if	(i >= 0){
+		if	(j != i)
+			return FALSE;
+		if	(memCompare(key, fullName, i) != 0)
+			return FALSE;
+		key = key[i + 2:];
+		fullName = fullName[i + 2:];
+		}
+	else if	(j >= 0)
+		fullName = fullName[j + 2:];
+
+		// If the search key has no dot, try to match on the last id
+
+	i = stringScan(key, '.');
+	if	(i < 0){
+		j = stringReverseScan(fullName, '.');
+		if	(j >= 0)
+			fullName = fullName[j + 1:];
+		}
+	if	(stringCompare(key, fullName) != 0)
+		return FALSE;
+	else
+		return TRUE;
+	}
+
+loadRun:	public	(run: [:] char) =
+	{
+	runFd:	stream;
+	i:	int;
+	len:	long;
+
+	i = runFd open(run, AR_READ);
+	if	(i){
+		printf("Could not open '%S': %S\n", run, cmdError(i));
+		exit(1);
+		}
+	len = runFd seek(0, SEEK_END);
+	runFd seek(0, SEEK_ABS);
+	Code = alloc(len);
+	i = runFd read(Code[:len]);
+	if	(i != len){
+		printf("Could not read '%S'\n", run);
+		exit(1);
+		}
+	RunHeader = ref runHeader(Code);
+	Code += sizeof runHeader;
+	Code -= RunHeader->codeOffset;
+	if	(RunHeader->magic != RUN_MAGIC ||
+		 (RunHeader->version != RUN_VERSION &&
+		  RunHeader->version != RUN_VERSION_2)){
+		printf("Improper core file '%S'\n", run);
+		exit(1);
+		}
+	Start = symbol create(RunHeader->ip, "machine::__start__", 'f');
+	}

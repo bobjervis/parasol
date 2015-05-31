@@ -1,0 +1,573 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	error;
+include	file;
+include	editor, forms;
+include	alys;
+include	filesys;
+include	environ;
+include window;
+include	console;
+include	heap;
+
+mainSetup:	entry	() =
+	{
+	fname:	[:] char;
+
+	if	(ArgumentCount == 0){
+		printf("ED Version 1.1 use is: ED filename[s]\n");
+		exit(0);
+		}
+	fname = getNextArgument();
+
+	StartFileName = SharedHeap new [0] char;
+
+	MainMenu submenu("File", &FileMenu);
+	MainMenu submenu("Edit", &EditMenu);
+	MainMenu submenu("Options", &OptionMenu);
+
+	FileMenu button("Read File         F3", &startSession, 0);
+	FileMenu button("Save File         F2", &saveSession, 0);
+	FileMenu button("Change Name",          &renameSession, 0);
+	FileMenu button("OS-Shell",	 	&launchShell, 0);
+	FileMenu button("Quit           Alt-X", &shutDownEditors, 0);
+
+	EditMenu button("Search      Alt-S", &searchButton, 0);
+	EditMenu button("Replace     Alt-Q", &replaceButton, 0);
+	EditMenu button("Last Again  Alt-L", &againButton, 0);
+	EditMenu button("Goto Line   Alt-G", &gotoLine, 0);
+
+	OptionMenu toggle("Regular Expressions", &RegularExpressionSwitch, 0);
+	OptionMenu toggle("Word Wrap", &WordWrapSwitch, 0);
+
+	vi:	ref fileViewer;
+	x:	exceptionContext;
+
+	try	{
+		vi = assumeSession(fname);
+		while	(ArgumentCount)
+			beginSession(getNextArgument());
+		}
+	except	(x){
+	case	MemTrap:
+		cause:	int;
+		size:	unsigned;
+
+		x.context nextArg(&cause, sizeof cause);
+		x.context nextArg(&size, sizeof size);
+		printf("cause = %d size = 0x%x\n", cause, size);
+		break;
+
+	default:
+		i, j:	int;
+
+		i = j = 0;
+		i = i / j;
+		printf("trap %p from %p\n", x.raised, x returnAddress());
+		continue;
+		}
+
+//	GlobalMap defineFunction("editfile", "Open file editor",  &startSession, F3);
+
+	vi loop();
+	}
+
+MainMenu:	menu;
+EditMenu:	menu;
+FileMenu:	menu;
+OptionMenu:	menu;
+
+shutDownEditors:	(w: ref window) =
+	{
+	w close();
+	exit(0);
+	}
+
+searchButton:	(v: ref window) =
+	{
+	ref fileEditor(v getShell())->textArea search();
+	}
+
+replaceButton:	(v: ref window) =
+	{
+	ref fileEditor(v getShell())->textArea replace();
+	}
+
+againButton:	(v: ref window) =
+	{
+	ref fileEditor(v getShell())->textArea again();
+	}
+
+launchShell:	(w: ref window) =
+	{
+	cmd:		[:] char;
+	lookup:		pathList;
+	shell:		[MAXPATH] char;
+	s:		[:] char;
+	p:		ref far external;
+
+	s = shell;
+	try
+		s [:]= Environment get("COMSPEC");
+	except	{
+		w getShell() postMessage("No shell defined by COMSPEC");
+		return;
+		}
+	lookup useEnvironment("PATH");
+	cmd = lookup search("session.run", 0);
+	if	(|cmd == 0){
+		w getShell() postMessage("session.run not found");
+		return;
+		}
+	try	{
+		p = FileSystem spawn(0, cmd, s);
+		disown(p);
+		}
+	except	{
+		w getShell() postMessage("session.run spawn failed");
+		}
+	}
+
+startSession:	public	(w: ref window) =
+	{
+	new startForm[ w ];
+	}
+
+EditorMenu:	public	ref menu;		// Set this to be the main
+						// menu for new edit sessions
+StartFileName:	[:] char;
+StartFileLock:	lock;
+
+startForm:	type	inherit form {
+	fileName:	[:] char;
+
+	public:
+
+constructor:	(w: ref window) =
+	{
+	super constructor([ 77, 1 ]);
+
+		// Create a default file name that is blank.
+
+	critical(StartFileLock){
+		fileName = new [|StartFileName] char;
+		fileName [:]= StartFileName;
+		}
+
+		// Describe the form
+
+	text([ 0, 0 ], WHITE, "File:");
+	stringf([ 6, 0 ], [ 70, 1], &fileName, "", 0, HIGH|WHITE);
+
+		// Draw it and accept input
+
+	startup(w, [ 1, 1 ]);
+	}
+
+escape:	dynamic	() =
+	{
+	close();
+	critical(StartFileLock){
+		SharedHeap free(StartFileName);
+		StartFileName = SharedHeap new [|fileName] char;
+		StartFileName [:]= fileName;
+		}
+	free(fileName);
+	delete();
+	}
+
+enterKey:	dynamic	() =
+	{
+	close();
+	if	(|fileName){
+		if	(!beginSession(fileName))
+			getShell() postMessage("Couldn't open file '%S'", 
+								fileName);
+		}
+	critical(StartFileLock){
+		SharedHeap free(StartFileName);
+		StartFileName = SharedHeap new [|fileName] char;
+		StartFileName [:]= fileName;
+		}
+	free(fileName);
+	delete();
+	}
+
+	};
+
+beginSession:	(filename: [:] char) int =
+	{
+	vi:	ref fileViewer;
+	x:	ref far fileViewer;
+	f:	[MAXPATH] char;
+	fa:	[:] char;
+
+	fa = f;
+	fa [:]= FileSystem getAbsolutePath(filename);
+	vi = new fileViewer[ ];
+	x = ref far fileViewer(thread(vi));
+	x loadFile(fa);
+	disown(x);
+	return 1;
+	}
+
+assumeSession:	(filename: [:] char) ref fileViewer =
+	{
+	vi:	ref fileViewer;
+	f:	[MAXPATH] char;
+	fa:	[:] char;
+
+	fa = f;
+	fa [:]= FileSystem getAbsolutePath(filename);
+	vi = new fileViewer[ ];
+	mainExternal(vi);
+	vi _loadFile(fa);
+	return vi;
+	}
+
+fileEditor:	public	type	inherit	shell {
+	public:
+
+	filename:	[:] char;
+	buffer:		textBuffer;
+	textArea:	textEditor;
+
+constructor:	(file: [:] char, sz: point) =
+	{
+	t:	[:] char;
+	ic:	[:] char;
+
+	t = new [|file] char;
+	t [:]= file;
+	ic = getFilename(t);
+	super constructor(t, ic, sz, WB_APPLICATION, &MainMenu);
+	textArea = [ [ sz.x - 2, sz.y - 2 ] ];
+	textArea at([ 1, 1 ]);
+	anchor(&textArea);
+	connect(file);
+	textArea setScrap(&Scrap);
+	textArea resetEditor();
+	textArea setTextFocus();
+	}
+
+connect:	(file: [:] char) =
+	{
+	filename = new [|file] char;
+	filename [:]= file;
+	buffer = [ filename ];
+	textArea connect(&buffer);
+	}
+
+reportFileStatus:	() =
+	{
+	if	(buffer isNew())
+		postMessage("New file %S", filename);
+	}
+
+closeApplication:	dynamic	() =
+	{
+	if	(buffer hasChanged()){
+		i:	int;
+
+		i = confirm(self, "File has changes, save it?");
+
+		if	(i < 0){
+			postMessage("File not saved");
+			return;
+			}
+		if	(i &&
+			 buffer save(filename)){
+			postMessage("Could not save");
+			return;
+			}
+		}
+	buffer close();
+	exit(0);
+	}
+
+redraw:	dynamic	() =
+	{
+/*
+	stateFrame printf([ 0, 0 ], WHITE, 
+			"Line:       Column:           %s", &filename);
+ */
+	super redraw();
+	}
+
+saveFile:	dynamic	() =
+	{
+	if	(buffer save(filename))
+		postMessage("Could not save");
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	switch	(k){
+	case	ALT_G:
+		new gotoForm[ self, textArea.cursor.line + 1 ];
+		return TRUE;
+
+	case	F3:
+		new startForm[ self ];
+		return TRUE;
+
+	case	F2:
+		saveFile();
+		break;
+
+	default:
+		return super processKeystroke(k);
+		}
+	}
+
+switchFile:	() =
+	{
+	new switchForm[ self, filename ];
+	}
+
+switchToFile:	(newFile: [:] char) =
+	{
+	if	(buffer hasChanged()){
+		i:	int;
+
+		i = confirm(self, "File has changes, save it?");
+
+		if	(i < 0){
+			postMessage("File not saved");
+			return;
+			}
+		if	(i &&
+			 buffer save(filename)){
+			postMessage("Could not save");
+			return;
+			}
+		}
+	buffer close();
+	connect(newFile);
+	textArea resetEditor();
+	redraw();
+	}
+
+renameFile:	() =
+	{
+	new renameForm[ self, filename ];
+	}
+
+renameToFile:	(newName: [:] char) =
+	{
+	free(filename);
+	filename = new [|newName] char;
+	filename [:]= newName;
+	newTitle(filename);
+	buffer setChanged();
+	}
+
+//	stateFrame:	window;
+	
+};
+
+TEXT_ATTR:	const	char = HIGH|YELLOW;
+
+Offset:	point;
+
+fileViewer:	public	type	inherit	inputHandler {
+	public:
+
+	editWindow:	ref fileEditor;
+
+constructor:	() =
+	{
+	}
+
+loadFile:	gate	(f: [:] char) =
+	{
+	reply;
+	_loadFile(f);
+	}
+
+_loadFile:	(filename: [:] char) =
+	{
+	esp:	ref fileEditor;
+	c:	console_t;
+	p:	point;
+
+	c = Screen.cons describe();
+	if	(c.size.x > 80){
+		if	(Offset.x + 78 < c.size.x)
+			Offset.x += 2;
+		else
+			Offset.x = 0;
+		c.size.x = 80;
+		}
+	if	(c.size.y > 30){
+		if	(Offset.y + 28 < c.size.y)
+			Offset.y += 2;
+		else
+			Offset.x = 0;
+		c.size.y = 30;
+		}
+	esp = new fileEditor[ filename, c.size ];
+	editWindow = esp;
+	super constructor(esp);
+	esp at(Offset);
+	esp zoom(WZ_NORMAL);
+	esp reportFileStatus();
+	}
+
+start:	gate	() =
+	{
+	}
+
+	// Ignore attention signals
+
+attention:		gate!	() = { }
+
+	};
+
+gotoLine:	public	(w: ref window) =
+	{
+	e:	ref fileEditor;
+
+	e = ref fileEditor(w getShell());
+	new gotoForm[ e, e->textArea.cursor.line + 1 ];
+	}
+
+gotoForm:	type	inherit form {
+	line:	int;
+	ed:	ref fileEditor;
+
+	public:
+
+constructor:	(w: ref fileEditor, l: int) =
+	{
+	ed = w;
+	line = l;
+	super constructor([ 20, 1 ]);
+
+		// Describe the form
+
+	text([ 0, 0 ], WHITE, "Goto:");
+	integer([ 6, 0 ], [ 10, 1], &line, "", 0, HIGH|WHITE);
+
+		// Draw it and accept input
+
+	startup(w, [ 1, 1 ]);
+	}
+
+escape:	dynamic	() =
+	{
+	delete();
+	}
+
+enterKey:	dynamic	() =
+	{
+	close();
+	ed->textArea gotoLine(line);
+	delete();
+	}
+
+	};
+
+switchForm:	type	inherit form {
+	fileName:	[:] char;
+	ed:		ref fileEditor;
+
+	public:
+
+constructor:	(w: ref fileEditor, filename: [:] char) =
+	{
+	ed = w;
+	super constructor([ 77, 1 ]);
+
+		// Create a default file name that is blank.
+
+	fileName = new [|filename] char;
+	fileName [:]= filename;
+
+		// Describe the form
+
+	text([ 0, 0 ], WHITE, "File:");
+	stringf([ 6, 0 ], [ 70, 1], &fileName, "", 0, HIGH|WHITE);
+
+		// Draw it and accept input
+
+	startup(w, [ 1, 1 ]);
+	}
+
+escape:	dynamic	() =
+	{
+	close();
+	free(fileName);
+	delete();
+	}
+
+enterKey:	dynamic	() =
+	{
+	close();
+	if	(|fileName)
+		ed switchToFile(fileName);
+	free(fileName);
+	delete();
+	}
+
+	};
+
+renameForm:	type	inherit form {
+	fileName:	[:] char;
+	ed:		ref fileEditor;
+
+	public:
+
+constructor:	(w: ref fileEditor, filename: [:] char) =
+	{
+	ed = w;
+	super constructor([ 77, 1 ]);
+
+		// Create a default file name that is blank.
+
+	fileName = new [|filename] char;
+	fileName [:]= filename;
+
+		// Describe the form
+
+	text([ 0, 0 ], WHITE, "File:");
+	stringf([ 6, 0 ], [ 70, 1], &fileName, "", 0, HIGH|WHITE);
+
+		// Draw it and accept input
+
+	startup(w, [ 1, 1 ]);
+	}
+
+escape:	dynamic	() =
+	{
+	close();
+	free(fileName);
+	delete();
+	}
+
+enterKey:	dynamic	() =
+	{
+	close();
+	if	(|fileName)
+		ed renameToFile(fileName);
+	free(fileName);
+	delete();
+	}
+
+	};
+
+saveSession:	public	(v: ref window) =
+	{
+	ref fileEditor(v getShell()) saveFile();
+	}
+
+renameSession:	public	(v: ref window) =
+	{
+	ref fileEditor(v getShell()) renameFile();
+	}
+

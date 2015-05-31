@@ -1,0 +1,906 @@
+include	file, format, error;
+include	hardware, alys;
+
+include	treeview;
+include	window;
+include	console;
+
+include	debugger;
+include	heap;
+
+include	debug;
+include	instruct;
+include	monitor;
+
+MessageLog:	public	ref messageLogWindow;
+
+messageLogWindow:	public	type	inherit	topLevelShell {
+	messages:	ref treeEditor;
+	buffer:		ref messageBuffer;
+	saveFile:	[:] char;
+
+	public:
+
+constructor:	(s: ref shell) =
+	{
+	m:		ref menubar;
+	file, view:	ref popupMenu;
+
+	try
+		KernelLogger = ref far messageLogger(FileSystem attach(
+				"/service/messageLogger",
+				":model.debugger.messageLogger"));
+	super constructor("Message Log", s);
+	useFooter();
+	m = new menubar[ ];
+
+	file = new popupMenu[ m ];
+	file button("Load         F3", 'l', [ self, &loadLog ]);
+	file button("Save         F2", 's', [ self, &saveLog ]);
+
+	view = new popupMenu[ m ];
+	view button("Start Logging", 	's', [ self, &startLogging ]);
+	view button("Stop Logging",	't', [ self, &stopLogging ]);
+
+	m pulldown("File", 'f', file);
+	m pulldown("View", 'v', view);
+	setMenu(m);
+	messages = new treeEditor[ 0 ];
+	anchor(messages);
+	buffer = new messageBuffer[];
+	messages connect(buffer);
+	saveFile = "msglog.dat";
+
+	configure([ 84, 12 ]);
+	messages setTextFocus(); 
+	}
+
+destructor:	dynamic	() =
+	{
+	MessageLog = 0;
+	delete buffer;
+	super destructor();
+	}
+
+toTop:	dynamic	() =
+	{
+	if	(KernelLogger)
+		super toTop();
+	}
+
+append:	(m: ref message) =
+	{
+	buffer append(m);
+	messages changeLine(buffer->messageCount - 1);
+	if	(messages->cursor >= buffer->messageCount - 2)
+		messages->cursor = buffer->messageCount - 1;
+	if	(buffer->messageCount == 
+				messages->display + messages->box.size.y + 1)
+		messages refreshDisplay(messages->display + 1);
+	else
+		messages refreshDisplay(messages->display);
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	switch	(k){
+	case	F3:	loadLog();		break;
+	case	F2:	saveLog();		break;
+
+	default:
+		return super processKeystroke(k);
+		}
+	return TRUE;
+	}
+
+saveLog:	() =
+	{
+	buffer save(saveFile);
+	}
+
+loadLog:	() =
+	{
+	buffer load(saveFile);
+	}
+
+startLogging:	() =
+	{
+	if	(LogReader.objectId == 0)
+		thread(&LogReader, 0);
+	LogReader.objectId start();
+	}
+
+stopLogging:	() =
+	{
+	LogReader.objectId attention();
+	}
+
+	};
+
+messageBuffer:	public	type	inherit	treeBuffer {
+	firstMessage:	ref message;
+	lastMessage:	ref message;
+	current:	ref message;
+	currentLine:	int;
+	editor:		ref treeEditor;
+	msgLock:	Lock;
+
+	visible:
+
+	messageCount:	int;
+
+	public:
+
+constructor:	() =
+	{
+	firstMessage = 0;
+	lastMessage = 0;
+	current = 0;
+	currentLine = 0;
+	messageCount = 0;
+	msgLock = [ ];
+	}
+
+save:	(fn: [:] char) =
+	{
+	f:	stream;
+	i:	int;
+	m:	ref message;
+
+	i = f create(fn, AR_READ|AR_WRITE);
+	if	(i){
+		MessageLog postFooter("Could not create file '%S'", fn);
+		return;
+		}
+	for	(m = firstMessage; m; m = m->next)
+		m save(&f);
+	f close();
+	}
+
+load:	(fn: [:] char) =
+	{
+	f:	stream;
+	i:	int;
+	m:	ref message;
+	h:	mlogRecord_t;
+
+	i = f open(fn, AR_READ);
+	if	(i){
+		MessageLog postFooter("Could not open file '%S'", fn);
+		return;
+		}
+	for	(;;){
+		i = f read(ref byte(&h)[:sizeof h]);
+		if	(i != sizeof h){
+			MessageLog postFooter("Read error");
+			break;
+			}
+		}
+	f close();
+	}
+
+
+/*
+display:	() =
+	{
+	f:	ref frame;
+
+	printf("currentLine = %d frameCount = %d\n", currentLine,
+					frameCount);
+	for	(f = rootOfStack; f; f = f->next){
+		if	(f == topOfStack)
+			printf("T ");
+		else
+			printf("  ");
+		if	(f == current)
+			printf("* ");
+		else
+			printf("  ");
+		printf("%8p < %8p > %8p: %S\n", f->prev, f, f->next, f->function);
+		}
+	}
+ */
+exposeIn:	dynamic	(e: ref treeEditor) =
+	{
+	editor = e;
+	}
+/*
+previousFrame:	(f: ref frame) =
+	{
+	if	(rootOfStack){
+		rootOfStack->prev = f;
+		f->next = rootOfStack;
+		}
+	else	{
+		topOfStack = f;
+		current = f;
+		}
+	currentLine = frameCount;
+	frameCount++;
+	rootOfStack = f;
+	}
+ */
+refresh:	dynamic	(lin: int) boolean =
+	{
+	seek(lin);
+	return TRUE;
+	}
+
+seek:	dynamic	(line: int) int =
+	{
+	if	(line < 0)
+		return currentLine;
+	critical(msgLock){
+		if	(currentLine > line){
+			while	(currentLine > line && current){
+				current = current->prev;
+				currentLine--;
+				}
+			if	(current == 0){
+				current = firstMessage;
+				currentLine = 0;
+				}
+			}
+		else if	(currentLine < line){
+			while	(currentLine < line && current){
+				current = current->next;
+				currentLine++;
+				}
+			if	(current == 0){
+				current = lastMessage;
+				if	(current)
+					currentLine = messageCount - 1;
+				else
+					currentLine = 0;
+				}
+			}
+		}
+	return currentLine;
+	}
+
+fetchLine:	dynamic	() [:] char =
+	{
+	if	(current == 0)
+		return "";
+	current draw(LineBuffer);
+	return LineBuffer;
+	}
+/*
+showCode:	(frameId: int) =
+	{
+	seek(frameId);
+	if	(current){
+		Instructions showAddress(current->returnAddr);
+		TestArena setContext(&current->task);
+		Display redraw();
+		}
+	}
+ */
+tagIndent:	dynamic	() int =
+	{
+	return 0;
+	}
+
+tagLength:	dynamic	() int =
+	{
+	return 60;
+	}
+
+lineCount:	dynamic	() int =
+	{
+	return messageCount;
+	}
+
+launch:		dynamic	(ref char) int =
+	{
+	if	(current == 0)
+		return FALSE;
+	else	{
+		return TRUE;
+		}
+	}
+
+open:		dynamic	(ref char) int =
+	{
+	if	(current == 0)
+		return FALSE;
+	else	{
+		return TRUE;
+		}
+	}
+
+append:	(m: ref message) =
+	{
+	critical(msgLock){
+		m->prev = lastMessage;
+		if	(lastMessage)
+			lastMessage->next = m;
+		else	{
+			firstMessage = m;
+			current = m;
+			}
+		lastMessage = m;
+		messageCount++;
+		}
+	}
+
+	};
+
+Mtypes:	[] ref char = [
+	"error",
+	"send",
+	"reject",
+	"reply",
+	"overflow",
+	"mark",
+	"thread",
+	"object",
+	"new job",
+	"disown",
+	"error--10",
+	"error--11",
+	"error--12",
+	"error--13",
+	"error--14",
+	"error--15",
+	];
+
+LineBuffer:	[800] char;
+
+message:	type	{ public:
+	next:		ref message;
+	prev:		ref message;
+	header:		mlogRecord_t;
+	data:		ref byte;
+
+draw:	(buf: [:] char) = 
+	{
+	se:	stringEmitter = [ buf ];
+
+	switch	(header.sendRecord.seq & ML_TYPE){
+	case	ML_SEND:
+		se printf("%06x send   ",
+					header.sendRecord.seq >> 8);
+		se printf("%3d -> ", header.sendRecord.sender);
+		i:	int;
+
+		i = header.sendRecord.func - int(&External.kill);
+		if	(i >= 0 &&
+			 i < |FuncNames){
+			se printf("%s", FuncNames[i]);
+			if	(header.sendRecord.func ==
+					int(&External.childExit)){
+				x:	ExitCode;
+
+				x = *ref unsigned(data);
+				se putc('(');
+				if	(x & EX_CORE)
+					se printf("EX_CORE|");
+				switch	(x & EX_CAUSE){
+				case	EX_ABORT:
+					se printf("EX_ABORT|");
+					i = x & EX_LEVEL - 
+							int(&External.kill);
+					if	(i >= 0 && i < |FuncNames)
+						se printf("(%s)", FuncNames[i]);
+					break;
+
+				case	EX_RAISE:
+					se printf("EX_RAISE|");
+					}
+				x &= EX_LEVEL;
+				if	(x == EX_SUCCESS)
+					se printf("EX_SUCCESS");
+				else if	(x == EX_FAIL)
+					se printf("EX_FAIL");
+				else
+					se printf("%d", x);
+				se putc(')');
+				}
+			else if	(header.sendRecord.func ==
+					int(&External._reclaimThreadContext))
+				se printf("(%p)", *ref pointer(data));
+			else if	(header.sendRecord.func ==
+					int(&External.rejectedMessage))
+				se printf("(%d %S)", *ref signed(data),
+						cmdError(*ref signed(data)));
+			}
+		else if	(int(header.sendRecord.target) == 20){
+			i -= |FuncNames;
+			if	(i >= 0 &&
+				 i < |FilesysFuncNames)
+				se printf("%s", FilesysFuncNames[i]);
+			else
+				se printf("f%d", header.sendRecord.func);
+			}
+		else if	(int(header.sendRecord.target) == 21){
+			i -= |FuncNames;
+			if	(i >= 0 &&
+				 i < |EnvironFuncNames)
+				se printf("%s", EnvironFuncNames[i]);
+			else
+				se printf("f%d", header.sendRecord.func);
+			}
+		else if	(int(header.sendRecord.target) == 22){
+			i -= |FuncNames;
+			if	(i >= 0 &&
+				 i < |NodeFuncNames)
+				se printf("%s", NodeFuncNames[i]);
+			else
+				se printf("f%d", header.sendRecord.func);
+			}
+		else
+			se printf("f%d", header.sendRecord.func);
+		se printf(" %d", header.sendRecord.target);
+		if	(header.sendRecord.target !=
+						header.sendRecord.realTarget)
+			se printf(" (%d)", header.sendRecord.realTarget);
+		if	(header.sendRecord.func != 
+					int(&External.childExit) &&
+			 header.sendRecord.func != 
+					int(&External._reclaimThreadContext) &&
+			 header.sendRecord.func != 
+					int(&External.rejectedMessage)){
+			if	(header.sendRecord.length)
+				se printf(" [%d] byte", 
+					header.sendRecord.length);
+			if	(header.sendRecord.expectedReply)
+				se printf(" expecting %d", 
+					header.sendRecord.expectedReply);
+			}
+		break;
+
+	case	ML_REPLY:
+		se printf("%06x reply  ", header.sendRecord.seq >> 8);
+		if	(header.replyRecord.length)
+			se printf("[%d] byte", header.replyRecord.length);
+		break;
+
+	case	ML_REJECT:
+		se printf("%06x reject %d %S", header.sendRecord.seq >> 8,
+					header.rejectRecord.code,
+					cmdError(header.rejectRecord.code));
+		break;
+
+	case	ML_THREAD:
+		se printf("...... thread %d spawns %d",
+					header.threadRecord.parent,
+					header.threadRecord.child);
+		break;
+
+	case	ML_MARK:
+		se printf("    ");
+		LogArena.baseAddress = data;
+		LogArena dumpData(&se, header.sendRecord.func, 
+					header.sendRecord.length);
+		break;
+
+	case	ML_NEWOBJECT:
+		s:	[:] char;
+
+		s = ref char(data + header.objectRecord.nameLength)
+				[:header.objectRecord.typeLength];
+		se printf("...... object %d parent %d '%S' %S",
+					header.objectRecord.id,
+					header.objectRecord.parent,
+					data[:header.objectRecord.nameLength],
+					s);
+		break;
+
+	case	ML_NEWJOB:
+		se printf("...... %d job %d newJob() :> %d",
+					header.newJobRecord.id,
+					header.newJobRecord.oldJob,
+					header.newJobRecord.newJob);
+		break;
+
+	case	ML_DISOWN:
+		se printf("...... %d disown(%d) parent %d child %d result %d %S",
+					header.disownRecord.caller,
+					header.disownRecord.x,
+					header.disownRecord.parent,
+					header.disownRecord.child,
+					header.disownRecord.result,
+					cmdError(header.disownRecord.result));
+		break;
+
+	default:
+		se printf("%06x %-7s ", header.sendRecord.seq >> 8,
+				Mtypes[header.sendRecord.seq & ML_TYPE]);
+		}
+	buf = se result();
+	buf[|buf] = 0;
+	}
+
+save:	(f: ref stream) =
+	{
+	if	(header.sendRecord.seq & ML_TYPE == ML_MARK)
+		return;
+	f write(ref byte(&header)[:sizeof header]);
+	switch	(header.sendRecord.seq & ML_TYPE){
+	case	ML_SEND:
+		f write(data[:header.sendRecord.length]);
+		break;
+
+	case	ML_REPLY:
+		f write(data[:header.replyRecord.length]);
+		break;
+
+	case	ML_NEWOBJECT:
+		f write(data[:header.objectRecord.nameLength +
+				header.objectRecord.typeLength]);
+		}
+	}
+
+dataLength:	() Size = 
+	{
+	switch	(header.sendRecord.seq & ML_TYPE){
+	case	ML_SEND:
+		return header.sendRecord.length;
+
+	case	ML_REPLY:
+		return header.replyRecord.length;
+
+	case	ML_NEWOBJECT:
+		return header.objectRecord.nameLength +
+			header.objectRecord.typeLength;
+		}
+	return 0;
+	}
+
+	};
+
+FuncNames:	[] ref char = [
+	"kill",
+	"illegalInstruction",
+	"memoryError",
+	"pageFault",
+	"arrayBounds",
+	"systemCallError",
+	"mathError",
+	"integerOverflow",
+	"rejectedMessage",		// code
+	"interruptedMessage",
+	"powerFailure",
+	"hangup",
+	"attention",
+	"quit",
+	"brokenSend",
+	"alarmExpired",
+	"start",
+	"childExit",			// code
+	"delete",
+	"close",
+	"copy",
+	"dup",
+	"_reclaimThreadContext",	// address
+	"__spare2",
+	"__spare3",
+	"__spare4",
+	"__spare5",
+	"__spare6",
+	"__spare7",
+	"__spare8",
+	];
+
+FilesysFuncNames:	[] ref char = [
+	"open",				// fname, opt
+	"stat",				// fname
+	"create",			// fname, attr
+	"makeDirectory",		// fname
+	"removeDirectory",		// fname
+	"unlink",			// fname
+	"unlinkGroup",			// fname
+	"move",				// fname1, fname2
+	"getAbsolutePath",		// fname
+	"access",			// fname, access
+	"setFileAttributes",		// fname, fAttributes_t
+	"setCurrentDirectory",		// fname
+	"getDriverInfo",		// fname
+	"scanDirectory",		// fname
+	"spawn",			// host, cmd, args
+	"spawnDebug",			// host, cmd, args
+	"exec",				// cmd, args
+	"register",			// obj, name, typ
+	"attach",			// name, typ
+	];
+
+EnvironFuncNames:	[] ref char = [
+	"get",				// name
+	"getByIndex",			// index
+	"define",			// name, value
+	"undefine",			// name
+	"fork",
+	"copy",
+	"probe",			// name
+	];
+
+NodeFuncNames:		[] ref char = [
+	"time",
+	"setTime",			// time_t
+	"enableNetwork",		// name , net, node
+	"defineNode",			// name
+	"loadDriver",			// cmd, args
+	"unloadDriver",			// i
+	"spawn",			// cmd, args
+	"spawnDebug",			// cmd, args
+	"nullDebug",
+	"describe",
+	"getArena",			// aid
+	"getObject",			// oid
+	"getObjectName",		// oid
+	"getMessage",			// mid
+	"getProcess",			// pid
+	"getDriver",			// drid
+	"getInterruptVector",		// vid
+	"getSegment",			// sid
+	"getRoute",			// rid
+	"killObject",			// oid
+	"getObjectType",		// oid
+	"setUserId",			// user, group
+	"timer",			// milliseconds
+	];
+
+LogArena:	inherit	debugArena {
+	public:
+
+baseAddress:	ref byte;
+
+fetchData:	dynamic	(addr: paddr_t, len: paddr_t) [:] byte =
+	{
+	return ref byte(baseAddress + addr)[:len];
+	}
+
+fetchPointer:	dynamic	(addr: paddr_t) paddr_t =
+	{
+	return * ref paddr_t(baseAddress + addr);
+	}
+
+	};
+
+logData:	type	{ public:
+	next:		ref logData;
+	index:		int;
+	length:		int;
+	data:		[2048] byte;
+	};
+
+LogTrap:	Trap;
+
+KernelLogger:		ref far messageLogger;
+
+LogReader:	inherit	External	{ public:
+	disableFlag:	boolean;
+	firstLogData:		ref logData;
+	lastLogData:		ref logData;
+//
+//	Starts logging
+//
+start:	gate	() =
+	{
+	KernelLogger logBuffer(0x20000);		// use a 128K
+							// log buffer
+	reply;
+	disableFlag = FALSE;
+	KernelLogger enable();
+	collectData();
+	}
+
+alarmExpired:	gate	() =
+	{
+	reply;
+	collectData();
+	}
+//
+//	Stops logging
+//
+attention:	gate!	() =
+	{
+	KernelLogger disable();
+	disableFlag = TRUE;
+	}
+
+collectData:	() =
+	{
+	l:	ref logData;
+	b:	[:] char;
+
+	for	(;;){
+		if	(disableFlag){
+			printf("Disabling\n");
+			KernelLogger disable();
+			return;
+			}
+		l = new logData;
+		b = l->data;
+		b [:]= KernelLogger collect();
+		if	(|b == 0){
+			delete l;
+			myHost() timer(250);		// .25 second wait
+			return;
+			}
+		l->length = |b;
+		if	(lastLogData)
+			lastLogData->next = l;
+		else
+			firstLogData = l;
+		lastLogData = l;
+		parseMessages();
+		}
+	}
+
+parseMessages:	() =
+	{
+	for	(;;){
+		x:	Size;
+		w, y:	unsigned;
+		m:	mlogRecord_t;
+		msg:	ref message;
+
+		x = remaining();
+		if	(x <= sizeof unsigned)
+			break;
+		w = peekword(0);
+		msg = SharedHeap new message;
+		switch	(w & ML_TYPE){
+		case	ML_SEND:
+			if	(x < sizeof m.sendRecord)
+				return;
+			w = peekword(6);
+			if	(x < sizeof m.sendRecord + w)
+				return;
+			readlog(&msg->header, sizeof m.sendRecord);
+			msg->data = SharedHeap new [w] byte;
+			readlog(msg->data, w);
+			MessageLog append(msg);
+			appendData(msg, w);
+			break;
+
+		case	ML_REJECT:
+			if	(x < sizeof m.rejectRecord)
+				return;
+			readlog(&msg->header, sizeof m.rejectRecord);
+			MessageLog append(msg);
+			break;
+
+		case	ML_REPLY:
+			if	(x < sizeof m.replyRecord)
+				return;
+			w = peekword(1);
+			if	(x < sizeof m.replyRecord + w)
+				return;
+			readlog(&msg->header, sizeof m.replyRecord);
+			msg->data = SharedHeap new [w] byte;
+			readlog(msg->data, w);
+			MessageLog append(msg);
+			appendData(msg, w);
+			break;
+
+		case	ML_THREAD:
+			if	(x < sizeof m.threadRecord)
+				return;
+			readlog(&msg->header, sizeof m.threadRecord);
+			MessageLog append(msg);
+			break;
+
+		case	ML_NEWOBJECT:
+			if	(x < sizeof m.objectRecord)
+				return;
+			w = peekword(3);
+			y = peekword(4);
+			readlog(&msg->header, sizeof m.objectRecord);
+			msg->data = SharedHeap new [w + y + 4] byte;
+			readlog(msg->data, w);
+			readlog(msg->data + w, y);
+			MessageLog append(msg);
+			appendData(msg, w);
+			msg->data += w;
+			appendData(msg, y);
+			msg->data -= w;
+			break;
+
+		case	ML_NEWJOB:
+			if	(x < sizeof m.newJobRecord)
+				return;
+			readlog(&msg->header, sizeof m.newJobRecord);
+			MessageLog append(msg);
+			break;
+
+		case	ML_DISOWN:
+			if	(x < sizeof m.disownRecord)
+				return;
+			readlog(&msg->header, sizeof m.disownRecord);
+			MessageLog append(msg);
+			break;
+
+		default:
+			readlog(&msg->header, sizeof m.specialRecord);
+			MessageLog append(msg);
+			}
+		}
+	}
+
+appendData:	(msg: ref message, w: int) =
+	{
+	i:	int;
+	m:	ref message;
+
+	for	(i = 0; i < w; i += 16){
+		m = SharedHeap new message;
+		m->header.sendRecord.seq = ML_MARK;
+		if	(w - i > 16)
+			m->header.sendRecord.length = 16;
+		else
+			m->header.sendRecord.length = w - i;
+		m->data = msg->data;
+		m->header.sendRecord.func = i;
+		MessageLog append(m);
+		}
+	}
+
+remaining:	() Size =
+	{
+	x:	Size;
+	l:	ref logData;
+
+	for	(l = firstLogData, x = 0; l; l = l->next)
+		x += l->length - l->index;
+	return x;
+	}
+
+peekword:	(n: int) unsigned =
+	{
+	l:	ref logData;
+	x:	unsigned;
+
+	
+	l = firstLogData;
+	while	(l){
+		if	(l->length - l->index >= (n + 1) * sizeof unsigned)
+			return ref unsigned[32](l->data + l->index)[n];
+		n -= (l->length - l->index) / sizeof unsigned;
+		l = l->next;
+		}
+	LogTrap raise();
+	}
+
+readlog:	(dest: pointer, n: int) =
+	{
+	l:	ref logData;
+	x:	unsigned;
+	d:	ref byte;
+	pad:	int;
+
+	pad = 4 - (n & 3);
+	if	(pad == 4)
+		pad = 0;
+	d = dest;
+	while	(n > 0){
+		if	(firstLogData == 0)
+			LogTrap raise();
+		l = firstLogData;
+		x = l->length - l->index;
+		if	(x <= n + pad){
+			y:	int;
+
+			if	(x <= n)
+				y = x;
+			else
+				y = n;
+			memCopy(d, l->data + l->index, y);
+			d += x;
+			n -= x;
+			firstLogData = l->next;
+			delete l;
+			if	(firstLogData == 0)
+				lastLogData = 0;
+			}
+		else	{
+			memCopy(d, l->data + l->index, n);
+			l->index += n + pad;
+			break;
+			}
+		}
+	}
+
+	};

@@ -1,0 +1,48 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	filesys;
+include	alys;
+include	file;
+include	error;
+include	hardware;
+
+main:	entry	() =
+	{
+	cmd:		[:] char;
+	arg0:		[:] char;
+	e:		ref far External;
+
+	if	(|commandLine.arguments == 0){
+		printf(	"Use is: NEWJOB cmd arg(s)\n"
+			"	Runs the given command under a new job\n");
+		return;
+		}
+	arg0 = commandLine.arguments[0];
+	commandLine shiftArguments();
+
+	lookup:	PathList = [];
+
+	lookup useEnvironment("PATH");
+	cmd = lookup search(arg0, ".run", ".com", ".exe", 0);
+	if	(|cmd == 0){
+		printf("Couldn't find command '%S'\n", arg0);
+		return;
+		}
+	arg0 = argumentString(commandLine.arguments);
+	try	{
+		newJob();
+		e = FileSystem spawn(0, cmd, arg0);
+		myHost() reparent(myJob(), e);
+		}
+	except	{
+		printf("Spawn failed: %S\n", cmd);
+		exit(1);
+		}
+	exit(EX_SUCCESS);
+	}
+

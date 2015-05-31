@@ -1,0 +1,27 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+
+include	symtab;
+include	cmdline;
+
+main:	entry	() =
+	{
+	if	(|commandLine.arguments == 0){
+		printf( "Use is: IPC [ options ] project_name\n");
+		help();
+		}
+	parseCommandLine();
+	ChattyOutput = FALSE;
+	compile();
+	if	(CurrentContext->errorCount)
+		exit(EX_FAIL);
+	else
+		exit(EX_SUCCESS);
+	}
+

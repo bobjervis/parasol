@@ -1,0 +1,379 @@
+include	hardware, file, alys, error;
+include	karena, arena;
+include	debugger, memory;
+include	kdriver, object;
+
+include	kprintf;
+
+main:	entry	() =
+	{
+	id:	ref far External;
+	arg:	[:] char;
+
+	if	(|commandLine.arguments == 0)
+		arg = "/service/messageLogger";
+	else
+		arg = commandLine.arguments[0];
+	id = publishKernel("messageLogger", ":model.debugger.messageLogger",
+					&MessageLogger,
+					AR_ANY, AR_ANY, AR_ANY, AR_ANY);
+	FileSystem register(id, arg, ":model.debugger.messageLogger");
+	Driver makeResident();
+	disown(Driver);
+	disown(id);
+	}
+
+MessageLogger:	inherit	messageLogger {
+	public:
+
+logBuffer:	gate	(sz: Size) =
+	{
+	if	(LogVector)
+		reject(ERREXIST);
+	if	(sz == 0){
+		if	(LogBufferSegment){
+			LogBufferSegment close();
+			LogBufferSegment = 0;
+			}
+		}
+	else	{
+		if	(sz < 512)
+			sz = 512;
+		sz &= ~(sizeof pointer - 1);
+		if	(LogBufferSegment){
+			if	(!LogBufferSegment grow(sz))
+				reject(ERRNOMEMORY);
+			}
+		else	{
+			LogBufferSegment = segment create(0, 0, sz, sz);
+			if	(LogBufferSegment == 0)
+				reject(ERRNOMEMORY);
+			}
+		}
+	LogBufferFront = 0;
+	LogBufferBack = 0;
+	}
+
+enable:		gate	() =
+	{
+	n:	threadLock;
+
+	n lock();
+	if	(LogVector)
+		reject(ERREXIST);
+	if	(LogBufferSegment == 0)
+		reject(ERRNOMEMORY);
+	LogBufferBase = LogBufferSegment lock(0);
+	LogBufferTop = LogBufferBase + LogBufferSegment->length;
+	LogBufferFront = 0;
+	LogBufferBack = 0;
+	LogVector = &MyLogVector;
+	logJob = getJobObject(messageHeader->sender);
+	n unlock();
+	}
+
+disable:	gate	() =
+	{
+	LogVector = 0;
+	}
+
+collect:	gate	() [] byte =
+	{
+	len:	signed;
+	rem:	int;
+	n:	threadLock;
+
+		// No data to collect
+
+	n lock();
+	rem = messageHeader->expected;
+	if	(LogBufferFront > LogBufferBack){
+		len = LogBufferSegment->length - LogBufferFront;
+		if	(len > rem)
+			len = rem;
+		replyPartial(LogBufferBase + LogBufferFront, len);
+		rem -= len;
+		LogBufferFront = 0;
+		}
+	len = LogBufferBack - LogBufferFront;
+	if	(len > rem)
+		len = rem;
+	replyGeneric(LogBufferBase + LogBufferFront, len);
+	LogBufferFront += len;
+	n unlock();
+	}
+
+	};
+
+LogBufferSegment:	ref segment;
+LogBufferBase:		ref byte;
+LogBufferTop:		ref byte;
+LogBufferFront:		int;
+LogBufferBack:		int;
+logJob:			ref far Job;
+
+logData:	(header: [:] byte, barena: ref arena, 
+					body: vaddr_t, blen: Size) =
+	{
+	rem:	signed;
+	len:	signed;
+	pad:	signed;
+
+	rem = LogBufferFront - LogBufferBack;
+	if	(rem <= 0)
+		rem += LogBufferSegment->length;
+	if	(rem <= sizeof unsigned[32])
+		return;
+	pad = blen & 3;
+	if	(pad)
+		pad = 4 - pad;
+	len = |header + blen + pad;
+	if	(len >= rem - sizeof unsigned[32]){
+		x:	unsigned[32];
+
+		x = ML_OVERFLOW;
+		memCopy(LogBufferBase + LogBufferBack, &x, sizeof x);
+		LogBufferBack += sizeof x;
+		}
+	else	{
+		addPiece(header);
+		if	(blen)
+			addRemotePiece(barena, body, blen, pad);
+		}
+	if	(LogBufferBack >= LogBufferSegment->length)
+		LogBufferBack -= LogBufferSegment->length;
+	}
+
+addPiece:	(seg: [:] byte) =
+	{
+	pad:	int;
+
+	pad = |seg & 3;
+	if	(pad)
+		pad = 4 - pad;
+	if	(LogBufferBack + |seg > LogBufferSegment->length){
+		x:	int;
+
+		x = LogBufferSegment->length - LogBufferBack;
+		memCopy(LogBufferBase + LogBufferBack, seg, x);
+		seg = seg[x:];
+		LogBufferBack = 0;
+		}
+	memCopy(LogBufferBase + LogBufferBack, seg, |seg);
+	LogBufferBack += |seg + pad;
+	}
+
+addRemotePiece:	(ar: ref arena, b: vaddr_t, len: unsigned, pad: signed) =
+	{
+	if	(LogBufferBack + len > LogBufferSegment->length){
+		x:	int;
+
+		x = LogBufferSegment->length - LogBufferBack;
+		ar read(b, LogBufferBase + LogBufferBack, x);
+		b += x;
+		len -= x;
+		LogBufferBack = 0;
+		}
+	ar read(b, LogBufferBase + LogBufferBack, len);
+	LogBufferBack += len + pad;
+	}
+
+MyLogVector:	inherit	logVector {
+
+	public:
+
+lsend:	dynamic	(signaling: boolean, wait: boolean, target: ref far External,
+				o: ref object, source: ref object,
+				seq: int,
+				func: int, buf: vaddr_t, len: int, 
+				replyLen: int) =
+	{
+	n:	threadLock;
+	m:	mlogRecord_t;
+
+	if	(o){
+		if	(o->me == MessageLogger.objectId)
+			return;
+		if	(o->myJob == logJob)
+			return;
+		}
+	if	(source->me == MessageLogger.objectId)
+		return;
+	if	(source->myJob == logJob)
+		return;
+//	kprintf("%d/%d lsend %d %d->%d\n", LogBufferFront, LogBufferBack,
+//			seq, source->me, o ? o->me : 0);
+	n lock();
+	m.sendRecord.seq = seq | ML_SEND;
+	if	(signaling)
+		m.sendRecord.seq |= ML_SIGNAL;
+	if	(wait)
+		m.sendRecord.seq |= ML_WAIT;
+	m.sendRecord.sender = source->me;
+	m.sendRecord.target = target;
+	if	(o)
+		m.sendRecord.realTarget = o->me;
+	else
+		m.sendRecord.realTarget = 0;
+	m.sendRecord.func = func;
+	m.sendRecord.expectedReply = replyLen;
+	m.sendRecord.length = len;
+	logData(ref byte(&m)[:sizeof m.sendRecord], source->where, buf, len);
+	n unlock();
+	}
+
+rejected:	dynamic	(seq: int, o: ref object, source: ref object, 
+				code: int) =
+	{
+	n:	threadLock;
+	m:	mlogRecord_t;
+
+	if	(o){
+		if	(o->me == MessageLogger.objectId)
+			return;
+		if	(o->myJob == logJob)
+			return;
+		}
+	if	(source->me == MessageLogger.objectId)
+		return;
+	if	(source->myJob == logJob)
+		return;
+//	kprintf("%d/%d rejected %d %d->%d\n", LogBufferFront, LogBufferBack,
+//			seq, source->me, o ? o->me : 0);
+	n lock();
+	m.rejectRecord.seq = seq | ML_REJECT;
+	m.rejectRecord.code = code;
+	logData(ref byte(&m)[:sizeof m.rejectRecord], 0, 0, 0);
+	n unlock();
+	}
+
+intReply:	dynamic	(seq: int, o: ref object, source: ref object, 
+				result: int) =
+	{
+	n:	threadLock;
+	m:	mlogRecord_t;
+
+	if	(o){
+		if	(o->me == MessageLogger.objectId)
+			return;
+		if	(o->myJob == logJob)
+			return;
+		}
+	if	(source->me == MessageLogger.objectId)
+		return;
+	if	(source->myJob == logJob)
+		return;
+//	kprintf("%d/%d intReply %d %d->%d\n", LogBufferFront, LogBufferBack,
+//			seq, source->me, o ? o->me : 0);
+	n lock();
+	m.replyRecord.seq = seq | ML_REPLY;
+	m.replyRecord.length = sizeof int;
+	logData(ref byte(&m)[:sizeof m.replyRecord], &KernelArena, 
+					vaddr_t(&result), sizeof int);
+	n unlock();
+	}
+
+replied:	dynamic	(seq: int, o: ref object, source: ref object, 
+				buf: buffer_t, len: int) =
+	{
+	n:	threadLock;
+	m:	mlogRecord_t;
+
+	if	(o){
+		if	(o->me == MessageLogger.objectId)
+			return;
+		if	(o->myJob == logJob)
+			return;
+		}
+	if	(source->me == MessageLogger.objectId)
+		return;
+	if	(source->myJob == logJob)
+		return;
+//	kprintf("%d/%d replied %d %d->%d\n", LogBufferFront, LogBufferBack,
+//			seq, source->me, o ? o->me : 0);
+	n lock();
+	m.replyRecord.seq = seq | ML_REPLY;
+	m.replyRecord.length = len;
+	logData(ref byte(&m)[:sizeof m.rejectRecord], buf.where, 
+							buf.address, len);
+	n unlock();
+	}
+
+thread:		dynamic	(parent: ref far External, child: ref far External) =
+	{
+	n:	threadLock;
+	m:	mlogRecord_t;
+
+	if	(getJobObject(parent) == logJob)
+		return;
+//	kprintf("%d/%d thread %d->%d\n", LogBufferFront, LogBufferBack,
+//			parent, child);
+	n lock();
+	m.threadRecord.spacer = ML_THREAD;
+	m.threadRecord.parent = parent;
+	m.threadRecord.child = child;
+	logData(ref byte(&m)[:sizeof m.threadRecord], 0, 0, 0);
+	n unlock();
+	}
+
+newObject:	dynamic	(id: ref far External, parent: ref far External,
+				name: [:] char, typeString: [:] char) =
+	{
+	n:	threadLock;
+	m:	mlogRecord_t;
+
+	if	(getJobObject(parent) == logJob)
+		return;
+	n lock();
+	m.objectRecord.spacer = ML_NEWOBJECT;
+	m.objectRecord.id = id;
+	m.objectRecord.parent = parent;
+	m.objectRecord.nameLength = |name;
+	m.objectRecord.typeLength = |typeString;
+	logData(ref byte(&m)[:sizeof m.objectRecord], &KernelArena, 
+						vaddr_t(name), |name);
+	addPiece(typeString);
+	n unlock();
+	}
+
+newJob:		dynamic	(id: ref far External, oldJob: ref far Job,
+				newJob: ref far Job) =
+	{
+	n:	threadLock;
+	m:	mlogRecord_t;
+
+	if	(getJobObject(id) == logJob)
+		return;
+	n lock();
+	m.newJobRecord.spacer = ML_NEWJOB;
+	m.newJobRecord.id = id;
+	m.newJobRecord.oldJob = oldJob;
+	m.newJobRecord.newJob = newJob;
+	logData(ref byte(&m)[:sizeof m.newJobRecord], 0, 0, 0);
+	n unlock();
+	}
+
+
+disown:		dynamic	(parent: ref far External, child: ref far External,
+			 caller: ref far External, x: ref far External,
+			 result: int) =
+	{
+	n:	threadLock;
+	m:	mlogRecord_t;
+
+	if	(getJobObject(parent) == logJob)
+		return;
+//	kprintf("%d/%d thread %d->%d\n", LogBufferFront, LogBufferBack,
+//			parent, child);
+	n lock();
+	m.disownRecord.spacer = ML_DISOWN;
+	m.disownRecord.parent = parent;
+	m.disownRecord.child = child;
+	m.disownRecord.caller = caller;
+	m.disownRecord.x = x;
+	m.disownRecord.result = result;
+	logData(ref byte(&m)[:sizeof m.disownRecord], 0, 0, 0);
+	n unlock();
+	}
+
+	};

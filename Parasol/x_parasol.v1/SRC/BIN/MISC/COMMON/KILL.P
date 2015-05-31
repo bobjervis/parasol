@@ -1,0 +1,37 @@
+include	string, alys, file, error;
+
+main:	entry	() =
+	{
+	i, j, k:	unsigned;
+	x:		ref far External;
+	o:		object_t;
+
+	if	(|commandLine.arguments == 0)
+		help();
+	for	(k = 0; k < |commandLine.arguments; k++){
+		sc:	stringConverter = [ commandLine.arguments[k] ];
+
+		i = sc encodeUnsigned();
+		x = ref far External(i);
+		o = myHost() getObject(x);
+		if	(o.me == 0)
+			printf("Object %d unknown\n", x);
+		else if	(o.flags & OF_KERNEL){
+			j = myHost() killObject(x);
+			if	(j)
+				printf("Could not kill %d: %S\n", x, 
+								cmdError(j));
+			}
+		else	{
+			try
+				x kill!();
+			}
+		}
+	exit(EX_SUCCESS);
+	}
+
+help:	() =
+	{
+	printf("Use is: KILL oid ...\n");
+	}
+

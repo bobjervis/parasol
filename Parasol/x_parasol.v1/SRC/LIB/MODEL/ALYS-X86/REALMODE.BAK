@@ -1,0 +1,17 @@
+/*
+	Copyright (c) 1995 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	hardware;
+
+RealModeFactory:	public	type	inherit	External {
+	public:
+
+createVirtualMachine:	gate	() ref far RealModeArena;
+
+	};
+
+

@@ -1,0 +1,474 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+include	encoder;
+include	symtab, types;
+include	tparams, target;
+include	functype;
+include	backend, i386back, xtree;
+include	addrmode;
+include	alloctmp, funcout;
+
+functionPreamble:	public	(sc: ref blockScope) =
+	{
+	Encoder startupFunction(I386Func.currentValue);
+//	Encoder recordLineNumber(0, TargetData.f.funcSym->lineno);
+	TargetData.reservedRegisters |=
+		ESmask|SSmask|CSmask|SPmask|BPmask|DSmask|
+		AHmask|BHmask|CHmask|DHmask;
+	TargetData.bytesPushed = 0;
+	TargetData.reservedRegisters |= TargetData.usedRegisters;
+
+	if	(I386Func.currentType->callingConvention == FC_INTERRUPT ||
+		 I386Func.currentType->callingConvention == FC_INTERRUPT2)
+		interruptPreamble();
+	else if	(I386Func.currentType->callingConvention == FC_GATE){
+		if	(I386Func.currentSymbol->qualifier & DQ_MEMBERFUNC ||
+			 I386Func.currentSymbol->qualifier & DQ_FACTORY){
+			memberGatePreamble(sc);
+			return;
+			}
+		else
+			gatePreamble();
+		}
+	else
+		normalPreamble();
+	locateParms();
+	convertIncomingParameters();
+	}
+
+functionPostamble:	public	() =
+	{
+//	Encoder recordLineNumber(0, lineno);
+
+		// If we have try statements, make sure the stack is
+		// properly aligned
+
+	if	(I386Func.currentType->callingConvention == FC_INTERRUPT ||
+		 I386Func.currentType->callingConvention == FC_INTERRUPT2)
+		interruptPostamble(I386Func.currentType->callingConvention);
+	else if	(I386Func.currentType->callingConvention == FC_GATE){
+		if	(I386Func.currentSymbol->qualifier & DQ_MEMBERFUNC ||
+			 I386Func.currentSymbol->qualifier & DQ_FACTORY)
+			memberGatePostamble();
+		else
+			gatePostamble();
+		}
+	else
+		normalPostamble();
+	}
+
+normalPreamble:	() =
+	{
+	preserveRegisters();
+	if	(TargetData.autoCount ||
+		 TargetData.parmCount ||
+		 TargetData.ellipsisUsed ||
+		 TargetData.floatTempsUsed ||
+		 Func->optimize == FALSE){
+		asmopr(I386_PUSHL, EBP);
+		allocateAutos();
+		}
+	}
+
+normalPostamble:	() =
+	{
+	releaseAutos();
+	restoreRegisters();
+	if	(TargetData.parmCount)
+		asmopri(I386_RET, CS, TargetData.parmCount);
+	else
+		Encoder inst(I386_RET);
+	}
+
+memberGatePreamble:	(sc: ref blockScope) =
+	{
+	preserveRegisters();
+	asmopr(I386_PUSHL, EBP);
+	allocateAutos();
+	locateParms();
+	convertIncomingParameters();
+	}
+
+memberGatePostamble:	() =
+	{
+	releaseAutos();
+	restoreRegisters();
+	asmopri(I386_RET, CS, 8);
+	}
+
+gatePreamble:	() =
+	{
+	TargetData.bytesPushed = 12;
+				// Allow for pushed seg regs and far return
+	preserveRegisters();
+	asmopr(I386_PUSHI, DS);
+	asmopr(I386_PUSHI, ES);
+	asmopr(I386_PUSHI, FS);
+	asmopr(I386_PUSHI, GS);
+	asmopr(I386_PUSHL, EBP);
+	Encoder loadDS(BP);
+	allocateAutos();
+	}
+
+gatePostamble:	() =
+	{
+	releaseAutos();
+	asmopr(I386_POPI, GS);
+	asmopr(I386_POPI, FS);
+	asmopr(I386_POPI, ES);
+	asmopr(I386_POPI, DS);
+	restoreRegisters();
+	if	(TargetData.parmCount)
+		asmopri(I386_RETF, CS, TargetData.parmCount);
+	else
+		Encoder inst(I386_RETF);
+	}
+
+interruptPreamble:	() =
+	{
+	TargetData.reservedRegisters |= (SImask|DImask);
+	Encoder inst(I386_PUSHA);
+	asmopr(I386_PUSHI, DS);
+	asmopr(I386_PUSHI, ES);
+	asmopr(I386_PUSHI, FS);
+	asmopr(I386_PUSHI, GS);
+	Encoder loadDS(BP);
+	allocateAutos();
+	}
+
+interruptPostamble:	(fc: fConventions) =
+	{
+	if	(TargetData.autoCount ||
+		 TargetData.flags & TF_TRY)
+		asmoprr(I386_MOVL, ESP, EBP);
+	asmopr(I386_POPI, GS);
+	asmopr(I386_POPI, FS);
+	asmopr(I386_POPI, ES);
+	asmopr(I386_POPI, DS);
+	Encoder inst(I386_POPA);
+	if	(fc == FC_INTERRUPT2)
+		asmopri(I386_ADDL, ESP, 4);
+	Encoder inst(I386_IRET);
+	}
+
+preserveRegisters:	() =
+	{
+	preservedRegs:	RegisterMask;
+
+	if	(TargetData.reservedRegisters & SImask){
+		asmopr(I386_PUSHL, ESI);
+		TargetData.bytesPushed += 4;
+		}
+	if	(TargetData.reservedRegisters & DImask){
+		asmopr(I386_PUSHL, EDI);
+		TargetData.bytesPushed += 4;
+		}
+	preservedRegs = TargetData.reservedRegisters &
+				(AXmask|BXmask|CXmask|DXmask);
+	preservedRegs &= ~(incomingRegs|OutgoingRegs);
+	if	(preservedRegs & AXmask){
+		asmopr(I386_PUSHL, EAX);
+		TargetData.bytesPushed += 4;
+		}
+	if	(preservedRegs & BXmask){
+		asmopr(I386_PUSHL, EBX);
+		TargetData.bytesPushed += 4;
+		}
+	if	(preservedRegs & CXmask){
+		asmopr(I386_PUSHL, ECX);
+		TargetData.bytesPushed += 4;
+		}
+	if	(preservedRegs & DXmask){
+		asmopr(I386_PUSHL, EDX);
+		TargetData.bytesPushed += 4;
+		}
+	}
+
+restoreRegisters:	() =
+	{
+	preservedRegs:	RegisterMask;
+
+	preservedRegs = TargetData.reservedRegisters &
+					(AXmask|BXmask|CXmask|DXmask);
+	preservedRegs &= ~(incomingRegs|OutgoingRegs);
+	if	(preservedRegs & DXmask)
+		asmopr(I386_POPL, EDX);
+	if	(preservedRegs & CXmask)
+		asmopr(I386_POPL, ECX);
+	if	(preservedRegs & BXmask)
+		asmopr(I386_POPL, EBX);
+	if	(preservedRegs & AXmask)
+		asmopr(I386_POPL, EAX);
+	if	(TargetData.reservedRegisters & DImask)
+		asmopr(I386_POPL, EDI);
+	if	(TargetData.reservedRegisters & SImask)
+		asmopr(I386_POPL, ESI);
+	}
+
+allocateAutos:	() =
+	{
+	asmoprr(I386_MOVL, EBP, ESP);
+	if	(TargetData.autoCount)
+		asmopri(I386_SUBL, ESP, TargetData.autoCount);
+	TargetData.flags |= TF_FULL_FRAME;
+	}
+
+releaseAutos:	() =
+	{
+	if	(TargetData.autoCount ||
+		 TargetData.flags & TF_TRY)
+		Encoder inst(I386_LEAVE);
+	else if	(TargetData.flags & TF_FULL_FRAME)
+		asmopr(I386_POPL, EBP);
+	}
+
+sizeParms:	public	() =
+	{
+	v:	ref variable;
+	psize:	addr_t;
+
+	psize = 0;
+	for	(v = TargetData.vars; v; v = v->next){
+		if	(v->declaration == 0 ||
+			 v->declaration->storageClass != SC_PARM)
+			continue;
+		if	(v->preferredReg != nullReg)
+			continue;
+		psize += v->dtype sizeOf();
+		if	(DebugList){
+			printf("parameter ");
+			if	(v->declaration->name)
+				printf("%S", v->declaration->name spelling());
+			else
+				printf("<anon>");
+			printf(" size %d\n", psize);
+			}
+
+			/* This adjusts for odd-sized structs and
+			   char parameters
+			 */
+
+		psize += 3;
+		psize &= ~3;
+		}
+	TargetData.parmCount = psize;
+	}
+
+locateParms:	() =
+	{
+	i:		int;
+	parmSize:	addr_t;
+	addr:		addr_t;
+	base:		addr_t;
+	v:		ref variable;
+	u:		unsigned;
+	t:		unsigned;
+
+	if	(I386Func.currentType->callingConvention == FC_INTERRUPT ||
+		 I386Func.currentType->callingConvention == FC_INTERRUPT2){
+		base = 0;
+		addr = TargetData.parmCount;
+		}
+	else	{
+		addr = 0;
+		base = 8 + TargetData.bytesPushed;
+		}
+	TargetData.parameterBaseOffset = base;
+
+		/* The parms are in the symbol list backwards */
+
+	for	(v = TargetData.vars; v; v = v->next){
+		if	(v->declaration == 0 ||
+			 v->declaration->storageClass != SC_PARM)
+			continue;
+		if	(v->preferredReg != nullReg)
+			continue;
+		parmSize = v->dtype sizeOf();
+		if	(parmSize & 3)
+			parmSize += 4 - (parmSize & 3);
+		if	(I386Func.currentType->callingConvention != FC_INTERRUPT &&
+			 I386Func.currentType->callingConvention != FC_INTERRUPT2){
+			v->offset = addr + base;
+			addr += parmSize;
+			}
+		else	{
+			addr -= parmSize;
+			v->offset = addr + base;
+			}
+		}
+	}
+
+convertIncomingParameters:	() =
+	{
+	v:		ref variable;
+	r:		regNum;
+	ri:		regNum;
+	ro:		regNum;
+	outx:		RegisterMask;
+	inx:		RegisterMask;
+	movingParms:	[4] ref variable;
+	changes:	int;
+	j:		int;
+	pcount:		int;
+	i:		int;
+	u:		ref tree_p;
+	t:		ref tree_p;
+
+		/* The first loop doesn't cope with parameters to be moved
+		   to registers.  This is due to the fact that in register
+		   parameter passing functions, incoming registers may be
+		   sitting in registers that have been assigned to other
+		   parameters for the body of the function!  So, first we
+		   dump any incoming register parameter that gets put onto
+		   the stack.  We can also take care of floating point
+		   parameters at that time.
+		 */
+
+	for	(v = TargetData.vars; v; v = v->next){
+		if	(v->declaration == 0 ||
+			 v->declaration->storageClass != SC_PARM)
+			continue;
+		if	(v->flags & VF_REG)
+			continue;
+		if	(v->preferredReg != nullReg){
+			t = auto_x createVar(v);
+			asmoptr(moveOp(v), t, v->preferredReg);
+			}
+		}
+
+		/* Now we have to cope with incoming parameters that are
+		   in registers and must be assigned to (possibly different)
+		   registers for the body of the function.  First, check if
+		   there are any conflicts.  If there are none, we can forge
+		   ahead without further problems.
+		 */
+
+	pcount = 0;
+	for	(v = TargetData.vars; v; v = v->next){
+		if	(v->declaration == 0 ||
+			 v->declaration->storageClass != SC_PARM)
+			continue;
+		if	((v->flags & VF_REG) == 0)
+			continue;
+		if	(v->preferredReg == nullReg)
+			continue;
+
+			/* if the parameter doesn't need to be moved, do
+			   nothing.  It's ok.
+			 */
+
+		if	(v->preferredReg == v->reg)
+			continue;
+		movingParms[pcount] = v;
+		pcount++;
+		}
+
+	inx = 0;
+	for	(i = 0; i < pcount; i++){
+		v = movingParms[i];
+		inx |= getRegMask(v->preferredReg);
+		}
+
+		/* Rid ourselves of any independant input
+		   parameters (ones which are not moved to other
+		   incoming registers).
+		 */
+
+	for	(;;){
+		do	{
+			changes = 0;
+			for	(i = 0; i < pcount; i++){
+				v = movingParms[i];
+				if	(!fits(v->reg, inx)){
+					copyParmReg(v);
+					inx &= ~getRegMask(v->preferredReg);
+					movingParms[i] = movingParms[pcount - 1];
+					pcount--;
+					changes = 1;
+					}
+				}
+			}
+			while	(changes);
+
+		/* If pcount is not zero by the time we get here, it must be
+		   at least 2.  (This is because a single moving parameter
+		   cannot depend on itself.)  The unresolved registers at
+		   this stage can be a pair, a cycle of three, a cycle of
+		   four or two pairs of interdependant moves.
+		 */
+
+		if	(pcount == 0)
+			break;
+
+			/* Since there is a dependancy, pick the last
+			   parameter, find the incoming parameter that is
+			   in the desired output register and exchange
+			   them.  Find the parameter we have exchanged with
+			   and update it's incoming register.
+			 */
+
+		v = movingParms[pcount - 1];
+		ro = v->reg;
+		ri = v->preferredReg;
+		asmoprr(I386_XCHGI, ro, ri);
+		pcount--;
+		inx &= ~getRegMask(ro);
+		for	(i = 0; i < pcount; i++){
+			v = movingParms[i];
+			if	(v->preferredReg == ro){
+				if	(v->reg == ri){
+					movingParms[i] = movingParms[pcount - 1];
+					pcount--;
+					inx &= ~getRegMask(ri);
+					}
+				v->preferredReg = ri;
+				break;
+				}
+			}
+		}
+
+		/* Lastly we can cope with incoming parameters that are
+		   on the stack to begin with.  Once the other registers
+		   are shuffled, loading stack parameters can't cause
+		   problems.
+		 */
+
+	for	(v = TargetData.vars; v; v = v->next){
+		if	(v->declaration == 0 ||
+			 v->declaration->storageClass != SC_PARM)
+			continue;
+		if	((v->flags & VF_REG) == 0)
+			continue;
+		if	(v->preferredReg != nullReg)
+			continue;
+		r = v->reg;
+		v->flags &= ~VF_REG;
+		u = auto_x createVar(v);
+		asmoprt(moveOp(v), r, u);
+		v->flags |= VF_REG;
+		}
+	}
+
+copyParmReg:	(v: ref variable) =
+	{
+	asmoprr(moveOp(v), v->reg, v->preferredReg);
+	}
+
+moveOp:	(v: ref variable) int =
+	{
+	bitSize:	int;
+
+	bitSize = v->dtype bitSizeOf();
+	if	(bitSize > 16)
+		return I386_MOVL;
+	else if	(bitSize > 8)
+		return I386_MOVI;
+	else
+		return I386_MOVC;
+	}

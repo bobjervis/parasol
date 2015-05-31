@@ -1,0 +1,819 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	edserver;
+include	filesys;
+include	alys;
+include	file;
+include	error;
+include	window;
+include	console;
+include	string;
+include	editor;
+
+HISTORY:	const int = 32;			// maximum number of 
+						// remembered commands
+
+SessionTitle:	[:] char = "Session 2.10";
+
+myJob:		ref far Job;
+
+RUN_PATH:	const	int = 0;		// Path was a .RUN file
+EXE_PATH:	const	int = 1;		// Path was an .EXE file
+/*
+	Note that the sequence of events here is not entirely random.
+	There are all sorts of tricky dependencies in the logic sequence
+	recorded here.  newJob, for example, will close local objects 0-2
+	effectively killing stdin, stdout and stderr.  These descriptors
+	must get reestablished before we call the TTYViewer startup code
+	because opening a window will consume a descriptor.  Since we do not
+	want that window descriptor to collide with the shell channels, we
+	must allocate them first.
+
+	We do a newJob in the first place to insure that a break key will do
+	the right things, i.e. it will send breaks only to processes attached
+	to this window and not beyond.
+ */
+main:	entry	() =
+	{
+	if	(|commandLine.arguments == 0){
+		printf("Use is: SESSION cmd arg(s)\n");
+		exit(1);
+		}
+	mainExternal(&TTYViewer);
+	EditServer = ref far editorServer(FileSystem attach("/service/editor",
+					":user.edserver.editorServer"));
+	ShellCommands initialize(0);
+	StartFileName = new [0] char;
+	ref far channel(0) close();
+	ref far channel(1) close();
+	ref far channel(2) close();
+	myJob = newJob();
+
+		// Set up the I/O channels for the shell.
+
+	TTY = new ttyEditor[ SessionTitle ];
+	thread(&ReadChannel, 0);
+	thread(&WriteChannel, 0);
+	makeLocal(ReadChannel.objectId, ref far channel(0));
+	makeLocal(WriteChannel.objectId, ref far channel(1));
+	makeLocal(ref far External(1), ref far channel(2));
+	esp:	ref ttyEditor;
+
+
+		// and launch the shell command
+
+	startCommand();
+	}
+
+startCommand:	() =
+	{
+	cmd:		[:] char;
+	arg0:		[:] char;
+	i:		int;
+	lookup:		PathList = [];
+
+	lookup useEnvironment("PATH");
+	arg0 = commandLine.arguments[0];
+	commandLine shiftArguments();
+	cmd = lookup search(arg0, ".run", ".com", ".exe", 0);
+	if	(|cmd == 0)
+		return;
+	if	(|commandLine.arguments == 0)
+		arg0 = "";
+	else
+		arg0 = argumentString(commandLine.arguments);
+	try
+		ShellObject = FileSystem spawn(0, cmd, arg0);
+	except
+		exit(1);
+	}
+/*
+	This is the channel that the shell reads from.  It must deliver
+	a line of text, one character at a time.  The read channel must also
+	support type ahead.  So, the session maintains a 
+ */
+ReadChannel:	readChannel;
+
+readChannel:	type	inherit	consoleChannel	{
+	attentionFlag:	Atomic;
+	midCommand:	boolean;	// TRUE if in mid-command line
+
+	public:
+
+attention:	gate!	() =
+	{
+	attentionFlag = TRUE;
+	}
+
+read:	gate	() [] byte =
+	{
+	rlen:	int;
+
+	rlen = messageHeader->expected;
+	if	(rlen == 0){
+		reject(ERRINVALIDARGUMENT);
+		return "";
+		}
+	while	(!ShutdownFlag){
+		if	(!midCommand){
+			while	(ShellCommands down() == FALSE)
+				;
+			if	(ShutdownFlag)
+				break;
+			midCommand = TRUE;
+			}
+		x:	ref lineEntry;
+		y:	int;
+
+		x = ShellInput;
+		y = x->len - ShellPos;
+		if	(y > rlen)
+			y = rlen;
+		if	(y){
+			replyPartial(&x->data[ShellPos], y);
+			ShellPos += y;
+			rlen -= y;
+			if	(rlen == 0)
+				break;
+			}
+		if	(ShellPos == x->len){
+			ShellPos = 0;
+			critical(CommandLock){
+				s:	ref lineEntry;
+
+				s = ShellInput;
+				ShellInput = s->next;
+				History newCommand(s);
+				}
+			midCommand = FALSE;
+			break;
+			}
+		}
+	}
+
+copy:	gate	() ref far External =
+	{
+	return thread(new readChannel[ CC_CONSOLE ], 0);
+	}
+
+//	These following two functions return TRUE if the operation is
+//	allowed, FALSE otherwise
+
+lastClose:	gate	() boolean =
+	{
+	reply TRUE;
+	exit(0);
+	}
+
+close:	gate	() boolean =
+	{
+	return TRUE;
+	}
+
+dup:	gate	() =
+	{
+	}
+
+getClass:	gate	() channelClass_t =
+	{
+	return CC_CONSOLE;
+	}
+
+appearsOn:	gate	() ref far console =
+	{
+	return locateConsole("");
+	}
+
+windowSize:	gate	() point =
+	{
+	return TTY->box.size;
+	}
+
+	};
+
+WriteChannel:	writeChannel;
+
+writeChannel:	type	inherit	channel	{
+	public:
+
+attention:	gate!	() =
+	{
+	}
+
+write:	gate	(buf: [:] byte) int =
+	{
+	critical(TTYLock)
+		TTY->textArea pasteFromChannel(buf);
+	return |buf;
+	}
+
+copy:	gate	() ref far External =
+	{
+	return thread(new writeChannel[ CC_CONSOLE ], 0);
+	}
+
+//	These following two functions return TRUE if the operation is
+//	allowed, FALSE otherwise
+
+lastClose:	gate	() boolean =
+	{
+	reply TRUE;
+	exit(0);
+	}
+
+close:	gate	() boolean =
+	{
+	return TRUE;
+	}
+
+dup:	gate	() =
+	{
+	}
+
+getClass:	gate	() channelClass_t =
+	{
+	return CC_CONSOLE;
+	}
+
+appearsOn:	gate	() ref far console =
+	{
+	return locateConsole("");
+	}
+
+windowSize:	gate	() point =
+	{
+	return TTY->box.size;
+	}
+
+	};
+
+TTY:		ref ttyEditor;
+TTYLock:	Lock;
+ShellObject:	ref far External;
+
+TTYViewer:	inherit inputHandler {
+	public:
+
+childExit:	gate	(exitCode: ExitCode) =
+	{
+	if	(messageHeader->sender == ShellObject)
+		exit(exitCode);
+	}
+
+	};
+
+ShutdownFlag:	boolean = FALSE;
+
+TEXT_ATTR:	const	char = HIGH|YELLOW;
+
+ttyEditor:	type	inherit	applicationShell {
+	public:
+
+	buffer:		ref textBuffer;
+	textArea:	ref sessionEditor;
+
+constructor:	(titl: [:] char) =
+	{
+	m:			ref menubar;
+	file, edit, opt:	ref popupMenu;
+
+	super constructor(titl);
+	useFooter();
+	textArea = new sessionEditor[ ];
+	anchor(textArea);
+	textArea setScrap(&Scrap);
+	buffer = new textBuffer[ ];
+	textArea connect(buffer);
+
+		// Build the menu structure
+
+	m = new menubar[];
+	setMenu(m);
+
+	file = new popupMenu[ m ];
+	file button("Edit Text File...     F3", 'e', [ self, &startEdit ]);
+	file button("Exit               Alt-X", 'x', [ self, &closeApplication ]);
+
+	edit = new popupMenu[ m ];
+	edit button("Search...    Ctrl-F", 's', [ textArea, &textEditor.search ]);
+	edit button("Replace...   Ctrl-M", 'r', [ textArea, &textEditor.replace ]);
+	edit button("Again        Ctrl-A", 'a', [ textArea, &textEditor.again ]);
+	edit button("Clear Output",        'c', [ self, &clearOutput ]);
+
+	opt = new popupMenu[ m ];
+	opt toggle("Regular Expressions", 'r',	
+			[ textArea, &textEditor.patterns] ) 
+				setValue(RegularExpressionSwitch, FALSE);
+
+	m pulldown("File",			'f', file);
+	m pulldown("Edit",			'e', edit);
+	m pulldown("Options",			'o', opt);
+
+	getInputFrom(&TTYViewer);
+	configure([ 80, 30 ]);
+	textArea setTextFocus();
+	open();
+	}
+
+clearOutput:	() =
+	{
+	buffer close();
+	buffer = [ ];
+	textArea resetEditor();
+	textArea redraw();
+	}
+
+startEdit:	() =
+	{
+	if	(EditServer)
+		new startForm[ self ];
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	switch	(k){
+	case	CTRL_BREAK:
+		myJob broadcastAttention();
+		break;
+
+	case	F3:
+		startEdit();
+		break;
+
+	default:
+		return super processKeystroke(k);
+		}
+	return TRUE;
+	}
+
+	};
+
+sessionEditor:	type	inherit	textEditor {
+	public:
+
+	commit:		filePos;
+	outPoint:	filePos;
+
+resetEditor:	dynamic	() =
+	{
+	super resetEditor();
+	commit zero();
+	outPoint zero();
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	h:	ref lineEntry;
+	b:	boolean;
+
+	switch	(k){
+	case	CTRL_UP:
+		h = History up();
+		if	(h == 0)
+			TTY postFooter("no history");
+		else
+			recall(h);
+		break;
+
+	case	CTRL_DOWN:
+		h = History down();
+		if	(h == 0)
+			TTY postFooter("no history");
+		else
+			recall(h);
+		break;
+
+	default:
+		critical(TTYLock)
+			b = super processKeystroke(k);
+		return b;
+		}
+	return TRUE;
+	}
+
+recall:	(h: ref lineEntry) =
+	{
+	if	(cursor.lpos + cursor.offset < commit.lpos + commit.offset)
+		cursor = commit;
+	deleteLine();
+	insertText(h->data[:h->len - 1]);
+	}
+
+close:	dynamic	() =
+	{
+	buffer close();
+	super close();
+	}
+
+topAlarm:	dynamic	() =
+	{
+	getShell() postFooter("Top of session");
+	}
+
+bottomAlarm:	dynamic	() =
+	{
+	getShell() postFooter("Bottom of session");
+	}
+
+depositColor:	dynamic	(ln: int, lineBuffer: [:] colorChar) =
+	{
+	super depositColor(ln, lineBuffer);
+	if	(ln > commit.line)
+		return;
+
+	col:	int;
+
+	if	(ln == commit.line){
+		col = commit.column - displayColumn;
+		col--;
+		if	(col > |lineBuffer)
+			col = |lineBuffer;
+		}
+	else
+		col = |lineBuffer;
+	while	(col >= 0){
+		if	(lineBuffer[col].color == C_TEXT)
+			lineBuffer[col].color = C_READONLY;
+		else
+			lineBuffer[col].color = C_READONLY_SELECTED;
+		col--;
+		}
+	}
+
+beginLine:	dynamic	() =
+	{
+	if	(cursor.lpos + cursor.offset <= commit.lpos + commit.offset)
+		super beginLine();
+	else
+		positionText(commit);
+	}
+
+deleteCharacter:dynamic	() =
+	{
+	if	(cursor.lpos + cursor.offset < commit.lpos + commit.offset)
+		readOnly();
+	else
+		super deleteCharacter();
+	}
+
+backspace:	dynamic	() =
+	{
+	if	(cursor.lpos + cursor.offset <= commit.lpos + commit.offset)
+		readOnly();
+	else
+		super backspace();
+	}
+
+deleteWord:	dynamic () =
+	{
+	if	(cursor.lpos + cursor.offset < commit.lpos + commit.offset)
+		readOnly();
+	else
+		super deleteWord();
+	}
+
+deleteLine:	dynamic	() =
+	{
+	if	(cursor.lpos + cursor.offset < commit.lpos + commit.offset)
+		readOnly();
+	else	{
+		delAmount:	int;
+		cpos, epos:	textPos;
+
+		cursor = commit;
+		cpos = commit.lpos + commit.offset;
+		for	(;;){
+			epos = buffer seek(0, 2);
+			if	(epos <= cpos + 1)
+				break;
+			super deleteWord();
+			}
+		refreshDisplay(displayLine);
+		}
+	}
+
+enterCharacter:	dynamic	(k: keystroke) =
+	{
+	if	(cursor.lpos + cursor.offset < commit.lpos + commit.offset)
+		readOnly();
+	else
+		super enterCharacter(k);
+	}
+
+enterKey:	dynamic	() =
+	{
+	if	(cursor.lpos + cursor.offset < commit.lpos + commit.offset)
+		readOnly();
+	else	{
+		x:	ref lineEntry;
+		spos, epos:	textPos;
+
+		endLine();
+		spos = commit.lpos + commit.offset;
+		epos = cursor.lpos + cursor.offset;
+		x = lineEntry create(buffer, spos, epos);
+		commit = cursor;
+		super enterKey();
+		commit = cursor;
+		outPoint = commit;
+		x appendToInputQueue();
+		}
+	}
+
+pasteFromScrap:	dynamic	() =
+	{
+	if	(cursor.lpos + cursor.offset < commit.lpos + commit.offset)
+		readOnly();
+	else
+		super pasteFromScrap();
+	}
+
+pasteFromChannel:	(buf: [:] char) =
+	{
+	cpos, xpos:		textPos;
+	i:			int;
+	c:			char;
+
+	buffer seek(outPoint.lpos + outPoint.offset, 0);
+	xpos = commit.lpos + commit.offset;
+	cpos = cursor.lpos + cursor.offset;
+	for	(i = 0; i < |buf; i++){
+		c = buf[i];
+		if	(c == '\r'){
+			if	(outPoint.offset > commit.offset)
+				commit.offset = outPoint.offset;
+			outPoint.offset = 0;
+			buffer seek(outPoint.lpos, 0);
+			continue;
+			}
+		if	(c == '\t'){
+			x2:	int;
+			x3:	int;
+
+			x2 = 8 - (outPoint.offset & 7);
+			outPoint.offset += x2;
+			if	(outPoint.offset <= commit.offset){
+				x3:	int;
+
+				x3 = commit.offset - outPoint.offset;
+				if	(x2 < x3)
+					x3 = x2;
+				buffer deleteText(x3);
+				}
+			buffer insert("        ", x2);
+			buffer seek(x2, 1);
+			continue;
+			}
+		changeLine(outPoint.line);
+		if	(c == '\n'){
+			changeLine(outPoint.line + 1);
+			if	(outPoint.offset > commit.offset)
+				commit.offset = outPoint.offset;
+			buffer seek(commit.lpos + commit.offset, 0);
+			buffer insert(&c, 1);
+			buffer seek(1, 1);
+			commit.lpos += commit.offset + 1;
+			commit.line++;
+			commit.offset = 0;
+			if	(outPoint.line < displayLine + box.size.y){
+				if	(outPoint.line == 
+						displayLine + box.size.y - 1)
+					refreshDisplay(displayLine + 1);
+				}
+			outPoint = commit;
+			}
+		else	{
+			outPoint.offset++;
+			if	(outPoint.offset <= commit.offset)
+				buffer deleteText(1);
+			buffer insert(&c, 1);
+			buffer seek(1, 1);
+			}
+		}
+	if	(outPoint.offset > commit.offset)
+		commit.offset = outPoint.offset;
+	commit.column = commit.offset;
+	if	(cpos >= xpos){
+		cursor = commit;
+		cursor.offset += cpos - xpos;
+		}
+	refreshDisplay(displayLine);
+	}
+
+};
+
+readOnly:	() =
+	{
+	TTY postFooter("Read only");
+	}
+
+ShellLines:	ref lineEntry;
+ShellInput:	ref lineEntry;
+ShellPos:	int;
+ShellCommands:	Semaphore;
+CommandLock:	Lock;
+
+History:	{
+	list:		ref lineEntry;
+	current:	ref lineEntry;
+	count:		int;
+
+	public:
+
+newCommand:	(s: ref lineEntry) =
+	{
+	if	(s->len == 1)
+		return;
+
+		// strip duplicate lines from 
+		// the history list
+
+	nh, h, hprev:	ref lineEntry;
+
+	hprev = 0;
+	for	(h = list; h; hprev = h, h = h->next){
+		if	(h->len == s->len &&
+			 memCompare(h->data, s->data, s->len) == 0){
+			nh = h->next;
+			if	(hprev)
+				hprev->next = nh;
+			else
+				list = nh;
+			count--;
+			delete h;
+			for	(h = nh; h; h = h->next)
+				hprev = h;
+			break;
+			}
+		}
+	h = lineEntry createHistory(s);
+	if	(hprev)
+		hprev->next = h;
+	else
+		list = h;
+	count++;
+	if	(count > HISTORY){
+		h = list;
+		list = list->next;
+		delete h;
+		count--;
+		}
+	}
+
+up:	() ref lineEntry =
+	{
+	h:	ref lineEntry;
+
+	if	(list == 0)
+		return 0;
+	if	(list == current)
+		current = 0;
+	for	(h = list; h->next != current; h = h->next)
+		;
+	current = h;
+	return h;
+	}
+
+down:	() ref lineEntry =
+	{
+	h:	ref lineEntry;
+
+	if	(current == 0)
+		current = list;
+	else	{
+		current = current->next;
+		if	(current == 0)
+			current = list;
+		}
+	return current;
+	}
+
+resetCurrent:	() =
+	{
+	current = 0;
+	}
+
+	};
+
+lineEntry:	type packed { public:
+	next:	ref lineEntry;
+	len:	int;
+	data:	[] char;
+
+create:	factory	(buffer: ref editBuffer, spos: textPos, 
+					 epos: textPos) ref lineEntry =
+	{
+	self = alloc(sizeof lineEntry + 1 + epos - spos);
+	next = 0;
+	len = epos - spos;
+	buffer seek(spos, 0);
+	buffer read(data, len);
+	data[len] = '\n';
+	len++;
+	return self;
+	}
+
+createHistory:	factory	(h: ref lineEntry) ref lineEntry =
+	{
+	self = alloc(sizeof lineEntry + h->len);
+	next = 0;
+	len = h->len;
+	memCopy(data, h->data, len);
+	return self;
+	}
+
+appendToInputQueue:	() =
+	{
+	critical(CommandLock){
+		s:	ref lineEntry;
+
+		while	(ShellLines != ShellInput){
+			s = ShellLines->next;
+			delete ShellLines;
+			ShellLines = s;
+			}
+		if	(ShellInput){
+			for	(s = ShellInput; s->next; s = s->next)
+				;
+			s->next = self;
+			}
+		else
+			ShellLines = ShellInput = self;
+		}
+	ShellCommands up();
+	History resetCurrent();
+	}
+
+	};
+
+EditorMenu:	public	ref menu;		// Set this to be the main
+						// menu for new edit sessions
+StartFileName:	[:] char;
+
+startForm:	type	inherit popupShell {
+	typein:		ref textField;
+
+	public:
+
+constructor:	(w: ref shell) =
+	{
+	g:	ref Grid;
+	d:	ref dialog;
+	rprop:	static	[] byte = [ 1 ];
+	cprop:	static	[] byte = [ 0, 1 ];
+
+	super constructor("Edit Text", w);
+
+		// Describe the form
+
+	g = new Grid[ 2, 1 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "File: ", C_READONLY, C_READONLY ]);
+	typein = new textField[ StartFileName, C_TEXT, C_READONLY ];
+	typein onEnterKey([ self, &ok ]);
+	g cell([ 1, 0 ], typein);
+
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g);
+	anchor(d);
+	typein setTextFocus();
+
+		// Draw it and accept input
+
+	configure([ 60, 1 ]);
+	open();
+	}
+
+ok:	() =
+	{
+	filename:	[:] char;
+
+	filename = typein getValue();
+	if	(|filename){
+		f:	[MAXPATH] char;
+		fa:	[:] char;
+
+		if	(EditServer == 0)
+			EditServer = ref far editorServer(FileSystem 
+				attach("/service/editor",
+					":user.edserver.editorServer"));
+		fa = f;
+		fa [:]= FileSystem getAbsolutePath(filename);
+		EditServer load(fa);
+		StartFileName = stringDup(filename);
+		}
+	delete self;
+	}
+
+	};
+
+EditServer:	ref far editorServer;

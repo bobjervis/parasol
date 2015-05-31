@@ -1,0 +1,1515 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+/*
+------------------------------------------------------------------------------
+		Portable intrinsics
+
+	These are the built-in portable functions of the compiler:
+ */
+abs:		public	(x: int) int = {}
+memScan:	public	(s: pointer, c: byte, len: size_t) pointer = 
+	{
+	cp:	ref byte;
+
+	cp = s;
+	do	{
+		if	(*cp++ == c)
+			return cp;
+		len--;
+		}
+		while	(len > 0);
+	return cp;
+	}
+
+memCopy:	public	(dest: pointer, src: pointer, len: size_t) = 
+	{
+	memcpy(dest, src, len);
+	}
+
+memcpy:	extern	(pointer, pointer, size_t) pointer;
+
+memSet:		public	(s: pointer, c: byte, len: size_t) = {}
+rotateLeft:	public	(value: unsigned, shiftAmt: byte)
+				unsigned = {}
+rotateRight:	public	(value: unsigned, shiftAmt: byte)
+				unsigned = {}
+fabs:		public	(x: extended) extended = {}
+exchangeByte:	public	(x: * byte, y: byte) byte = {}
+exchangeInt:	public	(x: * int, y: int) int = {}
+exchangeShort:	public	(x: * signed[16], y: short) short = {}
+roundInt:	public	(x: extended) extended = {}
+_cvtBCD:	public	(x: extended, buf: ref byte) = {}
+bitScanForward:	public	(u: unsigned) int =
+	{
+	}
+
+memCompare:	public	(ps1: pointer, ps2: pointer, n: size_t) int =
+	{
+	s1:	ref byte;
+	s2:	ref byte;
+
+	s1 = ps1;
+	s2 = ps2;
+	while	(n > 0){
+		n--;
+		if	(*s1 < *s2)
+			return -1;
+		else if	(*s1 > *s2)
+			return 1;
+		s1++;
+		s2++;
+		}
+	return 0;
+	}
+
+memMove:	public	(dst: pointer, src: pointer, len: size_t) =
+	{
+	if	(src < dst){
+		}
+	else	{
+		}
+	}
+
+bsearch:	public	(key: pointer, base: pointer, nelem: int, width: int,
+				fcmp: * (pointer, pointer) int) pointer =
+	{
+	kmin:	ref char;
+	probe:	ref char;
+	i:	int;
+	j:	int;
+
+	kmin = base;
+	while	(nelem > 0){
+		i = nelem >> 1;
+		probe = kmin + i * width;
+		j = (*fcmp)(key, probe);
+		if	(j == 0)
+			return probe;
+		else if	(j < 0)
+			nelem = i;
+		else	{
+			kmin = probe + width;
+			nelem -= i + 1;
+			}
+		}
+	return 0;
+	}
+
+exit:	public	(code: exit_t) =
+	{
+	exit:	extern	(int);
+
+	ParasolExit = code;
+	exit(code);
+	}
+
+exit_t:	public	type	unsigned[32] = {
+	EX_SUCCESS	= 0,
+	EX_FAIL		= 1,
+	EX_CORE		= 0x80000000,
+	EX_CAUSE	= 0x0F000000,
+	EX_NORMAL	= 0x00000000,
+	EX_ABORT	= 0x01000000,
+	EX_RAISE	= 0x02000000,
+	EX_LEVEL	= 0x00FFFFFF,	/* Ignore the high order bits */
+	};
+//
+//	This routine stops execution without executing the cleanup sequence.
+//
+abort:	public	(code: exit_t) =
+	{
+//	--_threadCount_;
+	}
+/*
+------------------------------------------------------------------------------
+		Built-in types
+
+	These are the built-in types of the language:
+ */
+bit:		public	type	unsigned[1];
+byte:		public	type	unsigned[8];
+signedByte:	public	type	signed[8];
+unsignedByte:	public	type	unsigned[8];
+char:		public	type	unsigned[8];
+short:		public	type	signed[16];
+int:		public	type	signed[32];
+long:		public	type	signed[32];
+unsignedShort:	public	type	unsigned[16];
+unsignedLong:	public	type	unsigned[32];
+single:		public	type	float[32];
+double:		public	type	float[64];
+extended:	public	type	float[128];
+
+size_t:		public	type	unsigned;
+ptrDiff_t:	public	type	int;
+tick_t:		public	type	unsigned[32];
+time_t:		public	type	unsigned[32];
+atomic_t:	public	type	byte;
+
+boolean:	public	type	char = {
+	FALSE,
+	TRUE
+	};
+/*
+------------------------------------------------------------------------------
+		Built-in constants
+ */
+NULL:		public	const	int = 0;
+
+NaN:		public	single;
+dNaN:		public	double;
+xNaN:		public	extended;
+Infinity:	public	single;
+/*
+finit:	entry	() =
+	{
+	x:	float = 0.0;
+
+	NaN = 0.0F / x;
+	dNaN = 0.0 / x;
+	xNaN = 0.0L / x;
+	Infinity = 1.0 / x;
+	}
+ */
+/*
+------------------------------------------------------------------------------
+		Built-in floating point
+ */
+fexcept_t:	public	type	short = {
+	FE_INVALID 	= 0x01,
+	FE_DENORMAL 	= 0x02,		// Intel 80x86 only
+	FE_DIVBYZERO	= 0x04,
+	FE_OVERFLOW 	= 0x08,
+	FE_UNDERFLOW 	= 0x10,
+	FE_INEXACT 	= 0x20,
+
+	FE_ALL_EXCEPT	= 0x3F
+	};
+
+frounds_t:	public	type	short = {
+	FE_TONEAREST 	= 0x000,
+	FE_UPWARD	= 0x400,
+	FE_DOWNWARD	= 0x800,
+	FE_TOWARDZERO	= 0xC00
+	};
+
+fenv_t:	public	type	packed { public:
+
+		// Data members are Intel only
+
+	control:	unsigned[32];
+	status:		unsigned[32];
+	tag:		unsigned[32];
+	fip:		unsigned[32];
+	fcs:		unsigned[16];
+	opcode:		unsigned[16];
+	foo:		unsigned[32];
+	fos:		unsigned[32];
+
+		// Methods are portable
+
+load:	(f: fenv_t) =
+	{
+	if	(self == &_FENV){
+		}
+	else
+		*self = f;
+	}
+
+save:	() fenv_t =
+	{
+	if	(self == &_FENV){
+		f:	fenv_t;
+
+//		return f;
+		}
+//	else
+//		return *self;
+	}
+
+update:	(f: fenv_t) =
+	{
+	f setRaised(self raised());
+	if	(self == &_FENV){
+		}
+	else
+		*self = f;
+	}
+
+mask:	(e: fexcept_t) boolean =
+	{
+	if	(e & FE_ALL_EXCEPT != e)
+		return FALSE;
+	if	(self == &_FENV){
+		x:	short;
+
+		x |= e;
+		}
+	else
+		control |= e;
+	return TRUE;
+	}
+
+unmask:	(e: fexcept_t) boolean =
+	{
+	if	(e & FE_ALL_EXCEPT != e)
+		return FALSE;
+	if	(self == &_FENV){
+		x:	short;
+
+		x &= ~e;
+		}
+	else
+		control &= ~e;
+	return TRUE;
+	}
+
+raised:	() fexcept_t =
+	{
+	if	(self == &_FENV){
+		}
+	else
+		return status & FE_ALL_EXCEPT;
+	}
+
+setRaised:	(e: fexcept_t) boolean =
+	{
+	if	(e & FE_ALL_EXCEPT != e)
+		return FALSE;
+	if	(self == &_FENV){
+		f:	fenv_t;
+
+		f.status &= ~FE_ALL_EXCEPT;
+		f.status |= e;
+		}
+	else	{
+		status &= ~FE_ALL_EXCEPT;
+		status |= e;
+		}
+	return TRUE;
+	}
+
+raise:	(e: fexcept_t) boolean =
+	{
+	if	(e & FE_ALL_EXCEPT != e)
+		return FALSE;
+	if	(self == &_FENV){
+		f:	fenv_t;
+
+		f.status |= e;
+		}
+	else
+		status |= e;
+	return TRUE;
+	}
+
+clear:	(e: fexcept_t) boolean =
+	{
+	if	(e & FE_ALL_EXCEPT != e)
+		return FALSE;
+	if	(self == &_FENV){
+		f:	fenv_t;
+
+		f.status &= ~e;
+		}
+	else
+		status &= ~e;
+	return TRUE;
+	}
+
+round:	(r: frounds_t) boolean =
+	{
+	if	(r & 0xC00 != r)
+		return FALSE;
+	if	(self == &_FENV){
+		x:	short;
+
+		x &= ~0xC00;
+		x |= r;
+		}
+	else	{
+		control &= ~0xC00;
+		control |= r;
+		}
+	return TRUE;
+	}
+
+roundsAs:	() frounds_t =
+	{
+	if	(self == &_FENV){
+		x:	short;
+
+		return x & 0xC00;
+		}
+	else
+		return control & 0xC00;
+	}
+
+	};
+
+fclass_t:	public	type	int = {
+	FP_NAN,
+	FP_INFINITE,
+	FP_NORMAL,
+	FP_SUBNORMAL,
+	FP_ZERO
+	};
+
+fpclassify:	public	(x: extended) fclass_t =
+	{
+	if	(x !<>= 0.0)
+		return FP_NAN;
+	if	(x !<> 0.0)
+		return FP_ZERO;
+	x = fabs(x);
+	if	(x !<> Infinity)
+		return FP_INFINITE;
+	if	(x !>= 0x1p-16383)
+		return FP_SUBNORMAL;
+	else
+		return FP_NORMAL;
+	}
+
+_FENV:			public	fenv_t;
+fDefaultEnvironment:	public	const fenv_t = [ 0x37F, 0, 0xFFFF ];
+/*
+------------------------------------------------------------------------------
+ */
+__symbols:	public	const __symbols_t = [ ~0, 0 ];
+				// So the compiler can play games with 
+				// the initialized data area for this 
+				// variable, be sure to scribble in it.
+
+__symbols_t:	public	type	{ public:
+	symbolCount:		size_t;
+	symbolBase:		ref _symbolDescriptor;
+
+lookup:	(key: ref char) pointer =
+	{
+	s:	ref _symbolDescriptor;
+
+	s = bsearch(key, symbolBase, symbolCount, sizeof _symbolDescriptor,
+				&symbolCompare);
+	if	(s)
+		return s->address;
+	else
+		return 0;
+	}
+
+	};
+/*
+	Returns:
+
+		-1 if key is less than entry,
+		0 if key equals entry,
+		1 if key is greater than entry
+ */
+symbolCompare:	(key: pointer, tableEntry: pointer) int =
+	{
+	sd:	ref _symbolDescriptor;
+	s1, s2:	ref char;
+
+	sd = tableEntry;
+	s1 = key;
+	s2 = sd->name;
+	while	(*s1 || *s2){
+		if	(*s1 != *s2)
+			return *s1 - *s2;
+		s1++;
+		s2++;
+		}
+	return 0;
+	}
+
+_symbolDescriptor:	public	type	{ public:
+	address:		pointer;
+	name:			ref char;
+	};
+/*
+------------------------------------------------------------------------------
+		Command line arguments
+
+	These variables define the command line arguments to be passed into
+	a program.  These are defined, even for kernel contexts, but in the
+	kernel they are always zero.  Note that the linker will drop them out
+	if they are never used, so the kernel won't really link them in.
+ */
+ArgumentCount:		public	int;
+__ArgumentVector:	public	ref ref char;
+CommandPath:		public	[:] char;
+ArgumentTrap:		trap;
+
+strlen:	extern	(ref char) int;
+atexit:	extern	(ref ()) int;
+//
+//	This function is called from the C main routine to set up the
+//	parasol argument processing conventions.
+//
+_parasolArguments:	public	(argc: int, argv: ref ref char) =
+	{
+	ArgumentCount = argc - 1;
+	if	(argv[0])
+		CommandPath = argv[0][:strlen(argv[0])];
+	__ArgumentVector = argv + 1;
+	atexit(&cleanupList);
+	_Thread->currentHeap = &ThreadHeap;
+	_Thread->threadHeap = &ThreadHeap;
+	}
+
+ParasolCleanupTable:	extern	[] ref (int) int;
+ParasolCleanupIndex:	extern	int;
+ParasolExit:		int;
+
+cleanupList:	() =
+	{
+	i:	int;
+
+	for	(i = ParasolCleanupIndex; i > 0; i--)
+		ParasolExit = ParasolCleanupTable[i](ParasolExit);
+	}
+
+getNextArgument:	public	() [:] char =
+	{
+	s:	ref char;
+
+	if	(ArgumentCount == 0)
+		ArgumentTrap raise();
+	ArgumentCount--;
+	s = __ArgumentVector[0];
+	__ArgumentVector++;
+	return s[:strlen(s)];
+	}
+
+argumentVector:	public	() [:] char =
+	{
+	len, i:	int;
+	s:	[:] char;
+	f:	ref char;
+
+	for	(len = 0, i = 0; i < ArgumentCount; i++)
+		len += strlen(__ArgumentVector[i]);
+	s = new [len] char;
+	|s = len;
+	for	(f = s, i = 0; i < ArgumentCount; i++){
+		len = strlen(__ArgumentVector[i]);
+		memcpy(f, __ArgumentVector[i], len);
+		f[len] = 0;
+		f += len;
+		}
+	return s;
+	}
+/*
+------------------------------------------------------------------------------
+		Exceptions
+
+	Exception handling is done using a linked list of exception frames
+	that are actually laced through the execution stack of a thread.
+	The head of that list is the _Thread->exceptionFrame pointer.
+ */
+trap:	public	type	{
+	private:
+
+	stuff:		byte;			// give it some substance
+
+	public:
+/*
+	Note: this code is VERY VERY VERY sensitive to the code generated
+	by the compiler.  The essential problem is to be sure that no 
+	references to EBP are generated inside the loop, that the value of
+	xf is not needed after the call to the exception handler and that
+	the two pop instructions correspond to the register variables picked
+	by the compiler for vx and self respectively (also that the 
+	arguments to the handler are passed on the stack in the exact
+	order the pop's expect.
+ */
+raise:	(...) =
+	{
+/*
+	va:	varArgs;
+	vx:	unsigned;
+
+	va = ...;
+	vx = *ref unsigned(&va);
+	while	(_Thread->exceptionFrame){
+		xf:	ref __exceptionFrame;
+
+		xf = _Thread->exceptionFrame;
+		_Thread->exceptionFrame = xf->next;
+		xf->addr(self, vx);
+		}
+ */
+	}
+
+};
+/*
+	This is the object type that an exception clause can name to store
+	exception context information for later review.
+ */
+exceptionContext:	public	type	packed	{
+	public:
+
+	raised:			ref trap;
+	context:		varArgs;
+	initialContext:	private	varArgs;
+
+returnAddress:	() pointer =
+	{
+	return (*ref ref pointer(&initialContext))[-2];
+	}
+
+	};
+
+__exceptionFrame:	public	type	packed {
+	public:
+
+	next:		ref __exceptionFrame;
+	addr:		ref (ref trap, unsigned);
+	bp:		unsigned;
+	sp:		unsigned;
+	};
+/*
+------------------------------------------------------------------------------
+		External message interface object
+
+	This must be the base class for any type defining any gate functions.
+	The compiler will create a typeDescriptor and will automatically
+	set the value of the '__td__' member to point to it.
+ */
+/*
+external:	public	type	{
+	visible:
+
+	__td__:			ref typeDescriptor;
+	MessageHeader:		ref messageHeader;
+	objectId:		ref far external;
+
+	public:
+
+		// Uncatchable kill
+
+kill:			gate!	() = { abort(int(&kill)); }
+
+		// Synchronous interrupts
+
+illegalInstruction:	gate!	() = { abort(int(&illegalInstruction)); }
+memoryError:		gate!	() = { abort(int(&memoryError)); }
+pageFault:		gate!	() = { abort(int(&pageFault)); }
+arrayBounds:		gate!	() = { abort(int(&arrayBounds)); }
+systemCallError:	gate!	() = { abort(int(&systemCallError)); }
+mathError:		gate!	() = { abort(int(&mathError)); }
+integerOverflow:	gate!	() = { abort(int(&integerOverflow)); }
+rejectedMessage:	gate!	(code: int) = { RejectTrap raise(code); }
+interruptedMessage:	gate!	() = { InterruptTrap raise(); }
+
+		// Asynchronous interrupts next
+
+powerFailure:		gate!	() = { abort(int(&powerFailure)); }
+hangup:			gate!	() = { abort(int(&hangup)); }
+attention:		gate!	() = { abort(int(&attention)); }
+quit:			gate!	() = { abort(int(&quit)); }
+brokenSend:		gate!	() = { abort(int(&brokenSend)); }
+alarmExpired:		gate!	() = { abort(int(&alarmExpired)); }
+
+start:	gate	() =
+	{
+	}
+
+childExit:	gate	(exitCode: exit_t) =
+	{
+	}
+
+//	These following two functions return TRUE if the operation is
+//	allowed, FALSE otherwise
+
+delete:	gate	() boolean =
+	{
+	return TRUE;
+	}
+
+close:	gate	() boolean =
+	{
+	return TRUE;
+	}
+
+copy:	gate	() ref far external =
+	{
+	return 0;
+	}
+
+dup:	gate	() =
+	{
+	}
+/*
+	This is called by the kernel whenever a thread dies in the same arena
+	as the receiver.  The receiver will arrange for the memory to be
+	recovered.
+ */
+_reclaimThreadContext:	gate	(p: size_t) =
+	{
+	if	(p)
+		_threadReclaim(pointer(p));
+	}
+
+__spare2:	gate	() =
+	{
+	}
+
+__spare3:	gate	() =
+	{
+	}
+
+__spare4:	gate	() =
+	{
+	}
+
+__spare5:	gate	() =
+	{
+	}
+
+__spare6:	gate	() =
+	{
+	}
+
+__spare7:	gate	() =
+	{
+	}
+
+__spare8:	gate	() =
+	{
+	}
+/*
+	This function returns non-zero when there are messages waiting,
+	zero otherwise.
+ */
+senseMessages:	() int =
+	{
+	_EBX = unsigned(objectId);
+	_emit(0x9a, _null, _GDT_SENSEMESSAGES);
+	}
+
+loop:	() =
+	{
+	wait(EXT_LOOP_FOREVER);
+	}
+
+wait:	(func: pointer) =
+	{
+	buf:		ref byte;
+	mark:		ref byte;
+	f:		ref gateDescriptor;
+	i, fparms:	int;
+	index:		unsigned[32];
+	len:		int;
+	mh:		messageHeader;
+	nextHeader:	ref messageHeader;
+
+	mark = pointer(_ESP);
+	nextHeader = MessageHeader;
+	for	(;;){
+		_ESP = unsigned(mark);
+		i = _receive(&mh);
+		if	(i < 0)
+			continue;
+		MessageHeader = &mh;
+		index = mh.func - __td__->funcBase;
+		if	(index >= __td__->gateCount){
+			_reject(mh.sequence, ERRINVALIDFUNC);
+			continue;
+			}
+		f = &__td__->funcs[index];
+		if	(mh.rights & f->accessMask == 0){
+			_reject(mh.sequence, ERRPERMISSION);
+			continue;
+			}
+		if	(f->fptr == 0){
+			_reject(mh.sequence, ERRINVALIDFUNC);
+			continue;
+			}
+		if	(mh.len > IMMED_MAX)
+			buf = alloc(mh.len);
+		else	{
+			len = (mh.len + 3) & ~3;
+			_ESP -= len;
+			buf = pointer(_ESP);
+			}
+		_readText(mh.sequence, 0, buf, mh.len);
+		try	{
+			f->fptr(self, buf);
+			}
+		except	{
+//		case	_RejectTrap:
+//			break;
+//
+//		default:
+			if	(len > IMMED_MAX)
+				free(buf);
+			MessageHeader = nextHeader;
+			_reject(mh.sequence, ERREXCEPTION);
+			continue;
+			}
+		_reply(mh.sequence, 0, 0);
+		if	(len > IMMED_MAX)
+			free(buf);
+		if	(func == pointer(mh.func) ||
+			 func == EXT_WAIT_FOR_ONE){
+			break;
+			}
+		}
+	MessageHeader = nextHeader;
+	}
+
+_signal:	(seq: _sequence_t) =
+	{
+	buf:		ref byte;
+	mark:		ref byte;
+	f:		ref gateDescriptor;
+	len, i, fparms:	int;
+	index:		unsigned[32];
+	mh:		messageHeader;
+
+	i = signalInfo(seq, &mh);
+	if	(i < 0)
+		return;
+	mh.next = MessageHeader;
+	MessageHeader = &mh;
+	index = mh.func - __td__->funcBase;
+	if	(index >= __td__->gateCount){
+		_reject(mh.sequence, ERRINVALIDFUNC);
+		return;
+		}
+	f = &__td__->funcs[index];
+	if	(mh.rights & f->accessMask == 0){
+		_reject(mh.sequence, ERRPERMISSION);
+		return;
+		}
+	if	(f->fptr == 0){
+		_reject(mh.sequence, ERRINVALIDFUNC);
+		return;
+		}
+	len = (f->parms + 3) & ~3;
+	if	(len > IMMED_MAX)
+		len = IMMED_MAX;
+	_ESP -= len;
+	buf = pointer(_ESP);
+	_readText(mh.sequence, 0, buf, len);
+	try	{
+		f->fptr(self, buf);
+		MessageHeader = mh.next;
+		_reply(mh.sequence, 0, 0);
+		}
+	except	{
+		MessageHeader = mh.next;
+		_reject(mh.sequence, ERREXCEPTION);
+		continue;
+		}
+	}
+
+receive:	(mh: ref messageHeader) int =
+	{
+	i:	int;
+
+	i = _receive(mh);
+	if	(i < 0)
+		return i;
+	mh->next = MessageHeader;
+	MessageHeader = mh;
+	}
+
+discardMessage:	() =
+	{
+	if	(MessageHeader)
+		MessageHeader = MessageHeader->next;
+	}
+
+kernelLocal:	(mh: ref messageHeader, buf: pointer) =
+	{
+	index:	unsigned[32];
+	fd:	ref gateDescriptor;
+
+	mh->next = MessageHeader;
+	MessageHeader = mh;
+	index = mh->func - __td__->funcBase;
+	if	(index >= __td__->gateCount){
+		_reject(mh->sequence, ERRINVALIDFUNC);
+		return;
+		}
+	fd = &__td__->funcs[index];
+	if	(mh->rights & fd->accessMask == 0){
+		_reject(mh->sequence, ERRPERMISSION);
+		return;
+		}
+	try	{
+		fd->fptr(self, buf);
+		}
+	except	{
+//	case	_RejectTrap:
+//		break;
+//
+//	default:
+		_reject(mh->sequence, ERREXCEPTION);
+		}
+	MessageHeader = mh->next;
+	}
+
+kernelRejected:	() =
+	{
+	index:	unsigned[32];
+	fd:	ref gateDescriptor;
+	mh:	messageHeader;
+
+	mh.rights = 0xFFFF;
+	mh.sender = 0;
+	mh.expected = 0;
+	mh.len = 0;
+	mh.func = int(&rejectedMessage);
+	mh.next = MessageHeader;
+	MessageHeader = &mh;
+	index = mh.func - __td__->funcBase;
+	fd = &__td__->funcs[index];
+	try	{
+		fd->fptr(self, 0);
+		}
+	except	{
+//	case	_RejectTrap:
+//		break;
+//
+//	default:
+		_reject(mh.sequence, ERREXCEPTION);
+		}
+	MessageHeader = mh.next;
+	}
+
+kernelRemote:	(mh: ref messageHeader, 
+				buf: pointer, firstPacketLength: int) =
+	{
+	index:	unsigned[32];
+	fparms:	int;
+	fd:	ref gateDescriptor;
+
+	mh->next = MessageHeader;
+	MessageHeader = mh;
+	index = mh->func - __td__->funcBase;
+	if	(index >= __td__->gateCount){
+		_reject(mh->sequence, ERRINVALIDFUNC);
+		return;
+		}
+	fd = &__td__->funcs[index];
+	if	(mh->rights & fd->accessMask == 0){
+		_reject(mh->sequence, ERRPERMISSION);
+		return;
+		}
+	if	(fd->parms == unsigned[16](~0) || 
+		 mh->len < fd->parms)
+		fparms = mh->len;
+	else
+		fparms = fd->parms;
+	if	(fparms > firstPacketLength){
+		_ESP -= fparms;
+		_ESP &= ~3;
+		buf = pointer(_ESP);
+		_readText(mh->sequence, 0, buf, fparms);
+		}
+	try	{
+		fd->fptr(self, buf);
+		}
+	except	{
+//	case	_RejectTrap:
+//		break;
+//
+//	default:
+		_reject(mh->sequence, ERREXCEPTION);
+		}
+	MessageHeader = mh->next;
+	}
+
+replyGeneric:	(buf: pointer, len: int) =
+	{
+	_reply(MessageHeader->sequence, buf, len);
+	}
+
+replyPartial:	(buf: pointer, len: int) =
+	{
+	_replyPartial(MessageHeader->sequence, buf, len);
+	}
+
+readText:	(offset: unsigned, buf: pointer, len: int) int =
+	{
+	return _readText(MessageHeader->sequence, offset, buf, len);
+	}
+
+discardText:	() =
+	{
+	_discardText(MessageHeader->sequence);
+	}
+
+reject:	(code: int) =
+	{
+	_reject(MessageHeader->sequence, code);
+	}
+
+	};
+
+EXT_LOOP_FOREVER:	public	const pointer = pointer(-1);
+EXT_WAIT_FOR_ONE:	public	const pointer = pointer(-2);
+
+signalInfo:	(seq: _sequence_t, mh: ref messageHeader) int =
+	{
+	_EDX = int(mh);
+	_BX = seq;
+	_emit(0x9a, _null, _GDT_SIGNALINFO);
+	return _EAX;
+	}
+
+probeObject:	public	(o: ref far external) ref far external =
+	{
+	_EBX = int(o);
+	_emit(0x9a, _null, _GDT_PROBEOBJECT);
+	}
+
+RejectTrap:	public	trap;			// You were rejected
+InterruptTrap:	public	trap;			// You were interrupted
+//_RejectTrap:	public	trap;			// For control rendesvous
+
+IMMED_MAX:	public	const	int = 256;
+
+messageHeader:	public	type	packed	{
+	public:
+
+	next:		ref messageHeader;
+	id:		messageId;		// system message id
+	rights:		unsigned[16];
+	sequence:	_sequence_t;
+	sender:		ref far external;	// sender's object id
+	expected:	unsigned[32];		// expected length of reply
+	len:		unsigned[32];		// length of send
+	func:		unsigned[32];		// function called
+	};
+
+objectId:	public	type	signed[32];
+messageId:	public	type	signed[32];
+ */
+errorCode:	public	type	int = {
+	SUCCESS,			// Success
+	ERRINVALIDFUNC		= -1,	// Invalid function number
+	ERRPERMISSION		= -2,	// Permission denied
+	ERREXCEPTION		= -3,	// Exception raised
+	};
+/*
+interruptFrame_t:	public	type	packed	{
+	public:
+	gs:			unsigned[16];
+	fs:			unsigned[16];
+	es:			unsigned[16];
+	ds:			unsigned[16];
+	edi:			unsigned[32];
+	esi:			unsigned[32];
+	ebp:			unsigned[32];
+	esp:			unsigned[32];
+	ebx:			unsigned[32];
+	edx:			unsigned[32];
+	ecx:			unsigned[32];
+	eax:			unsigned[32];
+	eip:			unsigned[32];
+	cs:			unsigned[16];
+	extra:			_sequence_t;
+	eflags:			unsigned[32];
+
+calledFromUserMode:	() boolean =
+	{
+	if	(eflags & 0x20000 ||			// v8086 mode
+		 cs & RING == USER_RING)		// ring == 3
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+	};
+
+_sequence_t:	public	type	unsigned[16];
+
+USER_RING:	const	int = 3;
+RING:		const	int = 0x0003;
+
+MessageTrap:	public	trap;
+ */
+/*
+	The _threadCount_ is the count of the total number of separate
+	process threads currently alive in this arena.  The cleanup functions
+	are only called when the number drops to zero.
+ */
+_Thread:	public	ref _threadContext = &_Thread0;
+_Thread0:		_threadContext;
+ThreadTrap:	public	trap;
+/*
+mainExternal:	public	(p: ref external) =
+	{
+	_Thread declareObject_(p);
+	}
+
+myExternal:	public	() ref external =
+	{
+	return _Thread->myThread;
+	}
+ */
+	// The Parasol compiler looks for 'threadContext' explicitly.
+	// So we make it private to avoid name space pollution.
+
+_threadContext:	public	type	threadContext;
+threadContext:		type	{
+	public:
+
+	exceptionFrame:	ref __exceptionFrame;
+//	myThread:	ref external;
+	myStack:	ref byte;
+	endStack:	ref byte;
+	currentHeap:	ref heap;
+	threadHeap:	ref heap;
+/*
+declareObject_:	(p: ref external) =
+	{
+	if	(myThread)
+		p->objectId = myThread->objectId;
+	else
+		p->objectId = 0;
+	myThread = p;
+	}
+ */
+	};
+/*
+_threadCount_:		public	int = 1;
+
+THREAD_STACK:	const	int = 0x2000;		// use an 8K stack
+
+thread:	public	(ex: ref external) ref far external =
+	{
+	_threadLaunch(ex, &threadStartup, THREAD_STACK);
+	_threadCount_++;
+	return ex->objectId;
+	}
+/*
+	This is where threads start.  The value of _Thread points at the
+	running thread.
+ */
+threadStartup:	() =
+	{
+	_Thread->myThread loop();
+	}
+
+_latchValues_t:	public	type	int =
+	{
+	_LATCH_OPEN,		// open
+	_LATCH_CLOSED,		// closed, but no one waiting
+	_LATCH_WAITERS		// closed, processes waiting
+	};
+
+lock:	public	type	{
+	latch:	_latchValues_t;
+
+	public:
+
+enter:	() =
+	{
+	_lock_enter(&latch);
+	}
+
+leave:	() =
+	{
+	_lock_leave(&latch);
+	}
+
+	};
+ */
+semaphore:	public	type	{
+	index:		int;
+
+public:
+
+constructor:	(c: int) =
+	{
+	}
+
+down:	() int =
+	{
+	}
+
+downNowait:	() boolean =
+	{
+	}
+
+up:	() =
+	{
+	}
+
+wakeup:	() =
+	{
+	}
+
+empty:	() =
+	{
+	}
+
+close:	() =
+	{
+	}
+
+	};
+/*
+	The funcBase value is designed to insure that the minimum function
+	value is this number.  The ALYS kernel reserves message function
+	id's below 0x100 for system control messages.  The compiler is
+	allowed to set this value (to make future compatibility possibly
+	easier).  For example, if I change the fence point on reserved id's.
+
+	The gateCount is just the count of the number of functions in the 
+	table.
+
+	The function descriptors point to the gate functions themselves
+	(which accept a special function interface).
+
+	In effect, other the the self pointer, all other parameters are 
+	stored indirectly, with only a pointer to the argument brick on the
+	stack.
+
+	The parms value is set to some value other than 0xFFFF to indicate
+	a maximum argument list size.  If the supplied message has more data
+	than the function expects, the excess is disregarded.
+
+	The accessMask is a sixteen bit mask that describes the set of
+	access rights bits that have permission to use this function.  The
+	value has a bit on if that right is needed to use the function.
+ */
+typeDescriptor:	type	packed	{
+	public:
+
+			unsigned[32];
+	funcBase:	unsigned[32];
+			unsigned[16];
+	gateCount:	unsigned[16];
+	funcs:		[] gateDescriptor;
+	};
+
+gateDescriptor:	type	packed	{
+	public:
+
+//	fptr:		ref (ref external, pointer) int;
+	parms:		unsigned[16];
+	accessMask:	accessRights_t;
+	};
+
+accessRights_t:	public	type	unsigned[16];
+
+AR_ANY:		public	const	accessRights_t = ~0;
+AR_NONE:	public	const	accessRights_t = 0;
+/*
+------------------------------------------------------------------------------
+		Heap Management
+
+	The heap begins at the end of the static data region of the program.
+	It is located by _heapbase_, which is set by the linker.  The
+	_brklvl variable is the current top of heap marker.  It moves as the
+	heap is manipulated.
+
+	Multiple heap support is provided through the two variables: Heap
+	and CurrentHeap.  The arena heap is defined by Heap, while whatever
+	is the currently active subheap is CurrentHeap.  Note that CurrentHeap
+	is usually set to the same value as Heap.
+ */
+_CurrentHeap:	ref heap;
+
+alloc:	public	(n: unsigned) pointer =
+	{
+	return _Thread->currentHeap alloc(n);
+	}
+
+free:	public	(p: pointer) =
+	{
+	_Thread->currentHeap free(p);
+	}
+
+currentHeap:	public	() ref heap =
+	{
+	return _Thread->currentHeap;
+	}
+
+threadHeap:	public	() ref heap =
+	{
+	return _Thread->threadHeap;
+	}
+
+heap:	public	type	{
+	public:
+
+activate:	() ref heap =
+	{
+	ch:	ref heap;
+
+	ch = _Thread->currentHeap;
+	_Thread->currentHeap = self;
+	return ch;
+	}
+
+alloc:	dynamic	(size_t) pointer =
+	{
+	MemTrap raise(H_ALLOC);
+	}
+
+free:	dynamic	(pointer) =
+	{
+	MemTrap raise(H_FREE);
+	}
+
+freeAll:	dynamic	() =
+	{
+	MemTrap raise(H_FREEALL);
+	}
+
+freeListSize:	dynamic	() size_t =
+	{
+	MemTrap raise(H_FREELISTSIZE);
+	}
+
+	};
+
+MemTrap:	public	trap;
+
+memTrapCauses:	public	type	int = {
+	H_ALLOC,
+	H_FREE,
+	H_FREEALL,
+	H_FREELISTSIZE,
+	H_NOMEMORY,
+	H_CORRUPT
+	};
+/*
+------------------------------------------------------------------------------
+		Heap Management Stuff
+ */
+ThreadHeap:	threadHeap_t;
+
+threadHeap_t:	type	inherit	heap {
+	public:
+
+constructor:	() =
+	{
+	}
+
+alloc:	dynamic	(size: size_t) pointer =
+	{
+	malloc:	extern	(size_t) pointer;
+	p:	pointer;
+
+	p = malloc(size);
+	if	(p == 0)
+		MemTrap raise(H_NOMEMORY, size);
+	return p;
+	}
+
+free:	dynamic	(block: pointer) =
+	{
+	free:	extern	(pointer);
+
+	free(block);
+	}
+
+freeListSize:	dynamic	() size_t =
+	{
+	return 0;
+	}
+
+	};
+
+/*
+------------------------------------------------------------------------------
+		Variable argument lists
+ */
+varArgs:	public	type	{
+	nextArgument:	ref byte;
+
+nextArg:	public	(dest: pointer, len: unsigned) =
+	{
+	memCopy(dest, nextArgument, len);
+	nextArgument += (len + 3) & ~3;		// advance by groups of 4
+	}
+
+	};
+
+/*
+------------------------------------------------------------------------------
+		Character conversion
+
+	These functions convert alphabetic characters to upper or lower case.
+ */
+tolower:	public	(c: int) int =
+	{
+	if	(isupper(c))
+		return _tolower(c);
+	else
+		return c;
+	}
+
+toupper:	public	(c: int) int =
+	{
+	if	(islower(c))
+		return _toupper(c);
+	else
+		return c;
+	}
+
+_tolower:	public	(c: int) int =
+	{
+	return c + 'a' - 'A';
+	}
+
+_toupper:	public	(c: int) int =
+	{
+	return c + 'A' - 'a';
+	}
+
+/*
+------------------------------------------------------------------------------
+		Character classification
+
+	These functions classify an integer according to whether it is a
+	particular class of character.  The integer must be either a
+	representable character or -1 (EOF).  Each function returns non-zero
+	if the character fits the predicate being tested, zero otherwise.
+ */
+
+isalnum:	public	(c: int) int =
+	{
+	return(Ctype[c + 1] & (IS_DIG | IS_UPP | IS_LOW));
+	}
+
+isalpha:	public	(c: int) int =
+	{
+	return(Ctype[c + 1] & (IS_UPP | IS_LOW));
+	}
+
+isascii:	public	(c: int) int =
+	{
+	return(c < 0x80);
+	}
+
+iscntrl:	public	(c: int) int =
+	{
+	return(Ctype[c + 1] & IS_CTL);
+	}
+
+isdigit:	public	(c: int) int =
+	{
+	return(Ctype[c + 1] & IS_DIG);
+	}
+
+isgraph:	public	(c: int) int =
+	{
+	return unsigned(c - 0x21) <= 0x7e - 0x21;
+	}
+
+islower:	public	(c: int) int =
+	{
+	return(Ctype[c + 1] & IS_LOW);
+	}
+
+isprint:	public	(c: int) int =
+	{
+	return unsigned(c - 0x20) <= 0x7e - 0x20;
+	}
+
+ispunct:	public	(c: int) int =
+	{
+	return(Ctype[c + 1] & IS_PUN);
+	}
+
+isspace:	public	(c: int) int =
+	{
+	return(Ctype[c + 1] & IS_SP);
+	}
+
+isupper:	public	(c: int) int =
+	{
+	return(Ctype[c + 1] & IS_UPP);
+	}
+
+isxdigit:	public	(c: int) int =
+	{
+	return(Ctype[c + 1] & (IS_DIG | IS_HEX));
+	}
+
+isFileChar:	public	(c: byte) int =
+	{
+	if	(c >= 128)
+		return 1;
+	return(Ctype[c + 1] & (IS_FNM | IS_DIG | IS_LOW | IS_UPP));
+	}
+
+charMasks:	type	char = {
+			IS_SP  = 0x01,		/* is space */
+			IS_DIG = 0x02,		/* is digit */
+			IS_UPP = 0x04,		/* is upper case */
+			IS_LOW = 0x08,		/* is lower case */
+			IS_HEX = 0x10,		/* [A-F] or [a-f] */
+			IS_CTL = 0x20,		/* Control */
+			IS_PUN = 0x40,		/* punctuation */
+			IS_FNM = 0x80		// DOS filename char
+		};
+
+Ctype:	public	const [257] charMasks = [
+	0,
+
+	IS_CTL,		IS_CTL,		IS_CTL,		IS_CTL,
+	IS_CTL,		IS_CTL,		IS_CTL,		IS_CTL,
+	IS_CTL,		IS_CTL|IS_SP,	IS_SP|IS_CTL,	IS_CTL,
+	IS_CTL,		IS_CTL,		IS_CTL,		IS_CTL,
+
+	IS_CTL,		IS_CTL,		IS_CTL,		IS_CTL,
+	IS_CTL,		IS_CTL,		IS_CTL,		IS_CTL,
+	IS_CTL,		IS_CTL,		IS_CTL,		IS_CTL,
+	IS_CTL,		IS_CTL,		IS_CTL,		IS_CTL,
+
+	IS_SP|IS_FNM,	IS_PUN|IS_FNM,	IS_PUN,		IS_PUN|IS_FNM,
+	IS_PUN|IS_FNM,	IS_PUN|IS_FNM,	IS_PUN|IS_FNM,	IS_PUN|IS_FNM,
+	IS_PUN|IS_FNM,	IS_PUN|IS_FNM,	IS_PUN|IS_FNM,	IS_PUN,
+	IS_PUN,		IS_PUN|IS_FNM,	IS_PUN,		IS_PUN,
+
+	IS_DIG,		IS_DIG,		IS_DIG,		IS_DIG,
+	IS_DIG,		IS_DIG,		IS_DIG,		IS_DIG,
+	IS_DIG,		IS_DIG,		IS_PUN,		IS_PUN,
+	IS_PUN,		IS_PUN,		IS_PUN,		IS_PUN|IS_FNM,
+
+	IS_PUN|IS_FNM,	IS_UPP|IS_HEX,	IS_HEX|IS_UPP,	IS_UPP|IS_HEX,
+	IS_UPP|IS_HEX,	IS_UPP|IS_HEX,	IS_UPP|IS_HEX,	IS_UPP,
+	IS_UPP,		IS_UPP,		IS_UPP,		IS_UPP,
+	IS_UPP,		IS_UPP,		IS_UPP,		IS_UPP,
+
+	IS_UPP,		IS_UPP,		IS_UPP,		IS_UPP,
+	IS_UPP,		IS_UPP,		IS_UPP,		IS_UPP,
+	IS_UPP,		IS_UPP,		IS_UPP,		IS_PUN,
+	IS_PUN,		IS_PUN,		IS_PUN|IS_FNM,	IS_PUN|IS_FNM,
+
+	IS_PUN|IS_FNM,	IS_LOW|IS_HEX,	IS_HEX|IS_LOW,	IS_LOW|IS_HEX,
+	IS_LOW|IS_HEX,	IS_LOW|IS_HEX,	IS_LOW|IS_HEX,	IS_LOW,
+	IS_LOW,		IS_LOW,		IS_LOW,		IS_LOW,
+	IS_LOW,		IS_LOW,		IS_LOW,		IS_LOW,
+
+	IS_LOW,		IS_LOW,		IS_LOW,		IS_LOW,
+	IS_LOW,		IS_LOW,		IS_LOW,		IS_LOW,
+	IS_LOW,		IS_LOW,		IS_LOW,		IS_PUN|IS_FNM,
+	IS_PUN,		IS_PUN|IS_FNM,	IS_PUN|IS_FNM,	IS_CTL,
+
+	0, 0		// ...
+	];
+
+_cString:	public	(s: [:] char) ref char =
+	{
+	x:	ref char;
+
+	x = new [|s + 1] char;
+	memcpy(x, s, |s);
+	x[|s] = 0;
+	return x;
+	}

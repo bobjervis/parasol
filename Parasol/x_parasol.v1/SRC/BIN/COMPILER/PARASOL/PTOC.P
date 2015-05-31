@@ -1,0 +1,350 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file, filesys, heap;
+
+include	symtab;
+include	hash, image, cback, backend;
+include	scanner, parser, ptree;
+
+main:	entry	() =
+	{
+	if	(ArgumentCount == 0){
+		printf( "Use is: PTOC [ options ] filename\n");
+		help();
+		}
+	commandLine();
+//	x:	exceptionContext;
+
+//	try	{
+		Build build();
+/*
+		}
+	except	(x){
+	case	MemTrap:
+		cause:	int;
+		size:	unsigned;
+
+		x.context nextArg(&cause, sizeof cause);
+		x.context nextArg(&size, sizeof size);
+		printf("cause = %d size = 0x%x\n", cause, size);
+		break;
+
+	case	FuncTrap:
+		x.context nextArg(&cause, sizeof cause);
+		printf("cause = %d (%s)\n", cause, OperTable[cause]);
+		break;
+
+	default:
+		printf("trap %p at %p\n", x.raised, x returnAddress());
+		cause = 0;
+		cause = 1 / cause;
+		continue;
+		}
+ */
+	printf("Lines parsed %ld\n", Build linesParsed());
+	if	(CurrentContext.errorCount)
+		exit(EX_FAIL);
+	else
+		exit(EX_SUCCESS);
+	}
+
+commandLine:	public	() =
+	{
+	cp:		[:] char;
+	s:		[:] char;
+
+	Build = [];
+	while	(ArgumentCount > 1){
+		cp = getNextArgument();
+		if	(cp[0] != '-'){
+			printf("Incorrect option: %S\n", cp);
+			help();
+			}
+		s = cp[2:];
+		switch	(cp[1]){
+		case	'v':	Build debugging();		break;
+		case	'b':	Build sourceBase(s);		break;
+		case	'i':	Build includeLibrary(s);	break;
+		case	'P':	Build mainModule();		break;
+		case	'y':	Build useSymbolFile(s);		break;
+		case	'=':	DebugList = TRUE;		break;
+		default:	exit(32);
+			}
+		}
+	cp = getNextArgument();
+	Build compile(cp);
+	}
+
+help:	public	() =
+	{
+	printf(	"Options:\n\n"
+		"\n			Support options\n\n"
+		"	-P	Include entry and cleanup function tables\n"
+		"	-v	Produce debugging information\n"
+		"\n			Input Options\n\n"
+		"	-bxxx	Source base directory list\n"
+		"	-ixxx	Include library name list\n"
+		"	-yxxx	Symbol file name\n"
+		"\nNote: exactly one module of each program must be compiled\n"
+		"with the -P option.  This must be the main module of the\n"
+		"program.\n"
+		);
+	exit(EX_FAIL);
+	}
+
+Build:		public	build_s;
+
+build_s:	public	type	{
+	public:
+
+	targetName:		[:] char;
+	debugInfo:		boolean;
+	includeEntryTables:	boolean;
+	sourceBasePath:		pathList;
+	libraryPath:		pathList;
+	symbolFile:		[:] char;
+
+	parsedLines:		long;
+	compiledLines:		long;
+
+constructor:	() =
+	{
+	targetName = "";
+	debugInfo = FALSE;
+	symbolFile = "";
+	libraryPath = [];
+	sourceBasePath = [];
+	parsedLines = compiledLines = 0;
+	includeEntryTables = FALSE;
+	}
+
+build:	() =
+	{
+	name:		[:] char;
+	s:		[:] char;
+	u:		ref unit_s;
+	mapFile:	[:] char;
+	lodFile:	[:] char;
+	runFile:	[:] char;
+	symFile:	[:] char;
+
+	CurrentContext = [];
+	libraryPath includeEnvironment("PARASOL_LIB");
+	enableCbackend(includeEntryTables);
+	initParasol();
+	name = stripExtension(targetName);
+	s = sourceBasePath search(name, ".p", 0);
+	if	(|s == 0){
+		CurrentContext printf(
+				"Unable to find source file '%S.p'\n", name);
+		exit(1);
+		}
+	u = new parasolUnit_s[ hash(name), s ];
+	if	(!initialParse())
+		return;
+	if	(ChattyOutput)
+		printf("%-32S cf\n", name);
+	u constructValues();
+	}
+
+initialParse:	() boolean =
+	{
+	changed:	boolean;
+	parsedAny:	boolean;
+	u:		ref unit_s;
+	s:		ref symbol_s;
+
+	for	(u = SymbolTable.units; u; u = u->next)
+		for	(s = u->symbols; s; s = s->next)
+			s clearChanges();
+	parsedAny = FALSE;
+	do	{
+		changed = FALSE;
+		for	(u = SymbolTable.units; u; u = u->next){
+			CurrentContext.obj = u;
+			if	(SymbolTable.machineUnit == 0 &&
+				 u->name isSpelled("machine"))
+				SymbolTable.machineUnit = u;
+			if	(u hasChanged()){
+				parsedAny = TRUE;
+				changed = TRUE;
+				if	(ChattyOutput)
+					printf("%-32S pa\r", 
+							u->name spelling());
+				u parse();
+				}
+			}
+		}
+		while	(changed);
+	if	(ChattyOutput)
+		printf("\n");
+	if	(!(parsedAny || SymbolTable.globalChange))
+		return FALSE;
+	SymbolTable.varArgsType = 0;
+	SymbolTable.machineUnit locateMagicSymbols();
+	CurrentContext.phase = PH_INTERFACE;
+	for	(u = SymbolTable.units; u; u = u->next){
+		u reconnectInterfaces();
+		}
+	for	(u = SymbolTable.units; u; u = u->next){
+		u constructInterfaces();
+		}
+	return TRUE;
+	}
+
+	// Build styles
+
+compile:	(s: [:] char) =
+	{
+	targetName = s;
+	}
+
+	// Options setting
+
+debugging:	() =
+	{
+	debugInfo = TRUE;
+	}
+
+sourceBase:	(s: [:] char) =
+	{
+	sourceBasePath includeString(s);
+	}
+
+includeLibrary:	(s: [:] char) =
+	{
+	libraryPath includeString(s);
+	}
+
+useSymbolFile:	(s: [:] char) =
+	{
+	symbolFile = s;
+	}
+
+mainModule:	() =
+	{
+	includeEntryTables = TRUE;
+	}
+
+linesParsed:	() long =
+	{
+	i:	long;
+
+	i = parsedLines;
+	parsedLines = 0;
+	return i;
+	}
+
+linesCompiled:	() long =
+	{
+	i:	long;
+
+	i = compiledLines;
+	compiledLines = 0;
+	return i;
+	}
+
+	};
+
+newUnit:	(nm: ref identifier) ref unit_s =
+	{
+	fpath:	[:] char;
+
+	fpath = Build.sourceBasePath search(nm spelling(), ".p", 0);
+	if	(|fpath)
+		return new parasolUnit_s[ nm, fpath ];
+
+	s:	[:] char;
+
+	s = Build.libraryPath search(nm spelling(), ".u", 0);
+	if	(|s)
+		return libraryUnit(nm, s);
+	else
+		return new parasolUnit_s[ nm, nm spelling() ];	// bad unit
+	}
+
+libraryUnit:	(nm: ref identifier, filename: [:] char) ref libraryUnit_s =
+	{
+	lx:	loader;
+	lu:	ref libraryUnit_s;
+
+	if	(lx open(filename))
+		return 0;
+	lx decode();
+	lu = lx getObject(1);
+	lx close();
+	if	(lu){
+		lu->unitFile = heapFile(filename, "");
+
+		SymbolTable addUnit(lu);
+
+		i:	ref include_s;
+
+		for	(i = lu->includes; i; i = i->next){
+			i->unit = SymbolTable locateUnit(i->name);
+			if	(i->unit == 0)
+				i->unit = newUnit(i->name);
+			}
+		}
+	return lu;
+	}
+
+parasolUnit_s:	type	inherit sourceUnit_s {
+	public:
+/*
+	This function parses the source for a unit, and if there is a
+	valid baseline file for reference, only differences are propagated
+	into the symbol table.  This elaborate process assures us of
+	enough information that a loosely coupled editor will not wreak
+	havoc with the build process.
+
+	Note that memory management is accomplished by created a temporary
+	heap for the blocks allocated in the parsing process (along with 
+	the source buffer for the baseline file).  When the differences
+	have been generated, this memory is discarded as a whole.  This
+	ends up saving a lot fo time and trouble.
+ */
+parse:	dynamic	() =
+	{
+	fpath:		[MAXPATH] char;
+	f:		[:] char;
+	u:		ref unit_p;
+	u2:		ref unit_p;
+	in:		ref sourceParser;
+	tempHeap:	incrementalHeap;
+	mainHeap:	ref heap;
+
+	tempHeap = [ threadHeap() ];
+	mainHeap = tempHeap activate();
+	u = unit_p create(name, 0);
+	mainHeap activate();
+	source = sourceParser create(sourceFile, &CurrentContext);
+	tempHeap activate();
+	u2 = source parseUnit(PH_CARVE, name);
+	Build.parsedLines += source linesScanned();
+	mainHeap activate();
+	u generateDifferences(u2, self);
+	tempHeap freeAll();
+	everBuilt = TRUE;
+	includes checkForSources();
+	}
+
+addInclude:	dynamic	(n: ref identifier, off: fileOffset) =
+	{
+	if	(includes findInclude(n) == 0){
+		i:	ref include_s;
+		u:	ref unit_s;
+
+		u = SymbolTable locateUnit(n);
+		if	(u == 0)
+			u = newUnit(n);
+		includes = new include_s[ includes, off, n, u ];
+		}
+	}
+
+	};

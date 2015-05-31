@@ -1,0 +1,136 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	format;
+include	console;
+
+video:	public	type	{
+	public:
+	cursor:		point;
+	mcursor:	point;
+	corner:		point;
+	size:		point;
+	mode:		consoleMode_t;
+
+mouseCursor:	dynamic	(point) =
+	{
+	}
+
+showMouse:	dynamic	(boolean) =
+	{
+	}
+
+hideMouse:	dynamic	() boolean =
+	{
+	}
+
+positionCursor:	dynamic	(point) =
+	{
+	}
+
+showCursor:	dynamic	() =
+	{
+	}
+
+hideCursor:	dynamic	() =
+	{
+	}
+
+setColor:	dynamic	(char) =
+	{
+	}
+
+putc:	dynamic	(point, char) =
+	{
+	}
+
+putcc:	dynamic	(point, char, color_t) =
+	{
+	}
+
+writecc:	dynamic	(point, ref char, color_t, unsigned) =
+	{
+	}
+
+write:	dynamic	(point, ref colorChar, unsigned) =
+	{
+	}
+
+read:	dynamic	(point, ref colorChar, unsigned) =
+	{
+	}
+
+close:	dynamic	() int =
+	{
+	}
+
+verticalScroll:	dynamic	(point, point, int) =
+	{
+	}
+
+horizontalScroll:	dynamic	(point, point, int) =
+	{
+	}
+
+rectangle:	dynamic	(rectangle_t, color_t) = 
+	{
+	}
+
+	};
+
+Screen:		public	ref video;
+ScreenPrintf:	public	consoleEmitter;
+
+consoleEmitter:	public	type	inherit	emitter	{
+
+putc:	dynamic	(c: char) int =
+	{
+	if	(Screen == 0)
+		return 0;
+	if	(c == '\r')
+		Screen->cursor.x = 0;
+	else if	(c == '\n'){
+		if	(Screen->cursor.y < Screen->size.y - 1)
+			Screen->cursor.y++;
+		else	{
+			Screen verticalScroll([ 0, 0 ], 
+				[ Screen->size.x - 1, Screen->size.y - 1 ], 
+				1);
+			}
+		Screen->cursor.x = 0;
+		}
+	else if	(c == '\b'){
+		if	(Screen->cursor.x > 0)
+			Screen->cursor.x--;
+		}
+	else if	(c == '\t'){
+		do	{
+			putc(' ');
+			}
+			while	(Screen->cursor.x & 7);
+		}
+	else	{
+		Screen putcc(Screen->cursor, c, HIGH|RED);
+		Screen->cursor.x++;
+		if	(Screen->cursor.x >= Screen->size.x){
+			if	(Screen->cursor.y < Screen->size.y - 1)
+				Screen->cursor.y++;
+			else	{
+				Screen verticalScroll([ 0, 0 ], 
+					[ Screen->size.x - 1, 
+						Screen->size.y - 1 ], 
+					1);
+				}
+			Screen->cursor.x = 0;
+			}
+		}
+	Screen showCursor();
+	return 0;
+	}
+
+	};
+

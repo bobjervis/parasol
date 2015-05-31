@@ -1,0 +1,188 @@
+/*
+Name            qsort - sorts using the quick sort routine
+
+Background
+
+The Quicker Sort algorithm was first described by C.A.R.Hoare in the
+Computer Journal, No. 5 (1962), pp.10..15, and in addition is frequently
+described in computing literature, notably in D. Knuth's Sorting and
+Searching.  The method used here includes a number of refinements:
+
+- The median-of-three technique described by Singleton (Communications
+  of the A.C.M., No 12 (1969) pp 185..187) is used, where the median
+  operation is also the special case sort for 3 elements.  This slightly
+  improves the average speed, especially when comparisons are slower
+  than exchanges, but more importantly it prevents worst-case behavior
+  on partly sorted files.  If a simplistic quicker-sort is run on a file
+  which is only slightly disordered (a common need in some applications)
+  then it is as slow as a bubble-sort.  The median technique prevents
+  this.
+
+  Another serious problem with the plain algorithm is that worst-case
+  behavior causes very deep recursion (almost one level per table
+  element !), so again it is best to use the median technique.
+
+	The comparison function accepts two arguments, elem1
+        and elem2, each a pointer to an entry in the table. The
+        comparison function compares each of the pointed-to items
+        (*elem1 and *elem2), and returns an integer based on the result
+        of the comparison.
+
+                        If the items            fcmp returns
+
+                        *elem1 <  *elem2         an integer < 0
+                        *elem1 == *elem2         0
+                        *elem1 >  *elem2         an integer > 0
+
+        In the comparison, the less than symbol (<) means that the left
+        element should appear before the right element in the final,
+        sorted sequence. Similarly, the greater than (>) symbol
+        means that the left element should appear after the right
+        element in the final, sorted sequence.
+
+  The internal contents of the records are never inspected by qsort.  It
+  depends entirely upon compare to decide the format and value of the records.
+  This allows the content of the records to be of any fixed length type -
+  formatted text, floating point, pointer to variable length record, etc. -
+  so long as each record is understood by compare.
+
+  The quicker sort algorithm will in general change the relative ordering
+  of records which may compare as equal.  For example, if it is attempted
+  to use two passes of quick sort on an order file, first by date and then
+  by customer name, the result will be that the second sort pass randomly
+  jumbles the dates.  It is necessary to design the compare() function to
+  consider all the keys and sort in one pass.
+
+	- After the compare pass is made over the array, the pivot is moved
+	  to the final boundary point, and the remaining parts of the array
+	  are sorted.  The code avoids having to sort pivot again, and also
+	  uses tail recursion on the larger portion of the array.  This will
+	  tend to minimize the depth of the recursion.
+*/
+include	file;
+
+qsort:	public	(base: pointer, nElem: Size, width: Size, 
+			compare: ref (pointer, pointer) int) =
+	{
+	if	(width == 0)
+		return;
+
+	pivot, left, right:	ref byte;
+	lNum:			unsigned;
+
+	pivot = base;
+	for	(;;){
+		if	(nElem <= 2){
+			if	(nElem == 2 &&
+				 compare(pivot, pivot + width) > 0)
+				exchange(pivot, pivot + width, width);
+			return;
+			}
+
+		right = (nElem - 1) * width + pivot;
+		left  = (nElem >> 1) * width + pivot;
+
+			/*  sort the pivot, left, and 
+				right elements for "median of 3" */
+
+		if	(compare(left, right) > 0)
+			exchange(left, right, width);
+
+			// assert *right >= *left
+
+		if	(compare(left, pivot) > 0)
+			exchange(left, pivot, width);
+		else if (compare(pivot, right) > 0)
+			exchange(pivot, right, width);
+
+			// assert *right >= *pivot >= *left
+
+		if	(nElem == 3){
+
+				// for exactly three elements, we need to
+				// fix pivot and left.
+
+			exchange(pivot, left, width);
+			return;
+			}
+
+			//  now for the classic Hoare algorithm
+
+		left = width + pivot;
+
+		compareDirection:	int;	// -1 from above, +1 from below
+
+		do	{
+			compareDirection = +1;
+			while	(compare(left, pivot) < 0)
+				if	(left < right)
+					left += width;
+				else
+					break;
+
+			while	(left < right){
+				compareDirection = -1;
+				if	(compare(pivot, right) <= 0)
+					right -= width;
+				else	{
+					exchange(left, right, width);
+					left += width;
+					break;
+					}
+				}
+			}	while (left < right);
+
+			// This puts the pivot into the middle if needed.
+
+		left -= width;
+		lNum = (right - pivot) / width;	// lNum is lower 'half' size
+		if	(left > pivot)
+			exchange(pivot, left, width);
+		if	(nElem >> 1 > lNum){
+
+				// lower 'half' has fewest elements
+
+			qsort(pivot, lNum - 1, width, compare);
+			nElem -= lNum;
+			pivot = right;
+			}
+		else	{
+			qsort(right, nElem - lNum, width, compare);
+			nElem = lNum - 1;
+			}
+		}
+	}
+/*
+	Exchange records.  Note that if records are long and word aligned,
+	this will be an extremely fast copy.  If the records are misaligned,
+	they will not be much faster than byte copies.  Also, note that this
+	code assumes the processor can do word accesses at arbitrary address
+	boundaries.
+ */
+exchange:	(left: ref byte, right: ref byte, width: unsigned) =
+	{
+/*
+	while	(width >= sizeof int){
+		*ref int(right) = exchangeInt(ref int(left), *ref int(right));
+		right += sizeof int;
+		left += sizeof int;
+		width -= sizeof int;
+		}
+	while	(width > 0){
+		*right = exchangeByte(left, *right);
+		right++;
+		left++;
+		width--;
+		}
+ */
+	while	(width > 0){
+		b:	byte;
+
+		b = *left;
+		*left = *right;
+		*right = b;
+		right++;
+		left++;
+		width--;
+		}
+	}

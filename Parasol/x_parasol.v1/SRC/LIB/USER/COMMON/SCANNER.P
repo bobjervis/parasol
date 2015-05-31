@@ -1,0 +1,1313 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file, time, string;
+include	sbuffer;
+include	hash;
+include	tparams;
+include	errmsg;
+include	real;
+
+tokenNames:	public	type	unsigned[16] =	{
+
+		/* Punctuation */
+
+	EOF_TOK,			/* End of file token */
+	LP,				/* ( */
+	RP,				/* ) */
+	LB,				/* [ */
+	RB,				/* ] */
+	LC,				/* { */
+	RC,				/* } */
+	SM,				/* ; */
+	CO,				/* : */
+	ELLIPSIS, 			/* ... */
+	RANGE,				/* .. */
+	CM,				/* , */
+
+		/* Operators */
+
+	ASG,				/* = */
+	ADA,				/* += */
+	SBA,				/* -= */
+	MUA,				/* *= */
+	DVA,				/* /= */
+	MOA,				/* %= */
+	ANA,				/* &= */
+	ORA,				/* |= */
+	XRA,				/* ^= */
+	LSA,				/* <<= */
+	RSA,				/* >>= */
+	ADD,				/* + */
+	SUB,				/* - */
+	MUL,				/* * */
+	DIV,				/* / */
+	MOD,				/* % */
+	AND,				/* & */
+	OR,				/* | */
+	XOR,				/* ^ */
+	LSH,				/* << */
+	RSH,				/* >> */
+	QUES,				/* ? */
+	LOR,				/* || */
+	LAND,				/* && */
+	EQ,				/* == */
+	NE,				/* != */
+	LT,				/* < */
+	GT,				/* > */
+	LE,				/* <= */
+	GE,				/* >= */
+	UNORD,				/* !<>= */
+	LT_GT,				/* <> */
+	ORD,				/* <>= */
+	NLE,				/* !<= */
+	NLT,				/* !< */
+	NGE,				/* !>= */
+	NGT,				/* !> */
+	NLT_GT,				/* !<> */
+	IOARROW,			/* <- */
+	DELETE,				/* delete */
+	NOT,				/* ! */
+	COM,				/* ~ */
+	SIZEOF,				/* sizeof */
+	INC,				/* ++ */
+	DEC,				/* -- */
+	DOT,				/* . */
+	ARROW,				/* -> */
+	OFFSETOF,			/* offsetof */
+	TYPEOF,				/* typeof */
+	QUAL,				/* :: */
+
+		/* Multi-component tokens */
+
+	MAGIC,				/* $ tokens */
+	ID,				/* normal identifier */
+	ICON,				/* integer constant */
+	FCON,				/* floating point constant */
+	STRING,				/* string literal */
+
+	ARRAY,				// array
+	ASSERT,				/* assert */
+	BREAK,				/* break */
+	CASE,				/* case */
+	CLEANUP,			/* cleanup */
+	CONST,				/* const */
+	CONTINUE, 			/* continue */
+	CRITICAL,			/* critical */
+	DEFAULT,			/* default */
+	DO,				/* do */
+	DYNAMIC,			/* dynamic */
+	ELSE,				/* else */
+	ENTRY,				/* entry */
+	EXCEPT,				/* except */
+	EXTERN,				/* extern */
+	FACTORY,			/* factory */
+	FAR,				// far
+	FLOAT,				// float
+	FOR,				/* for */
+	FORWARD,			/* forward */
+	GATE,				/* gate */
+	GOTO,				/* goto */
+	IF,				/* if */
+	INCLUDE,			/* include */
+	INHERIT,			/* inherit */
+	INLINE,				/* inline */
+	INTERRUPT,			/* interrupt */
+	LABEL,				/* label */
+	LANGUAGE,			// language
+	LINK,				// link
+	NEW,				// new
+	PACKED,				/* packed */
+	POINTER,			/* pointer */
+	PRIVATE,			/* private */
+	PUBLIC,				/* public */
+	REF,				/* ref */
+	REMOTE,				/* remote */
+	REPLY,				/* reply */
+	RETURN,				/* return */
+	SELF,				/* self */
+	SEND,				/* send */
+	SHARED,				/* shared */
+	SIGNED,				// signed
+	STATIC,				/* static */
+	SUPER,				/* super */
+	SWITCH,				/* switch */
+	TRY,				/* try */
+	TYPE,				/* type */
+	UNION,				/* union */
+	UNSIGNED,			// unsigned
+	VISIBLE,			/* visible */
+	VOLATILE,			/* volatile */
+	WHILE,				/* while */
+	WITH,				/* with */
+
+	REGISTER, 			// __reg__
+	DATE,				// __DATE__
+	TIME,				// __TIME__
+
+		// C keywords
+
+	CHAR,
+	INT,
+	LONG,
+	SHORT,
+	DOUBLE,
+	STRUCT,
+	ENUM,
+	AUTO,
+	ERROR,
+	VOID,
+
+	lastToken
+	};
+
+TokenNames:	public	const [] ref char = [
+
+		/* Punctuation */
+
+	"EOF_TOK",			/* End of file token */
+	"LP",				/* ( */
+	"RP",				/* ) */
+	"LB",				/* [ */
+	"RB",				/* ] */
+	"LC",				/* { */
+	"RC",				/* } */
+	"SM",				/* ; */
+	"CO",				/* : */
+	"ELLIPSIS", 			/* ... */
+	"RANGE",				/* .. */
+	"CM",				/* , */
+
+		/* Operators */
+
+	"ASG",				/* = */
+	"ADA",				/* += */
+	"SBA",				/* -= */
+	"MUA",				/* *= */
+	"DVA",				/* /= */
+	"MOA",				/* %= */
+	"ANA",				/* &= */
+	"ORA",				/* |= */
+	"XRA",				/* ^= */
+	"LSA",				/* <<= */
+	"RSA",				/* >>= */
+	"ADD",				/* + */
+	"SUB",				/* - */
+	"MUL",				/* * */
+	"DIV",				/* / */
+	"MOD",				/* % */
+	"AND",				/* & */
+	"OR",				/* | */
+	"XOR",				/* ^ */
+	"LSH",				/* << */
+	"RSH",				/* >> */
+	"QUES",				/* ? */
+	"LOR",				/* || */
+	"LAND",				/* && */
+	"EQ",				/* == */
+	"NE",				/* != */
+	"LT",				/* < */
+	"GT",				/* > */
+	"LE",				/* <= */
+	"GE",				/* >= */
+	"UNORD",			/* !<>= */
+	"LT_GT",			/* <> */
+	"ORD",				/* <>= */
+	"NLE",				/* !<= */
+	"NLT",				/* !< */
+	"NGE",				/* !>= */
+	"NGT",				/* !> */
+	"NLT_GT",			/* !<> */
+	"IOARROW",			/* <- */
+	"DELETE",			/* delete */
+	"NOT",				/* ! */
+	"COM",				/* ~ */
+	"SIZEOF",				/* sizeof */
+	"INC",				/* ++ */
+	"DEC",				/* -- */
+	"DOT",				/* . */
+	"ARROW",				/* -> */
+	"OFFSETOF",			/* offsetof */
+	"TYPEOF",				/* typeof */
+	"QUAL",				/* :: */
+
+		/* Multi-component tokens */
+
+	"MAGIC",				/* $ tokens */
+	"ID",				/* normal identifier */
+	"ICON",				/* integer constant */
+	"FCON",				/* floating point constant */
+	"STRING",				/* string literal */
+
+	"ARRAY",				// array
+	"ASSERT",				/* assert */
+	"BREAK",				/* break */
+	"CASE",				/* case */
+	"CLEANUP",			/* cleanup */
+	"CONST",				/* const */
+	"CONTINUE", 			/* continue */
+	"CRITICAL",			/* critical */
+	"DEFAULT",			/* default */
+	"DO",				/* do */
+	"DYNAMIC",			/* dynamic */
+	"ELSE",				/* else */
+	"ENTRY",				/* entry */
+	"EXCEPT",				/* except */
+	"EXTERN",				/* extern */
+	"FACTORY",			/* factory */
+	"FAR",				// far
+	"FLOAT",				// float
+	"FOR",				/* for */
+	"FORWARD",			/* forward */
+	"GATE",				/* gate */
+	"GOTO",				/* goto */
+	"IF",				/* if */
+	"INCLUDE",			/* include */
+	"INHERIT",			/* inherit */
+	"INLINE",				/* inline */
+	"INTERRUPT",			/* interrupt */
+	"LABEL",				/* label */
+	"LANGUAGE",			// language
+	"LINK",				// link
+	"NEW",				// new
+	"PACKED",				/* packed */
+	"POINTER",			/* pointer */
+	"PRIVATE",			/* private */
+	"PUBLIC",				/* public */
+	"REF",				/* ref */
+	"REMOTE",				/* remote */
+	"REPLY",				/* reply */
+	"RETURN",				/* return */
+	"SELF",				/* self */
+	"SEND",				/* send */
+	"SHARED",				/* shared */
+	"SIGNED",				// signed
+	"STATIC",				/* static */
+	"SUPER",				/* super */
+	"SWITCH",				/* switch */
+	"TRY",				/* try */
+	"TYPE",				/* type */
+	"UNION",				/* union */
+	"UNSIGNED",			// unsigned
+	"VISIBLE",			/* visible */
+	"VOLATILE",			/* volatile */
+	"WHILE",				/* while */
+	"WITH",				/* with */
+
+	"REGISTER", 			// __reg__
+	"DATE",				// __DATE__
+	"TIME",				// __TIME__
+
+	"CHAR",
+	"INT",
+	"LONG",
+	"SHORT",
+	"DOUBLE",
+	"STRUCT",
+	"ENUM",
+	"AUTO",
+
+	];
+
+initParasol:	public	() =
+	{
+	SystemTime decode(time());
+	identifier create("array",		ARRAY);
+	identifier create("assert",		ASSERT);
+        identifier create("break",		BREAK);
+        identifier create("case",		CASE);
+	identifier create("cleanup",		CLEANUP);
+        identifier create("const",		CONST);
+        identifier create("continue",		CONTINUE);
+        identifier create("critical",		CRITICAL);
+        identifier create("default", 		DEFAULT);
+        identifier create("delete", 		DELETE);
+        identifier create("do",			DO);
+	identifier create("dynamic",		DYNAMIC);
+        identifier create("else",		ELSE);
+	identifier create("entry",		ENTRY);
+	identifier create("except",		EXCEPT);
+	identifier create("extern",		EXTERN);
+	identifier create("factory",		FACTORY);
+        identifier create("far",		FAR);
+        identifier create("float",		FLOAT);
+        identifier create("for",		FOR);
+        identifier create("forward",		FORWARD);
+	identifier create("gate",		GATE);
+        identifier create("goto",		GOTO);
+        identifier create("if",			IF);
+	identifier create("inherit",		INHERIT);
+	identifier create("inline",		INLINE);
+        identifier create("interrupt",		INTERRUPT);
+	identifier create("label",		LABEL);
+	identifier create("language",		LANGUAGE);
+	identifier create("link",		LINK);
+	identifier create("new",		NEW);
+	identifier create("offsetof",		OFFSETOF);
+	identifier create("packed",		PACKED);
+	identifier create("pointer",		POINTER);
+	identifier create("private",		PRIVATE);
+	identifier create("public",		PUBLIC);
+	identifier create("ref",		REF);
+	identifier create("remote",		REMOTE);
+        identifier create("reply",		REPLY);
+        identifier create("return",		RETURN);
+	identifier create("self",		SELF);
+	identifier create("send",		SEND);
+	identifier create("shared",		SHARED);
+        identifier create("signed",		SIGNED);
+        identifier create("sizeof",		SIZEOF);
+        identifier create("static",		STATIC);
+	identifier create("super",		SUPER);
+        identifier create("switch",		SWITCH);
+	identifier create("try",		TRY);
+        identifier create("type",		TYPE);
+        identifier create("typeof",		TYPEOF);
+        identifier create("union",		UNION);
+        identifier create("unsigned",		UNSIGNED);
+	identifier create("include",		INCLUDE);
+	identifier create("visible",		VISIBLE);
+	identifier create("volatile",		VOLATILE);
+        identifier create("while",		WHILE);
+	identifier create("with",		WITH);
+	identifier create("__reg__",		REGISTER);
+	identifier create("__DATE__",		DATE);
+	identifier create("__TIME__",		TIME);
+	}
+
+initC:	public	() =
+	{
+        identifier create("auto",		AUTO);
+        identifier create("break",		BREAK);
+        identifier create("case",		CASE);
+        identifier create("char",		CHAR);
+        identifier create("const",		CONST);
+        identifier create("continue",		CONTINUE);
+        identifier create("default", 		DEFAULT);
+        identifier create("do",			DO);
+        identifier create("double",		DOUBLE);
+        identifier create("else",		ELSE);
+        identifier create("enum",		ENUM);
+	identifier create("extern",		EXTERN);
+        identifier create("float",		FLOAT);
+        identifier create("for",		FOR);
+        identifier create("goto",		GOTO);
+        identifier create("if",			IF);
+        identifier create("int",		INT);
+        identifier create("long",		LONG);
+        identifier create("register",		REGISTER);
+        identifier create("return",		RETURN);
+        identifier create("short",		SHORT);
+        identifier create("signed",		SIGNED);
+        identifier create("sizeof",		SIZEOF);
+        identifier create("static",		STATIC);
+        identifier create("struct",		STRUCT);
+        identifier create("switch",		SWITCH);
+        identifier create("union",		UNION);
+        identifier create("unsigned",		UNSIGNED);
+	identifier create("void",		VOID);
+	identifier create("volatile",		VOLATILE);
+        identifier create("while",		WHILE);
+	}
+
+/*
+	This function returns the precedence of the operator token passed
+	as an argument.  Note that if the token is not a binary operator,
+	the function returns zero.  Precedences range from 1 through 14
+	(varying from comma to multiply/divide/remainder).  A higher
+	numerical value indicates a higher precedence.
+ */
+precedence:	public	(t: tokenNames) int =
+	{
+	if	(t >= CM &&
+		 t <= DELETE)
+		return Prec[t - CM];
+	else
+		return 0;
+	}
+
+Prec:	const [] char = [
+	1,					/* CM */
+	2,					/* ASG */
+	2,					/* ADA */
+	2,					/* SBA */
+	2,					/* MUA */
+	2,					/* DVA */
+	2,					/* MOA */
+	2,					/* ANA */
+	2,					/* ORA */
+	2,					/* XRA */
+	2,					/* LSA */
+	2,					/* RSA */
+	12,					/* ADD */
+	12,					/* SUB */
+	14,					/* MUL */
+	14,					/* DIV */
+	14,					/* MOD */
+	11,					/* AND */
+	9,					/* OR */
+	10,					/* XOR */
+	13,					/* LSH */
+	13,					/* RSH */
+	3,					/* QUES */
+	5,					/* LOR */
+	6,					/* LAND */
+	7,					/* EQ */
+	7,					/* NE */
+	8,					/* LT */
+	8,					/* GT */
+	8,					/* LE */
+	8,					/* GE */
+	8,					/* UNORD */
+	8,					/* LT_GT */
+	8,					/* ORD */
+	8,					/* NLE */
+	8,					/* NLT */
+	8,					/* NGE */
+	8,					/* NGT */
+	8,					/* NLT_GT */
+	2,					/* IOARROW */
+	2,					/* DELETE */
+	];
+
+tokenStream:	public	type	inherit	sourceBuffer {
+	LineCount:	long;
+
+	public:
+/*
+ *	FUNCTION:	scan
+ *
+ *	DESCRIPTION:
+ *		This function returns a stream of tokens.
+ */
+scan:	() tokenNames =
+	{
+	nxtc:	int;
+	ntype:	int;
+	a:	int;
+	cp:	ref char;
+	s:	[:] char;
+
+	if	(Backup){
+		Backup = 0;
+//		printf("re-scan %s\n", TokenNames[Token.lex]);
+		return Token.lex;
+		}
+	for	(;;){
+		nxtc = getc();
+		ntype = CharacType[nxtc];
+		switch	(ntype){
+		case	A_LET:
+			rememberLine();
+		        cp = Accum;
+			for	(a = IDLEN;
+					 a > 0 &&
+					 (CharacType[nxtc] == A_LET ||
+					  CharacType[nxtc] == A_DIG);
+					a--){
+				*cp++ = nxtc;
+				nxtc = getc();
+				}
+			while	(CharacType[nxtc] == A_LET ||
+				 CharacType[nxtc] == A_DIG)
+				nxtc = getc();
+			if	(nxtc != EOF_MARK)
+			        ungetc();
+			if	(!FullScan){
+				Token.lex = ID;
+//				printf("scan %s\n", TokenNames[Token.lex]);
+				return ID;
+				}
+			i:	int;
+
+			i = cp - Accum;
+			Token.iden = hash(Accum[:i]);
+			switch	(Token.iden->Token){
+			case	DATE:
+				memCopy(&Accum, 
+					&Months[SystemTime.month * 3], 3);
+				Accum[3] = ' ';
+				Accum[4] = SystemTime.monthday / 10 + '0';
+				Accum[5] = SystemTime.monthday % 10 + '0';
+				Accum[6] = ' ';
+				s = Accum[7:];
+				sc:	stringConverter = [s];
+				s = sc decodeUnsigned(SystemTime.year);
+				Token.stringLength = 7 + |s;
+				if	(FullScan){
+					Token.stringValue = 
+						alloc(Token.stringLength);
+					memCopy(Token.stringValue, Accum, 
+							Token.stringLength);
+					}
+				Token.lex = STRING;
+				break;
+
+			case	TIME:
+				Accum[0] = SystemTime.hour / 10 + '0';
+				Accum[1] = SystemTime.hour % 10 + '0';
+				Accum[2] = ':';
+				Accum[3] = SystemTime.minute / 10 + '0';
+				Accum[4] = SystemTime.minute % 10 + '0';
+				Accum[5] = ':';
+				Accum[6] = SystemTime.second / 10 + '0';
+				Accum[7] = SystemTime.second % 10 + '0';
+				Accum[8] = 0;
+				Token.stringLength = 8;
+				if	(FullScan){
+					Token.stringValue = 
+						alloc(Token.stringLength);
+					memCopy(Token.stringValue, Accum, 
+							Token.stringLength);
+					}
+				Token.lex = STRING;
+				break;
+
+			case	0:
+				Token.lex = ID;
+				break;
+
+			default:
+				Token.lex = Token.iden->Token;
+				}
+//			printf("scan %s\n", TokenNames[Token.lex]);
+			return Token.lex;
+
+		default:
+			rememberLine();
+//			printf("scan %s\n", TokenNames[ntype]);
+			return Token.lex = ntype;
+
+		case	A_ILL:
+			aa:	[1] char;
+
+			aa[0] = nxtc;
+			errorContext errorX("ScannerBadChar", aa, "", 0);
+			break;
+
+		case	A_MAGIC:
+//			if	(!BuildMachine){
+//				errorContext errorX("ScannerBadChar", "$", "", 0);
+//				break;
+//				}
+			nxtc = getc();
+			if	(CharacType[nxtc] != A_DIG){
+				errorContext error("ScannerBadNumber");
+				ungetc();
+				break;
+				}
+			ntype = number(nxtc);
+			if	(ntype == FLOAT_CON ||
+				 ntype == FLOAT_HEX)
+				errorContext error("ScannerBadNumber");
+			convertnum(ntype);
+			return Token.lex = MAGIC;
+
+		case	A_SKP:
+			if	(nxtc == '\n')
+				LineCount++;
+			break;
+
+		case	A_SLH:
+			rememberLine();
+			a = getc();
+			if	(a == '*'){
+				LineCount += skipComment();
+				break;
+				}
+			else if	(a == '/'){
+				skipToEol();
+				break;
+				}
+			else if	(a == '=')
+				Token.lex = DVA;
+			else	{
+				ungetc();
+				Token.lex = DIV;
+				}
+//			printf("scan %s\n", TokenNames[Token.lex]);
+			return Token.lex;
+
+		case	A_EXC:
+			rememberLine();
+			a = getc();
+			if	(a == '=')
+				Token.lex = NE;
+			else if	(a == '<'){
+				a = getc();
+				if	(a == '>'){
+					a = getc();
+					if	(a == '=')
+						Token.lex = UNORD;
+					else	{
+						if	(a != EOF_MARK)
+							ungetc();
+						Token.lex = NLT_GT;
+						}
+					}
+				else if	(a == '=')
+					Token.lex = NLE;
+				else	{
+					if	(a != EOF_MARK)
+						ungetc();
+					Token.lex = NLT;
+					}
+				}
+			else if	(a == '>'){
+				a = getc();
+				if	(a == '=')
+					Token.lex = NGE;
+				else	{
+					if	(a != EOF_MARK)
+						ungetc();
+					Token.lex = NGT;
+					}
+				}
+			else	{
+				if	(a != EOF_MARK)
+					ungetc();
+				Token.lex = NOT;
+				}
+//			printf("scan %s\n", TokenNames[Token.lex]);
+			return Token.lex;
+
+		case	A_PCT:
+		case	A_EQ:
+		case	A_AMP:
+		case	A_AST:
+		case	A_PLS:
+		case	A_UP:
+		case	A_BAR:
+			rememberLine();
+			a = getc();
+			if	(Dbltok[ntype - A_EXC] && a == nxtc)
+				Token.lex = Dbltok[ntype - A_EXC];
+			else if	(a == '=')
+				Token.lex = Asgtok[ntype - A_EXC];
+			else	{
+				if	(a != EOF_MARK)
+					ungetc();
+				Token.lex = Sintok[ntype - A_EXC];
+				}
+//			printf("scan %s\n", TokenNames[Token.lex]);
+			return Token.lex;
+
+		case	A_DSH:
+			rememberLine();
+			nxtc = getc();
+			if	(nxtc == '-')
+				Token.lex = DEC;
+			else if	(nxtc == '=')
+				Token.lex = SBA;
+			else if	(nxtc == '>')
+				Token.lex = ARROW;
+			else	{
+				if	(nxtc != EOF_MARK)
+					ungetc();
+				Token.lex = SUB;
+				}
+//			printf("scan %s\n", TokenNames[Token.lex]);
+			return Token.lex;
+
+		case	A_DOT:
+			rememberLine();
+			nxtc = getc();
+			if	(CharacType[nxtc] == A_DIG){
+				ungetc();
+				ntype = number('.');
+				if	(!FullScan){
+					if	(ntype == FLOAT_CON ||
+						 ntype == FLOAT_HEX){
+						Token.lex = FCON;
+						return Token.lex;
+						}
+					}
+				Token.lex = convertnum(ntype);
+				}
+			else if	(nxtc == '.'){
+				nxtc = getc();
+				if	(nxtc != '.'){
+					ungetc();
+					Token.lex = RANGE;
+					}
+				else
+					Token.lex = ELLIPSIS;
+				}
+			else	{
+				if	(nxtc != EOF_MARK)
+					ungetc();
+				Token.lex = DOT;
+				}
+//			printf("scan %s\n", TokenNames[Token.lex]);
+			return Token.lex;
+
+		case	A_LT:
+			rememberLine();
+			nxtc = getc();
+			if	(nxtc == '=')
+				Token.lex = LE;
+/*
+			else if	(nxtc == '-')
+				Token.lex = IOARROW;
+ */
+			else if	(nxtc == '<'){
+				nxtc = getc();
+				if	(nxtc == '=')
+					Token.lex = LSA;
+				else	{
+					if	(nxtc != EOF_MARK)
+						ungetc();
+					Token.lex = LSH;
+					}
+				}
+			else if	(nxtc == '>'){
+				nxtc = getc();
+				if	(nxtc == '=')
+					Token.lex = ORD;
+				else	{
+					if	(nxtc != EOF_MARK)
+						ungetc();
+					Token.lex = LT_GT;
+					}
+				}
+			else	{
+				if	(nxtc != EOF_MARK)
+					ungetc();
+				Token.lex = LT;
+				}
+//			printf("scan %s\n", TokenNames[Token.lex]);
+			return Token.lex;
+
+		case	A_CO:
+			rememberLine();
+			nxtc = getc();
+			if	(nxtc == ':')
+				Token.lex = QUAL;
+			else	{
+				if	(nxtc != EOF_MARK)
+					ungetc();
+				Token.lex = CO;
+				}
+//			printf("scan %s\n", TokenNames[Token.lex]);
+			return Token.lex;
+
+		case	A_GT:
+			rememberLine();
+			nxtc = getc();
+			if	(nxtc == '=')
+				Token.lex = GE;
+			else if	(nxtc == '>'){
+				nxtc = getc();
+				if	(nxtc == '=')
+					Token.lex = RSA;
+				else	{
+					if	(nxtc != EOF_MARK)
+						ungetc();
+					Token.lex = RSH;
+					}
+				}
+			else	{
+				if	(nxtc != EOF_MARK)
+					ungetc();
+				Token.lex = GT;
+				}
+//			printf("scan %s\n", TokenNames[Token.lex]);
+			return Token.lex;
+
+		case	A_QUO:
+			rememberLine();
+			getString();
+//			printf("scan string\n");
+			return Token.lex = STRING;
+
+		case	A_DIG:
+			rememberLine();
+			ntype = number(nxtc);
+			if	(!FullScan){
+				if	(ntype == FLOAT_CON ||
+					 ntype == FLOAT_HEX){
+					Token.lex = FCON;
+					return Token.lex;
+					}
+				}
+//			printf("scan constant\n");
+			return Token.lex = convertnum(ntype);
+
+		case	A_APO:
+			rememberLine();
+			getcc();
+//			printf("scan character constant\n");
+			return Token.lex = ICON;
+			}
+		}
+	}
+
+openRange:	(t: textRange) =
+	{
+	super openRange(t);
+	Backup = 0;
+	FullScan = TRUE;
+	LineCount = 0;
+	}
+
+linesScanned:	() long =
+	{
+	lc:	long;
+
+	lc = LineCount;
+	LineCount = 0;
+	return lc;
+	}
+/*
+ *	FUNCTION:	unscan
+ *
+ *	DESCRIPTION:
+ *		This function backs up the scan pointer so that the next
+ *		call to scan will return the same token again.
+ */
+unscan:	() =
+	{
+	Backup = 1;
+	}
+
+number:	(i: char) int =
+	{
+	dotf:		boolean;
+	expf:		boolean;
+	bigDigits:	boolean;
+	radix:		int;
+	cp:		ref char;
+
+	dotf = FALSE;
+	expf = FALSE;
+	bigDigits = FALSE;
+	Token.constType = -INTBITS;		// default to a signed int
+	if	(i == '0'){
+		i = getc();
+		if	(i == 'x' || i == 'X'){
+			i = getc();
+			radix = HEX_CON;
+			}
+		else
+			radix = OCTAL_CON;
+		}
+	else
+		radix = DECIMAL_CON;
+	for	(cp = Accum;; cp++, i = getc()){
+		i = tolower(i);			// ignore upper case distinctions
+		if	(cp < &Accum[sizeof Accum])
+			*cp = i;
+		if	(CharacType[i] == A_DIG){
+			if	(i >= '8')
+				bigDigits = TRUE;
+			}
+		else if	(i == '.'){
+			if	(dotf)
+				errorContext error("ScannerTooManyDecimals");
+			if	(expf)
+				errorContext error("ScannerMisplacedDecimal");
+			dotf = TRUE;
+			if	(radix != HEX_CON)
+				radix = FLOAT_CON;
+			Token.constType = DOUBLEBITS;
+			}
+		else if	(i == 'p'){
+			if	(radix != HEX_CON){
+				ungetc();
+				break;
+				}
+			if	(expf)
+				errorContext error("ScannerTooManyExponents");
+			expf = TRUE;
+			Token.constType = DOUBLEBITS;
+			radix = FLOAT_HEX;
+			i = getc();
+			if	(i == '-' || i == '+'){
+				cp++;
+				if	(cp < &Accum[sizeof Accum])
+					*cp = i;
+				i = getc();
+				}
+			if	(CharacType[i] == A_DIG){
+				cp++;
+				if	(cp < &Accum[sizeof Accum])
+					*cp = i;
+				}
+			else	{
+				errorContext error("ScannerBadNumber");
+				if	(i != EOF_MARK)
+					ungetc();
+				break;
+				}
+			}
+		else if	(i == 'e'){
+			if	(radix == HEX_CON)
+				continue;
+			if	(expf)
+				errorContext error("ScannerTooManyExponents");
+			expf = TRUE;
+			radix = FLOAT_CON;
+			Token.constType = DOUBLEBITS;
+			i = getc();
+			if	(i == '-' || i == '+'){
+				cp++;
+				if	(cp < &Accum[sizeof Accum])
+					*cp = i;
+				i = getc();
+				}
+			if	(CharacType[i] == A_DIG){
+				cp++;
+				if	(cp < &Accum[sizeof Accum])
+					*cp = i;
+				}
+			else	{
+				errorContext error("ScannerBadNumber");
+				if	(i != EOF_MARK)
+					ungetc();
+				break;
+				}
+			}
+		else if	(i >= 'a' && i <= 'd'){
+			if	(radix != HEX_CON){
+				ungetc();
+				break;
+				}
+			}
+		else if	(i == 'f'){
+			if	(radix != HEX_CON){
+				Token.constType = FLOATBITS;
+				if	(radix != FLOAT_HEX)
+					radix = FLOAT_CON;
+				cp++;
+				if	(cp < &Accum[sizeof Accum])
+					*cp = 'f';
+				break;
+				}
+			}
+		else if	(i == 'l'){
+			if	(dotf || expf){
+				cp++;
+				if	(cp < &Accum[sizeof Accum])
+					*cp = 'l';
+				Token.constType = EXTENDBITS;
+				break;
+				}
+			i = getc();
+			if	(i == 'u' || i == 'U')
+				Token.constType = LONGBITS;
+			else	{
+				Token.constType = -LONGBITS;
+				if	(i != EOF_MARK)
+					ungetc();
+				}
+			break;
+			}
+		else if	(i == 'u'){
+			if	(dotf || expf){
+				ungetc();
+				break;
+				}
+			i = getc();
+			if	(i == 'l' || i == 'L')
+				Token.constType = LONGBITS;
+			else	{
+				Token.constType = INTBITS;
+				if	(i != EOF_MARK)
+					ungetc();
+				}
+			break;
+			}
+		else if	(i == EOF_MARK)
+			break;
+		else	{
+			ungetc();
+			break;
+			}
+		}
+	*cp = 0;
+	if	(radix == OCTAL_CON &&
+		 bigDigits)
+		errorContext error("ScannerNotOctalDigit");
+	else if	(dotf && radix == HEX_CON)
+		errorContext error("ScannerBadNumber");
+	return radix;
+	}
+
+getcc:	() =
+	{
+	i:	int;
+	c:	int;
+	u:	union	{
+		public:
+
+		cx:	[CCLEN] char;
+		y:	long;
+		};
+
+	u.y = 0;
+	for	(i = 0; ; i++){
+		c = mapc('\'');
+		if	(c == -1)
+			break;
+		if	(i < CCLEN)
+			u.cx[i] = c;
+		}
+	if	(i > CCLEN)
+		errorContext error("ScannerCConstLong");
+	if	(i == 1)
+		Token.icon = u.cx[0];
+	else
+		Token.icon = integerConstant(u.y, -INTBITS);
+	Token.constType = -INTBITS;
+	}
+
+getString:	() =
+	{
+	i:	int;
+	cp:	ref char;
+
+	Token.stringLength = 0;
+	cp = Accum;
+	i = mapc('"');
+	while	(i != -1){
+		if	(Token.stringLength >= sizeof Accum){
+			errorContext error("ScannerStringLong");
+			while	(mapc('"') != -1)
+				;
+			break;
+			}
+		else	{
+			Token.stringLength++;
+			*cp++ = i;
+			}
+		i = mapc('"');
+		}
+	if	(FullScan){
+		Token.stringValue = alloc(Token.stringLength);
+		memCopy(Token.stringValue, Accum, Token.stringLength);
+		}
+	}
+
+resync:	(s: [:] char) =
+	{
+	errorContext error(s);
+	consumeTokens();
+	}
+
+resyncX:	(msgid: [:] char, s: [:] char, a: [:] char, d: int) =
+	{
+	errorContext errorX(msgid, s, a, d);
+	consumeTokens();
+	}
+
+consumeTokens:	() =
+	{
+	tok:	int;
+	depth:	int;
+	f:	boolean;
+
+	tok = Token.lex;
+	if	(tok == RC){
+		unscan();
+		return;
+		}
+	f = FullScan;
+	FullScan = FALSE;
+	while	(tok != 0 && tok != SM && tok != RC){
+		if	(tok == LC){
+			depth = 1;
+			for	(;;){
+				tok = scan();
+				if	(tok == 0){
+					FullScan = f;
+					return;
+					}
+				if	(tok == RC){
+					depth--;
+					if	(depth <= 0)
+						break;
+					}
+				else if	(tok == LC)
+					depth++;
+				}
+			FullScan = f;
+			return;
+			}
+		tok = scan();
+		}
+	if	(tok == RC)
+		unscan();
+	FullScan = f;
+	}
+
+setScanMode:	(f: boolean) =
+	{
+	FullScan = f;
+	}
+
+private:
+
+Backup:		int;
+FullScan:	boolean;
+
+rememberLine:	() =
+	{
+	Token.offset = tell() - 1;
+	}
+
+
+	};
+
+IDLEN:	public	const	int = 32;		// max len of an identifier
+
+FLOAT_CON:	const	int = 0;
+FLOAT_HEX:	const	int = 1;
+OCTAL_CON:	const	int = 8;
+DECIMAL_CON:	const	int = 10;
+HEX_CON:	const	int = 16;
+
+Months:		const [] char = "JanFebMarAprMayJunJulAugSepOctNovDec";
+
+	/* These are the tokens returned by the scanner */
+
+Sintok:	const [] tokenNames = [ NOT, MOD,  AND, MUL, ADD, XOR,  OR, ASG ];
+Asgtok:	const [] tokenNames = [  NE, MOA,  ANA, MUA, ADA, XRA, ORA,  EQ ];
+Dbltok:	const [] tokenNames = [   0,   0, LAND,   0, INC,   0, LOR,  EQ ];
+
+Token:	public	{
+	public:
+	lex:		tokenNames;
+	offset:		fileOffset;
+	constType:	signedByte;
+	icon:		unsignedLong;
+	fcon:		real;
+	stringValue:	ref char;
+	stringLength:	int;
+	iden:		ref identifier;
+	};
+Accum:		public	[4096] char;
+BuildMachine:	public	boolean;
+
+tokenClasses:	type	byte = {
+	A_SKP = lastToken,
+	A_EXC,
+	A_PCT,
+	A_AMP,
+	A_AST,
+	A_PLS,
+	A_UP,
+	A_BAR,
+	A_EQ,
+	A_LET,
+	A_DIG,
+	A_QUO,
+	A_APO,
+	A_DSH,
+	A_DOT,
+	A_LT,
+	A_ILL,
+	A_GT,
+	A_SLH,
+	A_MAGIC,
+	A_CO,
+	};
+
+CharacType:	const [] tokenClasses = [
+	EOF_TOK,A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_SKP,	A_SKP,	A_SKP,	A_SKP,	A_SKP,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+
+	A_SKP,	A_EXC,	A_QUO,	A_ILL,	A_MAGIC,A_PCT,	A_AMP,	A_APO,
+	LP,	RP,	A_AST,	A_PLS,	CM,	A_DSH,	A_DOT,	A_SLH,
+	A_DIG,	A_DIG,	A_DIG,	A_DIG,	A_DIG,	A_DIG,	A_DIG,	A_DIG,
+	A_DIG,	A_DIG,	A_CO,	SM,	A_LT,	A_EQ,	A_GT,	QUES,
+
+	A_ILL,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,
+	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,
+	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,
+	A_LET,	A_LET,	A_LET,	LB,	A_ILL,	RB,	A_UP,	A_LET,
+
+	A_ILL,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,
+	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,
+	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,	A_LET,
+	A_LET,	A_LET,	A_LET,	LC,	A_BAR,	RC,	COM,	A_ILL,
+
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,	A_ILL,
+	];
+
+SystemTime:		Date;
+
+/*
+	This function converts a number that has been scanned.  The radix
+	determines whether floating point or integer conversion is applied.
+
+	For integer conversions, after the conversion is completed, the
+	resulting value is checked.  If it fits in the default number of
+	bits, everything proceeds just fine.  If not, the resulting integer
+	type is promoted.
+
+	The only promotions are that if the scanned type is a signed value
+	smaller than long, and the value fits as a signed long, then make
+	it a signed long.
+
+	Otherwise, make the result an unsigned long.
+
+	The 'scanned type' is the type determined by the combination of
+	L and U suffixes.
+ */
+convertnum:	(radix: int) int =
+	{
+	cp:	ref char;
+	i:	int;
+
+	if	(radix == FLOAT_CON){
+		stringToFloat(&Token.fcon, Accum);
+		return FCON;
+		}
+	if	(radix == FLOAT_HEX){
+		hexToFloat(&Token.fcon, Accum);
+		return FCON;
+		}
+	Token.icon = 0;
+	for	(cp = Accum; *cp; cp++){
+		i = *cp;
+		if	(CharacType[i] == A_DIG)
+			i -= '0';
+		else
+			i += 10 - 'a';
+		Token.icon = Token.icon * radix + i;
+		}
+	if	(integerFits(Token.icon, Token.constType))
+		return ICON;
+	if	(Token.constType < 0 &&
+		 Token.constType != -LONGBITS &&
+		 integerFits(Token.icon, -LONGBITS))
+		Token.constType = -LONGBITS;
+	else
+		Token.constType = LONGBITS;
+	return ICON;
+	}
+

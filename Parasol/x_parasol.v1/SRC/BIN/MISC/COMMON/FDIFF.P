@@ -1,0 +1,50 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+
+main:	entry	() =
+	{
+	fd1:	stream;
+	fd2:	stream;
+	nm1:	[:] char;
+	nm2:	[:] char;
+	v1:	int;
+	v2:	int;
+	i:	int;
+
+	if	(|commandLine.arguments != 2){
+		printf("Use is: FDIFF file1 file2\n");
+		return;
+		}
+	nm1 = commandLine.arguments[0];
+	nm2 = commandLine.arguments[1];
+	if	(fd1 open(nm1, AR_READ)){
+		printf("Couldn't open %s\n", nm1);
+		return;
+		}
+	if	(fd2 open(nm2, AR_READ)){
+		printf("Couldn't open %s\n", nm2);
+		return;
+		}
+	for	(i = 0;; i++){
+		v1 = fd1 getc();
+		v2 = fd2 getc();
+		if	(v1 == EOF){
+			if	(v2 != EOF)
+				printf("%s is longer\n", nm2);
+			break;
+			}
+		if	(v2 == EOF){
+			printf("%s is longer\n", nm1);
+			break;
+			}
+		if	(v1 != v2)
+			printf("%07x: %02x/%02x\n", i, v1, v2);
+		}
+	exit(EX_SUCCESS);
+	}

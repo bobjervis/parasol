@@ -1,0 +1,176 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+
+include	tparams;
+
+include	types;
+include	symtab;
+include	ptree;
+
+include	backend;
+
+/*
+	This function returns an updated bit offset given a starting
+	bit offset and a type.  The assumption is that the next member
+	of a structure to be allocated has type t, and the current
+	cumulative bit offset is given by bitOffset.  The return value
+	is the possibly padded bit offset.
+ */
+packedAdjustment:	public	(bitOffset: addr_t, t: ref type_s) addr_t =
+	{
+	width:		int;
+	bytePart:	int;
+
+	if	(t->topType != T_SIGNED &&
+		 t->topType != T_UNSIGNED)
+		return (bitOffset + 7) & ~7;
+	bytePart = bitOffset & 7;
+	width = t bitSizeOf();
+	if	(width + bytePart >= LONGBITS)
+		return (bitOffset + 7) & ~7;
+	else
+		return bitOffset;
+	}
+
+immediateSconstArgument: public	(ref tree_p, ref type_s) ref tree_p =
+	{
+	return 0;
+	}
+
+immediateDescriptorArgument: public	(ref tree_p, ref type_s) ref tree_p =
+	{
+	return 0;
+	}
+
+TargetData:	public	{
+	public:
+
+	changed:		boolean;
+	spills:			ref spill;
+	lastSpill:		ref spill;
+	};
+
+usesIndirectReturn:	public	() boolean =
+	{
+	return FALSE;
+	}
+
+spill:	public	type	{
+
+	public:
+
+	next:		ref spill;
+
+display:	(x: ref tree_p) =
+	{
+	}
+
+	};
+/*
+	This type records a register mask for register allocation operations.
+ */
+regMask:		public	type	unsigned[16];
+
+regNum:	public	type	char = {
+	nullReg = 0xFF
+	};
+
+RegNames:	public	const	[1] * char;
+
+jumpCondition:	public	type	char =	{
+	JC_JUMP,
+	};
+/*
+	A variable block is the basic unit of local variable allocation.
+	If a variable was created from a declared symbol, the declaration
+	field points to the parent symbol.  Only scalar symbols that may
+	be kept in registers need to be promoted in this way.
+
+	Common subexpressions or induction variables leave the
+	declaration field NULL.
+
+	The variables are stored as a single array.
+ */
+variable:	public	type	{
+
+	public:
+
+	dtype:		ref type_s;
+
+create:	factory	(sym: ref symbol_s) ref variable =
+	{
+	return new variable;
+	}
+
+	};
+/*
+	This function checks whether a member is a bit field.  The member
+	is known to be in a packed structure.  The bitOffset of the symbol
+	and the bitSizeOf its type are passed to this function.  Any offset
+	that is not a multiple of 8 must be bit field.  Any width that is
+	not a multiple of 8 also must be a bit field.  A 24 bit member is
+	also a bit field.
+ */
+isBitField:	public	(o: addr_t, m: ref type_s) boolean =
+	{
+	w:	unsigned;
+
+	if	(m->topType != T_SIGNED &&
+		 m->topType != T_UNSIGNED)
+		return FALSE;
+	w = m bitSizeOf();
+	if	(o & 7)
+		return TRUE;
+	else if	(w & 7)
+		return TRUE;
+	else if	(w == 24)
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+locateGateParameters:	public	(xsym: ref symbol_s) =
+	{
+	psize:		addr_t;
+	size:		addr_t;
+	sym:		ref symbol_s;
+
+	size = 0;
+	for	(sym = xsym; sym; sym = sym->next){
+		if	(sym->storageClass != SC_BASED)
+			continue;
+		psize = sym->dtype getType() sizeOf();
+		if	(DebugList){
+			printf("parameter ");
+			if	(sym->name)
+				printf("%S", sym->name spelling());
+			else
+				printf("<anon>");
+			printf(": size %d\n", psize);
+			}
+
+			/* This adjusts for odd-sized structs and
+			   char parameters
+			 */
+
+		psize += 3;
+		psize &= ~3;
+		sym->bitOffset = psize;
+		size += psize;
+		}
+	addr:		addr_t;
+
+	addr = size;
+	for	(sym = xsym; sym; sym = sym->next){
+		if	(sym->storageClass != SC_BASED)
+			continue;
+		addr -= sym->bitOffset;
+		sym->bitOffset = addr;
+		}
+	}

@@ -1,0 +1,7 @@
+include window;
+
+fileChooser:	public	type	inherit popupShell {
+	};
+
+fileFilter:	public	type	{
+	};

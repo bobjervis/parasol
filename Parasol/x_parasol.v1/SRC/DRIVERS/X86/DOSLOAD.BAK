@@ -1,0 +1,447 @@
+include	node;
+include	error;
+include	alys;
+include	process;
+include	hardware, hprocess, pc_hdw;
+include	vmemory;
+include	dosemul;
+include	file;
+include	memory;
+include	string;
+include	filesys;
+/*
+
+DOS_ERR_INVFNC:	const	int = 1;
+DOS_ERR_INVDAT:	const	int = 13;
+DOS_ERR_INVDRV:	const	int = 15;
+
+IE:		const	int = 0x0200;		// Interrupt Enable flag
+ZF:		const	int = 0x0040;		// Zero Flags
+
+directory:	public	type	packed	{
+	public:
+	filename:	[8] byte;
+	extension:	[3] byte;
+	attribute:	char;
+ 			[10] char;
+	ftime:		unsignedLong;
+	cluster:	unsigned[16];
+	size:		unsignedLong;
+	};
+
+
+ */
+dosLoadTrap:	Trap;
+
+ExeLoader:	public	inherit loader	{
+
+load:	dynamic	(par: ref far External, d: ref far directory, cmd: [:] char, 
+					args: [:] char) ref far External =
+	{
+	ext:	[:] char;
+
+	ext = getExtension(cmd);
+
+		// Only load .EXE files
+
+	if	(stringIcompare(ext, ".exe") != 0)
+		dosLoadTrap raise();
+
+	p:	ref process;
+	i:	int;
+
+	p = process create();
+	if	(p == 0)
+		dosLoadTrap raise();
+	i = loadExefile(par, p, d, cmd, args);
+	if	(i){
+		p free();
+		dosLoadTrap raise();
+		}
+//	kprintf("p->animates->where = %p\n", p->animates->where);
+//	kprintf("p->animates->me = %d\n", p->animates->me);
+	x: ref far External;
+
+	x = p->animates->me;
+	p setRunnable();
+	return x;
+	}
+
+debugLoad:	dynamic	(par: ref far External, d: ref debug_t, 
+				dr: ref far directory, cmd: [:] char, 
+				args: [:] char) boolean =
+	{
+	}
+
+	};
+
+ExeHeader:	type	{
+	public:
+
+	magic:		unsigned[16];
+	lenMod512:	unsigned[16];
+	lenBlocks:	unsigned[16];
+	relocs:		unsigned[16];
+	headerSize:	unsigned[16];
+	minSize:	unsigned[16];
+	maxSize:	unsigned[16];
+	ss:		unsigned[16];
+	sp:		unsigned[16];
+	checksum:	unsigned[16];
+	ip:		unsigned[16];
+	cs:		unsigned[16];
+	relocOffset:	unsigned[16];
+	overlay:	unsigned[16];
+	};
+
+EXE_MAGIC:	const	unsigned[16] = 0x5a4d;
+
+ComLoader:	public	inherit loader	{
+
+load:	dynamic	(par: ref far External, d: ref far directory, cmd: [:] char, 
+					args: [:] char) ref far External =
+	{
+	ext:	[:] char;
+
+	ext = getExtension(cmd);
+
+		// Only load .COM files
+
+	if	(stringIcompare(ext, ".com") != 0)
+		dosLoadTrap raise();
+
+	p:	ref process;
+	i:	int;
+
+	p = process create();
+	if	(p == 0)
+		dosLoadTrap raise();
+	i = loadComfile(par, p, d, cmd, args);
+	if	(i){
+		p free();
+		dosLoadTrap raise();
+		}
+//	kprintf("p->animates->where = %p\n", p->animates->where);
+//	kprintf("p->animates->me = %d\n", p->animates->me);
+	x: ref far External;
+
+	x = p->animates->me;
+	p setRunnable();
+	return x;
+	}
+
+debugLoad:	dynamic	(par: ref far External, d: ref debug_t, 
+				dr: ref far directory, cmd: [:] char, 
+				args: [:] char) boolean =
+	{
+	}
+
+	};
+
+LOAD_BASE:		const	int = 0x800;	// Byte offset of image base 
+
+loadExefile:	public	(par: ref far External,
+			 p: ref process, 
+			 d: ref far directory, 
+			 rf: [:] char, args: [:] char) int =
+	{
+	fd:		ref far channel;
+	i:		long;
+	j:		long;
+	fix:		long;
+	msize:		long;
+	dosMemory:	ref byte;
+	image:		ref byte;
+	n:		int;
+	cseg:		ref segment;
+	eh:		ExeHeader;
+	locp:		ref unsigned[16];
+	rp:		ref reloc_t;
+
+		/* Open the file */
+
+	if	(d)
+		fd = d open(rf, AR_READ);
+	else
+		fd = FileSystem open(rf, AR_READ);
+	if	(fd == 0)
+		dosLoadTrap raise();
+
+		// Read the header and verify it
+
+	r:	[:] byte;
+
+	r = ref byte(&eh)[:sizeof eh];
+	r [:]= fd read();
+	if	(|r != sizeof eh){
+		fd close();
+		return ERRNOTRUNFILE;
+		}
+	if	(eh.magic != EXE_MAGIC){
+		fd close();
+		return ERRNOTRUNFILE;
+		}
+
+	i = eh.headerSize * 16;
+	j = eh.lenBlocks * 512 - i;
+	if	(eh.lenMod512 != 0 && eh.lenMod512 != 4){
+				// 4 is some magic residue from an early,
+				// buggy linker.
+		j -= 512;
+		j += eh.lenMod512;
+		}
+
+		// j is now the adjusted image size.
+		// i is the file offset of the image.
+
+	fix = eh.maxSize + LOAD_BASE / 16;
+	if	(fix > 0x9FFF)
+		fix = 0x9FFF;
+	fix <<= 4;
+	fix += 0x1010;		// allow for the page table
+
+		// fix contains the minimum needed memory
+
+	msize = eh.minSize * 16 + 0x1000 + LOAD_BASE;
+
+	cseg = segment create(0, 0, msize, fix);
+	if	(cseg == 0){
+		fd close();
+		return ERRNOMEMORY;
+		}
+
+		/* Read the code image */
+
+
+	fd seek(i, 0);
+
+	dosMemory = cseg lock(0);
+
+	image = dosMemory + 0x1000 + LOAD_BASE;
+
+	r = image[:j];
+	r [:]= fd read();
+
+	if	(|r != j){
+		fd close();
+		return ERRNOTRUNFILE;
+		}
+
+		/* Relocate the image */
+
+	fd seek(eh.relocOffset, 0);
+	for	(i = 0; i < eh.relocs; i++){
+		if	(i & 0x1ff == 0){		// We need to fill
+							// a reloc block.
+			n = eh.relocs - i;
+			if	(n > 512)
+				n = 512;
+			n *= 4;
+			rp = ref reloc_t(dosMemory);
+			r = ref byte(rp)[:n];
+			r [:]= fd read();
+			if	(|r != n){
+				fd close();
+				return ERRNOTRUNFILE;
+				}
+			}
+		n = rp->offset + rp->segment * 16;
+		locp = ref unsigned[16](image + n);
+		*locp += LOAD_BASE / 16;
+		rp++;
+		}
+
+		// Relocate the initial ss and cs
+
+	eh.ss += LOAD_BASE / 16;
+	eh.cs += LOAD_BASE / 16;
+
+		// Copy the program arguments
+
+	fd close();
+
+	n = loadProcessState(p, cseg, dosMemory, rf, args);
+	if	(n)
+		return n;
+
+	p->task load(eh.cs, PSP_SEG, eh.ss, eh.ip, eh.sp, 0, 0);
+	return SUCCESS;
+	}
+
+loadComfile:	public	(par: ref far External,
+			 p: ref process, d: ref far directory, 
+			 rf: [:] char, args: [:] char) int =
+	{
+	fd:		ref far channel;
+	i:		long;
+	j:		long;
+	msize:		long;
+	dosMemory:	ref byte;
+	n:		int;
+	cseg:		ref segment;
+	image:		ref byte;
+
+		/* Open the file */
+
+	if	(d)
+		fd = d open(rf, AR_READ);
+	else
+		fd = FileSystem open(rf, AR_READ);
+	if	(fd == 0)
+		dosLoadTrap raise();
+	j = fd seek(0, 2);
+
+
+		// j is now the COM image size.
+
+	cseg = segment create(0, 0, 0x11000 + LOAD_BASE, 0xA1000);
+
+	if	(cseg == 0){
+		fd close();
+		return ERRNOMEMORY;
+		}
+
+		/* Read the code image */
+
+	fd seek(0, 0);
+	dosMemory = cseg lock(0);
+
+	image = dosMemory + 0x1000 + LOAD_BASE;
+
+	r:	[:] byte;
+
+	r = image[:j];
+
+	r [:]= fd read();
+
+	fd close();
+
+	if	(|r != j)
+		return ERRNOTRUNFILE;
+
+	n = loadProcessState(p, cseg, dosMemory, rf, args);
+	if	(n)
+		return n;
+
+	p->task load(PSP_SEG, PSP_SEG, PSP_SEG, sizeof psp_t, 0xFFFE, 0, 0);
+	return SUCCESS;
+	}
+
+loadProcessState:	(p: ref process, cseg: ref segment,
+			 dosMemory: ref byte, rf: [:] char, 
+			 args: [:] char) int =
+	{
+	psp:		ref psp_t;
+	ar:		ref DosMachine;
+	image:		ref char;
+	cmdname:	ref char;
+	i:		int;
+
+		// Copy the program arguments
+
+	psp = ref psp_t(dosMemory + 0x1000 + LOAD_BASE - sizeof psp_t);
+	psp->memTop = (cseg->length - 0x1000) >> 4;
+	psp->int20 = 0x20CD;
+	psp->environ = 0x53;
+	image = dosMemory + 0x1530;
+
+	s:	[:] char;
+
+	s = "COMSPEC=C:\\COMMAND.COM";
+	memCopy(image, s, |s);
+	cmdname = image + |s;
+	*cmdname++ = 0;
+	*cmdname++ = 0;
+	*cmdname++ = 1;
+	*cmdname++ = 0;
+
+	ar = new DosMachine[ cseg ];
+
+	i = ar->fileSystem getAbsolutePath(rf, cmdname[:MAXPATH]);
+
+		// Errors?!  Make the command name null.
+
+	if	(i)
+		*cmdname = 0;
+
+	for	(; *cmdname; cmdname++)
+		if	(*cmdname == '/')
+			*cmdname = '\\';
+		else
+			*cmdname = toupper(*cmdname);
+	i = copyArgs(&psp->argLen, args);
+	cseg unlock();
+
+	if	(i){
+		ar close();
+		return i;
+		}
+
+	p->where = ar;
+	p->task.pageTable0 = buildV8086pageTable(cseg->address, cseg->length);
+	loadProcessHardware(p->index, &p->task, &ar->lcontext, 
+					&p->kernelStack[KERNEL_STACK]);
+	return SUCCESS;
+	}
+
+copyArgs:	(argPool: ref char, args: [:] char) int =
+	{
+	i:		int;
+	b:		char;
+
+		// Trim trailing nulls
+
+	while	(|args && args[|args - 1] == 0)
+		(|args)--;
+	if	(|args >= 127)
+		return ERRINVALIDDATA;
+	*argPool = |args;
+	for	(i = 0; i < |args; i++){
+		if	(args[i] == 0)
+			argPool[i + 1] = ' ';
+		else
+			argPool[i + 1] = args[i];
+		}
+	argPool[i + 1] = '\r';
+	return SUCCESS;
+	}
+
+loadTSSv8086:	(tss: ref task_t, cs: int, ds: int, ss: int, 
+						eip: int, esp: int) =
+	{
+	tss->cs = cs;
+	tss->ds = ds;
+	tss->es = ds;
+	tss->fs = ds;
+	tss->gs = ds;
+	tss->ss = ss;
+	tss->eip = eip;
+	tss->esp = esp;
+	}
+
+buildV8086pageTable:	public	(addr: paddr_t, length: paddr_t) paddr_t =
+	{
+	ap:	ref paddr_t;
+	physp:	ref paddr_t;
+	locp:	ref paddr_t;
+	i:	int;
+
+	ap = getPageTable(addr) + getPageOffset(addr);
+	locp = physicalToAddressable(ap[0] & ~0xfff);
+	length = ((length + 0xfff) >> 12) << 2;
+	memSet(locp, 0, PAGE_SIZE);
+	memCopy(locp, ap + 1, length);
+	locp += 0xA0;
+	physp = getPageTable((512 + 256) << 22);
+	physp += 0xA0;
+	memCopy(locp, physp, 0x60 << 2);
+	return ap[0];
+	}
+
+reloc_t:	type	{
+	public:
+
+	offset:		unsigned[16];
+	segment:	unsigned[16];
+	};
+

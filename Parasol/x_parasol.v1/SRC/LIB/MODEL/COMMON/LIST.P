@@ -1,0 +1,339 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+list:	public	type	{
+	head:		queue;
+	loc:		ref queue;
+
+	public:
+
+constructor:	() =
+	{
+	head makeEmpty();
+	loc = &head;
+	}
+
+length:	() unsigned =
+	{
+	n:	ref queue;
+	i:	unsigned;
+
+	for	(n = head.next, i = 0; n != &head; n = n->next, i++)
+		;
+	return i;
+	}
+
+sort:	() =
+	{
+	ax:		unsigned;
+	bx:		unsigned;
+	dx:		unsigned;
+	si:		ref queue;
+	di:		ref queue;
+	save:		ref queue;
+	n:		ref queue;
+	v:		ref ref queue;
+	len:		unsigned;
+	i:		unsigned;
+
+	len = length();
+	if	(len < 2)
+		return;
+	v = new [len] ref queue;
+	n = head.next;
+	for	(n = head.next, i = 0; n != &head; n = n->next, i++)
+		v[i] = n;
+
+		/* Phase I of Sort */
+
+	dx = len >> 1;
+	do	{
+		bx = ax = dx;
+		for	(;;){
+			bx <<= 1;
+			if	(bx > len)
+				break;
+			si = v[bx - 1];
+			di = v[bx];
+			if	(bx < len &&
+				 compare(si, di) < 0){
+				bx++;
+				si = di;
+				}
+			di = si;
+			si = v[ax - 1];
+			if	(compare(si, di) >= 0)
+				break;
+			v[bx - 1] = si;
+			v[ax - 1] = di;
+			ax = bx;
+			}
+		}
+		while	(--dx);
+
+		/* Phase II of Sort */
+
+	dx = len - 1;
+	do	{
+		bx = 0;
+		save = v[dx];
+		v[dx] = *v;
+		dx--;
+		for	(;;){
+			ax = bx;
+			bx <<= 1;
+			bx++;
+			if	(bx > dx)
+				break;
+			si = v[bx];
+			di = v[bx + 1];
+			if	(bx < dx &&
+				 compare(si, di) < 0){
+				si = di;
+				bx++;
+				}
+			v[ax] = si;
+			}
+		di = save;
+
+		while	(ax){
+			bx = ax;
+			bx--;
+			bx >>= 1;
+			si = v[bx];
+			if	(compare(si, di) >= 0)
+				break;
+			v[ax] = si;
+			ax = bx;
+			}
+		v[ax] = di;
+		}
+		while	(dx);
+
+		/* Reconstruct the list */
+
+	head makeEmpty();
+	for	(i = 0; i < len; i++)
+		head enqueue(v[i]);
+	delete v;
+	}
+
+compare:	dynamic	(p1: ref queue, p2: ref queue) int =
+	{
+	return 0;
+	}
+/*
+	Place q into a queue at the end of the queue.
+ */
+enqueue:(q: ref queue) =
+	{
+	head enqueue(q);
+	}
+/*
+	Pull a queue item off the front of the queue (self).
+ */
+dequeue:	() ref queue =
+	{
+	q:	ref queue;
+
+	if	(isEmpty())
+		return 0;
+	q = head.next;
+	if	(loc == q)
+		loc = loc->next;
+	q extract();
+	return q;
+	}
+/*
+	The push and pop primitives implement a stack.
+ */
+push:	(q: ref queue) =
+	{
+	head push(q);
+	}
+
+pop:	() ref queue =
+	{
+	q:	ref queue;
+
+	if	(isEmpty())
+		return 0;
+	q = head.next;
+	if	(loc == q)
+		loc = loc->next;
+	q extract();
+	return q;
+	}
+
+isEmpty:	() boolean =
+	{
+	return (head.next == &head);
+	}
+
+index:	(count: int) ref queue =
+	{
+	if	(count == 0)
+		loc = &head;
+	else if	(count < 0){
+		for	(loc = head.prev; loc != &head; loc = loc->prev){
+			count++;
+			if	(count == 0)
+				return loc;
+			}
+		}
+	else	{
+		for	(loc = head.next; loc != &head; loc = loc->next){
+			count--;
+			if	(count == 0)
+				return loc;
+			}
+		}
+	return 0;
+	}
+
+seek:	(count: int) ref queue =
+	{
+	if	(count == 0){
+		if	(loc == &head)
+			return 0;
+		else
+			return loc;
+		}
+	if	(count < 0){
+		for	(;;){
+			if	(loc == &head)
+				return 0;
+			if	(count == 0)
+				return loc;
+			count++;
+			loc = loc->prev;
+			}
+		}
+	else	{
+		for	(;;){
+			if	(loc == &head)
+				return 0;
+			if	(count == 0)
+				return loc;
+			count--;
+			loc = loc->next;
+			}
+		}
+	}
+
+current:	() ref queue =
+	{
+	if	(loc == &head)
+		return 0;
+	else
+		return loc;
+	}
+
+extract:	() ref queue =
+	{
+	n:	ref queue;
+
+	if	(loc == &head)
+		return 0;
+	n = loc;
+	loc = loc->next;
+	n extract();
+	return n;
+	}
+
+};
+
+/*
+	Parasol queues operate as circular lists.  Any queue always has
+	at least one member: itself.  The new operation will thread
+	the queue onto itself.  Subsequent operations, for example a
+	dequeue() will remove an item from its current queue.  Once
+	off a queue, an item's next and previous pointers are undefined
+	and may not meaningfully be used.
+
+	An enqueue operation will place an unqueued item (self) onto a
+	named queue.
+
+	Since there is no distinction within these routines between a queue
+	head and a queue member.  Thus, while only enqueue and dequeue
+	operations are supported, merge and split operations could easily
+	be implemented so that two lists of arbitrary length can be
+	merged into a single list, or one list could be split into two
+	separate lists.  These operations are generalizations of the enqueue
+	and dequeue operations, but also slightly bigger.
+ */
+
+queue:	public	type	{
+	public:
+
+	next:	ref queue;
+	prev:	ref queue;
+
+makeEmpty:	() =
+	{
+	prev = next = self;
+	}
+
+extract:() =
+	{
+	prev->next = next;
+	next->prev = prev;
+	}
+/*
+	Place q into a queue at the end of the queue.
+ */
+enqueue:(q: ref queue) =
+	{
+	q->next = self;
+	q->prev = prev;
+	prev->next = q;
+	prev = q;
+	}
+/*
+	Pull a queue item off the front of the queue (self).
+ */
+dequeue:	() ref queue =
+	{
+	q:	ref queue;
+
+	q = next;
+	q extract();
+	return q;
+	}
+/*
+	Place a queue item before the current one.
+ */
+insert:	(q: ref queue) =
+	{
+	prev push(q);
+	}
+/*
+	The push and pop primitives implement a stack.
+ */
+push:	(q: ref queue) =
+	{
+	q->next = next;
+	q->prev = self;
+	next->prev = q;
+	next = q;
+	}
+
+pop:	() ref queue =
+	{
+	q:	ref queue;
+
+	q = next;
+	q extract();
+	return q;
+	}
+
+isEmpty:	() boolean =
+	{
+	return (next == self);
+	}
+
+};

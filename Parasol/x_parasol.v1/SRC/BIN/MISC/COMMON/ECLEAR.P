@@ -1,0 +1,29 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	msgboard;
+include	file, filesys;
+
+mainSetup:	entry	() =
+	{
+	fname:	[:] char;
+	x:	ref far messageBoard;
+
+	if	(|commandLine.arguments){
+		printf("ECLEAR Version 1.0 use is: ECLEAR\n");
+		return;
+		}
+	x = ref far messageBoard(FileSystem attach("/service/errorBrowser",
+					":desktop.msgboard.messageBoard"));
+	if	(x == 0){
+		printf("No error browser connection\n");
+		exit(EX_FAIL);
+		}
+	x clear();
+	exit(EX_SUCCESS);
+	}
+

@@ -1,0 +1,393 @@
+include	alys;
+include	error;
+include	file;
+include	object;
+include	dos_vol;
+include	message;
+include	hardware;
+include	alysfs;
+
+FILENAME:	const	int = 32;		// maximum length of a filename
+DRIVES:		const	int = 26;
+
+DosFileSystem:	public	type	{
+	public:
+
+	defaultDrive:		byte;
+	workingDirectory:	[DRIVES] ref far directory;
+	mountPoint:		[DRIVES] ref far directory;
+
+constructor:	() =
+	{
+	i:	int;
+	fs:	ref alysFileSystem;
+	d:	ref far directory;
+
+	defaultDrive = 2;		// default to c: in absence of better
+					// info
+	fs = locateObject(FileSystem);
+	d = fs locateDirectory("");	// get the working directory
+	for	(i = 0; i < |DosDrive; i++){
+		mountPoint[i] = 
+			ref far directory(DosDrive[i].rootDir.objectId);
+		workingDirectory[i] = mountPoint[i];
+/*
+		if	(d->residesOn == &DosDrive[i]){
+			workingDirectory[i] = d;
+			defaultDrive = i;
+			}
+ */
+		}
+//	objId = publishKernel(&NamerObject, self, AR_ALL);
+	}
+/*
+fork:	dynamic	() ref fileSystem =
+	{
+	fsp:	ref DosFileSystem;
+	i:	int;
+
+	fsp = alloc(sizeof DosFileSystem);
+	if	(fsp){
+		memCopy(fsp, self, sizeof DosFileSystem);
+		for	(i = 0; i < DRIVES; i++)
+			if	(workingDirectory[i])
+				workingDirectory[i] dup();
+		}
+	else
+		CurProc->error = ERRNOMEMORY;
+	return fsp;
+	}
+ */
+destructor:	dynamic	() =
+	{
+	i:	int;
+
+	for	(i = 0; i < DRIVES; i++){
+		if	(mountPoint[i])
+			mountPoint[i] close();
+		if	(workingDirectory[i])
+			workingDirectory[i] close();
+		}
+	}
+
+open:	dynamic	(path: [:] char, access: AccessRights) ref far channel =
+	{
+	d:		ref far directory;
+	drive:		int;
+	ch:		ref far channel;
+
+	d = parseFirstPart(&drive, &path);
+	if	(d == 0)
+		return 0;
+	ch = d open(path, access);
+	d close();
+	return ch;
+	}
+
+stat:	dynamic	(path: [:] char, fx: ref file_t) int =
+	{
+	d:		ref far directory;
+	drive:		int;
+
+	d = parseFirstPart(&drive, &path);
+	if	(d == 0)
+		return ERRNOPATH;
+	*fx = d stat(path);
+	d close();
+	return SUCCESS;
+	}
+
+setFileAttributes:	dynamic	(path: [:] char, acc: fAttributes_t) int =
+	{
+	d:		ref far directory;
+	drive:		int;
+	i:		int;
+
+	d = parseFirstPart(&drive, &path);
+	if	(d == 0)
+		return ERRNOPATH;
+	i = d setFileAttributes(path, acc);
+	d close();
+	return i;
+	}
+
+access:	dynamic	(path: [:] char, acc: AccessRights) int =
+	{
+	d:		ref far directory;
+	drive:		int;
+	i:		int;
+
+	d = parseFirstPart(&drive, &path);
+	if	(d == 0)
+		return ERRNOPATH;
+	i = d access(path, acc);
+	d close();
+	return i;
+	}
+
+create:	dynamic	(path: [:] char, attrib: fAttributes_t) ref far channel =
+	{
+	d:		ref far directory;
+	drive:		int;
+	ch:		ref far channel;
+
+	d = parseFirstPart(&drive, &path);
+	if	(d == 0)
+		return 0;
+	ch = d create(path, attrib);
+	d close();
+	return ch;
+	}
+
+makeDirectory:	dynamic	(path: [:] char) ErrorCode =
+	{
+	d:		ref far directory;
+	drive:		int;
+	i:		ErrorCode;
+
+	d = parseFirstPart(&drive, &path);
+	if	(d == 0)
+		return ERRNOPATH;
+	i = d makeDirectory(path);
+	d close();
+	return i;
+	}
+
+removeDirectory:	dynamic	(path: [:] char) ErrorCode =
+	{
+	d:		ref far directory;
+	drive:		int;
+	i:		ErrorCode;
+
+	d = parseFirstPart(&drive, &path);
+	if	(d == 0)
+		return ERRNOPATH;
+	i = d removeDirectory(path);
+	d close();
+	return i;
+	}
+
+unlink:	dynamic	(path: [:] char) ErrorCode =
+	{
+	d:		ref far directory;
+	drive:		int;
+	i:		ErrorCode;
+
+	d = parseFirstPart(&drive, &path);
+	if	(d == 0)
+		return ERRNOPATH;
+	i = d unlink(path);
+	d close();
+	return i;
+	}
+
+unlinkGroup:	dynamic	(path: [:] char) ErrorCode =
+	{
+	d:		ref far directory;
+	drive:		int;
+	i:		ErrorCode;
+
+	d = parseFirstPart(&drive, &path);
+	if	(d == 0)
+		return ERRNOPATH;
+	i = d unlinkGroup(path);
+	d close();
+	return i;
+	}
+
+move:	dynamic	(path1: [:] char, path2: [:] char) ErrorCode =
+	{
+	d1:		ref far directory;
+	d2:		ref far directory;
+	drive1:		int;
+	drive2:		int;
+	i:		int;
+
+	d1 = parseFirstPart(&drive1, &path1);
+	if	(d1 == 0)
+		return ERRNOPATH;
+	d2 = parseFirstPart(&drive2, &path2);
+	if	(d2 == 0){
+		d1 close();
+		return ERRNOPATH;
+		}
+	d1 dup();
+	if	(d1 access(path1, AR_READ) != SUCCESS)
+		return ERRNOFILE;
+/*
+
+		// The drives must be the same in both names
+
+	if	(d1->residesOn != d2->residesOn){
+		d1 close();
+		d2 close();
+		return ERRNOTSAME;
+		}
+ */
+	i = d1 move(path1, d2, path2);
+	d1 close();
+	d2 close();
+	return i;
+	}
+
+getDriveInfo:	(disk: int, di: ref drive_t) int =
+	{
+	if	(disk < 0 ||
+		 disk >= DRIVES ||
+		 mountPoint[disk] == 0)
+		return -1;
+	*di = mountPoint[disk] getDriveInfo();
+	return 0;
+	}
+
+getAbsolutePath:	dynamic	(path: [:] char, 
+				 buf: [:] char) int =
+	{
+	d:		ref far directory;
+	drive:		int;
+	s:		[:] char;
+
+	d = parseFirstPart(&drive, &path);
+	if	(d == 0)
+		return ERRNOPATH;
+	buf [:]= d getAbsolutePath(path);
+	d close();
+	return |buf;
+	}
+
+setCurrentDir:	dynamic	(path: [:] char) int =
+	{
+	d, d2:		ref far directory;
+	drive:		int;
+
+	d = parseFirstPart(&drive, &path);
+	if	(d == 0)
+		return ERRNOPATH;
+	d2 = d find(path);
+	d close();
+	if	(d2 == 0)
+		return ERRNOPATH;
+	if	(workingDirectory[drive])
+		workingDirectory[drive] close();
+	workingDirectory[drive] = d2;
+	return SUCCESS;
+	}
+
+setDefaultDrive:	(drive: int) int =
+	{
+	if	(drive >= DRIVES ||
+		 mountPoint[drive] == 0)
+		return ERRINVALIDDRIVE;
+	defaultDrive = drive;
+	return SUCCESS;
+	}
+
+getDefaultDrive:	() int =
+	{
+	return defaultDrive;
+	}
+
+private:
+
+parseFirstPart:	(drivep: ref int, pathp: ref [:] char) ref far directory =
+	{
+	d:		ref far directory;
+	path:		[:] char;
+	drive:		int;
+
+	path = *pathp;
+	if	(|path == 0)
+		return 0;
+	if	(|path >= 2 && path[1] == ':'){
+		if	(!isalpha(path[0]))
+			return 0;
+		drive = tolower(path[0]) - 'a';
+		path = path[2:];
+		}
+	else
+		drive = defaultDrive;
+	*drivep = drive;
+	if	(|path > 0 && path[0] == '/' || path[0] == '\\'){
+		d = mountPoint[drive];
+		path = path[1:];
+		if	(|path == 0){
+			*pathp = ".";
+			return d;
+			}
+		}
+	else
+		d = workingDirectory[drive];
+	if	(|path == 0)
+		return 0;
+	d dup();
+	while	(d){
+		component:	[FILENAME + 1] char;
+		i, j:		int;
+		cp:		ref char;
+		dx:		ref far directory;
+
+		for	(i = 0; i < FILENAME && i < |path; i++){
+			if	(path[i] == '/' ||
+				 path[i] == '\\')
+				break;
+			component[i] = path[i];
+			}
+		j = i;
+		while	(i < |path && path[i] != '/' && path[i] != '\\')
+			i++;
+		if	(i >= |path)
+			break;		// this was the last component
+		i++;			// skip the next /
+		path = path[i:];
+		dx = d find(component[:j]);
+		d close();
+		d = dx;
+		}
+	*pathp = path;
+	return d;
+	}
+
+	};
+/*
+/*
+	The null device is a seekable device that always reports end of
+	file on input and full write on output.  Seeks always succeed and
+	seek to 0 and control operations always succeed and do nothing.
+ */
+NullDevice:	public	inherit	file	{
+	public:
+
+open:	dynamic	(channelFlags) objectId = 
+	{
+	ob:	objectId;
+
+	NullChannel constructor(2, CH_READ|CH_WRITE|CH_CONTROL);
+	return &NullChannel;
+	}
+
+	} = [ FA_DEVICE|FA_READ|FA_WRITE|FA_CONTROL|FA_SEEKOK ];
+
+NullChannel:	inherit	channel	{
+
+control:	dynamic	(int, *, int) int =
+	{
+	return SUCCESS;
+	}
+
+read:	dynamic	(*, int) int =
+	{
+	return 0;
+	}
+
+write:	dynamic	(*, len: int) int =
+	{
+	return len;
+	}
+
+seek:	dynamic	(long, int) long =
+	{
+	return 0;
+	}
+
+	};
+ */

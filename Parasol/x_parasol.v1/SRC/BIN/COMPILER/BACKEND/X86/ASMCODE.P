@@ -1,0 +1,521 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	filesys, file, error, string;
+
+include	tparams, target;
+include	encoder;
+include	symtab;
+include	value;
+include	backend, i386back;
+include	hash;
+include	errmsg;
+
+AsmEncoder:	public	inherit	encoder {
+	private:
+
+	asmStream:	stream;
+	codeLabel:	unsigned;
+	currentSegment:	unsigned;
+	valueIndex:	unsigned;
+
+	public:
+
+initialize:	(unitName: ref identifier) ref stream =
+	{
+	fpath:		[MAXPATH] char;
+	f:		[:] char;
+
+	f = makePath(fpath, "", unitName spelling(), ".asm");
+	codeLabel = 0;
+	valueIndex = 0;
+	ch:	ref Heap;
+
+	ch = threadHeap() activate();
+	if	(asmStream create(f, AR_READ|AR_WRITE) != SUCCESS){
+		ch activate();
+		CurrentContext errorX("ErrCreate", f, "", 0);
+		}
+	asmStream printf("	.unit	%S\n", unitName spelling());
+	ch activate();
+	currentSegment = 0;
+	return &asmStream;
+	}
+
+close:	() =
+	{
+	ch:	ref Heap;
+
+	ch = threadHeap() activate();
+	asmStream close();
+	ch activate();
+	}
+
+startupFunction:	dynamic	(v: ref value) =
+	{
+	if	(v->owner == 0)
+		asmStream printf("Func%x:\n", v);
+	else
+		asmLabel(v->owner);
+	}
+
+asmLabel:	dynamic	(sym: ref symbol_s) =
+	{
+	if	(sym->name)
+		asmStream printf(sym objectName());
+/*
+	else	{			// Must be a dynamic vector table
+		d:	ref type_s;
+
+		d = sym->dtype;
+		if	(d &&
+			 d->name)
+			asmStream printf(&d->name->Spelling);
+		asmStream printf(".vectorTable");
+		}
+ */
+	asmStream printf(":\n");
+	}
+
+dataAlign:	dynamic	(amount: int) =
+	{
+	if	(amount & 1)
+		return;
+	asmStream printf("	.even\n");
+	}
+
+dataSegment:	dynamic	(i: int) =
+	{
+	if	(i == currentSegment)
+		return;
+	asmStream printf("	.seg	%u\n", i);
+	currentSegment = i;
+	}
+
+dataReserveBlock:	dynamic	(blockSize: addr_t) =
+	{
+	asmStream printf("	.bss	%u\n", blockSize);
+	}
+
+byte:	dynamic	(c: char) =
+	{
+	asmStream printf("	db	%d\n", unsignedByte(c));
+	}
+
+dwordInitializer:	dynamic	(val: ref value, offset: addr_t) =
+	{
+	asmStream printf("	dd	");
+	asmSymbolName(val);
+	if	(offset){
+		asmStream printf("+%u", offset);
+		}
+	asmStream putc('\n');
+	}
+
+emitLiteral:		dynamic (ll: ref literalValue) =
+	{
+	cp:	ref char;
+	len:	unsigned;
+	i:	int;
+
+	asmStream printf("Lit#%x:	.literal\n", ll);
+	for	(cp = ll->value, len = ll->length; len > 0; len--, cp++){
+		asmStream printf("	db	");
+		if	(isprint(*cp) && *cp != '"'){
+			asmStream putc('"');
+			for	(i = 0; i < 60; i++){
+				asmStream putc(*cp);
+				cp++;
+				len--;
+				if	(len == 0 ||
+					 !isprint(*cp))
+					break;
+				}
+			asmStream putc('"');
+			}
+		else
+			asmStream printf("%d", *cp);
+		asmStream putc('\n');
+		}
+	}
+
+dataCodeOffset:	dynamic	(i: ref stmt_x) =
+	{
+	asmStream printf("	dw	@%d\n", i->asmLabel);
+	}
+
+dataCodeLabel:	dynamic	(st: ref stmt_x) =
+	{
+	asmStream printf("@C%d:", st->asmLabel);
+	}
+/*
+recordLineNumber:	dynamic	(addr_t, lineno: unsigned) =
+	{
+	cp:	* char;
+
+	if	(lineno == 0)
+		return;
+	cp = InputFile fetchLine(lineno - 1, 0);
+	if	(cp == 0)
+		return;
+	asmStream printf(";	");
+	for	(; *cp != '\n' && *cp != TC_EOF; cp++)
+		asmStream putc(*cp);
+	asmStream putc('\n');
+	}
+ */
+generateLabel:	dynamic	(s: ref stmt_x) =
+	{
+	asmStream printf("@%d:\n", s->asmLabel);
+	}
+
+generateJump:	dynamic	(jc: jumpCondition, s: ref stmt_x) =
+	{
+	jumpInstructions:	static	[] ref char = [
+			0,		/* JC_NOOP */
+			"jmp",		/* JC_JUMP */
+			"jl",		/* JC_LT */
+			"jg",		/* JC_GT */
+			"jb",		/* JC_ULT */
+			"ja",		/* JC_UGT */
+			"jle",		/* JC_LE */
+			"jge",		/* JC_GE */
+			"jbe",		/* JC_ULE */
+			"jae",		/* JC_UGE */
+			"je",		/* JC_EQ */
+			"jne",		/* JC_NE */
+			"jc",		/* JC_CARRY */
+			"jnc",		/* JC_NOCARRY */
+			"jo",		/* JC_OVERFLOW */
+			"jno",		/* JC_NOOVERFLOW */
+			"js",		/* JC_SIGN */
+			"jns",		/* JC_NOSIGN */
+			"jp",		/* JC_PARITY */
+			"jnp",		/* JC_NOPARITY */
+			"loopz",	/* JC_LOOPZ */
+			"loopnz",	/* JC_LOOPNZ */
+			"jcxz",		/* JC_CXZ */
+			"loop"		/* JC_LOOP */
+			];
+
+	if	(jc != JC_NOOP)
+		asmStream printf("	%s	@%d\n", 
+						jumpInstructions[jc], s->asmLabel);
+	}
+
+generateExStore:	dynamic	(v: ref variable, st: ref stmt_x) =
+	{
+	asmStream printf("	mov	dword ptr [ebp%d], offset @%d\n", 
+				v->offset + ExceptFrameAddrOffset, 
+				st->asmLabel);
+	}
+
+jumpToTable:	dynamic	(r: regNum, st: ref switchTable_t) =
+	{
+	st->asmLabel = ++I386Func.asmLabels;
+	asmStream printf("	jmp	word ptr cs:@C%d[%S]\n", st->asmLabel,
+					registerName(r, IT_LONG));
+	}
+
+switchTableLabel:	dynamic	(st: ref switchTable_t) =
+	{
+	asmStream printf("@C%d:", st->asmLabel);
+	}
+
+loadDS:	dynamic	(reg: regNum) =
+	{
+	cp:	[:] char;
+
+	cp = registerName(reg, IT_WORD);
+	asmStream printf(	"	mov	%S,ss\n"
+			"	mov	ds,%S\n"
+			"	mov	es,%S\n"
+			"	mov	fs,%S\n"
+			"	mov	gs,%S\n", cp, cp, cp, cp, cp);
+	}
+
+encodeInstruction:	dynamic	(op: int) =
+	{
+	i:	int;
+	j:	int;
+	q:	ref instInfo;
+
+		/* Now output the instruction */
+
+	q = &InstInfo[op];
+	asmStream printf("	%s	", q->mnemonic);
+	switch	(op){
+	case	I386_RET:
+		if	(RightOpnd.address_mode)
+			asmStream printf("%u", RightOpnd.offset);
+		break;
+
+	case	I386_WDOFF:
+	case	I386_WDSEG:
+	case	I386_DD:
+		disp(&LeftOpnd, IT_DONT_CARE);
+		break;
+
+	case	I386_FLSTi:
+	case	I386_FFREE:
+		asmStream printf("st(%u)", LeftOpnd.base_register);
+		break;
+
+	case	I386_ENTER:
+		asmStream printf("%u,0", RightOpnd.offset);
+		break;
+
+	case	I386_INTRPT:
+		asmStream printf("%u", LeftOpnd.offset);
+		break;
+
+	case	I386_MULC:
+	case	I386_DIVC:
+	case	I386_DIVI:
+	case	I386_DIVL:
+	case	I386_UDIVI:
+	case	I386_UDIVL:
+		disp(&RightOpnd, q->optype);
+		break;
+
+	case	I386_CALL:
+		disp(&LeftOpnd, IT_DONT_CARE);
+		break;
+
+	case	I386_CALLF:
+		asmStream printf("%u:0", LeftOpnd.offset);
+		break;
+
+	default:
+		disp(&LeftOpnd, q->optype);
+		if	(RightOpnd.address_mode){
+			asmStream putc(',');
+
+			/* This is a hack to force the register portion of
+			   a shift to be a byte register.  This will make
+			   a shift be by CL rather than by CX on word shifts.
+			   Same applies to byte output.
+			 */
+
+			if	(RightOpnd.address_mode == AM_ADDRESS)
+				i = IT_DONT_CARE;
+			else
+				i = q->optype;
+			switch	(op){
+			case	I386_INC:
+				i = IT_WORD;
+				break;
+
+			case	I386_MOVSXCL:
+			case	I386_MOVSXCI:
+			case	I386_MOVZXCL:
+			case	I386_MOVZXCI:
+				i = IT_BYTE;
+				break;
+
+			case	I386_MOVSXIL:
+			case	I386_MOVZXIL:
+				i = IT_WORD;
+				}
+			disp(&RightOpnd, i);
+			}
+		}
+	asmStream putc('\n');
+	}
+
+disp:	(o: ref operand, otype: int) =
+	{
+	any_stuff:	int;
+	cp:		ref char;
+
+	any_stuff = 0;
+	switch	(o->address_mode){
+	case	AM_REG:
+		asmStream printf(registerName(o->base_register, otype));
+		break;
+
+	case	AM_ICON:
+		asmStream printf("%d", o->offset);
+/*
+		if	(otype == IT_BYTE){
+			assert(signed(o->offset) <= 255 &&
+				 signed(o->offset) >= -128);
+			}
+ */
+		break;
+
+	case	AM_OFFSET:
+		asmStream printf("offset ");
+		if	(o->val){
+			asmSymbolName(o->val);
+			any_stuff = 1;
+			}
+		if	(o->offset){
+			if	(any_stuff && o->offset)
+				asmStream putc('+');
+			asmStream printf("%u", o->offset);
+			}
+		break;
+
+	case	AM_DYNAMIC:
+/*
+		if	(o->segment_override != nullReg){
+			asmStream printf(registerName(o->segment_override, IT_WORD));
+			asmStream putc(':');
+			}
+ */
+		asmStream printf("[%S+%u]", 
+				registerName(o->base_register, IT_LONG), 
+				o->offset);
+		break;
+
+	case	AM_ADDRESS:
+		switch	(otype){
+		case	IT_BYTE:
+			asmStream printf("byte ptr ");
+			break;
+
+		case	IT_DBL:
+			asmStream printf("qword ptr ");
+			break;
+
+		case	IT_LDBL:
+			asmStream printf("tbyte ptr ");
+			break;
+
+		case	IT_FLT:
+		case	IT_LONG:
+			asmStream printf("dword ptr ");
+			break;
+
+		case	IT_WORD:
+			asmStream printf("word ptr ");
+			}
+		if	(o->segment_override != nullReg){
+			asmStream printf(registerName(o->segment_override, IT_WORD));
+			asmStream putc(':');
+			}
+		if	(o->val){
+			asmSymbolName(o->val);
+			any_stuff = 1;
+			}
+		else if	(o->base_register == nullReg &&
+			 o->index_register == nullReg){
+			asmStream printf("[%u]", o->offset);
+			break;
+			}
+		if	(o->base_register != nullReg ||
+			 o->index_register != nullReg){
+			asmStream putc('[');
+			any_stuff = 0;
+			if	(o->base_register != nullReg){
+				asmStream printf(
+					registerName(o->base_register, IT_LONG));
+				any_stuff = 1;
+				}
+			if	(o->index_register != nullReg){
+				if	(any_stuff)
+					asmStream putc('+');
+				asmStream printf(
+					registerName(o->index_register, IT_LONG));
+				if	(o->scale_factor){
+					asmStream printf("*%u", 
+							1 << o->scale_factor);
+					}
+				any_stuff = 1;
+				}
+			if	(o->offset){
+				if	(any_stuff && o->offset > 0)
+					asmStream putc('+');
+				asmStream printf("%d", o->offset);
+				}
+			asmStream putc(']');
+			}
+		else if	(o->offset){
+			if	(any_stuff)
+				asmStream putc('+');
+			asmStream printf("%u", o->offset);
+			}
+		}
+	}
+
+asmSymbolName:	(val: ref value) =
+	{
+	if	(val->owner &&
+		 val->owner->name)
+		asmStream printf(val->owner objectName());
+	else if	(val == &LiteralValue)
+		asmStream printf(".literal");
+	else
+		asmStream printf(".local");
+	}
+
+	};
+
+regdef:	type	{
+	public:
+
+	name:		ref char;
+	regId:		regNum;
+	typedef:	instTypes;
+	debugval:	char;
+	};
+
+Regdef:	[32] regdef = [
+		[ "_EAX",	EAX,	IT_LONG,	0x00 ],
+		[ "_EDX",	EDX,	IT_LONG,	0x02 ],
+		[ "_EBX",	EBX,	IT_LONG,	0x03 ],
+		[ "_ECX",	ECX,	IT_LONG,	0x01 ],
+		[ "_ESI",	ESI,	IT_LONG,	0x06 ],
+		[ "_EDI",	EDI,	IT_LONG,	0x07 ],
+		[ "_EBP",	EBP,	IT_LONG,	0x05 ],
+		[ "_ESP",	ESP,	IT_LONG,	0x04 ],
+
+		[ "_AX",	AX,	IT_WORD,	0x00 ],
+		[ "_DX",	DX,	IT_WORD,	0x02 ],
+		[ "_BX",	BX,	IT_WORD,	0x03 ],
+		[ "_CX",	CX,	IT_WORD,	0x01 ],
+		[ "_SI",	SI,	IT_WORD,	0x06 ],
+		[ "_DI",	DI,	IT_WORD,	0x07 ],
+		[ "_BP",	BP,	IT_WORD,	0x05 ],
+		[ "_SP",	SP,	IT_WORD,	0x04 ],
+
+		[ "_ES",	ES,	IT_WORD,	0x10 ],
+		[ "_DS",	DS,	IT_WORD,	0x13 ],
+		[ "_CS",	CS,	IT_WORD,	0x11 ],
+		[ "_SS",	SS,	IT_WORD,	0x12 ],
+		[ "_FS",	FS,	IT_WORD,	0x00 ],
+		[ "_GS",	GS,	IT_WORD,	0x00 ],
+
+		[ "_AL",	AL,	IT_BYTE,	0x08 ],
+		[ "_BL",	BL,	IT_BYTE,	0x0b ],
+		[ "_CL",	CL,	IT_BYTE,	0x09 ],
+		[ "_DL",	DL,	IT_BYTE,	0x0a ],
+		[ "_AH",	AH,	IT_BYTE,	0x0c ],
+		[ "_BH",	BH,	IT_BYTE,	0x0f ],
+		[ "_CH",	CH,	IT_BYTE,	0x0d ],
+		[ "_DH",	DH,	IT_BYTE,	0x0e ],
+		[ "_FLAGS",	nullReg,IT_WORD  ]
+	];
+
+registerName:	(rn: regNum, typedef: instTypes) [:] char =
+	{
+	r:		ref regdef;
+	a:	static	[4] char;
+
+	for	(r = Regdef; r->name; r++)
+		if	(r->regId == rn &&
+			 r->typedef == typedef){
+			a[3] = 0;
+			a[0] = tolower(r->name[1]);
+			a[1] = tolower(r->name[2]);
+			a[2] = tolower(r->name[3]);
+			return a[:stringLength(a)];
+			}
+	return "";
+	}
+

@@ -1,0 +1,595 @@
+/*
+	The Parasol builder.  This file contains the procedural code that
+	controls how a build is accomplished.
+ */
+include	file, filesys, heap, alys;
+
+include	symtab, errmsg;
+include	i386back, cback, backend, encoder, asmcode;
+include	scanner;
+include	image, hash;
+include	runlink, mapout;
+include	parser, ptree;
+
+Build:		public	build_s;
+
+targetType_t:	public	type	byte = {
+	TT_NONE,
+	TT_PARASOL_TO_C,
+	TT_COMPILE,
+	TT_RUNFILE,
+	TT_DRIVER,
+	TT_LIBRARY,
+	TT_UNIT,
+	TT_ASSEMBLE,
+	TT_INTERFACE
+	};
+
+build_s:	public	type	{
+	public:
+
+	targetType:		targetType_t;
+	targetName:		[:] char;
+	includeEntryTables:	boolean;
+	generateSymbols:	boolean;
+	debugInfo:		boolean;
+	optimize:		boolean;
+	warnAboutStyle:		boolean;
+	sourceBasePath:		ref PathList;
+	libraryPath:		ref PathList;
+	symbolFile:		[:] char;
+	sources:		ref fileItem_t;
+
+//	outputFd:		ref stream;
+	parsedLines:		long;
+	compiledLines:		long;
+
+initialize:	() =
+	{
+	targetType = TT_NONE;
+	generateSymbols = FALSE;
+	debugInfo = FALSE;
+	RunFile.smartLink = TRUE;
+	optimize = TRUE;
+	RunFile.stackSize = 8192;
+	symbolFile = "";
+	sources = 0;
+	libraryPath = new PathList[];
+	sourceBasePath = new PathList[];
+	parsedLines = compiledLines = 0;
+	includeEntryTables = FALSE;
+	warnAboutStyle = FALSE;
+
+	dir:	[:] char;
+	buf:	[MAXPATH] char;
+	file:	[:] char;
+
+	dir = getDirectory(commandLine.commandPath);
+	file = makePath(buf, dir, "pc.msg", "");
+	MessageCatalogName = stringDup(file);
+	}
+
+build:	() =
+	{
+	name:		[:] char;
+	s:		[:] char;
+	u:		ref unit_s;
+	mapFile:	[:] char;
+	lodFile:	[:] char;
+	runFile:	[:] char;
+	symFile:	[:] char;
+
+	CurrentContext = new messageContext[];
+	libraryPath includeEnvironment("PARASOL_LIB");
+	if	(targetType == TT_PARASOL_TO_C)
+		enableCbackend(includeEntryTables);
+	else
+		enable386backend(optimize);
+	initParasol();
+	name = stripDirectory(stripExtension(targetName));
+	mapFile = heapFile(targetName, ".map");
+	runFile = heapFile(targetName, ".run");
+	symFile = heapFile(targetName, ".sym");
+	lodFile = heapFile(targetName, ".lod");
+	if	(targetType != TT_LIBRARY){
+		s = sourceBasePath search(name, ".p", 0);
+		if	(|s == 0){
+			CurrentContext printf(
+				"Unable to find source file '%S.p'\n", name);
+			exit(1);
+			}
+		u = new parasolUnit_s[ hash(name), s ];
+		}
+	switch	(targetType){
+	case	TT_PARASOL_TO_C:
+		if	(!initialParse())
+			return;
+		u constructValues();
+		if	(ChattyOutput)
+			printf("\n");
+		break;
+
+	case	TT_COMPILE:
+		if	(!initialParse())
+			return;
+		u constructValues();
+		if	(ChattyOutput)
+			printf("\n");
+		break;
+
+	case	TT_RUNFILE:
+		if	(!initialParse())
+			return;
+		generateCodeFromSources();
+		RunFile runlink(u, DATA_BASE, CODE_BASE);
+		if	(ChattyOutput)
+			printf("%-32S rn\n", runFile);
+		RunFile write(runFile);
+		if	(ChattyOutput)
+			printf("%-32S mp\n", mapFile);
+		writeMap(mapFile);
+		if	(generateSymbols){
+			if	(ChattyOutput)
+				printf("%-32S sy\n", symFile);
+			saveSymbols(symFile);
+			}
+		break;
+
+	case	TT_DRIVER:
+		loadSymbolFile();
+		if	(!initialParse())
+			return;
+		generateCodeFromSources();
+		RunFile runlink(u, 0, 0);
+		if	(ChattyOutput)
+			printf("%-32S ld\n", lodFile);
+		RunFile writeDriver(lodFile);
+		if	(ChattyOutput)
+			printf("%-32S mp\n", mapFile);
+		writeMap(mapFile);
+		if	(generateSymbols){
+			if	(ChattyOutput)
+				printf("%-32S sy\n", symFile);
+			saveSymbols(symFile);
+			}
+		break;
+
+	case	TT_INTERFACE:
+		break;
+
+	case	TT_ASSEMBLE:
+		if	(!initialParse())
+			return;
+		AsmEncoder initialize(u->name);
+		Encoder = &AsmEncoder;
+		u constructValues();
+		AsmEncoder close();
+		if	(ChattyOutput)
+			printf("\n");
+		break;
+
+	case	TT_UNIT:
+		if	(!initialParse())
+			return;
+		u constructValues();
+		if	(ChattyOutput)
+			printf("\n");
+		break;
+
+	case	TT_LIBRARY:
+		gatherUnits();
+		if	(!initialParse())
+			return;
+		generateCodeFromSources();
+		for	(u = SymbolTable.units; u; u = u->next){
+			if	(ChattyOutput)
+				printf("%-32S us\r", u->name spelling());
+			u saveLibrary(targetName);
+			}
+		if	(ChattyOutput)
+			printf("\n");
+		break;
+		}
+	}
+
+saveSymbols:	(symFile: [:] char) =
+	{
+	ifile:		imageFile;
+	i:		int;
+
+	SymbolTable.saveStyle = SS_SYMBOL;
+	i = ifile create(symFile, 0);
+	if	(i){
+		printf("Could not create symbol file: '%S'\n", symFile);
+		return;
+		}
+	if	(ifile beginRecord(U_SYMFILE, self, sizeof symFile_s))
+		SymbolTable saveSymbols(&ifile);
+	ifile close();
+	}
+
+loadSymbolFile:	() =
+	{
+	lx:	loader;
+	sp:	ref symFile_s;
+	s:	[:] char;
+	u:	ref unit_s;
+	i:	ref include_s;
+
+	s = libraryPath search(symbolFile, ".sym", 0);
+	if	(ChattyOutput)
+		printf("%-32S sy\n", symbolFile);
+	if	(|s &&
+		 lx open(s) == 0){
+		lx decode();
+		sp = lx getObject(1);
+		lx close();
+		u = SymbolTable.units;
+		SymbolTable.units = sp->units;
+		SymbolTable addUnit(u);
+/*
+
+			Unit pointers are properly stored in the symbol
+			file.
+
+		for	(u = SymbolTable.units; u; u = u->next){
+			for	(i = u->includes; i; i = i->next){
+				i->unit = SymbolTable locateUnit(i->name);
+				if	(i->unit == 0)
+					i->unit = newUnit(i->name);
+				}
+			}
+ */
+		delete sp;
+		}
+	else
+		CurrentContext printf("Unable to open symbol file '%S'\n", 
+								symbolFile);
+	}
+
+gatherUnits:	() =
+	{
+	x:	ref fileItem_t;
+	s:	[:] char;
+
+	for	(x = sources; x; x = x->next)
+		newUnit(hash(x->name));
+	}
+
+initialParse:	() boolean =
+	{
+	changed:	boolean;
+	parsedAny:	boolean;
+	u:		ref unit_s;
+	s:		ref symbol_s;
+
+	changed = FALSE;
+	for	(u = SymbolTable.units; u; u = u->next){
+		for	(s = u->symbols; s; s = s->next)
+			s clearChanges();
+		if	(u hasChanged())
+			changed = TRUE;
+		}
+	if	(changed == FALSE)
+		return FALSE;
+	parsedAny = FALSE;
+	do	{
+		changed = FALSE;
+		for	(u = SymbolTable.units; u; u = u->next){
+			CurrentContext->obj = u;
+			if	(SymbolTable.machineUnit == 0 &&
+				 u->name isSpelled("machine"))
+				SymbolTable.machineUnit = u;
+			if	(u hasChanged()){
+				parsedAny = TRUE;
+				changed = TRUE;
+				if	(ChattyOutput)
+					printf("%-32S pa\r", 
+							u->name spelling());
+				u parse();
+				}
+			}
+		}
+		while	(changed);
+	if	(ChattyOutput)
+		printf("\n");
+	if	(!(parsedAny || SymbolTable.globalChange))
+		return FALSE;
+	SymbolTable.varArgsType = 0;
+	SymbolTable.machineUnit locateMagicSymbols();
+	CurrentContext->phase = PH_INTERFACE;
+	for	(u = SymbolTable.units; u; u = u->next){
+		u reconnectInterfaces();
+		}
+	for	(u = SymbolTable.units; u; u = u->next){
+		u constructInterfaces();
+		}
+	return TRUE;
+	}
+
+generateCodeFromSources:	() =
+	{
+	u:	ref unit_s;
+
+	for	(u = SymbolTable.units; u; u = u->next)
+		u constructValues();
+	if	(ChattyOutput)
+		printf("\n");
+	}
+
+	// Build styles
+
+parasolToC:	(s: [:] char) =
+	{
+	targetName = s;
+	targetType = TT_PARASOL_TO_C;
+	}
+
+compile:	(s: [:] char) =
+	{
+	targetName = s;
+	targetType = TT_COMPILE;
+	}
+
+driver:		(s: [:] char) =
+	{
+	targetName = s;
+	targetType = TT_DRIVER;
+	libraryPath includeEnvironment("DRIVER_LIB");
+	RunFile.stackSize = 0;
+	}
+
+library:	(s: [:] char) =
+	{
+	targetName = s;
+	targetType = TT_LIBRARY;
+	}
+
+runfile:	(s: [:] char) =
+	{
+	targetName = s;
+	targetType = TT_RUNFILE;
+	}
+
+unit:		(s: [:] char) =
+	{
+	targetName = s;
+	targetType = TT_UNIT;
+	}
+
+assemble:	(s: [:] char) =
+	{
+	targetName = s;
+	targetType = TT_ASSEMBLE;
+	}
+
+interface:	(s: [:] char) =
+	{
+	targetName = s;
+	targetType = TT_INTERFACE;
+	}
+
+tidyUp:	(s: [:] char) =
+	{
+	if	(Build.targetType == TT_NONE)
+		runfile(s);
+	}
+
+	// Options setting
+
+fullLink:	() =
+	{
+	RunFile.smartLink = FALSE;
+	}
+
+mainModule:	() =
+	{
+	includeEntryTables = TRUE;
+	}
+
+generateStyleWarnings:	() =
+	{
+	warnAboutStyle = TRUE;
+	}
+
+debugging:	() =
+	{
+	debugInfo = TRUE;
+	}
+
+sourceBase:	(s: [:] char) =
+	{
+	sourceBasePath includeString(s);
+	}
+
+includeLibrary:	(s: [:] char) =
+	{
+	libraryPath includeString(s);
+	}
+
+useSymbolFile:	(s: [:] char) =
+	{
+	symbolFile = s;
+	}
+
+writeSymbolFile:	() =
+	{
+	generateSymbols = TRUE;
+	}
+
+setOptimize:	(b: boolean) =
+	{
+	optimize = b;
+	}
+
+filename:	(s: [:] char) =
+	{
+	x, f:	ref fileItem_t;
+
+	x = new fileItem_t[ 0 ];
+	x->name = s;
+	if	(sources){
+		for	(f = sources; f->next; f = f->next)
+			;
+		f->next = x;
+		}
+	else
+		sources = x;
+	}
+
+linesParsed:	() long =
+	{
+	i:	long;
+
+	i = parsedLines;
+	parsedLines = 0;
+	return i;
+	}
+
+linesCompiled:	() long =
+	{
+	i:	long;
+
+	i = compiledLines;
+	compiledLines = 0;
+	return i;
+	}
+
+	};
+
+fileItem_t:	type	{ public:
+	next:	ref fileItem_t;
+	name:	[:] char;
+	};
+
+start:	entry	() =
+	{
+	defineLoadFuncs(U_SYMFILE, loadFunction(&symFile_s.load),
+							sizeof symFile_s);
+	}
+
+symFile_s:	public	type	{
+	public:
+
+	units:		ref unit_s;
+
+load:	factory	(lu: pointer, image: ref loader) =
+	{
+	self = lu;
+	self = [ 0 ];
+	units = image address();
+	}
+
+	};
+
+newUnit:	(nm: ref identifier) ref unit_s =
+	{
+	fpath:	[:] char;
+
+	fpath = Build.sourceBasePath search(nm spelling(), ".p", 0);
+	if	(|fpath)
+		return new parasolUnit_s[ nm, fpath ];
+
+	s:	[:] char;
+
+	s = Build.libraryPath search(nm spelling(), ".u", 0);
+	if	(|s)
+		return libraryUnit(nm, s);
+	else
+		return new parasolUnit_s[ nm, nm spelling() ];	// bad unit
+	}
+
+libraryUnit:	(nm: ref identifier, filename: [:] char) ref libraryUnit_s =
+	{
+	lx:	loader;
+	lu:	ref libraryUnit_s;
+
+	if	(lx open(filename))
+		return 0;
+	lx decode();
+	lu = lx getObject(1);
+	lx close();
+	if	(lu){
+		lu->unitFile = heapFile(filename, "");
+
+		SymbolTable addUnit(lu);
+
+		i:	ref include_s;
+
+		for	(i = lu->includes; i; i = i->next){
+			i->unit = SymbolTable locateUnit(i->name);
+			if	(i->unit == 0)
+				i->unit = newUnit(i->name);
+			}
+		}
+	return lu;
+	}
+
+parasolUnit_s:	type	inherit sourceUnit_s {
+	public:
+/*
+	This function parses the source for a unit, and if there is a
+	valid baseline file for reference, only differences are propagated
+	into the symbol table.  This elaborate process assures us of
+	enough information that a loosely coupled editor will not wreak
+	havoc with the build process.
+
+	Note that memory management is accomplished by created a temporary
+	heap for the blocks allocated in the parsing process (along with 
+	the source buffer for the baseline file).  When the differences
+	have been generated, this memory is discarded as a whole.  This
+	ends up saving a lot fo time and trouble.
+ */
+parse:	dynamic	() =
+	{
+	fs:		file_t;
+	fpath:		[MAXPATH] char;
+	f:		[:] char;
+	u:		ref unit_p;
+	u2:		ref unit_p;
+	in:		ref sourceParser;
+	tempHeap:	incrementalHeap = [ threadHeap() ];
+	mainHeap:	ref Heap;
+
+	mainHeap = tempHeap activate();
+	f = makePath(fpath, "", name spelling(), ".psb");
+	fs = FileSystem stat(f);
+	if	(fs isValid() &&
+		 fs.ftime == lastBuiltAge){
+		in = sourceParser create(f, CurrentContext);
+		u = in parseUnit(PH_NO_MESSAGES, name);
+		Build.parsedLines += in linesScanned();
+		}
+	else
+		u = unit_p create(name, 0);
+	mainHeap activate();
+	source = sourceParser create(sourceFile, CurrentContext);
+	tempHeap activate();
+	fs = FileSystem stat(sourceFile);
+	u2 = source parseUnit(PH_CARVE, name);
+	Build.parsedLines += source linesScanned();
+	if	(source){
+		lastBuiltAge = fs.ftime;
+		everBuilt = TRUE;
+//		source save([ fpath ], lastBuiltAge);
+		}
+	mainHeap activate();
+	u generateDifferences(u2, self);
+	tempHeap freeAll();
+	includes checkForSources();
+	}
+
+addInclude:	dynamic	(n: ref identifier, off: fileOffset) =
+	{
+	if	(!includes findInclude(n)){
+		i:	ref include_s;
+		u:	ref unit_s;
+
+		u = SymbolTable locateUnit(n);
+		if	(u == 0)
+			u = newUnit(n);
+		includes = new include_s[ includes, off, n, u ];
+		}
+	}
+
+	};

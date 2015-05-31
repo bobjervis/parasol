@@ -1,0 +1,413 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	vmemory;
+include	hardware;
+include	pc_hdw;
+include	trace;
+include	process;
+include	alys, kprintf;
+/*
+	Each process in the 80386 needs two descriptor table slots to 
+	describe the process.  ALYS uses two adjacent slots in the GDT for
+	each process.  P_TSS_BASE defines the first GDT slot used.  The
+	process index is used to identify which slot pair is being used for
+	that process.  ALYS will not switch to GDT entries that do not have
+	a live process entry, so obsolete entries can hang around.  A user
+	process that tries to muck with any GDT entries will trap no matter
+	whether the entry is current or not.  Of course, kernel mode drivers
+	could cause havoc with some injudicious poking about in the GDT.
+
+	In the GDT the LDT entry is the first entry in the slot pair for
+	a process.  The TR entry comes second.
+ */
+P_TSS_BASE:		const int = 10;		// starting point of process
+						// GDT entries
+TSS_SIZE:	public	const int = offsetof task_t.fpu;
+
+redlined:	public	() boolean =
+	{
+	return _ESP < unsigned(&CurProc->kernelStack[STACK_MARGIN]);
+	}
+
+hardwarePswitch:	public	(pindex: int, task: ref task_t) =
+	{
+	switchVector:	[2] int;
+	IDT:	static	descriptorReg;
+
+	PageDir[0] = task->pageTable0;
+	IDT.base = task->idt;
+	IDT.limit = 8 * 256;
+	_emit(0x0f, 0x01, 0x1D, &IDT);		// LIDT &IDT
+	switchVector[1] = pindex << 4 + _GDT_TSS_BASE;
+	_EBX = unsigned(&switchVector);
+	_emit(jmp_bx_);
+	}
+
+descriptorReg:	type	packed	{
+	public:
+
+	limit:	unsigned[16];
+	base:	long;
+	};
+
+
+jmp_bx_:	const	unsigned[16]	= 0x2BFF;
+
+loadTSS:	public	(tss: ref task_t, 
+			 cs: int, ds: int, ss: int, 
+			 eip: int, esp: int, dsegLength: paddr_t,
+			 selfObjectID: ref far External) =
+	{
+	tss->cs = cs;
+	tss->ds = ds;
+	tss->es = ds;
+	tss->fs = ds;
+	tss->gs = ds;
+	tss->ss = ss;
+	tss->eip = eip;
+	tss->esp = esp;
+	tss->esi = dsegLength;
+	tss->edi = int(selfObjectID);
+	}
+
+loadProcessHardware:	public	(pindex: int, tss: ref task_t, 
+				 ldtLoc: ref localContext_t,
+				 kstack: pointer) =
+	{
+	gdtSelector:	int;
+
+	gdtSelector = _GDT_TSS_BASE + pindex << 4;
+	tss->idt = addressableToMapped(&_idt_);
+	tss->ss0 = _SS;
+	tss->esp0 = unsigned(kstack);
+	tss->eflags = DEFAULT_FLAGS;
+	tss->cr3 = PageDirectory;
+	if	(ldtLoc){
+		tss->ldt = gdtSelector + 8;
+		setMapping(0, 0, tss->ldt, LDT_DESC, unsigned(ldtLoc), 
+						sizeof localContext_t);
+		}
+	else
+		tss->ldt = 0;
+	setMapping(0, 0, gdtSelector, AVAIL_TSS, unsigned(tss), TSS_SIZE);
+	}
+
+loadKernelProcessHardware:	public	(pindex: int, tss: ref task_t, 
+				 kstack: pointer,
+				 func: ref (),
+				 selfObjectID: ref far External) =
+	{
+	gdtSelector:	int;
+
+	gdtSelector = _GDT_TSS_BASE + pindex << 4;
+	tss->ldt = 0;
+	tss->idt = addressableToMapped(&_idt_);
+	tss->ss0 = _SS;
+	tss->esp0 = unsigned(kstack);
+	tss->eflags = DEFAULT_FLAGS;
+	tss->cr3 = PageDirectory;
+	tss->cs = _GDT_KERNEL_CODE;
+	tss->ds = _GDT_KERNEL_DATA;
+	tss->es = _GDT_KERNEL_DATA;
+	tss->fs = _GDT_KERNEL_DATA;
+	tss->gs = _GDT_KERNEL_DATA;
+	tss->ss = _SS;
+	tss->esp = unsigned(kstack);
+	tss->edi = int(selfObjectID);
+	tss->eip = unsigned(func);
+	setMapping(0, 0, gdtSelector, AVAIL_TSS, unsigned(tss), TSS_SIZE);
+	}
+
+loadProc0Hardware:	public	(tss: ref task_t) =
+	{
+	setMapping(0, 0, _GDT_TSS_BASE, AVAIL_TSS, unsigned(tss), TSS_SIZE);
+	tss->ldt = 0;
+	tss->idt = addressableToMapped(&_idt_);
+	tss->cr3 = PageDirectory;
+	_AX = 0;
+	_emit(0x66, 0x0F, 0x00, 0xD0);		// LLDT AX
+	_AX = _GDT_TSS_BASE;
+	_emit(0x66, 0x0F, 0x00, 0xD8);		// LTR AX
+	}
+
+hardwarePushCall:	public	(f: pointer, tss: ref task_t) =
+	{
+	x:	ref pointer;
+
+	x = ref pointer(tss->esp);
+	x--;
+	tss->esp = unsigned(x);
+	*x = f;
+	}
+
+displayTask:	public	(t: ref task_t) =
+	{
+	lab:	static	[] ref char = [
+		"Divide error",
+		"Debug Exception",
+		"- 2 -",
+		"Unexpected breakpoint",
+		"Overflow instruction",
+		"Bounds check",
+		"Invalid opcode",
+		"Coprocessor trap",
+		"Double fault",
+		"Coprocessor segment overrun",
+		"Invalid TSS",
+		"Segment not present",
+		"Stack segment fault",
+		"General protection fault",
+		"Page fault",
+		"- 15 -",
+		"Coprocessor error",
+		];
+
+	kprintf("%s at %08x\n", lab[t->idt], t->eip);
+	switch	(t->idt){
+	case	0x0d:
+		if	(t->pageTable0 & 2){
+			kprintf("Loading vector %02x", t->pageTable0 >> 3);
+			}
+		else	{
+			if	(t->pageTable0 & ~3)
+				kprintf("Loading selector %04x", 
+							t->pageTable0 & ~3);
+			}
+		if	(t->pageTable0 & 1)
+			kprintf(" in nested exception\n");
+		else
+			kprintf(" in external interrupt\n");
+		break;
+
+	case	0x0e:
+		if	(t->pageTable0 & 4)
+			kprintf("user");
+		else
+			kprintf("kernel");
+		kprintf(" mode ");
+		if	(t->pageTable0 & 2)
+			kprintf("write");
+		else
+			kprintf("read");
+		if	(t->pageTable0 & 1)
+			kprintf(" protection error");
+		else
+			kprintf(" not present error");
+		_emit(0x0f, 0x20, 0xd0);		// mov eax,cr2
+		kprintf(" at %x\n", _EAX);
+		break;
+
+	case	0x08:
+	case	0x0a:
+	case	0x0b:
+	case	0x0c:
+		if	(t->pageTable0 & 2)
+			kprintf("Error in IDT vector 0x%x", t->pageTable0 >> 3);
+		else if	(t->pageTable0 & 4)
+			kprintf("Error in LDT selector 0x%04x", t->pageTable0 & ~3);
+		else if	(t->pageTable0 & ~7)
+			kprintf("Error in GDT selector 0x%04x", t->pageTable0 & ~3);
+		else
+			kprintf("Error in NULL selector");
+		if	(t->pageTable0 & 1)
+			kprintf(" while servicing a nested interrupt");
+		kprintf("\n");
+/*
+		if	(t->pageTable0 & 2)
+			dumpVector(t->pageTable0 >> 3);
+		else if	(t->pageTable0 & 4)
+			dumpMapping(t->pageTable0 & ~3);
+		else if	(t->pageTable0 & ~7)
+			dumpMapping(t->pageTable0 & ~3);
+ */
+		}
+	if	(t->ss != 0x000f){
+		kprintf(" link %08x ss0:esp0 %04x:%08x\n", t->backlink, t->ss0, t->esp0);
+		kprintf("  cr3 %08x  ss:esp  %04x:%08x\n", t->cr3, t->ss, t->esp);
+		}
+	else
+		kprintf("                   esp       %08x\n", t->esp);
+	if	(t->cs != 0x7)
+		kprintf("flags %08x  cs:eip  %04x:%08x\n", t->eflags, t->cs, t->eip);
+	kprintf("  eax %08x ebx %08x ecx %08x edx %08x\n", t->eax, t->ebx, t->ecx, t->edx);
+	kprintf("  ebp %08x esi %08x edi %08x\n", t->ebp, t->esi, t->edi);
+	if	(t->ds != 0x000f ||
+		 t->es != 0x000f ||
+		 t->fs != 0x000f ||
+		 t->gs != 0x000f){
+		kprintf("   ds     %04x  es     %04x  fs     %04x  gs     %04x\n",
+						t->ds, t->es, t->fs, t->gs);
+		}
+	if	(t->eflags & 1)
+		kprintf("CY ");
+	else
+		kprintf("NC ");
+	if	(t->eflags & 4)
+		kprintf("PA ");
+	else
+		kprintf("NP ");
+	if	(t->eflags & 0x10)
+		kprintf("AC ");
+	else
+		kprintf("NA ");
+	if	(t->eflags & 0x40)
+		kprintf("ZF ");
+	else
+		kprintf("NZ ");
+	if	(t->eflags & 0x80)
+		kprintf("SG ");
+	else
+		kprintf("NS ");
+	if	(t->eflags & 0x100)
+		kprintf("TF ");
+	else
+		kprintf("NT ");
+	if	(t->eflags & 0x200)
+		kprintf("IE ");
+	else
+		kprintf("NI ");
+	if	(t->eflags & 0x400)
+		kprintf("DN ");
+	else
+		kprintf("UP ");
+	if	(t->eflags & 0x800)
+		kprintf("OV ");
+	else
+		kprintf("NO ");
+	if	(t->eflags & 0x4000)
+		kprintf("NT ");
+	if	(t->eflags & 0x10000)
+		kprintf("RF ");
+	if	(t->eflags & VM)
+		kprintf("VM ");
+	kprintf("iopl = %x\n", t->eflags >> 12 & 3);
+	d:	ref descriptor;
+
+	if	(t->cs == _GDT_KERNEL_CODE){
+		x:	paddr_t;
+
+		d = ref descriptor(_gdt_) + 1;
+		x = d->sa.limit;
+		if	(d->sa.attribute & 0x8000)
+			x <<= 12;
+		if	(t->eip < 0x1000 ||
+			 t->eip > x)
+			dumpData(pointer(t->esp), 160);
+		}
+/*
+	if	(t->cs & RING ||			// ring 3 trap
+		 t->eflags & VM)			// v8086 trap
+		abort(EX_LEVEL);
+	enableAll();
+	for	(;;)
+		;
+ */
+//	trace_(CurProc, t->esp, t->ebp);
+	}
+
+VM:	const	unsigned = 0x20000;		// v8086 mode
+
+displayProcesses:	public	() =
+	{
+	i:	int;
+
+	for	(i = 0; i < NPROCS; i++){
+		if	(ProcessTable[i] == 0)
+			continue;
+		p:	ref process;
+		p = ProcessTable[i];
+		displayProcess(p);
+		}
+	}
+
+displayProcess:	(p: ref process) =
+	{
+	if	(p == CurProc)
+		kprintf("*");
+	else
+		kprintf(" ");
+	kprintf("p %d: %8s %c%x ", p->index, pStatusName[p->status],
+				loadLastUserState(p),
+				loadLastUserAddress(p));
+	if	(p->animates)
+		kprintf("animates %d(%p) ", p->animates->me, p->animates);
+	kprintf("prio %d:%d ", p->priority, p->cpu);
+	kprintf("a %p ", p->where);
+	if	(p->status == PWAIT &&
+		 p->resource){
+		p->resource display();
+		kprintf("(%c)", p->alertable ? 'Y' : 'N');
+		}
+	kprintf("\n");
+	}
+
+pStatusName:	[] ref char = [
+	"PFREE",
+	"PNEW",
+	"PRUN",
+	"PSPIN",
+	"PWAIT",
+	"PDEAD",
+	"PSTOP",
+	"PINVALID"
+	];
+
+loadLastUserAddress:	(p: ref process) vaddr_t =
+	{
+	xp:		ref byte;
+
+	xp = &p->kernelStack[|p->kernelStack];
+	if	(p != CurProc &&
+		 p->task.cs != _GDT_KERNEL_CODE)	// p is in user mode
+		return p->task.eip;
+	else	{
+		gf:	ref i386gateFrame;
+		ifp:	ref i386trapFrame;
+
+		gf = ref i386gateFrame(xp) - 1;
+		if	(gf->cs == USER_CS)
+			return gf->eip;
+		else	{
+			ifp = ref i386trapFrame(xp) - 1;
+			if	(ifp->cs == USER_CS)
+				return ifp->eip;
+			}
+		}
+	return 0;
+	}
+
+loadLastUserState:	(p: ref process) char =
+	{
+	xp:		ref byte;
+
+	xp = &p->kernelStack[|p->kernelStack];
+	if	(p != CurProc &&
+		 p->task.cs != _GDT_KERNEL_CODE)	// p is in user mode
+		return 'U';
+	else	{
+		gf:	ref i386gateFrame;
+		ifp:	ref i386trapFrame;
+
+		gf = ref i386gateFrame(xp) - 1;
+		if	(gf->cs == USER_CS)
+			return 'G';
+		else	{
+			ifp = ref i386trapFrame(xp) - 1;
+			if	(ifp->cs == USER_CS)
+				return 'I';
+			}
+		}
+	return '?';
+	}
+
+trace_:	public	(p: ref process, esp: vaddr_t, ebp: vaddr_t) =
+	{
+	trace(esp, ebp, unsigned(&p->kernelStack), 
+			unsigned(&p->kernelStack[KERNEL_STACK]));
+	}
+

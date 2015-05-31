@@ -1,0 +1,29 @@
+include	file;
+include	qsort;
+
+main:	entry	() =
+	{
+	sd:	ref _symbolDescriptor;
+	i:	int;
+
+	sd = __symbols.symbolBase;
+//	qsort(sd, __symbols.symbolCount, sizeof _symbolDescriptor,
+//							&symbolCompare);
+	for	(i = 0; i < __symbols.symbolCount; i++, sd++)
+		printf("%08x: %s\n", sd->address, sd->name);
+	exit(EX_SUCCESS);
+	}
+
+symbolCompare:	(k1: pointer, k2: pointer) int =
+	{
+	s1, s2:	ref _symbolDescriptor;
+	c1, c2: ref char;
+
+	s1 = k1;
+	s2 = k2;
+	for	(c1 = s1->name, c2 = s2->name; *c1 && *c2; c1++, c2++)
+		if	(*c1 != *c2)
+			break;
+	return *c1 - *c2;
+	}
+	

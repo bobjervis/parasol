@@ -1,0 +1,24 @@
+include	file, filesys;
+
+main:	entry	() =
+	{
+	fcmd, cmd:	[:] char;
+
+	if	(|commandLine.arguments != 1){
+		printf("Use is: WHICH command\n"
+			"	Reports the exact path of the file to execute\n"
+			"	this command.\n");
+		exit(EX_FAIL);
+		}
+	cmd = commandLine.arguments[0];
+	lookup: PathList = [];
+
+	try lookup useEnvironment("PATH");
+	fcmd = lookup search(cmd, ".run", ".com", ".exe", ".bat", 0);
+	if	(|fcmd == 0){
+		printf("Unknown command: %S\n", cmd);
+		exit(EX_FAIL);
+		}
+	printf("%S\n", fcmd);
+	exit(EX_SUCCESS);
+	}

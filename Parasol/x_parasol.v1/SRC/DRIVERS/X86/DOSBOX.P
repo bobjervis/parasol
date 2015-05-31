@@ -1,0 +1,33 @@
+include	alys, realmode;
+include	kdriver;
+include	dosemul, dosload;
+include	object;
+include	file;
+
+main:	entry	() =
+	{
+	id:	ref far RealModeFactory;
+
+	id = ref far RealModeFactory(publishKernel("real mode factory", 
+				":model.realmode.RealModeFactory",
+				&realModeFactory, 
+				AR_ANY, AR_ANY, AR_ANY, AR_ANY));
+	FileSystem register(id, "/service/dos", 
+				":model.realmode.RealModeFactory");
+	Driver makeResident();
+	disown(Driver);
+	disown(id);
+
+	ExeLoader register();
+	ComLoader register();
+	}
+
+realModeFactory:	inherit	RealModeFactory {
+	public:
+
+createVirtualMachine:	gate	() ref far VirtualMachine =
+	{
+	return 0;
+	}
+
+	};

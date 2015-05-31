@@ -1,0 +1,72 @@
+/*
+	Copyright (c) 1994 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	string;
+include	console, window;
+include	file;
+
+main:	entry	() =
+	{
+	s:	boolean;
+	p:	boolean;
+	a:	[:] char;
+	x:	ref far console;
+
+	if	(|commandLine.arguments == 0)
+		help();
+	x = locateConsole("");
+	while	(|commandLine.arguments){
+		a = commandLine.arguments[0];
+		commandLine shiftArguments();
+		if	(a[0] != '-'){
+			if	(|commandLine.arguments > 0)
+				help();
+
+			port:	unsigned;
+			sc:	stringConverter = [ a ];
+
+			port = sc encodeUnsigned();
+			if	(!sc.success){
+				printf("Incorrect port id format: %S\n", a);
+				help();
+				}
+			if	(!x setMousePort(port)){
+				printf("%d is an invalid serial port\n", 
+									port);
+				help();
+				}
+			exit(0);
+			}
+		switch	(a[1]){
+		case	's':
+			x swapMouseButtons();
+			printf("Mouse buttons swapped\n");
+			break;
+
+		case	'l':
+			x setMouseHandedness(FALSE);
+			break;
+
+		case	'r':
+			x setMouseHandedness(TRUE);
+			break;
+
+		default:
+			printf("Unknown argument: %S\n", a);
+			help();
+			}
+		}
+	exit(EX_SUCCESS);
+	}
+
+help:	() = {
+	printf(	"USE IS: mouse [ -s | -l | -r ] port#\n"
+		"	-l	Set mouse for left-handed operation\n"
+		"	-r	Set mouse for right-handed operation\n"
+		"	-s	Swap mouse buttons\n");
+	exit(1);
+	}

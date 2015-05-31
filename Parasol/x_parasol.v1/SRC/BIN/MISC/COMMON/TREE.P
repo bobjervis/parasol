@@ -1,0 +1,272 @@
+include	edserver;
+include	string, format;
+include	file;
+include	error;
+include	filesys;
+include	treeview;
+include	console, window;
+include	alys;
+
+mainSetup:	entry	() =
+	{
+	arg:	[:] char;
+	i, tot:	int;
+	x:	unsigned;
+	fpathb:	[MAXPATH] char;
+	fpath:	[:] char;
+
+	if	(|commandLine.arguments > 1){
+		printf("TREE Version 1.0 - Print a directory tree\n");
+		printf("Use is: tree [ path ]\n");
+		exit(1);
+		}
+	if	(|commandLine.arguments == 1)
+		arg = commandLine.arguments[0];
+	else
+		arg = ".";
+
+	d, ds:	ref directory;
+
+	d = directory create(0, arg, 0);
+	tot = d totalDescendants();
+	for	(i = 1; i <= tot; i++){
+		d seek(i, &ds);
+		ds draw(&stdout);
+		stdout putc('\n');
+		}
+	exit(EX_SUCCESS);
+	}
+
+directory:	type	{
+	child:		ref directory;
+	nextSibling:	ref directory;
+	prevSibling:	ref directory;
+	parent:		ref directory;
+
+	public:
+
+	isOpen:		boolean;
+	path:		[:] char;
+	attrib:		fAttributes_t;
+	tag:		[:] char;
+
+create:	factory	(par: ref directory, a_path: [:] char, 
+						attr: int) ref directory =
+	{
+	self = new directory;
+	path = stringDup(a_path);
+	tag = stringDup(stripDirectory(path));
+	attrib = attr;
+	parent = par;
+	child = 0;
+	isOpen = FALSE;
+	if	(par && par->child){
+		x:	ref directory;
+		lastx:	ref directory;
+
+		lastx = 0;
+		for	(x = par->child; x; lastx = x, x = x->nextSibling)
+			if	(compare(x) < 0)
+				break;
+		if	(x){
+			nextSibling = x;
+			prevSibling = x->prevSibling;
+			if	(x->prevSibling)
+				x->prevSibling->nextSibling = self;
+			else
+				par->child = self;
+			x->prevSibling = self;
+			}
+		else	{
+			nextSibling = 0;
+			prevSibling = lastx;
+			lastx->nextSibling = self;
+			}
+		}
+	else	{
+		if	(par)
+			par->child = self;
+		nextSibling = 0;
+		prevSibling = 0;
+		}
+	open();
+	return self;
+	}
+
+open:	() =
+	{
+	d:	ref directory;
+
+	if	(child == 0)
+		expandsubpath(path, "*", self);
+	isOpen = TRUE;
+	if	(child){
+		for	(d = child; d; d = d->nextSibling){
+			if	(d->attrib & FA_NETNODE)
+				continue;
+			if	(d->child == 0){
+				expandsubpath(d->path, "*", d);
+				if	(d->child == 0)
+					d->isOpen = TRUE;
+				}
+			}
+		}
+	}
+
+compare:	(x: ref directory) int =
+	{
+	return stringCompare(tag, x->tag);
+	}
+
+draw:	(se: ref Emitter) =
+	{
+	drawParent(se, TRUE);
+	se write(tag);
+	}
+
+drawParent:	(se: ref Emitter, drawHoriz: boolean) =
+	{
+	if	(parent == 0)
+		return;
+	parent drawParent(se, FALSE);
+	if	(drawHoriz){
+		if	(nextSibling)
+			se putc(0xC3);
+		else
+			se putc(0xC0);
+		se putc(0xC4);
+		}
+	else	{
+		if	(nextSibling)
+			se putc(0xB3);
+		else
+			se putc(' ');
+		se putc(' ');
+		}
+	se putc(' ');
+	}
+
+level:	() int =
+	{
+	d:	ref directory;
+	i:	int;
+
+	for	(i = 0, d = parent; d; d = d->parent, i++)
+		;
+	return i;
+	}
+
+totalDescendants:	() int =
+	{
+	d:	ref directory;
+	i:	int;
+
+	i = 1;						// count self
+	if	(isOpen){
+		for	(d = child; d; d = d->nextSibling)
+			i += d totalDescendants();	// count children
+		}
+	return i;
+	}
+/*
+	This function locates the nth directory.  The resulting directory
+	is returned in *dp.  If the n value is too high, the return value is
+	n minus the number of directories found.  Note that n starts counting
+	at 1.  Note that *dp is always the last directory found, even if the
+	count was too high.
+ */
+seek:	(n: int, dp: ref ref directory) int =
+	{
+	*dp = self;
+	if	(n <= 1)			// a hit
+		return 0;
+
+	d:	ref directory;
+
+	n--;					// count self
+	if	(isOpen){
+		for	(d = child; d; d = d->nextSibling){
+			n = d seek(n, dp);		// count children
+			if	(n == 0)
+				return 0;		// there was a hit
+			}
+		}
+	return n;
+	}
+
+seekParent:	() ref directory =
+	{
+	if	(parent)
+		return parent;
+	else
+		return self;
+	}
+
+seekChild:	(srch: [:] char) ref directory =
+	{
+	d:	ref directory;
+
+	if	(isOpen){
+		for	(d = child; d; d = d->nextSibling)
+			if	(stringCompare(d->tag, srch) == 0)
+				return d;
+		}
+	return self;
+	}
+
+indexOf:	(loc: ref directory, i: int) int =
+	{
+	if	(loc == self)
+		return i;
+	d:	ref directory;
+
+	if	(isOpen){
+		for	(d = child; d; d = d->nextSibling){
+			i = d indexOf(loc, i + 1);
+			if	(i >= 0)
+				return i;
+			i = -i;
+			}
+		}
+	return -i;
+	}
+
+	};
+
+expandsubpath:	(dir: [:] char, filename: [:] char, 
+						parent: ref directory) int =
+	{
+	ff:	finder;
+	i:	int;
+	fpath:	[MAXPATH] char;
+	cp:	ref char;
+	scp:	ref char;
+	d:	ref directory;
+
+	if	(ff open(dir, filename, FA_DIR) != SUCCESS)
+		return(-1);
+
+		/* Copy the directory part of the path */
+
+	while	(ff next() == SUCCESS){
+		s:	unsigned;
+		cp:	ref char;
+
+		if	(ff.attrib & FA_DIR == 0)
+			continue;
+//		if	(ff.attrib & FA_NETNODE)
+//			continue;
+		i = |ff.pathname;
+		cp = ff.pathname + i - 1;
+		if	(i > 1 &&
+			 cp[0] == '.'){
+			if	(cp[-1] == '.' ||
+				 cp[-1] == '/' ||
+				 cp[-1] == ':')
+				continue;
+			}
+		d = directory create(parent, ff.pathname, ff.attrib);
+		}
+	ff close();
+	return(1);
+	}	

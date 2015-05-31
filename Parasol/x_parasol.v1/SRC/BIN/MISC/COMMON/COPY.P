@@ -1,0 +1,195 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+include	filesys;
+include	error;
+include	alys;
+/*
+		Copies files.
+ */
+verboseCopy:	boolean = FALSE;
+
+main:	entry	() =
+	{
+	dst:	[:] char;
+	src:	[:] char;
+	args:	ref [:] char;
+	sCount:	int;
+	i:	int;
+	fs:	file_t;
+
+	if	(|commandLine.arguments == 0)
+		usage();
+	while	(|commandLine.arguments > 0){
+		src = commandLine.arguments[0];
+		if	(|src == 0 ||
+			 src[0] != '-')
+			break;
+		commandLine shiftArguments();
+		if	(|src == 1){
+			printf("Unknown argument: %S\n", src);
+			usage();
+			}
+		switch	(src[1]){
+		case	'v':
+			verboseCopy = TRUE;
+			break;
+
+		default:
+			printf("Unknown argument: %S\n", src);
+			usage();
+			}
+		if	(|commandLine.arguments == 0){
+			printf("No filenames given\n");
+			usage();
+			}
+		}
+	if	(|commandLine.arguments == 1){
+		args = &src;
+		copyToDirectory(args, 1, ".");
+		}
+	else	{
+		sCount = |commandLine.arguments - 1;
+		dst = commandLine.arguments[sCount];
+		fs = FileSystem stat(dst);
+		if	(fs.id != -1 &&
+			 fs.attributes & FA_DIR)
+			copyToDirectory(commandLine.arguments, sCount, dst);
+		else if	(sCount == 1){
+			i = copyFile(dst, src);
+			if	(i){
+				if	(!verboseCopy)
+					printf("Copy '%S' to '%S' ", 
+							src, dst);
+				printf("failed: %S\n", cmdError(i));
+				}
+			}
+		else
+			usage();
+		}
+	exit(EX_SUCCESS);
+	}
+
+copyToDirectory:	(srcs: ref [:] char, count: int, dest: [:] char) =
+	{
+	destpath:	[MAXPATH] char;
+	dir:		[:] char;
+	pattern:	[:] char;
+	i:		int;
+	j:		int;
+	ff:		finder;
+	fcount:		int;
+
+	for	(i = 0; i < count; i++){
+		dir = getDirectory(srcs[i]);
+		pattern = stripDirectory(srcs[i]);
+		j = ff open(dir, pattern, 0);
+		if	(j != SUCCESS){
+			printf("Could not find %S: %S\n", srcs[i], cmdError(j));
+			continue;
+			}
+		fcount = 0;
+		while	(ff next() == SUCCESS){
+			dfile:	[:] char;
+
+			dfile = stripDirectory(ff.pathname);
+//			printf("dest %P dfile %P\n", dest, dfile);
+//			printf("dest = %S dfile = %S\n", dest, dfile);
+			dfile = makePath(destpath, dest, dfile, "");
+			i = copyFile(dfile, ff.pathname);
+			if	(i){
+				if	(!verboseCopy)
+					printf("Copy '%S' to '%S' ", 
+							ff.pathname, dfile);
+				printf("failed: %S\n", cmdError(i));
+				}
+			fcount = 1;
+			}
+		if	(fcount == 0)
+			printf("Could not copy %S to %S: %S\n",
+					srcs[i], dest, 
+					cmdError(ERRNOFILE));
+		}
+	}
+
+copyFile:	(dest: [:] char, src: [:] char) int =
+	{
+	ifd:	stream;
+	ofd:	stream;
+	i:	int;
+	j:	int;
+	fs:	file_t;
+	buf:	[:] byte;
+	buff:	static	[1024] byte;
+	buflen:	int;
+	copyAmount:	long;
+
+	if	(verboseCopy)
+		printf("Copy '%S' to '%S' ... ", src, dest);
+	fs = FileSystem stat(src);
+	fs.attributes &= ~FA_DIR;		// Don't create a directory
+						// with a copy call
+	if	(fs.id == -1){
+		fs.ftime = 0;
+		fs.size = 512;
+		}
+	i = ifd open(src, AR_READ);
+	if	(i)
+		return i;
+
+		// Make the buffer an even block length
+
+	buf = buff;
+	i = ofd create(dest, fs.attributes);
+	if	(i){
+		ifd close();
+		return i;
+		}
+	for	(copyAmount = 0;;){
+		i = ifd read(buf);
+		if	(i < 0){
+			ifd close();
+			ofd close();
+			FileSystem unlink(dest);
+			return i;
+			}
+		if	(i == 0)
+			break;
+		|buf = i;
+		copyAmount += i;
+		j = ofd write(buf);
+		if	(j != i){
+			printf("wrote i = %d |buf = %d j = %d\n", i, |buf, j);
+			ifd close();
+			ofd close();
+			FileSystem unlink(dest);
+			if	(j < 0)
+				return j;
+			return ERRDISKFULL;
+			}
+		}
+	if	(fs.ftime)
+		ofd setAge(fs.ftime);
+	ifd close();
+	ofd close();
+	if	(verboseCopy)
+		printf("%d bytes\n", copyAmount);
+	return SUCCESS;
+	}
+
+usage:	() =
+	{
+	printf( "Use is: copy [ -v ] src_file dest_file\n"
+		"\tcopy [ -v ] src_file(s) dest_directory\n"
+		"\tcopy [ -v ] src_file\n\n"
+		"\t\t-v\tDisplay file names as they are copied\n\n"
+		"Note: when there is only a source file given,"
+				" the implied destination is .\n");
+	exit(1);
+	}
+

@@ -1,0 +1,1117 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	console;
+include	window;
+include	editor;
+include	string;
+include	file;
+
+formStatus:	public	type	char = {
+	FS_SUCCESS,
+	FS_ESC,
+	FS_ERROR,
+
+	FS_ACTIONS,
+
+	FS_UP,
+	FS_DOWN,
+	FS_LEFT,
+	FS_RIGHT,
+	FS_TAB,
+	FS_BTAB,
+	FS_HOME,
+	FS_END,
+	FS_BLINE,
+	FS_ELINE
+	};
+/*
+	An application redefines this class and uses the following methods 
+	for standard actions:
+
+		escape		- cancel
+		enterKey	- ok
+ */
+form:	public	type	inherit	frob	{
+	public:
+
+	priorFocus:	ref frob;
+	agent:		fieldEditor;
+
+constructor:	() =
+	{
+	super constructor();
+	priorFocus = 0;
+	agent = [ self ];
+	}
+
+destructor:	dynamic	() =
+	{
+	nw, w:	ref frob;
+
+	for	(w = child; w; w = nw){
+		nw = w->sibling;
+		delete w;
+		}
+	super destructor();
+	}
+
+close:	dynamic	() =
+	{
+	if	(priorFocus)
+		priorFocus setTextFocus();
+	super close();
+	}
+
+enter:	dynamic	() ref frob =
+	{
+	f:	ref frob;
+	w:	ref frob;
+
+	for	(f = child; f; f = f->sibling){
+		w = f enter();
+		if	(w)
+			return w;
+		}
+	return 0;
+	}
+
+startup:	(w: ref frob, p: point) =
+	{
+	f:	ref frob;
+
+	at(p);
+	w anchor(self);
+	clear();
+	_expose(box);
+	priorFocus = w getTextFocus();
+	f = enter();
+	if	(f){
+		anchor(&agent);
+		agent connect(ref field(f));
+		agent setTextFocus();
+		}
+	}
+
+mainApplication:	() =
+	{
+	f:	ref frob;
+
+	priorFocus = 0;
+	f = enter();
+	if	(f){
+		anchor(&agent);
+		agent connect(ref field(f));
+		agent setTextFocus();
+		}
+	}
+/*
+	This function is really cheesy.  It relies on the fact that the only
+	child windows that can get attached to a form window (except for the
+	first in list, which is the fieldEditor agent window) are fields.
+ */
+locateField:	dynamic	(best: ref field, p: point, action: formStatus) ref field =
+	{
+	f:	ref field;
+	fx:	ref field;
+
+	if	(child == 0)
+		return best;
+	f = ref field(child->sibling);
+	for	(; f; f = ref field(f->sibling)){
+		fx = f locateField(best, p, action);
+		if	(fx)
+			best = fx;
+		}
+	return best;
+	}
+
+text:	(p: point, color: char, text: [:] char) =
+	{
+	t:	ref labelField;
+
+	t = new labelField[ p, text ];
+	t->box.size = [ |text, 1 ];
+	t->color = color;
+	anchor(t);
+	}
+
+rotary:	(c: point, sz: point, d: ref int, fmt: [:] char,
+				flags: byte,
+				fcolor: unsigned, choices: ref ref char) =
+	{
+	r:	ref rotaryField;
+
+	r = new rotaryField[ c, d, choices ];
+	r->box.size = sz;
+	r->fformat = fmt;
+	r->flags = flags;
+	r->color = fcolor;
+	anchor(r);
+	}
+
+integer:	(c: point, sz: point, d: ref int, 
+				fmt: [:] char,
+				flags: byte,
+				fcolor: unsigned) =
+	{
+	r:	ref integerField;
+
+	r = new integerField[ c, d ];
+	r->box.size = sz;
+	r->fformat = fmt;
+	r->flags = flags;
+	r->color = fcolor;
+	anchor(r);
+	}
+
+stringf:	(c: point, sz: point, str: ref [:] char, 
+				fmt: [:] char,
+				flags: byte,
+				fcolor: unsigned) =
+	{
+	r:	ref stringField;
+
+	r = new stringField[ c, str ];
+	r->box.size = sz;
+	r->fformat = fmt;
+	r->flags = flags;
+	r->color = fcolor;
+	anchor(r);
+	}
+/*
+focus:	dynamic	() =
+	{
+	agent focus();
+	}
+ */
+	};
+
+fieldEditor:	public	type	inherit editor {
+	owner:		ref form;
+	buff:		fieldBuffer;
+	textState:	tStates;
+	currentField:	ref field;
+
+	public:
+
+constructor:	(f: ref form) =
+	{
+	owner = f;
+	super constructor();
+	}
+
+connect:	(fld: ref field) =
+	{
+	textState = TS_INITIAL;
+	buff = [ fld ];
+	currentField = fld;
+	super connect(&buff);
+
+		// Conform to the agent's shadow window
+
+	box.size = fld->box.size;
+	box.corner = fld->box.corner;
+	resetEditor();
+	redraw();
+	}
+
+formatLine:	dynamic	(ln: int) =
+	{
+	if	(buff.mappedField->flags & FLD_NOECHO){
+		i:		int;
+		lineBuffer:	[80] colorChar;
+
+		memSet(lineBuffer, C_TEXT, sizeof lineBuffer);
+		for	(i = 0; i < box.size.x; i++)
+			lineBuffer[i].character = '\xb0';
+		write([ 0, ln - displayLine ], lineBuffer[:box.size.x]);
+		}
+	else
+		super formatLine(ln);
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	if	(currentField processKeystroke(k))
+		return TRUE;
+	return super processKeystroke(k);
+	}
+
+escape:	dynamic	() =
+	{
+	if	(owner->priorFocus){
+		buff close();
+		owner->priorFocus setTextFocus();
+		owner unanchor(self);
+		}
+	owner escape();
+	}
+
+enterKey:	dynamic	() =
+	{
+	leaveField(FS_SUCCESS);
+	}
+
+atLine:	(line: int) =
+	{
+	gotoLine(line + 1);
+	}
+
+atEndFile:	() =
+	{
+	super endFile();
+	}
+
+atEndLine:	() =
+	{
+	super endLine();
+	}
+
+leftArrow:	dynamic	() =
+	{
+	textState = TS_EDITING;
+	if	(cursor.offset == 0)
+		leaveField(FS_LEFT);
+	else
+		super leftArrow();
+	}
+
+rightArrow:	dynamic	() =
+	{
+	textState = TS_EDITING;
+	if	(cursor.column >= box.size.x - 1)
+		leaveField(FS_RIGHT);
+	else
+		super rightArrow();
+	}
+
+upArrow:	dynamic	() =
+	{
+	textState = TS_EDITING;
+	if	(cursor.line == 0)
+		leaveField(FS_UP);
+	else
+		super upArrow();
+	}
+
+downArrow:	dynamic	() =
+	{
+	textState = TS_EDITING;
+	if	(cursor.line >= box.size.y - 1)
+		leaveField(FS_DOWN);
+	else
+		super downArrow();
+	}
+
+deleteCharacter:	dynamic	() =
+	{
+	textState = TS_EDITING;
+	super deleteCharacter();
+	}
+
+backspace:	dynamic	() =
+	{
+	textState = TS_EDITING;
+	super backspace();
+	}
+
+enterCharacter:	dynamic	(k: keystroke) =
+	{
+	if	(textState == TS_INITIAL){
+		buff deleteAll();
+		redraw();
+		}
+	textState = TS_EDITING;
+	super enterCharacter(k);
+	}
+
+tab:	dynamic	() =
+	{
+	leaveField(FS_TAB);
+	}
+
+backtab:	dynamic	() =
+	{
+	leaveField(FS_BTAB);
+	}
+
+beginFile:	dynamic	() =
+	{
+	leaveField(FS_HOME);
+	}
+
+endFile:	dynamic () =
+	{
+	leaveField(FS_END);
+	}
+
+beginLine:	dynamic	() =
+	{
+	leaveField(FS_BLINE);
+	}
+
+endLine:	dynamic	() =
+	{
+	leaveField(FS_ELINE);
+	}
+
+leaveField:	(action: formStatus) =
+	{
+	p2, p:		point;
+	successor:	ref field;
+
+	if	(buff save() != FS_SUCCESS)
+		return;
+	p = localToAbsolute([ cursor.column, cursor.line ]);
+	if	(action > FS_ACTIONS){
+		successor = owner locateField(0, p, action);
+		if	(successor == 0)
+			return;
+		if	(successor == buff.mappedField){
+			textState = TS_EDITING;
+			switch	(action){
+			case	FS_UP:
+				super upArrow();
+				break;
+
+			case	FS_DOWN:
+				super downArrow();
+				break;
+
+			case	FS_RIGHT:
+				super rightArrow();
+				break;
+
+			case	FS_HOME:
+			case	FS_TAB:
+			case	FS_BTAB:
+				super beginFile();
+				break;
+
+			case	FS_BLINE:
+				super beginLine();
+				break;
+
+			case	FS_END:
+				super endFile();
+				break;
+
+			case	FS_LEFT:
+				super leftArrow();
+				break;
+
+			case	FS_ELINE:
+				super endLine();
+				}
+			return;
+			}
+		buff close();
+		}
+	else	{
+		if	(owner->priorFocus){
+			buff close();
+			owner->priorFocus setTextFocus();
+			owner unanchor(self);
+			}
+		owner enterKey();
+		return;
+		}
+	connect(successor);
+
+	p2 = successor localToAbsolute([ 0, 0 ]);
+	switch	(action){
+	case	FS_BTAB:
+	case	FS_UP:
+		if	(p.y > p2.y)
+			atLine(p.y - p2.y - 1);	// go to the relative
+						// line, start of line
+		else
+			atLine(0);
+		break;
+
+	case	FS_RIGHT:
+	case	FS_TAB:
+	case	FS_DOWN:
+	case	FS_BLINE:
+		atLine(0);		// go to the relative
+						// line, start of line
+		break;
+
+	case	FS_END:
+		atEndFile();
+		break;
+
+	case	FS_LEFT:
+	case	FS_ELINE:
+		atLine(p.y - p2.y);		// go to the relative
+						// line, end of line
+		atEndLine();
+		}
+	}
+
+	};
+
+tStates:	type	char = {
+	TS_INITIAL,
+	TS_EDITING
+	};
+
+fieldBuffer:	type	inherit	transferBuffer	{
+
+	usedLen:	int;
+	changed:	int;
+
+public:
+
+	mappedField:	ref field;
+
+constructor:	(fld: ref field) =
+	{
+	len:	int;
+
+	len = fld->box.size.x * int(fld->box.size.y) + 1;
+	data = 0;
+	beginExtract(len);
+	memSet(data, 0, len);
+	mappedField = fld;
+	changed = 0;
+	usedLen = fld load(data, len - 1);
+	data[usedLen] = EOF_MARK;
+	usedLen++;
+	}
+
+deleteAll:	() =
+	{
+	usedLen = 1;
+	data[0] = EOF_MARK;
+	}
+
+close:	dynamic	() =
+	{
+	makeEmpty();
+	usedLen = 0;
+	changed = 0;
+	}
+
+save:	() int =
+	{
+	i:	int;
+
+	i = mappedField store(data[:usedLen - 1]);
+	if	(i == FS_SUCCESS)
+		changed = 0;
+	return i;
+	}
+
+makeEmpty:	dynamic	() =
+	{
+	usedLen = 0;
+	changed = 1;
+	super makeEmpty();
+	}
+
+insert:	dynamic	(buf: * char, len: int) =	// buffer address and length
+	{
+	i:	int;
+	cp:	* char;
+
+	if	(usedLen + len > dataLen)
+		len = dataLen - usedLen;
+	if	(offset > usedLen)
+		offset = usedLen;
+	i = usedLen - offset;
+	cp = &data[offset];
+	if	(i)
+		memMove(&data[offset + len], cp, i);
+	memCopy(cp, buf, len);
+	usedLen += len;
+	changed = 1;
+	}
+
+deleteText:	dynamic	(len: int) =
+	{
+	rem:	int;
+
+	rem = usedLen - offset;
+	if	(len > rem)
+		len = rem;
+	memMove(&data[offset], &data[offset + len], rem - len);
+	usedLen -= len;
+	changed = 1;
+	}
+
+seek:	dynamic	(newPos: textPos, whence: int) textPos =
+	{
+	switch	(whence){
+	case	0:			// SEEK_ABS
+		offset = newPos;
+		break;
+
+	case	1:			// SEEK_CUR
+		offset += newPos;
+		break;
+
+	case	2:
+		offset = dataLen + newPos;
+		break;
+
+	case	3:
+		cp:	* char;
+		i:	textPos;
+		lc:	lineNum;
+
+		lc = newPos;
+		i = 0;
+		if	(lc){
+			for	(i = 1, cp = data; i < usedLen; i++, cp++){
+				if	(*cp == '\n'){
+					lc--;
+					if	(lc == 0)
+						break;
+					}
+				}
+			}
+		offset = i;
+		break;
+		}
+	return offset;
+	}
+
+fetchLine:	dynamic	(ln: lineNum, col: int) * char = 
+					// line number and offset in line
+	{
+	cp:	* char;
+	off:	int;
+
+	off = seek(ln, 3);		// get to ln, column 0
+	cp = &data[off];
+	while	(col){
+		if	(off >= usedLen ||
+			 *cp == '\n')
+			return 0;
+		cp++;
+		off++;
+		col--;
+		}
+	offset = off;
+	return cp;
+	}
+
+getLineno:	dynamic	(lnp: * lineNum, colp: * int) =
+					// return current location in lines
+	{
+	cp:	* char;
+	i:	textPos;
+	col:	int;
+	ln:	lineNum;
+
+	ln = 0;
+	i = 0;
+	col = 0;
+	for	(cp = data; i < offset; i++, cp++){
+		if	(*cp == '\n'){
+			col = i;
+			ln++;
+			}
+		}
+	*colp = i - (col + 1);
+	*lnp = ln;
+	}
+
+extract:	dynamic	(buff: * editBuffer, len: int) =
+					// buffer to put the data in
+	{
+	buff beginExtract(len);
+	buff write(&data[offset], len);
+	}
+
+hasChanged:	dynamic	() int =
+	{
+	return 0;
+	}
+
+	};
+
+
+FLD_READONLY:	public	const byte = 0x01;
+FLD_NOECHO:	public	const byte = 0x02;
+
+field:	public	type	inherit frob	{
+	public:
+
+	flags:		byte;
+	color:		byte;
+
+destructor:	dynamic	() =
+	{
+	}
+
+printf:	dynamic	(p: point, c: color_t, fmt: [:] char, ...) =
+	{
+	fe:	frameEmitter;
+
+	fe = [ self, c ];
+	fe.p = p;
+	fe format(fmt, ...);
+	while	(fe.p.x < box.size.x){
+		putcc(fe.p, ' ', c);
+		fe.p.x++;
+		}
+	}
+
+putcc:	dynamic	(p: point, c: char, co: color_t) =
+	{
+	if	(flags & FLD_NOECHO)
+		c = '\xb0';
+	super putcc(p, c, co);
+	}
+
+processKeystroke:	dynamic	(keystroke) boolean =
+	{
+	return FALSE;
+	}
+
+enter:	dynamic	() ref frob =
+	{
+	if	(flags & FLD_READONLY)
+		return 0;
+	else
+		return self;
+	}
+
+locateField:	dynamic	(best: * field, p: point, action: formStatus) * field =
+	{
+	c:	point;
+	b:	point;
+
+	if	(flags & FLD_READONLY)
+		return best;
+	c = localToAbsolute([ 0, 0 ]);
+	switch	(action){
+	case	FS_UP:
+		if	(c.x > p.x)
+			break;
+		if	(c.x + box.size.x <= p.x)
+			break;
+		if	(c.y >= p.y)
+			break;
+		if	(best == 0)
+			return self;
+		p = best localToAbsolute([ 0, 0 ]);
+		if	(c.y > p.y)
+			return self;
+		break;
+
+	case	FS_DOWN:
+		if	(c.x > p.x)
+			break;
+		if	(c.x + box.size.x <= p.x)
+			break;
+		if	(c.y <= p.y)
+			break;
+		if	(best == 0)
+			return self;
+		p = best localToAbsolute([ 0, 0 ]);
+		if	(c.y < p.y)
+			return self;
+		break;
+
+	case	FS_LEFT:
+		if	(c.y > p.y)
+			break;
+		if	(c.y + box.size.y <= p.y)
+			break;
+		if	(c.x >= p.x)
+			break;
+		if	(best == 0)
+			return self;
+		p = best localToAbsolute([ 0, 0 ]);
+		if	(c.x > p.x)
+			return self;
+		break;
+
+	case	FS_RIGHT:
+		if	(c.y > p.y)
+			break;
+		if	(c.y + box.size.y <= p.y)
+			break;
+		if	(c.x <= p.x)
+			break;
+		if	(best == 0)
+			return self;
+		p = best localToAbsolute([ 0, 0 ]);
+		if	(c.x < p.x)
+			return self;
+		break;
+
+	case	FS_TAB:
+		if	(c.y + box.size.y <= p.y)
+			break;
+
+			// If this field ends on the same line and is to the
+			// left, forget it.
+
+		if	(c.y + box.size.y == p.y + 1){
+			if	(c.x <= p.x)
+				break;
+			}
+		if	(best == 0)
+			return self;
+
+			// Trim the current field dimensions to below or
+			// to the right of the starting point
+
+		if	(c.y <= p.y){
+			if	(c.x < p.x)
+				c.y = p.y + 1;
+			else
+				c.y = p.y;
+			}
+		b = best localToAbsolute([ 0, 0 ]);
+
+			// Trim the best field dimensions to below or
+			// to the right of the starting point
+
+		if	(b.y < p.y){
+			if	(b.x < p.x)
+				b.y = p.y + 1;
+			else
+				b.y = p.y;
+			}
+		if	(c.y < b.y)
+			return self;
+		if	(c.y > b.y)
+			break;
+		if	(c.x < b.x)
+			return self;
+		break;
+
+	case	FS_BTAB:
+		if	(c.y > p.y)
+			break;
+
+			// If this field starts on the same line and is to the
+			// right, forget it.
+
+		if	(c.y == p.y){
+			if	(c.x >= p.x)
+				break;
+			}
+		if	(best == 0)
+			return self;
+
+			// Trim the current field dimensions to above or
+			// to the left of the starting point.  Also move
+			// the c point to the lower right corner
+
+		c.y += box.size.y - 1;
+		if	(c.y >= p.y){
+			c.y = p.y - 1;
+			if	(c.x < p.x)
+				c.y++;
+			}
+		c.x += box.size.x - 1;
+
+		b = best localToAbsolute([ 0, 0 ]);
+
+			// Trim the best field dimensions to below or
+			// to the right of the starting point
+
+		b.y += best->box.size.y - 1;
+		if	(b.y >= p.y){
+			b.y = p.y - 1;
+			if	(b.x < p.x)
+				b.y++;
+			}
+		b.x += best->box.size.x - 1;
+		if	(c.y > b.y)
+			return self;
+		if	(c.y < b.y)
+			break;
+		if	(c.x > b.x)
+			return self;
+		break;
+
+	case	FS_HOME:
+		if	(best == 0)
+			return self;
+		p = best localToAbsolute([ 0, 0 ]);
+		if	(c.y < p.y)
+			return self;
+		if	(c.y > p.y)
+			break;
+		if	(c.x < p.x)
+			return self;
+		break;
+
+	case	FS_END:
+		if	(best == 0)
+			return self;
+		p = best localToAbsolute([ 0, 0 ]);
+		if	(c.y + box.size.y > p.y + best->box.size.y)
+			return self;
+		if	(c.y + box.size.y < p.y + best->box.size.y)
+			break;
+
+			// Fields end on the same line, so pick the higher x
+
+		if	(c.x > p.x)
+			return self;
+		break;
+
+	case	FS_BLINE:
+		if	(c.y > p.y)
+			break;
+		if	(c.y + box.size.y <= p.y)
+			break;
+		if	(best == 0)
+			return self;
+		p = best localToAbsolute([ 0, 0 ]);
+		if	(c.x < p.x)
+			return self;
+		break;
+
+	case	FS_ELINE:
+		if	(c.y > p.y)
+			break;
+		if	(c.y + box.size.y <= p.y)
+			break;
+		if	(best == 0)
+			return self;
+		p = best localToAbsolute([ 0, 0 ]);
+		if	(c.x > p.x)
+			return self;
+		break;
+		}
+	return best;
+	}
+
+load:	dynamic	(buf: ref char, int) int =
+	{
+	buf[0] = EOF_MARK;
+	return 1;
+	}
+
+store:		dynamic	([:] char) formStatus =
+	{
+	return FS_ERROR;
+	}
+
+	};
+
+labelField:	public	type	inherit	field	{
+	text:		[:] char;
+
+	public:
+
+constructor:	(p: point, t: [:] char) =
+	{
+	box.corner = p;
+	flags = FLD_READONLY;
+	text = t;
+	}
+
+expose:	dynamic	(x: rectangle_t) = 
+	{
+	printf([ 0, 0 ], color, "%S", text);
+	}
+
+};
+
+dataField:	public	type	inherit	field	{
+	public:
+
+	fformat:	[:] char;
+	};
+
+rotaryField:	public	type	inherit dataField	{
+	data:		ref int;
+	choices:	ref ref char;
+	nchoices:	int;
+
+	public:
+
+constructor:	(p: point, d: ref int, ch: ref ref char) =
+	{
+	box.corner = p;
+	data = d;
+	choices = ch;
+	for	(nchoices = 0; choices[nchoices]; nchoices++)
+		;
+	}
+
+expose:	dynamic	(x: rectangle_t) = 
+	{
+	i:	int;
+	fmt:	[:] char;
+	cs:	ref char;
+
+	i = *data;
+	if	(|fformat)
+		fmt = fformat;
+	else
+		fmt = "%s";
+	if	(i < 0 || i >= nchoices)
+		cs = "<illegal>";
+	else
+		cs = choices[i];
+	printf([ 0, 0 ], color, fmt, cs);
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	switch	(k){
+	case	LEFT_ARW:
+		if	(*data > 0)
+			(*data)--;
+		else
+			*data = nchoices - 1;
+		break;
+
+	case	RIGHT_ARW:
+		(*data)++;
+		if	(*data >= nchoices)
+			*data = 0;
+		break;
+
+	default:
+		return FALSE;
+		}
+	redraw();
+	return TRUE;
+	}
+
+load:	dynamic	(buf: ref char, len: int) int =
+	{
+	i:	int;
+	cs:	ref char;
+
+	i = *data;
+	if	(i < 0 || i >= nchoices)
+		cs = "<illegal>";
+	else
+		cs = choices[i];
+
+	s:	[:] char;
+
+	s = cs[:stringLength(cs)];
+	if	(|s < len)
+		len = |s;
+	memCopy(buf, s, len);
+	return len;
+	}
+
+store:		dynamic	(buf: [:] char) formStatus =
+	{
+	return FS_SUCCESS;
+	}
+
+	};
+
+integerField:	public	type	inherit dataField	{
+	data:	ref long;
+
+	public:
+
+constructor:	(p: point, d: ref long) =
+	{
+	box.corner = p;
+	data = d;
+	}
+
+expose:	dynamic	(x: rectangle_t) = 
+	{
+	fmt:	[:] char;
+
+	if	(|fformat)
+		fmt = fformat;
+	else
+		fmt = "%d";
+	printf([ 0, 0 ], color, fmt, *data);
+	}
+
+load:	dynamic	(buf: ref char, len: int) int =
+	{
+	dst:	[:] char;
+	j:	int;
+	numBuf:	[12] char;
+	sc:	stringConverter = [ numBuf ];
+
+	dst = sc decodeSigned(*data);
+	j = |dst;
+	if	(j > len){
+		memSet(buf, '*', len);
+		j = len;
+		}
+	else
+		memCopy(buf, &numBuf, j);
+	return j;
+	}
+
+store:		dynamic	(buf: [:] char) formStatus =
+	{
+	i:	int;
+	sc:	stringConverter = [ buf ];
+
+	i = sc encodeSigned();
+	if	(sc.success){
+		*data = i;
+		return FS_SUCCESS;
+		}
+	else
+		return FS_ERROR;
+	}
+
+	};
+
+stringField:	public	type	inherit dataField	{
+	string:		ref [:] char;
+
+	public:
+
+constructor:	(p: point, str: ref [:] char) =
+	{
+	string = str;
+	box.corner = p;
+	}
+
+expose:	dynamic	(x: rectangle_t) = 
+	{
+	fmt:	[:] char;
+
+	if	(|fformat)
+		fmt = fformat;
+	else
+		fmt = "%S";
+	printf([ 0, 0 ], color, fmt, *string);
+	}
+
+load:	dynamic	(buf: ref char, len: int) int =
+	{
+	if	(|*string < len)
+		len = |*string;
+	memCopy(buf, *string, len);
+	return len;
+	}
+
+store:		dynamic	(buf: [:] char) formStatus =
+	{
+	if	(string == 0)
+		return FS_SUCCESS;
+
+	nstr:	[:] char;
+
+	nstr = new [|buf] char;
+	nstr [:]= buf;
+	delete *string;
+	*string = nstr;
+	return FS_SUCCESS;
+	}
+
+	};
+

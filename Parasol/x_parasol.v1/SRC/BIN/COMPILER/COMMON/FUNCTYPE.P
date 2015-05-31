@@ -1,0 +1,502 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	string;
+include	backend, xcall;
+include	tparams, target;
+include	hash;
+include	sbuffer;
+include	image;
+include	file;
+include	ptree;
+include	symtab;
+include	errmsg;
+include	value;
+include	types;
+
+start:	entry	() =
+	{
+	defineLoadFuncs(U_FUNCTION_TYPE, loadFunction(&function_z.load),
+					sizeof function_z);
+	defineLoadFuncs(U_PARAMETER, loadFunction(&parameter_s.load),
+					sizeof parameter_s);
+	}
+
+/*
+	Function calling conventions.  These specify various attributes of
+	the way in which parameters and return values are communicated into
+	and out of a function.  These conventions also control the kinds of
+	instructions used to call and return from a function.
+ */
+fConventions:	public	type	char = {
+	FC_NORMAL,
+	FC_GATE,
+	FC_INTERRUPT,
+	FC_INLINE,
+	FC_INTERRUPT2,
+	FC_C,
+	};
+
+function_z:	public	type	inherit	type_s	{
+	public:
+
+	returnType:		ref type_s;
+	fixedCalls:		boolean;
+	callingConvention:	fConventions;
+	parameters:		ref parameter_s;
+
+create:	factory	(rt: ref type_s, fc: boolean, 
+		cc: fConventions, p: ref parameter_s) ref function_z =
+	{
+	self = alloc(sizeof function_z);
+	self = [ T_FUNC, rt, fc, cc, p ];
+	return self;
+	}
+
+load:	factory	(f: pointer, image: ref loader) =
+	{
+	self = f;
+	self = [ T_FUNC ];
+	returnType = image address();
+	fixedCalls = image integer();
+	callingConvention = image integer();
+	parameters = image address();
+	}
+
+save:	dynamic	(ifile: ref imageFile) =
+	{
+	if	(ifile beginRecord(U_FUNCTION_TYPE, self, sizeof *self)){
+		ifile address(returnType);
+		ifile integer(fixedCalls);
+		ifile integer(callingConvention);
+		ifile address(parameters);
+		if	(returnType)
+			returnType save(ifile);
+		if	(parameters)
+			parameters save(ifile);
+		}
+	}
+
+constructInterface:	dynamic	(s: ref scope_s, boolean) =
+	{
+	p:	ref parameter_s;
+
+	if	(returnType)
+		s deferInterface(returnType, FALSE);
+	for	(p = parameters; p; p = p->next)
+		p constructInterface(s);
+	}
+
+reconnectInterface:	dynamic	(s: ref scope_s) =
+	{
+	p:	ref parameter_s;
+
+	if	(returnType)
+		returnType reconnectInterface(s);
+	for	(p = parameters; p; p = p->next)
+		p reconnectInterface(s);
+	}
+
+staticInitializer:	dynamic	(x: ref tree_p, ref scope_s) ref tree_p =
+	{
+	CurrentContext error("ErrBadInit");
+	return ErrorTree;
+	}
+
+isGateFunction:	dynamic	() boolean =
+	{
+	return (callingConvention == FC_GATE);
+	}
+
+checkEntrySignature:	() =
+	{
+	if	(returnType &&
+		 returnType->topType != T_VOID)
+		CurrentContext error("ErrEntryReturns");
+	if	(parameters != 0 ||
+		 !fixedCalls ||
+		 callingConvention != FC_NORMAL)
+		CurrentContext error("ErrEntryParams");
+	}
+
+checkCleanupSignature:	() =
+	{
+	if	(returnType == 0 ||
+		 !typeMatch(returnType, SymbolTable.exit_tType))
+		CurrentContext error("ErrCleanupReturns");
+	if	(parameters == 0 ||
+		 !fixedCalls ||
+		 callingConvention != FC_NORMAL ||
+		 !parameters validCleanupArgs())
+		CurrentContext error("ErrCleanupParams");
+	}
+
+constructValue:	dynamic	(s: ref scope_s) =
+	{
+	p:	ref parameter_s;
+
+	if	(returnType)
+		returnType constructValue(s);
+	for	(p = parameters; p; p = p->next)
+		p constructValue(s);
+	}
+
+display:	dynamic	(m: boolean) =
+	{
+	printf(" func");
+	if	(!fixedCalls)
+		printf(" var");
+	if	(callingConvention != FC_NORMAL)
+		printf(" calls %d", callingConvention);
+	printf(" (");
+	p:	ref parameter_s;
+	for	(p = parameters; p; p = p->next){
+		p display(m);
+		if	(p->next)
+			printf(", ");
+		}
+	printf(")");
+	if	(returnType)
+		returnType display(m);
+	}
+
+displayMessageFormat:	dynamic	() =
+	{
+	CurrentContext printf(" func");
+	if	(callingConvention != FC_NORMAL)
+		CurrentContext printf(" calls %d", callingConvention);
+	switch	(callingConvention){
+	case	FC_GATE:	CurrentContext printf(" gate");	break;
+	case	FC_INTERRUPT:	CurrentContext printf(" interrupt");	break;
+	case	FC_INLINE:	CurrentContext printf(" inline");	break;
+	case	FC_INTERRUPT2:	CurrentContext printf(" interrupt");	break;
+		}
+	CurrentContext printf(" (");
+	p:	ref parameter_s;
+	for	(p = parameters; p; p = p->next){
+		p displayMessageFormat();
+		if	(p->next)
+			CurrentContext printf(", ");
+		}
+	CurrentContext printf(")");
+	if	(returnType)
+		returnType displayMessageFormat();
+	}
+
+outputHeaderPrefix:	dynamic	(fd: ref stream) =
+	{
+	if	(callingConvention == FC_GATE ||
+		 returnType == 0)
+		fd printf("void ");
+	else
+		returnType outputHeaderPrefix(fd);
+	}
+
+outputHeaderSuffix:	dynamic	(fd: ref stream, q: dQualifiers, 
+					enclosing: ref scope_s) =
+	{
+	fd printf("(");
+	if	(callingConvention == FC_GATE)
+		fd printf("char *self_, char *m_buffer_");
+	else	{
+		count:	int;
+
+		if	(q & (DQ_MEMBERFUNC|DQ_FACTORY) == DQ_MEMBERFUNC){
+			d:	ref type_s;
+
+			d = enclosing getEnclosingType();
+			d outputHeaderPrefix(fd);
+			fd printf("*self_");
+			count = 1;
+			}
+		else
+			count = 0;
+		if	(parameters == 0){
+			if	(fixedCalls){
+				if	(!count)
+					fd printf("void");
+				}
+			else if	(count){
+				if	(callingConvention == FC_C)
+					fd printf(", ...");
+				else
+					fd printf(", void *pVar");
+				}
+			}
+		else	{
+			parameters outputHeader(fd, count);
+			if	(!fixedCalls){
+				if	(callingConvention == FC_C)
+					fd printf(", ...");
+				else
+					fd printf(", void *pVar");
+				}
+			}
+		}
+	fd printf(")");
+	if	(returnType &&
+		 callingConvention != FC_GATE)
+		returnType outputHeaderSuffix(fd, 0, 0);
+	}
+
+emitNeededTypedefs:	dynamic	(fd: ref stream) =
+	{
+	if	(parameters)
+		parameters emitNeededTypedefs(fd);
+	if	(returnType)
+		returnType emitNeededTypedefs(fd);
+	}
+
+emitStructTags:		dynamic	(fd: ref stream) =
+	{
+	if	(parameters)
+		parameters emitStructTags(fd);
+	if	(returnType)
+		returnType emitStructTags(fd);
+	}
+
+returnTypeOf:	dynamic	() ref type_s =
+	{
+	if	(returnType)
+		return returnType getType();
+	else
+		return 0;
+	}
+
+checkArguments:	(s: ref scope_s, args: ref tree_p, 
+					id: ref identifier) ref tree_p =
+	{
+	i:		int;
+
+	i = checkArgCount(args);
+	if	(i > 0){			// Too many arguments
+		if	(id)
+			CurrentContext errorX("ErrExtraParmsI", id spelling(), "", 0);
+		else
+			CurrentContext error("ErrExtraParms");
+		return ErrorTree;
+		}
+	else if	(i < 0){			// Too few arguments
+		if	(id)
+			CurrentContext errorX("ErrFewParmsI", id spelling(), "", 0);
+		else
+			CurrentContext error("ErrFewParms");
+		return ErrorTree;
+		}
+	if	(args == 0)
+		return args;
+	return args checkArgument(s, parameters, 1, id);
+	}
+
+checkArgCount:	(args: ref tree_p) int =
+	{
+	parm:	ref parameter_s;
+
+	for	(parm = parameters; args;){
+		if	(parm == 0){
+			if	(!fixedCalls)
+				return 0;	// More args are ok
+			else
+				return 1;	// Too many args
+			}
+		parm = parm->next;
+		if	(args->operator == O_ERROR)
+			return 0;		// don't report anything
+		if	(args->operator != O_ARG)
+			break;
+		else
+			args = ref argument_x(args)->right;
+		}
+	if	(parm)
+		return -1;			// Too few arguments
+	else
+		return 0;			// Exact match
+	}
+
+fixedArgsOf:	() int =
+	{
+	parm:	ref parameter_s;
+	i:	int;
+
+	for	(i = 0, parm = parameters; parm; i++, parm = parm->next)
+		;
+	return i;
+	}
+
+compare:	dynamic	(t: ref type_s) boolean =
+	{
+	ft:	ref function_z;
+
+	ft = ref function_z(t);
+	if	(returnType ||
+		 ft->returnType){
+		if	(!typeMatch(returnType, ft->returnType))
+			return FALSE;
+		}
+	if	(fixedCalls != ft->fixedCalls)
+		return FALSE;
+	if	(callingConvention != ft->callingConvention)
+		return FALSE;
+	if	(callingConvention == FC_INTERRUPT ||
+		 callingConvention == FC_INTERRUPT2)
+		return TRUE;
+	return parameters compare(ft->parameters);
+	}
+
+	};
+
+parameter_s:	public	type	{
+	public:
+
+	next:		ref parameter_s;
+	name:		ref identifier;
+	offset:		fileOffset;
+	pType:		ref type_s;
+
+create:	factory	(plist: ref parameter_s, n: ref identifier, i: fileOffset, 
+				d: ref type_s) ref parameter_s =
+	{
+	self = alloc(sizeof parameter_s);
+	self = [ plist, n, i, d ];
+	return self;
+	}
+
+load:	factory	(pa: pointer, image: ref loader) =
+	{
+	cp:	[:] char;
+
+	self = pa;
+	next = image address();
+	cp = image string();
+	if	(|cp)
+		name = identifier create(cp, 0);
+	else
+		name = 0;
+	offset = image uinteger();
+	pType = image address();
+	}
+
+save:	(ifile: ref imageFile) =
+	{
+	if	(ifile beginRecord(U_PARAMETER, self, sizeof *self)){
+		ifile address(next);
+		if	(name)
+			ifile putstring(name spelling());
+		else
+			ifile putc(0);
+		ifile uinteger(offset);
+		ifile address(pType);
+		if	(next)
+			next save(ifile);
+		if	(pType)
+			pType save(ifile);
+		}
+	}
+
+validCleanupArgs:	() boolean =
+	{
+	if	(next == 0 &&
+		 typeMatch(pType, SymbolTable.exit_tType))
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+outputHeader:	(fd: ref stream, count: int) =
+	{
+	index:	int;
+
+	index = 0;
+	while	(self){
+		if	(count || index)
+			fd putc(',');
+		if	(pType == 0)
+			fd printf("int filler_%d", index);
+		else	{
+			pType outputHeaderPrefix(fd);
+			outputHeaderName(fd, index);
+			pType outputHeaderSuffix(fd, 0, 0);
+			}
+		self = next;
+		index++;
+		}
+	}
+
+outputHeaderName:	(fd: ref stream, index: int) =
+	{
+	if	(name)
+		fd printf(" %S_", name spelling());
+	else
+		fd printf(" filler_%d", index);
+	}
+
+emitNeededTypedefs:	(fd: ref stream) =
+	{
+	if	(pType)
+		pType emitNeededTypedefs(fd);
+	if	(next)
+		next emitNeededTypedefs(fd);
+	}
+
+emitStructTags:	(fd: ref stream) =
+	{
+	if	(pType)
+		pType emitStructTags(fd);
+	if	(next)
+		next emitStructTags(fd);
+	}
+
+constructInterface:	(s: ref scope_s) =
+	{
+	if	(pType)
+		s deferInterface(pType, FALSE);
+	}
+
+reconnectInterface:	(s: ref scope_s) =
+	{
+	if	(pType)
+		pType reconnectInterface(s);
+	}
+
+constructValue:	(s: ref scope_s) =
+	{
+	if	(pType)
+		pType constructValue(s);
+	}
+
+display:	(m: boolean) =
+	{
+	if	(name)
+		printf("%S(%d):", name spelling(), offset);
+	if	(pType)
+		pType display(m);
+	}
+
+displayMessageFormat:	() =
+	{
+	if	(pType)
+		pType displayMessageFormat();
+	else
+		CurrentContext printf("?");
+	}
+
+compare:	(p: ref parameter_s) boolean =
+	{
+	while	(p && self){
+		if	(!typeMatch(pType, p->pType))
+			return FALSE;
+		self = next;
+		p = p->next;
+		}
+	if	(p || self)
+		return FALSE;
+	else
+		return TRUE;
+	}
+
+	};
+

@@ -1,0 +1,808 @@
+/*
+	Copyright (c) 1994 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	msgboard;
+include	edserver;
+include	file;
+include	console;
+include	filesys, alys, error, string, format;
+include	window, editor;
+include	msgcat;
+
+BrowserTitle:	[:] char = "Error Browser 1.01";
+
+mainSetup:	entry	() =
+	{
+	fname:	[:] char;
+	ename:	[:] char;
+	bname:	[:] char;
+
+	x:	ref far editorServer;
+
+	if	(|commandLine.arguments != 2){
+		printf("Use is: EBROWSER browser-name editor-server\n");
+		exit(EX_FAIL);
+		}
+	bname = commandLine.arguments[0];
+	ename = commandLine.arguments[1];
+	x = ref far editorServer(FileSystem attach(ename,
+					":user.edserver.editorServer"));
+	if	(x == 0){
+		printf("No editor server connection\n");
+		exit(EX_FAIL);
+		}
+	ErrorBrowser = new errorBrowser[];
+	mainExternal(ErrorBrowser);
+	permit(AR_ANY, AR_ANY, AR_ANY, AR_ANY);
+	i:int = FileSystem register(ErrorBrowser->objectId, bname,
+					":desktop.msgboard.messageBoard");
+	if	(i){
+		printf("Unable to register as %S: %S\n", bname,
+							cmdError(i));
+		exit(EX_FAIL);
+
+
+		}
+	try
+		ErrorBrowser subscribe(x);
+	}
+
+ErrorBrowser:	ref errorBrowser;
+
+errorBrowser:	type	inherit	messageBoard {
+	errorStyle:	style_t;
+	warningStyle:	style_t;
+	errorGlyph:	[:] byte;
+	warningGlyph:	[:] byte;
+	errorColor:	color_t;
+	warningColor:	color_t;
+	currentMark:	mark_t;
+	editor:		ref far editorServer;
+	messages:	ref message;
+	current:	ref message;
+	messageIndex:	msg_t;
+	catalogs:	ref catalogEntry;
+	catalogIndex:	catalog_t;
+	prefixLength:	int;
+
+	public:
+
+constructor:	() =
+	{
+	errorStyle = Invisible;
+	warningStyle = Invisible;
+	errorGlyph = "";
+	warningGlyph = "";
+	errorColor = 0;
+	warningColor = 0;
+	currentMark = NoMark;
+	editor = 0;
+	messages = 0;
+	messageIndex = 1;
+	current = 0;
+	catalogs = 0;
+	catalogIndex = 1;
+	}
+/*
+Info needed for the Parasol-i interpreter.  Eventually we will generate this
+in the compiler.
+
+describeYourself:	gate () [] char =
+	{
+	x:	selfDescriber;
+
+	reply x start(	":desktop.toolbus.visualTool"
+			":desktop.msgboard.messageBoard")
+		gate("nextMessage", offsetof messageBoard.nextMessage)
+		gate("previousMessage", offsetof messageBoard.previousMessage)
+		gate("clear", offsetof messageBoard.clear);
+		done();
+	x delete();
+	}
+ */
+subscribe:	(e: ref far editorServer) =
+	{
+	e defineMessageBoard(ref far messageBoard(objectId));
+	errorStyle = e defineStyle("error", errorGlyph, errorColor);
+	warningStyle = e defineStyle("warning", warningGlyph, warningColor);
+	editor = e;
+	}
+
+clear:	gate	() =
+	{
+	if	(ErrorBrowserWindow == 0)
+		return;
+	critical(ErrorBrowserLock){
+		ErrorBrowserWindow clearOutput();
+		ErrorBrowserWindow redraw();
+		if	(messages){
+			delete messages;
+			messages = 0;
+			}
+		current = 0;
+		}
+	}
+
+textonly:	gate	() =
+	{
+	}
+
+nextMessage:	gate	() =
+	{
+	reply;
+	_nextMessage();
+	}
+
+_nextMessage:	() =
+	{
+//	stdout printf("_nextMessage()\n");
+	critical(ErrorBrowserLock){
+		if	(current == 0)
+			current = messages;
+		else
+			current = current->next;
+		pointAt();
+		}
+	}
+
+previousMessage:gate	() =
+	{
+	reply;
+	_previousMessage();
+	}
+
+_previousMessage:	() =
+	{
+	m, mprev:	ref message;
+
+	critical(ErrorBrowserLock){
+		for	(mprev = 0, m = messages; m; mprev = m, m = m->next)
+			if	(m == current)
+				break;
+		current = mprev;
+		pointAt();
+		}
+	}
+
+selectMessage:	(start: textPos, end: textPos) =
+	{
+	m, mprev:	ref message;
+
+	critical(ErrorBrowserLock){
+		for	(m = messages; m; m = m->next)
+			if	(m->browserLoc >= start &&
+				 m->browserLoc < end)
+				break;
+		current = m;
+		pointAt();
+		}
+	}
+
+defineCatalog:	gate	(name: [:] char, file: [:] char) catalog_t =
+	{
+	c:	ref catalogEntry;
+
+	c = findCatalog(name);
+	if	(c)
+		return c replace(file);
+	else	{
+		c = catalogEntry create(name, file, catalogIndex);
+		if	(c){
+			c->next = catalogs;
+			catalogs = c;
+			catalogIndex++;
+			return c->index;
+			}
+		else
+			return 0;
+		}
+	}
+
+lookupCatalog:	gate	(name: [:] char) catalog_t =
+	{
+	c:	ref catalogEntry;
+
+	c = findCatalog(name);
+	if	(c)
+		return c->index;
+	else
+		return 0;
+	}
+
+deleteCatalog:	gate	(catalog: catalog_t) =
+	{
+	c, cprev:	ref catalogEntry;
+
+	for	(cprev = 0, c = catalogs; c; cprev = c, c = c->next)
+		if	(c->index == catalog){
+			delete c->catalog;
+			delete c->name;
+			if	(cprev)
+				cprev->next = c->next;
+			else
+				catalogs = c->next;
+			delete c;
+			return;
+			}
+	}
+
+findCatalog:	(name: [:] char) ref catalogEntry =
+	{
+	c:	ref catalogEntry;
+
+	for	(c = catalogs; c; c = c->next)
+		if	(stringCompare(name, c->name) == 0)
+			return c;
+	return 0;
+	}
+
+findCatalogIndex:	(idx: catalog_t) ref catalogEntry =
+	{
+	c:	ref catalogEntry;
+
+	for	(c = catalogs; c; c = c->next)
+		if	(c->index == idx)
+			return c;
+	return 0;
+	}
+
+newMessage:	gate	(catalog: catalog_t, group: group_t,
+					class: messageClass_t,
+					id: [:] char,
+					file: [:] char, 
+					location: fileOffset,
+					parms: [:] char) msg_t =
+	{
+	if	(ErrorBrowserViewer == 0){
+		startErrorBrowserWindow();
+		if	(ErrorBrowserWindow == 0){
+			printf("Couldn't start the error window\n");
+			exit(EX_FAIL);
+			}
+		}
+	s:	[:] char;
+	terse:	[:] char;
+	i:	int;
+	mnew:	ref message;
+
+	s = expandMessage(catalog, id, parms);
+	terse = s[prefixLength:];
+	if	(|terse && terse[|terse - 1] == '\n')
+		(|terse)--;
+	if	(|file)
+		mnew = new message[ messageIndex++, group, class, 
+					stringDup(file), location, 
+					stringDup(terse) ];
+	critical(ErrorBrowserLock){
+		m, mprev:	ref message;
+
+		if	(|file){
+			if	(messages){
+				for	(m = messages; m->next; m = m->next)
+					;
+				m->next = mnew;
+				}
+			else
+				messages = mnew;
+			mnew->browserLoc = ErrorBrowserWindow->buffer 
+								seek(-1, 2);
+			}
+		ErrorBrowserWindow->textArea pasteFromChannel(s);
+		ErrorBrowserWindow toTop();
+		}
+	delete s;
+	return 0;
+	}
+
+expandMessage:	(catalog: catalog_t, id: [:] char, parms: [:] char) [:] char =
+	{
+	c:	ref catalogEntry;
+	s:	[:] char;
+	m:	ref textMessage;
+
+	if	(catalog){
+		c = findCatalogIndex(catalog);
+		if	(c){
+			m = c->catalog lookupMessage(id);
+			if	(m){
+				s = expandMessageString(c->catalog->prefix, 
+						m->terse, parms, TRUE);
+				return s;
+				}
+			}
+		s = expandMessageString("", id, parms, TRUE);
+		return s;
+		}
+	else	{
+		s = expandMessageString("", id, parms, FALSE);
+		return s;
+		}
+	}
+
+expandMessageString:	(prefix: [:] char, msg: [:] char, 
+				parms: [:] char, 
+				appendNewline: boolean) [:] char =
+	{
+	buffer:	[256] char;
+	i:	int;
+	s:	[:] char;
+	se:	stringEmitter = [ buffer ];
+
+	expandPortion(prefix, parms, &se);
+	s = se result();
+	prefixLength = |s;
+	expandPortion(msg, parms, &se);
+	if	(appendNewline)
+		se putc('\n');
+	s = stringDup(se result());
+	return s;
+	}
+
+
+expandPortion:	(msg: [:] char, parms: [:] char, se: ref stringEmitter) =
+	{
+	i:	int;
+	s:	[:] char;
+
+	for	(i = 0; i < |msg; i++){
+		if	(msg[i] != '%'){
+			se putc(msg[i]);
+			continue;
+			}
+		i++;
+		if	(i >= |msg){
+			se putc('%');
+			break;
+			}
+		switch	(msg[i]){
+		case	'%':
+			se putc('%');
+			break;
+		
+		case	')':
+		case	'(':
+			while	(i < |msg && msg[i] != '%')
+				i++;
+			break;
+
+		default:
+			cp:	ref char;
+			j:	int;
+			id:	[:] char;
+
+			j = i;
+			cp = &msg[i];
+			while	(i < |msg && msg[i] != '%')
+				i++;
+			id = cp[:i - j];
+			s = scanParms(parms, id);
+			se write(s);
+			}
+		}
+	}
+
+deleteMessage:	gate	(m: msg_t) =
+	{
+	}
+
+pointAt:	() =
+	{
+	style:	style_t;
+	loc:	locator_t;
+
+	if	(currentMark != NoMark){
+		editor deleteMark(currentMark);
+		currentMark = NoMark;
+		}
+	if	(current){
+		if	(current->class == MSG_WARN)
+			style = warningStyle;
+		else
+			style = errorStyle;
+		loc.version = 0;
+		loc.start.location = current->location;
+		loc.start.increment = 0;
+		loc.end.location = current->location;
+		loc.end.increment = 0;
+		currentMark = editor setMark(current->file, loc, style);
+		editor gotoMark(currentMark, current->terseText);
+		ErrorBrowserWindow->textArea pointAt(current->browserLoc);
+		}
+	}
+
+	};
+
+scanParms:	(parms: [:] char, id: [:] char) [:] char =
+	{
+	i, j:	int;
+
+	for	(i = 0; i < |parms; i = j + 1){
+		if	(|id >= |parms - i)
+			return "";
+		for	(j = i + 1; j < |parms; j++)
+			if	(parms[j] == '\n')
+				break;
+		s:	[:] char;
+
+		s = parms[i:];
+		if	(stringCompare(s[:|id], id) == 0 &&
+			 s[|id] == '='){
+			i += |id + 1;		// skip the name
+			s = parms[i:j];
+			return s;
+			}
+		}
+	return "";
+	}
+
+/*
+	Some scribbling related to the Parasol-i language and interpreter.
+
+	interpreter object(self, offsetof editor.dynamic)
+		slot("foo", offsetof editor.foo)
+		member("box:rectangle_t", offsetof frame.box);
+ */
+message:	type	{
+	public:
+
+	next:		ref message;
+	id:		msg_t;
+	group:		group_t;
+	class:		messageClass_t;
+	file:		[:] char;
+	location:	fileOffset;
+	terseText:	[:] char;
+	verboseText:	[:] char;
+	browserLoc:	textPos;
+
+constructor:	(i: msg_t, grp: group_t, cl: messageClass_t,
+			f: [:] char, l: fileOffset, t: [:] char) =
+	{
+	next = 0;
+	id = i;
+	group = grp;
+	class = cl;
+	file = f;
+	location = l;
+	terseText = t;
+	verboseText = "";
+	browserLoc = 0;
+	}
+
+destructor:	() =
+	{
+	n:	ref message;
+
+	if	(next){
+		self = next;
+		while	(self){
+			n = next;
+			next = 0;
+			delete self;
+			self = n;
+			}
+		}
+	}
+
+	};
+
+catalogEntry:	type	{
+	public:
+
+	next:		ref catalogEntry;
+	index:		catalog_t;
+	name:		[:] char;
+	catalog:	ref messageCatalog;
+
+create:	factory	(name: [:] char, file: [:] char, idx: catalog_t) ref catalogEntry =
+	{
+	c:	ref messageCatalog;
+
+	c = new messageCatalog[ file ];
+	if	(!c->success){
+		delete c;
+		return 0;
+		}
+	self = new catalogEntry;
+	name = stringDup(name);
+	catalog = c;
+	next = 0;
+	index = idx;
+	return self;
+	}
+
+replace:	(file: [:] char) catalog_t =
+	{
+	c:	ref messageCatalog;
+
+	c = new messageCatalog[ file ];
+	if	(!c->success){
+		delete c;
+		return 0;
+		}
+	delete catalog;
+	catalog = c;
+	return index;
+	}
+
+	};
+
+startErrorBrowserWindow:	() =
+	{
+	ErrorBrowserViewer = new errorBrowserViewer[ 0 ];
+	thread(ErrorBrowserViewer, 0) start();
+	}
+
+ErrorBrowserWindow:		ref browserShell;
+ErrorBrowserLock:		Lock;
+ErrorBrowserViewer:		ref errorBrowserViewer;
+
+errorBrowserViewer:	type inherit inputHandler {
+	public:
+
+start:	gate	() =
+	{
+	ErrorBrowserWindow = new browserShell[ BrowserTitle ];
+	ErrorBrowserWindow getInputFrom(self);
+	ErrorBrowserWindow configure([ 80, 28 ]);
+	ErrorBrowserWindow open();
+	}
+
+shutdown:	(exitCode: ExitCode) =
+	{
+	ShutdownFlag = TRUE;
+	exit(exitCode);
+	}
+
+	};
+
+searchButton:	(v: ref frob) =
+	{
+	ref browserShell(v getShell())->textArea search();
+	}
+
+againButton:	(v: ref frob) =
+	{
+	ref browserShell(v getShell())->textArea again();
+	}
+
+shutDownErrorBrowserWindow:	(v: ref frob) =
+	{
+	ErrorBrowserViewer shutdown(0);
+	}
+
+clearOutput:	(v: ref frob) =
+	{
+	ErrorBrowserWindow clearOutput();
+	}
+
+ShutdownFlag:	boolean = FALSE;
+
+TEXT_ATTR:	const	char = HIGH|YELLOW;
+
+browserShell:	type	inherit	topLevelShell {
+	public:
+
+	buffer:		ref textBuffer;
+	textArea:	ref browserEditor;
+
+constructor:	(titl: [:] char) =
+	{
+	super constructor(titl, 0);
+	iconLabel("-errors-", C_TITLE);
+	textArea = new browserEditor[ ];
+	anchor(textArea);
+	textArea setScrap(&Scrap);
+	buffer = new textBuffer[ ];
+	textArea connect(buffer);
+	textArea resetEditor();
+	textArea setTextFocus();
+	}
+
+destructor:	dynamic	() =
+	{
+	delete buffer;
+	super destructor();
+	}
+
+clearOutput:	() =
+	{
+	buffer close();
+	buffer = [ ];
+	textArea resetEditor();
+	}
+
+closeApplication:	dynamic	() =
+	{
+	ErrorBrowserViewer = 0;
+	super closeApplication();
+	}
+
+	};
+
+browserEditor:	type	inherit	textEditor {
+	public:
+
+	outPoint:	filePos;
+	currentMessage:	textPos;
+
+resetEditor:	dynamic	() =
+	{
+	super resetEditor();
+	outPoint zero();
+	currentMessage = -1;
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	b:	boolean;
+
+	b = TRUE;
+	switch	(k){
+	case	F5:		ErrorBrowser _nextMessage();	break;
+	case	SHFT_F5:	ErrorBrowser _previousMessage();break;
+	case	GREY_CR:	enterKey();			break;
+
+	default:
+		critical(ErrorBrowserLock)
+			b = super processKeystroke(k);
+		}
+	return b;
+	}
+
+close:	dynamic	() =
+	{
+	buffer close();
+	super close();
+	}
+
+topAlarm:	dynamic	() =
+	{
+	getShell() postFooter("Top of messages");
+	}
+
+bottomAlarm:	dynamic	() =
+	{
+	getShell() postFooter("Bottom of messages");
+	}
+
+depositColor:	dynamic	(ln: int, lineBuffer: [:] colorChar) =
+	{
+	col:		int;
+	off1, off2:	textPos;
+
+	off1 = buffer seek(ln, 3);
+	off2 = buffer seek(ln + 1, 3);
+	if	(currentMessage < off1 || currentMessage >= off2){
+		for	(col = 0; col < |lineBuffer; col++)
+			lineBuffer[col].color = C_READONLY;
+		}
+	}
+
+deleteCharacter:dynamic	() =
+	{
+	readOnly();
+	}
+
+backspace:	dynamic	() =
+	{
+	readOnly();
+	}
+
+deleteWord:	dynamic () =
+	{
+	readOnly();
+	}
+
+deleteLine:	dynamic	() =
+	{
+	readOnly();
+	}
+
+enterCharacter:	dynamic	(k: keystroke) =
+	{
+	readOnly();
+	}
+
+click:		dynamic	(buttons: mouseButtons_t, location: point) =
+	{
+	if	(buttons & MB_LEFT){
+		super click(buttons, location);
+
+		off1, off2:	textPos;
+
+		off1 = buffer seek(cursor.line, 3);
+		off2 = buffer seek(cursor.line + 1, 3);
+		ErrorBrowser selectMessage(off1, off2);
+		}
+	}
+
+enterKey:	dynamic	() =
+	{
+	off1, off2:	textPos;
+
+	off1 = buffer seek(cursor.line, 3);
+	off2 = buffer seek(cursor.line + 1, 3);
+	ErrorBrowser selectMessage(off1, off2);
+	}
+
+pasteFromScrap:	dynamic	() =
+	{
+	readOnly();
+	}
+
+pointAt:	(n: textPos) =
+	{
+	line:	lineNum;
+	offset:	int;
+
+	if	(currentMessage != -1){
+		buffer seek(currentMessage, 0);
+		buffer getLineno(&line, &offset);
+		changeLine(line);
+		currentMessage = -1;
+		}
+	if	(n != -1){
+		currentMessage = n;
+		buffer seek(currentMessage, 0);
+		buffer getLineno(&line, &offset);
+		changeLine(line);
+		gotoTextOffset(n);
+		}
+	refreshDisplay(displayLine);
+	}
+
+pasteFromChannel:	(buf: [:] char) =
+	{
+	cpos, xpos:		textPos;
+	i:			int;
+	c:			char;
+
+	buffer seek(outPoint.lpos + outPoint.offset, 0);
+	for	(i = 0; i < |buf; i++){
+		c = buf[i];
+		if	(c == '\t'){
+			x2:	int;
+			x3:	int;
+
+			x2 = 8 - (outPoint.offset & 7);
+			outPoint.offset += x2;
+			buffer insert("        ", x2);
+			buffer seek(x2, 1);
+			continue;
+			}
+		changeLine(outPoint.line);
+		if	(c == '\n'){
+			changeLine(outPoint.line + 1);
+			buffer insert(&c, 1);
+			buffer seek(1, 1);
+			if	(outPoint.line < displayLine + box.size.y){
+				if	(outPoint.line == 
+						displayLine + box.size.y - 1)
+					refreshDisplay(displayLine + 1);
+				}
+			outPoint.lpos += outPoint.offset + 1;
+			outPoint.line++;
+			outPoint.offset = 0;
+			buffer seek(outPoint.lpos + outPoint.offset, 0);
+			}
+		else	{
+			outPoint.offset++;
+			buffer insert(&c, 1);
+			buffer seek(1, 1);
+			}
+		}
+	refreshDisplay(displayLine);
+	}
+
+readOnly:	() =
+	{
+	getShell() postFooter("Read only");
+	}
+
+};
+

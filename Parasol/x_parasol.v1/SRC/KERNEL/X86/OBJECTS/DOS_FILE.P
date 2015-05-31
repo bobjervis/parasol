@@ -1,0 +1,362 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	alys;
+include	dos_vol;
+include	object;
+include	disk;
+include	kprintf;
+include	error;
+include	backbone;
+
+diskioOps:	type	char = {
+	READ_OP,
+	RLOCAL_OP,
+	WRITE_OP,
+	FILL_OP
+	};
+
+DOSfile:	public	type	inherit	file {
+	public:
+
+	prev:		ref DOSfile;
+	next:		ref DOSfile;
+	disk:		ref dosVolume_t;
+	sCluster:	cluster_t;
+	DOSattrib:	dirAttributes;
+	dirSector:	unsigned;
+	dirOffset:	byte;
+
+constructor:	(dp: ref incoreDirectory) =
+	{
+	i:	fAttributes_t;
+
+	i = (int(dp->dd.attribute) & 
+			(DA_HIDDEN|DA_SYSTEM|DA_VLABEL|DA_DIR|DA_ARCHIVE))
+				<< 11;
+	i |= 	FA_SEEKOK;
+//	if	(dp->dd.attribute & (DA_READONLY|DA_DIR) == 0)
+//		i |= FA_WRITE;
+	user = 0;
+	group = 0;
+	DOSattrib = dp->dd.attribute;
+	attributes = i;
+	sCluster = dp->dd.cluster;
+	size = dp->dd.size;
+	ftime = dp->dd.ftime;
+	useCount = 1;
+	dirSector = dp->sector;
+	dirOffset = dp->offset >> 5;
+	disk = dp->disk;
+	disk loadFAT();
+	flags = 0;
+	next = disk->files;
+	prev = 0;
+	if	(disk->files)
+		disk->files->prev = self;
+	disk->files = self;
+	}
+
+open:	dynamic	(access: AccessRights) ref far channel = 
+	{
+	dc:	ref DOSfileChannel;
+	x:	ref far channel;
+
+	dc = new DOSfileChannel[ self ];
+	return ref far channel(jobPublishKernel("file channel", 
+						":model.filesys.channel",
+						dc, access));
+	}
+
+dispose:	dynamic	() =
+	{
+	sync();
+	if	(prev)
+		prev->next = next;
+	else
+		disk->files = next;
+	if	(next)
+		next->prev = prev;
+	delete self;
+	}
+
+sync:	dynamic	() =
+	{
+	dp:	ref diskDirectory;
+	buf:	pointer;
+
+		// Update any pending directory entry on a write
+
+	if	(flags & F_CHANGED){
+		sect:	int;
+		off:	int;
+
+		disk syncFAT();
+		disk->partition syncCluster(sCluster);
+		if	(dirSector){
+			dp = disk->partition readSector(dirSector);
+			buf = dp;
+			dp += dirOffset;
+			dp->ftime = ftime;
+			dp->size = size;
+			dp->cluster = sCluster;
+			disk->partition writeSector(buf, 0);
+			}
+		flags &= ~F_CHANGED;
+		}
+	}
+
+truncate:	(newLength: long) =
+	{
+	if	(newLength < size){
+		disk truncateChain(sCluster, newLength);
+		size = newLength;
+		ftime = newFileTime();
+		flags |= F_CHANGED;
+		if	(size == 0)
+			sCluster = 0;
+		}
+	}
+
+	};
+
+DOSDirfile:	public	type	inherit	DOSfile {
+
+constructor:	(dp: ref incoreDirectory) =
+	{
+	super constructor(dp);
+	size = disk chainLength(sCluster);
+	}
+
+	};
+
+DOSrootfile:	public	type	inherit	DOSfile {
+
+constructor:	(dp: ref incoreDirectory) =
+	{
+	super constructor(dp);
+	size = disk->rootDirSize * SECTOR_SIZE;
+	}
+
+	};
+
+DOSfileChannel:	public	type	inherit	directoryChannel {
+	public:
+	owner:		ref DOSfile;
+	posCluster:	cluster_t;
+	posLsect:	unsigned[16];	// logical sector within cluster
+
+constructor:	(dp: ref DOSfile) =
+	{
+	super constructor(0);
+	owner = dp;
+	posCluster = dp->sCluster;
+	posLsect = 0;
+	}
+
+close:	gate	() boolean =
+	{
+//	kprintf("close %d\n", objectId);
+	owner sync();
+	return TRUE;
+	}
+
+lastClose:	gate	() boolean =
+	{
+//	kprintf("lastClose %d\n", objectId);
+	owner sync();
+	owner close();
+	owner = 0;
+	return TRUE;
+	}
+
+setAge:	gate	(ftime: Time) int =
+	{
+	owner->ftime = unixToDos(ftime);
+	return SUCCESS;
+	}
+
+write:	gate	(buf: [:] byte) int =
+	{
+	rem:		long;
+	i:		int;
+	endPosition:	long;
+	len:		unsigned;
+
+	len = |buf;
+	if	(owner->attributes & FA_DIR)
+		return ERRINTERNAL;
+	if	(len == 0){
+		owner truncate(filePosition);
+		if	(filePosition == 0){
+			posCluster = 0;
+			posLsect = 0;
+			}
+		return 0;
+		}
+	endPosition = filePosition + len;
+	if	(endPosition > owner->size){
+		i = owner->disk extendChain(owner->sCluster, endPosition);
+		if	(i == 0)
+			return ERRDISKFULL;
+		owner->sCluster = i;
+		if	(owner->size == 0){
+			posCluster = owner->sCluster;
+			posLsect = filePosition / SECTOR_SIZE;
+			}
+		if	(filePosition > owner->size){
+			i:	int;
+
+			i = filePosition - owner->size;
+			filePosition = owner->size;
+			posLsect = filePosition / SECTOR_SIZE;
+			diskio(FILL_OP, owner->disk, 0, i);
+			}
+		owner->size = endPosition;
+		}
+	diskio(WRITE_OP, owner->disk, buf, len);
+	owner->ftime = newFileTime();
+	owner->flags |= F_CHANGED;
+	return len;
+	}
+
+getClass:		gate	() channelClass_t =
+	{
+	return CC_FILE;
+	}
+
+read:	gate	() [] byte =
+	{
+	rem:		long;
+	len:		unsigned;
+
+	if	(filePosition < owner->size){
+		rem = owner->size - filePosition;
+		len = messageHeader->expected;
+		if	(rem < len)
+			len = rem;
+		diskio(READ_OP, owner->disk, 0, len);
+		}
+	}
+
+seek:	gate	(offset: long, whence: seek_t) long =
+	{
+	switch	(whence){
+	case	SEEK_ABS:
+		filePosition = offset;
+		break;
+
+	case	SEEK_CUR:
+		if	(offset == 0)
+			return filePosition;
+		filePosition += offset;
+		break;
+
+	case	SEEK_END:
+		filePosition = owner->size + offset;
+		break;
+
+	default:
+		return ERRINVALIDFUNC;
+		}
+	posCluster = owner->sCluster;
+	posLsect = filePosition / SECTOR_SIZE;
+	return filePosition;
+	}
+
+	private:
+
+diskio:	(op: diskioOps, disk: ref dosVolume_t, bufx: pointer, len: unsigned) =
+	{
+	buf:		ref byte;
+	lsect:		unsigned;
+	blkoff:		unsigned;
+	rem:		unsigned;
+	blkamt:		unsigned;
+	psect:		unsigned;
+	ibuf:		ref char;
+	isect:		unsigned;
+	icluster:	unsigned;
+	xlen:		unsigned;
+
+	buf = bufx;
+	xlen = len;
+	blkoff = filePosition & 0x1ff;
+	while	(len){
+		psect = disk mapCluster(&posLsect, &posCluster);
+		if	(psect <= disk->firstDataSector){
+			kprintf("diskio involved sector %d - sCluster %d filePosition = %d\n",
+					psect, owner->sCluster, filePosition);
+			break;
+			}
+		rem = SECTOR_SIZE - blkoff;
+		if	(len >= rem){
+			blkamt = rem;
+			posLsect++;
+			}
+		else
+			blkamt = len;
+		if	(op == READ_OP ||
+			 blkamt != SECTOR_SIZE){
+			ibuf = disk->partition readSector(psect);
+			if	(op == READ_OP){
+				replyPartial(ibuf + blkoff, blkamt);
+				disk->partition releaseSector(ibuf);
+				}
+			else if	(op == RLOCAL_OP){
+				memCopy(buf, ibuf + blkoff, blkamt);
+				disk->partition releaseSector(ibuf);
+				}
+			else if	(op == FILL_OP){
+				memSet(ibuf + blkoff, 0, blkamt);
+				disk->partition writeSector(ibuf, 
+							owner->sCluster);
+				}
+			else	{
+				memCopy(ibuf + blkoff, buf, blkamt);
+				disk->partition writeSector(ibuf, 
+							owner->sCluster);
+				}
+			}
+		else	{
+			i:		int;
+			nsect:		unsigned;
+
+			i = 1;
+
+				// While we have enough room to get another
+				// full sector, look for one to read
+
+			while	(blkamt + SECTOR_SIZE <= len){
+				nsect = disk mapCluster(&posLsect, &posCluster);
+				if	(nsect != psect + i)
+					break;
+				blkamt += SECTOR_SIZE;
+				i++;
+				posLsect++;
+				}
+			if	(op == FILL_OP)
+				disk->partition fill(psect, i, 
+							owner->sCluster);
+			else if	(op == RLOCAL_OP)
+				disk->partition read(psect, buf, i);
+			else
+				disk->partition write(psect, buf, i, 
+							owner->sCluster);
+			}
+		blkoff = 0;
+		len -= blkamt;
+		buf += blkamt;
+		}
+	filePosition += xlen;
+
+		// Initiate any needed read-ahead operation.
+
+//	if	(op == READ_OP)
+	}
+
+	};

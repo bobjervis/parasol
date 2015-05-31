@@ -1,0 +1,1674 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+
+include	symtab, types, functype;
+include	sbuffer, ptree, hash;
+include	backend, real;
+include	xcall, xstmt, xtree, value;
+include	encoder, asmcode, objcode;
+include	addrmode, alloctmp, allocreg;
+include	pswitch;
+include	function, funcout;
+include	jumpopt;
+include	tparams, target;
+
+enable386backend:	public	(optim: boolean) =
+	{
+	Func = &I386Func;
+	Encoder = &UnitEncoder;
+	Func->optimize = optim;
+	}
+
+I386Func:	public	inherit	functionBody	{
+	public:
+
+startFunction:	dynamic	(sc: ref blockScope, ft: ref function_z, 
+						sym: ref symbol_s) =
+	{
+	super startFunction(sc, ft, sym);
+	if	(usesIndirectReturn())
+		TargetData.indirectReturn = symbol_s createParameter(sc,
+						hash("return"), 0, 
+						refTo(ft->returnType));
+	s:		ref symbol_s;
+	d:		ref type_s;
+	parm:		ref parameter_s;
+	fQual:		dQualifiers;
+
+	fQual = sym->qualifier & (DQ_MEMBERFUNC|DQ_FACTORY);
+	if	(fQual == DQ_MEMBERFUNC){
+		if	(Func->currentType->callingConvention == FC_GATE){
+			d = refTo(sc->enclosing getEnclosingType());
+			SymbolTable.selfSymbol = symbol_s createParameter(sc, 
+							hash("self"), 0, d);
+			TargetData.gateArgsSymbol = 
+				symbol_s createParameter(sc, 
+							hash("gate"), 0, d);
+			for	(parm = ft->parameters; parm; 
+							parm = parm->next){
+				if	(parm->pType->topType == T_ARRAY)
+					d = refTo(parm->pType elementOf());
+				else
+					d = parm->pType getType();
+				s = symbol_s createBased(sc, parm->name, 
+							parm->offset, d);
+				s->next = sc->symbols;
+				sc->symbols = s;
+				}
+			locateGateParameters(sc->symbols);
+			return;
+			}
+		}
+	sc defineParameters(ft->parameters, sym->qualifier &
+					(DQ_MEMBERFUNC|DQ_FACTORY));
+	}
+
+generateCode:	dynamic	(sym: ref symbol_s, x: ref stmt_x, 
+					sc: ref blockScope) =
+	{
+
+		// Perform expression pruning operations that are
+		// generally portable and leave a more efficient
+		// function body
+
+	x fold();
+
+		// Gate functions need some special adjustments for the
+		// descriptor arguments
+
+	if	(currentType->callingConvention == FC_GATE){
+		if	(currentSymbol->qualifier & DQ_MEMBERFUNC ||
+			 currentSymbol->qualifier & DQ_FACTORY)
+			adjustGateDescriptorArguments(x, sc);
+		}
+//	x display(0);
+	currentValue = sym->currentValue;
+/*
+	if	(Func->optimize){
+		x = optimizeJumps(x);
+		optimizeAndOrXor();
+		findLoops();
+		commonSubExpressions();
+		analyzeLiveRanges();
+		inductionVariables();
+		analyzeLiveRanges();
+		splitLiveRanges();
+		}
+ */
+
+		// Now allocate registers
+
+	incomingRegs = 0;
+	OutgoingRegs = 0;
+	if	(currentType->callingConvention == FC_NORMAL ||
+		 currentType->callingConvention == FC_GATE)
+		allocateParmRegisters();
+	while	(markTemps(x) &&
+		 Func->optimize)
+		;
+
+		// This removes jumps-to-jumps and such
+
+	if	(Func->optimize)
+		x = optimizeJumps(x);
+/*
+	allocateStackTemps();
+	if	(Func->optimize){
+		tailMerge();
+		loadSuppression();
+		}
+ */
+
+		// Now lay out the stack frame
+
+	m:	int;
+	m = locateAutos(rootScope, 0, FALSE);
+	TargetData.autoCount = locateAutos(rootScope, -m, TRUE);
+	m = TargetData.autoCount % StackFrameAlign;
+	if	(m)
+		TargetData.autoCount += StackFrameAlign - m;
+	sizeParms();
+
+		// Now spit out the machine instructions
+
+	Encoder openValue(currentValue);
+	functionPreamble(sc);
+	if	(generateInstructions(x))
+		functionPostamble();
+
+		// Jump tables for switch statements are spit out here
+
+	generateSwitchTables();
+
+		// This code value is complete
+
+	Encoder closeValue();
+
+		// Clear out state information from the code generator
+
+//	cleanupFloat();
+	TargetData.floatTempsUsed = FALSE;
+	TargetData.spills = 0;
+
+		// Construct a chain of static values that are only ref'ed
+		// from within the function itself.  Static objects declared
+		// inside the function will get collected here.
+
+	if	(sc->child)
+		sc->child foldStaticValues(sym->currentValue);
+	rootScope = 0;
+	}
+
+generateData:	dynamic	(sym: ref symbol_s) =
+	{
+	x:		ref tree_p;
+	y:		ref tree_p;
+	u:		ref tree_p;
+	t:		ref type_s;
+	initTree:	ref tree_p;
+
+	x = initializerExpression(sym);
+	t = sym->dtype getType();
+	if	(x ||
+		 t needsDynamicVectors()){
+		sym->currentValue initialize();
+		if	(x)
+			x initialize(0, sym->currentValue);
+		}
+	else
+		sym->currentValue recordValueSize();
+	}
+
+argument:	dynamic	(l: ref tree_p, r: ref tree_p, 
+				o: fileOffset) ref tree_p =
+	{
+	return new argument_i386[ l, r, o ];
+	}
+
+assert_:	dynamic	(x: ref tree_p, s: textRange) ref stmt_x =
+	{
+	return new assert_i386[ x, s ];
+	}
+
+auto:	dynamic	(sym: ref symbol_s, adjust: int) ref auto_x =
+	{
+	return new auto_i386[ sym, adjust ];
+	}
+
+binary:	dynamic	(op: operators, l: ref tree_p, 
+				r: ref tree_p, 
+				o: fileOffset) ref binary_x =
+	{
+	return new binary_i386[ op, l, r, o ];
+	}
+
+block:	dynamic	(x: ref stmt_x) ref stmt_x =
+	{
+	return new block_i386[ x ];
+	}
+
+cast:	dynamic	(d: ref type_p, t: ref tree_p, o: fileOffset) ref tree_p =
+	{
+	return new cast_i386[ d, t, o ];
+	}
+
+conditional:	dynamic	(t: ref tree_p, tp: ref tree_p, 
+				fp: ref tree_p, 
+				o: fileOffset) ref tree_p =
+	{
+	return new conditional_x[ t, tp, fp , o ];
+	}
+
+continueExcept:	dynamic	() ref stmt_x =
+	{
+	return continueExcept_x create();
+	}
+
+criticalRegion:	dynamic	(t: ref tree_p, s: textRange) ref critical_x =
+	{
+	return new critical_i386[ O_CRITICAL, t, s ];
+	}
+
+decl:	dynamic	(d: ref declaration_p, s: textRange) ref stmt_x =
+	{
+	return new decl_i386[ d, s ];
+	}
+
+dynamicVectorPointer:	dynamic	(st: ref struct_z) ref tree_p =
+	{
+	return iden_x createKnown(O_ID, IntType, 0, st->dynamicVector, 0);
+	}
+
+ellipsis:	dynamic	() ref tree_p =
+	{
+	return new ellipsis_x[];
+	}
+
+endCritical:	dynamic	(c: ref critical_x) ref stmt_x =
+	{
+	return new endCritical_i386[ O_ENDCRITICAL, c ];
+	}
+
+endExcept:	dynamic	(m: ref try_x) ref stmt_x =
+	{
+	return endExcept_x create(m);
+	}
+
+endTry:	dynamic	(x: ref try_x) ref stmt_x =
+	{
+	return new endTry_i386[ x ];
+	}
+
+error:	dynamic	() ref tree_p =
+	{
+	return error_x create();
+	}
+
+errorStmt:	dynamic	(o: fileOffset) ref stmt_x =
+	{
+	return errorStmt_x create(o);
+	}
+
+exceptClause:	dynamic	(m: ref try_x, x: ref tree_p, 
+						s: textRange) ref except_x =
+	{
+	return new except_i386[ m, x, s ];
+	}
+
+expr:	dynamic	(x: ref tree_p, s: textRange) ref stmt_x =
+	{
+	return new expr_i386[ x, s ];
+	}
+
+fcon:	dynamic	(v: ref real, w: int) ref tree_p =
+	{
+	return new fcon_x[ v, w ];
+	}
+
+goto_:	dynamic	(id: ref identifier, s: textRange) ref stmt_x =
+	{
+	return goto_x create(id, s);
+	}
+
+icon:	dynamic	(v: long, w: int) ref tree_p =
+	{
+	return new icon_i386[ v, w ];
+	}
+
+iden:	dynamic	(un: ref identifier, uno: fileOffset,
+		 id: ref identifier, o: fileOffset) ref tree_p =
+	{
+	return new iden_i386[ un, uno, id, o ];
+	}
+
+jump:	dynamic	(t: ref label_x, s: textRange) ref jump_x =
+	{
+	return new jump_i386[ t, s ];
+	}
+
+label_:	dynamic	() ref label_x =
+	{
+	return new label_i386[ O_LABEL, 0, 0 ];
+	}
+
+literal:	dynamic	() ref literal_x =
+	{
+	return new literal_i386[];
+	}
+
+methodCall:	dynamic	(l: ref tree_p, id: ref identifier,
+				r: ref tree_p,
+				o: fileOffset, s: boolean) ref methodCall_x =
+	{
+	return new methodCall_i386[ O_MCALL, r, o, s, l, id ];
+	}
+
+namedLabel:	dynamic	(id: ref identifier, o: fileOffset) ref label_x =
+	{
+	return new label_i386[ O_LABEL, id, o ];
+	}
+
+new_:	dynamic	(h: ref tree_p, d: ref type_p, t: ref tree_p, o: fileOffset) ref tree_p =
+	{
+	return new_x create(h, d, t, o);
+	}
+
+offsetof_:	dynamic	(d: ref type_p, id: ref identifier) ref tree_p =
+	{
+	return Offsetof_x create(d, id);
+	}
+
+reference:	dynamic	(op: operators, l: ref tree_p, 
+				id: ref identifier,
+				o: fileOffset) ref tree_p =
+	{
+	return reference_x create(op, l, id, o);
+	}
+
+remoteCall:	dynamic	(obj: ref tree_p, d: ref function_z, m: ref symbol_s,
+				a: ref tree_p, s: ref scope_s,
+				offset: fileOffset, sig: boolean) ref remoteCall_x =
+	{
+	return new remoteCall_i386[ obj, d, m, a, s, offset, sig ];
+	}
+
+reply_:	dynamic	(x: ref tree_p, s: textRange) ref stmt_x =
+	{
+	return new reply_i386[ O_REPLY, x, s ];
+	}
+
+return_:	dynamic	(x: ref tree_p, s: textRange) ref stmt_x =
+	{
+	return new return_i386[ x, s ];
+	}
+
+sconst:	dynamic	(c: ref tree_p, o: fileOffset) ref tree_p =
+	{
+	return new sconst_x[ c, o ];
+	}
+
+self_:	dynamic	(op: operators, o: fileOffset) ref tree_p =
+	{
+	return new Self_x[ op, o ];
+	}
+
+sizeof_:dynamic	(d: ref type_p) ref tree_p =
+	{
+	return sizeof_x create(d);
+	}
+
+slice:	dynamic	(t: ref tree_p, l: ref tree_p, r: ref tree_p, o: fileOffset)
+							ref tree_p =
+	{
+	return new slice_x[ t, l, r, o ];
+	}
+
+staticCall:	dynamic	(l: ref tree_p, r: ref tree_p,
+				o: fileOffset) ref staticCall_x =
+	{
+	return new staticCall_i386[ l, r, o ];
+	}
+
+switch_:	dynamic	(x: ref tree_p, s: textRange) ref switch_x =
+	{
+	return new switch_i386[ x, s ];
+	}
+
+test:	dynamic	(t: ref tree_p, destination: ref label_x, 
+					s: textRange) ref stmt_x =
+	{
+	s1:		ref stmt_x;
+	s2:		ref stmt_x;
+	falslab:	ref label_x;
+	left:		ref tree_p;
+	right:		ref tree_p;
+
+	switch	(t->operator){
+	default:
+		t = binary(O_NE, t, icon(0L, INTBITS), s.start);
+
+	case	O_EQ:
+	case	O_NE:
+	case	O_LT:
+	case	O_GT:
+	case	O_LE:
+	case	O_GE:
+	case	O_ORD:			// <>=
+	case	O_UNORD:		// !<>=
+	case	O_NLT:			// !<
+	case	O_NLE:			// !<=
+	case	O_NGT:			// !>
+	case	O_NGE:			// !>=
+	case	O_LT_GT:		// <>
+	case	O_NLT_GT:		// !<>
+		return new test_i386[ t, destination, s ];
+
+	case	O_NOT:
+		left = ref binary_x(t)->left;
+		return testFalse(left, destination, s);
+
+	case	O_LAND:
+		left = ref binary_x(t)->left;
+		right = ref binary_x(t)->right;
+		falslab = Func label_();
+		s1 = testFalse(left, falslab, s);
+		s2 = test(right, destination, s);
+		s1 post(s2);
+		s1 post(falslab);
+		return s1;
+
+	case	O_LOR:
+		left = ref binary_x(t)->left;
+		right = ref binary_x(t)->right;
+		s1 = test(left, destination, s);
+		s2 = test(right, destination, s);
+		s1 post(s2);
+		return s1;
+		}
+	}
+
+testFalse:	dynamic	(t: ref tree_p, destination: ref label_x, 
+					s: textRange) ref stmt_x =
+	{
+	s1:		ref stmt_x;
+	s2:		ref stmt_x;
+	falslab:	ref label_x;
+	left:		ref tree_p;
+	right:		ref tree_p;
+
+	switch	(t->operator){
+	case	O_EQ:
+	case	O_NE:
+	case	O_LT:
+	case	O_GT:
+	case	O_LE:
+	case	O_GE:
+	case	O_ORD:			// <>=
+	case	O_UNORD:		// !<>=
+	case	O_NLT:			// !<
+	case	O_NLE:			// !<=
+	case	O_NGT:			// !>
+	case	O_NGE:			// !>=
+	case	O_LT_GT:		// <>
+	case	O_NLT_GT:		// !<>
+		t->operator = negateCondition(t->operator);
+		return test(t, destination, s);
+
+	default:
+		t = binary(O_EQ, t, icon(0L, INTBITS), s.start);
+		return test(t, destination, s);
+
+	case	O_NOT:
+		left = ref binary_x(t)->left;
+		return test(left, destination, s);
+
+	case	O_LAND:
+		left = ref binary_x(t)->left;
+		right = ref binary_x(t)->right;
+		s1 = testFalse(left, destination, s);
+		s2 = testFalse(right, destination, s);
+		s1 post(s2);
+		return s1;
+
+	case	O_LOR:
+		left = ref binary_x(t)->left;
+		right = ref binary_x(t)->right;
+		falslab = Func label_();
+		s1 = test(left, falslab, s);
+		s2 = testFalse(right, destination, s);
+		s1 post(s2);
+		s1 post(falslab);
+		return s1;
+		}
+	}
+
+try_:	dynamic	(x: ref label_x) ref try_x =
+	{
+	return new try_i386[ x ];
+	}
+
+	};
+
+markTemps:	(x: ref stmt_x) boolean =
+	{
+	TargetData.spills = 0;
+	TargetData.lastSpill = 0;
+//	x display(0);
+	x markTempsAndSpills();
+	TargetData clearBenefitCounts();
+	x computeBenefits(1);			// 1 is the 'nesting level'
+	return assignRegisterVariables();
+	}
+
+locateAutos:	(sc: ref blockScope, baseAmount: int, 
+					allocateBig: boolean) int =
+	{
+	sym:		ref symbol_s;
+	m:		addr_t;
+	align:		addr_t;
+	d:		ref type_s;
+	maxbase:	int;
+	v:		ref variable;
+
+	for	(sym = sc->symbols; sym; sym = sym->next){
+		if	(sym->storageClass != SC_AUTO)
+			continue;
+		if	(sym->dtype == 0)
+			continue;
+		v = sym->var;
+		if	(v->totalCount == 0 ||
+			 (v->flags & VF_REG))
+			continue;		/* skip register vars */
+		d = sym->dtype getType();
+		m = d sizeOf();
+		if	(m > BigObjectThreshold){
+			if	(!allocateBig)
+				continue;
+			}
+		else if	(allocateBig)
+			continue;
+		v->offset = baseAmount - m;
+		align = d alignmentOf() / BYTEBITS;
+		m = -v->offset;
+		m = m % align;
+		if	(m)
+			v->offset -= align - m;
+		baseAmount = v->offset;
+		}
+	maxbase = -baseAmount;
+
+	s:	ref blockScope;
+
+	for	(s = sc->child; s; s = s->sibling){
+		m = locateAutos(s, baseAmount, allocateBig);
+		if	(m > maxbase)
+			maxbase = m;
+		}
+	return maxbase;
+	}
+
+argument_i386:	type	inherit argument_x {
+
+	};
+
+assert_i386:	type	inherit	assert_x {
+
+markTemps:	dynamic	() =
+	{
+	markAddressModes(test);
+	assignTempRegisters(test, operator);
+	}
+
+	};
+
+auto_i386:	type	inherit auto_x {
+	public:
+
+coerce:	dynamic	(t: ref type_s) ref tree_p =
+	{
+	return coerceLvalue(self, t);
+	}
+
+computeBenefits:	dynamic	(nesting: int) =
+	{
+	var->totalCount += nesting;
+	}
+
+	};
+
+binary_i386:	type	inherit	binary_x {
+	public:
+
+coerce:	dynamic	(t: ref type_s) ref tree_p =
+	{
+	if	(operator == O_IND)
+		return coerceLvalue(self, t);
+	else
+		return 0;
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, resultUsed: boolean) ref tree_p =
+	{
+	base, t, x:	ref tree_p;
+
+	base = super assignTypes(s, resultUsed);
+	if	(base != self){
+		if	(base->operator != O_SEQ)
+			return base;
+		t = base;
+		while	(ref binary_x(t)->right != self){
+			t = ref binary_x(t)->right;
+			if	(t == 0 || t->operator != O_SEQ)
+				return base;
+			}
+		}
+	else
+		t = 0;
+	if	(operator != O_ASG)
+		return base;
+
+	i:	addr_t;
+
+	i = dtype sizeOf();
+	if	(dtype->topType == T_STRUCT){
+		if	(i == 4)
+			return base;
+		else if	(i <= 2)
+			return base;
+		x = structCopy(i, s, resultUsed);
+		if	(t)
+			ref binary_x(t)->right = x;
+		else
+			base = x;
+		}
+	else if (dtype->topType == T_DESCRIPTOR){
+		x = structCopy(i, s, resultUsed);
+		if	(t)
+			ref binary_x(t)->right = x;
+		else
+			base = x;
+		}
+	else if	(dtype->topType == T_REF &&
+		 right->operator == O_CAST){
+		c:	ref cast_x;
+
+		right = right fold();
+		c = ref cast_x(right);
+
+			// A call returning a descriptor being cast to some 
+			// other type and having not gotten folded by this
+			// point should
+			// be transformed into a struct return by value.
+
+		if	(c->operator == O_CAST &&
+			 (c->opnd->operator == O_SCALL ||
+			  c->opnd->operator == O_MCALL ||
+			  c->opnd->operator == O_RCALL) &&
+			 c->opnd->dtype->topType == T_DESCRIPTOR){
+			sym:	ref symbol_s;
+
+			sym = s unnamedLocal(c->opnd->dtype);
+			x = Func auto(sym, 0);
+			x = Func binary(O_ASG, x, c->opnd, offset);
+			c->opnd = x assignTypes(s, TRUE);
+			}
+		}
+	return base;
+	}
+
+structCopy:	(i: addr_t, s: ref scope_s, resultUsed: boolean) ref tree_p =
+	{
+	if	(right->operator == O_SCALL ||
+		 right->operator == O_MCALL ||
+		 right->operator == O_RCALL)
+		return returnStructByValue(s, resultUsed);
+
+	u:	ref tree_p;
+
+	u = Func icon(i, INTBITS);
+	u = Func argument(right takeAddress(dtype), u, 0);
+	u = Func argument(left takeAddress(dtype), u, 0);
+	u = Func staticCall(0, u, 0);
+	u->operator = O_MCOPY;
+	if	(resultUsed)
+		u = binop(O_SEQ, dtype, u, left);
+	return u;
+	}
+
+returnStructByValue:	(s: ref scope_s, resultUsed: boolean) ref tree_p =
+	{
+	a, b, r, res, prefix:	ref tree_p;
+
+	r = right;
+	a = left takeAddress(dtype);
+	res = 0;
+	prefix = 0;
+	if	(resultUsed){
+		if	(left hasSideEffects()){
+			sym:	ref symbol_s;
+			t:	ref tree_p;
+
+			sym = s unnamedLocal(a->dtype);
+			t = Func auto(sym, 0);
+			prefix = binop(O_ASG, a->dtype, t, a);
+			a = Func auto(sym, 0);
+			res = binop(O_IND, dtype, Func auto(sym, 0), 0);
+			}
+		else
+			res = left dup(0);
+		}
+	if	(r->operator == O_RCALL){
+		b = Func icon(dtype sizeOf(), INTBITS);
+		ref remoteCall_x(r) declareReturn(a, b);
+		}
+	else	{
+		c:	ref bcall_x;
+
+		c = ref bcall_x(r);
+		if	(c->args == 0)
+			c->args = a;
+		else
+			c->args = Func argument(a, c->args, 0);
+		}
+	r = concatOps(prefix, r);
+	return concatOps(r, res);
+	}
+
+computeBenefits:	dynamic	(nesting: int) =
+	{
+	switch	(operator){
+	case	O_ADR:
+		if	(left->operator == O_AUTO)
+			ref auto_x(left)->var->flags |= VF_NIXREG;
+		break;
+
+	case	O_LSH:
+	case	O_RSH:
+	case	O_LSA:
+	case	O_RSA:
+		if	(right->operator == O_AUTO)
+			ref auto_x(right)->var->shiftCount += nesting;
+		break;
+		}
+	if	(left)
+		left computeBenefits(nesting);
+	if	(right)
+		right computeBenefits(nesting);
+	}
+
+sethiUllman:	dynamic	() signedByte =
+	{
+	tp:	int;
+	tl:	int;
+	tr:	int;
+	sul:	int;
+	sur:	int;
+	sup:	int;
+	i:	int;
+
+/*
+	if	(dtype->topType == T_STRUCT){
+		len:	addr_t;
+
+		len = t->typedef->size;
+		if	(len == 1)
+			t->topType = T_UCHAR;
+		else if	(len == 2)
+			t->topType = T_USHORT;
+		else if	(len == 4)
+			t->topType = T_ULONG;
+		}
+ */
+	if	(operator == O_ADR){
+		if	(left->operator == O_AUTO)
+			sethi = 1;
+		else
+			sethi = 0;
+		return sethi;
+		}
+/*
+	switch	(t->operator){
+	case	O_FLD:
+		sethi(t->n.f.operand);
+		t->sethi = -t->n.f.operand->sethi;
+		return;
+ */
+	tp = regneeds(self);
+	if	(left){
+		tl = regneeds(left);
+		sul = left sethiUllman();
+		sul = abs(sul);
+		if	(operator == O_INA ||
+			 operator == O_DEA)
+			sul += tp;
+		}
+	else	{
+		tl = 0;
+		sul = 0;
+		}
+	if	(right){
+		tr = regneeds(right);
+		sur = right sethiUllman();
+		sur = abs(sur);
+		}
+	else	{
+		sethi = -max(tp, sul);
+		return sethi;
+		}
+	sethi = max(sur, max(sul, max(tp, min(sur + tl, sul + tr))));
+	if	(sul < sur)
+		return sethi;
+
+		// Do easy assignments right first, otherwise left first. 
+
+	if	(sul == sur &&
+		 operator >= O_ASG &&
+		 operator <= O_XRA)
+		return sethi;
+	sethi = -sethi;
+	return sethi;
+	}
+
+	};
+
+block_i386:	type	inherit	block_x {
+
+assignTypes:	dynamic	(s: ref scope_s, b: boolean) ref tree_p =
+	{
+	x:	ref tree_p;
+
+	x = super assignTypes(s, b);
+	if	(x != self)
+		return x;
+	sym:	ref symbol_s;
+
+	for	(sym = scope->symbols; sym; sym = sym->next)
+		if	(sym->var)
+			sym->var->dtype = sym->dtype getType();
+	return self;
+	}
+
+markTemps:	dynamic	() =
+	{
+	s:	ref stmt_x;
+
+	TargetData.currentScope = scope;
+	for	(s = stmts; s; s = s->next)
+		s markTempsAndSpills();
+	}
+
+	};
+
+cast_i386:	type	inherit cast_x {
+
+initialize:	dynamic	(offset: addr_t, v: ref value) =
+	{
+	if	(opnd == 0)
+		return;			// some error - ignore it
+	if	(dtype->topType != T_DESCRIPTOR)
+		return;			// some other error - ignore it
+	if	(opnd->dtype->topType != T_ARRAY)
+		return;			// still another error - ignore it too
+	i:	addr_t;
+
+	opnd copyFixup(v, offset, dtype sizeOf());
+	i = ref array_z(opnd->dtype)->dimension;
+	memCopy(&v->data[offset + DescrMaxBoundOffset], &i, sizeof i);
+	memCopy(&v->data[offset + DescrBoundOffset], &i, sizeof i);
+	}
+
+	};
+
+critical_i386:	type	inherit	critical_x {
+
+markTemps:	dynamic	() =
+	{
+	if	(expr){
+		markAddressModes(expr);
+		assignTempRegisters(expr, operator);
+		}
+	}
+
+	};
+
+decl_i386:	type	inherit	decl_x {
+
+markTemps:	dynamic	() =
+	{
+	if	(initTree){
+		markAddressModes(initTree);
+		assignTempRegisters(initTree, operator);
+		}
+	}
+
+	};
+
+endCritical_i386:type	inherit	endCritical_x {
+
+markTemps:	dynamic	() =
+	{
+	if	(expr){
+		markAddressModes(expr);
+		assignTempRegisters(expr, operator);
+		}
+	}
+
+	};
+
+endTry_i386:	type	inherit	endTry_x {
+
+markTemps:	dynamic	() =
+	{
+	assignTempRegisters(0, operator);
+	}
+
+	};
+
+except_i386:	type	inherit except_x {
+
+traceLabels:	dynamic	() =
+	{
+	sc:	ref switchCases;
+
+	super traceLabels();
+	for	(sc = cases; sc; sc = sc->next){
+		if	(sc->target->asmLabel == 0){
+			sc->target->asmLabel = 1;
+			TargetData.changed = TRUE;
+			}
+		}
+	}
+
+cleanupLabels:	dynamic	() =
+	{
+	sc:	ref switchCases;
+	psc:	ref switchCases;
+
+	for	(psc = 0, sc = cases; sc; sc = sc->next){
+		sc->target = lastLabel(sc->target);
+/*
+		if	(sc->target == defaultCase){
+			if	(psc)
+				psc->next = sc->next;
+			else
+				cases = sc->next;
+			TargetData.changed = TRUE;
+			}
+		else
+ */
+			psc = sc;
+		}
+	}
+
+markTemps:	dynamic	() =
+	{
+	sc:	ref switchCases;
+
+	markExceptModes(self);
+	assignTempRegisters(expr, operator);
+	for	(sc = cases; sc; sc = sc->next)
+		assignTempRegisters(sc->caseValue, O_ENDEX);
+	}
+
+	};
+
+expr_i386:	type	inherit	expr_x {
+
+markTemps:	dynamic	() =
+	{
+	markAddressModes(expr);
+	assignTempRegisters(expr, operator);
+	}
+
+	};
+
+icon_i386:	type	inherit icon_x {
+
+	};
+
+iden_i386:	type	inherit iden_x {
+	public:
+
+assignTypes:	dynamic	(s: ref scope_s, b: boolean) ref tree_p =
+	{
+	t:	ref type_s;
+	x:	ref tree_p;
+
+	if	(dtype)
+		return self;
+	x = super assignTypes(s, b);
+	if	(x != self)
+		return x;			// possibly an error
+ 	switch	(symbol->storageClass){
+	case	SC_BASED:
+		x = Func auto(TargetData.gateArgsSymbol, 0);
+		if	(symbol->bitOffset){
+			s:	ref tree_p;
+
+			s = Func icon(symbol->bitOffset, INTBITS);
+			x = binop(O_ADD, TargetData.gateArgsSymbol->dtype, x, s);
+			}
+		return binop(O_IND, dtype, x, 0);
+
+	case	SC_REGISTER:
+		operator = O_REG;
+		adjust = symbol->initBase;
+		TargetData.reservedRegisters |= getRegMask(adjust);
+		break;
+		}
+	return self;
+	}
+
+coerce:	dynamic	(t: ref type_s) ref tree_p =
+	{
+	return coerceLvalue(self, t);
+	}
+
+	};
+
+jump_i386:	type	inherit	jump_x {
+
+traceLabels:	dynamic	() =
+	{
+	if	(jumpCond != JC_JUMP)
+		super traceLabels();
+	if	(asmLabel &&
+		 target->asmLabel == 0){
+		target->asmLabel = 1;
+		TargetData.changed = TRUE;
+		}
+	}
+
+cleanupLabels:	dynamic	() =
+	{
+	target = lastLabel(target);
+	}
+
+	};
+
+label_i386:	type	inherit	label_x {
+
+	};
+
+literal_i386:	type	inherit	literal_x {
+
+	};
+
+methodCall_i386:	type	inherit methodCall_x {
+
+constructMethodCall:	dynamic	(m: ref symbol_s, directCall: boolean,
+					t: ref type_s, 
+					s: ref scope_s) ref tree_p =
+	{
+	x:	ref tree_p;
+
+	x = super constructMethodCall(m, directCall, t, s);
+	if	(x != self)
+		return x;
+	else
+		return processDescriptors(s);
+	}
+
+sethiUllman:	dynamic	() signedByte =
+	{
+	super sethiUllman();
+	objectRef sethiUllman();
+	return regneeds(self);
+	}
+
+	};
+
+remoteCall_i386:	type	inherit remoteCall_x {
+
+sethiUllman:	dynamic	() signedByte =
+	{
+	super sethiUllman();
+	objectRef sethiUllman();
+	return regneeds(self);
+	}
+
+processRemoteDescriptors: dynamic	(s: ref scope_s) ref tree_p =
+	{
+	if	(args == 0)
+		return self;		// no args, no descriptors
+
+	a:	ref tree_p;
+	ar:	ref argument_x;
+	scode:	ref tree_p;
+
+	scode = 0;
+	a = args;
+	CallForm = symbol->storageClass;
+	if	(a->operator == O_ARG){
+		while	(a->operator == O_ARG){
+			ar = ref argument_x(a);
+			ar->left = copyDescriptors(s, ar->left, &scode);
+			if	(ar->right == 0)
+				break;
+			if	(ar->right->operator != O_ARG)
+				ar->right = copyDescriptors(s, ar->right, 
+								&scode);
+			a = ar->right;
+			}
+		}
+	else
+		args = copyDescriptors(s, args, &scode);
+
+	u:	ref tree_p;
+	v:	ref tree_p;
+	sym:	ref symbol_s;
+	d:	ref type_s;
+
+	if	(scode == 0)
+		return self;
+	d = number_z create(T_UNSIGNED, NO_RANGE, INTBITS);
+	sym = s unnamedLocal(d);
+	frameSize = Func auto(sym, 0);
+	v = iden_x createKnown(O_REG, d, 0, 0, ESP);
+	u = Func auto(sym, 0);
+	u = binop(O_ASG, d, u, v);
+	v = binop(O_SEQ, dtype, scode, self);
+	v = binop(O_SEQ, dtype, u, v);
+	return v;
+	}
+
+	};
+
+reply_i386:	type	inherit	reply_x {
+	
+markTemps:	dynamic	() =
+	{
+	markAddressModes(expr);
+	assignTempRegisters(expr, operator);
+	}
+
+	};
+
+return_i386:	type	inherit	return_x {
+
+assignTypes:	dynamic	(s: ref scope_s, b: boolean) ref tree_p =
+	{
+	x:	ref tree_p;
+
+	x = super assignTypes(s, b);
+	if	(x != self)
+		return x;
+
+	t:	ref type_s;
+
+	t = s returnTypeOf();
+	if	(expr &&
+		 expr != ErrorTree){
+		if	(I386Func.currentType->callingConvention == FC_GATE &&
+			 I386Func.currentSymbol->qualifier & DQ_MEMBERFUNC)
+			return self;
+		else if	(expr->dtype->topType == T_DESCRIPTOR){
+			e:	ref tree_p;
+
+			e = Func auto(TargetData.indirectReturn, 0);
+			e = Func binary(O_IND, e, 0, source.start);
+			if	(expr->operator == O_CAST)
+				expr = ref cast_x(expr)->opnd;
+			e = Func binary(O_ASG, e, expr, source.start);
+			expr = e assignTypes(s, FALSE);
+			}
+		else if	(expr->dtype->topType == T_STRUCT){
+			if	(expr->dtype sizeOf() > 4){
+				e:	ref tree_p;
+
+				e = Func auto(TargetData.indirectReturn, 0);
+				e = Func binary(O_IND, e, 0, source.start);
+				e = Func binary(O_ASG, e, expr, source.start);
+				expr = e assignTypes(s, FALSE);
+				}
+			}
+		}
+	return self;
+	}
+
+markTemps:	dynamic	() =
+	{
+	markAddressModes(expr);
+	assignTempRegisters(expr, operator);
+	}
+
+	};
+
+staticCall_i386:	type	inherit staticCall_x {
+
+checkFunctionCall:	dynamic	(s: ref scope_s, id: ref identifier, 
+					sym: ref symbol_s) ref tree_p =
+	{
+	t:	ref tree_p;
+
+	t = super checkFunctionCall(s, id, sym);
+	if	(t != self)
+		return t;
+	else	{
+		CurrentContext->offset = offset;
+		ft:	ref function_z;
+
+		ft = ref function_z(dtype);
+		if	(id &&
+			 sym->storageClass == SC_INTRINSIC)
+			return convertToIntrinsicOperation(sym->initBase);
+		else
+			return processDescriptors(s);
+		}
+	}
+
+convertToIntrinsicOperation:	public	(index: int) ref tree_p =
+	{
+	a:	ref argument_x;
+	x:	ref tree_p;
+
+	switch	(index){
+	case	0:			// raise
+	case	1:			// abs
+	case	2:			// outportByte
+	case	3:			// inportByte
+	case	4:			// emit
+	case	5:			// memScan
+	case	6:			// memCopy
+	case	7:			// memSet
+	case	10:			// fabs
+		operator = O_INTRPT + index;
+		return self;
+
+	case	8:			// rotateLeft
+	case	9:			// rotateRight
+		if	(args->operator != O_ARG)
+			return self;
+		a = ref argument_x(args);
+		x = Func binary(O_INTRPT + index, a->left, a->right, 
+								offset);
+		x->dtype = dtype;
+		return x;
+
+	case	11:			// exchange char
+	case	12:			// exchange dword
+	case	13:			// exchange word
+		if	(args->operator != O_ARG)
+			return self;
+		a = ref argument_x(args);
+		x = Func binary(O_XCHG, a->left, a->right, offset);
+		x->dtype = dtype;
+		return x;
+
+	case	14:			// roundInt
+		operator = O_RNDINT;
+		return self;
+
+	case	15:			// _cvtBCD
+		if	(args->operator != O_ARG)
+			return self;
+		a = ref argument_x(args);
+		x = Func binary(O_IND, a->right, 0, offset);
+		x->dtype = a->left->dtype;
+		x = Func binary(O_CVTBCD, a->left, x, offset);
+		x->dtype = dtype;
+		return x;
+		}
+/*
+	printf("Unknown intrinsic function: %ld (%S)\n",
+				index, 
+				&ref iden_x(left)->name spelling());
+	exit(1);
+ */
+	return self;
+	}
+
+sethiUllman:	dynamic	() signedByte =
+	{
+	super sethiUllman();
+	if	(func)
+		func sethiUllman();
+	return regneeds(self);
+	}
+
+	};
+
+switch_i386:	public	type	inherit switch_x {
+
+traceLabels:	dynamic	() =
+	{
+	sc:	ref switchCases;
+
+	if	(defaultCase->asmLabel == 0){
+		defaultCase->asmLabel = 1;
+		TargetData.changed = TRUE;
+		}
+	for	(sc = cases; sc; sc = sc->next){
+		if	(sc->target->asmLabel == 0){
+			sc->target->asmLabel = 1;
+			TargetData.changed = TRUE;
+			}
+		}
+	}
+
+cleanupLabels:	dynamic	() =
+	{
+	sc:	ref switchCases;
+	psc:	ref switchCases;
+
+	defaultCase = lastLabel(defaultCase);
+	for	(psc = 0, sc = cases; sc; sc = sc->next){
+		sc->target = lastLabel(sc->target);
+		if	(sc->target == defaultCase){
+			if	(psc)
+				psc->next = sc->next;
+			else
+				cases = sc->next;
+			TargetData.changed = TRUE;
+			}
+		else
+			psc = sc;
+		}
+	}
+
+markTemps:	dynamic	() =
+	{
+	markAddressModes(expr);
+	assignTempRegisters(expr, operator);
+	}
+
+	};
+
+test_i386:	type	inherit test_x {
+
+traceLabels:	dynamic	() =
+	{
+	super traceLabels();
+	if	(asmLabel &&
+		 target->asmLabel == 0){
+		target->asmLabel = 1;
+		TargetData.changed = TRUE;
+		}
+	}
+
+cleanupLabels:	dynamic	() =
+	{
+	target = lastLabel(target);
+	}
+
+markTemps:	dynamic	() =
+	{
+	if	(test){
+		markAddressModes(test);
+		assignTempRegisters(test, O_STMT);
+		}
+	}
+
+	};
+
+try_i386:	type	inherit	try_x {
+
+computeBenefits:	dynamic	(int) =
+	{
+	frameObject->var->totalCount += nestingLevel;
+	}
+
+traceLabels:	dynamic	() =
+	{
+	super traceLabels();
+	if	(asmLabel &&
+		 target->asmLabel == 0){
+		target->asmLabel = 1;
+		TargetData.changed = TRUE;
+		}
+	}
+
+cleanupLabels:	dynamic	() =
+	{
+	target = lastLabel(target);
+	}
+
+markTemps:	dynamic	() =
+	{
+	assignTempRegisters(0, operator);
+	}
+
+	};
+
+lastLabel:	public	(lab: ref label_x) ref label_x =
+	{
+	x:	ref label_x;
+
+	if	(lab == 0)
+		return lab;
+	x = lab;
+	I386Func.asmLabels++;
+	for	(;;){
+		while	(lab->next->operator == O_LABEL)
+			lab = ref label_x(lab->next);
+		if	(lab->next->operator == O_JUMP &&
+			 lab->next->asmLabel != I386Func.asmLabels &&
+			 ref jump_x(lab->next)->jumpCond == JC_JUMP){
+			lab->next->asmLabel = I386Func.asmLabels;
+			lab = ref jump_x(lab->next)->target;
+			}
+		else
+			break;
+		}
+	lab->asmLabel = 1;
+	if	(x != lab)
+		TargetData.changed = TRUE;
+	return lab;
+	}
+
+/*
+	This coerce code detects a conversion from one integral or pointer
+	type to another and does a little-endian truncate as needed.  The
+	arguments are:
+
+	x	an lvalue expression
+	t	the type to be coerced to
+
+	returns:
+
+	0	means coercion failed
+	x	(with type changed) means coercion succeeded
+ */
+coerceLvalue:	(x: ref tree_p, t: ref type_s) ref tree_p =
+	{
+	switch	(t->topType){
+	case	T_SIGNED:
+	case	T_UNSIGNED:
+	case	T_REF:
+		switch	(x->dtype->topType){
+		case	T_SIGNED:
+		case	T_UNSIGNED:
+		case	T_REF:
+			dst:	int;
+			src:	int;
+
+			dst = t sizeOf();
+			src = x->dtype sizeOf();
+			if	(dst <= src){
+				x->dtype = t;
+				return x;
+				}
+			}
+		}
+	return 0;
+	}
+
+min:	(a: int, b: int) int = 
+	{
+	return a < b ? a : b;
+	}
+
+CallForm:	int;
+
+copyDescriptors:	(sc: ref scope_s, arg: ref tree_p, 
+					scodep: ref ref tree_p) ref tree_p =
+	{
+	if	(arg->dtype->topType != T_DESCRIPTOR)
+		return arg;
+
+	d:		ref type_s;
+	sym:		ref symbol_s;
+	copyAreaPtr:		ref symbol_s;
+	dest, init:	ref tree_p;
+	dest2:		ref Tos_x;
+	cpylen, dlen:	ref tree_p;
+	cdest:		ref tree_p;
+	src:		ref tree_p;
+	t:		ref tree_p;
+	v:		ref tree_p;
+	u:		ref tree_p;
+
+	d = number_z create(T_UNSIGNED, NO_RANGE, INTBITS);
+	copyAreaPtr = sc unnamedLocal(d);
+
+		// First, reserve space for the described data
+
+	if	(arg->operator == O_CAST){
+		src = ref cast_x(arg)->opnd;
+		if	(src->dtype->topType != T_ARRAY){
+			CurrentContext error("ErrUnfinished");
+			return ErrorTree;
+			}
+		x:	addr_t;
+
+		x = src->dtype sizeOf();
+		v = iden_x createKnown(O_REG, d, 0, 0, ESP);
+		t = binop(O_SBA, d, v, Func icon((x + 3) & ~3, INTBITS));
+		src = src promoteArrays();
+		cpylen = Func icon(x, INTBITS);
+		dlen = Func icon(x, INTBITS);
+		}
+	else	{
+		rlen:	ref tree_p;
+		dd:	ref type_s;
+		x:	addr_t;
+		m:	ref tree_p;
+
+		t = 0;
+		if	(arg->operator == O_SLICE){
+			if	(ref slice_x(arg)->left){
+				CurrentContext error("ErrUnfinished");
+				return ErrorTree;
+				}
+			dlen = ref slice_x(arg)->right;
+			dd = arg->dtype elementOf();
+			x = dd sizeOf();
+			if	(dlen hasSimpleShape()){
+				rlen = dlen dup(0);
+				if	(x > 1){
+					m = Func icon(x, INTBITS);
+					rlen = binop(O_MUL, d, rlen, m);
+					}
+				cpylen = rlen dup(0);
+				}
+			else	{
+				sym = sc unnamedLocal(d);
+				u = Func auto(sym, 0);
+				t = binop(O_ASG, d, u, dlen);
+				cpylen = Func auto(sym, 0);
+				rlen = Func auto(sym, 0);
+				if	(x > 1){
+					m = Func icon(x, INTBITS);
+					rlen = binop(O_MUL, d, rlen, m);
+					m = Func icon(x, INTBITS);
+					cpylen = binop(O_MUL, d, cpylen, m);
+					}
+				}
+			src = ref slice_x(arg)->arrayRef promoteArrays();
+			}
+		else	{
+			dlen = structRef(arg, DescrBoundOffset * BYTEBITS, d);
+			dd = arg->dtype elementOf();
+			x = dd sizeOf();
+			if	(x > 1){
+				m = Func icon(x, INTBITS);
+				rlen = binop(O_MUL, d, rlen, m);
+				}
+			if	(arg hasSimpleShape()){
+				rlen = dlen dup(0);
+				if	(x > 1){
+					m = Func icon(x, INTBITS);
+					rlen = binop(O_MUL, d, rlen, m);
+					}
+				cpylen = rlen dup(0);
+				}
+			else	{
+				sym = sc unnamedLocal(d);
+				u = Func auto(sym, 0);
+				t = binop(O_ASG, d, u, dlen);
+				cpylen = Func auto(sym, 0);
+				rlen = Func auto(sym, 0);
+				if	(x > 1){
+					m = Func icon(x, INTBITS);
+					rlen = binop(O_MUL, d, rlen, m);
+					m = Func icon(x, INTBITS);
+					cpylen = binop(O_MUL, d, cpylen, m);
+					}
+				}
+			src = structRef(arg, 0, d);
+			}
+		v = iden_x createKnown(O_REG, d, 0, 0, ESP);
+		v = binop(O_SBA, d, v, rlen);
+		if	(t)
+			t = binop(O_SEQ, d, t, v);
+		else
+			t = v;
+		v = iden_x createKnown(O_REG, d, 0, 0, ESP);
+		v = binop(O_ANA, d, v, Func icon(~3, INTBITS));
+		t = binop(O_SEQ, d, t, v);
+		}
+
+		// Now link in the code so far, then remember the location
+		// of the copy area
+
+	if	(*scodep)
+		t = binop(O_SEQ, d, *scodep, t);
+	cdest = Func auto(copyAreaPtr, 0);
+	v = iden_x createKnown(O_REG, d, 0, 0, ESP);
+	v = binop(O_ASG, d, cdest, v);
+	t = binop(O_SEQ, d, t, v);
+	v = Func argument(src, cpylen, 0);
+	cdest = Func auto(copyAreaPtr, 0);
+	v = Func argument(cdest, v, 0);
+	v = Func staticCall(0, v, 0);
+	v->operator = O_MCOPY;
+	v->dtype = d;
+	t = binop(O_SEQ, d, t, v);
+	*scodep = t;
+
+	v = iden_x createKnown(O_REG, d, 0, 0, ESP);
+	cdest = Func auto(copyAreaPtr, 0);
+	cdest = binop(O_SUB, d, cdest, v);
+	dest = Tos_x create(d);
+	init = binop(O_ASG, d, dest, cdest);
+	dest2 = Tos_x create(d);
+	dest2->adjust = DescrMaxBoundOffset;
+	dest = binop(O_ASG, d, dest2, dlen);
+	if	(CallForm == SC_REMOTE){
+		d:	ref type_s;
+
+		d = array_z create(NO_RANGE, 2, IntType);
+		init = concatOps(init, dest);
+		dest = AllocTos_x create(d);
+		}
+	else	{
+		dest2 = Tos_x create(d);
+		dest2->adjust = DescrBoundOffset;
+		dest = binop(O_ASG, d, dest2, dest);
+		init = concatOps(init, dest);
+		dest = AllocTos_x create(arg->dtype);
+		}
+	init = concatOps(dest, init);
+	dest = Tos_x create(arg->dtype);
+	t = concatOps(init, dest);
+	return t;
+	}
+
+adjustGateDescriptorArguments:	(a_body: ref tree_p, sc: ref blockScope) =
+	{
+	sym:	ref symbol_s;
+	d:	ref type_s;
+	x:	ref tree_p;
+	y:	ref tree_p;
+	body:	ref block_x;
+
+	if	(a_body == 0 ||
+		 a_body->operator != O_BLOCK)
+		return;
+	body = ref block_x(a_body);
+
+		// If the body of the function is empty, then don't bother
+		// messing with the parameters.
+
+	if	(body->stmts == 0)
+		return;
+	for	(sym = sc->symbols; sym; sym = sym->next){
+		if	(sym->storageClass != SC_BASED)
+			continue;
+		d = sym->dtype getType();
+		if	(d->topType != T_DESCRIPTOR)
+			continue;
+		x = Func auto(TargetData.gateArgsSymbol, 0);
+		if	(sym->bitOffset){
+			s:	ref tree_p;
+
+			s = Func icon(sym->bitOffset, INTBITS);
+			x = binop(O_ADD, TargetData.gateArgsSymbol->dtype, x, s);
+			}
+		y = x dup(0);
+		x = binop(O_IND, IntType, x, 0);
+		x = binop(O_ADA, IntType, x, y);
+
+		s:	ref stmt_x;
+
+		s = I386Func expr(x, NO_RANGE);
+		body->stmts prefixPost(s);
+		body->stmts = s;
+		}
+	}

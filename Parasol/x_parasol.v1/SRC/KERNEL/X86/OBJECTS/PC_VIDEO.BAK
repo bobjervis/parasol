@@ -1,0 +1,529 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	console;
+include	video;
+include	process;
+include	hardware;
+include	pc_hdw;
+include	kprintf;
+
+MOUSE_ATTR:	const	byte = 0x7F;
+
+PC_Screen:	PCvideo;
+
+initTextScreen:	public	() =
+	{
+	i:		long;
+	va:		ref char;
+	pa:		int;
+	videoMode:	char;
+	sz:		point;
+
+	copyIn(&videoMode, 0x449, sizeof videoMode);
+	if	(videoMode == 0x07){
+		va = physicalToAddressable(0xb0000);
+		pa = 0x3b4;
+		sz = [ 80, 25 ];
+		}
+	else	{
+		va = physicalToAddressable(0xb8000);
+		pa = 0x3d4;
+		switch	(videoMode){
+		default:		sz = [ 80, 25 ];	break;
+		case	0x00:
+		case	0x01:		sz = [ 40, 25 ];	break;
+		case	0x02:
+		case	0x03:		sz = [ 80, 25 ];	break;
+		case	0x50:		sz = [ 80, 30 ];	break;
+		case	0x51:		sz = [ 80, 43 ];	break;
+		case	0x52:		sz = [ 80, 60 ];	break;
+		case	0x53:
+		case	0x57:		sz = [ 132, 25 ];	break;
+//		case	0x54:				// Tseng
+		case	0x58:		sz = [ 132, 30 ];	break;
+		case	0x54:				// Diamond stealth
+		case	0x55:
+		case	0x59:		sz = [ 132, 43 ];	break;
+		case	0x56:
+		case	0x5A:		sz = [ 132, 60 ];	break;
+			}
+		}
+	PC_Screen initialize(pa, va, sz, videoMode);
+	PC_Screen clear();
+	PC_Screen setColor(HIGH|RED);
+	Screen = &PC_Screen;
+	PrintfConsole = &ScreenPrintf;
+	}
+
+PCvideo:	public	type	inherit	video	{
+	private:
+
+	addr_6845:		unsigned;
+	video_address:		* char;
+	address:		unsigned;
+	mouseCursorVisible:	boolean;
+
+setCursor:	() =
+	{
+	_outportByte(addr_6845, 14);	/* Select cursor register */
+	_outportByte(addr_6845 + 1, address >> 9);
+	_outportByte(addr_6845, 15);	/* Select cursor register again */
+	_outportByte(addr_6845 + 1, address >> 1);
+	}
+
+	public:
+
+	useCount:		unsigned[16];
+	attribute:		char;
+	cursorVisible:		boolean;
+
+initialize:	(addr_chip: unsigned, video_addr: * char, sz: point,
+				m: consoleMode_t) =
+	{
+	addr_6845 = addr_chip;
+	video_address = video_addr;
+	corner = [ 0, 0 ];
+	size = sz;
+	mode = m;
+	cursorVisible = TRUE;
+	cursor = [ 0, 0 ];
+	mcursor = [ 0, 0 ];
+	attribute = WHITE;
+	useCount = 1;
+	mouseCursorVisible = FALSE;
+	}
+
+mouseCursor:	dynamic	(p: point) =
+	{
+	n:	threadLock;
+
+	if	(p.x < 0 || p.y < 0 || p.x >= size.x || p.y >= size.y)
+		return;
+	n lock();
+	if	(mouseCursorVisible){
+		wa:	unsigned;
+
+		wa = (mcursor.y * size.x + mcursor.x) * 2;
+		video_address[wa + 1] ^= MOUSE_ATTR;
+		}
+	mcursor = p;
+	if	(mouseCursorVisible){
+		wa:	unsigned;
+
+		wa = (mcursor.y * size.x + mcursor.x) * 2;
+		video_address[wa + 1] ^= MOUSE_ATTR;
+		}
+	n unlock();
+	}
+
+showMouse:	dynamic	(v: boolean) =
+	{
+	if	(v && !mouseCursorVisible){
+		wa:	unsigned;
+
+		wa = (mcursor.y * size.x + mcursor.x) * 2;
+		video_address[wa + 1] ^= MOUSE_ATTR;
+		mouseCursorVisible = TRUE;
+		}
+	}
+
+hideMouse:	dynamic	() boolean =
+	{
+	b:	boolean;
+
+	b = mouseCursorVisible;
+	if	(b){
+		wa:	unsigned;
+
+		wa = (mcursor.y * size.x + mcursor.x) * 2;
+		video_address[wa + 1] ^= MOUSE_ATTR;
+		mouseCursorVisible = FALSE;
+		}
+	return b;
+	}
+
+toggleMouse:	() =
+	{
+	if	(mouseCursorVisible){
+		wa:	unsigned;
+
+		wa = (mcursor.y * size.x + mcursor.x) * 2;
+		video_address[wa + 1] ^= MOUSE_ATTR;
+		}
+	}
+
+permitInterrupts:	() =
+	{
+	if	(mouseCursorVisible){
+		wa:	unsigned;
+
+		wa = (mcursor.y * size.x + mcursor.x) * 2;
+		video_address[wa + 1] ^= MOUSE_ATTR;
+		allowInterrupts();
+		wa = (mcursor.y * size.x + mcursor.x) * 2;
+		video_address[wa + 1] ^= MOUSE_ATTR;
+		}
+	else
+		allowInterrupts();
+	}
+
+loadState:	(v: * PCvideo) =
+	{
+	addr_6845 = 	v->addr_6845;
+	video_address = v->video_address;
+	address = 	v->address;
+	attribute = 	v->attribute;
+	cursorVisible = v->cursorVisible;
+ 	size = 		v->size;
+	cursor = 	v->cursor;
+	}
+
+saveState:	(v: * PCvideo) =
+	{
+	v->addr_6845 = 		addr_6845;
+	v->video_address = 	video_address;
+	v->address = 		address;
+	v->attribute = 		attribute;
+	v->cursorVisible = 	cursorVisible;
+ 	v->size = 		size;
+	v->cursor = 		cursor;
+	}
+
+absoluteCoordinates:	dynamic	(p: point) point =
+	{
+	return p;
+	}
+
+dup:	() =
+	{
+	useCount++;
+	}
+
+close:	dynamic	() int =
+	{
+	useCount--;
+	if	(useCount)
+		return 0;
+	else
+		return 1;
+	}
+
+positionCursor:	dynamic	(p: point) =
+	{
+	cursor = p;
+	if	(p.x >= 0 && p.x < size.x &&
+		 p.y >= 0 && p.y < size.y)
+		address = (size.x * p.y + p.x) * 2;
+	else
+		address = (size.x * size.y) * 2;
+	setCursor();
+	}
+
+hideCursor:	dynamic	() =
+	{
+	cursorVisible = FALSE;
+	address = (int(size.x) * size.y) * 2;
+	setCursor();
+	}
+
+showCursor:	dynamic	() =
+	{
+	cursorVisible = TRUE;
+	positionCursor(cursor);
+	}
+
+read:	dynamic	(p: point, buf: * colorChar, len: unsigned) =
+	{
+	loc:	int;
+	n:	threadLock;
+
+	n lock();
+	toggleMouse();
+	loc = (p.y * size.x + p.x) * 2;
+	len <<= 1;
+	memCopy(buf, video_address + loc, len);
+	toggleMouse();
+	n unlock();
+	}
+
+putc:	dynamic	(p: point, c: char) =
+	{
+	wa:	unsigned;
+	n:	threadLock;
+
+	n lock();
+	if	(p.x >= 0 && p.y >= 0 &&
+		 p.x < size.x && p.y < size.y){
+		wa = (p.y * size.x + p.x) * 2;
+		video_address[wa] = c;
+		video_address[wa + 1] = attribute;
+		if	(mouseCursorVisible &&
+			 p.x == mcursor.x &&
+			 p.y == mcursor.y)
+			video_address[wa + 1] ^= MOUSE_ATTR;
+		}
+	n unlock();
+	}
+
+putcc:	dynamic	(p: point, c: char, a: color_t) =
+	{
+	wa:	unsigned;
+	n:	threadLock;
+
+	n lock();
+	if	(p.x >= 0 && p.y >= 0 &&
+		 p.x < size.x && p.y < size.y){
+		wa = (p.y * size.x + p.x) * 2;
+		video_address[wa] = c;
+		video_address[wa + 1] = a;
+		if	(mouseCursorVisible &&
+			 p.x == mcursor.x &&
+			 p.y == mcursor.y)
+			video_address[wa + 1] ^= MOUSE_ATTR;
+		}
+	n unlock();
+	}
+
+writecc:	dynamic	(p: point, buf: * char, c: color_t, len: unsigned) =
+	{
+	loc:	int;
+	n:	threadLock;
+
+	if	(p.x >= size.x ||
+		 p.y >= size.y)
+		return;
+	if	(p.x < 0){
+		len += p.x;
+		buf -= p.x;
+		p.x = 0;
+		if	(signed(len) < 0)
+			return;
+		}
+	loc = (p.y * size.x + p.x) * 2;
+	n lock();
+	if	(p.y == mcursor.y)
+		toggleMouse();
+	while	(len){
+		video_address[loc] = *buf;
+		video_address[loc + 1] = c;
+		buf++;
+		loc += 2;
+		len--;
+		}
+	if	(p.y == mcursor.y)
+		toggleMouse();
+	n unlock();
+	}
+
+write:	dynamic	(p: point, buf: * colorChar, len: unsigned) =
+	{
+	loc:	int;
+	n:	threadLock;
+
+	if	(p.x >= size.x ||
+		 p.y >= size.y)
+		return;
+	if	(p.x < 0){
+		len += p.x;
+		buf -= p.x;
+		p.x = 0;
+		if	(signed(len) < 0)
+			return;
+		}
+	loc = (p.y * size.x + p.x) * 2;
+	len <<= 1;
+	n lock();
+	if	(p.y == mcursor.y)
+		toggleMouse();
+	memCopy(video_address + loc, buf, len);
+	if	(p.y == mcursor.y)
+		toggleMouse();
+	n unlock();
+	}
+
+verticalScroll:	dynamic	(ul: point, lr: point, amount: int) =
+	{
+	offset:		unsigned;
+	diff:		unsigned;
+	len:		unsigned;
+	rows:		int;
+	copyrows:	int;
+	i:		unsigned;
+	ip, jp:		ref colorChar;
+	cc:		colorChar;
+	n:		threadLock;
+	xbytes:		int;
+
+	if	(amount == 0)
+		return;
+	if	(lr.x < ul.x ||
+		 lr.y < ul.y ||
+		 ul.x >= size.x ||
+		 ul.y >= size.y)
+		return;
+	if	(ul.x < 0)
+		ul.x = 0;
+	if	(ul.y < 0)
+		ul.y = 0;
+	if	(lr.x >= size.x)
+		lr.x = size.x - 1;
+	if	(lr.y >= size.y)
+		lr.y = size.y - 1;
+	len = 2 * (1 + lr.x - ul.x);
+	rows = 1 + lr.y - ul.y;
+	i = 0;
+	offset = (int(ul.y) * size.x + ul.x) * 2;
+	xbytes = size.x * 2;
+	diff = amount * xbytes;
+	cc.color = attribute;
+	cc.character = ' ';
+
+	n lock();
+	toggleMouse();
+	if	(amount < 0){		/* scroll down */
+		amount = -amount;
+		offset += (rows - 1) * xbytes;
+		xbytes = -xbytes;	// work backwards through the array
+		}
+	if	(amount < rows){
+		copyrows = rows - amount;
+		for	(; i < copyrows; i++){
+			if	(i & 7 == 0)
+				permitInterrupts();
+			memCopy(video_address + offset,
+				video_address + offset + diff, len);
+			offset += xbytes;
+			}
+		}
+	for	(; i < rows; i++){
+		ip = ref colorChar(video_address + offset);
+		jp = ref colorChar(ref byte(ip) + len);
+		while	(ip < jp)
+			*ip++ = cc;
+		offset += xbytes;
+		}
+	toggleMouse();
+	n unlock();
+	}
+
+rectangle:	dynamic	(box: rectangle_t, color: color_t) =
+	{
+	offset:		unsigned;
+	diff:		unsigned;
+	len:		unsigned;
+	rows:		int;
+	copyrows:	int;
+	i:		unsigned;
+	ip:		ref byte;
+	jp:		ref byte;
+	n:		threadLock;
+
+	if	(box.corner.x >= size.x ||
+		 box.corner.y >= size.y ||
+		 box.corner.x + box.size.x > size.x ||
+		 box.corner.y + box.size.y > size.y)
+		return;
+	n lock();
+	toggleMouse();
+	len = 2 * box.size.x;
+	offset = (box.corner.y * size.x + box.corner.x) * 2;
+	for	(i = 0; i < box.size.y; i++){
+		if	(i & 7 == 0)
+			permitInterrupts();
+		ip = video_address + offset;
+		jp = ip + len;
+		while	(ip < jp){
+			*ip++ = ' ';
+			*ip++ = color;
+			}
+		offset += size.x * 2;
+		}
+	toggleMouse();
+	n unlock();
+	}
+
+horizontalScroll:	dynamic	(ul: point, lr: point, amount: int) =
+	{
+	offset:		unsigned;
+	diff:		unsigned;
+	len:		unsigned;
+	rows:		unsigned;
+	copyrows:	unsigned;
+	i:		unsigned;
+	j:		unsigned;
+	cp:		ref char;
+	n:		threadLock;
+
+	if	(amount == 0)
+		return;
+	n lock();
+	toggleMouse();
+	len = 2 * (1 + lr.x - ul.x);
+	rows = 1 + lr.y - ul.y;
+	i = 0;
+	offset = (int(ul.y) * size.x + ul.x) * 2;
+	cp = video_address + offset;
+	if	(amount < 0){		/* scroll left */
+		amount = -amount;
+		diff = amount * 2;
+		if	(diff > len)
+			diff = len;
+		len -= diff;
+		for	(; i < rows; i++){
+			if	(i & 7 == 0)
+				permitInterrupts();
+			if	(diff < len)
+				memMove(cp + diff, cp, len);
+			for	(j = 0; j < diff; j += 2){
+				cp[j] = ' ';
+				cp[j + 1] = attribute;
+				}
+			cp += size.x * 2;
+			}
+		}
+	else	{			/* scroll right */
+		ep:	ref char;
+
+		diff = amount * 2;
+		if	(diff > len)
+			diff = len;
+		len -= diff;
+		for	(; i < rows; i++){
+			if	(i & 7 == 0)
+				permitInterrupts();
+			if	(diff < len)
+				memMove(cp, cp + diff, len);
+			ep = cp + len - diff;
+			for	(j = 0; j < diff; j += 2){
+				ep[j] = ' ';
+				ep[j + 1] = attribute;
+				}
+			cp += size.x * 2;
+			}
+		}
+	toggleMouse();
+	n unlock();
+	}
+
+setColor:	dynamic	(a: char) =
+	{
+	attribute = a;
+	}
+
+getAttribute:	() char =
+	{
+	return attribute;
+	}
+
+clear:	() =
+	{
+	verticalScroll([ 0, 0 ], [ size.x - 1, size.y - 1 ], size.y);
+	positionCursor([ 0, 0 ]);
+	}
+
+	};

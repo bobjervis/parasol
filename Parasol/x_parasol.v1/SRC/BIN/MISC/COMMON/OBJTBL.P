@@ -1,0 +1,55 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	alys;
+include	file;
+
+main:	entry	() =
+	{
+	i:	int;
+	o:	object_t;
+	e:	ref far External;
+	node:	ref far Node;
+
+	node = myHost();
+	for	(i = 0; i < 32; i++){
+		e = probeObject(ref far External(i));
+		if	(e){
+			o = node getObject(e);
+			if	(o.me)
+				printf("%3d -> %3d\n", i, o.me);
+			}
+		}
+	for	(i = 32; i < 256 + 32; i++){
+		try	{
+			n:	[:] char;
+			ts:	[:] char;
+			_n:	[256] char;
+			_ts:	[256] char;
+
+			n = _n;
+			ts = _ts;
+			o = node getObject(ref far External(i));
+			if	(o.me){
+				printf("%3d %3d %3d u%04x:g%04x %04x %04x %04x %04x %5d %c%c%c",
+					o.me, o.parent, o.myJob, o.group, o.user,
+					o.worldRights, o.groupRights, o.userRights,
+					o.jobRights, o.useCount, 
+					o.flags & OF_KERNEL ? '-' : 'P',
+					o.flags & OF_DISOWNED ? 'D' : ' ',
+					o.alertable ? 'A' : 'N');
+				n [:]= node getObjectName(ref far External(i));
+				ts [:]= node getObjectType(ref far External(i));
+				printf(" %S (%S)\n", n, ts);
+				}
+			}
+		except	{
+			printf("%3d - closed [exception]\n", i);
+			}
+		}
+	exit(EX_SUCCESS);
+	}

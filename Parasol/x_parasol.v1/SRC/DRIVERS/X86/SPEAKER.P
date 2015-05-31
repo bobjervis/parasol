@@ -1,0 +1,76 @@
+include	hardware;
+include	file, alys, kdriver;
+include	sound;
+
+include	object, pc_hdw;
+
+main:	entry	() =
+	{
+	id:	ref far External;
+	arg:	[:] char;
+
+	if	(|commandLine.arguments == 0)
+		arg = "/service/speaker";
+	else
+		arg = commandLine.arguments[0];
+	id = publishKernel("speaker", ":model.sound.speaker",
+					&Speaker,
+					AR_ANY, AR_ANY, AR_ANY, AR_ANY);
+	FileSystem register(id, arg, ":model.sound.speaker");
+	Driver makeResident();
+	disown(Driver);
+	disown(id);
+	}
+
+Speaker:	inherit	speaker	{
+	public:
+
+play:	gate	(tune: [:] note_t) =
+	{
+	}
+
+pause:	gate	(sense: boolean) =
+	{
+	}
+
+clear:	gate	() =
+	{
+	}
+
+	};
+
+Divisors:	[12] unsigned[16] = [
+	4660,				// middle C
+	4398,				// C#
+	4152,				// D
+	3919,				// D#
+	3699,				// E
+	3491,				// F
+	3295,				// F#
+	3110,				// G
+	2936,				// G#
+	2771,				// A
+	2615,				// A#
+	2469,				// B
+	];
+
+note:	(divisor: unsigned[16]) =
+	{
+	_outportByte(0x43, 0xb6);
+	_emit(_idle_);
+	_outportByte(0x42, divisor);
+	_emit(_idle_);
+	_outportByte(0x42, divisor >> 8);
+	}
+
+enable:	(set: boolean) =
+	{
+	a:	byte;
+
+	a = _inportByte(0x61);
+	if	(set)
+		a |= 0x03;
+	else
+		a &= ~0x03;
+	_outportByte(0x61, a);
+	}

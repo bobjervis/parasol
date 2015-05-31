@@ -1,0 +1,323 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	hardware;
+include	kprintf;
+include	pc_hdw;
+include	alys;
+include	vector;
+include	console;
+/*
+	3-byte mouse protocol:
+
+		1st byte:
+
+			bits 0-1	- high order x bits
+			bits 2-3	- high order y bits
+			bit 4		- right button down
+			bit 5		- left button down
+			bit 6		- always 1
+			bit 7		- always 0
+
+		2nd byte:
+
+			bits 0-5	- low order x bits
+			bits 6-7	- always 0
+
+		3rd byte:
+
+			bits 0-5	- low order y bits
+			bits 6-7	- always 0
+ */
+SerialPorts:	public	[4] ref serialPort;
+
+startComm:	public	() =
+	{
+	data:		[4] unsigned[16];
+	irqs:	static	[4] int = [ 4, 3, -1, -1 ];
+	i:		int;
+	s:		ref serialPort;
+
+	copyIn(&data, 0x400, sizeof data);
+	for	(i = 0; i < 4; i++)
+		if	(data[i])
+			SerialPorts[i] = new serialPort[ data[i], irqs[i] ];
+	}
+
+serialStatus_t:	public	type	byte = {
+	SS_ERROR,
+	SS_IDLE,
+	SS_ACTIVE,		// Active serial line
+	SS_MOUSE		// Active serial mouse
+	};
+
+serialPort:	public	type	{
+	ioport:		unsigned[16];
+	irq:		unsigned[16];
+	state:		serialStatus_t;
+	mouseCmd:	[3] byte;
+	mouseIndex:	byte;
+	mouseScreen:	ref console;
+
+	public:
+
+constructor:	(iop: unsigned[16], irqnum: int) =
+	{
+	ioport = iop;
+	irq = irqnum;
+	if	(!validatePort()){
+		state = SS_ERROR;
+		return;
+		}
+	vector calloutInterrupt(DEV_BLOCK_A + irq, self, 
+					PR_DEVICE + (16 - irq), &commISR);
+	state = SS_IDLE;
+	}
+
+setMouse:	(cons: ref console) boolean =
+	{
+	if	(state != SS_IDLE)
+		return FALSE;
+	setSpeed(1200);
+	_outportByte(ioport + 5, 0x00);			// clear DR
+	_outportByte(ioport + 3, 0x06);			// 7 data, 2 stop
+	_outportByte(ioport + 1, 0x01);			// read ready
+	mouseIndex = 0;
+	mouseScreen = cons;
+	state = SS_MOUSE;
+	return TRUE;
+	}
+
+nudge:	() =
+	{
+	v:	byte;
+
+	if	(state == SS_MOUSE){
+		v = _inportByte(ioport + 5);
+		if	(v & 0x0E){
+			_inportByte(ioport);		// Clear the condition
+			mouseIndex = 0;
+			Primary8259 clearInterrupt();
+			return;
+			}
+		v = _inportByte(ioport);
+		if	(v & 0x80){
+			mouseIndex = 0;
+			Primary8259 clearInterrupt();
+			return;
+			}
+		if	(v & 0x40)
+			mouseIndex = 0;
+		mouseCmd[mouseIndex++] = v;
+		if	(mouseIndex == 3){
+			p:	point;
+			b:	byte;
+
+			p.x = signedByte(mouseCmd[1] + 
+						(mouseCmd[0] & 0x03) << 6);
+			p.y = signedByte(mouseCmd[2] + 
+						(mouseCmd[0] & 0x0c) << 4);
+			b = (mouseCmd[0] & 0x30) >> 4;
+
+			mouseIndex = 0;
+			mouseScreen mouse(p, b);
+			Primary8259 clearInterrupt();
+
+			return;
+			}
+		}
+	else	{
+/*
+		v = _inportByte(ioport + 2);
+		switch	(v & 6){
+		case	0:			// MODEM Status
+			kprintf("MStat.");
+			break;
+
+		case	2:			// Transmit buffer empty
+			kprintf("Trans.");
+			break;
+
+		case	4:			// Receive data
+			v = _inportByte(ioport);
+			kprintf("%02x.", v);
+			break;
+
+		case	6:			// Receiver line status
+			kprintf("recvl.");
+			break;
+			}
+ */
+		}
+	Primary8259 clearInterrupt();
+	}
+
+validatePort:	() boolean =
+	{
+	v:	byte;
+
+	v = _inportByte(ioport + 5);
+	if	(v & 0x80)		// high bit in LSR
+		return FALSE;
+	v = _inportByte(ioport + 2);
+	if	(v & 0xF8)		// high bits in the IIR
+		return FALSE;
+	v = _inportByte(ioport + 1);
+	if	(v & 0xF0)
+		return FALSE;		// high bits in the IER
+	else
+		return TRUE;
+	}
+
+status:	() =
+	{
+	v, x:		byte;
+
+	v = _inportByte(ioport + 5);
+	kprintf("Line status: ");
+	if	(v & 1)
+		kprintf("DR ");
+	if	(v & 2)
+		kprintf("OE ");
+	if	(v & 4)
+		kprintf("PE ");
+	if	(v & 8)
+		kprintf("FE ");
+	if	(v & 0x10)
+		kprintf("BI ");
+	if	(v & 0x20)
+		kprintf("THRE ");
+	if	(v & 0x40)
+		kprintf("TEMT ");
+	if	(v & 0x80)
+		kprintf("not a line status register");
+	kprintf("\n");
+	v = _inportByte(ioport + 2);
+	kprintf("Interrupt: %s\n", IIR[v & 7]);
+	if	(v & 0xF8)
+		kprintf("Not an IIR\n");
+	v = _inportByte(ioport + 1);
+	kprintf("Interrupts enabled: ");
+	if	(v & 0xF0)
+		kprintf("Not an interrupt enabled register\n");
+	else	{
+		if	(v & 1)
+			kprintf("Rcv Dta Avail ");
+		if	(v & 2)
+			kprintf("Trans Empty ");
+		if	(v & 4)
+			kprintf("Rcv Line Status ");
+		if	(v & 8)
+			kprintf("MODEM Status ");
+		kprintf("\n");
+		}
+	v = _inportByte(ioport + 7);
+	kprintf("Scratchpad register: %02x\n", v);
+	v = _inportByte(ioport + 4);
+	kprintf("Modem Control Register: ");
+	if	(v & 1)
+		kprintf("DTR ");
+	if	(v & 2)
+		kprintf("RTS ");
+	if	(v & 8)
+		kprintf("Out 2 ");
+	if	(v & 0x10)
+		kprintf("Loopback ");
+	kprintf("\n");
+	v = _inportByte(ioport + 6);
+	kprintf("Modem status: ");
+	if	(v & 1)
+		kprintf("DCTS ");
+	if	(v & 2)
+		kprintf("DDSR ");
+	if	(v & 4)
+		kprintf("TERI ");
+	if	(v & 8)
+		kprintf("DDCD ");
+	kprintf("\n");
+	x = _inportByte(ioport + 3);
+	v = 5 + (x & 3);
+	kprintf("%d data, ", v);
+	if	(x & 4){
+		if	(v == 5)
+			kprintf("1.5 stop, ");
+		else
+			kprintf("2 stop, ");
+		}
+	else
+		kprintf("1 stop, ");
+	if	(x & 8 == 0)
+		kprintf("no parity bits, ");
+	else if	(x & 0x10)
+		kprintf("even parity bits, ");
+	else
+		kprintf("odd parity bits, ");
+
+	divisor:	int;
+
+	_outportByte(ioport + 3, x | 0x80);
+	divisor = _inportByte(ioport);
+	divisor += _inportByte(ioport + 1) << 8;
+	if	(divisor == 0)
+		kprintf("invalid Baud\n");
+	else
+		kprintf("%d Baud\n", 2304 * 50 / divisor);
+	_outportByte(ioport + 3, x);
+	}
+
+setSpeed:	(speed: int) =
+	{
+	divisor: 	int;
+	v:		byte;
+
+	switch	(speed){
+	case	9600:	divisor = 12;	break;
+	case	7200:	divisor = 16;	break;
+	case	4800:	divisor = 24;	break;
+	case	3600:	divisor = 32;	break;
+	case	2400:	divisor = 48;	break;
+	case	2000:	divisor = 58;	break;
+	case	1800:	divisor = 64;	break;
+	case	1200:	divisor = 96;	break;
+	case	 600:	divisor = 192;	break;
+	case	 300:	divisor = 384;	break;
+	case	 150:	divisor = 768;	break;
+	case	 134:	divisor = 857;	break;
+	case	 110:	divisor = 1047;	break;
+	case	  75:	divisor = 1536;	break;
+	case	  50:	divisor = 2304;	break;
+	default:
+		kprintf("Invalid speed: %d\n", speed);
+		return;
+		}
+	v = _inportByte(ioport + 3);
+	_outportByte(ioport + 3, v | 0x80);
+	_outportByte(ioport, divisor);
+	_outportByte(ioport + 1, divisor >> 8);
+	_outportByte(ioport + 3, v);
+	}
+
+	};
+
+commISR:	(p: pointer) =
+	{
+	s:	ref serialPort = p;
+
+	s nudge();
+	}
+
+IIR:	const [] ref char = [
+	"MODEM Status",
+	"None",
+	"Transmitter Holder Register Empty",
+	"None",
+	"Received Data Available",
+	"None",
+	"Receiver Line Status",
+	"None"
+	];
+

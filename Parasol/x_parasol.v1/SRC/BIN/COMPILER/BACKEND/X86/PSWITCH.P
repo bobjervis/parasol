@@ -1,0 +1,107 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	encoder;
+include	target;
+include	backend, xstmt, i386back;
+
+generateSwitch:	public	(r: regNum, sc: ref switchCases, 
+					deflt: ref label_x) =
+	{
+	scend:		ref switchCases;
+	maxrow:		int;
+
+	/* if there are no cases, change the switch block to a quad block */
+
+	if	(sc == 0)
+		return;
+	for	(maxrow = 1, scend = sc; scend->next; 
+				maxrow++, scend = scend->next)
+		;
+
+	binarysw(r, maxrow, sc, deflt);
+	}
+
+binarysw:	(r: regNum, maxrow: int, sc: ref switchCases, deflt: ref label_x) =
+	{
+	scend:		ref switchCases;
+	scmid:		ref switchCases;
+	i:		int;
+	j:		int;
+	jlab:		ref stmt_x;
+
+	for	(;;){
+		if	(maxrow <= 3){
+			for	(i = 0; i < maxrow; i++, sc = sc->next){
+				asmopri(I386_CMPL, r, sc->caseValue integerValue());
+				Encoder generateJump(JC_EQ, sc->target);
+				}
+			Encoder generateJump(JC_JUMP, deflt);
+			return;
+			}
+		i = maxrow / 2u;
+		for	(scend = sc, j = 1; j < maxrow; j++,
+							scend = scend->next)
+			if	(j - 1 == i)
+				scmid = scend;
+		if	(scend->caseValue integerValue() - 
+				sc->caseValue integerValue() <= 3 * maxrow){
+			jumpsw(r, maxrow, sc, scend, deflt);
+			return;
+			}
+		asmopri(I386_CMPL, r, scmid->caseValue integerValue());
+		Encoder generateJump(JC_EQ, scmid->target);
+		jlab = Func label_();
+		Encoder generateJump(JC_GT, jlab);
+		binarysw(r, i, sc, deflt);
+		Encoder generateLabel(jlab);
+		maxrow -= i + 1;
+		sc = scmid->next;
+		}
+	}
+
+jumpsw:	(r: regNum, maxrow: int, sc: ref switchCases, scend: ref switchCases,
+				deflt: ref label_x) =
+	{
+	i:		long;
+	j:		long;
+	st:		ref switchTable_t;
+
+	i = sc->caseValue integerValue();
+	if	(i)
+		asmopri(I386_SUBL, r, i);
+	asmopri(I386_CMPL, r, scend->caseValue integerValue() - i);
+	Encoder generateJump(JC_UGT, deflt);
+	asmopri(I386_LSLL, r, 2);
+	Encoder jumpToTable(r, new switchTable_t[ sc, maxrow, deflt ]);
+	}
+
+generateSwitchTables:	public	() =
+	{
+	sc:	ref switchCases;
+	deflt:	ref stmt_x;
+	count:	int;
+	i:	int;
+	j:	int;
+
+	while	(SwitchTables){
+		sc = SwitchTables->cases;
+		count = SwitchTables->jumpTableRow;
+		deflt = SwitchTables->defaultCase;
+		Encoder switchTableLabel(SwitchTables);
+		SwitchTables = SwitchTables->next;
+		for	(i = 0, j = sc->caseValue integerValue(); i < count; 
+					i++, sc = sc->next){
+			while	(j < sc->caseValue integerValue()){
+				j++;
+				Encoder dataCodeOffset(deflt);
+				}
+			Encoder dataCodeOffset(sc->target);
+			j++;
+			}
+		}
+	}

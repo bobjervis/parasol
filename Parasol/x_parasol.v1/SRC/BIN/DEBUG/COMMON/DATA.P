@@ -1,0 +1,459 @@
+include	file, editor, format;
+include	hardware;
+include	string;
+
+include	window, treeview;
+include	console;
+
+include	debug, monitor;
+include symtab;
+
+Data:	public	ref dataWindow;
+
+dataWindow:	public	type	inherit	topLevelShell	{
+	buffer:		ref dataBuffer;
+	data:		ref dataEditor;
+	currentAddress:	vaddr_t;
+	currentSym:	ref symbol;
+
+	public:
+
+	hWalker:	ref heapWalker;
+
+constructor:	(s: ref shell) =
+	{
+	m:	ref menubar;
+	view:	ref popupMenu;
+
+	super constructor("Data", s);
+	iconLabel("- data -", C_TITLE);
+	useFooter();
+	currentAddress = 0;
+	currentSym = 0;
+	m = new menubar[ ];
+	setMenu(m);
+
+	view = new popupMenu[ m ];
+	view button("Walk Heap",	    'h', [ self, &walkHeap ]);
+	view button("Goto Address  Ctrl-G", 'g', [ self, &gotoLocation ]);
+
+	m pulldown("View", 'v', view);
+
+	data = new dataEditor[ ];
+	anchor(data);
+	buffer = new dataBuffer[ ];
+	data setScrap(&Scrap);
+	data connect(buffer);
+	currentAddress = 0;
+	configure([ 80, 20 ]);
+	data setTextFocus(); 
+	}
+
+destructor:	dynamic	() =
+	{
+	Data = 0;
+	delete buffer;
+	super destructor();
+	}
+
+showAddress:	(address: vaddr_t) =
+	{
+	currentAddress = address;
+	showData("");
+	}
+
+showData:	(address: [:] char) =
+	{
+	sym:	ref symbol;
+	x:	vaddr_t;
+
+	currentSym = translateAddress(address, FALSE, &x, currentAddress);
+	if	(x == INV_ADDRESS){
+		postFooter("Invalid address: %S", address);
+		return;
+		}
+	currentAddress = x;
+	data showAddress(currentAddress);
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	switch	(k){
+	case	CTRL_G:		gotoLocation();		break;
+
+	default:
+		return super processKeystroke(k);
+		}
+	return TRUE;
+	}
+
+gotoLocation:	() =
+	{
+	new gotoForm[ self ];
+	}
+
+walkHeap:	() =
+	{
+	if	(hWalker == 0)
+		hWalker = new heapWalker[ self ];
+	}
+
+	};
+
+dataEditor:	type	inherit	textEditor	{
+	buffer:	ref dataBuffer;
+	focus:	vaddr_t;
+
+	public:
+
+showAddress:	(address: vaddr_t) =
+	{
+	focus = buffer seekAddress(address);
+	gotoLine(focus + 1);
+	redraw();
+	}
+
+connect:	(buf: ref dataBuffer) =
+	{
+	super connect(buf);
+	buffer = buf;
+	}
+
+depositColor:	dynamic	(ln: int, lineBuffer: [:] colorChar) =
+	{
+	c:	color_t;
+	i:	int;
+
+	if	(ln == focus)
+		c = C_TEXT;
+	else
+		c = C_READONLY;
+	for	(i = 0; i < box.size.x; i++)
+		lineBuffer[i].color = c;
+	}
+
+	};
+
+dataBuffer:	public	type	inherit	editBuffer	{
+	dmap:		[:] data_t;
+	totalLines:	int;
+	current:	int;
+	currentLine:	int;
+	dbuf:		[128] char;
+	curr:		int;
+
+	public:
+
+constructor:	() =
+	{
+	i:	int;
+	heapbase:	vaddr_t;
+	heaptop:	vaddr_t;
+
+	dmap = Symbols constructDmap();
+	if	(|dmap){
+		heapbase = dmap[|dmap - 1].sym->address;
+		heaptop = TestArena getDataLength();
+		if	(heaptop < heapbase)
+			heaptop = heapbase;
+		dmap[|dmap - 1].len = heaptop - heapbase;
+		heapbase &= ~0xf;
+		dmap[|dmap - 1].lines = (0x10 + heaptop - heapbase) >> 4;
+		}
+	for	(i = 0; i < |dmap; i++)
+		totalLines += dmap[i].lines;
+//	printf("|dmap = %d totalLines = %d\n", |dmap, totalLines);
+	current = 0;
+	currentLine = 0;
+	}
+
+seekAddress:	dynamic	(address: vaddr_t) lineNum =
+	{
+	i:	int;
+	j:	lineNum;
+	addr:	vaddr_t;
+
+	for	(i = |dmap - 1, j = totalLines; i >= 0; i--){
+		j -= dmap[i].lines;
+		addr = dmap[i].sym->address;
+		if	(address == addr)
+			return j;
+		if	(address > addr){
+			addr &= ~0xf;
+			return j + (0x10 + address - addr) >> 4;
+			}
+		}
+	return 0;
+	}
+
+fetchLine:	dynamic	(i: lineNum, off: int) ref char =
+	{
+	if	(i >= totalLines)
+		return 0;
+
+	cp:	[:] char;
+	rem:	int;
+
+	if	(currentLine > i){
+		current = 0;
+		currentLine = 0;
+		}
+	rem = i - currentLine;
+	while	(current < |dmap &&
+		 dmap[current].lines <= rem){
+		i = dmap[current].lines;
+		rem -= i;
+		currentLine += i;
+		current++;
+		}
+	if	(current >= |dmap)
+		return 0;
+
+	se:	stringEmitter = [ dbuf ];
+
+	if	(rem == 0){
+		dmap[current].sym format(&se, dmap[current].sym->address);
+		se putc('\n');
+		}
+	else	{
+		addr:	vaddr_t;
+		len:	vaddr_t;
+
+		addr = dmap[current].sym->address;
+		len = dmap[current].len;
+		if	(rem > 1){
+			len += addr & 0xf;
+			addr &= ~0xf;
+			rem = (rem - 1) << 4;
+			addr += rem;
+			len -= rem;
+			}
+		TestArena dumpData(&se, addr, len);
+		se putc('\n');
+		}
+	cp = se result();
+	return cp;
+	}
+
+lineCount:	dynamic	() lineNum =
+	{
+	return totalLines;
+	}
+
+seek:	dynamic	(newPos: textPos, whence: int) textPos =
+	{
+	switch	(whence){
+	case	0:
+	case	3:		// go to line number
+		curr = newPos;
+		break;
+
+	case	1:
+		if	(newPos == 0)
+			return curr;
+		curr += newPos;
+		break;
+
+	case	2:
+		curr = totalLines + newPos;
+		break;
+		}
+
+	if	(curr >= totalLines)
+		curr = totalLines - 1;
+	return curr;
+	}
+
+	};
+
+LastAddress:	[:] char;
+
+startup:	entry	() =
+	{
+	LastAddress = new [0] char;
+	}
+
+gotoForm:	type	inherit popupShell {
+	typein:		ref textField;
+	address:	[:] char;
+
+	public:
+
+constructor:	(w: ref shell) =
+	{
+	g:	ref Grid;
+	d:	ref dialog;
+	rprop:	static	[] byte = [ 1 ];
+	cprop:	static	[] byte = [ 0, 1 ];
+
+	super constructor("Goto Address", w);
+
+		// Describe the form
+
+	g = new Grid[ 2, 1 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "Go to: ", C_READONLY, C_READONLY ]);
+	typein = new textField[ LastAddress, C_TEXT, C_READONLY ];
+	typein onEnterKey([ self, &ok ]);
+	g cell([ 1, 0 ], typein);
+
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g);
+	anchor(d);
+
+		// Draw it and accept input
+
+	configure([ 60, 1 ]);
+	typein setTextFocus();
+	open();
+	}
+
+ok:	() =
+	{
+	address:	[:] char;
+
+	delete LastAddress;
+	LastAddress = stringDup(typein getValue());
+	Data showData(LastAddress);
+	delete self;
+	}
+
+	};
+
+heapWalker:	type	inherit	popupShell {
+	dWindow:	ref dataWindow;
+	heapEditor:	ref treeEditor;
+	heapBuf:	ref heapBuffer;
+
+	public:
+
+constructor:	(dw: ref dataWindow) =
+	{
+	dWindow = dw;
+
+	d:	ref dialog;
+
+	super constructor("Heap Usage", dw);
+
+		// Describe the form
+
+	heapEditor = new treeEditor[ 0 ];
+	heapBuf = new heapBuffer[];
+	heapEditor connect(heapBuf);
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "Next", C_TEXT, C_READONLY ],
+							[ self, &downArrow ] ]);
+	d button(new pushButton[ new caption[ "Previous", C_TEXT, C_READONLY ],
+							[ self, &upArrow ] ]);
+	d button(new pushButton[ new caption[ "Close", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(heapEditor);
+	anchor(d);
+
+		// Draw it and accept input
+
+	configure([ 60, 1 ]);
+	heapEditor setTextFocus();
+	open();
+	}
+
+destructor:	dynamic	() =
+	{
+	dWindow->hWalker = 0;
+	super destructor();
+	delete heapBuf;
+	}
+
+	};
+
+heapBuffer:	type	inherit treeBuffer {
+	blocks:		ref block_t;
+	lastBlock:	ref block_t;
+	current:	ref block_t;
+	currentLine:	int;
+	blockCount:	int;
+
+	public:
+
+constructor:	() =
+	{
+	x:	vaddr_t;
+	b:	ref block_t;
+
+	blocks = 0;
+	lastBlock = 0;
+	x = 0;
+	blockCount = 0;
+	do	{
+		b = new block_t;
+		x = TestArena heapBlock(x, b);
+		if	(x == ~0){
+			delete b;
+			break;
+			}
+		blockCount++;
+		b->prev = lastBlock;
+		b->next = 0;
+		if	(lastBlock)
+			lastBlock->next = b;
+		else
+			blocks = b;
+		lastBlock = b;
+		}
+		while	(x);
+	current = blocks;
+	currentLine = 0;
+	}
+
+refresh:	dynamic	(lin: int) boolean =
+	{
+	seek(lin);
+	return TRUE;
+	}
+
+seek:	dynamic	(line: int) int =
+	{
+	if	(line < 0)
+		return currentLine;
+	if	(currentLine > line){
+		while	(currentLine > line && current){
+			current = current->prev;
+			currentLine--;
+			}
+		if	(current == 0){
+			current = blocks;
+			currentLine = 0;
+			}
+		}
+	else if	(currentLine < line){
+		while	(currentLine < line && current){
+			current = current->next;
+			currentLine++;
+			}
+		if	(current == 0){
+			current = lastBlock;
+			if	(current)
+				currentLine = blockCount - 1;
+			else
+				currentLine = 0;
+			}
+		}
+	return currentLine;
+	}
+
+fetchLine:	dynamic	() [:] char =
+	{
+	if	(current == 0)
+		return "";
+	current draw(LineBuffer);
+	return LineBuffer;
+	}
+
+	};
+
+LineBuffer:	[800] char;
+

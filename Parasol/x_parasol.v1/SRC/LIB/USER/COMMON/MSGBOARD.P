@@ -1,0 +1,40 @@
+include	file;
+include	edserver;
+include	toolbus;
+
+catalog_t:	public	type	int;
+group_t:	public	type	int;
+msg_t:		public	type	int;
+
+messageClass_t:	public	type	char = {
+	MSG_WARN = 1,
+	MSG_ERROR,
+	MSG_FATAL
+	};
+
+messageBoard:	public	type	inherit visualTool {
+	public:
+
+clear:		gate	();		// erase all messages
+
+textonly:	gate	();		// retain text, but erase references
+
+nextMessage:	gate	();
+
+previousMessage:gate	();
+
+defineCatalog:	gate	(name: [:] char, file: [:] char) catalog_t;
+
+lookupCatalog:	gate	(name: [:] char) catalog_t;
+
+deleteCatalog:	gate	(catalog_t);
+
+newMessage:	gate	(catalog_t, group_t, messageClass_t,
+					id: [:] char,
+					file: [:] char, 
+					location: fileOffset,
+					parms: [:] char) msg_t;
+
+deleteMessage:	gate	(m: msg_t);
+
+	};

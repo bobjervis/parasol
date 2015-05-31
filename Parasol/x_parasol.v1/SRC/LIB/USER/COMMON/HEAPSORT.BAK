@@ -1,0 +1,98 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+/*
+	listbase	points to an array of object pointers.  The
+			compare routine controls what sort of sorting
+			is to be done.  The end of the object pointer
+			array is found by using the second argument.
+ */
+heapsort:	public	(listbase: ref pointer, listlength: int,
+					compare: ref (pointer, pointer) int) =
+	{
+	ax:		unsigned;
+	bx:		unsigned;
+	dx:		unsigned;
+	q:		unsigned;
+	si:		pointer;
+	di:		pointer;
+	save:		pointer;
+	v:		*pointer;
+	vn:		*pointer;
+	len:		unsigned;
+
+	if	(listlength < 2)
+		return;
+
+		/* Phase I of Sort */
+
+	dx = listlength >> 1;
+	v = listbase;
+	do	{
+		bx = ax = dx;
+		for	(;;){
+			bx <<= 1;
+			if	(bx > listlength)
+				break;
+			si = v[bx - 1];
+			di = v[bx];
+			if	(bx < listlength &&
+				 compare(si, di) < 0){
+				bx++;
+				si = di;
+				}
+			di = si;
+			si = v[ax - 1];
+			if	(compare(si, di) >= 0)
+				break;
+			v[bx - 1] = si;
+			v[ax - 1] = di;
+			ax = bx;
+			}
+		}
+		while	(--dx);
+
+		/* Phase II of Sort */
+
+	dx = listlength - 1;
+	do	{
+		bx = 0;
+		save = v[dx];
+		v[dx] = *v;
+		dx--;
+		for	(;;){
+			ax = bx;
+			bx <<= 1;
+			bx++;
+			if	(bx > dx)
+				break;
+			si = v[bx];
+			di = v[bx + 1];
+			if	(bx < dx &&
+				 compare(si, di) < 0){
+				si = di;
+				bx++;
+				}
+			v[ax] = si;
+			}
+		di = save;
+
+		while	(ax){
+			bx = ax;
+			bx--;
+			bx >>= 1;
+			si = v[bx];
+			if	(compare(si, di) >= 0)
+				break;
+			v[ax] = si;
+			ax = bx;
+			}
+		v[ax] = di;
+		}
+		while	(dx);
+	}
+

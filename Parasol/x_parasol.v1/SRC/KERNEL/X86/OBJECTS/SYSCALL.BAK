@@ -1,0 +1,565 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	alys;
+include	hardware;
+include	node;
+include	pc_hdw;
+include	error;
+include	arena, karena;
+include	process;
+include	animobj, object, jobs;
+include	message;
+include	kprintf;
+
+initSystemCalls:	public	() =
+	{
+		// Object management system calls
+
+	kernelCall(_GDT_PROBEOBJECT, &probeObjectGate, 0);
+	kernelCall(_GDT_PERMIT, &permitGate, 0);
+	kernelCall(_GDT_GETUSERID, &getUseridGate, 0);
+	kernelCall(_GDT_GETGROUPID, &getGroupidGate, 0);
+
+		// Local aliases system calls
+
+	kernelCall(_GDT_FORKARENA, &forkArenaGate, 0);
+	kernelCall(_GDT_DISCARDARENA, &discardArenaGate, 0);
+	kernelCall(_GDT_MAKELOCAL, &makeLocalGate, 0);
+	kernelCall(_GDT_MAKEANYLOCAL, &makeAnyLocalGate, 0);
+	kernelCall(_GDT_SETFORKACTION, &setForkActionGate, 0);
+
+		// Message handling system calls
+
+	kernelCall(_GDT_SEND_INT, &sendIntGate, 0);
+	kernelCall(_GDT_SEND_VOID, &sendVoidGate, 0);
+	kernelCall(_GDT_SEND_ANY, &sendAnyGate, 0);
+	kernelCall(_GDT_SIGNAL_SEND_INT, &signalSendIntGate, 0);
+	kernelCall(_GDT_SIGNAL_SEND_VOID, &signalSendVoidGate, 0);
+	kernelCall(_GDT_SIGNAL_SEND_ANY, &signalSendAnyGate, 0);
+	kernelCall(_GDT_RECEIVE, &receiveGate, 0);
+	kernelCall(_GDT_SIGNALINFO, &signalInfoGate, 0);
+	kernelCall(_GDT_READTEXT, &readTextGate, 0);
+	kernelCall(_GDT_DISCARDTEXT, &discardTextGate, 0);
+	kernelCall(_GDT_REJECT, &rejectGate, 0);
+	kernelCall(_GDT_REPLY, &replyGate, 0);
+	kernelCall(_GDT_REPLYPARTIAL, &replyPartialGate, 0);
+	kernelCall(_GDT_SENSEMESSAGES, &senseMessagesGate, 0);
+
+		// Memory management system calls
+
+	kernelCall(_GDT_GROW, &growGate, 0);
+
+		// Program startup & termination system calls
+
+	kernelCall(_GDT_CATCHSIGNAL, &catchSignalGate, 0);
+	kernelCall(_GDT_ALARM, &alarmGate, 0);
+	kernelCall(_GDT_EXIT, &exitGate, 0);
+	kernelCall(_GDT_ABORT, &abortGate, 0);
+	kernelCall(_GDT_RAISE, &raiseGate, 0);
+	kernelCall(_GDT_THREADLAUNCH, &threadLaunchGate, 0);
+	kernelCall(_GDT_KERNELBLOCK, &kernelBlockGate, 0);
+	kernelCall(_GDT_KERNELUNBLOCK, &kernelUnblockGate, 0);
+	kernelCall(_GDT_KERNELDOWN, &kernelDownGate, 0);
+	kernelCall(_GDT_KERNELUP, &kernelUpGate, 0);
+
+		// Job control system calls
+
+	kernelCall(_GDT_NEWJOB, &newJobGate, 0);
+	kernelCall(_GDT_MYJOB, &myJobGate, 0);
+	kernelCall(_GDT_MYHOST, &myHostGate, 0);
+	kernelCall(_GDT_DISOWN, &disownGate, 0);
+
+		// Semaphore system calls
+
+	kernelCall(_GDT_SEMAPHORE_CONSTRUCT, &semaphoreConstructGate, 0);
+	kernelCall(_GDT_SEMAPHORE_DOWN, &semaphoreDownGate, 0);
+	kernelCall(_GDT_SEMAPHORE_UP, &semaphoreUpGate, 0);
+	kernelCall(_GDT_SEMAPHORE_WAKEUP, &semaphoreWakeupGate, 0);
+	kernelCall(_GDT_SEMAPHORE_EMPTY, &semaphoreEmptyGate, 0);
+	kernelCall(_GDT_SEMAPHORE_DOWNNOWAIT, &semaphoreDownNowaitGate, 0);
+	kernelCall(_GDT_SEMAPHORE_CLOSE, &semaphoreCloseGate, 0);
+
+		// This is a timing test gate, not normally enabled
+
+	kernelCall(_GDT_TSS_BASE - 8, &testGate, 0);
+	}
+
+testGate:	gate	() =
+	{
+	}
+/*
+	This gate function will only be called from within user mode.  So,
+	do not check for kernel mode caller.  Such a caller is by definition
+	incorrect.
+ */
+receiveGate:	gate	() int =
+	{
+	hdr:	vaddr_t;
+	buf:	vaddr_t;
+	len:	int;
+
+	hdr = _EBX;
+	if	(ref gateFrame_t(_EBP) calledFromUserMode())
+		return CurProc->animates receive(hdr);
+	else			// kernel mode processes must abort here
+		messageTrap raise();
+	}
+
+rejectGate:	gate	() =
+	{
+	code:	int;
+	seq:	_Sequence;
+
+	seq = _BX;
+	code = _EDX;
+	m_reject(seq, code);
+	}
+
+readTextGate:	gate	() int =
+	{
+	offs:	vaddr_t;
+	buf:	vaddr_t;
+	len:	vaddr_t;
+	seq:	_Sequence;
+
+	seq = _BX;
+	offs = _EAX;
+	len = _ECX;
+	buf = _EDX;
+	return m_readText(seq, offs, buf, len);
+	}
+
+discardTextGate:	gate	() =
+	{
+	seq:	_Sequence;
+
+	seq = _BX;
+	m_discardText(seq);
+	}
+
+replyGate:	gate () =
+	{
+	len:	vaddr_t;
+	buf:	vaddr_t;
+	seq:	_Sequence;
+
+	seq = _BX;
+	len = _ECX;
+	buf = _EDX;
+	m_reply(seq, buf, len);
+	}
+
+replyPartialGate:	gate () =
+	{
+	len:	vaddr_t;
+	buf:	vaddr_t;
+	seq:	_Sequence;
+
+	seq = _BX;
+	len = _ECX;
+	buf = _EDX;
+	m_replyPartial(seq, buf, len);
+	}
+/*
+	This code filters the exit code so that only a normal exit can be
+	returned.  Thus, a parent can always tell that the exit is a normal
+	one.
+ */
+exitGate:	gate	() =
+	{
+	code:	unsigned;
+
+	code = _EBX;
+	CurProc exit(code & EX_LEVEL);
+	}
+
+abortGate:	gate	() =
+	{
+	code:	unsigned;
+
+	code = _EBX;
+//	printf("Abort(%x)\n", code);
+	CurProc abort(code & EX_LEVEL);
+	}
+
+raiseGate:	gate	() =
+	{
+	t:	task_t;
+	xp:	ref byte;
+	gf:	ref i386gateFrame;
+
+	t.eax = _EAX;
+	t.ebx = _EBX;
+	t.ecx = _ECX;
+	t.edx = _EDX;
+	t.esi = _ESI;
+	t.edi = _EDI;
+	t.ebp = * ref unsigned(_EBP);
+	t.gs = * ref unsigned[16](_EBP + 4);
+	t.fs = * ref unsigned[16](_EBP + 6);
+	t.es = * ref unsigned[16](_EBP + 8);
+	t.ds = * ref unsigned[16](_EBP + 10);
+	xp = CurProc kernelStackBottom();
+	gf = ref i386gateFrame(xp) - 1;
+	t.eip = gf->eip;
+	t.cs = gf->cs;
+	t.ss = gf->ss;
+	t.esp = gf->esp;
+	t.eflags = DEFAULT_FLAGS;
+	t.state = TS_EXCEPTION;
+	CurProc raise(&t);
+	}
+
+threadLaunchGate:	gate	() ref far External =
+	{
+	exObject:	vaddr_t;
+	stack:		vaddr_t;
+	func:		vaddr_t;
+	threadObj:	vaddr_t;
+
+	exObject = _EBX;
+	func = _EAX;
+	stack = _ECX;
+	threadObj = _EDX;
+	return threadLaunch(exObject, threadObj, stack, func);
+	}
+
+alarmGate:	gate	() =
+	{
+	alarm_(_EBX);
+	}
+
+growGate:	gate () boolean =
+	{
+	len:	vaddr_t;
+
+	len = _EBX;
+	return CurArena grow(len);
+	}
+
+sendIntGate:	gate () int =
+	{
+	o:		ref far External;
+	i, f:		int;
+	len:		unsigned;
+	buf:		unsigned;
+
+	o = ref far External(_ECX);
+	f = _EAX;
+	len = _EBX;
+	buf = _EDX;
+	i = 0;
+	len = _send(o, f, [ CurProc->where, buf, len ], 
+				[ &KernelArena, vaddr_t(&i), sizeof i ], 
+				SF_WAIT);
+	if	(len <= sizeof i)
+		return i;
+	else
+		return len;
+	}
+
+sendAnyGate:	gate () int =
+	{
+	o:		ref far External;
+	i, f:		int;
+	len:		vaddr_t;
+	buf:		vaddr_t;
+	rlen:		vaddr_t;
+	rbuf:		vaddr_t;
+
+	o = ref far External(_ECX);
+	f = _EAX;
+	len = _EBX;
+	buf = _EDX;
+	rlen = _ESI;
+	rbuf = _EDI;
+	return _send(o, f, [ CurProc->where, buf, len ], 
+				[ CurProc->where, rbuf, rlen ], 
+				SF_WAIT);
+	}
+
+sendVoidGate:	gate () int =
+	{
+	o:		ref far External;
+	f:		int;
+	len:		int;
+	buf:		int;
+
+	o = ref far External(_ECX);
+	f = _EAX;
+	len = _EBX;
+	buf = _EDX;
+	return _send(o, f, [ CurProc->where, buf, len ], NODATA, 0);
+	}
+
+signalSendIntGate:	gate () int =
+	{
+	o:		ref far External;
+	i, f:		int;
+	len:		unsigned;
+	buf:		unsigned;
+
+	o = ref far External(_ECX);
+	f = _EAX;
+	len = _EBX;
+	buf = _EDX;
+	i = 0;
+	len = _send(o, f, [ CurProc->where, buf, len ], 
+				[ &KernelArena, vaddr_t(&i), sizeof i ], 
+				SF_WAIT|SF_SIGNAL);
+	if	(len <= sizeof i)
+		return i;
+	else
+		return len;
+	}
+
+signalSendAnyGate:	gate () int =
+	{
+	o:		ref far External;
+	i, f:		int;
+	len:		vaddr_t;
+	buf:		vaddr_t;
+	rlen:		vaddr_t;
+	rbuf:		vaddr_t;
+
+	o = ref far External(_ECX);
+	f = _EAX;
+	len = _EBX;
+	buf = _EDX;
+	rlen = _ESI;
+	rbuf = _EDI;
+	return _send(o, f, [ CurProc->where, buf, len ], 
+				[ CurProc->where, rbuf, rlen ], 
+				SF_WAIT|SF_SIGNAL);
+	}
+
+signalSendVoidGate:	gate () int =
+	{
+	o:		ref far External;
+	f:		int;
+	len:		int;
+	buf:		int;
+
+	o = ref far External(_ECX);
+	f = _EAX;
+	len = _EBX;
+	buf = _EDX;
+	return _send(o, f, [ CurProc->where, buf, len ], NODATA, SF_SIGNAL);
+	}
+
+discardArenaGate:	gate	() int =
+	{
+	return CurProc->animates closeContext();
+	}
+
+forkArenaGate:	gate	() int =
+	{
+	try	{
+		CurProc->animates copyContext();
+		return SUCCESS;
+		}
+	except	{
+		return ERRNOMEMORY;
+		}
+	}
+
+catchSignalGate:	gate	() int =
+	{
+	func:	vaddr_t;
+
+	func = _EBX;
+	return CurArena catchSignal(func);
+	}
+
+signalInfoGate:		gate	() int =
+	{
+	hdr:	vaddr_t;
+	seq:	_Sequence;
+
+	hdr = _EDX;
+	seq = _BX;
+	return ref animatedObject(CurProc->animates) signalInfo(seq, hdr);
+	}
+
+probeObjectGate:		gate	() ref far External =
+	{
+	o:	ref far External;
+
+	o = ref far External(_EBX);
+	return probeObject_(o);
+	}
+
+newJobGate:	gate	() ref far job =
+	{
+	return newJob_();
+	}
+
+myJobGate:	gate	() ref far job =
+	{
+	return myJob_();
+	}
+
+myHostGate:	gate	() ref far job =
+	{
+	return myHost_();
+	}
+
+makeLocalGate:	gate	() int =
+	{
+	obj, slot:	ref far External;
+
+	obj = ref far External(_EBX);
+	slot = ref far External(_EDX);
+	return CurProc->animates->context makeLocal(obj, slot);
+	}
+
+makeAnyLocalGate:	gate	() ref far External =
+	{
+	obj:	ref far External;
+
+	obj = ref far External(_EBX);
+	return CurProc->animates->context makeAnyLocal(obj);
+	}
+
+setForkActionGate:	gate	() int =
+	{
+	slot:		ref far External;
+	action:		forkAction_t;
+
+	slot = ref far External(_EBX);
+	action = _DL;
+	return CurProc->animates->context setForkAction(slot, action);
+	}
+
+kernelBlockGate:	gate	() =
+	{
+	CurArena->latch = ARENA_LATCH_COUNT;
+	}
+
+kernelUnblockGate:	gate	() =
+	{
+	CurArena->latch = 0;
+	}
+
+kernelDownGate:	gate	() =
+	{
+	event:	vaddr_t;
+
+	event = _EBX;
+	CurArena eventDown(event);
+	}
+
+kernelUpGate:	gate	() int =
+	{
+	event:	vaddr_t;
+
+	event = _EBX;
+	return CurArena eventUp(event);
+	}
+
+senseMessagesGate:	gate	() int =
+	{
+	x:	ref far External;
+
+	x = ref far External(_EBX);
+	return objectSenseMessages(x);
+	}
+/*
+messageLoggingGate:	gate	() boolean =
+	{
+	x:	boolean;
+
+	x = LogSends;
+	LogSends = _BL;
+	return x;
+	}
+ */
+disownGate:	gate	() int =
+	{
+	x:	ref far External;
+
+	x = ref far External(_EBX);
+	return disown_(x);
+	}
+
+semaphoreConstructGate:	gate	() int =
+	{
+	a:	int;
+
+	a = _EBX;
+	return semaphoreConstruct(a);
+	}
+
+semaphoreDownGate:	gate	() int =
+	{
+	a:	int;
+
+	a = _EBX;
+	semaphoreDown(a);
+	}
+
+semaphoreUpGate:	gate	() =
+	{
+	a:	int;
+
+	a = _EBX;
+	semaphoreUp(a);
+	}
+
+semaphoreWakeupGate:	gate	() =
+	{
+	a:	int;
+
+	a = _EBX;
+	semaphoreWakeup(a);
+	}
+
+semaphoreDownNowaitGate:	gate	() boolean =
+	{
+	a:	int;
+
+	a = _EBX;
+	return semaphoreDownNowait(a);
+	}
+
+semaphoreEmptyGate:	gate	() =
+	{
+	a:	int;
+
+	a = _EBX;
+	semaphoreEmpty(a);
+	}
+
+semaphoreCloseGate:	gate	() =
+	{
+	a:	int;
+
+	a = _EBX;
+	semaphoreClose(a);
+	}
+
+permitGate:	gate	() =
+	{
+	j, u, g, w:	AccessRights;
+
+	j = _AX;
+	u = _BX;
+	g = _CX;
+	w = _DX;
+	permit_(j, u, g, w);
+	}
+
+getUseridGate:	gate	() userId =
+	{
+	return CurProc->animates->user;
+	}
+
+getGroupidGate:	gate	() userId =
+	{
+	return CurProc->animates->group;
+	}

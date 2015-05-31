@@ -1,0 +1,2200 @@
+include	edserver, msgboard;
+include	string, format;
+include	file;
+include	error;
+include	filesys;
+include	treeview, editor;
+include	console, window;
+include	alys;
+include	attrib;
+
+stopOnFirstError:	boolean = TRUE;		// stop on error option
+stopOption:		ref menuToggle;
+
+main:	entry	() =
+	{
+	arg:	[:] char;
+	i:	int;
+	x:	unsigned;
+
+	if	(|commandLine.arguments > 1)
+		help();
+	else if (|commandLine.arguments == 1)
+		arg = commandLine.arguments[0];
+	else
+		arg = "-";
+	pathLookup = new PathList[];
+	messageBoardVar = ref far messageBoard(FileSystem 
+				attach("/service/errorBrowser",
+					":desktop.msgboard.messageBoard"));
+	if	(messageBoardVar == 0){
+		printf("No error browser connection\n");
+		exit(EX_FAIL);
+		}
+	mainExternal(&viewer);
+//	ref far channel(0) close();
+//	ref far channel(1) close();
+//	ref far channel(2) close();
+//	newJob();
+
+	startFileName = stringDup("");
+
+	display = new Display[ ];
+	display open();
+	if	(stringCompare(arg, "-") != 0)
+		display load(arg);
+	}
+
+help:	() =
+	{
+	printf(	"BUILDER Version 0.02\n"
+		"Use is: builder [ path ]\n");
+	exit(EX_FAIL);
+	}
+
+messageBoardVar:	ref far messageBoard;
+
+lastChild:	ref far External;
+lastStatus:	unsigned;
+
+viewer:	inherit	inputHandler {
+	public:
+
+childExit:	gate	(exitCode: unsigned) =
+	{
+	lastChild = messageHeader->sender;
+	lastStatus = exitCode;
+	}
+
+	};
+
+display:	ref Display;
+
+Display:	type	inherit	applicationShell	{
+	public:
+
+	editor:	ref treeEditor;
+
+constructor:	() =
+	{
+	m:			ref menubar;
+	opt, build, file, targ:	ref popupMenu;
+
+	super constructor("Builder");
+	m = new menubar[];
+	setMenu(m);
+	useFooter();
+
+	file = new popupMenu[ m ];
+	file button("New",		'n',	[ self, &newProject ]);
+	file button("Open...",		'o',	[ self, &openProject ]);
+	file button("Save         F2",	's',	[ self, &saveProject ]);
+	file button("Save As...",	'a',	[ self, &saveAsProject ]);
+	file button("Exit             Alt-X", 'x', [ self, &closeApplication ]);
+
+	build = new popupMenu[ m ];
+	build button("Build Current      F9",	'b', [ self, &buildCurrent ]);
+	build button("Build All      Alt-F9",	'a', [ self, &buildAll ]);
+
+	targ = new popupMenu[ m ];
+	targ button("New...          F3",	'n', [ self, &newTarget ]);
+	targ button("Options...  Ctrl-O",	'o', [ self, &optionsCurrent ]);
+
+	opt = new popupMenu[ m ];
+	stopOption = opt toggle("Stop on error", 's', [ self, &stopOnError ]);
+
+	stopOption setValue(stopOnFirstError, FALSE);
+
+	m pulldown("File", 	'f',	file);
+	m pulldown("Build",	'b',	build);
+	m pulldown("Target",	't',	targ);
+	m pulldown("Options",	'o',	opt);
+
+	projectBuffer = new ProjectBuffer[ ];
+	editor = new treeEditor[ projectBuffer ];
+	anchor(editor);
+
+	getInputFrom(&viewer);
+	configure(projectBuffer->preferredSize);
+	editor setTextFocus();
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	switch	(k){
+	case	CTRL_BREAK:	myJob() broadcastAttention();	break;
+	case	F2:		saveProject();			break;
+	case	F3:		newTarget();			break;
+	case	F9:		buildCurrent();			break;
+	case	ALT_F9:		buildAll();			break;
+	case	CTRL_O:		optionsCurrent();		break;
+
+
+	default:
+		return super processKeystroke(k);
+		}
+	return TRUE;
+	}
+
+stopOnError:	(b: boolean) =
+	{
+	stopOnFirstError = b;
+	}
+
+saveProject:	() =
+	{
+	if	(projectBuffer isUnnamed())
+		new SaveAsProject[ ];
+	else
+		projectBuffer save(box.size);
+	}
+
+saveAs:	(f: [:] char) =
+	{
+	projectBuffer saveAs(f, box.size);
+	}
+
+saveAsProject:	() =
+	{
+	new SaveAsProject[ ];
+	}
+
+openProject:	() =
+	{
+	new OpenProject[ ];
+	}
+
+newProject:	() =
+	{
+	if	(projectBuffer needsSave())
+		new NewProjectConfirm[ self, "Save current project?" ];
+	else	{
+		projectBuffer newProject();
+		redraw();
+		}
+	}
+
+load:	(f: [:] char) =
+	{
+	projectBuffer load(f);
+	resize(projectBuffer->preferredSize);
+	}
+
+newTarget:	() =
+	{
+	new NewTarget[ ];
+	}
+
+editFile:	() =
+	{
+	new StartForm[ self, startFileName ];
+	}
+
+optionsCurrent:	() =
+	{
+	projectBuffer optionsCurrent();
+	}
+
+buildCurrent:	() =
+	{
+	editor launch();
+	}
+
+buildAll:	() =
+	{
+	editor beginFile();
+	editor launch();
+	}
+
+};
+
+launchTrap:	Trap;
+
+launchBuffer:	[1024] char;
+
+GroupTarget:	type	inherit Target	{
+	public:
+
+save:	dynamic	(fd: ref stream) =
+	{
+	saveBody(fd, 'g');
+	saveChildren(fd);
+	}
+
+options:	dynamic	() =
+	{
+	new GroupOptions[ self ];
+	}
+
+};
+
+RunfileTarget:	type	inherit	Target	{
+
+	public:
+
+constructor:	(par: ref Target, a_path: [:] char, persist: boolean) =
+	{
+	super constructor(par, a_path, persist, ": Run");
+	}
+
+build:	dynamic	(directBuild: boolean, dependenciesFired: boolean) boolean =
+	{
+	cmd:	[:] char;
+	p:	ref far External;
+	se:	stringEmitter = [ launchBuffer ];
+	par:	ref Target;
+	s:	[:] char;
+
+		// Find all the relevant attributes and stuff them in priority
+		// order into the command line
+
+	for	(par = self; par; par = par->parent){
+		s = par attribute("source-path");
+		if	(|s)
+			se printf("-b%S\0", s);
+		s = par attribute("symbol-file");
+		if	(|s)
+			se write(s);
+		s = par attribute("link-options");
+		if	(|s)
+			se write(s);
+		}
+	drawCommandArguments(&se);
+	se printf("-r%S\0", path);
+	drawCommandNames(&se);
+	return execBuild("ipc", se result(), path);
+	}
+
+save:	dynamic	(fd: ref stream) =
+	{
+	saveBody(fd, 'r');
+	saveChildren(fd);
+	}
+
+drawCommandArgument:	dynamic	(se: ref stringEmitter) =
+	{
+	se printf("-y%S\0", path);
+	}
+
+options:	dynamic	() =
+	{
+	new RunfileOptions[ self ];
+	}
+
+	};
+
+LibraryTarget:	type	inherit	Target	{
+	public:
+
+constructor:	(par: ref Target, a_path: [:] char, persist: boolean) =
+	{
+	super constructor(par, a_path, persist, ": Library");
+	}
+
+build:	dynamic	(directBuild: boolean, dependenciesFired: boolean) boolean =
+	{
+	args:	[:] char;
+	se:	stringEmitter = [ launchBuffer ];
+	par:	ref Target;
+	s:	[:] char;
+
+		// Find all the relevant attributes and stuff them in priority
+		// order into the command line
+
+	for	(par = self; par; par = par->parent){
+		s = par attribute("source-path");
+		if	(|s)
+			se printf("-b%S\0", s);
+		}
+	drawCommandArguments(&se);
+	se printf("-l%S\0", path);			// declare a library
+	drawCommandNames(&se);
+	return execBuild("ipc", se result(), path);
+	}
+
+save:	dynamic	(fd: ref stream) =
+	{
+	saveBody(fd, 'L');
+	saveChildren(fd);
+	}
+
+drawCommandArgument:	dynamic	(se: ref stringEmitter) =
+	{
+	se printf("-i%S\0", path);
+	}
+
+options:	dynamic	() =
+	{
+	new LibraryOptions[ self ];
+	}
+
+	};
+
+DriverTarget:	type	inherit	Target	{
+	public:
+
+constructor:	(par: ref Target, a_path: [:] char, persist: boolean) =
+	{
+	super constructor(par, a_path, persist, ": Driver");
+	}
+
+save:	dynamic	(fd: ref stream) =
+	{
+	saveBody(fd, 'd');
+	saveChildren(fd);
+	}
+
+build:	dynamic	(directBuild: boolean, dependenciesFired: boolean) boolean =
+	{
+	args:	[:] char;
+	se:	stringEmitter = [ launchBuffer ];
+	par:	ref Target;
+	s:	[:] char;
+
+		// Find all the relevant attributes and stuff them in priority
+		// order into the command line
+
+	for	(par = self; par; par = par->parent){
+		s = par attribute("source-path");
+		if	(|s)
+			se printf("-b%S\0", s);
+		}
+	for	(par = self; par; par = par->parent){
+		s = par attribute("symbol-file-name");
+		if	(|s){
+			se printf("-y%S\0", s);
+			break;
+			}
+		}
+	drawCommandArguments(&se);
+	se printf("-d%S\0", path);			// declare a driver
+	drawCommandNames(&se);
+	return execBuild("ipc", se result(), path);
+	}
+
+drawCommandArgument:	dynamic	(se: ref stringEmitter) =
+	{
+	se printf("-y%S\0", path);
+	}
+
+options:	dynamic	() =
+	{
+	new DriverOptions[ self ];
+	}
+
+	};
+
+SourceTarget:	type	inherit	Target	{
+	public:
+
+constructor:	(par: ref Target, a_path: [:] char, persist: boolean) =
+	{
+	super constructor(par, a_path, persist, ": Source");
+	}
+
+save:	dynamic	(fd: ref stream) =
+	{
+	saveBody(fd, 's');
+	saveChildren(fd);
+	}
+
+drawCommandName:	dynamic	(se: ref stringEmitter) =
+	{
+	se printf("%S\0", path);
+	}
+
+	};
+
+BuildDirectoryTarget:	type	inherit	Target	{
+	public:
+
+constructor:	(par: ref Target, a_path: [:] char, persist: boolean) =
+	{
+	super constructor(par, a_path, persist, ": Build directory");
+	}
+
+save:	dynamic	(fd: ref stream) =
+	{
+	saveBody(fd, 'b');
+	saveChildren(fd);
+	}
+
+drawCommandArgument:	dynamic	(se: ref stringEmitter) =
+	{
+	se printf("-B%S\0", path);
+	}
+
+	};
+
+SourceDirectoryTarget:	type	inherit	Target	{
+	public:
+
+constructor:	(par: ref Target, a_path: [:] char, persist: boolean) =
+	{
+	super constructor(par, a_path, persist, ": Source directory");
+	}
+
+save:	dynamic	(fd: ref stream) =
+	{
+	saveBody(fd, 'B');
+	saveChildren(fd);
+	}
+
+drawCommandArgument:	dynamic	(se: ref stringEmitter) =
+	{
+	se printf("-b%S\0", path);
+	}
+
+	};
+
+ParasolSourceTarget:	type	inherit	Target	{
+	public:
+
+constructor:	(par: ref Target, a_path: [:] char, persist: boolean) =
+	{
+	super constructor(par, a_path, persist, ": Parasol source");
+	}
+
+save:	dynamic	(fd: ref stream) =
+	{
+	saveBody(fd, 'p');
+	saveChildren(fd);
+	}
+
+build:	dynamic	(directBuild: boolean, dependenciesFired: boolean) boolean =
+	{
+	args:	[:] char;
+
+	if	(!directBuild)
+		return FALSE;
+
+	se:	stringEmitter = [ launchBuffer ];
+
+	drawCommandArguments(&se);
+	se printf("-C%S\0", path);
+	drawCommandNames(&se);
+	return execBuild("ipc", se result(), path);
+	}
+
+drawCommandName:	dynamic	(se: ref stringEmitter) =
+	{
+	se printf("%S\0", path);
+	}
+
+	};
+
+InterfaceTarget:	type	inherit	Target	{
+	public:
+
+constructor:	(par: ref Target, a_path: [:] char, persist: boolean) =
+	{
+	super constructor(par, a_path, persist, ": Parasol Interface");
+	}
+
+save:	dynamic	(fd: ref stream) =
+	{
+	saveBody(fd, 'i');
+	saveChildren(fd);
+	}
+
+build:	dynamic	(directBuild: boolean, dependenciesFired: boolean) boolean =
+	{
+	args:	[:] char;
+	se:	stringEmitter = [ launchBuffer ];
+
+	drawCommandArguments(&se);
+	se printf("-I\0");			// compile interface only
+	se printf("%S", path);
+	drawCommandNames(&se);
+	return execBuild("ipc", se result(), path);
+	}
+
+	};
+
+CSourceTarget:	type	inherit	Target	{
+	public:
+
+constructor:	(par: ref Target, a_path: [:] char, persist: boolean) =
+	{
+	super constructor(par, a_path, persist, ": C source");
+	}
+
+save:	dynamic	(fd: ref stream) =
+	{
+	saveBody(fd, 'c');
+	saveChildren(fd);
+	}
+
+build:	dynamic	(directBuild: boolean, dependenciesFired: boolean) boolean =
+	{
+	args:	[:] char;
+
+	if	(!directBuild)
+		return FALSE;
+
+	se:	stringEmitter = [ launchBuffer ];
+
+	drawCommandArguments(&se);
+	se printf("-c\0");			// compile only, no link
+	se printf("%S", path);
+	drawCommandNames(&se);
+	return execBuild("cc", se result(), path);
+	}
+
+drawCommandArgument:	dynamic	(se: ref stringEmitter) =
+	{
+	}
+
+drawCommandName:	dynamic (se: ref stringEmitter) =
+	{
+	}
+
+	};
+
+CHeaderTarget:	type	inherit	Target	{
+	public:
+
+constructor:	(par: ref Target, a_path: [:] char, persist: boolean) =
+	{
+	super constructor(par, a_path, persist, ": C header directory");
+	}
+
+save:	dynamic	(fd: ref stream) =
+	{
+	saveBody(fd, 'h');
+	saveChildren(fd);
+	}
+
+drawCommandArgument:	dynamic	(se: ref stringEmitter) =
+	{
+	se printf("-I%S\0", path);
+	}
+
+	};
+
+UnitTarget:	type	inherit	Target	{
+	public:
+
+constructor:	(par: ref Target, a_path: [:] char, persist: boolean) =
+	{
+	super constructor(par, a_path, persist, ": Unit File");
+	}
+
+save:	dynamic	(fd: ref stream) =
+	{
+	saveBody(fd, 'u');
+	saveChildren(fd);
+	}
+
+build:	dynamic	(directBuild: boolean, dependenciesFired: boolean) boolean =
+	{
+	args:	[:] char;
+	se:	stringEmitter = [ launchBuffer ];
+	drawCommandArguments(&se);
+	se printf("-u%S\0", path);
+	drawCommandNames(&se);
+	return execBuild("ipc", se result(), path);
+	}
+
+drawCommandName:	dynamic (se: ref stringEmitter) =
+	{
+	se printf("%S\0", path);
+	}
+
+	};
+
+U_pTarget:	type	inherit	Target	{
+	public:
+
+constructor:	(par: ref Target, a_path: [:] char, persist: boolean) =
+	{
+	super constructor(par, a_path, persist, ": .u <- .p");
+	}
+
+save:	dynamic	(fd: ref stream) =
+	{
+	saveBody(fd, 'P');
+	saveChildren(fd);
+	}
+
+build:	dynamic	(directBuild: boolean, dependenciesFired: boolean) boolean =
+	{
+	args:	[:] char;
+	se:	stringEmitter = [ launchBuffer ];
+
+	drawCommandArguments(&se);
+	se printf("-u%S\0", path);
+	drawCommandNames(&se);
+	return execBuild("ipc", se result(), path);
+	}
+
+drawCommandName:	dynamic (se: ref stringEmitter) =
+	{
+	se printf("%S\0", path);
+	}
+
+	};
+
+U_cTarget:	type	inherit	Target	{
+	public:
+
+constructor:	(par: ref Target, a_path: [:] char, persist: boolean) =
+	{
+	super constructor(par, a_path, persist, ": .u <- .c");
+	}
+
+save:	dynamic	(fd: ref stream) =
+	{
+	saveBody(fd, 'C');
+	saveChildren(fd);
+	}
+
+build:	dynamic	(directBuild: boolean, dependenciesFired: boolean) boolean =
+	{
+	args:	[:] char;
+	se:	stringEmitter = [ launchBuffer ];
+
+	drawCommandArguments(&se);
+	se printf("-u%S\0", path);
+	drawCommandNames(&se);
+	return execBuild("cc", se result(), path);
+	}
+
+drawCommandName:	dynamic (se: ref stringEmitter) =
+	{
+	se printf("%S\0", path);
+	}
+
+	};
+
+C_pTarget:	type	inherit	Target	{
+	public:
+
+constructor:	(par: ref Target, a_path: [:] char, persist: boolean) =
+	{
+	super constructor(par, a_path, persist, ": .c <- .p");
+	}
+
+save:	dynamic	(fd: ref stream) =
+	{
+	saveBody(fd, 'X');
+	saveChildren(fd);
+	}
+
+build:	dynamic	(directBuild: boolean, dependenciesFired: boolean) boolean =
+	{
+	args:	[:] char;
+	se:	stringEmitter = [ launchBuffer ];
+
+	drawCommandArguments(&se);
+	se printf("%S\0", path);
+	drawCommandNames(&se);
+	return execBuild("ptoc", se result(), path);
+	}
+
+drawCommandName:	dynamic (se: ref stringEmitter) =
+	{
+	se printf("%S\0", path);
+	}
+
+	};
+
+Target:	type	{
+	child:		ref Target;
+	nextSibling:	ref Target;
+	prevSibling:	ref Target;
+	building:	boolean;
+	atts:		ref Attributes;
+
+	visible:
+
+	parent:		ref Target;
+
+	public:
+
+	isOpen:		boolean;
+	path:		[:] char;
+	tag:		[:] char;
+	extension:	[:] char;
+	isPersistent:	boolean;
+
+constructor:	(par: ref Target, a_path: [:] char, persist: boolean, 
+							ext: [:] char) =
+	{
+	cp:	[:] char;
+
+	isPersistent = persist;
+	path = stringDup(a_path);
+	if	(|path)
+		cp = path;
+	else
+		cp = "<project>";
+	tag = stringCat(cp, ext);
+	extension = ext;
+	parent = par;
+	child = 0;
+	isOpen = TRUE;
+	building = FALSE;
+	atts = new Attributes[];
+	if	(par && par->child){
+		x:	ref Target;
+		lastx:	ref Target;
+
+		lastx = 0;
+		for	(x = par->child; x; lastx = x, x = x->nextSibling)
+			if	(compare(x) < 0)
+				break;
+		if	(x){
+			nextSibling = x;
+			prevSibling = x->prevSibling;
+			if	(x->prevSibling)
+				x->prevSibling->nextSibling = self;
+			else
+				par->child = self;
+			x->prevSibling = self;
+			}
+		else	{
+			nextSibling = 0;
+			prevSibling = lastx;
+			lastx->nextSibling = self;
+			}
+		}
+	else	{
+		if	(par)
+			par->child = self;
+		nextSibling = 0;
+		prevSibling = 0;
+		}
+	}
+
+attribute:	(nm: [:] char) [:] char =
+	{
+	return atts get(nm);
+	}
+
+set:		(nm: [:] char, value: [:] char) =
+	{
+	atts set(nm, value);
+	}
+
+save:	dynamic	(fd: ref stream) =
+	{
+	}
+
+saveBody:	(fd: ref stream, prefix: char) =
+	{
+	e:	ref AttributeEntry;
+
+	fd printf("%c%d%d%S\n", prefix, isOpen, isPersistent, path);
+	for	(e = atts->entries; e; e = e->next)
+		fd printf("%%%S=%S\n", e->name, e->value);
+	}
+
+saveChildren:	(fd: ref stream) =
+	{
+	x:	ref Target;
+
+	for	(x = child; x; x = x->nextSibling)
+		x save(fd);
+	fd printf(".\n");
+	}
+
+isBuilding:	() boolean =
+	{
+	return building;
+	}
+
+destructor:	dynamic	() =
+	{
+
+		// Unlink from the parent
+
+	if	(nextSibling)
+		nextSibling->prevSibling = prevSibling;
+	if	(prevSibling)
+		prevSibling->nextSibling = nextSibling;
+	else if	(parent)
+		parent->child = nextSibling;
+
+		// Unlink the children
+
+	while	(child)
+		delete child;
+	delete path;
+	delete tag;
+	}
+
+launch:	dynamic	() boolean =
+	{
+	x:	ref Target;
+	b, b2:	boolean;
+
+	building = TRUE;
+	display->editor redraw();
+	try	{
+		b = FALSE;
+		for	(x = child; x; x = x->nextSibling)
+			if	(x launchIndirect())
+				b = TRUE;
+		b2 = build(TRUE, b);
+		b = b2;
+		building = FALSE;
+		display->editor redraw();
+		}
+	except	{
+		building = FALSE;
+		continue;
+		}
+	return b;
+	}
+
+options:	dynamic	() =
+	{
+	display beep();
+	}
+
+launchIndirect:	dynamic	() boolean =
+	{
+	x:	ref Target;
+	b, b2:	boolean;
+
+	building = TRUE;
+	display->editor redraw();
+	try	{
+		b = FALSE;
+		for	(x = child; x; x = x->nextSibling)
+			if	(x launchIndirect())
+				b = TRUE;
+		b2 = build(FALSE, b);
+		b = b2;
+		building = FALSE;
+		display->editor redraw();
+		}
+	except	{
+		building = FALSE;
+		continue;
+		}
+	return b;
+	}
+
+build:	dynamic	(directBuild: boolean, dependenciesFired: boolean) boolean =
+	{
+	return FALSE;
+	}
+
+open:	() =
+	{
+	d:	ref Target;
+
+	isOpen = TRUE;
+	for	(d = child; d; d = d->nextSibling){
+		if	(d->child == 0)
+			d->isOpen = TRUE;
+		}
+	}
+
+close:	() int =
+	{
+	if	(isOpen && child){
+		isOpen = FALSE;
+		return TRUE;
+		}
+	else
+		return FALSE;
+	}
+
+compare:	(x: ref Target) int =
+	{
+	return stringCompare(tag, x->tag);
+	}
+
+draw:	(se: ref stringEmitter) =
+	{
+	drawParent(se, TRUE);
+	se write(tag);
+	if	(!isOpen)
+		se write(" ...");
+	}
+
+drawParent:	(se: ref stringEmitter, drawHoriz: boolean) =
+	{
+	if	(parent == 0)
+		return;
+	parent drawParent(se, FALSE);
+	if	(drawHoriz){
+		if	(nextSibling)
+			se putc(0xC3);
+		else
+			se putc(0xC0);
+		se putc(0xC4);
+		}
+	else	{
+		if	(nextSibling)
+			se putc(0xB3);
+		else
+			se putc(' ');
+		se putc(' ');
+		}
+	se putc(' ');
+	}
+
+drawCommandArguments:	(se: ref stringEmitter) =
+	{
+	d:	ref Target;
+
+	for	(d = child; d; d = d->nextSibling)
+		d drawCommandArgument(se);
+	}
+
+drawCommandNames:	(se: ref stringEmitter) =
+	{
+	d:	ref Target;
+
+	for	(d = child; d; d = d->nextSibling)
+		d drawCommandName(se);
+	}
+
+drawCommandArgument:	dynamic	(se: ref stringEmitter) =
+	{
+	}
+
+drawCommandName:	dynamic (se: ref stringEmitter) =
+	{
+	}
+
+level:	() int =
+	{
+	d:	ref Target;
+	i:	int;
+
+	for	(i = 0, d = parent; d; d = d->parent, i++)
+		;
+	return i;
+	}
+
+totalDescendants:	() int =
+	{
+	d:	ref Target;
+	i:	int;
+
+	i = 1;						// count self
+	if	(isOpen){
+		for	(d = child; d; d = d->nextSibling)
+			i += d totalDescendants();	// count children
+		}
+	return i;
+	}
+/*
+	This function locates the nth Target.  The resulting Target
+	is returned in *dp.  If the n value is too high, the return value is
+	n minus the number of directories found.  Note that n starts counting
+	at 1.  Note that *dp is always the last Target found, even if the
+	count was too high.
+ */
+seek:	(n: int, dp: ref ref Target) int =
+	{
+	*dp = self;
+	if	(n <= 1)			// a hit
+		return 0;
+
+	d:	ref Target;
+
+	n--;					// count self
+	if	(isOpen){
+		for	(d = child; d; d = d->nextSibling){
+			n = d seek(n, dp);		// count children
+			if	(n == 0)
+				return 0;		// there was a hit
+			}
+		}
+	return n;
+	}
+
+seekParent:	() ref Target =
+	{
+	if	(parent)
+		return parent;
+	else
+		return self;
+	}
+
+seekChild:	(srch: [:] char) ref Target =
+	{
+	d:	ref Target;
+
+	if	(isOpen){
+		for	(d = child; d; d = d->nextSibling)
+			if	(stringCompare(d->tag, srch) == 0)
+				return d;
+		}
+	return self;
+	}
+
+indexOf:	(loc: ref Target, i: int) int =
+	{
+	if	(loc == self)
+		return i;
+	d:	ref Target;
+
+	if	(isOpen){
+		for	(d = child; d; d = d->nextSibling){
+			i = d indexOf(loc, i + 1);
+			if	(i >= 0)
+				return i;
+			i = -i;
+			}
+		}
+	return -i;
+	}
+
+	};
+
+lineBuffer:	[800] char;
+
+projectBuffer:	ref ProjectBuffer;
+
+ProjectBuffer:	type	inherit	treeBuffer	{
+	projectFile:	[:] char;
+	root:		ref Target;
+	loc:		ref Target;
+	ln:		int;
+	max:		int;
+	changed:	boolean;
+
+	visible:
+
+	preferredSize:	point;
+
+	public:
+
+constructor:	() =
+	{
+	projectFile = stringDup("");
+	root = 0;
+	newProject();
+	root open();
+	}
+
+isUnnamed:	() boolean =
+	{
+	return |projectFile == 0;
+	}
+
+isMarked:	dynamic	() boolean =
+	{
+	if	(loc && loc isBuilding())
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+needsSave:	() boolean =
+	{
+	return changed;
+	}
+
+change:	() =
+	{
+	changed = TRUE;
+	}
+
+load:	(pfile: [:] char) =
+	{
+	r:		ref Target;
+	fd:		stream;
+	i:		int;
+	buf, cp, line:	[:] char;
+	p:		point;
+	ext:		[:] char;
+	path:		[MAXPATH] char;
+
+		// Default extension is .prj
+
+	ext = getExtension(pfile);
+	if	(|ext == 0)
+		pfile = makePath(path, "", pfile, ".prj");
+	i = fd open(pfile, AR_READ);
+	if	(i){
+		display postFooter("Cannot open '%S': %S", pfile, 
+							cmdError(i));
+		return;
+		}
+	i = fd seek(0, SEEK_END);
+	fd seek(0, SEEK_ABS);
+	cp = new [i] char;
+	buf = cp;
+	|cp = fd read(cp);
+	fd close();
+	if	(cp[0] == '<'){
+		i = stringScan(cp, '\n');
+		if	(i > 0){
+			line = cp[:i];
+			cp = cp[i + 1:];
+			}
+		else	{
+			cp = "";
+			line = cp;
+			}
+		if	(i > 1){
+			stopOnFirstError = line[1] - '0';
+			stopOption setValue(stopOnFirstError, FALSE);
+			}
+		}
+	if	(cp[0] == '>'){
+		xs, ys:	[:] char;
+
+		i = stringScan(cp, '\n');
+		if	(i > 0){
+			line = cp[:i];
+			cp = cp[i + 1:];
+			}
+		else	{
+			cp = "";
+			line = cp;
+			}
+		i = stringScan(line, ',');
+		if	(i < 0){
+			parseError(pfile);
+			return;
+			}
+		xs = line[1:i];
+		ys = line[i + 1:];
+		sc: stringConverter = [ xs ];
+		p.x = sc encodeSigned();
+		if	(!sc.success){
+			parseError(pfile);
+			return;
+			}
+		sc = [ ys ];
+		p.y = sc encodeSigned();
+		if	(!sc.success){
+			parseError(pfile);
+			return;
+			}
+		}
+	else
+		p = [ 40, 30 ];
+	r = parseProjectFile(cp);
+	if	(r == 0){
+		parseError(pfile);
+		return;
+		}
+	delete buf;
+	preferredSize = p;
+	delete projectFile;
+	projectFile = stringDup(pfile);
+	if	(root)
+		delete root;
+	root = r;
+	max = root totalDescendants();
+	loc = root;
+	ln = 0;
+	changed = FALSE;
+
+//	fpath:	[:] char;
+
+//	fpath = getDirectory(projectFile);
+//	if	(|fpath)
+//		FileSystem changeDirectory(fpath);
+//	projectFile = stripDirectory(projectFile);
+	}
+
+newProject:	() =
+	{
+	delete projectFile;
+	if	(root)
+		delete root;
+	preferredSize = [ 40, 30 ];
+	projectFile = stringDup("");
+	root = new GroupTarget[ 0, "", TRUE, "" ];
+	max = root totalDescendants();
+	loc = root;
+	ln = 0;
+	changed = FALSE;
+	}
+
+parseError:	(pfile: [:] char) =
+	{
+	display postFooter("Parse error in '%S'", pfile);
+	}
+
+optionsCurrent:	() =
+	{
+	if	(loc && loc->path)
+		loc options();
+	}
+
+save:	(sz: point) =
+	{
+	fd:	stream;
+	i:	int;
+
+	i = fd create(projectFile, 0);
+	if	(i != 0){
+		display postFooter("Could not create '%S': %S", projectFile,
+						cmdError(i));
+		return;
+		}
+	fd printf("<%d\n>%d,%d\n", stopOnFirstError, sz.x, sz.y);
+	root save(&fd);
+	fd close();
+	display postFooter("Saved '%S'", projectFile);
+	}
+
+saveAs:	(pfile: [:] char, sz: point) =
+	{
+	delete projectFile;
+	projectFile = stringDup(pfile);
+	save(sz);
+	}
+
+getProjectFile:	() [:] char =
+	{
+	return projectFile;
+	}
+
+seek:	dynamic	(line: int) int =
+	{
+	x:	int;
+
+	if	(line == -1)
+		return ln;
+	if	(ln == line)
+		return ln;
+	x = root seek(line + 1, &loc);
+	ln = line - x;
+	return ln;
+	}
+
+seekParent:	dynamic	(line: int) int =
+	{
+	x:	int;
+
+	if	(ln != line){
+		x = root seek(line + 1, &loc);
+		ln = line - x;
+		}
+	loc = loc seekParent();
+	ln = root indexOf(loc, 0);
+	return ln;
+	}
+
+seekChild:	dynamic	(line: int, tag: [:] char) int =
+	{
+	x:	int;
+
+	if	(ln != line){
+		x = root seek(line + 1, &loc);
+		ln = line - x;
+		}
+	loc = loc seekChild(tag);
+	ln = root indexOf(loc, 0);
+	return ln;
+	}
+
+fetchLine:	dynamic	() [:] char =
+	{
+
+	if	(loc == 0)
+		return "";
+
+	se:	stringEmitter = [ lineBuffer ];
+
+	loc draw(&se);
+	return se result();
+	}
+
+tagIndent:	dynamic	() int =
+	{
+	return loc level() * 3;
+	}
+
+tagLength:	dynamic	() int =
+	{
+	return |loc->tag;
+	}
+
+open:		dynamic	(x: ref char) int =
+	{
+	b:	boolean;
+
+	if	(loc && loc->path){
+		if	(loc->isOpen)
+			return launch(x);
+		else	{
+			loc open();
+			max = root totalDescendants();
+			return TRUE;
+			}
+		}
+	return FALSE;
+	}
+
+launch:		dynamic	(ref char) int =
+	{
+	b:	boolean;
+
+	if	(loc && loc->path){
+		messageBoardVar clear();
+		try	{
+			b = loc launch();
+			display postFooter("Build complete");
+			}
+		except	{
+			display->editor redraw();
+			b = TRUE;
+			}
+		return b;
+		}
+	return FALSE;
+	}
+
+deleteFiles:	dynamic	(lin: int) =
+	{
+	if	(lin){
+		t:	ref Target;
+
+		seek(lin);
+		t = loc;
+		seekParent(lin);
+		delete t;
+		display->editor refresh();
+		}
+	else
+		display postFooter("Cannot delete the root node");
+	}
+
+lineCount:	dynamic	() int =
+	{
+	return max;
+	}
+
+getTag:	dynamic	() [:] char =
+	{
+	return loc->tag;
+	}
+
+getPath:	() [:] char =
+	{
+	return loc->path;
+	}
+
+focus:	dynamic	(i: int) =
+	{
+	seek(i);
+	}
+
+closeItem:	dynamic	(i: int) int =
+	{
+	r:	int;
+
+	seek(i);
+	r = loc close();
+	max = root totalDescendants();
+	return r;
+	}
+
+getCurrentTarget:	() ref Target =
+	{
+	return loc;
+	}
+
+refresh:	dynamic	(int) boolean =
+	{
+	max = root totalDescendants();
+	return TRUE;
+	}
+
+	};
+
+parseProjectFile:	(s: [:] char) ref Target =
+	{
+	i:	int;
+	t:	ref Target;
+
+	t = parseTarget(0, s, &i);
+	if	(t == 0)
+		display postFooter("Project file format error");
+	else if	(i != |s)
+		display postFooter("Extra text in project file");
+	return t;
+	}
+
+parseTarget:	(par: ref Target, s: [:] char, ip: ref int) ref Target =
+	{
+	if	(|s < 3)
+		return 0;
+	c:		char;
+	persist:	boolean;
+	open:		boolean;
+	i:		int;
+	name:		[:] char;
+	t, ch:		ref Target;
+
+	*ip = 0;
+	c = s[0];
+	if	(s[1] == '0')
+		open = FALSE;
+	else if	(s[1] == '1')
+		open = TRUE;
+	else
+		return 0;
+	if	(s[2] == '0')
+		persist = FALSE;
+	else if	(s[2] == '1')
+		persist = TRUE;
+	else
+		return 0;
+	s = s[3:];
+	*ip += 3;
+	i = stringScan(s, '\n');
+	if	(i < 0)
+		return 0;
+	name = s[:i];
+
+	s = s[i + 1:];			// trim the line away
+	*ip += i + 1;
+	switch	(c){
+	case	'g':
+		t = new GroupTarget[ par, name, persist, "" ];
+		break;
+
+	case	'r':
+		t = new RunfileTarget[ par, name, persist ];
+		break;
+
+	case	'd':
+		t = new DriverTarget[ par, name, persist ];
+		break;
+
+	case	'L':
+		t = new LibraryTarget[ par, name, persist ];
+		break;
+
+	case	's':
+		t = new SourceTarget[ par, name, persist ];
+		break;
+
+	case	'b':
+		t = new BuildDirectoryTarget[ par, name, persist ];
+		break;
+
+	case	'B':
+		t = new SourceDirectoryTarget[ par, name, persist ];
+		break;
+
+	case	'p':
+		t = new ParasolSourceTarget[ par, name, persist ];
+		break;
+
+	case	'c':
+		t = new CSourceTarget[ par, name, persist ];
+		break;
+
+	case	'h':
+		t = new CHeaderTarget[ par, name, persist ];
+		break;
+
+	case	'u':
+		t = new UnitTarget[ par, name, persist ];
+		break;
+
+	case	'P':
+		t = new U_pTarget[ par, name, persist ];
+		break;
+
+	case	'C':
+		t = new U_cTarget[ par, name, persist ];
+		break;
+
+	case	'X':
+		t = new C_pTarget[ par, name, persist ];
+		break;
+
+	case	'i':
+		t = new InterfaceTarget[ par, name, persist ];
+		break;
+
+	default:		// an error
+		return 0;
+		}
+	t->isOpen = open;
+	for	(;;){
+		i = stringScan(s, '\n');
+		if	(i < 0){
+			delete t;
+			return 0;
+			}
+		if	(i == 1 &&
+			 s[0] == '.'){
+			*ip += 2;
+			return t;
+			}
+		if	(s[0] == '%'){
+			j:		int;
+			nm, value:	[:] char;
+
+			j = stringScan(s, '=');
+			if	(j < 0){
+				delete t;
+				return 0;
+				}
+			nm = s[1:j];
+			value = s[j + 1: i];
+			t set(nm, value);
+			i++;
+			}
+		else	{
+			ch = parseTarget(t, s, &i);
+			if	(ch == 0){
+				delete t;
+				return 0;
+				}
+			}
+		s = s[i:];
+		*ip += i;
+		}
+	}
+
+NewProjectConfirm:	type	inherit	confirmWindow {
+	public:
+
+yes:	dynamic	() =
+	{
+	display saveProject();
+	display newProject();
+	}
+
+no:	dynamic	() =
+	{
+	projectBuffer newProject();
+	display newProject();
+	}
+
+	};
+
+TargetType:	type	int = {
+	TT_RUN,
+	TT_LIBRARY,
+	TT_DRIVER,
+	TT_GROUP,
+	TT_SOURCE,
+	TT_SOURCE_DIR,
+	TT_BUILD,
+	TT_PARASOL,
+	TT_C_SOURCE,
+	TT_C_HEADER,
+	TT_UNIT,
+	TT_U_P,
+	TT_U_C,
+	TT_C_P,
+	TT_INTERFACE,
+	TT_MAX
+	};
+
+NewTarget:	type	inherit	popupShell {
+	typein:		ref textField;
+	targetType:	TargetType;
+	line:		int;
+
+	public:
+
+constructor:	() =
+	{
+	g1, g2:		ref Grid;
+	r:		ref radioGroup;
+	d:		ref dialog;
+	r1prop:	static	[] byte = [ 1 ];
+	c1prop:	static	[] byte = [ 0, 1 ];
+	r2prop:	static	[] byte = [ 0, 0, 0 ];
+	c2prop:	static	[] byte = [ 1 ];
+
+	super constructor("New Target", display);
+	line = display->editor->cursor;
+
+		// Describe the form
+
+	g1 = new Grid[ 2, 1 ];
+	g1 resizeProportions(c1prop, r1prop);
+	g1 cell([ 0, 0 ], new caption[ "Target Name: ", C_READONLY, C_READONLY ]);
+	typein = new textField[ "", 			C_TEXT, C_READONLY ];
+	typein onEnterKey([ self, &ok ]);
+	g1 cell([ 1, 0 ], typein);
+
+	r = new radioGroup[ [ 3, 0 ], TT_RUN, TT_RUN, 
+						C_TEXT, C_READONLY,
+						[ self, &selectType ],
+			"Run file",
+			"Library",
+			"Loadable driver",
+			"Group",
+			"Source File",
+			"Source Directory",
+			"Build Directory",
+			"Parasol Source",
+			"C Source",
+			"C Header File",
+			"Unit File",
+			".u <- .p",
+			".u <- .c",
+			".c <- .p",
+			"Interface File",
+			0
+			];
+
+	g2 = new Grid[ 1, 3 ];
+	g2 resizeProportions(c2prop, r2prop);
+	g2 cell([ 0, 0 ], g1);
+	g2 cell([ 0, 1 ], new separator[ C_READONLY ]);
+	g2 cell([ 0, 2 ], r);
+
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g2);
+	anchor(d);
+
+		// Draw it and accept input
+
+	configure([ 60, 1 ]);
+	typein setTextFocus();
+	open();
+	}
+
+selectType:	(t: TargetType) =
+	{
+	targetType = t;
+	}
+
+ok:	() =
+	{
+	targetName:	[:] char;
+
+	targetName = typein getValue();
+	if	(|targetName){
+		t:	ref Target;
+
+		projectBuffer seek(line);
+		t = projectBuffer getCurrentTarget();
+		switch	(targetType){
+		case	TT_RUN:
+			new RunfileTarget[ t, targetName, TRUE ];
+			break;
+
+		case	TT_LIBRARY:
+			new LibraryTarget[ t, targetName, TRUE ];
+			break;
+
+		case	TT_DRIVER:
+			new DriverTarget[ t, targetName, TRUE ];
+			break;
+
+		case	TT_GROUP:
+			new GroupTarget[ t, targetName, TRUE, "" ];
+			break;
+
+		case	TT_SOURCE:
+			new SourceTarget[ t, targetName, TRUE ];
+			break;
+
+		case	TT_SOURCE_DIR:
+			new SourceDirectoryTarget[ t, targetName, TRUE ];
+			break;
+
+		case	TT_BUILD:
+			new BuildDirectoryTarget[ t, targetName, TRUE ];
+			break;
+
+		case	TT_PARASOL:
+			new ParasolSourceTarget[ t, targetName, TRUE ];
+			break;
+
+		case	TT_C_SOURCE:
+			new CSourceTarget[ t, targetName, TRUE ];
+			break;
+
+		case	TT_C_HEADER:
+			new CHeaderTarget[ t, targetName, TRUE ];
+			break;
+
+		case	TT_UNIT:
+			new UnitTarget[ t, targetName, TRUE ];
+			break;
+
+		case	TT_U_P:
+			new U_pTarget[ t, targetName, TRUE ];
+			break;
+
+		case	TT_U_C:
+			new U_cTarget[ t, targetName, TRUE ];
+			break;
+
+		case	TT_C_P:
+			new C_pTarget[ t, targetName, TRUE ];
+			break;
+
+		case	TT_INTERFACE:
+			new InterfaceTarget[ t, targetName, TRUE ];
+			break;
+			}
+		display->editor refresh();
+		}
+	delete self;
+	}
+
+	};
+
+OpenProject:	type	inherit	popupShell {
+	typein:		ref textField;
+
+	public:
+
+constructor:	() =
+	{
+	g:	ref Grid;
+	d:	ref dialog;
+	rprop:	static	[] byte = [ 1 ];
+	cprop:	static	[] byte = [ 0, 1 ];
+
+	super constructor("Open Project", display);
+
+		// Describe the form
+
+	g = new Grid[ 2, 1 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "File: ", C_READONLY, C_READONLY ]);
+	typein = new textField[ projectBuffer getProjectFile(), 
+							C_TEXT, C_READONLY ];
+	typein onEnterKey([ self, &ok ]);
+	g cell([ 1, 0 ], typein);
+
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g);
+	anchor(d);
+
+		// Draw it and accept input
+
+	configure([ 60, 1 ]);
+	typein setTextFocus();
+	open();
+	}
+
+ok:	() =
+	{
+	fileName:	[:] char;
+
+	fileName = typein getValue();
+	if	(|fileName)
+		display load(fileName);
+	delete self;
+	}
+
+	};
+
+SaveAsProject:	type	inherit	popupShell {
+	typein:		ref textField;
+
+	public:
+
+constructor:	() =
+	{
+	g:	ref Grid;
+	d:	ref dialog;
+	rprop:	static	[] byte = [ 1 ];
+	cprop:	static	[] byte = [ 0, 1 ];
+
+	super constructor("Save Project", display);
+
+		// Describe the form
+
+	g = new Grid[ 2, 1 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "File: ", C_READONLY, C_READONLY ]);
+	typein = new textField[ projectBuffer getProjectFile(), 
+							C_TEXT, C_READONLY ];
+	typein onEnterKey([ self, &ok ]);
+	g cell([ 1, 0 ], typein);
+
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g);
+	anchor(d);
+
+		// Draw it and accept input
+
+	configure([ 60, 1 ]);
+	typein setTextFocus();
+	open();
+	}
+
+ok:	() =
+	{
+	fileName:	[:] char;
+
+	fileName = typein getValue();
+	if	(|fileName)
+		display saveAs(fileName);
+	delete self;
+	}
+
+	};
+
+startFileName:	[:] char;
+
+StartForm:	type	inherit popupShell {
+	typein:		ref textField;
+
+	public:
+
+constructor:	(w: ref frob, f: [:] char) =
+	{
+	g:	ref Grid;
+	d:	ref dialog;
+	rprop:	static	[] byte = [ 1 ];
+	cprop:	static	[] byte = [ 0, 1 ];
+
+	super constructor("Edit Text", display);
+
+		// Describe the form
+
+	g = new Grid[ 2, 1 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "File: ", C_READONLY, C_READONLY ]);
+	typein = new textField[ f, C_TEXT, C_READONLY ];
+	typein onEnterKey([ self, &ok ]);
+	g cell([ 1, 0 ], typein);
+
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g);
+	anchor(d);
+
+		// Draw it and accept input
+
+	configure([ 60, 1 ]);
+	typein setTextFocus();
+	open();
+	}
+
+ok:	() =
+	{
+	filename:	[:] char;
+
+	filename = typein getValue();
+	if	(|filename){
+		f:	[MAXPATH] char;
+		fa:	[:] char;
+
+		if	(editServer == 0)
+			editServer = ref far editorServer(FileSystem 
+				attach("/service/editor",
+					":user.edserver.editorServer"));
+		fa = f;
+		fa [:]= FileSystem getAbsolutePath(filename);
+		editServer load(fa);
+		}
+	delete self;
+	}
+
+	};
+
+editServer:	ref far editorServer;
+pathLookup:	ref PathList;
+
+execBuild:	(compiler: [:] char, args: [:] char, path: [:] char) boolean =
+	{
+	cmd:	[:] char;
+	p:	ref far External;
+
+	pathLookup useEnvironment("PATH");
+	cmd = pathLookup search(compiler, ".run", 0);
+	if	(|cmd == 0){
+		display postFooter("Couldn't find command '%S.run'", compiler);
+		launchTrap raise();
+		}
+//	display postFooter("%S:%S", cmd, args);
+	p = FileSystem spawn(0, cmd, args);
+	if	(p == 0){
+		display postFooter("Can't spawn '%S'", cmd);
+		launchTrap raise();
+		}
+	lastChild = 0;
+	do
+		viewer wait(&External.childExit);
+		while	(p != lastChild);
+	if	(lastStatus){
+		display postFooter("Build of '%S' failed", path);
+		if	(stopOnFirstError)
+			launchTrap raise();
+		}
+	return TRUE;
+	}
+
+GroupOptions:	type	inherit	popupShell	{
+	target:		ref Target;
+	spath:		ref textField;
+	symfile:	ref textField;
+
+	public:
+
+constructor:	(targ: ref GroupTarget) =
+	{
+	g:		ref Grid;
+	d:		ref dialog;
+	rprop:		static	[] byte = [ 1, 1 ];
+	cprop:		static	[] byte = [ 0, 1 ];
+	sourcePath:	[:] char;
+	symbolFile:	[:] char;
+
+	target = targ;
+	sourcePath = targ attribute("source-path");
+	symbolFile = targ attribute("symbol-file-name");
+	super constructor("Group Target Options", display);
+
+		// Describe the form
+
+	g = new Grid[ 2, 2 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "Source Path: ", C_READONLY, C_READONLY ]);
+	spath = new textField[ sourcePath, C_TEXT, C_READONLY ];
+	spath onEnterKey([ self, &ok ]);
+	g cell([ 1, 0 ], spath);
+	g cell([ 0, 1 ], new caption[ "Symbol File Name: ", C_READONLY, C_READONLY ]);
+	symfile = new textField[ symbolFile, C_TEXT, C_READONLY ];
+	symfile onEnterKey([ self, &ok ]);
+	g cell([ 1, 1 ], symfile);
+
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g);
+	anchor(d);
+
+		// Draw it and accept input
+
+	configure([ 60, 1 ]);
+	spath setTextFocus();
+	open();
+	}
+
+ok:	() =
+	{
+	target set("source-path", spath getValue());
+	target set("symbol-file-name", symfile getValue());
+	delete self;
+	}
+
+};
+
+RunfileOptions:	type	inherit	popupShell	{
+	target:		ref Target;
+	spath:		ref textField;
+	sfToggle:	ref simpleToggle;
+	flToggle:	ref simpleToggle;
+
+	public:
+
+constructor:	(targ: ref RunfileTarget) =
+	{
+	g:		ref Grid;
+	d:		ref dialog;
+	rprop:		static	[] byte = [ 1, 0, 0, 0 ];
+	cprop:		static	[] byte = [ 0, 1 ];
+	sourcePath:	[:] char;
+	symbolFile:	[:] char;
+	linkOptions:	[:] char;
+
+	target = targ;
+	sourcePath = targ attribute("source-path");
+	symbolFile = targ attribute("symbol-file");
+	linkOptions = targ attribute("link-options");
+	super constructor("Runfile Target Options", display);
+
+		// Describe the form
+
+	g = new Grid[ 2, 4 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "Source Path: ", C_READONLY, C_READONLY ]);
+	spath = new textField[ sourcePath, C_TEXT, C_READONLY ];
+	spath onEnterKey([ self, &ok ]);
+	g cell([ 1, 0 ], spath);
+	g cell([ 0, 1 ], new caption[ "", C_READONLY, C_READONLY ]);
+	g cell([ 0, 2 ], new caption[ "Compiler Options: ", C_READONLY, C_READONLY ]);
+	g cell([ 1, 2 ], sfToggle = new simpleToggle[ "Generate Symbol File",
+						C_TEXT, C_READONLY, 
+						|symbolFile != 0,
+						[ self, 0 ] ]);
+	g cell([ 1, 3 ], flToggle = new simpleToggle[ "Perform Full Link",
+						C_TEXT, C_READONLY, 
+						|linkOptions != 0,
+						[ self, 0 ] ]);
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g);
+	anchor(d);
+
+		// Draw it and accept input
+
+	configure([ 60, 1 ]);
+	spath setTextFocus();
+	open();
+	}
+
+ok:	() =
+	{
+	target set("source-path", spath getValue());
+
+	if	(sfToggle getValue())
+		target set("symbol-file", "-s\0");
+	else
+		target set("symbol-file", "");
+
+	if	(flToggle getValue())
+		target set("link-options", "-f\0");
+	else
+		target set("link-options", "");
+
+	delete self;
+	}
+
+};
+
+LibraryOptions:	type	inherit	popupShell	{
+	target:		ref Target;
+	spath:		ref textField;
+
+	public:
+
+constructor:	(targ: ref LibraryTarget) =
+	{
+	g:		ref Grid;
+	d:		ref dialog;
+	rprop:		static	[] byte = [ 1 ];
+	cprop:		static	[] byte = [ 0, 1 ];
+	sourcePath:	[:] char;
+
+	target = targ;
+	sourcePath = targ attribute("source-path");
+	super constructor("Library Target Options", display);
+
+		// Describe the form
+
+	g = new Grid[ 2, 1 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "Source Path: ", C_READONLY, C_READONLY ]);
+	spath = new textField[ sourcePath, C_TEXT, C_READONLY ];
+	spath onEnterKey([ self, &ok ]);
+	g cell([ 1, 0 ], spath);
+
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g);
+	anchor(d);
+
+		// Draw it and accept input
+
+	configure([ 60, 1 ]);
+	spath setTextFocus();
+	open();
+	}
+
+ok:	() =
+	{
+	s:	[:] char;
+
+	s = spath getValue();
+	target set("source-path", s);
+	delete self;
+	}
+
+};
+
+DriverOptions:	type	inherit	popupShell	{
+	target:		ref Target;
+	spath:		ref textField;
+	symfile:	ref textField;
+
+	public:
+
+constructor:	(targ: ref DriverTarget) =
+	{
+	g:		ref Grid;
+	d:		ref dialog;
+	rprop:		static	[] byte = [ 1, 1 ];
+	cprop:		static	[] byte = [ 0, 1 ];
+	sourcePath:	[:] char;
+	symbolFile:	[:] char;
+
+	target = targ;
+	sourcePath = targ attribute("source-path");
+	symbolFile = targ attribute("symbol-file-name");
+	super constructor("Driver Target Options", display);
+
+		// Describe the form
+
+	g = new Grid[ 2, 2 ];
+	g resizeProportions(cprop, rprop);
+	g cell([ 0, 0 ], new caption[ "Source Path: ", C_READONLY, C_READONLY ]);
+	spath = new textField[ sourcePath, C_TEXT, C_READONLY ];
+	spath onEnterKey([ self, &ok ]);
+	g cell([ 1, 0 ], spath);
+	g cell([ 0, 1 ], new caption[ "Symbol File Name: ", C_READONLY, C_READONLY ]);
+	symfile = new textField[ symbolFile, C_TEXT, C_READONLY ];
+	symfile onEnterKey([ self, &ok ]);
+	g cell([ 1, 1 ], symfile);
+
+	d = new dialog[];
+	d button(new pushButton[ new caption[ "OK", C_TEXT, C_READONLY ],
+							[ self, &ok ] ]);
+	d button(new pushButton[ new caption[ "Cancel", C_TEXT, C_READONLY ],
+							[ self, &cancel ] ]);
+	d anchor(g);
+	anchor(d);
+
+		// Draw it and accept input
+
+	configure([ 60, 1 ]);
+	spath setTextFocus();
+	open();
+	}
+
+ok:	() =
+	{
+	target set("source-path", spath getValue());
+	target set("symbol-file-name", symfile getValue());
+	delete self;
+	}
+
+};
+
+smunch:	(s: [:] char) [:] char =
+	{
+	t:	[:] char;
+	i:	int;
+
+	t = stringDup(s);
+	for	(i = 0; i < |t; i++)
+		if	(t[i] == 0)
+			t[i] = '`';
+	return t;
+	}

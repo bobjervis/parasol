@@ -1,0 +1,166 @@
+include	heap;
+include	file;
+include	scanner;
+include	errmsg;
+
+/*
+ *	FUNCTION:	constantExpression
+ *
+ *	DESCRIPTION:
+ *		This function parses a constant expression and if
+ *		successful returns the expression's value.
+ */
+constantExpression:	public	(srcString: ref char) long =
+	{
+	i:		long;
+	mainHeap:	ref Heap;
+	src:		sourceParser;
+
+	tempHeap: incrementalHeap = [ threadHeap() ];
+	mainHeap = tempHeap activate();
+	src = [ srcString ];
+	try	{
+		i = src parseExpression(0);
+		}
+	except	{
+		}
+	tempHeap freeAll();
+	mainHeap activate();
+	return i;
+	}
+
+ParseTrap:	Trap;
+
+sourceParser:	public	type	inherit	tokenStream {
+	public:
+
+parseExpression:	(lastPrecedence: int) long =
+	{
+	assoc:		int;
+	opos:		int;
+	newPrecedence:	int;
+	left:		long;
+	right:		long;
+	op:		tokenNames;
+
+	left = parseUnary();
+	scan();
+	assoc = Assoc[lastPrecedence];
+	for	(;;){
+		newPrecedence = precedence(Token.lex);
+		if	(newPrecedence == 0)
+			break;
+		if	(lastPrecedence > newPrecedence)
+			break;
+		if	(lastPrecedence == newPrecedence &&
+			 assoc == LEFT)
+			break;
+		if	(Token.lex == QUES){
+			truePart:	long;
+			falsePart:	long;
+
+			truePart = parseExpression(0);
+			if	(Token.lex != CO){
+				error(ErrExpressionSyntax);
+				ParseTrap raise();
+				}
+			falsePart = parseExpression(precedence(QUES));
+			if	(left)
+				left = truePart;
+			else
+				left = falsePart;
+			continue;
+			}
+		op = Token.lex;
+		right = parseExpression(newPrecedence);
+		switch	(op){
+		case	ADD:		left += right;		break;
+		case	SUB:		left -= right;		break;
+		case	MUL:		left *= right;		break;
+		case	DIV:		left /= right;		break;
+		case	MOD:		left %= right;		break;
+		case	AND:		left &= right;		break;
+		case	OR:		left |= right;		break;
+		case	XOR:		left ^= right;		break;
+		case	LSH:		left <<= right;		break;
+		case	RSH:		left >>= right;		break;
+		case	LOR:		left = left || right;	break;
+		case	LAND:		left = left && right;	break;
+		case	EQ:		left = left == right;	break;
+		case	NE:		left = left != right;	break;
+		case	LT:		left = left < right;	break;
+		case	GT:		left = left > right;	break;
+		case	LE:		left = left <= right;	break;
+		case	GE:		left = left >= right;	break;
+
+		default:
+			printf("op = %d\n", op);
+			error(ErrExpressionSyntax);
+			ParseTrap raise();
+			}
+		}
+	return left;
+	}
+
+private:
+
+parseUnary:	() long =
+	{
+	i:		long;
+
+	switch	(scan()){
+	case	SUB:		return -parseUnary();
+	case	ADD:		return  parseUnary();
+	case	NOT:		return !parseUnary();
+	case	COM:		return ~parseUnary();
+	case	ICON:		return  Token.icon;
+
+	case	DEFINED:
+		scan();
+		if	(Token.lex == LP){
+			if	(scan() != ID ||
+				 scan() != RP){
+				error(ErrExpressionSyntax);
+				ParseTrap raise();
+				}
+			}
+		else if	(Token.lex != ID){
+			error(ErrExpressionSyntax);
+			ParseTrap raise();
+			}
+		return Token.iden isDefined();
+
+	case	LP:
+		i = parseExpression(0);
+		if	(Token.lex == RP)
+			return i;
+
+	default:
+		error(ErrExpressionSyntax);
+		ParseTrap raise();
+		}
+	}
+
+	};
+
+LEFT:	const	char = 1;
+RIGHT:	const	char = 2;
+
+Assoc:	[] char = [
+	0,
+	RIGHT,					/* cm */
+	RIGHT,					/* asgop */
+	RIGHT,					/* ques */
+	RIGHT,					/* - unused - */
+	LEFT,					/* lor */
+	LEFT,					/* land */
+	LEFT,					/* or */
+	LEFT,					/* xor */
+	LEFT,					/* and */
+	LEFT,					/* eq ne */
+	LEFT,					/* relop */
+	LEFT,					/* shift op */
+	LEFT,					/* add sub */
+	LEFT					/* mul div mod */
+	];
+

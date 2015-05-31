@@ -1,0 +1,135 @@
+include	hardware;
+include	string;
+
+commandArguments:	public	type	{
+	handlers:	ref optionHandler;
+	arguments:	[:] char;
+	origArgs:	[:] char;
+	acount:		int;
+
+	public:
+
+constructor:	(a: [:] char) =
+	{
+	handlers = 0;
+	arguments = stringDup(a);
+	origArgs = arguments;
+	}
+
+handle:	(s: [:] char, handler: ref ([:] char), 
+					extraAllowed: boolean, 
+					exclusive: boolean) boolean =
+	{
+	h:	ref optionHandler;
+
+	for	(h = handlers; h; h = h->next){
+		if	(stringCompare(s, h->string) == 0){
+			if	(exclusive || h->exclusive)
+				return FALSE;
+			}
+		}
+	handlers = new optionHandler[ handlers/*, s, handler, extraAllowed,
+				exclusive*/ ];
+	handlers->string = s;
+	handlers->handler = handler;
+	handlers->extraAllowed = extraAllowed;
+	handlers->exclusive = exclusive;
+	return TRUE;
+	}
+
+parse:	(args: [:] char) =
+	{
+	delete origArgs;
+	arguments = stringDup(args);
+	origArgs = arguments;
+	}
+
+next:	() [:] char =
+	{
+	for	(;;){
+		s:	[:] char;
+
+		if	(|arguments <= 0)
+			error("");
+
+		i:	int;
+		xp:	ref char;
+
+		xp = memScan(arguments, 0, |arguments);
+		if	(_FLAGS & 0x40){
+			i = (xp - arguments) - 1;
+			s = arguments;
+			arguments = s[i + 1:];
+			s = s[:i];
+			}
+		else	{
+			s = arguments;
+			arguments = "";
+			}
+		if	(|s && s[0] == '-'){
+			h:	ref optionHandler;
+			hit:	boolean;
+
+			hit = FALSE;
+			for	(h = handlers; h; h = h->next)
+				if	(h match(s)){
+					h->handler(s);
+					hit = TRUE;
+					}
+			if	(!hit)
+				error(s);
+			continue;
+			}
+		return s;
+		}
+	}
+
+more:	() boolean =
+	{
+	return |arguments != 0;
+	}
+	
+destructor:	() =
+	{
+	h, hnext:	ref optionHandler;
+
+	for	(h = handlers; h; h = hnext){
+		hnext = h->next;
+		delete h;
+		}
+	delete origArgs;
+	}
+
+error:	dynamic	(s: [:] char) =
+	{
+	}
+
+	};
+
+optionHandler:	type	{
+	public:
+
+	next:		ref optionHandler;
+	string:		[:] char;
+	handler:	ref ([:] char);
+	extraAllowed:	boolean;
+	exclusive:	boolean;
+
+match:	(s: [:] char) boolean =
+	{
+	i:	int;
+
+	i = stringScan(s, '=');
+	if	(i != -1 &&		// there is an =
+		 !extraAllowed)		// and is not allowed
+		return FALSE;
+	if	(i == -1)
+		i = |s;
+	s = s[1:i];
+	if	(stringCompare(s, string) == 0)
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+	};

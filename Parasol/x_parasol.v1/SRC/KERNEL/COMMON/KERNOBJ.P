@@ -1,0 +1,190 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	object;
+include	process;
+include	jobs;
+include	hardware;
+include	message;
+include	alys;
+include	kprintf;
+include	karena;
+include	error;
+include	arena;
+
+kernelObject:	public	type	inherit	object	{
+	public:
+
+	dispatcher:	ref External;
+	control:	kernelSemaphore;
+
+constructor:	(name: [:] char, ts: [:] char,
+		 d: ref External, jr: AccessRights, ur: AccessRights,
+				gr: AccessRights, wr: AccessRights) =
+	{
+	dispatcher = d;
+	control initialize(1, &oD, self);		// kernel object is not busy
+	super constructor(name, ts, TRUE, jr, ur, gr, wr);
+	where = &KernelArena;
+	if	(CurProc){
+		context = CurProc->animates->context;
+		context dup();
+		}
+	animator = 0;
+	actualObject = vaddr_t(d);
+	}
+
+object1constructor:	() =
+	{
+	me = ref far External(NLOCALS + 1);
+	myJob = ref far Job(me);
+	}
+
+_send:	dynamic	(xx: ref far External, r: unsigned[16], 
+					func: int, 
+					buf: buffer_t, 
+					rbuf: buffer_t,
+					flags: sendFlags_t) int =
+	{
+	m:		message;
+	src:		ref object;
+	n:		threadLock;
+
+	src = CurProc->animates;
+	m kernelSend(self, func, r, src, buf, rbuf);
+	n lock();
+	if	(flags & SF_SIGNAL)
+		msgs push(&m);
+	else
+		msgs enqueue(&m);
+	n unlock();
+
+		// Kernel messages do not support asynchrounous sends,
+		// but they do support signaling sends.
+
+	if	(flags & SF_SIGNAL ||
+		 control down(TRUE)){
+		n lock();
+		CurProc->animates = self;
+		CurArena = CurProc->where = where;
+		animator = CurProc;
+		n unlock();
+
+		bufp:	pointer;
+
+		if	(src == 0)
+			panic("No source for message\n");
+		if	(buf.length){
+			if	(buf.where == 0)
+				panic("No arena for source\n");
+			bufp = buf.where obtainWrite(buf.address, buf.length);
+			if	(bufp == 0){
+				m.errorCode = ERRINVALIDDATA;
+				m.state = MS_REJECTED;
+				}
+			else	{
+				m.state = MS_RECEIVED;
+				dispatcher kernelLocal(&m.header, bufp);
+				buf.where unlock();
+				}
+			}
+		else	{
+			m.state = MS_RECEIVED;
+			dispatcher kernelLocal(&m.header, 0);
+			}
+
+		n lock();
+		m wrapup();
+		CurProc->animates = src;
+		CurArena = CurProc->where = src->where;
+		animator = 0;
+		n unlock();
+		if	(flags & SF_SIGNAL == 0)
+			control up();
+		}
+	else	{
+		src interruptedSend();
+		return 0;
+		}
+	if	(m.state == MS_REJECTED){
+		src rejectedSend(m.errorCode);
+		return 0;
+		}
+	return m.cumReply;
+	}
+
+sendAttention:	dynamic	() =
+	{
+	if	(animator == 0)
+		return;
+//	kprintf("Kernel object break %d\n", me);
+/*
+	if	(CurProc == p){			// call yourself
+		m:		message;
+	
+		kprintf("to myself\n");
+		m kernelSend(self, int(&External.attention), AR_ANY, 
+							NODATA, NODATA, 
+							SF_SIGNAL);
+		msgs enqueue(&m);
+		m.state = MS_RECEIVED;
+		dispatcher kernelLocal(&m.header, 0);
+		m extract();
+		}
+	else	{
+		p arrangeCall(&hackKernelAttention);
+		p alert();			// wake up a sleeping
+						// process
+		}
+ */
+	}
+
+rejectedSend:	dynamic	(code: int) =
+	{
+	rejectTrap raise(code);
+	}
+
+interruptedSend:dynamic	() =
+	{
+	interruptTrap raise();
+	}
+
+sendQuit:	dynamic	() =
+	{
+	useCount = 1;
+	me close();
+	}
+
+killChild:	dynamic () int =
+	{
+	useCount = 1;
+	me close();
+	return 0;
+	}
+
+close:	dynamic	() boolean =
+	{
+	d:	ref External = dispatcher;
+
+	if	(super close()){
+		delete d;
+		return TRUE;
+		}
+	else
+		return FALSE;
+	}
+
+	};
+
+oD:	(ref kernelSemaphore, d: pointer) =
+	{
+	o:	ref object;
+
+	o = d;
+	kprintf("[%d].control", o->me);
+	}
+

@@ -1,0 +1,771 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file;
+
+include	parser, ptree;
+include	hash;
+include	errmsg;
+include	sbuffer;
+include	symtab;
+include	types;
+include	backend;
+include	functype, xtree, xcall;
+include	tparams, target;
+//include	addrmode;
+//include	alloctmp;
+
+errorStmt_x:	public	type	inherit	stmt_x	{
+	public:
+
+	offset:		fileOffset;
+
+create:	factory	(o: fileOffset) ref errorStmt_x =
+	{
+	return new errorStmt_x[ O_ERROR, o ];
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	}
+
+	};
+
+funcExit_x:	public	type	inherit	stmt_x	{
+	public:
+
+create:	factory	() ref funcExit_x =
+	{
+	self = alloc(sizeof funcExit_x);
+	self = [ O_EXIT ];
+	return self;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	}
+
+	};
+
+block_x:	public	type	inherit stmt_x {
+	public:
+
+	stmts:		ref stmt_x;
+
+		// Assigned information
+
+	scope:		ref blockScope;
+
+constructor:	(x: ref stmt_x) =
+	{
+	super constructor(O_BLOCK);
+	stmts = x;
+	scope = 0;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	sym:	ref symbol_s;
+
+	if	(scope){
+		for	(sym = scope->symbols; sym; sym = sym->next){
+			if	(sym->name)
+				printf("%*c%S: ", indent + INDENT_AMOUNT, ' ',
+						 sym->name spelling());
+			else
+				printf("%*c<anon>: ", 
+						indent + INDENT_AMOUNT, ' ');
+			if	(sym->dtype)
+				sym->dtype display(FALSE);
+			printf("\n");
+			}
+		}
+
+	s:	ref stmt_x;
+
+	for	(s = stmts; s; s = s->next)
+		s display(indent + INDENT_AMOUNT);
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	s:	ref stmt_x;
+
+	for	(s = stmts; s; s = s->next){
+//		if	(s->operator != O_BLOCK)
+//			s display(0);
+		s fold();
+		}
+	return self;
+	}
+
+computeBenefits:	dynamic	(int) =
+	{
+	s:	ref stmt_x;
+
+	for	(s = stmts; s; s = s->next)
+		s computeBenefits(nestingLevel);
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	st:	ref stmt_x;
+	nst:	ref stmt_x;
+
+	scope = new blockScope[ s, 0 ];
+	for	(st = stmts; st; st = st->next)
+		st gatherDeclarations(scope);
+	scope constructInterfaces();
+	scope constructValues();
+	for	(st = stmts; st; st = st->next){
+//		if	(st->operator != O_BLOCK)
+//			st display(0);
+		st assignTypes(scope, FALSE);
+		}
+	return self;
+	}
+
+	};
+
+assert_x:	public	type	inherit stmt_x {
+	public:
+
+	test:		ref tree_p;
+	source:		textRange;
+
+constructor:	(x: ref tree_p, s: textRange) =
+	{
+	super constructor(O_ASSERT);
+	test = x;
+	source = s;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	if	(test)
+		test display(indent + INDENT_AMOUNT);
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	test = test fold();
+	test sethiUllman();
+	return self;
+	}
+
+computeBenefits:	dynamic	(int) =
+	{
+	test computeBenefits(nestingLevel);
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	if	(test){
+		test = test assignTypes(s, TRUE);
+		}
+	return self;
+	}
+
+	};
+
+expr_x:	public	type	inherit stmt_x {
+	public:
+
+	expr:		ref tree_p;
+	source:		textRange;
+
+constructor:	(x: ref tree_p, s: textRange) = 
+	{
+	super constructor(O_STMT);
+	expr = x;
+	source = s;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	if	(expr)
+		expr display(indent + INDENT_AMOUNT);
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	if	(expr){
+		expr = expr fold();
+		CurrentContext->offset = source.start;
+		expr = expr checkForNoEffect();
+		if	(expr)
+			expr sethiUllman();
+		}
+	return self;
+	}
+
+computeBenefits:	dynamic	(int) =
+	{
+	if	(expr)
+		expr computeBenefits(nestingLevel);
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	if	(expr)
+		expr = expr assignTypes(s, FALSE);
+	else
+		expr = ErrorTree;
+	return self;
+	}
+
+	};
+
+endExcept_x:	public	type	inherit stmt_x {
+	public:
+
+	myTry:		ref try_x;
+
+create:	factory	(m: ref try_x) ref endExcept_x =
+	{
+	self = alloc(sizeof endExcept_x);
+	self = [ O_ENDEX, m ];
+	return self;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	}
+
+assignTypes:	dynamic	(ref scope_s, boolean) ref tree_p =
+	{
+	return self;
+	}
+
+	};
+
+continueExcept_x:	public	type	inherit stmt_x {
+	public:
+
+create:	factory	() ref continueExcept_x =
+	{
+	return new continueExcept_x[ O_CONTEX ];
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	}
+
+assignTypes:	dynamic	(ref scope_s, boolean) ref tree_p =
+	{
+	return self;
+	}
+
+	};
+
+return_x:	public	type	inherit stmt_x {
+	public:
+
+	expr:		ref tree_p;
+	source:		textRange;
+
+constructor:	(x: ref tree_p, s: textRange) =
+	{
+	super constructor(O_RETURN);
+	expr = x;
+	source = s;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	if	(expr)
+		expr display(indent + INDENT_AMOUNT);
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	if	(expr){
+		expr = expr fold();
+		expr sethiUllman();
+		}
+	return self;
+	}
+
+computeBenefits:	dynamic	(int) =
+	{
+	if	(expr)
+		expr computeBenefits(nestingLevel);
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	t:	ref type_s;
+
+	t = s returnTypeOf();
+	if	(expr){
+		expr = expr assignTypes(s, TRUE);
+		if	(t){
+			CurrentContext->offset = source.start;
+			if	(t->topType == T_VOID){
+				CurrentContext error("ErrVoidReturn");
+				return ErrorTree;
+				}
+			else
+				expr = cast_x createCheck(t, expr);
+			}
+		if	(expr->operator == O_SCONST)
+			expr = expr sconstTemp(s, t);
+		if	(Func->currentType->callingConvention == FC_GATE &&
+			 Func->currentSymbol->qualifier & DQ_MEMBERFUNC &&
+			 expr != ErrorTree){
+			symbol:	ref symbol_s;
+
+			symbol = s lookup(hash("replyGeneric"), s);
+			if	(symbol == 0 ||
+				 symbol->qualifier & DQ_MEMBERFUNC == 0){
+				CurrentContext->offset = source.start;
+				CurrentContext error("ErrUndefReply");
+				expr = ErrorTree;
+				return self;
+				}
+			extra:	ref tree_p;
+			if	(expr->operator == O_CAST)
+				expr = ref cast_x(expr)->opnd;
+			if	(expr->operator != O_LITERAL &&
+				 expr->operator != O_SLICE &&
+				 !expr isLvalue()){
+				sym:	ref symbol_s;
+				tmp:	ref tree_p;
+				b:	ref binary_x;
+
+				sym = s unnamedLocal(expr->dtype);
+				tmp = Func auto(sym, 0);
+				b = Func binary(O_ASG, tmp, expr, source.start);
+				extra = b processAssignment(s, FALSE);
+				expr = Func auto(sym, 0);
+				}
+			else	{
+				expr->attributes |= TA_LVALUE;
+				extra = 0;
+				}
+
+			f, args, e, len:	ref tree_p;
+
+			if	(expr->dtype->topType == T_DESCRIPTOR &&
+				 t->topType == T_ARRAY){
+				if	(expr->operator == O_SLICE){
+					sl:	ref slice_x;
+
+					sl = ref slice_x(expr);
+					len = sl->right;
+					e = sl->arrayRef;
+					}
+				else	{
+					len = structRef(expr, 
+							DescrBoundOffset * 
+							BYTEBITS, IntType);
+					e = expr;
+					}
+				x:	Size;
+
+				x = t elementOf() sizeOf();
+				if	(x > 1){
+					f = Func icon(x, INTBITS);
+					len = binop(O_MUL, f->dtype, len, f);
+					}
+				e->dtype = refTo(t elementOf());
+				}
+			else	{
+				len = Func icon(expr->dtype sizeOf(), INTBITS);
+				e = expr takeAddress(expr->dtype);
+				}
+			args = Func argument(e, len, 0);
+			e = Func auto(SymbolTable.selfSymbol, 0);
+			expr = methodCall_x createKnown(e, symbol, args,
+						CurrentContext->offset,
+						0, TRUE, s);
+			if	(extra)
+				expr = binop(O_SEQ, expr->dtype, extra, expr);
+			}
+		else if	(expr->dtype->topType == T_ARRAY){
+			CurrentContext error("ErrUnfinished");
+			expr = ErrorTree;
+			}
+		}
+	else if	(t &&
+		 t->topType != T_VOID)
+		CurrentContext warn("WarnReturnNeeded");
+	return self;
+	}
+
+traceLabels:	dynamic	() =
+	{
+	if	(next->operator == O_EXIT)
+		super traceLabels();
+	}
+
+	};
+
+reply_x:	public	type	inherit stmt_x {
+	public:
+
+	expr:		ref tree_p;
+	source:		textRange;
+
+create:	factory	(x: ref tree_p, s: textRange) ref reply_x =
+	{
+	return new reply_x[ O_REPLY, x, s ];
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	expr display(indent + INDENT_AMOUNT);
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	if	(expr){
+		expr = expr fold();
+		expr sethiUllman();
+		}
+	return self;
+	}
+
+computeBenefits:	dynamic	(int) =
+	{
+	if	(expr)
+		expr computeBenefits(nestingLevel);
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	t:	ref type_s;
+
+	if	(Func->currentType->callingConvention != FC_GATE ||
+		 Func->currentSymbol->qualifier & DQ_MEMBERFUNC == 0){
+		CurrentContext error("ErrNotGate");
+		expr = ErrorTree;
+		return self;
+		}
+	t = s returnTypeOf();
+
+	symbol:	ref symbol_s;
+
+	symbol = s lookup(hash("replyGeneric"), s);
+	if	(symbol == 0 ||
+		 symbol->qualifier & DQ_MEMBERFUNC == 0){
+		CurrentContext->offset = source.start;
+		CurrentContext error("ErrUndefReply");
+		expr = ErrorTree;
+		return self;
+		}
+	if	(expr){
+		expr = expr assignTypes(s, TRUE);
+		if	(t){
+			CurrentContext->offset = source.start;
+			if	(t->topType == T_VOID){
+				CurrentContext error("ErrVoidReply");
+				expr = ErrorTree;
+				}
+			else
+				expr = cast_x createCheck(t, expr);
+			}
+		extra:	ref tree_p;
+		if	(expr->operator == O_CAST)
+			expr = ref cast_x(expr)->opnd;
+		if	(expr->operator != O_LITERAL &&
+			 expr->operator != O_SLICE &&
+			 !expr isLvalue()){
+			sym:	ref symbol_s;
+			tmp:	ref tree_p;
+			b:	ref binary_x;
+
+			sym = s unnamedLocal(expr->dtype);
+			tmp = Func auto(sym, 0);
+			b = Func binary(O_ASG, tmp, expr, source.start);
+			extra = b processAssignment(s, FALSE);
+			expr = Func auto(sym, 0);
+			}
+		else	{
+			expr->attributes |= TA_LVALUE;
+			extra = 0;
+			}
+
+		f, args, e, len:	ref tree_p;
+
+		if	(expr->dtype->topType == T_DESCRIPTOR &&
+			 t->topType == T_ARRAY){
+			if	(expr->operator == O_SLICE){
+				sl:	ref slice_x;
+
+				sl = ref slice_x(expr);
+				len = sl->right;
+				e = sl->arrayRef;
+				}
+			else	{
+				len = structRef(expr, DescrMaxBoundOffset * 
+							BYTEBITS, IntType);
+				e = expr;
+				}
+			e->dtype = refTo(t elementOf());
+			}
+		else	{
+			len = Func icon(expr->dtype sizeOf(), INTBITS);
+			e = expr takeAddress(expr->dtype);
+			}
+		args = Func argument(e, len, 0);
+		e = Func auto(SymbolTable.selfSymbol, 0);
+		expr = methodCall_x createKnown(e, symbol, args,
+						CurrentContext->offset,
+						0, TRUE, s);
+		if	(extra)
+			expr = binop(O_SEQ, expr->dtype, extra, expr);
+		}
+	else	{
+		if	(t &&
+			 t->topType != T_VOID)
+			CurrentContext warn("WarnReplyNeeded");
+
+		f, args, e, len:	ref tree_p;
+
+		e = Func icon(0, PTRBITS);
+		len = Func icon(0, INTBITS);
+		args = Func argument(e, len, 0);
+		e = Func auto(SymbolTable.selfSymbol, 0);
+		expr = methodCall_x createKnown(e, symbol, args,
+						CurrentContext->offset,
+						0, TRUE, s);
+		}
+	return self;
+	}
+
+	};
+
+endTry_x:	public	type	inherit stmt_x {
+	public:
+
+	tryStmt:	ref try_x;
+	source:		textRange;
+
+constructor:	(x: ref try_x) =
+	{
+	super constructor(O_ENDTRY);
+	tryStmt = x;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf(" (%x)\n", tryStmt);
+	}
+
+assignTypes:	dynamic	(ref scope_s, boolean) ref tree_p =
+	{
+	return self;
+	}
+
+	};
+
+decl_x:	public	type	inherit stmt_x {
+	public:
+
+	declaration:	ref declaration_p;
+	source:		textRange;
+
+	initTree:	ref tree_p;
+
+constructor:	(d: ref declaration_p, s: textRange) =
+	{
+	super constructor(O_DECL);
+	declaration = d;
+	source = s;
+	initTree = 0;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	if	(initTree)
+		initTree display(indent + INDENT_AMOUNT);
+//	declaration display(???);
+	}
+
+gatherDeclarations:	dynamic	(s: ref blockScope) =
+	{
+	s addDeclaration(declaration);
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	if	(initTree){
+		initTree = initTree fold();
+		initTree sethiUllman();
+		}
+	return self;
+	}
+
+computeBenefits:	dynamic	(int) =
+	{
+	if	(initTree)
+		initTree computeBenefits(nestingLevel);
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	if	(declaration->storageClass != SC_AUTO)
+		return self;
+	if	(declaration->idList == 0)
+		return self;
+
+	t:		ref tree_p;
+
+	if	(declaration->initializer.start == 0){
+		sym:	ref symbol_s;
+		d:	ref type_s;
+
+		sym = s lookup(declaration->idList->name, s);
+		if	(sym == 0 ||
+			 sym->dtype == 0)
+			return self;
+		d = sym->dtype getType();
+		if	(sym->name && d hasConstructor()){
+			CurrentContext->offset = source.start;
+			CurrentContext errorX("ErrNeedsConstructor",
+					sym->name spelling(), "", 0);
+			initTree = ErrorTree;
+			return self;
+			}
+		if	(!d needsDynamicVectors())
+			return self;
+		t = 0;
+		}
+	else	{
+		src:		ref sourceParser;
+
+		src = s getSourceBuffer();
+		if	(src == 0)
+			return self;
+
+		t = src parseWholeExpression(declaration->initializer);
+		if	(t == 0)
+			return self;
+		}
+	n:	ref tree_p;
+
+	n = Func iden(0, 0, declaration->idList->name, 
+					declaration->idList->offset);
+	initTree = Func binary(O_INIT, n, t, 
+					declaration->initializer.start);
+	initTree = initTree assignTypes(s, FALSE);
+	return self;
+	}
+
+	};
+
+goto_x:	public	type	inherit stmt_x {
+	public:
+
+	tag:		ref identifier;
+	source:		textRange;
+
+	target:		ref label_x;
+
+create:	factory	(id: ref identifier, s: textRange) ref goto_x =
+	{
+	self = alloc(sizeof goto_x);
+	self = [ O_GOTO, id ];
+	source = s;
+	return self;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("%S (%d:%d)\n", tag spelling(), source.start, source.end);
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	target = s findLabel(tag);
+	if	(target == 0){
+		CurrentContext->offset = source.start;
+		CurrentContext errorX("ErrUndefSym", tag spelling(), "", 0);
+		}
+	return self;
+	}
+
+	};
+
+test_x:	public	type	inherit stmt_x {
+	public:
+
+	test:		ref tree_p;
+	target:		ref label_x;
+	source:		textRange;
+//	jumpCond:	jumpCondition;
+//	extraJump:	signedByte;
+
+constructor:	(t: ref tree_p, destination: ref label_x, 
+					s: textRange) =
+	{
+	super constructor(O_TEST);
+	test = t;
+	target = destination;
+	source = s;
+//	jumpCond = JC_NOOP;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf(" (%d:%d) -> %x nextSpill %x\n", source.start, source.end, target, nextSpill);
+	if	(test)
+		test display(indent + INDENT_AMOUNT);
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	if	(test){
+		test = test fold();
+		test sethiUllman();
+		}
+	return self;
+	}
+
+computeBenefits:	dynamic	(int) =
+	{
+	if	(test)
+		test computeBenefits(nestingLevel);
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	if	(test)
+		test = test assignTypes(s, TRUE);
+	else
+		test = ErrorTree;
+//	jumpCond = assignTestTemps(self);
+//	extraJump = extraTestJump(self);
+	return self;
+	}
+
+	};
+

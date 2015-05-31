@@ -1,0 +1,761 @@
+include	file, filesys, alys;
+include	error;
+include	string, format;
+include	window, console, treeview, editor;
+
+Mailgrams:	ref mailgram;
+Mailbox:		[:] char;
+Display:	ref display;
+
+main:	entry	() =
+	{
+	ms:	mailStream;
+	err, cnt:	int;
+
+	getMailbox();
+	err = ms find(Mailbox);
+	if	(err)
+		Mailbox = "<error>";
+	Display = new display[];
+	Display configure([ 80, 20 ]);
+	Display open();
+	if	(err){
+		Display postFooter("No mailbox found for %S", Mailbox);
+		return;
+		}
+	Display postFooter("Loading mail for %S", Mailbox);
+	Mailgrams = ms load();
+	ms close();
+	cnt = Mailgrams parseHeaders();
+	Display newMailgrams();
+	Display redraw();
+	Display postFooter("%d mail messages", cnt);
+	}
+
+display:	type	inherit	applicationShell	{
+	buffer:		ref	mailgramBuffer;
+	headers:	ref	mailgramEditor;
+
+	public:
+
+constructor:	() =
+	{
+	buf:	[MAXPATH + 10] char;
+	se:	stringEmitter = [ buf ];
+
+	se printf("Mail for: %S", Mailbox);
+	super constructor(stringDup(se result()));
+	useFooter();
+	iconLabel("- mail -", C_TITLE);
+	headers = new mailgramEditor[ 0 ];
+	anchor(headers);
+	buffer = new mailgramBuffer[];
+	headers connect(buffer);
+	headers resetEditor();
+	headers setTextFocus();
+	}
+
+newMailgrams:	() =
+	{
+	buffer newMailgrams();
+	}
+
+closeMessage:	() =
+	{
+	buffer closeMessage();
+	}
+
+previousMessage:	() =
+	{
+	headers processKeystroke(CTRL_P);
+	}
+
+nextMessage:	() =
+	{
+	headers processKeystroke(CTRL_N);
+	}
+
+	};
+
+mailgramEditor:	type	inherit	treeEditor {
+	public:
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	c:	int;
+
+	switch	(k){
+	case	CTRL_N:	
+		c = cursor;
+		downArrow();
+		if	(c != cursor)
+			enterKey();
+		break;
+
+	case	CTRL_P:	
+		c = cursor;
+		upArrow();
+		if	(c != cursor)
+			enterKey();
+		break;
+
+	default:
+		return super processKeystroke(k);
+		}
+	return TRUE;
+	}
+
+	};
+
+mailgramBuffer:	type	inherit	treeBuffer {
+	currentLine:	int;
+	current:	ref mailgram;
+	mailgramCount:	int;
+	lastMailgram:	ref mailgram;
+	msg:		ref messageEditor;
+
+	public:
+
+constructor:	() =
+	{
+	msg = 0;
+	mailgramCount = 0;
+	lastMailgram = 0;
+	current = 0;
+	currentLine = 0;
+	}
+
+newMailgrams:	() =
+	{
+	m:	ref mailgram;
+	i:	int;
+
+	lastMailgram = Mailgrams;
+	for	(i = 0, m = Mailgrams; m; lastMailgram = m, m = m->next, i++)
+		;
+	mailgramCount = i;
+	if	(current == 0)
+		current = Mailgrams;
+	}
+
+refresh:	dynamic	(lin: int) boolean =
+	{
+	seek(lin);
+	return TRUE;
+	}
+
+seek:	dynamic	(line: int) int =
+	{
+	if	(line < 0)
+		return currentLine;
+	if	(currentLine > line){
+		while	(currentLine > line && current){
+			current = current->prev;
+			currentLine--;
+			}
+		if	(current == 0){
+			current = Mailgrams;
+			currentLine = 0;
+			}
+		}
+	else if	(currentLine < line){
+		while	(currentLine < line && current){
+			current = current->next;
+			currentLine++;
+			}
+		if	(current == 0){
+			current = lastMailgram;
+			if	(current)
+				currentLine = mailgramCount - 1;
+			else
+				currentLine = 0;
+			}
+		}
+	return currentLine;
+	}
+
+fetchLine:	dynamic	() [:] char =
+	{
+	if	(current == 0)
+		return "";
+	current draw(LineBuffer);
+	return LineBuffer;
+	}
+
+tagIndent:	dynamic	() int =
+	{
+	return 0;
+	}
+
+tagLength:	dynamic	() int =
+	{
+	return 132;
+	}
+
+lineCount:	dynamic	() int =
+	{
+	return mailgramCount;
+	}
+
+open:		dynamic	(ref char) int =
+	{
+	if	(current == 0)
+		return FALSE;
+	else	{
+		if	(msg)
+			msg newMessage(current->subject, current->message);
+		else	{
+			msg = new messageEditor[ current->subject, 
+							current->message ];
+			msg configure([ 80, 30 ]);
+			msg open();
+			}
+		return TRUE;
+		}
+	}
+
+launch:		dynamic	(x: ref char) int =
+	{
+	return open(x);
+	}
+
+closeMessage:	() =
+	{
+	msg = 0;
+	}
+
+	};
+
+LineBuffer:	[800] char;
+
+mailStream:	type	inherit	stream {
+	public:
+
+find:	(user: [:] char) int =
+	{
+	buf:	[MAXPATH] char;
+	i:	int;
+	s:	[:] char;
+
+	s = makePath(buf, "/c/usr/spool/mail", user, "");
+	i = open(s, AR_READ);
+	if	(i)
+		stdout printf("Could not open '%S': %S\n", s, cmdError(i));
+	return i;
+	}
+
+load:	() ref mailgram =
+	{
+	m, first, last:	ref mailgram;
+	i, len:		long;
+	c:		int;
+	cp:		[:] char;
+
+	last = 0;
+	first = 0;
+	for	(;;){
+
+			// read the message starter
+
+		c = getc();
+		if	(c == EOF)
+			break;
+		if	(c != 1)
+			continue;
+		c = getc();
+		if	(c == EOF)
+			break;
+		if	(c != 1)
+			continue;
+		c = getc();
+		if	(c == EOF)
+			break;
+		if	(c != '\r')
+			continue;
+		c = getc();
+		if	(c == EOF)
+			break;
+		if	(c != '\n')
+			continue;
+		m = readMailgram();
+		if	(m == 0)
+			break;
+		m->prev = last;
+		if	(last)
+			last->next = m;
+		else
+			first = m;
+		last = m;
+		}
+	return first;
+	}
+
+readMailgram:	() ref mailgram =
+	{
+	m:		ref mailgram;
+	c:		int;
+	last:		ref text;
+	startOfLine:	boolean;
+	i:		int;
+
+	last = new text;
+	m = new mailgram[ 0, 0, last ];
+	startOfLine = TRUE;
+	i = 0;
+	for	(;;){
+		c = getc();
+		if	(c == EOF)
+			return m;
+		if	(startOfLine){
+			startOfLine = FALSE;
+			m->length = i;
+			if	(c == 1){
+				c = getc();
+				if	(c != 1)
+					last = last push(1);
+				else	{
+					c = getc();
+					if	(c != '\r')
+						last = last push(1) push(1);
+					else	{
+						c = getc();
+						if	(c != '\n')
+							last = last 
+								push(1)
+								push(1)
+								push('\r');
+						else
+							return m;
+						}
+					}
+				}
+			}
+		i++;
+		last = last push(c);
+		if	(c == '\n')
+			startOfLine = TRUE;
+		}
+	}
+
+	};
+
+mailgram:	type	{
+	public:
+
+	next:		ref mailgram;
+	prev:		ref mailgram;
+	message:	ref text;
+	index:		int;
+	length:		int;
+	from:		[:] char;
+	to:		[:] char;
+	subject:	[:] char;
+	date:		[:] char;
+
+parseHeaders:	() int =
+	{
+	i:	int;
+	m:	ref mailgram;
+
+	for	(i = 0, m = self; m; m = m->next, i++){
+		m->index = i + 1;
+		m->from = m->message findLine("From:");
+		if	(|m->from)
+			m->from = addressTrim(m->from);
+		m->date = m->message findLine("Date:");
+		m->date = normalizeDate(m->date);
+//		m->to = m->message findLine("To:");
+//		if	(|m->to)
+//			m->to = addressTrim(m->to);
+		m->subject = m->message findLine("Subject:");
+		}
+	return i;
+	}
+
+draw:	(buf: [:] char) =
+	{
+	s:	[:] char;
+	se:	stringEmitter = [ buf[:|buf - 1] ];
+
+	s = from;
+	if	(|s > 25)
+		s = s[|s - 25:];
+	se printf("%3d %20.20S³%25.25S³%S\n", index, date, s, subject);
+	s = se result();
+	s[|s] = 0;
+	}
+
+	};
+
+text:	type	{
+	public:
+
+	next:		ref text;
+	len:		int;
+	data:		[1024] char;
+
+push:	(c: char) ref text =
+	{
+	if	(len >= |data){
+		i:	int;
+
+		i = stringReverseScan(data, '\n');
+		next = new text;
+		if	(i >= 0){
+			i++;
+			next->len = len - i;
+			memCopy(next->data, data + i, next->len);
+			len = i;
+			}
+		self = next;
+		}
+	data[len++] = c;
+	return self;
+	}
+
+findLine:	(prefix: [:] char) [:] char =
+	{
+	i, j:	int;
+
+	while	(self){
+		i = 0;
+		while	(i + |prefix < len){
+			if	(memCompare(prefix, data + i, |prefix) == 0){
+				cp:	[:] char;
+
+				for	(j = i + |prefix; j < len; j++)
+					if	(data[j] == '\n'){
+						j++;
+						break;
+						}
+				cp = data[i + |prefix:j];
+				while	(|cp && isspace(cp[0]))
+					cp = cp[1:];
+				if	(|cp && cp[|cp - 1] == '\n')
+					(|cp)--;
+				if	(|cp && cp[|cp - 1] == '\r')
+					(|cp)--;
+				while	(|cp && isspace(cp[|cp - 1]))
+					(|cp)--;
+				return cp;
+				}
+			while	(i < len && data[i] != '\n')
+				i++;
+			i++;
+			}
+		self = next;
+		}
+	return "";
+	}
+
+	};
+
+addressTrim:	(cp: [:] char) [:] char =
+	{
+	i:	int;
+	s:	[:] char;
+
+	i = stringScan(cp, '<');
+	if	(i > 0){
+		s = cp[i + 1:];
+		if	(stringScan(s, '>') >= 0){
+			|cp = i;
+			while	(|cp && isspace(cp[|cp - 1]))
+				(|cp)--;
+			if	(|cp && cp[0] == '"')
+				cp = cp[1:];
+			if	(|cp && cp[|cp - 1] == '"')
+				(|cp)--;
+			return cp;
+			}
+		}
+	i = stringScan(cp, '(');
+	if	(i >= 0){
+		s = cp[i + 1:];
+		i = stringScan(s, ')');
+		if	(i > 0){
+			|s = i;
+			while	(|s && isspace(s[|s - 1]))
+				(|s)--;
+			while	(|s && isspace(s[0]))
+				s = s[1:];
+			if	(|s && s[0] == '"')
+				s = s[1:];
+			if	(|s && s[|s - 1] == '"')
+				(|s)--;
+			return s;
+			}
+		}
+	if	(|cp && cp[0] == '"')
+		cp = cp[1:];
+	if	(|cp && cp[|cp - 1] == '"')
+		(|cp)--;
+	return cp;
+	}
+
+getMailbox:	() =
+	{
+	uid:	[MAXPATH] char;
+	s:	[:] char;
+
+	s = uid;
+	try
+		s [:]= myJob() value("USER");
+	except	{
+		printf("USER not defined\n");
+		exit(1);
+		}
+	Mailbox = stringDup(s);
+	}
+
+normalizeDate:	(date: [:] char) [:] char =
+	{
+	original:	[:] char;
+	wday:		[:] char;
+	i:		int;
+	mday:		int;
+	year:		int;
+	month:		[:] char;
+	hour:		int;
+	minute:		int;
+	second:		int;
+
+	original = date;
+
+		// Find any week day
+
+	wday = "";
+	if	(|date >= 3){
+		if	(memCompare(date, "Mon", 3) == 0 ||
+			 memCompare(date, "Tue", 3) == 0 ||
+			 memCompare(date, "Wed", 3) == 0 ||
+			 memCompare(date, "Thu", 3) == 0 ||
+			 memCompare(date, "Fri", 3) == 0 ||
+			 memCompare(date, "Sat", 3) == 0 ||
+			 memCompare(date, "Sun", 3) == 0){
+			wday = date[:3];
+			date = date[3:];
+			if	(|date && date[0] == ',')
+				date = date[1:];
+			while	(|date && isspace(date[0]))
+				date = date[1:];
+			}
+		}
+	if	(|date && isdigit(date[0])){
+		mday = 0;
+		while	(|date && isdigit(date[0])){
+			mday = mday * 10 + date[0] - '0';
+			date = date[1:];
+			}
+		while	(|date && isspace(date[0]))
+			date = date[1:];
+		if	(|date >= 3){
+			month = date[:3];
+			date = date[3:];
+			}
+		else
+			return original;
+		}
+	else if	(|date && isupper(date[0])){
+		if	(|date >= 3){
+			month = date[:3];
+			date = date[3:];
+			while	(|date && isspace(date[0]))
+				date = date[1:];
+			}
+		else
+			return original;
+		mday = 0;
+		while	(|date && isdigit(date[0])){
+			mday = mday * 10 + date[0] - '0';
+			date = date[1:];
+			}
+		}
+	else
+		return original;
+	if	(mday == 0 || mday > 31)
+		return original;
+	while	(|date && isspace(date[0]))
+		date = date[1:];
+	year = 0;
+	while	(|date && isdigit(date[0])){
+		year = year * 10 + date[0] - '0';
+		date = date[1:];
+		}
+	if	(|date == 0)
+		return original;
+	if	(date[0] == ' '){
+		while	(|date && isspace(date[0]))
+			date = date[1:];
+		if	(year >= 100)
+			year %= 100;
+		hour = 0;
+		while	(|date && isdigit(date[0])){
+			hour = hour * 10 + date[0] - '0';
+			date = date[1:];
+			}
+		}
+	else	{
+		hour = year;
+		year = 0;
+		}
+	if	(date[0] != ':')
+		return original;
+	date = date[1:];
+	minute = 0;
+	while	(|date && isdigit(date[0])){
+		minute = minute * 10 + date[0] - '0';
+		date = date[1:];
+		}
+	second = 0;
+	if	(date[0] == ':'){
+		date = date[1:];
+		while	(|date && isdigit(date[0])){
+			second = second * 10 + date[0] - '0';
+			date = date[1:];
+			}
+		}
+	buf:	[40] char;
+	se:	stringEmitter = [ buf ];
+
+	if	(|wday)
+		se printf("%S, ", wday);
+	se printf("%d %S ", mday, month);
+	if	(year)
+		se printf("%d ", year);
+	se printf("%02d:%02d", hour, minute);
+	return stringDup(se result());
+	}
+
+messageEditor:	public	type	inherit	popupShell {
+	public:
+
+	buffer:		ref textBuffer;
+	textArea:	ref textEditor;
+
+constructor:	(subj: [:] char, message: ref text) =
+	{
+	super constructor(subj, Display);
+	textArea = new textEditor[ ];
+	anchor(textArea);
+	buffer = new textBuffer[];
+	textArea connect(buffer);
+	textArea resetEditor();
+	loadMessage(message);
+	textArea setScrap(&Scrap);
+	textArea setTextFocus();
+	}
+
+newMessage:	(subj: [:] char, message: ref text) =
+	{
+	buffer close();
+	newTitle(subj);
+	textArea resetEditor();
+	loadMessage(message);	
+	}
+
+loadMessage:	(message: ref text) =
+	{
+	len:	int;
+	cp:	ref char;
+	s:	[:] char;
+	i:	int;
+	line:	int;
+
+	buffer = [ ];
+	len = 0;
+	while	(message){
+		buffer seek(len, 0);
+		buffer insert(message->data, message->len);
+		len += message->len;
+		message = message->next;
+		}
+	cp = buffer fetchLine(0, 0);
+	if	(cp == 0){
+		buffer clearChanged();
+		return;
+		}
+	len = stringLength(cp);
+	s = cp[:len];
+	i = stringScan(s, '\n');
+	if	(i < 5){
+		buffer clearChanged();
+		return;
+		}
+	if	(memCompare(cp, "From", 4) == 0)
+		textArea deleteLine();
+	line = 0;
+	for	(;;){
+		cp = buffer fetchLine(line, 0);
+		if	(cp == 0)
+			break;
+		if	(*cp == '\r' ||
+			 *cp == '\n')
+			break;
+		len = stringLength(cp);
+		s = cp[:len];
+		i = stringScan(s, '\n');
+		if	(i < 0)
+			break;
+		if	(exclude(s)){
+			buffer seek(line, 3);
+			buffer deleteText(i + 1);
+			}
+		else
+			line++;
+		}
+	textArea beginFile();
+	textArea redraw();
+	buffer clearChanged();
+	}
+
+destructor:	dynamic	() =
+	{
+	delete buffer;
+	super destructor();
+	Display closeMessage();
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	c:	int;
+
+	switch	(k){
+	case	CTRL_N:	
+		Display nextMessage();
+		break;
+
+	case	CTRL_P:	
+		Display previousMessage();
+		break;
+
+	default:
+		return super processKeystroke(k);
+		}
+	return TRUE;
+	}
+
+	};
+
+exclude:	(s: [:] char) boolean =
+	{
+	i:	int;
+
+	if	(|s && isspace(s[0]))
+		return TRUE;
+	for	(i = 0; i < |ExcludeTagList; i++)
+		if	(|s > |ExcludeTagList[i] &&
+			 memCompare(s, ExcludeTagList[i], |ExcludeTagList[i]) == 0)
+			return TRUE;
+	return FALSE;
+	}
+
+ExcludeTagList:	[] [:] char = [
+	"Received:",
+	"Return-Path:",
+	"Message-Id:",
+	"Message-ID:",
+	"References:",
+	"X-",
+	"Content-",
+	];

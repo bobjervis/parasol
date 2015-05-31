@@ -1,0 +1,73 @@
+/*
+	Copyright (c) 1994 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+
+	// The random type must be signed.  It's size is coupled with the
+	// multiplier and increment to select a random sequence that will
+	// have a period covering the entire random_t range.
+
+Random:	type	signed[32];
+
+MULTIPLIER:	const	random_t = 0x015a4e35;
+INCREMENT:	const	random_t = 1;
+
+random:		public	Randomizer;
+
+start:	entry	() =
+	{
+	random seed(1);
+	}
+
+Randomizer:	public	type	{
+	state:		random_t;
+
+public:
+/*
+	Sets the random number state to s.
+ */
+seed:	(s: random_t) =
+	{
+	state = s;
+	}
+/*
+	Returns a random value from 0 to 2^15 - 1 as a signed int.
+ */
+next:	() int =
+	{
+	state = MULTIPLIER * state + INCREMENT;
+	return (state >> 16) & 0x7fff;
+	}
+/*
+	Return an integer in the range from 1 through i.
+ */
+range:	(i: int) int =
+	{
+	return next() % i + 1;
+	}
+/*
+	Return the roll of i dice, each of which have j sides.
+
+	As i and j increase the resulting probability distribution 
+	approximates a normal distribution.
+ */
+dice:	(i: int, j: int) int =
+	{
+	sum:	int;
+
+	for	(sum = 0; i; i--)
+		sum += next() % j + 1;
+	return sum;
+	}
+/*
+	Return a percentage from 0 through 100%.
+ */
+percent:	() int =
+	{
+	return next() % 101;
+	}
+
+};

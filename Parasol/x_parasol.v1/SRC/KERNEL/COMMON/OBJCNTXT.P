@@ -1,0 +1,211 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	alys;
+include	hardware;
+include	error;
+include	process;
+include	object;
+
+NLOCALS:	public	const	int = 32;
+
+objectContext:	public	type	{
+	public:
+
+	refCount:		int;
+	parent:			ref objectContext;
+	owner:			ref object;
+	localObject:		[NLOCALS] ref far External;
+	forkAction:		[NLOCALS] forkAction_t;
+
+makeLocal:	(obj: ref far External, slot: ref far External) int =
+	{
+	i:	int;
+
+	i = int(slot);
+	if	(i < 0 || i >= NLOCALS)
+		return ERRINVALIDDATA;
+	if	(unsigned(obj) < NLOCALS){
+		obj = localObject[unsigned(obj)];
+		if	(obj == 0)
+			return ERRINVALIDDATA;
+		obj dup();
+		}
+	if	(localObject[i])
+		localObject[i] close();
+	localObject[i] = obj;
+	forkAction[i] = FA_REF;
+	return SUCCESS;
+	}
+
+makeAnyLocal:	(obj: ref far External) ref far External =
+	{
+	i:	int;
+
+//	kprintf("obj = %x\n", obj);
+	if	(unsigned(obj) < NLOCALS){
+		obj = localObject[unsigned(obj)];
+		if	(obj == 0)
+			return ref far External(ERRINVALIDDATA);
+		obj dup();
+		}
+	for	(i = 0; i < NLOCALS; i++){
+		if	(localObject[i] == 0){
+			localObject[i] = obj;
+			forkAction[i] = FA_REF;
+//			kprintf("arena %x fd = %x\n", self, i);
+			return ref far External(i);
+			}
+		}
+	return ref far External(ERRMFILE);
+	}
+
+closeLocal:	(obj: ref far External) =
+	{
+	i:	unsigned;
+
+	i = unsigned(obj);
+	if	(i < NLOCALS)
+		localObject[i] = 0;
+	}
+
+setForkAction:	(slot: ref far External, action: forkAction_t) int =
+	{
+	i:	int;
+	x:	forkAction_t;
+
+	i = int(slot);
+	if	(i < 0 || i >= NLOCALS)
+		return ERRINVALIDDATA;
+	if	(action != FA_REF &&
+		 action != FA_COPY &&
+		 action != FA_STATIC &&
+		 action != FA_CLOSE)
+		return ERRINVALIDDATA;
+	x = forkAction[i];
+	forkAction[i] = action;
+	return x;
+	}
+
+copy:	(o: ref object) ref objectContext =
+	{
+	i:	int;
+	oc:	ref objectContext;
+
+	oc = new objectContext;
+	oc->refCount = 1;
+	memCopy(&oc->localObject, &localObject, sizeof localObject);
+	memCopy(&oc->forkAction, &forkAction, sizeof forkAction);
+	for	(i = 0; i < NLOCALS; i++){
+		x:	ref far External;
+
+		x = oc->localObject[i];
+		if	(x == 0 ||
+			 x == CurProc->animates->me)
+			continue;
+		switch	(oc->forkAction[i]){
+		case	FA_CLOSE:
+			oc->localObject[i] = 0;
+			break;
+
+		case	FA_COPY:
+			oc->localObject[i] = forkObject(x);
+			break;
+
+		case	FA_REF:
+			x dup();
+			break;
+
+		case	FA_STATIC:
+			break;
+			}
+		}
+	oc->owner = o;
+	if	(o)
+		oc->parent = self;
+	else	{
+//		kprintf("copy(0) %d %p -> %p\n", CurProc->animates->me,
+//					self, oc);
+		oc->parent = 0;
+		}
+	return oc;
+	}
+
+dup:	() =
+	{
+	n:	threadLock;
+
+	n lock();
+	refCount++;
+	n unlock();
+//	kprintf("%d %p dup()\n", CurProc->animates->me, self);
+	}
+
+newJob:	(j: ref far Job, u: userId, g: userId) =
+	{
+	i:	int;
+	
+	for	(i = 0; i < NLOCALS; i++){
+		if	(localObject[i] == 0)
+			continue;
+		switch	(forkAction[i]){
+		case	FA_CLOSE:
+			localObject[i] close();
+			localObject[i] = 0;
+			break;
+
+		case	FA_COPY:
+		case	FA_REF:
+			try
+				localObject[i] = 
+					setNewJobObject(localObject[i], 
+								j, u, g);
+			except	{
+				localObject[i] close();
+				localObject[i] = 0;
+				}
+			break;
+
+		case	FA_STATIC:
+			break;
+			}
+		}
+	}
+
+close:	() ref objectContext =
+	{
+	p:	ref objectContext;
+	i:	int;
+	e:	ref far External;
+	n:	threadLock;
+
+//	displayObjects();
+//	kprintf("%d %p close() count %d\n", CurProc->animates->me, self, refCount);
+	p = parent;
+	n lock();
+	i = --refCount;
+	n unlock();
+	if	(i <= 0){
+		for	(i = 0; i < NLOCALS; i++){
+			e = localObject[i];
+			localObject[i] = 0;
+			if	(e){
+				try
+					e close();
+				except
+					;
+				}
+			}
+		if	(parent)
+			parent close();
+		delete self;
+		}
+	return p;
+	}
+
+	};
+

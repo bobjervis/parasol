@@ -1,0 +1,831 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	hardware;
+
+NSIGNALS:	public	const	int = 32;
+NLOCALS:	public	const	int = 32;
+
+	// Local object slots:
+
+STDIN_SLOT:	public	const int = 0;
+STDOUT_SLOT:	public	const int = 1;
+STDERR_SLOT:	public	const int = 2;
+FSYS_SLOT:	public	const int = 20;		// file system name context.
+
+/*
+	The node structure is the main switchboard for the ALYS
+	kernel.  All of the other local resources of the kernel are 
+	accessible through this object.  By centralizing these attributes,
+	the AlysNode object can be visible to the outside world for
+	network inquiries and deep system management.
+ */
+Node:	public	type	inherit	External {
+	public:
+
+	// Clock management calls
+
+time:			gate	() Time;
+
+setTime:		gate	(Time);
+
+	// Network interface calls
+
+enableNetwork:		gate	(name: [:] char, net: int, node: int) int;
+
+defineNode:		gate	(name: [:] char) int;
+
+	// Driver management calls
+
+loadDriver:		gate	(cmd: [:] char, args: [:] char) int;
+
+unloadDriver:		gate	(i: int) int;
+
+	// Process management calls
+
+spawn:			gate	(cmd: [:] char, args: [:] char) 
+							ref far External;
+
+spawnDebug:		gate	(cmd: [:] char, args: [:] char) 
+							debug_t;
+
+nullDebug:		gate	() debug_t;
+
+	// Information reporting calls
+
+describe:		gate	() NodeState;
+
+getArena:		gate	(aid: int) arena_t;
+
+getObject:		gate	(oid: ref far External) object_t;
+
+getObjectName:		gate	(oid: ref far External) [] char;
+
+getMessage:		gate	(mid: MessageId) message_t;
+
+getProcess:		gate	(pid: int) process_t;
+
+getDriver:		gate	(drid: int) driver_t;
+
+getInterruptVector:	gate	(vid: int) interruptVector_t;
+
+getSegment:		gate	(sid: int) segment_t;
+
+getRoute:		gate	(rid: int) route_t;
+
+killObject:		gate	(oid: ref far External) int;
+
+getObjectType:		gate	(oid: ref far External) [] char;
+
+setUserid:		gate	(user: userId, group: userId);
+//
+//	Set a timer that will expire in n milliseconds.  The expiration
+//	will generate an alamrExpired signaling message.
+//
+timer:			gate	(n: Milliseconds);
+//
+//	Create a kernel core dump
+//
+kernelCoreDump:		gate	(f: [:] char);
+//
+//	Reparent a child object
+//
+reparent:		gate	(child: ref far External, 
+				 newparent: ref far External);
+	};
+/*
+	A startup server is the program that is started when ALYS is booted.
+	It manages a host-wide state which in turn determines the set of
+	programs that are running at any given time.
+ */
+StartupServer:	public	type	inherit	External	{
+
+enterState:	gate	(newState: char);
+
+getState:	gate	() char;
+
+	};
+
+Milliseconds:	public	type	signed[MILLISECONDS_BITS];
+/*
+	A job provides the execution context for a collection of processes.
+	These processes are not constrained to appear within a single arena,
+	nor must all processes within an arena participate in the same job.
+
+	A job defines a set of name/value pairs called the job context.  Each
+	pair is called an alias.
+
+	These attributes can have any string as the name and any string as the
+	value.  Because aliases can be used in other strings, some characters
+	are less useful in name strings than others.  For example, a slash in
+	a name string means the alias cannot be used in a pathname.
+ */
+Job:	public	type	inherit	External	{
+	public:
+
+broadcastAttention:	gate	();
+/*
+	This function defines a new name/value pair.  Names are case
+	sensitive, but values are not touched.
+
+	A return value of SUCCESS indicates that the definition was accepted.
+	If the name is already defined, the new value will replace the old.
+ */
+alias:	gate	(name: [:] char, value: [:] char) int;
+/*
+	The probe function returns the length, in characters, of the value
+	string corresponding to the name.  If the name is not defined, the
+	call is rejected.
+ */
+probe:	gate	(name: [:] char) Size;
+/*
+	This message requests the size of the name for the alias whose index
+	is passed as the argument.  All aliases
+	are accessible through an index.  The order of aliases is unspecified.
+	Aliases are numbered from zero and if an index greater than the highest
+	defined alias is requested, the message is rejected.
+ */
+probeNameByIndex:	gate	(index: int) Size;
+/*
+	This message requests the size of the value for the alias whose index
+	is passed as the argument.  All aliases
+	are accessible through an index.  The order of aliases is unspecified.
+	Aliases are numbered from zero and if an index greater than the highest
+	defined alias is requested, the message is rejected.
+ */
+probeValueByIndex:	gate	(index: int) Size;
+/*
+	This function returns the value string corresponding to the name, if
+	any.  If the name is not defined, the message is rejected.
+ */
+value:	gate	(name: [:] char) [] char;
+/*
+	Get by index has to return the value.  All aliases
+	are accessible through an index.  The order of aliases is unspecified.
+	Aliases are numbered from zero and if an index greater than the highest
+	defined alias is requested, the message is rejected.
+ */
+valueByIndex:	gate	(index: int) [] char;
+/*
+	Get by index has to return the name.  All aliases
+	are accessible through an index.  The order of aliases is unspecified.
+	Aliases are numbered from zero and if an index greater than the highest
+	defined alias is requested, the message is rejected.
+ */
+nameByIndex:	gate	(index: int) [] char;
+/*
+	This message deletes the alias for the given name.  Indices may not be
+	preserved when an alias is undefined.
+ */
+undefine:	gate	(name: [:] char) int;
+/*
+	Changes to the list of aliases will affect the results of index
+	calls.  As a result, any program wishing to extract alias information
+	from a job should ask for the change count before and after extracting
+	information.  If the change count differs before and after, the entire
+	extraction operation should be retried.
+ */
+changeId:	gate	() int;
+
+	};
+
+newJob:	public	() ref far Job =
+	{
+	_Thread->myJob = _newJob();
+	return _Thread->myJob;
+	}
+
+myJob:	public	() ref far Job =
+	{
+	j:	ref far Job;
+
+	if	(_Thread->myJob == 0)
+		_Thread->myJob = _myJob();
+	return _Thread->myJob;
+	}
+
+myHost:	public	() ref far Node =
+	{
+	n:	ref far Node;
+	cache:	static	ref far Node;
+
+	if	(cache == 0)
+		cache = _myHost();
+	return cache;
+	}
+/*
+	disown
+
+	This function alters the process cleanup behavior on exit.  Normally,
+	whenever a process exits, all objects it created are deleted.  This
+	means that threads are stopped and kernel objects are removed.
+
+	This function can be used to disown either the current thread's parent 
+	or children.  For a child to disown its parent means that when the
+	parent exits, the child remains.
+
+	INPUTS:
+
+	x	0 means disown this process from its parent,
+		otherwise disown the named object.  The current process
+		must either be the parent or a child of the named object.
+
+	RETURNS:
+
+	SUCCESS			The operation worked
+	ERRNOTFOUND		The named object does not exist
+	ERRINVALIDARGUMENT	The named object is already disowned
+	ERRPERMISSION		The named object is neither the parent nor a
+				child of the caller
+ */
+disown:	public	(x: ref far External) int =
+	{
+	return _disown(x);
+	}
+/*
+process:	public	type	inherit	External {
+	public:
+
+	// Debugging interface
+
+debug:			gate	() debug_t =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+setRegisters:		gate	(task_t) int =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+run:			gate	() state_t =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+singleStep:		gate	() state_t =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+flush:			gate	() int =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+	// Process management functions
+
+kill:			gate	() int =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+	// Information reporting functions
+
+describe:		gate	() process_t =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+	};
+ */
+/*
+segment:	public	type	inherit	External {
+	public:
+
+read:			gate	() [:] byte =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+write:			gate	([:] byte) int =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+seek:			gate	(long, seek_t) long =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+exchangeByte:		gate	(location: vaddr_t, value: byte) unsigned =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+fetchByte:		gate	(location: vaddr_t) unsigned =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+describe:		gate	() segment_t =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+	};
+ */
+NodeState:	public	type	packed	{
+	public:
+
+	kernelVersion:	unsigned[16];
+	name:		[33] char;
+			byte;
+
+	root:		ref far directory;
+
+	userTime:	Tick;
+	sysTime:	Tick;
+	idleTime:	Tick;
+
+	diskRetries:	long;
+	cacheHits:	long;
+	cacheMisses:	long;
+
+	availableRAM:	paddr_t;
+	diskCache:	paddr_t;
+	kernelCode:	paddr_t;
+	kernelData:	paddr_t;
+	dosMemory:	paddr_t;
+	netBuffers:	paddr_t;
+	};
+
+arena_t:	public	type	packed	{
+	};
+
+object_t:	public	type	packed	{
+	public:
+
+	me:		ref far External;
+	parent:		ref far External;
+	myJob:		ref far External;
+	user:		userId;
+	group:		userId;
+	jobRights:	AccessRights;
+	userRights:	AccessRights;
+	groupRights:	AccessRights;
+	worldRights:	AccessRights;
+	useCount:	int;
+	flags:		ObjectFlags;
+	alertable:	boolean;
+	};
+
+ObjectFlags:	public	type	byte = {
+	OF_KERNEL = 	0x01,
+	OF_DISOWNED =	0x02,
+	};
+
+message_t:	public	type	packed	{
+	};
+
+driver_t:	public	type	packed	{
+	};
+
+process_t:	public	type	packed	{
+	public:
+	status:		pStatus_t;
+	suspended:	boolean;
+	_filler:	[2] byte;
+	pid:		int;
+	mainObject:	ref far External;
+	parent:		ref far External;
+	currentObject:	ref far External;
+	basepriority:	priority_t;
+	priority:	priority_t;
+	exitStatus:	unsigned;
+	times:		processTimes_t;
+	childtimes:	processTimes_t;
+//	code:		ref far segment;
+//	data:		ref far segment;
+	context:	ref far directory;
+	};
+
+processTimes_t:	public	type	packed	{ public:
+	user:	Tick;
+	kernel:	Tick;
+	};
+
+	/* Process priorities */
+
+priority_t:	public	type    byte = {
+
+	PR_NORMAL	= 35,	/* Normal user priority */
+
+	PR_LOW		= 50,	/* Lowest system priority */
+
+	PR_SWAPPER	= 78,	/* Swapper wait */
+
+	PR_HIGH		= 80,	/* Unbreakable priorities */
+
+	PR_DEVICE	= 90,
+
+	PR_MAXIMUM	= 255
+	};
+
+route_t:	public	type	packed	{
+	public:
+	name:		[33] char;
+	state:		rState_t;
+	hwa:		hwa_t;
+	root:		ref far directory;
+	};
+
+debug_t:	public	type	packed	{
+	public:
+	proc:		ref far External;
+	pid:		processId;
+//	code:		ref far segment;
+//	data:		ref far segment;
+//	state:		state_t;
+	task:		task_t;
+	};
+/*
+state_t:	public	type	packed	{
+	public:
+
+	state:		dState_t;
+			[3] byte;
+	errorCode:	int;
+	task:		task_t;
+	};
+ */
+segment_t:	public	type	packed	{
+	public:
+	address:	vaddr_t;
+	length:		vaddr_t;
+	isCode:		boolean;
+	status:		sStatus_t;
+	};
+
+pDisposition_t:	public	type	byte = {
+	D_INCORE	= 0x01,
+	D_IO		= 0x02,
+	D_GIVEN		= 0x20,
+	D_KILLABLE	= 0x80,
+	};
+
+pStatus_t:	public	type	byte = {
+	PFREE,
+	PNEW,
+	PRUN,
+	PSPIN,
+	PWAIT,
+	PDEAD,
+	PSTOP,
+	PINVALID
+	};
+
+processId:	public	type	unsigned[16];
+userId:		public	type	unsigned[16];
+
+MAX_HWA:	const	int = 14;
+
+hwa_t:		public	type	{
+	public:
+	length:		char;
+	address:	[MAX_HWA] byte;
+	};
+
+rState_t:	public	type	char = {
+	ND_UNUSED,
+	ND_UNKNOWN,
+	ND_DOWN,
+	ND_UP
+	};
+/*
+dState_t:	public	type	byte =
+	{
+	DEB_STEP,			// after single step
+	DEB_NEW,			// at start of debug session
+	DEB_DEAD,			// after exit call
+	DEB_BKPT,			// after break point was hit
+	DEB_SIG,			// after signal raised
+	DEB_TRAP,			// after hardware trap
+	DEB_POSTMORTEM			// core dump
+	};
+ */
+sStatus_t:	public	type	byte = {
+	SG_INCORE	= 0x01,
+	SG_LOCK		= 0x02
+	};
+
+seek_t:	public	type	byte = {
+	SEEK_ABS,			// absolute seek
+	SEEK_CUR,			// relative to current loc
+	SEEK_END			// relative to end
+	};
+
+forkArena:	public	() int =
+	{
+	_emit(0x9a, _null, _GDT_FORKARENA);
+	}
+
+discardArena:	public	() int =
+	{
+	_emit(0x9a, _null, _GDT_DISCARDARENA);
+	}
+
+alarm:	public	(i: Time) =
+	{
+	_EBX = i;
+	_emit(0x9a, _null, _GDT_ALARM);
+	}
+
+permit:	public	(j: AccessRights, u: AccessRights, g: AccessRights,
+				w: AccessRights) =
+	{
+	_BX = u;
+	_CX = g;
+	_DX = w;
+	_AX = j;
+	_emit(0x9a, _null, _GDT_PERMIT);
+	}
+
+//	Special Alys users: each of these user id's carry special priveleges
+
+U_ALYS_BOOT:	public	const	userId = 0;
+U_ALYS_SECURITY:public	const	userId = 1;
+U_ALYS_ADMIN:	public	const	userId = 2;
+
+getUserid:	public	() userId =
+	{
+	_emit(0x9a, _null, _GDT_GETUSERID);
+	}
+
+getGroupid:	public	() userId =
+	{
+	_emit(0x9a, _null, _GDT_GETGROUPID);
+	}
+
+directory:	public	type	inherit	External {
+	public:
+
+open:			gate	(fname: [:] char, opt: AccessRights) 
+							ref far channel = 
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+stat:			gate	(fname: [:] char) file_t = 
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+create:			gate	(fname: [:] char, attr: fAttributes_t) 
+							ref far channel = 
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+makeDirectory:		gate	(fname: [:] char) int =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+removeDirectory:	gate	(fname: [:] char) int =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+unlink:			gate	(fname: [:] char) int =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+unlinkGroup:		gate	(fname: [:] char) int =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+move:			gate	(fname1: [:] char, d2: ref far directory, 
+						fname2: [:] char) int =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+getAbsolutePath:	gate	(fname: [:] char) [] char =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+access:			gate	(fname: [:] char, AccessRights) int =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+setFileAttributes:	gate	(fname: [:] char, fAttributes_t) int =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+getDrive:		gate	(fname: [:] char) int =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+find:			gate	(fname: [:] char) ref far directory = 
+	{
+	return 0;
+	}
+
+addReference:		gate	() =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+getDriveInfo:		gate	() drive_t = 
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+scanDirectory:		gate	() ref far directoryScanner =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+register:		gate	(obj: ref far External, name: [:] char,
+					typ: [:] char) int =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+attach:			gate	(name: [:] char, 
+					typ: [:] char) ref far External =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+detachObject:		gate	(obj: ref far External) =
+	{
+	}
+
+	};
+
+directoryScanner:	public	type	inherit External {
+	public:
+
+next:	gate	() fileDescriptor_t =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+	};
+
+fileDescriptor_t:	public	type	packed	{ public:
+	info:		file_t;
+	nlen:		byte;		// File name length in char's
+	name:		[32] char;
+	};
+
+channel:	public	type	inherit External {
+	public:
+
+	channelClass:	byte;
+	filePosition:	long;
+
+constructor:	(class: byte) =
+	{
+	channelClass = class;
+	filePosition = 0;
+	}
+
+open:			gate	() int =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+read:			gate	() [] byte =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+write:			gate	([:] byte) int =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+seek:			gate	(long, seek_t) long =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+setAge:			gate	(Time) int =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+getClass:		gate	() channelClass_t =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+	};
+
+channelClass_t:	public	type	byte = {
+	CC_FILE,			// a disk file channel
+	CC_CONSOLE,			// a console window channel
+	};
+
+directoryChannel:	public	type	inherit channel {
+
+next:	gate	() [] byte =
+	{
+	}
+
+	};
+
+channel_t:	public	type	packed	{
+	channelClass:	byte;
+			[3] byte;
+	filePosition:	long;
+	};
+
+file_t:	public	type	packed	{
+	public:
+	attributes:	fAttributes_t;
+	size:		long;
+	ftime:		Time;
+	user:		userId;
+	group:		userId;
+	id:		int;		// A unique identifier
+
+isValid:	() boolean =
+	{
+	return id != -1;
+	}
+
+	};
+
+drive_t:	public	type	packed	{
+	public:
+	sectors:		unsigned[32];
+	sectorSize:		unsigned[32];		// size in bytes
+	freeSectors:		unsigned[32];
+	};
+
+fAttributes_t:	public	type	unsigned = {
+/*
+	FA_USER_READ	= 0x000001,
+	FA_USER_WRITE	= 0x000002,
+	FA_USER_CONTROL	= 0x000004,
+	FA_USER_EXEC	= 0x000008,
+	FA_GRP_READ	= 0x000010,
+	FA_GRP_WRITE	= 0x000020,
+	FA_GRP_CONTROL	= 0x000040,
+	FA_GRP_EXEC	= 0x000080,
+	FA_WRLD_READ	= 0x000100,
+	FA_WRLD_WRITE	= 0x000200,
+	FA_WRLD_CONTROL	= 0x000400,
+	FA_WRLD_EXEC	= 0x000800,
+	FA_READ		= 0x000111,
+	FA_WRITE	= 0x000222,
+	FA_CONTROL	= 0x000444,
+	FA_EXEC		= 0x000888,
+ */
+	FA_HIDDEN	= 0x001000,
+	FA_SYSTEM	= 0x002000,
+	FA_VLABEL	= 0x004000,
+	FA_DIR		= 0x008000,
+	FA_ARCHIVE	= 0x010000,
+	FA_SETUID	= 0x020000,
+	FA_DEVICE	= 0x040000,
+	FA_SEEKOK	= 0x080000,
+	FA_NETNODE	= 0x100000,
+	FA_SERVICE	= 0x200000,		// object is an active process
+	};
+
+makeLocal:	public	(obj: ref far External, slot: ref far External) int =
+	{
+	_EBX = int(obj);
+	_EDX = int(slot);
+	_emit(0x9a, _null, _GDT_MAKELOCAL);
+	}
+
+makeAnyLocal:	public	(obj: ref far External) ref far External =
+	{
+	_EBX = int(obj);
+	_emit(0x9a, _null, _GDT_MAKEANYLOCAL);
+	}
+
+setForkAction:	public	(slot: ref far External, action: forkAction_t) int =
+	{
+	_EBX= int(slot);
+	_DL = action;
+	_emit(0x9a, _null, _GDT_SETFORKACTION);
+	}
+
+forkAction_t:	public	type	byte = {
+	FA_CLOSE,				// when the arena forks,
+						// close this reference
+	FA_COPY,				// when the arena forks,
+						// copy the object itself
+	FA_REF,					// when the arena forks,
+						// make a new reference only.
+	FA_STATIC,				// just copy the id, dont
+						// count it
+	};
+

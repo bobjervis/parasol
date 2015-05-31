@@ -1,0 +1,1503 @@
+include	string;
+include	console;
+include	alys;
+
+include	process, object;
+include	memory;
+include	error;
+include	file;
+include	arena;
+include	hardware, pc_hdw;
+include	kprintf;
+include	time;
+include	filesys;
+include	pc_keybd;
+include	sound;
+include	disk;
+include	dosfs;
+include	message;
+include	video;
+include timer;
+include	console;
+
+LOAD_BASE:	public	const	int = 0x800;	// Byte offset of image base 
+PSP_SEG:	public	const	int = (LOAD_BASE - sizeof psp_t) / 16;
+
+DOS_ERR_INVFNC:	const	int = 1;
+DOS_ERR_INVDAT:	const	int = 13;
+DOS_ERR_INVDRV:	const	int = 15;
+
+IE:		const	int = 0x0200;		// Interrupt Enable flag
+ZF:		const	int = 0x0040;		// Zero Flags
+
+DosMachine:	public	type	inherit	arena	{
+	dosMemory:		ref segment;
+	switchCharacter:	byte;		// DOS Switch Character
+	ctrlBreakState:		byte;
+	virtualIF:		byte;
+	dtaSeg:			unsigned[16];
+	dtaOffset:		unsigned[16];
+	dosWindow:		ref DosWindow;
+	openFiles:		[32] ref far channel;
+
+	visible:
+
+	fileSystem:		ref DosFileSystem;
+
+	public:
+
+	lcontext:		localContext_t;
+
+constructor:	(mem: ref segment) =
+	{
+	fileSystem = new DosFileSystem[];
+	switchCharacter = '/';
+	ctrlBreakState = 1;
+	virtualIF = IE;
+	dosWindow = 0;
+	dosMemory = mem;
+	setDTA(PSP_SEG, 0x80);
+	}
+
+setDTA:	(seg: unsigned[16], off: unsigned[16]) =
+	{
+	dtaSeg = seg;
+	dtaOffset = off;
+	}
+
+destructor:	dynamic	() =
+	{
+	i:	int;
+
+	for	(i = 0; i < |openFiles; i++)
+		if	(openFiles[i])
+			openFiles[i] close();
+	if	(dosWindow)
+		delete dosWindow;
+	if	(fileSystem)
+		delete fileSystem;
+	}
+
+getFd:	() int =
+	{
+	i:	int;
+
+	for	(i = 0; i < |openFiles; i++)
+		if	(openFiles[i] == 0)
+			return i;
+	return -1;
+	}
+
+generalProtectionFault:	public	dynamic	(rawFrame: ref InterruptFrame) =
+	{
+	xp:	ref dosInterruptFrame;
+
+	xp = ref dosInterruptFrame(rawFrame);
+	if	(xp->eflags & 0x20000 == 0)
+		return;
+//	if	(CurArena->debugger)
+//		triggerDebugEvent(DEB_TRAP, CurProc, 0x0D, rawFrame, 1);
+
+	loc:	paddr_t;
+	ip:	ref byte;
+	wp:	ref unsigned[16];
+
+	ip = makeLinear(xp->cs, xp->eip);	// Find the location of the
+						// instruction
+	switch	(*ip){
+	case	0x9C:				// PUSHF
+		xp->esp -= 2;
+		wp = makeLinear(xp->ss, xp->esp);
+		*wp = (xp->eflags & ~IE) | virtualIF;
+		xp->eip++;
+		resumeDos(xp);
+
+	case	0x9D:				// POPF
+		wp = makeLinear(xp->ss, xp->esp);
+		virtualIF = *wp & IE;
+		xp->eflags &= ~0xFFFF;
+		xp->eflags |= *wp | IE;
+		xp->esp += 2;
+		xp->eip++;
+		resumeDos(xp);
+
+	case	0xCD:				// An interrupt instruction!
+//		printf("@%x:%x int %x cmd %x\n", xp->cs, xp->eip, ip[1],
+//				(xp->eax >> 8) & 0xff);
+		switch	(ip[1]){
+		case	0x10:			// video io
+			biosVideo(xp);
+			break;
+
+		case	0x16:			// keyboard io
+			biosKey(xp);
+			break;
+
+		case	0x1A:			// Time of day
+			biosTimeOfDay(xp);
+			break;
+
+		case	0x20:			// exit
+			exit(0);
+
+		case	0x21:
+//			printf("@%x:%x int %x cmd %x\n", xp->cs, xp->eip, ip[1],
+//				(xp->eax >> 8) & 0xff);
+			dosInt21(xp);
+			break;
+			}
+		printf("Interrupt %x, ", ip[1]);
+		printf("Command: %x\n", byte(xp->eax >> 8));
+		break;
+
+	case	0xCF:				// IRET
+		wp = makeLinear(xp->ss, xp->esp);
+		xp->eip = *wp++;
+		xp->cs = *wp++;
+		virtualIF = *wp & IE;
+		xp->eflags &= ~0xFFFF;
+		xp->eflags |= *wp | IE;
+		xp->esp += 6;
+		resumeDos(xp);
+
+	case	0xEC:				// IN AL,DX
+		if	(xp->edx == 0x3d8 ||
+			 xp->edx == 0x3da){	// read CGA port
+			xp->eax = _inportByte(xp->edx);
+			xp->eip++;
+			resumeDos(xp);
+			}
+		break;
+
+	case	0xFA:				// CLI
+		virtualIF = 0;
+		xp->eip++;
+		resumeDos(xp);
+
+	case	0xFB:				// STI
+		virtualIF = IE;
+		xp->eip++;
+		resumeDos(xp);
+
+	default:
+		printf("Instruction: %02x\n", *ip);
+		}
+	dumpregs(xp);
+	exit(0x2000);
+	}
+
+biosKey:	(xp: ref dosInterruptFrame) =
+	{
+	x:	byte;
+	i:	unsigned[16];
+	k:	keystroke;
+
+	x = xp->eax >> 8;
+	for	(;;){
+		switch	(x){
+		case	0:
+			if	(dosWindow == 0)
+				getDosWindow();
+			do	{
+				k = dosWindow getRawKey();
+				k = keystrokeToBioskey(k);
+				}
+				while	(k == keystroke(-1));
+							// a dead key, eat it
+			xp->eax = k;
+			break;
+
+		case	1:
+			if	(dosWindow == 0)
+				getDosWindow();
+			k = dosWindow testKey();
+			if	(k == keystroke(-1)){
+				xp->eflags |= ZF;
+				}
+			else	{
+				k = keystrokeToBioskey(k);
+				if	(k == unsigned[16](-1)){
+							// a dead key, eat it
+					dosWindow getKey();
+					continue;
+					}
+				xp->eflags &= ~ZF;
+				xp->eax = k;
+				}
+			break;
+
+		case	2:
+			i = getShiftState();
+			* ref byte(&xp->eax) = i;
+			break;
+			}
+		xp->eip += 2;		// skip the interrupt instruction
+		resumeDos(xp);
+		}
+	}
+
+biosVideo:	(xp: ref dosInterruptFrame) =
+	{
+	x:	byte;
+	p:	point;
+	i:	unsigned[16];
+
+	x = xp->eax >> 8;
+	switch	(x){
+	case	0x02:			// set cursor position
+		p.x = xp->edx;
+		p.y = xp->edx >> 8;
+		if	(dosWindow == 0)
+			getDosWindow();
+		dosWindow positionCursor(p);
+		break;
+
+	case	0x03:			// get cursor position
+		if	(dosWindow == 0)
+			getDosWindow();
+		xp->edx = dosWindow->cursor.x + int(dosWindow->cursor.y) << 8;
+		xp->ecx = 0x0D0E;
+		break;
+
+	case	0x06:			// scroll up
+		i = byte(xp->eax);
+		if	(i == 0)
+			i = 5000;
+		p2:	point;
+		p.x = xp->ecx;
+		p.y = xp->ecx >> 8;
+		p2.x = xp->edx;
+		p2.y = xp->edx >> 8;
+		if	(dosWindow == 0)
+			getDosWindow();
+		dosWindow verticalScroll(p, p2, i);
+		break;
+
+	case	0x07:			// scroll down
+		i = byte(xp->eax);
+		if	(i == 0)
+			i = 5000;
+		p.x = xp->ecx;
+		p.y = xp->ecx >> 8;
+		p2.x = xp->edx;
+		p2.y = xp->edx >> 8;
+		if	(dosWindow == 0)
+			getDosWindow();
+		dosWindow verticalScroll(p, p2, -i);
+		break;
+
+	case	0x08:			// get char/attribute at cursor
+		if	(dosWindow == 0)
+			getDosWindow();
+		dosWindow read(dosWindow->cursor, ref char(&xp->eax), 2);
+		break;
+
+	case	0x09:			// write chars/attrs
+		i = xp->ecx;
+		if	(dosWindow == 0)
+			getDosWindow();
+		if	(i == 1){
+			dosWindow setColor(xp->ebx);
+			dosWindow putc(dosWindow->cursor, xp->eax);
+			}
+		else	{
+			p = dosWindow->cursor;
+
+			while	(i > 0){
+				dosWindow setColor(xp->ebx);
+				dosWindow putc(p, xp->eax);
+				p.x++;
+				i--;
+				}
+			}
+		break;
+
+	case	0x0A:			// write chars
+		i = xp->ecx;
+		if	(dosWindow == 0)
+			getDosWindow();
+		if	(i == 1)
+			dosWindow putc(dosWindow->cursor, xp->eax);
+		else	{
+			p = dosWindow->cursor;
+
+			while	(i > 0){
+				dosWindow putc(p, xp->eax);
+				p.x++;
+				i--;
+				}
+			}
+		break;
+
+	case	0x0B:			// set color palette
+		break;			// ignore for now
+
+	case	0x0F:			// get current state
+		xp->eax = 0x5003;	// mode 3 80 columns
+		xp->ebx &= ~0xff00;	// BH = 0; page 0
+		break;
+
+	default:
+		if	(x > 0x19)
+			break;
+		return;
+		}
+	xp->eip += 2;			// skip the interrupt instruction
+	resumeDos(xp);
+	}
+
+getDosWindow:	() =
+	{
+	dosWindow = new DosWindow[];
+	}
+
+dosInt21:	(xp: ref dosInterruptFrame) =
+	{
+	cmd:		int;
+	filename:	[MAXPATH] char;
+	s:		[:] char;
+
+	xp->eflags &= ~1;			// clear carry
+	switch	(byte(xp->eax >> 8)){
+	case	0x02:				// display byte
+		if	(byte(xp->edx) == '\a')
+			beep();
+		else
+			ref far channel(1) write(ref byte(&xp->edx)[:1]);
+		break;
+
+	case	0x09:
+		{
+		i:	int;
+
+		cp = makeLinear(xp->ds, xp->edx);
+		for	(i = 0; cp[i] != '$'; i++)
+			;
+		if	(i)
+			ref far channel(1) write(cp[:i]);
+		}
+		break;
+
+	case	0x0d:				// disk reset
+		break;
+
+	case	0x0e:				// set default disk
+//		printf("set default drive to %c:\n", (xp->edx & 0xff) + 'A');
+		cmd = fileSystem setDefaultDrive(xp->edx & 0xff);
+		if	(cmd){
+			xp->eflags |= 1;
+			xp->eax = DOS_ERR_INVDRV;
+			break;
+			}
+		xp->eax = activePartitions();
+		break;
+
+	case	0x0f:				// open FCB (yukk!)
+		fcb:	ref fcb_t;
+		{
+		ch:	ref far channel;
+		fd:	int;
+
+		fcb = makeFCB(xp->ds, xp->edx);
+		s = fcbToString(fcb, filename);
+		fd = getFd();
+		if	(fd < 0){
+			xp->eax |= 0xff;		// set al to FF
+			fcb->fileDescriptor = -1;
+			break;
+			}
+//		printf("open FCB %x:%x for %s: ", xp->ds, xp->edx, &filename);
+		ch = fileSystem open(s, AR_READ|AR_WRITE);
+		if	(ch == 0){
+			xp->eax |= 0xff;		// set al to FF
+			fcb->fileDescriptor = -1;
+//			printf("failed cmd = %d\n", cmd);
+			}
+		else	{
+			cmd = fileSystem stat(s, &sb);
+			if	(cmd == SUCCESS){
+				fcb->fileSize = sb.size;
+				fcb->fileDate = sb.ftime >> 16;
+				fcb->fileTime = sb.ftime;
+				fcb setAttribute((sb.attributes >> 11) & 0x3e);
+				}
+			openFiles[fd] = ch;
+			fcb->fileDescriptor = fd;
+			fcb->curBlock = 0;
+			fcb->curRecord = 0;
+			fcb->recordSize = 0x80;
+			* ref byte(&xp->eax) = 0;
+//			printf("succeeded\n");
+			}
+		}
+		break;
+
+	case	0x10:				// close FCB
+		fcb = makeFCB(xp->ds, xp->edx);
+//		printf("close FCB %x:%x %d:%s ", xp->ds, xp->edx, fcb->drive, &fcb->file);
+		if	(fcb->fileDescriptor < 3 ||
+			 fcb->fileDescriptor >= |openFiles ||
+			 openFiles[fcb->fileDescriptor] == 0 ||
+			 openFiles[fcb->fileDescriptor] close() != SUCCESS){
+			xp->eax |= 0xff;	// Error
+//			printf("failed\n");
+			}
+		else	{
+			xp->eax &= ~0xff;	// Success
+			fcb->fileDescriptor = -1;
+//			printf("succeeded\n");
+			}
+		break;
+
+	case	0x11:				// search for first entry
+		sb:	file_t;
+		fcb2:	ref fcb_t;
+		cp:	ref char;
+
+		fcb = makeFCB(xp->ds, xp->edx);
+		s = fcbToString(fcb, filename);
+//		printf("search for first FCB %x:%x for %s: ", 
+//				xp->ds, xp->edx, &filename);
+		cmd = fileSystem stat(s, &sb);
+//		printf("stat(%s) = %d\n", &filename, cmd);
+		if	(cmd){
+			xp->eax |= 0xff;		// set al to FF
+//			printf("failed\n");
+			}
+		else	{
+			cp = makeLinear(dtaSeg, dtaOffset);
+			if	(fcb->fcbStyle)
+				*cp = 0xff;
+			else
+				*cp = 0;
+			fcb2 = makeFCB(dtaSeg, dtaOffset);
+			fcb2 setAttribute(fcb getAttribute());
+			fcb2 setPrefix();
+			fcb2->drive = fcb->drive;
+			memCopy(&fcb2->file, &fcb->file, 11);
+			memSet(&fcb2->file[11], 0, 21);
+
+			d:	ref dosDirectory;
+
+			d = ref dosDirectory(&fcb2->file);
+			d->attribute = (sb.attributes >> 11) & 0x3e;
+			d->ftime = sb.ftime;
+			d->size = sb.size;
+			d->cluster = sb.id;
+			* ref byte(&xp->eax) = 0;
+//			printf("dta: %x:%x\n", dtaSeg, dtaOffset);
+//			dumpData(d, sizeof directory);
+//			dumpData(makeLinear(dtaSeg, 0x35DE), 0x40);
+//			printf("succeeded\n");
+			}
+		break;
+
+	case	0x13:				// delete FCB
+		fcb = makeFCB(xp->ds, xp->edx);
+		s = fcbToString(fcb, filename);
+//		printf("delete FCB %x:%x for %s: ", xp->ds, xp->edx, &filename);
+		cmd = fileSystem unlinkGroup(s);
+		if	(cmd){
+			* ref byte(&xp->eax) = 0xff;
+//			printf("failed\n");
+			}
+		else	{
+			* ref byte(&xp->eax) = 0;
+//			printf("succeeded\n");
+			}
+		break;
+
+	case	0x16:				// create FCB
+		{
+		ch:	ref far channel;
+		fd:	int;
+
+		fcb = makeFCB(xp->ds, xp->edx);
+		s = fcbToString(fcb, filename);
+//		printf("create FCB %x:%x for %s: ", xp->ds, xp->edx, &filename);
+		fd = getFd();
+		if	(fd < 0){
+			xp->eax |= 0xff;		// set al to FF
+			fcb->fileDescriptor = -1;
+			break;
+			}
+		ch = fileSystem create(s, 0);
+		if	(ch == 0){
+			xp->eax |= 0xff;		// set al to FF
+			fcb->fileDescriptor = -1;
+//			printf("failed\n");
+			}
+		else	{
+			openFiles[fd] = ch;
+			fcb->fileDescriptor = fd;
+			fcb->fileDate = 0;
+			fcb->fileSize = 0;
+			fcb->curBlock = 0;
+			fcb->curRecord = 0;
+			fcb->recordSize = 0x80;
+			* ref byte(&xp->eax) = 0;
+//			printf("succeeded\n");
+			}
+		}
+		break;
+
+	case	0x17:				// rename FCB
+		{
+		rfcb:		ref renameFcb_t;
+		newName:	[16] char;
+		s2:		[:] char;
+
+		rfcb = makeLinear(xp->ds, xp->edx);
+		s = fcbToString(ref fcb_t(rfcb), filename);
+		s2 = fcbToString(ref fcb_t(&rfcb->drive2), newName);
+		cmd = fileSystem move(s, s2);
+		if	(cmd)
+			xp->eax |= 0xff;
+		else
+			* ref byte(&xp->eax) = 0;
+		}
+		break;
+
+	case	0x19:				// get current disk
+		xp->eax = fileSystem getDefaultDrive();
+		break;
+
+	case	0x1a:				// set DTA
+		dtaSeg = xp->ds;
+		dtaOffset = xp->edx;
+		break;
+
+	case	0x25:				// set vector
+//		printf("Setting vector %x\n", xp->eax & 0xff);
+		break;
+
+	case	0x27:				// random block read
+		len:	int;
+		{
+		b:	[:] byte;
+
+		fcb = makeFCB(xp->ds, xp->edx);
+		buf = makeLinear(dtaSeg, dtaOffset);
+
+//		printf("random read buf %x:%x seek to %x ", dtaSeg, dtaOffset,
+//						fcb->seekRec * fcb->recordSize);
+		len = fcb->recordSize * xp->ecx;
+		if	(len + dtaOffset > 0xffff){
+			* ref byte(&xp->eax) = 2;
+			break;
+			}
+		if	(fcb->fileDescriptor < 0 ||
+			 fcb->fileDescriptor >= |openFiles ||
+			 openFiles[fcb->fileDescriptor] == 0){
+			* ref byte(&xp->eax) = 2;
+			break;
+			}
+		openFiles[fcb->fileDescriptor]
+				seek(fcb->seekRec * fcb->recordSize, 0);
+		b = buf[:len];
+		b [:]= openFiles[fcb->fileDescriptor] read();
+		cmd = |b;
+//		printf("result %d\n", cmd);
+//		printf("fcb: (%d:%s:@(%x:%x):seek %x:rec %x:fd %d) recs %x\n",
+//				fcb->drive, &fcb->file, fcb->curBlock,
+//				fcb->curRecord, fcb->seekRec, fcb->recordSize,
+//				fcb->fileDescriptor, xp->ecx);
+		if	(cmd <= 0){
+			* ref byte(&xp->eax) = 1;
+			break;
+			}
+		if	(cmd != len){
+			rem:	int;
+
+			rem = cmd % fcb->recordSize;
+			if	(rem){
+				cp:	ref byte;
+				cp = buf;
+				cp += cmd;
+				memSet(cp, 0, fcb->recordSize - rem);
+				cmd += (fcb->recordSize - rem);
+				}
+			xp->ecx = cmd / fcb->recordSize;
+			* ref byte(&xp->eax) = 3;
+			}
+		else
+			* ref byte(&xp->eax) = 0;
+		fcb->seekRec += xp->ecx;
+		fcb->curBlock = fcb->seekRec >> 7;
+		fcb->curRecord = fcb->seekRec & 0x7F;
+		}
+		break;
+
+	case	0x28:				// random block write
+		fcb = makeFCB(xp->ds, xp->edx);
+		buf = makeLinear(dtaSeg, dtaOffset);
+
+//		printf("fcb: (%d:%s:@(%x:%x):seek %x:rec %x:fd %d) recs %x\n",
+//				fcb->drive, &fcb->file, fcb->curBlock,
+//				fcb->curRecord, fcb->seekRec, fcb->recordSize,
+//				fcb->fileDescriptor, xp->ecx);
+//		printf("random write buf %x:%x seek to %x ", dtaSeg, dtaOffset,
+//						fcb->seekRec * fcb->recordSize);
+		if	(fcb->fileDescriptor < 0 ||
+			 fcb->fileDescriptor >= |openFiles ||
+			 openFiles[fcb->fileDescriptor] == 0){
+			* ref byte(&xp->eax) = 2;
+			break;
+			}
+		openFiles[fcb->fileDescriptor] 
+				seek(fcb->seekRec * fcb->recordSize, 0);
+		len = fcb->recordSize * xp->ecx;
+		if	(len + dtaOffset > 0xffff){
+			* ref byte(&xp->eax) = 2;
+			break;
+			}
+		cmd = openFiles[fcb->fileDescriptor] write(buf[:len]);
+//		printf("result %d\n", cmd);
+		if	(cmd != len){
+			* ref byte(&xp->eax) = 1;
+			if	(cmd <= 0)
+				break;
+			xp->ecx = cmd / fcb->recordSize;
+			}
+		else
+			* ref byte(&xp->eax) = 0;
+		fcb->seekRec += xp->ecx;
+		fcb->curBlock = fcb->seekRec >> 7;
+		fcb->curRecord = fcb->seekRec & 0x7F;
+		break;
+
+	case	0x29:				// parse filename
+//		printf("parsing %s ", makeLinear(xp->ds, xp->esi));
+		fcb = makeLinear(xp->es, xp->edi);
+		parseDosFilename(makeLinear(xp->ds, xp->esi),
+				fcb, xp->eax, xp);
+//		printf("result: %d:%s\n", fcb->drive, &fcb->file);
+		break;
+
+	case	0x2A:				// get date
+		{
+		d:	Date;
+
+		d decode(Now);
+		xp->ecx = d.year;
+		xp->edx = int(d.month) << 8 | d.monthday;
+		xp->eax &= ~0xff;		// always Sunday
+		}
+		break;
+
+	case	0x2C:				// get time
+		{
+		d:	Date;
+
+		d decode(Now);
+		xp->ecx = int(d.hour) << 8 | d.minute;
+		xp->edx = int(d.second) << 8 /* | d.hundredths */;
+		}
+		break;
+
+	case	0x30:				// get DOS version
+//		printf("Get DOS version (3.10)\n");
+		xp->ebx = 0;
+		xp->ecx = 0;
+		xp->eax = 0x0A03;		// pretend to be DOS 3.10
+		break;
+
+	case	0x33:				// ctrl-brk check
+		if	(byte(xp->eax) == 0)
+			xp->edx = ctrlBreakState;
+		else if	(byte(xp->eax) == 1)
+			ctrlBreakState = xp->edx;
+		else	{
+			xp->eflags |= 1;
+			xp->eax = DOS_ERR_INVFNC;
+			break;
+			}
+		break;
+
+	case	0x35:				// get vector
+//		printf("Getting vector %x\n", xp->eax & 0xff);
+		xp->es = 0;
+		xp->ebx = 0;
+		break;
+
+	case	0x36:				// get disk free space
+		{
+		di:	drive_t;
+
+		cmd = fileSystem getDriveInfo(byte(xp->edx), &di);
+		if	(cmd){
+			xp->eax = 0xffff;
+			break;
+			}
+		xp->ebx = di.freeSectors;
+		xp->edx = di.sectors;
+		xp->ecx = di.sectorSize;
+		xp->eax = 1;//di.sectorsPerCluster;
+		}
+		break;
+
+	case	0x37:				// switch character
+		if	(xp->eax & 0xff == 0)	// al == 0 means get
+			xp->edx = switchCharacter;
+		else
+			switchCharacter = xp->edx;
+		break;
+
+	case	0x3b:				// change current directory
+		{
+		i:	int;
+
+		cp = makeLinear(xp->ds, xp->edx);
+		i = stringLength(cp);
+		if	(i > MAXPATH){
+			xp->eflags |= 1;
+			xp->eax = DOS_ERR_INVDAT;
+			break;
+			}
+//		printf("CD %s\n", cp);
+		cmd = fileSystem setCurrentDir(cp[:i]);
+		if	(cmd){
+			xp->eflags |= 1;
+			xp->eax = DOS_ERR_INVDAT;
+			}
+		}
+		break;
+
+	case	0x3d:				// open fd
+		{
+		ch:	ref far channel;
+		mode:	byte;
+		i:	int;
+		fd:	int;
+
+		cp = makeLinear(xp->ds, xp->edx);
+		i = stringLength(cp);
+		if	(i > MAXPATH){
+			xp->eflags |= 1;
+			xp->eax = DOS_ERR_INVDAT;
+			break;
+			}
+		mode = xp->eax;
+		fd = getFd();
+		if	(fd < 0){
+			xp->eflags |= 1;
+			xp->eax = DOS_ERR_INVDAT;	// should be MFILES
+			break;
+			}
+		ch = FileSystem open(cp[:i], (mode & 3) + 1);
+		if	(ch){
+			xp->eflags |= 1;
+			xp->eax = DOS_ERR_INVDAT;
+			break;
+			}
+		openFiles[fd] = ch;
+		xp->eax = fd;
+		}
+		break;
+
+	case	0x3e:				// close fd
+		if	(xp->ebx < 0 ||
+			 xp->ebx >= |openFiles){
+			xp->eflags |= 1;
+			xp->eax = DOS_ERR_INVDAT;
+			break;
+			}
+		cmd = openFiles[xp->ebx] close();
+		if	(cmd){
+			xp->eflags |= 1;
+			xp->eax = DOS_ERR_INVDAT;
+			}
+		break;
+
+	case	0x40:				// write
+		buf:	ref byte;
+
+//		printf("Write (%d, %x:%x, %d)\n", xp->ebx, xp->ds, xp->edx,
+//						xp->ecx);
+		buf = validateDosAddress(xp->ds, xp->edx, xp->ecx);
+		if	(buf == 0 ||
+			 xp->ebx < 0 ||
+			 xp->ebx >= |openFiles ||
+			 openFiles[xp->ebx] == 0){
+			xp->eflags |= 1;
+			xp->eax = DOS_ERR_INVDAT;
+			break;
+			}
+		cmd = openFiles[xp->ebx] write(buf[:xp->ecx]);
+		if	(cmd < 0){
+			xp->eflags |= 1;
+			xp->eax = -cmd;
+			break;
+			}
+		xp->eax = cmd;
+		break;
+
+	case	0x43:				// chmod
+		{
+		i:	int;
+
+		cp = makeLinear(xp->ds, xp->edx);
+		i = stringLength(cp);
+		if	(i > MAXPATH){
+			xp->eflags |= 1;
+			xp->eax = DOS_ERR_INVDAT;
+			break;
+			}
+		if	(byte(xp->eax)){
+			printf("CHMOD %s %d %x\n", makeLinear(xp->ds, xp->edx),
+				byte(xp->eax), xp->ecx);
+			return;
+			}
+		else	{
+//			printf("chmod %s = %x\n", &filename, sb.attributes);
+			cmd = fileSystem stat(cp[:i], &sb);
+			if	(cmd){
+				xp->eflags |= 1;
+				xp->eax = DOS_ERR_INVDAT;
+				break;
+				}
+			xp->ecx = (sb.attributes >> 11) & 0x3e;
+			}
+		}
+		break;
+
+	case	0x44:				// ioctl
+		switch	(xp->eax & 0xff){
+		case	0:			// get device info
+//			printf("Get device info %d\n", xp->ebx);
+
+			fp:	ref object;
+			fd:	int;
+
+			fd = xp->ebx;
+			if	(fd < 0 || fd > 19){
+				xp->eflags |= 1;
+				xp->eax = 6;
+				break;
+				}
+			fp = objectEntry(ref far External(fd));
+			if	(fp == 0){
+				xp->eflags |= 1;
+				xp->eax = 6;
+				break;
+				}
+//			if	(fp->class == 1)	// console
+//				xp->edx = 0x80D3;
+//			else
+				xp->edx = 0;
+			break;
+
+		default:
+			printf("Sub command: %x\n", xp->eax & 0xff);
+			return;
+			}
+		break;
+
+	case	0x47:				// get current directory
+		{
+		dbuf:	[4] char;
+
+		dbuf[0] = xp->edx + 'a' - 1;
+		dbuf[1] = ':';
+		dbuf[2] = '.';
+		dbuf[3] = 0;
+		if	(char(xp->edx) == 0)
+			fileSystem getAbsolutePath(".", filename);
+		else
+			fileSystem getAbsolutePath(dbuf, filename);
+		src:	ref char;
+		dest:	ref char;
+
+		src = &filename[3];
+		dest = makeLinear(xp->ds, xp->esi);
+		while	(*src){
+			if	(*src == '/')
+				*dest = '\\';
+			else
+				*dest = toupper(*src);
+			src++;
+			dest++;
+			}
+		*dest = 0;
+//		printf("get name (%x:%x) = %s\n", xp->ds, xp->esi, makeLinear(xp->ds, xp->esi));
+		}
+		break;
+
+	case	0x4A:				// modify DOS block size
+//		printf("Set block %04x to %04x\n", xp->es, xp->ebx);
+		break;
+
+	case	0x4C:				// exit
+//		printf("DOS exit(%d)\n", xp->eax & 0xff);
+		exit(xp->eax & 0xff);
+
+	default:
+		return;
+		}
+	xp->eip += 2;			// skip the interrupt instruction
+	resumeDos(xp);
+	}
+
+parseDosFilename:	(cp: ref char, fcb: ref fcb_t, mask: byte,
+				xp: ref dosInterruptFrame) =
+	{
+	startp:	ref char;
+	result:	char;
+	rem:	int;
+	ptr:	ref char;
+	part:	int;
+
+	fcb->file[0] = ' ';
+	result = 0;
+	startp = cp;
+	if	(cp[0]){
+		if	(cp[1] == ':'){		// we have a drive spec
+			if	(!isalpha(cp[0])){
+				result = 0xff;
+				goto done;
+				}
+			fcb->drive = tolower(cp[0]) - 'a' + 1;
+			cp += 2;
+			}
+		else if	(mask & 2 == 0)		// get the default drive
+			fcb->drive = fileSystem getDefaultDrive() + 1;
+		ptr = fcb->file;
+		rem = sizeof fcb->file;
+		while	(cp[0] != ':' &&
+			 cp[0] != ';' &&
+			 cp[0] != ',' &&
+			 cp[0] != '=' &&
+			 cp[0] != '+' &&
+			 cp[0] != '<' &&
+			 cp[0] != '>' &&
+			 cp[0] != '|' &&
+//			 cp[0] != '/' &&
+			 cp[0] != '"' &&
+			 cp[0] != '[' &&
+			 cp[0] != ']' &&
+			 cp[0] > ' '){
+			if	(cp[0] == '.'){
+				while	(rem > 0){
+					rem--;
+					*ptr++ = ' ';
+					}
+				if	(ptr > fcb->ext)
+					break;
+				rem = sizeof fcb->ext;
+				cp++;
+				}
+			else if	(cp[0] == '*'){
+				result = 1;
+				while	(rem > 0){
+					rem--;
+					*ptr++ = '?';
+					}
+				cp++;
+				}
+			else	{
+				if	(rem > 0){
+					rem--;
+					if	(cp[0] == '?')
+						result = 1;
+					*ptr++ = *cp;
+					}
+				cp++;
+				}
+			}
+		endp:	ref char;
+
+		endp = &fcb->ext[sizeof fcb->ext];
+		if	(mask & 0x08 &&
+			 (ptr < fcb->ext ||
+			  rem == 0))
+			endp = &fcb->file[sizeof fcb->file];
+		while	(ptr < endp)
+			*ptr++ = ' ';
+		}
+
+	label	done:
+
+	xp->esi += cp - startp;
+	* ref byte(&xp->eax) = result;
+	}
+
+	};
+
+DosWindow:	type	{
+	win:		ref far textWindow;
+	color:		color_t;
+
+	visible:
+
+	cursor:		point;
+
+	public:
+
+constructor:	() =
+	{
+	c:	ref far console;
+
+	c = locateConsole("");
+	win = c newWindow("", [ 80, 25 ]);
+	win open();
+	color = WHITE;
+	cursor = [ 0, 0 ];
+	}
+
+destructor:	() =
+	{
+	win close();
+	}
+
+putc:	(p: point, ch: char) =
+	{
+	win putcc(p, ch, color);
+	}
+
+setColor:	(c: color_t) =
+	{
+	color = c;
+	}
+
+read:	(p: point, addr: ref byte, len: int) =
+	{
+	}
+
+verticalScroll:	(p1: point, p2: point, delta: int) =
+	{
+	win verticalScroll(p1, p2, delta);
+	}
+
+positionCursor:	(p: point) =
+	{
+	cursor = p;
+	win textCursor(p);
+	}
+
+getRawKey:	() keystroke =
+	{
+	return 'a';
+	}
+
+testKey:	() keystroke =
+	{
+	return -1;
+	}
+
+getKey:		() keystroke =
+	{
+	return 'a';
+	}
+
+	};
+/*
+translatePath:	(dest: * char, seg: unsigned[16], off: unsigned[16]) boolean =
+	{
+	s:	string;
+
+	s = [ makeLinear(seg, off) ];
+	if	(s length() >= MAXPATH)
+		return FALSE;
+	string[ dest ] copy(s);
+	return TRUE;
+	}
+ */
+dosDirectory:	public	type	packed	{
+	public:
+	filename:	[8] byte;
+	extension:	[3] byte;
+	attribute:	char;
+ 			[10] char;
+	ftime:		unsignedLong;
+	cluster:	unsigned[16];
+	size:		unsignedLong;
+	};
+
+keystrokeToBioskey:	(k: keystroke) unsigned[16] =
+	{
+	keymap:	static	[] unsigned[16] = [
+		0x300,			// CTRL_AT nul byte needs a high code
+			0x1e01,	0x3002,	0x2e03,	0x2004,	0x1205,	0x2106,	0x2207,
+		0x2308,	0x1709,	0x240A,	0x250B,	0x260C,	0x320D,	0x310E,	0x180F,
+		0x1910,	0x1011,	0x1312,	0x1f13,	0x1414,	0x1615,	0x2f16,	0x1117,
+		0x2d18,	0x1519,	0x2c1A,	0x1a1B,	0x2b1C,	0x1b1D,	0x071E,	0x0c1F,
+		0x20,	0x21,	0x22,	0x23,	0x24,	0x25,	0x26,	0x27,
+		0x28,	0x29,	0x2A,	0x2B,	0x2C,	0x2D,	0x2E,	0x2F,
+		0x30,	0x31,	0x32,	0x33,	0x34,	0x35,	0x36,	0x37,
+		0x38,	0x39,	0x3A,	0x3B,	0x3C,	0x3D,	0x3E,	0x3F,
+		0x40,	0x41,	0x42,	0x43,	0x44,	0x45,	0x46,	0x47,
+		0x48,	0x49,	0x4A,	0x4B,	0x4C,	0x4D,	0x4E,	0x4F,
+		0x50,	0x51,	0x52,	0x53,	0x54,	0x55,	0x56,	0x57,
+		0x58,	0x59,	0x5A,	0x5B,	0x5C,	0x5D,	0x5E,	0x5F,
+		0x60,	0x61,	0x62,	0x63,	0x64,	0x65,	0x66,	0x67,
+		0x68,	0x69,	0x6A,	0x6B,	0x6C,	0x6D,	0x6E,	0x6F,
+		0x70,	0x71,	0x72,	0x73,	0x74,	0x75,	0x76,	0x77,
+		0x78,	0x79,	0x7A,	0x7B,	0x7C,	0x7D,	0x7E,	0x7F,
+		0x80,	0x81,	0x82,	0x83,	0x84,	0x85,	0x86,	0x87,
+		0x88,	0x89,	0x8A,	0x8B,	0x8C,	0x8D,	0x8E,	0x8F,
+		0x90,	0x91,	0x92,	0x93,	0x94,	0x95,	0x96,	0x97,
+		0x98,	0x99,	0x9A,	0x9B,	0x9C,	0x9D,	0x9E,	0x9F,
+		0xA0,	0xA1,	0xA2,	0xA3,	0xA4,	0xA5,	0xA6,	0xA7,
+		0xA8,	0xA9,	0xAA,	0xAB,	0xAC,	0xAD,	0xAE,	0xAF,
+		0xB0,	0xB1,	0xB2,	0xB3,	0xB4,	0xB5,	0xB6,	0xB7,
+		0xB8,	0xB9,	0xBA,	0xBB,	0xBC,	0xBD,	0xBE,	0xBF,
+		0xC0,	0xC1,	0xC2,	0xC3,	0xC4,	0xC5,	0xC6,	0xC7,
+		0xC8,	0xC9,	0xCA,	0xCB,	0xCC,	0xCD,	0xCE,	0xCF,
+		0xD0,	0xD1,	0xD2,	0xD3,	0xD4,	0xD5,	0xD6,	0xD7,
+		0xD8,	0xD9,	0xDA,	0xDB,	0xDC,	0xDD,	0xDE,	0xDF,
+		0xE0,	0xE1,	0xE2,	0xE3,	0xE4,	0xE5,	0xE6,	0xE7,
+		0xE8,	0xE9,	0xEA,	0xEB,	0xEC,	0xED,	0xEE,	0xEF,
+		0xF0,	0xF1,	0xF2,	0xF3,	0xF4,	0xF5,	0xF6,	0xF7,
+		0xF8,	0xF9,	0xFA,	0xFB,	0xFC,	0xFD,	0xFE,	0xFF,
+
+			// Function keys:
+
+		59<<8,	60<<8,	61<<8,	62<<8,	63<<8,	64<<8,	65<<8,	66<<8,
+		67<<8,	68<<8,	133<<8,	134<<8,	84<<8,	85<<8,	86<<8,	87<<8,
+		88<<8,	89<<8,	90<<8,	91<<8,	92<<8,	93<<8,	135<<8,	136<<8,
+		94<<8,	95<<8,	96<<8,	97<<8,	98<<8,	99<<8,	100<<8,	101<<8,
+		102<<8,	103<<8,	137<<8,	138<<8,	104<<8,	105<<8,	106<<8,	107<<8,
+		108<<8,	109<<8,	110<<8,	111<<8,	112<<8,	113<<8,	139<<8,	140<<8,
+
+			// Numeric pad keys
+
+		71<<8,	79<<8,	73<<8,	81<<8,	-1,	72<<8,	80<<8,	75<<8,
+		77<<8,	82<<8,	83<<8,	0x0E08,	0x0F09,	78<<8+'+',
+								74<<8+'-',
+									106<<8+'*',
+
+		'0',	'1',	'2',	'3',	'4',	'5',	'6',	'7',
+		'8',	'9',	'.',	28<<8+'\r',
+						1<<8+ESC,
+							14<<8,	119<<8,	117<<8,
+		132<<8,	118<<8,	-1,	-1,	-1,	115<<8,	116<<8,	130<<8,
+		131<<8,	-1,	114<<8,	-1,	-1,	-1,	129<<8,	120<<8,
+		121<<8,	122<<8,	123<<8,	124<<8,	125<<8,	126<<8,	127<<8,	128<<8,
+		28<<8+'\n',
+
+			// Alt-letter keys:
+
+			30<<8,	48<<8,	46<<8,	32<<8,	18<<8,	33<<8,	34<<8,
+		35<<8,	23<<8,	36<<8,	37<<8,	38<<8,	50<<8,	49<<8,	24<<8,
+		25<<8,	16<<8,	19<<8,	31<<8,	20<<8,	22<<8,	47<<8,	17<<8,
+		45<<8,	21<<8,	44<<8,
+		];
+
+	return keymap[k];
+	}
+
+makeLinear:	(seg: unsigned[16], off: unsigned[16]) pointer =
+	{
+	return mappedToAddressable(seg << 4 + off);
+	}
+
+exeHeader:	type	{
+	public:
+
+	magic:		unsigned[16];
+	lenMod512:	unsigned[16];
+	lenBlocks:	unsigned[16];
+	relocs:		unsigned[16];
+	headerSize:	unsigned[16];
+	minSize:	unsigned[16];
+	maxSize:	unsigned[16];
+	ss:		unsigned[16];
+	sp:		unsigned[16];
+	checksum:	unsigned[16];
+	ip:		unsigned[16];
+	cs:		unsigned[16];
+	relocOffset:	unsigned[16];
+	overlay:	unsigned[16];
+	};
+
+EXE_MAGIC:	const	unsigned[16] = 0x5a4d;
+
+fcbToString:	(fcb: ref fcb_t, dest: ref char) [:] char =
+	{
+	sav:	ref char;
+
+	sav = dest;
+	if	(fcb->drive){
+		*dest++ = 'a' - 1 + fcb->drive;
+		*dest++ = ':';
+		}
+	i:	int;
+	limit:	int;
+
+	for	(limit = 7; limit >= 0; limit--)
+		if	(fcb->file[limit] != ' ')
+			break;
+	if	(limit >= 0){
+		memCopy(dest, &fcb->file, limit + 1);
+		dest += limit + 1;
+		}
+	for	(limit = 2; limit >= 0; limit--)
+		if	(fcb->ext[limit] != ' ')
+			break;
+	if	(limit >= 0){
+		*dest++ = '.';
+		memCopy(dest, &fcb->ext, limit + 1);
+		dest += limit + 1;
+		}
+	return sav[:dest - sav];
+	}
+
+makeFCB:	(seg: unsigned[16], off: unsigned[16]) ref fcb_t =
+	{
+	cp:	ref byte;
+	fcb:	ref fcb_t;
+
+	cp = makeLinear(seg, off);
+	if	(*cp == 0xff){
+		fcb = ref fcb_t(cp + 7);
+//		printf("extended FCB ");
+		fcb->fcbStyle = 1;
+		}
+	else	{
+		fcb = ref fcb_t(cp);
+		fcb->fcbStyle = 0;
+		}
+	return fcb;
+	}
+
+fcb_t:	type	packed	{
+	public:
+
+	drive:		byte;
+	file:		[8] byte;
+	ext:		[3] byte;
+	curBlock:	unsigned[16];
+	recordSize:	unsigned[16];
+	fileSize:	unsigned[32];
+	fileDate:	unsigned[16];
+	fileTime:	unsigned[16];
+	fileDescriptor:	unsigned[32];
+	fcbStyle:	byte;
+			[3] byte;
+	curRecord:	byte;
+	seekRec:	unsigned[32];
+
+setAttribute:	(attr: byte) =
+	{
+	cp:	ref byte;
+
+	cp = ref byte(self);
+	if	(fcbStyle == 1){
+		cp[-1] = attr;
+//		printf("extended FCB: attr = %x\n", attr);
+		}
+	}
+
+setPrefix:	() =
+	{
+	cp:	ref byte;
+
+	if	(fcbStyle == 1){
+		cp = ref byte(self);
+		cp[-7] = 0xff;
+		memSet(cp - 6, 0, 5);
+		}
+	}
+
+getAttribute:	() byte =
+	{
+	cp:	ref byte;
+
+	if	(fcbStyle == 1){
+		cp = ref byte(self);
+		return cp[-1];
+		}
+	else
+		return 0;
+	}
+
+	};
+
+renameFcb_t:	type	packed	{
+	public:
+
+	drive:		byte;
+	file:		[8] char;
+	ext:		[3] char;
+			[4] char;
+	drive2:		byte;
+	file2:		[8] char;
+	ext2:		[3] char;
+	};
+
+psp_t:	public	type	packed	{
+	public:
+
+	int20:		unsigned[16];
+	memTop:		unsigned[16];
+			[0x28] char;
+	environ:	unsigned[16];
+	stuff:		[82] char;
+	argLen:		char;
+	args:		[127] char;
+	};
+
+dosInterruptFrame:	type	packed	{
+	public:
+
+	_selectors:	[4] unsigned[16];	// extra segment selectors
+	edi:		unsigned;
+	esi:		unsigned;
+	ebp:		unsigned;
+	_esp:		unsigned;
+	ebx:		unsigned;
+	edx:		unsigned;
+	ecx:		unsigned;
+	eax:		unsigned;
+	errCode:	unsigned;
+	eip:		unsigned;
+	cs:		unsigned;
+	eflags:		unsigned;
+	esp:		unsigned;
+	ss:		unsigned;
+	es:		unsigned;
+	ds:		unsigned;
+	fs:		unsigned;
+	gs:		unsigned;
+	};
+
+resumeDos:	(xp: ref dosInterruptFrame) =
+	{
+//	dumpregs(xp);
+	_ESP = paddr_t(xp) + 8;
+	_emit(0x61);			// POPA - pop all
+	_ESP += 4;
+	_emit(0xcf);			// iret
+	}
+
+biosTimeOfDay:	(xp: ref dosInterruptFrame) =
+	{
+	switch	(byte(xp->eax >> 8)){
+	case	0:			// get time of day
+		i:	unsignedLong;
+
+		i = Ticks;
+		xp->edx = i & 0xffff;
+		xp->ecx = i >> 16;
+		xp->eax &= ~0xff;	// AL = 0
+//		printf("Get BIOS time of day: %d\n", i);
+		break;
+
+	default:
+		if	(byte(xp->eax >> 8) > 7)
+			break;
+		return;
+		}
+	xp->eip += 2;			// skip the interrupt instruction
+	resumeDos(xp);
+	}
+
+validateDosAddress:	(seg: unsigned[16], off: unsigned[16], 
+						len: unsigned[16]) pointer =
+	{
+	a:	paddr_t;
+
+	a = seg * 16 + off;
+	if	(a + len > 0xA0000)
+		return 0;
+	return mappedToAddressable(a);
+	}
+
+dumpregs:	(xp: ref dosInterruptFrame) =
+	{
+	t:	ref task_t;
+	err:	long;
+	flags:	long;
+	ch:	[10] char;
+
+		// If we are in user mode, create a debug trap event
+
+	t = &CurProc->task;
+	printf("process %d trapped\n", CurProc->where);
+	printf("v8086 fault at %04x:%04x\n", xp->cs, xp->eip);
+	printf("  ax %04x bx %04x cx %04x dx %04x", 
+				xp->eax, xp->ebx, xp->ecx, xp->edx);
+	printf(" sp %04x bp %04x si %04x di %04x\n", 
+				xp->esp, xp->ebp, xp->esi, xp->edi);
+	printf("  ss %04x ds %04x es %04x fs %04x gs %04x\n",
+				xp->ss, xp->ds, xp->es, xp->fs, xp->gs);
+	flags = xp->eflags;
+	if	(flags & 1)
+		printf("CY ");
+	else
+		printf("NC ");
+	if	(flags & 4)
+		printf("PA ");
+	else
+		printf("NP ");
+	if	(flags & 0x10)
+		printf("AC ");
+	else
+		printf("NA ");
+	if	(flags & 0x40)
+		printf("ZF ");
+	else
+		printf("NZ ");
+	if	(flags & 0x80)
+		printf("SG ");
+	else
+		printf("NS ");
+	if	(flags & 0x100)
+		printf("TF ");
+	else
+		printf("NT ");
+	if	(flags & 0x200)
+		printf("IE ");
+	else
+		printf("NI ");
+	if	(flags & 0x400)
+		printf("DN ");
+	else
+		printf("UP ");
+	if	(flags & 0x800)
+		printf("OV ");
+	else
+		printf("NO ");
+	if	(flags & 0x4000)
+		printf("NT ");
+	if	(flags & 0x10000)
+		printf("RF ");
+	if	(flags & 0x20000)
+		printf("VM ");
+	printf("iopl = %x\n", flags >> 12 & 3);
+	}
+/*
+dumpData:	(p: pointer, len: int) =
+	{
+	cp:	* byte;
+	i:	int;
+	j:	int;
+
+	cp = p;
+	while	(len){
+		printf("%08x: ", cp);
+		i = 8;
+		j = -16;
+		while	(i && len){
+			printf("%02x ", *cp);
+			i--;
+			j++;
+			len--;
+			cp++;
+			}
+		i = 8;
+		printf(" ");
+		while	(i && len){
+			printf("%02x ", *cp);
+			i--;
+			j++;
+			len--;
+			cp++;
+			}
+		printf("  ");
+		for	(i = -16; i < j; i++)
+			printf("%c", cp[i]);
+		printf("\n");
+		}
+	}
+ */

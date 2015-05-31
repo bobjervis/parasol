@@ -1,0 +1,2334 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+//		Expression trees
+
+include	file;
+
+include	types, functype;
+include	hash;
+include	scanner, parser;
+include	ptree;
+include	symtab;
+include	errmsg;
+include	sbuffer;
+include	tparams, target;
+include	value;
+include	real;
+include	xtree, xcall;
+
+Func:	public	ref	functionBody;
+FuncTrap:	public	Trap;
+
+functionBody:	public	type	{ public:
+	optimize:		boolean;
+	currentUnit:		ref unit_s;
+	staticInitializer:	boolean;
+	currentSymbol:		ref symbol_s;
+	currentType:		ref function_z;
+	currentValue:		ref value;
+	rootScope:		ref blockScope;
+	asmLabels:		int;
+
+startValue:	dynamic	(u: ref unit_s) =
+	{
+	currentUnit = u;
+	}
+
+endValue:	dynamic	() =
+	{
+	}
+
+startFunction:	dynamic	(sc: ref blockScope, ft: ref function_z, 
+						sym: ref symbol_s) =
+	{
+	memSet(&TargetData, 0, sizeof TargetData);
+	asmLabels = 0;
+	staticInitializer = FALSE;
+	rootScope = sc;
+	currentType = ft;
+	currentSymbol = sym;
+	}
+
+generateCode:	dynamic	(ref symbol_s, ref stmt_x, ref blockScope) =
+	{
+	}
+
+generateData:	dynamic	(ref symbol_s) =
+	{
+	}
+
+initializerExpression:	(sym: ref symbol_s) ref tree_p =
+	{
+	x, y:		ref tree_p;
+	u:		ref tree_p;
+	t:		ref type_s;
+	initTree:	ref tree_p;
+
+	t = sym->dtype getType();
+	if	(t == 0){
+		printf("t = %x name = %S dtype = ", t, sym->name spelling());
+		sym->dtype display(TRUE);
+		printf("\n");
+		return 0;
+		}
+	if	(sym->initBase &&
+		 sym->storageClass != SC_INTRINSIC)
+		y = icon(sym->initBase, INTBITS);
+	else
+		y = 0;
+	x = y;
+	sym->currentValue registerType();
+	if	(sym->initializer.start ||
+		 y){
+		if	(sym->initializer.start){
+			src:		ref sourceParser;
+
+			src = sym->enclosing getSourceBuffer();
+			if	(src == 0)
+				return 0;
+			x = src parseWholeExpression(sym->initializer);
+			if	(x == 0)
+				return 0;
+			if	(y)
+				x = binary(O_ADD, x, y, sym->offset);
+			x = x assignTypes(sym->enclosing, FALSE);
+			if	(x == 0)
+				return 0;
+			x = x fold();
+			}
+		x = t staticInitializer(x, sym->enclosing);
+		}
+	return x;
+	}
+
+argument:	dynamic	(l: ref tree_p, r: ref tree_p, 
+				o: fileOffset) ref tree_p =
+	{
+	FuncTrap raise(O_ARG);
+	}
+
+assert_:	dynamic	(x: ref tree_p, s: textRange) ref stmt_x =
+	{
+	FuncTrap raise(O_ASSERT);
+	}
+
+auto:	dynamic	(sym: ref symbol_s, adjust: int) ref auto_x =
+	{
+	FuncTrap raise(O_AUTO);
+	}
+
+binary:	dynamic	(op: operators, l: ref tree_p, 
+				r: ref tree_p, 
+				o: fileOffset) ref binary_x =
+	{
+	FuncTrap raise(op);
+	}
+
+block:	dynamic	(x: ref stmt_x) ref stmt_x =
+	{
+	FuncTrap raise(O_BLOCK);
+	}
+
+cast:	dynamic	(d: ref type_p, t: ref tree_p, o: fileOffset) ref tree_p =
+	{
+	FuncTrap raise(O_CAST);
+	}
+
+conditional:	dynamic	(t: ref tree_p, tp: ref tree_p, 
+				fp: ref tree_p, 
+				o: fileOffset) ref tree_p =
+	{
+	FuncTrap raise(O_QUES);
+	}
+
+continueExcept:	dynamic	() ref stmt_x =
+	{
+	FuncTrap raise(O_CONTEX);
+	}
+
+criticalRegion:	dynamic	(t: ref tree_p, s: textRange) ref critical_x =
+	{
+	FuncTrap raise(O_CRITICAL);
+	}
+
+decl:	dynamic	(d: ref declaration_p, s: textRange) ref stmt_x =
+	{
+	FuncTrap raise(O_DECL);
+	}
+
+dynamicVectorPointer:	dynamic	(ref struct_z) ref tree_p =
+	{
+	return ErrorTree;
+	}
+
+ellipsis:	dynamic	() ref tree_p =
+	{
+	FuncTrap raise(O_ELLIPSIS);
+	}
+
+endCritical:	dynamic	(c: ref critical_x) ref stmt_x =
+	{
+	FuncTrap raise(O_ENDCRITICAL);
+	}
+
+endExcept:	dynamic	(m: ref try_x) ref stmt_x =
+	{
+	FuncTrap raise(O_ENDEX);
+	}
+
+endTry:	dynamic	(x: ref try_x) ref stmt_x =
+	{
+	FuncTrap raise(O_ENDTRY);
+	}
+
+error:	dynamic	() ref tree_p =
+	{
+	FuncTrap raise(O_ERROR);
+	}
+
+errorStmt:	dynamic	(o: fileOffset) ref stmt_x =
+	{
+	FuncTrap raise(O_ERROR);
+	}
+
+exceptClause:	dynamic	(m: ref try_x, x: ref tree_p, 
+						s: textRange) ref except_x =
+	{
+	FuncTrap raise(O_EXCEPT);
+	}
+
+expr:	dynamic	(x: ref tree_p, s: textRange) ref stmt_x =
+	{
+	FuncTrap raise(O_STMT);
+	}
+
+fcon:	dynamic	(v: ref real, w: int) ref tree_p =
+	{
+	FuncTrap raise(O_FCON);
+	}
+
+goto_:	dynamic	(id: ref identifier, s: textRange) ref stmt_x =
+	{
+	FuncTrap raise(O_GOTO);
+	}
+
+icon:	dynamic	(v: long, w: int) ref tree_p =
+	{
+	FuncTrap raise(O_ICON);
+	}
+
+iden:	dynamic	(unitName: ref identifier, uno: fileOffset,
+		 id: ref identifier, o: fileOffset) ref tree_p =
+	{
+	FuncTrap raise(O_ID);
+	}
+
+jump:	dynamic	(t: ref label_x, s: textRange) ref jump_x =
+	{
+	FuncTrap raise(O_JUMP);
+	}
+
+label_:	dynamic	() ref label_x =
+	{
+	FuncTrap raise(O_LABEL);
+	}
+
+literal:	dynamic	() ref literal_x =
+	{
+	FuncTrap raise(O_LITERAL);
+	}
+
+methodCall:	dynamic	(l: ref tree_p, id: ref identifier,
+				r: ref tree_p,
+				o: fileOffset, signaling: boolean) ref methodCall_x =
+	{
+	FuncTrap raise(O_MCALL);
+	}
+
+namedLabel:	dynamic	(id: ref identifier, o: fileOffset) ref label_x =
+	{
+	FuncTrap raise(O_LABEL);
+	}
+
+new_:	dynamic	(h: ref tree_p, d: ref type_p, t: ref tree_p, 
+						o: fileOffset) ref tree_p =
+	{
+	FuncTrap raise(O_NEW);
+	}
+
+offsetof_:	dynamic	(d: ref type_p, id: ref identifier) ref tree_p =
+	{
+	FuncTrap raise(O_OFFSETOF);
+	}
+
+reference:	dynamic	(op: operators, l: ref tree_p, 
+				id: ref identifier,
+				o: fileOffset) ref tree_p =
+	{
+	FuncTrap raise(op);
+	}
+
+remoteCall:	dynamic	(obj: ref tree_p, d: ref function_z, m: ref symbol_s,
+				a: ref tree_p, s: ref scope_s,
+				offset: fileOffset, boolean) ref remoteCall_x =
+	{
+	FuncTrap raise(O_RCALL);
+	}
+
+reply_:	dynamic	(x: ref tree_p, s: textRange) ref stmt_x =
+	{
+	FuncTrap raise(O_REPLY);
+	}
+
+return_:	dynamic	(x: ref tree_p, s: textRange) ref stmt_x =
+	{
+	FuncTrap raise(O_RETURN);
+	}
+
+sconst:	dynamic	(c: ref tree_p, o: fileOffset) ref tree_p =
+	{
+	FuncTrap raise(O_SCONST);
+	}
+
+self_:	dynamic	(op: operators, o: fileOffset) ref tree_p =
+	{
+	FuncTrap raise(op);
+	}
+
+sizeof_:dynamic	(d: ref type_p) ref tree_p =
+	{
+	FuncTrap raise(O_SIZEOF);
+	}
+
+slice:	dynamic	(t: ref tree_p, l: ref tree_p, r: ref tree_p, o: fileOffset)
+							ref tree_p =
+	{
+	FuncTrap raise(O_SLICE);
+	}
+
+staticCall:	dynamic	(l: ref tree_p, r: ref tree_p,
+				o: fileOffset) ref staticCall_x =
+	{
+	FuncTrap raise(O_SCALL);
+	}
+
+switch_:	dynamic	(x: ref tree_p, s: textRange) ref switch_x =
+	{
+	FuncTrap raise(O_SWITCH);
+	}
+
+test:	dynamic	(t: ref tree_p, destination: ref label_x, 
+					s: textRange) ref stmt_x =
+	{
+	FuncTrap raise(O_TEST);
+	}
+
+testFalse:	dynamic	(t: ref tree_p, destination: ref label_x, 
+					s: textRange) ref stmt_x =
+	{
+	FuncTrap raise(O_TEST);
+	}
+
+try_:	dynamic	(x: ref label_x) ref try_x =
+	{
+	FuncTrap raise(O_TRY);
+	}
+
+	};
+
+binop:	public	(op: operators, t: ref type_s, l: ref tree_p, 
+					r: ref tree_p) ref binary_x =
+	{
+	x:	ref binary_x;
+
+	x = Func binary(op, l, r, 0);
+	x->dtype = t;
+	return x;
+	}
+
+ErrorTree:	public	ref error_x;
+
+setup:	entry	() =
+	{
+	ErrorTree = error_x create();
+	}
+
+error_x:	public	type	inherit	tree_p	{
+	public:
+
+create:	factory	() ref error_x =
+	{
+	self = alloc(sizeof error_x);
+	self = [ O_ERROR ];
+	dtype = error_z create();
+	return self;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	}
+
+checkForNoEffect:	dynamic	() ref tree_p =
+	{
+	return self;
+	}
+
+hasSideEffects:	dynamic	() boolean =
+	{
+	return TRUE;
+	}
+
+checkArgument:	dynamic	(ref scope_s, ref parameter_s, int, 
+					ref identifier) ref tree_p =
+	{
+	return self;
+	}
+
+assignTypes:	dynamic	(ref scope_s, boolean) ref tree_p =
+	{
+	return self;
+	}
+
+	};
+
+tAttributes_t:	public	type	byte = {
+	TA_READONLY = 0x01,		// tree node is read only
+	TA_LVALUE = 0x02,		// tree node is used as an lvalue
+	};
+
+tree_p:	public	type	{
+	public:
+
+	operator:	operators;
+
+		// added information
+
+	dtype:		ref type_s;
+	reg:		regNum;
+	addrMode:	boolean;
+	attributes:	tAttributes_t;
+
+constructor:	(op: operators) =
+	{
+	operator = op;
+	dtype = 0;
+	reg = nullReg;
+	addrMode = FALSE;
+	attributes = 0;
+	}
+/*
+	This function returns an uninteresting value so that we can
+	simplify some of our tests for constants.  We can test for 
+	constant zero or one, for example, without examining the 
+	operator.
+ */
+integerValue:	dynamic	() long =
+	{
+	return -1;			// not an interesting value
+	}
+/*
+	This function performs two functions.  First, it folds constant
+	subexpressions as well as performing other tree rewrites that
+	produce a more efficient evaluation.  Second, it checks for 
+	expressions trees with no side effects, which are likely to be
+	bugs.
+ */
+fold:	dynamic	() ref tree_p =
+	{
+	return self;
+	}
+
+addAdjustment:	dynamic	(int) =
+	{
+	}
+
+generateCode:	dynamic	() =
+	{
+	}
+
+initialize:	dynamic	(offset: addr_t, v: ref value) =
+	{
+	if	(v)
+		copyFixup(v, offset, dtype sizeOf());
+	else
+		generateCode();
+	}
+/*
+	This function duplicates an expression tree, preserving certain
+	side effects.
+
+	The argument is interpreted as follows:
+		< 0	Preserve pre-value side effects
+		0	Preserve no side effects
+		> 0	Preserve post-value side effects
+ */
+dup:	dynamic	(int) ref tree_p =
+	{
+	display(0);
+	CurrentContext error("ErrUnfinished");
+	return ErrorTree;
+	}
+
+assignTypes:	dynamic	(ref scope_s, boolean) ref tree_p =
+	{
+	printf("assignTypes:\n");
+	display(0);
+	return self;
+	}
+
+gatherDeclarations:	dynamic	(ref blockScope) =
+	{
+	}
+/*
+	This function converts O_ARG argument nodes to O_SEQ comma operator
+	nodes.  This is necessary in casts that looked like function calls.
+ */
+convertArgsToCommas:	dynamic	() ref tree_p =
+	{
+	return self;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	TargetData.spills display(self);
+	printf("%*c%s", indent, ' ', OperTable[operator]);
+	if	(addrMode)
+		printf(" mode");
+	if	(reg != nullReg)
+		printf(" %s", RegNames[reg]);
+	if	(dtype)
+		dtype display(FALSE);
+	}
+
+makeRightAssociative:	dynamic	() ref tree_p =
+	{
+	return self;
+	}
+
+lookupMember:	dynamic	(ref identifier, ref scope_s) ref symbol_s = 
+	{
+	return 0;
+	}
+
+scale:	(by: ref tree_p) ref tree_p =
+	{
+	return binop(O_MUL, IntType, convert(IntType), by getsize());
+	}
+
+getsize:	() ref tree_p =
+	{
+	sz:	addr_t;
+
+	if	(dtype->topType == T_REF)
+		sz = dtype targetOf() sizeOf();
+	else
+		sz = dtype sizeOf();
+	return Func icon(sz, INTBITS);
+	}
+/*
+	This function is called to determine is an lvalue has a simple
+	enough shape.  The intention is that any lvalue that is fairly
+	complicated should be computed once and stored in a temp.  The
+	temp will then be used instead.  Basically, simple variables
+	and indirection directly off simple variables are the only patterns
+	that will be recognized.
+ */
+hasSimpleShape:	dynamic	() boolean =
+	{
+	return FALSE;
+	}
+
+takeAddress:	dynamic	(t: ref type_s) ref tree_p =
+	{
+	return binop(O_ADR, refTo(t), self, 0);
+	}
+/*
+	This function examines the type of a subtree and produces an
+	error message if it does not conform to the set of acceptable
+	types.  The set of acceptable types is determined by the operator
+	containing this subtree as an operand.
+
+	The function returns TRUE if the subtree is acceptable, and FALSE
+	otherwise.
+ */
+checkType:	(opdope: int) boolean =
+	{
+	if	(dtype == 0)
+		return FALSE;
+	if	(opdope & ANY_OK)
+		return TRUE;
+	switch	(dtype->topType){
+	case	T_ERROR:
+		return FALSE;
+
+	case	T_VOID:
+		CurrentContext error("ErrBadType");
+		return FALSE;
+
+	case	T_TYPE:
+		if	(opdope & TYPE_OK == 0){
+			CurrentContext error("ErrBadType");
+			return FALSE;
+			}
+		break;
+
+	case	T_FLOAT:
+		if	(opdope & FLT_OK == 0){
+			CurrentContext error("ErrBadFloatOp");
+			return FALSE;
+			}
+		break;
+
+	case	T_REF:
+		if	(dtype isFarPointer()){
+			if	(opdope & FPTR_OK == 0){
+				CurrentContext error("ErrBadPointerOp");
+				return FALSE;
+				}
+			}
+		else	{
+			if	(opdope & PTR_OK == 0){
+				CurrentContext error("ErrBadPointerOp");
+				return FALSE;
+				}
+			}
+		break;
+
+	case	T_ARRAY:
+		if	(opdope & ARRAY_OK == 0){
+			CurrentContext error("ErrBadArrayOp");
+			return FALSE;
+			}
+		break;
+
+	case	T_DESCRIPTOR:
+		if	(opdope & DESCR_OK == 0){
+			CurrentContext error("ErrBadDescriptorOp");
+			return FALSE;
+			}
+		break;
+
+	case	T_STRUCT:
+		if	(opdope & STRUCT_OK == 0){
+			CurrentContext error("ErrBadStructOp");
+			return FALSE;
+			}
+		break;
+
+	case	T_FUNC:
+		if	(opdope & FUNC_OK == 0){
+			CurrentContext error("ErrBadFunctionOp");
+			return FALSE;
+			}
+		break;
+		}
+	return TRUE;
+	}
+
+checkStaticInitializer:	dynamic	() ref tree_p =
+	{
+	CurrentContext error("ErrBadInit");
+	return ErrorTree;
+	}
+
+copyFixup:	dynamic	(ref value, addr_t, addr_t) =
+	{
+	}
+
+copyString:	dynamic	(ref char, addr_t) =
+	{
+	display(0);
+	CurrentContext error("ErrBadInit");
+	}
+
+promoteArrays:	() ref tree_p =
+	{
+	if	(dtype == 0)
+		return self;
+	if	(dtype->topType == T_ARRAY)
+		return takeAddress(ref array_z(dtype)->element);
+	else if	(dtype->topType == T_DESCRIPTOR)
+		return cast_x createKnown(refTo(dtype elementOf()), self, 0);
+	else
+		return self;
+	}
+
+checkArgument:	dynamic	(s: ref scope_s, p: ref parameter_s, pnum: int, 
+					id: ref identifier) ref tree_p =
+	{
+	t:	ref type_s;
+
+	if	(p){
+		t = p->pType;
+		if	(t)
+			t = t getType();
+		if	(t &&
+			 t->topType != T_ARRAY &&
+			 t->topType != T_DESCRIPTOR)
+			self = promoteArrays();
+		if	(operator == O_SCONST){
+			if	(t->topType == T_STRUCT)
+				return sconstArgument(s, t);
+			}
+		else	{
+			if	(coercible(t)){
+				if	(t->topType == T_ARRAY)
+					return takeAddress(t);
+/*
+				else if	(t->topType == T_DESCRIPTOR &&
+					 dtype->topType == T_ARRAY)
+					return descriptorArgument(s, t);
+ */
+				else
+					return cast_x createCheck(t, self);
+				}
+			}
+		if	(p->name){
+			if	(id)
+				CurrentContext errorX("ErrBadParm2", 
+						id spelling(),
+						p->name spelling(), 0);
+			else
+				CurrentContext errorX("ErrBadParm4", "", p->name spelling(), 0);
+			}
+		else if	(id)
+			CurrentContext errorX("ErrBadParm1", id spelling(), "", pnum);
+		else
+			CurrentContext errorX("ErrBadParm3", "", "", pnum);
+		CurrentContext printf(	"\tExpected type:");
+		t displayMessageFormat();
+		CurrentContext printf( "\n"
+				"\t  Actual type:");
+		dtype displayMessageFormat();
+		CurrentContext printf( "\n");
+		return ErrorTree;
+		}
+
+		// Must be var args parameters
+
+	else	{
+		if	((dtype->topType == T_SIGNED ||
+			  dtype->topType == T_UNSIGNED) &&
+			  ref number_z(dtype)->width < LONGBITS)
+			return cast_x createCheck(number_z create(dtype->topType, NO_RANGE, LONGBITS), self);
+		else if	(dtype->topType == T_FLOAT &&
+			 ref number_z(dtype)->width < DOUBLEBITS)
+			return cast_x createCheck(number_z create(T_FLOAT, NO_RANGE, DOUBLEBITS), self);
+		else if	(dtype->topType == T_ARRAY)
+			return promoteArrays();
+		else if	(dtype->topType == T_TYPE){
+			CurrentContext error("ErrTypeInVarargs");
+			return ErrorTree;
+			}
+		}
+	return self;
+	}
+/*
+	This function must analyze a structure constant function
+	argument and construct an appropriate set of code to generate
+	the argument.  There are three possible approaches:
+
+		- Create a temporary, copy the constant to it and
+		  then pass the object by value.
+
+		- Create a 'stack' temporary by allocating it on
+		  the stack as if it had been pushed by value.
+
+		- Push the structure constant directly.
+
+	Clearly, the last approach is the most efficient one.  For some
+	forms of structure constant the generated code can be extremely
+	efficient indeed.  Short of that, the previous approach seems
+	reasonable as well.  The problem, of course, is that either of the
+	last two approaches depends heavily on being able to generate C
+	code that will accomplish the desired effect.  Such a thing is
+	not exactly portable.  The approach of creating a temporary is the
+	most portable.
+ */
+sconstArgument:	(s: ref scope_s, t: ref type_s) ref tree_p =
+	{
+	arg:	ref tree_p;
+
+		// First, try to generate an immediate mode structure
+		// constant.  If the constant and the underlying machine
+		// can handle it, use that form of the argument.
+
+	arg = immediateSconstArgument(self, t);
+	if	(arg)
+		return arg;
+
+		// Now, try to generate a top-of-stack temporary.  If that
+		// works, generate code for it.
+
+	dest:	ref tree_p;
+	dest2:	ref tree_p;
+	init:	ref tree_p;
+
+	if	(PUSH_TEMPS_ALLOWED){
+		dest = Tos_x create(t);
+		init = itemAssignment(dest, t, 0, self, s);
+		dest = AllocTos_x create(t);
+		init = binop(O_SEQ, init->dtype, dest, init);
+		dest = Tos_x create(t);
+		arg = binop(O_SEQ, dest->dtype, init, dest);
+		}
+	else
+		arg = sconstTemp(s, t);
+	arg->dtype = t;
+	return arg;
+	}
+
+sconstTemp:	(s: ref scope_s, t: ref type_s) ref tree_p =
+	{
+	sym:	ref symbol_s;
+	dest:	ref tree_p;
+	init:	ref tree_p;
+	x:	ref tree_p;
+
+	sym = s unnamedLocal(t);
+	dest = Func auto(sym, 0);
+	init = itemAssignment(dest, t, 0, self, s);
+	dest = Func auto(sym, 0);
+	return binop(O_SEQ, dest->dtype, init, dest);
+	}
+/*
+	This function converts an array argument to a descriptor parameter.
+ */
+descriptorArgument:	(s: ref scope_s, t: ref type_s) ref tree_p =
+	{
+	arg:	ref tree_p;
+	arr:	ref array_z;
+
+		// First, try to generate an immediate mode structure
+		// constant.  If the constant and the underlying machine
+		// can handle it, use that form of the argument.
+
+	arg = immediateDescriptorArgument(self, t);
+	if	(arg)
+		return arg;
+
+		// Now, try to generate a top-of-stack temporary.  If that
+		// works, generate code for it.
+
+	dest:	ref tree_p;
+	dest2:	ref Tos_x;
+	init:	ref tree_p;
+	i:	addr_t;
+	c:	ref tree_p;
+
+	i = ref array_z(dtype)->dimension;
+	self = promoteArrays();
+	if	(PUSH_TEMPS_ALLOWED){
+		dest = Tos_x create(dtype);
+		init = binop(O_ASG, dtype, dest, self);
+		c = Func icon(i, INTBITS);
+		dest2 = Tos_x create(c->dtype);
+		dest2->adjust = DescrMaxBoundOffset;
+		dest = binop(O_ASG, c->dtype, dest2, c);
+		init = binop(O_SEQ, c->dtype, init, dest);
+		c = Func icon(i, INTBITS);
+		dest2 = Tos_x create(c->dtype);
+		dest2->adjust = DescrBoundOffset;
+		dest = binop(O_ASG, c->dtype, dest2, c);
+		init = binop(O_SEQ, c->dtype, init, dest);
+		dest = AllocTos_x create(t);
+		init = binop(O_SEQ, init->dtype, dest, init);
+		dest = Tos_x create(t);
+		arg = binop(O_SEQ, dest->dtype, init, dest);
+		}
+	else
+		arg = descriptorTemp(s, t, i);
+	arg->dtype = t;
+	return arg;
+	}
+
+descriptorTemp:	(s: ref scope_s, t: ref type_s, i: addr_t) ref tree_p =
+	{
+	sym:	ref symbol_s;
+	dest:	ref tree_p;
+	init:	ref tree_p;
+	x:	ref tree_p;
+	c:	ref tree_p;
+
+	sym = s unnamedLocal(t);
+	dest = Func auto(sym, 0);
+	init = binop(O_ASG, dtype, dest, self);
+	c = Func icon(i, INTBITS);
+	dest = Func auto(sym, DescrMaxBoundOffset);
+	x = binop(O_ASG, c->dtype, dest, c);
+	init = binop(O_SEQ, c->dtype, init, x);
+	c = Func icon(i, INTBITS);
+	dest = Func auto(sym, DescrBoundOffset);
+	x = binop(O_ASG, c->dtype, dest, c);
+	init = binop(O_SEQ, c->dtype, init, x);
+	dest = Func auto(sym, 0);
+	return binop(O_SEQ, dest->dtype, init, dest);
+	}
+
+convert:	(t: ref type_s) ref tree_p =
+	{
+	x:	ref tree_p;
+
+	if	(typeMatch(dtype, t))
+		return self;
+	x = coerce(t);
+	if	(x)
+		return x;
+	return cast_x createKnown(t, self, 0);
+	}
+
+coerce:	dynamic	(ref type_s) ref tree_p =
+	{
+	return 0;
+	}
+/*
+	This function shrinks the type of an integer constant to the
+	given type.  The operator being passed determines whether the
+	constant is declared as out of range for the comparison.  This
+	way, in compares a loss of significance warning will be properly
+	generated.  Note that if this function is applied to a non-
+	integer-constant it has no effect.
+ */
+shrink:	dynamic	(operators, ref type_s) =
+	{
+	}
+/*
+	This function converts the type of this tree node to the indicated
+	type, but only if the conversion would widen the type of the node.
+
+	The widening rules are relatively simple:
+
+		- Widening only applies when two different numeric types
+		  confront one another.  If other types happen to reach 
+		  this function, ignore them and do nothing.
+
+		- Floating point types are wider than any integral type
+		  even if the integral type has far more bits than the
+		  float.
+
+		- Among integral types, if one has more bits it is wider.
+
+		- Among integral types, if they have the same width then
+		  if one is unsigned that is considered wider.  Strictly
+		  speaking, unsigned integers can represent generally the
+		  same quantity of numbers in the same bits, especially in
+		  2's complement representation.  The tradition in C,
+		  however, has been to treat unsigned integers as wider than
+		  signed integers of the same width.
+
+		- Note that among integral types, the types have not been
+		  converted to one of the integral types supported by
+		  the underlying hardware.  This means that a 17-bit unsigned
+		  may be narrower than a 31-bit signed number, even though
+		  they use the same storage!
+ */
+widen:	dynamic	(t: ref type_s) ref tree_p =
+	{
+	x:	ref tree_p;
+	w1:	int;
+	w2:	int;
+
+	switch	(t->topType){
+
+		// Widening to floating point
+
+	case	T_FLOAT:
+		switch	(dtype->topType){
+
+			// from float, check the width
+
+		case	T_FLOAT:
+			w2 = ref number_z(t)->width;
+			w1 = ref number_z(dtype)->width;
+			if	(w2 <= w1)
+				return self;
+			break;
+
+			// from integer, widen
+
+		case	T_UNSIGNED:
+		case	T_SIGNED:
+			break;
+
+			// from others, do nothing
+
+		default:
+			return self;
+			}
+		break;
+
+		// Widening to integer
+
+	case	T_UNSIGNED:
+	case	T_SIGNED:
+
+			// from integer, check the width
+
+		switch	(dtype->topType){
+		case	T_UNSIGNED:
+		case	T_SIGNED:
+			w2 = ref number_z(t)->width;
+			w1 = ref number_z(dtype)->width;
+
+				// new type smaller, do nothing
+
+			if	(w2 < w1)
+				return self;
+
+				// width the same, check signedness
+
+			if	(w2 == w1){
+				if	(dtype->topType == T_UNSIGNED ||
+					 t->topType == T_SIGNED)
+					return self;
+
+					// widening from signed to unsigned
+
+				}
+			break;
+
+			// from other, do nothing
+
+		default:
+			return self;
+			}
+		break;
+
+		// widening to non-numeric type, do nothing
+
+	default:
+		return self;
+		}
+	return convert(t);
+	}
+
+makelogical:	() ref tree_p =
+	{
+	s:	ref tree_p;
+
+	if	(operator == O_ASG)
+		CurrentContext warn("WarnAmbigAsg");
+	if	((operator >= O_EQ && operator <= O_NLT_GT) ||
+		 operator == O_LAND ||
+		 operator == O_LOR ||
+		 operator == O_NOT)
+		return self;
+	if	(!checkType(Opdope[O_LOR - O_ADD]))
+		return ErrorTree;
+	s = Func icon(0L, INTBITS);
+	s = s convert(dtype);
+	return binop(O_NE, IntType, self, s);
+	}
+
+integralPromote:	() ref tree_p =
+	{
+	if	(dtype->topType != T_SIGNED &&
+		 dtype->topType != T_UNSIGNED)
+		return self;
+	if	(ref number_z(dtype)->width >= INTBITS)
+		return self;
+	else
+		return convert(IntType);
+	}
+
+coercible:	dynamic	(t: ref type_s) boolean =
+	{
+	oldType:	topTypes;
+	newType:	topTypes;
+
+	if	(dtype == t)
+		return TRUE;
+	oldType = dtype->topType;
+	newType = t->topType;
+/*
+	Possible conversions are:
+
+	From:
+
+		T_REF		pointer		- restricted, but possible
+		T_SIGNED		signed integer	- fairly flexible
+		T_UNSIGNED	unsigned integer- fairly flexible
+		T_FLOAT		floating	- fairly flexible
+
+		T_ARRAY		fixed array	- can convert from array to
+		T_DESCRIPTOR		variable array	- array type
+
+		ID		type name	- doesn't appear here
+		T_FUNC		function	- can't cast
+		T_STRUCT		structure	- can't cast
+		T_TYPE		type-type	- can't cast
+		T_VOID		void		- doesn't matter
+		T_ERROR		error		- doesn't matter
+ */
+	switch	(newType){
+	case	T_ARRAY:
+	case	T_DESCRIPTOR:
+		if	(oldType != T_ARRAY &&
+			 oldType != T_DESCRIPTOR)
+			return FALSE;
+/*
+		if	(!typeMatch(dtype elementOf(), t elementOf()))
+			return FALSE;
+ */
+		return TRUE;
+
+	case	T_NAME:
+	case	T_STRUCT:
+	case	T_FUNC:
+	case	T_TYPE:
+		return FALSE;
+		}
+	switch	(oldType){
+	case	T_REF:
+		if	(newType != T_REF)
+			return FALSE;
+		break;
+
+	case	T_SIGNED:
+	case	T_UNSIGNED:
+	case	T_FLOAT:
+		if	(newType == T_REF)
+			return FALSE;
+		break;
+
+	case	T_STRUCT:
+	case	T_ARRAY:
+	case	T_DESCRIPTOR:
+	case	T_FUNC:
+	case	T_TYPE:
+		return FALSE;
+		}
+	return TRUE;
+	}
+
+isLvalue:	dynamic	() boolean =
+	{
+	return FALSE;
+	}
+
+hasSize:	dynamic	() boolean =
+	{
+	if	(dtype->topType == T_FUNC ||		// function
+		 dtype->topType == T_VOID)			// void type
+		return FALSE;
+	else
+		return TRUE;
+	}
+
+sizeOf:		dynamic	() addr_t =
+	{
+	return dtype sizeOf();
+	}
+
+varArgsSize:	dynamic	() addr_t =
+	{
+	return dtype sizeOf();
+	}
+
+checkForNoEffect:	dynamic	() ref tree_p =
+	{
+	CurrentContext warn("WarnNoEffect");
+	return removeNoEffectCode();
+	}
+
+removeNoEffectCode:	dynamic	() ref tree_p =
+	{
+	return 0;
+	}
+
+hasSideEffects:	dynamic	() boolean =
+	{
+	return FALSE;
+	}
+/*
+	This function assigns Sethi-Ullman numbers to expression trees.
+	These numbers become guides for later code generation.
+ */
+sethiUllman:	dynamic	() signedByte =
+	{
+	return 0;
+	}
+
+computeBenefits:	dynamic	(int) =
+	{
+	}
+
+getAlias:	dynamic	() ref symbol_s =
+	{
+	return 0;
+	}
+
+	};
+
+operators:	public	type	byte = {
+
+	    /* Leaf node operator id's */
+
+	O_ERROR,
+
+	O_ID,
+	O_ICON,
+	O_FCON,
+	O_SELF,
+	O_SUPER,
+	O_TOS,
+	O_REG,
+	O_AUTO,
+	O_DYNAMIC,
+	O_REMOTE,		// remote call
+	O_TYPE,			// reference to a type name, or typeof
+	O_SCONST,		// structure constant
+	O_LITERAL,
+	O_ELLIPSIS,
+
+	    /* Binary operators */
+
+	O_ADD,			/* + */
+	O_SUB,			/* - */
+	O_MUL,			/* * */
+	O_DIV,			/* / */
+	O_MOD,			/* % */
+	O_LSH,			/* << */
+	O_RSH,			/* >> */
+	O_AND,			/* & */
+	O_OR,			/* | */
+	O_XOR,			/* ^ */
+	O_ASG,			/* = */
+	O_ADA,			/* += */
+	O_SBA,			/* -= */
+	O_MUA,			/* *= */
+	O_DVA,			/* /= */
+	O_MOA,			/* %= */
+	O_LSA,			/* <<= */
+	O_RSA,			/* >>= */
+	O_ANA,			/* &= */
+	O_ORA,			/* |= */
+	O_XRA,			/* ^= */
+	O_EQ,			/* == */
+	O_NE,			/* != */
+	O_GT,			/* > */
+	O_LT,			/* < */
+	O_GE,			/* >= */
+	O_LE,			/* <= */
+	O_ORD,			// <>=
+	O_UNORD,		// !<>=
+	O_NLT,			// !<
+	O_NLE,			// !<=
+	O_NGT,			// !>
+	O_NGE,			// !>=
+	O_LT_GT,		// <>
+	O_NLT_GT,		// !<>
+	O_INA,			/* increment after */
+	O_DEA,			/* decrement after */
+	O_QUES,			/* ?: */
+	O_LAND,			/* && */
+	O_LOR,			/* || */
+//	O_LSEQ,			/* left-valued sequential execution */
+	O_SEQ,			/* sequential execution */
+	O_ARG,			/* function argument */
+	O_IOARROW,		/* <- */
+	O_INIT,			// auto initializer
+
+	   /* Unary operators */
+
+
+	O_NEG,			/* - (unary) */
+	O_PLUS,			/* + (unary) */
+	O_COM,			/* ~ */
+	O_NOT,			/* ! */
+	O_IND,			/* * (unary) */
+	O_ADR,			/* & (unary) */
+
+	   /* Special operators */
+
+	O_FLD,			/* bit field */
+/*
+	O_COPY,			/* structure copy */
+ */
+	O_CAST,			// type cast
+	O_SCALL,		// static function/method call
+	O_MCALL,		// dynamic method call
+	O_RCALL,		// remote method call
+	O_DOT,			// .
+	O_ARROW,		// ->
+	O_SUBSCRIPT,		// x[y]
+	O_SLICE,		// a[:n] and a[n1:n2] array slices
+	O_BOUND,		// |a
+	O_MBOUND,		// ||a
+	O_SIZEOF,		/* sizeof */
+
+		/* Code generation operations */
+
+	O_INTRPT,		/* Interrupt instruction */
+	O_ABS,			/* Absolute value */
+	O_OUT,			/* OutportByte */
+	O_IN,			/* InportByte */
+	O_EMIT,			/* Emit */
+	O_MSCAN,		/* MemScan */
+	O_MCOPY,		/* MemCopy */
+	O_MSET,			/* MemSet */
+	O_ROL,			/* RotateLeft */
+	O_ROR,			/* RotateRight */
+	O_FABS,			/* Fabs */
+	O_XCHG,			/* exchange */
+	O_RNDINT,		// roundInt
+	O_CVTBCD,		// _cvtBCD
+	O_TST,			/* test */
+	O_ALLOCTOS,		// allocate tos var
+	O_NEW,			// new operator
+	O_DELETE,		// delete operator
+	O_TYPELEN,		// sizeof ref type
+	O_OFFSETOF,		// offsetof
+	O_TYPEOF,		// typeof
+	O_SEND,			// send
+	O_SYNC,			// synchronous
+
+	O_BLOCK,		// { } block of statements
+	O_DECL,			// declaration
+	O_GOTO,			// goto
+	O_ASSERT,		// assertion
+	O_LABEL,		// goto label
+	O_RETURN,		// return
+	O_ENDTRY,		// end of try clause
+	O_REPLY,		// reply
+	O_JUMP,			// jump instruction
+	O_TEST,			// test and jump
+	O_STMT,			// statement
+	O_SWITCH,		// switch statement
+	O_TRY,			// try statement
+	O_EXCEPT,		// except clause
+	O_ENDEX,		// end of except clause
+	O_CONTEX,		// continue exception
+	O_CRITICAL,		// enter critical region
+	O_ENDCRITICAL,		// leave critical region
+	O_EXIT			// function exit block - a placeholder
+	};
+
+negateCondition:	public	(op: operators) operators =
+	{
+	rvop:	static	[14] operators = 
+			[ O_NE, O_EQ, O_NGT, O_NLT, O_NGE, O_NLE, 
+			  O_UNORD, O_ORD, O_LT, O_LE, O_GT, O_GE, 
+			  O_NLT_GT, O_LT_GT ];
+
+	return(rvop[op - O_EQ]);
+	}
+
+
+swapCompare:	public	(op: operators) operators =
+	{
+	rvop:	static	[14] operators = 
+				[ O_EQ, O_NE, O_LT, O_GT, O_LE, O_GE,
+				  O_ORD, O_UNORD, O_NGE, O_NGT, O_NLE, O_NLT,
+				  O_LT_GT, O_NLT_GT ];
+
+	return(rvop[op - O_EQ]);
+	}
+
+/*
+	This code returns the binary operator corresponding to the source
+	token passed in t.  The token value has already been screened to
+	fit in the range represented by the table.
+ */
+binaryOperator:	public	(t: tokenNames) operators =
+	{
+//	assert(t >= CM && t <= DELETE);
+	return Ops[t - CM];
+	}
+
+Ops:	public	[] operators = [
+	O_SEQ,					/* CM */
+	O_ASG,					/* ASG */
+	O_ADA,					/* ADA */
+	O_SBA,					/* SBA */
+	O_MUA,					/* MUA */
+	O_DVA,					/* DVA */
+	O_MOA,					/* MOA */
+	O_ANA,					/* ANA */
+	O_ORA,					/* ORA */
+	O_XRA,					/* XRA */
+	O_LSA,					/* LSA */
+	O_RSA,					/* RSA */
+	O_ADD,					/* ADD */
+	O_SUB,					/* SUB */
+	O_MUL,					/* MUL */
+	O_DIV,					/* DIV */
+	O_MOD,					/* MOD */
+	O_AND,					/* AND */
+	O_OR,					/* OR */
+	O_XOR,					/* XOR */
+	O_LSH,					/* LSH */
+	O_RSH,					/* RSH */
+	O_QUES,					/* QUES */
+	O_LOR,					/* LOR */
+	O_LAND,					/* LAND */
+	O_EQ,					/* EQ */
+	O_NE,					/* NE */
+	O_LT,					/* LT */
+	O_GT,					/* GT */
+	O_LE,					/* LE */
+	O_GE,					/* GE */
+	O_UNORD,				/* UNORD */
+	O_LT_GT,				/* LT_GT */
+	O_ORD,					/* ORD */
+	O_NLE,					/* NLE */
+	O_NLT,					/* NLT */
+	O_NGE,					/* NGE */
+	O_NGT,					/* NGT */
+	O_NLT_GT,				/* NLT_GT */
+	O_IOARROW,				/* IOARROW */
+	O_DELETE				// DELETE
+	];
+
+INDENT_AMOUNT:	public	const	int = 4;
+
+OperTable:	public	[] ref char = [
+	"error",		//	O_ERROR,
+
+	"id",			//	O_ID,
+	"icon",			//	O_ICON,
+	"fcon",			//	O_FCON,
+	"self",			//	O_SELF,
+	"super",		//	O_SUPER,
+	"tos",			//	O_TOS,
+	"reg",			//	O_REG,
+	"auto",			//	O_AUTO,
+	"dynamic",		//	O_DYNAMIC,
+	"remote",		//	O_REMOTE,		// remote call
+	"type",			//	O_TYPE,
+	"sconst",		//	O_SCONST,
+	"literal",		//	O_LITERAL,
+	"ellipsis",		//	O_ELLIPSIS,
+
+	    /* Binary operators */
+
+	"add",			//	O_ADD,			/* + */
+	"sub",			//	O_SUB,			/* - */
+	"mul",			//	O_MUL,			/* * */
+	"div",			//	O_DIV,			/* / */
+	"mod",			//	O_MOD,			/* % */
+	"lsh",			//	O_LSH,			/* << */
+	"rsh",			//	O_RSH,			/* >> */
+	"and",			//	O_AND,			/* & */
+	"or",			//	O_OR,			/* | */
+	"xor",			//	O_XOR,			/* ^ */
+	"asg",			//	O_ASG,			/* = */
+	"ada",			//	O_ADA,			/* += */
+	"sba",			//	O_SBA,			/* -= */
+	"mua",			//	O_MUA,			/* *= */
+	"dva",			//	O_DVA,			/* /= */
+	"moa",			//	O_MOA,			/* %= */
+	"lsa",			//	O_LSA,			/* <<= */
+	"rsa",			//	O_RSA,			/* >>= */
+	"ana",			//	O_ANA,			/* &= */
+	"ora",			//	O_ORA,			/* |= */
+	"xra",			//	O_XRA,			/* ^= */
+	"eq",			//	O_EQ,			/* == */
+	"ne",			//	O_NE,			/* != */
+	"gt",			//	O_GT,			/* > */
+	"lt",			//	O_LT,			/* < */
+	"ge",			//	O_GE,			/* >= */
+	"le",			//	O_LE,			/* <= */
+	"ord",			//	O_ORD,			// <>=
+	"unord",		//	O_UNORD,		// !<>=
+	"nlt",			//	O_NLT,			// !<
+	"nle",			//	O_NLE,			// !<=
+	"ngt",			//	O_NGT,			// !>
+	"nge",			//	O_NGE,			// !>=
+	"lt_gt",		//	O_LT_GT,		// <>
+	"nlt_gt",		//	O_NLT_GT,		// !<>
+	"ina",			//	O_INA,			/* increment after */
+	"dea",			//	O_DEA,			/* decrement after */
+	"ques",			//	O_QUES,			/* ?: */
+	"land",			//	O_LAND,			/* && */
+	"lor",			//	O_LOR,			/* || */
+//	O_LSEQ,			/* left-valued sequential execution */
+	"seq",			//	O_SEQ,			/* sequential execution */
+	"arg",			//	O_ARG,			/* function argument */
+	"ioarrow",		//	O_IOARROW,		/* <- */
+	"init",			//	O_INIT,			// auto initializer
+
+	   /* Unary operators */
+
+
+	"neg",			//	O_NEG,			/* - */
+	"plus",			//	O_PLUS,			/* + (unary) */
+	"com",			//	O_COM,			/* ~ */
+	"not",			//	O_NOT,			/* ! */
+	"ind",			//	O_IND,			/* * */
+	"adr",			//	O_ADR,			/* & */
+
+	   /* Special operators */
+
+	"fld",			//	O_FLD,			/* bit field */
+/*
+	O_COPY,			/* structure copy */
+ */
+	"cast",			//	O_CAST,			/* type cast */
+	"scall",		//	O_SCALL,		/* function call */
+	"mcall",		//	O_MCALL,		// member call
+	"rcall",		//	O_RCALL,		// factory call
+	"dot",			//	O_DOT,			/* . */
+	"arrow",		//	O_ARROW,		/* -> */
+	"subscript",		//	O_SUBSCRIPT,		/* x[y] */
+	"slice",		//	O_SLICE,		// a[:n] and a[n1:n2] array slices
+	"bound",		//	O_BOUND,		// |a
+	"mbound",		//	O_MBOUND,		// ||a
+	"sizeof",		//	O_SIZEOF,		/* sizeof */
+
+		/* Code generation operations */
+
+	"interrupt",		//	O_INTRPT,		/* Interrupt instruction */
+	"abs",			//	O_ABS,			/* Absolute value */
+	"out",			//	O_OUT,			/* OutportByte */
+	"in",			//	O_IN,			/* InportByte */
+	"emit",			//	O_EMIT,			/* Emit */
+	"mscan",		//	O_MSCAN,		/* MemScan */
+	"mcopy",		//	O_MCOPY,		/* MemCopy */
+	"mset",			//	O_MSET,			/* MemSet */
+	"rol",			//	O_ROL,			/* RotateLeft */
+	"ror",			//	O_ROR,			/* RotateRight */
+	"fabs",			//	O_FABS,			/* Fabs */
+	"xchg",			//	O_XCHG,			/* exchange */
+	"rndint",		//	O_RNDINT
+	"cvtbcd",		//	O_CVTBCD
+	"tst",			//	O_TEST,			/* test */
+
+	"alloctos",		//	O_ALLOCTOS,		// allocate tos var
+	"new",			//	O_NEW
+	"delete",		//	O_DELETE
+	"typelen",		//	O_TYPELEN,		/* sizeof ref type */
+	"offsetof",		//	O_OFFSETOF,		/* offsetof */
+	"typeof",		//	O_TYPEOF,		// typeof
+	"send",			//	O_SEND,			// send
+	"sync",			//	O_SYNC,			// synchronous send
+	"block",		//	O_BLOCK
+	"decl",			//	O_DECL,			// declaration
+	"goto",			//	O_GOTO,			// goto
+	"assert",		//	O_ASSERT,		// assertion
+	"label",		//	O_LABEL,		// goto label
+	"return",		//	O_RETURN,		// return
+	"endtry",		//	O_ENDTRY,		// end of try clause
+	"reply",		//	O_REPLY,		// reply
+	"jump",			//	O_JUMP,			// jump instruction
+	"test",			//	O_TEST,			// test and jump
+	"stmt",			//	O_STMT,			// statement
+	"switch",		//	O_SWITCH,		// switch statement
+	"try",			//	O_TRY,			// try statement
+	"except",		//	O_EXCEPT,		// except clause
+	"endex",		//	O_ENDEX			// end of except clause
+	"contex",		//	O_CONTEX		// continue exception
+	"critical",		//	O_CRITICAL
+	"endcritical",		//	O_ENDCRITICAL
+	"exit",			//	O_EXIT
+	];
+
+ANY_OK:		public	const int = 0x0008;
+FLT_OK:		public	const int = 0x0010;	/* Floating point ok */
+DESCR_OK:	public	const int = 0x0020;	/* Descriptor ok */
+STRUCT_OK:	public	const int = 0x0040;	/* Structure ops ok */
+PTR_OK:		public	const int = 0x0080;
+FPTR_OK:	public	const int = 0x0100;
+ARRAY_OK:	public	const int = 0x0200;
+FUNC_OK:	public	const int = 0x0400;
+TYPE_OK:	public	const int = 0x0800;
+
+MODIFIES:	public	const int = 0x4000;	/* Modifies the left hand side */
+REQ_LVAL:	public	const int = 0x8000;	/* Requires lval */
+
+Opdope:	public	[1 + O_BLOCK - O_ADD] int;
+
+od:	(op: int, dope: int) =
+	{
+	Opdope[op - O_ADD] = dope;
+	}
+
+odinit:	entry	() =
+	{
+
+	/* Arithmetic operators */
+
+	od(O_ADD, PTR_OK|FLT_OK);
+	od(O_SUB, PTR_OK|FLT_OK);
+	od(O_MUL, FLT_OK);
+	od(O_DIV, FLT_OK);
+
+		/* Assignment operators */
+
+	od(O_ASG, MODIFIES|REQ_LVAL|FLT_OK|STRUCT_OK|PTR_OK|FPTR_OK|DESCR_OK|ARRAY_OK);
+	od(O_ADA, MODIFIES|REQ_LVAL|FLT_OK|PTR_OK);
+	od(O_SBA, MODIFIES|REQ_LVAL|FLT_OK|PTR_OK);
+	od(O_MUA, MODIFIES|REQ_LVAL|FLT_OK);
+	od(O_DVA, MODIFIES|REQ_LVAL|FLT_OK);
+	od(O_MOA, MODIFIES|REQ_LVAL);
+	od(O_LSA, MODIFIES|REQ_LVAL);
+	od(O_RSA, MODIFIES|REQ_LVAL);
+	od(O_ANA, MODIFIES|REQ_LVAL);
+	od(O_ORA, MODIFIES|REQ_LVAL);
+	od(O_XRA, MODIFIES|REQ_LVAL);
+
+		/* Relational operators */
+
+	od(O_EQ, FLT_OK|PTR_OK|FPTR_OK);
+	od(O_NE, FLT_OK|PTR_OK|FPTR_OK);
+	od(O_GT, FLT_OK|PTR_OK);
+	od(O_LT, FLT_OK|PTR_OK);
+	od(O_GE, FLT_OK|PTR_OK);
+	od(O_LE, FLT_OK|PTR_OK);
+	od(O_ORD, FLT_OK|PTR_OK);
+	od(O_UNORD, FLT_OK|PTR_OK);
+	od(O_NLT, FLT_OK|PTR_OK);
+	od(O_NLE, FLT_OK|PTR_OK);
+	od(O_NGT, FLT_OK|PTR_OK);	
+	od(O_NGE, FLT_OK|PTR_OK);	
+	od(O_LT_GT, FLT_OK|PTR_OK);	
+	od(O_NLT_GT, FLT_OK|PTR_OK);
+
+		/* Special binary operators */
+
+	od(O_INA, MODIFIES|REQ_LVAL|FLT_OK|PTR_OK);
+	od(O_DEA, MODIFIES|REQ_LVAL|FLT_OK|PTR_OK);
+	od(O_QUES,FLT_OK|STRUCT_OK|PTR_OK|FPTR_OK);
+	od(O_LAND,FLT_OK|PTR_OK|FPTR_OK);
+	od(O_LOR, FLT_OK|PTR_OK|FPTR_OK);
+	od(O_SEQ, ANY_OK);
+
+	/* Unary operators */
+
+	od(O_NEG, FLT_OK);
+	od(O_PLUS, FLT_OK);
+	od(O_ADR, REQ_LVAL|FLT_OK|PTR_OK|FPTR_OK|FUNC_OK|ARRAY_OK|STRUCT_OK|DESCR_OK);
+	od(O_IND, PTR_OK|DESCR_OK);
+	od(O_SIZEOF, FLT_OK|PTR_OK|FPTR_OK|ARRAY_OK|STRUCT_OK|TYPE_OK|DESCR_OK);
+	od(O_SUBSCRIPT, PTR_OK|TYPE_OK|DESCR_OK);
+	od(O_BOUND, ARRAY_OK|DESCR_OK);
+	od(O_MBOUND, ARRAY_OK|DESCR_OK);
+	od(O_INIT, REQ_LVAL|FLT_OK|STRUCT_OK|PTR_OK|FPTR_OK|DESCR_OK);
+	od(O_CVTBCD, MODIFIES);
+	od(O_SYNC, MODIFIES|ANY_OK);
+	od(O_DELETE, ANY_OK);
+	}
+
+max:	(a: int, b: int) int = 
+	{
+	return a > b ? a : b;
+	}
+
+min:	(a: int, b: int) int = 
+	{
+	return a < b ? a : b;
+	}
+
+power:	public	(v: unsignedLong) int =
+	{
+	pow:		int;
+
+	if	(v == 0)
+		return(-1);
+	for	(pow = 0; (v & 1) == 0; v >>= 1, pow++)
+		;
+	v >>= 1;
+	if	(v)
+		return(-1);
+	return(pow);
+	}
+/*
+	This function combines two possibly empty subtrees into a combined
+	comma expression.  If either tree is empty the function simply 
+	returns the other tree.
+ */
+concatOps:	public	(p: ref tree_p, s: ref tree_p) ref tree_p =
+	{
+	if	(p){
+		if	(s)
+			return binop(O_SEQ, s->dtype, p, s);
+		else
+			return p;
+		}
+	else
+		return s;
+	}
+
+literal_x:	public	type	inherit	tree_p	{
+	public:
+
+	literals:	ref literalItem_p;
+
+constructor:	() =
+	{
+	super constructor(O_LITERAL);
+	literals = 0;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	}
+
+checkStaticInitializer:	dynamic	() ref tree_p =
+	{
+	return self;
+	}
+
+initialize:	dynamic	(offset: addr_t, v: ref value) =
+	{
+	copyString(v->data + offset, ref array_z(dtype)->dimension);
+	}
+
+copyFixup:	dynamic	(v: ref value, off: addr_t, addr_t) =
+	{
+	v literalFixup(off, literals, 0, TRUE);
+	}
+
+copyString:	dynamic	(dest: ref char, destLength: addr_t) =
+	{
+	li:	ref literalItem_p;
+	rem:	int;
+
+	for	(li = literals; li && destLength; li = li->next){
+		rem = li->length;
+		if	(rem > destLength)
+			rem = destLength;
+		memCopy(dest, li->value, rem);
+		destLength -= rem;
+		dest += rem;
+		}
+	}
+
+addStringItem:	(v: ref char, len: int) =
+	{
+	li:	ref literalItem_p;
+	ni:	ref literalItem_p;
+
+	ni = literalItem_p create(v, len);
+	if	(literals == 0)
+		literals = ni;
+	else	{
+		for	(li = literals; li->next; li = li->next)
+			;
+		li->next = ni;
+		}
+	}
+
+assignTypes:	dynamic	(ref scope_s, boolean) ref tree_p =
+	{
+	j:	int;
+	t:	ref type_s;
+	li:	ref literalItem_p;
+
+	if	(dtype)
+		return self;
+	for	(li = literals, j = 0; li; li = li->next)
+		j += li->length;
+	t = number_z create(T_UNSIGNED, NO_RANGE, BYTEBITS);
+	dtype = array_z create(NO_RANGE, j, t);
+	return self;
+	}
+
+	};
+
+literalItem_p:	public	type	{
+	public:
+
+	next:		ref literalItem_p;
+	value:		ref char;
+	length:		int;
+
+create:	factory	(v: ref char, len: int) ref literalItem_p =
+	{
+	self = alloc(sizeof literalItem_p);
+	self = [ 0, v, len ];
+	return self;
+	}
+
+	};
+
+stmt_x:	public	type	inherit	tree_p {
+	public:
+
+	next:		ref stmt_x;
+	prev:		ref stmt_x;
+	fwdJumpList:	pointer;
+	codeaddr:	pointer;	/* for jump dist optimization */
+	nestingLevel:	int;
+	nextSpill:	ref spill;
+	asmLabel:	int;
+
+constructor:	(op: operators) =
+	{
+	super constructor(op);
+	next = 0;
+	prev = 0;
+	fwdJumpList = 0;
+	codeaddr = 0;
+	nestingLevel = NestingLevel;
+	nextSpill = 0;
+	asmLabel = ++Func->asmLabels;
+	}
+
+post:	(x: ref stmt_x) =
+	{
+	if	(x == 0)
+		return;
+	while	(next)
+		self = next;
+	next = x;
+	x->prev = self;
+	}
+
+prefixPost:	(x: ref stmt_x) =
+	{
+	if	(x == 0)
+		return;
+	while	(x->next)
+		x = x->next;
+	prev = x;
+	x->next = self;
+	}
+
+markTempsAndSpills:	() =
+	{
+	sp:	ref spill;
+
+	sp = TargetData.lastSpill;
+	markTemps();
+	if	(sp == 0)
+		sp = TargetData.spills;
+	else
+		sp = sp->next;
+	nextSpill = sp;
+	}
+
+markTemps:	dynamic	() =
+	{
+	}
+
+cleanupLabels:	dynamic	() =
+	{
+	}
+/*
+	This function is called to trace reachable code.  Each statment
+	propagates reach for itself.  The default case is that if the
+	current statement is reachable, then what follows is also
+	reachable.  The changed flag is set because these calls are
+	embedded in an iterative algorithm that cycles over the statements
+	until no reaches are propagated.  That is why such care is made
+	to insure that the changed flag is set only when the asmLabel
+	actually changes value.
+ */
+traceLabels:	dynamic	() =
+	{
+	if	(next &&
+		 asmLabel &&
+		 next->asmLabel == 0){
+		next->asmLabel = 1;
+		TargetData.changed = TRUE;
+		}
+	}
+
+remove:	() =
+	{
+	TargetData.changed = TRUE;
+	if	(prev)
+		prev->next = next;
+	if	(next)
+		next->prev = prev;
+	}
+
+	};
+
+NestingLevel:	int;
+
+clearLoops:	public	() =
+	{
+	NestingLevel = 1;
+	}
+
+enterLoop:	public	() =
+	{
+	NestingLevel *= 3;
+	}
+
+exitLoop:	public	() =
+	{
+	NestingLevel /= 3;
+	}
+
+label_x:	public	type	inherit	stmt_x {
+	public:
+
+	name:		ref identifier;
+	offset:		fileOffset;
+/*
+create:	factory	() ref label_x =
+	{
+	self = alloc(sizeof label_x);
+	self = [ O_LABEL, 0, 0 ];
+	return self;
+	}
+
+createNamed:	factory	(id: ref identifier, o: fileOffset) ref label_x =
+	{
+	self = alloc(sizeof label_x);
+	self = [ O_LABEL, id, o ];
+	return self;
+	}
+ */
+display:	dynamic	(indent: int) =
+	{
+	printf("%x: ", self);
+	super display(indent);
+	if	(name)
+		printf(" %S (%d)", name spelling(), offset);
+	printf("\n");
+	}
+
+gatherDeclarations:	dynamic	(s: ref blockScope) =
+	{
+	if	(name)
+		s addLabel(name, self);
+	}
+
+assignTypes:	dynamic	(ref scope_s, boolean) ref tree_p =
+	{
+	return self;
+	}
+
+	};
+
+critical_x:	public	type	inherit	stmt_x {
+	public:
+
+	expr:		ref tree_p;
+	source:		textRange;
+	anonLock:	ref symbol_s;
+	lockPtr:	ref symbol_s;
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf(" src[%x:%x]\n", source.start, source.end);
+	if	(expr)
+		expr display(indent + INDENT_AMOUNT);
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	if	(expr)
+		expr = expr fold();
+	expr sethiUllman();
+	return self;
+	}
+
+computeBenefits:	dynamic	(int) =
+	{
+	if	(expr)
+		expr computeBenefits(nestingLevel);
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	if	(expr){
+		expr = expr assignTypes(s, TRUE);
+		if	(!expr->dtype inherits(SymbolTable.lockType)){
+			CurrentContext->offset = source.start;
+			CurrentContext error("ErrBadCritical");
+			expr = ErrorTree;
+			anonLock = 0;
+			lockPtr = 0;
+			return self;
+			}
+		anonLock = 0;
+
+		t:	ref type_s;
+
+		t = refTo(SymbolTable.lockType);
+		lockPtr = s unnamedLocal(t);
+
+		x, y:	ref tree_p;
+
+		x = Func auto(lockPtr, 0);
+		expr = Func binary(O_ADR, expr, 0, source.start);
+		expr = Func binary(O_ASG, x, expr, source.start);
+		x = Func auto(lockPtr, 0);
+		x = Func methodCall(x, hash("enter"), 0, source.start, FALSE);
+		expr = Func binary(O_SEQ, expr, x, source.start);
+		}
+	else	{
+		anonLock = s unnamedStatic(SymbolTable.lockType);
+		lockPtr = 0;
+		expr = iden_x createKnown(O_ID, SymbolTable.lockType, anonLock, 
+						anonLock->currentValue, 0);
+		expr = Func methodCall(expr, hash("enter"), 0, 
+						source.start, FALSE);
+		}
+	expr = expr assignTypes(s, FALSE);
+	return self;
+	}
+
+generateC:	dynamic	() =
+	{
+	if	(expr)
+		expr generateCode();
+	}
+
+	};
+
+endCritical_x:	public	type	inherit stmt_x {
+	public:
+
+	myCritical:	ref critical_x;
+	expr:		ref tree_p;
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf(" cri %p\n", myCritical);
+	if	(expr)
+		expr display(indent + INDENT_AMOUNT);
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	if	(expr)
+		expr = expr fold();
+	expr sethiUllman();
+	return self;
+	}
+
+computeBenefits:	dynamic	(int) =
+	{
+	if	(expr)
+		expr computeBenefits(nestingLevel);
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	if	(myCritical->anonLock)
+		expr = iden_x createKnown(O_ID, SymbolTable.lockType, 
+					myCritical->anonLock, 
+					myCritical->anonLock->currentValue, 0);
+	else if	(myCritical->lockPtr)
+		expr = Func auto(myCritical->lockPtr, 0);
+	else	{
+		expr = ErrorTree;
+		return self;
+		}
+	expr = Func methodCall(expr, hash("leave"), 0, 
+					myCritical->source.start, FALSE);
+	expr = expr assignTypes(s, FALSE);
+	return self;
+	}
+
+generateC:	dynamic	() =
+	{
+	if	(expr)
+		expr generateCode();
+	}
+
+	};
+
+switch_x:	public	type	inherit stmt_x {
+	public:
+
+	expr:		ref tree_p;
+	defaultCase:	ref label_x;
+	cases:		ref switchCases;
+	source:		textRange;
+
+constructor:	(x: ref tree_p, s: textRange) =
+	{
+	super constructor(O_SWITCH);
+	expr = x;
+	defaultCase = 0;
+	cases = 0;
+	source = s;
+	}
+
+table:	(d: ref label_x, c: ref switchCases) =
+	{
+	defaultCase = d;
+	cases = c;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	expr display(indent + INDENT_AMOUNT);
+	sw:	ref switchCases;
+
+	printf("%*ccases:\n", indent + INDENT_AMOUNT, ' ');
+	for	(sw = cases; sw; sw = sw->next)
+		sw->caseValue display(indent + 2 * INDENT_AMOUNT);
+	}
+/*
+	This function folds each of the case expressions, then sorts the
+	list of cases.  Duplicate case values generate error messages. 
+	The offending cases are removed.  This patch will mean that 
+	duplicate cases simply disappear.  That is not a terribly
+	satisfactory resolution.  The compiler should probably do something
+	special for such switches.  The expression tree should be
+	transformed into the ErrorTree.  That way, the code generator
+	will emit an appropriate instruction sequence.
+ */
+fold:	dynamic	() ref tree_p =
+	{
+	expr = expr fold();
+	expr sethiUllman();
+
+	sw:	ref switchCases;
+	swc:	ref switchCases;
+	ncases:	ref switchCases;
+	n:	ref switchCases;
+
+	ncases = 0;
+	for	(sw = cases; sw; sw = n){
+		sw fold();
+		n = sw->next;
+		if	(sw->caseValue->operator == O_ERROR){
+			expr = ErrorTree;
+			continue;
+			}
+		else if	(sw->caseValue->operator != O_ICON){
+			CurrentContext->offset = sw->offset;
+			CurrentContext error("ErrConstantExpr");
+			expr = ErrorTree;
+			continue;
+			}
+		if	(ncases == 0){
+			ncases = sw;
+			sw->next = 0;
+			}
+		else	{
+			i:	long;
+			j:	long;
+			prev:	ref switchCases;
+
+			i = sw->caseValue integerValue();
+			prev = 0;
+			for	(swc = ncases; swc; prev = swc, swc = swc->next){
+				j = swc->caseValue integerValue();
+				if	(i == j){
+					CurrentContext->offset = sw->offset;
+					CurrentContext error("ErrDuplicateCase");
+					expr = ErrorTree;
+					break;
+					}
+				else if	(i < j){
+					sw->next = swc;
+					if	(prev)
+						prev->next = sw;
+					else
+						ncases = sw;
+					break;
+					}
+				}
+			if	(swc == 0){
+				prev->next = sw;
+				sw->next = 0;
+				}
+			}
+		}
+	cases = ncases;
+	return self;
+	}
+
+computeBenefits:	dynamic	(int) =
+	{
+	if	(expr)
+		expr computeBenefits(nestingLevel);
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	if	(expr){
+		expr = expr assignTypes(s, TRUE);
+		CurrentContext->offset = source.start;
+		expr = cast_x createCheck(IntType, expr);
+		}
+	else
+		expr = ErrorTree;
+
+	sw:	ref switchCases;
+
+	for	(sw = cases; sw; sw = sw->next)
+		sw assignTypes(s);
+	return self;
+	}
+
+	};
+
+switchCases:	public	type	{
+	public:
+
+	next:		ref switchCases;
+	caseValue:	ref tree_p;
+	target:		ref label_x;
+	offset:		fileOffset;
+
+assignTypes:	(s: ref scope_s) =
+	{
+	if	(caseValue)
+		caseValue = caseValue assignTypes(s, TRUE);
+	}
+
+fold:	() =
+	{
+	caseValue = caseValue fold();
+	}
+
+	};
+
+jump_x:	public	type	inherit stmt_x {
+	public:
+
+	target:		ref label_x;
+	source:		textRange;
+	jumpCond:	jumpCondition;
+
+constructor:	(t: ref label_x, s: textRange) =
+	{
+	super constructor(O_JUMP);
+	target = t;
+	source = s;
+	jumpCond = JC_JUMP;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf(" (%d) -> %x\n", source.start, target);
+	}
+
+assignTypes:	dynamic	(ref scope_s, boolean) ref tree_p =
+	{
+	return self;
+	}
+
+	};
+
+try_x:	public	type	inherit stmt_x {
+	public:
+
+	target:		ref label_x;
+	frameObject:	ref symbol_s;
+
+constructor:	(x: ref label_x) =
+	{
+	super constructor(O_TRY);
+	target = x;
+	frameObject = 0;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	super display(indent);
+	printf("\n");
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	frameObject = s unnamedLocal(SymbolTable.exceptFrameType);
+	frameObject constructValue(TRUE);
+	return self;
+	}
+
+	};
+
+except_x:	public	type	inherit stmt_x {
+	public:
+
+	myTry:		ref try_x;
+	expr:		ref tree_p;
+//	defaultCase:	ref label_x;
+	cases:		ref switchCases;
+	source:		textRange;
+
+constructor:	(m: ref try_x, x: ref tree_p, s: textRange) =
+	{
+	super constructor(O_EXCEPT);
+	myTry = m;
+	expr = x;
+	cases = 0;
+	source = s;
+	}
+
+display:	dynamic	(indent: int) =
+	{
+	if	(expr)
+		expr display(indent + INDENT_AMOUNT);
+	super display(indent);
+	printf("\n");
+	sc:	ref switchCases;
+
+	for	(sc = cases; sc; sc = sc->next){
+		if	(sc->caseValue)
+			sc->caseValue display(indent + INDENT_AMOUNT);
+		}
+	}
+
+fold:	dynamic	() ref tree_p =
+	{
+	sc:	ref switchCases;
+
+	for	(sc = cases; sc; sc = sc->next){
+		if	(sc->caseValue){
+			sc->caseValue = sc->caseValue fold();
+			sc->caseValue sethiUllman();
+			}
+		}
+	return self;
+	}
+
+computeBenefits:	dynamic	(int) =
+	{
+	sc:	ref switchCases;
+
+	if	(expr)
+		expr computeBenefits(nestingLevel);
+	for	(sc = cases; sc; sc = sc->next)
+		if	(sc->caseValue)
+			sc->caseValue computeBenefits(nestingLevel);
+	}
+
+table:	(c: ref switchCases) =
+	{
+	cases = c;
+	}
+
+assignTypes:	dynamic	(s: ref scope_s, boolean) ref tree_p =
+	{
+	if	(expr){
+		expr = expr assignTypes(s, TRUE);
+		if	(expr->operator != O_AUTO ||
+			 expr->dtype != SymbolTable.exceptContextType){
+			CurrentContext error("ErrBadExceptVar");
+			expr = ErrorTree;
+			}
+		}
+	sc:	ref switchCases;
+
+	for	(sc = cases; sc; sc = sc->next){
+		if	(sc->caseValue)
+			sc->caseValue = Func binary(O_ADR, 
+						sc->caseValue, 0, sc->offset);
+		sc assignTypes(s);
+		if	(sc->caseValue == ErrorTree)
+			continue;
+		sc->caseValue = cast_x createCheck(SymbolTable.trapPtrType,
+							sc->caseValue);
+		}
+	return self;
+	}
+
+	};
+

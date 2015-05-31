@@ -1,0 +1,325 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file, filesys;
+include	alys;
+include	string, error;
+
+main:	entry	() =
+	{
+	fd:	stream;
+	x:	[1] char;
+	s:	[:] char;
+
+	mainExternal(&Startup);
+	s = x;
+	fd open("/con", AR_READ);			// stdin
+	fd open("/con", AR_WRITE);			// stdout
+	fd dup();					// stderr
+	bootScript();
+	Startup _enterState('b');
+	}
+
+establishService:	() =
+	{
+	buf:	[MAXPATH] char;
+	path:	[:] char;
+	j:	ref far Job;
+
+	j = myJob();
+	path = buf;
+	try	{
+		path [:]= j value("BOOTSERVICE");
+		i:int = FileSystem register(Startup.objectId, path,
+						":model.alys.startupServer");
+		if	(i){
+
+				// Possibly because there already is one.
+
+			printf("Unable to register as %S: %S\n", path,
+								cmdError(i));
+			}
+		}
+	try	{
+		x:	[1] char;
+		s:	[:] char;
+
+		s = x;
+		s [:]= j value("BOOTSTATE");
+		if	(|s)
+			Startup _enterState(s[0]);
+		}
+	}
+
+Startup:	inherit	StartupServer	{
+	curState:	char;
+	waitingFor:	ref far External;
+	nextCommand:	ref command;
+
+	public:
+
+childExit:	gate	(ecode: ExitCode) =
+	{
+	c:	ref command;
+
+	for	(c = Commands; c; c = c->next)
+		if	(c->spawnedAs == messageHeader->sender){
+			c->spawnedAs = 0;
+			if	(c->action == A_RETRY){
+				myHost() kernelCoreDump("/e/kcore");
+				c exec();
+				}
+			break;
+			}
+	if	(waitingFor == messageHeader->sender){
+		waitingFor = 0;
+		moreCommands();
+		}
+	}
+
+enterState:	gate	(newState: char) =
+	{
+	_enterState(newState);
+	}
+
+getState:	gate	() char =
+	{
+	return curState;
+	}
+
+_enterState:	(newState: char) =
+	{
+	c:	ref command;
+
+	curState = newState;
+	nextCommand = Commands;
+	moreCommands();
+	}
+
+moreCommands:	() =
+	{
+	c:	ref command;
+
+	while	(nextCommand){
+		c = nextCommand;
+		nextCommand = c->next;
+		if	(c->state != curState)
+			continue;
+		if	(c exec() &&
+			 c->action == A_SERIAL){
+			waitingFor = c->spawnedAs;
+			return;
+			}
+		}
+	if	(curState == 'b')
+		establishService();
+	}
+
+	};
+
+bootScript:	() =
+	{
+	cmd:	[MAXPATH] char;
+	cmdd:	[:] char;
+	cmdd = cmd;
+	args:	[MAXPATH] char;
+	script:	[:] char;
+	ext:	[:] char;
+	script = args[3:];
+	p:	ref far External;
+	j:	ref far Job;
+
+	j = myJob();
+	script [:]= j value("BOOTSHELL");
+	ext = getExtension(script);
+
+		// This provides backward compatibility with old boot scripts.
+
+	if	(stringCompare(ext, ".bat") == 0){
+		cmdd [:]= j value("COMSPEC");
+		args[0] = '-';
+		args[1] = 'c';
+		args[2] = 0;
+		for	(;;){
+			try	{
+				p = FileSystem spawn(0, cmdd, args[:3 + |script]);
+				}
+			except	{
+				p = 0;
+				}
+			if	(p == 0)
+				printf("Couldn't execute %S -c %S\n", cmdd, 
+									script);
+			else
+				myExternal() wait(&External.childExit);
+			}
+		}
+	i, err, x:		int;
+	ifile:		stream;
+	buf, cp:	[:] char;
+
+//	printf("script = %S\n", script);
+	err = ifile open(script, AR_READ);
+	if	(err){
+		printf("Couldn't read script '%S': %S", script, cmdError(err));
+		for	(;;)
+			;
+		}
+	x = ifile seek(0, SEEK_END);
+	ifile seek(0, SEEK_ABS);
+	cp = new [x] char;
+	buf = cp;
+	err = ifile read(cp);
+	ifile close();
+	if	(err != x){
+		printf("Couldn't read all of script '%S', using %d bytes\n",
+						script, err);
+		|cp = err;
+		}
+	last:	ref command;
+	last = 0;
+	i = 0;
+	while	(|cp){
+		fcmd, cmd, line:	[:] char;
+		c:			ref command;
+		len:			int;
+
+		i++;
+		x = stringScan(cp, '\n');
+		if	(x >= 0){
+			line = cp[:x];
+			cp = cp[x + 1:];
+			}
+		else	{
+			line = cp;
+			cp = "";
+			}
+
+			// trim any trailing carriage return
+
+		if	(|line &&
+			 line[|line - 1] == '\r')
+			(|line)--;
+		if	(|line == 0)
+			continue;
+		if	(line[0] == '#')
+			continue;
+		if	(line[0] == 26)
+			break;		// ctl-Z terminates the file
+		if	(|line < 2)
+			continue;
+
+			// The line is a command
+
+		c = new command;
+		c->next = 0;
+		c->spawnedAs = 0;
+		c->state = line[0];
+		if	(line[1] == ':')
+			c->action = A_SERIAL;
+		else if	(line[1] == '&')
+			c->action = A_SPAWN;
+		else if	(line[1] == '=')
+			c->action = A_RETRY;
+		else	{
+			printf("Invalid action on line %d: %S\n", i, line);
+			delete c;
+			continue;
+			}
+		cmd = line[2:];
+		if	(|cmd > 0 &&
+			 cmd[0] == '>'){
+			cmd = cmd[1:];
+			c->syncStart = TRUE;
+			}
+		else
+			c->syncStart = FALSE;
+		if	(|cmd == 0){
+			delete c;
+			continue;
+			}
+		cmd = stringTrim(cmd);
+		for	(x = 0; x < |cmd; x++){
+			if	(isspace(cmd[x]))
+				break;
+			}
+		line = cmd[:x];
+		c->cmd = stringDup(line);
+		if	(x < |cmd){
+			cmd = cmd[x + 1:];
+			cmd = stringTrim(cmd);
+			c->args = new [|cmd] char;
+			for	(x = 0, len = 0; x < |cmd; x++){
+				if	(isspace(cmd[x])){
+					x++;
+					while	(x < |cmd &&
+						 isspace(cmd[x]))
+						x++;
+					x--;
+					c->args[len] = 0;
+					}
+				else
+					c->args[len] = cmd[x];
+				len++;
+				}
+			|c->args = len;
+			}
+		else
+			c->args = "";
+		if	(last)
+			last->next = c;
+		else
+			Commands = c;
+		last = c;
+		}
+	delete buf;
+	}
+
+Commands:	ref command;
+
+actions_t:	type	byte = {
+	A_SERIAL,		// : in column 2
+	A_SPAWN,		// & in column 2
+	A_RETRY,		// = in column 2
+	};
+
+command:	type	{ public:
+	next:		ref command;
+	state:		char;
+	action:		actions_t;
+	syncStart:	boolean;
+	cmd:		[:] char;
+	args:		[:] char;
+	spawnedAs:	ref far External;
+
+exec:	() ref far External =
+	{
+	try	{
+		ctx:	PathList = [];
+		fcmd:	[:] char;
+
+		ctx useEnvironment("PATH");
+		printf("%S\n", cmd);
+		fcmd = ctx search(cmd, ".run", ".com", ".exe", 0);
+		if	(|fcmd == 0){
+			printf("Unknown command: %S\n", cmd);
+			spawnedAs = 0;
+			}
+		else	{
+			spawnedAs = FileSystem spawn(0, fcmd, args);
+			if	(syncStart)
+				= spawnedAs start();
+			}
+		}
+	except	{
+		printf("Could not spawn: %S\n", cmd);
+		spawnedAs = 0;
+		}
+	return spawnedAs;
+	}
+
+	};

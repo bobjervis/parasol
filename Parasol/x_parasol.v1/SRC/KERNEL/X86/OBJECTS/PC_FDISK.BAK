@@ -1,0 +1,657 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	process;
+include	pc_hdw;
+include	disk;
+include	node;
+include	kprintf;
+include	hardware;
+include	vector;
+include	vmemory;
+include	timer;
+
+pcFloppyDiskInitialization:	public	() =
+	{
+
+		// Initialize the controller
+
+	FloppyController initialize(FD_PORT, FDISK_INT);
+
+		// Define the disk drives
+
+	driveType:	byte;
+
+	driveType = getCMOSbyte(0x10);
+
+	FloppyController.drive[0] = [ 0, driveType >> 4 ];
+	FloppyController.drive[1] = [ 1, driveType & 0xf ];
+	}
+/*
+	The FloppyController object is the actual device driver for the
+	hard disk controller of a PC.  The controller needs three hardware
+	parameters: the control I/O port, the address of the block of eight
+	hard disk I/O ports, and the interrupt number used by the controller.
+
+	A controller object supports two operations: read and write.  The
+	controller can only issue one operation at a time, so only one drive
+	at a time can be used.
+
+	The acquire event is used to enforce serial access to the controller.
+
+	Note that the hardware does not use DMA to transfer data, but instead
+	requires the CPU to copy the data two bytes at a time.
+
+	Disk accesses are currently being performed on a first-come, first-
+	served basis.  In fact, disk accesses that change the cylinder
+	number are significantly slower than accesses that stay within a
+	cylinder, because the servo motor that moves the read/write heads is
+	much slower than the disk rotation speed.  As a result, in a disk
+	server on a LAN, considerable utilization improvements can be made
+	by minimizing the cylinder-to-cylinder movement of the heads.  For a
+	personal machine, such improvements may not be worth the trouble.  Of
+	course most elevator algorithms will work fine when access requests
+	are sequential.  Those algorithms involve minimal CPU overhead over a
+	simple first-come first-served strategy.
+
+	One can also separate the seek and transfer commands so that additional
+	reads or writes that arrive after a seek has been issued may be bundled
+	into a single transfer command.  Since adjacent sectors are frequently
+	accessed together, allowing additional transfers to accumulate while
+	a seek is underway may further help cut down on rotational latency.
+
+	This last improvement will require some experimentation since it does
+	involve more communications between the CPU and the disk controller,
+	and that extra work may be greater than the savings achieved through 
+	the added parallelism.
+ */
+FloppyController:	public	{
+	public:
+
+	acquire:	kernelSemaphore;
+	wait:		ref kernelSemaphore;
+	diskPort:	unsigned[16];
+	drive:		[2] floppyDiskDrive;
+	needsReset:	boolean;
+	previousMotor:	byte;
+	result:		[8] byte;
+
+initialize:	(dp: unsigned[16], ivect: int) =
+	{
+	diskPort = dp;
+	wait = vector semaphoreInterrupt(ivect);
+	acquire initialize(1, 0, 0);
+	needsReset = TRUE;
+	}
+
+reset:	() =
+	{
+	n:	threadLock;
+
+	needsReset = FALSE;
+	n lock();
+	_outportByte(FD_DOR, ENABLE_INT);
+	drive[0].calibrated = FALSE;
+	drive[1].calibrated = FALSE;
+	drive[0].running = FALSE;
+	drive[1].running = FALSE;
+	_emit(_idle_);
+	_outportByte(FD_DOR, ENABLE_INT | FUNC_RESET);
+	n unlock();
+	wait down(FALSE);		// wait for the reset interrupt
+	Primary8259 clearInterrupt();
+	putc(FDC_SENSE);
+	if	(!results()){
+		kprintf("Floppy Controller won't reset\n");
+		return;
+		}
+	if	(result[0] != CHANGE){
+		kprintf("Floppy controller reset to %x\n", result[0]);
+		return;
+		}
+	putc(FDC_SPECIFY);
+	putc(SPECIFY_1);
+	putc(SPECIFY_2);
+	}
+
+seek:	(drive: byte, head: int, track: int) boolean =
+	{
+	putc(FDC_SEEK);
+	putc(head << 2 | drive);
+	putc(track);
+	if	(needsReset)
+		return FALSE;
+	wait down(FALSE);			// wait for interrupt
+	Primary8259 clearInterrupt();
+	putc(FDC_SENSE);
+	if	(!results() ||
+		 result[ST0] & ST0_BITS != SEEK_ST0 ||
+		 result[ST_NCN] != track){
+		kprintf("Seek failed - recalibrating\n");
+		return FALSE;
+		}
+	else	{
+		settle:	semaphoreTimer = [ SETTLE_TIME ];
+
+		settle wait();
+		return TRUE;
+		}
+	}
+
+transfer:	(op: byte, driveSelect: byte, track: byte, head: byte, 
+					sector: byte, sectors: byte) boolean =
+	{
+	putc(op);
+	putc(head << 2 | driveSelect);
+	putc(track);
+	putc(head);
+	putc(sector);
+	putc(2);				// 512 byte sector
+	putc(sectors);				// sectors / track
+	putc(drive[driveSelect].media->gap);
+	putc(0xff);				// data length
+	if	(needsReset)
+		return FALSE;
+	TransferTimer = [ TRANSFER_TIMEOUT ];
+	if	(wait down(TRUE)){
+		Primary8259 clearInterrupt();
+		TransferTimer abort();
+		}
+	else	{				// we timed out
+		results();
+		drive[driveSelect].mediaLoaded = FALSE;
+		return FALSE;
+		}
+	if	(!results())
+		return FALSE;
+	if	(result[ST1] ||
+		 result[ST2])
+		return FALSE;
+	if	(result[ST0] & ST0_BITS != TRANS_ST0)
+		return FALSE;
+	else
+		return TRUE;
+	}
+
+recalibrate:	(drive: byte) boolean =
+	{
+	putc(FDC_RECALIBRATE);
+	putc(drive);
+	if	(needsReset)
+		return FALSE;
+	wait down(FALSE);			// wait for interrupt
+	Primary8259 clearInterrupt();
+	putc(FDC_SENSE);
+	if	(!results() ||
+		 result[ST0] & ST0_BITS != SEEK_ST0 ||
+		 result[ST_PCN] != 0){
+		needsReset = TRUE;
+		return FALSE;
+		}
+	else
+		return TRUE;
+	}
+
+results:	() boolean =
+	{
+	retries:	int;
+	i, j:		int;
+	s:		byte;
+
+	for	(i = 0; i < sizeof result; i++){
+		for	(retries = 0;; retries++){
+			if	(retries >= FDC_MAX_RETRY){
+				needsReset = TRUE;
+				return FALSE;
+				}
+
+			s:	byte;
+
+			s = _inportByte(FD_STATUS);
+			if	(s & MASTER)
+				break;
+			}
+		for	(retries = 0;; retries++){
+			if	(retries >= FDC_MAX_RETRY){
+				needsReset = TRUE;
+				return FALSE;
+				}
+
+			s:	byte;
+
+			s = _inportByte(FD_STATUS);
+			if	(s & DIRECTION)
+				break;
+			}
+		result[i] = _inportByte(FD_DATA);
+		for	(j = 0; j < 200; j++)
+			;
+		if	(_inportByte(FD_STATUS) & 0x10 == 0){
+			return TRUE;
+			}
+		}
+	needsReset = TRUE;
+	return FALSE;
+	}
+
+putc:	(c: byte) =
+	{
+	if	(needsReset)
+		return;
+	retries:	int;
+
+	for	(retries = 0;; retries++){
+		if	(retries >= FDC_MAX_RETRY){
+			needsReset = TRUE;
+			return;
+			}
+
+		s:	byte;
+
+		s = _inportByte(FD_STATUS);
+		if	(s & DIRECTION == 0)
+			break;
+		}
+	for	(retries = 0;; retries++){
+		if	(retries >= FDC_MAX_RETRY){
+			needsReset = TRUE;
+			return;
+			}
+
+		s:	byte;
+
+		s = _inportByte(FD_STATUS);
+		if	(s & MASTER)
+			break;
+		}
+	_outportByte(FD_DATA, c);
+	}
+
+	};
+
+TransferTimer:	inherit timer {
+	public:
+
+fire:	dynamic	() =
+	{
+	FloppyController.wait startle();
+	}
+
+	};
+
+FDC_READ:	const	int = 0xe6;
+FDC_WRITE:	const	int = 0xc5;
+FDC_SENSE:	const	int = 0x08;
+FDC_SPECIFY:	const	int = 0x03;
+FDC_RECALIBRATE:const	int = 0x07;
+FDC_SEEK:	const	int = 0x0f;
+
+FDC_MAX_RETRY:	const	int = 100000;
+MAX_ERRORS:	const	int = 10;
+MASTER:		const	byte = 0x80;
+DIRECTION:	const	byte = 0x40;
+
+ST0:		const	int = 0;		// status register 0
+ST1:		const	int = 1;		// status register 1
+ST2:		const	int = 2;		// status register 2
+ST_PCN:		const	int = 1;		// present cylinder
+ST_NCN:		const	int = 1;		// new cylinder
+ST_CYL:		const	int = 3;
+ST_HEAD:	const	int = 4;
+ST_SEC:		const	int = 5;
+
+ST0_BITS:	const	byte = 0xf8;
+SEEK_ST0:	const	byte = 0x20;
+TRANS_ST0:	const	byte = 0x00;
+
+BAD_CYL:	const	byte = 0x1f;
+BAD_SECTOR:	const	byte = 0x05;
+WRITE_PROTECT:	const	byte = 0x02;
+
+CHANGE:		const	byte = 0xc0;
+SPECIFY_1:	const	byte = 0xdf;
+SPECIFY_2:	const	byte = 0x02;
+/*
+	The diskDrive object holds the drive characteristics for each drive
+	attached to the hard disk controller.
+ */
+floppyDiskDrive:	type	inherit	diskDrive_t {
+	public:
+
+	calibrated:	boolean;
+	running:	boolean;
+	writeProtect:	boolean;
+	media:		ref mediaDef;
+	mediaLoaded:	boolean;
+
+constructor:	(ds: byte, dType: byte) =
+	{
+	r:	realModePtr;
+	bd:	ref driveDef;
+
+	driveSelect = ds;
+	if	(dType == 0)
+		return;
+	bd = &DriveTable[dType];
+	if	(bd->heads == 0)
+		return;
+	params = bd;
+	media = &params->mediaChoices[0];	// default to highest density
+	driveType = dType;
+	heads = bd->heads;
+	cylinders = bd->cylinders;
+	currentCylinder = -1;
+	sectors = bd->sectors;
+	calibrated = FALSE;
+	running = FALSE;
+	writeProtect = FALSE;
+	motorOff = new motorOff_t[ self ];
+	motorOn = new semaphoreTimer[ MOTOR_START ];
+
+	px:	ref Partition;
+
+	px = Partition create(media->system, TRUE);
+	px->sectorOffset = 0;
+	px->sectorCount = heads * cylinders * sectors;
+	px display();
+	}
+/*
+	The read operation is carried out one sector at a time.  The
+	controller is started for each sector, then the reader waits for
+	an disk interrupt event to occur.  The hardware interrupt controllers
+	are reset, the sector-full of data is copied into the caller's buffer
+	and status is checked.  If there was some sort of failure, a retry
+	is started by looping back to the beginning of the function.  
+	Otherwise, the transfers increments to the next sector and operation
+	continues.
+ */
+read:	dynamic	(sector: sector_t, buf: pointer, count: int) =
+	{
+	retries:	byte;
+
+	FloppyController.acquire down(FALSE);
+	mediaLoaded = TRUE;		// assume its true and try to read
+	for	(retries = 0;; retries++){
+		if	(retries >= MAX_ERRORS){
+			FloppyController.needsReset = TRUE;
+			break;
+			}
+		if	(executeIO(FDC_READ, sector, buf, count))
+			break;
+		if	(!mediaLoaded)
+			break;
+		}
+	if	(running)
+		motorOff start();
+	FloppyController.acquire up();
+	}
+/*
+	The write operation is carried out one sector at a time.  The
+	controller is started, then a sector-full of data is copied to
+	the controller data buffer.  The writer waits for a disk interrupt
+	event to happen, resets the interrupt controllers, and then status
+	is checked to determine whether the operation succeeded.  If not,
+	the sector is retried.  If so, the transfer is stepped to the next
+	sector until the transfer is complete.
+ */
+write:	dynamic	(sector: sector_t, buf: pointer, count: int) =
+	{
+	retries:	byte;
+
+	FloppyController.acquire down(FALSE);
+	for	(retries = 0;; retries++){
+		if	(writeProtect ||
+			 !mediaLoaded)
+			break;
+		if	(retries >= MAX_ERRORS){
+			FloppyController.needsReset = TRUE;
+			break;
+			}
+		if	(executeIO(FDC_WRITE, sector, buf, count))
+			break;
+		}
+	if	(running)
+		motorOff start();
+	FloppyController.acquire up();
+	}
+
+stopMotor:	() =
+	{
+	n:			threadLock;
+	m:			byte;
+
+	n lock();
+	if	(running){
+		running = FALSE;
+		m = FloppyController.drive[0].running << 4 |
+			FloppyController.drive[1].running << 5 | 
+			ENABLE_INT | FUNC_RESET | driveSelect;
+		_outportByte(FD_DOR, m);
+		}
+	n unlock();
+	}
+
+private:
+/*
+	This function maps the logical sector number into a sector,
+	head, cylinder combination for the target drive.  The needed
+	values are written to the controller I/O port registers.  Note
+	that the command register is written last.  The controller will
+	not act on any of the other registers until a command is written.
+ */
+executeIO:	(op: int, sector: long, buf: pointer, count: byte) boolean =
+	{
+	track:		int;
+	head:		int;
+	rsect:		int;
+
+	rsect = sector % sectors + 1;
+	sector /= sectors;
+	head = sector % heads;
+	track = sector / heads;
+	if	(FloppyController.needsReset)
+		FloppyController reset();
+	_outportByte(FD_RATE, media->accessRate);
+	setupDMA(op, buf, count * SECTOR_SIZE);
+	startMotor();
+	if	(!calibrated)
+		calibrated = FloppyController recalibrate(driveSelect);
+	if	(!seek(head, track))
+		return FALSE;
+	if	(!calibrated ||
+		 !running)
+		return FALSE;
+	b:	boolean;
+	b = FloppyController transfer(op, driveSelect, track, head, rsect, 
+							sectors);
+	if	(b){
+		s:	unsigned;
+
+		s = (FloppyController.result[ST_CYL] - track) * heads;
+		s += FloppyController.result[ST_HEAD] - head;
+		s *= sectors;
+		s += FloppyController.result[ST_SEC] - rsect;
+		if	(s != count)
+			return FALSE;
+		}
+	else	{
+		if	(FloppyController.result[ST1] & BAD_SECTOR ||
+			 FloppyController.result[ST2] & BAD_CYL)
+			calibrated = FALSE;
+		if	(FloppyController.result[ST1] & WRITE_PROTECT)
+			writeProtect = TRUE;
+		}
+	motorOff start();
+	return b;
+	}
+
+startMotor:	() =
+	{
+	n:			threadLock;
+	m:			byte;
+
+	n lock();
+	if	(running){
+		motorOff abort();
+		n unlock();
+		}
+	else	{
+		running = TRUE;
+		m = FloppyController.drive[0].running << 4 |
+			FloppyController.drive[1].running << 5 | 
+			ENABLE_INT | FUNC_RESET | driveSelect;
+		_outportByte(FD_DOR, m);
+		n unlock();
+		motorOn constructor(MOTOR_START);
+		motorOn wait();
+		}
+	}
+
+seek:	(head: int, track: int) boolean =
+	{
+	if	(!calibrated){
+		if	(!recalibrate())
+			return FALSE;
+		}
+	if	(track == currentCylinder)
+		return TRUE;
+	t:	int;
+
+	t = track;
+	if	(media->dualStep)
+		t <<= 1;
+	if	(FloppyController seek(driveSelect, head, t)){
+		currentCylinder = track;
+		return TRUE;
+		}
+	else	{
+		currentCylinder = -1;
+		return FALSE;
+		}
+	}
+
+recalibrate:	() boolean =
+	{
+	startMotor();
+	currentCylinder = -1;			// force a seek
+	return calibrated = FloppyController recalibrate(driveSelect);
+	}
+
+driveSelect:	byte;
+driveType:	byte;
+heads:		byte;
+sectors:	byte;
+cylinders:	unsigned[16];
+currentCylinder:unsigned[16];
+motorOn:	ref semaphoreTimer;
+motorOff:	ref motorOff_t;
+params:		ref driveDef;
+
+	};
+
+motorOff_t:	type	inherit	timer {
+	drive:	ref floppyDiskDrive;
+
+	public:
+
+constructor:	(d: ref floppyDiskDrive) =
+	{
+	drive = d;
+	}
+
+start:	() =
+	{
+	super constructor(MOTOR_STOP);
+	}
+
+fire:	dynamic	() =
+	{
+	drive stopMotor();
+	}
+
+	};
+
+MOTOR_START:		const	int = (5 * CLOCK_HZ) / 6;
+MOTOR_STOP:		const	int = CLOCK_HZ * 3;
+SETTLE_TIME:		const	int = 8;		// ticks
+TRANSFER_TIMEOUT:	const	int = CLOCK_HZ / 4;
+
+ENABLE_INT:	const	byte = 0x08;	// FD interrupt enable
+FUNC_RESET:	const	byte = 0x04;
+
+DMA_READ:	const	byte = 0x46;
+DMA_WRITE:	const	byte = 0x4a;
+
+setupDMA:	(op: byte, buf: pointer, len: unsigned) =
+	{
+	mode, low_addr, hi_addr, top_addr, low_len, hi_len:	byte;
+	address:	unsigned;
+	n:		threadLock;
+
+	mode = (op == FDC_READ) ? DMA_READ : DMA_WRITE;
+	address = virtualToPhysical(addressableToMapped(buf));
+	low_addr = address;
+	hi_addr = address >> 8;
+	top_addr = address >> 16;
+	len--;
+	low_len = len;
+	hi_len = len >> 8;
+	n lock();
+	_outportByte(DMA_M2, mode);
+	_emit(_idle_);
+	_outportByte(DMA_M1, mode);
+	_emit(_idle_);
+	_outportByte(DMA_ADDR, low_addr);
+	_emit(_idle_);
+	_outportByte(DMA_ADDR, hi_addr);
+	_emit(_idle_);
+	_outportByte(DMA_TOP, top_addr);
+	_emit(_idle_);
+	_outportByte(DMA_COUNT, low_len);
+	_emit(_idle_);
+	_outportByte(DMA_COUNT, hi_len);
+	n unlock();
+	_outportByte(DMA_INIT, 2);
+	}
+
+mediaDef:	type	{
+	public:
+
+	system:		systemIndicators;
+	accessRate:	byte;
+	dualStep:	boolean;
+	gap:		byte;
+	};
+
+driveDef:	type	{
+	public:
+
+	heads:		byte;
+	sectors:	byte;
+	cylinders:	unsigned[16];
+	mediaChoices:	[2] mediaDef;
+	};
+
+DriveTable:	const [] driveDef = [
+	[  0,   0,   0 ],						// 0
+	[  2,   9,  40, [ [ SI_DOS_360K, 2, FALSE, 0x2a ] ] ],		// 1
+	[  2,  15,  80, [ [ SI_DOS_1_2M, 0, FALSE, 0x1b ], 
+			  [ SI_DOS_360K, 1, TRUE, 0x23 ] ] ],		// 2
+	[  1,  18,  80, [ [ SI_DOS_720K, 0, FALSE, 0x1b ] ] ],		// 3
+	[  2,  18,  80, [ [ SI_DOS_1_4M, 0, FALSE, 0x1b ] ] ],		// 4
+	[  0,   0,  0 ],		// 5
+	[  0,   0,  0 ],		// 6
+	[  0,   0,  0 ],		// 7
+	[  0,   0,  0 ],		// 8
+	[  0,   0,  0 ],		// 9
+	[  0,   0,  0 ],		// 10
+	[  0,   0,  0 ],		// 11
+	[  0,   0,  0 ],		// 12
+	[  0,   0,  0 ],		// 13
+	[  0,   0,  0 ],		// 14
+	[  0,   0,  0 ],		// 15
+	];

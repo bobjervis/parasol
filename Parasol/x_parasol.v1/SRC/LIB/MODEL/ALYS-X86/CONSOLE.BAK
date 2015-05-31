@@ -1,0 +1,2053 @@
+/*
+	Copyright (c) 1993,94 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	alys, format, file;
+/*
+		The ALYS Kernel Console System
+
+	The ALYS system includes a powerful, multi-windowed console system
+	that includes support for keyboard and mouse input to display windows
+	under the control of an arbitrary number of processes.
+
+	Under ALYS, a console consists of a video display, a keyboard and an
+	optional mouse or other pointing device.  Currently, the video display
+	may only be in a text mode, but graphical modes are intended in the
+	future.
+
+	Software control of a console is managed through a console object in
+	the ALYS kernel.  You use this object to set the video mode, keyboard
+	repeat rate, mouse motion parameters and left or right handed 
+	operation.
+
+	You also use the console object to create display windows.  There can
+	be zero or more windows open on the console at any given time.  They
+	are arranged in a stack.  When windows overlap one another the window
+	higher on the stack will obscure the window lower on the stack.  Also,
+	when an input event occurs, such as mouse motion or a keypress, the
+	window stack is used to determine which window will receive the event.
+
+	The console object can also be used to place windows on	the screen.  
+	Independent applications will best be placed on the screen in such a 
+	way that they do not completely overlap.  This implementation simply
+	chooses a pseudo-random location.
+
+	Input handler objects are used in tandem with display windows to
+	fully process input events.  A textWindow object resides inside the
+	kernel and is a simple passive writng area.  However, its dimensions
+	determine which windowInput object will receive the event.
+
+	The basic notion is that mouse events are tracked inside the kernel
+	so that there is a mouse cursor maintained in addition to a keyboard
+	text cursor.  The text cursor can be hidden, while the mouse cursor 
+	cannot.  Mouse events, such as a button being pressed, are relayed to
+	the topmost window, inside of which the mouse cursor is currently
+	located.  An application can grab exclusive input so that all input
+	events are sent to the grabbing windowInput object.
+
+	The placement of the mouse cursor also determines the current text
+	focus.  Each display window has an associated text cursor and the
+	text cursor is only displayed for the window currently containing the
+	mouse cursor, if any.  Keypresses that occur while the mouse is in
+	a given window are directed at that window.
+
+	Also, when the mouse cursor is moved outside of a window a pair of
+	messages are sent, one to the window being left and one to the window
+	being entered.  The wndow being left is notified that it is losing
+	focus, while the new window receives focus.  Applications typically
+	use this information to visually signal that focus has changed by 
+	changing some aspect of the display, such as some aspect of the window
+	border.
+ */
+console:	public	type	inherit	External	{
+	public:
+
+mode:			gate	(m: consoleMode_t);
+
+newWindow:		gate	(title: [:] char, sz: point) ref far textWindow;
+
+setManager:		gate	(ref far consoleManager) ref far textWindow;
+
+describe:		gate	() console_t;
+
+getWindowInfo:		gate	(idx: int) window_t;
+
+beep:			gate	();
+
+setRepeatRate:		gate	(delay: int, repeat: int);
+
+clearMouseState:	gate	();
+
+swapMouseButtons:	gate	();
+
+setMousePort:		gate	(port: unsigned) boolean;
+
+setMouseHandedness:	gate	(isRighthanded: boolean);
+
+nonExclusiveInput:	gate	();
+
+newPalette:		gate	(size: int) ref far colorPalette;
+
+setDefaultPalette:	gate	(cp: ref far colorPalette);
+
+getDefaultPalette:	gate	() ref far colorPalette;
+
+getIconSlot:		gate	(w: ref far textWindow) point;
+
+placeWindow:		gate	(sz: point) point;
+//
+//	This method returns the previous double click interval.
+//	If the argument is non-zero, the value becomes the new double-
+//	click interval.
+//
+doubleClickTicks:	gate	(interval: Tick) Tick;
+
+newConmanShell:		gate	(sender: ref far External) conmanWindows_t;
+
+keypress:		dynamic	(k: keystroke) = {}
+
+mouse:			dynamic	(p: point, buttons: byte) = {}
+
+	};
+
+colorPalette:	public	type	inherit	External	{
+	public:
+
+deriveFrom:		gate	(cp: ref far colorPalette, idx: int);
+
+textColors:		gate	(idx: int, v: [:] color_t);
+
+getTextColors:		gate	(idx: int) [] color_t;
+
+size:			gate	() int;
+
+	};
+
+textWindow:	public	type	inherit	External	{
+	public:
+
+appearsOn:		gate	() ref far console;
+
+write:			gate	(p: point, buf: [:] colorChar);
+
+open:			gate	();
+
+zoom:			gate	(corner: point, zoomState: windowZoom_t);
+
+clear:			gate	();
+
+textCursor:		gate	(p: point);
+
+mouseCursor:		gate	(p: point);
+
+getCorner:		gate	() point;
+
+getConsoleSize:		gate	() point;
+
+verticalScroll:		gate	(ul: point, sz: point, amount: int);
+
+horizontalScroll:	gate	(ul: point, sz: point, amount: int);
+
+showCursor:		gate	();
+
+putcc:			gate	(p: point, c: char, co: color_t);
+
+hideCursor:		gate	();
+
+toTop:			gate	();
+
+toBottom:		gate	();
+
+beep:			gate	();
+
+hide:			gate	();
+
+configure:		gate	(newFrameSize: point);
+
+dismissRequest:		gate	();
+
+grabMouse:		gate	();
+
+_filler6:		gate	() keystroke;
+
+_filler7:		gate	(ref far inputHandler) ref far inputHandler;
+
+writecc:		gate	(p: point, buf: [:] char, c: color_t);
+
+rectangle:		gate	(rectangle_t, color_t);
+
+exclusiveInput:		gate	(newState: exclusiveInput_t);
+
+move:			gate	(delta: point);
+
+resize:			gate	(sz: point);
+
+registerWindowInput:	gate	(ref far inputHandler) ref far inputHandler;
+
+usePalette:		gate	(cp: ref far colorPalette);
+//
+//	delta.x = amount to change the horizontal width by.
+//	delta.y = amount to change the vertical size by.
+//	Note: corner x coordinate changes as the negative of the width delta
+//
+leftResize:		gate	(delta: point);
+
+	};
+//----------------------------------------------------------------------------
+
+inputHandler:	public	type	inherit	External {
+	displayList:	ref shellList;
+	exclusiveShell:	ref shell;
+
+
+	shellList:	type	{
+		public:
+
+		next:		ref shellList;
+		display:	ref shell;
+		viewport:	ref far textWindow;
+		cookie:		ref far textWindow;
+		};
+
+	public:
+
+constructor:	(s: ref shell) =
+	{
+	if	(s)
+		s getInputFrom(self);
+	}
+
+find:	(v: ref far textWindow) ref shell =
+	{
+	p:	ref shellList;
+
+	for	(p = displayList; p; p = p->next)
+		if	(p->viewport == v)
+			return p->display;
+	return 0;
+	}
+
+findCookie:	(c: ref far textWindow) ref shell =
+	{
+	p:	ref shellList;
+
+	for	(p = displayList; p; p = p->next)
+		if	(p->cookie == c)
+			return p->display;
+	return 0;
+	}
+
+manage:	(s: pointer, v: ref far textWindow, c: ref far textWindow) =
+	{
+	p:	ref shellList;
+
+	for	(p = displayList; p; p = p->next)
+		if	(p->display == s)
+			return;
+	p = new shellList[ displayList, s, v, c ];
+	displayList = p;
+	}
+
+unmanage:	(s: ref shell) =
+	{
+	p, q:	ref shellList;
+
+	if	(exclusiveShell == s)
+		exclusiveShell = 0;
+	for	(q = 0, p = displayList; p; q = p, p = p->next){
+		if	(p->display == s){
+			if	(q)
+				q->next = p->next;
+			else
+				displayList = p->next;
+			delete p;
+			return;
+			}
+		}
+	}
+
+exclusiveInput:	(s: ref shell) =
+	{
+	exclusiveShell = s;
+	}
+
+nonexclusiveInput:	(s: ref shell) =
+	{
+	if	(exclusiveShell == s)
+		exclusiveShell = 0;
+	}
+
+resize:		gate	(w: ref far textWindow, newSize: point) =
+	{
+	s:	ref shell;
+
+	s = find(w);
+	if	(s){
+		s _acknowledgeResize(newSize);
+		reply;
+		}
+	while	(workProc() &&
+		 !senseMessages())
+		;
+	}
+
+open:		gate	(w: ref far textWindow) =
+	{
+	s:	ref shell;
+
+	s = find(w);
+	if	(s){
+		s _acknowledgeOpen();
+		reply;
+		}
+	while	(workProc() &&
+		 !senseMessages())
+		;
+	}
+
+dismiss:		gate	(w: ref far textWindow) =
+	{
+	s:	ref shell;
+
+	s = find(w);
+	if	(s){
+		s _dismiss();
+		reply;
+		}
+	while	(workProc() &&
+		 !senseMessages())
+		;
+	}
+
+hide:		gate	(w: ref far textWindow) =
+	{
+	s:	ref shell;
+
+	s = find(w);
+	if	(s){
+		s _hide();
+		reply;
+		}
+	while	(workProc() &&
+		 !senseMessages())
+		;
+	}
+
+keyPressed:	gate	(w: ref far textWindow, k: keystroke) =
+	{
+	s:	ref shell;
+
+	if	(exclusiveShell)
+		s = exclusiveShell;
+	else
+		s = find(w);
+	if	(s){
+		s clearFooter();
+		s _processKeystroke(k);
+		reply;
+		}
+	while	(workProc() &&
+		 !senseMessages())
+		;
+	}
+
+mouseEvent:	gate	(w: ref far textWindow, e: mouseEvent_t, 
+				buttons: mouseButtons_t, location: point) =
+	{
+	s, x:	ref shell;
+
+	if	(exclusiveShell){
+		s = exclusiveShell;
+
+			// Translate the window coordinates if necessary.
+
+		if	(s->viewport != w){
+			x = find(w);
+			if	(x){
+				location = x shellToAbsolute(location);
+				location = s absoluteToShell(location);
+				}
+			}
+		}
+	else
+		s = find(w);
+	if	(s){
+		switch	(e){
+		case	ME_BDOWN:
+		case	ME_DCLICK:
+		case	ME_DRAG:
+		case	ME_DROP:
+			s clearFooter();
+			}
+		s _mouseEvent(e, buttons, location);
+		reply;
+		}
+	while	(workProc() &&
+		 !senseMessages())
+		;
+	}
+
+focus:		gate	(w: ref far textWindow) =
+	{
+	s:	ref shell;
+
+	s = find(w);
+	if	(s){
+		s _focus();
+		reply;
+		}
+	while	(workProc() &&
+		 !senseMessages())
+		;
+	}
+
+unfocus:	gate	(w: ref far textWindow) =
+	{
+	s:	ref shell;
+
+	s = find(w);
+	if	(s){
+		s _unfocus();
+		reply;
+		}
+	while	(workProc() &&
+		 !senseMessages())
+		;
+	}
+
+lastClose:	gate	() boolean =
+	{
+	reply TRUE;
+	exit(0);
+	}
+
+dismissRequest:		gate	(w: ref far textWindow) =
+	{
+	s:	ref shell;
+
+	s = find(w);
+	if	(s){
+		s dismissRequest();
+		reply;
+		}
+	while	(workProc() &&
+		 !senseMessages())
+		;
+	}
+
+workProc:	dynamic	() boolean =
+	{
+	return FALSE;
+	}
+
+	};
+
+consoleManager:	public	type	inherit	inputHandler {
+	public:
+
+newAppShell:		gate	(title: [:] char) ref far textWindow;
+
+newPopupShell:		gate	(title: [:] char, 
+				 parent: ref far textWindow) 
+							ref far textWindow;
+
+newMenuShell:		gate	() ref far textWindow;
+
+setTitle:		gate	(viewport: ref far textWindow, str: [:] char);
+
+minimize:		gate	(viewport: ref far textWindow);
+
+manages:		gate	() ref far console;
+
+configure:		gate	(viewport: ref far textWindow, 
+						sz: point) point;
+
+iconLabel:		gate	(viewport: ref far textWindow,
+						str: [:] char, color_t);
+
+askForResize:		gate	(viewport: ref far textWindow, 
+						sz: point) point;
+
+	};
+
+exclusiveInput_t:	public	type	byte = {
+	EI_NORMAL,			// Normal, non-exclusive mode
+	EI_APPLICATION,			// A subwindow wants the whole 
+					// application attention
+	EI_CONSOLE,			// A subwindow wants total console
+					// attention
+	};
+
+color_t:	public	type	byte;
+
+colorChar:	public	type	{ public:
+	character:		char;
+	color:			color_t;
+	};
+
+point:	public	type	{
+	public:
+	x:	signed[16];
+	y:	signed[16];
+	};
+
+colorIndex_t:	public	type	byte = {
+	C_BLACK,				// force total black
+	C_TEXT,					// normal text color
+	C_READONLY,				// readonly text
+	C_SELECTED,				// selected text
+	C_PENDING_DELETE,			// text in pending delete
+	C_LABEL,				// text label
+	C_TITLE,				// title text
+	C_FOOTER,				// footer text
+	C_MENU_TEXT,				// normal menu text
+	C_MENU_ACCELERATOR,			// menu accelerator color
+	C_MENU_SELECTED,			// selected menu item
+	C_MENU_DIMMED,				// dimmed menu text
+	C_FRAME,				// window frame color
+	C_MENU_FRAME,				// menu frame color
+	C_ICON,					// icon color
+	C_READONLY_SELECTED,			// selected read-only text
+	C_TOGGLE_ON,				// selected toggle
+	C_TOGGLE_OFF,				// unselected toggle
+	C_MAXCOLOR
+	};
+
+BLACK:	public	const color_t = 0;
+BLUE:	public	const color_t = 1;
+GREEN:	public	const color_t = 2;
+CYAN:	public	const color_t = 3;
+RED:	public	const color_t = 4;
+PURPLE:	public	const color_t = 5;
+YELLOW:	public	const color_t = 6;
+WHITE:	public	const color_t = 7;
+HIGH:	public	const color_t = 8;
+
+COLOR:	public	(foreground: color_t, background: color_t) color_t =
+	{
+	return background << 4 + foreground;
+	}
+
+foreground:	public	(color: color_t) color_t =
+	{
+	return color & 0xf;
+	}
+
+background:	public	(color: color_t) color_t =
+	{
+	return (color >> 4) & 0xf;
+	}
+
+consoleChannel:	public	type	inherit	channel	{
+	public:
+
+getClass:	gate	() channelClass_t =
+	{
+	return CC_CONSOLE;
+	}
+
+appearsOn:	gate	() ref far console =
+	{
+	}
+
+windowSize:	gate	() point =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+	};
+
+console_t:	public	type	packed	{
+	public:
+
+	windowCount:	unsigned[16];
+	mode:		consoleMode_t;
+	size:		point;
+	isRighthanded:	boolean;
+	manager:	ref far consoleManager;
+
+	};
+
+conmanWindows_t:public	type	packed	{ public:
+	frame:		ref far textWindow;
+	viewport:	ref far	textWindow;
+	};
+
+consoleMode_t:	public	type	byte;
+
+window_t:	public	type	packed	{
+	public:
+
+	corner:		point;
+	size:		point;
+	cursor:		point;
+	zoomState:	windowZoom_t;
+	flags:		windowFlags_t;
+	handler:	ref far inputHandler;
+	palette:	ref far colorPalette;
+	title:		[80] char;
+	};
+
+windowFlags_t:	public	type	byte = {
+	W_OS =		0x02,
+	W_POPUP =	0x04,
+	W_OPEN =	0x08,
+	};
+
+windowStatus_t:	public	type	byte = {
+	WS_SHOWING =	0x01,
+	WS_PLACED = 	0x02,
+	WS_CONFIGURED =	0x04,
+	};
+
+rectangle_t:	public	type	{ public:
+	corner:		point;
+	size:		point;
+
+contains:	(p: point) boolean =
+	{
+	if	(p.x < corner.x ||
+		 p.y < corner.y ||
+		 p.x >= corner.x + size.x ||
+		 p.y >= corner.y + size.y)
+		return FALSE;
+	else
+		return TRUE;
+	}
+
+containsLocal:	(p: point) boolean =
+	{
+	if	(p.x < 0 ||
+		 p.y < 0 ||
+		 p.x >= size.x ||
+		 p.y >= size.y)
+		return FALSE;
+	else
+		return TRUE;
+	}
+
+	};
+
+windowZoom_t:	public	type	byte = {
+	WZ_MAXIMIZED,
+	WZ_NORMAL,
+	WZ_MINIMIZED,
+	WZ_HIDDEN
+	};
+/*
+	This type provides a bit mask for up to a three button mouse.  A
+	two button mouse will not generate MB_CENTER, and a one button mouse
+	will only generate MB_LEFT
+ */
+mouseButtons_t:	public	type	byte = {
+	MB_RIGHT = 0x01,
+	MB_LEFT = 0x02,
+	MB_CENTER = 0x04
+	};
+/*
+	These tables must correspond to the above button definitions.  If the
+	definitions change, the tables must also.
+ */
+ButtonSwapTable:	public	const [] mouseButtons_t = [
+	0,					// no buttons
+	MB_LEFT,				// MB_RIGHT
+	MB_RIGHT,				// MB_LEFT
+	MB_RIGHT|MB_LEFT,			// MB_LEFT|MB_RIGHT
+	MB_CENTER,				// MB_CENTER
+	MB_CENTER|MB_LEFT,			// MB_CENTER|MB_RIGHT
+	MB_CENTER|MB_RIGHT,			// MB_CENTER|MB_LEFT
+	MB_CENTER|MB_RIGHT|MB_LEFT,		// MB_CENTER|MB_LEFT|MB_RIGHT
+	];
+
+ButtonMap:	public	const [] mouseButtons_t = [
+	0,					// no buttons
+	MB_RIGHT,				// MB_RIGHT
+	MB_LEFT,				// MB_LEFT
+	MB_LEFT,				// MB_LEFT|MB_RIGHT
+	MB_CENTER,				// MB_CENTER
+	MB_RIGHT,				// MB_CENTER|MB_RIGHT
+	MB_LEFT,				// MB_CENTER|MB_LEFT
+	MB_LEFT,				// MB_CENTER|MB_LEFT|MB_RIGHT
+	];
+
+PreviousButtonMap:	public	const [] mouseButtons_t = [
+	MB_LEFT|MB_RIGHT|MB_CENTER,		// no buttons
+	MB_RIGHT,				// MB_RIGHT
+	MB_LEFT,				// MB_LEFT
+	MB_LEFT,				// MB_LEFT|MB_RIGHT
+	MB_CENTER,				// MB_CENTER
+	MB_RIGHT,				// MB_CENTER|MB_RIGHT
+	MB_LEFT,				// MB_CENTER|MB_LEFT
+	MB_LEFT,				// MB_CENTER|MB_LEFT|MB_RIGHT
+	];
+
+mouseEvent_t:	public	type	byte = {
+	ME_CLICK,				// single click
+	ME_DCLICK,				// double click
+	ME_MOVE,				// move (buttons up)
+	ME_DRAG,				// start drag (buttons down)
+	ME_CDRAG,				// continue drag (buttons down)
+	ME_DROP,				// drop (buttons up)
+	ME_BDOWN				// button down
+	};
+/*
+event_t:	public	type	{ public:
+	class:		eClass_t;
+	info:		unsigned[16];		// class dependent info
+	location:	point;
+	};
+
+eClass_t:	public	type	byte = {
+	E_CHARACTER,			// a character keystroke
+	E_BUTTON,			// a special keystroke
+	E_MOUSE,			// a mouse event
+	};
+ */
+/*
+	This is the ALYS console standard keyboard key values.  This is part
+	of the ALYS model, but there are some serious questions concering the
+	relationship between a keystroke and the target character set, such 
+	as ASCII or Unicode.
+ */
+keystroke:	public	type	unsigned[16] = {
+	CTRL_AT,			/* ^@	nul character */
+	CTRL_A,		CTRL_B,		CTRL_C,		CTRL_D,
+	CTRL_E,		CTRL_F,		CTRL_G,		CTRL_H,
+	CTRL_I,		CTRL_J,		CTRL_K,		CTRL_L,
+	CTRL_M,		CTRL_N,		CTRL_O,		CTRL_P,
+	CTRL_Q,		CTRL_R,		CTRL_S,		CTRL_T,
+	CTRL_U,		CTRL_V,		CTRL_W,		CTRL_X,
+	CTRL_Y,		CTRL_Z,
+
+	ESC,
+
+//	BS = CTRL_H,	TAB = CTRL_I,	LF = CTRL_J,	FF = CTRL_L,
+//	CR = CTRL_M,
+
+	START_KEY = CTRL_Q,
+	STOP_KEY = CTRL_S,
+
+	F1 = 256,	F2,		F3,		F4,
+	F5,		F6,		F7,		F8,
+	F9,		F10,		F11,		F12,
+
+	SHFT_F1,	SHFT_F2,	SHFT_F3,	SHFT_F4,
+	SHFT_F5,	SHFT_F6,	SHFT_F7,	SHFT_F8,
+	SHFT_F9,	SHFT_F10,	SHFT_F11,	SHFT_F12,
+
+	CTRL_F1,	CTRL_F2,	CTRL_F3,	CTRL_F4,
+	CTRL_F5,	CTRL_F6,	CTRL_F7,	CTRL_F8,
+	CTRL_F9,	CTRL_F10,	CTRL_F11,	CTRL_F12,
+
+	ALT_F1,		ALT_F2,		ALT_F3,		ALT_F4,
+	ALT_F5,		ALT_F6,		ALT_F7,		ALT_F8,
+	ALT_F9,		ALT_F10,	ALT_F11,	ALT_F12,
+
+	HOME,		END,		PGUP,		PGDN,
+	CENTER,
+
+	UP_ARW,		DOWN_ARW,	LEFT_ARW,	RIGHT_ARW,
+
+	INS,
+	DEL,
+
+	GREY_BS,	GREY_TAB,	GREY_PLUS,	GREY_DASH,
+	GREY_STAR,
+
+	NUM_0,		NUM_1,		NUM_2,		NUM_3,
+	NUM_4,		NUM_5,		NUM_6,		NUM_7,
+	NUM_8,		NUM_9,
+
+	NUM_DOT,
+
+	GREY_CR,
+	GREY_ESC,
+
+	BACK_TAB,
+
+	CTRL_HOME,	CTRL_END,	CTRL_PGUP,	CTRL_PGDN,
+	CTRL_CENTER,
+
+	CTRL_UP,	CTRL_DOWN,	CTRL_LEFT,	CTRL_RIGHT,
+
+	ALT_DASH,	ALT_EQ,		CTRL_BREAK,	CTRL_PRTSC,
+	PRTSC,		SYSREQ,
+
+	ALT_0 = SYSREQ + 2,
+			ALT_1,		ALT_2,		ALT_3,
+	ALT_4,		ALT_5,		ALT_6,		ALT_7,
+	ALT_8,		ALT_9,
+
+	CTRL_CR,
+
+	ALT_A,		ALT_B,		ALT_C,		ALT_D,
+	ALT_E,		ALT_F,		ALT_G,		ALT_H,
+	ALT_I,		ALT_J,		ALT_K,		ALT_L,
+	ALT_M,		ALT_N,		ALT_O,		ALT_P,
+	ALT_Q,		ALT_R,		ALT_S,		ALT_T,
+	ALT_U,		ALT_V,		ALT_W,		ALT_X,
+	ALT_Y,		ALT_Z,
+
+	KEYCOUNT,
+
+	NO_KEY = ~0			// returned by testKey to
+					// indicate no keys waiting.  It is
+					// not a valid keystroke
+	};
+
+/*
+		ALYS Text Window System
+
+	This window toolkit is designed for text-based displays.  The intent
+	is that applications written to this library will function in text 
+	modes as well as graphics modes.  Since the kernel support is only
+	set up for text modes, this is what is supported.
+
+	The general input event processing model is, however, expected to be
+	exactly the saem as for a graphical system, except that the coordinate
+	space is larger in graphics mode.
+
+	An ALYS display application consists of one or more shell window
+	objects organized into a display control heirarchy.  Input events
+	are received from many sources and one or more executio threads are
+	used to handle these events.  Each shell object must have an
+	associated inputHandler object, although a single inputHandler can
+	route events to more than one shell.
+
+	
+ */
+shell:	public	type	inherit	frob	{
+	exclusivity:		exclusiveInput_t;
+	exclusiveFrob:		ref frob;
+	mouseFocusFrob:		ref frob;
+	startBias:		point;
+	textFocus:		ref frob;
+
+	visible:
+
+	status:			windowStatus_t;
+	hasFocus:		boolean;
+	inputSource:		ref inputHandler;
+	viewport:		ref far textWindow;
+	palette:		ref far colorPalette;
+
+	public:
+
+	minimumSize:		point;
+	maximumSize:		point;
+
+constructor:	() =
+	{
+	super constructor();
+	palette = 0;
+	status = 0;
+	textFocus = self;
+	inputSource = 0;
+	hasFocus = FALSE;
+	exclusivity = EI_NORMAL;
+	exclusiveFrob = 0;
+	mouseFocusFrob = 0;
+	minimumSize = [ 0, 0 ];
+	maximumSize = [ 2048, 2048 ];
+	viewport = 0;
+	}
+
+_setViewport:	(v: ref far textWindow) =
+	{
+	if	(viewport)
+		viewport close();
+	viewport = v;
+	}
+
+getInputFrom:	(i: ref inputHandler) =
+	{
+	if	(inputSource)
+		inputSource unmanage(self);
+	inputSource = 0;
+	i manage(self, viewport, 0);
+	inputSource = i;
+	viewport registerWindowInput(
+				ref far inputHandler(inputSource->objectId));
+	}
+
+pollEvents:	dynamic	() boolean =
+	{
+	if	(inputSource &&
+		 inputSource senseMessages())
+		return TRUE;
+	else
+		return FALSE;
+	}
+
+getShell:	dynamic	() ref shell =
+	{
+	if	(viewport)
+		return self;
+	else
+		return parent getShell();
+	}
+
+propagateTextFocus:	dynamic	(w: ref frob) =
+	{
+	if	(parent)
+		parent propagateTextFocus(w);
+	textFocus = w;
+	}
+
+getTextFocus:	dynamic	() ref frob =
+	{
+	if	(parent)
+		return parent getTextFocus();
+	else if	(textFocus)
+		return textFocus;
+	else
+		return self;
+	}
+
+usePalette:	(cp: ref far colorPalette) =
+	{
+	palette = cp;
+	if	(viewport)
+		viewport usePalette(cp);
+	}
+
+_processKeystroke:	(k: keystroke) =
+	{
+	w:	ref frob;
+
+		// Mouse drag operations lock out the keyboard
+
+	if	(mouseFocusFrob)
+		return;
+
+		// Modal dialogs grab the focus temporarily
+
+	if	(exclusiveFrob){
+		exclusiveFrob processKeystroke(k);
+		return;
+		}
+
+		// Otherwise use text focus to resolve keystrokes
+
+	for	(w = textFocus; w; w = w->parent)
+		if	(w processKeystroke(k))
+			return;
+	}
+
+_exclusiveInput:	dynamic	(w: ref frob, b: exclusiveInput_t) =
+	{
+	if	(parent)
+		parent _exclusiveInput(w, b);
+	else	{
+		if	(exclusivity != b &&
+			 exclusivity == EI_CONSOLE &&
+			 viewport)
+			viewport exclusiveInput(EI_NORMAL);
+
+		switch	(b){
+		case	EI_NORMAL:
+			exclusiveFrob = 0;
+			if	(inputSource)
+				inputSource nonexclusiveInput(self);
+			break;
+
+		case	EI_CONSOLE:
+			if	(viewport)
+				viewport exclusiveInput(EI_CONSOLE);
+
+		case	EI_APPLICATION:
+			exclusiveFrob = w;
+			if	(inputSource)
+				inputSource exclusiveInput(self);
+			}
+		exclusivity = b;
+		}
+	}
+
+_mouseEvent:	(e: mouseEvent_t, buttons: mouseButtons_t, 
+							location: point) =
+	{
+	w, c:		ref frob;
+
+	if	(mouseFocusFrob){
+		w = mouseFocusFrob;
+		location = w shellToLocal(location);
+		}
+	else	{
+		w = self;
+
+	label	tailRecursion:
+
+			// Look for mouse in child windows.
+
+		for	(c = w->child; c; c = c->sibling)
+			if	(c->box contains(location)){
+				location.x -= c->box.corner.x;
+				location.y -= c->box.corner.y;
+				w = c;
+				goto tailRecursion;
+				}
+		}
+
+		// process the mouse event
+
+	switch	(e){
+	case	ME_MOVE:
+		mouseFocusFrob = 0;
+		if	(w->sensitive)
+			w move(location);
+		break;
+
+	case	ME_BDOWN:
+		mouseFocusFrob = w;
+		if	(w->sensitive)
+			w buttonDown(buttons, location);
+		break;
+
+	case	ME_CLICK:
+		mouseFocusFrob = 0;
+		if	(w->sensitive)
+			w click(buttons, location);
+		break;
+
+	case	ME_DCLICK:
+		mouseFocusFrob = 0;
+		if	(w->sensitive)
+			w doubleClick(buttons, location);
+		break;
+
+	case	ME_DRAG:
+		if	(w->sensitive)
+			w drag(buttons, location);
+		break;
+
+	case	ME_CDRAG:
+		if	(w->sensitive)
+			w continueDrag(buttons, location);
+		break;
+
+	case	ME_DROP:
+		mouseFocusFrob = 0;
+		if	(w->sensitive)
+			w drop(buttons, location);
+		break;
+		}
+	}
+
+releaseMouse:	() =
+	{
+	mouseFocusFrob = 0;
+	}
+
+grabMouse:	(f: ref frob) =
+	{
+	mouseFocusFrob = f;
+	viewport grabMouse();
+	}
+
+_hide:	() =
+	{
+	status &= ~WS_SHOWING;
+	}
+
+hide:	dynamic	() =
+	{
+	status &= ~WS_SHOWING;
+	if	(viewport)
+		viewport hide();
+	}
+
+_dismiss:	() =
+	{
+	if	(viewport){
+		viewport close();
+		viewport = 0;
+		}
+	status = 0;
+	dismiss();
+	}
+
+dismissRequest:	dynamic	() =
+	{
+	dismiss();
+	}
+
+dismiss:	dynamic	() =
+	{
+	delete self;
+	}
+/*
+	Configuration of an ALYS window begins by working bottom up through
+	the frob hierarchy with the default size.  Then we find the maximum
+	of the default and the preferred size.  You can guarantee to use
+	the default size if you set the preferred size to [ 0, 0 ].  Finally,
+	the console manager is allowed to clip the window to fit the screen.
+	
+	With the size computed, it must now be communicated down the frob
+	hierarchy.
+ */
+configure:	dynamic	(preferredSize: point) =
+	{
+	if	(status & WS_CONFIGURED)
+		return;
+
+	deflt:	point;
+
+	deflt = defaultConfiguration();
+
+	status |= WS_CONFIGURED;
+	if	(deflt.x < preferredSize.x)
+		deflt.x = preferredSize.x;
+	if	(deflt.y < preferredSize.y)
+		deflt.y = preferredSize.y;
+	if	(deflt.x < box.size.x)
+		deflt.x = box.size.x;
+	if	(deflt.y < box.size.y)
+		deflt.y = box.size.y;
+	deflt = ConsoleManager configure(viewport, deflt);
+	super resize(deflt);
+	}
+
+_acknowledgeResize:	dynamic	(p: point) =
+	{
+	super resize(p);
+	redraw();
+	}
+
+resize:	dynamic	(p: point) =
+	{
+	p = ConsoleManager askForResize(viewport, p);
+	super resize(p);
+	redraw();
+	}
+
+_acknowledgeOpen:	dynamic	() =
+	{
+	configure([ 0, 0 ]);		// in case it hasn't happened yet
+	status |= WS_SHOWING;
+	redraw();
+	}
+
+open:	dynamic	() =
+	{
+	configure([ 0, 0 ]);		// in case it hasn't happened yet
+	if	(inputSource == 0){
+		inputSource = new inputHandler[ self ];
+		mainExternal(inputSource);
+		viewport registerWindowInput(
+				ref far inputHandler(inputSource->objectId));
+		}
+	status |= WS_SHOWING;
+	viewport open();
+	redraw();
+	textFocus setTextFocus();
+	}
+
+at:	dynamic	(p: point) =
+	{
+	delta:	point;
+
+	status |= WS_PLACED;
+	if	(viewport)
+		box.corner = viewport getCorner();
+	delta.x = p.x - box.corner.x;
+	delta.y = p.y - box.corner.y;
+	if	(delta.x || delta.y)
+		moveWindow(delta);
+	}
+/*
+	moveWindow
+
+	This method moves the shell on it's viewport.  The argument is a
+	change vector, not an absolute point.  The viewport's corner point
+	is changed by the amount of the x and y coordinates of the argument.
+ */
+moveWindow:	(delta: point) =
+	{
+	if	(viewport)
+		viewport move(delta);
+	}
+
+close:	dynamic	() =
+	{
+	if	(viewport){
+		viewport close();
+		viewport = 0;
+		}
+	super close();
+	}
+
+destructor:	dynamic	() =
+	{
+	if	(inputSource){
+		inputSource unmanage(self);
+		inputSource = 0;
+		}
+	close();
+	super destructor();
+	}
+/*
+front:	dynamic	() =
+	{
+	ConsoleManager front(viewport);
+	}
+ */
+toTop:	() =
+	{
+	if	(status & WS_SHOWING == 0)
+		open();
+	if	(viewport)
+		viewport toTop();
+	}
+
+toBottom:	() =
+	{
+	if	(viewport)
+		viewport toBottom();
+	}
+
+newTitle:	(t: [:] char) =
+	{
+	if	(ConsoleManager == 0)
+		locateConsoleManager("");
+	ConsoleManager setTitle(viewport, t);
+	}
+
+//----------------------------------------------------------------------------
+//
+//	Focus Notices
+//
+//	These methods are called by the inputHandler when a shell gets focus
+//	or gives it up.  The _focus and _unfocus calls are the entry points
+//	used by the inputHandler.  The dynamic functions focus and unfocus
+//	allow derivation and specialization of the responses.
+//
+_focus:	() =
+	{
+	hasFocus = TRUE;
+	focus();
+	}
+
+_unfocus:	() =
+	{
+	hasFocus = FALSE;
+	unfocus();
+	}
+
+focus:		dynamic	() = 
+	{
+	}
+
+unfocus:	dynamic	() =
+	{
+	}
+
+postFooter:	(fmt: [:] char, ...) =
+	{
+	vpostFooter(fmt, ...);
+	}
+
+vpostFooter:	dynamic	(fmt: [:] char, ap: ArgumentList) =
+	{
+	}
+
+clearFooter:	dynamic	() =
+	{
+	}
+//----------------------------------------------------------------------------
+//
+//		Coordinate Systems Conversions
+//
+localToAbsolute:	dynamic	(p: point) point =
+	{
+	if	(viewport)
+		box.corner = viewport getCorner();
+	p.x += box.corner.x;
+	p.y += box.corner.y;
+	if	(viewport)
+		return p;
+	else if	(ground)
+		return ground localToAbsolute(p);
+	else
+		return p;
+	}
+
+localToShell:		dynamic	(p: point) point =
+	{
+	if	(viewport)
+		return p;
+	else if	(ground){
+		p.x += box.corner.x;
+		p.y += box.corner.y;
+		return ground localToShell(p);
+		}
+	else
+		return p;
+	}
+
+absoluteToLocal:	dynamic	(p: point) point =
+	{
+	if	(viewport)
+		box.corner = viewport getCorner();
+	p.x -= box.corner.x;
+	p.y -= box.corner.y;
+	if	(viewport)
+		return p;
+	else if	(ground)
+		return ground absoluteToLocal(p);
+	else
+		return p;
+	}
+
+shellToLocal:		dynamic	(p: point) point =
+	{
+	if	(viewport)
+		return p;
+	else if	(ground){
+		p.x -= box.corner.x;
+		p.y -= box.corner.y;
+		return ground shellToLocal(p);
+		}
+	else
+		return p;
+	}
+
+absoluteToShell:	dynamic	(p: point) point =
+	{
+	if	(viewport)
+		box.corner = viewport getCorner();
+	p.x -= box.corner.x;
+	p.y -= box.corner.y;
+	return p;
+	}
+
+shellToAbsolute:	dynamic	(p: point) point =
+	{
+	if	(viewport)
+		box.corner = viewport getCorner();
+	p.x += box.corner.x;
+	p.y += box.corner.y;
+	return p;
+	}
+
+//----------------------------------------------------------------------------
+//
+//		Cursor Management
+//
+//		These methods are text cursor placement methods.  They just
+//		pass through their arguments to the viewport, if any.
+//
+
+hideCursor:	dynamic	() =
+	{
+	if	(viewport)
+		viewport hideCursor();
+	else if	(ground)
+		ground hideCursor();
+	}
+
+showCursor:	dynamic	() =
+	{
+	if	(viewport)
+		viewport showCursor();
+	else if	(ground)
+		ground showCursor();
+	}
+
+textCursor:	dynamic	(p: point) =
+	{
+	if	(viewport)
+		viewport textCursor(p);
+	else if	(ground)
+		ground textCursor(p);
+	}
+
+passCursor:	dynamic	(p: point) =
+	{
+	if	(viewport)
+		textCursor(p);
+	else if	(ground)
+		ground passCursor(p);
+	}
+
+mouseCursor:	dynamic	(p: point) =
+	{
+	if	(viewport)
+		viewport mouseCursor(p);
+	else if	(ground)
+		super mouseCursor(p);
+	}
+
+//----------------------------------------------------------------------------
+//
+//		Drawing
+//
+//		The following methods draw text, or otherwise alter the
+//		visible window.  They simply pass their arguments through 
+//		to the viewport, if any.  Otherwise, they write to the
+//		ground.
+//
+
+beep:	dynamic	() =
+	{
+	if	(viewport)
+		viewport beep();
+	else if	(ground)
+		super beep();
+	}
+
+verticalScroll:	dynamic	(ul: point, sz: point, amount: int) =
+	{
+	if	(viewport)
+		viewport verticalScroll(ul, sz, amount);
+	else if	(ground)
+		super verticalScroll(ul, sz, amount);
+	}
+
+horizontalScroll:	dynamic	(ul: point, sz: point, amount: int) =
+	{
+	if	(viewport)
+		viewport horizontalScroll(ul, sz, amount);
+	else if	(ground)
+		super horizontalScroll(ul, sz, amount);
+	}
+
+rectangle:	dynamic	(r: rectangle_t, c: color_t) =
+	{
+	if	(viewport)
+		viewport rectangle(r, c);
+	else if	(ground)
+		super rectangle(r, c);
+	}
+
+putcc:	dynamic	(p: point, c: char, a: color_t) =
+	{
+	if	(viewport)
+		viewport putcc(p, c, a);
+	else if	(ground)
+		super putcc(p, c, a);
+	}
+
+write:	dynamic	(p: point, buf: [:] colorChar) =
+	{
+	if	(viewport)
+		viewport write(p, buf);
+	else if	(ground)
+		super write(p, buf);
+	}
+
+writecc:	dynamic	(p: point, text: [:] char, c: color_t) =
+	{
+	if	(viewport)
+		viewport writecc(p, text, c);
+	else if	(ground)
+		super writecc(p, text, c);
+	}
+
+clear:	() =
+	{
+	if	(viewport)
+		viewport clear();
+	else if	(ground)
+		super clear();
+	}
+
+	};
+/*
+	The window class is the basic kind of object for interacting with
+	the display screen.  Any window can be used to display text and/or
+	graphics and also to process input events.  
+
+	The input focus model works as follows:
+
+	- The application is constructed as a nested set of stacked windows.
+	  (This uses the notion of frames and grounds from the frame class.)
+	- An input event arrives at an activeWindow object (which is run by
+	  a thread).  The input event is directed from the activeWindow via
+	  a keystroke focus thread to the window currently with focus.
+	- 
+ */
+frob:	public	type	inherit	frame	{
+	visible:
+
+	sensitive:		boolean;
+
+	public:
+
+	child:			ref frob;
+	sibling:		ref frob;
+	parent:			ref frob;
+
+constructor:	() =
+	{
+	box.corner = [ 0, 0 ];
+	box.size = [ 0, 0 ];
+	ground = 0;
+	parent = 0;
+	child = 0;
+	sibling = 0;
+	sensitive = TRUE;
+	}
+
+anchor:	dynamic	(w: ref frob) =
+	{
+	pw:	ref frob;
+
+
+	w->sibling = 0;
+	if	(child){
+		for	(pw = child; pw->sibling; pw = pw->sibling)
+			;
+		pw->sibling = w;
+		}
+	else
+		child = w;
+	w->parent = self;
+	w->ground = self;
+	}
+
+anchorFirst:	dynamic	(w: ref frob) =
+	{
+	w->sibling = child;
+	child = w;
+	w->parent = self;
+	w->ground = self;
+	}
+
+getShell:	dynamic	() ref shell =
+	{
+	return parent getShell();
+	}
+
+unanchor:	dynamic	(w: ref frob) =
+	{
+	s, p:	ref frob;
+
+	w->parent = 0;
+	if	(child == w){
+		child = child->sibling;
+		return;
+		}
+	for	(s = child; s; p = s, s = s->sibling)
+		if	(s == w){
+			p->sibling = s->sibling;
+			return;
+			}
+	}
+
+defaultConfiguration:	dynamic	() point =
+	{
+	return [ 0, 0 ];		// default size is empty
+	}
+
+resize:	dynamic	(p: point) =
+	{
+	oldp:	point;
+
+	oldp = box.size;
+	box.size = p;
+	resizeChildren(oldp);
+	}
+
+resizeChildren:	dynamic	(oldSize: point) =
+	{
+	}
+
+redraw:	() =
+	{
+	r:	rectangle_t;
+
+	r.corner = [ 0, 0 ];
+	r.size = box.size;
+	_expose(r);
+	}
+
+_expose:	(x: rectangle_t) =
+	{
+	w:	ref frob;
+
+	expose(x);
+	for	(w = child; w; w = w->sibling){
+		y:	rectangle_t;
+
+		y.corner.x = x.corner.x - w->box.corner.x;
+		y.corner.y = x.corner.y - w->box.corner.y;
+		y.size = x.size;
+
+			// shrink the rectangle to fit
+
+		if	(y.corner.x < 0){
+			y.size.x += y.corner.x;		// actually decreases
+			y.corner.x = 0;
+			}
+		if	(y.corner.y < 0){
+			y.size.y += y.corner.y;		// actually decreases
+			y.corner.y = 0;
+			}
+//		stdout printf("child expose @[%d,%d][%d,%d] ([ [%d,%d] [%d, %d] ])\n",
+//			w->box.corner.x, w->box.corner.y, w->box.size.x, w->box.size.y,
+//			y.corner.x, y.corner.y, y.size.x, y.size.y);
+		if	(y.size.x < 0 ||
+			 y.size.y < 0 ||
+			 y.corner.x >= w->box.size.x ||
+			 y.corner.y >= w->box.size.y)
+			continue;
+//		stdout printf("exposing...\n");
+		w _expose(y);
+		}
+	}
+
+expose:	dynamic	(x: rectangle_t) = { }
+
+setTextFocus:	dynamic	() =
+	{
+	if	(parent)
+		parent propagateTextFocus(self);
+	}
+
+propagateTextFocus:	dynamic	(w: ref frob) =
+	{
+	if	(parent)
+		parent propagateTextFocus(w);
+	}
+
+getTextFocus:	dynamic	() ref frob =
+	{
+	if	(parent)
+		return parent getTextFocus();
+	else
+		return self;
+	}
+
+exclusiveInput:	(b: exclusiveInput_t) =
+	{
+	_exclusiveInput(self, b);
+	}
+
+_exclusiveInput:	dynamic	(w: ref frob, b: exclusiveInput_t) =
+	{
+	if	(parent)
+		parent _exclusiveInput(w, b);
+	}
+
+eventWaiting:	() boolean =
+	{
+	while	(parent)
+		self = parent;
+	return pollEvents();
+	}
+
+pollEvents:	dynamic	() boolean =
+	{
+	return FALSE;
+	}
+
+sensitivity:	(b: boolean) =
+	{
+	_sensitivity(b);
+	redraw();
+	}
+
+_sensitivity:	(b: boolean) =
+	{
+	f:	ref frob;
+
+	sensitive = b;
+	for	(f = child; f; f = f->sibling)
+		f _sensitivity(b);
+	sensitivityReaction();
+	}
+
+sensitivityReaction:	dynamic	() =
+	{
+	}
+
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	switch	(k){
+
+		/* Navigation commands */
+
+	case	DOWN_ARW:	downArrow();		break;
+	case	UP_ARW:		upArrow();		break;
+	case	LEFT_ARW:	leftArrow();		break;
+	case	RIGHT_ARW:	rightArrow();		break;
+	case	HOME:		beginLine();		break;
+	case	END:		endLine();		break;
+	case	F1:		help();			break;
+	case	GREY_ESC:	escape();		break;
+	case	GREY_CR:	enterKey();		break;
+
+	default:		return FALSE;
+		}
+	return TRUE;
+	}
+
+click:		dynamic	(buttons: mouseButtons_t, location: point) = { }
+doubleClick:	dynamic	(buttons: mouseButtons_t, location: point) = { }
+drag:		dynamic	(buttons: mouseButtons_t, location: point) = { }
+buttonDown:	dynamic	(buttons: mouseButtons_t, location: point) = { }
+move:		dynamic	(location: point) = { }
+continueDrag:	dynamic	(buttons: mouseButtons_t, location: point) = { }
+drop:		dynamic	(buttons: mouseButtons_t, location: point) = { }
+/*
+	This method reports whether the window will allow input.  Return
+	a frob pointer to allow text focus to shift there, null otherwise.
+ */
+enter:		dynamic	() ref frob =
+	{
+	return self;
+	}
+
+enterCharacter:	dynamic	(keystroke) = { beep(); }
+
+escape:		dynamic	() = { beep(); }
+upArrow:	dynamic	() = { beep(); }
+downArrow:	dynamic	() = { beep(); }
+rightArrow:	dynamic	() = { beep(); }
+leftArrow:	dynamic	() = { beep(); }
+beginLine:	dynamic	() = { beep(); }
+endLine:	dynamic	() = { beep(); }
+help:		dynamic	() = { beep(); }
+enterKey:	dynamic	() = { beep(); }
+
+at:	dynamic	(p: point) =
+	{
+	box.corner = p;
+	}
+
+close:	dynamic	() =
+	{
+	if	(parent){
+		w:	ref frob;
+
+		if	(getTextFocus() == self)
+			parent setTextFocus();
+		w = parent;
+
+		w unanchor(self);
+		w expose(box);
+		}
+	}
+
+destructor:	dynamic	() =
+	{
+	close();
+	if	(parent){
+		parent unanchor(self);
+		parent = 0;
+		}
+	while	(child){
+		w:	ref frob;
+
+		w = child;
+		unanchor(child);
+		delete w;
+		}
+	}
+
+};
+
+/*
+	A frame is the most primitive unit of display processing.  It is
+	simply a clipping rectangle.  Frame form a tree, with each frame
+	potentially containing several other frames and in turn nested within
+	another frame.
+ */
+frame:	public	type	{
+	public:
+
+	box:		rectangle_t;
+	ground:		ref frame;
+
+textCursor:	dynamic	(p: point) =
+	{
+	p.x += box.corner.x;
+	p.y += box.corner.y;
+	if	(ground)
+		ground passCursor(p);
+	}
+
+passCursor:	dynamic	(p: point) =
+	{
+	p.x += box.corner.x;
+	p.y += box.corner.y;
+	if	(ground)
+		ground passCursor(p);
+	}
+
+mouseCursor:	dynamic	(p: point) =
+	{
+	p.x += box.corner.x;
+	p.y += box.corner.y;
+	if	(ground)
+		ground mouseCursor(p);
+	}
+
+showCursor:	dynamic	() =
+	{
+	if	(ground)
+		ground showCursor();
+	}
+
+hideCursor:	dynamic	() =
+	{
+	if	(ground)
+		ground hideCursor();
+	}
+
+printf:	dynamic	(p: point, c: color_t, fmt: [:] char, ...) =
+	{
+	fe:	frameEmitter;
+
+	fe = [ self, c ];
+	fe.p = p;
+	fe format(fmt, ...);
+	}
+
+vprintf:	dynamic	(p: point, c: color_t, fmt: [:] char, ap: ArgumentList) =
+	{
+	fe:	frameEmitter;
+
+	fe = [ self, c ];
+	fe.p = p;
+	fe format(fmt, ap);
+	}
+
+putcc:	dynamic	(p: point, c: char, a: color_t) =
+	{
+	if	(p.y < 0)
+		return;
+	if	(p.x < 0)
+		return;
+	if	(p.y >= box.size.y)
+		return;
+	if	(p.x >= box.size.x)
+		return;
+	ground putcc([p.x + box.corner.x, p.y + box.corner.y], c, a);
+	}
+
+write:	dynamic	(p: point, text: [:] colorChar) =
+	{
+	rem:	int;
+
+	if	(p.y < 0 ||
+		 p.y >= box.size.y)
+		return;
+	if	(p.x >= box.size.x)
+		return;
+	if	(p.x < 0){
+		rem = |text + p.x;
+		if	(rem < 0)
+			return;
+		|text = rem;
+		p.x = 0;
+		}
+	rem = box.size.x - p.x;
+	if	(|text > rem)
+		|text = rem;
+	p.x += box.corner.x;
+	p.y += box.corner.y;
+	if	(|text)
+		ground write(p, text);
+	}
+
+writecc:	dynamic	(p: point, text: [:] char, c: color_t) =
+	{
+	rem:	int;
+
+	if	(p.y < 0 ||
+		 p.y >= box.size.y)
+		return;
+	if	(p.x >= box.size.x)
+		return;
+	if	(p.x < 0){
+		rem = |text + p.x;
+		if	(rem < 0)
+			return;
+		|text = rem;
+		p.x = 0;
+		}
+	rem = box.size.x - p.x;
+	if	(|text > rem)
+		|text = rem;
+	p.x += box.corner.x;
+	p.y += box.corner.y;
+	if	(|text)
+		ground writecc(p, text, c);
+	}
+
+scrollContentsUp:	(amount: int) =
+	{
+	verticalScroll([ 0, 0 ], box.size, amount);
+	}
+
+scrollContentsDown:	(amount: int) =
+	{
+	verticalScroll([ 0, 0 ], box.size, -amount);
+	}
+
+clear:	() =
+	{
+	rectangle([ [ 0, 0 ], box.size ], C_BLACK);
+	}
+
+verticalScroll:	dynamic	(ul: point, sz: point, amount: int) =
+	{
+	if	(amount == 0)
+		return;
+
+		// If the scrolling frame in view?  If not, give up'
+
+	if	(ul.x > box.size.x ||
+		 ul.y > box.size.y ||
+		 sz.x < 1 ||
+		 sz.y < 1 ||
+		 ul.x + sz.x < 1 ||
+		 ul.y + sz.y < 1)
+		return;
+
+		// now clip the scrolling frame to the window
+
+	if	(ul.x < 0)
+		ul.x = 0;
+	if	(ul.y < 0)
+		ul.y = 0;
+	if	(ul.x + sz.x > box.size.x)
+		sz.x = box.size.x - ul.x;
+	if	(ul.y + sz.y > box.size.y)
+		sz.y = box.size.y - ul.y;
+	ul.x += box.corner.x;
+	ul.y += box.corner.y;
+	ground verticalScroll(ul, sz, amount);
+	}
+
+rectangle:	dynamic	(r: rectangle_t, color: color_t) =
+	{
+		// If the scrolling frame in view?  If not, give up'
+
+	if	(r.corner.x > box.size.x ||
+		 r.corner.y > box.size.y ||
+		 r.size.x < 1 ||
+		 r.size.y < 1 ||
+		 r.corner.x + r.size.x < 1 ||
+		 r.corner.y + r.size.y < 1)
+		return;
+
+		// now clip the scrolling frame to the window
+
+	if	(r.corner.x < 0)
+		r.corner.x = 0;
+	if	(r.corner.y < 0)
+		r.corner.y = 0;
+	if	(r.corner.x + r.size.x > box.size.x)
+		r.size.x = box.size.x - r.corner.x;
+	if	(r.corner.y + r.size.y > box.size.y)
+		r.size.y = box.size.y - r.corner.y;
+	r.corner.x += box.corner.x;
+	r.corner.y += box.corner.y;
+	ground rectangle(r, color);
+	}
+
+horizontalScroll:	dynamic	(ul: point, sz: point, amount: int) =
+	{
+
+		// If the scrolling frame in view?  If not, give up'
+
+	if	(ul.x > box.size.x ||
+		 ul.y > box.size.y ||
+		 sz.x < 1 ||
+		 sz.y < 1 ||
+		 ul.x + sz.x < 1 ||
+		 ul.y + sz.y < 1)
+		return;
+
+		// now clip the scrolling frame to the window
+
+	if	(ul.x < 0)
+		ul.x = 0;
+	if	(ul.y < 0)
+		ul.y = 0;
+	if	(ul.x + sz.x > box.size.x)
+		sz.x = box.size.x - ul.x;
+	if	(ul.y + sz.y > box.size.y)
+		sz.y = box.size.y - ul.y;
+	ul.x += box.corner.x;
+	ul.y += box.corner.y;
+	ground horizontalScroll(ul, sz, amount);
+	}
+
+localToAbsolute:	dynamic	(p: point) point =
+	{
+	p.x += box.corner.x;
+	p.y += box.corner.y;
+	return ground localToAbsolute(p);
+	}
+
+localToShell:		dynamic	(p: point) point =
+	{
+	p.x += box.corner.x;
+	p.y += box.corner.y;
+	return ground localToShell(p);
+	}
+
+absoluteToLocal:	dynamic	(p: point) point =
+	{
+	p.x -= box.corner.x;
+	p.y -= box.corner.y;
+	return ground absoluteToLocal(p);
+	}
+
+shellToLocal:		dynamic	(p: point) point =
+	{
+	p.x -= box.corner.x;
+	p.y -= box.corner.y;
+	return ground shellToLocal(p);
+	}
+
+beep:	dynamic	() =
+	{
+	ground beep();
+	}
+
+	};
+
+frameEmitter:	public	type	inherit	emitter	{
+	public:
+
+	fr:	ref frame;
+	color:	color_t;
+	p:	point;
+
+putc:	dynamic	(c: char) int =
+	{
+	fr putcc(p, c, color);
+	p.x++;
+	return 0;
+	}
+
+	};
+
+ConsoleManager:	public	ref far consoleManager;
+
+locateConsoleManager:	public	(name: [:] char) ref far consoleManager =
+	{
+	if	(|name == 0)
+		name = "/service/conman";
+	ConsoleManager = 
+		ref far consoleManager(FileSystem
+				attach(name, 
+					":model.console.consoleManager"));
+	return ConsoleManager;
+	}
+
+locateConsole:		public	(name: [:] char) ref far console =
+	{
+	if	(|name == 0)
+		name = "/dev/console";
+	return ref far console(FileSystem attach(name, 
+					":model.console.console"));
+	}

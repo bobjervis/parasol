@@ -1,0 +1,84 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	error;
+include	filesys;
+include	file;
+
+TotalLines:	long;
+TotalChars:	long;
+TotalWords:	long;
+
+main:	entry	() =
+	{
+	arg:	[:] char;
+	ff:	finder;
+	lines:	int;
+	i, j:	int;
+	dir:	[:] char;
+	patt:	[:] char;
+
+	if	(|commandLine.arguments == 0){
+		printf("Use is: wc filename(s)\n");
+		exit(1);
+		}
+	for	(j = 0; j < |commandLine.arguments; j++){
+		arg = commandLine.arguments[j];
+		dir = getDirectory(arg);
+		patt = stripDirectory(arg);
+		i = ff open(dir, patt, 0);
+		if	(i == SUCCESS){
+			while	(ff next() == SUCCESS)
+				countLines(ff.pathname);
+			}
+		else
+			printf("Couldn't open %S: %S\n", arg, cmdError(i));
+		}
+	ff close();
+	printf("\n%8d %8d %8d Total\n", TotalChars, TotalWords, TotalLines);
+	exit(0);
+	}
+
+countLines:	(fn: [:] char) =
+	{
+	f:	stream;
+	i:	int;
+	lines:	int;
+	chars:	int;
+	words:	int;
+	inword:	int;
+
+	i = f open(fn, AR_READ);
+	if	(i){
+		printf("Could not open: %S (%S)\n", fn, cmdError(i));
+		return;
+		}
+	lines = 0;
+	chars = 0;
+	words = 0;
+	inword = 0;
+	for	(;;){
+		i = f getc();
+		if	(i == EOF ||
+			 i == 26)
+			break;
+		chars++;
+		if	(i == '\n')
+			lines++;
+		if	(isspace(i))
+			inword = 0;
+		else if	(!inword){
+			words++;
+			inword = 1;
+			}
+		}
+	f close();
+	printf("%8d %8d %8d  %S\n", chars, words, lines, fn);
+	TotalChars += chars;
+	TotalWords += words;
+	TotalLines += lines;
+	}

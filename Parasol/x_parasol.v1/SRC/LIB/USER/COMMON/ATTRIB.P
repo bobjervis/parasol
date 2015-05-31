@@ -1,0 +1,69 @@
+include	string;
+
+/*
+	Attributes = 
+
+	This class supports a list of named string attributes.  Values can
+	only be other strings.
+ */
+Attributes:	public	type	{
+	visible:
+
+	entries:	ref AttributeEntry;
+
+	public:
+
+constructor:	() =
+	{
+	entries = 0;
+	}
+
+get:		(nm: [:] char) [:] char =
+	{
+	e:	ref AttributeEntry;
+
+	for	(e = entries; e; e = e->next)
+		if	(stringCompare(e->name, nm) == 0)
+			return e->value;
+	return "";
+	}
+
+set:		(nm: [:] char, value: [:] char) =
+	{
+	p, e:	ref AttributeEntry;
+
+	p = 0;
+	for	(p = 0, e = entries; e; p = e, e = e->next)
+		if	(stringCompare(e->name, nm) == 0){
+			if	(|value == 0){
+				if	(p)
+					p->next = e->next;
+				else
+					entries = e->next;
+				delete e;
+				}
+			else	{
+				delete e->value;
+				e->value = stringDup(value);
+				}
+			return;
+			}
+	if	(|value)
+		entries = new AttributeEntry[ entries, 
+					stringDup(nm), stringDup(value) ];
+	}
+
+};
+
+AttributeEntry:	public	type	{ public:
+	next:		ref AttributeEntry;
+	name:		[:] char;
+	value:		[:] char;
+
+destructor:	() =
+	{
+	delete name;
+	delete value;
+	}
+
+};

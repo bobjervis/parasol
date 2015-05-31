@@ -1,0 +1,67 @@
+include	string;
+include	window, console;
+include	file;
+include	error;
+
+main:	entry	() =
+	{
+
+	if	(ArgumentCount < 2 ||
+		 ArgumentCount > 3)
+		help();
+
+	sc:	stringConverter = [ getNextArgument() ];
+	delay:	int;
+	repeat:	int;
+
+	delay = sc encodeSigned();
+	if	(!sc.success || delay < 0 || delay > 3){
+		printf("Delay must be between 0 and 3\n");
+		help();
+		}
+	sc = [ getNextArgument() ];
+	repeat = sc encodeSigned();
+	if	(!sc.success || repeat < 0 || repeat > 31){
+		printf("Repeat must be between 0 and 31\n");
+		help();
+		}
+
+	x:	ref far console;
+
+	if	(ArgumentCount){
+		obj:	[:] char;
+
+		obj = getNextArgument();
+		x = locateConsole(obj);
+		if	(x == 0){
+			printf("Could not attach console '%S'\n", obj);
+			help();
+			}
+		}
+	else	{
+		x = locateConsole("");
+		if	(x == 0){
+			printf("Could not attaqch console\n");
+			help();
+			}
+		}
+	x setRepeatRate(delay, repeat);
+	exit(EX_SUCCESS);
+	}
+
+help:	() =
+	{
+	printf(	"Use is: QKEY delay repeat [ console ]\n"
+			"\tDelay  0-3   0 =  250ms\n"
+			"\t             1 =  500ms\n"
+			"\t             2 =  750ms\n"
+			"\t             3 = 1000ms\n"
+			"\tRepeat 0-31  0 = 30cps\n"
+			"\t             4 = 20cps\n"
+			"\t            12 = 10cps\n"
+			"\t            20 =  5cps\n"
+			"\t            31 =  2cps\n"
+			"\tConsole object defaults to current console\n"
+			);
+	exit(EX_FAIL);
+	}

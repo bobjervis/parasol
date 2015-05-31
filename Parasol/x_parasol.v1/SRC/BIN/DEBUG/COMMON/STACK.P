@@ -1,0 +1,293 @@
+include	file;
+include	hardware;
+
+include	treeview;
+include	window;
+include	console;
+
+include	debug;
+include	instruct;
+
+Stack:	public	ref stackWindow;
+
+stackWindow:	public	type	inherit	topLevelShell	{
+	frames:		ref treeEditor;
+	showing:	ref frameBuffer;
+
+	public:
+
+constructor:	(s: ref shell) =
+	{
+	m:	ref menubar;
+	view:	ref popupMenu;
+
+	super constructor("Stack", s);
+	iconLabel("-stack-", C_TITLE);
+	useFooter();
+	m = new menubar[ ];
+	setMenu(m);
+
+	view = new popupMenu[ m ];
+	view button("Up         Ctrl-P", 'u', [ self, &previous ]);
+	view button("Down       Ctrl-N", 'd', [ self, &next ]);
+	view button("Show Code",	 's', [ self, &showCode ]);
+	view button("Top        Ctrl-T", 't', [ self, &top ]);
+
+	m pulldown("View", 'v', view);
+
+	frames = new treeEditor[ 0 ];
+	anchor(frames);
+
+	configure([ 60, 12 ]);
+	frames setTextFocus(); 
+	}
+
+connect:	(s: ref frameBuffer) =
+	{
+	showing = s;
+	frames connect(s);
+	redraw();
+	}
+
+top:	() =
+	{
+	frames endFile();
+	}
+
+refresh:	() =
+	{
+	frames refresh();
+	}
+
+showCode:	() =
+	{
+	if	(showing)
+		showing showCode();
+	}
+
+next:	() =
+	{
+	if	(showing){
+		i:	int;
+
+		i = showing lineCount();
+		if	(frames->cursor >= i - 1)
+			postFooter("Top of Stack");
+		else	{
+			frames downArrow();
+			showing seek(frames->cursor);
+			showing showCode();
+			}
+		}
+	}
+
+previous:	() =
+	{
+	if	(showing){
+		if	(frames->cursor == 0)
+			postFooter("Bottom of Stack");
+		else	{
+			frames upArrow();
+			showing seek(frames->cursor);
+			showing showCode();
+			}
+		}
+	}
+
+open:	dynamic	() =
+	{
+	super open();
+	if	(showing)
+		showing exposeIn(frames);
+	}
+
+destructor:	dynamic	() =
+	{
+	if	(showing)
+		showing exposeIn(0);
+	Stack = 0;
+	super destructor();
+	}
+
+dismiss:	dynamic	() =
+	{
+	if	(showing)
+		showing exposeIn(0);
+	super dismiss();
+	}
+	
+processKeystroke:	dynamic	(k: keystroke) boolean =
+	{
+	switch	(k){
+	case	CTRL_N:		next();			break;
+	case	CTRL_P:		previous();		break;
+	case	CTRL_T:		top();			break;
+
+	default:	return super processKeystroke(k);
+		}
+	return TRUE;
+	}
+
+	};
+
+frameBuffer:	public	type	inherit	treeBuffer {
+	topOfStack:	ref frame;
+	rootOfStack:	ref frame;
+	current:	ref frame;
+	currentLine:	int;
+	frameCount:	int;
+	editor:		ref treeEditor;
+
+	public:
+
+constructor:	() =
+	{
+	topOfStack = 0;
+	rootOfStack = 0;
+	current = 0;
+	currentLine = 0;
+	frameCount = 0;
+	}
+
+display:	() =
+	{
+	f:	ref frame;
+
+	printf("currentLine = %d frameCount = %d\n", currentLine,
+					frameCount);
+	for	(f = rootOfStack; f; f = f->next){
+		if	(f == topOfStack)
+			printf("T ");
+		else
+			printf("  ");
+		if	(f == current)
+			printf("* ");
+		else
+			printf("  ");
+		printf("%8p < %8p > %8p: %S\n", f->prev, f, f->next, f->function);
+		}
+	}
+
+exposeIn:	dynamic	(e: ref treeEditor) =
+	{
+	editor = e;
+	}
+
+previousFrame:	(f: ref frame) =
+	{
+	if	(rootOfStack){
+		rootOfStack->prev = f;
+		f->next = rootOfStack;
+		}
+	else	{
+		topOfStack = f;
+		current = f;
+		}
+	currentLine = frameCount;
+	frameCount++;
+	rootOfStack = f;
+	}
+
+refresh:	dynamic	(lin: int) boolean =
+	{
+	seek(lin);
+	return TRUE;
+	}
+
+seek:	dynamic	(line: int) int =
+	{
+	if	(line < 0)
+		return currentLine;
+	if	(currentLine > line){
+		while	(currentLine > line && current){
+			current = current->prev;
+			currentLine--;
+			}
+		if	(current == 0){
+			current = rootOfStack;
+			currentLine = 0;
+			}
+		}
+	else if	(currentLine < line){
+		while	(currentLine < line && current){
+			current = current->next;
+			currentLine++;
+			}
+		if	(current == 0){
+			current = topOfStack;
+			if	(current)
+				currentLine = frameCount - 1;
+			else
+				currentLine = 0;
+			}
+		}
+	return currentLine;
+	}
+
+fetchLine:	dynamic	() [:] char =
+	{
+	if	(current == 0)
+		return "";
+	current draw(LineBuffer);
+	return LineBuffer;
+	}
+
+showCode:	() =
+	{
+	if	(current){
+		Instructions showAddress(current->returnAddr);
+		TestArena setContext(&current->task);
+		Display redraw();
+		}
+	}
+
+tagIndent:	dynamic	() int =
+	{
+	return 0;
+	}
+
+tagLength:	dynamic	() int =
+	{
+	return 60;
+	}
+
+lineCount:	dynamic	() int =
+	{
+	return frameCount;
+	}
+
+open:		dynamic	(ref char) int =
+	{
+	if	(current == 0)
+		return FALSE;
+	else	{
+		showCode();
+		return TRUE;
+		}
+	}
+
+launch:	dynamic	(x: ref char) int =
+	{
+	return open(x);
+	}
+
+	};
+
+LineBuffer:	[800] char;
+
+frame:	public	type	{
+	public:
+
+	next:		ref frame;
+	prev:		ref frame;
+	returnAddr:	paddr_t;
+	task:		task_t;
+	function:	[:] char;
+
+draw:	(buf: [:] char) =
+	{
+	buf [:]= function;
+	buf[|function] = 0;
+	}
+
+	};

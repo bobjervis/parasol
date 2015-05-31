@@ -1,0 +1,2131 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	alys;
+include	kprintf;
+include	object;
+include	console;
+include	video;
+include	message;
+include	pc_keybd;
+include	pc_comm;
+include	error;
+include	arena;
+include	process;
+include	hardware, list;
+include	timer;
+include	random;
+
+systemRequest:	public	(keystroke) =
+	{
+	n:	threadLock;
+
+	n lock();
+	ExclusiveWindow = 0;
+	MouseExclusiveWindow = 0;
+	Console.mState = &QuietState;
+	Console determineNewFocus();
+	n unlock();
+	}
+/*
+	The ALYS console design requires the role of several different
+	objects, each performing distinct functions.  First, the console
+	object itself defines the basic functioning of a display, keyboard,
+	mouse, pen or other input devices.  Window objects in turn define
+	an architecture of multiple overlapping windows to appear on the
+	console display.  All of the windows active on a display form a 
+	stack that can be rearranged or cycled, as needed.
+
+	For the time being, a console file object is used to provide tty-
+	like behavior.  A console channel object is connected to a window
+	when the console file object is opened.  This is clearly an interim
+	solution, since a more powerful tty window will eventually be
+	supplied that provides much more power (like scrollability and line
+	editing).
+ */
+Console:		public	PC_console;
+ConsoleWindowObj:	public	ref PC_textWindow;
+ConsoleWindowId:	public	ref far PC_textWindow;
+
+PC_console:	type	inherit	console	{
+
+	public:
+
+	breakKey:	keystroke;
+	mouseLoc:	point;
+	mouseCursor:	point;
+	mState:		ref mouseState;
+	swapped:	boolean;		// default to unswapped
+	doubleClickTime:Tick;
+	mLastEvent:	Tick;
+	mLastButtons:	mouseButtons_t;
+	focusWindow:	ref PC_textWindow;
+	mickeys:	point;
+	defaultPalette:	ref PC_colorPalette;
+	iconGrain:	point;
+	iconMap:	ref ref far textWindow;
+	manager:	ref far consoleManager;
+
+//	windowStack:	ref PC_textWindow;
+//	exclusiveWindow:ref PC_textWindow;
+
+initialize:	() =
+	{
+	initKeyboard();
+	manager = 0;
+	doubleClickTime = CLOCK_HZ / 3;		// double click is 1/3 second
+	breakKey = CTRL_BREAK;
+	mState = &QuietState;
+	registerConsole(self);
+	mickeys.x = Screen->size.x << 3;
+	mickeys.y = Screen->size.y << 4;
+	iconGrain.x = Screen->size.x / 10;
+	iconGrain.y = Screen->size.y / 3;
+
+	i:	int;
+
+	i = iconGrain.x * iconGrain.y;
+	iconMap = new [i] ref far textWindow;
+	memSet(iconMap, 0, i * sizeof ref far textWindow);
+	publishKernel("Console", ":model.console.console",
+					self, AR_ANY, AR_ANY, AR_ANY, AR_ANY);
+	ConsoleWindowObj = new PC_textWindow[ Screen->size, self ];
+	ConsoleWindowId = ref far PC_textWindow(
+				publishKernel("conWindow", 
+						":model.console.textWindow",
+						ConsoleWindowObj, AR_ANY, 
+						AR_ANY, AR_NONE, AR_NONE));
+	ConsoleWindowId zoom([ 0, 0 ], WZ_NORMAL);
+	}
+
+mode:	gate	(m: consoleMode_t) =
+	{
+	}
+
+newWindow:	gate	(title: [:] char, sz: point) ref far textWindow =
+	{
+	w:	ref PC_textWindow;
+	id:	ref far PC_textWindow;
+
+	w = new PC_textWindow[ sz, self ];
+	id = ref far PC_textWindow(jobPublishKernel(title, 
+				":model.console.textWindow", w, AR_ANY));
+	return id;
+	}
+
+placeWindow:	gate	(sz: point) point =
+	{
+	return _placeWindow(sz);
+	}
+
+_placeWindow:	(sz: point) point =
+	{
+	p:	point;
+	x:	int;
+
+	if	(Screen->size.x <= sz.x){
+		p.x = 0;
+		if	(Screen->size.y <= sz.y)
+			p.y = 0;
+		else	{
+			x = Screen->size.y - sz.y;
+			p.y = Random range(x) - 1;
+			}
+		}
+	else if	(Screen->size.y <= sz.y){
+		p.y = 0;
+		x = Screen->size.x - sz.x;
+		p.x = Random range(x) - 1;
+		}
+	else	{
+		x = (Screen->size.x - sz.x) * (Screen->size.y - sz.y);
+		x = Random range(x) - 1;
+		p.x = x % (Screen->size.x - sz.x);
+		p.y = x / (Screen->size.x - sz.x);
+		}
+	return p;
+	}
+
+setManager:	gate	(cm: ref far consoleManager) ref far textWindow =
+	{
+//	if	(manager == 0)
+		manager = cm;
+//	else
+//		reject(ERREXIST);
+	return ConsoleWindowId;
+	}
+
+newConmanShell:	gate	(sender: ref far External) conmanWindows_t =
+	{
+	winfo:	conmanWindows_t;
+	wf, wv:	ref PC_textWindow;
+	o, ow:	ref object;
+
+	winfo.frame = 0;
+	winfo.viewport = 0;
+	o = objectEntry(sender);
+	if	(o == 0)
+		return winfo;
+	wf = new PC_textWindow[ [ 0, 0 ], self ];
+	winfo.frame = ref far PC_textWindow(jobPublishKernel("frame", 
+				":model.console.textWindow", wf, AR_ANY));
+	wv = new PC_textWindow[ [ 0, 0 ], self ];
+	winfo.viewport = ref far PC_textWindow(jobPublishKernel("viewport", 
+				":model.console.textWindow", wv, AR_ANY));
+	ow = objectEntry(winfo.viewport);
+	ow reparent(o);			// Give the viewport to the sender
+	wf arrangeViewport(wv);
+	return winfo;
+	}
+
+describe:	gate	() console_t =
+	{
+	c:	console_t;
+
+	c.windowCount = 0;
+	c.mode = Screen->mode;
+	c.size = Screen->size;
+	c.isRighthanded = !swapped;
+	c.manager = manager;
+	return c;
+	}
+
+getWindowInfo:	gate	(idx: int) window_t =
+	{
+	reject(ERRINVALIDFUNC);
+	}
+
+beep:	gate	() =
+	{
+	_beep();
+	}
+
+setRepeatRate:	gate	(delay: int, repeat: int) =
+	{
+	repeat &= 0x1f;
+	pc_keybd::setRepeatRate(delay << 5 + repeat);
+	}
+
+keypress:	dynamic	(k: keystroke) =
+	{
+	wx:		ref PC_textWindow;
+	k_t:	type 	{ public:
+			w:	ref far External;
+			k:	int;
+			};
+	kp:		ref k_t;
+
+	wx = focusWindow;
+
+		// No focus - ignore keystrokes
+
+	if	(wx == 0)
+		return;
+
+		// If the window has a viewport, direct keystrokes to it.
+		// Conman frames only work with a mouse.
+
+	if	(wx->viewport)
+		wx = wx->viewport;
+
+		// No input handler - ignore the keystroke
+
+	if	(wx->handler == 0)
+		return;
+
+
+		// The k_t type is dependent on the Parasol layout rules
+		// so if the compiler changes, the type mus tbe modified.
+
+	kp = new k_t;
+	kp->k = k;
+	kp->w = wx->objectId;
+	selfSend(wx->handler, int(&inputHandler.keyPressed), 
+					vaddr_t(kp), sizeof k_t);
+	}
+
+mouse:	dynamic	(delta: point, buttons: byte) =
+	{
+	p:		point;
+	i:		int;
+	mouse_t: type	packed	{ public:
+			w:	ref far External;
+			e:	int;
+			b:	int;
+			p:	point;
+			};
+	m:		ref mouse_t;
+	wx:		ref PC_textWindow;
+	event:		int;
+	reportButtons:	byte;
+	sendIfEmpty:	boolean;
+
+		// A hack to avoid generating a button up after a double click
+
+	if	(buttons == 0 &&
+		 delta.x == 0 &&
+		 delta.y == 0 &&
+		 mState == &Down2State){
+		mState = &QuietState;
+		return;
+		}
+
+		// If the mouse movement is large, apply anaccelerator factor 
+		// to magnify the motion.  This tends to give a more lively
+		// mouse.
+
+	if	(delta.x > 5 ||
+		 delta.x < -5)
+		delta.x <<= 2;
+	if	(delta.y > 5 ||
+		 delta.y < -5)
+		delta.y <<= 2;
+
+		// mouseLoc tracks the mouse location in mickeys 
+
+	mouseLoc.x += delta.x;
+	mouseLoc.y += delta.y;
+
+		// limit motion to the screen dimensions
+
+	if	(mouseLoc.x < 0)
+		mouseLoc.x = 0;
+	else if	(mouseLoc.x >= mickeys.x)
+		mouseLoc.x = mickeys.x - 1;
+	if	(mouseLoc.y < 0)
+		mouseLoc.y = 0;
+	else if	(mouseLoc.y >= mickeys.y)
+		mouseLoc.y = mickeys.y - 1;
+
+		// now convert to character positions
+
+	p.x = mouseLoc.x >> 3;
+	p.y = mouseLoc.y >> 4;
+	mouseCursor = p;
+
+	Screen mouseCursor(p);
+
+		// Allow for left-handed operation
+
+	if	(swapped)
+		buttons = ButtonSwapTable[buttons];
+
+		// Ignore chording of mouse buttons.  Basically once a button
+		// goes down, later ups and downs are ignored.  If more than
+		// one goes down at once, use precedence to determine the
+		// button that is recognized.  After these two filters, only
+		// one button will be down.
+
+	buttons &= PreviousButtonMap[mLastButtons];
+	buttons = ButtonMap[buttons];
+
+		// Use the newly computed mouseCursor to determine the
+		// focus window.  
+
+	determineNewFocus();
+
+		// Translate from raw a buttons mask to the mouse event
+		// and the reported buttons values.  If an event is a 
+		// conclusion of a button down sequence (either a click or
+		// a drag), then don't confuse the final event by changing
+		// the button settings
+
+	event = mState generatedEvent(buttons);
+	if	(event == ME_CLICK ||
+		 event == ME_DROP)
+		reportButtons = mLastButtons;
+	else
+		reportButtons = buttons;
+	mState = mState newState(buttons);
+	mLastEvent = Ticks;
+	mLastButtons = buttons;
+
+	wx = focusWindow;
+
+	if	(wx == 0)		// no focus - do nothing more
+		return;
+
+		// Except when the frame has exclusive focus (such as for 
+		// mouse button down states), if the event happens inside 
+		// the viewport, use it.
+
+	if	(wx != MouseExclusiveWindow &&
+		 wx->viewport &&
+		 wx->viewport contains(p))
+		wx = wx->viewport;
+
+	if	(wx->handler == 0)	// no input handler - do nothing more
+		return;
+
+		// Cobble together the mouse event message.  The layout of
+		// the message depends on the Parasol compiler's message
+		// format rules.  If the compiler changes, the mouse_t type
+		// must be altered.
+
+	m = new mouse_t;
+	m->e = event;
+	m->b = reportButtons;
+	m->w = wx->objectId;
+
+		// Convert the mouse cursor location to window local
+		// coordinates
+
+	m->p.x = p.x - wx->corner.x;
+	m->p.y = p.y - wx->corner.y;
+
+		// This is a hack to conserve kernel messages.  If the window
+		// is busy (not waiting for input), do not send move or drag
+		// continuation events.  This is due to the fact that such
+		// events typically do not get special handling so dropping
+		// them won't significantly alter the behavior of the program.
+
+	if	(event == ME_MOVE ||
+		 event == ME_CDRAG)
+		sendIfEmpty = TRUE;
+	else
+		sendIfEmpty = FALSE;
+
+	selfSendIfEmpty(wx->handler, int(&inputHandler.mouseEvent), 
+				vaddr_t(m), sizeof mouse_t, sendIfEmpty);
+
+		// Now account for button-down states.  While a mouse
+		// button is down, a drag-and-drop operation requires that
+		// the originating window keeps getting the event stream
+		// so that it can control the whole sequence.
+
+	if	(event == ME_BDOWN){
+		if	(wx->frame)
+			focusWindow = wx;
+		MouseExclusiveWindow = wx;
+		}
+	else if	(event == ME_CLICK ||
+		 event == ME_DROP){
+		if	(wx->frame)
+			focusWindow = wx->frame;
+		MouseExclusiveWindow = 0;
+		determineNewFocus();
+		}
+	}
+
+grabMouse:		(w: ref PC_textWindow) =
+	{
+	n:	threadLock;
+
+	n lock();
+
+		// Suppress focus/unfocus events
+
+	focusWindow = w;
+	MouseExclusiveWindow = w;
+	n unlock();
+	}
+
+placeMouse:	(p: point) =
+	{
+	n:	threadLock;
+
+	n lock();
+	mouseCursor = p;
+	mouseLoc.x = p.x << 3;
+	mouseLoc.y = p.y << 4;
+	Screen mouseCursor(p);
+	n unlock();
+	determineNewFocus();
+	}
+
+clearMouseState:	gate	() =
+	{
+	mState = &QuietState;
+	determineNewFocus();
+	}
+
+swapMouseButtons:	gate	() =
+	{
+	swapped = !swapped;
+	}
+
+setMouseHandedness:	gate	(isRighthanded: boolean) =
+	{
+	swapped = !isRighthanded;
+	}
+
+setMousePort:	gate	(port: unsigned) boolean =
+	{
+	if	(port == 0 ||
+		 port > |SerialPorts)
+		return FALSE;
+	if	(SerialPorts[port] == 0)
+		return FALSE;
+	n:	threadLock;
+
+	n lock();
+	Screen showMouse(TRUE);
+	SerialPorts[port - 1] setMouse(&Console);
+	n unlock();
+	determineNewFocus();
+	return TRUE;
+	}
+
+doubleClickTicks:	gate	(interval: Tick) Tick =
+	{
+	t:	Tick;
+
+	t = doubleClickTime;
+	doubleClickTime = interval;
+	return t;
+	}
+
+nonExclusiveInput:	gate	() =
+	{
+	ExclusiveWindow = 0;
+	determineNewFocus();
+	}
+
+newPalette:	gate	(size: int) ref far colorPalette =
+	{
+	x:	ref PC_colorPalette;
+
+	x = new PC_colorPalette[ size ];
+	return ref far colorPalette(jobPublishKernel("palette", 
+				":model.console.colorPalette", x, AR_ANY));
+	}
+
+setDefaultPalette:	gate	(cp: ref far colorPalette) =
+	{
+	x:	pointer;
+
+	x = locateObject(cp);
+	if	(x == 0)
+		reject(ERRINVALIDARGUMENT);
+	else
+		defaultPalette = x;
+	}
+
+getDefaultPalette:	gate	() ref far colorPalette =
+	{
+	if	(defaultPalette)
+		return ref far colorPalette(defaultPalette->objectId);
+	else
+		return 0;
+	}
+
+getIconSlot:		gate	(w: ref far textWindow) point =
+	{
+	i, j:	int;
+
+	j = iconGrain.x * iconGrain.y;
+	for	(i = 0; i < j; i++)
+		if	(iconMap[i] == w){
+			p:	point;
+
+			p.x = (i % iconGrain.x) * 10;
+			p.y = Screen->size.y - (i / iconGrain.x + 1) * 3;
+			return p;
+			}
+	for	(i = 0; i < j; i++)
+		if	(iconMap[i] == 0){
+			p:	point;
+
+			iconMap[i] = w;
+			p.x = (i % iconGrain.x) * 10;
+			p.y = Screen->size.y - (i / iconGrain.x + 1) * 3;
+			return p;
+			}
+	}
+
+clearIconSlot:		(w: ref far textWindow) =
+	{
+	i:	int;
+
+	for	(i = iconGrain.x * iconGrain.y - 1; i >= 0; i--)
+		if	(iconMap[i] == w){
+			iconMap[i] = 0;
+			break;
+			}
+	}
+
+refreshScreen:		() =
+	{
+	w:	ref PC_textWindow;
+
+	for	(w = WindowStack; w; w = w->next)
+		w draw();
+	determineNewFocus();
+	updateCursor();
+	}
+
+determineNewFocus:	() =
+	{
+	wx:	ref PC_textWindow;
+	w:	ref PC_textWindow;
+	n:	threadLock;
+
+		// If we have exclusive focus in effect, there can be no
+		// change of focus.
+
+	if	(ExclusiveWindow || MouseExclusiveWindow)
+		return;
+	n lock();
+
+		// Work through the window stack from top down until we find
+		// a window that contains the cursor location.
+
+	for	(wx = WindowStack; wx; wx = wx->next){
+		if	(wx contains(mouseCursor))
+			break;
+		}
+	w = focusWindow;
+
+		// We have a change of focus
+
+	if	(w != wx){
+		z:	ref ref far External;
+
+
+			// The old focus has an input handler -
+			// tell it about the loss of focus
+
+		if	(w &&
+			 w->handler){
+			z = new ref far External;
+
+			*z = w->objectId;
+			selfSend(w->handler, 
+					int(&inputHandler.unfocus), 
+					vaddr_t(z), sizeof *z);
+
+				// If there is a viewport, then tell 
+				// the viewport as well
+
+			if	(w->viewport &&
+				 w->viewport->handler){
+				z = new ref far External;
+
+				*z = w->viewport->objectId;
+				selfSend(w->viewport->handler, 
+					int(&inputHandler.unfocus), 
+					vaddr_t(z), sizeof *z);
+				}
+			}
+
+			// New establish the new focus
+
+		focusWindow = wx;
+		if	(wx){
+
+				// Draw the text cursor of the new focus
+				// window, if any.
+
+			if	(wx->viewport)
+				wx->viewport updateCursor();
+			else
+				wx updateCursor();
+
+				// If there is a handler for the new window
+				// tell it about the focus event
+
+			if	(wx->handler){
+				z = new ref far External;
+
+				*z = wx->objectId;
+				selfSend(wx->handler, 
+						int(&inputHandler.focus), 
+						vaddr_t(z), sizeof *z);
+				}
+
+				// If there is a viewport with a handler,
+				// tell that handler too.
+
+			if	(wx->viewport &&
+				 wx->viewport->handler){
+				z = new ref far External;
+
+				*z = wx->viewport->objectId;
+				selfSend(wx->viewport->handler, 
+					int(&inputHandler.focus), 
+					vaddr_t(z), sizeof *z);
+				}
+			}
+
+			// If there is no new focus window, hide the text
+			// cursor
+
+		else
+			Screen hideCursor();
+		}
+	n unlock();
+	}
+
+updateCursor:	() =
+	{
+	n:	threadLock;
+	wx:	ref PC_textWindow;
+
+	n lock();
+	wx = focusWindow;
+	if	(wx){
+		if	(wx->viewport)
+			wx = wx->viewport;
+		wx updateCursor();
+		}
+	else
+		Screen hideCursor();
+	n unlock();
+	}
+
+	};
+
+PC_colorPalette:	public	type	inherit	colorPalette {
+	public:
+
+	colors:		ref color_t;
+	csize:		int;
+
+constructor:	(sz: int) =
+	{
+	colors = new [sz] color_t;
+	csize = sz;
+	}
+
+deriveFrom:	gate	(cp: ref far colorPalette, idx: int) =
+	{
+	x:	ref PC_colorPalette;
+
+	x = locateObject(cp);
+	if	(x)
+		reject(ERRINVALIDARGUMENT);
+	else	{
+		copyAmt, fillAmt:	int;
+
+		fillAmt = 0;
+		copyAmt = idx;
+		if	(idx >= x->csize){
+			copyAmt = x->csize;
+			fillAmt = idx - x->csize;
+			}
+		if	(idx >= csize){
+			copyAmt = csize;
+			fillAmt = 0;
+			}
+
+		colors [:copyAmt]= x->colors[:copyAmt];
+		if	(fillAmt)
+			memSet(colors + copyAmt, 0, fillAmt * sizeof color_t);
+		}
+	}
+
+textColors:	gate	(idx: int, v: [:] color_t) =
+	{
+	if	(idx >= csize)
+		reject(ERRINVALIDARGUMENT);
+	else	{
+		if	(idx + |v > csize)
+			|v = csize - idx;
+		c:	[:] color_t;
+
+		c = (colors + idx)[:|v];
+		c [:]= v;
+		}
+	}
+
+getTextColors:	gate	(idx: int) [] color_t =
+	{
+	i:	int;
+
+	if	(idx >= csize)
+		reject(ERRINVALIDARGUMENT);
+	else	{
+		i = messageHeader->expected / sizeof color_t;
+		if	(idx + i > csize)
+			i = csize - idx;
+		return (colors + idx)[:i];
+		}
+	}
+
+size:	gate	() int =
+	{
+	return csize;
+	}
+
+	};
+
+mouseState:	type	{ public:
+generatedEvent:	dynamic	(mouseButtons_t) mouseEvent_t = { }
+newState:	dynamic	(mouseButtons_t) ref mouseState = { }
+	};
+
+QuietState:	const inherit mouseState { public:
+
+generatedEvent:		dynamic	(b: mouseButtons_t) mouseEvent_t =
+	{
+	if	(b)
+		return ME_BDOWN;
+	else
+		return ME_MOVE;
+	}
+
+newState:	dynamic	(b: mouseButtons_t) ref mouseState =
+	{
+	if	(b)
+		return &DownState;
+	else
+		return &QuietState;
+	}
+
+	};
+
+DownState:	const inherit mouseState { public:
+
+generatedEvent:		dynamic	(b: mouseButtons_t) mouseEvent_t =
+	{
+	if	(b)
+		return ME_DRAG;
+	else
+		return ME_CLICK;
+	}
+
+newState:	dynamic	(b: mouseButtons_t) ref mouseState =
+	{
+	if	(b)
+		return &DragState;
+	else
+		return &ClickState;
+	}
+
+	};
+
+Down2State:	const inherit mouseState { public:
+
+generatedEvent:		dynamic	(b: mouseButtons_t) mouseEvent_t =
+	{
+	if	(b)
+		return ME_DRAG;
+	else
+		return ME_MOVE;
+	}
+
+newState:	dynamic	(b: mouseButtons_t) ref mouseState =
+	{
+	if	(b)
+		return &DragState;
+	else
+		return &QuietState;
+	}
+
+	};
+
+ClickState:	const inherit mouseState { public:
+
+generatedEvent:		dynamic	(b: mouseButtons_t) mouseEvent_t =
+	{
+	if	(b){
+		if	(Ticks - Console.mLastEvent <= 
+						Console.doubleClickTime)
+			return ME_DCLICK;
+		else
+			return ME_BDOWN;
+		}
+	else
+		return ME_MOVE;
+	}
+
+newState:	dynamic	(b: mouseButtons_t) ref mouseState =
+	{
+	if	(b){
+		if	(Ticks - Console.mLastEvent <= 
+						Console.doubleClickTime)
+			return &Down2State;
+		else
+			return &DownState;
+		}
+	else
+		return &QuietState;
+	}
+
+	};
+
+DragState:	const inherit mouseState { public:
+
+generatedEvent:		dynamic	(b: mouseButtons_t) mouseEvent_t =
+	{
+	if	(b)
+		return ME_CDRAG;
+	else
+		return ME_DROP;
+	}
+
+newState:	dynamic	(b: mouseButtons_t) ref mouseState =
+	{
+	if	(b)
+		return &DragState;
+	else
+		return &QuietState;
+	}
+
+	};
+
+windowFlags:	public	type	char = {
+	W_PLACED = 	0x01,
+	W_OPEN =	0x08,
+	};
+
+windowStatus:	type	char = {
+	WS_HIDDEN = 0x01,
+	};
+
+windowInfo:	type	packed	{
+	public:
+
+	corner:		point;
+	size:		point;
+	color:		char;
+	flags:		windowFlags;
+	status:		windowStatus;
+	title:		[] char;
+	};
+
+WindowStack:		ref PC_textWindow;
+ExclusiveWindow:	ref PC_textWindow;
+MouseExclusiveWindow:	ref PC_textWindow;
+
+TopWindow:	public	ref far textWindow;
+
+cycleWindows:	public	(keystroke) =
+	{
+	if	(WindowStack)
+		WindowStack _toBottom();
+	}
+
+pctwD:	(ref kernelSemaphore, w: pointer) =
+	{
+	pw:	ref PC_textWindow;
+
+	pw = w;
+	kprintf("[%d,%d] textWin.eventWait", pw->corner.x, pw->corner.y);
+	}
+
+PC_textWindow:	public	type	inherit	textWindow	{
+	on:			ref PC_console;
+	color:			color_t;
+	image:			ref colorChar;
+	imageLength:		int;
+	flags:			windowFlags;
+	status:			windowStatus;
+	palette:		ref PC_colorPalette;
+
+	public:
+	corner:			point;
+	size:			point;
+	next:			ref PC_textWindow;
+	prev:			ref PC_textWindow;
+	frame:			ref PC_textWindow;
+	viewport:		ref PC_textWindow;
+	cursor:			point;
+	handler:		ref far inputHandler;
+
+constructor:	(sz: point, cons: ref PC_console) =
+	{
+	on = cons;
+	size = [ 0, 0 ];
+	cursor = [ 0, 0 ];
+	status = 0;
+	color = 0;
+	flags = 0;
+	image = 0;
+	imageLength = 0;
+	handler = 0;
+	palette = cons->defaultPalette;
+	next = 0;
+	prev = 0;
+	frame = 0;
+	viewport = 0;
+	_resize(sz);
+	}
+
+lastClose:	gate	() boolean =
+	{
+	w:	ref PC_textWindow;
+	n:	threadLock;
+
+	if	(ExclusiveWindow == self)
+		ExclusiveWindow = 0;
+	if	(MouseExclusiveWindow == self)
+		MouseExclusiveWindow = 0;
+	on clearIconSlot(ref far textWindow(objectId));
+
+		// If the frame goes first, tell the viewport
+
+	if	(viewport){
+		viewport->frame = 0;
+		viewport->flags &= ~W_OPEN;
+		if	(viewport->handler)
+			viewport->handler dismiss(ref far 
+					textWindow(viewport->objectId));
+		viewport = 0;
+		}
+
+		// If the viewport goes first, tell the manager
+
+	if	(frame){
+		frame->viewport = 0;
+		if	(frame->handler)
+			frame->handler dismiss(ref far 
+					textWindow(frame->objectId));
+		frame = 0;
+		}
+	else	{
+		removeFromStack();
+		flags = 0;
+		n lock();
+		if	(image){
+			delete image;
+			image = 0;
+			}
+		n unlock();
+		on refreshScreen();
+		}
+	return TRUE;
+	}
+
+dismissRequest:	gate	() =
+	{
+	if	(viewport &&
+		 viewport->handler)
+		viewport->handler dismissRequest(ref far 
+					textWindow(viewport->objectId));
+	}
+
+appearsOn:	gate	() ref far console =
+	{
+	return ref far console(on->objectId);
+	}
+
+registerWindowInput:	gate	(w: ref far inputHandler) ref far inputHandler =
+	{
+	a:	ref far inputHandler;
+
+	a = handler;
+	handler = w;
+	return a;
+	}
+
+exclusiveInput:	gate	(e: exclusiveInput_t) =
+	{
+	if	(e){
+		if	(frame &&
+			 on->focusWindow == frame)
+			on->focusWindow = self;
+		ExclusiveWindow = self;
+		}
+	else if	(ExclusiveWindow == self){
+		if	(frame &&
+			 on->focusWindow == self)
+			on->focusWindow = frame;
+		ExclusiveWindow = 0;
+		on determineNewFocus();
+		}
+	}
+
+grabMouse:	gate	() =
+	{
+	on grabMouse(self);
+	}
+
+usePalette:	gate	(cp: ref far colorPalette) =
+	{
+	x:	pointer;
+
+	if	(cp == 0)
+		palette = on->defaultPalette;
+	else	{
+		x = locateObject(cp);
+		if	(x == 0)
+			reject(ERRINVALIDARGUMENT);
+		else
+			palette = x;
+		}
+	}
+
+getConsoleSize:	gate	() point =
+	{
+	return Screen->size;
+	}
+
+getCorner:	gate	() point =
+	{
+	return corner;
+	}
+
+move:	gate	(p: point) =
+	{
+	flags |= W_PLACED;
+	if	(viewport){
+		viewport->flags |= W_PLACED;
+		viewport->corner.x += p.x;
+		viewport->corner.y += p.y;
+		}
+	if	(frame){
+		frame->flags |= W_PLACED;
+		frame->corner.x += p.x;
+		frame->corner.y += p.y;
+		}
+	corner.x += p.x;
+	corner.y += p.y;
+	on refreshScreen();
+	}
+
+leftResize:	gate	(p: point) =
+	{
+	if	(viewport)
+		viewport->corner.x -= p.x;
+	if	(frame)
+		frame->corner.x -= p.x;
+	corner.x -= p.x;
+	p.x += size.x;
+	p.y += size.y;
+	_resize(p);
+	if	(viewport){
+		viewport _resize([ p.x - 2, p.y - 2 ]);
+		if	(viewport->handler)
+			viewport->handler
+				resize(ref far textWindow(viewport->objectId),
+						viewport->size);
+		}
+	if	(frame){
+		frame _resize([ p.x + 2, p.y + 2 ]);
+		if	(frame->handler)
+			frame->handler 
+				resize(ref far textWindow(frame->objectId),
+						frame->size);
+		}
+	if	(flags & W_OPEN)
+		on refreshScreen();
+	}
+
+configure:	gate	(newSize: point) =
+	{
+	if	(frame ||
+		 viewport == 0)
+		reject(ERRPERMISSION);
+	else	{
+		viewport _resize([ newSize.x - 2, newSize.y - 2 ]);
+		_resize(newSize);
+		if	(flags & W_OPEN)
+			on refreshScreen();
+		}
+	}
+
+resize:	gate	(newSize: point) =
+	{
+	_resize(newSize);
+	if	(viewport){
+		viewport _resize([ newSize.x - 2, newSize.y - 2 ]);
+		if	(viewport->handler)
+			viewport->handler
+				resize(ref far textWindow(viewport->objectId),
+						viewport->size);
+		}
+	if	(frame){
+		frame _resize([ newSize.x + 2, newSize.y + 2 ]);
+		if	(frame->handler)
+			frame->handler 
+				resize(ref far textWindow(frame->objectId),
+						frame->size);
+		}
+	if	(flags & W_OPEN)
+		on refreshScreen();
+	}
+
+_resize:	(newSize: point) =
+	{
+	i, il:		int;
+	img:		ref colorChar;
+	cp1, cp2:	ref colorChar;
+	minx, miny:	int;
+	n:		threadLock;
+
+	if	(newSize.x < 0)
+		newSize.x = 0;
+	else if	(newSize.x > Screen->size.x)
+		newSize.x = Screen->size.x;
+	if	(newSize.y < 0)
+		newSize.y = 0;
+	else if	(newSize.y > Screen->size.y)
+		newSize.y = Screen->size.y;
+	if	(frame == 0){
+		n lock();
+		il = newSize.x * newSize.y * sizeof colorChar;
+		if	(il){
+			img = alloc(il);
+			if	(img == 0)
+				return;
+			memSet(img, 0, il);
+			}
+		else
+			img = 0;
+		if	(newSize.x < size.x)
+			minx = newSize.x;
+		else
+			minx = size.x;
+		if	(newSize.y < size.y)
+			miny = newSize.y;
+		else
+			miny = size.y;
+		if	(image){
+			cp1 = img;
+			cp2 = image;
+			for	(i = 0; i < miny; 
+					i++, cp1 += newSize.x, cp2 += size.x)
+				memCopy(cp1, cp2, minx << 1);
+			delete image;
+			}
+		imageLength = il;
+		image = img;
+		n unlock();
+		}
+	size = newSize;
+	}
+
+open:	gate	() =
+	{
+	_open();
+	}
+
+_open:	() =
+	{
+	if	(flags & W_OPEN)
+		return;				// already open
+
+		// If the frame goes first, tell the viewport
+
+
+		// If the viewport goes first, tell the manager
+
+	if	(frame){
+		flags |= W_OPEN;
+		frame _wopen();
+		if	(frame->handler)
+			frame->handler open(ref far 
+					textWindow(frame->objectId));
+		}
+	else
+		_wopen();
+	if	(viewport){
+		viewport->flags |= W_OPEN;
+		if	(viewport->handler)
+			viewport->handler open(ref far 
+					textWindow(viewport->objectId));
+		}
+	}
+
+_wopen:	() =
+	{
+	i:	int;
+	n:		threadLock;
+
+	flags |= W_OPEN;
+	if	(flags & W_PLACED == 0){
+		corner = on _placeWindow(size);
+		if	(viewport){
+			viewport->flags |= W_PLACED;
+			viewport->corner.x = corner.x + 1;
+			viewport->corner.y = corner.y + 1;
+			}
+		flags |= W_PLACED;
+		}
+	n lock();
+	if	(image == 0){
+		i = size.x * size.y * sizeof colorChar;
+		imageLength = i;
+		image = alloc(i);
+		if	(image){
+			clen:	unsigned;
+			buf:	ref colorChar;
+			p:	point;
+
+			p = corner;
+			buf = image;
+			for	(clen = 0; clen < size.y; clen++){
+				Screen read(p, buf, size.x);
+				buf += size.x;
+				p.y++;
+				}
+			}
+		}
+	n unlock();
+	_toTop();
+	}
+
+hide:	gate	() =
+	{
+	if	(flags & W_OPEN == 0)
+		return;
+
+		// If the viewport goes first, tell the manager
+
+	if	(frame &&
+		 frame->handler){
+		flags &= ~W_OPEN;
+		frame _hide();
+		frame->handler hide(ref far textWindow(frame->objectId));
+		}
+	else
+		_hide();
+
+		// If the frame goes first, tell the viewport
+
+	if	(viewport &&
+		 viewport->handler){
+		viewport->flags &= ~W_OPEN;
+		viewport->handler hide(ref far textWindow(viewport->objectId));
+		}
+	}
+
+_hide:	() =
+	{
+	removeFromStack();
+	flags &= ~W_OPEN;
+	on refreshScreen();
+	}
+
+zoom:	gate	(p: point, zoomState: windowZoom_t) =
+	{
+	i:	int;
+
+	if	(frame ||
+		 viewport ||
+		 flags & W_OPEN)
+		return;				// already open
+	if	(zoomState == WZ_NORMAL){
+		flags |= W_OPEN;
+		corner = p;
+		i = size.x * size.y * sizeof colorChar;
+		imageLength = i;
+		image = alloc(i);
+		if	(image){
+			clen:	unsigned;
+			buf:	ref colorChar;
+
+			buf = image;
+			for	(clen = 0; clen < size.y; clen++){
+				Screen read(p, buf, size.x);
+				buf += size.x;
+				p.y++;
+				}
+			}
+		next = 0;
+		prev = 0;
+		_toTop();
+		}
+	on determineNewFocus();
+	}
+
+mouseCursor:	gate	(p: point) =
+	{
+	if	(p.x >= 0 &&
+		 p.x < size.x &&
+		 p.y >= 0 &&
+		 p.y < size.y){
+		p.x += corner.x;
+		p.y += corner.y;
+		on placeMouse(p);
+		}
+	}
+
+write:	gate	(p: point, buf: [:] colorChar) =
+	{
+	if	(flags & W_OPEN == 0)
+		return;
+	if	(frame){
+		p.x += 1;
+		p.y += 1;
+		frame _write(p, buf);
+		}
+	else
+		_write(p, buf);
+	}
+
+_write:	(p: point, buf: [:] colorChar) =
+	{
+	rows:	int;
+	clen:	unsigned;
+	rem:	unsigned;
+	img:	ref colorChar;
+	endimg:	ref colorChar;
+	cp:	ref colorChar;
+	bf:	ref colorChar;
+	s:	ref colorChar;
+	i:	int;
+	x:	[:] colorChar;
+
+	if	(p.y >= size.y ||
+		 p.x >= size.x)
+		return;
+	if	(p.x < 0){
+		i = -p.x;
+		if	(i >= |buf)
+			return;
+		x = buf;
+		x = x[i:];
+		buf = x;
+		p.x = 0;
+		}
+	if	(p.y < 0){
+		i = -p.y * size.x;
+		if	(i >= |buf)
+			return;
+		x = buf;
+		x = x[i:];
+		buf = x;
+		p.y = 0;
+		}
+	if	(palette){
+		for	(i = 0; i < |buf; i++){
+			idx:	int;
+
+			idx = buf[i].color;
+			if	(idx >= palette->csize)
+				idx = 0;
+			buf[i].color = palette->colors[idx];
+			}
+		}
+	rem = size.x - p.x;
+	img = image + (p.y * size.x + p.x);
+	endimg = ref colorChar(ref byte(image) + imageLength);
+	if	(img + |buf < endimg)
+		endimg = img + |buf;
+	else if	(img + |buf > endimg)
+		|buf = endimg - img;
+	for	(cp = img, bf = buf; cp < endimg; cp++, bf++)
+		*cp = *bf;
+	p.x += corner.x;
+	p.y += corner.y;
+	s = buf;
+	for	(clen = |buf; clen; ){
+		if	(clen < rem)
+			rem = clen;
+		if	(WindowStack == self){
+			clip:	int;
+
+			clip = Screen->size.x - p.x;
+			if	(clip > rem)
+				clip = rem;
+			Screen write(p, s, clip);
+			s += rem;
+			}
+		else	{
+			drawSegment(p, img, rem);
+			img += rem;
+			}
+		p.x = corner.x;
+		p.y++;
+		clen -= rem;
+		rem = size.x;
+		}
+	}
+
+clear:	gate	() =
+	{
+	box:	rectangle_t;
+
+	if	(flags & W_OPEN == 0)
+		return;
+	box.size = size;
+	if	(frame){
+		box.corner = [ 1, 1 ];
+		frame _rectangle(box, C_BLACK);
+		}
+	else	{
+		box.corner = [ 0, 0 ];
+		_rectangle(box, C_BLACK);
+		}
+	}
+
+rectangle:	gate	(box: rectangle_t, color: color_t) =
+	{
+	if	(flags & W_OPEN == 0)
+		return;
+	if	(frame){
+		box.corner.x += 1;
+		box.corner.y += 1;
+		frame _rectangle(box, color);
+		}
+	else
+		_rectangle(box, color);
+	}
+
+_rectangle:	(box: rectangle_t, color: color_t) =
+	{
+	offset:		unsigned;
+	diff:		unsigned;
+	len:		unsigned;
+	rows:		int;
+	copyrows:	int;
+	i:		unsigned;
+	ip:		ref colorChar;
+	jp:		ref colorChar;
+
+		// If the scrolling frame in view?  If not, give up'
+
+	if	(box.corner.x > size.x ||
+		 box.corner.y > size.y ||
+		 box.size.x < 1 ||
+		 box.size.y < 1 ||
+		 box.corner.x + box.size.x < 1 ||
+		 box.corner.y + box.size.y < 1)
+		return;
+
+		// Now map the color
+
+	if	(palette){
+		idx:	int;
+
+		idx = color;
+		if	(idx >= palette->csize)
+			idx = 0;
+		color = palette->colors[idx];
+		}
+
+		// now clip the scrolling frame to the window
+
+	if	(box.corner.x < 0)
+		box.corner.x = 0;
+	if	(box.corner.y < 0)
+		box.corner.y = 0;
+	if	(box.corner.x + box.size.x > size.x)
+		box.size.x = size.x - box.corner.x;
+	if	(box.corner.y + box.size.y > size.y)
+		box.size.y = size.y - box.corner.y;
+	len = 2 * box.size.x;
+	rows = box.size.y;
+	offset = box.corner.y * size.x + box.corner.x;
+	for	(i = 0; i < box.size.y; i++){
+		ip = image + offset;
+		jp = ip + box.size.x;
+		while	(ip < jp){
+			*ip = [ ' ', color ];
+			ip++;
+			}
+		offset += size.x;
+		}
+	if	(WindowStack == self){		// if on top use quick call
+		box.corner.x += corner.x;
+		box.corner.y += corner.y;
+		Screen rectangle(box, color);
+		}
+	else
+		draw();
+	}
+
+writecc:	gate	(p: point, buf: [:] char, c: color_t) =
+	{
+	if	(flags & W_OPEN == 0)
+		return;
+	if	(frame){
+		p.x += 1;
+		p.y += 1;
+		frame _writecc(p, buf, c);
+		}
+	else
+		_writecc(p, buf, c);
+	}
+
+_writecc:	(p: point, buf: [:] char, c: color_t) =
+	{
+	rows:	int;
+	clen:	unsigned;
+	rem:	unsigned;
+	img:	ref colorChar;
+	endimg:	ref colorChar;
+	cp:	ref colorChar;
+	bf:	ref char;
+	s:	ref char;
+	i:	int;
+	x:	[:] char;
+
+	if	(p.y >= size.y ||
+		 p.x >= size.x)
+		return;
+	if	(palette){
+		idx:	int;
+
+		idx = c;
+		if	(idx >= palette->csize)
+			idx = 0;
+		c = palette->colors[idx];
+		}
+	if	(p.x < 0){
+		i = -p.x;
+		if	(i >= |buf)
+			return;
+		x = buf;
+		x = x[i:];
+		buf = x;
+		p.x = 0;
+		}
+	if	(p.y < 0){
+		i = -p.y * size.x;
+		if	(i >= |buf)
+			return;
+		x = buf;
+		x = x[i:];
+		buf = x;
+		p.y = 0;
+		}
+	img = image + (p.y * size.x + p.x);
+	endimg = ref colorChar(ref byte(image) + imageLength);
+//	endimg = image + imageLength;
+	if	(img + |buf < endimg)
+		endimg = img + |buf;
+	else if	(img + |buf > endimg)
+		|buf = endimg - img;
+	for	(cp = img, bf = buf; cp < endimg; cp++, bf++)
+		cp[0] = [ *bf, c ];
+	rem = size.x - p.x;
+	if	(rem == 0)
+		return;
+	p.x += corner.x;
+	p.y += corner.y;
+	s = buf;
+	for	(clen = |buf; clen; ){
+		if	(clen < rem)
+			rem = clen;
+		if	(WindowStack == self){
+			clip:	int;
+
+			clip = Screen->size.x - p.x;
+			if	(clip > rem)
+				clip = rem;
+			Screen writecc(p, s, c, clip);
+			s += rem;
+			}
+		else	{
+			drawSegment(p, img, rem);
+			img += rem;
+			}
+		p.x = corner.x;
+		p.y++;
+		clen -= rem;
+		rem = size.x;
+		}
+	}
+
+verticalScroll:	gate	(ul: point, sz: point, amount: int) =
+	{
+	if	(flags & W_OPEN == 0)
+		return;
+	if	(frame){
+		ul.x += 1;
+		ul.y += 1;
+		frame _verticalScroll(ul, sz, amount);
+		}
+	else
+		_verticalScroll(ul, sz, amount);
+	}
+
+_verticalScroll:	(ul: point, sz: point, amount: int) =
+	{
+	offset:		unsigned;
+	diff:		unsigned;
+	len:		unsigned;
+	rows:		int;
+	copyrows:	int;
+	i:		unsigned;
+	ip:		ref colorChar;
+	jp:		ref colorChar;
+
+	if	(amount == 0)
+		return;
+
+		// If the scrolling frame in view?  If not, give up'
+
+	if	(ul.x > size.x ||
+		 ul.y > size.y ||
+		 sz.x < 1 ||
+		 sz.y < 1 ||
+		 ul.x + sz.x < 1 ||
+		 ul.y + sz.y < 1)
+		return;
+
+		// now clip the scrolling frame to the window
+
+	if	(ul.x < 0){
+		sz.x += ul.x;
+		ul.x = 0;
+		}
+	if	(ul.y < 0){
+		sz.y += ul.y;
+		ul.y = 0;
+		}
+	if	(sz.x > size.x - ul.x)
+		sz.x = size.x - ul.x;
+	if	(sz.y > size.y - ul.y)
+		sz.y = size.y - ul.y;
+	len = 2 * sz.x;
+	rows = sz.y;
+	i = 0;
+	offset = ul.y * size.x + ul.x;
+	if	(amount < 0){		/* scroll down */
+		amount = -amount;
+		if	(amount < sz.y){
+			copyrows = sz.y - amount;
+			offset += sz.y * size.x - size.x;
+			diff = amount * size.x;
+			for	(; i < copyrows; i++){
+				memCopy(image + offset,
+					image + offset - diff, len);
+				offset -= size.x;
+				}
+			}
+		for	(; i < sz.y; i++){
+			ip = image + offset;
+			jp = ip + sz.x;
+			while	(ip < jp){
+				*ip = [ ' ', color ];
+				ip++;
+				}
+			offset -= size.x;
+			}
+		amount = -amount;
+		}
+	else	{			/* scroll up */
+		if	(amount < sz.y){
+			copyrows = sz.y - amount;
+			diff = amount * size.x;
+			for	(; i < copyrows; i++){
+				memCopy(image + offset,
+					image + offset + diff, len);
+				offset += size.x;
+				}
+			}
+		for	(; i < sz.y; i++){
+			ip = image + offset;
+			jp = ip + sz.x;
+			while	(ip < jp){
+				*ip = [ ' ', color ];
+				ip++;
+				}
+			offset += size.x;
+			}
+		}
+	if	(WindowStack == self){		// if on top use quick call
+		lr:	point;
+
+		ul.x += corner.x;
+		ul.y += corner.y;
+		lr.x = ul.x + sz.x - 1;
+		lr.y = ul.y + sz.y - 1;
+		if	((amount > 0 && lr.y < Screen->size.y) ||
+			 (amount < 0 && ul.y >= 0))
+			Screen verticalScroll(ul, lr, amount);
+		else
+			draw();
+		}
+	else
+		draw();
+	}
+
+horizontalScroll:	gate	(ul: point, sz: point, amount: int) =
+	{
+	if	(flags & W_OPEN == 0)
+		return;
+	if	(frame){
+		ul.x += 1;
+		ul.y += 1;
+		frame _horizontalScroll(ul, sz, amount);
+		}
+	else
+		_horizontalScroll(ul, sz, amount);
+	}
+
+_horizontalScroll:	(ul: point, sz: point, amount: int) =
+	{
+	offset:		unsigned;
+	diff:		unsigned;
+	len:		unsigned;
+	rows:		unsigned;
+	copyrows:	unsigned;
+	i:		unsigned;
+	j:		unsigned;
+	cp:		ref char;
+	mcv:		boolean;
+
+	if	(amount == 0)
+		return;
+
+
+		// If the scrolling frame in view?  If not, give up'
+
+	if	(ul.x > size.x ||
+		 ul.y > size.y ||
+		 sz.x < 1 ||
+		 sz.y < 1 ||
+		 ul.x + sz.x < 1 ||
+		 ul.y + sz.y < 1)
+		return;
+
+		// now clip the scrolling frame to the window
+
+	if	(ul.x < 0)
+		ul.x = 0;
+	if	(ul.y < 0)
+		ul.y = 0;
+	if	(ul.x + sz.x > size.x)
+		sz.x = size.x - ul.x;
+	if	(ul.y + sz.y > size.y)
+		sz.y = size.y - ul.y;
+	len = 2 * sz.x;
+	rows = sz.y;
+	i = 0;
+	offset = (int(ul.y) * size.x + ul.x) * 2;
+	cp = ref char(image) + offset;
+	if	(amount < 0){		/* scroll left */
+		amount = -amount;
+		diff = amount * 2;
+		if	(diff > len)
+			diff = len;
+		len -= diff;
+		for	(; i < rows; i++){
+			if	(diff < len)
+				memMove(cp + diff, cp, len);
+			for	(j = 0; j < diff; j += 2){
+				cp[j] = ' ';
+				cp[j + 1] = color;
+				}
+			cp += size.x * 2;
+			}
+		amount = -amount;
+		}
+	else	{			/* scroll right */
+		ep:	ref char;
+
+		diff = amount * 2;
+		if	(diff > len)
+			diff = len;
+		len -= diff;
+		for	(; i < rows; i++){
+			if	(diff < len)
+				memMove(cp, cp + diff, len);
+			ep = cp + len - diff;
+			for	(j = 0; j < diff; j += 2){
+				ep[j] = ' ';
+				ep[j + 1] = color;
+				}
+			cp += size.x * 2;
+			}
+		}
+	if	(WindowStack == self){		// if on top use quick call
+		lr:	point;
+
+		ul.x += corner.x;
+		ul.y += corner.y;
+		lr.x = ul.x + sz.x - 1;
+		lr.y = ul.y + sz.y - 1;
+		if	((amount > 0 && lr.x < Screen->size.x) ||
+			 (amount < 0 && ul.x >= 0))
+			Screen horizontalScroll(ul, lr, amount);
+		else
+			draw();
+		}
+	else
+		draw();
+	}
+
+putcc:		gate	(p: point, c: char, co: color_t) =
+	{
+	if	(flags & W_OPEN == 0)
+		return;
+	if	(frame){
+		p.x += 1;
+		p.y += 1;
+		frame _putcc(p, c, co);
+		}
+	else
+		_putcc(p, c, co);
+	}
+
+_putcc:		(p: point, c: char, co: color_t) =
+	{
+	if	(p.y < 0 || p.y >= size.y)
+		return;
+	if	(p.x < 0 || p.x >= size.x)
+		return;
+	if	(palette){
+		idx:	int;
+
+		idx = co;
+		if	(idx >= palette->csize)
+			idx = 0;
+		co = palette->colors[idx];
+		}
+	img:	ref colorChar;
+
+	img = image + (p.y * size.x + p.x);
+	*img = [ c, co ];
+	p.x += corner.x;
+	p.y += corner.y;
+	if	(WindowStack == self)
+		Screen putcc(p, c, co);
+	else
+		drawSegment(p, img, 1);
+	}
+
+arrangeViewport:	(v: ref PC_textWindow) =
+	{
+	
+	v->frame = self;
+	viewport = v;
+
+		// The viewport is always offset from the frame by 1x1
+
+	v->corner.x = corner.x + 1;
+	v->corner.y = corner.y + 1;
+
+		// And the frame size is 1 row all the way around the
+		// viewport.
+
+	_resize([ v->size.x + 2, v->size.y + 2 ]);
+	}
+
+toTop:	gate	() =
+	{
+	if	(flags & W_OPEN == 0)
+		_open();
+	else	{
+		if	(frame)
+			frame _toTop();
+		else
+			_toTop();
+		}
+	}
+
+_toTop:	() =
+	{
+	if	(WindowStack == self)
+		return;			// already on the top
+	removeFromStack();
+	next = WindowStack;
+	if	(WindowStack)
+		WindowStack->prev = self;
+	WindowStack = self;
+	Screen setColor(color);
+	draw();
+	on determineNewFocus();
+	on updateCursor();
+	}
+
+toBottom:	gate	() =
+	{
+	if	(flags & W_OPEN){
+		if	(frame)
+			frame _toBottom();
+		else
+			_toBottom();
+		}
+	}
+
+_toBottom:	() =
+	{
+	if	(flags & W_OPEN){
+		if	(next == 0)
+			return;			// already on the bottom
+		removeFromStack();
+		w:	ref PC_textWindow;
+
+		for	(w = WindowStack; w && w->next; w = w->next)
+			;
+		if	(w){
+			w->next = self;
+			prev = w;
+			}
+		else
+			WindowStack = self;
+		on refreshScreen();
+		}
+	}
+
+removeFromStack:	() =
+	{
+	if	(flags & W_OPEN == 0)
+		return;
+	if	(next)
+		next->prev = prev;
+	if	(prev)
+		prev->next = next;
+	if	(WindowStack == self)
+		WindowStack = next;
+	prev = 0;
+	next = 0;
+	}
+
+beep:	gate	() =
+	{
+	_beep();
+	}
+/*
+	text cursor management is accomplished with a cursor position and a
+	hidden flag bit.  Each window maintains it's own idea of where a
+	text cursor might or might not appear.  The Console object then must
+	decide which window's cursor should be displayed.  It then 
+	recursively calls the window again to do the actual positioning.
+ */
+textCursor:	gate	(p: point) =
+	{
+	if	(p.x >= 0 &&
+		 p.x < size.x &&
+		 p.y >= 0 &&
+		 p.y < size.y){
+		cursor = p;
+		status &= ~WS_HIDDEN;	
+		}
+	else
+		status |= WS_HIDDEN;
+	if	(flags & W_OPEN)
+		on updateCursor();
+	}
+
+showCursor:	gate	() =
+	{
+	status &= ~WS_HIDDEN;	
+	if	(flags & W_OPEN)
+		on updateCursor();
+	}
+
+hideCursor:	gate	() =
+	{
+	status |= WS_HIDDEN;
+	if	(flags & W_OPEN)
+		on updateCursor();
+	}
+
+updateCursor:	() =
+	{
+	p:	point;
+	w:	ref PC_textWindow;
+
+	if	(frame)
+		w = frame;
+	else
+		w = self;
+	p = [ cursor.x + corner.x, cursor.y + corner.y ];
+	if	(status & WS_HIDDEN == 0 &&
+		 (WindowStack == w ||
+		  w isVisible(p))){
+		Screen positionCursor(p);
+		Screen showCursor();
+		}
+	else
+		Screen hideCursor();
+	}
+
+contains:	(p: point) boolean =
+	{
+	if	(p.x < corner.x ||
+		 p.y < corner.y ||
+		 p.x >= corner.x + size.x ||
+		 p.y >= corner.y + size.y)
+		return FALSE;
+	else
+		return TRUE;
+	}
+
+draw:	() =
+	{
+	img, img2, vimg:	ref colorChar;
+	p, p2, vp:		point;
+	i:			int;
+
+	img = image;
+	p = corner;
+	for	(i = 0; i < size.y; i++, img += size.x, p.y++)
+		drawSegment(p, img, size.x);
+	}
+/*
+	This code performs all the clipping logic for a background write.
+	It is called for each line of a window and backtracks through the
+	windows above it to determine whether there are any obscuring
+	windows.
+
+	Note: coordinates of p are absolute coordinates for this routine.
+ */
+drawSegment:	(p: point, img: ref colorChar, len: int) =
+	{
+	w:	ref PC_textWindow;
+	xx:	int;
+	endx:	int;
+
+	if	(p.y < 0 ||
+		 p.y >= Screen->size.y)
+		return;
+	if	(p.x < 0){
+		len += p.x;		// since p.x < 0 this decreass
+		img -= p.x;		// since p.x < 0 this increases
+		p.x = 0;
+		}
+	if	(p.x + len > Screen->size.x)
+		len = Screen->size.x - p.x;
+	if	(len <= 0)
+		return;
+	endx = p.x + len;
+	for	(w = prev; w; w = w->prev){
+		if	(p.y < w->corner.y)
+			continue;
+		if	(p.y >= w->corner.y + w->size.y)
+			continue;
+		if	(endx <= w->corner.x)
+			continue;
+		xx = w->corner.x + w->size.x;
+		if	(p.x >= xx)
+			continue;
+		if	(p.x >= w->corner.x){
+			if	(endx <= xx)
+				return;
+			img += xx - p.x;
+			p.x = xx;
+			}
+		else	{
+			if	(endx > xx)
+				drawSegment([ xx, p.y ],
+					img + (xx - p.x), endx - xx);
+			endx = w->corner.x;
+			}
+		len = endx - p.x;
+		}
+	Screen write(p, img, len);
+	}
+/*
+	This code checks whether any given point on a window is visible to
+	the user.
+
+	Note: coordinates of p are absolute coordinates for this routine.
+ */
+isVisible:	(p: point) boolean =
+	{
+	w:	ref PC_textWindow;
+
+	if	(p.y < 0 ||
+		 p.y >= Screen->size.y ||
+		 p.x < 0 ||
+		 p.x >= Screen->size.x)
+		return FALSE;
+	for	(w = prev; w; w = w->prev){
+		if	(p.y >= w->corner.y &&
+			 p.x >= w->corner.x &&
+			 p.y < w->corner.y + w->size.y &&
+			 p.x < w->corner.x + w->size.x)
+			return FALSE;
+		}
+	return TRUE;
+	}
+
+	};
+
+_beep:	() =
+	{
+	beep();
+	}
+

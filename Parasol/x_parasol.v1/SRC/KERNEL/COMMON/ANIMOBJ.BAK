@@ -1,0 +1,399 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	object;
+include	alys;
+include	hardware;
+include	message;
+include	kprintf;
+include	process;
+include	arena;
+include	karena;
+include	hprocess;
+include	error;
+
+animatedObject:	public	type	inherit	object	{
+	control:		kernelSemaphore;
+
+	public:
+
+		// Signal handling information
+
+//	signalHandler:	vaddr_t;
+
+constructor:	(name: [:] char, ts: [:] char ,
+		 d: vaddr_t, jr: accessRights_t, ur: accessRights_t,
+				gr: accessRights_t, wr: accessRights_t) =
+	{
+	control initialize(0, &oD, self);
+	super constructor(name, ts, FALSE, jr, ur, gr, wr);
+	where = CurArena;
+	if	(myJob)
+		myJob dup();
+	actualObject = d;
+	}
+
+object0constructor:	() =
+	{
+	context = &BootContext;
+	me = ref far External(NLOCALS);
+	}
+
+serves:	(par: ref far External, p: ref process, ar: ref arena) =
+	{
+	animator = p;
+	parent = par;
+	p->animates = self;
+	p->mainObject = self;
+	p->where = ar;
+	p->myJob = myJob;
+	where = ar;
+	}
+
+_send:	dynamic	(ref far External, r: unsigned[16],
+					func: int, 
+					buf: buffer_t, 
+					rbuf: buffer_t,
+					flags: sendFlags_t) int =
+	{
+	m:	ref message;
+	src:	ref object;
+
+	src = CurProc->animates;
+	if	(flags & SF_WAIT)
+		m = message create(self, r, src->me, func, buf, rbuf);
+	else
+		m = message createCopy(self, r, src->me, func, buf);
+	if	(m == 0){
+		src rejectedSend(ERRNOMEMORY);
+		return 0;
+		}
+
+	n:	threadLock;
+
+	n lock();
+	if	(flags & SF_SIGNAL){
+		msgs push(m);
+
+			// If the count is negative, the animator is
+			// receiving
+
+		if	(control.count >= 0){
+			where scheduleSignal(self, animator, m->header.sequence);
+			animator alert();
+			}
+		}
+	else
+		msgs enqueue(m);
+	n unlock();
+	control up();
+	if	(flags & SF_WAIT)
+		return m waitForDone(src);
+	else
+		return 0;
+	}
+
+selfSend:	dynamic	(func: int, buf: vaddr_t, len: int) =
+	{
+	m:	ref message;
+
+	m = message createSelfGenerated(self, func, 
+						[ &KernelArena, buf, len ]);
+	if	(m){
+		n:	threadLock;
+
+		n lock();
+		msgs enqueue(m);
+		n unlock();
+		control up();
+		}
+	}
+
+receive:	dynamic	(mh: vaddr_t) int =
+	{
+		// wait for a message
+
+	if	(!control down(TRUE))
+		return ERRINTERRUPTED;
+	else	{
+		m:	ref message;
+
+		for	(;;){
+			m = ref message(msgs.next);
+//			kprintf("(%S) recv %p ", name, mh);
+//			m display();
+//			dumpData(&m->header, sizeof m->header);
+			if	(m->state != MS_RECEIVED)
+				break;
+			m reply_(0, 0);
+			}
+		m->state = MS_RECEIVED;
+		return CurArena write(mh, &m->header, sizeof MessageHeader);
+		}
+	}
+
+signalInfo:	(seq: _Sequence, hdr: vaddr_t) int =
+	{
+		// wait for a message
+
+//	kprintf("control down\n");
+	if	(!control down(TRUE))
+		return ERRINTERRUPTED;
+	else	{
+//		kprintf("control gained\n");
+		m:	ref message;
+
+		for	(;;){
+			m = ref message(msgs.next);
+			if	(m->state != MS_RECEIVED)
+				break;
+			m reply_(0, 0);
+			}
+//		kprintf("m->header.sequence = %d seq = %d\n", m->header.sequence, seq);
+		if	(m->header.sequence != seq)
+			return ERRINVALIDARGUMENT;
+		m->state = MS_RECEIVED;
+		return CurArena write(hdr, &m->header, sizeof MessageHeader);
+		}
+	}
+
+exit:	dynamic	() =
+	{
+	i, j:	int;
+	m:	ref message;
+	o:	ref object;
+	n:	threadLock;
+
+	if	(jobRights == 0)
+		panic("Kernel reentry of exit - System halted");
+	CurProc->abortInProgress = FALSE;
+
+		// Shut down the access rights to shut off further messages
+
+	n lock();
+	jobRights = 0;
+	userRights = 0;
+	groupRights = 0;
+	worldRights = 0;
+	n unlock();
+
+		// Unlink local id's
+
+	while	(context)
+		context = context close();
+
+		// Unlink the object from any file system name
+
+	if	(nameDirectory){
+		nameDirectory detachObject(me);
+		nameDirectory = 0;
+		}
+
+		// Kill any timer
+
+	n lock();
+	if	(alarm){
+		alarm abort();
+		alarm dispose();
+		}
+	n unlock();
+
+		// Throw away unhandled messages
+
+	while	(!msgs isEmpty()){
+		m = ref message(msgs.next);
+		m reject(ERRINVALIDARGUMENT);
+		}
+
+		// Kill non-disowned children
+
+	for	(i = 0, j = 0; i < NOBJECTS; i++){
+		n lock();
+		o = ObjectTable[i];
+		if	(o &&
+			 o->parent == me){
+			if	(o->isDisowned)
+				o->parent = BootObject->me;
+			else	{
+				j += o killChild();
+				}
+			}
+		n unlock();
+		}
+
+		// Reap the dying children
+
+	for	(i = 0; i < j; i++){
+		m:	ref message;
+
+		control down(FALSE);
+		m = ref message(msgs.next);
+		m reply_(0, 0);			// reap the child
+		}
+
+	useCount = 0;
+
+		// Remove the reference to the job
+
+	try
+		myJob close();
+	}
+
+processTermination:	dynamic	() =
+	{
+	n:	threadLock;
+	a:	ref process;
+
+	n lock();
+	a = animator;
+	CurProc accumulateTimes(a);
+	animator = 0;
+	n unlock();
+	a termination();
+	n lock();
+	useCount = 1;
+	close();
+	n unlock();
+	}
+
+rejectedSend:	dynamic	(code: int) =
+	{
+	m:	ref message;
+	a:	ref task_t;
+
+	a = new task_t;
+	where recoverSendParameters(a);
+	a->state = TS_REJECT;
+	a->errorCode = code;
+	if	(!a calledFromUserMode())
+		rejectTrap raise(code);
+	m = message createSelfGenerated(self, int(&External.rejectedMessage),
+				[ &KernelArena, vaddr_t(a), sizeof task_t ]);
+	if	(m){
+		n:	threadLock;
+
+		n lock();
+		msgs push(m);
+		where scheduleSignal(self, animator, m->header.sequence);
+		control up();
+		n unlock();
+		}
+	}
+
+interruptedSend:dynamic	() =
+	{
+	m:	ref message;
+	a:	ref task_t;
+
+	a = new task_t;
+	where recoverSendParameters(a);
+	a->state = TS_INTERRUPT;
+	if	(!a calledFromUserMode()){
+		displayTask(a);
+		panic("Kernel mode interrupted send - System halted");
+		}
+	m = message createSelfGenerated(self, 
+				int(&External.interruptedMessage), 
+				[ &KernelArena, vaddr_t(a), sizeof task_t ]);
+	if	(m){
+		n:	threadLock;
+
+		n lock();
+		msgs push(m);
+		where scheduleSignal(self, animator, m->header.sequence);
+		control up();
+		n unlock();
+		}
+	}
+
+machineTrap:	dynamic	(t: ref task_t, func: int) int =
+	{
+	m:	ref message;
+	a:	ref task_t;
+
+	if	(!t calledFromUserMode()){
+		kprintf("Halted in object %d\n", CurProc->animates->me);
+		displayTask(t);
+		panic("Kernel mode trap - System halted");
+		}
+	a = new task_t;
+	*a = *t;
+	a->state = TS_TRAP;
+	a->errorCode = func;
+	m = message createSelfGenerated(self, func, 
+				[ &KernelArena, vaddr_t(a), sizeof task_t ]);
+	if	(m){
+		n:	threadLock;
+
+		m->dumpOnAbort = TRUE;
+		n lock();
+		msgs push(m);
+//		where scheduleSignal(self, animator);
+//		control up();
+		n unlock();
+		CurProc abort(func);
+		m close();
+		}
+	}
+
+coreDump:	dynamic	(code: unsigned) boolean =
+	{
+	m:	ref message;
+
+	m = ref message(msgs.next);
+	if	(m == &msgs)
+		return FALSE;
+	if	(m->dumpOnAbort){
+		x:	boolean;
+		y:	ref logVector;
+		t:	task_t;
+
+		y = LogVector;
+		LogVector = 0;
+		m readText(0, &t, sizeof t);
+		t.state = TS_ABORT;
+		x = where coreDump(&t, code);
+		LogVector = y;
+		return x;
+		}
+	else
+		return FALSE;
+	}
+
+close:	dynamic	() boolean =
+	{
+	if	(animator)
+		return FALSE;
+	else
+		return super close();
+	}
+
+killChild:	dynamic	() int =
+	{
+	if	(animator){
+		animator->abortInProgress = TRUE;
+		if	(animator->animates != self)
+						// object has called a kernel
+						// object:
+			animator alert();	// wake it if waiting
+		else
+			animator abortProcess(0);
+		return 1;
+		}
+	else
+		return 0;
+	}
+
+	};
+
+oD:	(ref kernelSemaphore, d: pointer) =
+	{
+	o:	ref object;
+
+	o = d;
+	kprintf("[%d].control", o->me);
+	}

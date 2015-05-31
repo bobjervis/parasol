@@ -1,0 +1,609 @@
+/*
+	Copyright (c) 1993 by Robert Jervis
+	All rights reserved.
+
+	Permission to use, copy, modify and distribute this software is
+	subject to the license described in the READ.ME file.
+ */
+include	file, runfile, filesys, qsort;
+
+include	target, tparams;
+include	symtab, etables, types;
+include	value;
+include	errmsg;
+
+BUF_SIZE:		const	int = 4096;	// size of exe file copy buffer
+
+CODE_BASE:	public	const	addr_t = 0x1000;
+DATA_BASE:	public	const	addr_t = 0x1000;
+PAGE_GRAIN:		const	addr_t = 0x1000;	// round to this size
+
+LinkVersion:	public	int = ALYS1;
+
+ALYS1:	public	const int = 1;
+ALYS2:	public	const int = 2;
+
+
+/*
+	These are special symbols defined in the machine unit that are
+	filled in with addresses automatically, without having to go
+	through normal channels.
+
+	0 = The entry function table
+	1 = The cleanup function table
+	2 = The end of the cleanup function table
+	3 = The base of the heap
+	4 = The GDT (ALYS only)
+	5 = The IDT (ALYS only)
+ */
+MagicValues:	[6] ref value;
+
+RunFile:	public	{
+	public:
+
+	smartLink:		boolean;
+	stackSize:		addr_t;
+
+	private:
+
+	codeSize:		addr_t;
+	dataSize:		addr_t;
+	constSize:		addr_t;
+	initSize:		addr_t;
+	header:			runHeader;
+	dataBlock:		ref byte;
+	codeBlock:		ref byte;
+
+	public:
+
+runlink:	(root: ref unit_s, data_base: Size, code_base: Size) =
+	{
+	i:		int;
+	vp:		ref value;
+	f:		ref fixup;
+	u:		ref unit_s;
+	sym:		ref symbol_s;
+	sl:		ref symbolList;
+	startupValue:	ref value;
+	lit:		ref literalValue;
+	cleanupBase:	int;
+	generateSymbols:boolean;
+
+	header.cs = 0x7;
+	header.ds = 0xf;
+	header.ss = 0xf;
+	codeSize = 0;
+	dataSize = 0;
+	constSize = 0;
+	initSize = 0;
+	memSet(&MagicValues, 0, sizeof MagicValues);
+	for	(u = SymbolTable.units; u; u = u->next){
+		u->built = FALSE;
+		for	(sym = u->symbols; sym; sym = sym->next)
+			if	(sym->storageClass == SC_INTRINSIC &&
+				 sym->dtype->topType != T_FUNC)
+				logMagic(sym);
+		}
+	if	(SymbolTable.linkOrder){
+		SymbolTable.linkOrder dispose();
+		SymbolTable.linkOrder = 0;
+		}
+	collectEntryAndCleanupFunctions(root, 0, 1);
+	startupValue = 0;
+	dataSize = 0;
+	generateSymbols = FALSE;
+	buildValueVector();
+	SymbolTable.startupSymbol = 0;
+
+		// Decide what to link in.  First, identify the entry
+		// and cleanup functions.  Then, iteratively include
+		// values referred to by already included units
+
+	for	(i = 0; i < ValueIndex; i++){
+		vp = ValueVector[i];
+/*
+		printf("%5d: %x", i, vp);
+		if	(vp->owner)
+			printf(" %S", vp->owner objectName());
+		printf("\n");
+ */
+		if	(smartLink){
+			vp->linked = FALSE;
+			vp->used = FALSE;
+			}
+		else	{
+			vp markReferencedValues();
+			vp->linked = TRUE;
+			vp->used = TRUE;
+			}
+		if	(vp->owner == 0)
+			continue;
+		if	(vp->owner->qualifier & (DQ_ENTRY|DQ_CLEANUP))
+			vp->used = TRUE;
+		if	(vp->owner->name &&
+			 vp->owner->name isSpelled("__startup__"))
+			SymbolTable.startupSymbol = vp->owner;
+		}
+
+		// Also mark __startup__ as linked.
+
+	if	(SymbolTable.startupSymbol)
+		SymbolTable.startupSymbol->currentValue->used = TRUE;
+
+		// Smart linking needs to form closure over referenced
+		// objects
+
+	if	(smartLink){
+		changed:	boolean;
+		skipped:	int;
+		c, d:		addr_t;
+
+//		printf("Smart link begin... ");
+		do	{
+			changed = FALSE;
+			skipped = 0;
+			c = d = 0;
+			for	(i = 0; i < ValueIndex; i++){
+				vp = ValueVector[i];
+
+				if	(!vp->used){
+					skipped++;
+					if	(vp->valueClass == VC_CODE)
+						c += vp->vSize;
+					else
+						d += vp->vSize;
+					continue;
+					}
+				if	(vp->linked)
+					continue;
+
+				vp markReferencedValues();
+
+				changed = TRUE;
+				vp->linked = TRUE;
+				}
+			}
+			while	(changed);
+//		printf("skipped %d objects (%d code, %d data bytes)\n", 
+//					skipped, c, d);
+		}
+
+		// Now trim away any values that have gotten sucked in from
+		// the symbol file.
+
+	for	(i = 0; i < ValueIndex; i++){
+		vp = ValueVector[i];
+		if	(vp isSymbolValue())
+			vp->linked = FALSE;
+		}
+	if	(SymbolTable.symbolValue &&
+		 SymbolTable.symbolValue->data){
+		if	(SymbolTable.symbolValue->used){
+			generateSymbols = TRUE;
+			SymbolTable.symbolValue->linked = TRUE;
+			}
+		}
+	dataSize = code_base;
+	for	(i = 0; i < ValueIndex; i++){
+		vp = ValueVector[i];
+
+			// Locate the functions
+
+		if	(vp->valueClass == VC_CODE &&
+			 vp->linked)
+			assignLocation(vp);
+		}
+	codeSize = dataSize;
+	if	(SymbolTable.startupSymbol)
+		header.ip = SymbolTable.startupSymbol->currentValue->address;
+
+		// Record the entry and cleanup table addresses
+
+	vp = MagicValues[0];
+	if	(vp == 0)
+		CurrentContext fatalX("ErrInternal", "Missing entry function table", "", 0);
+
+		// Note that we have to pretend that the magic values are
+		// not initialized because we want them to use our hand-
+		// crafted initialization logic (if any), not anything the
+		// link routines might want to do.
+
+	database:	addr_t;
+
+	database = data_base;
+	vp->address = database;
+	vp->vSize = EntryFunctions.count * 8;
+
+	vp = MagicValues[1];
+	if	(vp == 0)
+		CurrentContext fatalX("ErrInternal", "Missing cleanup function table", "", 0);
+	vp->address = database + EntryFunctions.count * 8;
+	vp->vSize = CleanupFunctions.count * 4;
+	cleanupBase = vp->address;
+
+	vp = MagicValues[2];
+	if	(vp == 0)
+		CurrentContext fatalX("ErrInternal", "Missing cleanup function table ender", "", 0);
+	vp->address = database + EntryFunctions.count * 8 + 
+						CleanupFunctions.count * 4;
+	vp->vSize = 0;
+	dataSize = vp->address;
+
+		// Locate the symbol table, as needed
+
+	if	(generateSymbols){
+		sd:		ref __Symbols_t;
+		len:		Size;
+
+		sd = pointer(SymbolTable.symbolValue->data);
+		len = 0;
+		sd->symbolCount = 0;
+		for	(i = 0; i < ValueIndex; i++){
+			vp = ValueVector[i];
+			if	(!vp->linked)
+				continue;
+			j:	Size;
+
+			j = vp nameLength();
+			if	(j){
+				sd->symbolCount++;
+				len += j + 1;
+				}
+			}
+		sd->symbolBase = pointer(dataSize);
+		dataSize += sd->symbolCount * sizeof _SymbolDescriptor;
+		dataSize += len;
+		}
+
+		// Locate the string literals
+
+	for	(i = 0; i < ValueIndex; i++){
+		vp = ValueVector[i];
+		if	(!vp->linked)
+			continue;
+		for	(f = vp->fixups; f; f = f->next)
+			dataSize += f assignLiteralLocation(dataSize);
+		}
+	for	(i = 0; i < ValueIndex; i++){
+		vp = ValueVector[i];
+		if	(!vp->linked)
+			continue;
+
+				// Locate the constant data
+
+		if	(vp->valueClass == VC_CONST)
+			assignLocation(vp);
+		}
+	dataSize += PAGE_GRAIN - 1;
+	dataSize &= ~(PAGE_GRAIN - 1);
+	constSize = dataSize;
+	for	(i = 0; i < ValueIndex; i++){
+		vp = ValueVector[i];
+		if	(!vp->linked)
+			continue;
+
+				// Locate the initialized data
+
+		if	(vp->valueClass == VC_DATA &&
+			 vp->data)
+			assignLocation(vp);
+		}
+	initSize = dataSize;
+	for	(i = 0; i < ValueIndex; i++){
+		vp = ValueVector[i];
+		if	(!vp->linked)
+			continue;
+
+				// Locate the BSS
+
+		if	(vp->valueClass == VC_DATA &&
+			 vp->data == 0)
+			assignLocation(vp);
+		}
+
+		// Allocate the stack
+
+	dataSize += 3;
+	dataSize &= ~3;		// Align the stack
+	dataSize += stackSize;
+	header.sp = dataSize;
+
+	vp = MagicValues[5];
+	if	(vp &&
+		 vp->linked){			// IDT goes here
+		vp->address = dataSize;
+		dataSize += vp->vSize;
+		}
+	vp = MagicValues[4];
+	if	(vp &&
+		 vp->linked){			// GDT goes here
+		vp->address = dataSize;
+		dataSize += vp->vSize;
+		}
+
+	vp = MagicValues[3];
+	if	(vp == 0)
+		CurrentContext fatalX("ErrInternal", "Missing heap base", "", 0);
+	vp->address = dataSize;
+	vp->vSize = 1;
+
+		// Pad out the code segment
+
+	codeBlock = alloc(codeSize);
+	memSet(codeBlock, 0x90, codeSize);
+
+		// Pad out the data segment
+
+	dataBlock = alloc(initSize);
+	memSet(dataBlock, 0, initSize);
+
+	dataSize++;			// ALYS assumes the heap has one byte
+					// to start with
+
+		// Write the entry function table
+
+	evect:	ref packed { public:
+		addr:		unsigned[32];
+		cleanVal:	unsigned[32];
+		};
+
+	evect = pointer(dataBlock + database);
+	EntryFunctions startTraversal();
+	while	((sl = EntryFunctions next()) != 0){
+		vp = sl->sym->currentValue;
+		evect->addr = vp->address;
+		evect->cleanVal = cleanupBase + sl->refCount * 4;
+		evect++;
+		}
+
+		// Write the cleanup function table
+
+	cvect:	ref unsigned[32];
+
+	cvect = pointer(evect);
+	CleanupFunctions startTraversal();
+	while	((sl = CleanupFunctions next()) != 0){
+		vp = sl->sym->currentValue;
+		*cvect = vp->address;
+		cvect++;
+		}
+
+		// Link the symbol table, as needed
+
+	if	(generateSymbols){
+		ss:		ref __Symbols_t;
+		sd:		ref _SymbolDescriptor;
+		syms:		ref char;
+		base:		Size;
+		len:		Size;
+		nameAddress:	Size;
+
+		ss = pointer(SymbolTable.symbolValue->data);
+		base = Size(ss->symbolBase);
+		sd = pointer(dataBlock + base);
+		syms = pointer(sd + ss->symbolCount);
+		nameAddress = Size(syms) - Size(dataBlock);
+		for	(i = 0; i < ValueIndex; i++){
+			vp = ValueVector[i];
+			if	(!vp->linked)
+				continue;
+			s:	[:] char;
+
+			s = vp objectName();
+			if	(|s){
+				sd->address = pointer(vp->address);
+				sd->name = pointer(nameAddress);
+				memCopy(syms, s, |s);
+				nameAddress += |s + 1;
+				syms += |s + 1;
+				sd++;
+				}
+			}
+		base = Size(ss->symbolBase);
+		sd = pointer(dataBlock + base);
+		sortSymbols(ss, sd, dataBlock);
+		}
+
+		// Link everything in sight
+
+	for	(u = SymbolTable.units; u; u = u->next){
+		u->codeSize = 0;
+		u->dataSize = 0;
+		u->bssSize = 0;
+		}
+	u = SymbolTable.units;
+	for	(i = 0; i < ValueIndex; i++){
+		vp = ValueVector[i];
+		while	(u->next && u->next->index == i)
+			u = u->next;
+		if	(!vp->linked)
+			continue;
+		for	(f = vp->fixups; f; f = f->next)
+			u->dataSize += f linkLiteral(dataBlock);
+		}
+	u = SymbolTable.units;
+	for	(i = 0; i < ValueIndex; i++){
+		vp = ValueVector[i];
+		while	(u->next && u->next->index == i)
+			u = u->next;
+		if	(!vp->linked)
+			continue;
+//		TargetData.currentUnit = u;
+		if	(vp->data){
+			buf:	ref byte;
+
+			vp runlink();
+			if	(vp->valueClass == VC_CODE){
+				buf = codeBlock;
+				if	(u)
+					u->codeSize += vp->vSize;
+				}
+			else	{
+				buf = dataBlock;
+				if	(u)
+					u->dataSize += vp->vSize;
+				}
+			memCopy(buf + vp->address, vp->data, vp->dataSize);
+			}
+		else if	(u)
+			u->bssSize += vp->vSize;
+		}
+	}
+
+sortSymbols:	(ss: ref __Symbols_t, sd: ref _SymbolDescriptor,
+							dataBlock: ref byte) =
+	{
+	DataBlock = dataBlock;
+//	Symbase = sd;
+	qsort(sd, ss->symbolCount, sizeof _SymbolDescriptor,
+							&symbolCompare);
+	}
+
+write:	(filename: [:] char) =
+	{
+	exeFile:	stream;
+	rh:		runHeader;
+	rem:		int;
+	j:		int;
+	i:		int;
+
+//	printf("link write(), creating %S\n", Project.runFile);
+	if	(exeFile create(filename, 0))
+		CurrentContext fatalX("ErrCreate", filename, "", 0);
+//	printf("created file fd = %x\n", exeFile getChannel());
+	memSet(&rh, 0, sizeof rh);
+	rh.magic = RUN_MAGIC;
+	rh.cs = header.cs;
+	rh.ds = header.ds;
+	rh.ss = header.ss;
+	rh.ip = header.ip;
+	rh.sp = header.sp;
+	rh.descriptors = sizeof rh;
+	rh.image = sizeof rh;
+	rh.codeLen = codeSize;
+	rh.dataTotalLen = dataSize;
+	rh.dataInitLen = initSize;
+	rh.dataConstLen = constSize;
+	rh.fixups = sizeof rh + rh.codeLen + rh.dataInitLen;
+	rh.version = RUN_VERSION_2;
+	rh.codeOffset = CODE_BASE;
+	rh.dataOffset = DATA_BASE;
+	rh.fixups = sizeof rh + rh.codeLen + rh.dataInitLen -
+				(CODE_BASE + DATA_BASE);
+	rh.gates = rh.fixups;
+	rh.externGates = rh.fixups;
+	rh.debugInfo = rh.fixups;
+	if	(SymbolTable.threadValue)
+		rh.threadLoc = SymbolTable.threadValue->address;
+	if	(SymbolTable.symbolValue)
+		rh.symbols = SymbolTable.symbolValue->address;
+	exeFile write(ref byte(&rh)[:sizeof rh]);
+//	exeFile write(codeBlock[CODE_BASE:codeSize]);
+//	exeFile write(dataBlock[DATA_BASE:initSize]);
+	exeFile write((codeBlock + CODE_BASE)[:codeSize - CODE_BASE]);
+	exeFile write((dataBlock + DATA_BASE)[:initSize - DATA_BASE]);
+	exeFile close();
+	}
+
+writeDriver:	(filename: [:] char) =
+	{
+	exeFile:	stream;
+	lh:		lodHeader;
+	rem:		int;
+	j:		int;
+	i:		int;
+	vp:		ref value;
+	sl:		ref symbolList;
+
+	if	(exeFile create(filename, 0))
+		CurrentContext fatalX("ErrCreate", filename, "", 0);
+	memSet(&lh, 0, sizeof lh);
+	lh.magic = LOD_MAGIC;
+	lh.version = LOD_VERSION;
+	lh.image = sizeof lh;
+	lh.codeLen = codeSize;
+	lh.dataTotalLen = dataSize;
+	lh.dataInitLen = initSize;
+	lh.dataConstLen = constSize;
+	lh.fixups = sizeof lh + lh.codeLen + lh.dataInitLen;
+	lh.debugInfo = lh.fixups;
+	lh.entryFuncs = EntryFunctions.count;
+	lh.cleanupFuncs = CleanupFunctions.count;
+	exeFile write(ref byte(&lh)[:sizeof lh]);
+	exeFile write(codeBlock[:codeSize]);
+	exeFile write(dataBlock[:initSize]);
+	buildValueVector();
+	startLoadFixups();
+	for	(i = 0; i < ValueIndex; i++){
+		vp = ValueVector[i];
+		if	(vp->linked)
+			vp writeLoadFixups(&exeFile);
+		}
+	flushLoadFixups(&exeFile);
+	finishLoadFixups();
+	startSymbolicLoadFixups();
+	for	(i = 0; i < ValueIndex; i++){
+		vp = ValueVector[i];
+		if	(vp->linked)
+			vp writeSymbolicLoadFixups();
+		}
+	strings:	long;
+
+	lh.symbolicStrings = exeFile seek(0, SEEK_CUR);
+	strings = flushSymbolicLoadFixups(&exeFile);
+	lh.symbolicFixups = lh.symbolicStrings + strings;
+	exeFile seek(0, SEEK_ABS);
+	exeFile write(ref byte(&lh)[:sizeof lh]);
+	exeFile close();
+	}
+
+	private:
+
+logMagic:	(sym: ref symbol_s) =
+	{
+	if	(sym->initBase > 5)
+		CurrentContext fatalX("ErrInternal", "Magic data value too high", "", 0);
+	MagicValues[sym->initBase] = sym->currentValue;
+	}
+
+assignLocation:	(vp: ref value) =
+	{
+	i:	addr_t;
+
+		// Skip over magic symbols
+
+	if	(vp->owner &&
+		 vp->owner->storageClass == SC_INTRINSIC)
+		return;
+	i = dataSize;
+	i += vp->align - 1;
+	i &= ~(addr_t(vp->align) - 1);
+	vp->address = i;
+	dataSize = i + vp->vSize;
+	}
+
+	};
+
+//Symbase:	ref _SymbolDescriptor;
+
+symbolCompare:	(k1: pointer, k2: pointer) int =
+	{
+	s1, s2:	ref _SymbolDescriptor;
+	c1, c2: ref char;
+
+	s1 = k1;
+	s2 = k2;
+	c1 = DataBlock + unsigned(s1->name);
+	c2 = DataBlock + unsigned(s2->name);
+	for	(; *c1 && *c2; c1++, c2++)
+		if	(*c1 != *c2)
+			break;
+//	printf("%d: %s ? %d: %s -> %d\n", 
+//			s1 - Symbase,
+//			DataBlock + unsigned(s1->name),
+//			s2 - Symbase,
+//			DataBlock + unsigned(s2->name), *c1 - *c2);
+	return *c1 - *c2;
+	}
+
+DataBlock:	ref byte;
