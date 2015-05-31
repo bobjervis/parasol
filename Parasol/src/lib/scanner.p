@@ -195,10 +195,6 @@ class FileScanner extends Scanner {
 	public boolean opened() { 
 		return _file.opened(); 
 	}
-/*
-private:
-	int _pushBack;			// last character read
-*/
 }
 
 public class StringScanner extends Scanner {
