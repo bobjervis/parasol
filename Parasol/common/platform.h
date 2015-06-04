@@ -1,5 +1,4 @@
 /*
-/*
    Copyright 2015 Rovert Jervis
 
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,8 +12,6 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
- */
- *	Platofrm specific common declarations
  */
 #ifdef _MSC_VER
 #ifdef _CRTDBG_MAP_ALLOC
