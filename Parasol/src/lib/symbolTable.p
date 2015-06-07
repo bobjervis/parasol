@@ -485,7 +485,7 @@ class Scope {
 	// Code generation information
 
 	public int variableStorage;			// number of bytes in scope's storage block (including enclosing/extended blocks)
-	public int reservedInScope;			// registers reserved (used) in the scope.
+	public long reservedInScope;		// registers reserved (used) in the scope.
 	
 	private boolean _checked;
 	private boolean _printed;
@@ -2733,6 +2733,18 @@ class Type {
 		return false;
 	}
 
+	boolean isFloat() {
+		switch (_family) {
+		case	FLOAT_32:
+		case	FLOAT_64:
+			return true;
+			
+		default:
+			return false;
+		}
+		return false;
+	}
+	
 	boolean requiresAutoStorage() {
 		switch (_family) {
 		case	TYPEDEF:

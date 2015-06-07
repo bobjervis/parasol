@@ -446,6 +446,7 @@ builtInMap.append(BuiltInMap(TypeFamily.SIGNED_64, "long"));
 builtInMap.append(BuiltInMap(TypeFamily.UNSIGNED_8, "byte"));
 builtInMap.append(BuiltInMap(TypeFamily.UNSIGNED_16, "char"));
 builtInMap.append(BuiltInMap(TypeFamily.UNSIGNED_32, "unsigned"));
+builtInMap.append(BuiltInMap(TypeFamily.FLOAT_32, "float"));
 builtInMap.append(BuiltInMap(TypeFamily.FLOAT_64, "double"));
 builtInMap.append(BuiltInMap(TypeFamily.VOID, "void"));
 builtInMap.append(BuiltInMap(TypeFamily.VAR, "var"));

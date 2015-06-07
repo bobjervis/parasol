@@ -616,6 +616,8 @@ class Binary extends Node {
 			case	UNSIGNED_32:
 			case	SIGNED_32:
 			case	SIGNED_64:
+			case	FLOAT_32:
+			case	FLOAT_64:
 			case	ENUM:
 			case	ADDRESS:
 			case	FUNCTION:
@@ -691,16 +693,18 @@ class Binary extends Node {
 			break;
 			
 		case	EQUALITY:
-		case	NOT_EQUAL:
-		case	GREATER:
-		case	GREATER_EQUAL:
 		case	LESS:
 		case	LESS_EQUAL:
-		case	LESS_GREATER:
+		case	LESS_GREATER_EQUAL:
+		case	NOT_EQUAL:
 		case	NOT_LESS:
-		case	NOT_GREATER:
 		case	NOT_LESS_EQUAL:
+		case	NOT_LESS_GREATER_EQUAL:
+		case	GREATER:
+		case	GREATER_EQUAL:
+		case	NOT_GREATER:
 		case	NOT_GREATER_EQUAL:
+		case	LESS_GREATER:
 		case	NOT_LESS_GREATER:
 			switch (_left.type.family()) {
 			case	STRING:
@@ -857,6 +861,8 @@ class Binary extends Node {
 			case	UNSIGNED_32:
 			case	SIGNED_32:
 			case	SIGNED_64:
+			case	FLOAT_32:
+			case	FLOAT_64:
 			case	ENUM:
 			case	ADDRESS:
 			case	FUNCTION:
@@ -1479,6 +1485,8 @@ class Binary extends Node {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	UNSIGNED_32:
+			case	FLOAT_32:
+			case	FLOAT_64:
 			case	BOOLEAN:
 			case	STRING:
 			case	ADDRESS:
@@ -1516,6 +1524,8 @@ class Binary extends Node {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	UNSIGNED_32:
+			case	FLOAT_32:
+			case	FLOAT_64:
 			case	VAR:
 			case	STRING:
 				type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
@@ -6013,6 +6023,8 @@ class Unary extends Node {
 			case	UNSIGNED_32:
 			case	SIGNED_32:
 			case	SIGNED_64:
+			case	FLOAT_32:
+			case	FLOAT_64:
 				break;
 
 			case	CLASS:
@@ -6021,7 +6033,7 @@ class Unary extends Node {
 				}
 
 			default:
-				add(MessageId.NOT_INTEGER, compileContext.pool());
+				add(MessageId.NOT_NUMERIC, compileContext.pool());
 				type = compileContext.errorType();
 			}
 			break;
@@ -6261,13 +6273,15 @@ class Node {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	UNSIGNED_32:
+			case	FLOAT_32:
+			case	FLOAT_64:
 			case	ENUM:
 			case	TYPEDEF:
 				break;
 
 			default:
-				add(MessageId.UNFINISHED_CONVERT_SMALL_INTS, compileContext.pool());
-				type = compileContext.errorType();
+				print(0);
+				assert(false);
 			}
 		}
 		return this;

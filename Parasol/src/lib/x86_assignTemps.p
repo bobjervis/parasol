@@ -103,11 +103,11 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			b = ref<Binary>(node);
 			b.register = byte(int(R.NO_REG));
 			if	(b.sethi < 0) {
-				assignRegisterTemp(b.left(), familyMasks[b.type.family()], compileContext);
-				assignRegisterTemp(b.right(), familyMasks[b.type.family()], compileContext);
+				assignRegisterTemp(b.left(), familyMasks[b.left().type.family()], compileContext);
+				assignRegisterTemp(b.right(), familyMasks[b.right().type.family()], compileContext);
 			} else {
-				assignRegisterTemp(b.right(), familyMasks[b.type.family()], compileContext);
-				assignRegisterTemp(b.left(), familyMasks[b.type.family()], compileContext);
+				assignRegisterTemp(b.right(), familyMasks[b.right().type.family()], compileContext);
+				assignRegisterTemp(b.left(), familyMasks[b.left().type.family()], compileContext);
 			}
 			break;
 
@@ -201,11 +201,11 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	NOT_LESS_GREATER_EQUAL:
 			ref<Binary> b = ref<Binary>(node);
 			if	(b.sethi < 0) {
-				assignRegisterTemp(b.left(), familyMasks[b.type.family()], compileContext);
-				assignRegisterTemp(b.right(), familyMasks[b.type.family()], compileContext);
+				assignRegisterTemp(b.left(), familyMasks[b.left().type.family()], compileContext);
+				assignRegisterTemp(b.right(), familyMasks[b.right().type.family()], compileContext);
 			} else {
-				assignRegisterTemp(b.right(), familyMasks[b.type.family()], compileContext);
-				assignRegisterTemp(b.left(), familyMasks[b.type.family()], compileContext);
+				assignRegisterTemp(b.right(), familyMasks[b.right().type.family()], compileContext);
+				assignRegisterTemp(b.left(), familyMasks[b.left().type.family()], compileContext);
 			}
 			break;
 
@@ -241,7 +241,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		f().r.cleanupTemps(node, depth);
 	}
 
-	void assignRegisterTemp(ref<Node> node, int regMask, ref<CompileContext> compileContext) {
+	void assignRegisterTemp(ref<Node> node, long regMask, ref<CompileContext> compileContext) {
 		if	(node.deferGeneration())
 			return;
 //		printf("AssignRegisterTemp:\n");
@@ -262,7 +262,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			
 		case	CAST:
 			u = ref<Unary>(node);
-			assignCast(u, u.operand(), regMask, compileContext);
+			assignCastNode(u, u.operand(), regMask, compileContext);
 			break;
 			
 		case	LOGICAL_OR:
@@ -388,14 +388,14 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			switch (b.type.family()) {
 			case	SIGNED_32:
 			case	SIGNED_64:
-				assignBinaryOperands(b, regMask, ~0, compileContext);
+				assignBinaryOperands(b, regMask, longMask, compileContext);
 				node.register = byte(int(f().r.latestResult(b.left())));
 				break;
 
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
-				assignBinaryOperands(b, RAXmask, ~0, compileContext);
+				assignBinaryOperands(b, RAXmask, longMask, compileContext);
 				node.register = byte(int(R.RAX));
 				break;
 				
@@ -452,7 +452,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	OR:
 		case	EXCLUSIVE_OR:
 			b = ref<Binary>(node);
-			assignBinaryOperands(b, regMask, ~0, compileContext);
+			assignBinaryOperands(b, regMask, longMask, compileContext);
 			node.register = byte(int(f().r.latestResult(b.left())));
 			break;
 
@@ -491,7 +491,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	DECREMENT_AFTER:
 			ref<Unary> u = ref<Unary>(node);
 			assignLvalueTemps(u.operand(), compileContext);
-			int rhsMask = familyMasks[node.type.family()];
+			long rhsMask = familyMasks[node.type.family()];
 			int i = int(f().r.getreg(node, rhsMask, rhsMask));
 			f().r.cleanupTemps(node, depth);
 			node.register = byte(i);
@@ -563,7 +563,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	NOT_LESS_GREATER:
 		case	NOT_LESS_GREATER_EQUAL:
 			ref<Binary> b = ref<Binary>(node);
-			assignBinaryOperands(b, familyMasks[node.type.family()], familyMasks[node.type.family()], compileContext);
+			assignBinaryOperands(b, familyMasks[b.left().type.family()], familyMasks[b.right().type.family()], compileContext);
 			node.register = byte(int(f().r.getreg(node, familyMasks[node.type.family()], regMask)));
 			break;
 
@@ -686,7 +686,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		assignment.register = byte(int(R.RAX));
 	}
 	
-	private void assignCast(ref<Node> result, ref<Node> operand, int regMask, ref<CompileContext> compileContext) {
+	private void assignCastNode(ref<Node> result, ref<Node> operand, long regMask, ref<CompileContext> compileContext) {
 		ref<Type> existingType = operand.type;
 		ref<Type> newType = result.type;
 		switch (existingType.family()) {
@@ -704,7 +704,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				return;
 
 			case	ENUM:
-				assignCast(true, result, operand, regMask, compileContext);
+				assignCast(result, operand, regMask, longMask, compileContext);
 				return;
 			}
 			break;
@@ -714,7 +714,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	UNSIGNED_8:
 			case	SIGNED_32:
 			case	SIGNED_64:
-				assignCast(false, result, operand, regMask, compileContext);
+				assignCast(result, operand, regMask, 0, compileContext);
 				return;
 			}
 			break;
@@ -728,18 +728,20 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ADDRESS:
-				assignCast(false, result, operand, regMask, compileContext);
+				assignCast(result, operand, regMask, 0, compileContext);
 				if (unsigned(int(result.register)) > unsigned(int(R.MAX_REG)))
 					assert(false);
 				return;
 				
+			case	FLOAT_32:
+			case	FLOAT_64:
 			case	ENUM:
-				assignCast(true, result, operand, regMask, compileContext);
+				assignCast(result, operand, regMask, longMask, compileContext);
 				return;
 
 			case	CLASS:
 				if (newType.indirectType(compileContext) != null) {
-					assignCast(false, result, operand, regMask, compileContext);
+					assignCast(result, operand, regMask, 0, compileContext);
 					return;
 				}
 				break;
@@ -751,12 +753,12 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	UNSIGNED_32:
 			case	SIGNED_32:
 			case	ADDRESS:
-				assignCast(false, result, operand, regMask, compileContext);
+				assignCast(result, operand, regMask, 0, compileContext);
 				return;
 
 			case	CLASS:
 				if (newType.indirectType(compileContext) != null) {
-					assignCast(false, result, operand, regMask, compileContext);
+					assignCast(result, operand, regMask, 0, compileContext);
 					return;
 				}
 				break;
@@ -766,7 +768,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	STRING:
 			switch (newType.family()) {
 			case	STRING:
-				assignCast(false, result, operand, regMask, compileContext);
+				assignCast(result, operand, regMask, 0, compileContext);
 				return;
 			}
 			break;
@@ -779,12 +781,12 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	SIGNED_32:
 			case	FUNCTION:
 			case	SIGNED_64:
-				assignCast(false, result, operand, regMask, compileContext);
+				assignCast(result, operand, regMask, 0, compileContext);
 				return;
 				
 			case	CLASS:
 				if (newType.indirectType(compileContext) != null) {
-					assignCast(false, result, operand, regMask, compileContext);
+					assignCast(result, operand, regMask, 0, compileContext);
 					return;
 				}
 				break;
@@ -796,12 +798,12 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	UNSIGNED_8:
 			case	SIGNED_32:
 			case	ADDRESS:
-				assignCast(true, result, operand, regMask, compileContext);
+				assignCast(result, operand, regMask, longMask, compileContext);
 				return;
 
 			case	CLASS:
 				if (newType.indirectType(compileContext) != null) {
-					assignCast(true, result, operand, regMask, compileContext);
+					assignCast(result, operand, regMask, longMask, compileContext);
 					return;
 				}
 				break;
@@ -815,12 +817,12 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				case	STRING:
 				case	ADDRESS:
 				case	SIGNED_64:
-					assignCast(false, result, operand, regMask, compileContext);
+					assignCast(result, operand, regMask, 0, compileContext);
 					return;
 					
 				case	CLASS:
 					if (newType.indirectType(compileContext) != null) {
-						assignCast(false, result, operand, regMask, compileContext);
+						assignCast(result, operand, regMask, 0, compileContext);
 						return;
 					}
 					break;
@@ -836,16 +838,16 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		assert(false);
 	}
 	
-	private void assignCast(boolean differentOutputRegister, ref<Node> result, ref<Node> operand, int regMask, ref<CompileContext> compileContext) {
+	private void assignCast(ref<Node> result, ref<Node> operand, long regMask, long operandMask, ref<CompileContext> compileContext) {
 		int depth = tempStackDepth();
-		if (differentOutputRegister) {
-			assignRegisterTemp(operand, longMask, compileContext);
+		if (operandMask != 0) {
+			assignRegisterTemp(operand, operandMask, compileContext);
 			R operandRegister = R(int(operand.register));
-			int operandMask = getRegMask(operandRegister);
-			if ((regMask & ~operandMask) == 0)
-				regMask = longMask & ~operandMask;
+			long actualMask = getRegMask(operandRegister);
+			if ((regMask & ~actualMask) == 0)
+				regMask = familyMasks[result.type.family()] & ~actualMask;
 			else
-				regMask &= ~operandMask;
+				regMask &= ~actualMask;
 			R output = f().r.getreg(result, regMask, regMask);
 			f().r.cleanupTemps(result, depth);
 			result.register = byte(int(output));
@@ -859,14 +861,13 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		}
 	}
 	
-	private void assignBinaryOperands(ref<Binary> b, int resultMask, int rhsMask, ref<CompileContext> compileContext) {
+	private void assignBinaryOperands(ref<Binary> b, long resultMask, long rhsMask, ref<CompileContext> compileContext) {
 		int depth = tempStackDepth();
-		int savedRhsMask = rhsMask;
-		rhsMask &= familyMasks[b.type.family()];
+		long savedRhsMask = rhsMask;
 		if	(resultMask != rhsMask)
 			rhsMask &= ~resultMask;
 		if (rhsMask == 0)
-			rhsMask = familyMasks[b.type.family()];
+			rhsMask = familyMasks[b.right().type.family()];
 		if	(b.sethi < 0) {
 			assignRegisterTemp(b.left(), resultMask, compileContext);
 			assignRegisterTemp(b.right(), rhsMask, compileContext);
@@ -949,7 +950,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 
 		if (call.arguments() != null) {
 			for (ref<NodeList> args = call.arguments(); args != null; args = args.next) {
-				int regMask;
+				long regMask;
 				
 				if (args.node.register == 0) {
 					printf("--\n");
@@ -1117,10 +1118,10 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		}
 	}
 	
-	private void reserveReg(ref<Node> node, R actual, int asked) {
+	private void reserveReg(ref<Node> node, R actual, long asked) {
 		f().r.makeTemp(node, actual, asked);
 		assert(f().current != null);
-		int regMask = getRegMask(actual);
+		long regMask = getRegMask(actual);
 		for	(ref<Scope> sc = f().current; sc != null && sc.storageClass() == StorageClass.AUTO; sc = sc.enclosing())
 			sc.reservedInScope |= regMask;
 	}

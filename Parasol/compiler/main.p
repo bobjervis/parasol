@@ -31,14 +31,14 @@ import parasol:time;
 /*
  * Date and Copyright holder of this code base.
  */
-string COPYRIGHT_STRING = "2011 Robert Jervis";
+string COPYRIGHT_STRING = "2015 Robert Jervis";
 /*
  * Major Release: Incremented when a breaking change is released
  * Minor Feature Release: Incremented when significant new features
  * are released.
  * Fix Release: Incremented when big fixes are released.
  */
-string RUNTIME_VERSION = "1.0.0";
+string RUNTIME_VERSION = "0.1.0";
 /*
  *	Parasol engine architecture:
  *
@@ -103,7 +103,7 @@ class ParasolCommand extends commandLine.Command {
 					"Selects the target runtime for this execution. " +
 					"Default: " + pxi.sectionTypeName(SectionType(runtime.supportedTarget(0))));
 		compileFromSourceArgument = booleanArgument('s', "compileFromSource",
-					"In --test mode, any 'run' tests are run with 'compile/main.p' included.");
+					"In --test mode, any 'run' tests are run with 'compiler/main.p' included.");
 		helpArgument('?', "help",
 					"Displays this help.");
 	}

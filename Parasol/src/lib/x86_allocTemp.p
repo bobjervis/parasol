@@ -41,6 +41,16 @@ enum R {
 	XMM6,
 	XMM7,
 	
+	XMM8,
+	XMM9,
+	XMM10,
+	XMM11,
+	
+	XMM12,
+	XMM13,
+	XMM14,
+	XMM15,
+	
 	AH,
 	
 	MAX_REG
@@ -78,23 +88,32 @@ regNames[R.XMM5] = "XMM5";
 regNames[R.XMM6] = "XMM6";
 regNames[R.XMM7] = "XMM7";
 
+regNames[R.XMM8] = "XMM8";
+regNames[R.XMM9] = "XMM9";
+regNames[R.XMM10] = "XMM10";
+regNames[R.XMM11] = "XMM11";
+regNames[R.XMM12] = "XMM12";
+regNames[R.XMM13] = "XMM13";
+regNames[R.XMM14] = "XMM14";
+regNames[R.XMM15] = "XMM15";
+
 regNames[R.AH] = "AH";
 
-int RAXmask = getRegMask(R.RAX);
-int RBXmask = getRegMask(R.RBX);
-int RCXmask = getRegMask(R.RCX);
-int RDXmask = getRegMask(R.RDX);
-int R8mask = getRegMask(R.R8);
-int R9mask = getRegMask(R.R9); 
-int R10mask = getRegMask(R.R10); 
-int R11mask = getRegMask(R.R11); 
+long RAXmask = getRegMask(R.RAX);
+long RBXmask = getRegMask(R.RBX);
+long RCXmask = getRegMask(R.RCX);
+long RDXmask = getRegMask(R.RDX);
+long R8mask = getRegMask(R.R8);
+long R9mask = getRegMask(R.R9); 
+long R10mask = getRegMask(R.R10); 
+long R11mask = getRegMask(R.R11); 
 
-int callMask = RAXmask|RCXmask|RDXmask|R8mask|R9mask|R10mask|R11mask;
+long callMask = RAXmask|RCXmask|RDXmask|R8mask|R9mask|R10mask|R11mask;
 
-int longMask = RAXmask|RCXmask|RDXmask|R8mask|R9mask|R10mask|R11mask;			// RBP and RSP are reserved
-int floatMask = 0x1fe0000;
+long longMask = RAXmask|RCXmask|RDXmask|R8mask|R9mask|R10mask|R11mask;			// RBP and RSP are reserved
+long floatMask = 0x1fffe0000;
 
-int[TypeFamily] familyMasks;
+long[TypeFamily] familyMasks;
 
 familyMasks.resize(TypeFamily.MAX_TYPES);
 familyMasks[TypeFamily.SIGNED_8] = longMask;
@@ -152,12 +171,12 @@ class RegisterState {
 	ref<TempStack> _t;
 	int _tempBase;
 	int _oldestUnspilled;
-	int _freeRegisters;
-	int _usedRegisters;
+	long _freeRegisters;
+	long _usedRegisters;
 	
 	// This variable is used during the cleanupOperands code, but must be shared with another function.
 	
-	int _tempRegisters;
+	long _tempRegisters;
 	
 	ref<Spill> _spills;
 	ref<Spill> _lastSpill;
@@ -169,13 +188,13 @@ class RegisterState {
 		_freeRegisters = longMask|floatMask;
 	}
 	
-	void makeTemp(ref<Node> n, R actual, int des) {
-		int rNeg;
+	void makeTemp(ref<Node> n, R actual, long des) {
+		long rNeg;
 
 		if (des == 1)
 			n.print(0);
 		assert(des != 1);
-		rNeg = 1 << int(actual);
+		rNeg = getRegMask(actual);
 		consumeRegs(rNeg);
 		_t.makeTemp(n, actual, des);
 	}
@@ -190,7 +209,7 @@ class RegisterState {
 		
 		while (stackDepth < _t.stackDepth()) {
 			ref<Temporary> tm = _t.pop();
-			int regMask = getRegMask(tm.currentReg);
+			long regMask = getRegMask(tm.currentReg);
 			_freeRegisters |= regMask;
 			_usedRegisters &= ~regMask;
 			assert((_usedRegisters & _freeRegisters) == 0);
@@ -335,8 +354,8 @@ class RegisterState {
 	 * register, get it into a satisfactory register.
 	 */
 	R cleanupTemp(ref<Node> node, ref<Temporary> tm) {
-		int allowedClass;
-		int rx;
+//		int allowedClass;
+		long rx;
 		R r, rnew;
 
 			/* The temp may be on the stack */
@@ -397,7 +416,34 @@ class RegisterState {
 				break;
 
 			case	MOVE:
-				target.inst(X86.MOV, _spills.affected.type.family(), _spills.newRegister, R(int(_spills.affected.register)));
+				switch (_spills.affected.type.family()) {
+				case	UNSIGNED_8:
+				case	UNSIGNED_16:
+				case	SIGNED_32:
+				case	SIGNED_64:
+				case	STRING:
+				case	ENUM:
+				case	ADDRESS:
+				case	CLASS:
+				case	BOOLEAN:
+					target.inst(X86.MOV, _spills.affected.type.family(), _spills.newRegister, R(int(_spills.affected.register)));
+					break;
+					
+				case	FLOAT_32:
+					target.inst(X86.MOVSS, _spills.affected.type.family(), _spills.newRegister, R(int(_spills.affected.register)));
+					break;
+					
+				case	FLOAT_64:
+					target.inst(X86.MOVSD, _spills.affected.type.family(), _spills.newRegister, R(int(_spills.affected.register)));
+					break;
+					
+				default:
+					_spills.print();
+					printf("Moving: ");
+					_spills.affected.type.print();
+					printf("\n");
+					assert(false);
+				}
 				_spills.affected.register = byte(int(_spills.newRegister));
 				break;
 				
@@ -427,19 +473,19 @@ class RegisterState {
 		}
 	}
 	
-	void clobberSomeRegisters(ref<Node> tree, int regMask) {
+	void clobberSomeRegisters(ref<Node> tree, long regMask) {
 		while ((_freeRegisters & regMask) != regMask)
 			spillOldest(tree);
 	}
 
-	private void consumeRegs(int regMask) {
+	private void consumeRegs(long regMask) {
 //		printf("consumeRegs(%x)\n", regMask);
 		_freeRegisters &= ~regMask;			// Reserve the register
 		_usedRegisters |= regMask;
 		assert((_usedRegisters & _freeRegisters) == 0);
 	}
 
-	private void freeRegs(int regMask) {
+	private void freeRegs(long regMask) {
 		_freeRegisters |= regMask;
 		_usedRegisters &= ~regMask;
 		assert((_usedRegisters & _freeRegisters) == 0);
@@ -450,7 +496,7 @@ class RegisterState {
 	 * put its output in the needed register set.
 	 */
 	void transfer(ref<Node> tree, ref<Node> affected, R dest) {
-		int targetMask = getRegMask(dest);
+		long targetMask = getRegMask(dest);
 		if (!overlaps(targetMask, _freeRegisters)) {
 			assert(false);
 		}
@@ -458,8 +504,8 @@ class RegisterState {
 		makeSpill(SpillKinds.MOVE, tree, dest, affected, null);
 	}
 
-	R getreg(ref<Node> tree, int required, int desired) {
-		int r;
+	R getreg(ref<Node> tree, long required, long desired) {
+		long r;
 
 		while	((required & _freeRegisters) == 0) {
 			if	(allSpilled()) {
@@ -483,7 +529,7 @@ class RegisterState {
 		if (_oldestUnspilled < _t.stackDepth()) {
 			ref<Temporary> tm = _t.getTemp(_oldestUnspilled);
 			makeSpill(SpillKinds.PUSH, tree, R.NO_REG, tm.node, null);
-			int regMask = getRegMask(tm.currentReg);
+			long regMask = getRegMask(tm.currentReg);
 			_freeRegisters |= regMask;
 			_usedRegisters &= ~regMask;
 			assert((_usedRegisters & _freeRegisters) == 0);
@@ -581,7 +627,7 @@ class TempStack {
 			return _variableStack[_variableStack.length() - 1];
 	}
 	
-	void makeTemp(ref<Node> n, R r, int des) {
+	void makeTemp(ref<Node> n, R r, long des) {
 		ref<Temporary> tm;
 		if (_freeTemps.length() == 0)
 			tm = new Temporary(n, r, des);
@@ -658,9 +704,9 @@ class Temporary {
 	public ref<Node> node;
 	R reg;
 	R currentReg;
-	int desired;
+	long desired;
 	
-	Temporary(ref<Node> n, R r, int des) {
+	Temporary(ref<Node> n, R r, long des) {
 		node = n;
 		reg = r;
 		currentReg = r;
@@ -692,7 +738,7 @@ spillKindNames.append("XCHG");
 spillKindNames.append("FPSPILL");
 spillKindNames.append("FPRELOAD");
 
-R lowestReg(int regmask) {
+R lowestReg(long regmask) {
 	int r;
 
 	assert(regmask != 0);
@@ -704,22 +750,22 @@ R lowestReg(int regmask) {
 	return R(r);
 }
 
-int getRegMask(R rx) {
-	return 1 << int(rx);
+long getRegMask(R rx) {
+	return long(1) << int(rx);
 }
 
 /*
 	This function returns a non-zero value if the named register is
 	in the register mask given by res, zero otherwise.
  */
-boolean fits(R reg, int res) {
+boolean fits(R reg, long res) {
 	return (getRegMask(reg) & res) != 0;
 }
 /*
 	This function returns non-zero if the two register masks share
 	some common registers, zero otherwise.
  */
-boolean overlaps(int rs1, int rs2) {
+boolean overlaps(long rs1, long rs2) {
 	return (rs1 & rs2) != 0;
 }
 

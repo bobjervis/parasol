@@ -553,8 +553,8 @@ class RunObject extends script.Object {
 		string command = parasolCommand + " ";
 		if (compileFromSourceArgument) {
 			command.append("compiler/main.p ");
-			if (SectionType(runtime.runningTarget()) == SectionType.X86_64)
-				command.append("compiler/main.p ");
+//			if (SectionType(runtime.runningTarget()) == SectionType.X86_64)
+//				command.append("compiler/main.p ");
 		}
 		if (targetArgument != null)
 			command.printf("--target=%s ", targetArgument);

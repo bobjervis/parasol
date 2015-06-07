@@ -438,16 +438,29 @@ class long {
 	}
 }
 
-@Final 
-class void {}
+class float {
+
+	public float() {
+	}
+	
+	public float(float value) {
+		
+	}
+}
 
 class double {
+
 	public double() {
 	}
 	
 	public double(double value) {
+		
 	}
 }
+
+@Final 
+class void {}
+
 class Exception {}
 class ClassInfo {}
 class `*Namespace*` {}

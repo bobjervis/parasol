@@ -56,9 +56,13 @@ import parasol:runtime;
  */
 enum X86 {
 	ADD,
+	ADDSD,
+	ADDSS,
 	AND,
 	CALL,
 	CMP,
+	CVTSI2SD,
+	CVTSI2SS,
 	CWD,
 	DIV,
 	ENTER,
@@ -67,6 +71,8 @@ enum X86 {
 	LEA,
 	LEAVE,
 	MOV,
+	MOVSD,
+	MOVSS,
 	MOVSXD,
 	MOVZX,
 	MUL,
@@ -81,7 +87,11 @@ enum X86 {
 	SBB,
 	SHR,
 	SUB,
+	SUBSD,
+	SUBSS,
 	TEST,
+	UCOMISD,
+	UCOMISS,
 	XCHG,
 	XOR,
 	MAX_INSTRUCTION
@@ -556,8 +566,8 @@ class X86_64Encoder extends Target {
 			case	JA:				// Jump above (unsigned >)
 			case	JS:				// Jump on sign
 			case	JNS:			// Jump on no sign
-			case	JPE:			// Jump parity even
-			case	JPO:			// Jump parity odd
+			case	JP:				// Jump parity even
+			case	JNP:			// Jump parity odd
 			case	JL:				// Jump less (sign <)
 			case	JGE:			// Jump greater or equal (signed >=)
 			case	JLE:			// Jump less or equal (signed <=)
@@ -597,7 +607,7 @@ class X86_64Encoder extends Target {
 	public abstract void generateFunctionCore(ref<Scope> scope, ref<CompileContext> compileContext);
 	
 	class FunctionState {
-		public int allocatedRegisters;
+//		public long allocatedRegisters;
 		public int autoSize;
 		public int firstCode;
 		public int firstExceptionEntry;
@@ -605,9 +615,9 @@ class X86_64Encoder extends Target {
 		public ref<CodeSegment> last;
 		public ref<CodeSegment> emitting;
 		public ref<CodeSegment> currentHandler;
-		public int avail;
-		public int freeRegisters;
-		public int usedRegisters;
+		public long avail;
+		public long freeRegisters;
+		public long usedRegisters;
 		public int tempBase;			// Index of the first temp in the function.
 		public int oldestUnspilled;		// Index of the oldest unspilled temporary. 
 		public ref<RegisterState> r;
@@ -1093,6 +1103,47 @@ class X86_64Encoder extends Target {
 			}
 			break;
 			
+		case	UCOMISD:
+			emit(0x66);
+		case	UCOMISS:
+			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emit(0x0f);
+			emit(0x2e);
+			modRM(3, rmValues[src], rmValues[dest]);
+			return;
+			
+		case	CVTSI2SS:
+			emit(0xf3);
+			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emit(0x0f);
+			emit(0x2a);
+			modRM(3, rmValues[src], rmValues[dest]);
+			return;
+			
+		case	CVTSI2SD:
+			emit(0xf2);
+			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emit(0x0f);
+			emit(0x2a);
+			modRM(3, rmValues[src], rmValues[dest]);
+			return;
+			
+		case	MOVSS:
+			emit(0xf3);
+			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emit(0x0f);
+			emit(0x11);
+			modRM(3, rmValues[src], rmValues[dest]);
+			return;
+			
+		case	MOVSD:
+			emit(0xf2);
+			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emit(0x0f);
+			emit(0x11);
+			modRM(3, rmValues[src], rmValues[dest]);
+			return;
+			
 		case	MOVSXD:
 			emitRex(TypeFamily.SIGNED_64, null, src, dest);
 			emit(0x63);
@@ -1215,6 +1266,7 @@ class X86_64Encoder extends Target {
 			assert(false);
 		}
 	}
+	
 	void inst(X86 instruction, TypeFamily family, R reg) {
 		switch (instruction) {
 		case	CWD:
@@ -1265,6 +1317,22 @@ class X86_64Encoder extends Target {
 	 */
 	void inst(X86 instruction, ref<Node> left, R right, ref<CompileContext> compileContext) {
 		switch (instruction) {
+		case	MOVSS:
+			emit(0xf3);
+			emitRex(left.type.family(), left, right, R.NO_REG);
+			emit(0x0f);
+			emit(0x11);
+			modRM(left, rmValues[right], 0, 0);
+			break;
+			
+		case	MOVSD:
+			emit(0xf2);
+			emitRex(left.type.family(), left, right, R.NO_REG);
+			emit(0x0f);
+			emit(0x11);
+			modRM(left, rmValues[right], 0, 0);
+			break;
+			
 		case	CMP:
 		case	AND:
 		case	OR:
@@ -1376,6 +1444,31 @@ class X86_64Encoder extends Target {
 			modRM(right, rmValues[left], 0, 0);
 			break;
 			
+		case	MOVSS:
+			emit(0xf3);
+			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emit(0x0f);
+			emit(0x10);
+			modRM(right, rmValues[left], 0, 0);
+			break;
+			
+		case	MOVSD:
+			emit(0xf2);
+			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emit(0x0f);
+			emit(0x10);
+			modRM(right, rmValues[left], 0, 0);
+			break;
+			
+		case	UCOMISD:
+			emit(0x66);
+		case	UCOMISS:
+			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emit(0x0f);
+			emit(0x2e);
+			modRM(right, rmValues[left], 0, 0);
+			break;
+
 		case	MOV:
 		case	ADD:
 		case	SUB:
@@ -2040,6 +2133,9 @@ class X86_64Encoder extends Target {
 		}
 	}
 	
+	public void instDoubleConstant(X86 instruction, R dest, int constant) {
+	}
+	
 	public void instLoadType(R destination, ref<Type> type) {
 		emit(REX_W);
 		emit(0x8d);			// LEA
@@ -2330,6 +2426,7 @@ class X86_64Encoder extends Target {
 		case	ADDRESS:
 		case	ENUM:
 		case	CLASS:
+		case	FLOAT_64:
 			rex |= REX_W;
 		}
 		rex |= rexValues[regField];
@@ -2695,8 +2792,8 @@ enum CC {
 	JA,				// Jump above (unsigned >)
 	JS,				// Jump on sign
 	JNS,			// Jump on no sign
-	JPE,			// Jump parity even
-	JPO,			// Jump parity odd
+	JP,			// Jump parity even
+	JNP,			// Jump parity odd
 	JL,				// Jump less (sign <)
 	JGE,			// Jump greater or equal (signed >=)
 	JLE,			// Jump less or equal (signed <=)
@@ -2728,13 +2825,42 @@ ccLabels.append("jg");
 ccLabels.append("nop");
 ccLabels.append("jmp");
 
+CC parityTest(Operator compare, ref<Type> type) {
+	if (type.isFloat()) {
+		switch (compare) {
+		case	NOT_LESS_GREATER:		return CC.NOP;
+		case	LESS_GREATER:			return CC.NOP;
+		case	NOT_LESS:				return CC.JP;
+		case	NOT_GREATER:			return CC.NOP;
+		case	NOT_LESS_EQUAL:			return CC.JP;
+		case	NOT_GREATER_EQUAL:		return CC.NOP;
+		case	NOT_EQUAL:				return CC.JP;
+		case	EQUALITY:				return CC.JNP;
+		case	GREATER:				return CC.NOP;
+		case	GREATER_EQUAL:			return CC.NOP;
+		case	LESS:					return CC.JNP;
+		case	LESS_EQUAL:				return CC.JNP;
+
+		default:
+			printf("parityTest(%s,", operatorMap.name[compare]);
+			type.print();
+			printf(")\n");
+			assert(false);
+		}
+		return CC.ERROR;
+	} else
+		return CC.NOP;
+}
+
 CC continuation(Operator compare, ref<Type> type) {
 	switch (compare) {
 	case	NOT_LESS_GREATER:
 		switch (type.family()) {
 		case	UNSIGNED_32:
 		case	SIGNED_32: 
-		case	SIGNED_64:		return CC.JE; 
+		case	SIGNED_64: 
+		case	FLOAT_32:
+		case	FLOAT_64:		return CC.JE; 
 		default:
 			printf("continuation(%s,", operatorMap.name[compare]);
 			type.print();
@@ -2747,7 +2873,9 @@ CC continuation(Operator compare, ref<Type> type) {
 		switch (type.family()) {
 		case	UNSIGNED_32:
 		case	SIGNED_32: 
-		case	SIGNED_64:		return CC.JNE; 
+		case	SIGNED_64: 
+		case	FLOAT_32:
+		case	FLOAT_64:		return CC.JNE; 
 		default:
 			printf("continuation(%s,", operatorMap.name[compare]);
 			type.print();
@@ -2761,6 +2889,8 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	UNSIGNED_32:	return CC.JNB;
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JGE; 
+		case	FLOAT_32:
+		case	FLOAT_64:		return CC.JNB;
 		default:
 			printf("continuation(%s,", operatorMap.name[compare]);
 			type.print();
@@ -2774,6 +2904,8 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	UNSIGNED_32:	return CC.JNA;
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JLE; 
+		case	FLOAT_32:
+		case	FLOAT_64:		return CC.JNA;
 		default:
 			printf("continuation(%s,", operatorMap.name[compare]);
 			type.print();
@@ -2787,6 +2919,8 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	UNSIGNED_32:	return CC.JA;
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JG; 
+		case	FLOAT_32:
+		case	FLOAT_64:		return CC.JA;
 		default:
 			printf("continuation(%s,", operatorMap.name[compare]);
 			type.print();
@@ -2800,6 +2934,8 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	UNSIGNED_32:	return CC.JB;
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JL; 
+		case	FLOAT_32:
+		case	FLOAT_64:		return CC.JB;
 		default:
 			printf("continuation(%s,", operatorMap.name[compare]);
 			type.print();
@@ -2808,13 +2944,53 @@ CC continuation(Operator compare, ref<Type> type) {
 		}
 		break;
 
-	case	NOT_EQUAL:			return CC.JNE;
-	case	EQUALITY:			return CC.JE;
+	case	NOT_EQUAL:
+		switch (type.family()) {
+		case	UNSIGNED_32:
+		case	SIGNED_32: 
+		case	SIGNED_64: 
+		case	FLOAT_32:
+		case	FLOAT_64:
+		case	BOOLEAN:
+		case	FUNCTION:
+		case	ADDRESS:
+		case	ENUM:
+		case	CLASS:			return CC.JNE;
+		default:
+			printf("continuation(%s,", operatorMap.name[compare]);
+			type.print();
+			printf(")\n");
+			assert(false);
+		}
+		break;
+
+	case	EQUALITY:
+		switch (type.family()) {
+		case	UNSIGNED_32:
+		case	SIGNED_32: 
+		case	SIGNED_64: 
+		case	FLOAT_32:
+		case	FLOAT_64:
+		case	BOOLEAN:
+		case	FUNCTION:
+		case	ADDRESS:
+		case	ENUM:
+		case	CLASS:			return CC.JE; 
+		default:
+			printf("continuation(%s,", operatorMap.name[compare]);
+			type.print();
+			printf(")\n");
+			assert(false);
+		}
+		break;
+
 	case	GREATER:
 		switch (type.family()) {
 		case	UNSIGNED_32:	return CC.JA;
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JG; 
+		case	FLOAT_32:
+		case	FLOAT_64:		return CC.JA;
 		default:
 			printf("continuation(%s,", operatorMap.name[compare]);
 			type.print();
@@ -2828,6 +3004,8 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	UNSIGNED_32:	return CC.JNB;
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JGE; 
+		case	FLOAT_32:
+		case	FLOAT_64:		return CC.JNB;
 		default:
 			printf("continuation(%s,", operatorMap.name[compare]);
 			type.print();
@@ -2841,6 +3019,8 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	UNSIGNED_32:	return CC.JB;
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JL; 
+		case	FLOAT_32:
+		case	FLOAT_64:		return CC.JB;
 		default:
 			printf("continuation(%s,", operatorMap.name[compare]);
 			type.print();
@@ -2854,6 +3034,8 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	UNSIGNED_32:	return CC.JNA;
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JLE; 
+		case	FLOAT_32:
+		case	FLOAT_64:		return CC.JNA;		// also need JNP
 		default:
 			printf("continuation(%s,", operatorMap.name[compare]);
 			type.print();
@@ -2918,10 +3100,10 @@ minCCSize[CC.JS] = 2;
 maxCCSize[CC.JS] = 6;
 minCCSize[CC.JNS] = 2;
 maxCCSize[CC.JNS] = 6;
-minCCSize[CC.JPE] = 2;
-maxCCSize[CC.JPE] = 6;
-minCCSize[CC.JPO] = 2;
-maxCCSize[CC.JPO] = 6;
+minCCSize[CC.JP] = 2;
+maxCCSize[CC.JP] = 6;
+minCCSize[CC.JNP] = 2;
+maxCCSize[CC.JNP] = 6;
 minCCSize[CC.JL] = 2;
 maxCCSize[CC.JL] = 6;
 minCCSize[CC.JGE] = 2;
@@ -2955,14 +3137,30 @@ rmValues[R.R13] = 0x5;
 rmValues[R.R14] = 0x6;
 rmValues[R.R15] = 0x7;
 rmValues[R.AH] = 0x04;
+rmValues[R.XMM0] = 0x00;
+rmValues[R.XMM1] = 0x01;
+rmValues[R.XMM2] = 0x02;
+rmValues[R.XMM3] = 0x03;
+rmValues[R.XMM4] = 0x04;
+rmValues[R.XMM5] = 0x05;
+rmValues[R.XMM6] = 0x06;
+rmValues[R.XMM7] = 0x07;
+rmValues[R.XMM8] = 0x00;
+rmValues[R.XMM9] = 0x01;
+rmValues[R.XMM10] = 0x02;
+rmValues[R.XMM11] = 0x03;
+rmValues[R.XMM12] = 0x04;
+rmValues[R.XMM13] = 0x05;
+rmValues[R.XMM14] = 0x06;
+rmValues[R.XMM15] = 0x07;
 
 private byte[R] rexValues;
 private byte[R] rexbValues;
 private byte[R] rexxValues;
 
-rexValues.resize(R.XMM0);
-rexbValues.resize(R.XMM0);
-rexxValues.resize(R.XMM0);
+rexValues.resize(R.MAX_REG);
+rexbValues.resize(R.MAX_REG);
+rexxValues.resize(R.MAX_REG);
 
 rexValues[R.R8] = REX_R;
 rexValues[R.R9] = REX_R;
@@ -2972,6 +3170,14 @@ rexValues[R.R12] = REX_R;
 rexValues[R.R13] = REX_R;
 rexValues[R.R14] = REX_R;
 rexValues[R.R15] = REX_R;
+rexValues[R.XMM8] = REX_R;
+rexValues[R.XMM9] = REX_R;
+rexValues[R.XMM10] = REX_R;
+rexValues[R.XMM11] = REX_R;
+rexValues[R.XMM12] = REX_R;
+rexValues[R.XMM13] = REX_R;
+rexValues[R.XMM14] = REX_R;
+rexValues[R.XMM15] = REX_R;
 
 rexbValues[R.R8] = REX_B;
 rexbValues[R.R9] = REX_B;
@@ -3038,9 +3244,13 @@ group3opcodes[X86.IDIV] = 7;
 string[X86] opcodeNames;
 
 opcodeNames.append("ADD");
+opcodeNames.append("ADDSD");
+opcodeNames.append("ADDSS");
 opcodeNames.append("AND");
 opcodeNames.append("CALL");
 opcodeNames.append("CMP");
+opcodeNames.append("CVTSI2SD");
+opcodeNames.append("CVTSI2SS");
 opcodeNames.append("CWD");
 opcodeNames.append("DIV");
 opcodeNames.append("ENTER");
@@ -3049,6 +3259,8 @@ opcodeNames.append("IMUL");
 opcodeNames.append("LEA");
 opcodeNames.append("LEAVE");
 opcodeNames.append("MOV");
+opcodeNames.append("MOVSD");
+opcodeNames.append("MOVSS");
 opcodeNames.append("MOVSXD");
 opcodeNames.append("MOVZX");
 opcodeNames.append("MUL");
@@ -3063,7 +3275,11 @@ opcodeNames.append("SAR");
 opcodeNames.append("SBB");
 opcodeNames.append("SHR");
 opcodeNames.append("SUB");
+opcodeNames.append("SUBSD");
+opcodeNames.append("SUBSS");
 opcodeNames.append("TEST");
-opcodeNames.append("xchg");
+opcodeNames.append("UCOMISD");
+opcodeNames.append("UCOMISS");
+opcodeNames.append("xCHG");
 opcodeNames.append("XOR");
 

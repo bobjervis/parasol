@@ -443,6 +443,11 @@ class Disassembler {
 		byte next = _physical[_offset];
 		_offset++;
 		switch (next) {
+		case	0x7e:
+			instructionOpcode("movq");
+			disassembleEfGf();
+			break;
+			
 		case	0x80:
 		case	0x81:
 		case	0x82:
@@ -666,6 +671,21 @@ class Disassembler {
 		_offset++;
 		effectiveByte(mod, rm, 0);
 		printf(",%s", byteRegs[regOpcode]);
+	}
+	/*
+	 * Effective Address (byte size), General register (byte)
+	 */
+	void disassembleEfGf() {
+		byte modRM = _physical[_offset];
+		int mod = modRM >> 6;
+		int regOpcode = (modRM >> 3) & 0x7;
+		int rm = modRM & 7;
+		_offset++;
+		effectiveWord(mod, rm, 0);
+		if ((_rex & REX_W) != 0)
+			printf(",%s", doubleRegs[regOpcode]);
+		else
+			printf(",%s", floatRegs[regOpcode]);
 	}
 	/*
 	 * General register (byte), Effective Address (byte size) 
@@ -1345,6 +1365,26 @@ longRegs.append("r12");
 longRegs.append("r13");
 longRegs.append("r14");
 longRegs.append("r15");
+
+private string[] floatRegs;
+floatRegs.append("mm0");
+floatRegs.append("mm1");
+floatRegs.append("mm2");
+floatRegs.append("mm3");
+floatRegs.append("mm4");
+floatRegs.append("mm5");
+floatRegs.append("mm6");
+floatRegs.append("mm7");
+
+private string[] doubleRegs;
+doubleRegs.append("xmm0");
+doubleRegs.append("xmm1");
+doubleRegs.append("xmm2");
+doubleRegs.append("xmm3");
+doubleRegs.append("xmm4");
+doubleRegs.append("xmm5");
+doubleRegs.append("xmm6");
+doubleRegs.append("xmm7");
 
 private string[] fixupTypes;
 fixupTypes.append("<error>");

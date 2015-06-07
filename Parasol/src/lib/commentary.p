@@ -73,6 +73,7 @@ enum MessageId {
 	INVALID_INDIRECT,
 	INVALID_SWITCH,
 	NOT_INTEGER,
+	NOT_NUMERIC,
 	NOT_ADDRESSABLE,
 	BAD_ELLIPSIS,
 	NOT_SIMPLE_VARIABLE,
@@ -98,7 +99,6 @@ enum MessageId {
 	UNRESOLVED_ABSTRACT,
 	
 	UNFINISHED_CHECK_STORAGE,
-	UNFINISHED_CONVERT_SMALL_INTS,
 	UNFINISHED_MAP_TO_VALUES,
 	UNFINISHED_INSTANTIATE_TEMPLATE,
 	UNFINISHED_NAMESPACE,
@@ -227,6 +227,7 @@ class MessageMap {
 		name[MessageId.INVALID_BREAK] = "INVALID_BREAK";
 		name[MessageId.INVALID_CONTINUE] = "INVALID_CONTINUE";
 		name[MessageId.NOT_INTEGER] = "NOT_INTEGER";
+		name[MessageId.NOT_NUMERIC] = "NOT_NUMERIC";
 		name[MessageId.DUPLICATE_DESTRUCTOR] = "DUPLICATE_DESTRUCTOR";
 		name[MessageId.NOT_SIMPLE_VARIABLE] = "NOT_SIMPLE_VARIABLE";
 		name[MessageId.NO_PARAMS_IN_DESTRUCTOR] = "NO_PARAMS_IN_DESTRUCTOR";
@@ -258,7 +259,6 @@ class MessageMap {
 		name[MessageId.UNFINISHED_BUILD_SCOPE] = "UNFINISHED_BUILD_SCOPE";
 		name[MessageId.UNFINISHED_BUILD_UNDER_SCOPE] = "UNFINISHED_BUILD_UNDER_SCOPE";
 		name[MessageId.UNFINISHED_BIND_DECLARATORS] = "UNFINISHED_BIND_DECLARATORS";
-		name[MessageId.UNFINISHED_CONVERT_SMALL_INTS] = "UNFINISHED_CONVERT_SMALL_INTS";
 		name[MessageId.UNFINISHED_MAP_TO_VALUES] = "UNFINISHED_MAP_TO_VALUES";
 		name[MessageId.UNFINISHED_INSTANTIATE_TEMPLATE] = "UNFINISHED_INSTANTIATE_TEMPLATE";
 		name[MessageId.UNFINISHED_NAMESPACE] = "UNFINISHED_NAMESPACE";
@@ -321,6 +321,7 @@ class MessageMap {
 		_message[MessageId.NOT_ENUM_INSTANCE] = "Case expression not an enum instance";
 		_message[MessageId.NOT_EXPECTING_ELSE] = "Not expecting an 'else'";
 		_message[MessageId.NOT_INTEGER] = "An operand does not have integral type";
+		_message[MessageId.NOT_NUMERIC] = "An operand does not have numeric type";
 		_message[MessageId.NOT_PARAMETERIZED_TYPE] = "Not a parameterized type found resolving overloads for '%1'";
 		_message[MessageId.NOT_SIMPLE_VARIABLE] = "'%1' does not name a simple variable";
 		_message[MessageId.ONLY_STATIC_VARIABLE] = "Must reference a static variable";
@@ -348,7 +349,6 @@ class MessageMap {
 		_message[MessageId.UNFINISHED_CHECK_STORAGE] = "Unfinished: checkStorage %1";
 		_message[MessageId.UNFINISHED_CONSTRUCTION] = "Unfinished: constructor initializer";
 		_message[MessageId.UNFINISHED_CONTROL_FLOW] = "Unfinished: control flow %1/%2";
-		_message[MessageId.UNFINISHED_CONVERT_SMALL_INTS] = "Unfinished: convertSmallIntegralTypes()";
 		_message[MessageId.UNFINISHED_FIXED_ARRAY] = "Unfinished: fixed length array";
 		_message[MessageId.UNFINISHED_GENERATE] = "Unfinished: generate %1/%2: %3";
 		_message[MessageId.UNFINISHED_INITIALIZER] = "Unfinished: static initializer";

@@ -68,6 +68,8 @@ run(filename: string_methods.p)
 run(filename: string_compares.p)
 run(filename: ternary.p)
 run(filename: address_ops.p)
+run(filename: double_ops.p)
+run(filename: float_ops.p)
 run(filename: long_ops.p)
 run(filename: boolean_ops.p)
 run(filename: byte_ops.p)
@@ -247,12 +249,116 @@ compile(expect: fail, message: INVALID_UNARY_PLUS) { "boolean a; a = +a;" }
 compile(expect: fail, message: INVALID_BIT_COMPLEMENT) { "boolean a; a = ~a;" }
 compile(expect: fail, message: CANNOT_CONVERT) { "boolean a; a = &a;" }
 compile(expect: fail, message: INVALID_INDIRECT) { "boolean a; a = *a;" }
-compile(expect: fail, message: NOT_INTEGER) { "boolean a; a = --a;" }
-compile(expect: fail, message: NOT_INTEGER) { "boolean a; a = ++a;" }
-compile(expect: fail, message: NOT_INTEGER) { "boolean a; a = a--;" }
-compile(expect: fail, message: NOT_INTEGER) { "boolean a; a = a++;" }
+compile(expect: fail, message: NOT_NUMERIC) { "boolean a; a = --a;" }
+compile(expect: fail, message: NOT_NUMERIC) { "boolean a; a = ++a;" }
+compile(expect: fail, message: NOT_NUMERIC) { "boolean a; a = a--;" }
+compile(expect: fail, message: NOT_NUMERIC) { "boolean a; a = a++;" }
 
 compile(expect: fail) { "ref<int> x; if (x == 0) x = new int;" }
+
+// The matrix of allowed operators for double operands:
+
+compile(expect: fail, message: INVALID_AND) { "double b; double a = b & 37;" }
+compile(expect: fail, message: INVALID_OR) { "double b; double a = b | 37;" }
+compile(expect: fail, message: INVALID_XOR) { "double b; double a = b ^ 37;" }
+compile(expect: fail, message: INVALID_AND) { "double b; double a; a &= 37;" }
+compile(expect: fail, message: INVALID_OR) { "double b; double a; a |= 37;" }
+compile(expect: fail, message: INVALID_XOR) { "double b; double a; a ^= 37;" }
+compile() { "double b; double a = b * 37;" }
+compile() { "double b; double a = b / 37;" }
+compile(expect: fail, message: INVALID_REMAINDER) { "double b; double a = b % 37;" }
+compile() { "double b; double a = b + 37;" }
+compile() { "double b; double a = b - 37;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "double b; double a = b << 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "double b; double a = b >> 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "double b; double a = b >>> 5;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "double b; double a = 5 << b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "double b; double a = 5 >> b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "double b; double a = 5 >>> b;" }
+compile() { "double b; double a; a *= 37;" }
+compile() { "double b; double a; a /= 37;" }
+compile(expect: fail, message: INVALID_REMAINDER) { "double b; double a; a %= 37;" }
+compile() { "double b; double a; a += 37;" }
+compile() { "double b; double a; a -= 37;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "double b; double a; a <<= 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "double b; double a; a >>= 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "double b; double a; a >>>= 5;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "double b; int a; a <<= b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "double b; int a; a >>= b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "double b; int a; a >>>= b;" }
+compile() { "double b; boolean a = b == 37;" }
+compile() { "double b; boolean a = b != 37;" }
+compile() { "double b; boolean a = b < 37;" }
+compile() { "double b; boolean a = b > 37;" }
+compile() { "double b; boolean a = b <= 37;" }
+compile() { "double b; boolean a = b >= 37;" }
+compile() { "double b; boolean a = b <> 37;" }
+compile() { "double b; boolean a = b !< 37;" }
+compile() { "double b; boolean a = b !> 37;" }
+compile() { "double b; boolean a = b !<= 37;" }
+compile() { "double b; boolean a = b !>= 37;" }
+compile() { "double b; boolean a = b !<> 37;" }
+compile() { "double a; a = -a;" }
+compile() { "double a; a = +a;" }
+compile(expect: fail, message: INVALID_BIT_COMPLEMENT) { "double a; a = ~a;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "double a; a = &a;" }
+compile(expect: fail, message: INVALID_INDIRECT) { "double a; a = *a;" }
+compile() { "double a; a = --a;" }
+compile() { "double a; a = ++a;" }
+compile() { "double a; a = a--;" }
+compile() { "double a; a = a++;" }
+
+// The matrix of allowed operators for float operands:
+
+compile(expect: fail, message: INVALID_AND) { "float b; float a = b & 37;" }
+compile(expect: fail, message: INVALID_OR) { "float b; float a = b | 37;" }
+compile(expect: fail, message: INVALID_XOR) { "float b; float a = b ^ 37;" }
+compile(expect: fail, message: INVALID_AND) { "float b; float a; a &= 37;" }
+compile(expect: fail, message: INVALID_OR) { "float b; float a; a |= 37;" }
+compile(expect: fail, message: INVALID_XOR) { "float b; float a; a ^= 37;" }
+compile() { "float b; float a = b * 37;" }
+compile() { "float b; float a = b / 37;" }
+compile(expect: fail, message: INVALID_REMAINDER) { "float b; float a = b % 37;" }
+compile() { "float b; float a = b + 37;" }
+compile() { "float b; float a = b - 37;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "float b; float a = b << 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "float b; float a = b >> 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "float b; float a = b >>> 5;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "float b; float a = 5 << b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "float b; float a = 5 >> b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "float b; float a = 5 >>> b;" }
+compile() { "float b; float a; a *= 37;" }
+compile() { "float b; float a; a /= 37;" }
+compile(expect: fail, message: INVALID_REMAINDER) { "float b; float a; a %= 37;" }
+compile() { "float b; float a; a += 37;" }
+compile() { "float b; float a; a -= 37;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "float b; float a; a <<= 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "float b; float a; a >>= 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "float b; float a; a >>>= 5;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "float b; int a; a <<= b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "float b; int a; a >>= b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "float b; int a; a >>>= b;" }
+compile() { "float b; boolean a = b == 37;" }
+compile() { "float b; boolean a = b != 37;" }
+compile() { "float b; boolean a = b < 37;" }
+compile() { "float b; boolean a = b > 37;" }
+compile() { "float b; boolean a = b <= 37;" }
+compile() { "float b; boolean a = b >= 37;" }
+compile() { "float b; boolean a = b <> 37;" }
+compile() { "float b; boolean a = b !< 37;" }
+compile() { "float b; boolean a = b !> 37;" }
+compile() { "float b; boolean a = b !<= 37;" }
+compile() { "float b; boolean a = b !>= 37;" }
+compile() { "float b; boolean a = b !<> 37;" }
+compile() { "float a; a = -a;" }
+compile() { "float a; a = +a;" }
+compile(expect: fail, message: INVALID_BIT_COMPLEMENT) { "float a; a = ~a;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "float a; a = &a;" }
+compile(expect: fail, message: INVALID_INDIRECT) { "float a; a = *a;" }
+compile() { "float a; a = --a;" }
+compile() { "float a; a = ++a;" }
+compile() { "float a; a = a--;" }
+compile() { "float a; a = a++;" }
 
 // The matrix of allowed operators for unsigned operands:
 
@@ -474,6 +580,9 @@ compile() { "byte a; a = ++a;" }
 compile() { "byte a; a = a--;" }
 compile() { "byte a; a = a++;" }
 
+compile(expect: fail, message: NOT_BOOLEAN) { "float a; a = !a;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "float a; a = &a;" }
+compile(expect: fail, message: INVALID_INDIRECT) { "float a; a = *a;" }
 compile(expect: fail, message: NOT_BOOLEAN) { "long a; a = !a;" }
 compile(expect: fail, message: CANNOT_CONVERT) { "long a; a = &a;" }
 compile(expect: fail, message: INVALID_INDIRECT) { "long a; a = *a;" }

@@ -742,18 +742,15 @@ public class X86_64 extends X86_64AssignTemps {
 		case	NOT_GREATER_EQUAL:
 		case	NOT_LESS_GREATER:
 			b = ref<Binary>(node);
-			generateOperands(b, compileContext);
 			ref<CodeSegment> trueSegment = new CodeSegment;
 			ref<CodeSegment> falseSegment = new CodeSegment;
 			ref<CodeSegment> join = new CodeSegment;
-
-			inst(X86.CMP, b.left(), b.right(), compileContext);
-			closeCodeSegment(continuation(b.op(), b.left().type), trueSegment);
-			falseSegment.start(this);
-			inst(X86.MOV, TypeFamily.BOOLEAN, R(int(b.register)), 0);
-			closeCodeSegment(CC.JMP, join);
+			generateCompare(b, trueSegment, falseSegment, compileContext);
 			trueSegment.start(this);
 			inst(X86.MOV, TypeFamily.BOOLEAN, R(int(b.register)), 1);
+			closeCodeSegment(CC.JMP, join);
+			falseSegment.start(this);
+			inst(X86.MOV, TypeFamily.BOOLEAN, R(int(b.register)), 0);
 			join.start(this);
 			break;
 			
@@ -1042,6 +1039,16 @@ public class X86_64 extends X86_64AssignTemps {
 						inst(X86.MOV, R(int(b.register)), b.right(), compileContext);
 						inst(X86.MOV, b.left(), R(int(b.register)), compileContext);
 					}
+					break;
+					
+				case	FLOAT_32:
+					generateOperands(b, compileContext);
+					inst(X86.MOVSS, b.left(), b.right(), compileContext);
+					break;
+					
+				case	FLOAT_64:
+					generateOperands(b, compileContext);
+					inst(X86.MOVSD, b.left(), b.right(), compileContext);
 					break;
 					
 				case	CLASS:
@@ -1580,6 +1587,18 @@ public class X86_64 extends X86_64AssignTemps {
 		case	INCREMENT_BEFORE:
 			expression = ref<Unary>(node);
 			generate(expression.operand(), compileContext);
+			if (expression.type.isFloat()) {
+				if (expression.type.family() == TypeFamily.FLOAT_64) {
+					inst(X86.MOVSD, expression, expression.operand(), compileContext);
+					instDoubleConstant(X86.ADDSD, R(expression.register), 1);
+					inst(X86.MOVSD, expression.operand(), expression, compileContext);
+				} else {
+					inst(X86.MOVSS, expression, expression.operand(), compileContext);
+					instDoubleConstant(X86.ADDSS, R(expression.register), 1);
+					inst(X86.MOVSS, expression.operand(), expression, compileContext);
+				}
+				break;
+			}
 			if (expression.operand().type.isPointer(compileContext)) {
 				ref<Type> t = expression.operand().type.indirectType(compileContext);
 				size = t.size();
@@ -1593,6 +1612,18 @@ public class X86_64 extends X86_64AssignTemps {
 		case	DECREMENT_BEFORE:
 			expression = ref<Unary>(node);
 			generate(expression.operand(), compileContext);
+			if (expression.type.isFloat()) {
+				if (expression.type.family() == TypeFamily.FLOAT_64) {
+					inst(X86.MOVSD, expression, expression.operand(), compileContext);
+					instDoubleConstant(X86.SUBSD, R(expression.register), 1);
+					inst(X86.MOVSD, expression.operand(), expression, compileContext);
+				} else {
+					inst(X86.MOVSS, expression, expression.operand(), compileContext);
+					instDoubleConstant(X86.SUBSS, R(expression.register), 1);
+					inst(X86.MOVSS, expression.operand(), expression, compileContext);
+				}
+				break;
+			}
 			if (expression.operand().type.isPointer(compileContext)) {
 				ref<Type> t = expression.operand().type.indirectType(compileContext);
 				size = t.size();
@@ -1606,6 +1637,20 @@ public class X86_64 extends X86_64AssignTemps {
 		case	INCREMENT_AFTER:
 			expression = ref<Unary>(node);
 			generate(expression.operand(), compileContext);
+			if (expression.type.isFloat()) {
+				if (expression.type.family() == TypeFamily.FLOAT_64) {
+					inst(X86.MOVSD, expression, expression.operand(), compileContext);
+					instDoubleConstant(X86.ADDSD, R(expression.register), 1);
+					inst(X86.MOVSD, expression.operand(), expression, compileContext);
+					instDoubleConstant(X86.SUBSD, R(expression.register), 1);
+				} else {
+					inst(X86.MOVSS, expression, expression.operand(), compileContext);
+					instDoubleConstant(X86.ADDSS, R(expression.register), 1);
+					inst(X86.MOVSS, expression.operand(), expression, compileContext);
+					instDoubleConstant(X86.SUBSS, R(expression.register), 1);
+				}
+				break;
+			}
 			inst(X86.MOV, expression, expression.operand(), compileContext);
 			if (expression.operand().type.isPointer(compileContext)) {
 				ref<Type> t = expression.operand().type.indirectType(compileContext);
@@ -1618,6 +1663,20 @@ public class X86_64 extends X86_64AssignTemps {
 		case	DECREMENT_AFTER:
 			expression = ref<Unary>(node);
 			generate(expression.operand(), compileContext);
+			if (expression.type.isFloat()) {
+				if (expression.type.family() == TypeFamily.FLOAT_64) {
+					inst(X86.MOVSD, expression, expression.operand(), compileContext);
+					instDoubleConstant(X86.SUBSD, R(expression.register), 1);
+					inst(X86.MOVSD, expression.operand(), expression, compileContext);
+					instDoubleConstant(X86.ADDSD, R(expression.register), 1);
+				} else {
+					inst(X86.MOVSS, expression, expression.operand(), compileContext);
+					instDoubleConstant(X86.SUBSS, R(expression.register), 1);
+					inst(X86.MOVSS, expression.operand(), expression, compileContext);
+					instDoubleConstant(X86.ADDSS, R(expression.register), 1);
+				}
+				break;
+			}
 			inst(X86.MOV, expression, expression.operand(), compileContext);
 			if (expression.operand().type.isPointer(compileContext)) {
 				ref<Type> t = expression.operand().type.indirectType(compileContext);
@@ -1821,10 +1880,22 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			dest = R(int(node.register));
 			node.register = 0;
-			if (node.type.family() == TypeFamily.TYPEDEF)
+			switch (node.type.family()) {
+			case	TYPEDEF:
 				inst(X86.LEA, dest, node, compileContext);
-			else
+				break;
+
+			case	FLOAT_32:
+				inst(X86.MOVSS, dest, node, compileContext);
+				break;
+
+			case	FLOAT_64:
+				inst(X86.MOVSD, dest, node, compileContext);
+				break;
+				
+			default:
 				inst(X86.MOV, dest, node, compileContext);
+			}
 			node.register = byte(int(dest));
 			break;
 
@@ -2027,9 +2098,7 @@ public class X86_64 extends X86_64AssignTemps {
 		case	NOT_GREATER_EQUAL:
 		case	NOT_LESS_GREATER:
 			ref<Binary> b = ref<Binary>(node);
-			generateOperands(b, compileContext);
-			inst(X86.CMP, b.left(), b.right(), compileContext);
-			closeCodeSegment(continuation(invert(b.op()), b.left().type), falseSegment);
+			generateCompare(b, trueSegment, falseSegment, compileContext);
 			break;
 			
 		case	LOGICAL_AND:
@@ -2076,6 +2145,55 @@ public class X86_64 extends X86_64AssignTemps {
 		ref<CodeSegment> insurance = new CodeSegment;
 		insurance.start(this);
 		closeCodeSegment(CC.JMP, trueSegment);
+	}
+
+	private void generateCompare(ref<Binary> b, ref<CodeSegment> trueSegment, ref<CodeSegment> falseSegment, ref<CompileContext> compileContext) {
+		generateOperands(b, compileContext);
+		switch (b.left().type.family()) {
+		case	UNSIGNED_32:
+		case	SIGNED_32:
+		case	SIGNED_64:
+		case	CLASS:
+		case	ENUM:
+		case	TYPEDEF:
+		case	ADDRESS:
+		case	BOOLEAN:
+		case	FUNCTION:
+			inst(X86.CMP, b.left(), b.right(), compileContext);
+			break;
+			
+		case	FLOAT_32:
+			inst(X86.UCOMISS, b.left(), b.right(), compileContext);
+			break;
+			
+		case	FLOAT_64:
+			inst(X86.UCOMISD, b.left(), b.right(), compileContext);
+			break;
+			
+		default:
+			b.print(0);
+			assert(false);
+		}
+		CC parityJump = parityTest(b.op(), b.left().type);
+		switch (parityJump) {
+		case	NOP:
+			closeCodeSegment(continuation(invert(b.op()), b.left().type), falseSegment);
+			break;
+			
+		case	JP:
+			closeCodeSegment(continuation(b.op(), b.left().type), trueSegment);
+			closeCodeSegment(CC.JNP, falseSegment);
+			break;
+			
+		case	JNP:
+			closeCodeSegment(continuation(invert(b.op()), b.left().type), falseSegment);
+			closeCodeSegment(CC.JP, falseSegment);
+			break;
+			
+		default:
+			b.print(0);
+			assert(false);
+		}
 	}
 	
 	private void generateInitializers(ref<Node> node, ref<CompileContext> compileContext) {
@@ -2217,6 +2335,16 @@ public class X86_64 extends X86_64AssignTemps {
 			case	FUNCTION:
 				generate(seq.right(), compileContext);
 				inst(X86.MOV, seq.left(), seq.right(), compileContext);
+				break;
+				
+			case	FLOAT_32:
+				generate(seq.right(), compileContext);
+				inst(X86.MOVSS, seq.left(), seq.right(), compileContext);
+				break;
+				
+			case	FLOAT_64:
+				generate(seq.right(), compileContext);
+				inst(X86.MOVSD, seq.left(), seq.right(), compileContext);
 				break;
 				
 			case	CLASS:
@@ -2613,6 +2741,14 @@ public class X86_64 extends X86_64AssignTemps {
 			case	SIGNED_64:
 			case	ADDRESS:
 				inst(X86.MOVSXD, result, n, compileContext);
+				return;
+				
+			case	FLOAT_32:
+				inst(X86.CVTSI2SS, result, n, compileContext);
+				return;
+				
+			case	FLOAT_64:
+				inst(X86.CVTSI2SD, result, n, compileContext);
 				return;
 				
 			case	ENUM:

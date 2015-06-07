@@ -151,9 +151,14 @@ class X86_64AddressModes extends X86_64Encoder {
 		case	NOT_LESS_GREATER:
 		case	NOT_LESS_GREATER_EQUAL:
 			b = ref<Binary>(node);
-			modeComplexity = tryMakeMode(b.left(), MC_ADDRESS|MC_REG, nClass, compileContext);
-			if (b.right().op() == Operator.INTEGER)
-				modeComplexity = MC_CONST;
+			if (b.left().type.isFloat()) {
+				markAddressModes(b.left(), compileContext);
+				modeComplexity = MC_ADDRESS|MC_REG;
+			} else {
+				modeComplexity = tryMakeMode(b.left(), MC_ADDRESS|MC_REG, nClass, compileContext);
+				if (b.right().op() == Operator.INTEGER)
+					modeComplexity = MC_CONST;
+			}
 			tryMakeMode(b.right(), modeComplexity, nClass, compileContext);
 			break;
 
@@ -337,6 +342,8 @@ class X86_64AddressModes extends X86_64Encoder {
 				tryMakeMode(operand, MC_FULL, 0, compileContext);
 				return;
 				
+			case	FLOAT_32:
+			case	FLOAT_64:
 			case	SIGNED_64:
 			case	ADDRESS:
 			case	ENUM:
