@@ -449,8 +449,10 @@ public class X86_64 extends X86_64AssignTemps {
 			reserveAutoMemory(false, compileContext);
 			closeCodeSegment(CC.NOP, null);
 			if (node.fallsThrough() == Test.PASS_TEST) {
-				if (!generateReturn(scope, compileContext))
-					unfinished(node, "generateReturn failed - default end-of-function", compileContext);
+				if (!generateReturn(scope, compileContext)) {
+					node.print(0);
+					assert(false);
+				}
 			}
 		} else {
 			inst(X86.PUSH, TypeFamily.SIGNED_64, R.RBX);
@@ -729,18 +731,20 @@ public class X86_64 extends X86_64AssignTemps {
 			join.start(this);
 			break;
 			
-		case	NOT_EQUAL:
 		case	EQUALITY:
 		case	LESS:
 		case	GREATER:
 		case	LESS_EQUAL:
 		case	GREATER_EQUAL:
 		case	LESS_GREATER:
+		case	LESS_GREATER_EQUAL:
+		case	NOT_EQUAL:
 		case	NOT_LESS:
 		case	NOT_GREATER:
 		case	NOT_LESS_EQUAL:
 		case	NOT_GREATER_EQUAL:
 		case	NOT_LESS_GREATER:
+		case	NOT_LESS_GREATER_EQUAL:
 			b = ref<Binary>(node);
 			ref<CodeSegment> trueSegment = new CodeSegment;
 			ref<CodeSegment> falseSegment = new CodeSegment;
@@ -1099,9 +1103,8 @@ public class X86_64 extends X86_64AssignTemps {
 					break;
 					
 				default:
-					b.type.print();
-					printf("\n");
-					unfinished(node, "and", compileContext);
+					b.print(0);
+					assert(false);
 				}
 			} else {
 				switch (b.type.family()) {
@@ -1117,9 +1120,8 @@ public class X86_64 extends X86_64AssignTemps {
 					break;
 					
 				default:
-					b.type.print();
-					printf("\n");
-					unfinished(node, "and", compileContext);
+					b.print(0);
+					assert(false);
 				}
 			}
 			break;
@@ -1158,9 +1160,8 @@ public class X86_64 extends X86_64AssignTemps {
 					break;
 					
 				default:
-					b.type.print();
-					printf("\n");
-					unfinished(node, "or", compileContext);
+					b.print(0);
+					assert(false);
 				}
 			}
 			break;
@@ -1181,9 +1182,8 @@ public class X86_64 extends X86_64AssignTemps {
 					break;
 					
 				default:
-					b.type.print();
-					printf("\n");
-					unfinished(node, "xor", compileContext);
+					b.print(0);
+					assert(false);
 				}
 			} else {
 				switch (b.type.family()) {
@@ -1199,9 +1199,8 @@ public class X86_64 extends X86_64AssignTemps {
 					break;
 					
 				default:
-					b.type.print();
-					printf("\n");
-					unfinished(node, "xor", compileContext);
+					b.print(0);
+					assert(false);
 				}
 			}
 			break;
@@ -1232,10 +1231,17 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.MOV, b, R.RAX, compileContext);
 				break;
 				
+			case	FLOAT_32:
+				inst(X86.DIVSS, R(int(b.left().register)), b.right(), compileContext);
+				break;
+				
+			case	FLOAT_64:
+				inst(X86.DIVSD, R(int(b.left().register)), b.right(), compileContext);
+				break;
+				
 			default:
-				b.type.print();
-				printf("\n");
-				unfinished(node, "divide", compileContext);
+				b.print(0);
+				assert(false);
 			}
 			break;
 			
@@ -1265,10 +1271,21 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.MOV, b.left(), R.RAX, compileContext);
 				break;
 				
+			case	FLOAT_32:
+				// TODO: get the right answer: get a second register, then mess around
+				inst(X86.DIVSS, b.right(), b.left(), compileContext);
+				inst(X86.MOVSS, b.left(), b.right(), compileContext);
+				break;
+				
+			case	FLOAT_64:
+				// TODO: get the right answer.
+				inst(X86.DIVSD, b.right(), b.left(), compileContext);
+				inst(X86.MOVSD, b.left(), b.right(), compileContext);
+				break;
+				
 			default:
-				b.type.print();
-				printf("\n");
-				unfinished(node, "divide assignment", compileContext);
+				b.print(0);
+				assert(false);
 			}
 			break;
 			
@@ -1358,6 +1375,14 @@ public class X86_64 extends X86_64AssignTemps {
 					inst(X86.MOV, b, R.RAX, compileContext);
 				break;
 				
+			case	FLOAT_32:
+				inst(X86.MULSS, b.left(), b.right(), compileContext);
+				break;
+				
+			case	FLOAT_64:
+				inst(X86.MULSD, b.left(), b.right(), compileContext);
+				break;
+				
 			default:
 				b.print(0);
 				assert(false);
@@ -1378,10 +1403,19 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.MOV, b.left(), R.RAX, compileContext);
 				break;
 				
+			case	FLOAT_32:
+				inst(X86.MULSS, b.right(), b.left(), compileContext);
+				inst(X86.MOVSS, b.left(), b.right(), compileContext);
+				break;
+				
+			case	FLOAT_64:
+				inst(X86.MULSD, b.right(), b.left(), compileContext);
+				inst(X86.MOVSD, b.left(), b.right(), compileContext);
+				break;
+				
 			default:
-				b.type.print();
-				printf("\n");
-				unfinished(node, "multiply assignment", compileContext);
+				b.print(0);
+				assert(false);
 			}
 			break;
 			
@@ -1417,15 +1451,36 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.SUB, b.left(), b.right(), compileContext);
 				break;
 
+			case	FLOAT_32:
+				generateOperands(b, compileContext);
+				if (b.op() == Operator.SUBTRACT)
+					inst(X86.SUBSS, b.left(), b.right(), compileContext);
+				else {
+					inst(X86.XORSS, R(b.right().register), FloatingConstants.DOUBLE_SIGN_MASK);
+					inst(X86.ADDSS, b.right(), b.left(), compileContext);
+					inst(X86.MOVSS, b.left(), b.right(), compileContext);
+				}
+				break;
+				
+			case	FLOAT_64:
+				generateOperands(b, compileContext);
+				if (b.op() == Operator.SUBTRACT)
+					inst(X86.SUBSD, b.left(), b.right(), compileContext);
+				else {
+					inst(X86.XORSD, R(b.right().register), FloatingConstants.DOUBLE_SIGN_MASK);
+					inst(X86.ADDSD, b.right(), b.left(), compileContext);
+					inst(X86.MOVSD, b.left(), b.right(), compileContext);
+				}
+				break;
+				
 			case	CLASS:
 				printf("\n>> non pointer type\n");
 				b.print(4);
 				assert(false);
 				
 			default:
-				b.type.print();
-				printf("\n");
-				unfinished(node, "subtract", compileContext);
+				b.print(4);
+				assert(false);
 			}
 			break;
 			
@@ -1449,6 +1504,26 @@ public class X86_64 extends X86_64AssignTemps {
 				}
 				break;
 				
+			case	FLOAT_32:
+				generateOperands(b, compileContext);
+				if (b.op() == Operator.ADD)
+					inst(X86.ADDSS, b.left(), b.right(), compileContext);
+				else {
+					inst(X86.ADDSS, b.right(), b.left(), compileContext);
+					inst(X86.MOVSS, b.left(), b.right(), compileContext);
+				}
+				break;
+				
+			case	FLOAT_64:
+				generateOperands(b, compileContext);
+				if (b.op() == Operator.ADD)
+					inst(X86.ADDSD, b.left(), b.right(), compileContext);
+				else {
+					inst(X86.ADDSD, b.right(), b.left(), compileContext);
+					inst(X86.MOVSD, b.left(), b.right(), compileContext);
+				}
+				break;
+				
 			case	STRING:
 				if (b.op() == Operator.ADD) {
 					b.type.print();
@@ -1467,9 +1542,8 @@ public class X86_64 extends X86_64AssignTemps {
 				assert(false);
 
 			default:
-				printf("\n>> add:\n");
 				b.print(4);
-				unfinished(node, "add", compileContext);
+				assert(false);
 			}
 			break;
 			
@@ -1590,11 +1664,11 @@ public class X86_64 extends X86_64AssignTemps {
 			if (expression.type.isFloat()) {
 				if (expression.type.family() == TypeFamily.FLOAT_64) {
 					inst(X86.MOVSD, expression, expression.operand(), compileContext);
-					instDoubleConstant(X86.ADDSD, R(expression.register), 1);
+					inst(X86.ADDSD, R(expression.register), FloatingConstants.DOUBLE_1);
 					inst(X86.MOVSD, expression.operand(), expression, compileContext);
 				} else {
 					inst(X86.MOVSS, expression, expression.operand(), compileContext);
-					instDoubleConstant(X86.ADDSS, R(expression.register), 1);
+					inst(X86.ADDSS, R(expression.register), FloatingConstants.FLOAT_1);
 					inst(X86.MOVSS, expression.operand(), expression, compileContext);
 				}
 				break;
@@ -1615,11 +1689,11 @@ public class X86_64 extends X86_64AssignTemps {
 			if (expression.type.isFloat()) {
 				if (expression.type.family() == TypeFamily.FLOAT_64) {
 					inst(X86.MOVSD, expression, expression.operand(), compileContext);
-					instDoubleConstant(X86.SUBSD, R(expression.register), 1);
+					inst(X86.SUBSD, R(expression.register), FloatingConstants.DOUBLE_1);
 					inst(X86.MOVSD, expression.operand(), expression, compileContext);
 				} else {
 					inst(X86.MOVSS, expression, expression.operand(), compileContext);
-					instDoubleConstant(X86.SUBSS, R(expression.register), 1);
+					inst(X86.SUBSS, R(expression.register), FloatingConstants.FLOAT_1);
 					inst(X86.MOVSS, expression.operand(), expression, compileContext);
 				}
 				break;
@@ -1640,14 +1714,14 @@ public class X86_64 extends X86_64AssignTemps {
 			if (expression.type.isFloat()) {
 				if (expression.type.family() == TypeFamily.FLOAT_64) {
 					inst(X86.MOVSD, expression, expression.operand(), compileContext);
-					instDoubleConstant(X86.ADDSD, R(expression.register), 1);
+					inst(X86.ADDSD, R(expression.register), FloatingConstants.DOUBLE_1);
 					inst(X86.MOVSD, expression.operand(), expression, compileContext);
-					instDoubleConstant(X86.SUBSD, R(expression.register), 1);
+					inst(X86.SUBSD, R(expression.register), FloatingConstants.DOUBLE_1);
 				} else {
 					inst(X86.MOVSS, expression, expression.operand(), compileContext);
-					instDoubleConstant(X86.ADDSS, R(expression.register), 1);
+					inst(X86.ADDSS, R(expression.register), FloatingConstants.FLOAT_1);
 					inst(X86.MOVSS, expression.operand(), expression, compileContext);
-					instDoubleConstant(X86.SUBSS, R(expression.register), 1);
+					inst(X86.SUBSS, R(expression.register), FloatingConstants.FLOAT_1);
 				}
 				break;
 			}
@@ -1666,14 +1740,14 @@ public class X86_64 extends X86_64AssignTemps {
 			if (expression.type.isFloat()) {
 				if (expression.type.family() == TypeFamily.FLOAT_64) {
 					inst(X86.MOVSD, expression, expression.operand(), compileContext);
-					instDoubleConstant(X86.SUBSD, R(expression.register), 1);
+					inst(X86.SUBSD, R(expression.register), FloatingConstants.DOUBLE_1);
 					inst(X86.MOVSD, expression.operand(), expression, compileContext);
-					instDoubleConstant(X86.ADDSD, R(expression.register), 1);
+					inst(X86.ADDSD, R(expression.register), FloatingConstants.DOUBLE_1);
 				} else {
 					inst(X86.MOVSS, expression, expression.operand(), compileContext);
-					instDoubleConstant(X86.SUBSS, R(expression.register), 1);
+					inst(X86.SUBSS, R(expression.register), FloatingConstants.FLOAT_1);
 					inst(X86.MOVSS, expression.operand(), expression, compileContext);
-					instDoubleConstant(X86.ADDSS, R(expression.register), 1);
+					inst(X86.ADDSS, R(expression.register), FloatingConstants.FLOAT_1);
 				}
 				break;
 			}
@@ -2085,18 +2159,20 @@ public class X86_64 extends X86_64AssignTemps {
 			node.print(4);
 		}
 		switch (node.op()) {
-		case	NOT_EQUAL:
 		case	EQUALITY:
 		case	LESS:
 		case	GREATER:
 		case	LESS_EQUAL:
 		case	GREATER_EQUAL:
 		case	LESS_GREATER:
+		case	LESS_GREATER_EQUAL:
+		case	NOT_EQUAL:
 		case	NOT_LESS:
 		case	NOT_GREATER:
 		case	NOT_LESS_EQUAL:
 		case	NOT_GREATER_EQUAL:
 		case	NOT_LESS_GREATER:
+		case	NOT_LESS_GREATER_EQUAL:
 			ref<Binary> b = ref<Binary>(node);
 			generateCompare(b, trueSegment, falseSegment, compileContext);
 			break;

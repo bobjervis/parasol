@@ -108,10 +108,17 @@ long R9mask = getRegMask(R.R9);
 long R10mask = getRegMask(R.R10); 
 long R11mask = getRegMask(R.R11); 
 
-long callMask = RAXmask|RCXmask|RDXmask|R8mask|R9mask|R10mask|R11mask;
+long xmm0mask = getRegMask(R.XMM0);
+long xmm1mask = getRegMask(R.XMM1);
+long xmm2mask = getRegMask(R.XMM2);
+long xmm3mask = getRegMask(R.XMM3);
+long xmm4mask = getRegMask(R.XMM4);
+long xmm5mask = getRegMask(R.XMM5);
 
 long longMask = RAXmask|RCXmask|RDXmask|R8mask|R9mask|R10mask|R11mask;			// RBP and RSP are reserved
-long floatMask = 0x1fffe0000;
+long floatMask = xmm0mask|xmm1mask|xmm2mask|xmm3mask|xmm4mask|xmm5mask;
+
+long callMask = longMask|floatMask;
 
 long[TypeFamily] familyMasks;
 

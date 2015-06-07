@@ -313,7 +313,11 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			
 		case	DIVIDE:
 			b = ref<Binary>(node);
-			if	(b.type.size() > 1) {
+			if (b.type.isFloat()) {
+				assignBinaryOperands(b, regMask, floatMask, compileContext);
+				node.register = byte(int(f().r.latestResult(b.left())));
+				break;
+			} else if (b.type.size() > 1) {
 				if	(b.sethi < 3) {
 					b.sethi = -1;
 					assignRegisterTemp(b.left(), RAXmask, compileContext);
@@ -397,6 +401,12 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	UNSIGNED_32:
 				assignBinaryOperands(b, RAXmask, longMask, compileContext);
 				node.register = byte(int(R.RAX));
+				break;
+				
+			case	FLOAT_32:
+			case	FLOAT_64:
+				assignBinaryOperands(b, regMask, floatMask, compileContext);
+				node.register = byte(int(f().r.latestResult(b.left())));
 				break;
 				
 			default:

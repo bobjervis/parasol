@@ -1261,6 +1261,8 @@ class Binary extends Node {
 			case	UNSIGNED_32:
 			case	SIGNED_32:
 			case	SIGNED_64:
+			case	FLOAT_32:
+			case	FLOAT_64:
 			case	VAR:
 				type = _left.type;
 				break;
@@ -1338,6 +1340,8 @@ class Binary extends Node {
 			case	UNSIGNED_32:
 			case	SIGNED_32:
 			case	SIGNED_64:
+			case	FLOAT_32:
+			case	FLOAT_64:
 			case	VAR:
 				if (_left.isLvalue()) 
 					type = _left.type;
@@ -1450,6 +1454,8 @@ class Binary extends Node {
 			case	SIGNED_64:
 			case	UNSIGNED_32:
 			case	VAR:
+			case	FLOAT_32:
+			case	FLOAT_64:
 				type = _left.type;
 				break;
 
@@ -1543,6 +1549,8 @@ class Binary extends Node {
 			if (!balance(compileContext))
 				break;
 			switch (_left.type.family()) {
+			case	FLOAT_32:
+			case	FLOAT_64:
 				type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
 				break;
 
@@ -1637,6 +1645,8 @@ class Binary extends Node {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	UNSIGNED_32:
+			case	FLOAT_32:
+			case	FLOAT_64:
 			case	VAR:
 				type = _left.type;
 				break;
@@ -1689,6 +1699,8 @@ class Binary extends Node {
 			case	UNSIGNED_32:
 			case	SIGNED_32:
 			case	SIGNED_64:
+			case	FLOAT_32:
+			case	FLOAT_64:
 			case	VAR:
 				if (_left.isLvalue()) 
 					type = _left.type;
@@ -5948,8 +5960,30 @@ class Unary extends Node {
 			break;
 
 		case	NEGATE:
-		case	BIT_COMPLEMENT:
 		case	UNARY_PLUS:
+			compileContext.assignTypes(_operand);
+			if (_operand.deferAnalysis()) {
+				type = _operand.type;
+				return;
+			}
+			switch (_operand.type.family()) {
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	SIGNED_32:
+			case	SIGNED_64:
+			case	FLOAT_32:
+			case	FLOAT_64:
+				type = _operand.type;
+				break;
+
+			default:
+				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				type = compileContext.errorType();
+			}
+			break;
+
+		case	BIT_COMPLEMENT:
 			compileContext.assignTypes(_operand);
 			if (_operand.deferAnalysis()) {
 				type = _operand.type;

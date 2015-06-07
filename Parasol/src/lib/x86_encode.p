@@ -65,6 +65,8 @@ enum X86 {
 	CVTSI2SS,
 	CWD,
 	DIV,
+	DIVSD,
+	DIVSS,
 	ENTER,
 	IDIV,
 	IMUL,
@@ -76,6 +78,8 @@ enum X86 {
 	MOVSXD,
 	MOVZX,
 	MUL,
+	MULSD,
+	MULSS,
 	NEG,
 	NOT,
 	OR,
@@ -94,6 +98,8 @@ enum X86 {
 	UCOMISS,
 	XCHG,
 	XOR,
+	XORSD,
+	XORSS,
 	MAX_INSTRUCTION
 }
 
@@ -103,6 +109,13 @@ enum JumpDistance {
 	UNKNOWN,
 	SHORT,
 	NEAR
+}
+
+enum FloatingConstants {			// A list of compile-time constants that may be needed at runtime.
+	FLOAT_SIGN_MASK,
+	FLOAT_1,
+	DOUBLE_SIGN_MASK,
+	DOUBLE_1
 }
 
 class SourceLocation {
@@ -1128,6 +1141,70 @@ class X86_64Encoder extends Target {
 			modRM(3, rmValues[src], rmValues[dest]);
 			return;
 			
+		case	ADDSS:
+			emit(0xf3);
+			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emit(0x0f);
+			emit(0x58);
+			modRM(3, rmValues[src], rmValues[dest]);
+			return;
+			
+		case	ADDSD:
+			emit(0xf2);
+			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emit(0x0f);
+			emit(0x58);
+			modRM(3, rmValues[src], rmValues[dest]);
+			return;
+			
+		case	SUBSS:
+			emit(0xf3);
+			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emit(0x0f);
+			emit(0x5c);
+			modRM(3, rmValues[src], rmValues[dest]);
+			return;
+			
+		case	SUBSD:
+			emit(0xf2);
+			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emit(0x0f);
+			emit(0x5c);
+			modRM(3, rmValues[src], rmValues[dest]);
+			return;
+			
+		case	MULSS:
+			emit(0xf3);
+			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emit(0x0f);
+			emit(0x59);
+			modRM(3, rmValues[src], rmValues[dest]);
+			return;
+			
+		case	MULSD:
+			emit(0xf2);
+			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emit(0x0f);
+			emit(0x59);
+			modRM(3, rmValues[src], rmValues[dest]);
+			return;
+			
+		case	DIVSS:
+			emit(0xf3);
+			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emit(0x0f);
+			emit(0x5e);
+			modRM(3, rmValues[src], rmValues[dest]);
+			return;
+			
+		case	DIVSD:
+			emit(0xf2);
+			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emit(0x0f);
+			emit(0x5e);
+			modRM(3, rmValues[src], rmValues[dest]);
+			return;
+			
 		case	MOVSS:
 			emit(0xf3);
 			emitRex(TypeFamily.SIGNED_32, null, src, dest);
@@ -1457,6 +1534,70 @@ class X86_64Encoder extends Target {
 			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
 			emit(0x0f);
 			emit(0x10);
+			modRM(right, rmValues[left], 0, 0);
+			break;
+			
+		case	ADDSS:
+			emit(0xf3);
+			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emit(0x0f);
+			emit(0x58);
+			modRM(right, rmValues[left], 0, 0);
+			break;
+			
+		case	ADDSD:
+			emit(0xf2);
+			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emit(0x0f);
+			emit(0x58);
+			modRM(right, rmValues[left], 0, 0);
+			break;
+			
+		case	SUBSS:
+			emit(0xf3);
+			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emit(0x0f);
+			emit(0x5c);
+			modRM(right, rmValues[left], 0, 0);
+			break;
+			
+		case	SUBSD:
+			emit(0xf2);
+			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emit(0x0f);
+			emit(0x5c);
+			modRM(right, rmValues[left], 0, 0);
+			break;
+			
+		case	MULSS:
+			emit(0xf3);
+			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emit(0x0f);
+			emit(0x59);
+			modRM(right, rmValues[left], 0, 0);
+			break;
+			
+		case	MULSD:
+			emit(0xf2);
+			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emit(0x0f);
+			emit(0x59);
+			modRM(right, rmValues[left], 0, 0);
+			break;
+			
+		case	DIVSS:
+			emit(0xf3);
+			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emit(0x0f);
+			emit(0x5e);
+			modRM(right, rmValues[left], 0, 0);
+			break;
+			
+		case	DIVSD:
+			emit(0xf2);
+			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emit(0x0f);
+			emit(0x5e);
 			modRM(right, rmValues[left], 0, 0);
 			break;
 			
@@ -2133,7 +2274,7 @@ class X86_64Encoder extends Target {
 		}
 	}
 	
-	public void instDoubleConstant(X86 instruction, R dest, int constant) {
+	public void inst(X86 instruction, R dest, FloatingConstants constant) {
 	}
 	
 	public void instLoadType(R destination, ref<Type> type) {
@@ -2840,7 +2981,9 @@ CC parityTest(Operator compare, ref<Type> type) {
 		case	GREATER_EQUAL:			return CC.NOP;
 		case	LESS:					return CC.JNP;
 		case	LESS_EQUAL:				return CC.JNP;
-
+		case	LESS_GREATER_EQUAL:		return CC.NOP;
+		case	NOT_LESS_GREATER_EQUAL:	return CC.NOP;
+		
 		default:
 			printf("parityTest(%s,", operatorMap.name[compare]);
 			type.print();
@@ -3044,6 +3187,30 @@ CC continuation(Operator compare, ref<Type> type) {
 		}
 		break;
 
+	case	LESS_GREATER_EQUAL:
+		switch (type.family()) {
+		case	FLOAT_32:
+		case	FLOAT_64:		return CC.JNP;
+		default:
+			printf("continuation(%s,", operatorMap.name[compare]);
+			type.print();
+			printf(")\n");
+			assert(false);
+		}
+		break;
+
+	case	NOT_LESS_GREATER_EQUAL:
+		switch (type.family()) {
+		case	FLOAT_32:
+		case	FLOAT_64:		return CC.JP;
+		default:
+			printf("continuation(%s,", operatorMap.name[compare]);
+			type.print();
+			printf(")\n");
+			assert(false);
+		}
+		break;
+
 	default:
 		printf("continuation(%s,", operatorMap.name[compare]);
 		type.print();
@@ -3055,18 +3222,20 @@ CC continuation(Operator compare, ref<Type> type) {
 
 Operator invert(Operator compare) {
 	switch (compare) {
-	case	NOT_LESS_GREATER:	return Operator.LESS_GREATER;
-	case	NOT_LESS:			return Operator.LESS;
-	case	NOT_GREATER:		return Operator.GREATER;
-	case	NOT_LESS_EQUAL:		return Operator.LESS_EQUAL;
-	case	NOT_GREATER_EQUAL:	return Operator.GREATER_EQUAL;
-	case	NOT_EQUAL:			return Operator.EQUALITY;
-	case	EQUALITY:			return Operator.NOT_EQUAL;
-	case	GREATER:			return Operator.NOT_GREATER;
-	case	GREATER_EQUAL:		return Operator.NOT_GREATER_EQUAL;
-	case	LESS:				return Operator.NOT_LESS;
-	case	LESS_GREATER:		return Operator.NOT_LESS_GREATER;
-	case	LESS_EQUAL:			return Operator.NOT_LESS_EQUAL;
+	case	NOT_LESS_GREATER:		return Operator.LESS_GREATER;
+	case	NOT_LESS_GREATER_EQUAL:	return Operator.LESS_GREATER_EQUAL;
+	case	NOT_LESS:				return Operator.LESS;
+	case	NOT_GREATER:			return Operator.GREATER;
+	case	NOT_LESS_EQUAL:			return Operator.LESS_EQUAL;
+	case	NOT_GREATER_EQUAL:		return Operator.GREATER_EQUAL;
+	case	NOT_EQUAL:				return Operator.EQUALITY;
+	case	EQUALITY:				return Operator.NOT_EQUAL;
+	case	GREATER:				return Operator.NOT_GREATER;
+	case	GREATER_EQUAL:			return Operator.NOT_GREATER_EQUAL;
+	case	LESS:					return Operator.NOT_LESS;
+	case	LESS_GREATER:			return Operator.NOT_LESS_GREATER;
+	case	LESS_EQUAL:				return Operator.NOT_LESS_EQUAL;
+	case	LESS_GREATER_EQUAL:		return Operator.NOT_LESS_GREATER_EQUAL;
 	default:
 		printf("invert(%s)\n", operatorMap.name[compare]);
 		assert(false);
@@ -3253,6 +3422,8 @@ opcodeNames.append("CVTSI2SD");
 opcodeNames.append("CVTSI2SS");
 opcodeNames.append("CWD");
 opcodeNames.append("DIV");
+opcodeNames.append("DIVSD");
+opcodeNames.append("DIVSS");
 opcodeNames.append("ENTER");
 opcodeNames.append("IDIV");
 opcodeNames.append("IMUL");
@@ -3264,6 +3435,8 @@ opcodeNames.append("MOVSS");
 opcodeNames.append("MOVSXD");
 opcodeNames.append("MOVZX");
 opcodeNames.append("MUL");
+opcodeNames.append("MULSD");
+opcodeNames.append("MULSS");
 opcodeNames.append("NEG");
 opcodeNames.append("NOT");
 opcodeNames.append("OR");
@@ -3282,4 +3455,6 @@ opcodeNames.append("UCOMISD");
 opcodeNames.append("UCOMISS");
 opcodeNames.append("xCHG");
 opcodeNames.append("XOR");
+opcodeNames.append("XORSD");
+opcodeNames.append("XORSS");
 

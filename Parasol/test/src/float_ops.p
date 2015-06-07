@@ -19,7 +19,7 @@ int main(string[] args) {
 	float c = 35;
 	float d = 17;
 
-	assert(0x10 == 16);
+	float NaN = b / b;
 	
 	// All of these expressions should be true (given the above)
 
@@ -37,6 +37,8 @@ int main(string[] args) {
 	assert(d !> 20);
 	assert(b !>= 4);
 	assert(a !<= 0);
+	assert(a <>= b);
+	assert(a !<>= NaN);
 	
 	assert(a * c == 35);
 	assert(a / c == 0);

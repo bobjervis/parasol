@@ -47,7 +47,7 @@ string func() {
 
 void compareTests() {
 	string s = "abc";
-	
+
 	assert(s == "abc");
 	assert(s != "def");
 	assert(s < "abd");
@@ -109,3 +109,4 @@ void resizeTests() {
 	assert(s.length() == 4);
 	assert(s == "abce");
 }
+
