@@ -136,6 +136,11 @@ public class X86_64 extends X86_64AssignTemps {
 	private ref<OverloadInstance> _memcpy;
 	private ref<OverloadInstance> _exposeException;
 	private ref<OverloadInstance> _assert;
+	private ref<Symbol> _floatSignMask;
+	private ref<Symbol> _floatOne;
+	private ref<Symbol> _doubleSignMask;
+	private ref<Symbol> _doubleOne;
+	
 //	private byte[] _data;
 	public int maxTypeOrdinal;
 	private boolean _verbose;
@@ -1272,15 +1277,15 @@ public class X86_64 extends X86_64AssignTemps {
 				break;
 				
 			case	FLOAT_32:
-				// TODO: get the right answer: get a second register, then mess around
-				inst(X86.DIVSS, b.right(), b.left(), compileContext);
-				inst(X86.MOVSS, b.left(), b.right(), compileContext);
+				inst(X86.MOVSS, b, b.left(), compileContext);
+				inst(X86.DIVSS, b, b.right(), compileContext);
+				inst(X86.MOVSS, b.left(), b, compileContext);
 				break;
 				
 			case	FLOAT_64:
-				// TODO: get the right answer.
-				inst(X86.DIVSD, b.right(), b.left(), compileContext);
-				inst(X86.MOVSD, b.left(), b.right(), compileContext);
+				inst(X86.MOVSD, b, b.left(), compileContext);
+				inst(X86.DIVSD, b, b.right(), compileContext);
+				inst(X86.MOVSD, b.left(), b, compileContext);
 				break;
 				
 			default:
@@ -1446,30 +1451,27 @@ public class X86_64 extends X86_64AssignTemps {
 				break;
 				
 			case	ADDRESS:
-				generateOperands(b, compileContext);
 				inst(X86.MOVSXD, b.right(), b.right(), compileContext);
 				inst(X86.SUB, b.left(), b.right(), compileContext);
 				break;
 
 			case	FLOAT_32:
-				generateOperands(b, compileContext);
 				if (b.op() == Operator.SUBTRACT)
 					inst(X86.SUBSS, b.left(), b.right(), compileContext);
 				else {
-					inst(X86.XORSS, R(b.right().register), FloatingConstants.DOUBLE_SIGN_MASK);
-					inst(X86.ADDSS, b.right(), b.left(), compileContext);
-					inst(X86.MOVSS, b.left(), b.right(), compileContext);
+					inst(X86.MOVSS, b, b.left(), compileContext);
+					inst(X86.SUBSS, b, b.right(), compileContext);
+					inst(X86.MOVSS, b.left(), b, compileContext);
 				}
 				break;
 				
 			case	FLOAT_64:
-				generateOperands(b, compileContext);
 				if (b.op() == Operator.SUBTRACT)
 					inst(X86.SUBSD, b.left(), b.right(), compileContext);
 				else {
-					inst(X86.XORSD, R(b.right().register), FloatingConstants.DOUBLE_SIGN_MASK);
-					inst(X86.ADDSD, b.right(), b.left(), compileContext);
-					inst(X86.MOVSD, b.left(), b.right(), compileContext);
+					inst(X86.MOVSD, b, b.left(), compileContext);
+					inst(X86.SUBSD, b, b.right(), compileContext);
+					inst(X86.MOVSD, b.left(), b, compileContext);
 				}
 				break;
 				
@@ -1664,11 +1666,11 @@ public class X86_64 extends X86_64AssignTemps {
 			if (expression.type.isFloat()) {
 				if (expression.type.family() == TypeFamily.FLOAT_64) {
 					inst(X86.MOVSD, expression, expression.operand(), compileContext);
-					inst(X86.ADDSD, R(expression.register), FloatingConstants.DOUBLE_1);
+					inst(X86.ADDSD, R(expression.register), _doubleOne);
 					inst(X86.MOVSD, expression.operand(), expression, compileContext);
 				} else {
 					inst(X86.MOVSS, expression, expression.operand(), compileContext);
-					inst(X86.ADDSS, R(expression.register), FloatingConstants.FLOAT_1);
+					inst(X86.ADDSS, R(expression.register), _floatOne);
 					inst(X86.MOVSS, expression.operand(), expression, compileContext);
 				}
 				break;
@@ -1689,11 +1691,11 @@ public class X86_64 extends X86_64AssignTemps {
 			if (expression.type.isFloat()) {
 				if (expression.type.family() == TypeFamily.FLOAT_64) {
 					inst(X86.MOVSD, expression, expression.operand(), compileContext);
-					inst(X86.SUBSD, R(expression.register), FloatingConstants.DOUBLE_1);
+					inst(X86.SUBSD, R(expression.register), _doubleOne);
 					inst(X86.MOVSD, expression.operand(), expression, compileContext);
 				} else {
 					inst(X86.MOVSS, expression, expression.operand(), compileContext);
-					inst(X86.SUBSS, R(expression.register), FloatingConstants.FLOAT_1);
+					inst(X86.SUBSS, R(expression.register), _floatOne);
 					inst(X86.MOVSS, expression.operand(), expression, compileContext);
 				}
 				break;
@@ -1714,14 +1716,14 @@ public class X86_64 extends X86_64AssignTemps {
 			if (expression.type.isFloat()) {
 				if (expression.type.family() == TypeFamily.FLOAT_64) {
 					inst(X86.MOVSD, expression, expression.operand(), compileContext);
-					inst(X86.ADDSD, R(expression.register), FloatingConstants.DOUBLE_1);
+					inst(X86.ADDSD, R(expression.register), _doubleOne);
 					inst(X86.MOVSD, expression.operand(), expression, compileContext);
-					inst(X86.SUBSD, R(expression.register), FloatingConstants.DOUBLE_1);
+					inst(X86.SUBSD, R(expression.register), _doubleOne);
 				} else {
 					inst(X86.MOVSS, expression, expression.operand(), compileContext);
-					inst(X86.ADDSS, R(expression.register), FloatingConstants.FLOAT_1);
+					inst(X86.ADDSS, R(expression.register), _floatOne);
 					inst(X86.MOVSS, expression.operand(), expression, compileContext);
-					inst(X86.SUBSS, R(expression.register), FloatingConstants.FLOAT_1);
+					inst(X86.SUBSS, R(expression.register), _floatOne);
 				}
 				break;
 			}
@@ -1740,14 +1742,14 @@ public class X86_64 extends X86_64AssignTemps {
 			if (expression.type.isFloat()) {
 				if (expression.type.family() == TypeFamily.FLOAT_64) {
 					inst(X86.MOVSD, expression, expression.operand(), compileContext);
-					inst(X86.SUBSD, R(expression.register), FloatingConstants.DOUBLE_1);
+					inst(X86.SUBSD, R(expression.register), _doubleOne);
 					inst(X86.MOVSD, expression.operand(), expression, compileContext);
-					inst(X86.ADDSD, R(expression.register), FloatingConstants.DOUBLE_1);
+					inst(X86.ADDSD, R(expression.register), _doubleOne);
 				} else {
 					inst(X86.MOVSS, expression, expression.operand(), compileContext);
-					inst(X86.SUBSS, R(expression.register), FloatingConstants.FLOAT_1);
+					inst(X86.SUBSS, R(expression.register), _floatOne);
 					inst(X86.MOVSS, expression.operand(), expression, compileContext);
-					inst(X86.ADDSS, R(expression.register), FloatingConstants.FLOAT_1);
+					inst(X86.ADDSS, R(expression.register), _floatOne);
 				}
 				break;
 			}
@@ -1804,7 +1806,20 @@ public class X86_64 extends X86_64AssignTemps {
 			expression = ref<Unary>(node);
 			generate(expression.operand(), compileContext);
 			f().r.generateSpills(expression, this);
-			inst(X86.NEG, expression.operand());
+			switch (expression.type.family()) {
+			case	FLOAT_32:
+				inst(X86.MOVSS, R(node.register), _floatSignMask);
+				inst(X86.XORPS, expression, expression.operand(), compileContext);
+				break;
+				
+			case	FLOAT_64:
+				inst(X86.MOVSD, R(node.register), _doubleSignMask);
+				inst(X86.XORPD, expression, expression.operand(), compileContext);
+				break;
+				
+			default:
+				inst(X86.NEG, expression.operand());
+			}
 			break;
 			
 		case	UNARY_PLUS:
@@ -3160,6 +3175,21 @@ public class X86_64 extends X86_64AssignTemps {
 				break;
 			}
 		}
+		ref<Type> floatType = _arena.builtInType(TypeFamily.FLOAT_32);
+		ref<Symbol> signMask = floatType.scope().lookup("SIGN_MASK");
+		if (signMask != null)
+			_floatSignMask = signMask;
+		ref<Symbol> one = floatType.scope().lookup("ONE");
+		if (one != null)
+			_floatOne = one;
+		ref<Type> doubleType = _arena.builtInType(TypeFamily.FLOAT_64);
+		signMask = doubleType.scope().lookup("SIGN_MASK");
+		if (signMask != null)
+			_doubleSignMask = signMask;
+		one = doubleType.scope().lookup("ONE");
+		if (one != null)
+			_doubleOne = one;
+		
 		ref<Symbol> assign = stringType.scope().lookup("assign");
 		if (assign != null) {
 			ref<Overload> o = ref<Overload>(assign);

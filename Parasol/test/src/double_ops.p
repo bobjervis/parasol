@@ -41,8 +41,8 @@ int main(string[] args) {
 	assert(a !<>= NaN);
 	
 	assert(a * c == 35);
-	assert(a / c == 0);
-	assert(c / d == 2);
+	assert(c / 5 == 7);
+	assert(34 / d == 2);
 	assert(a + d == 18);
 	assert(c - d == 18);
 	assert(d - c < 0);
@@ -67,7 +67,7 @@ int main(string[] args) {
 	d *= 3;
 	assert(d == 51);
 
-	d = 17;
+	d = 15;
 	d /= 3;
 	assert(d == 5);
 
@@ -80,7 +80,7 @@ int main(string[] args) {
 	d = 17;
 	assert((d *= 3) == 51);
 
-	d = 17;
+	d = 15;
 	assert((d /= 3) == 5);
 
 	d = 17;

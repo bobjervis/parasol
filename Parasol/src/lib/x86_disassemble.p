@@ -35,8 +35,12 @@ class Disassembler {
 	private ref<int[]> _pxiFixups;
 	private ref<Fixup> _fixups;
 	private int _offset;
+	
+	// Instruction prefixes.
 	private byte _rex;
 	private boolean _operandSize;
+	private boolean _repne;
+	private boolean _repe;
 	private int _sourceIndex;
 	private int _builtInsFinalOffset;
 	private pointer<ref<Symbol>> _dataMap;
@@ -404,6 +408,16 @@ class Disassembler {
 				printf("%#x", _logical + _offset + displacement);
 				break;
 				
+			case	0xf2:
+				_repne = true;
+				done = false;
+				break;
+				
+			case	0xf3:
+				_repe = true;
+				done = false;
+				break;
+				
 			case	0xf6:
 			case	0xf7:
 				group3(next);
@@ -435,6 +449,8 @@ class Disassembler {
 				currentAddress();
 				_rex = 0;
 				_operandSize = false;
+				_repne = false;
+				_repe = false;
 			}
 		}
 	}
@@ -443,6 +459,159 @@ class Disassembler {
 		byte next = _physical[_offset];
 		_offset++;
 		switch (next) {
+		case	0x10:
+			if (_operandSize) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else if (_repne) {
+				instructionOpcode("movsd");
+				_rex |= REX_W;
+				disassembleGfEf();
+			} else if (_repe) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			}
+			break;
+			
+		case	0x11:
+			if (_operandSize) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else if (_repne) {
+				instructionOpcode("movsd");
+				_rex |= REX_W;
+				disassembleEfGf();
+			} else if (_repe) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			}
+			break;
+
+		case	0x2a:
+			if (_operandSize) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else if (_repne) {
+				instructionOpcode("cvtsi2sd");
+				_rex |= REX_W;
+				disassembleGfEv();
+			} else if (_repe) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			}
+			break;
+			
+		case	0x2e:
+			if (_operandSize) {
+				instructionOpcode("ucomisd");
+				_rex |= REX_W;
+				disassembleGfEf();
+			} else if (_repne) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else if (_repe) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			}
+			break;
+			
+		case	0x57:
+			if (_operandSize) {
+				instructionOpcode("xorpd");
+				_rex |= REX_W;
+				disassembleGfEf();
+			} else if (_repne) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else if (_repe) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else {
+				instructionOpcode("xorps");
+				disassembleGfEf();
+			}
+			break;
+			
+		case	0x58:
+			if (_operandSize) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else if (_repne) {
+				instructionOpcode("addsd");
+				_rex |= REX_W;
+				disassembleGfEf();
+			} else if (_repe) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			}
+			break;
+			
+		case	0x59:
+			if (_operandSize) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else if (_repne) {
+				instructionOpcode("mulsd");
+				_rex |= REX_W;
+				disassembleGfEf();
+			} else if (_repe) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			}
+			break;
+			
+		case	0x5c:
+			if (_operandSize) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else if (_repne) {
+				instructionOpcode("subsd");
+				_rex |= REX_W;
+				disassembleGfEf();
+			} else if (_repe) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			}
+			break;
+			
+		case	0x5e:
+			if (_operandSize) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else if (_repne) {
+				instructionOpcode("divsd");
+				_rex |= REX_W;
+				disassembleGfEf();
+			} else if (_repe) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			}
+			break;
+			
 		case	0x7e:
 			instructionOpcode("movq");
 			disassembleEfGf();
@@ -481,8 +650,30 @@ class Disassembler {
 			break;
 			
 		default:
-			printf("0x0F escape Byte: '%#x'\n", int(next));
+			printf("0x0F escape Byte: '%#x'", int(next));
+			if (_operandSize)
+				printf(" 0x66 prefix present");
+			else if (_repne)
+				printf(" 0xf2 prefix present");
+			else if (_repe)
+				printf(" 0xf3 prefix present");
+			printf("\n");
 			assert(false);
+
+			if (_operandSize) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else if (_repne) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else if (_repe) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			}
+			break;
 		}
 	}
 	
@@ -547,7 +738,7 @@ class Disassembler {
 				
 			case	0xf7:
 				_offset++;
-				effectiveWord(mod, rm, int.bytes);
+				effectiveWord(false, mod, rm, int.bytes);
 				printf(",");
 				immediateWord();
 			}
@@ -566,7 +757,7 @@ class Disassembler {
 				
 			case	0xf7:
 				_offset++;
-				effectiveWord(mod, rm, 0);
+				effectiveWord(false, mod, rm, 0);
 			}
 			break;
 			
@@ -582,7 +773,7 @@ class Disassembler {
 				
 			case	0xf7:
 				_offset++;
-				effectiveWord(mod, rm, 0);
+				effectiveWord(false, mod, rm, 0);
 			}
 		}
 	}
@@ -631,24 +822,24 @@ class Disassembler {
 		switch (regOpcode) {
 		case	0:
 			instructionOpcode("inc");
-			effectiveWord(mod, rm, 0);
+			effectiveWord(false, mod, rm, 0);
 			break;
 			
 		case	1:
 			instructionOpcode("dec");
-			effectiveWord(mod, rm, 0);
+			effectiveWord(false, mod, rm, 0);
 			break;
 			
 		case	2:
 			instructionOpcode("call");
 			_rex |= REX_W;
-			effectiveWord(mod, rm, 0);
+			effectiveWord(false, mod, rm, 0);
 			break;
 			
 		case	6:
 			instructionOpcode("push");
 			_rex |= REX_W;
-			effectiveWord(mod, rm, 0);
+			effectiveWord(false, mod, rm, 0);
 			break;
 
 		case	7:
@@ -673,7 +864,7 @@ class Disassembler {
 		printf(",%s", byteRegs[regOpcode]);
 	}
 	/*
-	 * Effective Address (byte size), General register (byte)
+	 * Effective Address (dword size), XMM floating register ()
 	 */
 	void disassembleEfGf() {
 		byte modRM = _physical[_offset];
@@ -681,11 +872,41 @@ class Disassembler {
 		int regOpcode = (modRM >> 3) & 0x7;
 		int rm = modRM & 7;
 		_offset++;
-		effectiveWord(mod, rm, 0);
+		effectiveWord(true, mod, rm, 0);
 		if ((_rex & REX_W) != 0)
 			printf(",%s", doubleRegs[regOpcode]);
 		else
 			printf(",%s", floatRegs[regOpcode]);
+	}
+	/*
+	 * Effective Address (dword size), XMM floating register ()
+	 */
+	void disassembleGfEf() {
+		byte modRM = _physical[_offset];
+		int mod = modRM >> 6;
+		int regOpcode = (modRM >> 3) & 0x7;
+		int rm = modRM & 7;
+		_offset++;
+		if ((_rex & REX_W) != 0)
+			printf("%s,", doubleRegs[regOpcode]);
+		else
+			printf("%s,", floatRegs[regOpcode]);
+		effectiveWord(true, mod, rm, 0);
+	}
+	/*
+	 * Effective Address (dword size), XMM floating register ()
+	 */
+	void disassembleGfEv() {
+		byte modRM = _physical[_offset];
+		int mod = modRM >> 6;
+		int regOpcode = (modRM >> 3) & 0x7;
+		int rm = modRM & 7;
+		_offset++;
+		if ((_rex & REX_W) != 0)
+			printf("%s,", doubleRegs[regOpcode]);
+		else
+			printf("%s,", floatRegs[regOpcode]);
+		effectiveWord(false, mod, rm, 0);
 	}
 	/*
 	 * General register (byte), Effective Address (byte size) 
@@ -724,7 +945,7 @@ class Disassembler {
 		_offset++;
 		registerWord(regOpcode, true);
 		printf(",");
-		effectiveWord(mod, rm, ipAdjust);
+		effectiveWord(false, mod, rm, ipAdjust);
 	}
 
 	void disassembleGvEvWiden(int ipAdjust) {
@@ -736,7 +957,7 @@ class Disassembler {
 		registerWord(regOpcode, true);
 		printf(",");
 		_rex &= ~REX_W;
-		effectiveWord(mod, rm, ipAdjust);
+		effectiveWord(false, mod, rm, ipAdjust);
 	}
 	/*
 	 * Effective Address (word size), general register (word size)
@@ -747,7 +968,7 @@ class Disassembler {
 		int regOpcode = (modRM >> 3) & 0x7;
 		int rm = modRM & 7;
 		_offset++;
-		effectiveWord(mod, rm, 0);
+		effectiveWord(false, mod, rm, 0);
 		printf(",");
 		registerWord(regOpcode, true);
 	}
@@ -773,7 +994,7 @@ class Disassembler {
 		int regOpcode = (modRM >> 3) & 0x7;
 		int rm = modRM & 7;
 		_offset++;
-		effectiveWord(mod, rm, byte.bytes);
+		effectiveWord(false, mod, rm, byte.bytes);
 		printf(",");
 		immediateByte();
 	}
@@ -784,7 +1005,7 @@ class Disassembler {
 		int regOpcode = (modRM >> 3) & 0x7;
 		int rm = modRM & 7;
 		_offset++;
-		effectiveWord(mod, rm, byte.bytes);
+		effectiveWord(false, mod, rm, byte.bytes);
 	}
 	
 	void disassemblerAXIz() {
@@ -804,7 +1025,7 @@ class Disassembler {
 		int regOpcode = (modRM >> 3) & 0x7;
 		int rm = modRM & 7;
 		_offset++;
-		effectiveWord(mod, rm, int.bytes);
+		effectiveWord(false, mod, rm, int.bytes);
 		printf(",");
 		immediateWord();
 	}
@@ -890,6 +1111,18 @@ class Disassembler {
 				reg += 8;
 		}
 		printf("%s", byteRegs[reg]);
+	}
+	
+	void register64f(int reg) {
+		if ((_rex & REX_R) == REX_R)
+			reg += 8;
+		printf("%s", doubleRegs[reg]);
+	}
+	
+	void register32f(int reg) {
+		if ((_rex & REX_R) == REX_R)
+			reg += 8;
+		printf("%s", floatRegs[reg]);
 	}
 	
 	void effectiveByte(int mod, int rm, int ipAdjust) {
@@ -1021,9 +1254,14 @@ class Disassembler {
 		}
 	}
 
-	void effectiveWord(int mod, int rm, int ipAdjust) {
+	void effectiveWord(boolean isFloat, int mod, int rm, int ipAdjust) {
 		if (mod == 3) {
-			if ((_rex & REX_W) == REX_W)
+			if (isFloat) {
+				if ((_rex & REX_W) == REX_W)
+					register64f(rm);
+				else
+					register32f(rm);
+			} else if ((_rex & REX_W) == REX_W)
 				register64(rm, false);
 			else if (_operandSize)
 				register16(rm, false);

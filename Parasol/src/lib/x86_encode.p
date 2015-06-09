@@ -98,8 +98,8 @@ enum X86 {
 	UCOMISS,
 	XCHG,
 	XOR,
-	XORSD,
-	XORSS,
+	XORPD,
+	XORPS,
 	MAX_INSTRUCTION
 }
 
@@ -109,13 +109,6 @@ enum JumpDistance {
 	UNKNOWN,
 	SHORT,
 	NEAR
-}
-
-enum FloatingConstants {			// A list of compile-time constants that may be needed at runtime.
-	FLOAT_SIGN_MASK,
-	FLOAT_1,
-	DOUBLE_SIGN_MASK,
-	DOUBLE_1
 }
 
 class SourceLocation {
@@ -1119,90 +1112,99 @@ class X86_64Encoder extends Target {
 		case	UCOMISD:
 			emit(0x66);
 		case	UCOMISS:
-			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emitRex(TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x2e);
-			modRM(3, rmValues[src], rmValues[dest]);
+			modRM(3, rmValues[dest], rmValues[src]);
 			return;
 			
 		case	CVTSI2SS:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emitRex(TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x2a);
-			modRM(3, rmValues[src], rmValues[dest]);
+			modRM(3, rmValues[dest], rmValues[src]);
 			return;
 			
 		case	CVTSI2SD:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emitRex(TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x2a);
-			modRM(3, rmValues[src], rmValues[dest]);
+			modRM(3, rmValues[dest], rmValues[src]);
 			return;
 			
 		case	ADDSS:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emitRex(TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x58);
-			modRM(3, rmValues[src], rmValues[dest]);
+			modRM(3, rmValues[dest], rmValues[src]);
 			return;
 			
 		case	ADDSD:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emitRex(TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x58);
-			modRM(3, rmValues[src], rmValues[dest]);
+			modRM(3, rmValues[dest], rmValues[src]);
 			return;
 			
 		case	SUBSS:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emitRex(TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x5c);
-			modRM(3, rmValues[src], rmValues[dest]);
+			modRM(3, rmValues[dest], rmValues[src]);
 			return;
 			
 		case	SUBSD:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emitRex(TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x5c);
-			modRM(3, rmValues[src], rmValues[dest]);
+			modRM(3, rmValues[dest], rmValues[src]);
 			return;
 			
 		case	MULSS:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emitRex(TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x59);
-			modRM(3, rmValues[src], rmValues[dest]);
+			modRM(3, rmValues[dest], rmValues[src]);
 			return;
 			
 		case	MULSD:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emitRex(TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x59);
-			modRM(3, rmValues[src], rmValues[dest]);
+			modRM(3, rmValues[dest], rmValues[src]);
 			return;
 			
 		case	DIVSS:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emitRex(TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x5e);
-			modRM(3, rmValues[src], rmValues[dest]);
+			modRM(3, rmValues[dest], rmValues[src]);
 			return;
 			
 		case	DIVSD:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emitRex(TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x5e);
-			modRM(3, rmValues[src], rmValues[dest]);
+			modRM(3, rmValues[dest], rmValues[src]);
+			return;
+			
+		case	XORPD:
+			emit(0x66);
+		case	XORPS:
+			emitRex(TypeFamily.SIGNED_32, null, dest, src);
+			emit(0x0f);
+			emit(0x57);
+			modRM(3, rmValues[dest], rmValues[src]);
 			return;
 			
 		case	MOVSS:
@@ -2274,7 +2276,67 @@ class X86_64Encoder extends Target {
 		}
 	}
 	
-	public void inst(X86 instruction, R dest, FloatingConstants constant) {
+	public void inst(X86 instruction, R dest, ref<Symbol> constant) {
+		switch (instruction) {
+		case	XORPD:
+			emit(0x66);
+		case	XORPS:
+			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
+			emit(0x0f);
+			emit(0x57);
+			break;
+			
+		case	MOVSS:
+			emit(0xf3);
+			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
+			emit(0x0f);
+			emit(0x10);
+			break;
+			
+		case	MOVSD:
+			emit(0xf2);
+			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
+			emit(0x0f);
+			emit(0x10);
+			break;
+			
+		case	ADDSD:
+			emit(0xf2);
+			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
+			emit(0x0f);
+			emit(0x58);
+			break;
+			
+		case	ADDSS:
+			emit(0xf3);
+			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
+			emit(0x0f);
+			emit(0x58);
+			break;
+			
+		case	SUBSD:
+			emit(0xf2);
+			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
+			emit(0x0f);
+			emit(0x5c);
+			break;
+			
+		case	SUBSS:
+			emit(0xf3);
+			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
+			emit(0x0f);
+			emit(0x5c);
+			break;
+			
+		default:
+			printf("%s %s \n", opcodeNames[instruction], regNames[dest]);
+			constant.print(0, false);
+			assert(false);
+			emit(0x10);
+		}
+		modRM(0, rmValues[dest], 5);
+		fixup(FixupKind.RELATIVE32_DATA, constant);
+		emitInt(0);
 	}
 	
 	public void instLoadType(R destination, ref<Type> type) {
@@ -3455,6 +3517,6 @@ opcodeNames.append("UCOMISD");
 opcodeNames.append("UCOMISS");
 opcodeNames.append("xCHG");
 opcodeNames.append("XOR");
-opcodeNames.append("XORSD");
-opcodeNames.append("XORSS");
+opcodeNames.append("XORPD");
+opcodeNames.append("XORPS");
 
