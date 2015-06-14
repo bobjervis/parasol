@@ -742,10 +742,18 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		ref<Type> existingType = operand.type;
 		ref<Type> newType = result.type;
 		switch (existingType.family()) {
+		case	BOOLEAN:
 		case	UNSIGNED_8:
 			switch (newType.family()) {
+			case	BOOLEAN:
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
+			case	ADDRESS:
+			case	FUNCTION:
 				int depth = tempStackDepth();
 				assignRegisterTemp(operand, longMask, compileContext);
 				f().r.cleanupTemps(result, depth);
@@ -755,31 +763,63 @@ class X86_64AssignTemps extends X86_64AddressModes {
 					result.register = byte(int(f().r.latestResult(operand)));
 				return;
 
+			case	FLOAT_32:
+			case	FLOAT_64:
 			case	ENUM:
 				assignCast(result, operand, regMask, longMask, compileContext);
 				return;
+				
+			case	CLASS:
+				if (newType.indirectType(compileContext) != null) {
+					assignCast(result, operand, regMask, 0, compileContext);
+					return;
+				}
+				break;
 			}
 			break;
 			
+		case	SIGNED_16:
 		case	UNSIGNED_16:
 			switch (newType.family()) {
+			case	BOOLEAN:
 			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
+			case	ADDRESS:
+			case	FUNCTION:
 				assignCast(result, operand, regMask, 0, compileContext);
 				return;
+
+			case	FLOAT_32:
+			case	FLOAT_64:
+			case	ENUM:
+				assignCast(result, operand, regMask, longMask, compileContext);
+				return;
+				
+			case	CLASS:
+				if (newType.indirectType(compileContext) != null) {
+					assignCast(result, operand, regMask, 0, compileContext);
+					return;
+				}
+				break;
 			}
 			break;
 			
 		case	UNSIGNED_32:
 		case	SIGNED_32:
 			switch (newType.family()) {
+			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ADDRESS:
+			case	FUNCTION:
 				assignCast(result, operand, regMask, 0, compileContext);
 				if (unsigned(int(result.register)) > unsigned(int(R.MAX_REG)))
 					assert(false);
@@ -802,12 +842,20 @@ class X86_64AssignTemps extends X86_64AddressModes {
 
 		case	SIGNED_64:
 			switch (newType.family()) {
+			case	BOOLEAN:
 			case	UNSIGNED_32:
 			case	SIGNED_32:
 			case	ADDRESS:
+			case	FUNCTION:
 				assignCast(result, operand, regMask, 0, compileContext);
 				return;
 
+			case	FLOAT_32:
+			case	FLOAT_64:
+			case	ENUM:
+				assignCast(result, operand, regMask, longMask, compileContext);
+				return;
+				
 			case	CLASS:
 				if (newType.indirectType(compileContext) != null) {
 					assignCast(result, operand, regMask, 0, compileContext);
@@ -847,9 +895,18 @@ class X86_64AssignTemps extends X86_64AddressModes {
 
 		case	ENUM:
 			switch (newType.family()) {
+			case	BOOLEAN:
 			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
+			case	SIGNED_64:
+			case	FLOAT_32:
+			case	FLOAT_64:
 			case	ADDRESS:
+			case	ENUM:
+			case	FUNCTION:
 				assignCast(result, operand, regMask, longMask, compileContext);
 				return;
 
@@ -883,6 +940,35 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				// A general class coercion from another class type.
 				if (existingType.size() == newType.size())
 					return;
+			}
+			break;
+
+		case	FUNCTION:
+			switch (newType.family()) {
+			case	BOOLEAN:
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	SIGNED_16:
+			case	SIGNED_32:
+			case	SIGNED_64:
+			case	ADDRESS:
+			case	FUNCTION:
+				assignCast(result, operand, regMask, 0, compileContext);
+				return;
+
+			case	FLOAT_32:
+			case	FLOAT_64:
+			case	ENUM:
+				assignCast(result, operand, regMask, longMask, compileContext);
+				return;
+				
+			case	CLASS:
+				if (newType.indirectType(compileContext) != null) {
+					assignCast(result, operand, regMask, 0, compileContext);
+					return;
+				}
+				break;
 			}
 			break;
 		}

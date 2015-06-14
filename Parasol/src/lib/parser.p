@@ -972,39 +972,11 @@ class Parser {
 			break;
 
 		case	FUNCTION:
-			t = _scanner.next();
-			if (t != Token.LEFT_CURLY) {
-				_scanner.pushBack(t);
-				x = parseTerm(true);
-				if (x.op() == Operator.SYNTAX_ERROR)
-					return x;
-				t = _scanner.next();
-				if (t != Token.LEFT_CURLY) {
-					_scanner.pushBack(t);
-					return resync(MessageId.SYNTAX_ERROR);
-				}
-				switch (x.op()) {
-				case	FUNCTION:
-					func = ref<Function>(x);
-					break;
-
-				case	IDENTIFIER:
-				case	VECTOR_OF:
-				case	TEMPLATE:
-				case	CLASS:
-				case	MAP:
-				case	SUBSCRIPT:
-					func = _tree.newFunction(Function.Category.NORMAL, x, null, null, _scanner.location());
-					break;
-
-				default:
-					return _tree.newSyntaxError(x.location());
-				}
-			} else
-				func = _tree.newFunction(Function.Category.NORMAL, null, null, null, _scanner.location());
-			func.body = _tree.newBlock(Operator.BLOCK, _scanner.location());
-			parseBlock(func.body);
-			x = func;
+			x = parseTerm(true);
+			if (x.op() == Operator.SYNTAX_ERROR)
+				return x;
+			if (x.op() != Operator.FUNCTION)
+				return _tree.newSyntaxError(x.location());
 			break;
 
 		case	ELSE:
@@ -1032,9 +1004,18 @@ class Parser {
 			case	LEFT_PARENTHESIS:
 				if (!parseParameterList(Token.RIGHT_PARENTHESIS, &parameters))
 					return parameters.node;
-				if (inFunctionLiteral)
-					x = _tree.newFunction(Function.Category.NORMAL, x, null, parameters, location);
-				else // This is provisional.  It may be a call, a cast or a function declarator depending on context
+				if (inFunctionLiteral) {
+					t = _scanner.next();
+					if (t == Token.LEFT_CURLY) {
+						ref<Function> func = _tree.newFunction(Function.Category.NORMAL, x, null, parameters, location);
+						func.body = _tree.newBlock(Operator.BLOCK, _scanner.location());
+						parseBlock(func.body);
+						return func;
+					} else {
+						_scanner.pushBack(t);
+						return _tree.newFunction(Function.Category.DECLARATOR, x, null, parameters, location);
+					}
+				} else // This is provisional.  It may be a call, a cast or a function declarator depending on context
 					x = _tree.newCall(Operator.CALL, x, parameters, location);
 				break;
 

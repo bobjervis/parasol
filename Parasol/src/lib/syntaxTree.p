@@ -859,6 +859,7 @@ class Binary extends Node {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	FLOAT_32:
@@ -2849,6 +2850,7 @@ class Call extends ParameterBag {
 		case	ADDRESS:
 		case	BOOLEAN:
 		case	ENUM:
+		case	FUNCTION:
 			switch (newType.family()) {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -2891,6 +2893,7 @@ class Call extends ParameterBag {
 				case	ADDRESS:
 				case	BOOLEAN:
 				case	ENUM:
+				case	FUNCTION:
 					return true;
 
 				case	CLASS:
@@ -3200,11 +3203,17 @@ class Constant extends Node {
 //			printf("v = %d char.MAX_VALUE=%d\n", v, int(char.MAX_VALUE));
 			return v >= 0 && v <= char.MAX_VALUE;
 
+		case	SIGNED_16:
+//			printf("v = %d char.MAX_VALUE=%d\n", v, int(char.MAX_VALUE));
+//			return v >= short.MIN_VALUE && v <= short.MAX_VALUE;
+
 		case	SIGNED_32:
 			return v >= int.MIN_VALUE && v <= int.MAX_VALUE;
 
-		case	SIGNED_64:
 		case	UNSIGNED_32:
+			return v >= 0 && v <= unsigned.MAX_VALUE;
+
+		case	SIGNED_64:
 			return true;
 /*
 	 	 	 Note: Allowing an integer zero to be considered to 'represent' a valid pointer value,
@@ -4244,6 +4253,32 @@ class Leaf extends Node {
 	public void print(int indent) {
 		printBasic(indent);
 		printf("\n");
+	}
+	
+	public boolean canCoerce(ref<Type> newType, boolean explicitCast, ref<CompileContext> compileContext) {
+		switch (op()) {
+		case	NULL:
+			switch (newType.family()) {
+			case	STRING:
+			case	ENUM:
+			case	FUNCTION:
+				return true;
+
+			case	CLASS:
+				if (newType.indirectType(compileContext) != null)
+					return true;
+				break;
+
+			case	SIGNED_32:
+			case	SIGNED_64:
+				return explicitCast;
+
+			default:
+				break;
+			}
+			break;
+		}
+		return super.canCoerce(newType, explicitCast, compileContext);
 	}
 /*
 private:
@@ -5726,8 +5761,16 @@ class Unary extends Node {
 				assert(type.scope() != null);
 				ref<Type> targetType = null;
 				switch (_operand.type.family()) {
+				case	BOOLEAN:
+					targetType = compileContext.arena().builtInType(TypeFamily.SIGNED_64);
+					break;
+					
+				case	UNSIGNED_8:
 				case	UNSIGNED_16:
 				case	UNSIGNED_32:
+				case	UNSIGNED_64:
+				case	SIGNED_8:
+				case	SIGNED_16:
 				case	SIGNED_32:
 				case	SIGNED_64:
 					targetType = compileContext.arena().builtInType(TypeFamily.SIGNED_64);
@@ -5740,6 +5783,10 @@ class Unary extends Node {
 				case	STRING:
 					targetType = compileContext.arena().builtInType(TypeFamily.STRING);
 					break;
+					
+				case	ENUM:
+					print(0);
+					assert(false);
 					
 				case	CLASS:
 					if (_operand.type.indirectType(compileContext) != null) {
@@ -6295,6 +6342,7 @@ class Node {
 			switch (type.family()) {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
+			case	SIGNED_16:
 				t = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
 				return coerce(compileContext.tree(), t, false, compileContext);
 
@@ -6345,28 +6393,6 @@ class Node {
 	}
 
 	public boolean canCoerce(ref<Type> newType, boolean explicitCast, ref<CompileContext> compileContext) {
-		switch (_op) {
-		case	NULL:
-			switch (newType.family()) {
-			case	STRING:
-			case	ENUM:
-			case	FUNCTION:
-				return true;
-
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null)
-					return true;
-				break;
-
-			case	SIGNED_32:
-			case	SIGNED_64:
-				return explicitCast;
-
-			default:
-				break;
-			}
-			break;
-		}
 		return type.widensTo(newType, compileContext);
 	}
 
@@ -6930,6 +6956,8 @@ boolean balancePair(ref<Node> parent, ref<ref<Node>> leftp, ref<ref<Node>> right
 }
 
 ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
+	if (expression.deferAnalysis())
+		return expression;
 	switch (expression.op()) {
 	case	CALL:
 	case	AND_ASSIGN:

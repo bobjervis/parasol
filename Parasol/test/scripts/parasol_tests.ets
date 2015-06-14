@@ -161,6 +161,7 @@ compile(expect: fail, message: NOT_ENUM_INSTANCE) { "enum e { A, B, C }; e x; sw
 compile(expect: fail, message: ABSTRACT_INSTANCE_DISALLOWED) { 
 			"class Foo { abstract int f(); Foo() {} }; ref<Foo> a = new Foo();" 
 		}
+compile() { "void stat(int x) {} void foo(long x); foo = function void(long)(stat);" }
 
 // The matrix of allowed operators for boolean operands:
 
@@ -177,6 +178,113 @@ compile() { "boolean a = true || true;" }
 compile() { "boolean a = !true;" }
 
 compile(expect: fail, message: BAD_MULTI_ASSIGN) { "int x,y; (x, y) = (1, 3);" }
+
+// Casts
+
+// From byte
+
+compile() { "byte src; char x; x = src;" }
+compile() { "byte src; unsigned x; x = src;" }
+compile() { "byte src; short x; x = src;" }
+compile() { "byte src; int x; x = src;" }
+compile() { "byte src; long x; x = src;" }
+compile() { "byte src; float x; x = src;" }
+compile() { "byte src; double x; x = src;" }
+compile() { "byte src; var x; x = src;" }
+compile() { "byte src; address x; x = address(src);" }
+compile() { "char src; boolean x; x = boolean(src);" }
+compile() { "byte src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "byte src; int x(double z); x = function int(double)(src);" }
+
+// From char
+
+compile() { "char src; byte x; x = byte(src);" }
+compile() { "char src; unsigned x; x = src;" }
+compile() { "char src; short x; x = short(src);" }
+compile() { "char src; int x; x = src;" }
+compile() { "char src; long x; x = src;" }
+compile() { "char src; float x; x = src;" }
+compile() { "char src; double x; x = src;" }
+compile() { "char src; var x; x = src;" }
+compile() { "char src; address x; x = address(src);" }
+compile() { "char src; boolean x; x = boolean(src);" }
+compile() { "char src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "char src; int x(double z); x = function int(double)(src);" }
+
+// From unsigned
+
+compile() { "unsigned src; byte x; x = byte(src);" }
+compile() { "unsigned src; char x; x = char(src);" }
+compile() { "unsigned src; short x; x = short(src);" }
+compile() { "unsigned src; int x; x = int(src);" }
+compile() { "unsigned src; long x; x = src;" }
+compile() { "unsigned src; float x; x = src;" }
+compile() { "unsigned src; double x; x = src;" }
+compile() { "unsigned src; var x; x = src;" }
+compile() { "unsigned src; address x; x = address(src);" }
+compile() { "unsigned src; boolean x; x = boolean(src);" }
+compile() { "unsigned src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "unsigned src; int x(double z); x = function int(double)(src);" }
+
+// From short
+
+compile() { "short src; byte x; x = byte(src);" }
+compile() { "short src; char x; x = char(src);" }
+compile() { "short src; unsigned x; x = unsigned(src);" }
+compile() { "short src; int x; x = src;" }
+compile() { "short src; long x; x = src;" }
+compile() { "short src; float x; x = src;" }
+compile() { "short src; double x; x = src;" }
+compile() { "short src; var x; x = src;" }
+compile() { "short src; address x; x = address(src);" }
+compile() { "short src; boolean x; x = boolean(src);" }
+compile() { "short src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "short src; int x(double z); x = function int(double)(src);" }
+
+// From boolean
+
+compile() { "boolean src; byte x; x = byte(src);" }
+compile() { "boolean src; char x; x = char(src);" }
+compile() { "boolean src; unsigned x; x = unsigned(src);" }
+compile() { "boolean src; short x; x = short(src);" }
+compile() { "boolean src; int x; x = int(src);" }
+compile() { "boolean src; long x; x = long(src);" }
+compile() { "boolean src; float x; x = float(src);" }
+compile() { "boolean src; double x; x = double(src);" }
+compile() { "boolean src; var x; x = src;" }
+compile() { "boolean src; address x; x = address(src);" }
+compile() { "boolean src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "boolean src; int x(double z); x = function int(double)(src);" }
+
+// From Foo
+
+compile() { "enum Foo { A, B }; Foo src; byte x; x = byte(src);" }
+compile() { "enum Foo { A, B }; Foo src; char x; x = char(src);" }
+compile() { "enum Foo { A, B }; Foo src; unsigned x; x = unsigned(src);" }
+compile() { "enum Foo { A, B }; Foo src; short x; x = short(src);" }
+compile() { "enum Foo { A, B }; Foo src; int x; x = int(src);" }
+compile() { "enum Foo { A, B }; Foo src; long x; x = long(src);" }
+//compile() { "enum Foo { A, B }; Foo src; float x; x = float(src);" }
+//compile() { "enum Foo { A, B }; Foo src; double x; x = double(src);" }
+//compile() { "enum Foo { A, B }; Foo src; var x; x = src;" }
+compile() { "enum Foo { A, B }; Foo src; address x; x = address(src);" }
+compile() { "enum Foo { A, B }; Foo src; boolean x; x = boolean(src);" }
+compile() { "enum Foo { A, B }; Foo src; int x(double z); x = function int(double)(src);" }
+
+// From function int(double);
+
+compile() { "int src(double z); byte x; x = byte(src);" }
+compile() { "int src(double z); char x; x = char(src);" }
+compile() { "int src(double Z); unsigned x; x = unsigned(src);" }
+compile() { "int src(double z); short x; x = short(src);" }
+compile() { "int src(double z); int x; x = int(src);" }
+compile() { "int src(double z); long x; x = long(src);" }
+compile() { "int src(double z); float x; x = float(src);" }
+compile() { "int src(double z); double x; x = double(src);" }
+//compile() { "int src(double z); var x; x = src;" }
+compile() { "int src(double z); address x; x = address(src);" }
+compile() { "int src(double z); boolean x; x = boolean(src);" }
+compile() { "int src(double z); enum Foo { A, B }; Foo x; x = Foo(src);" }
 
 // Disallowed implicit casts.
 
@@ -1076,8 +1184,6 @@ expression() { "a(b, @n c)" }
 expression() { "a(@n(x) @m b c, d)" }
 expression() { "a(b c, @n d e)" }
 expression() { "a<b>" }
-expression() { "function {a;}" }
-expression() { "function int {a;}" }
 expression() { "function int (a b) {x;}" }
 expression() { "function int (a) {a;}" }
 expression() { "function int (a... b) {a;}" }
@@ -1111,15 +1217,12 @@ expression(expect: fail) { "function int (a" }
 expression(expect: fail) { "function int (@n" }
 expression(expect: fail) { "function int (a b" }
 expression(expect: fail) { "function int (@n a b" }
-expression(expect: fail) { "function int (a b)" }
 expression(expect: fail) { "function int (a b) {" }
-expression(expect: fail) { "function int (a)" }
 expression(expect: fail) { "function int (a) {" }
 expression(expect: fail) { "function int (a b," }
 expression(expect: fail) { "function int (a b, c" }
 expression(expect: fail) { "function int (a b, @n c" }
 expression(expect: fail) { "function int (a b, c," }
-expression(expect: fail) { "function int (a b, c, d)" }
 expression(expect: fail) { "function int (a b, c, d) {" }
 expression(expect: fail) { "function +int {}" }
 expression(expect: fail, message: EXPECTING_TERM) { @n a }

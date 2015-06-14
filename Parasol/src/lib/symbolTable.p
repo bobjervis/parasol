@@ -2280,7 +2280,7 @@ class FunctionType extends Type {
 	}
 
 	public boolean extendsFormally(ref<Type> other, ref<CompileContext> compileContext) {
-		assert(false);
+//		assert(false);
 		return false;
 	}
 

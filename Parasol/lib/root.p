@@ -54,6 +54,7 @@ class char {
 		return false;
 	}
 }
+
 class byte {
 	public static byte MIN_VALUE = 0;
 	public static byte MAX_VALUE = 255;
@@ -373,6 +374,43 @@ class byte {
 		else
 			return *this;
 	}
+}
+
+class short {
+//	public static short MIN_VALUE = 0xffffffffffff8000;
+//	public static short MAX_VALUE = 0x7fff;
+
+	public short() {
+	}
+/*
+	public short(short value) {
+		*this = value;
+	}
+	
+	public short compare(short other) {
+		return *this - other;
+	}
+	
+	public static short, boolean parse(string text) {
+		int value = 0;
+		int i = 0;
+		boolean negative = false;
+		if (text[i] == '-') {
+			negative = true;
+			i++;
+		}
+		for (; i < text.length(); i++) {
+			byte x = text[i];
+			if (x.isDigit())
+				value = value * 10 + (x - '0');
+			else
+				return 0, false;
+		}
+		if (negative)
+			value = -value;
+		return short(value), true;
+	}
+*/
 }
 
 class int {

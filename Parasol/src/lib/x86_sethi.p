@@ -211,6 +211,7 @@ void sethiUllman(ref<Node> node, ref<CompileContext> compileContext, ref<Target>
 	case	THIS:
 	case	SUPER:
 	case	IDENTIFIER:
+	case	FUNCTION:
 	case	VARIABLE:
 	case	INTEGER:
 	case	CHARACTER:
@@ -218,6 +219,7 @@ void sethiUllman(ref<Node> node, ref<CompileContext> compileContext, ref<Target>
 	case	STRING:
 	case	NULL:
 	case	TEMPLATE_INSTANCE:
+	case	BIND:
 		node.sethi = 0;
 		break;
 		

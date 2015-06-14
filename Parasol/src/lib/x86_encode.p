@@ -75,6 +75,8 @@ enum X86 {
 	MOV,
 	MOVSD,
 	MOVSS,
+	MOVSX,
+	MOVSX_REX_W,
 	MOVSXD,
 	MOVZX,
 	MUL,
@@ -733,9 +735,9 @@ class X86_64Encoder extends Target {
 				assert(false);
 			}
 		} else {
-			R dest = R(int(left.register));
+			R dest = R(left.register);
 			if (right.register != 0) {
-				R src = R(int(right.register));
+				R src = R(right.register);
 				inst(instruction, right.type.family(), dest, src);
 			} else if (right.op() == Operator.INTEGER) {
 				switch (right.type.family()) {
@@ -797,11 +799,28 @@ class X86_64Encoder extends Target {
 				emit(byte(int(operand)));
 				return;
 				
+			case	UNSIGNED_16:
+			case	SIGNED_16:
+				emit(0x66);
+				emitRex(family, null, R.NO_REG, dest);
+				if (operand >= -128 && operand <= 127) {
+					emit(0x83);
+					modRM(3, group1opcodes[instruction], rmValues[dest]);
+					emit(byte(int(operand)));
+				} else {
+					emit(0x81);
+					modRM(3, group1opcodes[instruction], rmValues[dest]);
+					emitShort(int(operand));
+				}
+				return;
+
 			case	SIGNED_32:
 			case	UNSIGNED_32:
 			case	ENUM:
 			case	ADDRESS:
 			case	SIGNED_64:
+			case	CLASS:
+			case	FUNCTION:
 				emitRex(family, null, R.NO_REG, dest);
 				if (operand >= -128 && operand <= 127) {
 					emit(0x83);
@@ -860,6 +879,8 @@ class X86_64Encoder extends Target {
 				emitShort(int(operand));
 				return;
 
+			case	SIGNED_16:
+				emit(0x66);
 			case	SIGNED_32:
 				emitRex(family, null, R.NO_REG, dest);
 				emit(byte(0xb8 + rmValues[dest]));
@@ -929,6 +950,19 @@ class X86_64Encoder extends Target {
 		fixup(FixupKind.RELATIVE32_DATA, enumSymbol);
 		emitInt(offset);
 	}
+	/*
+	 * This is actually a SUB instruction (dest contains the negative of an enum address).
+	 * 
+	 * 		SUB		<dest>,&enumSymbol
+	 */
+	void subEnumType(R dest, ref<Symbol> enumSymbol, int offset) {
+		emit(byte(REX_W | rexValues[dest]));
+		emit(0x2b);
+		modRM(0, rmValues[dest], 5);
+		fixup(FixupKind.RELATIVE32_DATA, enumSymbol);
+		emitInt(offset);
+	}
+	
 	void inst(X86 instruction, R dest, R reg, int offset) {
 		switch (instruction) {
 		case	MOV:
@@ -1120,7 +1154,7 @@ class X86_64Encoder extends Target {
 			
 		case	CVTSI2SS:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, null, dest, src);
+			emitRex(family, null, dest, src);
 			emit(0x0f);
 			emit(0x2a);
 			modRM(3, rmValues[dest], rmValues[src]);
@@ -1128,7 +1162,7 @@ class X86_64Encoder extends Target {
 			
 		case	CVTSI2SD:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, null, dest, src);
+			emitRex(family, null, dest, src);
 			emit(0x0f);
 			emit(0x2a);
 			modRM(3, rmValues[dest], rmValues[src]);
@@ -1226,6 +1260,13 @@ class X86_64Encoder extends Target {
 		case	MOVSXD:
 			emitRex(TypeFamily.SIGNED_64, null, src, dest);
 			emit(0x63);
+			modRM(3, rmValues[src], rmValues[dest]);
+			return;
+
+		case	MOVSX_REX_W:
+			emitRex(TypeFamily.SIGNED_64, null, src, dest);
+			emit(0x0f);
+			emit(0xbf);
 			modRM(3, rmValues[src], rmValues[dest]);
 			return;
 
@@ -1428,6 +1469,7 @@ class X86_64Encoder extends Target {
 				break;
 				
 			case	UNSIGNED_16:
+			case	SIGNED_16:
 				emit(0x66);
 				emitRex(left.type.family(), left, right, R.NO_REG);
 				emit(byte(opcodes[instruction] + 0x01));
@@ -1514,6 +1556,20 @@ class X86_64Encoder extends Target {
 			emitRex(right.type.family(), right, left, R.NO_REG);
 			emit(0x0f);
 			emit(0xb6);
+			modRM(right, rmValues[left], 0, 0);
+			break;
+			
+		case	MOVSX:
+			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emit(0x0f);
+			emit(0xbf);
+			modRM(right, rmValues[left], 0, 0);
+			break;
+			
+		case	MOVSX_REX_W:
+			emitRex(TypeFamily.SIGNED_64, right, left, R.NO_REG);
+			emit(0x0f);
+			emit(0xbf);
 			modRM(right, rmValues[left], 0, 0);
 			break;
 			
@@ -1627,6 +1683,7 @@ class X86_64Encoder extends Target {
 				break;
 				
 			case	UNSIGNED_16:
+			case	SIGNED_16:
 				emit(0x66);
 				emitRex(right.type.family(), right, left, R.NO_REG);
 				emit(byte(opcodes[instruction] + 0x03));
@@ -2414,6 +2471,13 @@ class X86_64Encoder extends Target {
 				}
 				break;
 				
+			case	ENUMERATION:
+				modRM(0, regOpcode, 5);
+				ref<EnumInstanceType> t = ref<EnumInstanceType>(sym.type());
+				fixup(FixupKind.RELATIVE32_DATA, t.symbol());
+				emitInt(-ipAdjust + allAdjust + sym.offset * int.bytes);
+				break;
+				
 			case	AUTO:
 			case	PARAMETER:
 				int offset = sym.offset + allAdjust;
@@ -2580,6 +2644,7 @@ class X86_64Encoder extends Target {
 				case	STATIC:
 				case	AUTO:
 				case	PARAMETER:
+				case	ENUMERATION:
 					break;
 					
 				case	MEMBER:
@@ -2591,7 +2656,7 @@ class X86_64Encoder extends Target {
 							ref<Binary> b = ref<Binary>(object);
 							object = b.right();
 						}
-						rex |= rexbValues[R(int(object.register))];
+						rex |= rexbValues[R(object.register)];
 					}
 					break;
 
@@ -2628,6 +2693,7 @@ class X86_64Encoder extends Target {
 		case	STRING:
 		case	ADDRESS:
 		case	ENUM:
+		case	FUNCTION:
 		case	CLASS:
 		case	FLOAT_64:
 			rex |= REX_W;
@@ -3494,6 +3560,8 @@ opcodeNames.append("LEAVE");
 opcodeNames.append("MOV");
 opcodeNames.append("MOVSD");
 opcodeNames.append("MOVSS");
+opcodeNames.append("MOVSX");
+opcodeNames.append("MOVSX_REX_W");
 opcodeNames.append("MOVSXD");
 opcodeNames.append("MOVZX");
 opcodeNames.append("MUL");

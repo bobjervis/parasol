@@ -441,6 +441,7 @@ class BuiltInMap {
 
 private BuiltInMap[] builtInMap;
 
+builtInMap.append(BuiltInMap(TypeFamily.SIGNED_16, "short"));
 builtInMap.append(BuiltInMap(TypeFamily.SIGNED_32, "int"));
 builtInMap.append(BuiltInMap(TypeFamily.SIGNED_64, "long"));
 builtInMap.append(BuiltInMap(TypeFamily.UNSIGNED_8, "byte"));

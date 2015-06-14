@@ -312,40 +312,80 @@ class X86_64AddressModes extends X86_64Encoder {
 		ref<Type> existingType = operand.type;
 		ref<Type> newType = dest.type;
 		switch (existingType.family()) {
+		case	BOOLEAN:
 		case	UNSIGNED_8:
 			switch (newType.family()) {
+			case	BOOLEAN:
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ENUM:
+			case	ADDRESS:
+			case	FUNCTION:
+			case	FLOAT_32:
+			case	FLOAT_64:
 				markAddressModes(operand, compileContext);
 				return;
+
+			case	CLASS:
+				if (newType.indirectType(compileContext) != null) {
+					markAddressModes(operand, compileContext);
+					return;
+				}
+				break;
 			}
 			break;
 			
 		case	UNSIGNED_16:
+		case	SIGNED_16:
 			switch (newType.family()) {
+			case	BOOLEAN:
 			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
+			case	ADDRESS:
+			case	FUNCTION:
 				tryMakeMode(operand, MC_FULL, 0, compileContext);
 				return;
+
+			case	ENUM:
+			case	FLOAT_32:
+			case	FLOAT_64:
+				markAddressModes(operand, compileContext);
+				return;
+
+			case	CLASS:
+				if (newType.indirectType(compileContext) != null) {
+					markAddressModes(operand, compileContext);
+					return;
+				}
+				break;
 			}
 			break;
 			
 		case	UNSIGNED_32:
 		case	SIGNED_32:
 			switch (newType.family()) {
+			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
+			case	SIGNED_64:
+			case	ADDRESS:
+			case	FUNCTION:
 				tryMakeMode(operand, MC_FULL, 0, compileContext);
 				return;
 				
 			case	FLOAT_32:
 			case	FLOAT_64:
-			case	SIGNED_64:
-			case	ADDRESS:
 			case	ENUM:
 				markAddressModes(operand, compileContext);
 				return;
@@ -361,10 +401,19 @@ class X86_64AddressModes extends X86_64Encoder {
 
 		case	SIGNED_64:
 			switch (newType.family()) {
+			case	BOOLEAN:
 			case	UNSIGNED_32:
 			case	SIGNED_32:
+			case	SIGNED_64:
 			case	ADDRESS:
+			case	FUNCTION:
 				tryMakeMode(operand, MC_FULL, 0, compileContext);
+				return;
+
+			case	FLOAT_32:
+			case	FLOAT_64:
+			case	ENUM:
+				markAddressModes(operand, compileContext);
 				return;
 
 			case	CLASS:
@@ -392,6 +441,7 @@ class X86_64AddressModes extends X86_64Encoder {
 			case	FUNCTION:
 			case	SIGNED_64:
 			case	ENUM:
+			case	FUNCTION:
 				tryMakeMode(operand, MC_FULL, 0, compileContext);
 				return;
 
@@ -406,10 +456,22 @@ class X86_64AddressModes extends X86_64Encoder {
 
 		case	ENUM:
 			switch (newType.family()) {
+			case	BOOLEAN:
 			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
-			case	ADDRESS:
+			case	SIGNED_64:
+			case	ENUM:
+			case	FLOAT_32:
+			case	FLOAT_64:
 				markAddressModes(operand, compileContext);
+				return;
+
+			case	ADDRESS:
+			case	FUNCTION:
+				tryMakeMode(operand, MC_FULL, 0, compileContext);
 				return;
 
 			case	CLASS:
@@ -428,6 +490,7 @@ class X86_64AddressModes extends X86_64Encoder {
 				case	SIGNED_64:
 				case	ADDRESS:
 				case	STRING:
+				case	FUNCTION:
 					tryMakeMode(operand, MC_FULL, 0, compileContext);
 					return;
 					
@@ -442,6 +505,32 @@ class X86_64AddressModes extends X86_64Encoder {
 				// A general class coercion from another class type.
 				if (existingType.size() == newType.size())
 					return;
+			}
+			break;
+			
+		case	FUNCTION:
+			switch (newType.family()) {
+			case	BOOLEAN:
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	SIGNED_16:
+			case	SIGNED_32:
+			case	SIGNED_64:
+			case	ENUM:
+			case	ADDRESS:
+			case	FUNCTION:
+			case	FLOAT_32:
+			case	FLOAT_64:
+				markAddressModes(operand, compileContext);
+				return;
+
+			case	CLASS:
+				if (newType.indirectType(compileContext) != null) {
+					markAddressModes(operand, compileContext);
+					return;
+				}
+				break;
 			}
 			break;
 		}
