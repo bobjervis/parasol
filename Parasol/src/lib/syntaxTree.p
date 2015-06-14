@@ -5747,6 +5747,15 @@ class Unary extends Node {
 				}
 				break;
 				
+			case	FLOAT_32:
+			case	FLOAT_64:
+				switch (_operand.type.family()) {
+				case	VAR:
+					ref<Node> call = createMethodCall(_operand, "floatValue", tree, compileContext);
+					return call.fold(tree, false, compileContext);
+				}
+				break;
+				
 			case	CLASS:
 				if (type.indirectType(compileContext) != null) {
 					switch (_operand.type.family()) {
@@ -5762,7 +5771,7 @@ class Unary extends Node {
 				ref<Type> targetType = null;
 				switch (_operand.type.family()) {
 				case	BOOLEAN:
-					targetType = compileContext.arena().builtInType(TypeFamily.SIGNED_64);
+					targetType = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
 					break;
 					
 				case	UNSIGNED_8:
@@ -5774,6 +5783,11 @@ class Unary extends Node {
 				case	SIGNED_32:
 				case	SIGNED_64:
 					targetType = compileContext.arena().builtInType(TypeFamily.SIGNED_64);
+					break;
+					
+				case	FLOAT_32:
+				case	FLOAT_64:
+					targetType = compileContext.arena().builtInType(TypeFamily.FLOAT_64);
 					break;
 					
 				case	ADDRESS:

@@ -105,7 +105,7 @@ assert(i == 1);
 assert(l == 1);
 assert(f == 1);
 assert(d == 1);
-assert(v == 1);
+assert(long(v) == 1);
 assert(long(a) == 1);
 assert(long(e) == 1);
 assert(long(p) == 1);
@@ -252,6 +252,96 @@ assert(long(bool) == 151);
 assert(long(e) == 1027843991);
 assert(long(p) == 1027843991);
 assert(long(fn) == 1027843991);
+
+l = 9098143217445643188;
+
+b = byte(l);
+c = char(l);
+u = unsigned(l);
+s = short(l);
+i = int(l);
+f = l;
+d = l;
+v = l;
+a = address(l);
+bool = boolean(l);
+e = E(l);
+p = ref<int>(l);
+fn = function int(double)(l);
+
+assert(b == 180);
+assert(c == 9140);
+assert(u == 1601840052);
+assert(s == 9140);
+assert(i == 1601840052);
+assert(f == 9098143217445643188);
+assert(d == 9098143217445643188);
+assert(v == 9098143217445643188);
+assert(long(a) == 9098143217445643188);
+assert(long(bool) == 180);
+assert(long(e) == -125228819409132620);		// Enums divide by four (the smallest size for the class)
+assert(long(p) == 9098143217445643188);
+assert(long(fn) == 9098143217445643188);
+
+f = 16121908;
+
+b = byte(f);
+c = char(f);
+u = unsigned(f);
+s = short(f);
+i = int(f);
+l = long(f);
+d = f;
+v = f;
+a = address(f);
+bool = boolean(f);
+e = E(f);
+p = ref<int>(f);
+fn = function int(double)(f);
+
+assert(b == 52);
+assert(c == 52);
+assert(u == 16121908);
+assert(s == 52);
+assert(i == 16121908);
+assert(f == 16121908);
+assert(d == 16121908);
+assert(float(v) == 16121908);
+assert(long(a) == 16121908);
+assert(long(bool) == 52);
+//assert(long(e) == 16121908);		// Enums divide by four (the smallest size for the class)
+assert(long(p) == 16121908);
+assert(long(fn) == 16121908);
+
+d = 2632372374184627;
+
+b = byte(d);
+c = char(d);
+u = unsigned(d);
+s = short(d);
+i = int(d);
+l = long(d);
+f = float(d);
+v = d;
+a = address(d);
+bool = boolean(d);
+e = E(d);
+p = ref<int>(d);
+fn = function int(double)(d);
+
+assert(b == 179);
+assert(c == 41651);
+assert(u == 4098335411);
+assert(s == -23885);
+assert(i == -196631885);
+assert(l == 2632372374184627);
+assert(f == 2632372374184627);
+assert(float(v) == 2632372374184627);
+assert(long(a) == 2632372374184627);
+assert(long(bool) == 179);
+//assert(long(e) == 16121908);		// Enums divide by four (the smallest size for the class)
+assert(long(p) == 2632372374184627);
+assert(long(fn) == 2632372374184627);
 
 e = e.C;
 

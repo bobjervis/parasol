@@ -547,15 +547,14 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			assignLvalueTemps(u.operand(), compileContext);
 			f().r.cleanupTemps(node, depth);
 			rhsMask = familyMasks[node.type.family()];
-			node.register = byte(int(f().r.getreg(node, rhsMask, rhsMask)));
+			node.register = byte(f().r.getreg(node, rhsMask, rhsMask));
 			break;
 			
 		case	INDIRECT:
 			u = ref<Unary>(node);
-			regMask &= familyMasks[node.type.family()];
 			assignRegisterTemp(u.operand(), longMask, compileContext);
 			f().r.cleanupTemps(node, depth);
-			node.register = byte(int(f().r.getreg(node, regMask, rhsMask)));
+			node.register = byte(f().r.getreg(node, regMask, familyMasks[node.type.family()]));
 			break;
 			
 		case	NEGATE:
@@ -843,8 +842,12 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	SIGNED_64:
 			switch (newType.family()) {
 			case	BOOLEAN:
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
 			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
+			case	SIGNED_64:
 			case	ADDRESS:
 			case	FUNCTION:
 				assignCast(result, operand, regMask, 0, compileContext);
@@ -859,6 +862,36 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	CLASS:
 				if (newType.indirectType(compileContext) != null) {
 					assignCast(result, operand, regMask, 0, compileContext);
+					return;
+				}
+				break;
+			}
+			break;
+
+		case	FLOAT_32:
+		case	FLOAT_64:
+			switch (newType.family()) {
+			case	BOOLEAN:
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	SIGNED_16:
+			case	SIGNED_32:
+			case	SIGNED_64:
+			case	ADDRESS:
+			case	FUNCTION:
+			case	ENUM:
+				assignCast(result, operand, regMask, floatMask, compileContext);
+				return;
+
+			case	FLOAT_32:
+			case	FLOAT_64:
+				assignCast(result, operand, regMask, 0, compileContext);
+				return;
+				
+			case	CLASS:
+				if (newType.indirectType(compileContext) != null) {
+					assignCast(result, operand, regMask, floatMask, compileContext);
 					return;
 				}
 				break;

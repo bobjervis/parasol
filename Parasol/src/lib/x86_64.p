@@ -1775,8 +1775,20 @@ public class X86_64 extends X86_64AssignTemps {
 			expression = ref<Unary>(node);
 			generate(expression.operand(), compileContext);
 			f().r.generateSpills(expression, this);
-			if ((expression.flags & ADDRESS_MODE) == 0)
-				generateLoad(expression, compileContext);
+			if ((expression.flags & ADDRESS_MODE) == 0) {
+				switch (node.type.family()) {
+				case	FLOAT_32:
+					inst(X86.MOVSS, expression, expression.operand(), compileContext);
+					break;
+					
+				case	FLOAT_64:
+					inst(X86.MOVSD, expression, expression.operand(), compileContext);
+					break;
+					
+				default:
+					generateLoad(expression, compileContext);
+				}
+			}
 			break;
 			
 		case	SUBSCRIPT:
@@ -3001,8 +3013,12 @@ public class X86_64 extends X86_64AssignTemps {
 		case	SIGNED_64:
 			switch (newType.family()) {
 			case	BOOLEAN:
-			case	SIGNED_32:
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
 			case	UNSIGNED_32:
+			case	SIGNED_16:
+			case	SIGNED_32:
+			case	SIGNED_64:
 			case	ADDRESS:
 			case	FUNCTION:
 				if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
@@ -3028,21 +3044,76 @@ public class X86_64 extends X86_64AssignTemps {
 			case	ENUM:
 				generateIntToEnum(result, n, ref<EnumInstanceType>(newType));
 				return;
-				/*		
-			case	VAR:
-				ref<Type> t = target.arena().builtInType(TypeFamily.SIGNED_64);
-				if (target.unit() != null) {
-					ref<TypeRef> tr = target.unit().newTypeRef(t, target.arena().stringType().enclosing());
-					target.byteCode(ByteCodes.LDSA);
-					target.byteCode(tr.index());
-				} else {
-					target.byteCode(ByteCodes.VALUE);
-					target.byteCode(0);
+			}
+			break;
+
+		case	FLOAT_32:
+			switch (newType.family()) {
+			case	BOOLEAN:
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	SIGNED_16:
+			case	SIGNED_32:
+			case	SIGNED_64:
+			case	ADDRESS:
+			case	FUNCTION:
+				inst(X86.CVTSS2SI, result, n, compileContext);
+				return;
+
+			case	CLASS:
+				if (newType.indirectType(compileContext) != null) {
+					inst(X86.CVTSS2SI, result, n, compileContext);
+					return;
 				}
-				target.byteCode(ByteCodes.CVTLV);
-				target.pushSp(var.bytes - address.bytes);
-				return;	
-				*/			
+				break;
+
+			case	FLOAT_32:
+				return;
+				
+			case	FLOAT_64:
+				inst(X86.CVTSS2SD, result, n, compileContext);
+				return;
+				
+			case	ENUM:
+				inst(X86.CVTSS2SI, result, n, compileContext);
+				generateIntToEnum(result, n, ref<EnumInstanceType>(newType));
+				return;
+			}
+			break;
+
+		case	FLOAT_64:
+			switch (newType.family()) {
+			case	BOOLEAN:
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	SIGNED_16:
+			case	SIGNED_32:
+			case	SIGNED_64:
+			case	ADDRESS:
+			case	FUNCTION:
+				inst(X86.CVTSD2SI, result, n, compileContext);
+				return;
+
+			case	CLASS:
+				if (newType.indirectType(compileContext) != null) {
+					inst(X86.CVTSD2SI, result, n, compileContext);
+					return;
+				}
+				break;
+
+			case	FLOAT_32:
+				inst(X86.CVTSD2SS, result, n, compileContext);
+				return;
+				
+			case	FLOAT_64:
+				return;
+				
+			case	ENUM:
+				inst(X86.CVTSD2SI, result, n, compileContext);
+				generateIntToEnum(result, n, ref<EnumInstanceType>(newType));
+				return;
 			}
 			break;
 

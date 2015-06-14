@@ -2153,6 +2153,16 @@ class var {
 		_actualType = long;
 	}
 	
+	public var(double value) {
+		_value = *ref<long>(&value);
+		_actualType = double;
+	}
+	
+	public var(boolean b) {
+		_value = long(b);
+		_actualType = boolean;
+	}
+	
 	public var(address p) {
 		_value = long(p);
 		_actualType = address;
@@ -2229,6 +2239,10 @@ class var {
 		return _value;
 	}
 
+	public double floatValue() {
+		return *ref<double>(&_value);
+	}
+	
 	public var leftShift(var other) {
 		long x = _value << int(other);
 		return x;

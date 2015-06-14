@@ -61,8 +61,12 @@ enum X86 {
 	AND,
 	CALL,
 	CMP,
+	CVTSD2SI,
+	CVTSD2SS,
 	CVTSI2SD,
 	CVTSI2SS,
+	CVTSS2SD,
+	CVTSS2SI,
 	CWD,
 	DIV,
 	DIVSD,
@@ -1152,6 +1156,22 @@ class X86_64Encoder extends Target {
 			modRM(3, rmValues[dest], rmValues[src]);
 			return;
 			
+		case	CVTSS2SI:
+			emit(0xf3);
+			emitRex(TypeFamily.SIGNED_64, null, dest, src);
+			emit(0x0f);
+			emit(0x2d);
+			modRM(3, rmValues[dest], rmValues[src]);
+			return;
+			
+		case	CVTSD2SI:
+			emit(0xf2);
+			emitRex(TypeFamily.SIGNED_64, null, dest, src);
+			emit(0x0f);
+			emit(0x2d);
+			modRM(3, rmValues[dest], rmValues[src]);
+			return;
+			
 		case	CVTSI2SS:
 			emit(0xf3);
 			emitRex(family, null, dest, src);
@@ -1658,7 +1678,23 @@ class X86_64Encoder extends Target {
 			emit(0x5e);
 			modRM(right, rmValues[left], 0, 0);
 			break;
-			
+
+		case	CVTSS2SD:
+			emit(0xf3);
+			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emit(0x0f);
+			emit(0x5a);
+			modRM(right, rmValues[left], 0, 0);
+			break;
+
+		case	CVTSD2SS:
+			emit(0xf2);
+			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emit(0x0f);
+			emit(0x5a);
+			modRM(right, rmValues[left], 0, 0);
+			break;
+
 		case	UCOMISD:
 			emit(0x66);
 		case	UCOMISS:
@@ -3546,8 +3582,12 @@ opcodeNames.append("ADDSS");
 opcodeNames.append("AND");
 opcodeNames.append("CALL");
 opcodeNames.append("CMP");
+opcodeNames.append("CVTSD2SI");
+opcodeNames.append("CVTSD2SS");
 opcodeNames.append("CVTSI2SD");
 opcodeNames.append("CVTSI2SS");
+opcodeNames.append("CVTSS2SD");
+opcodeNames.append("CVTSS2SI");
 opcodeNames.append("CWD");
 opcodeNames.append("DIV");
 opcodeNames.append("DIVSD");

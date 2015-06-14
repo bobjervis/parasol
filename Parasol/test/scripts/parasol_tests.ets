@@ -241,6 +241,66 @@ compile() { "short src; boolean x; x = boolean(src);" }
 compile() { "short src; enum Foo { A, B }; Foo x; x = Foo(src);" }
 compile() { "short src; int x(double z); x = function int(double)(src);" }
 
+// From int
+
+compile() { "int src; byte x; x = byte(src);" }
+compile() { "int src; char x; x = char(src);" }
+compile() { "int src; unsigned x; x = unsigned(src);" }
+compile() { "int src; int x; x = src;" }
+compile() { "int src; long x; x = src;" }
+compile() { "int src; float x; x = src;" }
+compile() { "int src; double x; x = src;" }
+compile() { "int src; var x; x = src;" }
+compile() { "int src; address x; x = address(src);" }
+compile() { "int src; boolean x; x = boolean(src);" }
+compile() { "int src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "int src; int x(double z); x = function int(double)(src);" }
+
+// From long
+
+compile() { "long src; byte x; x = byte(src);" }
+compile() { "long src; char x; x = char(src);" }
+compile() { "long src; unsigned x; x = unsigned(src);" }
+compile() { "long src; short x; x = short(src);" }
+compile() { "long src; int x; x = int(src);" }
+compile() { "long src; float x; x = src;" }
+compile() { "long src; double x; x = src;" }
+compile() { "long src; var x; x = src;" }
+compile() { "long src; address x; x = address(src);" }
+compile() { "long src; boolean x; x = boolean(src);" }
+compile() { "long src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "long src; int x(double z); x = function int(double)(src);" }
+
+// From float
+
+compile() { "float src; byte x; x = byte(src);" }
+compile() { "float src; char x; x = char(src);" }
+compile() { "float src; unsigned x; x = unsigned(src);" }
+compile() { "float src; short x; x = short(src);" }
+compile() { "float src; int x; x = int(src);" }
+compile() { "float src; long x; x = long(src);" }
+compile() { "float src; double x; x = src;" }
+compile() { "float src; var x; x = src;" }
+compile() { "float src; address x; x = address(src);" }
+compile() { "float src; boolean x; x = boolean(src);" }
+compile() { "float src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "float src; int x(double z); x = function int(double)(src);" }
+
+// From double
+
+compile() { "double src; byte x; x = byte(src);" }
+compile() { "double src; char x; x = char(src);" }
+compile() { "double src; unsigned x; x = unsigned(src);" }
+compile() { "double src; short x; x = short(src);" }
+compile() { "double src; int x; x = int(src);" }
+compile() { "double src; long x; x = long(src);" }
+compile() { "double src; float x; x = float(src);" }
+compile() { "double src; var x; x = src;" }
+compile() { "double src; address x; x = address(src);" }
+compile() { "double src; boolean x; x = boolean(src);" }
+compile() { "double src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "double src; int x(double z); x = function int(double)(src);" }
+
 // From boolean
 
 compile() { "boolean src; byte x; x = byte(src);" }
