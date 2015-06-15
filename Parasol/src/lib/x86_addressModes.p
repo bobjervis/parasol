@@ -175,6 +175,7 @@ class X86_64AddressModes extends X86_64Encoder {
 		case	TEMPLATE_INSTANCE:
 		case	BYTES:
 		case	CHARACTER:
+		case	FLOATING_POINT:
 			break;
 			
 		case	RIGHT_SHIFT:

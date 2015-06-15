@@ -43,3 +43,5 @@ public abstract int ferror(ref<FILE> fp);
 public abstract void exit(int exitCode);
 
 public abstract pointer<byte> getenv(pointer<byte> variable);
+
+public abstract double strtod(pointer<byte> str, ref<pointer<byte>> endPtr);

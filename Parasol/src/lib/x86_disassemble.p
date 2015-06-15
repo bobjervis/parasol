@@ -564,8 +564,8 @@ class Disassembler {
 				instructionOpcode("addsd");
 				disassembleGfEf(true, true);
 			} else if (_repe) {
-				printf("0x0F escape Byte: '%#x'\n", int(next));
-				assert(false);
+				instructionOpcode("addss");
+				disassembleGfEf(false, false);
 			} else {
 				printf("0x0F escape Byte: '%#x'\n", int(next));
 				assert(false);
@@ -580,8 +580,8 @@ class Disassembler {
 				instructionOpcode("mulsd");
 				disassembleGfEf(true, true);
 			} else if (_repe) {
-				printf("0x0F escape Byte: '%#x'\n", int(next));
-				assert(false);
+				instructionOpcode("mulss");
+				disassembleGfEf(false, false);
 			} else {
 				printf("0x0F escape Byte: '%#x'\n", int(next));
 				assert(false);
@@ -612,8 +612,8 @@ class Disassembler {
 				instructionOpcode("subsd");
 				disassembleGfEf(true, true);
 			} else if (_repe) {
-				printf("0x0F escape Byte: '%#x'\n", int(next));
-				assert(false);
+				instructionOpcode("subss");
+				disassembleGfEf(false, false);
 			} else {
 				printf("0x0F escape Byte: '%#x'\n", int(next));
 				assert(false);
@@ -628,8 +628,8 @@ class Disassembler {
 				instructionOpcode("divsd");
 				disassembleGfEf(true, true);
 			} else if (_repe) {
-				printf("0x0F escape Byte: '%#x'\n", int(next));
-				assert(false);
+				instructionOpcode("divss");
+				disassembleGfEf(false, false);
 			} else {
 				printf("0x0F escape Byte: '%#x'\n", int(next));
 				assert(false);

@@ -102,9 +102,9 @@ int main(string[] args) {
 	d = 17;
 	assert(func(d) == 17);
 	
-//	d = 5.0f;
+	d = 5.0f;
 	
-//	assert(d * 2.5f == 12.5f);
+	assert(d * 2.5f == 12.5f);
 	
 	return 0;
 }

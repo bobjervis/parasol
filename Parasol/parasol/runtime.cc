@@ -2084,7 +2084,7 @@ BuiltInFunctionMap builtInFunctionMap[] = {
 	{ "exceptionContext",
 						nativeFunction(pExceptionContext),
 														1,	1, "parasol" },
-
+	{ "strtod",			nativeFunction(strtod),			2,	1, "strtod" },
 /*
 	{ "open",			nativeFunction(open),			2,	1 },
 	{ "openCreat",		nativeFunction(open),			3,	1 },

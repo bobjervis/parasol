@@ -3089,6 +3089,9 @@ class InternalLiteral { // extends Node {
 class Constant extends Node {
 	private CompileString _value;
 	
+	public int offset;					// For constants that get stored out-of-line, like FP data,
+										// this records the offset into the data section where the data was assigned.
+	
 	Constant(Operator op, CompileString value, Location location) {
 		super(op, location);
 		_value = value;
@@ -3116,7 +3119,10 @@ class Constant extends Node {
 
 	public void print(int indent) {
 		printBasic(indent);
-		printf(" '%s'\n", _value.asString());
+		printf(" '%s'", _value.asString());
+		if (offset != 0)
+			printf(" offset %x", offset);
+		printf("\n");
 	}
 
 	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
@@ -3124,6 +3130,7 @@ class Constant extends Node {
 		case	INTEGER:
 		case	STRING:
 		case	CHARACTER:
+		case	FLOATING_POINT:
 			break;
 			
 		default:
@@ -3286,6 +3293,13 @@ class Constant extends Node {
 			type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
 			if (!representedBy(type)) 
 				type = compileContext.arena().builtInType(TypeFamily.SIGNED_64);
+			break;
+			
+		case	FLOATING_POINT:
+			if (_value.length > 0 && _value.data[_value.length - 1].toLowercase() == 'f')
+				type = compileContext.arena().builtInType(TypeFamily.FLOAT_32);
+			else
+				type = compileContext.arena().builtInType(TypeFamily.FLOAT_64);
 		}
 	}
 }

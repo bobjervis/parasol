@@ -15,6 +15,7 @@
  */
 namespace parasol:x86_64;
 
+import native:C;
 import parasol:file;
 import parasol:compiler.Arena;
 import parasol:compiler.Binary;
@@ -187,6 +188,20 @@ class X86_64Encoder extends Target {
 		_code.resize(_code.length() + _pxiHeader.vtableData * address.bytes);
 		
 		_dataOffsets.resize(address.bytes + 1);
+
+		for (ref<Fixup> f = _fixups; f != null; f = f.next) {
+			if (f.kind == FixupKind.RELATIVE32_FPDATA) {
+				ref<Constant> con = ref<Constant>(f.value);
+//				con.print(0);
+				if (con.type.family() == TypeFamily.FLOAT_32) {
+					con.offset = _staticDataSize[4];
+					_staticDataSize[4] += 4;
+				} else {
+					con.offset = _staticDataSize[8];
+					_staticDataSize[8] += 8;
+				}
+			}
+		}
 		
 		relocateStaticData(8);
 
@@ -223,7 +238,37 @@ class X86_64Encoder extends Target {
 				int ipAdjust = *ref<int>(&_code[f.location]);
 				*ref<int>(&_code[f.location]) = int(sym.offset + ipAdjust - (f.location + int.bytes));
 				break;
-				
+			
+			case	RELATIVE32_FPDATA:				// Fixup value is a ref<Constant>
+				ref<Constant> con = ref<Constant>(f.value);
+//				con.print(0);
+				pointer<byte> endPtr;
+				int targetOffset;
+				if (con.type.family() == TypeFamily.FLOAT_32) {
+					targetOffset = _dataOffsets[4] + con.offset;
+					ref<float> target = ref<float>(&_code[targetOffset]);
+					string s(con.value().data, con.value().length - 1); 
+//					printf("endptr = %p s.c_str() = %p\n", endPtr, s.c_str());
+					double x = C.strtod(s.c_str(), &endPtr);
+//					printf("endPtr = %p\n", endPtr);
+//					printf("endptr = %p s.c_str() = %p\n", endPtr, s.c_str());
+					assert(endPtr == s.c_str() + s.length());
+					float y = float(x);
+					memDump(&y, float.bytes);
+					*target = y;
+				} else {
+					targetOffset = _dataOffsets[8] + con.offset;
+					ref<double> target = ref<double>(&_code[targetOffset]);
+					string s = con.value().asString();
+					double x = C.strtod(s.c_str(), &endPtr);
+					assert(endPtr == s.c_str() + s.length());
+					*target = x;
+				}
+//				printf("f.location=%x targetOffset=%x\n", f.location, targetOffset);
+				*ref<int>(&_code[f.location]) = int(targetOffset - (f.location + int.bytes));
+
+				break;
+			
 			case	RELATIVE32_TYPE:				// Fixup value is a ref<Type>
 				ref<Type> type = ref<Type>(f.value);
 				ipAdjust = *ref<int>(&_code[f.location]) - 1;	// copyToImage returns the offset + 1
@@ -276,6 +321,8 @@ class X86_64Encoder extends Target {
 		_pxiHeader.exceptionsOffset = _code.length();
 		_pxiHeader.exceptionsCount = _exceptionTable.length();
 		pointer<byte> exceptionsTable = pointer<byte>(&_exceptionTable[0]); 
+//		memDump(&_code, _code.bytes);
+//		printf("_code.length()=%d\n", _code.length());
 		_code.append(exceptionsTable, _exceptionTable.length() * ExceptionEntry.bytes);
 		
 		_staticMemory = &_code[0];
@@ -2560,6 +2607,12 @@ class X86_64Encoder extends Target {
 			}
 			break;
 			
+		case	FLOATING_POINT:
+			modRM(0, regOpcode, 5);
+			fixup(FixupKind.RELATIVE32_FPDATA, addressMode);
+			emitInt(0);
+			break;
+			
 		case	TEMPLATE_INSTANCE:
 			modRM(0, regOpcode, 5);
 			ref<TypedefType> tt = ref<TypedefType>(addressMode.type);
@@ -2667,6 +2720,7 @@ class X86_64Encoder extends Target {
 			case	VARIABLE:
 			case	TEMPLATE_INSTANCE:
 			case	STRING:
+			case	FLOATING_POINT:
 				break;
 				
 			case	DOT:
@@ -3022,6 +3076,7 @@ enum FixupKind {
 	RELATIVE32_TYPE,				// Fixup value is a ref<Type>
 	RELATIVE32_STRING,				// Fixup value is an int offset into the string pool
 	RELATIVE32_VTABLE,				// Fixup value is a ref<ClassScope>
+	RELATIVE32_FPDATA,				// Fixup value is a ref<Constant>
 	LOCAL32_CODE,					// Fixup value is a ref<CodeSegment>
 	ABSOLUTE64_JUMP,				// Fixup value is a ref<CodeSegment>
 	ABSOLUTE64_CODE,				// Fixup value is a ref<Scope>

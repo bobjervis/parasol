@@ -427,8 +427,10 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.ENTER, 0);
 			int registerArgs = 0;
 			int i = 0;
+			int frameSize = 0;
 			if (parameterScope.hasThis()) {
 				inst(X86.PUSH, TypeFamily.SIGNED_64, R.RSI);
+				frameSize += address.bytes;
 				inst(X86.MOV, TypeFamily.ADDRESS, R.RSI, R.RCX);
 				registerArgs += address.bytes;
 				i++;
@@ -448,10 +450,11 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			while (registerArgs < f().registerSaveSize) {
 				inst(X86.PUSH, TypeFamily.SIGNED_64, fastArgs[i]);
+				frameSize += address.bytes;
 				registerArgs += address.bytes;
 				i++;
 			}
-			reserveAutoMemory(false, compileContext);
+			reserveAutoMemory(false, compileContext, frameSize);
 			closeCodeSegment(CC.NOP, null);
 			if (node.fallsThrough() == Test.PASS_TEST) {
 				if (!generateReturn(scope, compileContext)) {
@@ -512,13 +515,14 @@ public class X86_64 extends X86_64AssignTemps {
 				// generate call to main
 				// MOV RCX,input - find some place to put it.
 				inst(X86.POP, TypeFamily.SIGNED_64, R.RCX);
+				inst(X86.PUSH, TypeFamily.SIGNED_64, R.RCX);
 				inst(X86.PUSH, R.RCX, 8);
 				inst(X86.PUSH, R.RCX, 0);
 				ref<OverloadInstance> instance = m.instances()[0];
 				instCall(instance.parameterScope(), compileContext);
 				// return value is in RAX
 			} else {
-				inst(X86.POP, TypeFamily.SIGNED_64, R.RCX);
+//				inst(X86.POP, TypeFamily.SIGNED_64, R.RCX);
 				inst(X86.XOR, TypeFamily.SIGNED_64, R.RAX, R.RAX);
 			}
 			pushExceptionHandler(null);
@@ -526,9 +530,10 @@ public class X86_64 extends X86_64AssignTemps {
 			closeCodeSegment(CC.NOP, null);
 			insertPreamble();
 			inst(X86.ENTER, 0);
-			reserveAutoMemory(true, compileContext);
+			reserveAutoMemory(true, compileContext, 0);
 			closeCodeSegment(CC.NOP, null);
 			join.start(this);
+			inst(X86.POP, TypeFamily.SIGNED_64, R.RCX);
 			inst(X86.POP, TypeFamily.SIGNED_64, R.R15);
 			inst(X86.POP, TypeFamily.SIGNED_64, R.R14);
 			inst(X86.POP, TypeFamily.SIGNED_64, R.R13);
@@ -540,13 +545,16 @@ public class X86_64 extends X86_64AssignTemps {
 			if (!generateReturn(scope, compileContext))
 				unfinished(node, "generateReturn failed - default end-of-static block", compileContext);
 			handler.start(this);
-			inst(X86.LEA, R.RSP, R.RBP, -(f().autoSize + 7 * address.bytes));
+			inst(X86.LEA, R.RSP, R.RBP, -(f().autoSize + 8 * address.bytes));
 			instCall(_exposeException.parameterScope(), compileContext);
 			closeCodeSegment(CC.JMP, join);
 		}
 	}
 
-	private void reserveAutoMemory(boolean preserveRCX, ref<CompileContext> compileContext) {
+	private void reserveAutoMemory(boolean preserveRCX, ref<CompileContext> compileContext, int frameSize) {
+		frameSize &= 15;											// Reduce the calculated frame size to 0-15.
+		if (((f().autoSize + frameSize) & 15) != 0)					// Now if the combined size is odd, bail out.
+			f().autoSize = (f().autoSize + frameSize + 15) & ~15;
 		if (f().autoSize > 0) {
 			int reserveSpace = f().autoSize - f().registerSaveSize;
 			inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, reserveSpace);
@@ -648,6 +656,8 @@ public class X86_64 extends X86_64AssignTemps {
 		
 		case	DECLARATION:
 			ref<Binary> b = ref<Binary>(node);
+//			printf("Declaration...\n");
+//			node.print(0);
 			emitSourceLocation(compileContext.current().file(), node.location());
 			generateInitializers(b.right(), compileContext);
 			break;
@@ -1963,6 +1973,16 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			break;
 				
+		case	FLOATING_POINT:
+			dest = R(node.register);
+			node.register = 0;
+			if (node.type.family() == TypeFamily.FLOAT_32)
+				inst(X86.MOVSS, dest, node, compileContext);
+			else
+				inst(X86.MOVSD, dest, node, compileContext);
+			node.register = byte(dest);
+			break;
+			
 		case	TEMPLATE_INSTANCE:
 		case	IDENTIFIER:
 			if ((node.flags & ADDRESS_MODE) != 0)
@@ -1982,7 +2002,7 @@ public class X86_64 extends X86_64AssignTemps {
 				node.print(0);
 				assert(false);
 			}
-			dest = R(int(node.register));
+			dest = R(node.register);
 			node.register = 0;
 			switch (node.type.family()) {
 			case	TYPEDEF:
@@ -2303,6 +2323,8 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 	
 	private void generateInitializers(ref<Node> node, ref<CompileContext> compileContext) {
+//		printf("generateInitializers\n");
+//		node.print(4);
 		boolean hasDefaultConstructor = false;
 		if (node.type == null) {
 			node.print(0);
@@ -2411,6 +2433,8 @@ public class X86_64 extends X86_64AssignTemps {
 			seq = ref<Binary>(node);
 			if (seq.right().op() == Operator.CALL) {
 				ref<Call> call = ref<Call>(seq.right());
+//				printf("RHS...\n");
+//				call.print(0);
 				if (call.commentary() != null) {
 					generate(call, compileContext);
 					break;
@@ -2420,6 +2444,7 @@ public class X86_64 extends X86_64AssignTemps {
 					generateCall(call, compileContext);
 					break;
 				}
+//				printf("not a special case\n");
 			}
 //			printf("Initialize:\n");
 //			node.print(4);
@@ -2445,11 +2470,17 @@ public class X86_64 extends X86_64AssignTemps {
 				
 			case	FLOAT_32:
 				generate(seq.right(), compileContext);
+//				printf("Spilling...\n");
+//				seq.print(0);
+				f().r.generateSpills(seq, this);
 				inst(X86.MOVSS, seq.left(), seq.right(), compileContext);
 				break;
 				
 			case	FLOAT_64:
 				generate(seq.right(), compileContext);
+//				printf("Spilling...\n");
+//				seq.print(0);
+				f().r.generateSpills(seq, this);
 				inst(X86.MOVSD, seq.left(), seq.right(), compileContext);
 				break;
 				
