@@ -2451,6 +2451,7 @@ class Call extends ParameterBag {
 				outParameter.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 				registerArgumentIndex++;
 			}
+			int floatingArgumentIndex = 0;
 			if (_arguments != null) {
 				ref<NodeList> params = functionType.parameters();
 				
@@ -2487,24 +2488,46 @@ class Call extends ParameterBag {
 						break;
 					}
 					argsNext = args.next;
-					byte nextReg = compileContext.target.registerValue(registerArgumentIndex);
-					
-					// Thread each argument onto the appropriate list: stack or register
-					if (nextReg == 0 || args.node.type.passesViaStack(compileContext)) {
-						ref<Type> t = args.node.type;
-						args.node = tree.newUnary(Operator.STACK_ARGUMENT, args.node, args.node.location());
-						args.node.type = t;
-						args.next = _stackArguments;
-						_stackArguments = args;
+					if (args.node.type.isFloat()) {
+						byte nextReg = compileContext.target.floatingRegisterValue(floatingArgumentIndex);
+						
+						// Thread each argument onto the appropriate list: stack or register
+						if (nextReg == 0 || args.node.type.passesViaStack(compileContext)) {
+							ref<Type> t = args.node.type;
+							args.node = tree.newUnary(Operator.STACK_ARGUMENT, args.node, args.node.location());
+							args.node.type = t;
+							args.next = _stackArguments;
+							_stackArguments = args;
+						} else {
+							args.node.register = nextReg;
+							floatingArgumentIndex++;
+							if (lastRegisterArgument != null)
+								lastRegisterArgument.next = args;
+							else
+								registerArguments = args;
+							lastRegisterArgument = args;
+							args.next = null;
+						}
 					} else {
-						args.node.register = nextReg;
-						registerArgumentIndex++;
-						if (lastRegisterArgument != null)
-							lastRegisterArgument.next = args;
-						else
-							registerArguments = args;
-						lastRegisterArgument = args;
-						args.next = null;
+						byte nextReg = compileContext.target.registerValue(registerArgumentIndex);
+						
+						// Thread each argument onto the appropriate list: stack or register
+						if (nextReg == 0 || args.node.type.passesViaStack(compileContext)) {
+							ref<Type> t = args.node.type;
+							args.node = tree.newUnary(Operator.STACK_ARGUMENT, args.node, args.node.location());
+							args.node.type = t;
+							args.next = _stackArguments;
+							_stackArguments = args;
+						} else {
+							args.node.register = nextReg;
+							registerArgumentIndex++;
+							if (lastRegisterArgument != null)
+								lastRegisterArgument.next = args;
+							else
+								registerArguments = args;
+							lastRegisterArgument = args;
+							args.next = null;
+						}
 					}
 				}
 				_arguments = registerArguments;
@@ -5762,6 +5785,15 @@ class Unary extends Node {
 				break;
 				
 			case	FLOAT_32:
+				switch (_operand.type.family()) {
+				case	VAR:
+					ref<Node> call = createMethodCall(_operand, "floatValue", tree, compileContext);
+					call.type = compileContext.arena().builtInType(TypeFamily.FLOAT_64);
+					_operand = call.fold(tree, false, compileContext);
+					return this;
+				}
+				break;
+				
 			case	FLOAT_64:
 				switch (_operand.type.family()) {
 				case	VAR:

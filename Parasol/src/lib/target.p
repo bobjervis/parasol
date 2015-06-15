@@ -73,7 +73,11 @@ public class Target {
 	}
 	
 	public byte registerValue(int registerArgumentIndex) {
-		return 0xff;
+		return 0;
+	}
+	
+	public byte floatingRegisterValue(int floatingArgumentIndex) {
+		return 0;
 	}
 	
 	public abstract void assignStorageToObject(ref<Symbol> symbol, ref<Scope> scope, int offset, ref<CompileContext> compileContext);

@@ -1086,7 +1086,9 @@ class X86_64AssignTemps extends X86_64AddressModes {
 						assignVoidContext(value, compileContext);
 				}
 			}
-		} else
+		} else if (retn.type.isFloat())
+			assignRegisterTemp(value, xmm0mask, compileContext);	// Take the result in any register available.
+		else
 			assignRegisterTemp(value, RAXmask, compileContext);		// Take the result in any register available.
 		f().r.cleanupTemps(retn, depth);
 	}
@@ -1148,10 +1150,13 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			f().r.print();
 		}
 		if (call.type.family() == TypeFamily.VOID || (call.flags & PUSH_OUT_PARAMETER) != 0)
-			call.register = byte(int(R.NO_REG));
-		else {
+			call.register = byte(R.NO_REG);
+		else if (call.type.isFloat()) {
+			f().r.getreg(call, xmm0mask, xmm0mask);
+			call.register = byte(R.XMM0);
+		} else {
 			f().r.getreg(call, RAXmask, RAXmask);
-			call.register = byte(int(R.RAX));
+			call.register = byte(R.RAX);
 		}
 	}
 

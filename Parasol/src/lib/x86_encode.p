@@ -192,7 +192,6 @@ class X86_64Encoder extends Target {
 		for (ref<Fixup> f = _fixups; f != null; f = f.next) {
 			if (f.kind == FixupKind.RELATIVE32_FPDATA) {
 				ref<Constant> con = ref<Constant>(f.value);
-//				con.print(0);
 				if (con.type.family() == TypeFamily.FLOAT_32) {
 					con.offset = _staticDataSize[4];
 					_staticDataSize[4] += 4;
@@ -241,20 +240,15 @@ class X86_64Encoder extends Target {
 			
 			case	RELATIVE32_FPDATA:				// Fixup value is a ref<Constant>
 				ref<Constant> con = ref<Constant>(f.value);
-//				con.print(0);
 				pointer<byte> endPtr;
 				int targetOffset;
 				if (con.type.family() == TypeFamily.FLOAT_32) {
 					targetOffset = _dataOffsets[4] + con.offset;
 					ref<float> target = ref<float>(&_code[targetOffset]);
 					string s(con.value().data, con.value().length - 1); 
-//					printf("endptr = %p s.c_str() = %p\n", endPtr, s.c_str());
 					double x = C.strtod(s.c_str(), &endPtr);
-//					printf("endPtr = %p\n", endPtr);
-//					printf("endptr = %p s.c_str() = %p\n", endPtr, s.c_str());
 					assert(endPtr == s.c_str() + s.length());
 					float y = float(x);
-					memDump(&y, float.bytes);
 					*target = y;
 				} else {
 					targetOffset = _dataOffsets[8] + con.offset;
@@ -379,6 +373,7 @@ class X86_64Encoder extends Target {
 
 	public void markRegisterParameters(ref<ParameterScope> scope, ref<CompileContext> compileContext) {
 		int assignedFastArgs = 0;
+		int assignedFloatArgs = 0;
 		// Stack will look like:
 		//
 		// 		  ... stack arguments
@@ -410,7 +405,14 @@ class X86_64Encoder extends Target {
 				sym.offset = 0;
 				continue;
 			}
-			if (sym.type().passesViaStack(compileContext) || assignedFastArgs >= fastArgs.length()) {
+			if (sym.type().isFloat()) {
+				if (assignedFloatArgs >= floatArgs.length()) {
+					// It's a stack argument
+					sym.offset = FIRST_STACK_PARAM_OFFSET + scope.variableStorage;
+					scope.variableStorage += sym.type().stackSize();
+				} else
+					assignedFloatArgs++;
+			} else if (sym.type().passesViaStack(compileContext) || assignedFastArgs >= fastArgs.length()) {
 				// It's a stack argument
 				sym.offset = FIRST_STACK_PARAM_OFFSET + scope.variableStorage;
 				scope.variableStorage += sym.type().stackSize();
@@ -420,16 +422,38 @@ class X86_64Encoder extends Target {
 				assignedFastArgs++;
 			}
 		}
+		assignedFloatArgs = 0;
+		for (int i = 0; i < scope.parameters().length(); i++) {
+			ref<Symbol> sym = scope.parameters()[i];
+			
+			if (sym.deferAnalysis())
+				continue;
+			if (sym.type().isFloat()) {
+				if (assignedFloatArgs < floatArgs.length()) {
+					regStackOffset -= address.bytes;
+					sym.offset = regStackOffset;
+					assignedFloatArgs++;
+				}
+			}
+		}
 		_f.registerSaveSize = assignedFastArgs * address.bytes;
+		_f.floatRegisterSaveSize = assignedFloatArgs * address.bytes;
 	}
 	
 	public byte registerValue(int registerArgumentIndex) {
 		if (registerArgumentIndex < fastArgs.length())
-			return byte(int(fastArgs[registerArgumentIndex]));
+			return byte(fastArgs[registerArgumentIndex]);
 		else
 			return 0;
 	}
 	
+	public byte floatingRegisterValue(int floatingArgumentIndex) {
+		if (floatingArgumentIndex < floatArgs.length())
+			return byte(floatArgs[floatingArgumentIndex]);
+		else
+			return 0;
+	}
+
 	protected void buildVtable(ref<ClassScope> scope, ref<CompileContext> compileContext) {
 		if (scope.vtable == null) {
 			scope.vtable = address(_pxiHeader.vtableData + 1);
@@ -582,7 +606,7 @@ class X86_64Encoder extends Target {
 			ref<ParameterScope> parameterScope = ref<ParameterScope>(scope);
 			markRegisterParameters(parameterScope, compileContext);
 		}
-		f.autoSize = scope.autoStorage(this, _f.registerSaveSize, compileContext) + REGISTER_PARAMETER_STACK_AREA;
+		f.autoSize = scope.autoStorage(this, _f.registerSaveSize + _f.floatRegisterSaveSize, compileContext) + REGISTER_PARAMETER_STACK_AREA;
 		generateFunctionCore(scope, compileContext);
 		int offset = packFunction();
 		_f = savedState;
@@ -685,6 +709,7 @@ class X86_64Encoder extends Target {
 		public ref<Scope> current;
 		public int outParameterOffset;
 		public int registerSaveSize;
+		public int floatRegisterSaveSize;
 	}
 
 	class CodeSegment {
@@ -1060,6 +1085,27 @@ class X86_64Encoder extends Target {
 	
 	void inst(X86 instruction, TypeFamily family, R dest, int offset, R reg) {
 		switch (instruction) {
+		case	MOVSD:
+			emit(0xf2);
+			emitRex(TypeFamily.FLOAT_64, null, reg, R.NO_REG);
+			emit(0x0f);
+			emit(0x11);
+			if (dest == R.RSP) {
+				if (offset >= -128 || offset <= 127) {
+					modRM(1, rmValues[reg], 4);
+					sib(0, 4, 4);
+					emit(byte(offset));
+				} else {
+					modRM(2, rmValues[reg], 4);
+					sib(0, 4, 4);
+					emitInt(offset);
+				}
+			} else {
+				printf("%s, %s, %s, %d, %s\n", opcodeNames[instruction], typeFamilyMap.name[family], regNames[dest], offset, regNames[reg]);
+				assert(false);
+			}
+			break;
+			
 		case	MOV:
 		case	CMP:
 			emitRex(TypeFamily.SIGNED_64, null, reg, dest);
@@ -1203,6 +1249,14 @@ class X86_64Encoder extends Target {
 			modRM(3, rmValues[dest], rmValues[src]);
 			return;
 			
+		case	CVTSD2SS:
+			emit(0xf2);
+			emitRex(TypeFamily.SIGNED_32, null, dest, src);
+			emit(0x0f);
+			emit(0x5a);
+			modRM(3, rmValues[dest], rmValues[src]);
+			return;
+
 		case	CVTSS2SI:
 			emit(0xf3);
 			emitRex(TypeFamily.SIGNED_64, null, dest, src);

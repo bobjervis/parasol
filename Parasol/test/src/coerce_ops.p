@@ -336,7 +336,7 @@ assert(s == -23885);
 assert(i == -196631885);
 assert(l == 2632372374184627);
 assert(f == 2632372374184627);
-assert(float(v) == 2632372374184627);
+assert(double(v) == 2632372374184627);
 assert(long(a) == 2632372374184627);
 assert(long(bool) == 179);
 //assert(long(e) == 16121908);		// Enums divide by four (the smallest size for the class)

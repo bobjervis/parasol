@@ -77,6 +77,13 @@ fastArgs.append(R.RCX);
 fastArgs.append(R.RDX);
 fastArgs.append(R.R8);
 fastArgs.append(R.R9);
+
+R[] floatArgs;
+
+floatArgs.append(R.XMM0);
+floatArgs.append(R.XMM1);
+floatArgs.append(R.XMM2);
+floatArgs.append(R.XMM3);
 /*
  * Flags for the Node.flags field. (0x0f are reserved for non-codegen flags)
  */
@@ -453,6 +460,12 @@ public class X86_64 extends X86_64AssignTemps {
 				frameSize += address.bytes;
 				registerArgs += address.bytes;
 				i++;
+			}
+			int flimit = f().floatRegisterSaveSize / address.bytes;
+			for (int i = 0; i < flimit; i++) {
+				inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, 8);
+				inst(X86.MOVSD, TypeFamily.SIGNED_64, R.RSP, 0, floatArgs[i]);
+				frameSize += address.bytes;
 			}
 			reserveAutoMemory(false, compileContext, frameSize);
 			closeCodeSegment(CC.NOP, null);
@@ -1788,15 +1801,15 @@ public class X86_64 extends X86_64AssignTemps {
 			if ((expression.flags & ADDRESS_MODE) == 0) {
 				switch (node.type.family()) {
 				case	FLOAT_32:
-					inst(X86.MOVSS, expression, expression.operand(), compileContext);
+					generateLoad(X86.MOVSS, expression, compileContext);
 					break;
 					
 				case	FLOAT_64:
-					inst(X86.MOVSD, expression, expression.operand(), compileContext);
+					generateLoad(X86.MOVSD, expression, compileContext);
 					break;
 					
 				default:
-					generateLoad(expression, compileContext);
+					generateLoad(X86.MOV, expression, compileContext);
 				}
 			}
 			break;
@@ -1968,7 +1981,7 @@ public class X86_64 extends X86_64AssignTemps {
 
 				default:
 					if ((dot.flags & ADDRESS_MODE) == 0)
-						generateLoad(dot, compileContext);
+						generateLoad(X86.MOV, dot, compileContext);
 				}
 			}
 			break;
@@ -2171,10 +2184,10 @@ public class X86_64 extends X86_64AssignTemps {
 		f().r.generateSpills(b, this);
 	}
 
-	private void generateLoad(ref<Node> expression, ref<CompileContext> compileContext) {
+	private void generateLoad(X86 instruction, ref<Node> expression, ref<CompileContext> compileContext) {
 		R reg = R(int(expression.register));
 		expression.register = 0;
-		inst(X86.MOV, reg, expression, compileContext);
+		inst(instruction, reg, expression, compileContext);
 		expression.register = byte(int(reg));
 	}
 
