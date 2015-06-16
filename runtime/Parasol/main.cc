@@ -19,10 +19,8 @@
 #include "basic_types.h"
 #include "pxi.h"
 #include "common/command_line.h"
-#include "common/common_test.h"
 #include "common/file_system.h"
 #include "common/platform.h"
-#include "common/script.h"
 /*
  *	Parasol engine architecture:
  *

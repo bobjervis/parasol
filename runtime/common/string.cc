@@ -19,7 +19,6 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <time.h>
-#include "xml.h"
 
 string operator+ (const char* left, const string& right) {
 	string s(left);
@@ -352,7 +351,7 @@ double string::toDouble() const {
 		return 0;
 	else
 		// Should check for range exceptions?
-		return xml::sax_to_double(_contents->data, _contents->length);
+		return atof(_contents->data);
 }
 
 bool string::toBool() const {
