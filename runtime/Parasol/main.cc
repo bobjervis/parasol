@@ -23,7 +23,6 @@
 #include "common/file_system.h"
 #include "common/platform.h"
 #include "common/script.h"
-#include "test/test.h"
 /*
  *	Parasol engine architecture:
  *
