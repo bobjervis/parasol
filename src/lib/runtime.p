@@ -19,6 +19,14 @@ import native:windows;
 import parasol:x86_64.ExceptionContext;
 import parasol:x86_64.X86_64SectionHeader;
 
+/*
+ * Major Release: Incremented when a breaking change is released
+ * Minor Feature Release: Incremented when significant new features
+ * are released.
+ * Fix Release: Incremented when big fixes are released.
+ */
+public string RUNTIME_VERSION = "0.1.0";
+
 public abstract int injectObjects(pointer<address> objects, int objectCount);
 
 // eval calls the ByteCodes interpreter.  startObject is the byteCode function that should be run.

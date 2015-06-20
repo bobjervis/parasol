@@ -24,21 +24,12 @@ import parasol:compiler.Arena;
 import parasol:compiler.Target;
 import parasol:compiler.test.initTestObjects;
 import parasol:file;
-import parasol:test.launch;
-import parasol:test.listAllTests;
 import parasol:time;
 
 /*
  * Date and Copyright holder of this code base.
  */
 string COPYRIGHT_STRING = "2015 Robert Jervis";
-/*
- * Major Release: Incremented when a breaking change is released
- * Minor Feature Release: Incremented when significant new features
- * are released.
- * Fix Release: Incremented when big fixes are released.
- */
-string RUNTIME_VERSION = "0.1.0";
 /*
  *	Parasol engine architecture:
  *
@@ -66,7 +57,7 @@ class ParasolCommand extends commandLine.Command {
 					"Refer to the Parasol language reference manual for details on " +
 					"permitted syntax." +
 					"\n" +
-					"Parasol Runtime Version " + RUNTIME_VERSION + "\r" +
+					"Parasol Runtime Version " + runtime.RUNTIME_VERSION + "\r" +
 					"Copyright (c) " + COPYRIGHT_STRING
 					);
 		importPathArgument = stringArgument('I', "importPath", 
@@ -77,8 +68,6 @@ class ParasolCommand extends commandLine.Command {
 					"Enables verbose output.");
 		symbolTableArgument = booleanArgument(0, "syms",
 					"Print the symbol table.");
-		testArgument = booleanArgument(0, "test",
-					"Run a test script.");
 		logImportsArgument = booleanArgument(0, "logImports",
 					"Log all import processing");
 		traceArgument = booleanArgument(0, "trace",
@@ -94,33 +83,26 @@ class ParasolCommand extends commandLine.Command {
 					"Writes any declaration marked with a @Header annotation as a " + 
 					"C declaration. " + 
 					"The named output file will be overwritten if it already exists.");
-		testPxiArgument = stringArgument(0, "testpxi",
-					"Uses this pxi file with run tests.");
 		pxiArgument = stringArgument(0, "pxi",
 					"Writes compiled output to the given file. " + 
 					"Does not execute the program.");
 		targetArgument = stringArgument(0, "target",
 					"Selects the target runtime for this execution. " +
 					"Default: " + pxi.sectionTypeName(SectionType(runtime.supportedTarget(0))));
-		compileFromSourceArgument = booleanArgument('s', "compileFromSource",
-					"In --test mode, any 'run' tests are run with 'compiler/main.p' included.");
 		helpArgument('?', "help",
 					"Displays this help.");
 	}
 
 	ref<commandLine.Argument<string>> importPathArgument;
 	ref<commandLine.Argument<boolean>> verboseArgument;
-	ref<commandLine.Argument<boolean>> testArgument;
 	ref<commandLine.Argument<boolean>> traceArgument;
 	ref<commandLine.Argument<boolean>> disassemblyArgument;
 	ref<commandLine.Argument<string>> explicitArgument;
 	ref<commandLine.Argument<string>> headerArgument;
 	ref<commandLine.Argument<string>> pxiArgument;
 	ref<commandLine.Argument<string>> targetArgument;
-	ref<commandLine.Argument<string>> testPxiArgument;
 	ref<commandLine.Argument<boolean>> logImportsArgument;
 	ref<commandLine.Argument<boolean>> symbolTableArgument;
-	ref<commandLine.Argument<boolean>> compileFromSourceArgument;
 }
 
 private ref<ParasolCommand> parasolCommand;
@@ -130,8 +112,7 @@ enum CommandLineVariant {
 	INTERACTIVE,
 	COMMAND,
 	COMPILE,
-	HEADER,
-	TEST
+	HEADER
 }
 
 int main(string[] args) {
@@ -151,10 +132,6 @@ int main(string[] args) {
 		
 	case	HEADER:
 		result = createHeaderCommand();
-		break;
-		
-	case	TEST:
-		result = runTestSuiteCommand();
 		break;
 	}
 	process.exit(result);
@@ -177,9 +154,7 @@ CommandLineVariant parseCommandLine(string[] args) {
 		}
 	}
 	finalArgs = parasolCommand.finalArgs();
-	if (parasolCommand.testArgument.value)
-		return CommandLineVariant.TEST;
-	else if (finalArgs.length() == 0)
+	if (finalArgs.length() == 0)
 		return CommandLineVariant.INTERACTIVE;
 	else if (parasolCommand.pxiArgument.set())
 		return CommandLineVariant.COMPILE;
@@ -295,19 +270,6 @@ int createHeaderCommand() {
 		return 1;
 	else
 		return 0;
-}
-
-int runTestSuiteCommand() {
-	script.setCommandPrefix(storage.absolutePath(process.binaryFilename()) + " --test");
-	listAllTests = parasolCommand.traceArgument.value;
-	string pxiName = "debug/parasol.pxi";
-	if (parasolCommand.testPxiArgument.set())
-		pxiName = parasolCommand.testPxiArgument.value;
-	initTestObjects(process.binaryFilename() + " " + pxiName, parasolCommand.verboseArgument.value, 
-			parasolCommand.compileFromSourceArgument.value,
-			parasolCommand.targetArgument.value);
-//		initCommonTestObjects();
-	return launch(finalArgs);
 }
 
 boolean configureArena(ref<Arena> arena) {
