@@ -1137,7 +1137,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				if (args.node.register == 0xff)
 					regMask = longMask;
 				else
-					regMask = getRegMask(R(int(args.node.register)));
+					regMask = getRegMask(R(args.node.register));
 				args.node.register = 0;
 				assignRegisterTemp(args.node, regMask, compileContext);
 			}
@@ -1224,7 +1224,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	AND:
 			case	OR:
 			case	CONDITIONAL:
-				assignRegisterTemp(arg, longMask, compileContext);
+			case	FLOATING_POINT:
+				assignRegisterTemp(arg, familyMasks[arg.type.family()], compileContext);
 				f().r.cleanupTemps(u, depth);
 				break;
 				

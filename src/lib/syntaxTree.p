@@ -2437,7 +2437,7 @@ class Call extends ParameterBag {
 			// Now promote the 'hidden' parameters, so code gen is simpler.
 			int registerArgumentIndex = 0;
 			if (thisParameter != null) {
-				thisParameter.register = compileContext.target.registerValue(registerArgumentIndex);
+				thisParameter.register = compileContext.target.registerValue(registerArgumentIndex, TypeFamily.ADDRESS);
 				if (thisParameter.register == 0) {
 					printf("---\n");
 					print(0);
@@ -2447,7 +2447,7 @@ class Call extends ParameterBag {
 			}
 			if (outParameter != null) {
 				outParameter = tree.newUnary(Operator.ADDRESS, outParameter, outParameter.location());
-				outParameter.register = compileContext.target.registerValue(registerArgumentIndex);
+				outParameter.register = compileContext.target.registerValue(registerArgumentIndex, TypeFamily.ADDRESS);
 				outParameter.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 				registerArgumentIndex++;
 			}
@@ -2488,46 +2488,24 @@ class Call extends ParameterBag {
 						break;
 					}
 					argsNext = args.next;
-					if (args.node.type.isFloat()) {
-						byte nextReg = compileContext.target.floatingRegisterValue(floatingArgumentIndex);
-						
-						// Thread each argument onto the appropriate list: stack or register
-						if (nextReg == 0 || args.node.type.passesViaStack(compileContext)) {
-							ref<Type> t = args.node.type;
-							args.node = tree.newUnary(Operator.STACK_ARGUMENT, args.node, args.node.location());
-							args.node.type = t;
-							args.next = _stackArguments;
-							_stackArguments = args;
-						} else {
-							args.node.register = nextReg;
-							floatingArgumentIndex++;
-							if (lastRegisterArgument != null)
-								lastRegisterArgument.next = args;
-							else
-								registerArguments = args;
-							lastRegisterArgument = args;
-							args.next = null;
-						}
+					byte nextReg = compileContext.target.registerValue(registerArgumentIndex, args.node.type.family());
+					
+					// Thread each argument onto the appropriate list: stack or register
+					if (nextReg == 0 || args.node.type.passesViaStack(compileContext)) {
+						ref<Type> t = args.node.type;
+						args.node = tree.newUnary(Operator.STACK_ARGUMENT, args.node, args.node.location());
+						args.node.type = t;
+						args.next = _stackArguments;
+						_stackArguments = args;
 					} else {
-						byte nextReg = compileContext.target.registerValue(registerArgumentIndex);
-						
-						// Thread each argument onto the appropriate list: stack or register
-						if (nextReg == 0 || args.node.type.passesViaStack(compileContext)) {
-							ref<Type> t = args.node.type;
-							args.node = tree.newUnary(Operator.STACK_ARGUMENT, args.node, args.node.location());
-							args.node.type = t;
-							args.next = _stackArguments;
-							_stackArguments = args;
-						} else {
-							args.node.register = nextReg;
-							registerArgumentIndex++;
-							if (lastRegisterArgument != null)
-								lastRegisterArgument.next = args;
-							else
-								registerArguments = args;
-							lastRegisterArgument = args;
-							args.next = null;
-						}
+						args.node.register = nextReg;
+						registerArgumentIndex++;
+						if (lastRegisterArgument != null)
+							lastRegisterArgument.next = args;
+						else
+							registerArguments = args;
+						lastRegisterArgument = args;
+						args.next = null;
 					}
 				}
 				_arguments = registerArguments;

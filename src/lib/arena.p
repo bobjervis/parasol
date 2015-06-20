@@ -91,6 +91,8 @@ public class Arena {
 	public ref<Target> compile(ref<FileStat> mainFile, boolean countCurrentObjects, boolean cloneTree, boolean verbose) {
 		CompileContext context(this, _global);
 
+		cacheRootObjects(_root);
+
 		ref<Scanner> scanner = mainFile.scanner();
 
 		mainFile.parseFile(&context);
@@ -104,6 +106,8 @@ public class Arena {
 		if (verbose)
 			printf("Top level scopes constructed\n");
 		context.resolveImports();
+		createBuiltIns(_root, &context);
+		
 		_main = mainFile.fileScope();
 		if (verbose)
 			printf("Initial compilation phases completed.\n");
@@ -194,22 +198,17 @@ public class Arena {
 		_root = createRootScope(treeRoot, f);
 		rootLoader.buildScopes();
 
-		boolean allDefined = createBuiltIns(_root, treeRoot, &rootLoader);
-		if (allDefined) {
-			cacheRootObjects(_root);
-			rootLoader.assignTypes();
-		}
 		return treeRoot.countMessages() == 0;
 	}
 
-	public boolean createBuiltIns(ref<Scope> root, ref<Node> rootUnit, ref<CompileContext> compileContext) {
+	public boolean createBuiltIns(ref<Scope> root, ref<CompileContext> compileContext) {
 		boolean allDefined = true;
 		for (int i = 0; i < builtInMap.length(); i++) {
 			ref<Symbol> sym = root.lookup(builtInMap[i].name);
 			if (sym != null)
 				_builtInType[builtInMap[i].family] = sym.bindBuiltInType(builtInMap[i].family, compileContext);
 			if (_builtInType[builtInMap[i].family] == null) {
-				rootUnit.add(MessageId.UNDEFINED_BUILT_IN, _global, CompileString(builtInMap[i].name));
+				root.definition().add(MessageId.UNDEFINED_BUILT_IN, _global, CompileString(builtInMap[i].name));
 				allDefined = false;
 			}
 		}

@@ -372,8 +372,6 @@ class X86_64Encoder extends Target {
 	}
 
 	public void markRegisterParameters(ref<ParameterScope> scope, ref<CompileContext> compileContext) {
-		int assignedFastArgs = 0;
-		int assignedFloatArgs = 0;
 		// Stack will look like:
 		//
 		// 		  ... stack arguments
@@ -381,12 +379,15 @@ class X86_64Encoder extends Target {
 		// 		  Return Address
 		// RBP -> RBP (saved frame pointer)
 		// saved register parameters (for now, see above) as:
-		// 		  RCX (as needed)
-		// 		  RDX (as needed)
-		// 		  R8 (as needed)
-		// 		  R9 (as needed)
+		// 		  RCX / XMM0 (as needed)
+		// 		  RDX / XMM1 (as needed)
+		// 		  R8 / XMM2 (as needed)
+		// 		  R9 / XMM3 (as needed)
 		// 		  local variables
+		//		  possible 8-byte padding to align stack on 16 byte boundary
+		//		  32-byte register save area (per Win64 ABI)
 		// 
+		int assignedFastArgs = 0;
 		int regStackOffset = 0;
 		if (scope.hasThis()) {
 			assignedFastArgs++;
@@ -405,14 +406,7 @@ class X86_64Encoder extends Target {
 				sym.offset = 0;
 				continue;
 			}
-			if (sym.type().isFloat()) {
-				if (assignedFloatArgs >= floatArgs.length()) {
-					// It's a stack argument
-					sym.offset = FIRST_STACK_PARAM_OFFSET + scope.variableStorage;
-					scope.variableStorage += sym.type().stackSize();
-				} else
-					assignedFloatArgs++;
-			} else if (sym.type().passesViaStack(compileContext) || assignedFastArgs >= fastArgs.length()) {
+			if (sym.type().passesViaStack(compileContext) || assignedFastArgs >= fastArgs.length()) {
 				// It's a stack argument
 				sym.offset = FIRST_STACK_PARAM_OFFSET + scope.variableStorage;
 				scope.variableStorage += sym.type().stackSize();
@@ -422,38 +416,25 @@ class X86_64Encoder extends Target {
 				assignedFastArgs++;
 			}
 		}
-		assignedFloatArgs = 0;
-		for (int i = 0; i < scope.parameters().length(); i++) {
-			ref<Symbol> sym = scope.parameters()[i];
-			
-			if (sym.deferAnalysis())
-				continue;
-			if (sym.type().isFloat()) {
-				if (assignedFloatArgs < floatArgs.length()) {
-					regStackOffset -= address.bytes;
-					sym.offset = regStackOffset;
-					assignedFloatArgs++;
-				}
-			}
-		}
-		_f.registerSaveSize = assignedFastArgs * address.bytes;
-		_f.floatRegisterSaveSize = assignedFloatArgs * address.bytes;
+		_f.registerSaveSize = -regStackOffset;
 	}
 	
-	public byte registerValue(int registerArgumentIndex) {
-		if (registerArgumentIndex < fastArgs.length())
-			return byte(fastArgs[registerArgumentIndex]);
-		else
-			return 0;
-	}
-	
-	public byte floatingRegisterValue(int floatingArgumentIndex) {
-		if (floatingArgumentIndex < floatArgs.length())
-			return byte(floatArgs[floatingArgumentIndex]);
-		else
-			return 0;
-	}
+	public byte registerValue(int registerArgumentIndex, TypeFamily family) {
+		if (registerArgumentIndex < fastArgs.length()) {
+			switch (family) {
+			case	FLOAT_32:
+			case	FLOAT_64:
+				return byte(floatArgs[registerArgumentIndex]);
 
+			default:
+				return byte(fastArgs[registerArgumentIndex]);
+			}
+			return byte(fastArgs[registerArgumentIndex]);
+		}
+		else
+			return 0;
+	}
+	
 	protected void buildVtable(ref<ClassScope> scope, ref<CompileContext> compileContext) {
 		if (scope.vtable == null) {
 			scope.vtable = address(_pxiHeader.vtableData + 1);
@@ -606,7 +587,7 @@ class X86_64Encoder extends Target {
 			ref<ParameterScope> parameterScope = ref<ParameterScope>(scope);
 			markRegisterParameters(parameterScope, compileContext);
 		}
-		f.autoSize = scope.autoStorage(this, _f.registerSaveSize + _f.floatRegisterSaveSize, compileContext) + REGISTER_PARAMETER_STACK_AREA;
+		f.autoSize = scope.autoStorage(this, _f.registerSaveSize, compileContext);
 		generateFunctionCore(scope, compileContext);
 		int offset = packFunction();
 		_f = savedState;
@@ -709,7 +690,6 @@ class X86_64Encoder extends Target {
 		public ref<Scope> current;
 		public int outParameterOffset;
 		public int registerSaveSize;
-		public int floatRegisterSaveSize;
 	}
 
 	class CodeSegment {

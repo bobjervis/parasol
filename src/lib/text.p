@@ -15,19 +15,1281 @@
  */
 namespace parasol:text;
 
-public class Character {
-	public static boolean isSpace(byte b) {
-		switch (b) {
-		case	' ':
-		case	'\t':
-		case	'\n':
-		case	'\v':
-		case	'\r':
-			return true;
-			
-		default:
-			return false;
+import native:C;
+
+class string {
+	private class allocation {
+		public int length;
+		public byte data;
+	}
+	
+	private static int MIN_SIZE = 0x10;
+
+	private ref<allocation> _contents;
+	
+	public string() {
+	}
+	
+	public string(string source) {
+		if (source != null) {
+			resize(source.length());
+			memcpy(&_contents.data, &source._contents.data, source._contents.length + 1);
 		}
+	}
+	
+	public string(pointer<byte> cString) {
+		if (cString != null) {
+			int len = strlen(cString);
+			resize(len);
+			memcpy(&_contents.data, cString, len);
+		}
+	}
+	
+	public string(byte[] value) {
+		resize(value.length());
+		memcpy(&_contents.data, &value[0], value.length());
+	}
+	
+	public string(pointer<byte> buffer, int len) {
+		if (buffer != null) {
+			resize(len);
+			memcpy(&_contents.data, buffer, len);
+		}
+	}
+	
+	public string(long value) {
+		if (value == 0) {
+			append('0');
+			return;
+		} else if (value == long.MIN_VALUE) {
+			append("-9223372036854775808");
+			return;
+		} else if (value < 0) {
+			append('-');
+			value = -value;
+		}
+		appendDigits(value);		
+	}
+	
+	private void appendDigits(long value) {
+		if (value > 9)
+			appendDigits(value / 10);
+		value %= 10;
+		append('0' + int(value));
+	}
+	
+	public string(double value) {
+	}
+	
+	~string() {
+		if (_contents != null) {
+			free(_contents);
+		}
+	}
+	
+	public pointer<byte> c_str() {
+		return pointer<byte>(&_contents.data);
+	}
+	
+	@Deprecated
+	public void assign(string other) {
+		if (_contents != null) {
+			free(_contents);
+			_contents = null;
+		}
+		if (other != null) {
+			resize(other._contents.length);
+			memcpy(&_contents.data, &other._contents.data, other._contents.length + 1);
+		}
+	}
+	
+	public string append(string other) {
+//		print("'");
+//		print(*this);
+//		print("'+'");
+//		print(other);
+//		print("'");
+		int len = other.length();
+		if (len > 0) {
+//			print("appending\n");
+			int oldLength = length();
+			resize(oldLength + len);
+//			print("resized\n");
+			memcpy(pointer<byte>(&_contents.data) + oldLength, &other._contents.data, len + 1);
+//			print("appended\n");
+		}
+//		print("=");
+//		print(*this);
+//		print("\n");
+		return *this;
+	}
+	
+	public string append(byte b) {
+		if (_contents == null) {
+			resize(1);
+			_contents.data = b;
+		} else {
+			int len = _contents.length;
+			resize(len + 1);
+			*(pointer<byte>(&_contents.data) + len) = b;
+		}
+		return *this;
+	}
+	
+	public string append(pointer<byte> p, int length) {
+		if (_contents == null) {
+			resize(length);
+			memcpy(&_contents.data, p, length);
+		} else {
+			int len = _contents.length;
+			resize(len + length);
+			memcpy(pointer<byte>(&_contents.data) + len, p, length);
+		}
+		*(pointer<byte>(&_contents.data) + _contents.length) = 0;
+		return *this;
+	}
+	
+	public string append(int ch) {
+		if (ch <= 0x7f)
+			append(byte(ch));
+		else if (ch <= 0x7ff) {
+			append(byte(0xc0 + (ch >> 6)));
+			append(byte(0x80 + (ch & 0x3f)));
+		} else if (ch <= 0xffff) {
+			append(byte(0xe0 + (ch >> 12)));
+			append(byte(0x80 + ((ch >> 6) & 0x3f)));
+			append(byte(0x80 + (ch & 0x3f)));
+		} else if (ch <= 0x1fffff) {
+			append(byte(0xf0 + (ch >> 18)));
+			append(byte(0x80 + ((ch >> 12) & 0x3f)));
+			append(byte(0x80 + ((ch >> 6) & 0x3f)));
+			append(byte(0x80 + (ch & 0x3f)));
+		} else if (ch <= 0x3ffffff) {
+			append(byte(0xf8 + (ch >> 24)));
+			append(byte(0x80 + ((ch >> 18) & 0x3f)));
+			append(byte(0x80 + ((ch >> 12) & 0x3f)));
+			append(byte(0x80 + ((ch >> 6) & 0x3f)));
+			append(byte(0x80 + (ch & 0x3f)));
+		} else if (ch <= 0x7fffffff) {
+			append(byte(0xfc + (ch >> 30)));
+			append(byte(0x80 + ((ch >> 24) & 0x3f)));
+			append(byte(0x80 + ((ch >> 18) & 0x3f)));
+			append(byte(0x80 + ((ch >> 12) & 0x3f)));
+			append(byte(0x80 + ((ch >> 6) & 0x3f)));
+			append(byte(0x80 + (ch & 0x3f)));
+		}
+		return *this;
+	}
+	
+	public boolean beginsWith(string prefix) {
+		if (prefix.length() > length())
+			return false;
+		pointer<byte> cp = pointer<byte>(&_contents.data);
+		pointer<byte> pcp = pointer<byte>(&prefix._contents.data);
+		for (int i = 0; i < prefix.length(); i++)
+			if (pcp[i] != cp[i])
+				return false;
+		return true;
+	}
+	
+	public string center(int size) {
+		return center(size, ' ');
+	}
+	
+	public string center(int size, char pad) {
+		int margin = size - _contents.length;
+		if (margin <= 0)
+			return *this;
+		string result = "";
+		int half = margin / 2;
+		for (int i = 0; i < half; i++, margin--)
+			result.append(pad);
+//		print("a '");
+//		print(result);
+//		print("'\n");
+		result.append(*this);
+//		print("b '");
+//		print(result);
+//		print("'\n");
+		for (int i = 0; i < margin; i++)
+			result.append(pad);
+//		print("c '");
+//		print(result);
+//		print("'\n");
+		return result;
+	}
+	
+	public int compare(string other) {
+		if (_contents == null) {
+			if (other._contents == null)
+				return 0;
+			else
+				return -1;
+		} else if (other._contents == null)
+			return 1;
+		pointer<byte> cp = pointer<byte>(&_contents.data);
+		pointer<byte> ocp = pointer<byte>(&other._contents.data);
+		if (_contents.length < other._contents.length) {
+			for (int i = 0; i < _contents.length; i++) {
+				if (cp[i] != ocp[i])
+					return cp[i] < ocp[i] ? -1 : 1;
+			}
+			return -1;
+		} else {
+			for (int i = 0; i < other._contents.length; i++) {
+				if (cp[i] != ocp[i])
+					return cp[i] < ocp[i] ? -1 : 1;
+			}
+			if (_contents.length > other._contents.length)
+				return 1;
+			else
+				return 0;
+		}
+	}
+	
+	public int compareIgnoreCase(string other) {
+		return 0;
+	}
+	
+	public void copy(string other) {
+		if (_contents != null) {
+			free(_contents);
+			_contents = null;
+		}
+		if (other != null) {
+			resize(other._contents.length);
+			memcpy(&_contents.data, &other._contents.data, other._contents.length + 1);
+		}
+	}
+	
+	public int count(RegularExpression pattern) {
+		return 0;
+	}
+	
+	public string encrypt(string salt) {
+		return *this;
+	}
+	
+	public boolean endsWith(string suffix) {
+		if (suffix.length() > length())
+			return false;
+		int base = length() - suffix.length();
+		pointer<byte> cp = pointer<byte>(&_contents.data) + base;
+		pointer<byte> scp = pointer<byte>(&suffix._contents.data);
+		for (int i = 0; i < suffix.length(); i++)
+			if (scp[i] != cp[i])
+				return false;
+		return true;
+	}
+	
+	public boolean equalIgnoreCase(string other) {
 		return false;
+	}
+	/*
+	 *	escapeC
+	 *
+	 *	Take the string and convert it to a form, that when
+	 *	wrapped with double-quotes would be a well-formed C
+	 *	string literal token with the same string value as 
+	 *	this object, but which consists exclusively of 7-bit
+	 *	ASCII characters.  All characters with a high-order bit
+	 *	set are converted to hex escape sequences with two digits
+	 *	each (e.g. \xff).
+	 */
+	string escapeC() {
+		string output;
+
+		if (length() == 0)
+			return output;
+		pointer<byte> cp = pointer<byte>(&_contents.data);
+		for (int i = 0; i < _contents.length; i++) {
+			switch (cp[i]) {
+			case	'\\':	output.printf("\\\\");	break;
+			case	'\a':	output.printf("\\a");	break;
+			case	'\b':	output.printf("\\b");	break;
+			case	'\f':	output.printf("\\f");	break;
+			case	'\n':	output.printf("\\n");	break;
+			case	'\r':	output.printf("\\r");	break;
+			case	'\v':	output.printf("\\v");	break;
+			default:
+				if (cp[i] >= 0x20 &&
+					cp[i] < 0x7f)
+					output.append(cp[i]);
+				else
+					output.printf("\\x%x", cp[i] & 0xff);
+			}
+		}
+		return output;
+	}
+	/*
+	 *	escapeParasol
+	 *
+	 *	Take the string and convert it to a form, that when
+	 *	wrapped with double-quotes would be a well-formed Parasol
+	 *	string literal token with the same string value as 
+	 *	this object.  This differs in C-escaping a string in that
+	 *	all well-formed extended Unicode characters are converted to
+	 *	\uNNNNN escape sequences.  Other sub-sequences of characters with
+	 *	high-order bits set will be converted using hex sequences as for
+	 *	escapeC.
+	 */
+	string escapeParasol() {
+		string output;
+
+		if (length() == 0)
+			return output;
+		pointer<byte> cp = pointer<byte>(&_contents.data);
+		for (int i = 0; i < _contents.length; i++) {
+			switch (cp[i]) {
+			case	'\\':	output.printf("\\\\");	break;
+			case	'\a':	output.printf("\\a");	break;
+			case	'\b':	output.printf("\\b");	break;
+			case	'\f':	output.printf("\\f");	break;
+			case	'\n':	output.printf("\\n");	break;
+			case	'\r':	output.printf("\\r");	break;
+			case	'\v':	output.printf("\\v");	break;
+			default:
+				if (cp[i] >= 0x20 &&
+					cp[i] < 0x7f)
+					output.append(cp[i]);
+				else {
+					// TODO: Implement \uNNNNN sequence
+					//assert(false);
+					output.printf("\\x%x", cp[i] & 0xff);
+				}
+			}
+		}
+		return output;
+	}
+
+//	public long fingerprint() {
+//		return 0;
+//	}
+	
+//	public char get(int index) {
+//		return ' ';
+//	}
+	
+	public int hash() {
+		return 5;
+	}
+	/*
+	 *	indexOf
+	 *
+	 *	Returns the index of the first occurrance of the byte c
+	 *	in the string.
+	 *
+	 *	Returns -1 if the byte does not appear in the string
+	 */
+	public int indexOf(byte c) {
+		return indexOf(c, 0);
+	}
+	/*
+	 *	indexOf
+	 *
+	 *	Returns the index of the first occurrance of the byte c
+	 *	in the string, starting with the index given by start.
+	 *
+	 *	Returns -1 if the byte does not appear in the string
+	 */
+	public int indexOf(byte c, int start) {
+		pointer<byte> cp = pointer<byte>(&_contents.data);
+		for (int i = start; i < length(); i++)
+			if (cp[i] == c)
+				return i;
+		return -1;
+	}
+	
+	public int lastIndexOf(byte c) {
+		if (_contents != null) {
+			pointer<byte> cp = pointer<byte>(&_contents.data) + _contents.length;
+			for (int i = _contents.length - 1; i >= 0; i--)
+				if (cp[i] == c)
+					return i;
+		}
+		return -1;
+	}
+	
+	public int length() {
+		if (_contents != null)
+			return _contents.length;
+		else
+			return 0;
+	}
+	
+	public int printf(string format, var... arguments) {
+		int beforeLength = length();
+		int nextArgument = 0;
+		for (int i = 0; i < format.length(); i++) {
+			if (format[i] == '%') {
+				enum ParseState {
+					INITIAL,
+					INITIAL_DIGITS,
+					AFTER_LT,
+					IN_FLAGS,
+					IN_WIDTH,
+					BEFORE_DOT,
+					AFTER_DOT,
+					IN_PRECISION,
+					AT_FORMAT,
+					ERROR
+				}
+				
+				ParseState current = ParseState.INITIAL;
+				int accumulator = 0;
+								
+				int width = 0;
+				boolean widthSpecified = false;
+				int precision = 0;
+				boolean precisionSpecified = false;
+				
+				// flags
+				
+				boolean leftJustified = false;
+				boolean alternateForm = false;
+				boolean alwaysIncludeSign = false;
+				boolean leadingSpaceForPositive = false;
+				boolean zeroPadded = false;
+				boolean groupingSeparators = false;
+				boolean negativeInParentheses = false;
+				
+				int formatStart = i;
+				boolean done = false;
+				do {
+					i++;
+					if (i < format.length()) {
+						switch (format[i]) {
+						case	'*':
+							switch (current) {
+							case INITIAL:
+							case IN_FLAGS:
+								width = int(arguments[nextArgument]);
+								widthSpecified = true;
+								nextArgument++;
+								current = ParseState.BEFORE_DOT;
+								break;
+								
+							case AFTER_DOT:
+								precision = int(arguments[nextArgument]);
+								precisionSpecified = true;
+								nextArgument++;
+								current = ParseState.AT_FORMAT;
+								break;
+								
+							default:
+								current = ParseState.ERROR;
+							}
+							break;
+							
+						case	'<':
+							switch (current) {
+							case INITIAL:
+								if (nextArgument > 0)
+									current = ParseState.AFTER_LT;
+								else
+									current = ParseState.ERROR;
+								break;
+								
+							default:
+								current = ParseState.ERROR;
+							}
+							break;
+							
+						case	'0':
+							switch (current) {
+							case INITIAL:
+								current = ParseState.IN_FLAGS;
+							case IN_FLAGS:
+								zeroPadded = true;
+								break;
+								
+							case INITIAL_DIGITS:
+							case IN_WIDTH:
+							case IN_PRECISION:
+								accumulator *= 10;
+								break;
+
+							case AFTER_DOT:
+								current = ParseState.IN_PRECISION;
+								break;
+								
+							default:
+								current = ParseState.ERROR;
+							}
+							break;
+							
+						case	'1':
+						case	'2':
+						case	'3':
+						case	'4':
+						case	'5':
+						case	'6':
+						case	'7':
+						case	'8':
+						case	'9':
+							accumulator = accumulator * 10 + (format[i] - '0');
+							switch (current) {
+							case INITIAL:
+								current = ParseState.INITIAL_DIGITS;
+								break;
+								
+							case IN_FLAGS:
+								current = ParseState.IN_WIDTH;
+								break;
+								
+							case AFTER_DOT:
+								current = ParseState.IN_PRECISION;
+								break;
+								
+							case INITIAL_DIGITS:
+							case IN_WIDTH:
+							case IN_PRECISION:
+								break;
+
+							default:
+								current = ParseState.ERROR;
+							}
+							break;
+							
+						case	'-':
+							switch (current) {
+							case INITIAL:
+								current = ParseState.IN_FLAGS;
+							case IN_FLAGS:
+								leftJustified = true;
+								break;
+								
+							default:
+								current = ParseState.ERROR;
+							}
+							break;
+						
+						case	'+':
+							switch (current) {
+							case INITIAL:
+								current = ParseState.IN_FLAGS;
+							case IN_FLAGS:
+								alwaysIncludeSign = true;
+								break;
+								
+							default:
+								current = ParseState.ERROR;
+							}
+							break;
+						
+						case	' ':
+							switch (current) {
+							case INITIAL:
+								current = ParseState.IN_FLAGS;
+							case IN_FLAGS:
+								leadingSpaceForPositive = true;
+								break;
+								
+							default:
+								current = ParseState.ERROR;
+							}
+							break;
+						
+						case	'#':
+							switch (current) {
+							case INITIAL:
+								current = ParseState.IN_FLAGS;
+							case IN_FLAGS:
+								alternateForm = true;
+								break;
+								
+							default:
+								current = ParseState.ERROR;
+							}
+							break;
+						
+						case	',':
+							switch (current) {
+							case INITIAL:
+								current = ParseState.IN_FLAGS;
+							case IN_FLAGS:
+								groupingSeparators = true;
+								break;
+								
+							default:
+								current = ParseState.ERROR;
+							}
+							break;
+						
+						case	'(':
+							switch (current) {
+							case INITIAL:
+								current = ParseState.IN_FLAGS;
+							case IN_FLAGS:
+								negativeInParentheses = true;
+								break;
+								
+							default:
+								current = ParseState.ERROR;
+							}
+							break;
+												
+						case	'$':
+							switch (current) {
+							case INITIAL_DIGITS:
+								nextArgument = accumulator;
+								accumulator = 0;
+								
+							case AFTER_LT:
+								nextArgument--;
+								current = ParseState.IN_FLAGS;
+								break;
+								
+							default:
+								current = ParseState.ERROR;
+							}
+							break;
+							
+						case	'.':
+							switch (current) {
+							case INITIAL:
+							case INITIAL_DIGITS:
+							case IN_WIDTH:
+								width = accumulator;
+								widthSpecified = true;
+								accumulator = 0;
+							case BEFORE_DOT:
+								current = ParseState.AFTER_DOT;
+								break;
+							
+							default:
+								current = ParseState.ERROR;
+							}
+							break;
+							
+						default:
+							switch (current) {
+							case IN_PRECISION:
+								precision = accumulator;
+								precisionSpecified = true;
+								break;
+								
+							case INITIAL_DIGITS:
+							case IN_WIDTH:
+								width = accumulator;
+								widthSpecified = true;
+								break;
+								
+							case INITIAL:
+							case AT_FORMAT:
+							case BEFORE_DOT:
+								break;
+							
+							case AFTER_DOT:
+								current = ParseState.ERROR;
+							}
+							if (precision > width)
+								width = precision;
+							switch (format[i]) {
+							case	'd':
+							case	'D':
+								long ivalue = long(arguments[nextArgument]);
+								nextArgument++;
+								string formatted(ivalue);
+								int nextChar = 0;
+								
+								int actualLength = 0;
+								if (ivalue >= 0) {
+									if (alwaysIncludeSign || leadingSpaceForPositive)
+										actualLength++;
+								} else
+									nextChar++;
+								if (precision > formatted.length())
+									actualLength += precision;
+								else
+									actualLength += formatted.length();
+
+								if (!leftJustified) {
+									while (width > actualLength) {
+										append(' ');
+										width--;
+									}
+								}
+								if (ivalue >= 0) {
+									if (alwaysIncludeSign)
+										append('+');
+									else if (leadingSpaceForPositive)
+										append(' ');
+								} else
+									append('-');
+								while (precision > formatted.length()) {
+									append('0');
+									precision--;
+								}
+								while (nextChar < formatted.length()) {
+									append(formatted[nextChar]);
+									nextChar++;
+								}
+								if (leftJustified) {
+									while (width > formatted.length()) {
+										append(' ');
+										width--;
+									}
+								}
+								break;
+								
+							case	'e':
+							case	'E':
+								double value = double(arguments[nextArgument]);
+								nextArgument++;
+								if (!precisionSpecified)
+									precision = 6;
+								int decimalPoint;
+								int sign;
+								pointer<byte> result = C.ecvt(value, precision + 1, &decimalPoint, &sign);
+								if (value == 0)
+									sign = 0;
+								actualLength = precision + 7;
+								if (sign != 0 || alwaysIncludeSign || leadingSpaceForPositive)
+									actualLength++;
+								if (!leftJustified) {
+									while (actualLength < width) {
+										append(' ');
+										width--;
+									}
+								}
+								if (sign != 0)
+									append('-');
+								else if (alwaysIncludeSign)
+									append('+');
+								else if (leadingSpaceForPositive)
+									append(' ');
+								append(result[0]);
+								append('.');
+								append(result + 1, precision);
+								append(format[i]);
+								printf("%+3.3d", decimalPoint);
+								while (actualLength < width) {
+									append(' ');
+									width--;
+								}
+								break;
+								
+							case	'f':
+								value = double(arguments[nextArgument]);
+								nextArgument++;
+								if (!precisionSpecified)
+									precision = 6;
+								result = C.fcvt(value, precision, &decimalPoint, &sign);
+								actualLength = decimalPoint + precision;
+								if (precision > 0)
+									actualLength++;
+								if (sign != 0 || alwaysIncludeSign || leadingSpaceForPositive)
+									actualLength++;
+								if (!leftJustified) {
+									while (actualLength < width) {
+										append(' ');
+										width--;
+									}
+								}
+								if (sign != 0)
+									append('-');
+								else if (alwaysIncludeSign)
+									append('+');
+								else if (leadingSpaceForPositive)
+									append(' ');
+								append(result, decimalPoint);
+								if (precision > 0) {
+									append('.');
+									append(result + decimalPoint, precision);
+								}
+								while (actualLength < width) {
+									append(' ');
+									width--;
+								}
+								break;
+								
+							case	'g':
+							case	'G':
+								value = double(arguments[nextArgument]);
+								nextArgument++;
+								string buffer;
+								buffer.resize(80);
+								if (!precisionSpecified)
+									precision = 6;
+								result = C.gcvt(value, precision, &buffer[0]);
+								int resultLen = strlen(&buffer[0]);
+								actualLength = resultLen;
+								if (value >= 0) {
+									if (alwaysIncludeSign || leadingSpaceForPositive)
+										actualLength++;
+								}
+								if (!leftJustified) {
+									while (actualLength < width) {
+										append(' ');
+										width--;
+									}
+								}
+								if (value >= 0) {
+									if (alwaysIncludeSign)
+										append('+');
+									else if (leadingSpaceForPositive)
+										append(' ');
+								}
+								append(&buffer[0], resultLen);
+								while (actualLength < width) {
+									append(' ');
+									width--;
+								}
+								break;
+								
+							case	'p':
+							case	'x':
+								ivalue = long(arguments[nextArgument]);
+								nextArgument++;
+								string hex;
+								
+								if (!precisionSpecified)
+									precision = 1;
+								if (alternateForm)
+									hex.append("0x");
+								int digitCount = 16;
+								while ((ivalue & 0xf000000000000000) == 0 && digitCount > precision) {
+									ivalue <<= 4;
+									digitCount--;
+								}
+								for (int k = 0; k < digitCount; k++) {
+									int digit = int(ivalue >>> 60);
+									if (digit < 10)
+										hex.append('0' + digit);
+									else
+										hex.append(('a' - 10) + digit);
+									ivalue <<= 4;
+								}
+								if (!leftJustified) {
+									while (width > hex.length()) {
+										append(' ');
+										width--;
+									}
+								}
+								append(hex);
+								if (leftJustified) {
+									while (width > hex.length()) {
+										append(' ');
+										width--;
+									}
+								}
+								break;
+								
+							case	'X':
+							case	'i':
+							case	'u':
+							case	'o':
+							case	'n':		// write to integer pointer parameter
+								current = ParseState.ERROR;
+								break;
+								
+							case	'%':
+								if (!leftJustified) {
+									while (width > 1) {
+										append(' ');
+										width--;
+									}
+								}
+								append('%');
+								if (leftJustified) {
+									while (width > 1) {
+										append(' ');
+										width--;
+									}
+								}
+								break;
+								
+							case	'c':
+								char c = char(arguments[nextArgument]);
+								nextArgument++;
+								if (!leftJustified) {
+									while (width > 1) {
+										append(' ');
+										width--;
+									}
+								}
+								if (!precisionSpecified || precision >= 1)
+									append(c);
+								if (leftJustified) {
+									while (width > 1) {
+										append(' ');
+										width--;
+									}
+								}
+								break;
+								
+							case	's':
+								pointer<byte> cp;
+								int len;
+								string s;
+								
+								if (arguments[nextArgument].class == pointer<byte>) {
+									cp = pointer<byte>(arguments[nextArgument]);
+									if (cp == null) {
+										s = "<null>";
+										cp = s.c_str();
+										len = s.length();
+									} else {
+										len = strlen(cp);
+									}
+									nextArgument++;
+								} else if (arguments[nextArgument].class == string) {
+									s = string(arguments[nextArgument]);
+									if (s == null)
+										s = "<null>";
+									nextArgument++;
+									cp = s.c_str();
+									len = s.length();
+								} else {
+									current = ParseState.ERROR;
+									break;
+								}
+								if (!leftJustified) {
+									while (width > len) {
+										append(' ');
+										width--;
+									}
+								}
+								
+								if (precisionSpecified && precision < len)
+									len = precision;
+								append(cp, len);
+								if (leftJustified) {
+									while (width > len) {
+										append(' ');
+										width--;
+									}
+								}
+								break;
+								
+							default:
+								current = ParseState.ERROR;
+							}
+							done = true;
+						}
+					} else
+						current = ParseState.ERROR;
+					if (current == ParseState.ERROR) {
+						while (formatStart <= i) {
+							append(format[formatStart]);
+							formatStart++;
+						}
+						break;
+					}
+				} while (!done);
+			} else
+				append(format[i]);
+		}
+		return length() - beforeLength;
+	}
+	
+	public string remove(RegularExpression pattern) {
+		return null;
+	}
+	
+	public void resize(int newLength) {
+		int newSize = reservedSize(newLength);
+		if (_contents != null) {
+			if (_contents.length >= newLength) {
+				_contents.length = newLength;
+				return;
+			}
+			int oldSize = reservedSize(_contents.length);
+			if (oldSize == newSize) {
+				_contents.length = newLength;
+				return;
+			}
+		}
+		ref<allocation> a = ref<allocation>(allocz(newSize));
+		if (_contents != null) {
+			memcpy(&a.data, &_contents.data, _contents.length + 1);
+			free(_contents);
+		}
+		a.length = newLength;
+		*(pointer<byte>(&a.data) + newLength) = 0;
+		_contents = a;
+	}
+
+	private int reservedSize(int length) {
+		int usedSize = length + int.bytes + 1;
+		int allocSize = MIN_SIZE;
+		while (allocSize < usedSize)
+			allocSize <<= 1;
+		return allocSize;
+	}
+	
+	public void set(int index, char value) {
+	}
+	/*
+	 *	split
+	 *
+	 *	Splits a string into one or more sub-strings and
+	 *	stores them in the output vector.  If no instances of the
+	 *	delimiter character are present, then the vector is
+	 *	filled with a single element that is the entire
+	 *	string.  The output vector always has as many elements
+	 *	as the number of delimiters in the input string plus one.
+	 *	The delimiter characters are not included in the output.
+	 */
+	string[] split(char delimiter) {
+		string[] output;
+		if (_contents != null) {
+			int tokenStart = 0;
+			for (int i = 0; i < _contents.length; i++) {
+				if (pointer<byte>(&_contents.data)[i] == delimiter) {
+					output.append(string(pointer<byte>(&_contents.data) + tokenStart, i - tokenStart));
+					tokenStart = i + 1;
+				}
+			}
+			if (tokenStart > 0)
+				output.append(string(pointer<byte>(&_contents.data) + tokenStart, _contents.length - tokenStart));
+			else
+				output.append(*this);
+		} else
+			output.resize(1);
+		return output;
+	}
+	/*
+	 *	substring
+	 *
+	 *	Return a substring of this string, starting at the character
+	 *	given by first and continuing to the end of the string.
+	 */
+	public string substring(int first) {
+		return substring(first, length());
+	}
+	/*
+	 *	substring
+	 *
+	 *	Return a substring of this string, starting at the character
+	 *	given by first and continuing to (but not including) the
+	 *	character given by last.
+	 *
+	 *	TODO: Out of range values should produce exceptions
+	 */
+	public string substring(int first, int last) {
+		string result;
+		
+		result.append(pointer<byte>(&_contents.data) + first, last - first);
+		return result;
+	}
+	
+	public string toLower() {
+		if (length() == 0)
+			return *this;
+		string out;
+		pointer<byte> cp = pointer<byte>(&_contents.data);
+		for (int i = 0; i < _contents.length; i++) {
+			if (cp[i].isUppercase())
+				out.append(cp[i].toLowercase());
+			else
+				out.append(cp[i]);
+		}
+		return out;
+	}
+	
+	public string toUpper() {
+		if (length() == 0)
+			return *this;
+		string out;
+		pointer<byte> cp = pointer<byte>(&_contents.data);
+		for (int i = 0; i < _contents.length; i++) {
+			if (cp[i].isLowercase())
+				out.append(cp[i].toUppercase());
+			else
+				out.append(cp[i]);
+		}
+		return out;
+	}
+	
+	public string trim() {
+		if (length() == 0)
+			return *this;
+		pointer<byte> cp = pointer<byte>(&_contents.data);
+		for (int i = 0; i < _contents.length; i++) {
+			if (!cp[i].isSpace()) {
+				for (int j = _contents.length - 1; j > i; j--) {
+					if (!cp[j].isSpace())
+						return string(cp + i, 1 + (j - i));
+				}
+				return string(cp, 1);
+			}
+		}
+		return "";
+	}
+	/*
+	 *	unescapeC
+	 *
+	 *	Process the input string as if it were a C string literal.
+	 *	Escape sequences are:
+	 *
+	 *		\a		audible bell
+	 *		\b		backspace
+	 *		\f		form-feed
+	 *		\n		newline
+	 *		\r		carriage return
+	 *		\t		tab
+	 *		\v		vertical tab
+	 *		\xHH	hex escape
+	 *		\0DDD	octal escape
+	 *		\\		\
+	 *
+	 *	RETURNS
+	 *		false	If the sequence is not well-formed.
+	 *		string	The converted string (if the boolean is true).
+	 */
+	string,boolean unescapeC() {
+		string output;
+		
+		if (length() == 0)
+			return *this, true;
+		for (int i = 0; i < _contents.length; i++) {
+			if (pointer<byte>(&_contents.data)[i] == '\\') {
+				if (i == _contents.length - 1)
+					return output, false;
+				else {
+					int v;
+					i++;
+					switch (pointer<byte>(&_contents.data)[i]) {
+					case 'a':	output.append('\a');	break;
+					case 'b':	output.append('\b');	break;
+					case 'f':	output.append('\f');	break;
+					case 'n':	output.append('\n');	break;
+					case 'r':	output.append('\r');	break;
+					case 't':	output.append('\t');	break;
+					case 'v':	output.append('\v');	break;
+					case 'x':
+					case 'X':
+						i++;;
+						if (i >= _contents.length)
+							return output, false;
+						if (!pointer<byte>(&_contents.data)[i].isHexDigit())
+							return output, false;
+						v = 0;
+						do {
+							v <<= 4;
+							if (v > 0xff)
+								return output, false;
+							if (pointer<byte>(&_contents.data)[i].isDigit())
+								v += pointer<byte>(&_contents.data)[i] - '0';
+							else
+								v += 10 + pointer<byte>(&_contents.data)[i].toLowercase() - 'a';
+							i++;
+						} while (i < _contents.length && pointer<byte>(&_contents.data)[i].isHexDigit());
+						output.append(v);
+						break;
+					case '0':
+						i++;
+						if (i >= _contents.length)
+							return output, false;
+						if (!pointer<byte>(&_contents.data)[i].isOctalDigit())
+							return output, false;
+						v = 0;
+						do {
+							v <<= 3;
+							if (v > 0xff)
+								return output, false;
+							v += pointer<byte>(&_contents.data)[i] - '0';
+							i++;
+						} while (i < _contents.length && pointer<byte>(&_contents.data)[i].isOctalDigit());
+						output.append(v);
+						break;
+					default:	
+						output.append(pointer<byte>(&_contents.data)[i]);
+					}
+				}
+			} else
+				output.append(pointer<byte>(&_contents.data)[i]);
+		}
+		return output, true;
+	}
+	/*
+	 *	unescapeParasol
+	 *
+	 *	Process the input string as if it were a C string literal.
+	 *	Escape sequences are:
+	 *
+	 *		\a		audible bell
+	 *		\b		backspace
+	 *		\f		form-feed
+	 *		\n		newline
+	 *		\r		carriage return
+	 *		\t		tab
+	 *		\uNNNN	Unicode code point
+	 *		\v		vertical tab
+	 *		\xHH	hex escape
+	 *		\0DDD	octal escape
+	 *		\\		\
+	 *
+	 *	RETURNS
+	 *		false	If the sequence is not well-formed.
+	 *		string	The converted string (if the boolean is true).
+	 */
+	string,boolean unescapeParasol() {
+		string output;
+		
+		if (length() == 0)
+			return *this, true;
+		for (int i = 0; i < _contents.length; i++) {
+			if (pointer<byte>(&_contents.data)[i] == '\\') {
+				if (i == _contents.length - 1)
+					return output, false;
+				else {
+					int v;
+					i++;
+					switch (pointer<byte>(&_contents.data)[i]) {
+					case 'a':	output.append('\a');	break;
+					case 'b':	output.append('\b');	break;
+					case 'f':	output.append('\f');	break;
+					case 'n':	output.append('\n');	break;
+					case 'r':	output.append('\r');	break;
+					case 't':	output.append('\t');	break;
+					case 'v':	output.append('\v');	break;
+					case 'x':
+					case 'X':
+						i++;;
+						if (i >= _contents.length)
+							return output, false;
+						if (!pointer<byte>(&_contents.data)[i].isHexDigit())
+							return output, false;
+						v = 0;
+						do {
+							v <<= 4;
+							if (v > 0xff)
+								return output, false;
+							if (pointer<byte>(&_contents.data)[i].isDigit())
+								v += pointer<byte>(&_contents.data)[i] - '0';
+							else
+								v += 10 + pointer<byte>(&_contents.data)[i].toLowercase() - 'a';
+							i++;
+						} while (i < _contents.length && pointer<byte>(&_contents.data)[i].isHexDigit());
+						output.append(v);
+						break;
+					case '0':
+						i++;
+						if (i >= _contents.length)
+							return output, false;
+						if (!pointer<byte>(&_contents.data)[i].isOctalDigit())
+							return output, false;
+						v = 0;
+						do {
+							v <<= 3;
+							if (v > 0xff)
+								return output, false;
+							v += pointer<byte>(&_contents.data)[i] - '0';
+							i++;
+						} while (i < _contents.length && pointer<byte>(&_contents.data)[i].isOctalDigit());
+						output.append(v);
+						break;
+					default:
+						// TODO: Check for unicode \uNNNN sequences
+						output.append(pointer<byte>(&_contents.data)[i]);
+					}
+				}
+			} else
+				output.append(pointer<byte>(&_contents.data)[i]);
+		}
+		return output, true;
 	}
 }

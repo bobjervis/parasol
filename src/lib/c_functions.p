@@ -24,23 +24,29 @@ public int SEEK_SET = 0;
 public int SEEK_CUR = 1;
 public int SEEK_END = 2;
 
-public abstract ref<FILE> fopen(pointer<byte> filename, pointer<byte> mode);
+public abstract pointer<byte> ecvt(double number, int ndigits, ref<int> decpt, ref<int> sign);
+
+public abstract void exit(int exitCode);
 
 public abstract int fclose(ref<FILE> fp);
 
-public abstract int ftell(ref<FILE> fp);
-
-public abstract int fseek(ref<FILE> fp, int offset, int origin);
-
-public abstract int fgetc(ref<FILE> fp);
-
-public abstract unsigned fread(address cp, unsigned size, unsigned count, ref<FILE> fp);
-
-public abstract unsigned fwrite(address cp, unsigned size, unsigned count, ref<FILE> fp);
+public abstract pointer<byte> fcvt(double number, int ndigits, ref<int> decpt, ref<int> sign);
 
 public abstract int ferror(ref<FILE> fp);
 
-public abstract void exit(int exitCode);
+public abstract int fgetc(ref<FILE> fp);
+
+public abstract ref<FILE> fopen(pointer<byte> filename, pointer<byte> mode);
+
+public abstract unsigned fread(address cp, unsigned size, unsigned count, ref<FILE> fp);
+
+public abstract int fseek(ref<FILE> fp, int offset, int origin);
+
+public abstract int ftell(ref<FILE> fp);
+
+public abstract unsigned fwrite(address cp, unsigned size, unsigned count, ref<FILE> fp);
+
+public abstract pointer<byte> gcvt(double number, int ndigit, pointer<byte> buf);
 
 public abstract pointer<byte> getenv(pointer<byte> variable);
 

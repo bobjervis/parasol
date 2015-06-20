@@ -433,14 +433,12 @@ public class X86_64 extends X86_64AssignTemps {
 			insertPreamble();
 			inst(X86.ENTER, 0);
 			int registerArgs = 0;
-			int i = 0;
 			int frameSize = 0;
 			if (parameterScope.hasThis()) {
 				inst(X86.PUSH, TypeFamily.SIGNED_64, R.RSI);
 				frameSize += address.bytes;
 				inst(X86.MOV, TypeFamily.ADDRESS, R.RSI, R.RCX);
-				registerArgs += address.bytes;
-				i++;
+				registerArgs++;
 /*
  * TODO: Fix this up for a proper test. You can't use this simple test, you need to account for
  * subclasses.
@@ -455,17 +453,25 @@ public class X86_64 extends X86_64AssignTemps {
 				}
  */
 			}
-			while (registerArgs < f().registerSaveSize) {
-				inst(X86.PUSH, TypeFamily.SIGNED_64, fastArgs[i]);
+			if (parameterScope.hasOutParameter(compileContext)) {
 				frameSize += address.bytes;
-				registerArgs += address.bytes;
-				i++;
+				inst(X86.PUSH, TypeFamily.SIGNED_64, fastArgs[registerArgs]);
+				registerArgs++;
 			}
-			int flimit = f().floatRegisterSaveSize / address.bytes;
-			for (int i = 0; i < flimit; i++) {
-				inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, 8);
-				inst(X86.MOVSD, TypeFamily.SIGNED_64, R.RSP, 0, floatArgs[i]);
-				frameSize += address.bytes;
+			for (int i = 0; i < parameterScope.parameters().length(); i++) {
+				ref<Symbol> sym = parameterScope.parameters()[i];
+				
+				if (sym.deferAnalysis())
+					continue;
+				if (registerArgs < fastArgs.length() && !sym.type().passesViaStack(compileContext)) {
+					if (sym.type().isFloat()) {
+						inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, 8);
+						inst(X86.MOVSD, TypeFamily.SIGNED_64, R.RSP, 0, floatArgs[registerArgs]);
+					} else
+						inst(X86.PUSH, TypeFamily.SIGNED_64, fastArgs[registerArgs]);
+					frameSize += address.bytes;
+					registerArgs++;
+				}
 			}
 			reserveAutoMemory(false, compileContext, frameSize);
 			closeCodeSegment(CC.NOP, null);
@@ -566,11 +572,13 @@ public class X86_64 extends X86_64AssignTemps {
 
 	private void reserveAutoMemory(boolean preserveRCX, ref<CompileContext> compileContext, int frameSize) {
 		frameSize &= 15;											// Reduce the calculated frame size to 0-15.
+		int zeroZone = f().autoSize - f().registerSaveSize;
+		f().autoSize += REGISTER_PARAMETER_STACK_AREA;
 		if (((f().autoSize + frameSize) & 15) != 0)					// Now if the combined size is odd, bail out.
 			f().autoSize = (f().autoSize + frameSize + 15) & ~15;
-		if (f().autoSize > 0) {
-			int reserveSpace = f().autoSize - f().registerSaveSize;
-			inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, reserveSpace);
+		int reserveSpace = f().autoSize - f().registerSaveSize;
+		inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, reserveSpace);
+		if (zeroZone > 0) {
 			if (preserveRCX)
 				inst(X86.PUSH, TypeFamily.SIGNED_64, R.RCX);
 			inst(X86.MOV, TypeFamily.ADDRESS, R.RCX, R.RSP);
@@ -1664,7 +1672,7 @@ public class X86_64 extends X86_64AssignTemps {
 			ref<Type> t = node.type.indirectType(compileContext);
 			int size = t.size();
 			f().r.generateSpills(node, this);
-			inst(X86.MOV, TypeFamily.SIGNED_32, R.RCX, size);
+			inst(X86.MOV, TypeFamily.SIGNED_64, R.RCX, size);
 			instCall(_allocz.parameterScope(), compileContext);
 			break;
 
@@ -2766,6 +2774,12 @@ public class X86_64 extends X86_64AssignTemps {
 		case	CONDITIONAL:
 			generate(node, compileContext);
 			inst(X86.PUSH, TypeFamily.ADDRESS, R(int(node.register)));
+			return;
+			
+		case	FLOATING_POINT:
+			generate(node, compileContext);
+			inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, 8);
+			inst(X86.MOVSD, TypeFamily.SIGNED_64, R.RSP, 0, R(node.register));
 			return;
 			
 		default:

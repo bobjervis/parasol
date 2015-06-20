@@ -16,7 +16,6 @@
 namespace parasol:commandLine;
 
 import native:C;
-import parasol:text.Character;
 import parasol:process;
 
 class Command {

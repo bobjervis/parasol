@@ -72,11 +72,7 @@ public class Target {
 	public void markRegisterParameters(ref<ParameterScope> scope, ref<CompileContext> compileContext) {
 	}
 	
-	public byte registerValue(int registerArgumentIndex) {
-		return 0;
-	}
-	
-	public byte floatingRegisterValue(int floatingArgumentIndex) {
+	public byte registerValue(int registerArgumentIndex, TypeFamily family) {
 		return 0;
 	}
 	

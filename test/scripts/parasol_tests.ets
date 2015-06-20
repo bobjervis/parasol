@@ -32,6 +32,7 @@ run(filename: printf_3_ops.p, expectedOutput: "first second\n")
 run(filename: printf_4_ops.p, expectedOutput: "1234abcdef\n")
 run(filename: printf_5_ops.p, expectedOutput: "365")
 run(filename: printf_6_ops.p, expectedOutput: "506\n")
+run(filename: printf_7_ops.p)
 
 // Regressions
 
@@ -48,6 +49,7 @@ run(filename: complex_subscript.p)
 
 // Basic runtime execution tests
 
+run(filename: call_lots_o_params.p)
 run(filename: pre_decr_subscript.p)
 run(filename: covariant_return_override.p)
 run(filename: nested_enum.p)

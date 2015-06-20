@@ -13,8 +13,6 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import parasol:text.Character;
-
 int main(string[] args) {
 	char a = 1;
 	char b = 0;
@@ -186,11 +184,11 @@ char func(char p) {
 void classificationTest() {
 	for (byte b = byte.MIN_VALUE; b < byte.MAX_VALUE; b++) {
 		boolean expected = b == ' ' || b == '\t' || b == '\n' || b == '\r' || b == '\v';
-		boolean actual = Character.isSpace(b);
+		boolean actual = b.isSpace();
 		assert(expected == actual);
 	}
 	byte b = byte.MAX_VALUE;
 	boolean expected = b == ' ' || b == '\t' || b == '\n' || b == '\r' || b == '\v';
-	boolean actual = Character.isSpace(b);
+	boolean actual = b.isSpace();
 	assert(expected == actual);
 }
