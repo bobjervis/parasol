@@ -13,22 +13,23 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import parasol:file;
-import parasol:text;
+namespace parasol:types;
 
-int main(string[] args) {
-	for (int i = 0; i < args.length(); i++) {
-		string filename = args[i];
-		file.File f = file.openBinaryFile(filename);
-		string text;
-		boolean result;
-		(text, result) = f.readAll();
-		if (result) {
-			printf("%s:\n", filename);
-			text.memDump(&text[0], text.length(), 0);
-		} else
-			printf("Could not read %s\n", filename);
+public class address {}
+
+public class boolean {
+	public boolean() {
 	}
-	return 0;
+	
+	public boolean(boolean value) {
+	}
 }
+
+@Final 
+public class void {}
+
+public class ClassInfo {}
+public class `*Namespace*` {}
+public class `*deferred*`{}
+public class Exception {}
 

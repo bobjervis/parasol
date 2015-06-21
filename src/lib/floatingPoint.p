@@ -13,22 +13,30 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import parasol:file;
-import parasol:text;
+namespace parasol:floatingPoint;
 
-int main(string[] args) {
-	for (int i = 0; i < args.length(); i++) {
-		string filename = args[i];
-		file.File f = file.openBinaryFile(filename);
-		string text;
-		boolean result;
-		(text, result) = f.readAll();
-		if (result) {
-			printf("%s:\n", filename);
-			text.memDump(&text[0], text.length(), 0);
-		} else
-			printf("Could not read %s\n", filename);
+public class float {
+	private static unsigned SIGN_MASK = 0x80000000;
+	private static unsigned ONE = 0x3f800000;
+	
+	public float() {
 	}
-	return 0;
+	
+	public float(float value) {
+		
+	}
 }
+
+public class double {
+	private static long SIGN_MASK = 0x8000000000000000;
+	private static long ONE =       0x3ff0000000000000;
+
+	public double() {
+	}
+	
+	public double(double value) {
+		
+	}
+}
+
 

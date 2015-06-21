@@ -34,4 +34,4 @@ public Time now() {
 	return t;
 }
 
-public abstract long _now();
+private abstract long _now();

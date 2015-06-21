@@ -39,7 +39,7 @@ class string {
 	
 	public string(pointer<byte> cString) {
 		if (cString != null) {
-			int len = strlen(cString);
+			int len = C.strlen(cString);
 			resize(len);
 			memcpy(&_contents.data, cString, len);
 		}
@@ -813,7 +813,7 @@ class string {
 								if (!precisionSpecified)
 									precision = 6;
 								result = C.gcvt(value, precision, &buffer[0]);
-								int resultLen = strlen(&buffer[0]);
+								int resultLen = C.strlen(&buffer[0]);
 								actualLength = resultLen;
 								if (value >= 0) {
 									if (alwaysIncludeSign || leadingSpaceForPositive)
@@ -931,7 +931,7 @@ class string {
 										cp = s.c_str();
 										len = s.length();
 									} else {
-										len = strlen(cp);
+										len = C.strlen(cp);
 									}
 									nextArgument++;
 								} else if (arguments[nextArgument].class == string) {
@@ -1293,3 +1293,52 @@ class string {
 		return output, true;
 	}
 }
+
+public void memDump(address buffer, int length) {
+	memDump(buffer, length, long(buffer));
+}
+
+public void memDump(address buffer, long length, long startingOffset) {
+	pointer<byte> printed = pointer<byte>(startingOffset);
+	pointer<byte> firstRow = printed + -int(startingOffset & 15);
+	pointer<byte> data = pointer<byte>(buffer) + -int(startingOffset & 15);
+	pointer<byte> next = printed + int(length);
+	pointer<byte> nextRow = next + ((16 - int(next) & 15) & 15);
+	for (pointer<byte> p = firstRow; int(p) < int(nextRow); p += 16, data += 16) {
+		dumpPtr(p);
+		printf(" ");
+		for (int i = 0; i < 8; i++) {
+			if (int(p + i) >= int(printed) && int(p + i) < int(next))
+				printf(" %2.2x", int(data[i]));
+			else
+				printf("   ");
+		}
+		printf(" ");
+		for (int i = 8; i < 16; i++) {
+			if (int(p + i) >= int(printed) && int(p + i) < int(next))
+				printf(" %2.2x", int(data[i]));
+			else
+				printf("   ");
+		}
+		printf(" ");
+		for (int i = 0; i < 16; i++) {
+			if (int(p + i) >= int(printed) && int(p + i) < int(next)) {
+				if (data[i].isPrintable())
+					printf("%c", int(data[i]));
+				else
+					printf(".");
+			} else
+				printf(" ");
+		}
+		printf("\n");
+	}
+}
+
+private void dumpPtr(address x) {
+	pointer<long> np = pointer<long>(&x);
+	printf("%16.16x", *np);
+}
+
+class RegularExpression {
+}
+

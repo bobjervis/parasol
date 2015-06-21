@@ -454,11 +454,6 @@ int evalNative(X86_64SectionHeader *header, byte *image, char **argv, int argc) 
 	return result;
 }
 
-// Deprecated
-static int exposeException(void *exception) {
-	return 0;
-}
-
 static int setTrace(int newValue) {
 	ExecutionContext *context = threadContext.get();
 	bool oldValue = context->trace;
@@ -2068,7 +2063,7 @@ BuiltInFunctionMap builtInFunctionMap[] = {
 	{ "fetchSnapshot",	nativeFunction(fetchSnapshot),	2,	0, "parasol" },
 	{ "supportedTarget",nativeFunction(supportedTarget),1,	1, "parasol" },
 	// TODO: Remove plain 'now' in favor of the new function whenever...
-	{ "now",			nativeFunction(now),			0,	1, "parasol" },
+	{ "now",			0,								0,	1 },
 	{ "exit",			nativeFunction(exit),			1,	1, "parasol" },
 	{ "evalNative",		nativeFunction(evalNative),		4,	1, "parasol" },
 	{ "VirtualAlloc",	nativeFunction(builtinVirtualAlloc),
@@ -2077,7 +2072,8 @@ BuiltInFunctionMap builtInFunctionMap[] = {
 														4,	1, "native" },
 	{ "GetLastError",	nativeFunction(builtinGetLastError),
 														0,	1, "native" },
-	{ "exposeException",nativeFunction(exposeException),1,	1 },
+	// TODO: Remove plain 'now' in favor of the new function whenever...
+	{ "exposeException",0,								1,	1 },
 	{ "_now",			nativeFunction(now),			0,	1, "parasol" },
 	{ "FormatMessage",	nativeFunction(formatMessage),	1,	1, "native" },
 	{ "runningTarget",  nativeFunction(runningTarget),  0,  1, "parasol" },

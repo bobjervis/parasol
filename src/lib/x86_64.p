@@ -141,7 +141,6 @@ public class X86_64 extends X86_64AssignTemps {
 	private ref<OverloadInstance> _varCopyConstructor;
 	private ref<OverloadInstance> _memset;
 	private ref<OverloadInstance> _memcpy;
-	private ref<OverloadInstance> _exposeException;
 	private ref<OverloadInstance> _assert;
 	private ref<Symbol> _floatSignMask;
 	private ref<Symbol> _floatOne;
@@ -565,7 +564,6 @@ public class X86_64 extends X86_64AssignTemps {
 				unfinished(node, "generateReturn failed - default end-of-static block", compileContext);
 			handler.start(this);
 			inst(X86.LEA, R.RSP, R.RBP, -(f().autoSize + 8 * address.bytes));
-			instCall(_exposeException.parameterScope(), compileContext);
 			closeCodeSegment(CC.JMP, join);
 		}
 	}
@@ -3472,11 +3470,6 @@ public class X86_64 extends X86_64AssignTemps {
 		if (memsetOverload.class == Overload) {
 			ref<Overload> o = ref<Overload>(memcpyOverload);
 			_memcpy = o.instances()[0];
-		}
-		ref<Symbol> exposeExceptionOverload = root.lookup("exposeException");
-		if (exposeExceptionOverload.class == Overload) {
-			ref<Overload> o = ref<Overload>(exposeExceptionOverload);
-			_exposeException = o.instances()[0];
 		}
 		ref<Type> stringType = _arena.builtInType(TypeFamily.STRING);
 		for (int i = 0; i < stringType.scope().constructors().length(); i++) {

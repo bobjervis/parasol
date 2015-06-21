@@ -51,3 +51,11 @@ public abstract pointer<byte> gcvt(double number, int ndigit, pointer<byte> buf)
 public abstract pointer<byte> getenv(pointer<byte> variable);
 
 public abstract double strtod(pointer<byte> str, ref<pointer<byte>> endPtr);
+
+public int strlen(pointer<byte> cp) {
+	pointer<byte> start = cp;
+	while (*cp != 0)
+		cp++;
+	return int(cp - start);
+}
+

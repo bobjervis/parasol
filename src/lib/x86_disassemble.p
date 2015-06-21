@@ -20,6 +20,7 @@ import parasol:compiler.ClasslikeScope;
 import parasol:compiler.FileStat;
 import parasol:compiler.Scope;
 import parasol:compiler.Symbol;
+import native:C;
 
 class Disassembler {
 	private ref<Arena> _arena;
@@ -1453,7 +1454,7 @@ class Disassembler {
 	string builtInAt(int index) {
 		pointer<byte> pb = _physical + _pxiHeader.builtInsText;
 		for (int i = 0; i < index; i++) {
-			pb += strlen(pb) + 1;
+			pb += C.strlen(pb) + 1;
 		}
 		string s(pb);
 		return s;

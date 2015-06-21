@@ -37,8 +37,6 @@ public class Arena {
 	private ref<Symbol> _int;
 	private ref<Symbol> _string;
 	private ref<Symbol> _var;
-	private ref<Symbol> _enumBase;
-	private ref<Symbol> _enumInstanceBase;
 	private ref<OverloadInstance> _map;
 	private ref<OverloadInstance> _vector;
 	private ref<OverloadInstance> _enumVector;
@@ -261,8 +259,6 @@ public class Arena {
 		_int = root.lookup("int");
 		_string = root.lookup("string");
 		_var = root.lookup("var");
-		_enumBase = root.lookup("EnumBase");
-		_enumInstanceBase = root.lookup("EnumInstanceBase");
 		sym = root.lookup("vector");
 		if (sym.class == Overload) {
 			ref<Overload> o = ref<Overload>(sym);

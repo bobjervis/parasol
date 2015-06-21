@@ -15,6 +15,8 @@
  */
 namespace parasol:compiler;
 
+import native:C;
+
 enum TypeFamily {
 	SIGNED_8,
 	SIGNED_16,
@@ -60,7 +62,7 @@ class CompileString {
 	}
 	
 	CompileString(pointer<byte> value) {
-		length = strlen(value);
+		length = C.strlen(value);
 		data = value;
 	}
 	
@@ -79,7 +81,7 @@ class CompileString {
 	}
 
 	boolean equals(pointer<byte> other) {
-		if (length != strlen(other))
+		if (length != C.strlen(other))
 			return false;
 		for (int i = 0; i < length; i++)
 			if (data[i] != other[i])
