@@ -54,16 +54,24 @@ int printf(string format, var... arguments) {
 	return print(s);
 }
 
+// Use printf instead
+@Deprecated
 abstract int print(string text);
 
 abstract void assert(boolean test);
 
+// Use native:C
+@Deprecated
 abstract address memset(address destination, byte value, int length);
+@Deprecated
 abstract address memcpy(address destination, address source, int length);
+@Deprecated
+abstract void free(address p);
 
+// Use native:C.calloc
+@Deprecated
 abstract address allocz(long size);
 
-abstract void free(address p);
 
 class vector<class E> extends vector<E, int>{
 	public vector(int initialSize) {

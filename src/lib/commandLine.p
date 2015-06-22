@@ -219,7 +219,7 @@ class Argument<class T> extends BaseArgument {
 	
 	public Argument(ArgumentClass argumentClass, char shortOption, string longOption, string helpText) {
 		super(argumentClass, shortOption, longOption, helpText);
-		memset(pointer<byte>(&value), 0, value.bytes);
+		C.memset(pointer<byte>(&value), 0, value.bytes);
 	}
 
 };

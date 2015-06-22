@@ -33,7 +33,7 @@ class string {
 	public string(string source) {
 		if (source != null) {
 			resize(source.length());
-			memcpy(&_contents.data, &source._contents.data, source._contents.length + 1);
+			C.memcpy(&_contents.data, &source._contents.data, source._contents.length + 1);
 		}
 	}
 	
@@ -41,19 +41,19 @@ class string {
 		if (cString != null) {
 			int len = C.strlen(cString);
 			resize(len);
-			memcpy(&_contents.data, cString, len);
+			C.memcpy(&_contents.data, cString, len);
 		}
 	}
 	
 	public string(byte[] value) {
 		resize(value.length());
-		memcpy(&_contents.data, &value[0], value.length());
+		C.memcpy(&_contents.data, &value[0], value.length());
 	}
 	
 	public string(pointer<byte> buffer, int len) {
 		if (buffer != null) {
 			resize(len);
-			memcpy(&_contents.data, buffer, len);
+			C.memcpy(&_contents.data, buffer, len);
 		}
 	}
 	
@@ -99,7 +99,7 @@ class string {
 		}
 		if (other != null) {
 			resize(other._contents.length);
-			memcpy(&_contents.data, &other._contents.data, other._contents.length + 1);
+			C.memcpy(&_contents.data, &other._contents.data, other._contents.length + 1);
 		}
 	}
 	
@@ -115,7 +115,7 @@ class string {
 			int oldLength = length();
 			resize(oldLength + len);
 //			print("resized\n");
-			memcpy(pointer<byte>(&_contents.data) + oldLength, &other._contents.data, len + 1);
+			C.memcpy(pointer<byte>(&_contents.data) + oldLength, &other._contents.data, len + 1);
 //			print("appended\n");
 		}
 //		print("=");
@@ -139,11 +139,11 @@ class string {
 	public string append(pointer<byte> p, int length) {
 		if (_contents == null) {
 			resize(length);
-			memcpy(&_contents.data, p, length);
+			C.memcpy(&_contents.data, p, length);
 		} else {
 			int len = _contents.length;
 			resize(len + length);
-			memcpy(pointer<byte>(&_contents.data) + len, p, length);
+			C.memcpy(pointer<byte>(&_contents.data) + len, p, length);
 		}
 		*(pointer<byte>(&_contents.data) + _contents.length) = 0;
 		return *this;
@@ -258,7 +258,7 @@ class string {
 		}
 		if (other != null) {
 			resize(other._contents.length);
-			memcpy(&_contents.data, &other._contents.data, other._contents.length + 1);
+			C.memcpy(&_contents.data, &other._contents.data, other._contents.length + 1);
 		}
 	}
 	
@@ -1003,7 +1003,7 @@ class string {
 		}
 		ref<allocation> a = ref<allocation>(allocz(newSize));
 		if (_contents != null) {
-			memcpy(&a.data, &_contents.data, _contents.length + 1);
+			C.memcpy(&a.data, &_contents.data, _contents.length + 1);
 			free(_contents);
 		}
 		a.length = newLength;

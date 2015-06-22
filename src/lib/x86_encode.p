@@ -354,7 +354,7 @@ class X86_64Encoder extends Target {
 						ref<Constant> c = ref<Constant>(ps.initializer());
 						long x = c.intValue();
 						address p = &_code[sym.offset];
-						memcpy(p, &x, sym.type().size());
+						C.memcpy(p, &x, sym.type().size());
 						break;
 					}
 				//	default:
@@ -611,7 +611,7 @@ class X86_64Encoder extends Target {
 				cs.sourceLocations[i].offset += nextCopy;
 			_sourceLocations.append(cs.sourceLocations);
 			emitExceptionEntry(nextCopy, cs.exceptionHandler);
-			memcpy(&_code[nextCopy], &_functionCode[cs.codeOffset], cs.length);
+			C.memcpy(&_code[nextCopy], &_functionCode[cs.codeOffset], cs.length);
 			while (cs.fixups != null) {
 				ref<Fixup> fx = cs.fixups;
 				cs.fixups = fx.next;
@@ -2712,7 +2712,7 @@ class X86_64Encoder extends Target {
 			offset = _strings.length();
 			int sLength = output.length();
 			_strings.resize(offset + int.bytes);
-			memcpy(&_strings[offset], &sLength, int.bytes);
+			C.memcpy(&_strings[offset], &sLength, int.bytes);
 			for (int i = 0; i < sLength; i++)
 				_strings.append(output[i]);
 			_strings.append(0);

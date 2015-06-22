@@ -59,3 +59,11 @@ public int strlen(pointer<byte> cp) {
 	return int(cp - start);
 }
 
+// To be added to runtime:
+
+public abstract address memcpy(address destination, address source, int amount);
+public abstract address memset(address destination, byte value, int amount);
+//public abstract address calloc(long size);
+public abstract void free(address data);
+
+

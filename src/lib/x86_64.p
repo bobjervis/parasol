@@ -62,6 +62,7 @@ import parasol:compiler.TypeFamily;
 import parasol:compiler.Unary;
 import parasol:compiler.Variable;
 import parasol:pxi.Pxi;
+import native:C;
 
 /*
  * These are combined to produce the necessary instruciton encodings.
@@ -220,7 +221,7 @@ public class X86_64 extends X86_64AssignTemps {
 			runtime.setTrace(false);
 		} else {
 			pointer<byte> generatedCode = pointer<byte>(runtime.allocateRegion(_staticMemoryLength));
-			memcpy(generatedCode, _staticMemory, _staticMemoryLength);
+			C.memcpy(generatedCode, _staticMemory, _staticMemoryLength);
 			for (int i = 0; i < _pxiHeader.relocationCount; i++) {
 				long fx = pxiFixups[i];
 				assert(false);

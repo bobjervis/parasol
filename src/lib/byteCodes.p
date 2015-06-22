@@ -65,6 +65,7 @@ import parasol:compiler.typeFamilyMap;
 import parasol:compiler.Unary;
 import parasol:pxi.Pxi;
 import parasol:pxi.Section;
+import native:C;
 
 int STACK_SLOT = address.bytes;
 int FRAME_SIZE = 3 * address.bytes;
@@ -950,7 +951,7 @@ class Code extends Value {
 			_labels[i] -= mark;
 		target.applyJumpTargets(jumpsAtStart, this);
 		_byteCodes = pointer<byte>(allocz(_length));
-		memcpy(_byteCodes, &target.byteCodeBuffer()[mark], _length);
+		C.memcpy(_byteCodes, &target.byteCodeBuffer()[mark], _length);
 		target.resetByteCodeMark(mark);
 		target.popSp(-target.currentSpDepth());
 		target.popSp(spDepth);
@@ -3853,7 +3854,7 @@ class StaticObject extends Value {
 		case	INTEGER:{
 			ref<Constant> c = ref<Constant>(initializer);
 			long x = c.intValue();
-			memcpy(_data, &x, _size);
+			C.memcpy(_data, &x, _size);
 			break;
 		}
 	//	default:
@@ -3899,7 +3900,7 @@ class String extends Value {
 			pointer<int> data = pointer<int>(pointer<address>(_value) + 1);
 			*pointer<address>(_value) = data;
 			*data = value.length();
-			memcpy(data + 1, &value[0], value.length() + 1);
+			C.memcpy(data + 1, &value[0], value.length() + 1);
 		} else {
 			_length = address.bytes;
 			_value = allocz(_length);

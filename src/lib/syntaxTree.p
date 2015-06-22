@@ -16,6 +16,7 @@
 namespace parasol:compiler;
 
 import parasol:process;
+import native:C;
 
 enum Operator {
 	// SyntaxError
@@ -244,7 +245,7 @@ class SyntaxTree {
 	public ref<Identifier> newIdentifier(ref<Node> annotation, CompileString value, Location location) {
 		//void *block = _pool.alloc(sizeof (Identifier) + value.size());
 		pointer<byte> cp = pointer<byte>(allocz(value.length));
-		memcpy(cp, value.data, value.length);
+		C.memcpy(cp, value.data, value.length);
 		CompileString v;
 		v.data = cp;
 		v.length = value.length;
@@ -299,7 +300,7 @@ class SyntaxTree {
 	public ref<Selection> newSelection(ref<Node> left, CompileString name, Location location) {
 		//void *block = _pool.alloc(sizeof (Selection) + name.size());
 		pointer<byte> cp = pointer<byte>(allocz(name.length));
-		memcpy(cp, name.data, name.length);
+		C.memcpy(cp, name.data, name.length);
 		CompileString n;
 		n.data = cp;
 		n.length = name.length;
@@ -347,7 +348,7 @@ class SyntaxTree {
 	public ref<Constant> newConstant(Operator op, CompileString value, Location location) {
 		//void *block = _pool.alloc(sizeof (Constant) + value.size());
 		pointer<byte> cp = pointer<byte>(allocz(value.length));
-		memcpy(cp, value.data, value.length);
+		C.memcpy(cp, value.data, value.length);
 		CompileString v;
 		v.data = cp;
 		v.length = value.length;
@@ -3105,7 +3106,7 @@ class Constant extends Node {
 	public ref<Constant> clone(ref<SyntaxTree> tree) {
 		byte[] value;
 		value.resize(_value.length);
-		memcpy(&value[0], _value.data, _value.length);
+		C.memcpy(&value[0], _value.data, _value.length);
 		CompileString cs(&value);
 		return ref<Constant>(tree.newConstant(op(), cs, location()).finishClone(this, tree.pool()));
 	}
@@ -3113,7 +3114,7 @@ class Constant extends Node {
 	public ref<Constant> cloneRaw(ref<SyntaxTree> tree) {
 		byte[] value;
 		value.resize(_value.length);
-		memcpy(&value[0], _value.data, _value.length);
+		C.memcpy(&value[0], _value.data, _value.length);
 		CompileString cs(&value);
 		return tree.newConstant(op(), cs, location());
 	}
@@ -3857,7 +3858,7 @@ class Identifier extends Node {
 	public ref<Identifier> clone(ref<SyntaxTree> tree) {
 		byte[] value;
 		value.resize(_value.length);
-		memcpy(&value[0], _value.data, _value.length);
+		C.memcpy(&value[0], _value.data, _value.length);
 		CompileString cs(&value);
 		ref<Identifier> id = tree.newIdentifier(_annotation, cs, location());
 		id._symbol = _symbol;
@@ -3868,7 +3869,7 @@ class Identifier extends Node {
 	public ref<Identifier> cloneRaw(ref<SyntaxTree> tree) {
 		byte[] value;
 		value.resize(_value.length);
-		memcpy(&value[0], _value.data, _value.length);
+		C.memcpy(&value[0], _value.data, _value.length);
 		CompileString cs(&value);
 		ref<Identifier> id = tree.newIdentifier(_annotation, cs, location());
 		id._definition = _definition;

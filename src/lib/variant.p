@@ -15,6 +15,8 @@
  */
 namespace parasol:variant;
 
+import native:C;
+
 public class var {
 //	private class _actualType;
 	private address _actualType;
@@ -106,7 +108,7 @@ public class var {
 	public void copy(var source) {
 //		_actualType = source._actualType;
 //		_value = source._value;
-		memcpy(this, &source, var.bytes);
+		C.memcpy(this, &source, var.bytes);
 	}
 	
 	public var divide(var other) {

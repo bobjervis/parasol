@@ -15,6 +15,8 @@
  */
 namespace parasol:collections;
 
+import native:C;
+
 public class Pair<class K, class V> {
 	public K key;
 	public V value;
@@ -227,7 +229,7 @@ class vector<class E, enum I> {
 	}
 	
 	public void clear() {
-		memset(_data, 0, I.length * E.bytes);
+		C.memset(_data, 0, I.length * E.bytes);
 	}
 	
 	public boolean contains(E probe) {
