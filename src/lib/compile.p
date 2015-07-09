@@ -123,8 +123,21 @@ class CompileContext {
 		while (_arena.builtScopes < _arena.scopes().length()) {
 			ref<Scope> s = _arena.scopes()[_arena.builtScopes];
 			_arena.builtScopes++;
-//			printf(" --- buildScopes %d/%d\n", _arena.builtScopes, _arena.scopes().length());
-			clearDeclarationModifiers();
+/*
+			string label;
+			if (s.definition() != null) {
+				label = operatorMap.name[s.definition().op()];
+				if (s.definition().op() == Operator.CLASS) {
+					ref<Class> c = ref<Class>(s.definition());
+					if (c.name() != null) {
+						label.printf(" %s", c.name().identifier().asString());
+					}
+				}
+			} else
+				label = "<null>";
+			printf(" --- buildScopes %d/%d %s\n", _arena.builtScopes, _arena.scopes().length(), label);
+ */
+ 	 	 	 clearDeclarationModifiers();
 			if (s.definition() != null &&
 				s.storageClass() != StorageClass.TEMPLATE_INSTANCE)
 				buildUnderScope(s);
@@ -339,15 +352,15 @@ class CompileContext {
 			visibility = n.op();
 			break;
 
-		case	ANNOTATED:{
+		case	ANNOTATED:
 			ref<Binary> b = ref<Binary>(n);
 			annotations = b.left();
 			break;
-		}
-		case	IMPORT:{
+		
+		case	IMPORT:
 			ref<Import> i = ref<Import>(n);
 			i.prepareImport(this);
-		}break;
+			break;
 
 		case	BIND:{
 			ref<Binary> b = ref<Binary>(n);
@@ -365,22 +378,21 @@ class CompileContext {
 			createScope(n, StorageClass.AUTO);
 			return TraverseAction.SKIP_CHILDREN;
 			
-		case	ENUM_DECLARATION:{
-			ref<Binary> b = ref<Binary>(n);
+		case	ENUM_DECLARATION:
+			b = ref<Binary>(n);
 			ref<Identifier> id = ref<Identifier>(b.left());
 			id.bindEnumName(_current, ref<Block>(b.right()), this);
 			return TraverseAction.SKIP_CHILDREN;
-		}
 
-		case	CLASS:{
+		case	CLASS:
 			ref<Class> c = ref<Class>(n);
 			ref<ClassScope> classScope = createClassScope(n, null);
 			classScope.classType = _pool.newClassType(c, classScope);
 			return TraverseAction.SKIP_CHILDREN;
-		}
-		case	CLASS_DECLARATION:{
-			ref<Binary> b = ref<Binary>(n);
-			ref<Identifier> id = ref<Identifier>(b.left());
+		
+		case	CLASS_DECLARATION:
+			b = ref<Binary>(n);
+			id = ref<Identifier>(b.left());
 			if (b.right().op() == Operator.TEMPLATE) {
 				ref<Template> t = ref<Template>(b.right());
 				id.bindTemplateOverload(visibility, isStatic, annotations, _current, t, this);
@@ -389,12 +401,11 @@ class CompileContext {
 				id.bindClassName(_current, c, this);
 			}
 			return TraverseAction.SKIP_CHILDREN;
-		}
 
-		case	DECLARATION:{
-			ref<Binary> b = ref<Binary>(n);
+		case	DECLARATION:
+			b = ref<Binary>(n);
 			bindDeclarators(b.left(), b.right());
-		}break;
+			break;
 
 		case	FUNCTION:{
 			ref<Function> f = ref<Function>(n);
@@ -850,9 +861,9 @@ public:
 		return new ClassType(definition, scope);
 	}
 
-	public ref<ClassType> newClassType(ref<Type> base, ref<Scope> scope) {
+	public ref<ClassType> newClassType(TypeFamily effectiveFamily, ref<Type> base, ref<Scope> scope) {
 		//void *block = alloc(sizeof (ClassType));
-		return new ClassType(base, scope);
+		return new ClassType(effectiveFamily, base, scope);
 	}
 
 	public ref<EnumType> newEnumType(ref<Block> definition, ref<Scope> scope, ref<Type> wrappedType) {
@@ -865,9 +876,9 @@ public:
 		return new EnumInstanceType(symbol, scope, instanceClass);
 	}
 
-	public ref<TemplateType> newTemplateType(ref<Template> definition, ref<FileStat> definingFile, ref<Overload> overload, ref<Scope> templateScope) {
+	public ref<TemplateType> newTemplateType(ref<Symbol> symbol, ref<Template> definition, ref<FileStat> definingFile, ref<Overload> overload, ref<Scope> templateScope) {
 		//void *block = alloc(sizeof (TemplateType));
-		return new TemplateType(definition, definingFile, overload, templateScope);
+		return new TemplateType(symbol, definition, definingFile, overload, templateScope);
 	}
 
 	public ref<BuiltInType> newBuiltInType(TypeFamily family, ref<ClassType> classType) {

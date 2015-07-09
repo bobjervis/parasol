@@ -49,6 +49,7 @@ run(filename: complex_subscript.p)
 
 // Basic runtime execution tests
 
+//run(filename: vectorization_1.p)
 run(filename: call_lots_o_params.p)
 run(filename: pre_decr_subscript.p)
 run(filename: covariant_return_override.p)
@@ -381,6 +382,10 @@ compile(expect: fail) { "class A { private int x; }; void f(A a) { int b = a.x; 
 compile(expect: fail, message: ABSTRACT_INSTANCE_DISALLOWED) { "class A { public abstract void f(); } class B extends A { } B b;" }
 
 compile() { "class A { private byte z; int x; }; void f(A a) { int b = a.x; }" }
+// FOR NOw these are allowed again. Annotations need to be formalized at some point.
+compile(xexpect: fail, xmessage: DISALLOWED_ANNOTATION) { "@Shape @Shape class foo {}" }
+compile(xexpect: fail, xmessage: UNRECOGNIZED_ANNOTATION) { "@Sxp class foo {}" }
+
 compile(expect: fail, message: RETURN_VALUE_REQUIRED) { "int f() { int a; if (true) return 5; else a = 3; }" }
 compile(expect: fail, message: RETURN_VALUE_REQUIRED) { "int f() { int a; }" }
 compile(expect: fail, message: INVALID_MULTIPLY) { "boolean a = true * true;" }

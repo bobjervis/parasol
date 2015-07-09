@@ -72,7 +72,7 @@ abstract void free(address p);
 @Deprecated
 abstract address allocz(long size);
 
-
+// Note: compiler code requires that this definition of 'vector' appears first. TODO: Remove this dependency.
 class vector<class E> extends vector<E, int>{
 	public vector(int initialSize) {
 	}
@@ -85,6 +85,7 @@ class vector<class E> extends vector<E, int>{
 	
 }
 
+@Shape
 class vector<class E, class I> {
 	private static int MIN_CAPACITY = 0x10;
 
@@ -94,14 +95,18 @@ class vector<class E, class I> {
 	
 	public vector(I initialSize) {
 		_length = I(0);
+		_capacity = I(0);
 		resize(initialSize);
 	}
 	
 	public vector() {
+		_capacity = I(0);
 		_length = I(0);
 	}
 	
 	public vector(vector<E, I> other) {
+		_capacity = I(0);
+		_length = I(0);
 		append(other);
 	}
 	

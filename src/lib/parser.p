@@ -391,7 +391,7 @@ class Parser {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
-		ref<Identifier> importedSymbol = _tree.newIdentifier(null, _scanner.value(), _scanner.location());
+		ref<Identifier> importedSymbol = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
 		ref<Identifier> domainSymbol;
 		t = _scanner.next();
 		if (t == Token.EQUALS)
@@ -437,7 +437,7 @@ class Parser {
 				_scanner.pushBack(t);
 				return resync(MessageId.SYNTAX_ERROR);
 			}
-			stem = _tree.newIdentifier(null, _scanner.value(), _scanner.location());
+			stem = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
 		}
 		t = _scanner.next();
 		if (t != Token.DOT) {
@@ -460,7 +460,7 @@ class Parser {
 			_scanner.next();
 			if (t != Token.DOT) {
 				if (lastName != null)
-					*lastName = _tree.newIdentifier(null, _scanner.value(), _scanner.location());
+					*lastName = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
 				else
 					stem = _tree.newSelection(stem, _scanner.value(), _scanner.location());
 				return stem;
@@ -721,7 +721,7 @@ class Parser {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
-		ref<Identifier> identifier = _tree.newIdentifier(null, _scanner.value(), _scanner.location());
+		ref<Identifier> identifier = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
 		// Look ahead to get the correct location for the CLASS node.
 		_scanner.pushBack(_scanner.next());
 		ref<Node> body = parseClass(identifier, _scanner.location());
@@ -738,7 +738,7 @@ class Parser {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
-		ref<Identifier> identifier = _tree.newIdentifier(null, _scanner.value(), _scanner.location());
+		ref<Identifier> identifier = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
 		t = _scanner.next();
 		Location blockLoc = _scanner.location();
 		if (t != Token.LEFT_CURLY) {
@@ -808,7 +808,7 @@ class Parser {
 	}
 
 	private ref<Node> parseCollectionFor(ref<Node> type, Location location) {
-		ref<Identifier> id = _tree.newIdentifier(null, _scanner.value(), _scanner.location());
+		ref<Identifier> id = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
 		Token t = _scanner.next();
 		if (t == Token.EQUALS) {
 			Location loc = _scanner.location();
@@ -921,7 +921,7 @@ class Parser {
 			break;
 
 		case	IDENTIFIER:
-			x = _tree.newIdentifier(null, _scanner.value(), location);
+			x = _tree.newIdentifier(/*null, */_scanner.value(), location);
 			break;
 
 		case	INTEGER:
@@ -1131,7 +1131,7 @@ class Parser {
 					return resync(MessageId.SYNTAX_ERROR);
 				}
 				type = _tree.newLeaf(Operator.CLASS_TYPE, loc);
-				name = _tree.newIdentifier(null, _scanner.value(), _scanner.location());
+				name = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
 				ref<Node> bind = _tree.newBinary(Operator.BIND, type, name, _scanner.location());
 				if (annotations != null)
 					bind = _tree.newBinary(Operator.ANNOTATED, annotations, bind, aLoc);
@@ -1147,7 +1147,7 @@ class Parser {
 					return resync(MessageId.SYNTAX_ERROR);
 				}
 				type = _tree.newLeaf(Operator.ENUM_TYPE, loc);
-				name = _tree.newIdentifier(null, _scanner.value(), _scanner.location());
+				name = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
 				ref<Node> bind = _tree.newBinary(Operator.BIND, type, name, _scanner.location());
 				if (annotations != null)
 					bind = _tree.newBinary(Operator.ANNOTATED, annotations, bind, aLoc);
@@ -1259,6 +1259,7 @@ class Parser {
 	}
 
 	private ref<Node> parseName(Token t) {
+/*
 		ref<Node> annotation;
 
 		if (t == Token.ANNOTATION) {
@@ -1266,17 +1267,18 @@ class Parser {
 			t = _scanner.next();
 		} else
 			annotation = null;
+ */
 		if (t != Token.IDENTIFIER) {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
-		return _tree.newIdentifier(annotation, _scanner.value(), _scanner.location());
+		return _tree.newIdentifier(/*annotation, */_scanner.value(), _scanner.location());
 	}
 
 	private ref<Node> parseAnnotations() {
 		ref<Node> list = null;
 		for (;;) {
-			ref<Node> id = _tree.newIdentifier(null, _scanner.value(), _scanner.location());
+			ref<Node> id = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
 			Token t = _scanner.next();
 			Location location = _scanner.location();
 

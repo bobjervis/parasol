@@ -91,8 +91,6 @@ public class Arena {
 
 		cacheRootObjects(_root);
 
-		ref<Scanner> scanner = mainFile.scanner();
-
 		mainFile.parseFile(&context);
 		if (verbose)
 			printf("Main file parsed\n");
@@ -131,19 +129,12 @@ public class Arena {
 		return -1;
 	}
 
-	boolean writeHeader(string headerFile) {
-		file.File header = file.createTextFile(headerFile);
-		header.write("#ifndef PARASOL_HEADER_H\n");
-		header.write("#define PARASOL_HEADER_H\n");
+	boolean writeHeader(file.File header) {
 		for (ref<Scope>[string].iterator i = _domains.begin(); i.hasNext(); i.next()) {
 			ref<Scope> s = i.get();
-			if (!s.writeHeader(header)) {
-				header.close();
+			if (!s.writeHeader(header))
 				return false;
-			}
 		}
-		header.write("#endif // PARASOL_HEADER_H\n");
-		header.close();
 		return true;
 	}
 

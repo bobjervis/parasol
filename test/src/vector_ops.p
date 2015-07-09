@@ -96,6 +96,13 @@ s.append(byte('a' + int(e.length())));
 s.append(byte('a' + e[E.EA]));
 s.append(byte('a' + e[E.EB]));
 s.append(byte('a' + e[E.EC]));
+
+printf("len=%d ", int(e.length()));
+for (int i = 0; i < 3; i++) {
+	printf(" %d", e[E(i)]);
+}
+printf("\n");
+
 print(s);
 print("\n");
 assert(e[E.EA] == 2);

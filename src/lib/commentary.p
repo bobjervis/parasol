@@ -22,6 +22,7 @@ enum MessageId {
 	FILE_NOT_READ,
 	BREAK_NO_SEMI,
 	CASE_NO_CO,
+	DISALLOWED_ANNOTATION,
 	EXPECTING_TERM,
 	NOT_EXPECTING_ELSE,
 	UNEXPECTED_EOF,
@@ -97,6 +98,7 @@ enum MessageId {
 	LVALUE_REQUIRED,
 	INTERNAL_ERROR,
 	UNRESOLVED_ABSTRACT,
+	UNRECOGNIZED_ANNOTATION,
 	
 	UNFINISHED_CHECK_STORAGE,
 	UNFINISHED_MAP_TO_VALUES,
@@ -169,6 +171,7 @@ class MessageMap {
 		name[MessageId.ABSTRACT_INSTANCE_DISALLOWED] = "ABSTRACT_INSTANCE_DISALLOWED";
 		name[MessageId.AMBIGUOUS_REFERENCE] = "AMBIGUOUS_REFERENCE";
 		name[MessageId.BAD_TOKEN] = "BAD_TOKEN";
+		name[MessageId.DISALLOWED_ANNOTATION] = "DISALLOWED_ANNOTATION";
 		name[MessageId.FILE_NOT_READ] = "FILE_NOT_READ";
 		name[MessageId.BREAK_NO_SEMI] = "BREAK_NO_SEMI";
 		name[MessageId.CASE_NO_CO] = "CASE_NO_CO";
@@ -262,6 +265,7 @@ class MessageMap {
 		name[MessageId.UNFINISHED_MAP_TO_VALUES] = "UNFINISHED_MAP_TO_VALUES";
 		name[MessageId.UNFINISHED_INSTANTIATE_TEMPLATE] = "UNFINISHED_INSTANTIATE_TEMPLATE";
 		name[MessageId.UNFINISHED_NAMESPACE] = "UNFINISHED_NAMESPACE";
+		name[MessageId.UNRECOGNIZED_ANNOTATION] = "UNRECOGNIZED_ANNOTATION";
 		_message[MessageId.ABSTRACT_INSTANCE_DISALLOWED] = "Instance of abstract class disallowed";
 		_message[MessageId.AMBIGUOUS_CONSTRUCTOR] = "Ambiguous constructor call";
 		_message[MessageId.AMBIGUOUS_OVERLOAD] = "Ambiguous call, cannot choose between multiple valid overloads";
@@ -275,6 +279,7 @@ class MessageMap {
 		_message[MessageId.CANNOT_CONVERT] = "Cannot convert types";
 		_message[MessageId.CASE_NO_CO] = "Case without colon";
 		_message[MessageId.CIRCULAR_DEFINITION] = "Circular definition involving '%1'";
+		_message[MessageId.DISALLOWED_ANNOTATION] = " Disallowed annotation '%1'";
 		_message[MessageId.DO_WHILE_NO_SEMI] = "do-while with no semi-colon";
 		_message[MessageId.DUPLICATE] = "Duplicate definition of '%1'";
 		_message[MessageId.DUPLICATE_DESTRUCTOR] = "More than one destructor in a class";
@@ -357,6 +362,7 @@ class MessageMap {
 		_message[MessageId.UNFINISHED_MARKUP_DECLARATOR] = "Unfinished: markupDeclarator %1/%2";
 		_message[MessageId.UNFINISHED_NAMESPACE] = "Unfinished: anonymous namespace";
 		_message[MessageId.UNREACHABLE] = "Unreachable code";
+		_message[MessageId.UNRECOGNIZED_ANNOTATION] = "Unrecognized annotation '%1'";
 		_message[MessageId.UNRESOLVED_ABSTRACT] = "Abstract method has no override '%1'";
 		string last = "<first>";
 		int lastI = -1;

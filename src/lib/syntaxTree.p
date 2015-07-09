@@ -242,14 +242,14 @@ class SyntaxTree {
 		return new Reference(v, offset, definition, location);
 	}
 	
-	public ref<Identifier> newIdentifier(ref<Node> annotation, CompileString value, Location location) {
+	public ref<Identifier> newIdentifier(/*ref<Node> annotation, */CompileString value, Location location) {
 		//void *block = _pool.alloc(sizeof (Identifier) + value.size());
 		pointer<byte> cp = pointer<byte>(allocz(value.length));
 		C.memcpy(cp, value.data, value.length);
 		CompileString v;
 		v.data = cp;
 		v.length = value.length;
-		return new Identifier(annotation, v, location);
+		return new Identifier(null/*annotation*/, v, location);
 	}
 
 	public ref<Import> newImport(ref<Identifier> importedSymbol, ref<Ternary> namespaceNode, Location location) {
@@ -628,6 +628,7 @@ class Binary extends Node {
 				if (type.indirectType(compileContext) != null)
 					break;
 
+			case	SHAPE:
 			case	VAR:
 			case	STRING:
 				ref<OverloadInstance> oi = type.copyConstructor(compileContext);
@@ -875,6 +876,7 @@ class Binary extends Node {
 				if (type.indirectType(compileContext) != null)
 					break;
 
+			case	SHAPE:
 			case	STRING:
 				ref<OverloadInstance> oi = type.assignmentMethod(compileContext);
 				if (oi != null) {
@@ -1170,6 +1172,10 @@ class Binary extends Node {
 		switch (op()) {
 		case	ANNOTATED:{
 			compileContext.assignTypes(_left);
+			if (_left.deferAnalysis()) {
+				type = _left.type;
+				return;
+			}
 			compileContext.assignTypes(_right);
 			type = compileContext.arena().builtInType(TypeFamily.VOID);
 			break;
@@ -2919,13 +2925,15 @@ class Class extends Block {
 	private ref<Identifier> _name;
 	private ref<NodeList> _implements;
 	private ref<NodeList> _last;
+	private TypeFamily _effectiveFamily;		// Set by annotations (@Shape, @Ref, @Pointer)
 	
 	Class(ref<Identifier> name, ref<Node> extendsClause, Location location) {
 		super(Operator.CLASS, location);
 		_name = name;
 		_extends = extendsClause;
+		_effectiveFamily = TypeFamily.CLASS;
 	}
-
+	
 	public void addInterface(ref<NodeList> impl) {
 		if (_last != null)
 			_last.next = impl;
@@ -3033,6 +3041,9 @@ class Class extends Block {
 	public void print(int indent) {
 		printBasic(indent);
 		printf("\n");
+		if (_name != null)
+			_name.print(indent + INDENT);
+		printf("%*c  {CLASS extends}\n", indent, ' ');
 		if (_extends != null)
 			_extends.print(indent + INDENT);
 		printf("%*c  {CLASS implements}\n", indent, ' ');
@@ -3817,14 +3828,14 @@ class Identifier extends Node {
 				return false;
 			if (result == TraverseAction.SKIP_CHILDREN)
 				break;
-			if (_annotation != null && !_annotation.traverse(t, func, data))
-				return false;
+//			if (_annotation != null && !_annotation.traverse(t, func, data))
+//				return false;
 			break;
 
 		case	IN_ORDER:
 		case	POST_ORDER:
-			if (_annotation != null && !_annotation.traverse(t, func, data))
-				return false;
+//			if (_annotation != null && !_annotation.traverse(t, func, data))
+//				return false;
 			result = func(this, data);
 			if (result == TraverseAction.ABORT_TRAVERSAL)
 				return false;
@@ -3837,13 +3848,13 @@ class Identifier extends Node {
 				return false;
 			if (result == TraverseAction.SKIP_CHILDREN)
 				break;
-			if (_annotation != null && !_annotation.traverse(t, func, data))
-				return false;
+//			if (_annotation != null && !_annotation.traverse(t, func, data))
+//				return false;
 			break;
 
 		case	REVERSE_POST_ORDER:
-			if (_annotation != null && !_annotation.traverse(t, func, data))
-				return false;
+//			if (_annotation != null && !_annotation.traverse(t, func, data))
+//				return false;
 			result = func(this, data);
 			if (result == TraverseAction.ABORT_TRAVERSAL)
 				return false;
@@ -3860,7 +3871,8 @@ class Identifier extends Node {
 		value.resize(_value.length);
 		C.memcpy(&value[0], _value.data, _value.length);
 		CompileString cs(&value);
-		ref<Identifier> id = tree.newIdentifier(_annotation, cs, location());
+		ref<Identifier> id = tree.newIdentifier(/*_annotation, */cs, location());
+		id._annotation = _annotation;
 		id._symbol = _symbol;
 		id._definition = _definition;
 		return ref<Identifier>(id.finishClone(this, tree.pool()));
@@ -3871,7 +3883,8 @@ class Identifier extends Node {
 		value.resize(_value.length);
 		C.memcpy(&value[0], _value.data, _value.length);
 		CompileString cs(&value);
-		ref<Identifier> id = tree.newIdentifier(_annotation, cs, location());
+		ref<Identifier> id = tree.newIdentifier(/*_annotation, */cs, location());
+		id._annotation = _annotation;
 		id._definition = _definition;
 		return id;
 	}
@@ -3975,7 +3988,7 @@ class Identifier extends Node {
 		ref<EnumScope> enumScope = compileContext.createEnumScope(body, this);
 		_symbol = enclosing.define(compileContext.visibility, StorageClass.STATIC, compileContext.annotations, this, body, body, compileContext.pool());
 		if (_symbol != null) {
-			ref<ClassType> c = compileContext.pool().newClassType(ref<Type>(null), enumScope);
+			ref<ClassType> c = compileContext.pool().newClassType(TypeFamily.CLASS, ref<Type>(null), enumScope);
 			ref<Type> t = compileContext.pool().newEnumInstanceType(_symbol, enumScope, c);
 			enumScope.enumType = compileContext.pool().newEnumType(body, enumScope, t);
 			_symbol.bindType(enumScope.enumType);
@@ -4000,7 +4013,7 @@ class Identifier extends Node {
 			_symbol = o.addInstance(visibility, isStatic, annotations, this, templateScope, compileContext);
 			if (_symbol == null)
 				return;
-			ref<Type> t = compileContext.makeTypedef(compileContext.pool().newTemplateType(templateDef, compileContext.definingFile, o, templateScope));
+			ref<Type> t = compileContext.makeTypedef(compileContext.pool().newTemplateType(_symbol, templateDef, compileContext.definingFile, o, templateScope));
 			_symbol.bindType(t);
 		} else
 			add(MessageId.OVERLOAD_DISALLOWED, compileContext.pool(), _value);
@@ -4071,6 +4084,10 @@ class Identifier extends Node {
 		}
 		type = compileContext.errorType();
 		add(MessageId.UNDEFINED, compileContext.pool(), _value);
+	}
+	
+	ref<Node> annotation() {
+		return _annotation;
 	}
 }
 
@@ -4338,7 +4355,7 @@ private:
 
 		case	SUPER:
 			scope = compileContext.current();
-			while (scope != null&& scope.storageClass() != StorageClass.MEMBER)
+			while (scope != null && scope.storageClass() != StorageClass.MEMBER)
 				scope = scope.enclosing();
 			if (scope == null) {
 				add(MessageId.SUPER_NOT_ALLOWED, compileContext.pool());
@@ -4358,13 +4375,7 @@ private:
 				type = compileContext.errorType();
 				break;
 			}
-			for (int i = 0; i < int(TypeFamily.BUILTIN_TYPES); i++) {
-				ref<Type> b = compileContext.arena().builtInType(TypeFamily(i));
-				if (b != null && b.equals(t)) {
-					t = b;
-					break;
-				}
-			}
+			t = compileContext.convertToAnyBuiltIn(t);
 			type = compileContext.arena().createRef(t, compileContext);
 			break;
 		}
@@ -5347,7 +5358,7 @@ class Template extends Node {
 		assert(false);
 		return false;
 	}
- 
+	
 	private void assignTypes(ref<CompileContext> compileContext) {
 		compileContext.assignTypes(_name);
 		if (_name.deferAnalysis()) {
@@ -6052,7 +6063,7 @@ class Unary extends Node {
 				type = _operand.type;
 				return;
 			}
-			switch (_operand.type.family()) {
+			switch (_operand.type.scalarFamily(compileContext)) {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
@@ -6113,6 +6124,7 @@ class Unary extends Node {
 			type = compileContext.makeTypedef(vectorType);
 			break;
 		}
+		
 		case	ELLIPSIS:
 			compileContext.assignTypes(_operand);
 			if (_operand.deferAnalysis()) {

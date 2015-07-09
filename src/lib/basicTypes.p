@@ -17,38 +17,6 @@ namespace parasol:compiler;
 
 import native:C;
 
-enum TypeFamily {
-	SIGNED_8,
-	SIGNED_16,
-	SIGNED_32,
-	SIGNED_64,
-	UNSIGNED_8,
-	UNSIGNED_16,
-	UNSIGNED_32,
-	UNSIGNED_64,
-	FLOAT_32,
-	FLOAT_64,
-	BOOLEAN,
-	STRING,
-	VAR,
-	ADDRESS,
-	VOID,
-	ERROR,
-	CLASS_VARIABLE,
-	CLASS_DEFERRED,
-	NAMESPACE,
-	BUILTIN_TYPES,
-	CLASS,
-	ENUM,
-	TYPEDEF,
-	FUNCTION,
-	VECTOR,
-	TEMPLATE,
-	TEMPLATE_INSTANCE,
-	MAX_TYPES
-//	MIN_TYPE = SIGNED_8
-}
-
 class CompileString {
 	pointer<byte> data;
 	int length;

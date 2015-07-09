@@ -2357,7 +2357,9 @@ public class X86_64 extends X86_64AssignTemps {
 		switch (node.op()) {
 		case	IDENTIFIER:
 		case	VARIABLE:
-			if (node.type.family() == TypeFamily.CLASS) {
+			switch (node.type.family()) {
+			case	CLASS:
+			case	SHAPE:
 				ref<Scope> scope = node.type.scope();
 				for (int i = 0; i < scope.constructors().length(); i++) {
 					ref<Scope> sc = scope.constructors()[i];

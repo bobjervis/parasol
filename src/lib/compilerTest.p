@@ -456,6 +456,7 @@ class CompileObject  extends script.Object {
 			postCodeGenerationMessages > 0 ||
 			_expect != outcome) {
 			printf("\n  Expecting %s got %s\n", expectNames[_expect], expectNames[outcome]);
+			printf("      Messages flagged before code generation %d\n      Messages flagged after code generation %d\n", preCodeGenerationMessages, postCodeGenerationMessages);
 			if (verboseFlag)
 				f.tree().root().print(0);
 			ImportDirectory importDirectory("");

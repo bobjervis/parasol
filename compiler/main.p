@@ -22,7 +22,6 @@ import parasol:pxi;
 import parasol:pxi.SectionType;
 import parasol:compiler.Arena;
 import parasol:compiler.Target;
-import parasol:compiler.test.initTestObjects;
 import parasol:file;
 import parasol:time;
 
@@ -79,10 +78,6 @@ class ParasolCommand extends commandLine.Command {
 					"Directories are separated by commas. " +
 					"The special directory ^ can be used to signify the Parasol " +
 					"install directory. ");
-		headerArgument = stringArgument('H', "header",
-					"Writes any declaration marked with a @Header annotation as a " + 
-					"C declaration. " + 
-					"The named output file will be overwritten if it already exists.");
 		pxiArgument = stringArgument(0, "pxi",
 					"Writes compiled output to the given file. " + 
 					"Does not execute the program.");
@@ -98,7 +93,6 @@ class ParasolCommand extends commandLine.Command {
 	ref<commandLine.Argument<boolean>> traceArgument;
 	ref<commandLine.Argument<boolean>> disassemblyArgument;
 	ref<commandLine.Argument<string>> explicitArgument;
-	ref<commandLine.Argument<string>> headerArgument;
 	ref<commandLine.Argument<string>> pxiArgument;
 	ref<commandLine.Argument<string>> targetArgument;
 	ref<commandLine.Argument<boolean>> logImportsArgument;
@@ -111,8 +105,7 @@ private string[] finalArgs;
 enum CommandLineVariant {
 	INTERACTIVE,
 	COMMAND,
-	COMPILE,
-	HEADER
+	COMPILE
 }
 
 int main(string[] args) {
@@ -129,13 +122,8 @@ int main(string[] args) {
 	case	COMPILE:
 		result = compileCommand();
 		break;
-		
-	case	HEADER:
-		result = createHeaderCommand();
-		break;
 	}
-	process.exit(result);
-	return 0;
+	return result;
 }
 
 CommandLineVariant parseCommandLine(string[] args) {
@@ -158,8 +146,6 @@ CommandLineVariant parseCommandLine(string[] args) {
 		return CommandLineVariant.INTERACTIVE;
 	else if (parasolCommand.pxiArgument.set())
 		return CommandLineVariant.COMPILE;
-	else if (parasolCommand.headerArgument.set())
-		return CommandLineVariant.HEADER;
 	else
 		return CommandLineVariant.COMMAND;
 }
@@ -202,10 +188,7 @@ int runCommand() {
 int compileCommand() {
 	Arena arena;
 
-	printf("Compiling to %s", parasolCommand.pxiArgument.value);
-	if (parasolCommand.headerArgument.set())
-		printf(" and header to %s", parasolCommand.headerArgument.value);
-	printf("\n");
+	printf("Compiling to %s\n", parasolCommand.pxiArgument.value);
 	time.Time start = time.now();
 	if (!configureArena(&arena))
 		return 1;
@@ -225,10 +208,6 @@ int compileCommand() {
 		return 1;
 	}
 	boolean anyFailure = false;
-	if (parasolCommand.headerArgument.set()) {
-		if (!writeHeader(&arena))
-			anyFailure = true;
-	}
 	ref<pxi.Pxi> output = pxi.Pxi.create(parasolCommand.pxiArgument.value);
 	target.writePxi(output);
 	if (!output.write()) {
@@ -238,35 +217,6 @@ int compileCommand() {
 	time.Time end = time.now();
 	printf("Done in %d milliseconds\n", end.value() - start.value());
 	if (anyFailure)
-		return 1;
-	else
-		return 0;
-}
-
-int createHeaderCommand() {
-	if (parasolCommand.targetArgument.set()) {
-		printf("Cannot combine --target and --header options\n");
-		return 1;
-	}
-	printf("Creating header %s\n", parasolCommand.headerArgument.value);
-	Arena arena;
-
-	if (!configureArena(&arena))
-		return 1;
-	string filename = parasolCommand.finalArgs()[0];
-	ref<Target> target = arena.compile(filename, false, false);
-	if (parasolCommand.symbolTableArgument.value)
-		arena.printSymbolTable();
-	if (parasolCommand.verboseArgument.value) {
-		arena.print();
-		target.print();
-	}
-	if (target == null) {
-		printf("%s failed to compile\n", filename);
-		arena.printMessages();
-		return 1;
-	}
-	if (!writeHeader(&arena))
 		return 1;
 	else
 		return 0;
@@ -291,14 +241,6 @@ boolean configureArena(ref<Arena> arena) {
 		printf("Failed to load arena\n");
 		return false;
 	}
-}
-
-private boolean writeHeader(ref<Arena> arena) {
-	if (!arena.writeHeader(parasolCommand.headerArgument.value)) {
-		printf("Failed to write header %s\n", parasolCommand.headerArgument.value);
-		return false;
-	} else
-		return true;
 }
 
 private boolean disassemble(ref<Arena> arena, ref<Target> target, string filename) {
