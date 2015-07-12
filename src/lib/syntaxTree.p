@@ -621,13 +621,12 @@ class Binary extends Node {
 			case	FLOAT_64:
 			case	ENUM:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 				break;
 				
 			case	CLASS:
-				if (type.indirectType(compileContext) != null)
-					break;
-
 			case	SHAPE:
 			case	VAR:
 			case	STRING:
@@ -778,11 +777,9 @@ class Binary extends Node {
 		case	ADD_ASSIGN:
 		case	SUBTRACT_ASSIGN:
 			switch (type.family()) {
-			case	CLASS:
-				if (type.indirectType(compileContext) != null) {
-					rewritePointerArithmetic(tree, compileContext);
-					break;
-				}
+			case	POINTER:
+				rewritePointerArithmetic(tree, compileContext);
+				break;
 				
 			default:
 				if (_left.op() == Operator.SUBSCRIPT) {
@@ -799,9 +796,8 @@ class Binary extends Node {
 			
 		case	SUBTRACT:
 			switch (type.family()) {
-			case	CLASS:
-				if (type.indirectType(compileContext) != null)
-					rewritePointerArithmetic(tree, compileContext);
+			case	POINTER:
+				rewritePointerArithmetic(tree, compileContext);
 				break;
 				
 			case	VAR:
@@ -826,13 +822,8 @@ class Binary extends Node {
 				n.type = type;
 				return n;
 				
-			case	CLASS:
-				if (type.indirectType(compileContext) != null)
-					rewritePointerArithmetic(tree, compileContext);
-				else {
-					printf("non-pointer add\n");
-					print(0);
-				}
+			case	POINTER:
+				rewritePointerArithmetic(tree, compileContext);
 				break;
 				
 			case	VAR:
@@ -870,12 +861,11 @@ class Binary extends Node {
 			case	ADDRESS:
 			case	FUNCTION:
 			case	TYPEDEF:
+			case	REF:
+			case	POINTER:
 				break;
 				
 			case	CLASS:
-				if (type.indirectType(compileContext) != null)
-					break;
-
 			case	SHAPE:
 			case	STRING:
 				ref<OverloadInstance> oi = type.assignmentMethod(compileContext);
@@ -1504,17 +1494,13 @@ class Binary extends Node {
 			case	BOOLEAN:
 			case	STRING:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 			case	ENUM:
 			case	VAR:
 				type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
 				break;
-
-			case	CLASS:
-				if (_left.type.indirectType(compileContext) != null) {
-					type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
-					break;
-				}
 
 			default:
 				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
@@ -1541,6 +1527,7 @@ class Binary extends Node {
 			case	FLOAT_32:
 			case	FLOAT_64:
 			case	VAR:
+			case	POINTER:
 			case	STRING:
 				type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
 				break;
@@ -1659,11 +1646,9 @@ class Binary extends Node {
 				type = _left.type;
 				break;
 
-			case	CLASS:
-				if (_left.type.isPointer(compileContext)) {
-					type = compileContext.arena().builtInType(TypeFamily.SIGNED_64);
-					break;
-				}
+			case	POINTER:
+				type = compileContext.arena().builtInType(TypeFamily.SIGNED_64);
+				break;
 
 			default:
 				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
@@ -2856,6 +2841,8 @@ class Call extends ParameterBag {
 		case	FLOAT_64:
 		case	STRING:
 		case	ADDRESS:
+		case	REF:
+		case	POINTER:
 		case	BOOLEAN:
 		case	ENUM:
 		case	FUNCTION:
@@ -2872,43 +2859,12 @@ class Call extends ParameterBag {
 			case	FLOAT_64:
 			case	STRING:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	BOOLEAN:
 			case	ENUM:
 			case	FUNCTION:
 				return true;
-
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null)
-					return true;
-				break;
-			}
-			break;
-
-		case	CLASS:
-			if (existingType.indirectType(compileContext) != null) {
-				switch (newType.family()) {
-				case	UNSIGNED_8:
-				case	UNSIGNED_16:
-				case	UNSIGNED_32:
-				case	UNSIGNED_64:
-				case	SIGNED_8:
-				case	SIGNED_16:
-				case	SIGNED_32:
-				case	SIGNED_64:
-				case	FLOAT_32:
-				case	FLOAT_64:
-				case	STRING:
-				case	ADDRESS:
-				case	BOOLEAN:
-				case	ENUM:
-				case	FUNCTION:
-					return true;
-
-				case	CLASS:
-					if (newType.indirectType(compileContext) != null)
-						return true;
-					break;
-				}
 			}
 			break;
 		}
@@ -4295,12 +4251,9 @@ class Leaf extends Node {
 			case	STRING:
 			case	ENUM:
 			case	FUNCTION:
+			case	REF:
+			case	POINTER:
 				return true;
-
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null)
-					return true;
-				break;
 
 			case	SIGNED_32:
 			case	SIGNED_64:
@@ -5792,14 +5745,16 @@ class Unary extends Node {
 				}
 				break;
 				
-			case	CLASS:
-				if (type.indirectType(compileContext) != null) {
-					switch (_operand.type.family()) {
-					case	VAR:
-						ref<Node> call = createMethodCall(_operand, "integerValue", tree, compileContext);
-						return call.fold(tree, false, compileContext);
-					}
+			case	REF:
+			case	POINTER:
+				switch (_operand.type.family()) {
+				case	VAR:
+					ref<Node> call = createMethodCall(_operand, "integerValue", tree, compileContext);
+					return call.fold(tree, false, compileContext);
 				}
+				break;
+
+			case	CLASS:
 				break;
 				
 			case	VAR:
@@ -5830,6 +5785,39 @@ class Unary extends Node {
 					targetType = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 					break;
 					
+				case	REF:
+				case	POINTER:
+					for (int i = 0; i < type.scope().constructors().length(); i++) {
+						ref<Function> f = ref<Function>(type.scope().constructors()[i].definition());
+						ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
+						if (oi.parameterCount() != 2)
+							continue;
+						if (oi.parameterScope().parameters()[0].type().family() == TypeFamily.ADDRESS &&
+								oi.parameterScope().parameters()[1].type().family() == TypeFamily.SIGNED_64) {
+							ref<Variable> temp = compileContext.newVariable(type);
+							_operand = _operand.fold(tree, false, compileContext);
+							ref<Node> empty = tree.newLeaf(Operator.EMPTY, location());
+							empty.type = _operand.type;
+							ref<Node> typeOperand = tree.newUnary(Operator.CLASS_OF, empty, location());
+							// The type of the CLASS_OF operand is irrelevant.
+							typeOperand.type = compileContext.arena().builtInType(TypeFamily.VOID);
+							ref<NodeList> args = tree.newNodeList(typeOperand, _operand);
+							ref<Reference> r = tree.newReference(temp, true, location());
+							ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
+							adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+							ref<Call> constructor = tree.newCall(oi, CallCategory.CONSTRUCTOR, adr, args, location());
+							constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
+							if (voidContext)
+								return constructor.fold(tree, true, compileContext);
+							r = tree.newReference(temp, false, location());
+							ref<Binary> seq = tree.newBinary(Operator.SEQUENCE, constructor, r, location());
+							seq.type = type;
+							return seq.fold(tree, false, compileContext);
+						}
+					}
+					targetType = _operand.type;
+					break;
+
 				case	STRING:
 					targetType = compileContext.arena().builtInType(TypeFamily.STRING);
 					break;
@@ -5837,41 +5825,7 @@ class Unary extends Node {
 				case	ENUM:
 					print(0);
 					assert(false);
-					
-				case	CLASS:
-					if (_operand.type.indirectType(compileContext) != null) {
-						for (int i = 0; i < type.scope().constructors().length(); i++) {
-							ref<Function> f = ref<Function>(type.scope().constructors()[i].definition());
-							ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
-							if (oi.parameterCount() != 2)
-								continue;
-							if (oi.parameterScope().parameters()[0].type().family() == TypeFamily.ADDRESS &&
-									oi.parameterScope().parameters()[1].type().family() == TypeFamily.SIGNED_64) {
-								ref<Variable> temp = compileContext.newVariable(type);
-								_operand = _operand.fold(tree, false, compileContext);
-								ref<Node> empty = tree.newLeaf(Operator.EMPTY, location());
-								empty.type = _operand.type;
-								ref<Node> typeOperand = tree.newUnary(Operator.CLASS_OF, empty, location());
-								// The type of the CLASS_OF operand is irrelevant.
-								typeOperand.type = compileContext.arena().builtInType(TypeFamily.VOID);
-								ref<NodeList> args = tree.newNodeList(typeOperand, _operand);
-								ref<Reference> r = tree.newReference(temp, true, location());
-								ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
-								adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
-								ref<Call> constructor = tree.newCall(oi, CallCategory.CONSTRUCTOR, adr, args, location());
-								constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
-								if (voidContext)
-									return constructor.fold(tree, true, compileContext);
-								r = tree.newReference(temp, false, location());
-								ref<Binary> seq = tree.newBinary(Operator.SEQUENCE, constructor, r, location());
-								seq.type = type;
-								return seq.fold(tree, false, compileContext);
-							}
-						}
-						targetType = _operand.type;
-						break;
-					}
-					
+
 				default:
 					print(0);
 					assert(false);
@@ -6157,12 +6111,8 @@ class Unary extends Node {
 			case	SIGNED_64:
 			case	FLOAT_32:
 			case	FLOAT_64:
+			case	POINTER:
 				break;
-
-			case	CLASS:
-				if (type.isPointer(compileContext)) {
-					break;
-				}
 
 			default:
 				add(MessageId.NOT_NUMERIC, compileContext.pool());
@@ -6186,12 +6136,17 @@ class Unary extends Node {
 				break;
 			}
 			switch (_operand.type.family()) {
+			case	REF:
+			case	POINTER:
+			case	SHAPE:
 			case	CLASS:
 			case	VAR:
 				type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 				break;
 
 			default:
+				print(4);
+				assert(false);
 				break;
 			}
 			break;
@@ -6402,6 +6357,8 @@ class Node {
 			case	ADDRESS:
 			case	FUNCTION:
 			case	CLASS:
+			case	REF:
+			case	POINTER:
 			case	STRING:
 			case	SIGNED_32:
 			case	SIGNED_64:

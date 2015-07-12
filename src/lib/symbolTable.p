@@ -1566,6 +1566,10 @@ class Symbol {
 			return TypeFamily.CLASS;
 		if ((*_annotations)["Shape"] != null)
 			return TypeFamily.SHAPE;
+		else if ((*_annotations)["Pointer"] != null)
+			return TypeFamily.POINTER;
+		else if ((*_annotations)["Ref"] != null)
+			return TypeFamily.REF;
 		else
 			return TypeFamily.CLASS;
 	}

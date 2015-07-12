@@ -132,6 +132,8 @@ familyMasks[TypeFamily.UNSIGNED_16] = longMask;
 familyMasks[TypeFamily.UNSIGNED_32] = longMask;
 familyMasks[TypeFamily.UNSIGNED_64] = longMask;
 familyMasks[TypeFamily.ADDRESS] = longMask;
+familyMasks[TypeFamily.REF] = longMask;
+familyMasks[TypeFamily.POINTER] = longMask;
 familyMasks[TypeFamily.TYPEDEF] = longMask;
 familyMasks[TypeFamily.CLASS] = longMask;
 familyMasks[TypeFamily.BOOLEAN] = longMask;
@@ -431,6 +433,8 @@ class RegisterState {
 				case	STRING:
 				case	ENUM:
 				case	ADDRESS:
+				case	REF:
+				case	POINTER:
 				case	CLASS:
 				case	BOOLEAN:
 					target.inst(X86.MOV, _spills.affected.type.family(), _spills.newRegister, R(int(_spills.affected.register)));

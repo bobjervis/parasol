@@ -641,15 +641,14 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				u.register = byte(f().r.getreg(u, longMask, regMask));
 				break;
 				
-			case	CLASS:
-				if (u.operand().type.indirectType(compileContext) != null) {
-					if (u.operand().op() != Operator.EMPTY) {
-						assignRegisterTemp(u.operand(), longMask, compileContext);
-						f().r.cleanupTemps(u, depth);
-					}
-					u.register = byte(int(f().r.getreg(u, longMask, regMask)));
-					break;
+			case	REF:
+			case	POINTER:
+				if (u.operand().op() != Operator.EMPTY) {
+					assignRegisterTemp(u.operand(), longMask, compileContext);
+					f().r.cleanupTemps(u, depth);
 				}
+				u.register = byte(int(f().r.getreg(u, longMask, regMask)));
+				break;
 				
 			default:
 				assignRegisterTemp(u.operand(), longMask, compileContext);
@@ -756,6 +755,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 				int depth = tempStackDepth();
 				assignRegisterTemp(operand, longMask, compileContext);
@@ -771,13 +772,6 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	ENUM:
 				assignCast(result, operand, regMask, longMask, compileContext);
 				return;
-				
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null) {
-					assignCast(result, operand, regMask, 0, compileContext);
-					return;
-				}
-				break;
 			}
 			break;
 			
@@ -792,6 +786,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 				assignCast(result, operand, regMask, 0, compileContext);
 				return;
@@ -801,13 +797,6 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	ENUM:
 				assignCast(result, operand, regMask, longMask, compileContext);
 				return;
-				
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null) {
-					assignCast(result, operand, regMask, 0, compileContext);
-					return;
-				}
-				break;
 			}
 			break;
 			
@@ -822,6 +811,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 				assignCast(result, operand, regMask, 0, compileContext);
 				if (unsigned(int(result.register)) > unsigned(int(R.MAX_REG)))
@@ -833,13 +824,6 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	ENUM:
 				assignCast(result, operand, regMask, longMask, compileContext);
 				return;
-
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null) {
-					assignCast(result, operand, regMask, 0, compileContext);
-					return;
-				}
-				break;
 			}
 			break;
 
@@ -853,6 +837,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 				assignCast(result, operand, regMask, 0, compileContext);
 				return;
@@ -862,13 +848,6 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	ENUM:
 				assignCast(result, operand, regMask, longMask, compileContext);
 				return;
-				
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null) {
-					assignCast(result, operand, regMask, 0, compileContext);
-					return;
-				}
-				break;
 			}
 			break;
 
@@ -883,6 +862,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 			case	ENUM:
 				assignCast(result, operand, regMask, floatMask, compileContext);
@@ -892,13 +873,6 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	FLOAT_64:
 				assignCast(result, operand, regMask, 0, compileContext);
 				return;
-				
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null) {
-					assignCast(result, operand, regMask, floatMask, compileContext);
-					return;
-				}
-				break;
 			}
 			break;
 
@@ -911,22 +885,19 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			break;
 
 		case	ADDRESS:
+		case	REF:
+		case	POINTER:
 			switch (newType.family()) {
 			case	ENUM:
 			case	STRING:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	SIGNED_32:
 			case	FUNCTION:
 			case	SIGNED_64:
 				assignCast(result, operand, regMask, 0, compileContext);
 				return;
-				
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null) {
-					assignCast(result, operand, regMask, 0, compileContext);
-					return;
-				}
-				break;
 			}
 			break;
 
@@ -942,42 +913,19 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	FLOAT_32:
 			case	FLOAT_64:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	ENUM:
 			case	FUNCTION:
 				assignCast(result, operand, regMask, longMask, compileContext);
 				return;
-
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null) {
-					assignCast(result, operand, regMask, longMask, compileContext);
-					return;
-				}
-				break;
 			}
 			break;
 
 		case	CLASS:
-			if (existingType.indirectType(compileContext) != null) {
-				switch (newType.family()) {
-				case	SIGNED_32:
-				case	STRING:
-				case	ADDRESS:
-				case	SIGNED_64:
-					assignCast(result, operand, regMask, 0, compileContext);
-					return;
-					
-				case	CLASS:
-					if (newType.indirectType(compileContext) != null) {
-						assignCast(result, operand, regMask, 0, compileContext);
-						return;
-					}
-					break;
-				}
-			} else {
-				// A general class coercion from another class type.
-				if (existingType.size() == newType.size())
-					return;
-			}
+			// A general class coercion from another class type.
+			if (existingType.size() == newType.size())
+				return;
 			break;
 
 		case	FUNCTION:
@@ -990,6 +938,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 				assignCast(result, operand, regMask, 0, compileContext);
 				return;
@@ -999,13 +949,6 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	ENUM:
 				assignCast(result, operand, regMask, longMask, compileContext);
 				return;
-				
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null) {
-					assignCast(result, operand, regMask, 0, compileContext);
-					return;
-				}
-				break;
 			}
 			break;
 		}

@@ -41,9 +41,11 @@ import parasol:types.Exception;
 import parasol:types.`*Namespace*`;
 import parasol:types.`*deferred*`;
 
+@Ref
 class ref<class T> extends address {
 }
 
+@Pointer
 class pointer<class T> extends address {
 }
 

@@ -875,6 +875,8 @@ class X86_64Encoder extends Target {
 			case	UNSIGNED_32:
 			case	ENUM:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	SIGNED_64:
 			case	CLASS:
 			case	FUNCTION:
@@ -947,6 +949,8 @@ class X86_64Encoder extends Target {
 			case	CLASS:
 			case	SIGNED_64:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 			case	ENUM:
 				emitRex(family, null, R.NO_REG, dest);
@@ -1118,7 +1122,8 @@ class X86_64Encoder extends Target {
 					}
 					break;
 					
-				case	CLASS:			// This must be a ref/pointer
+				case	REF:
+				case	POINTER:
 					emit(byte(opcodes[instruction] + 0x01));
 					if (offset >= -128 || offset <= 127) {
 						modRM(1, rmValues[reg], 4);
@@ -1378,12 +1383,12 @@ class X86_64Encoder extends Target {
 			modRM(3, rmValues[src], rmValues[dest]);
 			return;
 
+		case	CMP:
 		case	ADD:
 		case	SUB:
 		case	OR:
 		case	XOR:
 		case	MOV:
-		case	CMP:
 		case	AND:
 			switch (family) {
 			case	BOOLEAN:
@@ -1409,6 +1414,8 @@ class X86_64Encoder extends Target {
 
 			case	CLASS:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	STRING:
 			case	SIGNED_64:
 			case	FUNCTION:
@@ -1584,6 +1591,8 @@ class X86_64Encoder extends Target {
 			case	ENUM:
 			case	SIGNED_64:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 				emitRex(left.type.family(), left, right, R.NO_REG);
 				emit(byte(opcodes[instruction] + 0x01));
@@ -1591,12 +1600,6 @@ class X86_64Encoder extends Target {
 				break;
 				
 			case	CLASS:
-				if (left.type.indirectType(compileContext) != null) {
-					emitRex(left.type.family(), left, right, R.NO_REG);
-					emit(byte(opcodes[instruction] + 0x01));
-					modRM(left, rmValues[right], 0, 0);
-					break;
-				}
 				switch (left.type.size()) {
 				case	1:
 					emitRex(TypeFamily.SIGNED_8, left, right, R.NO_REG);
@@ -1813,6 +1816,8 @@ class X86_64Encoder extends Target {
 			case	SIGNED_64:
 			case	ADDRESS:
 			case	FUNCTION:
+			case	REF:
+			case	POINTER:
 			case	STRING:
 			case	ENUM:
 			case	VAR:
@@ -1823,12 +1828,6 @@ class X86_64Encoder extends Target {
 				break;
 				
 			case	CLASS:
-				if (right.type.indirectType(compileContext) != null) {
-					emitRex(right.type.family(), right, left, R.NO_REG);
-					emit(byte(opcodes[instruction] + 0x03));
-					modRM(right, rmValues[left], 0, 0);
-					break;
-				}
 				switch (right.type.size()) {
 				case	1:
 					emitRex(TypeFamily.SIGNED_8, right, left, R.NO_REG);
@@ -2040,20 +2039,13 @@ class X86_64Encoder extends Target {
 			case	STRING:
 			case	ENUM:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 				emitRex(left.type.family(), left, R.NO_REG, R.NO_REG);
 				emit(0xf7);
 				modRM(left, 0, int.bytes, 0);
 				emitInt(immediate);
 				break;
-				
-			case	CLASS:
-				if (left.type.indirectType(compileContext) != null) {
-					emitRex(left.type.family(), left, R.NO_REG, R.NO_REG);
-					emit(0xf7);
-					modRM(left, 0, int.bytes, 0);
-					emitInt(immediate);
-					break;
-				}
 
 			default:
 				printf("%s - %d\n", opcodeNames[instruction], int(immediate));
@@ -2091,20 +2083,13 @@ class X86_64Encoder extends Target {
 			case	STRING:
 			case	ENUM:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 				emitRex(left.type.family(), left, R.NO_REG, R.NO_REG);
 				emit(0x81);
 				modRM(left, group1opcodes[instruction], int.bytes, 0);
 				emitInt(immediate);
 				break;
-				
-			case	CLASS:
-				if (left.type.indirectType(compileContext) != null) {
-					emitRex(left.type.family(), left, R.NO_REG, R.NO_REG);
-					emit(0x81);
-					modRM(left, group1opcodes[instruction], int.bytes, 0);
-					emitInt(immediate);
-					break;
-				}
 
 			default:
 				printf("%s - %d\n", opcodeNames[instruction], int(immediate));
@@ -2158,6 +2143,8 @@ class X86_64Encoder extends Target {
 			case	STRING:
 			case	ENUM:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	SIGNED_64:
 				emitRex(left.type.family(), left, R.NO_REG, R.NO_REG);
 				emit(0xc7);
@@ -2166,14 +2153,6 @@ class X86_64Encoder extends Target {
 				break;
 				
 			case	CLASS:
-				if (left.type.indirectType(compileContext) != null) {
-					emitRex(left.type.family(), left, R.NO_REG, R.NO_REG);
-					emit(0xc7);
-					modRM(left, 0, int.bytes, 0);
-					emitInt(immediate);
-					break;
-				}
-
 				switch (left.type.size()) {
 				case	1:
 					emit(0xc6);
@@ -2817,10 +2796,13 @@ class X86_64Encoder extends Target {
 		case	UNSIGNED_64:
 		case	STRING:
 		case	ADDRESS:
+		case	REF:
+		case	POINTER:
 		case	ENUM:
 		case	FUNCTION:
 		case	CLASS:
 		case	FLOAT_64:
+		case	TYPEDEF:
 			rex |= REX_W;
 		}
 		rex |= rexValues[regField];
@@ -3256,6 +3238,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	UNSIGNED_32:
 		case	SIGNED_32: 
 		case	SIGNED_64: 
+		case	POINTER:
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JE; 
 		default:
@@ -3271,6 +3254,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	UNSIGNED_32:
 		case	SIGNED_32: 
 		case	SIGNED_64: 
+		case	POINTER:
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JNE; 
 		default:
@@ -3283,6 +3267,7 @@ CC continuation(Operator compare, ref<Type> type) {
 
 	case	NOT_LESS:
 		switch (type.family()) {
+		case	POINTER:
 		case	UNSIGNED_32:	return CC.JNB;
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JGE; 
@@ -3298,6 +3283,7 @@ CC continuation(Operator compare, ref<Type> type) {
 
 	case	NOT_GREATER:
 		switch (type.family()) {
+		case	POINTER:
 		case	UNSIGNED_32:	return CC.JNA;
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JLE; 
@@ -3313,6 +3299,7 @@ CC continuation(Operator compare, ref<Type> type) {
 
 	case	NOT_LESS_EQUAL:
 		switch (type.family()) {
+		case	POINTER:
 		case	UNSIGNED_32:	return CC.JA;
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JG; 
@@ -3328,6 +3315,7 @@ CC continuation(Operator compare, ref<Type> type) {
 
 	case	NOT_GREATER_EQUAL:
 		switch (type.family()) {
+		case	POINTER:
 		case	UNSIGNED_32:	return CC.JB;
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JL; 
@@ -3351,6 +3339,8 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	BOOLEAN:
 		case	FUNCTION:
 		case	ADDRESS:
+		case	REF:
+		case	POINTER:
 		case	ENUM:
 		case	CLASS:			return CC.JNE;
 		default:
@@ -3371,6 +3361,8 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	BOOLEAN:
 		case	FUNCTION:
 		case	ADDRESS:
+		case	REF:
+		case	POINTER:
 		case	ENUM:
 		case	CLASS:			return CC.JE; 
 		default:
@@ -3383,6 +3375,7 @@ CC continuation(Operator compare, ref<Type> type) {
 
 	case	GREATER:
 		switch (type.family()) {
+		case	POINTER:
 		case	UNSIGNED_32:	return CC.JA;
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JG; 
@@ -3398,6 +3391,7 @@ CC continuation(Operator compare, ref<Type> type) {
 
 	case	GREATER_EQUAL:
 		switch (type.family()) {
+		case	POINTER:
 		case	UNSIGNED_32:	return CC.JNB;
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JGE; 
@@ -3413,6 +3407,7 @@ CC continuation(Operator compare, ref<Type> type) {
 
 	case	LESS:
 		switch (type.family()) {
+		case	POINTER:
 		case	UNSIGNED_32:	return CC.JB;
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JL; 
@@ -3428,6 +3423,7 @@ CC continuation(Operator compare, ref<Type> type) {
 
 	case	LESS_EQUAL:
 		switch (type.family()) {
+		case	POINTER:
 		case	UNSIGNED_32:	return CC.JNA;
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JLE; 

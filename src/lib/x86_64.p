@@ -1070,6 +1070,8 @@ public class X86_64 extends X86_64AssignTemps {
 				case	ENUM:
 				case	FUNCTION:
 				case	ADDRESS:
+				case	REF:
+				case	POINTER:
 					generateOperands(b, compileContext);
 	//				printf("\n\n---- ASSIGN ----\n");
 	//				b.print(4);
@@ -1092,16 +1094,6 @@ public class X86_64 extends X86_64AssignTemps {
 					break;
 					
 				case	CLASS:
-					if (b.type.indirectType(compileContext) != null) {
-						generateOperands(b, compileContext);
-						if (b.register == 0)
-							inst(X86.MOV, b.left(), b.right(), compileContext);
-						else {
-							inst(X86.MOV, R(int(b.register)), b.right(), compileContext);
-							inst(X86.MOV, b.left(), R(int(b.register)), compileContext);
-						}
-						break;
-					}
 					generateOperands(b, compileContext);
 					inst(X86.MOV, b.left(), b.right(), compileContext);
 					break;
@@ -1527,6 +1519,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ADDRESS:
+			case	POINTER:
 				generateOperands(b, compileContext);
 				if (b.register == 0 || b.op() == Operator.ADD)
 					inst(X86.ADD, b.left(), b.right(), compileContext);
@@ -1940,19 +1933,19 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.MOV, expression, expression.operand(), compileContext);
 				break;
 				
-			case	CLASS:
-				if (expression.operand().type.indirectType(compileContext) != null) {
-					generate(expression.operand(), compileContext);
-					if (expression.operand().op() == Operator.EMPTY)
-						instLoadType(R(int(expression.register)), expression.operand().type);
-					else if (expression.operand().type.indirectType(compileContext).hasVtable()) {
-						inst(X86.MOV, expression, expression.operand(), compileContext);
-						inst(X86.MOV, R(int(expression.register)), R(int(expression.register)), 0);
-						inst(X86.MOV, R(int(expression.register)), R(int(expression.register)), 0);
-					} else
-						instLoadType(R(int(expression.register)), expression.operand().type.indirectType(compileContext));
-					break;
-				}
+			case	REF:
+			case	POINTER:
+				generate(expression.operand(), compileContext);
+				if (expression.operand().op() == Operator.EMPTY)
+					instLoadType(R(int(expression.register)), expression.operand().type);
+				else if (expression.operand().type.indirectType(compileContext).hasVtable()) {
+					inst(X86.MOV, expression, expression.operand(), compileContext);
+					inst(X86.MOV, R(int(expression.register)), R(int(expression.register)), 0);
+					inst(X86.MOV, R(int(expression.register)), R(int(expression.register)), 0);
+				} else
+					instLoadType(R(int(expression.register)), expression.operand().type.indirectType(compileContext));
+				break;
+
 			default:
 				instLoadType(R(int(expression.register)), expression.operand().type);
 			}
@@ -2223,6 +2216,8 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 
 	private void generateConditional(ref<Node> node, ref<CodeSegment> trueSegment, ref<CodeSegment> falseSegment, ref<CompileContext> compileContext) {
+		if (node.deferGeneration())
+			return;
 		if (verbose()) {
 			printf("-----  generateConditional  ---------\n");
 			f().r.print();
@@ -2303,6 +2298,8 @@ public class X86_64 extends X86_64AssignTemps {
 		case	ENUM:
 		case	TYPEDEF:
 		case	ADDRESS:
+		case	REF:
+		case	POINTER:
 		case	BOOLEAN:
 		case	FUNCTION:
 			inst(X86.CMP, b.left(), b.right(), compileContext);
@@ -2485,6 +2482,8 @@ public class X86_64 extends X86_64AssignTemps {
 			case	BOOLEAN:
 			case	ENUM:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 				generate(seq.right(), compileContext);
 				inst(X86.MOV, seq.left(), seq.right(), compileContext);
@@ -2507,31 +2506,14 @@ public class X86_64 extends X86_64AssignTemps {
 				break;
 				
 			case	CLASS:
-				if (seq.type.indirectType(compileContext) != null) {
-					ref<Node> n = seq.right();
-					generate(n, compileContext);
-					inst(X86.MOV, seq.left(), seq.right(), compileContext);
-					break;
-				} else {
-					generateOperands(seq, compileContext);
-					inst(X86.MOV, seq.left(), R(int(seq.right().register)), compileContext);
-				}
+				generateOperands(seq, compileContext);
+				inst(X86.MOV, seq.left(), R(int(seq.right().register)), compileContext);
 				break;
 				
 			default:
 				seq.print(0);
 				assert(false);
 			}
-			/*
-			if (seq.type.family() == TypeFamily.STRING)
-				generateStringCopy(seq.left(), seq.right(), _stringCopyConstructor, compileContext);
-			else {
-				generate(seq.right(), compileContext);
-				generateStore(seq.left(), compileContext);
-			}
-			if (!clearStack(seq.type, compileContext))
-				unfinished(node, "clearStack - initialize", compileContext);
-			*/
 			break;
 
 		default:
@@ -2812,6 +2794,8 @@ public class X86_64 extends X86_64AssignTemps {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 				if (R(n.register) == R.AH) {
 					// The only way that AH could get assigned is to use the result of a byte-% operator
@@ -2848,18 +2832,6 @@ public class X86_64 extends X86_64AssignTemps {
 					inst(X86.AND, newType.family(), R(n.register), 0xff);
 				generateIntToEnum(result, n, ref<EnumInstanceType>(newType));
 				return;
-
-
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null) {
-					if (R(n.register) == R.AH) {
-						// The only way that AH could get assigned is to use the result of a byte-% operator
-						inst(X86.MOV, TypeFamily.UNSIGNED_8, R.RAX, R.AH);
-						inst(X86.AND, newType.family(), R.RAX, 0xff);
-					} else
-						inst(X86.AND, newType.family(), R(result.register), 0xff);
-					return;
-				}
 			}
 			break;
 
@@ -2877,6 +2849,8 @@ public class X86_64 extends X86_64AssignTemps {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 				if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, result, n, compileContext);
@@ -2896,14 +2870,6 @@ public class X86_64 extends X86_64AssignTemps {
 				else
 					inst(X86.CVTSI2SD, TypeFamily.FLOAT_64, R(result.register), R(n.register));
 				return;
-
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null) {
-					if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
-						inst(X86.MOV, result, n, compileContext);
-					inst(X86.AND, newType.family(), R(result.register), 0xffff);
-					return;
-				}
 			}
 			break;
 
@@ -2921,6 +2887,8 @@ public class X86_64 extends X86_64AssignTemps {
 
 			case	SIGNED_64:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 				if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, result, n, compileContext);
@@ -2947,15 +2915,6 @@ public class X86_64 extends X86_64AssignTemps {
 				else
 					inst(X86.CVTSI2SD, TypeFamily.SIGNED_64, R(result.register), R(n.register));
 				return;
-
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null) {
-					if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
-						inst(X86.MOV, result, n, compileContext);
-					inst(X86.SAL, TypeFamily.UNSIGNED_32, R(result.register), 32);
-					inst(X86.SHR, TypeFamily.UNSIGNED_32, R(result.register), 32);
-					return;	// TODO: widen from int 32 to pointer type.
-				}
 			}
 			break;
 
@@ -2975,6 +2934,8 @@ public class X86_64 extends X86_64AssignTemps {
 				
 			case	SIGNED_64:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 				inst(X86.MOVSX_REX_W, result, n, compileContext);
 				return;
@@ -2991,27 +2952,6 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.MOVSX_REX_W, TypeFamily.ADDRESS, R(n.register), R(n.register));
 				generateIntToEnum(result, n, ref<EnumInstanceType>(newType));
 				return;
-/*
-			case	VAR:
-				target.byteCode(ByteCodes.CVTIL);
-				ref<Type> t = target.arena().builtInType(TypeFamily.SIGNED_64);
-				if (target.unit() != null) {
-					ref<TypeRef> tr = target.unit().newTypeRef(t, target.arena().stringType().enclosing());
-					target.byteCode(ByteCodes.LDSA);
-					target.byteCode(tr.index());
-				} else {
-					target.byteCode(ByteCodes.VALUE);
-					target.byteCode(0);
-				}
-				target.byteCode(ByteCodes.CVTLV);
-				target.pushSp(var.bytes - address.bytes);
-				return;
-				*/
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null) {
-					inst(X86.MOVSXD, result, n, compileContext);
-					return;
-				}
 			}
 			break;
 
@@ -3029,6 +2969,8 @@ public class X86_64 extends X86_64AssignTemps {
 
 			case	SIGNED_64:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 				inst(X86.MOVSXD, result, n, compileContext);
 				return;
@@ -3061,11 +3003,6 @@ public class X86_64 extends X86_64AssignTemps {
 				target.pushSp(var.bytes - address.bytes);
 				return;
 				*/
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null) {
-					inst(X86.MOVSXD, result, n, compileContext);
-					return;
-				}
 			}
 			break;
 
@@ -3079,18 +3016,12 @@ public class X86_64 extends X86_64AssignTemps {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 				if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, result, n, compileContext);
 				return;
-
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null) {
-					if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
-						inst(X86.MOV, result, n, compileContext);
-					return;
-				}
-				break;
 
 			case	FLOAT_32:
 				inst(X86.CVTSI2SS, result, n, compileContext);
@@ -3116,16 +3047,11 @@ public class X86_64 extends X86_64AssignTemps {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 				inst(X86.CVTSS2SI, result, n, compileContext);
 				return;
-
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null) {
-					inst(X86.CVTSS2SI, result, n, compileContext);
-					return;
-				}
-				break;
 
 			case	FLOAT_32:
 				return;
@@ -3151,16 +3077,11 @@ public class X86_64 extends X86_64AssignTemps {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 				inst(X86.CVTSD2SI, result, n, compileContext);
 				return;
-
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null) {
-					inst(X86.CVTSD2SI, result, n, compileContext);
-					return;
-				}
-				break;
 
 			case	FLOAT_32:
 				inst(X86.CVTSD2SS, result, n, compileContext);
@@ -3177,6 +3098,8 @@ public class X86_64 extends X86_64AssignTemps {
 			break;
 
 		case	ADDRESS:
+		case	REF:
+		case	POINTER:
 			switch (newType.family()) {
 /*
 			case	ADDRESS:
@@ -3192,19 +3115,13 @@ public class X86_64 extends X86_64AssignTemps {
 			case	SIGNED_32:
 			case	STRING:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 			case	SIGNED_64:
 				if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, result, n, compileContext);
 				return;
-
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null) {
-					if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
-						inst(X86.MOV, result, n, compileContext);
-					return;
-				}
-				break;
 			}
 			break;
 
@@ -3227,6 +3144,8 @@ public class X86_64 extends X86_64AssignTemps {
 				return;
 
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 			case	ENUM:
 				if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
@@ -3254,73 +3173,13 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.SAR, src, 1);
 				inst(X86.CVTSI2SD, result, n, compileContext);
 				return;
-				
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null) {
-					if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
-						inst(X86.MOV, result, n, compileContext);
-					return;
-				}
-				break;
 			}
 			break;
 
 		case	CLASS:
-			if (existingType.indirectType(compileContext) != null) {
-				ref<Scope> scope;
-				switch (newType.family()) {
-				case	BOOLEAN:
-				case	STRING:
-				case	ADDRESS:
-				case	SIGNED_64:
-				case	SIGNED_32:
-					if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
-						inst(X86.MOV, result, n, compileContext);
-					return;
-		/*
-				case	SIGNED_32:
-
-				case	STRING:
-					scope = newType.scope();
-					for (int i = 0; i < scope.constructors().length(); i++) {
-						ref<Scope> sc = scope.constructors()[i];
-						if (sc.symbols().size() == 1 &&
-							sc.symbols().first().type() == existingType) {
-							ref<Function> constructorDef = ref<Function>(sc.definition());
-							ref<Symbol> sym = constructorDef.name().symbol();
-							ref<FunctionType> functionType = ref<FunctionType>(sym.type());
-							checkStack(target);
-							ref<Value>  value = target.unit().getCode(functionType.scope(), target, compileContext);
-							target.byteCode(ByteCodes.CALL);
-							target.byteCode(value.index());
-							target.popSp(address.bytes);
-							return;
-						}
-					}
-					break;
-*/
-				case	CLASS:
-					if (newType.indirectType(compileContext) != null) {
-						if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
-							inst(X86.MOV, result, n, compileContext);
-						return;
-					}
-					break;
-/*
-				case	VAR:
-					ref<TypeRef> tr = target.unit().newTypeRef(existingType, compileContext.current());
-					target.byteCode(ByteCodes.LDSA);
-					target.byteCode(tr.index());
-					target.byteCode(ByteCodes.CVTAV);
-					target.pushSp(var.bytes - address.bytes);
-					return;
-					*/
-				}
-			} else {
-				// A general class coercion from another class type.
-				if (existingType.size() == newType.size())
-					return;
-			}
+			// A general class coercion from another class type.
+			if (existingType.size() == newType.size())
+				return;
 			break;
 
 		case	STRING:
@@ -3381,6 +3240,8 @@ public class X86_64 extends X86_64AssignTemps {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ADDRESS:
+			case	REF:
+			case	POINTER:
 			case	FUNCTION:
 				if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, result, n, compileContext);
@@ -3397,14 +3258,6 @@ public class X86_64 extends X86_64AssignTemps {
 			case	ENUM:
 				generateIntToEnum(result, n, ref<EnumInstanceType>(newType));
 				return;
-
-
-			case	CLASS:
-				if (newType.indirectType(compileContext) != null) {
-					if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
-						inst(X86.MOV, result, n, compileContext);
-					return;
-				}
 			}
 			break;
 		}

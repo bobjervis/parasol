@@ -46,6 +46,8 @@ enum TypeFamily {
 	TYPEDEF,
 	FUNCTION,
 	SHAPE,
+	REF,
+	POINTER,
 	TEMPLATE,
 	TEMPLATE_INSTANCE,
 	MAX_TYPES
@@ -1261,6 +1263,8 @@ class TypeFamilyMap {
 		name[TypeFamily.ENUM] = "ENUM";
 		name[TypeFamily.TYPEDEF] = "TYPEDEF";
 		name[TypeFamily.SHAPE] = "SHAPE";
+		name[TypeFamily.REF] = "REF";
+		name[TypeFamily.POINTER] = "POINTER";
 		name[TypeFamily.FUNCTION] = "FUNCTION";
 		name[TypeFamily.TEMPLATE] = "TEMPLATE";
 		name[TypeFamily.TEMPLATE_INSTANCE] = "TEMPLATE_INSTANCE";
@@ -1289,6 +1293,8 @@ class TypeFamilyMap {
 		size[TypeFamily.ENUM] = size[TypeFamily.ADDRESS];
 		size[TypeFamily.TYPEDEF] = size[TypeFamily.ADDRESS];
 		size[TypeFamily.SHAPE] = -1;
+		size[TypeFamily.REF] = size[TypeFamily.ADDRESS];
+		size[TypeFamily.POINTER] = size[TypeFamily.ADDRESS];
 		size[TypeFamily.FUNCTION] = size[TypeFamily.ADDRESS];
 		size[TypeFamily.TEMPLATE] = -1;
 		size[TypeFamily.TEMPLATE_INSTANCE] = -1;
@@ -1319,6 +1325,8 @@ class TypeFamilyMap {
 		alignment[TypeFamily.ENUM] = alignment[TypeFamily.ADDRESS];
 		alignment[TypeFamily.TYPEDEF] = alignment[TypeFamily.ADDRESS];
 		alignment[TypeFamily.SHAPE] = -1;
+		alignment[TypeFamily.REF] = -1;
+		alignment[TypeFamily.POINTER] = -1;
 		alignment[TypeFamily.FUNCTION] = alignment[TypeFamily.ADDRESS];
 		alignment[TypeFamily.TEMPLATE] = -1;
 		alignment[TypeFamily.TEMPLATE_INSTANCE] = -1;

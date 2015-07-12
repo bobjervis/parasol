@@ -461,6 +461,18 @@ compile(expect: fail, message: LEFT_NOT_INT) { "double b; double a; a >>>= 5;" }
 compile(expect: fail, message: SHIFT_NOT_INT) { "double b; int a; a <<= b;" }
 compile(expect: fail, message: SHIFT_NOT_INT) { "double b; int a; a >>= b;" }
 compile(expect: fail, message: SHIFT_NOT_INT) { "double b; int a; a >>>= b;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b == c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b != c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b < c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b > c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b <= c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b >= c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b <> c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b !< c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b !> c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b !<= c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b !>= c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b !<> c;" }
 compile() { "double b; boolean a = b == 37;" }
 compile() { "double b; boolean a = b != 37;" }
 compile() { "double b; boolean a = b < 37;" }
@@ -468,11 +480,13 @@ compile() { "double b; boolean a = b > 37;" }
 compile() { "double b; boolean a = b <= 37;" }
 compile() { "double b; boolean a = b >= 37;" }
 compile() { "double b; boolean a = b <> 37;" }
+compile() { "double b; boolean a = b <>= 37;" }
 compile() { "double b; boolean a = b !< 37;" }
 compile() { "double b; boolean a = b !> 37;" }
 compile() { "double b; boolean a = b !<= 37;" }
 compile() { "double b; boolean a = b !>= 37;" }
 compile() { "double b; boolean a = b !<> 37;" }
+compile() { "double b; boolean a = b !<>= 37;" }
 compile() { "double a; a = -a;" }
 compile() { "double a; a = +a;" }
 compile(expect: fail, message: INVALID_BIT_COMPLEMENT) { "double a; a = ~a;" }
