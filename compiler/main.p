@@ -223,11 +223,11 @@ int compileCommand() {
 }
 
 boolean configureArena(ref<Arena> arena) {
+	arena.logImports = parasolCommand.logImportsArgument.value;
 	if (parasolCommand.explicitArgument.set())
 		arena.setImportPath(parasolCommand.explicitArgument.value);
 	else if (parasolCommand.importPathArgument.set())
 		arena.setImportPath(parasolCommand.importPathArgument.value + ",^/src/lib,^/alys/lib");
-	arena.logImports = parasolCommand.logImportsArgument.value;
 	arena.verbose = parasolCommand.verboseArgument.value;
 	arena.trace = parasolCommand.traceArgument.value;
 	if (parasolCommand.targetArgument.set())

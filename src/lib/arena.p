@@ -15,6 +15,7 @@
  */
 namespace parasol:compiler;
 
+import parasol:text;
 import parasol:storage;
 import parasol:file;
 import parasol:process;
@@ -27,6 +28,7 @@ public class Arena {
 	private string _rootFolder;
 	private ref<Scope> _root;
 	private ref<Scope> _main;
+	private ref<SourceCache> _sourceCache;
 	private ref<ImportDirectory>[] _importPath;
 	private ref<ImportDirectory> _specialFiles;			// A pseudo-import directory for the files explicitly loaded (root + main)
 	private ref<Scope>[string] _domains;
@@ -52,6 +54,17 @@ public class Arena {
 	SectionType preferredTarget;
 
 	public Arena() {
+		_sourceCache = new SourceCache();
+		setImportPath("^/src/lib,^/alys/lib");
+		_builtInType.resize(TypeFamily.BUILTIN_TYPES);
+		_builtInType[TypeFamily.ERROR] = _global.newBuiltInType(TypeFamily.ERROR, null);
+		_global = new MemoryPool;
+		_rootFolder = storage.directory(storage.directory(process.binaryFilename()));
+		_specialFiles = new ImportDirectory("");
+	}
+	
+	public Arena(ref<SourceCache> sourceCache) {
+		_sourceCache = sourceCache;
 		setImportPath("^/src/lib,^/alys/lib");
 		_builtInType.resize(TypeFamily.BUILTIN_TYPES);
 		_builtInType[TypeFamily.ERROR] = _global.newBuiltInType(TypeFamily.ERROR, null);
@@ -71,13 +84,14 @@ public class Arena {
 	 * is the name of a directory to search when resolving import statements. 
 	 */
 	public void setImportPath(string importPath) {
-		for (int i = 0; i < _importPath.length(); i++)
-			delete _importPath[i];
 		_importPath.clear();
 		if (importPath != null) {
 			string[] elements = importPath.split(',');
-			for (int i = 0; i < elements.length(); i++)
-				_importPath.append(new ImportDirectory(elements[i]));
+			for (int i = 0; i < elements.length(); i++) {
+				ref<ImportDirectory> dir = _sourceCache.getDirectory(elements[i]);
+				dir.prepareForNewCompile();
+				_importPath.append(dir);
+			}
 		}
 	}
 	

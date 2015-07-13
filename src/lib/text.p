@@ -1341,4 +1341,3 @@ private void dumpPtr(address x) {
 
 class RegularExpression {
 }
-

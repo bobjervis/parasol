@@ -1940,14 +1940,14 @@ public class X86_64 extends X86_64AssignTemps {
 					instLoadType(R(int(expression.register)), expression.operand().type);
 				else if (expression.operand().type.indirectType(compileContext).hasVtable()) {
 					inst(X86.MOV, expression, expression.operand(), compileContext);
-					inst(X86.MOV, R(int(expression.register)), R(int(expression.register)), 0);
-					inst(X86.MOV, R(int(expression.register)), R(int(expression.register)), 0);
+					inst(X86.MOV, R(expression.register), R(expression.register), 0);
+					inst(X86.MOV, R(expression.register), R(expression.register), 0);
 				} else
-					instLoadType(R(int(expression.register)), expression.operand().type.indirectType(compileContext));
+					instLoadType(R(expression.register), expression.operand().type.indirectType(compileContext));
 				break;
 
 			default:
-				instLoadType(R(int(expression.register)), expression.operand().type);
+				instLoadType(R(expression.register), expression.operand().type);
 			}
 			break;
 			

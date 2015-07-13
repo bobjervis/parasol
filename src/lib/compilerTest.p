@@ -41,6 +41,7 @@ import parasol:compiler.operatorMap;
 import parasol:compiler.Parser;
 import parasol:compiler.Scanner;
 import parasol:compiler.Scope;
+import parasol:compiler.SourceCache;
 import parasol:compiler.StorageClass;
 import parasol:compiler.StringScanner;
 import parasol:compiler.SyntaxTree;
@@ -416,7 +417,8 @@ class CompileObject  extends script.Object {
 	}
 
 	public boolean run() {
-		Arena arena;
+		static SourceCache sourceCache;
+		Arena arena(&sourceCache);
 		boolean loadFailed = false;
 
 		if (targetArgument != null)
