@@ -702,7 +702,11 @@ public class X86_64 extends X86_64AssignTemps {
 			
 		case	EXPRESSION:
 			ref<Unary> expression = ref<Unary>(node);
-			generateExpressionStatement(expression.operand(), compileContext);
+			// This was a vector expression
+			if (expression.operand().op() == Operator.FOR)
+				generate(expression.operand(), compileContext);
+			else
+				generateExpressionStatement(expression.operand(), compileContext);
 			break;
 
 		case	SEQUENCE:

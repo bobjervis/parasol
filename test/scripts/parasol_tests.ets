@@ -49,7 +49,7 @@ run(filename: complex_subscript.p)
 
 // Basic runtime execution tests
 
-//run(filename: vectorization_1.p)
+run(filename: vectorization_1.p)
 run(filename: call_lots_o_params.p)
 run(filename: pre_decr_subscript.p)
 run(filename: covariant_return_override.p)

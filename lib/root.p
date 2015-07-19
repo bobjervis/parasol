@@ -166,6 +166,10 @@ class vector<class E, class I> {
 		return _data[int(index)];
 	}
 	
+	public E getModulo(I index) {
+		return _data[int(index) % int(_length)];
+	}
+	
 	public void insert(I index, E value) {
 		if (int(index) < 0 || int(index) > int(_length))
 			return;
@@ -246,9 +250,14 @@ class vector<class E, class I> {
 		_data[int(index)] = value;
 	}
 	
+	public void setModulo(I index, E value) {
+		_data[int(index) % int(_length)] = value;
+	}
+
 	public pointer<E> elementAddress(I index) {
 		return _data + int(index);
 	}
+	
 	
 	public void slice(vector<E, I> source, I beginIndex, I endIndex) {
 		I len = I(int(endIndex) - int(beginIndex));

@@ -2557,8 +2557,8 @@ class X86_64Encoder extends Target {
 			switch (sym.storageClass()) {
 			case	STATIC:
 				modRM(0, regOpcode, 5);
-				if (sym.type().family() == TypeFamily.TYPEDEF) {
-					ref<TypedefType> tt = ref<TypedefType>(sym.type());
+				if (addressMode.type.family() == TypeFamily.TYPEDEF) {
+					ref<TypedefType> tt = ref<TypedefType>(addressMode.type);
 					ref<Type> t = tt.wrappedType();
 					fixup(FixupKind.RELATIVE32_TYPE, t);
 					emitInt(t.copyToImage(this));
@@ -2570,7 +2570,7 @@ class X86_64Encoder extends Target {
 				
 			case	ENUMERATION:
 				modRM(0, regOpcode, 5);
-				ref<EnumInstanceType> t = ref<EnumInstanceType>(sym.type());
+				ref<EnumInstanceType> t = ref<EnumInstanceType>(addressMode.type);
 				fixup(FixupKind.RELATIVE32_DATA, t.symbol());
 				emitInt(-ipAdjust + allAdjust + sym.offset * int.bytes);
 				break;

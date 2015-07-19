@@ -456,6 +456,7 @@ class CompileContext {
 			n.add(MessageId.UNFINISHED_BUILD_SCOPE, _pool, CompileString(/*n.class.name()*/"***"), CompileString(operatorMap.name[n.op()]));
 			n.type = errorType();
 		}
+		
 		return TraverseAction.CONTINUE_TRAVERSAL;
 	}
 

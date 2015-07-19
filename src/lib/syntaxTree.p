@@ -183,6 +183,8 @@ enum Test {
 
 // Global 'flags' values
 public byte BAD_CONSTANT = 0x01;
+public byte VECTOR_LVALUE = 0x02;
+public byte VECTOR_OPERAND = 0x04;
 public byte PUSH_OUT_PARAMETER = 0x08;
 
 class SyntaxTree {
@@ -494,12 +496,52 @@ class Binary extends Node {
 	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
 		if (deferGeneration())
 			return this;
+		if (type.family() == TypeFamily.SHAPE) {
+			switch (op()) {
+			case	BIND:
+			case	DECLARATION:
+				_left = _left.fold(tree, false, compileContext);
+				_right = _right.fold(tree, false, compileContext);
+				return this;
+				
+			case	SUBSCRIPT:
+			case	SEQUENCE:
+				break;
+				
+			case	INITIALIZE:
+			case	ASSIGN:
+				if (shouldVectorize(_right)) {
+					// Now, we've done it. We've got a vectorized assignment.
+					ref<Binary> operation;
+					if (voidContext) 
+						operation = this;
+					else {
+						ref<Variable> v = compileContext.newVariable(type);
+						operation = tree.newBinary(Operator.ASSIGN, tree.newReference(v, true, location()), this, location());
+						operation.type = type;
+						print(0);
+						assert(false);
+					}
+					return vectorize(tree, operation, compileContext);
+				}
+				break;
+				
+			default:
+				printf("fold %s\n", voidContext ? "void context" : "value context");
+				print(4);
+				assert(false);
+			}
+		}
 		switch (op()) {
 		case	ANNOTATED:
 			_right = _right.fold(tree, false, compileContext);
 			return this;
 			
 		case	DECLARATION:
+			_left = _left.fold(tree, false, compileContext);
+			_right = _right.fold(tree, true, compileContext);
+			return this;
+
 		case	ENUM_DECLARATION:
 		case	CLASS_DECLARATION:
 		case	WHILE:
@@ -626,8 +668,13 @@ class Binary extends Node {
 			case	FUNCTION:
 				break;
 				
-			case	CLASS:
 			case	SHAPE:
+				if (shouldVectorize(_right)) {
+					print(0);
+					assert(false);
+				}
+				
+			case	CLASS:
 			case	VAR:
 			case	STRING:
 				ref<OverloadInstance> oi = type.copyConstructor(compileContext);
@@ -2589,7 +2636,7 @@ class Call extends ParameterBag {
 			args++;
 		for (ref<NodeList> nl = _stackArguments; nl != null; nl = nl.next)
 			stackArgs++;
-		printf(" %s args: reg %d stack %d %s\n", callCategories[_category], args, stackArgs, _folded ? "folded" : "");
+		printf(" %s reg args %d stack args %d %s\n", callCategories[_category], args, stackArgs, _folded ? "folded" : "");
 		if (_overload != null)
 			_overload.print(indent + 2 * INDENT, false);
 		if (_stackArguments != null) {
@@ -6472,6 +6519,17 @@ class Node {
 		return false;
 	}
 	
+	public boolean isSimpleLvalue() {
+		switch (_op) {
+		case	IDENTIFIER:
+		case	VARIABLE:
+			return true;
+
+		default:
+			return false;
+		}
+		return false;
+	}
 	// Debugging API
 	
 	public void print(int indent) {

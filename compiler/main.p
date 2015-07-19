@@ -14,7 +14,6 @@
    limitations under the License.
  */
 import parasol:commandLine;
-import parasol:script;
 import parasol:storage;
 import parasol:process;
 import parasol:runtime;
