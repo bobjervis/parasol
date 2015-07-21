@@ -6087,7 +6087,7 @@ class Unary extends Node {
 				type = _operand.type;
 				return;
 			}
-			switch (_operand.type.family()) {
+			switch (_operand.type.scalarFamily(compileContext)) {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
@@ -6108,7 +6108,7 @@ class Unary extends Node {
 				type = _operand.type;
 				break;
 			}
-			if (_operand.type.family() != TypeFamily.BOOLEAN) {
+			if (_operand.type.scalarFamily(compileContext) != TypeFamily.BOOLEAN) {
 				add(MessageId.NOT_BOOLEAN, compileContext.pool());
 				type = compileContext.errorType();
 			} else

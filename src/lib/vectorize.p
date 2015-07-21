@@ -141,6 +141,9 @@ private ref<Node> rewriteVectorTree(ref<SyntaxTree> tree, ref<Node> vectorStuff,
 		return tree.newCall(oi, null,  method, args, vectorStuff.location());
 
 	case	NEGATE:
+	case	UNARY_PLUS:
+	case	BIT_COMPLEMENT:
+	case	NOT:
 		ref<Unary> u = ref<Unary>(vectorStuff);
 		right = rewriteVectorTree(tree, u.operand(), iterator, vectorSize, compileContext);
 		return tree.newUnary(u.op(), right, u.location());
@@ -178,6 +181,9 @@ TraverseAction extractLvalues(ref<Node> n, address data) {
 		return TraverseAction.SKIP_CHILDREN;
 		
 	case	NEGATE:
+	case	UNARY_PLUS:
+	case	BIT_COMPLEMENT:
+	case	NOT:
 		break;
 		
 	default:
