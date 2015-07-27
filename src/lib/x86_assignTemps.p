@@ -344,16 +344,13 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				node.register = byte(int(f().r.latestResult(b.left())));
 				break;
 			} else if (b.type.size() > 1) {
-				if	(b.sethi < 3) {
-					b.sethi = -1;
+				if	(b.sethi < 0) {
 					assignRegisterTemp(b.left(), RAXmask, compileContext);
-					reserveReg(node, R.RDX, RDXmask);
-					node.register = byte(int(R.RDX));
+					f().r.clobberSomeRegisters(node, RDXmask);
 					assignRegisterTemp(b.right(), longMask & ~(RAXmask | RDXmask), compileContext);
 				} else {
 					assignRegisterTemp(b.right(), longMask & ~(RAXmask | RDXmask), compileContext);
-					reserveReg(node, R.RDX, RDXmask);
-					node.register = byte(int(R.RDX));
+					f().r.clobberSomeRegisters(node, RDXmask);
 					assignRegisterTemp(b.left(), RAXmask, compileContext);
 				}
 			} else {
@@ -366,7 +363,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				}
 			}
 			f().r.cleanupTemps(node, depth);
-			node.register = byte(int(R.RAX));
+			node.register = byte(R.RAX);
 			break;
 			
 		case	REMAINDER_ASSIGN:
