@@ -232,7 +232,7 @@ class X86_64AddressModes extends X86_64Encoder {
 			
 		case	CONDITIONAL:
 			ref<Ternary> conditional = ref<Ternary>(node);
-			markAddressModes(conditional.left(), compileContext);
+			markConditionalAddressModes(conditional.left(), compileContext);
 			markAddressModes(conditional.middle(), compileContext);
 			markAddressModes(conditional.right(), compileContext);
 			break;

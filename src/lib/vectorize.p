@@ -58,11 +58,30 @@ ref<Node> vectorize(ref<SyntaxTree> tree, ref<Node> vectorExpression, ref<Compil
 			opnd.type = vsDef.type;
 			opnd = tree.newBinary(Operator.ASSIGN, vsDef, opnd, vectorExpression.location());
 			start = tree.newBinary(Operator.SEQUENCE, start, opnd, vectorExpression.location());
-		}
-		if (closure.operands.length() > 1) {
-			printf("Too many operands\n");
-			loop.print(0);
+		} else {
+			printf("Operand 0 too complex\n");
+			vectorExpression.print(0);
 			assert(false);
+		}
+		for (int i = 1; i < closure.operands.length(); i++) {
+			opnd = closure.operands[i];
+			if (opnd.isSimpleLvalue()) {
+				ref<Node> opnd2  = opnd.clone(tree);
+				opnd2.type = vsDef.type;
+				opnd = opnd.clone(tree);
+				opnd.type = vsDef.type;
+				ref<Node> comp = tree.newBinary(Operator.LESS, vsDef, opnd, vectorExpression.location());
+				ref<Node> vsdef2 = tree.newReference(vectorSize, true, vectorExpression.location());
+				opnd2 = tree.newBinary(Operator.ASSIGN, vsdef2, opnd2, vectorExpression.location());
+				ref<Node> emp = tree.newLeaf(Operator.EMPTY, vectorExpression.location());
+				emp.type = vsDef.type;
+				comp = tree.newTernary(Operator.CONDITIONAL, comp, opnd2, emp, vectorExpression.location());
+				start = tree.newBinary(Operator.SEQUENCE, start, comp, vectorExpression.location());
+			} else {
+				printf("Operand %d too complex\n", i);
+				vectorExpression.print(0);
+				assert(false);
+			}
 		}
 		if (closure.lvalues.length() == 1) {
 			CompileString name("resize");
@@ -80,12 +99,12 @@ ref<Node> vectorize(ref<SyntaxTree> tree, ref<Node> vectorExpression, ref<Compil
 			start = tree.newBinary(Operator.SEQUENCE, start, call, vectorExpression.location());
 		} else {
 			printf("Only 1 lvalue per expression allowed\n");
-			loop.print(0);
+			vectorExpression.print(0);
 			assert(false);
 		}
 	} else {
 		printf("Too few operands\n");
-		loop.print(0);
+		vectorExpression.print(0);
 		assert(false);
 	}
 	ref<Node> limit = tree.newReference(vectorSize, false, vectorExpression.location());
@@ -98,9 +117,9 @@ ref<Node> vectorize(ref<SyntaxTree> tree, ref<Node> vectorExpression, ref<Compil
 	body = tree.newUnary(Operator.EXPRESSION, body, vectorExpression.location());
 	
 	ref<Node> loop = tree.newFor(Operator.FOR, start, test, increment, body, vectorExpression.location());
-	compileContext.assignTypes(loop);
 //	printf("Re-written loop:\n");
 //	loop.print(0);
+	compileContext.assignTypes(loop);
 	return loop.fold(tree, false, compileContext);
 }
 
@@ -148,6 +167,12 @@ private ref<Node> rewriteVectorTree(ref<SyntaxTree> tree, ref<Node> vectorStuff,
 		right = rewriteVectorTree(tree, u.operand(), iterator, vectorSize, compileContext);
 		return tree.newUnary(u.op(), right, u.location());
 		
+	case	ADD:
+		b = ref<Binary>(vectorStuff);
+		ref<Node> left = rewriteVectorTree(tree, b.left(), iterator, vectorSize, compileContext);
+		right = rewriteVectorTree(tree, b.right(), iterator, vectorSize, compileContext);
+		return tree.newBinary(b.op(), left, right, b.location());
+		
 	default:
 		vectorStuff.print(0);
 		assert(false);
@@ -180,6 +205,7 @@ TraverseAction extractLvalues(ref<Node> n, address data) {
 		b.right().traverse(Node.Traversal.PRE_ORDER, extractLvalues, data);
 		return TraverseAction.SKIP_CHILDREN;
 		
+	case	ADD:
 	case	NEGATE:
 	case	UNARY_PLUS:
 	case	BIT_COMPLEMENT:

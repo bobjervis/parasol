@@ -763,10 +763,6 @@ class TemplateInstanceType extends ClassType {
 		return tt.wrappedType() == _templateType;
 	}
 
-	public ref<Type> scalarType() {
-		return this;
-	}
-	
 	public ref<Type> shapeType() {
 		return null;
 	}

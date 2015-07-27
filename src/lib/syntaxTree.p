@@ -1285,7 +1285,7 @@ class Binary extends Node {
 				type = _left.type;
 				break;
 			}
-			if (_left.type.isPointer(compileContext)) {
+			if (_left.type.family() == TypeFamily.POINTER) {
 				compileContext.assignTypes(_right);
 				if (_right.deferAnalysis()) {
 					type = _right.type;
@@ -1301,7 +1301,7 @@ class Binary extends Node {
 			}
 			if (!balance(compileContext))
 				break;
-			switch (_left.type.family()) {
+			switch (_left.type.scalarType(compileContext).family()) {
 			case	STRING:
 			case	UNSIGNED_32:
 			case	SIGNED_32:
@@ -3147,6 +3147,11 @@ class Constant extends Node {
 		case	STRING:
 		case	CHARACTER:
 		case	FLOATING_POINT:
+			if (voidContext) {
+				ref<Node> n = tree.newLeaf(Operator.EMPTY, location());
+				n.type = type;
+				return n;
+			}
 			break;
 			
 		default:
@@ -5497,18 +5502,20 @@ class Ternary extends Node {
 			break;
 			
 		case	CONDITIONAL:
-			_middle = tree.newUnary(Operator.LOAD, _middle, _middle.location());
-			_middle.type = type;
-			_right = tree.newUnary(Operator.LOAD, _right, _right.location());
-			_right.type = type;
+			if (!voidContext) {
+				_middle = tree.newUnary(Operator.LOAD, _middle, _middle.location());
+				_middle.type = type;
+				_right = tree.newUnary(Operator.LOAD, _right, _right.location());
+				_right.type = type;
+			}
 			
 		case	IF:
 			if (_left != null)
 				_left = _left.fold(tree, false, compileContext);
 			if (_middle != null)
-				_middle = _middle.fold(tree, true, compileContext);
+				_middle = _middle.fold(tree, voidContext, compileContext);
 			if (_right != null)
-				_right = _right.fold(tree, true, compileContext);
+				_right = _right.fold(tree, voidContext, compileContext);
 			break;
 			
 		default:
@@ -5610,7 +5617,10 @@ class Ternary extends Node {
 				type = compileContext.errorType();
 				break;
 			}
-			balancePair(this, &_middle, &_right, compileContext);
+			if (_right.op() == Operator.EMPTY)
+				type = _left.type;
+			else
+				balancePair(this, &_middle, &_right, compileContext);
 			break;
 
 		case	IF:
@@ -6414,6 +6424,7 @@ class Node {
 			case	FLOAT_64:
 			case	ENUM:
 			case	TYPEDEF:
+			case	SHAPE:
 				break;
 
 			default:
@@ -6530,6 +6541,7 @@ class Node {
 		}
 		return false;
 	}
+	
 	// Debugging API
 	
 	public void print(int indent) {
@@ -7042,6 +7054,8 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 	case	DECLARATION:
 	case	EMPTY:
 	case	DELETE:
+	case	IF:
+	case	CONDITIONAL:
 		break;
 		
 	case	ASSIGN:
@@ -7079,16 +7093,6 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 		expression.type = u.operand().type;
 		break;
 		
-	case	CONDITIONAL:
-		ref<Ternary> t = ref<Ternary>(expression);
-		ref<Node> middle = tree.newUnary(Operator.EXPRESSION, t.middle(), t.middle().location());
-		middle.type = compileContext.arena().builtInType(TypeFamily.VOID);
-		ref<Node> right = tree.newUnary(Operator.EXPRESSION, t.right(), t.right().location());
-		right.type = middle.type;
-		expression = tree.newTernary(Operator.IF, t.left(), middle, right, t.location()).fold(tree, false, compileContext);
-		expression.type = right.type;
-		break;
-		
 	case	INTEGER:
 		expression = tree.newLeaf(Operator.EMPTY, expression.location());
 		expression.type = compileContext.arena().builtInType(TypeFamily.VOID);
@@ -7097,7 +7101,7 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 	case	SEQUENCE:
 		ref<Binary> b = ref<Binary>(expression);
 		ref<Node> left = foldVoidContext(b.left(), tree, compileContext);
-		right = foldVoidContext(b.right(), tree, compileContext);
+		ref<Node> right = foldVoidContext(b.right(), tree, compileContext);
 		expression = tree.newBinary(Operator.SEQUENCE, left, right, b.location());
 		expression.type = b.type;
 		return expression;

@@ -180,6 +180,16 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			assignRegisterTemp(b.right(), RCXmask, compileContext);
 			break;
 			
+		case	CONDITIONAL:
+			ref<Ternary> cond = ref<Ternary>(node);
+			assignConditionCode(cond.left(), compileContext);
+			assignVoidContext(cond.middle(), compileContext);
+			assignVoidContext(cond.right(), compileContext);
+			break;
+
+		case	EMPTY:
+			break;
+			
 		default:
 			node.print(0);
 			assert(false);
