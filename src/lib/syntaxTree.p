@@ -1408,7 +1408,7 @@ class Binary extends Node {
 		case	EXCLUSIVE_OR:
 			if (!balance(compileContext))
 				break;
-			switch (_left.type.family()) {
+			switch (_left.type.scalarFamily(compileContext)) {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	UNSIGNED_32:
@@ -1513,7 +1513,7 @@ class Binary extends Node {
 		case	REMAINDER:
 			if (!balance(compileContext))
 				break;
-			switch (_left.type.family()) {
+			switch (_left.type.scalarFamily(compileContext)) {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	UNSIGNED_32:

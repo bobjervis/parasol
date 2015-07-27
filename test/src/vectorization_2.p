@@ -64,3 +64,44 @@ assert(d[0] == 0);
 assert(d[1] == 0);
 assert(d[2] == 44 / -23503);
 assert(d[3] == 1);
+
+d.clear();
+
+d = b % a;		// b contains a zero, a no no in integer arithmetic
+
+assert(d.length() == 4);
+assert(d[0] == 37);
+assert(d[1] == 0);
+assert(d[2] == 44 % -23503);
+assert(d[3] == 16);
+
+d.clear();
+
+d = a & b;
+
+assert(d.length() == 4);
+assert(d[0] == (100 & 37));
+assert(d[1] == 0);
+assert(d[2] == (-23503 & 44));
+assert(d[3] == (116 & 100));
+
+d.clear();
+
+d = a | b;
+
+assert(d.length() == 4);
+assert(d[0] == (100 | 37));
+assert(d[1] == 45);
+assert(d[2] == (-23503 | 44));
+assert(d[3] == (116 | 100));
+
+d.clear();
+
+d = a ^ b;
+
+assert(d.length() == 4);
+assert(d[0] == (100 ^ 37));
+assert(d[1] == 45);
+assert(d[2] == (-23503 ^ 44));
+assert(d[3] == (116 ^ 100));
+
