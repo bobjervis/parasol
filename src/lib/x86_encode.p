@@ -1215,7 +1215,7 @@ class X86_64Encoder extends Target {
 		case	SAR:
 			switch (family) {
 			case	SIGNED_32:
-				emitRex(family, null, dest, R.NO_REG);
+				emitRex(family, null, R.NO_REG, dest);
 				emit(0xd3);
 				modRM(3, 7, rmValues[dest]);
 				return;

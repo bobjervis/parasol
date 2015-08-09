@@ -1996,7 +1996,7 @@ class Binary extends Node {
 			type = _right.type;
 			return false;
 		}
-		switch (_left.type.family()) {
+		switch (_left.type.scalarFamily(compileContext)) {
 		case	VAR:
 			_right = _right.coerce(compileContext.tree(), TypeFamily.VAR, false, compileContext);
 			if (_right.deferAnalysis()) {
@@ -2018,7 +2018,7 @@ class Binary extends Node {
 			type = compileContext.errorType();
 			return false;
 		}
-		switch (_right.type.family()) {
+		switch (_right.type.scalarFamily(compileContext)) {
 		case	UNSIGNED_8:
 		case	UNSIGNED_16:
 			_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_32, false, compileContext);

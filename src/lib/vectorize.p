@@ -175,6 +175,9 @@ private ref<Node> rewriteVectorTree(ref<SyntaxTree> tree, ref<Node> vectorStuff,
 	case	AND:
 	case	OR:
 	case	EXCLUSIVE_OR:
+	case	LEFT_SHIFT:
+	case	RIGHT_SHIFT:
+	case	UNSIGNED_RIGHT_SHIFT:
 		b = ref<Binary>(vectorStuff);
 		ref<Node> left = rewriteVectorTree(tree, b.left(), iterator, vectorSize, compileContext);
 		right = rewriteVectorTree(tree, b.right(), iterator, vectorSize, compileContext);
@@ -220,6 +223,9 @@ TraverseAction extractLvalues(ref<Node> n, address data) {
 	case	AND:
 	case	OR:
 	case	EXCLUSIVE_OR:
+	case	LEFT_SHIFT:
+	case	RIGHT_SHIFT:
+	case	UNSIGNED_RIGHT_SHIFT:
 	case	NEGATE:
 	case	UNARY_PLUS:
 	case	BIT_COMPLEMENT:
