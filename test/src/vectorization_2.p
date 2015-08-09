@@ -112,6 +112,8 @@ shift.append(0);
 shift.append(2);
 shift.append(3);
 
+d.clear();
+
 d = a >> shift;
 
 assert(d.length() == 4);
@@ -120,3 +122,25 @@ assert(d[0] == 50);
 assert(d[1] == 45);
 assert(d[2] == (-23503 >> 2));
 assert(d[3] == 12);
+
+d.clear();
+
+d = a >>> shift;
+
+assert(d.length() == 4);
+printf("%d %d %d %d\n", d[0], d[1], d[2], d[3]);
+assert(d[0] == 50);
+assert(d[1] == 45);
+assert(d[2] == (-23503 >>> 2));
+assert(d[3] == 12);
+
+d.clear();
+
+d = a << shift;
+
+assert(d.length() == 4);
+printf("%d %d %d %d\n", d[0], d[1], d[2], d[3]);
+assert(d[0] == 200);
+assert(d[1] == 45);
+assert(d[2] == (-23503 << 2));
+assert(d[3] == 800);

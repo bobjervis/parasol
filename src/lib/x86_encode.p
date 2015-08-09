@@ -1187,7 +1187,7 @@ class X86_64Encoder extends Target {
 		case	SAL:
 			switch (family) {
 			case	SIGNED_32:
-				emitRex(family, null, dest, R.NO_REG);
+				emitRex(family, null, R.NO_REG, dest);
 				emit(0xd3);
 				modRM(3, 4, rmValues[dest]);
 				return;
@@ -1201,7 +1201,7 @@ class X86_64Encoder extends Target {
 		case	SHR:
 			switch (family) {
 			case	SIGNED_32:
-				emitRex(family, null, dest, R.NO_REG);
+				emitRex(family, null, R.NO_REG, dest);
 				emit(0xd3);
 				modRM(3, 5, rmValues[dest]);
 				return;
