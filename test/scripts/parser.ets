@@ -340,6 +340,7 @@ expression() { ~a }
 expression() { !a }
 expression() { &a }
 expression() { *a }
+expression() { +=a }
 expression() { ++a }
 expression() { --a }
 expression() { new a }
@@ -357,7 +358,6 @@ expression(expect: fail, message: EXPECTING_TERM) { >>a }
 expression(expect: fail, message: EXPECTING_TERM) { >>>a }
 expression(expect: fail, message: EXPECTING_TERM) { ..a }
 expression(expect: fail, message: EXPECTING_TERM) { =a }
-expression(expect: fail, message: EXPECTING_TERM) { +=a }
 expression(expect: fail, message: EXPECTING_TERM) { -=a }
 expression(expect: fail, message: EXPECTING_TERM) { *=a }
 expression(expect: fail, message: EXPECTING_TERM) { /=a }

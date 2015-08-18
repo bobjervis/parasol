@@ -896,6 +896,15 @@ class Scope {
 		return false;
 	}
 
+	public boolean isInTemplateFunction() {
+		if (_storageClass != StorageClass.AUTO)
+			return false;
+		ref<Type> type = enclosingClassType();
+		if (type == null)
+			return false;
+		return type.class == TemplateInstanceType;
+	}
+	
 	public ref<Type> enclosingClassType() {
 		ref<Scope> scope = this;
 		while (scope != null && scope.storageClass() != StorageClass.MEMBER)
@@ -1030,6 +1039,15 @@ class Scope {
 			}
 		}
 		return maxStorage;
+	}
+
+	public void assignTypesForAuto(ref<CompileContext> compileContext) {
+		for (int i = 0; i < _enclosed.length(); i++)
+			if (_enclosed[i].storageClass() == StorageClass.AUTO)
+				compileContext.assignTypesForAuto(_enclosed[i]);
+		// How about this case for vectorization:
+		// if (_enclosed.storageClass() == StorageClass.AUTO)
+		//	compileContext.assign(_enclosed);
 	}
 }
 

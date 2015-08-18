@@ -521,7 +521,7 @@ class CompileContext {
 	public void assignTypes() {
 		for (int i = 0; i < _arena.scopes().length(); i++) {
 			_current = _arena.scopes()[i];
-			if (_current.definition() != null) // && !_current.isInTemplateInstance())
+			if (_current.definition() != null && !_current.isInTemplateFunction())
 				_current.definition().assignTypesAtScope(this);
 		}
 		for (int i = 0; i < _arena.scopes().length(); i++) {
@@ -545,6 +545,14 @@ class CompileContext {
 		}
  	}
 
+	public void assignTypesForAuto(ref<Scope> scope) {
+		_current = scope;
+		if (_current.definition() != null && _current.definition().type == null) {
+			_current.definition().assignTypesAtScope(this);
+			_current.assignTypesForAuto(this);
+		}
+	}
+	
 	public void assignTypes(ref<Scope> scope, ref<Node> n) {
 		ref<Scope> outer = _current;
 		_current = scope;

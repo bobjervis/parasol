@@ -51,6 +51,7 @@ run(filename: complex_subscript.p)
 
 run(filename: vectorization_1.p)
 run(filename: vectorization_2.p)
+//run(filename: vectorization_3.p)
 run(filename: call_lots_o_params.p)
 run(filename: pre_decr_subscript.p)
 run(filename: covariant_return_override.p)
@@ -96,6 +97,7 @@ run(filename: func_obj_ops.p)
 run(filename: map_class_ops.p)
 run(filename: vector_class_ops.p)
 run(filename: static_members.p)
+run(filename: template_unused_method.p)
 run(filename: template_ops.p)
 run(filename: pointer_ops.p)
 run(filename: hello.p)
@@ -1197,6 +1199,7 @@ expression() { !a }
 expression() { &a }
 expression() { *a }
 expression() { ++a }
+expression() { +=a }
 expression() { --a }
 expression() { new a }
 expression() { delete a }
@@ -1213,7 +1216,6 @@ expression(expect: fail, message: EXPECTING_TERM) { >>a }
 expression(expect: fail, message: EXPECTING_TERM) { >>>a }
 expression(expect: fail, message: EXPECTING_TERM) { ..a }
 expression(expect: fail, message: EXPECTING_TERM) { =a }
-expression(expect: fail, message: EXPECTING_TERM) { +=a }
 expression(expect: fail, message: EXPECTING_TERM) { -=a }
 expression(expect: fail, message: EXPECTING_TERM) { *=a }
 expression(expect: fail, message: EXPECTING_TERM) { /=a }

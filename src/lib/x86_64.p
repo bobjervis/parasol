@@ -407,9 +407,19 @@ public class X86_64 extends X86_64AssignTemps {
 			if (node == null) {
 				func.print(0);
 				assert(false);
-			} else if (node.type != null) {
+			} else {
 				int initialVariableCount = compileContext.variableCount();
 				ref<FileStat> file = scope.file();
+				
+				// For template functions, this assigns any missing types info:
+				
+				if (node.type == null) {
+					parameterScope.assignTypesForAuto(compileContext);
+					if (node.type == null) {
+						node.print(0);
+						assert(false);
+					}
+				}
 				
 				// All function/method body folding is done here:
 				
@@ -425,9 +435,6 @@ public class X86_64 extends X86_64AssignTemps {
 				compileContext.setCurrent(outer);
 				compileContext.resetVariables(initialVariableCount);
 				_stackLocalVariables = initialVariableCount;
-			} else {
-				node.print(0);
-				assert(false);
 			}
 			closeCodeSegment(CC.NOP, null);
 			insertPreamble();

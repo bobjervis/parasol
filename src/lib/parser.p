@@ -878,6 +878,12 @@ class Parser {
 				return x;
 			return _tree.newUnary(Operator.NEGATE, x, location);
 
+		case	PLUS_EQ:
+			x = parseTerm(false);
+			if (x.op() == Operator.SYNTAX_ERROR)
+				return x;
+			return _tree.newUnary(Operator.ADD_REDUCE, x, location);
+			
 		case	TILDE:
 			x = parseTerm(false);
 			if (x.op() == Operator.SYNTAX_ERROR)

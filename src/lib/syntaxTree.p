@@ -41,6 +41,7 @@ enum Operator {
 	AND_ASSIGN,
 	OR_ASSIGN,
 	EXCLUSIVE_OR_ASSIGN,
+	ADD_REDUCE,
 	EQUALITY,
 	IDENTITY,
 	LESS,
@@ -6767,6 +6768,7 @@ class OperatorMap {
 		name[Operator.ENUM_DECLARATION] = "ENUM_DECLARATION";
 		name[Operator.INITIALIZE] = "INITIALIZE";
 		name[Operator.ABSTRACT] = "ABSTRACT";
+		name[Operator.ADD_REDUCE] = "ADD_REDUCE";
 		name[Operator.ANNOTATION] = "ANNOTATION";
 		name[Operator.ANNOTATED] = "ANNOTATED";
 		name[Operator.CLASS_TYPE] = "CLASS_TYPE";
@@ -6790,6 +6792,7 @@ class OperatorMap {
 		name[Operator.VARIABLE] = "VARIABLE";
 		typeNotAllowed[Operator.ADD] = MessageId.INVALID_ADD;
 		typeNotAllowed[Operator.ADD_ASSIGN] = MessageId.INVALID_ADD;
+		typeNotAllowed[Operator.ADD_REDUCE] = MessageId.INVALID_ADD;
 		typeNotAllowed[Operator.AND] = MessageId.INVALID_AND;
 		typeNotAllowed[Operator.AND_ASSIGN] = MessageId.INVALID_AND;
 		typeNotAllowed[Operator.ASSIGN] = MessageId.MAX_MESSAGE;

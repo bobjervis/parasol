@@ -272,6 +272,14 @@ class vector<class E, class I> {
 	
 	public void sort(boolean ascending) {
 	}
+	
+//	public E addReduce() {
+//		E sum = E(0);
+		
+//		for (I i = I(0); int(i) < int(_length); i = I(int(i) + 1))
+//			sum = E(int(sum) + int(_data[int(i)]));
+//		return sum;
+//	}
 }
 /*
 class vector<class E, enum I> {
