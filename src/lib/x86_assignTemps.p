@@ -53,6 +53,9 @@ class X86_64AssignTemps extends X86_64AddressModes {
 //		printf(">>\n");
 		int depth = tempStackDepth();
 		switch (node.op()) {
+		case	FOR:
+			return;
+			
 		case	CALL:
 			assignRegisterTemp(node, longMask, compileContext);
 			f().r.cleanupTemps(node, depth);

@@ -2534,8 +2534,8 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 
 	private void generateExpressionStatement(ref<Node> node, ref<CompileContext> compileContext) {
-		if (node.type == null) {
-			unfinished(node, "expression type == null", compileContext);
+		if (node.deferGeneration()) {
+			// TODO: make this generate a runtime exception
 			return;
 		}
 		emitSourceLocation(compileContext.current().file(), node.location());

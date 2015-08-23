@@ -5977,6 +5977,9 @@ class Unary extends Node {
 			}
 			break;
 			
+		case	ADD_REDUCE:
+			return reduce(op(), tree, _operand, compileContext);
+			
 		case	EXPRESSION:
 			_operand = foldVoidContext(_operand, tree, compileContext);
 			if (_operand.op() == Operator.IF)
@@ -6068,6 +6071,34 @@ class Unary extends Node {
 			}
 			break;
 
+		case	ADD_REDUCE:
+			compileContext.assignTypes(_operand);
+			if (_operand.deferAnalysis()) {
+				type = _operand.type;
+				break;
+			}
+			if (_operand.type.family() != TypeFamily.SHAPE) {
+				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				type = compileContext.errorType();
+				break;
+			}
+			type = _operand.type.scalarType(compileContext);
+			switch (type.family()) {
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	SIGNED_32:
+			case	SIGNED_64:
+			case	FLOAT_32:
+			case	FLOAT_64:
+				break;
+
+			default:
+				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				type = compileContext.errorType();
+			}
+			break;
+			
 		case	NEGATE:
 		case	UNARY_PLUS:
 			compileContext.assignTypes(_operand);

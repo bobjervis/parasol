@@ -246,6 +246,7 @@ class CompileContext {
 		case	ABSTRACT:
 		case	ADD:
 		case	ADD_ASSIGN:
+		case	ADD_REDUCE:
 		case	ADDRESS:
 		case	AND:
 		case	AND_ASSIGN:

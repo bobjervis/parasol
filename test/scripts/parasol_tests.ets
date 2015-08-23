@@ -51,7 +51,7 @@ run(filename: complex_subscript.p)
 
 run(filename: vectorization_1.p)
 run(filename: vectorization_2.p)
-//run(filename: vectorization_3.p)
+run(filename: vectorization_3.p)
 run(filename: call_lots_o_params.p)
 run(filename: pre_decr_subscript.p)
 run(filename: covariant_return_override.p)

@@ -60,6 +60,9 @@ class X86_64AddressModes extends X86_64Encoder {
 		int modeComplexity = MC_FULL;
 		int nClass = nodeClasses[node.op()];
 		switch (node.op()) {
+		case	FOR:
+			break;
+			
 		case	CALL:
 			ref<Call> call = ref<Call>(node);
 			if (!call.folded()) {

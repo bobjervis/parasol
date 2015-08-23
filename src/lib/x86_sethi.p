@@ -225,6 +225,9 @@ void sethiUllman(ref<Node> node, ref<CompileContext> compileContext, ref<Target>
 		node.sethi = 0;
 		break;
 		
+	case	FOR:
+		break;
+		
 	default:
 		node.print(0);
 		assert(false);
@@ -247,6 +250,7 @@ private int regneeds(ref<Node> node, ref<CompileContext> compileContext, ref<Tar
 	case	DELETE:
 		return CALL_REG_USE;
 		
+	case	FOR:
 	case	BYTES:
 	case	THIS:
 	case	SUPER:

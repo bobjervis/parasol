@@ -29,6 +29,86 @@ boolean shouldVectorize(ref<Node> node) {
 	return true;
 }
 
+ref<Node> reduce(Operator op, ref<SyntaxTree> tree, ref<Node> vectorExpression, ref<CompileContext> compileContext) {
+	ref<Variable> accumulator = compileContext.newVariable(vectorExpression.type.elementType(compileContext));
+	ref<Variable> iterator = compileContext.newVariable(vectorExpression.type.indexType(compileContext));
+	ref<Reference> def = tree.newReference(iterator, true, vectorExpression.location());
+	CompileString init("0");
+	ref<Node> start = tree.newConstant(Operator.INTEGER, init, vectorExpression.location());
+	start = tree.newBinary(Operator.ASSIGN, def, start, vectorExpression.location());
+	// test should really be: lognest of contributing lvalues, so lvalues need to be calculated (if not
+	// simple, or cloned if simple) - then the largest is selected.
+//	vectorExpression.print(0);
+	ExtractLvaluesClosure closure;
+	closure.tree = tree;
+	vectorExpression.traverse(Node.Traversal.PRE_ORDER, extractLvalues, &closure);
+//	printf("Extracted lvalues:\n");
+//	for (int i = 0; +i < +closure.lvalues.length(); i++) {
+//		closure.lvalues[i].print(+4);
+//	}
+//	printf("Extracted operands:\n");
+//	for (int i = 0; +i < +closure.operands.length(); i++) {
+//		closure.operands[i].print(+4);
+//	}
+	ref<Variable> vectorSize = compileContext.newVariable(def.type);
+	if (closure.operands.length() > 0) {
+		ref<Reference> vsDef = tree.newReference(vectorSize, true, vectorExpression.location());
+		ref<Node> opnd = closure.operands[0];
+		if (opnd.isSimpleLvalue()) {
+			opnd = opnd.clone(tree);
+			opnd.type = vsDef.type;
+			opnd = tree.newBinary(Operator.ASSIGN, vsDef, opnd, vectorExpression.location());
+			start = tree.newBinary(Operator.SEQUENCE, start, opnd, vectorExpression.location());
+		} else {
+			printf("Operand 0 too complex\n");
+			vectorExpression.print(0);
+			assert(false);
+		}
+		for (int i = 1; i < closure.operands.length(); i++) {
+			opnd = closure.operands[i];
+			if (opnd.isSimpleLvalue()) {
+				ref<Node> opnd2  = opnd.clone(tree);
+				opnd2.type = vsDef.type;
+				opnd = opnd.clone(tree);
+				opnd.type = vsDef.type;
+				ref<Node> comp = tree.newBinary(Operator.LESS, vsDef, opnd, vectorExpression.location());
+				ref<Node> vsdef2 = tree.newReference(vectorSize, true, vectorExpression.location());
+				opnd2 = tree.newBinary(Operator.ASSIGN, vsdef2, opnd2, vectorExpression.location());
+				ref<Node> emp = tree.newLeaf(Operator.EMPTY, vectorExpression.location());
+				emp.type = vsDef.type;
+				comp = tree.newTernary(Operator.CONDITIONAL, comp, opnd2, emp, vectorExpression.location());
+				start = tree.newBinary(Operator.SEQUENCE, start, comp, vectorExpression.location());
+			} else {
+				printf("Operand %d too complex\n", i);
+				vectorExpression.print(0);
+				assert(false);
+			}
+		}
+	} else {
+		printf("Too few operands\n");
+		vectorExpression.print(0);
+		assert(false);
+	}
+	ref<Node> limit = tree.newReference(vectorSize, false, vectorExpression.location());
+	ref<Node> v  = tree.newReference(iterator, false, vectorExpression.location());
+	ref<Node> test = tree.newBinary(Operator.LESS, v, limit, vectorExpression.location());
+	ref<Reference> r = tree.newReference(iterator, false, vectorExpression.location());
+	ref<Node> increment = tree.newUnary(Operator.INCREMENT_BEFORE, r, vectorExpression.location());
+	
+	ref<Node> body = rewriteVectorTree(tree, vectorExpression, iterator, vectorSize, compileContext);
+	r = tree.newReference(accumulator, false, vectorExpression.location());
+	body = tree.newBinary(reduceToAssignment(op), r, body, vectorExpression.location());
+	body = tree.newUnary(Operator.EXPRESSION, body, vectorExpression.location());
+	
+	ref<Node> loop = tree.newFor(Operator.FOR, start, test, increment, body, vectorExpression.location());
+	r = tree.newReference(accumulator, false, vectorExpression.location());
+	loop = tree.newBinary(Operator.SEQUENCE, loop, r, vectorExpression.location());
+//	printf("Re-written loop:\n");
+//	loop.print(0);
+	compileContext.assignTypes(loop);
+	return loop.fold(tree, false, compileContext);
+}
+
 ref<Node> vectorize(ref<SyntaxTree> tree, ref<Node> vectorExpression, ref<CompileContext> compileContext) {
 	ref<Variable> iterator = compileContext.newVariable(vectorExpression.type.indexType(compileContext));
 	ref<Reference> def = tree.newReference(iterator, true, vectorExpression.location());
@@ -239,4 +319,13 @@ TraverseAction extractLvalues(ref<Node> n, address data) {
 	return TraverseAction.CONTINUE_TRAVERSAL;
 }
 
-
+private Operator reduceToAssignment(Operator reduce) {
+	switch (reduce) {
+	case	ADD_REDUCE:
+		return Operator.ADD_ASSIGN;
+		
+	default:
+		assert(false);
+	}
+	return Operator.SEQUENCE;
+}
