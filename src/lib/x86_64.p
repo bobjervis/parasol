@@ -1834,12 +1834,19 @@ public class X86_64 extends X86_64AssignTemps {
 			} else
 				generateSubscript(b, compileContext);
 			if (node.register != 0) {
-				R dest = R(int(node.register));
-				node.register = 0;
-				inst(X86.MOV, dest, node, compileContext);
-				node.register = byte(int(dest));
+				switch (node.type.family()) {
+				case	FLOAT_32:
+					generateLoad(X86.MOVSS, node, compileContext);
+					break;
+					
+				case	FLOAT_64:
+					generateLoad(X86.MOVSD, node, compileContext);
+					break;
+					
+				default:
+					generateLoad(X86.MOV, node, compileContext);
+				}
 			}
- 
 			break;
 			
 		case	BIT_COMPLEMENT:

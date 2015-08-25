@@ -547,11 +547,13 @@ class CompileContext {
  	}
 
 	public void assignTypesForAuto(ref<Scope> scope) {
+		ref<Scope> outer = _current;
 		_current = scope;
 		if (_current.definition() != null && _current.definition().type == null) {
 			_current.definition().assignTypesAtScope(this);
 			_current.assignTypesForAuto(this);
 		}
+		_current = outer;
 	}
 	
 	public void assignTypes(ref<Scope> scope, ref<Node> n) {

@@ -36,11 +36,11 @@ public class LinearRegression<class T> {
 	
 	public void ordinaryLeastSquares() {
 		int n = _y.length();
-		T xSum = 1;//+=_x;
-		T ySum = 1;//+=_y;
-		T xySum = 1;//+=(_x * _y);
+		T xSum = +=_x;
+		T ySum = +=_y;
+		T xySum = +=(_x * _y);
 		T xSumYSum = xSum * ySum;
-		T x2Sum = 1;//+=(_x * _x);
+		T x2Sum = +=(_x * _x);
 		T xBar = xSum / n;
 		T yBar = ySum / n;
 		T xyBar = xSumYSum / n;

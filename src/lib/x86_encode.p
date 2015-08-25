@@ -1235,6 +1235,14 @@ class X86_64Encoder extends Target {
 			modRM(3, rmValues[dest], rmValues[src]);
 			return;
 			
+		case	CVTSS2SD:
+			emit(0xf3);
+			emitRex(TypeFamily.SIGNED_32, null, dest, src);
+			emit(0x0f);
+			emit(0x5a);
+			modRM(3, rmValues[dest], rmValues[src]);
+			return;
+
 		case	CVTSD2SS:
 			emit(0xf2);
 			emitRex(TypeFamily.SIGNED_32, null, dest, src);

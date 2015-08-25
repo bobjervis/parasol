@@ -1,5 +1,6 @@
 // Advanced library executions tests
 
+//run(filename: linearRegressionTests.p)
 run(filename: cmdLine_ops.p, exitCode: 7)
 run(filename: cmdLine_ops.p, arguments: "x TEST-STRING-2")
 run(filename: cmdLine_ops.p, arguments: "x anything-else", exitCode: 2)
