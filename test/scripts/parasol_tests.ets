@@ -1,6 +1,6 @@
 // Advanced library executions tests
 
-//run(filename: linearRegressionTests.p)
+run(filename: linearRegressionTests.p)
 run(filename: cmdLine_ops.p, exitCode: 7)
 run(filename: cmdLine_ops.p, arguments: "x TEST-STRING-2")
 run(filename: cmdLine_ops.p, arguments: "x anything-else", exitCode: 2)
@@ -50,6 +50,7 @@ run(filename: complex_subscript.p)
 
 // Basic runtime execution tests
 
+run(filename: template_scope/template_scope.p, importPath: ^/test/src/template_scope)
 run(filename: vectorization_1.p)
 run(filename: vectorization_2.p)
 run(filename: vectorization_3.p)

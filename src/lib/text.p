@@ -793,9 +793,15 @@ class string {
 									append('+');
 								else if (leadingSpaceForPositive)
 									append(' ');
-								append(result, decimalPoint);
+								if (decimalPoint > 0)
+									append(result, decimalPoint);
 								if (precision > 0) {
 									append('.');
+									if (decimalPoint < 0) {
+										for (int i = -decimalPoint; i > 0 && precision > 0; i--, precision--)
+											append('0');
+										decimalPoint = 0;
+									}
 									append(result + decimalPoint, precision);
 								}
 								while (actualLength < width) {

@@ -1,4 +1,5 @@
 import parasol:math.regression;
+import parasol:math;
 
 regression.LinearRegression<float> r;
 
@@ -24,5 +25,7 @@ float[] error = r.error();
 
 assert(error.length() == 3);
 
-for (int i = 0; i < error.length(); i++)
+for (int i = 0; i < error.length(); i++) {
 	printf("Error[%d] = %f\n", i, error[i]);
+	assert(math.abs(error[i]) < 0.000001);
+}

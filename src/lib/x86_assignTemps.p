@@ -432,7 +432,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	FLOAT_32:
 			case	FLOAT_64:
 				assignBinaryOperands(b, regMask, floatMask, compileContext);
-				node.register = byte(int(f().r.latestResult(b.left())));
+				node.register = byte(f().r.latestResult(b.left()));
 				break;
 				
 			default:
@@ -495,6 +495,12 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			
 		case	ADD:
 		case	SUBTRACT:
+			if (node.type.isFloat()) {
+				b = ref<Binary>(node);
+				assignBinaryOperands(b, regMask, floatMask, compileContext);
+				node.register = byte(f().r.latestResult(b.left()));
+				break;
+			}
 			switch (node.type.family()) {
 			case	CLASS:
 				printf("\n>> non pointer type\n");
@@ -507,7 +513,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	EXCLUSIVE_OR:
 			b = ref<Binary>(node);
 			assignBinaryOperands(b, regMask, longMask, compileContext);
-			node.register = byte(int(f().r.latestResult(b.left())));
+			node.register = byte(f().r.latestResult(b.left()));
 			break;
 
 		case	LEFT_SHIFT_ASSIGN:

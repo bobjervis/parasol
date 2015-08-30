@@ -25,3 +25,18 @@ b = +=a;
 
 assert(b == 36);
 
+float[] indep, dep;
+
+indep.append(1.0f);
+indep.append(2.0f);
+indep.append(3.0f);
+
+dep.append(0.5f);
+dep.append(0.7f);
+dep.append(0.9f);
+
+float sum = +=(indep * dep);
+
+printf("sum = %g\n", sum);
+
+assert(sum == (1.0f*0.5f)+(2.0f*0.7f)+(3.0f*0.9f));

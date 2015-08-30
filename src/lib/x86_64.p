@@ -1271,11 +1271,11 @@ public class X86_64 extends X86_64AssignTemps {
 				break;
 				
 			case	FLOAT_32:
-				inst(X86.DIVSS, R(int(b.left().register)), b.right(), compileContext);
+				inst(X86.DIVSS, R(b.left().register), b.right(), compileContext);
 				break;
 				
 			case	FLOAT_64:
-				inst(X86.DIVSD, R(int(b.left().register)), b.right(), compileContext);
+				inst(X86.DIVSD, R(b.left().register), b.right(), compileContext);
 				break;
 				
 			default:

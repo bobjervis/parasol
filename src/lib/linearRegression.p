@@ -39,17 +39,12 @@ public class LinearRegression<class T> {
 		T xSum = +=_x;
 		T ySum = +=_y;
 		T xySum = +=(_x * _y);
-		T xSumYSum = xSum * ySum;
 		T x2Sum = +=(_x * _x);
-		T xBar = xSum / n;
-		T yBar = ySum / n;
-		T xyBar = xSumYSum / n;
-		T x2Bar = x2Sum / n;
-		T num = xyBar - xBar * yBar;
-		T denom = x2Bar - xBar * xBar;
+		T num = xySum - (xSum * ySum) / n;
+		T denom = x2Sum - (xSum * xSum) / n;
 		_beta = num / denom;
-		_alpha = yBar - _beta * xBar;
-		_error = _y - _alpha - _beta * _x;
+		_alpha = (ySum - _beta * xSum) / n;
+		_error = _y - (_alpha + _beta * _x);
 	}
 	
 	public T alpha() {

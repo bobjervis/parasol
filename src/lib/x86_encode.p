@@ -1067,11 +1067,82 @@ class X86_64Encoder extends Target {
 			assert(false);
 		}
 	}
-	
+
+	void inst(X86 instruction, TypeFamily family, R dest, R reg, int offset) {
+		switch (instruction) {
+		case	MOVSD:
+			emit(0xf2);
+			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
+			emit(0x0f);
+			emit(0x10);
+			if (dest == R.RSP) {
+				if (offset >= -128 || offset <= 127) {
+					modRM(1, rmValues[dest], 4);
+					sib(0, 4, 4);
+					emit(byte(offset));
+				} else {
+					modRM(2, rmValues[dest], 4);
+					sib(0, 4, 4);
+					emitInt(offset);
+				}
+			} else {
+				printf("%s, %s, %s, %d, %s\n", opcodeNames[instruction], typeFamilyMap.name[family], regNames[dest], offset, regNames[reg]);
+				assert(false);
+			}
+			break;
+			
+		case	MOVSS:
+			emit(0xf3);
+			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
+			emit(0x0f);
+			emit(0x10);
+			if (reg == R.RSP) {
+				if (offset >= -128 || offset <= 127) {
+					modRM(1, rmValues[dest], 4);
+					sib(0, 4, 4);
+					emit(byte(offset));
+				} else {
+					modRM(2, rmValues[dest], 4);
+					sib(0, 4, 4);
+					emitInt(offset);
+				}
+			} else {
+				printf("%s, %s, %s, %d, %s\n", opcodeNames[instruction], typeFamilyMap.name[family], regNames[dest], offset, regNames[reg]);
+				assert(false);
+			}
+			break;
+			
+		default:
+			printf("%s, %s, %s, %s, %d\n", opcodeNames[instruction], typeFamilyMap.name[family], regNames[dest], regNames[reg], offset);
+			assert(false);
+		}
+	}
+
 	void inst(X86 instruction, TypeFamily family, R dest, int offset, R reg) {
 		switch (instruction) {
 		case	MOVSD:
 			emit(0xf2);
+			emitRex(TypeFamily.FLOAT_64, null, reg, R.NO_REG);
+			emit(0x0f);
+			emit(0x11);
+			if (dest == R.RSP) {
+				if (offset >= -128 || offset <= 127) {
+					modRM(1, rmValues[reg], 4);
+					sib(0, 4, 4);
+					emit(byte(offset));
+				} else {
+					modRM(2, rmValues[reg], 4);
+					sib(0, 4, 4);
+					emitInt(offset);
+				}
+			} else {
+				printf("%s, %s, %s, %d, %s\n", opcodeNames[instruction], typeFamilyMap.name[family], regNames[dest], offset, regNames[reg]);
+				assert(false);
+			}
+			break;
+			
+		case	MOVSS:
+			emit(0xf3);
 			emitRex(TypeFamily.FLOAT_64, null, reg, R.NO_REG);
 			emit(0x0f);
 			emit(0x11);

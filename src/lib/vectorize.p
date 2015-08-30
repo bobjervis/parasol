@@ -220,6 +220,8 @@ private ref<Node> rewriteVectorTree(ref<SyntaxTree> tree, ref<Node> vectorStuff,
 		ref<NodeList> args = tree.newNodeList(index);
 		return tree.newCall(oi, null,  method, args, vectorStuff.location());
 	}
+	if (vectorStuff.isLvalue())
+		return vectorStuff;
 	switch (vectorStuff.op()) {
 	case	ASSIGN:
 		CompileString elem("setModulo");
@@ -277,14 +279,14 @@ private class ExtractLvaluesClosure {
 }
 
 TraverseAction extractLvalues(ref<Node> n, address data) {
+	if (n.type.family() != TypeFamily.SHAPE)
+		return TraverseAction.SKIP_CHILDREN;
 	if (n.isLvalue()) {
 		ref<ExtractLvaluesClosure> closure = ref<ExtractLvaluesClosure>(data);
 		closure.operands.append(n);
 		n.flags |= VECTOR_OPERAND;
 		return TraverseAction.SKIP_CHILDREN;
 	}
-	if (n.type.family() != TypeFamily.SHAPE)
-		return TraverseAction.SKIP_CHILDREN;
 
 	switch (n.op()) {
 	case	ASSIGN:

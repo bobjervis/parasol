@@ -29,6 +29,20 @@ long abs(long x) {
 		return x;
 }
 
+float abs(float x) {
+	if (x < 0)
+		return -x;
+	else
+		return x;
+}
+
+double abs(double x) {
+	if (x < 0)
+		return -x;
+	else
+		return x;
+}
+
 int min(int x, int y) {
 	if (x < y)
 		return x;

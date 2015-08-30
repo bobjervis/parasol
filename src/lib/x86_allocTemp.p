@@ -420,7 +420,40 @@ class RegisterState {
 				return;
 			switch (_spills.spillKind) {
 			case	PUSH:
-				target.inst(X86.PUSH, TypeFamily.SIGNED_64, R(int(_spills.affected.register)));
+				switch (_spills.affected.type.family()) {
+				case	UNSIGNED_8:
+				case	UNSIGNED_16:
+				case	UNSIGNED_32:
+				case	SIGNED_32:
+				case	SIGNED_64:
+				case	STRING:
+				case	ENUM:
+				case	ADDRESS:
+				case	REF:
+				case	POINTER:
+				case	CLASS:
+				case	BOOLEAN:
+				case	VOID:
+					target.inst(X86.PUSH, TypeFamily.SIGNED_64, R(_spills.affected.register));
+					break;
+					
+				case	FLOAT_32:
+					target.inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, 8);
+					target.inst(X86.MOVSS, TypeFamily.SIGNED_32, R.RSP, 0, R(_spills.affected.register));
+					break;
+					
+				case	FLOAT_64:
+					target.inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, 8);
+					target.inst(X86.MOVSD, TypeFamily.SIGNED_64, R.RSP, 0, R(_spills.affected.register));
+					break;
+					
+				default:
+					_spills.print();
+					printf("Push: ");
+					_spills.affected.type.print();
+					printf("\n");
+					assert(false);
+				}
 				_spills.affected.register = 0;
 				break;
 
@@ -459,7 +492,40 @@ class RegisterState {
 				break;
 				
 			case	POP:
-				target.inst(X86.POP, TypeFamily.SIGNED_64, _spills.newRegister);
+				switch (_spills.affected.type.family()) {
+				case	UNSIGNED_8:
+				case	UNSIGNED_16:
+				case	UNSIGNED_32:
+				case	SIGNED_32:
+				case	SIGNED_64:
+				case	STRING:
+				case	ENUM:
+				case	ADDRESS:
+				case	REF:
+				case	POINTER:
+				case	CLASS:
+				case	BOOLEAN:
+				case	VOID:
+					target.inst(X86.POP, TypeFamily.SIGNED_64, _spills.newRegister);
+					break;
+					
+				case	FLOAT_32:
+					target.inst(X86.MOVSS, TypeFamily.SIGNED_32, _spills.newRegister, R.RSP, 0);
+					target.inst(X86.ADD, TypeFamily.SIGNED_64, R.RSP, 8);
+					break;
+					
+				case	FLOAT_64:
+					target.inst(X86.MOVSD, TypeFamily.SIGNED_64, _spills.newRegister, R.RSP, 0);
+					target.inst(X86.ADD, TypeFamily.SIGNED_64, R.RSP, 8);
+					break;
+					
+				default:
+					_spills.print();
+					printf("Pop: ");
+					_spills.affected.type.print();
+					printf("\n");
+					assert(false);
+				}
 				_spills.affected.register = byte(int(_spills.newRegister));
 				break;
 				

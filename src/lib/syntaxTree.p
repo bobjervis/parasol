@@ -1310,7 +1310,6 @@ class Binary extends Node {
 			case	FLOAT_32:
 			case	FLOAT_64:
 			case	VAR:
-				type = _left.type;
 				break;
 
 			case	BOOLEAN:
@@ -1415,7 +1414,6 @@ class Binary extends Node {
 			case	UNSIGNED_32:
 			case	BOOLEAN:
 			case	VAR:
-				type = _left.type;
 				break;
 
 			default:
@@ -1502,7 +1500,6 @@ class Binary extends Node {
 			case	VAR:
 			case	FLOAT_32:
 			case	FLOAT_64:
-				type = _left.type;
 				break;
 
 			default:
@@ -1519,7 +1516,6 @@ class Binary extends Node {
 			case	SIGNED_64:
 			case	UNSIGNED_32:
 			case	VAR:
-				type = _left.type;
 				break;
 
 			case	BOOLEAN:
@@ -1691,7 +1687,6 @@ class Binary extends Node {
 			case	FLOAT_32:
 			case	FLOAT_64:
 			case	VAR:
-				type = _left.type;
 				break;
 
 			case	POINTER:
@@ -4022,7 +4017,7 @@ class Identifier extends Node {
 			_symbol = o.addInstance(visibility, isStatic, annotations, this, templateScope, compileContext);
 			if (_symbol == null)
 				return;
-			ref<Type> t = compileContext.makeTypedef(compileContext.pool().newTemplateType(_symbol, templateDef, compileContext.definingFile, o, templateScope));
+			ref<Type> t = compileContext.makeTypedef(compileContext.pool().newTemplateType(_symbol, templateDef, templateScope.file(), o, templateScope));
 			_symbol.bindType(t);
 		} else
 			add(MessageId.OVERLOAD_DISALLOWED, compileContext.pool(), _value);
@@ -7056,14 +7051,20 @@ boolean balancePair(ref<Node> parent, ref<ref<Node>> leftp, ref<ref<Node>> right
 			if (gcb != null) {
 				*leftp = left.coerce(compileContext.tree(), gcb, false, compileContext);
 				*rightp = right.coerce(compileContext.tree(), gcb, false, compileContext);
-			} else {
+				
+				// If the scalar-types agree, one must be a shape the other a scalar.
+				
+			} else if (!left.type.scalarType(compileContext).equals(right.type.scalarType(compileContext))) {
 				parent.add(MessageId.TYPE_MISMATCH, compileContext.pool());
 				parent.type = compileContext.errorType();
 				return false;
 			}
 		}
 	}
-	parent.type = left.type;
+	if ((*rightp).type.family() == TypeFamily.SHAPE)
+		parent.type = (*rightp).type;
+	else
+		parent.type = (*leftp).type;
 	return true;
 }
 
