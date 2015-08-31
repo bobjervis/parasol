@@ -265,7 +265,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 //		printf("AssignRegisterTemp:\n");
 //		node.print(4);
 //		printf(">>\n");
-		if ((node.flags & ADDRESS_MODE) != 0) {
+		if ((node.nodeFlags & ADDRESS_MODE) != 0) {
 			assignLvalueTemps(node, compileContext);
 			return;
 		}
@@ -1066,7 +1066,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 	}
 	
 	private void ensureRegisterPlacement(ref<Node> where, ref<Node> affected, R reg) {
-		if ((affected.flags & ADDRESS_MODE) != 0)
+		if ((affected.nodeFlags & ADDRESS_MODE) != 0)
 			return;
 //		printf("ensure in %s:\n", regNames[reg]);
 //		affected.print(4);
@@ -1108,7 +1108,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			printf("After arguments cleanup:\n");
 			f().r.print();
 		}
-		if (call.type.family() == TypeFamily.VOID || (call.flags & PUSH_OUT_PARAMETER) != 0)
+		if (call.type.family() == TypeFamily.VOID || (call.nodeFlags & PUSH_OUT_PARAMETER) != 0)
 			call.register = byte(R.NO_REG);
 		else if (call.type.isFloat()) {
 			f().r.getreg(call, xmm0mask, xmm0mask);

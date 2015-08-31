@@ -204,7 +204,7 @@ ref<Node> vectorize(ref<SyntaxTree> tree, ref<Node> vectorExpression, ref<Compil
 }
 
 private ref<Node> rewriteVectorTree(ref<SyntaxTree> tree, ref<Node> vectorStuff, ref<Variable> iterator, ref<Variable> vectorSize, ref<CompileContext> compileContext) {
-	if ((vectorStuff.flags & VECTOR_OPERAND) != 0) {
+	if ((vectorStuff.nodeFlags & VECTOR_OPERAND) != 0) {
 		CompileString sub("getModulo");
 
 		ref<Node> index = tree.newReference(iterator, false, vectorStuff.location());
@@ -284,7 +284,7 @@ TraverseAction extractLvalues(ref<Node> n, address data) {
 	if (n.isLvalue()) {
 		ref<ExtractLvaluesClosure> closure = ref<ExtractLvaluesClosure>(data);
 		closure.operands.append(n);
-		n.flags |= VECTOR_OPERAND;
+		n.nodeFlags |= VECTOR_OPERAND;
 		return TraverseAction.SKIP_CHILDREN;
 	}
 
@@ -293,7 +293,7 @@ TraverseAction extractLvalues(ref<Node> n, address data) {
 		ref<Binary> b = ref<Binary>(n);
 		ref<ExtractLvaluesClosure> closure = ref<ExtractLvaluesClosure>(data);
 		closure.lvalues.append(b.left());
-		b.left().flags |= VECTOR_LVALUE;
+		b.left().nodeFlags |= VECTOR_LVALUE;
 		b.right().traverse(Node.Traversal.PRE_ORDER, extractLvalues, data);
 		return TraverseAction.SKIP_CHILDREN;
 		

@@ -115,11 +115,13 @@ enum Token {
 	EXTENDS,
 	FALSE,
 	FINAL,
+	FLAGS,
 	FOR,
 	FUNCTION,
 	IF,
 	IMPLEMENTS,
 	IMPORT,
+	LOCK,
 	NAMESPACE,
 	NEW,
 	NULL,
@@ -996,11 +998,13 @@ class Keywords {
 		_keywords["extends"] = Token.EXTENDS;
 		_keywords["false"] = Token.FALSE;
 		_keywords["final"] = Token.FINAL;
+		_keywords["flags"] = Token.FLAGS;
 		_keywords["for"] = Token.FOR;
 		_keywords["function"] = Token.FUNCTION;
 		_keywords["if"] = Token.IF;
 		_keywords["implements"] = Token.IMPLEMENTS;
 		_keywords["import"] = Token.IMPORT;
+		_keywords["lock"] = Token.LOCK;
 		_keywords["namespace"] = Token.NAMESPACE;
 		_keywords["new"] = Token.NEW;
 		_keywords["null"] = Token.NULL;
@@ -1062,125 +1066,127 @@ int binarySearchClosestGreater(ref<Location[]> list, Location key) {
 class Tokens {
 	public	Tokens() {
 		name.resize(Token.MAX_TOKEN);
-		name[Token.ERROR] = "T_ERROR";
-		name[Token.END_OF_STREAM] = "T_END_OF_STREAM";
+		name[Token.ERROR] = "ERROR";
+		name[Token.END_OF_STREAM] = "END_OF_STREAM";
 
 		// Each of these tokens has an associated 'value'
 
-		name[Token.IDENTIFIER] = "T_IDENTIFIER";
-		name[Token.INTEGER] = "T_INTEGER";
-		name[Token.FLOATING_POINT] = "T_FLOATING_POINT";
-		name[Token.CHARACTER] = "T_CHARACTER";
-		name[Token.STRING] = "T_STRING";
-		name[Token.ANNOTATION] = "T_ANNOTATION";
+		name[Token.IDENTIFIER] = "IDENTIFIER";
+		name[Token.INTEGER] = "INTEGER";
+		name[Token.FLOATING_POINT] = "FLOATING_POINT";
+		name[Token.CHARACTER] = "CHARACTER";
+		name[Token.STRING] = "STRING";
+		name[Token.ANNOTATION] = "ANNOTATION";
 
 		// Each of these are paired tokens:
 
-		name[Token.LEFT_PARENTHESIS] = "T_LEFT_PARENTHESIS";
-		name[Token.RIGHT_PARENTHESIS] = "T_RIGHT_PARENTHESIS";
-		name[Token.LEFT_CURLY] = "T_LEFT_CURLY";
-		name[Token.RIGHT_CURLY] = "T_RIGHT_CURLY";
-		name[Token.LEFT_SQUARE] = "T_LEFT_SQUARE";
-		name[Token.RIGHT_SQUARE] = "T_RIGHT_SQUARE";
-		name[Token.LEFT_ANGLE] = "T_LEFT_ANGLE";
-		name[Token.RIGHT_ANGLE] = "T_RIGHT_ANGLE";
-		name[Token.SP_LA] = "T_SP_LA";
-		name[Token.SP_RA] = "T_SP_RA";
+		name[Token.LEFT_PARENTHESIS] = "LEFT_PARENTHESIS";
+		name[Token.RIGHT_PARENTHESIS] = "RIGHT_PARENTHESIS";
+		name[Token.LEFT_CURLY] = "LEFT_CURLY";
+		name[Token.RIGHT_CURLY] = "RIGHT_CURLY";
+		name[Token.LEFT_SQUARE] = "LEFT_SQUARE";
+		name[Token.RIGHT_SQUARE] = "RIGHT_SQUARE";
+		name[Token.LEFT_ANGLE] = "LEFT_ANGLE";
+		name[Token.RIGHT_ANGLE] = "RIGHT_ANGLE";
+		name[Token.SP_LA] = "SP_LA";
+		name[Token.SP_RA] = "SP_RA";
 
 		// These are single character tokens:
 
-		name[Token.SEMI_COLON] = "T_SEMI_COLON";
-		name[Token.COLON] = "T_COLON";
-		name[Token.DOT] = "T_DOT";
-		name[Token.COMMA] = "T_COMMA";
-		name[Token.SLASH] = "T_SLASH";
-		name[Token.PERCENT] = "T_PERCENT";
-		name[Token.ASTERISK] = "T_ASTERISK";
-		name[Token.PLUS] = "T_PLUS";
-		name[Token.DASH] = "T_DASH";
-		name[Token.AMPERSAND] = "T_AMPERSAND";
-		name[Token.CARET] = "T_CARET";
-		name[Token.VERTICAL_BAR] = "T_VERTICAL_BAR";
-		name[Token.EXCLAMATION] = "T_EXCLAMATION";
-		name[Token.EQUALS] = "T_EQUALS";
-		name[Token.QUESTION_MARK] = "T_QUESTION_MARK";
-		name[Token.TILDE] = "T_TILDE";
+		name[Token.SEMI_COLON] = "SEMI_COLON";
+		name[Token.COLON] = "COLON";
+		name[Token.DOT] = "DOT";
+		name[Token.COMMA] = "COMMA";
+		name[Token.SLASH] = "SLASH";
+		name[Token.PERCENT] = "PERCENT";
+		name[Token.ASTERISK] = "ASTERISK";
+		name[Token.PLUS] = "PLUS";
+		name[Token.DASH] = "DASH";
+		name[Token.AMPERSAND] = "AMPERSAND";
+		name[Token.CARET] = "CARET";
+		name[Token.VERTICAL_BAR] = "VERTICAL_BAR";
+		name[Token.EXCLAMATION] = "EXCLAMATION";
+		name[Token.EQUALS] = "EQUALS";
+		name[Token.QUESTION_MARK] = "QUESTION_MARK";
+		name[Token.TILDE] = "TILDE";
 
 		// These are multi-character tokens:
 
-		name[Token.ELLIPSIS] = "T_ELLIPSIS";
-		name[Token.DOT_DOT] = "T_DOT_DOT";
-		name[Token.SLASH_EQ] = "T_SLASH_EQ";
-		name[Token.PERCENT_EQ] = "T_PERCENT_EQ";
-		name[Token.ASTERISK_EQ] = "T_ASTERISK_EQ";
-		name[Token.PLUS_EQ] = "T_PLUS_EQ";
-		name[Token.DASH_EQ] = "T_DASH_EQ";
-		name[Token.AMPERSAND_EQ] = "T_AMPERSAND_EQ";
-		name[Token.CARET_EQ] = "T_CARET_EQ";
-		name[Token.VERTICAL_BAR_EQ] = "T_VERTICAL_BAR_EQ";
-		name[Token.EQ_EQ] = "T_EQ_EQ";						// ==
-		name[Token.EQ_EQ_EQ] = "T_EQ_EQ_EQ";						// ===
-		name[Token.LA_EQ] = "T_LA_EQ";						// <=
-		name[Token.RA_EQ] = "T_RA_EQ";						// >=
-		name[Token.LA_RA] = "T_LA_RA";						// <>
-		name[Token.LA_RA_EQ] = "T_LA_RA_EQ";						// <>=
-		name[Token.EXCLAMATION_EQ] = "T_EXCLAMATION_EQ";				// !=
-		name[Token.EX_EQ_EQ] = "T_EX_EQ_EQ";						// !==
-		name[Token.EX_LA] = "T_EX_LA";						// !<
-		name[Token.EX_RA] = "T_EX_RA";						// !>
-		name[Token.EX_LA_EQ] = "T_EX_LA_EQ";						// !<=
-		name[Token.EX_RA_EQ] = "T_EX_RA_EQ";						// !>=
-		name[Token.EX_LA_RA] = "T_EX_LA_RA";						// !<>
-		name[Token.EX_LA_RA_EQ] = "T_EX_LA_RA_EQ";					// !<>=
-		name[Token.LA_LA] = "T_LA_LA";						// <<
-		name[Token.RA_RA] = "T_RA_RA";						// >>
-		name[Token.RA_RA_RA] = "T_RA_RA_RA";						// >>>
-		name[Token.LA_LA_EQ] = "T_LA_LA_EQ";						// <<=
-		name[Token.RA_RA_EQ] = "T_RA_RA_EQ";						// >>=
-		name[Token.RA_RA_RA_EQ] = "T_RA_RA_RA_EQ";					// >>>=
-		name[Token.AMP_AMP] = "T_AMP_AMP";						// &&
-		name[Token.VBAR_VBAR] = "T_VBAR_VBAR";					// ||
-		name[Token.PLUS_PLUS] = "T_PLUS_PLUS";					// ++
-		name[Token.DASH_DASH] = "T_DASH_DASH";					// --
+		name[Token.ELLIPSIS] = "ELLIPSIS";
+		name[Token.DOT_DOT] = "DOT_DOT";
+		name[Token.SLASH_EQ] = "SLASH_EQ";
+		name[Token.PERCENT_EQ] = "PERCENT_EQ";
+		name[Token.ASTERISK_EQ] = "ASTERISK_EQ";
+		name[Token.PLUS_EQ] = "PLUS_EQ";
+		name[Token.DASH_EQ] = "DASH_EQ";
+		name[Token.AMPERSAND_EQ] = "AMPERSAND_EQ";
+		name[Token.CARET_EQ] = "CARET_EQ";
+		name[Token.VERTICAL_BAR_EQ] = "VERTICAL_BAR_EQ";
+		name[Token.EQ_EQ] = "EQ_EQ";						// ==
+		name[Token.EQ_EQ_EQ] = "EQ_EQ_EQ";						// ===
+		name[Token.LA_EQ] = "LA_EQ";						// <=
+		name[Token.RA_EQ] = "RA_EQ";						// >=
+		name[Token.LA_RA] = "LA_RA";						// <>
+		name[Token.LA_RA_EQ] = "LA_RA_EQ";						// <>=
+		name[Token.EXCLAMATION_EQ] = "EXCLAMATION_EQ";				// !=
+		name[Token.EX_EQ_EQ] = "EX_EQ_EQ";						// !==
+		name[Token.EX_LA] = "EX_LA";						// !<
+		name[Token.EX_RA] = "EX_RA";						// !>
+		name[Token.EX_LA_EQ] = "EX_LA_EQ";						// !<=
+		name[Token.EX_RA_EQ] = "EX_RA_EQ";						// !>=
+		name[Token.EX_LA_RA] = "EX_LA_RA";						// !<>
+		name[Token.EX_LA_RA_EQ] = "EX_LA_RA_EQ";					// !<>=
+		name[Token.LA_LA] = "LA_LA";						// <<
+		name[Token.RA_RA] = "RA_RA";						// >>
+		name[Token.RA_RA_RA] = "RA_RA_RA";						// >>>
+		name[Token.LA_LA_EQ] = "LA_LA_EQ";						// <<=
+		name[Token.RA_RA_EQ] = "RA_RA_EQ";						// >>=
+		name[Token.RA_RA_RA_EQ] = "RA_RA_RA_EQ";					// >>>=
+		name[Token.AMP_AMP] = "AMP_AMP";						// &&
+		name[Token.VBAR_VBAR] = "VBAR_VBAR";					// ||
+		name[Token.PLUS_PLUS] = "PLUS_PLUS";					// ++
+		name[Token.DASH_DASH] = "DASH_DASH";					// --
 
 		// Keywords
 
-		name[Token.ABSTRACT] = "T_ABSTRACT";
-		name[Token.BREAK] = "T_BREAK";
-		name[Token.BYTES] = "T_BYTES";
-		name[Token.CASE] = "T_CASE";
-		name[Token.CONTINUE] = "T_CONTINUE";
-		name[Token.CLASS] = "T_CLASS";
-		name[Token.DEFAULT] = "T_DEFAULT";
-		name[Token.DELETE] = "T_DELETE";
-		name[Token.DO] = "T_DO";
-		name[Token.ELSE] = "T_ELSE";
-		name[Token.ENUM] = "T_ENUM";
-		name[Token.EXTENDS] = "T_EXTENDS";
-		name[Token.FALSE] = "T_FALSE";
-		name[Token.FINAL] = "T_FINAL";
-		name[Token.FOR] = "T_FOR";
-		name[Token.FUNCTION] = "T_FUNCTION";
-		name[Token.IF] = "T_IF";
-		name[Token.IMPLEMENTS] = "T_IMPLEMENTS";
-		name[Token.IMPORT] = "T_IMPORT";
-		name[Token.NAMESPACE] = "T_NAMESPACE";
-		name[Token.NEW] = "T_NEW";
-		name[Token.NULL] = "T_NULL";
-		name[Token.PRIVATE] = "T_PRIVATE";
-		name[Token.PROTECTED] = "T_PROTECTED";
-		name[Token.PUBLIC] = "T_PUBLIC";
-		name[Token.RETURN] = "T_RETURN";
-		name[Token.STATIC] = "T_STATIC";
-		name[Token.SUPER] = "T_SUPER";
-		name[Token.SWITCH] = "T_SWITCH";
-		name[Token.THIS] = "T_THIS";
-		name[Token.TRUE] = "T_TRUE";
-		name[Token.WHILE] = "T_WHILE";
+		name[Token.ABSTRACT] = "ABSTRACT";
+		name[Token.BREAK] = "BREAK";
+		name[Token.BYTES] = "BYTES";
+		name[Token.CASE] = "CASE";
+		name[Token.CONTINUE] = "CONTINUE";
+		name[Token.CLASS] = "CLASS";
+		name[Token.DEFAULT] = "DEFAULT";
+		name[Token.DELETE] = "DELETE";
+		name[Token.DO] = "DO";
+		name[Token.ELSE] = "ELSE";
+		name[Token.ENUM] = "ENUM";
+		name[Token.EXTENDS] = "EXTENDS";
+		name[Token.FALSE] = "FALSE";
+		name[Token.FINAL] = "FINAL";
+		name[Token.FLAGS] = "FLAGS";
+		name[Token.FOR] = "FOR";
+		name[Token.FUNCTION] = "FUNCTION";
+		name[Token.IF] = "IF";
+		name[Token.IMPLEMENTS] = "IMPLEMENTS";
+		name[Token.IMPORT] = "IMPORT";
+		name[Token.LOCK] = "LOCK";
+		name[Token.NAMESPACE] = "NAMESPACE";
+		name[Token.NEW] = "NEW";
+		name[Token.NULL] = "NULL";
+		name[Token.PRIVATE] = "PRIVATE";
+		name[Token.PROTECTED] = "PROTECTED";
+		name[Token.PUBLIC] = "PUBLIC";
+		name[Token.RETURN] = "RETURN";
+		name[Token.STATIC] = "STATIC";
+		name[Token.SUPER] = "SUPER";
+		name[Token.SWITCH] = "SWITCH";
+		name[Token.THIS] = "THIS";
+		name[Token.TRUE] = "TRUE";
+		name[Token.WHILE] = "WHILE";
 
 		// Pseudo-tokens not actually returned by a Scanner
 
-		name[Token.EMPTY] = "T_EMPTY";
+		name[Token.EMPTY] = "EMPTY";
 
 		string last = "<none>";
 		int lastI = -1;

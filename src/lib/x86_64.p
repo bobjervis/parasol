@@ -86,7 +86,7 @@ floatArgs.append(R.XMM1);
 floatArgs.append(R.XMM2);
 floatArgs.append(R.XMM3);
 /*
- * Flags for the Node.flags field. (0x0f are reserved for non-codegen flags)
+ * Flags for the Node.nodeFlags field. (0x0f are reserved for non-codegen flags)
  */
 byte ADDRESS_MODE = 0x10;
 
@@ -1809,7 +1809,7 @@ public class X86_64 extends X86_64AssignTemps {
 			expression = ref<Unary>(node);
 			generate(expression.operand(), compileContext);
 			f().r.generateSpills(expression, this);
-			if ((expression.flags & ADDRESS_MODE) == 0) {
+			if ((expression.nodeFlags & ADDRESS_MODE) == 0) {
 				switch (node.type.family()) {
 				case	FLOAT_32:
 					generateLoad(X86.MOVSS, expression, compileContext);
@@ -1901,7 +1901,7 @@ public class X86_64 extends X86_64AssignTemps {
 			break;
 			
 		case	INTEGER:
-			if ((node.flags & ADDRESS_MODE) != 0)
+			if ((node.nodeFlags & ADDRESS_MODE) != 0)
 				break;
 			ref<Constant> c = ref<Constant>(node);
 			switch (c.type.family()) {
@@ -1921,7 +1921,7 @@ public class X86_64 extends X86_64AssignTemps {
 			break;
 
 		case	CHARACTER:
-			if ((node.flags & ADDRESS_MODE) != 0)
+			if ((node.nodeFlags & ADDRESS_MODE) != 0)
 				break;
 			c = ref<Constant>(node);
 			switch (c.type.family()) {
@@ -1972,7 +1972,7 @@ public class X86_64 extends X86_64AssignTemps {
 		case	DOT:
 			ref<Selection> dot = ref<Selection>(node);
 			generate(dot.left(), compileContext);
-			if ((node.flags & ADDRESS_MODE) != 0)
+			if ((node.nodeFlags & ADDRESS_MODE) != 0)
 				break;
 			switch (dot.type.family()) {
 			case	VAR:
@@ -1998,7 +1998,7 @@ public class X86_64 extends X86_64AssignTemps {
 					break;
 
 				default:
-					if ((dot.flags & ADDRESS_MODE) == 0)
+					if ((dot.nodeFlags & ADDRESS_MODE) == 0)
 						generateLoad(X86.MOV, dot, compileContext);
 				}
 			}
@@ -2016,7 +2016,7 @@ public class X86_64 extends X86_64AssignTemps {
 			
 		case	TEMPLATE_INSTANCE:
 		case	IDENTIFIER:
-			if ((node.flags & ADDRESS_MODE) != 0)
+			if ((node.nodeFlags & ADDRESS_MODE) != 0)
 				break;
 			if (node.type.family() == TypeFamily.FUNCTION &&
 				generateFunctionAddress(node, compileContext))
@@ -2025,7 +2025,7 @@ public class X86_64 extends X86_64AssignTemps {
 		case	VARIABLE:
 		case	THIS:
 		case	SUPER:
-			if ((node.flags & ADDRESS_MODE) != 0)
+			if ((node.nodeFlags & ADDRESS_MODE) != 0)
 				break;
 			if (node.register == 0) {
 				// TODO: Get rid of this hook here.  Arises because of unpruned void context nodes.
@@ -2102,7 +2102,7 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.MOV, value.type.family(), R.RAX, outOffset, R(int(value.register)));
 			}
 		} else if (value.isLvalue()) {
-			value.flags |= ADDRESS_MODE;
+			value.nodeFlags |= ADDRESS_MODE;
 			generate(value, compileContext);
 			f().r.generateSpills(value, this);
 			inst(X86.LEA, R.RDX, value, compileContext);
@@ -2708,15 +2708,15 @@ public class X86_64 extends X86_64AssignTemps {
 			
 		case	IDENTIFIER:
 		case	VARIABLE:
-			if ((node.flags & ADDRESS_MODE) != 0)
+			if ((node.nodeFlags & ADDRESS_MODE) != 0)
 				node.print(0);
-			assert ((node.flags & ADDRESS_MODE) == 0);
+			assert ((node.nodeFlags & ADDRESS_MODE) == 0);
 			break;
 			
 		case	DOT:
-			if ((node.flags & ADDRESS_MODE) != 0)
+			if ((node.nodeFlags & ADDRESS_MODE) != 0)
 				node.print(0);
-			assert ((node.flags & ADDRESS_MODE) == 0);
+			assert ((node.nodeFlags & ADDRESS_MODE) == 0);
 			ref<Selection> dot = ref<Selection>(node);
 			if (dot.symbol().storageClass() == StorageClass.ENUMERATION) {
 				if (dot.symbol().value == null) {
@@ -2735,7 +2735,7 @@ public class X86_64 extends X86_64AssignTemps {
 			
 		case	CALL:
 			ref<Call> call = ref<Call>(node);
-			if ((call.flags & PUSH_OUT_PARAMETER) != 0)
+			if ((call.nodeFlags & PUSH_OUT_PARAMETER) != 0)
 				inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, call.type.stackSize());
 			generate(call, compileContext);
 			if (node == null)
@@ -2802,7 +2802,7 @@ public class X86_64 extends X86_64AssignTemps {
 			switch (newType.family()) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
-				if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
+				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, result, n, compileContext);
 				return;
 
@@ -2859,7 +2859,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	SIGNED_16:
-				if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
+				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, result, n, compileContext);
 				return;
 
@@ -2870,7 +2870,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
-				if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
+				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, result, n, compileContext);
 				inst(X86.AND, newType.family(), R(result.register), 0xffff);
 				return;
@@ -2899,7 +2899,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	UNSIGNED_32:
 			case	SIGNED_16:
 			case	SIGNED_32:
-				if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
+				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, result, n, compileContext);
 				return;
 
@@ -2908,14 +2908,14 @@ public class X86_64 extends X86_64AssignTemps {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
-				if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
+				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, result, n, compileContext);
 				inst(X86.SAL, TypeFamily.UNSIGNED_32, R(result.register), 32);
 				inst(X86.SHR, TypeFamily.UNSIGNED_32, R(result.register), 32);
 				return;
 
 			case	ENUM:
-				if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
+				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, result, n, compileContext);
 				inst(X86.SAL, TypeFamily.UNSIGNED_32, R(n.register), 32);
 				inst(X86.SHR, TypeFamily.UNSIGNED_32, R(n.register), 32);
@@ -2924,7 +2924,7 @@ public class X86_64 extends X86_64AssignTemps {
 				
 			case	FLOAT_32:
 			case	FLOAT_64:
-				if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
+				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, result, n, compileContext);
 				inst(X86.SAL, TypeFamily.UNSIGNED_32, R(n.register), 32);
 				inst(X86.SHR, TypeFamily.UNSIGNED_32, R(n.register), 32);
@@ -2941,7 +2941,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
-				if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
+				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, result, n, compileContext);
 				return;
 
@@ -2981,7 +2981,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	UNSIGNED_32:
 			case	SIGNED_16:
 			case	SIGNED_32:
-				if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
+				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, result, n, compileContext);
 				return;
 
@@ -3037,7 +3037,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
-				if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
+				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, result, n, compileContext);
 				return;
 
@@ -3137,7 +3137,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	POINTER:
 			case	FUNCTION:
 			case	SIGNED_64:
-				if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
+				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, result, n, compileContext);
 				return;
 			}
@@ -3166,7 +3166,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	POINTER:
 			case	FUNCTION:
 			case	ENUM:
-				if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
+				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, result, n, compileContext);
 				return;
 
@@ -3261,7 +3261,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
-				if ((n.flags & ADDRESS_MODE) != 0 || result.register != n.register)
+				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, result, n, compileContext);
 				return;
 

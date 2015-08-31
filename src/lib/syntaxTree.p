@@ -182,7 +182,7 @@ enum Test {
 						// remediation in this case depends on the test.
 }
 
-// Global 'flags' values
+// Global 'nodeFlags' values
 public byte BAD_CONSTANT = 0x01;
 public byte VECTOR_LVALUE = 0x02;
 public byte VECTOR_OPERAND = 0x04;
@@ -2413,7 +2413,7 @@ class Call extends ParameterBag {
 //					ref<Node> n = tree.newStackArgumentAddress(0, location());
 //					n.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 //					thisParameter = n;
-					flags |= PUSH_OUT_PARAMETER;
+					nodeFlags |= PUSH_OUT_PARAMETER;
 					result = encapsulateCallInTemp(temp, tree);
 				}
 				break;
@@ -2465,7 +2465,7 @@ class Call extends ParameterBag {
 					break;
 				outParameter = tree.newReference(temp, true, location());
 				if (!voidContext) {
-					flags |= PUSH_OUT_PARAMETER;
+					nodeFlags |= PUSH_OUT_PARAMETER;
 					result = encapsulateCallInTemp(temp, tree);
 				}
 			}
@@ -3158,7 +3158,7 @@ class Constant extends Node {
 	}
 	
 	public long foldInt(ref<CompileContext> compileContext) {
-		if ((flags & BAD_CONSTANT) != 0)
+		if ((nodeFlags & BAD_CONSTANT) != 0)
 			return 0;						// We've already flagged this node with an error
 		int x;
 		boolean status;
@@ -3170,7 +3170,7 @@ class Constant extends Node {
 			(x, status) = charValue();
 			if (status)
 				return x;
-			flags |= BAD_CONSTANT;
+			nodeFlags |= BAD_CONSTANT;
 			add(MessageId.BAD_CHAR, compileContext.pool(), _value);
 			return 0;
 
@@ -6249,7 +6249,7 @@ class Node {
 
 	public ref<Type> type;
 	public byte register;
-	public byte flags;
+	public byte nodeFlags;
 	public int sethi;
 	
 	Node(Operator op, Location location) {
@@ -6269,7 +6269,7 @@ class Node {
 	protected ref<Node> finishClone(ref<Node> original, ref<MemoryPool> pool) {
 		type = original.type;
 		register = original.register;
-		flags = original.flags;
+		nodeFlags = original.nodeFlags;
 		sethi = original.sethi;
 		if (original._commentary != null)
 			_commentary = original._commentary.clone(pool);
@@ -6587,8 +6587,8 @@ class Node {
 		}
 		if (register != 0)
 			printf(" reg %d", int(register));
-		if (flags != 0)
-			printf(" flags %x", int(flags));
+		if (nodeFlags != 0)
+			printf(" nodeFlags %x", int(nodeFlags));
 		if (sethi != 0)
 			printf(" sethi %d", sethi);
 	}

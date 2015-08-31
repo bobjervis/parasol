@@ -83,7 +83,7 @@ class X86_64AddressModes extends X86_64Encoder {
 
 		case	INITIALIZE:
 			b = ref<Binary>(node);
-			b.left().flags |= ADDRESS_MODE;
+			b.left().nodeFlags |= ADDRESS_MODE;
 			if (b.right().op() == Operator.CALL)
 				markAddressModes(b.right(), compileContext);
 			else
@@ -186,7 +186,7 @@ class X86_64AddressModes extends X86_64Encoder {
 		case	LEFT_SHIFT:
 			b = ref<Binary>(node);
 			if (b.right().op() == Operator.INTEGER) {
-				b.right().flags |= ADDRESS_MODE;
+				b.right().nodeFlags |= ADDRESS_MODE;
 				markAddressModes(b.left(), compileContext);
 				break;
 			}
@@ -208,7 +208,7 @@ class X86_64AddressModes extends X86_64Encoder {
 		case	UNSIGNED_RIGHT_SHIFT_ASSIGN:
 			b = ref<Binary>(node);
 			if (b.right().op() == Operator.INTEGER)
-				b.right().flags |= ADDRESS_MODE;
+				b.right().nodeFlags |= ADDRESS_MODE;
 			tryMakeMode(b.left(), modeComplexity, nClass, compileContext);
 			markAddressModes(b.right(), compileContext);
 			break;
@@ -555,7 +555,7 @@ class X86_64AddressModes extends X86_64Encoder {
 		case	DOT:
 			tryMakeMode(node, MC_FULL, nClass, compileContext);
 		case	IDENTIFIER:
-			node.flags |= ADDRESS_MODE;
+			node.nodeFlags |= ADDRESS_MODE;
 			break;
 			
 		default:
@@ -583,7 +583,7 @@ class X86_64AddressModes extends X86_64Encoder {
 				ref<Constant> number = ref<Constant>(node);
 				long value = number.foldInt(compileContext);
 				if (value >= int.MIN_VALUE && value <= int.MAX_VALUE)
-					node.flags |= ADDRESS_MODE;
+					node.nodeFlags |= ADDRESS_MODE;
 			}
 			return MC_FULL;
 /*
@@ -605,7 +605,7 @@ class X86_64AddressModes extends X86_64Encoder {
 		case	SUBSCRIPT:
 			if	((modeContext & MC_ADDRESS) != 0) {
 				ref<Binary> b = ref<Binary>(node);
-				node.flags |= ADDRESS_MODE;
+				node.nodeFlags |= ADDRESS_MODE;
 
 				markAddressModes(b.left(), compileContext);
 				markAddressModes(b.right(), compileContext);
@@ -616,7 +616,7 @@ class X86_64AddressModes extends X86_64Encoder {
 			
 		case	INDIRECT:
 			if	((modeContext & MC_ADDRESS) != 0) {
-				node.flags |= ADDRESS_MODE;
+				node.nodeFlags |= ADDRESS_MODE;
 
 				tryMakeIndirectMode(ref<Unary>(node).operand(), compileContext);
 				return justRegs(modeContext)|MC_CONST;
@@ -634,8 +634,8 @@ class X86_64AddressModes extends X86_64Encoder {
 		case	O_AUTO:
 			v = ref auto_x(t).var;
 			if	(t.dtype sizeOf() == 1)
-				ref auto_x(t).var.flags |= VF_BYTEREG;
-			if	(v.flags & VF_REG){
+				ref auto_x(t).var.nodeFlags |= VF_BYTEREG;
+			if	(v.nodeFlags & VF_REG){
 				t.reg = v.reg;
 				if	(isSegReg(v.reg)){
 					if	(modeContext & MC_SREG)
@@ -661,7 +661,7 @@ class X86_64AddressModes extends X86_64Encoder {
 		case	DOT:
 			ref<Selection> dot = ref<Selection>(node);
 			if	((modeContext & MC_ADDRESS) != 0) {
-				dot.flags |= ADDRESS_MODE;
+				dot.nodeFlags |= ADDRESS_MODE;
 				if (dot.indirect()) {
 					markAddressModes(dot.left(), compileContext);
 					break;
@@ -674,7 +674,7 @@ class X86_64AddressModes extends X86_64Encoder {
 		case	VARIABLE:
 		case	IDENTIFIER:
 			if	((modeContext & MC_ADDRESS) != 0) {
-				node.flags |= ADDRESS_MODE;
+				node.nodeFlags |= ADDRESS_MODE;
 				return (modeContext & MC_REG) | MC_CONST;
 			}
 			break;
@@ -708,7 +708,7 @@ class X86_64AddressModes extends X86_64Encoder {
 		
 		case	THIS:
 		case	SUPER:
-			node.flags |= ADDRESS_MODE;
+			node.nodeFlags |= ADDRESS_MODE;
 			return;
 		
 		case	IDENTIFIER:
@@ -719,12 +719,12 @@ class X86_64AddressModes extends X86_64Encoder {
 			ref<Binary> b = ref<Binary>(node);
 			if	(isCompileTimeConstant(b.right())){
 				tryMakeIndirectMode(b.left(), compileContext);
-				b.right().flags |= ADDRESS_MODE;
-				b.flags |= ADDRESS_MODE;
+				b.right().nodeFlags |= ADDRESS_MODE;
+				b.nodeFlags |= ADDRESS_MODE;
 			} else if	(isCompileTimeConstant(b.left())){
 				tryMakeIndirectMode(b.right(), compileContext);
-				b.left().flags |= ADDRESS_MODE;
-				b.flags |= ADDRESS_MODE;
+				b.left().nodeFlags |= ADDRESS_MODE;
+				b.nodeFlags |= ADDRESS_MODE;
 	/*
 			} else if (isIndexRegister(theRegisterOf(left))){
 				left->addrMode = TRUE;
@@ -778,7 +778,7 @@ class X86_64AddressModes extends X86_64Encoder {
 	
 		case	O_AUTO:
 			v = ref auto_x(t)->var;
-			if	(v->flags & VF_REG == 0)
+			if	(v->nodeFlags & VF_REG == 0)
 				return;
 			if	(isIndexRegister(v->reg)){
 				t->addrMode = TRUE;

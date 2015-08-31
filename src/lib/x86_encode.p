@@ -772,7 +772,7 @@ class X86_64Encoder extends Target {
 			inst(instruction, left, ref<Binary>(right).right(), compileContext);
 			return;
 		}
-		if ((left.flags & ADDRESS_MODE) != 0) {
+		if ((left.nodeFlags & ADDRESS_MODE) != 0) {
 			if (right.register != 0)
 				inst(instruction, left, R(int(right.register)), compileContext);
 			else if (right.isConstant()) {
@@ -811,7 +811,7 @@ class X86_64Encoder extends Target {
 					printf("\n");
 					assert(false);
 				}
-			} else if ((right.flags & ADDRESS_MODE) != 0)
+			} else if ((right.nodeFlags & ADDRESS_MODE) != 0)
 				inst(instruction, dest, right, compileContext);
 			else {
 				R src = R(int(right.register));
@@ -1516,7 +1516,7 @@ class X86_64Encoder extends Target {
 	}
 	
 	void inst(X86 instruction, ref<Node> operand) {
-		if ((operand.flags & ADDRESS_MODE) == 0) {
+		if ((operand.nodeFlags & ADDRESS_MODE) == 0) {
 			inst(instruction, operand.type.family(), R(int(operand.register)));
 			return;
 		}
@@ -2677,7 +2677,7 @@ class X86_64Encoder extends Target {
 						ref<Binary> b = ref<Binary>(object);
 						object = b.right();
 					}
-					if ((object.flags & ADDRESS_MODE) != 0) {
+					if ((object.nodeFlags & ADDRESS_MODE) != 0) {
 						modRM(object, regOpcode, ipAdjust, sym.offset + allAdjust);
 						return;
 					} else

@@ -171,11 +171,13 @@ scan(keyword: enum) { enum }
 scan(keyword: extends) { extends }
 scan(keyword: false) { false }
 scan(keyword: final) { final }
+scan(keyword: flags) { flags }
 scan(keyword: for) { for }
 scan(keyword: function) { function }
 scan(keyword: if) { if }
 scan(keyword: implements) { implements }
 scan(keyword: import) { import }
+scan(keyword: lock) { lock }
 scan(keyword: namespace) { namespace }
 scan(keyword: new) { new }
 scan(keyword: null) { null }

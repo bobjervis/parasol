@@ -15,9 +15,9 @@
  */
 namespace native:POSIX;
 
-public abstract int open(pointer<byte> filename, int flags);
+public abstract int open(pointer<byte> filename, int ioFlags);
 
-public abstract int openCreat(pointer<byte> filename, int flags, int mode);
+public abstract int openCreat(pointer<byte> filename, int ioFlags, int mode);
 
 public abstract int close(int fd);
 
