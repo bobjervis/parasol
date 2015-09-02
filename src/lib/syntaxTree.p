@@ -77,6 +77,7 @@ enum Operator {
 	TEMPLATE_INSTANCE,
 	DECLARATION,
 	CLASS_DECLARATION,
+	FLAGS_DECLARATION,
 	ENUM_DECLARATION,
 	INITIALIZE,
 	ANNOTATED,
@@ -409,6 +410,7 @@ class Binary extends Node {
 		case	WHILE:
 		case	DECLARATION:
 		case	CLASS_DECLARATION:
+		case	FLAGS_DECLARATION:
 		case	ENUM_DECLARATION:
 			switch (t) {
 			case	IN_ORDER:
@@ -6792,6 +6794,7 @@ class OperatorMap {
 		name[Operator.DECLARATION] = "DECLARATION";
 		name[Operator.CLASS_DECLARATION] = "CLASS_DECLARATION";
 		name[Operator.ENUM_DECLARATION] = "ENUM_DECLARATION";
+		name[Operator.FLAGS_DECLARATION] = "FLAGS_DECLARATION";
 		name[Operator.INITIALIZE] = "INITIALIZE";
 		name[Operator.ABSTRACT] = "ABSTRACT";
 		name[Operator.ADD_REDUCE] = "ADD_REDUCE";
@@ -6920,6 +6923,7 @@ class OperatorMap {
 		typeNotAllowed[Operator.UNIT] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.DECLARATION] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.CLASS_DECLARATION] = MessageId.MAX_MESSAGE;
+		typeNotAllowed[Operator.FLAGS_DECLARATION] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.ENUM_DECLARATION] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.INITIALIZE] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.ANNOTATION] = MessageId.MAX_MESSAGE;

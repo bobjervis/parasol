@@ -922,9 +922,16 @@ statement() { "@c(d) class q{}" }
 statement() { "@c(d) class q extends a {}" }
 statement() { "@c(d) class q implements a {}" }
 statement() { "@c(d) class q extends a implements b {}" }
+statement() { "flags a{b}" }
+statement() { "flags a{b,}" }
+statement() { "flags a{b,c}" }
+statement() { "flags a{b,c,}" }
 statement() { "enum a{b}" }
+statement() { "enum a{b,}" }
 statement() { "enum a{b,c}" }
+statement() { "enum a{b,c,}" }
 statement() { "enum a{b; int x;}" }
+statement() { "enum a{b,; int x;}" }
 statement() { "@c enum a{b}" }
 statement() { "@c enum a{b,c}" }
 statement() { "@c enum a{b; int x;}" }

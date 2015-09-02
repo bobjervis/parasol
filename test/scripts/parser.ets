@@ -62,9 +62,16 @@ statement() { "@c(d) class q{}" }
 statement() { "@c(d) class q extends a {}" }
 statement() { "@c(d) class q implements a {}" }
 statement() { "@c(d) class q extends a implements b {}" }
+statement() { "flags a{b}" }
+statement() { "flags a{b,}" }
+statement() { "flags a{b,c}" }
+statement() { "flags a{b,c,}" }
 statement() { "enum a{b}" }
+statement() { "enum a{b,}" }
 statement() { "enum a{b,c}" }
+statement() { "enum a{b,c,}" }
 statement() { "enum a{b; int x;}" }
+statement() { "enum a{b,; int x;}" }
 statement() { "@c enum a{b}" }
 statement() { "@c enum a{b,c}" }
 statement() { "@c enum a{b; int x;}" }
@@ -410,8 +417,6 @@ expression() { "a(b, @n c)" }
 expression() { "a(@n(x) @m b c, d)" }
 expression() { "a(b c, @n d e)" }
 expression() { "a<b>" }
-expression() { "function {a;}" }
-expression() { "function int {a;}" }
 expression() { "function int (a b) {x;}" }
 expression() { "function int (a) {a;}" }
 expression() { "function int (a... b) {a;}" }
@@ -445,15 +450,12 @@ expression(expect: fail) { "function int (a" }
 expression(expect: fail) { "function int (@n" }
 expression(expect: fail) { "function int (a b" }
 expression(expect: fail) { "function int (@n a b" }
-expression(expect: fail) { "function int (a b)" }
 expression(expect: fail) { "function int (a b) {" }
-expression(expect: fail) { "function int (a)" }
 expression(expect: fail) { "function int (a) {" }
 expression(expect: fail) { "function int (a b," }
 expression(expect: fail) { "function int (a b, c" }
 expression(expect: fail) { "function int (a b, @n c" }
 expression(expect: fail) { "function int (a b, c," }
-expression(expect: fail) { "function int (a b, c, d)" }
 expression(expect: fail) { "function int (a b, c, d) {" }
 expression(expect: fail) { "function +int {}" }
 expression(expect: fail, message: EXPECTING_TERM) { @n a }

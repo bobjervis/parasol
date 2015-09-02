@@ -341,6 +341,9 @@ class Parser {
 		case	CLASS:
 			return parseClassDeclaration();
 		
+		case	FLAGS:
+			return parseFlagsDeclaration();
+
 		case	ENUM:
 			return parseEnumDeclaration();
 
@@ -492,6 +495,10 @@ class Parser {
 
 		case	CLASS:
 			n = parseClassDeclaration();
+			break;
+
+		case	FLAGS:
+			n = parseFlagsDeclaration();
 			break;
 
 		case	ENUM:
@@ -731,6 +738,35 @@ class Parser {
 		return x;
 	}
 
+	private ref<Node> parseFlagsDeclaration() {
+		Location location = _scanner.location();
+		Token t = _scanner.next();
+		if (t != Token.IDENTIFIER) {
+			_scanner.pushBack(t);
+			return resync(MessageId.SYNTAX_ERROR);
+		}
+		ref<Identifier> identifier = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
+		t = _scanner.next();
+		Location blockLoc = _scanner.location();
+		if (t != Token.LEFT_CURLY) {
+			_scanner.pushBack(t);
+			return resync(MessageId.SYNTAX_ERROR);
+		}
+		ref<Block> body = _tree.newBlock(Operator.ENUM, _scanner.location());
+		ref<Node> e = parseIdentifierList();
+		body.statement(_tree.newNodeList(e));
+		t = _scanner.next();
+		if (t != Token.RIGHT_CURLY) {
+			if (e.op() != Operator.SYNTAX_ERROR) {
+				ref<Node> err = _tree.newSyntaxError(_scanner.location());
+				err.add(MessageId.SYNTAX_ERROR, _tree.pool());
+				body.statement(_tree.newNodeList(err));
+			}
+			parseBlock(body);
+		}
+		return _tree.newBinary(Operator.FLAGS_DECLARATION, identifier, body, location);
+	}
+
 	private ref<Node> parseEnumDeclaration() {
 		Location location = _scanner.location();
 		Token t = _scanner.next();
@@ -746,7 +782,7 @@ class Parser {
 			return resync(MessageId.SYNTAX_ERROR);
 		}
 		ref<Block> body = _tree.newBlock(Operator.ENUM, _scanner.location());
-		ref<Node> e = parseExpression(0);
+		ref<Node> e = parseIdentifierList();
 		body.statement(_tree.newNodeList(e));
 		t = _scanner.next();
 		if (t == Token.SEMI_COLON) {
@@ -762,6 +798,34 @@ class Parser {
 		return _tree.newBinary(Operator.ENUM_DECLARATION, identifier, body, location);
 	}
 
+	private ref<Node> parseIdentifierList() {
+		ref<Node> e = null;
+		Location commaLocation;
+		Token t;
+		for (;;) {
+			t = _scanner.next();
+			if (t == Token.IDENTIFIER) {
+				ref<Node> x = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
+				if (e != null)
+					e = _tree.newBinary(Operator.SEQUENCE, e, x, commaLocation);
+				else
+					e = x;
+				t = _scanner.next();
+				if (t == Token.COMMA)
+					commaLocation = _scanner.location();
+				else
+					break;
+			} else if (e != null)
+				break;
+			else {
+				_scanner.pushBack(t);
+				return resync(MessageId.SYNTAX_ERROR);
+			}
+		}
+		_scanner.pushBack(t);
+		return e;
+	}
+	
 	private ref<Node> parseGeneralizedFor(ref<Node> initializer, Location location) {
 		ref<Node> test;
 		ref<Node> increment;
