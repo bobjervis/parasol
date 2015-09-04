@@ -559,6 +559,8 @@ expression() { a !<>= b }
 
 expression() { a new b || c }
 expression() { a delete b }
+expression() { "new (a) b || c" }
+expression(expect: fail) { "x new (a) b || c" }
 
 // Invalid binary operators: the parses do not consume all tokens,
 // but otherwise report no error messages

@@ -919,6 +919,22 @@ class Parser {
 		switch (t) {
 
 		case	NEW:
+			t = _scanner.next();
+			if (t == Token.LEFT_PARENTHESIS) {
+				y = parseExpression(0);
+				if (y.op() == Operator.SYNTAX_ERROR)
+					return y;
+				t = _scanner.next();
+				if (t != Token.RIGHT_PARENTHESIS) {
+					_scanner.pushBack(t);
+					return resync(MessageId.SYNTAX_ERROR);
+				}
+				x = parseTerm(false);
+				if (x.op() == Operator.SYNTAX_ERROR)
+					return x;
+				return _tree.newBinary(Operator.PLACEMENT_NEW, y, x, location);
+			} else
+				_scanner.pushBack(t);
 			x = parseTerm(false);
 			if (x.op() == Operator.SYNTAX_ERROR)
 				return x;

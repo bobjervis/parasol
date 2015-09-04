@@ -69,6 +69,7 @@ enum Operator {
 	DOT_DOT,
 	DELETE,
 	NEW,
+	PLACEMENT_NEW,
 	WHILE,
 	DO_WHILE,
 	SWITCH,
@@ -409,6 +410,7 @@ class Binary extends Node {
 		case	SWITCH:
 		case	WHILE:
 		case	DECLARATION:
+		case	PLACEMENT_NEW:
 		case	CLASS_DECLARATION:
 		case	FLAGS_DECLARATION:
 		case	ENUM_DECLARATION:
@@ -6753,6 +6755,7 @@ class OperatorMap {
 		name[Operator.NOT_LESS_GREATER_EQUAL] = "NOT_LESS_GREATER_EQUAL";
 		name[Operator.OR] = "OR";
 		name[Operator.OR_ASSIGN] = "OR_ASSIGN";
+		name[Operator.PLACEMENT_NEW] = "PLACEMENT_NEW";
 		name[Operator.REMAINDER] = "REMAINDER";
 		name[Operator.REMAINDER_ASSIGN] = "REMAINDER_ASSIGN";
 		name[Operator.RIGHT_SHIFT] = "RIGHT_SHIFT";
@@ -6883,6 +6886,7 @@ class OperatorMap {
 		typeNotAllowed[Operator.NOT_LESS_GREATER_EQUAL] = MessageId.INVALID_COMPARE;
 		typeNotAllowed[Operator.OR] = MessageId.INVALID_OR;
 		typeNotAllowed[Operator.OR_ASSIGN] = MessageId.INVALID_OR;
+		typeNotAllowed[Operator.PLACEMENT_NEW] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.REMAINDER] = MessageId.INVALID_REMAINDER;
 		typeNotAllowed[Operator.REMAINDER_ASSIGN] = MessageId.INVALID_REMAINDER;
 		typeNotAllowed[Operator.RIGHT_SHIFT] = MessageId.MAX_MESSAGE;
