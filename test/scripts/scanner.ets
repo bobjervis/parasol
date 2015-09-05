@@ -178,6 +178,7 @@ scan(keyword: if) { if }
 scan(keyword: implements) { implements }
 scan(keyword: import) { import }
 scan(keyword: lock) { lock }
+scan(keyword: monitor) { monitor }
 scan(keyword: namespace) { namespace }
 scan(keyword: new) { new }
 scan(keyword: null) { null }

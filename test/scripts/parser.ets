@@ -3,6 +3,13 @@ statement() { a; }
 statement() { "{ }" }
 statement() { "{ a; }" }
 statement() { "{ a; a; }" }
+statement() { "lock { }" }
+statement() { "lock { a; }" }
+statement() { "lock { a; a; }" }
+statement() { "lock (a) { }" }
+statement() { "lock (a) { b; }" }
+statement() { "lock (a) { b; b; }" }
+statement() { "int f(double d) lock (a) { b; b; }" }
 statement() { break; }
 statement() { case a: b; }
 statement(expect: fail, message: UNEXPECTED_RC) { "case a: }" }
@@ -62,6 +69,8 @@ statement() { "@c(d) class q{}" }
 statement() { "@c(d) class q extends a {}" }
 statement() { "@c(d) class q implements a {}" }
 statement() { "@c(d) class q extends a implements b {}" }
+statement() { "monitor a { b; }" }
+statement() { "monitor a { }" }
 statement() { "flags a{b}" }
 statement() { "flags a{b,}" }
 statement() { "flags a{b,c}" }
@@ -99,6 +108,7 @@ statement(expect: fail, message: EXPECTING_TERM) { case : b; }
 statement(expect: fail, message: CASE_NO_CO) { case a b; }
 statement(expect: fail) { continue }
 statement(expect: fail) { default }
+statement(expect: recovered) { lock }
 statement(expect: fail, message: UNEXPECTED_EOF) { default: }
 statement(expect: fail, message: UNEXPECTED_EOF) { default: a }
 statement(expect: fail) { default a; }
@@ -218,6 +228,20 @@ statement(expect: fail) { class extends a implements b }
 statement(expect: fail) { class q extends a implements b }
 statement(expect: fail) { "class extends a implements b {" }
 statement(expect: recovered) { "class q extends a implements b {" }
+statement(expect: fail) { "monitor" }
+statement(expect: fail) { "monitor a" }
+statement(expect: recovered) { "monitor a {" }
+statement(expect: recovered) { "monitor a { b" }
+statement(expect: recovered) { "monitor a { b;" }
+statement(expect: fail) { "flags" }
+statement(expect: fail) { "flags a" }
+statement(expect: fail) { "flags {b}" }
+statement(expect: fail) { "flags {}" }
+statement(expect: recovered) { "flags a{" }
+statement(expect: recovered) { "flags a{b" }
+statement(expect: recovered) { "flags a{b," }
+statement(expect: recovered) { "flags a{b,c" }
+statement(expect: recovered) { "flags a{b c" }
 statement(expect: fail) { "enum" }
 statement(expect: fail) { "enum a" }
 statement(expect: fail) { "enum {b}" }

@@ -78,6 +78,7 @@ enum Operator {
 	TEMPLATE_INSTANCE,
 	DECLARATION,
 	CLASS_DECLARATION,
+	MONITOR_DECLARATION,
 	FLAGS_DECLARATION,
 	ENUM_DECLARATION,
 	INITIALIZE,
@@ -217,14 +218,14 @@ class SyntaxTree {
 			_root = parser.parseFile();
 		} else {
 			_scanner = null;
-			_root = newBlock(Operator.UNIT, Location.OUT_OF_FILE);
+			_root = newBlock(Operator.UNIT, null, Location.OUT_OF_FILE);
 			_root.add(MessageId.FILE_NOT_READ, _pool);
 		}
 	}
 
-	public ref<Block> newBlock(Operator op, Location location) {
+	public ref<Block> newBlock(Operator op, ref<Node> lockReference, Location location) {
 		//void *block = _pool.alloc(sizeof (Block));
-		return new Block(op, location);
+		return new Block(op, lockReference, location);
 	}
 
 	public ref<Class> newClass(ref<Identifier> name, ref<Node> extendsClause, Location location) {
@@ -411,6 +412,7 @@ class Binary extends Node {
 		case	WHILE:
 		case	DECLARATION:
 		case	PLACEMENT_NEW:
+		case	MONITOR_DECLARATION:
 		case	CLASS_DECLARATION:
 		case	FLAGS_DECLARATION:
 		case	ENUM_DECLARATION:
@@ -547,6 +549,8 @@ class Binary extends Node {
 			_right = _right.fold(tree, true, compileContext);
 			return this;
 
+		case	FLAGS_DECLARATION:
+		case	MONITOR_DECLARATION:
 		case	ENUM_DECLARATION:
 		case	CLASS_DECLARATION:
 		case	WHILE:
@@ -1118,7 +1122,10 @@ class Binary extends Node {
 
 	public Test fallsThrough() {
 		switch (op()) {
+		case	MONITOR_DECLARATION:
 		case	CLASS_DECLARATION:
+		case	ENUM_DECLARATION:
+		case	FLAGS_DECLARATION:
 			return Test.INCONCLUSIVE_TEST;
 
 		default:
@@ -1224,6 +1231,9 @@ class Binary extends Node {
 		}
 
 		case	CLASS_DECLARATION:
+		case	MONITOR_DECLARATION:
+		case	FLAGS_DECLARATION:
+		case	ENUM_DECLARATION:
 			type = compileContext.arena().builtInType(TypeFamily.VOID);
 			break;
 
@@ -1888,10 +1898,6 @@ class Binary extends Node {
 			type = compileContext.arena().builtInType(TypeFamily.VOID);
 			break;
 		}
-		case	ENUM_DECLARATION:
-			ref<Identifier> id = ref<Identifier>(_left);
-			type = compileContext.arena().builtInType(TypeFamily.VOID);
-			break;
 		}
 	}
 
@@ -2106,12 +2112,14 @@ private ref<Node> appendString(ref<Variable> variable, ref<Node> value, ref<Synt
 }
 
 class Block extends Node {
+	private ref<Node> _lockReference;
 	private ref<NodeList> _statements;
 	private ref<NodeList> _last;
 	public ref<Scope> scope;
 
-	Block(Operator op, Location location) {
+	Block(Operator op, ref<Node> lockReference, Location location) {
 		super(op, location);
+		_lockReference = lockReference;
 	}
 
 	public void statement(ref<NodeList> stmt) {
@@ -2126,7 +2134,20 @@ class Block extends Node {
 		TraverseAction result;
 		switch (t) {
 		case	PRE_ORDER:
+			result = func(this, data);
+			if (result == TraverseAction.ABORT_TRAVERSAL)
+				return false;
+			if (result == TraverseAction.SKIP_CHILDREN)
+				break;
+			if (_lockReference != null && !_lockReference.traverse(t, func, data))
+				return false;
+			if (_statements != null && !_statements.traverse(t, func, data))
+				return false;
+			break;
+
 		case	IN_ORDER:
+			if (_lockReference != null && !_lockReference.traverse(t, func, data))
+				return false;
 			result = func(this, data);
 			if (result == TraverseAction.ABORT_TRAVERSAL)
 				return false;
@@ -2138,6 +2159,8 @@ class Block extends Node {
 
 		case	POST_ORDER:
 			if (_statements != null && !_statements.traverse(t, func, data))
+				return false;
+			if (_lockReference != null && !_lockReference.traverse(t, func, data))
 				return false;
 			result = func(this, data);
 			if (result == TraverseAction.ABORT_TRAVERSAL)
@@ -2152,11 +2175,26 @@ class Block extends Node {
 				break;
 			if (_statements != null && !_statements.reverse(t, func, data))
 				return false;
+			if (_lockReference != null && !_lockReference.traverse(t, func, data))
+				return false;
 			break;
 
 		case	REVERSE_IN_ORDER:
+			if (_statements != null && !_statements.reverse(t, func, data))
+				return false;
+			result = func(this, data);
+			if (result == TraverseAction.ABORT_TRAVERSAL)
+				return false;
+			if (result == TraverseAction.SKIP_CHILDREN)
+				break;
+			if (_lockReference != null && !_lockReference.traverse(t, func, data))
+				return false;
+			break;
+
 		case	REVERSE_POST_ORDER:
 			if (_statements != null && !_statements.reverse(t, func, data))
+				return false;
+			if (_lockReference != null && !_lockReference.traverse(t, func, data))
 				return false;
 			result = func(this, data);
 			if (result == TraverseAction.ABORT_TRAVERSAL)
@@ -2178,7 +2216,10 @@ class Block extends Node {
 	}
 
 	public ref<Block> clone(ref<SyntaxTree> tree) {
-		ref<Block> b = tree.newBlock(op(), location());
+		ref<Node> lockReference = null;
+		if (_lockReference != null)
+			lockReference = _lockReference.clone(tree);
+		ref<Block> b = tree.newBlock(op(), lockReference, location());
 		if (_statements != null)
 			b._statements = _statements.clone(tree);
 		b.scope = scope;
@@ -2186,7 +2227,10 @@ class Block extends Node {
 	}
 
 	public ref<Block> cloneRaw(ref<SyntaxTree> tree) {
-		ref<Block> b = tree.newBlock(op(), location());
+		ref<Node> lockReference = null;
+		if (_lockReference != null)
+			lockReference = _lockReference.cloneRaw(tree);
+		ref<Block> b = tree.newBlock(op(), lockReference, location());
 		if (_statements != null)
 			b._statements = _statements.cloneRaw(tree);
 		return b;
@@ -2207,6 +2251,10 @@ class Block extends Node {
 	public void print(int indent) {
 		printBasic(indent);
 		printf("\n");
+		if (_lockReference != null) {
+			printf("%*c  {LOCK}\n", indent, ' ');
+			_lockReference.print(indent + INDENT);
+		}
 		boolean firstTime = true;
 		for (ref<NodeList> nl = _statements; nl != null; nl = nl.next) {
 			if (!firstTime)
@@ -2931,7 +2979,7 @@ class Class extends Block {
 	private TypeFamily _effectiveFamily;		// Set by annotations (@Shape, @Ref, @Pointer)
 	
 	Class(ref<Identifier> name, ref<Node> extendsClause, Location location) {
-		super(Operator.CLASS, location);
+		super(Operator.CLASS, null, location);
 		_name = name;
 		_extends = extendsClause;
 		_effectiveFamily = TypeFamily.CLASS;
@@ -6796,6 +6844,7 @@ class OperatorMap {
 		name[Operator.UNIT] = "UNIT";
 		name[Operator.DECLARATION] = "DECLARATION";
 		name[Operator.CLASS_DECLARATION] = "CLASS_DECLARATION";
+		name[Operator.MONITOR_DECLARATION] = "MONITOR_DECLARATION";
 		name[Operator.ENUM_DECLARATION] = "ENUM_DECLARATION";
 		name[Operator.FLAGS_DECLARATION] = "FLAGS_DECLARATION";
 		name[Operator.INITIALIZE] = "INITIALIZE";
@@ -6927,6 +6976,7 @@ class OperatorMap {
 		typeNotAllowed[Operator.UNIT] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.DECLARATION] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.CLASS_DECLARATION] = MessageId.MAX_MESSAGE;
+		typeNotAllowed[Operator.MONITOR_DECLARATION] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.FLAGS_DECLARATION] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.ENUM_DECLARATION] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.INITIALIZE] = MessageId.MAX_MESSAGE;

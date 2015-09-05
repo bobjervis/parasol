@@ -122,6 +122,7 @@ enum Token {
 	IMPLEMENTS,
 	IMPORT,
 	LOCK,
+	MONITOR,
 	NAMESPACE,
 	NEW,
 	NULL,
@@ -1005,6 +1006,7 @@ class Keywords {
 		_keywords["implements"] = Token.IMPLEMENTS;
 		_keywords["import"] = Token.IMPORT;
 		_keywords["lock"] = Token.LOCK;
+		_keywords["monitor"] = Token.MONITOR;
 		_keywords["namespace"] = Token.NAMESPACE;
 		_keywords["new"] = Token.NEW;
 		_keywords["null"] = Token.NULL;
@@ -1170,6 +1172,7 @@ class Tokens {
 		name[Token.IMPLEMENTS] = "IMPLEMENTS";
 		name[Token.IMPORT] = "IMPORT";
 		name[Token.LOCK] = "LOCK";
+		name[Token.MONITOR] = "MONITOR";
 		name[Token.NAMESPACE] = "NAMESPACE";
 		name[Token.NEW] = "NEW";
 		name[Token.NULL] = "NULL";
