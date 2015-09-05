@@ -1257,6 +1257,8 @@ class X86_64Encoder extends Target {
 		switch (instruction) {
 		case	SAL:
 			switch (family) {
+			case	SIGNED_16:
+				emit(0x66);
 			case	SIGNED_32:
 				emitRex(family, null, R.NO_REG, dest);
 				emit(0xd3);
@@ -1271,6 +1273,8 @@ class X86_64Encoder extends Target {
 			
 		case	SHR:
 			switch (family) {
+			case	SIGNED_16:
+				emit(0x66);
 			case	SIGNED_32:
 				emitRex(family, null, R.NO_REG, dest);
 				emit(0xd3);
@@ -1285,6 +1289,8 @@ class X86_64Encoder extends Target {
 			
 		case	SAR:
 			switch (family) {
+			case	SIGNED_16:
+				emit(0x66);
 			case	SIGNED_32:
 				emitRex(family, null, R.NO_REG, dest);
 				emit(0xd3);
@@ -1449,6 +1455,15 @@ class X86_64Encoder extends Target {
 			modRM(3, rmValues[src], rmValues[dest]);
 			return;
 
+		case	MOVSX:
+			if (family == TypeFamily.SIGNED_16)
+				emit(0x66);
+			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emit(0x0f);
+			emit(0xbf);
+			modRM(3, rmValues[src], rmValues[dest]);
+			return;
+
 		case	MOVSX_REX_W:
 			emitRex(TypeFamily.SIGNED_64, null, src, dest);
 			emit(0x0f);
@@ -1478,6 +1493,7 @@ class X86_64Encoder extends Target {
 				return;
 				
 			case	UNSIGNED_16:
+			case	SIGNED_16:
 				emit(0x66);
 				emitRex(family, null, dest, src);
 				emit(byte(opcodes[instruction] + 0x03));
@@ -1579,6 +1595,9 @@ class X86_64Encoder extends Target {
 		switch (instruction) {
 		case	CWD:
 			switch (family) {
+			case	SIGNED_16:
+				emit(0x66);
+				
 			case	SIGNED_32:
 				emit(0x99);
 				return;
@@ -1960,6 +1979,7 @@ class X86_64Encoder extends Target {
 				break;
 				
 			case	UNSIGNED_16:
+			case	SIGNED_16:
 				emit(0x66);
 				
 			case	SIGNED_32:
@@ -2149,6 +2169,7 @@ class X86_64Encoder extends Target {
 				break;
 				
 			case	UNSIGNED_16:
+			case	SIGNED_16:
 				emit(0x66);
 				emitRex(left.type.family(), left, R.NO_REG, R.NO_REG);
 				emit(0x81);
@@ -2189,6 +2210,7 @@ class X86_64Encoder extends Target {
 				break;
 				
 			case	UNSIGNED_16:
+			case	SIGNED_16:
 				emit(0x66);
 				
 			case	SIGNED_32:

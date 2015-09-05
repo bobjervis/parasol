@@ -81,6 +81,7 @@ run(filename: long_ops.p)
 run(filename: boolean_ops.p)
 run(filename: byte_ops.p)
 run(filename: char_ops.p)
+run(filename: short_ops.p)
 run(filename: int_ops.p)
 run(filename: unsigned_ops.p)
 run(filename: enum_ops.p)
@@ -685,6 +686,50 @@ compile() { "int a; a = --a;" }
 compile() { "int a; a = ++a;" }
 compile() { "int a; a = a--;" }
 compile() { "int a; a = a++;" }
+
+// The matrix of allowed operators for short operands:
+
+compile() { "short a = short(37 & 37);" }
+compile() { "short a = short(37 | 37);" }
+compile() { "short a = short(37 ^ 37);" }
+compile() { "short a; a &= 37;" }
+compile() { "short a; a |= 37;" }
+compile() { "short a; a ^= 37;" }
+compile() { "short a = short(37 * 37);" }
+compile() { "short a = short(37 / 37);" }
+compile() { "short a = short(37 % 37);" }
+compile() { "short a = short(37 + 37);" }
+compile() { "short a = short(37 - 37);" }
+compile() { "short a = short(37 << 5);" }
+compile() { "short a = short(37 >> 5);" }
+compile() { "short a = short(37 >>> 5);" }
+compile() { "short a; a *= 37;" }
+compile() { "short a; a /= 37;" }
+compile() { "short a; a %= 37;" }
+compile() { "short a; a += 37;" }
+compile() { "short a; a -= 37;" }
+compile() { "short a; a <<= 5;" }
+compile() { "short a; a >>= 5;" }
+compile() { "short a; a >>>= 5;" }
+compile() { "short b; boolean a = b == 37;" }
+compile() { "short b; boolean a = b != 37;" }
+compile() { "short b; boolean a = b < 37;" }
+compile() { "short b; boolean a = b > 37;" }
+compile() { "short b; boolean a = b <= 37;" }
+compile() { "short b; boolean a = b >= 37;" }
+compile() { "short b; boolean a = b <> 37;" }
+compile() { "short b; boolean a = b !< 37;" }
+compile() { "short b; boolean a = b !> 37;" }
+compile() { "short b; boolean a = b !<= 37;" }
+compile() { "short b; boolean a = b !>= 37;" }
+compile() { "short b; boolean a = b !<> 37;" }
+compile() { "short a; a = -a;" }
+compile() { "short a; a = +a;" }
+compile() { "short a; a = ~a;" }
+compile() { "short a; a = --a;" }
+compile() { "short a; a = ++a;" }
+compile() { "short a; a = a--;" }
+compile() { "short a; a = a++;" }
 
 // The matrix of allowed operators for char operands:
 

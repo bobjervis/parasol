@@ -1136,6 +1136,7 @@ public class X86_64 extends X86_64AssignTemps {
 				case	UNSIGNED_8:
 				case	UNSIGNED_16:
 				case	UNSIGNED_32:
+				case	SIGNED_16:
 				case	SIGNED_32:
 				case	SIGNED_64:
 					inst(X86.AND, b.left(), b.right(), compileContext);
@@ -1151,6 +1152,7 @@ public class X86_64 extends X86_64AssignTemps {
 				case	UNSIGNED_8:
 				case	UNSIGNED_16:
 				case	UNSIGNED_32:
+				case	SIGNED_16:
 				case	SIGNED_32:
 				case	SIGNED_64:
 					inst(X86.MOV, R(int(b.register)), b.left(), compileContext);
@@ -1175,6 +1177,7 @@ public class X86_64 extends X86_64AssignTemps {
 				case	UNSIGNED_8:
 				case	UNSIGNED_16:
 				case	UNSIGNED_32:
+				case	SIGNED_16:
 				case	SIGNED_32:
 				case	SIGNED_64:
 					inst(X86.OR, b.left(), b.right(), compileContext);
@@ -1191,6 +1194,7 @@ public class X86_64 extends X86_64AssignTemps {
 				case	UNSIGNED_8:
 				case	UNSIGNED_16:
 				case	UNSIGNED_32:
+				case	SIGNED_16:
 				case	SIGNED_32:
 				case	SIGNED_64:
 					inst(X86.MOV, R(int(b.register)), b.left(), compileContext);
@@ -1215,6 +1219,7 @@ public class X86_64 extends X86_64AssignTemps {
 				case	UNSIGNED_8:
 				case	UNSIGNED_16:
 				case	UNSIGNED_32:
+				case	SIGNED_16:
 				case	SIGNED_32:
 				case	SIGNED_64:
 					inst(X86.XOR, b.left(), b.right(), compileContext);
@@ -1230,6 +1235,7 @@ public class X86_64 extends X86_64AssignTemps {
 				case	UNSIGNED_8:
 				case	UNSIGNED_16:
 				case	UNSIGNED_32:
+				case	SIGNED_16:
 				case	SIGNED_32:
 				case	SIGNED_64:
 					inst(X86.MOV, R(int(b.register)), b.left(), compileContext);
@@ -1303,6 +1309,7 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.MOV, b.left(), R.RAX, compileContext);
 				break;
 				
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 				inst(X86.CWD, b.type.family(), R.RAX);
@@ -1380,6 +1387,7 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.MOV, b.left(), R.RDX, compileContext);
 				break;
 				
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 				inst(X86.MOV, R.RAX, b.left(), compileContext);
@@ -1435,6 +1443,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 				inst(X86.MOV, R.RAX, b.left(), compileContext);
@@ -1466,6 +1475,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 				t = b.left().type.indirectType(compileContext);
@@ -1527,6 +1537,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ADDRESS:
@@ -1592,6 +1603,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 				if (b.register == 0)
@@ -1626,6 +1638,7 @@ public class X86_64 extends X86_64AssignTemps {
 				}
 				break;
 				
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 				if (b.register == 0 || b.op() == Operator.SUBTRACT)
@@ -1651,6 +1664,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 				if (b.register == 0 || b.op() == Operator.SUBTRACT)
@@ -2494,8 +2508,9 @@ public class X86_64 extends X86_64AssignTemps {
 				
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
-			case	SIGNED_32:
 			case	UNSIGNED_32:
+			case	SIGNED_16:
+			case	SIGNED_32:
 			case	SIGNED_64:
 			case	BOOLEAN:
 			case	ENUM:

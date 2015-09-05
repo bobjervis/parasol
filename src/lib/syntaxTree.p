@@ -666,6 +666,7 @@ class Binary extends Node {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	FLOAT_32:
@@ -1358,6 +1359,7 @@ class Binary extends Node {
 				case	UNSIGNED_8:
 				case	UNSIGNED_16:
 				case	UNSIGNED_32:
+				case	SIGNED_16:
 				case	SIGNED_32:
 				case	SIGNED_64:
 					if (_right.op() == Operator.CHARACTER) {
@@ -1397,6 +1399,7 @@ class Binary extends Node {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	FLOAT_32:
@@ -1445,6 +1448,7 @@ class Binary extends Node {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	BOOLEAN:
@@ -1747,6 +1751,7 @@ class Binary extends Node {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	FLOAT_32:
@@ -1774,6 +1779,7 @@ class Binary extends Node {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	VAR:
@@ -1839,7 +1845,9 @@ class Binary extends Node {
 			if (!_left.deferAnalysis()) {
 				switch (_left.type.family()) {
 				case	UNSIGNED_8:
+				case	UNSIGNED_16:
 				case	UNSIGNED_32:
+				case	SIGNED_16:
 				case	SIGNED_32:
 				case	SIGNED_64:
 				case	ENUM:
@@ -1962,6 +1970,7 @@ class Binary extends Node {
 		case	UNSIGNED_8:
 		case	UNSIGNED_16:
 		case	UNSIGNED_32:
+		case	SIGNED_16:
 		case	SIGNED_32:
 		case	SIGNED_64:
 			break;
@@ -1979,7 +1988,9 @@ class Binary extends Node {
 			_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_32, false, compileContext);
 			break;
 
+		case	SIGNED_16:
 		case	SIGNED_32:
+		case	SIGNED_64:
 			break;
 
 		case	BOOLEAN:
@@ -2014,6 +2025,7 @@ class Binary extends Node {
 		case	UNSIGNED_8:
 		case	UNSIGNED_16:
 		case	UNSIGNED_32:
+		case	SIGNED_16:
 		case	SIGNED_32:
 		case	SIGNED_64:
 			break;
@@ -2038,7 +2050,9 @@ class Binary extends Node {
 			}
 			break;
 
+		case	SIGNED_16:
 		case	SIGNED_32:
+		case	SIGNED_64:
 			break;
 
 		case	BOOLEAN:
@@ -6134,6 +6148,7 @@ class Unary extends Node {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	FLOAT_32:
@@ -6157,6 +6172,7 @@ class Unary extends Node {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	FLOAT_32:
@@ -6180,6 +6196,7 @@ class Unary extends Node {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 				type = _operand.type;
@@ -6243,6 +6260,7 @@ class Unary extends Node {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	FLOAT_32:
