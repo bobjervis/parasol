@@ -59,3 +59,16 @@ a func(a x) {
 }
 
 assert(func(a.C) == a.B);
+
+enum Convert {
+	FIRST,
+	second,
+	Third
+}
+
+Convert c = Convert.Third;
+
+printf("Converting Third to string:\n");
+string label = string(c);
+printf("label = %s\n", label);
+assert(string(c) == "Third");

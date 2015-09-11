@@ -233,8 +233,6 @@ class X86_64Encoder extends Target {
 				
 			case	RELATIVE32_DATA:				// Fixup value is a ref<Symbol>
 				ref<Symbol> sym = ref<Symbol>(f.value);
-				int alignment = sym.type().alignment();
-				target = sym.offset;
 				int ipAdjust = *ref<int>(&_code[f.location]);
 				*ref<int>(&_code[f.location]) = int(sym.offset + ipAdjust - (f.location + int.bytes));
 				break;
@@ -295,6 +293,12 @@ class X86_64Encoder extends Target {
 				printf("    @%x ABSOLUTE64_DATA %p\n", f.location, f.value);
 				break;
 				
+			case	ABSOLUTE64_STRING:				// Fixup value is an int offset into the string pool
+				int location = f.locationSymbol.offset + f.location;
+				*ref<int>(&_code[location]) = _pxiHeader.stringsOffset + int(f.value);
+				definePxiFixup(location);
+				break;
+				
 			case	BUILTIN32:						// Fixup value is builtIn index
 				*ref<int>(&_code[f.location]) = _pxiHeader.builtInOffset + int(f.value) * long.bytes - 
 								(f.location + int.bytes);
@@ -325,6 +329,13 @@ class X86_64Encoder extends Target {
 		return true;
 	}
 
+	private void definePxiFixup(int location) {
+		int offset = _code.length();
+		_code.resize(_code.length() + int.bytes);
+		*ref<int>(&_code[offset]) = location;
+		_pxiHeader.relocationCount++;
+	}
+	
 	private void relocateStaticData(int alignment) {
 		_dataOffsets[alignment] = _code.length();
 		for (int i = 0; i < _dataMap[alignment].length(); i++) {
@@ -494,13 +505,7 @@ class X86_64Encoder extends Target {
 						break;
 					}
 					int alignment = type.alignment();
-					if (_dataMap.length() <= alignment)
-						_dataMap.resize(address.bytes + 1);
-					_dataMap[alignment].append(symbol);
-					if (_staticDataSize.length() <= alignment)
-						_staticDataSize.resize(alignment + 1);
-					symbol.offset = _staticDataSize[alignment];
-					_staticDataSize[alignment] += size;
+					assignStaticRegion(symbol, alignment, size);
 				}
 				break;
 
@@ -544,6 +549,16 @@ class X86_64Encoder extends Target {
 				symbol.add(MessageId.UNFINISHED_ASSIGN_STORAGE, compileContext.pool(), CompileString(StorageClassMap.name[scope.storageClass()]));
 			}
 		}
+	}
+	
+	public void assignStaticRegion(ref<Symbol> symbol, int alignment, int size) {
+		if (_dataMap.length() <= alignment) {
+			_dataMap.resize(alignment + 1);
+			_staticDataSize.resize(alignment + 1);
+		}
+		_dataMap[alignment].append(symbol);
+		symbol.offset = _staticDataSize[alignment];
+		_staticDataSize[alignment] += size;
 	}
 
 	public boolean disassemble(ref<Arena> arena) {
@@ -617,7 +632,8 @@ class X86_64Encoder extends Target {
 				cs.fixups = fx.next;
 				fx.next = _fixups;
 				_fixups = fx;
-				fx.location += nextCopy;
+				if (fx.locationSymbol == null)
+					fx.location += nextCopy;
 			}
 			nextCopy += cs.length;
 			switch (cs.continuation) {
@@ -1068,6 +1084,28 @@ class X86_64Encoder extends Target {
 		}
 	}
 
+	void inst(X86 instruction, R dest, R reg, R index) {
+		switch (instruction) {
+		case	MOV:
+			emitRex(TypeFamily.SIGNED_64, null, dest, reg);
+			emit(byte(opcodes[instruction] + 0x03));
+			modRM(0, rmValues[dest], 4);
+			sib(0, rmValues[reg], rmValues[index]);
+			break;
+			
+		case	LEA:
+			emitRex(TypeFamily.SIGNED_64, null, dest, reg);
+			emit(0x8d);
+			modRM(0, rmValues[dest], 4);
+			sib(0, rmValues[reg], rmValues[index]);
+			break;
+			
+		default:
+			printf("%s, %s, %s, %s\n", opcodeNames[instruction], regNames[dest], regNames[reg], regNames[index]);
+			assert(false);
+		}
+	}
+	
 	void inst(X86 instruction, TypeFamily family, R dest, R reg, int offset) {
 		switch (instruction) {
 		case	MOVSD:
@@ -2533,6 +2571,16 @@ class X86_64Encoder extends Target {
 	
 	public void inst(X86 instruction, R dest, ref<Symbol> constant) {
 		switch (instruction) {
+		case	MOV:
+			emitRex(TypeFamily.SIGNED_64, null, dest, R.NO_REG);
+			emit(byte(opcodes[instruction] + 0x03));
+			break;
+			
+		case	LEA:
+			emitRex(TypeFamily.SIGNED_64, null, dest, R.NO_REG);
+			emit(0x8d);
+			break;
+			
 		case	XORPD:
 			emit(0x66);
 		case	XORPS:
@@ -2789,20 +2837,7 @@ class X86_64Encoder extends Target {
 			string output;
 			boolean result;
 			(output, result) = s.unescapeC();
-			offset = _strings.length();
-			int sLength = output.length();
-			_strings.resize(offset + int.bytes);
-			C.memcpy(&_strings[offset], &sLength, int.bytes);
-			for (int i = 0; i < sLength; i++)
-				_strings.append(output[i]);
-			_strings.append(0);
-			int used = (_strings.length() - offset) & 3;
-			if (used > 0) {
-				while (used < 4) {
-					_strings.append(0);
-					used++;
-				}
-			}
+			offset = addStringLiteral(output);
 			modRM(0, regOpcode, 5);
 			fixup(FixupKind.RELATIVE32_STRING, address(offset));
 			emitInt(0);
@@ -2813,6 +2848,24 @@ class X86_64Encoder extends Target {
 			addressMode.print(4);
 			assert(false);
 		}
+	}
+	
+	public int addStringLiteral(string value) {
+		int offset = _strings.length();
+		int sLength = value.length();
+		_strings.resize(offset + int.bytes);
+		C.memcpy(&_strings[offset], &sLength, int.bytes);
+		for (int i = 0; i < sLength; i++)
+			_strings.append(value[i]);
+		_strings.append(0);
+		int used = (_strings.length() - offset) & 3;
+		if (used > 0) {
+			while (used < 4) {
+				_strings.append(0);
+				used++;
+			}
+		}
+		return offset;
 	}
 	/*
 	 * Calculate the necessary REX bits for this addressmode.
@@ -3135,9 +3188,14 @@ class X86_64Encoder extends Target {
 	}
 
 	private void fixup(FixupKind kind, address value) {
+		 fixup(kind, null, _functionCode.length() - _f.emitting.codeOffset, value);
+	}
+	
+	protected void fixup(FixupKind kind, ref<Symbol> locationSymbol, int location, address value) {
 		 ref<Fixup> f = new Fixup();
 		 f.kind = kind;
-		 f.location = _functionCode.length() - _f.emitting.codeOffset;
+		 f.locationSymbol = locationSymbol; 
+		 f.location = location;
 		 f.value = value;
 		 f.next = _f.emitting.fixups;
 		 _f.emitting.fixups = f;
@@ -3199,11 +3257,14 @@ enum FixupKind {
 	ABSOLUTE64_JUMP,				// Fixup value is a ref<CodeSegment>
 	ABSOLUTE64_CODE,				// Fixup value is a ref<Scope>
 	ABSOLUTE64_DATA,				// Fixup value is a ref<Symbol>
+	ABSOLUTE64_STRING,				// Fixup value is a an int offset into the string pool
 	BUILTIN32						// Fixup value is builtIn index
 }
 
 class Fixup {
 	public FixupKind kind;
+	public ref<Symbol> locationSymbol;			// For data-fixups, the static symbol from which
+												// the location is offset.
 	public int location;						// Where the bytes to be fixed up appear in code
 	public address value;						// What the value should be
 	public ref<Fixup> next;						// Next fixup
@@ -3232,6 +3293,10 @@ class Fixup {
 			
 		case	ABSOLUTE64_DATA:				// Fixup value is a ref<Symbol>
 			printf("    @%x ABSOLUTE64_DATA %p\n", location, value);
+			break;
+			
+		case	ABSOLUTE64_STRING:				// Fixup value is a ref<Symbol>
+			printf("    @%x ABSOLUTE64_STRING %p\n", location, value);
 			break;
 			
 		case	BUILTIN32:						// Fixup value is builtIn index

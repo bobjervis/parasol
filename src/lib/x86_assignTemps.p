@@ -935,6 +935,16 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	FUNCTION:
 				assignCast(result, operand, regMask, longMask, compileContext);
 				return;
+				
+			case	STRING:
+				// We can't use the assignCast method because this is a method call, so the output
+				// register is fixed
+				int depth = tempStackDepth();
+				assignRegisterTemp(operand, RCXmask, compileContext);
+				f().r.getreg(result, RAXmask, RAXmask);
+				f().r.cleanupTemps(result, depth);
+				result.register = byte(R.RAX);
+				return;
 			}
 			break;
 

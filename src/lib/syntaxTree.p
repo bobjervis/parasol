@@ -4077,7 +4077,7 @@ class Identifier extends Node {
 
 	void bindTemplateOverload(Operator visibility, boolean isStatic, ref<Node> annotations, ref<Scope> enclosing, ref<Template> templateDef, ref<CompileContext> compileContext) {
 		_definition = true;
-		ref<ParameterScope> templateScope = compileContext.createParameterScope(templateDef, StorageClass.TEMPLATE);
+		ref<ParameterScope> templateScope = compileContext.createParameterScope(templateDef, ParameterScope.Kind.TEMPLATE);
 		ref<Overload> o = enclosing.defineOverload(&_value, Operator.TEMPLATE, compileContext.pool());
 		if (o != null) {
 			_symbol = o.addInstance(visibility, isStatic, annotations, this, templateScope, compileContext);
@@ -5835,9 +5835,9 @@ class Unary extends Node {
 				}
 			}
 			switch (type.family()) {
+			case	STRING:
 			case	UNSIGNED_16:
 			case	SIGNED_32:
-			case	STRING:
 			case	SIGNED_64:
 				switch (_operand.type.family()) {
 				case	VAR:

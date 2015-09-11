@@ -434,6 +434,8 @@ class EnumInstanceType extends Type {
 	private ref<Symbol> _symbol;
 	private ref<Scope> _scope;
 	private ref<ClassType> _instanceClass;
+	
+	private ref<ParameterScope> _toStringMethod;
 
 	protected EnumInstanceType(ref<Symbol> symbol, ref<Scope> scope, ref<ClassType> instanceClass) {
 		super(TypeFamily.ENUM);
@@ -465,6 +467,12 @@ class EnumInstanceType extends Type {
 		// is equivalent to object identity on the type
 		// object.
 		return false;
+	}
+	
+	public ref<ParameterScope> toStringMethod(ref<Target> target, ref<CompileContext> compileContext) {
+		if (_toStringMethod == null)
+			_toStringMethod = target.generateEnumToStringMethod(this, compileContext);
+		return _toStringMethod;
 	}
 }
 

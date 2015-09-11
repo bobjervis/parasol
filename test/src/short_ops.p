@@ -175,9 +175,9 @@ int main(string[] args) {
 	d = 17;
 	assert(func(d) == 17);
 	
-//	assert(short.MAX_VALUE == 0x7fff);
+	assert(short.MAX_VALUE == 0x7fff);
 	
-//	assert(short.MIN_VALUE == (-1 << 15));
+	assert(short.MIN_VALUE == (-1 << 15));
 	return 0;
 }
 

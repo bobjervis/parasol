@@ -125,7 +125,8 @@ class ClasslikeScope extends Scope {
 
 	ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> source, ref<Node> declaration, ref<Node> initializer, ref<MemoryPool> memoryPool) {
 		ref<Symbol> sym = super.define(visibility, storageClass, annotations, source, declaration, initializer, memoryPool);
-		_members.append(sym);
+		if (sym != null)
+			_members.append(sym);
 		return sym;
 	}
 
@@ -141,7 +142,7 @@ class ClasslikeScope extends Scope {
 				return;
 			if (baseClass.constructors().length() == 0)
 				return;
-			ref<ParameterScope> functionScope = compileContext.arena().createParameterScope(this, null, StorageClass.PARAMETER);
+			ref<ParameterScope> functionScope = compileContext.arena().createParameterScope(this, null, ParameterScope.Kind.DEFAULT_CONSTRUCTOR);
 			defineConstructor(functionScope, compileContext.pool());
 			if (compileContext.arena().verbose) {
 				printf("current %p tree = %p base constructors %d constructors %d\n", compileContext.current(), compileContext.tree(), baseClass.constructors().length(), constructors().length());
@@ -261,14 +262,31 @@ class ClasslikeScope extends Scope {
 		}
 		return -1;
 	}
+	
+	public ref<Symbol>[] members() {
+		return _members;
+	}
 }
 
 class EnumScope extends ClasslikeScope {
+	public ref<EnumType> enumType;
+	
+	private ref<Symbol>[] _instances;
+	
 	public EnumScope(ref<Scope> enclosing, ref<Block> definition, ref<Identifier> enumName) {
 		super(enclosing, definition, StorageClass.ENUMERATION, enumName);
 	}
 
-	public ref<EnumType> enumType;
+	ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> source, ref<Type> type, ref<Node> initializer, ref<MemoryPool> memoryPool) {
+		ref<Symbol> sym = super.define(visibility, storageClass, annotations, source, type, initializer, memoryPool);
+		if (sym != null)
+			_instances.append(sym);
+		return sym;
+	}
+
+	public ref<Symbol>[] instances() {
+		return _instances;
+	}
 }
 /*
  * ParameterScope - a.k.a functionScope
@@ -313,18 +331,28 @@ class EnumScope extends ClasslikeScope {
  * The ParameterScope is the Scope recorded with the FunctionType for a function declaration.
  */
 class ParameterScope extends Scope {
+	public enum Kind {
+		FUNCTION,				// any ordinary constructor, destructor, method or function
+		TEMPLATE,				// any template
+		DEFAULT_CONSTRUCTOR,	// a default constructor (no source code) generated when needed
+		ENUM_TO_STRING,			// a generated enum-to-string coercion method
+	}
+	private Kind _kind;
 	private ref<Symbol>[] _parameters;
 	private boolean _hasEllipsis;
-	
+		
 	public address value;				// scratch area for use by code generators
 	
-	public ParameterScope(ref<Scope> enclosing, ref<Node> definition, StorageClass storageClass) {
-		super(enclosing, definition, storageClass, null);
+	public ParameterScope(ref<Scope> enclosing, ref<Node> definition, Kind kind) {
+		super(enclosing, definition, 
+				kind == Kind.TEMPLATE ? StorageClass.TEMPLATE : StorageClass.PARAMETER, null);
+		_kind = kind;
 	}
 
 	ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> definition, ref<Node> declaration, ref<Node> initializer, ref<MemoryPool> memoryPool) {
 		ref<Symbol> sym = super.define(visibility, storageClass, annotations, definition, declaration, initializer, memoryPool);
-		_parameters.append(sym);
+		if (sym != null)
+			_parameters.append(sym);
 		if (declaration != null && declaration.getProperEllipsis() != null)
 			_hasEllipsis = true;
 		return sym;
@@ -334,6 +362,10 @@ class ParameterScope extends Scope {
 		return _parameters;
 	}
 
+	public Kind kind() {
+		return _kind;
+	}
+	
 	public boolean hasEllipsis() {
 		return _hasEllipsis;
 	}
@@ -687,11 +719,21 @@ class Scope {
 	}
 
 	ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> source, ref<Type> type, ref<Node> initializer, ref<MemoryPool> memoryPool) {
+		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations, source.identifier(), source, type, initializer);
 		string name = source.identifier().asString();
 		if (_symbols.contains(name))
 			return null;
-		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations, source.identifier(), source, type, initializer);
 		_symbols[name] = sym;
+		return sym;
+	}
+
+	ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, pointer<byte> name, ref<Type> type, ref<Node> initializer, ref<MemoryPool> memoryPool) {
+		CompileString cs(name);
+		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations, &cs, null, type, initializer);
+		string nm(name);
+		if (_symbols.contains(nm))
+			return null;
+		_symbols[nm] = sym;
 		return sym;
 	}
 
@@ -769,6 +811,8 @@ class Scope {
 	public int parameterCount() {
 		if (_storageClass == StorageClass.TEMPLATE)
 			return _symbols.size();
+		else if (_definition == null)
+			return 0;
 		else {
 			if (_definition.deferAnalysis())
 				return int.MIN_VALUE;
@@ -776,6 +820,10 @@ class Scope {
 		}
 	}
 
+	public int symbolCount() {
+		return _symbols.size();
+	}
+	
 	public boolean encloses(ref<Scope> inner) {
 		while (inner != null) {
 			if (inner == this)

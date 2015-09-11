@@ -1388,7 +1388,7 @@ class Code extends Value {
 			ref<Function> func = ref<Function>(tree);
 			if (func.body != null) {
 				if (func.name() == null) {
-					ref<ParameterScope> functionScope = target.arena().createParameterScope(compileContext.current(), func, StorageClass.PARAMETER);
+					ref<ParameterScope> functionScope = target.arena().createParameterScope(compileContext.current(), func, ParameterScope.Kind.FUNCTION);
 					_owner.getCode(functionScope, target, compileContext);
 					pushAddress(ref<Value>(functionScope.value), target);
 				}

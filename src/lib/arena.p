@@ -295,8 +295,8 @@ public class Arena {
 		return s;
 	}
 
-	ref<ParameterScope> createParameterScope(ref<Scope> enclosing, ref<Node> definition, StorageClass storageClass) {
-		ref<ParameterScope> s = new ParameterScope(enclosing, definition, storageClass);
+	ref<ParameterScope> createParameterScope(ref<Scope> enclosing, ref<Node> definition, ParameterScope.Kind kind) {
+		ref<ParameterScope> s = new ParameterScope(enclosing, definition, kind);
 		_scopes.append(s);
 		return s;
 	}

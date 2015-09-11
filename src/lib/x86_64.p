@@ -29,6 +29,7 @@ import parasol:compiler.CompileContext;
 import parasol:compiler.CompileString;
 import parasol:compiler.Constant;
 import parasol:compiler.EnumInstanceType;
+import parasol:compiler.EnumScope;
 import parasol:compiler.EllipsisArguments;
 import parasol:compiler.FileStat;
 import parasol:compiler.For;
@@ -207,12 +208,12 @@ public class X86_64 extends X86_64AssignTemps {
 		}
 		pointer<int> pxiFixups = pointer<int>(&_staticMemory[_pxiHeader.relocationOffset]);
 		if (runtime.makeRegionExecutable(_staticMemory, _staticMemoryLength)) {
+			pointer<long> vp;
 			for (int i = 0; i < _pxiHeader.relocationCount; i++) {
-				long fx = pxiFixups[i];
-				assert(false);
-				return 0, false;
+				vp = pointer<long>(_staticMemory + pxiFixups[i]);
+				*vp += long(address(_staticMemory));
 			}
-			pointer<long> vp = pointer<long>(_staticMemory + _pxiHeader.vtablesOffset);
+			vp = pointer<long>(_staticMemory + _pxiHeader.vtablesOffset);
 			for (int i = 0; i < _pxiHeader.vtableData; i++, vp++)
 				*vp += long(address(_staticMemory));
 			runtime.setTrace(_arena.trace);
@@ -222,12 +223,12 @@ public class X86_64 extends X86_64AssignTemps {
 		} else {
 			pointer<byte> generatedCode = pointer<byte>(runtime.allocateRegion(_staticMemoryLength));
 			C.memcpy(generatedCode, _staticMemory, _staticMemoryLength);
+			pointer<long> vp;
 			for (int i = 0; i < _pxiHeader.relocationCount; i++) {
-				long fx = pxiFixups[i];
-				assert(false);
-				return 0, false;
+				vp = pointer<long>(generatedCode + pxiFixups[i]);
+				*vp += long(address(generatedCode));
 			}
-			pointer<long> vp = pointer<long>(generatedCode + _pxiHeader.vtablesOffset);
+			vp = pointer<long>(generatedCode + _pxiHeader.vtablesOffset);
 			for (int i = 0; i < _pxiHeader.vtableData; i++, vp++)
 				*vp += long(address(generatedCode));
 			if (runtime.makeRegionExecutable(generatedCode, _staticMemoryLength)) {
@@ -395,9 +396,49 @@ public class X86_64 extends X86_64AssignTemps {
 
 		ref<Function> func = ref<Function>(scope.definition());
 		if (func == null) {
-			generateCallToBaseDefaultConstructor(parameterScope, compileContext);
-			if (!generateReturn(scope, compileContext))
+			switch (parameterScope.kind()) {
+			case	DEFAULT_CONSTRUCTOR:
+				generateCallToBaseDefaultConstructor(parameterScope, compileContext);
+				if (!generateReturn(scope, compileContext))
+					assert(false);
+				break;
+				
+			case	ENUM_TO_STRING:
+				ref<EnumScope> enclosing = ref<EnumScope>(scope.enclosing());
+				
+				ref<Symbol>[] instances = enclosing.instances();
+				ref<CodeSegment> nullCase = new CodeSegment;
+				ref<CodeSegment> join = new CodeSegment;
+				inst(X86.CMP, TypeFamily.ADDRESS, R.RCX, 0);
+				closeCodeSegment(CC.JE, nullCase);
+				ref<EnumInstanceType> t = ref<EnumInstanceType>(enclosing.enumType.wrappedType());
+				loadEnumType(R.RAX, t.symbol(), 0);
+				inst(X86.SUB, TypeFamily.SIGNED_64, R.RCX, R.RAX);
+				inst(X86.SAL, TypeFamily.SIGNED_64, R.RCX, 1);
+				ref<Symbol> stringArray;
+				if (parameterScope.symbolCount() == 0) {
+					static string nm = "*";
+					stringArray = parameterScope.define(Operator.PRIVATE, StorageClass.STATIC, null, &nm[0], compileContext.arena().builtInType(TypeFamily.ADDRESS), null, compileContext.pool());
+					assignStaticRegion(stringArray, string.bytes, instances.length() * string.bytes);
+					for (int i = 0; i < instances.length(); i++) {
+						int offset = addStringLiteral(instances[i].name().asString());
+						fixup(FixupKind.ABSOLUTE64_STRING, stringArray, i * address.bytes, address(offset));
+					}
+				} else
+					stringArray = parameterScope.lookup("*");
+				inst(X86.LEA, R.RAX, stringArray);
+				inst(X86.MOV, R.RAX, R.RCX, R.RAX);
+				closeCodeSegment(CC.JMP, join);
+				nullCase.start(this);
+				inst(X86.XOR, TypeFamily.ADDRESS, R.RAX, R.RAX);
+				join.start(this);
+				if (!generateReturn(scope, compileContext))
+					assert(false);
+				break;
+				
+			default:
 				assert(false);
+			}
 			return;
 		}
 		if (func.op() == Operator.FUNCTION) {
@@ -1040,7 +1081,7 @@ public class X86_64 extends X86_64AssignTemps {
 			ref<Function> func = ref<Function>(node);
 			if (func.body != null) {
 				if (func.name() == null) {
-					ref<ParameterScope> functionScope = _arena.createParameterScope(compileContext.current(), func, StorageClass.PARAMETER);
+					ref<ParameterScope> functionScope = _arena.createParameterScope(compileContext.current(), func, ParameterScope.Kind.FUNCTION);
 					ref<Scope> funcScope;
 					boolean isBuiltIn;
 										
@@ -2389,20 +2430,16 @@ public class X86_64 extends X86_64AssignTemps {
 			switch (node.type.family()) {
 			case	CLASS:
 			case	SHAPE:
-				ref<Scope> scope = node.type.scope();
-				for (int i = 0; i < scope.constructors().length(); i++) {
-					ref<Scope> sc = scope.constructors()[i];
-					if (sc.symbols().size() == 0) {
-						inst(X86.LEA, R.RCX, node, compileContext);
-						if (node.type.hasVtable())
-							storeVtable(node.type, compileContext);
-//						printf("Found a constructor!\n");
-//						node.print(4);
-//						sc.print(4, false);
-						instCall(ref<ParameterScope>(sc), compileContext);
-						hasDefaultConstructor = true;
-						break;
-					}
+				ref<ParameterScope> constructor = node.type.scope().defaultConstructor();
+				if (constructor != null) {
+					inst(X86.LEA, R.RCX, node, compileContext);
+					if (node.type.hasVtable())
+						storeVtable(node.type, compileContext);
+//					printf("Found a constructor!\n");
+//					node.print(4);
+//					sc.print(4, false);
+					instCall(constructor, compileContext);
+					hasDefaultConstructor = true;
 				}
 			}
 			if (!hasDefaultConstructor) {
@@ -3206,6 +3243,11 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.SAR, src, 1);
 				inst(X86.CVTSI2SD, result, n, compileContext);
 				return;
+				
+			case	STRING:
+				t = ref<EnumInstanceType>(existingType);
+				instCall(t.toStringMethod(this, compileContext), compileContext);
+				return;
 			}
 			break;
 
@@ -3303,6 +3345,11 @@ public class X86_64 extends X86_64AssignTemps {
 		assert(false);
 	}
 
+	public ref<ParameterScope> generateEnumToStringMethod(ref<EnumInstanceType> type, ref<CompileContext> compileContext) {
+		ref<ParameterScope> scope = compileContext.arena().createParameterScope(type.scope(), null, ParameterScope.Kind.ENUM_TO_STRING);
+		return scope;
+	}
+	
 	private void generateIntToEnum(ref<Node> result, ref<Node> node, ref<EnumInstanceType> newType) {
 		loadEnumType(R(int(result.register)), newType.symbol(), 0);
 		loadEnumAddress(R(int(result.register)), R(int(node.register)));

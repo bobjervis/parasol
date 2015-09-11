@@ -106,6 +106,10 @@ public class Target {
 		n.traverse(Node.Traversal.REVERSE_PRE_ORDER, gatherCasesFunc, closure);
 	}
 	
+	public ref<ParameterScope> generateEnumToStringMethod(ref<EnumInstanceType> type, ref<CompileContext> compileContext) {
+		return null;
+	}
+	
 	public void unfinished(ref<Node> n, string explanation, ref<CompileContext> compileContext) {
 		n.add(MessageId.UNFINISHED_GENERATE, compileContext.pool(), CompileString(" "/*n.class.name()*/), CompileString(operatorMap.name[n.op()]), CompileString(explanation));
 	}

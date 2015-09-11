@@ -16,8 +16,8 @@
 namespace parasol:integers;
 
 public class short {
-//	public static short MIN_VALUE = 0xffffffffffff8000;
-//	public static short MAX_VALUE = 0x7fff;
+	public static short MIN_VALUE = 0xffffffffffff8000;
+	public static short MAX_VALUE = 0x7fff;
 
 	public short() {
 	}

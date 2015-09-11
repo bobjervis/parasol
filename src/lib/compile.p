@@ -410,7 +410,7 @@ class CompileContext {
 
 		case	FUNCTION:{
 			ref<Function> f = ref<Function>(n);
-			ref<ParameterScope> functionScope = createParameterScope(f, StorageClass.PARAMETER);
+			ref<ParameterScope> functionScope = createParameterScope(f, ParameterScope.Kind.FUNCTION);
 			if (f.name() != null) {
 				switch (f.functionCategory()) {
 				case	CONSTRUCTOR:
@@ -465,8 +465,8 @@ class CompileContext {
 		return _arena.createScope(_current, n, storageClass);
 	}
 
-	ref<ParameterScope> createParameterScope(ref<Node> n, StorageClass storageClass) {
-		return _arena.createParameterScope(_current, n, storageClass);
+	ref<ParameterScope> createParameterScope(ref<Node> n, ParameterScope.Kind kind) {
+		return _arena.createParameterScope(_current, n, kind);
 	}
 
 	public ref<ClassScope> createClassScope(ref<Node> n, ref<Identifier> className) {
