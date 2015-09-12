@@ -47,7 +47,6 @@ import parasol:compiler.StringScanner;
 import parasol:compiler.SyntaxTree;
 import parasol:compiler.Target;
 import parasol:compiler.Token;
-import parasol:compiler.tokens;
 import parasol:compiler.TraverseAction;
 
 private boolean verboseFlag;
@@ -210,7 +209,7 @@ class ScanObject extends script.Object {
 		do {
 			t = scanner.next();
 			CompileString value = scanner.value();
-			printf("%s %s\n", tokens.name[t], value.asString());
+			printf("%s %s\n", string(t), value.asString());
 		} while(t != Token.END_OF_STREAM);
 	}
 }
@@ -280,7 +279,7 @@ class ExpressionObject extends script.Object {
 		Token t;
 		do {
 			t = scanner.next();
-			printf("%s %s\n", tokens.name[t], scanner.value().asString());
+			printf("%s %s\n", string(t), scanner.value().asString());
 		} while(t != Token.END_OF_STREAM);
 		expression.print(0);
 		printSyntaxErrors(expression, &_source);
@@ -356,7 +355,7 @@ class StatementObject extends script.Object {
 			if (checkMessages(statement, get("message")) && _expect == outcome)
 				return true;
 		}
-		printf("  Expecting %s got %s\n", expectNames[_expect], expectNames[outcome]);
+		printf("  Expecting %s got %s\n", string(_expect), string(outcome));
 		dump(statement);
 		return false;
 	}
@@ -371,7 +370,7 @@ class StatementObject extends script.Object {
 		do {
 			t = scanner.next();
 			CompileString value = scanner.value();
-			printf("%s %s\n", tokens.name[t], value.asString());
+			printf("%s %s\n", string(t), value.asString());
 		} while(t != Token.END_OF_STREAM);
 		expression.print(0);
 		printSyntaxErrors(expression, &_source);
@@ -457,7 +456,7 @@ class CompileObject  extends script.Object {
 			!checkMessages(f.tree().root(), get("message")) ||
 			postCodeGenerationMessages > 0 ||
 			_expect != outcome) {
-			printf("\n  Expecting %s got %s\n", expectNames[_expect], expectNames[outcome]);
+			printf("\n  Expecting %s got %s\n", string(_expect), string(outcome));
 			printf("      Messages flagged before code generation %d\n      Messages flagged after code generation %d\n", preCodeGenerationMessages, postCodeGenerationMessages);
 			if (verboseFlag)
 				f.tree().root().print(0);
@@ -594,9 +593,9 @@ class RunObject extends script.Object {
 		}
 		printf("--> %s\n", command);
 		printf("%s\n", output);
-		printf("  Expecting %s got %s\n", expectNames[_expect], expectNames[outcome]);
+		printf("  Expecting %s got %s\n", string(_expect), string(outcome));
 		if (result < 0)
-			printf("    Saw an exception running %s: %s\n", _filename, process.exceptionNames[exception]);
+			printf("    Saw an exception running %s: %s\n", _filename, string(exception));
 		else if (result != _exitCode)
 			printf("    Unexpected exit code %d\n", result);
 		if (verboseFlag) {
@@ -719,7 +718,7 @@ boolean checkMessages(ref<Node> n, ref<script.Atom> message) {
 			}
 		}
 		if (!found) {
-			printf("Did not see message '%s' in messages\n", messageMap.name[targets[i]]);
+			printf("Did not see message '%s' in messages\n", string(targets[i]));
 			return false;
 		}
 	}
@@ -735,10 +734,3 @@ TraverseAction dumpSyntaxError(ref<Node> n, address data) {
 		dumpCursor(n, data);
 	return TraverseAction.CONTINUE_TRAVERSAL;
 }
-
-string[Expect] expectNames;
-
-expectNames.append("SUCCESS");
-expectNames.append("FAIL");
-expectNames.append("RECOVERED");
-expectNames.append("SEMANTIC");

@@ -56,49 +56,6 @@ enum R {
 	MAX_REG
 }
 
-string[R] regNames;
-
-regNames.resize(R.MAX_REG);
-regNames[R.RAX] = "RAX";
-regNames[R.RBX] = "RBX";
-regNames[R.RCX] = "RCX";
-regNames[R.RDX] = "RDX";
-
-regNames[R.RSP] = "RSP";
-regNames[R.RBP] = "RBP";
-regNames[R.RSI] = "RSI";
-regNames[R.RDI] = "RDI";
-
-regNames[R.R8] = "R8";
-regNames[R.R9] = "R9";
-regNames[R.R10] = "R10";
-regNames[R.R11] = "R11";
-
-regNames[R.R12] = "R12";
-regNames[R.R13] = "R13";
-regNames[R.R14] = "R14";
-regNames[R.R15] = "R15";
-
-regNames[R.XMM0] = "XMM0";
-regNames[R.XMM1] = "XMM1";
-regNames[R.XMM2] = "XMM2";
-regNames[R.XMM3] = "XMM3";
-regNames[R.XMM4] = "XMM4";
-regNames[R.XMM5] = "XMM5";
-regNames[R.XMM6] = "XMM6";
-regNames[R.XMM7] = "XMM7";
-
-regNames[R.XMM8] = "XMM8";
-regNames[R.XMM9] = "XMM9";
-regNames[R.XMM10] = "XMM10";
-regNames[R.XMM11] = "XMM11";
-regNames[R.XMM12] = "XMM12";
-regNames[R.XMM13] = "XMM13";
-regNames[R.XMM14] = "XMM14";
-regNames[R.XMM15] = "XMM15";
-
-regNames[R.AH] = "AH";
-
 long RAXmask = getRegMask(R.RAX);
 long RBXmask = getRegMask(R.RBX);
 long RCXmask = getRegMask(R.RCX);
@@ -771,7 +728,7 @@ class Spill {
 	}
 	
 	public void print() {
-		printf("    %p: spill %s w %d reg %s where %p\n", this, spillKindNames[spillKind], int(width), regNames[newRegister], where);
+		printf("    %p: spill %s w %d reg %s where %p\n", this, spillKindNames[spillKind], int(width), string(newRegister), where);
 		affected.print(8);
 	}
 }
@@ -791,7 +748,7 @@ class Temporary {
 	}
 	
 	void print() {
-		printf("Temp %p reg %s currently %s desired %x\n", this, regNames[reg], regNames[currentReg], desired);
+		printf("Temp %p reg %s currently %s desired %x\n", this, string(reg), string(currentReg), desired);
 		if (node != null)
 			node.print(4);
 	}

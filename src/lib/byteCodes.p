@@ -51,7 +51,6 @@ import parasol:compiler.Return;
 import parasol:compiler.Scope;
 import parasol:compiler.Selection;
 import parasol:compiler.StorageClass;
-import parasol:compiler.StorageClassMap;
 import parasol:compiler.Symbol;
 import parasol:compiler.Target;
 import parasol:compiler.Ternary;
@@ -420,7 +419,7 @@ public class ByteCodesTarget extends Target {
 				if (symbol.value == null) {
 					int size = type.size();
 					if (size < 0) {
-						symbol.add(MessageId.UNFINISHED_ASSIGN_STORAGE, compileContext.pool(), CompileString(StorageClassMap.name[symbol.storageClass()]));
+						symbol.add(MessageId.UNFINISHED_ASSIGN_STORAGE, compileContext.pool(), CompileString(string(symbol.storageClass())));
 						break;
 					}
 					symbol.value = _unit.newStaticObject(_unit, symbol, size);
@@ -451,7 +450,7 @@ public class ByteCodesTarget extends Target {
 				size = type.size();
 				alignment = type.alignment();
 				if (alignment == -1) {
-					symbol.add(MessageId.UNFINISHED_ASSIGN_STORAGE, compileContext.pool(), CompileString(StorageClassMap.name[scope.storageClass()]));
+					symbol.add(MessageId.UNFINISHED_ASSIGN_STORAGE, compileContext.pool(), CompileString(string(scope.storageClass())));
 				}
 				scope.variableStorage = (scope.variableStorage + alignment - 1) & ~(alignment - 1);
 				symbol.offset = scope.variableStorage;
@@ -468,7 +467,7 @@ public class ByteCodesTarget extends Target {
 			}	break;
 
 			default:
-				symbol.add(MessageId.UNFINISHED_ASSIGN_STORAGE, compileContext.pool(), CompileString(StorageClassMap.name[scope.storageClass()]));
+				symbol.add(MessageId.UNFINISHED_ASSIGN_STORAGE, compileContext.pool(), CompileString(string(scope.storageClass())));
 			}
 		}
 	}

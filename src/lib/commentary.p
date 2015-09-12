@@ -138,7 +138,7 @@ class Commentary {
 	}
 	
 	public void print(int indent) {
-		printf("%*.*c%d %s[%s]\n", indent, indent, ' ', int(_messageId), messageMap.name[_messageId], _message);
+		printf("%*.*c%d %s[%s]\n", indent, indent, ' ', int(_messageId), string(_messageId), _message);
 	}
 
 	public ref<Commentary> next() { 
@@ -163,109 +163,9 @@ MessageMap messageMap;
 
 class MessageMap {
 	private static string[MessageId] _message;
-	public static string[MessageId] name;
 	
 	MessageMap() {
 		_message.resize(MessageId.MAX_MESSAGE);
-		name.resize(MessageId.MAX_MESSAGE);
-		name[MessageId.ABSTRACT_INSTANCE_DISALLOWED] = "ABSTRACT_INSTANCE_DISALLOWED";
-		name[MessageId.AMBIGUOUS_REFERENCE] = "AMBIGUOUS_REFERENCE";
-		name[MessageId.BAD_TOKEN] = "BAD_TOKEN";
-		name[MessageId.DISALLOWED_ANNOTATION] = "DISALLOWED_ANNOTATION";
-		name[MessageId.FILE_NOT_READ] = "FILE_NOT_READ";
-		name[MessageId.BREAK_NO_SEMI] = "BREAK_NO_SEMI";
-		name[MessageId.CASE_NO_CO] = "CASE_NO_CO";
-		name[MessageId.EXPECTING_TERM] = "EXPECTING_TERM";
-		name[MessageId.NOT_EXPECTING_ELSE] = "NOT_EXPECTING_ELSE";
-		name[MessageId.UNEXPECTED_EOF] = "UNEXPECTED_EOF";
-		name[MessageId.DO_WHILE_NO_SEMI] = "DO_WHILE_NO_SEMI";
-		name[MessageId.UNEXPECTED_RC] = "UNEXPECTED_RC";
-		name[MessageId.EXPECTING_RS] = "EXPECTING_RS";
-		name[MessageId.SYNTAX_ERROR] = "SYNTAX_ERROR";
-		name[MessageId.DUPLICATE] = "DUPLICATE";
-		name[MessageId.UNDEFINED] = "UNDEFINED";
-		name[MessageId.UNDEFINED_BUILT_IN] = "UNDEFINED_BUILT_IN";
-		name[MessageId.UNFINISHED_ASSIGN_TYPE] = "ASSIGN_TYPE";
-		name[MessageId.UNFINISHED_CONTROL_FLOW] = "UNFINISHED_CONTROL_FLOW";
-		name[MessageId.INVALID_IMPORT] = "INVALID_IMPORT";
-		name[MessageId.NOT_A_TYPE] = "NOT_A_TYPE";
-		name[MessageId.NOT_A_FUNCTION] = "NOT_A_FUNCTION";
-		name[MessageId.INVALID_SUPER] = "INVALID_SUPER";
-		name[MessageId.NOT_A_TEMPLATE] = "NOT_A_TEMPLATE";
-		name[MessageId.NOT_CONSTANT] = "NOT_CONSTANT";
-		name[MessageId.NO_CODE] = "NO_CODE";
-		name[MessageId.UNFINISHED_GENERATE] = "UNFINISHED_GENERATE";
-		name[MessageId.BAD_STRING] = "BAD_STRING";
-		name[MessageId.BAD_CHAR] = "BAD_CHAR";
-		name[MessageId.UNREACHABLE] = "UNREACHABLE";
-		name[MessageId.CIRCULAR_DEFINITION] = "CIRCULAR_DEFINITION";
-		name[MessageId.RETURN_VALUE_REQUIRED] = "RETURN_VALUE_REQUIRED";
-		name[MessageId.RETURN_VALUE_DISALLOWED] = "RETURN_VALUE_DISALLOWED";
-		name[MessageId.RETURN_DISALLOWED] = "RETURN_DISALLOWED";
-		name[MessageId.UNFINISHED_ASSIGN_STORAGE] = "UNFINISHED_ASSIGN_STORAGE";
-		name[MessageId.UNFINISHED_FIXED_ARRAY] = "UNFINISHED_FIXED_ARRAY";
-		name[MessageId.UNFINISHED_CONSTRUCTION] = "UNFINISHED_CONSTRUCTION";
-		name[MessageId.TYPE_MISMATCH] = "TYPE_MISMATCH";
-		name[MessageId.INVALID_MULTIPLY] = "INVALID_MULTIPLY";
-		name[MessageId.INVALID_NEGATE] = "INVALID_NEGATE";
-		name[MessageId.INVALID_DIVIDE] = "INVALID_DIVIDE";
-		name[MessageId.INVALID_AND] = "INVALID_AND";
-		name[MessageId.INVALID_OR] = "INVALID_OR";
-		name[MessageId.INVALID_XOR] = "INVALID_XOR";
-		name[MessageId.INVALID_BIT_COMPLEMENT] = "INVALID_BIT_COMPLEMENT";
-		name[MessageId.INVALID_COMPARE] = "INVALID_COMPARE";
-		name[MessageId.INVALID_INDIRECT] = "INVALID_INDIRECT";
-		name[MessageId.INVALID_SWITCH] = "INVALID_SWITCH";
-		name[MessageId.INVALID_REMAINDER] = "INVALID_REMAINDER";
-		name[MessageId.INVALID_ADD] = "INVALID_ADD";
-		name[MessageId.INVALID_SUBTRACT] = "INVALID_SUBTRACT";
-		name[MessageId.INVALID_SUBSCRIPT] = "INVALID_SUBSCRIPT";
-		name[MessageId.INVALID_UNARY_PLUS] = "INVALID_UNARY_PLUS";
-		name[MessageId.LEFT_NOT_INT] = "LEFT_NOT_INT";
-		name[MessageId.SHIFT_NOT_INT] = "SHIFT_NOT_INT";
-		name[MessageId.NOT_BOOLEAN] = "NOT_BOOLEAN";
-		name[MessageId.NOT_ENUM_INSTANCE] = "NOT_ENUM_INSTANCE";
-		name[MessageId.INVALID_CASE] = "INVALID_CASE";
-		name[MessageId.INVALID_DEFAULT] = "INVALID_DEFAULT";
-		name[MessageId.INVALID_BREAK] = "INVALID_BREAK";
-		name[MessageId.INVALID_CONTINUE] = "INVALID_CONTINUE";
-		name[MessageId.NOT_INTEGER] = "NOT_INTEGER";
-		name[MessageId.NOT_NUMERIC] = "NOT_NUMERIC";
-		name[MessageId.DUPLICATE_DESTRUCTOR] = "DUPLICATE_DESTRUCTOR";
-		name[MessageId.NOT_SIMPLE_VARIABLE] = "NOT_SIMPLE_VARIABLE";
-		name[MessageId.NO_PARAMS_IN_DESTRUCTOR] = "NO_PARAMS_IN_DESTRUCTOR";
-		name[MessageId.THIS_NOT_ALLOWED] = "THIS_NOT_ALLOWED";
-		name[MessageId.SUPER_NOT_ALLOWED] = "SUPER_NOT_ALLOWED";
-		name[MessageId.NO_MATCHING_OVERLOAD] = "NO_MATCHING_OVERLOAD";
-		name[MessageId.NO_MATCHING_CONSTRUCTOR] = "NO_MATCHING_CONSTRUCTOR";
-		name[MessageId.AMBIGUOUS_CONSTRUCTOR] = "AMBIGUOUS_CONSTRUCTOR";
-		name[MessageId.EXPECTING_RC] = "EXPECTING_RC";
-		name[MessageId.AMBIGUOUS_OVERLOAD] = "AMGIUOUS_OVERLOAD";
-		name[MessageId.NOT_PARAMETERIZED_TYPE] = "NOT_PARAMETERIZED_TYPE";
-		name[MessageId.NO_FUNCTION_TYPE] = "NO_FUNCTION_TYPE";
-		name[MessageId.NO_EXPRESSION_TYPE] = "NO_EXPRESSION_TYPE";
-		name[MessageId.OVERLOAD_DISALLOWED] = "OVERLOAD_DISALLOWED";
-		name[MessageId.CANNOT_CONVERT] = "CANNOT_CONVERT";
-		name[MessageId.TYPE_ALREADY_DEFINED] = "TYPE_ALREADY_DEFINED";
-		name[MessageId.STATIC_DISALLOWED] = "STATIC_DISALLOWED";
-		name[MessageId.ONLY_STATIC_VARIABLE] = "ONLY_STATIC_VARIABLE";
-		name[MessageId.BAD_MULTI_ASSIGN] = "BAD_MULTI_ASSIGN";
-		name[MessageId.TOO_MANY_RETURN_ASSIGNMENTS] = "TOO_MANY_RETURN_ASSIGNMENTS";
-		name[MessageId.LVALUE_REQUIRED] = "LVALUE_REQUIRED";
-		name[MessageId.INTERNAL_ERROR] = "INTERNAL_ERROR";
-		name[MessageId.NOT_ADDRESSABLE] = "NOT_ADDRESSABLE";
-		name[MessageId.BAD_ELLIPSIS] = "BAD_ELLIPSIS";
-		name[MessageId.UNFINISHED_CHECK_STORAGE] = "UNFINISHED_CHECK_STORAGE";
-		name[MessageId.UNRESOLVED_ABSTRACT] = "UNRESOLVED_ABSTRACT";
-		name[MessageId.UNFINISHED_INITIALIZER] = "UNFINISHED_INITIALIZER";
-		name[MessageId.UNFINISHED_MARKUP_DECLARATOR] = "UNFINISHED_MARKUP_DECLARATOR";
-		name[MessageId.UNFINISHED_BUILD_SCOPE] = "UNFINISHED_BUILD_SCOPE";
-		name[MessageId.UNFINISHED_BUILD_UNDER_SCOPE] = "UNFINISHED_BUILD_UNDER_SCOPE";
-		name[MessageId.UNFINISHED_BIND_DECLARATORS] = "UNFINISHED_BIND_DECLARATORS";
-		name[MessageId.UNFINISHED_MAP_TO_VALUES] = "UNFINISHED_MAP_TO_VALUES";
-		name[MessageId.UNFINISHED_INSTANTIATE_TEMPLATE] = "UNFINISHED_INSTANTIATE_TEMPLATE";
-		name[MessageId.UNFINISHED_NAMESPACE] = "UNFINISHED_NAMESPACE";
-		name[MessageId.UNRECOGNIZED_ANNOTATION] = "UNRECOGNIZED_ANNOTATION";
 		_message[MessageId.ABSTRACT_INSTANCE_DISALLOWED] = "Instance of abstract class disallowed";
 		_message[MessageId.AMBIGUOUS_CONSTRUCTOR] = "Ambiguous constructor call";
 		_message[MessageId.AMBIGUOUS_OVERLOAD] = "Ambiguous call, cannot choose between multiple valid overloads";
@@ -378,17 +278,6 @@ class MessageMap {
 				lastI = i;
 			}
 		}
-		last = "<first>";
-		lastI = -1;
-		for (int i = 0; i < int(MessageId.MAX_MESSAGE); i++) {
-			MessageId m = MessageId(i);
-			if (name[m] == null)
-				printf("ERROR: Message %d has no name entry (last defined entry: %s %d)\n", i, last, lastI);
-			else {
-				last = name[m];
-				lastI = i;
-			}
-		}
 	}
 
 	public string format(MessageId messageId, CompileString[] args) {
@@ -433,7 +322,7 @@ class MessageMap {
 
 	MessageId messageId(string messageIdName) {
 		for (int i = 0; i < int(MessageId.MAX_MESSAGE); i++)
-			if (name[MessageId(i)] == messageIdName)
+			if (string(MessageId(i)) == messageIdName)
 				return MessageId(i);
 		return MessageId.MAX_MESSAGE;
 	}

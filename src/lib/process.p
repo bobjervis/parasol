@@ -40,16 +40,6 @@ public enum exception_t {
 										// runtime
 }
 
-public string[exception_t] exceptionNames;
-
-exceptionNames.append("NO_EXCEPTION");
-exceptionNames.append("ABORT");
-exceptionNames.append("BREAKPOINT");
-exceptionNames.append("TIMEOUT");
-exceptionNames.append("TOO_MANY_EXCEPTIONS");
-exceptionNames.append("ACCESS_VIOLATION");
-exceptionNames.append("UNKNOWN_EXCEPTION");
-
 private class SpawnPayload {
 	public pointer<byte> output;
 	public int outputLength;

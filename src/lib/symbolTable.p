@@ -38,34 +38,6 @@ enum Callable {
 
 int NOT_PARAMETERIZED_TYPE = -1000000;
 
-class StorageClassMap {
-	public StorageClassMap() {
-		name.resize(StorageClass.MAX_STORAGE_CLASS);
-		name[StorageClass.ERROR] = "ERROR";
-		name[StorageClass.AUTO] = "AUTO";
-		name[StorageClass.PARAMETER] = "PARAMETER";
-		name[StorageClass.MEMBER] = "MEMBER";
-		name[StorageClass.ENUMERATION] = "ENUMERATION";
-		name[StorageClass.STATIC] = "STATIC";
-		name[StorageClass.TEMPLATE] = "TEMPLATE";
-		name[StorageClass.TEMPLATE_INSTANCE] = "TEMPLATE_INSTANCE";
-		name[StorageClass.ENCLOSING] = "ENCLOSING";
-		string last = "<none>";
-		int lastI = -1;
-		for (int i = 0; i < int(StorageClass.MAX_STORAGE_CLASS); i++)
-			if (name[StorageClass(i)] == null) {
-				printf("ERROR: Storage class %d has no name entry (last defined entry: %s %d)\n", i, last, lastI);
-			} else {
-				last = name[StorageClass(i)];
-				lastI = i;
-			}
-	}
-
-	static string[StorageClass] name;
-}
-
-StorageClassMap storageClassMap;
-
 class ClassScope extends ClasslikeScope {
 	public ClassScope(ref<Scope> enclosing, ref<Node> definition, ref<Identifier> className) {
 		super(enclosing, definition, className);
@@ -578,7 +550,7 @@ class Scope {
 	}
 	
 	void print(int indent, boolean printChildren) {
-		printf("%*.*cScope %p[%d] %s", indent, indent, ' ', this, variableStorage, StorageClassMap.name[_storageClass]);
+		printf("%*.*cScope %p[%d] %s", indent, indent, ' ', this, variableStorage, string(_storageClass));
 		printf(" %p", _definition);
 		if (_definition != null) {
 			switch (_definition.op()) {
@@ -797,7 +769,7 @@ class Scope {
 	public void assignVariableStorage(ref<Target> target, ref<CompileContext> compileContext) {
 		assignStorage(target, 0, compileContext);
 		if (target.verbose()) {
-			printf("assignVariableStorage %s:\n", storageClassMap.name[_storageClass]);
+			printf("assignVariableStorage %s:\n", string(_storageClass));
 			print(4, false);
 		}
 	}
@@ -1045,7 +1017,7 @@ class Scope {
 				break;
 
 			default:
-				symbol.add(MessageId.UNFINISHED_CHECK_STORAGE, compileContext.pool(), CompileString(StorageClassMap.name[symbol.storageClass()]));
+				symbol.add(MessageId.UNFINISHED_CHECK_STORAGE, compileContext.pool(), CompileString(string(symbol.storageClass())));
 			}
 		}
 	}
@@ -1119,7 +1091,7 @@ class Namespace extends Symbol {
 			printf("%s", _name.asString());
 		else
 			printf("<null>");
-		printf(" Namespace %p %s", this, OperatorMap.name[visibility()]);
+		printf(" Namespace %p %s", this, string(visibility()));
 		if (_type != null) {
 			printf(" @%d ", offset);
 			_type.print();
@@ -1195,9 +1167,9 @@ class PlainSymbol extends Symbol {
 	}
 	
 	public void print(int indent, boolean printChildScopes) {
-		printf("%*.*c%s PlainSymbol %p %s", indent, indent, ' ', _name.asString(), this, OperatorMap.name[visibility()]);
+		printf("%*.*c%s PlainSymbol %p %s", indent, indent, ' ', _name.asString(), this, string(visibility()));
 		if (declaredStorageClass() != StorageClass.ENCLOSING)
-			printf(" %s", StorageClassMap.name[declaredStorageClass()]);
+			printf(" %s", string(declaredStorageClass()));
 		if (_type != null) {
 			printf(" @%d[%d] ", offset, _type.size());
 			_type.print();
@@ -1293,7 +1265,7 @@ class Overload extends Symbol {
 	}
 
 	public void print(int indent, boolean printChildScopes) {
-		printf("%*.*c%s Overload %p %s %s\n", indent, indent, ' ', _name.asString(), this, OperatorMap.name[visibility()], OperatorMap.name[_kind]);
+		printf("%*.*c%s Overload %p %s %s\n", indent, indent, ' ', _name.asString(), this, string(visibility()), string(_kind));
 		for (int i = 0; i < _instances.length(); i++)
 			_instances[i].print(indent + INDENT, printChildScopes);
 	}
@@ -1323,7 +1295,7 @@ class OverloadInstance extends Symbol {
 	}
 
 	public void print(int indent, boolean printChildScopes) {
-		printf("%*.*c%s OverloadInstance %p %s %s", indent, indent, ' ', _name.asString(), this, OperatorMap.name[visibility()], StorageClassMap.name[storageClass()]);
+		printf("%*.*c%s OverloadInstance %p %s %s", indent, indent, ' ', _name.asString(), this, string(visibility()), string(storageClass()));
 		if (_type != null) {
 			printf(" @%d ", offset);
 			_type.print();

@@ -540,24 +540,6 @@ private enum Token {
 	OTHER
 }
 
-private string[Token] TokenNames;
-
-TokenNames.append("END_OF_INPUT");
-TokenNames.append("TOKEN_ERROR");
-TokenNames.append("INTEGER");
-TokenNames.append("IDENTIFIER");
-TokenNames.append("FLOAT_LITERAL");
-TokenNames.append("STRING_LITERAL");
-TokenNames.append("CHAR_LITERAL");
-TokenNames.append("LEFT_PARENTHESIS");
-TokenNames.append("RIGHT_PARENTHESIS");
-TokenNames.append("LEFT_CURLY");
-TokenNames.append("RIGHT_CURLY");
-TokenNames.append("COLON");
-TokenNames.append("COMMA");
-TokenNames.append("DOT");
-TokenNames.append("OTHER");
-
 private class Scanner {
 	private string _text;
 	private int _cursor;

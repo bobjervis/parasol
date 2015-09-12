@@ -126,7 +126,7 @@ class CompileContext {
 /*
 			string label;
 			if (s.definition() != null) {
-				label = operatorMap.name[s.definition().op()];
+				label = string(s.definition().op());
 				if (s.definition().op() == Operator.CLASS) {
 					ref<Class> c = ref<Class>(s.definition());
 					if (c.name() != null) {
@@ -210,7 +210,7 @@ class CompileContext {
 		}break;
 
 		default:
-			definition.add(MessageId.UNFINISHED_BUILD_SCOPE, _pool, CompileString("  "/*definition.class.name()*/), CompileString(operatorMap.name[definition.op()]));
+			definition.add(MessageId.UNFINISHED_BUILD_SCOPE, _pool, CompileString("  "/*definition.class.name()*/), CompileString(string(definition.op())));
 			definition.type = errorType();
 		}
 		_current = outer;
@@ -231,10 +231,10 @@ class CompileContext {
 	}
 
 	private static TraverseAction buildScopeInTree(ref<Node> n, address data) {
-//		printf(">>>buildScope(%p %s,...)\n", n, operatorMap.name[n.op()]);
+//		printf(">>>buildScope(%p %s,...)\n", n, string(n.op()));
 		ref<CompileContext> context = ref<CompileContext>(data);
 		TraverseAction t = context.buildScopes(n);
-//		printf("<<<buildScope(%p %s,...)\n", n, operatorMap.name[n.op()]);
+//		printf("<<<buildScope(%p %s,...)\n", n, string(n.op()));
 		return t;
 	}
 
@@ -454,7 +454,7 @@ class CompileContext {
 		}
 
 		default:
-			n.add(MessageId.UNFINISHED_BUILD_SCOPE, _pool, CompileString(/*n.class.name()*/"***"), CompileString(operatorMap.name[n.op()]));
+			n.add(MessageId.UNFINISHED_BUILD_SCOPE, _pool, CompileString(/*n.class.name()*/"***"), CompileString(string(n.op())));
 			n.type = errorType();
 		}
 		
@@ -497,7 +497,7 @@ class CompileContext {
 		}break;
 
 		default:
-			n.add(MessageId.UNFINISHED_BIND_DECLARATORS, _pool, CompileString("   "/*n.class.name()*/), CompileString(operatorMap.name[n.op()]));
+			n.add(MessageId.UNFINISHED_BIND_DECLARATORS, _pool, CompileString("   "/*n.class.name()*/), CompileString(string(n.op())));
 			n.type = errorType();
 		}
 	}
@@ -572,7 +572,7 @@ class CompileContext {
 
 	public void assignTypes(ref<Node> n) {
 		if (n.type == null && !n.definesScope()) {
-//			printf("%s\n", OperatorMap.name[n.op()]);
+//			printf("%s\n", string(n.op()));
 			n.assignTypes(this);
 			if (n.type == null) {
 				n.add(MessageId.NO_EXPRESSION_TYPE, _pool);
@@ -704,7 +704,7 @@ class CompileContext {
 			break;
 
 		default:
-			n.add(MessageId.UNFINISHED_CONTROL_FLOW, _pool, CompileString("  "/*n.class.name()*/), CompileString(operatorMap.name[n.op()]));
+			n.add(MessageId.UNFINISHED_CONTROL_FLOW, _pool, CompileString("  "/*n.class.name()*/), CompileString(string(n.op())));
 			n.type = errorType();
 		}
 	}

@@ -41,7 +41,6 @@ import parasol:compiler.Reference;
 import parasol:compiler.Scope;
 import parasol:compiler.Selection;
 import parasol:compiler.StorageClass;
-import parasol:compiler.StorageClassMap;
 import parasol:compiler.Symbol;
 import parasol:compiler.Target;
 import parasol:compiler.Type;
@@ -501,7 +500,7 @@ class X86_64Encoder extends Target {
 					int size = type.size();
 					symbol.value = symbol;
 					if (size < 0) {
-						symbol.add(MessageId.UNFINISHED_ASSIGN_STORAGE, compileContext.pool(), CompileString(StorageClassMap.name[symbol.storageClass()]));
+						symbol.add(MessageId.UNFINISHED_ASSIGN_STORAGE, compileContext.pool(), CompileString(string(symbol.storageClass())));
 						break;
 					}
 					int alignment = type.alignment();
@@ -530,7 +529,7 @@ class X86_64Encoder extends Target {
 				size = type.size();
 				alignment = type.alignment();
 				if (alignment == -1) {
-					symbol.add(MessageId.UNFINISHED_ASSIGN_STORAGE, compileContext.pool(), CompileString(StorageClassMap.name[scope.storageClass()]));
+					symbol.add(MessageId.UNFINISHED_ASSIGN_STORAGE, compileContext.pool(), CompileString(string(scope.storageClass())));
 				}
 				scope.variableStorage = (scope.variableStorage + alignment - 1) & ~(alignment - 1);
 				symbol.offset = scope.variableStorage;
@@ -546,7 +545,7 @@ class X86_64Encoder extends Target {
 			}	break;
 
 			default:
-				symbol.add(MessageId.UNFINISHED_ASSIGN_STORAGE, compileContext.pool(), CompileString(StorageClassMap.name[scope.storageClass()]));
+				symbol.add(MessageId.UNFINISHED_ASSIGN_STORAGE, compileContext.pool(), CompileString(string(scope.storageClass())));
 			}
 		}
 	}
@@ -796,13 +795,13 @@ class X86_64Encoder extends Target {
 				if (c.representedBy(compileContext.arena().builtInType(TypeFamily.SIGNED_32)))
 					inst(instruction, left, int(c.intValue()), compileContext);
 				else {
-					printf("%s - -", opcodeNames[instruction]);
+					printf("%s - -", string(instruction));
 					left.print(4);
 					right.print(4);
 					assert(false);
 				}
 			} else {
-				printf("%s - -\n", opcodeNames[instruction]);
+				printf("%s - -\n", string(instruction));
 				left.print(4);
 				right.print(4);
 				assert(false);
@@ -840,7 +839,7 @@ class X86_64Encoder extends Target {
 	 */
 	void inst(X86 instruction, TypeFamily family, R dest, long operand) {
 		if (dest == R.NO_REG) {
-			printf("%s NO_REG %d\n", opcodeNames[instruction], operand);
+			printf("%s NO_REG %d\n", string(instruction), operand);
 			assert(false);
 		}
 		switch (instruction) {
@@ -975,7 +974,7 @@ class X86_64Encoder extends Target {
 				return;
 			}
 		}
-		printf("%s %s %s %d\n", opcodeNames[instruction], typeFamilyMap.name[family], regNames[dest], operand);
+		printf("%s %s %s %d\n", string(instruction), string(family), string(dest), operand);
 		assert(false);
 	}
 
@@ -1001,7 +1000,7 @@ class X86_64Encoder extends Target {
 			modRM(3, 7, rmValues[baseReg]);
 			return;
 		}
-		printf("%s [%s+%d]\n", opcodeNames[instruction], regNames[baseReg], offset);
+		printf("%s [%s+%d]\n", string(instruction), string(baseReg), offset);
 		assert(false);
 	}
 	/*
@@ -1079,7 +1078,7 @@ class X86_64Encoder extends Target {
 			break;
 			
 		default:
-			printf("%s, %s, %s, %d\n", opcodeNames[instruction], regNames[dest], regNames[reg], offset);
+			printf("%s, %s, %s, %d\n", string(instruction), string(dest), string(reg), offset);
 			assert(false);
 		}
 	}
@@ -1101,7 +1100,7 @@ class X86_64Encoder extends Target {
 			break;
 			
 		default:
-			printf("%s, %s, %s, %s\n", opcodeNames[instruction], regNames[dest], regNames[reg], regNames[index]);
+			printf("%s, %s, %s, %s\n", string(instruction), string(dest), string(reg), string(index));
 			assert(false);
 		}
 	}
@@ -1124,7 +1123,7 @@ class X86_64Encoder extends Target {
 					emitInt(offset);
 				}
 			} else {
-				printf("%s, %s, %s, %d, %s\n", opcodeNames[instruction], typeFamilyMap.name[family], regNames[dest], offset, regNames[reg]);
+				printf("%s, %s, %s, %d, %s\n", string(instruction), string(family), string(dest), offset, string(reg));
 				assert(false);
 			}
 			break;
@@ -1145,13 +1144,13 @@ class X86_64Encoder extends Target {
 					emitInt(offset);
 				}
 			} else {
-				printf("%s, %s, %s, %d, %s\n", opcodeNames[instruction], typeFamilyMap.name[family], regNames[dest], offset, regNames[reg]);
+				printf("%s, %s, %s, %d, %s\n", string(instruction), string(family), string(dest), offset, string(reg));
 				assert(false);
 			}
 			break;
 			
 		default:
-			printf("%s, %s, %s, %s, %d\n", opcodeNames[instruction], typeFamilyMap.name[family], regNames[dest], regNames[reg], offset);
+			printf("%s, %s, %s, %s, %d\n", string(instruction), string(family), string(dest), string(reg), offset);
 			assert(false);
 		}
 	}
@@ -1174,7 +1173,7 @@ class X86_64Encoder extends Target {
 					emitInt(offset);
 				}
 			} else {
-				printf("%s, %s, %s, %d, %s\n", opcodeNames[instruction], typeFamilyMap.name[family], regNames[dest], offset, regNames[reg]);
+				printf("%s, %s, %s, %d, %s\n", string(instruction), string(family), string(dest), offset, string(reg));
 				assert(false);
 			}
 			break;
@@ -1195,7 +1194,7 @@ class X86_64Encoder extends Target {
 					emitInt(offset);
 				}
 			} else {
-				printf("%s, %s, %s, %d, %s\n", opcodeNames[instruction], typeFamilyMap.name[family], regNames[dest], offset, regNames[reg]);
+				printf("%s, %s, %s, %d, %s\n", string(instruction), string(family), string(dest), offset, string(reg));
 				assert(false);
 			}
 			break;
@@ -1246,7 +1245,7 @@ class X86_64Encoder extends Target {
 					break;
 					
 				default:
-					printf("%s, %s, %s, %d, %s\n", opcodeNames[instruction], typeFamilyMap.name[family], regNames[dest], offset, regNames[reg]);
+					printf("%s, %s, %s, %d, %s\n", string(instruction), string(family), string(dest), offset, string(reg));
 					assert(false);
 				}
 /*
@@ -1268,7 +1267,7 @@ class X86_64Encoder extends Target {
 					break;
 					
 				default:
-					printf("%s, %s, %d, %s\n", opcodeNames[instruction], regNames[dest], offset, regNames[reg]);
+					printf("%s, %s, %d, %s\n", string(instruction), string(dest), offset, string(reg));
 					assert(false);
 				}
 				*/
@@ -1286,7 +1285,7 @@ class X86_64Encoder extends Target {
 			break;
 			
 		default:
-			printf("%s, %s, %d, %s\n", opcodeNames[instruction], regNames[dest], offset, regNames[reg]);
+			printf("%s, %s, %d, %s\n", string(instruction), string(dest), offset, string(reg));
 			assert(false);
 		}
 	}
@@ -1304,7 +1303,7 @@ class X86_64Encoder extends Target {
 				return;
 				
 			default:
-				printf("%s %s %s %s\n", opcodeNames[instruction], typeFamilyMap.name[family], regNames[dest], regNames[src]);
+				printf("%s %s %s %s\n", string(instruction), string(family), string(dest), string(src));
 				assert(false);
 			}
 			break;
@@ -1320,7 +1319,7 @@ class X86_64Encoder extends Target {
 				return;
 				
 			default:
-				printf("%s %s %s %s\n", opcodeNames[instruction], typeFamilyMap.name[family], regNames[dest], regNames[src]);
+				printf("%s %s %s %s\n", string(instruction), string(family), string(dest), string(src));
 				assert(false);
 			}
 			break;
@@ -1336,7 +1335,7 @@ class X86_64Encoder extends Target {
 				return;
 				
 			default:
-				printf("%s %s %s %s\n", opcodeNames[instruction], typeFamilyMap.name[family], regNames[dest], regNames[src]);
+				printf("%s %s %s %s\n", string(instruction), string(family), string(dest), string(src));
 				assert(false);
 			}
 			break;
@@ -1561,11 +1560,11 @@ class X86_64Encoder extends Target {
 				return;
 
 			default:
-				printf("%s %s %s %s\n", opcodeNames[instruction], typeFamilyMap.name[family], regNames[dest], regNames[src]);
+				printf("%s %s %s %s\n", string(instruction), string(family), string(dest), string(src));
 				assert(false);
 			}
 		}
-		printf("%s %s %s %s\n", opcodeNames[instruction], typeFamilyMap.name[family], regNames[dest], regNames[src]);
+		printf("%s %s %s %s\n", string(instruction), string(family), string(dest), string(src));
 		assert(false);
 	}
 	
@@ -1601,14 +1600,14 @@ class X86_64Encoder extends Target {
 				break;
 				
 			default:
-				printf("%s\n", opcodeNames[instruction]);
+				printf("%s\n", string(instruction));
 				operand.print(0);
 				assert(false);
 			}
 			break;
 			
 		default:
-			printf("%s\n", opcodeNames[instruction]);
+			printf("%s\n", string(instruction));
 			operand.print(0);
 			assert(false);
 		}
@@ -1623,7 +1622,7 @@ class X86_64Encoder extends Target {
 		case	PUSH:
 			
 		default:
-			printf("%s -\n", opcodeNames[instruction]);
+			printf("%s -\n", string(instruction));
 			operand.print(4);
 			assert(false);
 		}
@@ -1674,7 +1673,7 @@ class X86_64Encoder extends Target {
 			emit(byte(0x58 + rmValues[reg]));
 			return;
 		}
-		printf("%s %s %s\n", opcodeNames[instruction], typeFamilyMap.name[family], regNames[reg]);
+		printf("%s %s %s\n", string(instruction), string(family), string(reg));
 		assert(false);
 	}
 	/*
@@ -1763,21 +1762,21 @@ class X86_64Encoder extends Target {
 					break;
 					
 				default:
-					printf("%s - %s\n", opcodeNames[instruction], regNames[right]);
+					printf("%s - %s\n", string(instruction), string(right));
 					left.print(4);
 					assert(false);
 				}
 				break;
 				
 			default:
-				printf("%s - %s\n", opcodeNames[instruction], regNames[right]);
+				printf("%s - %s\n", string(instruction), string(right));
 				left.print(4);
 				assert(false);
 			}
 			break;
 			
 		default:
-			printf("%s - %s\n", opcodeNames[instruction], regNames[right]);
+			printf("%s - %s\n", string(instruction), string(right));
 			left.print(4);
 			assert(false);
 		}
@@ -1991,14 +1990,14 @@ class X86_64Encoder extends Target {
 					break;
 					
 				default:
-					printf("%s %s - (%d)\n", opcodeNames[instruction], regNames[left], right.type.size());
+					printf("%s %s - (%d)\n", string(instruction), string(left), right.type.size());
 					right.print(4);
 					assert(false);
 				}
 				break;
 				
 			default:
-				printf("%s %s -\n", opcodeNames[instruction], regNames[left]);
+				printf("%s %s -\n", string(instruction), string(left));
 				right.print(4);
 				assert(false);
 			}
@@ -2034,7 +2033,7 @@ class X86_64Encoder extends Target {
 				break;
 				
 			default:
-				printf("%s %s -\n", opcodeNames[instruction], regNames[left]);
+				printf("%s %s -\n", string(instruction), string(left));
 				right.print(4);
 				assert(false);
 			}
@@ -2074,14 +2073,14 @@ class X86_64Encoder extends Target {
 				break;
 				
 			default:
-				printf("%s %s -\n", opcodeNames[instruction], regNames[left]);
+				printf("%s %s -\n", string(instruction), string(left));
 				right.print(4);
 				assert(false);
 			}
 			break;
 				
 		default:
-			printf("%s %s -\n", opcodeNames[instruction], regNames[left]);
+			printf("%s %s -\n", string(instruction), string(left));
 			right.print(4);
 			assert(false);
 		}
@@ -2123,14 +2122,14 @@ class X86_64Encoder extends Target {
 				break;
 				
 			default:
-				printf("%s %s -, %d\n", opcodeNames[instruction], regNames[left], immediate);
+				printf("%s %s -, %d\n", string(instruction), string(left), immediate);
 				right.print(4);
 				assert(false);
 			}
 			break;
 				
 		default:
-			printf("%s %s -, %d\n", opcodeNames[instruction], regNames[left], immediate);
+			printf("%s %s -, %d\n", string(instruction), string(left), immediate);
 			right.print(4);
 			assert(false);
 		}
@@ -2185,7 +2184,7 @@ class X86_64Encoder extends Target {
 				break;
 
 			default:
-				printf("%s - %d\n", opcodeNames[instruction], int(immediate));
+				printf("%s - %d\n", string(instruction), int(immediate));
 				left.print(4);
 				assert(false);
 			}
@@ -2230,7 +2229,7 @@ class X86_64Encoder extends Target {
 				break;
 
 			default:
-				printf("%s - %d\n", opcodeNames[instruction], int(immediate));
+				printf("%s - %d\n", string(instruction), int(immediate));
 				left.print(4);
 				assert(false);
 			}
@@ -2261,7 +2260,7 @@ class X86_64Encoder extends Target {
 				break;
 				
 			default:
-				printf("%s - %d\n", opcodeNames[instruction], int(immediate));
+				printf("%s - %d\n", string(instruction), int(immediate));
 				left.print(4);
 				assert(false);
 			}
@@ -2320,21 +2319,21 @@ class X86_64Encoder extends Target {
 					break;
 					
 				default:
-					printf("%s - %d\n", opcodeNames[instruction], int(immediate));
+					printf("%s - %d\n", string(instruction), int(immediate));
 					left.print(4);
 					assert(false);
 				}
 				break;
 				
 			default:
-				printf("%s - %d\n", opcodeNames[instruction], int(immediate));
+				printf("%s - %d\n", string(instruction), int(immediate));
 				left.print(4);
 				assert(false);
 			}
 			break;
 						
 		default:
-			printf("%s - %d\n", opcodeNames[instruction], immediate);
+			printf("%s - %d\n", string(instruction), immediate);
 			left.print(4);
 			assert(false);
 		}
@@ -2369,7 +2368,7 @@ class X86_64Encoder extends Target {
 			break;
 			
 		default:
-			printf("%s %d\n", opcodeNames[instruction], immediate);
+			printf("%s %d\n", string(instruction), immediate);
 			assert(false);
 		}
 	}
@@ -2524,7 +2523,7 @@ class X86_64Encoder extends Target {
 				break;
 
 			default:
-				printf("StorageClass %s\n", StorageClassMap.name[sym.storageClass()]);
+				printf("StorageClass %s\n", string(sym.storageClass()));
 				node.print(0);
 				assert(false);
 			}
@@ -2632,7 +2631,7 @@ class X86_64Encoder extends Target {
 			break;
 			
 		default:
-			printf("%s %s \n", opcodeNames[instruction], regNames[dest]);
+			printf("%s %s \n", string(instruction), string(dest));
 			constant.print(0, false);
 			assert(false);
 			emit(0x10);
@@ -2919,7 +2918,7 @@ class X86_64Encoder extends Target {
 					break;
 
 				default:
-					printf("emitRex(-, %s, %s)\n", regNames[regField], regNames[baseField]);
+					printf("emitRex(-, %s, %s)\n", string(regField), string(baseField));
 					addressMode.print(4);
 					assert(false);
 				}
@@ -2940,7 +2939,7 @@ class X86_64Encoder extends Target {
 				break;
 				
 			default:
-				printf("emitRex(-, %s, %s)\n", regNames[regField], regNames[baseField]);
+				printf("emitRex(-, %s, %s)\n", string(regField), string(baseField));
 				addressMode.print(4);
 				assert(false);
 			}
@@ -3387,7 +3386,7 @@ CC parityTest(Operator compare, ref<Type> type) {
 		case	NOT_LESS_GREATER_EQUAL:	return CC.NOP;
 		
 		default:
-			printf("parityTest(%s,", operatorMap.name[compare]);
+			printf("parityTest(%s,", string(compare));
 			type.print();
 			printf(")\n");
 			assert(false);
@@ -3408,7 +3407,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JE; 
 		default:
-			printf("continuation(%s,", operatorMap.name[compare]);
+			printf("continuation(%s,", string(compare));
 			type.print();
 			printf(")\n");
 			assert(false);
@@ -3424,7 +3423,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JNE; 
 		default:
-			printf("continuation(%s,", operatorMap.name[compare]);
+			printf("continuation(%s,", string(compare));
 			type.print();
 			printf(")\n");
 			assert(false);
@@ -3440,7 +3439,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JNB;
 		default:
-			printf("continuation(%s,", operatorMap.name[compare]);
+			printf("continuation(%s,", string(compare));
 			type.print();
 			printf(")\n");
 			assert(false);
@@ -3456,7 +3455,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JNA;
 		default:
-			printf("continuation(%s,", operatorMap.name[compare]);
+			printf("continuation(%s,", string(compare));
 			type.print();
 			printf(")\n");
 			assert(false);
@@ -3472,7 +3471,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JA;
 		default:
-			printf("continuation(%s,", operatorMap.name[compare]);
+			printf("continuation(%s,", string(compare));
 			type.print();
 			printf(")\n");
 			assert(false);
@@ -3488,7 +3487,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JB;
 		default:
-			printf("continuation(%s,", operatorMap.name[compare]);
+			printf("continuation(%s,", string(compare));
 			type.print();
 			printf(")\n");
 			assert(false);
@@ -3510,7 +3509,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	ENUM:
 		case	CLASS:			return CC.JNE;
 		default:
-			printf("continuation(%s,", operatorMap.name[compare]);
+			printf("continuation(%s,", string(compare));
 			type.print();
 			printf(")\n");
 			assert(false);
@@ -3532,7 +3531,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	ENUM:
 		case	CLASS:			return CC.JE; 
 		default:
-			printf("continuation(%s,", operatorMap.name[compare]);
+			printf("continuation(%s,", string(compare));
 			type.print();
 			printf(")\n");
 			assert(false);
@@ -3548,7 +3547,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JA;
 		default:
-			printf("continuation(%s,", operatorMap.name[compare]);
+			printf("continuation(%s,", string(compare));
 			type.print();
 			printf(")\n");
 			assert(false);
@@ -3564,7 +3563,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JNB;
 		default:
-			printf("continuation(%s,", operatorMap.name[compare]);
+			printf("continuation(%s,", string(compare));
 			type.print();
 			printf(")\n");
 			assert(false);
@@ -3580,7 +3579,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JB;
 		default:
-			printf("continuation(%s,", operatorMap.name[compare]);
+			printf("continuation(%s,", string(compare));
 			type.print();
 			printf(")\n");
 			assert(false);
@@ -3596,7 +3595,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JNA;		// also need JNP
 		default:
-			printf("continuation(%s,", operatorMap.name[compare]);
+			printf("continuation(%s,", string(compare));
 			type.print();
 			printf(")\n");
 			assert(false);
@@ -3608,7 +3607,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JNP;
 		default:
-			printf("continuation(%s,", operatorMap.name[compare]);
+			printf("continuation(%s,", string(compare));
 			type.print();
 			printf(")\n");
 			assert(false);
@@ -3620,7 +3619,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JP;
 		default:
-			printf("continuation(%s,", operatorMap.name[compare]);
+			printf("continuation(%s,", string(compare));
 			type.print();
 			printf(")\n");
 			assert(false);
@@ -3628,7 +3627,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		break;
 
 	default:
-		printf("continuation(%s,", operatorMap.name[compare]);
+		printf("continuation(%s,", string(compare));
 		type.print();
 		printf(")\n");
 		assert(false);
@@ -3653,7 +3652,7 @@ Operator invert(Operator compare) {
 	case	LESS_EQUAL:				return Operator.NOT_LESS_EQUAL;
 	case	LESS_GREATER_EQUAL:		return Operator.NOT_LESS_GREATER_EQUAL;
 	default:
-		printf("invert(%s)\n", operatorMap.name[compare]);
+		printf("invert(%s)\n", string(compare));
 		assert(false);
 	}
 	return Operator.SYNTAX_ERROR;
@@ -3825,58 +3824,4 @@ group3opcodes[X86.MUL] = 4;
 group3opcodes[X86.IMUL] = 5;
 group3opcodes[X86.DIV] = 6;
 group3opcodes[X86.IDIV] = 7;
-
-string[X86] opcodeNames;
-
-opcodeNames.append("ADD");
-opcodeNames.append("ADDSD");
-opcodeNames.append("ADDSS");
-opcodeNames.append("AND");
-opcodeNames.append("CALL");
-opcodeNames.append("CMP");
-opcodeNames.append("CVTSD2SI");
-opcodeNames.append("CVTSD2SS");
-opcodeNames.append("CVTSI2SD");
-opcodeNames.append("CVTSI2SS");
-opcodeNames.append("CVTSS2SD");
-opcodeNames.append("CVTSS2SI");
-opcodeNames.append("CWD");
-opcodeNames.append("DIV");
-opcodeNames.append("DIVSD");
-opcodeNames.append("DIVSS");
-opcodeNames.append("ENTER");
-opcodeNames.append("IDIV");
-opcodeNames.append("IMUL");
-opcodeNames.append("LEA");
-opcodeNames.append("LEAVE");
-opcodeNames.append("MOV");
-opcodeNames.append("MOVSD");
-opcodeNames.append("MOVSS");
-opcodeNames.append("MOVSX");
-opcodeNames.append("MOVSX_REX_W");
-opcodeNames.append("MOVSXD");
-opcodeNames.append("MOVZX");
-opcodeNames.append("MUL");
-opcodeNames.append("MULSD");
-opcodeNames.append("MULSS");
-opcodeNames.append("NEG");
-opcodeNames.append("NOT");
-opcodeNames.append("OR");
-opcodeNames.append("POP");
-opcodeNames.append("PUSH");
-opcodeNames.append("RET");
-opcodeNames.append("SAL");
-opcodeNames.append("SAR");
-opcodeNames.append("SBB");
-opcodeNames.append("SHR");
-opcodeNames.append("SUB");
-opcodeNames.append("SUBSD");
-opcodeNames.append("SUBSS");
-opcodeNames.append("TEST");
-opcodeNames.append("UCOMISD");
-opcodeNames.append("UCOMISS");
-opcodeNames.append("xCHG");
-opcodeNames.append("XOR");
-opcodeNames.append("XORPD");
-opcodeNames.append("XORPS");
 

@@ -51,7 +51,6 @@ import parasol:compiler.Scope;
 import parasol:compiler.Selection;
 import parasol:compiler.StackArgumentAddress;
 import parasol:compiler.StorageClass;
-import parasol:compiler.StorageClassMap;
 import parasol:compiler.Symbol;
 import parasol:compiler.Target;
 import parasol:compiler.TemplateInstanceType;

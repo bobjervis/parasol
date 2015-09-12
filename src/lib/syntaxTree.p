@@ -1152,7 +1152,7 @@ class Binary extends Node {
 		}
 
 		default:
-			add(MessageId.UNFINISHED_GENERATE, compileContext.pool(), CompileString(" "/*this.class.name()*/), CompileString(operatorMap.name[this.op()]), CompileString("Binary.foldInt"));
+			add(MessageId.UNFINISHED_GENERATE, compileContext.pool(), CompileString(" "/*this.class.name()*/), CompileString(string(this.op())), CompileString("Binary.foldInt"));
 		}
 		return 0;
 	}
@@ -3241,7 +3241,7 @@ class Constant extends Node {
 			return 0;
 
 		default:
-			add(MessageId.UNFINISHED_GENERATE, compileContext.pool(), CompileString(" "/*this.class.name()*/), CompileString(operatorMap.name[op()]), CompileString("Constant.foldInt"));
+			add(MessageId.UNFINISHED_GENERATE, compileContext.pool(), CompileString(" "/*this.class.name()*/), CompileString(string(op())), CompileString("Constant.foldInt"));
 		}
 		return 0;
 	}
@@ -3969,14 +3969,14 @@ class Identifier extends Node {
 		printBasic(indent);
 		printf(" %s S%p '%s'", _definition ? "def" : "", _symbol, _value.asString());
 		if (_symbol != null)
-			printf(" %s", StorageClassMap.name[_symbol.storageClass()]);
+			printf(" %s", string(_symbol.storageClass()));
 		printf("\n");
 	}
 
 	public void markupDeclarator(ref<Type> t, ref<CompileContext> compileContext) {
 		if (_symbol != null) {
 			if (!_symbol.bindType(t)) {
-				add(MessageId.UNFINISHED_MARKUP_DECLARATOR, compileContext.pool(), CompileString("  "/*this.class.name()*/), CompileString(operatorMap.name[op()]));
+				add(MessageId.UNFINISHED_MARKUP_DECLARATOR, compileContext.pool(), CompileString("  "/*this.class.name()*/), CompileString(string(op())));
 				type = compileContext.errorType();
 				return;
 			}
@@ -6061,7 +6061,7 @@ class Unary extends Node {
 		case	NEGATE:
 			return -_operand.foldInt(compileContext);
 		}
-		add(MessageId.UNFINISHED_GENERATE, compileContext.pool(), CompileString(" "/*this.class.name()*/), CompileString(operatorMap.name[op()]), CompileString("Unary.foldInt"));
+		add(MessageId.UNFINISHED_GENERATE, compileContext.pool(), CompileString(" "/*this.class.name()*/), CompileString(string(op())), CompileString("Unary.foldInt"));
 		return 0;
 	}
 
@@ -6650,7 +6650,7 @@ class Node {
 
 		for (ref<Commentary> comment = _commentary; comment != null; comment = comment.next())
 			comment.print(indent + INDENT);
-		printf("%*.*c%p %s::%s", indent, indent, ' ', this, name, operatorMap.name[_op]);
+		printf("%*.*c%p %s::%s", indent, indent, ' ', this, name, string(_op));
 		if (type != null) {
 			printf(" ");
 			type.print();
@@ -6758,137 +6758,7 @@ public OperatorMap operatorMap;
 
 class OperatorMap {
 	public OperatorMap() {
-		name.resize(Operator.MAX_OPERATOR);
 		typeNotAllowed.resize(Operator.MAX_OPERATOR);
-		name[Operator.ADD] = "ADD";
-		name[Operator.ADD_ASSIGN] = "ADD_ASSIGN";
-		name[Operator.AND] = "AND";
-		name[Operator.AND_ASSIGN] = "AND_ASSIGN";
-		name[Operator.ASSIGN] = "ASSIGN";
-		name[Operator.BIT_COMPLEMENT] = "BIT_COMPLEMENT";
-		name[Operator.BREAK] = "BREAK";
-		name[Operator.CALL] = "CALL";
-		name[Operator.CAST] = "CAST";
-		name[Operator.CLASS] = "CLASS";
-		name[Operator.INTERFACE] = "INTERFACE";
-		name[Operator.CONDITIONAL] = "CONDITIONAL";
-		name[Operator.CONTINUE] = "CONTINUE";
-		name[Operator.DECREMENT_AFTER] = "DECREMENT_AFTER";
-		name[Operator.DECREMENT_BEFORE] = "DECREMENT_BEFORE";
-		name[Operator.DELETE] = "DELETE";
-		name[Operator.DIVIDE] = "DIVIDE";
-		name[Operator.DIVIDE_ASSIGN] = "DIVIDE_ASSIGN";
-		name[Operator.DOT] = "DOT";
-		name[Operator.DOT_DOT] = "DOT_DOT";
-		name[Operator.ELLIPSIS] = "ELLIPSIS";
-		name[Operator.ELLIPSIS_ARGUMENT] = "ELLIPSIS_ARGUMENT";
-		name[Operator.ELLIPSIS_ARGUMENTS] = "ELLIPSIS_ARGUMENTS";
-		name[Operator.EQUALITY] = "EQUALITY";
-		name[Operator.EXCLUSIVE_OR] = "EXCLUSIVE_OR";
-		name[Operator.EXCLUSIVE_OR_ASSIGN] = "EXCLUSIVE_OR_ASSIGN";
-		name[Operator.FOR] = "FOR";
-		name[Operator.SCOPED_FOR] = "SCOPED_FOR";
-		name[Operator.GREATER] = "GREATER";
-		name[Operator.GREATER_EQUAL] = "GREATER_EQUAL";
-		name[Operator.INCREMENT_AFTER] = "INCREMENT_AFTER";
-		name[Operator.INCREMENT_BEFORE] = "INCREMENT_BEFORE";
-		name[Operator.ADDRESS] = "ADDRESS";
-		name[Operator.INDIRECT] = "INDIRECT";
-		name[Operator.BYTES] = "BYTES";
-		name[Operator.CLASS_OF] = "CLASS_OF";
-		name[Operator.IDENTITY] = "IDENTITY";
-		name[Operator.LESS] = "LESS";
-		name[Operator.LESS_EQUAL] = "LESS_EQUAL";
-		name[Operator.LESS_GREATER] = "LESS_GREATER";
-		name[Operator.LESS_GREATER_EQUAL] = "LESS_GREATER_EQUAL";
-		name[Operator.LEFT_SHIFT] = "LEFT_SHIFT";
-		name[Operator.LEFT_SHIFT_ASSIGN] = "LEFT_SHIFT_ASSIGN";
-		name[Operator.LOAD] = "LOAD";
-		name[Operator.LOGICAL_AND] = "LOGICAL_AND";
-		name[Operator.LOGICAL_OR] = "LOGICAL_OR";
-		name[Operator.MULTIPLY] = "MULTIPLY";
-		name[Operator.MULTIPLY_ASSIGN] = "MULTIPLY_ASSIGN";
-		name[Operator.NEGATE] = "NEGATE";
-		name[Operator.NEW] = "NEW";
-		name[Operator.NOT] = "NOT";
-		name[Operator.NOT_EQUAL] = "NOT_EQUAL";
-		name[Operator.NOT_GREATER] = "NOT_GREATER";
-		name[Operator.NOT_GREATER_EQUAL] = "NOT_GREATER_EQUAL";
-		name[Operator.NOT_IDENTITY] = "NOT_IDENTITY";
-		name[Operator.NOT_LESS] = "NOT_LESS";
-		name[Operator.NOT_LESS_EQUAL] = "NOT_LESS_EQUAL";
-		name[Operator.NOT_LESS_GREATER] = "NOT_LESS_GREATER";
-		name[Operator.NOT_LESS_GREATER_EQUAL] = "NOT_LESS_GREATER_EQUAL";
-		name[Operator.OR] = "OR";
-		name[Operator.OR_ASSIGN] = "OR_ASSIGN";
-		name[Operator.PLACEMENT_NEW] = "PLACEMENT_NEW";
-		name[Operator.REMAINDER] = "REMAINDER";
-		name[Operator.REMAINDER_ASSIGN] = "REMAINDER_ASSIGN";
-		name[Operator.RIGHT_SHIFT] = "RIGHT_SHIFT";
-		name[Operator.RIGHT_SHIFT_ASSIGN] = "RIGHT_SHIFT_ASSIGN";
-		name[Operator.SEQUENCE] = "SEQUENCE";
-		name[Operator.STACK_ARGUMENT] = "STACK_ARGUMENT";
-		name[Operator.STACK_ARGUMENT_ADDRESS] = "STACK_ARGUMENT_ADDRESS";
-		name[Operator.SUBSCRIPT] = "SUBSCRIPT";
-		name[Operator.SUBTRACT] = "SUBTRACT";
-		name[Operator.SUBTRACT_ASSIGN] = "SUBTRACT_ASSIGN";
-		name[Operator.SYNTAX_ERROR] = "SYNTAX_ERROR";
-		name[Operator.UNSIGNED_RIGHT_SHIFT] = "UNSIGNED_RIGHT_SHIFT";
-		name[Operator.UNSIGNED_RIGHT_SHIFT_ASSIGN] = "UNSIGNED_RIGHT_SHIFT_ASSIGN";
-		name[Operator.UNARY_PLUS] = "UNARY_PLUS";
-		name[Operator.DECLARE_NAMESPACE] = "DECLARE_NAMESPACE";
-		name[Operator.INTEGER] = "INTEGER";
-		name[Operator.FLOATING_POINT] = "FLOATING_POINT";
-		name[Operator.CHARACTER] = "CHARACTER";
-		name[Operator.STRING] = "STRING";
-		name[Operator.IDENTIFIER] = "IDENTIFIER";
-		name[Operator.EMPTY] = "EMPTY";
-		name[Operator.EXPRESSION] = "EXPRESSION";
-		name[Operator.WHILE] = "WHILE";
-		name[Operator.DO_WHILE] = "DO_WHILE";
-		name[Operator.LOOP] = "LOOP";
-		name[Operator.SWITCH] = "SWITCH";
-		name[Operator.RETURN] = "RETURN";
-		name[Operator.CASE] = "CASE";
-		name[Operator.DEFAULT] = "DEFAULT";
-		name[Operator.BLOCK] = "BLOCK";
-		name[Operator.VECTOR_OF] = "VECTOR_OF";
-		name[Operator.MAP] = "MAP";
-		name[Operator.ENUM] = "ENUM";
-		name[Operator.BIND] = "BIND";
-		name[Operator.TEMPLATE] = "TEMPLATE";
-		name[Operator.TEMPLATE_INSTANCE] = "TEMPLATE_INSTANCE";
-		name[Operator.FUNCTION] = "FUNCTION";
-		name[Operator.UNIT] = "UNIT";
-		name[Operator.DECLARATION] = "DECLARATION";
-		name[Operator.CLASS_DECLARATION] = "CLASS_DECLARATION";
-		name[Operator.MONITOR_DECLARATION] = "MONITOR_DECLARATION";
-		name[Operator.ENUM_DECLARATION] = "ENUM_DECLARATION";
-		name[Operator.FLAGS_DECLARATION] = "FLAGS_DECLARATION";
-		name[Operator.INITIALIZE] = "INITIALIZE";
-		name[Operator.ABSTRACT] = "ABSTRACT";
-		name[Operator.ADD_REDUCE] = "ADD_REDUCE";
-		name[Operator.ANNOTATION] = "ANNOTATION";
-		name[Operator.ANNOTATED] = "ANNOTATED";
-		name[Operator.CLASS_TYPE] = "CLASS_TYPE";
-		name[Operator.CLASS_COPY] = "CLASS_COPY";
-		name[Operator.ENUM_TYPE] = "ENUM_TYPE";
-		name[Operator.FALSE] = "FALSE";
-		name[Operator.FINAL] = "FINAL";
-		name[Operator.IF] = "IF";
-		name[Operator.IMPORT] = "IMPORT";
-		name[Operator.NAMESPACE] = "NAMESPACE";
-		name[Operator.NULL] = "NULL";
-		name[Operator.PRIVATE] = "PRIVATE";
-		name[Operator.PROTECTED] = "PROTECTED";
-		name[Operator.PUBLIC] = "PUBLIC";
-		name[Operator.STATIC] = "STATIC";
-		name[Operator.SUPER] = "SUPER";
-		name[Operator.THIS] = "THIS";
-		name[Operator.TRUE] = "TRUE";
-		name[Operator.UNWRAP_TYPEDEF] = "UNWRAP_TYPEDEF";
-		name[Operator.VACATE_ARGUMENT_REGISTERS] = "VACATE_ARGUMENT_REGISTERS";
-		name[Operator.VARIABLE] = "VARIABLE";
 		typeNotAllowed[Operator.ADD] = MessageId.INVALID_ADD;
 		typeNotAllowed[Operator.ADD_ASSIGN] = MessageId.INVALID_ADD;
 		typeNotAllowed[Operator.ADD_REDUCE] = MessageId.INVALID_ADD;
@@ -7019,21 +6889,12 @@ class OperatorMap {
 		typeNotAllowed[Operator.NAMESPACE] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.VACATE_ARGUMENT_REGISTERS] = MessageId.MAX_MESSAGE;
 
-		string last = "<none>";
-		int lastI = -1;
 		for (int i = 0; i < int(Operator.MAX_OPERATOR); i++) {
-			if (name[Operator(i)] == null) {
-				printf("ERROR: Operator %d has no name entry (last defined entry: %s %d)\n", i, last, lastI);
-			} else {
-				last = name[Operator(i)];
-				lastI = i;
-			}
 			if (typeNotAllowed[Operator(i)] == MessageId(0))
-				printf("ERROR: Operator %s has no typeNotAllowed message.\n", name[Operator(i)]);
+				printf("ERROR: Operator %s has no typeNotAllowed message.\n", string(Operator(i)));
 		}
 	}
 
-	static string[Operator] name;
 	static MessageId[Operator] typeNotAllowed;
 }
 
@@ -7111,7 +6972,7 @@ boolean balancePair(ref<Node> parent, ref<ref<Node>> leftp, ref<ref<Node>> right
 			if (right.canCoerce(left.type, false, compileContext)) {
 				if (left.type.widensTo(right.type, compileContext)) {
 					if (right.type.widensTo(left.type, compileContext)) {
-						parent.add(MessageId.UNFINISHED_ASSIGN_TYPE, compileContext.pool(), CompileString("  "/*parent.class.name()*/), CompileString(operatorMap.name[parent.op()]));
+						parent.add(MessageId.UNFINISHED_ASSIGN_TYPE, compileContext.pool(), CompileString("  "/*parent.class.name()*/), CompileString(string(parent.op())));
 						parent.type = compileContext.errorType();
 						return false;
 					} else

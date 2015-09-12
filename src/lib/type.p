@@ -65,7 +65,7 @@ class BuiltInType extends Type {
 	}
 
 	public void print() {
-		printf("%s %p(", TypeFamilyMap.name[family()], _classType);
+		printf("%s %p(", string(family()), _classType);
 		if (_classType == null)
 			printf("<null>");
 		else
@@ -247,7 +247,7 @@ class ClassType extends Type {
 
 	public void print() {
 		pointer<address> pa = pointer<address>(this);
-		printf("%s(%p) %p scope %p", TypeFamilyMap.name[family()], pa[1], _definition, _scope);
+		printf("%s(%p) %p scope %p", string(family()), pa[1], _definition, _scope);
 	}
 
 	public ref<OverloadInstance> initialConstructor() {
@@ -412,7 +412,7 @@ class EnumType extends TypedefType {
 	}
 
 	public void print() {
-		printf("%s %p", TypeFamilyMap.name[family()], _definition);
+		printf("%s %p", string(family()), _definition);
 	}
 
 	public ref<Scope> scope() {
@@ -445,7 +445,7 @@ class EnumInstanceType extends Type {
 	}
 
 	public void print() {
-		printf("%s %p", TypeFamilyMap.name[family()], _instanceClass);
+		printf("%s %p", string(family()), _instanceClass);
 	}
 
 	public ref<Scope> scope() {
@@ -625,7 +625,7 @@ class FunctionType extends Type {
 	}
 
 	public void print() {
-		printf("%s %d <- %d", TypeFamilyMap.name[family()], returnCount(), parameterCount());
+		printf("%s %d <- %d", string(family()), returnCount(), parameterCount());
 	}
 
 }
@@ -648,7 +648,7 @@ class TemplateType extends Type {
 	}
 
 	public void print() {
-		printf("%s %p scope %p", TypeFamilyMap.name[family()], _definition, _templateScope);
+		printf("%s %p scope %p", string(family()), _definition, _templateScope);
 	}
 
 	public int parameterCount() {
@@ -834,7 +834,7 @@ class TemplateInstanceType extends ClassType {
 	}
 	
 	public void print() {
-		printf("TemplateInstanceType %s %p<", TypeFamilyMap.name[family()], definition());
+		printf("TemplateInstanceType %s %p<", string(family()), definition());
 		for (int i = 0; i < _arguments.length(); i++) {
 			if (i > 0)
 				printf(", ");
@@ -874,7 +874,7 @@ class TypedefType extends Type {
 	}
 
 	public void print() {
-		printf("%s ", TypeFamilyMap.name[family()]);
+		printf("%s ", string(family()));
 		if (_wrappedType != null)
 			_wrappedType.print();
 		else
@@ -910,13 +910,13 @@ class Type {
 	}
 
 	public void print() {
-		printf("%s", TypeFamilyMap.name[_family]);
+		printf("%s", string(_family));
 		if (_ordinal != 0)
 			printf(" ord [0x%x]", _ordinal);
 	}
 
 	public string name() {
-		return TypeFamilyMap.name[_family];
+		return string(_family);
 	}
 	
 	public TypeFamily scalarFamily(ref<CompileContext> compileContext) {
@@ -1245,36 +1245,6 @@ class Type {
 
 class TypeFamilyMap {
 	TypeFamilyMap() {
-		name.resize(TypeFamily.MAX_TYPES);
-		name[TypeFamily.SIGNED_8] = "SIGNED_8";
-		name[TypeFamily.SIGNED_16] = "SIGNED_16";
-		name[TypeFamily.SIGNED_32] = "SIGNED_32";
-		name[TypeFamily.SIGNED_64] = "SIGNED_64";
-		name[TypeFamily.UNSIGNED_8] = "UNSIGNED_8";
-		name[TypeFamily.UNSIGNED_16] = "UNSIGNED_16";
-		name[TypeFamily.UNSIGNED_32] = "UNSIGNED_32";
-		name[TypeFamily.UNSIGNED_64] = "UNSIGNED_64";
-		name[TypeFamily.FLOAT_32] = "FLOAT_32";
-		name[TypeFamily.FLOAT_64] = "FLOAT_64";
-		name[TypeFamily.BOOLEAN] = "BOOLEAN";
-		name[TypeFamily.STRING] = "STRING";
-		name[TypeFamily.VAR] = "VAR";
-		name[TypeFamily.ADDRESS] = "ADDRESS",
-		name[TypeFamily.VOID] = "VOID";
-		name[TypeFamily.ERROR] = "ERROR";
-		name[TypeFamily.BUILTIN_TYPES] = "BUILTIN_TYPES";
-		name[TypeFamily.CLASS] = "CLASS";
-		name[TypeFamily.ENUM] = "ENUM";
-		name[TypeFamily.TYPEDEF] = "TYPEDEF";
-		name[TypeFamily.SHAPE] = "SHAPE";
-		name[TypeFamily.REF] = "REF";
-		name[TypeFamily.POINTER] = "POINTER";
-		name[TypeFamily.FUNCTION] = "FUNCTION";
-		name[TypeFamily.TEMPLATE] = "TEMPLATE";
-		name[TypeFamily.TEMPLATE_INSTANCE] = "TEMPLATE_INSTANCE";
-		name[TypeFamily.NAMESPACE] = "NAMESPACE";
-		name[TypeFamily.CLASS_VARIABLE] = "CLASS_VARIABLE";
-		name[TypeFamily.CLASS_DEFERRED] = "CLASS_DEFERRED";
 		size.resize(TypeFamily.MAX_TYPES);
 		size[TypeFamily.SIGNED_8] = 1;
 		size[TypeFamily.SIGNED_16] = 2;
@@ -1337,18 +1307,8 @@ class TypeFamilyMap {
 		alignment[TypeFamily.NAMESPACE] = -1;
 		alignment[TypeFamily.CLASS_VARIABLE] = alignment[TypeFamily.ADDRESS];
 		alignment[TypeFamily.CLASS_DEFERRED] = -1;
-		string last = "<none>";
-		int lastI = -1;
-		for (int i = 0; i < int(TypeFamily.MAX_TYPES); i++)
-			if (name[TypeFamily(i)] == null || size[TypeFamily(i)] == 0 || alignment[TypeFamily(i)] == 0) {
-				printf("ERROR: Type %d has no name entry (last defined entry: %s %d)\n", i, last, lastI);
-			} else {
-				last = name[TypeFamily(i)];
-				lastI = i;
-			}
 	}
 
-	static string[TypeFamily] name;
 	static int[TypeFamily] size;
 	static int[TypeFamily] alignment;
 }

@@ -19,7 +19,6 @@ import parasol:byteCodes.ByteCodesTarget;
 import parasol:x86_64.X86_64;
 import parasol:pxi.Pxi;
 import parasol:pxi.SectionType;
-import parasol:pxi.sectionTypeNames;
 import parasol:runtime;
 /**
  * Class target defines the framework for Parasol compiler code generators.
@@ -42,7 +41,7 @@ public class Target {
 			selectedTarget = SectionType(runtime.supportedTarget(0));
 //		selectedTarget = SectionType.BYTE_CODES;
 		if (verbose)
-			printf("Targeting %s\n", sectionTypeNames[selectedTarget]);
+			printf("Targeting %s\n", string(selectedTarget));
 		switch (selectedTarget) {
 		case	BYTE_CODES:
 			target = new ByteCodesTarget(arena);
@@ -111,7 +110,7 @@ public class Target {
 	}
 	
 	public void unfinished(ref<Node> n, string explanation, ref<CompileContext> compileContext) {
-		n.add(MessageId.UNFINISHED_GENERATE, compileContext.pool(), CompileString(" "/*n.class.name()*/), CompileString(operatorMap.name[n.op()]), CompileString(explanation));
+		n.add(MessageId.UNFINISHED_GENERATE, compileContext.pool(), CompileString(" "/*n.class.name()*/), CompileString(string(n.op())), CompileString(explanation));
 	}
 	
 	public void print() {

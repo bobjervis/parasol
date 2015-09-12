@@ -244,22 +244,16 @@ public SectionType sectionType(string name) {
 }
 
 public string sectionTypeName(SectionType st) {
-	if (unsigned(int(st)) < unsigned(int(sectionTypeNames.length())))
-		return sectionTypeNames[st];
+	if (unsigned(int(st)) < unsigned(SectionType.FILLER))
+		return string(st);
 	else
 		return "<unknown>";
 }
 
 private SectionType[string] sectionTypes;
-private string[SectionType] sectionTypeNames;
 
 sectionTypes["byteCodes"] = SectionType.BYTE_CODES;
 sectionTypes["x86-64"] = SectionType.X86_64;
-
-sectionTypeNames.append("ERROR");
-sectionTypeNames.append("Source");
-sectionTypeNames.append("byteCodes");
-sectionTypeNames.append("x86-64");
 
 private class ReaderMap {
 	public SectionType sectionType;

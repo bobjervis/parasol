@@ -79,8 +79,8 @@ bool X86_64Section::run(char **args, int *returnValue, bool trace) {
 	int *pxiFixups = (int*)(image + _header.relocationOffset);
 	for (int i = 0; i < _header.relocationCount; i++) {
 		int fx = pxiFixups[i];
-		// TODO: Implement actual fixups.
-		*(char*)argc = 0;	// This should cause a crash.
+		long long *vp = (long long*)(image + pxiFixups[i]);
+		*vp += (long long)image;
 	}
 	DWORD oldProtection;
 	int result = VirtualProtect(_image, _imageLength, PAGE_EXECUTE_READWRITE, &oldProtection);
