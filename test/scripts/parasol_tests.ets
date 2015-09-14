@@ -130,6 +130,9 @@ compile(){"class Foo { public static Foo x(-1); Foo(int z){} }"}
 
 compile(){"long i; string formatted(i);"}
 
+// This is a regression where pointer<Foo> does not widen to ref<Foo> if Foo is a plain old class.
+compile() { "class Foo{} ref<Foo[]> x; ref<Foo> y = &(*x)[0];" }
+
 // This test checks a regression concering accepting ... arguments.
 compile() { "class Bar { void f(int... args) { } } ref<Bar> x; x.f(4);" }
 
@@ -147,6 +150,9 @@ compile() { "void f(int x(int z)){}" }
 compile() { "void f(int x(int z)){} f(g.h); class g { static int h(int y) { return 0;} }" }
 
 compile() { "class A { void f() { } } class B extends A { void g() { f(); } }" }
+
+// regression: mis-spelled static trips up later code.
+compile(expect: fail, message: SYNTAX_ERROR) { "class foo { public statc int, boolean parse(string text, int radix) { int value = 0; }}" }
 
 compile(expect: fail) { "static int x;" }
 compile(expect: fail) { "class A { static A() { } } " }

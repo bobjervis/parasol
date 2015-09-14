@@ -86,6 +86,32 @@ public class int {
 			value = -value;
 		return value, true;
 	}
+	
+	public static int, boolean parse(string text, int radix) {
+		int value = 0;
+		int i = 0;
+		boolean negative = false;
+		if (text[i] == '-') {
+			negative = true;
+			i++;
+		}
+		for (; i < text.length(); i++) {
+			byte x = text[i];
+			int digit;
+			if (x.isDigit())
+				digit = x - '0';
+			else if (x.isAlpha())
+				digit = 10 + (x.toLowercase() - 'a');
+			else
+				return 0, false;
+			if (digit >= radix)
+				return 0, false;
+			value = value * radix + digit;
+		}
+		if (negative)
+			value = -value;
+		return value, true;
+	}
 }
 
 public class long {

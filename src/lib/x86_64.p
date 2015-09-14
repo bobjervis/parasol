@@ -2227,6 +2227,8 @@ public class X86_64 extends X86_64AssignTemps {
 		case	FUNCTION:
 		case	EMPTY:
 		case	ENUM_DECLARATION:
+			// The ones below here only show up in mal-formed class declarations.
+		case	BLOCK:
 			break;
 			
 		case	SEQUENCE:

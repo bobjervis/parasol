@@ -325,6 +325,8 @@ class ClassType extends Type {
 	}
 	
 	public boolean extendsFormally(ref<Type> other, ref<CompileContext> compileContext) {
+		if (this == other)
+			return true;
 		if (_definition != null)
 			resolve(compileContext);
 		if (_extends == null)
@@ -1186,8 +1188,8 @@ class Type {
 			ref<Type> otherInd = other.indirectType(compileContext);
 			if (otherInd == null)
 				return false;
-			if (!isPointer(compileContext) &&
-				other.isPointer(compileContext))
+			if (family() != TypeFamily.POINTER &&
+				other.family() == TypeFamily.POINTER)
 				return false;
 			return ind.extendsFormally(otherInd, compileContext);
 		}

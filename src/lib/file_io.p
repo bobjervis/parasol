@@ -59,6 +59,27 @@ public class File {
 		return data, true;
 	}
 	
+	public string, boolean readLine() {
+		string line;
+		
+		for (;;) {
+			int c = read();
+			if (c == EOF) {
+				if (C.ferror(_handle) == 0) {
+					if (line.length() == 0)
+						return null, true;
+					else
+						return line, true;
+				} else if (line.length() == 0)
+					return null, false;
+				else
+					return line, false;
+			}
+			line.append(byte(c));
+			if (c == '\n')
+				return line, true;
+		}
+	}
 	public int read() {
 		return C.fgetc(_handle);
 	}

@@ -158,7 +158,7 @@ class FileScanner extends Scanner {
 		}
 	}
 
-	int getc() {
+	int getByte() {
 		if (!_file.opened())
 			return -1;
 		if (_pushedBack) {
@@ -209,7 +209,7 @@ public class StringScanner extends Scanner {
 		_source = source;
 	}
 
-	public int getc() {
+	public int getByte() {
 		if (_cursor < _source.length())
 			return _source[_cursor++];
 		else {
@@ -698,9 +698,18 @@ class Scanner {
 		else
 			return -1;
 	}
-/*
-	const char *sourceName();
- */
+	/*
+	 * Get the next UTF-8 character from the input.
+	 */
+	int getc() {
+		int x = getByte();
+		if (x == -1)
+			return x;
+		if ((x & ~0x7f) == 0)
+			return x;
+		assert(false);
+		return x;
+	}
 	/*
 	 * A Scanner must implement getc.
 	 *
@@ -726,7 +735,7 @@ class Scanner {
 	 *
 	 * At end of stream, getc will continue to return -1 indefinitely.
 	 */
-	protected abstract int getc();
+	protected abstract int getByte();
 	/*
 	 * This function returns the current 'cursor' location of the
 	 * Scanner.  This value 
@@ -971,14 +980,6 @@ class Scanner {
 				addByte(c);
 		}
 	}
-/*
-	void writeUtf8(unsigned codePoint);
-
-	Token _last;
-	vector<Location> _lines;
-	int _baseLineNumber;		// Line number of first character in scanner input.
-	FileStat *_file;
-*/
 }
 
 class Keywords {
