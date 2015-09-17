@@ -161,6 +161,7 @@ scan(keyword: abstract) { abstract }
 scan(keyword: break) { break }
 scan(keyword: bytes) { bytes }
 scan(keyword: case) { case }
+scan(keyword: catch) { catch }
 scan(keyword: class) { class }
 scan(keyword: continue) { continue }
 scan(keyword: default) { default }
@@ -171,6 +172,7 @@ scan(keyword: enum) { enum }
 scan(keyword: extends) { extends }
 scan(keyword: false) { false }
 scan(keyword: final) { final }
+scan(keyword: finally) { finally }
 scan(keyword: flags) { flags }
 scan(keyword: for) { for }
 scan(keyword: function) { function }
@@ -187,9 +189,12 @@ scan(keyword: protected) { protected }
 scan(keyword: public) { public }
 scan(keyword: return) { return }
 scan(keyword: static) { static }
+scan(keyword: super) { super }
 scan(keyword: switch) { switch }
 scan(keyword: this) { this }
+scan(keyword: throw) { throw }
 scan(keyword: true) { true }
+scan(keyword: try) { try }
 scan(keyword: while) { while }
 
 scan(expect:fail, character:0)

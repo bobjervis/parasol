@@ -153,6 +153,8 @@ compile() { "class A { void f() { } } class B extends A { void g() { f(); } }" }
 
 // regression: mis-spelled static trips up later code.
 compile(expect: fail, message: SYNTAX_ERROR) { "class foo { public statc int, boolean parse(string text, int radix) { int value = 0; }}" }
+// regression: passing a subscripted expression with class type as a function parameter 
+compile() { "class Foo { int x; } pointer<Foo> y; int j; Foo z = f(y[j]); Foo f(Foo s) { return s; }" }
 
 compile(expect: fail) { "static int x;" }
 compile(expect: fail) { "class A { static A() { } } " }
@@ -995,6 +997,7 @@ statement() { "enum a{b,; int x;}" }
 statement() { "@c enum a{b}" }
 statement() { "@c enum a{b,c}" }
 statement() { "@c enum a{b; int x;}" }
+statement() { "import x = z:y;" }
 statement() { "import x = z:y.w;" }
 statement() { "import z:y.w;" }
 statement() { "namespace y:x;" }

@@ -2755,6 +2755,17 @@ public class X86_64 extends X86_64AssignTemps {
 	private void generatePush(ref<Node> node, ref<CompileContext> compileContext) {
 		int size = (node.type.size() + (long.bytes - 1)) & ~(long.bytes - 1);
 		switch (node.op()) {
+		case	SUBSCRIPT:
+			b = ref<Binary>(node);
+			if (node.sethi < 0) {
+				generate(b.left(), compileContext);
+				generate(b.right(), compileContext);
+			} else {
+				generate(b.right(), compileContext);
+				generate(b.left(), compileContext);
+			}
+			break;
+			
 		case	INDIRECT:
 			ref<Unary> u = ref<Unary>(node);
 			generate(u.operand(), compileContext);

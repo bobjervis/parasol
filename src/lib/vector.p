@@ -86,6 +86,40 @@ public class vector<class E, class I> {
 		_data[int(_length) - 1] = other;
 	}
 
+	/*
+	 *	binarySearchClosestGreater
+	 *
+	 *	This function does a binary search on an already sorted array.
+	 *	The key class must define a compare method that returns < 0
+	 *	if the key is less than its argument, > 0 if it is greater and
+	 *	0 if they are equal.
+	 *
+	 *	RETURNS:
+	 *		-1			If there are no elements in the array.
+	 *		N < size	If element N is the smallest greater than the key.
+	 *		size		If no element is greater than the key.
+	 */
+	I binarySearchClosestGreater(E key) {
+		int min = 0;
+		int max = int(_length) - 1;
+		int mid = -1;
+		int relation = -1;
+
+		while (min <= max) {
+			mid = (max + min) / 2;
+			relation = key.compare(_data[I(mid)]);
+			if (relation == 0)
+				return I(mid);
+			if (relation < 0)
+				max = mid - 1;
+			else
+				min = mid + 1;
+		}
+		if (relation > 0)
+			mid++;
+		return I(mid);
+	}
+
 	public void clear() {
 		free(_data);
 		_data = null;

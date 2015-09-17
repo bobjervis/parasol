@@ -209,7 +209,10 @@ class ScanObject extends script.Object {
 		do {
 			t = scanner.next();
 			CompileString value = scanner.value();
-			printf("%s %s\n", string(t), value.asString());
+			if (t == Token.ERROR)
+				printf("%s '%c' (%<$2.2x)\n", string(t), value.data[0]);
+			else
+				printf("%s %s\n", string(t), value.asString());
 		} while(t != Token.END_OF_STREAM);
 	}
 }

@@ -491,25 +491,28 @@ class Parser {
 			return resync(MessageId.SYNTAX_ERROR);
 		}
 		Location lastIdentifier = _scanner.location();
+		string text;
+		CompileString spelling = _scanner.value();
 		for (;;) {
+			text = spelling.asString();
+			spelling.data = &text[0];
 			t = _scanner.next();
-			_scanner.seek(lastIdentifier);
-			_scanner.next();
 			if (t != Token.DOT) {
 				if (lastName != null)
-					*lastName = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
+					*lastName = _tree.newIdentifier(spelling, lastIdentifier);
 				else
-					stem = _tree.newSelection(stem, _scanner.value(), _scanner.location());
+					stem = _tree.newSelection(stem, spelling, lastIdentifier);
+				_scanner.pushBack(t);
 				return stem;
 			} else
-				stem = _tree.newSelection(stem, _scanner.value(), _scanner.location());
-			_scanner.next(); // The Token.DOT again
+				stem = _tree.newSelection(stem, spelling, lastIdentifier);
 			t = _scanner.next();
 			if (t != Token.IDENTIFIER) {
 				_scanner.pushBack(t);
 				return resync(MessageId.SYNTAX_ERROR);
 			}
 			lastIdentifier = _scanner.location();
+			spelling = _scanner.value();
 		}
 	}
 

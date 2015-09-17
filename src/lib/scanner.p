@@ -105,6 +105,7 @@ enum Token {
 	BREAK,
 	BYTES,
 	CASE,
+	CATCH,
 	CONTINUE,
 	CLASS,
 	DEFAULT,
@@ -115,6 +116,7 @@ enum Token {
 	EXTENDS,
 	FALSE,
 	FINAL,
+	FINALLY,
 	FLAGS,
 	FOR,
 	FUNCTION,
@@ -134,7 +136,9 @@ enum Token {
 	SUPER,
 	SWITCH,
 	THIS,
+	THROW,
 	TRUE,
+	TRY,
 	WHILE,
 
 	// Pseudo-tokens not actually returned by a Scanner
@@ -146,7 +150,6 @@ enum Token {
 class FileScanner extends Scanner {
 	private file.File _file;
 	private Location _fileSize;
-	private boolean _pushedBack;		// true if ungetc is called.
 	private int _pushBack;
 	
 	public FileScanner(ref<FileStat> fileInfo) {
@@ -161,13 +164,9 @@ class FileScanner extends Scanner {
 	int getByte() {
 		if (!_file.opened())
 			return -1;
-		if (_pushedBack) {
-			_pushedBack = false;
-			return _pushBack;
-		}
-		_pushBack = _file.read();
-		if (_pushBack != file.EOF)
-			return _pushBack;
+		int b = _file.read();
+		if (b != file.EOF)
+			return b;
 		else {
 			_file.close();
 			return -1;
@@ -181,17 +180,10 @@ class FileScanner extends Scanner {
 			loc.offset = _file.tell();
 		else
 			loc = _fileSize;
-		if (_pushedBack)
-			loc.offset--;
 		return loc;
 	}
 
-	void ungetc() {
-		_pushedBack = true;
-	}
-
 	public void seek(Location location) {
-		_pushedBack = false;
 		_file.seek(location.offset, file.Seek.START);
 	}
 
@@ -227,11 +219,6 @@ public class StringScanner extends Scanner {
 		return loc;
 	}
 
-	public void ungetc() {
-		if (_cursor > 0 && _cursor <= _source.length())
-			_cursor--;
-	}
-
 	public void seek(Location location) {
 		_cursor = location.offset;
 	}
@@ -243,12 +230,22 @@ class Scanner {
 	private Location[] _lines;
 	private byte[] _value;
 	private ref<FileStat> _file;
+	private boolean _utfError;
 	private int _baseLineNumber;		// Line number of first character in scanner input.
 	/*
 	 * Location of the last token read.
 	 */
 	private Location _location;
-
+	/*
+	 * _lastChar is the last value returned by getc
+	 */
+	private int _lastChar;
+	/*
+	 * _lastByte is the last character read and pushed back  
+	 */
+	private int _lastByte;
+	private byte _errorByte;
+	
 	public static ref<Scanner> create(ref<FileStat> file) {
 		ref<Scanner> scanner;
 		if (file.source() != null)
@@ -261,6 +258,7 @@ class Scanner {
 	protected Scanner(int baseLineNumber, ref<FileStat> file) {
 		_pushback = Token.EMPTY;
 		_last = Token.EMPTY;
+		_lastByte = -1;
 		_baseLineNumber = baseLineNumber;
 		_file = file;
 	}
@@ -281,6 +279,9 @@ class Scanner {
 			_location = cursor();
 			int c = getc();
 			switch (c) {
+			case	0x7fffffff://int.MAX_VALUE:
+				return remember(Token.ERROR, _errorByte);
+			
 			case	-1:
 				return remember(Token.END_OF_STREAM);
 
@@ -654,6 +655,7 @@ class Scanner {
 				// are valid identifier characters.
 
 			default:
+				
 				startValue(c);
 				for (;;) {
 					c = getc();
@@ -694,34 +696,88 @@ class Scanner {
 
 	public int lineNumber(Location location) {
 		if (_last == Token.END_OF_STREAM)
-			return _baseLineNumber + binarySearchClosestGreater(&_lines, location);
+			return _baseLineNumber + _lines.binarySearchClosestGreater(location);
 		else
 			return -1;
 	}
 	/*
-	 * Get the next UTF-8 character from the input.
+	 * Get the next Unicode code point from the input.
 	 */
 	int getc() {
-		int x = getByte();
-		if (x == -1)
+		if (_lastChar < 0) {	// did we have EOF or an ungetc?
+			if (_lastChar == -1)
+				return -1;		// EOF just keep returning EOF
+			int result = -1 - _lastChar;
+			_lastChar = result;	// ungetc was called, undo it's effects and return the last char again
+			return result;
+		}
+		int x;
+		if (_lastByte >= 0) {
+			x = _lastByte;
+			_lastByte = -1;
+		} else
+			x = getByte();
+		if (x < 0x80) {
+			_lastChar = x;
 			return x;
-		if ((x & ~0x7f) == 0)
-			return x;
-		assert(false);
-		return x;
+		}
+		if ((x & 0xc0) == 0x80 || x == 0xff) {
+			_lastChar = int.MAX_VALUE;			// ungetc will turn this into int.MIN_VALUE
+			_errorByte = byte(x);
+			return int.MAX_VALUE;
+		}
+		int value;
+		if ((x & 0xe0) == 0xc0) {
+			value = (x & 0x1f) << 5;
+			value = getMoreBytes(value, 1);
+		} else if ((x & 0xf0) == 0xe0) {
+			value = (x & 0xf) << 4;
+			value = getMoreBytes(value, 2);
+		} else if ((x & 0xf8) == 0xf0) {
+			value = (x & 0x7) << 3;
+			value = getMoreBytes(value, 3);
+		} else if ((x & 0xfc) == 0xf8) {
+			value = (x & 0x3) << 2;
+			value = getMoreBytes(value, 4);
+		} else if ((x & 0xfe) == 0xfc) {
+			value = x & 0x1;
+			value = getMoreBytes(value, 5);
+		}
+		_lastChar = value;
+		return value;
 	}
-	/*
-	 * A Scanner must implement getc.
+
+	int getMoreBytes(int valueSoFar, int extraBytes) {
+		for (int i = 0; i < extraBytes; i++) {
+			int x = getByte();
+			if ((x & ~0x3f) != 0x80) {
+				_lastByte = x;
+				_errorByte = 0xff;
+				return int.MAX_VALUE;
+			}
+			int increment = x & 0x3f;
+			valueSoFar = (valueSoFar << 6) + increment;
+		}
+		return valueSoFar;
+	}
+	
+	void ungetc() {
+		if (_lastChar >= 0)
+			_lastChar = -1 - _lastChar;
+	}
+
+/*
+	 * A Scanner must implement getByte.
 	 *
 	 * This function returns the next character in
 	 * the input stream.  At end of stream, the function
 	 * should return -1.  Windows implementations should
-	 * treat a ctrl-Z as end of file inside the getc function
+	 * treat a ctrl-Z as end of file inside the getByte function
 	 * when treating the input as a 'text file'.  UNIX
 	 * implementations reutrn all characters in a file.
 	 *
 	 * Scanners that read non-Unicode source files should
-	 * convert their inputs to UTF-8.  Each call to getc should
+	 * convert their inputs to UTF-8.  Each call to getByte should
 	 * return the next octet of the input stream.  If the input
 	 * text is not well-formed UTF, display semantics may be
 	 * unpredictable.  Malformed UTF sequences in identifiers
@@ -733,16 +789,14 @@ class Scanner {
 	 * If not at end of file, the 'cursor' of the Scanner will
 	 * advance one octet in the input stream.
 	 *
-	 * At end of stream, getc will continue to return -1 indefinitely.
+	 * At end of stream, getByte will continue to return -1 indefinitely.
 	 */
 	protected abstract int getByte();
 	/*
 	 * This function returns the current 'cursor' location of the
-	 * Scanner.  This value 
+	 * Scanner.  This value is the offset of the next byte to be read
 	 */
 	protected abstract Location cursor();
-
-	protected abstract void ungetc();
 
 	private Token remember(Token t) { 
 		return _last = t; 
@@ -990,6 +1044,7 @@ class Keywords {
 		_keywords["break"] = Token.BREAK;
 		_keywords["bytes"] = Token.BYTES;
 		_keywords["case"] = Token.CASE;
+		_keywords["catch"] = Token.CATCH;
 		_keywords["class"] = Token.CLASS;
 		_keywords["continue"] = Token.CONTINUE;
 		_keywords["default"] = Token.DEFAULT;
@@ -1000,6 +1055,7 @@ class Keywords {
 		_keywords["extends"] = Token.EXTENDS;
 		_keywords["false"] = Token.FALSE;
 		_keywords["final"] = Token.FINAL;
+		_keywords["finally"] = Token.FINALLY;
 		_keywords["flags"] = Token.FLAGS;
 		_keywords["for"] = Token.FOR;
 		_keywords["function"] = Token.FUNCTION;
@@ -1019,7 +1075,9 @@ class Keywords {
 		_keywords["super"] = Token.SUPER;
 		_keywords["switch"] = Token.SWITCH;
 		_keywords["this"] = Token.THIS;
+		_keywords["throw"] = Token.THROW;
 		_keywords["true"] = Token.TRUE;
+		_keywords["try"] = Token.TRY;
 		_keywords["while"] = Token.WHILE;
 	}
 
@@ -1031,37 +1089,3 @@ class Keywords {
 }
 
 Keywords keywords;
-
-/*
- *	binarySearchClosestGreater
- *
- *	This function does a binary search on an already sorted array.
- *	The key class must define a compare method that returns < 0
- *	if the key is less than its argument, > 0 if it is greater and
- *	0 if they are equal.
- *
- *	RETURNS:
- *		-1			If there are no elements in the array.
- *		N < size	If element N is the smallest greater than the key.
- *		size		If no element is greater than the key.
- */
-int binarySearchClosestGreater(ref<Location[]> list, Location key) {
-	int min = 0;
-	int max = list.length() - 1;
-	int mid = -1;
-	int relation = -1;
-
-	while (min <= max) {
-		mid = (max + min) / 2;
-		relation = key.compare(list.get(mid));
-		if (relation == 0)
-			return mid;
-		if (relation < 0)
-			max = mid - 1;
-		else
-			min = mid + 1;
-	}
-	if (relation > 0)
-		mid++;
-	return mid;
-}

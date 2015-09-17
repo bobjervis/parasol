@@ -2465,6 +2465,10 @@ class X86_64Encoder extends Target {
 			return;
 		}
 		switch (node.op()) {
+		case	SUBSCRIPT:
+			inst(X86.PUSH, node);
+			break;
+			
 		case	DOT:
 		case	IDENTIFIER:
 			ref<Symbol> sym = node.symbol();

@@ -84,6 +84,7 @@ statement() { "enum a{b,; int x;}" }
 statement() { "@c enum a{b}" }
 statement() { "@c enum a{b,c}" }
 statement() { "@c enum a{b; int x;}" }
+statement() { "import x = z:y;" }
 statement() { "import x = z:y.w;" }
 statement() { "import z:y.w;" }
 statement() { "namespace y:x;" }
