@@ -3,8 +3,8 @@
  */
 namespace parasol:compiler;
 
-int[] intervalFirst, intervalLast;
-byte[] intervalClass;
+private int[] intervalFirst, intervalLast;
+private byte[] intervalClass;
 intervalFirst.append(32);
 intervalLast.append(32);
 intervalClass.append(254);
@@ -3338,3 +3338,10 @@ intervalClass.append(255);
 intervalFirst.append(194560);
 intervalLast.append(195101);
 intervalClass.append(255);
+// 0-9 = digit value, 254 = white space, 255 = letter, -1 = unclassified
+public int codePointClass(int codePoint) {
+    int match = intervalFirst.binarySearchClosestGreater(codePoint);
+    if (codePoint <= intervalLast[match])
+        return intervalClass[match];
+    return -1;
+}

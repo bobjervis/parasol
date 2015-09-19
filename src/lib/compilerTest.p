@@ -63,11 +63,96 @@ public void initTestObjects(string argv0, boolean verbose, boolean compileFromSo
 	parasolCommand = argv0;
 	targetArgument = target;
 	compileFromSourceArgument = compileFromSource;
+	script.objectFactory("codePoint", CodePointObject.factory);
 	script.objectFactory("compile", CompileObject.factory);
 	script.objectFactory("expression", ExpressionObject.factory);
 	script.objectFactory("run", RunObject.factory);
 	script.objectFactory("scan", ScanObject.factory);
 	script.objectFactory("statement", StatementObject.factory);
+}
+
+class CodePointObject extends script.Object {
+	private string _source;
+	private boolean _expectSuccess;
+	private int[] _expectedValue;
+
+	public static ref<script.Object> factory() {
+		return new CodePointObject();
+	}
+
+	public boolean isRunnable() {
+		return true;
+	}
+
+	public boolean validate(ref<script.Parser> parser) {
+		ref<script.Atom> a = get("content");
+		if (a == null)
+			return false;
+		_source = a.toString();
+		a = get("expect");
+		if (a != null) {
+			if (a.toString() == "fail")
+				_expectSuccess = false;
+			else if (a.toString() == "success")
+				_expectSuccess = true;
+			else {
+				printf("Unexpected value for 'expect' attribute: '%s'\n", a.toString());
+				return false;
+			}
+		} else
+			_expectSuccess = true;
+		a = get("value");
+		string[] codes = a.toString().split(',');
+		for (int i = 0; i < codes.length(); i++) {
+			boolean success;
+			int xValue;
+			(xValue, success) = int.parse(codes[i], 16);
+			if (!success) {
+				printf("value attribute '%s' is not an integer in '%s'\n", codes[i], a.toString());
+				return false;
+			}
+			_expectedValue.append(xValue);
+		}
+		return true;
+	}
+
+	public boolean run() {
+		StringScanner scanner(_source, 0, "StringScanner test");
+
+		for (int i = 0; i < _expectedValue.length(); i++) {
+			int actual = scanner.getc();
+			if (actual != _expectedValue[i]) {
+				if (_expectSuccess) {
+					printf("Expected: %x Actual: %x\n", _expectedValue[i], actual);
+					return false;
+				} else
+					return true;
+			}
+		}
+		int next = scanner.getc();
+		if (next != -1) {
+			if (_expectSuccess)
+				printf("Expecting end of stream, got '%x'\n", next);
+			return !_expectSuccess;
+		}
+		return _expectSuccess;
+	}
+
+	private CodePointObject() {
+		
+	}
+
+	void dump(ref<Node> expression) {
+		printf("Scanning '%s'\n", _source);
+		StringScanner scanner(_source, 0, "StringScanner test");
+		Token t;
+		do {
+			t = scanner.next();
+			printf("%s %s\n", string(t), scanner.value().asString());
+		} while(t != Token.END_OF_STREAM);
+		expression.print(0);
+		printSyntaxErrors(expression, &_source);
+	}
 }
 
 class ScanObject extends script.Object {

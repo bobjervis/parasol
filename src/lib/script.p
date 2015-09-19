@@ -47,10 +47,7 @@ public class Null extends Atom {
 
 public class Object extends Atom {
 	ref<Atom>[string]	_properties;
-/*
-public:
-	~Object();
-*/
+
 	public boolean isRunnable() {
 		return true;
 	}
@@ -160,9 +157,6 @@ public class Vector extends Atom {
 		for (int i = 0; i < value.length(); i++)
 			_value.append(value[i]);
 	}
-/*
-	~Vector();
-*/
 
 	public string toSource() {
 		string s;
@@ -189,19 +183,9 @@ public class Vector extends Atom {
 		assert(false);
 		return 0;
 	}
-/*
-	const vector<Atom*>& value() const { return _value; }
-
-private:
-	vector<Atom*>		_value;
-	*/
 }
 
 public class Atom {
-/*
-public:
-	virtual ~Atom();
-*/
 	public boolean validate(ref<Parser> parser) {
 		return true;
 	}
@@ -217,23 +201,7 @@ public:
 	public ref<Atom> get(string name) {
 		return null;
 	}
-/*
-	template<class T>
-	bool containedBy(T** output) {
-		Atom* a = this;
-		*output = null;
-		for (;;) {
-			Atom* p = a.get("parent");
-			if (p == null)
-				return false;
-			if (typeid(*p) == typeid(T)) {
-				*output = (T*)p;
-				return true;
-			}
-			a = p;
-		}
-	}
-*/
+
 	public boolean put(string name, ref<Atom> value) {
 		assert(false);
 		return false;
@@ -252,9 +220,6 @@ public:
 	public abstract string toSource();
 
 	public abstract string toString();
-/*
-	Atom* operator [] (int i) const;
-*/
 }
 
 class ScriptObject extends Object {

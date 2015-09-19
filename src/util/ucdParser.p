@@ -217,8 +217,8 @@ void recordCodePoint(string generalCategory, int codePoint, ref<Interval> x) {
 
 boolean writeClassifier(file.File classifier) {
 	classifier.write("namespace parasol:compiler;\n\n");
-	classifier.write("int[] intervalFirst, intervalLast;\n");
-	classifier.write("byte[] intervalClass;\n");
+	classifier.write("private int[] intervalFirst, intervalLast;\n");
+	classifier.write("private byte[] intervalClass;\n");
 	for (int i = 0; i < intervals.length(); i++) {
 		classifier.printf("intervalFirst.append(%d);\n", intervals[i].first);
 		classifier.printf("intervalLast.append(%d);\n", intervals[i].last);
@@ -237,5 +237,12 @@ boolean writeClassifier(file.File classifier) {
 		}
 		classifier.write(");\n");
 	}
+	classifier.write("// 0-9 = digit value, 254 = white space, 255 = letter, -1 = unclassified\n");
+	classifier.write("public int codePointClass(int codePoint) {\n");
+	classifier.write("    int match = intervalFirst.binarySearchClosestGreater(codePoint);\n");
+	classifier.write("    if (codePoint <= intervalLast[match])\n");
+	classifier.write("        return intervalClass[match];\n");
+	classifier.write("    return -1;\n");
+	classifier.write("}\n");
 	return true;
 }

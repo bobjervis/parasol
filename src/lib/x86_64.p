@@ -2772,15 +2772,9 @@ public class X86_64 extends X86_64AssignTemps {
 			
 		case	IDENTIFIER:
 		case	VARIABLE:
-			if ((node.nodeFlags & ADDRESS_MODE) != 0)
-				node.print(0);
-			assert ((node.nodeFlags & ADDRESS_MODE) == 0);
 			break;
 			
 		case	DOT:
-			if ((node.nodeFlags & ADDRESS_MODE) != 0)
-				node.print(0);
-			assert ((node.nodeFlags & ADDRESS_MODE) == 0);
 			ref<Selection> dot = ref<Selection>(node);
 			if (dot.symbol().storageClass() == StorageClass.ENUMERATION) {
 				if (dot.symbol().value == null) {

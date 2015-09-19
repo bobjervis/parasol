@@ -355,7 +355,7 @@ class string {
 				else {
 					// TODO: Implement \uNNNNN sequence
 					//assert(false);
-					output.printf("\\x%x", cp[i] & 0xff);
+					output.printf("\\x%x", cp[i]);
 				}
 			}
 		}
@@ -1270,8 +1270,10 @@ class string {
 								v += 10 + pointer<byte>(&_contents.data)[i].toLowercase() - 'a';
 							i++;
 						} while (i < _contents.length && pointer<byte>(&_contents.data)[i].isHexDigit());
-						output.append(v);
+						output.append(byte(v));
+						i--;
 						break;
+						
 					case '0':
 						i++;
 						if (i >= _contents.length)

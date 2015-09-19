@@ -299,8 +299,14 @@ class X86_64AddressModes extends X86_64Encoder {
 				markAddressModes(args.node, compileContext);
 			break;
 			
-		case	ELLIPSIS_ARGUMENT:
 		case	STACK_ARGUMENT:
+			u = ref<Unary>(node);
+			markAddressModes(u.operand(), compileContext);
+			if (u.operand().isLvalue())
+				u.operand().nodeFlags |= ADDRESS_MODE;
+			break;
+			
+		case	ELLIPSIS_ARGUMENT:
 		case	LOAD:
 			u = ref<Unary>(node);
 			markAddressModes(u.operand(), compileContext);

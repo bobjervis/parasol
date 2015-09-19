@@ -30,7 +30,7 @@ class Parser {
 		for (;;) {
 			Token t = _scanner.next();
 			CompileString cs = _scanner.value();
-			int line = _scanner.lineNumber(_scanner.location());
+//			int line = _scanner.lineNumber(_scanner.location());
 			string s(cs.data, cs.length);
 //			printf("Token %d %s %d\n", int(t), s, line);
 			if (t == Token.END_OF_STREAM)

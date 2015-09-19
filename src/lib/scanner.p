@@ -695,9 +695,10 @@ class Scanner {
 	}
 
 	public int lineNumber(Location location) {
-		if (_last == Token.END_OF_STREAM)
+		if (_last == Token.END_OF_STREAM) {
+			int x = _lines.binarySearchClosestGreater(location);
 			return _baseLineNumber + _lines.binarySearchClosestGreater(location);
-		else
+		} else
 			return -1;
 	}
 	/*
@@ -728,16 +729,16 @@ class Scanner {
 		}
 		int value;
 		if ((x & 0xe0) == 0xc0) {
-			value = (x & 0x1f) << 5;
+			value = x & 0x1f;
 			value = getMoreBytes(value, 1);
 		} else if ((x & 0xf0) == 0xe0) {
-			value = (x & 0xf) << 4;
+			value = x & 0xf;
 			value = getMoreBytes(value, 2);
 		} else if ((x & 0xf8) == 0xf0) {
-			value = (x & 0x7) << 3;
+			value = x & 0x7;
 			value = getMoreBytes(value, 3);
 		} else if ((x & 0xfc) == 0xf8) {
-			value = (x & 0x3) << 2;
+			value = x & 0x3;
 			value = getMoreBytes(value, 4);
 		} else if ((x & 0xfe) == 0xfc) {
 			value = x & 0x1;

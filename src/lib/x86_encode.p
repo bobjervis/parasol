@@ -1570,7 +1570,7 @@ class X86_64Encoder extends Target {
 	
 	void inst(X86 instruction, ref<Node> operand) {
 		if ((operand.nodeFlags & ADDRESS_MODE) == 0) {
-			inst(instruction, operand.type.family(), R(int(operand.register)));
+			inst(instruction, operand.type.family(), R(operand.register));
 			return;
 		}
 		switch (instruction) {
@@ -2466,7 +2466,9 @@ class X86_64Encoder extends Target {
 		}
 		switch (node.op()) {
 		case	SUBSCRIPT:
-			inst(X86.PUSH, node);
+			emitRex(TypeFamily.SIGNED_32, node, R.NO_REG, R.NO_REG);
+			emit(0xff);
+			subscriptModRM(node, 6, offset);
 			break;
 			
 		case	DOT:
@@ -2678,7 +2680,7 @@ class X86_64Encoder extends Target {
 		}
 		switch (addressMode.op()) {
 		case	SEQUENCE:
-			b = ref<Binary>(addressMode);
+			ref<Binary> b = ref<Binary>(addressMode);
 			modRM(b.right(), regOpcode, ipAdjust, allAdjust);
 			break;
 			
@@ -2814,23 +2816,7 @@ class X86_64Encoder extends Target {
 			break;
 			
 		case	SUBSCRIPT:
-			ref<Binary> b = ref<Binary>(addressMode);
-			int mod = 0;
-			if (b.left().type.family() == TypeFamily.STRING)
-				mod = 1;
-			modRM(mod, regOpcode, 4);
-			R r1 = R(int(b.left().register));
-			R r2 = R(int(b.right().register));
-			int scale = 0;
-			int sz = b.type.size();
-			assert(sz <= address.bytes);
-			while (sz > 1) {
-				scale += 1;
-				sz >>= 1;
-			}
-			sib(scale, rmValues[r2], rmValues[r1]);
-			if (mod == 1)
-				emit(4);
+			subscriptModRM(addressMode, regOpcode, 0);
 			break;
 			
 		case	STRING:
@@ -2851,6 +2837,34 @@ class X86_64Encoder extends Target {
 			addressMode.print(4);
 			assert(false);
 		}
+	}
+	
+	private void subscriptModRM(ref<Node> addressMode, int regOpcode, int offset) {
+		ref<Binary> b = ref<Binary>(addressMode);
+		int mod = 0;
+		if (b.left().type.family() == TypeFamily.STRING)
+			offset += 4;
+		if (offset != 0) {
+			if (offset >= -128 || offset <= 127)
+				mod = 1;
+			else
+				mod = 2;
+		}
+		modRM(mod, regOpcode, 4);
+		R r1 = R(b.left().register);
+		R r2 = R(b.right().register);
+		int scale = 0;
+		int sz = b.type.size();
+		assert(sz <= address.bytes);
+		while (sz > 1) {
+			scale += 1;
+			sz >>= 1;
+		}
+		sib(scale, rmValues[r2], rmValues[r1]);
+		if (mod == 1)
+			emit(byte(offset));
+		else if (mod == 2)
+			emitInt(offset);
 	}
 	
 	public int addStringLiteral(string value) {
