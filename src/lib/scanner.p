@@ -656,6 +656,8 @@ class Scanner {
 
 			default:
 				
+//				int cpc = codePointClass(c);
+//				if (cpc == CPC_WHITE_SPACE)
 				startValue(c);
 				for (;;) {
 					c = getc();

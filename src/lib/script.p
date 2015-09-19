@@ -469,7 +469,7 @@ public:
 	}
 
 	public boolean resync(Token t) {
-		assert(false);
+		// Just do no resync for now.
 		return false;
 	}
 
@@ -736,8 +736,11 @@ public:
 	}
 
 	int lineNumber(int location) {
-		assert(false);
-		return 0;
+		int line = 1;
+		for (int i = 0; i < location && i < _text.length(); i++)
+			if (_text[i] == '\n')
+				line++;
+		return line;
 	}
 
 	void backup() {

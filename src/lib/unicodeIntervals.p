@@ -3,6 +3,26 @@
  */
 namespace parasol:compiler;
 
+// 0-9 = digit value, 254 = white space, 255 = letter, -1 = unclassified
+int CPC_ERROR = -1;
+int CPC_WHITE_SPACE = 254;
+int CPC_LETTER = 255;
+int CPC_DIGIT_0 = 0;
+int CPC_DIGIT_1 = 1;
+int CPC_DIGIT_2 = 2;
+int CPC_DIGIT_3 = 3;
+int CPC_DIGIT_4 = 4;
+int CPC_DIGIT_5 = 5;
+int CPC_DIGIT_6 = 6;
+int CPC_DIGIT_7 = 7;
+int CPC_DIGIT_8 = 8;
+int CPC_DIGIT_9 = 9;
+public int codePointClass(int codePoint) {
+    int match = intervalFirst.binarySearchClosestGreater(codePoint);
+    if (codePoint <= intervalLast[match])
+        return intervalClass[match];
+    return -1;
+}
 private int[] intervalFirst, intervalLast;
 private byte[] intervalClass;
 intervalFirst.append(32);
@@ -3338,10 +3358,3 @@ intervalClass.append(255);
 intervalFirst.append(194560);
 intervalLast.append(195101);
 intervalClass.append(255);
-// 0-9 = digit value, 254 = white space, 255 = letter, -1 = unclassified
-public int codePointClass(int codePoint) {
-    int match = intervalFirst.binarySearchClosestGreater(codePoint);
-    if (codePoint <= intervalLast[match])
-        return intervalClass[match];
-    return -1;
-}
