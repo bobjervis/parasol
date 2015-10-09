@@ -159,7 +159,7 @@ class vector<class E, class I> {
 			mid = (max + min) / 2;
 			relation = key.compare(_data[I(mid)]);
 			if (relation == 0)
-				return I(mid);
+				return I(mid + 1);
 			if (relation < 0)
 				max = mid - 1;
 			else

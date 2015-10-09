@@ -229,6 +229,9 @@ scan(expect:fail) { '#' }
 scan(expect:fail) { '$' }
 scan(expect:fail) { '\\' }
 scan(expect:fail, character:127)
+scan(expect:fail, character:128)
+scan(expect:fail, character:708)
+scan(expect:fail, character:1644)
 
 codePoint(value:03) { "\x03" }
 codePoint(value:20) { " " }

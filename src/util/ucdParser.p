@@ -232,16 +232,16 @@ boolean writeClassifier(file.File classifier) {
 	classifier.write("int CPC_DIGIT_8 = 8;\n");
 	classifier.write("int CPC_DIGIT_9 = 9;\n");
 	classifier.write("public int codePointClass(int codePoint) {\n");
-	classifier.write("    int match = intervalFirst.binarySearchClosestGreater(codePoint);\n");
-	classifier.write("    if (codePoint <= intervalLast[match])\n");
+	classifier.write("    int match = intervalLast.binarySearchClosestGreater(codePoint);\n");
+	classifier.write("    if (match >= 0 && match < intervalLast.length() && codePoint >= intervalFirst[match])\n");
 	classifier.write("        return intervalClass[match];\n");
-	classifier.write("    return -1;\n");
+	classifier.write("    return CPC_ERROR;\n");
 	classifier.write("}\n");
 	classifier.write("private int[] intervalFirst, intervalLast;\n");
 	classifier.write("private byte[] intervalClass;\n");
 	for (int i = 0; i < intervals.length(); i++) {
 		classifier.printf("intervalFirst.append(%d);\n", intervals[i].first);
-		classifier.printf("intervalLast.append(%d);\n", intervals[i].last);
+		classifier.printf("intervalLast.append(%d);\n", intervals[i].last + 1);
 		classifier.write("intervalClass.append(");
 		switch (intervals[i].treatment) {
 		case	LETTER:

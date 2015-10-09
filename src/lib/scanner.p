@@ -548,6 +548,9 @@ class Scanner {
 			case	'9':
 				return remember(number(c));
 
+			case	'_':
+				return remember(identifier(c));
+				
 			case	':':
 				return remember(Token.COLON);
 
@@ -651,29 +654,34 @@ class Scanner {
 			case	0x7f:
 				return remember(Token.ERROR, c);
 
-				// Alphabetic characters, underline and all Unicode characters above 127
+				// Alphabetic characters and all Unicode characters above 127
 				// are valid identifier characters.
 
 			default:
-				
-//				int cpc = codePointClass(c);
-//				if (cpc == CPC_WHITE_SPACE)
-				startValue(c);
-				for (;;) {
-					c = getc();
-					if (c == -1)
-						break;
-					if (byte(c).isAlphanumeric() || c == '_' || (c & 0x80) != 0)
-						addByte(c);
-					else {
-						ungetc();
-						break;
-					}
+				int cpc = codePointClass(c);
+				if (cpc == CPC_WHITE_SPACE)
+					continue;
+				else if (cpc == CPC_ERROR)
+					return remember(Token.ERROR, c);
+				else if (cpc == CPC_LETTER)
+					return remember(identifier(c));
+				else // a digit - for now an error
+					return remember(Token.ERROR, c);
+/*
+				switch (cpc) {
+				case	CPC_WHITE_SPACE:
+					break;
+					
+				case	CPC_ERROR:
+					return remember(Token.ERROR, c);
+					
+				case	CPC_LETTER:
+					return remember(identifier(c));
+
+				default:
+					return remember(Token.ERROR, c);
 				}
-				Token t = keywords.getKeyword(&_value[0], _value.length());
-				if (t != null)
-					return remember(t);
-				return remember(Token.IDENTIFIER);
+				*/
 			}
 		}
 	}
@@ -699,7 +707,7 @@ class Scanner {
 	public int lineNumber(Location location) {
 		if (_last == Token.END_OF_STREAM) {
 			int x = _lines.binarySearchClosestGreater(location);
-			return _baseLineNumber + _lines.binarySearchClosestGreater(location);
+			return _baseLineNumber + x;
 		} else
 			return -1;
 	}
@@ -820,6 +828,25 @@ class Scanner {
 		_value.append(byte(c));
 	}
 
+	private Token identifier(int c) {
+		startValue(c);
+		for (;;) {
+			c = getc();
+			if (c == -1)
+				break;
+			if (byte(c).isAlphanumeric() || c == '_' || (c & 0x80) != 0)
+				addByte(c);
+			else {
+				ungetc();
+				break;
+			}
+		}
+		Token t = keywords.getKeyword(&_value[0], _value.length());
+		if (t != null)
+			return t;
+		return Token.IDENTIFIER;
+	}
+	
 	private Token number(int c) {
 		Token t = Token.INTEGER;
 		startValue(c);

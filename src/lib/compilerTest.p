@@ -174,14 +174,14 @@ class ScanObject extends script.Object {
 		a = get("character");
 		if (a != null) {
 			string s = a.toString();
-			byte v;
+			int v;
 			boolean result;
-			(v, result) = byte.parse(s.trim());
+			(v, result) = int.parse(s.trim());
 			if (!result) {
 				printf("Invalid character value: %s\n", s.trim());
 				return false;
 			}
-			_source = string(pointer<byte>(&v), 1);
+			_source.append(v);
 		} else {
 			a = get("content");
 			if (a == null)
