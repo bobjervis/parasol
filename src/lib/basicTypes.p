@@ -34,6 +34,11 @@ class CompileString {
 		data = value;
 	}
 	
+	CompileString(pointer<byte> value, int length) {
+		this.length = length;
+		data = value;
+	}
+	
 	CompileString(string s) {
 		length = s.length();
 		data = &s[0];

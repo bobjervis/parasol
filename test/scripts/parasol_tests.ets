@@ -447,6 +447,8 @@ compile(expect: fail, message: NOT_NUMERIC) { "boolean a; a = a++;" }
 
 compile(expect: fail) { "ref<int> x; if (x == 0) x = new int;" }
 
+compile() { "int β; β = 56;" }
+
 // The matrix of allowed operators for double operands:
 
 compile(expect: fail, message: INVALID_AND) { "double b; double a = b & 37;" }
@@ -1546,6 +1548,7 @@ scan(tokens:0) { "/* Just a block comment /* with nesting */ */   " }
 scan(tokens: 1, value:"abc"){ abc }
 scan(tokens: 1, value:"Abc"){ Abc }
 scan(tokens: 1, value:"aBc"){ aBc }
+scan(tokens: 1, value:"β") { β }
 scan(tokens: 1, value:"a123"){ a123 }
 scan(tokens: 1, value:"_"){ _ }
 scan(tokens: 1, value:"a_"){ a_ }
@@ -1740,6 +1743,9 @@ scan(expect:fail) { '#' }
 scan(expect:fail) { '$' }
 scan(expect:fail) { '\\' }
 scan(expect:fail, character:127)
+scan(expect:fail, character:128)
+scan(expect:fail, character:708)
+scan(expect:fail, character:1644)
 
 
 codePoint(value:03) { "\x03" }

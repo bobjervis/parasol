@@ -228,7 +228,7 @@ class Scanner {
 	private Token _pushback;
 	private Token _last;
 	private Location[] _lines;
-	private byte[] _value;
+	private string _value;
 	private ref<FileStat> _file;
 	private boolean _utfError;
 	private int _baseLineNumber;		// Line number of first character in scanner input.
@@ -511,7 +511,7 @@ class Scanner {
 							// Set up a 'value' that will indicate
 							// the context of the error.
 							startValue('/');
-							addByte('*');
+							addCharacter('*');
 							return remember(Token.ERROR);
 						}
 						if (c == '/') {
@@ -600,13 +600,13 @@ class Scanner {
 				return remember(Token.QUESTION_MARK);
 
 			case	'@':
-				_value.clear();
+				_value = null;
 				for (;;) {
 					c = getc();
 					if (c == -1)
 						break;
 					if (byte(c).isAlphanumeric() || c == '_' || (c & 0x80) != 0)
-						addByte(c);
+						addCharacter(c);
 					else {
 						ungetc();
 						break;
@@ -686,6 +686,247 @@ class Scanner {
 		}
 	}
 
+	private Token identifier(int c) {
+		startValue(c);
+		for (;;) {
+			c = getc();
+			if (c == -1)
+				break;
+			if (c == '_') {
+				addCharacter(c);
+				continue;
+			}
+			int cpc = codePointClass(c);
+			if (cpc == CPC_ERROR || cpc == CPC_WHITE_SPACE) {
+				ungetc();
+				break;
+			} else
+				addCharacter(c);
+		}
+		Token t = keywords[_value];
+		if (t != null)
+			return t;
+		return Token.IDENTIFIER;
+	}
+	
+	private Token number(int c) {
+		Token t = Token.INTEGER;
+		startValue(c);
+		boolean hexConstant = false;
+		if (c == '.')
+			t = Token.FLOATING_POINT;
+		else if (c == '0') {
+			c = getc();
+			if (c == 'x' || c == 'X') {
+				hexConstant = true;
+				addCharacter(c);
+				c = getc();
+				ungetc();
+				if (!byte(c).isHexDigit())
+					return Token.ERROR;
+			} else
+				ungetc();
+		}
+		for (;;) {
+			c = getc();
+			switch (c) {
+			case	'0':
+			case	'1':
+			case	'2':
+			case	'3':
+			case	'4':
+			case	'5':
+			case	'6':
+			case	'7':
+			case	'8':
+			case	'9':
+				addCharacter(c);
+				break;
+
+			case	'a':
+			case	'b':
+			case	'c':
+			case	'd':
+			case	'A':
+			case	'B':
+			case	'C':
+			case	'D':
+				if (!hexConstant) {
+					ungetc();
+					return t;
+				}
+				addCharacter(c);
+				break;
+
+			case	'.':
+				if (t == Token.FLOATING_POINT || hexConstant) {
+					ungetc();
+					return t;
+				}
+				t = Token.FLOATING_POINT;
+				addCharacter(c);
+				break;
+
+			case	'e':
+			case	'E':
+				addCharacter(c);
+				if (!hexConstant) {
+					t = Token.FLOATING_POINT;
+					c = getc();
+					if (c == '+' || c == '-') {
+						addCharacter(c);
+						c = getc();
+					}
+					ungetc();
+					if (!byte(c).isDigit())
+						return Token.ERROR;
+				}
+				break;
+
+			case	'f':
+			case	'F':
+				addCharacter(c);
+				if (!hexConstant)
+					return Token.FLOATING_POINT;
+				break;
+
+			default:
+				ungetc();
+				return t;
+			}
+		}
+	}
+
+	private Token consume(Token t, byte delimiter) {
+		_value = "";
+		for (;;) {
+			int c = getc();
+
+			if (c == -1) {
+				if (t != Token.ERROR)
+					_value.insert(0, delimiter);
+				return Token.ERROR;
+			}
+			if (c == delimiter)
+				return t;
+			if (c == '\n') {
+				ungetc();
+				if (t != Token.ERROR)
+					_value.insert(0, delimiter);
+				return Token.ERROR;
+			}
+			if (c == '\\') {
+				addCharacter('\\');			
+				unsigned value = 0;
+
+				c = getc();
+				switch (c) {
+				case	-1:
+					if (t != Token.ERROR)
+						_value.insert(0, delimiter);
+					return Token.ERROR;
+
+				case	'\\':
+				case	'a':
+				case	'b':
+				case	'f':
+				case	'n':
+				case	'r':
+				case	't':
+				case	'v':
+				case	'"':
+				case	'\'':
+				case	'`':
+					addCharacter(c);
+					break;
+
+				case	'u':
+				case	'U':
+					addCharacter(c);
+					for (int i = 0; i < 8; i++) {
+						c = getc();
+						if (byte(c).isHexDigit()) {
+							if (byte(c).isDigit())
+								value = (value << 4) + unsigned(c - '0');
+							else
+								value = (value << 4) + 10 + unsigned(byte(c).toLowercase() - 'a');
+							addCharacter(c);
+						} else {
+							ungetc();
+							break;
+						}
+					}
+					if (value > 0x7fffffff) {
+						if (t != Token.ERROR)
+							_value.insert(0, delimiter);
+						t = Token.ERROR;
+					}
+					break;
+
+				case	'x':
+				case	'X':
+					addCharacter(c);
+					for (int i = 0; i < 2; i++) {
+						c = getc();
+						if (byte(c).isHexDigit()) {
+							if (byte(c).isDigit())
+								value = (value << 4) + unsigned(c - '0');
+							else
+								value = (value << 4) + 10 + unsigned(byte(c).toLowercase() - 'a');
+							addCharacter(c);
+						} else {
+							ungetc();
+							break;
+						}
+					}
+					if (value > 0xff) {
+						if (t != Token.ERROR)
+							_value.insert(0, delimiter);
+						t = Token.ERROR;
+					}
+					break;
+
+				case	'0':
+				case	'1':
+				case	'2':
+				case	'3':
+				case	'4':
+				case	'5':
+				case	'6':
+				case	'7':
+					for (int i = 0; i < 3; i++) {
+						if (c >= '0' && c <= '7') {
+							value = (value << 3) + unsigned(c - '0');
+							addCharacter(c);
+						} else
+							break;
+						c = getc();
+					}
+					ungetc();
+					if (value > 0xff) {
+						if (t != Token.ERROR)
+							_value.insert(0, delimiter);
+						t = Token.ERROR;
+					}
+					break;
+
+				case	'\n':
+					ungetc();
+					if (t != Token.ERROR)
+						_value.insert(0, delimiter);
+					return Token.ERROR;
+
+				default:
+					addCharacter(c);
+					if (t != Token.ERROR)
+						_value.insert(0, delimiter);
+					t = Token.ERROR;
+				}
+			} else
+				addCharacter(c);
+		}
+	}
+
 	public abstract void seek(Location location);
 
 	public void pushBack(Token t) {
@@ -693,7 +934,7 @@ class Scanner {
 	}
 	
 	public CompileString value() {
-		CompileString result(&_value);
+		CompileString result(&_value[0], _value.length());
 		return result;
 	}
 	
@@ -820,302 +1061,54 @@ class Scanner {
 	}
 
 	private void startValue(int c) {
-		_value.clear();
-		_value.append(byte(c));
+		_value = null;
+		_value.append(c);
 	}
 
-	private void addByte(int c) {
-		_value.append(byte(c));
+	private void addCharacter(int c) {
+		_value.append(c);
 	}
 
-	private Token identifier(int c) {
-		startValue(c);
-		for (;;) {
-			c = getc();
-			if (c == -1)
-				break;
-			if (byte(c).isAlphanumeric() || c == '_' || (c & 0x80) != 0)
-				addByte(c);
-			else {
-				ungetc();
-				break;
-			}
-		}
-		Token t = keywords.getKeyword(&_value[0], _value.length());
-		if (t != null)
-			return t;
-		return Token.IDENTIFIER;
-	}
-	
-	private Token number(int c) {
-		Token t = Token.INTEGER;
-		startValue(c);
-		boolean hexConstant = false;
-		if (c == '.')
-			t = Token.FLOATING_POINT;
-		else if (c == '0') {
-			c = getc();
-			if (c == 'x' || c == 'X') {
-				hexConstant = true;
-				addByte(c);
-				c = getc();
-				ungetc();
-				if (!byte(c).isHexDigit())
-					return Token.ERROR;
-			} else
-				ungetc();
-		}
-		for (;;) {
-			c = getc();
-			switch (c) {
-			case	'0':
-			case	'1':
-			case	'2':
-			case	'3':
-			case	'4':
-			case	'5':
-			case	'6':
-			case	'7':
-			case	'8':
-			case	'9':
-				addByte(c);
-				break;
-
-			case	'a':
-			case	'b':
-			case	'c':
-			case	'd':
-			case	'A':
-			case	'B':
-			case	'C':
-			case	'D':
-				if (!hexConstant) {
-					ungetc();
-					return t;
-				}
-				addByte(c);
-				break;
-
-			case	'.':
-				if (t == Token.FLOATING_POINT || hexConstant) {
-					ungetc();
-					return t;
-				}
-				t = Token.FLOATING_POINT;
-				addByte(c);
-				break;
-
-			case	'e':
-			case	'E':
-				addByte(c);
-				if (!hexConstant) {
-					t = Token.FLOATING_POINT;
-					c = getc();
-					if (c == '+' || c == '-') {
-						addByte(c);
-						c = getc();
-					}
-					ungetc();
-					if (!byte(c).isDigit())
-						return Token.ERROR;
-				}
-				break;
-
-			case	'f':
-			case	'F':
-				addByte(c);
-				if (!hexConstant)
-					return Token.FLOATING_POINT;
-				break;
-
-			default:
-				ungetc();
-				return t;
-			}
-		}
-	}
-
-	private Token consume(Token t, byte delimiter) {
-		_value.clear();
-		for (;;) {
-			int c = getc();
-
-			if (c == -1) {
-				if (t != Token.ERROR)
-					_value.insert(0, delimiter);
-				return Token.ERROR;
-			}
-			if (c == delimiter)
-				return t;
-			if (c == '\n') {
-				ungetc();
-				if (t != Token.ERROR)
-					_value.insert(0, delimiter);
-				return Token.ERROR;
-			}
-			if (c == '\\') {
-				addByte('\\');			
-				unsigned value = 0;
-
-				c = getc();
-				switch (c) {
-				case	-1:
-					if (t != Token.ERROR)
-						_value.insert(0, delimiter);
-					return Token.ERROR;
-
-				case	'\\':
-				case	'a':
-				case	'b':
-				case	'f':
-				case	'n':
-				case	'r':
-				case	't':
-				case	'v':
-				case	'"':
-				case	'\'':
-				case	'`':
-					addByte(c);
-					break;
-
-				case	'u':
-				case	'U':
-					addByte(c);
-					for (int i = 0; i < 8; i++) {
-						c = getc();
-						if (byte(c).isHexDigit()) {
-							if (byte(c).isDigit())
-								value = (value << 4) + unsigned(c - '0');
-							else
-								value = (value << 4) + 10 + unsigned(byte(c).toLowercase() - 'a');
-							addByte(c);
-						} else {
-							ungetc();
-							break;
-						}
-					}
-					if (value > 0x7fffffff) {
-						if (t != Token.ERROR)
-							_value.insert(0, delimiter);
-						t = Token.ERROR;
-					}
-					break;
-
-				case	'x':
-				case	'X':
-					addByte(c);
-					for (int i = 0; i < 2; i++) {
-						c = getc();
-						if (byte(c).isHexDigit()) {
-							if (byte(c).isDigit())
-								value = (value << 4) + unsigned(c - '0');
-							else
-								value = (value << 4) + 10 + unsigned(byte(c).toLowercase() - 'a');
-							addByte(c);
-						} else {
-							ungetc();
-							break;
-						}
-					}
-					if (value > 0xff) {
-						if (t != Token.ERROR)
-							_value.insert(0, delimiter);
-						t = Token.ERROR;
-					}
-					break;
-
-				case	'0':
-				case	'1':
-				case	'2':
-				case	'3':
-				case	'4':
-				case	'5':
-				case	'6':
-				case	'7':
-					for (int i = 0; i < 3; i++) {
-						if (c >= '0' && c <= '7') {
-							value = (value << 3) + unsigned(c - '0');
-							addByte(c);
-						} else
-							break;
-						c = getc();
-					}
-					ungetc();
-					if (value > 0xff) {
-						if (t != Token.ERROR)
-							_value.insert(0, delimiter);
-						t = Token.ERROR;
-					}
-					break;
-
-				case	'\n':
-					ungetc();
-					if (t != Token.ERROR)
-						_value.insert(0, delimiter);
-					return Token.ERROR;
-
-				default:
-					addByte(c);
-					if (t != Token.ERROR)
-						_value.insert(0, delimiter);
-					t = Token.ERROR;
-				}
-			} else
-				addByte(c);
-		}
-	}
 }
 
-class Keywords {
-	private Token[string] _keywords;
+Token[string] keywords;
 
-	public Keywords() {
-		_keywords["abstract"] = Token.ABSTRACT;
-		_keywords["break"] = Token.BREAK;
-		_keywords["bytes"] = Token.BYTES;
-		_keywords["case"] = Token.CASE;
-		_keywords["catch"] = Token.CATCH;
-		_keywords["class"] = Token.CLASS;
-		_keywords["continue"] = Token.CONTINUE;
-		_keywords["default"] = Token.DEFAULT;
-		_keywords["delete"] = Token.DELETE;
-		_keywords["do"] = Token.DO;
-		_keywords["else"] = Token.ELSE;
-		_keywords["enum"] = Token.ENUM;
-		_keywords["extends"] = Token.EXTENDS;
-		_keywords["false"] = Token.FALSE;
-		_keywords["final"] = Token.FINAL;
-		_keywords["finally"] = Token.FINALLY;
-		_keywords["flags"] = Token.FLAGS;
-		_keywords["for"] = Token.FOR;
-		_keywords["function"] = Token.FUNCTION;
-		_keywords["if"] = Token.IF;
-		_keywords["implements"] = Token.IMPLEMENTS;
-		_keywords["import"] = Token.IMPORT;
-		_keywords["lock"] = Token.LOCK;
-		_keywords["monitor"] = Token.MONITOR;
-		_keywords["namespace"] = Token.NAMESPACE;
-		_keywords["new"] = Token.NEW;
-		_keywords["null"] = Token.NULL;
-		_keywords["private"] = Token.PRIVATE;
-		_keywords["protected"] = Token.PROTECTED;
-		_keywords["public"] = Token.PUBLIC;
-		_keywords["return"] = Token.RETURN;
-		_keywords["static"] = Token.STATIC;
-		_keywords["super"] = Token.SUPER;
-		_keywords["switch"] = Token.SWITCH;
-		_keywords["this"] = Token.THIS;
-		_keywords["throw"] = Token.THROW;
-		_keywords["true"] = Token.TRUE;
-		_keywords["try"] = Token.TRY;
-		_keywords["while"] = Token.WHILE;
-	}
-
-	Token getKeyword(pointer<byte> name, int length) {
-		string s(name, length);
-
-		return _keywords[s];
-	}
-}
-
-Keywords keywords;
+keywords["abstract"] = Token.ABSTRACT;
+keywords["break"] = Token.BREAK;
+keywords["bytes"] = Token.BYTES;
+keywords["case"] = Token.CASE;
+keywords["catch"] = Token.CATCH;
+keywords["class"] = Token.CLASS;
+keywords["continue"] = Token.CONTINUE;
+keywords["default"] = Token.DEFAULT;
+keywords["delete"] = Token.DELETE;
+keywords["do"] = Token.DO;
+keywords["else"] = Token.ELSE;
+keywords["enum"] = Token.ENUM;
+keywords["extends"] = Token.EXTENDS;
+keywords["false"] = Token.FALSE;
+keywords["final"] = Token.FINAL;
+keywords["finally"] = Token.FINALLY;
+keywords["flags"] = Token.FLAGS;
+keywords["for"] = Token.FOR;
+keywords["function"] = Token.FUNCTION;
+keywords["if"] = Token.IF;
+keywords["implements"] = Token.IMPLEMENTS;
+keywords["import"] = Token.IMPORT;
+keywords["lock"] = Token.LOCK;
+keywords["monitor"] = Token.MONITOR;
+keywords["namespace"] = Token.NAMESPACE;
+keywords["new"] = Token.NEW;
+keywords["null"] = Token.NULL;
+keywords["private"] = Token.PRIVATE;
+keywords["protected"] = Token.PROTECTED;
+keywords["public"] = Token.PUBLIC;
+keywords["return"] = Token.RETURN;
+keywords["static"] = Token.STATIC;
+keywords["super"] = Token.SUPER;
+keywords["switch"] = Token.SWITCH;
+keywords["this"] = Token.THIS;
+keywords["throw"] = Token.THROW;
+keywords["true"] = Token.TRUE;
+keywords["try"] = Token.TRY;
+keywords["while"] = Token.WHILE;

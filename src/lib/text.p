@@ -400,6 +400,16 @@ class string {
 		return -1;
 	}
 	
+	public void insert(int index, byte value) {
+		if (index < 0 || index > _contents.length)
+			return;
+		resize(_contents.length + 1);
+		pointer<byte> cp = pointer<byte>(&_contents.data);
+		for (int j = _contents.length - 1; j > index; j--)
+			cp[j] = cp[j - 1];
+		cp[index] = value;
+	}
+	
 	public int lastIndexOf(byte c) {
 		if (_contents != null) {
 			pointer<byte> cp = pointer<byte>(&_contents.data) + _contents.length;
