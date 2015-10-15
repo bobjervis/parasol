@@ -17,6 +17,7 @@ namespace parasol:compiler;
 
 import parasol:process;
 import native:C;
+import parasol:stream.Utf8Reader;
 
 enum Operator {
 	// SyntaxError
@@ -3324,28 +3325,37 @@ class Constant extends Node {
 		long v = 0;
 		if (_value.length == 0)
 			return -1;
-		if (_value.data[0] == '0') {
-			if (_value.length == 1)
-				return 0;
-			if (_value.data[1] == 'x' || _value.data[1] == 'X') {
-				for (int i = 2; i < _value.length; i++) {
+		CompileStringReader r(_value);
+		Utf8Reader ur(&r);
+		
+		int c = ur.read();
+		if (codePointClass(c) == 0) {
+			c = ur.read();
+			if (c < 0)
+				return 0;			// the constant is just a '0' (or alternate decimal zero)
+			if (c == 'x' || c == 'X') {
+				for (;;) {
 					int digit;
-					if (_value.data[i].isAlpha())
-						digit = 10 + _value.data[i].toLowercase() - 'a';
+					c = ur.read();
+					if (c < 0)
+						break;
+					if (codePointClass(c) == CPC_LETTER)
+						digit = 10 + byte(c).toLowercase() - 'a';
 					else
-						digit = _value.data[i] - '0';
+						digit = codePointClass(c);
 					v = v * 16 + digit;
 				}
 			} else {
-				for (int i = 1; i < _value.length; i++)
-					v = v * 8 + _value.data[i] - '0';
+				do {
+					v = v * 8 + codePointClass(c);
+					c = ur.read();
+				} while (c >= 0);
 			}
 		} else {
-			for (int i = 0; i < _value.length; i++) {
-//				printf("_value.data[%d] = %x\n", i, int(_value.data[i]));
-				v = v * 10 + _value.data[i] - '0';
-			}
-			
+			do {
+				v = v * 10 + codePointClass(c);
+				c = ur.read();
+			} while (c >= 0);
 		}
 		return v;
 	}

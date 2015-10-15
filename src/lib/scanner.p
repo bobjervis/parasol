@@ -665,8 +665,8 @@ class Scanner {
 					return remember(Token.ERROR, c);
 				else if (cpc == CPC_LETTER)
 					return remember(identifier(c));
-				else // a digit - for now an error
-					return remember(Token.ERROR, c);
+				else
+					return remember(number(c));
 /*
 				switch (cpc) {
 				case	CPC_WHITE_SPACE:
@@ -722,78 +722,78 @@ class Scanner {
 				addCharacter(c);
 				c = getc();
 				ungetc();
-				if (!byte(c).isHexDigit())
+				if (codePointClass(c) == CPC_ERROR || codePointClass(c) == CPC_WHITE_SPACE)
+					return Token.ERROR;
+				else if (codePointClass(c) == CPC_LETTER && (c > 127 || !byte(c).isHexDigit()))
 					return Token.ERROR;
 			} else
 				ungetc();
 		}
 		for (;;) {
 			c = getc();
-			switch (c) {
-			case	'0':
-			case	'1':
-			case	'2':
-			case	'3':
-			case	'4':
-			case	'5':
-			case	'6':
-			case	'7':
-			case	'8':
-			case	'9':
-				addCharacter(c);
-				break;
-
-			case	'a':
-			case	'b':
-			case	'c':
-			case	'd':
-			case	'A':
-			case	'B':
-			case	'C':
-			case	'D':
-				if (!hexConstant) {
-					ungetc();
-					return t;
-				}
-				addCharacter(c);
-				break;
-
-			case	'.':
-				if (t == Token.FLOATING_POINT || hexConstant) {
-					ungetc();
-					return t;
-				}
-				t = Token.FLOATING_POINT;
-				addCharacter(c);
-				break;
-
-			case	'e':
-			case	'E':
-				addCharacter(c);
-				if (!hexConstant) {
-					t = Token.FLOATING_POINT;
-					c = getc();
-					if (c == '+' || c == '-') {
-						addCharacter(c);
-						c = getc();
+			int cpc = codePointClass(c);
+			if (cpc == CPC_ERROR) {
+				if (c == '.') {
+					if (t == Token.FLOATING_POINT || hexConstant) {
+						ungetc();
+						return t;
 					}
-					ungetc();
-					if (!byte(c).isDigit())
-						return Token.ERROR;
+					t = Token.FLOATING_POINT;
+					addCharacter(c);
+					continue;
 				}
-				break;
-
-			case	'f':
-			case	'F':
-				addCharacter(c);
-				if (!hexConstant)
-					return Token.FLOATING_POINT;
-				break;
-
-			default:
 				ungetc();
 				return t;
-			}
+			} else if (cpc == CPC_WHITE_SPACE) {
+				ungetc();
+				return t;
+			} else if (cpc == CPC_LETTER) {
+				switch (c) {
+				case	'a':
+				case	'b':
+				case	'c':
+				case	'd':
+				case	'A':
+				case	'B':
+				case	'C':
+				case	'D':
+					if (!hexConstant) {
+						ungetc();
+						return t;
+					}
+					addCharacter(c);
+					break;
+					
+				case	'e':
+				case	'E':
+					addCharacter(c);
+					if (!hexConstant) {
+						t = Token.FLOATING_POINT;
+						c = getc();
+						if (c == '+' || c == '-') {
+							addCharacter(c);
+							c = getc();
+						}
+						ungetc();
+						int cpc = codePointClass(c);
+						if (cpc == CPC_ERROR || cpc == CPC_WHITE_SPACE || cpc == CPC_LETTER)
+							return Token.ERROR;
+					}
+					break;
+
+				case	'f':
+				case	'F':
+					addCharacter(c);
+					if (!hexConstant)
+						return Token.FLOATING_POINT;
+					break;
+
+				default:
+					ungetc();
+					return t;
+				}
+			} else			// it's a digit
+				addCharacter(c);
 		}
 	}
 

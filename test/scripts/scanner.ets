@@ -43,6 +43,7 @@ scan(tokens: 1, value:"123"){ 123 }
 scan(tokens: 1, value:"0"){ 0 }
 scan(tokens: 1, value:"0x0"){ 0x0 }
 scan(tokens: 1, value:"0x0abcef"){ 0x0abcef }
+scan(tokens: 1, value:"23۷5"){ 23۷5 }
 
 	// Various floating point tokens
 

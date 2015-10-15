@@ -16,6 +16,7 @@ run(filename: cmdLine_ops.p, arguments: "--aBoolean boolean-true-no-string-disal
 run(filename: cmdLine_ops.p, arguments: "--aBoolean boolean-true-no-string-allowed")
 run(filename: cmdLine_ops.p, arguments: "boolean-false-no-string-disallowed", exitCode: 6)
 run(filename: cmdLine_ops.p, arguments: "boolean-false-no-string-allowed")
+run(filename: utf8stream.p)
 run(filename: c_ops.p, exitCode: 1)
 run(filename: string_ops.p)
 run(filename: map_ops.p)
@@ -52,6 +53,7 @@ run(filename: complex_subscript.p)
 
 // Basic runtime execution tests
 
+run(filename: unicodeNumber.p)
 run(filename: template_scope/template_scope.p, importPath: ^/test/src/template_scope)
 run(filename: vectorization_1.p)
 run(filename: vectorization_2.p)
@@ -1562,6 +1564,7 @@ scan(tokens: 1, value:"123"){ 123 }
 scan(tokens: 1, value:"0"){ 0 }
 scan(tokens: 1, value:"0x0"){ 0x0 }
 scan(tokens: 1, value:"0x0abcef"){ 0x0abcef }
+scan(tokens: 1, value:"23۷5"){ 23۷5 }
 
 	// Various floating point tokens
 

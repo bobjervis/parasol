@@ -758,14 +758,6 @@ public:
 	int	tokenSize() {
 		return _cursor - _previous; 
 	}
-/*
-	bool atEnd() const { return _cursor >= _text.length(); }
-
-private:
-	void init(const char* source, int length);
-
-	const char*		_text;
-*/
 }
 
 class ScannerMessageLog extends MessageLog {

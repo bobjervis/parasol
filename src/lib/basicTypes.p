@@ -16,6 +16,7 @@
 namespace parasol:compiler;
 
 import native:C;
+import parasol:stream;
 
 class CompileString {
 	pointer<byte> data;
@@ -64,6 +65,22 @@ class CompileString {
 	
 	string asString() {
 		return string(data, length);
+	}
+}
+
+class CompileStringReader extends stream.Reader {
+	CompileString _source;
+	int _cursor;
+	
+	CompileStringReader(CompileString source) {
+		_source = source;
+	}
+	
+	public int read() {
+		if (_cursor >= _source.length)
+			return -1;
+		else
+			return _source.data[_cursor++];
 	}
 }
 

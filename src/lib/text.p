@@ -1209,7 +1209,7 @@ class string {
 							v += pointer<byte>(&_contents.data)[i] - '0';
 							i++;
 						} while (i < _contents.length && pointer<byte>(&_contents.data)[i].isOctalDigit());
-						output.append(v);
+						output.append(byte(v));
 						break;
 					default:	
 						output.append(pointer<byte>(&_contents.data)[i]);
@@ -1262,6 +1262,10 @@ class string {
 					case 'r':	output.append('\r');	break;
 					case 't':	output.append('\t');	break;
 					case 'v':	output.append('\v');	break;
+					case 'u':
+					case 'U':
+						return null, false;
+						
 					case 'x':
 					case 'X':
 						i++;;
@@ -1300,6 +1304,7 @@ class string {
 						} while (i < _contents.length && pointer<byte>(&_contents.data)[i].isOctalDigit());
 						output.append(v);
 						break;
+						
 					default:
 						// TODO: Check for unicode \uNNNN sequences
 						output.append(pointer<byte>(&_contents.data)[i]);

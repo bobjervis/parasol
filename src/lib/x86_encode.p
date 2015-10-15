@@ -795,7 +795,7 @@ class X86_64Encoder extends Target {
 				if (c.representedBy(compileContext.arena().builtInType(TypeFamily.SIGNED_32)))
 					inst(instruction, left, int(c.intValue()), compileContext);
 				else {
-					printf("%s - -", string(instruction));
+					printf("%s - -\n", string(instruction));
 					left.print(4);
 					right.print(4);
 					assert(false);
@@ -2825,7 +2825,7 @@ class X86_64Encoder extends Target {
 			string s(cs.data, cs.length);
 			string output;
 			boolean result;
-			(output, result) = s.unescapeC();
+			(output, result) = s.unescapeParasol();
 			offset = addStringLiteral(output);
 			modRM(0, regOpcode, 5);
 			fixup(FixupKind.RELATIVE32_STRING, address(offset));

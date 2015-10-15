@@ -1937,10 +1937,10 @@ public class X86_64 extends X86_64AssignTemps {
 			break;
 			
 		case	STRING:
-			R dest = R(int(node.register));
+			R dest = R(node.register);
 			node.register = 0;
 			inst(X86.LEA, dest, node, compileContext);
-			node.register = byte(int(dest));
+			node.register = byte(dest);
 			break;
 
 		case	BYTES:
