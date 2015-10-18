@@ -330,6 +330,46 @@ class Parser {
 				return truePart;
 			return _tree.newBinary(Operator.WHILE, x, truePart, location);
 
+		case	TRY:
+			truePart = parseStatement();
+			if (truePart.op() == Operator.SYNTAX_ERROR)
+				return truePart;
+			for (;;) {
+				t = _scanner.next();
+				if (t == Token.CATCH) {
+					t = _scanner.next();
+					if (t != Token.LEFT_PARENTHESIS) {
+						_scanner.pushBack(t);
+						return resync(MessageId.SYNTAX_ERROR);
+					}
+					ref<Node> typeExpr = parseExpression(0);
+					if (typeExpr.op() == Operator.SYNTAX_ERROR)
+						return typeExpr;
+					t = _scanner.next();
+					if (t != Token.IDENTIFIER) {
+						_scanner.pushBack(t);
+						return resync(MessageId.SYNTAX_ERROR);
+					}
+					t = _scanner.next();
+					if (t != Token.RIGHT_PARENTHESIS) {
+						_scanner.pushBack(t);
+						return resync(MessageId.SYNTAX_ERROR);
+					}
+					ref<Node> clause = parseStatement();
+					if (clause.op() == Operator.SYNTAX_ERROR)
+						return clause;
+				} else if (t == Token.FINALLY) {
+					ref<Node> clause = parseStatement();
+					if (clause.op() == Operator.SYNTAX_ERROR)
+						return clause;
+					break;
+				} else {
+					_scanner.pushBack(t);
+					break;
+				}
+			}
+			return truePart;
+			
 		case	PUBLIC:
 			return parseVisibleDeclaration(Operator.PUBLIC);
 

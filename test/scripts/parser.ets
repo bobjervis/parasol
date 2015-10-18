@@ -16,6 +16,12 @@ statement(expect: fail, message: UNEXPECTED_RC) { "case a: }" }
 statement(expect: fail, message: UNEXPECTED_RC) { "default: }" }
 statement() { continue; }
 statement() { default: a; }
+statement() { "try x;" }
+statement() { "try a; catch (E x) b;" }
+statement() { "try a; catch (E x) b; catch (NE y) c;" }
+statement() { "try x; finally y;" }
+statement() { "try a; catch (E x) b; finally c;" }
+statement() { "try a; catch (E x) b; catch (NE y) c; finally d;" }
 statement() { "do a; while (b);" }
 statement() { "for (a; b; c) d;" }
 statement() { "for (; b; c) d;" }
@@ -113,6 +119,28 @@ statement(expect: recovered) { lock }
 statement(expect: fail, message: UNEXPECTED_EOF) { default: }
 statement(expect: fail, message: UNEXPECTED_EOF) { default: a }
 statement(expect: fail) { default a; }
+statement(expect: fail) { try }
+statement(expect: fail) { "try a" }
+statement(expect: fail) { "try a; catch" }
+statement(expect: fail) { "try a; catch (" }
+statement(expect: fail) { "try a; catch x" }
+statement(expect: fail) { "try a; catch (E" }
+statement(expect: fail) { "try a; catch (E)" }
+statement(expect: fail) { "try a; catch (E x" }
+statement(expect: fail) { "try a; catch (E x)" }
+statement(expect: fail) { "try a; catch (E x) b" }
+statement(expect: fail) { "try a; catch (E x) b; catch" }
+statement(expect: fail) { "try a; catch (E x) b; catch (" }
+statement(expect: fail) { "try a; catch (E x) b; catch (NE" }
+statement(expect: fail) { "try a; catch (E x) b; catch (NE y" }
+statement(expect: fail) { "try a; catch (E x) b; catch (NE y)" }
+statement(expect: fail) { "try a; catch (E x) b; catch (NE y) c" }
+statement(expect: fail) { "try a; finally" }
+statement(expect: fail) { "try a; finally y" }
+statement(expect: fail) { "try a; catch (E x) b; finally" }
+statement(expect: fail) { "try a; catch (E x) b; finally c" }
+statement(expect: fail) { "try a; catch (E x) b; catch (NE y) c; finally" }
+statement(expect: fail) { "try a; catch (E x) b; catch (NE y) c; finally d" }
 statement(expect: fail) { do }
 statement(expect: fail) { "do a" }
 statement(expect: fail) { "do a;" }
