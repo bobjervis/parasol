@@ -62,6 +62,9 @@ statement() { "class q{a;b;}" }
 statement() { "class q extends a {}" }
 statement() { "class q implements a {}" }
 statement() { "class q extends a implements b {}" }
+statement() { "class q;" }
+statement() { "class q = c;" }
+statement() { "class q = c<t>;" }
 statement() { "@c class q{}" }
 statement() { "@c class q extends a {}" }
 statement() { "@c class q implements a {}" }

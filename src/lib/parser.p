@@ -817,7 +817,25 @@ class Parser {
 		}
 		ref<Identifier> identifier = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
 		// Look ahead to get the correct location for the CLASS node.
-		_scanner.pushBack(_scanner.next());
+		t = _scanner.next();
+		if (t == Token.EQUALS) {
+			Location locEq = _scanner.location();
+			ref<Node> initializer = parseExpression(1);
+			if (initializer.op() == Operator.SYNTAX_ERROR)
+				return initializer;
+			t = _scanner.next();
+			if (t != Token.SEMI_COLON) {
+				_scanner.pushBack(t);
+				return resync(MessageId.SYNTAX_ERROR);
+			}
+			ref<Node> x = _tree.newBinary(Operator.INITIALIZE, identifier, initializer, locEq);
+			ref<Node> type = _tree.newLeaf(Operator.EMPTY, location);
+			return _tree.newDeclaration(type, x, location);
+		} else if (t == Token.SEMI_COLON) {
+			ref<Node> type = _tree.newLeaf(Operator.EMPTY, location);
+			return _tree.newDeclaration(type, identifier, location);
+		} else
+			_scanner.pushBack(t);
 		ref<Node> body = parseClass(identifier, _scanner.location());
 		if (body.op() == Operator.SYNTAX_ERROR)
 			return body;
