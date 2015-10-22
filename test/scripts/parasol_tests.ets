@@ -941,6 +941,7 @@ statement() { "try a; catch (E x) b; catch (NE y) c;" }
 statement() { "try x; finally y;" }
 statement() { "try a; catch (E x) b; finally c;" }
 statement() { "try a; catch (E x) b; catch (NE y) c; finally d;" }
+statement() { "throw x;" }
 statement() { "do a; while (b);" }
 statement() { "for (a; b; c) d;" }
 statement() { "for (; b; c) d;" }
@@ -997,6 +998,7 @@ statement() { "@c(d) class q{}" }
 statement() { "@c(d) class q extends a {}" }
 statement() { "@c(d) class q implements a {}" }
 statement() { "@c(d) class q extends a implements b {}" }
+statement() { "monitor a;" }
 statement() { "monitor a { b; }" }
 statement() { "monitor a { }" }
 statement() { "flags a{b}" }
@@ -1063,6 +1065,8 @@ statement(expect: fail) { "try a; catch (E x) b; finally" }
 statement(expect: fail) { "try a; catch (E x) b; finally c" }
 statement(expect: fail) { "try a; catch (E x) b; catch (NE y) c; finally" }
 statement(expect: fail) { "try a; catch (E x) b; catch (NE y) c; finally d" }
+statement(expect: fail) { "throw" }
+statement(expect: fail) { "throw x" }
 statement(expect: fail) { do }
 statement(expect: fail) { "do a" }
 statement(expect: fail) { "do a;" }

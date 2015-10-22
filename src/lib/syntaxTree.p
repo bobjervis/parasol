@@ -102,6 +102,7 @@ enum Operator {
 	DECREMENT_AFTER,
 	EXPRESSION,
 	RETURN,
+	THROW,
 	DEFAULT,
 	VECTOR_OF,
 	PUBLIC,
@@ -6774,55 +6775,23 @@ class OperatorMap {
 		typeNotAllowed[Operator.ADD_REDUCE] = MessageId.INVALID_ADD;
 		typeNotAllowed[Operator.AND] = MessageId.INVALID_AND;
 		typeNotAllowed[Operator.AND_ASSIGN] = MessageId.INVALID_AND;
-		typeNotAllowed[Operator.ASSIGN] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.BIT_COMPLEMENT] = MessageId.INVALID_BIT_COMPLEMENT;
-		typeNotAllowed[Operator.BREAK] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.BYTES] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.CALL] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.CAST] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.CLASS] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.CLASS_COPY] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.CONDITIONAL] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.CONTINUE] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.DECLARE_NAMESPACE] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.DECREMENT_AFTER] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.DECREMENT_BEFORE] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.DELETE] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.DIVIDE] = MessageId.INVALID_DIVIDE;
 		typeNotAllowed[Operator.DIVIDE_ASSIGN] = MessageId.INVALID_DIVIDE;
-		typeNotAllowed[Operator.DOT] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.DOT_DOT] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.ELLIPSIS] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.ELLIPSIS_ARGUMENT] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.ELLIPSIS_ARGUMENTS] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.EQUALITY] = MessageId.INVALID_COMPARE;
 		typeNotAllowed[Operator.EXCLUSIVE_OR] = MessageId.INVALID_XOR;
 		typeNotAllowed[Operator.EXCLUSIVE_OR_ASSIGN] = MessageId.INVALID_XOR;
-		typeNotAllowed[Operator.FOR] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.GREATER] = MessageId.INVALID_COMPARE;
 		typeNotAllowed[Operator.GREATER_EQUAL] = MessageId.INVALID_COMPARE;
-		typeNotAllowed[Operator.INCREMENT_AFTER] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.INCREMENT_BEFORE] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.ADDRESS] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.INDIRECT] = MessageId.INVALID_INDIRECT;
-		typeNotAllowed[Operator.CLASS_OF] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.IDENTITY] = MessageId.INVALID_COMPARE;
-		typeNotAllowed[Operator.INTEGER] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.INTERFACE] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.LESS] = MessageId.INVALID_COMPARE;
 		typeNotAllowed[Operator.LESS_EQUAL] = MessageId.INVALID_COMPARE;
 		typeNotAllowed[Operator.LESS_GREATER] = MessageId.INVALID_COMPARE;
 		typeNotAllowed[Operator.LESS_GREATER_EQUAL] = MessageId.INVALID_COMPARE;
-		typeNotAllowed[Operator.LEFT_SHIFT] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.LEFT_SHIFT_ASSIGN] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.LOAD] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.LOGICAL_AND] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.LOGICAL_OR] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.MULTIPLY] = MessageId.INVALID_MULTIPLY;
 		typeNotAllowed[Operator.MULTIPLY_ASSIGN] = MessageId.INVALID_MULTIPLY;
 		typeNotAllowed[Operator.NEGATE] = MessageId.INVALID_NEGATE;
-		typeNotAllowed[Operator.NEW] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.NOT] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.NOT_EQUAL] = MessageId.INVALID_COMPARE;
 		typeNotAllowed[Operator.NOT_GREATER] = MessageId.INVALID_COMPARE;
 		typeNotAllowed[Operator.NOT_GREATER_EQUAL] = MessageId.INVALID_COMPARE;
@@ -6833,75 +6802,18 @@ class OperatorMap {
 		typeNotAllowed[Operator.NOT_LESS_GREATER_EQUAL] = MessageId.INVALID_COMPARE;
 		typeNotAllowed[Operator.OR] = MessageId.INVALID_OR;
 		typeNotAllowed[Operator.OR_ASSIGN] = MessageId.INVALID_OR;
-		typeNotAllowed[Operator.PLACEMENT_NEW] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.REMAINDER] = MessageId.INVALID_REMAINDER;
 		typeNotAllowed[Operator.REMAINDER_ASSIGN] = MessageId.INVALID_REMAINDER;
-		typeNotAllowed[Operator.RIGHT_SHIFT] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.RIGHT_SHIFT_ASSIGN] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.SCOPED_FOR] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.SEQUENCE] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.STACK_ARGUMENT] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.STACK_ARGUMENT_ADDRESS] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.SUBSCRIPT] = MessageId.INVALID_SUBSCRIPT;
 		typeNotAllowed[Operator.SUBTRACT] = MessageId.INVALID_SUBTRACT;
 		typeNotAllowed[Operator.SUBTRACT_ASSIGN] = MessageId.INVALID_SUBTRACT;
-		typeNotAllowed[Operator.SYNTAX_ERROR] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.UNSIGNED_RIGHT_SHIFT] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.UNSIGNED_RIGHT_SHIFT_ASSIGN] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.UNARY_PLUS] = MessageId.INVALID_UNARY_PLUS;
 		typeNotAllowed[Operator.VARIABLE] = MessageId.INVALID_UNARY_PLUS;
-		typeNotAllowed[Operator.FLOATING_POINT] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.CHARACTER] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.STRING] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.IDENTIFIER] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.EMPTY] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.EXPRESSION] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.WHILE] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.DO_WHILE] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.LOOP] = MessageId.MAX_MESSAGE;
 		typeNotAllowed[Operator.SWITCH] = MessageId.INVALID_SWITCH;
-		typeNotAllowed[Operator.RETURN] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.CASE] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.DEFAULT] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.BLOCK] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.VECTOR_OF] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.MAP] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.ENUM] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.BIND] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.TEMPLATE] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.TEMPLATE_INSTANCE] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.FUNCTION] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.UNIT] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.DECLARATION] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.CLASS_DECLARATION] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.MONITOR_DECLARATION] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.FLAGS_DECLARATION] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.ENUM_DECLARATION] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.INITIALIZE] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.ANNOTATION] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.ANNOTATED] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.IF] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.THIS] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.SUPER] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.TRUE] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.FALSE] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.NULL] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.PUBLIC] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.PRIVATE] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.PROTECTED] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.STATIC] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.FINAL] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.ABSTRACT] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.CLASS_TYPE] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.ENUM_TYPE] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.UNWRAP_TYPEDEF] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.IMPORT] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.NAMESPACE] = MessageId.MAX_MESSAGE;
-		typeNotAllowed[Operator.VACATE_ARGUMENT_REGISTERS] = MessageId.MAX_MESSAGE;
 
 		for (int i = 0; i < int(Operator.MAX_OPERATOR); i++) {
 			if (typeNotAllowed[Operator(i)] == MessageId(0))
-				printf("ERROR: Operator %s has no typeNotAllowed message.\n", string(Operator(i)));
+				typeNotAllowed[Operator(i)] = MessageId.MAX_MESSAGE;
 		}
 	}
 

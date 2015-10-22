@@ -330,6 +330,17 @@ class Parser {
 				return truePart;
 			return _tree.newBinary(Operator.WHILE, x, truePart, location);
 
+		case	THROW:
+			x = parseExpression(0);
+			if (x.op() == Operator.SYNTAX_ERROR)
+				return x;
+			t = _scanner.next();
+			if (t != Token.SEMI_COLON) {
+				_scanner.pushBack(t);
+				return resync(MessageId.SYNTAX_ERROR);
+			}
+			return _tree.newUnary(Operator.THROW, x, location);
+			
 		case	TRY:
 			truePart = parseStatement();
 			if (truePart.op() == Operator.SYNTAX_ERROR)
@@ -852,10 +863,16 @@ class Parser {
 		}
 		ref<Identifier> identifier = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
 		// Look ahead to get the correct location for the CLASS node.
-		_scanner.pushBack(_scanner.next());
-		ref<Node> body = parseClass(identifier, _scanner.location());
-		if (body.op() == Operator.SYNTAX_ERROR)
-			return body;
+		t = _scanner.next();
+		ref<Node> body;
+		if (t == Token.SEMI_COLON)
+			body = _tree.newLeaf(Operator.EMPTY, _scanner.location());
+		else {
+			_scanner.pushBack(t);
+			body = parseClass(identifier, _scanner.location());
+			if (body.op() == Operator.SYNTAX_ERROR)
+				return body;
+		}
 		ref<Node> x = _tree.newBinary(Operator.MONITOR_DECLARATION, identifier, body, location);
 		return x;
 	}
@@ -1179,6 +1196,11 @@ class Parser {
 			}
 			break;
 
+		case	LEFT_SQUARE:
+		case	LEFT_CURLY:
+			_scanner.pushBack(t);
+			return resync(MessageId.EXPECTING_TERM);
+			
 		case	FUNCTION:
 			x = parseTerm(true);
 			if (x.op() == Operator.SYNTAX_ERROR)
