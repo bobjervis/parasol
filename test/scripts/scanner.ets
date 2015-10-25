@@ -181,6 +181,7 @@ scan(keyword: function) { function }
 scan(keyword: if) { if }
 scan(keyword: implements) { implements }
 scan(keyword: import) { import }
+scan(keyword: interface) { interface }
 scan(keyword: lock) { lock }
 scan(keyword: monitor) { monitor }
 scan(keyword: namespace) { namespace }

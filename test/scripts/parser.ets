@@ -57,7 +57,18 @@ statement() { "@c public int x;" }
 statement() { "@c protected int x;" }
 statement() { "@c private int x;" }
 statement() { "@c int x;" }
-statement() { "final class q{a;b;}" }
+statement() { "final interface q{a;b;}" }
+statement() { "interface q{a;b;}" }
+statement() { "interface q extends a {}" }
+statement() { "interface q;" }
+statement() { "interface q = c;" }
+statement() { "interface q = c<t>;" }
+statement() { "@c interface q{}" }
+statement() { "@c interface q extends a {}" }
+statement() { "@c() interface q{}" }
+statement() { "@c() interface q extends a {}" }
+statement() { "@c(d) interface q{}" }
+statement() { "@c(d) interface q extends a {}" }
 statement() { "final class q{a;b;}" }
 statement() { "class q{a;b;}" }
 statement() { "class q extends a {}" }
@@ -242,6 +253,42 @@ statement(expect: fail) { "while a) b;" }
 statement(expect: fail) { "while (a b;" }
 statement(expect: fail) { final }
 statement(expect: fail) { abstract }
+statement(expect: recovered) { "final interface q{a;b;" }
+statement(expect: recovered) { "final interface q{a;b" }
+statement(expect: recovered) { "final interface q{a;" }
+statement(expect: recovered) { "final interface q{a" }
+statement(expect: recovered) { "final interface q{" }
+statement(expect: fail) { "final interface q" }
+statement(expect: fail) { "final interface" }
+statement(expect: recovered) { "interface q{a;b;" }
+statement(expect: recovered) { "interface q{a;b" }
+statement(expect: recovered) { "interface q{a;" }
+statement(expect: recovered) { "interface q{a" }
+statement(expect: recovered) { "interface q{" }
+statement(expect: fail) { "interface q" }
+statement(expect: fail) { "interface " }
+statement(expect: recovered) { "interface q extends a {" }
+statement(expect: fail) { "interface q implements a " }
+statement(expect: fail) { "interface q extends a " }
+statement(expect: fail) { "interface q extends b implements a " }
+statement(expect: fail) { "interface q extends " }
+statement(expect: fail) { "interface q = c" }
+statement(expect: fail) { "interface q = " }
+statement(expect: fail) { "interface q = c<t>" }
+statement(expect: fail) { "interface q = c<t" }
+statement(expect: fail) { "interface q = c<" }
+statement(expect: recovered) { "@c interface q{" }
+statement(expect: fail) { "@c interface q" }
+statement(expect: fail) { "@c interface " }
+statement(expect: recovered) { "@c interface q extends a {" }
+statement(expect: fail) { "@c interface q extends a " }
+statement(expect: fail) { "@c interface q extends " }
+statement(expect: recovered) { "@c() interface q{" }
+statement(expect: fail) { "@c() interface q" }
+statement(expect: fail) { "@c() interface " }
+statement(expect: recovered) { "@c() interface q extends a {" }
+statement(expect: fail) { "@c() interface q extends a " }
+statement(expect: fail) { "@c() interface q extends " }
 statement(expect: fail) { class }
 statement(expect: fail) { class q }
 statement(expect: fail) { class extends }

@@ -393,8 +393,11 @@ class Parser {
 		case	FINAL:
 			return parseFinalDeclaration();
 
+		case	INTERFACE:
+			return parseClassOrInterfaceDeclaration(false);
+
 		case	CLASS:
-			return parseClassDeclaration();
+			return parseClassOrInterfaceDeclaration(true);
 		
 		case	MONITOR:
 			return parseMonitorDeclaration();
@@ -581,8 +584,12 @@ class Parser {
 			n = parseFinalDeclaration();
 			break;
 
+		case	INTERFACE:
+			n = parseClassOrInterfaceDeclaration(false);
+			break;
+
 		case	CLASS:
-			n = parseClassDeclaration();
+			n = parseClassOrInterfaceDeclaration(true);
 			break;
 
 		case	MONITOR:
@@ -655,9 +662,11 @@ class Parser {
 		Location location = _scanner.location();
 		Token t = _scanner.next();
 		ref<Node> n;
-		if (t == Token.CLASS) {
-			n = parseClassDeclaration();
-		} else {
+		if (t == Token.CLASS)
+			n = parseClassOrInterfaceDeclaration(true);
+		else if (t == Token.INTERFACE)
+			n = parseClassOrInterfaceDeclaration(false);
+		else {
 			Location loc = _scanner.location();
 			_scanner.pushBack(t);
 			ref<Node> x = parseExpression(0);
@@ -819,7 +828,7 @@ class Parser {
 		}
 	}
 
-	private ref<Node> parseClassDeclaration() {
+	private ref<Node> parseClassOrInterfaceDeclaration(boolean isClass) {
 		Location location = _scanner.location();
 		Token t = _scanner.next();
 		if (t != Token.IDENTIFIER) {
@@ -847,10 +856,10 @@ class Parser {
 			return _tree.newDeclaration(type, identifier, location);
 		} else
 			_scanner.pushBack(t);
-		ref<Node> body = parseClass(identifier, _scanner.location());
+		ref<Node> body = parseClass(isClass, identifier, _scanner.location());
 		if (body.op() == Operator.SYNTAX_ERROR)
 			return body;
-		ref<Node> x = _tree.newBinary(Operator.CLASS_DECLARATION, identifier, body, location);
+		ref<Node> x = _tree.newBinary(isClass ? Operator.CLASS_DECLARATION : Operator.INTERFACE_DECLARATION, identifier, body, location);
 		return x;
 	}
 
@@ -869,7 +878,7 @@ class Parser {
 			body = _tree.newLeaf(Operator.EMPTY, _scanner.location());
 		else {
 			_scanner.pushBack(t);
-			body = parseClass(identifier, _scanner.location());
+			body = parseClass(true, identifier, _scanner.location());
 			if (body.op() == Operator.SYNTAX_ERROR)
 				return body;
 		}
@@ -1139,7 +1148,7 @@ class Parser {
 			return _tree.newUnary(Operator.DECREMENT_BEFORE, x, location);
 
 		case	CLASS:
-			x = parseClass(null, _scanner.location());
+			x = parseClass(true, null, _scanner.location());
 			if (x.op() == Operator.SYNTAX_ERROR)
 				return x;
 			break;
@@ -1610,7 +1619,7 @@ class Parser {
 		}
 	}
 
-	private ref<Node> parseClass(ref<Identifier> name, Location location) {
+	private ref<Node> parseClass(boolean isClass, ref<Identifier> name, Location location) {
 		ref<Node> extendsClause = null;
 		ref<Node> implementsClause = null;
 		ref<Class> classDef;
@@ -1632,7 +1641,7 @@ class Parser {
 			t = _scanner.next();
 		}
 		classDef = _tree.newClass(name, extendsClause, location);
-		if (t == Token.IMPLEMENTS) {
+		if (isClass && t == Token.IMPLEMENTS) {
 			implementsClause = parseExpression(0);
 			if (implementsClause.op() == Operator.SYNTAX_ERROR)
 				return implementsClause;

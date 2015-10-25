@@ -123,6 +123,7 @@ enum Token {
 	IF,
 	IMPLEMENTS,
 	IMPORT,
+	INTERFACE,
 	LOCK,
 	MONITOR,
 	NAMESPACE,
@@ -1095,6 +1096,7 @@ keywords["function"] = Token.FUNCTION;
 keywords["if"] = Token.IF;
 keywords["implements"] = Token.IMPLEMENTS;
 keywords["import"] = Token.IMPORT;
+keywords["interface"] = Token.INTERFACE;
 keywords["lock"] = Token.LOCK;
 keywords["monitor"] = Token.MONITOR;
 keywords["namespace"] = Token.NAMESPACE;
