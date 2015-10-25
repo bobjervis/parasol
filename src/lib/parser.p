@@ -1056,7 +1056,6 @@ class Parser {
 		Token t = _scanner.next();
 		Location location = _scanner.location();
 		switch (t) {
-
 		case	NEW:
 			t = _scanner.next();
 			if (t == Token.LEFT_PARENTHESIS) {
@@ -1198,8 +1197,8 @@ class Parser {
 
 		case	LEFT_SQUARE:
 		case	LEFT_CURLY:
-			_scanner.pushBack(t);
-			return resync(MessageId.EXPECTING_TERM);
+			x = parseAggregateInitializer(t);
+			break;
 			
 		case	FUNCTION:
 			x = parseTerm(true);
@@ -1341,6 +1340,65 @@ class Parser {
 		}
 	}
 
+	private ref<Node> parseAggregateInitializer(Token startingToken) {
+		Token endingToken;
+		Location location = _scanner.location();
+		
+		if (startingToken == Token.LEFT_SQUARE)
+			endingToken = Token.RIGHT_SQUARE;
+		else
+			endingToken = Token.RIGHT_CURLY;
+		ref<Node>[] leftHandle;
+		for (;;) {
+			Token t = _scanner.next();
+			if (t == endingToken)
+				break;
+			_scanner.pushBack(t);
+			ref<Node> x = parseExpression(1);
+			leftHandle.append(x);
+			if (x.op() == Operator.SYNTAX_ERROR) {
+				if (endingToken == Token.RIGHT_SQUARE)
+					break;
+				t = _scanner.next();
+				if (t == Token.RIGHT_CURLY || t == Token.END_OF_STREAM)
+					break;				// This will bail us out of the aggregate
+				_scanner.pushBack(t);
+				continue;
+			}
+			t = _scanner.next();
+			if (t == endingToken)
+				break;
+			else if (t == Token.COLON) {
+				Location labLoc = _scanner.location();
+				ref<Node> y = parseExpression(1);
+				x = _tree.newBinary(Operator.LABEL, x, y, labLoc);
+				int last = leftHandle.length() - 1;
+				leftHandle[last] = x;
+				if (y.op() == Operator.SYNTAX_ERROR) {
+					if (endingToken == Token.RIGHT_SQUARE)
+						break;
+					t = _scanner.next();
+					if (t == Token.RIGHT_CURLY || t == Token.END_OF_STREAM)
+						break;				// This will bail us out of the aggregate
+					_scanner.pushBack(t);
+					continue;
+				}
+				t = _scanner.next();
+				if (t == endingToken)
+					break;
+				else if (t != Token.COMMA) {
+					_scanner.pushBack(t);
+					return resync(MessageId.SYNTAX_ERROR);
+				}
+			} else if (t != Token.COMMA) {
+				_scanner.pushBack(t);
+				return resync(MessageId.SYNTAX_ERROR);
+			}
+		}
+		return _tree.newCall(Operator.AGGREGATE, null, 
+				leftHandle.length() > 0 ? _tree.newNodeList(leftHandle) : null, location);
+	}
+	
 	private ref<Node> parseTemplateList(ref<Template> templateDef) {
 		for (;;) {
 			Token t = _scanner.next();

@@ -1318,6 +1318,43 @@ expression(expect: fail) { class extends a implements b }
 expression(expect: fail) { "class extends a implements b {" }
 expression(expect: fail) { @a }
 
+// Aggregate initializers
+
+expression() { "[ ]" }
+expression() { "[ 1 ]" }
+expression() { "[ 1, ]" }
+expression() { "[ 1, 2 ]" }
+expression() { "[ 1, 2, 3, 4 ]" }
+expression() { "[ 1, 2, 3, 4, ]" }
+expression() { "{ a: 1 }" }
+expression() { "{ a: 1, }" }
+expression() { "{ a: 1, b: 2 }" }
+expression() { "[ a: 1, b: 2, c: 3, d: 4 ]" }
+expression() { "[ a: 1, b: 2, c: 3, d: 4, ]" }
+expression() { "{ a: 1, b: 2, c: 3, d: 4 }" }
+expression() { "{ a: 1, b: 2, c: 3, d: 4, }" }
+
+expression(expect: fail) { "[ " }
+expression(expect: fail) { "[ 1" }
+expression(expect: fail) { "[ 1," }
+expression(expect: fail) { "[ 1, 2" }
+expression(expect: fail) { "[ 1, 2, 3, 4," }
+expression(expect: fail) { "{ a: 1 " }
+expression(expect: fail) { "{ a: " }
+expression(expect: fail) { "{ a" }
+expression(expect: fail) { "{ a: 1, " }
+expression(expect: fail) { "{ a: 1, b: 2 " }
+expression(expect: fail) { "{ a: 1, b: " }
+expression(expect: fail) { "{ a: 1, b" }
+expression(expect: fail) { "[ a: 1, b: 2, c: 3, d: 4 " }
+expression(expect: fail) { "[ a: 1, b: 2, c: 3, d: " }
+expression(expect: fail) { "[ a: 1, b: 2, c: 3, d" }
+expression(expect: fail) { "[ a: 1, b: 2, c: 3," }
+expression(expect: fail) { "[ a: 1" }
+expression(expect: fail) { "[ a: " }
+expression(expect: fail) { "[ a: 1, b: 2, c: 3, d: 4, " }
+expression(expect: fail) { "{ a: 1, b: 2, c: 3, d: 4, " }
+
 // Unary operators
 
 expression() { +a }

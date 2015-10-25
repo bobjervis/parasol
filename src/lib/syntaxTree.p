@@ -43,6 +43,7 @@ enum Operator {
 	OR_ASSIGN,
 	EXCLUSIVE_OR_ASSIGN,
 	ADD_REDUCE,
+	LABEL,
 	EQUALITY,
 	IDENTITY,
 	LESS,
@@ -170,6 +171,7 @@ enum Operator {
 	// Call
 	CALL,
 	ANNOTATION,
+	AGGREGATE,
 	MAX_OPERATOR
 }
 
