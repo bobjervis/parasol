@@ -416,8 +416,8 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.SAL, TypeFamily.SIGNED_64, R.RCX, 1);
 				ref<Symbol> stringArray;
 				if (parameterScope.symbolCount() == 0) {
-					static string nm = "*";
-					stringArray = parameterScope.define(Operator.PRIVATE, StorageClass.STATIC, null, &nm[0], compileContext.arena().builtInType(TypeFamily.ADDRESS), null, compileContext.pool());
+					string nm = "*";
+					stringArray = parameterScope.define(Operator.PRIVATE, StorageClass.STATIC, null, nm, compileContext.arena().builtInType(TypeFamily.ADDRESS), null, compileContext.pool());
 					assignStaticRegion(stringArray, string.bytes, instances.length() * string.bytes);
 					for (int i = 0; i < instances.length(); i++) {
 						int offset = addStringLiteral(instances[i].name().asString());
@@ -478,6 +478,8 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			closeCodeSegment(CC.NOP, null);
 			insertPreamble();
+			if (node != null)
+				emitSourceLocation(compileContext.current().file(), node.location());
 			inst(X86.ENTER, 0);
 			int registerArgs = 0;
 			int frameSize = 0;
@@ -2831,6 +2833,7 @@ public class X86_64 extends X86_64AssignTemps {
 		case	AND:
 		case	OR:
 		case	CONDITIONAL:
+		case	STRING:
 			generate(node, compileContext);
 			inst(X86.PUSH, TypeFamily.ADDRESS, R(int(node.register)));
 			return;

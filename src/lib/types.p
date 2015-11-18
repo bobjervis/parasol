@@ -31,5 +31,7 @@ public class void {}
 public class ClassInfo {}
 public class `*Namespace*` {}
 public class `*deferred*`{}
+public class `*array*`{}
+public class `*object*`{}
 public class Exception {}
 

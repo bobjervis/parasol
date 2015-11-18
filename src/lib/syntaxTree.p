@@ -172,7 +172,8 @@ enum Operator {
 	// Call
 	CALL,
 	ANNOTATION,
-	AGGREGATE,
+	OBJECT_AGGREGATE,
+	ARRAY_AGGREGATE,
 	MAX_OPERATOR
 }
 
@@ -514,7 +515,7 @@ class Binary extends Node {
 			case	BIND:
 			case	DECLARATION:
 				_left = _left.fold(tree, false, compileContext);
-				_right = _right.fold(tree, false, compileContext);
+				_right = _right.fold(tree, true, compileContext);
 				return this;
 				
 			case	SUBSCRIPT:
@@ -1205,9 +1206,7 @@ class Binary extends Node {
 			super.markupDeclarator(t, compileContext);
 		}
 	}
-/*
-	void coerceLeft(ref<Type> type, bool explicitCast, ref<CompileContext> compileContext);
-*/
+
 	public ref<Node> left() {
 		return _left;
 	}
@@ -1253,6 +1252,13 @@ class Binary extends Node {
 			_right.markupDeclarator(type, compileContext);
 			break;
 
+		case	LABEL:
+			// assign and propagate the value type, let higher-level code decide what to do with the label
+			// portion.
+			compileContext.assignTypes(_right);
+			type = _right.type;
+			break;
+			
 		case	NEW:
 			if (_left.op() != Operator.EMPTY) {
 				// Will generate a 'missing type' error
@@ -2642,6 +2648,7 @@ class Call extends ParameterBag {
 			return result;
 			
 		case	TEMPLATE_INSTANCE:
+		case	ARRAY_AGGREGATE:
 			for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
 				nl.node = nl.node.fold(tree, false, compileContext);
 			if (_target != null)
@@ -2718,9 +2725,45 @@ class Call extends ParameterBag {
 
 	private void assignTypes(ref<CompileContext> compileContext) {
 		switch (op()) {
+		case	ARRAY_AGGREGATE:
+			if (assignArguments(LabelStatus.OPTIONAL_LABELS, compileContext)) {
+				ref<Type> scalarType = null;
+				if (_arguments != null) {
+					scalarType = _arguments.node.type;
+					for (ref<NodeList> nl = _arguments; nl.next != null; nl = nl.next) {
+						scalarType = findCommonType(scalarType, nl.next.node.type, compileContext);
+						if (scalarType == null) {
+							nl.next.node.add(MessageId.TYPE_MISMATCH, compileContext.pool());
+							nl.next.node.type = compileContext.errorType();
+							break;
+						}
+					}
+					if (scalarType == null) {
+						type = compileContext.errorType();
+						break;
+					}
+					for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
+						if (scalarType != nl.node.type)
+							nl.node = nl.node.coerce(compileContext.tree(), scalarType, false, compileContext);
+				}
+				if (scalarType != null)
+					type = compileContext.arena().buildVectorType(scalarType, null, compileContext);
+				else
+					type = compileContext.arena().builtInType(TypeFamily.ARRAY_AGGREGATE);
+			} else
+				type = compileContext.errorType();
+			break;
+			
+		case	OBJECT_AGGREGATE:
+			if (assignArguments(LabelStatus.REQUIRED_LABELS, compileContext))
+				type = compileContext.arena().builtInType(TypeFamily.OBJECT_AGGREGATE);
+			else
+				type = compileContext.errorType();
+			break;
+			
 		case	ANNOTATION:
 			type = compileContext.arena().builtInType(TypeFamily.VOID);
-		break;
+			break;
 
 		case	TEMPLATE_INSTANCE:
 			if (!assignSub(Operator.TEMPLATE, compileContext))
@@ -2842,7 +2885,7 @@ class Call extends ParameterBag {
 	}
 	
 	private boolean assignSub(Operator kind, ref<CompileContext> compileContext) {
-		if (!assignArguments(compileContext))
+		if (!assignArguments(LabelStatus.NO_LABELS, compileContext))
 			return false;
 		_target.assignOverload(_arguments, kind, compileContext);
 		if (_target.deferAnalysis()) {
@@ -2853,7 +2896,7 @@ class Call extends ParameterBag {
 	}
 
 	void assignConstructorCall(ref<Type> classType, ref<CompileContext> compileContext) {
-		if (!assignArguments(compileContext))
+		if (!assignArguments(LabelStatus.NO_LABELS, compileContext))
 			return;
 		OverloadOperation operation(Operator.FUNCTION, this, null, _arguments, compileContext);
 		if (classType.deferAnalysis()) {
@@ -2902,9 +2945,47 @@ class Call extends ParameterBag {
 		}
 	}
 
-	boolean assignArguments(ref<CompileContext> compileContext) {
-		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
+	enum LabelStatus {
+		NO_LABELS,
+		OPTIONAL_LABELS,
+		REQUIRED_LABELS
+	}
+	
+	boolean assignArguments(LabelStatus status, ref<CompileContext> compileContext) {
+		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 			compileContext.assignTypes(nl.node);
+			switch (status) {
+			case	NO_LABELS:
+				if (nl.node.op() == Operator.LABEL) {
+					// This path way should not occur, because the parser context should constrain the
+					// argument expressions.
+					nl.node.print(0);
+					assert(false);
+					nl.node.add(MessageId.NOT_A_FUNCTION, compileContext.pool());
+					nl.node.type = compileContext.errorType();
+				}
+				break;
+				
+			case	OPTIONAL_LABELS:		// An array aggregate
+				if (nl.node.op() == Operator.LABEL) {
+					ref<Binary> b = ref<Binary>(nl.node);
+					compileContext.assignTypes(b.left());
+				}
+				break;
+				
+			case	REQUIRED_LABELS:
+				if (nl.node.op() == Operator.LABEL) {
+					ref<Binary> b = ref<Binary>(nl.node);
+					if (b.left().op() != Operator.IDENTIFIER) {
+						nl.node.add(MessageId.LABEL_NOT_IDENTIFIER, compileContext.pool());
+						nl.node.type = compileContext.errorType();
+					}
+				} else {
+					nl.node.add(MessageId.LABEL_REQUIRED, compileContext.pool());
+					nl.node.type = compileContext.errorType();
+				}
+			}
+		}
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
 			if (nl.node.deferAnalysis()) {
 				type = nl.node.type;
@@ -2920,6 +3001,18 @@ class Call extends ParameterBag {
 			return this;
 	}
 
+	public boolean canCoerce(ref<Type> newType, boolean explicitCast, ref<CompileContext> compileContext) {
+		switch (op()) {
+		case	ARRAY_AGGREGATE:
+			print(0);
+			assert(false);
+			break;
+			
+		case	OBJECT_AGGREGATE:
+			break;
+		}
+		return super.canCoerce(newType, explicitCast, compileContext);
+	}
 	public ref<Node> target() {
 		return _target;
 	}
@@ -6646,6 +6739,7 @@ class Node {
 		switch (_op) {
 		case	IDENTIFIER:
 		case	VARIABLE:
+		case	ARRAY_AGGREGATE:
 			return true;
 
 		default:
@@ -6929,6 +7023,17 @@ boolean balancePair(ref<Node> parent, ref<ref<Node>> leftp, ref<ref<Node>> right
 	else
 		parent.type = (*leftp).type;
 	return true;
+}
+
+ref<Type> findCommonType(ref<Type> left, ref<Type> right, ref<CompileContext> compileContext) {
+	if (left.equals(right))
+		return left;
+	else if (left.widensTo(right, compileContext))
+		return right;
+	else if (right.widensTo(left, compileContext))
+		return left;
+	else
+		return left.greatestCommonBase(right);
 }
 
 ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {

@@ -251,6 +251,7 @@ class CompileContext {
 		case	AND:
 		case	AND_ASSIGN:
 		case	ANNOTATION:
+		case	ARRAY_AGGREGATE:
 		case	ASSIGN:
 		case	BIT_COMPLEMENT:
 		case	BREAK:
@@ -292,6 +293,7 @@ class CompileContext {
 		case	INDIRECT:
 		case	INITIALIZE:
 		case	INTEGER:
+		case	LABEL:
 		case	LEFT_SHIFT:
 		case	LEFT_SHIFT_ASSIGN:
 		case	LESS:
@@ -316,6 +318,7 @@ class CompileContext {
 		case	NOT_LESS_GREATER:
 		case	NOT_LESS_GREATER_EQUAL:
 		case	NULL:
+		case	OBJECT_AGGREGATE:
 		case	OR:
 		case	OR_ASSIGN:
 		case	REMAINDER:
@@ -826,13 +829,13 @@ class MemoryPool {
 	
 	public MemoryPool() {
 	}
-/*
-public:
 
-	~MemoryPool();
-
-	ref<ScopeList> newScopeList(ref<Scope> scope);
-*/
+	public ref<CompileString> newCompileString(string s) {
+		pointer<byte> data = pointer<byte>(allocz(s.length()));
+		memcpy(data, &s[0], s.length());
+		return new CompileString(data, s.length());
+	}
+	
 	public ref<Symbol> newPlainSymbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<CompileString> name, ref<Node> source, ref<Node> type, ref<Node> initializer) {
 		//void *block = alloc(sizeof (PlainSymbol));
 		return new PlainSymbol(visibility, storageClass, enclosing, annotations, name, source, type, initializer);

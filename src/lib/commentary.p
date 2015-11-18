@@ -24,6 +24,8 @@ enum MessageId {
 	CASE_NO_CO,
 	DISALLOWED_ANNOTATION,
 	EXPECTING_TERM,
+	LABEL_REQUIRED,
+	LABEL_NOT_IDENTIFIER,
 	NOT_EXPECTING_ELSE,
 	UNEXPECTED_EOF,
 	DO_WHILE_NO_SEMI,
@@ -209,6 +211,8 @@ class MessageMap {
 		_message[MessageId.INVALID_SWITCH] = "Invalid type in switch expression";
 		_message[MessageId.INVALID_UNARY_PLUS] = "Invalid type for unary plus";
 		_message[MessageId.INVALID_XOR] = "Invalid type for bitwise exclusive-or";
+		_message[MessageId.LABEL_REQUIRED] = "Initializer expression must have a label";
+		_message[MessageId.LABEL_NOT_IDENTIFIER] = "Label for this expression is not an identifier";
 		_message[MessageId.LEFT_NOT_INT] = "Left operand not an integral type";
 		_message[MessageId.LVALUE_REQUIRED] = "Not an assignable object expression";
 		_message[MessageId.NO_CODE] = "No code generated for this unit";

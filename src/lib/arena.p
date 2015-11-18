@@ -455,5 +455,7 @@ builtInMap.append(BuiltInMap(TypeFamily.STRING, "string"));
 builtInMap.append(BuiltInMap(TypeFamily.BOOLEAN, "boolean"));
 builtInMap.append(BuiltInMap(TypeFamily.CLASS_VARIABLE, "ClassInfo"));
 builtInMap.append(BuiltInMap(TypeFamily.CLASS_DEFERRED, "*deferred*"));
+builtInMap.append(BuiltInMap(TypeFamily.ARRAY_AGGREGATE, "*array*"));
+builtInMap.append(BuiltInMap(TypeFamily.OBJECT_AGGREGATE, "*object*"));
 builtInMap.append(BuiltInMap(TypeFamily.ADDRESS, "address"));
 builtInMap.append(BuiltInMap(TypeFamily.NAMESPACE, "*Namespace*"));

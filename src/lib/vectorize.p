@@ -110,6 +110,11 @@ ref<Node> reduce(Operator op, ref<SyntaxTree> tree, ref<Node> vectorExpression, 
 }
 
 ref<Node> vectorize(ref<SyntaxTree> tree, ref<Node> vectorExpression, ref<CompileContext> compileContext) {
+	ref<Binary> b = ref<Binary>(vectorExpression);
+	if (b.right().op() == Operator.ARRAY_AGGREGATE) {
+		vectorExpression.print(0);
+		assert(false);
+	}
 	ref<Variable> iterator = compileContext.newVariable(vectorExpression.type.indexType(compileContext));
 	ref<Reference> def = tree.newReference(iterator, true, vectorExpression.location());
 	CompileString init("0");
@@ -224,6 +229,7 @@ private ref<Node> rewriteVectorTree(ref<SyntaxTree> tree, ref<Node> vectorStuff,
 		return vectorStuff;
 	switch (vectorStuff.op()) {
 	case	ASSIGN:
+	case	INITIALIZE:
 		CompileString elem("setModulo");
 
 		ref<Binary> b = ref<Binary>(vectorStuff);
@@ -281,7 +287,7 @@ private class ExtractLvaluesClosure {
 TraverseAction extractLvalues(ref<Node> n, address data) {
 	if (n.type.family() != TypeFamily.SHAPE)
 		return TraverseAction.SKIP_CHILDREN;
-	if (n.isLvalue()) {
+	if (n.isLvalue() || n.op() == Operator.ARRAY_AGGREGATE) {
 		ref<ExtractLvaluesClosure> closure = ref<ExtractLvaluesClosure>(data);
 		closure.operands.append(n);
 		n.nodeFlags |= VECTOR_OPERAND;
@@ -289,6 +295,7 @@ TraverseAction extractLvalues(ref<Node> n, address data) {
 	}
 
 	switch (n.op()) {
+	case	INITIALIZE:
 	case	ASSIGN:
 		ref<Binary> b = ref<Binary>(n);
 		ref<ExtractLvaluesClosure> closure = ref<ExtractLvaluesClosure>(data);
@@ -297,6 +304,7 @@ TraverseAction extractLvalues(ref<Node> n, address data) {
 		b.right().traverse(Node.Traversal.PRE_ORDER, extractLvalues, data);
 		return TraverseAction.SKIP_CHILDREN;
 		
+	case	ARRAY_AGGREGATE:
 	case	ADD:
 	case	SUBTRACT:
 	case	DIVIDE:

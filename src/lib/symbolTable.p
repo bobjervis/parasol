@@ -376,15 +376,6 @@ class ParameterScope extends Scope {
 			return returnType.node.type.returnsViaOutParameter(compileContext);
 	}
 	
-	public string functionName() {
-		ref<Function> func = ref<Function>(definition());
-		
-		if (func.name() != null)
-			return func.name().identifier().asString();
-		else
-			return "<anonymous>";
-	}
-	
 	public boolean equals(ref<ParameterScope> other, ref<CompileContext> compileContext) {
 		if (_parameters.length() != other._parameters.length())
 			return false;
@@ -699,13 +690,11 @@ class Scope {
 		return sym;
 	}
 
-	ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, pointer<byte> name, ref<Type> type, ref<Node> initializer, ref<MemoryPool> memoryPool) {
-		CompileString cs(name);
-		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations, &cs, null, type, initializer);
-		string nm(name);
-		if (_symbols.contains(nm))
+	ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, string name, ref<Type> type, ref<Node> initializer, ref<MemoryPool> memoryPool) {
+		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations, memoryPool.newCompileString(name), null, type, initializer);
+		if (_symbols.contains(name))
 			return null;
-		_symbols[nm] = sym;
+		_symbols[name] = sym;
 		return sym;
 	}
 

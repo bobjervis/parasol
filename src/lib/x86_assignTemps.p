@@ -1194,6 +1194,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	OR:
 			case	CONDITIONAL:
 			case	FLOATING_POINT:
+			case	STRING:
 				assignRegisterTemp(arg, familyMasks[arg.type.family()], compileContext);
 				f().r.cleanupTemps(u, depth);
 				break;

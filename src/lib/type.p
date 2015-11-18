@@ -39,6 +39,8 @@ enum TypeFamily {
 	CLASS_VARIABLE,
 	CLASS_DEFERRED,
 	NAMESPACE,
+	ARRAY_AGGREGATE,
+	OBJECT_AGGREGATE,
 	BUILTIN_TYPES,
 	
 	CLASS,
@@ -1266,6 +1268,8 @@ class TypeFamilyMap {
 		size[TypeFamily.ERROR] = -1;
 		size[TypeFamily.BUILTIN_TYPES] = -1;
 		size[TypeFamily.CLASS] = -1;
+		size[TypeFamily.ARRAY_AGGREGATE] = -1;
+		size[TypeFamily.OBJECT_AGGREGATE] = -1;
 		size[TypeFamily.ENUM] = size[TypeFamily.ADDRESS];
 		size[TypeFamily.TYPEDEF] = size[TypeFamily.ADDRESS];
 		size[TypeFamily.SHAPE] = -1;
@@ -1298,6 +1302,8 @@ class TypeFamilyMap {
 		alignment[TypeFamily.ERROR] = -1;
 		alignment[TypeFamily.BUILTIN_TYPES] = -1;
 		alignment[TypeFamily.CLASS] = -1;
+		alignment[TypeFamily.ARRAY_AGGREGATE] = -1;
+		alignment[TypeFamily.OBJECT_AGGREGATE] = -1;
 		alignment[TypeFamily.ENUM] = alignment[TypeFamily.ADDRESS];
 		alignment[TypeFamily.TYPEDEF] = alignment[TypeFamily.ADDRESS];
 		alignment[TypeFamily.SHAPE] = -1;

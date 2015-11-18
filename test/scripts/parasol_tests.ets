@@ -904,6 +904,10 @@ compile() { "ref<int> x = new int;" }
 
 compile() { "enum a { A, B, C }; a x = a.B;" }
 
+//compile() { "int[] a = [ 1, 2, 3 ];" }
+//compile() { "int[string] b = [ "a": 4, "b": 17, "c": -23, ];" }
+//compile() { "class C { int a, b, c; } C c = { a: 3, c: 7, b: -1 };" }
+
 compile() { "class a { ~a() {} }" }
 
 compile(expect: fail, message: NO_PARAMS_IN_DESTRUCTOR) { "class a { ~a(int b) {} }" }

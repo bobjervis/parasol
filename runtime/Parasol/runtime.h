@@ -152,6 +152,8 @@ private:
 		return x;
 	}
 
+	void crawlStack(const StackState &state, void *rbp);
+
 	int _target;
 	void **_objects;
 	int _objectCount;

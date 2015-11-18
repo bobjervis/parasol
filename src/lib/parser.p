@@ -1404,7 +1404,7 @@ class Parser {
 				return resync(MessageId.SYNTAX_ERROR);
 			}
 		}
-		return _tree.newCall(Operator.AGGREGATE, null, 
+		return _tree.newCall(startingToken == Token.LEFT_SQUARE ? Operator.ARRAY_AGGREGATE : Operator.OBJECT_AGGREGATE, null, 
 				leftHandle.length() > 0 ? _tree.newNodeList(leftHandle) : null, location);
 	}
 	
