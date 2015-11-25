@@ -23,6 +23,7 @@ enum StorageClass {
 	PARAMETER,
 	MEMBER,
 	STATIC,
+	CONSTANT,
 	TEMPLATE,
 	TEMPLATE_INSTANCE,
 	ENUMERATION,
@@ -829,7 +830,8 @@ class Scope {
 		int max = 1;
 		for (ref<Symbol>[string].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
 			ref<Symbol> sym = i.get();
-			if (sym.storageClass() == StorageClass.STATIC)
+			if (sym.storageClass() == StorageClass.STATIC ||
+				sym.storageClass() == StorageClass.CONSTANT)
 				continue;
 			if (sym.class == PlainSymbol) {
 				ref<Type> type = sym.type();
@@ -988,6 +990,7 @@ class Scope {
 				return;
 			type.checkSize(compileContext);
 			switch (symbol.storageClass()) {
+			case	CONSTANT:
 			case	STATIC:
 			case	AUTO:
 			case	MEMBER:
@@ -1006,6 +1009,8 @@ class Scope {
 				break;
 
 			default:
+				symbol.print(0, false);
+				assert(false);
 				symbol.add(MessageId.UNFINISHED_CHECK_STORAGE, compileContext.pool(), CompileString(string(symbol.storageClass())));
 			}
 		}
@@ -1207,6 +1212,32 @@ class PlainSymbol extends Symbol {
 		return _type;
 	}
 
+	protected boolean validateAnnotations(ref<CompileContext> compileContext) {
+		if (annotations() == null)
+			return true;
+		if (!super.validateAnnotations(compileContext))
+			return false;
+		if (storageClass() == StorageClass.CONSTANT) {
+			switch (_type.family()) {
+			case	SIGNED_32:
+				if (_initializer == null) {
+					definition().add(MessageId.INITIALIZER_REQUIRED, compileContext.pool());
+					return false;
+				}
+				if (!_initializer.isConstant()) {
+					definition().add(MessageId.INITIALIZER_MUST_BE_CONSTANT, compileContext.pool());
+					return false;
+				}
+				break;
+				
+			default:
+				print(0, false);
+				assert(false);
+			}
+		}
+		return true;
+	}
+	
 	public ref<Node> typeDeclarator() {
 		return _typeDeclarator;
 	}
@@ -1561,6 +1592,7 @@ class Symbol {
 				ref<Type> t = assignThisType(compileContext);
 				if (_type == null)
 					_type = t;
+				validateAnnotations(compileContext);
 				_inProgress = false;
 			}
 		}
@@ -1694,14 +1726,35 @@ class Symbol {
 		return bt;
 	}
 
-	public boolean bindType(ref<Type> t) {
+	public boolean bindType(ref<Type> t, ref<CompileContext> compileContext) {
 		if (_type == null) {
 			_type = t;
+			validateAnnotations(compileContext);
 			return true;
 		} else
 			return _type.equals(t);
 	}
 
+	protected boolean validateAnnotations(ref<CompileContext> compileContext) {
+		if (_annotations == null)
+			return true;
+		ref<Call> annotation = (*_annotations)["Constant"];
+		if (annotation != null) {
+			// If this symbol has a Constant annotation, be sure to validate it.
+			if (annotation.argumentCount() > 0) {
+				_definition.add(MessageId.ANNOTATION_TAKES_NO_ARGUMENTS, compileContext.pool());
+				return false;
+			}
+			if (storageClass() == StorageClass.STATIC)
+				_storageClass = StorageClass.CONSTANT;
+			else {
+				_definition.add(MessageId.CONSTANT_NOT_STATIC, compileContext.pool());
+				return false;
+			}
+		}
+		return true;
+	}
+	
 	public StorageClass storageClass() {
 		if (_storageClass != StorageClass.ENCLOSING)
 			return _storageClass;
@@ -1739,6 +1792,10 @@ class Symbol {
 		return _visibility;
 	}
 
+	public ref<ref<Call>[string]> annotations() {
+		return _annotations;
+	}
+	
 	public ref<Node> annotationNode() {
 		return _annotationNode;
 	}

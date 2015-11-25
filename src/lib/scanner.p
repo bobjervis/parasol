@@ -191,6 +191,11 @@ class FileScanner extends Scanner {
 	public boolean opened() { 
 		return _file.opened(); 
 	}
+
+	public void close() {
+		if (_file.opened())
+			_file.close();
+	}	
 }
 
 public class StringScanner extends Scanner {
@@ -268,6 +273,9 @@ class Scanner {
 		return true;
 	}
 
+	public void close() {
+	}
+	
 	public Token next() {
 		Token t;
 

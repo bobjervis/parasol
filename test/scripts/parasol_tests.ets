@@ -53,6 +53,7 @@ run(filename: complex_subscript.p)
 
 // Basic runtime execution tests
 
+run(filename: array_init.p)
 run(filename: unicodeNumber.p)
 run(filename: template_scope/template_scope.p, importPath: ^/test/src/template_scope)
 run(filename: vectorization_1.p)
@@ -113,6 +114,8 @@ run(filename: assert_local_false.p, expect: fail)
 run(filename: assert_true.p)
 run(filename: assert_local_true.p)
 run(filename: return_77.p, exitCode: 77)
+
+run(filename: scanner_test.p, arguments: src/lib/x86_64.p)
 
 compile(filename: hello.p)
 compile(filename: void_return_pass.p)
@@ -351,6 +354,21 @@ compile() { "enum Foo { A, B }; Foo src; long x; x = long(src);" }
 compile() { "enum Foo { A, B }; Foo src; address x; x = address(src);" }
 compile() { "enum Foo { A, B }; Foo src; boolean x; x = boolean(src);" }
 compile() { "enum Foo { A, B }; Foo src; int x(double z); x = function int(double)(src);" }
+
+// From address
+
+compile() { "address src; byte x; x = byte(src);" }
+compile() { "address src; char x; x = char(src);" }
+compile() { "address src; unsigned x; x = unsigned(src);" }
+compile() { "address src; short x; x = short(src);" }
+compile() { "address src; int x; x = int(src);" }
+compile() { "address src; long x; x = long(src);" }
+compile() { "address src; float x; x = float(src);" }
+compile() { "address src; var x; x = src;" }
+compile() { "address src; double x; x = double(src);" }
+compile() { "address src; boolean x; x = boolean(src);" }
+compile() { "address src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "address src; int x(double z); x = function int(double)(src);" }
 
 // From function int(double);
 
@@ -904,7 +922,7 @@ compile() { "ref<int> x = new int;" }
 
 compile() { "enum a { A, B, C }; a x = a.B;" }
 
-//compile() { "int[] a = [ 1, 2, 3 ];" }
+compile() { "int[] a = [ 1, 2, 3 ];" }
 //compile() { "int[string] b = [ "a": 4, "b": 17, "c": -23, ];" }
 //compile() { "class C { int a, b, c; } C c = { a: 3, c: 7, b: -1 };" }
 

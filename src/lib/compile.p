@@ -31,6 +31,7 @@ class CompileContext {
 	private int _importedScopes;
 	private ref<SyntaxTree> _tree;
 	private ref<Variable>[] _variables;
+	private ref<Symbol>[] _staticSymbols;		// Populated when assigning storage
 	
 	public class FlowContext {
 		private ref<FlowContext> _next;
@@ -734,9 +735,15 @@ class CompileContext {
 		else
 			return _current.storageClass();
 	}
-/*
-	void print();
-*/
+
+	public void rememberStaticSymbol(ref<Symbol> staticSymbol) {
+		_staticSymbols.append(staticSymbol);
+	}
+	
+	public ref<ref<Symbol>[]> staticSymbols() {
+		return &_staticSymbols;
+	}
+	
 	public ref<Type> makeTypedef(ref<Type> underlyingType) {
 		return _pool.newTypedefType(TypeFamily.TYPEDEF, underlyingType);
 	}

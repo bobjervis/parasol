@@ -909,10 +909,20 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	ADDRESS:
 			case	REF:
 			case	POINTER:
+			case	BOOLEAN:
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
-			case	FUNCTION:
 			case	SIGNED_64:
+			case	FUNCTION:
 				assignCast(result, operand, regMask, 0, compileContext);
+				return;
+
+			case	FLOAT_32:
+			case	FLOAT_64:
+				assignCast(result, operand, regMask, longMask, compileContext);
 				return;
 			}
 			break;

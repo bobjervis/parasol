@@ -91,6 +91,7 @@ class vector<class E> extends vector<E, int>{
 
 @Shape
 class vector<class E, class I> {
+	@Constant
 	private static int MIN_CAPACITY = 0x10;
 
 	private I _length;

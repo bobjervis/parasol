@@ -298,6 +298,11 @@ class X86_64Encoder extends Target {
 				definePxiFixup(location);
 				break;
 				
+			case	INT_CONSTANT:
+				location = f.locationSymbol.offset + f.location;
+				memcpy(&_code[location], &f.value, f.locationSymbol.type().size());
+				break;
+				
 			case	BUILTIN32:						// Fixup value is builtIn index
 				*ref<int>(&_code[f.location]) = _pxiHeader.builtInOffset + int(f.value) * long.bytes - 
 								(f.location + int.bytes);
@@ -495,16 +500,15 @@ class X86_64Encoder extends Target {
 			int alignment;
 			type.assignSize(this, compileContext);
 			switch (symbol.storageClass()) {
+			case	CONSTANT:
 			case	STATIC:
 				if (symbol.value == null) {
 					int size = type.size();
-					symbol.value = symbol;
-					if (size < 0) {
-						symbol.add(MessageId.UNFINISHED_ASSIGN_STORAGE, compileContext.pool(), CompileString(string(symbol.storageClass())));
+					if (size <= 0) {			// This is a static declaration inside a class 
+						compileContext.rememberStaticSymbol(symbol);
 						break;
 					}
-					int alignment = type.alignment();
-					assignStaticRegion(symbol, alignment, size);
+					assignStaticSymbolStorage(symbol, compileContext);
 				}
 				break;
 
@@ -545,8 +549,22 @@ class X86_64Encoder extends Target {
 			}	break;
 
 			default:
-				symbol.add(MessageId.UNFINISHED_ASSIGN_STORAGE, compileContext.pool(), CompileString(string(scope.storageClass())));
+				symbol.print(0, false);
+				assert(false);
 			}
+		}
+	}
+	
+	protected void assignStaticSymbolStorage(ref<Symbol> symbol, ref<CompileContext> compileContext) {
+		symbol.value = symbol;
+		ref<Type> type = symbol.type();
+		int size = type.size();
+		int alignment = type.alignment();
+		assignStaticRegion(symbol, alignment, size);
+		if (symbol.storageClass() == StorageClass.CONSTANT) {
+			ref<PlainSymbol> sym = ref<PlainSymbol>(symbol);		// constants are constrained to be Plain
+			long value = sym.initializer().foldInt(compileContext);
+			staticFixup(FixupKind.INT_CONSTANT, symbol, 0, address(value));
 		}
 	}
 	
@@ -2709,6 +2727,7 @@ class X86_64Encoder extends Target {
 				assert(false);
 			}
 			switch (sym.storageClass()) {
+			case	CONSTANT:
 			case	STATIC:
 				modRM(0, regOpcode, 5);
 				if (addressMode.type.family() == TypeFamily.TYPEDEF) {
@@ -2916,6 +2935,7 @@ class X86_64Encoder extends Target {
 					assert(false);
 				}
 				switch (sym.storageClass()) {
+				case	CONSTANT:
 				case	STATIC:
 				case	AUTO:
 				case	PARAMETER:
@@ -3218,6 +3238,16 @@ class X86_64Encoder extends Target {
 		 _f.emitting.fixups = f;
 	}
 	
+	protected void staticFixup(FixupKind kind, ref<Symbol> locationSymbol, int location, address value) {
+		 ref<Fixup> f = new Fixup();
+		 f.kind = kind;
+		 f.locationSymbol = locationSymbol; 
+		 f.location = location;
+		 f.value = value;
+		 f.next = _fixups;
+		 _fixups = f;
+	}
+	
 	private int assignBuiltInVector(int builtInId) {
 		for (int i = 0; i < _builtIns.length(); i++)
 			if (_builtIns[i] == builtInId)
@@ -3275,6 +3305,7 @@ enum FixupKind {
 	ABSOLUTE64_CODE,				// Fixup value is a ref<Scope>
 	ABSOLUTE64_DATA,				// Fixup value is a ref<Symbol>
 	ABSOLUTE64_STRING,				// Fixup value is a an int offset into the string pool
+	INT_CONSTANT,					// Fixup value is the value of the constant
 	BUILTIN32						// Fixup value is builtIn index
 }
 
@@ -3314,6 +3345,10 @@ class Fixup {
 			
 		case	ABSOLUTE64_STRING:				// Fixup value is a ref<Symbol>
 			printf("    @%x ABSOLUTE64_STRING %p\n", location, value);
+			break;
+			
+		case	INT_CONSTANT:
+			printf("    @%x INT_CONSTANT %p\n", location, value);
 			break;
 			
 		case	BUILTIN32:						// Fixup value is builtIn index

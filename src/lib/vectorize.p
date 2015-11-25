@@ -111,10 +111,8 @@ ref<Node> reduce(Operator op, ref<SyntaxTree> tree, ref<Node> vectorExpression, 
 
 ref<Node> vectorize(ref<SyntaxTree> tree, ref<Node> vectorExpression, ref<CompileContext> compileContext) {
 	ref<Binary> b = ref<Binary>(vectorExpression);
-	if (b.right().op() == Operator.ARRAY_AGGREGATE) {
-		vectorExpression.print(0);
-		assert(false);
-	}
+	if (b.right().op() == Operator.ARRAY_AGGREGATE)
+		return vectorizeAggregateAssignment(tree, b, compileContext);
 	ref<Variable> iterator = compileContext.newVariable(vectorExpression.type.indexType(compileContext));
 	ref<Reference> def = tree.newReference(iterator, true, vectorExpression.location());
 	CompileString init("0");
@@ -338,4 +336,53 @@ private Operator reduceToAssignment(Operator reduce) {
 		assert(false);
 	}
 	return Operator.SEQUENCE;
+}
+
+private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary> vectorExpression, ref<CompileContext> compileContext) {
+	ref<Call> aggregate = ref<Call>(vectorExpression.right());
+	ref<Type> vectorType = vectorExpression.type;
+	ref<Node> lhs = vectorExpression.left();
+	ref<Node> result = null;
+	if (!lhs.isSimpleLvalue()) {
+		ref<Variable> lhv = compileContext.newVariable(compileContext.arena().builtInType(TypeFamily.ADDRESS));
+		ref<Reference> def = tree.newReference(lhv, true, lhs.location());
+		ref<Node> adr = tree.newUnary(Operator.ADDRESS, lhs, lhs.location());
+		result = tree.newBinary(Operator.ASSIGN, def, adr, lhs.location());
+		ref<Reference> use = tree.newReference(lhv, false, lhs.location());
+		lhs = tree.newUnary(Operator.ADDRESS, use, lhs.location());
+	}
+	for (ref<NodeList> nl = aggregate.arguments(); nl != null; nl = nl.next) {
+		CompileString append("append");
+
+		ref<Node> arrayRef = lhs.clone(tree);
+		
+		ref<Symbol> sym = vectorType.lookup(&append, compileContext);
+
+		if (sym == null || sym.class != Overload) {
+			vectorExpression.add(MessageId.UNDEFINED, compileContext.pool(), append);
+			return vectorExpression;
+		}
+		ref<OverloadInstance> oi = ref<Overload>(sym).instances()[0];
+		ref<Selection> method = tree.newSelection(arrayRef, oi, arrayRef.location());
+		method.type = oi.type();
+		if (nl.node.op() == Operator.LABEL) {
+			vectorExpression.print(0);
+			assert(false);
+		}
+		ref<NodeList> args = tree.newNodeList(nl.node);
+		ref<Node> next = tree.newCall(oi, null,  method, args, nl.node.location());
+		if (result == null)
+			result = next;
+		else
+			result = tree.newBinary(Operator.SEQUENCE, result, next, vectorExpression.location());
+	}
+	
+	if (result == null)
+		result = tree.newLeaf(Operator.EMPTY, lhs.location());	// TODO: This is probably wrong.
+	compileContext.assignTypes(result);
+//	vectorExpression.print(0);
+//	printf("-->\n");
+//	result.print(0);
+//	assert(false);
+	return result.fold(tree, true, compileContext);
 }

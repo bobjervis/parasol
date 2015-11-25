@@ -3013,6 +3013,7 @@ class Call extends ParameterBag {
 		}
 		return super.canCoerce(newType, explicitCast, compileContext);
 	}
+	
 	public ref<Node> target() {
 		return _target;
 	}
@@ -3914,7 +3915,7 @@ class Function extends ParameterBag {
 		if (_functionCategory == Category.DECLARATOR)
 			type = compileContext.makeTypedef(type);
 		if (_name != null && _name.symbol() != null)
-			_name.symbol().bindType(type);
+			_name.symbol().bindType(type, compileContext);
 		if (body == null || retType == null)
 			return;
 		Test t = body.fallsThrough();
@@ -4083,7 +4084,7 @@ class Identifier extends Node {
 
 	public void markupDeclarator(ref<Type> t, ref<CompileContext> compileContext) {
 		if (_symbol != null) {
-			if (!_symbol.bindType(t)) {
+			if (!_symbol.bindType(t, compileContext)) {
 				add(MessageId.UNFINISHED_MARKUP_DECLARATOR, compileContext.pool(), CompileString("  "/*this.class.name()*/), CompileString(string(op())));
 				type = compileContext.errorType();
 				return;
@@ -4153,7 +4154,7 @@ class Identifier extends Node {
 		if (_symbol != null) {
 			classScope.classType = compileContext.pool().newClassType(body, classScope);
 			ref<Type> t = compileContext.makeTypedef(classScope.classType);
-			_symbol.bindType(t);
+			_symbol.bindType(t, compileContext);
 			return classScope;
 		} else {
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
@@ -4169,7 +4170,7 @@ class Identifier extends Node {
 			ref<ClassType> c = compileContext.pool().newClassType(TypeFamily.CLASS, ref<Type>(null), enumScope);
 			ref<Type> t = compileContext.pool().newEnumInstanceType(_symbol, enumScope, c);
 			enumScope.enumType = compileContext.pool().newEnumType(body, enumScope, t);
-			_symbol.bindType(enumScope.enumType);
+			_symbol.bindType(enumScope.enumType, compileContext);
 		} else
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
 	}
@@ -4192,7 +4193,7 @@ class Identifier extends Node {
 			if (_symbol == null)
 				return;
 			ref<Type> t = compileContext.makeTypedef(compileContext.pool().newTemplateType(_symbol, templateDef, templateScope.file(), o, templateScope));
-			_symbol.bindType(t);
+			_symbol.bindType(t, compileContext);
 		} else
 			add(MessageId.OVERLOAD_DISALLOWED, compileContext.pool(), _value);
 	}

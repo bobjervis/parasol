@@ -181,6 +181,10 @@ public class X86_64 extends X86_64AssignTemps {
 				scope.assignVariableStorage(this, compileContext);
 			}
 		}
+		for (int i = 0; i < compileContext.staticSymbols().length(); i++) {
+			ref<Symbol> symbol = (*compileContext.staticSymbols())[i];
+			assignStaticSymbolStorage(symbol, compileContext);
+		}
 		if (_verbose)
 			printf("Variable storage assigned\n");
 		return super.generateCode(mainFile, valueOffset, compileContext);
@@ -216,7 +220,6 @@ public class X86_64 extends X86_64AssignTemps {
 			for (int i = 0; i < _pxiHeader.vtableData; i++, vp++)
 				*vp += long(address(_staticMemory));
 			runtime.setTrace(_arena.trace);
-			int xxx = 15436;
 			returnValue = runtime.evalNative(&_pxiHeader, _staticMemory, &runArgs[0], runArgs.length());
 			runtime.setTrace(false);
 		} else {
@@ -3191,15 +3194,27 @@ public class X86_64 extends X86_64AssignTemps {
 */
 			case	BOOLEAN:
 			case	ENUM:
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
+			case	SIGNED_64:
 			case	STRING:
 			case	ADDRESS:
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
-			case	SIGNED_64:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, result, n, compileContext);
+				return;
+
+			case	FLOAT_32:
+				inst(X86.CVTSI2SS, result, n, compileContext);
+				return;
+				
+			case	FLOAT_64:
+				inst(X86.CVTSI2SD, result, n, compileContext);
 				return;
 			}
 			break;

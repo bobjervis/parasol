@@ -457,14 +457,24 @@ class X86_64AddressModes extends X86_64Encoder {
 			switch (newType.family()) {
 			case	STRING:
 			case	ADDRESS:
+			case	BOOLEAN:
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
-			case	FUNCTION:
 			case	SIGNED_64:
+			case	FUNCTION:
 			case	ENUM:
 			case	FUNCTION:
 			case	REF:
 			case	POINTER:
 				tryMakeMode(operand, MC_FULL, 0, compileContext);
+				return;
+
+			case	FLOAT_32:
+			case	FLOAT_64:
+				markAddressModes(operand, compileContext);
 				return;
 			}
 			break;
