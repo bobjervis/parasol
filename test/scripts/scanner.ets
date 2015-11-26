@@ -88,6 +88,8 @@ scan(tokens: 1, value:"\\x23") { '"\\x23"' }
 scan(tokens: 1, value:"\\'") { '"\\\'"' }
 scan(tokens: 1, value:"\\\"") { '"\\\""' }
 scan(tokens: 1, value:"\'") { '"\'"' }
+scan(tokens: 1, value:"ab") { '"a\\\nb"' }
+scan(tokens: 1, value:"ab") { '"a\\\r\nb"' }
 
 	// Various annotations
 	

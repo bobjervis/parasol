@@ -1130,7 +1130,7 @@ class X86_64Encoder extends Target {
 			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
 			emit(0x0f);
 			emit(0x10);
-			if (dest == R.RSP) {
+			if (reg == R.RSP) {
 				if (offset >= -128 || offset <= 127) {
 					modRM(1, rmValues[dest], 4);
 					sib(0, 4, 4);

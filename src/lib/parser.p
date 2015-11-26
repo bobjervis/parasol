@@ -33,8 +33,10 @@ class Parser {
 //			int line = _scanner.lineNumber(_scanner.location());
 			string s(cs.data, cs.length);
 //			printf("Token %d %s %d\n", int(t), s, line);
-			if (t == Token.END_OF_STREAM)
+			if (t == Token.END_OF_STREAM) {
+				_scanner.close();
 				return block;
+			}
 			_scanner.pushBack(t);
 			block.statement(_tree.newNodeList(parseStatement()));
 		}

@@ -150,42 +150,29 @@ enum Token {
 
 class FileScanner extends Scanner {
 	private file.File _file;
-	private Location _fileSize;
-	private int _pushBack;
 	
 	public FileScanner(ref<FileStat> fileInfo) {
 		super(0, fileInfo);
-		_file = file.openTextFile(fileInfo.filename());
-		if (_file.opened()) {
-			_fileSize.offset = _file.seek(0, file.Seek.END);
-			_file.seek(0, file.Seek.START);
-		}
+		_file = file.openBinaryFile(fileInfo.filename());
 	}
 
+	~FileScanner() {
+		close();
+	}
+	
 	int getByte() {
 		if (!_file.opened())
-			return -1;
+			return -1;			// Should be a throw, maybe?
 		int b = _file.read();
 		if (b != file.EOF)
 			return b;
-		else {
-			_file.close();
-			return -1;
-		}
-	}
-
-	Location cursor() {
-		Location loc;
-
-		if (_file.opened())
-			loc.offset = _file.tell();
 		else
-			loc = _fileSize;
-		return loc;
+			return -1;
 	}
 
 	public void seek(Location location) {
 		_file.seek(location.offset, file.Seek.START);
+		super.seek(location);
 	}
 
 	public boolean opened() { 
@@ -210,29 +197,18 @@ public class StringScanner extends Scanner {
 	public int getByte() {
 		if (_cursor < _source.length())
 			return _source[_cursor++];
-		else {
-			_cursor = _source.length() + 1;
-			return -1;
-		}
-	}
-
-	public Location cursor() {
-		Location loc;
-		if (_cursor <= _source.length())
-			loc.offset = _cursor;
 		else
-			loc.offset = _source.length();
-		return loc;
+			return -1;
 	}
 
 	public void seek(Location location) {
 		_cursor = location.offset;
+		super.seek(location);
 	}
 }
 
 class Scanner {
 	private Token _pushback;
-	private Token _last;
 	private Location[] _lines;
 	private string _value;
 	private ref<FileStat> _file;
@@ -243,14 +219,27 @@ class Scanner {
 	 */
 	private Location _location;
 	/*
-	 * _lastChar is the last value returned by getc
+	 * _lastChar is the last Unicode code point value returned by getc
 	 */
 	private int _lastChar;
+	/*
+	 * This is the cursor value before the last getc call, so if we unetc, we can restore the cursor
+	 */
+	private int _lastCursor;
+	/*
+	 * This is the cursor value after the last getc call, so if we ungetc, this will be the cursor
+	 * we restore when we read the ungotten character.
+	 */
+	private int _nextCursor;
 	/*
 	 * _lastByte is the last character read and pushed back  
 	 */
 	private int _lastByte;
 	private byte _errorByte;
+	/*
+	 * This is the byte offset in the input stream of the next byte to be read.
+	 */
+	private int _cursor;
 	
 	public static ref<Scanner> create(ref<FileStat> file) {
 		ref<Scanner> scanner;
@@ -263,7 +252,6 @@ class Scanner {
 	
 	protected Scanner(int baseLineNumber, ref<FileStat> file) {
 		_pushback = Token.EMPTY;
-		_last = Token.EMPTY;
 		_lastByte = -1;
 		_baseLineNumber = baseLineNumber;
 		_file = file;
@@ -289,10 +277,11 @@ class Scanner {
 			int c = getc();
 			switch (c) {
 			case	0x7fffffff://int.MAX_VALUE:
-				return remember(Token.ERROR, _errorByte);
+				startValue(_errorByte);
+				return Token.ERROR;
 			
 			case	-1:
-				return remember(Token.END_OF_STREAM);
+				return Token.END_OF_STREAM;
 
 			case	0x00:
 			case	0x01:
@@ -303,7 +292,8 @@ class Scanner {
 			case	0x06:
 			case	0x07:
 			case	0x08:
-				return remember(Token.ERROR, c);
+				startValue(c);
+				return Token.ERROR;
 
 			case	'\t':
 				continue;
@@ -313,7 +303,8 @@ class Scanner {
 				continue;
 
 			case	0x0b:
-				return remember(Token.ERROR, c);
+				startValue(c);
+				return Token.ERROR;
 
 			case	'\f':
 			case	'\r':
@@ -337,50 +328,54 @@ class Scanner {
 			case	0x1d:
 			case	0x1e:
 			case	0x1f:
-				return remember(Token.ERROR, c);
+				startValue(c);
+				return Token.ERROR;
 
 			case	' ':
+				Location spLoc = _location;
 				_location = cursor();
 				c = getc();
 				if (c == '<') {
 					c = getc();
 					if (c == '=')
-						return remember(Token.LA_EQ);
+						return Token.LA_EQ;
 					else if (c == '<') {
 						c = getc();
 						if (c == '=')
-							return remember(Token.LA_LA_EQ);
+							return Token.LA_LA_EQ;
 						ungetc();
-						return remember(Token.LA_LA);
+						return Token.LA_LA;
 					} else if (c == '>') {
 						c = getc();
 						if (c == '=')
-							return remember(Token.LA_RA_EQ);
+							return Token.LA_RA_EQ;
 						ungetc();
-						return remember(Token.LA_RA);
+						return Token.LA_RA;
 					}
 					ungetc();
-					return remember(Token.SP_LA);
+					_location = spLoc;
+					return Token.SP_LA;
 				} else if (c == '>') {
 					c = getc();
 					if (c == '=')
-						return remember(Token.RA_EQ);
+						return Token.RA_EQ;
 					else if (c == '>') {
 						c = getc();
 						if (c == '=')
-							return remember(Token.RA_RA_EQ);
+							return Token.RA_RA_EQ;
 						else if (c == '>') {
 							c = getc();
 							if (c == '=')
-								return remember(Token.RA_RA_RA_EQ);
+								return Token.RA_RA_RA_EQ;
 							ungetc();
-							return remember(Token.RA_RA_RA);
+							return Token.RA_RA_RA;
 						}
 						ungetc();
-						return remember(Token.RA_RA);
+						return Token.RA_RA;
 					}
 					ungetc();
-					return remember(Token.SP_RA);
+					_location = spLoc;
+					return Token.SP_RA;
 				}
 				ungetc();
 				continue;
@@ -391,115 +386,116 @@ class Scanner {
 				case	'=':
 					c = getc();
 					if (c == '=')
-						return remember(Token.EX_EQ_EQ);
+						return Token.EX_EQ_EQ;
 					ungetc();
-					return remember(Token.EXCLAMATION_EQ);
+					return Token.EXCLAMATION_EQ;
 
 				case	'<':
 					c = getc();
 					if (c == '=')
-						return remember(Token.EX_LA_EQ);
+						return Token.EX_LA_EQ;
 					else if (c == '>') {
 						c = getc();
 						if (c == '=')
-							return remember(Token.EX_LA_RA_EQ);
+							return Token.EX_LA_RA_EQ;
 						ungetc();
-						return remember(Token.EX_LA_RA);
+						return Token.EX_LA_RA;
 					}
 					ungetc();
-					return remember(Token.EX_LA);
+					return Token.EX_LA;
 
 				case	'>':
 					c = getc();
 					if (c == '=')
-						return remember(Token.EX_RA_EQ);
+						return Token.EX_RA_EQ;
 					ungetc();
-					return remember(Token.EX_RA);
+					return Token.EX_RA;
 
 				default:
 					ungetc();
-					return remember(Token.EXCLAMATION);
+					return Token.EXCLAMATION;
 				}
 
 			case	'"':
-				return remember(consume(Token.STRING, byte(c)));
+				return consume(Token.STRING, byte(c));
 
 			case	'#':
 			case	'$':
-				return remember(Token.ERROR, c);
+				startValue(c);
+				return Token.ERROR;
 
 			case	'%':
 				c = getc();
 				if (c == '=')
-					return remember(Token.PERCENT_EQ);
+					return Token.PERCENT_EQ;
 				ungetc();
-				return remember(Token.PERCENT);
+				return Token.PERCENT;
 
 			case	'&':
 				c = getc();
 				if (c == '=')
-					return remember(Token.AMPERSAND_EQ);
+					return Token.AMPERSAND_EQ;
 				else if (c == '&')
-					return remember(Token.AMP_AMP);
+					return Token.AMP_AMP;
 				ungetc();
 				return Token.AMPERSAND;
 
 			case	'\'':
-				return remember(consume(Token.CHARACTER, byte(c)));
+				return consume(Token.CHARACTER, byte(c));
 
 			case	'(':
-				return remember(Token.LEFT_PARENTHESIS);
+				return Token.LEFT_PARENTHESIS;
 
 			case	')':
-				return remember(Token.RIGHT_PARENTHESIS);
+				return Token.RIGHT_PARENTHESIS;
 
 			case	'*':
 				c = getc();
 				if (c == '=')
-					return remember(Token.ASTERISK_EQ);
+					return Token.ASTERISK_EQ;
 				ungetc();
-				return remember(Token.ASTERISK);
+				return Token.ASTERISK;
 
 			case	'+':
 				c = getc();
 				if (c == '=')
-					return remember(Token.PLUS_EQ);
+					return Token.PLUS_EQ;
 				else if (c == '+')
-					return remember(Token.PLUS_PLUS);
+					return Token.PLUS_PLUS;
 				ungetc();
-				return remember(Token.PLUS);
+				return Token.PLUS;
 
 			case	',':
-				return remember(Token.COMMA);
+				return Token.COMMA;
 
 			case	'-':
 				c = getc();
 				if (c == '=')
-					return remember(Token.DASH_EQ);
+					return Token.DASH_EQ;
 				else if (c == '-')
-					return remember(Token.DASH_DASH);
+					return Token.DASH_DASH;
 				ungetc();
-				return remember(Token.DASH);
+				return Token.DASH;
 
 			case	'.':
 				c = getc();
 				if (c == '.') {
 					c = getc();
 					if (c == '.')
-						return remember(Token.ELLIPSIS);
+						return Token.ELLIPSIS;
 					ungetc();
-					return remember(Token.DOT_DOT);
+					return Token.DOT_DOT;
 				} else if (byte(c).isDigit()) {
 					ungetc();
-					return remember(number('.'));
+					return number('.');
 				}
 				ungetc();
-				return remember(Token.DOT);
+				return Token.DOT;
 
 			case	'/':
 				c = getc();
 				if (c == '=')
-					return remember(Token.SLASH_EQ);
+					return Token.SLASH_EQ;
 				else if (c == '/') {
 					for (;;) {
 						c = getc();
@@ -521,7 +517,7 @@ class Scanner {
 							// the context of the error.
 							startValue('/');
 							addCharacter('*');
-							return remember(Token.ERROR);
+							return Token.ERROR;
 						}
 						if (c == '/') {
 							c = getc();
@@ -543,7 +539,7 @@ class Scanner {
 					continue;
 				}
 				ungetc();
-				return remember(Token.SLASH);
+				return Token.SLASH;
 
 			case	'0':
 			case	'1':
@@ -555,58 +551,58 @@ class Scanner {
 			case	'7':
 			case	'8':
 			case	'9':
-				return remember(number(c));
+				return number(c);
 
 			case	'_':
-				return remember(identifier(c));
+				return identifier(c);
 				
 			case	':':
-				return remember(Token.COLON);
+				return Token.COLON;
 
 			case	';':
-				return remember(Token.SEMI_COLON);
+				return Token.SEMI_COLON;
 
 			case	'<':
 				c = getc();
 				if (c == '=')
-					return remember(Token.LA_EQ);
+					return Token.LA_EQ;
 				else if (c == '<') {
 					c = getc();
 					if (c == '=')
-						return remember(Token.LA_LA_EQ);
+						return Token.LA_LA_EQ;
 					ungetc();
-					return remember(Token.LA_LA);
+					return Token.LA_LA;
 				} else if (c == '>') {
 					c = getc();
 					if (c == '=')
-						return remember(Token.LA_RA_EQ);
+						return Token.LA_RA_EQ;
 					ungetc();
-					return remember(Token.LA_RA);
+					return Token.LA_RA;
 				}
 				ungetc();
-				return remember(Token.LEFT_ANGLE);
+				return Token.LEFT_ANGLE;
 
 			case	'=':
 				c = getc();
 				if (c == '=') {
 					c = getc();
 					if (c == '=')
-						return remember(Token.EQ_EQ_EQ);
+						return Token.EQ_EQ_EQ;
 					ungetc();
-					return remember(Token.EQ_EQ);
+					return Token.EQ_EQ;
 				}
 				ungetc();
-				return remember(Token.EQUALS);
+				return Token.EQUALS;
 
 			case	'>':
 				c = getc();
 				if (c == '=')
-					return remember(Token.RA_EQ);
+					return Token.RA_EQ;
 				ungetc();
-				return remember(Token.RIGHT_ANGLE);
+				return Token.RIGHT_ANGLE;
 
 			case	'?':
-				return remember(Token.QUESTION_MARK);
+				return Token.QUESTION_MARK;
 
 			case	'@':
 				_value = null;
@@ -621,47 +617,49 @@ class Scanner {
 						break;
 					}
 				}
-				return remember(Token.ANNOTATION);
+				return Token.ANNOTATION;
 
 			case	'[':
-				return remember(Token.LEFT_SQUARE);
+				return Token.LEFT_SQUARE;
 
 			case	'\\':
-				return remember(Token.ERROR, c);
+				startValue(c);
+				return Token.ERROR;
 
 			case	']':
-				return remember(Token.RIGHT_SQUARE);
+				return Token.RIGHT_SQUARE;
 
 			case	'^':
 				c = getc();
 				if (c == '=')
-					return remember(Token.CARET_EQ);
+					return Token.CARET_EQ;
 				ungetc();
-				return remember(Token.CARET);
+				return Token.CARET;
 
 			case	'`':
-				return remember(consume(Token.IDENTIFIER, byte(c)));
+				return consume(Token.IDENTIFIER, byte(c));
 
 			case	'{':
-				return remember(Token.LEFT_CURLY);
+				return Token.LEFT_CURLY;
 
 			case	'|':
 				c = getc();
 				if (c == '=')
-					return remember(Token.VERTICAL_BAR_EQ);
+					return Token.VERTICAL_BAR_EQ;
 				else if (c == '|')
-					return remember(Token.VBAR_VBAR);
+					return Token.VBAR_VBAR;
 				ungetc();
-				return remember(Token.VERTICAL_BAR);
+				return Token.VERTICAL_BAR;
 
 			case	'}':
-				return remember(Token.RIGHT_CURLY);
+				return Token.RIGHT_CURLY;
 
 			case	'~':
-				return remember(Token.TILDE);
+				return Token.TILDE;
 
 			case	0x7f:
-				return remember(Token.ERROR, c);
+				startValue(c);
+				return Token.ERROR;
 
 				// Alphabetic characters and all Unicode characters above 127
 				// are valid identifier characters.
@@ -670,27 +668,13 @@ class Scanner {
 				int cpc = codePointClass(c);
 				if (cpc == CPC_WHITE_SPACE)
 					continue;
-				else if (cpc == CPC_ERROR)
-					return remember(Token.ERROR, c);
-				else if (cpc == CPC_LETTER)
-					return remember(identifier(c));
+				else if (cpc == CPC_ERROR) {
+					startValue(c);
+					return Token.ERROR;
+				} else if (cpc == CPC_LETTER)
+					return identifier(c);
 				else
-					return remember(number(c));
-/*
-				switch (cpc) {
-				case	CPC_WHITE_SPACE:
-					break;
-					
-				case	CPC_ERROR:
-					return remember(Token.ERROR, c);
-					
-				case	CPC_LETTER:
-					return remember(identifier(c));
-
-				default:
-					return remember(Token.ERROR, c);
-				}
-				*/
+					return number(c);
 			}
 		}
 	}
@@ -811,24 +795,31 @@ class Scanner {
 		for (;;) {
 			int c = getc();
 
-			if (c == -1) {
+			if (c == delimiter)
+				return t;
+			switch (c) {
+			case -1:
 				if (t != Token.ERROR)
 					_value.insert(0, delimiter);
 				return Token.ERROR;
-			}
-			if (c == delimiter)
-				return t;
-			if (c == '\n') {
+				
+			case '\r':
+				break;
+				
+			case '\n':
 				ungetc();
 				if (t != Token.ERROR)
 					_value.insert(0, delimiter);
 				return Token.ERROR;
-			}
-			if (c == '\\') {
-				addCharacter('\\');			
+				
+			case	'\\':
 				unsigned value = 0;
 
 				c = getc();
+
+				while (c == '\r') 
+					c = getc();
+
 				switch (c) {
 				case	-1:
 					if (t != Token.ERROR)
@@ -846,11 +837,13 @@ class Scanner {
 				case	'"':
 				case	'\'':
 				case	'`':
+					addCharacter('\\');			
 					addCharacter(c);
 					break;
 
 				case	'u':
 				case	'U':
+					addCharacter('\\');			
 					addCharacter(c);
 					for (int i = 0; i < 8; i++) {
 						c = getc();
@@ -874,6 +867,7 @@ class Scanner {
 
 				case	'x':
 				case	'X':
+					addCharacter('\\');			
 					addCharacter(c);
 					for (int i = 0; i < 2; i++) {
 						c = getc();
@@ -903,6 +897,7 @@ class Scanner {
 				case	'5':
 				case	'6':
 				case	'7':
+					addCharacter('\\');			
 					for (int i = 0; i < 3; i++) {
 						if (c >= '0' && c <= '7') {
 							value = (value << 3) + unsigned(c - '0');
@@ -920,23 +915,29 @@ class Scanner {
 					break;
 
 				case	'\n':
-					ungetc();
-					if (t != Token.ERROR)
-						_value.insert(0, delimiter);
-					return Token.ERROR;
+					break;
 
 				default:
+					addCharacter('\\');			
 					addCharacter(c);
 					if (t != Token.ERROR)
 						_value.insert(0, delimiter);
 					t = Token.ERROR;
 				}
-			} else
+				break;
+				
+			default:
 				addCharacter(c);
+			}
 		}
 	}
 
-	public abstract void seek(Location location);
+	public void seek(Location location) {
+		_pushback = Token.EMPTY;
+		_lastByte = -1;
+		_lastChar = 0;
+		_cursor = location.offset;
+	}
 
 	public void pushBack(Token t) {
 		_pushback = t;
@@ -947,19 +948,13 @@ class Scanner {
 		return result;
 	}
 	
-/*
-	Token last() { return _last; }
-*/
 	public Location location() { 
 		return _location; 
 	}
 
 	public int lineNumber(Location location) {
-		if (_last == Token.END_OF_STREAM) {
-			int x = _lines.binarySearchClosestGreater(location);
-			return _baseLineNumber + x;
-		} else
-			return -1;
+		int x = _lines.binarySearchClosestGreater(location);
+		return _baseLineNumber + x;
 	}
 	/*
 	 * Get the next Unicode code point from the input.
@@ -970,20 +965,25 @@ class Scanner {
 				return -1;		// EOF just keep returning EOF
 			int result = -1 - _lastChar;
 			_lastChar = result;	// ungetc was called, undo it's effects and return the last char again
+			_cursor = _nextCursor;
 			return result;
 		}
+		_lastCursor = _cursor;
 		int x;
 		if (_lastByte >= 0) {
 			x = _lastByte;
 			_lastByte = -1;
 		} else
 			x = getByte();
+		_cursor++;
 		if (x < 0x80) {
 			_lastChar = x;
+			_nextCursor = _cursor;
 			return x;
 		}
 		if ((x & 0xc0) == 0x80 || x == 0xff) {
 			_lastChar = int.MAX_VALUE;			// ungetc will turn this into int.MIN_VALUE
+			_nextCursor = _cursor;
 			_errorByte = byte(x);
 			return int.MAX_VALUE;
 		}
@@ -1005,14 +1005,24 @@ class Scanner {
 			value = getMoreBytes(value, 5);
 		}
 		_lastChar = value;
+		_nextCursor = _cursor;
 		return value;
+	}
+	/*
+	 * This function returns the current 'cursor' location of the
+	 * Scanner.  This value is the offset of the next byte to be read
+	 */
+	protected Location cursor() {
+		return Location(_cursor);
 	}
 
 	int getMoreBytes(int valueSoFar, int extraBytes) {
 		for (int i = 0; i < extraBytes; i++) {
 			int x = getByte();
+			_cursor++;
 			if ((x & ~0x3f) != 0x80) {
 				_lastByte = x;
+				_cursor--;
 				_errorByte = 0xff;
 				return int.MAX_VALUE;
 			}
@@ -1023,8 +1033,10 @@ class Scanner {
 	}
 	
 	void ungetc() {
-		if (_lastChar >= 0)
+		if (_lastChar >= 0) {
 			_lastChar = -1 - _lastChar;
+			_cursor = _lastCursor;
+		}
 	}
 
 /*
@@ -1053,21 +1065,6 @@ class Scanner {
 	 * At end of stream, getByte will continue to return -1 indefinitely.
 	 */
 	protected abstract int getByte();
-	/*
-	 * This function returns the current 'cursor' location of the
-	 * Scanner.  This value is the offset of the next byte to be read
-	 */
-	protected abstract Location cursor();
-
-	private Token remember(Token t) { 
-		return _last = t; 
-	}
-
-	private Token remember(Token t, int c) {
-		startValue(c);
-		_last = t;
-		return t;
-	}
 
 	private void startValue(int c) {
 		_value = null;

@@ -15,8 +15,8 @@
  */
 namespace parasol:random;
 
-import parasol:math.log;
-import parasol:math.sqrt;
+//import parasol:math.log;
+//import parasol:math.sqrt;
 
 class Random {
 	private class RandomState {
@@ -39,12 +39,12 @@ class Random {
 		set(seed);
 	}
 	/*
-	 *	This constructor supplies an unsigned integer value as the
+	 *	This constructor supplies an integer value as the
 	 *	seed data for the generator.  As above, if this is not enough
 	 *	data to completely fill in the internal state of the generator,
 	 *	the data is generated.
 	 */
-	public Random(unsigned seed) {
+	public Random(int seed) {
 		set(seed);
 	}
 	/*
@@ -82,8 +82,8 @@ class Random {
 	private unsigned nextCongruential(unsigned jcong) {
 		return 69069 * jcong + 1234567;
 	}
-	
-	void set(unsigned seed) {
+
+	void set(int seed) {
 		string s(pointer<byte>(&seed), seed.bytes);
 		set(s);
 	}
@@ -98,6 +98,7 @@ class Random {
 		} else {
 		}
 	*/
+		set(0);
 	}
 
 	/*
@@ -109,11 +110,17 @@ class Random {
 		return (_state.z << 16) + (_state.w & 0xffff);
 	}
 	/*
-	 *	Returns a uniformly distributed integer in the range from
+	 *	Returns a uniformly distributed number in the range from
 	 *  0 to 1.  Neither zero nor one can be returned.
 	 */
 	double uniform() {
-		return next() * (1 / 4294967296.0);
+		return next() / 4294967296.0;
+	}
+	/*
+	 * Returns a uniformly distributed 
+	 */
+	int uniform(int range) {
+		return int(range * uniform());
 	}
 	/*
 	 * normal
@@ -122,6 +129,7 @@ class Random {
 	 * distribution with a mean of 0 and standard
 	 * deviation of 1.
 	 */
+	/*
 	double normal()  {
 		double x1, x2, r;
 
@@ -133,6 +141,7 @@ class Random {
 		double fac = sqrt(-2 * log(r) / r);
 		return x2 * fac;
 	}
+	*/
 	/*
 	 * binomial
 	 *
@@ -140,6 +149,7 @@ class Random {
 	 * to a binomial distribution with n trials and probability of
 	 * p at each trial
 	 */
+	/*
 	int binomial(int n, double p) {
 		double mean = n * p;
 		double sdev = mean * (1 - p);
@@ -150,6 +160,7 @@ class Random {
 			x = n;
 		return x;
 	}
+	*/
 	/*
 	 * This function returns the sum on n random die rolls where
 	 * sides is the number of sides on each die.  The assumption is
