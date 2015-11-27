@@ -72,19 +72,9 @@ byte REX_R = 0x44;
 byte REX_X = 0x42;
 byte REX_B = 0x41;
 
-R[] fastArgs;
+R[] fastArgs = [ R.RCX, R.RDX, R.R8, R.R9 ];
 
-fastArgs.append(R.RCX);
-fastArgs.append(R.RDX);
-fastArgs.append(R.R8);
-fastArgs.append(R.R9);
-
-R[] floatArgs;
-
-floatArgs.append(R.XMM0);
-floatArgs.append(R.XMM1);
-floatArgs.append(R.XMM2);
-floatArgs.append(R.XMM3);
+R[] floatArgs = [ R.XMM0, R.XMM1, R.XMM2, R.XMM3 ];
 /*
  * Flags for the Node.nodeFlags field. (0x0f are reserved for non-codegen flags)
  */
