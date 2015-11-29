@@ -368,7 +368,7 @@ class vector<class E, enum I> {
 	}
 }
 */
-class map<class K, class V> {
+class map<class V, class K> {
 	private static int INITIAL_TABLE_SIZE	= 64;		// must be power of two
 	private static int REHASH_SHIFT = 3;				// rehash at ((1 << REHASH_SHIFT) - 1) / (1 << REHASH_SHIFT) keys filled
 
@@ -546,12 +546,12 @@ class map<class K, class V> {
 			return _dictionary._entries[_index].key;
 		}
 
-		iterator(ref<map<K, V>> dict) {
+		iterator(ref<map<V, K>> dict) {
 			_dictionary = dict;
 			_index = 0;
 		}
 
 		int				_index;
-		ref<map<K, V>>	_dictionary;
+		ref<map<V, K>>	_dictionary;
 	};
 }

@@ -231,8 +231,7 @@ public class Arena {
 				return _enumVector.createVectorInstance(element, index, compileContext);
 
 			case	STRING:
-				// TODO: This is a bug: index and element types are crossed for maps.
-				return _map.createVectorInstance(index, element, compileContext);
+				return _map.createVectorInstance(element, index, compileContext);
 			
 			case	SIGNED_32:
 				break;

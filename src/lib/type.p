@@ -742,16 +742,6 @@ class TemplateInstanceType extends ClassType {
 		return ref<Type>(_arguments[1]);
 	}
 
-	// Map sub-types
-
-	public ref<Type> keyType(ref<CompileContext> compileContext) {
-		return ref<Type>(_arguments[0]);
-	}
-
-	public ref<Type> valueType(ref<CompileContext> compileContext) {
-		return ref<Type>(_arguments[1]);
-	}
-
 	public boolean isPointer(ref<CompileContext> compileContext) {
 		if (!_templateType.extendsFormally(compileContext.arena().builtInType(TypeFamily.ADDRESS), compileContext))
 			return false;
@@ -1066,16 +1056,6 @@ class Type {
 	}
 	
 	public ref<Type> indexType(ref<CompileContext> compileContext) {
-		assert(false);
-		return null;
-	}
-
-	public ref<Type> keyType(ref<CompileContext> compileContext) {
-		assert(false);
-		return null;
-	}
-
-	public ref<Type> valueType(ref<CompileContext> compileContext) {
 		assert(false);
 		return null;
 	}

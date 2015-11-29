@@ -1296,20 +1296,14 @@ class Binary extends Node {
 			} else if (_left.type.isPointer(compileContext)) {
 				_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_64, false, compileContext);
 				type = _left.type.indirectType(compileContext);
-			} else if (_left.type.isVector(compileContext)) {
+			} else if (_left.type.isVector(compileContext) || 
+					   _left.type.isMap(compileContext)) {
 				_right = _right.coerce(compileContext.tree(), _left.type.indexType(compileContext), false, compileContext);
 				if (_right.deferAnalysis()) {
 					type = _right.type;
 					return;
 				}
 				type = _left.type.elementType(compileContext);
-			} else if (_left.type.isMap(compileContext)) {
-				_right = _right.coerce(compileContext.tree(), _left.type.keyType(compileContext), false, compileContext);
-				if (_right.deferAnalysis()) {
-					type = _right.type;
-					return;
-				}
-				type = _left.type.valueType(compileContext);
 			} else if (_left.type.family() == TypeFamily.STRING) {
 				_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_32, false, compileContext);
 				type = compileContext.arena().builtInType(TypeFamily.UNSIGNED_8);

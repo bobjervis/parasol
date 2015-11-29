@@ -27,7 +27,7 @@ print("After 2\n");
 assert(testMap.get("abc") == "xyz");
 print("Done!\n");
 
-map<string, int> intMap;
+map<int, string> intMap;
 
 intMap.set("abc", 1);
 
