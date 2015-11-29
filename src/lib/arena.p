@@ -225,15 +225,23 @@ public class Arena {
 	public ref<Type> buildVectorType(ref<Type> element, ref<Type> index, ref<CompileContext> compileContext) {
 		if (index == null)
 			index = _builtInType[TypeFamily.SIGNED_32];
+		else {
+			switch (index.family()) {
+			case	ENUM:
+				return _enumVector.createVectorInstance(element, index, compileContext);
+
+			case	STRING:
+				// TODO: This is a bug: index and element types are crossed for maps.
+				return _map.createVectorInstance(index, element, compileContext);
+			
+			case	SIGNED_32:
+				break;
+			
+			default:
+				return null;
+			}
+		}
 		return _vector.createVectorInstance(element, index, compileContext);
-	}
-
-	public ref<Type> buildEnumVectorType(ref<Type> element, ref<Type> index, ref<CompileContext> compileContext) {
-		return _enumVector.createVectorInstance(element, index, compileContext);
-	}
-
-	public ref<Type> buildMapType(ref<Type> key, ref<Type> value, ref<CompileContext> compileContext) {
-		return _map.createVectorInstance(key, value, compileContext);
 	}
 
 	ref<Type> createRef(ref<Type> target, ref<CompileContext> compileContext) {

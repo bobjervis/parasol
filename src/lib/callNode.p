@@ -7,7 +7,7 @@
 
        http://www.apache.org/licenses/LICENSE-2.0
 
-   Unless required by applicable law or agreed to in writing, software
+   Unless required by applicable law or agreed to in writing, softwareL404
    distributed under the License is distributed on an "AS IS" BASIS,
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
@@ -23,15 +23,6 @@ enum CallCategory {
 	METHOD_CALL,
 	VIRTUAL_METHOD_CALL
 }
-
-private string[CallCategory] callCategories;
-
-callCategories.append("ERROR");
-callCategories.append("COERCION");
-callCategories.append("CONSTRUCTOR");
-callCategories.append("FUNCTION_CALL");
-callCategories.append("METHOD_CALL");
-callCategories.append("VIRTUAL_METHOD_CALL");
 
 class Call extends ParameterBag {
 	// Populated at parse time:
@@ -410,7 +401,7 @@ class Call extends ParameterBag {
 			args++;
 		for (ref<NodeList> nl = _stackArguments; nl != null; nl = nl.next)
 			stackArgs++;
-		printf(" %s reg args %d stack args %d %s\n", callCategories[_category], args, stackArgs, _folded ? "folded" : "");
+		printf(" %s reg args %d stack args %d %s\n", string(_category), args, stackArgs, _folded ? "folded" : "");
 		if (_overload != null)
 			_overload.print(indent + 2 * INDENT, false);
 		if (_stackArguments != null) {
@@ -426,9 +417,15 @@ class Call extends ParameterBag {
 		switch (op()) {
 		case	ARRAY_AGGREGATE:
 			if (assignArguments(LabelStatus.OPTIONAL_LABELS, compileContext)) {
+				ref<Type> indexType = null;
+				boolean indexTypeValid = true;
 				ref<Type> scalarType = null;
 				if (_arguments != null) {
 					scalarType = _arguments.node.type;
+					if (_arguments.node.op() == Operator.LABEL) {
+						indexType = ref<Binary>(_arguments.node).left().type;
+						indexTypeValid = indexType != null;
+					}
 					for (ref<NodeList> nl = _arguments; nl.next != null; nl = nl.next) {
 						scalarType = findCommonType(scalarType, nl.next.node.type, compileContext);
 						if (scalarType == null) {
@@ -436,8 +433,17 @@ class Call extends ParameterBag {
 							nl.next.node.type = compileContext.errorType();
 							break;
 						}
+						if (nl.next.node.op() == Operator.LABEL) {
+							ref<Binary> b = ref<Binary>(nl.next.node);
+							indexType = findCommonType(indexType, b.left().type, compileContext);
+							if (indexType == null) {
+								indexTypeValid = false;
+								b.left().add(MessageId.TYPE_MISMATCH, compileContext.pool());
+								b.left().type = compileContext.errorType();
+							}
+						}
 					}
-					if (scalarType == null) {
+					if (scalarType == null || !indexTypeValid) {
 						type = compileContext.errorType();
 						break;
 					}
@@ -445,9 +451,11 @@ class Call extends ParameterBag {
 						if (scalarType != nl.node.type)
 							nl.node = nl.node.coerce(compileContext.tree(), scalarType, false, compileContext);
 				}
-				if (scalarType != null)
-					type = compileContext.arena().buildVectorType(scalarType, null, compileContext);
-				else
+				if (scalarType != null) {
+					if (indexType == null)
+						indexType = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+					type = compileContext.arena().buildVectorType(scalarType, indexType, compileContext);
+				} else // This is the class-less empty array initializer [ ]
 					type = compileContext.arena().builtInType(TypeFamily.ARRAY_AGGREGATE);
 			} else
 				type = compileContext.errorType();
@@ -703,6 +711,9 @@ class Call extends ParameterBag {
 	public boolean canCoerce(ref<Type> newType, boolean explicitCast, ref<CompileContext> compileContext) {
 		switch (op()) {
 		case	ARRAY_AGGREGATE:
+			printf("\nnewType: ");
+			newType.print();
+			printf("\n");
 			print(0);
 			assert(false);
 			break;
@@ -958,7 +969,7 @@ class Function extends ParameterBag {
 		int args = 0;
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
 			args++;
-		printf(" %s %d arguments\n", categoryNames[_functionCategory], args);
+		printf(" %s %d arguments\n", string(_functionCategory), args);
 		printf("%*.*c  {Function name}\n", indent, indent, ' ');
 		if (_name != null)
 			_name.print(indent + INDENT);
@@ -1038,12 +1049,6 @@ class Function extends ParameterBag {
 		}
 	}
 }
-
-private string[Function.Category] categoryNames;
-	categoryNames.append("NORMAL");
-	categoryNames.append("CONSTRUCTOR");
-	categoryNames.append("DESTRUCTOR");
-	categoryNames.append("ABSTRACT");
 
 class ParameterBag extends Node {
 	protected ref<NodeList> _arguments;

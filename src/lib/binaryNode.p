@@ -141,6 +141,7 @@ class Binary extends Node {
 				
 			case	SUBSCRIPT:
 			case	SEQUENCE:
+			case	LABEL:
 				break;
 				
 			case	INITIALIZE:
@@ -190,6 +191,7 @@ class Binary extends Node {
 		case	LOGICAL_OR:
 		case	BIND:
 		case	DELETE:
+		case	LABEL:
 			break;
 
 		case	SEQUENCE:
@@ -1281,23 +1283,12 @@ class Binary extends Node {
 					type = compileContext.errorType();
 				} else if (_right.type.family() == TypeFamily.TYPEDEF) {
 					ref<Type> keyType = _right.unwrapTypedef(compileContext);
-					ref<Type> vectorType;
-					ref<Type> mapType;
-					switch (keyType.family()) {
-					case	ENUM:
-						vectorType = compileContext.arena().buildEnumVectorType(_left.unwrapTypedef(compileContext), keyType, compileContext);
-						type = compileContext.makeTypedef(vectorType);
-						break;
-
-					case	STRING:
-						mapType = compileContext.arena().buildMapType(keyType, _left.unwrapTypedef(compileContext), compileContext);
-						type = compileContext.makeTypedef(mapType);
-						break;
-
-					default:
+					ref<Type> vectorType = compileContext.arena().buildVectorType(_left.unwrapTypedef(compileContext), keyType, compileContext);
+					if (vectorType == null) { // Not an allowed combination.
 						_right.add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
 						type = compileContext.errorType();
-					}
+					}else
+						type = compileContext.makeTypedef(vectorType);
 				} else {
 					add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
 					type = compileContext.errorType();
