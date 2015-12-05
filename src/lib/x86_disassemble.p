@@ -1389,7 +1389,7 @@ class Disassembler {
 	ref<Scope>, int nextVtable(int index) {
 		while (index < _arena.scopes().length()) {
 			ref<Scope> scope = _arena.scopes()[index];
-			if (scope.hasVtable())
+			if (scope.hasVtable(null))
 				return scope, index;
 			index++;
 		}

@@ -76,6 +76,14 @@ public class Arena {
 	~Arena() {
 	}
 	/*
+	 * setRootFolder
+	 * 
+	 * Allows one to build alternate sources when changing core source files.
+	 */
+	public void setRootFolder(string rootFolder) {
+		_rootFolder = rootFolder;
+	}
+	/*
 	 * setImportPath
 	 * 
 	 * If the importPath string is null, clear the import path entirely.

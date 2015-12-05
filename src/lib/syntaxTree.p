@@ -338,9 +338,9 @@ class SyntaxTree {
 		return new Call(op, target, arguments, location);
 	}
 
-	public ref<Call> newCall(ref<OverloadInstance> symbol, CallCategory category, ref<Node> target, ref<NodeList> arguments, Location location) {
+	public ref<Call> newCall(ref<OverloadInstance> symbol, CallCategory category, ref<Node> target, ref<NodeList> arguments, Location location, ref<CompileContext> compileContext) {
 		//void *block = _pool.alloc(sizeof (Call));
-		return new Call(symbol, category, target, arguments, location);
+		return new Call(symbol, category, target, arguments, location, compileContext);
 	}
 
 	public ref<EllipsisArguments> newEllipsisArguments(ref<NodeList> arguments, Location location) {
@@ -2238,7 +2238,7 @@ class Node {
 		ref<Selection> method = tree.newSelection(object, oi, location());
 		method.type = oi.type();
 		ref<NodeList> args = tree.newNodeList(arguments);
-		ref<Call> call = tree.newCall(oi, null, method, args, location());
+		ref<Call> call = tree.newCall(oi, null, method, args, location(), compileContext);
 		call.type = type;
 		return call;
 	}

@@ -83,6 +83,9 @@ class ParasolCommand extends commandLine.Command {
 		targetArgument = stringArgument(0, "target",
 					"Selects the target runtime for this execution. " +
 					"Default: " + pxi.sectionTypeName(SectionType(runtime.supportedTarget(0))));
+		rootArgument = stringArgument(0, "root",
+					"Designates a specific directory to treat as the 'root' of the install tree. " +
+					"The default is the parent directory of the runtime binary program.");
 		helpArgument('?', "help",
 					"Displays this help.");
 	}
@@ -94,6 +97,7 @@ class ParasolCommand extends commandLine.Command {
 	ref<commandLine.Argument<string>> explicitArgument;
 	ref<commandLine.Argument<string>> pxiArgument;
 	ref<commandLine.Argument<string>> targetArgument;
+	ref<commandLine.Argument<string>> rootArgument;
 	ref<commandLine.Argument<boolean>> logImportsArgument;
 	ref<commandLine.Argument<boolean>> symbolTableArgument;
 }
@@ -223,6 +227,8 @@ int compileCommand() {
 
 boolean configureArena(ref<Arena> arena) {
 	arena.logImports = parasolCommand.logImportsArgument.value;
+	if (parasolCommand.rootArgument.set())
+		arena.setRootFolder(parasolCommand.rootArgument.value);
 	if (parasolCommand.explicitArgument.set())
 		arena.setImportPath(parasolCommand.explicitArgument.value);
 	else if (parasolCommand.importPathArgument.set())

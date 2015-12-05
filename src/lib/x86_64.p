@@ -658,7 +658,7 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 	
 	private void generateConstructorPreamble(ref<ParameterScope> scope, ref<CompileContext> compileContext) {
-		if (scope.enclosing().hasVtable()) {
+		if (scope.enclosing().hasVtable(compileContext)) {
 //			instStoreVTable(R.RSI, R.RAX, ref<ClassScope>(scope.enclosing()));
 			if (scope.enclosing().variableStorage > address.bytes) {
 				inst(X86.LEA, R.RCX, R.RSI, address.bytes);
@@ -2005,7 +2005,7 @@ public class X86_64 extends X86_64AssignTemps {
 				generate(expression.operand(), compileContext);
 				if (expression.operand().op() == Operator.EMPTY)
 					instLoadType(R(int(expression.register)), expression.operand().type);
-				else if (expression.operand().type.indirectType(compileContext).hasVtable()) {
+				else if (expression.operand().type.indirectType(compileContext).hasVtable(compileContext)) {
 					inst(X86.MOV, expression, expression.operand(), compileContext);
 					inst(X86.MOV, R(expression.register), R(expression.register), 0);
 					inst(X86.MOV, R(expression.register), R(expression.register), 0);
@@ -2429,7 +2429,7 @@ public class X86_64 extends X86_64AssignTemps {
 				ref<ParameterScope> constructor = node.type.scope().defaultConstructor();
 				if (constructor != null) {
 					inst(X86.LEA, R.RCX, node, compileContext);
-					if (node.type.hasVtable())
+					if (node.type.hasVtable(compileContext))
 						storeVtable(node.type, compileContext);
 //					printf("Found a constructor!\n");
 //					node.print(4);
@@ -2444,7 +2444,7 @@ public class X86_64 extends X86_64AssignTemps {
 					sym.storageClass() == StorageClass.AUTO &&
 					sym.type() != null &&
 					sym.type().requiresAutoStorage()) {
-					if (sym.type().hasVtable()) {
+					if (sym.type().hasVtable(compileContext)) {
 						assert(false);
 						/*
 						target.byteCode(ByteCodes.AUTO);
@@ -2469,7 +2469,7 @@ public class X86_64 extends X86_64AssignTemps {
 					}
 					break;
 				}
-				if (node.type.hasVtable()) {
+				if (node.type.hasVtable(compileContext)) {
 					inst(X86.LEA, R.RCX, node, compileContext);
 					storeVtable(node.type, compileContext);
 				}
@@ -2634,7 +2634,7 @@ public class X86_64 extends X86_64AssignTemps {
 		
 		switch (call.category()) {
 		case	CONSTRUCTOR:
-			if (call.type.hasVtable() && (call.target() == null || call.target().op() != Operator.SUPER))
+			if (call.type.hasVtable(compileContext) && (call.target() == null || call.target().op() != Operator.SUPER))
 				storeVtable(call.type, compileContext);
 			if (!instCall(ref<OverloadInstance>(overload).parameterScope(), compileContext)) {
 				call.print(0);

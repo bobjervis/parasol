@@ -358,22 +358,15 @@ class X86_64Encoder extends Target {
 					p[instance.offset] = instance.offset;
 				}
 			} else if (sym.class == PlainSymbol) {
-				if (sym.type().hasVtable()) {
-//					sym.print(0, false);
-//					assert(false);
-				}
 				ref<PlainSymbol> ps = ref<PlainSymbol>(sym);
 				if (ps.initializer() != null) {
 					switch (ps.initializer().op()) {
-					case	INTEGER:{
+					case	INTEGER:
 						ref<Constant> c = ref<Constant>(ps.initializer());
 						long x = c.intValue();
 						address p = &_code[sym.offset];
 						C.memcpy(p, &x, sym.type().size());
 						break;
-					}
-				//	default:
-				//		target.unfinished(initializer, "initialize storage");
 					}
 				}
 			}

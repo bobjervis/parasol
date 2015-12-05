@@ -322,7 +322,7 @@ class Binary extends Node {
 					ref<Node> adr = tree.newUnary(Operator.ADDRESS, _left, location());
 					adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 					ref<NodeList> args = tree.newNodeList(_right);
-					ref<Call> constructor = tree.newCall(oi, CallCategory.CONSTRUCTOR, adr, args, location());
+					ref<Call> constructor = tree.newCall(oi, CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
 					constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
 					return constructor.fold(tree, true, compileContext);
 				} else {
@@ -431,7 +431,8 @@ class Binary extends Node {
 					return u;
 				}
 			} else if (_left.type.isVector(compileContext) ||
-				_left.type.isMap(compileContext)) {
+					   _left.type.isMap(compileContext) ||
+					   _left.type.family() == TypeFamily.SHAPE) {
 				CompileString name("get");
 				
 				ref<Symbol> sym = _left.type.lookup(&name, compileContext);
@@ -444,7 +445,7 @@ class Binary extends Node {
 				ref<Selection> method = tree.newSelection(_left, oi, location());
 				method.type = oi.type();
 				ref<NodeList> args = tree.newNodeList(_right);
-				ref<Call> call = tree.newCall(oi, null, method, args, location());
+				ref<Call> call = tree.newCall(oi, null, method, args, location(), compileContext);
 				call.type = type;
 				return call.fold(tree, false, compileContext);
 /*
@@ -562,7 +563,7 @@ class Binary extends Node {
 					ref<Selection> method = tree.newSelection(_left, oi, _left.location());
 					method.type = oi.type();
 					ref<NodeList> args = tree.newNodeList(_right);
-					ref<Call> call = tree.newCall(oi, null, method, args, location());
+					ref<Call> call = tree.newCall(oi, null, method, args, location(), compileContext);
 					call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 					return call.fold(tree, voidContext, compileContext);
 				} else {
@@ -582,7 +583,7 @@ class Binary extends Node {
 					ref<Selection> method = tree.newSelection(load, oi, _left.location());
 					method.type = oi.type();
 					ref<NodeList> args = tree.newNodeList(_right);
-					ref<Call> call = tree.newCall(oi, null, method, args, location());
+					ref<Call> call = tree.newCall(oi, null, method, args, location(), compileContext);
 					call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 					if (voidContext)
 						return call.fold(tree, voidContext, compileContext);
@@ -695,7 +696,8 @@ class Binary extends Node {
 	private ref<Node> subscriptAssign(ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
 		ref<Binary> subscript = ref<Binary>(_left);
 		if (subscript.left().type.isVector(compileContext) ||
-			subscript.left().type.isMap(compileContext)) {
+			subscript.left().type.isMap(compileContext) ||
+			subscript.left().type.family() == TypeFamily.SHAPE) {
 			CompileString name("set");
 			
 			ref<Symbol> sym = subscript.left().type.lookup(&name, compileContext);
@@ -708,7 +710,7 @@ class Binary extends Node {
 			ref<Selection> method = tree.newSelection(subscript.left(), oi, subscript.location());
 			method.type = oi.type();
 			ref<NodeList> args = tree.newNodeList(subscript.right(), _right);
-			ref<Call> call = tree.newCall(oi, null, method, args, location());
+			ref<Call> call = tree.newCall(oi, null, method, args, location(), compileContext);
 			call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 			return call;
 		} else
@@ -730,7 +732,7 @@ class Binary extends Node {
 			ref<Selection> method = tree.newSelection(_left, oi, location());
 			method.type = oi.type();
 			ref<NodeList> args = tree.newNodeList(_right);
-			ref<Call> call = tree.newCall(oi, null, method, args, location());
+			ref<Call> call = tree.newCall(oi, null, method, args, location(), compileContext);
 			call.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 			ref<Node> indirect = tree.newUnary(Operator.INDIRECT, call, location());
 			indirect.type = type;
@@ -911,7 +913,7 @@ class Binary extends Node {
 					methods[i].assignType(compileContext);
 				s.assignMethodMaps(compileContext);
 			}
-			if (!type.isConcrete())
+			if (!type.isConcrete(compileContext))
 				_right.add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool());
 			type = compileContext.arena().createRef(type, compileContext);
 			break;
@@ -1297,7 +1299,8 @@ class Binary extends Node {
 				_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_64, false, compileContext);
 				type = _left.type.indirectType(compileContext);
 			} else if (_left.type.isVector(compileContext) || 
-					   _left.type.isMap(compileContext)) {
+					   _left.type.isMap(compileContext) ||
+					   _left.type.family() == TypeFamily.SHAPE) {
 				_right = _right.coerce(compileContext.tree(), _left.type.indexType(compileContext), false, compileContext);
 				if (_right.deferAnalysis()) {
 					type = _right.type;
@@ -1708,7 +1711,7 @@ private ref<Node>, ref<Variable> foldStringAddition(ref<Node> leftHandle, ref<Va
 			ref<OverloadInstance> constructor = addNode.type.initialConstructor();
 			assert(constructor != null);
 			ref<NodeList> args = tree.newNodeList(addNode);
-			ref<Call> call = tree.newCall(constructor, CallCategory.CONSTRUCTOR, adr, args, addNode.location());
+			ref<Call> call = tree.newCall(constructor, CallCategory.CONSTRUCTOR, adr, args, addNode.location(), compileContext);
 			call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 			return call, variable;
 		}
@@ -1738,7 +1741,7 @@ private ref<Node> appendString(ref<Variable> variable, ref<Node> value, ref<Synt
 	ref<Selection> method = tree.newSelection(r, oi, value.location());
 	method.type = oi.type();
 	ref<NodeList> args = tree.newNodeList(value);
-	ref<Call> call = tree.newCall(oi, null, method, args, value.location());
+	ref<Call> call = tree.newCall(oi, null, method, args, value.location(), compileContext);
 	call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 	return call.fold(tree, true, compileContext);
 }

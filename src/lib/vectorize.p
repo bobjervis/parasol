@@ -178,7 +178,7 @@ ref<Node> vectorize(ref<SyntaxTree> tree, ref<Node> vectorExpression, ref<Compil
 			ref<Selection> method = tree.newSelection(closure.lvalues[0], oi, vectorExpression.location());
 			method.type = oi.type();
 			ref<NodeList> args = tree.newNodeList(tree.newReference(vectorSize, false, vectorExpression.location()));
-			ref<Call> call = tree.newCall(oi, null,  method, args, vectorExpression.location());
+			ref<Call> call = tree.newCall(oi, null,  method, args, vectorExpression.location(), compileContext);
 			start = tree.newBinary(Operator.SEQUENCE, start, call, vectorExpression.location());
 		} else {
 			printf("Only 1 lvalue per expression allowed\n");
@@ -221,7 +221,7 @@ private ref<Node> rewriteVectorTree(ref<SyntaxTree> tree, ref<Node> vectorStuff,
 		ref<Selection> method = tree.newSelection(vectorStuff, oi, vectorStuff.location());
 		method.type = oi.type();
 		ref<NodeList> args = tree.newNodeList(index);
-		return tree.newCall(oi, null,  method, args, vectorStuff.location());
+		return tree.newCall(oi, null,  method, args, vectorStuff.location(), compileContext);
 	}
 	if (vectorStuff.isLvalue())
 		return vectorStuff;
@@ -243,7 +243,7 @@ private ref<Node> rewriteVectorTree(ref<SyntaxTree> tree, ref<Node> vectorStuff,
 		method.type = oi.type();
 		ref<Node> right = rewriteVectorTree(tree, b.right(), iterator, vectorSize, compileContext);
 		ref<NodeList> args = tree.newNodeList(tree.newReference(iterator, false, vectorStuff.location()), right);
-		return tree.newCall(oi, null,  method, args, vectorStuff.location());
+		return tree.newCall(oi, null,  method, args, vectorStuff.location(), compileContext);
 
 	case	NEGATE:
 	case	UNARY_PLUS:
@@ -370,7 +370,7 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 			assert(false);
 		}
 		ref<NodeList> args = tree.newNodeList(nl.node);
-		ref<Node> next = tree.newCall(oi, null,  method, args, nl.node.location());
+		ref<Node> next = tree.newCall(oi, null,  method, args, nl.node.location(), compileContext);
 		if (result == null)
 			result = next;
 		else

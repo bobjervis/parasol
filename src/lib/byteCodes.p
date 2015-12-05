@@ -984,7 +984,7 @@ class Code extends Value {
 				return mark;
 			} else if (tree.type != null) {
 				if (func.functionCategory() == Function.Category.CONSTRUCTOR) {
-					if (_scope.enclosing().hasVtable()) {
+					if (_scope.enclosing().hasVtable(compileContext)) {
 						if (_scope.enclosing().variableStorage > address.bytes) {
 							pushThis(target);
 							pushInteger(address.bytes, target);
@@ -1838,7 +1838,7 @@ class Code extends Value {
 			case	CLASS:
 				ind = t.indirectType(compileContext);
 				if (ind != null) {
-					if (ind.hasVtable()) {
+					if (ind.hasVtable(compileContext)) {
 						generate(x.operand(), target, compileContext);
 						target.byteCode(ByteCodes.LDTR);	// TypeRef value
 					} else {
@@ -2406,7 +2406,7 @@ class Code extends Value {
 				}
 				pushedThisSize = address.bytes;
 			}
-			if (isIndirectCall && overload.usesVTable()) {
+			if (isIndirectCall && overload.usesVTable(compileContext)) {
 				target.byteCode(ByteCodes.VCALL);
 				target.byteCode(overload.offset);
 				target.byteCode(-1);
@@ -2472,7 +2472,7 @@ class Code extends Value {
 			pushAddress(placement, target, compileContext);
 			constructorType = placement.type;
 		}
-		if (constructorType.hasVtable())
+		if (constructorType.hasVtable(compileContext))
 			storeVtable(constructorType, target, compileContext);
 		return tempOffset;
 	}
@@ -2563,7 +2563,7 @@ class Code extends Value {
 					if (sc.symbols().size() == 0) {
 						pushAddress(tree, target, compileContext);
 						checkStack(target);
-						if (tree.type.hasVtable())
+						if (tree.type.hasVtable(compileContext))
 							storeVtable(tree.type, target, compileContext);
 						ref<FunctionType> functionType = ref<FunctionType>(sc.definition().type);
 						ref<Value> value = target.unit().getCode(ref<ParameterScope>(functionType.scope()), target, compileContext);
@@ -2582,7 +2582,7 @@ class Code extends Value {
 					sym.storageClass() == StorageClass.AUTO &&
 					sym.type() != null &&
 					sym.type().requiresAutoStorage()) {
-					if (sym.type().hasVtable()) {
+					if (sym.type().hasVtable(compileContext)) {
 						target.byteCode(ByteCodes.AUTO);
 						target.byteCode(sym.offset);
 						storeVtable(sym.type(), target, compileContext);
@@ -3843,7 +3843,7 @@ class StaticObject extends Value {
 		ref<PlainSymbol> ps = ref<PlainSymbol>(_symbol);
 		ref<Node> initializer = ps.initializer();
 
-		if (_symbol.type().hasVtable()) {
+		if (_symbol.type().hasVtable(compileContext)) {
 			ref<Value> v = target.buildVtable(_symbol.type().scope(), compileContext);
 			if (v != null)
 				*ref<address>(_data) = v.machineAddress();

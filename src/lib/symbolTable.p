@@ -131,7 +131,7 @@ class ClasslikeScope extends Scope {
 			if (enclosing() != null && enclosing().storageClass() == StorageClass.TEMPLATE)
 				return;
 			int baseOffset = 0;
-			if (hasVtable())
+			if (hasVtable(compileContext))
 				baseOffset += address.bytes;
 			checkStorage(compileContext);
 		} else
@@ -143,7 +143,7 @@ class ClasslikeScope extends Scope {
 			if (enclosing() != null && enclosing().storageClass() == StorageClass.TEMPLATE)
 				return;
 			int baseOffset = 0;
-			if (hasVtable())
+			if (hasVtable(compileContext))
 				baseOffset += address.bytes;
 			assignStorage(target, baseOffset, compileContext);
 		} else
@@ -198,24 +198,24 @@ class ClasslikeScope extends Scope {
 		}
 	}
 
-	public boolean isConcrete() {
-		assert(_methodsBuilt);
+	public boolean isConcrete(ref<CompileContext> compileContext) {
+		assignMethodMaps(compileContext);
 		for (int i = 0; i < _methods.length(); i++)
-			if (!_methods[i].isConcrete()) {
+			if (!_methods[i].isConcrete(compileContext)) {
 				return false;
 			}
 		return true;
 	}
 
-	public boolean hasVtable() {
+	public boolean hasVtable(ref<CompileContext> compileContext) {
 		if (vtable != null)
 			return true;
 		ref<Type> base = getSuper();
 		if (base != null &&
-			base.hasVtable())
+			base.hasVtable(compileContext))
 			return true;
 		for (int i = 0; i < _methods.length(); i++)
-			if (_methods[i].overridden() || !_methods[i].isConcrete())
+			if (_methods[i].overridden() || !_methods[i].isConcrete(compileContext))
 				return true;
 		return false;
 	}
@@ -818,11 +818,11 @@ class Scope {
 		return f.name().symbol().storageClass() == StorageClass.STATIC;
 	}
 
-	public boolean isConcrete() {
+	public boolean isConcrete(ref<CompileContext> compileContext) {
 		return true;
 	}
 
-	public boolean hasVtable() {
+	public boolean hasVtable(ref<CompileContext> compileContext) {
 		return false;
 	}
 
@@ -994,7 +994,7 @@ class Scope {
 			case	STATIC:
 			case	AUTO:
 			case	MEMBER:
-				if (!type.isConcrete())
+				if (!type.isConcrete(compileContext))
 					symbol.definition().add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool());
 				break;
 
@@ -1495,7 +1495,7 @@ class OverloadInstance extends Symbol {
 		_overridden = true;
 	}
 
-	public boolean isConcrete() {
+	public boolean isConcrete(ref<CompileContext> compileContext) {
 		if (_type == null)
 			return true;
 		if (_type.family() != TypeFamily.FUNCTION)
@@ -1606,7 +1606,7 @@ class Symbol {
 		return 0;
 	}
 
-	boolean usesVTable() {
+	boolean usesVTable(ref<CompileContext> compileContext) {
 		if (_enclosing.class != ClassScope)
 			return false;
 		if (_definition.class == Function) {
@@ -1616,7 +1616,7 @@ class Symbol {
 				return false;
 		}
 		ref<ClassScope> s = ref<ClassScope>(_enclosing);
-		return s.classType.hasVtable();
+		return s.classType.hasVtable(compileContext);
 	}
 
 	public TypeFamily effectiveFamily() {

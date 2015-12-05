@@ -340,12 +340,12 @@ class ClassType extends Type {
 			return false;
 	}
 
-	public boolean isConcrete() {
-		return _scope.isConcrete();
+	public boolean isConcrete(ref<CompileContext> compileContext) {
+		return _scope.isConcrete(compileContext);
 	}
 
-	public boolean hasVtable() {
-		return _scope.hasVtable();
+	public boolean hasVtable(ref<CompileContext> compileContext) {
+		return _scope.hasVtable(compileContext);
 	}
 
 	public ref<Class> definition() {
@@ -1115,7 +1115,7 @@ class Type {
 		return false;
 	}
 
-	public boolean hasVtable() {
+	public boolean hasVtable(ref<CompileContext> compileContext) {
 		return false;
 	}
 
@@ -1204,7 +1204,7 @@ class Type {
 		return int(_family) < int(TypeFamily.BUILTIN_TYPES);
 	}
 
-	public boolean isConcrete() {
+	public boolean isConcrete(ref<CompileContext> compileContext) {
 		return true;
 	}
 

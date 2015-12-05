@@ -232,7 +232,7 @@ class Unary extends Node {
 							ref<Reference> r = tree.newReference(temp, true, location());
 							ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
 							adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
-							ref<Call> constructor = tree.newCall(oi, CallCategory.CONSTRUCTOR, adr, args, location());
+							ref<Call> constructor = tree.newCall(oi, CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
 							constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
 							if (voidContext)
 								return constructor.fold(tree, true, compileContext);
@@ -271,7 +271,7 @@ class Unary extends Node {
 						ref<Reference> r = tree.newReference(temp, true, location());
 						ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
 						adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
-						ref<Call> constructor = tree.newCall(oi, CallCategory.CONSTRUCTOR, adr, args, location());
+						ref<Call> constructor = tree.newCall(oi, CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
 						constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
 						if (voidContext)
 							return constructor.fold(tree, true, compileContext);
@@ -299,7 +299,7 @@ class Unary extends Node {
 					ref<Selection> method = tree.newSelection(b.left(), oi, location());
 					method.type = oi.type();
 					ref<NodeList> args = tree.newNodeList(b.right());
-					ref<Call> call = tree.newCall(oi, null,  method, args, location());
+					ref<Call> call = tree.newCall(oi, null,  method, args, location(), compileContext);
 					call.type = type;
 					return call.fold(tree, voidContext, compileContext);
 /*

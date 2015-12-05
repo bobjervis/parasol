@@ -368,8 +368,11 @@ class vector<class E, enum I> {
 	}
 }
 */
+//@Shape
 class map<class V, class K> {
+	@Constant
 	private static int INITIAL_TABLE_SIZE	= 64;		// must be power of two
+	@Constant
 	private static int REHASH_SHIFT = 3;				// rehash at ((1 << REHASH_SHIFT) - 1) / (1 << REHASH_SHIFT) keys filled
 
 	private pointer<Entry>	_entries;

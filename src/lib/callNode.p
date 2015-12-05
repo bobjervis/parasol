@@ -49,7 +49,7 @@ class Call extends ParameterBag {
 		_category = CallCategory.ERROR;
 	}
 	
-	Call(ref<OverloadInstance> overload, CallCategory category, ref<Node> target, ref<NodeList> arguments, Location location) {
+	Call(ref<OverloadInstance> overload, CallCategory category, ref<Node> target, ref<NodeList> arguments, Location location, ref<CompileContext> compileContext) {
 		super(Operator.CALL, arguments, location);
 		_target = target;
 		_overload = overload;
@@ -58,7 +58,7 @@ class Call extends ParameterBag {
 		else if (overload == null)
 			_category = CallCategory.ERROR;
 		else if (overload.storageClass() == StorageClass.MEMBER) {
-			if (isVirtualCall())
+			if (isVirtualCall(compileContext))
 				_category = CallCategory.VIRTUAL_METHOD_CALL;
 			else
 				_category = CallCategory.METHOD_CALL;
@@ -550,7 +550,7 @@ class Call extends ParameterBag {
 					if (_overload.class != OverloadInstance)
 						_overload = null;
 					else if (_overload.storageClass() == StorageClass.MEMBER) {
-						if (isVirtualCall())
+						if (isVirtualCall(compileContext))
 							_category = CallCategory.VIRTUAL_METHOD_CALL;
 						else
 							_category = CallCategory.METHOD_CALL;
@@ -577,8 +577,8 @@ class Call extends ParameterBag {
 		}
 	}
 
-	private boolean isVirtualCall() {
-		if (!_overload.usesVTable())
+	private boolean isVirtualCall(ref<CompileContext> compileContext) {
+		if (!_overload.usesVTable(compileContext))
 			return false;
 		switch (_target.op()) {
 		case	DOT:
