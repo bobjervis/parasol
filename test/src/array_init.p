@@ -21,3 +21,13 @@ assert(a[0] == 1);
 assert(a[1] == 2);
 assert(a[2] == 33);
 assert(a[3] == 7);
+
+int[string] x = [ "abc": 3, "def": -17, "ghi": 44 ];
+
+assert(x.size() == 3);
+
+assert(x["def"] == -17);
+assert(x["abc"] == 3);
+assert(x["ghi"] == 44);
+assert(x["ABC"] == 0);
+

@@ -419,13 +419,15 @@ class Call extends ParameterBag {
 			if (assignArguments(LabelStatus.OPTIONAL_LABELS, compileContext)) {
 				ref<Type> indexType = null;
 				boolean indexTypeValid = true;
+				boolean anyUnlabeled = false;
 				ref<Type> scalarType = null;
 				if (_arguments != null) {
 					scalarType = _arguments.node.type;
 					if (_arguments.node.op() == Operator.LABEL) {
 						indexType = ref<Binary>(_arguments.node).left().type;
 						indexTypeValid = indexType != null;
-					}
+					} else
+						anyUnlabeled = true;
 					for (ref<NodeList> nl = _arguments; nl.next != null; nl = nl.next) {
 						scalarType = findCommonType(scalarType, nl.next.node.type, compileContext);
 						if (scalarType == null) {
@@ -433,7 +435,7 @@ class Call extends ParameterBag {
 							nl.next.node.type = compileContext.errorType();
 							break;
 						}
-						if (nl.next.node.op() == Operator.LABEL) {
+						if (indexType != null && nl.next.node.op() == Operator.LABEL) {
 							ref<Binary> b = ref<Binary>(nl.next.node);
 							indexType = findCommonType(indexType, b.left().type, compileContext);
 							if (indexType == null) {
@@ -441,11 +443,28 @@ class Call extends ParameterBag {
 								b.left().add(MessageId.TYPE_MISMATCH, compileContext.pool());
 								b.left().type = compileContext.errorType();
 							}
-						}
+						} else
+							anyUnlabeled = true;
 					}
 					if (scalarType == null || !indexTypeValid) {
 						type = compileContext.errorType();
 						break;
+					}
+					if (indexType != null) {
+						boolean anyFailed = false;
+						if (!indexType.isCompactIndexType()) {
+							for (ref<NodeList> nl = _arguments; nl.next != null; nl = nl.next) {
+								if (nl.node.op() != Operator.LABEL) {
+									nl.node.add(MessageId.TYPE_MISMATCH, compileContext.pool());
+									nl.node.type = compileContext.errorType();
+									anyFailed = true;
+								}
+							}
+						}
+						if (anyFailed) {
+							type = compileContext.errorType();
+							break;
+						}
 					}
 					for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
 						if (scalarType != nl.node.type)
@@ -676,7 +695,8 @@ class Call extends ParameterBag {
 			case	OPTIONAL_LABELS:		// An array aggregate
 				if (nl.node.op() == Operator.LABEL) {
 					ref<Binary> b = ref<Binary>(nl.node);
-					compileContext.assignTypes(b.left());
+					if (b.left().op() != Operator.IDENTIFIER)
+						compileContext.assignTypes(b.left());
 				}
 				break;
 				

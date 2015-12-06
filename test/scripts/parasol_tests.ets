@@ -924,8 +924,15 @@ compile() { "ref<int> x = new int;" }
 compile() { "enum a { A, B, C }; a x = a.B;" }
 
 compile() { "int[] a = [ 1, 2, 3 ];" }
-//compile() { "int[string] b = [ "a": 4, "b": 17, "c": -23, ];" }
+compile() { "int[string] b = [ \"a\": 4, \"b\": 17, \"c\": -23, ];" }
+compile() { "enum E { A, B, C } string[E] x = [ B: \"abc\", \"def\" ];" }
 //compile() { "class C { int a, b, c; } C c = { a: 3, c: 7, b: -1 };" }
+
+compile(expect: fail) { "int[string] b = [ \"a\": 4, 22: 17, \"c\": -23, ];" }
+//compile(expect: fail) { "enum E { A, B, C } string[E] x = [ B: \"abc\", \"def\", \"ghi\" ];" }
+compile(expect: fail) { "int[string] b = [ \"a\": 4, 17, \"c\": -23, ];" }
+compile(expect: fail) { "class C { int a, b, c; } C c = { 3, c: 7, b: -1 };" }
+compile(expect: fail) { "class C { int a, b, c; } C c = { \"wrong\": 3, c: 7, b: -1 };" }
 
 compile() { "class a { ~a() {} }" }
 

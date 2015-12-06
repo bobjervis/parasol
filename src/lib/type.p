@@ -1071,6 +1071,27 @@ class Type {
 	public boolean isMap(ref<CompileContext> compileContext) {
 		return false;
 	}
+	
+	boolean isCompactIndexType() {
+		switch (_family) {
+		case	UNSIGNED_8:
+		case	UNSIGNED_16:
+		case	UNSIGNED_32:
+		case	UNSIGNED_64:
+		case	SIGNED_8:
+		case	SIGNED_16:
+		case	SIGNED_32:
+		case	SIGNED_64:
+			
+		case	BOOLEAN:
+		case	ENUM:
+			return true;
+
+		default:
+			return false;
+		}
+		return false;
+	}
 
 	boolean isIntegral() {
 		switch (_family) {
