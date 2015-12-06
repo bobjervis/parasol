@@ -250,10 +250,11 @@ public string sectionTypeName(SectionType st) {
 		return "<unknown>";
 }
 
-private SectionType[string] sectionTypes;
+private SectionType[string] sectionTypes = [
+	"byteCodes": 	SectionType.BYTE_CODES,
+	"x86-64": 		SectionType.X86_64
+];
 
-sectionTypes["byteCodes"] = SectionType.BYTE_CODES;
-sectionTypes["x86-64"] = SectionType.X86_64;
 
 private class ReaderMap {
 	public SectionType sectionType;

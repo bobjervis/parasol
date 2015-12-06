@@ -728,7 +728,7 @@ class Spill {
 	}
 	
 	public void print() {
-		printf("    %p: spill %s w %d reg %s where %p\n", this, spillKindNames[spillKind], int(width), string(newRegister), where);
+		printf("    %p: spill %s w %d reg %s where %p\n", this, string(spillKind), int(width), string(newRegister), where);
 		affected.print(8);
 	}
 }
@@ -762,15 +762,6 @@ enum SpillKinds {
 	FPSPILL,	/* floating point spills use: spillKind, flags, */
 	FPRELOAD	/* where, tempVar, newRegister			*/
 }
-
-string[SpillKinds] spillKindNames;
-
-spillKindNames.append("PUSH");
-spillKindNames.append("POP");
-spillKindNames.append("MOVE");
-spillKindNames.append("XCHG");
-spillKindNames.append("FPSPILL");
-spillKindNames.append("FPRELOAD");
 
 R lowestReg(long regmask) {
 	int r;

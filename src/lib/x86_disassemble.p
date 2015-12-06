@@ -1534,148 +1534,152 @@ instructionMnemonic[0xe1] = "loopz";
 instructionMnemonic[0xe8] = "call";
 instructionMnemonic[0xe9] = "jmp";
 
-private string[] immedGrp1mnemonics;
-immedGrp1mnemonics.resize(8);
+private string[] immedGrp1mnemonics = [
+	"add",
+	"or",
+	"adc",
+	"sbb",
+	"and",
+	"sub",
+	"xor",
+	"cmp"
+];
 
-immedGrp1mnemonics[0] = "add";
-immedGrp1mnemonics[1] = "or";
-immedGrp1mnemonics[2] = "adc";
-immedGrp1mnemonics[3] = "sbb";
-immedGrp1mnemonics[4] = "and";
-immedGrp1mnemonics[5] = "sub";
-immedGrp1mnemonics[6] = "xor";
-immedGrp1mnemonics[7] = "cmp";
+private string[] grp2mnemonics = [
+	"rol",
+	"ror",
+	"rcl",
+	"rcr",
+	"sal",
+	"shr",
+	"<bad>",
+	"sar"
+];
 
-private string[] grp2mnemonics;
-grp2mnemonics.resize(8);
+private string[] grp3mnemonics = [
+	"test",
+	"<bad>",
+	"not",
+	"neg",
+	"mul",
+	"imul",
+	"div",
+	"idiv"
+];
 
-grp2mnemonics[0] = "rol";
-grp2mnemonics[1] = "ror";
-grp2mnemonics[2] = "rcl";
-grp2mnemonics[3] = "rcr";
-grp2mnemonics[4] = "sal";
-grp2mnemonics[5] = "shr";
-grp2mnemonics[6] = "<bad>";
-grp2mnemonics[7] = "sar";
+private string[] byteRegs = [
+	"al",
+	"cl",
+	"dl",
+	"bl",
+	"ah",
+	"ch",
+	"dh",
+	"bh",
+	"r8l",
+	"r9l",
+	"r10l",
+	"r11l",
+	"r12l",
+	"r13l",
+	"r14l",
+	"r15l",
+	"",		// xmm0
+	"",		// xmm1
+	"",		// xmm2
+	"",		// xmm3
+	"",		// xmm4
+	"",		// xmm5
+	"",		// xmm6
+	"",		// xmm7
+	"ah"
+];
 
-private string[] grp3mnemonics;
-grp3mnemonics.resize(8);
+private string[] shortRegs = [
+	"ax",
+	"cx",
+	"dx",
+	"bx",
+	"sp",
+	"bp",
+	"si",
+	"di",
+	"r8w",
+	"r9w",
+	"r10w",
+	"r11w",
+	"r12w",
+	"r13w",
+	"r14w",
+	"r15w",
+];
 
-grp3mnemonics[0] = "test";
-grp3mnemonics[1] = "<bad>";
-grp3mnemonics[2] = "not";
-grp3mnemonics[3] = "neg";
-grp3mnemonics[4] = "mul";
-grp3mnemonics[5] = "imul";
-grp3mnemonics[6] = "div";
-grp3mnemonics[7] = "idiv";
+private string[] intRegs = [
+	"eax",
+	"ecx",
+	"edx",
+	"ebx",
+	"esp",
+	"ebp",
+	"esi",
+	"edi",
+	"r8d",
+	"r9d",
+	"r10d",
+	"r11d",
+	"r12d",
+	"r13d",
+	"r14d",
+	"r15d",
+];
 
-private string[] byteRegs;
-byteRegs.append("al");
-byteRegs.append("cl");
-byteRegs.append("dl");
-byteRegs.append("bl");
-byteRegs.append("ah");
-byteRegs.append("ch");
-byteRegs.append("dh");
-byteRegs.append("bh");
-byteRegs.append("r8l");
-byteRegs.append("r9l");
-byteRegs.append("r10l");
-byteRegs.append("r11l");
-byteRegs.append("r12l");
-byteRegs.append("r13l");
-byteRegs.append("r14l");
-byteRegs.append("r15l");
-byteRegs.append("");		// xmm0
-byteRegs.append("");		// xmm1
-byteRegs.append("");		// xmm2
-byteRegs.append("");		// xmm3
-byteRegs.append("");		// xmm4
-byteRegs.append("");		// xmm5
-byteRegs.append("");		// xmm6
-byteRegs.append("");		// xmm7
-byteRegs.append("ah");
+private string[] longRegs = [
+	"rax",
+	"rcx",
+	"rdx",
+	"rbx",
+	"rsp",
+	"rbp",
+	"rsi",
+	"rdi",
+	"r8",
+	"r9",
+	"r10",
+	"r11",
+	"r12",
+	"r13",
+	"r14",
+	"r15",
+];
 
-private string[] shortRegs;
-shortRegs.append("ax");
-shortRegs.append("cx");
-shortRegs.append("dx");
-shortRegs.append("bx");
-shortRegs.append("sp");
-shortRegs.append("bp");
-shortRegs.append("si");
-shortRegs.append("di");
-shortRegs.append("r8w");
-shortRegs.append("r9w");
-shortRegs.append("r10w");
-shortRegs.append("r11w");
-shortRegs.append("r12w");
-shortRegs.append("r13w");
-shortRegs.append("r14w");
-shortRegs.append("r15w");
+private string[] floatRegs = [
+	"mm0",
+	"mm1",
+	"mm2",
+	"mm3",
+	"mm4",
+	"mm5",
+	"mm6",
+	"mm7",
+];
 
-private string[] intRegs;
-intRegs.append("eax");
-intRegs.append("ecx");
-intRegs.append("edx");
-intRegs.append("ebx");
-intRegs.append("esp");
-intRegs.append("ebp");
-intRegs.append("esi");
-intRegs.append("edi");
-intRegs.append("r8d");
-intRegs.append("r9d");
-intRegs.append("r10d");
-intRegs.append("r11d");
-intRegs.append("r12d");
-intRegs.append("r13d");
-intRegs.append("r14d");
-intRegs.append("r15d");
+private string[] doubleRegs = [
+	"xmm0",
+	"xmm1",
+	"xmm2",
+	"xmm3",
+	"xmm4",
+	"xmm5",
+	"xmm6",
+	"xmm7",
+];
 
-private string[] longRegs;
-longRegs.append("rax");
-longRegs.append("rcx");
-longRegs.append("rdx");
-longRegs.append("rbx");
-longRegs.append("rsp");
-longRegs.append("rbp");
-longRegs.append("rsi");
-longRegs.append("rdi");
-longRegs.append("r8");
-longRegs.append("r9");
-longRegs.append("r10");
-longRegs.append("r11");
-longRegs.append("r12");
-longRegs.append("r13");
-longRegs.append("r14");
-longRegs.append("r15");
-
-private string[] floatRegs;
-floatRegs.append("mm0");
-floatRegs.append("mm1");
-floatRegs.append("mm2");
-floatRegs.append("mm3");
-floatRegs.append("mm4");
-floatRegs.append("mm5");
-floatRegs.append("mm6");
-floatRegs.append("mm7");
-
-private string[] doubleRegs;
-doubleRegs.append("xmm0");
-doubleRegs.append("xmm1");
-doubleRegs.append("xmm2");
-doubleRegs.append("xmm3");
-doubleRegs.append("xmm4");
-doubleRegs.append("xmm5");
-doubleRegs.append("xmm6");
-doubleRegs.append("xmm7");
-
-private string[] fixupTypes;
-fixupTypes.append("<error>");
-fixupTypes.append("relative32");
-fixupTypes.append("absolute64");
-fixupTypes.append("absolute64-code");
+private string[] fixupTypes = [
+	"<error>",
+	"relative32",
+	"absolute64",
+	"absolute64-code",
+];
 
 private string[] escape0Fmnemonics;
 

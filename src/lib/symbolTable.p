@@ -2029,9 +2029,4 @@ class OverloadOperation {
 	public boolean done() {
 		return _done;
 	}
-/*
-	ref<Overload> overload() { return _overload; }
-
-private:
-*/
 }

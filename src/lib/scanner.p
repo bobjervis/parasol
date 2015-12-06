@@ -1077,45 +1077,45 @@ class Scanner {
 
 }
 
-Token[string] keywords;
-
-keywords["abstract"] = Token.ABSTRACT;
-keywords["break"] = Token.BREAK;
-keywords["bytes"] = Token.BYTES;
-keywords["case"] = Token.CASE;
-keywords["catch"] = Token.CATCH;
-keywords["class"] = Token.CLASS;
-keywords["continue"] = Token.CONTINUE;
-keywords["default"] = Token.DEFAULT;
-keywords["delete"] = Token.DELETE;
-keywords["do"] = Token.DO;
-keywords["else"] = Token.ELSE;
-keywords["enum"] = Token.ENUM;
-keywords["extends"] = Token.EXTENDS;
-keywords["false"] = Token.FALSE;
-keywords["final"] = Token.FINAL;
-keywords["finally"] = Token.FINALLY;
-keywords["flags"] = Token.FLAGS;
-keywords["for"] = Token.FOR;
-keywords["function"] = Token.FUNCTION;
-keywords["if"] = Token.IF;
-keywords["implements"] = Token.IMPLEMENTS;
-keywords["import"] = Token.IMPORT;
-keywords["interface"] = Token.INTERFACE;
-keywords["lock"] = Token.LOCK;
-keywords["monitor"] = Token.MONITOR;
-keywords["namespace"] = Token.NAMESPACE;
-keywords["new"] = Token.NEW;
-keywords["null"] = Token.NULL;
-keywords["private"] = Token.PRIVATE;
-keywords["protected"] = Token.PROTECTED;
-keywords["public"] = Token.PUBLIC;
-keywords["return"] = Token.RETURN;
-keywords["static"] = Token.STATIC;
-keywords["super"] = Token.SUPER;
-keywords["switch"] = Token.SWITCH;
-keywords["this"] = Token.THIS;
-keywords["throw"] = Token.THROW;
-keywords["true"] = Token.TRUE;
-keywords["try"] = Token.TRY;
-keywords["while"] = Token.WHILE;
+Token[string] keywords = [
+	"abstract":		Token.ABSTRACT,
+	"break":		Token.BREAK,
+	"bytes": 		Token.BYTES,
+	"case": 		Token.CASE,
+	"catch": 		Token.CATCH,
+	"class": 		Token.CLASS,
+	"continue": 	Token.CONTINUE,
+	"default": 		Token.DEFAULT,
+	"delete": 		Token.DELETE,
+	"do": 			Token.DO,
+	"else": 		Token.ELSE,
+	"enum": 		Token.ENUM,
+	"extends":		Token.EXTENDS,
+	"false": 		Token.FALSE,
+	"final": 		Token.FINAL,
+	"finally":		Token.FINALLY,
+	"flags": 		Token.FLAGS,
+	"for": 			Token.FOR,
+	"function": 	Token.FUNCTION,
+	"if": 			Token.IF,
+	"implements":	Token.IMPLEMENTS,
+	"import": 		Token.IMPORT,
+	"interface":	Token.INTERFACE,
+	"lock":			Token.LOCK,
+	"monitor": 		Token.MONITOR,
+	"namespace":	Token.NAMESPACE,
+	"new": 			Token.NEW,
+	"null": 		Token.NULL,
+	"private":		Token.PRIVATE,
+	"protected": 	Token.PROTECTED,
+	"public": 		Token.PUBLIC,
+	"return": 		Token.RETURN,
+	"static": 		Token.STATIC,
+	"super": 		Token.SUPER,
+	"switch": 		Token.SWITCH,
+	"this": 		Token.THIS,
+	"throw":		Token.THROW,
+	"true": 		Token.TRUE,
+	"try": 			Token.TRY,
+	"while":		Token.WHILE,
+];
