@@ -351,31 +351,126 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 		ref<Reference> use = tree.newReference(lhv, false, lhs.location());
 		lhs = tree.newUnary(Operator.ADDRESS, use, lhs.location());
 	}
-	if (vectorType.indexType(compileContext).isCompactIndexType()) {
+	ref<Type> indexType = vectorType.indexType(compileContext);
+	if (indexType.isCompactIndexType()) {
+		boolean anyLabels = false;
+		int maxIndexValue = -1;
+		int lastIndexValue = -1;
+		
+		// Calculate the maximum assigned element in this aggregate.
+		
 		for (ref<NodeList> nl = aggregate.arguments(); nl != null; nl = nl.next) {
-			CompileString append("append");
-
-			ref<Node> arrayRef = lhs.clone(tree);
-			
-			ref<Symbol> sym = vectorType.lookup(&append, compileContext);
-
-			if (sym == null || sym.class != Overload) {
-				vectorExpression.add(MessageId.UNDEFINED, compileContext.pool(), append);
-				return vectorExpression;
-			}
-			ref<OverloadInstance> oi = ref<Overload>(sym).instances()[0];
-			ref<Selection> method = tree.newSelection(arrayRef, oi, arrayRef.location());
-			method.type = oi.type();
 			if (nl.node.op() == Operator.LABEL) {
+				ref<Binary> b = ref<Binary>(nl.node);
+				if (indexType.family() == TypeFamily.ENUM) {
+					ref<EnumScope> scope = ref<EnumScope>(indexType.scope());
+					ref<Identifier> id = ref<Identifier>(b.left());
+					lastIndexValue = scope.indexOf(id.symbol()); 
+				} else {
+					vectorExpression.print(0);
+					assert(false);
+				}
+				anyLabels = true;
+			} else
+				lastIndexValue++;
+			if (lastIndexValue > maxIndexValue)
+				maxIndexValue = lastIndexValue;
+		}
+		if (anyLabels) {
+			
+			// If we have labels, pre-allocate all the elements as empty.
+			
+			ref<Node> arg = tree.newConstant(maxIndexValue + 1, aggregate.location());
+			arg.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+			arg = tree.newCast(indexType, arg);
+			ref<OverloadInstance> constructor = null;
+			for (int i = 0; i < vectorType.scope().constructors().length(); i++) {
+				ref<Function> f = ref<Function>(vectorType.scope().constructors()[i].definition());
+				ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
+				if (oi.parameterCount() != 1)
+					continue;
+				if (oi.parameterScope().parameters()[0].type() == indexType) {
+					constructor = oi;
+					break;
+				}
+			}
+			if (constructor == null) {
 				vectorExpression.print(0);
 				assert(false);
 			}
-			ref<NodeList> args = tree.newNodeList(nl.node);
-			ref<Node> next = tree.newCall(oi, null,  method, args, nl.node.location(), compileContext);
-			if (result == null)
-				result = next;
+			ref<NodeList> args = tree.newNodeList(arg);
+			ref<Node> adr;
+			if (lhs.op() == Operator.ADDRESS) 
+				adr = lhs;
 			else
+				adr = tree.newUnary(Operator.ADDRESS, lhs, lhs.location());
+			result = tree.newCall(constructor, CallCategory.CONSTRUCTOR, adr, args, aggregate.location(), compileContext);
+			result.type = compileContext.arena().builtInType(TypeFamily.VOID);
+			lastIndexValue = -1;
+			for (ref<NodeList> nl = aggregate.arguments(); nl != null; nl = nl.next) {
+				ref<Node> val;
+				ref<Node> idx;
+				if (nl.node.op() == Operator.LABEL) {
+					idx = ref<Binary>(nl.node).left(); 
+					val = ref<Binary>(nl.node).right();
+					if (indexType.family() == TypeFamily.ENUM) {
+						ref<EnumScope> scope = ref<EnumScope>(indexType.scope());
+						ref<Identifier> id = ref<Identifier>(idx);
+						lastIndexValue = scope.indexOf(id.symbol()); 
+					} else {
+						vectorExpression.print(0);
+						assert(false);
+					}
+					idx = tree.newUnary(Operator.ADDRESS, idx, idx.location());
+					idx.type = indexType;
+				} else {
+					lastIndexValue++;
+					val = nl.node;
+					idx = tree.newConstant(lastIndexValue, val.location());
+					idx.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+					idx = tree.newCast(indexType, idx);
+				}
+				CompileString set("set");
+				ref<Node> arrayRef = lhs.clone(tree);
+				ref<Symbol> sym = vectorType.lookup(&set, compileContext);
+
+				if (sym == null || sym.class != Overload) {
+					vectorExpression.add(MessageId.UNDEFINED, compileContext.pool(), set);
+					return vectorExpression;
+				}
+				ref<OverloadInstance> oi = ref<Overload>(sym).instances()[0];
+				ref<Selection> method = tree.newSelection(arrayRef, oi, arrayRef.location());
+				method.type = oi.type();
+				ref<NodeList> args = tree.newNodeList(idx, val);
+				ref<Node> next = tree.newCall(oi, null,  method, args, val.location(), compileContext);
 				result = tree.newBinary(Operator.SEQUENCE, result, next, vectorExpression.location());
+			}
+		} else {
+			for (ref<NodeList> nl = aggregate.arguments(); nl != null; nl = nl.next) {
+				CompileString append("append");
+
+				ref<Node> arrayRef = lhs.clone(tree);
+				
+				ref<Symbol> sym = vectorType.lookup(&append, compileContext);
+
+				if (sym == null || sym.class != Overload) {
+					vectorExpression.add(MessageId.UNDEFINED, compileContext.pool(), append);
+					return vectorExpression;
+				}
+				ref<OverloadInstance> oi = ref<Overload>(sym).instances()[0];
+				ref<Selection> method = tree.newSelection(arrayRef, oi, arrayRef.location());
+				method.type = oi.type();
+				if (nl.node.op() == Operator.LABEL) {
+					vectorExpression.print(0);
+					assert(false);
+				}
+				ref<NodeList> args = tree.newNodeList(nl.node);
+				ref<Node> next = tree.newCall(oi, null,  method, args, nl.node.location(), compileContext);
+				if (result == null)
+					result = next;
+				else
+					result = tree.newBinary(Operator.SEQUENCE, result, next, vectorExpression.location());
+			}
 		}
 	} else {
 		for (ref<NodeList> nl = aggregate.arguments(); nl != null; nl = nl.next) {

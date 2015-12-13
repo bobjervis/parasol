@@ -131,6 +131,8 @@ class Binary extends Node {
 	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
 		if (deferGeneration())
 			return this;
+		if (type == null)
+			print(0);
 		if (type.family() == TypeFamily.SHAPE) {
 			switch (op()) {
 			case	BIND:
@@ -400,8 +402,7 @@ class Binary extends Node {
 				ref<Node> call = createMethodCall(_left, "compare", tree, compileContext, _right);
 				call.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
 				_left = call.fold(tree, voidContext, compileContext);
-				CompileString value("0");
-				_right = tree.newConstant(Operator.INTEGER, value, location());
+				_right = tree.newConstant(0, location());
 				_right.type = _left.type;
 			}
 			break;
@@ -417,10 +418,7 @@ class Binary extends Node {
 					break;
 					
 				default:
-					string s;
-					s.printf("%d", t.size());
-					CompileString value(s);
-					ref<Constant> c = tree.newConstant(Operator.INTEGER, value, location());
+					ref<Constant> c = tree.newConstant(t.size(), location());
 					ref<Binary> b = tree.newBinary(Operator.MULTIPLY, _right.fold(tree, false, compileContext), c, location());
 					b.type = _right.type;
 					c.type = _right.type;
@@ -680,10 +678,7 @@ class Binary extends Node {
 	private void rewritePointerArithmetic(ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
 		ref<Type> t = type.indirectType(compileContext);
 		if (t.size() > 1) {
-			string s;
-			s.printf("%d", t.size());
-			CompileString value(s);
-			ref<Constant> c = tree.newConstant(Operator.INTEGER, value, location());
+			ref<Constant> c = tree.newConstant(t.size(), location());
 			ref<Binary> b = tree.newBinary(Operator.MULTIPLY, _right, c, location());
 			b.type = _right.type;
 			c.type = _right.type;
@@ -799,10 +794,11 @@ class Binary extends Node {
 
 		case	INITIALIZE:
 			_left.markupDeclarator(t, compileContext);
-			if (_right.op() == Operator.CALL) {
+			switch (_right.op()) {
+			case	CALL:
 				if (_left.deferAnalysis()) {
 					type = _left.type;
-					break;
+					return;
 				}
 				ref<Call> call = ref<Call>(_right);
 
@@ -811,8 +807,25 @@ class Binary extends Node {
 					// Must be a constructor, or else an error.
 					call.assignConstructorCall(t, compileContext);
 					type = t;
-					break;
+					return;
 				}
+				break;
+				
+			case	ARRAY_AGGREGATE:
+				if (_left.deferAnalysis()) {
+					type = _left.type;
+					return;
+				}
+				ref<Call> aggregate = ref<Call>(_right);
+				ref<EnumInstanceType> enumType;
+				if (_left.type.family() == TypeFamily.SHAPE &&
+					_left.type.indexType(compileContext).family() == TypeFamily.ENUM)
+					enumType = ref<EnumInstanceType>(_left.type.indexType(compileContext));
+				else
+					enumType = null;
+				aggregate.assignArrayAggregateTypes(enumType, compileContext);
+				type = _right.type;
+				return;
 			}
 			compileContext.assignTypes(_right);
 			if (_left.deferAnalysis()) {
@@ -966,7 +979,7 @@ class Binary extends Node {
 
 			case	BOOLEAN:
 			default:
-				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}
 			break;
@@ -1010,7 +1023,7 @@ class Binary extends Node {
 					}
 
 				default:
-					add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+					add(typeNotAllowed[op()], compileContext.pool());
 					type = compileContext.errorType();
 				}
 				break;
@@ -1052,7 +1065,7 @@ class Binary extends Node {
 
 			case	BOOLEAN:
 			default:
-				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}
 			break;
@@ -1071,7 +1084,7 @@ class Binary extends Node {
 				break;
 
 			default:
-				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}
 			break;
@@ -1099,7 +1112,7 @@ class Binary extends Node {
 				break;
 
 			default:
-				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}
 			break;
@@ -1158,7 +1171,7 @@ class Binary extends Node {
 				break;
 
 			default:
-				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}
 			break;
@@ -1175,7 +1188,7 @@ class Binary extends Node {
 
 			case	BOOLEAN:
 			default:
-				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}
 		break;
@@ -1202,7 +1215,7 @@ class Binary extends Node {
 				break;
 
 			default:
-				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}
 			break;
@@ -1233,7 +1246,7 @@ class Binary extends Node {
 
 			case	BOOLEAN:
 			default:
-				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}
 			break;
@@ -1253,7 +1266,7 @@ class Binary extends Node {
 			case	UNSIGNED_32:
 			case	BOOLEAN:
 			default:
-				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}
 			break;
@@ -1287,12 +1300,12 @@ class Binary extends Node {
 					ref<Type> keyType = _right.unwrapTypedef(compileContext);
 					ref<Type> vectorType = compileContext.arena().buildVectorType(_left.unwrapTypedef(compileContext), keyType, compileContext);
 					if (vectorType == null) { // Not an allowed combination.
-						_right.add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+						_right.add(typeNotAllowed[op()], compileContext.pool());
 						type = compileContext.errorType();
 					}else
 						type = compileContext.makeTypedef(vectorType);
 				} else {
-					add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+					add(typeNotAllowed[op()], compileContext.pool());
 					type = compileContext.errorType();
 				}
 			} else if (_left.type.isPointer(compileContext)) {
@@ -1311,7 +1324,7 @@ class Binary extends Node {
 				_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_32, false, compileContext);
 				type = compileContext.arena().builtInType(TypeFamily.UNSIGNED_8);
 			} else {
-				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}
 			break;
@@ -1333,7 +1346,7 @@ class Binary extends Node {
 				break;
 
 			default:
-				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}
 			break;
@@ -1388,7 +1401,7 @@ class Binary extends Node {
 
 			case	BOOLEAN:
 			default:
-				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}
 			break;
@@ -1414,7 +1427,7 @@ class Binary extends Node {
 
 			case	BOOLEAN:
 			default:
-				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}
 			break;
@@ -1475,7 +1488,7 @@ class Binary extends Node {
 					break;
 
 				default:
-					add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+					add(typeNotAllowed[op()], compileContext.pool());
 					_left.type = compileContext.errorType();
 				}
 			}

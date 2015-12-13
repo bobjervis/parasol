@@ -356,6 +356,13 @@ class SyntaxTree {
 		return new Leaf(op, location);
 	}
 
+	public ref<Constant> newConstant(int value, Location location) {
+		string s;
+		s.printf("%d", value);
+		CompileString v(s);
+		return newConstant(Operator.INTEGER, v, location);
+	}
+	
 	public ref<Constant> newConstant(Operator op, CompileString value, Location location) {
 		//void *block = _pool.alloc(sizeof (Constant) + value.size());
 		pointer<byte> cp = pointer<byte>(allocz(value.length));
@@ -767,19 +774,11 @@ class Constant extends Node {
 	}
 	
 	public ref<Constant> clone(ref<SyntaxTree> tree) {
-		byte[] value;
-		value.resize(_value.length);
-		C.memcpy(&value[0], _value.data, _value.length);
-		CompileString cs(&value);
-		return ref<Constant>(tree.newConstant(op(), cs, location()).finishClone(this, tree.pool()));
+		return ref<Constant>(tree.newConstant(op(), _value, location()).finishClone(this, tree.pool()));
 	}
 
 	public ref<Constant> cloneRaw(ref<SyntaxTree> tree) {
-		byte[] value;
-		value.resize(_value.length);
-		C.memcpy(&value[0], _value.data, _value.length);
-		CompileString cs(&value);
-		return tree.newConstant(op(), cs, location());
+		return tree.newConstant(op(), _value, location());
 	}
 
 	public void print(int indent) {
@@ -2407,7 +2406,7 @@ class Node {
 	}
 
 	public void add(MessageId messageId, ref<MemoryPool> pool, CompileString... args) {
-		string message = messageMap.format(messageId, args);
+		string message = formatMessage(messageId, args);
 		_commentary = pool.newCommentary(_commentary, messageId, message);
 	}
 
@@ -2576,59 +2575,52 @@ class NodeList {
 	}
 }
 
-public OperatorMap operatorMap;
+MessageId[Operator] typeNotAllowed = [
+	ADD: 					MessageId.INVALID_ADD,
+	ADD_ASSIGN: 			MessageId.INVALID_ADD,
+	ADD_REDUCE: 			MessageId.INVALID_ADD,
+	AND: 					MessageId.INVALID_AND,
+	AND_ASSIGN: 			MessageId.INVALID_AND,
+	BIT_COMPLEMENT: 		MessageId.INVALID_BIT_COMPLEMENT,
+	DIVIDE: 				MessageId.INVALID_DIVIDE,
+	DIVIDE_ASSIGN: 			MessageId.INVALID_DIVIDE,
+	EQUALITY: 				MessageId.INVALID_COMPARE,
+	EXCLUSIVE_OR: 			MessageId.INVALID_XOR,
+	EXCLUSIVE_OR_ASSIGN:	MessageId.INVALID_XOR,
+	GREATER: 				MessageId.INVALID_COMPARE,
+	GREATER_EQUAL: 			MessageId.INVALID_COMPARE,
+	INDIRECT: 				MessageId.INVALID_INDIRECT,
+	IDENTITY:				MessageId.INVALID_COMPARE,
+	LESS: 					MessageId.INVALID_COMPARE,
+	LESS_EQUAL: 			MessageId.INVALID_COMPARE,
+	LESS_GREATER: 			MessageId.INVALID_COMPARE,
+	LESS_GREATER_EQUAL:		MessageId.INVALID_COMPARE,
+	MULTIPLY: 				MessageId.INVALID_MULTIPLY,
+	MULTIPLY_ASSIGN:		MessageId.INVALID_MULTIPLY,
+	NEGATE: 				MessageId.INVALID_NEGATE,
+	NOT_EQUAL: 				MessageId.INVALID_COMPARE,
+	NOT_GREATER:			MessageId.INVALID_COMPARE,
+	NOT_GREATER_EQUAL: 		MessageId.INVALID_COMPARE,
+	NOT_IDENTITY: 			MessageId.INVALID_COMPARE,
+	NOT_LESS: 				MessageId.INVALID_COMPARE,
+	NOT_LESS_EQUAL: 		MessageId.INVALID_COMPARE,
+	NOT_LESS_GREATER: 		MessageId.INVALID_COMPARE,
+	NOT_LESS_GREATER_EQUAL: MessageId.INVALID_COMPARE,
+	OR: 					MessageId.INVALID_OR,
+	OR_ASSIGN: 				MessageId.INVALID_OR,
+	REMAINDER: 				MessageId.INVALID_REMAINDER,
+	REMAINDER_ASSIGN: 		MessageId.INVALID_REMAINDER,
+	SUBSCRIPT: 				MessageId.INVALID_SUBSCRIPT,
+	SUBTRACT: 				MessageId.INVALID_SUBTRACT,
+	SUBTRACT_ASSIGN:		MessageId.INVALID_SUBTRACT,
+	UNARY_PLUS: 			MessageId.INVALID_UNARY_PLUS,
+	VARIABLE:				MessageId.INVALID_UNARY_PLUS,
+	SWITCH: 				MessageId.INVALID_SWITCH,
+];
 
-class OperatorMap {
-	public OperatorMap() {
-		typeNotAllowed.resize(Operator.MAX_OPERATOR);
-		typeNotAllowed[Operator.ADD] = MessageId.INVALID_ADD;
-		typeNotAllowed[Operator.ADD_ASSIGN] = MessageId.INVALID_ADD;
-		typeNotAllowed[Operator.ADD_REDUCE] = MessageId.INVALID_ADD;
-		typeNotAllowed[Operator.AND] = MessageId.INVALID_AND;
-		typeNotAllowed[Operator.AND_ASSIGN] = MessageId.INVALID_AND;
-		typeNotAllowed[Operator.BIT_COMPLEMENT] = MessageId.INVALID_BIT_COMPLEMENT;
-		typeNotAllowed[Operator.DIVIDE] = MessageId.INVALID_DIVIDE;
-		typeNotAllowed[Operator.DIVIDE_ASSIGN] = MessageId.INVALID_DIVIDE;
-		typeNotAllowed[Operator.EQUALITY] = MessageId.INVALID_COMPARE;
-		typeNotAllowed[Operator.EXCLUSIVE_OR] = MessageId.INVALID_XOR;
-		typeNotAllowed[Operator.EXCLUSIVE_OR_ASSIGN] = MessageId.INVALID_XOR;
-		typeNotAllowed[Operator.GREATER] = MessageId.INVALID_COMPARE;
-		typeNotAllowed[Operator.GREATER_EQUAL] = MessageId.INVALID_COMPARE;
-		typeNotAllowed[Operator.INDIRECT] = MessageId.INVALID_INDIRECT;
-		typeNotAllowed[Operator.IDENTITY] = MessageId.INVALID_COMPARE;
-		typeNotAllowed[Operator.LESS] = MessageId.INVALID_COMPARE;
-		typeNotAllowed[Operator.LESS_EQUAL] = MessageId.INVALID_COMPARE;
-		typeNotAllowed[Operator.LESS_GREATER] = MessageId.INVALID_COMPARE;
-		typeNotAllowed[Operator.LESS_GREATER_EQUAL] = MessageId.INVALID_COMPARE;
-		typeNotAllowed[Operator.MULTIPLY] = MessageId.INVALID_MULTIPLY;
-		typeNotAllowed[Operator.MULTIPLY_ASSIGN] = MessageId.INVALID_MULTIPLY;
-		typeNotAllowed[Operator.NEGATE] = MessageId.INVALID_NEGATE;
-		typeNotAllowed[Operator.NOT_EQUAL] = MessageId.INVALID_COMPARE;
-		typeNotAllowed[Operator.NOT_GREATER] = MessageId.INVALID_COMPARE;
-		typeNotAllowed[Operator.NOT_GREATER_EQUAL] = MessageId.INVALID_COMPARE;
-		typeNotAllowed[Operator.NOT_IDENTITY] = MessageId.INVALID_COMPARE;
-		typeNotAllowed[Operator.NOT_LESS] = MessageId.INVALID_COMPARE;
-		typeNotAllowed[Operator.NOT_LESS_EQUAL] = MessageId.INVALID_COMPARE;
-		typeNotAllowed[Operator.NOT_LESS_GREATER] = MessageId.INVALID_COMPARE;
-		typeNotAllowed[Operator.NOT_LESS_GREATER_EQUAL] = MessageId.INVALID_COMPARE;
-		typeNotAllowed[Operator.OR] = MessageId.INVALID_OR;
-		typeNotAllowed[Operator.OR_ASSIGN] = MessageId.INVALID_OR;
-		typeNotAllowed[Operator.REMAINDER] = MessageId.INVALID_REMAINDER;
-		typeNotAllowed[Operator.REMAINDER_ASSIGN] = MessageId.INVALID_REMAINDER;
-		typeNotAllowed[Operator.SUBSCRIPT] = MessageId.INVALID_SUBSCRIPT;
-		typeNotAllowed[Operator.SUBTRACT] = MessageId.INVALID_SUBTRACT;
-		typeNotAllowed[Operator.SUBTRACT_ASSIGN] = MessageId.INVALID_SUBTRACT;
-		typeNotAllowed[Operator.UNARY_PLUS] = MessageId.INVALID_UNARY_PLUS;
-		typeNotAllowed[Operator.VARIABLE] = MessageId.INVALID_UNARY_PLUS;
-		typeNotAllowed[Operator.SWITCH] = MessageId.INVALID_SWITCH;
-
-		for (int i = 0; i < int(Operator.MAX_OPERATOR); i++) {
-			if (typeNotAllowed[Operator(i)] == MessageId(0))
-				typeNotAllowed[Operator(i)] = MessageId.MAX_MESSAGE;
-		}
-	}
-
-	static MessageId[Operator] typeNotAllowed;
+for (int i = 0; i < int(Operator.MAX_OPERATOR); i++) {
+	if (typeNotAllowed[Operator(i)] == MessageId(0))
+		typeNotAllowed[Operator(i)] = MessageId.MAX_MESSAGE;
 }
 
 int, boolean unescapeParasolCharacter(string str) {

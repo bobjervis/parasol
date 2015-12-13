@@ -165,286 +165,164 @@ class Message {
 	public Location location;
 }
 
-MessageMap messageMap;
-
-class MessageMap {
-	private static string[MessageId] _message;
+public string formatMessage(MessageId messageId, CompileString[] args) {
+	string format = messageCatalog[messageId];
+	string s;
+	int i = 0;
 	
-	MessageMap() {
-		/*
-		_message = [ 
-			ABSTRACT_INSTANCE_DISALLOWED: "Instance of abstract class disallowed",
-			AMBIGUOUS_CONSTRUCTOR: 	"Ambiguous constructor call",
-			AMBIGUOUS_OVERLOAD: 	"Ambiguous call, cannot choose between multiple valid overloads",
-			AMBIGUOUS_REFERENCE: 	"Ambiguous function reference",
-			ANNOTATION_TAKES_NO_ARGUMENTS: "'%1' Annotation takes no arguments",
-			BAD_CHAR: 				"Invalid escape sequence in '%1'",
-			BAD_ELLIPSIS: 			"Misplaced use of ellipsis",
-			BAD_MULTI_ASSIGN: 		"Multi-assignment only allowed with a function call",
-			BAD_STRING: 			"Invalid escape sequence in '%1'",
-			BAD_TOKEN: 				"Invalid token '%1'",
-			BREAK_NO_SEMI: 			"Break without semi-colon",
-			CANNOT_CONVERT: 		"Cannot convert types",
-			CASE_NO_CO: 			"Case without colon",
-			CIRCULAR_DEFINITION: 	"Circular definition involving '%1'",
-			CONSTANT_NOT_STATIC,	"@Constant declarations must have static storage class",
-			DISALLOWED_ANNOTATION: 	"Disallowed annotation '%1'",
-			DO_WHILE_NO_SEMI: 		"do-while with no semi-colon",
-			DUPLICATE: 				"Duplicate definition of '%1'",
-			DUPLICATE_DESTRUCTOR: 	"More than one destructor in a class",
-			EXPECTING_RC: 			"Expecting a right curly brace",
-			EXPECTING_RS: 			"Expecting a right square brace",
-			EXPECTING_TERM: 		"Expecting a term of an expression",
-			FILE_NOT_READ: 			"File could not be read",
-			INITIALIZER_MUST_BE_CONSTANT: "Initializer with @Constant must be compile-time constant expression",
-			INITIALIZER_REQUIRED:	"Initializer required with @Constant annotation",
-			INTERNAL_ERROR: 		"Internal error detected",
-			INVALID_ADD: 			"Invalid type for addition",
-			INVALID_AND: 			"Invalid type for bitwise and",
-			INVALID_BIT_COMPLEMENT: "Invalid type for bitwise complement",
-			INVALID_BREAK: 			"Break statement outside of loop or switch",
-			INVALID_CASE: 			"Case statement outside of switch",
-			INVALID_COMPARE: 		"Invalid type for comparison",
-			INVALID_CONTINUE: 		"Continue statement outside of loop",
-			INVALID_DEFAULT: 		"Default statement outside of switch",
-			INVALID_DIVIDE: 		"Invalid type for divide",
-			INVALID_IMPORT: 		"Invalid import from your own namespace",
-			INVALID_INDIRECT: 		"Invalid type for indirection",
-			INVALID_MULTIPLY: 		"Invalid type for multiply",
-			INVALID_NEGATE: 		"Invalid type for negation",
-			INVALID_OR: 			"Invalid type for bitwise or",
-			INVALID_REMAINDER: 		"Invalid type for remainder",
-			INVALID_SUBSCRIPT: 		"Not a collection",
-			INVALID_SUBTRACT: 		"Invalid type for subtraction",
-			INVALID_SUPER: 			"'super' call not allowed here",
-			INVALID_SWITCH: 		"Invalid type in switch expression",
-			INVALID_UNARY_PLUS: 	"Invalid type for unary plus",
-			INVALID_XOR: 			"Invalid type for bitwise exclusive-or",
-			LABEL_REQUIRED: 		"Initializer expression must have a label",
-			LABEL_NOT_IDENTIFIER: 	"Label for this expression is not an identifier",
-			LEFT_NOT_INT:			"Left operand not an integral type",
-			LVALUE_REQUIRED: 		"Not an assignable object expression",
-			NO_CODE: 				"No code generated for this unit",
-			NO_EXPRESSION_TYPE: 	"No type for expression",
-			NO_FUNCTION_TYPE: 		"No type for '%1'",
-			NO_MATCHING_CONSTRUCTOR: "No matching constructor",
-			NO_MATCHING_OVERLOAD: 	"No overloaded definition matched this reference",
-			NO_PARAMS_IN_DESTRUCTOR: "No parameters may be defined for a destructor",
-			NOT_A_FUNCTION: 		"Expecting a function",
-			NOT_A_TEMPLATE: 		"Expecting a template class",
-			NOT_A_TYPE: 			"Expecting a type",
-			NOT_ADDRESSABLE: 		"Cannot take the address of this value",
-			NOT_BOOLEAN: 			"An operand does not have boolean type",
-			NOT_CONSTANT: 			"Constant expression required",
-			NOT_ENUM_INSTANCE: 		"Case expression not an enum instance",
-			NOT_EXPECTING_ELSE: 	"Not expecting an 'else'",
-			NOT_INTEGER: 			"An operand does not have integral type",
-			NOT_NUMERIC: 			"An operand does not have numeric type",
-			NOT_PARAMETERIZED_TYPE: "Not a parameterized type found resolving overloads for '%1'",
-			NOT_SIMPLE_VARIABLE: 	"'%1' does not name a simple variable",
-			ONLY_STATIC_VARIABLE: 	"Must reference a static variable",
-			OVERLOAD_DISALLOWED: 	"Cannot mix overloaded and non-overloaded definitions in the same scope for '%s'",
-			RETURN_DISALLOWED: 		"Return statement not allowed",
-			RETURN_VALUE_DISALLOWED: "Return value not allowed",
-			RETURN_VALUE_REQUIRED: 	"Return value required",
-			SHIFT_NOT_INT: 			"Shift amount cannot be converted to int",
-			STATIC_DISALLOWED: 		"Keyword 'static' disallowed",
-			SUPER_NOT_ALLOWED: 		"Use of 'super' not allowed",
-			SYNTAX_ERROR: 			"Syntax error",
-			THIS_NOT_ALLOWED: 		"Use of 'this' not allowed",
-			TOO_MANY_RETURN_ASSIGNMENTS: "Too many return assignments",
-			TYPE_ALREADY_DEFINED: 	"Type already defined",
-			TYPE_MISMATCH: 			"Types do not convert to a common type",
-			UNDEFINED: 				"Undefined identifier '%1'",
-			UNDEFINED_BUILT_IN: 	"Undefined built in name '%1'",
-			UNEXPECTED_EOF: 		"Unexpected end of input",
-			UNEXPECTED_RC: 			"Unexpected right curly brace",
-			UNFINISHED_ASSIGN_STORAGE: "Unfinished: %1 assignVariableStorage()",
-			UNFINISHED_ASSIGN_TYPE: "Unfinished: assignTypes %1/%2",
-			UNFINISHED_BIND_DECLARATORS: "Unfinished: bindDeclarators %1/%2",
-			UNFINISHED_BUILD_SCOPE: "Unfinished: buildScopes %1/%2",
-			UNFINISHED_BUILD_UNDER_SCOPE: "Unfinished: buildUnderScope %1/%2",
-			UNFINISHED_CHECK_STORAGE: "Unfinished: checkStorage %1",
-			UNFINISHED_CONSTRUCTION: "Unfinished: constructor initializer",
-			UNFINISHED_CONTROL_FLOW: "Unfinished: control flow %1/%2",
-			UNFINISHED_FIXED_ARRAY: "Unfinished: fixed length array",
-			UNFINISHED_GENERATE: 	"Unfinished: generate %1/%2: %3",
-			UNFINISHED_INITIALIZER: "Unfinished: static initializer",
-			UNFINISHED_INSTANTIATE_TEMPLATE: "Unfinished: instantiateTemplate",
-			UNFINISHED_MAP_TO_VALUES: "Unfinished: mapToValues",
-			UNFINISHED_MARKUP_DECLARATOR: "Unfinished: markupDeclarator %1/%2",
-			UNFINISHED_NAMESPACE: "Unfinished: anonymous namespace",
-			UNREACHABLE: 			"Unreachable code",
-			UNRECOGNIZED_ANNOTATION: "Unrecognized annotation '%1'",
-			UNRESOLVED_ABSTRACT: 	"Abstract method has no override '%1'",
-		];
-		*/
-		_message.resize(MessageId.MAX_MESSAGE);
-		_message[MessageId.ANNOTATION_TAKES_NO_ARGUMENTS] = "'%1' Annotation takes no arguments";
-		_message[MessageId.ABSTRACT_INSTANCE_DISALLOWED] = "Instance of abstract class disallowed";
-		_message[MessageId.AMBIGUOUS_CONSTRUCTOR] = "Ambiguous constructor call";
-		_message[MessageId.AMBIGUOUS_OVERLOAD] = "Ambiguous call, cannot choose between multiple valid overloads";
-		_message[MessageId.AMBIGUOUS_REFERENCE] = "Ambiguous function reference";
-		_message[MessageId.BAD_CHAR] = "Invalid escape sequence in '%1'";
-		_message[MessageId.BAD_ELLIPSIS] = "Misplaced use of ellipsis";
-		_message[MessageId.BAD_MULTI_ASSIGN] = "Multi-assignment only allowed with a function call";
-		_message[MessageId.BAD_STRING] = "Invalid escape sequence in '%1'";
-		_message[MessageId.BAD_TOKEN] = "Invalid token '%1'";
-		_message[MessageId.BREAK_NO_SEMI] = "Break without semi-colon";
-		_message[MessageId.CANNOT_CONVERT] = "Cannot convert types";
-		_message[MessageId.CASE_NO_CO] = "Case without colon";
-		_message[MessageId.CIRCULAR_DEFINITION] = "Circular definition involving '%1'";
-		_message[MessageId.CONSTANT_NOT_STATIC] = "@Constant declarations must have static storage class";
-		_message[MessageId.DISALLOWED_ANNOTATION] = " Disallowed annotation '%1'";
-		_message[MessageId.DO_WHILE_NO_SEMI] = "do-while with no semi-colon";
-		_message[MessageId.DUPLICATE] = "Duplicate definition of '%1'";
-		_message[MessageId.DUPLICATE_DESTRUCTOR] = "More than one destructor in a class";
-		_message[MessageId.EXPECTING_RC] = "Expecting a right curly brace";
-		_message[MessageId.EXPECTING_RS] = "Expecting a right square brace";
-		_message[MessageId.EXPECTING_TERM] = "Expecting a term of an expression";
-		_message[MessageId.FILE_NOT_READ] = "File could not be read";
-		_message[MessageId.INITIALIZER_MUST_BE_CONSTANT] = "Initializer with @Constant must be compile-time constant expression";
-		_message[MessageId.INITIALIZER_REQUIRED] = "Initializer required with @Constant annotation";
-		_message[MessageId.INTERNAL_ERROR] = "Internal error detected";
-		_message[MessageId.INVALID_ADD] = "Invalid type for addition";
-		_message[MessageId.INVALID_AND] = "Invalid type for bitwise and";
-		_message[MessageId.INVALID_BIT_COMPLEMENT] = "Invalid type for bitwise complement";
-		_message[MessageId.INVALID_BREAK] = "Break statement outside of loop or switch";
-		_message[MessageId.INVALID_CASE] = "Case statement outside of switch";
-		_message[MessageId.INVALID_COMPARE] = "Invalid type for comparison";
-		_message[MessageId.INVALID_CONTINUE] = "Continue statement outside of loop";
-		_message[MessageId.INVALID_DEFAULT] = "Default statement outside of switch";
-		_message[MessageId.INVALID_DIVIDE] = "Invalid type for divide";
-		_message[MessageId.INVALID_IMPORT] = "Invalid import from your own namespace";
-		_message[MessageId.INVALID_INDIRECT] = "Invalid type for indirection";
-		_message[MessageId.INVALID_MULTIPLY] = "Invalid type for multiply";
-		_message[MessageId.INVALID_NEGATE] = "Invalid type for negation";
-		_message[MessageId.INVALID_OR] = "Invalid type for bitwise or";
-		_message[MessageId.INVALID_REMAINDER] = "Invalid type for remainder";
-		_message[MessageId.INVALID_SUBSCRIPT] = "Not a collection";
-		_message[MessageId.INVALID_SUBTRACT] = "Invalid type for subtraction";
-		_message[MessageId.INVALID_SUPER] = "'super' call not allowed here";
-		_message[MessageId.INVALID_SWITCH] = "Invalid type in switch expression";
-		_message[MessageId.INVALID_UNARY_PLUS] = "Invalid type for unary plus";
-		_message[MessageId.INVALID_XOR] = "Invalid type for bitwise exclusive-or";
-		_message[MessageId.LABEL_REQUIRED] = "Initializer expression must have a label";
-		_message[MessageId.LABEL_NOT_IDENTIFIER] = "Label for this expression is not an identifier";
-		_message[MessageId.LEFT_NOT_INT] = "Left operand not an integral type";
-		_message[MessageId.LVALUE_REQUIRED] = "Not an assignable object expression";
-		_message[MessageId.NO_CODE] = "No code generated for this unit";
-		_message[MessageId.NO_EXPRESSION_TYPE] = "No type for expression";
-		_message[MessageId.NO_FUNCTION_TYPE] = "No type for '%1'";
-		_message[MessageId.NO_MATCHING_CONSTRUCTOR] = "No matching constructor";
-		_message[MessageId.NO_MATCHING_OVERLOAD] = "No overloaded definition matched this reference";
-		_message[MessageId.NO_PARAMS_IN_DESTRUCTOR] = "No parameters may be defined for a destructor";
-		_message[MessageId.NOT_A_FUNCTION] = "Expecting a function";
-		_message[MessageId.NOT_A_TEMPLATE] = "Expecting a template class";
-		_message[MessageId.NOT_A_TYPE] = "Expecting a type";
-		_message[MessageId.NOT_ADDRESSABLE] = "Cannot take the address of this value";
-		_message[MessageId.NOT_BOOLEAN] = "An operand does not have boolean type";
-		_message[MessageId.NOT_CONSTANT] = "Constant expression required";
-		_message[MessageId.NOT_ENUM_INSTANCE] = "Case expression not an enum instance";
-		_message[MessageId.NOT_EXPECTING_ELSE] = "Not expecting an 'else'";
-		_message[MessageId.NOT_INTEGER] = "An operand does not have integral type";
-		_message[MessageId.NOT_NUMERIC] = "An operand does not have numeric type";
-		_message[MessageId.NOT_PARAMETERIZED_TYPE] = "Not a parameterized type found resolving overloads for '%1'";
-		_message[MessageId.NOT_SIMPLE_VARIABLE] = "'%1' does not name a simple variable";
-		_message[MessageId.ONLY_STATIC_VARIABLE] = "Must reference a static variable";
-		_message[MessageId.OVERLOAD_DISALLOWED] = "Cannot mix overloaded and non-overloaded definitions in the same scope for '%s'";
-		_message[MessageId.RETURN_DISALLOWED] = "Return statement not allowed";
-		_message[MessageId.RETURN_VALUE_DISALLOWED] = "Return value not allowed";
-		_message[MessageId.RETURN_VALUE_REQUIRED] = "Return value required";
-		_message[MessageId.SHIFT_NOT_INT] = "Shift amount cannot be converted to int";
-		_message[MessageId.STATIC_DISALLOWED] = "Keyword 'static' disallowed";
-		_message[MessageId.SUPER_NOT_ALLOWED] = "Use of 'super' not allowed";
-		_message[MessageId.SYNTAX_ERROR] = "Syntax error";
-		_message[MessageId.THIS_NOT_ALLOWED] = "Use of 'this' not allowed";
-		_message[MessageId.TOO_MANY_RETURN_ASSIGNMENTS] = "Too many return assignments";
-		_message[MessageId.TYPE_ALREADY_DEFINED] = "Type already defined";
-		_message[MessageId.TYPE_MISMATCH] = "Types do not convert to a common type";
-		_message[MessageId.UNDEFINED] = "Undefined identifier '%1'";
-		_message[MessageId.UNDEFINED_BUILT_IN] = "Undefined built in name '%1'";
-		_message[MessageId.UNEXPECTED_EOF] = "Unexpected end of input";
-		_message[MessageId.UNEXPECTED_RC] = "Unexpected right curly brace";
-		_message[MessageId.UNFINISHED_ASSIGN_STORAGE] = "Unfinished: %1 assignVariableStorage()";
-		_message[MessageId.UNFINISHED_ASSIGN_TYPE] = "Unfinished: assignTypes %1/%2";
-		_message[MessageId.UNFINISHED_BIND_DECLARATORS] = "Unfinished: bindDeclarators %1/%2";
-		_message[MessageId.UNFINISHED_BUILD_SCOPE] = "Unfinished: buildScopes %1/%2";
-		_message[MessageId.UNFINISHED_BUILD_UNDER_SCOPE] = "Unfinished: buildUnderScope %1/%2";
-		_message[MessageId.UNFINISHED_CHECK_STORAGE] = "Unfinished: checkStorage %1";
-		_message[MessageId.UNFINISHED_CONSTRUCTION] = "Unfinished: constructor initializer";
-		_message[MessageId.UNFINISHED_CONTROL_FLOW] = "Unfinished: control flow %1/%2";
-		_message[MessageId.UNFINISHED_FIXED_ARRAY] = "Unfinished: fixed length array";
-		_message[MessageId.UNFINISHED_GENERATE] = "Unfinished: generate %1/%2: %3";
-		_message[MessageId.UNFINISHED_INITIALIZER] = "Unfinished: static initializer";
-		_message[MessageId.UNFINISHED_INSTANTIATE_TEMPLATE] = "Unfinished: instantiateTemplate";
-		_message[MessageId.UNFINISHED_MAP_TO_VALUES] = "Unfinished: mapToValues";
-		_message[MessageId.UNFINISHED_MARKUP_DECLARATOR] = "Unfinished: markupDeclarator %1/%2";
-		_message[MessageId.UNFINISHED_NAMESPACE] = "Unfinished: anonymous namespace";
-		_message[MessageId.UNREACHABLE] = "Unreachable code";
-		_message[MessageId.UNRECOGNIZED_ANNOTATION] = "Unrecognized annotation '%1'";
-		_message[MessageId.UNRESOLVED_ABSTRACT] = "Abstract method has no override '%1'";
-		string last = "<first>";
-		int lastI = -1;
-		for (int i = 0; i < int(MessageId.MAX_MESSAGE); i++) {
-			MessageId m = MessageId(i);
-			if (_message[m] == null) {
-				printf("ERROR: Message %d has no message entry (last defined entry: %s %d)\n", i, last, lastI);
-				string s;
-				s.printf("<message #%d>", i);
-				_message[m] = s;
-			} else {
-				last = _message[m];
-				lastI = i;
-			}
-		}
-	}
-
-	public string format(MessageId messageId, CompileString[] args) {
-		string format = _message[messageId];
-		string s;
-		int i = 0;
-		
-		while (i < format.length()) {
-			if (format[i] == '%') {
-				int position;
-				i++;
-				switch (format[i]) {
-				case	'1':
-				case	'2':
-				case	'3':
-				case	'4':
-				case	'5':
-				case	'6':
-				case	'7':
-				case	'8':
-				case	'9':
-					position = format[i] - '1';
+	while (i < format.length()) {
+		if (format[i] == '%') {
+			int position;
+			i++;
+			switch (format[i]) {
+			case	'1':
+			case	'2':
+			case	'3':
+			case	'4':
+			case	'5':
+			case	'6':
+			case	'7':
+			case	'8':
+			case	'9':
+				position = format[i] - '1';
 //					printf("position = %d args.length=%d\n", position, args.length());
 //					printf("args[0]={%x,%d}\n", int(args[position].data), args[position].length);
-					string inclusionString(args[position].data, args[position].length);
+				string inclusionString(args[position].data, args[position].length);
 //					printf("inclusionString=%s\n", inclusionString);
-					s.append(inclusionString);
-					break;
+				s.append(inclusionString);
+				break;
 
-				case	'%':
-					s.append('%');
+			case	'%':
+				s.append('%');
 
-				default:
-					break;
-				}
-			} else
-				s.append(format[i]);
-			i++;
-		}
-		return s;
+			default:
+				break;
+			}
+		} else
+			s.append(format[i]);
+		i++;
 	}
+	return s;
+}
 
-	MessageId messageId(string messageIdName) {
-		for (int i = 0; i < int(MessageId.MAX_MESSAGE); i++)
-			if (string(MessageId(i)) == messageIdName)
-				return MessageId(i);
-		return MessageId.MAX_MESSAGE;
+private string[MessageId] messageCatalog = [ 
+	ABSTRACT_INSTANCE_DISALLOWED: "Instance of abstract class disallowed",
+	AMBIGUOUS_CONSTRUCTOR: 	"Ambiguous constructor call",
+	AMBIGUOUS_OVERLOAD: 	"Ambiguous call, cannot choose between multiple valid overloads",
+	AMBIGUOUS_REFERENCE: 	"Ambiguous function reference",
+	ANNOTATION_TAKES_NO_ARGUMENTS: "'%1' Annotation takes no arguments",
+	BAD_CHAR: 				"Invalid escape sequence in '%1'",
+	BAD_ELLIPSIS: 			"Misplaced use of ellipsis",
+	BAD_MULTI_ASSIGN: 		"Multi-assignment only allowed with a function call",
+	BAD_STRING: 			"Invalid escape sequence in '%1'",
+	BAD_TOKEN: 				"Invalid token '%1'",
+	BREAK_NO_SEMI: 			"Break without semi-colon",
+	CANNOT_CONVERT: 		"Cannot convert types",
+	CASE_NO_CO: 			"Case without colon",
+	CIRCULAR_DEFINITION: 	"Circular definition involving '%1'",
+	CONSTANT_NOT_STATIC:	"@Constant declarations must have static storage class",
+	DISALLOWED_ANNOTATION: 	"Disallowed annotation '%1'",
+	DO_WHILE_NO_SEMI: 		"do-while with no semi-colon",
+	DUPLICATE: 				"Duplicate definition of '%1'",
+	DUPLICATE_DESTRUCTOR: 	"More than one destructor in a class",
+	EXPECTING_RC: 			"Expecting a right curly brace",
+	EXPECTING_RS: 			"Expecting a right square brace",
+	EXPECTING_TERM: 		"Expecting a term of an expression",
+	FILE_NOT_READ: 			"File could not be read",
+	INITIALIZER_MUST_BE_CONSTANT: "Initializer with @Constant must be compile-time constant expression",
+	INITIALIZER_REQUIRED:	"Initializer required with @Constant annotation",
+	INTERNAL_ERROR: 		"Internal error detected",
+	INVALID_ADD: 			"Invalid type for addition",
+	INVALID_AND: 			"Invalid type for bitwise and",
+	INVALID_BIT_COMPLEMENT: "Invalid type for bitwise complement",
+	INVALID_BREAK: 			"Break statement outside of loop or switch",
+	INVALID_CASE: 			"Case statement outside of switch",
+	INVALID_COMPARE: 		"Invalid type for comparison",
+	INVALID_CONTINUE: 		"Continue statement outside of loop",
+	INVALID_DEFAULT: 		"Default statement outside of switch",
+	INVALID_DIVIDE: 		"Invalid type for divide",
+	INVALID_IMPORT: 		"Invalid import from your own namespace",
+	INVALID_INDIRECT: 		"Invalid type for indirection",
+	INVALID_MULTIPLY: 		"Invalid type for multiply",
+	INVALID_NEGATE: 		"Invalid type for negation",
+	INVALID_OR: 			"Invalid type for bitwise or",
+	INVALID_REMAINDER: 		"Invalid type for remainder",
+	INVALID_SUBSCRIPT: 		"Not a collection",
+	INVALID_SUBTRACT: 		"Invalid type for subtraction",
+	INVALID_SUPER: 			"'super' call not allowed here",
+	INVALID_SWITCH: 		"Invalid type in switch expression",
+	INVALID_UNARY_PLUS: 	"Invalid type for unary plus",
+	INVALID_XOR: 			"Invalid type for bitwise exclusive-or",
+	LABEL_REQUIRED: 		"Initializer expression must have a label",
+	LABEL_NOT_IDENTIFIER: 	"Label for this expression is not an identifier",
+	LEFT_NOT_INT:			"Left operand not an integral type",
+	LVALUE_REQUIRED: 		"Not an assignable object expression",
+	NO_CODE: 				"No code generated for this unit",
+	NO_EXPRESSION_TYPE: 	"No type for expression",
+	NO_FUNCTION_TYPE: 		"No type for '%1'",
+	NO_MATCHING_CONSTRUCTOR: "No matching constructor",
+	NO_MATCHING_OVERLOAD: 	"No overloaded definition matched this reference",
+	NO_PARAMS_IN_DESTRUCTOR: "No parameters may be defined for a destructor",
+	NOT_A_FUNCTION: 		"Expecting a function",
+	NOT_A_TEMPLATE: 		"Expecting a template class",
+	NOT_A_TYPE: 			"Expecting a type",
+	NOT_ADDRESSABLE: 		"Cannot take the address of this value",
+	NOT_BOOLEAN: 			"An operand does not have boolean type",
+	NOT_CONSTANT: 			"Constant expression required",
+	NOT_ENUM_INSTANCE: 		"Case expression not an enum instance",
+	NOT_EXPECTING_ELSE: 	"Not expecting an 'else'",
+	NOT_INTEGER: 			"An operand does not have integral type",
+	NOT_NUMERIC: 			"An operand does not have numeric type",
+	NOT_PARAMETERIZED_TYPE: "Not a parameterized type found resolving overloads for '%1'",
+	NOT_SIMPLE_VARIABLE: 	"'%1' does not name a simple variable",
+	ONLY_STATIC_VARIABLE: 	"Must reference a static variable",
+	OVERLOAD_DISALLOWED: 	"Cannot mix overloaded and non-overloaded definitions in the same scope for '%s'",
+	RETURN_DISALLOWED: 		"Return statement not allowed",
+	RETURN_VALUE_DISALLOWED: "Return value not allowed",
+	RETURN_VALUE_REQUIRED: 	"Return value required",
+	SHIFT_NOT_INT: 			"Shift amount cannot be converted to int",
+	STATIC_DISALLOWED: 		"Keyword 'static' disallowed",
+	SUPER_NOT_ALLOWED: 		"Use of 'super' not allowed",
+	SYNTAX_ERROR: 			"Syntax error",
+	THIS_NOT_ALLOWED: 		"Use of 'this' not allowed",
+	TOO_MANY_RETURN_ASSIGNMENTS: "Too many return assignments",
+	TYPE_ALREADY_DEFINED: 	"Type already defined",
+	TYPE_MISMATCH: 			"Types do not convert to a common type",
+	UNDEFINED: 				"Undefined identifier '%1'",
+	UNDEFINED_BUILT_IN: 	"Undefined built in name '%1'",
+	UNEXPECTED_EOF: 		"Unexpected end of input",
+	UNEXPECTED_RC: 			"Unexpected right curly brace",
+	UNFINISHED_ASSIGN_STORAGE: "Unfinished: %1 assignVariableStorage()",
+	UNFINISHED_ASSIGN_TYPE: "Unfinished: assignTypes %1/%2",
+	UNFINISHED_BIND_DECLARATORS: "Unfinished: bindDeclarators %1/%2",
+	UNFINISHED_BUILD_SCOPE: "Unfinished: buildScopes %1/%2",
+	UNFINISHED_BUILD_UNDER_SCOPE: "Unfinished: buildUnderScope %1/%2",
+	UNFINISHED_CHECK_STORAGE: "Unfinished: checkStorage %1",
+	UNFINISHED_CONSTRUCTION: "Unfinished: constructor initializer",
+	UNFINISHED_CONTROL_FLOW: "Unfinished: control flow %1/%2",
+	UNFINISHED_FIXED_ARRAY: "Unfinished: fixed length array",
+	UNFINISHED_GENERATE: 	"Unfinished: generate %1/%2: %3",
+	UNFINISHED_INITIALIZER: "Unfinished: static initializer",
+	UNFINISHED_INSTANTIATE_TEMPLATE: "Unfinished: instantiateTemplate",
+	UNFINISHED_MAP_TO_VALUES: "Unfinished: mapToValues",
+	UNFINISHED_MARKUP_DECLARATOR: "Unfinished: markupDeclarator %1/%2",
+	UNFINISHED_NAMESPACE: "Unfinished: anonymous namespace",
+	UNREACHABLE: 			"Unreachable code",
+	UNRECOGNIZED_ANNOTATION: "Unrecognized annotation '%1'",
+	UNRESOLVED_ABSTRACT: 	"Abstract method has no override '%1'",
+];
+
+string last = "<first>";
+int lastI = -1;
+for (int i = 0; i < int(MessageId.MAX_MESSAGE); i++) {
+	MessageId m = MessageId(i);
+	if (messageCatalog[m] == null) {
+		printf("ERROR: Message %d has no message entry (last defined entry: %s %d)\n", i, last, lastI);
+		string s;
+		s.printf("<message #%d>", i);
+		messageCatalog[m] = s;
+	} else {
+		last = messageCatalog[m];
+		lastI = i;
 	}
-
-};
+}

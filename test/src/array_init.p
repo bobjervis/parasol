@@ -31,3 +31,20 @@ assert(x["abc"] == 3);
 assert(x["ghi"] == 44);
 assert(x["ABC"] == 0);
 
+enum E { A, B, C, D }
+
+int[E] xe;
+
+printf("xe length = %d\n", int(xe.length()));
+
+int[E] foo = [ B: 45, 17 ];
+
+printf("foo length = %d\n", int(foo.length()));
+
+assert(foo.length() == E.D);
+assert(foo[E.C] == 17);
+assert(foo[E.A] == 0);
+assert(foo[E.B] == 45);
+assert(foo[E.D] == 0);
+
+

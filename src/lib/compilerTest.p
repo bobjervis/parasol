@@ -34,10 +34,8 @@ import parasol:compiler.Location;
 import parasol:compiler.MemoryPool;
 import parasol:compiler.Message;
 import parasol:compiler.MessageId;
-import parasol:compiler.messageMap;
 import parasol:compiler.Node;
 import parasol:compiler.Operator;
-import parasol:compiler.operatorMap;
 import parasol:compiler.Parser;
 import parasol:compiler.Scanner;
 import parasol:compiler.Scope;
@@ -779,7 +777,7 @@ boolean checkMessages(ref<Node> n, ref<script.Atom> message) {
 		for (int i = 0; i < v.length(); i++) {
 			ref<script.Atom> a = v.get(i);
 			string s = a.toString();
-			MessageId m = messageMap.messageId(s);
+			MessageId m = messageId(s);
 			if (m == MessageId.MAX_MESSAGE) {
 				printf("'%s' is not a valid message id\n", s);
 				return false;
@@ -788,7 +786,7 @@ boolean checkMessages(ref<Node> n, ref<script.Atom> message) {
 		}
 	} else {
 		string s = message.toString();
-		MessageId m = messageMap.messageId(s);
+		MessageId m = messageId(s);
 		if (m == MessageId.MAX_MESSAGE) {
 			printf("'%s' is not a valid message id\n", s);
 			return false;
@@ -811,6 +809,13 @@ boolean checkMessages(ref<Node> n, ref<script.Atom> message) {
 		}
 	}
 	return true;
+}
+
+MessageId messageId(string messageIdName) {
+	for (int i = 0; i < int(MessageId.MAX_MESSAGE); i++)
+		if (string(MessageId(i)) == messageIdName)
+			return MessageId(i);
+	return MessageId.MAX_MESSAGE;
 }
 
 void printSyntaxErrors(ref<Node> n, ref<string> source) {

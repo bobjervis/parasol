@@ -30,6 +30,7 @@ import parasol:compiler.CompileContext;
 import parasol:compiler.CompileString;
 import parasol:compiler.Constant;
 import parasol:compiler.EnumInstanceType;
+import parasol:compiler.familySize;
 import parasol:compiler.FileScanner;
 import parasol:compiler.FileStat;
 import parasol:compiler.For;
@@ -40,7 +41,6 @@ import parasol:compiler.Identifier;
 import parasol:compiler.Location;
 import parasol:compiler.MessageId;
 import parasol:compiler.Operator;
-import parasol:compiler.operatorMap;
 import parasol:compiler.Overload;
 import parasol:compiler.OverloadInstance;
 import parasol:compiler.Node;
@@ -60,7 +60,6 @@ import parasol:compiler.TraverseAction;
 import parasol:compiler.Type;
 import parasol:compiler.TypedefType;
 import parasol:compiler.TypeFamily;
-import parasol:compiler.typeFamilyMap;
 import parasol:compiler.Unary;
 import parasol:pxi.Pxi;
 import parasol:pxi.Section;
@@ -3437,7 +3436,7 @@ class Code extends Value {
 
 				case	VAR:
 					target.byteCode(ByteCodes.RETN);
-					target.byteCode(typeFamilyMap.size[TypeFamily.VAR]);
+					target.byteCode(familySize[TypeFamily.VAR]);
 					break;
 
 				case	CLASS:

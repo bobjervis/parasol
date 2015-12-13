@@ -945,7 +945,7 @@ class Type {
 	}
 
 	public int size() {
-		return TypeFamilyMap.size[_family];
+		return familySize[_family];
 	}
 
 	public int stackSize() {
@@ -953,7 +953,7 @@ class Type {
 	}
 
 	public int alignment() {
-		return TypeFamilyMap.alignment[_family];
+		return familyAlignment[_family];
 	}
 	
 	public int parameterCount() {
@@ -1248,78 +1248,71 @@ class Type {
 	}
 }
 
-class TypeFamilyMap {
-	TypeFamilyMap() {
-		size.resize(TypeFamily.MAX_TYPES);
-		size[TypeFamily.SIGNED_8] = 1;
-		size[TypeFamily.SIGNED_16] = 2;
-		size[TypeFamily.SIGNED_32] = 4;
-		size[TypeFamily.SIGNED_64] = 8;
-		size[TypeFamily.UNSIGNED_8] = 1;
-		size[TypeFamily.UNSIGNED_16] = 2;
-		size[TypeFamily.UNSIGNED_32] = 4;
-		size[TypeFamily.UNSIGNED_64] = 8;
-		size[TypeFamily.FLOAT_32] = 4;
-		size[TypeFamily.FLOAT_64] = 8;
-		size[TypeFamily.BOOLEAN] = 1;
-		size[TypeFamily.ADDRESS] = 8;
-		size[TypeFamily.STRING] = size[TypeFamily.ADDRESS];
-		size[TypeFamily.VAR] = 16;
-		size[TypeFamily.VOID] = -1;
-		size[TypeFamily.ERROR] = -1;
-		size[TypeFamily.BUILTIN_TYPES] = -1;
-		size[TypeFamily.CLASS] = -1;
-		size[TypeFamily.ARRAY_AGGREGATE] = -1;
-		size[TypeFamily.OBJECT_AGGREGATE] = -1;
-		size[TypeFamily.ENUM] = size[TypeFamily.ADDRESS];
-		size[TypeFamily.TYPEDEF] = size[TypeFamily.ADDRESS];
-		size[TypeFamily.SHAPE] = -1;
-		size[TypeFamily.REF] = size[TypeFamily.ADDRESS];
-		size[TypeFamily.POINTER] = size[TypeFamily.ADDRESS];
-		size[TypeFamily.FUNCTION] = size[TypeFamily.ADDRESS];
-		size[TypeFamily.TEMPLATE] = -1;
-		size[TypeFamily.TEMPLATE_INSTANCE] = -1;
-		size[TypeFamily.NAMESPACE] = -1;
-		size[TypeFamily.CLASS_VARIABLE] = size[TypeFamily.ADDRESS];
-		size[TypeFamily.CLASS_DEFERRED] = -1;
+int[TypeFamily] familySize = [
+	SIGNED_8:			 1,
+	SIGNED_16:			 2,
+	SIGNED_32:			 4,
+	SIGNED_64:			 8,
+	UNSIGNED_8:			 1,
+	UNSIGNED_16:		 2,
+	UNSIGNED_32:		 4,
+	UNSIGNED_64:		 8,
+	FLOAT_32:			 4,
+	FLOAT_64:			 8,
+	BOOLEAN:			 1,
+	ADDRESS:			 8,
+	STRING: 			 8,
+	VAR: 				16,
+	VOID: 				-1,
+	ERROR: 				-1,
+	BUILTIN_TYPES: 		-1,
+	CLASS: 				-1,
+	ARRAY_AGGREGATE: 	-1,
+	OBJECT_AGGREGATE: 	-1,
+	ENUM:				 8,
+	TYPEDEF: 			 8,
+	SHAPE: 				-1,
+	REF: 				 8,
+	POINTER: 			 8,
+	FUNCTION: 			 8,
+	TEMPLATE: 			-1,
+	TEMPLATE_INSTANCE:	-1,
+	NAMESPACE: 			-1,
+	CLASS_VARIABLE: 	 8,
+	CLASS_DEFERRED: 	-1,
+];
 
-		alignment.resize(TypeFamily.MAX_TYPES);
-		alignment[TypeFamily.ADDRESS] = 8;
-
-		alignment[TypeFamily.SIGNED_8] = 1;
-		alignment[TypeFamily.SIGNED_16] = 2;
-		alignment[TypeFamily.SIGNED_32] = 4;
-		alignment[TypeFamily.SIGNED_64] = 8;
-		alignment[TypeFamily.UNSIGNED_8] = 1;
-		alignment[TypeFamily.UNSIGNED_16] = 2;
-		alignment[TypeFamily.UNSIGNED_32] = 4;
-		alignment[TypeFamily.UNSIGNED_64] = 8;
-		alignment[TypeFamily.FLOAT_32] = 4;
-		alignment[TypeFamily.FLOAT_64] = 8;
-		alignment[TypeFamily.BOOLEAN] = 1;
-		alignment[TypeFamily.STRING] = alignment[TypeFamily.ADDRESS];
-		alignment[TypeFamily.VAR] = alignment[TypeFamily.ADDRESS];
-		alignment[TypeFamily.VOID] = -1;
-		alignment[TypeFamily.ERROR] = -1;
-		alignment[TypeFamily.BUILTIN_TYPES] = -1;
-		alignment[TypeFamily.CLASS] = -1;
-		alignment[TypeFamily.ARRAY_AGGREGATE] = -1;
-		alignment[TypeFamily.OBJECT_AGGREGATE] = -1;
-		alignment[TypeFamily.ENUM] = alignment[TypeFamily.ADDRESS];
-		alignment[TypeFamily.TYPEDEF] = alignment[TypeFamily.ADDRESS];
-		alignment[TypeFamily.SHAPE] = -1;
-		alignment[TypeFamily.REF] = -1;
-		alignment[TypeFamily.POINTER] = -1;
-		alignment[TypeFamily.FUNCTION] = alignment[TypeFamily.ADDRESS];
-		alignment[TypeFamily.TEMPLATE] = -1;
-		alignment[TypeFamily.TEMPLATE_INSTANCE] = -1;
-		alignment[TypeFamily.NAMESPACE] = -1;
-		alignment[TypeFamily.CLASS_VARIABLE] = alignment[TypeFamily.ADDRESS];
-		alignment[TypeFamily.CLASS_DEFERRED] = -1;
-	}
-
-	static int[TypeFamily] size;
-	static int[TypeFamily] alignment;
-}
-
-TypeFamilyMap typeFamilyMap;
+int[TypeFamily] familyAlignment = [
+	ADDRESS:			 8,
+	
+	SIGNED_8:			 1,
+	SIGNED_16:			 2,
+	SIGNED_32:			 4,
+	SIGNED_64:			 8,
+	UNSIGNED_8:			 1,
+	UNSIGNED_16:		 2,
+	UNSIGNED_32:		 4,
+	UNSIGNED_64:		 8,
+	FLOAT_32:			 4,
+	FLOAT_64:			 8,
+	BOOLEAN: 			 1,
+	STRING: 			 8,
+	VAR: 				 8,
+	VOID: 				-1,
+	ERROR: 				-1,
+	BUILTIN_TYPES: 		-1,
+	CLASS: 				-1,
+	ARRAY_AGGREGATE: 	-1,
+	OBJECT_AGGREGATE: 	-1,
+	ENUM: 				 8,
+	TYPEDEF: 			 8,
+	SHAPE: 				-1,
+	REF: 				-1,
+	POINTER: 			-1,
+	FUNCTION: 			 8,
+	TEMPLATE: 			-1,
+	TEMPLATE_INSTANCE:	-1,
+	NAMESPACE: 			-1,
+	CLASS_VARIABLE: 	 8,
+	CLASS_DEFERRED: 	-1,
+];

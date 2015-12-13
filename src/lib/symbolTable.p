@@ -260,6 +260,21 @@ class EnumScope extends ClasslikeScope {
 	public ref<Symbol>[] instances() {
 		return _instances;
 	}
+	/*
+	 * Given a symbol, return the index of the symbol within this enumscope. THis allows us to properly
+	 * validate aggregate initializers by calculating the numeric index of that element (in a labeled
+	 * initializer).
+	 * 
+	 * RETURN:
+	 *   >= 0	The index of the given enumInstance symbol.
+	 *   -1		The enumInstance argument was not a member of this EnumScope.
+	 */
+	public int indexOf(ref<Symbol> enumInstance) {
+		for (int i = 0; i < _instances.length(); i++)
+			if (_instances[i] == enumInstance)
+				return i;
+		return -1;
+	}
 }
 /*
  * ParameterScope - a.k.a functionScope

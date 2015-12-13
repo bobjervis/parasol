@@ -413,75 +413,79 @@ class Call extends ParameterBag {
 			nl.node.print(indent + INDENT);
 	}
 
+	public void assignArrayAggregateTypes(ref<EnumInstanceType> enumType, ref<CompileContext> compileContext) {
+		if (assignArguments(LabelStatus.OPTIONAL_LABELS, enumType, compileContext)) {
+			ref<Type> indexType = null;
+			boolean indexTypeValid = true;
+			boolean anyUnlabeled = false;
+			ref<Type> scalarType = null;
+			if (_arguments != null) {
+				scalarType = _arguments.node.type;
+				if (_arguments.node.op() == Operator.LABEL) {
+					indexType = ref<Binary>(_arguments.node).left().type;
+					indexTypeValid = indexType != null;
+				} else
+					anyUnlabeled = true;
+				for (ref<NodeList> nl = _arguments; nl.next != null; nl = nl.next) {
+					scalarType = findCommonType(scalarType, nl.next.node.type, compileContext);
+					if (scalarType == null) {
+						nl.next.node.add(MessageId.TYPE_MISMATCH, compileContext.pool());
+						nl.next.node.type = compileContext.errorType();
+						break;
+					}
+					if (indexType != null && nl.next.node.op() == Operator.LABEL) {
+						ref<Binary> b = ref<Binary>(nl.next.node);
+						indexType = findCommonType(indexType, b.left().type, compileContext);
+						if (indexType == null) {
+							indexTypeValid = false;
+							b.left().add(MessageId.TYPE_MISMATCH, compileContext.pool());
+							b.left().type = compileContext.errorType();
+						}
+					} else
+						anyUnlabeled = true;
+				}
+				if (scalarType == null || !indexTypeValid) {
+					type = compileContext.errorType();
+					return;
+				}
+				if (indexType != null) {
+					boolean anyFailed = false;
+					if (!indexType.isCompactIndexType()) {
+						for (ref<NodeList> nl = _arguments; nl.next != null; nl = nl.next) {
+							if (nl.node.op() != Operator.LABEL) {
+								nl.node.add(MessageId.TYPE_MISMATCH, compileContext.pool());
+								nl.node.type = compileContext.errorType();
+								anyFailed = true;
+							}
+						}
+					}
+					if (anyFailed) {
+						type = compileContext.errorType();
+						return;
+					}
+				}
+				for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
+					if (scalarType != nl.node.type)
+						nl.node = nl.node.coerce(compileContext.tree(), scalarType, false, compileContext);
+			}
+			if (scalarType != null) {
+				if (indexType == null)
+					indexType = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+				type = compileContext.arena().buildVectorType(scalarType, indexType, compileContext);
+			} else // This is the class-less empty array initializer [ ]
+				type = compileContext.arena().builtInType(TypeFamily.ARRAY_AGGREGATE);
+		} else
+			type = compileContext.errorType();
+	}
+	
 	private void assignTypes(ref<CompileContext> compileContext) {
 		switch (op()) {
 		case	ARRAY_AGGREGATE:
-			if (assignArguments(LabelStatus.OPTIONAL_LABELS, compileContext)) {
-				ref<Type> indexType = null;
-				boolean indexTypeValid = true;
-				boolean anyUnlabeled = false;
-				ref<Type> scalarType = null;
-				if (_arguments != null) {
-					scalarType = _arguments.node.type;
-					if (_arguments.node.op() == Operator.LABEL) {
-						indexType = ref<Binary>(_arguments.node).left().type;
-						indexTypeValid = indexType != null;
-					} else
-						anyUnlabeled = true;
-					for (ref<NodeList> nl = _arguments; nl.next != null; nl = nl.next) {
-						scalarType = findCommonType(scalarType, nl.next.node.type, compileContext);
-						if (scalarType == null) {
-							nl.next.node.add(MessageId.TYPE_MISMATCH, compileContext.pool());
-							nl.next.node.type = compileContext.errorType();
-							break;
-						}
-						if (indexType != null && nl.next.node.op() == Operator.LABEL) {
-							ref<Binary> b = ref<Binary>(nl.next.node);
-							indexType = findCommonType(indexType, b.left().type, compileContext);
-							if (indexType == null) {
-								indexTypeValid = false;
-								b.left().add(MessageId.TYPE_MISMATCH, compileContext.pool());
-								b.left().type = compileContext.errorType();
-							}
-						} else
-							anyUnlabeled = true;
-					}
-					if (scalarType == null || !indexTypeValid) {
-						type = compileContext.errorType();
-						break;
-					}
-					if (indexType != null) {
-						boolean anyFailed = false;
-						if (!indexType.isCompactIndexType()) {
-							for (ref<NodeList> nl = _arguments; nl.next != null; nl = nl.next) {
-								if (nl.node.op() != Operator.LABEL) {
-									nl.node.add(MessageId.TYPE_MISMATCH, compileContext.pool());
-									nl.node.type = compileContext.errorType();
-									anyFailed = true;
-								}
-							}
-						}
-						if (anyFailed) {
-							type = compileContext.errorType();
-							break;
-						}
-					}
-					for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
-						if (scalarType != nl.node.type)
-							nl.node = nl.node.coerce(compileContext.tree(), scalarType, false, compileContext);
-				}
-				if (scalarType != null) {
-					if (indexType == null)
-						indexType = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
-					type = compileContext.arena().buildVectorType(scalarType, indexType, compileContext);
-				} else // This is the class-less empty array initializer [ ]
-					type = compileContext.arena().builtInType(TypeFamily.ARRAY_AGGREGATE);
-			} else
-				type = compileContext.errorType();
+			assignArrayAggregateTypes(null, compileContext);
 			break;
 			
 		case	OBJECT_AGGREGATE:
-			if (assignArguments(LabelStatus.REQUIRED_LABELS, compileContext))
+			if (assignArguments(LabelStatus.REQUIRED_LABELS, null, compileContext))
 				type = compileContext.arena().builtInType(TypeFamily.OBJECT_AGGREGATE);
 			else
 				type = compileContext.errorType();
@@ -611,7 +615,7 @@ class Call extends ParameterBag {
 	}
 	
 	private boolean assignSub(Operator kind, ref<CompileContext> compileContext) {
-		if (!assignArguments(LabelStatus.NO_LABELS, compileContext))
+		if (!assignArguments(LabelStatus.NO_LABELS, null, compileContext))
 			return false;
 		_target.assignOverload(_arguments, kind, compileContext);
 		if (_target.deferAnalysis()) {
@@ -622,7 +626,7 @@ class Call extends ParameterBag {
 	}
 
 	void assignConstructorCall(ref<Type> classType, ref<CompileContext> compileContext) {
-		if (!assignArguments(LabelStatus.NO_LABELS, compileContext))
+		if (!assignArguments(LabelStatus.NO_LABELS, null, compileContext))
 			return;
 		OverloadOperation operation(Operator.FUNCTION, this, null, _arguments, compileContext);
 		if (classType.deferAnalysis()) {
@@ -677,7 +681,7 @@ class Call extends ParameterBag {
 		REQUIRED_LABELS
 	}
 	
-	boolean assignArguments(LabelStatus status, ref<CompileContext> compileContext) {
+	boolean assignArguments(LabelStatus status, ref<EnumInstanceType> enumType, ref<CompileContext> compileContext) {
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 			compileContext.assignTypes(nl.node);
 			switch (status) {
@@ -695,11 +699,25 @@ class Call extends ParameterBag {
 			case	OPTIONAL_LABELS:		// An array aggregate
 				if (nl.node.op() == Operator.LABEL) {
 					ref<Binary> b = ref<Binary>(nl.node);
-					if (b.left().op() != Operator.IDENTIFIER)
+					if (enumType != null) {
+						ref<EnumScope> scope = ref<EnumScope>(enumType.scope());
+						if (b.left().op() == Operator.IDENTIFIER) {
+							ref<Identifier> id = ref<Identifier>(b.left());
+							id.resolveAsEnum(enumType, compileContext);
+							if (b.left().deferAnalysis()) {
+								nl.node.type = compileContext.errorType();
+								break;
+							}
+							int i = scope.indexOf(id.symbol()); 
+						} else {
+							b.left().add(MessageId.LABEL_NOT_IDENTIFIER, compileContext.pool());
+							b.left().type = compileContext.errorType();
+						}
+					} else
 						compileContext.assignTypes(b.left());
 				}
 				break;
-				
+
 			case	REQUIRED_LABELS:
 				if (nl.node.op() == Operator.LABEL) {
 					ref<Binary> b = ref<Binary>(nl.node);

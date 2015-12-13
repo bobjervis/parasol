@@ -587,13 +587,6 @@ class X86_64AddressModes extends X86_64Encoder {
 		if	(node.deferGeneration())
 			return MC_FULL;
 		switch	(node.op()){
-/*
-		case	O_ADR:
-			if	(!isCompileTimeConstant(t))
-				return MC_FULL;
-
-		case	O_LITERAL:
-		*/
 		case	INTEGER:
 			if	((modeContext & MC_CONST) != 0 &&
 				 (nClass & NC_IMMED) != 0) {
@@ -603,22 +596,7 @@ class X86_64AddressModes extends X86_64Encoder {
 					node.nodeFlags |= ADDRESS_MODE;
 			}
 			return MC_FULL;
-/*
-		case	O_REG:
-			if	(ref iden_x(t).adjust == nullReg)
-				return MC_FULL;
-			else if	(isSegReg(ref iden_x(t).adjust)){
-				if	(modeContext & MC_SREG)
-					t.addrMode = TRUE;
-				t.reg = ref iden_x(t).adjust;
-				return MC_REG|MC_ADDRESS;
-				}
-			else if	(modeContext & MC_REG){
-				t.addrMode = TRUE;
-				t.reg = ref iden_x(t).adjust;
-				}
-			return MC_FULL;
-*/
+
 		case	SUBSCRIPT:
 			if	((modeContext & MC_ADDRESS) != 0) {
 				ref<Binary> b = ref<Binary>(node);
@@ -640,41 +618,7 @@ class X86_64AddressModes extends X86_64Encoder {
 			}
 			markAddressModes(node, compileContext);
 			break;
-/*
-		case	O_TOS:
-			if	(modeContext & MC_ADDRESS){
-				t.addrMode = TRUE;
-				return justRegs(modeContext)|MC_CONST;
-				}
-			break;
 
-		case	O_AUTO:
-			v = ref auto_x(t).var;
-			if	(t.dtype sizeOf() == 1)
-				ref auto_x(t).var.nodeFlags |= VF_BYTEREG;
-			if	(v.nodeFlags & VF_REG){
-				t.reg = v.reg;
-				if	(isSegReg(v.reg)){
-					if	(modeContext & MC_SREG)
-						t.addrMode = TRUE;
-					return MC_REG|MC_ADDRESS;
-					}
-				if	(!isByteReg(v.reg)){
-					if	(modeContext & MC_REG &&
-						 t.dtype sizeOf() > 1)
-						t.addrMode = TRUE;
-					return MC_FULL;
-					}
-				if	(modeContext & MC_REG)
-					t.addrMode = TRUE;
-				return MC_FULL;
-				}
-			if	(modeContext & MC_ADDRESS){
-				t.addrMode = TRUE;
-				return justRegs(modeContext)|MC_CONST;
-				}
-			break;
-*/
 		case	DOT:
 			ref<Selection> dot = ref<Selection>(node);
 			if	((modeContext & MC_ADDRESS) != 0) {
@@ -742,21 +686,6 @@ class X86_64AddressModes extends X86_64Encoder {
 				tryMakeIndirectMode(b.right(), compileContext);
 				b.left().nodeFlags |= ADDRESS_MODE;
 				b.nodeFlags |= ADDRESS_MODE;
-	/*
-			} else if (isIndexRegister(theRegisterOf(left))){
-				left->addrMode = TRUE;
-				left->reg = nullReg;
-				t->addrMode = TRUE;
-				t->reg = nullReg;
-				markAddressModes(right);
-				}
-			else if	(isIndexRegister(theRegisterOf(right))){
-				right->addrMode = TRUE;
-				right->reg = nullReg;
-				t->addrMode = TRUE;
-				t->reg = nullReg;
-				markAddressModes(left);
-	*/
 			} else {
 				markAddressModes(b.right(), compileContext);
 				markAddressModes(b.left(), compileContext);
@@ -775,78 +704,5 @@ class X86_64AddressModes extends X86_64Encoder {
 			node.print(0);
 			assert(false);
 		}
-		/*
-		r:		RegisterMask;
-		v:		ref variable;
-		left:		ref tree_p;
-		right:		ref tree_p;
-	
-		t->reg = nullReg;
-		if	(t->dtype &&
-			 t->dtype->topType == T_ERROR)
-			return;
-		switch	(t->operator){
-		case	O_REG:
-			if	(isIndexRegister(ref iden_x(t)->adjust)){
-				t->addrMode = TRUE;
-				t->reg = ref iden_x(t)->adjust;
-				}
-			return;
-	
-		case	O_AUTO:
-			v = ref auto_x(t)->var;
-			if	(v->nodeFlags & VF_REG == 0)
-				return;
-			if	(isIndexRegister(v->reg)){
-				t->addrMode = TRUE;
-				t->reg = v->reg;
-				}
-			return;
-	
-		case	O_ICON:
-			t->addrMode = TRUE;
-			return;
-	
-		case	O_ADD:
-			left  = ref binary_x(t)->left;
-			right = ref binary_x(t)->right;
-			if	(isCompileTimeConstant(right)){
-				tryMakeIndirectMode(left);
-				right->addrMode = TRUE;
-				right->reg = nullReg;
-				t->addrMode = TRUE;
-				t->reg = nullReg;
-				}
-			else if	(isCompileTimeConstant(left)){
-				tryMakeIndirectMode(right);
-				left->addrMode = TRUE;
-				left->reg = nullReg;
-				t->addrMode = TRUE;
-				t->reg = nullReg;
-				}
-			else if	(isIndexRegister(theRegisterOf(left))){
-				left->addrMode = TRUE;
-				left->reg = nullReg;
-				t->addrMode = TRUE;
-				t->reg = nullReg;
-				markAddressModes(right);
-				}
-			else if	(isIndexRegister(theRegisterOf(right))){
-				right->addrMode = TRUE;
-				right->reg = nullReg;
-				t->addrMode = TRUE;
-				t->reg = nullReg;
-				markAddressModes(left);
-				}
-			else	{
-				markAddressModes(right);
-				markAddressModes(left);
-				}
-			break;
-	
-		default:
-			markAddressModes(node);
-			}
-			*/
 	}
 }

@@ -33,7 +33,6 @@ import parasol:compiler.MessageId;
 import parasol:compiler.Node;
 import parasol:compiler.NodeList;
 import parasol:compiler.Operator;
-import parasol:compiler.operatorMap;
 import parasol:compiler.OverloadInstance;
 import parasol:compiler.ParameterScope;
 import parasol:compiler.PlainSymbol;
@@ -46,7 +45,6 @@ import parasol:compiler.Target;
 import parasol:compiler.Type;
 import parasol:compiler.TypedefType;
 import parasol:compiler.TypeFamily;
-import parasol:compiler.typeFamilyMap;
 import parasol:compiler.Unary;
 import parasol:compiler.Variable;
 import parasol:pxi.Pxi;
@@ -3362,7 +3360,7 @@ private string ccLabel(CC x) {
 		s.printf("<bad:%d>", int(x));
 		return s;
 	} else
-		return ccLabels[x];
+		return string(x);
 }
 	
 /*
@@ -3390,28 +3388,6 @@ enum CC {
 	JMP,			// Unconditional jump
 	MAX_CC
 }
-
-private string[CC] ccLabels;
-
-ccLabels.append("error");
-ccLabels.append("jo");
-ccLabels.append("jno");
-ccLabels.append("jb");
-ccLabels.append("jnb");
-ccLabels.append("je");
-ccLabels.append("jne");
-ccLabels.append("jna");
-ccLabels.append("ja");
-ccLabels.append("js");
-ccLabels.append("jns");
-ccLabels.append("jpe");
-ccLabels.append("jpo");
-ccLabels.append("jl");
-ccLabels.append("jge");
-ccLabels.append("jle");
-ccLabels.append("jg");
-ccLabels.append("nop");
-ccLabels.append("jmp");
 
 CC parityTest(Operator compare, ref<Type> type) {
 	if (type.isFloat()) {
@@ -3704,85 +3680,87 @@ Operator invert(Operator compare) {
 	return Operator.SYNTAX_ERROR;
 }
 
-private int[CC] minCCSize;
-minCCSize.resize(CC.MAX_CC);
+private int[CC] minCCSize = [
+	JO: 	2,
+	JNO: 	2,
+	JB: 	2,
+	JNB: 	2,
+	JE: 	2,
+	JNE: 	2,
+	JNA: 	2,
+	JA: 	2,
+	JS: 	2,
+	JNS: 	2,
+	JP: 	2,
+	JNP: 	2,
+	JL: 	2,
+	JGE: 	2,
+	JLE: 	2,
+	JG: 	2,
+	JMP:	2,
+	MAX_CC: 0
+];
 
-private int[CC] maxCCSize;
-maxCCSize.resize(CC.MAX_CC);
 
-minCCSize[CC.JO] = 2;
-maxCCSize[CC.JO] = 6;
-minCCSize[CC.JNO] = 2;
-maxCCSize[CC.JNO] = 6;
-minCCSize[CC.JB] = 2;
-maxCCSize[CC.JB] = 6;
-minCCSize[CC.JNB] = 2;
-maxCCSize[CC.JNB] = 6;
-minCCSize[CC.JE] = 2;
-maxCCSize[CC.JE] = 6;
-minCCSize[CC.JNE] = 2;
-maxCCSize[CC.JNE] = 6;
-minCCSize[CC.JNA] = 2;
-maxCCSize[CC.JNA] = 6;
-minCCSize[CC.JA] = 2;
-maxCCSize[CC.JA] = 6;
-minCCSize[CC.JS] = 2;
-maxCCSize[CC.JS] = 6;
-minCCSize[CC.JNS] = 2;
-maxCCSize[CC.JNS] = 6;
-minCCSize[CC.JP] = 2;
-maxCCSize[CC.JP] = 6;
-minCCSize[CC.JNP] = 2;
-maxCCSize[CC.JNP] = 6;
-minCCSize[CC.JL] = 2;
-maxCCSize[CC.JL] = 6;
-minCCSize[CC.JGE] = 2;
-maxCCSize[CC.JGE] = 6;
-minCCSize[CC.JLE] = 2;
-maxCCSize[CC.JLE] = 6;
-minCCSize[CC.JG] = 2;
-maxCCSize[CC.JG] = 6;
-minCCSize[CC.JMP] = 2;
-maxCCSize[CC.JMP] = 5;
+private int[CC] maxCCSize= [
+	JO: 	6,
+	JNO: 	6,
+	JB: 	6,
+	JNB: 	6,
+	JE: 	6,
+	JNE: 	6,
+	JNA: 	6,
+	JA: 	6,
+	JS: 	6,
+	JNS: 	6,
+	JP: 	6,
+	JNP: 	6,
+	JL: 	6,
+	JGE: 	6,
+	JLE: 	6,
+	JG: 	6,
+	JMP: 	5,
+	MAX_CC: 0
+];
 
-private byte[R] rmValues;
 
-rmValues.resize(R.MAX_REG);
-
-rmValues[R.NO_REG] = 0xff;
-rmValues[R.RAX] = 0x0;
-rmValues[R.RBX] = 0x3;
-rmValues[R.RCX] = 0x1;
-rmValues[R.RDX] = 0x2;
-rmValues[R.RSP] = 0x4;
-rmValues[R.RBP] = 0x5;
-rmValues[R.RSI] = 0x6;
-rmValues[R.RDI] = 0x7;
-rmValues[R.R8] = 0x0;
-rmValues[R.R9] = 0x1;
-rmValues[R.R10] = 0x2;
-rmValues[R.R11] = 0x3;
-rmValues[R.R12] = 0x4;
-rmValues[R.R13] = 0x5;
-rmValues[R.R14] = 0x6;
-rmValues[R.R15] = 0x7;
-rmValues[R.AH] = 0x04;
-rmValues[R.XMM0] = 0x00;
-rmValues[R.XMM1] = 0x01;
-rmValues[R.XMM2] = 0x02;
-rmValues[R.XMM3] = 0x03;
-rmValues[R.XMM4] = 0x04;
-rmValues[R.XMM5] = 0x05;
-rmValues[R.XMM6] = 0x06;
-rmValues[R.XMM7] = 0x07;
-rmValues[R.XMM8] = 0x00;
-rmValues[R.XMM9] = 0x01;
-rmValues[R.XMM10] = 0x02;
-rmValues[R.XMM11] = 0x03;
-rmValues[R.XMM12] = 0x04;
-rmValues[R.XMM13] = 0x05;
-rmValues[R.XMM14] = 0x06;
-rmValues[R.XMM15] = 0x07;
+private byte[R] rmValues = [
+	NO_REG: 	0xff,
+	RAX: 		0,
+	RBX: 		3,
+	RCX: 		1,
+	RDX: 		2,
+	RSP: 		4,
+	RBP: 		5,
+	RSI: 		6,
+	RDI: 		7,
+	R8: 		0,
+	R9: 		1,
+	R10: 		2,
+	R11: 		3,
+	R12: 		4,
+	R13: 		5,
+	R14: 		6,
+	R15: 		7,
+	AH: 		4,
+	XMM0: 		0,
+	XMM1: 		1,
+	XMM2: 		2,
+	XMM3: 		3,
+	XMM4: 		4,
+	XMM5: 		5,
+	XMM6: 		6,
+	XMM7: 		7,
+	XMM8: 		0,
+	XMM9: 		1,
+	XMM10: 		2,
+	XMM11: 		3,
+	XMM12: 		4,
+	XMM13: 		5,
+	XMM14: 		6,
+	XMM15: 		7,
+	MAX_REG: 	0
+];
 
 private byte[R] rexValues;
 private byte[R] rexbValues;

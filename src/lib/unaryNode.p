@@ -302,46 +302,6 @@ class Unary extends Node {
 					ref<Call> call = tree.newCall(oi, null,  method, args, location(), compileContext);
 					call.type = type;
 					return call.fold(tree, voidContext, compileContext);
-/*
-				} else if (b.left().type.isMap(compileContext)) {
-					ref<Symbol> sym = b.left().type.scope().lookup("createEmpty");
-					if (sym.class != Overload) {
-						target.unfinished(n, "createEmpty is not an Overloaded symbol", compileContext);
-						break;
-					}
-					sym = ref<Overload>(sym).instances()[0];
-					generate(b.right(), target, compileContext);
-					pushAddress(b.left(), target, compileContext);
-					if (sym.type().family() != TypeFamily.FUNCTION) {
-						target.unfinished(n, "createEmpty not a function", compileContext);
-						break;
-					}
-					ref<FunctionType> functionType = ref<FunctionType>(sym.type());
-					checkStack(target);
-					ref<Value>  value = target.unit().getCode(functionType.scope(), target, compileContext);
-					target.byteCode(ByteCodes.CALL);
-					target.byteCode(value.index());
-					target.popSp(address.bytes);
-				} else if (b.left().type.family() == TypeFamily.STRING) {
-					generate(b.left(), target, compileContext);
-					target.byteCode(ByteCodes.INT);
-					target.byteCode(int(int.bytes));
-					target.byteCode(ByteCodes.ADD);
-					generate(b.right(), target, compileContext);
-					target.byteCode(ByteCodes.ADD);
-					target.popSp(address.bytes);
-				} else {
-					generate(b.left(), target, compileContext);
-					generate(b.right(), target, compileContext);
-					ref<Type> t = b.left().type.indirectType(compileContext);
-					if (t != null && t.size() > 1) {
-						target.byteCode(ByteCodes.INT);
-						target.byteCode(t.size());
-						target.byteCode(ByteCodes.MUL);
-					}
-					target.byteCode(ByteCodes.ADD);
-					target.popSp(address.bytes);
-*/
 				}
 			}
 			break;
@@ -435,7 +395,7 @@ class Unary extends Node {
 			}
 			type = _operand.type.indirectType(compileContext);
 			if (type == null) {
-				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}
 			break;
@@ -447,7 +407,7 @@ class Unary extends Node {
 				break;
 			}
 			if (_operand.type.family() != TypeFamily.SHAPE) {
-				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 				break;
 			}
@@ -464,7 +424,7 @@ class Unary extends Node {
 				break;
 
 			default:
-				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}
 			break;
@@ -489,7 +449,7 @@ class Unary extends Node {
 				break;
 
 			default:
-				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}
 			break;
@@ -511,7 +471,7 @@ class Unary extends Node {
 				break;
 
 			default:
-				add(OperatorMap.typeNotAllowed[op()], compileContext.pool());
+				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}
 			break;
