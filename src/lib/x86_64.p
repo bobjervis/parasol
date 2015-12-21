@@ -2630,13 +2630,13 @@ public class X86_64 extends X86_64AssignTemps {
 		}
 		f().r.generateSpills(call, this);
 
-		ref<Symbol> overload = call.overload();
+		ref<ParameterScope> overload = call.overload();
 		
 		switch (call.category()) {
 		case	CONSTRUCTOR:
 			if (call.type.hasVtable(compileContext) && (call.target() == null || call.target().op() != Operator.SUPER))
 				storeVtable(call.type, compileContext);
-			if (!instCall(ref<OverloadInstance>(overload).parameterScope(), compileContext)) {
+			if (!instCall(overload, compileContext)) {
 				call.print(0);
 				assert(false);
 				return;
@@ -2645,7 +2645,7 @@ public class X86_64 extends X86_64AssignTemps {
 
 		case	VIRTUAL_METHOD_CALL:
 			inst(X86.MOV, R.RAX, R.RCX, 0);
-			inst(X86.CALL, TypeFamily.ADDRESS, R.RAX, overload.offset * address.bytes);
+			inst(X86.CALL, TypeFamily.ADDRESS, R.RAX, overload.symbol().offset * address.bytes);
 			break;
 			
 		case	METHOD_CALL:
@@ -2685,7 +2685,7 @@ public class X86_64 extends X86_64AssignTemps {
 				assert(false);
 			}
 			if (overload != null) {
-				if (!instCall(ref<OverloadInstance>(overload).parameterScope(), compileContext)) {
+				if (!instCall(overload, compileContext)) {
 					call.print(0);
 					assert(false);
 				}

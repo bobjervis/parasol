@@ -178,7 +178,7 @@ ref<Node> vectorize(ref<SyntaxTree> tree, ref<Node> vectorExpression, ref<Compil
 			ref<Selection> method = tree.newSelection(closure.lvalues[0], oi, vectorExpression.location());
 			method.type = oi.type();
 			ref<NodeList> args = tree.newNodeList(tree.newReference(vectorSize, false, vectorExpression.location()));
-			ref<Call> call = tree.newCall(oi, null,  method, args, vectorExpression.location(), compileContext);
+			ref<Call> call = tree.newCall(oi.parameterScope(), null,  method, args, vectorExpression.location(), compileContext);
 			start = tree.newBinary(Operator.SEQUENCE, start, call, vectorExpression.location());
 		} else {
 			printf("Only 1 lvalue per expression allowed\n");
@@ -221,7 +221,7 @@ private ref<Node> rewriteVectorTree(ref<SyntaxTree> tree, ref<Node> vectorStuff,
 		ref<Selection> method = tree.newSelection(vectorStuff, oi, vectorStuff.location());
 		method.type = oi.type();
 		ref<NodeList> args = tree.newNodeList(index);
-		return tree.newCall(oi, null,  method, args, vectorStuff.location(), compileContext);
+		return tree.newCall(oi.parameterScope(), null,  method, args, vectorStuff.location(), compileContext);
 	}
 	if (vectorStuff.isLvalue())
 		return vectorStuff;
@@ -243,7 +243,7 @@ private ref<Node> rewriteVectorTree(ref<SyntaxTree> tree, ref<Node> vectorStuff,
 		method.type = oi.type();
 		ref<Node> right = rewriteVectorTree(tree, b.right(), iterator, vectorSize, compileContext);
 		ref<NodeList> args = tree.newNodeList(tree.newReference(iterator, false, vectorStuff.location()), right);
-		return tree.newCall(oi, null,  method, args, vectorStuff.location(), compileContext);
+		return tree.newCall(oi.parameterScope(), null,  method, args, vectorStuff.location(), compileContext);
 
 	case	NEGATE:
 	case	UNARY_PLUS:
@@ -383,14 +383,14 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 			ref<Node> arg = tree.newConstant(maxIndexValue + 1, aggregate.location());
 			arg.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
 			arg = tree.newCast(indexType, arg);
-			ref<OverloadInstance> constructor = null;
+			ref<ParameterScope> constructor = null;
 			for (int i = 0; i < vectorType.scope().constructors().length(); i++) {
 				ref<Function> f = ref<Function>(vectorType.scope().constructors()[i].definition());
 				ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
 				if (oi.parameterCount() != 1)
 					continue;
 				if (oi.parameterScope().parameters()[0].type() == indexType) {
-					constructor = oi;
+					constructor = oi.parameterScope();
 					break;
 				}
 			}
@@ -442,7 +442,7 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 				ref<Selection> method = tree.newSelection(arrayRef, oi, arrayRef.location());
 				method.type = oi.type();
 				ref<NodeList> args = tree.newNodeList(idx, val);
-				ref<Node> next = tree.newCall(oi, null,  method, args, val.location(), compileContext);
+				ref<Node> next = tree.newCall(oi.parameterScope(), null,  method, args, val.location(), compileContext);
 				result = tree.newBinary(Operator.SEQUENCE, result, next, vectorExpression.location());
 			}
 		} else {
@@ -465,7 +465,7 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 					assert(false);
 				}
 				ref<NodeList> args = tree.newNodeList(nl.node);
-				ref<Node> next = tree.newCall(oi, null,  method, args, nl.node.location(), compileContext);
+				ref<Node> next = tree.newCall(oi.parameterScope(), null,  method, args, nl.node.location(), compileContext);
 				if (result == null)
 					result = next;
 				else
@@ -493,7 +493,7 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 			}
 			ref<Binary> label = ref<Binary>(nl.node);
 			ref<NodeList> args = tree.newNodeList(label.left(), label.right());
-			ref<Node> next = tree.newCall(oi, null,  method, args, nl.node.location(), compileContext);
+			ref<Node> next = tree.newCall(oi.parameterScope(), null,  method, args, nl.node.location(), compileContext);
 			if (result == null)
 				result = next;
 			else

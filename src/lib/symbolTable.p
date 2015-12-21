@@ -369,6 +369,23 @@ class ParameterScope extends Scope {
 			return false;
 	}
 	
+	public ref<FunctionType> type() {
+		ref<Function> func = ref<Function>(definition());
+		if (func == null)		// a generate default constructor has no 'definition'
+			return null;		// and no type.
+		return ref<FunctionType>(func.type);
+		
+	}
+	
+	public ref<OverloadInstance> symbol() {
+		ref<Function> func = ref<Function>(definition());
+		if (func == null)		// a generate default constructor has no 'definition'
+			return null;		// and no type.
+		if (func.deferAnalysis())
+			return null;
+		return ref<OverloadInstance>(func.name().symbol());
+	}
+	
 	public boolean hasOutParameter(ref<CompileContext> compileContext) {
 		ref<Function> func = ref<Function>(definition());
 		if (func == null)		// a generate default constructor has no 'definition'
@@ -390,6 +407,18 @@ class ParameterScope extends Scope {
 			return true;
 		else
 			return returnType.node.type.returnsViaOutParameter(compileContext);
+	}
+	
+	public boolean usesVTable(ref<CompileContext> compileContext) {
+		ref<Function> func = ref<Function>(definition());
+		if (func == null)		// a generate default constructor has no 'definition'
+			return false;		// and no out parameter.
+		if (func.deferAnalysis())
+			return false;
+		if (func.functionCategory() == Function.Category.CONSTRUCTOR ||
+			func.functionCategory() == Function.Category.DESTRUCTOR)
+			return false;
+		return func.name().symbol().usesVTable(compileContext);
 	}
 	
 	public boolean equals(ref<ParameterScope> other, ref<CompileContext> compileContext) {

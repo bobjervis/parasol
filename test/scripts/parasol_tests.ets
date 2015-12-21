@@ -4,6 +4,7 @@ run(filename: randomTests.p)
 run(filename: linearRegressionTests.p)
 run(filename: escapes.p)
 run(filename: binarySearch.p)
+run(filename: sort_test.p)
 run(filename: cmdLine_ops.p, exitCode: 7)
 run(filename: cmdLine_ops.p, arguments: "x TEST-STRING-2")
 run(filename: cmdLine_ops.p, arguments: "x anything-else", exitCode: 2)
@@ -144,7 +145,7 @@ compile() { "class Foo{} ref<Foo[]> x; ref<Foo> y = &(*x)[0];" }
 // This test checks a regression concering accepting ... arguments.
 compile() { "class Bar { void f(int... args) { } } ref<Bar> x; x.f(4);" }
 
-//compile(expect: fail) { "ref<int> x = = new int();" }
+compile(expect: fail) { "ref<int> x = = new int();" }
 compile(expect: fail, message: DUPLICATE) { "class Foo { private int f(int y) { return 0; } public int f(int z) { return z; } }" }
 compile(expect: fail) { "void f() { for (int i = 0; i < 5); i++) printf("hello"); }" }
 
@@ -926,10 +927,15 @@ compile() { "enum a { A, B, C }; a x = a.B;" }
 compile() { "int[] a = [ 1, 2, 3 ];" }
 compile() { "int[string] b = [ \"a\": 4, \"b\": 17, \"c\": -23, ];" }
 compile() { "enum E { A, B, C } string[E] x = [ B: \"abc\", \"def\" ];" }
-//compile() { "class C { int a, b, c; } C c = { a: 3, c: 7, b: -1 };" }
+
+compile(expect: fail) { "class C { C(int x) {} } C x;" }
+
+compile() { "class C { int a, b, c; } C c = { a: 3, c: 7, b: -1 };" }
 
 compile(expect: fail) { "int[string] b = [ \"a\": 4, 22: 17, \"c\": -23, ];" }
-//compile(expect: fail) { "enum E { A, B, C } string[E] x = [ B: \"abc\", \"def\", \"ghi\" ];" }
+compile(expect: fail) { "enum E { A, B, C } string[E] x = [ B: \"abc\", \"def\", \"ghi\" ];" }
+compile(expect: fail) { "enum E { A, B, C } string[E] x = [ B: \"abc\", A: \"def\", \"ghi\" ];" }
+compile(expect: fail) { "enum E { A, B, C } string[E] x = [ D: \"abc\" ];" }
 compile(expect: fail) { "int[string] b = [ \"a\": 4, 17, \"c\": -23, ];" }
 compile(expect: fail) { "class C { int a, b, c; } C c = { 3, c: 7, b: -1 };" }
 compile(expect: fail) { "class C { int a, b, c; } C c = { \"wrong\": 3, c: 7, b: -1 };" }
@@ -941,6 +947,8 @@ compile(expect: fail, message: NO_PARAMS_IN_DESTRUCTOR) { "class a { ~a(int b) {
 compile() { "int, boolean f() { return 0, false; }" }
 
 compile(expect: fail) { "int, boolean f() { return false, 0; }" }
+
+compile(expect: fail) { "int, boolean f() { return 0, false; } int x; double y; (x, y) = f();" }
 
 compile(expect: fail) { "void foo(foo bar);" }
 

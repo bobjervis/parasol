@@ -1549,11 +1549,11 @@ class Code extends Value {
 		case	CHARACTER: {
 			ref<Constant> integer = ref<Constant>(tree);
 			target.byteCode(ByteCodes.INT);
-			int charVal;
+			long charVal;
 			boolean result;
 			(charVal, result) = integer.charValue();
 			if (result)
-				target.byteCode(charVal);
+				target.byteCode(int(charVal));
 			else {
 				tree.add(MessageId.BAD_CHAR, compileContext.pool(), integer.value());
 				target.byteCode(-1);
@@ -1864,7 +1864,7 @@ class Code extends Value {
 			if (call.target().type.family() == TypeFamily.ERROR)
 				break;
 			if (call.target().type.family() == TypeFamily.TYPEDEF) {
-				ref<Symbol> sym = call.overload();
+				ref<Symbol> sym = call.overload().symbol();
 				if (sym != null) {
 					if (sym.isFunction()) {
 						ref<Function> f = ref<Function>(sym.definition());
@@ -2365,10 +2365,10 @@ class Code extends Value {
 			return 0;
 		}
 
-		ref<Symbol> overload = call.overload();
+		ref<Symbol> overload = call.overload().symbol();
 		if (overload != null && overload.type().family() != TypeFamily.FUNCTION) {
 			// This can only arise when a class constructor was called with no defined
-			// parameter-less constructor.
+			// default constructor.
 			if (placement != null)
 				generateObjectPlacement(placement, constructorType, target, compileContext);
 			return 0;

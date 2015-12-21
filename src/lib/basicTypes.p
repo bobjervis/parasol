@@ -89,22 +89,13 @@ class Location {
 
 	public int		offset;
 	
+	public Location() {
+	}
+	
 	public Location(int v) {
 		offset = v;
 	}
-/*
-	bool operator==(Location &loc) const {
-		return offset == loc.offset;
-	}
 
-	bool operator>(Location &loc) const {
-		return offset > loc.offset;
-	}
-
-	bool operator<(Location &loc) const {
-		return offset < loc.offset;
-	}
-*/
 	int compare(Location loc) {
 		return offset - loc.offset;
 	}

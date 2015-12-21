@@ -87,13 +87,16 @@ class Disassembler {
 		printf("    symbols for      %8x - %8x\n", _length, _imageLength);
 		
 		pointer<address> vp = pointer<address>(_physical + _pxiHeader.vtablesOffset);
+		ref<Scope> rawScope;
 		ref<ClasslikeScope> scope;
 		int scopeIndex;
-		(scope, scopeIndex) = nextVtable(0);
+		(rawScope, scopeIndex) = nextVtable(0);
+		scope = ref<ClasslikeScope>(rawScope);
 		for (int i = 0; i < _pxiHeader.vtableData; i++) {
 			if (scope != null && i == int(scope.vtable) - 1) {
 				printf("\n        %p:\n\n", scope);
-				(scope, scopeIndex) = nextVtable(scopeIndex + 1);
+				(rawScope, scopeIndex) = nextVtable(scopeIndex + 1);
+				scope = ref<ClasslikeScope>(rawScope);
 			}
 			printf("        %2d: %8x\n", i, vp[i]);
 		}

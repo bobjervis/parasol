@@ -91,6 +91,10 @@ class BuiltInType extends Type {
 		return _classType.initialConstructor();
 	}
 	
+	public ref<ParameterScope> defaultConstructor() {
+		return _classType.defaultConstructor();
+	}
+	
 	public ref<Type> assignSuper(ref<CompileContext> compileContext) {
 		if (_classType == null)
 			return null;
@@ -264,6 +268,15 @@ class ClassType extends Type {
 					return ref<OverloadInstance>(f.name().symbol());
 				}
 			}
+		}
+		return null;
+	}
+	
+	public ref<ParameterScope> defaultConstructor() {
+		for (int i = 0; i < _scope.constructors().length(); i++) {
+			ref<ParameterScope> scope = ref<ParameterScope>(_scope.constructors()[i]);
+			if (scope.parameters().length() == 0)
+				return scope;
 		}
 		return null;
 	}
@@ -978,7 +991,7 @@ class Type {
 		return null;
 	}
 
-	public ref<OverloadInstance> copyConstructor(ref<CompileContext> compileContext) {
+	public ref<ParameterScope> copyConstructor() {
 		if (scope() == null)
 			return null;
 		for (int i = 0; i < scope().constructors().length(); i++) {
@@ -987,7 +1000,7 @@ class Type {
 			if (oi.parameterCount() != 1)
 				continue;
 			if (oi.parameterScope().parameters()[0].type() == this)
-				return oi;
+				return oi.parameterScope();
 		}
 		return null;
 	}
@@ -996,6 +1009,16 @@ class Type {
 		return null;
 	}
 	
+	public ref<ParameterScope> defaultConstructor() {
+		return null;
+	}
+	
+	public boolean hasConstructors() {
+		if (scope() == null)
+			return false;
+		return scope().constructors().length() > 0;
+	}
+
 	public int ordinal(int maxOrdinal) {
 		if (_ordinal == 0)
 			_ordinal = maxOrdinal + 1;

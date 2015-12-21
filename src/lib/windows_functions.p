@@ -16,6 +16,9 @@
 namespace native:windows;
 
 public class HANDLE extends address {
+	HANDLE() {
+	}
+	
 	HANDLE(address a) {
 		*super = a;
 	}

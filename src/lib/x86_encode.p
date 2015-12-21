@@ -3762,61 +3762,61 @@ private byte[R] rmValues = [
 	MAX_REG: 	0
 ];
 
-private byte[R] rexValues;
-private byte[R] rexbValues;
-private byte[R] rexxValues;
+private byte[R] rexValues = [
+	R8: 		REX_R,
+	R9: 		REX_R,
+	R10: 		REX_R,
+	R11: 		REX_R,
+	R12: 		REX_R,
+	R13: 		REX_R,
+	R14: 		REX_R,
+	R15: 		REX_R,
+	XMM8: 		REX_R,
+	XMM9: 		REX_R,
+	XMM10: 		REX_R,
+	XMM11: 		REX_R,
+	XMM12: 		REX_R,
+	XMM13: 		REX_R,
+	XMM14: 		REX_R,
+	XMM15: 		REX_R,
+	MAX_REG:	byte(0),
+];
 
-rexValues.resize(R.MAX_REG);
-rexbValues.resize(R.MAX_REG);
-rexxValues.resize(R.MAX_REG);
+private byte[R] rexbValues = [
+	R8: 		REX_B,
+	R9: 		REX_B,
+	R10: 		REX_B,
+	R11: 		REX_B,
+	R12: 		REX_B,
+	R13: 		REX_B,
+	R14: 		REX_B,
+	R15: 		REX_B,
+	MAX_REG:	byte(0),
+];
 
-rexValues[R.R8] = REX_R;
-rexValues[R.R9] = REX_R;
-rexValues[R.R10] = REX_R;
-rexValues[R.R11] = REX_R;
-rexValues[R.R12] = REX_R;
-rexValues[R.R13] = REX_R;
-rexValues[R.R14] = REX_R;
-rexValues[R.R15] = REX_R;
-rexValues[R.XMM8] = REX_R;
-rexValues[R.XMM9] = REX_R;
-rexValues[R.XMM10] = REX_R;
-rexValues[R.XMM11] = REX_R;
-rexValues[R.XMM12] = REX_R;
-rexValues[R.XMM13] = REX_R;
-rexValues[R.XMM14] = REX_R;
-rexValues[R.XMM15] = REX_R;
+private byte[R] rexxValues = [
+	R8: 		REX_X,
+	R9: 		REX_X,
+	R10: 		REX_X,
+	R11: 		REX_X,
+	R12: 		REX_X,
+	R13: 		REX_X,
+	R14: 		REX_X,
+	R15: 		REX_X,
+	MAX_REG:	byte(0),
+];
 
-rexbValues[R.R8] = REX_B;
-rexbValues[R.R9] = REX_B;
-rexbValues[R.R10] = REX_B;
-rexbValues[R.R11] = REX_B;
-rexbValues[R.R12] = REX_B;
-rexbValues[R.R13] = REX_B;
-rexbValues[R.R14] = REX_B;
-rexbValues[R.R15] = REX_B;
-
-rexxValues[R.R8] = REX_X;
-rexxValues[R.R9] = REX_X;
-rexxValues[R.R10] = REX_X;
-rexxValues[R.R11] = REX_X;
-rexxValues[R.R12] = REX_X;
-rexxValues[R.R13] = REX_X;
-rexxValues[R.R14] = REX_X;
-rexxValues[R.R15] = REX_X;
-
-byte[X86] opcodes;
-
-opcodes.resize(X86.MAX_INSTRUCTION);
-
-opcodes[X86.ADD] = 0x00;
-opcodes[X86.OR]  = 0x08;
-opcodes[X86.SBB] = 0x18;
-opcodes[X86.AND] = 0x20;
-opcodes[X86.SUB] = 0x28;
-opcodes[X86.XOR] = 0x30;
-opcodes[X86.CMP] = 0x38;
-opcodes[X86.MOV] = 0x88;
+byte[X86] opcodes = [
+	ADD:	byte(0x00),
+	OR: 	byte(0x08),
+	SBB:	byte(0x18),
+	AND:	byte(0x20),
+	SUB:	byte(0x28),
+	XOR:	byte(0x30),
+	CMP:	byte(0x38),
+	MOV:	byte(0x88),
+	MAX_INSTRUCTION: byte(0)
+];
 
 byte[X86] group1opcodes;
 

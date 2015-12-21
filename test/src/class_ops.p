@@ -61,6 +61,9 @@ assert(ranNoArgsConstructor);
 class Loc {
 	int offset;
 	
+	Loc() {
+	}
+	
 	Loc(int o) {
 		offset = o;
 	}

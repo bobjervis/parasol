@@ -166,7 +166,8 @@ class Command {
 		wrapTo(8, 8, lineLength, prototype);
 		if (_allArguments.length() > 0) {
 			printf("\nOptions:\n");
-			_allArguments.sort();
+			// TODO: Fix this somehow - sort doesn't like this array.
+//			_allArguments.sort();
 			for (int i = 0; i < _allArguments.length(); i++) {
 				printf("    ");
 				if (_allArguments[i].shortOption() != 0)

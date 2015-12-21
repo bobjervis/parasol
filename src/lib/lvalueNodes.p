@@ -159,7 +159,7 @@ class Identifier extends Node {
 		printf("\n");
 	}
 
-	public void markupDeclarator(ref<Type> t, ref<CompileContext> compileContext) {
+	public void markupDeclarator(ref<Type> t, boolean needsDefaultConstructor, ref<CompileContext> compileContext) {
 		if (_symbol != null) {
 			if (!_symbol.bindType(t, compileContext)) {
 				add(MessageId.UNFINISHED_MARKUP_DECLARATOR, compileContext.pool(), CompileString("  "/*this.class.name()*/), CompileString(string(op())));
@@ -167,6 +167,10 @@ class Identifier extends Node {
 				return;
 			}
 			assignTypes(compileContext);
+			if (needsDefaultConstructor && t.hasConstructors()) {
+				if (t.defaultConstructor() == null)
+					add(MessageId.NO_DEFAULT_CONSTRUCTOR, compileContext.pool());
+			}
 			type = t;
 		}
 	}
@@ -294,6 +298,16 @@ class Identifier extends Node {
 			type = enumType;
 	}
 
+	ref<Symbol> resolveAsMember(ref<Type> classType, ref<CompileContext>  compileContext) {
+		_symbol = classType.scope().lookup(&_value);
+		if (_symbol == null) {
+			type = compileContext.errorType();
+			add(MessageId.UNDEFINED, compileContext.pool(), _value);
+		} else
+			type = _symbol.assignType(compileContext);
+		return _symbol;
+	}
+	
 	CompileString value() {
 		return _value;
 	}

@@ -338,9 +338,9 @@ class SyntaxTree {
 		return new Call(op, target, arguments, location);
 	}
 
-	public ref<Call> newCall(ref<OverloadInstance> symbol, CallCategory category, ref<Node> target, ref<NodeList> arguments, Location location, ref<CompileContext> compileContext) {
+	public ref<Call> newCall(ref<ParameterScope> overloadScope, CallCategory category, ref<Node> target, ref<NodeList> arguments, Location location, ref<CompileContext> compileContext) {
 		//void *block = _pool.alloc(sizeof (Call));
-		return new Call(symbol, category, target, arguments, location, compileContext);
+		return new Call(overloadScope, category, target, arguments, location, compileContext);
 	}
 
 	public ref<EllipsisArguments> newEllipsisArguments(ref<NodeList> arguments, Location location) {
@@ -812,7 +812,7 @@ class Constant extends Node {
 	public long foldInt(ref<CompileContext> compileContext) {
 		if ((nodeFlags & BAD_CONSTANT) != 0)
 			return 0;						// We've already flagged this node with an error
-		int x;
+		long x;
 		boolean status;
 		switch (op()) {
 		case	INTEGER:
@@ -945,7 +945,7 @@ class Constant extends Node {
 		return v;
 	}
 
-	int, boolean charValue() {
+	long, boolean charValue() {
 		string s(_value.data, _value.length);
 		int output;
 		boolean status;
@@ -2181,7 +2181,7 @@ class Node {
 
 	public abstract ref<Node> cloneRaw(ref<SyntaxTree> tree);
 
-	public void markupDeclarator(ref<Type> type, ref<CompileContext> compileContext) {
+	public void markupDeclarator(ref<Type> type, boolean needsDefaultConstructor, ref<CompileContext> compileContext) {
 		assert(false);
 	}
 
@@ -2237,7 +2237,7 @@ class Node {
 		ref<Selection> method = tree.newSelection(object, oi, location());
 		method.type = oi.type();
 		ref<NodeList> args = tree.newNodeList(arguments);
-		ref<Call> call = tree.newCall(oi, null, method, args, location(), compileContext);
+		ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
 		call.type = type;
 		return call;
 	}
@@ -2355,24 +2355,29 @@ class Node {
 	public ref<NodeList> assignMultiReturn(ref<NodeList> returnType, ref<CompileContext> compileContext) {
 		if (_op == Operator.SEQUENCE) {
 			ref<Binary> b = ref<Binary>(this);
-			b.left().assignMultiReturn(returnType, compileContext);
+			ref<NodeList> nl = b.left().assignMultiReturn(returnType, compileContext);
 			if (b.left().deferAnalysis()) {
 				type = b.left().type;
 				return null;
 			}
-			if (returnType == null) {
+			if (nl == null) {
 				add(MessageId.TOO_MANY_RETURN_ASSIGNMENTS, compileContext.pool());
 				type = compileContext.errorType();
 				return null;
 			}
+			b.right().assignMultiReturn(nl, compileContext);
+			return nl.next;
 		} else {
 			if (!isLvalue()) {
 				add(MessageId.LVALUE_REQUIRED, compileContext.pool());
 				type = compileContext.errorType();
 				return null;
 			}
+			if (!returnType.node.type.equals(type)) {
+				add(MessageId.CANNOT_CONVERT, compileContext.pool());
+			}
+			return returnType.next;
 		}
-		return returnType.next;
 	}
 
 	public boolean canCoerce(ref<Type> newType, boolean explicitCast, ref<CompileContext> compileContext) {

@@ -33,8 +33,8 @@ class Call extends ParameterBag {
 													//   METHOD_CALL, VIRTUAL_NETHOD_CALL: the simple identifier or object.method being called
 	// Populated at type analysis:					
 	private CallCategory _category;					// what kind of call it turned out to be after type analysis
-	private ref<Symbol> _overload;					// For CONSTRUCTOR, some FUNCTION_CALL, METHOD_CALL and VIRTUAL_METHOD_CALL: 
-													//   The symbol of the overload being called.
+	private ref<ParameterScope> _overload;			// For CONSTRUCTOR, some FUNCTION_CALL, METHOD_CALL and VIRTUAL_METHOD_CALL: 
+													//   The scope of the overload being called.
 	
 	// Populated by folding:
 	// Note _arguments (from ParameterBag):			// A set of 'arguments' that must be inserted in the available register 
@@ -49,7 +49,7 @@ class Call extends ParameterBag {
 		_category = CallCategory.ERROR;
 	}
 	
-	Call(ref<OverloadInstance> overload, CallCategory category, ref<Node> target, ref<NodeList> arguments, Location location, ref<CompileContext> compileContext) {
+	Call(ref<ParameterScope> overload, CallCategory category, ref<Node> target, ref<NodeList> arguments, Location location, ref<CompileContext> compileContext) {
 		super(Operator.CALL, arguments, location);
 		_target = target;
 		_overload = overload;
@@ -57,7 +57,7 @@ class Call extends ParameterBag {
 			_category = category;
 		else if (overload == null)
 			_category = CallCategory.ERROR;
-		else if (overload.storageClass() == StorageClass.MEMBER) {
+		else if (overload.enclosing().storageClass() == StorageClass.MEMBER) {
 			if (isVirtualCall(compileContext))
 				_category = CallCategory.VIRTUAL_METHOD_CALL;
 			else
@@ -345,6 +345,44 @@ class Call extends ParameterBag {
 				_target = _target.fold(tree, false, compileContext);
 			break;
 			
+		case	OBJECT_AGGREGATE:
+			ref<Variable> temp = compileContext.newVariable(type);
+			result = null;
+			ref<ParameterScope> constructor = type.defaultConstructor();
+			if (constructor != null) {
+				ref<Reference> r = tree.newReference(temp, true, location());
+				ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
+				adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+				ref<Call> call = tree.newCall(constructor, CallCategory.CONSTRUCTOR, adr, null, location(), compileContext);
+				call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+				result = call;
+			}
+			for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
+				ref<Binary> b = ref<Binary>(nl.node);		// We know this must be a LABEL node.
+				ref<Identifier> id = ref<Identifier>(b.left());	// and the left is an identifier.
+				ref<Node> value = b.right();
+				ref<Symbol> sym = id.symbol();
+				ref<Reference> r = tree.newReference(temp, false, nl.node.location());
+				ref<Selection> member = tree.newSelection(r, sym, nl.node.location());
+				member.type = sym.type();
+				value = value.coerce(tree, member.type, false, compileContext);
+				ref<Binary> init = tree.newBinary(Operator.ASSIGN, member, value, nl.node.location());
+				init.type = member.type;
+				if (result != null) {
+					result = tree.newBinary(Operator.SEQUENCE, result, init, location());
+					result.type = init.type;
+				} else
+					result = init;
+			}
+			if (result == null)
+				return tree.newReference(temp, false, location());
+			else {
+				ref<Reference> r = tree.newReference(temp, false, location());
+				result = tree.newBinary(Operator.SEQUENCE, result, r, location());
+				result.type = r.type;
+				return result;
+			}
+			
 		default:
 			print(0);
 			assert(false);
@@ -383,7 +421,7 @@ class Call extends ParameterBag {
 		return tree.newCall(op(), target, arguments, location());
 	}
 
-	public ref<Symbol> overload() {
+	public ref<ParameterScope> overload() {
 		return _overload;
 	}
 	
@@ -413,8 +451,8 @@ class Call extends ParameterBag {
 			nl.node.print(indent + INDENT);
 	}
 
-	public void assignArrayAggregateTypes(ref<EnumInstanceType> enumType, ref<CompileContext> compileContext) {
-		if (assignArguments(LabelStatus.OPTIONAL_LABELS, enumType, compileContext)) {
+	public void assignArrayAggregateTypes(ref<EnumInstanceType> enumType, long maximumIndex, ref<CompileContext> compileContext) {
+		if (assignArguments(LabelStatus.OPTIONAL_LABELS, enumType, maximumIndex, compileContext)) {
 			ref<Type> indexType = null;
 			boolean indexTypeValid = true;
 			boolean anyUnlabeled = false;
@@ -453,7 +491,7 @@ class Call extends ParameterBag {
 					if (!indexType.isCompactIndexType()) {
 						for (ref<NodeList> nl = _arguments; nl.next != null; nl = nl.next) {
 							if (nl.node.op() != Operator.LABEL) {
-								nl.node.add(MessageId.TYPE_MISMATCH, compileContext.pool());
+								nl.node.add(MessageId.LABEL_MISSING, compileContext.pool());
 								nl.node.type = compileContext.errorType();
 								anyFailed = true;
 							}
@@ -481,11 +519,11 @@ class Call extends ParameterBag {
 	private void assignTypes(ref<CompileContext> compileContext) {
 		switch (op()) {
 		case	ARRAY_AGGREGATE:
-			assignArrayAggregateTypes(null, compileContext);
+			assignArrayAggregateTypes(null, long.MAX_VALUE, compileContext);
 			break;
 			
 		case	OBJECT_AGGREGATE:
-			if (assignArguments(LabelStatus.REQUIRED_LABELS, null, compileContext))
+			if (assignArguments(LabelStatus.REQUIRED_LABELS, null, long.MAX_VALUE, compileContext))
 				type = compileContext.arena().builtInType(TypeFamily.OBJECT_AGGREGATE);
 			else
 				type = compileContext.errorType();
@@ -568,15 +606,18 @@ class Call extends ParameterBag {
 			case	FUNCTION:
 				convertArguments(compileContext);
 				_category = CallCategory.FUNCTION_CALL;
-				_overload = _target.symbol();
-				if (_overload != null) {
-					if (_overload.class != OverloadInstance)
-						_overload = null;
-					else if (_overload.storageClass() == StorageClass.MEMBER) {
-						if (isVirtualCall(compileContext))
-							_category = CallCategory.VIRTUAL_METHOD_CALL;
-						else
-							_category = CallCategory.METHOD_CALL;
+				ref<Symbol> symbol = _target.symbol();
+				if (symbol != null) {
+					if (symbol.class != OverloadInstance)
+						symbol = null;
+					else {
+						_overload = ref<OverloadInstance>(symbol).parameterScope();
+						if (symbol.storageClass() == StorageClass.MEMBER) {
+							if (isVirtualCall(compileContext))
+								_category = CallCategory.VIRTUAL_METHOD_CALL;
+							else
+								_category = CallCategory.METHOD_CALL;
+						}
 					}
 				}
 				ref<FunctionType> ft = ref<FunctionType>(_target.type);
@@ -615,7 +656,7 @@ class Call extends ParameterBag {
 	}
 	
 	private boolean assignSub(Operator kind, ref<CompileContext> compileContext) {
-		if (!assignArguments(LabelStatus.NO_LABELS, null, compileContext))
+		if (!assignArguments(LabelStatus.NO_LABELS, null, long.MAX_VALUE, compileContext))
 			return false;
 		_target.assignOverload(_arguments, kind, compileContext);
 		if (_target.deferAnalysis()) {
@@ -626,7 +667,7 @@ class Call extends ParameterBag {
 	}
 
 	void assignConstructorCall(ref<Type> classType, ref<CompileContext> compileContext) {
-		if (!assignArguments(LabelStatus.NO_LABELS, null, compileContext))
+		if (!assignArguments(LabelStatus.NO_LABELS, null, long.MAX_VALUE, compileContext))
 			return;
 		OverloadOperation operation(Operator.FUNCTION, this, null, _arguments, compileContext);
 		if (classType.deferAnalysis()) {
@@ -637,12 +678,14 @@ class Call extends ParameterBag {
 		if (type != null)
 			return;
 		ref<Type> match;
-		(match, _overload) = operation.result();
+		ref<Symbol> oi;
+		(match, oi) = operation.result();
 		if (match.deferAnalysis())
 			type = match;
 		else {
 			type = classType;
-//			type = compileContext.arena().builtInType(TypeFamily.VOID);
+			if (oi != null)
+				_overload = ref<OverloadInstance>(oi).parameterScope();
 			_category = CallCategory.CONSTRUCTOR;
 		}
 	}
@@ -681,7 +724,24 @@ class Call extends ParameterBag {
 		REQUIRED_LABELS
 	}
 	
-	boolean assignArguments(LabelStatus status, ref<EnumInstanceType> enumType, ref<CompileContext> compileContext) {
+	private class Interval {
+		long start;
+		long end;
+		ref<NodeList> first;
+		
+		public int compare(Interval i) {
+			if (i.start > start)
+				return -1;
+			else if (i.start < start)
+				return 1;
+			else
+				return 0;
+		}
+	}
+	
+	boolean assignArguments(LabelStatus status, ref<EnumInstanceType> enumType, long maximumIndex, ref<CompileContext> compileContext) {
+		Interval[] intervals;
+		long nextIndex = 0;
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 			compileContext.assignTypes(nl.node);
 			switch (status) {
@@ -709,12 +769,27 @@ class Call extends ParameterBag {
 								break;
 							}
 							int i = scope.indexOf(id.symbol()); 
+							Interval in = { start: i, end: i, first: nl };
+							intervals.append(in);
 						} else {
 							b.left().add(MessageId.LABEL_NOT_IDENTIFIER, compileContext.pool());
 							b.left().type = compileContext.errorType();
 						}
 					} else
 						compileContext.assignTypes(b.left());
+				} else {
+					if (intervals.length() == 0) {
+						Interval i = { start: 0, end: 0, first: nl };
+						intervals.append(i);
+					} else {
+						ref<Interval> i = &intervals[intervals.length() - 1];
+						if (i.end < maximumIndex)
+							i.end++;
+						else {
+							nl.node.add(MessageId.INITIALIZER_BEYOND_RANGE, compileContext.pool());
+							nl.node.type = compileContext.errorType();
+						}
+					}
 				}
 				break;
 
@@ -736,6 +811,16 @@ class Call extends ParameterBag {
 				type = nl.node.type;
 				return false;
 			}
+		if (status == LabelStatus.OPTIONAL_LABELS && intervals.length() > 1) {
+			intervals.sort();
+			for (int i = 1; i < intervals.length(); i++) {
+				if (intervals[i - 1].end >= intervals[i].start) {
+					intervals[i].first.node.add(MessageId.DUPLICATE_INDEX, compileContext.pool());
+					type = compileContext.errorType();
+					return false;
+				}
+			}
+		}
 		return true;
 	}
 
@@ -757,7 +842,34 @@ class Call extends ParameterBag {
 			break;
 			
 		case	OBJECT_AGGREGATE:
-			break;
+			switch (newType.family()) {
+			case	VAR:
+				return true;
+				
+			case	CLASS:
+			case	TEMPLATE_INSTANCE:
+				boolean success = true;
+				for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
+					ref<Binary> b = ref<Binary>(nl.node);		// We know this must be a LABEL node.
+					ref<Identifier> id = ref<Identifier>(b.left());	// and the left is an identifier.
+					ref<Node> value = b.right();
+					ref<Symbol> sym = id.resolveAsMember(newType, compileContext);
+					if (sym == null) {
+						value.type = compileContext.errorType();
+						b.type = value.type;
+						success = false;
+					} else if (!value.canCoerce(id.type, false, compileContext)) {
+						value.add(MessageId.CANNOT_CONVERT, compileContext.pool());
+						value.type = compileContext.errorType();
+						b.type = value.type;
+						success = false;
+					}
+				}
+				return success;
+
+			default:
+				return false;
+			}
 		}
 		return super.canCoerce(newType, explicitCast, compileContext);
 	}

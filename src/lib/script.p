@@ -510,6 +510,9 @@ private class Scanner {
 	private int _cursor;
 	private int _previous;
 
+	public Scanner() {	
+	}
+	
 	public Scanner(string source) {
 		_text = source;
 	}

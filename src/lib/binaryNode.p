@@ -319,12 +319,12 @@ class Binary extends Node {
 			case	CLASS:
 			case	VAR:
 			case	STRING:
-				ref<OverloadInstance> oi = type.copyConstructor(compileContext);
-				if (oi != null) {
+				ref<ParameterScope> scope = type.copyConstructor();
+				if (scope != null) {
 					ref<Node> adr = tree.newUnary(Operator.ADDRESS, _left, location());
 					adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 					ref<NodeList> args = tree.newNodeList(_right);
-					ref<Call> constructor = tree.newCall(oi, CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
+					ref<Call> constructor = tree.newCall(scope, CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
 					constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
 					return constructor.fold(tree, true, compileContext);
 				} else {
@@ -443,7 +443,7 @@ class Binary extends Node {
 				ref<Selection> method = tree.newSelection(_left, oi, location());
 				method.type = oi.type();
 				ref<NodeList> args = tree.newNodeList(_right);
-				ref<Call> call = tree.newCall(oi, null, method, args, location(), compileContext);
+				ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
 				call.type = type;
 				return call.fold(tree, false, compileContext);
 /*
@@ -561,7 +561,7 @@ class Binary extends Node {
 					ref<Selection> method = tree.newSelection(_left, oi, _left.location());
 					method.type = oi.type();
 					ref<NodeList> args = tree.newNodeList(_right);
-					ref<Call> call = tree.newCall(oi, null, method, args, location(), compileContext);
+					ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
 					call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 					return call.fold(tree, voidContext, compileContext);
 				} else {
@@ -581,7 +581,7 @@ class Binary extends Node {
 					ref<Selection> method = tree.newSelection(load, oi, _left.location());
 					method.type = oi.type();
 					ref<NodeList> args = tree.newNodeList(_right);
-					ref<Call> call = tree.newCall(oi, null, method, args, location(), compileContext);
+					ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
 					call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 					if (voidContext)
 						return call.fold(tree, voidContext, compileContext);
@@ -705,7 +705,7 @@ class Binary extends Node {
 			ref<Selection> method = tree.newSelection(subscript.left(), oi, subscript.location());
 			method.type = oi.type();
 			ref<NodeList> args = tree.newNodeList(subscript.right(), _right);
-			ref<Call> call = tree.newCall(oi, null, method, args, location(), compileContext);
+			ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
 			call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 			return call;
 		} else
@@ -727,7 +727,7 @@ class Binary extends Node {
 			ref<Selection> method = tree.newSelection(_left, oi, location());
 			method.type = oi.type();
 			ref<NodeList> args = tree.newNodeList(_right);
-			ref<Call> call = tree.newCall(oi, null, method, args, location(), compileContext);
+			ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
 			call.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 			ref<Node> indirect = tree.newUnary(Operator.INDIRECT, call, location());
 			indirect.type = type;
@@ -784,16 +784,16 @@ class Binary extends Node {
 		return 0;
 	}
 
-	public  void markupDeclarator(ref<Type> t, ref<CompileContext> compileContext) {
+	public  void markupDeclarator(ref<Type> t, boolean needsDefaultConstructor, ref<CompileContext> compileContext) {
 		switch (op()) {
 		case	SEQUENCE:
-			_left.markupDeclarator(t, compileContext);
-			_right.markupDeclarator(t, compileContext);
+			_left.markupDeclarator(t, true, compileContext);
+			_right.markupDeclarator(t, true, compileContext);
 			type = compileContext.arena().builtInType(TypeFamily.VOID);
 			break;
 
 		case	INITIALIZE:
-			_left.markupDeclarator(t, compileContext);
+			_left.markupDeclarator(t, false, compileContext);
 			switch (_right.op()) {
 			case	CALL:
 				if (_left.deferAnalysis()) {
@@ -818,12 +818,57 @@ class Binary extends Node {
 				}
 				ref<Call> aggregate = ref<Call>(_right);
 				ref<EnumInstanceType> enumType;
-				if (_left.type.family() == TypeFamily.SHAPE &&
-					_left.type.indexType(compileContext).family() == TypeFamily.ENUM)
-					enumType = ref<EnumInstanceType>(_left.type.indexType(compileContext));
-				else
-					enumType = null;
-				aggregate.assignArrayAggregateTypes(enumType, compileContext);
+				long maxIndex;
+				if (_left.type.family() == TypeFamily.SHAPE) {
+					ref<Type> indexType = _left.type.indexType(compileContext);
+					switch (indexType.family()) {
+					case	BOOLEAN:
+						enumType = null;
+						maxIndex = 1;
+						break;
+						
+					case	SIGNED_8:
+						enumType = null;
+						maxIndex = 127;
+						break;
+						
+					case	SIGNED_16:
+						enumType = null;
+						maxIndex = short.MAX_VALUE;
+						break;
+						
+					case	SIGNED_32:
+						enumType = null;
+						maxIndex = int.MAX_VALUE;
+						break;
+						
+					case	UNSIGNED_8:
+						enumType = null;
+						maxIndex = byte.MAX_VALUE;
+						break;
+						
+					case	UNSIGNED_16:
+						enumType = null;
+						maxIndex = char.MAX_VALUE;
+						break;
+						
+					case	UNSIGNED_32:
+						enumType = null;
+						maxIndex = unsigned.MAX_VALUE;
+						break;
+						
+					case	ENUM:
+						enumType = ref<EnumInstanceType>(indexType);
+						ref<EnumScope> enumScope = ref<EnumScope>(enumType.scope());
+						maxIndex = enumScope.instances().length() - 1;
+						break;
+						
+					default:
+						enumType = null;
+						maxIndex = long.MAX_VALUE;
+					}
+				}
+				aggregate.assignArrayAggregateTypes(enumType, maxIndex, compileContext);
 				type = _right.type;
 				return;
 			}
@@ -841,7 +886,7 @@ class Binary extends Node {
 			break;
 
 		default:
-			super.markupDeclarator(t, compileContext);
+			super.markupDeclarator(t, needsDefaultConstructor, compileContext);
 		}
 	}
 
@@ -887,7 +932,7 @@ class Binary extends Node {
 			type = _left.unwrapTypedef(compileContext);
 			if (deferAnalysis())
 				break;
-			_right.markupDeclarator(type, compileContext);
+			_right.markupDeclarator(type, true, compileContext);
 			break;
 
 		case	LABEL:
@@ -1724,7 +1769,7 @@ private ref<Node>, ref<Variable> foldStringAddition(ref<Node> leftHandle, ref<Va
 			ref<OverloadInstance> constructor = addNode.type.initialConstructor();
 			assert(constructor != null);
 			ref<NodeList> args = tree.newNodeList(addNode);
-			ref<Call> call = tree.newCall(constructor, CallCategory.CONSTRUCTOR, adr, args, addNode.location(), compileContext);
+			ref<Call> call = tree.newCall(constructor.parameterScope(), CallCategory.CONSTRUCTOR, adr, args, addNode.location(), compileContext);
 			call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 			return call, variable;
 		}
@@ -1742,19 +1787,20 @@ private ref<Node> appendString(ref<Variable> variable, ref<Node> value, ref<Synt
 	}
 	ref<Overload> over = ref<Overload>(sym);
 	ref<OverloadInstance> oi = null;
+	ref<ParameterScope> scope = null;
 	for (int i = 0; i < over.instances().length(); i++) {
 		oi = over.instances()[i];
-		ref<ParameterScope> scope = oi.parameterScope();
+		scope = oi.parameterScope();
 		if (scope.parameters().length() != 1)
 			continue;
 		if (scope.parameters()[0].type() == value.type)
 			break;
 	}
-	assert(oi != null);
+	assert(scope != null);
 	ref<Selection> method = tree.newSelection(r, oi, value.location());
 	method.type = oi.type();
 	ref<NodeList> args = tree.newNodeList(value);
-	ref<Call> call = tree.newCall(oi, null, method, args, value.location(), compileContext);
+	ref<Call> call = tree.newCall(scope, null, method, args, value.location(), compileContext);
 	call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 	return call.fold(tree, true, compileContext);
 }
