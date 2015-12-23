@@ -100,6 +100,7 @@ run(filename: lib_ref.p, exitCode: 5)
 run(filename: import_ops.p, importPath: ^/test/src/import_ops)
 run(filename: ref_loop_import_ops.p, importPath: ^/test/src/ref_loop_import_ops)
 run(filename: alloc_ops.p)
+run(filename: class_alias.p)
 run(filename: vector_ops.p)
 run(filename: func_arg.p)
 run(filename: func_map_ops.p)
@@ -132,6 +133,8 @@ compile(filename: unit_return_fail.p, expect: fail, message: RETURN_DISALLOWED)
 compile(filename: unit_return_fail2.p, expect: fail, message: RETURN_DISALLOWED)
 
 compile(filename: stray_token_enum.p, expect: fail)
+
+compile() { "class a = int; a b; int c; b = c;" }
 
 compile(){"pointer<int> ip; var v = ip;" }
 

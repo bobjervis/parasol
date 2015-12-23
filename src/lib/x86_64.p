@@ -2576,6 +2576,9 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.MOV, seq.left(), R(int(seq.right().register)), compileContext);
 				break;
 				
+			case	TYPEDEF:
+				break;
+				
 			default:
 				seq.print(0);
 				assert(false);

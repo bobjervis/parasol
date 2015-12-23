@@ -2185,6 +2185,10 @@ class Node {
 		assert(false);
 	}
 
+	public void assignClassVariable(ref<CompileContext> compileContext) {
+		assert(false);
+	}
+	
 	public void assignOverload(ref<NodeList> arguments, Operator kind, ref<CompileContext> compileContext) {
 		compileContext.assignTypes(this);			// needs to be 'function'
 	}

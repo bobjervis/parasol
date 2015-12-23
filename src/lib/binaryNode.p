@@ -308,6 +308,7 @@ class Binary extends Node {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	TYPEDEF:
 				break;
 				
 			case	SHAPE:
@@ -784,6 +785,18 @@ class Binary extends Node {
 		return 0;
 	}
 
+	public void assignClassVariable(ref<CompileContext> compileContext) {
+		assert(op() == Operator.INITIALIZE);
+		compileContext.assignTypes(_right);
+		if (_right.type.family() != TypeFamily.TYPEDEF) {
+			_right.add(MessageId.NOT_A_TYPE, compileContext.pool());
+			type = compileContext.errorType();
+			return;
+		}
+		_left.markupDeclarator(_right.type, false, compileContext);
+		type = _right.type;
+	}
+
 	public  void markupDeclarator(ref<Type> t, boolean needsDefaultConstructor, ref<CompileContext> compileContext) {
 		switch (op()) {
 		case	SEQUENCE:
@@ -927,12 +940,21 @@ class Binary extends Node {
 			break;
 
 		case	DECLARATION:
-			if (_left.op() == Operator.ELLIPSIS)
+			switch (_left.op()) {
+			case ELLIPSIS:
 				_left.add(MessageId.BAD_ELLIPSIS, compileContext.pool());
-			type = _left.unwrapTypedef(compileContext);
-			if (deferAnalysis())
 				break;
-			_right.markupDeclarator(type, true, compileContext);
+				
+			case EMPTY:	// A class alias
+				type = compileContext.arena().builtInType(TypeFamily.CLASS_VARIABLE);
+				_right.assignClassVariable(compileContext);
+				break;
+				
+			default:
+				type = _left.unwrapTypedef(compileContext);
+				if (!deferAnalysis())
+					_right.markupDeclarator(type, true, compileContext);
+			}
 			break;
 
 		case	LABEL:
