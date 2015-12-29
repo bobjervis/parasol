@@ -293,6 +293,10 @@ class X86_64AddressModes extends X86_64Encoder {
 		case	VACATE_ARGUMENT_REGISTERS:
 			break;
 			
+		case	FRAME_PTR:
+		case	STACK_PTR:
+			break;
+			
 		case	ELLIPSIS_ARGUMENTS:
 			ref<EllipsisArguments> ea = ref<EllipsisArguments>(node);
 			for (ref<NodeList> args = ea.arguments(); args != null; args = args.next)
@@ -644,6 +648,11 @@ class X86_64AddressModes extends X86_64Encoder {
 			ref<Binary> b = ref<Binary>(node);
 			markAddressModes(b.left(), compileContext);
 			tryMakeMode(b.right(), modeContext, nClass, compileContext);
+			break;
+			
+		case	FRAME_PTR:
+		case	STACK_PTR:
+			node.nodeFlags |= ADDRESS_MODE;
 			break;
 			
 		default:

@@ -31,6 +31,7 @@ class Disassembler {
 	private int _stringsEndOffset;
 	private int _typeDataEndOffset;
 	private int _vtablesEndOffset;
+	private pointer<ExceptionEntry> _exceptionsEndOffset;
 	private int _imageLength;
 	private ref<X86_64SectionHeader> _pxiHeader;
 	private ref<int[]> _pxiFixups;
@@ -60,6 +61,7 @@ class Disassembler {
 		_stringsEndOffset = _pxiHeader.stringsOffset + _pxiHeader.stringsLength;
 		_typeDataEndOffset = _pxiHeader.typeDataOffset + _pxiHeader.typeDataLength;
 		_vtablesEndOffset = _pxiHeader.vtablesOffset + _pxiHeader.vtableData * address.bytes;
+		_exceptionsEndOffset = pointer<ExceptionEntry>(_physical + _pxiHeader.exceptionsOffset + _pxiHeader.exceptionsCount * ExceptionEntry.bytes);
 		_ip = _pxiHeader.entryPoint;
 	}
 	
@@ -84,7 +86,14 @@ class Disassembler {
 	boolean disassemble() {
 		printHeader(_pxiHeader, -1);
 
-		printf("    symbols for      %8x - %8x\n", _length, _imageLength);
+		if (_pxiHeader.exceptionsCount > 0) {
+			printf("\nException Table:\n");
+			printf("    Location  Handler\n");
+			for (pointer<ExceptionEntry> ee = pointer<ExceptionEntry>(_physical + _pxiHeader.exceptionsOffset); ee < _exceptionsEndOffset; ee++) {
+				printf("    %8.8x  %8.8x\n", ee.location, ee.handler);
+			}
+		}
+		printf("\n    symbols for      %8x - %8x\n", _length, _imageLength);
 		
 		pointer<address> vp = pointer<address>(_physical + _pxiHeader.vtablesOffset);
 		ref<Scope> rawScope;

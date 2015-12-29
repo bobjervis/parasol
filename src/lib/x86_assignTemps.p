@@ -686,6 +686,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	BYTES:
 		case	TEMPLATE_INSTANCE:
 		case	FLOATING_POINT:
+		case	FRAME_PTR:
+		case	STACK_PTR:
 			if (node.type.isFloat())
 				node.register = byte(f().r.getreg(node, floatMask, regMask));
 			else
@@ -1237,6 +1239,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	STRING:
 		case	THIS:
 		case	SUPER:
+		case	FRAME_PTR:
+		case	STACK_PTR:
 			break;
 			
 		case	SEQUENCE:

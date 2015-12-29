@@ -65,3 +65,4 @@ public boolean makeRegionExecutable(address location, long length) {
 //	printf("VirtualProtect(%p, %d, %x, %p) -> %d oldProtection %x\n", location, length, int(windows.PAGE_EXECUTE_READWRITE), null, result, int(oldProtection));
 	return result != 0;
 }
+

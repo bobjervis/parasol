@@ -552,6 +552,7 @@ LONG CALLBACK windowsExceptionHandler(PEXCEPTION_POINTERS ExceptionInfo) {
 	pseudo.stackTop = saved.stackTop;
 	pseudo.target = NATIVE_64_TARGET;
 	pseudo.exceptionType = ExceptionInfo->ExceptionRecord->ExceptionCode;
+	pseudo.parasolException = null;
 	switch (pseudo.exceptionType) {
 	case EXCEPTION_ACCESS_VIOLATION:
 	case EXCEPTION_IN_PAGE_ERROR:
@@ -2011,6 +2012,34 @@ ExceptionContext *pExceptionContext(ExceptionContext *newContext) {
 	return context->exceptionContext(newContext);
 }
 
+void throwException(Exception *e, void *frame, void **stackPointer) {
+	ExecutionContext *context = threadContext.get();
+	StackState saved;
+	StackState pseudo;
+	saved = context->unloadFrame();
+	pseudo.frame.fp = (byte*)frame;
+	pseudo.frame.code = (byte*)stackPointer[-1];
+	pseudo.frame.ip = -1;
+	pseudo.sp = (byte*)stackPointer;
+	pseudo.stackTop = saved.stackTop;
+	pseudo.target = NATIVE_64_TARGET;
+	pseudo.exceptionType = 0;
+	pseudo.parasolException = e;
+	context->reloadFrame(pseudo);
+	context->snapshot(pseudo.stackTop);
+
+	// The last snapshot survives the reload of the frame.
+
+	context->reloadFrame(saved);
+	context->throwException(pseudo);
+	exit(1);
+}
+
+void exposeException(ExceptionContext *ec) {
+	ExecutionContext *context = threadContext.get();
+	context->exceptionContext(ec);
+}
+
 BuiltInFunctionMap builtInFunctionMap[] = {
 	{ "print",			nativeFunction(builtInPrint),	1,	1 },
 	{ "assert",			nativeFunction(builtInAssert),	1,	0 },
@@ -2072,8 +2101,8 @@ BuiltInFunctionMap builtInFunctionMap[] = {
 														4,	1, "native" },
 	{ "GetLastError",	nativeFunction(builtinGetLastError),
 														0,	1, "native" },
+	{ "exposeException",nativeFunction(exposeException),1,	1 },
 	// TODO: Remove plain 'now' in favor of the new function whenever...
-	{ "exposeException",0,								1,	1 },
 	{ "_now",			nativeFunction(now),			0,	1, "parasol" },
 	{ "FormatMessage",	nativeFunction(formatMessage),	1,	1, "native" },
 	{ "runningTarget",  nativeFunction(runningTarget),  0,  1, "parasol" },
@@ -2084,14 +2113,8 @@ BuiltInFunctionMap builtInFunctionMap[] = {
 	{ "ecvt",			nativeFunction(ecvt),			4,	1, "native" },
 	{ "fcvt",			nativeFunction(fcvt),			4,	1, "native" },
 	{ "gcvt",			nativeFunction(gcvt),			4,	1, "native" },
-/*
-	{ "open",			nativeFunction(open),			2,	1 },
-	{ "openCreat",		nativeFunction(open),			3,	1 },
-	{ "close",			nativeFunction(close),			1,	1 },
-	{ "read",			nativeFunction(read),			1,	1 },
-	{ "write",			nativeFunction(write),			1,	1 },
-	{ "seek",			nativeFunction(seek),			1,	1 },
- */
+
+	{ "throwException",	nativeFunction(throwException),	3,	0, "parasol" },
 	{ 0 }
 };
 

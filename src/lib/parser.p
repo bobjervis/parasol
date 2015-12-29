@@ -347,9 +347,12 @@ class Parser {
 			truePart = parseStatement();
 			if (truePart.op() == Operator.SYNTAX_ERROR)
 				return truePart;
+			ref<Node> finallyClause;
+			ref<NodeList> nl = null;
 			for (;;) {
 				t = _scanner.next();
 				if (t == Token.CATCH) {
+					Location loc = _scanner.location();
 					t = _scanner.next();
 					if (t != Token.LEFT_PARENTHESIS) {
 						_scanner.pushBack(t);
@@ -363,6 +366,7 @@ class Parser {
 						_scanner.pushBack(t);
 						return resync(MessageId.SYNTAX_ERROR);
 					}
+					ref<Node> variable = _tree.newIdentifier(_scanner.value(), _scanner.location());
 					t = _scanner.next();
 					if (t != Token.RIGHT_PARENTHESIS) {
 						_scanner.pushBack(t);
@@ -371,17 +375,22 @@ class Parser {
 					ref<Node> clause = parseStatement();
 					if (clause.op() == Operator.SYNTAX_ERROR)
 						return clause;
+					ref<Ternary> catchClause = _tree.newTernary(Operator.CATCH, typeExpr, variable, clause, loc);
+					if (nl == null)
+						nl = _tree.newNodeList(catchClause);
+					else
+						nl.last().next = _tree.newNodeList(catchClause);
 				} else if (t == Token.FINALLY) {
-					ref<Node> clause = parseStatement();
-					if (clause.op() == Operator.SYNTAX_ERROR)
-						return clause;
+					ref<Node> finallyClause = parseStatement();
+					if (finallyClause.op() == Operator.SYNTAX_ERROR)
+						return finallyClause;
 					break;
 				} else {
 					_scanner.pushBack(t);
 					break;
 				}
 			}
-			return truePart;
+			return _tree.newTry(truePart, finallyClause, nl, location);
 			
 		case	PUBLIC:
 			return parseVisibleDeclaration(Operator.PUBLIC);

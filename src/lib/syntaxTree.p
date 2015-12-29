@@ -138,6 +138,8 @@ enum Operator {
 	CLASS_TYPE,
 	ENUM_TYPE,
 	VACATE_ARGUMENT_REGISTERS,
+	FRAME_PTR,
+	STACK_PTR,
 	// Constant
 	INTEGER,
 	FLOATING_POINT,
@@ -145,7 +147,7 @@ enum Operator {
 	STRING,
 	// Identifier
 	IDENTIFIER,
-	//Reference
+	// Reference
 	VARIABLE,
 	// Class
 	CLASS,
@@ -166,6 +168,7 @@ enum Operator {
 	// Ternary
 	CONDITIONAL,
 	IF,
+	CATCH,
 	// Function
 	FUNCTION,
 	// Call
@@ -173,6 +176,8 @@ enum Operator {
 	ANNOTATION,
 	OBJECT_AGGREGATE,
 	ARRAY_AGGREGATE,
+	// Try
+	TRY,
 	MAX_OPERATOR
 }
 
@@ -298,6 +303,10 @@ class SyntaxTree {
 		return new Ternary(op, left, middle, right, location);
 	}
 
+	public ref<Try> newTry(ref<Node> body, ref<Node> finallyClause, ref<NodeList> catchList, Location location) {
+		return new Try(body, finallyClause, catchList, location);
+	}
+	
 	public ref<Loop> newLoop(Location location) {
 		//void *block = _pool.alloc(sizeof (Loop));
 		return new Loop(location);
@@ -1340,6 +1349,8 @@ class Leaf extends Node {
 		case	THIS:
 		case	SUPER:
 		case	NULL:
+		case	FRAME_PTR:
+		case	STACK_PTR:
 			break;
 			
 		default:
@@ -1884,7 +1895,7 @@ class Ternary extends Node {
 	public boolean traverse(Traversal t, TraverseAction func(ref<Node> n, address data), address data) {
 		TraverseAction result;
 		Traversal t_this = t;
-		if (op() == Operator.IF) {
+		if (op() == Operator.IF || op() == Operator.CATCH) {
 			switch (t) {
 			case	IN_ORDER:
 				t_this = Traversal.PRE_ORDER;
@@ -2003,6 +2014,10 @@ class Ternary extends Node {
 				_middle = _middle.fold(tree, voidContext, compileContext);
 			if (_right != null)
 				_right = _right.fold(tree, voidContext, compileContext);
+			break;
+			
+		case	CATCH:
+			_right = _right.fold(tree, true, compileContext);
 			break;
 			
 		default:
@@ -2128,7 +2143,158 @@ class Ternary extends Node {
 
 		case	NAMESPACE:
 			type = compileContext.arena().builtInType(TypeFamily.VOID);
+			break;
+			
+		case	CATCH:
+			compileContext.assignTypes(_left);
+			if (_left.deferAnalysis()) {
+				type = _left.type;
+				break;
+			}
+			compileContext.assignTypes(_right);
+			type = compileContext.arena().builtInType(TypeFamily.VOID);
+			break;
+			
+		default:
+			print(0);
+			assert(false);
 		}
+	}
+}
+
+class Try extends Node {
+	ref<Node>		_body;
+	ref<Node>		_finally;
+	ref<NodeList>	_catchList;
+	
+	Try(ref<Node> body, ref<Node> finallyClause, ref<NodeList> catchList, Location location) {
+		super(Operator.TRY, location);
+		_body = body;
+		_finally = finallyClause;
+		_catchList = catchList;
+	}
+
+	public boolean traverse(Traversal t, TraverseAction func(ref<Node> n, address data), address data) {
+		TraverseAction result;
+		switch (t) {
+		case	PRE_ORDER:
+		case	IN_ORDER:
+			result = func(this, data);
+			if (result == TraverseAction.ABORT_TRAVERSAL)
+				return false;
+			if (result == TraverseAction.SKIP_CHILDREN)
+				break;
+			if (!_body.traverse(t, func, data))
+				return false;
+			if (_catchList != null && !_catchList.traverse(t, func, data))
+				return false;
+			if (_finally != null && !_finally.traverse(t, func, data))
+				return false;
+			break;
+
+		case	POST_ORDER:
+			if (!_body.traverse(t, func, data))
+				return false;
+			if (_catchList != null && !_catchList.traverse(t, func, data))
+				return false;
+			if (_finally != null && !_finally.traverse(t, func, data))
+				return false;
+			result = func(this, data);
+			if (result == TraverseAction.ABORT_TRAVERSAL)
+				return false;
+			break;
+
+		case	REVERSE_PRE_ORDER:
+			result = func(this, data);
+			if (result == TraverseAction.ABORT_TRAVERSAL)
+				return false;
+			if (result == TraverseAction.SKIP_CHILDREN)
+				break;
+			if (_finally != null && !_finally.traverse(t, func, data))
+				return false;
+			if (_catchList != null && !_catchList.reverse(t, func, data))
+				return false;
+			if (!_body.traverse(t, func, data))
+				return false;
+			break;
+
+		case	REVERSE_IN_ORDER:
+		case	REVERSE_POST_ORDER:
+			if (_finally != null && !_finally.traverse(t, func, data))
+				return false;
+			if (_catchList != null && !_catchList.reverse(t, func, data))
+				return false;
+			if (!_body.traverse(t, func, data))
+				return false;
+			result = func(this, data);
+			if (result == TraverseAction.ABORT_TRAVERSAL)
+				return false;
+			break;
+
+		default:
+			return false;
+		}
+		return true;
+	}
+
+	void assignTypes(ref<CompileContext> compileContext) {
+		type = compileContext.arena().builtInType(TypeFamily.VOID);
+		compileContext.assignTypes(_body);
+		if (_finally != null)
+			compileContext.assignTypes(_finally);
+		for (ref<NodeList> nl = _catchList; nl != null; nl = nl.next)
+			compileContext.assignTypes(nl.node);
+	}
+
+	public ref<Try> clone(ref<SyntaxTree> tree) {
+		ref<Node> body = _body.clone(tree);
+		ref<Node> finallyClause = _finally != null ? _finally.clone(tree) : null;
+		ref<NodeList> nl = _catchList != null ? _catchList.clone(tree) : null;
+		return ref<Try>(tree.newTry(body, finallyClause, nl, location()).finishClone(this, tree.pool()));
+	}
+
+	public ref<Try> cloneRaw(ref<SyntaxTree> tree) {
+		ref<Node> body = _body.cloneRaw(tree);
+		ref<Node> finallyClause = _finally != null ? _finally.cloneRaw(tree) : null;
+		ref<NodeList> nl = _catchList != null ? _catchList.cloneRaw(tree) : null;
+		return tree.newTry(body, finallyClause, nl, location());
+	}
+
+	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+		_body = _body.fold(tree, true, compileContext);
+		if (_finally != null)
+			_finally = _finally.fold(tree, true, compileContext);
+		for (ref<NodeList> nl = _catchList; nl != null; nl = nl.next) 
+			nl.node = nl.node.fold(tree, true, compileContext);
+		return this;
+	}
+
+	public void print(int indent) {
+		printBasic(indent);
+		printf("\n");
+		_body.print(indent + INDENT);
+		if (_catchList != null) {
+			for (ref<NodeList> nl = _catchList; nl != null; nl = nl.next) {
+				printf("%*c  {catch}\n", indent, ' ');
+				nl.node.print(indent + INDENT);
+			}
+		}
+		if (_finally != null) {
+			printf("%*c  {finally}\n", indent, ' ');
+			_finally.print(indent + INDENT);
+		}
+	}
+	
+	public ref<Node> body() {
+		return _body;
+	}
+
+	public ref<Node> finallyClause() {
+		return _finally;
+	}
+	
+	public ref<NodeList> catchList() {
+		return _catchList;
 	}
 }
 
@@ -2223,6 +2389,8 @@ class Node {
 			if (type == null) {
 				add(MessageId.NO_EXPRESSION_TYPE, compileContext.pool());
 				type = compileContext.errorType();
+				print(0);
+				assert(false);
 			}
 		}
 	}
@@ -2547,6 +2715,13 @@ class NodeList {
 		return true;
 	}
 
+	public ref<NodeList> last() {
+		for (ref<NodeList> nl = this; ; nl = nl.next) {
+			if (nl.next == null)
+				return nl;
+		}
+	}
+	
 	public ref<NodeList> clone(ref<SyntaxTree> tree) {
 		ref<Node> n = node != null ? node.clone(tree) : null;
 		ref<NodeList> nl = tree.newNodeList(n);

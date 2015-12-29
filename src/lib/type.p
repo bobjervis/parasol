@@ -36,6 +36,7 @@ enum TypeFamily {
 	ADDRESS,
 	VOID,
 	ERROR,
+	EXCEPTION,
 	CLASS_VARIABLE,
 	CLASS_DEFERRED,
 	NAMESPACE,
@@ -110,76 +111,6 @@ class BuiltInType extends Type {
 	}
 
 	public boolean widensTo(ref<Type> other, ref<CompileContext> compileContext) {
-		static boolean[TypeFamily][TypeFamily] widens;
-		
-		widens.resize(TypeFamily.BUILTIN_TYPES);
-		for (int i = 0; i < int(TypeFamily.BUILTIN_TYPES); i++)
-			widens[TypeFamily(i)].resize(TypeFamily.BUILTIN_TYPES);
-		widens[TypeFamily.SIGNED_8][TypeFamily.SIGNED_8] = true;
-		widens[TypeFamily.SIGNED_8][TypeFamily.SIGNED_16] = true;
-		widens[TypeFamily.SIGNED_8][TypeFamily.SIGNED_32] = true;
-		widens[TypeFamily.SIGNED_8][TypeFamily.SIGNED_64] = true;
-		widens[TypeFamily.SIGNED_8][TypeFamily.FLOAT_32] = true;
-		widens[TypeFamily.SIGNED_8][TypeFamily.FLOAT_64] = true;
-		widens[TypeFamily.SIGNED_8][TypeFamily.VAR] = true;
-		widens[TypeFamily.SIGNED_16][TypeFamily.SIGNED_16] = true;
-		widens[TypeFamily.SIGNED_16][TypeFamily.SIGNED_32] = true;
-		widens[TypeFamily.SIGNED_16][TypeFamily.SIGNED_64] = true;
-		widens[TypeFamily.SIGNED_16][TypeFamily.FLOAT_32] = true;
-		widens[TypeFamily.SIGNED_16][TypeFamily.FLOAT_64] = true;
-		widens[TypeFamily.SIGNED_16][TypeFamily.VAR] = true;
-		widens[TypeFamily.SIGNED_32][TypeFamily.SIGNED_32] = true;
-		widens[TypeFamily.SIGNED_32][TypeFamily.SIGNED_64] = true;
-		widens[TypeFamily.SIGNED_32][TypeFamily.FLOAT_32] = true;
-		widens[TypeFamily.SIGNED_32][TypeFamily.FLOAT_64] = true;
-		widens[TypeFamily.SIGNED_32][TypeFamily.VAR] = true;
-		widens[TypeFamily.SIGNED_64][TypeFamily.SIGNED_64] = true;
-		widens[TypeFamily.SIGNED_64][TypeFamily.FLOAT_32] = true;
-		widens[TypeFamily.SIGNED_64][TypeFamily.FLOAT_64] = true;
-		widens[TypeFamily.SIGNED_64][TypeFamily.VAR] = true;
-		widens[TypeFamily.UNSIGNED_8][TypeFamily.SIGNED_16] = true;
-		widens[TypeFamily.UNSIGNED_8][TypeFamily.SIGNED_32] = true;
-		widens[TypeFamily.UNSIGNED_8][TypeFamily.SIGNED_64] = true;
-		widens[TypeFamily.UNSIGNED_8][TypeFamily.UNSIGNED_8] = true;
-		widens[TypeFamily.UNSIGNED_8][TypeFamily.UNSIGNED_16] = true;
-		widens[TypeFamily.UNSIGNED_8][TypeFamily.UNSIGNED_32] = true;
-		widens[TypeFamily.UNSIGNED_8][TypeFamily.UNSIGNED_64] = true;
-		widens[TypeFamily.UNSIGNED_8][TypeFamily.FLOAT_32] = true;
-		widens[TypeFamily.UNSIGNED_8][TypeFamily.FLOAT_64] = true;
-		widens[TypeFamily.UNSIGNED_8][TypeFamily.VAR] = true;
-		widens[TypeFamily.UNSIGNED_16][TypeFamily.SIGNED_32] = true;
-		widens[TypeFamily.UNSIGNED_16][TypeFamily.SIGNED_64] = true;
-		widens[TypeFamily.UNSIGNED_16][TypeFamily.UNSIGNED_16] = true;
-		widens[TypeFamily.UNSIGNED_16][TypeFamily.UNSIGNED_32] = true;
-		widens[TypeFamily.UNSIGNED_16][TypeFamily.UNSIGNED_64] = true;
-		widens[TypeFamily.UNSIGNED_16][TypeFamily.FLOAT_32] = true;
-		widens[TypeFamily.UNSIGNED_16][TypeFamily.FLOAT_64] = true;
-		widens[TypeFamily.UNSIGNED_16][TypeFamily.VAR] = true;
-		widens[TypeFamily.UNSIGNED_32][TypeFamily.SIGNED_64] = true;
-		widens[TypeFamily.UNSIGNED_32][TypeFamily.UNSIGNED_32] = true;
-		widens[TypeFamily.UNSIGNED_32][TypeFamily.UNSIGNED_64] = true;
-		widens[TypeFamily.UNSIGNED_32][TypeFamily.FLOAT_32] = true;
-		widens[TypeFamily.UNSIGNED_32][TypeFamily.FLOAT_64] = true;
-		widens[TypeFamily.UNSIGNED_32][TypeFamily.VAR] = true;
-		widens[TypeFamily.UNSIGNED_64][TypeFamily.UNSIGNED_64] = true;
-		widens[TypeFamily.UNSIGNED_64][TypeFamily.FLOAT_32] = true;
-		widens[TypeFamily.UNSIGNED_64][TypeFamily.FLOAT_64] = true;
-		widens[TypeFamily.UNSIGNED_64][TypeFamily.VAR] = true;
-		widens[TypeFamily.FLOAT_32][TypeFamily.FLOAT_32] = true;
-		widens[TypeFamily.FLOAT_32][TypeFamily.FLOAT_64] = true;
-		widens[TypeFamily.FLOAT_32][TypeFamily.VAR] = true;
-		widens[TypeFamily.FLOAT_64][TypeFamily.FLOAT_64] = true;
-		widens[TypeFamily.FLOAT_64][TypeFamily.VAR] = true;
-		widens[TypeFamily.BOOLEAN][TypeFamily.BOOLEAN] = true;
-		widens[TypeFamily.BOOLEAN][TypeFamily.VAR] = true;
-		widens[TypeFamily.STRING][TypeFamily.STRING] = true;
-		widens[TypeFamily.STRING][TypeFamily.VAR] = true;
-		widens[TypeFamily.VAR][TypeFamily.VAR] = true;
-		widens[TypeFamily.ADDRESS][TypeFamily.VAR] = true;
-		widens[TypeFamily.ADDRESS][TypeFamily.ADDRESS] = true;
-		widens[TypeFamily.CLASS_VARIABLE][TypeFamily.CLASS_VARIABLE] = true;
-		widens[TypeFamily.CLASS_DEFERRED][TypeFamily.CLASS_DEFERRED] = true;
-
 		if (int(other.family()) >= int(TypeFamily.BUILTIN_TYPES))
 			return super.widensTo(other, compileContext);
 		else
@@ -233,6 +164,77 @@ class BuiltInType extends Type {
 	}
 	
 }
+
+boolean[TypeFamily][TypeFamily] widens;
+
+widens.resize(TypeFamily.BUILTIN_TYPES);
+for (int i = 0; i < int(TypeFamily.BUILTIN_TYPES); i++)
+	widens[TypeFamily(i)].resize(TypeFamily.BUILTIN_TYPES);
+widens[TypeFamily.SIGNED_8][TypeFamily.SIGNED_8] = true;
+widens[TypeFamily.SIGNED_8][TypeFamily.SIGNED_16] = true;
+widens[TypeFamily.SIGNED_8][TypeFamily.SIGNED_32] = true;
+widens[TypeFamily.SIGNED_8][TypeFamily.SIGNED_64] = true;
+widens[TypeFamily.SIGNED_8][TypeFamily.FLOAT_32] = true;
+widens[TypeFamily.SIGNED_8][TypeFamily.FLOAT_64] = true;
+widens[TypeFamily.SIGNED_8][TypeFamily.VAR] = true;
+widens[TypeFamily.SIGNED_16][TypeFamily.SIGNED_16] = true;
+widens[TypeFamily.SIGNED_16][TypeFamily.SIGNED_32] = true;
+widens[TypeFamily.SIGNED_16][TypeFamily.SIGNED_64] = true;
+widens[TypeFamily.SIGNED_16][TypeFamily.FLOAT_32] = true;
+widens[TypeFamily.SIGNED_16][TypeFamily.FLOAT_64] = true;
+widens[TypeFamily.SIGNED_16][TypeFamily.VAR] = true;
+widens[TypeFamily.SIGNED_32][TypeFamily.SIGNED_32] = true;
+widens[TypeFamily.SIGNED_32][TypeFamily.SIGNED_64] = true;
+widens[TypeFamily.SIGNED_32][TypeFamily.FLOAT_32] = true;
+widens[TypeFamily.SIGNED_32][TypeFamily.FLOAT_64] = true;
+widens[TypeFamily.SIGNED_32][TypeFamily.VAR] = true;
+widens[TypeFamily.SIGNED_64][TypeFamily.SIGNED_64] = true;
+widens[TypeFamily.SIGNED_64][TypeFamily.FLOAT_32] = true;
+widens[TypeFamily.SIGNED_64][TypeFamily.FLOAT_64] = true;
+widens[TypeFamily.SIGNED_64][TypeFamily.VAR] = true;
+widens[TypeFamily.UNSIGNED_8][TypeFamily.SIGNED_16] = true;
+widens[TypeFamily.UNSIGNED_8][TypeFamily.SIGNED_32] = true;
+widens[TypeFamily.UNSIGNED_8][TypeFamily.SIGNED_64] = true;
+widens[TypeFamily.UNSIGNED_8][TypeFamily.UNSIGNED_8] = true;
+widens[TypeFamily.UNSIGNED_8][TypeFamily.UNSIGNED_16] = true;
+widens[TypeFamily.UNSIGNED_8][TypeFamily.UNSIGNED_32] = true;
+widens[TypeFamily.UNSIGNED_8][TypeFamily.UNSIGNED_64] = true;
+widens[TypeFamily.UNSIGNED_8][TypeFamily.FLOAT_32] = true;
+widens[TypeFamily.UNSIGNED_8][TypeFamily.FLOAT_64] = true;
+widens[TypeFamily.UNSIGNED_8][TypeFamily.VAR] = true;
+widens[TypeFamily.UNSIGNED_16][TypeFamily.SIGNED_32] = true;
+widens[TypeFamily.UNSIGNED_16][TypeFamily.SIGNED_64] = true;
+widens[TypeFamily.UNSIGNED_16][TypeFamily.UNSIGNED_16] = true;
+widens[TypeFamily.UNSIGNED_16][TypeFamily.UNSIGNED_32] = true;
+widens[TypeFamily.UNSIGNED_16][TypeFamily.UNSIGNED_64] = true;
+widens[TypeFamily.UNSIGNED_16][TypeFamily.FLOAT_32] = true;
+widens[TypeFamily.UNSIGNED_16][TypeFamily.FLOAT_64] = true;
+widens[TypeFamily.UNSIGNED_16][TypeFamily.VAR] = true;
+widens[TypeFamily.UNSIGNED_32][TypeFamily.SIGNED_64] = true;
+widens[TypeFamily.UNSIGNED_32][TypeFamily.UNSIGNED_32] = true;
+widens[TypeFamily.UNSIGNED_32][TypeFamily.UNSIGNED_64] = true;
+widens[TypeFamily.UNSIGNED_32][TypeFamily.FLOAT_32] = true;
+widens[TypeFamily.UNSIGNED_32][TypeFamily.FLOAT_64] = true;
+widens[TypeFamily.UNSIGNED_32][TypeFamily.VAR] = true;
+widens[TypeFamily.UNSIGNED_64][TypeFamily.UNSIGNED_64] = true;
+widens[TypeFamily.UNSIGNED_64][TypeFamily.FLOAT_32] = true;
+widens[TypeFamily.UNSIGNED_64][TypeFamily.FLOAT_64] = true;
+widens[TypeFamily.UNSIGNED_64][TypeFamily.VAR] = true;
+widens[TypeFamily.FLOAT_32][TypeFamily.FLOAT_32] = true;
+widens[TypeFamily.FLOAT_32][TypeFamily.FLOAT_64] = true;
+widens[TypeFamily.FLOAT_32][TypeFamily.VAR] = true;
+widens[TypeFamily.FLOAT_64][TypeFamily.FLOAT_64] = true;
+widens[TypeFamily.FLOAT_64][TypeFamily.VAR] = true;
+widens[TypeFamily.BOOLEAN][TypeFamily.BOOLEAN] = true;
+widens[TypeFamily.BOOLEAN][TypeFamily.VAR] = true;
+widens[TypeFamily.STRING][TypeFamily.STRING] = true;
+widens[TypeFamily.STRING][TypeFamily.VAR] = true;
+widens[TypeFamily.VAR][TypeFamily.VAR] = true;
+widens[TypeFamily.EXCEPTION][TypeFamily.EXCEPTION] = true;
+widens[TypeFamily.ADDRESS][TypeFamily.VAR] = true;
+widens[TypeFamily.ADDRESS][TypeFamily.ADDRESS] = true;
+widens[TypeFamily.CLASS_VARIABLE][TypeFamily.CLASS_VARIABLE] = true;
+widens[TypeFamily.CLASS_DEFERRED][TypeFamily.CLASS_DEFERRED] = true;
 
 class ClassType extends Type {
 	protected ref<Scope> _scope;
@@ -1302,6 +1304,7 @@ int[TypeFamily] familySize = [
 	TEMPLATE_INSTANCE:	-1,
 	NAMESPACE: 			-1,
 	CLASS_VARIABLE: 	 8,
+	EXCEPTION:			 8,
 	CLASS_DEFERRED: 	-1,
 ];
 
@@ -1337,5 +1340,6 @@ int[TypeFamily] familyAlignment = [
 	TEMPLATE_INSTANCE:	-1,
 	NAMESPACE: 			-1,
 	CLASS_VARIABLE: 	 8,
+	EXCEPTION:			 8,
 	CLASS_DEFERRED: 	-1,
 ];

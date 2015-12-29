@@ -36,6 +36,7 @@ typedef long long WORD;
 static const int STACK_SIZE = STACK_SLOT * 256 * 1024;
 
 class Code;
+class Exception;
 class ExceptionContext;
 class Type;
 
@@ -49,6 +50,7 @@ struct StackState {
 	byte *sp;
 	byte *stack;
 	byte *stackTop;
+	Exception *parasolException;
 	StackFrame frame;
 	int target;
 	int exceptionType;
@@ -188,6 +190,11 @@ public:
 
 class ExceptionInfo {
 
+};
+
+class Exception {
+public:
+	ExceptionContext *context;
 };
 
 class ExceptionContext {

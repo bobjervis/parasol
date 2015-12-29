@@ -38,10 +38,27 @@ import parasol:types.boolean;
 import parasol:types.void;
 import parasol:types.ClassInfo;
 import parasol:types.Exception;
+
+// Eventually, we need another way to get these 'built ins' plumbed through.
+
 import parasol:types.`*Namespace*`;
 import parasol:types.`*deferred*`;
 import parasol:types.`*array*`;
 import parasol:types.`*object*`;
+
+/**
+ * Throw an exception. It performs the exact same semantics as the throw statement.
+ * The throw statement will generate this call (and provide the magic frame and stack pointer).
+ *  
+ * Note: This function does not return.
+ * 
+ * @param e The non-null Exception to be thrown.
+ * @param frame The frame pointer when the exception was thrown.
+ * @param stackPointer The stack pointer when the exception was thrown.
+ */
+public abstract void throwException(ref<Exception> e, address frame, address stackPointer);
+
+public abstract void exposeException(ref<Exception> e);
 
 @Ref
 class ref<class T> extends address {

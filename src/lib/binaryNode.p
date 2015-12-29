@@ -943,6 +943,7 @@ class Binary extends Node {
 			switch (_left.op()) {
 			case ELLIPSIS:
 				_left.add(MessageId.BAD_ELLIPSIS, compileContext.pool());
+				type = compileContext.errorType();
 				break;
 				
 			case EMPTY:	// A class alias

@@ -288,6 +288,20 @@ class Unary extends Node {
 			}
 			break;
 
+		case	THROW:
+			ref<OverloadInstance> te = compileContext.arena().throwException();
+			ref<Node> f = tree.newLeaf(Operator.FRAME_PTR, location());
+			ref<Node> s = tree.newLeaf(Operator.STACK_PTR, location());
+			ref<Node> x = tree.newLeaf(Operator.EMPTY, location());
+			f.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+			s.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+			x.type = te.type();
+			ref<NodeList> args = tree.newNodeList(_operand, f, s);
+			ref<Call> call = tree.newCall(te.parameterScope(), null, x, args, location(), compileContext);
+			call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+			f = tree.newUnary(Operator.EXPRESSION, call, location());
+			return f.fold(tree, voidContext, compileContext);
+			
 		case	ADDRESS:
 			if (_operand.op() == Operator.SUBSCRIPT) {
 				ref<Binary> b = ref<Binary>(_operand);
@@ -580,6 +594,25 @@ class Unary extends Node {
 		case	UNWRAP_TYPEDEF:
 			type = _operand.unwrapTypedef(compileContext);
 			break;
+			
+		case	THROW:
+			compileContext.assignTypes(_operand);
+			type = _operand.type;
+			if (_operand.deferAnalysis())
+				break;
+			if (!_operand.canCoerce(compileContext.arena().builtInType(TypeFamily.EXCEPTION), false, compileContext)) {
+				ref<Type> t = _operand.type.indirectType(compileContext); 
+				if (t == null || 
+					!t.widensTo(compileContext.arena().builtInType(TypeFamily.EXCEPTION), compileContext)) {
+					add(MessageId.NOT_AN_EXCEPTION, compileContext.pool());
+					type = compileContext.errorType();
+				}
+			}
+			break;
+			
+		default:
+			print(0);
+			assert(false);
 		}
 	}
 }

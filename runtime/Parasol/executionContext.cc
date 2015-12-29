@@ -78,7 +78,7 @@ void ExecutionContext::crawlStack(const StackState &state, void *rbp) {
 					ec->exceptionFlags = state.exceptionFlags;
 					ec->exceptionType = state.exceptionType;
 
-					_exceptionContext = ec;
+//					_exceptionContext = ec;
 
 //					printf("Frame hit at %x: handler %p rbp %p\n", location, handler, rbp);
 					setRbp(rbp);

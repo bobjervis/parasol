@@ -222,6 +222,8 @@ void sethiUllman(ref<Node> node, ref<CompileContext> compileContext, ref<Target>
 	case	TEMPLATE_INSTANCE:
 	case	BIND:
 	case	VECTOR_OF:
+	case	FRAME_PTR:
+	case	STACK_PTR:
 		node.sethi = 0;
 		break;
 		

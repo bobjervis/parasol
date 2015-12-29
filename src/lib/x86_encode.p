@@ -42,6 +42,8 @@ import parasol:compiler.Selection;
 import parasol:compiler.StorageClass;
 import parasol:compiler.Symbol;
 import parasol:compiler.Target;
+import parasol:compiler.Ternary;
+import parasol:compiler.Try;
 import parasol:compiler.Type;
 import parasol:compiler.TypedefType;
 import parasol:compiler.TypeFamily;
@@ -127,6 +129,12 @@ class ExceptionEntry {
 	public int handler;
 }
 
+class DeferredTry {
+	public ref<X86_64Encoder.CodeSegment> primaryHandler;
+	public ref<Try> tryStatement;
+	public ref<X86_64Encoder.CodeSegment> join;
+}
+
 private int FIRST_STACK_PARAM_OFFSET = 16;
 
 class X86_64Encoder extends Target {
@@ -136,6 +144,7 @@ class X86_64Encoder extends Target {
 	protected byte[] _builtInsList;
 	protected ExceptionEntry[] _exceptionTable;
 	protected SourceLocation[] _sourceLocations;
+	protected DeferredTry[] _deferredTry;
 	
 	private ref<CodeSegment>[] _exceptionHandlers;
 	private int[] _staticDataSize;
@@ -764,6 +773,11 @@ class X86_64Encoder extends Target {
 		ref<CodeSegment> outerHandler = _f.currentHandler;
 		_f.currentHandler = handler;
 		return outerHandler;
+	}
+	
+	void deferTry(ref<Try> context, ref<CodeSegment> handler, ref<CodeSegment> join) {
+		DeferredTry dt = { tryStatement: context, primaryHandler: handler, join: join };
+		_deferredTry.append(dt);
 	}
 	
 	void emitExceptionEntry(int location, ref<CodeSegment> handler) {

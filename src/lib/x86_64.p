@@ -56,6 +56,7 @@ import parasol:compiler.Target;
 import parasol:compiler.TemplateInstanceType;
 import parasol:compiler.Ternary;
 import parasol:compiler.Test;
+import parasol:compiler.Try;
 import parasol:compiler.Type;
 import parasol:compiler.TypedefType;
 import parasol:compiler.TypeFamily;
@@ -133,6 +134,7 @@ public class X86_64 extends X86_64AssignTemps {
 	private ref<OverloadInstance> _memset;
 	private ref<OverloadInstance> _memcpy;
 	private ref<OverloadInstance> _assert;
+	private ref<OverloadInstance> _exposeException;
 	private ref<Symbol> _floatSignMask;
 	private ref<Symbol> _floatOne;
 	private ref<Symbol> _doubleSignMask;
@@ -523,6 +525,7 @@ public class X86_64 extends X86_64AssignTemps {
 					assert(false);
 				}
 			}
+			resolveDeferredTrys(true, compileContext);
 		} else {
 			inst(X86.PUSH, TypeFamily.SIGNED_64, R.RBX);
 			inst(X86.PUSH, TypeFamily.SIGNED_64, R.RSI);
@@ -607,10 +610,29 @@ public class X86_64 extends X86_64AssignTemps {
 				unfinished(node, "generateReturn failed - default end-of-static block", compileContext);
 			handler.start(this);
 			inst(X86.LEA, R.RSP, R.RBP, -(f().autoSize + 8 * address.bytes));
+			instCall(_exposeException.parameterScope(), compileContext);
 			closeCodeSegment(CC.JMP, join);
+			resolveDeferredTrys(false, compileContext);
 		}
 	}
 
+	private void resolveDeferredTrys(boolean isFunction, ref<CompileContext> compileContext) {
+		for (int i = 0; i < _deferredTry.length(); i++) {
+			ref<DeferredTry> dt = &_deferredTry[i];
+			dt.primaryHandler.start(this);
+			int adjust = -f().autoSize;
+			if (!isFunction)
+				adjust -= 8 * address.bytes;
+			inst(X86.LEA, R.RSP, R.RBP, adjust);
+			for (ref<NodeList> nl = dt.tryStatement.catchList(); nl != null; nl = nl.next) {
+				ref<Ternary> t = ref<Ternary>(nl.node);
+				generate(t.right(), compileContext);
+			}
+			closeCodeSegment(CC.JMP, dt.join);
+		}
+		_deferredTry.clear();
+	}
+	
 	private void reserveAutoMemory(boolean preserveRCX, ref<CompileContext> compileContext, int frameSize) {
 		frameSize &= 15;											// Reduce the calculated frame size to 0-15.
 		int zeroZone = f().autoSize - f().registerSaveSize;
@@ -750,7 +772,7 @@ public class X86_64 extends X86_64AssignTemps {
 			else
 				generateExpressionStatement(expression.operand(), compileContext);
 			break;
-
+			
 		case	SEQUENCE:
 			b = ref<Binary>(node);
 			generate(b.left(), compileContext);
@@ -1053,6 +1075,19 @@ public class X86_64 extends X86_64AssignTemps {
 			} 
 			if (!generateReturn(f().current, compileContext))
 				unfinished(retn, "failed return generation", compileContext);
+			break;
+			
+		case	TRY:
+			ref<Try> tr = ref<Try>(node);
+			ref<CodeSegment> primaryHandler = new CodeSegment;
+//			ref<CodeSegment> secondaryHandler = tr.finallyClause() != null ? new CodeSegment : null;
+			join = new CodeSegment;
+			ref<CodeSegment> outer = pushExceptionHandler(primaryHandler);
+			generate(tr.body(), compileContext);
+			closeCodeSegment(CC.NOP, join);
+			pushExceptionHandler(outer);
+			join.start(this);
+			deferTry(tr, primaryHandler, join);
 			break;
 			
 		case	CLASS_DECLARATION:
@@ -1874,6 +1909,18 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			break;
 			
+		case	FRAME_PTR:
+			if ((node.nodeFlags & ADDRESS_MODE) == 0) {
+				inst(X86.MOV, TypeFamily.ADDRESS, R(node.register), R.RBP);
+			}
+			break;
+			
+		case	STACK_PTR:
+			if ((node.nodeFlags & ADDRESS_MODE) == 0) {
+				inst(X86.MOV, TypeFamily.ADDRESS, R(node.register), R.RSP);
+			}
+			break;
+			
 		case	SUBSCRIPT:
 			b = ref<Binary>(node);
 
@@ -2129,7 +2176,7 @@ public class X86_64 extends X86_64AssignTemps {
 		case	ELLIPSIS_ARGUMENTS:
 			generateEllipsisArguments(ref<EllipsisArguments>(node), compileContext);
 			break;
-			
+
 		default:
 			node.print(0);
 			assert(false);
@@ -3423,6 +3470,11 @@ public class X86_64 extends X86_64AssignTemps {
 		if (memsetOverload.class == Overload) {
 			ref<Overload> o = ref<Overload>(memcpyOverload);
 			_memcpy = o.instances()[0];
+		}
+		ref<Symbol> exposeExceptionOverload = root.lookup("exposeException");
+		if (exposeExceptionOverload.class == Overload) {
+			ref<Overload> o = ref<Overload>(exposeExceptionOverload);
+			_exposeException = o.instances()[0];
 		}
 		ref<Type> stringType = _arena.builtInType(TypeFamily.STRING);
 		for (int i = 0; i < stringType.scope().constructors().length(); i++) {

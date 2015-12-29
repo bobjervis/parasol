@@ -150,17 +150,17 @@ class CompileContext {
 		ref<Scope> outer = _current;
 		_current = s;
 		switch (definition.op()) {
-		case	FUNCTION:{
-			ref<Function> f = ref<Function>(definition);
+		case	FUNCTION:
+			ref<Function> func = ref<Function>(definition);
 			boolean outer = isStatic;
 			isStatic = false;
-			for (ref<NodeList> nl = f.arguments(); nl != null; nl = nl.next) {
+			for (ref<NodeList> nl = func.arguments(); nl != null; nl = nl.next) {
 				buildScopesInTree(nl.node);
 			}
 			isStatic = outer;
-			if (f.body != null)
-				buildScopesInTree(f.body);
-		}break;
+			if (func.body != null)
+				buildScopesInTree(func.body);
+			break;
 
 		case	BLOCK:
 		case	CLASS:
@@ -170,7 +170,7 @@ class CompileContext {
 				clearDeclarationModifiers();
 				buildScopesInTree(nl.node);
 			}
-		break;
+			break;
 
 		case	UNIT:
 			b = ref<Block>(definition);
@@ -180,7 +180,7 @@ class CompileContext {
 				clearDeclarationModifiers();
 				buildScopesInTree(nl.node);
 			}
-		break;
+			break;
 		
 		case	ENUM:
 			b = ref<Block>(definition);
@@ -192,7 +192,7 @@ class CompileContext {
 				clearDeclarationModifiers();
 				buildScopesInTree(nl.node);
 			}
-		break;
+			break;
 
 		case	TEMPLATE:
 			ref<Template> t = ref<Template>(definition);
@@ -200,17 +200,26 @@ class CompileContext {
 				buildScopesInTree(nl.node);
 			buildScopesInTree(t.classDef);
 			t.type = _arena.builtInType(TypeFamily.VOID);
-		break;
+			break;
 
-		case	SCOPED_FOR:{
+		case	SCOPED_FOR:
 			ref<For> f = ref<For>(definition);
 			buildScopesInTree(f.initializer());
 			buildScopesInTree(f.test());
 			buildScopesInTree(f.increment());
 			buildScopesInTree(f.body());
-		}break;
+			break;
 
+		case	CATCH:
+			ref<Ternary> tern = ref<Ternary>(definition);
+			buildScopesInTree(tern.left());
+			// Note: middle is always IDENTIFIER so no new scopes.
+			buildScopesInTree(tern.right());
+			break;
+			
 		default:
+			definition.print(0);
+			assert(false);
 			definition.add(MessageId.UNFINISHED_BUILD_SCOPE, _pool, CompileString("  "/*definition.class.name()*/), CompileString(string(definition.op())));
 			definition.type = errorType();
 		}
@@ -338,7 +347,9 @@ class CompileContext {
 		case	TEMPLATE:
 		case	TEMPLATE_INSTANCE:
 		case	THIS:
+		case	THROW:
 		case	TRUE:
+		case	TRY:
 		case	UNARY_PLUS:
 		case	UNSIGNED_RIGHT_SHIFT:
 		case	UNSIGNED_RIGHT_SHIFT_ASSIGN:
@@ -367,25 +378,31 @@ class CompileContext {
 			i.prepareImport(this);
 			break;
 
-		case	BIND:{
-			ref<Binary> b = ref<Binary>(n);
+		case	BIND:
+			b = ref<Binary>(n);
 			ref<Identifier> id = ref<Identifier>(b.right());
 			id.bind(_current, b.left(), null, this);
-		}break;
+			break;
 
-		case	BLOCK:{
-			ref<Block> b = ref<Block>(n);
-			b.scope = createScope(n, StorageClass.AUTO);
+		case	BLOCK:
+			ref<Block>(n).scope = createScope(n, StorageClass.AUTO);
 			return TraverseAction.SKIP_CHILDREN;
-		}
+
 		case	SCOPED_FOR:
 		case	LOOP:
 			createScope(n, StorageClass.AUTO);
 			return TraverseAction.SKIP_CHILDREN;
-			
+	
+		case	CATCH:
+			ref<Scope> s = createScope(n, StorageClass.AUTO);
+			ref<Ternary> t = ref<Ternary>(n);
+			id = ref<Identifier>(t.middle());
+			id.bind(s, t.left(), null, this);
+			return TraverseAction.SKIP_CHILDREN;
+	
 		case	ENUM_DECLARATION:
 			b = ref<Binary>(n);
-			ref<Identifier> id = ref<Identifier>(b.left());
+			id = ref<Identifier>(b.left());
 			id.bindEnumName(_current, ref<Block>(b.right()), this);
 			return TraverseAction.SKIP_CHILDREN;
 
@@ -412,7 +429,7 @@ class CompileContext {
 			bindDeclarators(b.left(), b.right());
 			break;
 
-		case	FUNCTION:{
+		case	FUNCTION:
 			ref<Function> f = ref<Function>(n);
 			ref<ParameterScope> functionScope = createParameterScope(f, ParameterScope.Kind.FUNCTION);
 			if (f.name() != null) {
@@ -455,9 +472,10 @@ class CompileContext {
 				}
 			}
 			return TraverseAction.SKIP_CHILDREN;
-		}
 
 		default:
+			n.print(0);
+			assert(false);
 			n.add(MessageId.UNFINISHED_BUILD_SCOPE, _pool, CompileString(/*n.class.name()*/"***"), CompileString(string(n.op())));
 			n.type = errorType();
 		}
@@ -483,22 +501,22 @@ class CompileContext {
 
 	void bindDeclarators(ref<Node> type, ref<Node> n) {
 		switch (n.op()) {
-		case	IDENTIFIER:{
+		case	IDENTIFIER:
 			ref<Identifier> id = ref<Identifier>(n);
 			id.bind(_current, type, null, this);
-		}break;
+			break;
 						   
-		case	INITIALIZE:{
+		case	INITIALIZE:
 			ref<Binary> b = ref<Binary>(n);
-			ref<Identifier> id = ref<Identifier>(b.left());
+			id = ref<Identifier>(b.left());
 			id.bind(_current, type, b.right(), this);
-		}break;
+			break;
 
-		case	SEQUENCE:{
-			ref<Binary> b = ref<Binary>(n);
+		case	SEQUENCE:
+			b = ref<Binary>(n);
 			bindDeclarators(type, b.left());
 			bindDeclarators(type, b.right());
-		}break;
+			break;
 
 		default:
 			n.add(MessageId.UNFINISHED_BIND_DECLARATORS, _pool, CompileString("   "/*n.class.name()*/), CompileString(string(n.op())));
@@ -581,6 +599,8 @@ class CompileContext {
 			if (n.type == null) {
 				n.add(MessageId.NO_EXPRESSION_TYPE, _pool);
 				n.type = errorType();
+				n.print(0);
+				assert(false);
 			}
 		}
 	}
@@ -588,42 +608,45 @@ class CompileContext {
 	public void assignControlFlow(ref<Node> n) {
 		switch (n.op()) {
 		case	UNIT:
-		case	BLOCK:{
-			ref<Block> b = ref<Block>(n);
-			for (ref<NodeList> nl = b.statements(); nl != null; nl = nl.next)
+		case	BLOCK:
+			for (ref<NodeList> nl = ref<Block>(n).statements(); nl != null; nl = nl.next)
 				assignControlFlow(nl.node);
 			break;
-		}
-		case	IF:{
+
+		case	IF:
 			ref<Ternary> t = ref<Ternary>(n);
 			assignControlFlow(t.middle());
 			assignControlFlow(t.right());
 			break;
-		}
-		case	ANNOTATED:{
+
+		case	ANNOTATED:
 			ref<Binary> b = ref<Binary>(n);
 			assignControlFlow(b.right());
 			break;
-		}
+			
 		case	WHILE:
-		case	SWITCH:{
-			ref<Binary> b = ref<Binary>(n);
-			FlowContext flowContext(b, _flowContext);
-			pushFlowContext(&flowContext);
-			assignControlFlow(b.right());
-			popFlowContext();
+		case	SWITCH:
+			b = ref<Binary>(n);
+			{
+				FlowContext flowContext(b, _flowContext);
+				pushFlowContext(&flowContext);
+				assignControlFlow(b.right());
+				popFlowContext();
+			}
 			break;
-		}
-		case	DO_WHILE:{
-			ref<Binary> b = ref<Binary>(n);
-			FlowContext flowContext(b, _flowContext);
-			pushFlowContext(&flowContext);
-			assignControlFlow(b.left());
-			popFlowContext();
+
+		case	DO_WHILE:
+			b = ref<Binary>(n);
+			{
+				FlowContext flowContext(b, _flowContext);
+				pushFlowContext(&flowContext);
+				assignControlFlow(b.left());
+				popFlowContext();
+			}
 			break;
-		}
-		case	CASE:{
-			ref<Binary> b = ref<Binary>(n);
+
+		case	CASE:
+			b = ref<Binary>(n);
 			assignControlFlow(b.right());
 			ref<Binary> swit = enclosingSwitch();
 			if (swit == null) {
@@ -655,9 +678,9 @@ class CompileContext {
 					b.left().add(MessageId.NOT_CONSTANT, _pool);
 			}
 			break;
-		}
-		case	DEFAULT:{
-			ref<Binary> swit = enclosingSwitch();
+
+		case	DEFAULT:
+			swit = enclosingSwitch();
 			if (swit == null) {
 				n.add(MessageId.INVALID_DEFAULT, _pool);
 				n.type = errorType();
@@ -666,16 +689,32 @@ class CompileContext {
 			ref<Unary> u = ref<Unary>(n);
 			assignControlFlow(u.operand());
 			break;
-		}
+
 		case	FOR:
-		case	SCOPED_FOR:{
+		case	SCOPED_FOR:
 			ref<For> f = ref<For>(n);
-			FlowContext flowContext(f, _flowContext);
-			pushFlowContext(&flowContext);
-			assignControlFlow(f.body());
-			popFlowContext();
+			{
+				FlowContext flowContext(f, _flowContext);
+				pushFlowContext(&flowContext);
+				assignControlFlow(f.body());
+				popFlowContext();
+			}
 			break;
-		}
+		
+		case TRY:
+			ref<Try> tr = ref<Try>(n);
+			assignControlFlow(tr.body());
+			if (tr.finallyClause() != null)
+				assignControlFlow(tr.finallyClause());
+			for (ref<NodeList> nl = tr.catchList(); nl != null; nl = nl.next)
+				assignControlFlow(nl.node);
+			break;
+			
+		case	CATCH:
+			t = ref<Ternary>(n);
+			assignControlFlow(t.right());
+			break;
+			
 		case	ABSTRACT:
 		case	CLASS_DECLARATION:
 		case	ENUM_DECLARATION:
@@ -689,6 +728,7 @@ class CompileContext {
 		case	PUBLIC:
 		case	PRIVATE:
 		case	STATIC:
+		case	THROW:
 			break;
 
 		case	BREAK:
@@ -708,6 +748,8 @@ class CompileContext {
 			break;
 
 		default:
+			n.print(0);
+			assert(false);
 			n.add(MessageId.UNFINISHED_CONTROL_FLOW, _pool, CompileString("  "/*n.class.name()*/), CompileString(string(n.op())));
 			n.type = errorType();
 		}

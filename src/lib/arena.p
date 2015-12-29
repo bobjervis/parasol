@@ -39,6 +39,7 @@ public class Arena {
 	private ref<Symbol> _int;
 	private ref<Symbol> _string;
 	private ref<Symbol> _var;
+	private ref<OverloadInstance> _throwException;
 	private ref<OverloadInstance> _map;
 	private ref<OverloadInstance> _vector;
 	private ref<OverloadInstance> _enumVector;
@@ -290,6 +291,11 @@ public class Arena {
 			ref<Overload> o = ref<Overload>(sym);
 			_map = o.instances()[0];
 		}
+		sym = root.lookup("throwException");
+		if (sym.class == Overload) {
+			ref<Overload> o = ref<Overload>(sym);
+			_throwException = o.instances()[0];
+		}
 	}
 
 	public ref<Scope> createScope(ref<Scope> enclosing, ref<Node> definition, StorageClass storageClass) {
@@ -442,6 +448,10 @@ public class Arena {
 	ref<OverloadInstance> mapTemplate() {
 		return _map;
 	}
+	
+	ref<OverloadInstance> throwException() {
+		return _throwException;
+	}
 }
 
 class BuiltInMap {
@@ -473,4 +483,5 @@ builtInMap.append(BuiltInMap(TypeFamily.CLASS_DEFERRED, "*deferred*"));
 builtInMap.append(BuiltInMap(TypeFamily.ARRAY_AGGREGATE, "*array*"));
 builtInMap.append(BuiltInMap(TypeFamily.OBJECT_AGGREGATE, "*object*"));
 builtInMap.append(BuiltInMap(TypeFamily.ADDRESS, "address"));
+builtInMap.append(BuiltInMap(TypeFamily.EXCEPTION, "Exception"));
 builtInMap.append(BuiltInMap(TypeFamily.NAMESPACE, "*Namespace*"));
