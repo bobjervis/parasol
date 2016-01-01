@@ -37,7 +37,7 @@ import parasol:types.address;
 import parasol:types.boolean;
 import parasol:types.void;
 import parasol:types.ClassInfo;
-import parasol:types.Exception;
+import parasol:exception.Exception;
 
 // Eventually, we need another way to get these 'built ins' plumbed through.
 

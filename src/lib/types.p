@@ -33,13 +33,3 @@ public class `*Namespace*` {}
 public class `*deferred*`{}
 public class `*array*`{}
 public class `*object*`{}
-public class Exception {
-	public Exception() {
-		
-	}
-	
-	public Exception(string message) {
-		
-	}
-}
-

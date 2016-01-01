@@ -16,7 +16,7 @@
 namespace parasol:runtime;
 
 import native:windows;
-import parasol:x86_64.ExceptionContext;
+import parasol:exception.ExceptionContext;
 import parasol:x86_64.X86_64SectionHeader;
 
 /*
