@@ -50,6 +50,14 @@ int main(string[] args) {
 	assert(a + d == 18);
 	assert(c - d == 18);
 	assert(d - c < 0);
+	
+	// Noticed a register allocation bug that onll occurs because of RCX being used in the var constructor that gets
+	// generated for the printf.
+	
+	string str;
+	
+	str.printf("%d", d >> a);
+	assert(str == "8");
 	assert(d >> a == 8);
 	assert(d << a == 34);
 	assert(d >>> a == 8);

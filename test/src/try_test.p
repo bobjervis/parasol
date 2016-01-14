@@ -13,16 +13,32 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+import parasol:exception.DivideByZeroException;
+
 printf("Groundhog day!\n");
 
 try {
 	f();
 	printf("How did I get here?\n");
 	assert(false);
-} catch(Exception e) {
+} catch (Exception e) {
 	printf("Caught it!\n");
 }
 
+try {
+	int y = 0;
+	int x = 10 / y;
+} catch (Exception e) {
+	printf("Not expected - should have been a DivideByZeroException\n");
+	assert(false);
+} catch (DivideByZeroException e) {
+	printf("Caught this one too!");
+	assert(e.class == DivideByZeroException);
+}
+
+printf("Sunset!\n");
+
 void f() {
-	throw new Exception("Test");
+	printf("Jump!\n");
+	throw Exception("Test");
 }

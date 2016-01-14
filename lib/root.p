@@ -38,6 +38,7 @@ import parasol:types.boolean;
 import parasol:types.void;
 import parasol:types.ClassInfo;
 import parasol:exception.Exception;
+import parasol:exception.AssertionFailedException;
 
 // Eventually, we need another way to get these 'built ins' plumbed through.
 
@@ -79,7 +80,10 @@ int printf(string format, var... arguments) {
 @Deprecated
 abstract int print(string text);
 
-abstract void assert(boolean test);
+void assert(boolean test) {
+	if (!test)
+		throw AssertionFailedException();
+}
 
 // Use native:C
 @Deprecated

@@ -2405,7 +2405,7 @@ class Node {
 			add(MessageId.UNDEFINED, compileContext.pool(), name);
 			return this;
 		}
-		ref<OverloadInstance> oi = ref<Overload>(sym).instances()[0];
+		ref<OverloadInstance> oi = (*ref<Overload>(sym).instances())[0];
 		ref<Selection> method = tree.newSelection(object, oi, location());
 		method.type = oi.type();
 		ref<NodeList> args = tree.newNodeList(arguments);

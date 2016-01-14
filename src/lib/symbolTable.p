@@ -178,9 +178,9 @@ class ClasslikeScope extends Scope {
 				if (sym.class == Overload) {
 					ref<Overload> o = ref<Overload>(sym);
 					for (int i = 0; i < o.instances().length(); i++) {
-						ref<OverloadInstance> oi = o.instances()[i];
+						ref<OverloadInstance> oi = (*o.instances())[i];
 						for (int i = 0; i < oi.parameterScope().parameters().length(); i++) {
-							ref<Symbol> par = oi.parameterScope().parameters()[i];
+							ref<Symbol> par = (*oi.parameterScope().parameters())[i];
 							par.assignType(compileContext);
 						}
 						int index = matchingMethod(oi);
@@ -224,8 +224,8 @@ class ClasslikeScope extends Scope {
 		return true;
 	}
 
-	public ref<OverloadInstance>[] methods() {
-		return _methods;
+	public ref<ref<OverloadInstance>[]> methods() {
+		return &_methods;
 	}
 
 	private int matchingMethod(ref<OverloadInstance> candidate) {
@@ -236,8 +236,8 @@ class ClasslikeScope extends Scope {
 		return -1;
 	}
 	
-	public ref<Symbol>[] members() {
-		return _members;
+	public ref<ref<Symbol>[]> members() {
+		return &_members;
 	}
 }
 
@@ -257,8 +257,8 @@ class EnumScope extends ClasslikeScope {
 		return sym;
 	}
 
-	public ref<Symbol>[] instances() {
-		return _instances;
+	public ref<ref<Symbol>[]> instances() {
+		return &_instances;
 	}
 	/*
 	 * Given a symbol, return the index of the symbol within this enumscope. THis allows us to properly
@@ -346,8 +346,8 @@ class ParameterScope extends Scope {
 		return sym;
 	}
 
-	public ref<Symbol>[] parameters() {
-		return _parameters;
+	public ref<ref<Symbol>[]> parameters() {
+		return &_parameters;
 	}
 
 	public Kind kind() {
@@ -652,8 +652,8 @@ class Scope {
 				ref<ClassScope> c = ref<ClassScope>(this);
 				printf("%*.*c  (Methods)\n", indent, indent, ' ');
 				for (int i = 0; i < c.methods().length(); i++) {
-					if (c.methods()[i] != null)
-						c.methods()[i].print(indent + INDENT, false);
+					if ((*c.methods())[i] != null)
+						(*c.methods())[i].print(indent + INDENT, false);
 					else
 						printf("%*.*c    <null>\n", indent, indent, ' ');
 				}
@@ -984,16 +984,16 @@ class Scope {
 			return null;
 	}
 
-	ref<Symbol>[string] symbols() {
-		return _symbols;
+	ref<ref<Symbol>[string]> symbols() {
+		return &_symbols;
 	}
 
 	public ref<Scope> enclosing() {
 		return _enclosing;
 	}
 
-	ref<ParameterScope>[] constructors() {
-		return _constructors;
+	ref<ref<ParameterScope>[]> constructors() {
+		return &_constructors;
 	}
 
 	ref<ParameterScope> defaultConstructor() {
@@ -1343,8 +1343,8 @@ class Overload extends Symbol {
 		return _kind;
 	}
 
-	public ref<OverloadInstance>[] instances() {
-		return _instances;
+	public ref<ref<OverloadInstance>[]> instances() {
+		return &_instances;
 	}
 }
 
@@ -1417,7 +1417,7 @@ class OverloadInstance extends Symbol {
 		int parameter = 0;
 		boolean processingEllipsis = false;
 		while (arguments != null) {
-			ref<PlainSymbol> ps = ref<PlainSymbol>(_parameterScope.parameters()[parameter]);
+			ref<PlainSymbol> ps = ref<PlainSymbol>((*_parameterScope.parameters())[parameter]);
 			ref<Node> typeDeclarator = ps.typeDeclarator();
 			compileContext.assignTypes(typeDeclarator);
 			if (typeDeclarator.deferAnalysis())
@@ -1462,8 +1462,8 @@ class OverloadInstance extends Symbol {
 		int bias = 0;
 		// TODO: This doens't look right - what effect does it have?
 		while (parameter < _parameterScope.parameters().length()) {
-			ref<Symbol> symThis = _parameterScope.parameters()[parameter];
-			ref<Symbol> symOther = oiOther._parameterScope.parameters()[parameter];
+			ref<Symbol> symThis = (*_parameterScope.parameters())[parameter];
+			ref<Symbol> symOther = (*oiOther._parameterScope.parameters())[parameter];
 			ref<Type> typeThis = symThis.assignType(compileContext);
 			ref<Type> typeOther = symOther.assignType(compileContext);
 			if (!typeThis.equals(typeOther)) {
@@ -1524,8 +1524,8 @@ class OverloadInstance extends Symbol {
 		if (_parameterScope.parameters().length() != baseMethod._parameterScope.parameters().length())
 			return false;
 		for (int i = 0; i < _parameterScope.parameters().length(); i++) {
-			ref<Symbol> basePar = baseMethod._parameterScope.parameters()[i];
-			ref<Symbol> par = _parameterScope.parameters()[i];
+			ref<Symbol> basePar = (*baseMethod._parameterScope.parameters())[i];
+			ref<Symbol> par = (*_parameterScope.parameters())[i];
 			if (!par.type().equals(basePar.type()))
 				return false;
 		}
@@ -1576,7 +1576,7 @@ class OverloadInstance extends Symbol {
 
 //		memDump(_parameterScope, (*_parameterScope).bytes);
 		for (int i = 0; i < _parameterScope.parameterCount(); i++) {
-			ref<Symbol> sym = _parameterScope.parameters()[i];
+			ref<Symbol> sym = (*_parameterScope.parameters())[i];
 			if (sym.class != PlainSymbol)
 				continue;
 			ref<PlainSymbol> ps = ref<PlainSymbol>(sym);
@@ -1941,7 +1941,7 @@ class OverloadOperation {
 		if (_overload == null)
 			_overload = o;
 		for (int i = 0; i < o.instances().length(); i++) {
-			ref<Symbol> oi = o.instances()[i];
+			ref<Symbol> oi = (*o.instances())[i];
 			_anyPotentialOverloads = true;
 			if (!s.encloses(lexicalScope)) {
 				if (oi.visibility() == Operator.PRIVATE)
@@ -2021,7 +2021,7 @@ class OverloadOperation {
 	public ref<Type> includeConstructors(ref<Type> classType, ref<CompileContext> compileContext) {
 		for (int i = 0; i < classType.scope().constructors().length(); i++) {
 			_hadConstructors = true;
-			ref<Function> f = ref<Function>(classType.scope().constructors()[i].definition());
+			ref<Function> f = ref<Function>((*classType.scope().constructors())[i].definition());
 			if (f == null || f.name() == null)
 				continue;
 			ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());

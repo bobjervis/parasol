@@ -55,6 +55,8 @@ run(filename: complex_subscript.p)
 
 // Basic runtime execution tests
 
+//run(filename: try_test.p)
+run(filename: constructor_test.p)
 run(filename: array_init.p)
 run(filename: unicodeNumber.p)
 run(filename: template_scope/template_scope.p, importPath: ^/test/src/template_scope)

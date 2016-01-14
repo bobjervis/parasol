@@ -118,21 +118,17 @@ enum JumpDistance {
 	NEAR
 }
 
-class SourceLocation {
+public class SourceLocation {
 	ref<FileStat>	file;			// Source file contianing this location
 	Location		location;		// Source byte offset
 	int				offset;			// Code location
-}
-
-class ExceptionEntry {
-	public int location;
-	public int handler;
 }
 
 class DeferredTry {
 	public ref<X86_64Encoder.CodeSegment> primaryHandler;
 	public ref<Try> tryStatement;
 	public ref<X86_64Encoder.CodeSegment> join;
+	public ref<X86_64Encoder.CodeSegment> exceptionHandler;
 }
 
 private int FIRST_STACK_PARAM_OFFSET = 16;
@@ -416,7 +412,7 @@ class X86_64Encoder extends Target {
 		}
 		scope.variableStorage = 0;
 		for (int i = 0; i < scope.parameters().length(); i++) {
-			ref<Symbol> sym = scope.parameters()[i];
+			ref<Symbol> sym = (*scope.parameters())[i];
 			
 			if (sym.deferAnalysis()) {
 				sym.offset = 0;
@@ -458,7 +454,7 @@ class X86_64Encoder extends Target {
 			_vtables.append(scope);
 //			ref<VTable>(classScope.vtable).disassemble(0);
 			for (int i = 0; i < scope.methods().length(); i++) {
-				ref<OverloadInstance> method = scope.methods()[i];
+				ref<OverloadInstance> method = (*scope.methods())[i];
 				if (!method.deferAnalysis()) {
 					ref<Scope> func = getFunctionAddress(method.parameterScope(), compileContext);
 					if (func == null)
@@ -479,7 +475,7 @@ class X86_64Encoder extends Target {
 			pointer<address> table = pointer<address>(&_code[tableStart]);
 			*table = address(_pxiHeader.typeDataOffset + scope.classType.copyToImage(this) - 1);
 			for (int j = 1; j <= scope.methods().length(); j++) {
-				ref<OverloadInstance> oi = scope.methods()[j - 1];
+				ref<OverloadInstance> oi = (*scope.methods())[j - 1];
 				ref<ParameterScope> functionScope = oi.parameterScope();
 				ref<Scope> func = getFunctionAddress(functionScope, compileContext);
 				int target = int(functionScope.value) - 1;
@@ -775,11 +771,6 @@ class X86_64Encoder extends Target {
 		return outerHandler;
 	}
 	
-	void deferTry(ref<Try> context, ref<CodeSegment> handler, ref<CodeSegment> join) {
-		DeferredTry dt = { tryStatement: context, primaryHandler: handler, join: join };
-		_deferredTry.append(dt);
-	}
-	
 	void emitExceptionEntry(int location, ref<CodeSegment> handler) {
 		
 		// If we have no table yet, behave as if we are in 'null' state.
@@ -803,11 +794,11 @@ class X86_64Encoder extends Target {
 		_exceptionHandlers.append(handler);
 	}
 
-	void inst(X86 instruction, ref<Node> left, ref<Node> right, ref<CompileContext> compileContext) {
+	void inst(X86 instruction, TypeFamily family, ref<Node> left, ref<Node> right, ref<CompileContext> compileContext) {
 		if (left.deferGeneration() || right.deferGeneration())
 			return;
 		if (right.op() == Operator.SEQUENCE) {
-			inst(instruction, left, ref<Binary>(right).right(), compileContext);
+			inst(instruction, family, left, ref<Binary>(right).right(), compileContext);
 			return;
 		}
 		if ((left.nodeFlags & ADDRESS_MODE) != 0) {
@@ -833,7 +824,7 @@ class X86_64Encoder extends Target {
 			R dest = R(left.register);
 			if (right.register != 0) {
 				R src = R(right.register);
-				inst(instruction, right.type.family(), dest, src);
+				inst(instruction, family, dest, src);
 			} else if (right.op() == Operator.INTEGER) {
 				switch (right.type.family()) {
 				case	UNSIGNED_8:
@@ -841,7 +832,7 @@ class X86_64Encoder extends Target {
 				case	SIGNED_32:
 				case	SIGNED_64:
 					ref<Constant> c = ref<Constant>(right);
-					inst(instruction, left.type.family(), dest, int(c.intValue()));
+					inst(instruction, family, dest, int(c.intValue()));
 					break;
 					
 				default:
@@ -853,7 +844,7 @@ class X86_64Encoder extends Target {
 				inst(instruction, dest, right, compileContext);
 			else {
 				R src = R(int(right.register));
-				inst(instruction, right.type.family(), dest, src);
+				inst(instruction, family, dest, src);
 			}
 		}
 	}
@@ -1317,9 +1308,17 @@ class X86_64Encoder extends Target {
 		switch (instruction) {
 		case	SAL:
 			switch (family) {
+			case	UNSIGNED_8:
+				emit(0xd2);
+				modRM(3, 4, rmValues[dest]);
+				return;
+				
+			case	UNSIGNED_16:
 			case	SIGNED_16:
 				emit(0x66);
+			case	UNSIGNED_32:
 			case	SIGNED_32:
+			case	SIGNED_64:
 				emitRex(family, null, R.NO_REG, dest);
 				emit(0xd3);
 				modRM(3, 4, rmValues[dest]);
@@ -1333,9 +1332,17 @@ class X86_64Encoder extends Target {
 			
 		case	SHR:
 			switch (family) {
+			case	UNSIGNED_8:
+				emit(0xd2);
+				modRM(3, 5, rmValues[dest]);
+				return;
+				
+			case	UNSIGNED_16:
 			case	SIGNED_16:
 				emit(0x66);
+			case	UNSIGNED_32:
 			case	SIGNED_32:
+			case	SIGNED_64:
 				emitRex(family, null, R.NO_REG, dest);
 				emit(0xd3);
 				modRM(3, 5, rmValues[dest]);
@@ -1352,6 +1359,7 @@ class X86_64Encoder extends Target {
 			case	SIGNED_16:
 				emit(0x66);
 			case	SIGNED_32:
+			case	SIGNED_64:
 				emitRex(family, null, R.NO_REG, dest);
 				emit(0xd3);
 				modRM(3, 7, rmValues[dest]);
@@ -1516,8 +1524,6 @@ class X86_64Encoder extends Target {
 			return;
 
 		case	MOVSX:
-			if (family == TypeFamily.SIGNED_16)
-				emit(0x66);
 			emitRex(TypeFamily.SIGNED_32, null, src, dest);
 			emit(0x0f);
 			emit(0xbf);
@@ -3862,4 +3868,3 @@ group3opcodes[X86.MUL] = 4;
 group3opcodes[X86.IMUL] = 5;
 group3opcodes[X86.DIV] = 6;
 group3opcodes[X86.IDIV] = 7;
-

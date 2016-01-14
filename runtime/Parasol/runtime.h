@@ -40,6 +40,15 @@ class Exception;
 class ExceptionContext;
 class Type;
 
+struct HardwareException {
+	void *codePointer;
+	void *framePointer;
+	void *stackPointer;
+	long long exceptionInfo0;
+	int exceptionInfo1;
+	int exceptionType;
+};
+
 struct StackFrame {
 	byte *fp;
 	byte *code;
@@ -67,8 +76,6 @@ public:
 	~ExecutionContext();
 
 	void enter();
-
-	ExceptionContext *exceptionContext(ExceptionContext *exceptionInfo);
 
 	bool push(char **argv, int argc);
 
@@ -102,7 +109,13 @@ public:
 
 	int injectObjects(void **objects, int objectCount);
 
-	void throwException(const StackState &state);
+	void registerHardwareExceptionHandler(void (*handler)(HardwareException *exceptionContext));
+
+	bool hasHardwareExceptionHandler() {
+		return _hardwareExceptionHandler != null;
+	}
+
+	void callHardwareExceptionHandler(HardwareException *info);
 
 	void halt();
 
@@ -122,6 +135,8 @@ public:
 
 	byte *stack() { return _stack; }
 
+	byte *stackTop() { return _stackTop; }
+
 	byte *code() { return _active.code; }
 
 	int lastIp() { return _lastIp; }
@@ -131,6 +146,38 @@ public:
 	int objectCount() { return _objectCount; }
 
 	vector<string> &args() { return _args; }
+
+	vector<byte> &stackSnapshot() { return _stackSnapshot; }
+
+	void *exceptionsAddress();
+
+	int exceptionsCount();
+
+	void exposeException(Exception *exception) {
+		_exception = exception;
+	}
+
+	Exception *exception() {
+		return _exception;
+	}
+
+	byte *lowCodeAddress() {
+		return (byte*)_image;
+	}
+
+	byte *highCodeAddress();
+
+	void callCatchHandler(Exception *exception, void *framePointer, int handler);
+
+	void *sourceLocations() {
+		return _sourceLocations;
+	}
+
+	int sourceLocationsCount() {
+		return _sourceLocationsCount;
+	}
+
+	void setSourceLocations(void *location, int count);
 
 	bool trace;
 private:
@@ -164,12 +211,15 @@ private:
 	int _length;
 	StackFrame _active;
 	byte *_sp;
-	ExceptionContext *_exceptionContext;
+	Exception *_exception;
 	X86_64SectionHeader *_pxiHeader;
 	void *_image;
 	int _lastIp;
 	vector<byte> _stackSnapshot;
 	vector<string> _args;
+	void (*_hardwareExceptionHandler)(HardwareException *info);
+	void *_sourceLocations;
+	int _sourceLocationsCount;
 };
 
 // Exception table consist of some number of these entries, sorted by ascending location value.
@@ -194,6 +244,7 @@ class ExceptionInfo {
 
 class Exception {
 public:
+	void *vtable;
 	ExceptionContext *context;
 };
 

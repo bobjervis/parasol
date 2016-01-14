@@ -17,7 +17,6 @@ namespace parasol:x86_64;
 
 import native:windows;
 
-import parasol:runtime;
 import parasol:compiler.Arena;
 import parasol:compiler.Binary;
 import parasol:compiler.Block;
@@ -62,8 +61,10 @@ import parasol:compiler.TypedefType;
 import parasol:compiler.TypeFamily;
 import parasol:compiler.Unary;
 import parasol:compiler.Variable;
+import parasol:exception;
 import parasol:exception.ExceptionContext;
 import parasol:pxi.Pxi;
+import parasol:runtime;
 import native:C;
 
 /*
@@ -88,9 +89,6 @@ byte PXI_FIXUP_ABSOLUTE64 = 0x02;
 byte PXI_FIXUP_ABSOLUTE64_CODE = 0x03;
 byte PXI_FIXUP_MAX = 0x04;
 int PXI_FIXUP_SHIFT = 8;
-
-int EXCEPTION_ACCESS_VIOLATION	= int(0xc0000005);
-int EXCEPTION_IN_PAGE_ERROR		= int(0xc0000006);
 
 public class X86_64 extends X86_64AssignTemps {
 	private ref<Scope> _unitScope;
@@ -132,7 +130,7 @@ public class X86_64 extends X86_64AssignTemps {
 		maxTypeOrdinal = 1;
 		// This may have to be postponed until we get some data on register usage.
 		for (int i = 0; i < _arena.scopes().length(); i++) {
-			ref<Scope> scope = _arena.scopes()[i];
+			ref<Scope> scope = (*_arena.scopes())[i];
 			switch (scope.storageClass()) {
 			case	TEMPLATE:
 			case	AUTO:
@@ -164,13 +162,16 @@ public class X86_64 extends X86_64AssignTemps {
 		int returnValue;
 		pointer<address> pa = pointer<address>(&_staticMemory[_pxiHeader.builtInOffset]);
 		for (int i = 0; i < _pxiHeader.builtInCount; i++) {
-			if (unsigned(int(*pa)) > 50) {
-				printf("pa = %p *pa = %p\n", pa, *pa);
+			if (unsigned(int(*pa)) > 80) {
+				printf("pa = %p *pa = %d\n", pa, *pa);
 				assert(false);
 			}
 			*pa = runtime.builtInFunctionAddress(int(*pa));
 			pa++;
 		}
+		pointer<SourceLocation> outerSource = exception.sourceLocations();
+		int outerSourceCount = exception.sourceLocationsCount();
+		exception.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
 		pointer<int> pxiFixups = pointer<int>(&_staticMemory[_pxiHeader.relocationOffset]);
 		if (runtime.makeRegionExecutable(_staticMemory, _staticMemoryLength)) {
 			pointer<long> vp;
@@ -205,102 +206,13 @@ public class X86_64 extends X86_64AssignTemps {
 				return 0, false;
 			}
 		}
-//		assert(false);
-//		print("here\n");
-//		printf("done returnValue = %d\n", returnValue);
-		ref<ExceptionContext> raised = runtime.exceptionContext(null);
-		if (raised != null) {
-//			printf("assertion failed!\n");
-			printf("\n");
-			boolean locationIsExact = false;
-			pointer<byte> message = windows.FormatMessage(unsigned(raised.exceptionType));
-			string text(message);
-			if (raised.exceptionType == 0)
-				printf("Assertion failed ip %p", raised.exceptionAddress);
-			else {
-				printf("Uncaught exception %x", raised.exceptionType);
-				if (message != null)
-					printf(" (%s)", text);
-				printf(" ip %p", raised.exceptionAddress);
-				if (raised.exceptionType == EXCEPTION_ACCESS_VIOLATION ||
-					raised.exceptionType == EXCEPTION_IN_PAGE_ERROR) {
-					locationIsExact = true;
-					printf(" flags %d referencing %p", raised.exceptionFlags, raised.memoryAddress);
-				}
-			}
-
-			printf("\n");
-			byte[] stackSnapshot;
-						
-			stackSnapshot.resize(raised.stackSize);
-			raised.stackCopy = &stackSnapshot[0];
-//			printf("stack snapshot size %d\n", stackSnapshot.length());
-						
-			runtime.fetchSnapshot(&stackSnapshot[0], stackSnapshot.length());
-//			printf("    failure address %p\n", raised.exceptionAddress);
-//			printf("    sp: %p fp: %p stack size: %d\n", raised.stackPointer, raised.framePointer, raised.stackSize);
-			address stackLow = raised.stackPointer;
-			address stackHigh = pointer<byte>(raised.stackPointer) + raised.stackSize;
-			address fp = raised.framePointer;
-			address ip = raised.exceptionAddress;
-			string tag = "->";
-			while (long(fp) >= long(stackLow) && long(fp) < long(stackHigh)) {
-//				printf("fp = %p ip = %p relative = %x", fp, ip, int(ip) - int(_staticMemory));
-				pointer<address> stack = pointer<address>(fp);
-				long nextFp = raised.slot(fp);
-				int relative = int(ip) - int(_staticMemory);
-//				printf("relative = (%p) %x\n", ip, relative);
-				string locationLabel;
-				if (relative >= _staticMemoryLength || relative < 0)
-					locationLabel.printf("@%x", relative);
-				else
-					locationLabel = formattedLocation(relative, locationIsExact);
-				printf(" %2s %s\n", tag, locationLabel);
-//				if (nextFp != 0 && nextFp < long(fp)) {
-//					printf("    *** Stored frame pointer out of sequence: %p\n", nextFp);
-//					break;
-//				}
-				fp = address(nextFp);
-				ip = address(raised.slot(stack + 1));
-				tag = "";
-				locationIsExact = false;
-			}
-			printf("\n");
-			return 0, false;
-		} else
-		/*
-			ref<ExceptionContext> ec = ref<ExceptionContext>(exceptionInfo[3]);
-		*/
+		exception.setSourceLocations(outerSource, outerSourceCount);
+		if (exception.fetchExposedException() == null)
 			return returnValue, true;
+		else
+			return 0, false;
 	}
 
-	private string formattedLocation(int offset, boolean locationIsExact) {
-		int unadjustedOffset = offset;
-		if (!locationIsExact)
-			offset--;
-		pointer<SourceLocation> psl = &_sourceLocations[0];
-		int interval = _sourceLocations.length();
-		string result;
-		for (;;) {
-			if (interval <= 0) {
-				result.printf("@%x", offset);
-				break;
-			}
-			int middle = interval / 2;
-			if (psl[middle].offset > offset)
-				interval = middle;
-			else if (middle == interval - 1 || psl[middle + 1].offset > offset) {
-				ref<FileStat> file = psl[middle].file;
-				result.printf("%s %d (@%x)", file.filename(), file.scanner().lineNumber(psl[middle].location) + 1, unadjustedOffset);
-				break;
-			} else {
-				psl = &psl[middle + 1];
-				interval = interval - middle - 1;
-			}
-		}
-		return result;
-	}
-	
 	public ref<Scope>, boolean getFunctionAddress(ref<ParameterScope> functionScope, ref<CompileContext> compileContext) {
 		ref<Function> func = ref<Function>(functionScope.definition());
 		if (func == null) {
@@ -370,7 +282,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	ENUM_TO_STRING:
 				ref<EnumScope> enclosing = ref<EnumScope>(scope.enclosing());
 				
-				ref<Symbol>[] instances = enclosing.instances();
+				ref<ref<Symbol>[]> instances = enclosing.instances();
 				ref<CodeSegment> nullCase = new CodeSegment;
 				ref<CodeSegment> join = new CodeSegment;
 				inst(X86.CMP, TypeFamily.ADDRESS, R.RCX, 0);
@@ -385,7 +297,7 @@ public class X86_64 extends X86_64AssignTemps {
 					stringArray = parameterScope.define(Operator.PRIVATE, StorageClass.STATIC, null, nm, compileContext.arena().builtInType(TypeFamily.ADDRESS), null, compileContext.pool());
 					assignStaticRegion(stringArray, string.bytes, instances.length() * string.bytes);
 					for (int i = 0; i < instances.length(); i++) {
-						int offset = addStringLiteral(instances[i].name().asString());
+						int offset = addStringLiteral((*instances)[i].name().asString());
 						fixup(FixupKind.ABSOLUTE64_STRING, stringArray, i * address.bytes, address(offset));
 					}
 				} else
@@ -473,7 +385,7 @@ public class X86_64 extends X86_64AssignTemps {
 				registerArgs++;
 			}
 			for (int i = 0; i < parameterScope.parameters().length(); i++) {
-				ref<Symbol> sym = parameterScope.parameters()[i];
+				ref<Symbol> sym = (*parameterScope.parameters())[i];
 				
 				if (sym.deferAnalysis())
 					continue;
@@ -505,6 +417,18 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.PUSH, TypeFamily.SIGNED_64, R.R14);
 			inst(X86.PUSH, TypeFamily.SIGNED_64, R.R15);
 			inst(X86.PUSH, TypeFamily.SIGNED_64, R.RCX);
+			ref<Symbol> re = compileContext.arena().getSymbol("parasol", "exception.registerHardwareExceptionHandler", compileContext);
+			if (re == null || re.class != Overload)
+				assert(false);
+			ref<Overload> o = ref<Overload>(re);
+			ref<ParameterScope> registerHardwareExceptionHandler = ref<ParameterScope>((*o.instances())[0].type().scope());
+			re = compileContext.arena().getSymbol("parasol", "exception.hardwareExceptionHandler", compileContext);
+			if (re == null || re.class != Overload)
+				assert(false);
+			o = ref<Overload>(re);
+			ref<ParameterScope> hardwareExceptionHandler = ref<ParameterScope>((*o.instances())[0].type().scope());
+			instLoadFunctionAddress(R.RCX, hardwareExceptionHandler, compileContext);
+			instCall(registerHardwareExceptionHandler, compileContext);
 			ref<CodeSegment> handler = new CodeSegment;
 			pushExceptionHandler(handler);
 			_arena.clearStaticInitializers();
@@ -516,7 +440,7 @@ public class X86_64 extends X86_64AssignTemps {
 //			printf("staticBlocks %d\n", staticBlocks().length());
 			int initialVariableCount = compileContext.variableCount();
 			for (int i = 0; i < staticBlocks().length(); i++) {
-				ref<FileStat> file = staticBlocks()[i];
+				ref<FileStat> file = (*staticBlocks())[i];
 				if (file != scope.file()) {
 					if (_arena.verbose)
 						printf("   %s\n", file.filename());
@@ -524,7 +448,7 @@ public class X86_64 extends X86_64AssignTemps {
 				}
 			}
 			for (int i = 0; i < _arena.types().length(); i++) {
-				ref<TemplateInstanceType> t = _arena.types()[i];
+				ref<TemplateInstanceType> t = (*_arena.types())[i];
 				ref<FileStat> file = t.definingFile();
 				if (_arena.verbose)
 					printf("   Template in %s\n", file.filename());
@@ -552,7 +476,7 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.PUSH, TypeFamily.SIGNED_64, R.RCX);
 				inst(X86.PUSH, R.RCX, 8);
 				inst(X86.PUSH, R.RCX, 0);
-				ref<OverloadInstance> instance = m.instances()[0];
+				ref<OverloadInstance> instance = (*m.instances())[0];
 				instCall(instance.parameterScope(), compileContext);
 				// return value is in RAX
 			} else {
@@ -580,7 +504,12 @@ public class X86_64 extends X86_64AssignTemps {
 				unfinished(node, "generateReturn failed - default end-of-static block", compileContext);
 			handler.start(this);
 			inst(X86.LEA, R.RSP, R.RBP, -(f().autoSize + 8 * address.bytes));
-			instCall(_exposeException.parameterScope(), compileContext);
+			re = compileContext.arena().getSymbol("parasol", "exception.uncaughtException", compileContext);
+			if (re == null || re.class != Overload)
+				assert(false);
+			o = ref<Overload>(re);
+			ref<ParameterScope> uncaughtException = ref<ParameterScope>((*o.instances())[0].type().scope());
+			instCall(uncaughtException, compileContext);
 			closeCodeSegment(CC.JMP, join);
 			resolveDeferredTrys(false, compileContext);
 		}
@@ -594,11 +523,12 @@ public class X86_64 extends X86_64AssignTemps {
 			if (!isFunction)
 				adjust -= 8 * address.bytes;
 			inst(X86.LEA, R.RSP, R.RBP, adjust);
+			ref<CodeSegment> outer = pushExceptionHandler(dt.exceptionHandler);
 			for (ref<NodeList> nl = dt.tryStatement.catchList(); nl != null; nl = nl.next) {
-				ref<Ternary> t = ref<Ternary>(nl.node);
-				generate(t.right(), compileContext);
+				generate(nl.node, compileContext);
 			}
 			closeCodeSegment(CC.JMP, dt.join);
+			pushExceptionHandler(outer);
 		}
 		_deferredTry.clear();
 	}
@@ -626,11 +556,11 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 
 	private void allocateStackForLocalVariables(ref<CompileContext> compileContext) {
-		ref<Variable>[] v = compileContext.variables();
+		ref<ref<Variable>[]> v = compileContext.variables();
 //		if (_stackLocalVariables < v.length())
 //			printf("-- Scope %p\n", f().current);
 		for (int i = _stackLocalVariables; i < v.length(); i++) {
-			ref<Variable> var = v[i];
+			ref<Variable> var = (*v)[i];
 			int sz;
 			if (var.type != null)
 				sz = var.type.stackSize();
@@ -742,6 +672,11 @@ public class X86_64 extends X86_64AssignTemps {
 			else
 				generateExpressionStatement(expression.operand(), compileContext);
 			break;
+	
+		case	CATCH:
+			cond = ref<Ternary>(node);
+			generate(cond.right(), compileContext);
+			break;
 			
 		case	SEQUENCE:
 			b = ref<Binary>(node);
@@ -781,7 +716,7 @@ public class X86_64 extends X86_64AssignTemps {
 			closeCodeSegment(CC.JE, trueSegment);
 			generate(b.right(), compileContext);
 			if (node.register != b.right().register)
-				inst(X86.MOV, node, b.right(), compileContext);
+				inst(X86.MOV, node.type.family(), node, b.right(), compileContext);
 			closeCodeSegment(CC.JMP, join);
 			trueSegment.start(this);
 			inst(X86.MOV, node, 1, compileContext);
@@ -797,10 +732,10 @@ public class X86_64 extends X86_64AssignTemps {
 			closeCodeSegment(CC.JNE, falseSegment);
 			generate(b.right(), compileContext);
 			if (node.register != b.right().register)
-				inst(X86.MOV, node, b.right(), compileContext);
+				inst(X86.MOV, node.type.family(), node, b.right(), compileContext);
 			closeCodeSegment(CC.JMP, join);
 			falseSegment.start(this);
-			inst(X86.XOR, node, node, compileContext);
+			inst(X86.XOR, node.type.family(), node, node, compileContext);
 			join.start(this);
 			break;
 			
@@ -1057,7 +992,8 @@ public class X86_64 extends X86_64AssignTemps {
 			closeCodeSegment(CC.NOP, join);
 			pushExceptionHandler(outer);
 			join.start(this);
-			deferTry(tr, primaryHandler, join);
+			DeferredTry dt = { tryStatement: tr, primaryHandler: primaryHandler, join: join, exceptionHandler: outer };
+			_deferredTry.append(dt);
 			break;
 			
 		case	CLASS_DECLARATION:
@@ -1127,7 +1063,7 @@ public class X86_64 extends X86_64AssignTemps {
 	//				printf("\n\n---- ASSIGN ----\n");
 	//				b.print(4);
 					if (b.register == 0)
-						inst(X86.MOV, b.left(), b.right(), compileContext);
+						inst(X86.MOV, b.type.family(), b.left(), b.right(), compileContext);
 					else {
 						inst(X86.MOV, R(b.register), b.right(), compileContext);
 						inst(X86.MOV, b.left(), R(b.register), compileContext);
@@ -1136,17 +1072,17 @@ public class X86_64 extends X86_64AssignTemps {
 					
 				case	FLOAT_32:
 					generateOperands(b, compileContext);
-					inst(X86.MOVSS, b.left(), b.right(), compileContext);
+					inst(X86.MOVSS, b.type.family(), b.left(), b.right(), compileContext);
 					break;
 					
 				case	FLOAT_64:
 					generateOperands(b, compileContext);
-					inst(X86.MOVSD, b.left(), b.right(), compileContext);
+					inst(X86.MOVSD, b.type.family(), b.left(), b.right(), compileContext);
 					break;
 					
 				case	CLASS:
 					generateOperands(b, compileContext);
-					inst(X86.MOV, b.left(), b.right(), compileContext);
+					inst(X86.MOV, b.type.family(), b.left(), b.right(), compileContext);
 					break;
 					
 				default:
@@ -1179,7 +1115,7 @@ public class X86_64 extends X86_64AssignTemps {
 				case	SIGNED_16:
 				case	SIGNED_32:
 				case	SIGNED_64:
-					inst(X86.AND, b.left(), b.right(), compileContext);
+					inst(X86.AND, b.type.family(), b.left(), b.right(), compileContext);
 					break;
 					
 				default:
@@ -1196,7 +1132,7 @@ public class X86_64 extends X86_64AssignTemps {
 				case	SIGNED_32:
 				case	SIGNED_64:
 					inst(X86.MOV, R(int(b.register)), b.left(), compileContext);
-					inst(X86.AND, b, b.right(), compileContext);
+					inst(X86.AND, b.type.family(), b, b.right(), compileContext);
 					inst(X86.MOV, b.left(), R(int(b.register)), compileContext);
 					break;
 					
@@ -1220,7 +1156,7 @@ public class X86_64 extends X86_64AssignTemps {
 				case	SIGNED_16:
 				case	SIGNED_32:
 				case	SIGNED_64:
-					inst(X86.OR, b.left(), b.right(), compileContext);
+					inst(X86.OR, b.type.family(), b.left(), b.right(), compileContext);
 					break;
 					
 				default:
@@ -1238,7 +1174,7 @@ public class X86_64 extends X86_64AssignTemps {
 				case	SIGNED_32:
 				case	SIGNED_64:
 					inst(X86.MOV, R(int(b.register)), b.left(), compileContext);
-					inst(X86.OR, b, b.right(), compileContext);
+					inst(X86.OR, b.type.family(), b, b.right(), compileContext);
 					inst(X86.MOV, b.left(), R(int(b.register)), compileContext);
 					break;
 					
@@ -1262,7 +1198,7 @@ public class X86_64 extends X86_64AssignTemps {
 				case	SIGNED_16:
 				case	SIGNED_32:
 				case	SIGNED_64:
-					inst(X86.XOR, b.left(), b.right(), compileContext);
+					inst(X86.XOR, b.type.family(), b.left(), b.right(), compileContext);
 					break;
 					
 				default:
@@ -1279,7 +1215,7 @@ public class X86_64 extends X86_64AssignTemps {
 				case	SIGNED_32:
 				case	SIGNED_64:
 					inst(X86.MOV, R(int(b.register)), b.left(), compileContext);
-					inst(X86.XOR, b, b.right(), compileContext);
+					inst(X86.XOR, b.type.family(), b, b.right(), compileContext);
 					inst(X86.MOV, b.left(), R(int(b.register)), compileContext);
 					break;
 					
@@ -1358,15 +1294,15 @@ public class X86_64 extends X86_64AssignTemps {
 				break;
 				
 			case	FLOAT_32:
-				inst(X86.MOVSS, b, b.left(), compileContext);
-				inst(X86.DIVSS, b, b.right(), compileContext);
-				inst(X86.MOVSS, b.left(), b, compileContext);
+				inst(X86.MOVSS, b.type.family(), b, b.left(), compileContext);
+				inst(X86.DIVSS, b.type.family(), b, b.right(), compileContext);
+				inst(X86.MOVSS, b.type.family(), b.left(), b, compileContext);
 				break;
 				
 			case	FLOAT_64:
-				inst(X86.MOVSD, b, b.left(), compileContext);
-				inst(X86.DIVSD, b, b.right(), compileContext);
-				inst(X86.MOVSD, b.left(), b, compileContext);
+				inst(X86.MOVSD, b.type.family(), b, b.left(), compileContext);
+				inst(X86.DIVSD, b.type.family(), b, b.right(), compileContext);
+				inst(X86.MOVSD, b.type.family(), b.left(), b, compileContext);
 				break;
 				
 			default:
@@ -1463,11 +1399,11 @@ public class X86_64 extends X86_64AssignTemps {
 				break;
 				
 			case	FLOAT_32:
-				inst(X86.MULSS, b.left(), b.right(), compileContext);
+				inst(X86.MULSS, b.type.family(), b.left(), b.right(), compileContext);
 				break;
 				
 			case	FLOAT_64:
-				inst(X86.MULSD, b.left(), b.right(), compileContext);
+				inst(X86.MULSD, b.type.family(), b.left(), b.right(), compileContext);
 				break;
 				
 			default:
@@ -1492,13 +1428,13 @@ public class X86_64 extends X86_64AssignTemps {
 				break;
 				
 			case	FLOAT_32:
-				inst(X86.MULSS, b.right(), b.left(), compileContext);
-				inst(X86.MOVSS, b.left(), b.right(), compileContext);
+				inst(X86.MULSS, b.type.family(), b.right(), b.left(), compileContext);
+				inst(X86.MOVSS, b.type.family(), b.left(), b.right(), compileContext);
 				break;
 				
 			case	FLOAT_64:
-				inst(X86.MULSD, b.right(), b.left(), compileContext);
-				inst(X86.MOVSD, b.left(), b.right(), compileContext);
+				inst(X86.MULSD, b.type.family(), b.right(), b.left(), compileContext);
+				inst(X86.MOVSD, b.type.family(), b.left(), b.right(), compileContext);
 				break;
 				
 			default:
@@ -1521,41 +1457,41 @@ public class X86_64 extends X86_64AssignTemps {
 				t = b.left().type.indirectType(compileContext);
 				if (t != null && t.size() > 1) {
 					inst(X86.XOR, b.type.family(), R.RDX, R.RDX);
-					inst(X86.SUB, b.left(), b.right(), compileContext);
+					inst(X86.SUB, b.type.family(), b.left(), b.right(), compileContext);
 					inst(X86.SBB, TypeFamily.SIGNED_64, R.RDX, 0);
 					inst(X86.MOV, TypeFamily.SIGNED_64, R.RCX, t.size());
 					inst(X86.IDIV, TypeFamily.SIGNED_64, R.RCX);
 				} else if (b.register == 0 || b.op() == Operator.SUBTRACT)
-					inst(X86.SUB, b.left(), b.right(), compileContext);
+					inst(X86.SUB, b.type.family(), b.left(), b.right(), compileContext);
 				else {
-					inst(X86.MOV, b, b.left(), compileContext);
-					inst(X86.SUB, b, b.right(), compileContext);
-					inst(X86.MOV, b.left(), b, compileContext);
+					inst(X86.MOV, b.type.family(), b, b.left(), compileContext);
+					inst(X86.SUB, b.type.family(), b, b.right(), compileContext);
+					inst(X86.MOV, b.type.family(), b.left(), b, compileContext);
 				}
 				break;
 				
 			case	ADDRESS:
-				inst(X86.MOVSXD, b.right(), b.right(), compileContext);
-				inst(X86.SUB, b.left(), b.right(), compileContext);
+				inst(X86.MOVSXD, b.right().type.family(), b.right(), b.right(), compileContext);
+				inst(X86.SUB, b.type.family(), b.left(), b.right(), compileContext);
 				break;
 
 			case	FLOAT_32:
 				if (b.op() == Operator.SUBTRACT)
-					inst(X86.SUBSS, b.left(), b.right(), compileContext);
+					inst(X86.SUBSS, b.type.family(), b.left(), b.right(), compileContext);
 				else {
-					inst(X86.MOVSS, b, b.left(), compileContext);
-					inst(X86.SUBSS, b, b.right(), compileContext);
-					inst(X86.MOVSS, b.left(), b, compileContext);
+					inst(X86.MOVSS, b.type.family(), b, b.left(), compileContext);
+					inst(X86.SUBSS, b.type.family(), b, b.right(), compileContext);
+					inst(X86.MOVSS, b.type.family(), b.left(), b, compileContext);
 				}
 				break;
 				
 			case	FLOAT_64:
 				if (b.op() == Operator.SUBTRACT)
-					inst(X86.SUBSD, b.left(), b.right(), compileContext);
+					inst(X86.SUBSD, b.type.family(), b.left(), b.right(), compileContext);
 				else {
-					inst(X86.MOVSD, b, b.left(), compileContext);
-					inst(X86.SUBSD, b, b.right(), compileContext);
-					inst(X86.MOVSD, b.left(), b, compileContext);
+					inst(X86.MOVSD, b.type.family(), b, b.left(), compileContext);
+					inst(X86.SUBSD, b.type.family(), b, b.right(), compileContext);
+					inst(X86.MOVSD, b.type.family(), b.left(), b, compileContext);
 				}
 				break;
 				
@@ -1584,31 +1520,31 @@ public class X86_64 extends X86_64AssignTemps {
 			case	POINTER:
 				generateOperands(b, compileContext);
 				if (b.register == 0 || b.op() == Operator.ADD)
-					inst(X86.ADD, b.left(), b.right(), compileContext);
+					inst(X86.ADD, b.type.family(), b.left(), b.right(), compileContext);
 				else {
-					inst(X86.MOV, b, b.left(), compileContext);
-					inst(X86.ADD, b, b.right(), compileContext);
-					inst(X86.MOV, b.left(), b, compileContext);
+					inst(X86.MOV, b.type.family(), b, b.left(), compileContext);
+					inst(X86.ADD, b.type.family(), b, b.right(), compileContext);
+					inst(X86.MOV, b.type.family(), b.left(), b, compileContext);
 				}
 				break;
 				
 			case	FLOAT_32:
 				generateOperands(b, compileContext);
 				if (b.op() == Operator.ADD)
-					inst(X86.ADDSS, b.left(), b.right(), compileContext);
+					inst(X86.ADDSS, b.type.family(), b.left(), b.right(), compileContext);
 				else {
-					inst(X86.ADDSS, b.right(), b.left(), compileContext);
-					inst(X86.MOVSS, b.left(), b.right(), compileContext);
+					inst(X86.ADDSS, b.type.family(), b.right(), b.left(), compileContext);
+					inst(X86.MOVSS, b.type.family(), b.left(), b.right(), compileContext);
 				}
 				break;
 				
 			case	FLOAT_64:
 				generateOperands(b, compileContext);
 				if (b.op() == Operator.ADD)
-					inst(X86.ADDSD, b.left(), b.right(), compileContext);
+					inst(X86.ADDSD, b.type.family(), b.left(), b.right(), compileContext);
 				else {
-					inst(X86.ADDSD, b.right(), b.left(), compileContext);
-					inst(X86.MOVSD, b.left(), b.right(), compileContext);
+					inst(X86.ADDSD, b.type.family(), b.right(), b.left(), compileContext);
+					inst(X86.MOVSD, b.type.family(), b.left(), b.right(), compileContext);
 				}
 				break;
 				
@@ -1647,9 +1583,9 @@ public class X86_64 extends X86_64AssignTemps {
 			case	SIGNED_32:
 			case	SIGNED_64:
 				if (b.register == 0)
-					inst(X86.SAL, b.left(), b.right(), compileContext);
+					inst(X86.SAL, b.type.family(), b.left(), b.right(), compileContext);
 				else {
-					inst(X86.SAL, b.left(), b.right(), compileContext);
+					inst(X86.SAL, b.type.family(), b.left(), b.right(), compileContext);
 					if (b.register != b.left().register)
 						inst(X86.MOV, R(int(b.register)), b.left(), compileContext);
 				}
@@ -1671,9 +1607,9 @@ public class X86_64 extends X86_64AssignTemps {
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
 				if (b.register == 0 || b.op() == Operator.SUBTRACT)
-					inst(X86.SHR, b.left(), b.right(), compileContext);
+					inst(X86.SHR, b.type.family(), b.left(), b.right(), compileContext);
 				else {
-					inst(X86.SHR, b.left(), b.right(), compileContext);
+					inst(X86.SHR, b.type.family(), b.left(), b.right(), compileContext);
 					inst(X86.MOV, R(int(b.register)), b.left(), compileContext);
 				}
 				break;
@@ -1682,9 +1618,9 @@ public class X86_64 extends X86_64AssignTemps {
 			case	SIGNED_32:
 			case	SIGNED_64:
 				if (b.register == 0 || b.op() == Operator.SUBTRACT)
-					inst(X86.SAR, b.left(), b.right(), compileContext);
+					inst(X86.SAR, b.type.family(), b.left(), b.right(), compileContext);
 				else {
-					inst(X86.SAR, b.left(), b.right(), compileContext);
+					inst(X86.SAR, b.type.family(), b.left(), b.right(), compileContext);
 					inst(X86.MOV, R(int(b.register)), b.left(), compileContext);
 				}
 				break;
@@ -1708,9 +1644,9 @@ public class X86_64 extends X86_64AssignTemps {
 			case	SIGNED_32:
 			case	SIGNED_64:
 				if (b.register == 0 || b.op() == Operator.SUBTRACT)
-					inst(X86.SHR, b.left(), b.right(), compileContext);
+					inst(X86.SHR, b.type.family(), b.left(), b.right(), compileContext);
 				else {
-					inst(X86.SHR, b.left(), b.right(), compileContext);
+					inst(X86.SHR, b.type.family(), b.left(), b.right(), compileContext);
 					inst(X86.MOV, R(int(b.register)), b.left(), compileContext);
 				}
 				break;
@@ -1754,13 +1690,13 @@ public class X86_64 extends X86_64AssignTemps {
 			generate(expression.operand(), compileContext);
 			if (expression.type.isFloat()) {
 				if (expression.type.family() == TypeFamily.FLOAT_64) {
-					inst(X86.MOVSD, expression, expression.operand(), compileContext);
+					inst(X86.MOVSD, expression.type.family(), expression, expression.operand(), compileContext);
 					inst(X86.ADDSD, R(expression.register), _doubleOne);
-					inst(X86.MOVSD, expression.operand(), expression, compileContext);
+					inst(X86.MOVSD, expression.type.family(), expression.operand(), expression, compileContext);
 				} else {
-					inst(X86.MOVSS, expression, expression.operand(), compileContext);
+					inst(X86.MOVSS, expression.type.family(), expression, expression.operand(), compileContext);
 					inst(X86.ADDSS, R(expression.register), _floatOne);
-					inst(X86.MOVSS, expression.operand(), expression, compileContext);
+					inst(X86.MOVSS, expression.type.family(), expression.operand(), expression, compileContext);
 				}
 				break;
 			}
@@ -1779,13 +1715,13 @@ public class X86_64 extends X86_64AssignTemps {
 			generate(expression.operand(), compileContext);
 			if (expression.type.isFloat()) {
 				if (expression.type.family() == TypeFamily.FLOAT_64) {
-					inst(X86.MOVSD, expression, expression.operand(), compileContext);
+					inst(X86.MOVSD, expression.type.family(), expression, expression.operand(), compileContext);
 					inst(X86.SUBSD, R(expression.register), _doubleOne);
-					inst(X86.MOVSD, expression.operand(), expression, compileContext);
+					inst(X86.MOVSD, expression.type.family(), expression.operand(), expression, compileContext);
 				} else {
-					inst(X86.MOVSS, expression, expression.operand(), compileContext);
+					inst(X86.MOVSS, expression.type.family(), expression, expression.operand(), compileContext);
 					inst(X86.SUBSS, R(expression.register), _floatOne);
-					inst(X86.MOVSS, expression.operand(), expression, compileContext);
+					inst(X86.MOVSS, expression.type.family(), expression.operand(), expression, compileContext);
 				}
 				break;
 			}
@@ -1804,19 +1740,19 @@ public class X86_64 extends X86_64AssignTemps {
 			generate(expression.operand(), compileContext);
 			if (expression.type.isFloat()) {
 				if (expression.type.family() == TypeFamily.FLOAT_64) {
-					inst(X86.MOVSD, expression, expression.operand(), compileContext);
+					inst(X86.MOVSD, expression.type.family(), expression, expression.operand(), compileContext);
 					inst(X86.ADDSD, R(expression.register), _doubleOne);
-					inst(X86.MOVSD, expression.operand(), expression, compileContext);
+					inst(X86.MOVSD, expression.type.family(), expression.operand(), expression, compileContext);
 					inst(X86.SUBSD, R(expression.register), _doubleOne);
 				} else {
-					inst(X86.MOVSS, expression, expression.operand(), compileContext);
+					inst(X86.MOVSS, expression.type.family(), expression, expression.operand(), compileContext);
 					inst(X86.ADDSS, R(expression.register), _floatOne);
-					inst(X86.MOVSS, expression.operand(), expression, compileContext);
+					inst(X86.MOVSS, expression.type.family(), expression.operand(), expression, compileContext);
 					inst(X86.SUBSS, R(expression.register), _floatOne);
 				}
 				break;
 			}
-			inst(X86.MOV, expression, expression.operand(), compileContext);
+			inst(X86.MOV, expression.type.family(), expression, expression.operand(), compileContext);
 			if (expression.operand().type.isPointer(compileContext)) {
 				ref<Type> t = expression.operand().type.indirectType(compileContext);
 				size = t.size();
@@ -1830,19 +1766,19 @@ public class X86_64 extends X86_64AssignTemps {
 			generate(expression.operand(), compileContext);
 			if (expression.type.isFloat()) {
 				if (expression.type.family() == TypeFamily.FLOAT_64) {
-					inst(X86.MOVSD, expression, expression.operand(), compileContext);
+					inst(X86.MOVSD, expression.type.family(), expression, expression.operand(), compileContext);
 					inst(X86.SUBSD, R(expression.register), _doubleOne);
-					inst(X86.MOVSD, expression.operand(), expression, compileContext);
+					inst(X86.MOVSD, expression.type.family(), expression.operand(), expression, compileContext);
 					inst(X86.ADDSD, R(expression.register), _doubleOne);
 				} else {
-					inst(X86.MOVSS, expression, expression.operand(), compileContext);
+					inst(X86.MOVSS, expression.type.family(), expression, expression.operand(), compileContext);
 					inst(X86.SUBSS, R(expression.register), _floatOne);
-					inst(X86.MOVSS, expression.operand(), expression, compileContext);
+					inst(X86.MOVSS, expression.type.family(), expression.operand(), expression, compileContext);
 					inst(X86.ADDSS, R(expression.register), _floatOne);
 				}
 				break;
 			}
-			inst(X86.MOV, expression, expression.operand(), compileContext);
+			inst(X86.MOV, expression.type.family(), expression, expression.operand(), compileContext);
 			if (expression.operand().type.isPointer(compileContext)) {
 				ref<Type> t = expression.operand().type.indirectType(compileContext);
 				size = t.size();
@@ -1896,7 +1832,7 @@ public class X86_64 extends X86_64AssignTemps {
 
 			if (b.left().type.family() == TypeFamily.STRING) {
 				generateOperands(b, compileContext);
-				inst(X86.MOVSXD, b.right(), b.right(), compileContext);
+				inst(X86.MOVSXD, TypeFamily.SIGNED_32, b.right(), b.right(), compileContext);
 			} else
 				generateSubscript(b, compileContext);
 			if (node.register != 0) {
@@ -1929,12 +1865,12 @@ public class X86_64 extends X86_64AssignTemps {
 			switch (expression.type.family()) {
 			case	FLOAT_32:
 				inst(X86.MOVSS, R(node.register), _floatSignMask);
-				inst(X86.XORPS, expression, expression.operand(), compileContext);
+				inst(X86.XORPS, TypeFamily.FLOAT_32, expression, expression.operand(), compileContext);
 				break;
 				
 			case	FLOAT_64:
 				inst(X86.MOVSD, R(node.register), _doubleSignMask);
-				inst(X86.XORPD, expression, expression.operand(), compileContext);
+				inst(X86.XORPD, TypeFamily.FLOAT_64, expression, expression.operand(), compileContext);
 				break;
 				
 			default:
@@ -2014,7 +1950,7 @@ public class X86_64 extends X86_64AssignTemps {
 			switch (expression.operand().type.family()) {
 			case	VAR:
 				generate(expression.operand(), compileContext);
-				inst(X86.MOV, expression, expression.operand(), compileContext);
+				inst(X86.MOV, TypeFamily.ADDRESS, expression, expression.operand(), compileContext);
 				break;
 				
 			case	REF:
@@ -2023,7 +1959,7 @@ public class X86_64 extends X86_64AssignTemps {
 				if (expression.operand().op() == Operator.EMPTY)
 					instLoadType(R(int(expression.register)), expression.operand().type);
 				else if (expression.operand().type.indirectType(compileContext).hasVtable(compileContext)) {
-					inst(X86.MOV, expression, expression.operand(), compileContext);
+					inst(X86.MOV, TypeFamily.ADDRESS, expression, expression.operand(), compileContext);
 					inst(X86.MOV, R(expression.register), R(expression.register), 0);
 					inst(X86.MOV, R(expression.register), R(expression.register), 0);
 				} else
@@ -2288,7 +2224,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	4:
 			case	8:
 				if (x.right().type.size() < address.bytes)
-					inst(X86.MOVSXD, x.right(), x.right(), compileContext);
+					inst(X86.MOVSXD, x.right().type.family(), x.right(), x.right(), compileContext);
 				break;
 				
 			default:
@@ -2388,15 +2324,15 @@ public class X86_64 extends X86_64AssignTemps {
 		case	POINTER:
 		case	BOOLEAN:
 		case	FUNCTION:
-			inst(X86.CMP, b.left(), b.right(), compileContext);
+			inst(X86.CMP, b.left().type.family(), b.left(), b.right(), compileContext);
 			break;
 			
 		case	FLOAT_32:
-			inst(X86.UCOMISS, b.left(), b.right(), compileContext);
+			inst(X86.UCOMISS, b.left().type.family(), b.left(), b.right(), compileContext);
 			break;
 			
 		case	FLOAT_64:
-			inst(X86.UCOMISD, b.left(), b.right(), compileContext);
+			inst(X86.UCOMISD, b.left().type.family(), b.left(), b.right(), compileContext);
 			break;
 			
 		default:
@@ -2569,7 +2505,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	POINTER:
 			case	FUNCTION:
 				generate(seq.right(), compileContext);
-				inst(X86.MOV, seq.left(), seq.right(), compileContext);
+				inst(X86.MOV, seq.type.family(), seq.left(), seq.right(), compileContext);
 				break;
 				
 			case	FLOAT_32:
@@ -2577,7 +2513,7 @@ public class X86_64 extends X86_64AssignTemps {
 //				printf("Spilling...\n");
 //				seq.print(0);
 				f().r.generateSpills(seq, this);
-				inst(X86.MOVSS, seq.left(), seq.right(), compileContext);
+				inst(X86.MOVSS, TypeFamily.FLOAT_32, seq.left(), seq.right(), compileContext);
 				break;
 				
 			case	FLOAT_64:
@@ -2585,7 +2521,7 @@ public class X86_64 extends X86_64AssignTemps {
 //				printf("Spilling...\n");
 //				seq.print(0);
 				f().r.generateSpills(seq, this);
-				inst(X86.MOVSD, seq.left(), seq.right(), compileContext);
+				inst(X86.MOVSD, TypeFamily.FLOAT_64, seq.left(), seq.right(), compileContext);
 				break;
 				
 			case	CLASS:
@@ -2811,6 +2747,7 @@ public class X86_64 extends X86_64AssignTemps {
 			if ((call.nodeFlags & PUSH_OUT_PARAMETER) != 0)
 				inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, call.type.stackSize());
 			generate(call, compileContext);
+			assert(node != null);
 			if (node == null)
 				return;
 			break;
@@ -2877,7 +2814,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
-					inst(X86.MOV, result, n, compileContext);
+					inst(X86.MOV, TypeFamily.UNSIGNED_8, result, n, compileContext);
 				return;
 
 			case	UNSIGNED_16:
@@ -2934,7 +2871,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	UNSIGNED_16:
 			case	SIGNED_16:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
-					inst(X86.MOV, result, n, compileContext);
+					inst(X86.MOV, TypeFamily.UNSIGNED_16, result, n, compileContext);
 				return;
 
 			case	UNSIGNED_32:
@@ -2945,7 +2882,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	POINTER:
 			case	FUNCTION:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
-					inst(X86.MOV, result, n, compileContext);
+					inst(X86.MOV, TypeFamily.UNSIGNED_16, result, n, compileContext);
 				inst(X86.AND, newType.family(), R(result.register), 0xffff);
 				return;
 
@@ -2974,7 +2911,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	SIGNED_16:
 			case	SIGNED_32:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
-					inst(X86.MOV, result, n, compileContext);
+					inst(X86.MOV, TypeFamily.UNSIGNED_32, result, n, compileContext);
 				return;
 
 			case	SIGNED_64:
@@ -2983,14 +2920,14 @@ public class X86_64 extends X86_64AssignTemps {
 			case	POINTER:
 			case	FUNCTION:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
-					inst(X86.MOV, result, n, compileContext);
+					inst(X86.MOV, TypeFamily.UNSIGNED_32, result, n, compileContext);
 				inst(X86.SAL, TypeFamily.UNSIGNED_32, R(result.register), 32);
 				inst(X86.SHR, TypeFamily.UNSIGNED_32, R(result.register), 32);
 				return;
 
 			case	ENUM:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
-					inst(X86.MOV, result, n, compileContext);
+					inst(X86.MOV, TypeFamily.UNSIGNED_32, result, n, compileContext);
 				inst(X86.SAL, TypeFamily.UNSIGNED_32, R(n.register), 32);
 				inst(X86.SHR, TypeFamily.UNSIGNED_32, R(n.register), 32);
 				generateIntToEnum(result, n, ref<EnumInstanceType>(newType));
@@ -2998,8 +2935,6 @@ public class X86_64 extends X86_64AssignTemps {
 				
 			case	FLOAT_32:
 			case	FLOAT_64:
-				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
-					inst(X86.MOV, result, n, compileContext);
 				inst(X86.SAL, TypeFamily.UNSIGNED_32, R(n.register), 32);
 				inst(X86.SHR, TypeFamily.UNSIGNED_32, R(n.register), 32);
 				if (newType.family() == TypeFamily.FLOAT_32)
@@ -3016,12 +2951,12 @@ public class X86_64 extends X86_64AssignTemps {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
-					inst(X86.MOV, result, n, compileContext);
+					inst(X86.MOV, TypeFamily.SIGNED_16, result, n, compileContext);
 				return;
 
 			case	UNSIGNED_32:
 			case	SIGNED_32:
-				inst(X86.MOVSX, result, n, compileContext);
+				inst(X86.MOVSX, TypeFamily.SIGNED_32, result, n, compileContext);
 				return;
 				
 			case	SIGNED_64:
@@ -3029,15 +2964,15 @@ public class X86_64 extends X86_64AssignTemps {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
-				inst(X86.MOVSX_REX_W, result, n, compileContext);
+				inst(X86.MOVSX_REX_W, TypeFamily.SIGNED_64, result, n, compileContext);
 				return;
 				
 			case	FLOAT_32:
-				inst(X86.CVTSI2SS, result, n, compileContext);
+				inst(X86.CVTSI2SS, TypeFamily.SIGNED_16, result, n, compileContext);
 				return;
 				
 			case	FLOAT_64:
-				inst(X86.CVTSI2SD, result, n, compileContext);
+				inst(X86.CVTSI2SD, TypeFamily.SIGNED_16, result, n, compileContext);
 				return;
 				
 			case	ENUM:
@@ -3056,7 +2991,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	SIGNED_16:
 			case	SIGNED_32:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
-					inst(X86.MOV, result, n, compileContext);
+					inst(X86.MOV, TypeFamily.SIGNED_32, result, n, compileContext);
 				return;
 
 			case	SIGNED_64:
@@ -3064,15 +2999,15 @@ public class X86_64 extends X86_64AssignTemps {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
-				inst(X86.MOVSXD, result, n, compileContext);
+				inst(X86.MOVSXD, TypeFamily.SIGNED_32, result, n, compileContext);
 				return;
 				
 			case	FLOAT_32:
-				inst(X86.CVTSI2SS, result, n, compileContext);
+				inst(X86.CVTSI2SS, TypeFamily.SIGNED_32, result, n, compileContext);
 				return;
 				
 			case	FLOAT_64:
-				inst(X86.CVTSI2SD, result, n, compileContext);
+				inst(X86.CVTSI2SD, TypeFamily.SIGNED_32, result, n, compileContext);
 				return;
 				
 			case	ENUM:
@@ -3112,15 +3047,15 @@ public class X86_64 extends X86_64AssignTemps {
 			case	POINTER:
 			case	FUNCTION:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
-					inst(X86.MOV, result, n, compileContext);
+					inst(X86.MOV, TypeFamily.SIGNED_64, result, n, compileContext);
 				return;
 
 			case	FLOAT_32:
-				inst(X86.CVTSI2SS, result, n, compileContext);
+				inst(X86.CVTSI2SS, TypeFamily.SIGNED_64, result, n, compileContext);
 				return;
 				
 			case	FLOAT_64:
-				inst(X86.CVTSI2SD, result, n, compileContext);
+				inst(X86.CVTSI2SD, TypeFamily.SIGNED_64, result, n, compileContext);
 				return;
 				
 			case	ENUM:
@@ -3142,18 +3077,18 @@ public class X86_64 extends X86_64AssignTemps {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
-				inst(X86.CVTSS2SI, result, n, compileContext);
+				inst(X86.CVTSS2SI, TypeFamily.FLOAT_32, result, n, compileContext);
 				return;
 
 			case	FLOAT_32:
 				return;
 				
 			case	FLOAT_64:
-				inst(X86.CVTSS2SD, result, n, compileContext);
+				inst(X86.CVTSS2SD, TypeFamily.FLOAT_32, result, n, compileContext);
 				return;
 				
 			case	ENUM:
-				inst(X86.CVTSS2SI, result, n, compileContext);
+				inst(X86.CVTSS2SI, TypeFamily.FLOAT_32, result, n, compileContext);
 				generateIntToEnum(result, n, ref<EnumInstanceType>(newType));
 				return;
 			}
@@ -3172,18 +3107,18 @@ public class X86_64 extends X86_64AssignTemps {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
-				inst(X86.CVTSD2SI, result, n, compileContext);
+				inst(X86.CVTSD2SI, TypeFamily.FLOAT_64, result, n, compileContext);
 				return;
 
 			case	FLOAT_32:
-				inst(X86.CVTSD2SS, result, n, compileContext);
+				inst(X86.CVTSD2SS, TypeFamily.FLOAT_64, result, n, compileContext);
 				return;
 				
 			case	FLOAT_64:
 				return;
 				
 			case	ENUM:
-				inst(X86.CVTSD2SI, result, n, compileContext);
+				inst(X86.CVTSD2SI, TypeFamily.FLOAT_64, result, n, compileContext);
 				generateIntToEnum(result, n, ref<EnumInstanceType>(newType));
 				return;
 			}
@@ -3193,15 +3128,6 @@ public class X86_64 extends X86_64AssignTemps {
 		case	REF:
 		case	POINTER:
 			switch (newType.family()) {
-/*
-			case	ADDRESS:
-			case	FUNCTION:
-				return;
-
-				// The only valid conversion is for the NULL node.
-				// so do nothing here.
-				return;
-*/
 			case	BOOLEAN:
 			case	ENUM:
 			case	UNSIGNED_8:
@@ -3216,15 +3142,15 @@ public class X86_64 extends X86_64AssignTemps {
 			case	POINTER:
 			case	FUNCTION:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
-					inst(X86.MOV, result, n, compileContext);
+					inst(X86.MOV, TypeFamily.ADDRESS, result, n, compileContext);
 				return;
 
 			case	FLOAT_32:
-				inst(X86.CVTSI2SS, result, n, compileContext);
+				inst(X86.CVTSI2SS, TypeFamily.ADDRESS, result, n, compileContext);
 				return;
 				
 			case	FLOAT_64:
-				inst(X86.CVTSI2SD, result, n, compileContext);
+				inst(X86.CVTSI2SD, TypeFamily.ADDRESS, result, n, compileContext);
 				return;
 			}
 			break;
@@ -3253,7 +3179,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	FUNCTION:
 			case	ENUM:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
-					inst(X86.MOV, result, n, compileContext);
+					inst(X86.MOV, TypeFamily.ADDRESS, result, n, compileContext);
 				return;
 
 			case	FLOAT_32:
@@ -3264,7 +3190,7 @@ public class X86_64 extends X86_64AssignTemps {
 				subEnumType(src, t.symbol(), 0);
 				inst(X86.SAR, src, 1);
 				inst(X86.SAR, src, 1);
-				inst(X86.CVTSI2SS, result, n, compileContext);
+				inst(X86.CVTSI2SS, TypeFamily.ADDRESS, result, n, compileContext);
 				return;
 				
 			case	FLOAT_64:
@@ -3275,7 +3201,7 @@ public class X86_64 extends X86_64AssignTemps {
 				subEnumType(src, t.symbol(), 0);
 				inst(X86.SAR, src, 1);
 				inst(X86.SAR, src, 1);
-				inst(X86.CVTSI2SD, result, n, compileContext);
+				inst(X86.CVTSI2SD, TypeFamily.ADDRESS, result, n, compileContext);
 				return;
 				
 			case	STRING:
@@ -3353,7 +3279,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	POINTER:
 			case	FUNCTION:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
-					inst(X86.MOV, result, n, compileContext);
+					inst(X86.MOV, TypeFamily.FUNCTION, result, n, compileContext);
 				return;
 
 			case	FLOAT_32:
@@ -3419,36 +3345,36 @@ public class X86_64 extends X86_64AssignTemps {
 		ref<Symbol> alloczOverload = root.lookup("allocz");
 		if (alloczOverload.class == Overload) {
 			ref<Overload> o = ref<Overload>(alloczOverload);
-			_allocz = o.instances()[0];
+			_allocz = (*o.instances())[0];
 		}
 		ref<Symbol> freeOverload = root.lookup("free");
 		if (freeOverload.class == Overload) {
 			ref<Overload> o = ref<Overload>(freeOverload);
-			_free = o.instances()[0];
+			_free = (*o.instances())[0];
 		}
 		ref<Symbol> assertOverload = root.lookup("assert");
 		if (assertOverload.class == Overload) {
 			ref<Overload> o = ref<Overload>(assertOverload);
-			_assert = o.instances()[0];
+			_assert = (*o.instances())[0];
 		}
 		ref<Symbol> memsetOverload = root.lookup("memset");
 		if (memsetOverload.class == Overload) {
 			ref<Overload> o = ref<Overload>(memsetOverload);
-			_memset = o.instances()[0];
+			_memset = (*o.instances())[0];
 		}
 		ref<Symbol> memcpyOverload = root.lookup("memcpy");
 		if (memsetOverload.class == Overload) {
 			ref<Overload> o = ref<Overload>(memcpyOverload);
-			_memcpy = o.instances()[0];
+			_memcpy = (*o.instances())[0];
 		}
 		ref<Symbol> exposeExceptionOverload = root.lookup("exposeException");
 		if (exposeExceptionOverload.class == Overload) {
 			ref<Overload> o = ref<Overload>(exposeExceptionOverload);
-			_exposeException = o.instances()[0];
+			_exposeException = (*o.instances())[0];
 		}
 		ref<Type> stringType = _arena.builtInType(TypeFamily.STRING);
 		for (int i = 0; i < stringType.scope().constructors().length(); i++) {
-			ref<Scope> scope = stringType.scope().constructors()[i];
+			ref<Scope> scope = (*stringType.scope().constructors())[i];
 			ref<Function> func = ref<Function>(scope.definition());
 			ref<NodeList> args = func.arguments();
 			if (args == null ||
@@ -3461,7 +3387,7 @@ public class X86_64 extends X86_64AssignTemps {
 		}
 		ref<Type> varType = _arena.builtInType(TypeFamily.VAR);
 		for (int i = 0; i < varType.scope().constructors().length(); i++) {
-			ref<Scope> scope = varType.scope().constructors()[i];
+			ref<Scope> scope = (*varType.scope().constructors())[i];
 			ref<Function> func = ref<Function>(scope.definition());
 			ref<NodeList> args = func.arguments();
 			if (args == null ||
@@ -3491,7 +3417,7 @@ public class X86_64 extends X86_64AssignTemps {
 		if (assign != null) {
 			ref<Overload> o = ref<Overload>(assign);
 			if (o.instances().length() == 1) {
-				ref<OverloadInstance> oi = o.instances()[0];
+				ref<OverloadInstance> oi = (*o.instances())[0];
 				// TODO: Validate that we have the correct symbol;
 				_stringAssign = oi;
 			}
@@ -3500,7 +3426,7 @@ public class X86_64 extends X86_64AssignTemps {
 		if (append != null) {
 			ref<Overload> o = ref<Overload>(append);
 			for (int i = 0; i < o.instances().length(); i++) {
-				ref<OverloadInstance> oi = o.instances()[i];
+				ref<OverloadInstance> oi = (*o.instances())[i];
 				if (oi.parameterCount() != 1)
 					continue;
 				ref<Scope> s = oi.parameterScope();

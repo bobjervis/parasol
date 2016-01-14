@@ -81,8 +81,8 @@ public class Target {
 		_staticBlocks.append(file);
 	}
 
-	public ref<FileStat>[] staticBlocks() {
-		return _staticBlocks;
+	public ref<ref<FileStat>[]> staticBlocks() {
+		return &_staticBlocks;
 	}
 
 	public boolean verbose() {

@@ -339,7 +339,7 @@ class Identifier extends Node {
 					if (_symbol.class == Overload) {
 						ref<Overload> o = ref<Overload>(_symbol);
 						if (o.instances().length() == 1)
-							_symbol = o.instances()[0];
+							_symbol = (*o.instances())[0];
 						else {
 							add(MessageId.AMBIGUOUS_REFERENCE, compileContext.pool());
 							type = compileContext.errorType();
@@ -635,7 +635,7 @@ class Selection extends Node {
 			if (sym.class == Overload) {
 				ref<Overload> o = ref<Overload>(sym);
 				if (o.instances().length() == 1) {
-					_symbol = o.instances()[0];
+					_symbol = (*o.instances())[0];
 					type = _symbol.assignType(compileContext);
 				} else {
 					add(MessageId.AMBIGUOUS_REFERENCE, compileContext.pool());

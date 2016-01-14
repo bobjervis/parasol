@@ -84,6 +84,7 @@ int main(string[] args) {
 	assert((d /= 3) == 5);
 
 	d = 17;
+	printf("-d = %g double(-17) = %g\n", -d, double(-17));
 	assert(+d == 17);
 	assert(-d == -17);
 	assert(++d == 18);

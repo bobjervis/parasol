@@ -39,7 +39,6 @@ public class Arena {
 	private ref<Symbol> _int;
 	private ref<Symbol> _string;
 	private ref<Symbol> _var;
-	private ref<OverloadInstance> _throwException;
 	private ref<OverloadInstance> _map;
 	private ref<OverloadInstance> _vector;
 	private ref<OverloadInstance> _enumVector;
@@ -160,7 +159,32 @@ public class Arena {
 		}
 		return true;
 	}
-
+	/**
+	 * Get a symbol from a domain plus a namespace and symbol name path.
+	 * 
+	 * @return null if the path does not name a symbol. This method ignores
+	 * visibility along the entire path. Private symbols will be found and returned.
+	 */
+	public ref<Symbol> getSymbol(string domain, string path, ref<CompileContext> compileContext) {
+		ref<Scope> s = _domains.get(domain);
+		if (s == null)
+			return null;
+		string[] components = path.split('.');
+		ref<Symbol> found = null;
+		for (int i = 0; ; i++) {
+			found = s.lookup(components[i]);
+			if (found == null)
+				return null;
+			if (i == components.length() - 1)
+				return found;
+			if (found.assignType(compileContext) == null)
+				return null;
+			s = found.type().scope();
+			if (s == null)
+				return null;
+		}
+	}
+	
 	public ref<Symbol> getImport(boolean firstTry, string domain, ref<Ternary> namespaceNode, ref<CompileContext> compileContext) {
 		if (logImports && firstTry) {
 			string name;
@@ -270,12 +294,12 @@ public class Arena {
 		ref<Symbol> sym = root.lookup("ref");
 		if (sym.class == Overload) {
 			ref<Overload> o = ref<Overload>(sym);
-			_ref = o.instances()[0];
+			_ref = (*o.instances())[0];
 		}
 		sym = root.lookup("pointer");
 		if (sym.class == Overload) {
 			ref<Overload> o = ref<Overload>(sym);
-			_pointer = o.instances()[0];
+			_pointer = (*o.instances())[0];
 		}
 		_int = root.lookup("int");
 		_string = root.lookup("string");
@@ -283,18 +307,13 @@ public class Arena {
 		sym = root.lookup("vector");
 		if (sym.class == Overload) {
 			ref<Overload> o = ref<Overload>(sym);
-			_vector = o.instances()[1];
+			_vector = (*o.instances())[1];
 			_enumVector = _vector;//o.instances()[2];
 		}
 		sym = root.lookup("map");
 		if (sym.class == Overload) {
 			ref<Overload> o = ref<Overload>(sym);
-			_map = o.instances()[0];
-		}
-		sym = root.lookup("throwException");
-		if (sym.class == Overload) {
-			ref<Overload> o = ref<Overload>(sym);
-			_throwException = o.instances()[0];
+			_map = (*o.instances())[0];
 		}
 	}
 
@@ -421,12 +440,12 @@ public class Arena {
 		return _root; 
 	}
 
-	ref<Scope>[] scopes() { 
-		return _scopes;
+	ref<ref<Scope>[]> scopes() { 
+		return &_scopes;
 	}
 
-	ref<TemplateInstanceType>[] types() { 
-		return _types; 
+	ref<ref<TemplateInstanceType>[]> types() { 
+		return &_types; 
 	}
 
 	ref<Symbol> stringType() {
@@ -447,10 +466,6 @@ public class Arena {
 
 	ref<OverloadInstance> mapTemplate() {
 		return _map;
-	}
-	
-	ref<OverloadInstance> throwException() {
-		return _throwException;
 	}
 }
 

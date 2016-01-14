@@ -37,8 +37,6 @@ public abstract int eval(int startObject, pointer<pointer<byte>> args, int argsC
 
 public abstract int evalNative(ref<X86_64SectionHeader> header, address image, pointer<pointer<byte>> args, int argsCount);
 
-public abstract ref<ExceptionContext> exceptionContext(ref<ExceptionContext> newContext);
-
 public abstract boolean setTrace(boolean newValue);
 
 public abstract void fetchSnapshot(pointer<byte> buffer, int length);

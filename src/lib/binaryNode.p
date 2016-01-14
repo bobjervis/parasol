@@ -440,7 +440,7 @@ class Binary extends Node {
 					break;
 				}
 				ref<Overload> o = ref<Overload>(sym);
-				ref<OverloadInstance> oi = o.instances()[0];
+				ref<OverloadInstance> oi = (*o.instances())[0];
 				ref<Selection> method = tree.newSelection(_left, oi, location());
 				method.type = oi.type();
 				ref<NodeList> args = tree.newNodeList(_right);
@@ -702,7 +702,7 @@ class Binary extends Node {
 				return this;
 			}
 			ref<Overload> over = ref<Overload>(sym);
-			ref<OverloadInstance> oi = over.instances()[0];
+			ref<OverloadInstance> oi = (*over.instances())[0];
 			ref<Selection> method = tree.newSelection(subscript.left(), oi, subscript.location());
 			method.type = oi.type();
 			ref<NodeList> args = tree.newNodeList(subscript.right(), _right);
@@ -724,7 +724,7 @@ class Binary extends Node {
 				return this;
 			}
 			ref<Overload> over = ref<Overload>(sym);
-			ref<OverloadInstance> oi = over.instances()[0];
+			ref<OverloadInstance> oi = (*over.instances())[0];
 			ref<Selection> method = tree.newSelection(_left, oi, location());
 			method.type = oi.type();
 			ref<NodeList> args = tree.newNodeList(_right);
@@ -989,9 +989,9 @@ class Binary extends Node {
 			// TODO: Make this a method on Type with this as an override in ClassType
 			if (type.family() == TypeFamily.CLASS) {
 				ref<ClassScope> s = ref<ClassScope>(type.scope());
-				ref<OverloadInstance>[] methods = s.methods();
+				ref<ref<OverloadInstance>[]> methods = s.methods();
 				for (int i = 0; i < methods.length(); i++)
-					methods[i].assignType(compileContext);
+					(*methods)[i].assignType(compileContext);
 				s.assignMethodMaps(compileContext);
 			}
 			if (!type.isConcrete(compileContext))
@@ -1812,11 +1812,11 @@ private ref<Node> appendString(ref<Variable> variable, ref<Node> value, ref<Synt
 	ref<OverloadInstance> oi = null;
 	ref<ParameterScope> scope = null;
 	for (int i = 0; i < over.instances().length(); i++) {
-		oi = over.instances()[i];
+		oi = (*over.instances())[i];
 		scope = oi.parameterScope();
 		if (scope.parameters().length() != 1)
 			continue;
-		if (scope.parameters()[0].type() == value.type)
+		if ((*scope.parameters())[0].type() == value.type)
 			break;
 	}
 	assert(scope != null);

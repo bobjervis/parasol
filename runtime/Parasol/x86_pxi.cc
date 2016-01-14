@@ -69,7 +69,7 @@ bool X86_64Section::run(char **args, int *returnValue, bool trace) {
 	char *image = (char*)_image;
 	void **builtIns = (void**)(image + _header.builtInOffset);
 	for (int i = 0; i < _header.builtInCount; i++, builtIns++) {
-		if ((unsigned long long)*builtIns > 50) {
+		if ((unsigned long long)*builtIns > 80) {
 			printf("builtIns = %p *builtIns = %p\n", builtIns, *builtIns);
 			*(char*)argc = 0;	// This should cause a crash.
 		}
@@ -95,11 +95,15 @@ bool X86_64Section::run(char **args, int *returnValue, bool trace) {
 	int value = evalNative(&_header, (byte*)_image, args + 1, argc);
 	*returnValue = value;
 	ec.trace = false;
-	ExceptionContext *raised = ec.exceptionContext(null);
+	Exception *exception = ec.exception();
+	ExceptionContext *raised = null;
+	if (exception != null)
+		raised = exception->context;
 	if (raised != null) {
 		printf("\n");
 		bool locationIsExact = false;
 		char *message = (char*)formatMessage(unsigned(raised->exceptionType));
+		printf("C++: ");
 		if (raised->exceptionType == 0)
 			printf("Assertion failed ip %p", raised->exceptionAddress);
 		else {
@@ -155,68 +159,6 @@ bool X86_64Section::run(char **args, int *returnValue, bool trace) {
 		return false;
 	} else
 		return true;
-
-/*
-		if (exceptionInfo[3] != null) {
-			ref<ExceptionContext> ec = ref<ExceptionContext>(exceptionInfo[3]);
-//			printf("assertion failed!\n");
-			boolean locationIsExact = false;
-			pointer<byte> message = windows.FormatMessage(unsigned(raised->exceptionType));
-			string text(message);
-			if (raised->exceptionType == 0)
-				printf("Assertion failed ip %p", raised->exceptionAddress);
-			else {
-				printf("Uncaught exception %x", raised->exceptionType);
-				if (message != null)
-					printf(" (%s)", text);
-				printf(" ip %p", raised->exceptionAddress);
-			}
-			if (raised->exceptionType == EXCEPTION_ACCESS_VIOLATION ||
-				raised->exceptionType == EXCEPTION_IN_PAGE_ERROR) {
-				locationIsExact = true;
-				printf(" flags %d referencing %p", raised->exceptionFlags, raised->memoryAddress);
-			}
-
-			printf("\n");
-			byte[] stackSnapshot;
-
-//			printf("exceptionInfo = [ %p, %p, %p, %p, %p, %p ]\n", exceptionInfo[0], exceptionInfo[1], exceptionInfo[2], exceptionInfo[3], exceptionInfo[4], exceptionInfo[5]);
-			stackSnapshot.resize(raised->stackSize);
-			raised->stackCopy = &stackSnapshot[0];
-//			printf("stack snapshot size %d\n", stackSnapshot.length());
-
-			runtime.fetchSnapshot(&stackSnapshot[0], stackSnapshot.length());
-//			printf("    failure address %p\n", raised->exceptionAddress);
-//			printf("    sp: %p fp: %p stack size: %d\n", raised->stackPointer, raised->framePointer, raised->stackSize);
-			address stackLow = raised->stackPointer;
-			address stackHigh = pointer<byte>(raised->stackPointer) + raised->stackSize;
-			address fp = raised->framePointer;
-			address ip = raised->exceptionAddress;
-			string tag = "->";
-			while (long(fp) >= long(stackLow) && long(fp) < long(stackHigh)) {
-//				printf("fp = %p ip = %p relative = %x", fp, ip, int(ip) - int(_staticMemory));
-				pointer<address> stack = pointer<address>(fp);
-				long nextFp = raised->slot(fp);
-				int relative = int(ip) - int(_staticMemory);
-//				printf("relative = (%p) %x\n", ip, relative);
-				string locationLabel;
-				if (relative >= _staticMemoryLength || relative < 0)
-					locationLabel.printf("@%x", relative);
-				else
-					locationLabel = formattedLocation(relative, locationIsExact);
-				printf(" %2s %s\n", tag, locationLabel);
-//				if (nextFp != 0 && nextFp < long(fp)) {
-//					printf("    *** Stored frame pointer out of sequence: %p\n", nextFp);
-//					break;
-//				}
-				fp = address(nextFp);
-				ip = address(raised->slot(stack + 1));
-				tag = "";
-				locationIsExact = false;
-			}
-			printf("\n");
-			return 0, false;
- */
 }
 
 static pxi::Section *x86_64reader(FILE *pxiFile, long long length) {

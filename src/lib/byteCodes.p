@@ -276,7 +276,7 @@ public class ByteCodesTarget extends Target {
 		cacheRootCodegenObjects(_arena.root());
 		_unit = new Unit(_arena.root(), mainFile.tree().root(), this, valueOffset, compileContext);
 		for (int i = 0; i < _arena.scopes().length(); i++)
-			_arena.scopes()[i].assignVariableStorage(this, compileContext);
+			(*_arena.scopes())[i].assignVariableStorage(this, compileContext);
 		for (int i = 0; i < _unit.values().length(); i++)
 			_unit.values()[i].initializeStorage(this, compileContext);
 		if (mainFile.tree().root().countMessages() > 0)
@@ -346,8 +346,8 @@ public class ByteCodesTarget extends Target {
 		return true;
 	}
 	
-	byte[] byteCodeBuffer() {
-		return _byteCodeBuffer;
+	ref<byte[]> byteCodeBuffer() {
+		return &_byteCodeBuffer;
 	}
 
 	public void clearByteCodeBuffer() {
@@ -390,7 +390,7 @@ public class ByteCodesTarget extends Target {
 			classScope.vtable = _unit.newVTable(classScope, tr);
 //			ref<VTable>(classScope.vtable).disassemble(0);
 			for (int i = 0; i < classScope.methods().length(); i++) {
-				ref<OverloadInstance> method = classScope.methods()[i];
+				ref<OverloadInstance> method = (*classScope.methods())[i];
 				if (!method.deferAnalysis()) {
 					ref<Value> v = _unit.getCode(method.parameterScope(), this, compileContext);
 					if (v == null) {
@@ -540,7 +540,7 @@ public class ByteCodesTarget extends Target {
 			if (stringDef.initializer().op() == Operator.CLASS) {
 				ref<Class> stringClass = ref<Class> (stringDef.initializer());
 				for (int i = 0; i < stringType.scope().constructors().length(); i++) {
-					ref<ParameterScope> scope = stringType.scope().constructors()[i];
+					ref<ParameterScope> scope = (*stringType.scope().constructors())[i];
 					ref<Function> func = ref<Function>(scope.definition());
 					ref<NodeList> args = func.arguments();
 					if (args == null ||
@@ -557,7 +557,7 @@ public class ByteCodesTarget extends Target {
 		if (compare != null) {
 			ref<Overload> o = ref<Overload>(compare);
 			if (o.instances().length() == 1) {
-				ref<OverloadInstance> oi = o.instances()[0];
+				ref<OverloadInstance> oi = (*o.instances())[0];
 				// TODO: Validate that we have the correct symbol;
 				_stringCompare = oi.parameterScope();
 			}
@@ -566,7 +566,7 @@ public class ByteCodesTarget extends Target {
 		if (assign != null) {
 			ref<Overload> o = ref<Overload>(assign);
 			if (o.instances().length() == 1) {
-				ref<OverloadInstance> oi = o.instances()[0];
+				ref<OverloadInstance> oi = (*o.instances())[0];
 				// TODO: Validate that we have the correct symbol;
 				_stringAssign = oi.parameterScope();
 			}
@@ -575,7 +575,7 @@ public class ByteCodesTarget extends Target {
 		if (append != null) {
 			ref<Overload> o = ref<Overload>(append);
 			for (int i = 0; i < o.instances().length(); i++) {
-				ref<OverloadInstance> oi = o.instances()[i];
+				ref<OverloadInstance> oi = (*o.instances())[i];
 				if (oi.parameterCount() != 1)
 					continue;
 				ref<ParameterScope> s = oi.parameterScope();
@@ -759,8 +759,8 @@ class Unit {
 			else {
 				ref<Overload> o = ref<Overload>(sym);
 				ref<Value> v = createBuiltIn(i);
-				ref<ParameterScope> f = ref<ParameterScope>(o.instances()[0].type().scope());
-				o.instances()[0].value = v;
+				ref<ParameterScope> f = ref<ParameterScope>((*o.instances())[0].type().scope());
+				(*o.instances())[0].value = v;
 				f.value = v;
 			}
 		}
@@ -949,7 +949,7 @@ class Code extends Value {
 			_labels[i] -= mark;
 		target.applyJumpTargets(jumpsAtStart, this);
 		_byteCodes = pointer<byte>(allocz(_length));
-		C.memcpy(_byteCodes, &target.byteCodeBuffer()[mark], _length);
+		C.memcpy(_byteCodes, &(*target.byteCodeBuffer())[mark], _length);
 		target.resetByteCodeMark(mark);
 		target.popSp(-target.currentSpDepth());
 		target.popSp(spDepth);
@@ -1011,7 +1011,7 @@ class Code extends Value {
 			if (target.arena().verbose)
 				printf("Static initializers (%d):\n", target.staticBlocks().length());
 			for (int i = 0; i < target.staticBlocks().length(); i++) {
-				ref<FileStat> file = target.staticBlocks()[i];
+				ref<FileStat> file = (*target.staticBlocks())[i];
 				if (target.arena().verbose)
 					printf("   %s\n", file.filename());
 				generate(file.tree().root(), target, compileContext);
@@ -1028,7 +1028,7 @@ class Code extends Value {
 				target.byteCode(0);
 				target.byteCode((int)(address.bytes + 2 * int.bytes));
 				target.byteCode(ByteCodes.CALL);
-				ref<OverloadInstance> instance = m.instances()[0];
+				ref<OverloadInstance> instance = (*m.instances())[0];
 				
 				ref<Value> value = target.unit().getCode(instance.parameterScope(), target, compileContext);
 				target.byteCode(value.index());
@@ -1780,7 +1780,7 @@ class Code extends Value {
 					break;
 				}
 				ref<Overload> o = ref<Overload>(sym);
-				ref<OverloadInstance> oi = o.instances()[0];
+				ref<OverloadInstance> oi = (*o.instances())[0];
 				generate(x.right(), target, compileContext);
 				pushAddress(x.left(), target, compileContext);
 				ref<FunctionType> functionType = ref<FunctionType>(oi.type());
@@ -2558,7 +2558,7 @@ class Code extends Value {
 			if (tree.type.family() == TypeFamily.CLASS) {
 				ref<Scope> scope = tree.type.scope();
 				for (int i = 0; i < scope.constructors().length(); i++) {
-					ref<Scope> sc = scope.constructors()[i];
+					ref<Scope> sc = (*scope.constructors())[i];
 					if (sc.symbols().size() == 0) {
 						pushAddress(tree, target, compileContext);
 						checkStack(target);
@@ -2806,7 +2806,7 @@ class Code extends Value {
 					break;
 				}
 				ref<Overload> o = ref<Overload>(sym);
-				ref<OverloadInstance> oi = o.instances()[0];
+				ref<OverloadInstance> oi = (*o.instances())[0];
 				// Gross, gross, gross: cheap, dirty and hold my nose bad
 				target.byteCode(ByteCodes.DUP);
 				target.pushSp(address.bytes);
@@ -3246,7 +3246,7 @@ class Code extends Value {
 				case	STRING:
 					scope = newType.scope();
 					for (int i = 0; i < scope.constructors().length(); i++) {
-						ref<Scope> sc = scope.constructors()[i];
+						ref<Scope> sc = (*scope.constructors())[i];
 						if (sc.symbols().size() == 1 &&
 							sc.symbols().first().type() == existingType) {
 							ref<Function> constructorDef = ref<Function>(sc.definition());
@@ -3725,7 +3725,7 @@ class Code extends Value {
 					target.unfinished(n, "elementAddress not an Overloaded symbol", compileContext);
 					break;
 				}
-				sym = ref<Overload>(sym).instances()[0];
+				sym = (*ref<Overload>(sym).instances())[0];
 				generate(b.right(), target, compileContext);
 				pushAddress(b.left(), target, compileContext);
 				if (sym.type().family() != TypeFamily.FUNCTION) {
@@ -3744,7 +3744,7 @@ class Code extends Value {
 					target.unfinished(n, "createEmpty is not an Overloaded symbol", compileContext);
 					break;
 				}
-				sym = ref<Overload>(sym).instances()[0];
+				sym = (*ref<Overload>(sym).instances())[0];
 				generate(b.right(), target, compileContext);
 				pushAddress(b.left(), target, compileContext);
 				if (sym.type().family() != TypeFamily.FUNCTION) {
@@ -3966,7 +3966,7 @@ class VTable extends Value {
 	public void populateTable() {
 		_virtualMethods[0] = _typeRef.index();
 		for (int i = 0; i < _classScope.methods().length(); i++) {
-			ref<OverloadInstance> method = _classScope.methods()[i];
+			ref<OverloadInstance> method = (*_classScope.methods())[i];
 			if (!method.deferAnalysis() &&
 				method.value != null)
 				_virtualMethods[i + 1] = ref<Value>(method.value).index();

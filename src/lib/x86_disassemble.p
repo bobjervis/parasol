@@ -688,7 +688,7 @@ class Disassembler {
 			
 		case	0xbf:
 			instructionOpcode("movsx");
-			disassembleGvEv(0);
+			disassembleGvEvWiden(0);
 			break;
 			
 		default:
@@ -1016,6 +1016,7 @@ class Disassembler {
 		registerWord(regOpcode, true);
 		printf(",");
 		_rex &= ~REX_W;
+		_operandSize = true;
 		effectiveWord(false, mod, rm, ipAdjust);
 	}
 	/*
@@ -1400,7 +1401,7 @@ class Disassembler {
 
 	ref<Scope>, int nextVtable(int index) {
 		while (index < _arena.scopes().length()) {
-			ref<Scope> scope = _arena.scopes()[index];
+			ref<Scope> scope = (*_arena.scopes())[index];
 			if (scope.hasVtable(null))
 				return scope, index;
 			index++;

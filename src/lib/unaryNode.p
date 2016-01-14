@@ -219,12 +219,12 @@ class Unary extends Node {
 				case	REF:
 				case	POINTER:
 					for (int i = 0; i < type.scope().constructors().length(); i++) {
-						ref<Function> f = ref<Function>(type.scope().constructors()[i].definition());
+						ref<Function> f = ref<Function>((*type.scope().constructors())[i].definition());
 						ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
 						if (oi.parameterCount() != 2)
 							continue;
-						if (oi.parameterScope().parameters()[0].type().family() == TypeFamily.ADDRESS &&
-								oi.parameterScope().parameters()[1].type().family() == TypeFamily.SIGNED_64) {
+						if ((*oi.parameterScope().parameters())[0].type().family() == TypeFamily.ADDRESS &&
+								(*oi.parameterScope().parameters())[1].type().family() == TypeFamily.SIGNED_64) {
 							ref<Variable> temp = compileContext.newVariable(type);
 							_operand = _operand.fold(tree, false, compileContext);
 							ref<Node> empty = tree.newLeaf(Operator.EMPTY, location());
@@ -262,11 +262,11 @@ class Unary extends Node {
 					assert(false);
 				}
 				for (int i = 0; i < type.scope().constructors().length(); i++) {
-					ref<Function> f = ref<Function>(type.scope().constructors()[i].definition());
+					ref<Function> f = ref<Function>((*type.scope().constructors())[i].definition());
 					ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
 					if (oi.parameterCount() != 1)
 						continue;
-					if (oi.parameterScope().parameters()[0].type() == targetType) {
+					if ((*oi.parameterScope().parameters())[0].type() == targetType) {
 						ref<Variable> temp = compileContext.newVariable(type);
 						_operand = _operand.fold(tree, false, compileContext);
 						if (_operand.type != targetType)
@@ -289,17 +289,27 @@ class Unary extends Node {
 			break;
 
 		case	THROW:
-			ref<OverloadInstance> te = compileContext.arena().throwException();
+			ref<Symbol> re = compileContext.arena().getSymbol("parasol", "exception.throwException", compileContext);
+			if (re == null || re.class != Overload)
+				assert(false);
+			ref<Overload> o = ref<Overload>(re);
+			ref<OverloadInstance> te = (*o.instances())[0];
 			ref<Node> f = tree.newLeaf(Operator.FRAME_PTR, location());
 			ref<Node> s = tree.newLeaf(Operator.STACK_PTR, location());
 			ref<Node> x = tree.newLeaf(Operator.EMPTY, location());
 			f.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 			s.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 			x.type = te.type();
-			ref<NodeList> args = tree.newNodeList(_operand, f, s);
+			ref<Node> excep = _operand;
+			if (excep.type.indirectType(compileContext) == null) {
+				excep = tree.newUnary(Operator.ADDRESS, _operand, _operand.location());
+				excep.type = f.type;
+			}
+			ref<NodeList> args = tree.newNodeList(excep, f, s);
 			ref<Call> call = tree.newCall(te.parameterScope(), null, x, args, location(), compileContext);
 			call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 			f = tree.newUnary(Operator.EXPRESSION, call, location());
+			f.type = call.type;
 			return f.fold(tree, voidContext, compileContext);
 			
 		case	ADDRESS:
@@ -313,7 +323,7 @@ class Unary extends Node {
 						add(MessageId.UNDEFINED, compileContext.pool(), name);
 						break;
 					}
-					ref<OverloadInstance> oi = ref<Overload>(sym).instances()[0];
+					ref<OverloadInstance> oi = (*ref<Overload>(sym).instances())[0];
 					ref<Selection> method = tree.newSelection(b.left(), oi, location());
 					method.type = oi.type();
 					ref<NodeList> args = tree.newNodeList(b.right());

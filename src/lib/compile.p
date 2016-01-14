@@ -85,22 +85,22 @@ class CompileContext {
 	void compileFile() {
 		_arena.cacheRootObjects(_arena.root());
 		for (int i = 0; i < _arena.scopes().length(); i++)
-			_arena.scopes()[i].assignMethodMaps(this);
+			(*_arena.scopes())[i].assignMethodMaps(this);
 //		printf("before assignTypes\n");
 		assignTypes();
 //		printf("after assignTypes\n");
 		for (int i = 0; i < _arena.scopes().length(); i++) {
-			_arena.scopes()[i].checkForDuplicateMethods(this);
-			_arena.scopes()[i].assignMethodMaps(this);
+			(*_arena.scopes())[i].checkForDuplicateMethods(this);
+			(*_arena.scopes())[i].assignMethodMaps(this);
 		}
 		for (int i = 0; i < _arena.scopes().length(); i++)
-			_arena.scopes()[i].checkVariableStorage(this);
+			(*_arena.scopes())[i].checkVariableStorage(this);
 	}
 
 	public void resolveImports() {
 //		printf("preps done\n");
 		while (_importedScopes < _arena.scopes().length()) {
-			ref<Scope> s = _arena.scopes()[_importedScopes];
+			ref<Scope> s = (*_arena.scopes())[_importedScopes];
 			_importedScopes++;
 //			printf(" --- defineImports %d/%d\n", importedScopes, _arena.scopes().length());
 			if (s.definition() != null &&
@@ -122,7 +122,7 @@ class CompileContext {
 	
 	public void buildScopes() {
 		while (_arena.builtScopes < _arena.scopes().length()) {
-			ref<Scope> s = _arena.scopes()[_arena.builtScopes];
+			ref<Scope> s = (*_arena.scopes())[_arena.builtScopes];
 			_arena.builtScopes++;
 /*
 			string label;
@@ -543,12 +543,12 @@ class CompileContext {
 
 	public void assignTypes() {
 		for (int i = 0; i < _arena.scopes().length(); i++) {
-			_current = _arena.scopes()[i];
+			_current = (*_arena.scopes())[i];
 			if (_current.definition() != null && !_current.isInTemplateFunction())
 				_current.definition().assignTypesAtScope(this);
 		}
 		for (int i = 0; i < _arena.scopes().length(); i++) {
-			_current = _arena.scopes()[i];
+			_current = (*_arena.scopes())[i];
 			if (_current.definition() != null) {
 				switch (_current.definition().op()) {
 				case	FUNCTION:{
@@ -846,8 +846,8 @@ class CompileContext {
 		_variables.resize(originalCount);
 	}
 	
-	ref<Variable>[] variables() {
-		return _variables;
+	ref<ref<Variable>[]> variables() {
+		return &_variables;
 	}
 	
 	public ref<Scope> setCurrent(ref<Scope> scope) {

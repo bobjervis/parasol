@@ -174,7 +174,7 @@ ref<Node> vectorize(ref<SyntaxTree> tree, ref<Node> vectorExpression, ref<Compil
 				closure.lvalues[0].add(MessageId.UNDEFINED, compileContext.pool(), name);
 				return vectorExpression;
 			}
-			ref<OverloadInstance> oi = ref<Overload>(sym).instances()[0];
+			ref<OverloadInstance> oi = (*ref<Overload>(sym).instances())[0];
 			ref<Selection> method = tree.newSelection(closure.lvalues[0], oi, vectorExpression.location());
 			method.type = oi.type();
 			ref<NodeList> args = tree.newNodeList(tree.newReference(vectorSize, false, vectorExpression.location()));
@@ -217,7 +217,7 @@ private ref<Node> rewriteVectorTree(ref<SyntaxTree> tree, ref<Node> vectorStuff,
 			vectorStuff.add(MessageId.UNDEFINED, compileContext.pool(), sub);
 			return vectorStuff;
 		}
-		ref<OverloadInstance> oi = ref<Overload>(sym).instances()[0];
+		ref<OverloadInstance> oi = (*ref<Overload>(sym).instances())[0];
 		ref<Selection> method = tree.newSelection(vectorStuff, oi, vectorStuff.location());
 		method.type = oi.type();
 		ref<NodeList> args = tree.newNodeList(index);
@@ -238,7 +238,7 @@ private ref<Node> rewriteVectorTree(ref<SyntaxTree> tree, ref<Node> vectorStuff,
 			vectorStuff.add(MessageId.UNDEFINED, compileContext.pool(), elem);
 			return vectorStuff;
 		}
-		ref<OverloadInstance> oi = ref<Overload>(sym).instances()[0];
+		ref<OverloadInstance> oi = (*ref<Overload>(sym).instances())[0];
 		ref<Selection> method = tree.newSelection(b.left(), oi, vectorStuff.location());
 		method.type = oi.type();
 		ref<Node> right = rewriteVectorTree(tree, b.right(), iterator, vectorSize, compileContext);
@@ -385,11 +385,11 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 			arg = tree.newCast(indexType, arg);
 			ref<ParameterScope> constructor = null;
 			for (int i = 0; i < vectorType.scope().constructors().length(); i++) {
-				ref<Function> f = ref<Function>(vectorType.scope().constructors()[i].definition());
+				ref<Function> f = ref<Function>((*vectorType.scope().constructors())[i].definition());
 				ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
 				if (oi.parameterCount() != 1)
 					continue;
-				if (oi.parameterScope().parameters()[0].type() == indexType) {
+				if ((*oi.parameterScope().parameters())[0].type() == indexType) {
 					constructor = oi.parameterScope();
 					break;
 				}
@@ -438,7 +438,7 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 					vectorExpression.add(MessageId.UNDEFINED, compileContext.pool(), set);
 					return vectorExpression;
 				}
-				ref<OverloadInstance> oi = ref<Overload>(sym).instances()[0];
+				ref<OverloadInstance> oi = (*ref<Overload>(sym).instances())[0];
 				ref<Selection> method = tree.newSelection(arrayRef, oi, arrayRef.location());
 				method.type = oi.type();
 				ref<NodeList> args = tree.newNodeList(idx, val);
@@ -457,7 +457,7 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 					vectorExpression.add(MessageId.UNDEFINED, compileContext.pool(), append);
 					return vectorExpression;
 				}
-				ref<OverloadInstance> oi = ref<Overload>(sym).instances()[0];
+				ref<OverloadInstance> oi = (*ref<Overload>(sym).instances())[0];
 				ref<Selection> method = tree.newSelection(arrayRef, oi, arrayRef.location());
 				method.type = oi.type();
 				if (nl.node.op() == Operator.LABEL) {
@@ -484,7 +484,7 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 				vectorExpression.add(MessageId.UNDEFINED, compileContext.pool(), append);
 				return vectorExpression;
 			}
-			ref<OverloadInstance> oi = ref<Overload>(sym).instances()[0];
+			ref<OverloadInstance> oi = (*ref<Overload>(sym).instances())[0];
 			ref<Selection> method = tree.newSelection(arrayRef, oi, arrayRef.location());
 			method.type = oi.type();
 			if (nl.node.op() != Operator.LABEL) {

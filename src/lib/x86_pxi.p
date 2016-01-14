@@ -51,6 +51,12 @@ public class X86_64SectionHeader {
 	public int exceptionsOffset;	// Offset in image of exception table
 	public int exceptionsCount;		// Number of ExceptionEntry elements in the table
 }
+
+public class ExceptionEntry {
+	public int location;
+	public int handler;
+}
+
 /*
  * The X86_64 image section is laid out as follows:
  * 

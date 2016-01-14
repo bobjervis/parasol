@@ -88,6 +88,13 @@ class BuiltInType extends Type {
 			return _classType.scope();
 	}
 
+	public boolean hasVtable(ref<CompileContext> compileContext) {
+		if (_classType == null)
+			return false;
+		else
+			return _classType.hasVtable(compileContext);
+	}
+
 	public ref<OverloadInstance> initialConstructor() {
 		return _classType.initialConstructor();
 	}
@@ -260,9 +267,9 @@ class ClassType extends Type {
 
 	public ref<OverloadInstance> initialConstructor() {
 		for (int i = 0; i < _scope.constructors().length(); i++) {
-			ref<ParameterScope> scope = ref<ParameterScope>(_scope.constructors()[i]);
+			ref<ParameterScope> scope = ref<ParameterScope>((*_scope.constructors())[i]);
 			if (scope.parameters().length() == 1) {
-				ref<Type> paramType = scope.parameters()[0].type();
+				ref<Type> paramType = (*scope.parameters())[0].type();
 				if (paramType.class == BuiltInType)
 					paramType = ref<BuiltInType>(paramType).classType();
 				if (paramType == this) {
@@ -276,7 +283,7 @@ class ClassType extends Type {
 	
 	public ref<ParameterScope> defaultConstructor() {
 		for (int i = 0; i < _scope.constructors().length(); i++) {
-			ref<ParameterScope> scope = ref<ParameterScope>(_scope.constructors()[i]);
+			ref<ParameterScope> scope = ref<ParameterScope>((*_scope.constructors())[i]);
 			if (scope.parameters().length() == 0)
 				return scope;
 		}
@@ -542,7 +549,7 @@ class FunctionType extends Type {
 		int size = 0;
 
 		for (int i = 0; i < _functionScope.parameters().length(); i++) {
-			ref<Type> t = _functionScope.parameters()[i].type();
+			ref<Type> t = (*_functionScope.parameters())[i].type();
 			t.assignSize(target, compileContext);
 			size += t.stackSize();
 		}
@@ -983,10 +990,10 @@ class Type {
 		if (sym != null && sym.class == Overload) {
 			ref<Overload> o = ref<Overload>(sym);
 			for (int i = 0; i < o.instances().length(); i++) {
-				ref<OverloadInstance> oi = o.instances()[i];
+				ref<OverloadInstance> oi = (*o.instances())[i];
 				if (oi.parameterCount() != 1)
 					continue;
-				if (oi.parameterScope().parameters()[0].type() == this)
+				if ((*oi.parameterScope().parameters())[0].type() == this)
 					return oi;
 			}
 		}
@@ -997,11 +1004,11 @@ class Type {
 		if (scope() == null)
 			return null;
 		for (int i = 0; i < scope().constructors().length(); i++) {
-			ref<Function> f = ref<Function>(scope().constructors()[i].definition());
+			ref<Function> f = ref<Function>((*scope().constructors())[i].definition());
 			ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
 			if (oi.parameterCount() != 1)
 				continue;
-			if (oi.parameterScope().parameters()[0].type() == this)
+			if ((*oi.parameterScope().parameters())[0].type() == this)
 				return oi.parameterScope();
 		}
 		return null;
@@ -1304,7 +1311,7 @@ int[TypeFamily] familySize = [
 	TEMPLATE_INSTANCE:	-1,
 	NAMESPACE: 			-1,
 	CLASS_VARIABLE: 	 8,
-	EXCEPTION:			 8,
+	EXCEPTION:			 24,
 	CLASS_DEFERRED: 	-1,
 ];
 

@@ -281,7 +281,7 @@ ExecutionContext::ExecutionContext(void **objects, int objectCount) {
 	_length = STACK_SIZE;
 	_stack = (byte*)malloc(STACK_SIZE);
 	_sp = _stack + STACK_SIZE;
-	_exceptionContext = null;
+	_exception = null;
 	_stackTop = _sp;
 	_active.code = null;
 	_active.ip = 0;
@@ -290,13 +290,16 @@ ExecutionContext::ExecutionContext(void **objects, int objectCount) {
 	_objectCount = objectCount;
 	_target = -1;
 	_image = null;
+	_hardwareExceptionHandler = null;
+	_sourceLocations = null;
+	_sourceLocationsCount = 0;
 }
 
 ExecutionContext::ExecutionContext(X86_64SectionHeader *pxiHeader, void *image) {
 	_length = 2 * sizeof (void*);
 	_stack = (byte*)malloc(_length);
 	_sp = _stack + _length;
-	_exceptionContext = null;
+	_exception = null;
 	_stackTop = _sp;
 	_active.code = null;
 	_active.ip = 0;
@@ -306,6 +309,9 @@ ExecutionContext::ExecutionContext(X86_64SectionHeader *pxiHeader, void *image) 
 	_target = -1;
 	_pxiHeader = pxiHeader;
 	_image = image;
+	_hardwareExceptionHandler = null;
+	_sourceLocations = null;
+	_sourceLocationsCount = 0;
 }
 
 ExecutionContext::~ExecutionContext() {
@@ -324,12 +330,6 @@ bool ExecutionContext::push(WORD intValue) {
 	_sp -= sizeof(WORD);
 	*((WORD*)_sp) = intValue;
 	return true;
-}
-
-ExceptionContext *ExecutionContext::exceptionContext(ExceptionContext *exceptionInfo) {
-	ExceptionContext *old = _exceptionContext;
-	_exceptionContext = exceptionInfo;
-	return old;
 }
 
 bool ExecutionContext::push(char **argv, int argc){
@@ -442,12 +442,13 @@ int evalNative(X86_64SectionHeader *header, byte *image, char **argv, int argc) 
 //	StackState outer = context->unloadFrame();
 	int (*start)(void *args) = (int (*)(void*))(image + header->entryPoint);
 	context.push(argv, argc);
+	context.setSourceLocations(outer->sourceLocations(), outer->sourceLocationsCount());
 	int result = context.runNative(start);
 
 	// Transfer any uncaught exception to the outer context.
 
-	ExceptionContext *ec = context.exceptionContext(null);
-	outer->exceptionContext(ec);
+	Exception *e = context.exception();
+	outer->exposeException(e);
 	outer->transferSnapshot(&context);
 	threadContext.set(outer);
 //	context->reloadFrame(outer);
@@ -488,51 +489,6 @@ bool ExecutionContext::run(int objectId) {
 	invoke((byte*)valueAddress(objectId));
 	_lastIp = 0;
 	bool result;
-#ifdef MSVC
-	EXCEPTION_POINTERS *exception;
-	EXCEPTION_RECORD xr;
-	__try
-#else
-#ifdef __SEH__
-//	asm ("\t.l_startw:\n"
-//			"\t.seh_handler __C_specific_handler, @except\n"
-//			"\t.seh_handlerdata\n"
-//			"\t.long 1\n"
-//			"\t.rva .l_startw, .l_endw, my_exception_handler ,.l_endw\n"
-//			"\t.text"
-//   	);
-	try
-#else
-	try
-#endif
-#endif
-	{
-		result = run();
-#ifdef MSVC
-	} __except(exception = GetExceptionInformation(), xr = *exception->ExceptionRecord, EXCEPTION_EXECUTE_HANDLER) {
-		printf("   ");
-		process::dumpExceptionRecord(&xr, 0);
-		printf("\n");
-		threadContext.set(outer);
-		result = false;
-	}
-#else
-
-#ifdef __SEH__
-//	asm ("\tnop\n"
-//			"\t.l_endw: nop\n");
-	}
-	catch (EXCEPTION_RECORD &xr) {
-		threadContext.set(outer);
-		return false;
-	}
-#else
-	catch (...) {
-		threadContext.set(outer);
-		return false;
-	}
-#endif
-#endif
 
 	threadContext.set(outer);
 	return result;
@@ -540,32 +496,24 @@ bool ExecutionContext::run(int objectId) {
 
 LONG CALLBACK windowsExceptionHandler(PEXCEPTION_POINTERS ExceptionInfo) {
 	ExecutionContext *context = threadContext.get();
-	StackState saved;
-	StackState pseudo;
 
-	saved = context->unloadFrame();
-	pseudo.frame.fp = (byte*)ExceptionInfo->ContextRecord->Rbp;
-	pseudo.frame.code = (byte*)ExceptionInfo->ContextRecord->Rip;
-	pseudo.frame.ip = -1;
-//	printf("Caught exception at %p\n", pseudo.frame.code);
-	pseudo.sp = (byte*)ExceptionInfo->ContextRecord->Rsp;
-	pseudo.stackTop = saved.stackTop;
-	pseudo.target = NATIVE_64_TARGET;
-	pseudo.exceptionType = ExceptionInfo->ExceptionRecord->ExceptionCode;
-	pseudo.parasolException = null;
-	switch (pseudo.exceptionType) {
-	case EXCEPTION_ACCESS_VIOLATION:
-	case EXCEPTION_IN_PAGE_ERROR:
-		pseudo.exceptionFlags = (int)ExceptionInfo->ExceptionRecord->ExceptionInformation[0];
-		pseudo.memoryAddress = (void*)ExceptionInfo->ExceptionRecord->ExceptionInformation[1];
+	if (context->hasHardwareExceptionHandler()) {
+		HardwareException info;
+
+		info.codePointer = (byte*)ExceptionInfo->ContextRecord->Rip;
+		info.framePointer = (byte*)ExceptionInfo->ContextRecord->Rbp;
+		info.stackPointer = (byte*)ExceptionInfo->ContextRecord->Rsp;
+		info.exceptionType = ExceptionInfo->ExceptionRecord->ExceptionCode;
+		switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
+		case EXCEPTION_ACCESS_VIOLATION:
+		case EXCEPTION_IN_PAGE_ERROR:
+			info.exceptionInfo0 = (long long)ExceptionInfo->ExceptionRecord->ExceptionInformation[1];
+			info.exceptionInfo1 = (int)ExceptionInfo->ExceptionRecord->ExceptionInformation[0];
+		}
+		context->callHardwareExceptionHandler(&info);
+		printf("Did not expect this to return\n");
 	}
-	context->reloadFrame(pseudo);
-	context->snapshot(pseudo.stackTop);
-
-	// The last snapshot survives the reload of the frame.
-
-	context->reloadFrame(saved);
-	context->throwException(pseudo);
+	printf("No hardware exception handler defined\n");
 	exit(1);
 	return 0;
 }
@@ -1626,46 +1574,7 @@ int builtInPrint(int *ptr) {
 	return count;
 }
 
-const int NATIVE_64_RETURN_ADDRESS = 18;
-const int NATIVE_64_FRAME_ADDRESS = 15;
-
 int builtInAssert(int booleanValue) {
-	booleanValue &= 0xff;					// Cast to boolean
-	if (!booleanValue) {
-		ExecutionContext *context = threadContext.get();
-		switch (context->target()) {
-		case	BYTE_CODE_TARGET:
-			printf("assertion failed at ip=%d!\n", context->ip());
-			context->halt();
-			break;
-
-		case	NATIVE_64_TARGET: {
-			StackState saved;
-			StackState pseudo;
-
-			saved = context->unloadFrame();
-			WORD *stack = (WORD*)&context;
-			pseudo.frame.fp = (byte*)stack[NATIVE_64_FRAME_ADDRESS];
-			pseudo.frame.code = (byte*)stack[NATIVE_64_RETURN_ADDRESS];
-			pseudo.frame.ip = -1;
-			pseudo.sp = (byte*)&stack[NATIVE_64_RETURN_ADDRESS + 1];
-			pseudo.stackTop = saved.stackTop;
-			pseudo.target = NATIVE_64_TARGET;
-			pseudo.exceptionType = 0;
-			context->reloadFrame(pseudo);
-			context->snapshot(pseudo.stackTop);
-
-			// The last snapshot survives the reload of the frame.
-
-			context->reloadFrame(saved);
-			context->throwException(pseudo);
-			exit(1);
-		}
-		default:
-			printf("assertion failed in unknown target %d\n", context->target());
-			exit(1);
-		}
-	}
 	return 0;
 }
 
@@ -2008,36 +1917,93 @@ void *formatMessage(unsigned NTStatusMessage) {
 }
 
 ExceptionContext *pExceptionContext(ExceptionContext *newContext) {
-	ExecutionContext *context = threadContext.get();
-	return context->exceptionContext(newContext);
+	return null;
 }
-
+/*
+ * throwException - generated by the compiler as the implementation of the throw statement.
+ * The compiler adds the frame (RBP) and stack pointers (RSP). This makes the extraction process
+ * a whole lot easier (since we don't have to fool the C++ compiler into thinking it knows
+ * where these fields really are.
+ */
 void throwException(Exception *e, void *frame, void **stackPointer) {
+}
+/*
+ * exposeException - The compiler inserts a hidden try around the top level of a unit static initialization block
+ * whose catch consists solely of recording the otherwise uncaught exception for later processing. THis is basically
+ * the hook to transmit the failing exception out of the nested context and out to the invoker.
+ *
+ * Note: currently the logic is written interms of ExceptionContext objects, but must eventually be converted to use
+ * actual Exception objects.
+ */
+void exposeException(Exception *e) {
 	ExecutionContext *context = threadContext.get();
-	StackState saved;
-	StackState pseudo;
-	saved = context->unloadFrame();
-	pseudo.frame.fp = (byte*)frame;
-	pseudo.frame.code = (byte*)stackPointer[-1];
-	pseudo.frame.ip = -1;
-	pseudo.sp = (byte*)stackPointer;
-	pseudo.stackTop = saved.stackTop;
-	pseudo.target = NATIVE_64_TARGET;
-	pseudo.exceptionType = 0;
-	pseudo.parasolException = e;
-	context->reloadFrame(pseudo);
-	context->snapshot(pseudo.stackTop);
-
-	// The last snapshot survives the reload of the frame.
-
-	context->reloadFrame(saved);
-	context->throwException(pseudo);
-	exit(1);
+	context->exposeException(e);
 }
 
-void exposeException(ExceptionContext *ec) {
+Exception *fetchExposedException() {
 	ExecutionContext *context = threadContext.get();
-	context->exceptionContext(ec);
+	Exception *e = context->exception();
+	context->exposeException(null);
+	return e;
+}
+
+void registerHardwareExceptionHandler(void (*handler)(HardwareException*)) {
+	ExecutionContext *context = threadContext.get();
+	context->registerHardwareExceptionHandler(handler);
+}
+
+void ExecutionContext::callHardwareExceptionHandler(HardwareException *info) {
+	_hardwareExceptionHandler(info);
+}
+
+byte *stackTop() {
+	ExecutionContext *context = threadContext.get();
+	return context->stackTop();
+}
+
+void *exceptionsAddress() {
+	ExecutionContext *context = threadContext.get();
+	return context->exceptionsAddress();
+}
+
+int exceptionsCount() {
+	ExecutionContext *context = threadContext.get();
+	return context->exceptionsCount();
+}
+
+byte *lowCodeAddress() {
+	ExecutionContext *context = threadContext.get();
+	return context->lowCodeAddress();
+}
+
+byte *highCodeAddress() {
+	ExecutionContext *context = threadContext.get();
+	return context->highCodeAddress();
+}
+
+void callCatchHandler(Exception *exception, void *framePointer, int handler) {
+	ExecutionContext *context = threadContext.get();
+	context->callCatchHandler(exception, framePointer, handler);
+}
+
+void *sourceLocations() {
+	ExecutionContext *context = threadContext.get();
+	return context->sourceLocations();
+}
+
+int sourceLocationsCount() {
+	ExecutionContext *context = threadContext.get();
+	return context->sourceLocationsCount();
+}
+
+void setSourceLocations(void *location, int count) {
+	ExecutionContext *context = threadContext.get();
+	context->setSourceLocations(location, count);
+}
+
+void ExecutionContext::setSourceLocations(void *location, int count) {
+	_sourceLocations = location;
+	_sourceLocationsCount = count;
 }
 
 BuiltInFunctionMap builtInFunctionMap[] = {
@@ -2091,8 +2057,9 @@ BuiltInFunctionMap builtInFunctionMap[] = {
 	{ "setTrace",		nativeFunction(setTrace),		1,	1, "parasol" },
 	{ "fetchSnapshot",	nativeFunction(fetchSnapshot),	2,	0, "parasol" },
 	{ "supportedTarget",nativeFunction(supportedTarget),1,	1, "parasol" },
-	// TODO: Remove plain 'now' in favor of the new function whenever...
-	{ "now",			0,								0,	1 },
+	{ "registerHardwareExceptionHandler",
+						nativeFunction(registerHardwareExceptionHandler),
+														1,	0, "parasol" },
 	{ "exit",			nativeFunction(exit),			1,	1, "parasol" },
 	{ "evalNative",		nativeFunction(evalNative),		4,	1, "parasol" },
 	{ "VirtualAlloc",	nativeFunction(builtinVirtualAlloc),
@@ -2102,7 +2069,6 @@ BuiltInFunctionMap builtInFunctionMap[] = {
 	{ "GetLastError",	nativeFunction(builtinGetLastError),
 														0,	1, "native" },
 	{ "exposeException",nativeFunction(exposeException),1,	1 },
-	// TODO: Remove plain 'now' in favor of the new function whenever...
 	{ "_now",			nativeFunction(now),			0,	1, "parasol" },
 	{ "FormatMessage",	nativeFunction(formatMessage),	1,	1, "native" },
 	{ "runningTarget",  nativeFunction(runningTarget),  0,  1, "parasol" },
@@ -2115,6 +2081,26 @@ BuiltInFunctionMap builtInFunctionMap[] = {
 	{ "gcvt",			nativeFunction(gcvt),			4,	1, "native" },
 
 	{ "throwException",	nativeFunction(throwException),	3,	0, "parasol" },
+	{ "stackTop",		nativeFunction(stackTop),		0,	1, "parasol" },
+	{ "exceptionsAddress",
+						nativeFunction(exceptionsAddress),
+														0,	1, "parasol" },
+	{ "exceptionsCount",nativeFunction(exceptionsCount),0,	1, "parasol" },
+	{ "lowCodeAddress",	nativeFunction(lowCodeAddress),	0,	1, "parasol" },
+	{ "highCodeAddress",nativeFunction(highCodeAddress),0,	1, "parasol" },
+	{ "callCatchHandler",
+						nativeFunction(callCatchHandler),
+														3,	0, "parasol" },
+	{ "fetchExposedException",
+						nativeFunction(fetchExposedException),
+														0,	1, "parasol" },
+	{ "setSourceLocations",
+						nativeFunction(setSourceLocations),
+														0,	2, "parasol" },
+	{ "sourceLocations",nativeFunction(sourceLocations),1,	0, "parasol" },
+	{ "sourceLocationsCount",
+						nativeFunction(sourceLocationsCount),
+														1,	0, "parasol" },
 	{ 0 }
 };
 
