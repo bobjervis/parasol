@@ -319,15 +319,16 @@ public class ByteCodesTarget extends Target {
 //		print("here\n");
 //		printf("done returnValue = %d\n", returnValue);
 		if (returnValue == int.MIN_VALUE) {
-			byte[] stackSnapshot;
+			printf("\nUncaught exception!\n");
+//			byte[] stackSnapshot;
 			
 //			printf("exceptionInfo = [ %p, %p, %p, %p, %p, %p ]\n", exceptionInfo[0], exceptionInfo[1], exceptionInfo[2], exceptionInfo[3], exceptionInfo[4], exceptionInfo[5]);
-			stackSnapshot.resize(int(exceptionInfo[5] - exceptionInfo[3]));
+//			stackSnapshot.resize(int(exceptionInfo[5] - exceptionInfo[3]));
 //			printf("stack snapshot size %d\n", stackSnapshot.length());
 			
-			runtime.fetchSnapshot(&stackSnapshot[0], stackSnapshot.length());
+//			runtime.fetchSnapshot(&stackSnapshot[0], stackSnapshot.length());
 //			print("Got snapshot\n");
-			dumpStack(objects, exceptionInfo, stackSnapshot, startingObject);
+//			dumpStack(objects, exceptionInfo, stackSnapshot, startingObject);
 			return 1, false;
 		} else
 			return returnValue, true;

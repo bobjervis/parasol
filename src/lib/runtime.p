@@ -39,8 +39,6 @@ public abstract int evalNative(ref<X86_64SectionHeader> header, address image, p
 
 public abstract boolean setTrace(boolean newValue);
 
-public abstract void fetchSnapshot(pointer<byte> buffer, int length);
-
 public abstract int supportedTarget(int index);
 
 public abstract int runningTarget();

@@ -100,10 +100,6 @@ public:
 
 	void reloadFrame(const StackState &saved);
 
-	void snapshot(byte *highestSp);
-
-	void fetchSnapshot(byte *output, int length);
-
 	int injectObjects(void **objects, int objectCount);
 
 	void registerHardwareExceptionHandler(void (*handler)(HardwareException *exceptionContext));
@@ -143,8 +139,6 @@ public:
 	int objectCount() { return _objectCount; }
 
 	vector<string> &args() { return _args; }
-
-	vector<byte> &stackSnapshot() { return _stackSnapshot; }
 
 	void *exceptionsAddress();
 
@@ -375,7 +369,6 @@ private:
 
 WORD (*builtInFunctionAddress(int index))();
 int evalNative(X86_64SectionHeader *header, byte *image, char **argv, int argc);
-void fetchSnapshot(byte *output, int length);
 void *formatMessage(unsigned NTStatusMessage);
 void indentBy(int indent);
 
