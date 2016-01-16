@@ -744,3 +744,10 @@ class map<class V, class K> {
 		ref<map<V, K>>	_dictionary;
 	};
 }
+
+import parasol:text;
+
+void splat(var x) {
+	printf("Splat %s:\n", x);
+	text.memDump(&x, 600);
+}

@@ -435,6 +435,13 @@ public class X86_64 extends X86_64AssignTemps {
 			// Now we have to generate the various static blocks for included units.
 			while (_arena.collectStaticInitializers(this))
 				;
+			ref<Scope> globalFrame = _arena.createScope(null, null, StorageClass.AUTO);
+			for (int i = 0; i < staticBlocks().length(); i++) {
+				ref<FileStat> file = (*staticBlocks())[i];
+				if (file.fileScope() != null)
+					globalFrame.collectAutoScopesUnderUnitScope(file.fileScope());
+			}
+			f().autoSize = globalFrame.autoStorage(this, 0, compileContext);
 			if (_arena.verbose)
 				printf("Static initializers:\n");
 //			printf("staticBlocks %d\n", staticBlocks().length());

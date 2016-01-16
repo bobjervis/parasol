@@ -293,9 +293,8 @@ class EnumScope extends ClasslikeScope {
  * 
  *  Enclosing				Description
  *  
- *  UnitScope			A static function, possibly public.  'main' is the canonical UnitScope function.
- *  					These functions have no nested-function issues.  They also never have a 'this' 
- *  					pointer.
+ *  UnitScope			The static initializers of a unit, such as a source file. They also never have
+ *  					a 'this' pointer.
  *  					
  *  ClassScope			A method.  If this is an overridden method, it will have to be assigned a vtable
  *  					slot.  If the function is explicitly STATIC, then there will be no 'this' pointer,
@@ -543,6 +542,14 @@ class Scope {
 	public void mergeIntoNamespace(ref<Namespace> nm, ref<CompileContext> compileContext) {
 	}
 
+	public void collectAutoScopesUnderUnitScope(ref<UnitScope> fileScope) {
+		for (int i = 0; i < fileScope._enclosed.length(); i++) {
+			ref<Scope> s = fileScope._enclosed[i]; 
+			if (s.storageClass() == StorageClass.AUTO)
+				_enclosed.append(s);
+		}
+	}
+	
 	public void createPossibleDefaultConstructor(ref<CompileContext> compileContext) {
 	}
 		

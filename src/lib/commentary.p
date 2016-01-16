@@ -322,17 +322,22 @@ private string[MessageId] messageCatalog = [
 	UNRESOLVED_ABSTRACT: 	"Abstract method has no override '%1'",
 ];
 
-string last = "<first>";
-int lastI = -1;
-for (int i = 0; i < int(MessageId.MAX_MESSAGE); i++) {
-	MessageId m = MessageId(i);
-	if (messageCatalog[m] == null) {
-		printf("ERROR: Message %d has no message entry (last defined entry: %s %d)\n", i, last, lastI);
-		string s;
-		s.printf("<message #%d>", i);
-		messageCatalog[m] = s;
-	} else {
-		last = messageCatalog[m];
-		lastI = i;
+check();
+
+private void check() {
+	string last = "<first>";
+	int lastI = -1;
+	for (int i = 0; i < int(MessageId.MAX_MESSAGE); i++) {
+		MessageId m = MessageId(i);
+		int mergatroid;
+		if (messageCatalog[m] == null) {
+			printf("ERROR: Message %d has no message entry (last defined entry: %s %d)\n", i, last, lastI);
+			string s;
+			s.printf("<message #%d>", i);
+			messageCatalog[m] = s;
+		} else {
+			last = messageCatalog[m];
+			lastI = i;
+		}
 	}
 }

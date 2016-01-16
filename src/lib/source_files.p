@@ -137,6 +137,14 @@ class ImportDirectory {
 		}
 	}
 
+	public void printSymbolTable() {
+		for (int i = 0; i < _files.length(); i++) {
+			printf("    %s (%s)\n", _files[i].filename(), _files[i].getNamespaceString());
+			if (_files[i].fileScope() != null)
+				_files[i].fileScope().print(8, true);
+		}
+	}
+	
 	public void print() {
 		printf("%4s %s\n", _searched ? "SRCH" : "", _directoryName);
 		for (int i = 0; i < _files.length(); i++) {
@@ -197,7 +205,7 @@ class FileStat {
 	private string _domain;
 	private ref<Namespace> _namespaceSymbol;
 	private ref<Ternary> _namespaceNode;
-	private ref<Scope> _fileScope;
+	private ref<UnitScope> _fileScope;
 	private ref<SyntaxTree> _tree;
 	private boolean _scopesBuilt;
 	private boolean _staticsInitialized;
@@ -353,7 +361,7 @@ class FileStat {
 		return _source;
 	}
 	
-	public ref<Scope> fileScope() {
+	public ref<UnitScope> fileScope() {
 		return _fileScope;
 	}
 	

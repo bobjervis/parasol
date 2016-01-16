@@ -2802,9 +2802,13 @@ MessageId[Operator] typeNotAllowed = [
 	SWITCH: 				MessageId.INVALID_SWITCH,
 ];
 
-for (int i = 0; i < int(Operator.MAX_OPERATOR); i++) {
-	if (typeNotAllowed[Operator(i)] == MessageId(0))
-		typeNotAllowed[Operator(i)] = MessageId.MAX_MESSAGE;
+fill();
+
+private void fill() {
+	for (int i = 0; i < int(Operator.MAX_OPERATOR); i++) {
+		if (typeNotAllowed[Operator(i)] == MessageId(0))
+			typeNotAllowed[Operator(i)] = MessageId.MAX_MESSAGE;
+	}
 }
 
 int, boolean unescapeParasolCharacter(string str) {

@@ -96,66 +96,8 @@ bool X86_64Section::run(char **args, int *returnValue, bool trace) {
 	*returnValue = value;
 	ec.trace = false;
 	Exception *exception = ec.exception();
-	ExceptionContext *raised = null;
-	if (exception != null)
-		raised = exception->context;
-	if (raised != null) {
-		printf("\n");
-		bool locationIsExact = false;
-		char *message = (char*)formatMessage(unsigned(raised->exceptionType));
-		printf("C++: ");
-		if (raised->exceptionType == 0)
-			printf("Assertion failed ip %p", raised->exceptionAddress);
-		else {
-			printf("Uncaught exception %x", raised->exceptionType);
-			if (message != null)
-				printf(" (%s)", message);
-			printf(" ip %p", raised->exceptionAddress);
-		}
-		if (raised->exceptionType == EXCEPTION_ACCESS_VIOLATION ||
-			raised->exceptionType == EXCEPTION_IN_PAGE_ERROR) {
-			locationIsExact = true;
-			printf(" flags %d referencing %p", raised->exceptionFlags, raised->memoryAddress);
-		}
-
-		printf("\n");
-		vector<byte> stackSnapshot;
-
-//			printf("exceptionInfo = [ %p, %p, %p, %p, %p, %p ]\n", exceptionInfo[0], exceptionInfo[1], exceptionInfo[2], exceptionInfo[3], exceptionInfo[4], exceptionInfo[5]);
-		stackSnapshot.resize(raised->stackSize);
-		raised->stackCopy = &stackSnapshot[0];
-//			printf("stack snapshot size %d\n", stackSnapshot.length());
-
-		fetchSnapshot(&stackSnapshot[0], stackSnapshot.size());
-//			printf("    failure address %p\n", raised->exceptionAddress);
-//			printf("    sp: %p fp: %p stack size: %d\n", raised->stackPointer, raised->framePointer, raised->stackSize);
-		byte *stackLow = (byte*)raised->stackPointer;
-		byte *stackHigh = (byte*)raised->stackPointer + raised->stackSize;
-		byte *fp = (byte*)raised->framePointer;
-		void *ip = raised->exceptionAddress;
-		string tag = "->";
-		while (fp >= stackLow && fp < stackHigh) {
-//				printf("fp = %p ip = %p relative = %x", fp, ip, int(ip) - int(_staticMemory));
-			void **stack = (void**)fp;
-			long long nextFp = raised->slot(fp);
-			int relative = int((long long)ip - (long long)image);
-//				printf("relative = (%p) %x\n", ip, relative);
-			string locationLabel;
-//			if (relative >= (int)_imageLength || relative < 0)
-				locationLabel.printf("@%x", relative);
-//			else
-//				locationLabel = formattedLocation(relative, locationIsExact);
-			printf(" %2s %s\n", tag.c_str(), locationLabel.c_str());
-//				if (nextFp != 0 && nextFp < long(fp)) {
-//					printf("    *** Stored frame pointer out of sequence: %p\n", nextFp);
-//					break;
-//				}
-			fp = (byte*)nextFp;
-			ip = (void*)raised->slot(stack + 1);
-			tag = "";
-			locationIsExact = false;
-		}
-		printf("\n");
+	if (exception != null) {
+		printf("\nUncaught Exception.\n");
 		return false;
 	} else
 		return true;

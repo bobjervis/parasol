@@ -33,11 +33,10 @@ typedef long long WORD;
 #define STACK_SLOT (sizeof (WORD))
 #define FRAME_SIZE (sizeof(WORD) + 2 * sizeof(void*))
 
-static const int STACK_SIZE = STACK_SLOT * 256 * 1024;
+static const int STACK_SIZE = STACK_SLOT * 128 * 1024;
 
 class Code;
 class Exception;
-class ExceptionContext;
 class Type;
 
 struct HardwareException {
@@ -102,8 +101,6 @@ public:
 	void reloadFrame(const StackState &saved);
 
 	void snapshot(byte *highestSp);
-
-	void transferSnapshot(ExecutionContext *source);
 
 	void fetchSnapshot(byte *output, int length);
 
@@ -245,41 +242,7 @@ class ExceptionInfo {
 class Exception {
 public:
 	void *vtable;
-	ExceptionContext *context;
 };
-
-class ExceptionContext {
-public:
-	void *exceptionAddress;		// The machine instruction causing the exception
-	void *stackPointer;			// The thread stack point at the moment of the exception
-	void *framePointer;			// The frame pointer at the moment of the exception
-
-	// This is a copy of the hardware stack at the time of the exception.  It may extend beyond the actual
-	// hardware stack at the moment of the exception because, for example, the call to create the copy used
-	// the address of a local variable to get a stack offset.
-
-	// To compute the address in the copy from a forensic machine address, use the following:
-	//
-	//	COPY_ADDRESS = STACK_ADDRESS - stackBase + stackCopy;
-
-	void *stackBase;			// The machine address of the hardware stack this copy was taken from
-	byte *stackCopy;			// The first byte of the copy
-	void *memoryAddress;		// Valid only for memory exceptions: memory location referenced
-	int exceptionType;			// Exception type
-	int exceptionFlags;			// Flags (dependent on type).
-	int stackSize;				// The length of the copy
-
-	long long slot(void *stackAddress) {
-		long long addr = (long long)stackAddress;
-		long long base = (long long)stackBase;
-		long long copy = (long long)stackCopy;
-		long long target = addr - base + copy;
-		long long *copyAddress = (long long*)target;
-		return *copyAddress;
-	}
-};
-
-WORD stackSlot(ExceptionContext *context, void *stackAddress);
 
 class ByteCodeMap {
 public:

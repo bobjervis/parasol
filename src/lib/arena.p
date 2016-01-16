@@ -323,8 +323,8 @@ public class Arena {
 		return s;
 	}
 
-	public ref<Scope> createUnitScope(ref<Scope> rootScope, ref<Node> definition, ref<FileStat> file) {
-		ref<Scope>  s = new UnitScope(rootScope, file, definition);
+	public ref<UnitScope> createUnitScope(ref<Scope> rootScope, ref<Node> definition, ref<FileStat> file) {
+		ref<UnitScope>  s = new UnitScope(rootScope, file, definition);
 		_scopes.append(s);
 		return s;
 	}
@@ -406,11 +406,14 @@ public class Arena {
 	}
 
 	void printSymbolTable() {
+		_specialFiles.printSymbolTable();
 		printf("\nMain scope:\n");
 		if (_main != null)
 			_main.print(INDENT, true);
 		printf("\nRoot scope:\n");
 		_root.print(INDENT, true);
+		for (int i = 0; i < _importPath.length(); i++)
+			_importPath[i].printSymbolTable();
 		for (ref<Scope>[string].iterator i = _domains.begin(); i.hasNext(); i.next()) {
 			printf("\nDomain %s:\n", i.key());
 			i.get().print(INDENT, true);

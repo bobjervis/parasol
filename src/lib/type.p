@@ -175,8 +175,11 @@ class BuiltInType extends Type {
 boolean[TypeFamily][TypeFamily] widens;
 
 widens.resize(TypeFamily.BUILTIN_TYPES);
-for (int i = 0; i < int(TypeFamily.BUILTIN_TYPES); i++)
-	widens[TypeFamily(i)].resize(TypeFamily.BUILTIN_TYPES);
+fill();
+void fill() {
+	for (int i = 0; i < int(TypeFamily.BUILTIN_TYPES); i++)
+		widens[TypeFamily(i)].resize(TypeFamily.BUILTIN_TYPES);
+}
 widens[TypeFamily.SIGNED_8][TypeFamily.SIGNED_8] = true;
 widens[TypeFamily.SIGNED_8][TypeFamily.SIGNED_16] = true;
 widens[TypeFamily.SIGNED_8][TypeFamily.SIGNED_32] = true;
