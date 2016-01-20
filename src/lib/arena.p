@@ -48,6 +48,7 @@ public class Arena {
 	private ref<SyntaxTree> _postCodeGeneration;
 	
 	int builtScopes;
+	boolean _deleteSourceCache;
 	boolean trace;
 	boolean verbose;
 	boolean logImports;
@@ -55,10 +56,11 @@ public class Arena {
 
 	public Arena() {
 		_sourceCache = new SourceCache();
+		_deleteSourceCache = true;
 		setImportPath("^/src/lib,^/alys/lib");
+		_global = new MemoryPool;
 		_builtInType.resize(TypeFamily.BUILTIN_TYPES);
 		_builtInType[TypeFamily.ERROR] = _global.newBuiltInType(TypeFamily.ERROR, null);
-		_global = new MemoryPool;
 		_rootFolder = storage.directory(storage.directory(process.binaryFilename()));
 		_specialFiles = new ImportDirectory("");
 	}
@@ -66,9 +68,9 @@ public class Arena {
 	public Arena(ref<SourceCache> sourceCache) {
 		_sourceCache = sourceCache;
 		setImportPath("^/src/lib,^/alys/lib");
+		_global = new MemoryPool;
 		_builtInType.resize(TypeFamily.BUILTIN_TYPES);
 		_builtInType[TypeFamily.ERROR] = _global.newBuiltInType(TypeFamily.ERROR, null);
-		_global = new MemoryPool;
 		_rootFolder = storage.directory(storage.directory(process.binaryFilename()));
 		_specialFiles = new ImportDirectory("");
 	}
@@ -76,7 +78,9 @@ public class Arena {
 	~Arena() {
 		delete _specialFiles;
 		_importPath.clear();
-//		printf("Arena destructor\n");
+		delete _global;
+		if (_deleteSourceCache)
+			delete _sourceCache;
 	}
 	/*
 	 * setRootFolder

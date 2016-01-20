@@ -918,8 +918,13 @@ class MemoryPool {
 	public MemoryPool() {
 	}
 
+	~MemoryPool() {
+		for (int i = 0; i < _blocks.length(); i++)
+			free(_blocks[i]);
+	}
+	
 	public ref<CompileString> newCompileString(string s) {
-		pointer<byte> data = pointer<byte>(allocz(s.length()));
+		pointer<byte> data = pointer<byte>(alloc(s.length()));
 		memcpy(data, &s[0], s.length());
 		return new CompileString(data, s.length());
 	}

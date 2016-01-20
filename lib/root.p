@@ -143,6 +143,8 @@ class vector<class E, class I> {
 	}
 	
 	~vector() {
+		if (_data != null)
+			free(_data);
 	}
 	
 	public void append(vector<E, I> other) {

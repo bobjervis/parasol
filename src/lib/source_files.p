@@ -39,6 +39,10 @@ class ImportDirectory {
 		_directoryName = dirName;
 	}
 
+	~ImportDirectory() {
+		_files.deleteAll();
+	}
+	
 	public void prepareForNewCompile() {
 		for (int i = 0; i < _files.length(); i++) {
 			ref<FileStat> fs = _files[i];
@@ -220,6 +224,11 @@ class FileStat {
 	public FileStat() {
 	}
 
+	~FileStat() {
+		delete _tree;
+		delete _scanner;
+	}
+	
 	public void prepareForNewCompile() {
 		_scanner = null;
 		_parsed = false;

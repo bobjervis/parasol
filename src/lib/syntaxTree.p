@@ -211,6 +211,10 @@ class SyntaxTree {
 		_pool = new MemoryPool();
 	}
 
+	~SyntaxTree() {
+		delete _pool;
+	}
+	
 	public ref<SyntaxTree> clone() {
 		ref<SyntaxTree> copy = new SyntaxTree();
 		copy._root = _root.clone(this);
