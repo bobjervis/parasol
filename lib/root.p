@@ -217,9 +217,9 @@ class vector<class E, class I> {
 	}
 	
 	public void deleteAll() {
-//		for (int i = 0; i < _length; i++)
-//			delete _data[i];
-//		clear();
+		for (int i = 0; i < _length; i++)
+			delete _data[i];
+		clear();
 	}
 
 	public I find(E key) {

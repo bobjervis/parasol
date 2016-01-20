@@ -83,7 +83,7 @@ class string {
 	
 	~string() {
 		if (_contents != null) {
-			free(_contents);
+//			free(_contents);
 		}
 	}
 	

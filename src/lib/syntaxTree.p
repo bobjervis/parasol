@@ -268,6 +268,11 @@ class SyntaxTree {
 		return new Identifier(null/*annotation*/, v, location);
 	}
 
+	public ref<Identifier> newIdentifier(ref<Symbol> symbol, Location location) {
+		//void *block = _pool.alloc(sizeof (Identifier));
+		return new Identifier(symbol, location);
+	}
+
 	public ref<Import> newImport(ref<Identifier> importedSymbol, ref<Ternary> namespaceNode, Location location) {
 		//void *block = _pool.alloc(sizeof (Import));
 		return new Import(importedSymbol, namespaceNode, location);
@@ -508,8 +513,21 @@ class Block extends Node {
 	}
 
 	public ref<Block> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
-		for (ref<NodeList> nl = _statements; nl != null; nl = nl.next)
+		if (_statements == null)
+			return this;
+		for (ref<NodeList> nl = _statements;; nl = nl.next) {
 			nl.node = nl.node.fold(tree, false, compileContext);
+			if (nl.next == null) {
+				for (;;) {
+					ref<Symbol> sym = compileContext.popLiveSymbol(scope);
+					if (sym == null)
+						break;
+//					printf("Destructor for:\n");
+//					sym.print(4, false);
+				}				
+				break;
+			}
+		}
 		return this;
 	}
 

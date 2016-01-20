@@ -1003,6 +1003,10 @@ class Scope {
 		return &_constructors;
 	}
 
+	ref<ParameterScope> destructor() {
+		return _destructor;
+	}
+	
 	ref<ParameterScope> defaultConstructor() {
 		for (int i = 0; i < _constructors.length(); i++)
 			if (_constructors[i].parameterCount() == 0)

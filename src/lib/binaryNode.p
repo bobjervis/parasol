@@ -177,6 +177,7 @@ class Binary extends Node {
 			
 		case	DECLARATION:
 			_left = _left.fold(tree, false, compileContext);
+			markLiveSymbols(_right, compileContext);
 			_right = _right.fold(tree, true, compileContext);
 			return this;
 
@@ -1898,4 +1899,28 @@ private Operator stripAssignment(Operator op) {
 		assert(false);
 	}
 	return Operator.SYNTAX_ERROR;
+}
+
+private void markLiveSymbols(ref<Node> declarator, ref<CompileContext> compileContext) {
+	switch (declarator.op()) {
+	case	IDENTIFIER:
+		ref<Identifier> id = ref<Identifier>(declarator);
+		compileContext.markLiveSymbol(id.symbol());
+		break;
+		
+	case	INITIALIZE:
+		ref<Binary> b = ref<Binary>(declarator);
+		markLiveSymbols(b.left(), compileContext);
+		break;
+		
+	case	SEQUENCE:
+		b = ref<Binary>(declarator);
+		markLiveSymbols(b.left(), compileContext);
+		markLiveSymbols(b.right(), compileContext);
+		break;
+		
+	default:
+		declarator.print(0);
+		assert(false);
+	}
 }

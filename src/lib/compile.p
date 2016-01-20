@@ -32,6 +32,9 @@ class CompileContext {
 	private ref<SyntaxTree> _tree;
 	private ref<Variable>[] _variables;
 	private ref<Symbol>[] _staticSymbols;		// Populated when assigning storage
+	private ref<Symbol>[] _liveSymbols;			// Populated during fold actions with the set of live symbols that
+												// need destructor calls.
+	private int _baseLiveSymbol;				// >= 0, index of first symbol live in this function.
 	
 	public class FlowContext {
 		private ref<FlowContext> _next;
@@ -755,6 +758,42 @@ class CompileContext {
 		}
 	}
 
+	public ref<Node> fold(ref<Node> node, ref<FileStat> file) {
+		int outerBaseLive = _baseLiveSymbol;
+		_baseLiveSymbol = _liveSymbols.length();
+		ref<Node> n = node.fold(file.tree(), false, this);
+		_liveSymbols.resize(_baseLiveSymbol);
+		_baseLiveSymbol = outerBaseLive;
+		return n;
+	}
+	
+	public void markLiveSymbol(ref<Symbol> sym) {
+		if (sym == null)
+			return;
+		if (sym.storageClass() != StorageClass.AUTO)
+			return;
+		if (sym.type().hasDestructor())
+			_liveSymbols.push(sym);
+	}
+	
+	public int liveSymbolCount() {
+		return _liveSymbols.length() - _baseLiveSymbol;
+	}
+	
+	public ref<Symbol> getLiveSymbol(int index) {
+		return _liveSymbols[index + _baseLiveSymbol];
+	}
+	
+	public ref<Symbol> popLiveSymbol(ref<Scope> scope) {
+		if (_liveSymbols.length() <= _baseLiveSymbol)
+			return null;
+		ref<Symbol> result = _liveSymbols.peek();
+		if (result.enclosing() == scope)
+			return _liveSymbols.pop();
+		else
+			return null;
+	}
+	
 	public ref<Type> convertToAnyBuiltIn(ref<Type> t) {
 		for (int i = 0; i < int(TypeFamily.BUILTIN_TYPES); i++) {
 			ref<Type> b = _arena.builtInType(TypeFamily(i));

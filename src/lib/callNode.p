@@ -1402,10 +1402,27 @@ class Return extends ParameterBag {
 		return true;
 	}
 
-	public ref<Return> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
 			nl.node = nl.node.fold(tree, false, compileContext);
-		return this;
+		int n = compileContext.liveSymbolCount();
+		ref<Node> output = this;
+		for (int i = 0; i < n; i++) {
+			ref<Symbol> sym = compileContext.getLiveSymbol(i);
+			// We know that 'live' symbols have a scope with a destructor
+			ref<ParameterScope> destructor = sym.type().scope().destructor();
+			ref<Identifier> id = tree.newIdentifier(sym, location());
+			id.type = sym.type();
+			ref<Selection> method = tree.newSelection(id, destructor.symbol(), location());
+			method.type = destructor.symbol().type();
+			ref<Call> c = tree.newCall(destructor, null, method, null, location(), compileContext);
+			c.type = compileContext.arena().builtInType(TypeFamily.VOID);
+			ref<Node> folded = c.fold(tree, true, compileContext);
+			output = tree.newBinary(Operator.SEQUENCE, folded, output, location());
+//			printf("Return destructor:\n");
+//			sym.print(4, false);
+		}
+		return output;
 	}
 	
 	public ref<Return> clone(ref<SyntaxTree> tree) {

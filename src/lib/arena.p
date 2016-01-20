@@ -74,6 +74,9 @@ public class Arena {
 	}
 
 	~Arena() {
+		delete _specialFiles;
+		_importPath.clear();
+//		printf("Arena destructor\n");
 	}
 	/*
 	 * setRootFolder

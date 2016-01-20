@@ -1031,6 +1031,12 @@ class Type {
 		return scope().constructors().length() > 0;
 	}
 
+	public boolean hasDestructor() {
+		if (scope() == null)
+			return false;
+		return scope().destructor() != null;
+	}
+	
 	public int ordinal(int maxOrdinal) {
 		if (_ordinal == 0)
 			_ordinal = maxOrdinal + 1;

@@ -75,6 +75,11 @@ class Identifier extends Node {
 		_value = value;
 	}
 
+	Identifier(ref<Symbol> symbol, Location location) {
+		super(Operator.IDENTIFIER, location);
+		_symbol = symbol;
+	}
+	
 	public boolean traverse(Traversal t, TraverseAction func(ref<Node> n, address data), address data) {
 		TraverseAction result;
 		switch (t) {

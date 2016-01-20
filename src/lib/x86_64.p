@@ -340,7 +340,7 @@ public class X86_64 extends X86_64AssignTemps {
 				
 				// All function/method body folding is done here:
 				
-				node = node.fold(file.tree(), false, compileContext);
+				node = ref<Block>(compileContext.fold(node, file));
 				
 				allocateStackForLocalVariables(compileContext);
 				
@@ -619,7 +619,7 @@ public class X86_64 extends X86_64AssignTemps {
 		
 		// Here is where all static initializers are folded:
 		
-		ref<Node> n = file.tree().root().fold(file.tree(), true, compileContext);
+		ref<Node> n = compileContext.fold(file.tree().root(), file);
 		
 		allocateStackForLocalVariables(compileContext);
 		if (file.fileScope() != null)
@@ -2417,7 +2417,7 @@ public class X86_64 extends X86_64AssignTemps {
 							target.byteCode(int(sym.type().size() - address.bytes)); 
 						}
 						*/
-					} else {
+					} else if (sym.type().size() > 0) {
 						if (sym.type().size() <= address.bytes)
 							inst(X86.MOV, node, 0, compileContext);
 						else {
