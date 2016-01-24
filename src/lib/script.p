@@ -48,6 +48,10 @@ public class Null extends Atom {
 public class Object extends Atom {
 	ref<Atom>[string]	_properties;
 
+	public Object() {
+		
+	}
+	
 	public boolean isRunnable() {
 		return true;
 	}
@@ -72,7 +76,10 @@ public class Object extends Atom {
 					s.append(',');
 				s.append(i.key());
 				s.append(':');
-				s.append(a.toSource());
+				if (a == null)
+					s.append("<null>");
+				else
+					s.append(a.toSource());
 			}
 			i.next();
 		}

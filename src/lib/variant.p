@@ -26,7 +26,7 @@ public class var {
 	}
 	
 	public var(var other) {
-		_actualType = other.class;
+		_actualType = *ref<address>(&other);
 		_value = long(other);
 	}
 	
@@ -73,7 +73,7 @@ public class var {
 	}
 	
 	public var add(var other) {
-		if (_actualType == string || other.class == string) {
+		if (this.class == string || other.class == string) {
 			string otherValue = string(other);
 			string value = *ref<string>(&_value);
 			return value + otherValue;
@@ -88,9 +88,9 @@ public class var {
 	}
 
 	public int compare(var other) {
-		if (_actualType != other.class)
+		if (this.class != other.class)
 			return int.MIN_VALUE;
-		if (_actualType == string || other.class == string) {
+		if (this.class == string || other.class == string) {
 			string otherValue = string(other);
 			string value = *ref<string>(&_value);
 			return value.compare(otherValue);

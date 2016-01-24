@@ -1575,6 +1575,7 @@ class X86_64Encoder extends Target {
 
 			case	CLASS:
 			case	ADDRESS:
+			case	CLASS_VARIABLE:
 			case	REF:
 			case	POINTER:
 			case	STRING:
@@ -3546,6 +3547,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	BOOLEAN:
 		case	FUNCTION:
 		case	ADDRESS:
+		case	CLASS_VARIABLE:
 		case	REF:
 		case	POINTER:
 		case	ENUM:
@@ -3568,6 +3570,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	BOOLEAN:
 		case	FUNCTION:
 		case	ADDRESS:
+		case	CLASS_VARIABLE:
 		case	REF:
 		case	POINTER:
 		case	ENUM:

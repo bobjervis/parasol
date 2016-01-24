@@ -40,6 +40,8 @@ run(filename: printf_5_ops.p, expectedOutput: "365")
 run(filename: printf_6_ops.p, expectedOutput: "506\n")
 run(filename: printf_7_ops.p)
 
+run(filename: memory_test.p)
+
 // Regressions
 
 run(filename: virtual_call_w_constructor.p)
@@ -152,6 +154,9 @@ compile() { "class Foo{} ref<Foo[]> x; ref<Foo> y = &(*x)[0];" }
 compile() { "class Bar { void f(int... args) { } } ref<Bar> x; x.f(4);" }
 
 compile(expect: fail) { "ref<int> x = = new int();" }
+compile(expect: fail) { "ref<int> a = int new int;" }
+compile(expect: fail) { "class A { A(int b){} } ref<A> a = new A;" }
+
 compile(expect: fail, message: DUPLICATE) { "class Foo { private int f(int y) { return 0; } public int f(int z) { return z; } }" }
 compile(expect: fail) { "void f() { for (int i = 0; i < 5); i++) printf("hello"); }" }
 

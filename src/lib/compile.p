@@ -15,6 +15,8 @@
  */
 namespace parasol:compiler;
 
+import parasol:memory;
+
 int INDENT = 4;
 
 class CompileContext {
@@ -908,21 +910,11 @@ class CompileContext {
 	}
 }
 
-class MemoryPool {
-	private static int BLOCK_SIZE = (4096) * 4;
-
-	private int _remaining;
-	private pointer<byte> _freeSpace;
-	private pointer<byte>[] _blocks;
+class MemoryPool extends memory.NoReleasePool {
 	
 	public MemoryPool() {
 	}
 
-	~MemoryPool() {
-		for (int i = 0; i < _blocks.length(); i++)
-			free(_blocks[i]);
-	}
-	
 	public ref<CompileString> newCompileString(string s) {
 		pointer<byte> data = pointer<byte>(alloc(s.length()));
 		memcpy(data, &s[0], s.length());
@@ -1008,25 +1000,5 @@ class MemoryPool {
 	public ref<FunctionType> newFunctionType(ref<NodeList> returnType, ref<NodeList> parameters, ref<Scope> functionScope) {
 		//void *block = alloc(sizeof (FunctionType));
 		return new FunctionType(returnType, parameters, functionScope);
-	}
-
-	address alloc(int n) {
-		n = (n + (address.bytes - 1)) & ~(address.bytes - 1);		// round up to align
-		if (n >= BLOCK_SIZE) {
-			pointer<byte> megaBlock = pointer<byte>(allocz(n));
-			_blocks.append(megaBlock);
-			return megaBlock;
-		} else if (n >= _remaining) {
-			pointer<byte> block = pointer<byte>(allocz(BLOCK_SIZE));
-			_blocks.append(block);
-			_freeSpace = block + n;
-			_remaining = BLOCK_SIZE - n;
-			return block;
-		} else {
-			pointer<byte> block = _freeSpace;
-			_freeSpace += n;
-			_remaining -= n;
-			return block;
-		}
 	}
 }

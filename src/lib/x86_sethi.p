@@ -69,6 +69,7 @@ void sethiUllman(ref<Node> node, ref<CompileContext> compileContext, ref<Target>
 		break;
 		
 	case	LOAD:
+	case	STORE_V_TABLE:
 		u = ref<Unary>(node);
 		sethiUllman(u.operand(), compileContext, target);
 		node.sethi = u.operand().sethi;
@@ -313,6 +314,7 @@ private int regneeds(ref<Node> node, ref<CompileContext> compileContext, ref<Tar
 	case	INDIRECT:
 	case	CAST:
 	case	CLASS_OF:
+	case	STORE_V_TABLE:
 		return 1;
 		
 	case	CLASS_COPY:

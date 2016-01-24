@@ -57,24 +57,23 @@ public class Arena {
 	public Arena() {
 		_sourceCache = new SourceCache();
 		_deleteSourceCache = true;
+		init();
+	}
+	
+	public Arena(ref<SourceCache> sourceCache) {
+		_sourceCache = sourceCache;
+		init();
+	}
+
+	private void init() {
 		setImportPath("^/src/lib,^/alys/lib");
-		_global = new MemoryPool;
+		_global = new MemoryPool();
 		_builtInType.resize(TypeFamily.BUILTIN_TYPES);
 		_builtInType[TypeFamily.ERROR] = _global.newBuiltInType(TypeFamily.ERROR, null);
 		_rootFolder = storage.directory(storage.directory(process.binaryFilename()));
 		_specialFiles = new ImportDirectory("");
 	}
 	
-	public Arena(ref<SourceCache> sourceCache) {
-		_sourceCache = sourceCache;
-		setImportPath("^/src/lib,^/alys/lib");
-		_global = new MemoryPool;
-		_builtInType.resize(TypeFamily.BUILTIN_TYPES);
-		_builtInType[TypeFamily.ERROR] = _global.newBuiltInType(TypeFamily.ERROR, null);
-		_rootFolder = storage.directory(storage.directory(process.binaryFilename()));
-		_specialFiles = new ImportDirectory("");
-	}
-
 	~Arena() {
 		delete _specialFiles;
 		_importPath.clear();

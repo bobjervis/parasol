@@ -132,7 +132,10 @@ class BuiltInType extends Type {
 		// A built in type is unique, so one is always equal to itself...
 		if (this == other)
 			return true;
-		// or as a special case, ERROR type has no underlying class, so it canonly
+		// CLASS_VARIABLE has one special case: these match TYPEDEF
+		if (family() == TypeFamily.CLASS_VARIABLE && other.family() == TypeFamily.TYPEDEF)
+			return true;
+		// or as a special case, ERROR type has no underlying class, so it can only
 		// equal itself.
 		if (_classType == null)
 			return false;
@@ -347,6 +350,14 @@ class ClassType extends Type {
 		return _extends;
 	}
 
+	public void assignMethodMaps(ref<CompileContext> compileContext) {
+		ref<ClassScope> s = ref<ClassScope>(_scope);
+		ref<ref<OverloadInstance>[]> methods = s.methods();
+		for (int i = 0; i < methods.length(); i++)
+			(*methods)[i].assignType(compileContext);
+		s.assignMethodMaps(compileContext);
+	}
+	
 	public ref<Type> getSuper() {
 		return _extends;
 	}
@@ -911,7 +922,11 @@ class TypedefType extends Type {
 	}
 
 	public boolean extendsFormally(ref<Type> other, ref<CompileContext> compileContext) {
-		return true;
+		if (other.family() == TypeFamily.TYPEDEF ||
+			other.family() == TypeFamily.CLASS_VARIABLE)
+			return true;
+		else
+			return false;
 	}
 }
 
@@ -1083,6 +1098,9 @@ class Type {
 		return null;
 	}
 
+	public void assignMethodMaps(ref<CompileContext> compileContext) {
+	}
+	
 	public ref<Type> getSuper() {
 		return null;
 	}

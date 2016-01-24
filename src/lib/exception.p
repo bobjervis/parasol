@@ -284,6 +284,28 @@ public class AssertionFailedException extends RuntimeException {
 		return n;
 	}	
 }
+
+public class AccessException extends RuntimeException {
+	AccessException(ref<ExceptionContext> exceptionContext) {
+		super(exceptionContext);
+	}
+	
+	ref<AccessException> clone() {
+		ref<AccessException> a = new AccessException(_exceptionContext);
+		return a;
+	}
+}
+
+public class NullPointerException extends AccessException {
+	NullPointerException(ref<ExceptionContext> exceptionContext) {
+		super(exceptionContext);
+	}
+	
+	ref<NullPointerException> clone() {
+		ref<NullPointerException> n = new NullPointerException(_exceptionContext);
+		return n;
+	}
+}
 /**
  * Throw an exception. It performs the exact same semantics as the throw statement.
  * The throw statement will generate this call (and provide the magic frame and stack pointer).
@@ -322,7 +344,12 @@ void hardwareExceptionHandler(ref<HardwareException> info) {
 	context.memoryAddress = address(info.exceptionInfo0);
 	context.exceptionFlags = info.exceptionInfo1;
 	context.exceptionType = info.exceptionType;
-	if (info.exceptionType == int(0xc0000094))
+	if (info.exceptionType == 0xffffffffc0000005) {
+		if (context.memoryAddress == null)
+			throw NullPointerException(context);
+		else
+			throw AccessException(context);
+	} else if (info.exceptionType == int(0xc0000094))
 		throw DivideByZeroException(context);
 	else {
 		printf("exception %x at %p\n", info.exceptionType, info.codePointer);
@@ -378,7 +405,7 @@ class ExceptionContext {
 	
 	public address stackBase;			// The machine address of the hardware stack this copy was taken from
 	public pointer<byte> stackCopy;		// The first byte of the copy
-	public address memoryAddress;		// Valid only for memory exceptions: memory location referenced
+	public address memoryAddress;		// Valid only for access exceptions: memory location referenced
 	public int exceptionType;			// Exception type
 	public int exceptionFlags;			// Flags (dependent on type).
 	public int stackSize;				// The length of the copy

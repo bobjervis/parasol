@@ -1684,6 +1684,12 @@ public class X86_64 extends X86_64AssignTemps {
 			instCall(_free.parameterScope(), compileContext);
 			break;
 			
+		case	STORE_V_TABLE:
+			expression = ref<Unary>(node);
+			generate(expression.operand(), compileContext);
+			storeVtable(expression.type, compileContext);
+			break;
+			
 		case	CALL:
 			generateCall(ref<Call>(node), compileContext);
 			break;
@@ -1965,12 +1971,18 @@ public class X86_64 extends X86_64AssignTemps {
 				generate(expression.operand(), compileContext);
 				if (expression.operand().op() == Operator.EMPTY)
 					instLoadType(R(int(expression.register)), expression.operand().type);
-				else if (expression.operand().type.indirectType(compileContext).hasVtable(compileContext)) {
-					inst(X86.MOV, TypeFamily.ADDRESS, expression, expression.operand(), compileContext);
-					inst(X86.MOV, R(expression.register), R(expression.register), 0);
-					inst(X86.MOV, R(expression.register), R(expression.register), 0);
-				} else
-					instLoadType(R(expression.register), expression.operand().type.indirectType(compileContext));
+				else {
+					ref<Type> objType = expression.operand().type.indirectType(compileContext);
+					if (objType.family() == TypeFamily.VAR) {
+						inst(X86.MOV, TypeFamily.ADDRESS, expression, expression.operand(), compileContext);
+						inst(X86.MOV, R(expression.register), R(expression.register), 0);
+					} else if (objType.hasVtable(compileContext)) {
+						inst(X86.MOV, TypeFamily.ADDRESS, expression, expression.operand(), compileContext);
+						inst(X86.MOV, R(expression.register), R(expression.register), 0);
+						inst(X86.MOV, R(expression.register), R(expression.register), 0);
+					} else
+						instLoadType(R(expression.register), expression.operand().type.indirectType(compileContext));
+				}
 				break;
 
 			default:
@@ -2327,6 +2339,7 @@ public class X86_64 extends X86_64AssignTemps {
 		case	ENUM:
 		case	TYPEDEF:
 		case	ADDRESS:
+		case	CLASS_VARIABLE:
 		case	REF:
 		case	POINTER:
 		case	BOOLEAN:

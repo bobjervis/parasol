@@ -89,6 +89,7 @@ familyMasks[TypeFamily.UNSIGNED_16] = longMask;
 familyMasks[TypeFamily.UNSIGNED_32] = longMask;
 familyMasks[TypeFamily.UNSIGNED_64] = longMask;
 familyMasks[TypeFamily.ADDRESS] = longMask;
+familyMasks[TypeFamily.CLASS_VARIABLE] = longMask;
 familyMasks[TypeFamily.REF] = longMask;
 familyMasks[TypeFamily.POINTER] = longMask;
 familyMasks[TypeFamily.TYPEDEF] = longMask;

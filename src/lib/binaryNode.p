@@ -343,16 +343,30 @@ class Binary extends Node {
 			break;
 			
 		case	NEW:
-			assert(_left.op() == Operator.EMPTY);			// Don't allow memory allocators yet.
+			ref<Node> allocation;
+			if (_left.op() == Operator.EMPTY)
+				allocation = this;
+			else {
+				ref<Node> basis = tree.newLeaf(Operator.EMPTY, location());
+				basis.type = type.indirectType(compileContext);
+				ref<Node> arg = tree.newUnary(Operator.BYTES, basis, location());
+				arg.type = compileContext.arena().builtInType(TypeFamily.SIGNED_64);
+				ref<Node> call = createMethodCall(_left.fold(tree, false, compileContext), "alloc", tree, compileContext, arg);
+				call.type = type;
+				allocation = call.fold(tree, voidContext, compileContext);
+			}
 			if (_right.op() == Operator.CALL) {
 				ref<Type> entityType = type.indirectType(compileContext);
 				ref<Call> constructor = ref<Call>(_right);
-				_right = tree.newLeaf(Operator.EMPTY, location());
+				if (allocation == this) {
+					_right = tree.newLeaf(Operator.EMPTY, location());
+					_right.type = compileContext.arena().builtInType(TypeFamily.VOID);
+				}
 				if (constructor.overload() == null)
-					return this;
+					return defaultNewInitialization(allocation, tree, voidContext, compileContext);
 				ref<Variable> temp = compileContext.newVariable(type);
 				ref<Reference> r = tree.newReference(temp, true, location());
-				ref<Node> defn = tree.newBinary(Operator.ASSIGN, r, this, location());
+				ref<Node> defn = tree.newBinary(Operator.ASSIGN, r, allocation, location());
 				defn.type = type;
 				r = tree.newReference(temp, false, location());
 				constructor.setConstructorMemory(r, tree);
@@ -366,10 +380,23 @@ class Binary extends Node {
 				ref<Node> result = seq.fold(tree, false, compileContext);
 				return result;
 			} else {
-				_right = tree.newLeaf(Operator.EMPTY, location());
-				_right.type = compileContext.arena().builtInType(TypeFamily.VOID);
+				if (allocation == this) {
+					_right = tree.newLeaf(Operator.EMPTY, location());
+					_right.type = compileContext.arena().builtInType(TypeFamily.VOID);
+				}
+				return defaultNewInitialization(allocation, tree, voidContext, compileContext);
 			}
 			break;
+			
+		case	DELETE:
+			if (_left.op() != Operator.EMPTY) {
+				ref<Node> allocation;
+				ref<Node> call = createMethodCall(_left.fold(tree, false, compileContext), "free", tree, compileContext, _right);
+				call.type = type;
+				return call.fold(tree, voidContext, compileContext);
+			}
+			break;
+			
 			
 		case	MULTIPLY:
 			if (type.family() == TypeFamily.VAR) {
@@ -621,6 +648,28 @@ class Binary extends Node {
 		_left = _left.fold(tree, false, compileContext);
 		_right = _right.fold(tree, false, compileContext);
 		return this;
+	}
+	
+	private ref<Node> defaultNewInitialization(ref<Node> allocation, ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+		ref<Type> objType = type.indirectType(compileContext);
+		if (objType.hasVtable(compileContext)) {
+			ref<Variable> temp = compileContext.newVariable(type);
+			ref<Reference> r = tree.newReference(temp, true, location());
+			ref<Node> defn = tree.newBinary(Operator.ASSIGN, r, allocation, location());
+			defn.type = type;
+			r = tree.newReference(temp, false, location());
+			ref<Node> constructor = tree.newUnary(Operator.STORE_V_TABLE, r, location());
+			constructor.type = objType;
+			ref<Node> seq = tree.newBinary(Operator.SEQUENCE, defn, constructor, location());
+			seq.type = compileContext.arena().builtInType(TypeFamily.VOID);
+			if (voidContext)
+				return seq;
+			r = tree.newReference(temp, false, location());
+			seq = tree.newBinary(Operator.SEQUENCE, seq, r, location());
+			seq.type = type;
+			return seq;
+		} else
+			return allocation;
 	}
 	
 	private ref<Node> foldClassCopy(ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
@@ -968,8 +1017,22 @@ class Binary extends Node {
 			
 		case	NEW:
 			if (_left.op() != Operator.EMPTY) {
-				// Will generate a 'missing type' error
-				break;
+				compileContext.assignTypes(_left);
+				if (_left.deferAnalysis()) {
+					type = _left.type;
+					break;
+				}
+				ref<Symbol> re = compileContext.arena().getSymbol("parasol", "memory.Allocator", compileContext);
+				if (re.type().family() != TypeFamily.TYPEDEF) {
+					print(4);
+					assert(false);
+				}
+				ref<TypedefType> t = ref<TypedefType>(re.type());
+				if (!_left.type.extendsFormally(t.wrappedType(), compileContext)) {
+					_left.add(MessageId.NOT_AN_ALLOCATOR, compileContext.pool());
+					type = compileContext.errorType();
+					break;
+				}
 			}
 			if (_right.op() == Operator.CALL) {
 				// It needs to be a proper constructor of the type.  So,
@@ -986,15 +1049,13 @@ class Binary extends Node {
 				type = _right.unwrapTypedef(compileContext);
 				if (deferAnalysis())
 					break;
+				// So it's a valid type, what if it has non-default constructors only?
+				if (type.hasConstructors() && type.defaultConstructor() == null) {
+					add(MessageId.NO_DEFAULT_CONSTRUCTOR, compileContext.pool());
+					break;
+				}
 			}
-			// TODO: Make this a method on Type with this as an override in ClassType
-			if (type.family() == TypeFamily.CLASS) {
-				ref<ClassScope> s = ref<ClassScope>(type.scope());
-				ref<ref<OverloadInstance>[]> methods = s.methods();
-				for (int i = 0; i < methods.length(); i++)
-					(*methods)[i].assignType(compileContext);
-				s.assignMethodMaps(compileContext);
-			}
+			type.assignMethodMaps(compileContext);
 			if (!type.isConcrete(compileContext))
 				_right.add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool());
 			type = compileContext.arena().createRef(type, compileContext);
@@ -1002,8 +1063,22 @@ class Binary extends Node {
 
 		case	DELETE:
 			if (_left.op() != Operator.EMPTY) {
-				// Will generate a 'missing type' error
-				break;
+				compileContext.assignTypes(_left);
+				if (_left.deferAnalysis()) {
+					type = _left.type;
+					break;
+				}
+				ref<Symbol> re = compileContext.arena().getSymbol("parasol", "memory.Allocator", compileContext);
+				if (re.type().family() != TypeFamily.TYPEDEF) {
+					print(4);
+					assert(false);
+				}
+				ref<TypedefType> t = ref<TypedefType>(re.type());
+				if (!_left.type.extendsFormally(t.wrappedType(), compileContext)) {
+					_left.add(MessageId.NOT_AN_ALLOCATOR, compileContext.pool());
+					type = compileContext.errorType();
+					break;
+				}
 			}
 			compileContext.assignTypes(_right);
 			if (_right.deferAnalysis()) {
@@ -1280,6 +1355,8 @@ class Binary extends Node {
 			case	FUNCTION:
 			case	ENUM:
 			case	VAR:
+			case	CLASS_VARIABLE:
+			case	TYPEDEF:
 				type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
 				break;
 

@@ -13,6 +13,24 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+class Base {
+	int f() {
+		return 5;
+	}
+}
+
+class NoCons extends Base {
+	int f() {
+		return -1;
+	}
+}
+
+ref<NoCons> nc;
+
+nc = new NoCons();
+
+assert(nc.f() == -1);
+
 class CTest {
 	CTest() {
 		
@@ -38,3 +56,16 @@ void f(CTest x) {
 }
 
 f(CTest());
+
+ref<CTest> xt;
+
+xt = new CTest();
+
+assert(xt.foo() == "");
+
+ref<CTest> yt;
+
+yt = new CTest;
+
+assert(yt.foo() == "");
+

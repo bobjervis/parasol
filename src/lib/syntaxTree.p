@@ -118,6 +118,7 @@ enum Operator {
 	ELLIPSIS_ARGUMENT,
 	STACK_ARGUMENT,
 	LOAD,
+	STORE_V_TABLE,
 	// EllipsisArguments
 	ELLIPSIS_ARGUMENTS,
 	// StackArgumentAddress
@@ -2536,6 +2537,7 @@ class Node {
 			case	ENUM:
 			case	TYPEDEF:
 			case	SHAPE:
+			case	CLASS_VARIABLE:
 				break;
 
 			default:
