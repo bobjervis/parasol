@@ -324,7 +324,7 @@ class Unary extends Node {
 						break;
 					}
 					ref<OverloadInstance> oi = (*ref<Overload>(sym).instances())[0];
-					ref<Selection> method = tree.newSelection(b.left(), oi, location());
+					ref<Selection> method = tree.newSelection(b.left(), oi, false, location());
 					method.type = oi.type();
 					ref<NodeList> args = tree.newNodeList(b.right());
 					ref<Call> call = tree.newCall(oi.parameterScope(), null,  method, args, location(), compileContext);

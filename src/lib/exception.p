@@ -285,6 +285,17 @@ public class AssertionFailedException extends RuntimeException {
 	}	
 }
 
+public class CorruptHeapException extends RuntimeException {
+	CorruptHeapException(ref<ExceptionContext> exceptionContext) {
+		super(exceptionContext);
+	}
+	
+	ref<CorruptHeapException> clone() {
+		ref<CorruptHeapException> a = new CorruptHeapException(_exceptionContext);
+		return a;
+	}
+}
+
 public class AccessException extends RuntimeException {
 	AccessException(ref<ExceptionContext> exceptionContext) {
 		super(exceptionContext);
@@ -344,7 +355,9 @@ void hardwareExceptionHandler(ref<HardwareException> info) {
 	context.memoryAddress = address(info.exceptionInfo0);
 	context.exceptionFlags = info.exceptionInfo1;
 	context.exceptionType = info.exceptionType;
-	if (info.exceptionType == 0xffffffffc0000005) {
+	if (info.exceptionType == 0xffffffffc0000374) {
+		throw CorruptHeapException(context);
+	} else if (info.exceptionType == 0xffffffffc0000005) {
 		if (context.memoryAddress == null)
 			throw NullPointerException(context);
 		else

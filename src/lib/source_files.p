@@ -20,6 +20,11 @@ import parasol:file.Directory;
 public class SourceCache {
 	private ref<ImportDirectory>[string] _map;
 	
+	~SourceCache() {
+		for (ref<ImportDirectory>[string].iterator i = _map.begin(); i.hasNext(); i.next())
+			delete i.get();
+	}
+	
 	ref<ImportDirectory> getDirectory(string dirName) {
 		ref<ImportDirectory> dir = _map.get(dirName);
 		if (dir == null) {
@@ -230,6 +235,9 @@ class FileStat {
 	}
 	
 	public void prepareForNewCompile() {
+		delete _scanner;
+		delete _tree;
+		_tree = null;
 		_scanner = null;
 		_parsed = false;
 		_scopesBuilt = false;

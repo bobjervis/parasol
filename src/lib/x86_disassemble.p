@@ -1424,7 +1424,6 @@ class Disassembler {
 			// It's somewhere in static data.
 			int index = findSymbol(location);
 			if (index >= 0) {
-				printf(" %s", _dataMap[index].name().asString());
 				if (_dataMap[index].offset < location)
 					printf("+%d", location - _dataMap[index].offset);
 			}

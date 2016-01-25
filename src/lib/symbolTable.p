@@ -743,7 +743,9 @@ class Scope {
 	}
 
 	ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, string name, ref<Type> type, ref<Node> initializer, ref<MemoryPool> memoryPool) {
-		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations, memoryPool.newCompileString(name), null, type, initializer);
+		CompileString cs = memoryPool.newCompileString(name);
+		ref<CompileString> pcs = memoryPool new CompileString(cs.data, cs.length);
+		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations, pcs, null, type, initializer);
 		if (_symbols.contains(name))
 			return null;
 		_symbols[name] = sym;

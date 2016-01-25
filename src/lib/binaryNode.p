@@ -351,7 +351,13 @@ class Binary extends Node {
 				basis.type = type.indirectType(compileContext);
 				ref<Node> arg = tree.newUnary(Operator.BYTES, basis, location());
 				arg.type = compileContext.arena().builtInType(TypeFamily.SIGNED_64);
-				ref<Node> call = createMethodCall(_left.fold(tree, false, compileContext), "alloc", tree, compileContext, arg);
+				ref<Node> allocator = _left;
+				ref<Type> allocatorType = _left.type.indirectType(compileContext);
+				if (allocatorType != null) {
+					allocator = tree.newUnary(Operator.INDIRECT, _left, location());
+					allocator.type = allocatorType;
+				}
+				ref<Node> call = createMethodCall(allocator.fold(tree, false, compileContext), "alloc", tree, compileContext, arg);
 				call.type = type;
 				allocation = call.fold(tree, voidContext, compileContext);
 			}
@@ -389,11 +395,62 @@ class Binary extends Node {
 			break;
 			
 		case	DELETE:
-			if (_left.op() != Operator.EMPTY) {
-				ref<Node> allocation;
-				ref<Node> call = createMethodCall(_left.fold(tree, false, compileContext), "free", tree, compileContext, _right);
+			ref<Type> objType = _right.type.indirectType(compileContext);
+			ref<Node> destructors = null;
+			if (objType.hasDestructor()) {
+				ref<Node> defn;
+				ref<Node> value;
+				if (_right.isSimpleLvalue())
+					value = _right.clone(tree);
+				else {
+					ref<Variable> temp = compileContext.newVariable(_right.type);
+					ref<Reference> r = tree.newReference(temp, true, location());
+					defn = tree.newBinary(Operator.ASSIGN, r, _right, location());
+					defn.type = _right.type;
+					value = tree.newReference(temp, false, location());
+					_right = tree.newReference(temp, false, location());
+				}
+				ref<ParameterScope> des = objType.scope().destructor();
+				ref<Selection> method = tree.newSelection(value, des.symbol(), true, location());
+				method.type = des.symbol().type();
+				ref<Call> call = tree.newCall(des, null, method, null, location(), compileContext);
+				call.type = type;			// We know this is VOID
+				value = value.clone(tree);
+				ref<Node> con = tree.newConstant(0, location());
+				con.type = value.type;
+				ref<Node> compare = tree.newBinary(Operator.NOT_EQUAL, value, con, location());
+				compare.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+				ref<Node> nullPath = tree.newLeaf(Operator.EMPTY, location());
+				nullPath.type = call.type;
+				ref<Node> choice = tree.newTernary(Operator.CONDITIONAL, compare, call, nullPath, location());
+				choice.type = call.type;
+				if (defn != null) {
+					destructors = tree.newBinary(Operator.SEQUENCE, defn, choice, location());
+					destructors.type = choice.type;
+				} else
+					destructors = choice;
+				destructors = destructors.fold(tree, true, compileContext);
+			}
+			ref<Node> completion;
+			if (_left.op() == Operator.EMPTY)
+				completion = this;
+			else {
+				ref<Node> allocator = _left;
+				ref<Type> allocatorType = _left.type.indirectType(compileContext);
+				if (allocatorType != null) {
+					allocator = tree.newUnary(Operator.INDIRECT, _left, location());
+					allocator.type = allocatorType;
+				}
+				ref<Node> call = createMethodCall(allocator.fold(tree, false, compileContext), "free", tree, compileContext, _right);
 				call.type = type;
-				return call.fold(tree, voidContext, compileContext);
+				completion = call.fold(tree, true, compileContext);
+			}
+			if (destructors == null)
+				return completion;
+			else {
+				ref<Node> combined = tree.newBinary(Operator.SEQUENCE, destructors, completion, location());
+				combined.type = destructors.type;
+				return combined;
 			}
 			break;
 			
@@ -469,7 +526,7 @@ class Binary extends Node {
 				}
 				ref<Overload> o = ref<Overload>(sym);
 				ref<OverloadInstance> oi = (*o.instances())[0];
-				ref<Selection> method = tree.newSelection(_left, oi, location());
+				ref<Selection> method = tree.newSelection(_left, oi, false, location());
 				method.type = oi.type();
 				ref<NodeList> args = tree.newNodeList(_right);
 				ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
@@ -587,7 +644,7 @@ class Binary extends Node {
 				if (oi != null) {
 					// This is the assignment method for this class!!!
 					// (all strings go through here).
-					ref<Selection> method = tree.newSelection(_left, oi, _left.location());
+					ref<Selection> method = tree.newSelection(_left, oi, false, _left.location());
 					method.type = oi.type();
 					ref<NodeList> args = tree.newNodeList(_right);
 					ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
@@ -607,7 +664,7 @@ class Binary extends Node {
 					ref<Node> load;
 					ref<Node> store;
 					(load, store) = getLoadStore(tree, compileContext);
-					ref<Selection> method = tree.newSelection(load, oi, _left.location());
+					ref<Selection> method = tree.newSelection(load, oi, false, _left.location());
 					method.type = oi.type();
 					ref<NodeList> args = tree.newNodeList(_right);
 					ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
@@ -753,7 +810,7 @@ class Binary extends Node {
 			}
 			ref<Overload> over = ref<Overload>(sym);
 			ref<OverloadInstance> oi = (*over.instances())[0];
-			ref<Selection> method = tree.newSelection(subscript.left(), oi, subscript.location());
+			ref<Selection> method = tree.newSelection(subscript.left(), oi, false, subscript.location());
 			method.type = oi.type();
 			ref<NodeList> args = tree.newNodeList(subscript.right(), _right);
 			ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
@@ -775,7 +832,7 @@ class Binary extends Node {
 			}
 			ref<Overload> over = ref<Overload>(sym);
 			ref<OverloadInstance> oi = (*over.instances())[0];
-			ref<Selection> method = tree.newSelection(_left, oi, location());
+			ref<Selection> method = tree.newSelection(_left, oi, false, location());
 			method.type = oi.type();
 			ref<NodeList> args = tree.newNodeList(_right);
 			ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
@@ -1029,9 +1086,13 @@ class Binary extends Node {
 				}
 				ref<TypedefType> t = ref<TypedefType>(re.type());
 				if (!_left.type.extendsFormally(t.wrappedType(), compileContext)) {
-					_left.add(MessageId.NOT_AN_ALLOCATOR, compileContext.pool());
-					type = compileContext.errorType();
-					break;
+					ref<Type> indirect = _left.type.indirectType(compileContext);
+					if (indirect == null ||
+						!indirect.extendsFormally(t.wrappedType(), compileContext)) {
+						_left.add(MessageId.NOT_AN_ALLOCATOR, compileContext.pool());
+						type = compileContext.errorType();
+						break;
+					}
 				}
 			}
 			if (_right.op() == Operator.CALL) {
@@ -1075,9 +1136,13 @@ class Binary extends Node {
 				}
 				ref<TypedefType> t = ref<TypedefType>(re.type());
 				if (!_left.type.extendsFormally(t.wrappedType(), compileContext)) {
-					_left.add(MessageId.NOT_AN_ALLOCATOR, compileContext.pool());
-					type = compileContext.errorType();
-					break;
+					ref<Type> indirect = _left.type.indirectType(compileContext);
+					if (indirect == null ||
+						!indirect.extendsFormally(t.wrappedType(), compileContext)) {
+						_left.add(MessageId.NOT_AN_ALLOCATOR, compileContext.pool());
+						type = compileContext.errorType();
+						break;
+					}
 				}
 			}
 			compileContext.assignTypes(_right);
@@ -1085,7 +1150,11 @@ class Binary extends Node {
 				type = _right.type;
 				break;
 			}
-			_right = _right.coerce(compileContext.tree(), TypeFamily.ADDRESS, false, compileContext);
+			if (!_right.canCoerce(compileContext.arena().builtInType(TypeFamily.ADDRESS), false, compileContext)) {
+				_right.add(MessageId.CANNOT_CONVERT, compileContext.pool());
+				_right.type = compileContext.errorType();
+				type = _right.type;
+			}
 			type = compileContext.arena().builtInType(TypeFamily.VOID);
 			break;
 
@@ -1898,7 +1967,7 @@ private ref<Node> appendString(ref<Variable> variable, ref<Node> value, ref<Synt
 			break;
 	}
 	assert(scope != null);
-	ref<Selection> method = tree.newSelection(r, oi, value.location());
+	ref<Selection> method = tree.newSelection(r, oi, false, value.location());
 	method.type = oi.type();
 	ref<NodeList> args = tree.newNodeList(value);
 	ref<Call> call = tree.newCall(scope, null, method, args, value.location(), compileContext);

@@ -914,91 +914,84 @@ class MemoryPool extends memory.NoReleasePool {
 	
 	public MemoryPool() {
 	}
-
-	public ref<CompileString> newCompileString(string s) {
+	// TODO: Fix this 
+	public ~MemoryPool() {
+		clear();
+	}
+	
+	public CompileString newCompileString(string s) {
 		pointer<byte> data = pointer<byte>(alloc(s.length()));
 		memcpy(data, &s[0], s.length());
-		return new CompileString(data, s.length());
+		return CompileString(data, s.length());
+	}
+	
+	public CompileString newCompileString(CompileString s) {
+		pointer<byte> data = pointer<byte>(alloc(s.length));
+		memcpy(data, s.data, s.length);
+		return CompileString(data, s.length);
 	}
 	
 	public ref<Symbol> newPlainSymbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<CompileString> name, ref<Node> source, ref<Node> type, ref<Node> initializer) {
-		//void *block = alloc(sizeof (PlainSymbol));
-		return new PlainSymbol(visibility, storageClass, enclosing, annotations, name, source, type, initializer);
+		return super new PlainSymbol(visibility, storageClass, enclosing, annotations, name, source, type, initializer);
 	}
 
 	public ref<Symbol> newPlainSymbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<CompileString> name, ref<Node> source, ref<Type> type, ref<Node> initializer) {
-		//void *block = alloc(sizeof (PlainSymbol));
-		return new PlainSymbol(visibility, storageClass, enclosing, annotations, name, source, type, initializer);
+		return super new PlainSymbol(visibility, storageClass, enclosing, annotations, name, source, type, initializer);
 	}
 
 	public ref<Overload> newOverload(ref<Scope> enclosing, ref<CompileString> name, Operator kind) {
-		//void *block = alloc(sizeof (Overload));
-		return new Overload(enclosing, null, name, kind);
+		return super new Overload(enclosing, null, name, kind);
 	}
 
 	public ref<OverloadInstance> newOverloadInstance(Operator visibility, boolean isStatic, ref<Scope> enclosing, ref<Node> annotations, ref<CompileString> name, ref<Node> source, ref<ParameterScope> functionScope) {
-		//void *block = alloc(sizeof (OverloadInstance));
-		return new OverloadInstance(visibility, isStatic, enclosing, annotations, name, source, functionScope);
+		return super new OverloadInstance(visibility, isStatic, enclosing, annotations, name, source, functionScope);
 	}
 
 	public ref<Namespace> newNamespace(ref<Node> namespaceNode, ref<Scope> enclosing, ref<Scope> symbols, ref<Node> annotations, ref<CompileString> name) {
-		//void *block = alloc(sizeof (Namespace));
-		return new Namespace(namespaceNode, enclosing, symbols, annotations, name);
+		return super new Namespace(namespaceNode, enclosing, symbols, annotations, name);
 	}
 
 	public ref<Commentary> newCommentary(ref<Commentary> next, MessageId messageId, string message) {
-		//void *block = alloc(sizeof (Commentary) + message.size());
-		return new Commentary(next, messageId, message);
+		return super new Commentary(next, messageId, message);
 	}
 
 	public ref<Type> newType(TypeFamily family) {
-		//void *block = alloc(sizeof (Type));
-		return new Type(family);
+		return super new Type(family);
 	}
 
 	public ref<ClassType> newClassType(ref<Class> definition, ref<Scope> scope) {
-		//void *block = alloc(sizeof (ClassType));
-		return new ClassType(definition, scope);
+		return super new ClassType(definition, scope);
 	}
 
 	public ref<ClassType> newClassType(TypeFamily effectiveFamily, ref<Type> base, ref<Scope> scope) {
-		//void *block = alloc(sizeof (ClassType));
-		return new ClassType(effectiveFamily, base, scope);
+		return super new ClassType(effectiveFamily, base, scope);
 	}
 
 	public ref<EnumType> newEnumType(ref<Block> definition, ref<Scope> scope, ref<Type> wrappedType) {
-		//void *block = alloc(sizeof (EnumType));
-		return new EnumType(definition, scope, wrappedType);
+		return super new EnumType(definition, scope, wrappedType);
 	}
 
 	public ref<EnumInstanceType> newEnumInstanceType(ref<Symbol> symbol, ref<Scope> scope, ref<ClassType> instanceClass) {
-		//void *block = alloc(sizeof (EnumInstanceType));
-		return new EnumInstanceType(symbol, scope, instanceClass);
+		return super new EnumInstanceType(symbol, scope, instanceClass);
 	}
 
 	public ref<TemplateType> newTemplateType(ref<Symbol> symbol, ref<Template> definition, ref<FileStat> definingFile, ref<Overload> overload, ref<Scope> templateScope) {
-		//void *block = alloc(sizeof (TemplateType));
-		return new TemplateType(symbol, definition, definingFile, overload, templateScope);
+		return super new TemplateType(symbol, definition, definingFile, overload, templateScope);
 	}
 
 	public ref<BuiltInType> newBuiltInType(TypeFamily family, ref<ClassType> classType) {
-		//void *block = alloc(sizeof (BuiltInType));
-		return new BuiltInType(family, classType);
+		return super new BuiltInType(family, classType);
 	}
 
 	public ref<TypedefType> newTypedefType(TypeFamily family, ref<Type> wrappedType) {
-//		assert(wrappedType.family() != TypeFamily.ERROR);
-		//void *block = alloc(sizeof (TypedefType));
-		return new TypedefType(family, wrappedType);
+		return super new TypedefType(family, wrappedType);
 	}
 
 	public ref<TemplateInstanceType> newTemplateInstanceType(ref<TemplateType> templateType, var[] args, ref<Template> concreteDefinition, ref<FileStat> definingFile, ref<Scope> scope, ref<TemplateInstanceType> next) {
-		//void *block = alloc(sizeof (TemplateInstanceType));
-		return new TemplateInstanceType(templateType, args, concreteDefinition, definingFile, scope, next);
+		return super new TemplateInstanceType(templateType, args, concreteDefinition, definingFile, scope, next);
 	}
 
 	public ref<FunctionType> newFunctionType(ref<NodeList> returnType, ref<NodeList> parameters, ref<Scope> functionScope) {
-		//void *block = alloc(sizeof (FunctionType));
-		return new FunctionType(returnType, parameters, functionScope);
+		return super new FunctionType(returnType, parameters, functionScope);
 	}
 }

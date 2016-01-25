@@ -206,7 +206,7 @@ class Call extends ParameterBag {
 							adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 							ref<Node> pair = tree.newBinary(Operator.SEQUENCE, defn.fold(tree, true, compileContext), adr, dot.left().location());
 							pair.type = defn.type;
-							_target = tree.newSelection(pair, dot.symbol(), dot.location());
+							_target = tree.newSelection(pair, dot.symbol(), false, dot.location());
 							_target.type = dot.type;
 							thisParameter = pair;
 						}
@@ -363,7 +363,7 @@ class Call extends ParameterBag {
 				ref<Node> value = b.right();
 				ref<Symbol> sym = id.symbol();
 				ref<Reference> r = tree.newReference(temp, false, nl.node.location());
-				ref<Selection> member = tree.newSelection(r, sym, nl.node.location());
+				ref<Selection> member = tree.newSelection(r, sym, false, nl.node.location());
 				member.type = sym.type();
 				value = value.coerce(tree, member.type, false, compileContext);
 				ref<Binary> init = tree.newBinary(Operator.ASSIGN, member, value, nl.node.location());
@@ -1413,7 +1413,7 @@ class Return extends ParameterBag {
 			ref<ParameterScope> destructor = sym.type().scope().destructor();
 			ref<Identifier> id = tree.newIdentifier(sym, location());
 			id.type = sym.type();
-			ref<Selection> method = tree.newSelection(id, destructor.symbol(), location());
+			ref<Selection> method = tree.newSelection(id, destructor.symbol(), false, location());
 			method.type = destructor.symbol().type();
 			ref<Call> c = tree.newCall(destructor, null, method, null, location(), compileContext);
 			c.type = compileContext.arena().builtInType(TypeFamily.VOID);

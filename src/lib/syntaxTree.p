@@ -239,53 +239,39 @@ class SyntaxTree {
 	}
 
 	public ref<Block> newBlock(Operator op, ref<Node> lockReference, Location location) {
-		//void *block = _pool.alloc(sizeof (Block));
-		return new Block(op, lockReference, location);
+		return _pool new Block(op, lockReference, location);
 	}
 
 	public ref<Class> newClass(ref<Identifier> name, ref<Node> extendsClause, Location location) {
-		//void *block = _pool.alloc(sizeof (Class));
-		return new Class(name, extendsClause, location);
+		return _pool new Class(name, extendsClause, location);
 	}
 
 	public ref<Template> newTemplate(ref<Identifier> name, Location location) {
-		//void *block = _pool.alloc(sizeof (Template));
-		return new Template(name, this, location);
+		return _pool new Template(name, this, location);
 	}
 
 	public ref<Reference> newReference(ref<Variable> v, boolean definition, Location location) {
-		//void *block = _pool.alloc(sizeof (Reference));
-		return new Reference(v, 0, definition, location);
+		return _pool new Reference(v, 0, definition, location);
 	}
 	
 	public ref<Reference> newReference(ref<Variable> v, int offset, boolean definition, Location location) {
-		//void *block = _pool.alloc(sizeof (Reference));
-		return new Reference(v, offset, definition, location);
+		return _pool new Reference(v, offset, definition, location);
 	}
 	
-	public ref<Identifier> newIdentifier(/*ref<Node> annotation, */CompileString value, Location location) {
-		//void *block = _pool.alloc(sizeof (Identifier) + value.size());
-		pointer<byte> cp = pointer<byte>(allocz(value.length));
-		C.memcpy(cp, value.data, value.length);
-		CompileString v;
-		v.data = cp;
-		v.length = value.length;
-		return new Identifier(null/*annotation*/, v, location);
+	public ref<Identifier> newIdentifier(CompileString value, Location location) {
+		return _pool new Identifier(_pool.newCompileString(value), location);
 	}
 
 	public ref<Identifier> newIdentifier(ref<Symbol> symbol, Location location) {
-		//void *block = _pool.alloc(sizeof (Identifier));
-		return new Identifier(symbol, location);
+		return _pool new Identifier(symbol, location);
 	}
 
 	public ref<Import> newImport(ref<Identifier> importedSymbol, ref<Ternary> namespaceNode, Location location) {
-		//void *block = _pool.alloc(sizeof (Import));
-		return new Import(importedSymbol, namespaceNode, location);
+		return _pool new Import(importedSymbol, namespaceNode, location);
 	}
 
 	public ref<Map> newMap(ref<Node> valueType, ref<Node> keyType, ref<Node> seed, Location location) {
-		//void *block = _pool.alloc(sizeof (Map));
-		return new Map(valueType, keyType, seed, location);
+		return _pool new Map(valueType, keyType, seed, location);
 	}
 
 	public ref<Binary> newDeclaration(ref<Node> left, ref<Node> right, Location location) {
@@ -293,12 +279,10 @@ class SyntaxTree {
 	}
 
 	public ref<Binary> newBinary(Operator op, ref<Node> left, ref<Node> right, Location location) {
-		//void *block = _pool.alloc(sizeof (Binary));
-		return new Binary(op, left, right, location);
+		return _pool new Binary(op, left, right, location);
 	}
 
 	public ref<Unary> newUnary(Operator op, ref<Node> operand, Location location) {
-		//void *block = _pool.alloc(sizeof (Unary));
 		return new Unary(op, operand, location);
 	}
 
@@ -309,70 +293,55 @@ class SyntaxTree {
 	}
 	
 	public ref<Ternary> newTernary(Operator op, ref<Node> left, ref<Node> middle, ref<Node> right, Location location) {
-		//void *block = _pool.alloc(sizeof (Ternary));
-		return new Ternary(op, left, middle, right, location);
+		return _pool new Ternary(op, left, middle, right, location);
 	}
 
 	public ref<Try> newTry(ref<Node> body, ref<Node> finallyClause, ref<NodeList> catchList, Location location) {
-		return new Try(body, finallyClause, catchList, location);
+		return _pool new Try(body, finallyClause, catchList, location);
 	}
 	
 	public ref<Loop> newLoop(Location location) {
-		//void *block = _pool.alloc(sizeof (Loop));
-		return new Loop(location);
+		return _pool new Loop(location);
 	}
 
 	public ref<For> newFor(Operator op, ref<Node> initializer, ref<Node> test, ref<Node> increment, ref<Node> body, Location location) {
-		//void *block = _pool.alloc(sizeof (For));
-		return new For(op, initializer, test, increment, body, location);
+		return _pool new For(op, initializer, test, increment, body, location);
 	}
 
 	public ref<Selection> newSelection(ref<Node> left, CompileString name, Location location) {
-		//void *block = _pool.alloc(sizeof (Selection) + name.size());
-		pointer<byte> cp = pointer<byte>(allocz(name.length));
-		C.memcpy(cp, name.data, name.length);
-		CompileString n;
-		n.data = cp;
-		n.length = name.length;
-		return new Selection(left, n, location);
+		return _pool new Selection(left, _pool.newCompileString(name), location);
 	}
 
-	public ref<Selection> newSelection(ref<Node> left, ref<Symbol> symbol, Location location) {
-		//void *block = _pool.alloc(sizeof (Selection) + name.size());
-		return new Selection(left, symbol, location);
+	public ref<Selection> newSelection(ref<Node> left, ref<Symbol> symbol, boolean indirect, Location location) {
+		return _pool new Selection(left, symbol, indirect, location);
 	}
 
 	public ref<Return> newReturn(ref<NodeList> expressions, Location location) {
-		//void *block = _pool.alloc(sizeof (Return));
-		return new Return(expressions, location);
+		return _pool new Return(expressions, location);
 	}
 
 	public ref<Function> newFunction(Function.Category functionCategory, ref<Node> returnType, ref<Identifier> name, ref<NodeList> arguments, Location location) {
-		//void *block = _pool.alloc(sizeof (Function));
-		return new Function(functionCategory, returnType, name, arguments, this, location);
+		return _pool new Function(functionCategory, returnType, name, arguments, this, location);
 	}
 
 	public ref<Call> newCall(Operator op, ref<Node> target, ref<NodeList> arguments, Location location) {
-		//void *block = _pool.alloc(sizeof (Call));
-		return new Call(op, target, arguments, location);
+		return _pool new Call(op, target, arguments, location);
 	}
 
 	public ref<Call> newCall(ref<ParameterScope> overloadScope, CallCategory category, ref<Node> target, ref<NodeList> arguments, Location location, ref<CompileContext> compileContext) {
-		//void *block = _pool.alloc(sizeof (Call));
-		return new Call(overloadScope, category, target, arguments, location, compileContext);
+		return _pool new Call(overloadScope, category, target, arguments, location, compileContext);
 	}
 
 	public ref<EllipsisArguments> newEllipsisArguments(ref<NodeList> arguments, Location location) {
-		return new EllipsisArguments(arguments, location);
+		return _pool new EllipsisArguments(arguments, location);
 	}
 	
 	public ref<StackArgumentAddress> newStackArgumentAddress(int offset, Location location) {
-		return new StackArgumentAddress(offset, location);
+		return _pool new StackArgumentAddress(offset, location);
 	}
 	
 	public ref<Leaf> newLeaf(Operator op, Location location) {
-		//void *block = _pool.alloc(sizeof (Leaf));
-		return new Leaf(op, location);
+		return _pool new Leaf(op, location);
 	}
 
 	public ref<Constant> newConstant(int value, Location location) {
@@ -383,18 +352,11 @@ class SyntaxTree {
 	}
 	
 	public ref<Constant> newConstant(Operator op, CompileString value, Location location) {
-		//void *block = _pool.alloc(sizeof (Constant) + value.size());
-		pointer<byte> cp = pointer<byte>(allocz(value.length));
-		C.memcpy(cp, value.data, value.length);
-		CompileString v;
-		v.data = cp;
-		v.length = value.length;
-		return new Constant(op, v, location);
+		return _pool new Constant(op, _pool.newCompileString(value), location);
 	}
 
 	public ref<SyntaxError> newSyntaxError(Location location) {
-		//void *block = _pool.alloc(sizeof (SyntaxError));
-		return new SyntaxError(location);
+		return _pool new SyntaxError(location);
 	}
 
 	public ref<NodeList> newNodeList(ref<Node>... nodes) {
@@ -402,7 +364,7 @@ class SyntaxTree {
 			return null;
 		ref<NodeList> list;
 		for (int i = nodes.length() - 1; i >= 0; i--) {
-			ref<NodeList> nl = ref<NodeList>(_pool.alloc(NodeList.bytes));
+			ref<NodeList> nl = _pool new NodeList;
 			nl.next = list;
 			nl.node = nodes[i];
 			list = nl;
@@ -2422,14 +2384,17 @@ class Node {
 
 	ref<Node> createMethodCall(ref<Node> object, string functionName, ref<SyntaxTree> tree, ref<CompileContext> compileContext, ref<Node>... arguments) {
 		CompileString name(functionName);
+		ref<Type> objType = object.type.indirectType(compileContext);
 		
-		ref<Symbol> sym = object.type.lookup(&name, compileContext);
+		if (objType == null)
+			objType = object.type;
+		ref<Symbol> sym = objType.lookup(&name, compileContext);
 		if (sym == null || sym.class != Overload) {
 			add(MessageId.UNDEFINED, compileContext.pool(), name);
 			return this;
 		}
 		ref<OverloadInstance> oi = (*ref<Overload>(sym).instances())[0];
-		ref<Selection> method = tree.newSelection(object, oi, location());
+		ref<Selection> method = tree.newSelection(object, oi, false, location());
 		method.type = oi.type();
 		ref<NodeList> args = tree.newNodeList(arguments);
 		ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);

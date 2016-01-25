@@ -13,33 +13,45 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-class A {
-	int _filler;
+import parasol:memory;
+import native:C;
+
+address allocated;
+address freed;
+
+class TestAllocator extends memory.Allocator {
+	address alloc(long n) {
+		allocated = allocz(int(n));
+		return allocated;
+	}
 	
-	~A() {
-		_filler++;
-		destructorCountA++;
+	void free(address a) {
+		freed = a;
+		C.free(a);
+	}
+	
+	void clear() {
+		
 	}
 }
 
-int destructorCountA;
+TestAllocator ta;
 
-int f() {
-	A a;
-	
-	return 3;
-}
+ref<int> xp = ta new int;
 
-int x = f();
+assert(xp == allocated);
 
-assert(x == 3);
-printf("destructorCountA: %d\n", destructorCountA);
-assert(destructorCountA == 1);
+ta delete xp;
 
-ref<A> ra = new A;
+assert(xp == freed);
 
-delete ra;
+ref<TestAllocator> rta = &ta;
 
-assert(destructorCountA == 2);
+ref<int> zp = rta new int;
 
+assert(zp == allocated);
+
+rta delete zp;
+
+assert(zp == freed);
 

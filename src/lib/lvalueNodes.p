@@ -65,13 +65,11 @@ class Reference extends Node {
 
 class Identifier extends Node {
 	private CompileString _value;
-	private ref<Node> _annotation;
 	private boolean _definition;
 	private ref<Symbol> _symbol;
 
-	Identifier(ref<Node> annotation, CompileString value, Location location) {
+	Identifier(CompileString value, Location location) {
 		super(Operator.IDENTIFIER, location);
-		_annotation = annotation;
 		_value = value;
 	}
 
@@ -132,20 +130,14 @@ class Identifier extends Node {
 		value.resize(_value.length);
 		C.memcpy(&value[0], _value.data, _value.length);
 		CompileString cs(&value);
-		ref<Identifier> id = tree.newIdentifier(/*_annotation, */cs, location());
-		id._annotation = _annotation;
+		ref<Identifier> id = tree.newIdentifier(cs, location());
 		id._symbol = _symbol;
 		id._definition = _definition;
 		return ref<Identifier>(id.finishClone(this, tree.pool()));
 	}
 
 	public ref<Identifier> cloneRaw(ref<SyntaxTree> tree) {
-		byte[] value;
-		value.resize(_value.length);
-		C.memcpy(&value[0], _value.data, _value.length);
-		CompileString cs(&value);
-		ref<Identifier> id = tree.newIdentifier(/*_annotation, */cs, location());
-		id._annotation = _annotation;
+		ref<Identifier> id = tree.newIdentifier(_value, location());
 		id._definition = _definition;
 		return id;
 	}
@@ -155,8 +147,6 @@ class Identifier extends Node {
 	}
 	
 	public void print(int indent) {
-		if (_annotation != null)
-			_annotation.print(indent + INDENT);
 		printBasic(indent);
 		printf(" %s S%p '%s'", _definition ? "def" : "", _symbol, _value.asString());
 		if (_symbol != null)
@@ -360,10 +350,6 @@ class Identifier extends Node {
 		type = compileContext.errorType();
 		add(MessageId.UNDEFINED, compileContext.pool(), _value);
 	}
-	
-	ref<Node> annotation() {
-		return _annotation;
-	}
 }
 
 class Selection extends Node {
@@ -378,10 +364,11 @@ class Selection extends Node {
 		_name = name;
 	}
 
-	Selection(ref<Node> left, ref<Symbol> symbol, Location location) {
+	Selection(ref<Node> left, ref<Symbol> symbol, boolean indirect, Location location) {
 		super(Operator.DOT, location);
 		_left = left;
 		_symbol = symbol;
+		_indirect = indirect;
 		_name = *symbol.name();
 	}
 

@@ -336,7 +336,8 @@ class ExpressionObject extends script.Object {
 		ref<FileStat> f = new FileStat();
 		f.setSource(_source);
 		ref<Scanner> scanner = f.scanner();
-		Parser parser(new SyntaxTree(), scanner);
+		ref<SyntaxTree> tree = new SyntaxTree();
+		Parser parser(tree, scanner);
 
 		ref<Node> expression = parser.parseExpression(0);
 		
@@ -344,14 +345,22 @@ class ExpressionObject extends script.Object {
 
 		if (checkInOrder(expression, _source) && checkMessages(expression, get("message"))) {
 			if (_expectSuccess) {
-				if (success)
+				if (success) {
+					delete f;
+					delete tree;
 					return true;
+				}
 			} else {
-				if (!success)
+				if (!success) {
+					delete f;
+					delete tree;
 					return true;
+				}
 			}
 		}
 		dump(expression);
+		delete f;
+		delete tree;
 		return false;
 	}
 
@@ -419,7 +428,8 @@ class StatementObject extends script.Object {
 		ref<FileStat> f = new FileStat();
 		f.setSource(_source);
 		ref<Scanner> scanner = f.scanner();
-		Parser parser(new SyntaxTree(), scanner);
+		ref<SyntaxTree> tree = new SyntaxTree();
+		Parser parser(tree, scanner);
 
 		ref<Node> statement = parser.parseStatement();
 		Token t = scanner.next();
@@ -438,11 +448,16 @@ class StatementObject extends script.Object {
 				if (statement.countMessages() > 0)
 					outcome = Expect.SEMANTIC;
 			}
-			if (checkMessages(statement, get("message")) && _expect == outcome)
+			if (checkMessages(statement, get("message")) && _expect == outcome) {
+				delete f;
+				delete tree;
 				return true;
+			}
 		}
 		printf("  Expecting %s got %s\n", string(_expect), string(outcome));
 		dump(statement);
+		delete f;
+		delete tree;
 		return false;
 	}
 
@@ -502,8 +517,7 @@ class CompileObject  extends script.Object {
 	}
 
 	public boolean run() {
-		static SourceCache sourceCache;
-		Arena arena(&sourceCache);
+		Arena arena;
 		boolean loadFailed = false;
 
 		if (targetArgument != null)
@@ -523,6 +537,7 @@ class CompileObject  extends script.Object {
 			f = new FileStat();
 			f.setSource(_source);
 		}
+		// Note: arena.compile takes ownership of f.
 		ref<Target> target = arena.compile(f, true, true, verboseFlag);
 
 		Expect outcome;
@@ -551,6 +566,7 @@ class CompileObject  extends script.Object {
 			arena.printMessages();
 			result = false;
 		}
+		delete target;
 		return result;
 	}
 
