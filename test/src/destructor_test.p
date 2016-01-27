@@ -42,4 +42,20 @@ delete ra;
 
 assert(destructorCountA == 2);
 
+class B {
+	long filler;
+	A needsDestructor;
+	
+	~B() {
+		filler = 3;
+	}
+}
+
+ref<B> b = new B;
+
+delete b;
+
+assert(destructorCountA == 3);
+
+
 

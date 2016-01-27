@@ -352,6 +352,17 @@ public class X86_64 extends X86_64AssignTemps {
 				compileContext.setCurrent(outer);
 				compileContext.resetVariables(initialVariableCount);
 				_stackLocalVariables = initialVariableCount;
+				if (func.functionCategory() == Function.Category.DESTRUCTOR) {
+					ref<ClassScope> classScope = ref<ClassScope>(parameterScope.enclosing());
+					assert(classScope.storageClass() == StorageClass.MEMBER);
+					for (int i = 0; i < classScope.members().length(); i++) {
+						ref<Symbol> sym = (*classScope.members())[i];
+						if (sym.type().hasDestructor()) {
+							inst(X86.LEA, R.RCX, R.RSI, sym.offset);
+							instCall(sym.type().scope().destructor(), compileContext);
+						}
+					}
+				}
 			}
 			closeCodeSegment(CC.NOP, null);
 			insertPreamble();
