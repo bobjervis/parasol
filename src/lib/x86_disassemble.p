@@ -260,6 +260,11 @@ class Disassembler {
 				register64(next & 0x7, false);
 				break;
 				
+			case	0x68:
+				instructionOpcode(next);
+				immediateWord();
+				break;
+				
 			case	0x69:
 				instructionOpcode(next);
 				disassembleGvEv(int.bytes);
@@ -1516,8 +1521,9 @@ instructionMnemonic[0x3f] = "-";
 
 
 instructionMnemonic[0x63] = "movsxd";
+instructionMnemonic[0x68] = "push";
 instructionMnemonic[0x69] = "imul";
-instructionMnemonic[0x6a] = "imul";
+instructionMnemonic[0x6a] = "push";
 instructionMnemonic[0x6b] = "imul";
 instructionMnemonic[0x70] = "jo";
 instructionMnemonic[0x71] = "jno";

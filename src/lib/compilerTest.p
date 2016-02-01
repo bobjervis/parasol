@@ -537,6 +537,7 @@ class CompileObject  extends script.Object {
 			f = new FileStat();
 			f.setSource(_source);
 		}
+		
 		// Note: arena.compile takes ownership of f.
 		ref<Target> target = arena.compile(f, true, true, verboseFlag);
 

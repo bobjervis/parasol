@@ -15,6 +15,8 @@
  */
 namespace parasol:compiler;
 
+import parasol:process;
+
 class Parser {
 	private ref<SyntaxTree> _tree;
 	private ref<Scanner> _scanner;
@@ -30,9 +32,8 @@ class Parser {
 		for (;;) {
 			Token t = _scanner.next();
 			CompileString cs = _scanner.value();
-//			int line = _scanner.lineNumber(_scanner.location());
+			int line = _scanner.lineNumber(_scanner.location());
 			string s(cs.data, cs.length);
-//			printf("Token %d %s %d\n", int(t), s, line);
 			if (t == Token.END_OF_STREAM) {
 				_scanner.close();
 				return block;
@@ -115,8 +116,16 @@ class Parser {
 	public ref<LoopDescriptor> currentLoop;
  */
 	private ref<Block> parseBlock(ref<Block> block) {
+		if (long(_scanner) > 0x100000000) {
+			printf("_scanner is wrong-o\n");
+			process.exit(1);
+		}
 		for (;;) {
 			Token t = _scanner.next();
+//			CompileString cs = _scanner.value();
+//			int line = _scanner.lineNumber(_scanner.location());
+//			string s(cs.data, cs.length);
+//			printf("Token %s %s %d\n", string(t), s, line);
 			if (t == Token.RIGHT_CURLY) {
 				return block;
 			} else if (t == Token.END_OF_STREAM) {

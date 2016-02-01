@@ -370,28 +370,12 @@ public class X86_64 extends X86_64AssignTemps {
 				emitSourceLocation(compileContext.current().file(), node.location());
 			inst(X86.ENTER, 0);
 			int registerArgs = 0;
-			int frameSize = 0;
 			if (parameterScope.hasThis()) {
 				inst(X86.PUSH, TypeFamily.SIGNED_64, R.RSI);
-				frameSize += address.bytes;
 				inst(X86.MOV, TypeFamily.ADDRESS, R.RSI, R.RCX);
 				registerArgs++;
-/*
- * TODO: Fix this up for a proper test. You can't use this simple test, you need to account for
- * subclasses.
-				if (parameterScope.enclosing().hasVtable()) {
-					instLoadVtable(R.RAX, ref<ClassScope>(parameterScope.enclosing()));
-					inst(X86.CMP, TypeFamily.ADDRESS, R.RSI, 0, R.RAX);
-					ref<CodeSegment> join = new CodeSegment;
-					closeCodeSegment(CC.JE, join);
-					inst(X86.XOR, TypeFamily.BOOLEAN, R.RCX, R.RCX);
-					instCall(_assert.parameterScope(), compileContext);
-					join.start(this);
-				}
- */
 			}
 			if (parameterScope.hasOutParameter(compileContext)) {
-				frameSize += address.bytes;
 				inst(X86.PUSH, TypeFamily.SIGNED_64, fastArgs[registerArgs]);
 				registerArgs++;
 			}
@@ -406,11 +390,10 @@ public class X86_64 extends X86_64AssignTemps {
 						inst(X86.MOVSD, TypeFamily.SIGNED_64, R.RSP, 0, floatArgs[registerArgs]);
 					} else
 						inst(X86.PUSH, TypeFamily.SIGNED_64, fastArgs[registerArgs]);
-					frameSize += address.bytes;
 					registerArgs++;
 				}
 			}
-			reserveAutoMemory(false, compileContext, frameSize);
+			reserveAutoMemory(false, compileContext);
 			closeCodeSegment(CC.NOP, null);
 			if (node.fallsThrough() == Test.PASS_TEST) {
 				if (!generateReturn(scope, compileContext)) {
@@ -506,7 +489,7 @@ public class X86_64 extends X86_64AssignTemps {
 			closeCodeSegment(CC.NOP, null);
 			insertPreamble();
 			inst(X86.ENTER, 0);
-			reserveAutoMemory(true, compileContext, 0);
+			reserveAutoMemory(true, compileContext);
 			closeCodeSegment(CC.NOP, null);
 			join.start(this);
 			inst(X86.POP, TypeFamily.SIGNED_64, R.RCX);
@@ -551,12 +534,11 @@ public class X86_64 extends X86_64AssignTemps {
 		_deferredTry.clear();
 	}
 	
-	private void reserveAutoMemory(boolean preserveRCX, ref<CompileContext> compileContext, int frameSize) {
-		frameSize &= 15;											// Reduce the calculated frame size to 0-15.
+	private void reserveAutoMemory(boolean preserveRCX, ref<CompileContext> compileContext) {
 		int zeroZone = f().autoSize - f().registerSaveSize;
 		f().autoSize += REGISTER_PARAMETER_STACK_AREA;
-		if (((f().autoSize + frameSize) & 15) != 0)					// Now if the combined size is odd, bail out.
-			f().autoSize = (f().autoSize + frameSize + 15) & ~15;
+		if ((f().autoSize & 15) != 0)
+			f().autoSize = (f().autoSize + 15) & ~15;
 		int reserveSpace = f().autoSize - f().registerSaveSize;
 		inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, reserveSpace);
 		if (zeroZone > 0) {
@@ -2604,10 +2586,24 @@ public class X86_64 extends X86_64AssignTemps {
 	
 	private void generateCall(ref<Call> call, ref<CompileContext> compileContext) {
 		int cleanup = 0;
+		int stackPushes = 0;
 		for (ref<NodeList> args = call.stackArguments(); args != null; args = args.next) {
 			if (args.node.op() == Operator.ELLIPSIS_ARGUMENTS)
 				cleanup = ref<EllipsisArguments>(args.node).stackConsumed(); 
+			stackPushes += args.node.type.stackSize();
+		}
+		for (ref<NodeList> args = call.stackArguments(); args != null; args = args.next) {
 			generate(args.node, compileContext);
+			if (args.node.op() == Operator.VACATE_ARGUMENT_REGISTERS) {
+				int depth = f().r.stackDepth();
+				int stackAlignment = (stackPushes + cleanup + depth) & 15;
+				// Th only viable stack alignment value has to be 8, anything else is a compiler bug.
+				if (stackAlignment != 0) {
+					assert(stackAlignment == 8);
+					cleanup += 8;
+					inst(X86.SUB, TypeFamily.ADDRESS, R.RSP, 8);
+				}
+			}
 		}
 
 		if (call.arguments() != null) {

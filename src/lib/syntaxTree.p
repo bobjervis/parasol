@@ -283,7 +283,7 @@ class SyntaxTree {
 	}
 
 	public ref<Unary> newUnary(Operator op, ref<Node> operand, Location location) {
-		return new Unary(op, operand, location);
+		return _pool new Unary(op, operand, location);
 	}
 
 	public ref<Unary> newCast(ref<Type> type, ref<Node> operand) {

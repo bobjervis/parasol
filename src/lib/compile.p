@@ -31,7 +31,6 @@ class CompileContext {
 	private ref<Arena> _arena;
 	private ref<Scope> _current;
 	private int _importedScopes;
-	private ref<SyntaxTree> _tree;
 	private ref<Variable>[] _variables;
 	private ref<Symbol>[] _staticSymbols;		// Populated when assigning storage
 	private ref<Symbol>[] _liveSymbols;			// Populated during fold actions with the set of live symbols that
@@ -678,7 +677,7 @@ class CompileContext {
 				assignTypes(b.left());
 				if (b.left().deferAnalysis())
 					break;
-				b.left().coerce(_tree, switchType, false, this);
+				b.left().coerce(_current.file().tree(), switchType, false, this);
 				if (!b.left().isConstant())
 					b.left().add(MessageId.NOT_CONSTANT, _pool);
 			}
@@ -906,7 +905,7 @@ class CompileContext {
 	}
 	
 	ref<SyntaxTree> tree() {
-		return _tree;
+		return _current.file().tree();
 	}
 }
 

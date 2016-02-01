@@ -161,7 +161,6 @@ class X86_64Encoder extends Target {
 															// file.
 	
 	boolean generateCode(ref<FileStat> mainFile, int valueOffset, ref<CompileContext> compileContext) {
-		
 		// Initialize storage - somewhere along here needs to happen
 		// 
 		_pxiHeader.entryPoint = generateFunction(mainFile.fileScope(), compileContext);
@@ -261,7 +260,6 @@ class X86_64Encoder extends Target {
 				}
 //				printf("f.location=%x targetOffset=%x\n", f.location, targetOffset);
 				*ref<int>(&_code[f.location]) = int(targetOffset - (f.location + int.bytes));
-
 				break;
 			
 			case	RELATIVE32_TYPE:				// Fixup value is a ref<Type>
@@ -2384,7 +2382,7 @@ class X86_64Encoder extends Target {
 				emit(0x6a);
 				emit(byte(immediate));
 			} else {
-				emit(0x6b);
+				emit(0x68);
 				emitInt(immediate);
 			}
 			break;

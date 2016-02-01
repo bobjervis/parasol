@@ -364,6 +364,26 @@ class RegisterState {
 		}
 		return r;
 	}
+	/**
+	 * @return The bytes of stack depth consumed by temps on the stack.
+	 */
+	int stackDepth() {
+		int depth;
+		if (_spills != null) {
+			for (ref<Spill> s = _spills; s != null; s = s.next) {
+				switch (s.spillKind) {
+				case	PUSH:
+					depth -= address.bytes;
+					break;
+					
+				case	POP:
+					depth += address.bytes;
+					break;
+				}
+			}
+		}
+		return depth;
+	}
 	
 	void generateSpills(ref<Node> tree, ref<X86_64Encoder> target) {
 		if (_spills == null)
@@ -761,8 +781,7 @@ enum SpillKinds {
 	POP,
 	MOVE,
 	XCHG,
-	FPSPILL,	/* floating point spills use: spillKind, flags, */
-	FPRELOAD	/* where, tempVar, newRegister			*/
+	MAX_VALUE
 }
 
 R lowestReg(long regmask) {
