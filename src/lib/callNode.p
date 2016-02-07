@@ -21,7 +21,6 @@ enum CallCategory {
 	CONSTRUCTOR,
 	FUNCTION_CALL,
 	METHOD_CALL,
-	VIRTUAL_METHOD_CALL
 }
 
 class Call extends ParameterBag {
@@ -57,12 +56,9 @@ class Call extends ParameterBag {
 			_category = category;
 		else if (overload == null)
 			_category = CallCategory.ERROR;
-		else if (overload.enclosing().storageClass() == StorageClass.MEMBER) {
-			if (isVirtualCall(compileContext))
-				_category = CallCategory.VIRTUAL_METHOD_CALL;
-			else
-				_category = CallCategory.METHOD_CALL;
-		} else
+		else if (overload.enclosing().storageClass() == StorageClass.MEMBER)
+			_category = CallCategory.METHOD_CALL;
+		else
 			_category = CallCategory.FUNCTION_CALL;
 	}
 
@@ -187,7 +183,6 @@ class Call extends ParameterBag {
 				break;
 				
 			case	METHOD_CALL:
-			case	VIRTUAL_METHOD_CALL:
 				if (_target.op() == Operator.DOT) {
 					ref<Selection> dot = ref<Selection>(_target);
 					if (dot.indirect()) {
@@ -612,12 +607,8 @@ class Call extends ParameterBag {
 						symbol = null;
 					else {
 						_overload = ref<OverloadInstance>(symbol).parameterScope();
-						if (symbol.storageClass() == StorageClass.MEMBER) {
-							if (isVirtualCall(compileContext))
-								_category = CallCategory.VIRTUAL_METHOD_CALL;
-							else
-								_category = CallCategory.METHOD_CALL;
-						}
+						if (symbol.storageClass() == StorageClass.MEMBER)
+							_category = CallCategory.METHOD_CALL;
 					}
 				}
 				ref<FunctionType> ft = ref<FunctionType>(_target.type);
@@ -641,20 +632,6 @@ class Call extends ParameterBag {
 		}
 	}
 
-	private boolean isVirtualCall(ref<CompileContext> compileContext) {
-		if (!_overload.usesVTable(compileContext))
-			return false;
-		switch (_target.op()) {
-		case	DOT:
-			ref<Selection> dot = ref<Selection>(_target);
-			return dot.left().op() != Operator.SUPER;
-
-		case	IDENTIFIER:
-			return true;
-		}
-		return false;
-	}
-	
 	private boolean assignSub(Operator kind, ref<CompileContext> compileContext) {
 		if (!assignArguments(LabelStatus.NO_LABELS, null, long.MAX_VALUE, compileContext))
 			return false;

@@ -116,10 +116,10 @@ class Parser {
 	public ref<LoopDescriptor> currentLoop;
  */
 	private ref<Block> parseBlock(ref<Block> block) {
-		if (long(_scanner) > 0x100000000) {
-			printf("_scanner is wrong-o\n");
-			process.exit(1);
-		}
+//		if (long(_scanner) > 0x100000000) {
+//			printf("_scanner is wrong-o\n");
+//			process.exit(1);
+//		}
 		for (;;) {
 			Token t = _scanner.next();
 //			CompileString cs = _scanner.value();

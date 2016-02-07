@@ -1116,7 +1116,6 @@ class Binary extends Node {
 					break;
 				}
 			}
-			type.assignMethodMaps(compileContext);
 			if (!type.isConcrete(compileContext))
 				_right.add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool());
 			type = compileContext.arena().createRef(type, compileContext);

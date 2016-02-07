@@ -350,14 +350,6 @@ class ClassType extends Type {
 		return _extends;
 	}
 
-	public void assignMethodMaps(ref<CompileContext> compileContext) {
-		ref<ClassScope> s = ref<ClassScope>(_scope);
-		ref<ref<OverloadInstance>[]> methods = s.methods();
-		for (int i = 0; i < methods.length(); i++)
-			(*methods)[i].assignType(compileContext);
-		s.assignMethodMaps(compileContext);
-	}
-	
 	public ref<Type> getSuper() {
 		return _extends;
 	}
@@ -409,7 +401,6 @@ protected:
 				compileContext.assignTypes(_scope.enclosing(), base);
 				_extends = base.unwrapTypedef(compileContext);
 			}
-			_scope.createPossibleDefaultConstructor(compileContext);
 		}
 	}
 
@@ -1098,9 +1089,6 @@ class Type {
 		return null;
 	}
 
-	public void assignMethodMaps(ref<CompileContext> compileContext) {
-	}
-	
 	public ref<Type> getSuper() {
 		return null;
 	}

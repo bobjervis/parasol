@@ -2366,7 +2366,7 @@ class Code extends Value {
 			return 0;
 		}
 
-		ref<Symbol> overload = call.overload().symbol();
+		ref<OverloadInstance> overload = call.overload().symbol();
 		if (overload != null && overload.type().family() != TypeFamily.FUNCTION) {
 			// This can only arise when a class constructor was called with no defined
 			// default constructor.
@@ -2406,7 +2406,7 @@ class Code extends Value {
 				}
 				pushedThisSize = address.bytes;
 			}
-			if (isIndirectCall && overload.usesVTable(compileContext)) {
+			if (isIndirectCall && overload.overridden()) {
 				target.byteCode(ByteCodes.VCALL);
 				target.byteCode(overload.offset);
 				target.byteCode(-1);

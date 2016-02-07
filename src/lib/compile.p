@@ -94,8 +94,11 @@ class CompileContext {
 		assignTypes();
 //		printf("after assignTypes\n");
 		for (int i = 0; i < _arena.scopes().length(); i++) {
-			(*_arena.scopes())[i].checkForDuplicateMethods(this);
-			(*_arena.scopes())[i].assignMethodMaps(this);
+			ref<Scope> scope = (*_arena.scopes())[i];
+			scope.checkForDuplicateMethods(this);
+			scope.assignMethodMaps(this);
+			scope.createPossibleDefaultConstructor(this);
+//			_scope.createPossibleImpliedDestructor(compileContext);
 		}
 		for (int i = 0; i < _arena.scopes().length(); i++)
 			(*_arena.scopes())[i].checkVariableStorage(this);

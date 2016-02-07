@@ -126,6 +126,41 @@ class ClasslikeScope extends Scope {
 		}
 	}
 	
+	public void createPossibleImpliedDestructor(ref<CompileContext> compileContext) {
+		if (needsImpliedDestructor(compileContext)) {
+			ref<ParameterScope> functionScope = compileContext.arena().createParameterScope(this, null, ParameterScope.Kind.IMPLIED_DESTRUCTOR);
+			defineDestructor(functionScope, compileContext.pool());
+		}
+	}
+	/**
+	 * TODO: This decision function is not quite complete. If there is a class hierarchy in which any sub-class has an
+	 * explicit, or implied, destructor, then the common base class must have a Vtable.
+	 * 
+	 * On the other hand, if you have a class hierarchy in which there are no destructors anywhere in the entire tree,
+	 * there is no need to generate a bunch of implied destructors for no reason whatsoever.
+	 */
+	private boolean needsImpliedDestructor(ref<CompileContext> compileContext) {
+		if (destructor() == null) {
+			if (hasVtable(compileContext))
+				return true;
+			for (ref<Symbol>[string].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
+				ref<Symbol> sym = i.get();
+				if (sym.type() == null)
+					continue;
+				if (sym.type().hasDestructor())
+					return true;
+			}
+			// We know this is called after the class itself is largely resolved.
+			// In particular, we know that any value for the base class is already correctly set.
+			ref<Type> baseType = getSuper();
+			if (baseType == null)
+				return false;
+			if (baseType.hasDestructor())
+				return true;
+		}
+		return false;
+	}		
+	
 	public void checkVariableStorage(ref<CompileContext> compileContext) {
 		if (storageClass() == StorageClass.MEMBER) {
 			if (enclosing() != null && enclosing().storageClass() == StorageClass.TEMPLATE)
@@ -206,7 +241,11 @@ class ClasslikeScope extends Scope {
 			}
 		return true;
 	}
-
+	/**
+	 * Note: the vtable member is set by code generators and is set late in the process.
+	 * 
+	 *  
+	 */
 	public boolean hasVtable(ref<CompileContext> compileContext) {
 		if (vtable != null)
 			return true;
@@ -214,6 +253,7 @@ class ClasslikeScope extends Scope {
 		if (base != null &&
 			base.hasVtable(compileContext))
 			return true;
+		assignMethodMaps(compileContext);
 		for (int i = 0; i < _methods.length(); i++)
 			if (_methods[i].overridden() || !_methods[i].isConcrete(compileContext))
 				return true;
@@ -322,6 +362,7 @@ class ParameterScope extends Scope {
 		FUNCTION,				// any ordinary constructor, destructor, method or function
 		TEMPLATE,				// any template
 		DEFAULT_CONSTRUCTOR,	// a default constructor (no source code) generated when needed
+		IMPLIED_DESTRUCTOR,		// an implied destructor (no source code) generated when needed
 		ENUM_TO_STRING,			// a generated enum-to-string coercion method
 	}
 	private Kind _kind;
@@ -409,15 +450,15 @@ class ParameterScope extends Scope {
 	}
 	
 	public boolean usesVTable(ref<CompileContext> compileContext) {
+		if (_kind == Kind.IMPLIED_DESTRUCTOR) {
+			// There is no definition, but
+			return enclosing().hasVtable(compileContext);
+		}
 		ref<Function> func = ref<Function>(definition());
-		if (func == null)		// a generate default constructor has no 'definition'
-			return false;		// and no out parameter.
-		if (func.deferAnalysis())
-			return false;
-		if (func.functionCategory() == Function.Category.CONSTRUCTOR ||
-			func.functionCategory() == Function.Category.DESTRUCTOR)
-			return false;
-		return func.name().symbol().usesVTable(compileContext);
+		if (func == null)		// a generated default constructor has no 'definition'
+			return false;		// and no VTable, .
+		enclosing().assignMethodMaps(compileContext);
+		return ref<OverloadInstance>(func.name().symbol()).overridden();
 	}
 	
 	public boolean equals(ref<ParameterScope> other, ref<CompileContext> compileContext) {
@@ -551,6 +592,9 @@ class Scope {
 	}
 	
 	public void createPossibleDefaultConstructor(ref<CompileContext> compileContext) {
+	}
+		
+	public void createPossibleImpliedDestructor(ref<CompileContext> compileContext) {
 	}
 		
 	boolean writeHeader(File header) {
@@ -1372,7 +1416,7 @@ class OverloadInstance extends Symbol {
 	}
 
 	public void print(int indent, boolean printChildScopes) {
-		printf("%*.*c%s OverloadInstance %p %s %s", indent, indent, ' ', _name.asString(), this, string(visibility()), string(storageClass()));
+		printf("%*.*c%s OverloadInstance %p %s %s%s", indent, indent, ' ', _name.asString(), this, string(visibility()), string(storageClass()), _overridden ? " overridden" : "");
 		if (_type != null) {
 			printf(" @%d ", offset);
 			_type.print();
@@ -1553,8 +1597,7 @@ class OverloadInstance extends Symbol {
 	}
 
 	public boolean isConcrete(ref<CompileContext> compileContext) {
-		if (_type == null)
-			return true;
+		assignType(compileContext);
 		if (_type.family() != TypeFamily.FUNCTION)
 			return true;
 		ref<FunctionType> ft = ref<FunctionType>(_type);
@@ -1661,19 +1704,6 @@ class Symbol {
 	public int parameterCount() {
 		assert(false);
 		return 0;
-	}
-
-	boolean usesVTable(ref<CompileContext> compileContext) {
-		if (_enclosing.class != ClassScope)
-			return false;
-		if (_definition.class == Function) {
-			ref<Function> func = ref<Function>(_definition);
-			if (func.functionCategory() == Function.Category.CONSTRUCTOR ||
-				func.functionCategory() == Function.Category.DESTRUCTOR)
-				return false;
-		}
-		ref<ClassScope> s = ref<ClassScope>(_enclosing);
-		return s.classType.hasVtable(compileContext);
 	}
 
 	public TypeFamily effectiveFamily() {

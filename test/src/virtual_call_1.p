@@ -56,3 +56,12 @@ void func() {
 }
 
 func();
+
+Derived d3;
+ref<Base> base = &d3;
+
+base.put("tag2", new Derived);
+
+assert(d3.v.get() == null);
+assert(d3.x == "tag2");
+

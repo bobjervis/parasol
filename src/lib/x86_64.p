@@ -279,6 +279,9 @@ public class X86_64 extends X86_64AssignTemps {
 					assert(false);
 				break;
 				
+			case	IMPLIED_DESTRUCTOR:
+				assert(false);
+				
 			case	ENUM_TO_STRING:
 				ref<EnumScope> enclosing = ref<EnumScope>(scope.enclosing());
 				
@@ -2626,12 +2629,13 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			break;
 
-		case	VIRTUAL_METHOD_CALL:
-			inst(X86.MOV, R.RAX, R.RCX, 0);
-			inst(X86.CALL, TypeFamily.ADDRESS, R.RAX, overload.symbol().offset * address.bytes);
-			break;
-			
 		case	METHOD_CALL:
+			if (isVirtualCall(call, compileContext)) {
+				inst(X86.MOV, R.RAX, R.RCX, 0);
+				inst(X86.CALL, TypeFamily.ADDRESS, R.RAX, overload.symbol().offset * address.bytes);
+				break;
+			}
+			
 		case	FUNCTION_CALL:
 			ref<Node> func = call.target();
 			assert(func != null);
@@ -2640,27 +2644,8 @@ public class X86_64 extends X86_64AssignTemps {
 					ref<Selection> f = ref<Selection>(func);
 					ref<Node> left = f.left();
 					if (left.type.family() == TypeFamily.VAR) {
+						call.print(4);
 						assert(false);
-						/*
-						if (f.indirect())
-							generate(f.left(), compileContext);
-						else
-							pushAddress(f.left(), compileContext);
-						target.byteCode(ByteCodes.STRING);
-						ref<String> s = _owner.newString(f.name());
-						if (s == null) {
-							call.add(MessageId.BAD_STRING, compileContext.pool(), f.name());
-							// emit(trap of some kind);
-						} else
-							target.byteCode(s.index());
-						int count = 0;
-						for (ref<NodeList> nl = call.arguments(); nl != null; nl = nl.next) {
-							generate(nl.node, compileContext);
-							count++;
-						}
-						target.byteCode(ByteCodes.INVOKE);
-						target.byteCode(count);
-						*/
 						return;
 					}
 				}
@@ -2684,6 +2669,20 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.ADD, TypeFamily.SIGNED_64, R.RSP, cleanup);		// What about destructors?
 	}
 
+	private boolean isVirtualCall(ref<Call> call, ref<CompileContext> compileContext) {
+		if (!call.overload().usesVTable(compileContext))
+			return false;
+		switch (call.target().op()) {
+		case	DOT:
+			ref<Selection> dot = ref<Selection>(call.target());
+			return dot.left().op() != Operator.SUPER;
+
+		case	IDENTIFIER:
+			return true;
+		}
+		return false;
+	}
+	
 	private void generateEllipsisArguments(ref<EllipsisArguments> ea, ref<CompileContext> compileContext) {
 		int vargCount = ea.argumentCount();
 		ea.type.assignSize(this, compileContext);
