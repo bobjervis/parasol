@@ -397,40 +397,6 @@ class Binary extends Node {
 		case	DELETE:
 			ref<Type> objType = _right.type.indirectType(compileContext);
 			ref<Node> destructors = null;
-			if (objType.hasDestructor()) {
-				ref<Node> defn;
-				ref<Node> value;
-				if (_right.isSimpleLvalue())
-					value = _right.clone(tree);
-				else {
-					ref<Variable> temp = compileContext.newVariable(_right.type);
-					ref<Reference> r = tree.newReference(temp, true, location());
-					defn = tree.newBinary(Operator.ASSIGN, r, _right, location());
-					defn.type = _right.type;
-					value = tree.newReference(temp, false, location());
-					_right = tree.newReference(temp, false, location());
-				}
-				ref<ParameterScope> des = objType.scope().destructor();
-				ref<Selection> method = tree.newSelection(value, des.symbol(), true, location());
-				method.type = des.symbol().type();
-				ref<Call> call = tree.newCall(des, null, method, null, location(), compileContext);
-				call.type = type;			// We know this is VOID
-				value = value.clone(tree);
-				ref<Node> con = tree.newConstant(0, location());
-				con.type = value.type;
-				ref<Node> compare = tree.newBinary(Operator.NOT_EQUAL, value, con, location());
-				compare.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
-				ref<Node> nullPath = tree.newLeaf(Operator.EMPTY, location());
-				nullPath.type = call.type;
-				ref<Node> choice = tree.newTernary(Operator.CONDITIONAL, compare, call, nullPath, location());
-				choice.type = call.type;
-				if (defn != null) {
-					destructors = tree.newBinary(Operator.SEQUENCE, defn, choice, location());
-					destructors.type = choice.type;
-				} else
-					destructors = choice;
-				destructors = destructors.fold(tree, true, compileContext);
-			}
 			ref<Node> completion;
 			if (_left.op() == Operator.EMPTY)
 				completion = this;
@@ -445,13 +411,41 @@ class Binary extends Node {
 				call.type = type;
 				completion = call.fold(tree, true, compileContext);
 			}
-			if (destructors == null)
+			if (objType.hasDestructor()) {
+				ref<Node> defn;
+				ref<Node> value;
+				if (_right.isSimpleLvalue())
+					value = _right.clone(tree);
+				else {
+					ref<Variable> temp = compileContext.newVariable(_right.type);
+					ref<Reference> r = tree.newReference(temp, true, location());
+					defn = tree.newBinary(Operator.ASSIGN, r, _right, location());
+					defn.type = _right.type;
+					value = tree.newReference(temp, false, location());
+					_right = tree.newReference(temp, false, location());
+				}
+				ref<ParameterScope> des = objType.scope().destructor();
+				ref<Call> call = tree.newCall(des, CallCategory.DESTRUCTOR, value, null, location(), compileContext);
+				call.type = type;			// We know this is VOID
+				value = value.clone(tree);
+				ref<Node> con = tree.newConstant(0, location());
+				con.type = value.type;
+				ref<Node> compare = tree.newBinary(Operator.NOT_EQUAL, value, con, location());
+				compare.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+				ref<Node> nullPath = tree.newLeaf(Operator.EMPTY, location());
+				nullPath.type = call.type;
+				completion = tree.newBinary(Operator.SEQUENCE, call.fold(tree, false, compileContext), completion, location());
+				completion.type = type;
+				ref<Node> choice = tree.newTernary(Operator.CONDITIONAL, compare, completion, nullPath, location());
+				choice.type = call.type;
+				if (defn != null) {
+					destructors = tree.newBinary(Operator.SEQUENCE, defn.fold(tree, false, compileContext), choice, location());
+					destructors.type = choice.type;
+				} else
+					destructors = choice;
+				return destructors;
+			} else
 				return completion;
-			else {
-				ref<Node> combined = tree.newBinary(Operator.SEQUENCE, destructors, completion, location());
-				combined.type = destructors.type;
-				return combined;
-			}
 			break;
 			
 			

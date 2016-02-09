@@ -19,6 +19,7 @@ enum CallCategory {
 	ERROR,
 	COERCION,
 	CONSTRUCTOR,
+	DESTRUCTOR,
 	FUNCTION_CALL,
 	METHOD_CALL,
 }
@@ -181,7 +182,15 @@ class Call extends ParameterBag {
 					result = encapsulateCallInTemp(temp, tree);
 				}
 				break;
-				
+
+			case	DESTRUCTOR:
+				if (_overload == null) {
+					print(0);
+					assert(false);
+				}
+				thisParameter = _target;
+				break;
+
 			case	METHOD_CALL:
 				if (_target.op() == Operator.DOT) {
 					ref<Selection> dot = ref<Selection>(_target);
@@ -1390,9 +1399,9 @@ class Return extends ParameterBag {
 			ref<ParameterScope> destructor = sym.type().scope().destructor();
 			ref<Identifier> id = tree.newIdentifier(sym, location());
 			id.type = sym.type();
-			ref<Selection> method = tree.newSelection(id, destructor.symbol(), false, location());
-			method.type = destructor.symbol().type();
-			ref<Call> c = tree.newCall(destructor, null, method, null, location(), compileContext);
+			ref<Node> thisParameter = tree.newUnary(Operator.ADDRESS, id, id.location());
+			thisParameter.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+			ref<Call> c = tree.newCall(destructor, CallCategory.DESTRUCTOR, thisParameter, null, location(), compileContext);
 			c.type = compileContext.arena().builtInType(TypeFamily.VOID);
 			ref<Node> folded = c.fold(tree, true, compileContext);
 			output = tree.newBinary(Operator.SEQUENCE, folded, output, location());

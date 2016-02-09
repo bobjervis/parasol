@@ -39,6 +39,8 @@ enum Callable {
 
 int NOT_PARAMETERIZED_TYPE = -1000000;
 
+public int FIRST_USER_METHOD = 1;
+
 class ClassScope extends ClasslikeScope {
 	public ClassScope(ref<Scope> enclosing, ref<Node> definition, ref<Identifier> className) {
 		super(enclosing, definition, className);
@@ -57,7 +59,6 @@ class ClassScope extends ClasslikeScope {
 }
 
 class ClasslikeScope extends Scope {
-	private static int FIRST_USER_METHOD = 1;
 
 	public ref<ClassType> classType;
 	private ref<OverloadInstance>[] _methods;
@@ -126,11 +127,13 @@ class ClasslikeScope extends Scope {
 		}
 	}
 	
-	public void createPossibleImpliedDestructor(ref<CompileContext> compileContext) {
+	public boolean createPossibleImpliedDestructor(ref<CompileContext> compileContext) {
 		if (needsImpliedDestructor(compileContext)) {
 			ref<ParameterScope> functionScope = compileContext.arena().createParameterScope(this, null, ParameterScope.Kind.IMPLIED_DESTRUCTOR);
 			defineDestructor(functionScope, compileContext.pool());
-		}
+			return true;
+		} else
+			return false;
 	}
 	/**
 	 * TODO: This decision function is not quite complete. If there is a class hierarchy in which any sub-class has an
@@ -451,7 +454,7 @@ class ParameterScope extends Scope {
 	
 	public boolean usesVTable(ref<CompileContext> compileContext) {
 		if (_kind == Kind.IMPLIED_DESTRUCTOR) {
-			// There is no definition, but
+			// There is no definition, but the vtable will have a slot for virtual destructors.
 			return enclosing().hasVtable(compileContext);
 		}
 		ref<Function> func = ref<Function>(definition());
@@ -594,7 +597,8 @@ class Scope {
 	public void createPossibleDefaultConstructor(ref<CompileContext> compileContext) {
 	}
 		
-	public void createPossibleImpliedDestructor(ref<CompileContext> compileContext) {
+	public boolean createPossibleImpliedDestructor(ref<CompileContext> compileContext) {
+		return false;
 	}
 		
 	boolean writeHeader(File header) {
@@ -637,7 +641,10 @@ class Scope {
 	}
 	
 	void print(int indent, boolean printChildren) {
-		printf("%*.*cScope %p[%d] %s", indent, indent, ' ', this, variableStorage, string(_storageClass));
+		if (int(_storageClass) < 0)
+			printf("%*.*cScope %p[%d] storageClass <%d>", indent, indent, ' ', this, variableStorage, int(_storageClass));
+		else
+			printf("%*.*cScope %p[%d] %s", indent, indent, ' ', this, variableStorage, string(_storageClass));
 		printf(" %p", _definition);
 		if (_definition != null) {
 			switch (_definition.op()) {

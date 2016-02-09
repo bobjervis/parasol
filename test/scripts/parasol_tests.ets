@@ -59,6 +59,7 @@ run(filename: complex_subscript.p)
 
 //run(filename: try_test.p)
 run(filename: destructor_test.p)
+run(filename: destructor_virtual_test.p)
 run(filename: constructor_test.p)
 run(filename: array_init.p)
 run(filename: unicodeNumber.p)

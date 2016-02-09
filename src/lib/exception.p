@@ -296,6 +296,17 @@ public class CorruptHeapException extends RuntimeException {
 	}
 }
 
+public class StackOverflowException extends RuntimeException {
+	StackOverflowException(ref<ExceptionContext> exceptionContext) {
+		super(exceptionContext);
+	}
+	
+	ref<StackOverflowException> clone() {
+		ref<StackOverflowException> a = new StackOverflowException(_exceptionContext);
+		return a;
+	}
+}
+
 public class AccessException extends RuntimeException {
 	AccessException(ref<ExceptionContext> exceptionContext) {
 		super(exceptionContext);
@@ -357,6 +368,8 @@ void hardwareExceptionHandler(ref<HardwareException> info) {
 	context.exceptionType = info.exceptionType;
 	if (info.exceptionType == 0xffffffffc0000374) {
 		throw CorruptHeapException(context);
+	} else if (info.exceptionType == 0xffffffffc00000fd) {
+		throw StackOverflowException(context);
 	} else if (info.exceptionType == 0xffffffffc0000005) {
 		if (context.memoryAddress == null)
 			throw NullPointerException(context);

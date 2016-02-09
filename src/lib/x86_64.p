@@ -365,6 +365,11 @@ public class X86_64 extends X86_64AssignTemps {
 							instCall(sym.type().scope().destructor(), compileContext);
 						}
 					}
+					ref<Scope> base = classScope.base(compileContext);
+					if (base != null && base.destructor() != null) {
+						inst(X86.MOV, TypeFamily.ADDRESS, R.RCX, R.RSI);
+						instCall(base.destructor(), compileContext);			
+					}
 				}
 			}
 			closeCodeSegment(CC.NOP, null);
@@ -587,13 +592,13 @@ public class X86_64 extends X86_64AssignTemps {
 //			instStoreVTable(R.RSI, R.RAX, ref<ClassScope>(scope.enclosing()));
 			if (scope.enclosing().variableStorage > address.bytes) {
 				inst(X86.LEA, R.RCX, R.RSI, address.bytes);
-				inst(X86.XOR, TypeFamily.ADDRESS, R.RDX, R.RDX);
+				inst(X86.XOR, TypeFamily.UNSIGNED_8, R.RDX, R.RDX);
 				inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, scope.enclosing().variableStorage - address.bytes);
 				instCall(_memset.parameterScope(), compileContext);
 			}
 		} else {
 			inst(X86.MOV, TypeFamily.ADDRESS, R.RCX, R.RSI);
-			inst(X86.XOR, TypeFamily.ADDRESS, R.RDX, R.RDX);
+			inst(X86.XOR, TypeFamily.UNSIGNED_8, R.RDX, R.RDX);
 			inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, scope.enclosing().variableStorage);
 			instCall(_memset.parameterScope(), compileContext);
 		}
@@ -2414,24 +2419,19 @@ public class X86_64 extends X86_64AssignTemps {
 					sym.type() != null &&
 					sym.type().requiresAutoStorage()) {
 					if (sym.type().hasVtable(compileContext)) {
-						assert(false);
-						/*
-						target.byteCode(ByteCodes.AUTO);
-						target.byteCode(sym.offset);
-						storeVtable(sym.type(), this, compileContext);
-						target.byteCode(ByteCodes.POP);
+						inst(X86.LEA, R.RCX, node, compileContext);
+						storeVtable(node.type, compileContext);
 						if (sym.type().size() > address.bytes) {
-							target.byteCode(ByteCodes.ZERO_A);
-							target.byteCode(int(sym.offset + address.bytes));
-							target.byteCode(int(sym.type().size() - address.bytes)); 
+							inst(X86.XOR, TypeFamily.UNSIGNED_8, R.RDX, R.RDX);
+							inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, node.type.size() - address.bytes);
+							instCall(_memset.parameterScope(), compileContext);
 						}
-						*/
 					} else if (sym.type().size() > 0) {
 						if (sym.type().size() <= address.bytes)
 							inst(X86.MOV, node, 0, compileContext);
 						else {
 							inst(X86.LEA, R.RCX, node, compileContext);
-							inst(X86.XOR, TypeFamily.ADDRESS, R.RDX, R.RDX);
+							inst(X86.XOR, TypeFamily.UNSIGNED_8, R.RDX, R.RDX);
 							inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, node.type.size());
 							instCall(_memset.parameterScope(), compileContext);
 						}
@@ -2629,6 +2629,19 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			break;
 
+		case	DESTRUCTOR:
+			if (call.overload().usesVTable(compileContext)) {
+				inst(X86.MOV, R.RAX, R.RCX, 0);
+				inst(X86.CALL, TypeFamily.ADDRESS, R.RAX, address.bytes);
+			} else {
+				if (!instCall(call.overload(), compileContext)) {
+					call.print(0);
+					assert(false);
+					return;
+				}
+			}
+			break;
+			
 		case	METHOD_CALL:
 			if (isVirtualCall(call, compileContext)) {
 				inst(X86.MOV, R.RAX, R.RCX, 0);

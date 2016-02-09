@@ -98,7 +98,13 @@ class CompileContext {
 			scope.checkForDuplicateMethods(this);
 			scope.assignMethodMaps(this);
 			scope.createPossibleDefaultConstructor(this);
-//			_scope.createPossibleImpliedDestructor(compileContext);
+		}
+		for (;;) {
+			boolean modified;
+//			for (int i = 0; i < _arena.scopes().length(); i++)
+//				modified |= (*_arena.scopes())[i].createPossibleImpliedDestructor(this);
+			if (!modified)
+				break;
 		}
 		for (int i = 0; i < _arena.scopes().length(); i++)
 			(*_arena.scopes())[i].checkVariableStorage(this);

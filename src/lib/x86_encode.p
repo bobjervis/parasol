@@ -26,6 +26,7 @@ import parasol:compiler.CompileString;
 import parasol:compiler.Constant;
 import parasol:compiler.EnumInstanceType;
 import parasol:compiler.FileStat;
+import parasol:compiler.FIRST_USER_METHOD;
 import parasol:compiler.Function;
 import parasol:compiler.FunctionType;
 import parasol:compiler.Location;
@@ -448,7 +449,7 @@ class X86_64Encoder extends Target {
 	protected void buildVtable(ref<ClassScope> scope, ref<CompileContext> compileContext) {
 		if (scope.vtable == null) {
 			scope.vtable = address(_pxiHeader.vtableData + 1);
-			_pxiHeader.vtableData += scope.methods().length() + 1;
+			_pxiHeader.vtableData += scope.methods().length() + FIRST_USER_METHOD;
 			_vtables.append(scope);
 //			ref<VTable>(classScope.vtable).disassemble(0);
 			for (int i = 0; i < scope.methods().length(); i++) {
@@ -468,14 +469,23 @@ class X86_64Encoder extends Target {
 		int tableStart = _pxiHeader.vtablesOffset;
 		for (int i = 0; i < _vtables.length(); i++) {
 			ref<ClassScope> scope = _vtables[i];
-			int entries = scope.methods().length() + 1;
+			int entries = scope.methods().length() + FIRST_USER_METHOD;
 			int tableEnd = tableStart + entries * address.bytes;
 			pointer<address> table = pointer<address>(&_code[tableStart]);
 			*table = address(_pxiHeader.typeDataOffset + scope.classType.copyToImage(this) - 1);
-			for (int j = 1; j <= scope.methods().length(); j++) {
+			if (FIRST_USER_METHOD > 1 && scope.destructor() != null) {
+
+				// This relies on the side-effects of arranging that the function in question eventually gets generated.
+				getFunctionAddress(scope.destructor(), compileContext);
+				int target = int(scope.destructor().value) - 1;
+				table[1] = address(target);
+			}
+			for (int j = FIRST_USER_METHOD; j <= scope.methods().length(); j++) {
 				ref<OverloadInstance> oi = (*scope.methods())[j - 1];
 				ref<ParameterScope> functionScope = oi.parameterScope();
-				ref<Scope> func = getFunctionAddress(functionScope, compileContext);
+
+				// This relies on the side-effects of arranging that the function in question eventually gets generated.
+				getFunctionAddress(functionScope, compileContext);
 				int target = int(functionScope.value) - 1;
 				table[j] = address(target);
 			}

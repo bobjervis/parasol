@@ -20,6 +20,22 @@ class A {
 		_filler++;
 		destructorCountA++;
 	}
+	
+	void foo() {
+		
+	}
+}
+
+class B extends A {
+	int _signal;
+	
+	~B() {
+		assert(_signal == 1);
+	}
+	
+	void foo() {
+		_signal = 1;
+	}
 }
 
 int destructorCountA;
@@ -42,17 +58,27 @@ delete ra;
 
 assert(destructorCountA == 2);
 
-class B {
+ref<B> rb = new B;
+
+ra = rb;
+
+ra.foo();
+
+delete rb;
+
+assert(destructorCountA == 3);
+
+class C {
 	long filler;
 	A needsDestructor;
 	
-	~B() {
+	~C() {
 		filler = 3;
 	}
 }
 
-ref<B> b = new B;
+ref<C> c = new C;
 
-delete b;
+delete c;
 
-assert(destructorCountA == 3);
+assert(destructorCountA == 4);
