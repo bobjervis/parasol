@@ -280,7 +280,15 @@ public class X86_64 extends X86_64AssignTemps {
 				break;
 				
 			case	IMPLIED_DESTRUCTOR:
-				assert(false);
+				if (needsDestructorShutdown(parameterScope, compileContext)) { 
+					inst(X86.PUSH, TypeFamily.SIGNED_64, R.RSI);
+					inst(X86.MOV, TypeFamily.ADDRESS, R.RSI, R.RCX);
+					generateDestructorShutdown(parameterScope, compileContext);
+					inst(X86.POP, TypeFamily.SIGNED_64, R.RSI);
+				}
+				if (!generateReturn(scope, compileContext))
+					assert(false);
+				break;
 				
 			case	ENUM_TO_STRING:
 				ref<EnumScope> enclosing = ref<EnumScope>(scope.enclosing());
@@ -355,22 +363,8 @@ public class X86_64 extends X86_64AssignTemps {
 				compileContext.setCurrent(outer);
 				compileContext.resetVariables(initialVariableCount);
 				_stackLocalVariables = initialVariableCount;
-				if (func.functionCategory() == Function.Category.DESTRUCTOR) {
-					ref<ClassScope> classScope = ref<ClassScope>(parameterScope.enclosing());
-					assert(classScope.storageClass() == StorageClass.MEMBER);
-					for (int i = 0; i < classScope.members().length(); i++) {
-						ref<Symbol> sym = (*classScope.members())[i];
-						if (sym.type().hasDestructor()) {
-							inst(X86.LEA, R.RCX, R.RSI, sym.offset);
-							instCall(sym.type().scope().destructor(), compileContext);
-						}
-					}
-					ref<Scope> base = classScope.base(compileContext);
-					if (base != null && base.destructor() != null) {
-						inst(X86.MOV, TypeFamily.ADDRESS, R.RCX, R.RSI);
-						instCall(base.destructor(), compileContext);			
-					}
-				}
+				if (func.functionCategory() == Function.Category.DESTRUCTOR)
+					generateDestructorShutdown(parameterScope, compileContext);
 			}
 			closeCodeSegment(CC.NOP, null);
 			insertPreamble();
@@ -524,6 +518,34 @@ public class X86_64 extends X86_64AssignTemps {
 		}
 	}
 
+	private void generateDestructorShutdown(ref<ParameterScope> parameterScope, ref<CompileContext> compileContext) {
+		ref<ClassScope> classScope = ref<ClassScope>(parameterScope.enclosing());
+		assert(classScope.storageClass() == StorageClass.MEMBER);
+		for (int i = 0; i < classScope.members().length(); i++) {
+			ref<Symbol> sym = (*classScope.members())[i];
+			if (sym.type().hasDestructor()) {
+				inst(X86.LEA, R.RCX, R.RSI, sym.offset);
+				instCall(sym.type().scope().destructor(), compileContext);
+			}
+		}
+		ref<Scope> base = classScope.base(compileContext);
+		if (base != null && base.destructor() != null) {
+			inst(X86.MOV, TypeFamily.ADDRESS, R.RCX, R.RSI);
+			instCall(base.destructor(), compileContext);			
+		}
+	}
+
+	private boolean needsDestructorShutdown(ref<ParameterScope> parameterScope, ref<CompileContext> compileContext) {
+		ref<ClassScope> classScope = ref<ClassScope>(parameterScope.enclosing());
+		for (int i = 0; i < classScope.members().length(); i++) {
+			ref<Symbol> sym = (*classScope.members())[i];
+			if (sym.type().hasDestructor())
+				return true;
+		}
+		ref<Scope> base = classScope.base(compileContext);
+		return base != null && base.destructor() != null;
+	}
+	
 	private void resolveDeferredTrys(boolean isFunction, ref<CompileContext> compileContext) {
 		for (int i = 0; i < _deferredTry.length(); i++) {
 			ref<DeferredTry> dt = &_deferredTry[i];
@@ -985,7 +1007,37 @@ public class X86_64 extends X86_64AssignTemps {
 						outOffset += nl.node.type.stackSize();
 					}
 				}
-			} 
+				if (retn.liveSymbols() != null) {
+					ref<ParameterScope> enclosing = ref<ParameterScope>(compileContext.current());
+					boolean outParam = enclosing.hasOutParameter(compileContext);
+
+					if (!outParam) {
+						switch (arguments.node.type.family()) {
+						case	FLOAT_64:
+						case	FLOAT_32:
+							retn.print(4);
+							assert(false);
+							
+						default:
+							inst(X86.PUSH, TypeFamily.ADDRESS, R.RAX);
+						}
+					}
+					generateLiveSymbolDestructors(retn.liveSymbols(), compileContext);
+					if (!outParam) {
+						switch (arguments.node.type.family()) {
+						case	FLOAT_64:
+						case	FLOAT_32:
+							retn.print(4);
+							assert(false);
+							
+						default:
+							inst(X86.POP, TypeFamily.ADDRESS, R.RAX);
+						}
+					}
+				}
+			} else
+				generateLiveSymbolDestructors(retn.liveSymbols(), compileContext);
+				
 			if (!generateReturn(f().current, compileContext))
 				unfinished(retn, "failed return generation", compileContext);
 			break;
@@ -2109,6 +2161,14 @@ public class X86_64 extends X86_64AssignTemps {
 		}
 	}
 
+	private void generateLiveSymbolDestructors(ref<NodeList> liveSymbols, ref<CompileContext> compileContext) {
+		while (liveSymbols != null) {
+			inst(X86.LEA, R.RCX, liveSymbols.node, compileContext);
+			instCall(liveSymbols.node.type.scope().destructor(), compileContext);
+			liveSymbols = liveSymbols.next;
+		}
+	}
+	
 	private void generateOutParameter(ref<Node> value, int outOffset, ref<CompileContext> compileContext) {
 		if (value.op() == Operator.SEQUENCE) {
 			generate(ref<Binary>(value).left(), compileContext);
@@ -2422,6 +2482,7 @@ public class X86_64 extends X86_64AssignTemps {
 						inst(X86.LEA, R.RCX, node, compileContext);
 						storeVtable(node.type, compileContext);
 						if (sym.type().size() > address.bytes) {
+							inst(X86.ADD, TypeFamily.ADDRESS, R.RCX, 8);
 							inst(X86.XOR, TypeFamily.UNSIGNED_8, R.RDX, R.RDX);
 							inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, node.type.size() - address.bytes);
 							instCall(_memset.parameterScope(), compileContext);
@@ -2683,15 +2744,15 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 
 	private boolean isVirtualCall(ref<Call> call, ref<CompileContext> compileContext) {
-		if (!call.overload().usesVTable(compileContext))
-			return false;
-		switch (call.target().op()) {
-		case	DOT:
-			ref<Selection> dot = ref<Selection>(call.target());
-			return dot.left().op() != Operator.SUPER;
+		if (call.overload().usesVTable(compileContext)) {
+			switch (call.target().op()) {
+			case	DOT:
+				ref<Selection> dot = ref<Selection>(call.target());
+				return dot.left().op() != Operator.SUPER;
 
-		case	IDENTIFIER:
-			return true;
+			case	IDENTIFIER:
+				return true;
+			}
 		}
 		return false;
 	}

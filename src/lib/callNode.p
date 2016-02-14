@@ -1337,6 +1337,8 @@ class EllipsisArguments extends ParameterBag {
 }
 
 class Return extends ParameterBag {
+	ref<NodeList> _liveSymbols;
+	
 	Return(ref<NodeList> expressions, Location location) {
 		super(Operator.RETURN, expressions, location);
 	}
@@ -1392,28 +1394,32 @@ class Return extends ParameterBag {
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
 			nl.node = nl.node.fold(tree, false, compileContext);
 		int n = compileContext.liveSymbolCount();
-		ref<Node> output = this;
+//		ref<Node> output = this;
 		for (int i = 0; i < n; i++) {
 			ref<Symbol> sym = compileContext.getLiveSymbol(i);
 			// We know that 'live' symbols have a scope with a destructor
-			ref<ParameterScope> destructor = sym.type().scope().destructor();
+//			ref<ParameterScope> destructor = sym.type().scope().destructor();
 			ref<Identifier> id = tree.newIdentifier(sym, location());
 			id.type = sym.type();
-			ref<Node> thisParameter = tree.newUnary(Operator.ADDRESS, id, id.location());
-			thisParameter.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
-			ref<Call> c = tree.newCall(destructor, CallCategory.DESTRUCTOR, thisParameter, null, location(), compileContext);
-			c.type = compileContext.arena().builtInType(TypeFamily.VOID);
-			ref<Node> folded = c.fold(tree, true, compileContext);
-			output = tree.newBinary(Operator.SEQUENCE, folded, output, location());
-//			printf("Return destructor:\n");
-//			sym.print(4, false);
+			ref<NodeList> nl = tree.newNodeList(id);
+			nl.next = _liveSymbols;
+			_liveSymbols = nl;
+//			ref<Node> thisParameter = tree.newUnary(Operator.ADDRESS, id, id.location());
+//			thisParameter.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+//			ref<Call> c = tree.newCall(destructor, CallCategory.DESTRUCTOR, thisParameter, null, location(), compileContext);
+//			c.type = compileContext.arena().builtInType(TypeFamily.VOID);
+//			ref<Node> folded = c.fold(tree, true, compileContext);
+//			output = tree.newBinary(Operator.SEQUENCE, folded, output, location());
 		}
-		return output;
+		return this;
 	}
 	
 	public ref<Return> clone(ref<SyntaxTree> tree) {
 		ref<NodeList> arguments = _arguments != null ? _arguments.clone(tree) : null;
-		return ref<Return>(tree.newReturn(arguments, location()).finishClone(this, tree.pool()));
+		ref<Return> copy = tree.newReturn(arguments, location()); 
+		if (_liveSymbols != null)
+			copy._liveSymbols = _liveSymbols.clone(tree); 
+		return ref<Return>(copy.finishClone(this, tree.pool()));
 	}
 
 	public ref<Return> cloneRaw(ref<SyntaxTree> tree) {
@@ -1432,6 +1438,14 @@ class Return extends ParameterBag {
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next, i++) {
 			printf("%*.*c  {Return expression %d}\n", indent, indent, ' ', i);
 			nl.node.print(indent + INDENT);
+		}
+		if (_liveSymbols != null) {
+			i = 0;
+			printf("%*.*c  Destructors:\n", indent, indent, ' ');
+			for (ref<NodeList> nl = _liveSymbols; nl != null; nl = nl.next, i++) {
+				printf("%*.*c    {destructor %d}\n", indent, indent, ' ', i);
+				nl.node.print(indent + INDENT);
+			}
 		}
 	}
  
@@ -1484,6 +1498,10 @@ class Return extends ParameterBag {
 				type = compileContext.errorType();
 			}
 		}
+	}
+	
+	ref<NodeList> liveSymbols() {
+		return _liveSymbols;
 	}
 }
 

@@ -98,7 +98,7 @@ class BuiltInType extends Type {
 	public ref<OverloadInstance> initialConstructor() {
 		return _classType.initialConstructor();
 	}
-	
+
 	public ref<ParameterScope> defaultConstructor() {
 		return _classType.defaultConstructor();
 	}

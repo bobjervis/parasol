@@ -101,8 +101,8 @@ class CompileContext {
 		}
 		for (;;) {
 			boolean modified;
-//			for (int i = 0; i < _arena.scopes().length(); i++)
-//				modified |= (*_arena.scopes())[i].createPossibleImpliedDestructor(this);
+			for (int i = 0; i < _arena.scopes().length(); i++)
+				modified |= (*_arena.scopes())[i].createPossibleImpliedDestructor(this);
 			if (!modified)
 				break;
 		}
@@ -444,6 +444,8 @@ class CompileContext {
 
 		case	FUNCTION:
 			ref<Function> f = ref<Function>(n);
+			ParameterScope.Kind funcKind;
+		
 			ref<ParameterScope> functionScope = createParameterScope(f, ParameterScope.Kind.FUNCTION);
 			if (f.name() != null) {
 				switch (f.functionCategory()) {

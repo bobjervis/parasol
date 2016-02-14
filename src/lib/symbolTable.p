@@ -39,7 +39,7 @@ enum Callable {
 
 int NOT_PARAMETERIZED_TYPE = -1000000;
 
-public int FIRST_USER_METHOD = 1;
+public int FIRST_USER_METHOD = 2;
 
 class ClassScope extends ClasslikeScope {
 	public ClassScope(ref<Scope> enclosing, ref<Node> definition, ref<Identifier> className) {
@@ -412,6 +412,17 @@ class ParameterScope extends Scope {
 			return false;
 	}
 	
+	public boolean isDestructor() {
+		if (_kind == Kind.IMPLIED_DESTRUCTOR)
+			return true;
+		ref<Function> func = ref<Function>(definition());
+		
+		if (func == null)		// a generated default constructor has no 'definition'
+			return false;		// but it does have 'this'
+		else
+			return func.functionCategory() == Function.Category.DESTRUCTOR;
+	}
+
 	public ref<FunctionType> type() {
 		ref<Function> func = ref<Function>(definition());
 		if (func == null)		// a generate default constructor has no 'definition'
@@ -453,7 +464,7 @@ class ParameterScope extends Scope {
 	}
 	
 	public boolean usesVTable(ref<CompileContext> compileContext) {
-		if (_kind == Kind.IMPLIED_DESTRUCTOR) {
+		if (isDestructor()) {
 			// There is no definition, but the vtable will have a slot for virtual destructors.
 			return enclosing().hasVtable(compileContext);
 		}

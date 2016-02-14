@@ -139,6 +139,7 @@ private ref<ref<script.Atom>[]> parseOne(string arg) {
 			f.close();
 		} else
 			printf("Could not open %s\n", arg);
+		assert(false);
 		return null;
 	}
 }

@@ -45,9 +45,14 @@ assert(d.inheritedFunc() == 6);
 assert(flagBase);
 assert(flagDerived);
 
+printf("Derived class direct call test - PASSED\n");
+
 Base b;
 
 ref<Base> bp = &b;
+
+address vtable = *ref<address>(&b);
+text.memDump(vtable, 24);
 
 flagBase = false;
 assert(bp.inheritedFunc() == 3);
@@ -55,6 +60,11 @@ assert(flagBase);
 
 assert(bp.class == Base);
 
+printf("Base class indirect call test - PASSED\n");
+
 ref<Base> x = &d;
 
 assert(x.class == Derived);
+
+printf("Base class indirect class detection test - PASSED\n");
+

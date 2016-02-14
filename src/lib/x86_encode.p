@@ -166,6 +166,9 @@ class X86_64Encoder extends Target {
 		// 
 		_pxiHeader.entryPoint = generateFunction(mainFile.fileScope(), compileContext);
 
+		// Now generate some more functions that might have been missed during the static code generation.
+		prepareVTables(compileContext);
+		
 		if (_code.length() == 0) {
 			mainFile.tree().root().add(MessageId.NO_CODE, compileContext.pool());
 			return false;
@@ -462,7 +465,27 @@ class X86_64Encoder extends Target {
 			}
 		}
 	}
-	
+	/**
+	 * 
+	 */
+	private void prepareVTables(ref<CompileContext> compileContext) {
+		if (_pxiHeader.vtableData == 0)
+			return;
+		for (int i = 0; i < _vtables.length(); i++) {
+			ref<ClassScope> scope = _vtables[i];
+			// This relies on the side-effects of arranging that the function in question eventually gets generated.
+			if (FIRST_USER_METHOD > 1 && scope.destructor() != null)
+				getFunctionAddress(scope.destructor(), compileContext);
+			for (int j = 0; j < scope.methods().length(); j++) {
+				ref<OverloadInstance> oi = (*scope.methods())[j];
+				ref<ParameterScope> functionScope = oi.parameterScope();
+
+				// This relies on the side-effects of arranging that the function in question eventually gets generated.
+				getFunctionAddress(functionScope, compileContext);
+			}
+		}
+	}
+
 	private void populateVTables(ref<CompileContext> compileContext) {
 		if (_pxiHeader.vtableData == 0)
 			return;
@@ -474,20 +497,15 @@ class X86_64Encoder extends Target {
 			pointer<address> table = pointer<address>(&_code[tableStart]);
 			*table = address(_pxiHeader.typeDataOffset + scope.classType.copyToImage(this) - 1);
 			if (FIRST_USER_METHOD > 1 && scope.destructor() != null) {
-
-				// This relies on the side-effects of arranging that the function in question eventually gets generated.
-				getFunctionAddress(scope.destructor(), compileContext);
 				int target = int(scope.destructor().value) - 1;
 				table[1] = address(target);
 			}
-			for (int j = FIRST_USER_METHOD; j <= scope.methods().length(); j++) {
-				ref<OverloadInstance> oi = (*scope.methods())[j - 1];
+			for (int j = 0; j < scope.methods().length(); j++) {
+				ref<OverloadInstance> oi = (*scope.methods())[j];
 				ref<ParameterScope> functionScope = oi.parameterScope();
 
-				// This relies on the side-effects of arranging that the function in question eventually gets generated.
-				getFunctionAddress(functionScope, compileContext);
 				int target = int(functionScope.value) - 1;
-				table[j] = address(target);
+				table[j + FIRST_USER_METHOD] = address(target);
 			}
 			tableStart = tableEnd;
 		}

@@ -121,5 +121,6 @@ int main(string[] args) {
 			parasolCommand.compileFromSourceArgument.value,
 			parasolCommand.targetArgument.value);
 //		initCommonTestObjects();
+	string[] s = parasolCommand.finalArgs();
 	return launch(parasolCommand.finalArgs());
 }

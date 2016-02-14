@@ -82,3 +82,24 @@ ref<C> c = new C;
 delete c;
 
 assert(destructorCountA == 4);
+
+int destructorCountInnerD;
+
+class InnerD {
+	int y;
+	
+	~InnerD() {
+		destructorCountInnerD++;
+	}
+}
+
+class D extends A {
+	InnerD x;
+}
+
+ref<A> rac = new D();
+
+delete rac;
+
+assert(destructorCountInnerD == 1);
+assert(destructorCountA == 5);
