@@ -1411,6 +1411,23 @@ class Return extends ParameterBag {
 //			ref<Node> folded = c.fold(tree, true, compileContext);
 //			output = tree.newBinary(Operator.SEQUENCE, folded, output, location());
 		}
+		// Returning a string by value, we have to make a copy.
+		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
+			if (nl.node.type == null || nl.node.deferAnalysis())
+				continue;
+			if (nl.node.type.family() == TypeFamily.STRING) {
+				if (nl.node.op() == Operator.CALL)
+					continue;
+				// TODO: Add a check for the return value being one of the live symbols to be destroyed.
+				ref<Variable> temp = compileContext.newVariable(nl.node.type);
+				ref<Reference> r = tree.newReference(temp, true, location());
+				ref<Node> defn = tree.newBinary(Operator.ASSIGN, r, nl.node, location());
+				defn.type = nl.node.type;
+				r = tree.newReference(temp, false, location());
+				nl.node = tree.newBinary(Operator.SEQUENCE, defn.fold(tree, true, compileContext), r, location());
+				nl.node.type = defn.type;
+			}
+		}
 		return this;
 	}
 	
@@ -1515,9 +1532,26 @@ ref<Node>, int foldMultiReturn(ref<Node> leftHandle, ref<Node> destinations, ref
 		(lh, offset) = foldMultiReturn(leftHandle, b.left(), intermediate, tree, compileContext);
 		ref<Reference> r = tree.newReference(intermediate, offset, false, destinations.location());
 		r.type = b.right().type;
-		ref<Node> assignment = tree.newBinary(Operator.ASSIGN, b.right(), r, destinations.location());
-		assignment.type = r.type;
-		assignment = assignment.fold(tree, false, compileContext);
+		ref<Node> assignment;
+		if (r.type.family() == TypeFamily.STRING) {
+			ref<OverloadInstance> oi = getMethodSymbol(b.right(), "store", r.type, compileContext);
+			if (oi == null) {
+				destinations.type = compileContext.errorType();
+				return destinations;
+			}
+			// This is the assignment method for this class!!!
+			// (all strings go through here).
+			ref<Selection> method = tree.newSelection(b.right(), oi, false, destinations.location());
+			method.type = oi.type();
+			ref<NodeList> args = tree.newNodeList(r);
+			ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, destinations.location(), compileContext);
+			call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+			assignment = call.fold(tree, true, compileContext);
+		} else {
+			assignment = tree.newBinary(Operator.ASSIGN, b.right(), r, destinations.location());
+			assignment.type = r.type;
+			assignment = assignment.fold(tree, true, compileContext);
+		}
 		offset += b.right().type.stackSize();
 		result = tree.newBinary(Operator.SEQUENCE, lh, assignment, destinations.location());
 	} else {

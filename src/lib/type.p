@@ -1009,6 +1009,23 @@ class Type {
 		return null;
 	}
 
+	public ref<OverloadInstance> storeMethod(ref<CompileContext> compileContext) {
+		CompileString name("store");
+		
+		ref<Symbol> sym = lookup(&name, compileContext);
+		if (sym != null && sym.class == Overload) {
+			ref<Overload> o = ref<Overload>(sym);
+			for (int i = 0; i < o.instances().length(); i++) {
+				ref<OverloadInstance> oi = (*o.instances())[i];
+				if (oi.parameterCount() != 1)
+					continue;
+				if ((*oi.parameterScope().parameters())[0].type() == this)
+					return oi;
+			}
+		}
+		return null;
+	}
+
 	public ref<ParameterScope> copyConstructor() {
 		if (scope() == null)
 			return null;

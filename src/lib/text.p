@@ -17,6 +17,9 @@ namespace parasol:text;
 
 import native:C;
 
+public boolean ignoring;
+public address[] deletedContents;
+
 class string {
 	private class allocation {
 		public int length;
@@ -71,6 +74,10 @@ class string {
 		appendDigits(value);		
 	}
 	
+	private string(ref<allocation> other) {
+		_contents = other;
+	}
+	
 	private void appendDigits(long value) {
 		if (value > 9)
 			appendDigits(value / 10);
@@ -83,7 +90,11 @@ class string {
 	
 	~string() {
 		if (_contents != null) {
-//			free(_contents);
+//			if (!ignoring)
+//				deletedContents.append(_contents);
+//			else
+//				print("Delete\n");
+			free(_contents);
 		}
 	}
 	
@@ -252,13 +263,16 @@ class string {
 	}
 	
 	public void copy(string other) {
-		if (_contents != null) {
-			free(_contents);
-			_contents = null;
-		}
 		if (other != null) {
+			if (_contents == other._contents)
+				return;
 			resize(other._contents.length);
 			C.memcpy(&_contents.data, &other._contents.data, other._contents.length + 1);
+		} else {
+			if (_contents != null) {
+				free(_contents);
+				_contents = null;
+			}
 		}
 	}
 	
@@ -1065,6 +1079,17 @@ class string {
 		} else
 			output.resize(1);
 		return output;
+	}
+	/**
+	 * store
+	 * 
+	 * This is only in generated code in those circumstances where a string returned from a function can short-
+	 * circuit a copy and a delete by just taing the live string value returned from the function and calling this
+	 * method to use that live value.
+	 */
+	void store(ref<allocation> other) {
+		copy(null);			// First, just remove whatever data we have in the string
+		_contents = other;	// Then. store the new data - note that other == null is the right value for a null string.
 	}
 	/*
 	 *	substring

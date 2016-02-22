@@ -15,7 +15,7 @@
  */
 print("constructor tests\n");
 constructorTests();
-print("append tests");
+print("append tests\n");
 appendTests();
 print("center tests\n");
 centerTests();
@@ -95,6 +95,9 @@ void centerTests() {
 	
 	print("value ok!\n");
 	string d = a.center(12, '#');
+	print("'");
+	print(d);
+	print("'\n");
 	assert(d.length() == 12);
 	print("d length ok\n");
 	assert(d == "####abc#####");

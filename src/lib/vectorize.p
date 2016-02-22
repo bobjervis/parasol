@@ -167,14 +167,9 @@ ref<Node> vectorize(ref<SyntaxTree> tree, ref<Node> vectorExpression, ref<Compil
 			}
 		}
 		if (closure.lvalues.length() == 1) {
-			CompileString name("resize");
-			
-			ref<Symbol> sym = closure.lvalues[0].type.lookup(&name, compileContext);
-			if (sym == null || sym.class != Overload) {
-				closure.lvalues[0].add(MessageId.UNDEFINED, compileContext.pool(), name);
+			ref<OverloadInstance> oi = getMethodSymbol(closure.lvalues[0], "resize", closure.lvalues[0].type, compileContext);
+			if (oi == null)
 				return vectorExpression;
-			}
-			ref<OverloadInstance> oi = (*ref<Overload>(sym).instances())[0];
 			ref<Selection> method = tree.newSelection(closure.lvalues[0], oi, false, vectorExpression.location());
 			method.type = oi.type();
 			ref<NodeList> args = tree.newNodeList(tree.newReference(vectorSize, false, vectorExpression.location()));
@@ -208,16 +203,10 @@ ref<Node> vectorize(ref<SyntaxTree> tree, ref<Node> vectorExpression, ref<Compil
 
 private ref<Node> rewriteVectorTree(ref<SyntaxTree> tree, ref<Node> vectorStuff, ref<Variable> iterator, ref<Variable> vectorSize, ref<CompileContext> compileContext) {
 	if ((vectorStuff.nodeFlags & VECTOR_OPERAND) != 0) {
-		CompileString sub("getModulo");
-
 		ref<Node> index = tree.newReference(iterator, false, vectorStuff.location());
-		ref<Symbol> sym = vectorStuff.type.lookup(&sub, compileContext);
-		
-		if (sym == null || sym.class != Overload) {
-			vectorStuff.add(MessageId.UNDEFINED, compileContext.pool(), sub);
+		ref<OverloadInstance> oi = getMethodSymbol(vectorStuff, "getModulo", vectorStuff.type, compileContext);
+		if (oi == null)
 			return vectorStuff;
-		}
-		ref<OverloadInstance> oi = (*ref<Overload>(sym).instances())[0];
 		ref<Selection> method = tree.newSelection(vectorStuff, oi, false, vectorStuff.location());
 		method.type = oi.type();
 		ref<NodeList> args = tree.newNodeList(index);
@@ -228,17 +217,11 @@ private ref<Node> rewriteVectorTree(ref<SyntaxTree> tree, ref<Node> vectorStuff,
 	switch (vectorStuff.op()) {
 	case	ASSIGN:
 	case	INITIALIZE:
-		CompileString elem("setModulo");
-
 		ref<Binary> b = ref<Binary>(vectorStuff);
 		ref<Node> index = tree.newReference(iterator, false, vectorStuff.location());
-		ref<Symbol> sym = vectorStuff.type.lookup(&elem, compileContext);
-		
-		if (sym == null || sym.class != Overload) {
-			vectorStuff.add(MessageId.UNDEFINED, compileContext.pool(), elem);
+		ref<OverloadInstance> oi = getMethodSymbol(vectorStuff, "setModulo", vectorStuff.type, compileContext);
+		if (oi == null)
 			return vectorStuff;
-		}
-		ref<OverloadInstance> oi = (*ref<Overload>(sym).instances())[0];
 		ref<Selection> method = tree.newSelection(b.left(), oi, false, vectorStuff.location());
 		method.type = oi.type();
 		ref<Node> right = rewriteVectorTree(tree, b.right(), iterator, vectorSize, compileContext);

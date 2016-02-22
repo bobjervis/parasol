@@ -320,8 +320,23 @@ class Binary extends Node {
 				
 			case	CLASS:
 			case	VAR:
-			case	STRING:
 				ref<ParameterScope> scope = type.copyConstructor();
+				if (scope != null) {
+					ref<Node> adr = tree.newUnary(Operator.ADDRESS, _left, location());
+					adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+					ref<NodeList> args = tree.newNodeList(_right);
+					ref<Call> constructor = tree.newCall(scope, CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
+					constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
+					return constructor.fold(tree, true, compileContext);
+				} else {
+					ref<Node> result = foldClassCopy(tree, compileContext);
+					if (result != null)
+						return result;
+				}
+				break;
+				
+			case	STRING:
+				scope = type.copyConstructor();
 				if (scope != null) {
 					ref<Node> adr = tree.newUnary(Operator.ADDRESS, _left, location());
 					adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
@@ -631,9 +646,25 @@ class Binary extends Node {
 			case	POINTER:
 				break;
 				
+			case	STRING:
+				if (_right.op() == Operator.CALL) {
+					ref<OverloadInstance> oi = getMethodSymbol(_right, "store", type, compileContext);
+					if (oi == null) {
+						type = compileContext.errorType();
+						return this;
+					}
+					// This is the assignment method for this class!!!
+					// (all strings go through here).
+					ref<Selection> method = tree.newSelection(_left, oi, false, _left.location());
+					method.type = oi.type();
+					ref<NodeList> args = tree.newNodeList(_right);
+					ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
+					call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+					return call.fold(tree, voidContext, compileContext);
+				}
+				
 			case	CLASS:
 			case	SHAPE:
-			case	STRING:
 				ref<OverloadInstance> oi = type.assignmentMethod(compileContext);
 				if (oi != null) {
 					// This is the assignment method for this class!!!
@@ -2062,4 +2093,16 @@ private void markLiveSymbols(ref<Node> declarator, ref<CompileContext> compileCo
 		declarator.print(0);
 		assert(false);
 	}
+}
+
+ref<OverloadInstance> getMethodSymbol(ref<Node> parent, string name, ref<Type> type, ref<CompileContext> compileContext) {
+	CompileString csName(name);
+	
+	ref<Symbol> sym = type.lookup(&csName, compileContext);
+	if (sym == null || sym.class != Overload) {
+		parent.add(MessageId.UNDEFINED, compileContext.pool(), csName);
+		return null;
+	}
+	ref<Overload> over = ref<Overload>(sym);
+	return (*over.instances())[0];
 }
