@@ -38,6 +38,7 @@ public:
 					"Parasol Runtime Version " RUNTIME_VERSION "\r"
 					"Copyright (c) " COPYRIGHT_STRING
 					);
+		leaksArgument = booleanArgument(0, "leaks", "Check for memory leaks.");
 		verboseArgument = booleanArgument('v', null,
 					"Enables verbose output.");
 		traceArgument = booleanArgument(0, "trace",
@@ -48,6 +49,7 @@ public:
 
 	commandLine::Argument<bool> *verboseArgument;
 	commandLine::Argument<bool> *traceArgument;
+	commandLine::Argument<bool> *leaksArgument;
 };
 
 static ParasolCommand parasolCommand;
@@ -68,6 +70,11 @@ void parseCommandLine(int argc, char **argv) {
 }
 
 int runCommand() {
+	long long runtimeFlags = 0;
+	if (parasolCommand.leaksArgument->value())
+		runtimeFlags |= 1;
+	if (parasolCommand.traceArgument->value())
+		runtimeFlags |= 2;
 	char **args = parasolCommand.finalArgv();
 	int returnValue;
 	pxi::Pxi* pxi = pxi::Pxi::load(args[0]);
@@ -75,7 +82,7 @@ int runCommand() {
 		printf("Failed to load %s\n", args[0]);
 		return 1;
 	}
-	if (pxi->run(args, &returnValue, parasolCommand.traceArgument->value()))
+	if (pxi->run(args, &returnValue, runtimeFlags))
 		return returnValue;
 	else {
 		printf("Unable to run pxi %s\n", args[0]);

@@ -295,7 +295,7 @@ ExecutionContext::ExecutionContext(void **objects, int objectCount) {
 	_sourceLocationsCount = 0;
 }
 
-ExecutionContext::ExecutionContext(X86_64SectionHeader *pxiHeader, void *image) {
+ExecutionContext::ExecutionContext(X86_64SectionHeader *pxiHeader, void *image, long long runtimeFlags) {
 	_length = 2 * sizeof (void*);
 	_stack = (byte*)malloc(_length);
 	_sp = _stack + _length;
@@ -312,6 +312,7 @@ ExecutionContext::ExecutionContext(X86_64SectionHeader *pxiHeader, void *image) 
 	_hardwareExceptionHandler = null;
 	_sourceLocations = null;
 	_sourceLocationsCount = 0;
+	_runtimeFlags = runtimeFlags;
 }
 
 ExecutionContext::~ExecutionContext() {
@@ -435,7 +436,7 @@ static int eval(int startObject, char **argv, int argc, byte** exceptionInfo) {
 
 int evalNative(X86_64SectionHeader *header, byte *image, char **argv, int argc) {
 	ExecutionContext *outer = threadContext.get();
-	ExecutionContext context(header, image);
+	ExecutionContext context(header, image, outer->runtimeFlags());
 
 	threadContext.set(&context);
 //	StackState outer = context->unloadFrame();
@@ -1723,6 +1724,16 @@ static int pGetModuleFileName(void *hModule, void *buffer, int bufferLen) {
 	return result;
 }
 
+static void *pGetModuleHandle(void *buffer) {
+	void *hModule = GetModuleHandle((LPCH)buffer);
+	return hModule;
+}
+
+static FARPROC pGetProcAddress(void *hModule, void *symbol) {
+	FARPROC procAddress = GetProcAddress((HMODULE)hModule, (LPCH)symbol);
+	return procAddress;
+}
+
 static unsigned pGetFullPathName(char *filename, unsigned bufSz, char *buffer, char **filePart) {
 	DWORD result = GetFullPathName(filename, bufSz, buffer, filePart);
 	return result;
@@ -1934,6 +1945,11 @@ int exceptionsCount() {
 	return context->exceptionsCount();
 }
 
+long long getRuntimeFlags() {
+	ExecutionContext *context = threadContext.get();
+	return context->runtimeFlags();
+}
+
 byte *lowCodeAddress() {
 	ExecutionContext *context = threadContext.get();
 	return context->lowCodeAddress();
@@ -1971,7 +1987,8 @@ void ExecutionContext::setSourceLocations(void *location, int count) {
 
 BuiltInFunctionMap builtInFunctionMap[] = {
 	{ "print",			nativeFunction(builtInPrint),	1,	1 },
-	{ "__notUsed3__",	nativeFunction(now),			0,	0 },
+	{ "GetModuleHandle",nativeFunction(pGetModuleHandle),
+														1,	1, "native" },
 	{ "allocz",			nativeFunction(allocz),			1,	1 },
 	{ "free",			nativeFunction(free),			1,	0 },
 	{ "memcpy",			nativeFunction(fMemcpy),		3,	1 },
@@ -2018,7 +2035,8 @@ BuiltInFunctionMap builtInFunctionMap[] = {
 	{ "injectObjects",	nativeFunction(injectObjects),	2,	1, "parasol" },
 	{ "eval",			nativeFunction(eval),			4,	1, "parasol" },
 	{ "setTrace",		nativeFunction(setTrace),		1,	1, "parasol" },
-	{ "__notused2__",	nativeFunction(now),			0,	0, "parasol" },
+	{ "GetProcAddress",	nativeFunction(pGetProcAddress),
+														2,	1, "native" },
 	{ "supportedTarget",nativeFunction(supportedTarget),1,	1, "parasol" },
 	{ "registerHardwareExceptionHandler",
 						nativeFunction(registerHardwareExceptionHandler),
@@ -2035,7 +2053,7 @@ BuiltInFunctionMap builtInFunctionMap[] = {
 	{ "_now",			nativeFunction(now),			0,	1, "parasol" },
 	{ "FormatMessage",	nativeFunction(formatMessage),	1,	1, "native" },
 	{ "runningTarget",  nativeFunction(runningTarget),  0,  1, "parasol" },
-	{ "__notused__",	nativeFunction(now),			0,	0, "parasol" },
+	{ "getRuntimeFlags",nativeFunction(getRuntimeFlags),0,	1, "parasol" },
 	{ "strtod",			nativeFunction(strtod),			2,	1, "native" },
 	{ "ecvt",			nativeFunction(ecvt),			4,	1, "native" },
 	{ "fcvt",			nativeFunction(fcvt),			4,	1, "native" },
@@ -2360,13 +2378,14 @@ ByteCodeSection::~ByteCodeSection() {
 		free(_image);
 }
 
-bool ByteCodeSection::run(char **args, int *returnValue, bool trace) {
+bool ByteCodeSection::run(char **args, int *returnValue, long long runtimeFlags) {
 	ExecutionContext executionContext(&_objects[0], _objects.size());
 	int argc = 0;
 	for (int i = 1; args[i] != null; i++)
 		argc++;
 	executionContext.push(args + 1, argc);
-	executionContext.trace = trace;
+	executionContext.trace = (runtimeFlags & 2) != 0;
+	executionContext.setRuntimeFlags(runtimeFlags);
 	executionContext.unloadFrame();
 	if (executionContext.run(_entryPoint)) {
 		long long x = executionContext.pop();

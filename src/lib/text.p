@@ -86,6 +86,7 @@ class string {
 	}
 	
 	public string(double value) {
+		printf("%g", value);
 	}
 	
 	~string() {

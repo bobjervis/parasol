@@ -20,6 +20,7 @@ import parasol:compiler.FileStat;
 import parasol:compiler.Location;
 import parasol:compiler.Scanner;
 import parasol:compiler.Token;
+import native:C;
 
 class TestCommand extends commandLine.Command {
 	public TestCommand() {
@@ -119,7 +120,7 @@ boolean scan(string filename) {
 		}
 		tokens.append(ti);
 		// TODO: The following line is hacky, hacky, hacky - should not be needed.
-		memset(&ti, 0, ti.bytes);
+		C.memset(&ti, 0, ti.bytes);
 	}
 	ref<Scanner> nscanner = Scanner.create(fs);
 	if (!scannerTestCommand.skipShuffleArgument.value)

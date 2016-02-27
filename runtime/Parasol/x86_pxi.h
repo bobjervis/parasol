@@ -48,7 +48,7 @@ public:
 
 	virtual ~X86_64Section();
 
-	virtual bool run(char **args, int *returnValue, bool trace);
+	virtual bool run(char **args, int *returnValue, long long runtimeFlags);
 
 	bool valid() {
 		return _image != null;

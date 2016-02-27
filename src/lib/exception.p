@@ -19,7 +19,9 @@ import parasol:compiler.FileStat;
 import parasol:x86_64.ExceptionEntry;
 import parasol:x86_64.SourceLocation;
 import parasol:process;
+import parasol:runtime;
 import native:windows;
+import native:C;
 
 int EXCEPTION_ACCESS_VIOLATION	= int(0xc0000005);
 int EXCEPTION_IN_PAGE_ERROR		= int(0xc0000006);
@@ -345,7 +347,7 @@ void throwException(ref<Exception> e, address frame, address stackPointer) {
 /**
  * Intercept an uncaught exception. This code is called from the catch handler that encloses the static initializers.
  * 
- * It is called under the scope of the ExecutionContext of the code throwing the eexception. Doing this inside the
+ * It is called under the scope of the ExecutionContext of the code throwing the exception. Doing this inside the
  * enclosed ExecutionContext means that the source locations are correctly aligned for the stack trace.
  * 
  * Note that this handler also exposes the exception so that the caller to eval knows that the call failed because of an
@@ -391,7 +393,7 @@ ref<ExceptionContext> createExceptionContext(address stackPointer) {
 	pointer<byte> memory = pointer<byte>(allocz(stackSize + ExceptionContext.bytes));
 	ref<ExceptionContext> results = ref<ExceptionContext>(memory);
 	results.stackCopy = memory + ExceptionContext.bytes;
-	memcpy(results.stackCopy, stackPointer, int(stackSize));
+	C.memcpy(results.stackCopy, stackPointer, int(stackSize));
 	results.stackPointer = stackPointer;
 	results.stackBase = stackPointer;
 	results.stackSize = int(stackSize);
@@ -400,6 +402,12 @@ ref<ExceptionContext> createExceptionContext(address stackPointer) {
 
 
 public abstract ref<ExceptionContext> exceptionContext(ref<ExceptionContext> newContext);
+/**
+ * This method records in the runtime's ExecutionContext the given exception, if this is passed a null,
+ * the 'uncaught exception' indicator is effectively reset. If passed a null, the enclosing ExecutionContext
+ * will detect that an uncaught exception terminated execution.
+ */
+private abstract void exposeException(ref<Exception> e);
 
 abstract void registerHardwareExceptionHandler(void handler(ref<HardwareException> info));
 

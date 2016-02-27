@@ -49,6 +49,8 @@ public abstract address builtInFunctionAddress(int index);
 public abstract int builtInFunctionArguments(int index);
 public abstract int builtInFunctionReturns(int index);
 
+public abstract long getRuntimeFlags();
+
 public address allocateRegion(long length) {
 	address v = windows.VirtualAlloc(null, length, windows.MEM_COMMIT|windows.MEM_RESERVE, windows.PAGE_READWRITE);
 //	printf("VirtualAlloc(%p, %d, %x, %x) -> %p\n", null, length, int(windows.MEM_COMMIT|windows.MEM_RESERVE), int(windows.PAGE_READWRITE), v);
@@ -61,4 +63,3 @@ public boolean makeRegionExecutable(address location, long length) {
 //	printf("VirtualProtect(%p, %d, %x, %p) -> %d oldProtection %x\n", location, length, int(windows.PAGE_EXECUTE_READWRITE), null, result, int(oldProtection));
 	return result != 0;
 }
-

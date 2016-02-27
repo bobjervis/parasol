@@ -57,8 +57,8 @@ X86_64Section::~X86_64Section() {
 	free(_image);
 }
 
-bool X86_64Section::run(char **args, int *returnValue, bool trace) {
-	ExecutionContext ec(&_header, _image);
+bool X86_64Section::run(char **args, int *returnValue, long long runtimeFlags) {
+	ExecutionContext ec(&_header, _image, runtimeFlags);
 
 	ec.enter();
 
@@ -91,7 +91,7 @@ bool X86_64Section::run(char **args, int *returnValue, bool trace) {
 	long long *vp = (long long*)(image + _header.vtablesOffset);
 	for (int i = 0; i < _header.vtableData; i++, vp++)
 		*vp += (long long)image;
-	ec.trace = trace;
+	ec.trace = (runtimeFlags & 2) != 0;
 	int value = evalNative(&_header, (byte*)_image, args + 1, argc);
 	*returnValue = value;
 	ec.trace = false;

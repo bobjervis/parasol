@@ -93,16 +93,14 @@ int PXI_FIXUP_SHIFT = 8;
 public class X86_64 extends X86_64AssignTemps {
 	private ref<Scope> _unitScope;
 	private ref<Arena> _arena;
-	private ref<OverloadInstance> _allocz;					// Symbol for allocz function.
-	private ref<OverloadInstance> _free;					// Symbol for allocz function.
+	private ref<ParameterScope> _alloc;						// Symbol for alloc function.
+	private ref<ParameterScope> _free;						// Symbol for free function.
 	private ref<OverloadInstance> _stringAppendString;		// string.append(string)
 	private ref<OverloadInstance> _stringCopyConstructor;
 	private ref<OverloadInstance> _stringAssign;
 	private ref<OverloadInstance> _varCopyConstructor;
-	private ref<OverloadInstance> _memset;
-	private ref<OverloadInstance> _memcpy;
-	private ref<OverloadInstance> _assert;
-	private ref<OverloadInstance> _exposeException;
+	private ref<ParameterScope> _memset;
+	private ref<ParameterScope> _memcpy;
 	private ref<Symbol> _floatSignMask;
 	private ref<Symbol> _floatOne;
 	private ref<Symbol> _doubleSignMask;
@@ -116,7 +114,6 @@ public class X86_64 extends X86_64AssignTemps {
 	public X86_64(ref<Arena> arena, boolean verbose) {
 		_arena = arena;
 		_verbose = verbose;
-		cacheCodegenObjects();
 	}
 
 	public boolean verbose() {
@@ -124,6 +121,7 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 
 	boolean generateCode(ref<FileStat> mainFile, int valueOffset, ref<CompileContext> compileContext) {
+		cacheCodegenObjects(compileContext);
 		ref<Block> unit = mainFile.tree().root();
 //		printf("unit = %p\n", unit);
 		_unitScope = new Scope(_arena.root(), unit, compileContext.blockStorageClass(), unit.className());
@@ -579,7 +577,7 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.ADD, TypeFamily.ADDRESS, R.RCX, address.bytes);
 			inst(X86.XOR, TypeFamily.UNSIGNED_8, R.RDX, R.RDX);
 			inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, reserveSpace);
-			instCall(_memset.parameterScope(), compileContext);
+			instCall(_memset, compileContext);
 			if (preserveRCX)
 				inst(X86.POP, TypeFamily.SIGNED_64, R.RCX);
 		}
@@ -616,13 +614,13 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.LEA, R.RCX, R.RSI, address.bytes);
 				inst(X86.XOR, TypeFamily.UNSIGNED_8, R.RDX, R.RDX);
 				inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, scope.enclosing().variableStorage - address.bytes);
-				instCall(_memset.parameterScope(), compileContext);
+				instCall(_memset, compileContext);
 			}
 		} else {
 			inst(X86.MOV, TypeFamily.ADDRESS, R.RCX, R.RSI);
 			inst(X86.XOR, TypeFamily.UNSIGNED_8, R.RDX, R.RDX);
 			inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, scope.enclosing().variableStorage);
-			instCall(_memset.parameterScope(), compileContext);
+			instCall(_memset, compileContext);
 		}
 		// TODO: add code to check for absence of super. or self. calls at the head of the node
 //					generateCallToBaseDefaultConstructor(parameterScope, compileContext);
@@ -1093,7 +1091,7 @@ public class X86_64 extends X86_64AssignTemps {
 			b = ref<Binary>(node);
 			generateOperands(b, compileContext);
 			inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, b.type.size());
-			instCall(_memcpy.parameterScope(), compileContext);
+			instCall(_memcpy, compileContext);
 			break;
 
 		case	ASSIGN:
@@ -1726,7 +1724,7 @@ public class X86_64 extends X86_64AssignTemps {
 			int size = t.size();
 			f().r.generateSpills(node, this);
 			inst(X86.MOV, TypeFamily.SIGNED_64, R.RCX, size);
-			instCall(_allocz.parameterScope(), compileContext);
+			instCall(_alloc, compileContext);
 			break;
 
 		case	DELETE:
@@ -1734,7 +1732,7 @@ public class X86_64 extends X86_64AssignTemps {
 			assert(b.left().op() == Operator.EMPTY);
 			generate(b.right(), compileContext);
 			f().r.generateSpills(node, this);
-			instCall(_free.parameterScope(), compileContext);
+			instCall(_free, compileContext);
 			break;
 			
 		case	STORE_V_TABLE:
@@ -2192,7 +2190,7 @@ public class X86_64 extends X86_64AssignTemps {
 			if (outOffset > 0)
 				inst(X86.ADD, R.RCX, outOffset);
 			inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, value.type.size());
-			instCall(_memcpy.parameterScope(), compileContext);
+			instCall(_memcpy, compileContext);
 		} else {
 			value.print(0);
 			assert(false);
@@ -2485,7 +2483,7 @@ public class X86_64 extends X86_64AssignTemps {
 							inst(X86.ADD, TypeFamily.ADDRESS, R.RCX, 8);
 							inst(X86.XOR, TypeFamily.UNSIGNED_8, R.RDX, R.RDX);
 							inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, node.type.size() - address.bytes);
-							instCall(_memset.parameterScope(), compileContext);
+							instCall(_memset, compileContext);
 						}
 					} else if (sym.type().size() > 0) {
 						if (sym.type().size() <= address.bytes)
@@ -2494,7 +2492,7 @@ public class X86_64 extends X86_64AssignTemps {
 							inst(X86.LEA, R.RCX, node, compileContext);
 							inst(X86.XOR, TypeFamily.UNSIGNED_8, R.RDX, R.RDX);
 							inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, node.type.size());
-							instCall(_memset.parameterScope(), compileContext);
+							instCall(_memset, compileContext);
 						}
 					}
 					break;
@@ -2526,7 +2524,7 @@ public class X86_64 extends X86_64AssignTemps {
 			ref<Binary> b = ref<Binary>(node);
 			generateOperands(b, compileContext);
 			inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, b.type.size());
-			instCall(_memcpy.parameterScope(), compileContext);
+			instCall(_memcpy, compileContext);
 			break;
 
 		case	INITIALIZE:
@@ -3440,38 +3438,27 @@ public class X86_64 extends X86_64AssignTemps {
 		instStoreVTable(R.RCX, R.RAX, classScope);
 	}
 
-	private void cacheCodegenObjects() {
-		ref<Scope> root = _arena.root();
-		ref<Symbol> alloczOverload = root.lookup("allocz");
-		if (alloczOverload.class == Overload) {
-			ref<Overload> o = ref<Overload>(alloczOverload);
-			_allocz = (*o.instances())[0];
-		}
-		ref<Symbol> freeOverload = root.lookup("free");
-		if (freeOverload.class == Overload) {
-			ref<Overload> o = ref<Overload>(freeOverload);
-			_free = (*o.instances())[0];
-		}
-		ref<Symbol> assertOverload = root.lookup("assert");
-		if (assertOverload.class == Overload) {
-			ref<Overload> o = ref<Overload>(assertOverload);
-			_assert = (*o.instances())[0];
-		}
-		ref<Symbol> memsetOverload = root.lookup("memset");
-		if (memsetOverload.class == Overload) {
-			ref<Overload> o = ref<Overload>(memsetOverload);
-			_memset = (*o.instances())[0];
-		}
-		ref<Symbol> memcpyOverload = root.lookup("memcpy");
-		if (memsetOverload.class == Overload) {
-			ref<Overload> o = ref<Overload>(memcpyOverload);
-			_memcpy = (*o.instances())[0];
-		}
-		ref<Symbol> exposeExceptionOverload = root.lookup("exposeException");
-		if (exposeExceptionOverload.class == Overload) {
-			ref<Overload> o = ref<Overload>(exposeExceptionOverload);
-			_exposeException = (*o.instances())[0];
-		}
+	private void cacheCodegenObjects(ref<CompileContext> compileContext) {
+		ref<Symbol> re = _arena.getSymbol("parasol", "memory.alloc", compileContext);
+		if (re == null || re.class != Overload)
+			assert(false);
+		ref<Overload> o = ref<Overload>(re);
+		_alloc = ref<ParameterScope>((*o.instances())[0].type().scope());
+		re = _arena.getSymbol("parasol", "memory.free", compileContext);
+		if (re == null || re.class != Overload)
+			assert(false);
+		 o = ref<Overload>(re);
+		_free = ref<ParameterScope>((*o.instances())[0].type().scope());
+		re = _arena.getSymbol("native", "C.memset", compileContext);
+		if (re == null || re.class != Overload)
+			assert(false);
+		 o = ref<Overload>(re);
+		_memset = ref<ParameterScope>((*o.instances())[0].type().scope());
+		re = _arena.getSymbol("native", "C.memcpy", compileContext);
+		if (re == null || re.class != Overload)
+			assert(false);
+		 o = ref<Overload>(re);
+		_memcpy = ref<ParameterScope>((*o.instances())[0].type().scope());
 		ref<Type> stringType = _arena.builtInType(TypeFamily.STRING);
 		for (int i = 0; i < stringType.scope().constructors().length(); i++) {
 			ref<Scope> scope = (*stringType.scope().constructors())[i];

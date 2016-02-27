@@ -30,9 +30,11 @@ public class HANDLE extends address {
 
 public HANDLE INVALID_HANDLE_VALUE = HANDLE(address(-1));
 
-class HMODULE extends address {}
+class HMODULE = address;
 
-public abstract int GetModuleFileName(address hModule, pointer<byte> filename, int filenameSize);
+public abstract int GetModuleFileName(HMODULE hModule, pointer<byte> filename, int filenameSize);
+public abstract HMODULE GetModuleHandle(pointer<byte> filename);
+public abstract address GetProcAddress(HMODULE hModule, pointer<byte> procName);
 public abstract unsigned GetFullPathName(pointer<byte> filename, unsigned bufSz, pointer<byte> lpBuffer, ref<pointer<byte>> lpFilePart);
 
 public abstract address FindFirstFile(pointer<byte> pattern, ref<WIN32_FIND_DATA> data);

@@ -305,7 +305,7 @@ class X86_64Encoder extends Target {
 				
 			case	INT_CONSTANT:
 				location = f.locationSymbol.offset + f.location;
-				memcpy(&_code[location], &f.value, f.locationSymbol.type().size());
+				C.memcpy(&_code[location], &f.value, f.locationSymbol.type().size());
 				break;
 				
 			case	BUILTIN32:						// Fixup value is builtIn index

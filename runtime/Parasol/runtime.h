@@ -70,7 +70,7 @@ class ExecutionContext {
 public:
 	ExecutionContext(void **objects, int objectCount);
 
-	ExecutionContext(X86_64SectionHeader *pxiHeader, void *image);
+	ExecutionContext(X86_64SectionHeader *pxiHeader, void *image, long long runtimeFlags);
 
 	~ExecutionContext();
 
@@ -138,6 +138,8 @@ public:
 
 	int objectCount() { return _objectCount; }
 
+	long long runtimeFlags() { return _runtimeFlags; }
+
 	vector<string> &args() { return _args; }
 
 	void *exceptionsAddress();
@@ -169,6 +171,8 @@ public:
 	}
 
 	void setSourceLocations(void *location, int count);
+
+	void setRuntimeFlags(long long runtimeFlags) { _runtimeFlags = runtimeFlags; }
 
 	bool trace;
 private:
@@ -211,6 +215,7 @@ private:
 	void (*_hardwareExceptionHandler)(HardwareException *info);
 	void *_sourceLocations;
 	int _sourceLocationsCount;
+	long long _runtimeFlags;
 };
 
 // Exception table consist of some number of these entries, sorted by ascending location value.
@@ -352,7 +357,7 @@ public:
 
 	~ByteCodeSection();
 
-	virtual bool run(char **args, int *returnValue, bool trace);
+	virtual bool run(char **args, int *returnValue, long long runtimeFlags);
 
 	bool valid() {
 		return _objects.size() > 0 && _image != null;

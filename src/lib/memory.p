@@ -16,8 +16,45 @@
 namespace parasol:memory;
 
 import native:C;
+import parasol:runtime;
 
-class Allocator {
+private long LEAKS_FLAG = 0x1;
+
+/**
+ * This implements the 'new' operator. It is called from inline code. Eventually, all 
+ * memory allocation will be done with an Allocator. Clever bit twiddlers will always
+ * find clever ways to pack objects into a single allocation.
+ */
+private address alloc(long size) {
+	return currentHeap.alloc(size);
+}
+/**
+ * This implements the 'delete' operator. It is called from inline code.
+ */
+private void free(address p) {
+	currentHeap.free(p);
+}
+
+private ref<Allocator> currentHeap;
+
+private Heap heap;
+
+if ((runtime.getRuntimeFlags() & LEAKS_FLAG) != 0)
+	currentHeap = new LeakHeap();
+else
+	currentHeap = &heap;
+
+public class OutOfMemoryException extends Exception {
+	public long requestedAmount;
+	
+	public OutOfMemoryException(long requestedAmount) {
+		super("Insufficient memory for requested " + string(requestedAmount) + " bytes");
+		
+		this.requestedAmount = requestedAmount;
+	}
+}
+
+public class Allocator {
 	public abstract void clear();
 	
 	public abstract address alloc(long n);
@@ -25,7 +62,39 @@ class Allocator {
 	public abstract void free(address p);
 }
 
-class NoReleasePool extends Allocator {
+public class Heap extends Allocator {
+	public void clear() {
+		
+	}
+	
+	public address alloc(long n) {
+		return allocz(n);
+	}
+	
+	public void free(address p) {
+		if (p == null)
+			return;
+		C.free(p);
+	}
+}
+
+public class LeakHeap extends Allocator {
+	public void clear() {
+		
+	}
+	
+	public address alloc(long n) {
+		return allocz(n);
+	}
+	
+	public void free(address p) {
+		if (p == null)
+			return;
+		C.free(p);
+	}
+}
+
+public class NoReleasePool extends Allocator {
 	private static long BLOCK_SIZE = 64 * 1024;
 
 	private long _remaining;

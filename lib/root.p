@@ -47,8 +47,6 @@ import parasol:types.`*deferred*`;
 import parasol:types.`*array*`;
 import parasol:types.`*object*`;
 
-public abstract void exposeException(ref<Exception> e);
-
 @Ref
 class ref<class T> extends address {
 }
@@ -74,10 +72,6 @@ void assert(boolean test) {
 }
 
 // Use native:C
-@Deprecated
-abstract address memset(address destination, byte value, int length);
-@Deprecated
-abstract address memcpy(address destination, address source, int length);
 @Deprecated
 abstract void free(address p);
 

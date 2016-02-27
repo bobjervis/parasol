@@ -15,6 +15,7 @@
  */
 namespace parasol:random;
 
+import native:C;
 //import parasol:math.log;
 //import parasol:math.sqrt;
 
@@ -69,14 +70,14 @@ class Random {
 
 			if (i > jcong.bytes)
 				i = jcong.bytes;
-			memcpy(&jcong, seed.c_str(), i);
+			C.memcpy(&jcong, seed.c_str(), i);
 			
 			jcong = nextCongruential(jcong);
 			_state.z = jcong;
 			jcong = nextCongruential(jcong);
 			_state.w = jcong;
 		} else
-			memcpy(&_state, seed.c_str(), _state.bytes);
+			C.memcpy(&_state, seed.c_str(), _state.bytes);
 	}
 
 	private unsigned nextCongruential(unsigned jcong) {

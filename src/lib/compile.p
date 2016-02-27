@@ -15,6 +15,7 @@
  */
 namespace parasol:compiler;
 
+import native:C;
 import parasol:memory;
 
 int INDENT = 4;
@@ -931,13 +932,13 @@ class MemoryPool extends memory.NoReleasePool {
 	
 	public CompileString newCompileString(string s) {
 		pointer<byte> data = pointer<byte>(alloc(s.length()));
-		memcpy(data, &s[0], s.length());
+		C.memcpy(data, &s[0], s.length());
 		return CompileString(data, s.length());
 	}
 	
 	public CompileString newCompileString(CompileString s) {
 		pointer<byte> data = pointer<byte>(alloc(s.length));
-		memcpy(data, s.data, s.length);
+		C.memcpy(data, s.data, s.length);
 		return CompileString(data, s.length);
 	}
 	
