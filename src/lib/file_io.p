@@ -201,11 +201,11 @@ public class Directory {
 		_handle = windows.INVALID_HANDLE_VALUE;
 		_directory = path;
 		_wildcard = "*";
-		_data = ref<windows.WIN32_FIND_DATA>(allocz(windows.sizeof_WIN32_FIND_DATA));
+		_data = ref<windows.WIN32_FIND_DATA>(memory.alloc(windows.sizeof_WIN32_FIND_DATA));
 	}
 /*
 	~Directory() {
-		delete _data;
+		memory.free(_data);
 		if (_handle != windows.INVALID_HANDLE_VALUE)
 			windows.FindClose(_handle);
 	}

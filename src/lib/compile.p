@@ -783,8 +783,6 @@ class CompileContext {
 	public void markLiveSymbol(ref<Symbol> sym) {
 		if (sym == null)
 			return;
-		if (sym.storageClass() != StorageClass.AUTO)
-			return;
 		if (sym.type().hasDestructor())
 			_liveSymbols.push(sym);
 	}

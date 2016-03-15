@@ -185,6 +185,7 @@ int runCommand() {
 			printf("%s failed!\n", args[0]);
 		return 1;
 	}
+	delete target;
 	return returnValue;
 }
 

@@ -352,15 +352,59 @@ class Unary extends Node {
 		return this;
 	}
 	
-	public long foldInt(ref<CompileContext> compileContext) {
+	public long foldInt(ref<Target> target, ref<CompileContext> compileContext) {
 		switch (op()) {
 		case	NEGATE:
-			return -_operand.foldInt(compileContext);
+			return -_operand.foldInt(target, compileContext);
+			
+		case	CAST:
+			long v = _operand.foldInt(target, compileContext);
+			switch (type.family()) {
+			case	SIGNED_64:
+				return v;
+				
+			default:
+				break;
+			}
+			break;
+			
+		case	BYTES:
+			ref<Type> t = _operand.type;
+			if (t.family() == TypeFamily.TYPEDEF) {
+				ref<TypedefType> tt = ref<TypedefType>(t);
+				t = tt.wrappedType();
+			}
+			t.assignSize(target, compileContext);
+			return t.size();
 		}
-		add(MessageId.UNFINISHED_GENERATE, compileContext.pool(), CompileString(" "/*this.class.name()*/), CompileString(string(op())), CompileString("Unary.foldInt"));
+		print(0);
+		assert(false);
 		return 0;
 	}
 
+	public boolean isConstant() {
+		switch (op()) {
+		case	NEGATE:
+			return _operand.isConstant();
+			
+		case	CAST:
+			if (!_operand.isConstant())
+				return false;
+			switch (type.family()) {
+			case	SIGNED_64:
+				return true;
+				
+			default:
+				break;
+			}
+			break;
+			
+		case	BYTES:
+			return true;
+		}
+		return false;
+	}
+	
 	public void print(int indent) {
 		printBasic(indent);
 		printf("\n");
@@ -371,17 +415,6 @@ class Unary extends Node {
 		return _operand; 
 	}
  
-	public boolean isConstant() {
-		switch (op()) {
-		case	NEGATE:
-			return _operand.isConstant();
-
-		default:
-			return false;
-		}
-		return false;
-	}
-
 	private void assignTypes(ref<CompileContext> compileContext) {
 		switch (op()) {
 		case	ABSTRACT:

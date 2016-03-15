@@ -596,7 +596,7 @@ class X86_64AddressModes extends X86_64Encoder {
 			if	((modeContext & MC_CONST) != 0 &&
 				 (nClass & NC_IMMED) != 0) {
 				ref<Constant> number = ref<Constant>(node);
-				long value = number.foldInt(compileContext);
+				long value = number.foldInt(this, compileContext);
 				if (value >= int.MIN_VALUE && value <= int.MAX_VALUE)
 					node.nodeFlags |= ADDRESS_MODE;
 			}

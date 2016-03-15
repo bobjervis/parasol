@@ -18,6 +18,7 @@ namespace parasol:exception;
 import parasol:compiler.FileStat;
 import parasol:x86_64.ExceptionEntry;
 import parasol:x86_64.SourceLocation;
+import parasol:memory;
 import parasol:process;
 import parasol:runtime;
 import native:windows;
@@ -72,8 +73,8 @@ public class Exception {
 		address fp = _exceptionContext.framePointer;
 		address ip = _exceptionContext.exceptionAddress;
 		string tag = "->";
-		int lowCode = int(lowCodeAddress());
-		int staticMemoryLength = int(highCodeAddress()) - lowCode;
+		int lowCode = int(runtime.lowCodeAddress());
+		int staticMemoryLength = int(runtime.highCodeAddress()) - lowCode;
 		while (long(fp) >= long(stackLow) && long(fp) < long(stackHigh)) {
 //			printf("fp = %p ip = %p relative = %x", fp, ip, int(ip) - int(_staticMemory));
 			pointer<address> stack = pointer<address>(fp);
@@ -95,33 +96,6 @@ public class Exception {
 			locationIsExact = false;
 		}
 		return output;
-	}
-	
-	private static string formattedLocation(int offset, boolean locationIsExact) {
-		int unadjustedOffset = offset;
-		if (!locationIsExact)
-			offset--;
-		pointer<SourceLocation> psl = sourceLocations();
-		int interval = sourceLocationsCount();
-		string result;
-		for (;;) {
-			if (interval <= 0) {
-				result.printf("@%x", offset);
-				break;
-			}
-			int middle = interval / 2;
-			if (psl[middle].offset > offset)
-				interval = middle;
-			else if (middle == interval - 1 || psl[middle + 1].offset > offset) {
-				ref<FileStat> file = psl[middle].file;
-				result.printf("%s %d (@%x)", file.filename(), file.scanner().lineNumber(psl[middle].location) + 1, unadjustedOffset);
-				break;
-			} else {
-				psl = &psl[middle + 1];
-				interval = interval - middle - 1;
-			}
-		}
-		return result;
 	}
 	
 	void throwNow(address framePointer, address stackPointer) {
@@ -154,8 +128,8 @@ public class Exception {
 			printf("No exceptions table for this image.\n");
 			process.exit(1);
 		}
-		pointer<byte> lowCode = lowCodeAddress();
-		pointer<byte> highCode = highCodeAddress();
+		pointer<byte> lowCode = runtime.lowCodeAddress();
+		pointer<byte> highCode = runtime.highCodeAddress();
 		int(address ip, address elem) comparator = comparatorCurrentIp;
 		pointer<byte> ip = pointer<byte>(_exceptionContext.exceptionAddress);
 		address stackTop = address(long(_exceptionContext.stackBase) + _exceptionContext.stackSize);
@@ -387,12 +361,12 @@ void hardwareExceptionHandler(ref<HardwareException> info) {
 }
 
 ref<ExceptionContext> createExceptionContext(address stackPointer) {
-	address top = stackTop();
+	address top = runtime.stackTop();
 	
 	long stackSize = long(top) - long(stackPointer);
-	pointer<byte> memory = pointer<byte>(allocz(stackSize + ExceptionContext.bytes));
-	ref<ExceptionContext> results = ref<ExceptionContext>(memory);
-	results.stackCopy = memory + ExceptionContext.bytes;
+	pointer<byte> mem = pointer<byte>(memory.alloc(stackSize + ExceptionContext.bytes));
+	ref<ExceptionContext> results = ref<ExceptionContext>(mem);
+	results.stackCopy = mem + ExceptionContext.bytes;
 	C.memcpy(results.stackCopy, stackPointer, int(stackSize));
 	results.stackPointer = stackPointer;
 	results.stackBase = stackPointer;
@@ -412,11 +386,8 @@ private abstract void exposeException(ref<Exception> e);
 abstract void registerHardwareExceptionHandler(void handler(ref<HardwareException> info));
 
 public abstract ref<Exception> fetchExposedException();
-abstract address stackTop();
 abstract address exceptionsAddress();
 abstract int exceptionsCount();
-abstract pointer<byte> lowCodeAddress();
-abstract pointer<byte> highCodeAddress();
 
 abstract void setSourceLocations(address location, int count);
 abstract pointer<SourceLocation> sourceLocations();
@@ -463,3 +434,33 @@ class HardwareException {
 	public int exceptionInfo1;
 	public int exceptionType;
 }
+
+public string formattedLocation(int offset, boolean locationIsExact) {
+	if (offset < 0)
+		return "-";
+	int unadjustedOffset = offset;
+	if (!locationIsExact)
+		offset--;
+	pointer<SourceLocation> psl = sourceLocations();
+	int interval = sourceLocationsCount();
+	string result;
+	for (;;) {
+		if (interval <= 0) {
+			result.printf("@%x", offset);
+			break;
+		}
+		int middle = interval / 2;
+		if (psl[middle].offset > offset)
+			interval = middle;
+		else if (middle == interval - 1 || psl[middle + 1].offset > offset) {
+			ref<FileStat> file = psl[middle].file;
+			result.printf("%s %d (@%x)", file.filename(), file.scanner().lineNumber(psl[middle].location) + 1, unadjustedOffset);
+			break;
+		} else {
+			psl = &psl[middle + 1];
+			interval = interval - middle - 1;
+		}
+	}
+	return result;
+}
+

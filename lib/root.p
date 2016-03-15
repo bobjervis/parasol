@@ -79,6 +79,8 @@ abstract void free(address p);
 @Deprecated
 abstract address allocz(long size);
 
+import parasol:memory;
+
 // Note: compiler code requires that this definition of 'vector' appears first. TODO: Remove this dependency.
 class vector<class E> extends vector<E, int>{
 	public vector() {
@@ -125,8 +127,7 @@ class vector<class E, class I> {
 	}
 	
 	~vector() {
-		if (_data != null)
-			free(_data);
+		memory.free(_data);
 	}
 	
 	public void append(vector<E, I> other) {
@@ -185,7 +186,7 @@ class vector<class E, class I> {
 	}
 
 	public void clear() {
-		free(_data);
+		memory.free(_data);
 		_data = null;
 		_length = I(0);
 		_capacity = I(0);
@@ -275,11 +276,11 @@ class vector<class E, class I> {
 				return;
 			newSize = reservedSize(newLength);
 		}
-		pointer<E> a = pointer<E>(allocz(int(newSize) * E.bytes));
+		pointer<E> a = pointer<E>(memory.alloc(int(newSize) * E.bytes));
 		if (_data != null) {
 			for (I i = I(0); int(i) < int(_length); i = I(int(i) + 1))
 				a[int(i)] = _data[int(i)];
-			free(_data);
+			memory.free(_data);
 		}
 		_capacity = newSize;
 		_data = a;
@@ -493,7 +494,7 @@ class vector<class E, enum I> {
 	private pointer<E> _data;
 	
 	public vector() {
-		_data = pointer<E>(allocz(I.length * E.bytes));
+		_data = pointer<E>(memory.alloc(I.length * E.bytes));
 	}
 	
 	public vector(vector<E, I> other) {
@@ -641,7 +642,7 @@ class map<class V, class K> {
 	
 	private ref<Entry> findEntry(K key) {
 		if (_entries == null) {
-			_entries = pointer<Entry>(allocz(INITIAL_TABLE_SIZE * Entry.bytes));
+			_entries = pointer<Entry>(memory.alloc(INITIAL_TABLE_SIZE * Entry.bytes));
 			_allocatedEntries = INITIAL_TABLE_SIZE;
 			setRehashThreshold();
 		}
@@ -661,7 +662,7 @@ class map<class V, class K> {
 		if (_entriesCount >= _rehashThreshold) {
 			pointer<Entry> oldE = _entries;
 			_allocatedEntries *= 2;
-			_entries = pointer<Entry>(allocz(_allocatedEntries * Entry.bytes));
+			_entries = pointer<Entry>(memory.alloc(_allocatedEntries * Entry.bytes));
 			int e = _entriesCount;
 			_entriesCount = 0;
 			for (int i = 0; e > 0; i++) {
@@ -671,7 +672,8 @@ class map<class V, class K> {
 				}
 			}
 			setRehashThreshold();
-			free(oldE);
+			// TODO: Big MEM LEAK bug: we don't run destructors on any of the keys. We should.
+			memory.free(oldE);
 			return true;
 		} else
 			return false;

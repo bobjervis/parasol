@@ -117,7 +117,7 @@ ref<pxi.Section> byteCodeReader(file.File pxiFile, long length) {
 	}
 	return new PlaceHolder();
 /*
-	address data = allocz(imageLength);
+	address data = memory.alloc(imageLength);
 	if (pxiFile.read(data, int(imageLength)) != imageLength) {
 		printf("Could not read byte code image\n");
 		return null;

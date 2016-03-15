@@ -16,6 +16,7 @@
 namespace parasol:text;
 
 import native:C;
+import parasol:memory;
 
 public boolean ignoring;
 public address[] deletedContents;
@@ -95,7 +96,7 @@ class string {
 //				deletedContents.append(_contents);
 //			else
 //				print("Delete\n");
-			free(_contents);
+			memory.free(_contents);
 		}
 	}
 	
@@ -106,7 +107,7 @@ class string {
 	@Deprecated
 	public void assign(string other) {
 		if (_contents != null) {
-			free(_contents);
+			memory.free(_contents);
 			_contents = null;
 		}
 		if (other != null) {
@@ -115,7 +116,7 @@ class string {
 		}
 	}
 	
-	public string append(string other) {
+	public void append(string other) {
 //		print("'");
 //		print(*this);
 //		print("'+'");
@@ -133,10 +134,9 @@ class string {
 //		print("=");
 //		print(*this);
 //		print("\n");
-		return *this;
 	}
 	
-	public string append(byte b) {
+	public void append(byte b) {
 		if (_contents == null) {
 			resize(1);
 			_contents.data = b;
@@ -145,10 +145,9 @@ class string {
 			resize(len + 1);
 			*(pointer<byte>(&_contents.data) + len) = b;
 		}
-		return *this;
 	}
 	
-	public string append(pointer<byte> p, int length) {
+	public void append(pointer<byte> p, int length) {
 		if (_contents == null) {
 			resize(length);
 			C.memcpy(&_contents.data, p, length);
@@ -158,10 +157,9 @@ class string {
 			C.memcpy(pointer<byte>(&_contents.data) + len, p, length);
 		}
 		*(pointer<byte>(&_contents.data) + _contents.length) = 0;
-		return *this;
 	}
 	
-	public string append(int ch) {
+	public void append(int ch) {
 		if (ch <= 0x7f)
 			append(byte(ch));
 		else if (ch <= 0x7ff) {
@@ -190,7 +188,6 @@ class string {
 			append(byte(0x80 + ((ch >> 6) & 0x3f)));
 			append(byte(0x80 + (ch & 0x3f)));
 		}
-		return *this;
 	}
 	
 	public boolean beginsWith(string prefix) {
@@ -271,7 +268,7 @@ class string {
 			C.memcpy(&_contents.data, &other._contents.data, other._contents.length + 1);
 		} else {
 			if (_contents != null) {
-				free(_contents);
+				memory.free(_contents);
 				_contents = null;
 			}
 		}
@@ -1032,10 +1029,10 @@ class string {
 				return;
 			}
 		}
-		ref<allocation> a = ref<allocation>(allocz(newSize));
+		ref<allocation> a = ref<allocation>(memory.alloc(newSize));
 		if (_contents != null) {
 			C.memcpy(&a.data, &_contents.data, _contents.length + 1);
-			free(_contents);
+			memory.free(_contents);
 		}
 		a.length = newLength;
 		*(pointer<byte>(&a.data) + newLength) = 0;

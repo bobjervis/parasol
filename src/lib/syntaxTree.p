@@ -803,7 +803,7 @@ class Constant extends Node {
 		return this;
 	}
 	
-	public long foldInt(ref<CompileContext> compileContext) {
+	public long foldInt(ref<Target> target, ref<CompileContext> compileContext) {
 		if ((nodeFlags & BAD_CONSTANT) != 0)
 			return 0;						// We've already flagged this node with an error
 		long x;
@@ -821,6 +821,8 @@ class Constant extends Node {
 			return 0;
 
 		default:
+			print(0);
+			assert(false);
 			add(MessageId.UNFINISHED_GENERATE, compileContext.pool(), CompileString(" "/*this.class.name()*/), CompileString(string(op())), CompileString("Constant.foldInt"));
 		}
 		return 0;
@@ -2402,7 +2404,7 @@ class Node {
 		return call;
 	}
 	
-	public long foldInt(ref<CompileContext> compileContext) {
+	public long foldInt(ref<Target> target, ref<CompileContext> compileContext) {
 		print(0);
 		assert(false);
 		return 0;

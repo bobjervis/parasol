@@ -729,7 +729,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			break;
 			
 		case	NEW:
-			// NEW nodes have been re-written - they now just signify that we should call allocz
+			// NEW nodes have been re-written - they now just signify that we should call memory.alloc
 			b = ref<Binary>(node);
 			assert(b.left().op() == Operator.EMPTY);
 //			assert(b.right().op() == Operator.EMPTY);

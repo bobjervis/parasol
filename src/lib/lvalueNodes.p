@@ -146,6 +146,25 @@ class Identifier extends Node {
 		return this;
 	}
 	
+	public long foldInt(ref<Target> target, ref<CompileContext> compileContext) {
+		if (_symbol.storageClass() == StorageClass.CONSTANT) {
+			ref<Node> initializer = ref<PlainSymbol>(_symbol).initializer();
+			if (initializer == null)
+				return 0;
+			return initializer.foldInt(target, compileContext);
+		} else {
+			add(MessageId.NOT_CONSTANT, compileContext.pool());
+			return 0;
+		}
+	}
+
+	public boolean isConstant() {
+		if (_symbol == null)
+			return false;
+		else
+			return _symbol.storageClass() == StorageClass.CONSTANT;
+	}
+	
 	public void print(int indent) {
 		printBasic(indent);
 		printf(" %s S%p '%s'", _definition ? "def" : "", _symbol, _value.asString());

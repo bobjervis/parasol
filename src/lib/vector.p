@@ -121,7 +121,7 @@ public class vector<class E, class I> {
 	}
 
 	public void clear() {
-		free(_data);
+		memory.free(_data);
 		_data = null;
 		_length = I(0);
 		_capacity = I(0);
@@ -207,11 +207,11 @@ public class vector<class E, class I> {
 				return;
 			newSize = reservedSize(newLength);
 		}
-		pointer<E> a = pointer<E>(allocz(int(newSize) * E.bytes));
+		pointer<E> a = pointer<E>(memory.alloc(int(newSize) * E.bytes));
 		if (_data != null) {
 			for (I i = I(0); int(i) < int(_length); i = I(int(i) + 1))
 				a[int(i)] = _data[int(i)];
-			free(_data);
+			memory.free(_data);
 		}
 		_capacity = newSize;
 		_data = a;
@@ -248,53 +248,3 @@ public class vector<class E, class I> {
 	public void sort(boolean ascending) {
 	}
 }
-/*
-class vector<class E, enum I> {
-	private pointer<E> _data;
-	
-	public vector() {
-		_data = pointer<E>(allocz(I.length * E.bytes));
-	}
-	
-	public vector(vector<E, I> other) {
-	}
-	
-	~vector() {
-	}
-	
-	public void clear() {
-		C.memset(_data, 0, I.length * E.bytes);
-	}
-	
-	public boolean contains(E probe) {
-		return false;
-	}
-	
-	public I find(E key) {
-		return null;
-	}
-	
-	public E get(I index) {
-		return _data[index.index];
-	}
-	
-	public int length() {
-		return I.length;
-	}
-	
-	public void set(I index, E value) {
-		_data[index.index] = value;
-	}
-	
-	public pointer<E> elementAddress(I index) {
-		return _data + index.index;
-	}
-	
-	public void sort() {
-		sort(true);
-	}
-	
-	public void sort(boolean ascending) {
-	}
-}
-*/

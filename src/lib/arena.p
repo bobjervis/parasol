@@ -80,6 +80,7 @@ public class Arena {
 		delete _global;
 		if (_deleteSourceCache)
 			delete _sourceCache;
+		_scopes.deleteAll();
 	}
 	/*
 	 * setRootFolder

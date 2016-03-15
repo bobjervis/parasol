@@ -177,7 +177,7 @@ class Binary extends Node {
 			
 		case	DECLARATION:
 			_left = _left.fold(tree, false, compileContext);
-			markLiveSymbols(_right, compileContext);
+			markLiveSymbols(_right, StorageClass.AUTO, compileContext);
 			_right = _right.fold(tree, true, compileContext);
 			return this;
 
@@ -336,6 +336,21 @@ class Binary extends Node {
 				break;
 				
 			case	STRING:
+				/*
+				if (_right.op() == Operator.CALL) {
+					ref<OverloadInstance> oi = getMethodSymbol(_right, "store", type, compileContext);
+					if (oi == null) {
+						type = compileContext.errorType();
+						return this;
+					}
+					ref<Selection> method = tree.newSelection(_left, oi, false, _left.location());
+					method.type = oi.type();
+					ref<NodeList> args = tree.newNodeList(_right);
+					ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
+					call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+					return call.fold(tree, voidContext, compileContext);
+				}
+*/
 				scope = type.copyConstructor();
 				if (scope != null) {
 					ref<Node> adr = tree.newUnary(Operator.ADDRESS, _left, location());
@@ -903,20 +918,40 @@ class Binary extends Node {
 			_right.print(indent + INDENT);
 	}
 
-	public long foldInt(ref<CompileContext> compileContext) {
+	public long foldInt(ref<Target> target, ref<CompileContext> compileContext) {
 		switch (op()) {
-		case	ADD: {
-			long x = _left.foldInt(compileContext);
-			long y = _right.foldInt(compileContext);
+		case	ADD:
+			long x = _left.foldInt(target, compileContext);
+			long y = _right.foldInt(target, compileContext);
 			return x + y;
-		}
+
+		case	SUBTRACT:
+			x = _left.foldInt(target, compileContext);
+			y = _right.foldInt(target, compileContext);
+			return x - y;
+
+		case	MULTIPLY:
+			x = _left.foldInt(target, compileContext);
+			y = _right.foldInt(target, compileContext);
+			return x * y;
 
 		default:
-			add(MessageId.UNFINISHED_GENERATE, compileContext.pool(), CompileString(" "/*this.class.name()*/), CompileString(string(this.op())), CompileString("Binary.foldInt"));
+			print(0);
+			assert(false);
 		}
 		return 0;
 	}
 
+	public boolean isConstant() {
+		switch (op()) {
+		case	ADD:
+		case	SUBTRACT:
+		case	MULTIPLY:
+			if (_left.isConstant() && _right.isConstant())
+				return true;
+		}
+		return false;
+	}
 	public void assignClassVariable(ref<CompileContext> compileContext) {
 		assert(op() == Operator.INITIALIZE);
 		compileContext.assignTypes(_right);
@@ -2071,22 +2106,50 @@ private Operator stripAssignment(Operator op) {
 	return Operator.SYNTAX_ERROR;
 }
 
-private void markLiveSymbols(ref<Node> declarator, ref<CompileContext> compileContext) {
+public void markLiveSymbols(ref<Node> declarator, StorageClass storageClass, ref<CompileContext> compileContext) {
 	switch (declarator.op()) {
 	case	IDENTIFIER:
 		ref<Identifier> id = ref<Identifier>(declarator);
-		compileContext.markLiveSymbol(id.symbol());
+		if (id.deferAnalysis())
+			break;
+		ref<Symbol> symbol = id.symbol();
+		if (symbol.storageClass() == storageClass)
+			compileContext.markLiveSymbol(symbol);
 		break;
 		
 	case	INITIALIZE:
 		ref<Binary> b = ref<Binary>(declarator);
-		markLiveSymbols(b.left(), compileContext);
+		markLiveSymbols(b.left(), storageClass, compileContext);
 		break;
 		
 	case	SEQUENCE:
 		b = ref<Binary>(declarator);
-		markLiveSymbols(b.left(), compileContext);
-		markLiveSymbols(b.right(), compileContext);
+		markLiveSymbols(b.left(), storageClass, compileContext);
+		markLiveSymbols(b.right(), storageClass, compileContext);
+		break;
+		
+	case	CLASS_COPY:
+		b = ref<Binary>(declarator);
+		u = ref<Unary>(b.left());
+		if (u.op() != Operator.ADDRESS) {
+			declarator.print(0);
+			assert(false);
+		}
+		markLiveSymbols(u.operand(), storageClass, compileContext);
+		break;
+		
+	case	CALL:
+		// It's a constructor initializer
+		ref<Call> call = ref<Call>(declarator);
+		if (call.category() != CallCategory.CONSTRUCTOR)
+			break;
+//		declarator.print(0);
+		ref<Unary> u = ref<Unary>(call.target());
+		if (u.op() != Operator.ADDRESS) {
+			declarator.print(0);
+			assert(false);
+		}
+		markLiveSymbols(u.operand(), storageClass, compileContext);
 		break;
 		
 	default:

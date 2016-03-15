@@ -969,7 +969,10 @@ class Scope {
 	}
 
 	public ref<Symbol> lookup(ref<CompileString> name) {
-		return _symbols[name.asString()];
+		string s = name.asString();
+		ref<Symbol> sym = _symbols[s];
+		s = null;
+		return sym;
 	}
 
 	public ref<Symbol> lookup(string name) {
@@ -1339,10 +1342,12 @@ class PlainSymbol extends Symbol {
 		if (storageClass() == StorageClass.CONSTANT) {
 			switch (_type.family()) {
 			case	SIGNED_32:
+			case	SIGNED_64:
 				if (_initializer == null) {
 					definition().add(MessageId.INITIALIZER_REQUIRED, compileContext.pool());
 					return false;
 				}
+				_initializer.assignTypes(compileContext);
 				if (!_initializer.isConstant()) {
 					definition().add(MessageId.INITIALIZER_MUST_BE_CONSTANT, compileContext.pool());
 					return false;

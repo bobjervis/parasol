@@ -949,7 +949,7 @@ class Code extends Value {
 		for (int i = 0; i < _labels.length(); i++)
 			_labels[i] -= mark;
 		target.applyJumpTargets(jumpsAtStart, this);
-		_byteCodes = pointer<byte>(allocz(_length));
+		_byteCodes = pointer<byte>(memory.alloc(_length));
 		C.memcpy(_byteCodes, &(*target.byteCodeBuffer())[mark], _length);
 		target.resetByteCodeMark(mark);
 		target.popSp(-target.currentSpDepth());
@@ -2499,7 +2499,7 @@ class Code extends Value {
 			target.jumpTarget(defaultLabel);
 			for (int i = 0; i < labels.length(); i++) {
 				ref<Binary> caseNode = ref<Binary>(closure.nodes[i]);
-				int x = int(caseNode.left().foldInt(compileContext));
+				int x = int(caseNode.left().foldInt(target, compileContext));
 				target.byteCode(x & mask);
 				target.jumpTarget(labels[i]);
 			}
@@ -3827,7 +3827,7 @@ class StaticObject extends Value {
 		_owner = owner;
 		_symbol = symbol;
 		_size = size;
-		_data = allocz(size);
+		_data = memory.alloc(size);
 		switch (symbol.type().family()) {
 		case	TYPEDEF:
 			ref<Scope> s = symbol.type().scope();
@@ -3896,14 +3896,14 @@ class String extends Value {
 	String(string value) {
 		if (value != null) {
 			_length = address.bytes + int.bytes + value.length() + 1;
-			_value = allocz(_length);
+			_value = memory.alloc(_length);
 			pointer<int> data = pointer<int>(pointer<address>(_value) + 1);
 			*pointer<address>(_value) = data;
 			*data = value.length();
 			C.memcpy(data + 1, &value[0], value.length() + 1);
 		} else {
 			_length = address.bytes;
-			_value = allocz(_length);
+			_value = memory.alloc(_length);
 		}
 	}
 
@@ -4374,6 +4374,7 @@ private class OpToByteCodeMap {
 		swapped[Operator.NOT_LESS_GREATER_EQUAL] = Operator.NOT_LESS_GREATER_EQUAL;
 
 	}
+	
 	// TODO: Fix order of subscripts to match order of declaration
 	static ByteCodes[Operator][TypeFamily] byteCode;
 	// A table of operator mappings (from an operator to the equivalent with swapped operands)

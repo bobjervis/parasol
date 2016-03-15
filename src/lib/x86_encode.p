@@ -136,6 +136,7 @@ private int FIRST_STACK_PARAM_OFFSET = 16;
 
 class X86_64Encoder extends Target {
 	protected X86_64SectionHeader _pxiHeader;
+	protected memory.NoReleasePool _storage;
 	protected pointer<byte> _staticMemory;
 	protected int _staticMemoryLength;
 	protected byte[] _builtInsList;
@@ -585,7 +586,7 @@ class X86_64Encoder extends Target {
 		assignStaticRegion(symbol, alignment, size);
 		if (symbol.storageClass() == StorageClass.CONSTANT) {
 			ref<PlainSymbol> sym = ref<PlainSymbol>(symbol);		// constants are constrained to be Plain
-			long value = sym.initializer().foldInt(compileContext);
+			long value = sym.initializer().foldInt(this, compileContext);
 			staticFixup(FixupKind.INT_CONSTANT, symbol, 0, address(value));
 		}
 	}
@@ -1838,6 +1839,21 @@ class X86_64Encoder extends Target {
 		}
 	}
 	
+	void inst(X86 instruction, R left, ref<Symbol> right, ref<CompileContext> compileContext) {
+		switch (instruction) {
+		case	LEA:
+			emitRex(TypeFamily.SIGNED_64, null, left, R.NO_REG);
+			emit(0x8d);
+			modRM(right, rmValues[left], 0, 0);
+			break;
+
+		default:
+			printf("%s %s -\n", string(instruction), string(left));
+			right.print(4, false);
+			assert(false);
+		}
+	}
+
 	void inst(X86 instruction, R left, ref<Node> right, ref<CompileContext> compileContext) {
 		if (right.deferGeneration())
 			return;
@@ -2767,16 +2783,7 @@ class X86_64Encoder extends Target {
 			switch (sym.storageClass()) {
 			case	CONSTANT:
 			case	STATIC:
-				modRM(0, regOpcode, 5);
-				if (addressMode.type.family() == TypeFamily.TYPEDEF) {
-					ref<TypedefType> tt = ref<TypedefType>(addressMode.type);
-					ref<Type> t = tt.wrappedType();
-					fixup(FixupKind.RELATIVE32_TYPE, t);
-					emitInt(t.copyToImage(this));
-				} else {
-					fixup(FixupKind.RELATIVE32_DATA, sym);
-					emitInt(-ipAdjust + allAdjust);
-				}
+				modRM(sym, regOpcode, ipAdjust, allAdjust);
 				break;
 				
 			case	ENUMERATION:
@@ -2896,6 +2903,19 @@ class X86_64Encoder extends Target {
 		}
 	}
 	
+	private void modRM(ref<Symbol> sym, int regOpcode, int ipAdjust, int allAdjust) {
+		modRM(0, regOpcode, 5);
+		if (sym.type().family() == TypeFamily.TYPEDEF) {
+			ref<TypedefType> tt = ref<TypedefType>(sym.type());
+			ref<Type> t = tt.wrappedType();
+			fixup(FixupKind.RELATIVE32_TYPE, t);
+			emitInt(t.copyToImage(this));
+		} else {
+			fixup(FixupKind.RELATIVE32_DATA, sym);
+			emitInt(-ipAdjust + allAdjust);
+		}
+	}
+
 	private void subscriptModRM(ref<Node> addressMode, int regOpcode, int offset) {
 		ref<Binary> b = ref<Binary>(addressMode);
 		int mod = 0;
@@ -3120,7 +3140,7 @@ class X86_64Encoder extends Target {
 	
 	void ensureCodeSegment() {
 		if (_f.emitting == null) {
-			ref<CodeSegment> cs = new CodeSegment();
+			ref<CodeSegment> cs = _storage new CodeSegment();
 			cs.start(this);
 		}
 	}
@@ -3179,7 +3199,7 @@ class X86_64Encoder extends Target {
 			_continueLabel = continueLabel;
 			if (nodes != null) {
 				for (int i = 0; i < nodes.length(); i++) {
-					_caseLabels.append(new CodeSegment);
+					_caseLabels.append(_storage new CodeSegment);
 					_nextCase++;
 				}
 			}
@@ -3241,7 +3261,7 @@ class X86_64Encoder extends Target {
 		if (_f.emitting == null) {
 			if (continuation == CC.NOP)
 				return;
-			ref<CodeSegment> cs = new CodeSegment;
+			ref<CodeSegment> cs = _storage new CodeSegment;
 			cs.start(this);
 		}
 		_f.emitting.length = _functionCode.length() - _f.emitting.codeOffset; 
@@ -3251,7 +3271,7 @@ class X86_64Encoder extends Target {
 	}
 	
 	void insertPreamble() {
-		ref<CodeSegment> cs = new CodeSegment;
+		ref<CodeSegment> cs = _storage new CodeSegment;
 		cs.next = _f.first;
 		cs.codeOffset = _functionCode.length();
 		if (_f.first != null)

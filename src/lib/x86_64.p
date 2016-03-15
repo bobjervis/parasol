@@ -17,6 +17,7 @@ namespace parasol:x86_64;
 
 import native:windows;
 
+import parasol:compiler;
 import parasol:compiler.Arena;
 import parasol:compiler.Binary;
 import parasol:compiler.Block;
@@ -55,6 +56,7 @@ import parasol:compiler.Target;
 import parasol:compiler.TemplateInstanceType;
 import parasol:compiler.Ternary;
 import parasol:compiler.Test;
+import parasol:compiler.TraverseAction;
 import parasol:compiler.Try;
 import parasol:compiler.Type;
 import parasol:compiler.TypedefType;
@@ -292,8 +294,8 @@ public class X86_64 extends X86_64AssignTemps {
 				ref<EnumScope> enclosing = ref<EnumScope>(scope.enclosing());
 				
 				ref<ref<Symbol>[]> instances = enclosing.instances();
-				ref<CodeSegment> nullCase = new CodeSegment;
-				ref<CodeSegment> join = new CodeSegment;
+				ref<CodeSegment> nullCase = _storage new CodeSegment;
+				ref<CodeSegment> join = _storage new CodeSegment;
 				inst(X86.CMP, TypeFamily.ADDRESS, R.RCX, 0);
 				closeCodeSegment(CC.JE, nullCase);
 				ref<EnumInstanceType> t = ref<EnumInstanceType>(enclosing.enumType.wrappedType());
@@ -423,7 +425,7 @@ public class X86_64 extends X86_64AssignTemps {
 			ref<ParameterScope> hardwareExceptionHandler = ref<ParameterScope>((*o.instances())[0].type().scope());
 			instLoadFunctionAddress(R.RCX, hardwareExceptionHandler, compileContext);
 			instCall(registerHardwareExceptionHandler, compileContext);
-			ref<CodeSegment> handler = new CodeSegment;
+			ref<CodeSegment> handler = _storage new CodeSegment;
 			pushExceptionHandler(handler);
 			_arena.clearStaticInitializers();
 			// Now we have to generate the various static blocks for included units.
@@ -485,13 +487,24 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.XOR, TypeFamily.SIGNED_64, R.RAX, R.RAX);
 			}
 			pushExceptionHandler(null);
-			ref<CodeSegment> join = new CodeSegment;
+			ref<CodeSegment> join = _storage new CodeSegment;
 			closeCodeSegment(CC.NOP, null);
 			insertPreamble();
 			inst(X86.ENTER, 0);
 			reserveAutoMemory(true, compileContext);
 			closeCodeSegment(CC.NOP, null);
 			join.start(this);
+			inst(X86.PUSH, TypeFamily.SIGNED_64, R.RAX);
+			inst(X86.SUB, TypeFamily.ADDRESS, R.RSP, 8);
+			int liveVariables = compileContext.liveSymbolCount();
+			for (int i = liveVariables - 1; i >= 0; i--) {
+				ref<Symbol> id = compileContext.getLiveSymbol(i);
+//				id.print(0, false);
+				inst(X86.LEA, R.RCX, id, compileContext);
+				instCall(id.type().scope().destructor(), compileContext);
+			}
+			inst(X86.ADD, TypeFamily.ADDRESS, R.RSP, 8);
+			inst(X86.POP, TypeFamily.SIGNED_64, R.RAX);
 			inst(X86.POP, TypeFamily.SIGNED_64, R.RCX);
 			inst(X86.POP, TypeFamily.SIGNED_64, R.R15);
 			inst(X86.POP, TypeFamily.SIGNED_64, R.R14);
@@ -521,7 +534,7 @@ public class X86_64 extends X86_64AssignTemps {
 		assert(classScope.storageClass() == StorageClass.MEMBER);
 		for (int i = 0; i < classScope.members().length(); i++) {
 			ref<Symbol> sym = (*classScope.members())[i];
-			if (sym.type().hasDestructor()) {
+			if (sym.storageClass() == StorageClass.MEMBER && sym.type().hasDestructor()) {
 				inst(X86.LEA, R.RCX, R.RSI, sym.offset);
 				instCall(sym.type().scope().destructor(), compileContext);
 			}
@@ -647,6 +660,7 @@ public class X86_64 extends X86_64AssignTemps {
 			compileContext.setCurrent(file.fileScope());
 		else
 			compileContext.setCurrent(_arena.root());
+		n.traverse(Node.Traversal.IN_ORDER, collectStaticDestructors, compileContext);
 		generate(n, compileContext);
 	}
 	
@@ -714,9 +728,9 @@ public class X86_64 extends X86_64AssignTemps {
 			
 		case	CONDITIONAL:
 			cond = ref<Ternary>(node);
-			trueSegment = new CodeSegment;
-			falseSegment = new CodeSegment;
-			join = new CodeSegment;
+			trueSegment = _storage new CodeSegment;
+			falseSegment = _storage new CodeSegment;
+			join = _storage new CodeSegment;
 			f().r.generateSpills(cond, this);
 			generateConditional(cond.left(), trueSegment, falseSegment, compileContext);
 			trueSegment.start(this);
@@ -737,8 +751,8 @@ public class X86_64 extends X86_64AssignTemps {
 			
 		case	LOGICAL_OR:
 			b = ref<Binary>(node);
-			join = new CodeSegment;
-			trueSegment = new CodeSegment;
+			join = _storage new CodeSegment;
+			trueSegment = _storage new CodeSegment;
 			generate(b.left(), compileContext);
 			inst(X86.CMP, b.left(), 1, compileContext);
 			closeCodeSegment(CC.JE, trueSegment);
@@ -753,8 +767,8 @@ public class X86_64 extends X86_64AssignTemps {
 			
 		case	LOGICAL_AND:
 			b = ref<Binary>(node);
-			falseSegment = new CodeSegment;
-			join = new CodeSegment;
+			falseSegment = _storage new CodeSegment;
+			join = _storage new CodeSegment;
 			generate(b.left(), compileContext);
 			inst(X86.CMP, b.left(), 1, compileContext);
 			closeCodeSegment(CC.JNE, falseSegment);
@@ -782,9 +796,9 @@ public class X86_64 extends X86_64AssignTemps {
 		case	NOT_LESS_GREATER:
 		case	NOT_LESS_GREATER_EQUAL:
 			b = ref<Binary>(node);
-			ref<CodeSegment> trueSegment = new CodeSegment;
-			ref<CodeSegment> falseSegment = new CodeSegment;
-			ref<CodeSegment> join = new CodeSegment;
+			ref<CodeSegment> trueSegment = _storage new CodeSegment;
+			ref<CodeSegment> falseSegment = _storage new CodeSegment;
+			ref<CodeSegment> join = _storage new CodeSegment;
 			generateCompare(b, trueSegment, falseSegment, compileContext);
 			trueSegment.start(this);
 			inst(X86.MOV, TypeFamily.BOOLEAN, R(int(b.register)), 1);
@@ -796,9 +810,9 @@ public class X86_64 extends X86_64AssignTemps {
 			
 		case	IF:
 			ref<Ternary> cond = ref<Ternary>(node);
-			trueSegment = new CodeSegment;
-			falseSegment = new CodeSegment;
-			join = new CodeSegment;
+			trueSegment = _storage new CodeSegment;
+			falseSegment = _storage new CodeSegment;
+			join = _storage new CodeSegment;
 			markConditionalAddressModes(cond.left(), compileContext);
 			sethiUllman(cond.left(), compileContext, this);
 			assignConditionCode(cond.left(), compileContext);
@@ -821,16 +835,16 @@ public class X86_64 extends X86_64AssignTemps {
 			else
 				generateExpressionStatement(forStmt.initializer(), compileContext);
 
-			ref<CodeSegment> testSegment = new CodeSegment;
-			join = new CodeSegment;
-			topOfLoop = new CodeSegment;
+			ref<CodeSegment> testSegment = _storage new CodeSegment;
+			join = _storage new CodeSegment;
+			topOfLoop = _storage new CodeSegment;
 
 			closeCodeSegment(CC.JMP, testSegment);
 			topOfLoop.start(this);
 			generateExpressionStatement(forStmt.increment(), compileContext);
 			testSegment.start(this);
 			if (forStmt.test().op() != Operator.EMPTY) {
-				trueSegment = new CodeSegment;
+				trueSegment = _storage new CodeSegment;
 				markAddressModes(forStmt.test(), compileContext);
 				sethiUllman(forStmt.test(), compileContext, this);
 				assignConditionCode(forStmt.test(), compileContext);
@@ -847,9 +861,9 @@ public class X86_64 extends X86_64AssignTemps {
 
 		case	WHILE:
 			b = ref<Binary>(node);
-			trueSegment = new CodeSegment;
-			join = new CodeSegment;
-			ref<CodeSegment> topOfLoop = new CodeSegment;
+			trueSegment = _storage new CodeSegment;
+			join = _storage new CodeSegment;
+			ref<CodeSegment> topOfLoop = _storage new CodeSegment;
 			markAddressModes(b.left(), compileContext);
 			sethiUllman(b.left(), compileContext, this);
 			assignConditionCode(b.left(), compileContext);
@@ -866,9 +880,9 @@ public class X86_64 extends X86_64AssignTemps {
 			
 		case	DO_WHILE:
 			b = ref<Binary>(node);
-			join = new CodeSegment;
-			trueSegment = new CodeSegment;
-			topOfLoop = new CodeSegment;
+			join = _storage new CodeSegment;
+			trueSegment = _storage new CodeSegment;
+			topOfLoop = _storage new CodeSegment;
 			topOfLoop.start(this);
 			JumpContext doWhileContext(b, join, trueSegment, null, this, jumpContext());
 			pushJumpContext(&doWhileContext);
@@ -885,8 +899,8 @@ public class X86_64 extends X86_64AssignTemps {
 			
 		case	SWITCH:
 			b = ref<Binary>(node);
-			ref<CodeSegment> defaultSegment = new CodeSegment;
-			join = new CodeSegment;
+			ref<CodeSegment> defaultSegment = _storage new CodeSegment;
+			join = _storage new CodeSegment;
 			GatherCasesClosure closure;
 			closure.target = this;
 			gatherCases(b.right(), &closure);
@@ -910,10 +924,10 @@ public class X86_64 extends X86_64AssignTemps {
 						// TODO: generate exception
 						continue;
 					}
-					int x = int(caseNode.left().foldInt(compileContext));
+					int x = int(caseNode.left().foldInt(this, compileContext));
 					inst(X86.CMP, b.left().type.family(), controlReg, x & mask);
 					closeCodeSegment(CC.JE, labels[i]);
-					ref<CodeSegment> n = new CodeSegment;
+					ref<CodeSegment> n = _storage new CodeSegment;
 					n.start(this);
 				}
 				closeCodeSegment(CC.JMP, defaultSegment);
@@ -932,7 +946,7 @@ public class X86_64 extends X86_64AssignTemps {
 						loadEnumType(R(int(node.register)), t.symbol(), c.symbol().offset * int.bytes);
 						inst(X86.CMP, TypeFamily.SIGNED_64, controlReg, R(int(node.register)));
 						closeCodeSegment(CC.JE, labels[i]);
-						ref<CodeSegment> n = new CodeSegment;
+						ref<CodeSegment> n = _storage new CodeSegment;
 						n.start(this);
 					} else
 						unfinished(c, "enum switch", compileContext);
@@ -1042,9 +1056,9 @@ public class X86_64 extends X86_64AssignTemps {
 			
 		case	TRY:
 			ref<Try> tr = ref<Try>(node);
-			ref<CodeSegment> primaryHandler = new CodeSegment;
-//			ref<CodeSegment> secondaryHandler = tr.finallyClause() != null ? new CodeSegment : null;
-			join = new CodeSegment;
+			ref<CodeSegment> primaryHandler = _storage new CodeSegment;
+//			ref<CodeSegment> secondaryHandler = tr.finallyClause() != null ? _storage new CodeSegment : null;
+			join = _storage new CodeSegment;
 			ref<CodeSegment> outer = pushExceptionHandler(primaryHandler);
 			generate(tr.body(), compileContext);
 			closeCodeSegment(CC.NOP, join);
@@ -2344,7 +2358,7 @@ public class X86_64 extends X86_64AssignTemps {
 			
 		case	LOGICAL_AND:
 			b = ref<Binary>(node);
-			ref<CodeSegment> secondTest = new CodeSegment;
+			ref<CodeSegment> secondTest = _storage new CodeSegment;
 			generateConditional(b.left(), secondTest, falseSegment, compileContext);
 			secondTest.start(this);
 			generateConditional(b.right(), trueSegment, falseSegment, compileContext);
@@ -2352,7 +2366,7 @@ public class X86_64 extends X86_64AssignTemps {
 			
 		case	LOGICAL_OR:
 			b = ref<Binary>(node);
-			secondTest = new CodeSegment;
+			secondTest = _storage new CodeSegment;
 			generateConditional(b.left(), trueSegment, secondTest, compileContext);
 			secondTest.start(this);
 			generateConditional(b.right(), trueSegment, falseSegment, compileContext);
@@ -2383,7 +2397,7 @@ public class X86_64 extends X86_64AssignTemps {
 			node.print(0);
 			assert(false);
 		}
-		ref<CodeSegment> insurance = new CodeSegment;
+		ref<CodeSegment> insurance = _storage new CodeSegment;
 		insurance.start(this);
 		closeCodeSegment(CC.JMP, trueSegment);
 	}
@@ -3748,3 +3762,8 @@ boolean isCompileTimeConstant(ref<Node> t) {
 	return false;
 }
 
+private TraverseAction collectStaticDestructors(ref<Node> n, address data) {
+	if (n.op() == Operator.DECLARATION)
+		compiler.markLiveSymbols(ref<Binary>(n).right(), StorageClass.STATIC, ref<CompileContext>(data));
+	return TraverseAction.CONTINUE_TRAVERSAL;
+}

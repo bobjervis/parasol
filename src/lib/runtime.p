@@ -49,6 +49,10 @@ public abstract address builtInFunctionAddress(int index);
 public abstract int builtInFunctionArguments(int index);
 public abstract int builtInFunctionReturns(int index);
 
+public abstract pointer<byte> lowCodeAddress();
+public abstract pointer<byte> highCodeAddress();
+public abstract address stackTop();
+
 public abstract long getRuntimeFlags();
 
 public address allocateRegion(long length) {
