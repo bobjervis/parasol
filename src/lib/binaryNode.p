@@ -336,9 +336,8 @@ class Binary extends Node {
 				break;
 				
 			case	STRING:
-				/*
 				if (_right.op() == Operator.CALL) {
-					ref<OverloadInstance> oi = getMethodSymbol(_right, "store", type, compileContext);
+					ref<OverloadInstance> oi = type.stringAllocationConstructor(compileContext);
 					if (oi == null) {
 						type = compileContext.errorType();
 						return this;
@@ -350,7 +349,6 @@ class Binary extends Node {
 					call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 					return call.fold(tree, voidContext, compileContext);
 				}
-*/
 				scope = type.copyConstructor();
 				if (scope != null) {
 					ref<Node> adr = tree.newUnary(Operator.ADDRESS, _left, location());
@@ -662,7 +660,7 @@ class Binary extends Node {
 				break;
 				
 			case	STRING:
-				if (_right.op() == Operator.CALL) {
+				if (_right.op() == Operator.CALL && ref<Call>(_right).category() != CallCategory.CONSTRUCTOR) {
 					ref<OverloadInstance> oi = getMethodSymbol(_right, "store", type, compileContext);
 					if (oi == null) {
 						type = compileContext.errorType();
@@ -2112,9 +2110,8 @@ public void markLiveSymbols(ref<Node> declarator, StorageClass storageClass, ref
 		ref<Identifier> id = ref<Identifier>(declarator);
 		if (id.deferAnalysis())
 			break;
-		ref<Symbol> symbol = id.symbol();
-		if (symbol.storageClass() == storageClass)
-			compileContext.markLiveSymbol(symbol);
+		if (id.symbol().storageClass() == storageClass)
+			compileContext.markLiveSymbol(id);
 		break;
 		
 	case	INITIALIZE:

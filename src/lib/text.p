@@ -92,6 +92,9 @@ class string {
 	
 	~string() {
 		if (_contents != null) {
+//			print("\"");
+//			print(*this);
+//			print("\"\n");
 //			if (!ignoring)
 //				deletedContents.append(_contents);
 //			else

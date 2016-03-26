@@ -498,10 +498,10 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.SUB, TypeFamily.ADDRESS, R.RSP, 8);
 			int liveVariables = compileContext.liveSymbolCount();
 			for (int i = liveVariables - 1; i >= 0; i--) {
-				ref<Symbol> id = compileContext.getLiveSymbol(i);
+				ref<Node> id = compileContext.getLiveSymbol(i);
 //				id.print(0, false);
 				inst(X86.LEA, R.RCX, id, compileContext);
-				instCall(id.type().scope().destructor(), compileContext);
+				instCall(id.type.scope().destructor(), compileContext);
 			}
 			inst(X86.ADD, TypeFamily.ADDRESS, R.RSP, 8);
 			inst(X86.POP, TypeFamily.SIGNED_64, R.RAX);

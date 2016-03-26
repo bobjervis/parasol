@@ -148,6 +148,13 @@ class Unary extends Node {
 			}
 			switch (type.family()) {
 			case	STRING:
+				switch (_operand.type.family()) {
+				case	VAR:
+					ref<Node> call = createMethodCall(_operand, "stringValue", tree, compileContext);
+					return call.fold(tree, false, compileContext);
+				}
+				break;
+				
 			case	UNSIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
@@ -273,6 +280,7 @@ class Unary extends Node {
 							_operand = tree.newCast(targetType, _operand);
 						ref<NodeList> args = tree.newNodeList(_operand);
 						ref<Reference> r = tree.newReference(temp, true, location());
+						compileContext.markLiveSymbol(r);
 						ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
 						adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 						ref<Call> constructor = tree.newCall(oi.parameterScope(), CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);

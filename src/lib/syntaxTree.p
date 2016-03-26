@@ -486,8 +486,8 @@ class Block extends Node {
 			nl.node = nl.node.fold(tree, false, compileContext);
 			if (nl.next == null) {
 				for (;;) {
-					ref<Symbol> sym = compileContext.popLiveSymbol(scope);
-					if (sym == null)
+					ref<Node> n = compileContext.popLiveSymbol(scope);
+					if (n == null)
 						break;
 //					printf("Destructor for:\n");
 //					sym.print(4, false);

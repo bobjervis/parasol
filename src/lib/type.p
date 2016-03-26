@@ -1048,6 +1048,27 @@ class Type {
 		return null;
 	}
 	
+	public ref<OverloadInstance> stringAllocationConstructor(ref<CompileContext> compileContext) {
+		if (scope() == null)
+			return null;
+		for (int i = 0; i < scope().constructors().length(); i++) {
+			ref<Function> f = ref<Function>((*scope().constructors())[i].definition());
+			ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
+			if (oi.parameterCount() != 1)
+				continue;
+			ref<Type> parameterType = (*oi.parameterScope().parameters())[0].type();
+			ref<Type> allocationType = parameterType.indirectType(compileContext);
+			if (allocationType == null)
+				continue;
+			ref<Scope> allocationClass = allocationType.scope();
+			if (allocationClass == null)
+				continue;
+			if (allocationClass.enclosing() == scope())
+				return oi;
+		}
+		return null;
+	}
+	
 	public boolean hasConstructors() {
 		if (scope() == null)
 			return false;

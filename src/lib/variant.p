@@ -120,6 +120,10 @@ public class var {
 		long x = _value ^ long(other);
 		return x;
 	}
+
+	public string stringValue() {
+		return *ref<string>(&_value);
+	}
 	
 	public long integerValue() {
 		// TODO: Validate type and convert when necessary

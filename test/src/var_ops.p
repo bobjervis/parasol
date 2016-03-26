@@ -178,7 +178,6 @@ void basicStringOps() {
 	printf(string(c));
 	assert(c == "sample stuff");
 	assert(a + b == "sample stuff");
-	
 	var f = "xx";
 //	assert(f.length() == 2);
 //	int x = int(f.printf("%s %d:", a, 35));
@@ -189,6 +188,7 @@ void basicStringOps() {
 
 void conversions() {
 	var f = "xx";
+	print("conversions\n");
 	string s = string(f);
 	assert(s == "xx");
 	char c = 'g';

@@ -971,7 +971,6 @@ class Scope {
 	public ref<Symbol> lookup(ref<CompileString> name) {
 		string s = name.asString();
 		ref<Symbol> sym = _symbols[s];
-		s = null;
 		return sym;
 	}
 

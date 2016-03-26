@@ -34,7 +34,7 @@ class CompileContext {
 	private int _importedScopes;
 	private ref<Variable>[] _variables;
 	private ref<Symbol>[] _staticSymbols;		// Populated when assigning storage
-	private ref<Symbol>[] _liveSymbols;			// Populated during fold actions with the set of live symbols that
+	private ref<Node>[] _liveSymbols;			// Populated during fold actions with the set of live symbols that
 												// need destructor calls.
 	private int _baseLiveSymbol;				// >= 0, index of first symbol live in this function.
 	
@@ -780,26 +780,26 @@ class CompileContext {
 		return n;
 	}
 	
-	public void markLiveSymbol(ref<Symbol> sym) {
-		if (sym == null)
+	public void markLiveSymbol(ref<Node> n) {
+		if (n == null || n.type == null)
 			return;
-		if (sym.type().hasDestructor())
-			_liveSymbols.push(sym);
+		if (n.type.hasDestructor())
+			_liveSymbols.push(n);
 	}
 	
 	public int liveSymbolCount() {
 		return _liveSymbols.length() - _baseLiveSymbol;
 	}
 	
-	public ref<Symbol> getLiveSymbol(int index) {
+	public ref<Node> getLiveSymbol(int index) {
 		return _liveSymbols[index + _baseLiveSymbol];
 	}
 	
-	public ref<Symbol> popLiveSymbol(ref<Scope> scope) {
+	public ref<Node> popLiveSymbol(ref<Scope> scope) {
 		if (_liveSymbols.length() <= _baseLiveSymbol)
 			return null;
-		ref<Symbol> result = _liveSymbols.peek();
-		if (result.enclosing() == scope)
+		ref<Node> result = _liveSymbols.peek();
+		if (result.symbol() == null || result.symbol().enclosing() == scope)
 			return _liveSymbols.pop();
 		else
 			return null;

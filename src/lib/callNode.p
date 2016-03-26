@@ -173,6 +173,7 @@ class Call extends ParameterBag {
 				else {
 					ref<Variable> temp = compileContext.newVariable(type);
 					thisParameter = tree.newReference(temp, true, location());
+					compileContext.markLiveSymbol(thisParameter);
 					thisParameter = tree.newUnary(Operator.ADDRESS, thisParameter, location());
 					thisParameter.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 //					ref<Node> n = tree.newStackArgumentAddress(0, location());
@@ -203,6 +204,7 @@ class Call extends ParameterBag {
 						} else {
 							ref<Variable> temp = compileContext.newVariable(dot.left().type);
 							ref<Reference> r = tree.newReference(temp, true, dot.left().location());
+							compileContext.markLiveSymbol(r);
 							ref<Node> defn = tree.newBinary(Operator.ASSIGN, r, dot.left(), dot.left().location());
 							defn.type = dot.left().type;
 							r = tree.newReference(temp, false, dot.left().location());
@@ -1396,12 +1398,9 @@ class Return extends ParameterBag {
 		int n = compileContext.liveSymbolCount();
 //		ref<Node> output = this;
 		for (int i = 0; i < n; i++) {
-			ref<Symbol> sym = compileContext.getLiveSymbol(i);
+			ref<Node> n = compileContext.getLiveSymbol(i);
 			// We know that 'live' symbols have a scope with a destructor
-//			ref<ParameterScope> destructor = sym.type().scope().destructor();
-			ref<Identifier> id = tree.newIdentifier(sym, location());
-			id.type = sym.type();
-			ref<NodeList> nl = tree.newNodeList(id);
+			ref<NodeList> nl = tree.newNodeList(n);
 			nl.next = _liveSymbols;
 			_liveSymbols = nl;
 //			ref<Node> thisParameter = tree.newUnary(Operator.ADDRESS, id, id.location());
