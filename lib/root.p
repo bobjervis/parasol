@@ -565,15 +565,20 @@ class map<class V, class K> {
 	}
 	
 	public boolean contains(K key) {
-		ref<Entry> e = findEntry(key);
-		return e.valid;
+		ref<Entry> e = findEntryReadOnly(key);
+		if (e != null)
+			return e.valid;
+		else
+			return false;
 	}
 
 	public void deleteAll() {
 	}
 	
 	public V get(K key) {
-		ref<Entry> e = findEntry(key);
+		ref<Entry> e = findEntryReadOnly(key);
+		if (e == null)
+			return V(null);
 		if (e.valid)
 			return e.value;
 		else
@@ -588,6 +593,21 @@ class map<class V, class K> {
 		return v;
 	}
 
+	public boolean insert(K key, V value, ref<memory.Allocator> allocator) {
+		ref<Entry> e = findEntry(key, allocator);
+		if (e.valid)
+			return false;
+		else {
+			if (hadToRehash(allocator))
+				e = findEntry(key, allocator);
+			_entriesCount++;
+			e.valid = true;
+			e.key = key;
+			e.value = value;
+			return true;
+		}
+	}
+	
 	public boolean insert(K key, V value) {
 		ref<Entry> e = findEntry(key);
 		if (e.valid)
@@ -640,6 +660,39 @@ class map<class V, class K> {
 		*createEmpty(key) = value;
 	}
 	
+	private ref<Entry> findEntryReadOnly(K key) {
+		if (_entries == null)
+			return null;
+		int x = key.hash() & (_allocatedEntries - 1);
+		int startx = x;
+		for(;;) {
+			ref<Entry> e = ref<Entry>(_entries + x);
+			if (!e.valid || e.key.compare(key) == 0)
+				return e;
+			x++;
+			if (x >= _allocatedEntries)
+				x = 0;
+		}
+	}
+
+	private ref<Entry> findEntry(K key, ref<memory.Allocator> allocator) {
+		if (_entries == null) {
+			_entries = pointer<Entry>(allocator.alloc(INITIAL_TABLE_SIZE * Entry.bytes));
+			_allocatedEntries = INITIAL_TABLE_SIZE;
+			setRehashThreshold();
+		}
+		int x = key.hash() & (_allocatedEntries - 1);
+		int startx = x;
+		for(;;) {
+			ref<Entry> e = ref<Entry>(_entries + x);
+			if (!e.valid || e.key.compare(key) == 0)
+				return e;
+			x++;
+			if (x >= _allocatedEntries)
+				x = 0;
+		}
+	}
+
 	private ref<Entry> findEntry(K key) {
 		if (_entries == null) {
 			_entries = pointer<Entry>(memory.alloc(INITIAL_TABLE_SIZE * Entry.bytes));
@@ -658,6 +711,27 @@ class map<class V, class K> {
 		}
 	}
 
+	private boolean hadToRehash(ref<memory.Allocator> allocator) {
+		if (_entriesCount >= _rehashThreshold) {
+			pointer<Entry> oldE = _entries;
+			_allocatedEntries *= 2;
+			_entries = pointer<Entry>(allocator.alloc(_allocatedEntries * Entry.bytes));
+			int e = _entriesCount;
+			_entriesCount = 0;
+			for (int i = 0; e > 0; i++) {
+				if (oldE[i].valid) {
+					insert(oldE[i].key, oldE[i].value);
+					e--;
+				}
+			}
+			setRehashThreshold();
+			// TODO: Big MEM LEAK bug: we don't run destructors on any of the keys. We should.
+			allocator.free(oldE);
+			return true;
+		} else
+			return false;
+	}
+	
 	private boolean hadToRehash() {
 		if (_entriesCount >= _rehashThreshold) {
 			pointer<Entry> oldE = _entries;

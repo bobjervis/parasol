@@ -525,7 +525,7 @@ class UnitScope extends Scope {
 						n.definition().add(MessageId.DUPLICATE, compileContext.pool(), *n.name());
 					sym.definition().add(MessageId.DUPLICATE, compileContext.pool(), *sym.name());
 				} else
-					namespaceScope.put(sym);
+					namespaceScope.put(sym, compileContext.pool());
 			} else if (sym.class == Overload) {
 				ref<Overload> o = ref<Overload>(sym);
 
@@ -777,11 +777,11 @@ class Scope {
 		return "<anonymous>";
 	}
 
-	boolean defineImport(ref<Identifier> id, ref<Symbol> definition) {
+	boolean defineImport(ref<Identifier> id, ref<Symbol> definition, ref<MemoryPool> memoryPool) {
 		string name = id.identifier().asString();
 		if (_symbols.contains(name))
 			return false;
-		_symbols[name] = definition;
+		_symbols.insert(name, definition, memoryPool);
 		return true;
 	}
 
@@ -791,7 +791,7 @@ class Scope {
 			return null;
 	//	printf("Define %s\n", source.identifier().asString());
 		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations, source.identifier(), source, declaration, initializer);
-		_symbols[name] = sym;
+		_symbols.insert(name, sym, memoryPool);
 		return sym;
 	}
 
@@ -800,7 +800,7 @@ class Scope {
 		string name = source.identifier().asString();
 		if (_symbols.contains(name))
 			return null;
-		_symbols[name] = sym;
+		_symbols.insert(name, sym, memoryPool);
 		return sym;
 	}
 
@@ -810,7 +810,7 @@ class Scope {
 		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations, pcs, null, type, initializer);
 		if (_symbols.contains(name))
 			return null;
-		_symbols[name] = sym;
+		_symbols.insert(name, sym, memoryPool);
 		return sym;
 	}
 
@@ -826,7 +826,7 @@ class Scope {
 		} else {
 			string n = name.asString();
 			o = memoryPool.newOverload(this, name, kind);
-			_symbols[n] = o;
+			_symbols.insert(n, o, memoryPool);
 		}
 		return o;
 	}
@@ -856,7 +856,7 @@ class Scope {
 		}
 		ref<Scope> scope = compileContext.arena().createScope(null, null, StorageClass.STATIC);
 		ref<Namespace> nm = compileContext.pool().newNamespace(namespaceNode, this, scope, compileContext.annotations, name);
-		_symbols[name.asString()] = nm;
+		_symbols.insert(name.asString(), nm, compileContext.pool());
 		return nm;
 	}
 
@@ -964,8 +964,8 @@ class Scope {
 		return max;
 	}
 
-	public void put(ref<Symbol> sym) {
-		_symbols[sym.name().asString()] = sym;
+	public void put(ref<Symbol> sym, ref<MemoryPool> memoryPool) {
+		_symbols.insert(sym.name().asString(), sym, memoryPool);
 	}
 
 	public ref<Symbol> lookup(ref<CompileString> name) {

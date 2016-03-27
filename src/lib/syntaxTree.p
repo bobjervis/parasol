@@ -1289,7 +1289,7 @@ class Import extends Node {
 				localName = ref<Identifier>(_namespaceNode.right());
 			if (symbol != null) {
 				if (isAllowedImport(symbol)) {
-					if (!_enclosingScope.defineImport(localName, symbol))
+					if (!_enclosingScope.defineImport(localName, symbol, compileContext.pool()))
 						_namespaceNode.add(MessageId.DUPLICATE, compileContext.pool(), localName.value());
 				} else
 					_namespaceNode.add(MessageId.INVALID_IMPORT, compileContext.pool());
