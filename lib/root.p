@@ -98,6 +98,8 @@ class vector<class E> extends vector<E, int>{
 		super(other);
 	}
 	
+	~vector() {
+	}
 }
 
 @Shape
@@ -151,6 +153,12 @@ class vector<class E, class I> {
 		_data[int(_length) - 1] = other;
 	}
 
+	public void append(E other, ref<memory.Allocator> allocator) {
+		resize(I(int(_length) + 1), allocator);
+//		print("resize done\n");
+		_data[int(_length) - 1] = other;
+	}
+
 	/*
 	 *	binarySearchClosestGreater
 	 *
@@ -187,6 +195,13 @@ class vector<class E, class I> {
 
 	public void clear() {
 		memory.free(_data);
+		_data = null;
+		_length = I(0);
+		_capacity = I(0);
+	}
+	
+	public void clear(ref<memory.Allocator> allocator) {
+		allocator.free(_data);
 		_data = null;
 		_length = I(0);
 		_capacity = I(0);
@@ -281,6 +296,37 @@ class vector<class E, class I> {
 			for (I i = I(0); int(i) < int(_length); i = I(int(i) + 1))
 				a[int(i)] = _data[int(i)];
 			memory.free(_data);
+		}
+		_capacity = newSize;
+		_data = a;
+		_length = newLength;
+	}
+	
+	public void resize(I newLength, ref<memory.Allocator> allocator) {
+		I newSize;
+		if (_data != null) {
+			if (int(_capacity) >= int(newLength)) {
+				if (int(newLength) == 0)
+					clear(allocator);
+				else
+					_length = newLength;
+				return;
+			}
+			newSize = reservedSize(newLength);
+			if (_capacity == newSize) {
+				_length = newLength;
+				return;
+			}
+		} else {
+			if (int(newLength) == 0)
+				return;
+			newSize = reservedSize(newLength);
+		}
+		pointer<E> a = pointer<E>(allocator.alloc(int(newSize) * E.bytes));
+		if (_data != null) {
+			for (I i = I(0); int(i) < int(_length); i = I(int(i) + 1))
+				a[int(i)] = _data[int(i)];
+			allocator.free(_data);
 		}
 		_capacity = newSize;
 		_data = a;

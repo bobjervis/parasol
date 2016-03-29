@@ -573,6 +573,7 @@ class X86_64Encoder extends Target {
 
 			default:
 				symbol.print(0, false);
+				printf("StorageClass: %s\n", string(symbol.storageClass()));
 				assert(false);
 			}
 		}

@@ -676,6 +676,11 @@ class TempStack {
 	private ref<Temporary>[] _variableStack;
 	private ref<Temporary>[] _freeTemps;
 	
+	~TempStack() {
+		_variableStack.deleteAll();
+		_freeTemps.deleteAll();
+	}
+	
 	ref<Temporary> tos() {
 		if (_variableStack.length() == 0)
 			return null;

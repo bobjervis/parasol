@@ -253,6 +253,7 @@ public class Arena {
 			if (_builtInType[builtInMap[i].family] == null) {
 				root.definition().add(MessageId.UNDEFINED_BUILT_IN, _global, CompileString(builtInMap[i].name));
 				allDefined = false;
+				_builtInType[builtInMap[i].family] = compileContext.pool().newBuiltInType(builtInMap[i].family, ref<ClassType>(null));
 			}
 		}
 		return allDefined;

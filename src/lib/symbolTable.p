@@ -1296,7 +1296,10 @@ class PlainSymbol extends Symbol {
 		printf("\n");
 		if (_initializer != null && _initializer.op() == Operator.CLASS && _type != null && _type.family() == TypeFamily.TYPEDEF) {
 			ref<TypedefType> tt = ref<TypedefType>(_type);
-			ref<ClassType> t = ref<ClassType>(tt.wrappedType());
+			ref<Type> declaredType = tt.wrappedType();
+			if (declaredType.class == BuiltInType)
+				declaredType = ref<BuiltInType>(declaredType).classType();
+			ref<ClassType> t = ref<ClassType>(declaredType);
 			t.scope().print(indent + INDENT, printChildScopes);
 		} else {
 			definition().printBasic(indent + INDENT);
@@ -1352,6 +1355,9 @@ class PlainSymbol extends Symbol {
 					return false;
 				}
 				break;
+				
+			case	ERROR:
+				return true;
 				
 			default:
 				print(0, false);
@@ -1954,6 +1960,10 @@ class OverloadOperation {
 			_argCount++;
 	}
 
+	~OverloadOperation() {
+		_best.clear(_compileContext.pool());
+	}
+	
 	public ref<Type> includeClass(ref<Type>  classType, ref<CompileContext> compileContext) {
 		for (ref<Type> current = classType; current != null; current = current.assignSuper(compileContext)) {
 			if (current.scope() != null) {
@@ -1984,8 +1994,8 @@ class OverloadOperation {
 			// whether that one is good enough.  Function pointers, for
 			// example follow this code path.
 			if (_kind == Operator.FUNCTION && !_anyPotentialOverloads) {
-				_best.clear();
-				_best.append(sym);
+				_best.clear(_compileContext.pool());
+				_best.append(sym, _compileContext.pool());
 			}
 			_done = true;
 			// If we did see some overloads, this plain symbol must be
@@ -2070,7 +2080,7 @@ class OverloadOperation {
 				if (partialOrder < 0) {
 					if (i < _best.length() - 1)
 						_best[i] = _best[_best.length() - 1];
-					_best.resize(_best.length() - 1);
+					_best.resize(_best.length() - 1, _compileContext.pool());
 				} else {
 					if (partialOrder > 0)
 						includeOi = false;
@@ -2078,7 +2088,7 @@ class OverloadOperation {
 				}
 			}
 			if (includeOi)
-				_best.append(oi);
+				_best.append(oi, _compileContext.pool());
 		}
 		return null;
 	}
@@ -2131,7 +2141,7 @@ class OverloadOperation {
 
 	public void restart() {
 		_done = false;
-		_best.clear();
+		_best.clear(_compileContext.pool());
 		_anyPotentialOverloads = false;
 	}
 

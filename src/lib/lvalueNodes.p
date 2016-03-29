@@ -361,6 +361,8 @@ class Identifier extends Node {
 						}
 					}
 					type = _symbol.assignType(compileContext);
+					if (type == null)
+						type = compileContext.errorType();
 					return;
 				}
 				available = available.base(compileContext);

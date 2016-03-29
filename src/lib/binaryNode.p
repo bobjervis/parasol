@@ -135,8 +135,9 @@ class Binary extends Node {
 			print(0);
 		if (type.family() == TypeFamily.SHAPE) {
 			switch (op()) {
-			case	BIND:
 			case	DECLARATION:
+				markLiveSymbols(_right, StorageClass.AUTO, compileContext);
+			case	BIND:
 				_left = _left.fold(tree, false, compileContext);
 				_right = _right.fold(tree, true, compileContext);
 				return this;

@@ -1414,16 +1414,15 @@ class Return extends ParameterBag {
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 			if (nl.node.type == null || nl.node.deferAnalysis())
 				continue;
-			if (nl.node.type.family() == TypeFamily.STRING) {
-				if (nl.node.op() == Operator.CALL)
-					continue;
+			if ((nl.node.type.family() == TypeFamily.STRING && nl.node.op() != Operator.CALL) ||
+				nl.node.type.returnsViaOutParameter(compileContext)) {
 				// TODO: Add a check for the return value being one of the live symbols to be destroyed.
 				ref<Variable> temp = compileContext.newVariable(nl.node.type);
-				ref<Reference> r = tree.newReference(temp, true, location());
-				ref<Node> defn = tree.newBinary(Operator.ASSIGN, r, nl.node, location());
+				ref<Reference> r = tree.newReference(temp, true, nl.node.location());
+				ref<Node> defn = tree.newBinary(Operator.ASSIGN, r, nl.node, nl.node.location());
 				defn.type = nl.node.type;
-				r = tree.newReference(temp, false, location());
-				nl.node = tree.newBinary(Operator.SEQUENCE, defn.fold(tree, true, compileContext), r, location());
+				r = tree.newReference(temp, false, nl.node.location());
+				nl.node = tree.newBinary(Operator.SEQUENCE, defn.fold(tree, true, compileContext), r, nl.node.location());
 				nl.node.type = defn.type;
 			}
 		}
