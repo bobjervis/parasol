@@ -146,7 +146,7 @@ class ClasslikeScope extends Scope {
 		if (destructor() == null) {
 			if (hasVtable(compileContext))
 				return true;
-			for (ref<Symbol>[string].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
+			for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
 				ref<Symbol> sym = i.get();
 				if (sym.type() == null)
 					continue;
@@ -189,7 +189,7 @@ class ClasslikeScope extends Scope {
 	}
 
 	public void checkForDuplicateMethods(ref<CompileContext> compileContext) {
-		for (ref<Symbol>[string].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
+		for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
 			ref<Symbol> sym = i.get();
 			if (sym.class == Overload)
 				ref<Overload>(sym).checkForDuplicateMethods(compileContext);
@@ -211,7 +211,7 @@ class ClasslikeScope extends Scope {
 						_methods.append(baseClass._methods[i]);
 				}
 			}
-			for (ref<Symbol>[string].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
+			for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
 				ref<Symbol> sym = i.get();
 				if (sym.class == Overload) {
 					ref<Overload> o = ref<Overload>(sym);
@@ -516,7 +516,7 @@ class UnitScope extends Scope {
 
 	public void mergeIntoNamespace(ref<Namespace> nm, ref<CompileContext> compileContext) {
 		ref<Scope> namespaceScope = nm.symbols();
-		for (ref<Symbol>[string].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
+		for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
 			ref<Symbol> sym = i.get();
 			if (sym.class == PlainSymbol) {
 				ref<Symbol> n = namespaceScope.lookup(sym.name());
@@ -567,8 +567,28 @@ class Scope {
 	private ref<ParameterScope>[] _constructors;
 	private ref<ParameterScope> _destructor;
 
-	protected ref<Symbol>[string] _symbols;
+	protected ref<Symbol>[SymbolKey] _symbols;
 
+	class SymbolKey {
+		ref<CompileString> _key;
+		
+		public SymbolKey() {}
+		
+		SymbolKey(ref<CompileString> key) {
+			_key = key;
+		}
+		
+		int compare(SymbolKey other) {
+			return _key.compare(*other._key);
+		}
+		
+		int hash() {
+			if (_key.length == 1)
+				return _key.data[0];
+			else
+				return _key.data[0] + (_key.data[_key.length - 1] << 7);
+		}
+	}
 
 	// General block information
 
@@ -613,7 +633,7 @@ class Scope {
 	}
 		
 	boolean writeHeader(File header) {
-		for (ref<Symbol>[string].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
+		for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
 			ref<Symbol> sym = i.get();
 			if (sym.deferAnalysis())
 				continue;
@@ -639,7 +659,7 @@ class Scope {
 				if (t.family() == TypeFamily.ENUM) {
 					header.printf("enum %s {\n", sym.name().asString());
 					ref<Scope> s = t.scope();
-					for (ref<Symbol>[string].iterator i = s.symbols().begin(); i.hasNext(); i.next()) {
+					for (ref<Symbol>[SymbolKey].iterator i = s.symbols().begin(); i.hasNext(); i.next()) {
 						ref<Symbol> c = i.get();
 						header.printf("\t%s%s,\n", prefix, c.name().asString());
 					}
@@ -699,7 +719,7 @@ class Scope {
 			}
 		}
 		printf(":\n");
-		for (ref<Symbol>[string].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
+		for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
 			ref<Symbol> sym = i.get();
 			if (sym.enclosing() == this)
 				i.get().print(indent + INDENT, printChildren);
@@ -778,29 +798,29 @@ class Scope {
 	}
 
 	boolean defineImport(ref<Identifier> id, ref<Symbol> definition, ref<MemoryPool> memoryPool) {
-		string name = id.identifier().asString();
-		if (_symbols.contains(name))
+		SymbolKey key(id.identifier());
+		if (_symbols.contains(key))
 			return false;
-		_symbols.insert(name, definition, memoryPool);
+		_symbols.insert(key, definition, memoryPool);
 		return true;
 	}
 
 	ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> source, ref<Node> declaration, ref<Node> initializer, ref<MemoryPool> memoryPool) {
-		string name = source.identifier().asString();
-		if (_symbols.contains(name))
+		SymbolKey key(source.identifier());
+		if (_symbols.contains(key))
 			return null;
 	//	printf("Define %s\n", source.identifier().asString());
 		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations, source.identifier(), source, declaration, initializer);
-		_symbols.insert(name, sym, memoryPool);
+		_symbols.insert(key, sym, memoryPool);
 		return sym;
 	}
 
 	ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> source, ref<Type> type, ref<Node> initializer, ref<MemoryPool> memoryPool) {
 		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations, source.identifier(), source, type, initializer);
-		string name = source.identifier().asString();
-		if (_symbols.contains(name))
+		SymbolKey key(source.identifier());
+		if (_symbols.contains(key))
 			return null;
-		_symbols.insert(name, sym, memoryPool);
+		_symbols.insert(key, sym, memoryPool);
 		return sym;
 	}
 
@@ -808,9 +828,10 @@ class Scope {
 		CompileString cs = memoryPool.newCompileString(name);
 		ref<CompileString> pcs = memoryPool new CompileString(cs.data, cs.length);
 		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations, pcs, null, type, initializer);
-		if (_symbols.contains(name))
+		SymbolKey key(pcs);
+		if (_symbols.contains(key))
 			return null;
-		_symbols.insert(name, sym, memoryPool);
+		_symbols.insert(key, sym, memoryPool);
 		return sym;
 	}
 
@@ -824,9 +845,9 @@ class Scope {
 			if (o.kind() != kind)
 				return null;
 		} else {
-			string n = name.asString();
+			SymbolKey key(name);
 			o = memoryPool.newOverload(this, name, kind);
-			_symbols.insert(n, o, memoryPool);
+			_symbols.insert(key, o, memoryPool);
 		}
 		return o;
 	}
@@ -856,7 +877,8 @@ class Scope {
 		}
 		ref<Scope> scope = compileContext.arena().createScope(null, null, StorageClass.STATIC);
 		ref<Namespace> nm = compileContext.pool().newNamespace(namespaceNode, this, scope, compileContext.annotations, name);
-		_symbols.insert(name.asString(), nm, compileContext.pool());
+		SymbolKey key(name);
+		_symbols.insert(key, nm, compileContext.pool());
 		return nm;
 	}
 
@@ -943,7 +965,7 @@ class Scope {
 
 	public int maximumAlignment() {
 		int max = 1;
-		for (ref<Symbol>[string].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
+		for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
 			ref<Symbol> sym = i.get();
 			if (sym.storageClass() == StorageClass.STATIC ||
 				sym.storageClass() == StorageClass.CONSTANT)
@@ -965,22 +987,26 @@ class Scope {
 	}
 
 	public void put(ref<Symbol> sym, ref<MemoryPool> memoryPool) {
-		_symbols.insert(sym.name().asString(), sym, memoryPool);
+		SymbolKey key(sym.name());
+		_symbols.insert(key, sym, memoryPool);
 	}
 
 	public ref<Symbol> lookup(ref<CompileString> name) {
-		string s = name.asString();
-		ref<Symbol> sym = _symbols[s];
+		SymbolKey key(name);
+		ref<Symbol> sym = _symbols[key];
 		return sym;
 	}
 
 	public ref<Symbol> lookup(string name) {
-		return _symbols[name];
+		CompileString cs(name);
+		SymbolKey key(&cs);
+		return _symbols[key];
 	}
 
 	public ref<Symbol> lookup(pointer<byte> name) {
-		string s(name);
-		return _symbols[s];
+		CompileString cs(name);
+		SymbolKey key(&cs);
+		return _symbols[key];
 	}
 
 	public ref<Type>, ref<Symbol> assignOverload(ref<Node> node, CompileString name, ref<NodeList> arguments, Operator kind, ref<CompileContext> compileContext) {
@@ -1057,7 +1083,7 @@ class Scope {
 			return null;
 	}
 
-	ref<ref<Symbol>[string]> symbols() {
+	ref<ref<Symbol>[SymbolKey]> symbols() {
 		return &_symbols;
 	}
 
@@ -1095,7 +1121,7 @@ class Scope {
 	protected void checkStorage(ref<CompileContext> compileContext) {
 		if (!_checked) {
 			_checked = true;
-			for (ref<Symbol>[string].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
+			for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
 				ref<Symbol> sym = i.get();
 				checkStorageOfObject(sym, compileContext);
 			}
@@ -1154,7 +1180,7 @@ class Scope {
 	}
 
 	protected void visitAll(ref<Target> target, int offset, ref<CompileContext> compileContext) {
-		for (ref<Symbol>[string].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
+		for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
 			ref<Symbol> sym = i.get();
 			target.assignStorageToObject(sym, this, offset, compileContext);
 		}

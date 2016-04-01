@@ -3531,7 +3531,7 @@ public class X86_64 extends X86_64AssignTemps {
 				if (oi.parameterCount() != 1)
 					continue;
 				ref<Scope> s = oi.parameterScope();
-				ref<Symbol>[string].iterator iter = s.symbols().begin();
+				ref<Symbol>[Scope.SymbolKey].iterator iter = s.symbols().begin();
 				if (iter.get().type().family() == TypeFamily.STRING) {
 					_stringAppendString = oi;
 					break;

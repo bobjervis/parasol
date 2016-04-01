@@ -45,6 +45,24 @@ class CompileString {
 		data = &s[0];
 	}
 
+	int compare(CompileString other) {
+		if (length < other.length) {
+			for (int i = 0; i < length; i++) {
+				int diff = data[i] - other.data[i];
+				if (diff != 0)
+					return diff;
+			}
+			return -1;
+		} else {
+			for (int i = 0; i < other.length; i++) {
+				int diff = data[i] - other.data[i];
+				if (diff != 0)
+					return diff;
+			}
+			return length - other.length;
+		}
+	}
+	
 	boolean equals(CompileString other) {
 		if (length != other.length)
 			return false;

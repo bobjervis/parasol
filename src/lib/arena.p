@@ -271,6 +271,10 @@ public class Arena {
 			case	ENUM:
 				return _enumVector.createVectorInstance(element, index, compileContext);
 
+			case	CLASS:
+				if (index.compareMethod(compileContext) == null)
+					return null;
+				
 			case	STRING:
 				return _map.createVectorInstance(element, index, compileContext);
 			

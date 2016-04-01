@@ -29,6 +29,7 @@ run(filename: class_ops.p)
 run(filename: int_parse.p)
 run(filename: byte_isdigit.p)
 run(filename: map_iterator.p)
+run(filename: map_class_index.p)
 run(filename: split_ops.p)
 run(filename: printf_1_ops.p, expectedOutput: "Hello world!\n"
 											" Character is 'S'\n"

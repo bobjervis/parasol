@@ -580,7 +580,7 @@ public class ByteCodesTarget extends Target {
 				if (oi.parameterCount() != 1)
 					continue;
 				ref<ParameterScope> s = oi.parameterScope();
-				ref<Symbol>[string].iterator iter = s.symbols().begin();
+				ref<Symbol>[Scope.SymbolKey].iterator iter = s.symbols().begin();
 				if (iter.get().type().family() == TypeFamily.STRING) {
 					_stringAppend = s;
 					break;
@@ -3831,7 +3831,7 @@ class StaticObject extends Value {
 		switch (symbol.type().family()) {
 		case	TYPEDEF:
 			ref<Scope> s = symbol.type().scope();
-			for (ref<Symbol>[string].iterator i = s.symbols().begin(); i.hasNext(); i.next()) {
+			for (ref<Symbol>[Scope.SymbolKey].iterator i = s.symbols().begin(); i.hasNext(); i.next()) {
 				ref<Symbol> instance = i.get();
 				pointer<int>(_data)[instance.offset] = instance.offset;
 			}

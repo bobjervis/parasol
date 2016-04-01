@@ -66,17 +66,15 @@ public class Exception {
 
 		if (_exceptionContext.exceptionType == 0)
 			locationIsExact = false;
-//		printf("    failure address %p\n", raised.exceptionAddress);
-//		printf("    sp: %p fp: %p stack size: %d\n", raised.stackPointer, raised.framePointer, raised.stackSize);
-		address stackLow = _exceptionContext.stackPointer;
+//		printf("    failure address %p\n", _exceptionContext.exceptionAddress);
 		address stackHigh = pointer<byte>(_exceptionContext.stackPointer) + _exceptionContext.stackSize;
-		address fp = _exceptionContext.framePointer;
+		address fp = _exceptionContext.inferredFramePointer;
 		address ip = _exceptionContext.exceptionAddress;
 		string tag = "->";
 		int lowCode = int(runtime.lowCodeAddress());
 		int staticMemoryLength = int(runtime.highCodeAddress()) - lowCode;
-		while (long(fp) >= long(stackLow) && long(fp) < long(stackHigh)) {
-//			printf("fp = %p ip = %p relative = %x", fp, ip, int(ip) - int(_staticMemory));
+		while (_exceptionContext.valid(fp)) {
+//			printf("fp = %p ip = %p relative = %x", fp, ip, int(ip) - lowCode);
 			pointer<address> stack = pointer<address>(fp);
 			long nextFp = _exceptionContext.slot(fp);
 			int relative = int(ip) - lowCode;
@@ -120,7 +118,7 @@ public class Exception {
 	}
 	
 	private void crawlStack(pointer<address> frame) {
-		pointer<address> initialRbp = frame;
+		_exceptionContext.inferredFramePointer = frame;
 		pointer<address> oldRbp;
 		pointer<ExceptionEntry> ee = pointer<ExceptionEntry>(exceptionsAddress());
 		int count = exceptionsCount();
@@ -154,6 +152,44 @@ public class Exception {
 			frame = pointer<address>(*frame);
 			comparator = comparatorReturnAddress;
 		} while (frame > oldRbp && frame < plausibleEnd);
+	}
+	/*
+	 * findStack confirms whether there are any valid stack frames (ones with Parasol code from
+	 * this image in them). Second, if it is valid, it counts how many frames there are so calling code
+	 * can allocate storage for the stack walk.
+	 * 
+	 * 
+	 * RETURNS:	-1 if this could not be confirmed to be a valid Parasol stack, or >= 1 for
+	 * 			valid stacks (the number is the number of stack frames found).
+	 */
+	private int countStackFrames(pointer<address> frame) {
+		pointer<address> oldRbp;
+		pointer<ExceptionEntry> ee = pointer<ExceptionEntry>(exceptionsAddress());
+		int count = exceptionsCount();
+		if (count == 0) {
+			printf("No exceptions table for this image.\n");
+			process.exit(1);
+		}
+		pointer<byte> lowCode = runtime.lowCodeAddress();
+		pointer<byte> highCode = runtime.highCodeAddress();
+		int(address ip, address elem) comparator = comparatorCurrentIp;
+		address stackTop = address(long(_exceptionContext.stackBase) + _exceptionContext.stackSize);
+		pointer<address> plausibleEnd = pointer<address>(stackTop) + -2;
+		int frames = 0;
+		boolean confirmed;
+		do {
+			oldRbp = frame;
+			pointer<byte> ip = pointer<byte>(frame[1]);
+			if (ip >= lowCode && ip < highCode)
+				confirmed = true;
+			frame = pointer<address>(*frame);
+			comparator = comparatorReturnAddress;
+			frames++;
+		} while (frame > oldRbp && frame < plausibleEnd);
+		if (confirmed)
+			return frames;
+		else
+			return -1;
 	}
 	
 	ref<ExceptionContext> exceptionContext() {
@@ -221,8 +257,11 @@ public class RuntimeException extends Exception {
 			output.printf("Assertion failed ip %p", _exceptionContext.exceptionAddress);
 		else {
 			output.printf("Uncaught exception %x", _exceptionContext.exceptionType);
-			if (message != null)
+			if (message != null) {
+				if (text.endsWith("\r\n"))
+					text = text.substring(0, text.length() - 2);
 				output.printf(" (%s)", text);
+			}
 			output.printf(" ip %p", _exceptionContext.exceptionAddress);
 			if (_exceptionContext.exceptionType == EXCEPTION_ACCESS_VIOLATION ||
 				_exceptionContext.exceptionType == EXCEPTION_IN_PAGE_ERROR)
@@ -398,7 +437,7 @@ abstract void callCatchHandler(ref<Exception> exception, address frame, int hand
 class ExceptionContext {
 	public address exceptionAddress;		// The machine instruction causing the exception
 	public address stackPointer;			// The thread stack point at the moment of the exception
-	public address framePointer;			// The frame pointer at the moment of the exception
+	public address framePointer;			// The hardware frame pointer at the moment of the exception
 
 	// This is a copy of the hardware stack at the time of the exception.  It may extend beyond the actual
 	// hardware stack at the moment of the exception because, for example, the call to create the copy used
@@ -414,8 +453,18 @@ class ExceptionContext {
 	public int exceptionType;			// Exception type
 	public int exceptionFlags;			// Flags (dependent on type).
 	public int stackSize;				// The length of the copy
+	public address inferredFramePointer;	// The frame pointer inferred when the hardware value is not valid.
+											// Note: C++ and OS ilbraries do not maintain a proper frame pointer
+											// so hardware exceptions can leave the stack chain corrupted at the top.
 	
+	boolean valid(address stackAddress) {
+		return pointer<byte>(stackBase) <= pointer<byte>(stackAddress) &&
+				pointer<byte>(stackAddress) < pointer<byte>(stackBase) + stackSize;
+	}
+
 	long slot(address stackAddress) {
+		if (!valid(stackAddress))
+			return 0;
 		long addr = long(stackAddress);
 		long base = long(stackBase);
 		long copy = long(address(stackCopy));

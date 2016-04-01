@@ -921,6 +921,26 @@ class TypedefType extends Type {
 	}
 }
 
+enum CompareMethodCategory {
+	ORDERED,
+	PARTIALLY_ORDERED,
+	UNORDERED,
+	NOT_COMPARABLE
+}
+
+boolean comparable(CompareMethodCategory category) {
+	return category != CompareMethodCategory.NOT_COMPARABLE;
+}
+
+public CompareMethodCategory compareMethodCategory(ref<Type> type, ref<CompileContext> compileContext) {
+	ref<OverloadInstance> sym = type.compareMethod(compileContext);
+	if (sym == null)
+		return CompareMethodCategory.NOT_COMPARABLE;
+	// TODO: Finish this for code gen.
+	assert(false);
+	return CompareMethodCategory.ORDERED;
+}
+	
 class Type {
 	private TypeFamily _family;
 	private boolean _resolved;
@@ -1081,6 +1101,24 @@ class Type {
 		return scope().destructor() != null;
 	}
 	
+	public ref<OverloadInstance> compareMethod(ref<CompileContext> compileContext) {
+		CompileString name("compare");
+		
+		ref<Symbol> sym = lookup(&name, compileContext);
+		if (sym != null && sym.class == Overload) {
+			ref<Overload> o = ref<Overload>(sym);
+			for (int i = 0; i < o.instances().length(); i++) {
+				ref<OverloadInstance> oi = (*o.instances())[i];
+				oi.assignType(compileContext);
+				if (oi.parameterCount() != 1)
+					continue;
+				if ((*oi.parameterScope().parameters())[0].type() == this)
+					return oi;
+			}
+		}
+		return null;
+	}
+
 	public int ordinal(int maxOrdinal) {
 		if (_ordinal == 0)
 			_ordinal = maxOrdinal + 1;

@@ -359,7 +359,7 @@ class X86_64Encoder extends Target {
 			if (sym.type().family() == TypeFamily.TYPEDEF) {
 				ref<Scope> s = sym.type().scope();
 				pointer<int> p = pointer<int>(&_code[sym.offset]);
-				for (ref<Symbol>[string].iterator i = s.symbols().begin(); i.hasNext(); i.next()) {
+				for (ref<Symbol>[Scope.SymbolKey].iterator i = s.symbols().begin(); i.hasNext(); i.next()) {
 					ref<Symbol> instance = i.get();
 					p[instance.offset] = instance.offset;
 				}
@@ -3200,7 +3200,7 @@ class X86_64Encoder extends Target {
 			_continueLabel = continueLabel;
 			if (nodes != null) {
 				for (int i = 0; i < nodes.length(); i++) {
-					_caseLabels.append(_storage new CodeSegment);
+					_caseLabels.append(target._storage new CodeSegment);
 					_nextCase++;
 				}
 			}
