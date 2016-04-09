@@ -386,7 +386,12 @@ class string {
 //	}
 	
 	public int hash() {
-		return 5;
+		if (_contents == null)
+			return 0;
+		if (_contents.length == 1)
+			return pointer<byte>(&_contents.data)[0];
+		else
+			return pointer<byte>(&_contents.data)[0] + (pointer<byte>(&_contents.data)[_contents.length - 1] << 7);
 	}
 	/*
 	 *	indexOf

@@ -28,6 +28,7 @@ import parasol:compiler.ClassScope;
 import parasol:compiler.CompileContext;
 import parasol:compiler.CompileString;
 import parasol:compiler.Constant;
+import parasol:compiler.DestructorList;
 import parasol:compiler.EnumInstanceType;
 import parasol:compiler.EnumScope;
 import parasol:compiler.EllipsisArguments;
@@ -44,6 +45,7 @@ import parasol:compiler.Operator;
 import parasol:compiler.Overload;
 import parasol:compiler.OverloadInstance;
 import parasol:compiler.ParameterScope;
+import parasol:compiler.PlainSymbol;
 import parasol:compiler.PUSH_OUT_PARAMETER;
 import parasol:compiler.Reference;
 import parasol:compiler.Return;
@@ -274,7 +276,10 @@ public class X86_64 extends X86_64AssignTemps {
 		if (func == null) {
 			switch (parameterScope.kind()) {
 			case	DEFAULT_CONSTRUCTOR:
-				generateCallToBaseDefaultConstructor(parameterScope, compileContext);
+				inst(X86.PUSH, TypeFamily.SIGNED_64, R.RSI);
+				inst(X86.MOV, TypeFamily.ADDRESS, R.RSI, R.RCX);
+				generateConstructorPreamble(null, parameterScope, compileContext);
+				inst(X86.POP, TypeFamily.SIGNED_64, R.RSI);
 				if (!generateReturn(scope, compileContext))
 					assert(false);
 				break;
@@ -356,7 +361,7 @@ public class X86_64 extends X86_64AssignTemps {
 				allocateStackForLocalVariables(compileContext);
 				
 				if (func.functionCategory() == Function.Category.CONSTRUCTOR)
-					generateConstructorPreamble(parameterScope, compileContext);
+					generateConstructorPreamble(node, parameterScope, compileContext);
 
 				ref<Scope> outer = compileContext.setCurrent(scope);
 				generate(node, compileContext);
@@ -620,7 +625,7 @@ public class X86_64 extends X86_64AssignTemps {
 		_stackLocalVariables = v.length();
 	}
 	
-	private void generateConstructorPreamble(ref<ParameterScope> scope, ref<CompileContext> compileContext) {
+	private void generateConstructorPreamble(ref<Block> constructorBody, ref<ParameterScope> scope, ref<CompileContext> compileContext) {
 		if (scope.enclosing().hasVtable(compileContext)) {
 //			instStoreVTable(R.RSI, R.RAX, ref<ClassScope>(scope.enclosing()));
 			if (scope.enclosing().variableStorage > address.bytes) {
@@ -635,13 +640,45 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, scope.enclosing().variableStorage);
 			instCall(_memset, compileContext);
 		}
-		// TODO: add code to check for absence of super. or self. calls at the head of the node
-//					generateCallToBaseDefaultConstructor(parameterScope, compileContext);
+		for (ref<Symbol>[Scope.SymbolKey].iterator i = scope.enclosing().symbols().begin(); i.hasNext(); i.next()) {
+			ref<Symbol> sym = i.get();
+			if (sym.class != PlainSymbol || sym.storageClass() != StorageClass.MEMBER)
+				continue;
+			ref<ParameterScope> defaultConstructor = sym.type().defaultConstructor();
+			if (sym.type().hasVtable(compileContext)) {
+				inst(X86.LEA, R.RCX, R.RSI, sym.offset);
+				storeVtable(sym.type(), compileContext);
+				if (defaultConstructor != null)
+					instCall(defaultConstructor, compileContext);
+			} else if (defaultConstructor != null) {
+				inst(X86.LEA, R.RCX, R.RSI, sym.offset);
+				instCall(defaultConstructor, compileContext);
+			}
+		}
+		if (constructorBody != null) {
+			// if there is no super. or self. calls at the head of the node, we need to generate one
+			ref<NodeList> nl = constructorBody.statements();
+			if (nl != null && nl.node.op() == Operator.EXPRESSION) {
+				ref<Unary> u = ref<Unary>(nl.node);
+				if (u.operand().op() == Operator.CALL) {
+					ref<Call> c = ref<Call>(u.operand());
+					if (c.target() != null) {
+						if (c.target().op() == Operator.SUPER || c.target().op() == Operator.SELF)
+							return;
+					}
+				}
+			}
+		}
+		if (scope.enclosing().base(compileContext) != null) {
+			inst(X86.MOV, TypeFamily.ADDRESS, R.RCX, R.RSI);
+			generateCallToBaseDefaultConstructor(scope, compileContext);
+		}
 	}
 	
 	private void generateCallToBaseDefaultConstructor(ref<ParameterScope> scope, ref<CompileContext> compileContext) {
 		ref<ClassScope> classScope = ref<ClassScope>(scope.enclosing());
-		ref<Scope> base = classScope.getSuper().scope();
+		ref<Type> base = classScope.getSuper();
+//		ref<Scope> base = classScope.base(compileContext);
 		if (base != null) {
 			ref<ParameterScope> baseDefaultConstructor = base.defaultConstructor(); 
 			if (baseDefaultConstructor != null)
@@ -1076,6 +1113,11 @@ public class X86_64 extends X86_64AssignTemps {
 			ref<Class> classNode = ref<Class>(node);
 			for (ref<NodeList> nl = classNode.statements(); nl != null; nl = nl.next)
 				generateStaticInitializers(nl.node, compileContext);
+			break;
+
+		case	DESTRUCTOR_LIST:
+			ref<DestructorList> dl = ref<DestructorList>(node);
+			generateLiveSymbolDestructors(dl.arguments(), compileContext);
 			break;
 			
 		case	ENUM_DECLARATION:
@@ -2531,6 +2573,29 @@ public class X86_64 extends X86_64AssignTemps {
 			generateCall(ref<Call>(node), compileContext);
 			break;
 			
+		case	CLASS_CLEAR:
+			ref<Unary> u = ref<Unary>(node);
+			if (node.type.hasVtable(compileContext)) {
+				inst(X86.MOV, R.RCX, u.operand(), compileContext);
+				storeVtable(node.type, compileContext);
+				if (node.type.size() > address.bytes) {
+					inst(X86.ADD, TypeFamily.ADDRESS, R.RCX, 8);
+					inst(X86.XOR, TypeFamily.UNSIGNED_8, R.RDX, R.RDX);
+					inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, node.type.size() - address.bytes);
+					instCall(_memset, compileContext);
+				}
+			} else if (node.type.size() > 0) {
+				inst(X86.MOV, R.RCX, u.operand(), compileContext);
+//				if (node.type.size() <= address.bytes)
+//					inst(X86.MOV, R.RCX, 0, 0, compileContext);
+//				else {
+					inst(X86.XOR, TypeFamily.UNSIGNED_8, R.RDX, R.RDX);
+					inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, node.type.size());
+					instCall(_memset, compileContext);
+//				}
+			}
+			break;
+			
 		case	CLASS_COPY:
 			markAddressModes(node, compileContext);
 			sethiUllman(node, compileContext, this);
@@ -2541,6 +2606,7 @@ public class X86_64 extends X86_64AssignTemps {
 			instCall(_memcpy, compileContext);
 			break;
 
+		case	ASSIGN:
 		case	INITIALIZE:
 			if (node.type == null) {
 				unfinished(node, "initialize type == null", compileContext);

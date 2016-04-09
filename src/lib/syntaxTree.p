@@ -119,6 +119,7 @@ enum Operator {
 	STACK_ARGUMENT,
 	LOAD,
 	STORE_V_TABLE,
+	CLASS_CLEAR,
 	// EllipsisArguments
 	ELLIPSIS_ARGUMENTS,
 	// StackArgumentAddress
@@ -132,6 +133,7 @@ enum Operator {
 	BREAK,
 	CONTINUE,
 	SUPER,
+	SELF,
 	THIS,
 	TRUE,
 	FALSE,
@@ -172,6 +174,8 @@ enum Operator {
 	CATCH,
 	// Function
 	FUNCTION,
+	// DestructorList
+	DESTRUCTOR_LIST,
 	// Call
 	CALL,
 	ANNOTATION,
@@ -332,6 +336,10 @@ class SyntaxTree {
 		return _pool new Call(overloadScope, category, target, arguments, location, compileContext);
 	}
 
+	public ref<DestructorList> newDestructorList(ref<NodeList> destructors, Location location) {
+		return _pool new DestructorList(destructors, location);
+	}
+	
 	public ref<EllipsisArguments> newEllipsisArguments(ref<NodeList> arguments, Location location) {
 		return _pool new EllipsisArguments(arguments, location);
 	}
@@ -386,6 +394,7 @@ class Block extends Node {
 	private ref<NodeList> _statements;
 	private ref<NodeList> _last;
 	public ref<Scope> scope;
+	public Location closeCurlyLocation;
 
 	Block(Operator op, ref<Node> lockReference, Location location) {
 		super(op, location);
@@ -485,13 +494,18 @@ class Block extends Node {
 		for (ref<NodeList> nl = _statements;; nl = nl.next) {
 			nl.node = nl.node.fold(tree, false, compileContext);
 			if (nl.next == null) {
+				ref<Node>[] destructors;
 				for (;;) {
 					ref<Node> n = compileContext.popLiveSymbol(scope);
 					if (n == null)
 						break;
-//					printf("Destructor for:\n");
-//					sym.print(4, false);
-				}				
+					destructors.append(n);
+				}		
+				if (destructors.length() > 0) {
+					ref<NodeList> destructorList = tree.newNodeList(destructors);
+					ref<Node> n = tree.newDestructorList(destructorList, closeCurlyLocation);
+					nl.next = tree.newNodeList(n);
+				}
 				break;
 			}
 		}
@@ -2796,6 +2810,7 @@ MessageId[Operator] typeNotAllowed = [
 fill();
 
 private void fill() {
+//	text.memDump(&typeNotAllowed, typeNotAllowed.bytes);
 	for (int i = 0; i < int(Operator.MAX_OPERATOR); i++) {
 		if (typeNotAllowed[Operator(i)] == MessageId(0))
 			typeNotAllowed[Operator(i)] = MessageId.MAX_MESSAGE;

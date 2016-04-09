@@ -64,6 +64,7 @@ class ClasslikeScope extends Scope {
 	private ref<OverloadInstance>[] _methods;
 	protected ref<Symbol>[] _members;
 	private boolean _methodsBuilt;
+	private boolean _defaultConstructorChecked;
 	
 	public address vtable;				// scratch area for code generators.
 
@@ -105,26 +106,58 @@ class ClasslikeScope extends Scope {
 	}
 
 	public void createPossibleDefaultConstructor(ref<CompileContext> compileContext) {
+		if (_defaultConstructorChecked)
+			return;
+		_defaultConstructorChecked = true;
 		if (constructors().length() == 0) {
-			// We know this is called after the class itself is largely resolved.
-			// In particular, we know that any value for the base class is already correctly set.
-			ref<Type> baseType = getSuper();
-			if (baseType == null)
-				return;
-			ref<Scope> baseClass = baseType.scope();
-			if (baseClass == null)
-				return;
-			if (baseClass.constructors().length() == 0)
-				return;
-			ref<ParameterScope> functionScope = compileContext.arena().createParameterScope(this, null, ParameterScope.Kind.DEFAULT_CONSTRUCTOR);
-			defineConstructor(functionScope, compileContext.pool());
-			if (compileContext.arena().verbose) {
-				printf("current %p tree = %p base constructors %d constructors %d\n", compileContext.current(), compileContext.tree(), baseClass.constructors().length(), constructors().length());
-				print(4, false);
-				printf("=== End default constructor check ===\n");
+			if (hasBaseConstructor(compileContext) || hasMembersNeedingInitialization(compileContext)) {
+				ref<ParameterScope> functionScope = compileContext.arena().createParameterScope(this, null, ParameterScope.Kind.DEFAULT_CONSTRUCTOR);
+//				printf("scope = %p ", this);
+//				printf("functionScope = %p\n---\n", functionScope);
+				defineConstructor(functionScope, compileContext.pool());
+				if (compileContext.arena().verbose) {
+					ref<Scope> baseClass = base(compileContext);
+					if (baseClass != null)
+						printf("current %p tree = %p base constructors %d constructors %d\n", compileContext.current(), compileContext.tree(), baseClass.constructors().length(), constructors().length());
+					else
+						printf("current %p tree = %p constructors %d\n", compileContext.current(), compileContext.tree(), constructors().length());
+					print(4, false);
+					printf("=== End default constructor check ===\n");
+				}
+	//			assert(false);
 			}
-//			assert(false);
 		}
+	}
+	
+	private boolean hasBaseConstructor(ref<CompileContext> compileContext) {
+		// We know this is called after the class itself is largely resolved.
+		// In particular, we know that any value for the base class is already correctly set.
+		ref<Type> baseType = getSuper();
+		if (baseType == null)
+			return false;
+		ref<Scope> baseClass = baseType.scope();
+		if (baseClass == null)
+			return false;
+		baseClass.createPossibleDefaultConstructor(compileContext);
+		if (baseClass.constructors().length() == 0)
+			return false;
+		else
+			return true;
+	}
+	
+	private boolean hasMembersNeedingInitialization(ref<CompileContext> compileContext) {
+		for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
+			ref<Symbol> sym = i.get();
+			if (sym.class != PlainSymbol || sym.storageClass() != StorageClass.MEMBER)
+				continue;
+//			printf("hasVtable? %s hasDefaultConstructor? %s\n", sym.type().hasVtable(compileContext) ? "true" : "false", sym.type().defaultConstructor() != null ? "true" : "false");
+//			sym.print(0, false);
+			if (sym.assignType(compileContext).hasVtable(compileContext))
+				return true;
+			else if (sym.type().defaultConstructor() != null)
+				return true;
+		}
+		return false;
 	}
 	
 	public boolean createPossibleImpliedDestructor(ref<CompileContext> compileContext) {
@@ -532,10 +565,10 @@ class UnitScope extends Scope {
 				ref<Symbol> n = namespaceScope.lookup(sym.name());
 				if (n == null) {
 					ref<Overload> no = namespaceScope.defineOverload(sym.name(), o.kind(), compileContext.pool());
-					no.merge(o);
+					no.merge(o, compileContext);
 				} else if (n.class == Overload) {
 					ref<Overload> no = ref<Overload>(n);
-					no.merge(o);
+					no.merge(o, compileContext);
 				} else {
 					if (n.definition().countMessages() == 0)
 						n.definition().add(MessageId.DUPLICATE, compileContext.pool(), *n.name());
@@ -1413,7 +1446,7 @@ class Overload extends Symbol {
 
 	public ref<Symbol> addInstance(Operator visibility, boolean isStatic, ref<Node> annotations, ref<Identifier> name, ref<ParameterScope> functionScope, ref<CompileContext> compileContext) {
 		ref<OverloadInstance> sym = compileContext.pool().newOverloadInstance(visibility, isStatic, _enclosing, annotations, name.identifier(), name, functionScope);
-		_instances.append(sym);
+		_instances.append(sym, compileContext.pool());
 		return sym;
 	}
 
@@ -1428,10 +1461,10 @@ class Overload extends Symbol {
 		}
 	}
 
-	public void merge(ref<Overload> unitDeclarations) {
+	public void merge(ref<Overload> unitDeclarations, ref<CompileContext> compileContext) {
 		for (int i = 0; i < unitDeclarations._instances.length(); i++) {
 			ref<OverloadInstance> s = unitDeclarations._instances[i];
-			_instances.append(s);
+			_instances.append(s, compileContext.pool());
 		}
 	}
 
@@ -1986,10 +2019,6 @@ class OverloadOperation {
 			_argCount++;
 	}
 
-	~OverloadOperation() {
-		_best.clear(_compileContext.pool());
-	}
-	
 	public ref<Type> includeClass(ref<Type>  classType, ref<CompileContext> compileContext) {
 		for (ref<Type> current = classType; current != null; current = current.assignSuper(compileContext)) {
 			if (current.scope() != null) {
@@ -2020,8 +2049,8 @@ class OverloadOperation {
 			// whether that one is good enough.  Function pointers, for
 			// example follow this code path.
 			if (_kind == Operator.FUNCTION && !_anyPotentialOverloads) {
-				_best.clear(_compileContext.pool());
-				_best.append(sym, _compileContext.pool());
+				_best.clear();
+				_best.append(sym);
 			}
 			_done = true;
 			// If we did see some overloads, this plain symbol must be
@@ -2106,7 +2135,7 @@ class OverloadOperation {
 				if (partialOrder < 0) {
 					if (i < _best.length() - 1)
 						_best[i] = _best[_best.length() - 1];
-					_best.resize(_best.length() - 1, _compileContext.pool());
+					_best.resize(_best.length() - 1);
 				} else {
 					if (partialOrder > 0)
 						includeOi = false;
@@ -2114,7 +2143,7 @@ class OverloadOperation {
 				}
 			}
 			if (includeOi)
-				_best.append(oi, _compileContext.pool());
+				_best.append(oi);
 		}
 		return null;
 	}
@@ -2167,7 +2196,7 @@ class OverloadOperation {
 
 	public void restart() {
 		_done = false;
-		_best.clear(_compileContext.pool());
+		_best.clear();
 		_anyPotentialOverloads = false;
 	}
 

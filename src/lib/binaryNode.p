@@ -330,7 +330,7 @@ class Binary extends Node {
 					constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
 					return constructor.fold(tree, true, compileContext);
 				} else {
-					ref<Node> result = foldClassCopy(tree, compileContext);
+					ref<Node> result = foldClassCopy(tree, true, compileContext);
 					if (result != null)
 						return result;
 				}
@@ -359,7 +359,7 @@ class Binary extends Node {
 					constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
 					return constructor.fold(tree, true, compileContext);
 				} else {
-					ref<Node> result = foldClassCopy(tree, compileContext);
+					ref<Node> result = foldClassCopy(tree, true, compileContext);
 					if (result != null)
 						return result;
 				}
@@ -390,15 +390,20 @@ class Binary extends Node {
 				call.type = type;
 				allocation = call.fold(tree, voidContext, compileContext);
 			}
+			ref<Type> entityType = type.indirectType(compileContext);
+			ref<ParameterScope> defaultConstructor = entityType.defaultConstructor();
 			if (_right.op() == Operator.CALL) {
-				ref<Type> entityType = type.indirectType(compileContext);
 				ref<Call> constructor = ref<Call>(_right);
 				if (allocation == this) {
 					_right = tree.newLeaf(Operator.EMPTY, location());
 					_right.type = compileContext.arena().builtInType(TypeFamily.VOID);
 				}
-				if (constructor.overload() == null)
-					return defaultNewInitialization(allocation, tree, voidContext, compileContext);
+				if (constructor.overload() == null) {
+					if (defaultConstructor != null) // This must have been a late-created constructor.
+						return foldDefaultConstructor(defaultConstructor, allocation, tree, voidContext, compileContext);
+					else
+						return defaultNewInitialization(allocation, tree, voidContext, compileContext);
+				}
 				ref<Variable> temp = compileContext.newVariable(type);
 				ref<Reference> r = tree.newReference(temp, true, location());
 				ref<Node> defn = tree.newBinary(Operator.ASSIGN, r, allocation, location());
@@ -419,7 +424,10 @@ class Binary extends Node {
 					_right = tree.newLeaf(Operator.EMPTY, location());
 					_right.type = compileContext.arena().builtInType(TypeFamily.VOID);
 				}
-				return defaultNewInitialization(allocation, tree, voidContext, compileContext);
+				if (defaultConstructor != null) // This must have been a late-created constructor.
+					return foldDefaultConstructor(defaultConstructor, allocation, tree, voidContext, compileContext);
+				else
+					return defaultNewInitialization(allocation, tree, voidContext, compileContext);
 			}
 			break;
 			
@@ -690,7 +698,7 @@ class Binary extends Node {
 					call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 					return call.fold(tree, voidContext, compileContext);
 				} else {
-					ref<Node> result = foldClassCopy(tree, compileContext);
+					ref<Node> result = foldClassCopy(tree, false, compileContext);
 					if (result != null)
 						return result;
 				}
@@ -746,6 +754,36 @@ class Binary extends Node {
 		return this;
 	}
 	
+	private ref<Node> foldDefaultConstructor(ref<ParameterScope> defaultConstructor, ref<Node> allocation, ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+		ref<Variable> temp = compileContext.newVariable(type);
+		ref<Reference> r = tree.newReference(temp, true, location());
+		ref<Node> defn = tree.newBinary(Operator.ASSIGN, r, allocation, location());
+		defn.type = type;
+		ref<Type> objType = type.indirectType(compileContext);
+		ref<Node> storeVtable = null;
+		if (objType.hasVtable(compileContext)) {
+			r = tree.newReference(temp, false, location());
+			storeVtable = tree.newUnary(Operator.STORE_V_TABLE, r, location());
+			storeVtable.type = objType;
+		}
+		r = tree.newReference(temp, false, location());
+		ref<Node> constructor = tree.newCall(defaultConstructor, CallCategory.CONSTRUCTOR, r, null, location(), compileContext);
+		constructor.type = type;
+		constructor = constructor.fold(tree, true, compileContext);
+		if (storeVtable != null) {
+			constructor = tree.newBinary(Operator.SEQUENCE, storeVtable, constructor, location());
+			constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
+		}
+		ref<Node> seq = tree.newBinary(Operator.SEQUENCE, defn, constructor, location());
+		seq.type = compileContext.arena().builtInType(TypeFamily.VOID);
+		if (voidContext)
+			return seq;
+		r = tree.newReference(temp, false, location());
+		seq = tree.newBinary(Operator.SEQUENCE, seq, r, location());
+		seq.type = type;
+		return seq;
+	}
+	
 	private ref<Node> defaultNewInitialization(ref<Node> allocation, ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
 		ref<Type> objType = type.indirectType(compileContext);
 		if (objType.hasVtable(compileContext)) {
@@ -768,24 +806,89 @@ class Binary extends Node {
 			return allocation;
 	}
 	
-	private ref<Node> foldClassCopy(ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
-		switch (type.size()) {
-		case	1:
-		case	2:
-		case	4:
-		case	8:
-			return null;
+	private ref<Node> foldClassCopy(ref<SyntaxTree> tree, boolean initializer, ref<CompileContext> compileContext) {
+		boolean hasAssignmentMethods = false;
+		for (ref<Symbol>[Scope.SymbolKey].iterator i = type.scope().symbols().begin(); i.hasNext(); i.next()) {
+			ref<Symbol> sym = i.get();
+			if (sym.class == PlainSymbol && sym.storageClass() == StorageClass.MEMBER && sym.type().assignmentMethod(compileContext) != null) {
+				hasAssignmentMethods = true;
+				break;
+			}
 		}
-		_left = tree.newUnary(Operator.ADDRESS, _left.fold(tree, false, compileContext), location());
-		_left.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
-		_right = _right.fold(tree, false, compileContext);
-		if (_right.op() != Operator.CLASS_COPY) {
-			_right = tree.newUnary(Operator.ADDRESS, _right, location());
-			_right.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+
+		if (hasAssignmentMethods) {
+			_left = tree.newUnary(Operator.ADDRESS, _left.fold(tree, false, compileContext), location());
+			_left.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+			_right = _right.fold(tree, false, compileContext);
+			if (_right.op() != Operator.CLASS_COPY) {
+				_right = tree.newUnary(Operator.ADDRESS, _right, location());
+				_right.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+			}
+			ref<Variable> dest = compileContext.newVariable(_left.type);
+			ref<Variable> src = compileContext.newVariable(_left.type);
+			ref<Reference> destR = tree.newReference(dest, true, location());
+			ref<Reference> srcR = tree.newReference(src, true, location());
+			ref<Node> da = tree.newBinary(Operator.ASSIGN, destR, _left, location());
+			da.type = _left.type;
+			ref<Node> sa = tree.newBinary(Operator.ASSIGN, srcR, _right, location());
+			sa.type = _left.type;
+			ref<Node> seq = tree.newBinary(Operator.SEQUENCE, da, sa, location());
+			seq.type = _left.type;
+			if (initializer) {
+				destR = tree.newReference(dest, false, location());
+				da = tree.newUnary(Operator.CLASS_CLEAR, destR, location());
+				da.type = type;
+				seq = tree.newBinary(Operator.SEQUENCE, seq, da, location());
+				seq.type = _left.type;
+				if (_left.type.hasVtable(compileContext)) {
+					destR = tree.newReference(dest, false, location());
+					srcR = tree.newReference(src, false, location());
+					da = tree.newUnary(Operator.INDIRECT, destR, location());
+					da.type = destR.type;
+					sa = tree.newUnary(Operator.INDIRECT, srcR, location());
+					sa.type = destR.type;
+					ref<Node> asg = tree.newBinary(Operator.ASSIGN, da, sa, location());
+					asg.type = destR.type;
+					seq = tree.newBinary(Operator.SEQUENCE, seq, asg, location());
+					seq.type = asg.type;
+				}
+			}
+			for (ref<Symbol>[Scope.SymbolKey].iterator i = type.scope().symbols().begin(); i.hasNext(); i.next()) {
+				ref<Symbol> sym = i.get();
+				if (sym.class != PlainSymbol || sym.storageClass() != StorageClass.MEMBER)
+					continue;
+				destR = tree.newReference(dest, false, location());
+				srcR = tree.newReference(src, false, location());
+				da = tree.newSelection(destR, sym, true, location());
+				da.type = sym.type();
+				sa = tree.newSelection(srcR, sym, true, location());
+				sa.type = sym.type();
+				ref<Node> asg = tree.newBinary(Operator.ASSIGN, da, sa, location());
+				asg.type = sym.type();
+				asg = asg.fold(tree, false, compileContext);
+				seq = tree.newBinary(Operator.SEQUENCE, seq, asg, location());
+				seq.type = asg.type;
+			}
+			return seq;
+		} else {
+			switch (type.size()) {
+			case	1:
+			case	2:
+			case	4:
+			case	8:
+				return null;
+			}
+			_left = tree.newUnary(Operator.ADDRESS, _left.fold(tree, false, compileContext), location());
+			_left.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+			_right = _right.fold(tree, false, compileContext);
+			if (_right.op() != Operator.CLASS_COPY) {
+				_right = tree.newUnary(Operator.ADDRESS, _right, location());
+				_right.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+			}
+			ref<Binary> copy = tree.newBinary(Operator.CLASS_COPY, _left, _right, location());
+			copy.type = type;
+			return copy;
 		}
-		ref<Binary> copy = tree.newBinary(Operator.CLASS_COPY, _left, _right, location());
-		copy.type = type;
-		return copy;
 	}
 	
 	private ref<Node> processAssignmentOp(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {

@@ -127,8 +127,10 @@ class Parser {
 //			string s(cs.data, cs.length);
 //			printf("Token %s %s %d\n", string(t), s, line);
 			if (t == Token.RIGHT_CURLY) {
+				block.closeCurlyLocation = _scanner.location();
 				return block;
 			} else if (t == Token.END_OF_STREAM) {
+				block.closeCurlyLocation = _scanner.location();
 				block.statement(_tree.newNodeList(syntaxError(MessageId.UNEXPECTED_EOF)));
 				return block;
 			}
@@ -1197,6 +1199,10 @@ class Parser {
 			x = _tree.newLeaf(Operator.THIS, location);
 			break;
 
+		case	SELF:
+			x = _tree.newLeaf(Operator.SELF, location);
+			break;
+			
 		case	SUPER:
 			x = _tree.newLeaf(Operator.SUPER, location);
 			break;

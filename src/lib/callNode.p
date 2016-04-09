@@ -205,7 +205,7 @@ class Call extends ParameterBag {
 							ref<Variable> temp = compileContext.newVariable(dot.left().type);
 							ref<Reference> r = tree.newReference(temp, true, dot.left().location());
 							compileContext.markLiveSymbol(r);
-							ref<Node> defn = tree.newBinary(Operator.ASSIGN, r, dot.left(), dot.left().location());
+							ref<Node> defn = tree.newBinary(Operator.INITIALIZE, r, dot.left(), dot.left().location());
 							defn.type = dot.left().type;
 							r = tree.newReference(temp, false, dot.left().location());
 							ref<Unary> adr = tree.newUnary(Operator.ADDRESS, r, dot.left().location());
@@ -361,7 +361,7 @@ class Call extends ParameterBag {
 				adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 				ref<Call> call = tree.newCall(constructor, CallCategory.CONSTRUCTOR, adr, null, location(), compileContext);
 				call.type = compileContext.arena().builtInType(TypeFamily.VOID);
-				result = call;
+				result = call.fold(tree, true, compileContext);
 			}
 			for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 				ref<Binary> b = ref<Binary>(nl.node);		// We know this must be a LABEL node.
@@ -1184,6 +1184,96 @@ class Function extends ParameterBag {
 				}
 			} else
 				b.add(MessageId.RETURN_VALUE_REQUIRED, compileContext.pool());
+		}
+	}
+}
+
+class DestructorList extends ParameterBag {
+	DestructorList(ref<NodeList> destructors, Location location) {
+		super(Operator.DESTRUCTOR_LIST, destructors, location);
+	}
+
+	public boolean traverse(Traversal t, TraverseAction func(ref<Node> n, address data), address data) {
+		TraverseAction result;
+		switch (t) {
+		case	PRE_ORDER:
+			result = func(this, data);
+			if (result == TraverseAction.ABORT_TRAVERSAL)
+				return false;
+			if (result == TraverseAction.SKIP_CHILDREN)
+				break;
+			if (_arguments != null && !_arguments.traverse(t, func, data))
+				return false;
+			break;
+
+		case	IN_ORDER:
+			result = func(this, data);
+			if (result == TraverseAction.ABORT_TRAVERSAL)
+				return false;
+			if (result == TraverseAction.SKIP_CHILDREN)
+				break;
+			if (_arguments != null && !_arguments.traverse(t, func, data))
+				return false;
+			break;
+
+		case	POST_ORDER:
+			if (_arguments != null && !_arguments.traverse(t, func, data))
+				return false;
+			result = func(this, data);
+			if (result == TraverseAction.ABORT_TRAVERSAL)
+				return false;
+			break;
+
+		case	REVERSE_PRE_ORDER:
+			result = func(this, data);
+			if (result == TraverseAction.ABORT_TRAVERSAL)
+				return false;
+			if (result == TraverseAction.SKIP_CHILDREN)
+				break;
+			if (_arguments != null && !_arguments.reverse(t, func, data))
+				return false;
+			break;
+
+		case	REVERSE_IN_ORDER:
+			if (_arguments != null && !_arguments.reverse(t, func, data))
+				return false;
+			result = func(this, data);
+			if (result == TraverseAction.ABORT_TRAVERSAL)
+				return false;
+			break;
+
+		case	REVERSE_POST_ORDER:
+			if (_arguments != null && !_arguments.reverse(t, func, data))
+				return false;
+			result = func(this, data);
+			if (result == TraverseAction.ABORT_TRAVERSAL)
+				return false;
+			break;
+
+		default:
+			return false;
+		}
+		return true;
+	}
+
+	public ref<DestructorList> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+		return this;
+	}
+	
+	public ref<DestructorList> clone(ref<SyntaxTree> tree) {
+		return ref<DestructorList>(tree.newDestructorList(_arguments.clone(tree), location()).finishClone(this, tree.pool()));
+	}
+
+	public ref<DestructorList> cloneRaw(ref<SyntaxTree> tree) {
+		return tree.newDestructorList(_arguments.cloneRaw(tree), location());
+	}
+
+	public void print(int indent) {
+		printBasic(indent);
+		printf("\n");
+		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
+			printf("%*.*c  {Destructor for}\n", indent, indent, ' ');
+			nl.node.print(indent + INDENT);
 		}
 	}
 }

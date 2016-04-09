@@ -19,8 +19,8 @@ public class short {
 	public static short MIN_VALUE = 0xffffffffffff8000;
 	public static short MAX_VALUE = 0x7fff;
 
-	public short() {
-	}
+//	public short() {
+//	}
 /*
 	public short(short value) {
 		*this = value;
@@ -56,12 +56,12 @@ public class int {
 	public static int MIN_VALUE = 0xffffffff80000000;
 	public static int MAX_VALUE = 0x7fffffff;
 
-	public int() {
-	}
+//	public int() {
+//	}
 	
-	public int(int value) {
-		*this = value;
-	}
+//	public int(int value) {
+//		*this = value;
+//	}
 	
 	public int compare(int other) {
 		return *this - other;
@@ -118,22 +118,22 @@ public class long {
 	public static long MIN_VALUE = 0x8000000000000000;
 	public static long MAX_VALUE = 0x7fffffffffffffff;
 	
-	public long() {
-	}
+//	public long() {
+//	}
 	
-	public long(long value) {
-	}
+//	public long(long value) {
+//	}
 }
 
 public class byte {
 	public static byte MIN_VALUE = 0;
 	public static byte MAX_VALUE = 255;
 	
-	public byte() {
-	}
+//	public byte() {
+//	}
 
-	public byte(byte value) {
-	}
+//	public byte(byte value) {
+//	}
 
 	public static byte, boolean parse(string text) {
 		int value = 0;
@@ -449,11 +449,11 @@ public class byte {
 public class char {
 	public static char MAX_VALUE = 65535;
 	
-	public char() {
-	}
+//	public char() {
+//	}
 	
-	public char(char value) {
-	}
+//	public char(char value) {
+//	}
 	
 	public int compare(char other) {
 		return *this - other;
@@ -479,11 +479,11 @@ public class unsigned {
 	public static unsigned MIN_VALUE = 0x00000000;
 	public static unsigned MAX_VALUE = 0xffffffff;
 
-	public unsigned() {
-	}
+//	public unsigned() {
+//	}
 	
-	public unsigned(unsigned value) {
-	}
+//	public unsigned(unsigned value) {
+//	}
 /*	
 	public int compare(unsigned other) {
 		return int(*this - other);

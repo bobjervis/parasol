@@ -3110,7 +3110,7 @@ class X86_64Encoder extends Target {
 		loc.file = file;;
 		loc.location = location;
 		loc.offset = _functionCode.length() - _f.emitting.codeOffset;
-		_f.emitting.sourceLocations.append(loc);
+		_f.emitting.sourceLocations.append(loc, &_storage);
 	}
 	
 	protected boolean inlineEllipsisArguments(ref<NodeList> args, ref<NodeList> params) {
@@ -3288,7 +3288,7 @@ class X86_64Encoder extends Target {
 	}
 	
 	protected void fixup(FixupKind kind, ref<Symbol> locationSymbol, int location, address value) {
-		 ref<Fixup> f = new Fixup();
+		 ref<Fixup> f = _storage new Fixup();
 		 f.kind = kind;
 		 f.locationSymbol = locationSymbol; 
 		 f.location = location;
@@ -3298,7 +3298,7 @@ class X86_64Encoder extends Target {
 	}
 	
 	protected void staticFixup(FixupKind kind, ref<Symbol> locationSymbol, int location, address value) {
-		 ref<Fixup> f = new Fixup();
+		 ref<Fixup> f = _storage new Fixup();
 		 f.kind = kind;
 		 f.locationSymbol = locationSymbol; 
 		 f.location = location;

@@ -1051,6 +1051,8 @@ class Type {
 			return null;
 		for (int i = 0; i < scope().constructors().length(); i++) {
 			ref<Function> f = ref<Function>((*scope().constructors())[i].definition());
+			if (f == null)
+				continue; // default constructors should be ignored.
 			ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
 			if (oi.parameterCount() != 1)
 				continue;

@@ -13,54 +13,38 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-class A {
-	int _filler;
+class Member {
+	int _value;
 	
-	~A() {
-		_filler++;
-		destructorCountA++;
+	Member() {
+		_value = 3;
+	}
+	
+	int value() {
+		return _value;
 	}
 }
 
-int destructorCountA;
-
-int f() {
-	A a;
+class Base {
+	Member baseMember;
 	
-	return 3;
-}
-
-int x = f();
-
-assert(x == 3);
-printf("destructorCountA: %d\n", destructorCountA);
-assert(destructorCountA == 1);
-
-ref<A> ra = new A;
-
-delete ra;
-
-assert(destructorCountA == 2);
-
-class B {
-	long filler;
-	A needsDestructor;
-	
-	~B() {
-		filler = 3;
+	int baseTest() {
+		return baseMember.value();
 	}
 }
 
-ref<B> b = new B;
-
-delete b;
-
-assert(destructorCountA == 3);
-
-void plainFunc() {
-	A plainA;
+class Derived extends Base {
+	void test() {
+		assert(baseTest() == 3);
+	}
 }
 
-plainFunc();
+class ReallyDerived extends Derived {
+	ReallyDerived() {
+		test();
+	}
+}
 
-assert(destructorCountA == 4);
+ref<ReallyDerived> rd = new ReallyDerived();
+
+delete rd;

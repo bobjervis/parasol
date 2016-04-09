@@ -177,6 +177,7 @@ class RegisterState {
 		while (stackDepth < _t.stackDepth()) {
 			ref<Temporary> tm = _t.pop();
 			long regMask = getRegMask(tm.currentReg);
+			_t.free(tm);
 			_freeRegisters |= regMask;
 			_usedRegisters &= ~regMask;
 			assert((_usedRegisters & _freeRegisters) == 0);

@@ -262,7 +262,7 @@ public class RuntimeException extends Exception {
 					text = text.substring(0, text.length() - 2);
 				output.printf(" (%s)", text);
 			}
-			output.printf(" ip %p", _exceptionContext.exceptionAddress);
+			output.printf(" ip %p", _exceptionContext.exceptionAddress, runtime.lowCodeAddress());
 			if (_exceptionContext.exceptionType == EXCEPTION_ACCESS_VIOLATION ||
 				_exceptionContext.exceptionType == EXCEPTION_IN_PAGE_ERROR)
 				output.printf(" flags %d referencing %p", _exceptionContext.exceptionFlags, _exceptionContext.memoryAddress);

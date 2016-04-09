@@ -13,6 +13,8 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+import parasol:text;
+
 class A {
 	int _filler;
 	
@@ -60,9 +62,15 @@ assert(destructorCountA == 2);
 
 ref<B> rb = new B;
 
+printf("rb = %p\n", rb);
+text.memDump(address(long(rb) - 0x20), B.bytes + 0x40);
+
 ra = rb;
 
 ra.foo();
+
+printf("after foo() rb = %p\n", rb);
+text.memDump(address(long(rb) - 0x20), B.bytes + 0x40);
 
 delete rb;
 

@@ -13,54 +13,26 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-class A {
-	int _filler;
-	
-	~A() {
-		_filler++;
-		destructorCountA++;
+class InnerWithVtable {
+	int foo() {
+		return 3;
 	}
 }
 
-int destructorCountA;
-
-int f() {
-	A a;
-	
-	return 3;
-}
-
-int x = f();
-
-assert(x == 3);
-printf("destructorCountA: %d\n", destructorCountA);
-assert(destructorCountA == 1);
-
-ref<A> ra = new A;
-
-delete ra;
-
-assert(destructorCountA == 2);
-
-class B {
-	long filler;
-	A needsDestructor;
-	
-	~B() {
-		filler = 3;
+class Derived extends InnerWithVtable {
+	int foo() {
+		return 5;
 	}
 }
 
-ref<B> b = new B;
-
-delete b;
-
-assert(destructorCountA == 3);
-
-void plainFunc() {
-	A plainA;
+class Outer {
+	Derived d;
 }
 
-plainFunc();
+ref<Outer> o = new Outer();
 
-assert(destructorCountA == 4);
+ref<InnerWithVtable> inner = &o.d;
+
+assert(o.d.foo() == 5);			// Doesn't use the vtable
+
+assert(inner.foo() == 5);		// Does use the vtable

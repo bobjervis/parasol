@@ -18,11 +18,11 @@ namespace parasol:types;
 public class address {}
 
 public class boolean {
-	public boolean() {
-	}
+//	public boolean() {
+//	}
 	
-	public boolean(boolean value) {
-	}
+//	public boolean(boolean value) {
+//	}
 }
 
 @Final 
