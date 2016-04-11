@@ -451,16 +451,8 @@ class Binary extends Node {
 			if (objType.hasDestructor()) {
 				ref<Node> defn;
 				ref<Node> value;
-				if (_right.isSimpleLvalue())
-					value = _right.clone(tree);
-				else {
-					ref<Variable> temp = compileContext.newVariable(_right.type);
-					ref<Reference> r = tree.newReference(temp, true, location());
-					defn = tree.newBinary(Operator.ASSIGN, r, _right, location());
-					defn.type = _right.type;
-					value = tree.newReference(temp, false, location());
-					_right = tree.newReference(temp, false, location());
-				}
+				(defn, value) = cloneDefnValue(tree, _right, compileContext);
+				_right = value.clone(tree);
 				ref<ParameterScope> des = objType.scope().destructor();
 				ref<Call> call = tree.newCall(des, CallCategory.DESTRUCTOR, value, null, location(), compileContext);
 				call.type = type;			// We know this is VOID
@@ -476,7 +468,7 @@ class Binary extends Node {
 				ref<Node> choice = tree.newTernary(Operator.CONDITIONAL, compare, completion, nullPath, location());
 				choice.type = call.type;
 				if (defn != null) {
-					destructors = tree.newBinary(Operator.SEQUENCE, defn.fold(tree, false, compileContext), choice, location());
+					destructors = tree.newBinary(Operator.SEQUENCE, defn.fold(tree, true, compileContext), choice, location());
 					destructors.type = choice.type;
 				} else
 					destructors = choice;
@@ -514,6 +506,137 @@ class Binary extends Node {
 		case	LESS_GREATER:
 		case	NOT_LESS_GREATER:
 			switch (_left.type.family()) {
+			case	TYPEDEF:
+				ref<Symbol> typeType = compileContext.arena().getSymbol("parasol", "compiler.Type", compileContext);
+				if (typeType == null || typeType.class != PlainSymbol) {
+					print(0);
+					assert(false);
+				}
+				ref<Type> t = typeType.assignType(compileContext);
+				assert(t.family() == TypeFamily.TYPEDEF);
+				t = ref<TypedefType>(t).wrappedType();
+				ref<OverloadInstance> isSubtypeMethod = getOverloadInstance(t, "isSubtype", compileContext);
+				if (isSubtypeMethod == null)
+					return this;
+				switch (op()) {
+				case	EQUALITY:
+				case	NOT_EQUAL:
+					break;
+					
+				case	LESS:
+					ref<Selection> method = tree.newSelection(_left, isSubtypeMethod, true, location());
+					method.type = isSubtypeMethod.type();
+					call = tree.newCall(isSubtypeMethod.parameterScope(), CallCategory.METHOD_CALL, method, tree.newNodeList(_right), location(), compileContext);
+					call.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+					return call.fold(tree, voidContext, compileContext);
+					
+				case	GREATER:
+					method = tree.newSelection(_right, isSubtypeMethod, true, location());
+					method.type = isSubtypeMethod.type();
+					call = tree.newCall(isSubtypeMethod.parameterScope(), CallCategory.METHOD_CALL, method, tree.newNodeList(_left), location(), compileContext);
+					call.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+					return call.fold(tree, voidContext, compileContext);
+					
+				case	LESS_EQUAL:
+					ref<Node> defnRight;
+					ref<Node> valueRight;
+					(defnRight, valueRight) = cloneDefnValue(tree, _right, compileContext);
+					ref<Node> defnLeft;
+					ref<Node> valueLeft;
+					(defnLeft, valueLeft) = cloneDefnValue(tree, _left, compileContext);
+					ref<Node> equalsTest = tree.newBinary(Operator.EQUALITY, valueLeft, valueRight, location());
+					equalsTest.type = type;
+					ref<Node> lessTest = tree.newBinary(Operator.LESS, valueLeft.clone(tree), valueRight.clone(tree), location());
+					lessTest.type = type;
+					ref<Node> orTogether = tree.newBinary(Operator.LOGICAL_OR, equalsTest, lessTest, location());
+					orTogether.type = type;
+					return sequenceNodes(tree, defnLeft, defnRight, orTogether).fold(tree, voidContext, compileContext);
+					
+				case	GREATER_EQUAL:
+					(defnRight, valueRight) = cloneDefnValue(tree, _right, compileContext);
+					(defnLeft, valueLeft) = cloneDefnValue(tree, _left, compileContext);
+					equalsTest = tree.newBinary(Operator.EQUALITY, valueLeft, valueRight, location());
+					equalsTest.type = type;
+					lessTest = tree.newBinary(Operator.LESS, valueRight.clone(tree), valueLeft.clone(tree), location());
+					lessTest.type = type;
+					orTogether = tree.newBinary(Operator.LOGICAL_OR, equalsTest, lessTest, location());
+					orTogether.type = type;
+					return sequenceNodes(tree, defnLeft, defnRight, orTogether).fold(tree, voidContext, compileContext);
+					
+				case	LESS_GREATER:
+					(defnRight, valueRight) = cloneDefnValue(tree, _right, compileContext);
+					(defnLeft, valueLeft) = cloneDefnValue(tree, _left, compileContext);
+					equalsTest = tree.newBinary(Operator.LESS, valueLeft, valueRight, location());
+					equalsTest.type = type;
+					lessTest = tree.newBinary(Operator.LESS, valueRight.clone(tree), valueLeft.clone(tree), location());
+					lessTest.type = type;
+					orTogether = tree.newBinary(Operator.LOGICAL_OR, equalsTest, lessTest, location());
+					orTogether.type = type;
+					return sequenceNodes(tree, defnLeft, defnRight, orTogether).fold(tree, voidContext, compileContext);
+					
+				case	LESS_GREATER_EQUAL:
+					(defnRight, valueRight) = cloneDefnValue(tree, _right, compileContext);
+					(defnLeft, valueLeft) = cloneDefnValue(tree, _left, compileContext);
+					equalsTest = tree.newBinary(Operator.EQUALITY, valueLeft, valueRight, location());
+					equalsTest.type = type;
+					lessTest = tree.newBinary(Operator.LESS, valueLeft.clone(tree), valueRight.clone(tree), location());
+					lessTest.type = type;
+					orTogether = tree.newBinary(Operator.LOGICAL_OR, equalsTest, lessTest, location());
+					orTogether.type = type;
+					lessTest = tree.newBinary(Operator.LESS, valueRight.clone(tree), valueLeft.clone(tree), location());
+					lessTest.type = type;
+					orTogether = tree.newBinary(Operator.LOGICAL_OR, orTogether, lessTest, location());
+					orTogether.type = type;
+					return sequenceNodes(tree, defnLeft, defnRight, orTogether).fold(tree, voidContext, compileContext);
+					
+				case	NOT_LESS:
+					lessTest = tree.newBinary(Operator.LESS, _left, _right, location());
+					lessTest.type = type;
+					orTogether = tree.newUnary(Operator.NOT, lessTest, location());
+					orTogether.type = type;
+					return orTogether.fold(tree, voidContext, compileContext);
+					
+				case	NOT_GREATER:
+					lessTest = tree.newBinary(Operator.GREATER, _left, _right, location());
+					lessTest.type = type;
+					orTogether = tree.newUnary(Operator.NOT, lessTest, location());
+					orTogether.type = type;
+					return orTogether.fold(tree, voidContext, compileContext);
+					
+				case	NOT_LESS_EQUAL:
+					lessTest = tree.newBinary(Operator.LESS_EQUAL, _left, _right, location());
+					lessTest.type = type;
+					orTogether = tree.newUnary(Operator.NOT, lessTest, location());
+					orTogether.type = type;
+					return orTogether.fold(tree, voidContext, compileContext);
+					
+				case	NOT_GREATER_EQUAL:
+					lessTest = tree.newBinary(Operator.GREATER_EQUAL, _left, _right, location());
+					lessTest.type = type;
+					orTogether = tree.newUnary(Operator.NOT, lessTest, location());
+					orTogether.type = type;
+					return orTogether.fold(tree, voidContext, compileContext);
+					
+				case	NOT_LESS_GREATER:
+					lessTest = tree.newBinary(Operator.LESS_GREATER, _left, _right, location());
+					lessTest.type = type;
+					orTogether = tree.newUnary(Operator.NOT, lessTest, location());
+					orTogether.type = type;
+					return orTogether.fold(tree, voidContext, compileContext);
+					
+				case	NOT_LESS_GREATER_EQUAL:
+					lessTest = tree.newBinary(Operator.LESS_GREATER_EQUAL, _left, _right, location());
+					lessTest.type = type;
+					orTogether = tree.newUnary(Operator.NOT, lessTest, location());
+					orTogether.type = type;
+					return orTogether.fold(tree, voidContext, compileContext);
+					
+				default:
+					print(0);
+					assert(false);
+				}
+				break;
+				
 			case	STRING:
 			case	VAR:
 				ref<Node> call = createMethodCall(_left, "compare", tree, compileContext, _right);
@@ -754,6 +877,20 @@ class Binary extends Node {
 		return this;
 	}
 	
+	ref<Node>, ref<Node> cloneDefnValue(ref<SyntaxTree> tree, ref<Node> n, ref<CompileContext> compileContext) {
+		ref<Node> defn;
+		ref<Node> value;
+		if (n.isSimpleLvalue())
+			value = n.clone(tree);
+		else {
+			ref<Variable> temp = compileContext.newVariable(n.type);
+			ref<Reference> r = tree.newReference(temp, true, location());
+			defn = tree.newBinary(Operator.ASSIGN, r, n, location());
+			defn.type = n.type;
+			value = tree.newReference(temp, false, location());
+		}
+		return defn, value;
+	}	
 	private ref<Node> foldDefaultConstructor(ref<ParameterScope> defaultConstructor, ref<Node> allocation, ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
 		ref<Variable> temp = compileContext.newVariable(type);
 		ref<Reference> r = tree.newReference(temp, true, location());
@@ -1617,6 +1754,7 @@ class Binary extends Node {
 			case	VAR:
 			case	POINTER:
 			case	STRING:
+			case	TYPEDEF:
 				type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
 				break;
 
@@ -1634,6 +1772,7 @@ class Binary extends Node {
 			switch (_left.type.family()) {
 			case	FLOAT_32:
 			case	FLOAT_64:
+			case	TYPEDEF:
 				type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
 				break;
 
@@ -2269,4 +2408,19 @@ ref<OverloadInstance> getMethodSymbol(ref<Node> parent, string name, ref<Type> t
 	}
 	ref<Overload> over = ref<Overload>(sym);
 	return (*over.instances())[0];
+}
+
+ref<Node> sequenceNodes(ref<SyntaxTree> tree, ref<Node>... n) {
+	ref<Node> result;
+	for (int i = 0; i < n.length(); i++) {
+		if (n[i] != null) {
+			if (result != null) {
+				ref<Binary> seq = tree.newBinary(Operator.SEQUENCE, result, n[i], n[i].location());
+				seq.type = seq.right().type;
+				result = seq;
+			} else
+				result = n[i];
+		}
+	}
+	return result;
 }

@@ -1490,30 +1490,25 @@ class Disassembler {
 private string[] instructionMnemonic;
 instructionMnemonic.resize(256);
 
-fill();
-
-void fill() {
-	for (int i = 0; i < 6; i++) {
-		instructionMnemonic[i] = "add";
-		instructionMnemonic[i + 0x08] = "or";
-		instructionMnemonic[i + 0x10] = "adc";
-		instructionMnemonic[i + 0x18] = "sbb";
-		instructionMnemonic[i + 0x20] = "and";
-		instructionMnemonic[i + 0x28] = "sub";
-		instructionMnemonic[i + 0x30] = "xor";
-		instructionMnemonic[i + 0x38] = "cmp";
-	}
-	for (int i = 0x50; i < 0x58; i++)
-		instructionMnemonic[i] = "push";
-	for (int i = 0x58; i < 0x60; i++)
-		instructionMnemonic[i] = "pop";
-	for (int i = 0x88; i < 0x8d; i++)
-		instructionMnemonic[i] = "mov";
-
-	for (int i = 0xb0; i < 0xc0; i++)
-		instructionMnemonic[i] = "mov";
-
+for (int i = 0; i < 6; i++) {
+	instructionMnemonic[i] = "add";
+	instructionMnemonic[i + 0x08] = "or";
+	instructionMnemonic[i + 0x10] = "adc";
+	instructionMnemonic[i + 0x18] = "sbb";
+	instructionMnemonic[i + 0x20] = "and";
+	instructionMnemonic[i + 0x28] = "sub";
+	instructionMnemonic[i + 0x30] = "xor";
+	instructionMnemonic[i + 0x38] = "cmp";
 }
+for (int i = 0x50; i < 0x58; i++)
+	instructionMnemonic[i] = "push";
+for (int i = 0x58; i < 0x60; i++)
+	instructionMnemonic[i] = "pop";
+for (int i = 0x88; i < 0x8d; i++)
+	instructionMnemonic[i] = "mov";
+
+for (int i = 0xb0; i < 0xc0; i++)
+	instructionMnemonic[i] = "mov";
 
 instructionMnemonic[0x2f] = "-";
 instructionMnemonic[0x37] = "-";

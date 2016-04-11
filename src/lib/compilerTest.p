@@ -562,8 +562,6 @@ class CompileObject  extends script.Object {
 			printf("      Messages flagged before code generation %d\n      Messages flagged after code generation %d\n", preCodeGenerationMessages, postCodeGenerationMessages);
 			if (verboseFlag)
 				f.tree().root().print(0);
-			ImportDirectory importDirectory("");
-			importDirectory.setFile(f);
 			arena.printMessages();
 			result = false;
 		}

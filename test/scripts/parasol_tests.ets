@@ -420,6 +420,21 @@ compile(expect: fail) { "3 <<= 3;" }
 compile(expect: fail) { "3 >>= 3;" }
 compile(expect: fail) { "3 >>>= 3;" }
 
+compile() { "class A{} class B{} boolean a = A == B;" }
+compile() { "class A{} class B{} boolean a = A < B;" }
+compile() { "class A{} class B{} boolean a = A > B;" }
+compile() { "class A{} class B{} boolean a = A <= B;" }
+compile() { "class A{} class B{} boolean a = A >= B;" }
+compile() { "class A{} class B{} boolean a = A <> B;" }
+compile() { "class A{} class B{} boolean a = A <>= B;" }
+compile() { "class A{} class B{} boolean a = A != B;" }
+compile() { "class A{} class B{} boolean a = A !< B;" }
+compile() { "class A{} class B{} boolean a = A !> B;" }
+compile() { "class A{} class B{} boolean a = A !<= B;" }
+compile() { "class A{} class B{} boolean a = A !>= B;" }
+compile() { "class A{} class B{} boolean a = A !<> B;" }
+compile() { "class A{} class B{} boolean a = A !<>= B;" }
+
 compile() { "3 < 4 ? 5 : 6;" }
 
 compile() { "int f() { if (true) return 5; else return 3; }" }

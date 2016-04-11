@@ -96,7 +96,6 @@ int PXI_FIXUP_SHIFT = 8;
 
 public class X86_64 extends X86_64AssignTemps {
 	private ref<Scope> _unitScope;
-	private ref<Arena> _arena;
 	private ref<ParameterScope> _alloc;						// Symbol for alloc function.
 	private ref<ParameterScope> _free;						// Symbol for free function.
 	private ref<OverloadInstance> _stringAppendString;		// string.append(string)

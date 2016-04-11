@@ -29,6 +29,11 @@ import parasol:runtime;
  * a single Parasol compiler to be used as a cross-compiler to other environments.
  */
 public class Target {
+	protected ref<Arena> _arena;
+
+	private ref<Type> _builtInType;
+	private ref<Type> _classType;
+	
 	private ref<FileStat>[] _staticBlocks;
 	
 	public static ref<Target> generate(ref<Arena> arena, ref<FileStat> mainFile, boolean countCurrentObjects, ref<CompileContext> compileContext, boolean verbose) {
@@ -54,11 +59,26 @@ public class Target {
 		}
 		if (verbose)
 			printf("target=%p\n", target);
+		target.populateTypeMap(compileContext);
 		compileContext.target = target;
 		if (target.generateCode(mainFile, countCurrentObjects ? runtime.injectObjects(null, 0) : 0, compileContext))
 			return target;
 		else
 			return null;
+	}
+	
+	private void populateTypeMap(ref<CompileContext> compileContext) {
+		ref<Symbol> re = _arena.getSymbol("parasol", "compiler.BuiltInType", compileContext);
+		if (re.type().family() != TypeFamily.TYPEDEF)
+			assert(false);
+		ref<TypedefType> t = ref<TypedefType>(re.type());
+		_builtInType = t.wrappedType();
+		
+		re = _arena.getSymbol("parasol", "compiler.ClassType", compileContext);
+		if (re.type().family() != TypeFamily.TYPEDEF)
+			assert(false);
+		t = ref<TypedefType>(re.type());
+		_classType = t.wrappedType();
 	}
 	
 	public abstract boolean generateCode(ref<FileStat> mainFile, int valueOffset, ref<CompileContext> compileContext);
@@ -69,6 +89,14 @@ public class Target {
 		return null, 0;
 	}
 
+	public void fixupType(int ordinal, ref<Type> type) {
+		assert(false);
+	}
+	
+	public void fixupVtable(int ordinal, ref<Type> type) {
+		assert(false);
+	}
+	
 	public void markRegisterParameters(ref<ParameterScope> scope, ref<CompileContext> compileContext) {
 	}
 	
@@ -112,6 +140,14 @@ public class Target {
 	
 	public void unfinished(ref<Node> n, string explanation, ref<CompileContext> compileContext) {
 		n.add(MessageId.UNFINISHED_GENERATE, compileContext.pool(), CompileString(" "/*n.class.name()*/), CompileString(string(n.op())), CompileString(explanation));
+	}
+	
+	public ref<Type> builtInType() {
+		return _builtInType;
+	}
+	
+	public ref<Type> classType() {
+		return _classType;
 	}
 	
 	public void print() {

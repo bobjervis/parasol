@@ -157,6 +157,13 @@ class X86_64AddressModes extends X86_64Encoder {
 			if (b.left().type.isFloat()) {
 				markAddressModes(b.left(), compileContext);
 				modeComplexity = MC_ADDRESS|MC_REG;
+			} else if (b.left().type.family() == TypeFamily.TYPEDEF) {
+				markAddressModes(b.left(), compileContext);
+				if (b.right().type.family() == TypeFamily.TYPEDEF) {
+					markAddressModes(b.right(), compileContext);
+					break;
+				} else
+					modeComplexity = MC_ADDRESS|MC_REG;
 			} else {
 				modeComplexity = tryMakeMode(b.left(), MC_ADDRESS|MC_REG, nClass, compileContext);
 				if (b.right().op() == Operator.INTEGER)

@@ -143,7 +143,7 @@ class X86_64Encoder extends Target {
 	protected ExceptionEntry[] _exceptionTable;
 	protected SourceLocation[] _sourceLocations;
 	protected DeferredTry[] _deferredTry;
-	
+
 	private ref<CodeSegment>[] _exceptionHandlers;
 	private int[] _staticDataSize;
 	private byte[] _imageData;								// Used to persist the symbol table
@@ -304,6 +304,21 @@ class X86_64Encoder extends Target {
 				definePxiFixup(location);
 				break;
 				
+			case	ABSOLUTE64_TYPE:				// Fixup value is a ref<Type>
+				type = ref<Type>(f.value);
+				location = _pxiHeader.typeDataOffset + f.location;
+				*ref<int>(&_code[location]) = _pxiHeader.typeDataOffset + type.copyToImage(this) - 1;
+				definePxiFixup(location);
+				break;
+				
+			case	ABSOLUTE64_VTABLE:				// Fixup value is a ref<Type>
+				type = ref<Type>(f.value);
+				location = _pxiHeader.typeDataOffset + f.location;
+				scope = ref<ClassScope>(type.scope());
+				*ref<int>(&_code[location]) = _pxiHeader.vtablesOffset + (int(scope.vtable) - 1) * address.bytes;
+				definePxiFixup(location);
+				break;
+				
 			case	INT_CONSTANT:
 				location = f.locationSymbol.offset + f.location;
 				C.memcpy(&_code[location], &f.value, f.locationSymbol.type().size());
@@ -312,6 +327,11 @@ class X86_64Encoder extends Target {
 			case	BUILTIN32:						// Fixup value is builtIn index
 				*ref<int>(&_code[f.location]) = _pxiHeader.builtInOffset + int(f.value) * long.bytes - 
 								(f.location + int.bytes);
+				break;
+				
+			default:
+				f.print();
+				assert(false);
 			}
 		}
 		
@@ -384,6 +404,14 @@ class X86_64Encoder extends Target {
 		int blockOffset = _imageData.length();
 		_imageData.resize(blockOffset + size);
 		return &_imageData[blockOffset], blockOffset + 1;
+	}
+
+	public void fixupType(int ordinal, ref<Type> type) {
+		staticFixup(FixupKind.ABSOLUTE64_TYPE, null, ordinal - 1, type);
+	}
+
+	public void fixupVtable(int ordinal, ref<Type> type) {
+		staticFixup(FixupKind.ABSOLUTE64_VTABLE, null, ordinal - 1, type);
 	}
 
 	public void markRegisterParameters(ref<ParameterScope> scope, ref<CompileContext> compileContext) {
@@ -3364,6 +3392,8 @@ enum FixupKind {
 	ABSOLUTE64_CODE,				// Fixup value is a ref<Scope>
 	ABSOLUTE64_DATA,				// Fixup value is a ref<Symbol>
 	ABSOLUTE64_STRING,				// Fixup value is a an int offset into the string pool
+	ABSOLUTE64_TYPE,				// Fixup value is a ref<Type>
+	ABSOLUTE64_VTABLE,				// Fixup value is a ref<ClassScope>
 	INT_CONSTANT,					// Fixup value is the value of the constant
 	BUILTIN32						// Fixup value is builtIn index
 }
@@ -3406,6 +3436,14 @@ class Fixup {
 			printf("    @%x ABSOLUTE64_STRING %p\n", location, value);
 			break;
 			
+		case	ABSOLUTE64_TYPE:				// Fixup value is a ref<Type>
+			printf("    @%x ABSOLUTE64_TYPE %p\n", location, value);
+			break;
+			
+		case	ABSOLUTE64_VTABLE:				// Fixup value is a ref<Type>
+			printf("    @%x ABSOLUTE64_VTABLE %p\n", location, value);
+			break;
+			
 		case	INT_CONSTANT:
 			printf("    @%x INT_CONSTANT %p\n", location, value);
 			break;
@@ -3416,6 +3454,7 @@ class Fixup {
 			
 		default:
 			printf("    @%x <error %d> %p\n", location, int(kind), value);
+			assert(false);
 		}
 	}
 }
@@ -3598,6 +3637,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	REF:
 		case	POINTER:
 		case	ENUM:
+		case	TYPEDEF:
 		case	CLASS:			return CC.JNE;
 		default:
 			printf("continuation(%s,", string(compare));
@@ -3621,6 +3661,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	REF:
 		case	POINTER:
 		case	ENUM:
+		case	TYPEDEF:
 		case	CLASS:			return CC.JE; 
 		default:
 			printf("continuation(%s,", string(compare));

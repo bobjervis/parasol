@@ -251,7 +251,6 @@ enum ByteCodes {
 
 public class ByteCodesTarget extends Target {
 	private ref<Unit> _unit;
-	private ref<Arena> _arena;
 	private ref<Code> _staticBlock;
 	private int _currentSpDepth;
 	private byte[] _byteCodeBuffer;

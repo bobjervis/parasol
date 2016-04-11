@@ -163,12 +163,9 @@ class BuiltInType extends Type {
 	
 	public int copyToImage(ref<Target> target) {
 		if (_ordinal == 0) {
-			address a = allocateImageData(target, BuiltInType.bytes);
-			ref<BuiltInType> t = ref<BuiltInType>(a);
-//			*t = *this;
-//			*ref<long>(t) = 0;
-//			t._classType = null;
-			// TODO: patch up the _classType
+			allocateImageData(target, BuiltInType.bytes);
+			target.fixupVtable(_ordinal, target.builtInType());
+			target.fixupType(_ordinal + int(&ref<BuiltInType>(null)._classType), _classType);
 		}
 		return _ordinal;
 	}
@@ -795,7 +792,7 @@ class TemplateInstanceType extends ClassType {
 	public ref<Type> shapeType() {
 		return null;
 	}
-	
+/*	
 	public  ref<Type> assignSuper(ref<CompileContext> compileContext) {
 		resolve(compileContext);
 		return _extends;
@@ -804,7 +801,7 @@ class TemplateInstanceType extends ClassType {
 	public ref<Type> getSuper() {
 		return _extends;
 	}
-
+*/
 	public boolean extendsFormally(ref<Type> other, ref<CompileContext> compileContext) {
 		ref<Type> base = assignSuper(compileContext);
 		if (base != null)
@@ -1154,7 +1151,22 @@ class Type {
 			return false;
 		return sameAs(other);
 	}
-
+	/*
+	 * This is the implementation method for class <. This is a subtype of other if other is one of the base class chain.
+	 * 
+	 * RETURNS
+	 *     true if other is a base class of this, false otherwise.
+	 */
+	public boolean isSubtype(ref<Type> other) {
+		ref<Type> base = getSuper();
+		if (base == null)
+			return false;
+		else if (base == other)
+			return true;
+		else
+			return base.isSubtype(other);
+	}
+	
 	boolean canOverride(ref<Type> other, ref<CompileContext> compileContext) {
 		return false;
 	}

@@ -16,6 +16,7 @@
 namespace parasol:compiler;
 
 import native:C;
+import parasol:text;
 import parasol:stream.Utf8Reader;
 
 enum Operator {
@@ -2416,6 +2417,16 @@ class Node {
 		ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
 		call.type = type;
 		return call;
+	}
+	
+	ref<OverloadInstance> getOverloadInstance(ref<Type> objType, string functionName, ref<CompileContext> compileContext) {
+		CompileString name(functionName);
+		ref<Symbol> sym = objType.lookup(&name, compileContext);
+		if (sym == null || sym.class != Overload) {
+			add(MessageId.UNDEFINED, compileContext.pool(), name);
+			return null;
+		}
+		return (*ref<Overload>(sym).instances())[0];
 	}
 	
 	public long foldInt(ref<Target> target, ref<CompileContext> compileContext) {
