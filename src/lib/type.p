@@ -165,6 +165,7 @@ class BuiltInType extends Type {
 		if (_ordinal == 0) {
 			allocateImageData(target, BuiltInType.bytes);
 			target.fixupVtable(_ordinal, target.builtInType());
+			_classType.copyToImage(target);
 			target.fixupType(_ordinal + int(&ref<BuiltInType>(null)._classType), _classType);
 		}
 		return _ordinal;
@@ -376,13 +377,7 @@ class ClassType extends Type {
 	public ref<Class> definition() {
 		return _definition;
 	}
-/*
-protected:
 
-
-	vector<InterfaceType*> _implements;
-
-*/
 	private boolean sameAs(ref<Type> other) {
 		// Two classes are considered the same only
 		// if they have the same declaration site, which
@@ -403,15 +398,11 @@ protected:
 
 	public int copyToImage(ref<Target> target) {
 		if (_ordinal == 0) {
-			address a = allocateImageData(target, ClassType.bytes);
-			ref<ClassType> t = ref<ClassType>(a);
-//			*t = *this;
-//			*ref<long>(t) = 0;
-//			t._scope = null;
-//			t._extends = null;
-//			t._definition = null;
-			// TODO: patch up _scope and _extends
-			// Definition is left empty.
+			allocateImageData(target, ClassType.bytes);
+			target.fixupVtable(_ordinal, target.classType());
+			if (_extends != null)
+				_extends.copyToImage(target);
+			target.fixupType(_ordinal + int(&ref<ClassType>(null)._extends), _extends);
 		}
 		return _ordinal;
 	}
@@ -738,10 +729,10 @@ class TemplateInstanceType extends ClassType {
 	private var[] _arguments;
 	private ref<TemplateType> _templateType;
 
-	TemplateInstanceType(ref<TemplateType> templateType, var[] args, ref<Template> concreteDefinition, ref<FileStat> definingFile, ref<Scope> scope, ref<TemplateInstanceType> next) {
+	TemplateInstanceType(ref<TemplateType> templateType, var[] args, ref<Template> concreteDefinition, ref<FileStat> definingFile, ref<Scope> scope, ref<TemplateInstanceType> next, ref<MemoryPool> pool) {
 		super(templateType.definingSymbol().effectiveFamily(), ref<Type>(null), scope);
 		for (int i = 0; i < args.length(); i++)
-			_arguments.append(args[i]);
+			_arguments.append(args[i], pool);
 		_definingFile = definingFile;
 		_templateType = templateType;
 		_next = next;
@@ -792,16 +783,7 @@ class TemplateInstanceType extends ClassType {
 	public ref<Type> shapeType() {
 		return null;
 	}
-/*	
-	public  ref<Type> assignSuper(ref<CompileContext> compileContext) {
-		resolve(compileContext);
-		return _extends;
-	}
 
-	public ref<Type> getSuper() {
-		return _extends;
-	}
-*/
 	public boolean extendsFormally(ref<Type> other, ref<CompileContext> compileContext) {
 		ref<Type> base = assignSuper(compileContext);
 		if (base != null)
@@ -1158,6 +1140,8 @@ class Type {
 	 *     true if other is a base class of this, false otherwise.
 	 */
 	public boolean isSubtype(ref<Type> other) {
+//		printf("this = %p other = %p\n", this, other);
+//		text.memDump(this, ClassType.bytes);
 		ref<Type> base = getSuper();
 		if (base == null)
 			return false;

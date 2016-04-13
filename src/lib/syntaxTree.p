@@ -2822,6 +2822,7 @@ fill();
 
 private void fill() {
 //	text.memDump(&typeNotAllowed, typeNotAllowed.bytes);
+	typeNotAllowed.resize(Operator.MAX_OPERATOR);
 	for (int i = 0; i < int(Operator.MAX_OPERATOR); i++) {
 		if (typeNotAllowed[Operator(i)] == MessageId(0))
 			typeNotAllowed[Operator(i)] = MessageId.MAX_MESSAGE;

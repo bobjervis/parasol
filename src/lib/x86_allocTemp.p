@@ -522,7 +522,9 @@ class RegisterState {
 				_spills.affected.print(4);
 				assert(false);
 			}
+			ref<Spill> spill = _spills;
 			_spills = _spills.next;
+			delete spill;
 			if (_spills == null) {
 				_lastSpill = null;
 				return;

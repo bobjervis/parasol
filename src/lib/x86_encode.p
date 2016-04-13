@@ -407,10 +407,12 @@ class X86_64Encoder extends Target {
 	}
 
 	public void fixupType(int ordinal, ref<Type> type) {
-		staticFixup(FixupKind.ABSOLUTE64_TYPE, null, ordinal - 1, type);
+		if (type != null)
+			staticFixup(FixupKind.ABSOLUTE64_TYPE, null, ordinal - 1, type);
 	}
 
 	public void fixupVtable(int ordinal, ref<Type> type) {
+		ref<ClassScope> classScope = ref<ClassScope>(type.scope());
 		staticFixup(FixupKind.ABSOLUTE64_VTABLE, null, ordinal - 1, type);
 	}
 
@@ -498,6 +500,9 @@ class X86_64Encoder extends Target {
 	 * 
 	 */
 	private void prepareVTables(ref<CompileContext> compileContext) {
+		// TODO: make this work better.
+		buildVtable(ref<ClassScope>(classType().scope()), compileContext);
+		buildVtable(ref<ClassScope>(builtInType().scope()), compileContext);
 		if (_pxiHeader.vtableData == 0)
 			return;
 		for (int i = 0; i < _vtables.length(); i++) {

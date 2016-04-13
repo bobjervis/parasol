@@ -1249,8 +1249,8 @@ class Namespace extends Symbol {
 	private ref<Scope> _symbols;
 	private string _dottedName;
 
-	Namespace(ref<Node> namespaceNode, ref<Scope> enclosing, ref<Scope> symbols, ref<Node> annotations, ref<CompileString> name) {
-		super(Operator.PUBLIC, StorageClass.ENCLOSING, enclosing, annotations, name, null);
+	Namespace(ref<Node> namespaceNode, ref<Scope> enclosing, ref<Scope> symbols, ref<Node> annotations, ref<MemoryPool> pool, ref<CompileString> name) {
+		super(Operator.PUBLIC, StorageClass.ENCLOSING, enclosing, annotations, pool, name, null);
 		_symbols = symbols;
 		if (namespaceNode != null) {
 			boolean x;
@@ -1328,14 +1328,14 @@ class PlainSymbol extends Symbol {
 	private ref<Node> _typeDeclarator;
 	private ref<Node> _initializer;
 
-	PlainSymbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<CompileString> name, ref<Node> source, ref<Node> typeDeclarator, ref<Node> initializer) {
-		super(visibility, storageClass, enclosing, annotations, name, source);
+	PlainSymbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<MemoryPool> pool, ref<CompileString> name, ref<Node> source, ref<Node> typeDeclarator, ref<Node> initializer) {
+		super(visibility, storageClass, enclosing, annotations, pool, name, source);
 		_typeDeclarator = typeDeclarator;
 		_initializer = initializer;
 	}
 	
-	PlainSymbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<CompileString> name, ref<Node> source, ref<Type> type, ref<Node> initializer) {
-		super(visibility, storageClass, enclosing, annotations, name, source);
+	PlainSymbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<MemoryPool> pool, ref<CompileString> name, ref<Node> source, ref<Type> type, ref<Node> initializer) {
+		super(visibility, storageClass, enclosing, annotations, pool, name, source);
 		_type = type;
 		_initializer = initializer;
 	}
@@ -1439,8 +1439,8 @@ class Overload extends Symbol {
 	private Operator _kind;
 	ref<OverloadInstance>[] _instances;
 
-	Overload(ref<Scope>  enclosing, ref<Node> annotations, ref<CompileString> name, Operator kind) {
-		super(Operator.PUBLIC, StorageClass.ENCLOSING, enclosing, annotations, name, null);
+	Overload(ref<Scope>  enclosing, ref<Node> annotations, ref<MemoryPool> pool, ref<CompileString> name, Operator kind) {
+		super(Operator.PUBLIC, StorageClass.ENCLOSING, enclosing, annotations, pool, name, null);
 		_kind = kind;
 	}
 
@@ -1497,8 +1497,8 @@ class OverloadInstance extends Symbol {
 	private ref<ParameterScope> _parameterScope;
 	private ref<TemplateInstanceType> _instances;	// For template's, the actual instances of those
 
-	OverloadInstance(Operator visibility, boolean isStatic, ref<Scope> enclosing, ref<Node> annotations, ref<CompileString> name, ref<Node> source, ref<ParameterScope> parameterScope) {
-		super(visibility, isStatic ? StorageClass.STATIC : StorageClass.ENCLOSING, enclosing, annotations, name, source);
+	OverloadInstance(Operator visibility, boolean isStatic, ref<Scope> enclosing, ref<Node> annotations, ref<MemoryPool> pool, ref<CompileString> name, ref<Node> source, ref<ParameterScope> parameterScope) {
+		super(visibility, isStatic ? StorageClass.STATIC : StorageClass.ENCLOSING, enclosing, annotations, pool, name, source);
 		_parameterScope = parameterScope;
 	}
 
@@ -1754,11 +1754,11 @@ class Symbol {
 	private StorageClass _storageClass;
 	private Operator _visibility;
 
-	protected Symbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<CompileString> name, ref<Node> definition) {
+	protected Symbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<MemoryPool> pool, ref<CompileString> name, ref<Node> definition) {
 		_visibility = visibility;
 		if (annotations != null) {
-			_annotations = new ref<Call>[string];
-			populateAnnotations(annotations);
+			_annotations = pool new ref<Call>[string];
+			populateAnnotations(annotations, pool);
 			_annotationNode = annotations;
 		}
 		_storageClass = storageClass;
@@ -1812,15 +1812,15 @@ class Symbol {
 		return (*_annotations)[name];
 	}
 	
-	private void populateAnnotations(ref<Node> annotations) {
+	private void populateAnnotations(ref<Node> annotations, ref<MemoryPool> pool) {
 		if (annotations.op() == Operator.SEQUENCE) {
 			ref<Binary> b = ref<Binary>(annotations);
-			populateAnnotations(b.left());
-			populateAnnotations(b.right());
+			populateAnnotations(b.left(), pool);
+			populateAnnotations(b.right(), pool);
 		} else {
 			ref<Call> b = ref<Call>(annotations);
 			ref<Identifier> id = ref<Identifier>(b.target());
-			(*_annotations)[id.identifier().asString()] = b;
+			_annotations.insert(id.identifier().asString(), b, pool);
 		}
 	}
 	/*

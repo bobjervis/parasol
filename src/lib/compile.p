@@ -943,23 +943,23 @@ class MemoryPool extends memory.NoReleasePool {
 	}
 	
 	public ref<Symbol> newPlainSymbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<CompileString> name, ref<Node> source, ref<Node> type, ref<Node> initializer) {
-		return super new PlainSymbol(visibility, storageClass, enclosing, annotations, name, source, type, initializer);
+		return super new PlainSymbol(visibility, storageClass, enclosing, annotations, this, name, source, type, initializer);
 	}
 
 	public ref<Symbol> newPlainSymbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<CompileString> name, ref<Node> source, ref<Type> type, ref<Node> initializer) {
-		return super new PlainSymbol(visibility, storageClass, enclosing, annotations, name, source, type, initializer);
+		return super new PlainSymbol(visibility, storageClass, enclosing, annotations, this, name, source, type, initializer);
 	}
 
 	public ref<Overload> newOverload(ref<Scope> enclosing, ref<CompileString> name, Operator kind) {
-		return super new Overload(enclosing, null, name, kind);
+		return super new Overload(enclosing, null, this, name, kind);
 	}
 
 	public ref<OverloadInstance> newOverloadInstance(Operator visibility, boolean isStatic, ref<Scope> enclosing, ref<Node> annotations, ref<CompileString> name, ref<Node> source, ref<ParameterScope> functionScope) {
-		return super new OverloadInstance(visibility, isStatic, enclosing, annotations, name, source, functionScope);
+		return super new OverloadInstance(visibility, isStatic, enclosing, annotations, this, name, source, functionScope);
 	}
 
 	public ref<Namespace> newNamespace(ref<Node> namespaceNode, ref<Scope> enclosing, ref<Scope> symbols, ref<Node> annotations, ref<CompileString> name) {
-		return super new Namespace(namespaceNode, enclosing, symbols, annotations, name);
+		return super new Namespace(namespaceNode, enclosing, symbols, annotations, this, name);
 	}
 
 	public ref<Commentary> newCommentary(ref<Commentary> next, MessageId messageId, string message) {
@@ -999,7 +999,7 @@ class MemoryPool extends memory.NoReleasePool {
 	}
 
 	public ref<TemplateInstanceType> newTemplateInstanceType(ref<TemplateType> templateType, var[] args, ref<Template> concreteDefinition, ref<FileStat> definingFile, ref<Scope> scope, ref<TemplateInstanceType> next) {
-		return super new TemplateInstanceType(templateType, args, concreteDefinition, definingFile, scope, next);
+		return super new TemplateInstanceType(templateType, args, concreteDefinition, definingFile, scope, next, this);
 	}
 
 	public ref<FunctionType> newFunctionType(ref<NodeList> returnType, ref<NodeList> parameters, ref<Scope> functionScope) {
