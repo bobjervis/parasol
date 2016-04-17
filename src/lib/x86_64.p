@@ -562,21 +562,54 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 	
 	private void resolveDeferredTrys(boolean isFunction, ref<CompileContext> compileContext) {
-		for (int i = 0; i < _deferredTry.length(); i++) {
+		ref<Symbol> re = compileContext.arena().getSymbol("parasol", "exception.dispatchException", compileContext);
+		if (re == null || re.class != Overload)
+			assert(false);
+		ref<Overload> o = ref<Overload>(re);
+		ref<ParameterScope> dispatchException = ref<ParameterScope>((*o.instances())[0].type().scope());
+		re = compileContext.arena().getSymbol("parasol", "exception.throwException", compileContext);
+		if (re == null || re.class != Overload)
+			assert(false);
+		o = ref<Overload>(re);
+		ref<ParameterScope> throwException = ref<ParameterScope>((*o.instances())[0].type().scope());
+		for (int i = f().knownDeferredTrys; i < _deferredTry.length(); i++) {
 			ref<DeferredTry> dt = &_deferredTry[i];
 			dt.primaryHandler.start(this);
 			int adjust = -f().autoSize;
 			if (!isFunction)
 				adjust -= 8 * address.bytes;
+			// An exception handler enters with RBP correct and RCX pointing to the exception itself.
+			// First we have to chop the stack, so we can proceed to dispatch to one of a set of catch
+			// clauses. The clauses were sorted during the fold phase to put the most specific Exception
+			// first. That way we only have to move down the list in sequence.
 			inst(X86.LEA, R.RSP, R.RBP, adjust);
 			ref<CodeSegment> outer = pushExceptionHandler(dt.exceptionHandler);
-			for (ref<NodeList> nl = dt.tryStatement.catchList(); nl != null; nl = nl.next) {
+			ref<NodeList> nl = dt.tryStatement.catchList();
+			ref<Node> temp = nl.node;
+			inst(X86.MOV, temp, R.RCX, compileContext);
+			for (nl = nl.next; nl != null; nl = nl.next) {
+				ref<CodeSegment> nextCheck = _storage new CodeSegment;
+				ref<Binary> b = ref<Binary>(nl.node);
+				ref<Type> t = ref<TypedefType>(b.left().type).wrappedType();	// Get the catch Exception class
+				instLoadType(R.RDX, t);	// target type
+				inst(X86.MOV, R.RCX, temp, compileContext);
+				inst(X86.LEA, R.R8, b.right(), compileContext);
+				inst(X86.MOV, TypeFamily.SIGNED_32, R.R9, t.size());
+				instCall(dispatchException, compileContext);
+				inst(X86.OR, TypeFamily.BOOLEAN, R.RAX, R.RAX);
+				closeCodeSegment(CC.JE, nextCheck);
 				generate(nl.node, compileContext);
+				closeCodeSegment(CC.JMP, dt.join);
+				nextCheck.start(this);
 			}
-			closeCodeSegment(CC.JMP, dt.join);
+			inst(X86.MOV, R.RCX, temp, compileContext);
+			inst(X86.MOV, TypeFamily.ADDRESS, R.RDX, R.RBP);
+			inst(X86.MOV, TypeFamily.ADDRESS, R.R8, R.RSP);
+			instCall(throwException, compileContext);
+			closeCodeSegment(CC.NOP, null);
 			pushExceptionHandler(outer);
 		}
-		_deferredTry.clear();
+		_deferredTry.resize(f().knownDeferredTrys);
 	}
 	
 	private void reserveAutoMemory(boolean preserveRCX, ref<CompileContext> compileContext) {

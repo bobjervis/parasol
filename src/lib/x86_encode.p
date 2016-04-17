@@ -669,7 +669,8 @@ class X86_64Encoder extends Target {
 		f.avail = longMask|floatMask;
 		f.current = scope;
 		f.oldestUnspilled = f.tempBase = _t.stackDepth();
-
+		f.knownDeferredTrys = _deferredTry.length();
+		
 		ref<FunctionState> savedState = _f;
 
 		_f = &f;
@@ -781,6 +782,7 @@ class X86_64Encoder extends Target {
 		public ref<Scope> current;
 		public int outParameterOffset;
 		public int registerSaveSize;
+		public int knownDeferredTrys;
 	}
 
 	class CodeSegment {
@@ -3183,6 +3185,8 @@ class X86_64Encoder extends Target {
 		int i = 1;
 		for (ref<CodeSegment> cs = _f.first; cs != null; cs = cs.next) {
 			cs.ordinal = i++;
+			
+			// Do some validation to ensure that the up-stream code did its job correctly
 			if (cs.continuation == null) {
 				for (ref<CodeSegment> cs = _f.first; cs != null; cs = cs.next)
 					cs.print(this);

@@ -592,6 +592,7 @@ class FunctionType extends Type {
 					break;
 			} else if (nlOther == null)
 				return false;
+			
 			if (!nlThis.node.type.equals(nlOther.node.type))
 				return false;
 		}
@@ -1315,6 +1316,8 @@ class Type {
 			if (family() != TypeFamily.POINTER &&
 				other.family() == TypeFamily.POINTER)
 				return false;
+			if (ind == otherInd)
+				return true;
 			return ind.extendsFormally(otherInd, compileContext);
 		}
 		return false;

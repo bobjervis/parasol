@@ -518,6 +518,100 @@ class vector<class E, class I> {
 			}
 		}
 	}
+	
+	public void sort(int comparator(E a, E b), boolean ascending) {
+		if (int(_length) == 0)
+			return;
+		int descendingAdjust = 1;
+		if (!ascending)
+			descendingAdjust = -1;
+		qsort(_data, int(_length), comparator, descendingAdjust);
+	}
+	
+	private static void qsort(pointer<E> pivot, int nElem, int comparator(E a, E b), int descendingAdjust) { 
+		pointer<E> left, right;
+		int lNum;
+
+		for	(;;) {
+			if (nElem <= 2){
+				if (nElem == 2 &&
+					comparator(pivot[0], pivot[1]) * descendingAdjust > 0)
+					exchange(pivot, pivot + 1);
+				return;
+			}
+
+			right = pivot + (nElem - 1);
+			left  = pivot + (nElem >> 1);
+
+				/*  sort the pivot, left, and 
+					right elements for "median of 3" */
+
+			if (comparator(*left, *right) * descendingAdjust > 0)
+				exchange(left, right);
+
+				// assert *right >= *left
+
+			if (comparator(*left, *pivot) * descendingAdjust > 0)
+				exchange(left, pivot);
+			else if (comparator(*pivot, *right) * descendingAdjust > 0)
+				exchange(pivot, right);
+
+				// assert *right >= *pivot >= *left
+
+			if (nElem == 3) {
+
+					// for exactly three elements, we need to
+					// fix pivot and left.
+
+				exchange(pivot, left);
+				return;
+			}
+
+				//  now for the classic Hoare algorithm
+
+			left = pivot + 1;
+
+			int compareDirection;	// -1 from above, +1 from below
+
+			do {
+				compareDirection = +1;
+				while (comparator(*left, *pivot) * descendingAdjust < 0)
+					if (left < right)
+						left++;
+					else
+						break;
+
+				while (left < right) {
+					compareDirection = -1;
+					if (comparator(*pivot, *right) * descendingAdjust <= 0)
+						right--;
+					else {
+						exchange(left, right);
+						left++;
+						break;
+					}
+				}
+			} while (left < right);
+
+				// This puts the pivot into the middle if needed.
+
+			left--;
+			lNum = int(right - pivot);	// lNum is lower 'half' size
+			if (left > pivot)
+				exchange(pivot, left);
+			if ((nElem >> 1) > lNum) {
+
+					// lower 'half' has fewest elements
+
+				qsort(pivot, lNum - 1, comparator, descendingAdjust);
+				nElem -= lNum;
+				pivot = right;
+			} else {
+				qsort(right, nElem - lNum, comparator, descendingAdjust);
+				nElem = lNum - 1;
+			}
+		}
+	}
 	/*
 		Exchange records.
 	 */

@@ -16,6 +16,7 @@
 namespace parasol:exception;
 
 import parasol:compiler.FileStat;
+import parasol:compiler.Type;
 import parasol:x86_64.ExceptionEntry;
 import parasol:x86_64.SourceLocation;
 import parasol:memory;
@@ -397,6 +398,28 @@ void hardwareExceptionHandler(ref<HardwareException> info) {
 		printf("Unexpected exception type\n");
 		throw RuntimeException(context);
 	}
+}
+/*
+ * dispatchException is called from the compiler when deciding which catch clause to execute when an exception is
+ * thrown.
+ * 
+ * Note that the body of the exception is copied from the tmeporary location to the destination if there is a match.
+ * 
+ * PARAMETERS
+ * 	e			The thrown exception. May be any type derived from Exception.
+ * 	t			The type record of the Exception class that this handler matches.
+ * 	destination	If the thrown exception's type matches the passed type, then the exception is copied.
+ * 	size		The amount to copy.
+ * 	
+ * RETURNS	true if the exception should be handled, false if it should not
+ */
+private boolean dispatchException(ref<Exception> e, ref<Type> t, ref<Exception> destination, int size) {
+	ref<Type> actual = **ref<ref<ref<Type>>>(e);
+	if (actual.equals(t) || actual.isSubtype(t)) {
+		C.memcpy(destination, e, size);
+		return true;
+	} else
+		return false;
 }
 
 ref<ExceptionContext> createExceptionContext(address stackPointer) {

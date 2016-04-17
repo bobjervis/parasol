@@ -59,6 +59,8 @@ run(filename: complex_subscript.p)
 // Basic runtime execution tests
 
 //run(filename: try_test.p)
+run(filename: function_parameter_test.p)
+run(filename: sort_bug.p)
 run(filename: destructor_test.p)
 run(filename: destructor_virtual_test.p)
 run(filename: constructor_test.p)

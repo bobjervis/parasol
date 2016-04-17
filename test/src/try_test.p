@@ -32,7 +32,7 @@ try {
 	printf("Not expected - should have been a DivideByZeroException\n");
 	assert(false);
 } catch (DivideByZeroException e) {
-	printf("Caught this one too!");
+	printf("Caught this one too!\n");
 	assert(e.class == DivideByZeroException);
 }
 

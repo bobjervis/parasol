@@ -2262,12 +2262,40 @@ class Try extends Node {
 		return tree.newTry(body, finallyClause, nl, location());
 	}
 
+	private static int compareTypes(ref<Node> a, ref<Node> b) {
+		ref<Binary> ab = ref<Binary>(a);
+		ref<Binary> bb = ref<Binary>(b);
+		ref<Type> at = ref<TypedefType>(ab.left().type).wrappedType();
+		ref<Type> bt = ref<TypedefType>(bb.left().type).wrappedType();
+		if (at.isSubtype(bt))
+			return -1;
+		else if (bt.isSubtype(at))
+			return 1;
+		else
+			return 0;
+	}
+	
 	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
 		_body = _body.fold(tree, true, compileContext);
 		if (_finally != null)
 			_finally = _finally.fold(tree, true, compileContext);
-		for (ref<NodeList> nl = _catchList; nl != null; nl = nl.next) 
+		ref<Node>[] catches;
+		for (ref<NodeList> nl = _catchList; nl != null; nl = nl.next) {
 			nl.node = nl.node.fold(tree, true, compileContext);
+			catches.append(nl.node);
+		}
+		// Sort catches from most specific to most general.
+		if (catches.length() > 1) {
+			catches.sort(compareTypes, true);
+			int i = 0;
+			for (ref<NodeList> nl = _catchList; nl != null; nl = nl.next, i++)
+				nl.node = catches[i];
+		}
+		ref<Variable> temp = compileContext.newVariable(compileContext.arena().builtInType(TypeFamily.ADDRESS));
+		ref<Reference> r = tree.newReference(temp, true, _body.location());
+		ref<NodeList> extra = tree.newNodeList(r);
+		extra.next = _catchList;
+		_catchList = extra;
 		return this;
 	}
 
