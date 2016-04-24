@@ -232,6 +232,12 @@ public class X86_64 extends X86_64AssignTemps {
 		} else {
 			if (func.functionCategory() == Function.Category.ABSTRACT) {
 				if (functionScope.enclosing().storageClass() == StorageClass.STATIC) {
+					ref<Symbol> fsym = func.name().symbol();
+					ref<Call> binding = fsym.getAnnotation("Windows");
+					if (binding != null) {
+						binding.print(0);
+						assert(false);
+					}
 					for (int i = 0;; i++) {
 						pointer<byte> name = runtime.builtInFunctionName(i);
 						if (name == null)
@@ -239,8 +245,7 @@ public class X86_64 extends X86_64AssignTemps {
 						// TODO: Add code to verify correct domain/namespace.
 						if (func.name().value().equals(name)) {
 							address v = address(long(i + 1));
-							if (func.name() != null)
-								func.name().symbol().value = v;
+							fsym.value = v;
 							functionScope.value = v;
 							return functionScope, true;
 						}

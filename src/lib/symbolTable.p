@@ -1273,6 +1273,7 @@ class Namespace extends Symbol {
 		printf("\n");
 		_symbols.print(indent + INDENT, false);
 		printf("\n");
+		printAnnotations(indent + INDENT);
 	}
 
 	public ref<Type> assignThisType(ref<CompileContext> compileContext) {
@@ -1376,6 +1377,7 @@ class PlainSymbol extends Symbol {
 				printf("\n");
 			}
 		}
+		printAnnotations(indent + INDENT);
 	}
 
 	public ref<Type> assignThisType(ref<CompileContext> compileContext) {
@@ -1478,6 +1480,7 @@ class Overload extends Symbol {
 		printf("%*.*c%s Overload %p %s %s\n", indent, indent, ' ', _name.asString(), this, string(visibility()), string(_kind));
 		for (int i = 0; i < _instances.length(); i++)
 			_instances[i].print(indent + INDENT, printChildScopes);
+		printAnnotations(indent + INDENT);
 	}
 
 	public ref<Type> assignThisType(ref<CompileContext> compileContext) {
@@ -1541,6 +1544,7 @@ class OverloadInstance extends Symbol {
 			_parameterScope.definition().printBasic(indent + INDENT);
 			printf("\n");
 		}
+		printAnnotations(indent + INDENT);
 	}
 
 	public ref<Type> assignThisType(ref<CompileContext> compileContext) {
@@ -1771,6 +1775,15 @@ class Symbol {
 
 	public abstract void print(int indent, boolean printChildScopes);
 
+	protected void printAnnotations(int indent) {
+		if (_annotations != null) {
+			for (ref<Call>[string].iterator i = _annotations.begin(); i.hasNext(); i.next()) {
+				printf("%*.*c[Annotation %s]\n", indent, indent, ' ', i.key());
+				i.get().print(indent + INDENT);
+			}
+		}
+	}
+	
 	public ref<Type> assignType(ref<CompileContext> compileContext) {
 		if (_type == null) {
 			if (_inProgress) {

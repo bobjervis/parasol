@@ -916,6 +916,14 @@ class map<class V, class K> {
 	}
 
 	public class iterator {
+		int				_index;
+		ref<map<V, K>>	_dictionary;
+
+		iterator(ref<map<V, K>> dict) {
+			_dictionary = dict;
+			_index = 0;
+		}
+
 		public boolean hasNext() {
 			return _index < _dictionary._allocatedEntries;
 		}
@@ -935,13 +943,6 @@ class map<class V, class K> {
 			return _dictionary._entries[_index].key;
 		}
 
-		iterator(ref<map<V, K>> dict) {
-			_dictionary = dict;
-			_index = 0;
-		}
-
-		int				_index;
-		ref<map<V, K>>	_dictionary;
 	};
 }
 

@@ -58,7 +58,7 @@ run(filename: complex_subscript.p)
 
 // Basic runtime execution tests
 
-//run(filename: try_test.p)
+run(filename: try_test.p)
 run(filename: function_parameter_test.p)
 run(filename: sort_bug.p)
 run(filename: destructor_test.p)
@@ -166,6 +166,8 @@ compile(expect: fail) { "class A { A(int b){} } ref<A> a = new A;" }
 
 compile(expect: fail, message: DUPLICATE) { "class Foo { private int f(int y) { return 0; } public int f(int z) { return z; } }" }
 compile(expect: fail) { "void f() { for (int i = 0; i < 5); i++) printf("hello"); }" }
+
+compile(expect: fail, message: UNDEFINED) { "class A{ X y;}" }	// Undefined member classes should not cause compiler crashes, just an error message
 
 // This tests a regression involving bad code generation and also the ordering of an in-order traversal of
 // the 'int a, b, c;' portion of the line.  The original failure involved not catching the missing parameter

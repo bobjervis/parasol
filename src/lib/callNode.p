@@ -372,7 +372,7 @@ class Call extends ParameterBag {
 				ref<Selection> member = tree.newSelection(r, sym, false, nl.node.location());
 				member.type = sym.type();
 				value = value.coerce(tree, member.type, false, compileContext);
-				ref<Binary> init = tree.newBinary(Operator.ASSIGN, member, value, nl.node.location());
+				ref<Binary> init = tree.newBinary(Operator.ASSIGN, member, value.fold(tree, false, compileContext), nl.node.location());
 				init.type = member.type;
 				if (result != null) {
 					result = tree.newBinary(Operator.SEQUENCE, result, init, location());

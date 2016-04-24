@@ -30,7 +30,12 @@ public class HANDLE extends address {
 
 public HANDLE INVALID_HANDLE_VALUE = HANDLE(address(-1));
 
-class HMODULE = address;
+public class HMODULE = address;
+public class ATOM = char;
+public class HICON = address;
+public class HCURSOR = address;
+public class HBRUSH = address;
+public class HINSTANCE = address;
 
 public abstract int GetModuleFileName(HMODULE hModule, pointer<byte> filename, int filenameSize);
 public abstract HMODULE GetModuleHandle(pointer<byte> filename);
@@ -79,3 +84,25 @@ public abstract address VirtualAlloc(address lpAddress, long sz, unsigned flAllo
 public abstract int VirtualProtect(address lpAddress, long sz, unsigned flNewProtect, ref<unsigned> lpflOldProtect);
 
 public abstract pointer<byte> FormatMessage(unsigned ntstatus);
+
+public class WNDCLASSEX {
+
+	public unsigned cbSize;
+	public unsigned style;
+	public WNDPROC lpfnWndProc;
+	public int cbClsExtra;
+	public int cbWndExtra;
+	public HINSTANCE hInstance;
+	public HICON hIcon;
+	public HCURSOR hCursor;
+	public HBRUSH hbrBackground;
+	public pointer<byte> lpszMenuName;
+	public pointer<byte> lpszClassName;
+	public HICON hIconSm;
+}
+
+class WNDPROC = address;
+
+@Windows("user32.dll", "RegisterCLassExA")
+public abstract ATOM RegisterClassEx(ref<WNDCLASSEX> lpwcx);
+//public ATOM RegisterClassEx(ref<WNDCLASSEX> lpwcx) { return 0; }
