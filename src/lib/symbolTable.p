@@ -406,6 +406,7 @@ class ParameterScope extends Scope {
 	private boolean _hasEllipsis;
 		
 	public address value;				// scratch area for use by code generators
+	public boolean nativeBinding;		// true if this is an nativebinding-annotated external function
 	
 	public ParameterScope(ref<Scope> enclosing, ref<Node> definition, Kind kind) {
 		super(enclosing, definition, 
@@ -1509,7 +1510,11 @@ class OverloadInstance extends Symbol {
 
 	public void print(int indent, boolean printChildScopes) {
 		printf("%*.*c%s OverloadInstance %p %s %s%s", indent, indent, ' ', _name.asString(), this, string(visibility()), string(storageClass()), _overridden ? " overridden" : "");
-		if (_type != null) {
+		if (_parameterScope.nativeBinding) {
+			printf(" @%x ", offset);
+			if (_type != null)
+				_type.print();
+		} else if (_type != null) {
 			printf(" @%d ", offset);
 			_type.print();
 		}

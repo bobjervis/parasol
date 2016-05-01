@@ -236,6 +236,7 @@ public enum SectionType {
 	SOURCE,						// 0x01 the region is in POSIX IEEE P1003.1 USTar archive format.
 	BYTE_CODES,					// 0x02 Parasol byte codes
 	X86_64,						// 0x03 Parasol 64-bit for Intel and AMD processors.
+	X86_64_NEXT,				// 0x04 Parasol 64-bit for Intel and AMD processors, next version (for upgrade scenarios).
 	FILLER
 }
 
@@ -252,7 +253,8 @@ public string sectionTypeName(SectionType st) {
 
 private SectionType[string] sectionTypes = [
 	"byteCodes": 	SectionType.BYTE_CODES,
-	"x86-64": 		SectionType.X86_64
+	"x86-64": 		SectionType.X86_64,
+	"x86-64-next":	SectionType.X86_64_NEXT,
 ];
 
 
@@ -279,4 +281,3 @@ public boolean registerSectionReader(SectionType sectionType, ref<Section> secti
 	readerMap.append(rm);
 	return true;
 }
-

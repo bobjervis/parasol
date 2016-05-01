@@ -17,7 +17,7 @@ namespace parasol:runtime;
 
 import native:windows;
 import parasol:exception.ExceptionContext;
-import parasol:x86_64.X86_64SectionHeader;
+import parasol:x86_64.X86_64NextSectionHeader;
 
 /*
  * Major Release: Incremented when a breaking change is released
@@ -35,7 +35,7 @@ public abstract int eval(int startObject, pointer<pointer<byte>> args, int argsC
 
 // evalNative call the native runtime.  entryPoint is the native function that should be run.
 
-public abstract int evalNative(ref<X86_64SectionHeader> header, address image, pointer<pointer<byte>> args, int argsCount);
+public abstract int evalNative(ref<X86_64NextSectionHeader> header, address image, pointer<pointer<byte>> args, int argsCount);
 
 public abstract boolean setTrace(boolean newValue);
 

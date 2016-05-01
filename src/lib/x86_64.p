@@ -152,7 +152,7 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 	
 	public void writePxi(ref<Pxi> output) {
-		ref<X86_64Section> s = new X86_64Section(this);
+		ref<X86_64NextSection> s = new X86_64NextSection(this);
 		output.declareSection(s);
 	}
 	
@@ -183,6 +183,22 @@ public class X86_64 extends X86_64AssignTemps {
 			vp = pointer<long>(_staticMemory + _pxiHeader.vtablesOffset);
 			for (int i = 0; i < _pxiHeader.vtableData; i++, vp++)
 				*vp += long(address(_staticMemory));
+			/*
+	NativeBinding *nativeBindings = (NativeBinding*)(image + _header.nativeBindingsOffset);
+	for (int i = 0; i < _header.nativeBindingsCount; i++) {
+		HMODULE dll = GetModuleHandle(nativeBindings[i].dllName);
+		if (dll == 0) {
+			printf("Unable to locate DLL %s\n", nativeBindings[i].dllName);
+			*(char*)argc = 0;	// This should cause a crash.
+		} else {
+			nativeBindings[i].address = (void*) GetProcAddress(dll, nativeBindings[i].symbolName);
+			if (nativeBindings[i].address == 0) {
+				printf("Unable to locate DLL %s\n", nativeBindings[i].dllName);
+				*(char*)argc = 0;	// This should cause a crash.
+			}
+		}
+	}
+			 */
 			runtime.setTrace(_arena.trace);
 			returnValue = runtime.evalNative(&_pxiHeader, _staticMemory, &runArgs[0], runArgs.length());
 			runtime.setTrace(false);
@@ -214,7 +230,7 @@ public class X86_64 extends X86_64AssignTemps {
 			return 0, false;
 	}
 
-	public ref<Scope>, boolean getFunctionAddress(ref<ParameterScope> functionScope, ref<CompileContext> compileContext) {
+	public ref<ParameterScope>, boolean getFunctionAddress(ref<ParameterScope> functionScope, ref<CompileContext> compileContext) {
 		ref<Function> func = ref<Function>(functionScope.definition());
 		if (func == null) {
 			if (functionScope.value == null) {
@@ -235,9 +251,54 @@ public class X86_64 extends X86_64AssignTemps {
 					ref<Symbol> fsym = func.name().symbol();
 					ref<Call> binding = fsym.getAnnotation("Windows");
 					if (binding != null) {
-						binding.print(0);
+						ref<NodeList> args = binding.arguments();
+						if (args == null || args.next == null || args.next.next != null) {
+							binding.add(MessageId.BAD_WINDOWS_BINDING, compileContext.pool());
+							return null, false;
+						}
+						ref<Node> dll = args.node;
+						ref<Node> symbol = args.next.node;
+						if (dll.op() != Operator.STRING || symbol.op() != Operator.STRING) {
+							binding.add(MessageId.BAD_WINDOWS_BINDING, compileContext.pool());
+							return null, false;
+						}
+						CompileString dllName = ref<Constant>(dll).value();
+						CompileString symbolName = ref<Constant>(symbol).value();
+						int dllNameOffset = _segments[Segments.BUILT_INS_TEXT].reserve(dllName.length + 1);
+						int symbolNameOffset = _segments[Segments.BUILT_INS_TEXT].reserve(symbolName.length + 1);
+						C.memcpy(_segments[Segments.BUILT_INS_TEXT].at(dllNameOffset), dllName.data, dllName.length);
+						C.memcpy(_segments[Segments.BUILT_INS_TEXT].at(symbolNameOffset), symbolName.data, symbolName.length);
+						int offset = _segments[Segments.NATIVE_BINDINGS].reserve(NativeBinding.bytes);
+						_segments[Segments.NATIVE_BINDINGS].fixup(Segments.BUILT_INS_TEXT, offset, true);
+						_segments[Segments.NATIVE_BINDINGS].fixup(Segments.BUILT_INS_TEXT, offset + address.bytes, true);
+						C.memcpy(_segments[Segments.NATIVE_BINDINGS].at(0), &dllNameOffset, int.bytes);
+						C.memcpy(_segments[Segments.NATIVE_BINDINGS].at(address.bytes), &symbolNameOffset, int.bytes);
+						address v = address(long(offset + 2 * address.bytes));
+						fsym.value = v;
+						fsym.offset = offset + 2 * address.bytes;
+						_nativeBindingSymbols.append(fsym);
+						functionScope.value = v;
+						functionScope.nativeBinding = true;
+/*
+						string dllName = ref<Constant>(dll).value().asString();
+						string symbolName = ref<Constant>(symbol).value().asString();
+						windows.HMODULE dllHandle = windows.GetModuleHandle(&dllName[0]);
+						if (dllHandle == null) {
+							binding.add(MessageId.UNDEFINED, compileContext.pool(), ref<Constant>(dll).value());
+							return null, false;
+						}
+						address entryPoint = windows.GetProcAddress(dllHandle, &symbolName[0]);
+						if (entryPoint == null) {
+							binding.add(MessageId.UNDEFINED, compileContext.pool(), ref<Constant>(symbol).value());
+							return null, false;
+						}
+						printf("HMODULE = %p\n", dllHandle);
+						printf("Binding to '%s':'%s'\n", dllName, symbolName);
 						assert(false);
+ */
+						return functionScope, true;
 					}
+					// Runtime built-ins, accessed via ordinal. 
 					for (int i = 0;; i++) {
 						pointer<byte> name = runtime.builtInFunctionName(i);
 						if (name == null)
@@ -378,7 +439,7 @@ public class X86_64 extends X86_64AssignTemps {
 			closeCodeSegment(CC.NOP, null);
 			insertPreamble();
 			if (node != null)
-				emitSourceLocation(compileContext.current().file(), node.location());
+				emitSourceLocation(parameterScope.file(), node.location());
 			inst(X86.ENTER, 0);
 			int registerArgs = 0;
 			if (parameterScope.hasThis()) {
@@ -1168,12 +1229,12 @@ public class X86_64 extends X86_64AssignTemps {
 			if (func.body != null) {
 				if (func.name() == null) {
 					ref<ParameterScope> functionScope = _arena.createParameterScope(compileContext.current(), func, ParameterScope.Kind.FUNCTION);
-					ref<Scope> funcScope;
+					ref<ParameterScope> funcScope;
 					boolean isBuiltIn;
 										
 					(funcScope, isBuiltIn) = getFunctionAddress(functionScope, compileContext);
 					if (isBuiltIn)
-						instBuiltIn(X86.MOV, R(func.register), functionScope.value);
+						instBuiltIn(X86.MOV, R(func.register), functionScope);
 					else
 						instFunc(X86.MOV, R(func.register), functionScope);
 				}
@@ -2841,12 +2902,9 @@ public class X86_64 extends X86_64AssignTemps {
 				call.print(4);
 				assert(false);
 			}
-			if (overload != null) {
-				if (!instCall(overload, compileContext)) {
-					call.print(0);
-					assert(false);
-				}
-			} else
+			if (overload != null)
+				instCall(overload, compileContext);
+			else
 				inst(X86.CALL, func);
 			break;
 			

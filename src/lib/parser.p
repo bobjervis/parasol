@@ -1614,20 +1614,24 @@ class Parser {
 				if (t == Token.RIGHT_PARENTHESIS) {
 				} else {
 					_scanner.pushBack(t);
-					ref<Node> annotationArguments = parseExpression(0);
-					if (annotationArguments.op() == Operator.SYNTAX_ERROR)
-						return annotationArguments;
-					t = _scanner.next();
-					if (t != Token.RIGHT_PARENTHESIS) {
-						_scanner.pushBack(t);
-						return resync(MessageId.SYNTAX_ERROR);
+					for (;;) {
+						ref<Node> annotationArguments = parseExpression(binaryOperators.precedence(Operator.ASSIGN));
+						if (annotationArguments.op() == Operator.SYNTAX_ERROR)
+							return annotationArguments;
+						ref<NodeList> nl = _tree.newNodeList(annotationArguments);
+						if (last != null)
+							last.next = nl;
+						else
+							arguments = nl;
+						last = nl;
+						t = _scanner.next();
+						if (t == Token.RIGHT_PARENTHESIS)
+							break;
+						else if (t != Token.COMMA) {
+							_scanner.pushBack(t);
+							return resync(MessageId.SYNTAX_ERROR);
+						}
 					}
-					ref<NodeList> nl = _tree.newNodeList(annotationArguments);
-					if (last != null)
-						last.next = nl;
-					else
-						arguments = nl;
-					last = nl;
 				}
 			} else
 				_scanner.pushBack(t);

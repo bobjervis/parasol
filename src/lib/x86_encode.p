@@ -39,6 +39,7 @@ import parasol:compiler.ParameterScope;
 import parasol:compiler.PlainSymbol;
 import parasol:compiler.Reference;
 import parasol:compiler.Scope;
+import parasol:compiler.Segment;
 import parasol:compiler.Selection;
 import parasol:compiler.StorageClass;
 import parasol:compiler.Symbol;
@@ -134,8 +135,34 @@ class DeferredTry {
 
 private int FIRST_STACK_PARAM_OFFSET = 16;
 
+enum Segments {
+	CODE,
+	EXCEPTION_TABLE,
+	SOURCE_LOCATIONS,
+	BUILT_INS,
+	NATIVE_BINDINGS,
+	VTABLES,
+	TYPES,
+
+	DATA_8,
+	STRINGS,
+	DATA_4,
+	DATA_2,
+	DATA_1,
+
+	BUILT_INS_TEXT,
+	RELOCATIONS,
+	MAXIMUM
+}
+
+class NativeBinding {
+	pointer<byte> dllName;
+	pointer<byte> symbolName;
+	address functionAddress;
+}
+
 class X86_64Encoder extends Target {
-	protected X86_64SectionHeader _pxiHeader;
+	protected X86_64NextSectionHeader _pxiHeader;
 	protected memory.NoReleasePool _storage;
 	protected pointer<byte> _staticMemory;
 	protected int _staticMemoryLength;
@@ -143,7 +170,9 @@ class X86_64Encoder extends Target {
 	protected ExceptionEntry[] _exceptionTable;
 	protected SourceLocation[] _sourceLocations;
 	protected DeferredTry[] _deferredTry;
-
+	protected ref<Segment<Segments>>[Segments] _segments;
+	protected ref<Symbol>[] _nativeBindingSymbols;
+	
 	private ref<CodeSegment>[] _exceptionHandlers;
 	private int[] _staticDataSize;
 	private byte[] _imageData;								// Used to persist the symbol table
@@ -163,6 +192,24 @@ class X86_64Encoder extends Target {
 															// file.
 	
 	boolean generateCode(ref<FileStat> mainFile, int valueOffset, ref<CompileContext> compileContext) {
+		_segments.resize(Segments.MAXIMUM);
+		_segments[Segments.CODE] = new Segment<Segments>(8, 0x37);
+		_segments[Segments.EXCEPTION_TABLE] = new Segment<Segments>(8);
+		_segments[Segments.SOURCE_LOCATIONS] = new Segment<Segments>(8);
+		_segments[Segments.BUILT_INS] = new Segment<Segments>(8);
+		_segments[Segments.NATIVE_BINDINGS] = new Segment<Segments>(8);
+		_segments[Segments.VTABLES] = new Segment<Segments>(8);
+		_segments[Segments.TYPES] = new Segment<Segments>(8);
+
+		_segments[Segments.DATA_8] = new Segment<Segments>(8);
+		_segments[Segments.STRINGS] = new Segment<Segments>(4);
+		_segments[Segments.DATA_4] = new Segment<Segments>(4);
+		_segments[Segments.DATA_2] = new Segment<Segments>(2);
+		_segments[Segments.DATA_1] = new Segment<Segments>(1);
+
+		_segments[Segments.BUILT_INS_TEXT] = new Segment<Segments>(1);
+		_segments[Segments.RELOCATIONS] = new Segment<Segments>(4);
+		
 		// Initialize storage - somewhere along here needs to happen
 		// 
 		_pxiHeader.entryPoint = generateFunction(mainFile.fileScope(), compileContext);
@@ -175,6 +222,7 @@ class X86_64Encoder extends Target {
 			return false;
 		}
 		appendExceptionEntry(int.MAX_VALUE, null);
+		
 		_pxiHeader.builtInOffset = _code.length();
 		
 		for (ref<Fixup> f = _fixups; f != null; f = f.next) {
@@ -226,7 +274,41 @@ class X86_64Encoder extends Target {
 		relocateStaticData(4);
 		relocateStaticData(2);
 		relocateStaticData(1);
+		_dataOffsets[0] = _code.length();
 		
+		int startOfSegments = _code.length();
+		int segmentsLength = startOfSegments;
+		_pxiHeader.nativeBindingsCount = _segments[Segments.NATIVE_BINDINGS].reserve(0) / NativeBinding.bytes;
+		
+		// First link the segments base addresses.
+		
+		for (int i = 0; i < int(Segments.MAXIMUM); i++) {
+			Segments segment = Segments(i);
+			
+			segmentsLength = _segments[segment].link(segmentsLength);
+		}
+		
+		// Second resolve fixups within the segments.
+		
+		for (int i = 0; i < int(Segments.MAXIMUM); i++) {
+			Segments segment = Segments(i);
+			
+			_segments[segment].resolveFixups(this, &_segments);
+		}
+		
+		_pxiHeader.nativeBindingsOffset = _segments[Segments.NATIVE_BINDINGS].offset();
+		for (int i = 0; i < _nativeBindingSymbols.length(); i++)
+			_nativeBindingSymbols[i].offset += _pxiHeader.nativeBindingsOffset;
+		
+		_dataMap[0].append(_nativeBindingSymbols);
+		
+		for (int i = 0; i < int(Segments.MAXIMUM); i++) {
+			Segments segment = Segments(i);
+			
+			_code.resize(_segments[segment].offset());
+			_code.append(*_segments[segment].content());
+		}
+
 		_pxiHeader.relocationOffset = _code.length();
 
 		for (ref<Fixup> f = _fixups; f != null; f = f.next) {
@@ -268,7 +350,7 @@ class X86_64Encoder extends Target {
 				break;
 			
 			case	RELATIVE32_TYPE:				// Fixup value is a ref<Type>
-				ref<Type> type = ref<Type>(f.value);
+//				ref<Type> type = ref<Type>(f.value);
 				ipAdjust = *ref<int>(&_code[f.location]) - 1;	// copyToImage returns the offset + 1
 				*ref<int>(&_code[f.location]) = int(_pxiHeader.typeDataOffset + ipAdjust - (f.location + int.bytes));
 //				printf("Reference @%x to image offset %x (ordinal %x) ", f.location, _imageDataOffset + ipAdjust, type.copyToImage(this));
@@ -305,7 +387,7 @@ class X86_64Encoder extends Target {
 				break;
 				
 			case	ABSOLUTE64_TYPE:				// Fixup value is a ref<Type>
-				type = ref<Type>(f.value);
+				ref<Type> type = ref<Type>(f.value);
 				location = _pxiHeader.typeDataOffset + f.location;
 				*ref<int>(&_code[location]) = _pxiHeader.typeDataOffset + type.copyToImage(this) - 1;
 				definePxiFixup(location);
@@ -326,6 +408,11 @@ class X86_64Encoder extends Target {
 				
 			case	BUILTIN32:						// Fixup value is builtIn index
 				*ref<int>(&_code[f.location]) = _pxiHeader.builtInOffset + int(f.value) * long.bytes - 
+								(f.location + int.bytes);
+				break;
+				
+			case	NATIVE32:
+				*ref<int>(&_code[f.location]) = _pxiHeader.nativeBindingsOffset + int(f.value) -
 								(f.location + int.bytes);
 				break;
 				
@@ -613,15 +700,17 @@ class X86_64Encoder extends Target {
 	}
 	
 	protected void assignStaticSymbolStorage(ref<Symbol> symbol, ref<CompileContext> compileContext) {
-		symbol.value = symbol;
-		ref<Type> type = symbol.type();
-		int size = type.size();
-		int alignment = type.alignment();
-		assignStaticRegion(symbol, alignment, size);
-		if (symbol.storageClass() == StorageClass.CONSTANT) {
-			ref<PlainSymbol> sym = ref<PlainSymbol>(symbol);		// constants are constrained to be Plain
-			long value = sym.initializer().foldInt(this, compileContext);
-			staticFixup(FixupKind.INT_CONSTANT, symbol, 0, address(value));
+		if (symbol.value == null) {
+			symbol.value = symbol;
+			ref<Type> type = symbol.type();
+			int size = type.size();
+			int alignment = type.alignment();
+			assignStaticRegion(symbol, alignment, size);
+			if (symbol.storageClass() == StorageClass.CONSTANT) {
+				ref<PlainSymbol> sym = ref<PlainSymbol>(symbol);		// constants are constrained to be Plain
+				long value = sym.initializer().foldInt(this, compileContext);
+				staticFixup(FixupKind.INT_CONSTANT, symbol, 0, address(value));
+			}
 		}
 	}
 	
@@ -629,6 +718,14 @@ class X86_64Encoder extends Target {
 		if (_dataMap.length() <= alignment) {
 			_dataMap.resize(alignment + 1);
 			_staticDataSize.resize(alignment + 1);
+		}
+		if (symbol.name().asString() == "opToByteCodeMap") {
+			static boolean firstTime = true;
+			
+			if (firstTime)
+				firstTime = false;
+//			else
+//				throw Exception();
 		}
 		_dataMap[alignment].append(symbol);
 		symbol.offset = _staticDataSize[alignment];
@@ -644,13 +741,12 @@ class X86_64Encoder extends Target {
 		for (int i = 8; i > 0; i >>= 1) {
 			int length = _dataOffsets[i / 2] - _dataOffsets[i];
 			if (length > 0)
-				printf("  data align %d length %5d\n", i, length);
+				printf("        data align %d            %x length %5x\n", i, _dataOffsets[i], length);
 		}
-		printf("  string       length %5d\n", _strings.length());
 		return d.disassemble();
 	}
 
-	public abstract ref<Scope>, boolean getFunctionAddress(ref<ParameterScope> functionScope, ref<CompileContext> compileContext);
+	public abstract ref<ParameterScope>, boolean getFunctionAddress(ref<ParameterScope> functionScope, ref<CompileContext> compileContext);
 	
 	int generateFunction(ref<Scope> scope, ref<CompileContext> compileContext) {
 		// Sketch of the code generator:
@@ -2495,7 +2591,7 @@ class X86_64Encoder extends Target {
 	}
 	
 	boolean instCall(ref<ParameterScope> functionScope, ref<CompileContext> compileContext) {
-		ref<Scope> func;
+		ref<ParameterScope> func;
 		boolean isBuiltIn;
 		
 		(func, isBuiltIn) = getFunctionAddress(functionScope, compileContext);
@@ -2504,7 +2600,10 @@ class X86_64Encoder extends Target {
 		if (isBuiltIn) {
 			emit(0xff);
 			modRM(0, 2, 5);
-			fixup(FixupKind.BUILTIN32, functionScope.value);
+			if (functionScope.nativeBinding)
+				fixup(FixupKind.NATIVE32, functionScope.value);
+			else
+				fixup(FixupKind.BUILTIN32, functionScope.value);
 			emitInt(0);
 		} else {
 			emit(0xe8);
@@ -2515,7 +2614,7 @@ class X86_64Encoder extends Target {
 	}
 	
 	boolean instLoadFunctionAddress(R dest, ref<ParameterScope> functionScope, ref<CompileContext> compileContext) {
-		ref<Scope> func;
+		ref<ParameterScope> func;
 		boolean isBuiltIn;
 		
 		(func, isBuiltIn) = getFunctionAddress(functionScope, compileContext);
@@ -2526,7 +2625,10 @@ class X86_64Encoder extends Target {
 			// MOV
 			emit(0x8b);
 			modRM(0, rmValues[dest], 5);
-			fixup(FixupKind.BUILTIN32, functionScope.value);
+			if (functionScope.nativeBinding)
+				fixup(FixupKind.NATIVE32, functionScope.value);
+			else
+				fixup(FixupKind.BUILTIN32, functionScope.value);
 			emitInt(0);
 		} else {
 			// LEA
@@ -2552,13 +2654,16 @@ class X86_64Encoder extends Target {
 		}
 	}
 	
-	void instBuiltIn(X86 instruction, R dest, address builtInId) {
+	void instBuiltIn(X86 instruction, R dest, ref<ParameterScope> functionScope) {
 		switch (instruction) {
 		case	MOV:			
 			emit(byte(REX_W | rexValues[dest]));
 			emit(0x8b);
 			modRM(0, rmValues[dest], 5);
-			fixup(FixupKind.BUILTIN32, builtInId);
+			if (functionScope.nativeBinding)
+				fixup(FixupKind.NATIVE32, functionScope.value);
+			else
+				fixup(FixupKind.BUILTIN32, functionScope.value);
 			emitInt(0);
 			break;
 			
@@ -3376,7 +3481,7 @@ class X86_64Encoder extends Target {
 		pxiFile.write(_builtInsList);
 	}
 	
-	public ref<X86_64SectionHeader> pxiHeader() {
+	public ref<X86_64NextSectionHeader> pxiHeader() {
 		return &_pxiHeader;
 	}
 
@@ -3404,7 +3509,8 @@ enum FixupKind {
 	ABSOLUTE64_TYPE,				// Fixup value is a ref<Type>
 	ABSOLUTE64_VTABLE,				// Fixup value is a ref<ClassScope>
 	INT_CONSTANT,					// Fixup value is the value of the constant
-	BUILTIN32						// Fixup value is builtIn index
+	BUILTIN32,						// Fixup value is builtIn index
+	NATIVE32,						// Fixup value is NativeBindings index
 }
 
 class Fixup {
@@ -3459,6 +3565,10 @@ class Fixup {
 			
 		case	BUILTIN32:						// Fixup value is builtIn index
 			printf("    @%x BUILTIN32 %p\n", location, value);
+			break;
+			
+		case	NATIVE32:						// Fixup value is nativeBindings index
+			printf("    @%x NATIVE32 %p\n", location, value);
 			break;
 			
 		default:

@@ -33,7 +33,7 @@ class Disassembler {
 	private int _vtablesEndOffset;
 	private pointer<ExceptionEntry> _exceptionsEndOffset;
 	private int _imageLength;
-	private ref<X86_64SectionHeader> _pxiHeader;
+	private ref<X86_64NextSectionHeader> _pxiHeader;
 	private ref<int[]> _pxiFixups;
 	private ref<Fixup> _fixups;
 	private int _offset;
@@ -50,7 +50,7 @@ class Disassembler {
 	private pointer<SourceLocation> _sourceLocations;
 	private int _sourceLocationsCount;
 	
-	Disassembler(ref<Arena> arena, long logical, int imageLength, pointer<byte> physical, ref<X86_64SectionHeader> pxiHeader) {
+	Disassembler(ref<Arena> arena, long logical, int imageLength, pointer<byte> physical, ref<X86_64NextSectionHeader> pxiHeader) {
 		_arena = arena;
 		_logical = logical;
 		_imageLength = imageLength;
@@ -94,7 +94,12 @@ class Disassembler {
 			}
 		}
 		printf("\n    symbols for      %8x - %8x\n", _length, _imageLength);
-		
+		for (int i = 0; i < _dataMapLength; i++) {
+			string prefix;
+			prefix.printf("[%d]", i);
+			printf("      %8s %8.8x %s\n", prefix, _dataMap[i].offset, _dataMap[i].name().asString());
+		}
+		printf("\n    vtables\n");
 		pointer<address> vp = pointer<address>(_physical + _pxiHeader.vtablesOffset);
 		ref<Scope> rawScope;
 		ref<ClasslikeScope> scope;
@@ -134,6 +139,19 @@ class Disassembler {
 				pb += s.length() + 1;
 				printf("    [%8.8x] %d \"%s\"\n", addr, *pi, s);
 				addr += address.bytes;
+			}
+		}
+		if (_pxiHeader.nativeBindingsCount > 0) {
+			printf("\n  Native Bindings:\n");
+			
+			int addr = _pxiHeader.nativeBindingsOffset;
+			pointer<NativeBinding> nb = pointer<NativeBinding>(_physical + addr);
+			
+			for (int i = 0; i < _pxiHeader.nativeBindingsCount; i++, nb++) {
+				string d(_physical + int(nb.dllName));
+				string s(_physical + int(nb.symbolName));
+				printf("    [%8.8x] %x %x %20s %s\n", addr, int(nb.dllName), int(nb.symbolName), d, s);
+				addr += NativeBinding.bytes;
 			}
 		}
 		printf("\n");
@@ -1429,6 +1447,7 @@ class Disassembler {
 			// It's somewhere in static data.
 			int index = findSymbol(location);
 			if (index >= 0) {
+				printf(" %s", _dataMap[index].name().asString());
 				if (_dataMap[index].offset < location)
 					printf("+%d", location - _dataMap[index].offset);
 			}
@@ -1718,43 +1737,89 @@ escape0Fmnemonics[0x8d] = "jge";
 escape0Fmnemonics[0x8e] = "jle";
 escape0Fmnemonics[0x8f] = "jg";
 
-public void printHeader(ref<X86_64SectionHeader> header, long fileOffset) {
+public void printHeader(ref<X86_64NextSectionHeader> header, long fileOffset) {
 	printf("\n");
 	if (fileOffset >= 0)
-		printf("        image offset     %8x\n", fileOffset);
-	printf("        entryPoint       %8x\n", header.entryPoint);
-	printf("        builtInOffset    %8x", header.builtInOffset);
+		printf("        image offset         %8x\n", fileOffset);
+	printf("        entryPoint           %8x\n", header.entryPoint);
+	printf("        builtInOffset        %8x", header.builtInOffset);
 	if (fileOffset >= 0)
 		printf(" (file offset %x)", header.builtInOffset + fileOffset);
 	printf("\n");
-	printf("        builtInCount     %8d.\n", header.builtInCount);
-	printf("        vtablesOffset    %8x", header.vtablesOffset);
+	printf("        builtInCount         %8d.\n", header.builtInCount);
+	printf("        vtablesOffset        %8x", header.vtablesOffset);
 	if (fileOffset >= 0)
 		printf(" (file offset %x)", header.vtablesOffset + fileOffset);
 	printf("\n");
-	printf("        vtableData       %8x\n", header.vtableData);
-	printf("        typeDataOffset   %8x", header.typeDataOffset);
+	printf("        vtableData           %8x\n", header.vtableData);
+	printf("        typeDataOffset       %8x", header.typeDataOffset);
 	if (fileOffset >= 0)
 		printf(" (file offset %x)", header.typeDataOffset + fileOffset);
 	printf("\n");
-	printf("        typeDataLength   %8x\n", header.typeDataLength);
-	printf("        stringsOffset    %8x", header.stringsOffset);
+	printf("        typeDataLength       %8x\n", header.typeDataLength);
+	printf("        stringsOffset        %8x", header.stringsOffset);
 	if (fileOffset >= 0)
 		printf(" (file offset %x)", header.stringsOffset + fileOffset);
 	printf("\n");
-	printf("        stringsLength    %8x\n", header.stringsLength);
-	printf("        relocationOffset %8x", header.relocationOffset);
+	printf("        stringsLength        %8x\n", header.stringsLength);
+	printf("        nativeBindingsOffset %8x", header.nativeBindingsOffset);
+	if (fileOffset >= 0)
+		printf(" (file offset %x)", header.nativeBindingsOffset + fileOffset);
+	printf("\n");
+	printf("        nativeBindingsCount  %8d.\n", header.nativeBindingsCount);
+	printf("        relocationOffset     %8x", header.relocationOffset);
 	if (fileOffset >= 0)
 		printf(" (file offset %x)", header.relocationOffset + fileOffset);
 	printf("\n");
-	printf("        relocationCount  %8x\n", header.relocationCount);
-	printf("        builtInsText     %8x", header.builtInsText);
+	printf("        relocationCount      %8x\n", header.relocationCount);
+	printf("        builtInsText         %8x", header.builtInsText);
 	if (fileOffset >= 0)
 		printf(" (file offset %x)", header.builtInsText + fileOffset);
 	printf("\n");
-	printf("        exceptionsOffset %8x", header.exceptionsOffset);
+	printf("        exceptionsOffset     %8x", header.exceptionsOffset);
 	if (fileOffset >= 0)
 		printf(" (file offset %x)", header.exceptionsOffset + fileOffset);
 	printf("\n");
-	printf("        exceptionsCount  %8d.\n", header.exceptionsCount);
+	printf("        exceptionsCount      %8d.\n", header.exceptionsCount);
+}
+
+public void printHeader(ref<X86_64SectionHeader> header, long fileOffset) {
+	printf("\n");
+	if (fileOffset >= 0)
+		printf("        image offset         %8x\n", fileOffset);
+	printf("        entryPoint           %8x\n", header.entryPoint);
+	printf("        builtInOffset        %8x", header.builtInOffset);
+	if (fileOffset >= 0)
+		printf(" (file offset %x)", header.builtInOffset + fileOffset);
+	printf("\n");
+	printf("        builtInCount         %8d.\n", header.builtInCount);
+	printf("        vtablesOffset        %8x", header.vtablesOffset);
+	if (fileOffset >= 0)
+		printf(" (file offset %x)", header.vtablesOffset + fileOffset);
+	printf("\n");
+	printf("        vtableData           %8x\n", header.vtableData);
+	printf("        typeDataOffset       %8x", header.typeDataOffset);
+	if (fileOffset >= 0)
+		printf(" (file offset %x)", header.typeDataOffset + fileOffset);
+	printf("\n");
+	printf("        typeDataLength       %8x\n", header.typeDataLength);
+	printf("        stringsOffset        %8x", header.stringsOffset);
+	if (fileOffset >= 0)
+		printf(" (file offset %x)", header.stringsOffset + fileOffset);
+	printf("\n");
+	printf("        stringsLength        %8x\n", header.stringsLength);
+	printf("        relocationOffset     %8x", header.relocationOffset);
+	if (fileOffset >= 0)
+		printf(" (file offset %x)", header.relocationOffset + fileOffset);
+	printf("\n");
+	printf("        relocationCount      %8x\n", header.relocationCount);
+	printf("        builtInsText         %8x", header.builtInsText);
+	if (fileOffset >= 0)
+		printf(" (file offset %x)", header.builtInsText + fileOffset);
+	printf("\n");
+	printf("        exceptionsOffset     %8x", header.exceptionsOffset);
+	if (fileOffset >= 0)
+		printf(" (file offset %x)", header.exceptionsOffset + fileOffset);
+	printf("\n");
+	printf("        exceptionsCount      %8d.\n", header.exceptionsCount);
 }

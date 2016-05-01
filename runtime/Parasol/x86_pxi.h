@@ -36,6 +36,8 @@ public:
 	int builtInsText;		// Offset in image of built-ins text
 	int exceptionsOffset;	// Offset in image of exception table
 	int exceptionsCount;	// Number of ExceptionEntry elements in the table
+//	int nativeBindingsOffset;// Offset in image of native bindings
+//	int nativeBindingsCount;// Number of native bindings
 };
 
 class X86_64Section : public pxi::Section {
@@ -47,6 +49,44 @@ public:
 	X86_64Section(FILE *pxiFile, long long length);
 
 	virtual ~X86_64Section();
+
+	virtual bool run(char **args, int *returnValue, long long runtimeFlags);
+
+	bool valid() {
+		return _image != null;
+	}
+
+};
+
+class X86_64SectionHeaderNext {
+public:
+	int entryPoint;			// Object id of the starting function to run in the image
+	int builtInOffset;		// Offset in image of built-in table
+	int builtInCount;		// Total number of built-ins
+	int vtablesOffset;		// Offset in image of vtables
+	int vtableData;			// Total number of vtable slots
+	int typeDataOffset;		// Offset in image of type data
+	int typeDataLength;		// Total number of bytes of type data
+	int stringsOffset;		// Offset in image of strings area
+	int stringsLength;		// Total number of bytes in strings area
+	int relocationOffset;	// Offset in image of relocations list
+	int relocationCount;	// Total number of relocations
+	int builtInsText;		// Offset in image of built-ins text
+	int exceptionsOffset;	// Offset in image of exception table
+	int exceptionsCount;	// Number of ExceptionEntry elements in the table
+	int nativeBindingsOffset;// Offset in image of native bindings
+	int nativeBindingsCount;// Number of native bindings
+};
+
+class X86_64SectionNext : public pxi::Section {
+	X86_64SectionHeaderNext _header;
+	void *_image;
+	size_t _imageLength;
+
+public:
+	X86_64SectionNext(FILE *pxiFile, long long length);
+
+	virtual ~X86_64SectionNext();
 
 	virtual bool run(char **args, int *returnValue, long long runtimeFlags);
 

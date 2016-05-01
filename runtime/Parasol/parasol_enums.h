@@ -8,6 +8,7 @@ enum SectionType {
 	ST_SOURCE,
 	ST_BYTE_CODES,
 	ST_X86_64,
+	ST_X86_64_NEXT,
 	ST_FILLER,
 };
 enum ByteCodes {

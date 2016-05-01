@@ -22,7 +22,9 @@ string className = "TestClass";
 
 w.lpszClassName = &className[0];
 
+print("About to register class...\n");
 windows.ATOM windowClass = windows.RegisterClassEx(&w);
+print("Class registered\n");
 
 assert(windowClass != 0);
 

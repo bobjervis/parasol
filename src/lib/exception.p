@@ -74,6 +74,7 @@ public class Exception {
 		string tag = "->";
 		int lowCode = int(runtime.lowCodeAddress());
 		int staticMemoryLength = int(runtime.highCodeAddress()) - lowCode;
+		printf("staticMemoryLength = %x\n", staticMemoryLength);
 		while (_exceptionContext.valid(fp)) {
 //			printf("fp = %p ip = %p relative = %x", fp, ip, int(ip) - lowCode);
 			pointer<address> stack = pointer<address>(fp);

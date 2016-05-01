@@ -30,19 +30,30 @@ public class Pair<class K, class V> {
 	}
 }
 
-public class vector<class E> extends vector<E, int>{
+// Note: compiler code requires that this definition of 'vector' appears first. TODO: Remove this dependency.
+class vector<class E> extends vector<E, int>{
+	public vector() {
+	}
+	
 	public vector(int initialSize) {
+		super(initialSize);
 	}
 	
 	public vector(vector<E> other) {
+		super(other);
 	}
 	
 	public vector(vector<E, int> other) {
+		super(other);
 	}
 	
+	~vector() {
+	}
 }
 
-public class vector<class E, class I> {
+@Shape
+class vector<class E, class I> {
+	@Constant
 	private static int MIN_CAPACITY = 0x10;
 
 	private I _length;
@@ -51,18 +62,23 @@ public class vector<class E, class I> {
 	
 	public vector(I initialSize) {
 		_length = I(0);
+		_capacity = I(0);
 		resize(initialSize);
 	}
 	
 	public vector() {
+		_capacity = I(0);
 		_length = I(0);
 	}
 	
 	public vector(vector<E, I> other) {
+		_capacity = I(0);
+		_length = I(0);
 		append(other);
 	}
 	
 	~vector() {
+		memory.free(_data);
 	}
 	
 	public void append(vector<E, I> other) {
@@ -82,6 +98,12 @@ public class vector<class E, class I> {
 	
 	public void append(E other) {
 		resize(I(int(_length) + 1));
+//		print("resize done\n");
+		_data[int(_length) - 1] = other;
+	}
+
+	public void append(E other, ref<memory.Allocator> allocator) {
+		resize(I(int(_length) + 1), allocator);
 //		print("resize done\n");
 		_data[int(_length) - 1] = other;
 	}
@@ -109,7 +131,7 @@ public class vector<class E, class I> {
 			mid = (max + min) / 2;
 			relation = key.compare(_data[I(mid)]);
 			if (relation == 0)
-				return I(mid);
+				return I(mid + 1);
 			if (relation < 0)
 				max = mid - 1;
 			else
@@ -127,6 +149,13 @@ public class vector<class E, class I> {
 		_capacity = I(0);
 	}
 	
+	public void clear(ref<memory.Allocator> allocator) {
+		allocator.free(_data);
+		_data = null;
+		_length = I(0);
+		_capacity = I(0);
+	}
+	
 	public boolean contains(E probe) {
 		return false;
 	}
@@ -137,9 +166,9 @@ public class vector<class E, class I> {
 	}
 	
 	public void deleteAll() {
-//		for (int i = 0; i < _length; i++)
-//			delete _data[i];
-//		clear();
+		for (int i = 0; i < _length; i++)
+			delete _data[i];
+		clear();
 	}
 
 	public I find(E key) {
@@ -148,6 +177,10 @@ public class vector<class E, class I> {
 	
 	public E get(I index) {
 		return _data[int(index)];
+	}
+	
+	public E getModulo(I index) {
+		return _data[int(index) % int(_length)];
 	}
 	
 	public void insert(I index, E value) {
@@ -218,6 +251,37 @@ public class vector<class E, class I> {
 		_length = newLength;
 	}
 	
+	public void resize(I newLength, ref<memory.Allocator> allocator) {
+		I newSize;
+		if (_data != null) {
+			if (int(_capacity) >= int(newLength)) {
+				if (int(newLength) == 0)
+					clear(allocator);
+				else
+					_length = newLength;
+				return;
+			}
+			newSize = reservedSize(newLength);
+			if (_capacity == newSize) {
+				_length = newLength;
+				return;
+			}
+		} else {
+			if (int(newLength) == 0)
+				return;
+			newSize = reservedSize(newLength);
+		}
+		pointer<E> a = pointer<E>(allocator.alloc(int(newSize) * E.bytes));
+		if (_data != null) {
+			for (I i = I(0); int(i) < int(_length); i = I(int(i) + 1))
+				a[int(i)] = _data[int(i)];
+			allocator.free(_data);
+		}
+		_capacity = newSize;
+		_data = a;
+		_length = newLength;
+	}
+	
 	private I reservedSize(I length) {
 		I usedSize = length;
 		I allocSize = I(MIN_CAPACITY);
@@ -230,9 +294,14 @@ public class vector<class E, class I> {
 		_data[int(index)] = value;
 	}
 	
+	public void setModulo(I index, E value) {
+		_data[int(index) % int(_length)] = value;
+	}
+
 	public pointer<E> elementAddress(I index) {
 		return _data + int(index);
 	}
+	
 	
 	public void slice(vector<E, I> source, I beginIndex, I endIndex) {
 		I len = I(int(endIndex) - int(beginIndex));
@@ -244,7 +313,318 @@ public class vector<class E, class I> {
 	public void sort() {
 		sort(true);
 	}
+	/*
+	   sort - sorts using the quick sort routine
+
+	Background
+
+	The Quicker Sort algorithm was first described by C.A.R.Hoare in the
+	Computer Journal, No. 5 (1962), pp.10..15, and in addition is frequently
+	described in computing literature, notably in D. Knuth's Sorting and
+	Searching.  The method used here includes a number of refinements:
+
+	- The median-of-three technique described by Singleton (Communications
+	  of the A.C.M., No 12 (1969) pp 185..187) is used, where the median
+	  operation is also the special case sort for 3 elements.  This slightly
+	  improves the average speed, especially when comparisons are slower
+	  than exchanges, but more importantly it prevents worst-case behavior
+	  on partly sorted files.  If a simplistic quicker-sort is run on a file
+	  which is only slightly disordered (a common need in some applications)
+	  then it is as slow as a bubble-sort.  The median technique prevents
+	  this.
+
+	  Another serious problem with the plain algorithm is that worst-case
+	  behavior causes very deep recursion (almost one level per table
+	  element !), so again it is best to use the median technique.
+
+		The comparison function accepts two arguments, elem1
+	        and elem2, each a pointer to an entry in the table. The
+	        comparison function compares each of the pointed-to items
+	        (*elem1 and *elem2), and returns an integer based on the result
+	        of the comparison.
+
+	                        If the items            fcmp returns
+
+	                        *elem1 <  *elem2         an integer < 0
+	                        *elem1 == *elem2         0
+	                        *elem1 >  *elem2         an integer > 0
+
+	        In the comparison, the less than symbol (<) means that the left
+	        element should appear before the right element in the final,
+	        sorted sequence. Similarly, the greater than (>) symbol
+	        means that the left element should appear after the right
+	        element in the final, sorted sequence.
+
+	  The internal contents of the records are never inspected by qsort.  It
+	  depends entirely upon compare to decide the format and value of the records.
+	  This allows the content of the records to be of any fixed length type -
+	  formatted text, floating point, pointer to variable length record, etc. -
+	  so long as each record is understood by compare.
+
+	  The quicker sort algorithm will in general change the relative ordering
+	  of records which may compare as equal.  For example, if it is attempted
+	  to use two passes of quick sort on an order file, first by date and then
+	  by customer name, the result will be that the second sort pass randomly
+	  jumbles the dates.  It is necessary to design the compare() function to
+	  consider all the keys and sort in one pass.
+
+		- After the compare pass is made over the array, the pivot is moved
+		  to the final boundary point, and the remaining parts of the array
+		  are sorted.  The code avoids having to sort pivot again, and also
+		  uses tail recursion on the larger portion of the array.  This will
+		  tend to minimize the depth of the recursion.
+	*/
+	public void sort(boolean ascending) {
+		if (int(_length) == 0)
+			return;
+		int descendingAdjust = 1;
+		if (!ascending)
+			descendingAdjust = -1;
+		qsort(_data, int(_length), descendingAdjust);
+	}
+	
+	private static void qsort(pointer<E> pivot, int nElem, int descendingAdjust) { 
+		pointer<E> left, right;
+		int lNum;
+
+		for	(;;) {
+			if (nElem <= 2){
+				if (nElem == 2 &&
+					pivot[0].compare(pivot[1]) * descendingAdjust > 0)
+					exchange(pivot, pivot + 1);
+				return;
+			}
+
+			right = pivot + (nElem - 1);
+			left  = pivot + (nElem >> 1);
+
+				/*  sort the pivot, left, and 
+					right elements for "median of 3" */
+
+			if (left.compare(*right) * descendingAdjust > 0)
+				exchange(left, right);
+
+				// assert *right >= *left
+
+			if (left.compare(*pivot) * descendingAdjust > 0)
+				exchange(left, pivot);
+			else if (pivot.compare(*right) * descendingAdjust > 0)
+				exchange(pivot, right);
+
+				// assert *right >= *pivot >= *left
+
+			if (nElem == 3) {
+
+					// for exactly three elements, we need to
+					// fix pivot and left.
+
+				exchange(pivot, left);
+				return;
+			}
+
+				//  now for the classic Hoare algorithm
+
+			left = pivot + 1;
+
+			int compareDirection;	// -1 from above, +1 from below
+
+			do {
+				compareDirection = +1;
+				while (left.compare(*pivot) * descendingAdjust < 0)
+					if (left < right)
+						left++;
+					else
+						break;
+
+				while (left < right) {
+					compareDirection = -1;
+					if (pivot.compare(*right) * descendingAdjust <= 0)
+						right--;
+					else {
+						exchange(left, right);
+						left++;
+						break;
+					}
+				}
+			} while (left < right);
+
+				// This puts the pivot into the middle if needed.
+
+			left--;
+			lNum = int(right - pivot);	// lNum is lower 'half' size
+			if (left > pivot)
+				exchange(pivot, left);
+			if ((nElem >> 1) > lNum) {
+
+					// lower 'half' has fewest elements
+
+				qsort(pivot, lNum - 1, descendingAdjust);
+				nElem -= lNum;
+				pivot = right;
+			} else {
+				qsort(right, nElem - lNum, descendingAdjust);
+				nElem = lNum - 1;
+			}
+		}
+	}
+	
+	public void sort(int comparator(E a, E b), boolean ascending) {
+		if (int(_length) == 0)
+			return;
+		int descendingAdjust = 1;
+		if (!ascending)
+			descendingAdjust = -1;
+		qsort(_data, int(_length), comparator, descendingAdjust);
+	}
+	
+	private static void qsort(pointer<E> pivot, int nElem, int comparator(E a, E b), int descendingAdjust) { 
+		pointer<E> left, right;
+		int lNum;
+
+		for	(;;) {
+			if (nElem <= 2){
+				if (nElem == 2 &&
+					comparator(pivot[0], pivot[1]) * descendingAdjust > 0)
+					exchange(pivot, pivot + 1);
+				return;
+			}
+
+			right = pivot + (nElem - 1);
+			left  = pivot + (nElem >> 1);
+
+				/*  sort the pivot, left, and 
+					right elements for "median of 3" */
+
+			if (comparator(*left, *right) * descendingAdjust > 0)
+				exchange(left, right);
+
+				// assert *right >= *left
+
+			if (comparator(*left, *pivot) * descendingAdjust > 0)
+				exchange(left, pivot);
+			else if (comparator(*pivot, *right) * descendingAdjust > 0)
+				exchange(pivot, right);
+
+				// assert *right >= *pivot >= *left
+
+			if (nElem == 3) {
+
+					// for exactly three elements, we need to
+					// fix pivot and left.
+
+				exchange(pivot, left);
+				return;
+			}
+
+				//  now for the classic Hoare algorithm
+
+			left = pivot + 1;
+
+			int compareDirection;	// -1 from above, +1 from below
+
+			do {
+				compareDirection = +1;
+				while (comparator(*left, *pivot) * descendingAdjust < 0)
+					if (left < right)
+						left++;
+					else
+						break;
+
+				while (left < right) {
+					compareDirection = -1;
+					if (comparator(*pivot, *right) * descendingAdjust <= 0)
+						right--;
+					else {
+						exchange(left, right);
+						left++;
+						break;
+					}
+				}
+			} while (left < right);
+
+				// This puts the pivot into the middle if needed.
+
+			left--;
+			lNum = int(right - pivot);	// lNum is lower 'half' size
+			if (left > pivot)
+				exchange(pivot, left);
+			if ((nElem >> 1) > lNum) {
+
+					// lower 'half' has fewest elements
+
+				qsort(pivot, lNum - 1, comparator, descendingAdjust);
+				nElem -= lNum;
+				pivot = right;
+			} else {
+				qsort(right, nElem - lNum, comparator, descendingAdjust);
+				nElem = lNum - 1;
+			}
+		}
+	}
+	/*
+		Exchange records.
+	 */
+	private static void exchange(ref<E> left, ref<E> right) {
+		E temp = *left;
+		*left = *right;
+		*right = temp;
+	}
+	
+//	public E addReduce() {
+//		E sum = E(0);
+		
+//		for (I i = I(0); int(i) < int(_length); i = I(int(i) + 1))
+//			sum = E(int(sum) + int(_data[int(i)]));
+//		return sum;
+//	}
+}
+/*
+class vector<class E, enum I> {
+	private pointer<E> _data;
+	
+	public vector() {
+		_data = pointer<E>(memory.alloc(I.length * E.bytes));
+	}
+	
+	public vector(vector<E, I> other) {
+	}
+	
+	~vector() {
+	}
+	
+	public void clear() {
+		memset(_data, 0, I.length * E.bytes);
+	}
+	
+	public boolean contains(E probe) {
+		return false;
+	}
+	
+	public I find(E key) {
+		return null;
+	}
+	
+	public E get(I index) {
+		return _data[index.index];
+	}
+	
+	public int length() {
+		return I.length;
+	}
+	
+	public void set(I index, E value) {
+		_data[index.index] = value;
+	}
+	
+	public pointer<E> elementAddress(I index) {
+		return _data + index.index;
+	}
+	
+	public void sort() {
+		sort(true);
+	}
 	
 	public void sort(boolean ascending) {
 	}
 }
+*/

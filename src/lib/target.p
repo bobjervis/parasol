@@ -97,6 +97,10 @@ public class Target {
 		assert(false);
 	}
 	
+	public void definePxiFixup(int location) {
+		assert(false);
+	}
+	
 	public void markRegisterParameters(ref<ParameterScope> scope, ref<CompileContext> compileContext) {
 	}
 	
@@ -177,8 +181,115 @@ private TraverseAction gatherCasesFunc(ref<Node> n, address data) {
 	return TraverseAction.CONTINUE_TRAVERSAL;
 }
 
-class Variable {
-	ref<Type>	type;				// If not null, the 'type' of the variable
-	ref<NodeList> returns;			// If not null, the returns list from the function type this represents
-	int			offset;
+public class Variable {
+	public ref<Type>	type;				// If not null, the 'type' of the variable
+	public ref<NodeList> returns;			// If not null, the returns list from the function type this represents
+	public int			offset;
+}
+
+public class Segment<class T> {
+	byte[]	_content;
+	Fixup<T>[]	_fixups;
+	int _alignment;
+	int _offset;							// Offset of this Segment in the final image (only valid after linking).
+	byte _fill;
+	
+	Segment(int alignment, byte fill) {
+		_alignment = alignment;
+		_fill = fill;
+	}
+	
+	Segment(int alignment) {
+		_alignment = alignment;
+	}
+	
+	Segment() {
+		
+	}
+
+	public void fixup(T segment, int location, boolean absolute) {
+		Fixup<T> f;
+		
+		f.segment = segment;
+		f.location = location;
+		f.absolute = absolute;
+		_fixups.append(f);
+	}
+	
+	public int absoluteFixups() {
+		int result = 0;
+		for (int i = 0;  i < _fixups.length(); i++)
+			if (_fixups[i].absolute)
+				result++;
+		return result;
+	}
+	
+	public void resolveFixups(ref<Target> target, ref<ref<Segment<T>>[T]> segments) {
+		for (int i = 0; i < _fixups.length(); i++) {
+			ref<Fixup<T>> f = &_fixups[i];
+			pointer<int> fixupTarget = pointer<int>(at(f.location));
+			*fixupTarget += (*segments)[f.segment].offset();
+			if (f.absolute)
+				target.definePxiFixup(_offset + f.location);
+			else
+				*fixupTarget -= _offset + f.location + int.bytes;
+		}
+	}
+	
+	public pointer<byte> at(int location) {
+		return &_content[location];
+	}
+	
+	public int reserve(int memory) {
+		return reserve(memory, _alignment);
+	}
+	/*
+	 * Reserve memory, using a specific alignment. If the block needs to be aligned, fill with the fill byte.
+	 * 
+	 * @param alignment Must be a power of two.
+	 */
+	public int reserve(int memory, int alignment) {
+		int len = _content.length();
+		int partial = len & (alignment - 1);
+		if (partial != 0) {
+			if (_fill != 0) {
+				for (int i = partial; i < alignment; i++)
+					_content.append(_fill);
+			} else
+				_content.resize(len + alignment - partial);
+		}
+		int value = _content.length();
+		_content.resize(value + memory);
+		return value;
+	}
+	
+	public int alignment() {
+		return _alignment;
+	}
+	/*
+	 * Given the initial offset offered, the next properly aligned address is picked for the segment and then
+	 * the function returns the properly aligned size of the segment.
+	 */
+	public int link(int offset) {
+		_offset = (offset + _alignment - 1) & ~(_alignment - 1);
+		return _offset + reserve(0);
+	}
+	
+	public int offset() {
+		return _offset;
+	}
+	
+	public ref<byte[]> content() {
+		return &_content;
+	}
+}
+/*
+ * Note that the memory at the location is an 8-byte address, containing a 32-bit offset into the referenced segment OR
+ * a 4-byte offset, containing a 32-offset into the referenced segment.
+ */
+public class Fixup<class T> {
+	public T segment;						// The Segment of the object being referenced.
+	public int location;					// The location within the host Segment of the fixup.
+	public boolean absolute;				// If true, this is an absolute, 64-bit reference;
+											//     if false, a relative, 32-bit reference.
 }
