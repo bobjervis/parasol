@@ -20,7 +20,7 @@
 namespace parasol {
 
 static pxi::Section *x86_64reader(FILE *pxiFile, long long length);
-static pxi::Section *x86_64readerNext(FILE *pxiFile, long long length);
+static pxi::Section *x86_64NextReader(FILE *pxiFile, long long length);
 
 class Loader {
 public:
@@ -30,7 +30,7 @@ public:
 Loader::Loader() {
 	if (!pxi::registerSectionReader(ST_X86_64, x86_64reader))
 		printf("Could not register x86_64SectionReader for ST_X86_64\n");
-	if (!pxi::registerSectionReader(ST_X86_64_NEXT, x86_64readerNext))
+	if (!pxi::registerSectionReader(ST_X86_64_NEXT, x86_64NextReader))
 		printf("Could not register x86_64SectionReaderNext for ST_X86_64_NEXT\n");
 }
 
@@ -116,7 +116,7 @@ static pxi::Section *x86_64reader(FILE *pxiFile, long long length) {
 	}
 }
 
-X86_64SectionNext::X86_64SectionNext(FILE *pxiFile, long long length) {
+X86_64NextSection::X86_64NextSection(FILE *pxiFile, long long length) {
 	if (fread(&_header, 1, sizeof _header, pxiFile) != sizeof _header) {
 		printf("Could not read x86-64 section header\n");
 		return;
@@ -136,7 +136,7 @@ X86_64SectionNext::X86_64SectionNext(FILE *pxiFile, long long length) {
 	// Do any post-load initializations and fixups
 }
 
-X86_64SectionNext::~X86_64SectionNext() {
+X86_64NextSection::~X86_64NextSection() {
 	free(_image);
 }
 
@@ -147,7 +147,7 @@ public:
 	void *address;
 };
 
-bool X86_64SectionNext::run(char **args, int *returnValue, long long runtimeFlags) {
+bool X86_64NextSection::run(char **args, int *returnValue, long long runtimeFlags) {
 	ExecutionContext ec((X86_64SectionHeader*)&_header, _image, runtimeFlags);
 
 	ec.enter();
@@ -209,8 +209,8 @@ bool X86_64SectionNext::run(char **args, int *returnValue, long long runtimeFlag
 		return true;
 }
 
-static pxi::Section *x86_64readerNext(FILE *pxiFile, long long length) {
-	X86_64SectionNext *section = new X86_64SectionNext(pxiFile, length);
+static pxi::Section *x86_64NextReader(FILE *pxiFile, long long length) {
+	X86_64NextSection *section = new X86_64NextSection(pxiFile, length);
 	if (section->valid())
 		return section;
 	else {

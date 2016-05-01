@@ -58,7 +58,7 @@ public:
 
 };
 
-class X86_64SectionHeaderNext {
+class X86_64NextSectionHeader {
 public:
 	int entryPoint;			// Object id of the starting function to run in the image
 	int builtInOffset;		// Offset in image of built-in table
@@ -78,15 +78,15 @@ public:
 	int nativeBindingsCount;// Number of native bindings
 };
 
-class X86_64SectionNext : public pxi::Section {
-	X86_64SectionHeaderNext _header;
+class X86_64NextSection : public pxi::Section {
+	X86_64NextSectionHeader _header;
 	void *_image;
 	size_t _imageLength;
 
 public:
-	X86_64SectionNext(FILE *pxiFile, long long length);
+	X86_64NextSection(FILE *pxiFile, long long length);
 
-	virtual ~X86_64SectionNext();
+	virtual ~X86_64NextSection();
 
 	virtual bool run(char **args, int *returnValue, long long runtimeFlags);
 

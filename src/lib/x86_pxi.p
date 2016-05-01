@@ -72,6 +72,7 @@ public class ExceptionEntry {
  * 			Dword-align static data
  * 			Word-aligned static data
  * 			Byte-aligned static data
+ * 			Native Bindings
  * 			Relocations
  * 			Exception Table
  * 			Built-ins Text
