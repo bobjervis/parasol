@@ -172,7 +172,6 @@ public class X86_64 extends X86_64AssignTemps {
 		}
 		pointer<SourceLocation> outerSource = exception.sourceLocations();
 		int outerSourceCount = exception.sourceLocationsCount();
-		exception.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
 		pointer<int> pxiFixups = pointer<int>(&_staticMemory[_pxiHeader.relocationOffset]);
 		if (runtime.makeRegionExecutable(_staticMemory, _staticMemoryLength)) {
 			pointer<long> vp;
@@ -183,22 +182,24 @@ public class X86_64 extends X86_64AssignTemps {
 			vp = pointer<long>(_staticMemory + _pxiHeader.vtablesOffset);
 			for (int i = 0; i < _pxiHeader.vtableData; i++, vp++)
 				*vp += long(address(_staticMemory));
-			/*
-	NativeBinding *nativeBindings = (NativeBinding*)(image + _header.nativeBindingsOffset);
-	for (int i = 0; i < _header.nativeBindingsCount; i++) {
-		HMODULE dll = GetModuleHandle(nativeBindings[i].dllName);
-		if (dll == 0) {
-			printf("Unable to locate DLL %s\n", nativeBindings[i].dllName);
-			*(char*)argc = 0;	// This should cause a crash.
-		} else {
-			nativeBindings[i].address = (void*) GetProcAddress(dll, nativeBindings[i].symbolName);
-			if (nativeBindings[i].address == 0) {
-				printf("Unable to locate DLL %s\n", nativeBindings[i].dllName);
-				*(char*)argc = 0;	// This should cause a crash.
+			pointer<NativeBinding> nativeBindings = pointer<NativeBinding>(_staticMemory + _pxiHeader.nativeBindingsOffset);
+			for (int i = 0; i < _pxiHeader.nativeBindingsCount; i++) {
+				windows.HMODULE dll = windows.GetModuleHandle(nativeBindings[i].dllName);
+				if (dll == null) {
+					string d(nativeBindings[i].dllName);
+					printf("Unable to locate DLL %s\n", d);
+					assert(false);
+				} else {
+					nativeBindings[i].functionAddress = windows.GetProcAddress(dll, nativeBindings[i].symbolName);
+					if (nativeBindings[i].functionAddress == null) {
+						string d(nativeBindings[i].dllName);
+						string s(nativeBindings[i].symbolName);
+						printf("Unable to locate symbol %s in %s\n", s, d);
+						assert(false);
+					}
+				}
 			}
-		}
-	}
-			 */
+			exception.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
 			runtime.setTrace(_arena.trace);
 			returnValue = runtime.evalNative(&_pxiHeader, _staticMemory, &runArgs[0], runArgs.length());
 			runtime.setTrace(false);
@@ -214,6 +215,7 @@ public class X86_64 extends X86_64AssignTemps {
 			for (int i = 0; i < _pxiHeader.vtableData; i++, vp++)
 				*vp += long(address(generatedCode));
 			if (runtime.makeRegionExecutable(generatedCode, _staticMemoryLength)) {
+				exception.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
 				runtime.setTrace(_arena.trace);
 				returnValue = runtime.evalNative(&_pxiHeader, _staticMemory, &runArgs[0], runArgs.length());
 				runtime.setTrace(false);
@@ -562,7 +564,8 @@ public class X86_64 extends X86_64AssignTemps {
 			insertPreamble();
 			inst(X86.ENTER, 0);
 			reserveAutoMemory(true, compileContext);
-			closeCodeSegment(CC.NOP, null);
+
+			pushExceptionHandler(handler);
 			join.start(this);
 			inst(X86.PUSH, TypeFamily.SIGNED_64, R.RAX);
 			inst(X86.SUB, TypeFamily.ADDRESS, R.RSP, 8);
@@ -640,6 +643,7 @@ public class X86_64 extends X86_64AssignTemps {
 		ref<ParameterScope> throwException = ref<ParameterScope>((*o.instances())[0].type().scope());
 		for (int i = f().knownDeferredTrys; i < _deferredTry.length(); i++) {
 			ref<DeferredTry> dt = &_deferredTry[i];
+			ref<CodeSegment> outer = pushExceptionHandler(dt.exceptionHandler);
 			dt.primaryHandler.start(this);
 			int adjust = -f().autoSize;
 			if (!isFunction)
@@ -649,7 +653,6 @@ public class X86_64 extends X86_64AssignTemps {
 			// clauses. The clauses were sorted during the fold phase to put the most specific Exception
 			// first. That way we only have to move down the list in sequence.
 			inst(X86.LEA, R.RSP, R.RBP, adjust);
-			ref<CodeSegment> outer = pushExceptionHandler(dt.exceptionHandler);
 			ref<NodeList> nl = dt.tryStatement.catchList();
 			ref<Node> temp = nl.node;
 			inst(X86.MOV, temp, R.RCX, compileContext);
@@ -672,7 +675,7 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.MOV, TypeFamily.ADDRESS, R.RDX, R.RBP);
 			inst(X86.MOV, TypeFamily.ADDRESS, R.R8, R.RSP);
 			instCall(throwException, compileContext);
-			closeCodeSegment(CC.NOP, null);
+
 			pushExceptionHandler(outer);
 		}
 		_deferredTry.resize(f().knownDeferredTrys);
@@ -1196,7 +1199,6 @@ public class X86_64 extends X86_64AssignTemps {
 			join = _storage new CodeSegment;
 			ref<CodeSegment> outer = pushExceptionHandler(primaryHandler);
 			generate(tr.body(), compileContext);
-			closeCodeSegment(CC.NOP, join);
 			pushExceptionHandler(outer);
 			join.start(this);
 			DeferredTry dt = { tryStatement: tr, primaryHandler: primaryHandler, join: join, exceptionHandler: outer };

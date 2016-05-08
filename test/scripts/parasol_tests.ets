@@ -1,5 +1,6 @@
 // Advanced library executions tests
 
+run(filename: win_ui_test.p)
 run(filename: randomTests.p)
 run(filename: linearRegressionTests.p)
 run(filename: escapes.p)

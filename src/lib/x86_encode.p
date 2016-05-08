@@ -309,8 +309,6 @@ class X86_64Encoder extends Target {
 			_code.append(*_segments[segment].content());
 		}
 
-		_pxiHeader.relocationOffset = _code.length();
-
 		for (ref<Fixup> f = _fixups; f != null; f = f.next) {
 			switch (f.kind) {
 			case	RELATIVE32_CODE:				// Fixup value is a ref<Scope>
@@ -422,6 +420,11 @@ class X86_64Encoder extends Target {
 			}
 		}
 		
+		_pxiHeader.relocationOffset = _code.length();
+		_pxiHeader.relocationCount = _pxiFixups.length();
+		
+		_code.resize(_code.length() + _pxiFixups.length() * int.bytes);
+		C.memcpy(&_code[_pxiHeader.relocationOffset], &_pxiFixups[0], _pxiFixups.length() * int.bytes);
 		_pxiHeader.builtInsText = _code.length();
 		
 		_code.append(_builtInsList);
@@ -447,10 +450,7 @@ class X86_64Encoder extends Target {
 	}
 
 	private void definePxiFixup(int location) {
-		int offset = _code.length();
-		_code.resize(_code.length() + int.bytes);
-		*ref<int>(&_code[offset]) = location;
-		_pxiHeader.relocationCount++;
+		_pxiFixups.append(location);
 	}
 	
 	private void relocateStaticData(int alignment) {

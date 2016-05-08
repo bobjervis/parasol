@@ -74,7 +74,6 @@ public class Exception {
 		string tag = "->";
 		int lowCode = int(runtime.lowCodeAddress());
 		int staticMemoryLength = int(runtime.highCodeAddress()) - lowCode;
-		printf("staticMemoryLength = %x\n", staticMemoryLength);
 		while (_exceptionContext.valid(fp)) {
 //			printf("fp = %p ip = %p relative = %x", fp, ip, int(ip) - lowCode);
 			pointer<address> stack = pointer<address>(fp);
@@ -99,10 +98,22 @@ public class Exception {
 	}
 	
 	void throwNow(address framePointer, address stackPointer) {
+		
+		// The default treatment is that the return address just under the stackPointer is the starting pooint for
+		// 'throw' resolution. That will cover the cases where the exception context doesn't exist (this is a plain
+		// 'throw' statement), or this is a re-thrown exception (in which case the lastCrawledFramePinter will not be
+		// null). If there is an _exceptionContext set but no lastCrawledFramePointer, we are processing a hardware
+		// exception for the first time.
+		
+		int(address ip, address elem) comparator = comparatorReturnAddress;
+		pointer<byte> ip = pointer<pointer<byte>>(stackPointer)[-1];
 		if (_exceptionContext == null) {
 			_exceptionContext = createExceptionContext(stackPointer);
 			_exceptionContext.framePointer = framePointer;
 			_exceptionContext.exceptionAddress = pointer<address>(stackPointer)[-1];
+		} else if (_exceptionContext.lastCrawledFramePointer == null) {
+			ip = pointer<byte>(_exceptionContext.exceptionAddress);
+			comparator = comparatorCurrentIp;
 		}
 		address stackTop = address(long(_exceptionContext.stackBase) + _exceptionContext.stackSize);
 		pointer<address> searchEnd = pointer<address>(stackTop) + -2;
@@ -110,16 +121,16 @@ public class Exception {
 		pointer<address> stack = pointer<address>(_exceptionContext.stackPointer);
 		if (frame < stack || frame >= searchEnd) {
 			for (pointer<address> rbpCandidate = stack; rbpCandidate < searchEnd; rbpCandidate++)
-				crawlStack(rbpCandidate);
+				crawlStack(ip, rbpCandidate, comparator);
 		} else
-			crawlStack(frame);
+			crawlStack(ip, frame, comparator);
 		printf("\nRBP %p is out of stack range [%p - %p] ip %p\n", 
 				_exceptionContext.framePointer, _exceptionContext.stackPointer, 
 				stackTop, _exceptionContext.exceptionAddress);
 		process.exit(1);
 	}
 	
-	private void crawlStack(pointer<address> frame) {
+	private void crawlStack(pointer<byte> ip, pointer<address> frame, int comparator(address ip, address elem)) {
 		_exceptionContext.inferredFramePointer = frame;
 		pointer<address> oldRbp;
 		pointer<ExceptionEntry> ee = pointer<ExceptionEntry>(exceptionsAddress());
@@ -130,8 +141,7 @@ public class Exception {
 		}
 		pointer<byte> lowCode = runtime.lowCodeAddress();
 		pointer<byte> highCode = runtime.highCodeAddress();
-		int(address ip, address elem) comparator = comparatorCurrentIp;
-		pointer<byte> ip = pointer<byte>(_exceptionContext.exceptionAddress);
+//		int(address ip, address elem) comparator = comparatorCurrentIp;
 		address stackTop = address(long(_exceptionContext.stackBase) + _exceptionContext.stackSize);
 		pointer<address> plausibleEnd = pointer<address>(stackTop) + -2;
 		do {
@@ -144,6 +154,7 @@ public class Exception {
 
 					// If we have a handler, call it.
 					if (ee.handler != 0) {
+						_exceptionContext.lastCrawledFramePointer = frame;
 						callCatchHandler(this, frame, ee.handler);
 						process.exit(1);
 					}
@@ -462,6 +473,7 @@ class ExceptionContext {
 	public address exceptionAddress;		// The machine instruction causing the exception
 	public address stackPointer;			// The thread stack point at the moment of the exception
 	public address framePointer;			// The hardware frame pointer at the moment of the exception
+	public address lastCrawledFramePointer;	// Used when re-throwing an exception to ensure proper crawl.
 
 	// This is a copy of the hardware stack at the time of the exception.  It may extend beyond the actual
 	// hardware stack at the moment of the exception because, for example, the call to create the copy used

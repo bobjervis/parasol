@@ -119,15 +119,6 @@ class Disassembler {
 			for (int i = 0; i < _pxiFixups.length(); i++)
 				printf("    [%d] %#x\n", i, (*_pxiFixups)[i]);
 		}
-/*
-		if (_fixups != null) {
-			printf("Fixups:\n");
-			for (ref<Fixup> f = _fixups; f != null; f = f.next) {
-				printf("    ");
-				f.print();
-			}
-		}
-*/		
 		if (_pxiHeader.builtInCount > 0) {
 			printf("\n  Built-in method references:\n");
 			pointer<byte> pb = _physical + _pxiHeader.builtInsText;
@@ -1771,7 +1762,7 @@ public void printHeader(ref<X86_64NextSectionHeader> header, long fileOffset) {
 	if (fileOffset >= 0)
 		printf(" (file offset %x)", header.relocationOffset + fileOffset);
 	printf("\n");
-	printf("        relocationCount      %8x\n", header.relocationCount);
+	printf("        relocationCount      %8d.\n", header.relocationCount);
 	printf("        builtInsText         %8x", header.builtInsText);
 	if (fileOffset >= 0)
 		printf(" (file offset %x)", header.builtInsText + fileOffset);
@@ -1812,7 +1803,7 @@ public void printHeader(ref<X86_64SectionHeader> header, long fileOffset) {
 	if (fileOffset >= 0)
 		printf(" (file offset %x)", header.relocationOffset + fileOffset);
 	printf("\n");
-	printf("        relocationCount      %8x\n", header.relocationCount);
+	printf("        relocationCount      %8d.\n", header.relocationCount);
 	printf("        builtInsText         %8x", header.builtInsText);
 	if (fileOffset >= 0)
 		printf(" (file offset %x)", header.builtInsText + fileOffset);

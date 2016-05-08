@@ -103,6 +103,5 @@ public class WNDCLASSEX {
 
 class WNDPROC = address;
 
-@Windows("user32.dll", "RegisterCLassExA")
+@Windows("user32.dll", "RegisterClassExA")
 public abstract ATOM RegisterClassEx(ref<WNDCLASSEX> lpwcx);
-//public ATOM RegisterClassEx(ref<WNDCLASSEX> lpwcx) { return 1; }

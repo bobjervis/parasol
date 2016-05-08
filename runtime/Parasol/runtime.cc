@@ -1726,6 +1726,8 @@ static int pGetModuleFileName(void *hModule, void *buffer, int bufferLen) {
 
 static void *pGetModuleHandle(void *buffer) {
 	void *hModule = GetModuleHandle((LPCH)buffer);
+	if (hModule == null)
+		hModule = LoadLibrary((LPCH)buffer);
 	return hModule;
 }
 
