@@ -392,7 +392,7 @@ class Parser {
 					else
 						nl.last().next = _tree.newNodeList(catchClause);
 				} else if (t == Token.FINALLY) {
-					ref<Node> finallyClause = parseStatement();
+					finallyClause = parseStatement();
 					if (finallyClause.op() == Operator.SYNTAX_ERROR)
 						return finallyClause;
 					break;

@@ -2010,7 +2010,7 @@ BuiltInFunctionMap builtInFunctionMap[] = {
 														3,	1, "native" },
 	{ "GetFullPathName",nativeFunction(pGetFullPathName),
 														4,	1, "native" },
-	{ "FindFirstFile",	nativeFunction(pFindFirstFile),	2,	1, "native" },
+	{ "__notUsed1__",	nativeFunction(pFindFirstFile),	2,	1, "native" },
 	{ "FindNextFile",	nativeFunction(pFindNextFile),	2,	1, "native" },
 	{ "FindClose",		nativeFunction(pFindClose),		1,	1, "native" },
 

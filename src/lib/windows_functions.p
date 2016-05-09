@@ -42,8 +42,11 @@ public abstract HMODULE GetModuleHandle(pointer<byte> filename);
 public abstract address GetProcAddress(HMODULE hModule, pointer<byte> procName);
 public abstract unsigned GetFullPathName(pointer<byte> filename, unsigned bufSz, pointer<byte> lpBuffer, ref<pointer<byte>> lpFilePart);
 
+@Windows("kernel32.dll", "FindFirstFileA")
 public abstract address FindFirstFile(pointer<byte> pattern, ref<WIN32_FIND_DATA> data);
+@Windows("kernel32.dll", "FindNextFileA")
 public abstract int FindNextFile(address handle, ref<WIN32_FIND_DATA> data);
+@Windows("kernel32.dll", "FindClose")
 public abstract int FindClose(address handle);
 
 public abstract int GetLastError();
@@ -83,6 +86,7 @@ public unsigned PAGE_READWRITE = 0x04;
 public abstract address VirtualAlloc(address lpAddress, long sz, unsigned flAllocationType, unsigned flProtect);
 public abstract int VirtualProtect(address lpAddress, long sz, unsigned flNewProtect, ref<unsigned> lpflOldProtect);
 
+@Windows("kernel32.dll", "FormatMessageA")
 public abstract pointer<byte> FormatMessage(unsigned ntstatus);
 
 public class WNDCLASSEX {

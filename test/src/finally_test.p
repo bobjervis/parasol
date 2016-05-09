@@ -13,22 +13,29 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import parasol:file;
-import parasol:text;
+import parasol:process;
 
-int main(string[] args) {
-	for (int i = 0; i < args.length(); i++) {
-		string filename = args[i];
-		file.File f = file.openBinaryFile(filename);
-		string content;
-		boolean success;
-		(content, success) = f.readAll();
-		if (success) {
-			printf("%s:\n", filename);
-			text.memDump(&content[0], content.length(), 0);
-		} else
-			printf("Could not read %s\n", filename);
+boolean ranFinally = false;
+boolean ranAfterFinally = false;
+boolean ranCatch = false;
+
+printf("Starting finally test!\n");
+try {
+	try {
+		printf("About to throw!\n");
+		throw Exception("Inner one!");
+	} finally {
+		printf("hit it!");
+		ranFinally = true;
 	}
-	return 0;
+	printf("Missed this!\n");
+	ranAfterFinally = true;
+} catch (Exception e) {
+	printf("Caught exception!\n");
+	e.printStackTrace();
+	ranCatch = true;
 }
 
+assert(ranFinally);
+assert(!ranAfterFinally);
+assert(ranCatch);

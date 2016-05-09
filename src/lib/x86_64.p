@@ -273,8 +273,8 @@ public class X86_64 extends X86_64AssignTemps {
 						int offset = _segments[Segments.NATIVE_BINDINGS].reserve(NativeBinding.bytes);
 						_segments[Segments.NATIVE_BINDINGS].fixup(Segments.BUILT_INS_TEXT, offset, true);
 						_segments[Segments.NATIVE_BINDINGS].fixup(Segments.BUILT_INS_TEXT, offset + address.bytes, true);
-						C.memcpy(_segments[Segments.NATIVE_BINDINGS].at(0), &dllNameOffset, int.bytes);
-						C.memcpy(_segments[Segments.NATIVE_BINDINGS].at(address.bytes), &symbolNameOffset, int.bytes);
+						C.memcpy(_segments[Segments.NATIVE_BINDINGS].at(offset), &dllNameOffset, int.bytes);
+						C.memcpy(_segments[Segments.NATIVE_BINDINGS].at(offset + address.bytes), &symbolNameOffset, int.bytes);
 						address v = address(long(offset + 2 * address.bytes));
 						fsym.value = v;
 						fsym.offset = offset + 2 * address.bytes;
@@ -671,6 +671,8 @@ public class X86_64 extends X86_64AssignTemps {
 				closeCodeSegment(CC.JMP, dt.join);
 				nextCheck.start(this);
 			}
+			if (dt.tryStatement.finallyClause() != null)
+				generate(dt.tryStatement.finallyClause(), compileContext);
 			inst(X86.MOV, R.RCX, temp, compileContext);
 			inst(X86.MOV, TypeFamily.ADDRESS, R.RDX, R.RBP);
 			inst(X86.MOV, TypeFamily.ADDRESS, R.R8, R.RSP);
