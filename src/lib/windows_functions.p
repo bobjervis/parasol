@@ -37,9 +37,13 @@ public class HCURSOR = address;
 public class HBRUSH = address;
 public class HINSTANCE = address;
 
+@Windows("kernel32.dll", "GetModuleFileNameA")
 public abstract int GetModuleFileName(HMODULE hModule, pointer<byte> filename, int filenameSize);
+@Windows("kernel32.dll", "GetModuleHandleA")
 public abstract HMODULE GetModuleHandle(pointer<byte> filename);
+@Windows("kernel32.dll", "GetProcAddress")
 public abstract address GetProcAddress(HMODULE hModule, pointer<byte> procName);
+@Windows("kernel32.dll", "GetFullPathNameA")
 public abstract unsigned GetFullPathName(pointer<byte> filename, unsigned bufSz, pointer<byte> lpBuffer, ref<pointer<byte>> lpFilePart);
 
 @Windows("kernel32.dll", "FindFirstFileA")
@@ -49,7 +53,11 @@ public abstract int FindNextFile(address handle, ref<WIN32_FIND_DATA> data);
 @Windows("kernel32.dll", "FindClose")
 public abstract int FindClose(address handle);
 
+@Windows("kernel32.dll", "GetLastError")
 public abstract int GetLastError();
+
+@Windows("kernel32.dll", "LoadLibraryA")
+public abstract HMODULE LoadLibrary(pointer<byte> lpLibFileName);
 
 public int sizeof_WIN32_FIND_DATA = 320;
 
@@ -83,10 +91,12 @@ public unsigned PAGE_EXECUTE_READ = 0x20;
 public unsigned PAGE_EXECUTE_READWRITE = 0x40;
 public unsigned PAGE_READWRITE = 0x04;
 
+@Windows("kernel32.dll", "VirtualAlloc")
 public abstract address VirtualAlloc(address lpAddress, long sz, unsigned flAllocationType, unsigned flProtect);
+@Windows("kernel32.dll", "VirtualProtect")
 public abstract int VirtualProtect(address lpAddress, long sz, unsigned flNewProtect, ref<unsigned> lpflOldProtect);
 
-@Windows("kernel32.dll", "FormatMessageA")
+//@Windows("kernel32.dll", "FormatMessageA")
 public abstract pointer<byte> FormatMessage(unsigned ntstatus);
 
 public class WNDCLASSEX {

@@ -26,8 +26,10 @@ public int SEEK_END = 2;
 
 public abstract pointer<byte> ecvt(double number, int ndigits, ref<int> decpt, ref<int> sign);
 
+@Windows("msvcrt.dll", "exit")
 public abstract void exit(int exitCode);
 
+@Windows("msvcrt.dll", "fclose")
 public abstract int fclose(ref<FILE> fp);
 
 public abstract pointer<byte> fcvt(double number, int ndigits, ref<int> decpt, ref<int> sign);
@@ -36,10 +38,13 @@ public abstract int ferror(ref<FILE> fp);
 
 public abstract int fgetc(ref<FILE> fp);
 
+@Windows("msvcrt.dll", "fopen")
 public abstract ref<FILE> fopen(pointer<byte> filename, pointer<byte> mode);
 
+@Windows("msvcrt.dll", "fread")
 public abstract unsigned fread(address cp, unsigned size, unsigned count, ref<FILE> fp);
 
+@Windows("msvcrt.dll", "fseek")
 public abstract int fseek(ref<FILE> fp, int offset, int origin);
 
 public abstract int ftell(ref<FILE> fp);

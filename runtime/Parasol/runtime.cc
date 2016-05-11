@@ -1719,57 +1719,6 @@ static void *fMemset(void *dest, char c, size_t len) {
 	return memset(dest, c, len);
 }
 
-static int pGetModuleFileName(void *hModule, void *buffer, int bufferLen) {
-	DWORD result = GetModuleFileName((HMODULE)hModule, (LPCH)buffer, bufferLen);
-	return result;
-}
-
-static void *pGetModuleHandle(void *buffer) {
-	void *hModule = GetModuleHandle((LPCH)buffer);
-	if (hModule == null)
-		hModule = LoadLibrary((LPCH)buffer);
-	return hModule;
-}
-
-static FARPROC pGetProcAddress(void *hModule, void *symbol) {
-	FARPROC procAddress = GetProcAddress((HMODULE)hModule, (LPCH)symbol);
-	return procAddress;
-}
-
-static unsigned pGetFullPathName(char *filename, unsigned bufSz, char *buffer, char **filePart) {
-	DWORD result = GetFullPathName(filename, bufSz, buffer, filePart);
-	return result;
-}
-
-static void *pFindFirstFile(char *pattern, WIN32_FIND_DATA *buffer) {
-	HANDLE result = FindFirstFile(pattern, buffer);
-	return result;
-}
-
-static int pFindNextFile(void *handle, WIN32_FIND_DATA *buffer) {
-	DWORD result = FindNextFile(handle, buffer);
-	return result;
-}
-
-static int pFindClose(void *handle) {
-	BOOL result = FindClose(handle);
-	return result;
-}
-
-static FILE *builtInfopen(char *file, char*opts) {
-	FILE *result = fopen(file, opts);
-	return result;
-}
-
-static int builtinFseek(FILE *fp, long offset, int whence) {
-	int result = fseek(fp, offset, whence);
-	return result;
-}
-
-static unsigned builtinFread(void *cp, unsigned size, unsigned count, FILE *fp) {
-	return fread(cp, size, count, fp);
-}
-
 struct SpawnPayload {
 	const char *buffer;
 	int length;
@@ -1989,30 +1938,29 @@ void ExecutionContext::setSourceLocations(void *location, int count) {
 
 BuiltInFunctionMap builtInFunctionMap[] = {
 	{ "print",			nativeFunction(builtInPrint),	1,	1 },
-	{ "GetModuleHandle",nativeFunction(pGetModuleHandle),
+	{ "__notUsed9__",	nativeFunction(builtInPrint),
 														1,	1, "native" },
 	{ "allocz",			nativeFunction(allocz),			1,	1 },
 	{ "free",			nativeFunction(free),			1,	0 },
 	{ "memcpy",			nativeFunction(fMemcpy),		3,	1 },
 	{ "memset",			nativeFunction(fMemset),		3,	1 },
-	{ "fopen",			nativeFunction(builtInfopen),	2,	1, "native" },
-	{ "fclose",			nativeFunction(fclose),			1,	1, "native" },
+	{ "__notUsed5__",	nativeFunction(builtInPrint),	2,	1, "native" },
+	{ "__notUsed6__",	nativeFunction(builtInPrint),	1,	1, "native" },
 	{ "ftell",			nativeFunction(ftell),			1,	1, "native" },
-	{ "fseek",			nativeFunction(builtinFseek),	3,	1, "native" },
+	{ "__notUsed7__",	nativeFunction(builtInPrint),	3,	1, "native" },
 	{ "fgetc",			nativeFunction(fgetc),			1,	1, "native" },
-	{ "fread",			nativeFunction(builtinFread),	4,  1, "native" },
+	{ "__notUsed8__",	nativeFunction(builtInPrint),	4,  1, "native" },
 	{ "fwrite",			nativeFunction(fwrite),			4,  1, "native" },
 	{ "ferror",			nativeFunction(ferror),			1,	1, "native" },
 	{ "exit",			nativeFunction(exit),			1,	1, "native" },
 	{ "getenv",			nativeFunction(getenv),			1,	1, "native" },
-	{ "GetModuleFileName",
-						nativeFunction(pGetModuleFileName),
+	{ "__notUsed10__",	nativeFunction(builtInPrint),
 														3,	1, "native" },
-	{ "GetFullPathName",nativeFunction(pGetFullPathName),
+	{ "__notUsed11__",	nativeFunction(builtInPrint),
 														4,	1, "native" },
-	{ "__notUsed1__",	nativeFunction(pFindFirstFile),	2,	1, "native" },
-	{ "FindNextFile",	nativeFunction(pFindNextFile),	2,	1, "native" },
-	{ "FindClose",		nativeFunction(pFindClose),		1,	1, "native" },
+	{ "__notUsed1__",	nativeFunction(builtInPrint),	2,	1, "native" },
+	{ "__notUsed2__",	nativeFunction(builtInPrint),	2,	1, "native" },
+	{ "__notUsed3__",	nativeFunction(builtInPrint),		1,	1, "native" },
 
 	{ "builtInFunctionName",
 						nativeFunction(builtInFunctionName),
@@ -2037,7 +1985,7 @@ BuiltInFunctionMap builtInFunctionMap[] = {
 	{ "injectObjects",	nativeFunction(injectObjects),	2,	1, "parasol" },
 	{ "eval",			nativeFunction(eval),			4,	1, "parasol" },
 	{ "setTrace",		nativeFunction(setTrace),		1,	1, "parasol" },
-	{ "GetProcAddress",	nativeFunction(pGetProcAddress),
+	{ "__notUsed12__",	nativeFunction(builtInPrint),
 														2,	1, "native" },
 	{ "supportedTarget",nativeFunction(supportedTarget),1,	1, "parasol" },
 	{ "registerHardwareExceptionHandler",
@@ -2045,11 +1993,11 @@ BuiltInFunctionMap builtInFunctionMap[] = {
 														1,	0, "parasol" },
 	{ "exit",			nativeFunction(exit),			1,	1, "parasol" },
 	{ "evalNative",		nativeFunction(evalNative),		4,	1, "parasol" },
-	{ "VirtualAlloc",	nativeFunction(builtinVirtualAlloc),
+	{ "__notUsed13__",	nativeFunction(builtInPrint),
 														4,	1, "native" },
-	{ "VirtualProtect",	nativeFunction(builtinVirtualProtect),
+	{ "__notUsed14__",	nativeFunction(builtInPrint),
 														4,	1, "native" },
-	{ "GetLastError",	nativeFunction(builtinGetLastError),
+	{ "__notUsed15__",	nativeFunction(builtInPrint),
 														0,	1, "native" },
 	{ "exposeException",nativeFunction(exposeException),1,	1 },
 	{ "_now",			nativeFunction(now),			0,	1, "parasol" },

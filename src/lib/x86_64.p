@@ -186,17 +186,19 @@ public class X86_64 extends X86_64AssignTemps {
 			for (int i = 0; i < _pxiHeader.nativeBindingsCount; i++) {
 				windows.HMODULE dll = windows.GetModuleHandle(nativeBindings[i].dllName);
 				if (dll == null) {
-					string d(nativeBindings[i].dllName);
-					printf("Unable to locate DLL %s\n", d);
-					assert(false);
-				} else {
-					nativeBindings[i].functionAddress = windows.GetProcAddress(dll, nativeBindings[i].symbolName);
-					if (nativeBindings[i].functionAddress == null) {
+					dll = windows.LoadLibrary(nativeBindings[i].dllName);
+					if (dll == null) {
 						string d(nativeBindings[i].dllName);
-						string s(nativeBindings[i].symbolName);
-						printf("Unable to locate symbol %s in %s\n", s, d);
+						printf("Unable to locate DLL %s\n", d);
 						assert(false);
 					}
+				}
+				nativeBindings[i].functionAddress = windows.GetProcAddress(dll, nativeBindings[i].symbolName);
+				if (nativeBindings[i].functionAddress == null) {
+					string d(nativeBindings[i].dllName);
+					string s(nativeBindings[i].symbolName);
+					printf("Unable to locate symbol %s in %s\n", s, d);
+					assert(false);
 				}
 			}
 			exception.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
@@ -214,6 +216,25 @@ public class X86_64 extends X86_64AssignTemps {
 			vp = pointer<long>(generatedCode + _pxiHeader.vtablesOffset);
 			for (int i = 0; i < _pxiHeader.vtableData; i++, vp++)
 				*vp += long(address(generatedCode));
+			pointer<NativeBinding> nativeBindings = pointer<NativeBinding>(_staticMemory + _pxiHeader.nativeBindingsOffset);
+			for (int i = 0; i < _pxiHeader.nativeBindingsCount; i++) {
+				windows.HMODULE dll = windows.GetModuleHandle(nativeBindings[i].dllName);
+				if (dll == null) {
+					dll = windows.LoadLibrary(nativeBindings[i].dllName);
+					if (dll == null) {
+						string d(nativeBindings[i].dllName);
+						printf("Unable to locate DLL %s\n", d);
+						assert(false);
+					}
+				}
+				nativeBindings[i].functionAddress = windows.GetProcAddress(dll, nativeBindings[i].symbolName);
+				if (nativeBindings[i].functionAddress == null) {
+					string d(nativeBindings[i].dllName);
+					string s(nativeBindings[i].symbolName);
+					printf("Unable to locate symbol %s in %s\n", s, d);
+					assert(false);
+				}
+			}
 			if (runtime.makeRegionExecutable(generatedCode, _staticMemoryLength)) {
 				exception.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
 				runtime.setTrace(_arena.trace);
