@@ -36,8 +36,6 @@ public:
 	int builtInsText;		// Offset in image of built-ins text
 	int exceptionsOffset;	// Offset in image of exception table
 	int exceptionsCount;	// Number of ExceptionEntry elements in the table
-//	int nativeBindingsOffset;// Offset in image of native bindings
-//	int nativeBindingsCount;// Number of native bindings
 };
 
 class X86_64Section : public pxi::Section {

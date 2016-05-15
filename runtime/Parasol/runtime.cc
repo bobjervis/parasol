@@ -1704,13 +1704,6 @@ static void *varInvoke(int methodName, int object) {
 #define nativeFunction(f) ((WORD(*)())f)
 
 
-static void *allocz(size_t size) {
-	void *p = malloc(size);
-	if (p != null)
-		memset(p, 0, size);
-	return p;
-}
-
 static void *fMemcpy(void *dest, void *src, size_t len) {
 	return memcpy(dest, src, len);
 }
@@ -1756,73 +1749,6 @@ static int runningTarget() {
 	case NATIVE_64_TARGET:		return ST_X86_64;
 	default:					return -1;
 	}
-}
-
-class ParasolTime {
-public:
-	static ParasolTime UNDEFINED;
-
-	ParasolTime() {
-		_time = 0;
-	}
-
-	ParasolTime(time_t t) {
-		_time = t * 1000;			// Record as millisec units.
-	}
-
-	ParasolTime(FILETIME& t) {
-		// Use UNIX era, and millis rather than 100nsec units
-		_time = (*(__int64*)&t - ERA_DIFF) / 10000;
-	}
-
-	void clear() { _time = 0; }
-
-	bool operator == (const ParasolTime& t2) const {
-		return _time == t2._time;
-	}
-
-	bool operator != (const ParasolTime& t2) const {
-		return _time != t2._time;
-	}
-
-	bool operator < (const ParasolTime& t2) const {
-		return _time < t2._time;
-	}
-
-	bool operator > (const ParasolTime& t2) const {
-		return _time > t2._time;
-	}
-
-	bool operator <= (const ParasolTime& t2) const {
-		return _time <= t2._time;
-	}
-
-	bool operator >= (const ParasolTime& t2) const {
-		return _time >= t2._time;
-	}
-
-//	string toString();
-
-//	void touch();
-
-	void setValue(__int64 t) { _time = t; }
-
-	__int64 value() const { return _time; }
-
-private:
-	static const __int64 ERA_DIFF = 0x019DB1DED53E8000LL;
-
-	__int64		_time;
-};
-
-static __int64 now() {
-	SYSTEMTIME s;
-	FILETIME f;
-
-	GetSystemTime(&s);
-	SystemTimeToFileTime(&s, &f);
-	ParasolTime result(f);
-	return result.value();
 }
 
 void *formatMessage(unsigned NTStatusMessage) {
@@ -1937,99 +1863,35 @@ void ExecutionContext::setSourceLocations(void *location, int count) {
 }
 
 BuiltInFunctionMap builtInFunctionMap[] = {
-	{ "print",			nativeFunction(builtInPrint),	1,	1 },
-	{ "__notUsed9__",	nativeFunction(builtInPrint),
-														1,	1, "native" },
-	{ "allocz",			nativeFunction(allocz),			1,	1 },
-	{ "free",			nativeFunction(free),			1,	0 },
-	{ "memcpy",			nativeFunction(fMemcpy),		3,	1 },
-	{ "memset",			nativeFunction(fMemset),		3,	1 },
-	{ "__notUsed5__",	nativeFunction(builtInPrint),	2,	1, "native" },
-	{ "__notUsed6__",	nativeFunction(builtInPrint),	1,	1, "native" },
-	{ "ftell",			nativeFunction(ftell),			1,	1, "native" },
-	{ "__notUsed7__",	nativeFunction(builtInPrint),	3,	1, "native" },
-	{ "fgetc",			nativeFunction(fgetc),			1,	1, "native" },
-	{ "__notUsed8__",	nativeFunction(builtInPrint),	4,  1, "native" },
-	{ "fwrite",			nativeFunction(fwrite),			4,  1, "native" },
-	{ "ferror",			nativeFunction(ferror),			1,	1, "native" },
-	{ "exit",			nativeFunction(exit),			1,	1, "native" },
-	{ "getenv",			nativeFunction(getenv),			1,	1, "native" },
-	{ "__notUsed10__",	nativeFunction(builtInPrint),
-														3,	1, "native" },
-	{ "__notUsed11__",	nativeFunction(builtInPrint),
-														4,	1, "native" },
-	{ "__notUsed1__",	nativeFunction(builtInPrint),	2,	1, "native" },
-	{ "__notUsed2__",	nativeFunction(builtInPrint),	2,	1, "native" },
-	{ "__notUsed3__",	nativeFunction(builtInPrint),		1,	1, "native" },
+	{ "print",								nativeFunction(builtInPrint),						1,	1 },
+	{ "formatMessage",						nativeFunction(formatMessage),						1,	1, "native" },
+	{ "sourceLocations",					nativeFunction(sourceLocations),					1,	0, "parasol" },
+	{ "sourceLocationsCount",				nativeFunction(sourceLocationsCount),				1,	0, "parasol" },
+	{ "setSourceLocations",					nativeFunction(setSourceLocations),					0,	2, "parasol" },
+	{ "builtInFunctionArguments",			nativeFunction(builtInFunctionArguments),			1,	1, "parasol" },
+	{ "builtInFunctionName",				nativeFunction(builtInFunctionName),				1,	1, "parasol" },
+	{ "builtInFunctionDomain",				nativeFunction(builtInFunctionDomain),				1,	1, "parasol" },
+	{ "builtInFunctionReturns",				nativeFunction(builtInFunctionReturns),				1,	1, "parasol" },
+	{ "builtInFunctionAddress",				nativeFunction(builtInFunctionAddress),				1,	1, "parasol" },
+	{ "fetchExposedException",				nativeFunction(fetchExposedException),				0,	1, "parasol" },
+	{ "exposeException",					nativeFunction(exposeException),					1,	1, "parasol" },
+	{ "callCatchHandler",					nativeFunction(callCatchHandler),					3,	0, "parasol" },
+	{ "registerHardwareExceptionHandler",	nativeFunction(registerHardwareExceptionHandler),	1,	0, "parasol" },
+	{ "exceptionsCount",					nativeFunction(exceptionsCount),					0,	1, "parasol" },
+	{ "exceptionsAddress",					nativeFunction(exceptionsAddress),					0,	1, "parasol" },
+	{ "stackTop",							nativeFunction(stackTop),							0,	1, "parasol" },
+	{ "lowCodeAddress",						nativeFunction(lowCodeAddress),						0,	1, "parasol" },
+	{ "highCodeAddress",					nativeFunction(highCodeAddress),					0,	1, "parasol" },
+	{ "getRuntimeFlags",					nativeFunction(getRuntimeFlags),					0,	1, "parasol" },
+	{ "supportedTarget",					nativeFunction(supportedTarget),					1,	1, "parasol" },
 
-	{ "builtInFunctionName",
-						nativeFunction(builtInFunctionName),
-														1,	1, "parasol" },
-	{ "builtInFunctionDomain",
-						nativeFunction(builtInFunctionDomain),
-														1,	1, "parasol" },
-	{ "builtInFunctionAddress",
-						nativeFunction(builtInFunctionAddress),
-														1,	1, "parasol" },
-	{ "builtInFunctionArguments",
-						nativeFunction(builtInFunctionArguments),
-														1,	1, "parasol" },
-	{ "builtInFunctionReturns",
-						nativeFunction(builtInFunctionReturns),
-														1,	1, "parasol" },
-	{ "debugSpawnImpl", nativeFunction(processDebugSpawn),
-														3,	1, "parasol" },
-	{ "disposeOfPayload",
-						nativeFunction(disposeOfPayload),
-														1,	0, "parasol" },
-	{ "injectObjects",	nativeFunction(injectObjects),	2,	1, "parasol" },
-	{ "eval",			nativeFunction(eval),			4,	1, "parasol" },
-	{ "setTrace",		nativeFunction(setTrace),		1,	1, "parasol" },
-	{ "__notUsed12__",	nativeFunction(builtInPrint),
-														2,	1, "native" },
-	{ "supportedTarget",nativeFunction(supportedTarget),1,	1, "parasol" },
-	{ "registerHardwareExceptionHandler",
-						nativeFunction(registerHardwareExceptionHandler),
-														1,	0, "parasol" },
-	{ "exit",			nativeFunction(exit),			1,	1, "parasol" },
-	{ "evalNative",		nativeFunction(evalNative),		4,	1, "parasol" },
-	{ "__notUsed13__",	nativeFunction(builtInPrint),
-														4,	1, "native" },
-	{ "__notUsed14__",	nativeFunction(builtInPrint),
-														4,	1, "native" },
-	{ "__notUsed15__",	nativeFunction(builtInPrint),
-														0,	1, "native" },
-	{ "exposeException",nativeFunction(exposeException),1,	1 },
-	{ "_now",			nativeFunction(now),			0,	1, "parasol" },
-	{ "FormatMessage",	nativeFunction(formatMessage),	1,	1, "native" },
-	{ "runningTarget",  nativeFunction(runningTarget),  0,  1, "parasol" },
-	{ "getRuntimeFlags",nativeFunction(getRuntimeFlags),0,	1, "parasol" },
-	{ "strtod",			nativeFunction(strtod),			2,	1, "native" },
-	{ "ecvt",			nativeFunction(ecvt),			4,	1, "native" },
-	{ "fcvt",			nativeFunction(fcvt),			4,	1, "native" },
-	{ "gcvt",			nativeFunction(gcvt),			4,	1, "native" },
-
-	{ "__notUsed4__",	nativeFunction(now),			0,	0, "parasol" },
-	{ "stackTop",		nativeFunction(stackTop),		0,	1, "parasol" },
-	{ "exceptionsAddress",
-						nativeFunction(exceptionsAddress),
-														0,	1, "parasol" },
-	{ "exceptionsCount",nativeFunction(exceptionsCount),0,	1, "parasol" },
-	{ "lowCodeAddress",	nativeFunction(lowCodeAddress),	0,	1, "parasol" },
-	{ "highCodeAddress",nativeFunction(highCodeAddress),0,	1, "parasol" },
-	{ "callCatchHandler",
-						nativeFunction(callCatchHandler),
-														3,	0, "parasol" },
-	{ "fetchExposedException",
-						nativeFunction(fetchExposedException),
-														0,	1, "parasol" },
-	{ "setSourceLocations",
-						nativeFunction(setSourceLocations),
-														0,	2, "parasol" },
-	{ "sourceLocations",nativeFunction(sourceLocations),1,	0, "parasol" },
-	{ "sourceLocationsCount",
-						nativeFunction(sourceLocationsCount),
-														1,	0, "parasol" },
+	{ "runningTarget",  					nativeFunction(runningTarget), 						0,  1, "parasol" },
+	{ "injectObjects",						nativeFunction(injectObjects),						2,	1, "parasol" },
+	{ "setTrace",							nativeFunction(setTrace),							1,	1, "parasol" },
+	{ "eval",								nativeFunction(eval),								4,	1, "parasol" },
+	{ "evalNative",							nativeFunction(evalNative),							4,	1, "parasol" },
+	{ "debugSpawnImpl", 					nativeFunction(processDebugSpawn),					3,	1, "parasol" },
+	{ "disposeOfPayload",					nativeFunction(disposeOfPayload),					1,	0, "parasol" },
 	{ 0 }
 };
 

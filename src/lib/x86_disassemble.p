@@ -18,6 +18,7 @@ namespace parasol:x86_64;
 import parasol:compiler.Arena;
 import parasol:compiler.ClasslikeScope;
 import parasol:compiler.FileStat;
+import parasol:compiler.ParameterScope;
 import parasol:compiler.Scope;
 import parasol:compiler.Symbol;
 import native:C;
@@ -46,6 +47,7 @@ class Disassembler {
 	private int _sourceIndex;
 	private int _builtInsFinalOffset;
 	private pointer<ref<Symbol>> _dataMap;
+	private ref<ref<Scope>[]> _functionMap;
 	private int _dataMapLength;
 	private pointer<SourceLocation> _sourceLocations;
 	private int _sourceLocationsCount;
@@ -78,6 +80,10 @@ class Disassembler {
 		_dataMapLength = dataMapLength;
 	}
 	
+	void setFunctionMap(ref<ref<Scope>[]> functionMap) {
+		_functionMap = functionMap;
+	}
+	
 	void setSourceLocations(pointer<SourceLocation> sourceLocations, int sourceLocationsCount) {
 		_sourceLocations = sourceLocations;
 		_sourceLocationsCount = sourceLocationsCount;
@@ -91,6 +97,32 @@ class Disassembler {
 			printf("    Location  Handler\n");
 			for (pointer<ExceptionEntry> ee = pointer<ExceptionEntry>(_physical + _pxiHeader.exceptionsOffset); ee < _exceptionsEndOffset; ee++) {
 				printf("    %8.8x  %8.8x\n", ee.location, ee.handler);
+			}
+		}
+		if (_pxiHeader.builtInCount > 0) {
+			printf("\n  Built-in method references:\n");
+			pointer<byte> pb = _physical + _pxiHeader.builtInsText;
+			
+			int addr = _pxiHeader.builtInOffset;
+			for (int i = 0; i < _pxiHeader.builtInCount; i++) {
+				pointer<int> pi = pointer<int>(_physical + addr);
+				string s(pb);
+				pb += s.length() + 1;
+				printf("    [%8.8x] %d \"%s\"\n", addr, *pi, s);
+				addr += address.bytes;
+			}
+		}
+		if (_pxiHeader.nativeBindingsCount > 0) {
+			printf("\n  Native Bindings:\n");
+			
+			int addr = _pxiHeader.nativeBindingsOffset;
+			pointer<NativeBinding> nb = pointer<NativeBinding>(_physical + addr);
+			
+			for (int i = 0; i < _pxiHeader.nativeBindingsCount; i++, nb++) {
+				string d(_physical + int(nb.dllName));
+				string s(_physical + int(nb.symbolName));
+				printf("    [%8.8x] %20s %s\n", addr, d, s);
+				addr += NativeBinding.bytes;
 			}
 		}
 		printf("\n    symbols for      %8x - %8x\n", _length, _imageLength);
@@ -118,32 +150,6 @@ class Disassembler {
 			printf("PXI Fixups:\n");
 			for (int i = 0; i < _pxiFixups.length(); i++)
 				printf("    [%d] %#x\n", i, (*_pxiFixups)[i]);
-		}
-		if (_pxiHeader.builtInCount > 0) {
-			printf("\n  Built-in method references:\n");
-			pointer<byte> pb = _physical + _pxiHeader.builtInsText;
-			
-			int addr = _pxiHeader.builtInOffset;
-			for (int i = 0; i < _pxiHeader.builtInCount; i++) {
-				pointer<int> pi = pointer<int>(_physical + addr);
-				string s(pb);
-				pb += s.length() + 1;
-				printf("    [%8.8x] %d \"%s\"\n", addr, *pi, s);
-				addr += address.bytes;
-			}
-		}
-		if (_pxiHeader.nativeBindingsCount > 0) {
-			printf("\n  Native Bindings:\n");
-			
-			int addr = _pxiHeader.nativeBindingsOffset;
-			pointer<NativeBinding> nb = pointer<NativeBinding>(_physical + addr);
-			
-			for (int i = 0; i < _pxiHeader.nativeBindingsCount; i++, nb++) {
-				string d(_physical + int(nb.dllName));
-				string s(_physical + int(nb.symbolName));
-				printf("    [%8.8x] %x %x %20s %s\n", addr, int(nb.dllName), int(nb.symbolName), d, s);
-				addr += NativeBinding.bytes;
-			}
 		}
 		printf("\n");
 		_offset = 0;
@@ -428,6 +434,13 @@ class Disassembler {
 				break;
 				
 			case	0xe8:
+				instructionOpcode(next);
+				displacement = *ref<int>(&_physical[_offset]);
+				_offset += int.bytes;
+				printf("%#x", _logical + _offset + displacement);
+				lookupReference(int(_logical + _offset + displacement));
+				break;
+				
 			case	0xe9:
 				instructionOpcode(next);
 				displacement = *ref<int>(&_physical[_offset]);
@@ -1424,7 +1437,18 @@ class Disassembler {
 	}
 	
 	void lookupReference(int location) {
-		if (location >= _pxiHeader.builtInOffset && location < _builtInsFinalOffset) {
+		if (location < _pxiHeader.builtInOffset) {
+			int index = findFunction(location);
+			if (index >= 0) {
+				ref<Scope> scope = (*_functionMap)[index];
+				if (scope.class == ParameterScope) {
+					ref<ParameterScope> funcScope = ref<ParameterScope>(scope);
+					printf(" %s", funcScope.label());
+					if (int(funcScope.value) <= location)
+						printf("+%d", location - (int(funcScope.value) - 1));
+				}
+			}
+		} else if (location < _builtInsFinalOffset) {
 			printf(" &%s", builtInAt((location - _pxiHeader.builtInOffset) / address.bytes));
 		} else if (location >= _pxiHeader.stringsOffset && location < _stringsEndOffset) {
 			address x = &_physical[int(location - _logical)];
@@ -1445,6 +1469,48 @@ class Disassembler {
 		}
 	}
 
+	int findFunction(int location) {
+		pointer<ref<Scope>> functionMap = &(*_functionMap)[0];
+		int length = _functionMap.length();
+		int base = 0;
+		if (length <= 0)
+			return -1;
+		for (;;) {
+			if (length == 1)
+				return base;
+			
+			// Compute a 'middle' that guarantees that there is one more element past the middle.
+			
+			int middle = (length - 1) / 2;
+
+//			printf(" checking %s %x", dataMap[middle].name().asString(), dataMap[middle].offset);
+
+			// If the target location is somewhere above the last of the middle's data, look in the upper half
+			
+			if (functionAddress(functionMap[middle + 1]) <= location) {
+				middle++;
+				base += middle;
+				length -= middle;
+				functionMap += middle;
+				
+			// If the target location is somewhere below the middle symbol, look in the lower half
+				
+			} else if (functionAddress(functionMap[middle]) > location)
+				length = middle;
+			else
+				return base + middle;
+		}
+	}
+	
+	private int functionAddress(ref<Scope> scope) {
+		int result = scope.functionAddress();
+		
+		if (result < 0)
+			return _pxiHeader.entryPoint;
+		else
+			return result;
+	}
+	
 	int findSymbol(int location) {
 		pointer<ref<Symbol>> dataMap = _dataMap;
 		int length = _dataMapLength;

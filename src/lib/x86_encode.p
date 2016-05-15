@@ -737,6 +737,7 @@ class X86_64Encoder extends Target {
 		d.setFixups(&_pxiFixups);
 		d.setFixups(_fixups);
 		d.setDataMap(&_dataMap[0][0], _dataMap[0].length());
+		d.setFunctionMap(&_functionMap);
 		d.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
 		for (int i = 8; i > 0; i >>= 1) {
 			int length = _dataOffsets[i / 2] - _dataOffsets[i];

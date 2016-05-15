@@ -33,8 +33,6 @@ public abstract int injectObjects(pointer<address> objects, int objectCount);
 
 public abstract int eval(int startObject, pointer<pointer<byte>> args, int argsCount, pointer<pointer<byte>> exceptionInfo);
 
-// evalNative call the native runtime.  entryPoint is the native function that should be run.
-
 public abstract int evalNative(ref<X86_64NextSectionHeader> header, address image, pointer<pointer<byte>> args, int argsCount);
 
 public abstract boolean setTrace(boolean newValue);

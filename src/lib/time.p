@@ -14,14 +14,41 @@
    limitations under the License.
  */
 namespace parasol:time;
+
+import native:windows;
+import native:C;
+
+@Constant
+private long ERA_DIFF = 0x019DB1DED53E8000;
 /*
  * A class that encapsulates time representation - using the UNIX era in milliseconds.
  */
 public class Time {
+
 	private long _value;
 	
 	public Time(long value) {
 		_value = value;
+	}
+	/*
+	 * This is a constructor defined for local use only to construct a Parasol Time object
+	 * from a Windows FILETIME object. 
+	 */
+	Time(windows.FILETIME fileTime) {
+		// Use UNIX era, and millis rather than 100nsec units
+		_value = (*ref<long>(&fileTime) - ERA_DIFF) / 10000;
+	}
+	/*
+	 * Implement a fully ordered relation of Time objects so that times can be compared
+	 * correctly.
+	 */
+	public int compare(ref<Time> other) {
+		if (_value > other._value)
+			return 1;
+		else if (_value < other._value)
+			return -1;
+		else
+			return 0;
 	}
 	
 	public long value() {
@@ -30,8 +57,12 @@ public class Time {
 }
 
 public Time now() {
-	Time t(_now());
-	return t;
+	windows.SYSTEMTIME s;
+	windows.FILETIME f;
+
+	windows.GetSystemTime(&s);
+	windows.SystemTimeToFileTime(&s, &f);
+	Time result(f);
+	return result;
 }
 
-private abstract long _now();

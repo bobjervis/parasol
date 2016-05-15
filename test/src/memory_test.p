@@ -21,7 +21,7 @@ address freed;
 
 class TestAllocator extends memory.Allocator {
 	address alloc(long n) {
-		allocated = allocz(int(n));
+		allocated = C.calloc(unsigned(n), 1);
 		return allocated;
 	}
 	

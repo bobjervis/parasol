@@ -36,6 +36,10 @@ public class HICON = address;
 public class HCURSOR = address;
 public class HBRUSH = address;
 public class HINSTANCE = address;
+public class BOOL = int;
+public class WINBOOL = int;
+public class HLOCAL = address;
+public class WORD = short;
 
 @Windows("kernel32.dll", "GetModuleFileNameA")
 public abstract int GetModuleFileName(HMODULE hModule, pointer<byte> filename, int filenameSize);
@@ -58,6 +62,18 @@ public abstract int GetLastError();
 
 @Windows("kernel32.dll", "LoadLibraryA")
 public abstract HMODULE LoadLibrary(pointer<byte> lpLibFileName);
+@Windows("kernel32.dll", "FreeLibrary")
+public abstract BOOL FreeLibrary(HMODULE hModule);
+
+@Windows("kernel32.dll", "LocalAlloc")
+public abstract HLOCAL LocalAlloc(unsigned uFlags, unsigned uBytes);
+@Windows("kernel32.dll", "LocalFree")
+public abstract HLOCAL LocalFree(HLOCAL hMem);
+
+@Windows("kernel32.dll", "GetSystemTime")
+public abstract void GetSystemTime(ref<SYSTEMTIME> lpSystemTime);
+@Windows("kernel32.dll", "SystemTimeToFileTime")
+public abstract WINBOOL SystemTimeToFileTime(ref<SYSTEMTIME> lpSystemTime, ref<FILETIME> lpFileTome);
 
 public int sizeof_WIN32_FIND_DATA = 320;
 
@@ -78,6 +94,17 @@ public class WIN32_FIND_DATA {
 	}
 }
 
+public class SYSTEMTIME {
+	public WORD wYear;
+	public WORD wMonth;
+	public WORD wDayOfWeek;
+	public WORD wDay;
+	public WORD wHour;
+	public WORD wMinute;
+	public WORD wSecond;
+	public WORD wMilliseconds;
+}
+
 public class FILETIME {
     public unsigned dwLowDateTime;
     public unsigned dwHighDateTime;
@@ -95,9 +122,6 @@ public unsigned PAGE_READWRITE = 0x04;
 public abstract address VirtualAlloc(address lpAddress, long sz, unsigned flAllocationType, unsigned flProtect);
 @Windows("kernel32.dll", "VirtualProtect")
 public abstract int VirtualProtect(address lpAddress, long sz, unsigned flNewProtect, ref<unsigned> lpflOldProtect);
-
-//@Windows("kernel32.dll", "FormatMessageA")
-public abstract pointer<byte> FormatMessage(unsigned ntstatus);
 
 public class WNDCLASSEX {
 

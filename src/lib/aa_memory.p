@@ -86,12 +86,10 @@ public class Heap extends Allocator {
 	}
 	
 	public address alloc(long n) {
-		return allocz(n);
+		return C.calloc(unsigned(n), 1);
 	}
 	
 	public void free(address p) {
-		if (p == null)
-			return;
 		C.free(p);
 	}
 }

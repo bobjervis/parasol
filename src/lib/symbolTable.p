@@ -427,6 +427,10 @@ class ParameterScope extends Scope {
 		return &_parameters;
 	}
 
+	public int functionAddress() {
+		return int(value) - 1;
+	}
+
 	public Kind kind() {
 		return _kind;
 	}
@@ -542,10 +546,14 @@ class RootScope extends Scope {
 
 class UnitScope extends Scope {
 	private ref<FileStat> _file;
-
+	
 	public UnitScope(ref<Scope> rootScope, ref<FileStat> file, ref<Node> definition) {
 		super(rootScope, definition, StorageClass.STATIC, null);
 		_file = file;
+	}
+
+	public int functionAddress() {
+		return -1;
 	}
 
 	public void mergeIntoNamespace(ref<Namespace> nm, ref<CompileContext> compileContext) {
@@ -828,7 +836,11 @@ class Scope {
 			}break;
 			}
 		}
-		return "<anonymous>";
+		ref<Namespace> nm = getNamespace();
+		if (nm != null)
+			return nm.dottedName();
+		else
+			return "[" + file().filename() + "]";
 	}
 
 	boolean defineImport(ref<Identifier> id, ref<Symbol> definition, ref<MemoryPool> memoryPool) {
@@ -996,7 +1008,14 @@ class Scope {
 	public boolean hasVtable(ref<CompileContext> compileContext) {
 		return false;
 	}
-
+	/*
+	 * A base method that will be overridden by the classes that care about it.
+	 */
+	public int functionAddress() {
+		assert(false);
+		return 0;
+	}
+	
 	public int maximumAlignment() {
 		int max = 1;
 		for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
@@ -1316,6 +1335,10 @@ class Namespace extends Symbol {
 
 	public ref<Scope> symbols() {
 		return _symbols;
+	}
+	
+	public string dottedName() {
+		return _dottedName;
 	}
 }
 /*

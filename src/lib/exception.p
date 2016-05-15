@@ -262,7 +262,29 @@ public class RuntimeException extends Exception {
 	public string message() {
 		if (_exceptionContext == null)
 			return "RuntimeException (not thrown)\n";
-		pointer<byte> message = windows.FormatMessage(unsigned(_exceptionContext.exceptionType));
+		pointer<byte> message = formatMessage(unsigned(_exceptionContext.exceptionType));
+/*
+		pointer<byte> lpMessageBuffer;
+		windows.HMODULE Hand = windows.LoadLibrary("NTDLL.DLL");
+
+		FormatMessage(
+				FORMAT_MESSAGE_ALLOCATE_BUFFER |
+				FORMAT_MESSAGE_FROM_SYSTEM |
+				FORMAT_MESSAGE_FROM_HMODULE,
+				Hand,
+				NTStatusMessage,
+				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+				(char*) &lpMessageBuffer,
+		       0,
+		       NULL );
+
+		   // Now display the string.
+
+		string text(lpMessageBuffer);
+		if (lpMessageBuffer != null)
+			windows.LocalFree( lpMessageBuffer );
+		windows.FreeLibrary(Hand);
+		*/
 		string text(message);
 		string output;
 		output.printf("RuntimeException: ");
@@ -289,6 +311,8 @@ public class RuntimeException extends Exception {
 	}	
 
 }
+
+public abstract pointer<byte> formatMessage(unsigned ntstatus);
 
 public class DivideByZeroException extends RuntimeException {
 	DivideByZeroException(ref<ExceptionContext> exceptionContext) {

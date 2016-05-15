@@ -18,6 +18,7 @@ namespace parasol:process;
 import parasol:storage;
 import parasol:time;
 import native:windows;
+import native:C;
 
 public string binaryFilename() {
 	byte[] filename;
@@ -62,4 +63,6 @@ private abstract int debugSpawnImpl(pointer<byte> command, ref<SpawnPayload> out
 
 private abstract void disposeOfPayload(ref<SpawnPayload> output);
 
-public abstract void exit(int code);
+public void exit(int code) {
+	C.exit(code);
+}

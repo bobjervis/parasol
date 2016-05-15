@@ -24,6 +24,10 @@ public int SEEK_SET = 0;
 public int SEEK_CUR = 1;
 public int SEEK_END = 2;
 
+@Windows("msvcrt.dll", "calloc")
+public abstract address calloc(unsigned count, unsigned size);
+
+@Windows("msvcrt.dll", "_ecvt")
 public abstract pointer<byte> ecvt(double number, int ndigits, ref<int> decpt, ref<int> sign);
 
 @Windows("msvcrt.dll", "exit")
@@ -32,10 +36,13 @@ public abstract void exit(int exitCode);
 @Windows("msvcrt.dll", "fclose")
 public abstract int fclose(ref<FILE> fp);
 
+@Windows("msvcrt.dll", "_fcvt")
 public abstract pointer<byte> fcvt(double number, int ndigits, ref<int> decpt, ref<int> sign);
 
+@Windows("msvcrt.dll", "ferror")
 public abstract int ferror(ref<FILE> fp);
 
+@Windows("msvcrt.dll", "fgetc")
 public abstract int fgetc(ref<FILE> fp);
 
 @Windows("msvcrt.dll", "fopen")
@@ -44,31 +51,37 @@ public abstract ref<FILE> fopen(pointer<byte> filename, pointer<byte> mode);
 @Windows("msvcrt.dll", "fread")
 public abstract unsigned fread(address cp, unsigned size, unsigned count, ref<FILE> fp);
 
+@Windows("msvcrt.dll", "free")
+public abstract void free(address data);
+
 @Windows("msvcrt.dll", "fseek")
 public abstract int fseek(ref<FILE> fp, int offset, int origin);
 
+@Windows("msvcrt.dll", "ftell")
 public abstract int ftell(ref<FILE> fp);
 
+@Windows("msvcrt.dll", "fwrite")
 public abstract unsigned fwrite(address cp, unsigned size, unsigned count, ref<FILE> fp);
 
+@Windows("msvcrt.dll", "_gcvt")
 public abstract pointer<byte> gcvt(double number, int ndigit, pointer<byte> buf);
 
+@Windows("msvcrt.dll", "getenv")
 public abstract pointer<byte> getenv(pointer<byte> variable);
 
+@Windows("msvcrt.dll", "memcpy")
+public abstract address memcpy(address destination, address source, int amount);
+
+@Windows("msvcrt.dll", "memset")
+public abstract address memset(address destination, byte value, int amount);
+
+@Windows("msvcrt.dll", "strtod")
 public abstract double strtod(pointer<byte> str, ref<pointer<byte>> endPtr);
 
-public int strlen(pointer<byte> cp) {
-	pointer<byte> start = cp;
-	while (*cp != 0)
-		cp++;
-	return int(cp - start);
-}
+@Windows("msvcrt.dll", "strlen")
+public abstract int strlen(pointer<byte> cp);
 
-// To be added to runtime:
-
-public abstract address memcpy(address destination, address source, int amount);
-public abstract address memset(address destination, byte value, int amount);
-//public abstract address calloc(long size);
-public abstract void free(address data);
+@Windows("msvcrt.dll", "time")
+public abstract int time(ref<int> t);
 
 
