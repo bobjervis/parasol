@@ -39,3 +39,37 @@ try {
 assert(ranFinally);
 assert(!ranAfterFinally);
 assert(ranCatch);
+
+boolean inCatch = false;
+boolean inFinally = false;
+boolean inFinallyAfterCatch = false;
+
+void tryFunc(boolean doThrow) {
+	try {
+		printf("tryFunc(%s)\n", doThrow ? "true" : "false");
+		if (doThrow)
+			throw Exception("Hit it!");
+	} catch (Exception e) {
+		inCatch = true;
+	} finally {
+		if (inCatch && !inFinally)
+			inFinallyAfterCatch = true;
+		inFinally = true;
+	}
+}
+
+tryFunc(false);
+
+assert(inFinally);
+assert(!inCatch);
+assert(!inFinallyAfterCatch);
+
+inCatch = false;
+inFinally = false;
+inFinallyAfterCatch = false;
+
+tryFunc(true);
+
+assert(inCatch);
+assert(inFinally);
+assert(inFinallyAfterCatch);

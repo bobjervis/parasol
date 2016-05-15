@@ -762,7 +762,6 @@ class X86_64Encoder extends Target {
 		RegisterState r(&_t);
 		f.r = &r;
 		f.firstCode = _functionCode.length();
-		f.firstExceptionEntry = _exceptionTable.length();
 		f.avail = longMask|floatMask;
 		f.current = scope;
 		f.oldestUnspilled = f.tempBase = _t.stackDepth();
@@ -793,6 +792,8 @@ class X86_64Encoder extends Target {
 			_code[offset + i] = 0x37;						// Make it an AAA instruction to fill space.
 		
 		int nextCopy = offset;
+		int firstExceptionEntry = _exceptionTable.length();
+
 		for (ref<CodeSegment> cs = _f.first; cs != null; cs = cs.next) {
 			for (int i = 0; i < cs.sourceLocations.length(); i++)
 				cs.sourceLocations[i].offset += nextCopy;
@@ -849,7 +850,7 @@ class X86_64Encoder extends Target {
 				}
 			}
 		}
-		for (int i = _f.firstExceptionEntry; i < _exceptionTable.length(); i++) {
+		for (int i = firstExceptionEntry; i < _exceptionTable.length(); i++) {
 			if (_exceptionHandlers[i] != null)
 				_exceptionTable[i].handler = offset + _exceptionHandlers[i].segmentOffset;
 		}
@@ -863,7 +864,6 @@ class X86_64Encoder extends Target {
 //		public long allocatedRegisters;
 		public int autoSize;
 		public int firstCode;
-		public int firstExceptionEntry;
 		public ref<CodeSegment> first;
 		public ref<CodeSegment> last;
 		public ref<CodeSegment> emitting;

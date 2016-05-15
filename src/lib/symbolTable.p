@@ -431,6 +431,19 @@ class ParameterScope extends Scope {
 		return int(value) - 1;
 	}
 
+	string label() {
+		switch (_kind) {
+		case	DEFAULT_CONSTRUCTOR:
+			string enc = enclosing().label();
+			return enc + ".";
+			
+		case	IMPLIED_DESTRUCTOR:
+			enc = enclosing().label();
+			return enc + ".~";
+		}
+		return super.label();
+	}
+
 	public Kind kind() {
 		return _kind;
 	}
@@ -817,23 +830,23 @@ class Scope {
 	string label() {
 		if (_definition != null) {
 			switch (_definition.op()) {
-			case	FUNCTION:{
+			case	FUNCTION:
 				ref<Function> f = ref<Function>(_definition);
-				if (f.name() != null) {
-					string enc = _enclosing.label();
-					return enc + "." + f.name().value().asString();
-				}
-			}break;
-			case	CLASS:{
+				if (f.name() != null)
+					return _enclosing.label() + "." + f.name().value().asString();
+				break;
+				
+			case	CLASS:
 				ref<Class> c = ref<Class>(_definition);
 				if (c.name() != null)
-					return "class " + c.name().value().asString();
-			}break;
-			case	TEMPLATE:{
+					return _enclosing.label() + "." + c.name().value().asString();
+				break;
+				
+			case	TEMPLATE:
 				ref<Template> t = ref<Template>(_definition);
 				if (t.name() != null)
-					return "template " + t.name().value().asString();
-			}break;
+					return _enclosing.label() + "." + t.name().value().asString();
+				break;
 			}
 		}
 		ref<Namespace> nm = getNamespace();

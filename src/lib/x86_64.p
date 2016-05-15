@@ -621,6 +621,10 @@ public class X86_64 extends X86_64AssignTemps {
 			closeCodeSegment(CC.JMP, join);
 			resolveDeferredTrys(false, compileContext);
 		}
+		for (int i = f().knownDeferredTrys; i < _deferredTry.length(); i++) {
+			
+		}
+		_deferredTry.resize(f().knownDeferredTrys);
 	}
 
 	private void generateDestructorShutdown(ref<ParameterScope> parameterScope, ref<CompileContext> compileContext) {
@@ -701,7 +705,6 @@ public class X86_64 extends X86_64AssignTemps {
 
 			pushExceptionHandler(outer);
 		}
-		_deferredTry.resize(f().knownDeferredTrys);
 	}
 	
 	private void reserveAutoMemory(boolean preserveRCX, ref<CompileContext> compileContext) {
@@ -1224,6 +1227,9 @@ public class X86_64 extends X86_64AssignTemps {
 			generate(tr.body(), compileContext);
 			pushExceptionHandler(outer);
 			join.start(this);
+			if (tr.finallyClause() != null) {
+				generate(tr.finallyClause().clone(compileContext.tree()), compileContext);
+			}
 			DeferredTry dt = { tryStatement: tr, primaryHandler: primaryHandler, join: join, exceptionHandler: outer };
 			_deferredTry.append(dt);
 			break;

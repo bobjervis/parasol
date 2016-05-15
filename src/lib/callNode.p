@@ -418,6 +418,7 @@ class Call extends ParameterBag {
 		ref<Call> call = ref<Call>(tree.newCall(op(), target, arguments, location()).finishClone(this, tree.pool()));
 		call._category = _category;
 		call._overload = _overload;
+		call._folded = _folded;
 		return call;
 	}
 
