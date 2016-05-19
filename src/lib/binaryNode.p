@@ -131,6 +131,20 @@ class Binary extends Node {
 	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
 		if (deferGeneration())
 			return this;
+		if (voidContext) {
+			switch (op()) {
+			case SUBSCRIPT:
+				_left = _left.fold(tree, true, compileContext);
+				_right = _right.fold(tree, true, compileContext);
+				if (_left.op() == Operator.EMPTY)
+					return _right;
+				if (_right.op() == Operator.EMPTY)
+					return _left;
+				ref<Node> n = tree.newBinary(Operator.SEQUENCE, _left, _right, location());
+				n.type = _right.type;
+				return n;
+			}
+		}
 		if (type == null)
 			print(0);
 		if (type.family() == TypeFamily.SHAPE) {
@@ -139,7 +153,9 @@ class Binary extends Node {
 				markLiveSymbols(_right, StorageClass.AUTO, compileContext);
 			case	BIND:
 				_left = _left.fold(tree, false, compileContext);
-				_right = _right.fold(tree, true, compileContext);
+				_right = _right.fold(tree, false, compileContext);		// Call this context not void, because if it were
+																		// folded as truly voidContext it would erase
+																		// simple identifier declarators.
 				return this;
 				
 			case	SUBSCRIPT:
@@ -148,6 +164,7 @@ class Binary extends Node {
 				break;
 				
 			case	INITIALIZE:
+				voidContext = true;
 			case	ASSIGN:
 				if (shouldVectorize(_right)) {
 					// Now, we've done it. We've got a vectorized assignment.
@@ -179,7 +196,7 @@ class Binary extends Node {
 		case	DECLARATION:
 			_left = _left.fold(tree, false, compileContext);
 			markLiveSymbols(_right, StorageClass.AUTO, compileContext);
-			_right = _right.fold(tree, true, compileContext);
+			_right = _right.fold(tree, false, compileContext);			//Need to mark this as NOT a voidContext to avoid erasing a simple identifier
 			return this;
 
 		case	FLAGS_DECLARATION:
@@ -348,7 +365,7 @@ class Binary extends Node {
 					ref<NodeList> args = tree.newNodeList(_right);
 					ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
 					call.type = compileContext.arena().builtInType(TypeFamily.VOID);
-					return call.fold(tree, voidContext, compileContext);
+					return call.fold(tree, true, compileContext);
 				}
 				scope = type.copyConstructor();
 				if (scope != null) {
@@ -368,6 +385,42 @@ class Binary extends Node {
 			default:
 				print(0);
 				assert(false);
+			}
+			break;
+			
+		case	PLACEMENT_NEW:
+			entityType = type.indirectType(compileContext);
+			defaultConstructor = entityType.defaultConstructor();
+			if (_right.op() == Operator.CALL) {
+				ref<Call> constructor = ref<Call>(_right);
+				if (constructor.overload() == null) {
+					if (defaultConstructor != null) // This must have been a late-created constructor.
+						return foldDefaultConstructor(defaultConstructor, _left.fold(tree, false, compileContext), tree, voidContext, compileContext);
+					else
+						return defaultPlacementNewInitialization(_left, tree, voidContext, compileContext);
+				}
+				if (voidContext) {
+					constructor.setConstructorMemory(_left.fold(tree, false, compileContext), tree);
+					return constructor.fold(tree, true, compileContext);
+				}
+				ref<Variable> temp = compileContext.newVariable(type);
+				ref<Reference> r = tree.newReference(temp, true, location());
+				ref<Node> defn = tree.newBinary(Operator.ASSIGN, r, _left.fold(tree, false, compileContext), location());
+				defn.type = type;
+				r = tree.newReference(temp, false, location());
+				constructor.setConstructorMemory(r, tree);
+				ref<Node> seq = tree.newBinary(Operator.SEQUENCE, defn, constructor, location());
+				seq.type = compileContext.arena().builtInType(TypeFamily.VOID);
+				r = tree.newReference(temp, false, location());
+				seq = tree.newBinary(Operator.SEQUENCE, seq, r, location());
+				seq.type = type;
+				ref<Node> result = seq.fold(tree, false, compileContext);
+				return result;
+			} else {
+				if (defaultConstructor != null) // This must have been a late-created constructor.
+					return foldDefaultConstructor(defaultConstructor, _left.fold(tree, false, compileContext), tree, voidContext, compileContext);
+				else
+					return defaultPlacementNewInitialization(_left, tree, voidContext, compileContext);
 			}
 			break;
 			
@@ -891,6 +944,7 @@ class Binary extends Node {
 		}
 		return defn, value;
 	}	
+	
 	private ref<Node> foldDefaultConstructor(ref<ParameterScope> defaultConstructor, ref<Node> allocation, ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
 		ref<Variable> temp = compileContext.newVariable(type);
 		ref<Reference> r = tree.newReference(temp, true, location());
@@ -941,6 +995,29 @@ class Binary extends Node {
 			return seq;
 		} else
 			return allocation;
+	}
+	
+	private ref<Node> defaultPlacementNewInitialization(ref<Node> target, ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+		ref<Type> objType = type.indirectType(compileContext);
+		if (objType.hasVtable(compileContext)) {
+			target = target.fold(tree, false, compileContext);
+			ref<Variable> temp = compileContext.newVariable(type);
+			ref<Reference> r = tree.newReference(temp, true, location());
+			ref<Node> defn = tree.newBinary(Operator.ASSIGN, r, target, location());
+			defn.type = type;
+			r = tree.newReference(temp, false, location());
+			ref<Node> constructor = tree.newUnary(Operator.STORE_V_TABLE, r, location());
+			constructor.type = objType;
+			ref<Node> seq = tree.newBinary(Operator.SEQUENCE, defn, constructor, location());
+			seq.type = compileContext.arena().builtInType(TypeFamily.VOID);
+			if (voidContext)
+				return seq;
+			r = tree.newReference(temp, false, location());
+			seq = tree.newBinary(Operator.SEQUENCE, seq, r, location());
+			seq.type = type;
+			return seq;
+		} else
+			return target.fold(tree, voidContext, compileContext);
 	}
 	
 	private ref<Node> foldClassCopy(ref<SyntaxTree> tree, boolean initializer, ref<CompileContext> compileContext) {
@@ -1371,6 +1448,44 @@ class Binary extends Node {
 			type = _right.type;
 			break;
 			
+		case	PLACEMENT_NEW:
+			compileContext.assignTypes(_left);
+			if (_left.deferAnalysis()) {
+				type = _left.type;
+				break;
+			}
+			if (_right.op() == Operator.CALL) {
+				// It needs to be a proper constructor of the type.  So,
+				// processing this as a plain constructor will do everything
+				// necessary to bind the arguments to the correct constructor.
+				compileContext.assignTypes(_right);
+				if (_right.deferAnalysis()) {
+					type = _right.type;
+					break;
+				}
+				ref<Call> call = ref<Call>(_right);
+				type = call.target().unwrapTypedef(compileContext);
+			} else {
+				type = _right.unwrapTypedef(compileContext);
+				if (deferAnalysis())
+					break;
+				// So it's a valid type, what if it has non-default constructors only?
+				if (type.hasConstructors() && type.defaultConstructor() == null) {
+					add(MessageId.NO_DEFAULT_CONSTRUCTOR, compileContext.pool());
+					break;
+				}
+			}
+			if (!_left.canCoerce(compileContext.arena().builtInType(TypeFamily.ADDRESS), false, compileContext)) { 
+				_left.add(MessageId.CANNOT_CONVERT, compileContext.pool());
+				_left.type = compileContext.errorType();
+				type = _left.type;
+				break;
+			}
+			if (!type.isConcrete(compileContext))
+				_right.add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool());
+			type = compileContext.arena().createRef(type, compileContext);
+			break;
+
 		case	NEW:
 			if (_left.op() != Operator.EMPTY) {
 				compileContext.assignTypes(_left);
@@ -1448,12 +1563,13 @@ class Binary extends Node {
 				type = _right.type;
 				break;
 			}
-			if (!_right.canCoerce(compileContext.arena().builtInType(TypeFamily.ADDRESS), false, compileContext)) {
+			if (_right.canCoerce(compileContext.arena().builtInType(TypeFamily.ADDRESS), false, compileContext)) 
+				type = compileContext.arena().builtInType(TypeFamily.VOID);
+			else {
 				_right.add(MessageId.CANNOT_CONVERT, compileContext.pool());
 				_right.type = compileContext.errorType();
 				type = _right.type;
 			}
-			type = compileContext.arena().builtInType(TypeFamily.VOID);
 			break;
 
 		case	ADD:
@@ -2390,6 +2506,9 @@ public void markLiveSymbols(ref<Node> declarator, StorageClass storageClass, ref
 			assert(false);
 		}
 		markLiveSymbols(u.operand(), storageClass, compileContext);
+		break;
+		
+	case	EMPTY:
 		break;
 		
 	default:

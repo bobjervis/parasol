@@ -276,6 +276,7 @@ class vector<class E, class I> {
 		I newSize;
 		if (_data != null) {
 			if (int(_capacity) >= int(newLength)) {
+				// TODO: run destructors
 				if (int(newLength) == 0)
 					clear();
 				else
@@ -284,6 +285,8 @@ class vector<class E, class I> {
 			}
 			newSize = reservedSize(newLength);
 			if (_capacity == newSize) {
+//				for (int i = int(_length); i < int(newLength); i++)
+//					new (&_data[i]) E();
 				_length = newLength;
 				return;
 			}

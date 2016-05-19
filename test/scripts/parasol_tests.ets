@@ -59,6 +59,8 @@ run(filename: complex_subscript.p)
 
 // Basic runtime execution tests
 
+//run(filename: vector_elem_constructor_test.p)
+run(filename: placement_new_test.p)
 run(filename: try_test.p)
 run(filename: finally_test.p)
 run(filename: function_parameter_test.p)
@@ -962,6 +964,14 @@ compile(expect: fail, message: UNEXPECTED_RC) { "switch (5) { case 3: }" }
 compile(expect: fail, message: UNEXPECTED_RC) { "switch (5) { default: }" }
 
 compile() { "ref<int> x = new int;" }
+
+
+compile() { "ref<int> x = new (null) int;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "long x = new (null) int;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "ref<int> x = new (false) int;" }
+compile() { "ref<int> x = new (null) int();" }
+compile(expect: fail, message: CANNOT_CONVERT) { "long x = new (null) int();" }
+compile(expect: fail, message: CANNOT_CONVERT) { "ref<int> x = new (false) int();" }
 
 compile() { "enum a { A, B, C }; a x = a.B;" }
 

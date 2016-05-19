@@ -2735,6 +2735,9 @@ public class X86_64 extends X86_64AssignTemps {
 			instCall(_memcpy, compileContext);
 			break;
 
+		case	EMPTY:
+			break;
+			
 		case	ASSIGN:
 		case	INITIALIZE:
 			if (node.type == null) {

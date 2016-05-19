@@ -105,6 +105,12 @@ class Unary extends Node {
 	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
 		if (deferGeneration())
 			return this;
+		if (voidContext) {
+			switch (op()) {
+			case	ADDRESS:
+				return _operand.fold(tree, true, compileContext);
+			}
+		}
 		switch (op()) {
 		case	DECLARE_NAMESPACE:
 			// No need to do anything for these sub-trees.

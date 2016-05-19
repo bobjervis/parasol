@@ -2946,12 +2946,13 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 	case	DELETE:
 	case	IF:
 	case	CONDITIONAL:
+	case	PLACEMENT_NEW:
 		break;
 		
 	case	ASSIGN:
 		b = ref<Binary>(expression);
 		if (b.left().op() == Operator.SEQUENCE) {
-			ref<Node> destinations = b.left().fold(tree, false, compileContext);
+			ref<Node> destinations = foldMultiValueReturn(b.left(), tree, compileContext);
 			ref<Node> x = b.right().fold(tree, false, compileContext);
 			assert(x.op() == Operator.SEQUENCE);
 			b = ref<Binary>(x);
@@ -3002,4 +3003,19 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 	}
 //	expression.print(0);
 	return expression.fold(tree, true, compileContext);
+}
+
+private ref<Node> foldMultiValueReturn(ref<Node> left, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
+	if (left.op() == Operator.SEQUENCE) {
+		ref<Binary> b = ref<Binary>(left);
+		left = foldMultiValueReturn(b.left(), tree, compileContext);
+		ref<Node> right = foldMultiValueReturn(b.right(), tree, compileContext);
+		if (left != b.left() || right != b.right()) {
+			ref<Binary> n = tree.newBinary(Operator.SEQUENCE, left, right, b.location());
+			n.type = b.type;
+			return n;
+		} else
+			return b;
+	} else
+		return left.fold(tree, false, compileContext);
 }

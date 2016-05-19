@@ -345,6 +345,7 @@ class CompileContext {
 		case	OBJECT_AGGREGATE:
 		case	OR:
 		case	OR_ASSIGN:
+		case	PLACEMENT_NEW:
 		case	REMAINDER:
 		case	REMAINDER_ASSIGN:
 		case	RETURN:

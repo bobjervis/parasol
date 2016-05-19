@@ -142,7 +142,12 @@ class Identifier extends Node {
 		return id;
 	}
 
-	public ref<Identifier> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+		if (voidContext) {
+			ref<Node> n = tree.newLeaf(Operator.EMPTY, location());
+			n.type = type;
+			return n;
+		}
 		return this;
 	}
 	

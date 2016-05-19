@@ -54,6 +54,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		int depth = tempStackDepth();
 		switch (node.op()) {
 		case	FOR:
+		case	EMPTY:
 			return;
 			
 		case	CALL:
