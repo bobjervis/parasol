@@ -485,6 +485,8 @@ public class Arena {
 }
 
 class BuiltInMap {
+	BuiltInMap() {}
+	
 	BuiltInMap(TypeFamily f, string n) {
 		family = f;
 		name = n;

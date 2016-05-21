@@ -1353,13 +1353,34 @@ class Parser {
 
 			case	DOT:
 				t = _scanner.next();
-				if (t == Token.BYTES)
+				switch (t) {
+				case	BYTES:
 					x = _tree.newUnary(Operator.BYTES, x, location);
-				else if (t == Token.CLASS)
+					break;
+					
+				case	TILDE:
+					t = _scanner.next();
+					if (t != Token.LEFT_PARENTHESIS) {
+						_scanner.pushBack(t);
+						return resync(MessageId.SYNTAX_ERROR);
+					}
+					t = _scanner.next();
+					if (t != Token.RIGHT_PARENTHESIS) {
+						_scanner.pushBack(t);
+						return resync(MessageId.SYNTAX_ERROR);
+					}
+					x = _tree.newUnary(Operator.CALL_DESTRUCTOR, x, location);
+					break;
+					
+				case	CLASS:
 					x = _tree.newUnary(Operator.CLASS_OF, x, location);
-				else if (t == Token.IDENTIFIER)
+					break;
+					
+				case	IDENTIFIER:
 					x = _tree.newSelection(x, _scanner.value(), location);
-				else {
+					break;
+					
+				default:
 					_scanner.pushBack(t);
 					return resync(MessageId.SYNTAX_ERROR);
 				}

@@ -285,12 +285,13 @@ class vector<class E, class I> {
 			}
 			newSize = reservedSize(newLength);
 			if (_capacity == newSize) {
-//				for (int i = int(_length); i < int(newLength); i++)
-//					new (&_data[i]) E();
+				for (int i = int(_length); i < int(newLength); i++)
+					new (&_data[i]) E();
 				_length = newLength;
 				return;
 			}
 		} else {
+			_length = I(0);
 			if (int(newLength) == 0)
 				return;
 			newSize = reservedSize(newLength);
@@ -301,6 +302,8 @@ class vector<class E, class I> {
 				a[int(i)] = _data[int(i)];
 			memory.free(_data);
 		}
+		for (int i = int(_length); i < int(newLength); i++)
+			new (&a[i]) E();
 		_capacity = newSize;
 		_data = a;
 		_length = newLength;

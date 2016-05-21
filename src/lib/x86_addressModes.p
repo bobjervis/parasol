@@ -75,6 +75,11 @@ class X86_64AddressModes extends X86_64Encoder {
 				markAddressModes(args.node, compileContext);
 			break;
 			
+		case	CALL_DESTRUCTOR:
+			u = ref<Unary>(node);
+			tryMakeMode(u.operand(), modeComplexity & ~MC_CONST, nClass, compileContext);
+			break;
+			
 		case	MULTIPLY_ASSIGN:
 			ref<Binary> b = ref<Binary>(node);
 			modeComplexity = tryMakeMode(b.left(), MC_ADDRESS|MC_REG, nClass, compileContext);

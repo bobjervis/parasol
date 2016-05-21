@@ -138,7 +138,7 @@ class ImportDirectory {
 				ref<TemplateInstanceType> instance = instances[j];
 				if (instance.definingFile() == _files[i]) {
 					if (instance.concreteDefinition().countMessages() > 0) {
-						printf("template instance:\n");
+						printf("template instance %s:\n", instance.signature());
 						dumpMessages(_files[i], instance.concreteDefinition());
 					}
 				}

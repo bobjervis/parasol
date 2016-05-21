@@ -174,8 +174,10 @@ class OverloadOperation {
 
 	public ref<Type> includeConstructors(ref<Type> classType, ref<CompileContext> compileContext) {
 		for (int i = 0; i < classType.scope().constructors().length(); i++) {
-			_hadConstructors = true;
-			ref<Function> f = ref<Function>((*classType.scope().constructors())[i].definition());
+			ref<ParameterScope> constructor = (*classType.scope().constructors())[i];
+			if (constructor.kind() != ParameterScope.Kind.DEFAULT_CONSTRUCTOR)
+				_hadConstructors = true;
+			ref<Function> f = ref<Function>(constructor.definition());
 			if (f == null || f.name() == null)
 				continue;
 			ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
@@ -194,14 +196,15 @@ class OverloadOperation {
 			return _best[0].assignType(_compileContext), _best[0];
 
 		case	0:
+//			printf("_name = %p _arguments = %p _argCount = %d _hadConstructors %s\n", _name, _arguments, _argCount, _hadConstructors ? "true" : "false");
 			if (_name != null) {
 				_node.add(_anyPotentialOverloads ? MessageId.NO_MATCHING_OVERLOAD : MessageId.UNDEFINED, _compileContext.pool(), *_name);
 //				_node.print(2);
 //				for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
 //					nl.node.print(6);
-			} else if (_arguments == null && !_hadConstructors) {
+			} else if (_arguments == null && !_hadConstructors)
 				return _compileContext.arena().builtInType(TypeFamily.VOID), null;
-			} else
+			else
 				_node.add(MessageId.NO_MATCHING_CONSTRUCTOR, _compileContext.pool());
 			break;
 

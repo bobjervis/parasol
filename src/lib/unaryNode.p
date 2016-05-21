@@ -137,10 +137,13 @@ class Unary extends Node {
 		case	NOT:
 		case	INDIRECT:
 		case	BYTES:
+		case	CALL_DESTRUCTOR:
 		case	LOAD:
 			break;
 
 		case	CAST:
+			if (voidContext)
+				return _operand.fold(tree, true, compileContext);
 			if (_operand.op() == Operator.OBJECT_AGGREGATE) {
 				_operand.type = type;
 				return _operand.fold(tree, false, compileContext);
@@ -624,6 +627,15 @@ class Unary extends Node {
 				break;
 			}
 			type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+			break;
+
+		case	CALL_DESTRUCTOR:
+			compileContext.assignTypes(_operand);
+			if (_operand.deferAnalysis()) {
+				type = _operand.type;
+				break;
+			}
+			type = compileContext.arena().builtInType(TypeFamily.VOID);
 			break;
 
 		case	CLASS_OF:

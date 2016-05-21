@@ -2338,6 +2338,17 @@ public class X86_64 extends X86_64AssignTemps {
 			generateEllipsisArguments(ref<EllipsisArguments>(node), compileContext);
 			break;
 
+		case	CALL_DESTRUCTOR:
+			expression = ref<Unary>(node);
+			generate(expression.operand(), compileContext);
+			f().r.generateSpills(node, this);
+			ref<Type> actual = expression.operand().type.indirectType(compileContext);
+			if (actual == null)
+				actual = expression.operand().type;
+			if (actual.hasDestructor())
+				instCall(actual.scope().destructor(), compileContext);
+			break;
+
 		default:
 			node.print(0);
 			assert(false);

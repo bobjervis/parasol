@@ -97,6 +97,7 @@ enum Operator {
 	ADDRESS,
 	INDIRECT,
 	BYTES,
+	CALL_DESTRUCTOR,
 	CLASS_OF,
 	INCREMENT_BEFORE,
 	DECREMENT_BEFORE,
@@ -2947,6 +2948,7 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 	case	IF:
 	case	CONDITIONAL:
 	case	PLACEMENT_NEW:
+	case	CALL_DESTRUCTOR:
 		break;
 		
 	case	ASSIGN:

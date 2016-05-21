@@ -281,6 +281,7 @@ class CompileContext {
 		case	BREAK:
 		case	BYTES:
 		case	CALL:
+		case	CALL_DESTRUCTOR:
 		case	CASE:
 		case	CAST:
 		case	CHARACTER:

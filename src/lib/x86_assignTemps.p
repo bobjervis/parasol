@@ -195,6 +195,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			break;
 			
 		case	STORE_V_TABLE:
+		case	CALL_DESTRUCTOR:
 			u = ref<Unary>(node);
 			assignRegisterTemp(u.operand(), RCXmask, compileContext);
 			break;

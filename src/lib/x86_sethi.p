@@ -55,6 +55,12 @@ void sethiUllman(ref<Node> node, ref<CompileContext> compileContext, ref<Target>
 		}
 		break;
 		
+	case	CALL_DESTRUCTOR:
+		u = ref<Unary>(node);
+		sethiUllman(u.operand(), compileContext, target);
+		u.sethi = CALL_REG_USE;
+		break;
+		
 	case	ADDRESS:
 		ref<Unary> u = ref<Unary>(node);
 		if (u.operand().op() == Operator.IDENTIFIER) {

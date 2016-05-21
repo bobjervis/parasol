@@ -59,7 +59,8 @@ run(filename: complex_subscript.p)
 
 // Basic runtime execution tests
 
-//run(filename: vector_elem_constructor_test.p)
+run(filename: placement_delete_test.p)
+run(filename: vector_elem_constructor_test.p)
 run(filename: placement_new_test.p)
 run(filename: try_test.p)
 run(filename: finally_test.p)

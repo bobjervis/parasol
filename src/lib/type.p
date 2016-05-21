@@ -384,6 +384,13 @@ class ClassType extends Type {
 		return _definition;
 	}
 
+	public string signature() {
+		if (_definition != null && _definition.name() != null)
+			return _definition.name().identifier().asString();
+		else
+			return super.signature();
+	}
+	
 	private boolean sameAs(ref<Type> other) {
 		// Two classes are considered the same only
 		// if they have the same declaration site, which
@@ -708,6 +715,10 @@ class TemplateType extends Type {
 		return _definingSymbol;
 	}
 
+	public string signature() {
+		return definingSymbol().name().asString();
+	}
+	
 	private boolean sameAs(ref<Type> other) {
 		assert(false);
 		return false;
@@ -855,6 +866,24 @@ class TemplateInstanceType extends ClassType {
 		}
 	}
 
+	public string signature() {
+		string sig = _templateType.signature();
+		sig.append('<');
+		
+		for (int i = 0; i < _arguments.length(); i++) {
+			if (i > 0)
+				sig.append(", ");
+			ref<Type> t = ref<Type>(_arguments[i]);
+			sig.append(t.signature());
+		}
+		sig.append(">");
+		if (_extends != null) {
+			sig.append(" extends ");
+			sig.append(_extends.signature());
+		}
+		return sig;
+	}
+	
 	public ref<TemplateInstanceType> next() {
 		return _next;
 	}
@@ -947,6 +976,10 @@ class Type {
 	}
 
 	public string name() {
+		return string(_family);
+	}
+	
+	public string signature() {
 		return string(_family);
 	}
 	
