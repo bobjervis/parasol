@@ -130,6 +130,8 @@ class vector<class E, class I> {
 	}
 	
 	~vector() {
+		for (int i = 0; i < int(_length); i++)
+			_data[i].~();
 		memory.free(_data);
 	}
 	
@@ -275,8 +277,9 @@ class vector<class E, class I> {
 	public void resize(I newLength) {
 		I newSize;
 		if (_data != null) {
-			if (int(_capacity) >= int(newLength)) {
-				// TODO: run destructors
+			if (int(_length) >= int(newLength)) {
+				for (int i = int(newLength); i < int(_length); i++)
+					_data[i].~();
 				if (int(newLength) == 0)
 					clear();
 				else

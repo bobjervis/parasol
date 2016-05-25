@@ -262,6 +262,39 @@ class Call extends ParameterBag {
 			}
 			int floatingArgumentIndex = 0;
 			if (_arguments != null) {
+				
+				// The goal of this patch of code is to deal with the possibility of needing to call a destructor.
+				// The way to achieve this is a reliable way is to generate a temp and call markLiveSymbol to get it
+				// cleaned up.
+				/*
+				for (ref<NodeList> args = _arguments; args != null; args = args.next) {
+					if (args.node.type.family() == TypeFamily.STRING && args.node.op() == Operator.CALL) {
+//						ref<FunctionType> functionType = ref<FunctionType>(_target.type);
+						ref<Type> t = args.node.type;
+						if (functionType.returnCount() == 1) {
+							printf("===== call->call =====\n");
+							print(0);
+							printf("--\n");
+							args.node.print(0);
+							printf("----------------------\n");
+
+							ref<Variable> temp = compileContext.newVariable(t);
+							ref<Reference> r = tree.newReference(temp, true, location());
+							compileContext.markLiveSymbol(r);
+							ref<Node> call = tree.newBinary(Operator.ASSIGN, r, args.node, location());
+							call.type = t;
+							call = call.fold(tree, true, compileContext);
+							r = tree.newReference(temp, false, location());
+							ref<Node> seq = tree.newBinary(Operator.SEQUENCE, call, r, location());
+							seq.type = t;
+							args.node = seq;
+							printf("After:\n");
+							print(0);
+							printf("======================\n");
+						}
+					}
+				}
+				*/
 				ref<NodeList> params = functionType.parameters();
 				
 				ref<NodeList> registerArguments;

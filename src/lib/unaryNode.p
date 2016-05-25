@@ -137,7 +137,6 @@ class Unary extends Node {
 		case	NOT:
 		case	INDIRECT:
 		case	BYTES:
-		case	CALL_DESTRUCTOR:
 		case	LOAD:
 			break;
 
@@ -328,6 +327,11 @@ class Unary extends Node {
 			f = tree.newUnary(Operator.EXPRESSION, call, location());
 			f.type = call.type;
 			return f.fold(tree, voidContext, compileContext);
+
+		case	CALL_DESTRUCTOR:
+			_operand = tree.newUnary(Operator.ADDRESS, _operand.fold(tree, false, compileContext), location());
+			_operand.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+			return this;
 			
 		case	ADDRESS:
 			if (_operand.op() == Operator.SUBSCRIPT) {

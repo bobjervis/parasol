@@ -2342,9 +2342,8 @@ public class X86_64 extends X86_64AssignTemps {
 			expression = ref<Unary>(node);
 			generate(expression.operand(), compileContext);
 			f().r.generateSpills(node, this);
-			ref<Type> actual = expression.operand().type.indirectType(compileContext);
-			if (actual == null)
-				actual = expression.operand().type;
+			ref<Unary> objectAddress = ref<Unary>(expression.operand());
+			ref<Type> actual = objectAddress.operand().type;
 			if (actual.hasDestructor())
 				instCall(actual.scope().destructor(), compileContext);
 			break;
