@@ -705,11 +705,37 @@ class map<class V, class K> {
 	}
 	
 	~map() {
+		clear();
 	}
 	
 	public void clear() {
+		int e = _entriesCount;
+		_entriesCount = 0;
+		for (int i = 0; e > 0; i++) {
+			if (_entries[i].valid) {
+				e--;
+				_entries[i].value.~();
+			}
+		}
+		memory.free(_entries);
+		_allocatedEntries = 0;
+		_rehashThreshold = 0;
 	}
 	
+	public void clear(ref<memory.Allocator> allocator) {
+		int e = _entriesCount;
+		_entriesCount = 0;
+		for (int i = 0; e > 0; i++) {
+			if (_entries[i].valid) {
+				e--;
+				_entries[i].value.~();
+			}
+		}
+		allocator.free(_entries);
+		_allocatedEntries = 0;
+		_rehashThreshold = 0;
+	}
+
 	public int size() {
 		return _entriesCount;
 	}
@@ -723,6 +749,33 @@ class map<class V, class K> {
 	}
 
 	public void deleteAll() {
+		int e = _entriesCount;
+		_entriesCount = 0;
+		for (int i = 0; e > 0; i++) {
+			if (_entries[i].valid) {
+				e--;
+				delete _entries[i].value;
+				_entries[i].value.~();
+			}
+		}
+		memory.free(_entries);
+		_allocatedEntries = 0;
+		_rehashThreshold = 0;
+	}
+	
+	public void deleteAll(ref<memory.Allocator> allocator) {
+		int e = _entriesCount;
+		_entriesCount = 0;
+		for (int i = 0; e > 0; i++) {
+			if (_entries[i].valid) {
+				e--;
+				allocator delete _entries[i].value;
+				_entries[i].value.~();
+			}
+		}
+		allocator.free(_entries);
+		_allocatedEntries = 0;
+		_rehashThreshold = 0;
 	}
 	
 	public V get(K key) {
@@ -753,6 +806,7 @@ class map<class V, class K> {
 			_entriesCount++;
 			e.valid = true;
 			e.key = key;
+			new (&e.value) V();
 			e.value = value;
 			return true;
 		}
@@ -768,6 +822,7 @@ class map<class V, class K> {
 			_entriesCount++;
 			e.valid = true;
 			e.key = key;
+			new (&e.value) V();
 			e.value = value;
 			return true;
 		}
@@ -803,6 +858,7 @@ class map<class V, class K> {
 		}
 		e.valid = true;
 		e.key = key;
+		new (&e.value) V();
 		return &e.value;
 	}
 	
@@ -872,10 +928,10 @@ class map<class V, class K> {
 				if (oldE[i].valid) {
 					insert(oldE[i].key, oldE[i].value);
 					e--;
+//					oldE[i].value.~();
 				}
 			}
 			setRehashThreshold();
-			// TODO: Big MEM LEAK bug: we don't run destructors on any of the keys. We should.
 			allocator.free(oldE);
 			return true;
 		} else
@@ -893,10 +949,10 @@ class map<class V, class K> {
 				if (oldE[i].valid) {
 					insert(oldE[i].key, oldE[i].value);
 					e--;
+					oldE[i].value.~();
 				}
 			}
 			setRehashThreshold();
-			// TODO: Big MEM LEAK bug: we don't run destructors on any of the keys. We should.
 			memory.free(oldE);
 			return true;
 		} else

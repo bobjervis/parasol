@@ -587,6 +587,8 @@ class Selection extends Node {
 	}
  
 	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+		if (voidContext)
+			return _left.fold(tree, true, compileContext);
 		if (_left.op() == Operator.SUBSCRIPT) {
 			ref<Node> element = ref<Binary>(_left).subscriptModify(tree, compileContext);
 			if (element != null)

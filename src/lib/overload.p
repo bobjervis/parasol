@@ -173,17 +173,19 @@ class OverloadOperation {
 	}
 
 	public ref<Type> includeConstructors(ref<Type> classType, ref<CompileContext> compileContext) {
-		for (int i = 0; i < classType.scope().constructors().length(); i++) {
-			ref<ParameterScope> constructor = (*classType.scope().constructors())[i];
-			if (constructor.kind() != ParameterScope.Kind.DEFAULT_CONSTRUCTOR)
-				_hadConstructors = true;
-			ref<Function> f = ref<Function>(constructor.definition());
-			if (f == null || f.name() == null)
-				continue;
-			ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
-			ref<Type> t = includeOverload(oi);
-			if (t != null)
-				return t;
+		if (classType.scope() != null) {
+			for (int i = 0; i < classType.scope().constructors().length(); i++) {
+				ref<ParameterScope> constructor = (*classType.scope().constructors())[i];
+				if (constructor.kind() != ParameterScope.Kind.DEFAULT_CONSTRUCTOR)
+					_hadConstructors = true;
+				ref<Function> f = ref<Function>(constructor.definition());
+				if (f == null || f.name() == null)
+					continue;
+				ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
+				ref<Type> t = includeOverload(oi);
+				if (t != null)
+					return t;
+			}
 		}
 		return null;
 	}

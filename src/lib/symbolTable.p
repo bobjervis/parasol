@@ -860,7 +860,7 @@ class Scope {
 		SymbolKey key(id.identifier());
 		if (_symbols.contains(key))
 			return false;
-		_symbols.insert(key, definition, memoryPool);
+		_symbols.insert(key, definition);
 		return true;
 	}
 
@@ -870,7 +870,7 @@ class Scope {
 			return null;
 	//	printf("Define %s\n", source.identifier().asString());
 		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations, source.identifier(), source, declaration, initializer);
-		_symbols.insert(key, sym, memoryPool);
+		_symbols.insert(key, sym);
 		return sym;
 	}
 
@@ -879,7 +879,7 @@ class Scope {
 		SymbolKey key(source.identifier());
 		if (_symbols.contains(key))
 			return null;
-		_symbols.insert(key, sym, memoryPool);
+		_symbols.insert(key, sym);
 		return sym;
 	}
 
@@ -890,7 +890,7 @@ class Scope {
 		SymbolKey key(pcs);
 		if (_symbols.contains(key))
 			return null;
-		_symbols.insert(key, sym, memoryPool);
+		_symbols.insert(key, sym);
 		return sym;
 	}
 
@@ -906,7 +906,7 @@ class Scope {
 		} else {
 			SymbolKey key(name);
 			o = memoryPool.newOverload(this, name, kind);
-			_symbols.insert(key, o, memoryPool);
+			_symbols.insert(key, o);
 		}
 		return o;
 	}
@@ -937,7 +937,7 @@ class Scope {
 		ref<Scope> scope = compileContext.arena().createScope(null, null, StorageClass.STATIC);
 		ref<Namespace> nm = compileContext.pool().newNamespace(namespaceNode, this, scope, compileContext.annotations, name);
 		SymbolKey key(name);
-		_symbols.insert(key, nm, compileContext.pool());
+		_symbols.insert(key, nm);
 		return nm;
 	}
 
@@ -1054,7 +1054,7 @@ class Scope {
 
 	public void put(ref<Symbol> sym, ref<MemoryPool> memoryPool) {
 		SymbolKey key(sym.name());
-		_symbols.insert(key, sym, memoryPool);
+		_symbols.insert(key, sym);
 	}
 
 	public ref<Symbol> lookup(ref<CompileString> name) {
