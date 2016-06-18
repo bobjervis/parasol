@@ -142,6 +142,10 @@ public class Target {
 		return null;
 	}
 	
+	public ref<ParameterScope> generateFlagsToStringMethod(ref<FlagsInstanceType> type, ref<CompileContext> compileContext) {
+		return null;
+	}
+	
 	public void unfinished(ref<Node> n, string explanation, ref<CompileContext> compileContext) {
 		n.add(MessageId.UNFINISHED_GENERATE, compileContext.pool(), CompileString(" "/*n.class.name()*/), CompileString(string(n.op())), CompileString(explanation));
 	}

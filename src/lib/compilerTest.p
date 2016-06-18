@@ -350,14 +350,17 @@ class ExpressionObject extends script.Object {
 					delete tree;
 					return true;
 				}
+				printf("\n  Expecting SUCCESS got FAIL\n");
 			} else {
 				if (!success) {
 					delete f;
 					delete tree;
 					return true;
 				}
+				printf("\n  Expecting FAIL got SUCCESS\n");
 			}
-		}
+		} else if (!checkMessages(expression, get("message")))
+			printf("\n  Message did not match %s\n", get("message"));
 		dump(expression);
 		delete f;
 		delete tree;

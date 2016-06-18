@@ -191,6 +191,7 @@ class Disassembler {
 			case	0x22:
 			case	0x2a:
 			case	0x32:
+			case	0x3a:
 			case	0x8a:
 				instructionOpcode(next);
 				disassembleGbEb();

@@ -208,6 +208,12 @@ class CompileContext {
 			}
 			break;
 
+		case	FLAGS:
+			b = ref<Block>(definition);
+			nl = b.statements();
+			bindFlags(nl.node);
+			break;
+			
 		case	TEMPLATE:
 			ref<Template> t = ref<Template>(definition);
 			for (ref<NodeList> nl = t.templateParameters(); nl != null; nl = nl.next)
@@ -440,6 +446,12 @@ class CompileContext {
 			}
 			return TraverseAction.SKIP_CHILDREN;
 
+		case	FLAGS_DECLARATION:
+			b = ref<Binary>(n);
+			id = ref<Identifier>(b.left());
+			id.bindFlagsName(_current, ref<Block>(b.right()), this);
+			return TraverseAction.SKIP_CHILDREN;
+			
 		case	DECLARATION:
 			b = ref<Binary>(n);
 			bindDeclarators(b.left(), b.right());
@@ -517,6 +529,10 @@ class CompileContext {
 		return _arena.createEnumScope(_current, definition, className);
 	}
 
+	public ref<FlagsScope> createFlagsScope(ref<Block> definition, ref<Identifier> className) {
+		return _arena.createFlagsScope(_current, definition, className);
+	}
+
 	void bindDeclarators(ref<Node> type, ref<Node> n) {
 		switch (n.op()) {
 		case	IDENTIFIER:
@@ -559,6 +575,23 @@ class CompileContext {
 		}
 	}
 
+	void bindFlags(ref<Node> n) {
+		switch (n.op()) {
+		case SEQUENCE:
+			ref<Binary> b = ref<Binary>(n);
+			bindFlags(b.left());
+			bindFlags(b.right());
+			break;
+			
+		case	IDENTIFIER:
+			ref<Identifier> id = ref<Identifier>(n);
+			ref<FlagsScope> scope = ref<FlagsScope>(_current);
+			int offset = 1 << scope.symbols().size();
+			ref<Symbol> sym = id.bindFlagsInstance(_current, scope.flagsType.wrappedType(), this);
+			sym.offset = offset;
+		}
+	}
+	
 	public void assignTypes() {
 		for (int i = 0; i < _arena.scopes().length(); i++) {
 			_current = (*_arena.scopes())[i];
@@ -736,6 +769,7 @@ class CompileContext {
 		case	ABSTRACT:
 		case	CLASS_DECLARATION:
 		case	ENUM_DECLARATION:
+		case	FLAGS_DECLARATION:
 		case	DECLARATION:
 		case	DECLARE_NAMESPACE:
 		case	EXPRESSION:
@@ -986,6 +1020,14 @@ class MemoryPool extends memory.NoReleasePool {
 
 	public ref<EnumInstanceType> newEnumInstanceType(ref<Symbol> symbol, ref<Scope> scope, ref<ClassType> instanceClass) {
 		return super new EnumInstanceType(symbol, scope, instanceClass);
+	}
+
+	public ref<FlagsType> newFlagsType(ref<Block> definition, ref<Scope> scope, ref<Type> wrappedType) {
+		return super new FlagsType(definition, scope, wrappedType);
+	}
+
+	public ref<FlagsInstanceType> newFlagsInstanceType(ref<Symbol> symbol, ref<Scope> scope, ref<ClassType> instanceClass) {
+		return super new FlagsInstanceType(symbol, scope, instanceClass);
 	}
 
 	public ref<TemplateType> newTemplateType(ref<Symbol> symbol, ref<Template> definition, ref<FileStat> definingFile, ref<Overload> overload, ref<Scope> templateScope) {

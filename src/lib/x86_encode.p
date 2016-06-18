@@ -27,6 +27,7 @@ import parasol:compiler.Constant;
 import parasol:compiler.EnumInstanceType;
 import parasol:compiler.FileStat;
 import parasol:compiler.FIRST_USER_METHOD;
+import parasol:compiler.FlagsInstanceType;
 import parasol:compiler.Function;
 import parasol:compiler.FunctionType;
 import parasol:compiler.Location;
@@ -683,13 +684,21 @@ class X86_64Encoder extends Target {
 				scope.variableStorage += size;
 				break;
 
-			case	ENUMERATION:{
+			case	ENUMERATION:
 				ref<EnumInstanceType> eit = ref<EnumInstanceType>(type);
 				ref<Symbol> typeDefinition = eit.symbol();
 				if (typeDefinition.value == null)
 					assignStorageToObject(typeDefinition, typeDefinition.enclosing(), 0, compileContext);
 				symbol.value = typeDefinition.value;
-			}	break;
+				break;
+
+			case	FLAGS:
+				ref<FlagsInstanceType> fit = ref<FlagsInstanceType>(type);
+				typeDefinition = fit.symbol();
+				if (typeDefinition.value == null)
+					assignStorageToObject(typeDefinition, typeDefinition.enclosing(), 0, compileContext);
+				symbol.value = typeDefinition.value;
+				break;
 
 			default:
 				symbol.print(0, false);
@@ -987,6 +996,7 @@ class X86_64Encoder extends Target {
 				inst(instruction, family, dest, src);
 			} else if (right.op() == Operator.INTEGER) {
 				switch (right.type.family()) {
+				case	FLAGS:
 				case	UNSIGNED_8:
 				case	UNSIGNED_32:
 				case	SIGNED_32:
@@ -1115,6 +1125,7 @@ class X86_64Encoder extends Target {
 			}
 			switch (family) {
 			case	BOOLEAN:
+			case	UNSIGNED_8:
 				emitRex(family, null, R.NO_REG, dest);
 				emit(byte(0xb0 + rmValues[dest]));
 				emit(byte(int(operand)));
@@ -1924,6 +1935,7 @@ class X86_64Encoder extends Target {
 				modRM(left, rmValues[right], 0, 0);
 				break;
 				
+			case	FLAGS:
 			case	CLASS:
 				switch (left.type.size()) {
 				case	1:
@@ -2167,6 +2179,7 @@ class X86_64Encoder extends Target {
 				modRM(right, rmValues[left], 0, 0);
 				break;
 				
+			case	FLAGS:
 			case	CLASS:
 				switch (right.type.size()) {
 				case	1:
@@ -2401,7 +2414,7 @@ class X86_64Encoder extends Target {
 		case	XOR:
 		case	ADD:
 		case	SUB:
-			switch (left.type.family()) {
+			switch (impl(left.type)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 				emitRex(left.type.family(), left, R.NO_REG, R.NO_REG);
@@ -3140,6 +3153,7 @@ class X86_64Encoder extends Target {
 				case	AUTO:
 				case	PARAMETER:
 				case	ENUMERATION:
+				case	FLAGS:
 					break;
 					
 				case	MEMBER:
@@ -3756,6 +3770,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	CLASS_VARIABLE:
 		case	REF:
 		case	POINTER:
+		case	FLAGS:
 		case	ENUM:
 		case	TYPEDEF:
 		case	CLASS:			return CC.JNE;
@@ -3780,6 +3795,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	CLASS_VARIABLE:
 		case	REF:
 		case	POINTER:
+		case	FLAGS:
 		case	ENUM:
 		case	TYPEDEF:
 		case	CLASS:			return CC.JE; 

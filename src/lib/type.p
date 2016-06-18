@@ -46,6 +46,7 @@ enum TypeFamily {
 	
 	CLASS,
 	ENUM,
+	FLAGS,
 	TYPEDEF,
 	FUNCTION,
 	SHAPE,
@@ -504,6 +505,118 @@ class EnumInstanceType extends Type {
 	public ref<ParameterScope> toStringMethod(ref<Target> target, ref<CompileContext> compileContext) {
 		if (_toStringMethod == null)
 			_toStringMethod = target.generateEnumToStringMethod(this, compileContext);
+		return _toStringMethod;
+	}
+}
+
+class FlagsType extends TypedefType {
+	private ref<Block> _definition;
+	private ref<Scope> _scope;
+
+	FlagsType(ref<Block> definition, ref<Scope> scope, ref<Type> wrappedType) {
+		super(TypeFamily.TYPEDEF, wrappedType);
+		_definition = definition;
+		_scope = scope;
+	}
+
+	boolean requiresAutoStorage() {
+		return true;
+	}
+
+	public void print() {
+		printf("%s %p", string(family()), _definition);
+	}
+
+	public ref<Scope> scope() {
+		return _scope;
+	}
+
+	public boolean equals(ref<Type> other) {
+		assert(false);
+		return false;
+	}
+
+	private boolean sameAs(ref<Type> other) {
+		assert(false);
+		return false;
+	}
+}
+
+class FlagsInstanceType extends Type {
+	private ref<Symbol> _symbol;
+	private ref<Scope> _scope;
+	private ref<ClassType> _instanceClass;
+	
+	private ref<ParameterScope> _toStringMethod;
+
+	protected FlagsInstanceType(ref<Symbol> symbol, ref<Scope> scope, ref<ClassType> instanceClass) {
+		super(TypeFamily.FLAGS);
+		_symbol = symbol;
+		_scope = scope;
+		_instanceClass = instanceClass;
+	}
+
+	public void print() {
+		printf("%s %p", string(family()), _instanceClass);
+	}
+
+	public ref<Scope> scope() {
+		return _scope;
+	}
+
+	public int size() {
+		int numberOfFlags = _scope.symbols().size();
+		
+		if (numberOfFlags <= 8)
+			return byte.bytes;
+		else if (numberOfFlags <= 16)
+			return short.bytes;
+		else if (numberOfFlags <= 32)
+			return int.bytes;
+		else
+			return long.bytes;
+	}
+
+	public int alignment() {
+		int numberOfFlags = _scope.symbols().size();
+		
+		if (numberOfFlags <= 8)
+			return byte.bytes;
+		else if (numberOfFlags <= 16)
+			return short.bytes;
+		else if (numberOfFlags <= 32)
+			return int.bytes;
+		else
+			return long.bytes;
+	}
+	
+	public boolean widensTo(ref<Type> other, ref<CompileContext> compileContext) {
+		if (other.family() == TypeFamily.BOOLEAN)
+			return true;
+		else
+			return super.widensTo(other, compileContext);
+	}
+
+	public boolean equals(ref<Type> other) {
+		// An enum type is unique, so one is always equal to itself...
+		return this == other;
+	}
+
+	public ref<Symbol> symbol() {
+		return _symbol;
+	}
+
+	private boolean sameAs(ref<Type> other) {
+		// Two enums are considered the same only
+		// if they have the same declaration site, which
+		// is equivalent to object identity on the type
+		// object.
+		return false;
+	}
+	
+	public ref<ParameterScope> toStringMethod(ref<Target> target, ref<CompileContext> compileContext) {
+		if (_toStringMethod == null)
+			_toStringMethod = target.generateFlagsToStringMethod(this, compileContext);
 		return _toStringMethod;
 	}
 }
@@ -1438,6 +1551,7 @@ int[TypeFamily] familySize = [
 	REF: 				 8,
 	POINTER: 			 8,
 	FUNCTION: 			 8,
+	FLAGS:				-1,
 	TEMPLATE: 			-1,
 	TEMPLATE_INSTANCE:	-1,
 	NAMESPACE: 			-1,
@@ -1474,6 +1588,7 @@ int[TypeFamily] familyAlignment = [
 	REF: 				-1,
 	POINTER: 			-1,
 	FUNCTION: 			 8,
+	FLAGS:				-1,
 	TEMPLATE: 			-1,
 	TEMPLATE_INSTANCE:	-1,
 	NAMESPACE: 			-1,

@@ -247,6 +247,14 @@ class Identifier extends Node {
 		return _symbol;
 	}
 
+	ref<Symbol> bindFlagsInstance(ref<Scope> enclosing, ref<Type> type, ref<CompileContext> compileContext) {
+		_definition = true;
+		_symbol = enclosing.define(compileContext.visibility, StorageClass.FLAGS, compileContext.annotations, this, type, null, compileContext.pool());
+		if (_symbol == null)
+			add(MessageId.DUPLICATE, compileContext.pool(), _value);
+		return _symbol;
+	}
+
 	ref<ClassScope> bindClassName(ref<Scope> enclosing, ref<Class> body, ref<CompileContext> compileContext) {
 		_definition = true;
 		ref<ClassScope> classScope = compileContext.createClassScope(body, this);
@@ -271,6 +279,19 @@ class Identifier extends Node {
 			ref<Type> t = compileContext.pool().newEnumInstanceType(_symbol, enumScope, c);
 			enumScope.enumType = compileContext.pool().newEnumType(body, enumScope, t);
 			_symbol.bindType(enumScope.enumType, compileContext);
+		} else
+			add(MessageId.DUPLICATE, compileContext.pool(), _value);
+	}
+
+	void bindFlagsName(ref<Scope> enclosing, ref<Block> body, ref<CompileContext> compileContext) {
+		_definition = true;
+		ref<FlagsScope> flagsScope = compileContext.createFlagsScope(body, this);
+		_symbol = enclosing.define(compileContext.visibility, StorageClass.STATIC, compileContext.annotations, this, body, body, compileContext.pool());
+		if (_symbol != null) {
+			ref<ClassType> c = compileContext.pool().newClassType(TypeFamily.CLASS, ref<Type>(null), flagsScope);
+			ref<Type> t = compileContext.pool().newFlagsInstanceType(_symbol, flagsScope, c);
+			flagsScope.flagsType = compileContext.pool().newFlagsType(body, flagsScope, t);
+			_symbol.bindType(flagsScope.flagsType, compileContext);
 		} else
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
 	}
@@ -589,6 +610,11 @@ class Selection extends Node {
 	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
 		if (voidContext)
 			return _left.fold(tree, true, compileContext);
+		if (_symbol != null && _symbol.storageClass() == StorageClass.FLAGS) {
+			ref<Node> n = tree.newConstant(_symbol.offset, location());
+			n.type = type;
+			return n;
+		}
 		if (_left.op() == Operator.SUBSCRIPT) {
 			ref<Node> element = ref<Binary>(_left).subscriptModify(tree, compileContext);
 			if (element != null)
@@ -623,6 +649,7 @@ class Selection extends Node {
 				switch (_symbol.storageClass()) {
 				case	STATIC:
 				case	ENUMERATION:
+				case	FLAGS:
 				case	MEMBER:
 					break;
 

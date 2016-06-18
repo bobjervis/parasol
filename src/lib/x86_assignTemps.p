@@ -839,6 +839,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	FLAGS:
 				assignCast(result, operand, regMask, 0, compileContext);
 				if (unsigned(int(result.register)) > unsigned(int(R.MAX_REG)))
 					assert(false);

@@ -168,6 +168,7 @@ enum Operator {
 	BLOCK,
 	UNIT,
 	ENUM,
+	FLAGS,
 	// Map
 	MAP,
 	// Ternary
@@ -354,7 +355,7 @@ class SyntaxTree {
 		return _pool new Leaf(op, location);
 	}
 
-	public ref<Constant> newConstant(int value, Location location) {
+	public ref<Constant> newConstant(long value, Location location) {
 		string s;
 		s.printf("%d", value);
 		CompileString v(s);
@@ -903,6 +904,12 @@ class Constant extends Node {
 
 		case	SIGNED_64:
 			return true;
+			
+		case	FLAGS:
+			if (v == 0)
+				return true;
+			else
+				return false;
 /*
 	 	 	 Note: Allowing an integer zero to be considered to 'represent' a valid pointer value,
 	 	 	 means that 0 is interchangeable with null.  This seems to violate the spirit of having
@@ -1087,8 +1094,16 @@ class For extends Node {
 		case	FOR:
 			if (_initializer != null)
 				_initializer = foldVoidContext(_initializer, tree, compileContext);
-			if (_test != null)
+			if (_test != null) {
 				_test = _test.fold(tree, false, compileContext);
+				if (_test.type.family() == TypeFamily.FLAGS) {
+					ref<Node> right = tree.newConstant(0, location());
+					right.type = _test.type;
+					ref<Node> op = tree.newBinary(Operator.NOT_EQUAL, _test, right, location());
+					op.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+					_test = op;
+				}
+			}
 			if (_increment != null)
 				_increment = foldVoidContext(_increment, tree, compileContext);
 				
@@ -1164,7 +1179,8 @@ class For extends Node {
 			compileContext.assignTypes(_initializer);
 			compileContext.assignTypes(_test);
 			if (!_test.deferAnalysis() && _test.op() != Operator.EMPTY) {
-				if (_test.type.family() != TypeFamily.BOOLEAN) {
+				if (_test.type.family() != TypeFamily.BOOLEAN &&
+					_test.type.family() != TypeFamily.FLAGS) {
 					_test.add(MessageId.NOT_BOOLEAN, compileContext.pool());
 					_test.type = compileContext.errorType();
 				}
@@ -2017,6 +2033,13 @@ class Ternary extends Node {
 				_middle = _middle.fold(tree, voidContext, compileContext);
 			if (_right != null)
 				_right = _right.fold(tree, voidContext, compileContext);
+			if (_left.type.family() == TypeFamily.FLAGS) {
+				ref<Node> right = tree.newConstant(0, location());
+				right.type = _left.type;
+				ref<Node> op = tree.newBinary(Operator.NOT_EQUAL, _left, right, location());
+				op.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+				_left = op;
+			}
 			break;
 			
 		case	CATCH:
@@ -2117,7 +2140,8 @@ class Ternary extends Node {
 				type = _right.type;
 				return;
 			}
-			if (_left.type.family() != TypeFamily.BOOLEAN) {
+			if (_left.type.family() != TypeFamily.BOOLEAN &&
+				_left.type.family() != TypeFamily.FLAGS) {
 				add(MessageId.NOT_BOOLEAN, compileContext.pool());
 				type = compileContext.errorType();
 				break;
@@ -2136,7 +2160,8 @@ class Ternary extends Node {
 				type = _left.type;
 				return;
 			}
-			if (_left.type.family() != TypeFamily.BOOLEAN) {
+			if (_left.type.family() != TypeFamily.BOOLEAN &&
+				_left.type.family() != TypeFamily.FLAGS) {
 				add(MessageId.NOT_BOOLEAN, compileContext.pool());
 				type = compileContext.errorType();
 				break;
@@ -2556,6 +2581,7 @@ class Node {
 			case	FLOAT_32:
 			case	FLOAT_64:
 			case	ENUM:
+			case	FLAGS:
 			case	TYPEDEF:
 			case	SHAPE:
 			case	CLASS_VARIABLE:
@@ -2945,10 +2971,10 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 	case	DECLARATION:
 	case	EMPTY:
 	case	DELETE:
-	case	IF:
 	case	CONDITIONAL:
 	case	PLACEMENT_NEW:
 	case	CALL_DESTRUCTOR:
+	case	IF:
 		break;
 		
 	case	ASSIGN:

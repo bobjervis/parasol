@@ -406,6 +406,7 @@ class X86_64AddressModes extends X86_64Encoder {
 			case	FLOAT_32:
 			case	FLOAT_64:
 			case	ENUM:
+			case	FLAGS:
 				markAddressModes(operand, compileContext);
 				return;
 			}

@@ -27,6 +27,9 @@ public int SEEK_END = 2;
 @Windows("msvcrt.dll", "calloc")
 public abstract address calloc(unsigned count, unsigned size);
 
+@Windows("msvcrt.dll", "_close")
+public abstract int close(int fd);
+
 @Windows("msvcrt.dll", "_ecvt")
 public abstract pointer<byte> ecvt(double number, int ndigits, ref<int> decpt, ref<int> sign);
 

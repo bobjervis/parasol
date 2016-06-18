@@ -17,9 +17,9 @@ int f() {
 	return 4;
 }
 
-int ptr();
+int() testFuncPtr;
 
-if (ptr == null)
-	ptr = f;
+if (testFuncPtr == null)
+	testFuncPtr = f;
 
-assert(ptr() == 4);
+assert(testFuncPtr() == 4);

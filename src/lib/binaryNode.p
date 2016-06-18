@@ -203,16 +203,41 @@ class Binary extends Node {
 		case	MONITOR_DECLARATION:
 		case	ENUM_DECLARATION:
 		case	CLASS_DECLARATION:
-		case	WHILE:
-		case	DO_WHILE:
 		case	SWITCH:
 		case	CASE:
 		case	LEFT_SHIFT:
-		case	LOGICAL_AND:
-		case	LOGICAL_OR:
 		case	BIND:
 		case	DELETE:
 		case	LABEL:
+			break;
+			
+		case	LOGICAL_AND:
+		case	LOGICAL_OR:
+			if (_right.type.family() == TypeFamily.FLAGS) {
+				ref<Node> right = tree.newConstant(0, location());
+				right.type = _right.type;
+				ref<Node> op = tree.newBinary(Operator.NOT_EQUAL, _right, right, location());
+				op.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+				_right = op;
+			}
+		case	WHILE:
+			if (_left.type.family() == TypeFamily.FLAGS) {
+				ref<Node> right = tree.newConstant(0, location());
+				right.type = _left.type;
+				ref<Node> op = tree.newBinary(Operator.NOT_EQUAL, _left, right, location());
+				op.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+				_left = op;
+			}
+			break;
+			
+		case	DO_WHILE:
+			if (_right.type.family() == TypeFamily.FLAGS) {
+				ref<Node> right = tree.newConstant(0, location());
+				right.type = _right.type;
+				ref<Node> op = tree.newBinary(Operator.NOT_EQUAL, _right, right, location());
+				op.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+				_right = op;
+			}
 			break;
 
 		case	SEQUENCE:
@@ -323,6 +348,7 @@ class Binary extends Node {
 			case	FLOAT_32:
 			case	FLOAT_64:
 			case	ENUM:
+			case	FLAGS:
 			case	ADDRESS:
 			case	REF:
 			case	POINTER:
@@ -837,6 +863,7 @@ class Binary extends Node {
 			case	FLOAT_32:
 			case	FLOAT_64:
 			case	ENUM:
+			case	FLAGS:
 			case	ADDRESS:
 			case	FUNCTION:
 			case	TYPEDEF:
@@ -1377,6 +1404,12 @@ class Binary extends Node {
 				type = _right.type;
 				break;
 			}
+			if (t.hasConstructors() && t.defaultConstructor() == null) {
+				
+//				add(MessageId.NO_DEFAULT_CONSTRUCTOR, compileContext.pool());
+//				type = compileContext.errorType();
+//				break;
+			}
 			_right = _right.coerce(compileContext.tree(), t, false, compileContext);
 			type = _right.type;
 			break;
@@ -1708,6 +1741,7 @@ class Binary extends Node {
 			case	UNSIGNED_32:
 			case	BOOLEAN:
 			case	VAR:
+			case	FLAGS:
 				break;
 
 			default:
@@ -1730,6 +1764,7 @@ class Binary extends Node {
 			case	SIGNED_64:
 			case	BOOLEAN:
 			case	VAR:
+			case	FLAGS:
 				if (_left.isLvalue()) 
 					type = _left.type;
 				else {
@@ -1819,7 +1854,38 @@ class Binary extends Node {
 				type = compileContext.errorType();
 			}
 		break;
+/*
+ * 		TODO: Figure out what the semantics of these operators should be. 
+		case	IDENTITY:
+		case	NOT_IDENTITY:
+			if (!balance(compileContext))
+				break;
+			switch (_left.type.family()) {
+			case	SIGNED_32:
+			case	SIGNED_64:
+			case	UNSIGNED_32:
+			case	FLOAT_32:
+			case	FLOAT_64:
+			case	BOOLEAN:
+			case	STRING:
+			case	ADDRESS:
+			case	REF:
+			case	POINTER:
+			case	FUNCTION:
+			case	ENUM:
+			case	FLAGS:
+			case	VAR:
+			case	CLASS_VARIABLE:
+			case	TYPEDEF:
+				type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+				break;
 
+			default:
+				add(typeNotAllowed[op()], compileContext.pool());
+				type = compileContext.errorType();
+			}
+			break;
+ */			
 		case	EQUALITY:
 		case	NOT_EQUAL:
 			if (!balance(compileContext))
@@ -1837,6 +1903,7 @@ class Binary extends Node {
 			case	POINTER:
 			case	FUNCTION:
 			case	ENUM:
+			case	FLAGS:
 			case	VAR:
 			case	CLASS_VARIABLE:
 			case	TYPEDEF:
@@ -2096,8 +2163,10 @@ class Binary extends Node {
 				type = _right.type;
 				return;
 			}
-			if (_left.type.family() == TypeFamily.BOOLEAN &&
-				_right.type.family() == TypeFamily.BOOLEAN)
+			if ((_left.type.family() == TypeFamily.BOOLEAN ||
+				 _left.type.family() == TypeFamily.FLAGS) &&
+				(_right.type.family() == TypeFamily.BOOLEAN ||
+				 _right.type.family() == TypeFamily.FLAGS))
 				type = _left.type;
 			else {
 				add(MessageId.NOT_BOOLEAN, compileContext.pool());
@@ -2135,7 +2204,7 @@ class Binary extends Node {
 			type = compileContext.arena().builtInType(TypeFamily.VOID);
 			break;
 		}
-		case	DO_WHILE:{
+		case	DO_WHILE:
 			compileContext.assignTypes(_left);
 			compileContext.assignTypes(_right);
 			if (_left.deferAnalysis()) {
@@ -2146,14 +2215,15 @@ class Binary extends Node {
 				type = _right.type;
 				return;
 			}
-			if (_right.type.family() != TypeFamily.BOOLEAN) {
+			if (_right.type.family() != TypeFamily.BOOLEAN &&
+				_right.type.family() != TypeFamily.FLAGS) {
 				_right.add(MessageId.NOT_BOOLEAN, compileContext.pool());
 				type = compileContext.errorType();
 			}
 			type = compileContext.arena().builtInType(TypeFamily.VOID);
 			break;
-		}
-		case	WHILE:{
+
+		case	WHILE:
 			compileContext.assignTypes(_left);
 			compileContext.assignTypes(_right);
 			if (_left.deferAnalysis()) {
@@ -2164,13 +2234,13 @@ class Binary extends Node {
 				type = _right.type;
 				return;
 			}
-			if (_left.type.family() != TypeFamily.BOOLEAN) {
+			if (_left.type.family() != TypeFamily.BOOLEAN &&
+				_left.type.family() != TypeFamily.FLAGS) {
 				_left.add(MessageId.NOT_BOOLEAN, compileContext.pool());
 				type = compileContext.errorType();
 			}
 			type = compileContext.arena().builtInType(TypeFamily.VOID);
 			break;
-		}
 		}
 	}
 

@@ -98,6 +98,7 @@ familyMasks[TypeFamily.BOOLEAN] = longMask;
 familyMasks[TypeFamily.FUNCTION] = longMask;
 familyMasks[TypeFamily.STRING] = longMask;
 familyMasks[TypeFamily.ENUM] = longMask;
+familyMasks[TypeFamily.FLAGS] = longMask;
 familyMasks[TypeFamily.FLOAT_32] = floatMask;
 familyMasks[TypeFamily.FLOAT_64] = floatMask;
 

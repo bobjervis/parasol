@@ -194,9 +194,14 @@ public string formatMessage(MessageId messageId, CompileString[] args) {
 				position = format[i] - '1';
 //					printf("position = %d args.length=%d\n", position, args.length());
 //					printf("args[0]={%x,%d}\n", int(args[position].data), args[position].length);
-				string inclusionString(args[position].data, args[position].length);
+				if (position < args.length()) {
+					string inclusionString(args[position].data, args[position].length);
 //					printf("inclusionString=%s\n", inclusionString);
-				s.append(inclusionString);
+					s.append(inclusionString);
+				} else {
+					s.append(''%'');
+					s.append(format[i]);
+				}
 				break;
 
 			case	'%':
@@ -281,7 +286,7 @@ private string[MessageId] messageCatalog = [
 	NOT_ADDRESSABLE: 		"Cannot take the address of this value",
 	NOT_AN_ALLOCATOR:		"Not an Allocator",
 	NOT_AN_EXCEPTION:		"Not an Exception",
-	NOT_BOOLEAN: 			"An operand does not have boolean type",
+	NOT_BOOLEAN: 			"An operand does not have boolean or flags type",
 	NOT_CONSTANT: 			"Constant expression required",
 	NOT_ENUM_INSTANCE: 		"Case expression not an enum instance",
 	NOT_EXPECTING_ELSE: 	"Not expecting an 'else'",

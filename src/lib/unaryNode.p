@@ -129,7 +129,6 @@ class Unary extends Node {
 		case	CLASS_OF:
 		case	UNARY_PLUS:
 		case	NEGATE:
-		case	BIT_COMPLEMENT:
 		case	DECREMENT_BEFORE:
 		case	INCREMENT_BEFORE:
 		case	DECREMENT_AFTER:
@@ -140,6 +139,30 @@ class Unary extends Node {
 		case	LOAD:
 			break;
 
+		case	BIT_COMPLEMENT:
+			if (type.family() == TypeFamily.FLAGS) {
+				int numberOfFlags = type.scope().symbols().size();
+				switch (numberOfFlags) {
+				case 8:
+				case 16:
+				case 32:
+				case 64:
+					break;
+					
+				default:		// This is a flag object with spare bits in the container, you can't let those bits
+								// pollute the downstream value (a test for zero/non-zero is far more likely to be
+								// done, instead of bit complement, so make bit complemennt a tiny bit slower). You can
+								// always pad the definition if you are that concerned about the cost.
+					long mask = (long(1) << numberOfFlags) - 1;
+					ref<Node> m = tree.newConstant(mask, location());
+					m.type = type;
+					m = tree.newBinary(Operator.EXCLUSIVE_OR, _operand.fold(tree, false, compileContext), m, location());
+					m.type = type;
+					return m;
+				}
+			}
+			break;
+			
 		case	CAST:
 			if (voidContext)
 				return _operand.fold(tree, true, compileContext);
@@ -549,6 +572,7 @@ class Unary extends Node {
 			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
+			case	FLAGS:
 				type = _operand.type;
 				break;
 

@@ -465,7 +465,7 @@ class Parser {
 			if (t == Token.SEMI_COLON)
 				return _tree.newUnary(Operator.EXPRESSION, x, location);
 			_scanner.pushBack(t);
-			return parseDeclaration(x, location);
+			return parseDeclarators(x, location);
 		}
 		return null;
 	}
@@ -635,7 +635,7 @@ class Parser {
 			x = parseExpression(0);
 			if (x.op() == Operator.SYNTAX_ERROR)
 				return x;
-			n = parseDeclaration(x, location);
+			n = parseDeclarators(x, location);
 			if (n.op() == Operator.SYNTAX_ERROR)
 				return n;
 		}
@@ -674,7 +674,7 @@ class Parser {
 		ref<Node> x = parseExpression(0);
 		if (x.op() == Operator.SYNTAX_ERROR)
 			return x;
-		ref<Node> n = parseDeclaration(x, location);
+		ref<Node> n = parseDeclarators(x, location);
 		if (n.op() == Operator.SYNTAX_ERROR)
 			return n;
 		return _tree.newUnary(Operator.STATIC, n, location);
@@ -694,7 +694,7 @@ class Parser {
 			ref<Node> x = parseExpression(0);
 			if (x.op() == Operator.SYNTAX_ERROR)
 				return x;
-			n = parseDeclaration(x, loc);
+			n = parseDeclarators(x, loc);
 		}
 		if (n.op() == Operator.SYNTAX_ERROR)
 			return n;
@@ -734,7 +734,7 @@ class Parser {
 		return func;
 	}
 
-	private ref<Node> parseDeclaration(ref<Node> type, Location location) {
+	private ref<Node> parseDeclarators(ref<Node> type, Location location) {
 		if (enclosingClassName() != null) {
 			switch (type.op()) {
 			case	BIT_COMPLEMENT:	// possible destructor
@@ -772,7 +772,7 @@ class Parser {
 			case	LEFT_PARENTHESIS:
 				if (!parseParameterList(Token.RIGHT_PARENTHESIS, &parameters))
 					return parameters.node;
-				if (parameters == null || parameters.hasBindings()) {
+				if (parameters.hasBindings()) {
 					func = _tree.newFunction(Function.Category.NORMAL, type, id, parameters, loc);
 					t = _scanner.next();
 					if (t == Token.LOCK)
@@ -785,6 +785,24 @@ class Parser {
 						return resync(MessageId.SYNTAX_ERROR);
 					} 
 					return func;
+				} else if (parameters == null) {
+					t = _scanner.next();
+					if (t == Token.LOCK) {
+						func = _tree.newFunction(Function.Category.NORMAL, type, id, parameters, loc);
+						func.body = parseLockStatement();
+						return func;
+					} else if (t == Token.LEFT_CURLY) {
+						func = _tree.newFunction(Function.Category.NORMAL, type, id, parameters, loc);
+						func.body = _tree.newBlock(Operator.BLOCK, null, _scanner.location());
+						parseBlock(func.body);
+						return func;
+					} else if (t != Token.SEMI_COLON) {
+						_scanner.pushBack(t);
+						return resync(MessageId.SYNTAX_ERROR);
+					} 
+					ref<Call> initializer = _tree.newCall(Operator.CALL, null, null, loc);
+					x = _tree.newBinary(Operator.INITIALIZE, id, initializer, loc);
+					return _tree.newDeclaration(type, x, location);
 				} else {
 					t = _scanner.next();
 					if (t == Token.SEMI_COLON) {
@@ -922,7 +940,7 @@ class Parser {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
-		ref<Block> body = _tree.newBlock(Operator.ENUM, null, _scanner.location());
+		ref<Block> body = _tree.newBlock(Operator.FLAGS, null, _scanner.location());
 		ref<Node> e = parseIdentifierList();
 		body.statement(_tree.newNodeList(e));
 		t = _scanner.next();
@@ -1240,7 +1258,7 @@ class Parser {
 			if (x.op() == Operator.SYNTAX_ERROR)
 				return x;
 			if (x.op() != Operator.FUNCTION)
-				return _tree.newSyntaxError(x.location());
+				return resync(MessageId.SYNTAX_ERROR);
 			break;
 
 		case	ELSE:

@@ -27,6 +27,7 @@ enum StorageClass {
 	TEMPLATE,
 	TEMPLATE_INSTANCE,
 	ENUMERATION,
+	FLAGS,
 	ENCLOSING,
 	MAX_STORAGE_CLASS
 }
@@ -352,6 +353,42 @@ class EnumScope extends ClasslikeScope {
 		return -1;
 	}
 }
+
+class FlagsScope extends ClasslikeScope {
+	public ref<FlagsType> flagsType;
+	
+	private ref<Symbol>[] _instances;
+	
+	public FlagsScope(ref<Scope> enclosing, ref<Block> definition, ref<Identifier> enumName) {
+		super(enclosing, definition, StorageClass.STATIC, enumName);
+	}
+
+	ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> source, ref<Type> type, ref<Node> initializer, ref<MemoryPool> memoryPool) {
+		ref<Symbol> sym = super.define(visibility, storageClass, annotations, source, type, initializer, memoryPool);
+		if (sym != null)
+			_instances.append(sym);
+		return sym;
+	}
+
+	public ref<ref<Symbol>[]> instances() {
+		return &_instances;
+	}
+	/*
+	 * Given a symbol, return the index of the symbol within this enumscope. THis allows us to properly
+	 * validate aggregate initializers by calculating the numeric index of that element (in a labeled
+	 * initializer).
+	 * 
+	 * RETURN:
+	 *   >= 0	The index of the given enumInstance symbol.
+	 *   -1		The enumInstance argument was not a member of this EnumScope.
+	 */
+	public int indexOf(ref<Symbol> enumInstance) {
+		for (int i = 0; i < _instances.length(); i++)
+			if (_instances[i] == enumInstance)
+				return i;
+		return -1;
+	}
+}
 /*
  * ParameterScope - a.k.a functionScope
  * 
@@ -400,6 +437,7 @@ class ParameterScope extends Scope {
 		DEFAULT_CONSTRUCTOR,	// a default constructor (no source code) generated when needed
 		IMPLIED_DESTRUCTOR,		// an implied destructor (no source code) generated when needed
 		ENUM_TO_STRING,			// a generated enum-to-string coercion method
+		FLAGS_TO_STRING,		// a generate flags-to-string coercion method
 	}
 	private Kind _kind;
 	private ref<Symbol>[] _parameters;
@@ -1221,6 +1259,12 @@ class Scope {
 				typeDefinition.enclosing().checkStorageOfObject(typeDefinition, compileContext);
 				break;
 
+			case	FLAGS:
+				ref<FlagsInstanceType> fit = ref<FlagsInstanceType>(type);
+				typeDefinition = fit.symbol();
+				typeDefinition.enclosing().checkStorageOfObject(typeDefinition, compileContext);
+				break;
+
 			default:
 				symbol.print(0, false);
 				assert(false);
@@ -1443,6 +1487,7 @@ class PlainSymbol extends Symbol {
 			return false;
 		if (storageClass() == StorageClass.CONSTANT) {
 			switch (_type.family()) {
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 				if (_initializer == null) {

@@ -365,6 +365,12 @@ public class Arena {
 		return s;
 	}
 
+	public ref<FlagsScope> createFlagsScope(ref<Scope> enclosing, ref<Block> definition, ref<Identifier> className) {
+		ref<FlagsScope> s = new FlagsScope(enclosing, definition, className);
+		_scopes.append(s);
+		return s;
+	}
+
 	public ref<Scope> createDomain(string domain) {
 		ref<Scope> s = _domains[domain];
 		if (s == null) {

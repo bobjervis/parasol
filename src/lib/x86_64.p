@@ -33,6 +33,7 @@ import parasol:compiler.EnumInstanceType;
 import parasol:compiler.EnumScope;
 import parasol:compiler.EllipsisArguments;
 import parasol:compiler.FileStat;
+import parasol:compiler.FlagsInstanceType;
 import parasol:compiler.For;
 import parasol:compiler.Function;
 import parasol:compiler.FunctionType;
@@ -1250,6 +1251,7 @@ public class X86_64 extends X86_64AssignTemps {
 			break;
 			
 		case	ENUM_DECLARATION:
+		case	FLAGS_DECLARATION:
 		case	DECLARE_NAMESPACE:
 		case	IMPORT:
 		case	EMPTY:
@@ -1298,6 +1300,7 @@ public class X86_64 extends X86_64AssignTemps {
 				case	SIGNED_64:
 				case	BOOLEAN:
 				case	ENUM:
+				case	FLAGS:
 				case	FUNCTION:
 				case	ADDRESS:
 				case	REF:
@@ -1358,7 +1361,8 @@ public class X86_64 extends X86_64AssignTemps {
 				case	SIGNED_16:
 				case	SIGNED_32:
 				case	SIGNED_64:
-					inst(X86.AND, b.type.family(), b.left(), b.right(), compileContext);
+				case	FLAGS:
+					inst(X86.AND, impl(b.type), b.left(), b.right(), compileContext);
 					break;
 					
 				default:
@@ -1374,8 +1378,9 @@ public class X86_64 extends X86_64AssignTemps {
 				case	SIGNED_16:
 				case	SIGNED_32:
 				case	SIGNED_64:
+				case	FLAGS:
 					inst(X86.MOV, R(int(b.register)), b.left(), compileContext);
-					inst(X86.AND, b.type.family(), b, b.right(), compileContext);
+					inst(X86.AND, impl(b.type), b, b.right(), compileContext);
 					inst(X86.MOV, b.left(), R(int(b.register)), compileContext);
 					break;
 					
@@ -1399,7 +1404,8 @@ public class X86_64 extends X86_64AssignTemps {
 				case	SIGNED_16:
 				case	SIGNED_32:
 				case	SIGNED_64:
-					inst(X86.OR, b.type.family(), b.left(), b.right(), compileContext);
+				case	FLAGS:
+					inst(X86.OR, impl(b.type), b.left(), b.right(), compileContext);
 					break;
 					
 				default:
@@ -1416,8 +1422,9 @@ public class X86_64 extends X86_64AssignTemps {
 				case	SIGNED_16:
 				case	SIGNED_32:
 				case	SIGNED_64:
+				case	FLAGS:
 					inst(X86.MOV, R(int(b.register)), b.left(), compileContext);
-					inst(X86.OR, b.type.family(), b, b.right(), compileContext);
+					inst(X86.OR, impl(b.type), b, b.right(), compileContext);
 					inst(X86.MOV, b.left(), R(int(b.register)), compileContext);
 					break;
 					
@@ -1441,7 +1448,8 @@ public class X86_64 extends X86_64AssignTemps {
 				case	SIGNED_16:
 				case	SIGNED_32:
 				case	SIGNED_64:
-					inst(X86.XOR, b.type.family(), b.left(), b.right(), compileContext);
+				case	FLAGS:
+					inst(X86.XOR, impl(b.type), b.left(), b.right(), compileContext);
 					break;
 					
 				default:
@@ -1457,8 +1465,9 @@ public class X86_64 extends X86_64AssignTemps {
 				case	SIGNED_16:
 				case	SIGNED_32:
 				case	SIGNED_64:
+				case	FLAGS:
 					inst(X86.MOV, R(int(b.register)), b.left(), compileContext);
-					inst(X86.XOR, b.type.family(), b, b.right(), compileContext);
+					inst(X86.XOR, impl(b.type), b, b.right(), compileContext);
 					inst(X86.MOV, b.left(), R(int(b.register)), compileContext);
 					break;
 					
@@ -2162,7 +2171,8 @@ public class X86_64 extends X86_64AssignTemps {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ADDRESS:
-				inst(X86.MOV, c.type.family(), R(int(node.register)), c.intValue());
+			case	FLAGS:
+				inst(X86.MOV, impl(c.type), R(int(node.register)), c.intValue());
 				break;
 				
 			default:
@@ -2586,6 +2596,26 @@ public class X86_64 extends X86_64AssignTemps {
 	private void generateCompare(ref<Binary> b, ref<CodeSegment> trueSegment, ref<CodeSegment> falseSegment, ref<CompileContext> compileContext) {
 		generateOperands(b, compileContext);
 		switch (b.left().type.family()) {
+		case	FLAGS:
+			switch (b.left().type.size()) {
+			case	1:
+				inst(X86.CMP, TypeFamily.UNSIGNED_8, b.left(), b.right(), compileContext);
+				break;
+
+			case	2:
+				inst(X86.CMP, TypeFamily.SIGNED_16, b.left(), b.right(), compileContext);
+				break;
+
+			case	4:
+				inst(X86.CMP, TypeFamily.SIGNED_32, b.left(), b.right(), compileContext);
+				break;
+
+			case	8:
+				inst(X86.CMP, TypeFamily.SIGNED_64, b.left(), b.right(), compileContext);
+				break;
+			}
+			break;
+			
 		case	UNSIGNED_32:
 		case	SIGNED_32:
 		case	SIGNED_64:
@@ -2789,6 +2819,7 @@ public class X86_64 extends X86_64AssignTemps {
 				assert(false);
 				break;
 				
+			case	FLAGS:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
@@ -2802,7 +2833,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	POINTER:
 			case	FUNCTION:
 				generate(seq.right(), compileContext);
-				inst(X86.MOV, seq.type.family(), seq.left(), seq.right(), compileContext);
+				inst(X86.MOV, impl(seq.type), seq.left(), seq.right(), compileContext);
 				break;
 				
 			case	FLOAT_32:
@@ -2901,6 +2932,8 @@ public class X86_64 extends X86_64AssignTemps {
 		
 		switch (call.category()) {
 		case	CONSTRUCTOR:
+			if (overload == null)
+				return;
 			if (call.type.hasVtable(compileContext) && (call.target() == null || call.target().op() != Operator.SUPER))
 				storeVtable(call.type, compileContext);
 			if (!instCall(overload, compileContext)) {
@@ -3311,6 +3344,12 @@ public class X86_64 extends X86_64AssignTemps {
 					inst(X86.MOV, TypeFamily.SIGNED_32, result, n, compileContext);
 				return;
 
+			case	FLAGS:
+				if (newType.size() < 8) {
+					if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
+						inst(X86.MOV, TypeFamily.SIGNED_32, result, n, compileContext);
+					return;
+				}
 			case	SIGNED_64:
 			case	ADDRESS:
 			case	REF:
@@ -3624,6 +3663,11 @@ public class X86_64 extends X86_64AssignTemps {
 
 	public ref<ParameterScope> generateEnumToStringMethod(ref<EnumInstanceType> type, ref<CompileContext> compileContext) {
 		ref<ParameterScope> scope = compileContext.arena().createParameterScope(type.scope(), null, ParameterScope.Kind.ENUM_TO_STRING);
+		return scope;
+	}
+	
+	public ref<ParameterScope> generateFlagsToStringMethod(ref<FlagsInstanceType> type, ref<CompileContext> compileContext) {
+		ref<ParameterScope> scope = compileContext.arena().createParameterScope(type.scope(), null, ParameterScope.Kind.FLAGS_TO_STRING);
 		return scope;
 	}
 	
@@ -3971,4 +4015,19 @@ private TraverseAction collectStaticDestructors(ref<Node> n, address data) {
 	if (n.op() == Operator.DECLARATION)
 		compiler.markLiveSymbols(ref<Binary>(n).right(), StorageClass.STATIC, ref<CompileContext>(data));
 	return TraverseAction.CONTINUE_TRAVERSAL;
+}
+
+TypeFamily impl(ref<Type> t) {
+	if (t.family() != TypeFamily.FLAGS) {
+		return t.family();
+	}
+	switch (t.size()) {
+	case 1:
+		return TypeFamily.UNSIGNED_8;
+	case 2:
+		return TypeFamily.SIGNED_16;
+	case 4:
+		return TypeFamily.SIGNED_32;
+	}
+	return TypeFamily.SIGNED_64;
 }

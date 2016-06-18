@@ -161,8 +161,10 @@ class OverloadOperation {
 						_best[i] = _best[_best.length() - 1];
 					_best.resize(_best.length() - 1);
 				} else {
-					if (partialOrder > 0)
+					if (partialOrder > 0) {
 						includeOi = false;
+						break;
+					}
 					i++;
 				}
 			}

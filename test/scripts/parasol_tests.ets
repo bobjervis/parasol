@@ -1,5 +1,6 @@
 // Advanced library executions tests
 
+run(filename: httpd_test.p)
 run(filename: win_ui_test.p)
 run(filename: randomTests.p)
 run(filename: linearRegressionTests.p)
@@ -83,6 +84,7 @@ run(filename: super_call.p)
 run(filename: inherited_constructor.p)
 run(filename: class_nested_vtable.p)
 run(filename: class_retn_init.p)
+run(filename: flags_ops.p)
 run(filename: class_meta_ops.p)
 run(filename: vector_return.p)
 run(filename: vector_lvalue_ops.p)
@@ -632,6 +634,61 @@ compile() { "float a; a = --a;" }
 compile() { "float a; a = ++a;" }
 compile() { "float a; a = a--;" }
 compile() { "float a; a = a++;" }
+
+// Flags tests
+
+compile() { "flags A { B, C, D } A x, y; x = y;" }
+compile() { "flags A { B, C, D } A x; x = 0;" }
+compile() { "flags A { B, C, D } A x; x = A.C|A.D;" }
+compile() { "flags A { B, C, D } A x; x = A.C&A.D;" }
+compile() { "flags A { B, C, D } A x; x = A.C^A.D;" }
+compile() { "flags A { B, C, D } A x; if (x & A.B) x = A.D;" }
+compile() { "flags A { B, C, D } A x; while (x & A.B) x = A.D;" }
+compile() { "flags A { B, C, D } A x; for (; x & A.B; ) x = A.D;" }
+compile() { "flags A { B, C, D } A x; do { x = A.C; } while (x & A.B);" }
+compile() { "flags A { B, C, D } A x; int y = (x & A.C) ? 3 : -1;" }
+compile(expect: fail) { "flags A { B, C, D } switch (x) x = A.B;" }
+compile(expect: fail) { "flags A { B, C, D } A x; flags B { B, C, D } B y; x = y;" }
+compile(expect: fail) { "flags A { B, C, D } A x; flags B { B, C, D } B y; if (x | y) y = B.B;" }
+compile(expect: fail) { "flags A { B, C, D } A x; flags B { B, C, D } B y; if (x & y) y = B.B;" }
+compile(expect: fail) { "flags A { B, C, D } A x; flags B { B, C, D } B y; if (x ^ y) y = B.B;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y, z; x = y + z;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y, z; x = y - z;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y, z; x = y * z;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y, z; x = y / z;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y, z; x = y % z;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; x = y << 2;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; x = y >> 3;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; x = y >>> 4;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y, z; x += z;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y, z; x -= z;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y, z; x *= z;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y, z; x /= z;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y, z; x %= z;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; x <<= 2;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; x >>= 3;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; x >>>= 4;" }
+//compile() { "flags A { B, C, D } A x, y; boolean z = x === y;" }
+compile() { "flags A { B, C, D } A x, y; boolean z = x == y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x < y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x > y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x <= y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x >= y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x <> y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x <>= y;" }
+//compile() { "flags A { B, C, D } A x, y; boolean z = x !== y;" }
+compile() { "flags A { B, C, D } A x, y; boolean z = x != y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x !< y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x !> y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x !<= y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x !>= y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x !<> y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x !<>= y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; x = !y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; x = -y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; x = +y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; x = *y;" }
+compile() { "flags A { B, C, D } A x, y; x = ~y;" }
 
 // The matrix of allowed operators for unsigned operands:
 

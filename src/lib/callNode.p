@@ -164,6 +164,7 @@ class Call extends ParameterBag {
 				
 			case	CONSTRUCTOR:
 				if (_overload == null) {
+					return this;
 					print(0);
 					assert(false);
 				}
@@ -936,6 +937,7 @@ class Call extends ParameterBag {
 		case	POINTER:
 		case	BOOLEAN:
 		case	ENUM:
+		case	FLAGS:
 		case	FUNCTION:
 			switch (newType.family()) {
 			case	UNSIGNED_8:
@@ -954,6 +956,7 @@ class Call extends ParameterBag {
 			case	POINTER:
 			case	BOOLEAN:
 			case	ENUM:
+			case	FLAGS:
 			case	FUNCTION:
 				return true;
 			}
