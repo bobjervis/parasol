@@ -17,6 +17,7 @@ namespace parasol:x86_64;
 
 import native:C;
 import parasol:file;
+import parasol:compiler.Access;
 import parasol:compiler.Arena;
 import parasol:compiler.Binary;
 import parasol:compiler.Block;
@@ -644,7 +645,6 @@ class X86_64Encoder extends Target {
 			int alignment;
 			type.assignSize(this, compileContext);
 			switch (symbol.storageClass()) {
-			case	CONSTANT:
 			case	STATIC:
 				if (symbol.value == null) {
 					int size = type.size();
@@ -715,7 +715,7 @@ class X86_64Encoder extends Target {
 			int size = type.size();
 			int alignment = type.alignment();
 			assignStaticRegion(symbol, alignment, size);
-			if (symbol.storageClass() == StorageClass.CONSTANT) {
+			if (symbol.accessFlags() & Access.CONSTANT) {
 				ref<PlainSymbol> sym = ref<PlainSymbol>(symbol);		// constants are constrained to be Plain
 				long value = sym.initializer().foldInt(this, compileContext);
 				staticFixup(FixupKind.INT_CONSTANT, symbol, 0, address(value));
@@ -1898,6 +1898,34 @@ class X86_64Encoder extends Target {
 			modRM(left, rmValues[right], 0, 0);
 			break;
 			
+		case	SAL:
+		case	SAR:
+		case	SHR:
+			switch (left.type.family()) {
+			case	UNSIGNED_8:
+				emitRex(left.type.family(), left, right, R.NO_REG);
+				emit(0xd2);
+				modRM(left, shiftReg[instruction], 0, 0);
+				break;
+				
+			case	UNSIGNED_16:
+			case	SIGNED_16:
+				emit(0x66);
+			case	SIGNED_32:
+			case	UNSIGNED_32:
+			case	SIGNED_64:
+				emitRex(left.type.family(), left, right, R.NO_REG);
+				emit(0xd3);
+				modRM(left, shiftReg[instruction], 0, 0);
+				break;
+				
+			default:
+				printf("%s - %s\n", string(instruction), string(right));
+				left.print(4);
+				assert(false);
+			}
+			break;
+			
 		case	CMP:
 		case	AND:
 		case	OR:
@@ -2936,7 +2964,6 @@ class X86_64Encoder extends Target {
 				assert(false);
 			}
 			switch (sym.storageClass()) {
-			case	CONSTANT:
 			case	STATIC:
 				modRM(sym, regOpcode, ipAdjust, allAdjust);
 				break;
@@ -3148,7 +3175,6 @@ class X86_64Encoder extends Target {
 					assert(false);
 				}
 				switch (sym.storageClass()) {
-				case	CONSTANT:
 				case	STATIC:
 				case	AUTO:
 				case	PARAMETER:
@@ -4062,7 +4088,14 @@ byte[X86] opcodes = [
 	XOR:	byte(0x30),
 	CMP:	byte(0x38),
 	MOV:	byte(0x88),
+
 	MAX_INSTRUCTION: byte(0)
+];
+
+byte[X86] shiftReg = [
+	SAL:	byte(0x04),
+	SAR:	byte(0x07),
+	SHR:	byte(0x05),
 ];
 
 byte[X86] group1opcodes;

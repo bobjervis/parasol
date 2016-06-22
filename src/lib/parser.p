@@ -49,18 +49,18 @@ class Parser {
 		Location location;
 
 		t = _scanner.next();
-		location = _scanner.location();
 		if (t == Token.ANNOTATION) {
 			annotations = parseAnnotations();
 			if (annotations.op() == Operator.SYNTAX_ERROR)
 				return annotations;
 		} else
 			_scanner.pushBack(t);
+		location = _scanner.location();
 		ref<Node> x = parseBareStatement();
 		if (x.op() == Operator.SYNTAX_ERROR)
 			return x;
 		if (annotations != null)
-			x = _tree.newBinary(Operator.ANNOTATED, annotations, x, x.location());
+			x = _tree.newBinary(Operator.ANNOTATED, annotations, x, location);
 		return x;
 	}
 

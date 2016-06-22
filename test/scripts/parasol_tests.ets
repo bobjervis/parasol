@@ -70,6 +70,7 @@ run(filename: sort_bug.p)
 run(filename: destructor_test.p)
 run(filename: destructor_virtual_test.p)
 run(filename: constructor_test.p)
+run(filename: constant_int_test.p)
 run(filename: array_init.p)
 run(filename: unicodeNumber.p)
 run(filename: template_scope/template_scope.p, importPath: ^/test/src/template_scope)
@@ -235,6 +236,39 @@ compile() { "boolean a = true || true;" }
 compile() { "boolean a = !true;" }
 
 compile(expect: fail, message: BAD_MULTI_ASSIGN) { "int x,y; (x, y) = (1, 3);" }
+
+// Constant tests
+
+compile() { "@Constant int x = 4;" }
+compile(expect: fail) { "@Constant int x;" }
+compile(expect: fail) { "class A {} @Constant A x();" }
+compile(expect: fail) { "@Constant void folderol(int x) {}" }
+compile(expect: fail) { "@Constant int() x = f; int f() { return 0;}" }
+compile(expect: fail) { "@Constant int[] x = [ 1, 2, 3];" }
+compile() { "int a; @Constant int b = 7; a = b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b = a;" }
+compile() { "int a; @Constant int b = 7; a += b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b += a;" }
+compile() { "int a; @Constant int b = 7; a -= b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b -= a;" }
+compile() { "int a; @Constant int b = 7; a *= b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b *= a;" }
+compile() { "int a; @Constant int b = 7; a /= b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b /= a;" }
+compile() { "int a; @Constant int b = 7; a %= b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b %= a;" }
+compile() { "int a; @Constant int b = 7; a &= b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b &= a;" }
+compile() { "int a; @Constant int b = 7; a |= b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b |= a;" }
+compile() { "int a; @Constant int b = 7; a ^= b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b ^= a;" }
+compile() { "int a; @Constant int b = 7; a <<= b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b <<= a;" }
+compile() { "int a; @Constant int b = 7; a >>= b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b >>= a;" }
+compile() { "int a; @Constant int b = 7; a >>>= b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b >>>= a;" }
 
 // Casts
 

@@ -23,7 +23,6 @@ enum StorageClass {
 	PARAMETER,
 	MEMBER,
 	STATIC,
-	CONSTANT,
 	TEMPLATE,
 	TEMPLATE_INSTANCE,
 	ENUMERATION,
@@ -1004,6 +1003,10 @@ class Scope {
 	public void assignMethodMaps(ref<CompileContext> compileContext) {
 	}
 
+	public void configureDefaultConstructors(ref<CompileContext> compileContext) {
+		
+	}
+	
 	public int parameterCount() {
 		if (_storageClass == StorageClass.TEMPLATE)
 			return _symbols.size();
@@ -1071,8 +1074,7 @@ class Scope {
 		int max = 1;
 		for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
 			ref<Symbol> sym = i.get();
-			if (sym.storageClass() == StorageClass.STATIC ||
-				sym.storageClass() == StorageClass.CONSTANT)
+			if (sym.storageClass() == StorageClass.STATIC)
 				continue;
 			if (sym.class == PlainSymbol) {
 				ref<Type> type = sym.type();
@@ -1241,7 +1243,6 @@ class Scope {
 				return;
 			type.checkSize(compileContext);
 			switch (symbol.storageClass()) {
-			case	CONSTANT:
 			case	STATIC:
 			case	AUTO:
 			case	MEMBER:
@@ -1398,6 +1399,11 @@ class Namespace extends Symbol {
 		return _dottedName;
 	}
 }
+
+flags Access {
+	CONSTANT,
+	CONSTRUCTED			// If the object is not initialized with a constructor, it will be constructed at scope start.						// the bit will be set any constructor initializer is performed.
+}
 /*
 	PlainSymbol
 	
@@ -1409,7 +1415,8 @@ class Namespace extends Symbol {
 class PlainSymbol extends Symbol {
 	private ref<Node> _typeDeclarator;
 	private ref<Node> _initializer;
-
+	private Access _accessFlags;
+	
 	PlainSymbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<MemoryPool> pool, ref<CompileString> name, ref<Node> source, ref<Node> typeDeclarator, ref<Node> initializer) {
 		super(visibility, storageClass, enclosing, annotations, pool, name, source);
 		_typeDeclarator = typeDeclarator;
@@ -1480,36 +1487,50 @@ class PlainSymbol extends Symbol {
 		return _type;
 	}
 
-	protected boolean validateAnnotations(ref<CompileContext> compileContext) {
+	protected void validateAnnotations(ref<CompileContext> compileContext) {
 		if (annotations() == null)
-			return true;
-		if (!super.validateAnnotations(compileContext))
-			return false;
-		if (storageClass() == StorageClass.CONSTANT) {
+			return;
+		ref<Call> annotation = (*annotations())["Constant"];
+		if (annotation != null) {
+			// If this symbol has a Constant annotation, be sure to validate it.
+			if (annotation.argumentCount() > 0) {
+				definition().add(MessageId.ANNOTATION_TAKES_NO_ARGUMENTS, compileContext.pool());
+				return;
+			}
+			if (storageClass() != StorageClass.STATIC) {
+				definition().add(MessageId.CONSTANT_NOT_STATIC, compileContext.pool());
+				return;
+			}
 			switch (_type.family()) {
 			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 				if (_initializer == null) {
 					definition().add(MessageId.INITIALIZER_REQUIRED, compileContext.pool());
-					return false;
+					return;
 				}
 				_initializer.assignTypes(compileContext);
 				if (!_initializer.isConstant()) {
 					definition().add(MessageId.INITIALIZER_MUST_BE_CONSTANT, compileContext.pool());
-					return false;
+					return;
 				}
 				break;
 				
+			case	FUNCTION:
+			case	CLASS:
+			case	SHAPE:
+				definition().add(MessageId.CONSTANT_NOT_ALLOWED, compileContext.pool());
+				return;
+
 			case	ERROR:
-				return true;
+				return;
 				
 			default:
 				print(0, false);
 				assert(false);
 			}
+			_accessFlags |= Access.CONSTANT;
 		}
-		return true;
 	}
 	
 	public ref<Node> typeDeclarator() {
@@ -1518,6 +1539,10 @@ class PlainSymbol extends Symbol {
 
 	public ref<Node> initializer() {
 		return _initializer;
+	}
+	
+	public Access accessFlags() {
+		return _accessFlags;
 	}
 }
 
@@ -2010,24 +2035,12 @@ class Symbol {
 			return _type.equals(t);
 	}
 
-	protected boolean validateAnnotations(ref<CompileContext> compileContext) {
+	protected void validateAnnotations(ref<CompileContext> compileContext) {
 		if (_annotations == null)
-			return true;
+			return;
 		ref<Call> annotation = (*_annotations)["Constant"];
-		if (annotation != null) {
-			// If this symbol has a Constant annotation, be sure to validate it.
-			if (annotation.argumentCount() > 0) {
-				_definition.add(MessageId.ANNOTATION_TAKES_NO_ARGUMENTS, compileContext.pool());
-				return false;
-			}
-			if (storageClass() == StorageClass.STATIC)
-				_storageClass = StorageClass.CONSTANT;
-			else {
-				_definition.add(MessageId.CONSTANT_NOT_STATIC, compileContext.pool());
-				return false;
-			}
-		}
-		return true;
+		if (annotation != null)
+			_definition.add(MessageId.CONSTANT_NOT_ALLOWED, compileContext.pool());
 	}
 	
 	public StorageClass storageClass() {
@@ -2051,6 +2064,10 @@ class Symbol {
 		return _definition;
 	}
 	
+	public Access accessFlags() {
+		return Access.CONSTRUCTED;
+	}
+
 	public boolean isFunction() {
 		return false;
 	}

@@ -137,12 +137,27 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			assignLargeClass(ref<Binary>(node), compileContext);
 			break;
 
-		case	ASSIGN:
-		case	ADD_ASSIGN:
-		case	SUBTRACT_ASSIGN:
 		case	LEFT_SHIFT_ASSIGN:
 		case	RIGHT_SHIFT_ASSIGN:
 		case	UNSIGNED_RIGHT_SHIFT_ASSIGN:
+			b = ref<Binary>(node);
+			if (b.left().op() == Operator.SEQUENCE) {
+				b.print(0);
+				assert(false);
+			} else {
+				if (b.sethi < 0) {
+					assignLvalueTemps(b.left(), compileContext);
+					assignRegisterTemp(b.right(), RCXmask, compileContext);
+				} else {
+					assignRegisterTemp(b.right(), RCXmask, compileContext);
+					assignLvalueTemps(b.left(), compileContext);
+				}
+			}
+			break;
+
+		case	ASSIGN:
+		case	ADD_ASSIGN:
+		case	SUBTRACT_ASSIGN:
 		case	OR_ASSIGN:
 		case	AND_ASSIGN:
 		case	EXCLUSIVE_OR_ASSIGN:

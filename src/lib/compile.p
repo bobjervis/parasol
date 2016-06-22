@@ -108,6 +108,9 @@ class CompileContext {
 				break;
 		}
 		for (int i = 0; i < _arena.scopes().length(); i++)
+			(*_arena.scopes())[i].configureDefaultConstructors(this);
+		
+		for (int i = 0; i < _arena.scopes().length(); i++)
 			(*_arena.scopes())[i].checkVariableStorage(this);
 	}
 

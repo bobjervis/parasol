@@ -111,12 +111,28 @@ int main(string[] args) {
 	d <<= 3;
 	assert(d == 0x88);
 
+	// Now test a different instruction format.
+	d = 17;
+	int sh = 3;
+	d <<= sh;
+	assert(d == 0x88);
+	
 	d = 17;
 	d >>= 1;
 	assert(d == 8);
 
 	d = 17;
+	sh = 1;
+	d >>= sh;
+	assert(d == 8);
+
+	d = 17;
 	d >>>= 1;
+	assert(d == 8);
+
+	d = 17;
+	sh = 1;
+	d >>>= sh;
 	assert(d == 8);
 
 	d = 17;

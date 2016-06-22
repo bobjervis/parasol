@@ -325,6 +325,10 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 	ref<Call> aggregate = ref<Call>(vectorExpression.right());
 	ref<Type> vectorType = vectorExpression.type;
 	ref<Node> lhs = vectorExpression.left();
+	if (lhs.commentary() != null) {
+		vectorExpression.type = compileContext.errorType();
+		return vectorExpression;
+	}
 	ref<Node> result = null;
 	if (!lhs.isSimpleLvalue()) {
 		ref<Variable> lhv = compileContext.newVariable(compileContext.arena().builtInType(TypeFamily.ADDRESS));

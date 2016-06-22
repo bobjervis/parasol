@@ -152,7 +152,7 @@ class Identifier extends Node {
 	}
 	
 	public long foldInt(ref<Target> target, ref<CompileContext> compileContext) {
-		if (_symbol.storageClass() == StorageClass.CONSTANT) {
+		if (isConstant()) {
 			ref<Node> initializer = ref<PlainSymbol>(_symbol).initializer();
 			if (initializer == null)
 				return 0;
@@ -167,7 +167,7 @@ class Identifier extends Node {
 		if (_symbol == null)
 			return false;
 		else
-			return _symbol.storageClass() == StorageClass.CONSTANT;
+			return (_symbol.accessFlags() & Access.CONSTANT) != 0;
 	}
 	
 	public void print(int indent) {

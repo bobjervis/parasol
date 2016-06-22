@@ -1655,6 +1655,13 @@ class Binary extends Node {
 				type = _right.type;
 				break;
 			}
+			ref<Symbol> lvalue = _left.symbol();
+			if (lvalue != null && lvalue.accessFlags() & Access.CONSTANT) {
+				add(MessageId.BAD_WRITE_ATTEMPT, compileContext.pool());
+				type = compileContext.errorType();
+				break;
+			}
+			
 			if (_left.type.family() == TypeFamily.STRING) {
 				switch (_right.type.family()) {
 				case	STRING:
@@ -1755,6 +1762,12 @@ class Binary extends Node {
 		case	EXCLUSIVE_OR_ASSIGN:
 			if (!assignOp(compileContext))
 				break;
+			lvalue = _left.symbol();
+			if (lvalue != null && lvalue.accessFlags() & Access.CONSTANT) {
+				add(MessageId.BAD_WRITE_ATTEMPT, compileContext.pool());
+				type = compileContext.errorType();
+				break;
+			}
 			switch (_left.type.family()) {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -1788,6 +1801,12 @@ class Binary extends Node {
 			}
 			if (_right.deferAnalysis()) {
 				type = _right.type;
+				break;
+			}
+			lvalue = _left.symbol();
+			if (lvalue != null && lvalue.accessFlags() & Access.CONSTANT) {
+				add(MessageId.BAD_WRITE_ATTEMPT, compileContext.pool());
+				type = compileContext.errorType();
 				break;
 			}
 			if (_left.op() == Operator.SEQUENCE) {
@@ -2079,6 +2098,12 @@ class Binary extends Node {
 		case	MULTIPLY_ASSIGN:
 			if (!assignOp(compileContext))
 				break;
+			lvalue = _left.symbol();
+			if (lvalue != null && lvalue.accessFlags() & Access.CONSTANT) {
+				add(MessageId.BAD_WRITE_ATTEMPT, compileContext.pool());
+				type = compileContext.errorType();
+				break;
+			}
 			switch (_left.type.family()) {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -2107,6 +2132,12 @@ class Binary extends Node {
 		case	REMAINDER_ASSIGN:
 			if (!assignOp(compileContext))
 				break;
+			lvalue = _left.symbol();
+			if (lvalue != null && lvalue.accessFlags() & Access.CONSTANT) {
+				add(MessageId.BAD_WRITE_ATTEMPT, compileContext.pool());
+				type = compileContext.errorType();
+				break;
+			}
 			switch (_left.type.family()) {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -2143,6 +2174,12 @@ class Binary extends Node {
 		case	UNSIGNED_RIGHT_SHIFT_ASSIGN:
 			if (!assignShiftOp(compileContext))
 				break;
+			lvalue = _left.symbol();
+			if (lvalue != null && lvalue.accessFlags() & Access.CONSTANT) {
+				add(MessageId.BAD_WRITE_ATTEMPT, compileContext.pool());
+				type = compileContext.errorType();
+				break;
+			}
 			if (_left.isLvalue()) 
 				type = _left.type;
 			else {

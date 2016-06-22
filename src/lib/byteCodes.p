@@ -3643,8 +3643,7 @@ class Code extends Value {
 			ref<Selection> s = ref<Selection>(n);
 			if (s.indirect())
 				generate(s.left(), target, compileContext);
-			else if (s.symbol().storageClass() == StorageClass.STATIC ||
-					 s.symbol().storageClass() == StorageClass.CONSTANT) {
+			else if (s.symbol().storageClass() == StorageClass.STATIC) {
 				target.byteCode(ByteCodes.VALUE);
 				if (s.symbol().value == null) {
 					target.unfinished(s, "pushAddress selection value == null", compileContext);
