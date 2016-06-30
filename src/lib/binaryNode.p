@@ -1404,12 +1404,6 @@ class Binary extends Node {
 				type = _right.type;
 				break;
 			}
-			if (t.hasConstructors() && t.defaultConstructor() == null) {
-				
-//				add(MessageId.NO_DEFAULT_CONSTRUCTOR, compileContext.pool());
-//				type = compileContext.errorType();
-//				break;
-			}
 			_right = _right.coerce(compileContext.tree(), t, false, compileContext);
 			type = _right.type;
 			break;
@@ -2204,7 +2198,7 @@ class Binary extends Node {
 				 _left.type.family() == TypeFamily.FLAGS) &&
 				(_right.type.family() == TypeFamily.BOOLEAN ||
 				 _right.type.family() == TypeFamily.FLAGS))
-				type = _left.type;
+				type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
 			else {
 				add(MessageId.NOT_BOOLEAN, compileContext.pool());
 				type = compileContext.errorType();

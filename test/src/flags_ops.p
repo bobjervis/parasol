@@ -81,9 +81,16 @@ int main(string[] args) {
 	d = A.E;
 	assert(~d == (A.B|A.C|A.D));
 
-	d = A.E;
 	assert(func(d) == A.E);
 	
+	assert(!(d & A.D));
+
+	assert(d & A.D || a & A.B);
+	assert(d & A.E || a & A.C);
+	assert(!(d & A.D || a & A.C));
+	assert(d & A.E && a & A.B);
+	assert(!(d & A.D && a & A.B));
+	assert(!(d & A.E && a & A.C));
 	return 0;
 }
 

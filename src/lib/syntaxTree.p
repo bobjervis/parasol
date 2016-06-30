@@ -240,13 +240,13 @@ class SyntaxTree {
 			_root = parser.parseFile();
 		} else {
 			_scanner = null;
-			_root = newBlock(Operator.UNIT, null, Location.OUT_OF_FILE);
+			_root = newBlock(Operator.UNIT, null, false, Location.OUT_OF_FILE);
 			_root.add(MessageId.FILE_NOT_READ, _pool);
 		}
 	}
 
-	public ref<Block> newBlock(Operator op, ref<Node> lockReference, Location location) {
-		return _pool new Block(op, lockReference, location);
+	public ref<Block> newBlock(Operator op, ref<Node> lockReference, boolean inSwitch, Location location) {
+		return _pool new Block(op, lockReference, inSwitch, location);
 	}
 
 	public ref<Class> newClass(ref<Identifier> name, ref<Node> extendsClause, Location location) {
@@ -396,12 +396,14 @@ class Block extends Node {
 	private ref<Node> _lockReference;
 	private ref<NodeList> _statements;
 	private ref<NodeList> _last;
+	private boolean _inSwitch;
 	public ref<Scope> scope;
 	public Location closeCurlyLocation;
 
-	Block(Operator op, ref<Node> lockReference, Location location) {
+	Block(Operator op, ref<Node> lockReference, boolean inSwitch, Location location) {
 		super(op, location);
 		_lockReference = lockReference;
+		_inSwitch = inSwitch;
 	}
 
 	public void statement(ref<NodeList> stmt) {
@@ -519,7 +521,7 @@ class Block extends Node {
 		ref<Node> lockReference = null;
 		if (_lockReference != null)
 			lockReference = _lockReference.clone(tree);
-		ref<Block> b = tree.newBlock(op(), lockReference, location());
+		ref<Block> b = tree.newBlock(op(), lockReference, _inSwitch, location());
 		if (_statements != null)
 			b._statements = _statements.clone(tree);
 		b.scope = scope;
@@ -530,7 +532,7 @@ class Block extends Node {
 		ref<Node> lockReference = null;
 		if (_lockReference != null)
 			lockReference = _lockReference.cloneRaw(tree);
-		ref<Block> b = tree.newBlock(op(), lockReference, location());
+		ref<Block> b = tree.newBlock(op(), lockReference, _inSwitch, location());
 		if (_statements != null)
 			b._statements = _statements.cloneRaw(tree);
 		return b;
@@ -578,6 +580,10 @@ class Block extends Node {
 	boolean definesScope() {
 		return true;
 	}
+	
+	boolean inSwitch() {
+		return _inSwitch;
+	}
 }
 
 private Test blockFallsThrough(ref<NodeList> nl) {
@@ -598,7 +604,7 @@ class Class extends Block {
 	private TypeFamily _effectiveFamily;		// Set by annotations (@Shape, @Ref, @Pointer)
 	
 	Class(ref<Identifier> name, ref<Node> extendsClause, Location location) {
-		super(Operator.CLASS, null, location);
+		super(Operator.CLASS, null, false, location);
 		_name = name;
 		_extends = extendsClause;
 		_effectiveFamily = TypeFamily.CLASS;

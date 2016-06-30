@@ -19,6 +19,8 @@ class Word {
 	Word(long xx) {
 		x = xx;
 	}
+	
+	Word() {}
 }
 
 Word f() {

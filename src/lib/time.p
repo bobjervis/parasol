@@ -27,6 +27,8 @@ public class Time {
 
 	private long _value;
 	
+	public Time() {}
+	
 	public Time(long value) {
 		_value = value;
 	}

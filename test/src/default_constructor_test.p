@@ -57,5 +57,24 @@ void f() {
 	assert(local.value() == MAGIC_VALUE);
 
 	C local;
+	
+	if (local.value() == 0)
+		;
+	else {
+		int x = 173;		// make sure this is declared in a nested scope and initializes the value to non-zero.
+	}
+	if (local.value() != 0) {
+		assert(y == 0);
+		
+		int y;				// this should get assigned to the same memory location. if the compiler zails to clear 
+							// the memory, we have a bug.
+	}
+	for (int i = 0; i < 2; i++) {
+		string x;
+		
+		x = "some value";			// If this succeeds, the constructor cleared the first iteration's memory.
+	}
 }
+
+
 

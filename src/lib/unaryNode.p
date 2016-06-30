@@ -588,11 +588,16 @@ class Unary extends Node {
 				type = _operand.type;
 				break;
 			}
-			if (_operand.type.scalarFamily(compileContext) != TypeFamily.BOOLEAN) {
+			if (_operand.type.scalarFamily(compileContext) != TypeFamily.BOOLEAN &&
+				_operand.type.scalarFamily(compileContext) != TypeFamily.FLAGS) {
 				add(MessageId.NOT_BOOLEAN, compileContext.pool());
 				type = compileContext.errorType();
-			} else
-				type = _operand.type;
+			} else {
+				if (_operand.type == _operand.type.scalarType(compileContext))
+					type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+				else
+					type = _operand.type;
+			}
 			break;
 
 		case	VECTOR_OF:{

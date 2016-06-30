@@ -1205,8 +1205,10 @@ class Function extends ParameterBag {
 		type = compileContext.pool().newFunctionType(retType, _arguments, definesScope() ? compileContext.current() : null);
 		if (_functionCategory == Category.DECLARATOR)
 			type = compileContext.makeTypedef(type);
-		if (_name != null && _name.symbol() != null)
+		if (_name != null && _name.symbol() != null) {
 			_name.symbol().bindType(type, compileContext);
+			_name.type = type;
+		}
 		if (body == null || retType == null)
 			return;
 		Test t = body.fallsThrough();

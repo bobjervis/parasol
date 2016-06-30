@@ -681,7 +681,7 @@ compile() { "flags A { B, C, D } A x; while (x & A.B) x = A.D;" }
 compile() { "flags A { B, C, D } A x; for (; x & A.B; ) x = A.D;" }
 compile() { "flags A { B, C, D } A x; do { x = A.C; } while (x & A.B);" }
 compile() { "flags A { B, C, D } A x; int y = (x & A.C) ? 3 : -1;" }
-compile(expect: fail) { "flags A { B, C, D } switch (x) x = A.B;" }
+compile(expect: fail) { "flags A { B, C, D } switch (x) { x = A.B; }" }
 compile(expect: fail) { "flags A { B, C, D } A x; flags B { B, C, D } B y; x = y;" }
 compile(expect: fail) { "flags A { B, C, D } A x; flags B { B, C, D } B y; if (x | y) y = B.B;" }
 compile(expect: fail) { "flags A { B, C, D } A x; flags B { B, C, D } B y; if (x & y) y = B.B;" }
@@ -1139,9 +1139,9 @@ statement() { "if (a) b; else if (c) d;" }
 statement() { "if (a) if (b) c; else d; else e;" }
 statement() { return; }
 statement() { return a; }
-statement() { "switch (a) b;" }
+statement() { "switch (a) { b; }" }
 statement() { "while (a) b;" }
-statement() { "@n switch (a) b;" }
+statement() { "@n switch (a) { b; }" }
 statement() { "@n while (a) b;" }
 statement() { "int main(string[] args){a;}" }
 statement() { "int<64> x;" }
@@ -1342,9 +1342,10 @@ statement(expect: fail) { "switch" }
 statement(expect: fail) { "switch (" }
 statement(expect: fail) { "switch (a" }
 statement(expect: fail) { "switch (a)" }
-statement(expect: fail, message: UNEXPECTED_EOF) { "switch (a) b" }
-statement(expect: fail) { "switch a) b;" }
-statement(expect: fail) { "switch (a b;" }
+statement(expect: recovered, message: UNEXPECTED_EOF) { "switch (a) {" }
+statement(expect: recovered, message: UNEXPECTED_EOF) { "switch (a) { b" }
+statement(expect: fail) { "switch a) { b; }" }
+statement(expect: fail) { "switch (a { b; }" }
 statement(expect: fail) { "while" }
 statement(expect: fail) { "while (" }
 statement(expect: fail) { "while (a" }

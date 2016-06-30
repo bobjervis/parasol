@@ -468,8 +468,8 @@ class X86_64Encoder extends Target {
 			if (sym.type().family() == TypeFamily.TYPEDEF) {
 				ref<Scope> s = sym.type().scope();
 				pointer<int> p = pointer<int>(&_code[sym.offset]);
-				for (ref<Symbol>[Scope.SymbolKey].iterator i = s.symbols().begin(); i.hasNext(); i.next()) {
-					ref<Symbol> instance = i.get();
+				for (ref<Symbol>[Scope.SymbolKey].iterator indicia = s.symbols().begin(); indicia.hasNext(); indicia.next()) {
+					ref<Symbol> instance = indicia.get();
 					p[instance.offset] = instance.offset;
 				}
 			} else if (sym.class == PlainSymbol) {
@@ -2522,14 +2522,25 @@ class X86_64Encoder extends Target {
 				emit(byte(immediate));
 				break;
 				
+			case	SIGNED_16:
+			case	UNSIGNED_16:
+				emit(0x66);
+				emitRex(left.type.family(), left, R.NO_REG, R.NO_REG);
+				emit(0xc7);
+				modRM(left, 0, int.bytes, 0);
+				emitShort(immediate);
+				break;
+
 			case	UNSIGNED_32:
 			case	SIGNED_32:
 			case	STRING:
 			case	ENUM:
+			case	FLAGS:
 			case	ADDRESS:
 			case	REF:
 			case	POINTER:
 			case	SIGNED_64:
+			case	FUNCTION:
 				emitRex(left.type.family(), left, R.NO_REG, R.NO_REG);
 				emit(0xc7);
 				modRM(left, 0, int.bytes, 0);
@@ -2581,6 +2592,53 @@ class X86_64Encoder extends Target {
 		default:
 			printf("%s - %d\n", string(instruction), immediate);
 			left.print(4);
+			assert(false);
+		}
+	}
+
+	void inst(X86 instruction, TypeFamily family, R base, int offset, int immediate) {
+		switch (instruction) {
+		case	MOV:
+			switch (family) {
+			case	BOOLEAN:
+			case	UNSIGNED_8:
+				emitRex(family, null, base, R.NO_REG);
+				emit(0xc6);
+				modRM(0, base, offset);
+				emit(byte(immediate));
+				break;
+				
+			case	UNSIGNED_16:
+				emit(0x66);
+				emitRex(family, null, base, R.NO_REG);
+				emit(0xc7);
+				modRM(0, base, offset);
+				emitShort(immediate);
+				break;
+
+			case	UNSIGNED_32:
+			case	SIGNED_32:
+			case	STRING:
+			case	ENUM:
+			case	ADDRESS:
+			case	REF:
+			case	POINTER:
+			case	SIGNED_64:
+			case	FUNCTION:
+				emitRex(family, null, base, R.NO_REG);
+				emit(0xc7);
+				modRM(0, base, offset);
+				emitInt(immediate);
+				break;
+				
+			default:
+				printf("%s [%s+%d] %d\n", string(instruction), string(base), offset, int(immediate));
+				assert(false);
+			}
+			break;
+						
+		default:
+			printf("%s [%s+%d] %d\n", string(instruction), string(base), offset, int(immediate));
 			assert(false);
 		}
 	}
@@ -3082,6 +3140,31 @@ class X86_64Encoder extends Target {
 			printf("modRM(-, %d)\n", regOpcode);
 			addressMode.print(4);
 			assert(false);
+		}
+	}
+	
+	private void modRM(byte regOpcode, R base, int offset) {
+		if (offset == 0) {
+			switch (base) {
+			case	RAX:
+			case	RBX:
+			case	RCX:
+			case	RDX:
+			case	RSI:
+			case	RDI:
+				modRM(0, regOpcode, rmValues[base]);
+				break;
+				
+			default:
+				modRM(1, regOpcode, rmValues[base]);
+				emit(byte(offset));
+			}
+		} else if (offset >= -128 && offset <= 127) {
+			modRM(1, regOpcode, rmValues[base]);
+			emit(byte(offset));
+		} else {
+			modRM(2, regOpcode, rmValues[base]);
+			emitInt(offset);
 		}
 	}
 	

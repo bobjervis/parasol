@@ -18,6 +18,7 @@ namespace parasol:x86_64;
 import native:windows;
 
 import parasol:compiler;
+import parasol:compiler.Access;
 import parasol:compiler.Arena;
 import parasol:compiler.Binary;
 import parasol:compiler.Block;
@@ -535,6 +536,13 @@ public class X86_64 extends X86_64AssignTemps {
 			if (_arena.verbose)
 				printf("Static initializers:\n");
 //			printf("staticBlocks %d\n", staticBlocks().length());
+			// Generate the default constructor calls.
+			for (int i = 0; i < staticBlocks().length(); i++) {
+				ref<FileStat> file = (*staticBlocks())[i];
+				if (_arena.verbose)
+					printf("   cnstructors for %s\n", file.filename());
+				generateDefaultConstructors(file.fileScope(), compileContext);
+			}
 			int initialVariableCount = compileContext.variableCount();
 			for (int i = 0; i < staticBlocks().length(); i++) {
 				ref<FileStat> file = (*staticBlocks())[i];
@@ -755,7 +763,6 @@ public class X86_64 extends X86_64AssignTemps {
 	
 	private void generateConstructorPreamble(ref<Block> constructorBody, ref<ParameterScope> scope, ref<CompileContext> compileContext) {
 		if (scope.enclosing().hasVtable(compileContext)) {
-//			instStoreVTable(R.RSI, R.RAX, ref<ClassScope>(scope.enclosing()));
 			if (scope.enclosing().variableStorage > address.bytes) {
 				inst(X86.LEA, R.RCX, R.RSI, address.bytes);
 				inst(X86.XOR, TypeFamily.UNSIGNED_8, R.RDX, R.RDX);
@@ -841,6 +848,7 @@ public class X86_64 extends X86_64AssignTemps {
 		case	BLOCK:
 		case	UNIT:
 			ref<Block> block = ref<Block>(node);
+			generateDefaultConstructors(block.scope, compileContext);
 			for (ref<NodeList> nl = block.statements(); nl != null; nl = nl.next)
 				generate(nl.node, compileContext);
 			break;
@@ -2680,53 +2688,6 @@ public class X86_64 extends X86_64AssignTemps {
 		switch (node.op()) {
 		case	IDENTIFIER:
 		case	VARIABLE:
-			switch (node.type.family()) {
-			case	CLASS:
-			case	SHAPE:
-				ref<ParameterScope> constructor = node.type.scope().defaultConstructor();
-				if (constructor != null) {
-					inst(X86.LEA, R.RCX, node, compileContext);
-					if (node.type.hasVtable(compileContext))
-						storeVtable(node.type, compileContext);
-//					printf("Found a constructor!\n");
-//					node.print(4);
-//					sc.print(4, false);
-					instCall(constructor, compileContext);
-					hasDefaultConstructor = true;
-				}
-			}
-			if (!hasDefaultConstructor) {
-				ref<Symbol> sym = node.symbol();
-				if (sym != null &&
-					sym.storageClass() == StorageClass.AUTO &&
-					sym.type() != null &&
-					sym.type().requiresAutoStorage()) {
-					if (sym.type().hasVtable(compileContext)) {
-						inst(X86.LEA, R.RCX, node, compileContext);
-						storeVtable(node.type, compileContext);
-						if (sym.type().size() > address.bytes) {
-							inst(X86.ADD, TypeFamily.ADDRESS, R.RCX, 8);
-							inst(X86.XOR, TypeFamily.UNSIGNED_8, R.RDX, R.RDX);
-							inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, node.type.size() - address.bytes);
-							instCall(_memset, compileContext);
-						}
-					} else if (sym.type().size() > 0) {
-						if (sym.type().size() <= address.bytes)
-							inst(X86.MOV, node, 0, compileContext);
-						else {
-							inst(X86.LEA, R.RCX, node, compileContext);
-							inst(X86.XOR, TypeFamily.UNSIGNED_8, R.RDX, R.RDX);
-							inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, node.type.size());
-							instCall(_memset, compileContext);
-						}
-					}
-					break;
-				}
-				if (node.type.hasVtable(compileContext)) {
-					inst(X86.LEA, R.RCX, node, compileContext);
-					storeVtable(node.type, compileContext);
-				}
-			}
 			break;
 
 		case	SEQUENCE:
@@ -2755,13 +2716,9 @@ public class X86_64 extends X86_64AssignTemps {
 				}
 			} else if (node.type.size() > 0) {
 				inst(X86.MOV, R.RCX, u.operand(), compileContext);
-//				if (node.type.size() <= address.bytes)
-//					inst(X86.MOV, R.RCX, 0, 0, compileContext);
-//				else {
-					inst(X86.XOR, TypeFamily.UNSIGNED_8, R.RDX, R.RDX);
-					inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, node.type.size());
-					instCall(_memset, compileContext);
-//				}
+				inst(X86.XOR, TypeFamily.UNSIGNED_8, R.RDX, R.RDX);
+				inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, node.type.size());
+				instCall(_memset, compileContext);
 			}
 			break;
 			
@@ -3785,6 +3742,91 @@ public class X86_64 extends X86_64AssignTemps {
 					_stringAppendString = oi;
 					break;
 				}
+			}
+		}
+	}
+	
+	private void generateDefaultConstructors(ref<Scope> scope, ref<CompileContext> compileContext) {
+		if (scope == null)
+			return;
+		for (ref<Symbol>[Scope.SymbolKey].iterator i = scope.symbols().begin(); i.hasNext(); i.next()) {
+			ref<Symbol> sym = i.get();
+			if (sym.class != PlainSymbol)
+				continue;
+			if (!sym.initializedWithConstructor()) {
+				ref<ParameterScope> constructor = sym.type().defaultConstructor();
+				if (constructor != null) {
+					inst(X86.LEA,R.RCX,  sym.definition(), compileContext);
+					if (sym.type().hasVtable(compileContext))
+						storeVtable(sym.type(), compileContext);
+					instCall(constructor, compileContext);
+				} else {
+					if (sym.accessFlags() & Access.CONSTANT)
+						continue;
+					switch (sym.type().family()) {
+					case	FUNCTION:
+					case	REF:
+					case	POINTER:
+					case	ADDRESS:
+					case	BOOLEAN:
+					case	ENUM:
+					case	FLAGS:
+					case	SIGNED_16:
+					case	SIGNED_32:
+					case	SIGNED_64:
+					case	UNSIGNED_8:
+					case	UNSIGNED_16:
+					case	UNSIGNED_32:
+						if (sym.storageClass() != StorageClass.STATIC)
+							inst(X86.MOV, sym.definition(), 0, compileContext);
+						break;
+						
+					case	TYPEDEF:
+					case	ERROR:
+						break;
+						
+					case	CLASS:
+						if (sym.type().hasVtable(compileContext)) {
+							inst(X86.LEA,R.RCX,  sym.definition(), compileContext);
+							storeVtable(sym.type(), compileContext);
+						}
+						break;
+													
+					default:
+						sym.print(0, false);
+						assert(false);
+					}
+				}
+			}
+		}
+	}
+	
+	private void classClear(ref<Type> type, ref<Node> node, ref<CompileContext> compileContext) {
+		if (type.hasVtable(compileContext)) {
+			if (type.size() > address.bytes) {
+				if (node != null) {
+					inst(X86.LEA, R.RCX, node, compileContext);
+					inst(X86.ADD, TypeFamily.ADDRESS, R.RCX, 8);
+				} else
+					inst(X86.LEA, R.RCX, R.RSI, address.bytes);
+				inst(X86.XOR, TypeFamily.UNSIGNED_8, R.RDX, R.RDX);
+				inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, type.size() - address.bytes);
+				instCall(_memset, compileContext);
+			}
+		} else if (type.size() > 0) {
+			if (type.size() <= int.bytes) {
+				if (node != null)
+					inst(X86.MOV, node, 0, compileContext);
+				else
+					inst(X86.MOV, impl(type), R.RSI, 0, 0);
+			} else {
+				if (node != null)
+					inst(X86.LEA, R.RCX, node, compileContext);
+				else
+					inst(X86.MOV, TypeFamily.ADDRESS, R.RCX, R.RSI);
+				inst(X86.XOR, TypeFamily.UNSIGNED_8, R.RDX, R.RDX);
+				inst(X86.MOV, TypeFamily.SIGNED_32, R.R8, type.size());
+				instCall(_memset, compileContext);
 			}
 		}
 	}

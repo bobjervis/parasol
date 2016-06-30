@@ -152,10 +152,40 @@ class ClasslikeScope extends Scope {
 				continue;
 //			printf("hasVtable? %s hasDefaultConstructor? %s\n", sym.type().hasVtable(compileContext) ? "true" : "false", sym.type().defaultConstructor() != null ? "true" : "false");
 //			sym.print(0, false);
-			if (sym.assignType(compileContext).hasVtable(compileContext))
+			sym.assignType(compileContext);
+			switch (sym.type().family()) {
+			case	POINTER:
+			case	REF:
+			case	ADDRESS:
+			case	ENUM:
+			case	BOOLEAN:
+			case	SIGNED_16:
+			case	SIGNED_32:
+			case	SIGNED_64:
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	FLOAT_32:
+			case	FLOAT_64:
+			case	STRING:
 				return true;
-			else if (sym.type().defaultConstructor() != null)
-				return true;
+				
+			case	SHAPE:
+			case	CLASS:
+				if (sym.type().hasVtable(compileContext))
+					return true;
+				else if (sym.type().defaultConstructor() != null)
+					return true;
+				break;
+				
+			case	CLASS_DEFERRED:
+			case	ERROR:
+				return false;
+				
+			default:
+				sym.print(0, false);
+				assert(false);
+			}
 		}
 		return false;
 	}
@@ -808,6 +838,9 @@ class Scope {
 				if (t.name() != null)
 					printf(" template %s", t.name().value().asString());
 				break;
+				
+			default:
+				printf(" %s", string(_definition.op()));
 			}
 		}
 		printf(":\n");
@@ -1004,7 +1037,53 @@ class Scope {
 	}
 
 	public void configureDefaultConstructors(ref<CompileContext> compileContext) {
-		
+		if (_symbols.size() == 0)
+			return;
+		if (_definition == null)
+			return;
+		if (_definition.class == Block || _definition.class == For) {
+//			ref<Block> b = ref<Block>(_definition);
+//			printf("Scope storage class %s operator %s inSwitch %s\n", string(_storageClass), string(b.op()), b.inSwitch() ? "true" : "false");
+			boolean needsValidation = false;
+			for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
+				ref<Symbol> sym = i.get();
+				boolean hasConstructorInitializer = sym.configureDefaultConstructors();
+				if (hasConstructorInitializer)
+					needsValidation = true;
+				else if (sym.isFullyAnalyzed() && sym.type().hasConstructors() && sym.type().defaultConstructor() == null)
+					sym.definition().add(MessageId.NO_DEFAULT_CONSTRUCTOR, compileContext.pool());
+			}
+			if (needsValidation) {
+//				printf("  Validating\n");
+				_definition.traverse(Node.Traversal.IN_ORDER, checkAccesses, compileContext);
+			}
+		}
+	}
+	
+	private static TraverseAction checkAccesses(ref<Node> n, address data) {
+		switch (n.op()) {
+		case IDENTIFIER:
+		case DOT:
+			ref<Symbol> sym = n.symbol();
+			if (sym != null && sym.class == PlainSymbol) {
+				ref<CompileContext> compileContext = ref<CompileContext>(data);
+				if (compileContext.current() == sym.enclosing()) {
+					ref<PlainSymbol> ps = ref<PlainSymbol>(sym);
+					if (ps.definition() == n)
+						ps.construct();
+					else if (!((ps.accessFlags() & Access.CONSTRUCTED) != 0))
+						n.add(MessageId.REFERENCE_PREMATURE, compileContext.pool());
+				}
+			}
+			break;
+			
+		case FUNCTION:
+		case CLASS_DECLARATION:
+		case ENUM_DECLARATION:
+		case FLAGS_DECLARATION:
+			return TraverseAction.SKIP_CHILDREN;
+		}
+		return TraverseAction.CONTINUE_TRAVERSAL;
 	}
 	
 	public int parameterCount() {
@@ -1541,8 +1620,67 @@ class PlainSymbol extends Symbol {
 		return _initializer;
 	}
 	
+	public boolean isFullyAnalyzed() {
+		if (_type == null)
+			return false;
+		if (_initializer != null && _initializer.deferAnalysis())
+			return false;
+		return true;
+	}
+	
 	public Access accessFlags() {
 		return _accessFlags;
+	}
+	
+	public boolean configureDefaultConstructors() {
+		if (_type == null)
+			return false;
+		if (_type.family() == TypeFamily.TYPEDEF) {
+			_accessFlags |= Access.CONSTRUCTED;
+			return false;
+		}
+		if (storageClass() == StorageClass.ENUMERATION) {
+			_accessFlags |= Access.CONSTRUCTED;
+			return false;
+		}
+		// If the symbol was declared with a constructor, then it is not constructed on entry and we have to leave
+		// the constructed flag for itleared.
+		if (_initializer != null &&
+			_initializer.op() == Operator.CALL &&
+			ref<Call>(_initializer).category() == CallCategory.CONSTRUCTOR) {
+			// We have an object declared with a constructor, it will not be constructed until we execute the 
+			// declaration statement, so prior accesses generate errors.
+			_accessFlags &= ~Access.CONSTRUCTED;
+//			printf("    Constructor:\n");
+//			print(8, false);
+			return true;
+		} else {
+			_accessFlags |= Access.CONSTRUCTED;
+//			printf("    Not Constructor:\n");
+//			print(8, false);
+			return false;
+		}
+	}
+	
+	public boolean initializedWithConstructor() {
+		if (_type == null)
+			return false;
+		if (_type.family() == TypeFamily.TYPEDEF)
+			return false;
+		if (storageClass() == StorageClass.ENUMERATION)
+			return false;
+		// If the symbol was declared with a constructor, then it is not constructed on entry and we have to leave
+		// the constructed flag for itleared.
+		if (_initializer != null &&
+			_initializer.op() == Operator.CALL &&
+			ref<Call>(_initializer).category() == CallCategory.CONSTRUCTOR)
+			return true;
+		else
+			return false;
+	}
+	
+	public void construct() {
+		_accessFlags |= Access.CONSTRUCTED;
 	}
 }
 
@@ -2067,7 +2205,21 @@ class Symbol {
 	public Access accessFlags() {
 		return Access.CONSTRUCTED;
 	}
-
+	/**
+	 * returns true if this symbol is initialized via a constructor call, and false if not.
+	 */
+	public boolean configureDefaultConstructors() {
+		return false;
+	}
+	
+	public boolean initializedWithConstructor() {
+		return false;
+	}
+	
+	public boolean isFullyAnalyzed() {
+		return _type != null;
+	}
+	
 	public boolean isFunction() {
 		return false;
 	}

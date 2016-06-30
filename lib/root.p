@@ -985,6 +985,11 @@ class map<class V, class K> {
 		int				_index;
 		ref<map<V, K>>	_dictionary;
 
+		// This is to suppress the dumb rule that you can't initialize a variable with a value when there is no
+		// default constructor for the object.
+		iterator() {
+		}
+		
 		iterator(ref<map<V, K>> dict) {
 			_dictionary = dict;
 			_index = 0;

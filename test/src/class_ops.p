@@ -44,6 +44,8 @@ bp = axp;
 
 assert(bp == &b);
 
+assert(ranNoArgsConstructor);
+
 boolean ranNoArgsConstructor = false;
 
 class NoArgsConstructor {
@@ -52,11 +54,10 @@ class NoArgsConstructor {
 	}
 }
 
-assert(!ranNoArgsConstructor);
-
 NoArgsConstructor m;
 
-assert(ranNoArgsConstructor);
+assert(!ranNoArgsConstructor);
+
 
 class Loc {
 	int offset;
