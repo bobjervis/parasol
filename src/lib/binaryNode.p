@@ -166,6 +166,7 @@ class Binary extends Node {
 			case	INITIALIZE:
 				voidContext = true;
 			case	ASSIGN:
+			case	ASSIGN_TEMP:
 				if (shouldVectorize(_right)) {
 					// Now, we've done it. We've got a vectorized assignment.
 					ref<Binary> operation;
@@ -838,6 +839,7 @@ class Binary extends Node {
 			}
 			break;
 			
+		case	ASSIGN_TEMP:
 		case	ASSIGN:
 			if (_left.op() == Operator.SEQUENCE) {
 				print(0);
@@ -873,7 +875,11 @@ class Binary extends Node {
 				
 			case	STRING:
 				if (_right.op() == Operator.CALL && ref<Call>(_right).category() != CallCategory.CONSTRUCTOR) {
-					ref<OverloadInstance> oi = getMethodSymbol(_right, "store", type, compileContext);
+					ref<OverloadInstance> oi;
+					if (op() == Operator.ASSIGN_TEMP)
+						oi = type.tempAssignmentMethod(compileContext);
+					else
+						oi = getMethodSymbol(_right, "store", type, compileContext);
 					if (oi == null) {
 						type = compileContext.errorType();
 						return this;
@@ -890,7 +896,11 @@ class Binary extends Node {
 				
 			case	CLASS:
 			case	SHAPE:
-				ref<OverloadInstance> oi = type.assignmentMethod(compileContext);
+				ref<OverloadInstance> oi;
+				if (op() == Operator.ASSIGN_TEMP)
+					oi = type.tempAssignmentMethod(compileContext);
+				else
+					oi = type.assignmentMethod(compileContext);
 				if (oi != null) {
 					// This is the assignment method for this class!!!
 					// (all strings go through here).

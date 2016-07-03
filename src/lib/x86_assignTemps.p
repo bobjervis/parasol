@@ -156,6 +156,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			break;
 
 		case	ASSIGN:
+		case	ASSIGN_TEMP:
 		case	ADD_ASSIGN:
 		case	SUBTRACT_ASSIGN:
 		case	OR_ASSIGN:
@@ -320,6 +321,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			b = ref<Binary>(node);
 			assignVoidContext(b.left(), compileContext);
 			assignRegisterTemp(b.right(), regMask, compileContext);
+			f().r.cleanupTemps(node, depth);
 			node.register = b.right().register;
 			break;
 			

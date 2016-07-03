@@ -236,6 +236,8 @@ boolean configureArena(ref<Arena> arena) {
 		arena.setImportPath(parasolCommand.importPathArgument.value + ",^/src/lib,^/alys/lib");
 	arena.verbose = parasolCommand.verboseArgument.value;
 	arena.trace = parasolCommand.traceArgument.value;
+	if (arena.logImports)
+		printf("Running with import path: %s\n", arena.importPath());
 	if (parasolCommand.targetArgument.set())
 		arena.preferredTarget = pxi.sectionType(parasolCommand.targetArgument.value);
 	if (arena.load()) 

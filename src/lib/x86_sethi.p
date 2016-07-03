@@ -126,6 +126,7 @@ void sethiUllman(ref<Node> node, ref<CompileContext> compileContext, ref<Target>
 		break;
 
 	case	ASSIGN:
+	case	ASSIGN_TEMP:
 	case	INITIALIZE:
 	case	ADD_ASSIGN:
 	case	SUBTRACT_ASSIGN:
@@ -312,6 +313,7 @@ private int regneeds(ref<Node> node, ref<CompileContext> compileContext, ref<Tar
 	case	LOGICAL_OR:
 	case	LOGICAL_AND:
 	case	ASSIGN:
+	case	ASSIGN_TEMP:
 	case	BIT_COMPLEMENT:
 	case	UNARY_PLUS:
 	case	NEGATE:

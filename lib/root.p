@@ -219,6 +219,14 @@ class vector<class E, class I> {
 		append(other);
 	}
 	
+	void copyTemp(vector<E, I> other) {
+		// a temp is assumed to be random stack trash - so clear it first.
+		_data = null;
+		_length = I(0);
+		_capacity = I(0);
+		append(other);
+	}
+	
 	public void deleteAll() {
 		for (int i = 0; i < _length; i++)
 			delete _data[i];

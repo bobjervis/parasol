@@ -100,14 +100,26 @@ public class Arena {
 	 */
 	public void setImportPath(string importPath) {
 		_importPath.clear();
+//		printf("setImportPath('%s')\n", importPath);
 		if (importPath != null) {
 			string[] elements = importPath.split(',');
 			for (int i = 0; i < elements.length(); i++) {
 				ref<ImportDirectory> dir = _sourceCache.getDirectory(elements[i]);
+//				printf("Created import directory '%s'\n", dir.directoryName());
 				dir.prepareForNewCompile();
 				_importPath.append(dir);
 			}
 		}
+	}
+
+	public string importPath() {
+		string result = "";
+		for (int i = 0; i < _importPath.length(); i++) {
+			if (i > 0)
+				result.append(',');
+			result.append(_importPath[i].directoryName());
+		}
+		return result;
 	}
 	
 	public ref<Target> compile(string filename, boolean countCurrentObjects, boolean verbose) {
@@ -174,8 +186,10 @@ public class Arena {
 	 */
 	public ref<Symbol> getSymbol(string domain, string path, ref<CompileContext> compileContext) {
 		ref<Scope> s = _domains.get(domain);
-		if (s == null)
+		if (s == null) {
+			printf("Failed to find domain for '%s'\n", domain);
 			return null;
+		}
 		string[] components = path.split('.');
 		ref<Symbol> found = null;
 		for (int i = 0; ; i++) {
@@ -375,6 +389,7 @@ public class Arena {
 		ref<Scope> s = _domains[domain];
 		if (s == null) {
 			s = createScope(_root, null, StorageClass.STATIC);
+//			printf("Creating domain for '%s'\n", domain);
 			_domains[domain] = s;
 			if (domain.length() == 0 && _anonymous == null)
 				_anonymous = _global.newNamespace(null, _root, s, null, null); 

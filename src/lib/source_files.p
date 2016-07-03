@@ -67,6 +67,7 @@ class ImportDirectory {
 			if (logImports)
 				printf("    File %s namespace %s\n", fs.filename(), fs.getNamespaceString());
 			if (fs.matches(domain, importNode)) {
+//				printf("Matched domain '%s'\n", domain);
 				if (fs.buildScopes(domain, compileContext)) {
 					if (logImports)
 						printf("        Building scopes for %s\n", fs.filename());

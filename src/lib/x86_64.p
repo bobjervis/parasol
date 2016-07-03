@@ -1290,6 +1290,7 @@ public class X86_64 extends X86_64AssignTemps {
 			break;
 
 		case	ASSIGN:
+		case	ASSIGN_TEMP:
 			b = ref<Binary>(node);
 			if (b.left().op() == Operator.SEQUENCE) {
 				b.print(0);

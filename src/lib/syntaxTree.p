@@ -33,6 +33,7 @@ enum Operator {
 	AND,
 	OR,
 	EXCLUSIVE_OR,
+	ASSIGN_TEMP,		// Handles the special case of assignment to a string temp 
 	ASSIGN,
 	DIVIDE_ASSIGN,
 	REMAINDER_ASSIGN,

@@ -276,6 +276,14 @@ class string {
 			}
 		}
 	}
+	// This method is called from generated code and assumes that the target memory is un-constructed.
+	void copyTemp(string other) {
+		_contents = null;
+		if (other != null) {
+			resize(other._contents.length);
+			C.memcpy(&_contents.data, &other._contents.data, other._contents.length + 1);
+		}
+	}
 	
 	public int count(RegularExpression pattern) {
 		return 0;
@@ -878,7 +886,7 @@ class string {
 							case	'x':
 								ivalue = long(arguments[nextArgument]);
 								nextArgument++;
-								string hex;
+								string hex();
 								
 								if (!precisionSpecified)
 									precision = 1;
@@ -1096,6 +1104,9 @@ class string {
 	void store(ref<allocation> other) {
 		copy(null);			// First, just remove whatever data we have in the string
 		_contents = other;	// Then. store the new data - note that other == null is the right value for a null string.
+//		print("after store: ");
+//		print(*this);
+//		print("\n");
 	}
 	/*
 	 *	substring

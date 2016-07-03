@@ -119,6 +119,7 @@ class X86_64AddressModes extends X86_64Encoder {
 			break;
 			
 		case	ASSIGN:
+		case	ASSIGN_TEMP:
 		case	ADD_ASSIGN:
 		case	SUBTRACT_ASSIGN:
 		case	DIVIDE_ASSIGN:
