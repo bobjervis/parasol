@@ -842,7 +842,7 @@ class CompileContext {
 		if (_liveSymbols.length() <= _baseLiveSymbol)
 			return null;
 		ref<Node> result = _liveSymbols.peek();
-		if (result.symbol() == null || result.symbol().enclosing() == scope)
+		if (result.enclosing() == scope)
 			return _liveSymbols.pop();
 		else
 			return null;
@@ -920,6 +920,7 @@ class CompileContext {
 	ref<Variable> newVariable(ref<Type> type) {
 		ref<Variable> v = new Variable;
 		v.type = type;
+		v.enclosing = _current;
 		_variables.append(v);
 		return v;
 	}
@@ -927,6 +928,7 @@ class CompileContext {
 	ref<Variable> newVariable(ref<NodeList> returns) {
 		ref<Variable> v = new Variable;
 		v.returns = returns;
+		v.enclosing = _current;
 		_variables.append(v);
 		return v;
 	}

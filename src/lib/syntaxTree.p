@@ -33,6 +33,7 @@ enum Operator {
 	AND,
 	OR,
 	EXCLUSIVE_OR,
+	STORE_TEMP,
 	ASSIGN_TEMP,		// Handles the special case of assignment to a string temp 
 	ASSIGN,
 	DIVIDE_ASSIGN,
@@ -497,6 +498,9 @@ class Block extends Node {
 	public ref<Block> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
 		if (_statements == null)
 			return this;
+		ref<Scope> outer;
+		if (scope != null)
+			outer = compileContext.setCurrent(scope);
 		for (ref<NodeList> nl = _statements;; nl = nl.next) {
 			nl.node = nl.node.fold(tree, false, compileContext);
 			if (nl.next == null) {
@@ -515,6 +519,8 @@ class Block extends Node {
 				break;
 			}
 		}
+		if (scope != null)
+			compileContext.setCurrent(outer);
 		return this;
 	}
 
@@ -2432,6 +2438,14 @@ class Node {
 
 	public ref<Symbol> symbol() {
 		return null;
+	}
+
+	public ref<Scope> enclosing() {
+		ref<Symbol> sym = symbol();
+		if (sym != null)
+			return sym.enclosing();
+		else
+			return null;
 	}
 
 	public Test fallsThrough() {

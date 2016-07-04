@@ -239,6 +239,7 @@ class Call extends ParameterBag {
 				else
 					break;
 				outParameter = tree.newReference(temp, true, location());
+				compileContext.markLiveSymbol(outParameter);
 				if (!voidContext) {
 					nodeFlags |= PUSH_OUT_PARAMETER;
 					result = encapsulateCallInTemp(temp, tree);
@@ -282,7 +283,7 @@ class Call extends ParameterBag {
 							ref<Variable> temp = compileContext.newVariable(t);
 							ref<Reference> r = tree.newReference(temp, true, location());
 							compileContext.markLiveSymbol(r);
-							ref<Node> call = tree.newBinary(Operator.ASSIGN_TEMP, r, args.node, location());
+							ref<Node> call = tree.newBinary(Operator.STORE_TEMP, r, args.node, location());
 							call.type = t;
 							call = call.fold(tree, true, compileContext);
 							r = tree.newReference(temp, false, location());

@@ -839,6 +839,7 @@ class Binary extends Node {
 			}
 			break;
 			
+		case	STORE_TEMP:
 		case	ASSIGN_TEMP:
 		case	ASSIGN:
 			if (_left.op() == Operator.SEQUENCE) {
@@ -878,6 +879,8 @@ class Binary extends Node {
 					ref<OverloadInstance> oi;
 					if (op() == Operator.ASSIGN_TEMP)
 						oi = type.tempAssignmentMethod(compileContext);
+					else if (op() == Operator.STORE_TEMP)
+						oi = getMethodSymbol(_right, "storeTemp", type, compileContext);
 					else
 						oi = getMethodSymbol(_right, "store", type, compileContext);
 					if (oi == null) {

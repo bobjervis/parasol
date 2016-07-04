@@ -61,6 +61,10 @@ class Reference extends Node {
 	public int offset() {
 		return _offset;
 	}
+	
+	public ref<Scope> enclosing() {
+		return _variable.enclosing;
+	}
 }
 
 class Identifier extends Node {

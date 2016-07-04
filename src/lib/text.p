@@ -1108,6 +1108,21 @@ class string {
 //		print(*this);
 //		print("\n");
 	}
+	/**
+	 * storeTemp
+	 * 
+	 * This is only in generated code in those circumstances where a string returned from a function can short-
+	 * circuit a copy and a delete by just taing the live string value returned from the function and calling this
+	 * method to use that live value.
+	 * 
+	 * Note that this assumes the memory being assigned-to is not constructed.
+	 */
+	void storeTemp(ref<allocation> other) {
+		_contents = other;	// Then. store the new data - note that other == null is the right value for a null string.
+//		print("after store: ");
+//		print(*this);
+//		print("\n");
+	}
 	/*
 	 *	substring
 	 *

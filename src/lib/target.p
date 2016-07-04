@@ -186,6 +186,7 @@ private TraverseAction gatherCasesFunc(ref<Node> n, address data) {
 }
 
 public class Variable {
+	public ref<Scope> 	enclosing;			// 
 	public ref<Type>	type;				// If not null, the 'type' of the variable
 	public ref<NodeList> returns;			// If not null, the returns list from the function type this represents
 	public int			offset;
