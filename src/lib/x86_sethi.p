@@ -152,6 +152,13 @@ void sethiUllman(ref<Node> node, ref<CompileContext> compileContext, ref<Target>
 			b.sethi = -b.sethi;
 		break;
 
+	case	LEFT_COMMA:
+		b = ref<Binary>(node);
+		sethiUllman(b.left(), compileContext, target);
+		sul = math.abs(b.left().sethi);
+		b.sethi = -math.max(CALL_REG_USE, sul);
+		break;
+		
 	case	LOGICAL_OR:
 	case	LOGICAL_AND:
 	case	MULTIPLY:
@@ -280,6 +287,7 @@ private int regneeds(ref<Node> node, ref<CompileContext> compileContext, ref<Tar
 	case	DECREMENT_BEFORE:
 	case	CONDITIONAL:
 	case	SEQUENCE:
+	case	LEFT_COMMA:
 	case	TEMPLATE_INSTANCE:
 		return 0;
 		

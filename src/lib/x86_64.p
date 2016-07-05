@@ -1255,6 +1255,7 @@ public class X86_64 extends X86_64AssignTemps {
 
 		case	DESTRUCTOR_LIST:
 			ref<DestructorList> dl = ref<DestructorList>(node);
+			f().r.generateSpills(node, this);
 			generateLiveSymbolDestructors(dl.arguments(), compileContext);
 			break;
 			
@@ -2572,6 +2573,15 @@ public class X86_64 extends X86_64AssignTemps {
 			generateConditional(b.right(), trueSegment, falseSegment, compileContext);
 			return;
 			
+		case	LEFT_COMMA:
+			b = ref<Binary>(node);
+			generate(b.left(), compileContext);
+			generate(b.right(), compileContext);
+			f().r.generateSpills(b, this);
+			inst(X86.CMP, b.left(), 0, compileContext);
+			generateConditionalJump(Operator.NOT_EQUAL, b.left().type, trueSegment, falseSegment, compileContext);
+			break;
+			
 		case	NOT:
 			ref<Unary> u = ref<Unary>(node);
 			generateConditional(u.operand(), falseSegment, trueSegment, compileContext);
@@ -2604,6 +2614,11 @@ public class X86_64 extends X86_64AssignTemps {
 
 	private void generateCompare(ref<Binary> b, ref<CodeSegment> trueSegment, ref<CodeSegment> falseSegment, ref<CompileContext> compileContext) {
 		generateOperands(b, compileContext);
+		generateCompareInst(b, compileContext);
+		generateConditionalJump(b.op(), b.left().type, trueSegment, falseSegment, compileContext);
+	}
+	
+	private void generateCompareInst(ref<Binary> b, ref<CompileContext> compileContext) {
 		switch (b.left().type.family()) {
 		case	FLAGS:
 			switch (b.left().type.size()) {
@@ -2652,24 +2667,26 @@ public class X86_64 extends X86_64AssignTemps {
 			b.print(0);
 			assert(false);
 		}
-		CC parityJump = parityTest(b.op(), b.left().type);
+	}
+	
+	private void generateConditionalJump(Operator op, ref<Type> type, ref<CodeSegment> trueSegment, ref<CodeSegment> falseSegment, ref<CompileContext> compileContext) {
+		CC parityJump = parityTest(op, type);
 		switch (parityJump) {
 		case	NOP:
-			closeCodeSegment(continuation(invert(b.op()), b.left().type), falseSegment);
+			closeCodeSegment(continuation(invert(op), type), falseSegment);
 			break;
 			
 		case	JP:
-			closeCodeSegment(continuation(b.op(), b.left().type), trueSegment);
+			closeCodeSegment(continuation(op, type), trueSegment);
 			closeCodeSegment(CC.JNP, falseSegment);
 			break;
 			
 		case	JNP:
-			closeCodeSegment(continuation(invert(b.op()), b.left().type), falseSegment);
+			closeCodeSegment(continuation(invert(op), type), falseSegment);
 			closeCodeSegment(CC.JP, falseSegment);
 			break;
 			
 		default:
-			b.print(0);
 			assert(false);
 		}
 	}

@@ -270,6 +270,32 @@ compile() { "int a; @Constant int b = 7; a >>= b;" }
 compile(expect: fail) { "int a; @Constant int b = 7; b >>= a;" }
 compile() { "int a; @Constant int b = 7; a >>>= b;" }
 compile(expect: fail) { "int a; @Constant int b = 7; b >>>= a;" }
+// A set of definition flows.
+
+// From a formal perspective, all classes have one constructor. If none is explicitly declared, than an implied default
+// constructor is appointed. However, the compiler implementation special-cases this to provide better code generation.
+// As a result, we can make a class that only contains a built-in and know that it will not create a default constructor.
+compile() { "class A { int x; } A b(); a = b; A a; " }
+compile() { "class A { int x; } A b(); A a = b;" }
+compile() { "class A { int x; } A b(); A a; a = b;" }
+compile() { "class A { int x; } A b; a = b; A a;" }
+compile() { "class A { int x; } A b; A a = b;" }
+compile() { "class A { int x; } A b; A a; a = b;" }
+compile() { "class A { B x; } class B { int y; B() {} } A b(); a = b; A a; " }
+compile() { "class A { B x; } class B { int y; B() {} } A b(); A a = b;" }
+compile() { "class A { B x; } class B { int y; B() {} } A b(); A a; a = b;" }
+compile() { "class A { B x; } class B { int y; B() {} } A b; a = b; A a;" }
+compile() { "class A { B x; } class B { int y; B() {} } A b; A a = b;" }
+compile() { "class A { B x; } class B { int y; B() {} } A b; A a; a = b;" }
+compile() { "class A { int x; A() {} } A b(); a = b; A a; " }
+compile() { "class A { int x; A() {} } A b(); A a = b;" }
+compile() { "class A { int x; A() {} } A b(); A a; a = b;" }
+compile() { "class A { int x; A() {} } A b; a = b; A a;" }
+compile() { "class A { int x; A() {} } A b; A a = b;" }
+compile() { "class A { int x; A() {} } A b; A a; a = b;" }
+compile(expect: fail) { "class A { int x; A(int y) {} } A b;" }
+compile(expect: fail) { "class A { int x; A(int y) {} } A a(2); A b = a;" }
+compile(expect: fail) { "class A { int x; A(int y) {} } A a(2); a = b; A b(5);" }
 
 // Casts
 
@@ -1110,6 +1136,9 @@ statement() { "lock { a; a; }" }
 statement() { "lock (a) { }" }
 statement() { "lock (a) { b; }" }
 statement() { "lock (a) { b; b; }" }
+statement() { "class C { C() lock { } }" }
+statement() { "class C { ~C() lock { } }" }
+statement() { "void func() lock { }" }
 statement() { "int f(double d) lock (a) { b; b; }" }
 statement() { break; }
 statement() { case a: b; }
@@ -1224,6 +1253,21 @@ statement(expect: recovered, message: EXPECTING_TERM) { "{ for (int i : array) ;
 statement(expect: fail, message: UNEXPECTED_EOF) { a }
 statement(expect: recovered, message: UNEXPECTED_EOF) { "{" }
 statement(expect: fail, message: UNEXPECTED_RC) { "}" }
+statement(expect: recovered) { "lock { " }
+statement(expect: recovered) { "lock { a " }
+statement(expect: recovered) { "lock { a; " }
+statement(expect: recovered) { "lock ( " }
+statement(expect: recovered) { "lock (a " }
+statement(expect: recovered) { "lock (a) " }
+statement(expect: recovered) { "lock (a) {" }
+statement(expect: recovered) { "lock (a) { b " }
+statement(expect: recovered) { "lock (a) { b; " }
+statement(expect: recovered) { "class C { C() lock " }
+statement(expect: recovered) { "class C { C() lock { " }
+statement(expect: recovered) { "class C { ~C() lock  " }
+statement(expect: recovered) { "class C { ~C() lock {" }
+statement(expect: recovered) { "void func() lock " }
+statement(expect: recovered) { "void func() lock { " }
 statement(expect: fail, message: BREAK_NO_SEMI) { break }
 statement(expect: fail, message: EXPECTING_TERM) { case }
 statement(expect: fail, message: CASE_NO_CO) { case a }
@@ -1671,6 +1715,10 @@ expression() { "function int (a b, c, d) {x;}" }
 expression() { "function int (@n a b) {x;}" }
 expression() { "function int (@n a) {a;}" }
 expression() { "function int (a b, @n c, d) {x;}" }
+expression() { "function int(a b) lock { }" }
+
+expression(expect: fail) { "function int(a b) lock " }
+expression(expect: fail) { "function int(a b) lock { " }
 
 expression(expect: fail) { ... }
 expression(expect: fail) { a. }

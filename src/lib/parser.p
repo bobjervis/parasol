@@ -483,11 +483,11 @@ class Parser {
 		if (t == Token.LEFT_PARENTHESIS) {
 			lockReference = parseExpression(0);
 			if (lockReference.op() == Operator.SYNTAX_ERROR)
-				return _tree.newBlock(Operator.BLOCK, lockReference, false, location);
+				return _tree.newBlock(Operator.BLOCK, lockReference, false, _scanner.location());
 			t = _scanner.next();
 			if (t != Token.RIGHT_PARENTHESIS) {
 				_scanner.pushBack(t);
-				ref<Block> block = _tree.newBlock(Operator.BLOCK, lockReference, false, location);
+				ref<Block> block = _tree.newBlock(Operator.BLOCK, lockReference, false, _scanner.location());
 				block.statement(_tree.newNodeList(resync(MessageId.SYNTAX_ERROR)));
 				return block;
 			}

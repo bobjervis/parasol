@@ -208,6 +208,12 @@ class X86_64AddressModes extends X86_64Encoder {
 			markAddressModes(b.right(), compileContext);
 			break;
 			
+		case	LEFT_COMMA:
+			b = ref<Binary>(node);
+			markAddressModes(b.left(), compileContext);
+//			markAddressModes(b.right(), compileContext); - these are alwsy a destructor list (so far)
+			break;			
+			
 		case	LOGICAL_AND:
 		case	LOGICAL_OR:
 		case	SEQUENCE:
@@ -570,6 +576,7 @@ class X86_64AddressModes extends X86_64Encoder {
 			markConditionalAddressModes(u.operand(), compileContext);
 			break;
 			
+		case	LEFT_COMMA:
 		case	CALL:
 		case	EQUALITY:
 		case	GREATER:

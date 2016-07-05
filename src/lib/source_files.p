@@ -156,7 +156,7 @@ class ImportDirectory {
 	}
 	
 	public void print() {
-		printf("%4s %s\n", _searched ? "SRCH" : "", _directoryName);
+		printf("%s %s\n", _searched ? "(searched)" : "", _directoryName);
 		for (int i = 0; i < _files.length(); i++) {
 			printf("    %s (%s)\n", _files[i].filename(), _files[i].getNamespaceString());
 			if (_files[i].namespaceSymbol() != null)

@@ -207,6 +207,13 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			assignVoidContext(cond.right(), compileContext);
 			break;
 
+		case	LEFT_COMMA:
+			b = ref<Binary>(node);
+			assignRegisterTemp(b.left(), longMask, compileContext);
+			f().r.clobberSomeRegisters(b, callMask);
+//			assignVoidContext(b.right(), compileContext); - d
+			break;
+			
 		case	EMPTY:
 			break;
 			
@@ -250,6 +257,13 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			}
 			break;
 
+		case	LEFT_COMMA:
+			b = ref<Binary>(node);
+			assignRegisterTemp(b.left(), longMask, compileContext);
+			f().r.clobberSomeRegisters(b.right(), callMask);
+//			assignVoidContext(b.right(), compileContext);
+			break;
+			
 		case	LOGICAL_OR:
 		case	LOGICAL_AND:
 			b = ref<Binary>(node);

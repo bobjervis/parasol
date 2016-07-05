@@ -462,6 +462,23 @@ class CompileContext {
 			bindDeclarators(b.left(), b.right());
 			break;
 
+		case	MONITOR_DECLARATION:
+			b = ref<Binary>(n);
+			id = ref<Identifier>(b.left());
+			if (b.right().op() == Operator.EMPTY)
+				id.bind(_current, n, null, this);
+			else {
+				ref<Class> c = ref<Class>(b.right());
+				ref<ClassScope> classScope = createClassScope(n, null);
+				classScope.classType = _pool.newClassType(c, classScope);
+				id.bind(_current, n, b.right(), this);
+				// By making the type of the 'monitor' node itself, when we get to running assignType later on,
+				// it will all just work out fine (hopefully). Since the node will have a type, there won't be any
+				// need to do further analysis. 
+				n.type = classScope.classType;
+			}
+			return TraverseAction.SKIP_CHILDREN;
+			
 		case	FUNCTION:
 			ref<Function> f = ref<Function>(n);
 			ParameterScope.Kind funcKind;
@@ -775,6 +792,7 @@ class CompileContext {
 		case	CLASS_DECLARATION:
 		case	ENUM_DECLARATION:
 		case	FLAGS_DECLARATION:
+		case	MONITOR_DECLARATION:
 		case	DECLARATION:
 		case	DECLARE_NAMESPACE:
 		case	EXPRESSION:
@@ -843,6 +861,15 @@ class CompileContext {
 			return null;
 		ref<Node> result = _liveSymbols.peek();
 		if (result.enclosing() == scope)
+			return _liveSymbols.pop();
+		else
+			return null;
+	}
+	
+	public ref<Node> popLiveTemp(int priorLength) {
+		if (_liveSymbols.length() - _baseLiveSymbol <= priorLength)
+			return null;
+		if (_liveSymbols.peek().op() == Operator.VARIABLE)
 			return _liveSymbols.pop();
 		else
 			return null;

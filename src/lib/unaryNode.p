@@ -396,6 +396,14 @@ class Unary extends Node {
 		return this;
 	}
 	
+	public ref<Node> foldConditional(ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
+		if (op() == Operator.NOT) {
+			_operand = _operand.foldConditional(tree, compileContext);
+			return this;
+		}
+		return super.foldConditional(tree, compileContext);
+	}
+	
 	public long foldInt(ref<Target> target, ref<CompileContext> compileContext) {
 		switch (op()) {
 		case	NEGATE:

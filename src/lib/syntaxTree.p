@@ -25,6 +25,7 @@ enum Operator {
 	// Binary
 	SUBSCRIPT,
 	SEQUENCE,
+	LEFT_COMMA,			// like SEQUENCE, but with the left operand supplyng the result. Evalute left, then right always.
 	DIVIDE,
 	REMAINDER,
 	MULTIPLY,
@@ -2041,7 +2042,7 @@ class Ternary extends Node {
 			
 		case	IF:
 			if (_left != null)
-				_left = _left.fold(tree, false, compileContext);
+				_left = _left.foldConditional(tree, compileContext);
 			if (_middle != null)
 				_middle = _middle.fold(tree, voidContext, compileContext);
 			if (_right != null)
@@ -2474,6 +2475,28 @@ class Node {
 
 	public abstract ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext);
 
+	public ref<Node> foldConditional(ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
+		int priorLength = compileContext.liveSymbolCount();
+		ref<Node> n = fold(tree, false, compileContext);
+		if (priorLength < compileContext.liveSymbolCount()) {
+			ref<Node>[] destructors;
+			for (;;) {
+				ref<Node> n = compileContext.popLiveTemp(priorLength);
+				if (n == null)
+					break;
+				destructors.append(n);
+			}
+			if (destructors.length() > 0) {
+				ref<NodeList> destructorList = tree.newNodeList(destructors);
+				ref<Node> d = tree.newDestructorList(destructorList, _location);
+				ref<Node> resolution = tree.newBinary(Operator.LEFT_COMMA, n, d, _location);
+				resolution.type = n.type;
+				return resolution;
+			}
+		}
+		return n;
+	}
+	
 	ref<Node> createMethodCall(ref<Node> object, string functionName, ref<SyntaxTree> tree, ref<CompileContext> compileContext, ref<Node>... arguments) {
 		CompileString name(functionName);
 		ref<Type> objType = object.type.indirectType(compileContext);

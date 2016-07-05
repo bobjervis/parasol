@@ -40,6 +40,7 @@ public class BOOL = int;
 public class WINBOOL = int;
 public class HLOCAL = address;
 public class WORD = short;
+public class DWORD = unsigned;
 
 @Windows("kernel32.dll", "GetModuleFileNameA")
 public abstract int GetModuleFileName(HMODULE hModule, pointer<byte> filename, int filenameSize);
@@ -74,6 +75,9 @@ public abstract HLOCAL LocalFree(HLOCAL hMem);
 public abstract void GetSystemTime(ref<SYSTEMTIME> lpSystemTime);
 @Windows("kernel32.dll", "SystemTimeToFileTime")
 public abstract WINBOOL SystemTimeToFileTime(ref<SYSTEMTIME> lpSystemTime, ref<FILETIME> lpFileTome);
+
+@Windows("kernel32.dll", "GetCurrentThreadIs")
+public abstract DWORD GetCurrentThreadId(void);
 
 public int sizeof_WIN32_FIND_DATA = 320;
 

@@ -214,6 +214,7 @@ class Binary extends Node {
 			
 		case	LOGICAL_AND:
 		case	LOGICAL_OR:
+			_right = _right.foldConditional(tree, compileContext);
 			if (_right.type.family() == TypeFamily.FLAGS) {
 				ref<Node> right = tree.newConstant(0, location());
 				right.type = _right.type;
@@ -221,7 +222,7 @@ class Binary extends Node {
 				op.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
 				_right = op;
 			}
-		case	WHILE:
+			_left = _left.foldConditional(tree, compileContext);
 			if (_left.type.family() == TypeFamily.FLAGS) {
 				ref<Node> right = tree.newConstant(0, location());
 				right.type = _left.type;
@@ -229,9 +230,23 @@ class Binary extends Node {
 				op.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
 				_left = op;
 			}
-			break;
+			return this;
+			
+		case	WHILE:
+			_right = _right.fold(tree, true, compileContext);
+			_left = _left.foldConditional(tree, compileContext);
+			if (_left.type.family() == TypeFamily.FLAGS) {
+				ref<Node> right = tree.newConstant(0, location());
+				right.type = _left.type;
+				ref<Node> op = tree.newBinary(Operator.NOT_EQUAL, _left, right, location());
+				op.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+				_left = op;
+			}
+			return this;
 			
 		case	DO_WHILE:
+			_left = _left.fold(tree, true, compileContext);
+			_right = _right.foldConditional(tree, compileContext);
 			if (_right.type.family() == TypeFamily.FLAGS) {
 				ref<Node> right = tree.newConstant(0, location());
 				right.type = _right.type;
@@ -239,7 +254,7 @@ class Binary extends Node {
 				op.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
 				_right = op;
 			}
-			break;
+			return this;
 
 		case	SEQUENCE:
 			_left = _left.fold(tree, true, compileContext);
@@ -968,6 +983,15 @@ class Binary extends Node {
 		_left = _left.fold(tree, false, compileContext);
 		_right = _right.fold(tree, false, compileContext);
 		return this;
+	}
+	
+	public ref<Node> foldConditional(ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
+		switch (op()) {
+		case	LOGICAL_AND:
+		case	LOGICAL_OR:
+			return fold(tree, false, compileContext);
+		}
+		return super.foldConditional(tree, compileContext);
 	}
 	
 	ref<Node>, ref<Node> cloneDefnValue(ref<SyntaxTree> tree, ref<Node> n, ref<CompileContext> compileContext) {
