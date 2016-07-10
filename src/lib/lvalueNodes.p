@@ -224,8 +224,8 @@ class Identifier extends Node {
 		return nm;
 	}
 
-	public ref<Namespace> getNamespace(ref<Scope> domainScope) {
-		ref<Symbol> sym = domainScope.lookup(&_value);
+	public ref<Namespace> getNamespace(ref<Scope> domainScope, ref<CompileContext> compileContext) {
+		ref<Symbol> sym = domainScope.lookup(&_value, compileContext);
 		if (sym != null && sym.class == Namespace)
 			return ref<Namespace>(sym);
 		else
@@ -302,7 +302,7 @@ class Identifier extends Node {
 
 	void bindFunctionOverload(Operator visibility, boolean isStatic, ref<Node> annotations, ref<Scope> enclosing, ref<ParameterScope> funcScope, ref<CompileContext> compileContext) {
 		_definition = true;
-		ref<Overload> o = enclosing.defineOverload(&_value, Operator.FUNCTION, compileContext.pool());
+		ref<Overload> o = enclosing.defineOverload(&_value, Operator.FUNCTION, compileContext);
 		if (o != null)
 			_symbol = o.addInstance(visibility, isStatic, annotations, this, funcScope, compileContext);
 		else
@@ -312,7 +312,7 @@ class Identifier extends Node {
 	void bindTemplateOverload(Operator visibility, boolean isStatic, ref<Node> annotations, ref<Scope> enclosing, ref<Template> templateDef, ref<CompileContext> compileContext) {
 		_definition = true;
 		ref<ParameterScope> templateScope = compileContext.createParameterScope(templateDef, ParameterScope.Kind.TEMPLATE);
-		ref<Overload> o = enclosing.defineOverload(&_value, Operator.TEMPLATE, compileContext.pool());
+		ref<Overload> o = enclosing.defineOverload(&_value, Operator.TEMPLATE, compileContext);
 		if (o != null) {
 			_symbol = o.addInstance(visibility, isStatic, annotations, this, templateScope, compileContext);
 			if (_symbol == null)
@@ -334,7 +334,7 @@ class Identifier extends Node {
 	}
 
 	void resolveAsEnum(ref<Type> enumType, ref<CompileContext>  compileContext) {
-		_symbol = enumType.scope().lookup(&_value);
+		_symbol = enumType.scope().lookup(&_value, compileContext);
 		if (_symbol == null) {
 			type = compileContext.errorType();
 			add(MessageId.UNDEFINED, compileContext.pool(), _value);
@@ -343,7 +343,7 @@ class Identifier extends Node {
 	}
 
 	ref<Symbol> resolveAsMember(ref<Type> classType, ref<CompileContext>  compileContext) {
-		_symbol = classType.scope().lookup(&_value);
+		_symbol = classType.scope().lookup(&_value, compileContext);
 		if (_symbol == null) {
 			type = compileContext.errorType();
 			add(MessageId.UNDEFINED, compileContext.pool(), _value);
@@ -374,7 +374,7 @@ class Identifier extends Node {
 		for (ref<Scope> s = compileContext.current(); s != null; s = s.enclosing()) {
 			ref<Scope> available = s;
 			do {
-				_symbol = available.lookup(&_value);
+				_symbol = available.lookup(&_value, compileContext);
 				if (_symbol != null) {
 					// For non-lexical scopes (i.e. base classes), do not include private
 					// variables.
@@ -589,10 +589,10 @@ class Selection extends Node {
 			return outer;
 	}
 
-	public ref<Namespace> getNamespace(ref<Scope> domainScope) {
-		ref<Namespace> outer = _left.getNamespace(domainScope);
+	public ref<Namespace> getNamespace(ref<Scope> domainScope, ref<CompileContext> compileContext) {
+		ref<Namespace> outer = _left.getNamespace(domainScope, compileContext);
 		if (outer != null) {
-			ref<Symbol> sym = outer.symbols().lookup(identifier());
+			ref<Symbol> sym = outer.symbols().lookup(identifier(), compileContext);
 			if (sym != null && sym.class == Namespace)
 				return ref<Namespace>(sym);
 		}
@@ -700,6 +700,9 @@ class Selection extends Node {
 				return true;
 			}
 			type = sym.assignType(compileContext);
+			if (sym.storageClass() == StorageClass.MONITOR) {
+				add(MessageId.BAD_MONITOR_REF, compileContext.pool(), _name);
+			}
 			_symbol = sym;
 			return true;
 		}

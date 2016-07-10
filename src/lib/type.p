@@ -254,6 +254,22 @@ widens[TypeFamily.ADDRESS][TypeFamily.ADDRESS] = true;
 widens[TypeFamily.CLASS_VARIABLE][TypeFamily.CLASS_VARIABLE] = true;
 widens[TypeFamily.CLASS_DEFERRED][TypeFamily.CLASS_DEFERRED] = true;
 
+class MonitorType extends ClassType {
+	MonitorType(ref<Class> definition, ref<Scope> scope) {
+		super(definition, scope);
+	}
+
+	public  ref<Type> assignSuper(ref<CompileContext> compileContext) {
+		if (_extends == null)
+			_extends = compileContext.monitorClass();
+		return _extends;
+	}
+	
+	public boolean isMonitor() {
+		return true;
+	}	
+}
+
 class ClassType extends Type {
 	protected ref<Scope> _scope;
 	protected ref<Type> _extends;
@@ -1384,6 +1400,10 @@ class Type {
 		return false;
 	}
 
+	boolean isMonitor() {
+		return false;
+	}
+	
 	boolean isIntegral() {
 		switch (_family) {
 		case	UNSIGNED_8:
@@ -1459,7 +1479,7 @@ class Type {
 	public ref<Symbol> lookup(ref<CompileString> name, ref<CompileContext> compileContext) {
 		for (ref<Type> current = this; current != null; current = current.assignSuper(compileContext)) {
 			if (current.scope() != null) {
-				ref<Symbol> sym = current.scope().lookup(name);
+				ref<Symbol> sym = current.scope().lookup(name, compileContext);
 				if (sym != null) {
 					if (sym.visibility() != Operator.PRIVATE || 
 						current.scope().encloses(compileContext.current()))

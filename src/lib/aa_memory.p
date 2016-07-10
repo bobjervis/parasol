@@ -23,6 +23,8 @@ import native:windows;
 import parasol:runtime;
 import parasol:exception;
 
+import parasol:thread;
+
 private long LEAKS_FLAG = 0x1;
 
 /**

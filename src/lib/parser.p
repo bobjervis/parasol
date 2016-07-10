@@ -28,7 +28,7 @@ class Parser {
 	}
 
 	public ref<Block> parseFile() {
-		ref<Block> block = _tree.newBlock(Operator.UNIT, null, false, _scanner.location());
+		ref<Block> block = _tree.newBlock(Operator.UNIT, false, _scanner.location());
 		for (;;) {
 			Token t = _scanner.next();
 			CompileString cs = _scanner.value();
@@ -157,7 +157,7 @@ class Parser {
 			return x;
 
 		case	LEFT_CURLY:
-			x = parseBlock(_tree.newBlock(Operator.BLOCK, null, false, location));
+			x = parseBlock(_tree.newBlock(Operator.BLOCK, false, location));
 			return x;
 
 		case	BREAK:
@@ -324,7 +324,7 @@ class Parser {
 				_scanner.pushBack(t);
 				return resync(MessageId.SYNTAX_ERROR);
 			}
-			ref<Block> body = _tree.newBlock(Operator.BLOCK, null, true, _scanner.location());
+			ref<Block> body = _tree.newBlock(Operator.BLOCK, true, _scanner.location());
 			truePart = parseBlock(body);
 			if (truePart.op() == Operator.SYNTAX_ERROR)
 				return truePart;
@@ -482,25 +482,32 @@ class Parser {
 		ref<Node> lockReference;
 		if (t == Token.LEFT_PARENTHESIS) {
 			lockReference = parseExpression(0);
-			if (lockReference.op() == Operator.SYNTAX_ERROR)
-				return _tree.newBlock(Operator.BLOCK, lockReference, false, _scanner.location());
+			if (lockReference.op() == Operator.SYNTAX_ERROR) {
+				ref<Block> block = _tree.newBlock(Operator.BLOCK, false, location);
+				block.statement(_tree.newNodeList(lockReference));
+				return block;
+			}
 			t = _scanner.next();
 			if (t != Token.RIGHT_PARENTHESIS) {
 				_scanner.pushBack(t);
-				ref<Block> block = _tree.newBlock(Operator.BLOCK, lockReference, false, _scanner.location());
+				ref<Block> block = _tree.newBlock(Operator.BLOCK, false, _scanner.location());
 				block.statement(_tree.newNodeList(resync(MessageId.SYNTAX_ERROR)));
 				return block;
 			}
 			t = _scanner.next();
+			lockReference = _tree.newUnary(Operator.EXPRESSION, lockReference, lockReference.location());
 		} else
 			lockReference = _tree.newLeaf(Operator.EMPTY, location);
-		ref<Block> block = _tree.newBlock(Operator.BLOCK, lockReference, false, _scanner.location());
+		ref<Block> lockEnclosure = _tree.newBlock(Operator.LOCK, false, location);
+		ref<Block> block = _tree.newBlock(Operator.BLOCK, false, _scanner.location());
+		lockEnclosure.statement(_tree.newNodeList(lockReference, block));
 		if (t != Token.LEFT_CURLY) {
 			_scanner.pushBack(t);
 			block.statement(_tree.newNodeList(resync(MessageId.SYNTAX_ERROR)));
-		} else
+		} else {
 			parseBlock(block);
-		return block;
+		}
+		return lockEnclosure;
 	}
 	
 	private ref<Node> parseImportStatement() {
@@ -710,10 +717,8 @@ class Parser {
 	private ref<Node> parseConstructor(ref<Call> declarator) {
 		ref<Function> func = _tree.newFunction(Function.Category.CONSTRUCTOR, null, ref<Identifier>(declarator.target()), declarator.arguments(), declarator.location());
 		Token t = _scanner.next();
-		if (t == Token.LOCK)
-			func.body = parseLockStatement();
-		else if (t == Token.LEFT_CURLY) {
-			func.body = _tree.newBlock(Operator.BLOCK, null, false, _scanner.location());
+		if (t == Token.LEFT_CURLY) {
+			func.body = _tree.newBlock(Operator.BLOCK, false, _scanner.location());
 			parseBlock(func.body);
 		} else {
 			_scanner.pushBack(t);
@@ -728,10 +733,8 @@ class Parser {
 			declarator.arguments().node.add(MessageId.NO_PARAMS_IN_DESTRUCTOR, _tree.pool());
 		}
 		Token t = _scanner.next();
-		if (t == Token.LOCK)
-			func.body = parseLockStatement();
-		else if (t == Token.LEFT_CURLY) {
-			func.body = _tree.newBlock(Operator.BLOCK, null, false, _scanner.location());
+		if (t == Token.LEFT_CURLY) {
+			func.body = _tree.newBlock(Operator.BLOCK, false, _scanner.location());
 			parseBlock(func.body);
 		} else {
 			_scanner.pushBack(t);
@@ -784,7 +787,7 @@ class Parser {
 					if (t == Token.LOCK)
 						func.body = parseLockStatement();
 					else if (t == Token.LEFT_CURLY) {
-						func.body = _tree.newBlock(Operator.BLOCK, null, false, _scanner.location());
+						func.body = _tree.newBlock(Operator.BLOCK, false, _scanner.location());
 						parseBlock(func.body);
 					} else if (t != Token.SEMI_COLON) {
 						_scanner.pushBack(t);
@@ -799,7 +802,7 @@ class Parser {
 						return func;
 					} else if (t == Token.LEFT_CURLY) {
 						func = _tree.newFunction(Function.Category.NORMAL, type, id, parameters, loc);
-						func.body = _tree.newBlock(Operator.BLOCK, null, false, _scanner.location());
+						func.body = _tree.newBlock(Operator.BLOCK, false, _scanner.location());
 						parseBlock(func.body);
 						return func;
 					} else if (t != Token.SEMI_COLON) {
@@ -823,9 +826,9 @@ class Parser {
 
 			case	EQUALS:
 				initializer = parseExpression(1);
-				if (initializer.op() == Operator.SYNTAX_ERROR)
-					return initializer;
 				x = _tree.newBinary(Operator.INITIALIZE, id, initializer, loc);
+				if (initializer.op() == Operator.SYNTAX_ERROR)
+					return _tree.newDeclaration(type, x, location);
 				t = _scanner.next();
 				if (t == Token.SEMI_COLON) {
 					return _tree.newDeclaration(type, x, location);
@@ -946,7 +949,7 @@ class Parser {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
-		ref<Block> body = _tree.newBlock(Operator.FLAGS, null, false, _scanner.location());
+		ref<Block> body = _tree.newBlock(Operator.FLAGS, false, _scanner.location());
 		ref<Node> e = parseIdentifierList();
 		body.statement(_tree.newNodeList(e));
 		t = _scanner.next();
@@ -975,7 +978,7 @@ class Parser {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
-		ref<Block> body = _tree.newBlock(Operator.ENUM, null, false, _scanner.location());
+		ref<Block> body = _tree.newBlock(Operator.ENUM, false, _scanner.location());
 		ref<Node> e = parseIdentifierList();
 		body.statement(_tree.newNodeList(e));
 		t = _scanner.next();
@@ -1298,7 +1301,7 @@ class Parser {
 					if (t == Token.LOCK)
 						func.body = parseLockStatement();
 					else if (t == Token.LEFT_CURLY) {
-						func.body = _tree.newBlock(Operator.BLOCK, null, false, _scanner.location());
+						func.body = _tree.newBlock(Operator.BLOCK, false, _scanner.location());
 						parseBlock(func.body);
 					} else {
 						_scanner.pushBack(t);

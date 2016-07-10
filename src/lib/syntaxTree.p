@@ -125,6 +125,7 @@ enum Operator {
 	LOAD,
 	STORE_V_TABLE,
 	CLASS_CLEAR,
+	LOCK,
 	// EllipsisArguments
 	ELLIPSIS_ARGUMENTS,
 	// StackArgumentAddress
@@ -243,13 +244,13 @@ class SyntaxTree {
 			_root = parser.parseFile();
 		} else {
 			_scanner = null;
-			_root = newBlock(Operator.UNIT, null, false, Location.OUT_OF_FILE);
+			_root = newBlock(Operator.UNIT, false, Location.OUT_OF_FILE);
 			_root.add(MessageId.FILE_NOT_READ, _pool);
 		}
 	}
 
-	public ref<Block> newBlock(Operator op, ref<Node> lockReference, boolean inSwitch, Location location) {
-		return _pool new Block(op, lockReference, inSwitch, location);
+	public ref<Block> newBlock(Operator op, boolean inSwitch, Location location) {
+		return _pool new Block(op, inSwitch, location);
 	}
 
 	public ref<Class> newClass(ref<Identifier> name, ref<Node> extendsClause, Location location) {
@@ -396,16 +397,14 @@ class SyntaxTree {
 }
 
 class Block extends Node {
-	private ref<Node> _lockReference;
 	private ref<NodeList> _statements;
 	private ref<NodeList> _last;
 	private boolean _inSwitch;
 	public ref<Scope> scope;
 	public Location closeCurlyLocation;
 
-	Block(Operator op, ref<Node> lockReference, boolean inSwitch, Location location) {
+	Block(Operator op, boolean inSwitch, Location location) {
 		super(op, location);
-		_lockReference = lockReference;
 		_inSwitch = inSwitch;
 	}
 
@@ -426,15 +425,11 @@ class Block extends Node {
 				return false;
 			if (result == TraverseAction.SKIP_CHILDREN)
 				break;
-			if (_lockReference != null && !_lockReference.traverse(t, func, data))
-				return false;
 			if (_statements != null && !_statements.traverse(t, func, data))
 				return false;
 			break;
 
 		case	IN_ORDER:
-			if (_lockReference != null && !_lockReference.traverse(t, func, data))
-				return false;
 			result = func(this, data);
 			if (result == TraverseAction.ABORT_TRAVERSAL)
 				return false;
@@ -446,8 +441,6 @@ class Block extends Node {
 
 		case	POST_ORDER:
 			if (_statements != null && !_statements.traverse(t, func, data))
-				return false;
-			if (_lockReference != null && !_lockReference.traverse(t, func, data))
 				return false;
 			result = func(this, data);
 			if (result == TraverseAction.ABORT_TRAVERSAL)
@@ -462,8 +455,6 @@ class Block extends Node {
 				break;
 			if (_statements != null && !_statements.reverse(t, func, data))
 				return false;
-			if (_lockReference != null && !_lockReference.traverse(t, func, data))
-				return false;
 			break;
 
 		case	REVERSE_IN_ORDER:
@@ -474,14 +465,10 @@ class Block extends Node {
 				return false;
 			if (result == TraverseAction.SKIP_CHILDREN)
 				break;
-			if (_lockReference != null && !_lockReference.traverse(t, func, data))
-				return false;
 			break;
 
 		case	REVERSE_POST_ORDER:
 			if (_statements != null && !_statements.reverse(t, func, data))
-				return false;
-			if (_lockReference != null && !_lockReference.traverse(t, func, data))
 				return false;
 			result = func(this, data);
 			if (result == TraverseAction.ABORT_TRAVERSAL)
@@ -502,22 +489,27 @@ class Block extends Node {
 		ref<Scope> outer;
 		if (scope != null)
 			outer = compileContext.setCurrent(scope);
-		for (ref<NodeList> nl = _statements;; nl = nl.next) {
+		if (op() == Operator.LOCK) {
+			ref<NodeList> nl = _statements.next;
 			nl.node = nl.node.fold(tree, false, compileContext);
-			if (nl.next == null) {
-				ref<Node>[] destructors;
-				for (;;) {
-					ref<Node> n = compileContext.popLiveSymbol(scope);
-					if (n == null)
-						break;
-					destructors.append(n);
-				}		
-				if (destructors.length() > 0) {
-					ref<NodeList> destructorList = tree.newNodeList(destructors);
-					ref<Node> n = tree.newDestructorList(destructorList, closeCurlyLocation);
-					nl.next = tree.newNodeList(n);
+		} else {
+			for (ref<NodeList> nl = _statements;; nl = nl.next) {
+				nl.node = nl.node.fold(tree, false, compileContext);
+				if (nl.next == null) {
+					ref<Node>[] destructors;
+					for (;;) {
+						ref<Node> n = compileContext.popLiveSymbol(scope);
+						if (n == null)
+							break;
+						destructors.append(n);
+					}		
+					if (destructors.length() > 0) {
+						ref<NodeList> destructorList = tree.newNodeList(destructors);
+						ref<Node> n = tree.newDestructorList(destructorList, closeCurlyLocation);
+						nl.next = tree.newNodeList(n);
+					}
+					break;
 				}
-				break;
 			}
 		}
 		if (scope != null)
@@ -526,10 +518,7 @@ class Block extends Node {
 	}
 
 	public ref<Block> clone(ref<SyntaxTree> tree) {
-		ref<Node> lockReference = null;
-		if (_lockReference != null)
-			lockReference = _lockReference.clone(tree);
-		ref<Block> b = tree.newBlock(op(), lockReference, _inSwitch, location());
+		ref<Block> b = tree.newBlock(op(), _inSwitch, location());
 		if (_statements != null)
 			b._statements = _statements.clone(tree);
 		b.scope = scope;
@@ -537,10 +526,7 @@ class Block extends Node {
 	}
 
 	public ref<Block> cloneRaw(ref<SyntaxTree> tree) {
-		ref<Node> lockReference = null;
-		if (_lockReference != null)
-			lockReference = _lockReference.cloneRaw(tree);
-		ref<Block> b = tree.newBlock(op(), lockReference, _inSwitch, location());
+		ref<Block> b = tree.newBlock(op(), _inSwitch, location());
 		if (_statements != null)
 			b._statements = _statements.cloneRaw(tree);
 		return b;
@@ -560,11 +546,9 @@ class Block extends Node {
 
 	public void print(int indent) {
 		printBasic(indent);
+		if (_inSwitch)
+			printf(" in switch");
 		printf("\n");
-		if (_lockReference != null) {
-			printf("%*c  {LOCK}\n", indent, ' ');
-			_lockReference.print(indent + INDENT);
-		}
 		boolean firstTime = true;
 		for (ref<NodeList> nl = _statements; nl != null; nl = nl.next) {
 			if (!firstTime)
@@ -583,6 +567,15 @@ class Block extends Node {
 		for (ref<NodeList> nl = _statements; nl != null; nl = nl.next)
 			compileContext.assignTypes(nl.node);
 		type = compileContext.arena().builtInType(TypeFamily.VOID);
+		if (op() == Operator.LOCK) {
+			if (_statements.node.deferAnalysis())
+				return;
+			ref<Unary> u = ref<Unary>(_statements.node);
+			if (_statements.node.op() != Operator.EMPTY && !compileContext.isMonitor(u.operand().type)) {
+				add(MessageId.NEEDS_MONITOR, compileContext.pool());
+				type = compileContext.errorType();
+			}
+		}
 	}
 
 	boolean definesScope() {
@@ -612,7 +605,7 @@ class Class extends Block {
 	private TypeFamily _effectiveFamily;		// Set by annotations (@Shape, @Ref, @Pointer)
 	
 	Class(ref<Identifier> name, ref<Node> extendsClause, Location location) {
-		super(Operator.CLASS, null, false, location);
+		super(Operator.CLASS, false, location);
 		_name = name;
 		_extends = extendsClause;
 		_effectiveFamily = TypeFamily.CLASS;
@@ -2574,7 +2567,7 @@ class Node {
 		return null;
 	}
 
-	public ref<Namespace> getNamespace(ref<Scope> domainScope) {
+	public ref<Namespace> getNamespace(ref<Scope> domainScope, ref<CompileContext> compileContext) {
 		assert(false);
 		return null;
 	}

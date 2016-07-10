@@ -28,6 +28,8 @@ enum StorageClass {
 	ENUMERATION,
 	FLAGS,
 	ENCLOSING,
+	MONITOR,
+	LOCK,
 	MAX_STORAGE_CLASS
 }
 
@@ -55,6 +57,31 @@ class ClassScope extends ClasslikeScope {
 			ref<Symbol> sym = _members[i];
 			target.assignStorageToObject(sym, this, offset, compileContext);
 		}
+	}
+}
+
+class MonitorScope extends ClassScope {
+	public MonitorScope(ref<Scope> enclosing, ref<Node> definition) {
+		super(enclosing, definition, StorageClass.MONITOR, null);
+	}
+}
+
+class LockScope extends Scope {
+	private ref<Node> _monitor;
+	
+	public LockScope(ref<Scope> enclosing, ref<Node> definition) {
+		super(enclosing, definition, StorageClass.LOCK, null);
+		ref<Block> b = ref<Block>(definition);
+		if (b.statements().node.op() != Operator.EMPTY) {
+			ref<Unary> u = ref<Unary>(b.statements().node);
+			_monitor = u.operand();
+		}
+	}
+
+	public ref<Symbol> lookup(ref<CompileString> name, ref<CompileContext> compileContext) {
+		if (_monitor != null)
+			return _monitor.type.lookup(name, compileContext);
+		return null;
 	}
 }
 
@@ -641,7 +668,7 @@ class UnitScope extends Scope {
 		for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
 			ref<Symbol> sym = i.get();
 			if (sym.class == PlainSymbol) {
-				ref<Symbol> n = namespaceScope.lookup(sym.name());
+				ref<Symbol> n = namespaceScope.lookup(sym.name(), compileContext);
 				if (n != null) {
 					if (n.definition().countMessages() == 0)
 						n.definition().add(MessageId.DUPLICATE, compileContext.pool(), *n.name());
@@ -651,9 +678,9 @@ class UnitScope extends Scope {
 			} else if (sym.class == Overload) {
 				ref<Overload> o = ref<Overload>(sym);
 
-				ref<Symbol> n = namespaceScope.lookup(sym.name());
+				ref<Symbol> n = namespaceScope.lookup(sym.name(), compileContext);
 				if (n == null) {
-					ref<Overload> no = namespaceScope.defineOverload(sym.name(), o.kind(), compileContext.pool());
+					ref<Overload> no = namespaceScope.defineOverload(sym.name(), o.kind(), compileContext);
 					no.merge(o, compileContext);
 				} else if (n.class == Overload) {
 					ref<Overload> no = ref<Overload>(n);
@@ -964,8 +991,8 @@ class Scope {
 		return sym;
 	}
 
-	public ref<Overload> defineOverload(ref<CompileString> name, Operator kind, ref<MemoryPool> memoryPool) {
-		ref<Symbol> sym = lookup(name);
+	public ref<Overload> defineOverload(ref<CompileString> name, Operator kind, ref<CompileContext> compileContext) {
+		ref<Symbol> sym = lookup(name, compileContext);
 		ref<Overload> o;
 		if (sym != null) {
 			if (sym.class != Overload)
@@ -975,7 +1002,7 @@ class Scope {
 				return null;
 		} else {
 			SymbolKey key(name);
-			o = memoryPool.newOverload(this, name, kind);
+			o = compileContext.pool().newOverload(this, name, kind);
 			_symbols.insert(key, o);
 		}
 		return o;
@@ -997,7 +1024,7 @@ class Scope {
 	}
 
 	public ref<Namespace> defineNamespace(ref<Node> namespaceNode, ref<CompileString> name, ref<CompileContext> compileContext) {
-		ref<Symbol> sym = lookup(name);
+		ref<Symbol> sym = lookup(name, compileContext);
 		if (sym != null) {
 			if (sym.class == Namespace)
 				return ref<Namespace>(sym);
@@ -1176,22 +1203,20 @@ class Scope {
 		_symbols.insert(key, sym);
 	}
 
-	public ref<Symbol> lookup(ref<CompileString> name) {
+	public ref<Symbol> lookup(ref<CompileString> name, ref<CompileContext> compileContext) {
 		SymbolKey key(name);
 		ref<Symbol> sym = _symbols[key];
 		return sym;
 	}
 
-	public ref<Symbol> lookup(string name) {
+	public ref<Symbol> lookup(string name, ref<CompileContext> compileContext) {
 		CompileString cs(name);
-		SymbolKey key(&cs);
-		return _symbols[key];
+		return lookup(&cs, compileContext);
 	}
 
-	public ref<Symbol> lookup(pointer<byte> name) {
+	public ref<Symbol> lookup(pointer<byte> name, ref<CompileContext> compileContext) {
 		CompileString cs(name);
-		SymbolKey key(&cs);
-		return _symbols[key];
+		return lookup(&cs, compileContext);
 	}
 
 	public ref<Type>, ref<Symbol> assignOverload(ref<Node> node, CompileString name, ref<NodeList> arguments, Operator kind, ref<CompileContext> compileContext) {
@@ -1325,6 +1350,7 @@ class Scope {
 			case	STATIC:
 			case	AUTO:
 			case	MEMBER:
+			case	MONITOR:
 				if (!type.isConcrete(compileContext))
 					symbol.definition().add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool());
 				break;
@@ -1346,6 +1372,7 @@ class Scope {
 				break;
 
 			default:
+				printf("Unexpected storageClass: %s\n", string(symbol.storageClass()));
 				symbol.print(0, false);
 				assert(false);
 				symbol.add(MessageId.UNFINISHED_CHECK_STORAGE, compileContext.pool(), CompileString(string(symbol.storageClass())));
@@ -1439,7 +1466,7 @@ class Namespace extends Symbol {
 		return _type;
 	}
 
-	ref<Symbol> findImport(ref<Ternary> namespaceNode) {
+	ref<Symbol> findImport(ref<Ternary> namespaceNode, ref<CompileContext> compileContext) {
 		ref<Identifier> id = ref<Identifier>(namespaceNode.right());
 		if (namespaceNode.middle().op() == Operator.EMPTY) {
 			if (name() != null && name().equals(*id.identifier()))
@@ -1447,7 +1474,7 @@ class Namespace extends Symbol {
 			else
 				return null;
 		} else {
-			return _symbols.lookup(id.identifier());
+			return _symbols.lookup(id.identifier(), compileContext);
 		}
 	}
 
@@ -1557,7 +1584,31 @@ class PlainSymbol extends Symbol {
 				if (_typeDeclarator.op() == Operator.CLASS_DECLARATION ||
 					_typeDeclarator.op() == Operator.ENUM_DECLARATION)
 					_type = _typeDeclarator.type;
-				else if (_typeDeclarator.op() == Operator.FUNCTION)
+				else if (_typeDeclarator.op() == Operator.MONITOR_DECLARATION) {
+					ref<Binary> mon = ref<Binary>(_typeDeclarator);
+					if (mon.right().op() == Operator.EMPTY) {
+						ref<Symbol> m = compileContext.arena().getSymbol("parasol", "thread.Monitor", compileContext);
+						if (m == null || m.class != PlainSymbol) {
+							if (m != null) {
+								m.print(0, false);
+							} else
+								assert(false);
+							_typeDeclarator.add(MessageId.NOT_A_TYPE, compileContext.pool());
+							_type = compileContext.errorType();
+						} else {
+							ref<Type> type = m.assignType(compileContext);
+							if (type.family() == TypeFamily.TYPEDEF) {		// if (type instanceof TypedefType)
+								ref<TypedefType> tp = ref<TypedefType>(type);
+								_type = tp.wrappedType();
+							} else {
+								m.print(0, false);
+								_typeDeclarator.add(MessageId.NOT_A_TYPE, compileContext.pool());
+								_type = compileContext.errorType();
+							}
+						}
+					} else
+						_type = _typeDeclarator.type;
+				} else if (_typeDeclarator.op() == Operator.FUNCTION)
 					_type = _typeDeclarator.type;
 				else
 					_type = _typeDeclarator.unwrapTypedef(compileContext);

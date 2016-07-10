@@ -62,7 +62,7 @@ class OverloadOperation {
 //			printf("Looking for Unit...\n");
 //			s.print(0, false);
 //		}
-		ref<Symbol> sym = s.lookup(_name);
+		ref<Symbol> sym = s.lookup(_name, _compileContext);
 		if (sym == null)
 			return null;
 //		if (ts == _name.asString())

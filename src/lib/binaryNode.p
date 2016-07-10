@@ -1479,8 +1479,8 @@ class Binary extends Node {
 			break;
 		}
 
-		case	CLASS_DECLARATION:
 		case	MONITOR_DECLARATION:
+		case	CLASS_DECLARATION:
 		case	FLAGS_DECLARATION:
 		case	ENUM_DECLARATION:
 			type = compileContext.arena().builtInType(TypeFamily.VOID);

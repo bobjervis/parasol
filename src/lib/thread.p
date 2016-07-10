@@ -15,20 +15,20 @@
  */
 namespace parasol:thread;
 
-import native:windows.getCurrentThreadId;
+import native:windows.GetCurrentThreadId;
 
 public class Thread {
 	string _name;
 	
 	public Thread() {
-		_name.printf("TID-%d", getCurrentThreadId());
+		_name.printf("TID-%d", GetCurrentThreadId());
 	}
 	
 	public Thread(string name) {
 		if (name != null)
 			_name = name;
 		else
-			_name.printf("TID-%d", getCurrentThreadId());
+			_name.printf("TID-%d", GetCurrentThreadId());
 	}
 	
 	public string name() {

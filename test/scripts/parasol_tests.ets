@@ -1084,7 +1084,30 @@ compile(expect: fail, message: UNEXPECTED_RC) { "switch (5) { default: }" }
 
 compile() { "ref<int> x = new int;" }
 
+compile() { "lock { }" }
+compile() { "lock { int x; }" }
+compile() { "void func() lock {}" }
+compile() { "void func() lock { int x; }" }
+compile() { "monitor a; lock(a) { }" }
+compile() { "monitor a; lock(a) { notify(); }" }
+compile() { "monitor a; lock(a) { notifyAll(); }" }
+compile() { "monitor a; lock(a) { wait(); }" }
+compile() { "monitor a; lock(a) { wait(10); }" }
+compile() { "monitor a; lock(a) { wait(10, 5); }" }
+compile() { "lock(a) { } monitor a;" }
+compile() { "monitor a {} lock(a) { }" }
+compile() { "monitor a { int b; } lock(a) { int c = b; }" }
+compile() { "lock(a) { int c = b; } monitor a { int b; }" }
+compile() { "monitor a { int b() { return 0; } } lock(a) { int c = b(); }" }
+compile() { "monitor a { void b() { } } a.b();" }
+compile() { "monitor a; lock(a) { int x; }" }
+compile() { "monitor a; void func() lock(a) {}" }
+compile() { "monitor a; void func() lock(a) { int x; }" }
 
+compile(expect: fail) { "float a; lock(a) { }" }
+compile(expect: fail) { "float a; void func() lock(a) {}" }
+compile(expect: fail) { "monitor a { int b; } int c = a.b;" }
+ 
 compile() { "ref<int> x = new (null) int;" }
 compile(expect: fail, message: CANNOT_CONVERT) { "long x = new (null) int;" }
 compile(expect: fail, message: CANNOT_CONVERT) { "ref<int> x = new (false) int;" }
@@ -1136,8 +1159,6 @@ statement() { "lock { a; a; }" }
 statement() { "lock (a) { }" }
 statement() { "lock (a) { b; }" }
 statement() { "lock (a) { b; b; }" }
-statement() { "class C { C() lock { } }" }
-statement() { "class C { ~C() lock { } }" }
 statement() { "void func() lock { }" }
 statement() { "int f(double d) lock (a) { b; b; }" }
 statement() { break; }

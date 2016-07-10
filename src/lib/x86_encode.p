@@ -673,6 +673,7 @@ class X86_64Encoder extends Target {
 				break;
 
 			case	MEMBER:
+			case	MONITOR:
 				// Align member fields, but don't reorder them - do not try to optimize stack frame yet.
 				size = type.size();
 				alignment = type.alignment();
@@ -3046,6 +3047,7 @@ class X86_64Encoder extends Target {
 				break;
 				
 			case	MEMBER:
+			case	MONITOR:
 				int baseReg;
 				if (addressMode.op() == Operator.IDENTIFIER)
 					baseReg = 6;
@@ -3266,6 +3268,7 @@ class X86_64Encoder extends Target {
 					break;
 					
 				case	MEMBER:
+				case	MONITOR:
 					int baseReg;
 					if (addressMode.op() != Operator.IDENTIFIER) {
 						ref<Selection> dot = ref<Selection>(addressMode);

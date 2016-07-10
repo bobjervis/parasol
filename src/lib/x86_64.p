@@ -407,7 +407,7 @@ public class X86_64 extends X86_64AssignTemps {
 						fixup(FixupKind.ABSOLUTE64_STRING, stringArray, i * address.bytes, address(offset));
 					}
 				} else
-					stringArray = parameterScope.lookup("*");
+					stringArray = parameterScope.lookup("*", compileContext);
 				inst(X86.LEA, R.RAX, stringArray);
 				inst(X86.MOV, R.RAX, R.RCX, R.RAX);
 				closeCodeSegment(CC.JMP, join);
@@ -570,7 +570,7 @@ public class X86_64 extends X86_64AssignTemps {
 				printf("   %s\n", scope.file().filename());
 			generateStaticBlock(scope.file(), compileContext);
 			node = ref<Block>(scope.definition());
-			ref<Symbol> main = scope.lookup("main");
+			ref<Symbol> main = scope.lookup("main", compileContext);
 			if (main != null &&
 				main.class == Overload) {
 				ref<Overload> m = ref<Overload>(main);
@@ -853,6 +853,12 @@ public class X86_64 extends X86_64AssignTemps {
 				generate(nl.node, compileContext);
 			break;
 		
+		case	LOCK:
+			block = ref<Block>(node);
+			// TODO: insert lock/unlock logic here, also need to declare a try-finally to ensure it gets unlocked.
+			generate(block.statements().next.node, compileContext);
+			break;
+			
 		case	DECLARATION:
 			ref<Binary> b = ref<Binary>(node);
 //			printf("Declaration...\n");
@@ -1261,6 +1267,7 @@ public class X86_64 extends X86_64AssignTemps {
 			
 		case	ENUM_DECLARATION:
 		case	FLAGS_DECLARATION:
+		case	MONITOR_DECLARATION:
 		case	DECLARE_NAMESPACE:
 		case	IMPORT:
 		case	EMPTY:
@@ -3724,21 +3731,21 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 		}
 		ref<Type> floatType = _arena.builtInType(TypeFamily.FLOAT_32);
-		ref<Symbol> signMask = floatType.scope().lookup("SIGN_MASK");
+		ref<Symbol> signMask = floatType.scope().lookup("SIGN_MASK", compileContext);
 		if (signMask != null)
 			_floatSignMask = signMask;
-		ref<Symbol> one = floatType.scope().lookup("ONE");
+		ref<Symbol> one = floatType.scope().lookup("ONE", compileContext);
 		if (one != null)
 			_floatOne = one;
 		ref<Type> doubleType = _arena.builtInType(TypeFamily.FLOAT_64);
-		signMask = doubleType.scope().lookup("SIGN_MASK");
+		signMask = doubleType.scope().lookup("SIGN_MASK", compileContext);
 		if (signMask != null)
 			_doubleSignMask = signMask;
-		one = doubleType.scope().lookup("ONE");
+		one = doubleType.scope().lookup("ONE", compileContext);
 		if (one != null)
 			_doubleOne = one;
 		
-		ref<Symbol> assign = stringType.scope().lookup("assign");
+		ref<Symbol> assign = stringType.scope().lookup("assign", compileContext);
 		if (assign != null) {
 			ref<Overload> o = ref<Overload>(assign);
 			if (o.instances().length() == 1) {
@@ -3747,7 +3754,7 @@ public class X86_64 extends X86_64AssignTemps {
 				_stringAssign = oi;
 			}
 		}
-		ref<Symbol> append = stringType.scope().lookup("append");
+		ref<Symbol> append = stringType.scope().lookup("append", compileContext);
 		if (append != null) {
 			ref<Overload> o = ref<Overload>(append);
 			for (int i = 0; i < o.instances().length(); i++) {

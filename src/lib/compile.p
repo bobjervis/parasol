@@ -37,6 +37,7 @@ class CompileContext {
 	private ref<Node>[] _liveSymbols;			// Populated during fold actions with the set of live symbols that
 												// need destructor calls.
 	private int _baseLiveSymbol;				// >= 0, index of first symbol live in this function.
+	private ref<Type> _monitorClass;
 	
 	public class FlowContext {
 		private ref<FlowContext> _next;
@@ -88,7 +89,7 @@ class CompileContext {
 	 * string.
 	 */
 	void compileFile() {
-		_arena.cacheRootObjects(_arena.root());
+		_arena.cacheRootObjects(_arena.root(), this);
 		for (int i = 0; i < _arena.scopes().length(); i++)
 			(*_arena.scopes())[i].assignMethodMaps(this);
 //		printf("before assignTypes\n");
@@ -157,7 +158,7 @@ class CompileContext {
 				label = "<null>";
 			printf(" --- buildScopes %d/%d %s\n", _arena.builtScopes, _arena.scopes().length(), label);
  */
- 	 	 	 clearDeclarationModifiers();
+ 	 	 	clearDeclarationModifiers();
 			if (s.definition() != null &&
 				s.storageClass() != StorageClass.TEMPLATE_INSTANCE)
 				buildUnderScope(s);
@@ -181,6 +182,7 @@ class CompileContext {
 				buildScopesInTree(func.body);
 			break;
 
+		case	LOCK:
 		case	BLOCK:
 		case	CLASS:
 			ref<Block> b = ref<Block>(definition);
@@ -240,6 +242,18 @@ class CompileContext {
 			buildScopesInTree(tern.left());
 			// Note: middle is always IDENTIFIER so no new scopes.
 			buildScopesInTree(tern.right());
+			break;
+			
+		case	MONITOR_DECLARATION:
+			ref<Binary> bin = ref<Binary>(definition);
+			if (bin.right().op() != Operator.EMPTY) {
+				b = ref<Block>(bin.right());
+				for (ref<NodeList> nl = b.statements(); nl != null; nl = nl.next) {
+					// Reset these state conditions accumulated from the traversal so far.
+					clearDeclarationModifiers();
+					buildScopesInTree(nl.node);
+				}
+			}
 			break;
 			
 		default:
@@ -411,8 +425,14 @@ class CompileContext {
 			id.bind(_current, b.left(), null, this);
 			break;
 
+		case	LOCK:
+			blk = ref<Block>(n);
+			blk.scope = createLockScope(n);
+			return TraverseAction.SKIP_CHILDREN;
+			
 		case	BLOCK:
-			ref<Block>(n).scope = createScope(n, StorageClass.AUTO);
+			ref<Block> blk = ref<Block>(n);
+			blk.scope = createScope(n, StorageClass.AUTO);
 			return TraverseAction.SKIP_CHILDREN;
 
 		case	SCOPED_FOR:
@@ -465,12 +485,13 @@ class CompileContext {
 		case	MONITOR_DECLARATION:
 			b = ref<Binary>(n);
 			id = ref<Identifier>(b.left());
-			if (b.right().op() == Operator.EMPTY)
+			if (b.right().op() == Operator.EMPTY) {
 				id.bind(_current, n, null, this);
-			else {
+				n.type = monitorClass();
+			} else {
 				ref<Class> c = ref<Class>(b.right());
-				ref<ClassScope> classScope = createClassScope(n, null);
-				classScope.classType = _pool.newClassType(c, classScope);
+				ref<ClassScope> classScope = createMonitorScope(c);
+				classScope.classType = _pool.newMonitorType(c, classScope);
 				id.bind(_current, n, b.right(), this);
 				// By making the type of the 'monitor' node itself, when we get to running assignType later on,
 				// it will all just work out fine (hopefully). Since the node will have a type, there won't be any
@@ -553,6 +574,14 @@ class CompileContext {
 
 	public ref<FlagsScope> createFlagsScope(ref<Block> definition, ref<Identifier> className) {
 		return _arena.createFlagsScope(_current, definition, className);
+	}
+
+	public ref<LockScope> createLockScope(ref<Node> definition) {
+		return _arena.createLockScope(_current, definition);
+	}
+
+	public ref<MonitorScope> createMonitorScope(ref<Node> definition) {
+		return _arena.createMonitorScope(_current, definition);
 	}
 
 	void bindDeclarators(ref<Node> type, ref<Node> n) {
@@ -682,6 +711,7 @@ class CompileContext {
 		switch (n.op()) {
 		case	UNIT:
 		case	BLOCK:
+		case	LOCK:
 			for (ref<NodeList> nl = ref<Block>(n).statements(); nl != null; nl = nl.next)
 				assignControlFlow(nl.node);
 			break;
@@ -982,6 +1012,33 @@ class CompileContext {
 		return _current;
 	}
 
+	ref<Type> monitorClass() {
+		if (_monitorClass == null) {
+			ref<Symbol> m = _arena.getSymbol("parasol", "thread.Monitor", this);
+			if (m == null || m.class != PlainSymbol) {
+				if (m != null)
+					m.print(0, false);
+				assert(false);
+			} else {
+				ref<Type> type = m.assignType(this);
+				if (type.family() == TypeFamily.TYPEDEF) {		// if (type == TypedefType)
+					ref<TypedefType> tp = ref<TypedefType>(type);
+					return tp.wrappedType();
+				} else {
+					m.print(0, false);
+					assert(false);
+				}
+			}
+		}
+		return _monitorClass;
+	}
+	
+	boolean isMonitor(ref<Type> type) {
+		if (type.isMonitor())
+			return true;
+		return type == monitorClass();
+	}
+	
 	ref<MemoryPool> pool() {
 		return _pool;
 	}
@@ -1046,6 +1103,10 @@ class MemoryPool extends memory.NoReleasePool {
 
 	public ref<ClassType> newClassType(TypeFamily effectiveFamily, ref<Type> base, ref<Scope> scope) {
 		return super new ClassType(effectiveFamily, base, scope);
+	}
+
+	public ref<MonitorType> newMonitorType(ref<Class> definition, ref<Scope> scope) {
+		return super new MonitorType(definition, scope);
 	}
 
 	public ref<EnumType> newEnumType(ref<Block> definition, ref<Scope> scope, ref<Type> wrappedType) {

@@ -272,7 +272,7 @@ public class ByteCodesTarget extends Target {
 	}
 	
 	boolean generateCode(ref<FileStat> mainFile, int valueOffset, ref<CompileContext> compileContext) {
-		cacheRootCodegenObjects(_arena.root());
+		cacheRootCodegenObjects(_arena.root(), compileContext);
 		_unit = new Unit(_arena.root(), mainFile.tree().root(), this, valueOffset, compileContext);
 		for (int i = 0; i < _arena.scopes().length(); i++)
 			(*_arena.scopes())[i].assignVariableStorage(this, compileContext);
@@ -532,7 +532,7 @@ public class ByteCodesTarget extends Target {
 			printf("No unit defined\n");
 	}
 
-	private void cacheRootCodegenObjects(ref<Scope> root) {
+	private void cacheRootCodegenObjects(ref<Scope> root, ref<CompileContext> compileContext) {
 		ref<Type> stringType = _arena.builtInType(TypeFamily.STRING);
 		ref<Symbol> sym = _arena.stringType();
 		if (sym != null && sym.class == PlainSymbol) {
@@ -553,7 +553,7 @@ public class ByteCodesTarget extends Target {
 				}
 			}
 		}
-		ref<Symbol> compare = stringType.scope().lookup("compare");
+		ref<Symbol> compare = stringType.scope().lookup("compare", compileContext);
 		if (compare != null) {
 			ref<Overload> o = ref<Overload>(compare);
 			if (o.instances().length() == 1) {
@@ -562,7 +562,7 @@ public class ByteCodesTarget extends Target {
 				_stringCompare = oi.parameterScope();
 			}
 		}
-		ref<Symbol> assign = stringType.scope().lookup("assign");
+		ref<Symbol> assign = stringType.scope().lookup("assign", compileContext);
 		if (assign != null) {
 			ref<Overload> o = ref<Overload>(assign);
 			if (o.instances().length() == 1) {
@@ -571,7 +571,7 @@ public class ByteCodesTarget extends Target {
 				_stringAssign = oi.parameterScope();
 			}
 		}
-		ref<Symbol> append = stringType.scope().lookup("append");
+		ref<Symbol> append = stringType.scope().lookup("append", compileContext);
 		if (append != null) {
 			ref<Overload> o = ref<Overload>(append);
 			for (int i = 0; i < o.instances().length(); i++) {
@@ -753,7 +753,7 @@ class Unit {
 			// Not a 'root' built-in
 			if (runtime.builtInFunctionDomain(i) != null)
 				continue;
-			ref<Symbol> sym = target.arena().root().lookup(name);
+			ref<Symbol> sym = target.arena().root().lookup(name, compileContext);
 			if (sym == null || sym.class != Overload)
 				unit.add(MessageId.UNDEFINED_BUILT_IN, compileContext.pool(), CompileString(name));
 			else {
@@ -1018,7 +1018,7 @@ class Code extends Value {
 			}
 			tree = ref<Block>(_scope.definition());
 			//generate(tree, target);
-			ref<Symbol> main = _scope.lookup("main");
+			ref<Symbol> main = _scope.lookup("main", compileContext);
 			if (main != null &&
 				main.class == Overload) {
 				ref<Overload> m = ref<Overload>(main);
@@ -3719,7 +3719,7 @@ class Code extends Value {
 		case	SUBSCRIPT: {
 			ref<Binary> b = ref<Binary>(n);
 			if (b.left().type.isVector(compileContext)) {
-				ref<Symbol> sym = b.left().type.scope().lookup("elementAddress");
+				ref<Symbol> sym = b.left().type.scope().lookup("elementAddress", compileContext);
 				if (sym.class != Overload) {
 					target.unfinished(n, "elementAddress not an Overloaded symbol", compileContext);
 					break;
@@ -3738,7 +3738,7 @@ class Code extends Value {
 				target.byteCode(value.index());
 				target.popSp(address.bytes);
 			} else if (b.left().type.isMap(compileContext)) {
-				ref<Symbol> sym = b.left().type.scope().lookup("createEmpty");
+				ref<Symbol> sym = b.left().type.scope().lookup("createEmpty", compileContext);
 				if (sym.class != Overload) {
 					target.unfinished(n, "createEmpty is not an Overloaded symbol", compileContext);
 					break;

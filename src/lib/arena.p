@@ -130,12 +130,13 @@ public class Arena {
 	public ref<Target> compile(ref<FileStat> mainFile, boolean countCurrentObjects, boolean cloneTree, boolean verbose) {
 		CompileContext context(this, _global);
 
-		cacheRootObjects(_root);
+		cacheRootObjects(_root, &context);
 
 		mainFile.parseFile(&context);
 		if (verbose)
 			printf("Main file parsed\n");
 		_specialFiles.setFile(mainFile);
+//		mainFile.tree().root().print(0);
 		if (mainFile.hasNamespace())
 			mainFile.completeNamespace(&context);
 		else
@@ -193,7 +194,7 @@ public class Arena {
 		string[] components = path.split('.');
 		ref<Symbol> found = null;
 		for (int i = 0; ; i++) {
-			found = s.lookup(components[i]);
+			found = s.lookup(components[i], compileContext);
 			if (found == null)
 				return null;
 			if (i == components.length() - 1)
@@ -221,13 +222,13 @@ public class Arena {
 		if (s != null) {
 			ref<Namespace> nm;
 			if (namespaceNode.middle().op() == Operator.EMPTY) {
-				nm = namespaceNode.right().getNamespace(s);
+				nm = namespaceNode.right().getNamespace(s, compileContext);
 				if (nm != null)
 					return nm;
 			} else {
-				nm = namespaceNode.middle().getNamespace(s);
+				nm = namespaceNode.middle().getNamespace(s, compileContext);
 				if (nm != null) {
-					ref<Symbol> sym = nm.findImport(namespaceNode);
+					ref<Symbol> sym = nm.findImport(namespaceNode, compileContext);
 					if (sym != null)
 						return sym;
 				}
@@ -261,7 +262,7 @@ public class Arena {
 	public boolean createBuiltIns(ref<Scope> root, ref<CompileContext> compileContext) {
 		boolean allDefined = true;
 		for (int i = 0; i < builtInMap.length(); i++) {
-			ref<Symbol> sym = root.lookup(builtInMap[i].name);
+			ref<Symbol> sym = root.lookup(builtInMap[i].name, compileContext);
 			if (sym != null)
 				_builtInType[builtInMap[i].family] = sym.bindBuiltInType(builtInMap[i].family, compileContext);
 			if (_builtInType[builtInMap[i].family] == null) {
@@ -316,27 +317,27 @@ public class Arena {
 			return compileContext.errorType();
 	}
 
-	public void cacheRootObjects(ref<Scope> root) {
-		ref<Symbol> sym = root.lookup("ref");
+	public void cacheRootObjects(ref<Scope> root, ref<CompileContext> compileContext) {
+		ref<Symbol> sym = root.lookup("ref", compileContext);
 		if (sym.class == Overload) {
 			ref<Overload> o = ref<Overload>(sym);
 			_ref = (*o.instances())[0];
 		}
-		sym = root.lookup("pointer");
+		sym = root.lookup("pointer", compileContext);
 		if (sym.class == Overload) {
 			ref<Overload> o = ref<Overload>(sym);
 			_pointer = (*o.instances())[0];
 		}
-		_int = root.lookup("int");
-		_string = root.lookup("string");
-		_var = root.lookup("var");
-		sym = root.lookup("vector");
+		_int = root.lookup("int", compileContext);
+		_string = root.lookup("string", compileContext);
+		_var = root.lookup("var", compileContext);
+		sym = root.lookup("vector", compileContext);
 		if (sym.class == Overload) {
 			ref<Overload> o = ref<Overload>(sym);
 			_vector = (*o.instances())[1];
 			_enumVector = _vector;//o.instances()[2];
 		}
-		sym = root.lookup("map");
+		sym = root.lookup("map", compileContext);
 		if (sym.class == Overload) {
 			ref<Overload> o = ref<Overload>(sym);
 			_map = (*o.instances())[0];
@@ -381,6 +382,18 @@ public class Arena {
 
 	public ref<FlagsScope> createFlagsScope(ref<Scope> enclosing, ref<Block> definition, ref<Identifier> className) {
 		ref<FlagsScope> s = new FlagsScope(enclosing, definition, className);
+		_scopes.append(s);
+		return s;
+	}
+
+	public ref<LockScope> createLockScope(ref<Scope> enclosing, ref<Node> definition) {
+		ref<LockScope> s = new LockScope(enclosing, definition);
+		_scopes.append(s);
+		return s;
+	}
+
+	public ref<MonitorScope> createMonitorScope(ref<Scope> enclosing, ref<Node> definition) {
+		ref<MonitorScope> s = new MonitorScope(enclosing, definition);
 		_scopes.append(s);
 		return s;
 	}
