@@ -26,6 +26,10 @@ public class HANDLE extends address {
 	boolean isValid() {
 		return *super != INVALID_HANDLE_VALUE;
 	}
+	
+	public address asAddress() {
+		return *this;
+	}
 }
 
 public HANDLE INVALID_HANDLE_VALUE = HANDLE(address(-1));
@@ -41,6 +45,7 @@ public class WINBOOL = int;
 public class HLOCAL = address;
 public class WORD = short;
 public class DWORD = unsigned;
+public class SIZE_T = address;
 
 @Windows("kernel32.dll", "GetModuleFileNameA")
 public abstract int GetModuleFileName(HMODULE hModule, pointer<byte> filename, int filenameSize);
@@ -76,8 +81,36 @@ public abstract void GetSystemTime(ref<SYSTEMTIME> lpSystemTime);
 @Windows("kernel32.dll", "SystemTimeToFileTime")
 public abstract WINBOOL SystemTimeToFileTime(ref<SYSTEMTIME> lpSystemTime, ref<FILETIME> lpFileTome);
 
-@Windows("kernel32.dll", "GetCurrentThreadIs")
+@Windows("kernel32.dll", "GetCurrentThreadId")
 public abstract DWORD GetCurrentThreadId(void);
+@Windows("kernel32.dll", "CreateThread")
+public abstract HANDLE CreateThread(address lpThreadAttributes, SIZE_T dwStackSize, DWORD lpStartAddress(address p), address lpParameter, DWORD dwCreationFlags, ref<DWORD> lpThreadId);
+
+@Windows("msvcrt.dll", "_beginthread")
+public abstract address _beginthread(void startAddress(address p), unsigned stackSize, address args);
+@Windows("msvcrt.dll", "_beginthreadex")
+public abstract address _beginthreadex(address security, unsigned stackSize, unsigned startAddress(address p), address arglist, unsigned initflag, ref<unsigned> thrdaddr);
+
+@Windows("kernel32.dll", "CloseHandle")
+private abstract BOOL CloseHandle(address hHandle);
+// This is a hack to get around a parameter passing mismatch. Parasol wants to pass all class objects on the stack, but HANDLE is really passed in a register.
+public BOOL CloseHandle(HANDLE hHandle) {
+	return CloseHandle(*ref<address>(&hHandle));
+}
+
+@Windows("kernel32.dll", "WaitForSingleObject")
+private abstract DWORD WaitForSingleObject(address hHandle, DWORD dwMilliseconds);
+// This is a hack to get around a parameter passing mismatch. Parasol wants to pass all class objects on the stack, but HANDLE is really passed in a register.
+public DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds) {
+	return WaitForSingleObject(*ref<address>(&hHandle), dwMilliseconds);
+}
+
+public DWORD WAIT_FAILED = DWORD(~0);
+public DWORD WAIT_ABANDONED = 0x80;
+public DWORD WAIT_TIMEOUT = 0x102;
+public DWORD WAIT_OBJECT_0 = 0;
+
+public DWORD INFINITE = DWORD(~0);
 
 public int sizeof_WIN32_FIND_DATA = 320;
 

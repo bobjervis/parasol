@@ -130,6 +130,10 @@ public:
 
 	byte *stackTop() { return _stackTop; }
 
+	void setStackTop(void *p) {
+		_stackTop = (byte*)p;
+	}
+
 	byte *code() { return _active.code; }
 
 	int lastIp() { return _lastIp; }
@@ -169,6 +173,8 @@ public:
 	int sourceLocationsCount() {
 		return _sourceLocationsCount;
 	}
+
+	ExecutionContext *clone();
 
 	void setSourceLocations(void *location, int count);
 

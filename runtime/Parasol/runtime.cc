@@ -1862,6 +1862,37 @@ void ExecutionContext::setSourceLocations(void *location, int count) {
 	_sourceLocationsCount = count;
 }
 
+ExecutionContext *ExecutionContext::clone() {
+	ExecutionContext *newContext;
+	if (_target == BYTE_CODE_TARGET)
+		newContext = new ExecutionContext(null, 0);
+	else
+		newContext = new ExecutionContext(_pxiHeader, _image, _runtimeFlags);
+	newContext->_target = _target;
+	newContext->_hardwareExceptionHandler = _hardwareExceptionHandler;
+	newContext->_sourceLocations = _sourceLocations;
+	newContext->_sourceLocationsCount = _sourceLocationsCount;
+	return newContext;
+}
+
+void enterThread(ExecutionContext *newContext, void *stackTop) {
+	threadContext.set(newContext);
+	newContext->setStackTop(stackTop);
+}
+
+void exitThread() {
+	ExecutionContext *context = threadContext.get();
+	if (context != null) {
+		threadContext.set(null);
+		delete context;
+	}
+}
+
+ExecutionContext *dupExecutionContext() {
+	ExecutionContext *context = threadContext.get();
+	return context->clone();
+}
+
 BuiltInFunctionMap builtInFunctionMap[] = {
 	{ "print",								nativeFunction(builtInPrint),						1,	1 },
 	{ "formatMessage",						nativeFunction(formatMessage),						1,	1, "native" },
@@ -1892,6 +1923,10 @@ BuiltInFunctionMap builtInFunctionMap[] = {
 	{ "evalNative",							nativeFunction(evalNative),							4,	1, "parasol" },
 	{ "debugSpawnImpl", 					nativeFunction(processDebugSpawn),					3,	1, "parasol" },
 	{ "disposeOfPayload",					nativeFunction(disposeOfPayload),					1,	0, "parasol" },
+
+	{ "enterThread",						nativeFunction(enterThread),						2,	0, "parasol" },
+	{ "exitThread",							nativeFunction(exitThread),							0,	0, "parasol" },
+	{ "dupExecutionContext",				nativeFunction(dupExecutionContext),				0,	1, "parasol" },
 	{ 0 }
 };
 

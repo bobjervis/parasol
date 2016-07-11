@@ -16,6 +16,7 @@
 #include <limits.h>
 #include <stdio.h>
 #include <string.h>
+#include <process.h>
 #include "basic_types.h"
 #include "pxi.h"
 #include "common/command_line.h"

@@ -441,6 +441,7 @@ class RegisterState {
 				switch (_spills.affected.type.family()) {
 				case	UNSIGNED_8:
 				case	UNSIGNED_16:
+				case	UNSIGNED_32:
 				case	SIGNED_16:
 				case	SIGNED_32:
 				case	SIGNED_64:
