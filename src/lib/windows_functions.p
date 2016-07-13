@@ -46,6 +46,7 @@ public class HLOCAL = address;
 public class WORD = short;
 public class DWORD = unsigned;
 public class SIZE_T = address;
+public class HTHREAD = address;
 
 @Windows("kernel32.dll", "GetModuleFileNameA")
 public abstract int GetModuleFileName(HMODULE hModule, pointer<byte> filename, int filenameSize);
@@ -103,6 +104,23 @@ private abstract DWORD WaitForSingleObject(address hHandle, DWORD dwMilliseconds
 // This is a hack to get around a parameter passing mismatch. Parasol wants to pass all class objects on the stack, but HANDLE is really passed in a register.
 public DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds) {
 	return WaitForSingleObject(*ref<address>(&hHandle), dwMilliseconds);
+}
+@Windows("kernel32.dll", "CreateSemaphoreA")
+public abstract address CreateSemaphore(address lpSemaphoreAttributes, int lInitialCount, int lMaximumCount, ref<byte> name);
+@Windows("kernel32.dll", "ReleaseSemaphore")
+private abstract BOOL ReleaseSemaphore(address hHandle, int lReleaseCount, ref<int> lpPreviousCount);
+//This is a hack to get around a parameter passing mismatch. Parasol wants to pass all class objects on the stack, but HANDLE is really passed in a register.
+public BOOL ReleaseSemaphore(HANDLE hHandle, int lReleaseCount, ref<int> lpPreviousCount) {
+	return ReleaseSemaphore(*ref<address>(&hHandle), lReleaseCount, lpPreviousCount);
+}
+
+@Windows("kernel32.dll", "CreateMutexA")
+public abstract address CreateMutex(address lpMutexAttributes, BOOL bInitialOwner, pointer<byte> lpName);
+@Windows("kernel32.dll", "ReleaseMutex")
+private abstract BOOL ReleaseMutex(address hHandle);
+//This is a hack to get around a parameter passing mismatch. Parasol wants to pass all class objects on the stack, but HANDLE is really passed in a register.
+public BOOL ReleaseMutex(HANDLE hHandle) {
+	return ReleaseMutex(*ref<address>(&hHandle));
 }
 
 public DWORD WAIT_FAILED = DWORD(~0);

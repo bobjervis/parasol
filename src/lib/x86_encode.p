@@ -2699,6 +2699,7 @@ class X86_64Encoder extends Target {
 		if (func == null)
 			return false;
 		if (isBuiltIn) {
+			inst(X86.SUB, TypeFamily.ADDRESS, R.RSP, 16);
 			emit(0xff);
 			modRM(0, 2, 5);
 			if (functionScope.nativeBinding)
@@ -2706,6 +2707,7 @@ class X86_64Encoder extends Target {
 			else
 				fixup(FixupKind.BUILTIN32, functionScope.value);
 			emitInt(0);
+			inst(X86.ADD, TypeFamily.ADDRESS, R.RSP, 16);
 		} else {
 			emit(0xe8);
 			fixup(FixupKind.RELATIVE32_CODE, func);

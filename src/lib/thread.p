@@ -17,6 +17,10 @@ namespace parasol:thread;
 
 import native:windows.GetCurrentThreadId;
 import native:windows.CloseHandle;
+import native:windows.CreateSemaphore;
+import native:windows.ReleaseSemaphore;
+import native:windows.CreateMutex;
+import native:windows.ReleaseMutex;
 import native:windows.WaitForSingleObject;
 import native:windows._beginthreadex;
 import native:windows.HANDLE;
@@ -25,6 +29,7 @@ import native:windows.DWORD;
 import native:windows.BOOL;
 import native:windows.SIZE_T;
 import native:windows.WAIT_FAILED;
+import native:windows.WAIT_TIMEOUT;
 import native:windows.INFINITE;
 import native:windows.GetLastError;
 import parasol:exception.HardwareException;
@@ -87,7 +92,6 @@ public class Thread {
 	}
 
 	public void join() {
-		printf("handle = %p\n", *ref<address>(&_threadHandle));
 		DWORD dw = WaitForSingleObject(_threadHandle, INFINITE);
 		if (dw == WAIT_FAILED) {
 			printf("WaitForSingleObject failed %x\n", GetLastError());
@@ -105,32 +109,118 @@ public class Thread {
  * implied in a declared monitor object.
  */
 class Monitor {
+	private Mutex _mutex;
+	private HANDLE	_semaphore;
+	private int _waiting;
+	
 	public Monitor() {
-		
+		_semaphore = HANDLE(CreateSemaphore(null, 0, int.MAX_VALUE, null));
 	}
 	
 	~Monitor() {
-		
+		CloseHandle(_semaphore);
 	}
 	
 	public void notify() {
-		
+		_mutex.take();
+		ReleaseSemaphore(_semaphore, 1, null);
+		--_waiting;
+		_mutex.release();
 	}
 	
 	public void notifyAll() {
-		
+		_mutex.take();
+		if (_waiting > 0) {
+			ReleaseSemaphore(_semaphore, _waiting, null);
+			_waiting = 0;
+		}
+		_mutex.release();
 	}
 	
 	public void wait() {
-		
+		_mutex.take();
+		_waiting++;
+		int level = _mutex.releaseForWait();
+		WaitForSingleObject(_semaphore, INFINITE);
+		_mutex.takeAfterWait(level - 1);
 	}
 	
 	public void wait(long timeout) {
-		
+		long upper = timeout >> 31;
+		int lower = int(timeout & ((long(1) << 31) - 1));
+		_mutex.take();
+		_waiting++;
+		int level = _mutex.releaseForWait();
+		DWORD outcome = WaitForSingleObject(_semaphore, DWORD(lower));
+		if (outcome == WAIT_TIMEOUT) {
+			for (int i = 0; i < upper; i++) {
+				outcome = WaitForSingleObject(_semaphore, DWORD(int.MAX_VALUE));
+				if (outcome != WAIT_TIMEOUT)
+					break;
+			}
+		}
+		_mutex.takeAfterWait(level - 1);
+	}
+	// Sorry, Windows doesn't support nano second timing on semaphores.
+	public void wait(long timeout, int nanos) {
+		long upper = timeout >> 31;
+		int lower = int(timeout & ((long(1) << 31) - 1));
+		_mutex.take();
+		_waiting++;
+		int level = _mutex.releaseForWait();
+		DWORD outcome = WaitForSingleObject(_semaphore, DWORD(lower));
+		if (outcome == WAIT_TIMEOUT) {
+			for (int i = 0; i < upper; i++) {
+				outcome = WaitForSingleObject(_semaphore, DWORD(int.MAX_VALUE));
+				if (outcome != WAIT_TIMEOUT)
+					break;
+			}
+		}
+		_mutex.takeAfterWait(level - 1);
+	}
+}
+
+class Mutex {
+	private int _level;
+	private HANDLE _mutex;
+	private DWORD _ownerThreadId;
+	
+	public Mutex() {
+		_mutex = HANDLE(CreateMutex(null, 0, null));
 	}
 	
-	public void wait(long timeout, int nanos) {
-		
+	~Mutex() {
+		CloseHandle(_mutex);
+	}
+	
+	void take() {
+		WaitForSingleObject(_mutex, INFINITE);
+		DWORD currentThreadId = GetCurrentThreadId(); 
+		if (_ownerThreadId == currentThreadId) {
+			_level++;
+		} else {
+			_level = 1;
+			_ownerThreadId = currentThreadId;
+		}
+	}
+	
+	void release() {
+		_level--;
+		ReleaseMutex(_mutex);
+	}
+	
+	int releaseForWait() {
+		int priorLevel = _level;
+		while (_level > 0) {
+			_level--;
+			ReleaseMutex(_mutex);
+		}
+		return priorLevel;
+	}
+	
+	void takeAfterWait(int level) {
+		for (int i = 0; i < level; i++)
+			take();
 	}
 }
 

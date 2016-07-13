@@ -19,6 +19,8 @@ import parasol:thread.Thread;
 ref<Thread> t1 = new Thread();
 ref<Thread> t2 = new Thread();
 
+printf("starting\n");
+
 if (!t1.start(f1, t1)) {
 	printf("t1 start failed\n");
 }
