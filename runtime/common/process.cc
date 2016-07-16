@@ -345,29 +345,29 @@ static int monitorDebugEvents(HANDLE hProcess, unsigned processId, exception_t* 
 	int totalExceptions = 0;
 	DWORD otherProcessId = 0;
 	int totalOtherExceptions = 0;
-	
+	time_t millis = timeout * 1000;
+	DWORD wTimeout;
+	if (timeout <= 0 || millis > INFINITE)
+		wTimeout = INFINITE;
+	else
+		wTimeout = DWORD(millis);
+
 	for (;;) {
 		DEBUG_EVENT dbg;
 		fflush(stdout);
 		
-		time_t millis = timeout * 1000;
-		DWORD wTimeout;
-		if (timeout <= 0 || millis > INFINITE)
-			wTimeout = INFINITE;
-		else
-			wTimeout = DWORD(millis);
+		DWORD start = GetTickCount();
 		BOOL result = WaitForDebugEvent(&dbg, wTimeout);
-		if (result == FALSE) {
+		DWORD end = GetTickCount();
+		long elapsed = end - start;
+		if (result == FALSE || elapsed > wTimeout) {
 			// This is probably a timeout, any other error probably deserves this
 			// treatment too.
 			TerminateProcess(hProcess, WINDOWS_DEBUGGER_TERMINATED);
 			*exception = TIMEOUT;
 			return -2;
 		}
-		if (result == FALSE) {
-			printf("Unexpected FALSE from WaitForDebugEvent\n");
-			exit(1);
-		}
+		wTimeout -= elapsed;
 		DWORD handling = DBG_EXCEPTION_NOT_HANDLED;
 		switch (dbg.dwDebugEventCode) {
 		case	EXCEPTION_DEBUG_EVENT:

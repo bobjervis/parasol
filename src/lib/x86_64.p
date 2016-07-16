@@ -845,18 +845,13 @@ public class X86_64 extends X86_64AssignTemps {
 			node.print(4);
 		}
 		switch (node.op()) {
+		case	LOCK:
 		case	BLOCK:
 		case	UNIT:
 			ref<Block> block = ref<Block>(node);
 			generateDefaultConstructors(block.scope, compileContext);
 			for (ref<NodeList> nl = block.statements(); nl != null; nl = nl.next)
 				generate(nl.node, compileContext);
-			break;
-		
-		case	LOCK:
-			block = ref<Block>(node);
-			// TODO: insert lock/unlock logic here, also need to declare a try-finally to ensure it gets unlocked.
-			generate(block.statements().next.node, compileContext);
 			break;
 			
 		case	DECLARATION:

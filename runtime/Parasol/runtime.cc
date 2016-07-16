@@ -1722,7 +1722,7 @@ static int processDebugSpawn(char *command, SpawnPayload *output, long long time
 	string out;
 	string cmd(command);
 
-	int result = process::debugSpawn(cmd, &out, &output->outcome, (time_t)(timeout / 1000));
+	int result = process::debugSpawn(cmd, &out, &output->outcome, (time_t)timeout);
 	char *capture = new char[out.size()];
 	output->buffer = capture;
 	output->length = out.size();

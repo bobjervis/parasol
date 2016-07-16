@@ -47,8 +47,8 @@ boolean t2FinishedWait;
 void f1(address parameter) {
 	t1StartedWait = true;
 	m1.wait();
-	assert(!t2FinishedWait);
 	t1FinishedWait = true;
+	assert(!t2FinishedWait);
 	m2.notify();
 }
 
@@ -59,3 +59,7 @@ void f2(address parameter) {
 	m2.wait();
 	t2FinishedWait = true;
 }
+
+assert(t1FinishedWait);
+assert(t2FinishedWait);
+

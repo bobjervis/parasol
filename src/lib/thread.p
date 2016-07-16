@@ -121,6 +121,14 @@ class Monitor {
 		CloseHandle(_semaphore);
 	}
 	
+	private void take() {
+		_mutex.take();
+	}
+	
+	private void release() {
+		_mutex.release();
+	}
+	
 	public void notify() {
 		_mutex.take();
 		ReleaseSemaphore(_semaphore, 1, null);

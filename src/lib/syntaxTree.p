@@ -490,8 +490,42 @@ class Block extends Node {
 		if (scope != null)
 			outer = compileContext.setCurrent(scope);
 		if (op() == Operator.LOCK) {
-			ref<NodeList> nl = _statements.next;
-			nl.node = nl.node.fold(tree, false, compileContext);
+			if (deferAnalysis()) {
+				_statements.next.node = _statements.next.node.fold(tree, true, compileContext);
+				return this;
+			}
+			ref<NodeList> nl = _statements;
+			if (nl.node.op() == Operator.EXPRESSION) {
+				ref<Unary> expression = ref<Unary>(nl.node);
+				ref<Node> monitorName = expression.operand();
+				ref<Variable> temp = compileContext.newVariable(compileContext.arena().builtInType(TypeFamily.ADDRESS));
+				ref<Node> defn = tree.newReference(temp, true, expression.location());
+				ref<Node> adr = tree.newUnary(Operator.ADDRESS, monitorName, monitorName.location());
+				adr.type = defn.type;
+				defn = tree.newBinary(Operator.ASSIGN, defn, adr, expression.location());
+				defn.type = adr.type;
+				nl.node = tree.newUnary(Operator.EXPRESSION, defn, defn.location());
+				nl.node.type = compileContext.arena().builtInType(TypeFamily.VOID);
+				ref<Node> takeCall = callMethod(monitorName, temp, "take", tree, compileContext);
+				if (takeCall == null)
+					return this;
+				ref<NodeList> nln = compileContext.pool() new NodeList;
+				nln.next = nl.next;
+				nln.node = tree.newUnary(Operator.EXPRESSION, takeCall, location());
+				nln.node.type = nl.node.type;
+				nl.next = nln;
+				nl = nln.next;
+				nl.node = nl.node.fold(tree, true, compileContext);
+				ref<Node> releaseCall = callMethod(monitorName, temp, "release", tree, compileContext);
+				if (releaseCall == null)
+					return this;
+				ref<NodeList> nlr = compileContext.pool() new NodeList;
+				nlr.node = tree.newUnary(Operator.EXPRESSION, releaseCall, location());
+				nlr.node.type = nl.node.type;
+				nl.next = nlr;
+			} else {
+				// TODO: Handle the case for anonymous locks.
+			}
 		} else {
 			for (ref<NodeList> nl = _statements;; nl = nl.next) {
 				nl.node = nl.node.fold(tree, false, compileContext);
@@ -517,6 +551,20 @@ class Block extends Node {
 		return this;
 	}
 
+	public ref<Node> callMethod(ref<Node> monitorName, ref<Variable> temp, string methodName, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
+		ref<Node> defn = tree.newReference(temp, false, location());
+		ref<OverloadInstance> oi = getMethodSymbol(monitorName, methodName, monitorName.type, compileContext);
+		if (oi == null)
+			return null;
+		// This is the assignment method for this class!!!
+		// (all strings go through here).
+		ref<Selection> method = tree.newSelection(defn, oi, true, location());
+		method.type = oi.type();
+		ref<Call> call = tree.newCall(oi.parameterScope(), null, method, null, location(), compileContext);
+		call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+		return call.fold(tree, true, compileContext);
+	}
+	
 	public ref<Block> clone(ref<SyntaxTree> tree) {
 		ref<Block> b = tree.newBlock(op(), _inSwitch, location());
 		if (_statements != null)

@@ -50,7 +50,7 @@ private class SpawnPayload {
 public int debugSpawn(string command, ref<string> output, ref<exception_t> outcome, time.Time timeout) {
 	SpawnPayload payload;
 	
-	int result = debugSpawnImpl(&command[0], &payload, timeout);
+	int result = debugSpawnImpl(&command[0], &payload, timeout.value());
 	if (output != null)
 		*output = string(payload.output, payload.outputLength);
 	if (outcome != null) 
@@ -59,7 +59,7 @@ public int debugSpawn(string command, ref<string> output, ref<exception_t> outco
 	return result;
 }
 
-private abstract int debugSpawnImpl(pointer<byte> command, ref<SpawnPayload> output, time.Time timeout);
+private abstract int debugSpawnImpl(pointer<byte> command, ref<SpawnPayload> output, long timeout);
 
 private abstract void disposeOfPayload(ref<SpawnPayload> output);
 

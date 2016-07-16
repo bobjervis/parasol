@@ -587,7 +587,7 @@ class RunObject extends script.Object {
 	private int _timeout;
 
 	private RunObject() {
-		_timeout = 100000;
+		_timeout = 120;
 	}
 	
 	public static ref<script.Object> factory() {
@@ -634,7 +634,7 @@ class RunObject extends script.Object {
 			
 			(_timeout, result) = int.parse(a.toString());
 			if (!result) {
-				printf("Timeout %s is not an integer (in milliseconds)\n");
+				printf("Timeout %s is not an integer (in seconds)\n");
 				return false;
 			}
 		}
