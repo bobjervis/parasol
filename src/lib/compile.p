@@ -1077,6 +1077,10 @@ class MemoryPool extends memory.NoReleasePool {
 		return super new PlainSymbol(visibility, storageClass, enclosing, annotations, this, name, source, type, initializer);
 	}
 
+	public ref<Symbol> newDelegateSymbol(ref<Scope> enclosing, ref<PlainSymbol> delegate) {
+		return super new DelegateSymbol(enclosing, delegate, this);
+	}
+	
 	public ref<Overload> newOverload(ref<Scope> enclosing, ref<CompileString> name, Operator kind) {
 		return super new Overload(enclosing, null, this, name, kind);
 	}
@@ -1085,6 +1089,10 @@ class MemoryPool extends memory.NoReleasePool {
 		return super new OverloadInstance(visibility, isStatic, enclosing, annotations, this, name, source, functionScope);
 	}
 
+	public ref<OverloadInstance> newDelegateOverload(ref<Overload> overloadSym, ref<OverloadInstance> delegate) {
+		return super new DelegateOverload(overloadSym.enclosing(), delegate, this);
+	}
+	
 	public ref<Namespace> newNamespace(ref<Node> namespaceNode, ref<Scope> enclosing, ref<Scope> symbols, ref<Node> annotations, ref<CompileString> name) {
 		return super new Namespace(namespaceNode, enclosing, symbols, annotations, this, name);
 	}

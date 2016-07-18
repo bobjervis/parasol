@@ -152,6 +152,19 @@ class Identifier extends Node {
 			n.type = type;
 			return n;
 		}
+		if (_symbol != null && _symbol.storageClass() == StorageClass.LOCK) {
+			ref<LockScope> lockScope = ref<LockScope>(_symbol.enclosing());
+			ref<Node> lockRef = tree.newReference(lockScope.lockTemp, false, location());
+			if (lockRef == null)
+				return this;
+			ref<Node> member;
+			if (_symbol.class == DelegateSymbol)
+				member = tree.newSelection(lockRef, ref<DelegateSymbol>(_symbol).delegate(), true, location());
+			else // Must be a DelegateOverload
+				member = tree.newSelection(lockRef, ref<DelegateOverload>(_symbol).delegate(), true, location());
+			member.type = type;
+			return member;
+		}
 		return this;
 	}
 	

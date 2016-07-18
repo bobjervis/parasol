@@ -69,6 +69,8 @@ class MonitorScope extends ClassScope {
 class LockScope extends Scope {
 	private ref<Node> _monitor;
 	
+	public ref<Variable> lockTemp;			// The temp used to hold the reference to the monitor being locked.
+	
 	public LockScope(ref<Scope> enclosing, ref<Node> definition) {
 		super(enclosing, definition, StorageClass.LOCK, null);
 		ref<Block> b = ref<Block>(definition);
@@ -79,8 +81,15 @@ class LockScope extends Scope {
 	}
 
 	public ref<Symbol> lookup(ref<CompileString> name, ref<CompileContext> compileContext) {
-		if (_monitor != null)
-			return _monitor.type.lookup(name, compileContext);
+		ref<Symbol> sym = super.lookup(name, compileContext);
+		if (sym != null)
+			return sym;
+		if (_monitor != null) {
+			sym = _monitor.type.lookup(name, compileContext);
+			if (sym == null)
+				return null;
+			return defineDelegate(sym, compileContext.pool());
+		}
 		return null;
 	}
 }
@@ -1038,6 +1047,27 @@ class Scope {
 		return nm;
 	}
 
+	ref<Symbol> defineDelegate(ref<Symbol> delegate, ref<MemoryPool> memoryPool) {
+		SymbolKey key(delegate.name());
+		if (delegate.class == PlainSymbol) {
+			if (_symbols.contains(key))
+				return null;
+			ref<Symbol> sym = memoryPool.newDelegateSymbol(this, ref<PlainSymbol>(delegate));
+			_symbols.insert(key, sym);
+			return sym;
+		} else if (delegate.class == Overload) {
+			ref<Overload> o = ref<Overload>(delegate);
+			ref<Overload> newOverload = memoryPool.newOverload(this, o.name(), o.kind());
+			newOverload.cloneDelegates(o, memoryPool);
+			_symbols.insert(key, newOverload);
+			return newOverload;
+		} else {
+			delegate.print(0, false);
+			assert(false);
+			return null;
+		}
+	}
+	
 	public void checkVariableStorage(ref<CompileContext> compileContext) {
 		switch (_storageClass) {
 		case	TEMPLATE:
@@ -1511,6 +1541,27 @@ flags Access {
 	CONSTRUCTED			// If the object is not initialized with a constructor, it will be constructed at scope start.						// the bit will be set any constructor initializer is performed.
 }
 /*
+ * DelegateSymbol
+ * 
+ * This class represents a plain symbol visible through a lock statement.
+ */
+class DelegateSymbol extends PlainSymbol {
+	ref<PlainSymbol> _delegate;
+	
+	DelegateSymbol(ref<Scope> enclosing, ref<PlainSymbol> delegate, ref<MemoryPool> pool) {
+		super(Operator.PUBLIC, StorageClass.LOCK, enclosing, null, pool, delegate.name(), null, ref<Type>(null), null);
+		_delegate = delegate;
+	}
+	
+	public ref<Type> assignThisType(ref<CompileContext> compileContext) {
+		return _delegate.assignThisType(compileContext);
+	}
+	
+	ref<PlainSymbol> delegate() {
+		return _delegate;
+	}
+}
+/*
 	PlainSymbol
 	
 	This class represents a 'plain' symbol, one that is not overloaded (i.e. neither functions nor templates).
@@ -1761,6 +1812,14 @@ class Overload extends Symbol {
 		}
 	}
 
+	public void cloneDelegates(ref<Overload> src, ref<MemoryPool> memoryPool) {
+		for (int i = 0; i < src._instances.length(); i++) {
+			ref<OverloadInstance> oi = src._instances[i];
+			ref<OverloadInstance> newOi = memoryPool.newDelegateOverload(this, oi);
+			_instances.append(newOi, memoryPool);
+		}
+	}
+	
 	public void merge(ref<Overload> unitDeclarations, ref<CompileContext> compileContext) {
 		for (int i = 0; i < unitDeclarations._instances.length(); i++) {
 			ref<OverloadInstance> s = unitDeclarations._instances[i];
@@ -1790,6 +1849,34 @@ class Overload extends Symbol {
 
 	public ref<ref<OverloadInstance>[]> instances() {
 		return &_instances;
+	}
+}
+
+class DelegateOverload extends OverloadInstance {
+	ref<OverloadInstance> _delegate;
+	
+	DelegateOverload(ref<Scope> enclosing, ref<OverloadInstance> delegate, ref<MemoryPool> pool) {
+		super(Operator.UNIT, false, enclosing, null, pool, delegate.name(), null, delegate.parameterScope());
+		_delegate = delegate;
+	}
+	
+	public ref<Type> assignType(ref<CompileContext> compileContext) {
+		if (_type == null)
+			_type = _delegate.assignType(compileContext);
+		return _type;
+	}
+
+	public int parameterCount() {
+		return _delegate.parameterCount();
+	}
+
+	public void print(int indent, boolean printChildScopes) {
+		printf("%*.*c%s DelegateOverload %p ", indent, indent, ' ', _delegate.name().asString(), this);
+		printf("\n");
+	}
+
+	public ref<OverloadInstance> delegate() {
+		return _delegate;
 	}
 }
 

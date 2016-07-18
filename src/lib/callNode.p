@@ -1215,15 +1215,7 @@ class Function extends ParameterBag {
 		Test t = body.fallsThrough();
 		if (t == Test.PASS_TEST) {
 			ref<Block> b = ref<Block>(body);
-			if (b.statements() != null) {
-				for (ref<NodeList> nl = b.statements(); ; nl = nl.next) {
-					if (nl.next == null) {
-						nl.node.add(MessageId.RETURN_VALUE_REQUIRED, compileContext.pool());
-						break;
-					}
-				}
-			} else
-				b.add(MessageId.RETURN_VALUE_REQUIRED, compileContext.pool());
+			body.endOfBlockStatement(body.scope.file().tree()).add(MessageId.RETURN_VALUE_REQUIRED, compileContext.pool());
 		}
 	}
 }

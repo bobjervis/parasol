@@ -499,6 +499,8 @@ class Block extends Node {
 				ref<Unary> expression = ref<Unary>(nl.node);
 				ref<Node> monitorName = expression.operand();
 				ref<Variable> temp = compileContext.newVariable(compileContext.arena().builtInType(TypeFamily.ADDRESS));
+				ref<LockScope> lockScope = ref<LockScope>(scope);
+				lockScope.lockTemp = temp;
 				ref<Node> defn = tree.newReference(temp, true, expression.location());
 				ref<Node> adr = tree.newUnary(Operator.ADDRESS, monitorName, monitorName.location());
 				adr.type = defn.type;
@@ -607,6 +609,14 @@ class Block extends Node {
 		}
 	}
 
+	public ref<Node> endOfBlockStatement(ref<SyntaxTree> tree) {
+		if (_last == null || _last.node.location().compare(closeCurlyLocation) != 0) {
+			ref<Node> eob = tree.newLeaf(Operator.EMPTY, closeCurlyLocation);
+			statement(tree.newNodeList(eob));
+		}
+		return _last.node;
+	}
+	
 	public ref<NodeList> statements() {
 		return _statements; 
 	}
