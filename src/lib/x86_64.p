@@ -1304,6 +1304,7 @@ public class X86_64 extends X86_64AssignTemps {
 					node.print(0);
 					assert(false);
 				case	TYPEDEF:
+				case	CLASS_VARIABLE:
 				case	UNSIGNED_8:
 				case	UNSIGNED_16:
 				case	SIGNED_16:
@@ -2593,6 +2594,15 @@ public class X86_64 extends X86_64AssignTemps {
 			generate(node, compileContext);
 			inst(X86.CMP, node, 0, compileContext);
 			closeCodeSegment(CC.JE, falseSegment);
+			break;
+			
+		case	SEQUENCE:
+			b = ref<Binary>(node);
+			generate(b.left(), compileContext);
+			generate(b.right(), compileContext);
+			f().r.generateSpills(b, this);
+			inst(X86.CMP, b.right(), 0, compileContext);
+			generateConditionalJump(Operator.NOT_EQUAL, b.right().type, trueSegment, falseSegment, compileContext);
 			break;
 			
 		case	DOT:

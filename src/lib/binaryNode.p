@@ -602,6 +602,7 @@ class Binary extends Node {
 		case	NOT_LESS_GREATER:
 			switch (_left.type.family()) {
 			case	TYPEDEF:
+			case	CLASS_VARIABLE:
 				ref<Symbol> typeType = compileContext.arena().getSymbol("parasol", "compiler.Type", compileContext);
 				if (typeType == null || typeType.class != PlainSymbol) {
 					print(0);
@@ -885,6 +886,7 @@ class Binary extends Node {
 			case	ADDRESS:
 			case	FUNCTION:
 			case	TYPEDEF:
+			case	CLASS_VARIABLE:
 			case	REF:
 			case	POINTER:
 				break;
@@ -1987,6 +1989,7 @@ class Binary extends Node {
 			case	VAR:
 			case	POINTER:
 			case	STRING:
+			case	CLASS_VARIABLE:
 			case	TYPEDEF:
 				type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
 				break;
@@ -2005,6 +2008,7 @@ class Binary extends Node {
 			switch (_left.type.family()) {
 			case	FLOAT_32:
 			case	FLOAT_64:
+			case	CLASS_VARIABLE:
 			case	TYPEDEF:
 				type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
 				break;

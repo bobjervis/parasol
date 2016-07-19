@@ -92,6 +92,10 @@ class LockScope extends Scope {
 		}
 		return null;
 	}
+
+	void printDetails() {
+		printf(" lockTemp %p", lockTemp);
+	}
 }
 
 class ClasslikeScope extends Scope {
@@ -561,7 +565,8 @@ class ParameterScope extends Scope {
 		if (func == null)		// a generated default constructor has no 'definition'
 			return true;		// but it does have 'this'
 		if (func.name() != null && func.name().symbol() != null)
-			return func.name().symbol().storageClass() == StorageClass.MEMBER;
+			return func.name().symbol().storageClass() == StorageClass.MEMBER || 
+				   func.name().symbol().storageClass() == StorageClass.MONITOR;
 		else
 			return false;
 	}
@@ -879,6 +884,7 @@ class Scope {
 				printf(" %s", string(_definition.op()));
 			}
 		}
+		printDetails();
 		printf(":\n");
 		for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
 			ref<Symbol> sym = i.get();
@@ -932,7 +938,9 @@ class Scope {
 		_printed = true;
 	}
 
-
+	void printDetails() {
+	}
+	
 	string label() {
 		if (_definition != null) {
 			switch (_definition.op()) {

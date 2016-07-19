@@ -595,6 +595,12 @@ class X86_64AddressModes extends X86_64Encoder {
 			markAddressModes(node, compileContext);
 			break;
 
+		case	SEQUENCE:
+			b = ref<Binary>(node);
+			markAddressModes(b.left(), compileContext);
+			markConditionalAddressModes(b.right(), compileContext);
+			break;			
+
 		case	DOT:
 			tryMakeMode(node, MC_FULL, nClass, compileContext);
 		case	IDENTIFIER:

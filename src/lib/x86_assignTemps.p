@@ -271,6 +271,12 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			assignConditionCode(b.right(), compileContext);
 			break;
 			
+		case	SEQUENCE:
+			b = ref<Binary>(node);
+			assignVoidContext(b.left(), compileContext);
+			assignRegisterTemp(b.right(), longMask, compileContext);
+			break;
+			
 		case	NOT:
 			ref<Unary> u = ref<Unary>(node);
 			assignConditionCode(u.operand(), compileContext);

@@ -57,7 +57,8 @@ class Call extends ParameterBag {
 			_category = category;
 		else if (overload == null)
 			_category = CallCategory.ERROR;
-		else if (overload.enclosing().storageClass() == StorageClass.MEMBER)
+		else if (overload.enclosing().storageClass() == StorageClass.MEMBER || 
+				 overload.enclosing().storageClass() == StorageClass.LOCK)
 			_category = CallCategory.METHOD_CALL;
 		else
 			_category = CallCategory.FUNCTION_CALL;
@@ -650,11 +651,12 @@ class Call extends ParameterBag {
 				_category = CallCategory.FUNCTION_CALL;
 				ref<Symbol> symbol = _target.symbol();
 				if (symbol != null) {
-					if (symbol.class != OverloadInstance)
+					if (symbol.class !<= OverloadInstance)
 						symbol = null;
 					else {
 						_overload = ref<OverloadInstance>(symbol).parameterScope();
-						if (symbol.storageClass() == StorageClass.MEMBER)
+						if (symbol.storageClass() == StorageClass.MEMBER || 
+							symbol.storageClass() == StorageClass.LOCK)
 							_category = CallCategory.METHOD_CALL;
 					}
 				}

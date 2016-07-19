@@ -1959,6 +1959,7 @@ class X86_64Encoder extends Target {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	CLASS_VARIABLE:
 				emitRex(left.type.family(), left, right, R.NO_REG);
 				emit(byte(opcodes[instruction] + 0x01));
 				modRM(left, rmValues[right], 0, 0);
@@ -2203,6 +2204,7 @@ class X86_64Encoder extends Target {
 			case	ENUM:
 			case	VAR:
 			case	TYPEDEF:
+			case	CLASS_VARIABLE:
 				emitRex(right.type.family(), right, left, R.NO_REG);
 				emit(byte(opcodes[instruction] + 0x03));
 				modRM(right, rmValues[left], 0, 0);
@@ -3973,6 +3975,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		switch (type.family()) {
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JNA;
+		case	CLASS_VARIABLE:
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JLE; 
 		case	FLOAT_32:

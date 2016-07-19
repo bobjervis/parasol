@@ -21,7 +21,7 @@ monitor a {
 	
 	ref<Atom> readOne() {
 		if (list != null) {
-			reef<Atom> p = list;
+			ref<Atom> p = list;
 			list = p.next;
 			return p;
 		} else
@@ -70,7 +70,11 @@ void reader(address parameter) {
 	int misses;
 	
 	for (int i = 0; i < 10; ) {
-		ref<Atom> p = a.readOne();
+		ref<Atom> p;
+	
+		lock(a) {
+			p = readOne();
+		}
 		if (p != null) {
 			sum += p.value;
 			printf("%d ", p.value);
@@ -87,7 +91,9 @@ void reader(address parameter) {
 void writer(address parameter) {
 	for (int i = 0; i < 10; i++) {
 		ref<Atom> p = new Atom(i + 13);
-		writeOne(p);
+		lock(a) {
+			writeOne(p);
+		}
 		printf("[%d] ", i + 13);
 	}
 }

@@ -159,3 +159,137 @@ assert(D1 !<>= D2);
 assert(Base !<>= int);
 if (Base !<>= D1)
 	assert(false);
+
+Base b;
+D1 d1;
+D2 d2;
+D3 d3;
+
+ref<Base> pb = &b;
+ref<Base> pd1 = &d1;
+ref<Base> pd2 = &d2;
+ref<Base> pd3 = &d3;
+
+assert(Base > D1);
+assert(Base > D2);
+assert(Base > D3);
+assert(D2 > D3);
+if (D1 > D2)
+	assert(false);
+if (D1 > Base)
+	assert(false);
+
+assert(D1 < Base);
+assert(D2 < Base);
+assert(D2 < Base);
+assert(D3 < D2);
+if (D1 < D2)
+	assert(false);
+if (Base < D1)
+	assert(false);
+
+assert(Base >= Base);
+assert(D1 >= D1);
+assert(D2 >= D2);
+assert(D3 >= D3);
+assert(Base >= D1);
+assert(Base >= D2);
+assert(Base >= D3);
+assert(D2 >= D3);
+if (D1 >= D2)
+	assert(false);
+if (D2 >= Base)
+	assert(false);
+
+assert(Base <= Base);
+assert(D1 <= D1);
+assert(D2 <= D2);
+assert(D3 <= D3);
+assert(D1 <= Base);
+assert(D2 <= Base);
+assert(D2 <= Base);
+assert(D3 <= D2);
+if (D1 <= D2)
+	assert(false);
+
+assert(Base == Base);
+assert(D1 == D1);
+assert(D2 == D2);
+assert(D3 == D3);
+if (D1 == D2)
+	assert(false);
+
+assert(Base <> D1);
+assert(Base <> D2);
+assert(Base <> D3);
+assert(D1 <> Base);
+assert(D2 <> Base);
+assert(D3 <> Base);
+assert(D2 <> D3);
+assert(D3 <> D2);
+if (D1 <> D2)
+	assert(false);
+
+assert(Base <>= Base);
+assert(D1 <>= D1);
+assert(D2 <>= D2);
+assert(D2 <>= Base);
+assert(Base <>= D2);
+assert(D3 <>= D3);
+assert(Base <>= D1);
+assert(Base <>= D2);
+assert(Base <>= D3);
+assert(D1 <>= Base);
+assert(D2 <>= Base);
+assert(D3 <>= Base);
+assert(D2 <>= D3);
+assert(D3 <>= D2);
+if (D1 <>= D2)
+	assert(false);
+
+assert(D1 !> D2);
+assert(Base !> Base);
+assert(D3 !> Base);
+if (Base !> D1)
+	assert(false);
+
+assert(D2 !< D1);
+assert(D3 !< D3);
+assert(D2 !< D3);
+assert(Base !< D2);
+if (D1 !< Base)
+	assert(false);
+
+assert(D1 !>= D2);
+assert(D3 !>= Base);
+if (D1 !>= D1)
+	assert(false);
+if (Base !>= D1)
+	assert(false);
+
+assert(pd2.class !<= D1);
+assert(pd2.class !<= D3);
+assert(pb.class !<= D2);
+if (pb.class !<= Base)
+	assert(false);
+if (pd1.class !<= Base)
+	assert(false);
+
+assert(D1 != D2);
+assert(Base != D3);
+if (Base != Base)
+	assert(false);
+
+assert(D1 !<> D2);
+assert(Base !<> int);
+assert(Base !<> Base);
+if (Base !<> D1)
+	assert(false);
+if (D1 !<> Base)
+	assert(false);
+
+assert(D1 !<>= D2);
+assert(Base !<>= int);
+if (Base !<>= D1)
+	assert(false);
+
