@@ -99,7 +99,6 @@ class LockScope extends Scope {
 }
 
 class ClasslikeScope extends Scope {
-
 	public ref<ClassType> classType;
 	private ref<OverloadInstance>[] _methods;
 	protected ref<Symbol>[] _members;

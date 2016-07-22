@@ -106,6 +106,9 @@ public class X86_64 extends X86_64AssignTemps {
 	private ref<OverloadInstance> _varCopyConstructor;
 	private ref<ParameterScope> _memset;
 	private ref<ParameterScope> _memcpy;
+	private ref<ParameterScope> _takeMethod;
+	private ref<ParameterScope> _releaseMethod;
+	
 	private ref<Symbol> _floatSignMask;
 	private ref<Symbol> _floatOne;
 	private ref<Symbol> _doubleSignMask;
@@ -370,7 +373,7 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.MOV, TypeFamily.ADDRESS, R.RSI, R.RCX);
 				generateConstructorPreamble(null, parameterScope, compileContext);
 				inst(X86.POP, TypeFamily.SIGNED_64, R.RSI);
-				if (!generateReturn(scope, compileContext))
+				if (!generateReturn(parameterScope, compileContext))
 					assert(false);
 				break;
 				
@@ -381,7 +384,7 @@ public class X86_64 extends X86_64AssignTemps {
 					generateDestructorShutdown(parameterScope, compileContext);
 					inst(X86.POP, TypeFamily.SIGNED_64, R.RSI);
 				}
-				if (!generateReturn(scope, compileContext))
+				if (!generateReturn(parameterScope, compileContext))
 					assert(false);
 				break;
 				
@@ -414,7 +417,7 @@ public class X86_64 extends X86_64AssignTemps {
 				nullCase.start(this);
 				inst(X86.XOR, TypeFamily.ADDRESS, R.RAX, R.RAX);
 				join.start(this);
-				if (!generateReturn(scope, compileContext))
+				if (!generateReturn(parameterScope, compileContext))
 					assert(false);
 				break;
 				
@@ -446,8 +449,10 @@ public class X86_64 extends X86_64AssignTemps {
 				
 				// All function/method body folding is done here:
 				
+				if (verbose()) {
+					printf("=====  folding %s:%s  =========\n", file.filename(), func.name() != null ? func.name().identifier().asString() : "<anonymous>");
+				}
 				node = ref<Block>(compileContext.fold(node, file));
-				
 				allocateStackForLocalVariables(compileContext);
 				
 				if (func.functionCategory() == Function.Category.CONSTRUCTOR)
@@ -491,9 +496,13 @@ public class X86_64 extends X86_64AssignTemps {
 				}
 			}
 			reserveAutoMemory(false, compileContext);
+			if (parameterScope.enclosing().storageClass() == StorageClass.MONITOR) {
+				inst(X86.MOV, TypeFamily.ADDRESS, R.RCX, R.RSI);
+				instCall(takeMethod(compileContext), compileContext);
+			}
 			closeCodeSegment(CC.NOP, null);
 			if (node.fallsThrough() == Test.PASS_TEST) {
-				if (!generateReturn(scope, compileContext)) {
+				if (!generateReturn(parameterScope, compileContext)) {
 					node.print(0);
 					assert(false);
 				}
@@ -617,7 +626,7 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.POP, TypeFamily.SIGNED_64, R.RSI);
 			inst(X86.POP, TypeFamily.SIGNED_64, R.RBX);
 			inst(X86.LEAVE);
-			if (!generateReturn(scope, compileContext))
+			if (!generateReturn(parameterScope, compileContext))
 				unfinished(node, "generateReturn failed - default end-of-static block", compileContext);
 			handler.start(this);
 			inst(X86.LEA, R.RSP, R.RBP, -(f().autoSize + 8 * address.bytes));
@@ -3674,6 +3683,19 @@ public class X86_64 extends X86_64AssignTemps {
 				return true;
 			}
 			ref<ParameterScope> parameterScope = ref<ParameterScope>(scope);
+			if (parameterScope.enclosing().storageClass() == StorageClass.MONITOR) {
+				boolean returnRegisterBusy = functionType.returnCount() == 1 && 
+						!functionType.returnValueType().returnsViaOutParameter(compileContext);
+
+				if (returnRegisterBusy)
+					pushRegister(functionType.returnValueType().family(), 
+							functionType.returnValueType().isFloat() ? R.XMM0 : R.RAX);
+				inst(X86.MOV, TypeFamily.ADDRESS, R.RCX, R.RSI);
+				instCall(releaseMethod(compileContext), compileContext);
+				if (returnRegisterBusy)
+					popRegister(functionType.returnValueType().family(), 
+							functionType.returnValueType().isFloat() ? R.XMM0 : R.RAX);
+			}
 			if (parameterScope.hasThis())
 				inst(X86.MOV, R.RSI, R.RBP, -address.bytes);
 			inst(X86.LEAVE);
@@ -3859,6 +3881,52 @@ public class X86_64 extends X86_64AssignTemps {
 				instCall(_memset, compileContext);
 			}
 		}
+	}
+	
+	private ref<ParameterScope> takeMethod(ref<CompileContext> compileContext) {
+		if (_takeMethod == null) {
+			ref<Type> m = compileContext.monitorClass();
+			CompileString cs("take");
+			ref<Symbol> take = m.scope().lookup(&cs, compileContext);
+			if (take == null || take.class != Overload) {
+				printf("Could not find appropriate 'take' method.\n");
+				assert(false);
+			}
+			ref<Overload> o = ref<Overload>(take);
+			if (o.instances().length() != 1) {
+				printf("Could not find appropriate 'take' method.\n");
+				assert(false);
+			}
+			if ((*o.instances())[0].parameterCount() != 0) {
+				printf("Could not find appropriate 'take' method.\n");
+				assert(false);
+			}
+			_takeMethod = (*o.instances())[0].parameterScope();
+		}
+		return _takeMethod;
+	}
+	
+	private ref<ParameterScope> releaseMethod(ref<CompileContext> compileContext) {
+		if (_releaseMethod == null) {
+			ref<Type> m = compileContext.monitorClass();
+			CompileString cs("release");
+			ref<Symbol> release = m.scope().lookup(&cs, compileContext);
+			if (release == null || release.class != Overload) {
+				printf("Could not find appropriate 'release' method.\n");
+				assert(false);
+			}
+			ref<Overload> o = ref<Overload>(release);
+			if (o.instances().length() != 1) {
+				printf("Could not find appropriate 'release' method.\n");
+				assert(false);
+			}
+			if ((*o.instances())[0].parameterCount() != 0) {
+				printf("Could not find appropriate 'release' method.\n");
+				assert(false);
+			}
+			_releaseMethod = (*o.instances())[0].parameterScope();
+		}
+		return _releaseMethod;
 	}
 }
 

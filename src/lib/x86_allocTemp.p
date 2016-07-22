@@ -400,34 +400,7 @@ class RegisterState {
 				return;
 			switch (_spills.spillKind) {
 			case	PUSH:
-				switch (_spills.affected.type.family()) {
-				case	UNSIGNED_8:
-				case	UNSIGNED_16:
-				case	UNSIGNED_32:
-				case	SIGNED_32:
-				case	SIGNED_64:
-				case	STRING:
-				case	ENUM:
-				case	ADDRESS:
-				case	REF:
-				case	POINTER:
-				case	CLASS:
-				case	BOOLEAN:
-				case	VOID:
-					target.inst(X86.PUSH, TypeFamily.SIGNED_64, R(_spills.affected.register));
-					break;
-					
-				case	FLOAT_32:
-					target.inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, 8);
-					target.inst(X86.MOVSS, TypeFamily.SIGNED_32, R.RSP, 0, R(_spills.affected.register));
-					break;
-					
-				case	FLOAT_64:
-					target.inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, 8);
-					target.inst(X86.MOVSD, TypeFamily.SIGNED_64, R.RSP, 0, R(_spills.affected.register));
-					break;
-					
-				default:
+				if (!target.pushRegister(_spills.affected.type.family(), R(_spills.affected.register))) {
 					_spills.print();
 					printf("Push: ");
 					_spills.affected.type.print();
@@ -474,34 +447,7 @@ class RegisterState {
 				break;
 				
 			case	POP:
-				switch (_spills.affected.type.family()) {
-				case	UNSIGNED_8:
-				case	UNSIGNED_16:
-				case	UNSIGNED_32:
-				case	SIGNED_32:
-				case	SIGNED_64:
-				case	STRING:
-				case	ENUM:
-				case	ADDRESS:
-				case	REF:
-				case	POINTER:
-				case	CLASS:
-				case	BOOLEAN:
-				case	VOID:
-					target.inst(X86.POP, TypeFamily.SIGNED_64, _spills.newRegister);
-					break;
-					
-				case	FLOAT_32:
-					target.inst(X86.MOVSS, TypeFamily.SIGNED_32, _spills.newRegister, R.RSP, 0);
-					target.inst(X86.ADD, TypeFamily.SIGNED_64, R.RSP, 8);
-					break;
-					
-				case	FLOAT_64:
-					target.inst(X86.MOVSD, TypeFamily.SIGNED_64, _spills.newRegister, R.RSP, 0);
-					target.inst(X86.ADD, TypeFamily.SIGNED_64, R.RSP, 8);
-					break;
-					
-				default:
+				if (!target.popRegister(_spills.affected.type.family(), _spills.newRegister)) {
 					_spills.print();
 					printf("Pop: ");
 					_spills.affected.type.print();

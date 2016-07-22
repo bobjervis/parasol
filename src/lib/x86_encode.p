@@ -1020,6 +1020,73 @@ class X86_64Encoder extends Target {
 		}
 	}
 	
+	boolean pushRegister(TypeFamily family, R reg) {
+		switch (family) {
+		case	UNSIGNED_8:
+		case	UNSIGNED_16:
+		case	UNSIGNED_32:
+		case	SIGNED_32:
+		case	SIGNED_64:
+		case	STRING:
+		case	ENUM:
+		case	ADDRESS:
+		case	REF:
+		case	POINTER:
+		case	CLASS:
+		case	BOOLEAN:
+		case	VOID:
+			inst(X86.PUSH, TypeFamily.SIGNED_64, reg);
+			break;
+			
+		case	FLOAT_32:
+			inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, 8);
+			inst(X86.MOVSS, TypeFamily.SIGNED_32, R.RSP, 0, reg);
+			break;
+			
+		case	FLOAT_64:
+			inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, 8);
+			inst(X86.MOVSD, TypeFamily.SIGNED_64, R.RSP, 0, reg);
+			break;
+			
+		default:
+			return false;
+		}
+		return true;
+	}
+	
+	boolean popRegister(TypeFamily family, R reg) {
+		switch (family) {
+		case	UNSIGNED_8:
+		case	UNSIGNED_16:
+		case	UNSIGNED_32:
+		case	SIGNED_32:
+		case	SIGNED_64:
+		case	STRING:
+		case	ENUM:
+		case	ADDRESS:
+		case	REF:
+		case	POINTER:
+		case	CLASS:
+		case	BOOLEAN:
+		case	VOID:
+			inst(X86.POP, TypeFamily.SIGNED_64, reg);
+			break;
+			
+		case	FLOAT_32:
+			inst(X86.MOVSS, TypeFamily.SIGNED_32, reg, R.RSP, 0);
+			inst(X86.ADD, TypeFamily.SIGNED_64, R.RSP, 8);
+			break;
+			
+		case	FLOAT_64:
+			inst(X86.MOVSD, TypeFamily.SIGNED_64, reg, R.RSP, 0);
+			inst(X86.ADD, TypeFamily.SIGNED_64, R.RSP, 8);
+			break;
+			
+		default:
+			return false;
+		}
+		return true;
+	}
 	/*
 	 */
 	void inst(X86 instruction, TypeFamily family, R dest, long operand) {
