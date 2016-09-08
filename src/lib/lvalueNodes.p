@@ -196,23 +196,32 @@ class Identifier extends Node {
 	}
 
 	public void markupDeclarator(ref<Type> t, boolean needsDefaultConstructor, ref<CompileContext> compileContext) {
-		if (_symbol != null) {
-			if (!_symbol.bindType(t, compileContext)) {
-				add(MessageId.UNFINISHED_MARKUP_DECLARATOR, compileContext.pool(), CompileString("  "/*this.class.name()*/), CompileString(string(op())));
-				type = compileContext.errorType();
-				return;
+		if (type == null) {
+			if (_symbol != null) {
+				if (!_symbol.bindType(t, compileContext)) {
+					printf("bindType failed for %s\n", t == null ? "<null>" : t.signature());
+					_symbol.print(0, false);
+					assert(false);
+					add(MessageId.UNFINISHED_MARKUP_DECLARATOR, compileContext.pool(), CompileString("  "/*this.class.name()*/), CompileString(string(op())));
+					type = compileContext.errorType();
+					return;
+				}
+				assignTypes(compileContext);
+				if (needsDefaultConstructor && t.hasConstructors()) {
+					if (!t.hasDefaultConstructor()) {
+//						printf("case 1: %s\n", t.signature());
+						add(MessageId.NO_DEFAULT_CONSTRUCTOR, compileContext.pool());
+					}
+				}
+				type = t;
 			}
-			assignTypes(compileContext);
-			if (needsDefaultConstructor && t.hasConstructors()) {
-				if (t.defaultConstructor() == null)
-					add(MessageId.NO_DEFAULT_CONSTRUCTOR, compileContext.pool());
-			}
-			type = t;
 		}
 	}
 
 	public void assignOverload(ref<NodeList> arguments, Operator kind, ref<CompileContext> compileContext) {
 		(type, _symbol) = compileContext.current().assignOverload(this, _value, arguments, kind, compileContext);
+		if (_symbol != null)
+			_symbol.markAsReferenced(compileContext);
 	}
 
 	public ref<Symbol> symbol() {
@@ -274,10 +283,9 @@ class Identifier extends Node {
 
 	ref<ClassScope> bindClassName(ref<Scope> enclosing, ref<Class> body, ref<CompileContext> compileContext) {
 		_definition = true;
-		ref<ClassScope> classScope = compileContext.createClassScope(body, this);
 		_symbol = enclosing.define(compileContext.visibility, StorageClass.STATIC, compileContext.annotations, this, body, body, compileContext.pool());
 		if (_symbol != null) {
-			classScope.classType = compileContext.pool().newClassType(body, classScope);
+			ref<ClassScope> classScope = ref<ClassScope>(body.scope);
 			ref<Type> t = compileContext.makeTypedef(classScope.classType);
 			_symbol.bindType(t, compileContext);
 			return classScope;
@@ -406,6 +414,7 @@ class Identifier extends Node {
 					type = _symbol.assignType(compileContext);
 					if (type == null)
 						type = compileContext.errorType();
+					_symbol.markAsReferenced(compileContext);
 					return;
 				}
 				available = available.base(compileContext);
@@ -552,6 +561,8 @@ class Selection extends Node {
 				return;
 			if (operation.anyPotentialOverloads()) {
 				(type, _symbol) = operation.result();
+				if (_symbol != null)
+					_symbol.markAsReferenced(compileContext);
 				return;
 			}
 			t = _left.type.indirectType(compileContext);
@@ -563,6 +574,8 @@ class Selection extends Node {
 					return;
 			}
 			(type, _symbol) = operation.result();
+			if (_symbol != null)
+				_symbol.markAsReferenced(compileContext);
 		}
 	}
 
@@ -653,6 +666,7 @@ class Selection extends Node {
 			type = _left.type;
 			return;
 		}
+		
 		ref<Type> t;
 		switch (_left.type.family()) {
 		case	VAR:
@@ -701,6 +715,7 @@ class Selection extends Node {
 				if (o.instances().length() == 1) {
 					_symbol = (*o.instances())[0];
 					type = _symbol.assignType(compileContext);
+					_symbol.markAsReferenced(compileContext);
 				} else {
 					add(MessageId.AMBIGUOUS_REFERENCE, compileContext.pool());
 					type = compileContext.errorType();
@@ -713,7 +728,7 @@ class Selection extends Node {
 				return true;
 			}
 			type = sym.assignType(compileContext);
-			if (sym.storageClass() == StorageClass.MONITOR) {
+			if (sym.enclosing().isMonitor()) {
 				add(MessageId.BAD_MONITOR_REF, compileContext.pool(), _name);
 			}
 			_symbol = sym;

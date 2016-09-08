@@ -36,7 +36,7 @@ import parasol:compiler.EllipsisArguments;
 import parasol:compiler.FileStat;
 import parasol:compiler.FlagsInstanceType;
 import parasol:compiler.For;
-import parasol:compiler.Function;
+import parasol:compiler.FunctionDeclaration;
 import parasol:compiler.FunctionType;
 import parasol:compiler.GatherCasesClosure;
 import parasol:compiler.Identifier;
@@ -259,7 +259,7 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 
 	public ref<ParameterScope>, boolean getFunctionAddress(ref<ParameterScope> functionScope, ref<CompileContext> compileContext) {
-		ref<Function> func = ref<Function>(functionScope.definition());
+		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(functionScope.definition());
 		if (func == null) {
 			if (functionScope.value == null) {
 				functionScope.value = address(-1);
@@ -268,13 +268,13 @@ public class X86_64 extends X86_64AssignTemps {
 			return functionScope, false;
 		}
 		if (functionScope.value != null) {
-			if (func.functionCategory() == Function.Category.ABSTRACT &&
+			if (func.functionCategory() == FunctionDeclaration.Category.ABSTRACT &&
 				functionScope.enclosing().storageClass() == StorageClass.STATIC)
 				return functionScope, true;
 			else
 				return functionScope, false;
 		} else {
-			if (func.functionCategory() == Function.Category.ABSTRACT) {
+			if (func.functionCategory() == FunctionDeclaration.Category.ABSTRACT) {
 				if (functionScope.enclosing().storageClass() == StorageClass.STATIC) {
 					ref<Symbol> fsym = func.name().symbol();
 					ref<Call> binding = fsym.getAnnotation("Windows");
@@ -365,7 +365,7 @@ public class X86_64 extends X86_64AssignTemps {
 		ref<Block> node;
 		ref<ParameterScope> parameterScope = ref<ParameterScope>(scope);
 
-		ref<Function> func = ref<Function>(scope.definition());
+		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(scope.definition());
 		if (func == null) {
 			switch (parameterScope.kind()) {
 			case	DEFAULT_CONSTRUCTOR:
@@ -440,8 +440,9 @@ public class X86_64 extends X86_64AssignTemps {
 				// For template functions, this assigns any missing types info:
 				
 				if (node.type == null) {
-					parameterScope.assignTypesForAuto(compileContext);
+					compileContext.assignTypes(parameterScope, node);
 					if (node.type == null) {
+						parameterScope.printStatus();
 						node.print(0);
 						assert(false);
 					}
@@ -455,7 +456,7 @@ public class X86_64 extends X86_64AssignTemps {
 				node = ref<Block>(compileContext.fold(node, file));
 				allocateStackForLocalVariables(compileContext);
 				
-				if (func.functionCategory() == Function.Category.CONSTRUCTOR)
+				if (func.functionCategory() == FunctionDeclaration.Category.CONSTRUCTOR)
 					generateConstructorPreamble(node, parameterScope, compileContext);
 
 				ref<Scope> outer = compileContext.setCurrent(scope);
@@ -463,7 +464,7 @@ public class X86_64 extends X86_64AssignTemps {
 				compileContext.setCurrent(outer);
 				compileContext.resetVariables(initialVariableCount);
 				_stackLocalVariables = initialVariableCount;
-				if (func.functionCategory() == Function.Category.DESTRUCTOR)
+				if (func.functionCategory() == FunctionDeclaration.Category.DESTRUCTOR)
 					generateDestructorShutdown(parameterScope, compileContext);
 			}
 			closeCodeSegment(CC.NOP, null);
@@ -496,7 +497,7 @@ public class X86_64 extends X86_64AssignTemps {
 				}
 			}
 			reserveAutoMemory(false, compileContext);
-			if (parameterScope.enclosing().storageClass() == StorageClass.MONITOR) {
+			if (parameterScope.enclosing().isMonitor()) {
 				inst(X86.MOV, TypeFamily.ADDRESS, R.RCX, R.RSI);
 				instCall(takeMethod(compileContext), compileContext);
 			}
@@ -517,18 +518,6 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.PUSH, TypeFamily.SIGNED_64, R.R14);
 			inst(X86.PUSH, TypeFamily.SIGNED_64, R.R15);
 			inst(X86.PUSH, TypeFamily.SIGNED_64, R.RCX);
-			ref<Symbol> re = compileContext.arena().getSymbol("parasol", "exception.registerHardwareExceptionHandler", compileContext);
-			if (re == null || re.class != Overload)
-				assert(false);
-			ref<Overload> o = ref<Overload>(re);
-			ref<ParameterScope> registerHardwareExceptionHandler = ref<ParameterScope>((*o.instances())[0].type().scope());
-			re = compileContext.arena().getSymbol("parasol", "exception.hardwareExceptionHandler", compileContext);
-			if (re == null || re.class != Overload)
-				assert(false);
-			o = ref<Overload>(re);
-			ref<ParameterScope> hardwareExceptionHandler = ref<ParameterScope>((*o.instances())[0].type().scope());
-			instLoadFunctionAddress(R.RCX, hardwareExceptionHandler, compileContext);
-			instCall(registerHardwareExceptionHandler, compileContext);
 			ref<CodeSegment> handler = _storage new CodeSegment;
 			pushExceptionHandler(handler);
 			_arena.clearStaticInitializers();
@@ -545,13 +534,6 @@ public class X86_64 extends X86_64AssignTemps {
 			if (_arena.verbose)
 				printf("Static initializers:\n");
 //			printf("staticBlocks %d\n", staticBlocks().length());
-			// Generate the default constructor calls.
-			for (int i = 0; i < staticBlocks().length(); i++) {
-				ref<FileStat> file = (*staticBlocks())[i];
-				if (_arena.verbose)
-					printf("   cnstructors for %s\n", file.filename());
-				generateDefaultConstructors(file.fileScope(), compileContext);
-			}
 			int initialVariableCount = compileContext.variableCount();
 			for (int i = 0; i < staticBlocks().length(); i++) {
 				ref<FileStat> file = (*staticBlocks())[i];
@@ -630,6 +612,8 @@ public class X86_64 extends X86_64AssignTemps {
 				unfinished(node, "generateReturn failed - default end-of-static block", compileContext);
 			handler.start(this);
 			inst(X86.LEA, R.RSP, R.RBP, -(f().autoSize + 8 * address.bytes));
+			ref<Symbol> re;
+			ref<Overload> o;
 			re = compileContext.arena().getSymbol("parasol", "exception.uncaughtException", compileContext);
 			if (re == null || re.class != Overload)
 				assert(false);
@@ -849,7 +833,7 @@ public class X86_64 extends X86_64AssignTemps {
 		if (node.deferGeneration())
 			return;
 		if (verbose()) {
-			printf("-----  generate  ---------\n");
+			printf("-----  generate %s ---------\n", compileContext.current().sourceLocation(node.location()));
 			f().r.print();
 			node.print(4);
 		}
@@ -1185,7 +1169,7 @@ public class X86_64 extends X86_64AssignTemps {
 				}
 				if (arguments.next == null) {
 					assignSingleReturn(retn, arguments.node, compileContext);
-					ref<Function> enclosing = f().current.enclosingFunction();
+					ref<FunctionDeclaration> enclosing = f().current.enclosingFunction();
 					ref<FunctionType> functionType = ref<FunctionType>(enclosing.type);
 					ref<NodeList> returnType = functionType.returnType();
 					if (returnType.next != null || 
@@ -1278,7 +1262,7 @@ public class X86_64 extends X86_64AssignTemps {
 			break;
 			
 		case	FUNCTION:
-			ref<Function> func = ref<Function>(node);
+			ref<FunctionDeclaration> func = ref<FunctionDeclaration>(node);
 			if (func.body != null) {
 				if (func.name() == null) {
 					ref<ParameterScope> functionScope = _arena.createParameterScope(compileContext.current(), func, ParameterScope.Kind.FUNCTION);
@@ -2468,7 +2452,13 @@ public class X86_64 extends X86_64AssignTemps {
 				generateStaticInitializers(nl.node, compileContext);
 			break;
 			
-
+		case	MONITOR_DECLARATION:
+			b = ref<Binary>(node);
+			classNode = ref<Class>(b.right());
+			for (ref<NodeList> nl = classNode.statements(); nl != null; nl = nl.next)
+				generateStaticInitializers(nl.node, compileContext);
+			break;
+			
 		case	INITIALIZE:
 			b = ref<Binary>(node);
 			ref<Symbol> sym = b.left().symbol();
@@ -2716,10 +2706,8 @@ public class X86_64 extends X86_64AssignTemps {
 //		printf("generateInitializers\n");
 //		node.print(4);
 		boolean hasDefaultConstructor = false;
-		if (node.type == null) {
-			node.print(0);
-			assert(false);
-		}
+		if (node.type == null)		// static initiailizers in templates can generate this.
+			compileContext.assignTypes(node);
 		if (node.deferGeneration()) {
 			// TODO: make this generate a runtime exception
 			return;
@@ -3676,14 +3664,14 @@ public class X86_64 extends X86_64AssignTemps {
 		if (scope.definition() == null || scope.definition().op() != Operator.FUNCTION)			// in-line code
 			inst(X86.RET);
 		else {							// a function body
-			ref<Function> func = ref<Function>(scope.definition());
+			ref<FunctionDeclaration> func = ref<FunctionDeclaration>(scope.definition());
 			ref<FunctionType> functionType = ref<FunctionType>(func.type);
 			if (functionType == null) {
 				unfinished(func, "generateReturn functionType == null", compileContext);
 				return true;
 			}
 			ref<ParameterScope> parameterScope = ref<ParameterScope>(scope);
-			if (parameterScope.enclosing().storageClass() == StorageClass.MONITOR) {
+			if (parameterScope.enclosing().isMonitor()) {
 				boolean returnRegisterBusy = functionType.returnCount() == 1 && 
 						!functionType.returnValueType().returnsViaOutParameter(compileContext);
 
@@ -3734,7 +3722,7 @@ public class X86_64 extends X86_64AssignTemps {
 		ref<Type> stringType = _arena.builtInType(TypeFamily.STRING);
 		for (int i = 0; i < stringType.scope().constructors().length(); i++) {
 			ref<Scope> scope = (*stringType.scope().constructors())[i];
-			ref<Function> func = ref<Function>(scope.definition());
+			ref<FunctionDeclaration> func = ref<FunctionDeclaration>(scope.definition());
 			ref<NodeList> args = func.arguments();
 			if (args == null ||
 				args.next != null)
@@ -3747,11 +3735,15 @@ public class X86_64 extends X86_64AssignTemps {
 		ref<Type> varType = _arena.builtInType(TypeFamily.VAR);
 		for (int i = 0; i < varType.scope().constructors().length(); i++) {
 			ref<Scope> scope = (*varType.scope().constructors())[i];
-			ref<Function> func = ref<Function>(scope.definition());
+			ref<FunctionDeclaration> func = ref<FunctionDeclaration>(scope.definition());
 			ref<NodeList> args = func.arguments();
 			if (args == null ||
 				args.next != null)
 				continue;
+			if (args.node.type == null) {
+				ref<Binary> b = ref<Binary>(args.node);
+				b.type = b.left().unwrapTypedef(compileContext);
+			}
 			if (args.node.type.equals(varType)) {
 				_varCopyConstructor = ref<OverloadInstance>(func.name().symbol());
 				break;
@@ -3829,8 +3821,12 @@ public class X86_64 extends X86_64AssignTemps {
 					case	UNSIGNED_8:
 					case	UNSIGNED_16:
 					case	UNSIGNED_32:
-						if (sym.storageClass() != StorageClass.STATIC)
+					case	CLASS_VARIABLE:
+						if (sym.storageClass() != StorageClass.STATIC) {
+							if (sym.definition().type == null)
+								sym.definition().type = sym.type();		// probably caused by some error condition, patch it
 							inst(X86.MOV, sym.definition(), 0, compileContext);
+						}
 						break;
 						
 					case	TYPEDEF:

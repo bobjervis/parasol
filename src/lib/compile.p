@@ -38,6 +38,7 @@ class CompileContext {
 												// need destructor calls.
 	private int _baseLiveSymbol;				// >= 0, index of first symbol live in this function.
 	private ref<Type> _monitorClass;
+	private boolean _verbose;
 	
 	public class FlowContext {
 		private ref<FlowContext> _next;
@@ -79,9 +80,10 @@ class CompileContext {
 		}
 	}
 
-	CompileContext(ref<Arena> arena, ref<MemoryPool> pool) {
+	CompileContext(ref<Arena> arena, ref<MemoryPool> pool, boolean verbose) {
 		_arena = arena;
 		_pool = pool;
+		_verbose = verbose;
 		clearDeclarationModifiers();
 	}
 	/*
@@ -171,7 +173,7 @@ class CompileContext {
 		_current = s;
 		switch (definition.op()) {
 		case	FUNCTION:
-			ref<Function> func = ref<Function>(definition);
+			ref<FunctionDeclaration> func = ref<FunctionDeclaration>(definition);
 			boolean outer = isStatic;
 			isStatic = false;
 			for (ref<NodeList> nl = func.arguments(); nl != null; nl = nl.next) {
@@ -436,6 +438,10 @@ class CompileContext {
 			return TraverseAction.SKIP_CHILDREN;
 
 		case	SCOPED_FOR:
+			ref<For> fr = ref<For>(n);
+			fr.scope = createScope(n, StorageClass.AUTO);
+			return TraverseAction.SKIP_CHILDREN;
+			
 		case	LOOP:
 			createScope(n, StorageClass.AUTO);
 			return TraverseAction.SKIP_CHILDREN;
@@ -456,6 +462,7 @@ class CompileContext {
 		case	CLASS:
 			ref<Class> c = ref<Class>(n);
 			ref<ClassScope> classScope = createClassScope(n, null);
+			c.scope = classScope;
 			classScope.classType = _pool.newClassType(c, classScope);
 			return TraverseAction.SKIP_CHILDREN;
 		
@@ -467,6 +474,9 @@ class CompileContext {
 				id.bindTemplateOverload(visibility, isStatic, annotations, _current, t, this);
 			} else {
 				ref<Class> c = ref<Class>(b.right());
+				ref<ClassScope> classScope = createClassScope(c, id);
+				c.scope = classScope;
+				classScope.classType = _pool.newClassType(c, classScope);
 				id.bindClassName(_current, c, this);
 			}
 			return TraverseAction.SKIP_CHILDREN;
@@ -496,12 +506,12 @@ class CompileContext {
 				// By making the type of the 'monitor' node itself, when we get to running assignType later on,
 				// it will all just work out fine (hopefully). Since the node will have a type, there won't be any
 				// need to do further analysis. 
-				n.type = classScope.classType;
+				c.type = classScope.classType;
 			}
 			return TraverseAction.SKIP_CHILDREN;
 			
 		case	FUNCTION:
-			ref<Function> f = ref<Function>(n);
+			ref<FunctionDeclaration> f = ref<FunctionDeclaration>(n);
 			ParameterScope.Kind funcKind;
 		
 			ref<ParameterScope> functionScope = createParameterScope(f, ParameterScope.Kind.FUNCTION);
@@ -646,23 +656,67 @@ class CompileContext {
 	public void assignTypes() {
 		for (int i = 0; i < _arena.scopes().length(); i++) {
 			_current = (*_arena.scopes())[i];
-			if (_current.definition() != null && !_current.isInTemplateFunction())
-				_current.definition().assignTypesAtScope(this);
+
+			if (_current.definition() == null)
+				continue;
+			switch (_current.definition().op()) {
+			case UNIT:
+				assignTypeToNode(_current.definition());
+				_current.checkDefaultConstructorCalls(this);
+				break;
+				
+			case FUNCTION:
+				assignTypeToNode(_current.definition());
+			}
 		}
+/*
+		printf("Before computing reference closure\n");
+		for (int i = 0; i < _arena.scopes().length(); i++) {
+			_current = (*_arena.scopes())[i];
+
+			_current.printStatus();
+		}
+ */
+		boolean modified;
+		do {
+			modified = false;
+			for (int i = 0; i < _arena.scopes().length(); i++) {
+				_current = (*_arena.scopes())[i];
+				
+				if (_current.definition() != null && 
+					_current.definition().op() == Operator.FUNCTION) {
+					ref<FunctionDeclaration> func = ref<FunctionDeclaration>(_current.definition());
+					if ((func.referenced || !_current.isTemplateFunction()) && func.body != null && func.body.type == null) {
+						modified = true;
+						assignTypes(func.body);
+						_current.checkDefaultConstructorCalls(this);
+					}
+				}
+			}
+		} while (modified);
+/*
+		printf("Before assigning control flow\n");
+		for (int i = 0; i < _arena.scopes().length(); i++) {
+			_current = (*_arena.scopes())[i];
+
+			_current.printStatus();
+		}
+ */
 		for (int i = 0; i < _arena.scopes().length(); i++) {
 			_current = (*_arena.scopes())[i];
 			if (_current.definition() != null) {
+//				printf("[%d] %s\n", i, string(_current.storageClass()));
 				switch (_current.definition().op()) {
-				case	FUNCTION:{
-					if (_current.definition().class != Function) {
-						printf("not Function class\n");
+				case	FUNCTION:
+					if (_current.definition().class != FunctionDeclaration) {
+						printf("not FunctionDeclaration class\n");
 						break;
 					}
-					ref<Function> f = ref<Function>(_current.definition());
-					if (f.body != null)
+					ref<FunctionDeclaration> f = ref<FunctionDeclaration>(_current.definition());
+					if (f.body != null && f.body.type != null)
 						assignControlFlow(f.body);
 					break;
-				}
+
 				case UNIT:
 					assignControlFlow(_current.definition());
 				}
@@ -670,33 +724,23 @@ class CompileContext {
 		}
  	}
 
-	public void assignTypesForAuto(ref<Scope> scope) {
-		ref<Scope> outer = _current;
-		_current = scope;
-		if (_current.definition() != null && _current.definition().type == null) {
-			_current.definition().assignTypesAtScope(this);
-			_current.assignTypesForAuto(this);
-		}
-		_current = outer;
-	}
-	
 	public void assignTypes(ref<Scope> scope, ref<Node> n) {
 		ref<Scope> outer = _current;
 		_current = scope;
-		assignTypes(n);
-		_current = outer;
-	}
-
-	public void assignTypesAtScope(ref<Scope> scope, ref<Node> n) {
-		ref<Scope> outer = _current;
-		_current = scope;
-		n.assignTypesAtScope(this);
+		assignTypeToNode(n);
 		_current = outer;
 	}
 
 	public void assignTypes(ref<Node> n) {
-		if (n.type == null && !n.definesScope()) {
-//			printf("%s\n", string(n.op()));
+		if (!n.assignTypesBoundary())
+			assignTypeToNode(n);
+	}
+
+	public void assignTypeToNode(ref<Node> n) {
+		if (n.type == null) {
+			if (_verbose) {
+				printf("-----  assignTypes %s ---------\n", _current != null ? _current.sourceLocation(n.location()) : "<null>");
+			}
 			n.assignTypes(this);
 			if (n.type == null) {
 				n.add(MessageId.NO_EXPRESSION_TYPE, _pool);
@@ -704,9 +748,13 @@ class CompileContext {
 				n.print(0);
 				assert(false);
 			}
+			if (_verbose) {
+				n.print(4);
+				printf("=====  assignTypes %s =========\n", _current != null ? _current.sourceLocation(n.location()) : "<null>");
+			}
 		}
 	}
-
+	
 	public void assignControlFlow(ref<Node> n) {
 		switch (n.op()) {
 		case	UNIT:
@@ -762,6 +810,8 @@ class CompileContext {
 				break;
 			}
 			ref<Type> switchType = swit.left().type;
+			if (switchType == null)
+				swit.print(0);
 			if (switchType.family() == TypeFamily.ENUM) {
 				if (b.left().op() != Operator.IDENTIFIER) {
 					b.left().add(MessageId.NOT_ENUM_INSTANCE, _pool);
@@ -773,7 +823,7 @@ class CompileContext {
 				if (b.left().deferAnalysis())
 					break;
 			} else {
-				assignTypes(b.left());
+				assignTypes(ref<Block>(swit.right()).scope, b.left());
 				if (b.left().deferAnalysis())
 					break;
 				b.left().coerce(_current.file().tree(), switchType, false, this);
@@ -1003,6 +1053,7 @@ class CompileContext {
 	}
 	
 	public ref<Scope> setCurrent(ref<Scope> scope) {
+		assert(scope != null);
 		ref<Scope> old = _current;
 		_current = scope;
 		return old;
@@ -1052,7 +1103,7 @@ class MemoryPool extends memory.NoReleasePool {
 	
 	public MemoryPool() {
 	}
-	// TODO: Fix this 
+
 	public ~MemoryPool() {
 		clear();
 	}

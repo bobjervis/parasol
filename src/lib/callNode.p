@@ -58,8 +58,7 @@ class Call extends ParameterBag {
 		else if (overload == null)
 			_category = CallCategory.ERROR;
 		else if (overload.enclosing().storageClass() == StorageClass.MEMBER || 
-				 overload.enclosing().storageClass() == StorageClass.LOCK || 
-				 overload.enclosing().storageClass() == StorageClass.MONITOR)
+				 overload.enclosing().storageClass() == StorageClass.LOCK)
 			_category = CallCategory.METHOD_CALL;
 		else
 			_category = CallCategory.FUNCTION_CALL;
@@ -234,9 +233,9 @@ class Call extends ParameterBag {
 				functionType = ref<FunctionType>(_target.type);
 
 				ref<Variable> temp;
-				if (type.returnsViaOutParameter(compileContext))
+				if (type != null && type.returnsViaOutParameter(compileContext))
 					temp = compileContext.newVariable(type);
-				else if (functionType.returnCount() > 1)
+				else if (functionType != null && functionType.returnCount() > 1)
 					temp = compileContext.newVariable(functionType.returnType());
 				else
 					break;
@@ -299,6 +298,9 @@ class Call extends ParameterBag {
 					}
 				}
 
+				if (functionType == null) {
+					print(0);
+				}
 				ref<NodeList> params = functionType.parameters();
 				
 				ref<NodeList> registerArguments;
@@ -613,8 +615,8 @@ class Call extends ParameterBag {
 					type = compileContext.errorType();
 					break;
 				}
-				ref<Function> func = ref<Function>(def);
-				if (func.functionCategory() != Function.Category.CONSTRUCTOR ||
+				ref<FunctionDeclaration> func = ref<FunctionDeclaration>(def);
+				if (func.functionCategory() != FunctionDeclaration.Category.CONSTRUCTOR ||
 					func.body != compileContext.current().definition()) {
 					_target.add(MessageId.INVALID_SUPER, compileContext.pool());
 					type = compileContext.errorType();
@@ -657,8 +659,7 @@ class Call extends ParameterBag {
 					else {
 						_overload = ref<OverloadInstance>(symbol).parameterScope();
 						if (symbol.storageClass() == StorageClass.MEMBER || 
-							symbol.storageClass() == StorageClass.LOCK || 
-							symbol.storageClass() == StorageClass.MONITOR)
+							symbol.storageClass() == StorageClass.LOCK)
 							_category = CallCategory.METHOD_CALL;
 					}
 				}
@@ -854,7 +855,7 @@ class Call extends ParameterBag {
 
 	ref<Node> rewriteDeclarators(ref<SyntaxTree> syntaxTree) {
 		if (op() == Operator.CALL)
-			return syntaxTree.newFunction(Function.Category.DECLARATOR, _target, null, _arguments, location());
+			return syntaxTree.newFunctionDeclaration(FunctionDeclaration.Category.DECLARATOR, _target, null, _arguments, location());
 		else
 			return this;
 	}
@@ -975,21 +976,23 @@ class Call extends ParameterBag {
 	}
 }
 
-class Function extends ParameterBag {
+class FunctionDeclaration extends ParameterBag {
 	public enum Category {
 		NORMAL,
 		CONSTRUCTOR,
 		DESTRUCTOR,
 		ABSTRACT,
-		DECLARATOR
+		DECLARATOR			// occurs 
 	}
 	private Category _functionCategory;
 	private ref<NodeList> _returnType;
 	private ref<Identifier> _name;
 
 	public ref<Block> body;
+	public boolean referenced;			// The function in question has been referenced, so it should be typed checked
+										// and have code generated.
 	
-	Function(Category functionCategory, ref<Node> returnType, ref<Identifier> name, ref<NodeList> arguments, ref<SyntaxTree> tree, Location location) {
+	FunctionDeclaration(Category functionCategory, ref<Node> returnType, ref<Identifier> name, ref<NodeList> arguments, ref<SyntaxTree> tree, Location location) {
 		super(Operator.FUNCTION, arguments, location);
 		_functionCategory = functionCategory;
 		if (returnType != null) {
@@ -1117,22 +1120,22 @@ class Function extends ParameterBag {
 		return this;
 	}
 	
-	public ref<Function> clone(ref<SyntaxTree> tree) {
+	public ref<FunctionDeclaration> clone(ref<SyntaxTree> tree) {
 		ref<NodeList> returnType = _returnType != null ? _returnType.clone(tree) : null;
 		ref<Identifier> name = _name != null ? _name.clone(tree) : null;
 		ref<NodeList> arguments = _arguments != null ? _arguments.clone(tree) : null;
-		ref<Function> f = tree.newFunction(_functionCategory, null, name, arguments, location());
+		ref<FunctionDeclaration> f = tree.newFunctionDeclaration(_functionCategory, null, name, arguments, location());
 		f._returnType = returnType;
 		if (body != null)
 			f.body = body.clone(tree);
-		return ref<Function>(f.finishClone(this, tree.pool()));
+		return ref<FunctionDeclaration>(f.finishClone(this, tree.pool()));
 	}
 
-	public ref<Function> cloneRaw(ref<SyntaxTree> tree) {
+	public ref<FunctionDeclaration> cloneRaw(ref<SyntaxTree> tree) {
 		ref<NodeList> returnType = _returnType != null ? _returnType.cloneRaw(tree) : null;
 		ref<Identifier> name = _name != null ? _name.cloneRaw(tree) : null;
 		ref<NodeList> arguments = _arguments != null ? _arguments.cloneRaw(tree) : null;
-		ref<Function> f = tree.newFunction(_functionCategory, null, name, arguments, location());
+		ref<FunctionDeclaration> f = tree.newFunctionDeclaration(_functionCategory, null, name, arguments, location());
 		f._returnType = returnType;
 		if (body != null)
 			f.body = body.cloneRaw(tree);
@@ -1176,7 +1179,7 @@ class Function extends ParameterBag {
  */
 
 	boolean definesScope() {
-		if (_functionCategory == Function.Category.ABSTRACT ||
+		if (_functionCategory == FunctionDeclaration.Category.ABSTRACT ||
 			body != null)
 			return true;
 		else
@@ -1205,8 +1208,9 @@ class Function extends ParameterBag {
 				type = nl.node.type;
 				return;
 			}
-		if (deferAnalysis())
+		if (deferAnalysis()) {
 			return;
+		}
 		type = compileContext.pool().newFunctionType(retType, _arguments, definesScope() ? compileContext.current() : null);
 		if (_functionCategory == Category.DECLARATOR)
 			type = compileContext.makeTypedef(type);
@@ -1214,13 +1218,20 @@ class Function extends ParameterBag {
 			_name.symbol().bindType(type, compileContext);
 			_name.type = type;
 		}
-		if (body == null || retType == null)
+		if (body == null)
+			return;
+//		compileContext.assignTypes(body);
+		if (retType == null)
 			return;
 		Test t = body.fallsThrough();
 		if (t == Test.PASS_TEST) {
 			ref<Block> b = ref<Block>(body);
 			body.endOfBlockStatement(body.scope.file().tree()).add(MessageId.RETURN_VALUE_REQUIRED, compileContext.pool());
 		}
+	}
+	
+	boolean assignTypesBoundary() {
+		return _functionCategory != Category.DECLARATOR;
 	}
 }
 
@@ -1591,7 +1602,7 @@ class Return extends ParameterBag {
 	}
  
 	private void assignTypes(ref<CompileContext> compileContext) {
-		ref<Function> func = compileContext.current().enclosingFunction();
+		ref<FunctionDeclaration> func = compileContext.current().enclosingFunction();
 		if (func == null) {
 			add(MessageId.RETURN_DISALLOWED, compileContext.pool());
 			type = compileContext.errorType();

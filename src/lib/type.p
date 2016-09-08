@@ -103,6 +103,13 @@ class BuiltInType extends Type {
 			return _classType.initialConstructor();
 	}
 
+	public boolean hasDefaultConstructor() {
+		if (_classType == null)
+			return false;
+		else
+			return _classType.hasDefaultConstructor();
+	}
+	
 	public ref<ParameterScope> defaultConstructor() {
 		if (_classType == null)
 			return null;
@@ -178,6 +185,9 @@ class BuiltInType extends Type {
 		return _ordinal;
 	}
 	
+	public string signature() {
+		return builtinName[family()];
+	}
 }
 
 boolean[TypeFamily][TypeFamily] widens;
@@ -300,7 +310,7 @@ class ClassType extends Type {
 				if (paramType.class == BuiltInType)
 					paramType = ref<BuiltInType>(paramType).classType();
 				if (paramType == this) {
-					ref<Function> f = ref<Function>(scope.definition());
+					ref<FunctionDeclaration> f = ref<FunctionDeclaration>(scope.definition());
 					return ref<OverloadInstance>(f.name().symbol());
 				}
 			}
@@ -315,6 +325,15 @@ class ClassType extends Type {
 				return scope;
 		}
 		return null;
+	}
+	
+	public boolean hasDefaultConstructor() {
+		for (int i = 0; i < _scope.constructors().length(); i++) {
+			ref<ParameterScope> scope = ref<ParameterScope>((*_scope.constructors())[i]);
+			if (scope.parameters().length() == 0)
+				return true;
+		}
+		return false;
 	}
 	
 	public void assignSize(ref<Target> target, ref<CompileContext> compileContext) {
@@ -981,7 +1000,7 @@ class TemplateInstanceType extends ClassType {
 	}
 	
 	public void print() {
-		printf("TemplateInstanceType %s %p<", string(family()), definition());
+		printf("TemplateInstanceType %s <", string(family()));
 		for (int i = 0; i < _arguments.length(); i++) {
 			if (i > 0)
 				printf(", ");
@@ -1046,6 +1065,13 @@ class TypedefType extends Type {
 			printf("<null>");
 	}
 
+	public string signature() {
+		if (_wrappedType != null)
+			return "class (" + _wrappedType.signature() + ")";
+		else
+			return "class";
+	}
+	
 	public ref<Type> wrappedType() {
 		return _wrappedType;
 	}
@@ -1215,7 +1241,7 @@ class Type {
 		if (scope() == null)
 			return null;
 		for (int i = 0; i < scope().constructors().length(); i++) {
-			ref<Function> f = ref<Function>((*scope().constructors())[i].definition());
+			ref<FunctionDeclaration> f = ref<FunctionDeclaration>((*scope().constructors())[i].definition());
 			if (f == null)
 				continue; // default constructors should be ignored.
 			ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
@@ -1231,6 +1257,10 @@ class Type {
 		return null;
 	}
 	
+	public boolean hasDefaultConstructor() {
+		return false;
+	}
+	
 	public ref<ParameterScope> defaultConstructor() {
 		return null;
 	}
@@ -1239,7 +1269,7 @@ class Type {
 		if (scope() == null)
 			return null;
 		for (int i = 0; i < scope().constructors().length(); i++) {
-			ref<Function> f = ref<Function>((*scope().constructors())[i].definition());
+			ref<FunctionDeclaration> f = ref<FunctionDeclaration>((*scope().constructors())[i].definition());
 			ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
 			if (oi.parameterCount() != 1)
 				continue;
@@ -1262,6 +1292,12 @@ class Type {
 		return scope().constructors().length() > 0;
 	}
 
+	public ref<ParameterScope> destructor() {
+		if (scope() == null)
+			return null;
+		return scope().destructor();
+	}
+	
 	public boolean hasDestructor() {
 		if (scope() == null)
 			return false;
@@ -1633,3 +1669,29 @@ int[TypeFamily] familyAlignment = [
 	EXCEPTION:			 8,
 	CLASS_DEFERRED: 	-1,
 ];
+
+string[TypeFamily] builtinName = [
+  	SIGNED_8:			"signed<8>",
+  	SIGNED_16:			"short",
+  	SIGNED_32:			"int",
+  	SIGNED_64:			"long",
+  	UNSIGNED_8:			"byte",
+  	UNSIGNED_16:		"char",
+  	UNSIGNED_32:		"unsigned",
+  	UNSIGNED_64:		"unsigned<64>",
+  	FLOAT_32:			"float",
+  	FLOAT_64:			"double",
+  	BOOLEAN:			"boolean",
+  	ADDRESS:			"address",
+  	STRING: 			"string",
+  	VAR: 				"var",
+  	VOID: 				"void",
+  	ERROR: 				"<error>",
+	EXCEPTION:			"Exception",
+	CLASS_VARIABLE:		"class",
+	CLASS_DEFERRED:		"<deferred class>",
+	NAMESPACE:			"namespace",
+	ARRAY_AGGREGATE:	"Array",
+	OBJECT_AGGREGATE:	"Object"
+  ];
+

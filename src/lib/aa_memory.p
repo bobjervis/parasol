@@ -22,7 +22,6 @@ import native:C;
 import native:windows;
 import parasol:runtime;
 import parasol:exception;
-
 import parasol:thread;
 
 private long LEAKS_FLAG = 0x1;
@@ -57,6 +56,8 @@ private ref<Allocator> currentHeap;
 
 private Heap heap;
 private LeakHeap leakHeap;
+
+exception.registerHardwareExceptionHandler(exception.hardwareExceptionHandler);
 
 if ((runtime.getRuntimeFlags() & LEAKS_FLAG) != 0) {
 	currentHeap = &leakHeap;

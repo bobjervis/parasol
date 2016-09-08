@@ -179,7 +179,7 @@ enum Operator {
 	CONDITIONAL,
 	IF,
 	CATCH,
-	// Function
+	// FunctionDeclaration
 	FUNCTION,
 	// DestructorList
 	DESTRUCTOR_LIST,
@@ -331,8 +331,8 @@ class SyntaxTree {
 		return _pool new Return(expressions, location);
 	}
 
-	public ref<Function> newFunction(Function.Category functionCategory, ref<Node> returnType, ref<Identifier> name, ref<NodeList> arguments, Location location) {
-		return _pool new Function(functionCategory, returnType, name, arguments, this, location);
+	public ref<FunctionDeclaration> newFunctionDeclaration(FunctionDeclaration.Category functionCategory, ref<Node> returnType, ref<Identifier> name, ref<NodeList> arguments, Location location) {
+		return _pool new FunctionDeclaration(functionCategory, returnType, name, arguments, this, location);
 	}
 
 	public ref<Call> newCall(Operator op, ref<Node> target, ref<NodeList> arguments, Location location) {
@@ -642,18 +642,25 @@ class Block extends Node {
 	}
  
 	protected void assignTypes(ref<CompileContext> compileContext) {
+		ref<Scope> outer;
+		if (scope != null)
+			outer = compileContext.setCurrent(scope);
 		for (ref<NodeList> nl = _statements; nl != null; nl = nl.next)
 			compileContext.assignTypes(nl.node);
 		type = compileContext.arena().builtInType(TypeFamily.VOID);
 		if (op() == Operator.LOCK) {
-			if (_statements.node.deferAnalysis())
-				return;
-			ref<Unary> u = ref<Unary>(_statements.node);
-			if (_statements.node.op() != Operator.EMPTY && !compileContext.isMonitor(u.operand().type)) {
-				add(MessageId.NEEDS_MONITOR, compileContext.pool());
-				type = compileContext.errorType();
+			if (!_statements.node.deferAnalysis()) {
+				ref<Unary> u = ref<Unary>(_statements.node);
+				if (_statements.node.op() != Operator.EMPTY && !compileContext.isMonitor(u.operand().type)) {
+					add(MessageId.NEEDS_MONITOR, compileContext.pool());
+					type = compileContext.errorType();
+				}
 			}
 		}
+		if (scope != null)
+			scope.checkDefaultConstructorCalls(compileContext);
+		if (outer != null)
+			compileContext.setCurrent(outer);
 	}
 
 	boolean definesScope() {
@@ -795,6 +802,8 @@ class Class extends Block {
 
 	public void print(int indent) {
 		printBasic(indent);
+		if (scope != null)
+			printf(" scope %p", scope);
 		printf("\n");
 		if (_name != null)
 			_name.print(indent + INDENT);
@@ -817,9 +826,6 @@ class Class extends Block {
 	public ref<Node> extendsClause() {
 		return _extends;
 	}
-/*
-	ref<NodeList> implements() { return _implements; }
-*/
 
 	boolean definesScope() {
 		assert(false);
@@ -842,6 +848,26 @@ class Class extends Block {
 				return;
 			}
 		super.assignTypes(compileContext);
+
+		if (scope != null) {
+			// should read for (ref<Symbol> sym : scope.symbols()) {
+			for (ref<Symbol>[Scope.SymbolKey].iterator i = scope.symbols().begin(); i.hasNext(); i.next()) {
+				ref<Symbol> sym = i.get();
+				if (sym.class != Overload)
+					continue;
+				ref<Overload> o = ref<Overload>(sym);
+				for (int i = 0; i < o.instances().length(); i++) {
+					ref<OverloadInstance> oi = (*o.instances())[i];
+					oi.assignType(compileContext);
+					ref<ParameterScope> parameterScope = oi.parameterScope();
+					if (!parameterScope.isTemplateFunction()) {
+						ref<FunctionDeclaration> func = ref<FunctionDeclaration>(parameterScope.definition());
+						if (func != null && func.body != null)
+							compileContext.assignTypes(func.body);
+					}
+				}
+			}
+		}
 	}
 }
 /*
@@ -1091,7 +1117,8 @@ class For extends Node {
 	private ref<Node> _test;
 	private ref<Node> _increment;
 	private ref<Node> _body;
-
+	public ref<Scope> scope;
+	
 	For(Operator op, ref<Node> initializer, ref<Node> test, ref<Node> increment, ref<Node> body, Location location) {
 		super(op, location);
 		_initializer = initializer;
@@ -1253,14 +1280,15 @@ class For extends Node {
 		return _body;
 	}
 
-	public boolean definesScope() {
+	boolean definesScope() {
 		return op() == Operator.SCOPED_FOR;
 	}
  
 	private void assignTypes(ref<CompileContext> compileContext) {
 		switch (op()) {
-		case	FOR:
 		case	SCOPED_FOR:
+			ref<Scope> outer = compileContext.setCurrent(scope);
+		case	FOR:
 			compileContext.assignTypes(_initializer);
 			compileContext.assignTypes(_test);
 			if (!_test.deferAnalysis() && _test.op() != Operator.EMPTY) {
@@ -1273,6 +1301,8 @@ class For extends Node {
 			compileContext.assignTypes(_increment);
 			compileContext.assignTypes(_body);
 			type = compileContext.arena().builtInType(TypeFamily.VOID);
+			if (op() == Operator.SCOPED_FOR)
+				compileContext.setCurrent(outer);
 			break;
 		}
 	}
@@ -1962,6 +1992,7 @@ class Template extends Node {
 	}
 
 	boolean definesScope() {
+		print(0);
 		assert(false);
 		return false;
 	}
@@ -2118,7 +2149,7 @@ class Ternary extends Node {
 				_middle = _middle.fold(tree, voidContext, compileContext);
 			if (_right != null)
 				_right = _right.fold(tree, voidContext, compileContext);
-			if (_left.type.family() == TypeFamily.FLAGS) {
+			if (_left.type != null && _left.type.family() == TypeFamily.FLAGS) {
 				ref<Node> right = tree.newConstant(0, location());
 				right.type = _left.type;
 				ref<Node> op = tree.newBinary(Operator.NOT_EQUAL, _left, right, location());
@@ -2532,18 +2563,6 @@ class Node {
 		return false;
 	}
 
-	public void assignTypesAtScope(ref<CompileContext> compileContext) {
-		if (type == null) {
-			assignTypes(compileContext);
-			if (type == null) {
-				add(MessageId.NO_EXPRESSION_TYPE, compileContext.pool());
-				type = compileContext.errorType();
-				print(0);
-				assert(false);
-			}
-		}
-	}
-
 	public abstract ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext);
 
 	public ref<Node> foldConditional(ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
@@ -2651,11 +2670,13 @@ class Node {
 	}
 
 	public ref<Type> unwrapTypedef(ref<CompileContext> compileContext) {
-		compileContext.assignTypes(this);
+		compileContext.assignTypeToNode(this);
 		if (deferAnalysis())
 			return type;
 		if (_op == Operator.UNWRAP_TYPEDEF)
 			return type;
+		if (type == null)
+			print(0);
 		if (type.family() == TypeFamily.TYPEDEF) {		// if (type instanceof TypedefType)
 			ref<TypedefType> tp = ref<TypedefType>(type);
 			return tp.wrappedType();
@@ -2747,6 +2768,8 @@ class Node {
 	}
 
 	public ref<Node> coerce(ref<SyntaxTree> tree, ref<Type> newType, boolean explicitCast, ref<CompileContext> compileContext) {
+		if (type == null)
+			print(0);
 		if (type.equals(newType))
 			return this;
 		if (canCoerce(newType, explicitCast, compileContext))
@@ -2835,10 +2858,8 @@ class Node {
 		for (ref<Commentary> comment = _commentary; comment != null; comment = comment.next())
 			comment.print(indent + INDENT);
 		printf("%*.*c%p %s::%s", indent, indent, ' ', this, name, string(_op));
-		if (type != null) {
-			printf(" ");
-			type.print();
-		}
+		if (type != null)
+			printf(" type %s", type.signature());
 		if (register != 0)
 			printf(" reg %d", int(register));
 		if (nodeFlags != 0)
@@ -2856,6 +2877,140 @@ class Node {
 		return _commentary; 
 	}
 
+	boolean assignTypesBoundary() {
+		switch (_op) {
+		case	ABSTRACT:
+		case	ADD:
+		case	ADD_ASSIGN:
+		case	ADD_REDUCE:
+		case	ADDRESS:
+		case	AND:
+		case	AND_ASSIGN:
+		case	ANNOTATED:
+		case	ANNOTATION:
+		case	ASSIGN:
+		case	BIND:
+		case	BIT_COMPLEMENT:
+		case	BLOCK:
+		case	BREAK:
+		case	BYTES:
+		case	CALL:
+		case	CALL_DESTRUCTOR:
+		case	CASE:
+		case	CAST:
+		case	CATCH:
+		case	CHARACTER:
+		case	CLASS:
+		case	CLASS_DECLARATION:
+		case	CLASS_OF:
+		case	CLASS_TYPE:
+		case	CONDITIONAL:
+		case	CONTINUE:
+		case	DECLARATION:
+		case	DECLARE_NAMESPACE:
+		case	DECREMENT_AFTER:
+		case	DECREMENT_BEFORE:
+		case	DEFAULT:
+		case	DELETE:
+		case	DIVIDE:
+		case	DIVIDE_ASSIGN:
+		case	DO_WHILE:
+		case	DOT:
+		case	ELLIPSIS:
+		case	EMPTY:
+		case	ENUM:
+		case	ENUM_DECLARATION:
+		case	EQUALITY:
+		case	EXCLUSIVE_OR:
+		case	EXCLUSIVE_OR_ASSIGN:
+		case	EXPRESSION:
+		case	FALSE:
+		case	FLAGS:
+		case	FLAGS_DECLARATION:
+		case	FLOATING_POINT:
+		case	FOR:
+		case	GREATER:
+		case	GREATER_EQUAL:
+		case	IDENTIFIER:
+		case	IF:
+		case	IMPORT:
+		case	INCREMENT_AFTER:
+		case	INCREMENT_BEFORE:
+		case	INDIRECT:
+		case	INITIALIZE:
+		case	INTEGER:
+		case	LABEL:
+		case	LEFT_SHIFT:
+		case	LEFT_SHIFT_ASSIGN:
+		case	LESS:
+		case	LESS_EQUAL:
+		case	LESS_GREATER:
+		case	LESS_GREATER_EQUAL:
+		case	LOCK:
+		case	LOGICAL_AND:
+		case	LOGICAL_OR:
+		case	MONITOR_DECLARATION:
+		case	MULTIPLY:
+		case	MULTIPLY_ASSIGN:
+		case	NAMESPACE:
+		case	NEGATE:
+		case	NEW:
+		case	NOT:
+		case	NOT_EQUAL:
+		case	NOT_GREATER:
+		case	NOT_GREATER_EQUAL:
+		case	NOT_LESS:
+		case	NOT_LESS_EQUAL:
+		case	NOT_LESS_GREATER:
+		case	NOT_LESS_GREATER_EQUAL:
+		case	NULL:
+		case	OBJECT_AGGREGATE:
+		case	OR:
+		case	OR_ASSIGN:
+		case	PLACEMENT_NEW:
+		case	PRIVATE:
+		case	PROTECTED:
+		case	PUBLIC:
+		case	REMAINDER:
+		case	REMAINDER_ASSIGN:
+		case	RETURN:
+		case	RIGHT_SHIFT:
+		case	RIGHT_SHIFT_ASSIGN:
+		case	SCOPED_FOR:
+		case	SEQUENCE:
+		case	STATIC:
+		case	STRING:
+		case	SUBSCRIPT:
+		case	SUBTRACT:
+		case	SUBTRACT_ASSIGN:
+		case	SUPER:
+		case	SWITCH:
+		case	SYNTAX_ERROR:
+		case	TEMPLATE:
+		case	TEMPLATE_INSTANCE:
+		case	THIS:
+		case	THROW:
+		case	TRUE:
+		case	TRY:
+		case	UNARY_PLUS:
+		case	UNSIGNED_RIGHT_SHIFT:
+		case	UNSIGNED_RIGHT_SHIFT_ASSIGN:
+		case	UNWRAP_TYPEDEF:
+		case	VARIABLE:
+		case	VECTOR_OF:
+		case	WHILE:
+			break;
+			
+		case	UNIT:
+			return true;
+			
+		default:
+			print(0);
+			assert(false);
+		}
+		return false;
+	}
+	
 	boolean definesScope() {
 		return false;
 	}

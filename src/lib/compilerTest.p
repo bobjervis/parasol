@@ -531,7 +531,7 @@ class CompileObject  extends script.Object {
 			printf("Failed to load arena\n");
 			return false;
 		}
-		CompileContext context(&arena, arena.global());
+		CompileContext context(&arena, arena.global(), verboseFlag);
 
 		ref<FileStat> f;
 		if (_filename.length() > 0) {

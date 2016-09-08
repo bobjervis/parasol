@@ -380,12 +380,12 @@ class Binary extends Node {
 				
 			case	CLASS:
 			case	VAR:
-				ref<ParameterScope> scope = type.copyConstructor();
-				if (scope != null) {
+				ref<ParameterScope> copyConstructor = type.copyConstructor();
+				if (copyConstructor != null) {
 					ref<Node> adr = tree.newUnary(Operator.ADDRESS, _left, location());
 					adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 					ref<NodeList> args = tree.newNodeList(_right);
-					ref<Call> constructor = tree.newCall(scope, CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
+					ref<Call> constructor = tree.newCall(copyConstructor, CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
 					constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
 					return constructor.fold(tree, true, compileContext);
 				} else {
@@ -409,12 +409,12 @@ class Binary extends Node {
 					call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 					return call.fold(tree, true, compileContext);
 				}
-				scope = type.copyConstructor();
-				if (scope != null) {
+				copyConstructor = type.copyConstructor();
+				if (copyConstructor != null) {
 					ref<Node> adr = tree.newUnary(Operator.ADDRESS, _left, location());
 					adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 					ref<NodeList> args = tree.newNodeList(_right);
-					ref<Call> constructor = tree.newCall(scope, CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
+					ref<Call> constructor = tree.newCall(copyConstructor, CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
 					constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
 					return constructor.fold(tree, true, compileContext);
 				} else {
@@ -1244,7 +1244,8 @@ class Binary extends Node {
 	
 	ref<Node> subscriptModify(ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
 		if (_left.type.isVector(compileContext) ||
-			_left.type.isMap(compileContext)) {
+			_left.type.isMap(compileContext) ||
+			_left.type.family() == TypeFamily.SHAPE) {
 			CompileString name("elementAddress");
 			
 			ref<Symbol> sym = _left.type.lookup(&name, compileContext);
@@ -1470,21 +1471,25 @@ class Binary extends Node {
 
 	private void assignTypes(ref<CompileContext> compileContext) {
 		switch (op()) {
-		case	ANNOTATED:{
+		case	MONITOR_DECLARATION:
+			type = _right.type;
+			_right.type = null;
+			compileContext.assignTypes(_right);
+			_right.type = type;
+//			type = compileContext.arena().builtInType(TypeFamily.VOID);
+			break;
+
+		case	ANNOTATED:
 			compileContext.assignTypes(_left);
 			if (_left.deferAnalysis()) {
 				type = _left.type;
 				return;
 			}
-			compileContext.assignTypes(_right);
-			type = compileContext.arena().builtInType(TypeFamily.VOID);
-			break;
-		}
 
-		case	MONITOR_DECLARATION:
 		case	CLASS_DECLARATION:
 		case	FLAGS_DECLARATION:
 		case	ENUM_DECLARATION:
+			compileContext.assignTypes(_right);
 			type = compileContext.arena().builtInType(TypeFamily.VOID);
 			break;
 
@@ -1507,6 +1512,17 @@ class Binary extends Node {
 			}
 			break;
 
+			// This case arises when static initializers have to be 
+		case	INITIALIZE:
+			ref<Symbol> sym = ref<Identifier>(_left).symbol();
+			_left.type = sym.assignType(compileContext);
+			if (_left.deferAnalysis()) {
+				type = _left.type;
+				break;
+			}
+			markupDeclarator(_left.type, true, compileContext);
+			break;
+			
 		case	LABEL:
 			// assign and propagate the value type, let higher-level code decide what to do with the label
 			// portion.
@@ -1536,7 +1552,7 @@ class Binary extends Node {
 				if (deferAnalysis())
 					break;
 				// So it's a valid type, what if it has non-default constructors only?
-				if (type.hasConstructors() && type.defaultConstructor() == null) {
+				if (type.hasConstructors() && !type.hasDefaultConstructor()) {
 					add(MessageId.NO_DEFAULT_CONSTRUCTOR, compileContext.pool());
 					break;
 				}
@@ -1591,7 +1607,7 @@ class Binary extends Node {
 				if (deferAnalysis())
 					break;
 				// So it's a valid type, what if it has non-default constructors only?
-				if (type.hasConstructors() && type.defaultConstructor() == null) {
+				if (type.hasConstructors() && !type.hasDefaultConstructor()) {
 					add(MessageId.NO_DEFAULT_CONSTRUCTOR, compileContext.pool());
 					break;
 				}
@@ -1694,7 +1710,6 @@ class Binary extends Node {
 				type = compileContext.errorType();
 				break;
 			}
-			
 			if (_left.type.family() == TypeFamily.STRING) {
 				switch (_right.type.family()) {
 				case	STRING:
@@ -1809,8 +1824,8 @@ class Binary extends Node {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	BOOLEAN:
-			case	VAR:
 			case	FLAGS:
+			case	VAR:
 				if (_left.isLvalue()) 
 					type = _left.type;
 				else {
@@ -2044,6 +2059,8 @@ class Binary extends Node {
 				type = _right.type;
 				return;
 			}
+			if (_left.type == null)
+				print(0);
 			if (_left.type.family() == TypeFamily.TYPEDEF) {
 				if (_right.type.isIntegral()) {
 					add(MessageId.UNFINISHED_FIXED_ARRAY, compileContext.pool());
@@ -2246,7 +2263,7 @@ class Binary extends Node {
 			}
 			break;
 
-		case	SWITCH:{
+		case	SWITCH:
 			compileContext.assignTypes(_left);
 			if (!_left.deferAnalysis()) {
 				switch (_left.type.family()) {
@@ -2270,12 +2287,12 @@ class Binary extends Node {
 			compileContext.popFlowContext();
 			type = compileContext.arena().builtInType(TypeFamily.VOID);
 			break;
-		}
-		case	CASE:{
+
+		case	CASE:
 			compileContext.assignTypes(_right);
 			type = compileContext.arena().builtInType(TypeFamily.VOID);
 			break;
-		}
+
 		case	DO_WHILE:
 			compileContext.assignTypes(_left);
 			compileContext.assignTypes(_right);

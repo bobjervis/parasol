@@ -28,7 +28,6 @@ enum StorageClass {
 	ENUMERATION,
 	FLAGS,
 	ENCLOSING,
-	MONITOR,
 	LOCK,
 	MAX_STORAGE_CLASS
 }
@@ -48,7 +47,7 @@ class ClassScope extends ClasslikeScope {
 		super(enclosing, definition, className);
 	}
 
-	ClassScope(ref<Scope> enclosing, ref<Node> definition, StorageClass storageClass, ref<Identifier> className) {
+	protected ClassScope(ref<Scope> enclosing, ref<Node> definition, StorageClass storageClass, ref<Identifier> className) {
 		super(enclosing, definition, storageClass, className);
 	}
 
@@ -62,7 +61,11 @@ class ClassScope extends ClasslikeScope {
 
 class MonitorScope extends ClassScope {
 	public MonitorScope(ref<Scope> enclosing, ref<Node> definition) {
-		super(enclosing, definition, StorageClass.MONITOR, null);
+		super(enclosing, definition, null);
+	}
+	
+	public boolean isMonitor() {
+		return true;
 	}
 }
 
@@ -207,18 +210,20 @@ class ClasslikeScope extends Scope {
 			case	FLOAT_32:
 			case	FLOAT_64:
 			case	STRING:
+			case	FUNCTION:
 				return true;
 				
 			case	SHAPE:
 			case	CLASS:
 				if (sym.type().hasVtable(compileContext))
 					return true;
-				else if (sym.type().defaultConstructor() != null)
+				else if (sym.type().hasDefaultConstructor())
 					return true;
 				break;
 				
 			case	CLASS_DEFERRED:
 			case	ERROR:
+			case	TYPEDEF:
 				return false;
 				
 			default:
@@ -559,13 +564,12 @@ class ParameterScope extends Scope {
 	}
 	
 	public boolean hasThis() {
-		ref<Function> func = ref<Function>(definition());
+		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(definition());
 		
 		if (func == null)		// a generated default constructor has no 'definition'
 			return true;		// but it does have 'this'
 		if (func.name() != null && func.name().symbol() != null)
-			return func.name().symbol().storageClass() == StorageClass.MEMBER || 
-				   func.name().symbol().storageClass() == StorageClass.MONITOR;
+			return func.name().symbol().storageClass() == StorageClass.MEMBER;
 		else
 			return false;
 	}
@@ -573,16 +577,16 @@ class ParameterScope extends Scope {
 	public boolean isDestructor() {
 		if (_kind == Kind.IMPLIED_DESTRUCTOR)
 			return true;
-		ref<Function> func = ref<Function>(definition());
+		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(definition());
 		
 		if (func == null)		// a generated default constructor has no 'definition'
 			return false;		// but it does have 'this'
 		else
-			return func.functionCategory() == Function.Category.DESTRUCTOR;
+			return func.functionCategory() == FunctionDeclaration.Category.DESTRUCTOR;
 	}
 
 	public ref<FunctionType> type() {
-		ref<Function> func = ref<Function>(definition());
+		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(definition());
 		if (func == null)		// a generate default constructor has no 'definition'
 			return null;		// and no type.
 		return ref<FunctionType>(func.type);
@@ -590,7 +594,7 @@ class ParameterScope extends Scope {
 	}
 	
 	public ref<OverloadInstance> symbol() {
-		ref<Function> func = ref<Function>(definition());
+		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(definition());
 		if (func == null)		// a generate default constructor has no 'definition'
 			return null;		// and no type.
 		if (func.deferAnalysis())
@@ -599,12 +603,14 @@ class ParameterScope extends Scope {
 	}
 	
 	public boolean hasOutParameter(ref<CompileContext> compileContext) {
-		ref<Function> func = ref<Function>(definition());
+		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(definition());
 		if (func == null)		// a generate default constructor has no 'definition'
 			return false;		// and no out parameter.
 		if (func.deferAnalysis())
 			return false;
 		ref<Type> fType;
+		if (func.type == null)
+			compileContext.assignTypeToNode(func);
 		if (func.type.family() == TypeFamily.TYPEDEF) {
 			assert(false);
 			ref<TypedefType> tp = ref<TypedefType>(func.type);
@@ -626,7 +632,7 @@ class ParameterScope extends Scope {
 			// There is no definition, but the vtable will have a slot for virtual destructors.
 			return enclosing().hasVtable(compileContext);
 		}
-		ref<Function> func = ref<Function>(definition());
+		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(definition());
 		if (func == null)		// a generated default constructor has no 'definition'
 			return false;		// and no VTable, .
 		enclosing().assignMethodMaps(compileContext);
@@ -842,11 +848,11 @@ class Scope {
 		if (_definition != null) {
 			switch (_definition.op()) {
 			case	FUNCTION:
-				if (_definition.class != Function) {
-					printf(" not Function");
+				if (_definition.class != FunctionDeclaration) {
+					printf(" not FunctionDeclaration");
 					break;
 				}
-				ref<Function> f = ref<Function>(_definition);
+				ref<FunctionDeclaration> f = ref<FunctionDeclaration>(_definition);
 				if (f.name() != null)
 					printf(" func %s", f.name().value().asString());
 				ref<ParameterScope> p = ref<ParameterScope>(this);
@@ -940,11 +946,40 @@ class Scope {
 	void printDetails() {
 	}
 	
+	void printStatus() {
+		printf("%p %s %s", this, string(_storageClass), isTemplateFunction() ? "template function " : "");
+		if (_definition != null) {
+			ref<FileStat> fs = file();
+			printf("%s %d: ", fs.filename(), fs.scanner().lineNumber(_definition.location()) + 1);
+			
+			printf("%s %s", string(_definition.op()), _definition.assignTypesBoundary() ? "type boundary " : "");
+			if (_definition.op() == Operator.FUNCTION) {
+				ref<FunctionDeclaration> func = ref<FunctionDeclaration>(_definition);
+				if (func.referenced)
+					printf("referenced ");
+			}
+			if (_definition.type != null)
+				_definition.type.print();
+			else {
+				printf("no type");
+			}
+		} else
+			printf("<no definition>");
+		printf("\n");
+	}
+	
+	string sourceLocation(Location loc) {
+		string result;
+		ref<FileStat> fs = file();
+		result.printf("%s %d: ", fs.filename(), fs.scanner().lineNumber(loc) + 1);
+		return result;
+	}
+	
 	string label() {
 		if (_definition != null) {
 			switch (_definition.op()) {
 			case	FUNCTION:
-				ref<Function> f = ref<Function>(_definition);
+				ref<FunctionDeclaration> f = ref<FunctionDeclaration>(_definition);
 				if (f.name() != null)
 					return _enclosing.label() + "." + f.name().value().asString();
 				break;
@@ -1030,7 +1065,7 @@ class Scope {
 
 	public boolean defineDestructor(ref<ParameterScope> destructor, ref<MemoryPool> memoryPool) {
 		if (_destructor != null) {
-			ref<Function> func = ref<Function>(_destructor.definition());
+			ref<FunctionDeclaration> func = ref<FunctionDeclaration>(_destructor.definition());
 			if (func.name().commentary() == null)
 				func.name().add(MessageId.DUPLICATE_DESTRUCTOR, memoryPool);
 			return false;
@@ -1075,6 +1110,55 @@ class Scope {
 		}
 	}
 	
+	public void checkDefaultConstructorCalls(ref<CompileContext> compileContext) {
+		if (_definition == null)
+			return;
+		if (_storageClass != StorageClass.MEMBER) {
+			switch (_definition.op()) {
+			case	LOCK:
+			case	BLOCK:
+			case	UNIT:
+				break;
+				
+			default:
+				return;
+			}
+		}
+		for (ref<Symbol>[Scope.SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
+			ref<Symbol> sym = i.get();
+			if (sym.class != PlainSymbol)
+				continue;
+			sym.assignType(compileContext);
+			ref<ParameterScope> destructor = sym.type().destructor();
+			if (destructor != null) {
+				if (destructor != null && destructor.definition() != null) {
+					ref<FunctionDeclaration> f = ref<FunctionDeclaration>(destructor.definition());
+					ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
+					oi.assignType(compileContext);
+					oi.markAsReferenced(compileContext);
+				}
+			}
+			if (sym.initializedWithConstructor())
+				continue;
+			ref<ParameterScope> defaultConstructor = sym.type().defaultConstructor();
+			if (defaultConstructor == null) {
+				if (sym.type().hasConstructors()) {
+//					printf("no def. %s\n", sym.type().signature());
+//					sym.print(0, false);
+//					assert(false);
+					sym.add(MessageId.NO_DEFAULT_CONSTRUCTOR, compileContext.pool());
+				}
+				continue;
+			}
+			if (defaultConstructor != null && defaultConstructor.definition() != null) {
+				ref<FunctionDeclaration> f = ref<FunctionDeclaration>(defaultConstructor.definition());
+				ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
+				oi.assignType(compileContext);
+				oi.markAsReferenced(compileContext);
+			}
+		}
+	}
+	
 	public void checkVariableStorage(ref<CompileContext> compileContext) {
 		switch (_storageClass) {
 		case	TEMPLATE:
@@ -1114,7 +1198,7 @@ class Scope {
 				boolean hasConstructorInitializer = sym.configureDefaultConstructors();
 				if (hasConstructorInitializer)
 					needsValidation = true;
-				else if (sym.isFullyAnalyzed() && sym.type().hasConstructors() && sym.type().defaultConstructor() == null)
+				else if (sym.isFullyAnalyzed() && sym.type().hasConstructors() && !sym.type().hasDefaultConstructor())
 					sym.definition().add(MessageId.NO_DEFAULT_CONSTRUCTOR, compileContext.pool());
 			}
 			if (needsValidation) {
@@ -1158,6 +1242,10 @@ class Scope {
 		else {
 			if (_definition.deferAnalysis())
 				return int.MIN_VALUE;
+			if (_definition.type == null) {
+				print(0, false);
+				_definition.print(0);
+			}
 			return _definition.type.parameterCount();
 		}
 	}
@@ -1175,11 +1263,15 @@ class Scope {
 		return false;
 	}
 
-	public ref<Function> enclosingFunction() {
+	public boolean isMonitor() {
+		return false;
+	}
+
+	public ref<FunctionDeclaration> enclosingFunction() {
 		for (ref<Scope>  s = this; s != null; s = s._enclosing) {
 			if (s._definition != null &&
 				s._definition.op() == Operator.FUNCTION)
-				return ref<Function>(s._definition);
+				return ref<FunctionDeclaration>(s._definition);
 		}
 		return null;
 	}
@@ -1190,7 +1282,7 @@ class Scope {
 			return false;
 		if (_definition.op() != Operator.FUNCTION)
 			return false;
-		ref<Function> f = ref<Function>(_definition);
+		ref<FunctionDeclaration> f = ref<FunctionDeclaration>(_definition);
 		if (f.name() == null)
 			return false;
 		if (f.name().symbol() == null)
@@ -1297,8 +1389,8 @@ class Scope {
 		return false;
 	}
 
-	public boolean isInTemplateFunction() {
-		if (_storageClass != StorageClass.AUTO)
+	public boolean isTemplateFunction() {
+		if (_storageClass != StorageClass.PARAMETER)
 			return false;
 		ref<Type> type = enclosingClassType();
 		if (type == null)
@@ -1348,8 +1440,14 @@ class Scope {
 	
 	ref<ParameterScope> defaultConstructor() {
 		for (int i = 0; i < _constructors.length(); i++)
-			if (_constructors[i].parameterCount() == 0)
+			if (_constructors[i].parameterCount() == 0) {
+				if (_constructors[i].definition() != null &&
+					_constructors[i].definition().type == null) {
+					_constructors[i].definition().print(0);
+					assert(false);
+				}
 				return _constructors[i];
+			}
 		return null;
 	}
 	
@@ -1387,7 +1485,6 @@ class Scope {
 			case	STATIC:
 			case	AUTO:
 			case	MEMBER:
-			case	MONITOR:
 				if (!type.isConcrete(compileContext))
 					symbol.definition().add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool());
 				break;
@@ -1454,15 +1551,6 @@ class Scope {
 			}
 		}
 		return maxStorage;
-	}
-
-	public void assignTypesForAuto(ref<CompileContext> compileContext) {
-		for (int i = 0; i < _enclosed.length(); i++)
-			if (_enclosed[i].storageClass() == StorageClass.AUTO)
-				compileContext.assignTypesForAuto(_enclosed[i]);
-		// How about this case for vectorization:
-		// if (_enclosed.storageClass() == StorageClass.AUTO)
-		//	compileContext.assign(_enclosed);
 	}
 }
 
@@ -1597,14 +1685,10 @@ class PlainSymbol extends Symbol {
 		printf("%*.*c%s PlainSymbol %p %s", indent, indent, ' ', _name.asString(), this, string(visibility()));
 		if (declaredStorageClass() != StorageClass.ENCLOSING)
 			printf(" %s", string(declaredStorageClass()));
-		if (_type != null) {
-			printf(" @%d[%d] ", offset, _type.size());
-			_type.print();
-		}
+		if (_type != null)
+			printf(" @%d[%d] %s", offset, _type.size(), _type.signature());
 		if (value != null)
 			printf(" val=%p", value);
-		if (offset != 0)
-			printf(" offset=%x", offset);
 		printf("\n");
 		if (_initializer != null && _initializer.op() == Operator.CLASS && _type != null && _type.family() == TypeFamily.TYPEDEF) {
 			ref<TypedefType> tt = ref<TypedefType>(_type);
@@ -1635,8 +1719,21 @@ class PlainSymbol extends Symbol {
 	public ref<Type> assignThisType(ref<CompileContext> compileContext) {
 		if (_type == null) {
 			ref<Scope> current = compileContext.current();
-			if (_enclosing.storageClass() == StorageClass.TEMPLATE) {
+			if (_enclosing.storageClass() == StorageClass.TEMPLATE)
 				_type = compileContext.arena().builtInType(TypeFamily.CLASS_DEFERRED);
+			else if (_typeDeclarator.op() == Operator.EMPTY) {
+				if (_initializer != null) {
+					compileContext.assignTypes(enclosing(), _initializer);
+					if (_initializer.deferAnalysis())
+						_type = _initializer.type;
+					else if (_initializer.type.family() == TypeFamily.TYPEDEF) {
+						_type = _initializer.type;
+					} else {
+						_initializer.add(MessageId.NOT_A_TYPE, compileContext.pool());
+						_type = compileContext.errorType();
+					}
+				} else
+					_type = compileContext.arena().builtInType(TypeFamily.CLASS_VARIABLE);
 			} else {
 				compileContext.assignTypes(enclosing(), _typeDeclarator);
 				if (_typeDeclarator.op() == Operator.CLASS_DECLARATION ||
@@ -1697,7 +1794,7 @@ class PlainSymbol extends Symbol {
 					definition().add(MessageId.INITIALIZER_REQUIRED, compileContext.pool());
 					return;
 				}
-				_initializer.assignTypes(compileContext);
+				compileContext.assignTypes(enclosing(), _initializer);
 				if (!_initializer.isConstant()) {
 					definition().add(MessageId.INITIALIZER_MUST_BE_CONSTANT, compileContext.pool());
 					return;
@@ -1772,7 +1869,7 @@ class PlainSymbol extends Symbol {
 	}
 	
 	public boolean initializedWithConstructor() {
-		if (_type == null)
+		if (deferAnalysis())
 			return false;
 		if (_type.family() == TypeFamily.TYPEDEF)
 			return false;
@@ -1781,11 +1878,13 @@ class PlainSymbol extends Symbol {
 		// If the symbol was declared with a constructor, then it is not constructed on entry and we have to leave
 		// the constructed flag for itleared.
 		if (_initializer != null &&
-			_initializer.op() == Operator.CALL &&
-			ref<Call>(_initializer).category() == CallCategory.CONSTRUCTOR)
-			return true;
-		else
-			return false;
+			_initializer.op() == Operator.CALL) {
+			if (_initializer.deferAnalysis())
+				return true;
+			if (ref<Call>(_initializer).category() == CallCategory.CONSTRUCTOR)
+				return true;
+		}
+		return false;
 	}
 	
 	public void construct() {
@@ -1943,12 +2042,24 @@ class OverloadInstance extends Symbol {
 
 	public ref<Type> assignThisType(ref<CompileContext> compileContext) {
 		if (_type == null) {
-			compileContext.assignTypesAtScope(_parameterScope, _parameterScope.definition());
+//			printf(" --- assignThisType ---\n");
+//			_parameterScope.definition().print(0);
+			compileContext.assignTypes(_parameterScope, _parameterScope.definition());
 			_type = _parameterScope.definition().type;
+			if (_type == null) {
+				_parameterScope.definition().print(0);
+			}
 		}
 		return _type;
 	}
 
+	public void markAsReferenced(ref<CompileContext> compileContext) {
+		if (_parameterScope.definition().op() == Operator.FUNCTION) {
+			ref<FunctionDeclaration> func = ref<FunctionDeclaration>(_parameterScope.definition());
+			func.referenced = true;
+		}
+	}
+	
 	public int parameterCount() {
 		return _parameterScope.parameterCount();
 	}
@@ -1963,10 +2074,12 @@ class OverloadInstance extends Symbol {
 		while (arguments != null) {
 			ref<PlainSymbol> ps = ref<PlainSymbol>((*_parameterScope.parameters())[parameter]);
 			ref<Node> typeDeclarator = ps.typeDeclarator();
-			compileContext.assignTypes(typeDeclarator);
+			compileContext.assignTypes(_parameterScope, typeDeclarator);
 			if (typeDeclarator.deferAnalysis())
 				return Callable.DEFER;
 			ref<Type> t;
+			if (typeDeclarator.type == null)
+				typeDeclarator.print(0);
 			if (typeDeclarator.type.family() == TypeFamily.FUNCTION)
 				t = typeDeclarator.type;
 			else
@@ -2085,13 +2198,16 @@ class OverloadInstance extends Symbol {
 
 	public boolean isConcrete(ref<CompileContext> compileContext) {
 		assignType(compileContext);
+		if (_type == null) {
+			print(0, false);
+		}
 		if (_type.family() != TypeFamily.FUNCTION)
 			return true;
 		ref<FunctionType> ft = ref<FunctionType>(_type);
 		if (ft.scope().definition().op() != Operator.FUNCTION)
 			return true;
-		ref<Function> func = ref<Function>(ft.scope().definition());
-		if (func.functionCategory() != Function.Category.ABSTRACT)
+		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(ft.scope().definition());
+		if (func.functionCategory() != FunctionDeclaration.Category.ABSTRACT)
 			return true;
 		return false;
 	}
@@ -2180,6 +2296,8 @@ class Symbol {
 	
 	public ref<Type> assignType(ref<CompileContext> compileContext) {
 		if (_type == null) {
+//			printf("assignType()\n");
+//			print(4, false);
 			if (_inProgress) {
 				_definition.add(MessageId.CIRCULAR_DEFINITION, compileContext.pool(), *_name);
 				_type = compileContext.errorType();
@@ -2197,6 +2315,9 @@ class Symbol {
 
 	public abstract ref<Type> assignThisType(ref<CompileContext> compileContext);
 
+	public void markAsReferenced(ref<CompileContext> compileContext) {
+	}
+	
 	public int parameterCount() {
 		assert(false);
 		return 0;

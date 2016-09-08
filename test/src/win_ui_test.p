@@ -22,6 +22,7 @@ string className = "TestClass";
 
 w.lpszClassName = &className[0];
 
+text.memDump(&w, w.bytes);
 print("About to register class...\n");
 windows.ATOM windowClass = windows.RegisterClassEx(&w);
 print("Class registered\n");

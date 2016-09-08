@@ -128,7 +128,7 @@ public class Arena {
 	}
 	
 	public ref<Target> compile(ref<FileStat> mainFile, boolean countCurrentObjects, boolean cloneTree, boolean verbose) {
-		CompileContext context(this, _global);
+		CompileContext context(this, _global, verbose);
 
 		cacheRootObjects(_root, &context);
 
@@ -248,12 +248,13 @@ public class Arena {
 
 	public boolean load() {
 		string rootFile = storage.constructPath(_rootFolder + "/lib", "root", "p");
-		CompileContext rootLoader(this, _global);
+		CompileContext rootLoader(this, _global, false);
 		ref<FileStat> f = new FileStat(rootFile, true);
 		f.parseFile(&rootLoader);
 		_specialFiles.setFile(f);
 		ref<Block> treeRoot = f.tree().root();
 		_root = createRootScope(treeRoot, f);
+		treeRoot.scope = _root;
 		rootLoader.buildScopes();
 
 		return treeRoot.countMessages() == 0;

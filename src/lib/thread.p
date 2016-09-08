@@ -33,7 +33,6 @@ import native:windows.WAIT_TIMEOUT;
 import native:windows.INFINITE;
 import native:windows.GetLastError;
 import parasol:exception.HardwareException;
-import parasol:exception.hardwareExceptionHandler;
 
 public class Thread {
 	private string _name;
@@ -229,6 +228,225 @@ class Mutex {
 	void takeAfterWait(int level) {
 		for (int i = 0; i < level; i++)
 			take();
+	}
+}
+
+private class WorkItem<class T> {
+	public ref<WorkItem<T>> next;
+	public ref<Future<T>> result;
+	public T(address p) func;
+	public address parameter;
+}
+
+public class ThreadPool<class T> {
+	private monitor _workload {
+		ref<WorkItem<T>> _first;
+		ref<WorkItem<T>> _last;
+		boolean _shutdownRequested;
+	}
+	
+	ref<Thread>[] _threads;
+	
+	public ThreadPool(int threadCount) {
+		resize(threadCount);
+	}
+	
+	~ThreadPool() {
+	}
+	
+	public void shutdown() {
+		lock (_workload) {
+			while (_first != null) {
+				ref<WorkItem<T>> wi = _first;
+				_first = wi.next;
+				if (wi.result != null)
+					wi.result.cancel();
+				delete wi;
+			}
+			_shutdownRequested = true;
+			notifyAll();
+		}
+		for (int i = 0; i < _threads.length(); i++) {
+			_threads[i].join();
+		}
+	}
+	
+	public ref<Future<T>> execute(T f(address p), address parameter) {
+		ref<Future<T>> future = new Future<T>;
+		ref<WorkItem<T>> wi = new WorkItem<T>;
+		wi.result = future;
+		wi.func = f;
+		wi.parameter = parameter;
+		lock (_workload) {
+			if (_shutdownRequested) {
+				delete wi;
+				delete future;
+				return null;			// Don't do it! It's a trap. (Bug: compiler does not unlock the _workload lock)
+			}
+			if (_first == null)
+				_first = wi;
+			else
+				_last.next = wi;
+			_last = wi;
+			notify();
+		}
+		return future;
+	}
+	
+	public boolean execute(void f(address p), address parameter) {
+		ref<WorkItem<T>> wi = new WorkItem<T>;
+		wi.result = null;
+		wi.func = T(address p)(f);
+		wi.parameter = parameter;
+		lock (_workload) {
+			if (_shutdownRequested) {
+				delete wi;
+				return false;			// Don't do it! It's a trap. (Bug: compiler does not unlock the _workload lock)
+			}
+			if (_first == null)
+				_first = wi;
+			else
+				_last.next = wi;
+			_last = wi;
+			notify();
+		}
+		return true;
+	}
+	
+	public void resize(int newThreadCount) {
+		if (newThreadCount < _threads.length()) {
+			assert(false);		// Need to have a way to shut down threads.
+		} else {
+			while (newThreadCount > _threads.length()) {
+				ref<Thread> t = new Thread();
+				_threads.append(t);
+				t.start(workLoop, this);
+			}
+		}
+	}
+
+	private static void workLoop(address p) {
+		ref<ThreadPool<T>> pool = ref<ThreadPool<T>>(p);
+		while (pool.getEvent())
+			;
+	}
+
+	private boolean getEvent() {
+		ref<WorkItem<T>> wi;
+
+		lock(_workload) {
+			if (_shutdownRequested)
+				return false;			// Don't do it! It's a trap. (Bug: compiler does not unlock the _workload lock)
+			wait();
+			if (_shutdownRequested)		// Note: _first will be null
+				return false;			// Don't do it! It's a trap. (Bug: compiler does not unlock the _workload lock)
+			wi = _first;
+			_first = wi.next;
+		}
+		if (wi.result != null) {
+			try {
+				if (wi.result.calculating())
+					wi.result.post(wi.func(wi.parameter));
+			} catch (Exception e) {
+				wi.result.postFailure(e.clone());
+			}
+		} else {
+			void(address p) f = void(address p)(wi.func);
+			f(wi.parameter);
+		}
+		delete wi;
+		return true;
+	}
+}
+
+public class Future<class T> {
+	private monitor _resources {
+		T _value;
+		boolean _calculating;
+		boolean _posted;
+		boolean _cancelled;
+		ref<Exception> _uncaught;
+	}
+	
+	public T get() {
+		T val;
+		lock (_resources) {
+			if (!_posted)
+				wait();
+			val = _value;
+		}
+		return val;
+	}
+	
+	public boolean success() {
+		boolean result;
+		lock (_resources) {
+			if (!_posted)
+				wait();
+			result = !_cancelled && _uncaught == null;
+		}
+		return result;
+	}
+	
+	public ref<Exception> uncaught() {
+		ref<Exception> e;
+		lock (_resources) {
+			if (!_posted)
+				wait();
+			e = _uncaught;
+		}
+		return e;
+	}
+	
+	public boolean cancelled() {
+		boolean c;
+		lock (_resources) {
+			if (!_posted)
+				wait();
+			c = _cancelled;
+		}
+		return c;
+	}
+	
+	public void post(T value) {
+		lock (_resources) {
+			_value = value;
+			_posted = true;
+			_calculating = false;
+			notifyAll();
+		}
+	}
+	
+	public void postFailure(ref<Exception> e) {
+		lock (_resources) {
+			_uncaught = e;
+			_posted = true;
+			_calculating = false;
+			notifyAll();
+		}
+	}
+	
+	boolean calculating() {
+		boolean result;
+		lock (_resources) {
+			if (!_cancelled)
+				_calculating = true;
+			result = _calculating;
+		}
+		return result;
+	}
+	
+	public boolean cancel() {
+		boolean result;
+		lock (_resources) {
+			if (!_posted && !_calculating) {
+				_cancelled = true;
+				_posted = true;
+				notifyAll();
+			}
+			result = _cancelled;
+		}
+		return result;
 	}
 }
 

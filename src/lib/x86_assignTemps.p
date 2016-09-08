@@ -26,7 +26,7 @@ import parasol:compiler.Call;
 import parasol:compiler.CallCategory;
 import parasol:compiler.CompileContext;
 import parasol:compiler.EllipsisArguments;
-import parasol:compiler.Function;
+import parasol:compiler.FunctionDeclaration;
 import parasol:compiler.FunctionType;
 import parasol:compiler.Node;
 import parasol:compiler.NodeList;
@@ -1085,7 +1085,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 	}
 	
 	void assignSingleReturn(ref<Return> retn, ref<Node> value, ref<CompileContext> compileContext) {
-		ref<Function> enclosing = f().current.enclosingFunction();
+		ref<FunctionDeclaration> enclosing = f().current.enclosingFunction();
 		ref<FunctionType> functionType = ref<FunctionType>(enclosing.type);
 		ref<NodeList> returnType = functionType.returnType();
 		int depth = tempStackDepth();
@@ -1120,7 +1120,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 	}
 	
 	void assignMultiReturn(ref<Return> retn, ref<Node> value, ref<CompileContext> compileContext) {
-		ref<Function> enclosing = f().current.enclosingFunction();
+		ref<FunctionDeclaration> enclosing = f().current.enclosingFunction();
 		ref<FunctionType> functionType = ref<FunctionType>(enclosing.type);
 		ref<NodeList> returnType = functionType.returnType();
 		int depth = tempStackDepth();

@@ -40,6 +40,7 @@ printf("Start of test\n");
 // Even though 'global' is declared below this point, the semantics of default constructors demands that
 // they be executed before entry to the scope, so that side-effects like this can be detected.
 
+printf("defaultConstructorCallCount = %d\n", defaultConstructorCallCount);
 assert(defaultConstructorCallCount == 1);
 defaultConstructorCallCount = 0;
 assert(global.value() == MAGIC_VALUE);

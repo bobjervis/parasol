@@ -179,7 +179,6 @@ public abstract address VirtualAlloc(address lpAddress, long sz, unsigned flAllo
 public abstract int VirtualProtect(address lpAddress, long sz, unsigned flNewProtect, ref<unsigned> lpflOldProtect);
 
 public class WNDCLASSEX {
-
 	public unsigned cbSize;
 	public unsigned style;
 	public WNDPROC lpfnWndProc;

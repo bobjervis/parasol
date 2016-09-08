@@ -180,7 +180,7 @@ class OverloadOperation {
 				ref<ParameterScope> constructor = (*classType.scope().constructors())[i];
 				if (constructor.kind() != ParameterScope.Kind.DEFAULT_CONSTRUCTOR)
 					_hadConstructors = true;
-				ref<Function> f = ref<Function>(constructor.definition());
+				ref<FunctionDeclaration> f = ref<FunctionDeclaration>(constructor.definition());
 				if (f == null || f.name() == null)
 					continue;
 				ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());

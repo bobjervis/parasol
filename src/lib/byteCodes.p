@@ -34,7 +34,7 @@ import parasol:compiler.familySize;
 import parasol:compiler.FileScanner;
 import parasol:compiler.FileStat;
 import parasol:compiler.For;
-import parasol:compiler.Function;
+import parasol:compiler.FunctionDeclaration;
 import parasol:compiler.FunctionType;
 import parasol:compiler.GatherCasesClosure;
 import parasol:compiler.Identifier;
@@ -394,7 +394,7 @@ public class ByteCodesTarget extends Target {
 				if (!method.deferAnalysis()) {
 					ref<Value> v = _unit.getCode(method.parameterScope(), this, compileContext);
 					if (v == null) {
-						ref<Function> func = ref<Function>(method.parameterScope().definition());
+						ref<FunctionDeclaration> func = ref<FunctionDeclaration>(method.parameterScope().definition());
 						classScope.classType.definition().add(MessageId.UNRESOLVED_ABSTRACT, compileContext.pool(), func.name().value());
 					}
 				}
@@ -541,7 +541,7 @@ public class ByteCodesTarget extends Target {
 				ref<Class> stringClass = ref<Class> (stringDef.initializer());
 				for (int i = 0; i < stringType.scope().constructors().length(); i++) {
 					ref<ParameterScope> scope = (*stringType.scope().constructors())[i];
-					ref<Function> func = ref<Function>(scope.definition());
+					ref<FunctionDeclaration> func = ref<FunctionDeclaration>(scope.definition());
 					ref<NodeList> args = func.arguments();
 					if (args == null ||
 						args.next != null)
@@ -606,7 +606,7 @@ public class ByteCodesTarget extends Target {
 
 	void dumpStack(address[] objects, pointer<byte>[] exceptionInfo, byte[] stackSnapshot, int startingObject) {
 //		printf("dumpStack\n");
-		CompileContext context(_arena, _arena.global());
+		CompileContext context(_arena, _arena.global(), false);
 		
 		ref<Code> code = ref<Code>(getValue(objects, exceptionInfo[0]));
 		if (code != null) {
@@ -811,9 +811,9 @@ class Unit {
 	}
 
 	public ref<Value> getCode(ref<ParameterScope> functionScope, ref<ByteCodesTarget> target, ref<CompileContext> compileContext) {
-		ref<Function> func = ref<Function>(functionScope.definition());
+		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(functionScope.definition());
 		if (functionScope.value == null) {
-			if (func.functionCategory() == Function.Category.ABSTRACT) {
+			if (func.functionCategory() == FunctionDeclaration.Category.ABSTRACT) {
 				if (functionScope.enclosing().storageClass() == StorageClass.STATIC) {
 					ref<Value> v = BuiltInFunction.create(func, target);
 					if (v != null)
@@ -899,7 +899,7 @@ class BuiltInFunction extends Value {
 		_returns = returns;
 	}
 
-	public static ref<BuiltInFunction> create(ref<Function> func, ref<ByteCodesTarget> target) {
+	public static ref<BuiltInFunction> create(ref<FunctionDeclaration> func, ref<ByteCodesTarget> target) {
 		for (int i = 0;; i++) {
 			pointer<byte> name = runtime.builtInFunctionName(i);
 			if (name == null)
@@ -975,14 +975,14 @@ class Code extends Value {
 		target.byteCode(ByteCodes.LOCALS);
 		target.fixup(0);
 		if (_scope.definition().op() == Operator.FUNCTION) {
-			ref<Function> func = ref<Function>(_scope.definition());
+			ref<FunctionDeclaration> func = ref<FunctionDeclaration>(_scope.definition());
 			tree = func.body;
 			if (tree == null) {
 				target.unfinished(func, "no function body", compileContext);
 				_length = 0;
 				return mark;
 			} else if (tree.type != null) {
-				if (func.functionCategory() == Function.Category.CONSTRUCTOR) {
+				if (func.functionCategory() == FunctionDeclaration.Category.CONSTRUCTOR) {
 					if (_scope.enclosing().hasVtable(compileContext)) {
 						if (_scope.enclosing().variableStorage > address.bytes) {
 							pushThis(target);
@@ -1383,7 +1383,7 @@ class Code extends Value {
 			break;
 
 		case	FUNCTION: {
-			ref<Function> func = ref<Function>(tree);
+			ref<FunctionDeclaration> func = ref<FunctionDeclaration>(tree);
 			if (func.body != null) {
 				if (func.name() == null) {
 					ref<ParameterScope> functionScope = target.arena().createParameterScope(compileContext.current(), func, ParameterScope.Kind.FUNCTION);
@@ -1867,8 +1867,8 @@ class Code extends Value {
 				ref<Symbol> sym = call.overload().symbol();
 				if (sym != null) {
 					if (sym.isFunction()) {
-						ref<Function> f = ref<Function>(sym.definition());
-						if (f.functionCategory() == Function.Category.CONSTRUCTOR) {
+						ref<FunctionDeclaration> f = ref<FunctionDeclaration>(sym.definition());
+						if (f.functionCategory() == FunctionDeclaration.Category.CONSTRUCTOR) {
 							int tempOffset = generateCall(call, null, call.type, false, target, compileContext);
 							generateAutoLoad(call, call.type, tempOffset, target, compileContext);
 						} else
@@ -3249,7 +3249,7 @@ class Code extends Value {
 						ref<Scope> sc = (*scope.constructors())[i];
 						if (sc.symbols().size() == 1 &&
 							sc.symbols().first().type() == existingType) {
-							ref<Function> constructorDef = ref<Function>(sc.definition());
+							ref<FunctionDeclaration> constructorDef = ref<FunctionDeclaration>(sc.definition());
 							ref<Symbol> sym = constructorDef.name().symbol();
 							ref<FunctionType> functionType = ref<FunctionType>(sym.type());
 							checkStack(target);
@@ -3400,7 +3400,7 @@ class Code extends Value {
 			target.byteCode(ByteCodes.RET1);
 			target.byteCode(0);
 		} else {							// a function body
-			ref<Function> func = ref<Function>(_scope.definition());
+			ref<FunctionDeclaration> func = ref<FunctionDeclaration>(_scope.definition());
 			ref<FunctionType> functionType = ref<FunctionType>(func.type);
 			if (functionType == null) {
 				target.unfinished(func, "generateReturn functionType == null", compileContext);

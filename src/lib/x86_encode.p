@@ -29,7 +29,6 @@ import parasol:compiler.EnumInstanceType;
 import parasol:compiler.FileStat;
 import parasol:compiler.FIRST_USER_METHOD;
 import parasol:compiler.FlagsInstanceType;
-import parasol:compiler.Function;
 import parasol:compiler.FunctionType;
 import parasol:compiler.Location;
 import parasol:compiler.MessageId;
@@ -673,7 +672,6 @@ class X86_64Encoder extends Target {
 				break;
 
 			case	MEMBER:
-			case	MONITOR:
 				// Align member fields, but don't reorder them - do not try to optimize stack frame yet.
 				size = type.size();
 				alignment = type.alignment();
@@ -736,6 +734,10 @@ class X86_64Encoder extends Target {
 				firstTime = false;
 //			else
 //				throw Exception();
+		}
+		if (alignment < 0) {
+			symbol.print(0, false);
+			assert(false);
 		}
 		_dataMap[alignment].append(symbol);
 		symbol.offset = _staticDataSize[alignment];
@@ -3118,7 +3120,6 @@ class X86_64Encoder extends Target {
 				break;
 				
 			case	MEMBER:
-			case	MONITOR:
 				int baseReg;
 				if (addressMode.op() == Operator.IDENTIFIER)
 					baseReg = 6;
@@ -3339,7 +3340,6 @@ class X86_64Encoder extends Target {
 					break;
 					
 				case	MEMBER:
-				case	MONITOR:
 					int baseReg;
 					if (addressMode.op() != Operator.IDENTIFIER) {
 						ref<Selection> dot = ref<Selection>(addressMode);

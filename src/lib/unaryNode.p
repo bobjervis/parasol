@@ -257,7 +257,7 @@ class Unary extends Node {
 				case	REF:
 				case	POINTER:
 					for (int i = 0; i < type.scope().constructors().length(); i++) {
-						ref<Function> f = ref<Function>((*type.scope().constructors())[i].definition());
+						ref<FunctionDeclaration> f = ref<FunctionDeclaration>((*type.scope().constructors())[i].definition());
 						ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
 						if (oi.parameterCount() != 2)
 							continue;
@@ -300,7 +300,7 @@ class Unary extends Node {
 					assert(false);
 				}
 				for (int i = 0; i < type.scope().constructors().length(); i++) {
-					ref<Function> f = ref<Function>((*type.scope().constructors())[i].definition());
+					ref<FunctionDeclaration> f = ref<FunctionDeclaration>((*type.scope().constructors())[i].definition());
 					ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
 					if (oi.parameterCount() != 1)
 						continue;

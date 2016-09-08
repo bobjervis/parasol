@@ -154,7 +154,7 @@ public class Pxi {
 				if (_pxiFile.seek(int(_entries[sectionIndex].offset), file.Seek.START) < 0)
 					return null;
 				ReaderMap r = readerMap[j];
-				return r.sectionReaderX(_pxiFile, _entries[sectionIndex].length);
+				return r.sectionReader(_pxiFile, _entries[sectionIndex].length);
 			}
 		}
 		return null;
@@ -165,8 +165,7 @@ public class Pxi {
 	}
 	
 	SectionType sectionType(int i) {
-		SectionType xyzzy = SectionType(_entries[i].sectionType);
-		return xyzzy;
+		return SectionType(_entries[i].sectionType);
 	}
 	
 	SectionEntry entry(int i) {
@@ -262,9 +261,9 @@ private class ReaderMap {
 	public SectionType sectionType;
 	public ref<Section> sectionReader(file.File pxiFile, long length);
 	
-	ref<Section> sectionReaderX(file.File pxiFile, long length) {
-		return sectionReader(pxiFile, length);
-	}
+//	ref<Section> sectionReader(file.File pxiFile, long length) {
+//		return sectionReader(pxiFile, length);
+//	}
 }
 
 private ReaderMap[] readerMap;

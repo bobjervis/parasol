@@ -678,7 +678,7 @@ class Parser {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
-		ref<Function> func = _tree.newFunction(Function.Category.ABSTRACT, returnType, id, parameters, loc);
+		ref<FunctionDeclaration> func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.ABSTRACT, returnType, id, parameters, loc);
 		return _tree.newUnary(Operator.ABSTRACT, func, location);
 	}
 
@@ -715,7 +715,7 @@ class Parser {
 	}
 
 	private ref<Node> parseConstructor(ref<Call> declarator) {
-		ref<Function> func = _tree.newFunction(Function.Category.CONSTRUCTOR, null, ref<Identifier>(declarator.target()), declarator.arguments(), declarator.location());
+		ref<FunctionDeclaration> func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.CONSTRUCTOR, null, ref<Identifier>(declarator.target()), declarator.arguments(), declarator.location());
 		Token t = _scanner.next();
 		if (t == Token.LEFT_CURLY) {
 			func.body = _tree.newBlock(Operator.BLOCK, false, _scanner.location());
@@ -728,7 +728,7 @@ class Parser {
 	}
 
 	private ref<Node> parseDestructor(ref<Call> declarator) {
-		ref<Function> func = _tree.newFunction(Function.Category.DESTRUCTOR, null, ref<Identifier>(declarator.target()), declarator.arguments(), declarator.location());
+		ref<FunctionDeclaration> func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.DESTRUCTOR, null, ref<Identifier>(declarator.target()), declarator.arguments(), declarator.location());
 		if (declarator.arguments() != null) {
 			declarator.arguments().node.add(MessageId.NO_PARAMS_IN_DESTRUCTOR, _tree.pool());
 		}
@@ -772,7 +772,7 @@ class Parser {
 			if (x.op() == Operator.SYNTAX_ERROR)
 				return x;
 			ref<Node> initializer;
-			ref<Function> func;
+			ref<FunctionDeclaration> func;
 			ref<Identifier> id = ref<Identifier>(x);
 			t = _scanner.next();
 			Location loc = _scanner.location();
@@ -782,7 +782,7 @@ class Parser {
 				if (!parseParameterList(Token.RIGHT_PARENTHESIS, &parameters))
 					return parameters.node;
 				if (parameters.hasBindings()) {
-					func = _tree.newFunction(Function.Category.NORMAL, type, id, parameters, loc);
+					func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.NORMAL, type, id, parameters, loc);
 					t = _scanner.next();
 					if (t == Token.LOCK)
 						func.body = parseLockStatement();
@@ -797,11 +797,11 @@ class Parser {
 				} else if (parameters == null) {
 					t = _scanner.next();
 					if (t == Token.LOCK) {
-						func = _tree.newFunction(Function.Category.NORMAL, type, id, parameters, loc);
+						func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.NORMAL, type, id, parameters, loc);
 						func.body = parseLockStatement();
 						return func;
 					} else if (t == Token.LEFT_CURLY) {
-						func = _tree.newFunction(Function.Category.NORMAL, type, id, parameters, loc);
+						func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.NORMAL, type, id, parameters, loc);
 						func.body = _tree.newBlock(Operator.BLOCK, false, _scanner.location());
 						parseBlock(func.body);
 						return func;
@@ -1109,7 +1109,7 @@ class Parser {
 	private ref<Node> parseTerm(boolean inFunctionLiteral) {
 		ref<Node> x;
 		ref<Node> y;
-		ref<Function> func;
+		ref<FunctionDeclaration> func;
 
 		Token t = _scanner.next();
 		Location location = _scanner.location();
@@ -1297,7 +1297,7 @@ class Parser {
 					return parameters.node;
 				if (inFunctionLiteral) {
 					t = _scanner.next();
-					ref<Function> func = _tree.newFunction(Function.Category.NORMAL, x, null, parameters, location);
+					ref<FunctionDeclaration> func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.NORMAL, x, null, parameters, location);
 					if (t == Token.LOCK)
 						func.body = parseLockStatement();
 					else if (t == Token.LEFT_CURLY) {
@@ -1305,7 +1305,7 @@ class Parser {
 						parseBlock(func.body);
 					} else {
 						_scanner.pushBack(t);
-						return _tree.newFunction(Function.Category.DECLARATOR, x, null, parameters, location);
+						return _tree.newFunctionDeclaration(FunctionDeclaration.Category.DECLARATOR, x, null, parameters, location);
 					}
 					return func;
 				} else // This is provisional.  It may be a call, a cast or a function declarator depending on context
@@ -1606,7 +1606,7 @@ class Parser {
 						*results = _tree.newNodeList(parameters.node);
 						return false;
 					}
-					argument = _tree.newFunction(Function.Category.NORMAL, type, ref<Identifier>(name), parameters, loc);
+					argument = _tree.newFunctionDeclaration(FunctionDeclaration.Category.NORMAL, type, ref<Identifier>(name), parameters, loc);
 					t = _scanner.next();
 				} else
 					argument = _tree.newBinary(Operator.BIND, type, name, location);

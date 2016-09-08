@@ -372,8 +372,9 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 			arg = tree.newCast(indexType, arg);
 			ref<ParameterScope> constructor = null;
 			for (int i = 0; i < vectorType.scope().constructors().length(); i++) {
-				ref<Function> f = ref<Function>((*vectorType.scope().constructors())[i].definition());
+				ref<FunctionDeclaration> f = ref<FunctionDeclaration>((*vectorType.scope().constructors())[i].definition());
 				ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
+				oi.assignType(compileContext);
 				if (oi.parameterCount() != 1)
 					continue;
 				if ((*oi.parameterScope().parameters())[0].type() == indexType) {

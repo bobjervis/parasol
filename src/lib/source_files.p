@@ -305,6 +305,7 @@ class FileStat {
 			return false;
 		_scopesBuilt = true;
 		_fileScope = compileContext.arena().createUnitScope(compileContext.arena().root(), _tree.root(), this);
+		_tree.root().scope = _fileScope;
 		compileContext.buildScopes();
 		ref<Scope> domainScope = compileContext.arena().createDomain(domain);
 		if (_namespaceNode != null)

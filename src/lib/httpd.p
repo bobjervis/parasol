@@ -15,6 +15,7 @@
  */
 namespace parasol:http;
 
+import parasol:thread.ThreadPool;
 import native:C.close;
 import native:net.accept;
 import native:net.AF_INET;
@@ -37,10 +38,12 @@ import native:windows.WORD;
 public class HttpServer {
 	private string _hostname;
 	private char _port;
+	private ref<ThreadPool<int>> _requestThreads;
 	
 	public HttpServer() {
 		_hostname = "";
 		_port = 80;
+		_requestThreads = new ThreadPool<int>(4);
 	}
 	
 	public boolean start() {
