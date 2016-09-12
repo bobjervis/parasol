@@ -307,7 +307,6 @@ class CompileContext {
 		case	BIT_COMPLEMENT:
 		case	BREAK:
 		case	BYTES:
-		case	CALL:
 		case	CALL_DESTRUCTOR:
 		case	CASE:
 		case	CAST:
@@ -421,10 +420,25 @@ class CompileContext {
 			i.prepareImport(this);
 			break;
 
+		case	CALL:
+			ref<Call> call = ref<Call>(n);
+			for (ref<NodeList> nl = call.arguments(); nl != null; nl = nl.next) {
+				switch (nl.node.op()) {
+				case BIND:
+				case FUNCTION:
+					nl.node.register = 1;
+				}
+			}
+			break;
+			
 		case	BIND:
-			b = ref<Binary>(n);
-			ref<Identifier> id = ref<Identifier>(b.right());
-			id.bind(_current, b.left(), null, this);
+			if (n.register == 1)
+				n.register = 0;
+			else {
+				b = ref<Binary>(n);
+				id = ref<Identifier>(b.right());
+				id.bind(_current, b.left(), null, this);
+			}
 			break;
 
 		case	LOCK:
@@ -449,7 +463,7 @@ class CompileContext {
 		case	CATCH:
 			ref<Scope> s = createScope(n, StorageClass.AUTO);
 			ref<Ternary> t = ref<Ternary>(n);
-			id = ref<Identifier>(t.middle());
+			ref<Identifier> id = ref<Identifier>(t.middle());
 			id.bind(s, t.left(), null, this);
 			return TraverseAction.SKIP_CHILDREN;
 	
@@ -511,6 +525,10 @@ class CompileContext {
 			return TraverseAction.SKIP_CHILDREN;
 			
 		case	FUNCTION:
+			if (n.register == 1) {
+				n.register = 0;
+				break;
+			}
 			ref<FunctionDeclaration> f = ref<FunctionDeclaration>(n);
 			ParameterScope.Kind funcKind;
 		

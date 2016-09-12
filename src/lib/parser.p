@@ -1305,7 +1305,8 @@ class Parser {
 						parseBlock(func.body);
 					} else {
 						_scanner.pushBack(t);
-						return _tree.newFunctionDeclaration(FunctionDeclaration.Category.DECLARATOR, x, null, parameters, location);
+						x = _tree.newFunctionDeclaration(FunctionDeclaration.Category.DECLARATOR, x, null, parameters, location);
+						break;
 					}
 					return func;
 				} else // This is provisional.  It may be a call, a cast or a function declarator depending on context

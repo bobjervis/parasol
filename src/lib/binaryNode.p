@@ -1469,6 +1469,53 @@ class Binary extends Node {
 		return this;
 	}
 
+	void assignDeclarationTypes(ref<CompileContext> compileContext) {
+		switch (op()) {
+		case	SUBSCRIPT:
+			_left.assignDeclarationTypes(compileContext);
+			compileContext.assignTypes(_right);
+			if (_left.deferAnalysis()) {
+				type = _left.type;
+				return;
+			}
+			if (_right.deferAnalysis()) {
+				type = _right.type;
+				return;
+			}
+			if (_left.type == null)
+				print(0);
+			if (_left.type.family() == TypeFamily.TYPEDEF)
+				arrayDeclaration(compileContext);
+			else {
+				print(0);
+				_left.add(MessageId.NOT_A_TYPE, compileContext.pool());
+				type = compileContext.errorType();
+			}
+			return;
+			
+		default:
+			assignTypes(compileContext);
+		}
+	}
+	
+	private void arrayDeclaration(ref<CompileContext> compileContext) {
+		if (_right.type.isIntegral()) {
+			add(MessageId.UNFINISHED_FIXED_ARRAY, compileContext.pool());
+			type = compileContext.errorType();
+		} else if (_right.type.family() == TypeFamily.TYPEDEF) {
+			ref<Type> keyType = _right.unwrapTypedef(compileContext);
+			ref<Type> vectorType = compileContext.arena().buildVectorType(_left.unwrapTypedef(compileContext), keyType, compileContext);
+			if (vectorType == null) { // Not an allowed combination.
+				_right.add(typeNotAllowed[op()], compileContext.pool());
+				type = compileContext.errorType();
+			}else
+				type = compileContext.makeTypedef(vectorType);
+		} else {
+			add(typeNotAllowed[op()], compileContext.pool());
+			type = compileContext.errorType();
+		}
+	}
+	
 	private void assignTypes(ref<CompileContext> compileContext) {
 		switch (op()) {
 		case	MONITOR_DECLARATION:
@@ -2061,23 +2108,9 @@ class Binary extends Node {
 			}
 			if (_left.type == null)
 				print(0);
-			if (_left.type.family() == TypeFamily.TYPEDEF) {
-				if (_right.type.isIntegral()) {
-					add(MessageId.UNFINISHED_FIXED_ARRAY, compileContext.pool());
-					type = compileContext.errorType();
-				} else if (_right.type.family() == TypeFamily.TYPEDEF) {
-					ref<Type> keyType = _right.unwrapTypedef(compileContext);
-					ref<Type> vectorType = compileContext.arena().buildVectorType(_left.unwrapTypedef(compileContext), keyType, compileContext);
-					if (vectorType == null) { // Not an allowed combination.
-						_right.add(typeNotAllowed[op()], compileContext.pool());
-						type = compileContext.errorType();
-					}else
-						type = compileContext.makeTypedef(vectorType);
-				} else {
-					add(typeNotAllowed[op()], compileContext.pool());
-					type = compileContext.errorType();
-				}
-			} else if (_left.type.isPointer(compileContext)) {
+			if (_left.type.family() == TypeFamily.TYPEDEF)
+				arrayDeclaration(compileContext);
+			else if (_left.type.isPointer(compileContext)) {
 				_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_64, false, compileContext);
 				type = _left.type.indirectType(compileContext);
 			} else if (_left.type.isVector(compileContext) || 

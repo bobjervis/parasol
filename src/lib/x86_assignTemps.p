@@ -318,7 +318,10 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		switch (node.op()) {
 		case	CALL:
 			ref<Call> call = ref<Call>(node);
-			assignCallRegisters(call, compileContext);
+			if (call.category() == CallCategory.DECLARATOR)
+				node.register = byte(f().r.getreg(node, longMask, regMask));
+			else
+				assignCallRegisters(call, compileContext);
 			break;
 			
 		case	CAST:

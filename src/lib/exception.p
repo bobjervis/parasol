@@ -105,7 +105,7 @@ public class Exception {
 		// null). If there is an _exceptionContext set but no lastCrawledFramePointer, we are processing a hardware
 		// exception for the first time.
 		
-		int(address ip, address elem) comparator = comparatorReturnAddress;
+		int(address, address) comparator = comparatorReturnAddress;
 		pointer<byte> ip = pointer<pointer<byte>>(stackPointer)[-1];
 		if (_exceptionContext == null) {
 			_exceptionContext = createExceptionContext(stackPointer);
@@ -185,7 +185,7 @@ public class Exception {
 		}
 		pointer<byte> lowCode = runtime.lowCodeAddress();
 		pointer<byte> highCode = runtime.highCodeAddress();
-		int(address ip, address elem) comparator = comparatorCurrentIp;
+		int(address, address) comparator = comparatorCurrentIp;
 		address stackTop = address(long(_exceptionContext.stackBase) + _exceptionContext.stackSize);
 		pointer<address> plausibleEnd = pointer<address>(stackTop) + -2;
 		int frames = 0;

@@ -240,6 +240,7 @@ class X86_64AddressModes extends X86_64Encoder {
 				tryMakeMode(dot.left(), MC_ADDRESS, nClass, compileContext);
 			break;
 			
+		case	BIND:
 		case	SUBSCRIPT:
 		case	DELETE:
 			b = ref<Binary>(node);

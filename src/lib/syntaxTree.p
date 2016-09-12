@@ -2670,7 +2670,8 @@ class Node {
 	}
 
 	public ref<Type> unwrapTypedef(ref<CompileContext> compileContext) {
-		compileContext.assignTypeToNode(this);
+		if (type == null)
+			assignDeclarationTypes(compileContext);
 		if (deferAnalysis())
 			return type;
 		if (_op == Operator.UNWRAP_TYPEDEF)
@@ -2683,6 +2684,7 @@ class Node {
 		} else if (type.family() == TypeFamily.CLASS_VARIABLE) {
 			return compileContext.arena().builtInType(TypeFamily.CLASS_DEFERRED);
 		}
+		print(0);
 		add(MessageId.NOT_A_TYPE, compileContext.pool());
 		type = compileContext.errorType();
 		return type;
@@ -3019,6 +3021,10 @@ class Node {
 		return false;
 	}
 
+	void assignDeclarationTypes(ref<CompileContext> compileContext) {
+		assignTypes(compileContext);
+	}
+	
 	void assignTypes(ref<CompileContext> compileContext) {
 		assert(false);
 	}
@@ -3092,6 +3098,20 @@ class NodeList {
 			if (nl.node.op() == Operator.BIND || nl.node.op() == Operator.FUNCTION)
 				return true;
 		return false;
+	}
+	
+	void markErroneousBindings(ref<CompileContext> compileContext) {
+		for (ref<NodeList> nl = this; nl != null; nl = nl.next) {
+			if (nl.node.op() == Operator.BIND) {
+				ref<Identifier> id = ref<Identifier>(ref<Binary>(nl.node).right());
+				nl.node.add(MessageId.INVALID_BINDING, compileContext.pool(), id.value());
+				nl.node.type = compileContext.errorType();
+			} else if (nl.node.op() == Operator.FUNCTION) {
+				ref<Identifier> id = ref<FunctionDeclaration>(nl.node).name();
+				nl.node.add(MessageId.INVALID_BINDING, compileContext.pool(), id.value());
+				nl.node.type = compileContext.errorType();
+			}
+		}
 	}
 	
 	void print(int indent) {

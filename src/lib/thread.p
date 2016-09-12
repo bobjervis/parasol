@@ -37,7 +37,7 @@ import parasol:exception.HardwareException;
 public class Thread {
 	private string _name;
 	private HANDLE _threadHandle;
-	private void(address a) _function;
+	private void(address) _function;
 	private address _parameter;
 	private address _context;
 	
@@ -234,7 +234,7 @@ class Mutex {
 private class WorkItem<class T> {
 	public ref<WorkItem<T>> next;
 	public ref<Future<T>> result;
-	public T(address p) func;
+	public T(address p) valueGenerator;
 	public address parameter;
 }
 
@@ -275,7 +275,7 @@ public class ThreadPool<class T> {
 		ref<Future<T>> future = new Future<T>;
 		ref<WorkItem<T>> wi = new WorkItem<T>;
 		wi.result = future;
-		wi.func = f;
+		wi.valueGenerator = f;
 		wi.parameter = parameter;
 		lock (_workload) {
 			if (_shutdownRequested) {
@@ -296,7 +296,7 @@ public class ThreadPool<class T> {
 	public boolean execute(void f(address p), address parameter) {
 		ref<WorkItem<T>> wi = new WorkItem<T>;
 		wi.result = null;
-		wi.func = T(address p)(f);
+		wi.valueGenerator = T(address p)(f);
 		wi.parameter = parameter;
 		lock (_workload) {
 			if (_shutdownRequested) {
@@ -346,12 +346,12 @@ public class ThreadPool<class T> {
 		if (wi.result != null) {
 			try {
 				if (wi.result.calculating())
-					wi.result.post(wi.func(wi.parameter));
+					wi.result.post(wi.valueGenerator(wi.parameter));
 			} catch (Exception e) {
 				wi.result.postFailure(e.clone());
 			}
 		} else {
-			void(address p) f = void(address p)(wi.func);
+			void(address) f = void(address)(wi.valueGenerator);
 			f(wi.parameter);
 		}
 		delete wi;

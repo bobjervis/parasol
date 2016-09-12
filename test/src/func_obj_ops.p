@@ -23,3 +23,26 @@ if (testFuncPtr == null)
 	testFuncPtr = f;
 
 assert(testFuncPtr() == 4);
+
+int g(long x) {
+	return int(x + 3);
+}
+
+int(long) testFuncPtrWithArg;
+
+if (testFuncPtrWithArg == null)
+	testFuncPtrWithArg = g;
+
+assert(testFuncPtrWithArg(17) == 20);
+
+void h(long x) {
+	assert(x <= 1);
+}
+
+testFuncPtrWithArg = int(long)(h);
+
+void(long) p;
+
+p = void(long)(testFuncPtrWithArg);
+
+p(0);

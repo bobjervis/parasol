@@ -79,7 +79,7 @@ boolean bool;
 enum E { A, B, C };
 E e;
 ref<int> p;
-int fn(double x);
+int(double) fn;
 
 bool = true;
 
@@ -95,7 +95,7 @@ v = var(bool);
 a = address(bool);
 e = E(bool);
 p = ref<int>(bool);
-fn = function int(double)(bool);
+fn = int(double)(bool);
 
 assert(b == 1);
 assert(c == 1);
@@ -125,7 +125,7 @@ a = address(b);
 bool = boolean(b);
 e = E(b);
 p = ref<int>(b);
-fn = function int(double)(b);
+fn = int(double)(b);
 
 assert(c == 253);
 assert(u == 253);
@@ -155,7 +155,7 @@ a = address(c);
 bool = boolean(c);
 e = E(c);
 p = ref<int>(c);
-fn = function int(double)(c);
+fn = int(double)(c);
 
 assert(b == 7);
 assert(u == 64007);
@@ -237,7 +237,7 @@ a = address(i);
 bool = boolean(i);
 e = E(i);
 p = ref<int>(i);
-fn = function int(double)(i);
+fn = int(double)(i);
 
 assert(b == 151);
 assert(c == 42903);
@@ -267,7 +267,7 @@ a = address(l);
 bool = boolean(l);
 e = E(l);
 p = ref<int>(l);
-fn = function int(double)(l);
+fn = int(double)(l);
 
 assert(b == 180);
 assert(c == 9140);
@@ -297,7 +297,7 @@ a = address(f);
 bool = boolean(f);
 e = E(f);
 p = ref<int>(f);
-fn = function int(double)(f);
+fn = int(double)(f);
 
 assert(b == 52);
 assert(c == 52);
@@ -327,7 +327,7 @@ a = address(d);
 bool = boolean(d);
 e = E(d);
 p = ref<int>(d);
-fn = function int(double)(d);
+fn = int(double)(d);
 
 assert(b == 179);
 assert(c == 41651);
@@ -357,7 +357,7 @@ l = long(e);
 a = address(e);
 bool = boolean(e);
 p = ref<int>(e);
-fn = function int(double)(e);
+fn = int(double)(e);
 
 assert(b == 2);
 assert(c == 2);

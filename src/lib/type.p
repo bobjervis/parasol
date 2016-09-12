@@ -809,6 +809,42 @@ class FunctionType extends Type {
 		printf("%s %d <- %d", string(family()), returnCount(), parameterCount());
 	}
 
+	public string signature() {
+		string sig;
+		// First, format the return type(s).
+		if (_returnType == null)
+			sig = "<void>";
+		else if (_returnType.next == null)
+			sig = _returnType.node.type.signature();
+		else {
+			sig = "(";
+			for (ref<NodeList> nl = _returnType; nl != null; nl = nl.next) {
+				sig.append(nl.node.type.signature());
+				if (nl.next != null)
+					sig.append(',');
+				else
+					sig.append(')');
+			}
+		}
+		sig.append('(');
+		if (_parameters == null)
+			sig.append(')');
+		else {
+			for (ref<NodeList> nl = _parameters; nl != null; nl = nl.next) {
+				if (nl.node == null)
+					sig.append("<node:null>");
+				else if (nl.node.type == null)
+					sig.append("<null>");
+				else
+					sig.append(nl.node.type.signature());
+				if (nl.next != null)
+					sig.append(',');
+				else
+					sig.append(')');
+			}
+		}
+		return sig;
+	}
 }
 
 class TemplateType extends Type {

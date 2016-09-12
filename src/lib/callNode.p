@@ -22,6 +22,7 @@ enum CallCategory {
 	DESTRUCTOR,
 	FUNCTION_CALL,
 	METHOD_CALL,
+	DECLARATOR,			// type1(type2, type3, ...) ,_ if all expressions have 'class' type, then this must be a function type
 }
 
 class Call extends ParameterBag {
@@ -159,6 +160,9 @@ class Call extends ParameterBag {
 			ref<Node> thisParameter = null;
 			ref<Node> functionObject = null;
 			switch (_category) {
+			case	DECLARATOR:
+				return this;
+				
 			case	COERCION:
 				ref<Node> source = _arguments.node;
 				return tree.newCast(type, source).fold(tree, voidContext, compileContext);
@@ -562,6 +566,55 @@ class Call extends ParameterBag {
 			type = compileContext.errorType();
 	}
 	
+	void assignDeclarationTypes(ref<CompileContext> compileContext) {
+		switch (op()) {
+		case	CALL:
+			if (!assignSub(Operator.FUNCTION, compileContext))
+				break;
+			if (!assignFunctionType(compileContext)) {
+				add(MessageId.NOT_A_TYPE, compileContext.pool());
+				type = compileContext.errorType();
+			}
+			return;
+			
+		default:
+			assignTypes(compileContext);
+		}
+	}
+	
+	private boolean assignFunctionType(ref<CompileContext> compileContext) {
+		if (_target.type.family() != TypeFamily.TYPEDEF)
+			return false;
+		ref<Type> t = _target.unwrapTypedef(compileContext);
+		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
+			if (nl.node.op() == Operator.BIND)
+				continue;
+			if (nl.node.type.family() != TypeFamily.TYPEDEF)
+				return false;
+		}
+		// This is a good function type declaration, clean it up. 
+		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
+			if (nl.node.op() == Operator.BIND) {
+				ref<Identifier> id = ref<Identifier>(ref<Binary>(nl.node).right());
+				nl.node.add(MessageId.INVALID_BINDING, compileContext.pool(), id.value());
+				type = compileContext.errorType();
+			} else
+				nl.node.type = nl.node.unwrapTypedef(compileContext);
+		}
+		ref<NodeList> returnType;
+		if (t.family() != TypeFamily.VOID) {
+			ref<Node> n = compileContext.current().file().tree().newLeaf(Operator.EMPTY, _target.location());
+			n.type = t;
+			returnType = compileContext.current().file().tree().newNodeList(n);
+		}
+		if (type == null) {
+			type = compileContext.pool().newFunctionType(returnType, _arguments, null);
+			type = compileContext.pool().newTypedefType(TypeFamily.TYPEDEF, type);
+		}
+		_category = CallCategory.DECLARATOR;
+		return true;
+	}
+	
 	private void assignTypes(ref<CompileContext> compileContext) {
 		switch (op()) {
 		case	ARRAY_AGGREGATE:
@@ -597,6 +650,15 @@ class Call extends ParameterBag {
 
 		case	CALL:
 			if (!assignSub(Operator.FUNCTION, compileContext))
+				break;
+			for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
+				if (nl.node.op() == Operator.BIND) {
+					ref<Identifier> id = ref<Identifier>(ref<Binary>(nl.node).right());
+					nl.node.add(MessageId.INVALID_BINDING, compileContext.pool(), id.value());
+					type = compileContext.errorType();
+				}
+			}
+			if (deferAnalysis())
 				break;
 			if (_target.op() == Operator.SUPER) {
 				_category = CallCategory.CONSTRUCTOR;
@@ -638,6 +700,8 @@ class Call extends ParameterBag {
 
 			case	TYPEDEF:
 				ref<Type> t = _target.unwrapTypedef(compileContext);
+				if (_arguments != null && assignFunctionType(compileContext))
+					break;
 				if (builtInCoercion(compileContext))
 					_category = CallCategory.COERCION;
 				else {
@@ -854,9 +918,9 @@ class Call extends ParameterBag {
 	}
 
 	ref<Node> rewriteDeclarators(ref<SyntaxTree> syntaxTree) {
-		if (op() == Operator.CALL)
-			return syntaxTree.newFunctionDeclaration(FunctionDeclaration.Category.DECLARATOR, _target, null, _arguments, location());
-		else
+//		if (op() == Operator.CALL)
+//			return syntaxTree.newFunctionDeclaration(FunctionDeclaration.Category.DECLARATOR, _target, null, _arguments, location());
+//		else
 			return this;
 	}
 
@@ -927,6 +991,7 @@ class Call extends ParameterBag {
 		case	VAR:
 			return true;
 
+		case	FUNCTION:
 		case	UNSIGNED_8:
 		case	UNSIGNED_16:
 		case	UNSIGNED_32:
@@ -944,7 +1009,6 @@ class Call extends ParameterBag {
 		case	BOOLEAN:
 		case	ENUM:
 		case	FLAGS:
-		case	FUNCTION:
 			switch (newType.family()) {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -1212,8 +1276,6 @@ class FunctionDeclaration extends ParameterBag {
 			return;
 		}
 		type = compileContext.pool().newFunctionType(retType, _arguments, definesScope() ? compileContext.current() : null);
-		if (_functionCategory == Category.DECLARATOR)
-			type = compileContext.makeTypedef(type);
 		if (_name != null && _name.symbol() != null) {
 			_name.symbol().bindType(type, compileContext);
 			_name.type = type;

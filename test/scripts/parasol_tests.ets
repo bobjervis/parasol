@@ -161,6 +161,8 @@ compile(filename: unit_return_fail2.p, expect: fail, message: RETURN_DISALLOWED)
 
 compile(filename: stray_token_enum.p, expect: fail)
 
+compile(){ "int(address) func; void(address) f = void(address)(func);" }
+
 compile() { "class a = int; a b; int c; b = c;" }
 
 compile(){"pointer<int> ip; var v = ip;" }
@@ -226,7 +228,7 @@ compile(expect: fail, message: NOT_ENUM_INSTANCE) { "enum e { A, B, C }; e x; sw
 compile(expect: fail, message: ABSTRACT_INSTANCE_DISALLOWED) { 
 			"class Foo { abstract int f(); Foo() {} }; ref<Foo> a = new Foo();" 
 		}
-compile() { "void stat(int x) {} void foo(long x); foo = function void(long)(stat);" }
+compile() { "void stat(int x) {} void foo(long x); foo = void(long)(stat);" }
 
 // The matrix of allowed operators for boolean operands:
 
@@ -318,7 +320,7 @@ compile() { "byte src; var x; x = src;" }
 compile() { "byte src; address x; x = address(src);" }
 compile() { "char src; boolean x; x = boolean(src);" }
 compile() { "byte src; enum Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "byte src; int x(double z); x = function int(double)(src);" }
+compile() { "byte src; int x(double z); x = int(double)(src);" }
 
 // From char
 
@@ -333,7 +335,7 @@ compile() { "char src; var x; x = src;" }
 compile() { "char src; address x; x = address(src);" }
 compile() { "char src; boolean x; x = boolean(src);" }
 compile() { "char src; enum Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "char src; int x(double z); x = function int(double)(src);" }
+compile() { "char src; int x(double z); x = int(double)(src);" }
 
 // From unsigned
 
@@ -348,7 +350,7 @@ compile() { "unsigned src; var x; x = src;" }
 compile() { "unsigned src; address x; x = address(src);" }
 compile() { "unsigned src; boolean x; x = boolean(src);" }
 compile() { "unsigned src; enum Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "unsigned src; int x(double z); x = function int(double)(src);" }
+compile() { "unsigned src; int x(double z); x = int(double)(src);" }
 
 // From short
 
@@ -363,7 +365,7 @@ compile() { "short src; var x; x = src;" }
 compile() { "short src; address x; x = address(src);" }
 compile() { "short src; boolean x; x = boolean(src);" }
 compile() { "short src; enum Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "short src; int x(double z); x = function int(double)(src);" }
+compile() { "short src; int x(double z); x = int(double)(src);" }
 
 // From int
 
@@ -378,7 +380,7 @@ compile() { "int src; var x; x = src;" }
 compile() { "int src; address x; x = address(src);" }
 compile() { "int src; boolean x; x = boolean(src);" }
 compile() { "int src; enum Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "int src; int x(double z); x = function int(double)(src);" }
+compile() { "int src; int x(double z); x = int(double)(src);" }
 
 // From long
 
@@ -393,7 +395,7 @@ compile() { "long src; var x; x = src;" }
 compile() { "long src; address x; x = address(src);" }
 compile() { "long src; boolean x; x = boolean(src);" }
 compile() { "long src; enum Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "long src; int x(double z); x = function int(double)(src);" }
+compile() { "long src; int x(double z); x = int(double)(src);" }
 
 // From float
 
@@ -408,7 +410,7 @@ compile() { "float src; var x; x = src;" }
 compile() { "float src; address x; x = address(src);" }
 compile() { "float src; boolean x; x = boolean(src);" }
 compile() { "float src; enum Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "float src; int x(double z); x = function int(double)(src);" }
+compile() { "float src; int x(double z); x = int(double)(src);" }
 
 // From double
 
@@ -423,7 +425,7 @@ compile() { "double src; var x; x = src;" }
 compile() { "double src; address x; x = address(src);" }
 compile() { "double src; boolean x; x = boolean(src);" }
 compile() { "double src; enum Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "double src; int x(double z); x = function int(double)(src);" }
+compile() { "double src; int x(double z); x = int(double)(src);" }
 
 // From boolean
 
@@ -438,7 +440,7 @@ compile() { "boolean src; double x; x = double(src);" }
 compile() { "boolean src; var x; x = src;" }
 compile() { "boolean src; address x; x = address(src);" }
 compile() { "boolean src; enum Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "boolean src; int x(double z); x = function int(double)(src);" }
+compile() { "boolean src; int x(double z); x = int(double)(src);" }
 
 // From Foo
 
@@ -453,7 +455,7 @@ compile() { "enum Foo { A, B }; Foo src; long x; x = long(src);" }
 //compile() { "enum Foo { A, B }; Foo src; var x; x = src;" }
 compile() { "enum Foo { A, B }; Foo src; address x; x = address(src);" }
 compile() { "enum Foo { A, B }; Foo src; boolean x; x = boolean(src);" }
-compile() { "enum Foo { A, B }; Foo src; int x(double z); x = function int(double)(src);" }
+compile() { "enum Foo { A, B }; Foo src; int x(double z); x = int(double)(src);" }
 
 // From address
 
@@ -468,7 +470,7 @@ compile() { "address src; var x; x = src;" }
 compile() { "address src; double x; x = double(src);" }
 compile() { "address src; boolean x; x = boolean(src);" }
 compile() { "address src; enum Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "address src; int x(double z); x = function int(double)(src);" }
+compile() { "address src; int x(double z); x = int(double)(src);" }
 
 // From function int(double);
 

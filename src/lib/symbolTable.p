@@ -2001,11 +2001,9 @@ class OverloadInstance extends Symbol {
 		if (_parameterScope.nativeBinding) {
 			printf(" @%x ", offset);
 			if (_type != null)
-				_type.print();
-		} else if (_type != null) {
-			printf(" @%d ", offset);
-			_type.print();
-		}
+				printf("%s", _type.signature());
+		} else if (_type != null)
+			printf(" @%d %s", offset, _type.signature());
 		printf("\n");
 		switch (_parameterScope.definition().op()) {
 		case	FUNCTION:
