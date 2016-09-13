@@ -21,6 +21,7 @@ import native:windows.CreateSemaphore;
 import native:windows.ReleaseSemaphore;
 import native:windows.CreateMutex;
 import native:windows.ReleaseMutex;
+import native:windows.Sleep;
 import native:windows.WaitForSingleObject;
 import native:windows._beginthreadex;
 import native:windows.HANDLE;
@@ -101,6 +102,15 @@ public class Thread {
 	
 	public string name() {
 		return _name;
+	}
+	
+	public static void sleep(long milliseconds) {
+		while (milliseconds > 1000000000) {
+			Sleep(1000000000);
+			milliseconds -= 1000000000;
+		}
+		if (milliseconds > 0)
+			Sleep(DWORD(milliseconds));
 	}
 }
 /*
@@ -234,7 +244,7 @@ class Mutex {
 private class WorkItem<class T> {
 	public ref<WorkItem<T>> next;
 	public ref<Future<T>> result;
-	public T(address p) valueGenerator;
+	public T(address) valueGenerator;
 	public address parameter;
 }
 
@@ -296,7 +306,7 @@ public class ThreadPool<class T> {
 	public boolean execute(void f(address p), address parameter) {
 		ref<WorkItem<T>> wi = new WorkItem<T>;
 		wi.result = null;
-		wi.valueGenerator = T(address p)(f);
+		wi.valueGenerator = T(address)(f);
 		wi.parameter = parameter;
 		lock (_workload) {
 			if (_shutdownRequested) {

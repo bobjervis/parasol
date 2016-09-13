@@ -86,6 +86,8 @@ public abstract WINBOOL SystemTimeToFileTime(ref<SYSTEMTIME> lpSystemTime, ref<F
 public abstract DWORD GetCurrentThreadId(void);
 @Windows("kernel32.dll", "CreateThread")
 public abstract HANDLE CreateThread(address lpThreadAttributes, SIZE_T dwStackSize, DWORD lpStartAddress(address p), address lpParameter, DWORD dwCreationFlags, ref<DWORD> lpThreadId);
+@Windows("kernel32.dll", "Sleep")
+public abstract void Sleep(DWORD dwMilliseconds);
 
 @Windows("msvcrt.dll", "_beginthread")
 public abstract address _beginthread(void startAddress(address p), unsigned stackSize, address args);
