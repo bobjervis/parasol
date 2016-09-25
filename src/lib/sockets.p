@@ -243,6 +243,14 @@ public abstract int listen(int socketfd, int backlog);
 @Windows("ws2_32.dll", "socket")
 public abstract int socket(int af, int type, int protocol);
 
+@Windows("ws2_32.dll", "closesocket")
+public abstract int closesocket(int socketfd);
+
+@Windows("ws2_32.dll", "recv")
+public abstract int recv(int fd, pointer<byte> buf, int len, int recvflags);
+
+@Windows("ws2_32.dll", "send")
+public abstract int send(int fd, pointer<byte> buf, int len, int sendflags);
 
 @Windows("ws2_32.dll", "WSAGetLastError")
 public abstract int WSAGetLastError();

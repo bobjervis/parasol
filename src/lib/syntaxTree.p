@@ -614,6 +614,13 @@ class Block extends Node {
 			return t;
 	}
 
+	public Test containsBreak() {
+		for (ref<NodeList> nl = _statements; nl != null; nl = nl.next)
+			if (nl.node.containsBreak() == Test.PASS_TEST)
+				return Test.PASS_TEST;
+		return Test.FAIL_TEST;
+	}
+
 	public void print(int indent) {
 		printBasic(indent);
 		if (_inSwitch)
@@ -1595,6 +1602,13 @@ private:
 			type = compileContext.arena().createRef(t, compileContext);
 			break;
 		}
+	}
+	
+	public Test containsBreak() {
+		if (op() == Operator.BREAK)
+			return Test.PASS_TEST;
+		else
+			return Test.FAIL_TEST;
 	}
 }
 

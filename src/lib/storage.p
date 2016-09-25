@@ -15,6 +15,8 @@
  */
 namespace parasol:storage;
 
+import native:windows.DWORD;
+import native:windows.GetFileAttributes;
 import native:windows.GetFullPathName;
 
 public int FILENAME_MAX = 260;
@@ -79,4 +81,10 @@ public string directory(string filename) {
 	return ".";
 }
 
-
+public boolean exists(string filename) {
+	DWORD r = GetFileAttributes(&filename[0]);
+	if (r == 0xffffffff)
+		return false;
+	else
+		return true;
+}

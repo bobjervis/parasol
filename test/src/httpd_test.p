@@ -13,8 +13,36 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import parasol:http.HttpServer;;
+import parasol:http.HttpRequest;
+import parasol:http.HttpResponse;
+import parasol:http.HttpServer;
+import parasol:http.HttpService;
 
 HttpServer server;
 
+TestService service;
+
+server.staticContent("/sim", "c:/SetsInMotion-Alpha-4/help");
+server.service("/service", &service);
+
 assert(server.start());
+
+class TestService extends HttpService {
+	
+	public boolean processRequest(ref<HttpRequest> request, ref<HttpResponse> response) {
+		printf("Test Service! fetching %s\n", request.serviceResource);
+		if (request.method != HttpRequest.Method.POST) {
+			response.error(405);
+			return true;
+		}
+		long messageBodySize = request.contentLength();
+		printf("Reading %d bytes more\n", messageBodySize);
+		byte[] buffer;
+		buffer.resize(int(messageBodySize));
+		for (int i = 0; i < buffer.length(); i++) {
+			buffer[i] = byte(request.getc());
+		}
+		text.memDump(&buffer[0], messageBodySize, 0);
+		return false;
+	}
+}

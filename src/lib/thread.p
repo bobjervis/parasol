@@ -87,6 +87,7 @@ public class Thread {
 		try {
 			t._function(t._parameter);
 		} catch (Exception e) {
+			printf("\nUncaught exception! (thread %d)\n\n%s\n", long(_threadHandle.asAddress()), e.message());
 			e.printStackTrace();
 		}
 	}

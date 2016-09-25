@@ -231,6 +231,10 @@ class string {
 		return result;
 	}
 	
+	public void clear() {
+		copy(null);
+	}
+	
 	public int compare(string other) {
 		if (_contents == null) {
 			if (other._contents == null)
@@ -1093,6 +1097,24 @@ class string {
 		} else
 			output.resize(1);
 		return output;
+	}
+	/*
+	 * startsWith - matches a prefix against the target string. If this string is a byte-by-byte match for the other
+	 * string, this method returns true. If this string is null, this method returns false, regardless of the value of the
+	 * prefix. 
+	 */
+	public boolean startsWith(string prefix) {
+		if (_contents == null)
+			return false;
+		// If the prefix is longer, it can't match
+		if (_contents.length < prefix.length())
+			return false;
+		// Check the first N bytes (N = the length of the shorter, the prefix).
+		for (int i = 0; i < prefix.length(); i++) {
+			if (pointer<byte>(&_contents.data)[i] != pointer<byte>(&prefix._contents.data)[i])
+				return false;
+		}
+		return true;
 	}
 	/**
 	 * store

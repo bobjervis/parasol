@@ -16,7 +16,7 @@
 namespace parasol:x86_64;
 
 import native:C;
-import parasol:file;
+
 import parasol:compiler.Access;
 import parasol:compiler.Arena;
 import parasol:compiler.Binary;
@@ -52,6 +52,8 @@ import parasol:compiler.TypedefType;
 import parasol:compiler.TypeFamily;
 import parasol:compiler.Unary;
 import parasol:compiler.Variable;
+import parasol:file;
+import parasol:math.abs;
 import parasol:pxi.Pxi;
 import parasol:runtime;
 import parasol:text;
@@ -794,8 +796,21 @@ class X86_64Encoder extends Target {
 		return offset;
 	}
 
+	protected void showCS() {
+		if (_f.emitting == null) {
+			printf("----\nNo segment active last = %p\n", _f.last);
+			_f.last.print(this);
+		} else {
+			printf("----\nTrailing block:\n");
+			_f.emitting.print(this);
+		}
+		printf("Code offset = %x\n", _functionCode.length());
+	}
+
 	private int packFunction() {
+//		showCS();
 		closeCodeSegment(CC.NOP, null);
+		
 		int length = optimizeJumps(_f.first);
 		int allocation = (length + address.bytes - 1) & ~(address.bytes - 1);
 		int offset = _code.length();
@@ -929,8 +944,18 @@ class X86_64Encoder extends Target {
 		}
 		
 		void print(ref<X86_64Encoder> encoder) {
-			printf("%p: %p %p %s %d[%d] ord %d seg offs %d\n", this, prev, next, ccLabel(continuation), codeOffset, length, ordinal, segmentOffset);
-			text.memDump(&encoder._functionCode[codeOffset], length);
+			printf("%p: %p %p %s", this, prev, next, ccLabel(continuation));
+			if (continuation != CC.NOP) {
+				printf("(%p", jumpTarget);
+				if (jumpDistance != JumpDistance.UNKNOWN)
+					printf(" %s", string(jumpDistance));
+				if (jumpTarget.segmentOffset != segmentOffset)
+					printf("%c%#x", jumpTarget.segmentOffset < segmentOffset ? '-' : '+', abs(jumpTarget.segmentOffset - segmentOffset));
+				printf(")");
+			}
+			printf(" %#x[%#x] ord %d seg offs %#x\n", codeOffset, length, ordinal, segmentOffset);
+			if (length > 0)
+				text.memDump(&encoder._functionCode[codeOffset], length, segmentOffset);
 			for (ref<Fixup> f = fixups; f != null; f = f.next)
 				f.print();
 		}
@@ -3722,55 +3747,25 @@ class Fixup {
 	void print() {
 		switch (kind) {
 		case	RELATIVE32_CODE:				// Fixup value is a ref<Scope>
-			printf("    @%x RELATIVE32_CODE %p\n", location, value);
-			break;
-			
 		case	RELATIVE32_DATA:				// Fixup value is a ref<Symbol>
-			printf("    @%x RELATIVE32_DATA %p\n", location, value);
-			break;
-			
 		case	RELATIVE32_STRING:				// Fixup value is an int offset into the string pool
-			printf("    @%x RELATIVE32_STRING %p\n", location, value);
-			break;
-			
+		case	RELATIVE32_TYPE:				// Fixup value is a ref<Type>
+		case	RELATIVE32_VTABLE:				// Fixup value is a ref<ClassScope>
+		case	RELATIVE32_FPDATA:				// Fixup value is a ref<Constant>
 		case	ABSOLUTE64_JUMP:				// Fixup value is a ref<CodeSegment>
-			printf("    @%x ABSOLUTE64_JUMP %p\n", location, value);
-			break;
-			
 		case	ABSOLUTE64_CODE:				// Fixup value is a ref<Scope>
-			printf("    @%x ABSOLUTE64_CODE %p\n", location, value);
-			break;
-			
 		case	ABSOLUTE64_DATA:				// Fixup value is a ref<Symbol>
-			printf("    @%x ABSOLUTE64_DATA %p\n", location, value);
-			break;
-			
 		case	ABSOLUTE64_STRING:				// Fixup value is a ref<Symbol>
-			printf("    @%x ABSOLUTE64_STRING %p\n", location, value);
-			break;
-			
 		case	ABSOLUTE64_TYPE:				// Fixup value is a ref<Type>
-			printf("    @%x ABSOLUTE64_TYPE %p\n", location, value);
-			break;
-			
 		case	ABSOLUTE64_VTABLE:				// Fixup value is a ref<Type>
-			printf("    @%x ABSOLUTE64_VTABLE %p\n", location, value);
-			break;
-			
 		case	INT_CONSTANT:
-			printf("    @%x INT_CONSTANT %p\n", location, value);
-			break;
-			
 		case	BUILTIN32:						// Fixup value is builtIn index
-			printf("    @%x BUILTIN32 %p\n", location, value);
-			break;
-			
 		case	NATIVE32:						// Fixup value is nativeBindings index
-			printf("    @%x NATIVE32 %p\n", location, value);
+			printf("    @%x %s %p\n", location, string(kind), value);
 			break;
 			
 		default:
-			printf("    @%x <error %d> %p\n", location, int(kind), value);
+			printf("    @%x <error %s> %p\n", location, string(kind), value);
 			assert(false);
 		}
 	}

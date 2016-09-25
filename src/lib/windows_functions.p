@@ -64,6 +64,9 @@ public abstract int FindNextFile(address handle, ref<WIN32_FIND_DATA> data);
 @Windows("kernel32.dll", "FindClose")
 public abstract int FindClose(address handle);
 
+@Windows("kernel32.dll", "GetFileAttributesA")
+public abstract DWORD GetFileAttributes(pointer<byte> filename);
+
 @Windows("kernel32.dll", "GetLastError")
 public abstract int GetLastError();
 

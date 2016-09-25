@@ -123,6 +123,51 @@ public class long {
 	
 //	public long(long value) {
 //	}
+	public static long, boolean parse(string text) {
+		long value = 0;
+		int i = 0;
+		boolean negative = false;
+		if (text[i] == '-') {
+			negative = true;
+			i++;
+		}
+		for (; i < text.length(); i++) {
+			byte x = text[i];
+			if (x.isDigit())
+				value = value * 10 + (x - '0');
+			else
+				return 0, false;
+		}
+		if (negative)
+			value = -value;
+		return value, true;
+	}
+	
+	public static long, boolean parse(string text, int radix) {
+		long value = 0;
+		int i = 0;
+		boolean negative = false;
+		if (text[i] == '-') {
+			negative = true;
+			i++;
+		}
+		for (; i < text.length(); i++) {
+			byte x = text[i];
+			int digit;
+			if (x.isDigit())
+				digit = x - '0';
+			else if (x.isAlpha())
+				digit = 10 + (x.toLowercase() - 'a');
+			else
+				return 0, false;
+			if (digit >= radix)
+				return 0, false;
+			value = value * radix + digit;
+		}
+		if (negative)
+			value = -value;
+		return value, true;
+	}
 }
 
 public class byte {

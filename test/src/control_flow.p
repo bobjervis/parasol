@@ -99,6 +99,8 @@ int main(string[] args) {
 	}
 	assert(i == 0);
 	forScopeTest();
+	forBreakRegression2();
+	forBreakRegression1();
 	return 0;
 }
 
@@ -135,4 +137,20 @@ void forScopeTest() {
 			flag = true;
 		}
 	assert(flag == true);
+}
+// This is a degenerate case. The bug is that the 'return' implied at the end is missing, so the code falls off onto the next 
+// byte, which is an illegal instruction (usually).
+void forBreakRegression1() {
+	for (;;) {
+		break;
+	}
+}
+
+//This is a degenerate case. The bug is that the 'return' implied at the end is missing, so the code falls off onto the next 
+//byte, which is an illegal instruction (usually).
+void forBreakRegression2() {
+	for (;;) {
+		break;
+	}
+	int x = 5;
 }
