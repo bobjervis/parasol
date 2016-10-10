@@ -1217,8 +1217,8 @@ statement() { "@c public int x;" }
 statement() { "@c protected int x;" }
 statement() { "@c private int x;" }
 statement() { "@c int x;" }
-statement() { "final interface q{a;b;}" }
-statement() { "interface q{a;b;}" }
+statement() { "final interface q{void a(); int b(int a);}" }
+statement() { "interface q{long a(a b, c d);x b(x y, p... q);}" }
 statement() { "interface q extends a {}" }
 statement() { "interface q;" }
 statement() { "interface q = c;" }

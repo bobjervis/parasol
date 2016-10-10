@@ -682,6 +682,57 @@ class Parser {
 		return _tree.newUnary(Operator.ABSTRACT, func, location);
 	}
 
+	private ref<Block> parseInterface(ref<Block> block) {
+		for (;;) {
+			Token t = _scanner.next();
+//			CompileString cs = _scanner.value();
+//			int line = _scanner.lineNumber(_scanner.location());
+//			string s(cs.data, cs.length);
+//			printf("Token %s %s %d\n", string(t), s, line);
+			if (t == Token.RIGHT_CURLY) {
+				block.closeCurlyLocation = _scanner.location();
+				return block;
+			} else if (t == Token.END_OF_STREAM) {
+				block.closeCurlyLocation = _scanner.location();
+				block.statement(_tree.newNodeList(syntaxError(MessageId.UNEXPECTED_EOF)));
+				return block;
+			}
+			_scanner.pushBack(t);
+			Location location = _scanner.location();
+			ref<Node> returnType = parseExpression(0);
+			if (returnType.op() == Operator.SYNTAX_ERROR) {
+				block.statement(_tree.newNodeList(returnType));
+				continue;
+			}
+			ref<Node> name = parseName(_scanner.next());
+			if (name.op() == Operator.SYNTAX_ERROR) {
+				block.statement(_tree.newNodeList(name));
+				continue;
+			}
+			ref<Identifier> id = ref<Identifier>(name);
+			t = _scanner.next();
+			Location loc = _scanner.location();
+			if (t != Token.LEFT_PARENTHESIS) {
+				_scanner.pushBack(t);
+				block.statement(_tree.newNodeList(resync(MessageId.SYNTAX_ERROR)));
+				continue;
+			}
+			ref<NodeList> parameters;
+			if (!parseParameterList(Token.RIGHT_PARENTHESIS, &parameters)) {
+				block.statement(_tree.newNodeList(parameters.node));
+				continue;
+			}
+			t = _scanner.next();
+			if (t != Token.SEMI_COLON) {
+				_scanner.pushBack(t);
+				block.statement(_tree.newNodeList(resync(MessageId.SYNTAX_ERROR)));
+				continue;
+			}
+			ref<FunctionDeclaration> func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.ABSTRACT, returnType, id, parameters, loc);
+			block.statement(_tree.newNodeList(func));
+		}
+	}
+	
 	private ref<Node> parseStaticDeclaration() {
 		Location location = _scanner.location();
 		ref<Node> x = parseExpression(0);
@@ -1732,7 +1783,10 @@ class Parser {
 			return resync(MessageId.SYNTAX_ERROR);
 		}
 		ref<Class> oldEnclosing = pushEnclosing(classDef);
-		parseBlock(classDef);
+		if (isClass)
+			parseBlock(classDef);
+		else
+			parseInterface(classDef);
 		pushEnclosing(oldEnclosing);
 		if (templateDef != null) {
 			templateDef.classDef = classDef;

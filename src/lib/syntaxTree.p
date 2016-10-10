@@ -2698,7 +2698,8 @@ class Node {
 		} else if (type.family() == TypeFamily.CLASS_VARIABLE) {
 			return compileContext.arena().builtInType(TypeFamily.CLASS_DEFERRED);
 		}
-		print(0);
+//		print(0);
+//		assert(false);
 		add(MessageId.NOT_A_TYPE, compileContext.pool());
 		type = compileContext.errorType();
 		return type;
@@ -2955,6 +2956,7 @@ class Node {
 		case	INDIRECT:
 		case	INITIALIZE:
 		case	INTEGER:
+		case	INTERFACE_DECLARATION:
 		case	LABEL:
 		case	LEFT_SHIFT:
 		case	LEFT_SHIFT_ASSIGN:

@@ -495,6 +495,17 @@ class CompileContext {
 			}
 			return TraverseAction.SKIP_CHILDREN;
 
+		case	INTERFACE_DECLARATION:
+			b = ref<Binary>(n);
+			id = ref<Identifier>(b.left());
+			assert(b.right().op() == Operator.CLASS);
+			c = ref<Class>(b.right());
+			classScope = createClassScope(c, id);
+			c.scope = classScope;
+			classScope.classType = _pool.newInterfaceType(c, classScope);
+			id.bindClassName(_current, c, this);
+			return TraverseAction.SKIP_CHILDREN;
+			
 		case	FLAGS_DECLARATION:
 			b = ref<Binary>(n);
 			id = ref<Identifier>(b.left());
@@ -887,6 +898,7 @@ class CompileContext {
 			break;
 			
 		case	ABSTRACT:
+		case	INTERFACE_DECLARATION:
 		case	CLASS_DECLARATION:
 		case	ENUM_DECLARATION:
 		case	FLAGS_DECLARATION:
@@ -1184,6 +1196,10 @@ class MemoryPool extends memory.NoReleasePool {
 
 	public ref<MonitorType> newMonitorType(ref<Class> definition, ref<Scope> scope) {
 		return super new MonitorType(definition, scope);
+	}
+
+	public ref<InterfaceType> newInterfaceType(ref<Class> definition, ref<Scope> scope) {
+		return super new InterfaceType(definition, scope);
 	}
 
 	public ref<EnumType> newEnumType(ref<Block> definition, ref<Scope> scope, ref<Type> wrappedType) {

@@ -224,6 +224,7 @@ class ClasslikeScope extends Scope {
 			case	CLASS_DEFERRED:
 			case	ERROR:
 			case	TYPEDEF:
+			case	VOID:				// This would be an error, but that will be flagged elsewhere.
 				return false;
 				
 			default:
@@ -1737,7 +1738,8 @@ class PlainSymbol extends Symbol {
 			} else {
 				compileContext.assignTypes(enclosing(), _typeDeclarator);
 				if (_typeDeclarator.op() == Operator.CLASS_DECLARATION ||
-					_typeDeclarator.op() == Operator.ENUM_DECLARATION)
+					_typeDeclarator.op() == Operator.ENUM_DECLARATION ||
+					_typeDeclarator.op() == Operator.INTERFACE_DECLARATION)
 					_type = _typeDeclarator.type;
 				else if (_typeDeclarator.op() == Operator.MONITOR_DECLARATION) {
 					ref<Binary> mon = ref<Binary>(_typeDeclarator);

@@ -204,6 +204,7 @@ class Binary extends Node {
 		case	MONITOR_DECLARATION:
 		case	ENUM_DECLARATION:
 		case	CLASS_DECLARATION:
+		case	INTERFACE_DECLARATION:
 		case	SWITCH:
 		case	CASE:
 		case	LEFT_SHIFT:
@@ -1533,6 +1534,7 @@ class Binary extends Node {
 				return;
 			}
 
+		case	INTERFACE_DECLARATION:
 		case	CLASS_DECLARATION:
 		case	FLAGS_DECLARATION:
 		case	ENUM_DECLARATION:

@@ -280,6 +280,12 @@ class MonitorType extends ClassType {
 	}	
 }
 
+class InterfaceType extends ClassType {
+	InterfaceType(ref<Class> definition, ref<Scope> scope) {
+		super(definition, scope);
+	}
+}
+
 class ClassType extends Type {
 	protected ref<Scope> _scope;
 	protected ref<Type> _extends;

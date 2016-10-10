@@ -1253,6 +1253,7 @@ public class X86_64 extends X86_64AssignTemps {
 			generateLiveSymbolDestructors(dl.arguments(), compileContext);
 			break;
 			
+		case	INTERFACE_DECLARATION:
 		case	ENUM_DECLARATION:
 		case	FLAGS_DECLARATION:
 		case	MONITOR_DECLARATION:

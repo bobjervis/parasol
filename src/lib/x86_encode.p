@@ -729,14 +729,6 @@ class X86_64Encoder extends Target {
 			_dataMap.resize(alignment + 1);
 			_staticDataSize.resize(alignment + 1);
 		}
-		if (symbol.name().asString() == "opToByteCodeMap") {
-			static boolean firstTime = true;
-			
-			if (firstTime)
-				firstTime = false;
-//			else
-//				throw Exception();
-		}
 		if (alignment < 0) {
 			symbol.print(0, false);
 			assert(false);
