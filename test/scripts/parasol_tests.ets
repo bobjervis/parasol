@@ -200,6 +200,14 @@ compile(expect: fail, message: NO_MATCHING_OVERLOAD) { "void f(ref<int> y, int z
 compile() { "void f(int x(int z)){}" }
 compile() { "void f(int x(int z)){} f(g.h); class g { static int h(int y) { return 0;} }" }
 
+// Interface tests
+
+compile() { "interface a {} class b implements a {}" }
+compile() { "interface a {} interface b extends a {}" }
+compile() { "interface a {} interface b{} class c implements a, b {}" }
+compile() { "interface a { void f(); } class b implements a { void f() {} }" }
+compile() { "interface a { void f(); } class b implements a { void f() {} void g() {} }" }
+
 compile() { "class A { void f() { } } class B extends A { void g() { f(); } }" }
 
 // regression: mis-spelled static trips up later code.
