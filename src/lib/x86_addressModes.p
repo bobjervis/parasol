@@ -72,7 +72,7 @@ class X86_64AddressModes extends X86_64Encoder {
 			for (ref<NodeList> args = call.arguments(); args != null; args = args.next)
 				markAddressModes(args.node, compileContext);
 			for (ref<NodeList> args = call.stackArguments(); args != null; args = args.next)
-				markAddressModes(args.node, compileContext);
+				markStackArgument(args.node, compileContext);
 			break;
 			
 		case	CALL_DESTRUCTOR:
@@ -343,6 +343,65 @@ class X86_64AddressModes extends X86_64Encoder {
 		}
 	}
 
+	void markStackArgument(ref<Node> arg, ref<CompileContext> compileContext) {
+		if (arg.isLvalue())
+			tryMakeMode(arg, MC_ADDRESS, 0, compileContext);
+		else {
+			switch (arg.op()) {
+			case	SEQUENCE:
+				ref<Binary> b = ref<Binary>(arg);
+				markAddressModes(b.left(), compileContext);
+				markStackArgument(b.right(), compileContext);
+				break;
+				
+			case	ELLIPSIS_ARGUMENTS:
+				ref<EllipsisArguments> ea = ref<EllipsisArguments>(arg);
+				for (ref<NodeList> args = ea.arguments(); args != null; args = args.next) {
+					ref<Unary> u = ref<Unary>(args.node);
+					if (u.type.family() == TypeFamily.CLASS && u.type.indirectType(compileContext) == null && u.operand().isLvalue())
+						tryMakeMode(u.operand(), MC_ADDRESS, 0, compileContext);
+					else 
+						markAddressModes(u.operand(), compileContext);
+				}
+				break;
+				
+			case	STACK_ARGUMENT:
+				ref<Unary> u = ref<Unary>(arg);
+				markStackArgument(u.operand(), compileContext);
+				break;
+			
+			case	CALL:
+			case	CAST:
+			case	BYTES:
+			case	ADDRESS:
+			case	NEGATE:
+			case	INTEGER:
+			case	MULTIPLY:
+			case	ADD:
+			case	SUBTRACT:
+			case	AND:
+			case	OR:
+			case	CONDITIONAL:
+			case	FLOATING_POINT:
+			case	STRING:
+				markAddressModes(arg, compileContext);
+				break;
+				
+			case	VACATE_ARGUMENT_REGISTERS:
+			case	NULL:
+			case	THIS:
+			case	SUPER:
+			case	TRUE:
+			case	FALSE:
+				break;
+				
+			default:
+				arg.print(0);
+				assert(false);
+			}
+		}
+	}
+	
 	void markCast(ref<Node> dest, ref<Node> operand, ref<CompileContext> compileContext) {
 		ref<Type> existingType = operand.type;
 		ref<Type> newType = dest.type;

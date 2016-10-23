@@ -1250,6 +1250,70 @@ class X86_64Encoder extends Target {
 		assert(false);
 	}
 
+	void inst(X86 instruction, ref<Type> type, R left, ref<Node> right, int offset) {
+		switch (instruction) {
+		case	MOV:
+		case	ADD:
+		case	SUB:
+		case	OR:
+		case	XOR:
+		case	AND:
+			switch (type.family()) {
+			case	BOOLEAN:
+			case	UNSIGNED_8:
+				emitRex(type.family(), right, left, R.NO_REG);
+				emit(byte(opcodes[instruction] + 0x02));
+				ref<Type> t = right.type;
+				right.type = type;
+				modRM(right, rmValues[left], 0, offset);
+				right.type = t;
+				break;
+				
+			case	UNSIGNED_16:
+			case	SIGNED_16:
+				emit(0x66);
+				emitRex(type.family(), right, left, R.NO_REG);
+				emit(byte(opcodes[instruction] + 0x03));
+				t = right.type;
+				right.type = type;
+				modRM(right, rmValues[left], 0, offset);
+				right.type = t;
+				break;
+				
+			case	SIGNED_32:
+			case	UNSIGNED_32:
+			case	SIGNED_64:
+			case	ADDRESS:
+			case	FUNCTION:
+			case	REF:
+			case	POINTER:
+			case	STRING:
+			case	ENUM:
+			case	VAR:
+			case	TYPEDEF:
+			case	CLASS_VARIABLE:
+				emitRex(type.family(), right, left, R.NO_REG);
+				emit(byte(opcodes[instruction] + 0x03));
+				t = right.type;
+				right.type = type;
+				modRM(right, rmValues[left], 0, offset);
+				right.type = t;
+				break;
+				
+			default:
+				printf("%s %s %s +%d\n", string(instruction), type.signature(), string(left), offset);
+				right.print(4);
+				assert(false);
+			}
+			break;
+			
+		default:
+			printf("%s %s %s +%d\n", string(instruction), type.signature(), string(left), offset);
+			right.print(4);
+			assert(false);
+		}
+	}
+	
 	void inst(X86 instruction, R baseReg, int offset) {
 		switch (instruction) {
 		case	PUSH:
@@ -1473,7 +1537,7 @@ class X86_64Encoder extends Target {
 			
 		case	MOV:
 		case	CMP:
-			emitRex(TypeFamily.SIGNED_64, null, reg, dest);
+			emitRex(family, null, reg, dest);
 			if (dest == R.RSP) {
 				switch (family) {
 				case	UNSIGNED_8:
@@ -1504,6 +1568,7 @@ class X86_64Encoder extends Target {
 					
 				case	REF:
 				case	POINTER:
+				case	ADDRESS:
 					emit(byte(opcodes[instruction] + 0x01));
 					if (offset >= -128 || offset <= 127) {
 						modRM(1, rmValues[reg], 4);
@@ -1517,32 +1582,9 @@ class X86_64Encoder extends Target {
 					break;
 					
 				default:
-					printf("%s, %s, %s, %d, %s\n", string(instruction), string(family), string(dest), offset, string(reg));
+					printf("%s %s %s +%d %s\n", string(instruction), string(family), string(dest), offset, string(reg));
 					assert(false);
 				}
-/*
-				switch (reg) {
-				case	RAX:
-				case	RCX:
-				case	RSP:
-					emit(byte(REX_W | REX_B | rexValues[reg]));
-					emit(byte(opcodes[instruction] + 0x01));
-					if (offset >= -128 || offset <= 127) {
-						modRM(1, rmValues[reg], 4);
-						sib(0, 4, 4);
-						emit(byte(offset));
-					} else {
-						modRM(2, rmValues[reg], 4);
-						sib(0, 4, 4);
-						emitInt(offset);
-					}
-					break;
-					
-				default:
-					printf("%s, %s, %d, %s\n", string(instruction), string(dest), offset, string(reg));
-					assert(false);
-				}
-				*/
 			} else {
 				emit(byte(opcodes[instruction] + 0x01));
 				if (offset >= -128 || offset <= 127) {

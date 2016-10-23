@@ -1225,13 +1225,28 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				ref<EllipsisArguments> ea = ref<EllipsisArguments>(arg);
 				for (ref<NodeList> args = ea.arguments(); args != null; args = args.next) {
 					ref<Unary> u = ref<Unary>(args.node);
-					if (u.type.family() == TypeFamily.STRING) {
+					switch (u.type.family()) {
+					case STRING:
 						assignRegisterTemp(u.operand(), RDXmask, compileContext);
 						reserveReg(u.operand(), R.RCX, RCXmask);
-					} else if (u.type.passesViaStack(compileContext))
+						break;
+						
+					case VAR:
 						assignStackArgument(u.operand(), compileContext);
-					else
+						break;
+						
+					case CLASS:
+						if (u.type.indirectType(compileContext) == null) {
+							if (u.operand().isLvalue())
+								assignLvalueTemps(u.operand(), compileContext);
+							else 
+								assignStackArgument(u.operand(), compileContext); 
+							u.register = byte(f().r.getreg(u, longMask, longMask));
+							break;
+						}
+					default:
 						assignRegisterTemp(u.operand(), longMask, compileContext);
+					}
 					f().r.cleanupTemps(u, depth);
 				}
 				break;

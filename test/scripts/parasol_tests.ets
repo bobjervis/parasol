@@ -105,7 +105,8 @@ run(filename: member_order.p)
 run(filename: param_order.p)
 run(filename: multi_return.p)
 run(filename: var_ops.p)
-run(filename: var_args.p)
+run(filename: var_args_1.p)
+run(filename: var_args_2.p)
 run(filename: string_methods.p)
 run(filename: string_compares.p)
 run(filename: ternary.p)
@@ -207,6 +208,16 @@ compile() { "interface a {} interface b extends a {}" }
 compile() { "interface a {} interface b{} class c implements a, b {}" }
 compile() { "interface a { void f(); } class b implements a { void f() {} }" }
 compile() { "interface a { void f(); } class b implements a { void f() {} void g() {} }" }
+compile(expect: fail, message: IMPLEMENTS_NEEDS_INTERFACE) { "class a {} class b implements a {}" }
+compile(expect: fail, message: CLASS_MISSING_METHOD_FROM_INTERFACE) { "interface a { void f(); } class b implements a {}" }
+compile(expect: fail) { "interface a { int x; }" }
+compile(expect: fail) { "interface a { private int f(); }" }
+compile(expect: fail) { "interface a { public int f(); }" }
+compile(expect: fail) { "interface a { protected int f(); }" }
+compile(expect: fail) { "interface a { abstract int f(); }" }
+compile(expect: fail) { "interface a { class b{} }" }
+compile(expect: fail) { "interface a { enum b{} }" }
+compile(expect: fail) { "interface a { flags b{} }" }
 
 compile() { "class A { void f() { } } class B extends A { void g() { f(); } }" }
 

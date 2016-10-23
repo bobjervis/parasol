@@ -32,12 +32,14 @@ enum MessageId {
 	BREAK_NO_SEMI,
 	CASE_NO_CO,
 	CIRCULAR_DEFINITION,
+	CLASS_MISSING_METHOD_FROM_INTERFACE,
 	CONSTANT_NOT_ALLOWED,
 	CONSTANT_NOT_STATIC,
 	DISALLOWED_ANNOTATION,
 	DUPLICATE_INDEX,
 	EXPECTING_TERM,
 	FILE_NOT_READ,
+	IMPLEMENTS_NEEDS_INTERFACE,
 	INITIALIZER_BEYOND_RANGE,
 	INITIALIZER_MUST_BE_CONSTANT,
 	INITIALIZER_REQUIRED,
@@ -199,8 +201,8 @@ public string formatMessage(MessageId messageId, CompileString[] args) {
 			case	'8':
 			case	'9':
 				position = format[i] - '1';
-//					printf("position = %d args.length=%d\n", position, args.length());
-//					printf("args[0]={%x,%d}\n", int(args[position].data), args[position].length);
+//				printf("messageId %s position = %d args.length=%d\n", string(messageId), position, args.length());
+//				printf("args[%d]={%x,%d}\n", position, int(args[position].data), args[position].length);
 				if (position < args.length()) {
 					string inclusionString(args[position].data, args[position].length);
 //					printf("inclusionString=%s\n", inclusionString);
@@ -242,6 +244,7 @@ private string[MessageId] messageCatalog = [
 	CANNOT_CONVERT: 		"Cannot convert types",
 	CASE_NO_CO: 			"Case without colon",
 	CIRCULAR_DEFINITION: 	"Circular definition involving '%1'",
+	CLASS_MISSING_METHOD_FROM_INTERFACE: "Class missing method %1 for interface %2",
 	CONSTANT_NOT_ALLOWED:	"@Constant annotation not allowed",
 	CONSTANT_NOT_STATIC:	"@Constant declarations must have static storage class",
 	DISALLOWED_ANNOTATION: 	"Disallowed annotation '%1'",
@@ -253,6 +256,7 @@ private string[MessageId] messageCatalog = [
 	EXPECTING_RS: 			"Expecting a right square brace",
 	EXPECTING_TERM: 		"Expecting a term of an expression",
 	FILE_NOT_READ: 			"File could not be read",
+	IMPLEMENTS_NEEDS_INTERFACE: "Expecting an interface name after 'implements'",
 	INITIALIZER_BEYOND_RANGE: "Initializer out of index range",
 	INITIALIZER_MUST_BE_CONSTANT: "Initializer with @Constant must be compile-time constant expression",
 	INITIALIZER_REQUIRED:	"Initializer required with @Constant annotation",

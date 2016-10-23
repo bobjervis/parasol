@@ -855,6 +855,33 @@ class Class extends Block {
 				return;
 			}
 		super.assignTypes(compileContext);
+		for (ref<NodeList> nl = _implements; nl != null; nl = nl.next) {
+			ref<Type> tp = nl.node.unwrapTypedef(compileContext);
+			if (tp.class == InterfaceType) {
+				for (ref<Symbol>[Scope.SymbolKey].iterator i = tp.scope().symbols().begin(); i.hasNext(); i.next()) {
+					ref<Overload> o = ref<Overload>(i.get());
+					ref<Symbol> sym = scope.lookup(o.name(), compileContext);
+					if (sym != null && sym.class == Overload) {
+						ref<Overload> classFunctions = ref<Overload>(sym);
+						for (int i = 0; i < o.instances().length(); i++) {
+							
+						}
+					} else {
+						for (int i = 0; i < o.instances().length(); i++) {
+							ref<OverloadInstance> oi = (*o.instances())[i];
+							ref<Identifier> nm = ref<Identifier>(nl.node);
+//							printf("nm = {%x:%x} '%s'\n", nm.identifier().data, nm.identifier().length, (*nm.identifier()).asString());
+//							printf("oi = {%x:%x} '%s'\n", oi.name().data, nm.identifier().length, (*oi.name()).asString());
+							add(MessageId.CLASS_MISSING_METHOD_FROM_INTERFACE, compileContext.pool(), *oi.name(), *nm.identifier());
+						}
+					}
+				}
+			} else {
+//				nl.node.print(0);
+				nl.node.add(MessageId.IMPLEMENTS_NEEDS_INTERFACE, compileContext.pool());
+				type = compileContext.errorType();
+			}
+		}
 
 		if (scope != null) {
 			// should read for (ref<Symbol> sym : scope.symbols()) {
@@ -863,6 +890,8 @@ class Class extends Block {
 				if (sym.class != Overload)
 					continue;
 				ref<Overload> o = ref<Overload>(sym);
+				if (o.kind() != Operator.FUNCTION)
+					continue;
 				for (int i = 0; i < o.instances().length(); i++) {
 					ref<OverloadInstance> oi = (*o.instances())[i];
 					oi.assignType(compileContext);

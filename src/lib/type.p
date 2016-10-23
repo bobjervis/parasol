@@ -284,6 +284,10 @@ class InterfaceType extends ClassType {
 	InterfaceType(ref<Class> definition, ref<Scope> scope) {
 		super(definition, scope);
 	}
+
+//	public string signature() {
+//		return "interface " + super.signature();
+//	}	
 }
 
 class ClassType extends Type {
