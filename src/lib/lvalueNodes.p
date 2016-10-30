@@ -536,7 +536,7 @@ class Selection extends Node {
 			return;
 
 		case	TYPEDEF:
-			t = _left.unwrapTypedef(compileContext);
+			t = _left.unwrapTypedef(Operator.CLASS, compileContext);
 			type = operation.includeClass(t, compileContext);
 			if (type != null)
 				return;
@@ -674,7 +674,7 @@ class Selection extends Node {
 			return;
 
 		case	TYPEDEF:
-			if (lookupInType(_left.unwrapTypedef(compileContext), compileContext)) {
+			if (lookupInType(_left.unwrapTypedef(Operator.CLASS, compileContext), compileContext)) {
 				if (deferAnalysis())
 					return;
 				switch (_symbol.storageClass()) {

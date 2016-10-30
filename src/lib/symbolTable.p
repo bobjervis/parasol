@@ -103,6 +103,7 @@ class LockScope extends Scope {
 
 class ClasslikeScope extends Scope {
 	public ref<ClassType> classType;
+	
 	private ref<OverloadInstance>[] _methods;
 	protected ref<Symbol>[] _members;
 	private boolean _methodsBuilt;
@@ -389,6 +390,15 @@ class ClasslikeScope extends Scope {
 	
 	public ref<ref<Symbol>[]> members() {
 		return &_members;
+	}
+
+	public boolean isInterface() {
+		return classType != null && classType.class == InterfaceType;
+	}
+	
+	void printDetails() {
+		if (classType != null)
+			printf(" classType %s", classType.signature());
 	}
 }
 
@@ -1268,6 +1278,10 @@ class Scope {
 		return false;
 	}
 
+	public boolean isInterface() {
+		return false;
+	}
+	
 	public ref<FunctionDeclaration> enclosingFunction() {
 		for (ref<Scope>  s = this; s != null; s = s._enclosing) {
 			if (s._definition != null &&
@@ -1768,7 +1782,7 @@ class PlainSymbol extends Symbol {
 				} else if (_typeDeclarator.op() == Operator.FUNCTION)
 					_type = _typeDeclarator.type;
 				else
-					_type = _typeDeclarator.unwrapTypedef(compileContext);
+					_type = _typeDeclarator.unwrapTypedef(Operator.CLASS, compileContext);
 			}
 		}
 		return _type;
@@ -1939,6 +1953,16 @@ class Overload extends Symbol {
 		assert(false);
 	}
 
+	public boolean doesImplement(ref<OverloadInstance> interfaceMethod) {
+		for (int i = 0; i < _instances.length(); i++) {
+			ref<OverloadInstance> oi = _instances[i];
+			// oi is the interface method, this represents the class' methods of the same name
+			if (oi.type().equals(interfaceMethod.type()))
+				return true;
+		}
+		return false;
+	}
+
 	public void print(int indent, boolean printChildScopes) {
 		printf("%*.*c%s Overload %p %s %s\n", indent, indent, ' ', _name.asString(), this, string(visibility()), string(_kind));
 		for (int i = 0; i < _instances.length(); i++)
@@ -2083,7 +2107,7 @@ class OverloadInstance extends Symbol {
 			if (typeDeclarator.type.family() == TypeFamily.FUNCTION)
 				t = typeDeclarator.type;
 			else
-				t = typeDeclarator.unwrapTypedef(compileContext);
+				t = typeDeclarator.unwrapTypedef(Operator.CLASS, compileContext);
 			if (typeDeclarator.deferAnalysis())
 				return Callable.DEFER;
 			if (parameter == _parameterScope.parameters().length() - 1 && hasEllipsis) {

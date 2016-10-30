@@ -585,7 +585,7 @@ class Call extends ParameterBag {
 	private boolean assignFunctionType(ref<CompileContext> compileContext) {
 		if (_target.type.family() != TypeFamily.TYPEDEF)
 			return false;
-		ref<Type> t = _target.unwrapTypedef(compileContext);
+		ref<Type> t = _target.unwrapTypedef(Operator.CLASS, compileContext);
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 			if (nl.node.op() == Operator.BIND)
 				continue;
@@ -599,7 +599,7 @@ class Call extends ParameterBag {
 				nl.node.add(MessageId.INVALID_BINDING, compileContext.pool(), id.value());
 				type = compileContext.errorType();
 			} else
-				nl.node.type = nl.node.unwrapTypedef(compileContext);
+				nl.node.type = nl.node.unwrapTypedef(Operator.CLASS, compileContext);
 		}
 		ref<NodeList> returnType;
 		if (t.family() != TypeFamily.VOID) {
@@ -699,7 +699,7 @@ class Call extends ParameterBag {
 				break;
 
 			case	TYPEDEF:
-				ref<Type> t = _target.unwrapTypedef(compileContext);
+				ref<Type> t = _target.unwrapTypedef(Operator.CLASS, compileContext);
 				if (_arguments != null && assignFunctionType(compileContext))
 					break;
 				if (builtInCoercion(compileContext))
@@ -984,7 +984,7 @@ class Call extends ParameterBag {
 			_arguments.next != null)
 			return false;
 		ref<Type> existingType = _arguments.node.type;
-		ref<Type> newType = _target.unwrapTypedef(compileContext);
+		ref<Type> newType = _target.unwrapTypedef(Operator.CLASS, compileContext);
 		if (newType.family() == TypeFamily.VAR)
 			return true;
 		switch (existingType.family()) {

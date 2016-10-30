@@ -1408,26 +1408,6 @@ class Parser {
 						return resync(MessageId.EXPECTING_RS);
 					}
 				}
-				t = _scanner.next();
-				if (t == Token.LEFT_CURLY) {
-					ref<Node> aggregate;
-					t = _scanner.next();
-					if (t == Token.RIGHT_CURLY)
-						aggregate = null;
-					else {
-						_scanner.pushBack(t);
-						aggregate = parseExpression(0);
-						if (aggregate.op() == Operator.SYNTAX_ERROR)
-							return aggregate;
-						t = _scanner.next();
-						// Needs possible changes here to resync logic.
-						if (t != Token.RIGHT_CURLY) {
-							_scanner.pushBack(t);
-							return resync(MessageId.EXPECTING_RC);
-						}
-					}
-				} else
-					_scanner.pushBack(t);
 				break;
 
 			case	DOT:
@@ -1772,11 +1752,13 @@ class Parser {
 		}
 		classDef = _tree.newClass(name, extendsClause, location);
 		if (isClass && t == Token.IMPLEMENTS) {
-			implementsClause = parseExpression(0);
-			if (implementsClause.op() == Operator.SYNTAX_ERROR)
-				return implementsClause;
-			classDef.addInterface(_tree.newNodeList(implementsClause));
-			t = _scanner.next();
+			do {
+				implementsClause = parseExpression(1);
+				if (implementsClause.op() == Operator.SYNTAX_ERROR)
+					return implementsClause;
+				classDef.addInterface(_tree.newNodeList(implementsClause));
+				t = _scanner.next();
+			} while (t == Token.COMMA);
 		}
 		if (t != Token.LEFT_CURLY) {
 			_scanner.pushBack(t);

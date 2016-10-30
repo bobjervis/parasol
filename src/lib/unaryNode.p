@@ -614,7 +614,7 @@ class Unary extends Node {
 				type = _operand.type;
 				return;
 			}
-			ref<Type> vectorType = compileContext.arena().buildVectorType(_operand.unwrapTypedef(compileContext), null, compileContext);
+			ref<Type> vectorType = compileContext.arena().buildVectorType(_operand.unwrapTypedef(Operator.CLASS, compileContext), null, compileContext);
 			type = compileContext.makeTypedef(vectorType);
 			break;
 		}
@@ -625,7 +625,7 @@ class Unary extends Node {
 				type = _operand.type;
 				break;
 			}
-			ref<Type> vectorType = compileContext.arena().buildVectorType(_operand.unwrapTypedef(compileContext), null, compileContext);
+			ref<Type> vectorType = compileContext.arena().buildVectorType(_operand.unwrapTypedef(Operator.CLASS, compileContext), null, compileContext);
 			type = compileContext.makeTypedef(vectorType);
 			break;
 
@@ -702,7 +702,7 @@ class Unary extends Node {
 			break;
 
 		case	UNWRAP_TYPEDEF:
-			type = _operand.unwrapTypedef(compileContext);
+			type = _operand.unwrapTypedef(Operator.EXPRESSION, compileContext);
 			break;
 			
 		case	THROW:

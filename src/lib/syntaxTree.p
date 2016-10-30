@@ -844,10 +844,11 @@ class Class extends Block {
 			compileContext.assignTypes(_extends);
 		for (ref<NodeList> nl = _implements; nl != null; nl = nl.next)
 			compileContext.assignTypes(nl.node);
-		if (_extends != null &&
-			_extends.deferAnalysis()) {
-			type = _extends.type;
-			return;
+		if (_extends != null) {
+			if (_extends.deferAnalysis()) {
+				type = _extends.type;
+				return;
+			}
 		}
 		for (ref<NodeList> nl = _implements; nl != null; nl = nl.next)
 			if (nl.node.deferAnalysis()) {
@@ -856,30 +857,39 @@ class Class extends Block {
 			}
 		super.assignTypes(compileContext);
 		for (ref<NodeList> nl = _implements; nl != null; nl = nl.next) {
-			ref<Type> tp = nl.node.unwrapTypedef(compileContext);
-			if (tp.class == InterfaceType) {
-				for (ref<Symbol>[Scope.SymbolKey].iterator i = tp.scope().symbols().begin(); i.hasNext(); i.next()) {
-					ref<Overload> o = ref<Overload>(i.get());
-					ref<Symbol> sym = scope.lookup(o.name(), compileContext);
-					if (sym != null && sym.class == Overload) {
-						ref<Overload> classFunctions = ref<Overload>(sym);
-						for (int i = 0; i < o.instances().length(); i++) {
-							
-						}
-					} else {
-						for (int i = 0; i < o.instances().length(); i++) {
-							ref<OverloadInstance> oi = (*o.instances())[i];
-							ref<Identifier> nm = ref<Identifier>(nl.node);
-//							printf("nm = {%x:%x} '%s'\n", nm.identifier().data, nm.identifier().length, (*nm.identifier()).asString());
-//							printf("oi = {%x:%x} '%s'\n", oi.name().data, nm.identifier().length, (*oi.name()).asString());
+			ref<Type> tp = nl.node.unwrapTypedef(Operator.INTERFACE, compileContext);
+			if (tp.deferAnalysis()) {
+				type = tp;
+				continue;
+			}
+			if (nl.node.op() != Operator.IDENTIFIER) {
+				nl.node.print(0);
+			}
+			assert(nl.node.op() == Operator.IDENTIFIER);
+			ref<Identifier> nm = ref<Identifier>(nl.node);
+			for (ref<Symbol>[Scope.SymbolKey].iterator i = tp.scope().symbols().begin(); i.hasNext(); i.next()) {
+				ref<Overload> o = ref<Overload>(i.get());
+				ref<Symbol> sym = scope.lookup(o.name(), compileContext);
+				if (sym != null && sym.class == Overload) {
+					ref<Overload> classMethods = ref<Overload>(sym);
+					for (int i = 0; i < classMethods.instances().length(); i++) {
+						ref<OverloadInstance> oi = (*classMethods.instances())[i];
+						oi.assignType(compileContext);
+					}
+					for (int i = 0; i < o.instances().length(); i++) {
+						ref<OverloadInstance> oi = (*o.instances())[i];
+						// oi is the interface method, classFunctions are the class' methods of the same name
+						if (!classMethods.doesImplement(oi))
 							add(MessageId.CLASS_MISSING_METHOD_FROM_INTERFACE, compileContext.pool(), *oi.name(), *nm.identifier());
-						}
+					}
+				} else {
+					for (int i = 0; i < o.instances().length(); i++) {
+						ref<OverloadInstance> oi = (*o.instances())[i];
+//						printf("nm = {%x:%x} '%s'\n", nm.identifier().data, nm.identifier().length, (*nm.identifier()).asString());
+//						printf("oi = {%x:%x} '%s'\n", oi.name().data, nm.identifier().length, (*oi.name()).asString());
+						add(MessageId.CLASS_MISSING_METHOD_FROM_INTERFACE, compileContext.pool(), *oi.name(), *nm.identifier());
 					}
 				}
-			} else {
-//				nl.node.print(0);
-				nl.node.add(MessageId.IMPLEMENTS_NEEDS_INTERFACE, compileContext.pool());
-				type = compileContext.errorType();
 			}
 		}
 
@@ -2712,7 +2722,7 @@ class Node {
 		return null;
 	}
 
-	public ref<Type> unwrapTypedef(ref<CompileContext> compileContext) {
+	public ref<Type> unwrapTypedef(Operator context, ref<CompileContext> compileContext) {
 		if (type == null)
 			assignDeclarationTypes(compileContext);
 		if (deferAnalysis())
@@ -2723,15 +2733,25 @@ class Node {
 			print(0);
 		if (type.family() == TypeFamily.TYPEDEF) {		// if (type instanceof TypedefType)
 			ref<TypedefType> tp = ref<TypedefType>(type);
-			return tp.wrappedType();
+			if (context != Operator.INTERFACE || tp.wrappedType().isInterface())
+				return tp.wrappedType();
 		} else if (type.family() == TypeFamily.CLASS_VARIABLE) {
 			return compileContext.arena().builtInType(TypeFamily.CLASS_DEFERRED);
 		}
-//		print(0);
-//		assert(false);
-		add(MessageId.NOT_A_TYPE, compileContext.pool());
-		type = compileContext.errorType();
-		return type;
+		switch (context) {
+		case CLASS:
+			add(MessageId.NOT_A_TYPE, compileContext.pool());
+			break;
+			
+		case INTERFACE:
+			add(MessageId.NOT_AN_INTERFACE, compileContext.pool());
+			break;
+			
+		default:
+			print(0);
+			assert(false);
+		}
+		return compileContext.errorType();
 	}
 
 	public boolean widensTo(ref<Type> other, ref<CompileContext> compileContext) {

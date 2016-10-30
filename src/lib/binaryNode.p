@@ -1504,8 +1504,8 @@ class Binary extends Node {
 			add(MessageId.UNFINISHED_FIXED_ARRAY, compileContext.pool());
 			type = compileContext.errorType();
 		} else if (_right.type.family() == TypeFamily.TYPEDEF) {
-			ref<Type> keyType = _right.unwrapTypedef(compileContext);
-			ref<Type> vectorType = compileContext.arena().buildVectorType(_left.unwrapTypedef(compileContext), keyType, compileContext);
+			ref<Type> keyType = _right.unwrapTypedef(Operator.CLASS, compileContext);
+			ref<Type> vectorType = compileContext.arena().buildVectorType(_left.unwrapTypedef(Operator.CLASS, compileContext), keyType, compileContext);
 			if (vectorType == null) { // Not an allowed combination.
 				_right.add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
@@ -1555,7 +1555,7 @@ class Binary extends Node {
 				break;
 				
 			default:
-				type = _left.unwrapTypedef(compileContext);
+				type = _left.unwrapTypedef(Operator.CLASS, compileContext);
 				if (!deferAnalysis())
 					_right.markupDeclarator(type, true, compileContext);
 			}
@@ -1595,9 +1595,9 @@ class Binary extends Node {
 					break;
 				}
 				ref<Call> call = ref<Call>(_right);
-				type = call.target().unwrapTypedef(compileContext);
+				type = call.target().unwrapTypedef(Operator.CLASS, compileContext);
 			} else {
-				type = _right.unwrapTypedef(compileContext);
+				type = _right.unwrapTypedef(Operator.CLASS,compileContext);
 				if (deferAnalysis())
 					break;
 				// So it's a valid type, what if it has non-default constructors only?
@@ -1650,9 +1650,9 @@ class Binary extends Node {
 					break;
 				}
 				ref<Call> call = ref<Call>(_right);
-				type = call.target().unwrapTypedef(compileContext);
+				type = call.target().unwrapTypedef(Operator.CLASS, compileContext);
 			} else {
-				type = _right.unwrapTypedef(compileContext);
+				type = _right.unwrapTypedef(Operator.CLASS, compileContext);
 				if (deferAnalysis())
 					break;
 				// So it's a valid type, what if it has non-default constructors only?
@@ -2088,7 +2088,7 @@ class Binary extends Node {
 			break;
 
 		case	BIND:
-			type = _left.unwrapTypedef(compileContext);
+			type = _left.unwrapTypedef(Operator.CLASS, compileContext);
 			break;
 
 		case	SEQUENCE:

@@ -284,6 +284,10 @@ class InterfaceType extends ClassType {
 	InterfaceType(ref<Class> definition, ref<Scope> scope) {
 		super(definition, scope);
 	}
+	
+	public boolean isInterface() {
+		return true;
+	}
 
 //	public string signature() {
 //		return "interface " + super.signature();
@@ -450,7 +454,7 @@ class ClassType extends Type {
 			ref<Node> base = _definition.extendsClause();
 			if (base != null) {
 				compileContext.assignTypes(_scope.enclosing(), base);
-				_extends = base.unwrapTypedef(compileContext);
+				_extends = base.unwrapTypedef(isInterface() ? Operator.INTERFACE : Operator.CLASS, compileContext);
 			}
 		}
 	}
@@ -929,7 +933,7 @@ class TemplateType extends Type {
 		ref<Node> base = _definition.classDef.extendsClause();
 		if (base != null) {
 			compileContext.assignTypes(_templateScope, base);
-			_extends = base.unwrapTypedef(compileContext);
+			_extends = base.unwrapTypedef(Operator.CLASS, compileContext);
 		}
 	}
 }
@@ -1008,7 +1012,7 @@ class TemplateInstanceType extends ClassType {
 		ref<Node> base = _concreteDefinition.classDef.extendsClause();
 		if (base != null) {
 			compileContext.assignTypes(_scope.enclosing(), base);
-			_extends = base.unwrapTypedef(compileContext);
+			_extends = base.unwrapTypedef(Operator.CLASS, compileContext);
 		}
 	}
 
@@ -1622,6 +1626,10 @@ class Type {
 
 	public boolean isConcrete(ref<CompileContext> compileContext) {
 		return true;
+	}
+	
+	public boolean isInterface() {
+		return false;
 	}
 
 	public boolean deferAnalysis() {

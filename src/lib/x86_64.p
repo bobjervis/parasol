@@ -3791,7 +3791,7 @@ public class X86_64 extends X86_64AssignTemps {
 				continue;
 			if (args.node.type == null) {
 				ref<Binary> b = ref<Binary>(args.node);
-				b.type = b.left().unwrapTypedef(compileContext);
+				b.type = b.left().unwrapTypedef(Operator.CLASS, compileContext);
 			}
 			if (args.node.type.equals(varType)) {
 				_varCopyConstructor = ref<OverloadInstance>(func.name().symbol());

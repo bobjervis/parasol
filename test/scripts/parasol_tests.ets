@@ -208,8 +208,11 @@ compile() { "interface a {} interface b extends a {}" }
 compile() { "interface a {} interface b{} class c implements a, b {}" }
 compile() { "interface a { void f(); } class b implements a { void f() {} }" }
 compile() { "interface a { void f(); } class b implements a { void f() {} void g() {} }" }
-compile(expect: fail, message: IMPLEMENTS_NEEDS_INTERFACE) { "class a {} class b implements a {}" }
 compile(expect: fail, message: CLASS_MISSING_METHOD_FROM_INTERFACE) { "interface a { void f(); } class b implements a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "class a {} class b implements a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "monitor a { byte filler; } interface b extends a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "int a; interface b extends a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "void a() {} interface b extends a {}" }
 compile(expect: fail) { "interface a { int x; }" }
 compile(expect: fail) { "interface a { private int f(); }" }
 compile(expect: fail) { "interface a { public int f(); }" }
@@ -218,6 +221,13 @@ compile(expect: fail) { "interface a { abstract int f(); }" }
 compile(expect: fail) { "interface a { class b{} }" }
 compile(expect: fail) { "interface a { enum b{} }" }
 compile(expect: fail) { "interface a { flags b{} }" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "class a {} interface b extends a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "flags a {A} interface b extends a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "enum a {A} interface b extends a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "interface b extends int {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "interface b extends ref<char> {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "interface b extends byte[] {}" } 
+compile(expect: fail, message: NOT_AN_INTERFACE) { "interface b extends byte(int) {}" }
 
 compile() { "class A { void f() { } } class B extends A { void g() { f(); } }" }
 
@@ -1741,8 +1751,6 @@ expression() { a.b }
 expression() { a.bytes }
 expression() { a[b] }
 expression() { a[b] }
-expression() { "a[b]{ c }" }
-expression() { "a[b]{ c, d }" }
 expression() { a[b:] }
 expression() { a[b:c] }
 expression() { "a()" }
