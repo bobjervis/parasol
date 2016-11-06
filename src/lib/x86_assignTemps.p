@@ -823,6 +823,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	INTERFACE:
+			case	FLAGS:
 				int depth = tempStackDepth();
 				assignRegisterTemp(operand, longMask, compileContext);
 				f().r.cleanupTemps(result, depth);
@@ -854,6 +856,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	INTERFACE:
+			case	FLAGS:
 				assignCast(result, operand, regMask, 0, compileContext);
 				return;
 
@@ -880,6 +884,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	POINTER:
 			case	FUNCTION:
 			case	FLAGS:
+			case	INTERFACE:
 				assignCast(result, operand, regMask, 0, compileContext);
 				if (unsigned(int(result.register)) > unsigned(int(R.MAX_REG)))
 					assert(false);
@@ -906,6 +911,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	INTERFACE:
+			case	FLAGS:
 				assignCast(result, operand, regMask, 0, compileContext);
 				return;
 
@@ -932,6 +939,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	POINTER:
 			case	FUNCTION:
 			case	ENUM:
+			case	FLAGS:
+			case	INTERFACE:
 				assignCast(result, operand, regMask, floatMask, compileContext);
 				return;
 
@@ -950,11 +959,13 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			}
 			break;
 
+		case	INTERFACE:
 		case	ADDRESS:
 		case	REF:
 		case	POINTER:
 			switch (newType.family()) {
 			case	ENUM:
+			case	FLAGS:
 			case	STRING:
 			case	ADDRESS:
 			case	REF:
@@ -967,6 +978,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	FUNCTION:
+			case	INTERFACE:
 				assignCast(result, operand, regMask, 0, compileContext);
 				return;
 
@@ -993,6 +1005,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	POINTER:
 			case	ENUM:
 			case	FUNCTION:
+			case	INTERFACE:
+			case	FLAGS:
 				assignCast(result, operand, regMask, longMask, compileContext);
 				return;
 				
@@ -1012,6 +1026,14 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			// A general class coercion from another class type.
 			if (existingType.size() == newType.size())
 				return;
+			if (newType.family() == TypeFamily.INTERFACE) {
+				int depth = tempStackDepth();
+				assignLvalueTemps(operand, compileContext);
+				R reg = f().r.getreg(result, longMask, longMask);
+				f().r.cleanupTemps(result, depth);
+				result.register = byte(reg);
+				return;
+			}
 			break;
 
 		case	FUNCTION:
@@ -1027,6 +1049,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	INTERFACE:
+			case	FLAGS:
 				assignCast(result, operand, regMask, 0, compileContext);
 				return;
 

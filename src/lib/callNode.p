@@ -1009,6 +1009,7 @@ class Call extends ParameterBag {
 		case	BOOLEAN:
 		case	ENUM:
 		case	FLAGS:
+		case	INTERFACE:
 			switch (newType.family()) {
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -1028,6 +1029,7 @@ class Call extends ParameterBag {
 			case	ENUM:
 			case	FLAGS:
 			case	FUNCTION:
+			case	INTERFACE:
 				return true;
 			}
 			break;

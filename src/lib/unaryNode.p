@@ -251,6 +251,7 @@ class Unary extends Node {
 					break;
 					
 				case	ADDRESS:
+				case	INTERFACE:
 					targetType = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 					break;
 					

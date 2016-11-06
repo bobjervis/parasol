@@ -371,6 +371,7 @@ class Binary extends Node {
 			case	POINTER:
 			case	FUNCTION:
 			case	TYPEDEF:
+			case	INTERFACE:
 				break;
 				
 			case	SHAPE:
@@ -890,6 +891,7 @@ class Binary extends Node {
 			case	CLASS_VARIABLE:
 			case	REF:
 			case	POINTER:
+			case	INTERFACE:
 				break;
 				
 			case	STRING:

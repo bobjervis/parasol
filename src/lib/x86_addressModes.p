@@ -417,9 +417,11 @@ class X86_64AddressModes extends X86_64Encoder {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ENUM:
+			case	FLAGS:
 			case	ADDRESS:
 			case	REF:
 			case	POINTER:
+			case	INTERFACE:
 			case	FUNCTION:
 			case	FLOAT_32:
 			case	FLOAT_64:
@@ -442,10 +444,12 @@ class X86_64AddressModes extends X86_64Encoder {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	INTERFACE:
 				tryMakeMode(operand, MC_FULL, 0, compileContext);
 				return;
 
 			case	ENUM:
+			case	FLAGS:
 			case	FLOAT_32:
 			case	FLOAT_64:
 				markAddressModes(operand, compileContext);
@@ -467,6 +471,7 @@ class X86_64AddressModes extends X86_64Encoder {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	INTERFACE:
 				tryMakeMode(operand, MC_FULL, 0, compileContext);
 				return;
 				
@@ -492,12 +497,14 @@ class X86_64AddressModes extends X86_64Encoder {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	INTERFACE:
 				tryMakeMode(operand, MC_FULL, 0, compileContext);
 				return;
 
 			case	FLOAT_32:
 			case	FLOAT_64:
 			case	ENUM:
+			case	FLAGS:
 				markAddressModes(operand, compileContext);
 				return;
 			}
@@ -518,6 +525,8 @@ class X86_64AddressModes extends X86_64Encoder {
 			case	POINTER:
 			case	FUNCTION:
 			case	ENUM:
+			case	FLAGS:
+			case	INTERFACE:
 				markAddressModes(operand, compileContext);
 				return;
 
@@ -539,6 +548,7 @@ class X86_64AddressModes extends X86_64Encoder {
 		case	ADDRESS:
 		case	REF:
 		case	POINTER:
+		case	INTERFACE:
 			switch (newType.family()) {
 			case	STRING:
 			case	ADDRESS:
@@ -551,9 +561,11 @@ class X86_64AddressModes extends X86_64Encoder {
 			case	SIGNED_64:
 			case	FUNCTION:
 			case	ENUM:
+			case	FLAGS:
 			case	FUNCTION:
 			case	REF:
 			case	POINTER:
+			case	INTERFACE:
 				tryMakeMode(operand, MC_FULL, 0, compileContext);
 				return;
 
@@ -574,6 +586,7 @@ class X86_64AddressModes extends X86_64Encoder {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ENUM:
+			case	FLAGS:
 			case	FLOAT_32:
 			case	FLOAT_64:
 			case	STRING:
@@ -584,6 +597,7 @@ class X86_64AddressModes extends X86_64Encoder {
 			case	FUNCTION:
 			case	REF:
 			case	POINTER:
+			case	INTERFACE:
 				tryMakeMode(operand, MC_FULL, 0, compileContext);
 				return;
 			}
@@ -593,6 +607,10 @@ class X86_64AddressModes extends X86_64Encoder {
 			// A general class coercion from another class type.
 			if (existingType.size() == newType.size())
 				return;
+			if (newType.family() == TypeFamily.INTERFACE) {
+				markAddressModes(operand, compileContext);
+				return;
+			}
 			break;
 			
 		case	FUNCTION:
@@ -605,12 +623,14 @@ class X86_64AddressModes extends X86_64Encoder {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	ENUM:
+			case	FLAGS:
 			case	ADDRESS:
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
 			case	FLOAT_32:
 			case	FLOAT_64:
+			case	INTERFACE:
 				markAddressModes(operand, compileContext);
 				return;
 			}

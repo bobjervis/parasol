@@ -292,9 +292,20 @@ class ClasslikeScope extends Scope {
 			int baseOffset = 0;
 			if (hasVtable(compileContext))
 				baseOffset += address.bytes;
-			assignStorage(target, baseOffset, compileContext);
+			int interfaceArea = classType.interfaceCount() * address.bytes;
+			assignStorage(target, baseOffset, interfaceArea, compileContext);
 		} else
 			super.assignVariableStorage(target, compileContext);
+	}
+
+	public int interfaceOffset(ref<CompileContext> compileContext) {
+		ref<Type> base = assignSuper(compileContext);
+		if (base != null)
+			return base.size();
+		else if (hasVtable(compileContext))
+			return address.bytes;
+		else
+			return 0;
 	}
 
 	public void checkForDuplicateMethods(ref<CompileContext> compileContext) {
@@ -1182,7 +1193,7 @@ class Scope {
 	}
 	
 	public void assignVariableStorage(ref<Target> target, ref<CompileContext> compileContext) {
-		assignStorage(target, 0, compileContext);
+		assignStorage(target, 0, 0, compileContext);
 		if (target.verbose()) {
 			printf("assignVariableStorage %s:\n", string(_storageClass));
 			print(4, false);
@@ -1529,14 +1540,20 @@ class Scope {
 		}
 	}
 
-	protected void assignStorage(ref<Target> target, int offset, ref<CompileContext> compileContext) {
+	public int interfaceOffset(ref<CompileContext> compileContext) {
+		return 0;
+	}
+	
+	protected void assignStorage(ref<Target> target, int offset, int interfaceArea, ref<CompileContext> compileContext) {
 		if (variableStorage == -1) {
+			int interfaceOffset = 0;
 			ref<Type> base = assignSuper(compileContext);
 			if (base != null) {
 				base.assignSize(target, compileContext);
-				variableStorage = base.size();
+				interfaceOffset = base.size();
 			} else
-				variableStorage = offset;
+				interfaceOffset = offset;
+			variableStorage = interfaceOffset + interfaceArea;
 //			printf("Before assignStorage:\n");
 //			print(0, false);
 			visitAll(target, offset, compileContext);
@@ -1554,7 +1571,7 @@ class Scope {
 
 	public int autoStorage(ref<Target> target, int offset, ref<CompileContext> compileContext) {
 		if (_storageClass == StorageClass.AUTO) {
-			assignStorage(target, offset, compileContext);
+			assignStorage(target, offset, 0, compileContext);
 			offset = variableStorage;
 		}
 		int maxStorage = offset;

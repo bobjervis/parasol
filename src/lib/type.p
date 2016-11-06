@@ -45,6 +45,7 @@ enum TypeFamily {
 	BUILTIN_TYPES,
 	
 	CLASS,
+	INTERFACE,
 	ENUM,
 	FLAGS,
 	TYPEDEF,
@@ -282,13 +283,13 @@ class MonitorType extends ClassType {
 
 class InterfaceType extends ClassType {
 	InterfaceType(ref<Class> definition, ref<Scope> scope) {
-		super(definition, scope);
+		super(TypeFamily.INTERFACE, definition, scope);
 	}
 	
-	public boolean isInterface() {
+	public boolean isConcrete(ref<CompileContext> compileContext) {
 		return true;
 	}
-
+	
 //	public string signature() {
 //		return "interface " + super.signature();
 //	}	
@@ -297,7 +298,14 @@ class InterfaceType extends ClassType {
 class ClassType extends Type {
 	protected ref<Scope> _scope;
 	protected ref<Type> _extends;
+	protected ref<Type>[] _implements;
 	protected ref<Class> _definition;
+
+	protected ClassType(TypeFamily family, ref<Class> definition, ref<Scope> scope) {
+		super(family);
+		_definition = definition;
+		_scope = scope;
+	}
 
 	ClassType(ref<Class> definition, ref<Scope> scope) {
 		super(TypeFamily.CLASS);
@@ -386,7 +394,38 @@ class ClassType extends Type {
 	public ref<Scope> scope() {
 		return _scope;
 	}
+	
+	public void implement(ref<Type> interfaceType) {
+		_implements.append(interfaceType);
+	}
 
+	public boolean doesImplement(ref<Type> interfaceType) {
+		for (int i = 0; i < _implements.length(); i++)
+			if (_implements[i] == interfaceType)
+				return true;
+		return false;
+	}
+
+	public int interfaceOffset(ref<Type> interfaceType, ref<CompileContext> compileContext) {
+		for (int i = 0; i < _implements.length(); i++)
+			if (_implements[i] == interfaceType)
+				return _scope.interfaceOffset(compileContext) + i * address.bytes;
+		return -1;
+	}
+	/**
+	 * Note: If the interfaceType is not actually an interface, or is null, this function
+	 * will always return -1.
+	 * 
+	 * RETURNS: an offset >= 0 if this type implements the named interface. -1 otherwise.
+	 */
+	public int interfaceOffset(ref<Type> interfaceType) {
+		return -1;
+	}
+
+	public int interfaceCount() {
+		return _implements.length();
+	}
+	
 	public boolean equals(ref<Type> other) {
 		// A class type is unique, so one is always equal to itself...
 		if (this == other)
@@ -454,7 +493,7 @@ class ClassType extends Type {
 			ref<Node> base = _definition.extendsClause();
 			if (base != null) {
 				compileContext.assignTypes(_scope.enclosing(), base);
-				_extends = base.unwrapTypedef(isInterface() ? Operator.INTERFACE : Operator.CLASS, compileContext);
+				_extends = base.unwrapTypedef(family() == TypeFamily.INTERFACE ? Operator.INTERFACE : Operator.CLASS, compileContext);
 			}
 		}
 	}
@@ -470,6 +509,16 @@ class ClassType extends Type {
 		return _ordinal;
 	}
 	
+	public boolean widensTo(ref<Type> other, ref<CompileContext> compileContext) {
+		if (other.family() == TypeFamily.INTERFACE) {
+			if (doesImplement(other))
+				return true;
+			ref<Type> ind = indirectType(compileContext);
+			if (ind != null && ind.doesImplement(other))
+				return true;
+		}
+		return super.widensTo(other, compileContext);
+	}
 }
 
 class EnumType extends TypedefType {
@@ -1627,11 +1676,25 @@ class Type {
 	public boolean isConcrete(ref<CompileContext> compileContext) {
 		return true;
 	}
-	
-	public boolean isInterface() {
+	/**
+	 * Note: If the interfaceType is not actually an interface, or is null, this function
+	 * will always return false.
+	 * 
+	 * RETURNS: True if this type implements the named interface. False otherwise.
+	 */
+	public boolean doesImplement(ref<Type> interfaceType) {
 		return false;
 	}
-
+	/**
+	 * Note: If the interfaceType is not actually an interface, or is null, this function
+	 * will always return -1.
+	 * 
+	 * RETURNS: an offset >= 0 if this type implements the named interface. -1 otherwise.
+	 */
+	public int interfaceOffset(ref<Type> interfaceType, ref<CompileContext> compileContext) {
+		return -1;
+	}
+	
 	public boolean deferAnalysis() {
 		return _family == TypeFamily.ERROR || _family == TypeFamily.CLASS_DEFERRED;
 	}
@@ -1670,6 +1733,7 @@ int[TypeFamily] familySize = [
 	ERROR: 				-1,
 	BUILTIN_TYPES: 		-1,
 	CLASS: 				-1,
+	INTERFACE:			 8,
 	ARRAY_AGGREGATE: 	-1,
 	OBJECT_AGGREGATE: 	-1,
 	ENUM:				 8,
@@ -1707,6 +1771,7 @@ int[TypeFamily] familyAlignment = [
 	ERROR: 				-1,
 	BUILTIN_TYPES: 		-1,
 	CLASS: 				-1,
+	INTERFACE:			 8,
 	ARRAY_AGGREGATE: 	-1,
 	OBJECT_AGGREGATE: 	-1,
 	ENUM: 				 8,

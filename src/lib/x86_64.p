@@ -1312,6 +1312,7 @@ public class X86_64 extends X86_64AssignTemps {
 				case	ADDRESS:
 				case	REF:
 				case	POINTER:
+				case	INTERFACE:
 					generateOperands(b, compileContext);
 	//				printf("\n\n---- ASSIGN ----\n");
 	//				b.print(4);
@@ -2817,6 +2818,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	INTERFACE:
 				generate(seq.right(), compileContext);
 				inst(X86.MOV, impl(seq.type), seq.left(), seq.right(), compileContext);
 				break;
@@ -3209,6 +3211,8 @@ public class X86_64 extends X86_64AssignTemps {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	INTERFACE:
+			case	FLAGS:
 				if (R(n.register) == R.AH) {
 					// The only way that AH could get assigned is to use the result of a byte-% operator
 					inst(X86.MOV, TypeFamily.UNSIGNED_8, R.RAX, R.AH);
@@ -3264,6 +3268,8 @@ public class X86_64 extends X86_64AssignTemps {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	INTERFACE:
+			case	FLAGS:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, TypeFamily.UNSIGNED_16, result, n, compileContext);
 				inst(X86.AND, newType.family(), R(result.register), 0xffff);
@@ -3302,6 +3308,8 @@ public class X86_64 extends X86_64AssignTemps {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	INTERFACE:
+			case	FLAGS:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, TypeFamily.UNSIGNED_32, result, n, compileContext);
 				inst(X86.SAL, TypeFamily.UNSIGNED_32, R(result.register), 32);
@@ -3347,6 +3355,8 @@ public class X86_64 extends X86_64AssignTemps {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	INTERFACE:
+			case	FLAGS:
 				inst(X86.MOVSX_REX_W, TypeFamily.SIGNED_64, result, n, compileContext);
 				return;
 				
@@ -3388,6 +3398,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	INTERFACE:
 				inst(X86.MOVSXD, TypeFamily.SIGNED_32, result, n, compileContext);
 				return;
 				
@@ -3435,6 +3446,8 @@ public class X86_64 extends X86_64AssignTemps {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	INTERFACE:
+			case	FLAGS:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, TypeFamily.SIGNED_64, result, n, compileContext);
 				return;
@@ -3466,6 +3479,8 @@ public class X86_64 extends X86_64AssignTemps {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	INTERFACE:
+			case	FLAGS:
 				inst(X86.CVTSS2SI, TypeFamily.FLOAT_32, result, n, compileContext);
 				return;
 
@@ -3496,6 +3511,8 @@ public class X86_64 extends X86_64AssignTemps {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	INTERFACE:
+			case	FLAGS:
 				inst(X86.CVTSD2SI, TypeFamily.FLOAT_64, result, n, compileContext);
 				return;
 
@@ -3513,12 +3530,14 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			break;
 
+		case	INTERFACE:
 		case	ADDRESS:
 		case	REF:
 		case	POINTER:
 			switch (newType.family()) {
 			case	BOOLEAN:
 			case	ENUM:
+			case	FLAGS:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
@@ -3530,6 +3549,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	INTERFACE:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, TypeFamily.ADDRESS, result, n, compileContext);
 				return;
@@ -3567,6 +3587,8 @@ public class X86_64 extends X86_64AssignTemps {
 			case	POINTER:
 			case	FUNCTION:
 			case	ENUM:
+			case	INTERFACE:
+			case	FLAGS:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, TypeFamily.ADDRESS, result, n, compileContext);
 				return;
@@ -3604,6 +3626,15 @@ public class X86_64 extends X86_64AssignTemps {
 			// A general class coercion from another class type.
 			if (existingType.size() == newType.size())
 				return;
+			if (newType.family() == TypeFamily.INTERFACE) {
+				int interfaceOffset = existingType.interfaceOffset(newType, compileContext);
+				if (interfaceOffset == -1) {
+					result.print(0);
+					assert(false);
+				}
+				inst(X86.LEA, newType, R(result.register), n, interfaceOffset);
+				return;
+			}
 			break;
 
 		case	STRING:
@@ -3667,6 +3698,8 @@ public class X86_64 extends X86_64AssignTemps {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
+			case	INTERFACE:
+			case	FLAGS:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, TypeFamily.FUNCTION, result, n, compileContext);
 				return;
@@ -3690,7 +3723,7 @@ public class X86_64 extends X86_64AssignTemps {
 		printf(" -> ");
 		newType.print();
 		printf("\n");
-		n.print(4);
+		result.print(4);
 		assert(false);
 	}
 
@@ -3880,6 +3913,7 @@ public class X86_64 extends X86_64AssignTemps {
 						
 					case	TYPEDEF:
 					case	ERROR:
+					case	INTERFACE:
 						break;
 						
 					case	CLASS:

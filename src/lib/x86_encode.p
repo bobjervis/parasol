@@ -1166,6 +1166,8 @@ class X86_64Encoder extends Target {
 			case	SIGNED_64:
 			case	CLASS:
 			case	FUNCTION:
+			case	INTERFACE:
+			case	FLAGS:
 				emitRex(family, null, R.NO_REG, dest);
 				if (operand >= -128 && operand <= 127) {
 					emit(0x83);
@@ -1307,6 +1309,15 @@ class X86_64Encoder extends Target {
 			}
 			break;
 			
+		case	LEA:
+			emitRex(TypeFamily.SIGNED_64, right, left, R.NO_REG);
+			emit(0x8d);
+			ref<Type> t = right.type;
+			right.type = type;
+			modRM(right, rmValues[left], 0, offset);
+			right.type = t;
+			break;
+						
 		default:
 			printf("%s %s %s +%d\n", string(instruction), type.signature(), string(left), offset);
 			right.print(4);
@@ -2088,6 +2099,7 @@ class X86_64Encoder extends Target {
 			case	POINTER:
 			case	FUNCTION:
 			case	CLASS_VARIABLE:
+			case	INTERFACE:
 				emitRex(left.type.family(), left, right, R.NO_REG);
 				emit(byte(opcodes[instruction] + 0x01));
 				modRM(left, rmValues[right], 0, 0);
@@ -2324,6 +2336,7 @@ class X86_64Encoder extends Target {
 			case	SIGNED_32:
 			case	UNSIGNED_32:
 			case	SIGNED_64:
+			case	INTERFACE:
 			case	ADDRESS:
 			case	FUNCTION:
 			case	REF:

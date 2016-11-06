@@ -865,6 +865,10 @@ class Class extends Block {
 			if (nl.node.op() != Operator.IDENTIFIER) {
 				nl.node.print(0);
 			}
+			if (scope != null) {
+				ref<ClassType> classType = ref<ClassScope>(scope).classType;
+				classType.implement(tp);
+			}
 			assert(nl.node.op() == Operator.IDENTIFIER);
 			ref<Identifier> nm = ref<Identifier>(nl.node);
 			for (ref<Symbol>[Scope.SymbolKey].iterator i = tp.scope().symbols().begin(); i.hasNext(); i.next()) {
@@ -1562,6 +1566,7 @@ class Leaf extends Node {
 			case	FUNCTION:
 			case	REF:
 			case	POINTER:
+			case	INTERFACE:
 				return true;
 
 			case	SIGNED_32:
@@ -2733,7 +2738,7 @@ class Node {
 			print(0);
 		if (type.family() == TypeFamily.TYPEDEF) {		// if (type instanceof TypedefType)
 			ref<TypedefType> tp = ref<TypedefType>(type);
-			if (context != Operator.INTERFACE || tp.wrappedType().isInterface())
+			if (context != Operator.INTERFACE || tp.wrappedType().family() == TypeFamily.INTERFACE)
 				return tp.wrappedType();
 		} else if (type.family() == TypeFamily.CLASS_VARIABLE) {
 			return compileContext.arena().builtInType(TypeFamily.CLASS_DEFERRED);
