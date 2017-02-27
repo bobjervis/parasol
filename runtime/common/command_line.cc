@@ -18,7 +18,14 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
+#if defined(__WIN64)
 #include "windows.h"
+#elif __linux__
+#include <sys/ioctl.h>	/* ioctl, TIOCGWINSZ */
+#include <err.h>	/* err */
+#include <fcntl.h>	/* open */
+#include <unistd.h>	/* close */
+#endif
 
 namespace commandLine {
 
@@ -205,15 +212,29 @@ static void wrapTo(int alreadyPrinted, int indent, int lineLength, const char *t
 }
 
 void Command::help() {
+	int lineLength = 80;
+#if defined(__WIN64)
 	CONSOLE_SCREEN_BUFFER_INFO screenBuffer;
 
-	int lineLength = 80;
-	int indent = 22;
 	if (GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &screenBuffer)) {
 		lineLength = screenBuffer.dwSize.X - 1;
-		if (lineLength < 60)
-			indent = lineLength / 3;
 	}
+#elif __linux__
+	struct winsize ws;
+	int fd;
+
+	/* Open the controlling terminal. */
+	fd = open("/dev/tty", O_RDWR);
+	if (fd < 0)
+		err(1, "/dev/tty");
+
+	/* Get window size of terminal. */
+	if (ioctl(fd, TIOCGWINSZ, &ws) < 0)
+		err(1, "/dev/tty");
+#endif
+	int indent = 22;
+	if (lineLength < 60)
+		indent = lineLength / 3;
 	printf("Use is: %s", _command);
 	if (_allArguments.size() > 0) {
 		printf(" [options]");

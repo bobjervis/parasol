@@ -14,7 +14,12 @@
    limitations under the License.
  */
 #pragma once
+#if defined(__WIN64)
 #include <windows.h>
+#elif __linux__
+#include <pthread.h>
+static const int INFINITE = -1;
+#endif
 #include "event.h"
 #include "string.h"
 #include "vector.h"
@@ -57,12 +62,16 @@ class Pipe {
 public:
 	Pipe();
 
+#if defined(__WIN64)
 	HANDLE writer() const { return _writer; }
 	HANDLE reader() const { return _reader; }
+#endif
 
 private:
+#if defined(__WIN64)
 	HANDLE			_writer;
 	HANDLE			_reader;
+#endif
 };
 
 class DebugSpawnCookie {
@@ -116,7 +125,9 @@ public:
 		_locals[id] = value;
 	}
 
+#if defined(__WIN64)
 	HANDLE hThread() const { return _hThread; }
+#endif
 
 	Event idle;
 
@@ -222,10 +233,12 @@ private:
 
 	void start();
 
+#if defined(__WIN64)
 	static DWORD WINAPI threadProc(void* data);
 
 	DWORD			_threadId;
 	HANDLE			_hThread;
+#endif
 	Handler*		_handler;
 	int				_local;
 	vector<void*>	_locals;
@@ -235,15 +248,30 @@ class Mutex {
 	friend class MutexLock;
 public:
 	Mutex() {
+#if defined(__WIN64)
 		InitializeCriticalSection(&_lock);
+#elif __linux__
+		pthread_mutexattr_t attr;
+
+		_lock = PTHREAD_MUTEX_INITIALIZER;
+		pthread_mutex_init(&_lock, &attr);
+#endif
 	}
 
 	~Mutex() {
+#if defined(__WIN64)
 		DeleteCriticalSection(&_lock);
+#elif __linux__
+		pthread_mutex_destroy(&_lock);
+#endif
 	}
 
 private:
+#if defined(__WIN64)
 	CRITICAL_SECTION		_lock;
+#elif __linux__
+	pthread_mutex_t _lock;
+#endif
 };
 
 class MutexLock {
@@ -259,13 +287,21 @@ public:
 	}
 
 	void lock() {
+#if defined(__WIN64)
 		EnterCriticalSection(&_mutex->_lock);
+#elif __linux__
+		pthread_mutex_lock(&_mutex->_lock);
+#endif
 		_locked = true;
 	}
 
 	void unlock() {
 		_locked = false;
+#if defined(__WIN64)
 		LeaveCriticalSection(&_mutex->_lock);
+#elif __linux__
+		pthread_mutex_unlock(&_mutex->_lock);
+#endif
 	}
 
 private:
@@ -277,30 +313,42 @@ class WaitableEvent {
 	friend int wait2(WaitableEvent* a, WaitableEvent* b, unsigned millisecondsWait);
 public:
 	WaitableEvent() {
+#if defined(__WIN64)
 		_handle = null;
+#endif
 	}
 
 	virtual ~WaitableEvent() {
+#if defined(__WIN64)
 		CloseHandle(_handle);
+#endif
 	}
 
 	bool wait(unsigned millisecondsWait = INFINITE) {
+#if defined(__WIN64)
 		DWORD value = WaitForSingleObject(_handle, millisecondsWait);
 		return value == WAIT_OBJECT_0;
+#endif
 	}
 
 protected:
+#if defined(__WIN64)
 	HANDLE	_handle;
+#endif
 };
 
 class SignalingEvent : public WaitableEvent {
 public:
 	SignalingEvent() {
+#if defined(__WIN64)
 		_handle = CreateEvent(null, FALSE, FALSE, null);
+#endif
 	}
 
 	void signal() {
+#if defined(__WIN64)
 		SetEvent(_handle);
+#endif
 	}
 };
 
@@ -309,11 +357,15 @@ public:
 	static const int MAX_COUNT = int(~0u >> 1);
 
 	Semaphore(int initialCount, int maximumCount = MAX_COUNT) {
+#if defined(__WIN64)
 		_handle = CreateSemaphore(null, initialCount, maximumCount, null);
+#endif
 	}
 
 	void release() {
+#if defined(__WIN64)
 		ReleaseSemaphore(_handle, 1, null);
+#endif
 	}
 };
 
@@ -460,8 +512,10 @@ private:
 
 int debugSpawn(const string& cmd, string* captureData, exception_t* exception, time_t timeout);
 
+#if defined(__WIN64)
 const DWORD WINDOWS_ABORT_EXCEPTION = 0xc1000001;
 const DWORD WINDOWS_DEBUGGER_TERMINATED = 0xc3770001;
+#endif
 
 extern Process me;
 
@@ -469,6 +523,7 @@ string binaryFilename();
 
 Thread* currentThread();
 
+#if defined(__WIN64)
 void dumpExceptionRecord(const EXCEPTION_RECORD *xr, int firstChance);
-
+#endif
 }  // namespace process

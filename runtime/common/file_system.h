@@ -16,7 +16,11 @@
 #pragma once
 #include <stdio.h>
 #include <time.h>
+#ifdef __WIN64
 #include <windows.h>
+#elif __linux__
+#include <dirent.h>
+#endif
 #ifdef MSVC
 #include <typeinfo.h>
 #else
@@ -57,6 +61,9 @@ const char* extension(const string& filename);
  */
 string constructPath(const string& directory, const string& baseName, const string& extension);
 
+static const long long UNITS_PER_SECOND = 10000000;			// Record as 100 nsec units.
+static const long long NANOS_PER_TIMESTAMP = 100;
+
 class TimeStamp {
 public:
 	static TimeStamp UNDEFINED;
@@ -66,13 +73,19 @@ public:
 	}
 
 	TimeStamp(time_t t) {
-		_time = t * 10000000;			// Record as 100 nsec units.
+		_time = t * UNITS_PER_SECOND;
 	}
 
+#if defined(__WIN64)
 	TimeStamp(FILETIME& t) {
 		// Use UNIX era
-		_time = *(__int64*)&t - ERA_DIFF;
+		_time = *(long long*)&t - ERA_DIFF;
 	}
+#elif __linux__
+	TimeStamp(timespec& tspec) {
+		_time = tspec.tv_sec * UNITS_PER_SECOND + tspec.tv_nsec / NANOS_PER_TIMESTAMP;
+	}
+#endif
 
 	void clear() { _time = 0; }
 
@@ -104,18 +117,32 @@ public:
 
 	void touch();
 
-	void setValue(__int64 t) { _time = t; }
+	void setValue(long long t) { _time = t; }
 
-	__int64 value() const { return _time; }
+	long long value() const { return _time; }
 
+	time_t asTime_t() const { return _time / UNITS_PER_SECOND; }
+
+#if __linux__
+	timespec asTimespec() const {
+		timespec spec;
+
+		spec.tv_sec = _time / UNITS_PER_SECOND;
+		spec.tv_nsec = (_time % UNITS_PER_SECOND) * NANOS_PER_TIMESTAMP;
+	}
+#endif
 private:
-	static const __int64 ERA_DIFF = 0x019DB1DED53E8000LL;
 
-	__int64		_time;
+#if defined(__WIN64)
+	static const long long ERA_DIFF = 0x019DB1DED53E8000LL;
+#endif
+
+	long long _time;
 };
 
 TimeStamp lastModified(const string& filename);
 TimeStamp lastModified(FILE* fp);
+TimeStamp now();
 
 bool rename(const string& f1, const string& f2);
 bool erase(const string& filename);
@@ -181,8 +208,13 @@ public:
 	string currentName();
 
 private:
+#if defined(__WIN64)
 	HANDLE				_handle;
 	WIN32_FIND_DATA		_data;
+#elif __linux__
+	DIR					*_dir;
+	dirent				*_dirent;
+#endif
 	string				_directory;
 	string				_wildcard;
 };

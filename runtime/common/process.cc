@@ -16,7 +16,6 @@
 #include "../common/platform.h"
 #include "process.h"
 
-#include <windows.h>
 #include "machine.h"
 #include "file_system.h"
 

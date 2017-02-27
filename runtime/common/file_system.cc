@@ -21,8 +21,15 @@
 #else
 #include <typeinfo>
 #endif
-#include <windows.h>
+#if defined(__WIN64)
 #include <io.h>
+#elif __linux__
+#include <stddef.h>
+#include <stdlib.h>
+#include <limits.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#endif
 #include "machine.h"
 
 const long long oneMinute = 60 * 10000000;
@@ -85,6 +92,7 @@ string basename(const string& filename) {
 }
 
 string absolutePath(const string& filename) {
+#ifdef __WIN64
 	char buffer[256];
 	int len = GetFullPathName(filename.c_str(), sizeof buffer, buffer, null);
 	if (len == 0)
@@ -96,6 +104,9 @@ string absolutePath(const string& filename) {
 		return s;
 	}
 	return string(buffer, len).tolower();
+#elif __linux__
+	return string(realpath(filename.c_str(), null));
+#endif
 }
 
 const char* extension(const string& filename) {
@@ -131,10 +142,15 @@ string constructPath(const string& directory, const string& baseName, const stri
 	return base;
 }
 
+#ifdef __WIN64
 static FILETIME t = { 0x0, 0x80000000 };
 TimeStamp TimeStamp::UNDEFINED(t);
+#elif __linux__
+TimeStamp TimeStamp::UNDEFINED((time_t) LONG_LONG_MIN);
+#endif
 
 string TimeStamp::toString() {
+#if defined(__WIN64)
 	long long t = _time + ERA_DIFF;
 	SYSTEMTIME d;
 	if (!FileTimeToSystemTime((FILETIME*)&t, &d))
@@ -144,80 +160,133 @@ string TimeStamp::toString() {
 	if (y > 1900 && y < 1999)
 		y -= 1900;
 	return string(d.wMonth) + "/" + d.wDay + "/" + y + " " + d.wHour + ":" + d.wMinute + ":" + d.wSecond;
+#elif __linux__
+	struct tm *time;
+	time_t secs = asTime_t();
+
+	time = localtime(&secs);
+	return string(time->tm_mon) + "/" + time->tm_mday + "/" + time->tm_year + " " + time->tm_hour + ":" + time->tm_min + ":" + time->tm_sec;
+#endif
 }
-
+/**
+ * Note that this function is not thread safe.
+ *
+ * TODO: Should it be?
+ */
 void TimeStamp::touch() {
-	static __int64 lastTouched = 0;
-	__int64 now = time(null) * 10000000;
+	static long long lastTouched = 0;
+	long long n = now().value();
 
-	if (lastTouched >= now)
-		now = lastTouched + 1;
-	lastTouched = now;
-	if (_time < now)
-		_time = now;
+	if (lastTouched >= n)
+		n = lastTouched + 1;
+	lastTouched = n;
+	if (_time < n)
+		_time = n;
 }
 
 TimeStamp lastModified(const string& filename) {
+	TimeStamp t;
+#if defined(__WIN64)
 	HANDLE fh = CreateFile(filename.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
 	if (fh == INVALID_HANDLE_VALUE)
 		return 0;
 	FILETIME ftCreate, ftAccess, ftWrite;
 
-	TimeStamp t;
 	if (GetFileTime(fh, &ftCreate, &ftAccess, &ftWrite) != FALSE)
 		t = ftWrite;
 	CloseHandle(fh);
 	return t;
+#elif __linux__
+	struct stat attrib;                 //1. create a file attribute structure
+	stat(filename.c_str(), &attrib);         //2. get the attributes of afile.txt
+	return TimeStamp(attrib.st_mtim);
+#endif
 }
 
 TimeStamp lastModified(FILE* fp) {
+#if defined(__WIN64)
 	int fd = _fileno(fp);
 	HANDLE fh = (HANDLE)_get_osfhandle(fd);
 	FILETIME ftCreate, ftAccess, ftWrite;
 
 	if (GetFileTime(fh, &ftCreate, &ftAccess, &ftWrite) != FALSE)
 		return ftWrite;
+#elif __linux__
+	struct stat attrib;                 //1. create a file attribute structure
+	int fd = fileno(fp);
+	if (fstat(fd, &attrib) >= 0)
+		return TimeStamp(attrib.st_mtim);
+#endif
 	return 0;
 }
 
+TimeStamp now() {
+	return TimeStamp(time(null));
+}
+
 bool rename(const string& f1, const string& f2) {
-   if (MoveFileEx(f1.c_str(), f2.c_str(), MOVEFILE_COPY_ALLOWED) != FALSE)
+#if defined(__WIN64)
+	if (MoveFileEx(f1.c_str(), f2.c_str(), MOVEFILE_COPY_ALLOWED) != FALSE)
+#elif __linux__
+	if (rename(f1.c_str(), f2.c_str()) >= 0)
+#endif
 		return true;
-   else
+    else
 		return false;
 }
 
 bool erase(const string& filename) {
+#if defined(__WIN64)
 	if (DeleteFile(filename.c_str()) != FALSE)
+#elif __linux__
+	if (unlink(filename.c_str()) >= 0)
+#endif
 		return true;
 	else
 		return false;
 }
 
 bool exists(const string& fn) {
+#if defined(__WIN64)
 	DWORD r = GetFileAttributes(fn.c_str());
 	if (r == 0xffffffff)
+#elif __linux__
+	struct stat attrib;
+	if (stat(fn.c_str(), &attrib) < 0)
+#endif
 		return false;
 	else
 		return true;
 }
 
 bool writable(const string& fn) {
+#if defined(__WIN64)
 	DWORD r = GetFileAttributes(fn.c_str());
 	if (r == 0xffffffff)
 		return false;
-	else if (r & FILE_ATTRIBUTE_READONLY)
+	else if (attrib.r & FILE_ATTRIBUTE_READONLY)
+#elif __linux__
+	if (access(fn.c_str(), W_OK) < 0)
+#endif
 		return false;
 	else
 		return true;
 }
 
 bool isDirectory(const string &filename) {
+#if defined(__WIN64)
 	DWORD r = GetFileAttributes(filename.c_str());
 	if (r == 0xffffffff)
 		return false;
 	else
 		return (r & FILE_ATTRIBUTE_DIRECTORY) != 0;
+#elif __linux__
+	struct stat attrib;
+	if (stat(filename.c_str(), &attrib) < 0)
+		return false;
+	else
+		return S_ISDIR(attrib.st_mode);
+#endif
 }
 
 bool ensure(const string& dir) {
@@ -227,7 +296,11 @@ bool ensure(const string& dir) {
 		return false;
 	if (!ensure(directory(dir)))
 		return false;
+#if defined(__WIN64)
 	if (CreateDirectory(dir.c_str(), null) != FALSE)
+#elif __linux__
+	if (mkdir(dir.c_str(), 0777) >= 0)
+#endif
 		return true;
 	else
 		return false;
@@ -305,8 +378,13 @@ string makeCompactPath(const string& filename, const string& baseFilename) {
 }
 
 Directory::Directory(const string &path) {
+#if defined(__WIN64)
 	memset(&_data, 0, sizeof _data);
 	_handle = INVALID_HANDLE_VALUE;
+#elif __linux__
+	_dir = null;
+	_dirent = null;
+#endif
 	_directory = path;
 	_wildcard = "*";
 }
@@ -316,27 +394,57 @@ void Directory::pattern(const string &wildcard) {
 }
 
 Directory::~Directory() {
+#if defined(__WIN64)
 	if (_handle != INVALID_HANDLE_VALUE)
 		FindClose(_handle);
+#elif __linux__
+	if (_dir != null)
+		closedir(_dir);
+	if (_dirent != null)
+		free(_dirent);
+#endif
 }
 
 bool Directory::first() {
 	string s = _directory + "\\" + _wildcard;
+#if defined(__WIN64)
 	_handle = FindFirstFile(s.c_str(), &_data);
 	return _handle != INVALID_HANDLE_VALUE;
+#elif __linux__
+	_dir = opendir(_directory.c_str());
+	if (_dir == null)
+		return false;
+	return next();
+#endif
 }
 
 bool Directory::next() {
+#if defined(__WIN64)
 	BOOL result = FindNextFile(_handle, &_data);
 	if (result)
 		return true;
 	FindClose(_handle);
 	_handle = INVALID_HANDLE_VALUE;
 	return false;
+#elif __linux__
+	if (_dirent == null) {
+		int name_max = pathconf(_directory.c_str(), _PC_NAME_MAX);
+		if (name_max == -1)         /* Limit not defined, or error */
+		    name_max = 255;         /* Take a guess */
+		int len = offsetof(struct dirent, d_name) + name_max + 1;
+		_dirent = (dirent*) malloc(len);
+	}
+	dirent *resultbuf;
+	int result = readdir_r(_dir, _dirent, &resultbuf);
+	if (result == 0) {
+		return resultbuf != null;
+	} else
+		return false;
+#endif
 }
 
 string Directory::currentName() {
-	return _directory + "/" + _data.cFileName;
+	return _directory + "/" + _dirent->d_name;
 }
 
 }

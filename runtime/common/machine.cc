@@ -15,7 +15,15 @@
  */
 #include "../common/platform.h"
 #include <stdlib.h>
+#if defined(__WIN64)
 #include <windows.h>
+#elif __linux__
+#include <stdio.h>
+#include <time.h>
+
+static const long long MILLIS_PER_SECOND = 1000;
+static const long long NANOS_PER_MILLISECOND = 1000000;
+#endif
 
 #include "machine.h"
 
@@ -24,6 +32,7 @@ char string::dummy;
 const int OUTPUT_BLOCK = 32;
 
 void debugPrint(const string& s) {
+#if defined(__WIN64)
 	char chars[OUTPUT_BLOCK + 1];
 
 	for (int i = 0; i < s.size(); i += OUTPUT_BLOCK){
@@ -35,10 +44,19 @@ void debugPrint(const string& s) {
 
 		OutputDebugString(chars);
 	}
+#elif __linux__
+	printf("%s", s.c_str());
+#endif
 }
 
 Milliseconds millisecondMark() {
+#if defined(__WIN64)
 	return GetTickCount();
+#elif __linux__
+	timespec ts;
+	clock_gettime(CLOCK_BOOTTIME, &ts);
+	return ts.tv_sec * MILLIS_PER_SECOND + ts.tv_nsec / NANOS_PER_MILLISECOND;
+#endif
 }
 
 void setRbp(void *newValue) {

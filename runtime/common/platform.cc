@@ -15,7 +15,9 @@
  */
 #include "platform.h"
 
+#if defined(__WIN64)
 #include <windows.h>
+#endif
 
 namespace platform {
 
