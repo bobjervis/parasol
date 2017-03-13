@@ -13,20 +13,29 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-#include "../common/platform.h"
+#include "platform.h"
 #include "process.h"
 
 #include "machine.h"
 #include "file_system.h"
+#if __linux__
+#include <unistd.h>
+#include <sys/syscall.h>
+#endif
 
 namespace process {
 
+#if defined(__WIN64)
 static const int MS_VC_EXCEPTION = 0x406d1388;
 static void	drain(HANDLE reader, string* captureData);
 static void dumpException(const DEBUG_EVENT& dbg, unsigned processId);
 static const char* exceptionName(DWORD x);
 static void initStartupInfo(STARTUPINFO* info, HANDLE stdoutHandle, HANDLE stderrHandle);
 static int monitorDebugEvents(HANDLE hProcess, unsigned processId, exception_t* exception, time_t timeout);
+#elif __linux__
+
+static __thread Thread *thisThread;
+#endif
 
 const char* exceptionNames[] = {
 	"NO_EXCEPTION",
@@ -41,12 +50,18 @@ const char* exceptionNames[] = {
 Process me;
 
 Process::Process() {
+#if defined(__WIN64)
 	_tlsIndex = TlsAlloc();
+#endif
 
 	Thread* t = new Thread();
 
+#if defined(__WIN64)
 	t->_hThread = GetCurrentThread();
 	t->_threadId = GetCurrentThreadId();
+#elif __linux__
+	t->_threadId = pthread_self();
+#endif
 	setTls(t);
 }
 
@@ -55,15 +70,23 @@ Process::~Process() {
 }
 
 void Process::setTls(Thread* t) {
+#if defined(__WIN64)
 	if (_tlsIndex != TLS_OUT_OF_INDEXES)
 		TlsSetValue(_tlsIndex, t);
+#elif __linux__
+	thisThread = t;
+#endif
 }
 
 Thread* Process::getTls() {
+#if defined(__WIN64)
 	if (_tlsIndex != TLS_OUT_OF_INDEXES)
 		return (Thread*)TlsGetValue(_tlsIndex);
 	else
 		return null;
+#elif __linux__
+	return thisThread;
+#endif
 }
 
 Thread* currentThread() {
@@ -71,15 +94,28 @@ Thread* currentThread() {
 }
 
 Pipe::Pipe() {
+#if defined(__WIN64)
 	if (CreatePipe(&_reader, &_writer, null, 0) == FALSE) {
 		_reader = INVALID_HANDLE_VALUE;
 		_writer = INVALID_HANDLE_VALUE;
 	}
+#elif __linux__
+	int pipefd[2];
+	if (pipe(pipefd) < 0) {
+		_reader = pipefd[0];
+		_writer = pipefd[1];
+	} else {
+		_reader = -1;
+		_writer = -1;
+	}
+#endif
 }
 
 Thread::Thread() {
 	_threadId = 0;
+#if defined(__WIN64)
 	_hThread = null;
+#endif
 	_handler = null;
 	_local = 0;
 }
@@ -90,9 +126,13 @@ Thread::~Thread() {
 }
 
 void Thread::start() {
+#if defined(__WIN64)
 	_hThread = CreateThread(null, 0, threadProc, (void*)this, 0, &_threadId);
+#elif __linux__
+	pthread_create(&_threadId, null, threadProc, (void*)this);
+#endif
 }
-
+#if defined(__WIN64)
 DWORD WINAPI Thread::threadProc(void* data) {
 	Thread* t = (Thread*)data;
 
@@ -100,7 +140,17 @@ DWORD WINAPI Thread::threadProc(void* data) {
 	me.setTls(t);
 	return 0;
 }
+#elif __linux__
+void *Thread::threadProc(void *data) {
+	Thread *t = (Thread*)data;
 
+	t->_handler->start();
+	me.setTls(t);
+	return 0;
+}
+#endif
+
+#if 0
 ThreadPool::ThreadPool(int threadCount) : _actionQueue(0) {
 	_actions = null;
 	_idleThreads = 0;
@@ -130,7 +180,11 @@ void ThreadPool::stop() {
 	_shutdownSemaphore->release();
 	// This won't return, which we rely on so that the shutdown
 	// stopHandler doesn't get deleted.
+#if defined(__WIN64)
 	ExitThread(0);
+#elif __linux__
+	pthread_exit(0);
+#endif
 }
 
 bool ThreadPool::busy() {
@@ -281,8 +335,10 @@ string binaryFilename() {
 	GetModuleFileName(NULL, filename, sizeof filename);
 	return string(filename);
 }
+#endif
 
 int debugSpawn(const string& cmd, string* captureData, exception_t* exception, time_t timeout) {
+#if defined(__WIN64)
 	PROCESS_INFORMATION pinfo;
 	STARTUPINFO info;
 	Pipe pipe;
@@ -302,8 +358,12 @@ int debugSpawn(const string& cmd, string* captureData, exception_t* exception, t
 		delete t;
 		return exitValue;
 	}
+#elif __linux__
+	return -1;
+#endif
 }
 
+#if defined(__WIN64)
 static void initStartupInfo(STARTUPINFO* info, HANDLE stdoutHandle, HANDLE stderrHandle) {
 	fflush(stdout);
 	fflush(stderr);
@@ -477,27 +537,7 @@ static int monitorDebugEvents(HANDLE hProcess, unsigned processId, exception_t* 
 		ContinueDebugEvent(dbg.dwProcessId, dbg.dwThreadId, handling);
 	}
 }
-/*	
-	DumpData: type = struct {
-		dbg: windows.DEBUG_EVENT
-		processId: unsigned
-		next: ref[DumpData]
-		
-		new: (dbg: pointer[windows.DEBUG_EVENT], processId: unsigned, next: ref[DumpData])
-		{
-			this.dbg = *dbg
-			this.processId = processId
-			this.next = next
-		}
-		
-		dump: function ()
-		{
-			if (next != null)
-				next.dump()
-			dumpException(&dbg, processId)
-		}
-	}
- */
+
 static void dumpException(const DEBUG_EVENT& dbg, unsigned processId) {
 	printf("    Pid: %d", dbg.dwProcessId);
 	if (dbg.dwProcessId == processId)
@@ -572,5 +612,6 @@ static const char* exceptionName(DWORD x) {
 	default:									return "* unknown exception *";
 	}
 }
+#endif
 
 }  // namespace process

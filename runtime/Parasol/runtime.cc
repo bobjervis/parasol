@@ -28,7 +28,13 @@
 #endif
 #include <exception>
 #include <time.h>
+#if defined(__WIN64)
 #include <windows.h>
+#elif __linux__
+typedef unsigned long long SIZE_T;
+typedef unsigned DWORD;
+typedef int BOOL;
+#endif
 #include "common/process.h"
 #include "basic_types.h"
 
@@ -49,25 +55,42 @@ public:
 
 extern BuiltInFunctionMap builtInFunctionMap[];
 
+#if __linux__
+static __thread ExecutionContext *_threadContextValue;
+#endif
+
 class ThreadContext {
 public:
 	ThreadContext() {
+#if defined(__WIN64)
 		_slot = TlsAlloc();
+#endif
 	}
 
 	bool set(ExecutionContext *value) {
+#if defined(__WIN64)
 		if (TlsSetValue(_slot, value))
 			return true;
 		else
 			return false;
+#elif __linux__
+		_threadContextValue = value;
+		return true;
+#endif
 	}
 
 	ExecutionContext *get() {
+#if defined(__WIN64)
 		return (ExecutionContext*)TlsGetValue(_slot);
+#elif __linux__
+		return _threadContextValue;
+#endif
 	}
 
 private:
+#if defined(__WIN64)
 	DWORD	_slot;
+#endif
 };
 
 ByteCodeMap::ByteCodeMap() {
@@ -293,6 +316,9 @@ ExecutionContext::ExecutionContext(void **objects, int objectCount) {
 	_hardwareExceptionHandler = null;
 	_sourceLocations = null;
 	_sourceLocationsCount = 0;
+	_pxiHeader = null;
+	_runtimeFlags = 0;
+	trace = false;
 }
 
 ExecutionContext::ExecutionContext(X86_64SectionHeader *pxiHeader, void *image, long long runtimeFlags) {
@@ -313,6 +339,7 @@ ExecutionContext::ExecutionContext(X86_64SectionHeader *pxiHeader, void *image, 
 	_sourceLocations = null;
 	_sourceLocationsCount = 0;
 	_runtimeFlags = runtimeFlags;
+	trace = false;
 }
 
 ExecutionContext::~ExecutionContext() {
@@ -320,7 +347,6 @@ ExecutionContext::~ExecutionContext() {
 }
 
 void ExecutionContext::enter() {
-	ExecutionContext *outer = threadContext.get();
 	_target = NATIVE_64_TARGET;
 	threadContext.set(this);
 }
@@ -333,7 +359,7 @@ bool ExecutionContext::push(WORD intValue) {
 	return true;
 }
 
-bool ExecutionContext::push(char **argv, int argc){
+void ExecutionContext::push(char **argv, int argc){
 	_args.clear();
 	for (int i = 0; i < argc; i++)
 		_args.push_back(string(argv[i]));
@@ -372,7 +398,7 @@ void *ExecutionContext::popAddress() {
 void *ExecutionContext::peekAddress() {
 	return *((void**)_sp);
 }
-
+#if 0
 extern "C" {
 
 CALLBACK long my_exception_handler(EXCEPTION_POINTERS * exception_data) {
@@ -380,6 +406,7 @@ CALLBACK long my_exception_handler(EXCEPTION_POINTERS * exception_data) {
 }
 
 }
+#endif
 
 static int injectObjects(void **objects, int objectCount) {
 	ExecutionContext *context = threadContext.get();
@@ -493,6 +520,7 @@ bool ExecutionContext::run(int objectId) {
 	return result;
 }
 
+#if defined(_WIN64)
 LONG CALLBACK windowsExceptionHandler(PEXCEPTION_POINTERS ExceptionInfo) {
 	ExecutionContext *context = threadContext.get();
 
@@ -516,14 +544,19 @@ LONG CALLBACK windowsExceptionHandler(PEXCEPTION_POINTERS ExceptionInfo) {
 	exit(1);
 	return 0;
 }
+#endif
 
 int ExecutionContext::runNative(int (*start)(void *args)) {
 	_target = NATIVE_64_TARGET;
 	byte *x;
 	_stackTop = (byte*) &x;
+#if defined(__WIN64)
 	PVOID handle = AddVectoredExceptionHandler(0, windowsExceptionHandler);
+#endif
 	int result = start(_sp);
+#if defined(__WIN64)
 	RemoveVectoredExceptionHandler(handle);
+#endif
 	return result;
 }
 
@@ -563,7 +596,7 @@ void ExecutionContext::invoke(byte *code) {
 }
 
 void ExecutionContext::print() {
-	printf("%d objects sp = %p (%d) fp = %p (%d) \n", _objectCount, _sp, _sp - _stack, _active.fp, _active.fp - _stack);
+	printf("%d objects sp = %p (%ld) fp = %p (%ld) \n", _objectCount, _sp, _sp - _stack, _active.fp, _active.fp - _stack);
 	printf("ip = %d code = %p _lastIp = %d\n", _active.ip, _active.code, _lastIp);
 }
 
@@ -579,7 +612,7 @@ bool ExecutionContext::run() {
 		objectId = valueIndex(_active.code);
 	for (;;) {
 		if (trace) {
-			printf("%05x %05x [%03d] (%016llx) ", _active.fp - _stack, _sp - _stack, objectId, st(0));
+			printf("%05lx %05lx [%03d] (%016llx) ", _active.fp - _stack, _sp - _stack, objectId, st(0));
 			fflush(stdout);
 			disassemble(_active.ip);
 		}
@@ -691,7 +724,7 @@ bool ExecutionContext::run() {
 		case	B_CHKSTK:
 			i = intInByteCode();
 			if (_active.fp - _sp != i) {
-				printf("Stack not as expected! expected = %d actual = %lld\n", i, _active.fp - _sp);
+				printf("Stack not as expected! expected = %d actual = %ld\n", i, _active.fp - _sp);
 				return false;
 			}
 			break;
@@ -1419,7 +1452,7 @@ bool ExecutionContext::run() {
 
 		case	B_ZERO_I:
 			left = pop();
-			MEM_VALID(left);
+			MEM_VALID((void*)left);
 			val = intInByteCode();
 			memset((void*)left, 0, val);
 			break;
@@ -1432,45 +1465,45 @@ bool ExecutionContext::run() {
 		case	B_LDIA:
 		case	B_LDIL:
 			left = pop();
-			MEM_VALID(left);
+			MEM_VALID((void*)left);
 			push(*(WORD*)left);
 			break;
 
 		case	B_LDII:
 			left = pop();
-			MEM_VALID(left);
+			MEM_VALID((void*)left);
 			push(*(int*)left);
 			break;
 
 		case	B_LDIU:
 			left = pop();
-			MEM_VALID(left);
+			MEM_VALID((void*)left);
 			push(*(unsigned*)left);
 			break;
 
 		case	B_LDIV:
 			left = pop();
-			MEM_VALID(left);
+			MEM_VALID((void*)left);
 			_sp -= sizeof(Variant);
 			*((Variant*)_sp) = *((Variant*)left);
 			break;
 
 		case	B_LDIB:
 			left = pop();
-			MEM_VALID(left);
+			MEM_VALID((void*)left);
 			push((int)*(unsigned char*)left);
 			break;
 
 		case	B_LDIC:
 			left = pop();
-			MEM_VALID(left);
+			MEM_VALID((void*)left);
 			push((int)*(unsigned short*)left);
 			break;
 
 		case	B_LDIO:
 			val = intInByteCode();
 			right = pop();
-			MEM_VALID(right);
+			MEM_VALID((void*)right);
 			_sp -= (val + sizeof(WORD) - 1) & ~(sizeof(WORD) - 1);
 			memcpy(_sp, (void*)right, val);
 			break;
@@ -1478,45 +1511,45 @@ bool ExecutionContext::run() {
 		case	B_STIO:
 			val = intInByteCode();
 			right = pop();
-			MEM_VALID(right);
+			MEM_VALID((void*)right);
 			memcpy((void*)right, _sp, val);
 			break;
 
 		case	B_STIL:
 		case	B_STIA:
 			left = pop();
-			MEM_VALID(left);
+			MEM_VALID((void*)left);
 			*(WORD*)left = peek();
 			break;
 
 		case	B_STII:
 			left = pop();
-			MEM_VALID(left);
+			MEM_VALID((void*)left);
 			*(int*)left = peek();
 			break;
 
 		case	B_POPIA:
 			val = pop();
 			left = peek();
-			MEM_VALID(left);
+			MEM_VALID((void*)left);
 			*(int*)left = val;
 			break;
 
 		case	B_STIV:
 			left = pop();
-			MEM_VALID(left);
+			MEM_VALID((void*)left);
 			*((Variant*)left) = *(Variant*)_sp;
 			break;
 
 		case	B_STIB:
 			left = pop();
-			MEM_VALID(left);
+			MEM_VALID((void*)left);
 			*(unsigned char*)left = (unsigned char)peek();
 			break;
 
 		case	B_STIC:
 			left = pop();
-			MEM_VALID(left);
+			MEM_VALID((void*)left);
 			*(unsigned short*)left = (unsigned short)peek();
 			break;
 
@@ -1568,15 +1601,27 @@ void *builtInMemcpy(void *dest, void *src, int size) {
 }
 
 void *builtinVirtualAlloc(void *lpAddress, SIZE_T sz, DWORD flAllocationType, DWORD flProtect) {
+#if defined(__WIN64)
 	return VirtualAlloc(lpAddress, sz, flAllocationType, flProtect);
+#elif __linux__
+	return null;
+#endif
 }
 
 BOOL builtinVirtualProtect(void *lpAddress, SIZE_T sz, DWORD flNewProtect, DWORD *lpflOldProtect) {
+#if defined(__WIN64)
 	return VirtualProtect(lpAddress, sz, flNewProtect, lpflOldProtect);
+#elif __linux__
+	return 0;
+#endif
 }
 
 unsigned builtinGetLastError() {
+#if defined(__WIN64)
 	return GetLastError();
+#elif __linux__
+	return 0;
+#endif
 }
 
 bool Variant::equals(Variant &other) const {
@@ -1696,14 +1741,14 @@ static void varXor(byte *bLeft, byte *bRight) {
 	long long val = left->asLong() ^ right->asLong();
 	left->setLong(val);
 }
-
+#if 0
 static void *varInvoke(int methodName, int object) {
 	return null;
 }
-
+#endif
 #define nativeFunction(f) ((WORD(*)())f)
 
-
+#if 0
 static void *fMemcpy(void *dest, void *src, size_t len) {
 	return memcpy(dest, src, len);
 }
@@ -1711,6 +1756,7 @@ static void *fMemcpy(void *dest, void *src, size_t len) {
 static void *fMemset(void *dest, char c, size_t len) {
 	return memset(dest, c, len);
 }
+#endif
 
 struct SpawnPayload {
 	const char *buffer;
@@ -1752,6 +1798,7 @@ static int runningTarget() {
 }
 
 void *formatMessage(unsigned NTStatusMessage) {
+#if defined(__WIN64)
    char *lpMessageBuffer;
    HMODULE Hand = LoadLibrary("NTDLL.DLL");
 
@@ -1777,6 +1824,9 @@ void *formatMessage(unsigned NTStatusMessage) {
    LocalFree( lpMessageBuffer );
    FreeLibrary(Hand);
    return memory;
+#elif __linux__
+   return (void*)"";
+#endif
 }
 /*
  * exposeException - The compiler inserts a hidden try around the top level of a unit static initialization block
@@ -1931,7 +1981,7 @@ BuiltInFunctionMap builtInFunctionMap[] = {
 };
 
 const char *builtInFunctionName(int index) {
-	if (index < sizeof builtInFunctionMap / sizeof builtInFunctionMap[0]) {
+	if (index < (int) (sizeof builtInFunctionMap / sizeof builtInFunctionMap[0])) {
 		return builtInFunctionMap[index].name;
 	} else
 		return null;
@@ -2075,7 +2125,6 @@ void ExecutionContext::disassemble(int ip) {
 		for (int j = 0; j < x; j++) {
 			int value = *((int*)&_active.code[ip + 1]);
 			ip += 4;
-			int offset = *((int*)&_active.code[ip + 1]);
 			ip += 4;
 			int label = *((int*)&_active.code[ip + 1]);
 			ip += 4;
@@ -2200,7 +2249,7 @@ ByteCodeSection::ByteCodeSection(FILE *pxiFile, long long length) {
 		return;
 	}
 	void *data = malloc(imageLength);
-	if (fread(data, 1, imageLength, pxiFile) != imageLength) {
+	if (fread(data, 1, imageLength, pxiFile) != (size_t)imageLength) {
 		printf("Could not read byte code image\n");
 		return;
 	}

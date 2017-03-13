@@ -76,7 +76,7 @@ public:
 
 	void enter();
 
-	bool push(char **argv, int argc);
+	void push(char **argv, int argc);
 
 	bool push(void *pointerValue);
 
@@ -361,7 +361,7 @@ class ByteCodeSection : public pxi::Section {
 public:
 	ByteCodeSection(FILE *pxiFile, long long length);
 
-	~ByteCodeSection();
+	virtual ~ByteCodeSection();
 
 	virtual bool run(char **args, int *returnValue, long long runtimeFlags);
 

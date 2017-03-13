@@ -231,6 +231,7 @@ void Command::help() {
 	/* Get window size of terminal. */
 	if (ioctl(fd, TIOCGWINSZ, &ws) < 0)
 		err(1, "/dev/tty");
+	lineLength = ws.ws_col;
 #endif
 	int indent = 22;
 	if (lineLength < 60)

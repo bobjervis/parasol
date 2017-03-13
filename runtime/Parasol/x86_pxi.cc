@@ -13,7 +13,9 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+#if defined(__WIN64)
 #include <windows.h>
+#endif
 #include "runtime.h"
 #include "x86_pxi.h"
 
@@ -85,12 +87,14 @@ bool X86_64Section::run(char **args, int *returnValue, long long runtimeFlags) {
 		long long *vp = (long long*)(image + pxiFixups[i]);
 		*vp += (long long)image;
 	}
+#if defined(__WIN64)
 	DWORD oldProtection;
 	int result = VirtualProtect(_image, _imageLength, PAGE_EXECUTE_READWRITE, &oldProtection);
 	if (result == 0) {
 		printf("GetLastError=%x\n", GetLastError());
 		*(char*)argc = 0;	// This should cause a crash.
 	}
+#endif
 	long long *vp = (long long*)(image + _header.vtablesOffset);
 	for (int i = 0; i < _header.vtableData; i++, vp++)
 		*vp += (long long)image;
@@ -175,6 +179,7 @@ bool X86_64NextSection::run(char **args, int *returnValue, long long runtimeFlag
 
 	NativeBinding *nativeBindings = (NativeBinding*)(image + _header.nativeBindingsOffset);
 	for (int i = 0; i < _header.nativeBindingsCount; i++) {
+#if defined(__WIN64)
 		HMODULE dll = GetModuleHandle(nativeBindings[i].dllName);
 		if (dll == 0) {
 			printf("Unable to locate DLL %s\n", nativeBindings[i].dllName);
@@ -186,14 +191,17 @@ bool X86_64NextSection::run(char **args, int *returnValue, long long runtimeFlag
 				*(char*)argc = 0;	// This should cause a crash.
 			}
 		}
+#endif
 	}
 
+#if defined(__WIN64)
 	DWORD oldProtection;
 	int result = VirtualProtect(_image, _imageLength, PAGE_EXECUTE_READWRITE, &oldProtection);
 	if (result == 0) {
 		printf("GetLastError=%x\n", GetLastError());
 		*(char*)argc = 0;	// This should cause a crash.
 	}
+#endif
 	long long *vp = (long long*)(image + _header.vtablesOffset);
 	for (int i = 0; i < _header.vtableData; i++, vp++)
 		*vp += (long long)image;

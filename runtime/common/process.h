@@ -55,7 +55,9 @@ public:
 	Thread* getTls();
 
 private:
+#if defined(__WIN64)
 	int	_tlsIndex;
+#endif
 };
 
 class Pipe {
@@ -65,12 +67,18 @@ public:
 #if defined(__WIN64)
 	HANDLE writer() const { return _writer; }
 	HANDLE reader() const { return _reader; }
+#elif __linux__
+	int writer() const { return _writer; }
+	int reader() const { return _reader; }
 #endif
 
 private:
 #if defined(__WIN64)
 	HANDLE			_writer;
 	HANDLE			_reader;
+#elif __linux__
+	int _writer;
+	int _reader;
 #endif
 };
 
@@ -238,6 +246,10 @@ private:
 
 	DWORD			_threadId;
 	HANDLE			_hThread;
+#elif __linux__
+	static void *threadProc(void *data);
+
+	pthread_t _threadId;
 #endif
 	Handler*		_handler;
 	int				_local;
@@ -369,6 +381,7 @@ public:
 	}
 };
 
+#if 0
 int wait2(WaitableEvent* a, WaitableEvent* b, unsigned millisecondsWait = INFINITE);
 
 class ThreadPool {
@@ -509,6 +522,7 @@ private:
 	Semaphore*				_shutdownSemaphore;	// guarded by _lock
 	int						_waitingThreads;
 };
+#endif
 
 int debugSpawn(const string& cmd, string* captureData, exception_t* exception, time_t timeout);
 
@@ -519,7 +533,9 @@ const DWORD WINDOWS_DEBUGGER_TERMINATED = 0xc3770001;
 
 extern Process me;
 
+#if 0
 string binaryFilename();
+#endif
 
 Thread* currentThread();
 

@@ -13,6 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+#if 0
 #pragma once
 #include "string.h"
 
@@ -104,3 +105,4 @@ private:
 };
 
 }  // namespace random
+#endif
