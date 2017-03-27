@@ -264,7 +264,7 @@ bool writable(const string& fn) {
 	DWORD r = GetFileAttributes(fn.c_str());
 	if (r == 0xffffffff)
 		return false;
-	else if (attrib.r & FILE_ATTRIBUTE_READONLY)
+	else if (r & FILE_ATTRIBUTE_READONLY)
 #elif __linux__
 	if (access(fn.c_str(), W_OK) < 0)
 #endif
@@ -444,7 +444,11 @@ bool Directory::next() {
 }
 
 string Directory::currentName() {
+#if defined(__WIN64)
+	return _directory + "/" + _data.cFileName;
+#elif __linux__
 	return _directory + "/" + _dirent->d_name;
+#endif
 }
 
 }
