@@ -32,7 +32,7 @@ class ParasolCommand : public commandLine::Command {
 public:
 	ParasolCommand() {
 		finalArguments(0, INT_MAX, "<filename> [arguments ...]");
-		description("The given filename is run as a pxi image or if --test is supplied as a unit test script. "
+		description("The given filename is run as a pxi image. "
 					"Any command-line arguments appearing after are passed "
 					"to any main function in that file."
 					"\n"

@@ -15,6 +15,10 @@
  */
 #if defined(__WIN64)
 #include <windows.h>
+#elif __linux__
+#include <sys/mman.h>
+#include <errno.h>
+#include <unistd.h>
 #endif
 #include "runtime.h"
 #include "x86_pxi.h"
@@ -126,7 +130,20 @@ X86_64NextSection::X86_64NextSection(FILE *pxiFile, long long length) {
 		return;
 	}
 	_imageLength = (size_t)length - sizeof _header;
+#if defined(__WIN64)
 	_image = malloc(_imageLength);
+#elif __linux__
+    int pagesize = sysconf(_SC_PAGE_SIZE);
+    if (pagesize == -1) {
+    	printf("sysconf failed\n");
+    	return;
+    }
+
+    /* Allocate a buffer aligned on a page boundary;
+       initial protection is PROT_READ | PROT_WRITE */
+
+    _image = aligned_alloc(pagesize, _imageLength);
+#endif
 	if (_image != null) {
 		if (fread(_image, 1, _imageLength, pxiFile) != _imageLength) {
 			printf("Could not read x86-64 image\n");
@@ -200,6 +217,10 @@ bool X86_64NextSection::run(char **args, int *returnValue, long long runtimeFlag
 	if (result == 0) {
 		printf("GetLastError=%x\n", GetLastError());
 		*(char*)argc = 0;	// This should cause a crash.
+	}
+#elif __linux__
+	if (mprotect(_image, _imageLength, PROT_EXEC|PROT_READ|PROT_WRITE) < 0) {
+		printf("Could not protect %p [%x] errno = %d (%s)\n", _image, _imageLength, errno, strerror(errno));
 	}
 #endif
 	long long *vp = (long long*)(image + _header.vtablesOffset);
