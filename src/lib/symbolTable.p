@@ -848,9 +848,9 @@ class Scope {
 				t = tt.wrappedType();
 				if (t.family() == TypeFamily.ENUM) {
 					header.printf("enum %s {\n", sym.name().asString());
-					ref<Scope> s = t.scope();
-					for (ref<Symbol>[SymbolKey].iterator i = s.symbols().begin(); i.hasNext(); i.next()) {
-						ref<Symbol> c = i.get();
+					ref<EnumScope> s = ref<EnumScope>(t.scope());
+					for (int i = 0; i < s.instances().length(); i++) {
+						ref<Symbol> c = (*s.instances())[i];
 						header.printf("\t%s%s,\n", prefix, c.name().asString());
 					}
 					header.printf("};\n");

@@ -234,8 +234,8 @@ public enum SectionType {
 	ERROR,						// 0x00 A section given this type has unknown data at the section offset
 	SOURCE,						// 0x01 the region is in POSIX IEEE P1003.1 USTar archive format.
 	BYTE_CODES,					// 0x02 Parasol byte codes
-	X86_64,						// 0x03 Parasol 64-bit for Intel and AMD processors.
-	X86_64_NEXT,				// 0x04 Parasol 64-bit for Intel and AMD processors, next version (for upgrade scenarios).
+	X86_64_LNX,					// 0x03 Parasol 64-bit for Intel and AMD processors, Linux calling conventions.
+	X86_64_WIN,					// 0x04 Parasol 64-bit for Intel and AMD processors, Windows calling conventions.
 	FILLER
 }
 
@@ -252,8 +252,8 @@ public string sectionTypeName(SectionType st) {
 
 private SectionType[string] sectionTypes = [
 	"byteCodes": 	SectionType.BYTE_CODES,
-	"x86-64": 		SectionType.X86_64,
-	"x86-64-next":	SectionType.X86_64_NEXT,
+	"x86-64-lnx":	SectionType.X86_64_LNX,
+	"x86-64-win":	SectionType.X86_64_WIN,
 ];
 
 

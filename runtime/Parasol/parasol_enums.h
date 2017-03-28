@@ -3,14 +3,6 @@
  */
 #ifndef PARASOL_HEADER_H
 #define PARASOL_HEADER_H
-enum SectionType {
-	ST_ERROR,
-	ST_SOURCE,
-	ST_BYTE_CODES,
-	ST_X86_64,
-	ST_X86_64_NEXT,
-	ST_FILLER,
-};
 enum ByteCodes {
 	B_ILLEGAL,
 	B_INT,
@@ -183,5 +175,13 @@ enum ByteCodes {
 	B_CLASSV,
 	B_string,
 	B_MAX_BYTECODE,
+};
+enum SectionType {
+	ST_ERROR,
+	ST_SOURCE,
+	ST_BYTE_CODES,
+	ST_X86_64_LNX,
+	ST_X86_64_WIN,
+	ST_FILLER,
 };
 #endif // PARASOL_HEADER_H

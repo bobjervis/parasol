@@ -17,13 +17,18 @@ import parasol:exception.DivideByZeroException;
 
 printf("Groundhog day!\n");
 
+g();
+
 try {
 	f();
 	printf("How did I get here?\n");
 	assert(false);
 } catch (Exception e) {
+	g();
 	printf("Caught it!\n");
 }
+
+g();
 
 try {
 	int y = 0;
@@ -36,9 +41,16 @@ try {
 	assert(e.class == DivideByZeroException);
 }
 
+g();
+
 printf("Sunset!\n");
 
 void f() {
 	printf("Jump!\n");
 	throw Exception("Test");
+}
+
+void g() {
+	int x;
+	printf("&x = %p\n", &x);
 }

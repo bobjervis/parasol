@@ -157,7 +157,7 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 	
 	public void writePxi(ref<Pxi> output) {
-		ref<X86_64NextSection> s = new X86_64NextSection(this);
+		ref<X86_64WinSection> s = new X86_64WinSection(this);
 		output.declareSection(s);
 	}
 	

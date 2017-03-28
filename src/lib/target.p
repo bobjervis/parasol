@@ -53,7 +53,8 @@ public class Target {
 			target = new ByteCodesTarget(arena);
 			break;
 			
-		case	X86_64:
+		case	X86_64_LNX:
+		case	X86_64_WIN:
 			target = new X86_64(arena, verbose);
 			break;
 		}

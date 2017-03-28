@@ -60,5 +60,7 @@ Milliseconds millisecondMark() {
 }
 
 void setRbp(void *newValue) {
-	asm ("mov %rcx,%rbp");
+	asm ("pop %rax");
+	asm ("push %rcx");
+//	asm ("mov %rcx,%rbp");
 }

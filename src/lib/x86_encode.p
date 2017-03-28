@@ -165,7 +165,7 @@ class NativeBinding {
 }
 
 class X86_64Encoder extends Target {
-	protected X86_64NextSectionHeader _pxiHeader;
+	protected X86_64SectionHeader _pxiHeader;
 	protected memory.NoReleasePool _storage;
 	protected pointer<byte> _staticMemory;
 	protected int _staticMemoryLength;
@@ -1054,6 +1054,7 @@ class X86_64Encoder extends Target {
 		case	CLASS:
 		case	BOOLEAN:
 		case	VOID:
+		case	FUNCTION:
 			inst(X86.PUSH, TypeFamily.SIGNED_64, reg);
 			break;
 			
@@ -1088,6 +1089,7 @@ class X86_64Encoder extends Target {
 		case	CLASS:
 		case	BOOLEAN:
 		case	VOID:
+		case	FUNCTION:
 			inst(X86.POP, TypeFamily.SIGNED_64, reg);
 			break;
 			
@@ -3751,7 +3753,7 @@ class X86_64Encoder extends Target {
 		pxiFile.write(_builtInsList);
 	}
 	
-	public ref<X86_64NextSectionHeader> pxiHeader() {
+	public ref<X86_64SectionHeader> pxiHeader() {
 		return &_pxiHeader;
 	}
 

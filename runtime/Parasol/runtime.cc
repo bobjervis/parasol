@@ -520,7 +520,7 @@ bool ExecutionContext::run(int objectId) {
 	return result;
 }
 
-#if defined(_WIN64)
+#if defined(__WIN64)
 LONG CALLBACK windowsExceptionHandler(PEXCEPTION_POINTERS ExceptionInfo) {
 	ExecutionContext *context = threadContext.get();
 
@@ -1782,8 +1782,9 @@ static void disposeOfPayload(SpawnPayload *output) {
 
 static int supportedTarget(int index) {
 	switch (index) {
-	case 0:			return ST_X86_64;
+	case 0:			return ST_X86_64_LNX;//ST_X86_64_WIN;
 	case 1:			return ST_BYTE_CODES;
+//	case 2:			return ST_X86_64_LNX;
 	default:		return -1;
 	}
 }
@@ -1792,7 +1793,7 @@ static int runningTarget() {
 	ExecutionContext *context = threadContext.get();
 	switch (context->target()) {
 	case BYTE_CODE_TARGET:		return ST_BYTE_CODES;
-	case NATIVE_64_TARGET:		return ST_X86_64;
+	case NATIVE_64_TARGET:		return ST_X86_64_WIN;
 	default:					return -1;
 	}
 }

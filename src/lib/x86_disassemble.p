@@ -34,7 +34,7 @@ class Disassembler {
 	private int _vtablesEndOffset;
 	private pointer<ExceptionEntry> _exceptionsEndOffset;
 	private int _imageLength;
-	private ref<X86_64NextSectionHeader> _pxiHeader;
+	private ref<X86_64SectionHeader> _pxiHeader;
 	private ref<int[]> _pxiFixups;
 	private ref<Fixup> _fixups;
 	private int _offset;
@@ -52,7 +52,7 @@ class Disassembler {
 	private pointer<SourceLocation> _sourceLocations;
 	private int _sourceLocationsCount;
 	
-	Disassembler(ref<Arena> arena, long logical, int imageLength, pointer<byte> physical, ref<X86_64NextSectionHeader> pxiHeader) {
+	Disassembler(ref<Arena> arena, long logical, int imageLength, pointer<byte> physical, ref<X86_64SectionHeader> pxiHeader) {
 		_arena = arena;
 		_logical = logical;
 		_imageLength = imageLength;
@@ -1795,7 +1795,7 @@ escape0Fmnemonics[0x8d] = "jge";
 escape0Fmnemonics[0x8e] = "jle";
 escape0Fmnemonics[0x8f] = "jg";
 
-public void printHeader(ref<X86_64NextSectionHeader> header, long fileOffset) {
+public void printHeader(ref<X86_64SectionHeader> header, long fileOffset) {
 	printf("\n");
 	if (fileOffset >= 0)
 		printf("        image offset         %8x\n", fileOffset);

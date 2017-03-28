@@ -77,10 +77,8 @@ boolean dump(string filename) {
 		printf("  %c %4s %16s %10s [%d bytes]\n", i == best ? '*' : ' ', label, type, offset, entry.length);
 		if (st == pxi.SectionType.BYTE_CODES)
 			pxi.registerSectionReader(pxi.SectionType.BYTE_CODES, byteCodeReader);
-		else if (st == pxi.SectionType.X86_64)
-			pxi.registerSectionReader(pxi.SectionType.X86_64, x86_64Reader);
-		else if (st == pxi.SectionType.X86_64_NEXT)
-			pxi.registerSectionReader(pxi.SectionType.X86_64_NEXT, x86_64NextReader);
+		else if (st == pxi.SectionType.X86_64_WIN)
+			pxi.registerSectionReader(pxi.SectionType.X86_64_WIN, x86_64NextReader);
 		else
 			continue;
 		ref<pxi.Section> s = p.readSection(i);
@@ -136,19 +134,8 @@ ref<pxi.Section> byteCodeReader(file.File pxiFile, long length) {
 */
 }
 
-ref<pxi.Section> x86_64Reader(file.File pxiFile, long length) {
-	x86_64.X86_64SectionHeader header;
-	
-	if (pxiFile.read(&header, header.bytes) != header.bytes) {
-		printf("          Could not read x86-64 section header\n");
-		return null;
-	}
-	x86_64.printHeader(&header, pxiFile.tell());
-	return new PlaceHolder();
-}
-
 ref<pxi.Section> x86_64NextReader(file.File pxiFile, long length) {
-	x86_64.X86_64NextSectionHeader header;
+	x86_64.X86_64SectionHeader header;
 	
 	if (pxiFile.read(&header, header.bytes) != header.bytes) {
 		printf("          Could not read x86-64 section header\n");

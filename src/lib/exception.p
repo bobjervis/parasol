@@ -124,9 +124,10 @@ public class Exception {
 				crawlStack(ip, rbpCandidate, comparator);
 		} else
 			crawlStack(ip, frame, comparator);
-		printf("\nRBP %p is out of stack range [%p - %p] ip %p\n", 
+		printf("\nFATAL: Could not find a stack handler for this address.\n", 
 				_exceptionContext.framePointer, _exceptionContext.stackPointer, 
 				stackTop, _exceptionContext.exceptionAddress);
+		_exceptionContext.print();
 		process.exit(1);
 	}
 	
@@ -531,6 +532,18 @@ class ExceptionContext {
 		long target = addr - base + copy;
 		ref<long> copyAddress = ref<long>(address(target));
 		return *copyAddress;
+	}
+	
+	void print() {
+		printf("    exception address          %p\n", exceptionAddress);
+		printf("    stack pointer              %p\n", stackPointer);
+		printf("    frame pointer              %p\n", framePointer);
+		printf("    inferred frame pointer     %p\n", inferredFramePointer);
+		printf("    last crawled frame pointer %p\n", lastCrawledFramePointer);
+		printf("    stack base                 %p\n", stackBase);
+		printf("    stack top                  %p\n", long(stackBase) + stackSize);
+		printf("    exception type             %x\n", unsigned(exceptionType));
+		printf("    exception flags            %x\n", unsigned(exceptionFlags));
 	}
 }
 
