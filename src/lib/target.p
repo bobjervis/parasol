@@ -16,7 +16,8 @@
 namespace parasol:compiler;
 
 import parasol:byteCodes.ByteCodesTarget;
-import parasol:x86_64.X86_64;
+import parasol:x86_64.X86_64Lnx;
+import parasol:x86_64.X86_64Win;
 import parasol:pxi.Pxi;
 import parasol:pxi.SectionType;
 import parasol:runtime;
@@ -45,7 +46,6 @@ public class Target {
 			selectedTarget = arena.preferredTarget;
 		else
 			selectedTarget = SectionType(runtime.supportedTarget(0));
-//		selectedTarget = SectionType.BYTE_CODES;
 		if (verbose)
 			printf("Targeting %s\n", string(selectedTarget));
 		switch (selectedTarget) {
@@ -54,8 +54,11 @@ public class Target {
 			break;
 			
 		case	X86_64_LNX:
+			target = new X86_64Lnx(arena, verbose);
+			break;
+
 		case	X86_64_WIN:
-			target = new X86_64(arena, verbose);
+			target = new X86_64Win(arena, verbose);
 			break;
 		}
 		if (verbose)

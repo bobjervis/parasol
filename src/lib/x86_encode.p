@@ -541,7 +541,7 @@ class X86_64Encoder extends Target {
 				sym.offset = 0;
 				continue;
 			}
-			if (sym.type().passesViaStack(compileContext) || assignedFastArgs >= fastArgs.length()) {
+			if (sym.type().passesViaStack(compileContext) || registerValue(assignedFastArgs, TypeFamily.ADDRESS) == 0) {
 				// It's a stack argument
 				sym.offset = FIRST_STACK_PARAM_OFFSET + scope.variableStorage;
 				scope.variableStorage += sym.type().stackSize();
@@ -552,22 +552,6 @@ class X86_64Encoder extends Target {
 			}
 		}
 		_f.registerSaveSize = -regStackOffset;
-	}
-	
-	public byte registerValue(int registerArgumentIndex, TypeFamily family) {
-		if (registerArgumentIndex < fastArgs.length()) {
-			switch (family) {
-			case	FLOAT_32:
-			case	FLOAT_64:
-				return byte(floatArgs[registerArgumentIndex]);
-
-			default:
-				return byte(fastArgs[registerArgumentIndex]);
-			}
-			return byte(fastArgs[registerArgumentIndex]);
-		}
-		else
-			return 0;
 	}
 	
 	protected void buildVtable(ref<ClassScope> scope, ref<CompileContext> compileContext) {
@@ -3545,7 +3529,7 @@ class X86_64Encoder extends Target {
 	}
 
 	protected boolean usesStack(int i, ref<Type> t, ref<CompileContext> compileContext) {
-		if (i >= fastArgs.length())
+		if (registerValue(i, t.family()) == 0)
 			return true;
 		else
 			return t.passesViaStack(compileContext);
@@ -3764,6 +3748,10 @@ class X86_64Encoder extends Target {
 	public int staticMemoryLength() {
 		return _staticMemoryLength;
 	}
+	
+	public abstract R firstRegisterArgument();
+	
+	public abstract R thisRegister();
 }
 
 enum FixupKind {

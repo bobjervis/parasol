@@ -1216,8 +1216,9 @@ class X86_64AssignTemps extends X86_64AddressModes {
 	private void ensureCorrectPlacement(ref<Call> call, int i, ref<NodeList> args, ref<NodeList> params) {
 		ref<Node> ellipsis = params.node.getProperEllipsis();
 		if (ellipsis == null) {
-			if (i < fastArgs.length() && args.node.type.size() <= address.bytes) {
-				ensureRegisterPlacement(call, args.node, fastArgs[i]);
+			byte r = registerValue(i, args.node.type.family());
+			if (r > 0) {
+				ensureRegisterPlacement(call, args.node, R(r));
 				i++;
 			}
 			if (params.next != null)

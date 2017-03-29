@@ -1782,9 +1782,12 @@ static void disposeOfPayload(SpawnPayload *output) {
 
 static int supportedTarget(int index) {
 	switch (index) {
-	case 0:			return ST_X86_64_LNX;//ST_X86_64_WIN;
+#if defined(__WIN64)
+	case 0:			return ST_X86_64_WIN;
+#elif __linux__
+	case 0:			return ST_X86_64_LNX;
+#endif
 	case 1:			return ST_BYTE_CODES;
-//	case 2:			return ST_X86_64_LNX;
 	default:		return -1;
 	}
 }
@@ -1793,7 +1796,11 @@ static int runningTarget() {
 	ExecutionContext *context = threadContext.get();
 	switch (context->target()) {
 	case BYTE_CODE_TARGET:		return ST_BYTE_CODES;
+#if defined(__WIN64)
 	case NATIVE_64_TARGET:		return ST_X86_64_WIN;
+#elif __linux__
+	case NATIVE_64_TARGET:		return ST_X86_64_LNX;
+#endif
 	default:					return -1;
 	}
 }

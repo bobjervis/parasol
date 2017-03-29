@@ -81,9 +81,6 @@ byte REX_R = 0x44;
 byte REX_X = 0x42;
 byte REX_B = 0x41;
 
-R[] fastArgs = [ R.RCX, R.RDX, R.R8, R.R9 ];
-
-R[] floatArgs = [ R.XMM0, R.XMM1, R.XMM2, R.XMM3 ];
 /*
  * Flags for the Node.nodeFlags field. (0x0f are reserved for non-codegen flags)
  */
@@ -96,6 +93,72 @@ byte PXI_FIXUP_ABSOLUTE64_CODE = 0x03;
 byte PXI_FIXUP_MAX = 0x04;
 int PXI_FIXUP_SHIFT = 8;
 
+public class X86_64Lnx extends X86_64 {
+	public X86_64Lnx(ref<Arena> arena, boolean verbose) {
+		super(arena, verbose);
+	}
+	
+	static R[] fastArgs = [ R.RDI, R.RSI, R.RDX, R.RCX, R.R8, R.R9 ];
+
+	static R[] floatArgs = [ R.XMM0, R.XMM1, R.XMM2, R.XMM3, R.XMM4, R.XMM5, R.XMM6, R.XMM7 ];
+	
+	public byte registerValue(int registerArgumentIndex, TypeFamily family) {
+		switch (family) {
+		case	FLOAT_32:
+		case	FLOAT_64:
+			if (registerArgumentIndex < floatArgs.length())
+				return byte(floatArgs[registerArgumentIndex]);
+			break;
+
+		default:
+			if (registerArgumentIndex < fastArgs.length())
+				return byte(fastArgs[registerArgumentIndex]);
+		}
+		return 0;
+	}
+
+	public R firstRegisterArgument() {
+		return R.RDI;
+	}
+	
+	public R thisRegister() {
+		return R.RBX;
+	}
+}
+
+public class X86_64Win extends X86_64 {
+	public X86_64Win(ref<Arena> arena, boolean verbose) {
+		super(arena, verbose);
+	}
+	
+	static R[] fastArgs = [ R.RCX, R.RDX, R.R8, R.R9 ];
+
+	static R[] floatArgs = [ R.XMM0, R.XMM1, R.XMM2, R.XMM3 ];
+	
+	public byte registerValue(int registerArgumentIndex, TypeFamily family) {
+		if (registerArgumentIndex < fastArgs.length()) {
+			switch (family) {
+			case	FLOAT_32:
+			case	FLOAT_64:
+				return byte(floatArgs[registerArgumentIndex]);
+
+			default:
+				return byte(fastArgs[registerArgumentIndex]);
+			}
+			return byte(fastArgs[registerArgumentIndex]);
+		}
+		else
+			return 0;
+	}
+
+	public R firstRegisterArgument() {
+		return R.RCX;
+	}
+	
+	public R thisRegister() {
+		return R.RSI;
+	}
+}
 public class X86_64 extends X86_64AssignTemps {
 	private ref<Scope> _unitScope;
 	private ref<ParameterScope> _alloc;						// Symbol for alloc function.
@@ -369,20 +432,20 @@ public class X86_64 extends X86_64AssignTemps {
 		if (func == null) {
 			switch (parameterScope.kind()) {
 			case	DEFAULT_CONSTRUCTOR:
-				inst(X86.PUSH, TypeFamily.SIGNED_64, R.RSI);
-				inst(X86.MOV, TypeFamily.ADDRESS, R.RSI, R.RCX);
+				inst(X86.PUSH, TypeFamily.SIGNED_64, thisRegister());
+				inst(X86.MOV, TypeFamily.ADDRESS, thisRegister(), firstRegisterArgument());
 				generateConstructorPreamble(null, parameterScope, compileContext);
-				inst(X86.POP, TypeFamily.SIGNED_64, R.RSI);
+				inst(X86.POP, TypeFamily.SIGNED_64, thisRegister());
 				if (!generateReturn(parameterScope, compileContext))
 					assert(false);
 				break;
 				
 			case	IMPLIED_DESTRUCTOR:
 				if (needsDestructorShutdown(parameterScope, compileContext)) { 
-					inst(X86.PUSH, TypeFamily.SIGNED_64, R.RSI);
-					inst(X86.MOV, TypeFamily.ADDRESS, R.RSI, R.RCX);
+					inst(X86.PUSH, TypeFamily.SIGNED_64, thisRegister());
+					inst(X86.MOV, TypeFamily.ADDRESS, thisRegister(), firstRegisterArgument());
 					generateDestructorShutdown(parameterScope, compileContext);
-					inst(X86.POP, TypeFamily.SIGNED_64, R.RSI);
+					inst(X86.POP, TypeFamily.SIGNED_64, thisRegister());
 				}
 				if (!generateReturn(parameterScope, compileContext))
 					assert(false);
@@ -479,7 +542,7 @@ public class X86_64 extends X86_64AssignTemps {
 				registerArgs++;
 			}
 			if (parameterScope.hasOutParameter(compileContext)) {
-				inst(X86.PUSH, TypeFamily.SIGNED_64, fastArgs[registerArgs]);
+				inst(X86.PUSH, TypeFamily.SIGNED_64, R(registerValue(registerArgs, TypeFamily.ADDRESS)));
 				registerArgs++;
 			}
 			for (int i = 0; i < parameterScope.parameters().length(); i++) {
@@ -487,12 +550,13 @@ public class X86_64 extends X86_64AssignTemps {
 				
 				if (sym.deferAnalysis())
 					continue;
-				if (registerArgs < fastArgs.length() && !sym.type().passesViaStack(compileContext)) {
+				byte value = registerValue(registerArgs, sym.type().family());
+				if (value > 0 && !sym.type().passesViaStack(compileContext)) {
 					if (sym.type().isFloat()) {
 						inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, 8);
-						inst(X86.MOVSD, TypeFamily.SIGNED_64, R.RSP, 0, floatArgs[registerArgs]);
+						inst(X86.MOVSD, TypeFamily.SIGNED_64, R.RSP, 0, R(value));
 					} else
-						inst(X86.PUSH, TypeFamily.SIGNED_64, fastArgs[registerArgs]);
+						inst(X86.PUSH, TypeFamily.SIGNED_64, R(value));
 					registerArgs++;
 				}
 			}
