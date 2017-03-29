@@ -58,9 +58,22 @@ Milliseconds millisecondMark() {
 	return ts.tv_sec * MILLIS_PER_SECOND + ts.tv_nsec / NANOS_PER_MILLISECOND;
 #endif
 }
-
-void setRbp(void *newValue) {
-	asm ("pop %rax");
-	asm ("push %rcx");
-//	asm ("mov %rcx,%rbp");
+/*
+ * callAndSetFramePtr is a very specialized function that is used to call a catch handler with the correct RBP
+ * value so that the generated code will do the right thing when it gets control. The arg in this case is the
+ * pointer to the Exception object. Note that the catch handler will never return, so a jump is the correct way
+ * to transfer control. Because the input values are all loaded up into registers in the X64 calling
+ * conventions, the code is the same three instructions, but Windows uses a different set of instructions than
+ * Linux does.
+ */
+void callAndSetFramePtr(void *newRbp, void *newRip, void *arg) {
+#if defined(__WIN64)
+	asm ("mov %rcx,%rbp");
+	asm ("mov %r8,%rcx");
+	asm ("jmp *%rdx");
+#elif __linux__
+	asm ("mov %rdi,%rbp");
+	asm ("mov %rdx,%rdi");
+	asm ("jmp *%rsi");
+#endif
 }

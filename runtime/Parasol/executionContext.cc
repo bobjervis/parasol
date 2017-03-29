@@ -61,8 +61,7 @@ byte *ExecutionContext::highCodeAddress() {
 
 void ExecutionContext::callCatchHandler(Exception *exception, void *framePointer, int handler) {
 	void (*h)(Exception *exception) = (void(*)(Exception*))((byte*)_image + handler);
-	setRbp(framePointer);
-	h(exception);
+	callAndSetFramePtr(framePointer, (void*) h, exception);
 }
 
 void ExecutionContext::registerHardwareExceptionHandler(void (*handler)(HardwareException *info)) {

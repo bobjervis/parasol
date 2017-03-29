@@ -38,7 +38,7 @@ void warningMessage(const string& s);
 
 void debugPrint(const string& s);
 
-void setRbp(void *newValue);
+void callAndSetFramePtr(void *newRbp, void *newRip, void *arg);
 
 const float sqrt3 = float(sqrt(3.0));
 
