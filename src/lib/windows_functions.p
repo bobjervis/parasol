@@ -15,22 +15,7 @@
  */
 namespace native:windows;
 
-public class HANDLE extends address {
-	HANDLE() {
-	}
-	
-	HANDLE(address a) {
-		*super = a;
-	}
-	
-	boolean isValid() {
-		return *super != INVALID_HANDLE_VALUE;
-	}
-	
-	public address asAddress() {
-		return *this;
-	}
-}
+public class HANDLE = address;
 
 public HANDLE INVALID_HANDLE_VALUE = HANDLE(address(-1));
 

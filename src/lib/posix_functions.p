@@ -24,3 +24,27 @@ public abstract int close(int fd);
 @Linux("libc.so", "readlink")
 public abstract int readlink(pointer<byte> filename, pointer<byte> buffer, int buf_len);
 
+@Linux("libc.so", "opendir")
+public abstract ref<DIR> opendir(pointer<byte> name);
+
+@Linux("libc.so", "closedir")
+public abstract int closedir(ref<DIR> dirp);
+
+@Linux("libc.so", "clock_gettime")
+public abstract int clock_gettime(int clock_id, ref<timespec> tp);
+
+public class DIR {
+	private int dummy;			// Don't expose anything about this structure
+}
+
+public class dirent {
+	public byte d_name;
+}
+
+public class timespec {
+	public int tv_sec;
+	public int tv_nsec;
+}
+
+@Constant
+public int CLOCK_REALTIME = 0;

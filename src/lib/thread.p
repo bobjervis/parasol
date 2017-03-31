@@ -34,6 +34,8 @@ import native:windows.WAIT_TIMEOUT;
 import native:windows.INFINITE;
 import native:windows.GetLastError;
 import parasol:exception.HardwareException;
+import parasol:pxi.SectionType;
+import parasol:runtime;
 
 public class Thread {
 	private string _name;
@@ -56,7 +58,7 @@ public class Thread {
 	}
 	
 	~Thread() {
-		if (_threadHandle.isValid())
+		if (_threadHandle != INVALID_HANDLE_VALUE)
 			CloseHandle(_threadHandle);
 	}
 	
@@ -66,7 +68,7 @@ public class Thread {
 		_context = dupExecutionContext();
 		address x = _beginthreadex(null, 0, wrapperFunction, this, 0, null);
 		_threadHandle = *ref<HANDLE>(&x);
-		return _threadHandle.isValid();
+		return _threadHandle != INVALID_HANDLE_VALUE;
 	}
 	/**
 	 * This is a wrapper function that sets up the environment, but for reasons that are not all that great,
@@ -87,18 +89,20 @@ public class Thread {
 		try {
 			t._function(t._parameter);
 		} catch (Exception e) {
-			printf("\nUncaught exception! (thread %d)\n\n%s\n", long(_threadHandle.asAddress()), e.message());
+			printf("\nUncaught exception! (thread %d)\n\n%s\n", long(_threadHandle), e.message());
 			e.printStackTrace();
 		}
 	}
 
 	public void join() {
-		DWORD dw = WaitForSingleObject(_threadHandle, INFINITE);
-		if (dw == WAIT_FAILED) {
-			printf("WaitForSingleObject failed %x\n", GetLastError());
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			DWORD dw = WaitForSingleObject(_threadHandle, INFINITE);
+			if (dw == WAIT_FAILED) {
+				printf("WaitForSingleObject failed %x\n", GetLastError());
+			}
+			CloseHandle(_threadHandle);
+			_threadHandle = INVALID_HANDLE_VALUE;
 		}
-		CloseHandle(_threadHandle);
-		_threadHandle = INVALID_HANDLE_VALUE;
 	}
 	
 	public string name() {

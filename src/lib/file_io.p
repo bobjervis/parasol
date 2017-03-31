@@ -18,6 +18,9 @@ namespace parasol:file;
 import native:C;
 import native:windows;
 import native:windows.HANDLE;
+import native:posix;
+import parasol:runtime;
+import parasol:pxi.SectionType;
 
 public int EOF = -1;
 
@@ -193,7 +196,8 @@ public File createBinaryFile(string filename) {
 
 public class Directory {
 	private windows.HANDLE						_handle;
-	private ref<windows.WIN32_FIND_DATA>		_data;
+	private address								_data;
+	private ref<posix.dirent>					_dirent;
 	private string								_directory;
 	private string								_wildcard;
 
@@ -201,36 +205,56 @@ public class Directory {
 		_handle = windows.INVALID_HANDLE_VALUE;
 		_directory = path;
 		_wildcard = "*";
-		_data = ref<windows.WIN32_FIND_DATA>(memory.alloc(windows.sizeof_WIN32_FIND_DATA));
+		if (runtime.compileTarget == SectionType.X86_64_WIN)
+			_data = memory.alloc(windows.sizeof_WIN32_FIND_DATA);
 	}
-/*
+
 	~Directory() {
 		memory.free(_data);
-		if (_handle != windows.INVALID_HANDLE_VALUE)
-			windows.FindClose(_handle);
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			if (_handle != windows.INVALID_HANDLE_VALUE)
+				windows.FindClose(_handle);
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			posix.closedir(ref<posix.DIR>(_data));
+		}
 	}
-*/
+	
 	public void pattern(string wildcard) {
 		_wildcard = wildcard;
 	}
 
 	boolean first() {
 		string s = _directory + "\\" + _wildcard;
-		_handle = HANDLE(windows.FindFirstFile(s.c_str(), _data));
-		return _handle.isValid();
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			_handle = HANDLE(windows.FindFirstFile(s.c_str(), ref<windows.WIN32_FIND_DATA>(_data)));
+			return _handle != windows.INVALID_HANDLE_VALUE;
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			_data = posix.opendir(_directory.c_str());
+			if (_data == null)
+				return false;
+			return next();
+		} else
+			return false;
 	}
 
 	boolean next() {
-		int result = windows.FindNextFile(_handle, _data);
-		if (result != 0)
-			return true;
-		windows.FindClose(_handle);
-		_handle = windows.INVALID_HANDLE_VALUE;
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			int result = windows.FindNextFile(_handle, ref<windows.WIN32_FIND_DATA>(_data));
+			if (result != 0)
+				return true;
+			windows.FindClose(_handle);
+			_handle = windows.INVALID_HANDLE_VALUE;
+		}
 		return false;
 	}
 
 	public string currentName() {
-		return _directory + "/" + _data.fileName();
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			return _directory + "/" + ref<windows.WIN32_FIND_DATA>(_data).fileName();
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			return _directory + "/" + string(pointer<byte>(&_dirent.d_name));
+		} else
+			return null;
 	}
 
 }

@@ -378,7 +378,6 @@ public class X86_64 extends X86_64AssignTemps {
 				returnValue = runtime.evalNative(&_pxiHeader, _staticMemory, &runArgs[0], runArgs.length());
 				runtime.setTrace(false);
 			} else {
-				printf("GetLastError=%x\n", int(windows.GetLastError()));
 				assert(false);
 				return 0, false;
 			}
