@@ -123,6 +123,8 @@ bool X86_64Section::run(char **args, int *returnValue, long long runtimeFlags) {
 				*(char*)argc = 0;	// This should cause a crash.
 			}
 		}
+#elif __linux__
+
 #endif
 	}
 

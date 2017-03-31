@@ -21,16 +21,16 @@ public abstract int openCreat(pointer<byte> filename, int ioFlags, int mode);
 
 public abstract int close(int fd);
 
-@Linux("libc.so", "readlink")
+@Linux("libc.so.6", "readlink")
 public abstract int readlink(pointer<byte> filename, pointer<byte> buffer, int buf_len);
 
-@Linux("libc.so", "opendir")
+@Linux("libc.so.6", "opendir")
 public abstract ref<DIR> opendir(pointer<byte> name);
 
-@Linux("libc.so", "closedir")
+@Linux("libc.so.6", "closedir")
 public abstract int closedir(ref<DIR> dirp);
 
-@Linux("libc.so", "clock_gettime")
+@Linux("libc.so.6", "clock_gettime")
 public abstract int clock_gettime(int clock_id, ref<timespec> tp);
 
 public class DIR {
@@ -38,6 +38,10 @@ public class DIR {
 }
 
 public class dirent {
+    public long d_ino;
+    public long d_off;
+    public d_reclen;
+    public byte d_type;
 	public byte d_name;
 }
 

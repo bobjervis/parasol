@@ -25,7 +25,7 @@ public int SEEK_CUR = 1;
 public int SEEK_END = 2;
 
 @Windows("msvcrt.dll", "calloc")
-@Linux("libc.so", "calloc")
+@Linux("libc.so.6", "calloc")
 public abstract address calloc(unsigned count, unsigned size);
 
 @Windows("msvcrt.dll", "_close")
@@ -33,79 +33,79 @@ public abstract address calloc(unsigned count, unsigned size);
 public abstract int close(int fd);
 
 @Windows("msvcrt.dll", "_ecvt")
-@Linux("libc.so", "ecvt")
+@Linux("libc.so.6", "ecvt")
 public abstract pointer<byte> ecvt(double number, int ndigits, ref<int> decpt, ref<int> sign);
 
 @Windows("msvcrt.dll", "exit")
-@Linux("libc.so", "exit")
+@Linux("libc.so.6", "exit")
 public abstract void exit(int exitCode);
 
 @Windows("msvcrt.dll", "fclose")
-@Linux("libc.so", "fclose")
+@Linux("libc.so.6", "fclose")
 public abstract int fclose(ref<FILE> fp);
 
 @Windows("msvcrt.dll", "_fcvt")
-@Linux("libc.so", "fcvt")
+@Linux("libc.so.6", "fcvt")
 public abstract pointer<byte> fcvt(double number, int ndigits, ref<int> decpt, ref<int> sign);
 
 @Windows("msvcrt.dll", "ferror")
-@Linux("libc.so", "ferror")
+@Linux("libc.so.6", "ferror")
 public abstract int ferror(ref<FILE> fp);
 
 @Windows("msvcrt.dll", "fgetc")
-@Linux("libc.so", "fgetc")
+@Linux("libc.so.6", "fgetc")
 public abstract int fgetc(ref<FILE> fp);
 
 @Windows("msvcrt.dll", "fopen")
-@Linux("libc.so", "fopen")
+@Linux("libc.so.6", "fopen")
 public abstract ref<FILE> fopen(pointer<byte> filename, pointer<byte> mode);
 
 @Windows("msvcrt.dll", "fread")
-@Linux("libc.so", "fread")
+@Linux("libc.so.6", "fread")
 public abstract unsigned fread(address cp, unsigned size, unsigned count, ref<FILE> fp);
 
 @Windows("msvcrt.dll", "free")
-@Linux("libc.so", "free")
+@Linux("libc.so.6", "free")
 public abstract void free(address data);
 
 @Windows("msvcrt.dll", "fseek")
-@Linux("libc.so", "fseek")
+@Linux("libc.so.6", "fseek")
 public abstract int fseek(ref<FILE> fp, int offset, int origin);
 
 @Windows("msvcrt.dll", "ftell")
-@Linux("libc.so", "ftell")
+@Linux("libc.so.6", "ftell")
 public abstract int ftell(ref<FILE> fp);
 
 @Windows("msvcrt.dll", "fwrite")
-@Linux("libc.so", "fwrite")
+@Linux("libc.so.6", "fwrite")
 public abstract unsigned fwrite(address cp, unsigned size, unsigned count, ref<FILE> fp);
 
 @Windows("msvcrt.dll", "_gcvt")
-@Linux("libc.so", "gcvt")
+@Linux("libc.so.6", "gcvt")
 public abstract pointer<byte> gcvt(double number, int ndigit, pointer<byte> buf);
 
 @Windows("msvcrt.dll", "getenv")
-@Linux("libc.so", "getenv")
+@Linux("libc.so.6", "getenv")
 public abstract pointer<byte> getenv(pointer<byte> variable);
 
 @Windows("msvcrt.dll", "memcpy")
-@Linux("libc.so", "memcpy")
+@Linux("libc.so.6", "memcpy")
 public abstract address memcpy(address destination, address source, int amount);
 
 @Windows("msvcrt.dll", "memset")
-@Linux("libc.so", "memset")
+@Linux("libc.so.6", "memset")
 public abstract address memset(address destination, byte value, int amount);
 
 @Windows("msvcrt.dll", "strtod")
-@Linux("libc.so", "strtod")
+@Linux("libc.so.6", "strtod")
 public abstract double strtod(pointer<byte> str, ref<pointer<byte>> endPtr);
 
 @Windows("msvcrt.dll", "strlen")
-@Linux("libc.so", "strlen")
+@Linux("libc.so.6", "strlen")
 public abstract int strlen(pointer<byte> cp);
 
 @Windows("msvcrt.dll", "time")
-@Linux("libc.so", "time")
+@Linux("libc.so.6", "time")
 public abstract int time(ref<int> t);
 
 
