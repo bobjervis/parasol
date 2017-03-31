@@ -16,6 +16,7 @@
 namespace parasol:byteCodes;
 
 import parasol:file;
+
 import parasol:process;
 import parasol:pxi;
 import parasol:runtime;
@@ -336,6 +337,10 @@ public class ByteCodesTarget extends Target {
 	public void writePxi(ref<Pxi> output) {
 		ref<Section> s = new ByteCodeSection(_staticBlock.index(), _unit);
 		output.declareSection(s);
+	}
+	
+	public pxi.SectionType sectionType() {
+		return pxi.SectionType.BYTE_CODES;
 	}
 	
 	public boolean disassemble(ref<Arena> arena) {

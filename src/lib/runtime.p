@@ -16,6 +16,7 @@
 namespace parasol:runtime;
 
 import native:windows;
+import parasol:pxi.SectionType;
 import parasol:exception.ExceptionContext;
 import parasol:x86_64.X86_64SectionHeader;
 
@@ -26,6 +27,14 @@ import parasol:x86_64.X86_64SectionHeader;
  * Fix Release: Incremented when big fixes are released.
  */
 public string RUNTIME_VERSION = "0.1.0";
+
+/*
+ * This is a special variable used to control compile-time conditional compilation. For now, this is hacked in
+ * to the compiler optimization logic to coomunicate precisely which compile target was selected to build this
+ * runtime.
+ */
+@CompileTarget
+public SectionType compileTarget = SectionType.X86_64_WIN;	// TODO: Remove this as there should be magic setting this value
 
 public abstract int injectObjects(pointer<address> objects, int objectCount);
 
@@ -54,14 +63,20 @@ public abstract address stackTop();
 public abstract long getRuntimeFlags();
 
 public address allocateRegion(long length) {
-	address v = windows.VirtualAlloc(null, length, windows.MEM_COMMIT|windows.MEM_RESERVE, windows.PAGE_READWRITE);
+	address v;
+	if (compileTarget == SectionType.X86_64_WIN) {
+		v = windows.VirtualAlloc(null, length, windows.MEM_COMMIT|windows.MEM_RESERVE, windows.PAGE_READWRITE);
+	}
 //	printf("VirtualAlloc(%p, %d, %x, %x) -> %p\n", null, length, int(windows.MEM_COMMIT|windows.MEM_RESERVE), int(windows.PAGE_READWRITE), v);
 	return v;
 }
 
 public boolean makeRegionExecutable(address location, long length) {
-	unsigned oldProtection;
-	int result = windows.VirtualProtect(location, length, windows.PAGE_EXECUTE_READWRITE, &oldProtection);
-//	printf("VirtualProtect(%p, %d, %x, %p) -> %d oldProtection %x\n", location, length, int(windows.PAGE_EXECUTE_READWRITE), null, result, int(oldProtection));
-	return result != 0;
+	if (compileTarget == SectionType.X86_64_WIN) {
+		unsigned oldProtection;
+		int result = windows.VirtualProtect(location, length, windows.PAGE_EXECUTE_READWRITE, &oldProtection);
+//		printf("VirtualProtect(%p, %d, %x, %p) -> %d oldProtection %x\n", location, length, int(windows.PAGE_EXECUTE_READWRITE), null, result, int(oldProtection));
+		return result != 0;
+	}
+	return false;
 }

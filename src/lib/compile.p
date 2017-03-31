@@ -26,6 +26,8 @@ class CompileContext {
 	public ref<Node> annotations;
 	public ref<FileStat> definingFile;
 	public ref<Target> target;
+	public ref<PlainSymbol> compileTarget;		// Special 'compileTarget' variable that is used to
+												// implement conditional compilation
 
 	private ref<FlowContext> _flowContext;
 	private ref<MemoryPool> _pool;

@@ -687,6 +687,11 @@ class X86_64AddressModes extends X86_64Encoder {
 			node.nodeFlags |= ADDRESS_MODE;
 			break;
 			
+		case	TRUE:
+		case	FALSE:
+			node.nodeFlags |= ADDRESS_MODE;
+			break;
+			
 		default:
 			node.print(0);
 			assert(false);

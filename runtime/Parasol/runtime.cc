@@ -1599,7 +1599,7 @@ int builtInFree(void *p) {
 void *builtInMemcpy(void *dest, void *src, int size) {
 	return memcpy(dest, src, size);
 }
-
+#if 0
 void *builtinVirtualAlloc(void *lpAddress, SIZE_T sz, DWORD flAllocationType, DWORD flProtect) {
 #if defined(__WIN64)
 	return VirtualAlloc(lpAddress, sz, flAllocationType, flProtect);
@@ -1623,7 +1623,7 @@ unsigned builtinGetLastError() {
 	return 0;
 #endif
 }
-
+#endif
 bool Variant::equals(Variant &other) const {
 	if (_kind != other._kind)
 		return false;

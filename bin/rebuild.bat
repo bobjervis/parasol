@@ -11,7 +11,7 @@ if errorlevel 1 goto :failed
 copy p1.pxi debug\parasol.pxi
 if errorlevel 1 goto :failed
 echo SUCCESS
-debug\parasol debug/parasol.pxi compiler/main.p --pxi=debug/x86-64lnx.pxi compiler/main.p
+debug\parasol debug/parasol.pxi compiler/main.p --pxi=debug/x86-64lnx.pxi --target=x86-64-lnx compiler/main.p
 exit /b 0
 :failed
 echo FAILED

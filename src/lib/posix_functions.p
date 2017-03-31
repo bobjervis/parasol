@@ -13,7 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-namespace native:POSIX;
+namespace native:posix;
 
 public abstract int open(pointer<byte> filename, int ioFlags);
 
@@ -21,4 +21,6 @@ public abstract int openCreat(pointer<byte> filename, int ioFlags, int mode);
 
 public abstract int close(int fd);
 
+@Linux("libc.so", "readlink")
+public abstract int readlink(pointer<byte> filename, pointer<byte> buffer, int buf_len);
 

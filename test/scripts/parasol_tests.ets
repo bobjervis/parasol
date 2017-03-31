@@ -1,5 +1,6 @@
 // Advanced library executions tests
 
+run(filename: compile_target_test.p)
 //run(filename: httpd_test.p)
 run(filename: threadpool_test.p)
 run(filename: win_ui_test.p)

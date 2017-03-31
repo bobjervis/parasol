@@ -589,10 +589,33 @@ class Binary extends Node {
 			break;
 			
 		case	EQUALITY:
+		case	NOT_EQUAL:
+			if (isCompileTarget(_left, _right)) {
+				if (matchesCompileTarget(op(), _right, compileContext.target)) {
+					ref<Node> x = tree.newLeaf(Operator.TRUE, location());
+					x.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+					return x;
+				} else {
+					ref<Node> x = tree.newLeaf(Operator.FALSE, location());
+					x.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+					return x;
+				}
+			} else if (isCompileTarget(_right, _left)) {
+				if (matchesCompileTarget(op(), _left, compileContext.target)) {
+					ref<Node> x = tree.newLeaf(Operator.TRUE, location());
+					x.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+					return x;
+				} else {
+					ref<Node> x = tree.newLeaf(Operator.FALSE, location());
+					x.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+					return x;
+				}
+				break;
+			}
+			
 		case	LESS:
 		case	LESS_EQUAL:
 		case	LESS_GREATER_EQUAL:
-		case	NOT_EQUAL:
 		case	NOT_LESS:
 		case	NOT_LESS_EQUAL:
 		case	NOT_LESS_GREATER_EQUAL:
@@ -2738,4 +2761,35 @@ ref<Node> sequenceNodes(ref<SyntaxTree> tree, ref<Node>... n) {
 		}
 	}
 	return result;
+}
+
+private boolean isCompileTarget(ref<Node> n, ref<Node> constant) {
+	ref<Symbol> sym = n.symbol();
+	if (sym == null)
+		return false;
+	if (sym.class != PlainSymbol)
+		return false;
+	if (ref<PlainSymbol>(sym).accessFlags() & Access.COMPILE_TARGET) {
+		sym = constant.symbol();
+		if (sym == null)
+			return false;
+		if (sym.storageClass() != StorageClass.ENUMERATION)
+			return false;
+	} else
+		return false;
+	return true;
+}
+
+private boolean matchesCompileTarget(Operator op, ref<Node> constant, ref<Target> target) {
+	int constantIndex = constant.symbol().offset;
+	int targetIndex = int(target.sectionType());
+	
+	switch (op) {
+	case EQUALITY:
+		return constantIndex == targetIndex;
+		
+	case NOT_EQUAL:
+		return constantIndex != targetIndex;
+	}
+	return false;
 }

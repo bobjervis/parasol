@@ -131,6 +131,9 @@ public class Target {
 	public abstract int, boolean run(string[] args);
 
 	public abstract void writePxi(ref<Pxi> output);
+
+	public abstract SectionType sectionType();
+	
 	/*
 	 * Write a disassembly of the target to the console.
 	 */

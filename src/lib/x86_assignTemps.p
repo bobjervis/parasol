@@ -58,7 +58,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			return;
 			
 		case	CALL:
-			assignRegisterTemp(node, longMask, compileContext);
+			assignRegisterTemp(node, longMask(), compileContext);
 			f().r.cleanupTemps(node, depth);
 			break;
 			
@@ -79,9 +79,9 @@ class X86_64AssignTemps extends X86_64AddressModes {
 
 		case	SWITCH:
 			b = ref<Binary>(node);
-			assignRegisterTemp(b.left(), longMask, compileContext);		// Take the result in any register available.
+			assignRegisterTemp(b.left(), longMask(), compileContext);		// Take the result in any register available.
 			if (b.left().type.family() == TypeFamily.ENUM) {
-				int i = int(f().r.getreg(node, longMask, longMask));
+				int i = int(f().r.getreg(node, longMask(), longMask()));
 				node.register = byte(i);
 			}
 			break;
@@ -209,8 +209,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 
 		case	LEFT_COMMA:
 			b = ref<Binary>(node);
-			assignRegisterTemp(b.left(), longMask, compileContext);
-			f().r.clobberSomeRegisters(b, callMask);
+			assignRegisterTemp(b.left(), longMask(), compileContext);
+			f().r.clobberSomeRegisters(b, callMask());
 //			assignVoidContext(b.right(), compileContext); - d
 			break;
 			
@@ -259,8 +259,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 
 		case	LEFT_COMMA:
 			b = ref<Binary>(node);
-			assignRegisterTemp(b.left(), longMask, compileContext);
-			f().r.clobberSomeRegisters(b.right(), callMask);
+			assignRegisterTemp(b.left(), longMask(), compileContext);
+			f().r.clobberSomeRegisters(b.right(), callMask());
 //			assignVoidContext(b.right(), compileContext);
 			break;
 			
@@ -274,7 +274,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	SEQUENCE:
 			b = ref<Binary>(node);
 			assignVoidContext(b.left(), compileContext);
-			assignRegisterTemp(b.right(), longMask, compileContext);
+			assignRegisterTemp(b.right(), longMask(), compileContext);
 			break;
 			
 		case	NOT:
@@ -288,6 +288,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			break;
 			
 		case	IDENTIFIER:
+		case	TRUE:
+		case	FALSE:
 			break;
 			
 		case	CALL:
@@ -319,7 +321,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	CALL:
 			ref<Call> call = ref<Call>(node);
 			if (call.category() == CallCategory.DECLARATOR)
-				node.register = byte(f().r.getreg(node, longMask, regMask));
+				node.register = byte(f().r.getreg(node, longMask(), regMask));
 			else
 				assignCallRegisters(call, compileContext);
 			break;
@@ -367,19 +369,19 @@ class X86_64AssignTemps extends X86_64AddressModes {
 					reserveReg(node, R.RDX, RDXmask);
 					node.register = byte(int(R.RDX));
 					assignLvalueTemps(b.left(), compileContext);
-					assignRegisterTemp(b.right(), longMask & ~(RAXmask | RDXmask), compileContext);
+					assignRegisterTemp(b.right(), longMask() & ~(RAXmask | RDXmask), compileContext);
 				} else {
 					reserveReg(node, R.RDX, RDXmask);
 					node.register = byte(int(R.RDX));
-					assignRegisterTemp(b.right(), longMask & ~(RAXmask | RDXmask), compileContext);
+					assignRegisterTemp(b.right(), longMask() & ~(RAXmask | RDXmask), compileContext);
 					assignLvalueTemps(b.left(), compileContext);
 				}
 			} else {
 				if	(b.sethi < 0) {
 					assignRegisterTemp(b.left(), RAXmask, compileContext);
-					assignRegisterTemp(b.right(), longMask & ~RAXmask, compileContext);
+					assignRegisterTemp(b.right(), longMask() & ~RAXmask, compileContext);
 				} else {
-					assignRegisterTemp(b.right(), longMask & ~RAXmask, compileContext);
+					assignRegisterTemp(b.right(), longMask() & ~RAXmask, compileContext);
 					assignRegisterTemp(b.left(), RAXmask, compileContext);
 				}
 			}
@@ -397,18 +399,18 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				if	(b.sethi < 0) {
 					assignRegisterTemp(b.left(), RAXmask, compileContext);
 					f().r.clobberSomeRegisters(node, RDXmask);
-					assignRegisterTemp(b.right(), longMask & ~(RAXmask | RDXmask), compileContext);
+					assignRegisterTemp(b.right(), longMask() & ~(RAXmask | RDXmask), compileContext);
 				} else {
-					assignRegisterTemp(b.right(), longMask & ~(RAXmask | RDXmask), compileContext);
+					assignRegisterTemp(b.right(), longMask() & ~(RAXmask | RDXmask), compileContext);
 					f().r.clobberSomeRegisters(node, RDXmask);
 					assignRegisterTemp(b.left(), RAXmask, compileContext);
 				}
 			} else {
 				if	(b.sethi < 0) {
 					assignRegisterTemp(b.left(), RAXmask, compileContext);
-					assignRegisterTemp(b.right(), longMask & ~RAXmask, compileContext);
+					assignRegisterTemp(b.right(), longMask() & ~RAXmask, compileContext);
 				} else {
-					assignRegisterTemp(b.right(), longMask & ~RAXmask, compileContext);
+					assignRegisterTemp(b.right(), longMask() & ~RAXmask, compileContext);
 					assignRegisterTemp(b.left(), RAXmask, compileContext);
 				}
 			}
@@ -425,9 +427,9 @@ class X86_64AssignTemps extends X86_64AddressModes {
 					assignRegisterTemp(b.left(), RAXmask, compileContext);
 					reserveReg(node, R.RDX, RDXmask);
 					node.register = byte(int(R.RDX));
-					assignRegisterTemp(b.right(), longMask & ~(RAXmask | RDXmask), compileContext);
+					assignRegisterTemp(b.right(), longMask() & ~(RAXmask | RDXmask), compileContext);
 				} else {
-					assignRegisterTemp(b.right(), longMask & ~(RAXmask | RDXmask), compileContext);
+					assignRegisterTemp(b.right(), longMask() & ~(RAXmask | RDXmask), compileContext);
 					reserveReg(node, R.RDX, RDXmask);
 					node.register = byte(int(R.RDX));
 					assignRegisterTemp(b.left(), RAXmask, compileContext);
@@ -436,9 +438,9 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			} else {
 				if	(b.sethi < 0) {
 					assignRegisterTemp(b.left(), RAXmask, compileContext);
-					assignRegisterTemp(b.right(), longMask & ~RAXmask, compileContext);
+					assignRegisterTemp(b.right(), longMask() & ~RAXmask, compileContext);
 				} else {
-					assignRegisterTemp(b.right(), longMask & ~RAXmask, compileContext);
+					assignRegisterTemp(b.right(), longMask() & ~RAXmask, compileContext);
 					assignRegisterTemp(b.left(), RAXmask, compileContext);
 				}
 				node.register = byte(int(R.AH));
@@ -465,14 +467,14 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			switch (b.type.family()) {
 			case	SIGNED_32:
 			case	SIGNED_64:
-				assignBinaryOperands(b, regMask, longMask, compileContext);
+				assignBinaryOperands(b, regMask, longMask(), compileContext);
 				node.register = byte(int(f().r.latestResult(b.left())));
 				break;
 
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
-				assignBinaryOperands(b, RAXmask, longMask, compileContext);
+				assignBinaryOperands(b, RAXmask, longMask(), compileContext);
 				node.register = byte(int(R.RAX));
 				break;
 				
@@ -536,7 +538,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				assignRegisterTemp(b.right(), familyMasks[b.type.family()], compileContext);
 				assignLvalueTemps(b.left(), compileContext);
 			}
-			node.register = byte(f().r.getreg(node, longMask, longMask));
+			node.register = byte(f().r.getreg(node, longMask(), longMask()));
 			f().r.cleanupTemps(b, depth);
 			break;
 			
@@ -559,7 +561,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	OR:
 		case	EXCLUSIVE_OR:
 			b = ref<Binary>(node);
-			assignBinaryOperands(b, regMask, longMask, compileContext);
+			assignBinaryOperands(b, regMask, longMask(), compileContext);
 			node.register = byte(f().r.latestResult(b.left()));
 			break;
 
@@ -578,7 +580,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			if (b.right().register != 0)
 				node.register = byte(int(R.RCX));
 			else
-				node.register = byte(int(f().r.getreg(node, longMask, longMask)));
+				node.register = byte(int(f().r.getreg(node, longMask(), longMask())));
 			break;
 			
 		case	LEFT_SHIFT:
@@ -586,7 +588,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	UNSIGNED_RIGHT_SHIFT:
 			b = ref<Binary>(node);
 			if (regMask == RCXmask)
-				regMask = longMask & ~RCXmask;
+				regMask = longMask() & ~RCXmask;
 			else
 				regMask &= ~RCXmask;
 			assignBinaryOperands(b, regMask, RCXmask, compileContext);
@@ -615,7 +617,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			
 		case	INDIRECT:
 			u = ref<Unary>(node);
-			assignRegisterTemp(u.operand(), longMask, compileContext);
+			assignRegisterTemp(u.operand(), longMask(), compileContext);
 			f().r.cleanupTemps(node, depth);
 			node.register = byte(f().r.getreg(node, familyMasks[node.type.family()], regMask));
 			break;
@@ -644,7 +646,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			regMask &= familyMasks[node.type.family()];
 //			printf("\n\nbefore test (desired depth=%d current depth=%d):\n", depth, tempStackDepth());
 //			f().r.print();
-			f().r.clobberSomeRegisters(conditional, callMask);
+			f().r.clobberSomeRegisters(conditional, callMask());
 			assignConditionCode(conditional.left(), compileContext);
 //			printf("\n\nbefore first cleanup (desired depth=%d current depth=%d):\n", depth, tempStackDepth());
 //			f().r.print();
@@ -685,7 +687,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			u = ref<Unary>(node);
 			assignLvalueTemps(u.operand(), compileContext);
 			f().r.cleanupTemps(u, depth);
-			u.register = byte(f().r.getreg(u, longMask, regMask));
+			u.register = byte(f().r.getreg(u, longMask(), regMask));
 			break;
 			
 		case	LOAD:
@@ -701,20 +703,20 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	VAR:
 				assignLvalueTemps(u.operand(), compileContext);
 				f().r.cleanupTemps(u, depth);
-				u.register = byte(f().r.getreg(u, longMask, regMask));
+				u.register = byte(f().r.getreg(u, longMask(), regMask));
 				break;
 				
 			case	REF:
 			case	POINTER:
 				if (u.operand().op() != Operator.EMPTY) {
-					assignRegisterTemp(u.operand(), longMask, compileContext);
+					assignRegisterTemp(u.operand(), longMask(), compileContext);
 					f().r.cleanupTemps(u, depth);
 				}
-				u.register = byte(int(f().r.getreg(u, longMask, regMask)));
+				u.register = byte(int(f().r.getreg(u, longMask(), regMask)));
 				break;
 				
 			default:
-				assignRegisterTemp(u.operand(), longMask, compileContext);
+				assignRegisterTemp(u.operand(), longMask(), compileContext);
 				f().r.cleanupTemps(u, depth);
 				u.register = byte(int(f().r.latestResult(u.operand())));
 			}
@@ -738,7 +740,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			if (node.type.isFloat())
 				node.register = byte(f().r.getreg(node, floatMask, regMask));
 			else
-				node.register = byte(f().r.getreg(node, longMask, regMask));
+				node.register = byte(f().r.getreg(node, longMask(), regMask));
 			break;
 			
 		case	SUBSCRIPT:
@@ -746,11 +748,11 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			if (b.left().type.indirectType(compileContext) != null || 
 				b.left().type.family() == TypeFamily.STRING) {
 				if (b.sethi < 0) {
-					assignRegisterTemp(b.left(), longMask, compileContext);
-					assignRegisterTemp(b.right(), longMask, compileContext);
+					assignRegisterTemp(b.left(), longMask(), compileContext);
+					assignRegisterTemp(b.right(), longMask(), compileContext);
 				} else {
-					assignRegisterTemp(b.right(), longMask, compileContext);
-					assignRegisterTemp(b.left(), longMask, compileContext);
+					assignRegisterTemp(b.right(), longMask(), compileContext);
+					assignRegisterTemp(b.left(), longMask(), compileContext);
 				}
 				f().r.cleanupTemps(b, depth);
 				node.register = byte(f().r.getreg(node, familyMasks[node.type.family()], regMask));
@@ -763,7 +765,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	DOT:
 			ref<Selection> dot = ref<Selection>(node);
 			if (dot.indirect())
-				assignRegisterTemp(dot.left(), longMask, compileContext);
+				assignRegisterTemp(dot.left(), longMask(), compileContext);
 			else
 				assignLvalueTemps(dot.left(), compileContext);
 			f().r.cleanupTemps(node, depth);
@@ -775,7 +777,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			b = ref<Binary>(node);
 			assert(b.left().op() == Operator.EMPTY);
 //			assert(b.right().op() == Operator.EMPTY);
-			f().r.clobberSomeRegisters(b, callMask);
+			f().r.clobberSomeRegisters(b, callMask());
 			f().r.getreg(b, RAXmask, RAXmask);
 			node.register = byte(int(R.RAX));
 			break;
@@ -792,7 +794,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 
 	private void assignLargeClass(ref<Binary> assignment, ref<CompileContext> compileContext) {
 		int depth = tempStackDepth();
-		f().r.clobberSomeRegisters(assignment, callMask);
+		f().r.clobberSomeRegisters(assignment, callMask());
 		if	(assignment.sethi < 0) {
 			assignRegisterTemp(assignment.left(), RCXmask, compileContext);
 			assignRegisterTemp(assignment.right(), RDXmask, compileContext);
@@ -826,7 +828,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	INTERFACE:
 			case	FLAGS:
 				int depth = tempStackDepth();
-				assignRegisterTemp(operand, longMask, compileContext);
+				assignRegisterTemp(operand, longMask(), compileContext);
 				f().r.cleanupTemps(result, depth);
 				if (R(int(operand.register)) == R.AH)
 					result.register = byte(int(f().r.getreg(result, RAXmask, RAXmask)));
@@ -837,7 +839,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	FLOAT_32:
 			case	FLOAT_64:
 			case	ENUM:
-				assignCast(result, operand, regMask, longMask, compileContext);
+				assignCast(result, operand, regMask, longMask(), compileContext);
 				return;
 			}
 			break;
@@ -864,7 +866,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	FLOAT_32:
 			case	FLOAT_64:
 			case	ENUM:
-				assignCast(result, operand, regMask, longMask, compileContext);
+				assignCast(result, operand, regMask, longMask(), compileContext);
 				return;
 			}
 			break;
@@ -893,7 +895,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	FLOAT_32:
 			case	FLOAT_64:
 			case	ENUM:
-				assignCast(result, operand, regMask, longMask, compileContext);
+				assignCast(result, operand, regMask, longMask(), compileContext);
 				return;
 			}
 			break;
@@ -919,7 +921,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	FLOAT_32:
 			case	FLOAT_64:
 			case	ENUM:
-				assignCast(result, operand, regMask, longMask, compileContext);
+				assignCast(result, operand, regMask, longMask(), compileContext);
 				return;
 			}
 			break;
@@ -984,7 +986,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 
 			case	FLOAT_32:
 			case	FLOAT_64:
-				assignCast(result, operand, regMask, longMask, compileContext);
+				assignCast(result, operand, regMask, longMask(), compileContext);
 				return;
 			}
 			break;
@@ -1007,7 +1009,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	FUNCTION:
 			case	INTERFACE:
 			case	FLAGS:
-				assignCast(result, operand, regMask, longMask, compileContext);
+				assignCast(result, operand, regMask, longMask(), compileContext);
 				return;
 				
 			case	STRING:
@@ -1029,7 +1031,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			if (newType.family() == TypeFamily.INTERFACE) {
 				int depth = tempStackDepth();
 				assignLvalueTemps(operand, compileContext);
-				R reg = f().r.getreg(result, longMask, longMask);
+				R reg = f().r.getreg(result, longMask(), longMask());
 				f().r.cleanupTemps(result, depth);
 				result.register = byte(reg);
 				return;
@@ -1057,7 +1059,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	FLOAT_32:
 			case	FLOAT_64:
 			case	ENUM:
-				assignCast(result, operand, regMask, longMask, compileContext);
+				assignCast(result, operand, regMask, longMask(), compileContext);
 				return;
 			}
 			break;
@@ -1188,7 +1190,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				}
 				assert(args.node.register != 0);
 				if (args.node.register == 0xff)
-					regMask = longMask;
+					regMask = longMask();
 				else
 					regMask = getRegMask(R(args.node.register));
 				args.node.register = 0;
@@ -1243,7 +1245,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				break;
 			
 			case	VACATE_ARGUMENT_REGISTERS:
-				f().r.clobberSomeRegisters(arg, callMask);
+				f().r.clobberSomeRegisters(arg, callMask());
 				break;
 				
 			case	ELLIPSIS_ARGUMENTS:
@@ -1252,8 +1254,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 					ref<Unary> u = ref<Unary>(args.node);
 					switch (u.type.family()) {
 					case STRING:
-						assignRegisterTemp(u.operand(), RDXmask, compileContext);
-						reserveReg(u.operand(), R.RCX, RCXmask);
+						assignRegisterTemp(u.operand(), getRegMask(secondRegisterArgument()), compileContext);
+						reserveReg(u.operand(), firstRegisterArgument(), getRegMask(firstRegisterArgument()));
 						break;
 						
 					case VAR:
@@ -1266,11 +1268,11 @@ class X86_64AssignTemps extends X86_64AddressModes {
 								assignLvalueTemps(u.operand(), compileContext);
 							else 
 								assignStackArgument(u.operand(), compileContext); 
-							u.register = byte(f().r.getreg(u, longMask, longMask));
+							u.register = byte(f().r.getreg(u, longMask(), longMask()));
 							break;
 						}
 					default:
-						assignRegisterTemp(u.operand(), longMask, compileContext);
+						assignRegisterTemp(u.operand(), longMask(), compileContext);
 					}
 					f().r.cleanupTemps(u, depth);
 				}
@@ -1344,23 +1346,23 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	SUBSCRIPT:
 			b = ref<Binary>(node);
 			if (b.sethi < 0) {
-				assignRegisterTemp(b.left(), longMask, compileContext);
-				assignRegisterTemp(b.right(), longMask, compileContext);
+				assignRegisterTemp(b.left(), longMask(), compileContext);
+				assignRegisterTemp(b.right(), longMask(), compileContext);
 			} else {
-				assignRegisterTemp(b.right(), longMask, compileContext);
-				assignRegisterTemp(b.left(), longMask, compileContext);
+				assignRegisterTemp(b.right(), longMask(), compileContext);
+				assignRegisterTemp(b.left(), longMask(), compileContext);
 			}
 			break;
 			
 		case	INDIRECT:
 			ref<Unary> u = ref<Unary>(node);
-			assignRegisterTemp(u.operand(), longMask, compileContext);
+			assignRegisterTemp(u.operand(), longMask(), compileContext);
 			break;
 			
 		case	DOT:
 			ref<Selection> dot = ref<Selection>(node);
 			if (dot.indirect())
-				assignRegisterTemp(dot.left(), longMask, compileContext);
+				assignRegisterTemp(dot.left(), longMask(), compileContext);
 			else
 				assignLvalueTemps(dot.left(), compileContext);
 			break;

@@ -2201,8 +2201,16 @@ class Ternary extends Node {
 			}
 			
 		case	IF:
-			if (_left != null)
+			if (_left != null) {
 				_left = _left.foldConditional(tree, compileContext);
+				switch (_left.op()) {
+				case TRUE:
+					return _middle.fold(tree, voidContext, compileContext);
+					
+				case FALSE:
+					return _right.fold(tree, voidContext, compileContext);
+				}
+			}
 			if (_middle != null)
 				_middle = _middle.fold(tree, voidContext, compileContext);
 			if (_right != null)

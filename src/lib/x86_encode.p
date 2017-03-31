@@ -55,6 +55,7 @@ import parasol:compiler.Variable;
 import parasol:file;
 import parasol:math.abs;
 import parasol:pxi.Pxi;
+import parasol:pxi.SectionType;
 import parasol:runtime;
 import parasol:text;
 /*
@@ -749,10 +750,10 @@ class X86_64Encoder extends Target {
 		// 6 instruction ordering
 		// 7 coding
 		FunctionState f;
-		RegisterState r(&_t);
+		f.avail = longMask()|floatMask;
+		RegisterState r(&_t, f.avail);
 		f.r = &r;
 		f.firstCode = _functionCode.length();
-		f.avail = longMask|floatMask;
 		f.current = scope;
 		f.oldestUnspilled = f.tempBase = _t.stackDepth();
 		f.knownDeferredTrys = _deferredTry.length();
@@ -2963,7 +2964,7 @@ class X86_64Encoder extends Target {
 					ref<Selection> dot = ref<Selection>(node);
 					regValue = rmValues[R(int(dot.left().register))];
 				} else
-					regValue = rmValues[R.RSI];
+					regValue = rmValues[thisRegister()];
 				if (offset >= -128 && offset <= 127) {
 					modRM(1, 6, regValue);
 					emit(byte(offset));
@@ -3180,7 +3181,7 @@ class X86_64Encoder extends Target {
 			case	MEMBER:
 				int baseReg;
 				if (addressMode.op() == Operator.IDENTIFIER)
-					baseReg = 6;
+					baseReg = rmValues[thisRegister()];
 				else {
 					ref<Selection> dot = ref<Selection>(addressMode);
 					ref<Node> object = dot.left();
@@ -3751,7 +3752,19 @@ class X86_64Encoder extends Target {
 	
 	public abstract R firstRegisterArgument();
 	
+	public abstract R secondRegisterArgument();
+	
+	public abstract R thirdRegisterArgument();
+	
+	public abstract R fourthRegisterArgument();
+	
 	public abstract R thisRegister();
+	
+	public abstract long longMask();
+	
+	public long callMask() {
+		return longMask()|floatMask;
+	}
 }
 
 enum FixupKind {

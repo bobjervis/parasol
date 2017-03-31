@@ -1665,6 +1665,7 @@ class Namespace extends Symbol {
 
 flags Access {
 	CONSTANT,
+	COMPILE_TARGET,
 	CONSTRUCTED			// If the object is not initialized with a constructor, it will be constructed at scope start.						// the bit will be set any constructor initializer is performed.
 }
 /*
@@ -1848,6 +1849,22 @@ class PlainSymbol extends Symbol {
 				assert(false);
 			}
 			_accessFlags |= Access.CONSTANT;
+		}
+		annotation = (*annotations())["CompileTarget"];
+		if (annotation != null) {
+			if (annotation.argumentCount() > 0) {
+				definition().add(MessageId.ANNOTATION_TAKES_NO_ARGUMENTS, compileContext.pool());
+				return;
+			}
+			if (compileContext.compileTarget != null) {
+				definition().add(MessageId.BAD_COMPILE_TARGET, compileContext.pool());
+				return;
+			}
+			if (storageClass() != StorageClass.STATIC) {
+				definition().add(MessageId.CONSTANT_NOT_STATIC, compileContext.pool());
+				return;
+			}
+			_accessFlags |= Access.COMPILE_TARGET;
 		}
 	}
 	

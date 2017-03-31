@@ -64,6 +64,8 @@ long R8mask = getRegMask(R.R8);
 long R9mask = getRegMask(R.R9); 
 long R10mask = getRegMask(R.R10); 
 long R11mask = getRegMask(R.R11); 
+long RSImask = getRegMask(R.RSI);
+long RDImask = getRegMask(R.RDI);
 
 long xmm0mask = getRegMask(R.XMM0);
 long xmm1mask = getRegMask(R.XMM1);
@@ -72,36 +74,9 @@ long xmm3mask = getRegMask(R.XMM3);
 long xmm4mask = getRegMask(R.XMM4);
 long xmm5mask = getRegMask(R.XMM5);
 
-long longMask = RAXmask|RCXmask|RDXmask|R8mask|R9mask|R10mask|R11mask;			// RBP and RSP are reserved
 long floatMask = xmm0mask|xmm1mask|xmm2mask|xmm3mask|xmm4mask|xmm5mask;
 
-long callMask = longMask|floatMask;
-
 long[TypeFamily] familyMasks;
-
-familyMasks.resize(TypeFamily.MAX_TYPES);
-familyMasks[TypeFamily.SIGNED_8] = longMask;
-familyMasks[TypeFamily.SIGNED_16] = longMask;
-familyMasks[TypeFamily.SIGNED_32] = longMask;
-familyMasks[TypeFamily.SIGNED_64] = longMask;
-familyMasks[TypeFamily.UNSIGNED_8] = longMask;
-familyMasks[TypeFamily.UNSIGNED_16] = longMask;
-familyMasks[TypeFamily.UNSIGNED_32] = longMask;
-familyMasks[TypeFamily.UNSIGNED_64] = longMask;
-familyMasks[TypeFamily.ADDRESS] = longMask;
-familyMasks[TypeFamily.CLASS_VARIABLE] = longMask;
-familyMasks[TypeFamily.REF] = longMask;
-familyMasks[TypeFamily.POINTER] = longMask;
-familyMasks[TypeFamily.TYPEDEF] = longMask;
-familyMasks[TypeFamily.CLASS] = longMask;
-familyMasks[TypeFamily.BOOLEAN] = longMask;
-familyMasks[TypeFamily.FUNCTION] = longMask;
-familyMasks[TypeFamily.STRING] = longMask;
-familyMasks[TypeFamily.ENUM] = longMask;
-familyMasks[TypeFamily.FLAGS] = longMask;
-familyMasks[TypeFamily.INTERFACE] = longMask;
-familyMasks[TypeFamily.FLOAT_32] = floatMask;
-familyMasks[TypeFamily.FLOAT_64] = floatMask;
 
 /*
  * TempStack represents the state of temporary register allocation at any given moment.
@@ -150,11 +125,11 @@ class RegisterState {
 	ref<Spill> _spills;
 	ref<Spill> _lastSpill;
 	
-	public RegisterState(ref<TempStack> t) {
+	public RegisterState(ref<TempStack> t, long freeRegisters) {
 		_t = t;
 		_tempBase = t.stackDepth();
 		_oldestUnspilled = _tempBase;
-		_freeRegisters = longMask|floatMask;
+		_freeRegisters = freeRegisters;
 	}
 	
 	void makeTemp(ref<Node> n, R actual, long des) {
