@@ -40,7 +40,7 @@ public class DIR {
 public class dirent {
     public long d_ino;
     public long d_off;
-    public d_reclen;
+    public char d_reclen;
     public byte d_type;
 	public byte d_name;
 }
