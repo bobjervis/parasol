@@ -27,7 +27,6 @@ import parasol:pxi.SectionType;
 
 private long LEAKS_FLAG = 0x1;
 
-print("aa_memory.p\n");
 /**
  * This implements the 'new' operator. It is called from inline code. Eventually, all 
  * memory allocation will be done with an Allocator. Clever bit twiddlers will always

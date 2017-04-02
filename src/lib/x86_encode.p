@@ -1841,12 +1841,62 @@ class X86_64Encoder extends Target {
 			modRM(3, rmValues[src], rmValues[dest]);
 			return;
 
+		case	MOV:
+			switch (family) {
+			case	BOOLEAN:
+			case	UNSIGNED_8:
+				emitRex(family, null, dest, src);
+				if ((getRegMask(dest) & byteMask) != 0 && (getRegMask(src) & byteMask) != 0) {
+					// Both are valid byte registers, so use the byte instruction.
+					emit(byte(opcodes[instruction] + 0x02));
+				} else {
+					emit(byte(opcodes[instruction] + 0x03));
+				}
+				modRM(3, rmValues[dest], rmValues[src]);
+				return;
+				
+			case	UNSIGNED_16:
+			case	SIGNED_16:
+				emit(0x66);
+				emitRex(family, null, dest, src);
+				emit(byte(opcodes[instruction] + 0x03));
+				modRM(3, rmValues[dest], rmValues[src]);
+				return;
+
+			case	SIGNED_32:
+			case	UNSIGNED_32:
+				emitRex(family, null, dest, src);
+				emit(byte(opcodes[instruction] + 0x03));
+				modRM(3, rmValues[dest], rmValues[src]);
+				return;
+
+			case	CLASS:
+			case	ADDRESS:
+			case	CLASS_VARIABLE:
+			case	REF:
+			case	POINTER:
+			case	STRING:
+			case	SIGNED_64:
+			case	FUNCTION:
+			case	ENUM:
+			case	VAR:
+			case	TYPEDEF:
+				emitRex(family, null, dest, src);
+				emit(byte(opcodes[instruction] + 0x03));
+				modRM(3, rmValues[dest], rmValues[src]);
+				return;
+
+			default:
+				printf("%s %s %s %s\n", string(instruction), string(family), string(dest), string(src));
+				assert(false);
+			}
+			return;
+			
 		case	CMP:
 		case	ADD:
 		case	SUB:
 		case	OR:
 		case	XOR:
-		case	MOV:
 		case	AND:
 			switch (family) {
 			case	BOOLEAN:
@@ -3132,7 +3182,7 @@ class X86_64Encoder extends Target {
 			
 		case	THIS:
 		case	SUPER:
-			modRM(3, regOpcode, 6);
+			modRM(3, regOpcode, rmValues[thisRegister()]);
 			break;
 			
 		case	VARIABLE:
@@ -3231,7 +3281,7 @@ class X86_64Encoder extends Target {
 			ref<Node> ptr = u.operand();
 			int baseReg;
 			if (ptr.op() == Operator.THIS || ptr.op() == Operator.SUPER)
-				baseReg = 6;
+				baseReg = rmValues[thisRegister()];
 			else if (ptr.register != 0)
 				baseReg = rmValues[R(int(ptr.register))];
 			else if (ptr.deferGeneration())

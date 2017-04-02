@@ -420,7 +420,9 @@ class Disassembler {
 				
 			case	0xc0:
 			case	0xc1:
+			case	0xd0:
 			case	0xd1:
+			case	0xd2:
 			case	0xd3:
 				group2(next);
 				break;
@@ -779,11 +781,13 @@ class Disassembler {
 			disassembleEvIb();
 			break;
 			
+		case	0xd0:
 		case	0xd1:
 			disassembleEv();
 			printf(",1");
 			break;
 			
+		case	0xd2:
 		case	0xd3:
 			disassembleEv();
 			printf(",cl");

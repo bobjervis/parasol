@@ -228,11 +228,11 @@ public class X86_64 extends X86_64AssignTemps {
 		_arena = arena;
 		_verbose = verbose;
 		familyMasks.resize(TypeFamily.MAX_TYPES);
-		familyMasks[TypeFamily.SIGNED_8] = longMask();
+		familyMasks[TypeFamily.SIGNED_8] = byteMask;
 		familyMasks[TypeFamily.SIGNED_16] = longMask();
 		familyMasks[TypeFamily.SIGNED_32] = longMask();
 		familyMasks[TypeFamily.SIGNED_64] = longMask();
-		familyMasks[TypeFamily.UNSIGNED_8] = longMask();
+		familyMasks[TypeFamily.UNSIGNED_8] = byteMask;
 		familyMasks[TypeFamily.UNSIGNED_16] = longMask();
 		familyMasks[TypeFamily.UNSIGNED_32] = longMask();
 		familyMasks[TypeFamily.UNSIGNED_64] = longMask();
@@ -242,7 +242,7 @@ public class X86_64 extends X86_64AssignTemps {
 		familyMasks[TypeFamily.POINTER] = longMask();
 		familyMasks[TypeFamily.TYPEDEF] = longMask();
 		familyMasks[TypeFamily.CLASS] = longMask();
-		familyMasks[TypeFamily.BOOLEAN] = longMask();
+		familyMasks[TypeFamily.BOOLEAN] = byteMask;
 		familyMasks[TypeFamily.FUNCTION] = longMask();
 		familyMasks[TypeFamily.STRING] = longMask();
 		familyMasks[TypeFamily.ENUM] = longMask();
@@ -3066,11 +3066,11 @@ public class X86_64 extends X86_64AssignTemps {
 			break;
 
 		case	DESTRUCTOR:
-			if (call.overload().usesVTable(compileContext)) {
+			if (overload.usesVTable(compileContext)) {
 				inst(X86.MOV, R.RAX, firstRegisterArgument(), 0);
 				inst(X86.CALL, TypeFamily.ADDRESS, R.RAX, address.bytes);
 			} else {
-				if (!instCall(call.overload(), compileContext)) {
+				if (!instCall(overload, compileContext)) {
 					call.print(0);
 					assert(false);
 					return;

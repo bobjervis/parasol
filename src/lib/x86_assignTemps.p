@@ -220,7 +220,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	STORE_V_TABLE:
 		case	CALL_DESTRUCTOR:
 			u = ref<Unary>(node);
-			assignRegisterTemp(u.operand(), RCXmask, compileContext);
+			assignRegisterTemp(u.operand(), getRegMask(firstRegisterArgument()), compileContext);
 			break;
 
 		default:
@@ -538,7 +538,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				assignRegisterTemp(b.right(), familyMasks[b.type.family()], compileContext);
 				assignLvalueTemps(b.left(), compileContext);
 			}
-			node.register = byte(f().r.getreg(node, longMask(), longMask()));
+			node.register = byte(f().r.getreg(node, familyMasks[b.type.family()], familyMasks[b.type.family()]));
 			f().r.cleanupTemps(b, depth);
 			break;
 			
@@ -561,7 +561,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	OR:
 		case	EXCLUSIVE_OR:
 			b = ref<Binary>(node);
-			assignBinaryOperands(b, regMask, longMask(), compileContext);
+			assignBinaryOperands(b, regMask, familyMasks[b.type.family()], compileContext);
 			node.register = byte(f().r.latestResult(b.left()));
 			break;
 
@@ -692,6 +692,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			
 		case	LOAD:
 			u = ref<Unary>(node);
+			if ((regMask & familyMasks[u.type.family()]) == 0)
+				regMask = familyMasks[u.type.family()];
 			assignRegisterTemp(u.operand(), regMask, compileContext);
 			f().r.cleanupTemps(u, depth);
 			u.register = u.operand().register;
@@ -740,7 +742,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			if (node.type.isFloat())
 				node.register = byte(f().r.getreg(node, floatMask, regMask));
 			else
-				node.register = byte(f().r.getreg(node, longMask(), regMask));
+				node.register = byte(f().r.getreg(node, familyMasks[node.type.family()], regMask));
 			break;
 			
 		case	SUBSCRIPT:
