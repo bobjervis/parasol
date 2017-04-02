@@ -19,6 +19,7 @@
 #include <sys/mman.h>
 #include <errno.h>
 #include <unistd.h>
+#include <dlfcn.h>
 #endif
 #include "runtime.h"
 #include "x86_pxi.h"
@@ -119,12 +120,24 @@ bool X86_64Section::run(char **args, int *returnValue, long long runtimeFlags) {
 		} else {
 			nativeBindings[i].address = (void*) GetProcAddress(dll, nativeBindings[i].symbolName);
 			if (nativeBindings[i].address == 0) {
-				printf("Unable to locate DLL %s\n", nativeBindings[i].dllName);
+				printf("Unable to locate symbol %s in %s\n", nativeBindings[i].symbolName, nativeBindings[i].dllName);
 				*(char*)argc = 0;	// This should cause a crash.
 			}
 		}
+		CloseHandle(dll);
 #elif __linux__
-
+		void *handle = dlopen(nativeBindings[i].dllName, RTLD_LAZY);
+		if (handle == null) {
+			printf("Unable to locate shared object %s (%s)\n", nativeBindings[i].dllName, dlerror());
+			*(char*)argc = 0;	// This should cause a crash.
+		} else {
+			nativeBindings[i].address = dlsym(handle, nativeBindings[i].symbolName);
+			if (nativeBindings[i].address == 0) {
+				printf("Unable to locate symbol %s in %s (%s)\n", nativeBindings[i].symbolName, nativeBindings[i].dllName, dlerror());
+				*(char*)argc = 0;	// This should cause a crash.
+			}
+		}
+		dlclose(handle);
 #endif
 	}
 
