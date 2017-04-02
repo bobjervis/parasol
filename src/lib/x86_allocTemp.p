@@ -66,7 +66,8 @@ long R10mask = getRegMask(R.R10);
 long R11mask = getRegMask(R.R11); 
 long RSImask = getRegMask(R.RSI);
 long RDImask = getRegMask(R.RDI);
-
+long AHmask = getRegMask(R.AH)
+;
 long xmm0mask = getRegMask(R.XMM0);
 long xmm1mask = getRegMask(R.XMM1);
 long xmm2mask = getRegMask(R.XMM2);
@@ -75,6 +76,7 @@ long xmm4mask = getRegMask(R.XMM4);
 long xmm5mask = getRegMask(R.XMM5);
 
 long floatMask = xmm0mask|xmm1mask|xmm2mask|xmm3mask|xmm4mask|xmm5mask;
+long byteMask = RAXmask|RBXmask|RCXmask|RDXmask|R8mask|R9mask|R10mask|R11mask|AHmask;
 
 long[TypeFamily] familyMasks;
 
@@ -501,6 +503,8 @@ class RegisterState {
 		}
 		if	((desired & required) != 0)
 			desired &= required;
+		else
+			desired = required;
 		if	((desired & _freeRegisters) != 0)
 			r = desired & _freeRegisters;
 		else

@@ -19,8 +19,6 @@ import native:C;
 import parasol:text;
 import parasol:stream.Utf8Reader;
 
-print("syntaxTree.p!\n");
-
 enum Operator {
 	// SyntaxError
 	SYNTAX_ERROR,

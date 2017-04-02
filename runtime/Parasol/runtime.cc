@@ -34,6 +34,7 @@
 typedef unsigned long long SIZE_T;
 typedef unsigned DWORD;
 typedef int BOOL;
+#include <signal.h>
 #endif
 #include "common/process.h"
 #include "basic_types.h"
@@ -544,6 +545,37 @@ LONG CALLBACK windowsExceptionHandler(PEXCEPTION_POINTERS ExceptionInfo) {
 	exit(1);
 	return 0;
 }
+#elif __linux__
+void sigIllHandler(int signum, siginfo_t *info, void *uContext) {
+
+}
+
+void sigSegvHandler(int signum, siginfo_t *info, void *uContext) {
+	ExecutionContext *context = threadContext.get();
+
+	if (context->hasHardwareExceptionHandler()) {
+		HardwareException info;
+
+		info.codePointer = (byte*)ExceptionInfo->ContextRecord->Rip;
+		info.framePointer = (byte*)ExceptionInfo->ContextRecord->Rbp;
+		info.stackPointer = (byte*)ExceptionInfo->ContextRecord->Rsp;
+		info.exceptionType = ExceptionInfo->ExceptionRecord->ExceptionCode;
+		switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
+		case EXCEPTION_ACCESS_VIOLATION:
+		case EXCEPTION_IN_PAGE_ERROR:
+			info.exceptionInfo0 = (long long)ExceptionInfo->ExceptionRecord->ExceptionInformation[1];
+			info.exceptionInfo1 = (int)ExceptionInfo->ExceptionRecord->ExceptionInformation[0];
+		}
+		context->callHardwareExceptionHandler(&info);
+		printf("Did not expect this to return\n");
+	}
+	printf("No hardware exception handler defined\n");
+	exit(1);
+}
+
+void sigFpeHandler(int signum, siginfo_t *info, void *uContext) {
+
+}
 #endif
 
 int ExecutionContext::runNative(int (*start)(void *args)) {
@@ -552,10 +584,31 @@ int ExecutionContext::runNative(int (*start)(void *args)) {
 	_stackTop = (byte*) &x;
 #if defined(__WIN64)
 	PVOID handle = AddVectoredExceptionHandler(0, windowsExceptionHandler);
+#elif __linux__
+	sigaction oldSigIllAction;
+	sigaction oldSigSegvAction;
+	sigaction oldSigFpeAction;
+	sigaction newIllAction;
+	sigaction newSegvAction;
+	sigaction newFpeAction;
+
+	newIllAction.sa_sigaction = sigIllHandler;
+	newIllAction.sa_flags = SA_SIGINFO;
+	newSegvAction.sa_sigaction = sigSegvHandler;
+	newSegvAction.sa_flags = SA_SIGINFO;
+	newFpeAction.sa_sigaction = sigFpeHandler;
+	newFpeAction.sa_flags = SA_SIGINFO;
+	sigaction(SIGILL, &newIllAction, &oldSigIllAction);
+	sigaction(SIGSEGV, &newSegvAction, &oldSigSegvAction);
+	sigaction(SIGFPE, &newFpeAction, &oldSigFpeAction);
 #endif
 	int result = start(_sp);
 #if defined(__WIN64)
 	RemoveVectoredExceptionHandler(handle);
+#elif __linux__
+	sigaction(SIGILL, &oldSigIllAction, null);
+	sigaction(SIGSEGV, &oldSigSegvAction, null);
+	sigaction(SIGFPE, &oldSigFpeAction, null);
 #endif
 	return result;
 }
