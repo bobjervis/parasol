@@ -37,6 +37,15 @@ public class DIR {
 	private int dummy;			// Don't expose anything about this structure
 }
 
+@Linux("libc.so.6", "pathconf")
+public abstract int pathconf(pointer<byte> path, int selector);
+
+@Linux("libc.so.6", "readdir_r")
+public abstract int readdir_r(ref<DIR> dir, ref<dirent> entry, ref<ref<dirent>> result);
+
+@Constant
+public int _PC_NAME_MAX = 4;
+
 public class dirent {
     public long d_ino;
     public long d_off;

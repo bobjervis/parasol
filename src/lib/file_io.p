@@ -203,6 +203,8 @@ public class Directory {
 
 	public Directory(string path) {
 		_handle = windows.INVALID_HANDLE_VALUE;
+//		if (path.length() == 0)
+//			assert(false);
 		_directory = path;
 		_wildcard = "*";
 		if (runtime.compileTarget == SectionType.X86_64_WIN)
@@ -244,6 +246,20 @@ public class Directory {
 				return true;
 			windows.FindClose(_handle);
 			_handle = windows.INVALID_HANDLE_VALUE;
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			if (_dirent == null) {
+				int name_max = posix.pathconf(_directory.c_str(), posix._PC_NAME_MAX);
+				if (name_max == -1)         /* Limit not defined, or error */
+				    name_max = 255;         /* Take a guess */
+				int len = posix.dirent.bytes + name_max + 1;	// dirent is a dummy structure, the offset of d_name is 1 less than dirent.bytes
+				_dirent = ref<posix.dirent>(memory.alloc(len));
+			}
+			ref<posix.dirent> resultbuf;
+			int result = posix.readdir_r(ref<posix.DIR>(_data), _dirent, &resultbuf);
+			if (result == 0) {
+				return resultbuf != null;
+			} else
+				return false;
 		}
 		return false;
 	}
@@ -252,6 +268,7 @@ public class Directory {
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 			return _directory + "/" + ref<windows.WIN32_FIND_DATA>(_data).fileName();
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			printf("_dirent = %p &_dirent.d_name = %p\n", _dirent, &_dirent.d_name);
 			return _directory + "/" + string(pointer<byte>(&_dirent.d_name));
 		} else
 			return null;

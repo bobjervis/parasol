@@ -991,6 +991,35 @@ class Call extends ParameterBag {
 		case	VAR:
 			return true;
 
+		case	POINTER:
+			switch (newType.family()) {
+			case	STRING:
+				ref<Type> object = existingType.indirectType(compileContext);
+				if (object != null && object.family() == TypeFamily.UNSIGNED_8)
+					return false;									// This is a string constructor
+				
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	UNSIGNED_64:
+			case	SIGNED_8:
+			case	SIGNED_16:
+			case	SIGNED_32:
+			case	SIGNED_64:
+			case	FLOAT_32:
+			case	FLOAT_64:
+			case	ADDRESS:
+			case	REF:
+			case	POINTER:
+			case	BOOLEAN:
+			case	ENUM:
+			case	FLAGS:
+			case	FUNCTION:
+			case	INTERFACE:
+				return true;
+			}
+			break;
+			
 		case	FUNCTION:
 		case	UNSIGNED_8:
 		case	UNSIGNED_16:
@@ -1005,7 +1034,6 @@ class Call extends ParameterBag {
 		case	STRING:
 		case	ADDRESS:
 		case	REF:
-		case	POINTER:
 		case	BOOLEAN:
 		case	ENUM:
 		case	FLAGS:

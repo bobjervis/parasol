@@ -1061,6 +1061,9 @@ class string {
 
 	private int reservedSize(int length) {
 		int usedSize = length + int.bytes + 1;
+		if (usedSize >= 0x40000000) {
+			return (usedSize + 15) & ~15;
+		}
 		int allocSize = MIN_SIZE;
 		while (allocSize < usedSize)
 			allocSize <<= 1;
