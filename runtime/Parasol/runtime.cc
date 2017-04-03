@@ -546,27 +546,39 @@ LONG CALLBACK windowsExceptionHandler(PEXCEPTION_POINTERS ExceptionInfo) {
 	return 0;
 }
 #elif __linux__
-void sigIllHandler(int signum, siginfo_t *info, void *uContext) {
+static void fillExceptionInfo(HardwareException *he, siginfo_t *info, ucontext *uContext) {
+	he->codePointer = (byte*)uContext->uc_mcontext.gregs[REG_RIP];
+	he->framePointer = (byte*)uContext->uc_mcontext.gregs[REG_RBP];
+	he->stackPointer = (byte*)uContext->uc_mcontext.gregs[REG_RSP];
+	he->exceptionType = (info->si_signo << 8) + (info->si_code & ~SI_KERNEL);
+}
 
+void sigIllHandler(int signum, siginfo_t *info, void *uContext) {
+	ExecutionContext *context = threadContext.get();
+
+	if (context->hasHardwareExceptionHandler()) {
+		HardwareException he;
+
+		fillExceptionInfo(&he, info, (ucontext*)uContext);
+		he.exceptionInfo0 = 0;
+		he.exceptionInfo1 = 0;
+		context->callHardwareExceptionHandler(&he);
+		printf("Did not expect this to return\n");
+	}
+	printf("No hardware exception handler defined\n");
+	exit(1);
 }
 
 void sigSegvHandler(int signum, siginfo_t *info, void *uContext) {
 	ExecutionContext *context = threadContext.get();
 
 	if (context->hasHardwareExceptionHandler()) {
-		HardwareException info;
+		HardwareException he;
 
-		info.codePointer = (byte*)ExceptionInfo->ContextRecord->Rip;
-		info.framePointer = (byte*)ExceptionInfo->ContextRecord->Rbp;
-		info.stackPointer = (byte*)ExceptionInfo->ContextRecord->Rsp;
-		info.exceptionType = ExceptionInfo->ExceptionRecord->ExceptionCode;
-		switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
-		case EXCEPTION_ACCESS_VIOLATION:
-		case EXCEPTION_IN_PAGE_ERROR:
-			info.exceptionInfo0 = (long long)ExceptionInfo->ExceptionRecord->ExceptionInformation[1];
-			info.exceptionInfo1 = (int)ExceptionInfo->ExceptionRecord->ExceptionInformation[0];
-		}
-		context->callHardwareExceptionHandler(&info);
+		fillExceptionInfo(&he, info, (ucontext*)uContext);
+		he.exceptionInfo0 = (long long)info->si_addr;
+		he.exceptionInfo1 = 0;
+		context->callHardwareExceptionHandler(&he);
 		printf("Did not expect this to return\n");
 	}
 	printf("No hardware exception handler defined\n");
@@ -574,7 +586,19 @@ void sigSegvHandler(int signum, siginfo_t *info, void *uContext) {
 }
 
 void sigFpeHandler(int signum, siginfo_t *info, void *uContext) {
+	ExecutionContext *context = threadContext.get();
 
+	if (context->hasHardwareExceptionHandler()) {
+		HardwareException he;
+
+		fillExceptionInfo(&he, info, (ucontext*)uContext);
+		he.exceptionInfo0 = 0;
+		he.exceptionInfo1 = 0;
+		context->callHardwareExceptionHandler(&he);
+		printf("Did not expect this to return\n");
+	}
+	printf("No hardware exception handler defined\n");
+	exit(1);
 }
 #endif
 
@@ -585,12 +609,12 @@ int ExecutionContext::runNative(int (*start)(void *args)) {
 #if defined(__WIN64)
 	PVOID handle = AddVectoredExceptionHandler(0, windowsExceptionHandler);
 #elif __linux__
-	sigaction oldSigIllAction;
-	sigaction oldSigSegvAction;
-	sigaction oldSigFpeAction;
-	sigaction newIllAction;
-	sigaction newSegvAction;
-	sigaction newFpeAction;
+	struct sigaction oldSigIllAction;
+	struct sigaction oldSigSegvAction;
+	struct sigaction oldSigFpeAction;
+	struct sigaction newIllAction;
+	struct sigaction newSegvAction;
+	struct sigaction newFpeAction;
 
 	newIllAction.sa_sigaction = sigIllHandler;
 	newIllAction.sa_flags = SA_SIGINFO;
