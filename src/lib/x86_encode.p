@@ -3500,6 +3500,7 @@ class X86_64Encoder extends Target {
 		case	CLASS:
 		case	FLOAT_64:
 		case	TYPEDEF:
+		case	CLASS_VARIABLE:
 			rex |= REX_W;
 		}
 		rex |= rexValues[regField];
