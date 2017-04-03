@@ -798,11 +798,11 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		int depth = tempStackDepth();
 		f().r.clobberSomeRegisters(assignment, callMask());
 		if	(assignment.sethi < 0) {
-			assignRegisterTemp(assignment.left(), RCXmask, compileContext);
-			assignRegisterTemp(assignment.right(), RDXmask, compileContext);
+			assignRegisterTemp(assignment.left(), getRegMask(firstRegisterArgument()), compileContext);
+			assignRegisterTemp(assignment.right(), getRegMask(secondRegisterArgument()), compileContext);
 		} else {
-			assignRegisterTemp(assignment.right(), RDXmask, compileContext);
-			assignRegisterTemp(assignment.left(), RCXmask, compileContext);
+			assignRegisterTemp(assignment.right(), getRegMask(secondRegisterArgument()), compileContext);
+			assignRegisterTemp(assignment.left(), getRegMask(firstRegisterArgument()), compileContext);
 		}
 		f().r.getreg(assignment, RAXmask, RAXmask);
 		f().r.cleanupTemps(assignment, depth);

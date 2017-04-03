@@ -22,6 +22,7 @@ import parasol:x86_64.SourceLocation;
 import parasol:memory;
 import parasol:process;
 import parasol:runtime;
+import parasol:pxi.SectionType;
 import native:windows;
 import native:C;
 
@@ -419,22 +420,30 @@ void hardwareExceptionHandler(ref<HardwareException> info) {
 	context.memoryAddress = address(info.exceptionInfo0);
 	context.exceptionFlags = info.exceptionInfo1;
 	context.exceptionType = info.exceptionType;
-	if (info.exceptionType == 0xffffffffc0000374) {
-		throw CorruptHeapException(context);
-	} else if (info.exceptionType == 0xffffffffc00000fd) {
-		throw StackOverflowException(context);
-	} else if (info.exceptionType == 0xffffffffc0000005) {
-		if (context.memoryAddress == null)
-			throw NullPointerException(context);
-		else
-			throw AccessException(context);
-	} else if (info.exceptionType == int(0xc0000094))
-		throw DivideByZeroException(context);
-	else {
-		printf("exception %x at %p\n", info.exceptionType, info.codePointer);
-		printf("Unexpected exception type\n");
-		throw RuntimeException(context);
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (info.exceptionType == 0xffffffffc0000374) {
+			throw CorruptHeapException(context);
+		} else if (info.exceptionType == 0xffffffffc00000fd) {
+			throw StackOverflowException(context);
+		} else if (info.exceptionType == 0xffffffffc0000005) {
+			if (context.memoryAddress == null)
+				throw NullPointerException(context);
+			else
+				throw AccessException(context);
+		} else if (info.exceptionType == int(0xc0000094))
+			throw DivideByZeroException(context);
+	} else {
+		switch (info.exceptionType) {
+		case 0xb01:						// SIGSEGV + SEGV_MAPERR
+			if (context.memoryAddress == null)
+				throw NullPointerException(context);
+			else
+				throw AccessException(context);			
+		}
 	}
+	printf("exception %x at %p\n", info.exceptionType, info.codePointer);
+	printf("Unexpected exception type\n");
+	throw RuntimeException(context);
 }
 /*
  * dispatchException is called from the compiler when deciding which catch clause to execute when an exception is
