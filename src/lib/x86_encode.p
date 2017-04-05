@@ -1202,10 +1202,13 @@ class X86_64Encoder extends Target {
 			switch (family) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
-				emitRex(family, null, R.NO_REG, dest);
-				emit(byte(0xb0 + rmValues[dest]));
-				emit(byte(int(operand)));
-				return;
+				if (fits(dest, byteMask)) {
+					emitRex(family, null, R.NO_REG, dest);
+					emit(byte(0xb0 + rmValues[dest]));
+					emit(byte(operand));
+					return;
+				}
+				family = TypeFamily.UNSIGNED_16;
 
 			case	UNSIGNED_16:
 				emit(0x66);
@@ -1892,17 +1895,20 @@ class X86_64Encoder extends Target {
 			}
 			return;
 			
-		case	CMP:
-		case	ADD:
-		case	SUB:
 		case	OR:
 		case	XOR:
 		case	AND:
+		case	CMP:
+		case	ADD:
+		case	SUB:
 			switch (family) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 				emitRex(family, null, dest, src);
-				emit(byte(opcodes[instruction] + 0x02));
+				if ((getRegMask(dest) & byteMask) != 0 && (getRegMask(src) & byteMask) != 0)
+					emit(byte(opcodes[instruction] + 0x02));
+				else
+					emit(byte(opcodes[instruction] + 0x03));
 				modRM(3, rmValues[dest], rmValues[src]);
 				return;
 				
@@ -2697,11 +2703,13 @@ class X86_64Encoder extends Target {
 			switch (left.type.family()) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
-				emitRex(left.type.family(), left, R.NO_REG, R.NO_REG);
-				emit(0xc6);
-				modRM(left, 0, byte.bytes, 0);
-				emit(byte(immediate));
-				break;
+				if (left.register == 0 || fits(R(left.register), byteMask)) {
+					emitRex(left.type.family(), left, R.NO_REG, R.NO_REG);
+					emit(0xc6);
+					modRM(left, 0, byte.bytes, 0);
+					emit(byte(immediate));
+					break;
+				}
 				
 			case	SIGNED_16:
 			case	UNSIGNED_16:
@@ -3501,6 +3509,7 @@ class X86_64Encoder extends Target {
 		case	FLOAT_64:
 		case	TYPEDEF:
 		case	CLASS_VARIABLE:
+		case	VAR:
 			rex |= REX_W;
 		}
 		rex |= rexValues[regField];

@@ -268,7 +268,6 @@ public class Directory {
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 			return _directory + "/" + ref<windows.WIN32_FIND_DATA>(_data).fileName();
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
-			printf("_dirent = %p &_dirent.d_name = %p\n", _dirent, &_dirent.d_name);
 			return _directory + "/" + string(pointer<byte>(&_dirent.d_name));
 		} else
 			return null;

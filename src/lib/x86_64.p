@@ -1044,35 +1044,19 @@ public class X86_64 extends X86_64AssignTemps {
 			break;
 			
 		case	LOGICAL_OR:
+		case	LOGICAL_AND:
 			b = ref<Binary>(node);
 			join = _storage new CodeSegment;
 			trueSegment = _storage new CodeSegment;
-			generate(b.left(), compileContext);
-			inst(X86.CMP, b.left(), 1, compileContext);
-			closeCodeSegment(CC.JE, trueSegment);
-			generate(b.right(), compileContext);
-			if (node.register != b.right().register)
-				inst(X86.MOV, node.type.family(), node, b.right(), compileContext);
-			closeCodeSegment(CC.JMP, join);
+			falseSegment = _storage new CodeSegment;
+			generateConditional(node, trueSegment, falseSegment, compileContext);
 			trueSegment.start(this);
 			inst(X86.MOV, node, 1, compileContext);
-			join.start(this);
-			break;
-			
-		case	LOGICAL_AND:
-			b = ref<Binary>(node);
-			falseSegment = _storage new CodeSegment;
-			join = _storage new CodeSegment;
-			generate(b.left(), compileContext);
-			inst(X86.CMP, b.left(), 1, compileContext);
-			closeCodeSegment(CC.JNE, falseSegment);
-			generate(b.right(), compileContext);
-			if (node.register != b.right().register)
-				inst(X86.MOV, node.type.family(), node, b.right(), compileContext);
 			closeCodeSegment(CC.JMP, join);
 			falseSegment.start(this);
-			inst(X86.XOR, node.type.family(), node, node, compileContext);
+			inst(X86.XOR, TypeFamily.BOOLEAN, node, node, compileContext);
 			join.start(this);
+			f().r.generateSpills(node, this);
 			break;
 			
 		case	EQUALITY:
@@ -2307,6 +2291,8 @@ public class X86_64 extends X86_64AssignTemps {
 			case	SIGNED_64:
 			case	ADDRESS:
 			case	FLAGS:
+//				printf("flaky integeer stuff\n");
+//				node.print(0);
 				inst(X86.MOV, impl(c.type), R(int(node.register)), c.intValue());
 				break;
 				
@@ -2954,6 +2940,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	POINTER:
 			case	FUNCTION:
 			case	INTERFACE:
+//				seq.print(0);
 				generate(seq.right(), compileContext);
 				inst(X86.MOV, impl(seq.type), seq.left(), seq.right(), compileContext);
 				break;

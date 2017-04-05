@@ -197,7 +197,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 
 		case	DELETE:
 			b = ref<Binary>(node);
-			assignRegisterTemp(b.right(), RCXmask, compileContext);
+			assignRegisterTemp(b.right(), getRegMask(firstRegisterArgument()), compileContext);
 			break;
 			
 		case	CONDITIONAL:
@@ -334,12 +334,10 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	LOGICAL_OR:
 		case	LOGICAL_AND:
 			b = ref<Binary>(node);
-			assignRegisterTemp(b.left(), regMask, compileContext);
+			assignConditionCode(b.left(), compileContext);
+			assignConditionCode(b.right(), compileContext);
+			node.register = byte(f().r.getreg(node, regMask, regMask));
 			f().r.cleanupTemps(node, depth);
-			regMask = getRegMask(R(int(b.left().register)));
-			assignRegisterTemp(b.right(), regMask, compileContext);
-			f().r.cleanupTemps(node, depth);
-			node.register = b.left().register;
 			break;
 			
 		case	SEQUENCE:
@@ -890,8 +888,12 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	FLAGS:
 			case	INTERFACE:
 				assignCast(result, operand, regMask, 0, compileContext);
-				if (unsigned(int(result.register)) > unsigned(int(R.MAX_REG)))
+				if (unsigned(int(result.register)) > unsigned(int(R.MAX_REG))) {
+					printf("----- %s ---------\n", compileContext.current().sourceLocation(result.location()));
+					result.print(0);
+					f().r.print();
 					assert(false);
+				}
 				return;
 				
 			case	FLOAT_32:
@@ -1071,25 +1073,31 @@ class X86_64AssignTemps extends X86_64AddressModes {
 	}
 	
 	private void assignCast(ref<Node> result, ref<Node> operand, long regMask, long operandMask, ref<CompileContext> compileContext) {
+//		long originalOperandMask = operandMask;
+//		long originalRegMask = regMask;
 		int depth = tempStackDepth();
 		if (operandMask != 0) {
+//			if ((operandMask & regMask) != 0)
+//				operandMask &= regMask;
 			assignRegisterTemp(operand, operandMask, compileContext);
-			R operandRegister = R(int(operand.register));
+			R operandRegister = R(operand.register);
 			long actualMask = getRegMask(operandRegister);
 			if ((regMask & ~actualMask) == 0)
 				regMask = familyMasks[result.type.family()] & ~actualMask;
 			else
 				regMask &= ~actualMask;
+//			if (regMask == 0)
+//				printf("operandMask = %x regMask = %x actualMask = %x\n", originalOperandMask, originalRegMask, actualMask);
 			R output = f().r.getreg(result, regMask, regMask);
 			f().r.cleanupTemps(result, depth);
-			result.register = byte(int(output));
+			result.register = byte(output);
 		} else {
 			assignRegisterTemp(operand, regMask, compileContext);
 			f().r.cleanupTemps(result, depth);
 			if (operand.register == 0)
-				result.register = byte(int(f().r.getreg(result, regMask, regMask)));
+				result.register = byte(f().r.getreg(result, regMask, regMask));
 			else
-				result.register = byte(int(f().r.latestResult(operand)));
+				result.register = byte(f().r.latestResult(operand));
 		}
 	}
 	

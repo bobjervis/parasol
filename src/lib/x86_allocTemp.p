@@ -76,7 +76,7 @@ long xmm4mask = getRegMask(R.XMM4);
 long xmm5mask = getRegMask(R.XMM5);
 
 long floatMask = xmm0mask|xmm1mask|xmm2mask|xmm3mask|xmm4mask|xmm5mask;
-long byteMask = RAXmask|RBXmask|RCXmask|RDXmask|R8mask|R9mask|R10mask|R11mask|AHmask;
+long byteMask = RAXmask|RCXmask|RDXmask|R8mask|R9mask|R10mask|R11mask|AHmask;
 
 long[TypeFamily] familyMasks;
 
@@ -241,6 +241,11 @@ class RegisterState {
 					if	(!fits(tm.currentReg, tm.desired) &&
 						 !overlaps(tm.desired, _tempRegisters)){
 						tm.currentReg = cleanupTemp(node, tm);
+						if (tm.currentReg == R.NO_REG) {
+							printf("After cleanupTemp got a R.NO_REG\n");
+							print();
+							node.print(0);
+						}
 						tm.desired = getRegMask(tm.currentReg);
 						doesFit++;
 						didAnything = true;
@@ -301,7 +306,6 @@ class RegisterState {
 	 * register, get it into a satisfactory register.
 	 */
 	R cleanupTemp(ref<Node> node, ref<Temporary> tm) {
-//		int allowedClass;
 		long rx;
 		R r, rnew;
 
