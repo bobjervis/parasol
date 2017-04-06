@@ -138,10 +138,8 @@ class ImportDirectory {
 			for (int j = 0; j < instances.length(); j++) {
 				ref<TemplateInstanceType> instance = instances[j];
 				if (instance.definingFile() == _files[i]) {
-					if (instance.concreteDefinition().countMessages() > 0) {
-						printf("template instance %s:\n", instance.signature());
+					if (instance.concreteDefinition().countMessages() > 0)
 						dumpMessages(_files[i], instance.concreteDefinition());
-					}
 				}
 			}
 		}
@@ -172,9 +170,16 @@ class ImportDirectory {
 
 	public boolean collectStaticInitializers(ref<Target> target) {
 		boolean result = false;
-		for (int i = 0; i < _files.length(); i++)
-			result |= _files[i].collectStaticInitializers(target);
+		ref<FileStat>[] f = _files;
+		f.sort(compareFilenames, true);
+		for (int i = 0; i < f.length(); i++)
+			result |= f[i].collectStaticInitializers(target);
 		return result;
+	}
+
+	
+	private static int compareFilenames(ref<FileStat> one, ref<FileStat> other) {
+		return one.filename().compare(other.filename());
 	}
 
 	public void clearStaticInitializers() {

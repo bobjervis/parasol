@@ -401,7 +401,7 @@ public class X86_64 extends X86_64AssignTemps {
 			if (runtime.makeRegionExecutable(generatedCode, _staticMemoryLength)) {
 				exception.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
 				runtime.setTrace(_arena.trace);
-				returnValue = runtime.evalNative(&_pxiHeader, _staticMemory, &runArgs[0], runArgs.length());
+				returnValue = runtime.evalNative(&_pxiHeader, generatedCode, &runArgs[0], runArgs.length());
 				runtime.setTrace(false);
 			} else {
 				assert(false);
