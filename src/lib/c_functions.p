@@ -26,11 +26,7 @@ public int SEEK_END = 2;
 
 @Windows("msvcrt.dll", "calloc")
 @Linux("libc.so.6", "calloc")
-public abstract address calloc(unsigned count, unsigned size);
-
-@Windows("msvcrt.dll", "_close")
-@Linux("libc.so", "close")
-public abstract int close(int fd);
+public abstract address calloc(long count, long size);
 
 @Windows("msvcrt.dll", "_ecvt")
 @Linux("libc.so.6", "ecvt")
@@ -87,6 +83,10 @@ public abstract pointer<byte> gcvt(double number, int ndigit, pointer<byte> buf)
 @Windows("msvcrt.dll", "getenv")
 @Linux("libc.so.6", "getenv")
 public abstract pointer<byte> getenv(pointer<byte> variable);
+
+@Windows("msvcrt.dll", "malloc")
+@Linux("libc.s0.6", "malloc")
+public abstract address malloc(unsigned size);
 
 @Windows("msvcrt.dll", "memcpy")
 @Linux("libc.so.6", "memcpy")

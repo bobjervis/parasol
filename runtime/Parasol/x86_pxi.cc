@@ -49,7 +49,7 @@ X86_64Section::X86_64Section(FILE *pxiFile, long long length) {
 #if defined(__WIN64)
 	_image = malloc(_imageLength);
 #elif __linux__
-    int pagesize = sysconf(_SC_PAGE_SIZE);
+    int pagesize = sysconf(_SC_PAGESIZE);
     if (pagesize == -1) {
     	printf("sysconf failed\n");
     	return;

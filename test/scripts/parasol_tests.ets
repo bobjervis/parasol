@@ -157,6 +157,7 @@ compile(filename: hello.p)
 compile(filename: void_return_pass.p)
 compile(filename: int_return_pass.p)
 
+compile(filename: undefined_parameter_test.p, expect: fail, message: UNDEFINED)
 compile(filename: syntax_error.p, expect: fail, message: DO_WHILE_NO_SEMI)
 compile(filename: undef_type.p, expect: fail, message: UNDEFINED)
 compile(filename: undef_init.p, expect: fail, message: UNDEFINED)

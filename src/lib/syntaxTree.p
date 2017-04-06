@@ -2837,7 +2837,7 @@ class Node {
 			return returnType.next;
 		}
 	}
-
+	
 	public boolean canCoerce(ref<Type> newType, boolean explicitCast, ref<CompileContext> compileContext) {
 		return type.widensTo(newType, compileContext);
 	}

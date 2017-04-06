@@ -978,6 +978,15 @@ class Call extends ParameterBag {
 	public ref<NodeList> stackArguments() {
 		return _stackArguments;
 	}
+	/**
+	 * Called when this CALL is an operand of a return statement. If this is a multi-value return, then
+	 * we have to process the return value in toto to preserve the semantics correctly.
+	 */
+	public boolean isNestedMultiReturn() {
+		if (_target.deferAnalysis())
+			return false;
+		return ref<FunctionType>(_target.type).returnCount() > 1;
+	}
 	
 	private boolean builtInCoercion(ref<CompileContext> compileContext) {
 		if (_arguments == null ||

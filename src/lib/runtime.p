@@ -15,6 +15,7 @@
  */
 namespace parasol:runtime;
 
+import native:linux;
 import native:windows;
 import parasol:pxi.SectionType;
 import parasol:exception.ExceptionContext;
@@ -66,8 +67,15 @@ public address allocateRegion(long length) {
 	address v;
 	if (compileTarget == SectionType.X86_64_WIN) {
 		v = windows.VirtualAlloc(null, length, windows.MEM_COMMIT|windows.MEM_RESERVE, windows.PAGE_READWRITE);
-	}
-//	printf("VirtualAlloc(%p, %d, %x, %x) -> %p\n", null, length, int(windows.MEM_COMMIT|windows.MEM_RESERVE), int(windows.PAGE_READWRITE), v);
+	} else if (compileTarget == SectionType.X86_64_LNX) {
+		int pagesize = linux.sysconf(int(linux.SysConf._SC_PAGESIZE));
+		if (pagesize == -1) {
+			printf("sysconf failed\n");
+			assert(false);
+		}
+		return linux.aligned_alloc(pagesize, length);
+	} else
+		return null;
 	return v;
 }
 
@@ -77,6 +85,7 @@ public boolean makeRegionExecutable(address location, long length) {
 		int result = windows.VirtualProtect(location, length, windows.PAGE_EXECUTE_READWRITE, &oldProtection);
 //		printf("VirtualProtect(%p, %d, %x, %p) -> %d oldProtection %x\n", location, length, int(windows.PAGE_EXECUTE_READWRITE), null, result, int(oldProtection));
 		return result != 0;
-	}
+	} else if (compileTarget == SectionType.X86_64_LNX)
+		return linux.mprotect(location, length, linux.PROT_EXEC|linux.PROT_READ|linux.PROT_WRITE) == 0;
 	return false;
 }

@@ -211,7 +211,7 @@ class Disassembler {
 				
 			case	0x63:
 				instructionOpcode(next);
-				disassembleGvEvWiden(0);
+				disassembleGvEvWiden(0, false);
 				break;
 				
 			case	0x04:
@@ -718,7 +718,7 @@ class Disassembler {
 			
 		case	0xbf:
 			instructionOpcode("movsx");
-			disassembleGvEvWiden(0);
+			disassembleGvEvWiden(0, true);
 			break;
 			
 		default:
@@ -1039,7 +1039,7 @@ class Disassembler {
 		effectiveWord(true, mod, rm, 0);
 	}
 
-	void disassembleGvEvWiden(int ipAdjust) {
+	void disassembleGvEvWiden(int ipAdjust, boolean operandSize) {
 		byte modRM = _physical[_offset];
 		int mod = modRM >> 6;
 		int regOpcode = (modRM >> 3) & 0x7;
@@ -1048,7 +1048,7 @@ class Disassembler {
 		registerWord(regOpcode, true);
 		printf(",");
 		_rex &= ~REX_W;
-		_operandSize = true;
+		_operandSize = operandSize;
 		effectiveWord(false, mod, rm, ipAdjust);
 	}
 	/*

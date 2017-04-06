@@ -17,7 +17,7 @@ namespace parasol:time;
 
 import native:windows;
 import native:C;
-import native:posix;
+import native:linux;
 import parasol:runtime;
 import parasol:pxi.SectionType;
 
@@ -47,7 +47,7 @@ public class Time {
 	 * This is the constructor defined for local use only to construct a Parasol Time object
 	 * from a Linux timespec object.
 	 */
-	Time(posix.timespec t) {
+	Time(linux.timespec t) {
 		_value = long(t.tv_sec) * 1000 + t.tv_nsec / 1000000;
 	}
 	/*
@@ -78,8 +78,8 @@ public Time now() {
 		Time result(f);
 		return result;
 	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
-		posix.timespec t;
-		posix.clock_gettime(posix.CLOCK_REALTIME, &t);
+		linux.timespec t;
+		linux.clock_gettime(linux.CLOCK_REALTIME, &t);
 		return Time(t);
 	} else {
 		return Time(0);

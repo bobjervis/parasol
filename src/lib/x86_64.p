@@ -16,6 +16,7 @@
 namespace parasol:x86_64;
 
 import native:windows;
+import native:linux;
 
 import parasol:compiler;
 import parasol:compiler.Access;
@@ -145,6 +146,14 @@ public class X86_64Lnx extends X86_64 {
 	public SectionType sectionType() {
 		return SectionType.X86_64_LNX;
 	}
+
+	public int, boolean run(string[] args) {
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			printf("Running Linux target in Windows\n");
+			return 0, false;
+		}
+		return super.run(args);
+	}
 }
 
 public class X86_64Win extends X86_64 {
@@ -198,6 +207,14 @@ public class X86_64Win extends X86_64 {
 
 	public SectionType sectionType() {
 		return SectionType.X86_64_WIN;
+	}
+
+	public int, boolean run(string[] args) {
+		if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			printf("Running windows target in Linux\n");
+			return 0, false;
+		}
+		return super.run(args);
 	}
 }
 
@@ -305,8 +322,8 @@ public class X86_64 extends X86_64AssignTemps {
 		}
 		pointer<SourceLocation> outerSource = exception.sourceLocations();
 		int outerSourceCount = exception.sourceLocationsCount();
-		pointer<int> pxiFixups = pointer<int>(&_staticMemory[_pxiHeader.relocationOffset]);
 		if (runtime.makeRegionExecutable(_staticMemory, _staticMemoryLength)) {
+			pointer<int> pxiFixups = pointer<int>(&_staticMemory[_pxiHeader.relocationOffset]);
 			pointer<long> vp;
 			for (int i = 0; i < _pxiHeader.relocationCount; i++) {
 				vp = pointer<long>(_staticMemory + pxiFixups[i]);
@@ -343,6 +360,7 @@ public class X86_64 extends X86_64AssignTemps {
 		} else {
 			pointer<byte> generatedCode = pointer<byte>(runtime.allocateRegion(_staticMemoryLength));
 			C.memcpy(generatedCode, _staticMemory, _staticMemoryLength);
+			pointer<int> pxiFixups = pointer<int>(&generatedCode[_pxiHeader.relocationOffset]);
 			pointer<long> vp;
 			for (int i = 0; i < _pxiHeader.relocationCount; i++) {
 				vp = pointer<long>(generatedCode + pxiFixups[i]);
@@ -351,7 +369,7 @@ public class X86_64 extends X86_64AssignTemps {
 			vp = pointer<long>(generatedCode + _pxiHeader.vtablesOffset);
 			for (int i = 0; i < _pxiHeader.vtableData; i++, vp++)
 				*vp += long(address(generatedCode));
-			pointer<NativeBinding> nativeBindings = pointer<NativeBinding>(_staticMemory + _pxiHeader.nativeBindingsOffset);
+			pointer<NativeBinding> nativeBindings = pointer<NativeBinding>(generatedCode + _pxiHeader.nativeBindingsOffset);
 			for (int i = 0; i < _pxiHeader.nativeBindingsCount; i++) {
 				if (runtime.compileTarget == SectionType.X86_64_WIN) {
 					windows.HMODULE dll = windows.GetModuleHandle(nativeBindings[i].dllName);
@@ -364,6 +382,14 @@ public class X86_64 extends X86_64AssignTemps {
 						}
 					}
 					nativeBindings[i].functionAddress = windows.GetProcAddress(dll, nativeBindings[i].symbolName);
+				} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+					address handle = linux.dlopen(nativeBindings[i].dllName, linux.RTLD_LAZY);
+					if (handle == null) {
+						printf("Unable to locate shared object %s (%s)\n", nativeBindings[i].dllName, linux.dlerror());
+						assert(false);
+					} else
+						nativeBindings[i].functionAddress = linux.dlsym(handle, nativeBindings[i].symbolName);
+					linux.dlclose(handle);
 				}
 				if (nativeBindings[i].functionAddress == null) {
 					string d(nativeBindings[i].dllName);
@@ -1279,16 +1305,20 @@ public class X86_64 extends X86_64AssignTemps {
 					sethiUllman(nl.node, compileContext, this);
 				}
 				if (arguments.next == null) {
-					assignSingleReturn(retn, arguments.node, compileContext);
 					ref<FunctionDeclaration> enclosing = f().current.enclosingFunction();
 					ref<FunctionType> functionType = ref<FunctionType>(enclosing.type);
 					ref<NodeList> returnType = functionType.returnType();
-					if (returnType.next != null || 
-						returnType.node.type.returnsViaOutParameter(compileContext))
-						generateOutParameter(arguments.node, 0, compileContext);
-					else
-						generate(arguments.node, compileContext);
-					f().r.generateSpills(node, this);
+					if (returnType.next != null && containsNestedMultiReturn(arguments.node))
+						generateNestedMultiReturn(functionType, arguments.node, compileContext);
+					else {
+						assignSingleReturn(retn, arguments.node, compileContext);
+						if (returnType.next != null || 
+							returnType.node.type.returnsViaOutParameter(compileContext))
+							generateOutParameter(arguments.node, 0, compileContext);
+						else
+							generate(arguments.node, compileContext);
+						f().r.generateSpills(node, this);
+					}
 				} else {
 					int outOffset = 0;
 					for (ref<NodeList> nl = arguments; nl != null; nl = nl.next) {
@@ -2485,12 +2515,31 @@ public class X86_64 extends X86_64AssignTemps {
 		}
 	}
 
+	private static boolean containsNestedMultiReturn(ref<Node> node) {
+		if (node.op() != Operator.SEQUENCE)
+			return false;
+		ref<Binary> b = ref<Binary>(node);
+		if (b.left().op() != Operator.CALL)
+			return false;
+		return ref<Call>(b.left()).isNestedMultiReturn();		
+	}
+	
 	private void generateLiveSymbolDestructors(ref<NodeList> liveSymbols, ref<CompileContext> compileContext) {
 		while (liveSymbols != null) {
 			inst(X86.LEA, firstRegisterArgument(), liveSymbols.node, compileContext);
 			instCall(liveSymbols.node.type.scope().destructor(), compileContext);
 			liveSymbols = liveSymbols.next;
 		}
+	}
+	
+	private void generateNestedMultiReturn(ref<FunctionType> funcType, ref<Node> value, ref<CompileContext> compileContext) {
+		generate(ref<Binary>(value).left(), compileContext);
+		f().r.generateSpills(ref<Binary>(value).left(), this);
+		ref<Node> temp = ref<Binary>(value).right();
+		inst(X86.LEA, secondRegisterArgument(), temp, compileContext);
+		inst(X86.MOV, firstRegisterArgument(), R.RBP, f().outParameterOffset);
+		inst(X86.MOV, TypeFamily.SIGNED_32, thirdRegisterArgument(), funcType.returnSize(this, compileContext));
+		instCall(_memcpy, compileContext);
 	}
 	
 	private void generateOutParameter(ref<Node> value, int outOffset, ref<CompileContext> compileContext) {
@@ -2910,10 +2959,14 @@ public class X86_64 extends X86_64AssignTemps {
 					generate(call, compileContext);
 					break;
 				}
-				if (call.target() == null || call.category() == CallCategory.CONSTRUCTOR) {
-					assert(false);
-					generateCall(call, compileContext);
+				if (call.target() == null) {
+					// This can arise as a result of a comile-time error in the call, such as 'no 
+					// matching definition'.
+					// TODO: Generate the appropriate 'throw' statement.
 					break;
+				} else if (call.category() == CallCategory.CONSTRUCTOR) {
+					call.print(0);
+					assert(false);
 				}
 //				printf("not a special case\n");
 			}

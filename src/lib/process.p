@@ -20,7 +20,7 @@ import parasol:runtime;
 import parasol:storage;
 import parasol:time;
 import native:windows;
-import native:posix;
+import native:linux;
 import native:C;
 
 public string binaryFilename() {
@@ -31,7 +31,7 @@ public string binaryFilename() {
 	if (runtime.compileTarget == pxi.SectionType.X86_64_WIN)
 		length = windows.GetModuleFileName(null, &filename[0], filename.length());
 	else if (runtime.compileTarget == pxi.SectionType.X86_64_LNX)
-		length = posix.readlink("/proc/self/exe".c_str(), &filename[0], filename.length());
+		length = linux.readlink("/proc/self/exe".c_str(), &filename[0], filename.length());
 	filename.resize(length);
 	string s(filename);
 	return s;
