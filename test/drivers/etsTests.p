@@ -114,7 +114,11 @@ int main(string[] args) {
 	}
 	script.setCommandPrefix(storage.absolutePath(process.binaryFilename()) + " --test");
 	listAllTests = parasolCommand.traceArgument.value;
-	string pxiName = "debug/parasol.pxi";
+	string pxiName;
+	if (runtime.compileTarget == SectionType.X86_64_WIN)
+		pxiName = "Debug/parasol.pxi";
+	else
+		pxiName = "Debug/x86-64lnx.pxi";
 	if (parasolCommand.testPxiArgument.set())
 		pxiName = parasolCommand.testPxiArgument.value;
 	initTestObjects(process.binaryFilename() + " " + pxiName, parasolCommand.verboseArgument.value, 

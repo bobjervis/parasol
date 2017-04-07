@@ -55,6 +55,9 @@ public abstract int readdir_r(ref<DIR> dir, ref<dirent> entry, ref<ref<dirent>> 
 @Linux("libc.so.6", "readlink")
 public abstract int readlink(pointer<byte> filename, pointer<byte> buffer, int buf_len);
 
+@Linux("libc.so.6", "realpath")
+public abstract pointer<byte> realpath(pointer<byte> filename, pointer<byte> resolved_path);
+
 @Linux("libc.so.6", "sysconf")
 public abstract int sysconf(int parameter_index);
 

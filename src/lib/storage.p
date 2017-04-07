@@ -15,6 +15,11 @@
  */
 namespace parasol:storage;
 
+import parasol:runtime;
+import parasol:pxi.SectionType;
+
+import native:C;
+import native:linux;
 import native:windows.DWORD;
 import native:windows.GetFileAttributes;
 import native:windows.GetFullPathName;
@@ -27,15 +32,24 @@ public class FileSystem {
 string absolutePath(string filename) {
 	string buffer;
 	buffer.resize(256);
-	unsigned len = GetFullPathName(filename.c_str(), unsigned(buffer.length()), buffer.c_str(), null);
-	if (len == 0)
-		return string();
-	if (len >= unsigned(buffer.length())) {
-		buffer.resize(int(len));
-		GetFullPathName(filename.c_str(), unsigned(len + 1), buffer.c_str(), null);
+	
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		unsigned len = GetFullPathName(filename.c_str(), unsigned(buffer.length()), buffer.c_str(), null);
+		if (len == 0)
+			return string();
+		if (len >= unsigned(buffer.length())) {
+			buffer.resize(int(len));
+			GetFullPathName(filename.c_str(), unsigned(len + 1), buffer.c_str(), null);
+		} else
+			buffer.resize(int(len));
+		return buffer.toLower();
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		pointer<byte> f = linux.realpath(filename.c_str(), null);
+		string result = string(f);
+		C.free(f);
+		return result;
 	} else
-		buffer.resize(int(len));
-	return buffer.toLower();
+		return null;
 }
 
 public string basename(string filename) {

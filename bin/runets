@@ -1,0 +1,6 @@
+#!/bin/bash
+
+PARASOL_BIN=$(dirname `readlink -f $0`)/..
+export PARASOL_HOME=`readlink -f $PARASOL_BIN`
+
+$PARASOL_HOME/bin/parasolrt $PARASOL_HOME/Debug/x86-64lnx.pxi $PARASOL_HOME/test/drivers/etsTests.p $@
