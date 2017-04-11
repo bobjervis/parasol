@@ -182,13 +182,19 @@ public class Vector extends Atom {
 	}
 
 	public ref<Atom> get(int i) {
-		assert(false);
-		return null;
+		if (i < 0 || i >= _value.length()) {
+			assert(false);
+			return null;
+		}
+		return _value[i];
 	}
 
 	public int length() {
-		assert(false);
-		return 0;
+		return _value.length();
+	}
+	
+	public ref<ref<Atom>[]> value() {
+		return &_value;
 	}
 }
 

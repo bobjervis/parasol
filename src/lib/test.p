@@ -19,6 +19,8 @@ import parasol:file;
 import parasol:script;
 import parasol:script.Object;
 import parasol:time;
+import parasol:pxi;
+import parasol:runtime;
 
 private boolean listAllTests = false;
 
@@ -118,6 +120,7 @@ private void init() {
 	script.objectFactory("repeat", RepeatObject.factory);
 	script.objectFactory("perf", PerfObject.factory);
 */
+	script.objectFactory("conditional", ConditionalObject.factory);
 }
 
 private ref<ref<script.Atom>[]> parseOne(string arg) {
@@ -131,7 +134,9 @@ private ref<ref<script.Atom>[]> parseOne(string arg) {
 			atoms = null;
 		}
 		delete p;
-		return atoms;
+		ref<ref<script.Atom>[]> results = new ref<script.Atom>[];
+		flattenSet(results, atoms);
+		return results;
 	} else {
 		file.File f = file.openTextFile(arg);
 		if (f.opened()) {
@@ -144,3 +149,45 @@ private ref<ref<script.Atom>[]> parseOne(string arg) {
 	}
 }
 
+private void flattenSet(ref<ref<script.Atom>[]> results, ref<ref<script.Atom>[]> source) {
+	for (int i = 0; i < source.length(); i++) {
+		ref<script.Atom> atom = (*source)[i];
+		if (atom.class == ConditionalObject) {
+			ref<ConditionalObject> conditional = ref<ConditionalObject>(atom);
+			if (conditional.isEnabled()) {
+				ref<script.Atom> content = conditional.get("content");
+				if (content.class == script.Vector) {
+					ref<script.Vector> v = ref<script.Vector>(content);
+					flattenSet(results, v.value());
+				}
+			}
+		} else
+			results.append(atom);
+	}
+}
+
+class ConditionalObject extends script.Object {
+	private boolean _isEnabled;
+	
+	public static ref<script.Object> factory() {
+		return new ConditionalObject();
+	}
+
+	public boolean validate(ref<script.Parser> parser) {
+		ref<script.Atom> a = get("target");
+		if (a == null)
+			return false;
+		pxi.SectionType sectionType = pxi.sectionType(a.toString());
+		if (sectionType == null) {
+			printf("Unexpected section type name in 'target' attribute: '%s'\n", a.toString());
+			return false;
+		}
+		int enabledTarget = int(sectionType);
+		_isEnabled = enabledTarget == runtime.runningTarget();
+		return true;
+	}
+	
+	public boolean isEnabled() {
+		return _isEnabled;
+	} 
+}

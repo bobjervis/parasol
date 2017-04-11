@@ -193,9 +193,11 @@ compile(expect: fail) { "void f() { for (int i = 0; i < 5); i++) printf("hello")
 
 compile(expect: fail, message: UNDEFINED) { "class A{ X y;}" }	// Undefined member classes should not cause compiler crashes, just an error message
 
-compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows abstract void foo(); foo();" }
-compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows("a") abstract void foo(); foo();" }
-compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows("a", "b", "c") abstract void foo(); foo();" }
+conditional(target: x86-64-win) {
+	compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows abstract void foo(); foo();" }
+	compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows("a") abstract void foo(); foo();" }
+	compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows("a", "b", "c") abstract void foo(); foo();" }
+}
 
 // This tests a regression involving bad code generation and also the ordering of an in-order traversal of
 // the 'int a, b, c;' portion of the line.  The original failure involved not catching the missing parameter
