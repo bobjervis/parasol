@@ -270,7 +270,7 @@ ByteCodeMap::ByteCodeMap() {
 	int lastI = -1;
 	for (int i = 0; i < B_MAX_BYTECODE; i++)
 		if (name[i] == null) {
-			printf("ERROR: Byte codee %d has no name entry (last defined entry: %s %d)\n", i, last, lastI);
+			printf("ERROR: Byte code %d has no name entry (last defined entry: %s %d)\n", i, last, lastI);
 		} else {
 			last = name[i];
 			lastI = i;
