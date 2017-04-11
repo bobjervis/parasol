@@ -710,6 +710,7 @@ public:
 
 			case	' ':
 			case	'\t':
+			case	'\r':
 			case	'\n':
 				_cursor++;
 				break;

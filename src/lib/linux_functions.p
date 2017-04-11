@@ -105,8 +105,8 @@ public class dirent {
 }
 
 public class timespec {
-	public int tv_sec;
-	public int tv_nsec;
+	public long tv_sec;
+	public long tv_nsec;
 }
 
 @Constant

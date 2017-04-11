@@ -76,7 +76,7 @@ int launch(string[] args) {
 							printf("Failed atom:\n%s\n=============\n", a.toSource());
 					}
 				} else 
-					printf("Atom not runnable: %s\n-------------\n", a.toSource());
+					printf("Atom not runnable: '%s'\n-------------\n", a.toSource());
 			}
 		}
 		if (totalRuns == 0) {
