@@ -551,6 +551,22 @@ class Disassembler {
 			}
 			break;
 
+		case	0x2c:
+			if (_operandSize) {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			} else if (_repne) {
+				instructionOpcode("cvttsd2si");
+				disassembleGvEf(true);
+			} else if (_repe) {
+				instructionOpcode("cvttss2si");
+				disassembleGvEf(false);
+			} else {
+				printf("0x0F escape Byte: '%#x'\n", int(next));
+				assert(false);
+			}
+			break;
+
 		case	0x2d:
 			if (_operandSize) {
 				printf("0x0F escape Byte: '%#x'\n", int(next));

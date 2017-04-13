@@ -338,15 +338,18 @@ class Scanner {
 				c = getc();
 				if (c == '<') {
 					c = getc();
-					if (c == '=')
+					if (c == '=') {
+						_location = spLoc;
 						return Token.LA_EQ;
-					else if (c == '<') {
+					} else if (c == '<') {
+						_location = spLoc;
 						c = getc();
 						if (c == '=')
 							return Token.LA_LA_EQ;
 						ungetc();
 						return Token.LA_LA;
 					} else if (c == '>') {
+						_location = spLoc;
 						c = getc();
 						if (c == '=')
 							return Token.LA_RA_EQ;
@@ -358,13 +361,15 @@ class Scanner {
 					return Token.SP_LA;
 				} else if (c == '>') {
 					c = getc();
-					if (c == '=')
+					if (c == '=') {
+						_location = spLoc;
 						return Token.RA_EQ;
-					else if (c == '>') {
+					} else if (c == '>') {
+						_location = spLoc;
 						c = getc();
-						if (c == '=')
+						if (c == '=') {
 							return Token.RA_RA_EQ;
-						else if (c == '>') {
+						} else if (c == '>') {
 							c = getc();
 							if (c == '=')
 								return Token.RA_RA_RA_EQ;

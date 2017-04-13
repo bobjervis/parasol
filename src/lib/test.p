@@ -18,6 +18,7 @@ namespace parasol:test;
 import parasol:file;
 import parasol:script;
 import parasol:script.Object;
+import parasol:script.Vector;
 import parasol:time;
 import parasol:pxi;
 import parasol:runtime;
@@ -156,7 +157,7 @@ private void flattenSet(ref<ref<script.Atom>[]> results, ref<ref<script.Atom>[]>
 			ref<ConditionalObject> conditional = ref<ConditionalObject>(atom);
 			if (conditional.isEnabled()) {
 				ref<script.Atom> content = conditional.get("content");
-				if (content.class == script.Vector) {
+				if (content.class == Vector) {
 					ref<script.Vector> v = ref<script.Vector>(content);
 					flattenSet(results, v.value());
 				}

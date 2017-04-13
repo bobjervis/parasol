@@ -74,6 +74,8 @@ enum X86 {
 	CVTSI2SS,
 	CVTSS2SD,
 	CVTSS2SI,
+	CVTTSD2SI,
+	CVTTSS2SI,
 	CWD,
 	DIV,
 	DIVSD,
@@ -1705,11 +1707,27 @@ class X86_64Encoder extends Target {
 			modRM(3, rmValues[dest], rmValues[src]);
 			return;
 			
+		case	CVTTSS2SI:
+			emit(0xf3);
+			emitRex(TypeFamily.SIGNED_64, null, dest, src);
+			emit(0x0f);
+			emit(0x2c);
+			modRM(3, rmValues[dest], rmValues[src]);
+			return;
+			
 		case	CVTSD2SI:
 			emit(0xf2);
 			emitRex(TypeFamily.SIGNED_64, null, dest, src);
 			emit(0x0f);
 			emit(0x2d);
+			modRM(3, rmValues[dest], rmValues[src]);
+			return;
+			
+		case	CVTTSD2SI:
+			emit(0xf2);
+			emitRex(TypeFamily.SIGNED_64, null, dest, src);
+			emit(0x0f);
+			emit(0x2c);
 			modRM(3, rmValues[dest], rmValues[src]);
 			return;
 			

@@ -115,7 +115,7 @@ class Random {
 	 *  0 to 1.  Neither zero nor one can be returned.
 	 */
 	double uniform() {
-		return next() / 4294967296.0;
+		return next() / double(0x100000000);
 	}
 	/*
 	 * Returns a uniformly distributed 

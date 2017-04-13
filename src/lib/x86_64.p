@@ -450,13 +450,13 @@ public class X86_64 extends X86_64AssignTemps {
 					if (binding != null) {
 						ref<NodeList> args = binding.arguments();
 						if (args == null || args.next == null || args.next.next != null) {
-							binding.add(MessageId.BAD_WINDOWS_BINDING, compileContext.pool());
+							binding.add(sectionType() == SectionType.X86_64_WIN ? MessageId.BAD_WINDOWS_BINDING : MessageId.BAD_LINUX_BINDING, compileContext.pool());
 							return null, false;
 						}
 						ref<Node> dll = args.node;
 						ref<Node> symbol = args.next.node;
 						if (dll.op() != Operator.STRING || symbol.op() != Operator.STRING) {
-							binding.add(MessageId.BAD_WINDOWS_BINDING, compileContext.pool());
+							binding.add(sectionType() == SectionType.X86_64_WIN ? MessageId.BAD_WINDOWS_BINDING : MessageId.BAD_LINUX_BINDING, compileContext.pool());
 							return null, false;
 						}
 						CompileString dllName = ref<Constant>(dll).value();
@@ -2397,6 +2397,16 @@ public class X86_64 extends X86_64AssignTemps {
 				node.print(0);
 				assert(false);
 				break;
+
+			case	TYPEDEF:
+				if ((dot.nodeFlags & ADDRESS_MODE) == 0)
+					generateLoad(X86.LEA, dot, compileContext);
+				break;
+				
+			case	CLASS:
+				if ((dot.nodeFlags & ADDRESS_MODE) == 0)
+					generateLoad(X86.MOV, dot, compileContext);
+				break;
 				
 			case	FUNCTION:
 				if (generateFunctionAddress(node, compileContext))
@@ -3656,7 +3666,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	FUNCTION:
 			case	INTERFACE:
 			case	FLAGS:
-				inst(X86.CVTSS2SI, TypeFamily.FLOAT_32, result, n, compileContext);
+				inst(X86.CVTTSS2SI, TypeFamily.FLOAT_32, result, n, compileContext);
 				return;
 
 			case	FLOAT_32:
@@ -3667,7 +3677,7 @@ public class X86_64 extends X86_64AssignTemps {
 				return;
 				
 			case	ENUM:
-				inst(X86.CVTSS2SI, TypeFamily.FLOAT_32, result, n, compileContext);
+				inst(X86.CVTTSS2SI, TypeFamily.FLOAT_32, result, n, compileContext);
 				generateIntToEnum(result, n, ref<EnumInstanceType>(newType));
 				return;
 			}
@@ -3688,7 +3698,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	FUNCTION:
 			case	INTERFACE:
 			case	FLAGS:
-				inst(X86.CVTSD2SI, TypeFamily.FLOAT_64, result, n, compileContext);
+				inst(X86.CVTTSD2SI, TypeFamily.FLOAT_64, result, n, compileContext);
 				return;
 
 			case	FLOAT_32:
@@ -3699,7 +3709,7 @@ public class X86_64 extends X86_64AssignTemps {
 				return;
 				
 			case	ENUM:
-				inst(X86.CVTSD2SI, TypeFamily.FLOAT_64, result, n, compileContext);
+				inst(X86.CVTTSD2SI, TypeFamily.FLOAT_64, result, n, compileContext);
 				generateIntToEnum(result, n, ref<EnumInstanceType>(newType));
 				return;
 			}
