@@ -68,6 +68,7 @@ run(filename: stack_arg_dot.p)
 run(filename: byte_to_enum.p)
 run(filename: cond_needs_spills.p)
 run(filename: complex_subscript.p)
+run(filename: class_name_test.p)
 
 // Basic runtime execution tests
 
@@ -197,6 +198,11 @@ conditional(target: x86-64-win) {
 	compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows abstract void foo(); foo();" }
 	compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows("a") abstract void foo(); foo();" }
 	compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows("a", "b", "c") abstract void foo(); foo();" }
+}
+conditional(target: x86-64-lnx) {
+	compile(expect: fail, message: BAD_LINUX_BINDING) { "@Linux abstract void foo(); foo();" }
+	compile(expect: fail, message: BAD_LINUX_BINDING) { "@Linux("a") abstract void foo(); foo();" }
+	compile(expect: fail, message: BAD_LINUX_BINDING) { "@Linux("a", "b", "c") abstract void foo(); foo();" }
 }
 
 // This tests a regression involving bad code generation and also the ordering of an in-order traversal of

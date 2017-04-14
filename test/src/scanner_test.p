@@ -118,13 +118,27 @@ boolean scan(string filename) {
 		case ANNOTATION:
 			ti.value = string(scanner.value().asString());
 		}
+		printf("[] %s ", string(ti.token));
+		switch (ti.token){
+		case	IDENTIFIER:
+		case	INTEGER:
+		case FLOATING_POINT:
+		case CHARACTER:
+		case STRING:
+		case ANNOTATION:
+			printf("'%s' ", ti.value);
+		}
+		printf("@ %d(%d)\n", scanner.lineNumber(ti.location) + 1, ti.location.offset);
 		tokens.append(ti);
 		// TODO: The following line is hacky, hacky, hacky - should not be needed.
 		C.memset(&ti, 0, ti.bytes);
 	}
+//	dumpTokens(&tokens, scanner);
 	ref<Scanner> nscanner = Scanner.create(fs);
 	if (!scannerTestCommand.skipShuffleArgument.value)
 		shuffle(&tokens);
+//	printf("---\nAfter shuffle:\n\n");
+//	dumpTokens(&tokens, scanner);
 	for (int i = 0; i < tokens.length(); i++) {
 		nscanner.seek(tokens[i].location);
 		Token t = nscanner.next();
@@ -180,11 +194,30 @@ boolean scan(string filename) {
 	return true;
 }
 
+void dumpTokens(ref<TokenInfo[]> tokens, ref<Scanner> scanner) {
+	for (int i = 0; i < tokens.length(); i++) {
+		printf("[%4d] %s ", i, string((*tokens)[i].token));
+		switch ((*tokens)[i].token){
+		case	IDENTIFIER:
+		case	INTEGER:
+		case FLOATING_POINT:
+		case CHARACTER:
+		case STRING:
+		case ANNOTATION:
+			printf("'%s' ", (*tokens)[i].value);
+		}
+		printf("@ %d(%d)\n", scanner.lineNumber((*tokens)[i].location) + 1, (*tokens)[i].location.offset);
+	}	
+}
+
 void shuffle(ref<TokenInfo[]> tokens) {
 	for (int i = 0; i < tokens.length(); i++) {
 		int index = r.uniform(tokens.length() - i);
-		TokenInfo sv = (*tokens)[i];
-		(*tokens)[i] = (*tokens)[index];
-		(*tokens)[index] = sv;
+		printf("swap [%d:%d]\n", i, i + index);
+		if (index != 0) {
+			TokenInfo sv = (*tokens)[i];
+			(*tokens)[i] = (*tokens)[i + index];
+			(*tokens)[i + index] = sv;
+		}
 	}
 }
