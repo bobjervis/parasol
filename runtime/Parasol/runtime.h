@@ -248,14 +248,7 @@ class Exception {
 public:
 	void *vtable;
 };
-
-class ByteCodeMap {
-public:
-	ByteCodeMap();
-
-	static const char *name[B_MAX_BYTECODE];
-};
-
+#if 0
 enum VariantKind {
 	K_EMPTY,			// No value at all, equals null
 	K_INT,				// An integer value
@@ -323,8 +316,9 @@ private:
 	} _value;
 
 };
+#endif
 /*
-	Reutrns non-null function name for valid index values, null for invalid values (< 0 or > maximum function).
+	Returns non-null function name for valid index values, null for invalid values (< 0 or > maximum function).
  */
 const char *builtInFunctionName(int index);
 
@@ -335,7 +329,7 @@ WORD (*builtInFunctionAddress(int index))();
 int builtInFunctionArguments(int index);
 
 int builtInFunctionReturns(int index);
-
+#if 0
 class ByteCodeSectionHeader {
 public:
 	int entryPoint;				// Object id of the starting function to run in the image
@@ -377,6 +371,7 @@ private:
 	string collectIp(ExecutionContext *executionContext, byte *code, int ip);
 
 };
+#endif
 
 WORD (*builtInFunctionAddress(int index))();
 int evalNative(X86_64SectionHeader *header, byte *image, char **argv, int argc);

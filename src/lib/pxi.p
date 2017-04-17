@@ -43,11 +43,8 @@ import parasol:file;
  * A Parasol program can be written to ignore the underlying operating system and target the portable runtime
  * components of the language.  Parasol code could also take advantage of underlying Windows or Linux features.
  *
- * Parasol includes an interpreted byte code, but this has terrible performance and should only be used where
- * native binaries are unavailable.
- * 
  * The Parasol runtime will scan the section table and launch the first section that has the 'best' executable
- * code for the runtime.  For example, a Linux runtime on an Intel 64-bit machine could run byte codes or X86_64
+ * code for the runtime.  For example, a Linux runtime on an Intel 64-bit machine could run X86_64 Linux
  * sections.  If the runtime is passed a command-line flag that declares a specific section type to use, then
  * that will be the one run.  By default, though, the runtime would launch the X86_64 binary.
  */
@@ -233,7 +230,7 @@ class SectionEntry {
 public enum SectionType {
 	ERROR,						// 0x00 A section given this type has unknown data at the section offset
 	SOURCE,						// 0x01 the region is in POSIX IEEE P1003.1 USTar archive format.
-	BYTE_CODES,					// 0x02 Parasol byte codes
+	NOT_USED_2,					// 0x02 Parasol byte codes
 	X86_64_LNX,					// 0x03 Parasol 64-bit for Intel and AMD processors, Linux calling conventions.
 	X86_64_WIN,					// 0x04 Parasol 64-bit for Intel and AMD processors, Windows calling conventions.
 	FILLER
@@ -251,7 +248,6 @@ public string sectionTypeName(SectionType st) {
 }
 
 private SectionType[string] sectionTypes = [
-	"byteCodes": 	SectionType.BYTE_CODES,
 	"x86-64-lnx":	SectionType.X86_64_LNX,
 	"x86-64-win":	SectionType.X86_64_WIN,
 ];

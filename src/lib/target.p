@@ -15,7 +15,6 @@
  */
 namespace parasol:compiler;
 
-import parasol:byteCodes.ByteCodesTarget;
 import parasol:x86_64.X86_64Lnx;
 import parasol:x86_64.X86_64Win;
 import parasol:pxi.Pxi;
@@ -49,10 +48,6 @@ public class Target {
 		if (verbose)
 			printf("Targeting %s\n", string(selectedTarget));
 		switch (selectedTarget) {
-		case	BYTE_CODES:
-			target = new ByteCodesTarget(arena);
-			break;
-			
 		case	X86_64_LNX:
 			target = new X86_64Lnx(arena, verbose);
 			break;
@@ -61,8 +56,6 @@ public class Target {
 			target = new X86_64Win(arena, verbose);
 			break;
 		}
-		if (verbose)
-			printf("target=%p\n", target);
 		target.populateTypeMap(compileContext);
 		compileContext.target = target;
 		if (target.generateCode(mainFile, countCurrentObjects ? runtime.injectObjects(null, 0) : 0, compileContext))
