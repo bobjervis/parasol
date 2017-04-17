@@ -723,7 +723,8 @@ class FunctionType extends Type {
 	private ref<NodeList> _returnType;
 	private ref<NodeList> _parameters;
 	private ref<ParameterScope> _functionScope;
-
+	private boolean _registerArgumentsAssigned;
+	
 	FunctionType(ref<NodeList> returnType, ref<NodeList> parameters, ref<Scope> functionScope) {
 		super(TypeFamily.FUNCTION);
 		_returnType = returnType;
@@ -762,6 +763,20 @@ class FunctionType extends Type {
 		return equals(other);
 	}
 
+	public void assignRegisterArguments(ref<CompileContext> compileContext) {
+		if (_registerArgumentsAssigned)
+			return;
+		_registerArgumentsAssigned = true;
+		int hiddenParams = 0;
+		if (_functionScope != null) {
+			if (_functionScope.hasThis())
+				hiddenParams++;
+			if (_functionScope.hasOutParameter(compileContext))
+				hiddenParams++;
+		}
+		compileContext.target.assignRegisterArguments(hiddenParams, _parameters, compileContext);
+	}
+	
 	public int fixedArgsSize(ref<Target> target, ref<CompileContext> compileContext) {
 		int size = 0;
 

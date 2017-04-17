@@ -17,6 +17,8 @@ namespace parasol:text;
 
 import native:C;
 import parasol:memory;
+import parasol:pxi.SectionType;
+import parasol:runtime;
 
 public boolean ignoring;
 public address[] deletedContents;
@@ -860,7 +862,7 @@ class string {
 								buffer.resize(80);
 								if (!precisionSpecified)
 									precision = 6;
-								result = C.gcvt(value, precision, &buffer[0]);
+								C.gcvt(value, precision, &buffer[0]);
 								int resultLen = C.strlen(&buffer[0]);
 								actualLength = resultLen;
 								if (value >= 0) {

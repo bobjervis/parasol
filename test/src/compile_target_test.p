@@ -18,7 +18,7 @@ import parasol:pxi.SectionType;
 import parasol:runtime.compileTarget;
 import parasol:runtime;
 
-@Linux("libc.so", "getpgid")
+@Linux("libc.so.6", "getpgid")
 abstract int getpgid(int pid);
 
 @Windows("kernel32.dll", "GetExitCodeProcess")

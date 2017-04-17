@@ -14,6 +14,7 @@
    limitations under the License.
  */
 #include <limits.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 #include "common/process.h"

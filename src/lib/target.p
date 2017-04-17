@@ -111,6 +111,11 @@ public class Target {
 	public byte registerValue(int registerArgumentIndex, TypeFamily family) {
 		return 0;
 	}
+	/**
+	 * hiddenParams: Either 0, 1 or 2 depending on the presence of 'this' and/or an out parameter
+	 */
+	public void assignRegisterArguments(int hiddenParams, ref<NodeList> params, ref<CompileContext> compileContext) {
+	}
 	
 	public abstract void assignStorageToObject(ref<Symbol> symbol, ref<Scope> scope, int offset, ref<CompileContext> compileContext);
 

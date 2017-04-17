@@ -513,45 +513,51 @@ class X86_64Encoder extends Target {
 		// Stack will look like:
 		//
 		// 		  ... stack arguments
-		// TODO: Need to insert 32 byte register save area (for full binary compatibility)
+		// TODO: Need to insert 32 byte register save area (for full Win64 ABI compatibility - not on Linux)
 		// 		  Return Address
 		// RBP -> RBP (saved frame pointer)
 		// saved register parameters (for now, see above) as:
+		//    On Windows:
 		// 		  RCX / XMM0 (as needed)
 		// 		  RDX / XMM1 (as needed)
 		// 		  R8 / XMM2 (as needed)
 		// 		  R9 / XMM3 (as needed)
+		//    On Linux (non-floating and floating arguments can be intermixed, register are in order within each subset):
+		//		  RDI, RSI, RDX, RCX, R8, R9
+		//         XMM), XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7
 		// 		  local variables
 		//		  possible 8-byte padding to align stack on 16 byte boundary
 		//		  32-byte register save area (per Win64 ABI)
-		// 
-		int assignedFastArgs = 0;
+		//		  TODO: Remove 32-byte register save are on Linux
+		//
 		int regStackOffset = 0;
 		if (scope.hasThis()) {
-			assignedFastArgs++;
 			regStackOffset -= address.bytes;
 		}
 		if (scope.hasOutParameter(compileContext)) {
-			assignedFastArgs++;	
 			regStackOffset -= address.bytes;
 			_f.outParameterOffset = regStackOffset;
 		}
 		scope.variableStorage = 0;
-		for (int i = 0; i < scope.parameters().length(); i++) {
-			ref<Symbol> sym = (*scope.parameters())[i];
-			
-			if (sym.deferAnalysis()) {
-				sym.offset = 0;
-				continue;
-			}
-			if (sym.type().passesViaStack(compileContext) || registerValue(assignedFastArgs, TypeFamily.ADDRESS) == 0) {
-				// It's a stack argument
-				sym.offset = FIRST_STACK_PARAM_OFFSET + scope.variableStorage;
-				scope.variableStorage += sym.type().stackSize();
-			} else {
-				regStackOffset -= address.bytes;
-				sym.offset = regStackOffset;
-				assignedFastArgs++;
+		ref<FunctionType> fType = scope.type();
+		if (fType != null) {
+			fType.assignRegisterArguments(compileContext);
+			ref<NodeList> params = fType.parameters();
+			for (int i = 0; i < scope.parameters().length(); i++, params = params.next) {
+				ref<Symbol> sym = (*scope.parameters())[i];
+				
+				if (sym.deferAnalysis()) {
+					sym.offset = 0;
+					continue;
+				}
+				if (params.node.register == 0) {
+					// It's a stack argument
+					sym.offset = FIRST_STACK_PARAM_OFFSET + scope.variableStorage;
+					scope.variableStorage += sym.type().stackSize();
+				} else {
+					regStackOffset -= address.bytes;
+					sym.offset = regStackOffset;
+				}
 			}
 		}
 		_f.registerSaveSize = -regStackOffset;
@@ -3607,13 +3613,6 @@ class X86_64Encoder extends Target {
 		return !args.node.type.equals(params.node.type);
 	}
 
-	protected boolean usesStack(int i, ref<Type> t, ref<CompileContext> compileContext) {
-		if (registerValue(i, t.family()) == 0)
-			return true;
-		else
-			return t.passesViaStack(compileContext);
-	}
-	
 	void ensureCodeSegment() {
 		if (_f.emitting == null) {
 			ref<CodeSegment> cs = _storage new CodeSegment();

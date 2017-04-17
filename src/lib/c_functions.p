@@ -20,6 +20,19 @@ namespace native:C;
  */
 public class FILE {}
 
+public class va_list = address;
+/**
+ * This is the GNU CC __builtin_va_list structure used internally by GNU CC runtime to implemant va_list.
+ * 
+ * Do not venture into this without understanding...
+ */
+public class __x86_64_va_list {
+	unsigned gp_offset;
+	unsigned fp_offset;
+	ref<address> overflow_arg_area;
+	ref<address> reg_save_area;
+}
+
 public int SEEK_SET = 0;
 public int SEEK_CUR = 1;
 public int SEEK_END = 2;
@@ -96,6 +109,14 @@ public abstract address memcpy(address destination, address source, int amount);
 @Linux("libc.so.6", "memset")
 public abstract address memset(address destination, byte value, int amount);
 
+@Windows("msvcrt.dll", "sqrt")
+@Linux("libm.so.6", "sqrt")
+public abstract double sqrt(double x);
+
+@Windows("msvcrt.dll", "sleep")
+@Linux("libc.so.6", "sleep")
+public abstract int sleep(unsigned seconds);
+
 @Windows("msvcrt.dll", "strtod")
 @Linux("libc.so.6", "strtod")
 public abstract double strtod(pointer<byte> str, ref<pointer<byte>> endPtr);
@@ -108,4 +129,6 @@ public abstract int strlen(pointer<byte> cp);
 @Linux("libc.so.6", "time")
 public abstract int time(ref<int> t);
 
-
+//@Windows("msvcrt.dll", "vsprintf") - not yet implemented on Windows, Linux is pretty hacky, so beware
+@Linux("libc.so.6", "vsprintf")
+public abstract int vsprintf(pointer<byte> buffer, pointer<byte> format, va_list ap);

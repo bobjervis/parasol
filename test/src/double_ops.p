@@ -14,6 +14,7 @@
    limitations under the License.
  */
 int main(string[] args) {
+	printf("Test of double operations.\n");
 	double a = 1;
 	double b = 0;
 	double c = 35;
@@ -84,7 +85,6 @@ int main(string[] args) {
 	assert((d /= 3) == 5);
 
 	d = 17;
-	printf("-d = %g double(-17) = %g\n", -d, double(-17));
 	assert(+d == 17);
 	assert(-d == -17);
 	assert(++d == 18);

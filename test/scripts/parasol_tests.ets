@@ -1,9 +1,21 @@
+// Platform specific tests
+conditional(target: x86-64-win) {
+    run(filename: win_ui_test.p)
+	compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows abstract void foo(); foo();" }
+	compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows("a") abstract void foo(); foo();" }
+	compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows("a", "b", "c") abstract void foo(); foo();" }
+}
+conditional(target: x86-64-lnx) {
+	compile(expect: fail, message: BAD_LINUX_BINDING) { "@Linux abstract void foo(); foo();" }
+	compile(expect: fail, message: BAD_LINUX_BINDING) { "@Linux("a") abstract void foo(); foo();" }
+	compile(expect: fail, message: BAD_LINUX_BINDING) { "@Linux("a", "b", "c") abstract void foo(); foo();" }
+}
 // Advanced library executions tests
 
 run(filename: compile_target_test.p)
 //run(filename: httpd_test.p)
+run(filename: math_test_1.p)
 run(filename: threadpool_test.p)
-run(filename: win_ui_test.p)
 run(filename: monitor_test_1.p)
 run(filename: monitor_test_2.p)
 run(filename: monitor_test_3.p)
@@ -193,17 +205,6 @@ compile(expect: fail, message: DUPLICATE) { "class Foo { private int f(int y) { 
 compile(expect: fail) { "void f() { for (int i = 0; i < 5); i++) printf("hello"); }" }
 
 compile(expect: fail, message: UNDEFINED) { "class A{ X y;}" }	// Undefined member classes should not cause compiler crashes, just an error message
-
-conditional(target: x86-64-win) {
-	compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows abstract void foo(); foo();" }
-	compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows("a") abstract void foo(); foo();" }
-	compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows("a", "b", "c") abstract void foo(); foo();" }
-}
-conditional(target: x86-64-lnx) {
-	compile(expect: fail, message: BAD_LINUX_BINDING) { "@Linux abstract void foo(); foo();" }
-	compile(expect: fail, message: BAD_LINUX_BINDING) { "@Linux("a") abstract void foo(); foo();" }
-	compile(expect: fail, message: BAD_LINUX_BINDING) { "@Linux("a", "b", "c") abstract void foo(); foo();" }
-}
 
 // This tests a regression involving bad code generation and also the ordering of an in-order traversal of
 // the 'int a, b, c;' portion of the line.  The original failure involved not catching the missing parameter

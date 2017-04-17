@@ -119,6 +119,33 @@ public class X86_64Lnx extends X86_64 {
 		return 0;
 	}
 
+	public void assignRegisterArguments(int hiddenParams, ref<NodeList> params, ref<CompileContext> compileContext) {
+		int registerArgumentIndex = hiddenParams;
+		int floatRegisterArgumentIndex = 0;
+		for (; params != null; params = params.next) {
+			if (params.node.type.passesViaStack(compileContext))
+				continue;
+			
+			byte nextReg;
+			switch (params.node.type.family()) {
+			case	FLOAT_32:
+			case	FLOAT_64:
+				nextReg = registerValue(floatRegisterArgumentIndex, params.node.type.family());
+				if (nextReg > 0)
+					floatRegisterArgumentIndex++;
+				break;
+				
+			default:
+				nextReg = registerValue(registerArgumentIndex, params.node.type.family());
+				if (nextReg > 0)
+					registerArgumentIndex++;
+			}
+			
+			if (nextReg > 0)
+				params.node.register = nextReg;
+		}
+	}
+
 	public R firstRegisterArgument() {
 		return R.RDI;
 	}
@@ -140,7 +167,7 @@ public class X86_64Lnx extends X86_64 {
 	}
 	
 	public long longMask() {
-		return RAXmask|RCXmask|RDXmask|R8mask|R9mask|RSImask|RDImask|R10mask|R11mask;			// RBP and RSP are reserved
+		return RAXmask|RCXmask|RDXmask|R8mask|R9mask|RSImask|RDImask|R10mask|R11mask;			// RBX, R12, R13, R14, R15, RBP and RSP are reserved
 	}
 	
 	public SectionType sectionType() {
@@ -179,6 +206,18 @@ public class X86_64Win extends X86_64 {
 		}
 		else
 			return 0;
+	}
+
+	public void assignRegisterArguments(int hiddenParams, ref<NodeList> params, ref<CompileContext> compileContext) {
+		int registerArgumentIndex = hiddenParams;
+		for (; params != null; params = params.next) {
+			byte nextReg = registerValue(registerArgumentIndex, params.node.type.family());
+			
+			if (nextReg > 0 && !params.node.type.passesViaStack(compileContext)) {
+				params.node.register = nextReg;
+				registerArgumentIndex++;
+			}
+		}
 	}
 
 	public R firstRegisterArgument() {
@@ -632,21 +671,15 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			if (parameterScope.hasOutParameter(compileContext)) {
 				inst(X86.PUSH, TypeFamily.SIGNED_64, R(registerValue(registerArgs, TypeFamily.ADDRESS)));
-				registerArgs++;
 			}
-			for (int i = 0; i < parameterScope.parameters().length(); i++) {
-				ref<Symbol> sym = (*parameterScope.parameters())[i];
-				
-				if (sym.deferAnalysis())
-					continue;
-				byte value = registerValue(registerArgs, sym.type().family());
-				if (value > 0 && !sym.type().passesViaStack(compileContext)) {
-					if (sym.type().isFloat()) {
+			for (ref<NodeList> params = parameterScope.type().parameters(); params != null; params = params.next) {
+				byte value = params.node.register;
+				if (value > 0) {
+					if (params.node.type.isFloat()) {
 						inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, 8);
 						inst(X86.MOVSD, TypeFamily.SIGNED_64, R.RSP, 0, R(value));
 					} else
 						inst(X86.PUSH, TypeFamily.SIGNED_64, R(value));
-					registerArgs++;
 				}
 			}
 			reserveAutoMemory(false, compileContext);
@@ -1066,7 +1099,10 @@ public class X86_64 extends X86_64AssignTemps {
 			expression = ref<Unary>(node);
 			generate(expression.operand(), compileContext);
 			f().r.generateSpills(expression, this);
-			inst(X86.XOR, TypeFamily.BOOLEAN, R(int(node.register)), 1);
+			if ((getRegMask(R(node.register)) & byteMask) != 0)
+				inst(X86.XOR, TypeFamily.BOOLEAN, R(int(node.register)), 1);
+			else
+				inst(X86.XOR, TypeFamily.SIGNED_16, R(int(node.register)), 1);
 			break;
 			
 		case	LOGICAL_OR:
@@ -1512,6 +1548,8 @@ public class X86_64 extends X86_64AssignTemps {
 				case	SIGNED_64:
 				case	FLAGS:
 					inst(X86.AND, impl(b.type), b.left(), b.right(), compileContext);
+					if (b.op() == Operator.AND && b.register != b.left().register)
+						inst(X86.MOV, b.type.family(), b, b.left(), compileContext);
 					break;
 					
 				default:
@@ -1555,6 +1593,8 @@ public class X86_64 extends X86_64AssignTemps {
 				case	SIGNED_64:
 				case	FLAGS:
 					inst(X86.OR, impl(b.type), b.left(), b.right(), compileContext);
+					if (b.op() == Operator.OR && b.register != b.left().register)
+						inst(X86.MOV, b.type.family(), b, b.left(), compileContext);
 					break;
 					
 				default:
@@ -1599,6 +1639,8 @@ public class X86_64 extends X86_64AssignTemps {
 				case	SIGNED_64:
 				case	FLAGS:
 					inst(X86.XOR, impl(b.type), b.left(), b.right(), compileContext);
+					if (b.op() == Operator.EXCLUSIVE_OR && b.register != b.left().register)
+						inst(X86.MOV, b.type.family(), b, b.left(), compileContext);
 					break;
 					
 				default:
@@ -1615,9 +1657,9 @@ public class X86_64 extends X86_64AssignTemps {
 				case	SIGNED_32:
 				case	SIGNED_64:
 				case	FLAGS:
-					inst(X86.MOV, R(int(b.register)), b.left(), compileContext);
+					inst(X86.MOV, R(b.register), b.left(), compileContext);
 					inst(X86.XOR, impl(b.type), b, b.right(), compileContext);
-					inst(X86.MOV, b.left(), R(int(b.register)), compileContext);
+					inst(X86.MOV, b.left(), R(b.register), compileContext);
 					break;
 					
 				default:
@@ -1786,7 +1828,9 @@ public class X86_64 extends X86_64AssignTemps {
 			switch (b.type.family()) {
 			case	SIGNED_32:
 			case	SIGNED_64:
-				inst(X86.IMUL, R(int(b.left().register)), b.right(), compileContext);
+				inst(X86.IMUL, R(b.left().register), b.right(), compileContext);
+				if (b.register != b.left().register)
+					inst(X86.MOV, b.type.family(), b, b.left(), compileContext);
 				break;
 				
 			case	UNSIGNED_8:
@@ -1869,6 +1913,8 @@ public class X86_64 extends X86_64AssignTemps {
 					inst(X86.SUB, b.type.family(), b, b.right(), compileContext);
 					inst(X86.MOV, b.type.family(), b.left(), b, compileContext);
 				}
+				if (b.op() == Operator.SUBTRACT && b.register != b.left().register)
+					inst(X86.MOV, b.type.family(), b, b.left(), compileContext);
 				break;
 				
 			case	ADDRESS:
@@ -1927,6 +1973,8 @@ public class X86_64 extends X86_64AssignTemps {
 					inst(X86.ADD, b.type.family(), b, b.right(), compileContext);
 					inst(X86.MOV, b.type.family(), b.left(), b, compileContext);
 				}
+				if (b.op() == Operator.ADD && b.register != b.left().register)
+					inst(X86.MOV, b.type.family(), b, b.left(), compileContext);
 				break;
 				
 			case	FLOAT_32:
@@ -3082,7 +3130,7 @@ public class X86_64 extends X86_64AssignTemps {
 		for (ref<NodeList> args = call.stackArguments(); args != null; args = args.next) {
 			generate(args.node, compileContext);
 			if (args.node.op() == Operator.VACATE_ARGUMENT_REGISTERS) {
-				int depth = f().r.stackDepth();
+				int depth = f().r.bytesPushed();
 				int stackAlignment = (stackPushes + cleanup + depth) & 15;
 				// Th only viable stack alignment value has to be 8, anything else is a compiler bug.
 				if (stackAlignment != 0) {

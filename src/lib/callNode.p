@@ -265,9 +265,8 @@ class Call extends ParameterBag {
 				outParameter = tree.newUnary(Operator.ADDRESS, outParameter, outParameter.location());
 				outParameter.register = compileContext.target.registerValue(registerArgumentIndex, TypeFamily.ADDRESS);
 				outParameter.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
-				registerArgumentIndex++;
 			}
-			int floatingArgumentIndex = 0;
+			
 			if (_arguments != null) {
 				
 				// The goal of this patch of code is to deal with the possibility of needing to call a destructor.
@@ -305,6 +304,7 @@ class Call extends ParameterBag {
 				if (functionType == null) {
 					print(0);
 				}
+				functionType.assignRegisterArguments(compileContext);
 				ref<NodeList> params = functionType.parameters();
 				
 				ref<NodeList> registerArguments;
@@ -340,18 +340,16 @@ class Call extends ParameterBag {
 						break;
 					}
 					argsNext = args.next;
-					byte nextReg = compileContext.target.registerValue(registerArgumentIndex, args.node.type.family());
 					
 					// Thread each argument onto the appropriate list: stack or register
-					if (nextReg == 0 || args.node.type.passesViaStack(compileContext)) {
+					if (params.node.register == 0) {
 						ref<Type> t = args.node.type;
 						args.node = tree.newUnary(Operator.STACK_ARGUMENT, args.node, args.node.location());
 						args.node.type = t;
 						args.next = _stackArguments;
 						_stackArguments = args;
 					} else {
-						args.node.register = nextReg;
-						registerArgumentIndex++;
+						args.node.register = params.node.register;
 						if (lastRegisterArgument != null)
 							lastRegisterArgument.next = args;
 						else

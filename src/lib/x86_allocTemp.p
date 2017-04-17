@@ -149,6 +149,11 @@ class RegisterState {
 	 * all of them.
 	 */
 	void cleanupTemps(ref<Node> node, int stackDepth) {
+		if (_spills != null && _spills.prev != null) {
+			printf("    ** spills list is corrupted **\n");
+			print();
+			assert(false);
+		}
 		cleanupOperands(node, stackDepth);
 
 		// Now free up the spare registers.
@@ -212,12 +217,12 @@ class RegisterState {
 		// clean it up.
 
 		else if	(tempCount == 1) {
-			tm.currentReg = cleanupTemp(node, tm);
+			tm.currentReg = cleanupTemp(node, tm, stackDepth);
 			return;
 		}
 
 			/* If not all the temps are on the stack, we have to do some tricks to ensure that
-			 * complicated situations don't get the wrong answer.  Note: the situation may not be taht
+			 * complicated situations don't get the wrong answer.  Note: the situation may not be that
 			 * bad, but these checks ensure that the messy situations are corrected before we do the
 			 * simple stuff.
 			 */
@@ -240,7 +245,8 @@ class RegisterState {
 						continue;
 					if	(!fits(tm.currentReg, tm.desired) &&
 						 !overlaps(tm.desired, _tempRegisters)){
-						tm.currentReg = cleanupTemp(node, tm);
+						// If the temp is not in the desired register and the desired register(s) are not in use, a MOVE should fix it up.
+						tm.currentReg = cleanupTemp(node, tm, stackDepth);
 						if (tm.currentReg == R.NO_REG) {
 							printf("After cleanupTemp got a R.NO_REG\n");
 							print();
@@ -298,29 +304,50 @@ class RegisterState {
 
 		for (int i = _t.stackDepth() - 1; i >= stackDepth; i--) {
 			tm = _t.getTemp(i);
-			tm.currentReg = cleanupTemp(node, tm);
+			tm.currentReg = cleanupTemp(node, tm, stackDepth);
 		}
 	}
 	/*
 	 * This method 'cleans up' a temporary.  If it is on the stack or otherwise not in the correct
 	 * register, get it into a satisfactory register.
 	 */
-	R cleanupTemp(ref<Node> node, ref<Temporary> tm) {
+	R cleanupTemp(ref<Node> node, ref<Temporary> tm, int stackDepth) {
 		long rx;
 		R r, rnew;
 
 			/* The temp may be on the stack */
 
 		if	(tm.currentReg == R.NO_REG){
-			rx = tm.desired;
-			if	((rx & _freeRegisters) != 0)
-				r = getreg(node, rx, rx);
-			else {
+			if	(overlaps(tm.desired, _freeRegisters)) {
+				r = getreg(node, tm.desired, tm.desired);
+				makeSpill(SpillKinds.POP, node, r, tm.node, null);
+				consumeRegs(getRegMask(r));
+				return r;
+			}
+			if (!overlaps(tm.desired, _tempRegisters)) {
 				print();
 				assert(false);
 			}
-			makeSpill(SpillKinds.POP, node, r, tm.node, null);
-			consumeRegs(getRegMask(r));
+			
+			/*
+			 *  The temp is on the stack and wants to be in a register that is in use elsewhere.
+			 *  Find an 'elsewhere' that can work.
+			 */
+			
+			for (int i = stackDepth; i < _t.stackDepth(); i++) {
+				ref<Temporary> otherTm = _t.getTemp(i);
+				if (otherTm == tm)
+					continue;
+				if (otherTm.currentReg != R.NO_REG && fits(otherTm.currentReg, tm.desired) && overlaps(_freeRegisters, otherTm.desired)) {
+					// Ok, we have a temp that can be moved to another register.
+					r = getreg(node, otherTm.desired, otherTm.desired);
+					makeSpill(SpillKinds.POP, node, r, tm.node, null);
+					rnew = otherTm.currentReg;
+					makeSpill(SpillKinds.XCHG, node, rnew,
+							tm.node, otherTm.node);
+					return rnew;
+				}
+			}
 		}
 
 			/* Check for the possibility that the temp
@@ -351,7 +378,7 @@ class RegisterState {
 	/**
 	 * @return The bytes of stack depth consumed by temps on the stack.
 	 */
-	int stackDepth() {
+	int bytesPushed() {
 		int depth;
 		if (_spills != null) {
 			for (ref<Spill> s = _spills; s != null; s = s.next) {
@@ -458,7 +485,8 @@ class RegisterState {
 			if (_spills == null) {
 				_lastSpill = null;
 				return;
-			}
+			} else
+				_spills.prev = null;
 		}
 	}
 	
@@ -517,6 +545,11 @@ class RegisterState {
 	}
 
 	void spillOldest(ref<Node> tree) {
+		if (_spills != null && _spills.prev != null) {
+			printf("    ** spills list is corrupted **\n");
+			print();
+			assert(false);
+		}
 		if (_oldestUnspilled < _t.stackDepth()) {
 			ref<Temporary> tm = _t.getTemp(_oldestUnspilled);
 			makeSpill(SpillKinds.PUSH, tree, R.NO_REG, tm.node, null);
@@ -601,6 +634,9 @@ class RegisterState {
 		_t.print(_tempBase, _oldestUnspilled);
 		if (_spills != null) {
 			printf("Spills:\n");
+			if (_spills != null && _spills.prev != null) {
+				printf("    ** spills list is corrupted **\n");
+			}
 			for (ref<Spill> s = _spills; s != null; s = s.next)
 				s.print();
 		}
@@ -691,6 +727,10 @@ class Spill {
 	
 	public void print() {
 		printf("    %p: spill %s w %d reg %s where %p\n", this, string(spillKind), int(width), string(newRegister), where);
+		if (next != null && next.prev != this)
+			printf("        next->X does not point back properly\n");
+		if (prev != null && prev.next != this)
+			printf("        X<-prev does not point forward properly\n");
 		affected.print(8);
 	}
 }

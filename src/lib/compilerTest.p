@@ -646,8 +646,10 @@ class RunObject extends script.Object {
 			_checkOutput = true;
 			string output = a.toString();
 			for (int i = 0; i < output.length(); i++) {
-				if (output[i] == '\n')
-					_output.append('\r');
+				if (runtime.compileTarget == SectionType.X86_64_WIN) {
+					if (output[i] == '\n')
+						_output.append('\r');
+				}
 				_output.append(output[i]);
 			}
 		} else
@@ -673,11 +675,13 @@ class RunObject extends script.Object {
 			command.append(" ");
 			command.append(_arguments);
 		}
-		string output;
-		process.exception_t exception;
 		time.Time timeout(_timeout);
 
-		int result = process.debugSpawn(command, &output, &exception, timeout);
+		int result;
+		string output;
+		process.exception_t exception;
+		
+		(result, output, exception) = process.spawn(command, timeout);
 		Expect outcome;
 		if (result < 0)
 			outcome = Expect.FAIL;

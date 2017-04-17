@@ -15,44 +15,68 @@
  */
 namespace parasol:math;
 
-int abs(int x) {
+import native:C;
+
+public int abs(int x) {
 	if (x < 0)
 		return -x;
 	else
 		return x;
 }
 
-long abs(long x) {
+public long abs(long x) {
 	if (x < 0)
 		return -x;
 	else
 		return x;
 }
 
-float abs(float x) {
+public float abs(float x) {
 	if (x < 0)
 		return -x;
 	else
 		return x;
 }
 
-double abs(double x) {
+public double abs(double x) {
 	if (x < 0)
 		return -x;
 	else
 		return x;
 }
 
-int min(int x, int y) {
+public int min(int x, int y) {
 	if (x < y)
 		return x;
 	else
 		return y;
 }
 
-int max(int x, int y) {
+public long min(long x, long y) {
+	if (x < y)
+		return x;
+	else
+		return y;
+}
+
+public int max(int x, int y) {
 	if (x < y)
 		return y;
 	else
 		return x;
+}
+
+public long max(long x, long y) {
+	if (x < y)
+		return y;
+	else
+		return x;
+}
+
+public float sqrt(float x) {
+	return float(C.sqrt(x));
+}
+
+public double sqrt(double x) {
+	return C.sqrt(x);
 }
