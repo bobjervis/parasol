@@ -432,13 +432,16 @@ void hardwareExceptionHandler(ref<HardwareException> info) {
 				throw AccessException(context);
 		} else if (info.exceptionType == int(0xc0000094))
 			throw DivideByZeroException(context);
-	} else {
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
 		switch (info.exceptionType) {
 		case 0xb01:						// SIGSEGV + SEGV_MAPERR
 			if (context.memoryAddress == null)
 				throw NullPointerException(context);
 			else
-				throw AccessException(context);			
+				throw AccessException(context);	
+			
+		case 0x801:						// SIGTRAP + FPE_INTDIV;
+			throw DivideByZeroException(context);
 		}
 	}
 	printf("exception %x at %p\n", info.exceptionType, info.codePointer);

@@ -283,29 +283,6 @@ public class X86_64 extends X86_64AssignTemps {
 	public X86_64(ref<Arena> arena, boolean verbose) {
 		_arena = arena;
 		_verbose = verbose;
-		familyMasks.resize(TypeFamily.MAX_TYPES);
-		familyMasks[TypeFamily.SIGNED_8] = byteMask;
-		familyMasks[TypeFamily.SIGNED_16] = longMask();
-		familyMasks[TypeFamily.SIGNED_32] = longMask();
-		familyMasks[TypeFamily.SIGNED_64] = longMask();
-		familyMasks[TypeFamily.UNSIGNED_8] = byteMask;
-		familyMasks[TypeFamily.UNSIGNED_16] = longMask();
-		familyMasks[TypeFamily.UNSIGNED_32] = longMask();
-		familyMasks[TypeFamily.UNSIGNED_64] = longMask();
-		familyMasks[TypeFamily.ADDRESS] = longMask();
-		familyMasks[TypeFamily.CLASS_VARIABLE] = longMask();
-		familyMasks[TypeFamily.REF] = longMask();
-		familyMasks[TypeFamily.POINTER] = longMask();
-		familyMasks[TypeFamily.TYPEDEF] = longMask();
-		familyMasks[TypeFamily.CLASS] = longMask();
-		familyMasks[TypeFamily.BOOLEAN] = byteMask;
-		familyMasks[TypeFamily.FUNCTION] = longMask();
-		familyMasks[TypeFamily.STRING] = longMask();
-		familyMasks[TypeFamily.ENUM] = longMask();
-		familyMasks[TypeFamily.FLAGS] = longMask();
-		familyMasks[TypeFamily.INTERFACE] = longMask();
-		familyMasks[TypeFamily.FLOAT_32] = floatMask;
-		familyMasks[TypeFamily.FLOAT_64] = floatMask;
 	}
 
 	public boolean verbose() {

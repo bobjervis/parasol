@@ -1006,6 +1006,23 @@ class X86_64Encoder extends Target {
 			R dest = R(left.register);
 			if (right.register != 0) {
 				R src = R(right.register);
+				if (family == TypeFamily.FLAGS) {
+					assert(left.type.family() == TypeFamily.FLAGS);
+					switch (left.type.size()) {
+					case 1:
+					case 2:
+						family = TypeFamily.SIGNED_16;
+						break;
+						
+					case 4:
+						family = TypeFamily.SIGNED_32;
+						break;
+						
+					case 8:
+						family = TypeFamily.SIGNED_64;
+						break;
+					}
+				}
 				inst(instruction, family, dest, src);
 			} else if (right.op() == Operator.INTEGER) {
 				switch (right.type.family()) {

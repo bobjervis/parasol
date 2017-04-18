@@ -78,8 +78,6 @@ long xmm5mask = getRegMask(R.XMM5);
 long floatMask = xmm0mask|xmm1mask|xmm2mask|xmm3mask|xmm4mask|xmm5mask;
 long byteMask = RAXmask|RCXmask|RDXmask|R8mask|R9mask|R10mask|R11mask|AHmask;
 
-long[TypeFamily] familyMasks;
-
 /*
  * TempStack represents the state of temporary register allocation at any given moment.
  * The array can grow arbitrarily deep, because functions may be generated recursively
@@ -435,6 +433,23 @@ class RegisterState {
 				case	CLASS:
 				case	BOOLEAN:
 					target.inst(X86.MOV, _spills.affected.type.family(), _spills.newRegister, R(int(_spills.affected.register)));
+					break;
+					
+				case FLAGS:
+					switch (_spills.affected.type.size()) {
+					case 1:
+					case 2:
+						target.inst(X86.MOV, TypeFamily.SIGNED_16, _spills.newRegister, R(int(_spills.affected.register)));
+						break;
+						
+					case 4:
+						target.inst(X86.MOV, TypeFamily.SIGNED_32, _spills.newRegister, R(int(_spills.affected.register)));
+						break;
+						
+					case 8:
+						target.inst(X86.MOV, TypeFamily.SIGNED_64, _spills.newRegister, R(int(_spills.affected.register)));
+						break;
+					}
 					break;
 					
 				case	FLOAT_32:

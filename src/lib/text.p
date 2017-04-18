@@ -807,7 +807,7 @@ class string {
 								append('.');
 								append(result + 1, precision);
 								append(format[i]);
-								printf("%+3.3d", decimalPoint);
+								printf("%+2.2d", decimalPoint);
 								while (actualLength < width) {
 									append(' ');
 									width--;
@@ -863,6 +863,14 @@ class string {
 								if (!precisionSpecified)
 									precision = 6;
 								C.gcvt(value, precision, &buffer[0]);
+								for (pointer<byte> b = &buffer[0]; *b != 0; b++) {
+									if (*b == 'e') {
+										if (format[i] == 'G')
+											*b = 'E';
+										// TODO: Add code to strip any out-of-compliance leading zeroes
+										break;
+									}
+								}
 								int resultLen = C.strlen(&buffer[0]);
 								actualLength = resultLen;
 								if (value >= 0) {

@@ -26,7 +26,7 @@ se.printf("%12.2e", 12.5432);
 
 printf("se='%s'\n", se);
 
-assert(se == "   1.25e+002");
+assert(se == "   1.25e+02");
 
 string sg;
 
@@ -42,4 +42,12 @@ sgBig.printf("%g", 1683490358.535);
 
 printf("sgBig='%s'\n", sgBig);
 
-assert(sgBig == "1.68349e+009");
+assert(sgBig == "1.68349e+09");
+
+string sgBigG;
+
+sgBigG.printf("%G", 1683490358.535);
+
+printf("sgBigG='%s'\n", sgBigG);
+
+assert(sgBigG == "1.68349E+09");
