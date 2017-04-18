@@ -590,6 +590,8 @@ class ParameterScope extends Scope {
 		
 		if (func == null)		// a generated default constructor has no 'definition'
 			return true;		// but it does have 'this'
+		if (func.op() == Operator.UNIT)
+			return false;
 		if (func.name() != null && func.name().symbol() != null)
 			return func.name().symbol().storageClass() == StorageClass.MEMBER;
 		else

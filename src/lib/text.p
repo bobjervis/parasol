@@ -867,7 +867,21 @@ class string {
 									if (*b == 'e') {
 										if (format[i] == 'G')
 											*b = 'E';
-										// TODO: Add code to strip any out-of-compliance leading zeroes
+										if (b[1] == '0') {
+											b++;
+											pointer<byte> bnext = b;
+											
+											do {
+												// OK, we have a leading zero, it might not be valid.
+												if (bnext[1] == 0 || bnext[2] == 0) {
+													break;
+												}
+												bnext++;
+											} while (*bnext == '0');
+											if (bnext > b) {
+												C.strcpy(b, bnext);
+											}
+										}
 										break;
 									}
 								}

@@ -117,6 +117,10 @@ public abstract double sqrt(double x);
 @Linux("libc.so.6", "sleep")
 public abstract int sleep(unsigned seconds);
 
+@Windows("msvcrt.dll", "strcpy")
+@Linux("libc.so.6", "strcpy")
+public abstract double strcpy(pointer<byte> dest, pointer<byte> src);
+
 @Windows("msvcrt.dll", "strtod")
 @Linux("libc.so.6", "strtod")
 public abstract double strtod(pointer<byte> str, ref<pointer<byte>> endPtr);
