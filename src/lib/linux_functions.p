@@ -108,6 +108,9 @@ public abstract int pthread_mutex_lock(ref<pthread_mutex_t> mutex);
 @Linux("libpthread.so.0", "pthread_mutex_unlock")
 public abstract int pthread_mutex_unlock(ref<pthread_mutex_t> mutex);
 
+@Linux("libpthread.so.0", "pthread_mutexattr_settype")
+public abstract int pthread_mutexattr_settype(ref<pthread_mutexattr_t> attr, int type);
+
 @Linux("libpthread.so.0", "pthread_self")
 public abstract pthread_t pthread_self();
 
@@ -498,6 +501,15 @@ public boolean WIFCONTINUED(int status) {
 @Constant
 private int __W_CONTINUED = 0xffff;
 //#define	__WCOREFLAG		0x80
+
+@Constant
+public int PTHREAD_MUTEX_NORMAL = 0;
+@Constant
+public int PTHREAD_MUTEX_RECURSIVE = 1;
+@Constant
+public int PTHREAD_MUTEX_ERRORCHECK = 2;
+@Constant
+public int PTHREAD_MUTEX_DEFAULT = 0;
 
 public class dirent {
     public long d_ino;

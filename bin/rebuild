@@ -13,5 +13,5 @@ $PARASOL_HOME/bin/pc src/util/bdiff.p p1.pxi p2.pxi
 $PARASOL_HOME/bin/parasolrt p2.pxi test/drivers/etsTests.p $@ --testpxi=p2.pxi test/scripts/parasol_tests.ets
 cp $PARASOL_PXI ${PARASOL_PXI}.save
 cp p1.pxi $PARASOL_PXI
-$PARASOL_HOME/bin/parasolrt $PARASOL_PXI compiler/main.p --pxi=debug/x86-64-win.pxi --target=x86-64-win compiler/main.p
+$PARASOL_HOME/bin/parasolrt $PARASOL_PXI compiler/main.p --pxi=Debug/x86-64-win.pxi --target=x86-64-win compiler/main.p
 echo SUCCESS

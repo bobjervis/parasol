@@ -82,6 +82,8 @@ public class Pxi {
 	
 	public boolean write() {
 		file.File f = file.createBinaryFile(_filename);
+		if (!f.opened())
+			return false;
 		PxiHeader header;
 		header.sections = char(_sections.length());
 		f.write(&header, header.bytes);

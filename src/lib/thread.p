@@ -311,7 +311,9 @@ class Mutex {
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 			_mutex = HANDLE(CreateMutex(null, 0, null));
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
-			linux.pthread_mutex_init(&_linuxMutex, null);
+			linux.pthread_mutexattr_t attr;
+			linux.pthread_mutexattr_settype(&attr, linux.PTHREAD_MUTEX_RECURSIVE);
+			linux.pthread_mutex_init(&_linuxMutex, &attr);
 		}
 	}
 	
