@@ -867,20 +867,15 @@ class string {
 									if (*b == 'e') {
 										if (format[i] == 'G')
 											*b = 'E';
-										if (b[1] == '0') {
-											b++;
-											pointer<byte> bnext = b;
+										b += 2; // skip the sign
+										if (*b == '0' && b[1] != 0 && b[2] != 0) {
+											pointer<byte> bnext = b + 1;
 											
-											do {
-												// OK, we have a leading zero, it might not be valid.
-												if (bnext[1] == 0 || bnext[2] == 0) {
-													break;
-												}
+											while (*bnext == '0')
 												bnext++;
-											} while (*bnext == '0');
-											if (bnext > b) {
-												C.strcpy(b, bnext);
-											}
+											if (bnext[1] == 0)
+												b++;
+											C.strcpy(b, bnext);
 										}
 										break;
 									}
