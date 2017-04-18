@@ -421,6 +421,8 @@ class X86_64Encoder extends Target {
 				break;
 				
 			default:
+				printf("f = %p\n", f);
+				text.memDump(f, Fixup.bytes);
 				f.print();
 				assert(false);
 			}
@@ -728,6 +730,9 @@ class X86_64Encoder extends Target {
 		}
 		_dataMap[alignment].append(symbol);
 		symbol.offset = _staticDataSize[alignment];
+		int partial = size & (alignment - 1);
+		if (partial != 0)
+			size += alignment - partial;
 		_staticDataSize[alignment] += size;
 	}
 

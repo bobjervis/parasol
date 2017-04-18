@@ -1561,6 +1561,8 @@ class Scope {
 			visitAll(target, offset, compileContext);
 //			printf("After assignStorage:\n");
 //			print(0, false);
+			int alignment = maximumAlignment();
+			variableStorage = (variableStorage + alignment - 1) & ~(alignment - 1);
 		}
 	}
 

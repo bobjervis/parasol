@@ -83,7 +83,7 @@ abstract address allocz(long size);
 import parasol:memory;
 
 // Note: compiler code requires that this definition of 'vector' appears first. TODO: Remove this dependency.
-class vector<class E> extends vector<E, int>{
+class vector<class E> extends vector<E, int> {
 	public vector() {
 	}
 	

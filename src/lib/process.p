@@ -47,6 +47,7 @@ public enum exception_t {
 	TIMEOUT,							// debugSpawn exceeded specified timeout
 	TOO_MANY_EXCEPTIONS,				// too many exceptions raised by child process
 	ACCESS_VIOLATION,					// hardware memory access violation
+	UNKNOWN_PLATFORM,					// The running runtime is not recognized where custom code is needed.
 	UNKNOWN_EXCEPTION					// A system or application exception not known to the
 										// runtime
 }
@@ -149,14 +150,21 @@ public int, string, exception_t spawn(string command, time.Time timeout) {
 			linux.close(pipefd[0]);
 			if (timer.timedOut)
 				return -1, d.output, exception_t.TIMEOUT;
-			if (linux.WIFEXITED(exitStatus))
+			else if (linux.WIFEXITED(exitStatus))
 				return linux.WEXITSTATUS(exitStatus), d.output, exception_t.NO_EXCEPTION;
-			else
-				return linux.WTERMSIG(exitStatus), d.output, exception_t.UNKNOWN_EXCEPTION;
+			else {
+				int signal = linux.WTERMSIG(exitStatus);
+				if (signal == linux.SIGABRT)
+					return -1, d.output, exception_t.ABORT;
+				else if (signal == linux.SIGSEGV)
+					return -1, d.output, exception_t.ACCESS_VIOLATION;
+				else
+					return -1, d.output, exception_t.UNKNOWN_EXCEPTION;
+			}
 		}
-		return -2, null, exception_t.NO_EXCEPTION;
+		return -1, null, exception_t.UNKNOWN_EXCEPTION;		// Shouldn't ever get here
 	} else
-		return -1, null, exception_t.NO_EXCEPTION;
+		return -1, null, exception_t.UNKNOWN_PLATFORM;
 }
 
 private abstract int debugSpawnImpl(pointer<byte> command, ref<SpawnPayload> output, long timeout);

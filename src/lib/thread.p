@@ -175,7 +175,8 @@ class Monitor {
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 			_semaphore = HANDLE(CreateSemaphore(null, 0, int.MAX_VALUE, null));
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
-			linux.sem_init(&_linuxSemaphore, 0, 0);
+			if (linux.sem_init(&_linuxSemaphore, 0, 0) != 0)
+				linux.perror("sem_init".c_str());
 		}
 	}
 	

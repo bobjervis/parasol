@@ -28,7 +28,9 @@ if (!t2.start(f2, t2)) {
 	printf("t2 start failed\n");
 }
 
+printf("About to join t1\n");
 t1.join();
+printf("About to join t2\n");
 t2.join();
 
 printf("joined\n");
@@ -46,16 +48,20 @@ boolean t2FinishedWait;
 
 void f1(address parameter) {
 	t1StartedWait = true;
+	printf("t1 about to wait\n");
 	m1.wait();
 	t1FinishedWait = true;
 	assert(!t2FinishedWait);
+	printf("t1 about to notify\n");
 	m2.notify();
 }
 
 void f2(address parameter) {
 	assert(!t1FinishedWait);
+	printf("t2 about to notify\n");
 	m1.notify();
 	t2StartedWait = true;
+	printf("t2 about to wait\n");
 	m2.wait();
 	t2FinishedWait = true;
 }
