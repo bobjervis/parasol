@@ -25,7 +25,7 @@ try {
 		printf("About to throw!\n");
 		throw Exception("Inner one!");
 	} finally {
-		printf("hit it!");
+		printf("hit it!\n");
 		ranFinally = true;
 	}
 	printf("Missed this!\n");

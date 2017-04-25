@@ -2319,6 +2319,7 @@ class OverloadInstance extends Symbol {
 
 class Symbol {
 	public int offset;				// Variable offset within scope block
+	public address segment;			// Variable segment, for static variables used by code generators
 	public address value;			// Scratch address for use by code generators.
 
 	protected ref<CompileString> _name;

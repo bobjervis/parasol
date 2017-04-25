@@ -15,6 +15,7 @@
  */
 namespace parasol:exception;
 
+import parasol:compiler.BuiltInType;
 import parasol:compiler.FileStat;
 import parasol:compiler.Type;
 import parasol:x86_64.ExceptionEntry;
@@ -150,7 +151,6 @@ public class Exception {
 			if (ip >= lowCode && ip < highCode) {
 				int location = int(ip - lowCode);
 				address result = bsearch(&location, ee, count, ExceptionEntry.bytes, comparator);
-
 				if (result != null) {
 					ref<ExceptionEntry> ee = ref<ExceptionEntry>(result);
 
@@ -464,11 +464,26 @@ void hardwareExceptionHandler(ref<HardwareException> info) {
  */
 private boolean dispatchException(ref<Exception> e, ref<Type> t, ref<Exception> destination, int size) {
 	ref<Type> actual = **ref<ref<ref<Type>>>(e);
+	printf("dispatchException %p actual %p t %p equals %s isSubtype %s\n", e, actual, t, actual.equals(t) ? "true" : "false", actual.isSubtype(t) ? "true" : "false");
+//	if (!actual.equals(t)) {
+		printf("actual class %x t class %x\n", pxiOffset(**ref<ref<address>>(actual)), pxiOffset(**ref<ref<address>>(t)));
+		printf("actual vtable %x t vtable %x\n", pxiOffset(*ref<address>(actual)), pxiOffset(*ref<address>(t)));
+		printf("actual family %s t family %s\n", string(actual.family()), string(t.family()));
+//	}
+	if (t.class == BuiltInType) {
+		printf("t._classType = %x\n", pxiOffset(ref<BuiltInType>(t).classType()));
+		printf("t._classType vatble %x\n", pxiOffset(*ref<address>(ref<BuiltInType>(t).classType())));
+	}
 	if (actual.equals(t) || actual.isSubtype(t)) {
 		C.memcpy(destination, e, size);
 		return true;
 	} else
 		return false;
+}
+
+private int pxiOffset(address a) {
+	return int(a) - int(runtime.lowCodeAddress());
+	
 }
 
 ref<ExceptionContext> createExceptionContext(address stackPointer) {

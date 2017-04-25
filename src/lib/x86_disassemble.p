@@ -16,8 +16,10 @@
 namespace parasol:x86_64;
 
 import parasol:compiler.Arena;
-import parasol:compiler.ClasslikeScope;
+import parasol:compiler.ClassScope;
 import parasol:compiler.FileStat;
+import parasol:compiler.FIRST_USER_METHOD;
+import parasol:compiler.OverloadInstance;
 import parasol:compiler.ParameterScope;
 import parasol:compiler.Scope;
 import parasol:compiler.Symbol;
@@ -35,8 +37,6 @@ class Disassembler {
 	private pointer<ExceptionEntry> _exceptionsEndOffset;
 	private int _imageLength;
 	private ref<X86_64SectionHeader> _pxiHeader;
-	private ref<int[]> _pxiFixups;
-	private ref<Fixup> _fixups;
 	private int _offset;
 	
 	// Instruction prefixes.
@@ -51,13 +51,14 @@ class Disassembler {
 	private int _dataMapLength;
 	private pointer<SourceLocation> _sourceLocations;
 	private int _sourceLocationsCount;
+	private ref<ref<ClassScope>[]> _vtables;
 	
 	Disassembler(ref<Arena> arena, long logical, int imageLength, pointer<byte> physical, ref<X86_64SectionHeader> pxiHeader) {
 		_arena = arena;
 		_logical = logical;
 		_imageLength = imageLength;
 		_physical = physical;
-		_length = pxiHeader.builtInOffset;
+		_length = pxiHeader.typeDataOffset;
 		_pxiHeader = pxiHeader; 
 		_builtInsFinalOffset = _pxiHeader.builtInOffset + _pxiHeader.builtInCount * address.bytes; 
 		_stringsEndOffset = _pxiHeader.stringsOffset + _pxiHeader.stringsLength;
@@ -65,14 +66,6 @@ class Disassembler {
 		_vtablesEndOffset = _pxiHeader.vtablesOffset + _pxiHeader.vtableData * address.bytes;
 		_exceptionsEndOffset = pointer<ExceptionEntry>(_physical + _pxiHeader.exceptionsOffset + _pxiHeader.exceptionsCount * ExceptionEntry.bytes);
 		_ip = _pxiHeader.entryPoint;
-	}
-	
-	void setFixups(ref<int[]> pxiFixups) {
-		_pxiFixups = pxiFixups;
-	}
-	
-	void setFixups(ref<Fixup> fixups) {
-		_fixups = fixups;
 	}
 	
 	void setDataMap(pointer<ref<Symbol>> dataMap, int dataMapLength) {
@@ -87,6 +80,10 @@ class Disassembler {
 	void setSourceLocations(pointer<SourceLocation> sourceLocations, int sourceLocationsCount) {
 		_sourceLocations = sourceLocations;
 		_sourceLocationsCount = sourceLocationsCount;
+	}
+	
+	void setVtablesClasses(ref<ref<ClassScope>[]> vtables) {
+		_vtables = vtables;
 	}
 	
 	boolean disassemble() {
@@ -133,23 +130,33 @@ class Disassembler {
 		}
 		printf("\n    vtables\n");
 		pointer<address> vp = pointer<address>(_physical + _pxiHeader.vtablesOffset);
-		ref<Scope> rawScope;
-		ref<ClasslikeScope> scope;
+		ref<ClassScope> scope = null;
 		int scopeIndex;
-		(rawScope, scopeIndex) = nextVtable(0);
-		scope = ref<ClasslikeScope>(rawScope);
-		for (int i = 0; i < _pxiHeader.vtableData; i++) {
-			if (scope != null && i == int(scope.vtable) - 1) {
-				printf("\n        %p:\n\n", scope);
-				(rawScope, scopeIndex) = nextVtable(scopeIndex + 1);
-				scope = ref<ClasslikeScope>(rawScope);
+		int vtableIndex = 0;
+		if (_vtables != null) {
+			scope = (*_vtables)[0];
+			ref<ref<OverloadInstance>[]> methods = scope.methods();
+			int methodIndex = 0;
+			for (int i = 0; i < _pxiHeader.vtableData; i++, methodIndex++) {
+				int vtableValue = i * address.bytes + 1;
+				if (vtableIndex < _vtables.length() && int(scope.vtable) == vtableValue) {
+					printf("\n      %s (%p) (pxi %x):\n", scope.classType.signature(), &vp[i], _pxiHeader.vtablesOffset + i * address.bytes);
+					vtableIndex++;
+					methods = scope.methods();
+					scope = (*_vtables)[vtableIndex];
+					methodIndex = 0;
+				}
+				printf("        %2d: %8x", i, vp[i]);
+				if (methodIndex >= FIRST_USER_METHOD && methodIndex - FIRST_USER_METHOD < methods.length())
+					printf(" %s", (*methods)[methodIndex - FIRST_USER_METHOD].name().asString());
+				printf("\n");
 			}
-			printf("        %2d: %8x\n", i, vp[i]);
 		}
-		if (_pxiFixups.length() > 0) {
+		if (_pxiHeader.relocationCount > 0) {
 			printf("PXI Fixups:\n");
-			for (int i = 0; i < _pxiFixups.length(); i++)
-				printf("    [%d] %#x\n", i, (*_pxiFixups)[i]);
+			pointer<int> f = pointer<int>(_physical + _pxiHeader.relocationOffset);
+			for (int i = 0; i < _pxiHeader.relocationCount; i++)
+				printf("    [%d] %#x\n", i, f[i]);
 		}
 		printf("\n");
 		_offset = 0;
@@ -1448,18 +1455,8 @@ class Disassembler {
 		printf("%+d]", displacement);
 	}
 
-	ref<Scope>, int nextVtable(int index) {
-		while (index < _arena.scopes().length()) {
-			ref<Scope> scope = (*_arena.scopes())[index];
-			if (scope.hasVtable(null))
-				return scope, index;
-			index++;
-		}
-		return null, int.MAX_VALUE;
-	}
-	
 	void lookupReference(int location) {
-		if (location < _pxiHeader.builtInOffset) {
+		if (location < _pxiHeader.typeDataOffset) {
 			int index = findFunction(location);
 			if (index >= 0) {
 				ref<Scope> scope = (*_functionMap)[index];
@@ -1470,7 +1467,7 @@ class Disassembler {
 						printf("+%d", location - (int(funcScope.value) - 1));
 				}
 			}
-		} else if (location < _builtInsFinalOffset) {
+		} else if (location >= _pxiHeader.builtInOffset && location < _builtInsFinalOffset) {
 			printf(" &%s", builtInAt((location - _pxiHeader.builtInOffset) / address.bytes));
 		} else if (location >= _pxiHeader.stringsOffset && location < _stringsEndOffset) {
 			address x = &_physical[int(location - _logical)];

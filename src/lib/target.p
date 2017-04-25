@@ -21,6 +21,7 @@ import parasol:pxi.Pxi;
 import parasol:pxi.SectionType;
 import parasol:runtime;
 
+import native:C;
 /**
  * Class target defines the framework for Parasol compiler code generators.
  * 
@@ -250,6 +251,10 @@ public class Segment<class T> {
 		return &_content[location];
 	}
 	
+	public int align() {
+		return reserve(0);
+	}
+	
 	public int reserve(int memory) {
 		return reserve(memory, _alignment);
 	}
@@ -273,6 +278,12 @@ public class Segment<class T> {
 		return value;
 	}
 	
+	public int append(address data, int length) {
+		int location = reserve(length);
+		C.memcpy(&_content[location], data, length);
+		return location;
+	}
+	
 	public int alignment() {
 		return _alignment;
 	}
@@ -282,11 +293,15 @@ public class Segment<class T> {
 	 */
 	public int link(int offset) {
 		_offset = (offset + _alignment - 1) & ~(_alignment - 1);
-		return _offset + reserve(0);
+		return _offset + align();
 	}
 	
 	public int offset() {
 		return _offset;
+	}
+	
+	public int length() {
+		return _content.length();
 	}
 	
 	public ref<byte[]> content() {

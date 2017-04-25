@@ -178,7 +178,9 @@ class BuiltInType extends Type {
 	
 	public int copyToImage(ref<Target> target) {
 		if (_ordinal == 0) {
-			allocateImageData(target, BuiltInType.bytes);
+			address a = allocateImageData(target, BuiltInType.bytes);
+			ref<BuiltInType> copy = ref<BuiltInType>(a);
+//			copy._family = _family;			
 			target.fixupVtable(_ordinal, target.builtInType());
 			_classType.copyToImage(target);
 			target.fixupType(_ordinal + int(&ref<BuiltInType>(null)._classType), _classType);
@@ -481,6 +483,7 @@ class ClassType extends Type {
 	}
 	
 	private boolean sameAs(ref<Type> other) {
+		// 'other' in this case has already been checked for identity, so this != other.
 		// Two classes are considered the same only
 		// if they have the same declaration site, which
 		// is equivalent to object identity on the type
@@ -500,7 +503,9 @@ class ClassType extends Type {
 
 	public int copyToImage(ref<Target> target) {
 		if (_ordinal == 0) {
-			allocateImageData(target, ClassType.bytes);
+			address a = allocateImageData(target, ClassType.bytes);
+			ref<ClassType> copy = ref<ClassType>(a);
+//			copy._family = _family;
 			target.fixupVtable(_ordinal, target.classType());
 			if (_extends != null)
 				_extends.copyToImage(target);
@@ -1481,7 +1486,7 @@ class Type {
 		ref<Type> base = getSuper();
 		if (base == null)
 			return false;
-		else if (base == other)
+		else if (base.equals(other))
 			return true;
 		else
 			return base.isSubtype(other);

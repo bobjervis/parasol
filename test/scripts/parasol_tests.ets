@@ -84,11 +84,12 @@ run(filename: class_name_test.p)
 
 // Basic runtime execution tests
 
+//run(filename: interface_test.p)
 run(filename: placement_delete_test.p)
 run(filename: vector_elem_constructor_test.p)
 run(filename: placement_new_test.p)
-run(filename: try_test.p)
-run(filename: finally_test.p)
+//run(filename: try_test.p)
+//run(filename: finally_test.p)
 run(filename: function_parameter_test.p)
 run(filename: sort_bug.p)
 run(filename: destructor_test.p)
@@ -261,6 +262,8 @@ compile(expect: fail, message: NOT_AN_INTERFACE) { "interface b extends byte[] {
 compile(expect: fail, message: NOT_AN_INTERFACE) { "interface b extends byte(int) {}" }
 
 compile() { "class A { void f() { } } class B extends A { void g() { f(); } }" }
+
+compile(expect: fail, message: NOT_SIMPLE_VARIABLE) { "class X<class Y> {} class Y {} ref<X> x;" }
 
 // regression: mis-spelled static trips up later code.
 compile(expect: fail, message: SYNTAX_ERROR) { "class foo { public statc int, boolean parse(string text, int radix) { int value = 0; }}" }
@@ -688,6 +691,58 @@ compile(expect: fail) { "ref<int> x; if (x == 0) x = new int;" }
 
 compile() { "int β; β = 56;" }
 
+// The matrix of allowed operators for pointer operands:
+
+compile(expect: fail, message: INVALID_AND) { "class C{} double b; pointer<C> a = b & 37;" }
+compile(expect: fail, message: TYPE_MISMATCH) { "class C{} pointer<C> b; pointer<C> a = b | 37;" }
+compile(expect: fail, message: TYPE_MISMATCH) { "class C{} pointer<C> b; pointer<C> a = b ^ 37;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "class C{} pointer<C> b; pointer<C> a; a &= 37;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "class C{} pointer<C> b; pointer<C> a; a |= 37;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "class C{} pointer<C> b; pointer<C> a; a ^= 37;" }
+compile(expect: fail, message: TYPE_MISMATCH) { "class C{} pointer<C> b; pointer<C> a = b * 37;" }
+compile(expect: fail, message: TYPE_MISMATCH) { "class C{} pointer<C> b; pointer<C> a = b / 37;" }
+compile(expect: fail, message: TYPE_MISMATCH) { "class C{} pointer<C> b; pointer<C> a = b % 37;" }
+compile() { "class C{ int m; } pointer<C> b, c; long i; c = b + i;" }
+compile() { "class C{ int m; } pointer<C> b, c; long i; c = b - i;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "class C{} pointer<C> b; pointer<C> a = b << 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "class C{} pointer<C> b; pointer<C> a = b >> 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "class C{} pointer<C> b; pointer<C> a = b >>> 5;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "class C{} pointer<C> b; pointer<C> a = 5 << b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "class C{} pointer<C> b; pointer<C> a = 5 >> b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "class C{} pointer<C> b; pointer<C> a = 5 >>> b;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "class C{} pointer<C> b; pointer<C> a; a *= 37;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "class C{} pointer<C> b; pointer<C> a; a /= 37;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "class C{} pointer<C> b; pointer<C> a; a %= 37;" }
+compile() { "class C{ int m; } pointer<C> b; long i; b += i;" }
+compile() { "class C{ int m; } pointer<C> b; long i; b -= i;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "class C{} pointer<C> b; pointer<C> a; a <<= 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "class C{} pointer<C> b; pointer<C> a; a >>= 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "class C{} pointer<C> b; pointer<C> a; a >>>= 5;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "class C{} pointer<C> b; int a; a <<= b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "class C{} pointer<C> b; int a; a >>= b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "class C{} pointer<C> b; int a; a >>>= b;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b == c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b != c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b < c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b > c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b <= c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b >= c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b <> c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b !< c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b !> c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b !<= c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b !>= c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b !<> c;" }
+compile(expect: fail, message: INVALID_NEGATE) { "class C{} pointer<C> a; a = -a;" }
+compile(expect: fail, message: INVALID_UNARY_PLUS) { "class C{} pointer<C> a; a = +a;" }
+compile(expect: fail, message: INVALID_BIT_COMPLEMENT) { "class C{} pointer<C> a; a = ~a;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "class C{} pointer<C> a; a = &a;" }
+compile() { "class C{int m;} pointer<C> a; C c = *a;" }
+compile() { "class C{} pointer<C> a; a = --a;" }
+compile() { "class C{} pointer<C> a; a = ++a;" }
+compile() { "class C{} pointer<C> a; a = a--;" }
+compile() { "class C{} pointer<C> a; a = a++;" }
+
 // The matrix of allowed operators for double operands:
 
 compile(expect: fail, message: INVALID_AND) { "double b; double a = b & 37;" }
@@ -718,18 +773,6 @@ compile(expect: fail, message: LEFT_NOT_INT) { "double b; double a; a >>>= 5;" }
 compile(expect: fail, message: SHIFT_NOT_INT) { "double b; int a; a <<= b;" }
 compile(expect: fail, message: SHIFT_NOT_INT) { "double b; int a; a >>= b;" }
 compile(expect: fail, message: SHIFT_NOT_INT) { "double b; int a; a >>>= b;" }
-compile() { "class C{} pointer<C> b, c; boolean a = b == c;" }
-compile() { "class C{} pointer<C> b, c; boolean a = b != c;" }
-compile() { "class C{} pointer<C> b, c; boolean a = b < c;" }
-compile() { "class C{} pointer<C> b, c; boolean a = b > c;" }
-compile() { "class C{} pointer<C> b, c; boolean a = b <= c;" }
-compile() { "class C{} pointer<C> b, c; boolean a = b >= c;" }
-compile() { "class C{} pointer<C> b, c; boolean a = b <> c;" }
-compile() { "class C{} pointer<C> b, c; boolean a = b !< c;" }
-compile() { "class C{} pointer<C> b, c; boolean a = b !> c;" }
-compile() { "class C{} pointer<C> b, c; boolean a = b !<= c;" }
-compile() { "class C{} pointer<C> b, c; boolean a = b !>= c;" }
-compile() { "class C{} pointer<C> b, c; boolean a = b !<> c;" }
 compile() { "double b; boolean a = b == 37;" }
 compile() { "double b; boolean a = b != 37;" }
 compile() { "double b; boolean a = b < 37;" }

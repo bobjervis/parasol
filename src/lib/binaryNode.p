@@ -1819,7 +1819,7 @@ class Binary extends Node {
 			}
 
 			if (_left.type.isPointer(compileContext)) {
-				_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_32, false, compileContext);
+				_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_64, false, compileContext);
 				if (_right.deferAnalysis()) {
 					type = _right.type;
 					break;
@@ -2159,6 +2159,25 @@ class Binary extends Node {
 			break;
 
 		case	SUBTRACT:
+			compileContext.assignTypes(_left);
+			compileContext.assignTypes(_right);
+			if (_left.deferAnalysis()) {
+				type = _left.type;
+				break;
+			}
+			if (_right.deferAnalysis()) {
+				type = _right.type;
+				break;
+			}
+			if (_left.type.scalarFamily(compileContext) == TypeFamily.POINTER && _right.type.scalarType(compileContext).isIntegral()) {
+				_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_64, false, compileContext);
+				if (_right.deferAnalysis()) {
+					type = _right.type;
+					break;
+				}
+				type = _left.type;
+				break;
+			}
 			if (!balance(compileContext))
 				break;
 			switch (_left.type.scalarFamily(compileContext)) {
@@ -2192,7 +2211,7 @@ class Binary extends Node {
 					type = _right.type;
 					break;
 				}
-				_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_32, false, compileContext);
+				_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_64, false, compileContext);
 				if (_right.deferAnalysis()) {
 					type = _right.type;
 					break;

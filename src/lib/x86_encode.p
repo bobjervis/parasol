@@ -127,7 +127,7 @@ enum JumpDistance {
 }
 
 public class SourceLocation {
-	ref<FileStat>	file;			// Source file contianing this location
+	ref<FileStat>	file;			// Source file containing this location
 	Location		location;		// Source byte offset
 	int				offset;			// Code location
 }
@@ -172,32 +172,27 @@ class X86_64Encoder extends Target {
 	protected memory.NoReleasePool _storage;
 	protected pointer<byte> _staticMemory;
 	protected int _staticMemoryLength;
-	protected byte[] _builtInsList;
-	protected ExceptionEntry[] _exceptionTable;
 	protected SourceLocation[] _sourceLocations;
 	protected DeferredTry[] _deferredTry;
 	protected ref<Segment<Segments>>[Segments] _segments;
 	protected ref<Symbol>[] _nativeBindingSymbols;
 	
 	private ref<CodeSegment>[] _exceptionHandlers;
-	private int[] _staticDataSize;
 	private byte[] _imageData;								// Used to persist the symbol table
 	private ref<Symbol>[][] _dataMap;
 	private ref<Scope>[] _functionMap;
 	private ref<FunctionState> _f;
 	private byte[] _functionCode;
-	private byte[] _strings;
 	private ref<ClassScope>[] _vtables;
 	private ref<JumpContext> _jumpContext;
 	private TempStack _t;
 	private byte[] _code;
-	private int[] _dataOffsets;
 	private ref<Fixup> _fixups;
-	private int[] _pxiFixups;
 	private int[] _builtIns;								// The set of built-ins referenced by this
 															// file.
 	
-	boolean generateCode(ref<FileStat> mainFile, int valueOffset, ref<CompileContext> compileContext) {
+	protected X86_64Encoder() {
+		_dataMap.resize(9);
 		_segments.resize(Segments.MAXIMUM);
 		_segments[Segments.CODE] = new Segment<Segments>(8, 0x37);
 		_segments[Segments.EXCEPTION_TABLE] = new Segment<Segments>(8);
@@ -215,6 +210,9 @@ class X86_64Encoder extends Target {
 
 		_segments[Segments.BUILT_INS_TEXT] = new Segment<Segments>(1);
 		_segments[Segments.RELOCATIONS] = new Segment<Segments>(4);
+	}
+	
+	boolean generateCode(ref<FileStat> mainFile, int valueOffset, ref<CompileContext> compileContext) {
 		
 		// Initialize storage - somewhere along here needs to happen
 		// 
@@ -229,41 +227,7 @@ class X86_64Encoder extends Target {
 		}
 		appendExceptionEntry(int.MAX_VALUE, null);
 		
-		_pxiHeader.builtInOffset = _code.length();
-		
-		for (ref<Fixup> f = _fixups; f != null; f = f.next) {
-			if (f.kind == FixupKind.BUILTIN32) {
-				int b = int(f.value) - 1;
-				f.value = address(assignBuiltInVector(b));
-			}
-		}
-		_pxiHeader.builtInCount = _builtIns.length();
-		for (int i = 0; i < _builtIns.length(); i++) {
-			long filler = _builtIns[i];
-			
-			_code.append(pointer<byte>(&filler), long.bytes);
-		}
-
-		_pxiHeader.vtablesOffset = _code.length();
-		
-		_code.resize(_code.length() + _pxiHeader.vtableData * address.bytes);
-		
-		_dataOffsets.resize(address.bytes + 1);
-
-		for (ref<Fixup> f = _fixups; f != null; f = f.next) {
-			if (f.kind == FixupKind.RELATIVE32_FPDATA) {
-				ref<Constant> con = ref<Constant>(f.value);
-				if (con.type.family() == TypeFamily.FLOAT_32) {
-					con.offset = _staticDataSize[4];
-					_staticDataSize[4] += 4;
-				} else {
-					con.offset = _staticDataSize[8];
-					_staticDataSize[8] += 8;
-				}
-			}
-		}
-		
-		relocateStaticData(8);
+		assignBuiltInVectors();
 
 		_pxiHeader.typeDataOffset = _code.length();
 		
@@ -271,16 +235,6 @@ class X86_64Encoder extends Target {
 		
 		_pxiHeader.typeDataLength = _imageData.length();
 		_code.append(_imageData);
-		
-		_pxiHeader.stringsOffset = _code.length();
-		_pxiHeader.stringsLength = _strings.length();
-		
-		_code.append(_strings);
-
-		relocateStaticData(4);
-		relocateStaticData(2);
-		relocateStaticData(1);
-		_dataOffsets[0] = _code.length();
 		
 		int startOfSegments = _code.length();
 		int segmentsLength = startOfSegments;
@@ -306,15 +260,25 @@ class X86_64Encoder extends Target {
 		for (int i = 0; i < _nativeBindingSymbols.length(); i++)
 			_nativeBindingSymbols[i].offset += _pxiHeader.nativeBindingsOffset;
 		
-		_dataMap[0].append(_nativeBindingSymbols);
-		
-		for (int i = 0; i < int(Segments.MAXIMUM); i++) {
+		for (int i = 0; i < int(Segments.RELOCATIONS); i++) {
 			Segments segment = Segments(i);
 			
 			_code.resize(_segments[segment].offset());
 			_code.append(*_segments[segment].content());
 		}
-
+		relocateStaticData(8);
+		relocateStaticData(4);
+		relocateStaticData(2);
+		relocateStaticData(1);
+		_dataMap[0].append(_nativeBindingSymbols);
+		
+		_pxiHeader.builtInOffset = _segments[Segments.BUILT_INS].offset();
+		_pxiHeader.builtInCount = _segments[Segments.BUILT_INS].length() / long.bytes;
+		_pxiHeader.builtInsText += _segments[Segments.BUILT_INS_TEXT].offset();
+		_pxiHeader.stringsOffset = _segments[Segments.STRINGS].offset();
+		_pxiHeader.stringsLength = _segments[Segments.STRINGS].length();
+		_pxiHeader.vtablesOffset = _segments[Segments.VTABLES].offset();
+				
 		for (ref<Fixup> f = _fixups; f != null; f = f.next) {
 			switch (f.kind) {
 			case	RELATIVE32_CODE:				// Fixup value is a ref<Scope>
@@ -331,24 +295,11 @@ class X86_64Encoder extends Target {
 			
 			case	RELATIVE32_FPDATA:				// Fixup value is a ref<Constant>
 				ref<Constant> con = ref<Constant>(f.value);
-				pointer<byte> endPtr;
 				int targetOffset;
-				if (con.type.family() == TypeFamily.FLOAT_32) {
-					targetOffset = _dataOffsets[4] + con.offset;
-					ref<float> target = ref<float>(&_code[targetOffset]);
-					string s(con.value().data, con.value().length - 1); 
-					double x = C.strtod(s.c_str(), &endPtr);
-					assert(endPtr == s.c_str() + s.length());
-					float y = float(x);
-					*target = y;
-				} else {
-					targetOffset = _dataOffsets[8] + con.offset;
-					ref<double> target = ref<double>(&_code[targetOffset]);
-					string s = con.value().asString();
-					double x = C.strtod(s.c_str(), &endPtr);
-					assert(endPtr == s.c_str() + s.length());
-					*target = x;
-				}
+				if (con.type.family() == TypeFamily.FLOAT_32)
+					targetOffset = _segments[Segments.DATA_4].offset() + con.offset;
+				else
+					targetOffset = _segments[Segments.DATA_8].offset() + con.offset;
 //				printf("f.location=%x targetOffset=%x\n", f.location, targetOffset);
 				*ref<int>(&_code[f.location]) = int(targetOffset - (f.location + int.bytes));
 				break;
@@ -369,7 +320,7 @@ class X86_64Encoder extends Target {
 			case	RELATIVE32_VTABLE:				// Fixup value is a ref<ClassScope>
 				ref<ClassScope> scope = ref<ClassScope>(f.value);
 				ipAdjust = *ref<int>(&_code[f.location]);
-				*ref<int>(&_code[f.location]) = int(_pxiHeader.vtablesOffset + ipAdjust + (int(scope.vtable) - 1) * address.bytes - (f.location + int.bytes));
+				*ref<int>(&_code[f.location]) = int(_pxiHeader.vtablesOffset + ipAdjust + (int(scope.vtable) - 1) - (f.location + int.bytes));
 				break;
 				
 			case	ABSOLUTE64_JUMP:				// Fixup value is a ref<CodeSegment>
@@ -401,7 +352,7 @@ class X86_64Encoder extends Target {
 				type = ref<Type>(f.value);
 				location = _pxiHeader.typeDataOffset + f.location;
 				scope = ref<ClassScope>(type.scope());
-				*ref<int>(&_code[location]) = _pxiHeader.vtablesOffset + (int(scope.vtable) - 1) * address.bytes;
+				*ref<int>(&_code[location]) = _pxiHeader.vtablesOffset + int(scope.vtable) - 1;
 				definePxiFixup(location);
 				break;
 				
@@ -427,48 +378,53 @@ class X86_64Encoder extends Target {
 				assert(false);
 			}
 		}
+		for (int i = int(Segments.RELOCATIONS); i < int(Segments.MAXIMUM); i++) {
+			Segments segment = Segments(i);
+			
+			_code.resize(_segments[segment].offset());
+			_code.append(*_segments[segment].content());
+		}
 		
-		_pxiHeader.relocationOffset = _code.length();
-		_pxiHeader.relocationCount = _pxiFixups.length();
-		
-		_code.resize(_code.length() + _pxiFixups.length() * int.bytes);
-		C.memcpy(&_code[_pxiHeader.relocationOffset], &_pxiFixups[0], _pxiFixups.length() * int.bytes);
-		_pxiHeader.builtInsText = _code.length();
-		
-		_code.append(_builtInsList);
-		
-		int len = _code.length();
-		int roundUp;
-		if ((len & (address.bytes - 1)) == 0)
-			roundUp = 0;
-		else
-			roundUp = address.bytes - (len & (address.bytes - 1));
-		for (int i = 0; i < roundUp; i++)
-			_code.append(byte('\x0'));
-		_pxiHeader.exceptionsOffset = _code.length();
-		_pxiHeader.exceptionsCount = _exceptionTable.length();
-		pointer<byte> exceptionsTable = pointer<byte>(&_exceptionTable[0]); 
-//		memDump(&_code, _code.bytes);
-//		printf("_code.length()=%d\n", _code.length());
-		_code.append(exceptionsTable, _exceptionTable.length() * ExceptionEntry.bytes);
-		
-		_staticMemory = &_code[0];
+		_pxiHeader.relocationOffset = _segments[Segments.RELOCATIONS].offset();
+		_pxiHeader.relocationCount = _segments[Segments.RELOCATIONS].length() / int.bytes;
+		_pxiHeader.exceptionsOffset = _segments[Segments.EXCEPTION_TABLE].offset();
+		_pxiHeader.exceptionsCount = _segments[Segments.EXCEPTION_TABLE].length() / ExceptionEntry.bytes;
+				
+		_staticMemory = pointer<byte>(runtime.allocateRegion(_code.length()));
+		C.memcpy(_staticMemory, &_code[0], _code.length());
 		_staticMemoryLength = _code.length();
 		return true;
 	}
 
 	private void definePxiFixup(int location) {
-		_pxiFixups.append(location);
+		_segments[Segments.RELOCATIONS].append(&location, location.bytes);
 	}
 	
 	private void relocateStaticData(int alignment) {
-		_dataOffsets[alignment] = _code.length();
+		int offset;
+		switch (alignment) {
+		case 8:
+			offset = _segments[Segments.DATA_8].offset();
+			break;
+			
+		case 4:
+			offset = _segments[Segments.DATA_4].offset();
+			break;
+			
+		case 2:
+			offset = _segments[Segments.DATA_2].offset();
+			break;
+			
+		case 1:
+			offset = _segments[Segments.DATA_1].offset();
+			break;
+			
+		}
 		for (int i = 0; i < _dataMap[alignment].length(); i++) {
 //			printf("  Relocating %s from %x to %x\n", _dataMap[alignment][i].name().asString(), _dataMap[alignment][i].offset, _dataMap[alignment][i].offset + _dataOffsets[alignment]);
-			_dataMap[alignment][i].offset += _dataOffsets[alignment];
+			_dataMap[alignment][i].offset += offset;
 		}
 		_dataMap[0].append(_dataMap[alignment]);
-		_code.resize(_code.length() + _staticDataSize[alignment]);
 		for (int i = 0; i < _dataMap[alignment].length(); i++) {
 			ref<Symbol> sym = _dataMap[alignment][i];
 			if (sym.type().family() == TypeFamily.TYPEDEF) {
@@ -567,10 +523,8 @@ class X86_64Encoder extends Target {
 	
 	protected void buildVtable(ref<ClassScope> scope, ref<CompileContext> compileContext) {
 		if (scope.vtable == null) {
-			scope.vtable = address(_pxiHeader.vtableData + 1);
-			_pxiHeader.vtableData += scope.methods().length() + FIRST_USER_METHOD;
+			scope.vtable = address(_segments[Segments.VTABLES].reserve((scope.methods().length() + FIRST_USER_METHOD) * address.bytes) + 1);
 			_vtables.append(scope);
-//			ref<VTable>(classScope.vtable).disassemble(0);
 			for (int i = 0; i < scope.methods().length(); i++) {
 				ref<OverloadInstance> method = (*scope.methods())[i];
 				if (!method.deferAnalysis()) {
@@ -588,8 +542,6 @@ class X86_64Encoder extends Target {
 		// TODO: make this work better.
 		buildVtable(ref<ClassScope>(classType().scope()), compileContext);
 		buildVtable(ref<ClassScope>(builtInType().scope()), compileContext);
-		if (_pxiHeader.vtableData == 0)
-			return;
 		for (int i = 0; i < _vtables.length(); i++) {
 			ref<ClassScope> scope = _vtables[i];
 			// This relies on the side-effects of arranging that the function in question eventually gets generated.
@@ -606,14 +558,14 @@ class X86_64Encoder extends Target {
 	}
 
 	private void populateVTables(ref<CompileContext> compileContext) {
-		if (_pxiHeader.vtableData == 0)
-			return;
-		int tableStart = _pxiHeader.vtablesOffset;
 		for (int i = 0; i < _vtables.length(); i++) {
 			ref<ClassScope> scope = _vtables[i];
+			int tableStart = int(scope.vtable) - 1;
 			int entries = scope.methods().length() + FIRST_USER_METHOD;
+			
+			_pxiHeader.vtableData += entries;
 			int tableEnd = tableStart + entries * address.bytes;
-			pointer<address> table = pointer<address>(&_code[tableStart]);
+			pointer<address> table = pointer<address>(_segments[Segments.VTABLES].at(tableStart));
 			*table = address(_pxiHeader.typeDataOffset + scope.classType.copyToImage(this) - 1);
 			if (FIRST_USER_METHOD > 1 && scope.destructor() != null) {
 				int target = int(scope.destructor().value) - 1;
@@ -626,7 +578,6 @@ class X86_64Encoder extends Target {
 				int target = int(functionScope.value) - 1;
 				table[j + FIRST_USER_METHOD] = address(target);
 			}
-			tableStart = tableEnd;
 		}
 	}
 
@@ -720,34 +671,37 @@ class X86_64Encoder extends Target {
 	}
 	
 	public void assignStaticRegion(ref<Symbol> symbol, int alignment, int size) {
-		if (_dataMap.length() <= alignment) {
-			_dataMap.resize(alignment + 1);
-			_staticDataSize.resize(alignment + 1);
-		}
-		if (alignment < 0) {
+		switch (alignment) {
+		case 8:
+			symbol.segment = _segments[Segments.DATA_8];
+			break;
+			
+		case 4:
+			symbol.segment = _segments[Segments.DATA_4];
+			break;
+			
+		case 2:
+			symbol.segment = _segments[Segments.DATA_2];
+			break;
+			
+		case 1:
+			symbol.segment = _segments[Segments.DATA_1];
+			break;
+			
+		default:
 			symbol.print(0, false);
 			assert(false);
 		}
 		_dataMap[alignment].append(symbol);
-		symbol.offset = _staticDataSize[alignment];
-		int partial = size & (alignment - 1);
-		if (partial != 0)
-			size += alignment - partial;
-		_staticDataSize[alignment] += size;
+		symbol.offset = ref<Segment<Segments>>(symbol.segment).reserve(size);
 	}
 
 	public boolean disassemble(ref<Arena> arena) {
 		Disassembler d(arena, 0, _staticMemoryLength, _staticMemory, &_pxiHeader);
-		d.setFixups(&_pxiFixups);
-		d.setFixups(_fixups);
 		d.setDataMap(&_dataMap[0][0], _dataMap[0].length());
 		d.setFunctionMap(&_functionMap);
 		d.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
-		for (int i = 8; i > 0; i >>= 1) {
-			int length = _dataOffsets[i / 2] - _dataOffsets[i];
-			if (length > 0)
-				printf("        data align %d            %x length %5x\n", i, _dataOffsets[i], length);
-		}
+		d.setVtablesClasses(&_vtables);
 		return d.disassemble();
 	}
 
@@ -809,8 +763,7 @@ class X86_64Encoder extends Target {
 			_code[offset + i] = 0x37;						// Make it an AAA instruction to fill space.
 		
 		int nextCopy = offset;
-		int firstExceptionEntry = _exceptionTable.length();
-
+		int firstExceptionEntry = _segments[Segments.EXCEPTION_TABLE].length();
 		for (ref<CodeSegment> cs = _f.first; cs != null; cs = cs.next) {
 			for (int i = 0; i < cs.sourceLocations.length(); i++)
 				cs.sourceLocations[i].offset += nextCopy;
@@ -867,9 +820,11 @@ class X86_64Encoder extends Target {
 				}
 			}
 		}
-		for (int i = firstExceptionEntry; i < _exceptionTable.length(); i++) {
-			if (_exceptionHandlers[i] != null)
-				_exceptionTable[i].handler = offset + _exceptionHandlers[i].segmentOffset;
+		pointer<ExceptionEntry> ee = pointer<ExceptionEntry>(_segments[Segments.EXCEPTION_TABLE].at(firstExceptionEntry));
+		for (int i = firstExceptionEntry; i < _segments[Segments.EXCEPTION_TABLE].length(); i += ExceptionEntry.bytes, ee++) {
+			int hi = i / ExceptionEntry.bytes;
+			if (_exceptionHandlers[hi] != null)
+				ee.handler = offset + _exceptionHandlers[hi].segmentOffset;
 		}
 		_functionCode.resize(_f.firstCode);
 		return offset;
@@ -961,15 +916,14 @@ class X86_64Encoder extends Target {
 	void emitExceptionEntry(int location, ref<CodeSegment> handler) {
 		
 		// If we have no table yet, behave as if we are in 'null' state.
-		if (handler == null && _exceptionTable.length() == 0)
+		if (handler == null && _exceptionHandlers.length() == 0)
 			return;
 
-		int i = _exceptionTable.length() - 1;
+		int i = _exceptionHandlers.length() - 1;
 		
 		// If we are already under this handler, stay there.
-		if (i >= 0 && _exceptionHandlers[i] == handler)
-			return;
-		appendExceptionEntry(location, handler);
+		if (i < 0 || _exceptionHandlers[i] != handler)
+			appendExceptionEntry(location, handler);
 	}
 	
 	private void appendExceptionEntry(int location, ref<CodeSegment> handler) {
@@ -977,7 +931,7 @@ class X86_64Encoder extends Target {
 		
 		ee.location = location;
 		ee.handler = 0;
-		_exceptionTable.append(ee);
+		_segments[Segments.EXCEPTION_TABLE].append(&ee, ee.bytes);
 		_exceptionHandlers.append(handler);
 	}
 
@@ -3318,7 +3272,21 @@ class X86_64Encoder extends Target {
 			
 		case	FLOATING_POINT:
 			modRM(0, regOpcode, 5);
-			fixup(FixupKind.RELATIVE32_FPDATA, addressMode);
+			pointer<byte> endPtr;
+			ref<Constant> con = ref<Constant>(addressMode);
+			if (con.type.family() == TypeFamily.FLOAT_32) {
+				string s(con.value().data, con.value().length - 1); // omit the trailing f
+				double x = C.strtod(s.c_str(), &endPtr);
+				assert(endPtr == s.c_str() + s.length());
+				float y = float(x);
+				con.offset = _segments[Segments.DATA_4].append(&y, float.bytes);
+			} else {
+				string s = con.value().asString();
+				double x = C.strtod(s.c_str(), &endPtr);
+				assert(endPtr == s.c_str() + s.length());
+				con.offset = _segments[Segments.DATA_8].append(&x, double.bytes);
+			}
+			fixup(FixupKind.RELATIVE32_FPDATA, con);
 			emitInt(0);
 			break;
 			
@@ -3447,20 +3415,11 @@ class X86_64Encoder extends Target {
 	}
 	
 	public int addStringLiteral(string value) {
-		int offset = _strings.length();
 		int sLength = value.length();
-		_strings.resize(offset + int.bytes);
-		C.memcpy(&_strings[offset], &sLength, int.bytes);
-		for (int i = 0; i < sLength; i++)
-			_strings.append(value[i]);
-		_strings.append(0);
-		int used = (_strings.length() - offset) & 3;
-		if (used > 0) {
-			while (used < 4) {
-				_strings.append(0);
-				used++;
-			}
-		}
+		int offset = _segments[Segments.STRINGS].reserve(value.length() + int.bytes + 1);
+		pointer<byte> dest = _segments[Segments.STRINGS].at(offset);
+		*ref<int>(dest) = sLength;
+		C.memcpy(dest + int.bytes, &value[0], sLength);
 		return offset;
 	}
 	/*
@@ -3805,17 +3764,30 @@ class X86_64Encoder extends Target {
 		 _fixups = f;
 	}
 	
+	private void assignBuiltInVectors() {
+		
+		for (ref<Fixup> f = _fixups; f != null; f = f.next) {
+			if (f.kind == FixupKind.BUILTIN32) {
+				int b = int(f.value) - 1;
+				f.value = address(assignBuiltInVector(b));
+			}
+		}
+		_pxiHeader.builtInsText = _segments[Segments.BUILT_INS_TEXT].length();
+		for (int i = 0; i < _builtIns.length(); i++) {
+			int location = _segments[Segments.BUILT_INS].reserve(long.bytes);
+			*ref<long>(_segments[Segments.BUILT_INS].at(location)) = _builtIns[i];
+			string name(runtime.builtInFunctionName(_builtIns[i]));
+			_segments[Segments.BUILT_INS_TEXT].append(&name[0], name.length() + 1);
+		}
+	}
+	
 	private int assignBuiltInVector(int builtInId) {
-		for (int i = 0; i < _builtIns.length(); i++)
+		int i;
+		for (i = 0; i < _builtIns.length(); i++)
 			if (_builtIns[i] == builtInId)
 				return i;
-		int result = _builtIns.length();
 		_builtIns.append(builtInId);
-		string name(runtime.builtInFunctionName(builtInId));
-		for (int i = 0; i < name.length(); i++)
-			_builtInsList.append(name[i]);
-		_builtInsList.append(0);
-		return result;
+		return i;
 	}
 	
 	protected byte[] functionCode() {
@@ -3827,14 +3799,12 @@ class X86_64Encoder extends Target {
 	}
 
 	public int imageLength() {
-		return X86_64SectionHeader.bytes + _staticMemoryLength +
-				_builtInsList.length();
+		return X86_64SectionHeader.bytes + _staticMemoryLength;
 	}
 	
 	public void writePxiFile(file.File pxiFile) {
 		pxiFile.write(&_pxiHeader, _pxiHeader.bytes);
 		pxiFile.write(_staticMemory, _staticMemoryLength);
-		pxiFile.write(_builtInsList);
 	}
 	
 	public ref<X86_64SectionHeader> pxiHeader() {

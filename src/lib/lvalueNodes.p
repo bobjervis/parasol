@@ -218,12 +218,6 @@ class Identifier extends Node {
 		}
 	}
 
-	public void assignOverload(ref<NodeList> arguments, Operator kind, ref<CompileContext> compileContext) {
-		(type, _symbol) = compileContext.current().assignOverload(this, _value, arguments, kind, compileContext);
-		if (_symbol != null)
-			_symbol.markAsReferenced(compileContext);
-	}
-
 	public ref<Symbol> symbol() {
 		return _symbol;
 	}
@@ -403,9 +397,12 @@ class Identifier extends Node {
 						break;
 					if (_symbol.class == Overload) {
 						ref<Overload> o = ref<Overload>(_symbol);
-						if (o.instances().length() == 1)
+						if (o.instances().length() == 1) {
+							if (o.kind() == Operator.TEMPLATE) {
+								add(MessageId.NOT_SIMPLE_VARIABLE, compileContext.pool(), _value);
+							}
 							_symbol = (*o.instances())[0];
-						else {
+						} else {
 							add(MessageId.AMBIGUOUS_REFERENCE, compileContext.pool());
 							type = compileContext.errorType();
 							return;
@@ -422,6 +419,12 @@ class Identifier extends Node {
 		}
 		type = compileContext.errorType();
 		add(MessageId.UNDEFINED, compileContext.pool(), _value);
+	}
+
+	public void assignOverload(ref<NodeList> arguments, Operator kind, ref<CompileContext> compileContext) {
+		(type, _symbol) = compileContext.current().assignOverload(this, _value, arguments, kind, compileContext);
+		if (_symbol != null)
+			_symbol.markAsReferenced(compileContext);
 	}
 }
 

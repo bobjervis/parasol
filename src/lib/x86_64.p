@@ -361,6 +361,14 @@ public class X86_64 extends X86_64AssignTemps {
 						}
 					}
 					nativeBindings[i].functionAddress = windows.GetProcAddress(dll, nativeBindings[i].symbolName);
+				} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+					address handle = linux.dlopen(nativeBindings[i].dllName, linux.RTLD_LAZY);
+					if (handle == null) {
+						printf("Unable to locate shared object %s (%s)\n", nativeBindings[i].dllName, linux.dlerror());
+						assert(false);
+					} else
+						nativeBindings[i].functionAddress = linux.dlsym(handle, nativeBindings[i].symbolName);
+					linux.dlclose(handle);
 				}
 				if (nativeBindings[i].functionAddress == null) {
 					string d(nativeBindings[i].dllName);
