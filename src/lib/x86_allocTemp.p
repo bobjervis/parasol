@@ -432,24 +432,8 @@ class RegisterState {
 				case	POINTER:
 				case	CLASS:
 				case	BOOLEAN:
-					target.inst(X86.MOV, _spills.affected.type.family(), _spills.newRegister, R(int(_spills.affected.register)));
-					break;
-					
 				case FLAGS:
-					switch (_spills.affected.type.size()) {
-					case 1:
-					case 2:
-						target.inst(X86.MOV, TypeFamily.SIGNED_16, _spills.newRegister, R(int(_spills.affected.register)));
-						break;
-						
-					case 4:
-						target.inst(X86.MOV, TypeFamily.SIGNED_32, _spills.newRegister, R(int(_spills.affected.register)));
-						break;
-						
-					case 8:
-						target.inst(X86.MOV, TypeFamily.SIGNED_64, _spills.newRegister, R(int(_spills.affected.register)));
-						break;
-					}
+					target.inst(X86.MOV, impl(_spills.affected.type), _spills.newRegister, R(int(_spills.affected.register)));
 					break;
 					
 				case	FLOAT_32:

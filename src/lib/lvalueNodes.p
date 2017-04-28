@@ -152,18 +152,24 @@ class Identifier extends Node {
 			n.type = type;
 			return n;
 		}
-		if (_symbol != null && _symbol.storageClass() == StorageClass.LOCK) {
-			ref<LockScope> lockScope = ref<LockScope>(_symbol.enclosing());
-			ref<Node> lockRef = tree.newReference(lockScope.lockTemp, false, location());
-			if (lockRef == null)
-				return this;
-			ref<Node> member;
-			if (_symbol.class == DelegateSymbol)
-				member = tree.newSelection(lockRef, ref<DelegateSymbol>(_symbol).delegate(), true, location());
-			else // Must be a DelegateOverload
-				member = tree.newSelection(lockRef, ref<DelegateOverload>(_symbol).delegate(), true, location());
-			member.type = type;
-			return member;
+		if (_symbol != null) {
+			switch (_symbol.storageClass()) {
+			case LOCK:
+				ref<LockScope> lockScope = ref<LockScope>(_symbol.enclosing());
+				ref<Node> lockRef = tree.newReference(lockScope.lockTemp, false, location());
+				if (lockRef == null)
+					return this;
+				ref<Node> member;
+				if (_symbol.class == DelegateSymbol)
+					member = tree.newSelection(lockRef, ref<DelegateSymbol>(_symbol).delegate(), true, location());
+				else // Must be a DelegateOverload
+					member = tree.newSelection(lockRef, ref<DelegateOverload>(_symbol).delegate(), true, location());
+				member.type = type;
+				return member;
+
+			case ENUMERATION:
+				return tree.newInternalLiteral(_symbol.offset, location());
+			}
 		}
 		return this;
 	}
@@ -643,10 +649,14 @@ class Selection extends Node {
 	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
 		if (voidContext)
 			return _left.fold(tree, true, compileContext);
-		if (_symbol != null && _symbol.storageClass() == StorageClass.FLAGS) {
-			ref<Node> n = tree.newConstant(_symbol.offset, location());
-			n.type = type;
-			return n;
+		if (_symbol != null) {
+			switch (_symbol.storageClass()) {
+			case FLAGS:
+			case ENUMERATION:
+				ref<Node> n = tree.newInternalLiteral(_symbol.offset, location());
+				n.type = type;
+				return n;
+			}
 		}
 		if (_left.op() == Operator.SUBSCRIPT) {
 			ref<Node> element = ref<Binary>(_left).subscriptModify(tree, compileContext);

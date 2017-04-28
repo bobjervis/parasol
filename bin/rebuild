@@ -1,5 +1,5 @@
-set -e
 #!/bin/bash
+set -e
 
 PARASOL_BIN=$(dirname `readlink -f $0`)/..
 export PARASOL_HOME=`readlink -f $PARASOL_BIN`
@@ -9,7 +9,16 @@ PARASOL_PXI=$PARASOL_HOME/Debug/x86-64lnx.pxi
 $PARASOL_HOME/bin/parasolrt $PARASOL_PXI compiler/main.p --pxi=p1.pxi compiler/main.p
 
 $PARASOL_HOME/bin/parasolrt  p1.pxi --pxi=p2.pxi compiler/main.p
-$PARASOL_HOME/bin/pc src/util/bdiff.p p1.pxi p2.pxi
+if ! $PARASOL_HOME/bin/pc src/util/bdiff.p p1.pxi p2.pxi 
+then
+    echo Trying a third generation...
+    $PARASOL_HOME/bin/parasolrt  p2.pxi --pxi=p3.pxi compiler/main.p
+    if ! $PARASOL_HOME/bin/pc src/util/bdiff.p p2.pxi p3.pxi
+    then
+        echo  FAILED: binaries not converging after 3 generations
+        exit 1
+    fi
+fi
 $PARASOL_HOME/bin/parasolrt p2.pxi test/drivers/etsTests.p $@ --testpxi=p2.pxi test/scripts/parasol_tests.ets
 cp $PARASOL_PXI ${PARASOL_PXI}.save
 cp p1.pxi $PARASOL_PXI

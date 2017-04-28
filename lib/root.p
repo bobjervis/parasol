@@ -354,8 +354,12 @@ class vector<class E, class I> {
 	private I reservedSize(I length) {
 		I usedSize = length;
 		I allocSize = I(MIN_CAPACITY);
-		while (int(allocSize) < int(usedSize))
-			allocSize = I(int(allocSize) << 1);
+		while (int(allocSize) < int(usedSize)) {
+			I nextAllocSize = I(int(allocSize) << 1);
+			if (int(nextAllocSize) <= 0)
+				return I((int(allocSize) << 1) - 1);
+			allocSize = nextAllocSize;
+		}
 		return allocSize;
 	}
 	

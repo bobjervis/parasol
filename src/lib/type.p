@@ -610,6 +610,32 @@ class EnumInstanceType extends Type {
 			_toStringMethod = target.generateEnumToStringMethod(this, compileContext);
 		return _toStringMethod;
 	}
+
+	public int size() {
+		long numberOfEnums = _scope.symbols().size();
+		
+		if (numberOfEnums <= byte.MAX_VALUE)
+			return byte.bytes;
+		else if (numberOfEnums <= char.MAX_VALUE)
+			return short.bytes;
+		else if (numberOfEnums <= unsigned.MAX_VALUE)
+			return int.bytes;
+		else
+			return long.bytes;
+	}
+
+	public int alignment() {
+		long numberOfEnums = _scope.symbols().size();
+		
+		if (numberOfEnums <= byte.MAX_VALUE)
+			return byte.bytes;
+		else if (numberOfEnums <= char.MAX_VALUE)
+			return char.bytes;
+		else if (numberOfEnums <= unsigned.MAX_VALUE)
+			return unsigned.bytes;
+		else
+			return long.bytes;
+	}
 }
 
 class FlagsType extends TypedefType {

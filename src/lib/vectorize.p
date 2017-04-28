@@ -399,25 +399,22 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 				ref<Node> val;
 				ref<Node> idx;
 				if (nl.node.op() == Operator.LABEL) {
-					idx = ref<Binary>(nl.node).left(); 
 					val = ref<Binary>(nl.node).right();
 					if (indexType.family() == TypeFamily.ENUM) {
 						ref<EnumScope> scope = ref<EnumScope>(indexType.scope());
-						ref<Identifier> id = ref<Identifier>(idx);
+						ref<Identifier> id = ref<Identifier>(ref<Binary>(nl.node).left());
 						lastIndexValue = scope.indexOf(id.symbol()); 
 					} else {
 						vectorExpression.print(0);
 						assert(false);
 					}
-					idx = tree.newUnary(Operator.ADDRESS, idx, idx.location());
-					idx.type = indexType;
 				} else {
 					lastIndexValue++;
 					val = nl.node;
-					idx = tree.newConstant(lastIndexValue, val.location());
-					idx.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
-					idx = tree.newCast(indexType, idx);
 				}
+				idx = tree.newConstant(lastIndexValue, val.location());
+				idx.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+				idx = tree.newCast(indexType, idx);
 				CompileString set("set");
 				ref<Node> arrayRef = lhs.clone(tree);
 				ref<Symbol> sym = vectorType.lookup(&set, compileContext);

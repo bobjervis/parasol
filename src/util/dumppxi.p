@@ -16,8 +16,6 @@
 import parasol:pxi;
 import parasol:file;
 import parasol:commandLine;
-import parasol:byteCodes.ByteCodeSectionHeader;
-import parasol:byteCodes.ByteCodeRelocation;
 import parasol:x86_64;
 
 class DumpPxiCommand extends commandLine.Command {
@@ -75,9 +73,7 @@ boolean dump(string filename) {
 		string offset;
 		offset.printf("@%x", entry.offset);
 		printf("  %c %4s %16s %10s [%d bytes]\n", i == best ? '*' : ' ', label, type, offset, entry.length);
-		if (st == pxi.SectionType.BYTE_CODES)
-			pxi.registerSectionReader(pxi.SectionType.BYTE_CODES, byteCodeReader);
-		else if (st == pxi.SectionType.X86_64_WIN)
+		if (st == pxi.SectionType.X86_64_WIN)
 			pxi.registerSectionReader(pxi.SectionType.X86_64_WIN, x86_64NextReader);
 		else
 			continue;
@@ -89,50 +85,6 @@ boolean dump(string filename) {
 	return true;
 }
 
-ref<pxi.Section> byteCodeReader(file.File pxiFile, long length) {
-	ByteCodeSectionHeader header;
-
-	if (pxiFile.read(&header, header.bytes) != header.bytes) {
-		printf("          Could not read byte-code section header\n");
-		return null;
-	}
-	printf("          %d objects, entry point [%d], %d relocations\n", header.objectCount, header.entryPoint, header.relocationCount);
-	int[] objectTable;
-	objectTable.resize(header.objectCount);
-	long imageLength = length - header.bytes - header.objectCount * int.bytes - header.relocationCount * ByteCodeRelocation.bytes;
-	if (imageLength == 0) {
-		printf("Image is zero bytes long\n");
-		return null;
-	}
-	if (pxiFile.read(&objectTable[0], header.objectCount * int.bytes) != header.objectCount * int.bytes) {
-		printf("Could not read byte code object table\n");
-		return null;
-	}
-	long loc = pxiFile.tell();
-	printf("          Image starts at offset %d\n", loc);
-	for (int i = 0; i < objectTable.length(); i++) {
-		string label;
-		label.printf("[%d]", i);
-		printf("%18s @ %d\n", label, objectTable[i]);
-	}
-	return new PlaceHolder();
-/*
-	address data = memory.alloc(imageLength);
-	if (pxiFile.read(data, int(imageLength)) != imageLength) {
-		printf("Could not read byte code image\n");
-		return null;
-	}
-	ByteCodeRelocation[] relocations;
-	relocations.resize(header.relocationCount);
-	if (pxiFile.read(&relocations[0], relocations.length() * ByteCodeRelocation.bytes) != relocations.length() * ByteCodeRelocation.bytes) {
-		printf("Could not read relocations\n");
-		return null;
-	}
-	for (int i = 0; i < relocations.length(); i++) {
-	}
-	return null;
-*/
-}
 
 ref<pxi.Section> x86_64NextReader(file.File pxiFile, long length) {
 	x86_64.X86_64SectionHeader header;

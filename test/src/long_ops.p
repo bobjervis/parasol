@@ -185,9 +185,21 @@ int main(string[] args) {
 	assert(long.MAX_VALUE == 0x7fffffffffffffff);
 	
 	assert(long.MIN_VALUE == 0x8000000000000000);
+	
+	assert(weirdShift(1) == 0xff);
+	assert(weirdShift(2) == 0xffff);
+	assert(weirdShift(4) == 0xffffffff);
+	assert(weirdShift(8) == 0);				// Unfortunate, this happens because the Intel chip truncates the shift count so the largest shift is 63.
+	
 	return 0;
 }
 
 long func(long p) {
 	return p;
+}
+
+long weirdShift(int size) {
+	long mask = (long(1) << (size << 3)) - 1;
+	printf("mask = %x\n", mask);
+	return mask;
 }

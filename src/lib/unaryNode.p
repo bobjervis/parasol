@@ -358,7 +358,8 @@ class Unary extends Node {
 			return this;
 			
 		case	ADDRESS:
-			if (_operand.op() == Operator.SUBSCRIPT) {
+			switch (_operand.op()) {
+			case SUBSCRIPT:
 				ref<Binary> b = ref<Binary>(_operand);
 				if (b.left().type.isVector(compileContext)) {
 					CompileString name("elementAddress");
@@ -376,6 +377,12 @@ class Unary extends Node {
 					call.type = type;
 					return call.fold(tree, voidContext, compileContext);
 				}
+				break;
+				
+			case DOT:
+			case IDENTIFIER:
+				if (_operand.symbol() != null && _operand.symbol().storageClass() == StorageClass.ENUMERATION)
+					return this;			// Avoid mapping enum constants to INTERNAL_LITERAL when the operand of a 
 			}
 			break;
 			

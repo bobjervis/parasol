@@ -41,6 +41,7 @@ import parasol:compiler.FunctionDeclaration;
 import parasol:compiler.FunctionType;
 import parasol:compiler.GatherCasesClosure;
 import parasol:compiler.Identifier;
+import parasol:compiler.InternalLiteral;
 import parasol:compiler.MessageId;
 import parasol:compiler.Node;
 import parasol:compiler.NodeList;
@@ -568,14 +569,27 @@ public class X86_64 extends X86_64AssignTemps {
 				ref<EnumScope> enclosing = ref<EnumScope>(scope.enclosing());
 				
 				ref<ref<Symbol>[]> instances = enclosing.instances();
-				ref<CodeSegment> nullCase = _storage new CodeSegment;
-				ref<CodeSegment> join = _storage new CodeSegment;
-				inst(X86.CMP, TypeFamily.ADDRESS, R.RCX, 0);
-				closeCodeSegment(CC.JE, nullCase);
 				ref<EnumInstanceType> t = ref<EnumInstanceType>(enclosing.enumType.wrappedType());
-				loadEnumType(R.RAX, t.symbol(), 0);
-				inst(X86.SUB, TypeFamily.SIGNED_64, R.RCX, R.RAX);
-				inst(X86.SAL, TypeFamily.SIGNED_64, R.RCX, 1);
+				R indexRegister = firstRegisterArgument();
+				switch (impl(t)) {
+				case UNSIGNED_8:
+					if ((getRegMask(firstRegisterArgument()) & byteMask) != 0) {
+						indexRegister = R.RDX;
+						inst(X86.MOVZX_8, TypeFamily.UNSIGNED_32, indexRegister, firstRegisterArgument());
+					}
+					inst(X86.MOVZX_8, TypeFamily.UNSIGNED_64, indexRegister, indexRegister);
+					inst(X86.SAL, TypeFamily.SIGNED_64, indexRegister, 3);
+					break;
+					
+				case UNSIGNED_16:
+					inst(X86.MOVZX, TypeFamily.UNSIGNED_64, indexRegister, indexRegister);
+					inst(X86.SAL, TypeFamily.SIGNED_64, indexRegister, 3);
+					break;
+					
+				case UNSIGNED_32:
+					inst(X86.SAL, TypeFamily.SIGNED_64, indexRegister, 32);
+					inst(X86.SAR, TypeFamily.UNSIGNED_64, indexRegister, 29);
+				}
 				ref<Symbol> stringArray;
 				if (parameterScope.symbolCount() == 0) {
 					string nm = "*";
@@ -588,11 +602,7 @@ public class X86_64 extends X86_64AssignTemps {
 				} else
 					stringArray = parameterScope.lookup("*", compileContext);
 				inst(X86.LEA, R.RAX, stringArray);
-				inst(X86.MOV, R.RAX, R.RCX, R.RAX);
-				closeCodeSegment(CC.JMP, join);
-				nullCase.start(this);
-				inst(X86.XOR, TypeFamily.ADDRESS, R.RAX, R.RAX);
-				join.start(this);
+				inst(X86.MOV, R.RAX, indexRegister, R.RAX);
 				if (!generateReturn(parameterScope, compileContext))
 					assert(false);
 				break;
@@ -1236,55 +1246,32 @@ public class X86_64 extends X86_64AssignTemps {
 			emitSourceLocation(compileContext.current().file(), node.location());
 			generate(b.left(), compileContext);
 			ref<CodeSegment>[] labels = switchContext.caseLabels();
-			int mask = ~0;
-			R controlReg = R(int(b.left().register));
-			switch (b.left().type.family()) {
-			case	UNSIGNED_8:
-				inst(X86.MOVZX, controlReg, b.left(), compileContext);
-				mask = 0xff;
-			case	SIGNED_32:
-				for (int i = 0; i < labels.length(); i++) {
-					ref<Binary> caseNode = ref<Binary>(closure.nodes[i]);
-					if (caseNode.left().deferGeneration()) {
-						// TODO: generate exception
-						continue;
-					}
-					int x = int(caseNode.left().foldInt(this, compileContext));
-					inst(X86.CMP, b.left().type.family(), controlReg, x & mask);
-					closeCodeSegment(CC.JE, labels[i]);
-					ref<CodeSegment> n = _storage new CodeSegment;
-					n.start(this);
+			R controlReg = R(b.left().register);
+			int size = b.left().type.size();
+			long mask;
+			if (size < 8)
+				mask = (long(1) << (size << 3)) - 1;
+			else
+				mask = ~0;
+			for (int i = 0; i < labels.length(); i++) {
+				ref<Binary> caseNode = ref<Binary>(closure.nodes[i]);
+				if (caseNode.left().deferGeneration()) {
+					// TODO: generate exception
+					continue;
 				}
-				closeCodeSegment(CC.JMP, defaultSegment);
-				break;
-
-			case	ENUM:
-				for (int i = 0; i < labels.length(); i++) {
-					ref<Binary> caseNode = ref<Binary>(closure.nodes[i]);
-					if (caseNode.left().deferGeneration()) {
-						// TODO: generate exception
-						continue;
-					}
-					ref<Identifier> c = ref<Identifier>(caseNode.left());
-					if (c.symbol() != null) {
-						ref<EnumInstanceType> t = ref<EnumInstanceType>(b.left().type);
-						loadEnumType(R(int(node.register)), t.symbol(), c.symbol().offset * int.bytes);
-						inst(X86.CMP, TypeFamily.SIGNED_64, controlReg, R(int(node.register)));
-						closeCodeSegment(CC.JE, labels[i]);
-						ref<CodeSegment> n = _storage new CodeSegment;
-						n.start(this);
-					} else
-						unfinished(c, "enum switch", compileContext);
-				}
-				closeCodeSegment(CC.JMP, defaultSegment);
-				break;
-
-			default:
-				if (b.left().deferAnalysis())
-					return;
-				b.print(4);
-				unfinished(b, "switch type", compileContext);
+				int x;
+				if (b.left().type.family() == TypeFamily.ENUM) {
+					ref<EnumInstanceType> t = ref<EnumInstanceType>(b.left().type);
+					ref<InternalLiteral> c = ref<InternalLiteral>(caseNode.left());
+					x = int(c.intValue());
+				} else
+					x = int(caseNode.left().foldInt(this, compileContext));
+				inst(X86.CMP, impl(b.left().type), controlReg, x);// & mask);
+				closeCodeSegment(CC.JE, labels[i]);
+				ref<CodeSegment> n = _storage new CodeSegment;
+				n.start(this);
 			}
+			closeCodeSegment(CC.JMP, defaultSegment);
 			pushJumpContext(&switchContext);
 			generate(b.right(), compileContext);
 			popJumpContext();
@@ -1479,7 +1466,7 @@ public class X86_64 extends X86_64AssignTemps {
 	//				printf("\n\n---- ASSIGN ----\n");
 	//				b.print(4);
 					if (b.register == 0)
-						inst(X86.MOV, b.type.family(), b.left(), b.right(), compileContext);
+						inst(X86.MOV, impl(b.type), b.left(), b.right(), compileContext);
 					else {
 						inst(X86.MOV, R(b.register), b.right(), compileContext);
 						inst(X86.MOV, b.left(), R(b.register), compileContext);
@@ -2097,7 +2084,8 @@ public class X86_64 extends X86_64AssignTemps {
 			assert(b.left().op() == Operator.EMPTY);
 //			assert(b.right().op() == Operator.EMPTY);
 			ref<Type> t = node.type.indirectType(compileContext);
-			int size = t.size();
+
+			size = t.size();
 			f().r.generateSpills(node, this);
 			inst(X86.MOV, TypeFamily.SIGNED_64, firstRegisterArgument(), size);
 			instCall(_alloc, compileContext);
@@ -2356,7 +2344,29 @@ public class X86_64 extends X86_64AssignTemps {
 			case	FLAGS:
 //				printf("flaky integeer stuff\n");
 //				node.print(0);
-				inst(X86.MOV, impl(c.type), R(int(node.register)), c.intValue());
+				inst(X86.MOV, impl(c.type), R(node.register), c.intValue());
+				break;
+				
+			default:
+				node.print(0);
+				unfinished(node, "generate INTEGER", compileContext);
+			}
+			break;
+
+		case	INTERNAL_LITERAL:
+			if ((node.nodeFlags & ADDRESS_MODE) != 0)
+				break;
+			ref<InternalLiteral> il = ref<InternalLiteral>(node);
+			switch (il.type.family()) {
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	SIGNED_32:
+			case	SIGNED_64:
+			case	ADDRESS:
+			case	FLAGS:
+			case	ENUM:
+				inst(X86.MOV, impl(il.type), R(node.register), il.intValue());
 				break;
 				
 			default:
@@ -2446,22 +2456,8 @@ public class X86_64 extends X86_64AssignTemps {
 					break;
 				
 			default:
-				switch (dot.symbol().storageClass()) {
-				case ENUMERATION:
-					if (dot.symbol().value == null) {
-						node.print(0);
-						assert(false);
-						break;
-					}
-					ref<EnumInstanceType> t = ref<EnumInstanceType>(dot.type);
-					loadEnumType(R(dot.register), t.symbol(), 0);
-					inst(X86.ADD, TypeFamily.ENUM, R(dot.register), dot.symbol().offset * int.bytes);
-					break;
-
-				default:
-					if ((dot.nodeFlags & ADDRESS_MODE) == 0)
-						generateLoad(X86.MOV, dot, compileContext);
-				}
+				if ((dot.nodeFlags & ADDRESS_MODE) == 0)
+					generateLoad(X86.MOV, dot, compileContext);
 			}
 			break;
 				
@@ -2709,10 +2705,10 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 
 	private void generateLoad(X86 instruction, ref<Node> expression, ref<CompileContext> compileContext) {
-		R reg = R(int(expression.register));
+		R reg = R(expression.register);
 		expression.register = 0;
 		inst(instruction, reg, expression, compileContext);
-		expression.register = byte(int(reg));
+		expression.register = byte(reg);
 	}
 
 	private void generateSubscript(ref<Binary> x, ref<CompileContext> compileContext) {
@@ -2847,30 +2843,11 @@ public class X86_64 extends X86_64AssignTemps {
 	private void generateCompareInst(ref<Binary> b, ref<CompileContext> compileContext) {
 		switch (b.left().type.family()) {
 		case	FLAGS:
-			switch (b.left().type.size()) {
-			case	1:
-				inst(X86.CMP, TypeFamily.UNSIGNED_8, b.left(), b.right(), compileContext);
-				break;
-
-			case	2:
-				inst(X86.CMP, TypeFamily.SIGNED_16, b.left(), b.right(), compileContext);
-				break;
-
-			case	4:
-				inst(X86.CMP, TypeFamily.SIGNED_32, b.left(), b.right(), compileContext);
-				break;
-
-			case	8:
-				inst(X86.CMP, TypeFamily.SIGNED_64, b.left(), b.right(), compileContext);
-				break;
-			}
-			break;
-			
+		case	ENUM:
 		case	UNSIGNED_32:
 		case	SIGNED_32:
 		case	SIGNED_64:
 		case	CLASS:
-		case	ENUM:
 		case	TYPEDEF:
 		case	ADDRESS:
 		case	CLASS_VARIABLE:
@@ -2878,7 +2855,7 @@ public class X86_64 extends X86_64AssignTemps {
 		case	POINTER:
 		case	BOOLEAN:
 		case	FUNCTION:
-			inst(X86.CMP, b.left().type.family(), b.left(), b.right(), compileContext);
+			inst(X86.CMP, impl(b.left().type), b.left(), b.right(), compileContext);
 			break;
 			
 		case	FLOAT_32:
@@ -3330,18 +3307,6 @@ public class X86_64 extends X86_64AssignTemps {
 			
 		case	DOT:
 			ref<Selection> dot = ref<Selection>(node);
-			if (dot.symbol().storageClass() == StorageClass.ENUMERATION) {
-				if (dot.symbol().value == null) {
-					node.print(0);
-					assert(false);
-					break;
-				}
-				ref<EnumInstanceType> t = ref<EnumInstanceType>(dot.type);
-				loadEnumType(R.RAX, t.symbol(), 0);
-				inst(X86.ADD, TypeFamily.ENUM, R.RAX, dot.symbol().offset * int.bytes);
-				inst(X86.PUSH, TypeFamily.SIGNED_64, R.RAX);
-				return;
-			}
 			generate(dot.left(), compileContext);
 			break;
 			
@@ -3380,6 +3345,7 @@ public class X86_64 extends X86_64AssignTemps {
 		case	ADDRESS:
 		case	NEGATE:
 		case	INTEGER:
+		case	INTERNAL_LITERAL:
 		case	MULTIPLY:
 		case	ADD:
 		case	SUBTRACT:
@@ -3410,10 +3376,15 @@ public class X86_64 extends X86_64AssignTemps {
 		ref<Type> newType = result.type;
 		
 		f().r.generateSpills(result, this);
-		switch (existingType.family()) {
+		if (existingType.family() == TypeFamily.ENUM && newType.family() == TypeFamily.STRING) {
+			ref<EnumInstanceType> t = ref<EnumInstanceType>(existingType);
+			instCall(t.toStringMethod(this, compileContext), compileContext);
+			return;
+		}
+		switch (impl(existingType)) {
 		case	BOOLEAN:
 		case	UNSIGNED_8:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
@@ -3430,13 +3401,16 @@ public class X86_64 extends X86_64AssignTemps {
 			case	POINTER:
 			case	FUNCTION:
 			case	INTERFACE:
-			case	FLAGS:
 				if (R(n.register) == R.AH) {
 					// The only way that AH could get assigned is to use the result of a byte-% operator
 					inst(X86.MOV, TypeFamily.UNSIGNED_8, R.RAX, R.AH);
 					inst(X86.AND, newType.family(), R.RAX, 0xff);
-				} else
+				} else {
+					if (result.register == 0) {
+						result.print(0);
+					}
 					inst(X86.AND, newType.family(), R(result.register), 0xff);
+				}
 				return;
 				
 			case	FLOAT_32:
@@ -3456,21 +3430,11 @@ public class X86_64 extends X86_64AssignTemps {
 				else
 					inst(X86.CVTSI2SD, TypeFamily.FLOAT_64, R(result.register), src);
 				return;
-				
-			case	ENUM:
-				if (R(n.register) == R.AH) {
-					// The only way that AH could get assigned is to use the result of a byte-% operator
-					inst(X86.MOV, TypeFamily.UNSIGNED_8, R.RAX, R.AH);
-					inst(X86.AND, newType.family(), R.RAX, 0xff);
-				} else
-					inst(X86.AND, newType.family(), R(n.register), 0xff);
-				generateIntToEnum(result, n, ref<EnumInstanceType>(newType));
-				return;
 			}
 			break;
 
 		case	UNSIGNED_16:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -3487,15 +3451,9 @@ public class X86_64 extends X86_64AssignTemps {
 			case	POINTER:
 			case	FUNCTION:
 			case	INTERFACE:
-			case	FLAGS:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, TypeFamily.UNSIGNED_16, result, n, compileContext);
 				inst(X86.AND, newType.family(), R(result.register), 0xffff);
-				return;
-
-			case	ENUM:
-				inst(X86.AND, newType.family(), R(n.register), 0xffff);
-				generateIntToEnum(result, n, ref<EnumInstanceType>(newType));
 				return;
 				
 			case	FLOAT_32:
@@ -3510,7 +3468,7 @@ public class X86_64 extends X86_64AssignTemps {
 			break;
 
 		case	UNSIGNED_32:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -3527,19 +3485,10 @@ public class X86_64 extends X86_64AssignTemps {
 			case	POINTER:
 			case	FUNCTION:
 			case	INTERFACE:
-			case	FLAGS:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, TypeFamily.UNSIGNED_32, result, n, compileContext);
 				inst(X86.SAL, TypeFamily.UNSIGNED_32, R(result.register), 32);
 				inst(X86.SHR, TypeFamily.UNSIGNED_32, R(result.register), 32);
-				return;
-
-			case	ENUM:
-				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
-					inst(X86.MOV, TypeFamily.UNSIGNED_32, result, n, compileContext);
-				inst(X86.SAL, TypeFamily.UNSIGNED_32, R(n.register), 32);
-				inst(X86.SHR, TypeFamily.UNSIGNED_32, R(n.register), 32);
-				generateIntToEnum(result, n, ref<EnumInstanceType>(newType));
 				return;
 				
 			case	FLOAT_32:
@@ -3555,7 +3504,7 @@ public class X86_64 extends X86_64AssignTemps {
 			break;
 
 		case	SIGNED_16:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -3574,7 +3523,6 @@ public class X86_64 extends X86_64AssignTemps {
 			case	POINTER:
 			case	FUNCTION:
 			case	INTERFACE:
-			case	FLAGS:
 				inst(X86.MOVSX_REX_W, TypeFamily.SIGNED_64, result, n, compileContext);
 				return;
 				
@@ -3585,16 +3533,11 @@ public class X86_64 extends X86_64AssignTemps {
 			case	FLOAT_64:
 				inst(X86.CVTSI2SD, TypeFamily.SIGNED_16, result, n, compileContext);
 				return;
-				
-			case	ENUM:
-				inst(X86.MOVSX_REX_W, TypeFamily.ADDRESS, R(n.register), R(n.register));
-				generateIntToEnum(result, n, ref<EnumInstanceType>(newType));
-				return;
 			}
 			break;
 
 		case	SIGNED_32:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -3605,12 +3548,6 @@ public class X86_64 extends X86_64AssignTemps {
 					inst(X86.MOV, TypeFamily.SIGNED_32, result, n, compileContext);
 				return;
 
-			case	FLAGS:
-				if (newType.size() < 8) {
-					if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
-						inst(X86.MOV, TypeFamily.SIGNED_32, result, n, compileContext);
-					return;
-				}
 			case	SIGNED_64:
 			case	ADDRESS:
 			case	REF:
@@ -3626,11 +3563,6 @@ public class X86_64 extends X86_64AssignTemps {
 				
 			case	FLOAT_64:
 				inst(X86.CVTSI2SD, TypeFamily.SIGNED_32, result, n, compileContext);
-				return;
-				
-			case	ENUM:
-				inst(X86.MOVSXD, TypeFamily.ADDRESS, R(n.register), R(n.register));
-				generateIntToEnum(result, n, ref<EnumInstanceType>(newType));
 				return;
 /*
 			case	VAR:
@@ -3652,7 +3584,7 @@ public class X86_64 extends X86_64AssignTemps {
 			break;
 
 		case	SIGNED_64:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -3665,7 +3597,6 @@ public class X86_64 extends X86_64AssignTemps {
 			case	POINTER:
 			case	FUNCTION:
 			case	INTERFACE:
-			case	FLAGS:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, TypeFamily.SIGNED_64, result, n, compileContext);
 				return;
@@ -3677,15 +3608,11 @@ public class X86_64 extends X86_64AssignTemps {
 			case	FLOAT_64:
 				inst(X86.CVTSI2SD, TypeFamily.SIGNED_64, result, n, compileContext);
 				return;
-				
-			case	ENUM:
-				generateIntToEnum(result, n, ref<EnumInstanceType>(newType));
-				return;
 			}
 			break;
 
 		case	FLOAT_32:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -3698,7 +3625,6 @@ public class X86_64 extends X86_64AssignTemps {
 			case	POINTER:
 			case	FUNCTION:
 			case	INTERFACE:
-			case	FLAGS:
 				inst(X86.CVTTSS2SI, TypeFamily.FLOAT_32, result, n, compileContext);
 				return;
 
@@ -3708,16 +3634,11 @@ public class X86_64 extends X86_64AssignTemps {
 			case	FLOAT_64:
 				inst(X86.CVTSS2SD, TypeFamily.FLOAT_32, result, n, compileContext);
 				return;
-				
-			case	ENUM:
-				inst(X86.CVTTSS2SI, TypeFamily.FLOAT_32, result, n, compileContext);
-				generateIntToEnum(result, n, ref<EnumInstanceType>(newType));
-				return;
 			}
 			break;
 
 		case	FLOAT_64:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -3730,7 +3651,6 @@ public class X86_64 extends X86_64AssignTemps {
 			case	POINTER:
 			case	FUNCTION:
 			case	INTERFACE:
-			case	FLAGS:
 				inst(X86.CVTTSD2SI, TypeFamily.FLOAT_64, result, n, compileContext);
 				return;
 
@@ -3740,11 +3660,6 @@ public class X86_64 extends X86_64AssignTemps {
 				
 			case	FLOAT_64:
 				return;
-				
-			case	ENUM:
-				inst(X86.CVTTSD2SI, TypeFamily.FLOAT_64, result, n, compileContext);
-				generateIntToEnum(result, n, ref<EnumInstanceType>(newType));
-				return;
 			}
 			break;
 
@@ -3752,10 +3667,8 @@ public class X86_64 extends X86_64AssignTemps {
 		case	ADDRESS:
 		case	REF:
 		case	POINTER:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
-			case	ENUM:
-			case	FLAGS:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
 			case	UNSIGNED_32:
@@ -3778,64 +3691,6 @@ public class X86_64 extends X86_64AssignTemps {
 				
 			case	FLOAT_64:
 				inst(X86.CVTSI2SD, TypeFamily.ADDRESS, result, n, compileContext);
-				return;
-			}
-			break;
-
-		case	ENUM:
-			switch (newType.family()) {
-			case	BOOLEAN:
-			case	UNSIGNED_8:
-			case	UNSIGNED_16:
-			case	UNSIGNED_32:
-			case	SIGNED_16:
-			case	SIGNED_32:
-			case	SIGNED_64:
-				R dest = R(result.register);
-				ref<EnumInstanceType> t = ref<EnumInstanceType>(existingType);
-				loadEnumType(dest, t.symbol(), 0);
-				inst(X86.SUB, dest, n, compileContext);
-				inst(X86.SAR, dest, 1);
-				inst(X86.SAR, dest, 1);
-				inst(X86.NEG, newType.family(), dest);
-				return;
-
-			case	ADDRESS:
-			case	REF:
-			case	POINTER:
-			case	FUNCTION:
-			case	ENUM:
-			case	INTERFACE:
-			case	FLAGS:
-				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
-					inst(X86.MOV, TypeFamily.ADDRESS, result, n, compileContext);
-				return;
-
-			case	FLOAT_32:
-				R src = R(n.register);
-				t = ref<EnumInstanceType>(existingType);
-				result.print(0);
-				assert(false);
-				subEnumType(src, t.symbol(), 0);
-				inst(X86.SAR, src, 1);
-				inst(X86.SAR, src, 1);
-				inst(X86.CVTSI2SS, TypeFamily.ADDRESS, result, n, compileContext);
-				return;
-				
-			case	FLOAT_64:
-				src = R(n.register);
-				t = ref<EnumInstanceType>(existingType);
-				result.print(0);
-				assert(false);
-				subEnumType(src, t.symbol(), 0);
-				inst(X86.SAR, src, 1);
-				inst(X86.SAR, src, 1);
-				inst(X86.CVTSI2SD, TypeFamily.ADDRESS, result, n, compileContext);
-				return;
-				
-			case	STRING:
-				t = ref<EnumInstanceType>(existingType);
-				instCall(t.toStringMethod(this, compileContext), compileContext);
 				return;
 			}
 			break;
@@ -3904,7 +3759,7 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			*/
 		case	FUNCTION:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -3917,7 +3772,6 @@ public class X86_64 extends X86_64AssignTemps {
 			case	POINTER:
 			case	FUNCTION:
 			case	INTERFACE:
-			case	FLAGS:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, TypeFamily.FUNCTION, result, n, compileContext);
 				return;
@@ -3928,10 +3782,6 @@ public class X86_64 extends X86_64AssignTemps {
 					inst(X86.CVTSI2SS, TypeFamily.FLOAT_32, R(result.register), R(n.register));
 				else
 					inst(X86.CVTSI2SD, TypeFamily.FLOAT_64, R(result.register), R(n.register));
-				return;
-				
-			case	ENUM:
-				generateIntToEnum(result, n, ref<EnumInstanceType>(newType));
 				return;
 			}
 			break;
@@ -3953,11 +3803,6 @@ public class X86_64 extends X86_64AssignTemps {
 	public ref<ParameterScope> generateFlagsToStringMethod(ref<FlagsInstanceType> type, ref<CompileContext> compileContext) {
 		ref<ParameterScope> scope = compileContext.arena().createParameterScope(type.scope(), null, ParameterScope.Kind.FLAGS_TO_STRING);
 		return scope;
-	}
-	
-	private void generateIntToEnum(ref<Node> result, ref<Node> node, ref<EnumInstanceType> newType) {
-		loadEnumType(R(int(result.register)), newType.symbol(), 0);
-		loadEnumAddress(R(int(result.register)), R(int(node.register)));
 	}
 	
 	private boolean generateReturn(ref<Scope> scope, ref<CompileContext> compileContext) {
@@ -4455,16 +4300,18 @@ private TraverseAction collectStaticDestructors(ref<Node> n, address data) {
 }
 
 TypeFamily impl(ref<Type> t) {
-	if (t.family() != TypeFamily.FLAGS) {
-		return t.family();
+	switch (t.family()) {
+	case FLAGS:
+	case ENUM:
+		switch (t.size()) {
+		case 1:
+			return TypeFamily.UNSIGNED_8;
+		case 2:
+			return TypeFamily.SIGNED_16;
+		case 4:
+			return TypeFamily.SIGNED_32;
+		}
+		return TypeFamily.SIGNED_64;
 	}
-	switch (t.size()) {
-	case 1:
-		return TypeFamily.UNSIGNED_8;
-	case 2:
-		return TypeFamily.SIGNED_16;
-	case 4:
-		return TypeFamily.SIGNED_32;
-	}
-	return TypeFamily.SIGNED_64;
+	return t.family();
 }

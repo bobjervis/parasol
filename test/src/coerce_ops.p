@@ -167,7 +167,7 @@ assert(d == 64007);
 assert(v == 64007);
 assert(long(a) == 64007);
 assert(long(bool) == 7);
-assert(long(e) == 64007);
+assert(long(e) == 7);
 assert(long(p) == 64007);
 assert(long(fn) == 64007);
 
@@ -195,7 +195,7 @@ assert(d == 3567421900);
 assert(v == 3567421900);
 assert(long(a) == 3567421900);
 assert(long(bool) == 204);
-assert(long(e) == 3567421900);
+assert(long(e) == 204);
 
 s = 24880;
 
@@ -221,7 +221,7 @@ assert(d == 24880);
 assert(v == 24880);
 assert(long(a) == 24880);
 assert(long(bool) == 48);
-assert(long(e) == 24880);
+assert(long(e) == 48);
 
 i = 1027843991;
 
@@ -249,7 +249,7 @@ assert(d == 1027843991);
 assert(v == 1027843991);
 assert(long(a) == 1027843991);
 assert(long(bool) == 151);
-assert(long(e) == 1027843991);
+assert(long(e) == 151);
 assert(long(p) == 1027843991);
 assert(long(fn) == 1027843991);
 
@@ -279,7 +279,7 @@ assert(d == 9098143217445643188);
 assert(v == 9098143217445643188);
 assert(long(a) == 9098143217445643188);
 assert(long(bool) == 180);
-assert(long(e) == -125228819409132620);		// Enums divide by four (the smallest size for the class)
+assert(long(e) == 180);
 assert(long(p) == 9098143217445643188);
 assert(long(fn) == 9098143217445643188);
 
@@ -309,7 +309,7 @@ assert(d == 16121908);
 assert(float(v) == 16121908);
 assert(long(a) == 16121908);
 assert(long(bool) == 52);
-//assert(long(e) == 16121908);		// Enums divide by four (the smallest size for the class)
+assert(long(e) == 52);
 assert(long(p) == 16121908);
 assert(long(fn) == 16121908);
 
@@ -339,7 +339,7 @@ assert(f == 2632372374184627);
 assert(double(v) == 2632372374184627);
 assert(long(a) == 2632372374184627);
 assert(long(bool) == 179);
-//assert(long(e) == 16121908);		// Enums divide by four (the smallest size for the class)
+assert(long(e) == 179);
 assert(long(p) == 2632372374184627);
 assert(long(fn) == 2632372374184627);
 
@@ -351,8 +351,8 @@ u = unsigned(e);
 s = short(e);
 i = int(e);
 l = long(e);
-//f = float(e);
-//d = double(e);
+f = float(e);
+d = double(e);
 //v = e;
 a = address(e);
 bool = boolean(e);
@@ -365,13 +365,13 @@ assert(u == 2);
 assert(s == 2);
 assert(i == 2);
 assert(l == 2);
-//assert(f == 2);
-//assert(d == 2);
+assert(f == 2);
+assert(d == 2);
 //assert(v == 2);
-assert(long(a) == long(&e.C));
+assert(long(a) == long(e.C));
 assert(long(bool) == 2);
-assert(long(p) == long(&e.C));
-assert(long(fn) == long(&e.C));
+assert(long(p) == long(e.C));
+assert(long(fn) == long(e.C));
 
 
 

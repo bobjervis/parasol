@@ -93,7 +93,7 @@ private:
 };
 
 static ThreadContext threadContext;
-
+#if 0
 static int varCompare(byte *left, byte *right);
 // Results stored in left:
 static void varAdd(byte *left, byte *right);
@@ -108,6 +108,7 @@ static void varAnd(byte *left, byte *right);
 static void varOr(byte *left, byte *right);
 static void varXor(byte *left, byte *right);
 static void *varInvoke(int object, int method);
+#endif
 
 char ParasolStringParameter::dummy;
 
@@ -360,10 +361,11 @@ static void fillExceptionInfo(HardwareException *he, siginfo_t *info, ucontext *
 	he->codePointer = (byte*)uContext->uc_mcontext.gregs[REG_RIP];
 	he->framePointer = (byte*)uContext->uc_mcontext.gregs[REG_RBP];
 	he->stackPointer = (byte*)uContext->uc_mcontext.gregs[REG_RSP];
-	he->exceptionType = (info->si_signo << 8) + (info->si_code & ~SI_KERNEL);
+	he->exceptionType = (info->si_signo << 8) + info->si_code;
+	he->exceptionInfo1 = info->si_errno;
 }
 
-void sigIllHandler(int signum, siginfo_t *info, void *uContext) {
+void sigGeneralHandler(int signum, siginfo_t *info, void *uContext) {
 	ExecutionContext *context = threadContext.get();
 
 	if (context->hasHardwareExceptionHandler()) {
@@ -371,7 +373,6 @@ void sigIllHandler(int signum, siginfo_t *info, void *uContext) {
 
 		fillExceptionInfo(&he, info, (ucontext*)uContext);
 		he.exceptionInfo0 = 0;
-		he.exceptionInfo1 = 0;
 		context->callHardwareExceptionHandler(&he);
 		printf("Did not expect this to return\n");
 	}
@@ -387,23 +388,6 @@ void sigSegvHandler(int signum, siginfo_t *info, void *uContext) {
 
 		fillExceptionInfo(&he, info, (ucontext*)uContext);
 		he.exceptionInfo0 = (long long)info->si_addr;
-		he.exceptionInfo1 = 0;
-		context->callHardwareExceptionHandler(&he);
-		printf("Did not expect this to return\n");
-	}
-	printf("No hardware exception handler defined\n");
-	exit(1);
-}
-
-void sigFpeHandler(int signum, siginfo_t *info, void *uContext) {
-	ExecutionContext *context = threadContext.get();
-
-	if (context->hasHardwareExceptionHandler()) {
-		HardwareException he;
-
-		fillExceptionInfo(&he, info, (ucontext*)uContext);
-		he.exceptionInfo0 = 0;
-		he.exceptionInfo1 = 0;
 		context->callHardwareExceptionHandler(&he);
 		printf("Did not expect this to return\n");
 	}
@@ -422,19 +406,18 @@ int ExecutionContext::runNative(int (*start)(void *args)) {
 	struct sigaction oldSigIllAction;
 	struct sigaction oldSigSegvAction;
 	struct sigaction oldSigFpeAction;
-	struct sigaction newIllAction;
+	struct sigaction oldSigQuitAction;
+	struct sigaction newGeneralAction;
 	struct sigaction newSegvAction;
-	struct sigaction newFpeAction;
 
-	newIllAction.sa_sigaction = sigIllHandler;
-	newIllAction.sa_flags = SA_SIGINFO;
+	newGeneralAction.sa_sigaction = sigGeneralHandler;
+	newGeneralAction.sa_flags = SA_SIGINFO;
 	newSegvAction.sa_sigaction = sigSegvHandler;
 	newSegvAction.sa_flags = SA_SIGINFO;
-	newFpeAction.sa_sigaction = sigFpeHandler;
-	newFpeAction.sa_flags = SA_SIGINFO;
-	sigaction(SIGILL, &newIllAction, &oldSigIllAction);
+	sigaction(SIGILL, &newGeneralAction, &oldSigIllAction);
 	sigaction(SIGSEGV, &newSegvAction, &oldSigSegvAction);
-	sigaction(SIGFPE, &newFpeAction, &oldSigFpeAction);
+	sigaction(SIGFPE, &newGeneralAction, &oldSigFpeAction);
+	sigaction(SIGQUIT, &newGeneralAction, &oldSigFpeAction);
 #endif
 	int result = start(_sp);
 #if defined(__WIN64)

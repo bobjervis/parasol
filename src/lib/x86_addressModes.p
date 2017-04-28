@@ -192,6 +192,7 @@ class X86_64AddressModes extends X86_64Encoder {
 		case	BYTES:
 		case	CHARACTER:
 		case	FLOATING_POINT:
+		case	INTERNAL_LITERAL:
 			break;
 			
 		case	RIGHT_SHIFT:
@@ -376,6 +377,7 @@ class X86_64AddressModes extends X86_64Encoder {
 			case	ADDRESS:
 			case	NEGATE:
 			case	INTEGER:
+			case	INTERNAL_LITERAL:
 			case	MULTIPLY:
 			case	ADD:
 			case	SUBTRACT:
@@ -405,10 +407,14 @@ class X86_64AddressModes extends X86_64Encoder {
 	void markCast(ref<Node> dest, ref<Node> operand, ref<CompileContext> compileContext) {
 		ref<Type> existingType = operand.type;
 		ref<Type> newType = dest.type;
-		switch (existingType.family()) {
+		if (existingType.family() == TypeFamily.ENUM && newType.family() == TypeFamily.STRING) {
+			markAddressModes(operand, compileContext);
+			return;
+		}
+		switch (impl(existingType)) {
 		case	BOOLEAN:
 		case	UNSIGNED_8:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -416,8 +422,6 @@ class X86_64AddressModes extends X86_64Encoder {
 			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
-			case	ENUM:
-			case	FLAGS:
 			case	ADDRESS:
 			case	REF:
 			case	POINTER:
@@ -432,7 +436,7 @@ class X86_64AddressModes extends X86_64Encoder {
 			
 		case	UNSIGNED_16:
 		case	SIGNED_16:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -448,8 +452,6 @@ class X86_64AddressModes extends X86_64Encoder {
 				tryMakeMode(operand, MC_FULL, 0, compileContext);
 				return;
 
-			case	ENUM:
-			case	FLAGS:
 			case	FLOAT_32:
 			case	FLOAT_64:
 				markAddressModes(operand, compileContext);
@@ -459,7 +461,7 @@ class X86_64AddressModes extends X86_64Encoder {
 			
 		case	UNSIGNED_32:
 		case	SIGNED_32:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -477,15 +479,13 @@ class X86_64AddressModes extends X86_64Encoder {
 				
 			case	FLOAT_32:
 			case	FLOAT_64:
-			case	ENUM:
-			case	FLAGS:
 				markAddressModes(operand, compileContext);
 				return;
 			}
 			break;
 
 		case	SIGNED_64:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -503,8 +503,6 @@ class X86_64AddressModes extends X86_64Encoder {
 
 			case	FLOAT_32:
 			case	FLOAT_64:
-			case	ENUM:
-			case	FLAGS:
 				markAddressModes(operand, compileContext);
 				return;
 			}
@@ -512,7 +510,7 @@ class X86_64AddressModes extends X86_64Encoder {
 
 		case	FLOAT_32:
 		case	FLOAT_64:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -524,8 +522,6 @@ class X86_64AddressModes extends X86_64Encoder {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
-			case	ENUM:
-			case	FLAGS:
 			case	INTERFACE:
 				markAddressModes(operand, compileContext);
 				return;
@@ -549,7 +545,7 @@ class X86_64AddressModes extends X86_64Encoder {
 		case	REF:
 		case	POINTER:
 		case	INTERFACE:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	STRING:
 			case	ADDRESS:
 			case	BOOLEAN:
@@ -560,8 +556,6 @@ class X86_64AddressModes extends X86_64Encoder {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	FUNCTION:
-			case	ENUM:
-			case	FLAGS:
 			case	FUNCTION:
 			case	REF:
 			case	POINTER:
@@ -572,33 +566,6 @@ class X86_64AddressModes extends X86_64Encoder {
 			case	FLOAT_32:
 			case	FLOAT_64:
 				markAddressModes(operand, compileContext);
-				return;
-			}
-			break;
-
-		case	ENUM:
-			switch (newType.family()) {
-			case	BOOLEAN:
-			case	UNSIGNED_8:
-			case	UNSIGNED_16:
-			case	UNSIGNED_32:
-			case	SIGNED_16:
-			case	SIGNED_32:
-			case	SIGNED_64:
-			case	ENUM:
-			case	FLAGS:
-			case	FLOAT_32:
-			case	FLOAT_64:
-			case	STRING:
-				markAddressModes(operand, compileContext);
-				return;
-
-			case	ADDRESS:
-			case	FUNCTION:
-			case	REF:
-			case	POINTER:
-			case	INTERFACE:
-				tryMakeMode(operand, MC_FULL, 0, compileContext);
 				return;
 			}
 			break;
@@ -614,7 +581,7 @@ class X86_64AddressModes extends X86_64Encoder {
 			break;
 			
 		case	FUNCTION:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:

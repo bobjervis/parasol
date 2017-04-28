@@ -92,6 +92,7 @@ enum X86 {
 	MOVSX_REX_W,
 	MOVSXD,
 	MOVZX,
+	MOVZX_8,
 	MUL,
 	MULSD,
 	MULSS,
@@ -1017,6 +1018,7 @@ class X86_64Encoder extends Target {
 		case	SIGNED_64:
 		case	STRING:
 		case	ENUM:
+		case	FLAGS:
 		case	ADDRESS:
 		case	REF:
 		case	POINTER:
@@ -1052,6 +1054,7 @@ class X86_64Encoder extends Target {
 		case	SIGNED_64:
 		case	STRING:
 		case	ENUM:
+		case	FLAGS:
 		case	ADDRESS:
 		case	REF:
 		case	POINTER:
@@ -1130,15 +1133,14 @@ class X86_64Encoder extends Target {
 
 			case	SIGNED_32:
 			case	UNSIGNED_32:
-			case	ENUM:
 			case	ADDRESS:
 			case	REF:
 			case	POINTER:
 			case	SIGNED_64:
+			case	UNSIGNED_64:
 			case	CLASS:
 			case	FUNCTION:
 			case	INTERFACE:
-			case	FLAGS:
 				emitRex(family, null, R.NO_REG, dest);
 				if (operand >= -128 && operand <= 127) {
 					emit(0x83);
@@ -1215,7 +1217,6 @@ class X86_64Encoder extends Target {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
-			case	ENUM:
 				emitRex(family, null, R.NO_REG, dest);
 				emit(byte(0xb8 + rmValues[dest]));
 				emitLong(operand);
@@ -1264,7 +1265,6 @@ class X86_64Encoder extends Target {
 			case	REF:
 			case	POINTER:
 			case	STRING:
-			case	ENUM:
 			case	VAR:
 			case	TYPEDEF:
 			case	CLASS_VARIABLE:
@@ -1323,41 +1323,6 @@ class X86_64Encoder extends Target {
 		}
 		printf("%s [%s+%d]\n", string(instruction), string(baseReg), offset);
 		assert(false);
-	}
-	/*
-	 * This is actually ONE LEA instructions.  First.
-	 * 
-	 * 		LEA		<dest>,[dest+index*4]
-	 */
-	void loadEnumAddress(R dest, R enumIndex) {
-		emit(byte(REX_W | rexValues[dest] | rexbValues[dest] | rexxValues[enumIndex]));
-		emit(0x8d);
-		modRM(0, rmValues[dest], 4);
-		sib(2, rmValues[enumIndex], rmValues[dest]);
-	}
-	/*
-	 * This is actually an LEA instruction.
-	 * 
-	 * 		LEA		<dest>,&enumSymbol
-	 */
-	void loadEnumType(R dest, ref<Symbol> enumSymbol, int offset) {
-		emit(byte(REX_W | rexValues[dest]));
-		emit(0x8d);
-		modRM(0, rmValues[dest], 5);
-		fixup(FixupKind.RELATIVE32_DATA, enumSymbol);
-		emitInt(offset);
-	}
-	/*
-	 * This is actually a SUB instruction (dest contains the negative of an enum address).
-	 * 
-	 * 		SUB		<dest>,&enumSymbol
-	 */
-	void subEnumType(R dest, ref<Symbol> enumSymbol, int offset) {
-		emit(byte(REX_W | rexValues[dest]));
-		emit(0x2b);
-		modRM(0, rmValues[dest], 5);
-		fixup(FixupKind.RELATIVE32_DATA, enumSymbol);
-		emitInt(offset);
 	}
 	
 	void inst(X86 instruction, R dest, R reg, int offset) {
@@ -1824,6 +1789,20 @@ class X86_64Encoder extends Target {
 			modRM(3, rmValues[src], rmValues[dest]);
 			return;
 
+		case	MOVZX:
+			emitRex(family, null, src, dest);
+			emit(0x0f);
+			emit(0xb7);
+			modRM(3, rmValues[src], rmValues[dest]);
+			return;
+			
+		case	MOVZX_8:
+			emitRex(family, null, src, dest);
+			emit(0x0f);
+			emit(0xb6);
+			modRM(3, rmValues[src], rmValues[dest]);
+			return;
+			
 		case	MOVSX:
 			emitRex(TypeFamily.SIGNED_32, null, src, dest);
 			emit(0x0f);
@@ -1881,7 +1860,6 @@ class X86_64Encoder extends Target {
 			case	STRING:
 			case	SIGNED_64:
 			case	FUNCTION:
-			case	ENUM:
 			case	VAR:
 			case	TYPEDEF:
 				emitRex(family, null, dest, src);
@@ -1935,7 +1913,6 @@ class X86_64Encoder extends Target {
 			case	STRING:
 			case	SIGNED_64:
 			case	FUNCTION:
-			case	ENUM:
 			case	VAR:
 			case	TYPEDEF:
 				emitRex(family, null, dest, src);
@@ -2116,10 +2093,10 @@ class X86_64Encoder extends Target {
 		case	XOR:
 		case	ADD:
 		case	SUB:
-			switch (left.type.family()) {
+			switch (impl(left.type)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
-				emitRex(left.type.family(), left, right, R.NO_REG);
+				emitRex(impl(left.type), left, right, R.NO_REG);
 				emit(opcodes[instruction]);
 				modRM(left, rmValues[right], 0, 0);
 				break;
@@ -2127,7 +2104,7 @@ class X86_64Encoder extends Target {
 			case	UNSIGNED_16:
 			case	SIGNED_16:
 				emit(0x66);
-				emitRex(left.type.family(), left, right, R.NO_REG);
+				emitRex(impl(left.type), left, right, R.NO_REG);
 				emit(byte(opcodes[instruction] + 0x01));
 				modRM(left, rmValues[right], 0, 0);
 				break;
@@ -2135,7 +2112,6 @@ class X86_64Encoder extends Target {
 			case	SIGNED_32:
 			case	UNSIGNED_32:
 			case	STRING:
-			case	ENUM:
 			case	SIGNED_64:
 			case	ADDRESS:
 			case	REF:
@@ -2143,12 +2119,11 @@ class X86_64Encoder extends Target {
 			case	FUNCTION:
 			case	CLASS_VARIABLE:
 			case	INTERFACE:
-				emitRex(left.type.family(), left, right, R.NO_REG);
+				emitRex(impl(left.type), left, right, R.NO_REG);
 				emit(byte(opcodes[instruction] + 0x01));
 				modRM(left, rmValues[right], 0, 0);
 				break;
 				
-			case	FLAGS:
 			case	CLASS:
 				switch (left.type.size()) {
 				case	1:
@@ -2360,10 +2335,10 @@ class X86_64Encoder extends Target {
 		case	OR:
 		case	XOR:
 		case	AND:
-			switch (right.type.family()) {
+			switch (impl(right.type)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
-				emitRex(right.type.family(), right, left, R.NO_REG);
+				emitRex(impl(right.type), right, left, R.NO_REG);
 				emit(byte(opcodes[instruction] + 0x02));
 				modRM(right, rmValues[left], 0, 0);
 				break;
@@ -2371,7 +2346,7 @@ class X86_64Encoder extends Target {
 			case	UNSIGNED_16:
 			case	SIGNED_16:
 				emit(0x66);
-				emitRex(right.type.family(), right, left, R.NO_REG);
+				emitRex(impl(right.type), right, left, R.NO_REG);
 				emit(byte(opcodes[instruction] + 0x03));
 				modRM(right, rmValues[left], 0, 0);
 				break;
@@ -2385,16 +2360,14 @@ class X86_64Encoder extends Target {
 			case	REF:
 			case	POINTER:
 			case	STRING:
-			case	ENUM:
 			case	VAR:
 			case	TYPEDEF:
 			case	CLASS_VARIABLE:
-				emitRex(right.type.family(), right, left, R.NO_REG);
+				emitRex(impl(right.type), right, left, R.NO_REG);
 				emit(byte(opcodes[instruction] + 0x03));
 				modRM(right, rmValues[left], 0, 0);
 				break;
 				
-			case	FLAGS:
 			case	CLASS:
 				switch (right.type.size()) {
 				case	1:
@@ -2606,7 +2579,6 @@ class X86_64Encoder extends Target {
 				
 			case	SIGNED_64:
 			case	STRING:
-			case	ENUM:
 			case	ADDRESS:
 			case	REF:
 			case	POINTER:
@@ -2651,7 +2623,6 @@ class X86_64Encoder extends Target {
 			case	UNSIGNED_32:
 			case	SIGNED_64:
 			case	STRING:
-			case	ENUM:
 			case	ADDRESS:
 			case	REF:
 			case	POINTER:
@@ -2700,7 +2671,7 @@ class X86_64Encoder extends Target {
 			break;
 			
 		case	MOV:
-			switch (left.type.family()) {
+			switch (impl(left.type)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 				if (left.register == 0 || fits(R(left.register), byteMask)) {
@@ -2723,8 +2694,6 @@ class X86_64Encoder extends Target {
 			case	UNSIGNED_32:
 			case	SIGNED_32:
 			case	STRING:
-			case	ENUM:
-			case	FLAGS:
 			case	ADDRESS:
 			case	REF:
 			case	POINTER:
@@ -2808,7 +2777,6 @@ class X86_64Encoder extends Target {
 			case	UNSIGNED_32:
 			case	SIGNED_32:
 			case	STRING:
-			case	ENUM:
 			case	ADDRESS:
 			case	REF:
 			case	POINTER:
@@ -3002,13 +2970,13 @@ class X86_64Encoder extends Target {
 					emitInt(offset);
 				}
 				break;
-				
+/*				
 			case	ENUMERATION:
 				ref<EnumInstanceType> t = ref<EnumInstanceType>(node.type);
 				loadEnumType(R.RAX, t.symbol(), 0);
 				inst(X86.PUSH, TypeFamily.ADDRESS, R.RAX);
 				break;
-
+ */
 			case	MEMBER:
 				offset += sym.offset;
 				if (node.op() == Operator.DOT && !ref<Selection>(node).indirect()) {
@@ -3218,11 +3186,7 @@ class X86_64Encoder extends Target {
 				break;
 				
 			case	ENUMERATION:
-				modRM(0, regOpcode, 5);
-				ref<EnumInstanceType> t = ref<EnumInstanceType>(addressMode.type);
-				fixup(FixupKind.RELATIVE32_DATA, t.symbol());
-				emitInt(-ipAdjust + allAdjust + sym.offset * int.bytes);
-				break;
+				assert(false);
 				
 			case	AUTO:
 			case	PARAMETER:
@@ -3508,7 +3472,6 @@ class X86_64Encoder extends Target {
 		case	ADDRESS:
 		case	REF:
 		case	POINTER:
-		case	ENUM:
 		case	FUNCTION:
 		case	CLASS:
 		case	FLOAT_64:

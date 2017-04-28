@@ -231,6 +231,7 @@ void sethiUllman(ref<Node> node, ref<CompileContext> compileContext, ref<Target>
 	case	INTEGER:
 	case	CHARACTER:
 	case	FLOATING_POINT:
+	case	INTERNAL_LITERAL:
 	case	EMPTY:
 	case	STRING:
 	case	NULL:
@@ -277,6 +278,7 @@ private int regneeds(ref<Node> node, ref<CompileContext> compileContext, ref<Tar
 	case	INTEGER:
 	case	CHARACTER:
 	case	FLOATING_POINT:
+	case	INTERNAL_LITERAL:
 	case	NULL:
 	case	TRUE:
 	case	FALSE:

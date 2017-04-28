@@ -76,27 +76,36 @@ public class Exception {
 		string tag = "->";
 		int lowCode = int(runtime.lowCodeAddress());
 		int staticMemoryLength = int(runtime.highCodeAddress()) - lowCode;
+		int ignoreFrames = ignoreTopFrames();
 		while (_exceptionContext.valid(fp)) {
 //			printf("fp = %p ip = %p relative = %x", fp, ip, int(ip) - lowCode);
 			pointer<address> stack = pointer<address>(fp);
 			long nextFp = _exceptionContext.slot(fp);
 			int relative = int(ip) - lowCode;
-			string locationLabel;
-			if (relative >= staticMemoryLength || relative < 0)
-				locationLabel.printf("ext @%x", ip);
-			else
-				locationLabel = formattedLocation(relative, locationIsExact);
-			output.printf(" %2s %s\n", tag, locationLabel);
+			if (ignoreFrames > 0)
+				ignoreFrames--;
+			else {
+				string locationLabel;
+				if (relative >= staticMemoryLength || relative < 0)
+					locationLabel.printf("ext @%x", ip);
+				else
+					locationLabel = formattedLocation(relative, locationIsExact);
+				output.printf(" %2s %s\n", tag, locationLabel);
+				tag = "";
+			}
 //			if (nextFp != 0 && nextFp < long(fp)) {
 //				printf("    *** Stored frame pointer out of sequence: %p\n", nextFp);
 //				break;
 //			}
 			fp = address(nextFp);
 			ip = address(_exceptionContext.slot(stack + 1));
-			tag = "";
 			locationIsExact = false;
 		}
 		return output;
+	}
+	
+	int ignoreTopFrames() {
+		return 0;
 	}
 	
 	void throwNow(address framePointer, address stackPointer) {
@@ -264,46 +273,22 @@ public class RuntimeException extends Exception {
 	public string message() {
 		if (_exceptionContext == null)
 			return "RuntimeException (not thrown)\n";
-		pointer<byte> message = formatMessage(unsigned(_exceptionContext.exceptionType));
-/*
-		pointer<byte> lpMessageBuffer;
-		windows.HMODULE Hand = windows.LoadLibrary("NTDLL.DLL");
-
-		FormatMessage(
-				FORMAT_MESSAGE_ALLOCATE_BUFFER |
-				FORMAT_MESSAGE_FROM_SYSTEM |
-				FORMAT_MESSAGE_FROM_HMODULE,
-				Hand,
-				NTStatusMessage,
-				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-				(char*) &lpMessageBuffer,
-		       0,
-		       NULL );
-
-		   // Now display the string.
-
-		string text(lpMessageBuffer);
-		if (lpMessageBuffer != null)
-			windows.LocalFree( lpMessageBuffer );
-		windows.FreeLibrary(Hand);
-		*/
-		string text(message);
 		string output;
 		output.printf("RuntimeException: ");
-		if (_exceptionContext.exceptionType == 0)
-			output.printf("Assertion failed ip %p", _exceptionContext.exceptionAddress);
-		else {
-			output.printf("Uncaught exception %x", _exceptionContext.exceptionType);
+
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			pointer<byte> message = formatMessage(unsigned(_exceptionContext.exceptionType));
+
+			string text(message);
+			output.printf("%x", _exceptionContext.exceptionType);
 			if (message != null) {
 				if (text.endsWith("\r\n"))
 					text = text.substring(0, text.length() - 2);
 				output.printf(" (%s)", text);
 			}
 			output.printf(" ip %p", _exceptionContext.exceptionAddress, runtime.lowCodeAddress());
-			if (_exceptionContext.exceptionType == EXCEPTION_ACCESS_VIOLATION ||
-				_exceptionContext.exceptionType == EXCEPTION_IN_PAGE_ERROR)
-				output.printf(" flags %d referencing %p", _exceptionContext.exceptionFlags, _exceptionContext.memoryAddress);
-		}
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX)
+			output.printf("%x", _exceptionContext.exceptionType);
 		return output;
 	}
 	
@@ -337,6 +322,16 @@ public class AssertionFailedException extends RuntimeException {
 		n._exceptionContext = _exceptionContext;
 		return n;
 	}	
+
+	public string message() {
+		if (_exceptionContext == null)
+			return "AssertionFailedException (not thrown)\n";
+		return "Assertion failed";
+	}
+	
+	int ignoreTopFrames() {
+		return 1;
+	}
 }
 
 public class CorruptHeapException extends RuntimeException {
@@ -370,7 +365,15 @@ public class AccessException extends RuntimeException {
 		ref<AccessException> a = new AccessException(_exceptionContext);
 		return a;
 	}
-}
+
+	public string message() {
+		if (_exceptionContext == null)
+			return "AccessException (not thrown)\n";
+		string output;
+		output.printf("AccessException: flags %d referencing %p", _exceptionContext.exceptionFlags, _exceptionContext.memoryAddress);
+		return output;
+	}
+	}
 
 public class NullPointerException extends AccessException {
 	NullPointerException(ref<ExceptionContext> exceptionContext) {
@@ -434,6 +437,7 @@ void hardwareExceptionHandler(ref<HardwareException> info) {
 			throw DivideByZeroException(context);
 	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
 		switch (info.exceptionType) {
+		case 0xb80:						// SIGSEGV + SI_KERNEL
 		case 0xb01:						// SIGSEGV + SEGV_MAPERR
 			if (context.memoryAddress == null)
 				throw NullPointerException(context);

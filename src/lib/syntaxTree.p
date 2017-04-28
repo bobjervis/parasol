@@ -190,6 +190,8 @@ enum Operator {
 	TEMPLATE_INSTANCE,
 	// Try
 	TRY,
+	// InternalLiteral
+	INTERNAL_LITERAL,
 	MAX_OPERATOR
 }
 
@@ -359,6 +361,10 @@ class SyntaxTree {
 		return _pool new Leaf(op, location);
 	}
 
+	public ref<InternalLiteral> newInternalLiteral(long value, Location location) {
+		return _pool new InternalLiteral(value, location);
+	}
+	
 	public ref<Constant> newConstant(long value, Location location) {
 		string s;
 		s.printf("%d", value);
@@ -926,8 +932,104 @@ class Class extends Block {
  * implementation to some future date.  For now, it is easier to just use the existing Constant
  * class.
  */
-class InternalLiteral { // extends Node {
+class InternalLiteral extends Node {
+	private long _value;
 	
+	InternalLiteral(long value, Location location) {
+		super(Operator.INTERNAL_LITERAL, location);
+		_value = value;
+	}
+
+	public boolean traverse(Traversal t, TraverseAction func(ref<Node> n, address data), address data) {
+		return func(this, data) != TraverseAction.ABORT_TRAVERSAL;
+	}
+	
+	public ref<InternalLiteral> clone(ref<SyntaxTree> tree) {
+		return ref<InternalLiteral>(tree.newInternalLiteral(_value, location()).finishClone(this, tree.pool()));
+	}
+
+	public ref<InternalLiteral> cloneRaw(ref<SyntaxTree> tree) {
+		return tree.newInternalLiteral(_value, location());
+	}
+
+	public void print(int indent) {
+		printBasic(indent);
+		printf(" %d\n", _value);
+	}
+
+	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+		if (voidContext) {
+			ref<Node> n = tree.newLeaf(Operator.EMPTY, location());
+			n.type = type;
+			return n;
+		}
+		return this;
+	}
+	
+	public long foldInt(ref<Target> target, ref<CompileContext> compileContext) {
+		return _value;
+	}
+
+	public boolean isConstant() {
+		return true;
+	}
+	
+	boolean representedBy(ref<Type> newType) {
+		switch (newType.family()) {
+		case	UNSIGNED_8:
+//			printf("v = %d byte.MAX_VALUE=%d\n", v, int(byte.MAX_VALUE));
+			return _value >= 0 && _value <= byte.MAX_VALUE;
+
+		case	UNSIGNED_16:
+//			printf("_value = %d char.MAX_VALUE=%d\n", _value, int(char.MAX_VALUE));
+			return _value >= 0 && _value <= char.MAX_VALUE;
+
+		case	SIGNED_16:
+//			printf("_value = %d char.MAX_VALUE=%d\n", _value, int(char.MAX_VALUE));
+			return _value >= short.MIN_VALUE && _value <= short.MAX_VALUE;
+
+		case	SIGNED_32:
+			return _value >= int.MIN_VALUE && _value <= int.MAX_VALUE;
+
+		case	UNSIGNED_32:
+			return _value >= 0 && _value <= unsigned.MAX_VALUE;
+
+		case	SIGNED_64:
+			return true;
+			
+		case	FLAGS:
+			if (_value == 0)
+				return true;
+			else
+				return false;
+/*
+	 	 	 Note: Allowing an integer zero to be considered to 'represent' a valid pointer value,
+	 	 	 means that 0 is interchangeable with null.  This seems to violate the spirit of having
+	 	 	 null at all.
+
+		case	CLASS:
+			return _value == 0 && newType.indirectType(compileContext) != null;
+ */
+
+		default:
+			return false;
+		}
+		return false;
+	}
+
+	long intValue() {
+		return _value;
+	}
+
+	long, boolean charValue() {
+		return -1, false;
+	}
+ 
+	private void assignTypes(ref<CompileContext> compileContext) {
+		type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+		if (!representedBy(type)) 
+			type = compileContext.arena().builtInType(TypeFamily.SIGNED_64);
+	}
 }
 
 class Constant extends Node {
@@ -2901,6 +3003,9 @@ class Node {
 		switch (_op) {
 		case	IDENTIFIER:
 		case	DOT:
+			if (symbol() != null && symbol().storageClass() == StorageClass.ENUMERATION)
+				return false;
+			
 		case	INDIRECT:
 		case	SUBSCRIPT:
 		case	VARIABLE:

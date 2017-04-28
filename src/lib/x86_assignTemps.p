@@ -579,10 +579,11 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	RIGHT_SHIFT:
 		case	UNSIGNED_RIGHT_SHIFT:
 			b = ref<Binary>(node);
-			long originalRegMask = regMask;
-			if (regMask == RCXmask)
-				regMask = requiredMask(b.left());
-			regMask &= ~RCXmask;
+			if (regMask == RCXmask) {
+				if ((b.right().nodeFlags & ADDRESS_MODE) == 0)
+					regMask = requiredMask(b.left()) & ~RCXmask;
+			} else
+				regMask &= ~RCXmask;
 
 			if	(b.sethi < 0) {
 				assignRegisterTemp(b.left(), regMask, compileContext);
@@ -592,10 +593,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				assignRegisterTemp(b.left(), regMask, compileContext);
 			}
 			f().r.cleanupTemps(b, depth);
-			if (originalRegMask == RCXmask)
-				b.register = byte(f().r.getreg(node, RCXmask, RCXmask));
-			else
-				b.register = byte(f().r.latestResult(b.left()));
+			b.register = byte(f().r.latestResult(b.left()));
 			break;
 			
 		case	INCREMENT_AFTER:
@@ -653,7 +651,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			
 		case	CONDITIONAL:
 			ref<Ternary> conditional = ref<Ternary>(node);
-			regMask &= requiredMask(node);
+			if ((regMask & requiredMask(node)) != 0)
+				regMask &= requiredMask(node);
 //			printf("\n\nbefore test (desired depth=%d current depth=%d):\n", depth, tempStackDepth());
 //			f().r.print();
 			f().r.clobberSomeRegisters(conditional, callMask());
@@ -736,6 +735,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	FALSE:
 		case	INTEGER:
 		case	CHARACTER:
+		case	INTERNAL_LITERAL:
 		case	TRUE:
 		case	STRING:
 		case	IDENTIFIER:
@@ -822,10 +822,20 @@ class X86_64AssignTemps extends X86_64AddressModes {
 	private void assignCastNode(ref<Node> result, ref<Node> operand, long regMask, ref<CompileContext> compileContext) {
 		ref<Type> existingType = operand.type;
 		ref<Type> newType = result.type;
-		switch (existingType.family()) {
+		if (existingType.family() == TypeFamily.ENUM && newType.family() == TypeFamily.STRING) {
+			// We can't use the assignCast method because this is a method call, so the output
+			// register is fixed
+			int depth = tempStackDepth();
+			assignRegisterTemp(operand, getRegMask(firstRegisterArgument()), compileContext);
+			f().r.getreg(result, RAXmask, RAXmask);
+			f().r.cleanupTemps(result, depth);
+			result.register = byte(R.RAX);
+			return;
+		}
+		switch (impl(existingType)) {
 		case	BOOLEAN:
 		case	UNSIGNED_8:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -838,7 +848,6 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	POINTER:
 			case	FUNCTION:
 			case	INTERFACE:
-			case	FLAGS:
 				int depth = tempStackDepth();
 				assignRegisterTemp(operand, longMask(), compileContext);
 				f().r.cleanupTemps(result, depth);
@@ -850,7 +859,6 @@ class X86_64AssignTemps extends X86_64AddressModes {
 
 			case	FLOAT_32:
 			case	FLOAT_64:
-			case	ENUM:
 				assignCast(result, operand, regMask, longMask(), compileContext);
 				return;
 			}
@@ -858,7 +866,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			
 		case	SIGNED_16:
 		case	UNSIGNED_16:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -871,13 +879,11 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	POINTER:
 			case	FUNCTION:
 			case	INTERFACE:
-			case	FLAGS:
 				assignCast(result, operand, regMask, 0, compileContext);
 				return;
 
 			case	FLOAT_32:
 			case	FLOAT_64:
-			case	ENUM:
 				assignCast(result, operand, regMask, longMask(), compileContext);
 				return;
 			}
@@ -885,7 +891,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			
 		case	UNSIGNED_32:
 		case	SIGNED_32:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -897,7 +903,6 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
-			case	FLAGS:
 			case	INTERFACE:
 				assignCast(result, operand, regMask, 0, compileContext);
 				if (unsigned(int(result.register)) > unsigned(int(R.MAX_REG))) {
@@ -910,14 +915,13 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				
 			case	FLOAT_32:
 			case	FLOAT_64:
-			case	ENUM:
 				assignCast(result, operand, regMask, longMask(), compileContext);
 				return;
 			}
 			break;
 
 		case	SIGNED_64:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -930,13 +934,11 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	POINTER:
 			case	FUNCTION:
 			case	INTERFACE:
-			case	FLAGS:
 				assignCast(result, operand, regMask, 0, compileContext);
 				return;
 
 			case	FLOAT_32:
 			case	FLOAT_64:
-			case	ENUM:
 				assignCast(result, operand, regMask, longMask(), compileContext);
 				return;
 			}
@@ -944,7 +946,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 
 		case	FLOAT_32:
 		case	FLOAT_64:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -956,8 +958,6 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
-			case	ENUM:
-			case	FLAGS:
 			case	INTERFACE:
 				assignCast(result, operand, regMask, floatMask, compileContext);
 				return;
@@ -981,9 +981,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	ADDRESS:
 		case	REF:
 		case	POINTER:
-			switch (newType.family()) {
-			case	ENUM:
-			case	FLAGS:
+			switch (impl(newType)) {
 			case	STRING:
 			case	ADDRESS:
 			case	REF:
@@ -1007,39 +1005,6 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			}
 			break;
 
-		case	ENUM:
-			switch (newType.family()) {
-			case	BOOLEAN:
-			case	UNSIGNED_8:
-			case	UNSIGNED_16:
-			case	UNSIGNED_32:
-			case	SIGNED_16:
-			case	SIGNED_32:
-			case	SIGNED_64:
-			case	FLOAT_32:
-			case	FLOAT_64:
-			case	ADDRESS:
-			case	REF:
-			case	POINTER:
-			case	ENUM:
-			case	FUNCTION:
-			case	INTERFACE:
-			case	FLAGS:
-				assignCast(result, operand, regMask, longMask(), compileContext);
-				return;
-				
-			case	STRING:
-				// We can't use the assignCast method because this is a method call, so the output
-				// register is fixed
-				int depth = tempStackDepth();
-				assignRegisterTemp(operand, RCXmask, compileContext);
-				f().r.getreg(result, RAXmask, RAXmask);
-				f().r.cleanupTemps(result, depth);
-				result.register = byte(R.RAX);
-				return;
-			}
-			break;
-
 		case	CLASS:
 			// A general class coercion from another class type.
 			if (existingType.size() == newType.size())
@@ -1055,7 +1020,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			break;
 
 		case	FUNCTION:
-			switch (newType.family()) {
+			switch (impl(newType)) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -1318,6 +1283,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			case	ADDRESS:
 			case	NEGATE:
 			case	INTEGER:
+			case	INTERNAL_LITERAL:
 			case	MULTIPLY:
 			case	ADD:
 			case	SUBTRACT:
@@ -1354,6 +1320,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	IDENTIFIER:
 		case	VARIABLE:
 		case	INTEGER:
+		case	INTERNAL_LITERAL:
 		case	EMPTY:
 		case	STRING:
 		case	THIS:
@@ -1422,6 +1389,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			return floatMask;
 			
 		case FLAGS:
+		case ENUM:
 			if (node.type.size() == 1)
 				return byteMask;
 			

@@ -34,6 +34,8 @@ class Disassembler {
 	private int _stringsEndOffset;
 	private int _typeDataEndOffset;
 	private int _vtablesEndOffset;
+	private int _staticDataStart;
+	private int _staticDataEnd;
 	private pointer<ExceptionEntry> _exceptionsEndOffset;
 	private int _imageLength;
 	private ref<X86_64SectionHeader> _pxiHeader;
@@ -66,6 +68,8 @@ class Disassembler {
 		_vtablesEndOffset = _pxiHeader.vtablesOffset + _pxiHeader.vtableData * address.bytes;
 		_exceptionsEndOffset = pointer<ExceptionEntry>(_physical + _pxiHeader.exceptionsOffset + _pxiHeader.exceptionsCount * ExceptionEntry.bytes);
 		_ip = _pxiHeader.entryPoint;
+		_staticDataStart = _pxiHeader.typeDataOffset + _pxiHeader.typeDataLength;
+		_staticDataEnd = _pxiHeader.builtInsText;
 	}
 	
 	void setDataMap(pointer<ref<Symbol>> dataMap, int dataMapLength) {
@@ -122,7 +126,7 @@ class Disassembler {
 				addr += NativeBinding.bytes;
 			}
 		}
-		printf("\n    symbols for      %8x - %8x\n", _length, _imageLength);
+		printf("\n    symbols for      %8x - %8x\n", _staticDataStart, _staticDataEnd);
 		for (int i = 0; i < _dataMapLength; i++) {
 			string prefix;
 			prefix.printf("[%d]", i);
@@ -1477,7 +1481,7 @@ class Disassembler {
 			printf(" [ordinal %x]", location - _pxiHeader.typeDataOffset);
 		} else if (location >= _pxiHeader.vtablesOffset && location < _vtablesEndOffset) {
 			printf(" [vtable %x]", (location - _pxiHeader.vtablesOffset) / address.bytes);
-		} else if (location >= _length && location < _imageLength) {
+		} else if (location >= _staticDataStart && location < _staticDataEnd) {
 			// It's somewhere in static data.
 			int index = findSymbol(location);
 			if (index >= 0) {
