@@ -180,7 +180,7 @@ class BuiltInType extends Type {
 		if (_ordinal == 0) {
 			address a = allocateImageData(target, BuiltInType.bytes);
 			ref<BuiltInType> copy = ref<BuiltInType>(a);
-//			copy._family = _family;			
+			transferBase(copy);
 			target.fixupVtable(_ordinal, target.builtInType());
 			_classType.copyToImage(target);
 			target.fixupType(_ordinal + int(&ref<BuiltInType>(null)._classType), _classType);
@@ -505,7 +505,7 @@ class ClassType extends Type {
 		if (_ordinal == 0) {
 			address a = allocateImageData(target, ClassType.bytes);
 			ref<ClassType> copy = ref<ClassType>(a);
-//			copy._family = _family;
+			transferBase(copy);
 			target.fixupVtable(_ordinal, target.classType());
 			if (_extends != null)
 				_extends.copyToImage(target);
@@ -1483,6 +1483,11 @@ class Type {
 		print();
 		assert(false);
 		return _ordinal;
+	}
+	
+	protected void transferBase(ref<Type> copy) {
+		copy._family = _family;
+		copy._resolved = _resolved;
 	}
 	
 	protected address allocateImageData(ref<Target> target, int size) {
