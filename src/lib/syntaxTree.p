@@ -863,7 +863,7 @@ class Class extends Block {
 			}
 		super.assignTypes(compileContext);
 		for (ref<NodeList> nl = _implements; nl != null; nl = nl.next) {
-			ref<Type> tp = nl.node.unwrapTypedef(Operator.INTERFACE, compileContext);
+			ref<InterfaceType> tp = ref<InterfaceType>(nl.node.unwrapTypedef(Operator.INTERFACE, compileContext));
 			if (tp.deferAnalysis()) {
 				type = tp;
 				continue;
@@ -1738,7 +1738,7 @@ private:
 				type = compileContext.errorType();
 				break;
 			}
-			t = t.getSuper();
+			t = t.assignSuper(compileContext);
 			if (t == null) {
 				add(MessageId.SUPER_NOT_ALLOWED, compileContext.pool());
 				type = compileContext.errorType();
@@ -2941,7 +2941,14 @@ class Node {
 	}
 	
 	public boolean canCoerce(ref<Type> newType, boolean explicitCast, ref<CompileContext> compileContext) {
-		return type.widensTo(newType, compileContext);
+		if (!type.widensTo(newType, compileContext))
+			return false;
+		if (newType.family() == TypeFamily.INTERFACE && !isLvalue()) {
+			add(MessageId.LVALUE_REQUIRED, compileContext.pool());
+			type = compileContext.errorType();
+			return false;
+		}
+		return true;
 	}
 
 	public ref<Node> coerce(ref<SyntaxTree> tree, TypeFamily newType, boolean explicitCast, ref<CompileContext> compileContext) {

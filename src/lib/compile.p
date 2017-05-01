@@ -94,8 +94,6 @@ class CompileContext {
 	 */
 	void compileFile() {
 		_arena.cacheRootObjects(_arena.root(), this);
-		for (int i = 0; i < _arena.scopes().length(); i++)
-			(*_arena.scopes())[i].assignMethodMaps(this);
 //		printf("before assignTypes\n");
 		assignTypes();
 //		printf("after assignTypes\n");

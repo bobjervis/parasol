@@ -41,6 +41,7 @@ import parasol:compiler.FunctionDeclaration;
 import parasol:compiler.FunctionType;
 import parasol:compiler.GatherCasesClosure;
 import parasol:compiler.Identifier;
+import parasol:compiler.InterfaceType;
 import parasol:compiler.InternalLiteral;
 import parasol:compiler.MessageId;
 import parasol:compiler.Node;
@@ -540,81 +541,83 @@ public class X86_64 extends X86_64AssignTemps {
 		// 6 instruction ordering
 		// 7 coding
 		ref<Block> node;
-		ref<ParameterScope> parameterScope = ref<ParameterScope>(scope);
+		if (scope.class == ParameterScope) {
+			ref<ParameterScope> parameterScope = ref<ParameterScope>(scope);
 
-		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(scope.definition());
-		if (func == null) {
-			switch (parameterScope.kind()) {
-			case	DEFAULT_CONSTRUCTOR:
-				inst(X86.PUSH, TypeFamily.SIGNED_64, thisRegister());
-				inst(X86.MOV, TypeFamily.ADDRESS, thisRegister(), firstRegisterArgument());
-				generateConstructorPreamble(null, parameterScope, compileContext);
-				inst(X86.POP, TypeFamily.SIGNED_64, thisRegister());
-				if (!generateReturn(parameterScope, compileContext))
-					assert(false);
-				break;
-				
-			case	IMPLIED_DESTRUCTOR:
-				if (needsDestructorShutdown(parameterScope, compileContext)) { 
+			ref<FunctionDeclaration> func = ref<FunctionDeclaration>(scope.definition());
+			if (func == null) {
+				switch (parameterScope.kind()) {
+				case	DEFAULT_CONSTRUCTOR:
 					inst(X86.PUSH, TypeFamily.SIGNED_64, thisRegister());
 					inst(X86.MOV, TypeFamily.ADDRESS, thisRegister(), firstRegisterArgument());
-					generateDestructorShutdown(parameterScope, compileContext);
+					generateConstructorPreamble(null, parameterScope, compileContext);
 					inst(X86.POP, TypeFamily.SIGNED_64, thisRegister());
-				}
-				if (!generateReturn(parameterScope, compileContext))
-					assert(false);
-				break;
-				
-			case	ENUM_TO_STRING:
-				ref<EnumScope> enclosing = ref<EnumScope>(scope.enclosing());
-				
-				ref<ref<Symbol>[]> instances = enclosing.instances();
-				ref<EnumInstanceType> t = ref<EnumInstanceType>(enclosing.enumType.wrappedType());
-				R indexRegister = firstRegisterArgument();
-				switch (impl(t)) {
-				case UNSIGNED_8:
-					if ((getRegMask(firstRegisterArgument()) & byteMask) != 0) {
-						indexRegister = R.RDX;
-						inst(X86.MOVZX_8, TypeFamily.UNSIGNED_32, indexRegister, firstRegisterArgument());
-					}
-					inst(X86.MOVZX_8, TypeFamily.UNSIGNED_64, indexRegister, indexRegister);
-					inst(X86.SAL, TypeFamily.SIGNED_64, indexRegister, 3);
+					if (!generateReturn(parameterScope, compileContext))
+						assert(false);
 					break;
 					
-				case UNSIGNED_16:
-					inst(X86.MOVZX, TypeFamily.UNSIGNED_64, indexRegister, indexRegister);
-					inst(X86.SAL, TypeFamily.SIGNED_64, indexRegister, 3);
+				case	IMPLIED_DESTRUCTOR:
+					if (needsDestructorShutdown(parameterScope, compileContext)) { 
+						inst(X86.PUSH, TypeFamily.SIGNED_64, thisRegister());
+						inst(X86.MOV, TypeFamily.ADDRESS, thisRegister(), firstRegisterArgument());
+						generateDestructorShutdown(parameterScope, compileContext);
+						inst(X86.POP, TypeFamily.SIGNED_64, thisRegister());
+					}
+					if (!generateReturn(parameterScope, compileContext))
+						assert(false);
 					break;
 					
-				case UNSIGNED_32:
-					inst(X86.SAL, TypeFamily.SIGNED_64, indexRegister, 32);
-					inst(X86.SAR, TypeFamily.UNSIGNED_64, indexRegister, 29);
-				}
-				ref<Symbol> stringArray;
-				if (parameterScope.symbolCount() == 0) {
-					string nm = "*";
-					stringArray = parameterScope.define(Operator.PRIVATE, StorageClass.STATIC, null, nm, compileContext.arena().builtInType(TypeFamily.ADDRESS), null, compileContext.pool());
-					assignStaticRegion(stringArray, string.bytes, instances.length() * string.bytes);
-					for (int i = 0; i < instances.length(); i++) {
-						int offset = addStringLiteral((*instances)[i].name().asString());
-						fixup(FixupKind.ABSOLUTE64_STRING, stringArray, i * address.bytes, address(offset));
+				case	ENUM_TO_STRING:
+					ref<EnumScope> enclosing = ref<EnumScope>(scope.enclosing());
+					
+					ref<ref<Symbol>[]> instances = enclosing.instances();
+					ref<EnumInstanceType> t = ref<EnumInstanceType>(enclosing.enumType.wrappedType());
+					R indexRegister = firstRegisterArgument();
+					switch (impl(t)) {
+					case UNSIGNED_8:
+						if ((getRegMask(firstRegisterArgument()) & byteMask) != 0) {
+							indexRegister = R.RDX;
+							inst(X86.MOVZX_8, TypeFamily.UNSIGNED_32, indexRegister, firstRegisterArgument());
+						}
+						inst(X86.MOVZX_8, TypeFamily.UNSIGNED_64, indexRegister, indexRegister);
+						inst(X86.SAL, TypeFamily.SIGNED_64, indexRegister, 3);
+						break;
+						
+					case UNSIGNED_16:
+						inst(X86.MOVZX, TypeFamily.UNSIGNED_64, indexRegister, indexRegister);
+						inst(X86.SAL, TypeFamily.SIGNED_64, indexRegister, 3);
+						break;
+						
+					case UNSIGNED_32:
+						inst(X86.SAL, TypeFamily.SIGNED_64, indexRegister, 32);
+						inst(X86.SAR, TypeFamily.UNSIGNED_64, indexRegister, 29);
 					}
-				} else
-					stringArray = parameterScope.lookup("*", compileContext);
-				inst(X86.LEA, R.RAX, stringArray);
-				inst(X86.MOV, R.RAX, indexRegister, R.RAX);
-				if (!generateReturn(parameterScope, compileContext))
+					ref<Symbol> stringArray;
+					if (parameterScope.symbolCount() == 0) {
+						string nm = "*";
+						stringArray = parameterScope.define(Operator.PRIVATE, StorageClass.STATIC, null, nm, compileContext.arena().builtInType(TypeFamily.ADDRESS), null, compileContext.pool());
+						assignStaticRegion(stringArray, string.bytes, instances.length() * string.bytes);
+						for (int i = 0; i < instances.length(); i++) {
+							int offset = addStringLiteral((*instances)[i].name().asString());
+							fixup(FixupKind.ABSOLUTE64_STRING, stringArray, i * address.bytes, address(offset));
+						}
+					} else
+						stringArray = parameterScope.lookup("*", compileContext);
+					inst(X86.LEA, R.RAX, stringArray);
+					inst(X86.MOV, R.RAX, indexRegister, R.RAX);
+					if (!generateReturn(parameterScope, compileContext))
+						assert(false);
+					break;
+					
+				default:
 					assert(false);
-				break;
-				
-			default:
-				assert(false);
+				}
+				return;
 			}
-			return;
-		}
-		if (func.op() == Operator.FUNCTION) {
-//			if (func.name() != null)
-//				printf("Generating for %s\n", func.name().identifier().asString());
+			if (parameterScope.type() == null) {
+				// TODO add throw
+				return;
+			}
 			node = func.body;
 			if (node == null) {
 				func.print(0);
@@ -644,7 +647,7 @@ public class X86_64 extends X86_64AssignTemps {
 				
 				if (func.functionCategory() == FunctionDeclaration.Category.CONSTRUCTOR)
 					generateConstructorPreamble(node, parameterScope, compileContext);
-
+	
 				ref<Scope> outer = compileContext.setCurrent(scope);
 				generate(node, compileContext);
 				compileContext.setCurrent(outer);
@@ -789,7 +792,7 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.POP, TypeFamily.SIGNED_64, R.RSI);
 			inst(X86.POP, TypeFamily.SIGNED_64, R.RBX);
 			inst(X86.LEAVE);
-			if (!generateReturn(parameterScope, compileContext))
+			if (!generateReturn(scope, compileContext))
 				unfinished(node, "generateReturn failed - default end-of-static block", compileContext);
 			handler.start(this);
 			inst(X86.LEA, R.RSP, R.RBP, -(f().autoSize + 8 * address.bytes));
@@ -803,9 +806,6 @@ public class X86_64 extends X86_64AssignTemps {
 			instCall(uncaughtException, compileContext);
 			closeCodeSegment(CC.JMP, join);
 			resolveDeferredTrys(false, compileContext);
-		}
-		for (int i = f().knownDeferredTrys; i < _deferredTry.length(); i++) {
-			
 		}
 		_deferredTry.resize(f().knownDeferredTrys);
 	}
@@ -962,6 +962,13 @@ public class X86_64 extends X86_64AssignTemps {
 			} else if (defaultConstructor != null) {
 				inst(X86.LEA, firstRegisterArgument(), thisRegister(), sym.offset);
 				instCall(defaultConstructor, compileContext);
+			}
+			if (sym.type().interfaceCount() > 0) {
+				ref<ref<InterfaceType>[]> interfaces = sym.type().interfaces();
+				for (int i = 0; i < interfaces.length(); i++) {
+					int offset = sym.type().interfaceOffset(i, compileContext);
+//					storeItable(thisRegister(), sym.offset + offset, null);
+				}
 			}
 		}
 		if (constructorBody != null) {
@@ -3668,6 +3675,12 @@ public class X86_64 extends X86_64AssignTemps {
 		case	REF:
 		case	POINTER:
 			switch (impl(newType)) {
+			case	INTERFACE:
+				if (existingType.indirectType(compileContext) != null && existingType.indirectType(compileContext).doesImplement(newType)) {
+					inst(X86.MOV, TypeFamily.ADDRESS, result, n, compileContext);
+					inst(X86.ADD, result, existingType.indirectType(compileContext).interfaceOffset(newType, compileContext), compileContext);
+					return;
+				}
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -3680,7 +3693,6 @@ public class X86_64 extends X86_64AssignTemps {
 			case	REF:
 			case	POINTER:
 			case	FUNCTION:
-			case	INTERFACE:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, TypeFamily.ADDRESS, result, n, compileContext);
 				return;

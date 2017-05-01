@@ -572,6 +572,10 @@ class Selection extends Node {
 				(type, _symbol) = operation.result();
 				if (_symbol != null)
 					_symbol.markAsReferenced(compileContext);
+				if (deferAnalysis())
+					return;
+				if (_left.type.family() == TypeFamily.INTERFACE)
+					_indirect = true;
 				return;
 			}
 			t = _left.type.indirectType(compileContext);

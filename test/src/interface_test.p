@@ -19,8 +19,11 @@ interface A {
 	void g(string s);
 }
 
+class B {
+	long _fillter;		// TO give the interface slot a non-zero offset.
+}
 
-class C implements A {
+class C extends B implements A {
 	int f(long y) {
 		return int(y);
 	}
@@ -33,8 +36,9 @@ class C implements A {
 
 ref<C> c = new C;
 
-A a = c;
+A testInterface = c;
 
-a.g("hello");
+testInterface.g("hello");
 
-assert(a.f(0x200000045) == 69);
+printf("testInterface.f(0x200000045) = %d\n", testInterface.f(0x200000045));
+assert(testInterface.f(0x200000045) == 69);

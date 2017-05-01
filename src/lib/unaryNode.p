@@ -223,6 +223,15 @@ class Unary extends Node {
 				}
 				break;
 
+			case	INTERFACE:
+				if (_operand.op() != Operator.NULL && _operand.type.indirectType(compileContext) == null) {
+					ref<Node> adr = tree.newUnary(Operator.ADDRESS, _operand.fold(tree, false, compileContext), _operand.location());
+					adr.type = compileContext.arena().createRef(_operand.type, compileContext);
+					_operand = adr;
+					return this;
+				}
+				break;
+				
 			case	CLASS:
 				break;
 				

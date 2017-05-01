@@ -1336,6 +1336,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			break;
 			
 		case	NULL:
+			node.print(0);
 			assert(false);
 			break;
 			

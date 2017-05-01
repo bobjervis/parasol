@@ -46,6 +46,7 @@ enum TypeFamily {
 	
 	CLASS,
 	INTERFACE,
+	BOUND_INTERFACE,
 	ENUM,
 	FLAGS,
 	TYPEDEF,
@@ -292,15 +293,78 @@ class InterfaceType extends ClassType {
 		return true;
 	}
 	
-//	public string signature() {
-//		return "interface " + super.signature();
-//	}	
+	public int size() {
+		return 8;
+	}
+
+	public int alignment() {
+		return 8;
+	}
+
+	public boolean hasVtable(ref<CompileContext> compileContext) {
+		return true;
+	}
+
+}
+
+class InterfaceImplementationType extends Type {
+	private ref<InterfaceType> _interface;
+	private ref<ClassType> _implementingClass;
+	private ref<OverloadInstance>[] _methods;
+	
+	InterfaceImplementationType(ref<InterfaceType> definedInterface, ref<ClassType> implementingClass) {
+		super(TypeFamily.BOUND_INTERFACE);
+		_interface = definedInterface;
+		_implementingClass = implementingClass;
+		populateFromBase(null, 0);
+	}
+	
+	InterfaceImplementationType(ref<InterfaceType> definedInterface, ref<ClassType> implementingClass, ref<InterfaceImplementationType> baseInterface, int firstNewMethod) {
+		super(TypeFamily.BOUND_INTERFACE);
+		_interface = definedInterface;
+		_implementingClass = implementingClass;
+		populateFromBase(baseInterface, firstNewMethod);
+	}
+	/**
+	 * This populates the methid table for this implementation based on the baseInterface.
+	 * 
+	 * Note that the Number of methods matching does not have to equal the number of methods on the interface. Such an interface
+	 * is missing a method in the class, so the class definition is broken. Any effort to use this InterfaceImplementation should fail
+	 */
+	private void populateFromBase(ref<InterfaceImplementationType> baseInterface, int firstNewMethod) {
+		for (int i = 0; i < firstNewMethod; i++)
+			_methods.append(baseInterface._methods[i]);
+		ref<ClassScope> scope = ref<ClassScope>(_interface.scope());
+		ref<ref<OverloadInstance>[]> interfaceMethods = scope.methods();
+		scope = ref<ClassScope>(_implementingClass.scope());
+		ref<ref<OverloadInstance>[]> classMethods = scope.methods();
+		
+		for (int j = firstNewMethod; j < interfaceMethods.length(); j++) {
+			for (int k = 0; k < classMethods.length(); k++) {
+				if ((*classMethods)[k].overrides((*interfaceMethods)[j])) {
+					_methods.append((*classMethods)[k]);
+					break;
+				}
+			}
+			if (_methods.length() != j + 1) {
+				// TODO: Didn't get a match, substitute in a dummy entry point that throws an exception in case code gets that far.
+			}
+		}
+	}
+	
+	public ref<InterfaceType> iface() {
+		return _interface;
+	}
+	
+	public ref<ClassType> implementingClass() {
+		return _implementingClass;
+	}
 }
 
 class ClassType extends Type {
 	protected ref<Scope> _scope;
 	protected ref<Type> _extends;
-	protected ref<Type>[] _implements;
+	protected ref<InterfaceType>[] _implements;
 	protected ref<Class> _definition;
 
 	protected ClassType(TypeFamily family, ref<Class> definition, ref<Scope> scope) {
@@ -397,7 +461,7 @@ class ClassType extends Type {
 		return _scope;
 	}
 	
-	public void implement(ref<Type> interfaceType) {
+	public void implement(ref<InterfaceType> interfaceType) {
 		_implements.append(interfaceType);
 	}
 
@@ -414,18 +478,17 @@ class ClassType extends Type {
 				return _scope.interfaceOffset(compileContext) + i * address.bytes;
 		return -1;
 	}
-	/**
-	 * Note: If the interfaceType is not actually an interface, or is null, this function
-	 * will always return -1.
-	 * 
-	 * RETURNS: an offset >= 0 if this type implements the named interface. -1 otherwise.
-	 */
-	public int interfaceOffset(ref<Type> interfaceType) {
-		return -1;
-	}
 
 	public int interfaceCount() {
 		return _implements.length();
+	}
+	
+	public ref<ref<InterfaceType>[]> interfaces() {
+		return &_implements;
+	}
+	
+	public int interfaceOffset(int implementsIndex, ref<CompileContext> compileContext) {
+		return _scope.interfaceOffset(compileContext) + implementsIndex * address.bytes;
 	}
 	
 	public boolean equals(ref<Type> other) {
@@ -1539,6 +1602,22 @@ class Type {
 		return null;
 	}
 
+	public int interfaceCount() {
+		return 0;
+	}
+	
+	public ref<ref<InterfaceType>[]> interfaces() {
+		return null;
+	}
+	/**
+	 * Returns the offset of the interface in the type
+	 * 
+	 * If the implementsIndex >= interfaceCount() for the type, the behavior is undefined.
+	 */
+	public int interfaceOffset(int implementsIndex, ref<CompileContext> compileContext) {
+		return -1;
+	}
+	
 	public ref<Type> indirectType(ref<CompileContext> compileContext) {
 		return null;
 	}

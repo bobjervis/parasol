@@ -267,11 +267,11 @@ class X86_64Encoder extends Target {
 			_code.resize(_segments[segment].offset());
 			_code.append(*_segments[segment].content());
 		}
+		_dataMap[0].append(_nativeBindingSymbols);
 		relocateStaticData(8);
 		relocateStaticData(4);
 		relocateStaticData(2);
 		relocateStaticData(1);
-		_dataMap[0].append(_nativeBindingSymbols);
 		
 		_pxiHeader.builtInOffset = _segments[Segments.BUILT_INS].offset();
 		_pxiHeader.builtInCount = _segments[Segments.BUILT_INS].length() / long.bytes;
@@ -2626,6 +2626,7 @@ class X86_64Encoder extends Target {
 			case	ADDRESS:
 			case	REF:
 			case	POINTER:
+			case	INTERFACE:
 				emitRex(left.type.family(), left, R.NO_REG, R.NO_REG);
 				emit(0x81);
 				modRM(left, group1opcodes[instruction], int.bytes, 0);
@@ -3478,6 +3479,7 @@ class X86_64Encoder extends Target {
 		case	TYPEDEF:
 		case	CLASS_VARIABLE:
 		case	VAR:
+		case	INTERFACE:
 			rex |= REX_W;
 		}
 		rex |= rexValues[regField];

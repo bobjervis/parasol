@@ -1532,6 +1532,7 @@ class Binary extends Node {
 			ref<Type> keyType = _right.unwrapTypedef(Operator.CLASS, compileContext);
 			ref<Type> vectorType = compileContext.arena().buildVectorType(_left.unwrapTypedef(Operator.CLASS, compileContext), keyType, compileContext);
 			if (vectorType == null) { // Not an allowed combination.
+				print(0);
 				_right.add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}else
