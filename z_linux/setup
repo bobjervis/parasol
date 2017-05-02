@@ -5,7 +5,7 @@
 # The links stitch together the directory structure that the Parasol compiler expects to be in place by default:
 #
 #    <INSTALL DIRECTORY>
-#        bin - The directory contianing scripts plus the installed binaries for both Linux and Windows
+#        bin - The directory containing scripts plus the installed binaries for both Linux and Windows
 #        compiler - Contains the main Parasol command-line compiler file 'main.p'.
 #        lib - Contains the source to the Parasol runtime root.p root scope file.
 #        src/lib - The sources to the Parasol runtime.
@@ -18,12 +18,15 @@
 #
 #        Default - The build directory (not present in a binary install).
 #
-# Because the parasolrt binary expects to run 
+# Because the parasolrt binary expects to run under the install directory, the above arrangement mimics an install
+# well enough.
+#
 set -e
 
 PARASOL_BIN=$(dirname `readlink -f $0`)/..
 export PARASOL_HOME=`readlink -f $PARASOL_BIN`
 
+ln -sfT $PARASOL_HOME/bin $PARASOL_HOME/z_linux/bin
 ln -sfT $PARASOL_HOME/compiler $PARASOL_HOME/z_linux/compiler
 ln -sfT $PARASOL_HOME/lib $PARASOL_HOME/z_linux/lib
 ln -sfT $PARASOL_HOME/src $PARASOL_HOME/z_linux/src
