@@ -4,7 +4,7 @@ set -e
 PARASOL_BIN=$(dirname `readlink -f $0`)/..
 export PARASOL_HOME=`readlink -f $PARASOL_BIN`
 
-PARASOL_PXI=$PARASOL_HOME/Debug/x86-64lnx.pxi
+PARASOL_PXI=$PARASOL_HOME/bin/x86-64-lnx.pxi
 
 $PARASOL_HOME/bin/parasolrt $PARASOL_PXI compiler/main.p --pxi=p1.pxi compiler/main.p
 
