@@ -121,7 +121,6 @@ enum MessageId {
 	INTERNAL_ERROR,
 	UNDEFINED,
 	UNDEFINED_BUILT_IN,
-	UNRESOLVED_ABSTRACT,
 	UNRECOGNIZED_ANNOTATION,
 	
 	UNFINISHED_CHECK_STORAGE,
@@ -350,7 +349,6 @@ private string[MessageId] messageCatalog = [
 	UNFINISHED_NAMESPACE: "Unfinished: anonymous namespace",
 	UNREACHABLE: 			"Unreachable code",
 	UNRECOGNIZED_ANNOTATION: "Unrecognized annotation '%1'",
-	UNRESOLVED_ABSTRACT: 	"Abstract method has no override '%1'",
 ];
 
 check();

@@ -84,7 +84,7 @@ run(filename: class_name_test.p)
 
 // Basic runtime execution tests
 
-//run(filename: interface_test.p)
+run(filename: interface_test.p)
 run(filename: placement_delete_test.p)
 run(filename: vector_elem_constructor_test.p)
 run(filename: placement_new_test.p)

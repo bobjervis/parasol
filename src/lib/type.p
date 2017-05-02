@@ -307,60 +307,6 @@ class InterfaceType extends ClassType {
 
 }
 
-class InterfaceImplementationType extends Type {
-	private ref<InterfaceType> _interface;
-	private ref<ClassType> _implementingClass;
-	private ref<OverloadInstance>[] _methods;
-	
-	InterfaceImplementationType(ref<InterfaceType> definedInterface, ref<ClassType> implementingClass) {
-		super(TypeFamily.BOUND_INTERFACE);
-		_interface = definedInterface;
-		_implementingClass = implementingClass;
-		populateFromBase(null, 0);
-	}
-	
-	InterfaceImplementationType(ref<InterfaceType> definedInterface, ref<ClassType> implementingClass, ref<InterfaceImplementationType> baseInterface, int firstNewMethod) {
-		super(TypeFamily.BOUND_INTERFACE);
-		_interface = definedInterface;
-		_implementingClass = implementingClass;
-		populateFromBase(baseInterface, firstNewMethod);
-	}
-	/**
-	 * This populates the methid table for this implementation based on the baseInterface.
-	 * 
-	 * Note that the Number of methods matching does not have to equal the number of methods on the interface. Such an interface
-	 * is missing a method in the class, so the class definition is broken. Any effort to use this InterfaceImplementation should fail
-	 */
-	private void populateFromBase(ref<InterfaceImplementationType> baseInterface, int firstNewMethod) {
-		for (int i = 0; i < firstNewMethod; i++)
-			_methods.append(baseInterface._methods[i]);
-		ref<ClassScope> scope = ref<ClassScope>(_interface.scope());
-		ref<ref<OverloadInstance>[]> interfaceMethods = scope.methods();
-		scope = ref<ClassScope>(_implementingClass.scope());
-		ref<ref<OverloadInstance>[]> classMethods = scope.methods();
-		
-		for (int j = firstNewMethod; j < interfaceMethods.length(); j++) {
-			for (int k = 0; k < classMethods.length(); k++) {
-				if ((*classMethods)[k].overrides((*interfaceMethods)[j])) {
-					_methods.append((*classMethods)[k]);
-					break;
-				}
-			}
-			if (_methods.length() != j + 1) {
-				// TODO: Didn't get a match, substitute in a dummy entry point that throws an exception in case code gets that far.
-			}
-		}
-	}
-	
-	public ref<InterfaceType> iface() {
-		return _interface;
-	}
-	
-	public ref<ClassType> implementingClass() {
-		return _implementingClass;
-	}
-}
-
 class ClassType extends Type {
 	protected ref<Scope> _scope;
 	protected ref<Type> _extends;

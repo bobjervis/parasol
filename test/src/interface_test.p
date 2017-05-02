@@ -25,12 +25,14 @@ class B {
 
 class C extends B implements A {
 	int f(long y) {
+		assert(_fillter == 17);
 		return int(y);
 	}
 	
 	void g(string z) {
 		printf(z);
 		assert(z.startsWith("hel"));
+		_fillter = 17;
 	}
 }
 

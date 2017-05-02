@@ -137,6 +137,7 @@ class Unary extends Node {
 		case	INDIRECT:
 		case	BYTES:
 		case	LOAD:
+		case	STORE_V_TABLE:
 			break;
 
 		case	BIT_COMPLEMENT:

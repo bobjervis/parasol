@@ -105,7 +105,8 @@ class ClasslikeScope extends Scope {
 	public ref<ClassType> classType;
 	
 	private ref<OverloadInstance>[] _methods;
-	private ref<InterfaceImplementationType>[] _interfaces;
+	private ref<InterfaceImplementationScope>[] _interfaces;
+	private int _reservedInterfaceSlots;
 	protected ref<Symbol>[] _members;
 	private boolean _methodsBuilt;
 	private boolean _defaultConstructorChecked;
@@ -293,10 +294,25 @@ class ClasslikeScope extends Scope {
 			int baseOffset = 0;
 			if (hasVtable(compileContext))
 				baseOffset += address.bytes;
-			int interfaceArea = classType.interfaceCount() * address.bytes;
+			int interfaceArea = _reservedInterfaceSlots * address.bytes;
 			assignStorage(target, baseOffset, interfaceArea, compileContext);
 		} else
 			super.assignVariableStorage(target, compileContext);
+	}
+
+	protected void assignStorage(ref<Target> target, int offset, int interfaceArea, ref<CompileContext> compileContext) {
+		if (variableStorage == -1) {
+			super.assignStorage(target, offset, interfaceArea, compileContext);
+			int thunkOffset = interfaceOffset(compileContext);
+			for (int i = 0; i < _interfaces.length(); i++) {
+				if (_interfaces[i].baseInterface() != null)
+					_interfaces[i].thunkOffset = _interfaces[i].baseInterface().thunkOffset;
+				else {
+					_interfaces[i].thunkOffset = thunkOffset;
+					thunkOffset += 8;
+				}
+			}
+		}
 	}
 
 	public int interfaceOffset(ref<CompileContext> compileContext) {
@@ -309,6 +325,16 @@ class ClasslikeScope extends Scope {
 			return 0;
 	}
 
+	public int firstMemberOffset(ref<CompileContext> compileContext) {
+		int reservedSpace = _reservedInterfaceSlots * address.bytes;
+		ref<Type> base = assignSuper(compileContext);
+		if (base != null)
+			reservedSpace += base.size();
+		else if (hasVtable(compileContext))
+			reservedSpace += address.bytes;
+		return reservedSpace;
+	}
+	
 	public void checkForDuplicateMethods(ref<CompileContext> compileContext) {
 		for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
 			ref<Symbol> sym = i.get();
@@ -354,31 +380,36 @@ class ClasslikeScope extends Scope {
 					}
 				}
 			}
-			// First, copy in the base-class interface implementations.
-			if (base != null) {
-				ref<Scope> baseScope = base.scope();
-				if (baseScope != null && baseScope.storageClass() == StorageClass.MEMBER) {
-					ref<ClassScope> baseClass = ref<ClassScope>(baseScope);
-					ref<ref<InterfaceImplementationType>[]> interfaces = baseClass.interfaces();
-					for (int i = 0; i < interfaces.length(); i++) {
-						ref<InterfaceImplementationType> iface = (*interfaces)[i];
-						if (iface.implementingClass().destructor() != classType.destructor())
-							iface = new InterfaceImplementationType(iface.iface(), classType);
-						else
-							iface = mergeNovelImplementationMethods(iface);
-						_interfaces.append(iface);
+			if (classType != null) {
+				// First, copy in the base-class interface implementations.
+				if (base != null) {
+					ref<Scope> baseScope = base.scope();
+					if (baseScope != null && baseScope.storageClass() == StorageClass.MEMBER) {
+						ref<ClassScope> baseClass = ref<ClassScope>(baseScope);
+						ref<ref<InterfaceImplementationScope>[]> interfaces = baseClass.interfaces();
+						for (int i = 0; i < interfaces.length(); i++) {
+							ref<InterfaceImplementationScope> iface = (*interfaces)[i];
+							if (iface.implementingClass().destructor() != classType.destructor())
+								iface = compileContext.arena().createInterfaceImplementationScope(iface.iface(), classType);
+							else
+								iface = mergeNovelImplementationMethods(iface, compileContext);
+							iface.makeThunks(compileContext);
+							_interfaces.append(iface);
+						}
 					}
 				}
-			}
-			if (classType != null) {
-				// Now build out the InterfaceImplementationType objects (for their vtables).
+				// Now build out the InterfaceImplementationScope objects (for their vtables).
 				ref<ref<InterfaceType>[]> interfaces = classType.interfaces();
 				if (interfaces != null) {
 					for (int i = 0; i < interfaces.length(); i++) {
 						ref<InterfaceType> iface = (*interfaces)[i];
+						iface.scope().assignMethodMaps(compileContext);
 						for (int j = 0; ; j++) {
 							if (j >= _interfaces.length()) {
-								_interfaces.append(new InterfaceImplementationType(iface, classType));
+								_reservedInterfaceSlots++;
+								ref<InterfaceImplementationScope> impl = compileContext.arena().createInterfaceImplementationScope(iface, classType);
+								impl.makeThunks(compileContext);
+								_interfaces.append(impl);
 								break;
 							}
 							if (_interfaces[j].iface() == iface)
@@ -387,15 +418,10 @@ class ClasslikeScope extends Scope {
 					}
 				}
 			}
-			if (_interfaces.length() > 0) {
-				printf("%s: ", classType.signature());
-				classType.print();
-				printf("\n");
-			}
 		}
 	}
 	
-	public ref<InterfaceImplementationType> mergeNovelImplementationMethods(ref<InterfaceImplementationType> iface) {
+	public ref<InterfaceImplementationScope> mergeNovelImplementationMethods(ref<InterfaceImplementationScope> iface, ref<CompileContext> compileContext) {
 		ref<InterfaceType> ifaceDefinition = iface.iface();
 		ref<Scope> scope = ifaceDefinition.scope();
 		if (scope.storageClass() == StorageClass.MEMBER){
@@ -403,10 +429,9 @@ class ClasslikeScope extends Scope {
 			ref<ref<OverloadInstance>[]> methods = interfaceClass.methods();
 			for (int j = 0; j < methods.length(); j++) {
 				for (int k = 0; k < _methods.length(); k++) {
-					if (_methods[k].overrides((*methods)[j])) {
+					if (_methods[k].overrides((*methods)[j]))
 						// Bingo, we need a new interface implementation for this particular class, and we need to populate it.
-						return new InterfaceImplementationType(ifaceDefinition, classType, iface, j);
-					}
+						return compileContext.arena().createInterfaceImplementationScope(ifaceDefinition, classType, iface, j);
 				}
 			}
 		}
@@ -464,13 +489,117 @@ class ClasslikeScope extends Scope {
 		return classType != null && classType.class == InterfaceType;
 	}
 	
-	public ref<ref<InterfaceImplementationType>[]> interfaces() {
+	public int interfaceCount() {
+		return _interfaces.length();
+	}
+	
+	public ref<ref<InterfaceImplementationScope>[]> interfaces() {
 		return &_interfaces;
 	}
 	
 	void printDetails() {
 		if (classType != null)
 			printf(" classType %s", classType.signature());
+	}
+}
+
+class InterfaceImplementationScope extends ClassScope {
+	public int thunkOffset;
+
+	private ref<InterfaceType> _interface;
+	private ref<ClassType> _implementingClass;
+	private ref<OverloadInstance>[] _methods;
+	private ref<ThunkScope>[] _thunks;
+	private ref<InterfaceImplementationScope> _baseInterface;
+	
+	InterfaceImplementationScope(ref<InterfaceType> definedInterface, ref<ClassType> implementingClass) {
+		super(implementingClass.scope(), null, StorageClass.STATIC, null);
+		_interface = definedInterface;
+		classType = _interface;
+		_implementingClass = implementingClass;
+		populateFromBase(null, 0);
+	}
+	
+	InterfaceImplementationScope(ref<InterfaceType> definedInterface, ref<ClassType> implementingClass, ref<InterfaceImplementationScope> baseInterface, int firstNewMethod) {
+		super(implementingClass.scope(), null, StorageClass.STATIC, null);
+		_interface = definedInterface;
+		classType = _interface;
+		_implementingClass = implementingClass;
+		_baseInterface = baseInterface;
+		populateFromBase(baseInterface, firstNewMethod);
+	}
+	/**
+	 * This populates the methid table for this implementation based on the baseInterface.
+	 * 
+	 * Note that the Number of methods matching does not have to equal the number of methods on the interface. Such an interface
+	 * is missing a method in the class, so the class definition is broken. Any effort to use this InterfaceImplementation should fail
+	 */
+	private void populateFromBase(ref<InterfaceImplementationScope> baseInterface, int firstNewMethod) {
+		for (int i = 0; i < firstNewMethod; i++)
+			_methods.append(baseInterface._methods[i]);
+		ref<ClassScope> scope = ref<ClassScope>(_interface.scope());
+		ref<ref<OverloadInstance>[]> interfaceMethods = scope.methods();
+		scope = ref<ClassScope>(_implementingClass.scope());
+		ref<ref<OverloadInstance>[]> classMethods = scope.methods();
+		
+		for (int j = firstNewMethod; j < interfaceMethods.length(); j++) {
+			for (int k = 0; k < classMethods.length(); k++) {
+				if ((*classMethods)[k].overrides((*interfaceMethods)[j])) {
+					_methods.append((*classMethods)[k]);
+					break;
+				}
+			}
+			if (_methods.length() != j + 1) {
+				// TODO: Didn't get a match, substitute in a dummy entry point that throws an exception in case code gets that far.
+			}
+		}
+	}
+
+	public void makeThunks(ref<CompileContext> compileContext) {
+		for (int i = _thunks.length(); i < _methods.length(); i++)
+			_thunks.append(compileContext.arena().createThunkScope(this, _methods[i].parameterScope()));
+	}
+	
+	public ref<InterfaceType> iface() {
+		return _interface;
+	}
+	
+	public ref<ClassType> implementingClass() {
+		return _implementingClass;
+	}
+	
+	public ref<InterfaceImplementationScope> baseInterface() {
+		return _baseInterface;
+	}
+	
+	public ref<ref<ThunkScope>[]> thunks() {
+		return &_thunks;
+	}
+	
+	public ref<ref<OverloadInstance>[]> methods() {
+		return &_methods;
+	}
+
+	public boolean hasVtable(ref<CompileContext> compileContext) {
+		return true;
+	}
+
+	public boolean hasThis() {
+		return true;
+	}
+
+	public boolean isInterface() {
+		return true;
+	}
+	
+	public void assignMethodMaps(ref<CompileContext> compileContext) {
+	}
+
+	public void createPossibleDefaultConstructor(ref<CompileContext> compileContext) {
+	}
+
+	void printDetails() {
+		printf(" %s implemented by %s", _interface.signature(), _implementingClass.signature());
 	}
 }
 
@@ -594,6 +723,7 @@ class ParameterScope extends Scope {
 		IMPLIED_DESTRUCTOR,		// an implied destructor (no source code) generated when needed
 		ENUM_TO_STRING,			// a generated enum-to-string coercion method
 		FLAGS_TO_STRING,		// a generate flags-to-string coercion method
+		THUNK,					// This is a thunk. 
 	}
 	private Kind _kind;
 	private ref<Symbol>[] _parameters;
@@ -740,6 +870,51 @@ class ParameterScope extends Scope {
 			if (!thisType.equals(otherType))
 				return false;
 		}
+		return true;
+	}
+}
+
+class ThunkScope extends ParameterScope {
+	ref<ParameterScope> _function;
+	
+	public ThunkScope(ref<InterfaceImplementationScope> enclosing, ref<ParameterScope> func) {
+		super(enclosing, null, Kind.THUNK);
+		_function = func;
+	}
+	
+	public ref<ParameterScope> func() {
+		return _function;
+	}
+
+	public int thunkOffset() {
+		return ref<InterfaceImplementationScope>(enclosing()).thunkOffset;
+	}
+	
+	public boolean hasEllipsis() {
+		return _function.hasEllipsis();
+	}
+	
+	public boolean hasThis() {
+		return true;
+	}
+	
+	public boolean isDestructor() {
+		return _function.isDestructor();
+	}
+
+	public ref<FunctionType> type() {
+		return _function.type();
+	}
+	
+	public ref<OverloadInstance> symbol() {
+		return _function.symbol();
+	}
+	
+	public boolean hasOutParameter(ref<CompileContext> compileContext) {
+		return _function.hasOutParameter(compileContext);
+	}
+	
+	public boolean usesVTable(ref<CompileContext> compileContext) {
 		return true;
 	}
 }
@@ -998,10 +1173,13 @@ class Scope {
 		if (_storageClass == StorageClass.MEMBER) {
 			if (this.class == ClassScope) {
 				ref<ClassScope> c = ref<ClassScope>(this);
-				ref<ref<InterfaceImplementationType>[]> interfaceImplementations = c.interfaces();
+				ref<ref<InterfaceImplementationScope>[]> interfaceImplementations = c.interfaces();
 				for (int i = 0; i < interfaceImplementations.length(); i++) {
-					ref<InterfaceImplementationType> iit = (*interfaceImplementations)[i];
+					ref<InterfaceImplementationScope> iit = (*interfaceImplementations)[i];
 					printf("%*.*c  (Interface) %s\n", indent, indent, ' ', iit.iface().signature());
+					for (int j = 0; j < iit.methods().length(); j++) {
+						(*iit.methods())[j].print(indent + INDENT, false);
+					}
 				}
 				printf("%*.*c  (Methods)\n", indent, indent, ' ');
 				for (int i = 0; i < c.methods().length(); i++) {
@@ -1611,6 +1789,10 @@ class Scope {
 	}
 
 	public int interfaceOffset(ref<CompileContext> compileContext) {
+		return 0;
+	}
+	
+	public int firstMemberOffset(ref<CompileContext> compileContext) {
 		return 0;
 	}
 	

@@ -375,6 +375,24 @@ public class Arena {
 		return s;
 	}
 
+	public ref<InterfaceImplementationScope> createInterfaceImplementationScope(ref<InterfaceType> definedInterface, ref<ClassType> implementingClass) {
+		ref<InterfaceImplementationScope> s = new InterfaceImplementationScope(definedInterface, implementingClass);
+		_scopes.append(s);
+		return s;
+	}
+	
+	public ref<InterfaceImplementationScope> createInterfaceImplementationScope(ref<InterfaceType> definedInterface, ref<ClassType> implementingClass, ref<InterfaceImplementationScope> baseInterface, int firstNewMethod) {
+		ref<InterfaceImplementationScope> s = new InterfaceImplementationScope(definedInterface, implementingClass, baseInterface, firstNewMethod);
+		_scopes.append(s);
+		return s;
+	}
+	
+	public ref<ThunkScope> createThunkScope(ref<InterfaceImplementationScope> enclosing, ref<ParameterScope> func) {
+		ref<ThunkScope> s = new ThunkScope(enclosing, func);
+		_scopes.append(s);
+		return s;
+	}
+
 	public ref<EnumScope> createEnumScope(ref<Scope> enclosing, ref<Block> definition, ref<Identifier> className) {
 		ref<EnumScope> s = new EnumScope(enclosing, definition, className);
 		_scopes.append(s);

@@ -1044,7 +1044,7 @@ class Binary extends Node {
 		defn.type = type;
 		ref<Type> objType = type.indirectType(compileContext);
 		ref<Node> storeVtable = null;
-		if (objType.hasVtable(compileContext)) {
+		if (objType.hasVtable(compileContext) || objType.interfaceCount() > 0) {
 			r = tree.newReference(temp, false, location());
 			storeVtable = tree.newUnary(Operator.STORE_V_TABLE, r, location());
 			storeVtable.type = objType;

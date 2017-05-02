@@ -30,6 +30,7 @@ import parasol:compiler.FileStat;
 import parasol:compiler.FIRST_USER_METHOD;
 import parasol:compiler.FlagsInstanceType;
 import parasol:compiler.FunctionType;
+import parasol:compiler.InterfaceImplementationScope;
 import parasol:compiler.Location;
 import parasol:compiler.MessageId;
 import parasol:compiler.Node;
@@ -46,6 +47,7 @@ import parasol:compiler.StorageClass;
 import parasol:compiler.Symbol;
 import parasol:compiler.Target;
 import parasol:compiler.Ternary;
+import parasol:compiler.ThunkScope;
 import parasol:compiler.Try;
 import parasol:compiler.Type;
 import parasol:compiler.TypedefType;
@@ -526,14 +528,6 @@ class X86_64Encoder extends Target {
 		if (scope.vtable == null) {
 			scope.vtable = address(_segments[Segments.VTABLES].reserve((scope.methods().length() + FIRST_USER_METHOD) * address.bytes) + 1);
 			_vtables.append(scope);
-			for (int i = 0; i < scope.methods().length(); i++) {
-				ref<OverloadInstance> method = (*scope.methods())[i];
-				if (!method.deferAnalysis()) {
-					ref<Scope> func = getFunctionAddress(method.parameterScope(), compileContext);
-					if (func == null)
-						scope.classType.definition().add(MessageId.UNRESOLVED_ABSTRACT, compileContext.pool(), *method.name());
-				}
-			}
 		}
 	}
 	/**
@@ -546,7 +540,7 @@ class X86_64Encoder extends Target {
 		for (int i = 0; i < _vtables.length(); i++) {
 			ref<ClassScope> scope = _vtables[i];
 			// This relies on the side-effects of arranging that the function in question eventually gets generated.
-			if (FIRST_USER_METHOD > 1 && scope.destructor() != null)
+			if (scope.destructor() != null)
 				getFunctionAddress(scope.destructor(), compileContext);
 			for (int j = 0; j < scope.methods().length(); j++) {
 				ref<OverloadInstance> oi = (*scope.methods())[j];
@@ -554,6 +548,11 @@ class X86_64Encoder extends Target {
 
 				// This relies on the side-effects of arranging that the function in question eventually gets generated.
 				getFunctionAddress(functionScope, compileContext);
+			}
+			if (scope.class == InterfaceImplementationScope) {
+				ref<ref<ThunkScope>[]> thunks = ref<InterfaceImplementationScope>(scope).thunks();
+				for (int i = 0; i < thunks.length(); i++)
+					getFunctionAddress((*thunks)[i], compileContext);
 			}
 		}
 	}
@@ -568,16 +567,24 @@ class X86_64Encoder extends Target {
 			int tableEnd = tableStart + entries * address.bytes;
 			pointer<address> table = pointer<address>(_segments[Segments.VTABLES].at(tableStart));
 			*table = address(_pxiHeader.typeDataOffset + scope.classType.copyToImage(this) - 1);
-			if (FIRST_USER_METHOD > 1 && scope.destructor() != null) {
+			if (scope.destructor() != null) {
 				int target = int(scope.destructor().value) - 1;
 				table[1] = address(target);
 			}
-			for (int j = 0; j < scope.methods().length(); j++) {
-				ref<OverloadInstance> oi = (*scope.methods())[j];
-				ref<ParameterScope> functionScope = oi.parameterScope();
+			if (scope.class == InterfaceImplementationScope) {
+				ref<ref<ThunkScope>[]> thunks = ref<InterfaceImplementationScope>(scope).thunks();
+				for (int j = 0; j < thunks.length(); j++) {
+					int target = int((*thunks)[j].value) - 1;
+					table[j + FIRST_USER_METHOD] = address(target);
+				}
+			} else {
+				for (int j = 0; j < scope.methods().length(); j++) {
+					ref<OverloadInstance> oi = (*scope.methods())[j];
+					ref<ParameterScope> functionScope = oi.parameterScope();
 
-				int target = int(functionScope.value) - 1;
-				table[j + FIRST_USER_METHOD] = address(target);
+					int target = int(functionScope.value) - 1;
+					table[j + FIRST_USER_METHOD] = address(target);
+				}
 			}
 		}
 	}
@@ -2856,7 +2863,8 @@ class X86_64Encoder extends Target {
 		if (func == null)
 			return false;
 		if (isBuiltIn) {
-			inst(X86.SUB, TypeFamily.ADDRESS, R.RSP, 16);
+			if (sectionType() == SectionType.X86_64_WIN)
+				inst(X86.SUB, TypeFamily.ADDRESS, R.RSP, 16);
 			emit(0xff);
 			modRM(0, 2, 5);
 			if (functionScope.nativeBinding)
@@ -2864,9 +2872,28 @@ class X86_64Encoder extends Target {
 			else
 				fixup(FixupKind.BUILTIN32, functionScope.value);
 			emitInt(0);
-			inst(X86.ADD, TypeFamily.ADDRESS, R.RSP, 16);
+			if (sectionType() == SectionType.X86_64_WIN)
+				inst(X86.ADD, TypeFamily.ADDRESS, R.RSP, 16);
 		} else {
 			emit(0xe8);
+			fixup(FixupKind.RELATIVE32_CODE, func);
+			emitInt(0);
+		}
+		return true;
+	}
+	
+	boolean instJump(ref<ParameterScope> functionScope, ref<CompileContext> compileContext) {
+		ref<ParameterScope> func;
+		boolean isBuiltIn;
+		
+		(func, isBuiltIn) = getFunctionAddress(functionScope, compileContext);
+		if (func == null)
+			return false;
+		if (isBuiltIn) {
+			printf("Can't jump to a built-in\n");
+			assert(false);
+		} else {
+			emit(0xe9);
 			fixup(FixupKind.RELATIVE32_CODE, func);
 			emitInt(0);
 		}
@@ -3128,11 +3155,19 @@ class X86_64Encoder extends Target {
 		emitInt(type.copyToImage(this));
 	}
 	
-	public void instStoreVTable(R thisPointer, R tempRegister, ref<ClassScope> scope) {
+	public void instStoreVTable(R thisPointer, int offset, R tempRegister, ref<ClassScope> scope) {
 		instLoadVtable(tempRegister, scope);
 		emit(REX_W);
 		emit(0x89);			// MOV
-		modRM(0, rmValues[tempRegister], rmValues[thisPointer]);
+		if (offset == 0)
+			modRM(0, rmValues[tempRegister], rmValues[thisPointer]);
+		else if (offset < 128) {
+			modRM(1, rmValues[tempRegister], rmValues[thisPointer]);
+			emit(byte(offset));
+		} else {
+			modRM(2, rmValues[tempRegister], rmValues[thisPointer]);
+			emitInt(offset);
+		}
 	}
 	
 	public void instLoadVtable(R dest, ref<ClassScope> scope) {

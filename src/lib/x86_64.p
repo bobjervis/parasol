@@ -41,6 +41,7 @@ import parasol:compiler.FunctionDeclaration;
 import parasol:compiler.FunctionType;
 import parasol:compiler.GatherCasesClosure;
 import parasol:compiler.Identifier;
+import parasol:compiler.InterfaceImplementationScope;
 import parasol:compiler.InterfaceType;
 import parasol:compiler.InternalLiteral;
 import parasol:compiler.MessageId;
@@ -63,6 +64,7 @@ import parasol:compiler.Target;
 import parasol:compiler.TemplateInstanceType;
 import parasol:compiler.Ternary;
 import parasol:compiler.Test;
+import parasol:compiler.ThunkScope;
 import parasol:compiler.TraverseAction;
 import parasol:compiler.Try;
 import parasol:compiler.Type;
@@ -541,7 +543,7 @@ public class X86_64 extends X86_64AssignTemps {
 		// 6 instruction ordering
 		// 7 coding
 		ref<Block> node;
-		if (scope.class == ParameterScope) {
+		if (scope.class <= ParameterScope) {
 			ref<ParameterScope> parameterScope = ref<ParameterScope>(scope);
 
 			ref<FunctionDeclaration> func = ref<FunctionDeclaration>(scope.definition());
@@ -557,6 +559,8 @@ public class X86_64 extends X86_64AssignTemps {
 					break;
 					
 				case	IMPLIED_DESTRUCTOR:
+					if (generateInterfaceDestructorThunk(parameterScope, compileContext))
+						break;
 					if (needsDestructorShutdown(parameterScope, compileContext)) { 
 						inst(X86.PUSH, TypeFamily.SIGNED_64, thisRegister());
 						inst(X86.MOV, TypeFamily.ADDRESS, thisRegister(), firstRegisterArgument());
@@ -607,6 +611,12 @@ public class X86_64 extends X86_64AssignTemps {
 					inst(X86.MOV, R.RAX, indexRegister, R.RAX);
 					if (!generateReturn(parameterScope, compileContext))
 						assert(false);
+					break;
+					
+				case	THUNK:
+					ref<ThunkScope> thunk = ref<ThunkScope>(parameterScope);
+					inst(X86.SUB, TypeFamily.ADDRESS, firstRegisterArgument(), thunk.thunkOffset());
+					instJump(thunk.func(), compileContext);
 					break;
 					
 				default:
@@ -827,6 +837,18 @@ public class X86_64 extends X86_64AssignTemps {
 		}
 	}
 
+	private boolean generateInterfaceDestructorThunk(ref<ParameterScope> parameterScope, ref<CompileContext> compileContext) {
+		ref<Scope> scope = parameterScope.enclosing();
+		if (scope.class != InterfaceImplementationScope)
+			return false;
+		ref<InterfaceImplementationScope> iis = ref<InterfaceImplementationScope>(scope);
+		if (!iis.implementingClass().hasDestructor())
+			return false;
+		inst(X86.SUB, TypeFamily.ADDRESS, firstRegisterArgument(), iis.thunkOffset);
+		instJump(parameterScope, compileContext);
+		return true;
+	}
+	
 	private boolean needsDestructorShutdown(ref<ParameterScope> parameterScope, ref<CompileContext> compileContext) {
 		ref<ClassScope> classScope = ref<ClassScope>(parameterScope.enclosing());
 		for (int i = 0; i < classScope.members().length(); i++) {
@@ -936,11 +958,12 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 	
 	private void generateConstructorPreamble(ref<Block> constructorBody, ref<ParameterScope> scope, ref<CompileContext> compileContext) {
-		if (scope.enclosing().hasVtable(compileContext)) {
-			if (scope.enclosing().variableStorage > address.bytes) {
-				inst(X86.LEA, firstRegisterArgument(), thisRegister(), address.bytes);
+		int firstMemberOffset = scope.enclosing().firstMemberOffset(compileContext);
+		if (firstMemberOffset > 0) {
+			if (scope.enclosing().variableStorage > firstMemberOffset) {
+				inst(X86.LEA, firstRegisterArgument(), thisRegister(), firstMemberOffset);
 				inst(X86.XOR, TypeFamily.UNSIGNED_16, secondRegisterArgument(), secondRegisterArgument());
-				inst(X86.MOV, TypeFamily.SIGNED_32, thirdRegisterArgument(), scope.enclosing().variableStorage - address.bytes);
+				inst(X86.MOV, TypeFamily.SIGNED_32, thirdRegisterArgument(), scope.enclosing().variableStorage - firstMemberOffset);
 				instCall(_memset, compileContext);
 			}
 		} else {
@@ -963,13 +986,7 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.LEA, firstRegisterArgument(), thisRegister(), sym.offset);
 				instCall(defaultConstructor, compileContext);
 			}
-			if (sym.type().interfaceCount() > 0) {
-				ref<ref<InterfaceType>[]> interfaces = sym.type().interfaces();
-				for (int i = 0; i < interfaces.length(); i++) {
-					int offset = sym.type().interfaceOffset(i, compileContext);
-//					storeItable(thisRegister(), sym.offset + offset, null);
-				}
-			}
+			storeITables(sym.type(), sym.offset, compileContext);
 		}
 		if (constructorBody != null) {
 			// if there is no super. or self. calls at the head of the node, we need to generate one
@@ -2109,7 +2126,9 @@ public class X86_64 extends X86_64AssignTemps {
 		case	STORE_V_TABLE:
 			expression = ref<Unary>(node);
 			generate(expression.operand(), compileContext);
-			storeVtable(expression.type, compileContext);
+			if (expression.type.hasVtable(compileContext))
+				storeVtable(expression.type, compileContext);
+			storeITables(expression.type, 0, compileContext);
 			break;
 			
 		case	CALL:
@@ -2935,7 +2954,7 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.MOV, firstRegisterArgument(), u.operand(), compileContext);
 				storeVtable(node.type, compileContext);
 				if (node.type.size() > address.bytes) {
-					inst(X86.ADD, TypeFamily.ADDRESS, firstRegisterArgument(), 8);
+					inst(X86.ADD, TypeFamily.ADDRESS, firstRegisterArgument(), address.bytes);
 					inst(X86.XOR, TypeFamily.UNSIGNED_16, secondRegisterArgument(), secondRegisterArgument());
 					inst(X86.MOV, TypeFamily.SIGNED_32, thirdRegisterArgument(), node.type.size() - address.bytes);
 					instCall(_memset, compileContext);
@@ -2946,6 +2965,7 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.MOV, TypeFamily.SIGNED_32, thirdRegisterArgument(), node.type.size());
 				instCall(_memset, compileContext);
 			}
+			storeITables(node.type, 0, compileContext);
 			break;
 			
 		case	CLASS_COPY:
@@ -3123,8 +3143,11 @@ public class X86_64 extends X86_64AssignTemps {
 		case	CONSTRUCTOR:
 			if (overload == null)
 				return;
-			if (call.type.hasVtable(compileContext) && (call.target() == null || call.target().op() != Operator.SUPER))
-				storeVtable(call.type, compileContext);
+			if (call.target() == null || call.target().op() != Operator.SUPER) {
+				if (call.type.hasVtable(compileContext))
+					storeVtable(call.type, compileContext);
+				storeITables(call.type, 0, compileContext);
+			}
 			if (!instCall(overload, compileContext)) {
 				call.print(0);
 				assert(false);
@@ -3852,9 +3875,22 @@ public class X86_64 extends X86_64AssignTemps {
 	private void storeVtable(ref<Type> t, ref<CompileContext> compileContext) {
 		ref<ClassScope> classScope = ref<ClassScope>(t.scope());
 		buildVtable(classScope, compileContext);
-		instStoreVTable(firstRegisterArgument(), R.RAX, classScope);
+		instStoreVTable(firstRegisterArgument(), 0, R.RAX, classScope);
 	}
 
+	private void storeITables(ref<Type> t, int adjustment, ref<CompileContext> compileContext) {
+		if (t.interfaceCount() == 0)
+			return;
+		ref<ClassScope> classScope = ref<ClassScope>(t.scope());
+		ref<ref<InterfaceImplementationScope>[]> interfaces = classScope.interfaces();
+		for (int i = 0; i < interfaces.length(); i++) {
+			ref<InterfaceImplementationScope> iit = (*interfaces)[i];
+			int offset = adjustment + t.interfaceOffset(i, compileContext);
+			buildVtable(iit, compileContext);
+			instStoreVTable(firstRegisterArgument(), offset, R.RAX, iit);
+		}
+	}
+	
 	private void cacheCodegenObjects(ref<CompileContext> compileContext) {
 		ref<Symbol> re = _arena.getSymbol("parasol", "memory.alloc", compileContext);
 		if (re == null || re.class != Overload)
@@ -3960,6 +3996,7 @@ public class X86_64 extends X86_64AssignTemps {
 					inst(X86.LEA,firstRegisterArgument(),  sym.definition(), compileContext);
 					if (sym.type().hasVtable(compileContext))
 						storeVtable(sym.type(), compileContext);
+					storeITables(sym.type(), 0, compileContext);
 					instCall(constructor, compileContext);
 				} else {
 					if (sym.accessFlags() & Access.CONSTANT)
@@ -3996,6 +4033,7 @@ public class X86_64 extends X86_64AssignTemps {
 							inst(X86.LEA,firstRegisterArgument(),  sym.definition(), compileContext);
 							storeVtable(sym.type(), compileContext);
 						}
+						storeITables(sym.type(), 0, compileContext);
 						break;
 													
 					default:
