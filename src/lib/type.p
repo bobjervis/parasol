@@ -134,10 +134,10 @@ class BuiltInType extends Type {
 	}
 
 	public boolean widensTo(ref<Type> other, ref<CompileContext> compileContext) {
-		if (int(other.family()) >= int(TypeFamily.BUILTIN_TYPES))
-			return super.widensTo(other, compileContext);
-		else
+		if (other.isBuiltIn())
 			return widens[family()][other.family()];
+		else
+			return super.widensTo(other, compileContext);
 	}
 
 	public ref<ClassType> classType() {
@@ -415,6 +415,8 @@ class ClassType extends Type {
 		for (int i = 0; i < _implements.length(); i++)
 			if (_implements[i] == interfaceType)
 				return true;
+		if (_extends != null)
+			return _extends.doesImplement(interfaceType);
 		return false;
 	}
 
@@ -422,6 +424,8 @@ class ClassType extends Type {
 		for (int i = 0; i < _implements.length(); i++)
 			if (_implements[i] == interfaceType)
 				return _scope.interfaceOffset(compileContext) + i * address.bytes;
+		if (_extends != null)
+			return _extends.interfaceOffset(interfaceType, compileContext);
 		return -1;
 	}
 
@@ -502,6 +506,7 @@ class ClassType extends Type {
 
 	protected void doResolve(ref<CompileContext> compileContext) {
 		if (_definition != null) {
+			_definition.assignImplementsClause(compileContext);
 			ref<Node> base = _definition.extendsClause();
 			if (base != null) {
 				compileContext.assignTypes(_scope.enclosing(), base);
@@ -525,11 +530,21 @@ class ClassType extends Type {
 	
 	public boolean widensTo(ref<Type> other, ref<CompileContext> compileContext) {
 		if (other.family() == TypeFamily.INTERFACE) {
+			ref<Type> t = this;
+			do {
+				t = t.assignSuper(compileContext); 
+			} while (t != null);
 			if (doesImplement(other))
 				return true;
 			ref<Type> ind = indirectType(compileContext);
-			if (ind != null && ind.doesImplement(other))
-				return true;
+			if (ind != null) {
+				t = ind;
+				do {
+					t = t.assignSuper(compileContext); 
+				} while (t != null);
+				if (ind.doesImplement(other))
+					return true;
+			}
 		}
 		return super.widensTo(other, compileContext);
 	}

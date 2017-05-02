@@ -390,7 +390,7 @@ class ClasslikeScope extends Scope {
 						for (int i = 0; i < interfaces.length(); i++) {
 							ref<InterfaceImplementationScope> iface = (*interfaces)[i];
 							if (iface.implementingClass().destructor() != classType.destructor())
-								iface = compileContext.arena().createInterfaceImplementationScope(iface.iface(), classType);
+								iface = compileContext.arena().createInterfaceImplementationScope(iface.iface(), classType, iface, 0);
 							else
 								iface = mergeNovelImplementationMethods(iface, compileContext);
 							iface.makeThunks(compileContext);
@@ -406,8 +406,8 @@ class ClasslikeScope extends Scope {
 						iface.scope().assignMethodMaps(compileContext);
 						for (int j = 0; ; j++) {
 							if (j >= _interfaces.length()) {
+								ref<InterfaceImplementationScope> impl = compileContext.arena().createInterfaceImplementationScope(iface, classType, _reservedInterfaceSlots);
 								_reservedInterfaceSlots++;
-								ref<InterfaceImplementationScope> impl = compileContext.arena().createInterfaceImplementationScope(iface, classType);
 								impl.makeThunks(compileContext);
 								_interfaces.append(impl);
 								break;
@@ -511,12 +511,14 @@ class InterfaceImplementationScope extends ClassScope {
 	private ref<OverloadInstance>[] _methods;
 	private ref<ThunkScope>[] _thunks;
 	private ref<InterfaceImplementationScope> _baseInterface;
+	private int _itableSlot;
 	
-	InterfaceImplementationScope(ref<InterfaceType> definedInterface, ref<ClassType> implementingClass) {
+	InterfaceImplementationScope(ref<InterfaceType> definedInterface, ref<ClassType> implementingClass, int itableSlot) {
 		super(implementingClass.scope(), null, StorageClass.STATIC, null);
 		_interface = definedInterface;
 		classType = _interface;
 		_implementingClass = implementingClass;
+		_itableSlot = itableSlot;
 		populateFromBase(null, 0);
 	}
 	
@@ -580,6 +582,13 @@ class InterfaceImplementationScope extends ClassScope {
 		return &_methods;
 	}
 
+	public int itableOffset(ref<CompileContext> compileContext) {
+		if (_baseInterface != null)
+			return _baseInterface.itableOffset(compileContext);
+		else
+			return ref<ClassScope>(_implementingClass.scope()).interfaceOffset(compileContext) + _itableSlot * address.bytes;
+	}
+	
 	public boolean hasVtable(ref<CompileContext> compileContext) {
 		return true;
 	}

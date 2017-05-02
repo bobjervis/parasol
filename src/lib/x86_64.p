@@ -3879,13 +3879,15 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 
 	private void storeITables(ref<Type> t, int adjustment, ref<CompileContext> compileContext) {
-		if (t.interfaceCount() == 0)
+		if (t.scope() == null || t.scope().class != ClassScope)
 			return;
 		ref<ClassScope> classScope = ref<ClassScope>(t.scope());
+		if (classScope.interfaceCount() == 0)
+			return;
 		ref<ref<InterfaceImplementationScope>[]> interfaces = classScope.interfaces();
 		for (int i = 0; i < interfaces.length(); i++) {
 			ref<InterfaceImplementationScope> iit = (*interfaces)[i];
-			int offset = adjustment + t.interfaceOffset(i, compileContext);
+			int offset = adjustment + iit.itableOffset(compileContext);
 			buildVtable(iit, compileContext);
 			instStoreVTable(firstRegisterArgument(), offset, R.RAX, iit);
 		}

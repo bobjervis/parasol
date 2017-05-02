@@ -19,16 +19,13 @@ interface A {
 	void g(string s);
 }
 
-class B {
+class B implements A {
 	long _fillter;		// TO give the interface slot a non-zero offset.
-}
 
-class C extends B implements A {
 	int f(long y) {
-		assert(_fillter == 17);
-		return int(y);
+		return int(y - 5);
 	}
-	
+
 	void g(string z) {
 		printf(z);
 		assert(z.startsWith("hel"));
@@ -36,11 +33,19 @@ class C extends B implements A {
 	}
 }
 
+class C extends B {
+	int f(long y) {
+		return int(y);
+	}
+	
+}
+
 ref<C> c = new C;
 
 A testInterface = c;
 
 testInterface.g("hello");
+assert(c._fillter == 17);
 
 printf("testInterface.f(0x200000045) = %d\n", testInterface.f(0x200000045));
 assert(testInterface.f(0x200000045) == 69);

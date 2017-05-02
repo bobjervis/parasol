@@ -699,6 +699,7 @@ class Class extends Block {
 	protected ref<Node> _extends;
 	private ref<Identifier> _name;
 	private ref<NodeList> _implements;
+	private boolean _implementsAssigned;
 	private ref<NodeList> _last;
 	private TypeFamily _effectiveFamily;		// Set by annotations (@Shape, @Ref, @Pointer)
 	
@@ -840,16 +841,39 @@ class Class extends Block {
 		return _extends;
 	}
 
+	public ref<NodeList> implementsClause() {
+		return _implements;
+	}
+	
 	boolean definesScope() {
 		assert(false);
 		return false;
 	}
  
+	public void assignImplementsClause(ref<CompileContext> compileContext) {
+		if (!_implementsAssigned) {
+			_implementsAssigned = true;
+			for (ref<NodeList> nl = _implements; nl != null; nl = nl.next) {
+				compileContext.assignTypes(nl.node);
+				ref<InterfaceType> tp = ref<InterfaceType>(nl.node.unwrapTypedef(Operator.INTERFACE, compileContext));
+				if (tp.deferAnalysis())
+					continue;
+				if (nl.node.op() != Operator.IDENTIFIER) {
+					nl.node.print(0);
+					assert(false);
+				}
+				if (scope != null) {
+					ref<ClassType> classType = ref<ClassScope>(scope).classType;
+					classType.implement(tp);
+				}
+			}
+		}
+	}
+	
 	private void assignTypes(ref<CompileContext> compileContext) {
 		if (_extends != null)
 			compileContext.assignTypes(_extends);
-		for (ref<NodeList> nl = _implements; nl != null; nl = nl.next)
-			compileContext.assignTypes(nl.node);
+		assignImplementsClause(compileContext);
 		if (_extends != null) {
 			if (_extends.deferAnalysis()) {
 				type = _extends.type;
@@ -861,19 +885,14 @@ class Class extends Block {
 				type = nl.node.type;
 				return;
 			}
+		
 		super.assignTypes(compileContext);
+		
 		for (ref<NodeList> nl = _implements; nl != null; nl = nl.next) {
 			ref<InterfaceType> tp = ref<InterfaceType>(nl.node.unwrapTypedef(Operator.INTERFACE, compileContext));
 			if (tp.deferAnalysis()) {
 				type = tp;
 				continue;
-			}
-			if (nl.node.op() != Operator.IDENTIFIER) {
-				nl.node.print(0);
-			}
-			if (scope != null) {
-				ref<ClassType> classType = ref<ClassScope>(scope).classType;
-				classType.implement(tp);
 			}
 			assert(nl.node.op() == Operator.IDENTIFIER);
 			ref<Identifier> nm = ref<Identifier>(nl.node);

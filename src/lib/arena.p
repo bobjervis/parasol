@@ -375,8 +375,8 @@ public class Arena {
 		return s;
 	}
 
-	public ref<InterfaceImplementationScope> createInterfaceImplementationScope(ref<InterfaceType> definedInterface, ref<ClassType> implementingClass) {
-		ref<InterfaceImplementationScope> s = new InterfaceImplementationScope(definedInterface, implementingClass);
+	public ref<InterfaceImplementationScope> createInterfaceImplementationScope(ref<InterfaceType> definedInterface, ref<ClassType> implementingClass, int itableSlot) {
+		ref<InterfaceImplementationScope> s = new InterfaceImplementationScope(definedInterface, implementingClass, itableSlot);
 		_scopes.append(s);
 		return s;
 	}
