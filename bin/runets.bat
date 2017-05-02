@@ -6,6 +6,6 @@ if "%BIN:~-1%"=="\" set BIN=%BIN:~0,-1%
 for %%i in (%BIN%) do set PARASOL_HOME=%%~dpi
 if "%PARASOL_HOME:~-1%"=="\" set PARASOL_HOME=%PARASOL_HOME:~0,-1%
 
-%PARASOL_HOME%\debug\parasol %PARASOL_HOME%\debug\parasol.pxi %PARASOL_HOME%\test\drivers\etsTests.p %*
+%PARASOL_HOME%\bin\parasol %PARASOL_HOME%\bin\x86-64-win.pxi %PARASOL_HOME%\test\drivers\etsTests.p %*
 
 endlocal
