@@ -205,51 +205,71 @@ public class in6_addr {
 // Note: there is only one C function, but the most convenient way to get some semblance of type-safety (that is restricting
 // the function calls to one of the sockaddr types) is to overload the various allowed signatures.
 @Windows("ws2_32.dll", "accept")
+@Linux("libc.so.6", "accept")
 public abstract int accept(int socketfd, ref<sockaddr> addr, ref<int> addrlen);
 @Windows("ws2_32.dll", "accept")
+@Linux("libc.so.6", "accept")
 public abstract int accept(int socketfd, ref<sockaddr_in> addr, ref<int> addrlen);
 @Windows("ws2_32.dll", "accept")
+@Linux("libc.so.6", "accept")
 public abstract int accept(int socketfd, ref<sockaddr_in6> addr, ref<int> addrlen);
 @Windows("ws2_32.dll", "accept")
+@Linux("libc.so.6", "accept")
 public abstract int accept(int socketfd, ref<sockaddr_in6_old> addr, ref<int> addrlen);
 
 // Note: there is only one C function, but the most convenient way to get some semblance of type-safety (that is restricting
 // the function calls to one of the sockaddr types) is to overload the various allowed signatures.
 @Windows("ws2_32.dll", "bind")
+@Linux("libc.so.6", "bind")
 public abstract int bind(int s, ref<sockaddr> name, int nameLen);
 @Windows("ws2_32.dll", "bind")
+@Linux("libc.so.6", "bind")
 public abstract int bind(int s, ref<sockaddr_in> name, int nameLen);
 @Windows("ws2_32.dll", "bind")
+@Linux("libc.so.6", "bind")
 public abstract int bind(int s, ref<sockaddr_in6> name, int nameLen);
 @Windows("ws2_32.dll", "bind")
+@Linux("libc.so.6", "bind")
 public abstract int bind(int s, ref<sockaddr_in6_old> name, int nameLen);
 
 @Windows("ws2_32.dll", "gethostbyname")
+@Linux("libc.so.6", "gethostbyname")
 public abstract ref<hostent> gethostbyname(pointer<byte> name);
 
 @Windows("ws2_32.dll", "htons")
+@Linux("libc.so.6", "htons")
 public abstract char htons(char u16);
 
 @Windows("ws2_32.dll", "inet_addr")
+@Linux("libc.so.6", "inet_addr")
 public abstract unsigned inet_addr(pointer<byte> cp);
 
 // Have to figure out what this is doing - does the argument need to be unsigned or in_addr or ref<in_addr>?
 @Windows("ws2_32.dll", "inet_ntoa")
+@Linux("libc.so.6", "inet_ntoa")
 public abstract pointer<byte> inet_ntoa(unsigned in);
 
+@Linux("libc.so.6", "inet_ntop")
+public abstract pointer<byte> inet_ntop(int af, address src, pointer<byte> dst, unsigned size);
+
 @Windows("ws2_32.dll", "listen")
+@Linux("libc.so.6", "listen")
 public abstract int listen(int socketfd, int backlog);
 
 @Windows("ws2_32.dll", "socket")
+@Linux("libc.so.6", "socket")
 public abstract int socket(int af, int type, int protocol);
 
 @Windows("ws2_32.dll", "closesocket")
+@Linux("libc.so.6", "close")
 public abstract int closesocket(int socketfd);
 
 @Windows("ws2_32.dll", "recv")
+@Linux("libc.so.6", "recv")
 public abstract int recv(int fd, pointer<byte> buf, int len, int recvflags);
 
 @Windows("ws2_32.dll", "send")
+@Linux("libc.so.6", "send")
 public abstract int send(int fd, pointer<byte> buf, int len, int sendflags);
 
 @Windows("ws2_32.dll", "WSAGetLastError")

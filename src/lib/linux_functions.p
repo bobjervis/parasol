@@ -14,6 +14,7 @@
    limitations under the License.
  */
 namespace native:linux;
+import native:net.sockaddr;
 
 class pid_t = int;
 class pthread_t = address;
@@ -59,6 +60,12 @@ public abstract int execv(pointer<byte> path, pointer<pointer<byte>> argv);
 
 @Linux("libc.so.6", "fork")
 public abstract pid_t fork();
+
+@Linux("libc.so.6", "getcwd")
+public abstract pointer<byte> getcwd(pointer<byte> buf, long len);
+
+@Linux("libc.so.6", "getifaddrs")
+public abstract int getifaddrs(ref<ref<ifaddrs>> ifap);
 
 @Linux("libc.so.6", "kill")
 public abstract int kill(pid_t pid, int sig);
@@ -144,6 +151,9 @@ public abstract int sem_wait(ref<sem_t> sem);
 @Linux("libc.so.6", "sigaction")
 public abstract int sigaction(int signum, ref<struct_sigaction> act, ref<struct_sigaction> oldact);
 
+@Linux("libc.so.6", "statfs")
+public abstract int stat(pointer<byte> path, ref<statStruct> buf);
+
 @Linux("libc.so.6", "sysconf")
 public abstract int sysconf(int parameter_index);
 
@@ -174,6 +184,49 @@ public int errno() {
 
 public class DIR {
 	private int dummy;			// Don't expose anything about this structure
+}
+
+public class statStruct {
+    long st_dev;		/* Device.  */
+    long st_ino;		/* File serial number.	*/
+    long st_nlink;		/* Link count.  */
+    unsigned st_mode;		/* File mode.  */
+    unsigned st_uid;		/* User ID of the file's owner.	*/
+    unsigned st_gid;		/* Group ID of the file's group.*/
+    int __pad0;
+    long st_rdev;		/* Device number, if device.  */
+    long st_size;			/* Size of file, in bytes.  */
+    long st_blksize;	/* Optimal block size for I/O.  */
+    long st_blocks;		/* Number 512-byte blocks allocated. */
+    /* Nanosecond resolution timestamps are stored in a format
+       equivalent to 'struct timespec'.  This is the type used
+       whenever possible but the Unix namespace rules do not allow the
+       identifier 'timespec' to appear in the <sys/stat.h> header.
+       Therefore we have to handle the use of this header in strictly
+       standard-compliant sources special.  */
+    timespec st_atim;		/* Time of last access.  */
+    timespec st_mtim;		/* Time of last modification.  */
+    timespec st_ctim;		/* Time of last status change.  */
+    long __glibc_reserved0;
+    long __glibc_reserved1;
+    long __glibc_reserved2;
+}
+
+public class ifaddrs {
+	  public ref<ifaddrs> ifa_next;		/* Pointer to the next structure.  */
+
+	  public pointer<byte> ifa_name;	/* Name of this network interface.  */
+	  public unsigned ifa_flags;		/* Flags as from SIOCGIFFLAGS ioctl.  */
+
+	  public ref<sockaddr> ifa_addr;	/* Network address of this interface.  */
+	  public ref<sockaddr> ifa_netmask; /* Netmask of this interface.  */
+	  public ref<sockaddr> ifa_dstaddr; /* Point-to-point destination address */
+	  
+	  public ref<sockaddr> ifa_broadaddr() {
+		  return ifa_dstaddr;
+	  }
+
+	  public address ifa_data;			/* Address-specific data (may be unused).  */
 }
 
 @Constant

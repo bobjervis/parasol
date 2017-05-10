@@ -25,7 +25,7 @@ TestService service;
 server.staticContent("/sim", "c:/SetsInMotion-Alpha-4/help");
 server.service("/service", &service);
 
-assert(server.start());
+assert(server.start(ServerScope.LOCALHOST));
 
 class TestService extends HttpService {
 	

@@ -39,6 +39,20 @@ class Command {
 		_description = helpText;
 	}
 
+	ref<Argument<int>> integerArgument(string longOption, string helpText) {
+		return integerArgument(0, longOption, helpText);
+	}
+	
+	ref<Argument<int>> integerArgument(char shortOption, string longOption, string helpText) {
+		ref<Argument<int>> arg = new Argument<int>(ArgumentClass.INTEGER, shortOption, longOption, helpText);
+		if (defineOption(shortOption, longOption, arg))
+			return arg;
+		else {
+			delete arg;
+			return null;
+		}
+	}
+	
 	ref<Argument<string>> stringArgument(string longOption, string helpText) {
 		return stringArgument(0, longOption, helpText);
 	}
@@ -47,8 +61,10 @@ class Command {
 		ref<Argument<string>> arg = new Argument<string>(ArgumentClass.STRING, shortOption, longOption, helpText);
 		if (defineOption(shortOption, longOption, arg))
 			return arg;
-		else
+		else {
+			delete arg;
 			return null;
+		}
 	}
 
 	ref<Argument<boolean>> booleanArgument(string longOption, string helpText) {
@@ -59,8 +75,10 @@ class Command {
 		ref<Argument<boolean>> arg = new Argument<boolean>(ArgumentClass.BOOLEAN, shortOption, longOption, helpText);
 		if (defineOption(shortOption, longOption, arg))
 			return arg;
-		else
+		else {
+			delete arg;
 			return null;
+		}
 	}
 
 	boolean helpArgument(string longOption, string helpText) {
@@ -102,7 +120,10 @@ class Command {
 						printf("Unknown argument: %s\n", key);
 						return false;
 					}
-					b.setValue(value);
+					if (!b.setValue(value)) {
+						printf("Argument format incorrect: %s\n", args[i]);
+						return false;
+					}
 				} else if (args[i].length() > 1) {
 					// -xyz short option, might be -x val
 					pointer<byte> argument = &args[i][1];
@@ -115,17 +136,33 @@ class Command {
 							printf("Unknown argument: %s\n", key);
 							return false;
 						}
-						string value;
-						if (b.argumentClass() == ArgumentClass.STRING) {
+						switch (b.argumentClass()) {
+						case BOOLEAN:
+						case HELP:
+							b.setValue("true");
+							break;
+							
+						case STRING:
+						case INTEGER:
+							string value;
+							int lastI = i;
+
 							if (*argument != 0) {
 								value = string(argument);
 								argument = &""[0];
 							} else if (i < args.length() - 1) {
 								value = string(args[i + 1]);
-								i++;
+								lastI = i + 1;
+							} else {
+								printf("Argument %s requires a value\n", key);
+								return false;
 							}
+							if (!b.setValue(value)) {
+								printf("Argument format incorrect: %s %s\n", args[i]);
+								return false;
+							}
+							i = lastI;
 						}
-						b.setValue(value);
 					}
 				}
 			} else
@@ -271,10 +308,23 @@ class BaseArgument {
 		return _longOption; 
 	}
 
-	void setValue(string value) {
+	boolean setValue(string value) {
 		switch (_argumentClass) {
 		case	STRING:
 			ref<Argument<string>>(this).value = value;
+			break;
+			
+		case	INTEGER:
+			ref<Argument<int>> iarg = ref<Argument<int>>(this);
+			int v;
+			boolean success;
+			
+			(v, success) = int.parse(value);
+			
+			if (success)
+				iarg.value = v;
+			else
+				return false;
 			break;
 			
 		case	BOOLEAN:
@@ -287,6 +337,7 @@ class BaseArgument {
 			break;
 		}
 		_set = true;
+		return true;
 	}
 
 };
@@ -294,6 +345,7 @@ class BaseArgument {
 enum ArgumentClass {
 	STRING,
 	BOOLEAN,
+	INTEGER,
 	HELP
 };
 

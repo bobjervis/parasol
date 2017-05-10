@@ -21,10 +21,10 @@ public class HttpClient {
 	}
 	
 	public boolean get(string url) {
-		
+		return false;
 	}
 	
 	public boolean post(string url, string body) {
-		
+		return false;
 	}
 }

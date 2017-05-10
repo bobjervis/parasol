@@ -30,7 +30,7 @@ string COPYRIGHT_STRING = "2015 Robert Jervis";
  */
 class UCDParserCommand extends commandLine.Command {
 	public UCDParserCommand() {
-		finalArguments(0, int.MAX_VALUE, "<UnicodeData.txt file> <classifier-filename>");
+		finalArguments(2, 2, "<UnicodeData.txt file> <classifier-filename>");
 		description("The first given filename is parsed as a UnicodeData.txt file. " +
 					"\n" +
 					"This program will interpret the information in that file and generate " +

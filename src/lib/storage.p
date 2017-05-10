@@ -96,9 +96,17 @@ public string directory(string filename) {
 }
 
 public boolean exists(string filename) {
-	DWORD r = GetFileAttributes(&filename[0]);
-	if (r == 0xffffffff)
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		DWORD r = GetFileAttributes(&filename[0]);
+		if (r == 0xffffffff)
+			return false;
+		else
+			return true;
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		linux.statStruct statb;
+		
+		int result = linux.stat(filename.c_str(), &statb);
+		return result == 0;
+	} else
 		return false;
-	else
-		return true;
 }

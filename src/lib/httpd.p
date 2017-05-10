@@ -21,7 +21,6 @@ import parasol:file.Seek;
 import parasol:storage.constructPath;
 import parasol:storage.exists;
 import parasol:thread.ThreadPool;
-import native:C.close;
 import native:net.accept;
 import native:net.AF_INET;
 import native:net.bind;
@@ -31,6 +30,7 @@ import native:net.hostent;
 import native:net.htons;
 import native:net.inet_addr;
 import native:net.inet_ntoa;
+import native:net.inet_ntop;
 import native:net.listen;
 import native:net.recv;
 import native:net.send;
@@ -42,6 +42,17 @@ import native:net.WSADATA;
 import native:net.WSAGetLastError;
 import native:net.WSAStartup;
 import native:windows.WORD;
+import native:linux;
+import parasol:runtime;
+import parasol:pxi.SectionType;
+
+public enum ServerScope {
+	LOCALHOST,						// The HttpServer is only visible on the same machine as the server.
+	INTERNET,						// The HttpServer is visible across the Internet (using IPv4).
+}
+
+byte[] localhost = [ 127, 0, 0, 1 ];
+
 /*
  * This class implements an HTTP server. It implements HTTP version 1.1 for an Origin Server only. Hooks are defined to allow for
  * future expansion.
@@ -82,15 +93,21 @@ public class HttpServer {
 		_handlers.append(PathHandler(absPath, handler));
 	}
 	
-	public boolean start() {
-		WSADATA data;
-		WORD version = 0x202;
-		
-		int result = WSAStartup(version, &data);
-		if (result != 0) {
-			// TODO: Make up an exception class for this error.
-			printf("WSAStartup returned %d\n", result);
-			assert(result == 0);
+	public void setPort(char newPort) {
+		_port = newPort;
+	}
+	
+	public boolean start(ServerScope scope) {
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			WSADATA data;
+			WORD version = 0x202;
+			
+			int result = WSAStartup(version, &data);
+			if (result != 0) {
+				// TODO: Make up an exception class for this error.
+				printf("WSAStartup returned %d\n", result);
+				assert(result == 0);
+			}
 		}
 		int socketfd = socket(AF_INET, SOCK_STREAM, 0);
 		if (socketfd < 0) {
@@ -98,29 +115,60 @@ public class HttpServer {
 			return false;
 		}
 		sockaddr_in s;
+		pointer<byte> ip;
 		
-		ref<hostent> localHost = gethostbyname(&_hostname[0]);
-		if (localHost == null) {
-			printf("gethostbyname failed for '%s'\n", _hostname);
-			return false;
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			ref<hostent> localHost = gethostbyname(&_hostname[0]);
+			if (localHost == null) {
+				printf("gethostbyname failed for '%s'\n", _hostname);
+				return false;
+			}
+			ip = inet_ntoa (*ref<unsigned>(*localHost.h_addr_list));
+//			string n(localHost.h_name);
+//			printf("hostent name = '%s' ip = '%s'\n", n, x);
+			ip = inet_addr(ip);
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			if (scope == ServerScope.LOCALHOST)
+				ip = &localhost[0];
+			else {					// must be INTERNET
+				ref<linux.ifaddrs> ifAddresses;
+				if (linux.getifaddrs(&ifAddresses) != 0) {
+					printf("getifaddrs failed\n");
+					return false;
+				}
+				int i = 1;
+				for (ref<linux.ifaddrs> ifa = ifAddresses; ; ifa = ifa.ifa_next, i++) {
+					if (ifa == null) {
+						printf("No identifiable IPv4 address to use\n");
+						return false;
+					}
+					if (ifa.ifa_addr.sa_family == AF_INET) {
+						pointer<byte> ipa = pointer<byte>(&(ref<sockaddr_in>(ifa.ifa_addr).sin_addr));
+						if (ipa[0] == 127 && ipa[1] == 0 && ipa[2] == 0 && ipa[3] == 1)
+							continue;
+						ip = ipa;
+						break;
+					}
+				}
+			}
 		}
-		pointer<byte> ip = inet_ntoa (*ref<unsigned>(*localHost.h_addr_list));
 		string x(ip);
-		string n(localHost.h_name);
-//		printf("hostent name = '%s' ip = '%s'\n", n, x);
 		s.sin_family = AF_INET;
-		s.sin_addr.s_addr = inet_addr(ip);
+		s.sin_addr.s_addr = *ref<unsigned>(ip);
 		s.sin_port = htons(_port);
 //		printf("s = { %d, %x, %x }\n", s.sin_family, s.sin_addr.s_addr, s.sin_port);
 		if (bind(socketfd, &s, s.bytes) != 0) {
-			printf("Binding failed!\n");
-			close(socketfd);
+			printf("Binding failed!");
+			if (runtime.compileTarget == SectionType.X86_64_LNX)
+				linux.perror(" ".c_str());
+			printf("\n");
+			closesocket(socketfd);
 			return false;
 		}
 //		printf("socketfd = %d\n", socketfd);
 		for (;;) {
 			if (listen(socketfd, SOMAXCONN) != 0) {
-				close(socketfd);
+				closesocket(socketfd);
 				return false;
 			}
 			sockaddr_in a;
@@ -130,7 +178,7 @@ public class HttpServer {
 			int acceptfd = accept(socketfd, &a, &addrlen);
 //			printf("acceptfd = %d\n", acceptfd);
 			if (acceptfd < 0) {
-				close(socketfd);
+				closesocket(socketfd);
 				return false;
 			}
 //			printf("Dispatching");
@@ -331,11 +379,6 @@ public class HttpResponse {
 			flush();
 	}
 	
-	private void write(string s) {
-		for (int i = 0; i < s.length(); i++)
-			putc(s[i]);
-	}
-	
 	void error(int statusCode) {
 		string reasonPhrase;
 		switch (statusCode) {
@@ -373,7 +416,12 @@ public class HttpResponse {
 		flush();
 	}
 	
-	void write(pointer<byte> buffer, int len) {
+	public void write(string s) {
+		for (int i = 0; i < s.length(); i++)
+			putc(s[i]);
+	}
+	
+	public void write(pointer<byte> buffer, int len) {
 		for (int i = i; i < len; i++)
 			putc(buffer[i]);
 	}
