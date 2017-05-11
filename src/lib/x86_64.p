@@ -372,7 +372,7 @@ public class X86_64 extends X86_64AssignTemps {
 						assert(false);
 					} else
 						nativeBindings[i].functionAddress = linux.dlsym(handle, nativeBindings[i].symbolName);
-					linux.dlclose(handle);
+//					linux.dlclose(handle);
 				}
 				if (nativeBindings[i].functionAddress == null) {
 					string d(nativeBindings[i].dllName);

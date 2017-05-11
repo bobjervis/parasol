@@ -34,9 +34,12 @@ import native:net.inet_ntop;
 import native:net.listen;
 import native:net.recv;
 import native:net.send;
+import native:net.setsockopt;
 import native:net.SOCK_STREAM;
 import native:net.sockaddr_in;
 import native:net.socket;
+import native:net.SOL_SOCKET;
+import native:net.SO_REUSEADDR;
 import native:net.SOMAXCONN;
 import native:net.WSADATA;
 import native:net.WSAGetLastError;
@@ -114,6 +117,11 @@ public class HttpServer {
 			printf("socket returned %d\n", socketfd);
 			return false;
 		}
+		int xx = 1;
+		if (setsockopt(socketfd, SOL_SOCKET, SO_REUSEADDR, &xx, xx.bytes) < 0) {
+		    printf("setsockopt(SO_REUSEADDR) failed\n");
+		    return false;
+		}
 		sockaddr_in s;
 		pointer<byte> ip;
 		
@@ -189,7 +197,7 @@ public class HttpServer {
 		return true;
 	}
 	
-	void dispatch(ref<HttpRequest> request, ref<HttpResponse> response) {
+	boolean dispatch(ref<HttpRequest> request, ref<HttpResponse> response) {
 //		printf("dispatch %s %s\n", string(request.method), request.url);
 		for (int i = 0; i < _handlers.length(); i++) {
 			if (request.url.startsWith(_handlers[i].absPath)) {
@@ -201,7 +209,7 @@ public class HttpServer {
 					request.serviceResource = null;
 //				printf("hit handler %d absPath = %s\n", i, _handlers[i].absPath);
 				if (_handlers[i].handler.processRequest(request, response))
-					return;
+					return false;
 				else
 					break;
 			}
@@ -209,6 +217,7 @@ public class HttpServer {
 //		printf("miss!\n");
 		response.error(404);
 //		printf("done.\n");
+		return false;
 	}
 }
 
@@ -239,9 +248,12 @@ private void processHttpRequest(address ctx) {
 	HttpRequest request(context.requestFd);
 	HttpParser parser(&request);
 	HttpResponse response(context.requestFd);
-	if (parser.parse())
-		context.server.dispatch(&request, &response);
-	else
+	if (parser.parse()) {
+		if (context.server.dispatch(&request, &response)) {
+			delete context;
+			return;				// if dispatch returns true, we want to keep the connection open (for at least a while).
+		}
+	} else
 		response.error(400);
 //	printf("About to close socket %d\n", context.requestFd);
 	response.close();
@@ -424,6 +436,20 @@ public class HttpResponse {
 	public void write(pointer<byte> buffer, int len) {
 		for (int i = i; i < len; i++)
 			putc(buffer[i]);
+	}
+	/**
+	 * Only make this visible to internal users, such as WebSocket.
+	 */
+	int fd() {
+		return _fd;
+	}
+	
+	void respond() {
+		flush();
+	}
+	
+	void print() {
+		text.memDump(&_buffer[0], _buffer.length(), 0);
 	}
 }
 

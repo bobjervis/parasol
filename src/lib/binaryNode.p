@@ -2528,8 +2528,15 @@ class Binary extends Node {
 
 		case	UNSIGNED_8:
 		case	UNSIGNED_16:
-		case	UNSIGNED_32:
 		case	SIGNED_16:
+			_left = _left.coerce(compileContext.tree(), TypeFamily.SIGNED_32, false, compileContext);
+			if (_left.deferAnalysis()) {
+				type = _left.type;
+				return false;
+			}
+			break;
+			
+		case	UNSIGNED_32:
 		case	SIGNED_32:
 		case	SIGNED_64:
 			break;

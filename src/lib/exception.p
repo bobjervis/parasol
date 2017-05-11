@@ -385,6 +385,17 @@ public class NullPointerException extends AccessException {
 		return n;
 	}
 }
+
+public class PermissionsException extends AccessException {
+	PermissionsException(ref<ExceptionContext> exceptionContext) {
+		super(exceptionContext);
+	}
+	
+	ref<PermissionsException> clone() {
+		ref<PermissionsException> n = new PermissionsException(_exceptionContext);
+		return n;
+	}
+}
 /**
  * Throw an exception. It performs the exact same semantics as the throw statement.
  * The throw statement will generate this call (and provide the magic frame and stack pointer).
@@ -443,6 +454,9 @@ void hardwareExceptionHandler(ref<HardwareException> info) {
 				throw NullPointerException(context);
 			else
 				throw AccessException(context);	
+			
+		case 0xb02:						// SIGSEGV + SEGV_ACCERR
+			throw PermissionsException(context);	
 			
 		case 0x801:						// SIGTRAP + FPE_INTDIV;
 			throw DivideByZeroException(context);

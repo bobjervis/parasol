@@ -14,6 +14,8 @@ conditional(target: x86-64-lnx) {
 
 run(filename: compile_target_test.p)
 //run(filename: httpd_test.p)
+run(filename: sha1test.p)
+run(filename: base64test.p)
 run(filename: math_test_1.p)
 run(filename: threadpool_test.p)
 run(filename: monitor_test_1.p)
@@ -1096,9 +1098,9 @@ compile() { "char b; char a = char(b / 37);" }
 compile() { "char b; char a = char(b % 37);" }
 compile() { "char b; char a = char(b + 37);" }
 compile() { "char b; char a = char(b - 37);" }
-compile() { "char b; char a = b << 5;" }
-compile() { "char b; char a = b >> 5;" }
-compile() { "char b; char a = b >>> 5;" }
+compile() { "char b; char a = char(b << 5);" }
+compile() { "char b; char a = char(b >> 5);" }
+compile() { "char b; char a = char(b >>> 5);" }
 compile() { "char b; char a; a *= 37;" }
 compile() { "char b; char a; a /= 37;" }
 compile() { "char b; char a; a %= 37;" }
@@ -1140,9 +1142,9 @@ compile() { "byte b; byte a = byte(b / 37);" }
 compile() { "byte b; byte a = byte(b % 37);" }
 compile() { "byte b; byte a = byte(b + 37);" }
 compile() { "byte b; byte a = byte(b - 37);" }
-compile() { "byte b; byte a = b << 5;" }
-compile() { "byte b; byte a = b >> 5;" }
-compile() { "byte b; byte a = b >>> 5;" }
+compile() { "byte b; byte a = byte(b << 5);" }
+compile() { "byte b; byte a = byte(b >> 5);" }
+compile() { "byte b; byte a = byte(b >>> 5);" }
 compile() { "byte b; byte a; a *= 37;" }
 compile() { "byte b; byte a; a /= 37;" }
 compile() { "byte b; byte a; a %= 37;" }

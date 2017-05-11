@@ -256,6 +256,10 @@ public abstract pointer<byte> inet_ntop(int af, address src, pointer<byte> dst, 
 @Linux("libc.so.6", "listen")
 public abstract int listen(int socketfd, int backlog);
 
+@Windows("ws2_32.dll", "setsockopt")
+@Linux("libc.so.6", "setsockopt")
+public abstract int setsockopt(int socketfd, int level, int optname, address optval, int optlen);
+
 @Windows("ws2_32.dll", "socket")
 @Linux("libc.so.6", "socket")
 public abstract int socket(int af, int type, int protocol);
@@ -294,3 +298,10 @@ public class WSADATA {
 	  char iMaxUdpDg;
 	  pointer<byte> lpVendorInfo;
 }
+
+@Constant
+public int SOL_SOCKET = 1;
+@Constant
+public int SO_REUSEADDR = 2;
+
+
