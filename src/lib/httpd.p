@@ -208,10 +208,7 @@ public class HttpServer {
 				} else
 					request.serviceResource = null;
 //				printf("hit handler %d absPath = %s\n", i, _handlers[i].absPath);
-				if (_handlers[i].handler.processRequest(request, response))
-					return false;
-				else
-					break;
+				return _handlers[i].handler.processRequest(request, response);
 			}
 		}
 //		printf("miss!\n");
@@ -379,6 +376,10 @@ public class HttpResponse {
 	private void flush() {
 		if (_fill > 0) {
 			int x = send(_fd, &_buffer[0], _fill, 0);
+			if (x < 0) {
+				printf("flush failed\n");
+				linux.perror(null);
+			}
 //			printf("sent %d bytes\n", _fill);
 //			text.memDump(&_buffer[0], _fill, 0);
 			_fill = 0;
@@ -449,7 +450,7 @@ public class HttpResponse {
 	}
 	
 	void print() {
-		text.memDump(&_buffer[0], _buffer.length(), 0);
+		text.memDump(&_buffer[0], _fill, 0);
 	}
 }
 
