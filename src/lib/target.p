@@ -196,6 +196,34 @@ public class Variable {
 	public ref<Type>	type;				// If not null, the 'type' of the variable
 	public ref<NodeList> returns;			// If not null, the returns list from the function type this represents
 	public int			offset;
+	
+	public int stackSize() {
+		int sz;
+		if (type != null)
+			sz = type.stackSize();
+		else if (returns != null) {
+			for (ref<NodeList> nl = returns; nl != null; nl = nl.next) {
+				int nlSize = nl.node.type.stackSize();
+				sz += nlSize;
+			}
+		}
+		return sz;
+	}
+	
+	public void print() {
+		if (type != null)
+			printf("Variable V%p %s [%d]\n", this, type.signature(), stackSize());
+		else if (returns != null) {
+			printf("Variable V%p ", this);
+			for (ref<NodeList> nl = returns; nl != null; nl = nl.next) {
+				printf("%s", nl.node.type.signature());
+				if (nl.next != null)
+					printf(", ");
+			}
+			printf(" [%d]\n", stackSize());
+		} else 
+			printf("Variable V%p no type [%d]\n", this, stackSize());
+	}
 }
 
 public class Segment<class T> {

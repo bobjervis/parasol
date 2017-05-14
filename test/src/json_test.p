@@ -21,7 +21,6 @@ boolean success;
 
 printf("Phase I: null, true and false\n");
 (value, success) = json.parse("null");
-printf("value = %d success = %s\n", value, success ? "true" : "false");
 assert(success);
 
 (value, success) = json.parse("true");
@@ -230,5 +229,5 @@ assert(!success);
 (value, success) = json.parse("{ \"a\":true, }");
 assert(!success);
 
-(value, success) = json.parse("{ \"a\":true, \"b\":{ \"c\":[ 2, 3, \"s\" ] }");
+(value, success) = json.parse("{ \"a\":true, \"b\":{ \"c\":[ 2, 3, \"s\" ] } }");
 assert(success);

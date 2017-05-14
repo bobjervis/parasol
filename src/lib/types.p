@@ -34,7 +34,30 @@ public class `*deferred*`{}
 public class `*array*`{}
 public class `*object*`{}
 
-public class Array{}
+public class Array {
+	private var[] _elements;
+	
+	public var get(int i) {
+		return _elements[i];
+	}
+	
+	public void set(int i, var x) {
+		_elements[i] = x;
+	}
+	
+	public void push(var x) {
+		_elements.append(x);
+	}
+	
+	public var pop() {
+		if (_elements.length() > 0) {
+			var x = _elements[_elements.length() - 1];
+			_elements.resize(_elements.length() - 1);
+			return x;
+		} else
+			return var();
+	}
+}
 
 public class Object {
 	private var[string] _members;

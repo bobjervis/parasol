@@ -249,10 +249,10 @@ class Call extends ParameterBag {
 					outParameter = tree.newLeaf(Operator.MY_OUT_PARAMETER, location());
 					outParameter.type = functionType;
 				} else {
-					if (type != null && type.returnsViaOutParameter(compileContext))
-						temp = compileContext.newVariable(type);
-					else if (functionType != null && functionType.returnCount() > 1)
+					if (functionType != null && functionType.returnCount() > 1)
 						temp = compileContext.newVariable(functionType.returnType());
+					else if (type != null && type.returnsViaOutParameter(compileContext))
+						temp = compileContext.newVariable(type);
 					else
 						break;
 					outParameter = tree.newReference(temp, true, location());
@@ -1711,6 +1711,8 @@ class Return extends ParameterBag {
 	
 	public void print(int indent) {
 		printBasic(indent);
+		if (_multiReturnOfMultiCall)
+			printf(" multi-return-of-multi-call");
 		printf("\n");
 		int i = 0;
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next, i++) {

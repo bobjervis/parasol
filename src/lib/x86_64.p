@@ -939,15 +939,10 @@ public class X86_64 extends X86_64AssignTemps {
 //			printf("-- Scope %p\n", f().current);
 		for (int i = _stackLocalVariables; i < v.length(); i++) {
 			ref<Variable> var = (*v)[i];
-			int sz;
-			if (var.type != null)
-				sz = var.type.stackSize();
-			else if (var.returns != null) {
-				for (ref<NodeList> nl = var.returns; nl != null; nl = nl.next) {
-					int nlSize = nl.node.type.stackSize();
-					sz += nlSize;
-				}
-			}
+			int sz = var.stackSize();
+//			if (var.returns != null)
+//				var.print();
+			assert(sz > 0);
 			f().autoSize += sz;
 			var.offset = -f().autoSize;
 //			printf("Var [%d] %p offset %d\n", i, var, var.offset);

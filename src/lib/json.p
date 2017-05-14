@@ -18,7 +18,8 @@ namespace parasol:json;
 import parasol:compiler.codePointClass;
 import parasol:compiler.CompileString;
 import parasol:compiler.CPC_LETTER;
-import parasol:compiler.Location;
+
+import parasol:text.memDump;
 
 public var, boolean parse(string text) {
 	Parser parser(text);
@@ -39,7 +40,11 @@ class Parser {
 	
 	var, boolean parse() {
 		var x = parseValue();
-		printf("_error = %s\n", _error ? "true" : "false");
+		if (!_error) {
+			Token t = _scanner.next();
+			if (t != Token.END_OF_STREAM)
+				_error = true;
+		}
 		return x, !_error;
 	}
 	
@@ -48,10 +53,55 @@ class Parser {
 		var v;
 		switch (t) {
 		case	LEFT_CURLY:
-//			return;
+			ref<Object> object = new Object();
+			t = _scanner.next();
+			if (t == Token.RIGHT_CURLY)
+				return object;
+			_scanner.pushBack(t);
+			for (;;) {
+				t = _scanner.next();
+				if (t != Token.STRING) {
+					_error = true;
+					return object;
+				}
+				string key = _scanner.stringValue();
+				t = _scanner.next();
+				if (t != Token.COLON) {
+					_error = true;
+					return object;
+				}
+				var x = parseValue();
+				if (_error)
+					return object;
+				object.set(key, x);
+				t = _scanner.next();
+				if (t == Token.RIGHT_CURLY)
+					return object;
+				else if (t != Token.COMMA) {
+					_error = true;
+					return object;
+				}
+			}
 
 		case	LEFT_SQUARE:
-//			return;
+			ref<Array> array = new Array();
+			t = _scanner.next();
+			if (t == Token.RIGHT_SQUARE)
+				return array;
+			_scanner.pushBack(t);
+			for (;;) {
+				var x = parseValue();
+				if (_error)
+					return x;
+				array.push(x);
+				t = _scanner.next();
+				if (t == Token.RIGHT_SQUARE)
+					return array;
+				else if (t != Token.COMMA) {
+					_error = true;
+					return array;
+				}
+			}
 		
 		case	NUMBER:
 			return _scanner.numberValue();
@@ -113,7 +163,7 @@ class Scanner {
 	/*
 	 * Location of the last token read.
 	 */
-	private Location _location;
+	private int _location;
 	/*
 	 * _lastChar is the last Unicode code point value returned by getc
 	 */
@@ -155,7 +205,7 @@ class Scanner {
 			return t;
 		}
 		for (;;) {
-			_location = cursor();
+			_location = _cursor;
 			int c = getc();
 			switch (c) {
 			case	0x7fffffff://int.MAX_VALUE:
@@ -259,7 +309,6 @@ class Scanner {
 				break;
 			addCharacter(c);
 		}
-		c == getc();
 		if (c == '.') {
 			addCharacter(c);
 			boolean anyDigits;
@@ -282,15 +331,16 @@ class Scanner {
 			}
 			boolean anyDigits;
 			for (;;) {
-				c = getc();
 				if (!c.isDigit())
 					break;
 				addCharacter(c);
 				anyDigits = true;
+				c = getc();
 			}
 			if (!anyDigits)
 				t = Token.ERROR;
 		}
+		ungetc();
 		return t;
 	}
 
@@ -381,15 +431,19 @@ class Scanner {
 		}
 	}
 
-	public void seek(Location location) {
+	public void seek(int location) {
 		_pushback = Token.EMPTY;
 		_lastByte = -1;
 		_lastChar = 0;
-		_cursor = location.offset;
+		_cursor = location;
 	}
 
 	public void pushBack(Token t) {
 		_pushback = t;
+	}
+	
+	public string value() {
+		return _value;
 	}
 	/*
 	 * Only valid if the last returned token was STRING
@@ -404,7 +458,7 @@ class Scanner {
 		return double.parse(_value);
 	}
 	
-	public Location location() { 
+	public int location() { 
 		return _location; 
 	}
 	/*
@@ -426,7 +480,6 @@ class Scanner {
 			_lastByte = -1;
 		} else
 			x = getByte();
-		_cursor++;
 		if (x < 0x80) {
 			_lastChar = x;
 			_nextCursor = _cursor;
@@ -459,21 +512,12 @@ class Scanner {
 		_nextCursor = _cursor;
 		return value;
 	}
-	/*
-	 * This function returns the current 'cursor' location of the
-	 * Scanner.  This value is the offset of the next byte to be read
-	 */
-	protected Location cursor() {
-		return Location(_cursor);
-	}
 
 	int getMoreBytes(int valueSoFar, int extraBytes) {
 		for (int i = 0; i < extraBytes; i++) {
 			int x = getByte();
-			_cursor++;
 			if ((x & ~0x3f) != 0x80) {
 				_lastByte = x;
-				_cursor--;
 				_errorByte = 0xff;
 				return int.MAX_VALUE;
 			}

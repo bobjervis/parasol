@@ -14,6 +14,7 @@ conditional(target: x86-64-lnx) {
 
 run(filename: compile_target_test.p)
 //run(filename: httpd_test.p)
+run(filename: json_test.p)
 run(filename: sha1test.p)
 run(filename: base64test.p)
 run(filename: math_test_1.p)
