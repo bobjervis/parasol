@@ -37,6 +37,10 @@ public int SEEK_SET = 0;
 public int SEEK_CUR = 1;
 public int SEEK_END = 2;
 
+@Windows("msvcrt.dll", "atof")
+@Linux("libc.so.6", "atof")
+public abstract double atof(pointer<byte> text);
+
 @Windows("msvcrt.dll", "calloc")
 @Linux("libc.so.6", "calloc")
 public abstract address calloc(long count, long size);
@@ -124,6 +128,10 @@ public abstract double strcpy(pointer<byte> dest, pointer<byte> src);
 @Windows("msvcrt.dll", "strtod")
 @Linux("libc.so.6", "strtod")
 public abstract double strtod(pointer<byte> str, ref<pointer<byte>> endPtr);
+
+@Windows("msvcrt.dll", "strtof")
+@Linux("libc.so.6", "strtof")
+public abstract float strtof(pointer<byte> str, ref<pointer<byte>> endPtr);
 
 @Windows("msvcrt.dll", "strlen")
 @Linux("libc.so.6", "strlen")

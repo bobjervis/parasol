@@ -142,7 +142,15 @@ class Call extends ParameterBag {
 		return true;
 	}
 
+	public ref<Node> foldMultiReturnOfMultiCall(ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
+		return foldInternal(tree, true, true, compileContext);
+	}
+	
 	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+		return foldInternal(tree, voidContext, false, compileContext);
+	}
+	
+	private ref<Node> foldInternal(ref<SyntaxTree> tree, boolean voidContext, boolean multiReturnOfMultiCall, ref<CompileContext> compileContext) {
 		if (deferGeneration())
 			return this;
 		switch (op()) {
@@ -237,13 +245,18 @@ class Call extends ParameterBag {
 				functionType = ref<FunctionType>(_target.type);
 
 				ref<Variable> temp;
-				if (type != null && type.returnsViaOutParameter(compileContext))
-					temp = compileContext.newVariable(type);
-				else if (functionType != null && functionType.returnCount() > 1)
-					temp = compileContext.newVariable(functionType.returnType());
-				else
-					break;
-				outParameter = tree.newReference(temp, true, location());
+				if (multiReturnOfMultiCall) {
+					outParameter = tree.newLeaf(Operator.MY_OUT_PARAMETER, location());
+					outParameter.type = functionType;
+				} else {
+					if (type != null && type.returnsViaOutParameter(compileContext))
+						temp = compileContext.newVariable(type);
+					else if (functionType != null && functionType.returnCount() > 1)
+						temp = compileContext.newVariable(functionType.returnType());
+					else
+						break;
+					outParameter = tree.newReference(temp, true, location());
+				}
 				compileContext.markLiveSymbol(outParameter);
 				if (!voidContext) {
 					nodeFlags |= PUSH_OUT_PARAMETER;
@@ -262,9 +275,13 @@ class Call extends ParameterBag {
 				registerArgumentIndex++;
 			}
 			if (outParameter != null) {
-				outParameter = tree.newUnary(Operator.ADDRESS, outParameter, outParameter.location());
-				outParameter.register = compileContext.target.registerValue(registerArgumentIndex, TypeFamily.ADDRESS);
-				outParameter.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+				if (multiReturnOfMultiCall)
+					outParameter.register = compileContext.target.registerValue(registerArgumentIndex, TypeFamily.ADDRESS);
+				else {
+					outParameter = tree.newUnary(Operator.ADDRESS, outParameter, outParameter.location());
+					outParameter.register = compileContext.target.registerValue(registerArgumentIndex, TypeFamily.ADDRESS);
+					outParameter.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+				}
 			}
 			
 			if (_arguments != null) {
@@ -1575,7 +1592,8 @@ class EllipsisArguments extends ParameterBag {
 }
 
 class Return extends ParameterBag {
-	ref<NodeList> _liveSymbols;
+	private ref<NodeList> _liveSymbols;
+	private boolean _multiReturnOfMultiCall;
 	
 	Return(ref<NodeList> expressions, Location location) {
 		super(Operator.RETURN, expressions, location);
@@ -1629,6 +1647,11 @@ class Return extends ParameterBag {
 	}
 
 	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+		if (_multiReturnOfMultiCall) {
+			// This is the special case of a multi-return 'return' statement matching a call to another multi-return function.
+			_arguments.node = ref<Call>(_arguments.node).foldMultiReturnOfMultiCall(tree, compileContext);
+			return this;
+		}
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
 			nl.node = nl.node.fold(tree, false, compileContext);
 		int n = compileContext.liveSymbolCount();
@@ -1682,6 +1705,10 @@ class Return extends ParameterBag {
 		return Test.FAIL_TEST;
 	}
 
+	public boolean multiReturnOfMultiCall() {
+		return _multiReturnOfMultiCall;
+	}
+	
 	public void print(int indent) {
 		printBasic(indent);
 		printf("\n");
@@ -1727,23 +1754,62 @@ class Return extends ParameterBag {
 			return;
 		}
 		ref<NodeList> returnType = functionType.returnType();
+		type = compileContext.arena().builtInType(TypeFamily.VOID);
 		if (_arguments != null) {
 			if (returnType == null) {
 				add(MessageId.RETURN_VALUE_DISALLOWED, compileContext.pool());
 				type = compileContext.errorType();
 			} else {
+				if (_arguments.next == null && returnType.next != null) {
+					// This is a special case that can only be valid if the one argument is a call to a function returning the same set of types.
+					if (_arguments.node.op() == Operator.CALL) {
+						ref<Call> call = ref<Call>(_arguments.node);
+						if (call.category() != CallCategory.COERCION) {
+							ref<Type> tt = call.target().type;
+							if (tt.family() == TypeFamily.FUNCTION) {
+								ref<FunctionType> ft = ref<FunctionType>(tt);
+								
+								ref<NodeList> rtCall = ft.returnType();
+								for (ref<NodeList> rt = returnType; rt != null; rt = rt.next, rtCall = rtCall.next) {
+									if (rtCall == null || !rtCall.node.type.equals(rt.node.type)) {
+										_arguments.node.add(MessageId.CANNOT_CONVERT, compileContext.pool());
+										type = compileContext.errorType();
+										return;
+									}
+								}
+								if (rtCall != null) {
+									_arguments.node.add(MessageId.CANNOT_CONVERT, compileContext.pool());
+									type = compileContext.errorType();
+								}
+								_arguments.node.type = type;		// Make the called function a 'void' function for now.
+								type = ft;
+								_multiReturnOfMultiCall = true;
+								return;								
+							}
+						}
+					}
+				}
+				ref<NodeList> rt = returnType;
+				for (ref<NodeList> arg = _arguments; arg != null; arg = arg.next, rt = rt.next)
+					if (rt == null) {
+						arg.node.add(MessageId.INCORRECT_RETURN_COUNT, compileContext.pool());
+						type = compileContext.errorType();
+						break;
+					}
+				if (rt != null) {
+					_arguments.node.add(MessageId.INCORRECT_RETURN_COUNT, compileContext.pool());
+					type = compileContext.errorType();
+				}
 				type = returnType.node.type;
 				for (ref<NodeList> arg = _arguments; arg != null; arg = arg.next, returnType = returnType.next)
 					arg.node = arg.node.coerce(compileContext.tree(), returnType.node.type, false, compileContext);
 				for (ref<NodeList> arg = _arguments; arg != null; arg = arg.next) {
 					if (arg.node.deferAnalysis()) {
-						type = arg.node.type;
 						return;
 					}
 				}
 			}
 		} else {
-			type = compileContext.arena().builtInType(TypeFamily.VOID);
 			if (returnType != null) {
 				add(MessageId.RETURN_VALUE_REQUIRED, compileContext.pool());
 				type = compileContext.errorType();
@@ -1771,7 +1837,7 @@ ref<Node>, int foldMultiReturn(ref<Node> leftHandle, ref<Node> destinations, ref
 			ref<OverloadInstance> oi = getMethodSymbol(b.right(), "store", r.type, compileContext);
 			if (oi == null) {
 				destinations.type = compileContext.errorType();
-				return destinations;
+				return destinations, 0;
 			}
 			// This is the assignment method for this class!!!
 			// (all strings go through here).
@@ -1793,7 +1859,7 @@ ref<Node>, int foldMultiReturn(ref<Node> leftHandle, ref<Node> destinations, ref
 		r.type = destinations.type;
 		ref<Node> assignment = tree.newBinary(Operator.ASSIGN, destinations, r, destinations.location());
 		assignment.type = r.type;
-		assignment = assignment.fold(tree, false, compileContext);
+		assignment = assignment.fold(tree, true, compileContext);
 		result = tree.newBinary(Operator.SEQUENCE, leftHandle, assignment, destinations.location());
 		offset = destinations.type.stackSize();
 	}

@@ -1198,7 +1198,7 @@ compile(expect: fail, message: INVALID_COMPARE) { "boolean a = 37 !<>= 37;" }
 compile(expect: fail, message: INVALID_COMPARE) { "unsigned b, c; boolean a = b <>= c;" }
 compile(expect: fail, message: INVALID_COMPARE) { "unsigned b, c; boolean a = b !<>= c;" }
 
-// The matrix of allowed operators for boolean operands:
+// The matrix of allowed operators for string operands:
 
 compile() { 'string a = "abc" + "abc";' }
 compile() { 'string a; a += "abc";' }
@@ -1300,6 +1300,8 @@ compile() { "int, boolean f() { return 0, false; }" }
 compile(expect: fail) { "int, boolean f() { return false, 0; }" }
 
 compile(expect: fail) { "int, boolean f() { return 0, false; } int x; double y; (x, y) = f();" }
+compile(expect: fail, message: CANNOT_CONVERT) { "int, boolean a() { return b(); } int, char b() { return 2, 3; }" }
+compile(expect: fail, message: INCORRECT_RETURN_COUNT) { "int, boolean a() { return 2; }" }
 
 compile(expect: fail) { "void foo(foo bar);" }
 

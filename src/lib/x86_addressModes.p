@@ -316,6 +316,7 @@ class X86_64AddressModes extends X86_64Encoder {
 			
 		case	FRAME_PTR:
 		case	STACK_PTR:
+		case	MY_OUT_PARAMETER:
 			break;
 			
 		case	ELLIPSIS_ARGUMENTS:

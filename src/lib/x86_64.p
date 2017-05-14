@@ -1330,65 +1330,74 @@ public class X86_64 extends X86_64AssignTemps {
 		case	RETURN:
 			ref<Return> retn = ref<Return>(node);
 			emitSourceLocation(compileContext.current().file(), node.location());
-			ref<NodeList> arguments = retn.arguments();
-			if (arguments != null) {
-				for (ref<NodeList> nl = arguments; nl != null; nl = nl.next) {
-					markAddressModes(nl.node, compileContext);
-					sethiUllman(nl.node, compileContext, this);
-				}
-				if (arguments.next == null) {
-					ref<FunctionDeclaration> enclosing = f().current.enclosingFunction();
-					ref<FunctionType> functionType = ref<FunctionType>(enclosing.type);
-					ref<NodeList> returnType = functionType.returnType();
-					if (returnType.next != null && containsNestedMultiReturn(arguments.node))
-						generateNestedMultiReturn(functionType, arguments.node, compileContext);
-					else {
-						assignSingleReturn(retn, arguments.node, compileContext);
-						if (returnType.next != null || 
-							returnType.node.type.returnsViaOutParameter(compileContext))
-							generateOutParameter(arguments.node, 0, compileContext);
-						else
-							generate(arguments.node, compileContext);
-						f().r.generateSpills(node, this);
-					}
-				} else {
-					int outOffset = 0;
-					for (ref<NodeList> nl = arguments; nl != null; nl = nl.next) {
-						assignMultiReturn(retn, nl.node, compileContext);
-						generateOutParameter(nl.node, outOffset, compileContext);
-						outOffset += nl.node.type.stackSize();
-					}
-				}
-				if (retn.liveSymbols() != null) {
-					ref<ParameterScope> enclosing = ref<ParameterScope>(compileContext.current());
-					boolean outParam = enclosing.hasOutParameter(compileContext);
-
-					if (!outParam) {
-						switch (arguments.node.type.family()) {
-						case	FLOAT_64:
-						case	FLOAT_32:
-							retn.print(4);
-							assert(false);
-							
-						default:
-							inst(X86.PUSH, TypeFamily.ADDRESS, R.RAX);
-						}
-					}
-					generateLiveSymbolDestructors(retn.liveSymbols(), compileContext);
-					if (!outParam) {
-						switch (arguments.node.type.family()) {
-						case	FLOAT_64:
-						case	FLOAT_32:
-							retn.print(4);
-							assert(false);
-							
-						default:
-							inst(X86.POP, TypeFamily.ADDRESS, R.RAX);
-						}
-					}
-				}
-			} else
+			if (retn.multiReturnOfMultiCall()) {
+				ref<Node> call = retn.arguments().node;
+				markAddressModes(call, compileContext);
+				sethiUllman(call, compileContext, this);
+				assignVoidContext(call, compileContext);		// Take the result in any register available.
+				generate(call, compileContext);
 				generateLiveSymbolDestructors(retn.liveSymbols(), compileContext);
+			} else {
+				ref<NodeList> arguments = retn.arguments();
+				if (arguments != null) {
+					for (ref<NodeList> nl = arguments; nl != null; nl = nl.next) {
+						markAddressModes(nl.node, compileContext);
+						sethiUllman(nl.node, compileContext, this);
+					}
+					if (arguments.next == null) {
+						ref<FunctionDeclaration> enclosing = f().current.enclosingFunction();
+						ref<FunctionType> functionType = ref<FunctionType>(enclosing.type);
+						ref<NodeList> returnType = functionType.returnType();
+						if (returnType.next != null && containsNestedMultiReturn(arguments.node))
+							generateNestedMultiReturn(functionType, arguments.node, compileContext);
+						else {
+							assignSingleReturn(retn, arguments.node, compileContext);
+							if (returnType.next != null || 
+								returnType.node.type.returnsViaOutParameter(compileContext))
+								generateOutParameter(arguments.node, 0, compileContext);
+							else
+								generate(arguments.node, compileContext);
+							f().r.generateSpills(node, this);
+						}
+					} else {
+						int outOffset = 0;
+						for (ref<NodeList> nl = arguments; nl != null; nl = nl.next) {
+							assignMultiReturn(retn, nl.node, compileContext);
+							generateOutParameter(nl.node, outOffset, compileContext);
+							outOffset += nl.node.type.stackSize();
+						}
+					}
+					if (retn.liveSymbols() != null) {
+						ref<ParameterScope> enclosing = ref<ParameterScope>(compileContext.current());
+						boolean outParam = enclosing.hasOutParameter(compileContext);
+
+						if (!outParam) {
+							switch (arguments.node.type.family()) {
+							case	FLOAT_64:
+							case	FLOAT_32:
+								retn.print(4);
+								assert(false);
+								
+							default:
+								inst(X86.PUSH, TypeFamily.ADDRESS, R.RAX);
+							}
+						}
+						generateLiveSymbolDestructors(retn.liveSymbols(), compileContext);
+						if (!outParam) {
+							switch (arguments.node.type.family()) {
+							case	FLOAT_64:
+							case	FLOAT_32:
+								retn.print(4);
+								assert(false);
+								
+							default:
+								inst(X86.POP, TypeFamily.ADDRESS, R.RAX);
+							}
+						}
+					}
+				} else
+					generateLiveSymbolDestructors(retn.liveSymbols(), compileContext);
+			}
 				
 			if (!generateReturn(f().current, compileContext))
 				unfinished(retn, "failed return generation", compileContext);
@@ -2281,6 +2290,12 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			break;
 			
+		case	MY_OUT_PARAMETER:
+			if ((node.nodeFlags & ADDRESS_MODE) == 0) {
+				inst(X86.MOV, R(node.register), R.RBP, f().outParameterOffset);
+			}
+			break;
+			
 		case	SUBSCRIPT:
 			b = ref<Binary>(node);
 
@@ -2612,14 +2627,31 @@ public class X86_64 extends X86_64AssignTemps {
 			generate(ref<Binary>(value).left(), compileContext);
 			generateOutParameter(ref<Binary>(value).right(), outOffset, compileContext);
 		} else if (value.register != 0) {
-			generate(value, compileContext);
-			f().r.generateSpills(value, this);
-			if (value.register == int(R.RAX)) {
-				inst(X86.MOV, firstRegisterArgument(), R.RBP, f().outParameterOffset);
-				inst(X86.MOV, value.type.family(), firstRegisterArgument(), outOffset, R(int(value.register)));
+			if (value.type.family() == TypeFamily.VAR) {
+				assert(value.op() == Operator.VARIABLE);
+				generateLoad(X86.MOV, value, compileContext);
+				if (value.register == int(R.RAX)) {
+					inst(X86.MOV, firstRegisterArgument(), R.RBP, f().outParameterOffset);
+					inst(X86.MOV, value.type.family(), firstRegisterArgument(), outOffset, R(int(value.register)));
+				} else {
+					inst(X86.MOV, R.RAX, R.RBP, f().outParameterOffset);
+					inst(X86.MOV, value.type.family(), R.RAX, outOffset, R(int(value.register)));
+				}
+				generateLoad(X86.MOV, value, address.bytes);
+				if (value.register == int(R.RAX))
+					inst(X86.MOV, value.type.family(), firstRegisterArgument(), outOffset + address.bytes, R(int(value.register)));
+				else
+					inst(X86.MOV, value.type.family(), R.RAX, outOffset + address.bytes, R(int(value.register)));
 			} else {
-				inst(X86.MOV, R.RAX, R.RBP, f().outParameterOffset);
-				inst(X86.MOV, value.type.family(), R.RAX, outOffset, R(int(value.register)));
+				generate(value, compileContext);
+				f().r.generateSpills(value, this);
+				if (value.register == int(R.RAX)) {
+					inst(X86.MOV, firstRegisterArgument(), R.RBP, f().outParameterOffset);
+					inst(X86.MOV, value.type.family(), firstRegisterArgument(), outOffset, R(int(value.register)));
+				} else {
+					inst(X86.MOV, R.RAX, R.RBP, f().outParameterOffset);
+					inst(X86.MOV, value.type.family(), R.RAX, outOffset, R(int(value.register)));
+				}
 			}
 		} else if (value.isLvalue()) {
 			value.nodeFlags |= ADDRESS_MODE;
@@ -2734,6 +2766,13 @@ public class X86_64 extends X86_64AssignTemps {
 		R reg = R(expression.register);
 		expression.register = 0;
 		inst(instruction, reg, expression, compileContext);
+		expression.register = byte(reg);
+	}
+
+	private void generateLoad(X86 instruction, ref<Node> expression, int offset) {
+		R reg = R(expression.register);
+		expression.register = 0;
+		inst(instruction, expression.type, reg, expression, offset);
 		expression.register = byte(reg);
 	}
 

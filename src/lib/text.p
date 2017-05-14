@@ -1322,6 +1322,80 @@ class string {
 		return output, true;
 	}
 	/*
+	 *	unescapeJSON
+	 *
+	 *	Process the input string as if it were a C string literal.
+	 *	Escape sequences are:
+	 *
+	 *		\b		backspace
+	 *		\f		form-feed
+	 *		\n		newline
+	 *		\r		carriage return
+	 *		\t		tab
+	 *		\uNNNN	Unicode code point
+	 *		\\		\
+	 *		\/		/
+	 *		\"		"
+	 *
+	 *	RETURNS
+	 *		false	If the sequence is not well-formed.
+	 *		string	The converted string (if the boolean is true).
+	 */
+	string, boolean unescapeJSON() {
+		string output;
+		
+		if (length() == 0)
+			return *this, true;
+		for (int i = 0; i < _contents.length; i++) {
+			if (pointer<byte>(&_contents.data)[i] == '\\') {
+				if (i == _contents.length - 1)
+					return output, false;
+				else {
+					int v;
+					i++;
+					switch (pointer<byte>(&_contents.data)[i]) {
+					case 'b':	output.append('\b');	break;
+					case 'f':	output.append('\f');	break;
+					case 'n':	output.append('\n');	break;
+					case 'r':	output.append('\r');	break;
+					case 't':	output.append('\t');	break;
+					case '/':	output.append('/');		break;
+					case '\\':	output.append('\\');	break;
+					case '"':	output.append('"');		break;
+					case 'u':
+					case 'U':
+						i++;;
+						if (i >= _contents.length)
+							return output, false;
+						if (!pointer<byte>(&_contents.data)[i].isHexDigit())
+							return output, false;
+						v = 0;
+						do {
+							v <<= 4;
+							if (v > 0xff)
+								return output, false;
+							if (pointer<byte>(&_contents.data)[i].isDigit())
+								v += pointer<byte>(&_contents.data)[i] - '0';
+							else
+								v += 10 + pointer<byte>(&_contents.data)[i].toLowercase() - 'a';
+							i++;
+						} while (i < _contents.length && pointer<byte>(&_contents.data)[i].isHexDigit());
+						// TODO: Implement Unicode escape sequence. 
+						assert(v < 128);
+						output.append(byte(v));
+						i--;
+						break;
+						
+					default:
+						return output, false;
+					}
+				}
+			} else
+				output.append(pointer<byte>(&_contents.data)[i]);
+		}
+		return output, true;
+	}
+	/*
 	 *	unescapeParasol
 	 *
 	 *	Process the input string as if it were a C string literal.
@@ -1365,8 +1439,6 @@ class string {
 					case 'v':	output.append('\v');	break;
 					case 'u':
 					case 'U':
-						return null, false;
-						
 					case 'x':
 					case 'X':
 						i++;;
@@ -1407,7 +1479,6 @@ class string {
 						break;
 						
 					default:
-						// TODO: Check for unicode \uNNNN sequences
 						output.append(pointer<byte>(&_contents.data)[i]);
 					}
 				}

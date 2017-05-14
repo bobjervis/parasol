@@ -106,7 +106,6 @@ enum Operator {
 	INCREMENT_AFTER,
 	DECREMENT_AFTER,
 	EXPRESSION,
-	RETURN,
 	THROW,
 	DEFAULT,
 	VECTOR_OF,
@@ -148,6 +147,7 @@ enum Operator {
 	VACATE_ARGUMENT_REGISTERS,
 	FRAME_PTR,
 	STACK_PTR,
+	MY_OUT_PARAMETER,
 	// Constant
 	INTEGER,
 	FLOATING_POINT,
@@ -188,6 +188,7 @@ enum Operator {
 	OBJECT_AGGREGATE,
 	ARRAY_AGGREGATE,
 	TEMPLATE_INSTANCE,
+	RETURN,
 	// Try
 	TRY,
 	// InternalLiteral
@@ -3512,18 +3513,20 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 		break;
 		
 	case	INTEGER:
+	case	IDENTIFIER:
 		expression = tree.newLeaf(Operator.EMPTY, expression.location());
 		expression.type = compileContext.arena().builtInType(TypeFamily.VOID);
 		return expression;
 		
 	case	SEQUENCE:
+	case	EQUALITY:
 		ref<Binary> b = ref<Binary>(expression);
 		ref<Node> left = foldVoidContext(b.left(), tree, compileContext);
 		ref<Node> right = foldVoidContext(b.right(), tree, compileContext);
 		expression = tree.newBinary(Operator.SEQUENCE, left, right, b.location());
 		expression.type = b.type;
 		return expression;
-		
+
 	default:
 		expression.print(0);
 		assert(false);

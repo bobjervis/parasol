@@ -313,6 +313,18 @@ public class DivideByZeroException extends RuntimeException {
 
 }
 
+public class IllegalInstructionException extends RuntimeException {
+	IllegalInstructionException(ref<ExceptionContext> exceptionContext) {
+		super(exceptionContext);
+	}
+
+	ref<IllegalInstructionException> clone() {
+		ref<IllegalInstructionException> n = new IllegalInstructionException(_exceptionContext);
+		return n;
+	}	
+
+}
+
 public class AssertionFailedException extends RuntimeException {
 	AssertionFailedException() {
 	}
@@ -458,8 +470,11 @@ void hardwareExceptionHandler(ref<HardwareException> info) {
 		case 0xb02:						// SIGSEGV + SEGV_ACCERR
 			throw PermissionsException(context);	
 			
-		case 0x801:						// SIGTRAP + FPE_INTDIV;
+		case 0x801:						// SIGTRAP + FPE_INTDIV
 			throw DivideByZeroException(context);
+			
+		case 0x402:						// SIGILL + ILL_ILLOPN
+			throw IllegalInstructionException(context);
 		}
 	}
 	printf("exception %x at %p\n", info.exceptionType, info.codePointer);

@@ -15,6 +15,8 @@
  */
 namespace parasol:floatingPoint;
 
+import native:C;
+
 public class float {
 	private static unsigned SIGN_MASK = 0x80000000;
 	private static unsigned ONE = 0x3f800000;
@@ -24,8 +26,14 @@ public class float {
 	public float() {
 	}
 	
-	public float(float value) {
+//	public float(float value) {
 		
+//	}
+	public static float, boolean parse(string text) {
+		pointer<byte> endptr;
+		
+		float x = C.strtof(&text[0], &endptr);
+		return x, endptr != &text[0] && endptr == &text[text.length()];
 	}
 }
 
@@ -38,8 +46,15 @@ public class double {
 	public double() {
 	}
 	
-	public double(double value) {
+//	public double(double value) {
 		
+//	}
+	
+	public static double, boolean parse(string text) {
+		pointer<byte> endptr;
+		
+		double x = C.strtod(&text[0], &endptr);
+		return x, endptr != &text[0] && endptr == &text[text.length()];
 	}
 }
 

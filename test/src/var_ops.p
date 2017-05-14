@@ -17,6 +17,7 @@ basicIntegerArithmetic();
 basicStringOps();
 conversions();
 subscripting();
+multiReturns();
 
 void basicIntegerArithmetic() {
 	var a = 1;
@@ -216,4 +217,28 @@ void subscripting() {
 	assert(array.length() == 10);
 	for (int i = 0; i < 10; i++)
 		assert(array[i] == i + 5);
+}
+
+void multiReturns() {
+	var a;
+	boolean b;
+	(a, b) = test2();
+	assert(a == 5);
+	assert(!b);
+	var c;
+	boolean d;
+	(c, d) = test1();
+	assert(c == 5);
+	assert(!d);
+}
+
+var, boolean test1() {
+	return test2();
+}
+
+var, boolean test2() {
+	var x = 5;
+	boolean y = true;
+	assert(x == 5);
+	return x, !y;
 }

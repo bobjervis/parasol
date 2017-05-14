@@ -33,3 +33,17 @@ public class `*Namespace*` {}
 public class `*deferred*`{}
 public class `*array*`{}
 public class `*object*`{}
+
+public class Array{}
+
+public class Object {
+	private var[string] _members;
+	
+	public var get(string key) {
+		return _members[key];
+	}
+	
+	public void set(string key, var value) {
+		_members[key] = value;
+	}
+}

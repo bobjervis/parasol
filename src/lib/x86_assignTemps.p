@@ -732,6 +732,10 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			}
 			break;
 
+		case	MY_OUT_PARAMETER:
+			node.register = byte(f().r.getreg(node, longMask(), regMask));
+			break;
+
 		case	FALSE:
 		case	INTEGER:
 		case	CHARACTER:
@@ -1178,11 +1182,11 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			for (ref<NodeList> args = call.arguments(); args != null; args = args.next) {
 				long regMask;
 				
+				// This can happen for a multi-return of a multi-call, where this is the call part.
 				if (args.node.register == 0) {
-					printf("--\n");
-					call.print(0);
+					assignVoidContext(args.node, compileContext);
+					continue;
 				}
-				assert(args.node.register != 0);
 				if (args.node.register == 0xff)
 					regMask = longMask();
 				else

@@ -240,6 +240,7 @@ void sethiUllman(ref<Node> node, ref<CompileContext> compileContext, ref<Target>
 	case	VECTOR_OF:
 	case	FRAME_PTR:
 	case	STACK_PTR:
+	case	MY_OUT_PARAMETER:
 		node.sethi = 0;
 		break;
 		

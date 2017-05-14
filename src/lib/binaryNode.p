@@ -1361,6 +1361,7 @@ class Binary extends Node {
 		}
 		return false;
 	}
+	
 	public void assignClassVariable(ref<CompileContext> compileContext) {
 		assert(op() == Operator.INITIALIZE);
 		compileContext.assignTypes(_right);

@@ -47,6 +47,8 @@ import parasol:types.`*Namespace*`;
 import parasol:types.`*deferred*`;
 import parasol:types.`*array*`;
 import parasol:types.`*object*`;
+import parasol:types.Array;
+import parasol:types.Object;
 
 @Ref
 class ref<class T> extends address {
