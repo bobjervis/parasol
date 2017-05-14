@@ -2640,12 +2640,23 @@ public class X86_64 extends X86_64AssignTemps {
 			} else {
 				generate(value, compileContext);
 				f().r.generateSpills(value, this);
-				if (value.register == int(R.RAX)) {
+				if (!value.type.isFloat() && value.register == int(R.RAX)) {
 					inst(X86.MOV, firstRegisterArgument(), R.RBP, f().outParameterOffset);
-					inst(X86.MOV, value.type.family(), firstRegisterArgument(), outOffset, R(int(value.register)));
+					inst(X86.MOV, value.type.family(), firstRegisterArgument(), outOffset, R(int(value.register))); 
 				} else {
 					inst(X86.MOV, R.RAX, R.RBP, f().outParameterOffset);
-					inst(X86.MOV, value.type.family(), R.RAX, outOffset, R(int(value.register)));
+					switch (value.type.family()) {
+					case	FLOAT_32:
+						inst(X86.MOVSS, value.type.family(), R.RAX, outOffset, R(int(value.register)));
+						break;
+
+					case	FLOAT_64:
+						inst(X86.MOVSD, value.type.family(), R.RAX, outOffset, R(int(value.register)));
+						break;
+						
+					default:
+						inst(X86.MOV, value.type.family(), R.RAX, outOffset, R(int(value.register)));
+					}
 				}
 			}
 		} else if (value.isLvalue()) {

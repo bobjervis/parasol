@@ -1466,8 +1466,13 @@ class X86_64Encoder extends Target {
 					emitInt(offset);
 				}
 			} else {
-				printf("%s, %s, %s, %d, %s\n", string(instruction), string(family), string(dest), offset, string(reg));
-				assert(false);
+				if (offset >= -128 || offset <= 127) {
+					modRM(1, rmValues[reg], rmValues[dest]);
+					emit(byte(offset));
+				} else {
+					modRM(2, rmValues[reg], rmValues[dest]);
+					emitInt(offset);
+				}
 			}
 			break;
 			
@@ -1487,8 +1492,13 @@ class X86_64Encoder extends Target {
 					emitInt(offset);
 				}
 			} else {
-				printf("%s, %s, %s, %d, %s\n", string(instruction), string(family), string(dest), offset, string(reg));
-				assert(false);
+				if (offset >= -128 || offset <= 127) {
+					modRM(1, rmValues[reg], rmValues[dest]);
+					emit(byte(offset));
+				} else {
+					modRM(2, rmValues[reg], rmValues[dest]);
+					emitInt(offset);
+				}
 			}
 			break;
 			

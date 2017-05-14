@@ -57,6 +57,10 @@ public class Array {
 		} else
 			return var();
 	}
+	
+	public int length() {
+		return _elements.length();
+	}
 }
 
 public class Object {
@@ -68,5 +72,9 @@ public class Object {
 	
 	public void set(string key, var value) {
 		_members[key] = value;
+	}
+	
+	public int size() {
+		return _members.size();
 	}
 }

@@ -187,6 +187,7 @@ class Unary extends Node {
 				}
 				break;
 				
+			case	BOOLEAN:
 			case	UNSIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
