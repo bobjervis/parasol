@@ -79,7 +79,12 @@ class X86_64AssignTemps extends X86_64AddressModes {
 
 		case	SWITCH:
 			b = ref<Binary>(node);
-			assignRegisterTemp(b.left(), longMask(), compileContext);		// Take the result in any register available.
+			long switchMask;
+			if (b.left().type.family() == TypeFamily.STRING)
+				switchMask = getRegMask(secondRegisterArgument());
+			else
+				switchMask = longMask();
+			assignRegisterTemp(b.left(), switchMask, compileContext);		// Take the result in any register available.
 			if (b.left().type.family() == TypeFamily.ENUM) {
 				int i = int(f().r.getreg(node, longMask(), longMask()));
 				node.register = byte(i);

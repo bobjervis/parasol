@@ -2348,6 +2348,7 @@ class Binary extends Node {
 			compileContext.assignTypes(_left);
 			if (!_left.deferAnalysis()) {
 				switch (_left.type.family()) {
+				case	STRING:
 				case	UNSIGNED_8:
 				case	UNSIGNED_16:
 				case	UNSIGNED_32:

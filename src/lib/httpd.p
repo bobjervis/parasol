@@ -246,6 +246,7 @@ private void processHttpRequest(address ctx) {
 	HttpParser parser(&request);
 	HttpResponse response(context.requestFd);
 	if (parser.parse()) {
+		request.print();
 		if (context.server.dispatch(&request, &response)) {
 			delete context;
 			return;				// if dispatch returns true, we want to keep the connection open (for at least a while).
@@ -816,7 +817,7 @@ private class StaticContentService extends HttpService {
 //		printf("Static Content! fetching %s / %s\n", _filename, request.serviceResource);
 		if (request.method != HttpRequest.Method.GET) {
 			response.error(501);
-			return true;
+			return false;
 		}
 		string filename;
 		if (request.serviceResource != null)
@@ -848,6 +849,6 @@ private class StaticContentService extends HttpService {
 		} else
 			response.error(404);
 		
-		return true;
+		return false;
 	}
 }

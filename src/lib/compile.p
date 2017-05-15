@@ -841,7 +841,8 @@ class CompileContext {
 			ref<Type> switchType = swit.left().type;
 			if (switchType == null)
 				swit.print(0);
-			if (switchType.family() == TypeFamily.ENUM) {
+			switch (switchType.family()) {
+			case ENUM:
 				if (b.left().op() != Operator.IDENTIFIER) {
 					b.left().add(MessageId.NOT_ENUM_INSTANCE, _pool);
 					b.left().type = errorType();
@@ -849,9 +850,16 @@ class CompileContext {
 				}
 				ref<Identifier> id = ref<Identifier>(b.left());
 				id.resolveAsEnum(switchType, this);
-				if (b.left().deferAnalysis())
-					break;
-			} else {
+				break;
+				
+			case STRING:
+				if (b.left().op() != Operator.STRING) {
+					b.left().add(MessageId.STRING_LITERAL_EXPECTED, _pool);
+					b.left().type = errorType();
+				}
+				break;
+				
+			default:
 				assignTypes(ref<Block>(swit.right()).scope, b.left());
 				if (b.left().deferAnalysis())
 					break;

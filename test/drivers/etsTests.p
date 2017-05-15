@@ -116,9 +116,9 @@ int main(string[] args) {
 	listAllTests = parasolCommand.traceArgument.value;
 	string pxiName;
 	if (runtime.compileTarget == SectionType.X86_64_WIN)
-		pxiName = "Debug/parasol.pxi";
+		pxiName = "bin/x86-64-win.pxi";
 	else
-		pxiName = "Debug/x86-64lnx.pxi";
+		pxiName = "bin/x86-64-lnx.pxi";
 	if (parasolCommand.testPxiArgument.set())
 		pxiName = parasolCommand.testPxiArgument.value;
 	initTestObjects(process.binaryFilename() + " " + pxiName, parasolCommand.verboseArgument.value, 

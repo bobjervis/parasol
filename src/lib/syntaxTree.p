@@ -2387,6 +2387,18 @@ class Ternary extends Node {
 			return Test.PASS_TEST;
 	}
 
+	public Test containsBreak() {
+		if (op() == Operator.IF) {
+			Test t = _middle.containsBreak();
+			if (t == Test.PASS_TEST)
+				return Test.PASS_TEST;
+			t = _right.containsBreak();
+			if (t == Test.PASS_TEST)
+				return Test.PASS_TEST;
+		}
+		return Test.FAIL_TEST;
+	}
+
 	public boolean namespaceConforms(ref<Ternary> importNode) {
 		if (_middle.conforms(importNode.middle()))
 			return true;

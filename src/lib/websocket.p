@@ -186,6 +186,10 @@ public class WebSocket {
 		}
 		if (initialFrame) {
 			switch (mh.opcode()) {
+			case 1:
+			case 2:
+				break;
+				
 			default:					// Not valid in an initial frame
 				printf("initial opcode == %d\n", mh.opcode());
 				shutDown();
@@ -199,9 +203,19 @@ public class WebSocket {
 				return mh.fin(), mh.opcode(), false;
 			}
 		} else if (mh.opcode() != 0) {
-			printf("Unexpected non-zero opcode on non-initial frame\n");
-			shutDown();
-			return mh.fin(), mh.opcode(), false;
+			switch (mh.opcode()) {
+			default:					// Not valid in an initial frame
+				printf("Unexpected non-zero opcode on non-initial frame\n");
+				shutDown();
+				return mh.fin(), mh.opcode(), false;
+				
+			case 8:				// connection close
+			case 9:				// ping
+			case 10:			// pong
+				printf("Unfinished non-initial control frame %d\n", mh.opcode());
+				shutDown();
+				return mh.fin(), mh.opcode(), false;
+			}
 		}
 		return mh.fin(), mh.opcode(), true;
 	}
