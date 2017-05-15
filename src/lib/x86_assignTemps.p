@@ -89,6 +89,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				int i = int(f().r.getreg(node, longMask(), longMask()));
 				node.register = byte(i);
 			}
+			f().r.cleanupTemps(node, depth);
 			break;
 			
 		case	EMPTY:

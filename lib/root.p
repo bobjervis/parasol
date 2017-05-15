@@ -712,6 +712,7 @@ class map<class V, class K> {
 
 	private pointer<Entry>	_entries;
 	private int				_entriesCount;
+	private int				_deletedEntriesCount;
 	private int				_allocatedEntries;
 	private int				_rehashThreshold;
 
@@ -725,10 +726,12 @@ class map<class V, class K> {
 	public void clear() {
 		int e = _entriesCount;
 		_entriesCount = 0;
+		_deletedEntriesCount = 0;
 		for (int i = 0; e > 0; i++) {
 			if (_entries[i].valid) {
 				e--;
-				_entries[i].value.~();
+				if (!_entries[i].deleted)
+					_entries[i].value.~();
 			}
 		}
 		memory.free(_entries);
@@ -739,10 +742,12 @@ class map<class V, class K> {
 	public void clear(ref<memory.Allocator> allocator) {
 		int e = _entriesCount;
 		_entriesCount = 0;
+		_deletedEntriesCount = 0;
 		for (int i = 0; e > 0; i++) {
 			if (_entries[i].valid) {
 				e--;
-				_entries[i].value.~();
+				if (!_entries[i].deleted)
+					_entries[i].value.~();
 			}
 		}
 		allocator.free(_entries);
@@ -751,25 +756,54 @@ class map<class V, class K> {
 	}
 
 	public int size() {
-		return _entriesCount;
+		return _entriesCount - _deletedEntriesCount;
 	}
 	
 	public boolean contains(K key) {
 		ref<Entry> e = findEntryReadOnly(key);
 		if (e != null)
-			return e.valid;
+			return e.valid && !e.deleted;
 		else
 			return false;
 	}
 
+	public boolean deleteOne(K key) {
+		ref<Entry> e = findEntry(key);
+		if (e.valid) {
+			if (!e.deleted) {
+				delete e.value;
+				e.value.~();
+				e.deleted = true;
+				_deletedEntriesCount++;
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	public boolean deleteOne(K key, ref<memory.Allocator> allocator) {
+		ref<Entry> e = findEntry(key, allocator);
+		if (e.valid) {
+			if (!e.deleted) {
+				allocator delete e.value;
+				e.value.~();
+				e.deleted = true;
+				return true;
+			}
+		}
+		return false;
+	}
+	
 	public void deleteAll() {
 		int e = _entriesCount;
 		_entriesCount = 0;
 		for (int i = 0; e > 0; i++) {
 			if (_entries[i].valid) {
 				e--;
-				delete _entries[i].value;
-				_entries[i].value.~();
+				if (!_entries[i].deleted) {
+					delete _entries[i].value;
+					_entries[i].value.~();
+				}
 			}
 		}
 		memory.free(_entries);
@@ -783,8 +817,10 @@ class map<class V, class K> {
 		for (int i = 0; e > 0; i++) {
 			if (_entries[i].valid) {
 				e--;
-				allocator delete _entries[i].value;
-				_entries[i].value.~();
+				if (!_entries[i].deleted) {
+					allocator delete _entries[i].value;
+					_entries[i].value.~();
+				}
 			}
 		}
 		allocator.free(_entries);
@@ -796,7 +832,7 @@ class map<class V, class K> {
 		ref<Entry> e = findEntryReadOnly(key);
 		if (e == null)
 			return V(null);
-		if (e.valid)
+		if (e.valid && !e.deleted)
 			return e.value;
 		else
 			return V(null);
@@ -804,7 +840,7 @@ class map<class V, class K> {
 
 	public V first() {
 		for (int i = 0; i < _allocatedEntries; i++)
-			if (_entries[i].valid)
+			if (_entries[i].valid && !_entries[i].deleted)
 				return _entries[i].value;
 		static V v;
 		return v;
@@ -812,13 +848,17 @@ class map<class V, class K> {
 
 	public boolean insert(K key, V value, ref<memory.Allocator> allocator) {
 		ref<Entry> e = findEntry(key, allocator);
-		if (e.valid)
+		if (e.valid && !e.deleted)
 			return false;
 		else {
 			if (hadToRehash(allocator))
 				e = findEntry(key, allocator);
 			_entriesCount++;
 			e.valid = true;
+			if (e.deleted) {
+				_deletedEntriesCount--;
+				e.deleted = false;
+			}
 			e.key = key;
 			new (&e.value) V();
 			e.value = value;
@@ -828,12 +868,16 @@ class map<class V, class K> {
 	
 	public boolean insert(K key, V value) {
 		ref<Entry> e = findEntry(key);
-		if (e.valid)
+		if (e.valid && !e.deleted)
 			return false;
 		else {
 			if (hadToRehash())
 				e = findEntry(key);
 			_entriesCount++;
+			if (e.deleted) {
+				_deletedEntriesCount--;
+				e.deleted = false;
+			}
 			e.valid = true;
 			e.key = key;
 			new (&e.value) V();
@@ -845,7 +889,7 @@ class map<class V, class K> {
 	public V replace(K key, V value) {
 		ref<Entry> e = findEntry(key);
 		V result;
-		if (e.valid) {
+		if (e.valid && !e.deleted) {
 			result = e.value;
 			e.value = value;
 		} else {
@@ -857,7 +901,7 @@ class map<class V, class K> {
 	
 	public ref<V> elementAddress(K key) {
 		ref<Entry> e = findEntry(key);
-		if (e.valid)
+		if (e.valid && !e.deleted)
 			return &e.value;
 		else
 			return null;
@@ -871,9 +915,39 @@ class map<class V, class K> {
 			_entriesCount++;
 		}
 		e.valid = true;
+		if (e.deleted) {
+			_deletedEntriesCount--;
+			e.deleted = false;
+		}
 		e.key = key;
 		new (&e.value) V();
 		return &e.value;
+	}
+	
+	public boolean remove(K key) {
+		ref<Entry> e = findEntry(key);
+		if (e.valid) {
+			if (!e.deleted) {
+				e.value.~();
+				e.deleted = true;
+				_deletedEntriesCount++;
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	public boolean remove(K key, ref<memory.Allocator> allocator) {
+		ref<Entry> e = findEntry(key, allocator);
+		if (e.valid) {
+			if (!e.deleted) {
+				e.value.~();
+				e.deleted = true;
+				_deletedEntriesCount++;
+				return true;
+			}
+		}
+		return false;
 	}
 	
 	public void set(K key, V value) {
@@ -939,7 +1013,7 @@ class map<class V, class K> {
 			int e = _entriesCount;
 			_entriesCount = 0;
 			for (int i = 0; e > 0; i++) {
-				if (oldE[i].valid) {
+				if (oldE[i].valid && !oldE[i].deleted) {
 					insert(oldE[i].key, oldE[i].value);
 					e--;
 //					oldE[i].value.~();
@@ -960,7 +1034,7 @@ class map<class V, class K> {
 			int e = _entriesCount;
 			_entriesCount = 0;
 			for (int i = 0; e > 0; i++) {
-				if (oldE[i].valid) {
+				if (oldE[i].valid && !oldE[i].deleted) {
 					insert(oldE[i].key, oldE[i].value);
 					e--;
 					oldE[i].value.~();
@@ -981,15 +1055,16 @@ class map<class V, class K> {
 		public K		key;
 		public V		value;
 		public boolean	valid;
+		public boolean	deleted;
 	}
 
 	public iterator begin() {
 		iterator i(this);
-		if (_entriesCount == 0)
+		if (size() == 0)
 			i._index = _allocatedEntries;
 		else {
 			for (i._index = 0; i._index < _allocatedEntries; i._index++)
-				if (_entries[i._index].valid)
+				if (_entries[i._index].valid && !_entries[i._index].deleted)
 					break;
 		}
 		return i;
@@ -1017,7 +1092,7 @@ class map<class V, class K> {
 			do
 				_index++;
 			while (_index < _dictionary._allocatedEntries &&
-				   !_dictionary._entries[_index].valid);
+				   !(_dictionary._entries[_index].valid && !_dictionary._entries[_index].deleted));
 		}
 
 		public V get() {

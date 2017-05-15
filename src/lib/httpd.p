@@ -246,7 +246,6 @@ private void processHttpRequest(address ctx) {
 	HttpParser parser(&request);
 	HttpResponse response(context.requestFd);
 	if (parser.parse()) {
-		request.print();
 		if (context.server.dispatch(&request, &response)) {
 			delete context;
 			return;				// if dispatch returns true, we want to keep the connection open (for at least a while).

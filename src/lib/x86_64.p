@@ -1265,6 +1265,7 @@ public class X86_64 extends X86_64AssignTemps {
 			assignVoidContext(node, compileContext);		// Take the result in any register available.
 			emitSourceLocation(compileContext.current().file(), node.location());
 			generate(b.left(), compileContext);
+			f().r.generateSpills(node, this);
 			ref<CodeSegment>[] labels = switchContext.caseLabels();
 			R controlReg = R(b.left().register);
 			int size = b.left().type.size();
