@@ -720,7 +720,55 @@ public class siginfo_t_sigsys extends siginfo_t {
 public class sigval_t = address;		// in C actually a union
 public class clock_t = int;
 
+/* Encoding of the file mode.  */
+/*
+@Constant
+public unsigned S_IFMT	= 0170000;	/* These bits determine file type.  */
 
+/* File types.  */
+@Constant
+public unsigned S_IFDIR	=	0040000;	/* Directory.  */
+@Constant
+public unsigned S_IFCHR	=	0020000;	/* Character device.  */
+@Constant
+public unsigned S_IFBLK	=	0060000;	/* Block device.  */
+@Constant
+public unsigned S_IFREG	=	0100000;	/* Regular file.  */
+@Constant
+public unsigned S_IFIFO	=	0010000;	/* FIFO.  */
+@Constant
+public unsigned S_IFLNK	=	0120000;	/* Symbolic link.  */
+@Constant
+public unsigned S_IFSOCK =	0140000;	/* Socket.  */
+
+public boolean S_ISDIR(unsigned mode) {
+	return (mode & S_IFMT) == S_IFDIR;
+}
+
+public boolean S_ISCHR(unsigned mode) {
+	return (mode & S_IFMT) == S_IFCHR;
+}
+
+public boolean S_ISBLK(unsigned mode) {
+	return (mode & S_IFMT) == S_IFBLK;
+}
+
+public boolean S_ISREG(unsigned mode) {
+	return (mode & S_IFMT) == S_IFREG;
+}
+
+public boolean S_ISFIFO(unsigned mode) {
+	return (mode & S_IFMT) == S_IFIFO;
+}
+
+public boolean S_ISLNK(unsigned mode) {
+	return (mode & S_IFMT) == S_IFLNK;
+}
+
+public boolean S_ISSOCK(unsigned mode) {
+	return (mode & S_IFMT) == S_IFSOCK;
+}
+*/
 @Constant
 public int CLOCK_REALTIME = 0;
 

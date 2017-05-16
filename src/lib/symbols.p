@@ -252,6 +252,10 @@ class PlainSymbol extends Symbol {
 				return;
 			}
 			switch (_type.family()) {
+			case	BOOLEAN:
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
 			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:

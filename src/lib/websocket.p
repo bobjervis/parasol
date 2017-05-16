@@ -227,7 +227,7 @@ public class WebSocket {
 	public boolean send(byte opcode, pointer<byte> message, int length) {
 		do {
 			int frameLength = maxFrameSize <= length ? maxFrameSize : length;
-			boolean lastFrame = frameLength < length;
+			boolean lastFrame = frameLength >= length;
 			if (!sendFrame(opcode, lastFrame, message, frameLength))
 				return false;
 			length -= frameLength;
@@ -265,6 +265,8 @@ public class WebSocket {
 		} else
 			frame.append(byte(length));
 		frame.append(data, length);
+		printf("Sending:\n");
+		text.memDump(&frame[0], frame.length(), 0);
 		int result = send(_fd, &frame[0], frame.length(), 0);
 		if (result == frame.length())
 			return true;

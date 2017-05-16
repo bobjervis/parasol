@@ -21,6 +21,7 @@ import parasol:pxi.SectionType;
 import native:C;
 import native:linux;
 import native:windows.DWORD;
+import native:windows.FILE_ATTRIBUTE_DIRECTORY;
 import native:windows.GetFileAttributes;
 import native:windows.GetFullPathName;
 
@@ -107,6 +108,22 @@ public boolean exists(string filename) {
 		
 		int result = linux.stat(filename.c_str(), &statb);
 		return result == 0;
+	} else
+		return false;
+}
+
+public boolean isDirectory(string filename) {
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		DWORD r = GetFileAttributes(&filename[0]);
+		if (r == 0xffffffff)
+			return false;
+		else
+			return (r & FILE_ATTRIBUTE_DIRECTORY) != 0;
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		linux.statStruct statb;
+		
+		int result = linux.stat(filename.c_str(), &statb);
+		return result == 0;// && linux.S_ISDIR(statb.st_mode);
 	} else
 		return false;
 }
