@@ -721,7 +721,7 @@ public class sigval_t = address;		// in C actually a union
 public class clock_t = int;
 
 /* Encoding of the file mode.  */
-/*
+
 @Constant
 public unsigned S_IFMT	= 0170000;	/* These bits determine file type.  */
 
@@ -768,7 +768,7 @@ public boolean S_ISLNK(unsigned mode) {
 public boolean S_ISSOCK(unsigned mode) {
 	return (mode & S_IFMT) == S_IFSOCK;
 }
-*/
+
 @Constant
 public int CLOCK_REALTIME = 0;
 

@@ -123,7 +123,7 @@ public boolean isDirectory(string filename) {
 		linux.statStruct statb;
 		
 		int result = linux.stat(filename.c_str(), &statb);
-		return result == 0;// && linux.S_ISDIR(statb.st_mode);
+		return result == 0 && linux.S_ISDIR(statb.st_mode);
 	} else
 		return false;
 }

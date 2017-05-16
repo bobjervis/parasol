@@ -1205,6 +1205,7 @@ class Scope {
 				if (!_enclosed[i].printed()) {
 					switch (_enclosed[i].storageClass()) {
 					case	AUTO:
+					case	LOCK:
 						break;
 
 					case	MEMBER:
@@ -1833,13 +1834,14 @@ class Scope {
 	}
 
 	public int autoStorage(ref<Target> target, int offset, ref<CompileContext> compileContext) {
-		if (_storageClass == StorageClass.AUTO) {
+		if (_storageClass == StorageClass.AUTO || _storageClass == StorageClass.LOCK) {
 			assignStorage(target, offset, 0, compileContext);
 			offset = variableStorage;
 		}
 		int maxStorage = offset;
 		for (int i = 0; i < _enclosed.length(); i++) {
-			if (_enclosed[i].storageClass() == StorageClass.AUTO)  {
+			if (_enclosed[i].storageClass() == StorageClass.AUTO ||
+				_enclosed[i].storageClass() == StorageClass.LOCK)  {
 				int thisStorage = _enclosed[i].autoStorage(target, offset, compileContext);
 				if (thisStorage > maxStorage)
 					maxStorage = thisStorage;
