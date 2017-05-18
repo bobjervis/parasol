@@ -67,16 +67,33 @@ public class WebSocket {
 	public static byte OP_STRING = 1;
 //	@Constant
 	public static byte OP_BINARY = 2;
-	
+//	@Constant
+	public static byte OP_CLOSE = 8;
+//	@Constant
+	public static byte OP_PING = 9;
+//	@Constant
+	public static byte OP_PONG = 10;
+
+//	@Constant
+	public static short CLOSE_NORMAL = 1000;
+	public static short CLOSE_GOING_AWAY = 1001;
+	public static short CLOSE_PROTOCOL_ERROR = 1002;
+	public static short CLOSE_BAD_DATA = 1003;
+
 	public int maxFrameSize;
 	int _fd;
 	private boolean _server;
+	// TODO: Take care of excess data beyond the current frame. The initial call to 'recv' in readFrame may conceivably read beyond the current frame,
+	// so we should be prepared to absorb that data. Currently, we choke and die, but do so noisily and will not drop unexpected overruns.
+//	private byte[] _incomingData;
+//	private int _incomingCursor;
 	/**
 	 * Construct a server-side WebSocket
 	 */
 	public WebSocket() {
 		maxFrameSize = 1024;
 		_server = true;
+//		_incomingData.resize(1024);
 	}
 	/**
 	 * Construct a client-side WebSocket
@@ -111,30 +128,13 @@ public class WebSocket {
 		start();
 		return true;
 	}
-/*	
-	public boolean readFinalClientHandshake() {
-		byte[] frameBuffer;
-		frameBuffer.resize(512);
-		ref<MessageHeader> header;
+
+	public void shutDown(short cause, string reason) {
+		byte[] closeFrame;
 		
-		printf("in readFinal\n");
-		int bufferEnd = recv(_fd, &frameBuffer[0], frameBuffer.length(), 0);
-		printf("buffeerEnd = %d\n", bufferEnd);
-		text.memDump(&frameBuffer[0], bufferEnd, 0);
-		if (bufferEnd < 20) {
-			shutDown();
-			return false;
-		}
-		string s(frameBuffer);
-		if (!s.startsWith("HTTP/1.1 101 Swithing Prototocls\r\n")) {
-			shutDown();
-			return false;
-		}
-		printf("Saw the last handshake!\n");
-		return true;
-	}
- */
-	public void shutDown() {
+		networkOrder(&closeFrame, cause);
+		networkOrder(&closeFrame, reason);
+		send(OP_CLOSE, &closeFrame[0], closeFrame.length());
 		closesocket(_fd);
 	}
 	
@@ -149,7 +149,8 @@ public class WebSocket {
 				break;
 			if (lastFrame)
 				return true;
-			initialFrame = false;
+			if (opcode < 8)
+				initialFrame = false;
 		}
 		return false;
 	}
@@ -164,13 +165,14 @@ public class WebSocket {
 		if (bufferEnd <= 0) {
 			printf("bufferEnd = %d\n", bufferEnd);
 			linux.perror(null);
-			shutDown();
+			shutDown(CLOSE_BAD_DATA, "recv failed");
 			return false, 0, false;
 		}
 		ref<MessageHeader> mh = ref<MessageHeader>(&frameBuffer[0]);
 		int totalLength = mh.payloadLength();
 		pointer<byte> payload = mh.payload();
 		int offset = int(payload - &frameBuffer[0]);
+		// Unmask the frame data if necessary
 		if (mh.masked()) {
 			unsigned mask = mh.mask();
 			int part = 24;
@@ -178,48 +180,72 @@ public class WebSocket {
 				frameBuffer[i] = byte(frameBuffer[i] ^ byte(mask >> part)); 
 			}
 		}
-		buffer.append(&frameBuffer[offset], bufferEnd - offset);
 		if (totalLength > bufferEnd - offset) {
-			printf("Long frame\n");
-			shutDown();
-			return mh.fin(), mh.opcode(), false;
+			int remaining = totalLength - (bufferEnd - offset);
+			frameBuffer.resize(bufferEnd + remaining);
+			int frameEnd = recv(_fd, &frameBuffer[bufferEnd], remaining, 0);
+			if (frameEnd <= 0) {
+				printf("frameEnd = %d\n", frameEnd);
+				linux.perror(null);
+				shutDown(CLOSE_BAD_DATA, "recv failed");
+				return false, 0, false;
+			}
+			bufferEnd += frameEnd;
+		}
+		if (totalLength < bufferEnd - offset) {
+			printf("totalLength = %d bufferEnd = %d offset = %d\n", totalLength, bufferEnd, offset);
+			shutDown(CLOSE_BAD_DATA, "Framing error");
+			return false, 0, false;
 		}
 		if (initialFrame) {
 			switch (mh.opcode()) {
 			case 1:
 			case 2:
-				break;
+				buffer.append(&frameBuffer[offset], bufferEnd - offset);
+				return mh.fin(), mh.opcode(), true;
 				
 			default:					// Not valid in an initial frame
 				printf("initial opcode == %d\n", mh.opcode());
-				shutDown();
+				shutDown(CLOSE_BAD_DATA, "Unexpected opcode");
 				return mh.fin(), mh.opcode(), false;
 				
 			case 8:				// connection close
 			case 9:				// ping
 			case 10:			// pong
-				printf("Unfinished control frame %d\n", mh.opcode());
-				shutDown();
-				return mh.fin(), mh.opcode(), false;
+				break;
 			}
-		} else if (mh.opcode() != 0) {
+		} else {
 			switch (mh.opcode()) {
+			case 0:
+				buffer.append(&frameBuffer[offset], bufferEnd - offset);
+				return mh.fin(), mh.opcode(), true;
+
 			default:					// Not valid in an initial frame
-				printf("Unexpected non-zero opcode on non-initial frame\n");
-				shutDown();
+				printf("Unexpected non-zero opcode (%d) on non-initial frame\n", mh.opcode());
+				shutDown(CLOSE_PROTOCOL_ERROR, "Unexpected opcode");
 				return mh.fin(), mh.opcode(), false;
 				
-			case 8:				// connection close
+			case 8:				// connection close				
 			case 9:				// ping
 			case 10:			// pong
-				printf("Unfinished non-initial control frame %d\n", mh.opcode());
-				shutDown();
-				return mh.fin(), mh.opcode(), false;
+				break;
 			}
 		}
-		return mh.fin(), mh.opcode(), true;
+		switch (mh.opcode()) {
+		case 8:				// connection close
+			shutDown(CLOSE_NORMAL, "Responding to close");
+			return false, 0, false;
+			
+		case 9:				// ping
+			send(OP_PONG, &frameBuffer[offset], bufferEnd - offset);
+			return false, OP_PING, true;
+			
+		case 10:			// pong
+			return false, OP_PONG, true;
+		}
+		return false, mh.opcode(), true;
 	}
-	
+
 	public boolean send(string message) {
 		return send(OP_STRING, &message[0], message.length());
 	}
@@ -241,7 +267,7 @@ public class WebSocket {
 		
 		if (!_server) {
 			printf("Unsupported client-side WebSocket\n");
-			shutDown();
+			shutDown(CLOSE_PROTOCOL_ERROR, "Trying to send frames from a non-server endpoint (masking not supported)");
 			return false;
 		}
 		if (lastFrame)
@@ -272,7 +298,7 @@ public class WebSocket {
 			return true;
 		printf("WebSocket send failed\n");
 		linux.perror(null);
-		shutDown();
+		closesocket(_fd);
 		return false;
 	}
 	
@@ -361,3 +387,14 @@ private class MessageHeader {
 			return pb;
 	}
 }
+
+private void networkOrder(ref<byte[]> output, short x) {
+	output.append(byte(x >> 8));
+	output.append(byte(x));
+}
+
+private void networkOrder(ref<byte[]> output, string x) {
+	for (int i = 0; i < x.length(); i++)
+		output.append(x[i]);
+}
+

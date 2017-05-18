@@ -1031,8 +1031,10 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 	
 	private void generate(ref<Node> node, ref<CompileContext> compileContext) {
-		if (node.deferGeneration())
+		if (node.deferGeneration()) {
+			// Throw an exception
 			return;
+		}
 		if (verbose()) {
 			printf("-----  generate %s ---------\n", compileContext.current().sourceLocation(node.location()));
 			f().r.print();

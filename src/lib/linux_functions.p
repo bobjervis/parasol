@@ -151,8 +151,12 @@ public abstract int sem_wait(ref<sem_t> sem);
 @Linux("libc.so.6", "sigaction")
 public abstract int sigaction(int signum, ref<struct_sigaction> act, ref<struct_sigaction> oldact);
 
-@Linux("libc.so.6", "statfs")
-public abstract int stat(pointer<byte> path, ref<statStruct> buf);
+@Linux("libc.so.6", "__xstat")
+public abstract int __xstat(int statVersion, pointer<byte> path, ref<statStruct> buf);
+
+public int stat(pointer<byte> path, ref<statStruct> buf) {
+	return __xstat(1, path, buf);
+}
 
 @Linux("libc.so.6", "sysconf")
 public abstract int sysconf(int parameter_index);

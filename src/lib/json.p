@@ -30,6 +30,57 @@ public var, boolean parse(string text) {
 	return x, success;
 }
 
+public string stringify(var object) {
+	if (object.class == ref<Object>) {
+		string s;
+		
+		s = "{";
+		ref<var[string]> members = ref<Object>(object).members();
+		boolean serializedMember;
+		for (var[string].iterator i = members.begin(); i.hasNext(); i.next()) {
+			if (serializedMember)
+				s.append(',');
+			s.printf("\"%s\":", i.key().escapeJSON());
+			s.append(stringify(i.get()));
+			serializedMember = true;
+		}
+		s.append("}");
+		return s;
+	} else if (object.class == ref<Array>) {
+		string s;
+		ref<Array> array = ref<Array>(object);
+		
+		s = "[";
+		for (int i = 0; i < array.length(); i++) {
+			if (i > 0)
+				s.append(',');
+			s.append(stringify(array.get(i)));
+		}
+		s.append("]");
+		return s;
+	} else if (object.class == long) {
+		string s;
+		
+		s.printf("%d", object);
+		return s;
+	} else if (object.class == double) {
+		string s;
+		
+		s.printf("%g", object);
+		return s;
+	} else if (object.class == string) {
+		string s;
+		
+		s.printf("\"%s\"", string(object).escapeJSON());
+		return s;
+	} else if (object.class == boolean)
+		return boolean(object) ? "true" : "false";
+	else if (object == null)
+		return "null";
+	else
+		return "\"object (unknown schema)\"";
+}
+
 class Parser {
 	Scanner _scanner;
 	boolean _error;

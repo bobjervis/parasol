@@ -100,6 +100,7 @@ class ImportDirectory {
 					}
 				} while (dir.next());
 			}
+			delete dir;
 			_searched = true;
 		} else {
 			if (logImports)

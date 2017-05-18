@@ -1282,10 +1282,10 @@ compile(expect: fail, message: UNEXPECTED_RC) { "switch (5) { default: }" }
 
 compile() { "ref<int> x = new int;" }
 
-compile() { "lock { }" }
-compile() { "lock { int x; }" }
-compile() { "void func() lock {}" }
-compile() { "void func() lock { int x; }" }
+//compile() { "lock { }" }
+//compile() { "lock { int x; }" }
+//compile() { "void func() lock {}" }
+//compile() { "void func() lock { int x; }" }
 compile() { "monitor a; lock(a) { }" }
 compile() { "monitor a; lock(a) { notify(); }" }
 compile() { "monitor a; lock(a) { notifyAll(); }" }

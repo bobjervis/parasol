@@ -351,6 +351,37 @@ class string {
 		return output;
 	}
 	/*
+	 *	escapeJSON
+	 *
+	 *	Take the string and convert it to a form, that when
+	 *	wrapped with double-quotes would be a well-formed JSON
+	 *	string literal token with the same string value as 
+	 *	this object.  This differs in C-escaping a string in that
+	 *	all well-formed extended Unicode characters are converted to
+	 *	\uNNNNN escape sequences.  Other sub-sequences of characters with
+	 *	high-order bits set will be converted using hex sequences as for
+	 *	escapeC.
+	 */
+	string escapeJSON() {
+		string output;
+
+		if (length() == 0)
+			return output;
+		pointer<byte> cp = pointer<byte>(&_contents.data);
+		for (int i = 0; i < _contents.length; i++) {
+			switch (cp[i]) {
+			case	'\\':	output.printf("\\\\");	break;
+			case	'\b':	output.printf("\\b");	break;
+			case	'\f':	output.printf("\\f");	break;
+			case	'\n':	output.printf("\\n");	break;
+			case	'\r':	output.printf("\\r");	break;
+			default:
+				output.append(cp[i]);
+			}
+		}
+		return output;
+	}
+	/*
 	 *	escapeParasol
 	 *
 	 *	Take the string and convert it to a form, that when

@@ -212,10 +212,10 @@ public class Directory {
 	}
 
 	~Directory() {
-		memory.free(_data);
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 			if (_handle != windows.INVALID_HANDLE_VALUE)
 				windows.FindClose(_handle);
+			memory.free(_data);
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
 			linux.closedir(ref<linux.DIR>(_data));
 		}

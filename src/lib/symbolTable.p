@@ -1834,7 +1834,7 @@ class Scope {
 	}
 
 	public int autoStorage(ref<Target> target, int offset, ref<CompileContext> compileContext) {
-		if (_storageClass == StorageClass.AUTO || _storageClass == StorageClass.LOCK) {
+		if (_storageClass == StorageClass.AUTO) {
 			assignStorage(target, offset, 0, compileContext);
 			offset = variableStorage;
 		}

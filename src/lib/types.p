@@ -77,4 +77,8 @@ public class Object {
 	public int size() {
 		return _members.size();
 	}
+	
+	public ref<var[string]> members() {
+		return &_members;
+	}
 }

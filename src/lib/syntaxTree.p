@@ -496,6 +496,7 @@ class Block extends Node {
 			outer = compileContext.setCurrent(scope);
 		if (op() == Operator.LOCK) {
 			if (deferAnalysis()) {
+				// This can arise if the lock expression is not a valid monitor.
 				_statements.next.node = _statements.next.node.fold(tree, true, compileContext);
 				if (scope != null)
 					compileContext.setCurrent(outer);
@@ -504,6 +505,12 @@ class Block extends Node {
 			ref<NodeList> nl = _statements;
 			if (nl.node.op() == Operator.EXPRESSION) {
 				ref<Unary> expression = ref<Unary>(nl.node);
+				if (expression.operand().deferAnalysis()) {
+					_statements.next.node = _statements.next.node.fold(tree, true, compileContext);
+					if (scope != null)
+						compileContext.setCurrent(outer);
+					return this;
+				}
 				ref<Node> monitorName = expression.operand();
 				ref<Variable> temp = compileContext.newVariable(compileContext.arena().builtInType(TypeFamily.ADDRESS));
 				ref<LockScope> lockScope = ref<LockScope>(scope);
@@ -538,6 +545,7 @@ class Block extends Node {
 				nl.next = nlr;
 			} else {
 				// TODO: Handle the case for anonymous locks.
+				assert(false);
 			}
 		} else if (_statements != null) {
 			for (ref<NodeList> nl = _statements;; nl = nl.next) {
@@ -663,11 +671,13 @@ class Block extends Node {
 			compileContext.assignTypes(nl.node);
 		type = compileContext.arena().builtInType(TypeFamily.VOID);
 		if (op() == Operator.LOCK) {
-			if (!_statements.node.deferAnalysis()) {
+			if (_statements.node.op() != Operator.EMPTY) {
 				ref<Unary> u = ref<Unary>(_statements.node);
-				if (_statements.node.op() != Operator.EMPTY && !compileContext.isMonitor(u.operand().type)) {
-					add(MessageId.NEEDS_MONITOR, compileContext.pool());
-					type = compileContext.errorType();
+				if (!u.operand().deferAnalysis()) {
+					if (!compileContext.isMonitor(u.operand().type)) {
+						add(MessageId.NEEDS_MONITOR, compileContext.pool());
+						type = compileContext.errorType();
+					}
 				}
 			}
 		}

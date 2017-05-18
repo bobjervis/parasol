@@ -356,6 +356,8 @@ class Call extends ParameterBag {
 						}
 						break;
 					}
+					if (args == null)
+						break;					// This indicates a call args/params mismatch error, so don't fold this.
 					argsNext = args.next;
 					
 					// Thread each argument onto the appropriate list: stack or register
