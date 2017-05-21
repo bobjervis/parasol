@@ -19,6 +19,7 @@ import native:net.closesocket;
 import native:net.recv;
 import native:net.send;
 import native:linux;
+import native:C;
 import openssl.org:crypto.SHA1;
 import parasol:net.base64encode;
 import parasol:text;
@@ -83,17 +84,16 @@ public class WebSocket {
 	public int maxFrameSize;
 	int _fd;
 	private boolean _server;
-	// TODO: Take care of excess data beyond the current frame. The initial call to 'recv' in readFrame may conceivably read beyond the current frame,
-	// so we should be prepared to absorb that data. Currently, we choke and die, but do so noisily and will not drop unexpected overruns.
-//	private byte[] _incomingData;
-//	private int _incomingCursor;
+	private byte[] _incomingData;		// A buffer of data being read from the websocket.
+	private int _incomingLength;		// The number of bytes in the buffer.
+	private int _incomingCursor;		// The index of the next byte to be read from the buffer.
 	/**
 	 * Construct a server-side WebSocket
 	 */
 	public WebSocket() {
 		maxFrameSize = 1024;
 		_server = true;
-//		_incomingData.resize(1024);
+		_incomingData.resize(1024);
 	}
 	/**
 	 * Construct a client-side WebSocket
@@ -156,58 +156,77 @@ public class WebSocket {
 	}
 	
 	public boolean, int, boolean readFrame(ref<byte[]> buffer, boolean initialFrame) {
-		byte[] frameBuffer;
-		frameBuffer.resize(512);
-		ref<MessageHeader> header;
 		boolean lastFrame;
 		
-		int bufferEnd = recv(_fd, &frameBuffer[0], frameBuffer.length(), 0);
-		if (bufferEnd <= 0) {
-			printf("bufferEnd = %d\n", bufferEnd);
-			linux.perror(null);
-			shutDown(CLOSE_BAD_DATA, "recv failed");
+		int opcode = getc();
+		if (opcode < 0)
 			return false, 0, false;
+		int payloadLengthByte = getc();
+		if (payloadLengthByte < 0)
+			return false, 0, false;
+		
+		long payloadLength;
+		
+		boolean success;
+		switch (payloadLengthByte & 0x7f) {
+		case 126:
+			short s;
+			(s, success) = readShort();
+			payloadLength = s;
+			if (!success)
+				return false, 0, false;
+			break;
+			
+		case 127:
+			(payloadLength, success) = readLong();
+			if (!success)
+				return false, 0, false;
+			break;
+			
+		default:
+			payloadLength = payloadLengthByte & 0x7f;
 		}
-		ref<MessageHeader> mh = ref<MessageHeader>(&frameBuffer[0]);
-		int totalLength = mh.payloadLength();
-		pointer<byte> payload = mh.payload();
-		int offset = int(payload - &frameBuffer[0]);
-		// Unmask the frame data if necessary
-		if (mh.masked()) {
-			unsigned mask = mh.mask();
-			int part = 24;
-			for (int i = offset; i < bufferEnd; i++, part = (part - 8) & 0x1f) {
-				frameBuffer[i] = byte(frameBuffer[i] ^ byte(mask >> part)); 
-			}
+		
+		unsigned mask;
+
+		if ((payloadLengthByte & 0x80) != 0) {		// It is a masked frame
+			(mask, success) = readMask();
+			if (!success)
+				return false, 0, false;
 		}
-		if (totalLength > bufferEnd - offset) {
-			int remaining = totalLength - (bufferEnd - offset);
-			frameBuffer.resize(bufferEnd + remaining);
-			int frameEnd = recv(_fd, &frameBuffer[bufferEnd], remaining, 0);
-			if (frameEnd <= 0) {
-				printf("frameEnd = %d\n", frameEnd);
+		
+		int offset = buffer.length();
+		buffer.resize(int(offset + payloadLength));
+		
+		int copied = drainBuffer(&(*buffer)[offset], int(payloadLength));
+		
+		if (copied < payloadLength) {
+			int received = recv(_fd, &(*buffer)[offset + copied], int(payloadLength - copied), 0);
+			if (received < int(payloadLength - copied)) {
+				printf("received = %d\n", received);
 				linux.perror(null);
 				shutDown(CLOSE_BAD_DATA, "recv failed");
 				return false, 0, false;
 			}
-			bufferEnd += frameEnd;
 		}
-		if (totalLength < bufferEnd - offset) {
-			printf("totalLength = %d bufferEnd = %d offset = %d\n", totalLength, bufferEnd, offset);
-			shutDown(CLOSE_BAD_DATA, "Framing error");
-			return false, 0, false;
+		// Unmask the frame data if necessary
+		if (mask != 0) {
+			int part = 24;
+			for (int i = offset; i < offset + payloadLength; i++, part = (part - 8) & 0x1f) {
+				(*buffer)[i] = byte((*buffer)[i] ^ byte(mask >> part)); 
+			}
 		}
 		if (initialFrame) {
-			switch (mh.opcode()) {
+			switch (opcode & 0x7f) {
 			case 1:
 			case 2:
-				buffer.append(&frameBuffer[offset], bufferEnd - offset);
-				return mh.fin(), mh.opcode(), true;
+				return (opcode & 0x80) != 0, opcode & 0x7f, true;
 				
 			default:					// Not valid in an initial frame
-				printf("initial opcode == %d\n", mh.opcode());
+				buffer.resize(offset);
+				printf("initial opcode == %d\n", opcode & 0x7f);
 				shutDown(CLOSE_BAD_DATA, "Unexpected opcode");
-				return mh.fin(), mh.opcode(), false;
+				return false, opcode & 0x7f, false;
 				
 			case 8:				// connection close
 			case 9:				// ping
@@ -215,15 +234,15 @@ public class WebSocket {
 				break;
 			}
 		} else {
-			switch (mh.opcode()) {
+			switch (opcode & 0x7f) {
 			case 0:
-				buffer.append(&frameBuffer[offset], bufferEnd - offset);
-				return mh.fin(), mh.opcode(), true;
+				return (opcode & 0x80) != 0, opcode & 0x7f, true;
 
 			default:					// Not valid in an initial frame
-				printf("Unexpected non-zero opcode (%d) on non-initial frame\n", mh.opcode());
+				buffer.resize(offset);
+				printf("Unexpected non-zero opcode (%d) on non-initial frame\n", opcode & 0x7f);
 				shutDown(CLOSE_PROTOCOL_ERROR, "Unexpected opcode");
-				return mh.fin(), mh.opcode(), false;
+				return false, opcode & 0x7f, false;
 				
 			case 8:				// connection close				
 			case 9:				// ping
@@ -231,21 +250,103 @@ public class WebSocket {
 				break;
 			}
 		}
-		switch (mh.opcode()) {
+		switch (opcode & 0x7f) {
 		case 8:				// connection close
+			buffer.resize(offset);
 			shutDown(CLOSE_NORMAL, "Responding to close");
 			return false, 0, false;
 			
 		case 9:				// ping
-			send(OP_PONG, &frameBuffer[offset], bufferEnd - offset);
+			send(OP_PONG, &(*buffer)[offset], int(payloadLength));
+			buffer.resize(offset);
 			return false, OP_PING, true;
 			
 		case 10:			// pong
+			buffer.resize(offset);
 			return false, OP_PONG, true;
 		}
-		return false, mh.opcode(), true;
+		// Should never get here.
+		buffer.resize(offset);
+		return false, opcode & 0x7f, true;
 	}
 
+	private short, boolean readShort() {
+		int high = getc();
+		if (high < 0)
+			return 0, false;
+		int low = getc();
+		if (low < 0)
+			return 0, false;
+		return short((high << 8) + low), true;
+	}
+	
+	private unsigned, boolean readMask() {
+		int bits24 = getc();
+		if (bits24 < 0)
+			return 0, false;
+		int bits16 = getc();
+		if (bits16 < 0)
+			return 0, false;
+		int bits8 = getc();
+		if (bits8 < 0)
+			return 0, false;
+		int bits0 = getc();
+		if (bits0 < 0)
+			return 0, false;
+		return unsigned((bits24 << 24) + (bits16 << 16) + (bits8 << 8) + bits0), true;
+	}
+	
+	private long, boolean readLong() {
+		int bits56 = getc();
+		if (bits56 < 0)
+			return 0, false;
+		int bits48 = getc();
+		if (bits48 < 0)
+			return 0, false;
+		int bits40 = getc();
+		if (bits40 < 0)
+			return 0, false;
+		int bits32 = getc();
+		if (bits32 < 0)
+			return 0, false;
+		int bits24 = getc();
+		if (bits24 < 0)
+			return 0, false;
+		int bits16 = getc();
+		if (bits16 < 0)
+			return 0, false;
+		int bits8 = getc();
+		if (bits8 < 0)
+			return 0, false;
+		int bits0 = getc();
+		if (bits0 < 0)
+			return 0, false;
+		return (long(bits56) << 56) + (long(bits48) << 48) + (long(bits40) << 40) + (long(bits32) << 32) + (bits24 << 24) + (bits16 << 16) + (bits8 << 8) + bits0, true;
+	}
+	
+	private int drainBuffer(pointer<byte> loc, int count) {
+		int remaining = _incomingLength - _incomingCursor;
+		if (remaining > count)
+			remaining = count;
+		C.memcpy(loc, &_incomingData[_incomingCursor], remaining);
+		_incomingCursor += remaining;
+		return remaining;
+	}
+	
+	private int getc() {
+		if (_incomingCursor >= _incomingLength) {
+			_incomingLength = recv(_fd, &_incomingData[0], _incomingData.length(), 0);
+			if (_incomingLength <= 0) {
+				printf("_incomingLength = %d\n", _incomingLength);
+				linux.perror(null);
+				shutDown(CLOSE_BAD_DATA, "recv failed");
+				return -1;
+			}
+			_incomingCursor = 0;
+		}
+		return _incomingData[_incomingCursor++];
+	}
+	
 	public boolean send(string message) {
 		return send(OP_STRING, &message[0], message.length());
 	}
@@ -258,6 +359,7 @@ public class WebSocket {
 				return false;
 			length -= frameLength;
 			message += frameLength;
+			opcode = 0;
 		} while (length > 0);
 		return true;
 	}
@@ -306,85 +408,6 @@ public class WebSocket {
 	
 	protected int fd() {
 		return _fd;
-	}
-}
-
-private class MessageHeader {
-	private byte _opcode;
-	private byte _payloadLength;
-	
-	boolean fin() {
-		return (_opcode & 0x80) != 0;
-	}
-	
-	boolean masked() {
-		return (_payloadLength & 0x80) != 0;
-	}
-	
-	int opcode() {
-		return _opcode & 0x7f;
-	}
-	
-	int payloadLength() {
-		int rawLength = _payloadLength & 0x7f;
-		
-		switch (rawLength) {
-		case 126:
-			pointer<byte> pb = pointer<byte>(this);
-			return pb[3] + (pb[2] << 8);
-			
-		case 127:
-			pb = pointer<byte>(this);
-			return pb[7] + (pb[6] << 8) + (pb[5] << 16) + (pb[4] << 24) + (pb[3] << 32) + (pb[2] << 40) + (pb[1] << 48) + (pb[0] << 54);
-			
-		default:
-			return rawLength;
-		}
-		return rawLength;
-	}
-	
-	unsigned mask() {
-		if (masked()) {
-			int rawLength = _payloadLength & 0x7f;
-			pointer<byte> pb;
-			
-			switch (rawLength) {
-			case 126:
-				pb = pointer<byte>(this) + 4;
-				break;
-				
-			case 127:
-				pb = pointer<byte>(this) + 10;
-				break;
-				
-			default:
-				pb = pointer<byte>(this) + 2;
-			}
-			return unsigned((pb[0] << 24) + (pb[1] << 16) + (pb[2] << 8) + pb[3]); 
-		} else
-			return 0;
-	}
-	
-	pointer<byte> payload() {
-		int rawLength = _payloadLength & 0x7f;
-		pointer<byte> pb;
-		
-		switch (rawLength) {
-		case 126:
-			pb = pointer<byte>(this) + 4;
-			break;
-			
-		case 127:
-			pb = pointer<byte>(this) + 10;
-			break;
-			
-		default:
-			pb = pointer<byte>(this) + 2;
-		}
-		if (masked())
-			return pb + int.bytes; 
-		else
-			return pb;
 	}
 }
 

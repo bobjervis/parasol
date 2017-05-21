@@ -264,7 +264,7 @@ public class Directory {
 		return false;
 	}
 
-	public string currentName() {
+	public string path() {
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 			return _directory + "/" + ref<windows.WIN32_FIND_DATA>(_data).fileName();
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
@@ -273,5 +273,13 @@ public class Directory {
 			return null;
 	}
 
+	public string basename() {
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			return ref<windows.WIN32_FIND_DATA>(_data).fileName();
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			return string(pointer<byte>(&_dirent.d_name));
+		} else
+			return null;
+	}
 }
 

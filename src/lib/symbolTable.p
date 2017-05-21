@@ -214,6 +214,8 @@ class ClasslikeScope extends Scope {
 			case	FLOAT_64:
 			case	STRING:
 			case	FUNCTION:
+			case	OBJECT_AGGREGATE:
+			case	ARRAY_AGGREGATE:
 				return true;
 				
 			case	SHAPE:

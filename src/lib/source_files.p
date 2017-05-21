@@ -91,9 +91,9 @@ class ImportDirectory {
 			dir.pattern("*");
 			if (dir.first()) {
 				if (logImports)
-					printf("Found %s\n", dir.currentName());
+					printf("Found %s\n", dir.path());
 				do {
-					string filename = dir.currentName();
+					string filename = dir.path();
 					if (filename.endsWith(".p")) {
 						ref<FileStat> fs = new FileStat(filename, false);
 						_files.append(fs);
