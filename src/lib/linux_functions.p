@@ -67,6 +67,12 @@ public abstract pointer<byte> getcwd(pointer<byte> buf, long len);
 @Linux("libc.so.6", "getifaddrs")
 public abstract int getifaddrs(ref<ref<ifaddrs>> ifap);
 
+@Linux("libc.so.6", "getpid")
+public abstract pid_t getpid();
+
+@Linux("libc.so.6", "getppid")
+public abstract pid_t getppid();
+
 @Linux("libc.so.6", "kill")
 public abstract int kill(pid_t pid, int sig);
 
@@ -150,6 +156,15 @@ public abstract int sem_wait(ref<sem_t> sem);
 
 @Linux("libc.so.6", "sigaction")
 public abstract int sigaction(int signum, ref<struct_sigaction> act, ref<struct_sigaction> oldact);
+
+@Linux("libc.so.6", "syscall")
+public abstract long syscall(long callId);
+/*
+ * Hack to get the tid - gettid is not in the Linux library, so we have to resort to this...
+ */
+public pid_t gettid() {
+	return pid_t(syscall(186));
+}
 
 @Linux("libc.so.6", "__xstat")
 public abstract int __xstat(int statVersion, pointer<byte> path, ref<statStruct> buf);

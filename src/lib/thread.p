@@ -39,10 +39,13 @@ import parasol:exception.HardwareException;
 import parasol:pxi.SectionType;
 import parasol:runtime;
 
+parasolThread(new Thread());
+
 public class Thread {
 	private string _name;
 	private HANDLE _threadHandle;
 	private linux.pthread_t _threadId;
+	private linux.pid_t _pid;
 	private void(address) _function;
 	private address _parameter;
 	private address _context;
@@ -52,6 +55,9 @@ public class Thread {
 			_name.printf("TID-%d", GetCurrentThreadId());
 			_threadHandle = INVALID_HANDLE_VALUE;
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			_threadId = linux.pthread_self();
+			_pid = linux.gettid();
+			_name.printf("TID-%d", _pid);			
 		}
 	}
 	
@@ -63,6 +69,12 @@ public class Thread {
 				_name.printf("TID-%d", GetCurrentThreadId());
 			_threadHandle = INVALID_HANDLE_VALUE;
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			_threadId = linux.pthread_self();
+			_pid = linux.gettid();
+			if (name != null)
+				_name = name;
+			else
+				_name.printf("TID-%d", _pid);			
 		}
 	}
 	
@@ -101,6 +113,8 @@ public class Thread {
 	
 	private static address linuxWrapperFunction(address wrapperParameter) {
 		ref<Thread> t = ref<Thread>(wrapperParameter);
+		t._threadId = linux.pthread_self();
+		t._pid = linux.gettid();
 		enterThread(t._context, &t);
 		nested(t);
 		exitThread();
@@ -142,6 +156,15 @@ public class Thread {
 		return _name;
 	}
 	
+	public long id() {
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			return GetCurrentThreadId();
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			return _pid;
+		} else
+			return -1;
+	}
+
 	public static void sleep(long milliseconds) {
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 			while (milliseconds > 1000000000) {
@@ -588,6 +611,11 @@ public class Future<class T> {
 	}
 }
 
+public ref<Thread> currentThread() {
+	return ref<Thread>(parasolThread(null));
+}
+
 private abstract address dupExecutionContext();
 private abstract void enterThread(address newContext, address stackTop);
 private abstract void exitThread();
+private abstract address parasolThread(address newThread);

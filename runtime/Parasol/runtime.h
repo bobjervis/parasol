@@ -180,6 +180,8 @@ public:
 
 	void setRuntimeFlags(long long runtimeFlags) { _runtimeFlags = runtimeFlags; }
 
+	void *parasolThread(void *newThread);
+
 	bool trace;
 private:
 	bool run();
@@ -222,6 +224,7 @@ private:
 	void *_sourceLocations;
 	int _sourceLocationsCount;
 	long long _runtimeFlags;
+	void *_parasolThread;
 };
 
 // Exception table consist of some number of these entries, sorted by ascending location value.

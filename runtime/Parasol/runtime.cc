@@ -130,6 +130,7 @@ ExecutionContext::ExecutionContext(void **objects, int objectCount) {
 	_sourceLocationsCount = 0;
 	_pxiHeader = null;
 	_runtimeFlags = 0;
+	_parasolThread = null;
 	trace = false;
 }
 
@@ -151,6 +152,7 @@ ExecutionContext::ExecutionContext(X86_64SectionHeader *pxiHeader, void *image, 
 	_sourceLocations = null;
 	_sourceLocationsCount = 0;
 	_runtimeFlags = runtimeFlags;
+	_parasolThread = null;
 	trace = false;
 }
 
@@ -209,6 +211,13 @@ void *ExecutionContext::popAddress() {
 
 void *ExecutionContext::peekAddress() {
 	return *((void**)_sp);
+}
+
+void *ExecutionContext::parasolThread(void *newThread) {
+	void *oldThread = _parasolThread;
+	if (newThread != null)
+		_parasolThread = newThread;
+	return oldThread;
 }
 #if 0
 extern "C" {
@@ -862,6 +871,11 @@ ExecutionContext *dupExecutionContext() {
 	return context->clone();
 }
 
+void *parasolThread(void *newThread) {
+	ExecutionContext *context = threadContext.get();
+	return context->parasolThread(newThread);
+}
+
 BuiltInFunctionMap builtInFunctionMap[] = {
 	{ "print",								nativeFunction(builtInPrint),						1,	1 },
 	{ "formatMessage",						nativeFunction(formatMessage),						1,	1, "native" },
@@ -896,6 +910,7 @@ BuiltInFunctionMap builtInFunctionMap[] = {
 	{ "enterThread",						nativeFunction(enterThread),						2,	0, "parasol" },
 	{ "exitThread",							nativeFunction(exitThread),							0,	0, "parasol" },
 	{ "dupExecutionContext",				nativeFunction(dupExecutionContext),				0,	1, "parasol" },
+	{ "parasolThread",						nativeFunction(parasolThread),						1,	1, "parasol" },
 	{ 0 }
 };
 

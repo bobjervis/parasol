@@ -176,6 +176,8 @@ public class HttpServer {
 //		printf("socketfd = %d\n", socketfd);
 		for (;;) {
 			if (listen(socketfd, SOMAXCONN) != 0) {
+				printf("listen != 0: ");
+				linux.perror(null);
 				closesocket(socketfd);
 				return false;
 			}
@@ -186,6 +188,8 @@ public class HttpServer {
 			int acceptfd = accept(socketfd, &a, &addrlen);
 //			printf("acceptfd = %d\n", acceptfd);
 			if (acceptfd < 0) {
+				printf("acceptfd < 0: ");
+				linux.perror(null);
 				closesocket(socketfd);
 				return false;
 			}

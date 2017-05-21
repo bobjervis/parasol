@@ -370,11 +370,13 @@ class string {
 		pointer<byte> cp = pointer<byte>(&_contents.data);
 		for (int i = 0; i < _contents.length; i++) {
 			switch (cp[i]) {
+			case	'\"':	output.printf("\\\"");	break;
 			case	'\\':	output.printf("\\\\");	break;
 			case	'\b':	output.printf("\\b");	break;
 			case	'\f':	output.printf("\\f");	break;
 			case	'\n':	output.printf("\\n");	break;
 			case	'\r':	output.printf("\\r");	break;
+			case	'\t':	output.printf("\\t");	break;
 			default:
 				output.append(cp[i]);
 			}
