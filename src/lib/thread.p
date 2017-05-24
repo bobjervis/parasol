@@ -39,7 +39,7 @@ import parasol:exception.HardwareException;
 import parasol:pxi.SectionType;
 import parasol:runtime;
 
-parasolThread(new Thread());
+Thread.init();
 
 public class Thread {
 	private string _name;
@@ -51,31 +51,18 @@ public class Thread {
 	private address _context;
 	
 	public Thread() {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
-			_name.printf("TID-%d", GetCurrentThreadId());
+		if (runtime.compileTarget == SectionType.X86_64_WIN)
 			_threadHandle = INVALID_HANDLE_VALUE;
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
-			_threadId = linux.pthread_self();
-			_pid = linux.gettid();
-			_name.printf("TID-%d", _pid);			
-		}
+		else if (runtime.compileTarget == SectionType.X86_64_LNX)
+			_pid = -1;
 	}
 	
 	public Thread(string name) {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
-			if (name != null)
-				_name = name;
-			else
-				_name.printf("TID-%d", GetCurrentThreadId());
+		_name = name;
+		if (runtime.compileTarget == SectionType.X86_64_WIN)
 			_threadHandle = INVALID_HANDLE_VALUE;
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
-			_threadId = linux.pthread_self();
-			_pid = linux.gettid();
-			if (name != null)
-				_name = name;
-			else
-				_name.printf("TID-%d", _pid);			
-		}
+		else if (runtime.compileTarget == SectionType.X86_64_LNX)
+			_pid = -1;
 	}
 	
 	~Thread() {
@@ -85,6 +72,12 @@ public class Thread {
 		}
 	}
 	
+	static void init() {
+		ref<Thread> t = new Thread();
+		t._name.printf("TID-%d", getCurrentThreadId());
+		parasolThread(t);
+	}
+
 	public boolean start(void func(address p), address parameter) {
 		_function = func;
 		_parameter = parameter;
@@ -106,6 +99,9 @@ public class Thread {
 	private static unsigned wrapperFunction(address wrapperParameter) {
 		ref<Thread> t = ref<Thread>(wrapperParameter);
 		enterThread(t._context, &t);
+		parasolThread(t);
+		if (t._name == null)
+			t._name.printf("TID-%d", getCurrentThreadId());
 		nested(t);
 		exitThread();
 		return 0;
@@ -115,7 +111,10 @@ public class Thread {
 		ref<Thread> t = ref<Thread>(wrapperParameter);
 		t._threadId = linux.pthread_self();
 		t._pid = linux.gettid();
+		if (t._name == null)
+			t._name.printf("TID-%d", t._pid);
 		enterThread(t._context, &t);
+		parasolThread(t);
 		nested(t);
 		exitThread();
 		return null;
@@ -128,11 +127,7 @@ public class Thread {
 		try {
 			t._function(t._parameter);
 		} catch (Exception e) {
-			if (runtime.compileTarget == SectionType.X86_64_WIN) {
-				printf("\nUncaught exception! (thread %d)\n\n%s\n", long(_threadHandle), e.message());
-			} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
-				printf("\nUncaught exception! (thread %d)\n\n%s\n", _threadId, e.message());
-			}
+			printf("\nUncaught exception! (thread %s)\n\n%s\n", t._name, e.message());
 			e.printStackTrace();
 		}
 	}
@@ -613,6 +608,15 @@ public class Future<class T> {
 
 public ref<Thread> currentThread() {
 	return ref<Thread>(parasolThread(null));
+}
+
+private int getCurrentThreadId() {
+	if (runtime.compileTarget == SectionType.X86_64_WIN)
+		return int(GetCurrentThreadId());
+	else if (runtime.compileTarget == SectionType.X86_64_LNX)
+		return linux.gettid();
+	else
+		return -1;
 }
 
 private abstract address dupExecutionContext();

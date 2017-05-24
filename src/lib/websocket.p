@@ -26,14 +26,17 @@ import parasol:text;
 
 public class WebSocketService extends HttpService {
 	private monitor _webSockets {
-		ref<WebSocket>[string] _webSocketProtocols;
+		ref<WebSocketFactory>[string] _webSocketProtocols;
 	}
 
-	public void webSocketProtocol(string protocol, ref<WebSocket> webSocket) {
-		ref<WebSocket> oldProtocol;
+	public void webSocketProtocol(string protocol, ref<WebSocketFactory> webSocketFactory) {
+		ref<WebSocketFactory> oldProtocol;
 		lock (_webSockets) {
 			oldProtocol = _webSocketProtocols[protocol];
-			_webSocketProtocols[protocol] = webSocket;
+			if (webSocketFactory == null)
+				_webSocketProtocols.remove(protocol);
+			else
+				_webSocketProtocols[protocol] = webSocketFactory;
 		}
 		if (oldProtocol != null)
 			delete oldProtocol;
@@ -50,17 +53,46 @@ public class WebSocketService extends HttpService {
 			string[] protocolsAttempted = protocol.split(',');
 			for (int i = 0; i < protocolsAttempted.length(); i++) {
 				string p = protocolsAttempted[i].trim();
-				ref<WebSocket> ws;
+				ref<WebSocketFactory> wsf;
 				lock (_webSockets) {
-					ws = _webSocketProtocols[p];
+					wsf = _webSocketProtocols[p];
 				}
-				if (ws != null)
-					return ws.processConnection(p, request, response);
+				if (wsf != null)
+					return wsf.processConnection(p, request, response);
 			}
 		}
 		response.error(400);			// you gotta give me a matching protocol
 		return false;
 	}
+}
+
+public class WebSocketFactory {
+	boolean processConnection(string protocol, ref<HttpRequest> request, ref<HttpResponse> response) {
+		response.statusLine(101, "Switching Protocols");
+		string key = request.headers["sec-websocket-key"];
+		if (key == null) {
+			response.error(400);
+			return false;
+		}
+		string value = key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+		byte[] hash;
+		
+		hash.resize(20);
+		
+		SHA1(&value[0], value.length(), &hash[0]);
+		string v = base64encode(hash);
+		response.header("Sec-WebSocket-Accept", v);
+		response.header("Connection", "Upgrade");
+		response.header("Upgrade", "websocket");
+		response.header("Sec-Websocket-Protocol", protocol);
+		response.endOfHeaders();
+		int fd = response.fd();
+		response.respond();
+		start(fd);
+		return true;
+	}
+
+	public abstract void start(int fd);
 }
 
 public class WebSocket {
@@ -82,53 +114,20 @@ public class WebSocket {
 	public static short CLOSE_BAD_DATA = 1003;
 
 	public int maxFrameSize;
-	int _fd;
+	
+	private int _fd;
 	private boolean _server;
 	private byte[] _incomingData;		// A buffer of data being read from the websocket.
 	private int _incomingLength;		// The number of bytes in the buffer.
 	private int _incomingCursor;		// The index of the next byte to be read from the buffer.
-	/**
-	 * Construct a server-side WebSocket
-	 */
-	public WebSocket() {
-		maxFrameSize = 1024;
-		_server = true;
-		_incomingData.resize(1024);
-	}
-	/**
-	 * Construct a client-side WebSocket
-	 */
-	public WebSocket(int fd) {
+
+	public WebSocket(int fd, boolean server) {
 		maxFrameSize = 1024;
 		_fd = fd;
-		_server = false;
+		_server = server;
+		_incomingData.resize(1024);
 	}
 	
-	boolean processConnection(string protocol, ref<HttpRequest> request, ref<HttpResponse> response) {
-		response.statusLine(101, "Switching Protocols");
-		string key = request.headers["sec-websocket-key"];
-		if (key == null) {
-			response.error(400);
-			return false;
-		}
-		string value = key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-		byte[] hash;
-		
-		hash.resize(20);
-		
-		SHA1(&value[0], value.length(), &hash[0]);
-		string v = base64encode(hash);
-		response.header("Sec-WebSocket-Accept", v);
-		response.header("Connection", "Upgrade");
-		response.header("Upgrade", "websocket");
-		response.header("Sec-Websocket-Protocol", protocol);
-		response.endOfHeaders();
-		_fd = response.fd();
-		response.respond();
-		start();
-		return true;
-	}
-
 	public void shutDown(short cause, string reason) {
 		byte[] closeFrame;
 		
@@ -393,8 +392,8 @@ public class WebSocket {
 		} else
 			frame.append(byte(length));
 		frame.append(data, length);
-		printf("Sending:\n");
-		text.memDump(&frame[0], frame.length(), 0);
+//		printf("Sending:\n");
+//		text.memDump(&frame[0], frame.length(), 0);
 		int result = send(_fd, &frame[0], frame.length(), 0);
 		if (result == frame.length())
 			return true;
@@ -403,8 +402,6 @@ public class WebSocket {
 		closesocket(_fd);
 		return false;
 	}
-	
-	public abstract void start(); 
 	
 	protected int fd() {
 		return _fd;
