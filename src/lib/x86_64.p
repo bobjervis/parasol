@@ -3176,6 +3176,7 @@ public class X86_64 extends X86_64AssignTemps {
 	private void generateCall(ref<Call> call, ref<CompileContext> compileContext) {
 		int cleanup = 0;
 		int stackPushes = 0;
+		int stackAlignment = 0;
 		for (ref<NodeList> args = call.stackArguments(); args != null; args = args.next) {
 			if (args.node.op() == Operator.ELLIPSIS_ARGUMENTS)
 				cleanup = ref<EllipsisArguments>(args.node).stackConsumed(); 
@@ -3185,11 +3186,12 @@ public class X86_64 extends X86_64AssignTemps {
 			generate(args.node, compileContext);
 			if (args.node.op() == Operator.VACATE_ARGUMENT_REGISTERS) {
 				int depth = f().r.bytesPushed();
-				int stackAlignment = (stackPushes + cleanup + depth) & 15;
+				stackAlignment = (stackPushes + cleanup + depth + f().stackAdjustment) & 15;
 				// Th only viable stack alignment value has to be 8, anything else is a compiler bug.
 				if (stackAlignment != 0) {
 					assert(stackAlignment == 8);
 					cleanup += 8;
+					f().stackAdjustment += stackAlignment;
 					inst(X86.SUB, TypeFamily.ADDRESS, R.RSP, 8);
 				}
 			}
@@ -3266,8 +3268,10 @@ public class X86_64 extends X86_64AssignTemps {
 			call.print(0);
 			assert(false);
 		}
-		if (cleanup != 0)
+		if (cleanup != 0) {
+			f().stackAdjustment -= stackAlignment;
 			inst(X86.ADD, TypeFamily.SIGNED_64, R.RSP, cleanup);		// What about destructors?
+		}
 	}
 
 	private boolean isVirtualCall(ref<Call> call, ref<CompileContext> compileContext) {

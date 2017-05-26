@@ -860,6 +860,7 @@ class X86_64Encoder extends Target {
 		public int outParameterOffset;
 		public int registerSaveSize;
 		public int knownDeferredTrys;
+		public int stackAdjustment;
 	}
 
 	class CodeSegment {
