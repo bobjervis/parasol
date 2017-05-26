@@ -134,7 +134,7 @@ public class HttpServer {
 			ip = inet_ntoa (*ref<unsigned>(*localHost.h_addr_list));
 //			string n(localHost.h_name);
 //			printf("hostent name = '%s' ip = '%s'\n", n, x);
-			ip = inet_addr(ip);
+			inet_addr(ip);
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
 			if (scope == ServerScope.LOCALHOST)
 				ip = &localhost[0];
