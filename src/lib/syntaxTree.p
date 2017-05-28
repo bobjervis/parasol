@@ -897,6 +897,16 @@ class Class extends Block {
 				return;
 			}
 		
+		if (_extends != null) {
+			ref<Type> t = _extends.unwrapTypedef(Operator.CLASS, compileContext);
+			if (t.isCircularExtension(scope, compileContext)) {
+				_extends.add(MessageId.CIRCULAR_EXTENDS, compileContext.pool());
+				type = compileContext.errorType();
+				ref<ClassScope>(scope).classType = null;
+				_extends.type = type;
+				return;
+			}
+		}
 		super.assignTypes(compileContext);
 		
 		for (ref<NodeList> nl = _implements; nl != null; nl = nl.next) {

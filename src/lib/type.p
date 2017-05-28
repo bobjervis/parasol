@@ -510,7 +510,10 @@ class ClassType extends Type {
 			ref<Node> base = _definition.extendsClause();
 			if (base != null) {
 				compileContext.assignTypes(_scope.enclosing(), base);
-				_extends = base.unwrapTypedef(family() == TypeFamily.INTERFACE ? Operator.INTERFACE : Operator.CLASS, compileContext);
+				if (base.deferAnalysis())
+					_extends = base.type;
+				else
+					_extends = base.unwrapTypedef(family() == TypeFamily.INTERFACE ? Operator.INTERFACE : Operator.CLASS, compileContext);
 			}
 		}
 	}
@@ -1284,6 +1287,7 @@ class Type {
 	private TypeFamily _family;
 	private boolean _resolved;
 	private boolean _resolving;
+	public boolean busy;				// Used when checking for circular extends clauses.
 
 	protected int _ordinal;				// Assigned by type-refs: first one gets the 'real' value
 	
@@ -1701,7 +1705,23 @@ class Type {
 		_resolving = false;
 		_resolved = true;
 	}
-
+	/**
+	 * This method assumes it is being called for an 'extends' clause expression.
+	 */
+	public boolean isCircularExtension(ref<Scope> derivedScope, ref<CompileContext> compileContext) {
+		if (scope() == derivedScope)
+			return true;
+		if (busy)				// Hitting a busy loop means somebody else is circular, can this happen?
+			return false;
+		ref<Type> base = assignSuper(compileContext);
+		if (base == null)
+			return false;		// We hit bottom and didn't see the same class again, woo hoo!
+		busy = true;
+		boolean result = base.isCircularExtension(derivedScope, compileContext);
+		busy = false;
+		return result;
+	}
+	
 	public ref<Symbol> lookup(ref<CompileString> name, ref<CompileContext> compileContext) {
 		for (ref<Type> current = this; current != null; current = current.assignSuper(compileContext)) {
 			if (current.scope() != null) {

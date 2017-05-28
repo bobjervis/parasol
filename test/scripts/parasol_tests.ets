@@ -684,6 +684,11 @@ compile(expect: fail) { "class A { private int x; }; void f(A a) { int b = a.x; 
 
 compile(expect: fail, message: ABSTRACT_INSTANCE_DISALLOWED) { "class A { public abstract void f(); } class B extends A { } B b;" }
 
+compile(expect: fail, message: CIRCULAR_EXTENDS) { "class A extends A {}" }
+compile(expect: fail, message: CIRCULAR_EXTENDS) { "class B extends A{} class A extends B {}" }
+compile(expect: fail, message: CIRCULAR_EXTENDS) { "class B extends C{} class A extends B {} class C extends A {}" }
+compile(expect: fail, message: CIRCULAR_EXTENDS) { "class B extends C{} class A extends C {} class C extends A {}" }
+
 compile() { "class A { private byte z; int x; }; void f(A a) { int b = a.x; }" }
 // FOR NOw these are allowed again. Annotations need to be formalized at some point.
 compile(xexpect: fail, xmessage: DISALLOWED_ANNOTATION) { "@Shape @Shape class foo {}" }

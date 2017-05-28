@@ -86,3 +86,5 @@ public Time now() {
 	}
 }
 
+public Time infinite(0);
+

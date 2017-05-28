@@ -104,6 +104,13 @@ public BOOL ReleaseSemaphore(HANDLE hHandle, int lReleaseCount, ref<int> lpPrevi
 	return ReleaseSemaphore(*ref<address>(&hHandle), lReleaseCount, lpPreviousCount);
 }
 
+@Windows("kernel32.dll", "CreateDirectory")
+public abstract BOOL CreateDirectory(pointer<byte> lpPathName, ref<SECURITY_ATTRIBUTES> lpSecurityAttributes);
+@Windows("kernel32.dll", "RemoveDirectory")
+public abstract BOOL RemoveDirectory(pointer<byte> lpPathName);
+@Windows("kernel32.dll", "DeleteFile")
+public abstract BOOL DeleteFile(pointer<byte> lpPathName);
+
 @Windows("kernel32.dll", "CreateMutexA")
 public abstract address CreateMutex(address lpMutexAttributes, BOOL bInitialOwner, pointer<byte> lpName);
 @Windows("kernel32.dll", "ReleaseMutex")
@@ -174,6 +181,12 @@ public DWORD FILE_ATTRIBUTE_SPARSE_FILE = 0x200;
 public DWORD FILE_ATTRIBUTE_SYSTEM = 0x4;
 public DWORD FILE_ATTRIBUTE_TEMPORARY = 0x100;
 public DWORD FILE_ATTRIBUTE_VIRTUAL = 0x10000;
+
+public class SECURITY_ATTRIBUTES {
+	public DWORD nLength;
+	public address lpSecurityDescriptor;
+	public BOOL bInheritHandle;
+}
 
 public unsigned MEM_COMMIT = 0x00001000;
 public unsigned MEM_RESERVE = 0x00002000;

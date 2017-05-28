@@ -20,6 +20,7 @@ class pid_t = int;
 class pthread_t = address;
 class uid_t = unsigned;
 class useconds_t = unsigned;
+class mode_t = unsigned;
 
 @Linux("libc.so.6", "aligned_alloc")
 public abstract address aligned_alloc(long alignment, long length);
@@ -75,6 +76,9 @@ public abstract pid_t getppid();
 
 @Linux("libc.so.6", "kill")
 public abstract int kill(pid_t pid, int sig);
+
+@Linux("libc.so.6", "mkdir")
+public abstract int mkdir(pointer<byte> path, mode_t mode);
 
 @Linux("libc.so.6", "mprotect")
 public abstract int mprotect(address addr, long length, int prot);
@@ -139,6 +143,9 @@ public abstract int readlink(pointer<byte> filename, pointer<byte> buffer, int b
 @Linux("libc.so.6", "realpath")
 public abstract pointer<byte> realpath(pointer<byte> filename, pointer<byte> resolved_path);
 
+@Linux("libc.so.6", "rmdir")
+public abstract int rmdir(pointer<byte> path);
+
 @Linux("libpthread.so.0", "sem_destroy")
 public abstract int sem_destroy(ref<sem_t> sem);
 
@@ -175,6 +182,9 @@ public int stat(pointer<byte> path, ref<statStruct> buf) {
 
 @Linux("libc.so.6", "sysconf")
 public abstract int sysconf(int parameter_index);
+
+@Linux("libc.so.6", "unlink")
+public abstract int unlink(pointer<byte> path);
 
 @Linux("libc.so.6", "usleep")
 public abstract int usleep(useconds_t usec);

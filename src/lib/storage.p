@@ -17,13 +17,18 @@ namespace parasol:storage;
 
 import parasol:runtime;
 import parasol:pxi.SectionType;
+import parasol:file;
 
 import native:C;
 import native:linux;
+import native:windows.CreateDirectory;
+import native:windows.DeleteFile;
 import native:windows.DWORD;
 import native:windows.FILE_ATTRIBUTE_DIRECTORY;
+import native:windows.FILE_ATTRIBUTE_REPARSE_POINT;
 import native:windows.GetFileAttributes;
 import native:windows.GetFullPathName;
+import native:windows.RemoveDirectory;
 
 public int FILENAME_MAX = 260;
 
@@ -126,4 +131,101 @@ public boolean isDirectory(string filename) {
 		return result == 0 && linux.S_ISDIR(statb.st_mode);
 	} else
 		return false;
+}
+
+public boolean isLink(string filename) {
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		DWORD r = GetFileAttributes(&filename[0]);
+		if (r == 0xffffffff)
+			return false;
+		else
+			return (r & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		linux.statStruct statb;
+		
+		int result = linux.stat(filename.c_str(), &statb);
+		return result == 0 && linux.S_ISLNK(statb.st_mode);
+	} else
+		return false;
+}
+
+public boolean makeDirectory(string path) {
+	return makeDirectory(path, false);
+}
+
+public boolean makeDirectory(string path, boolean shared) {
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (!shared)
+			return CreateDirectory(path.c_str(), null) != 0;
+		else
+			return false;								// TODO: There's much work to make a Windows file shared to others and/or read-only, so for now fail.
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		linux.mode_t mode = 0777;
+		
+		if (!shared)
+			mode &= unsigned(~0007);			// zero out the 'world' bits
+		return linux.mkdir(path.c_str(), mode) == 0;
+	} else
+		return false;
+}
+/**
+ * This call ensures that the given path exists and that the final element of the path is indeed a directory (or a link to one).
+ * 
+ * If it fails, that is because one or more of the directories in the path do not exist and you do not have permissions to create
+ * it, or it does exist and is not a directory.
+ */
+public boolean ensure(string path) {
+	if (isDirectory(path))
+		return true;
+	string dir = directory(path);
+	if (!ensure(dir))
+		return false;
+	// The final component of the path is not a directory, but the rest of the path checks out, so try and create the path as a directory.
+	return makeDirectory(path);
+}
+
+public boolean deleteFile(string path) {
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		return DeleteFile(path.c_str()) != 0;
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		return linux.unlink(path.c_str()) == 0;
+	} else
+		return false;
+}
+
+public boolean deleteDirectory(string path) {
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		return RemoveDirectory(path.c_str()) != 0;
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		return linux.rmdir(path.c_str()) == 0;
+	} else
+		return false;
+}
+/**
+ * This function tries to delete n entire directory tree. It will try to delete each file in turn, in no particular order. If the
+ * file cannot be deleted, then the whole operation stops immediately.
+ */
+public boolean deleteDirectoryTree(string path) {
+	if (!isDirectory(path))
+		return false;
+	ref<file.Directory> dir = new file.Directory(path);
+	dir.pattern("*");
+	if (dir.first()) {
+		do {
+			if (dir.basename() == "." || dir.basename() == "..")
+				continue;
+			string filename = dir.path();
+			if (isDirectory(filename) && !isLink(filename)) {
+				if (!deleteDirectoryTree(filename)) {
+					delete dir;
+					return false;
+				}
+			} else if (!deleteFile(filename)) {
+				delete dir;
+				return false;
+			}
+		} while (dir.next());
+	}
+	delete dir;
+	return deleteDirectory(path);
 }
