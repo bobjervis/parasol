@@ -33,8 +33,11 @@ public class __x86_64_va_list {
 	ref<address> reg_save_area;
 }
 
+@Constant
 public int SEEK_SET = 0;
+@Constant
 public int SEEK_CUR = 1;
+@Constant
 public int SEEK_END = 2;
 
 @Windows("msvcrt.dll", "atof")
@@ -95,7 +98,7 @@ public abstract void free(address data);
 
 @Windows("msvcrt.dll", "fseek")
 @Linux("libc.so.6", "fseek")
-public abstract int fseek(ref<FILE> fp, int offset, int origin);
+public abstract int fseek(ref<FILE> fp, long offset, int origin);
 
 @Windows("msvcrt.dll", "ftell")
 @Linux("libc.so.6", "ftell")
