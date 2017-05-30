@@ -65,13 +65,25 @@ public abstract pointer<byte> fcvt(double number, int ndigits, ref<int> decpt, r
 @Linux("libc.so.6", "ferror")
 public abstract int ferror(ref<FILE> fp);
 
+@Windows("msvcrt.dll", "fflush")
+@Linux("libc.so.6", "fflush")
+public abstract int fflush(ref<FILE> fp);
+
 @Windows("msvcrt.dll", "fgetc")
 @Linux("libc.so.6", "fgetc")
 public abstract int fgetc(ref<FILE> fp);
 
+@Windows("msvcrt.dll", "_fileno")
+@Linux("libc.so.6", "fileno")
+public abstract int fileno(ref<FILE> fp);
+
 @Windows("msvcrt.dll", "fopen")
 @Linux("libc.so.6", "fopen")
 public abstract ref<FILE> fopen(pointer<byte> filename, pointer<byte> mode);
+
+@Windows("msvcrt.dll", "fputc")
+@Linux("libc.so.6", "fputc")
+public abstract int fputc(int character, ref<FILE> fp);
 
 @Windows("msvcrt.dll", "fread")
 @Linux("libc.so.6", "fread")
@@ -112,6 +124,10 @@ public abstract address memcpy(address destination, address source, int amount);
 @Windows("msvcrt.dll", "memset")
 @Linux("libc.so.6", "memset")
 public abstract address memset(address destination, byte value, int amount);
+
+@Windows("msvcrt.dll", "rename")
+@Linux("libc.so.6", "rename")
+public abstract int rename(pointer<byte> oldName, pointer<byte> newName);
 
 @Windows("msvcrt.dll", "sqrt")
 @Linux("libm.so.6", "sqrt")

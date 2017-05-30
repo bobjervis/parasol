@@ -22,6 +22,7 @@ import native:linux;
 import parasol:runtime;
 import parasol:pxi.SectionType;
 
+@Constant
 public int EOF = -1;
 
 public class File {
@@ -83,6 +84,7 @@ public class File {
 				return line, true;
 		}
 	}
+	
 	public int read() {
 		return C.fgetc(_handle);
 	}
@@ -112,6 +114,10 @@ public class File {
 		return write(&s[0], s.length());
 	}
 	
+	public int putc(byte b) {
+		return C.fputc(b, _handle);
+	}
+	
 	public int write(byte[] buffer) {
 		unsigned n = C.fwrite(&buffer[0], 1, unsigned(buffer.length()), _handle);
 		if (C.ferror(_handle) != 0)
@@ -133,6 +139,23 @@ public class File {
 		return int(n);
 	}
 	
+	public boolean flush() {
+		return C.fflush(_handle) == 0;
+	}
+	/**
+	 * Force the file contents to disk. 
+	 */
+	public boolean sync() {
+		if (C.fflush(_handle) != 0)
+			return false;
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			return windows.FlushFileBuffers(windows._get_osfhandle(C.fileno(_handle))) != 0;
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			return linux.fdatasync(C.fileno(_handle)) == 0;
+		} else
+			return false;
+	}
+
 	public int read(byte[] buffer) {
 		unsigned n = C.fread(&buffer[0], 1, unsigned(buffer.length()), _handle);
 		if (C.ferror(_handle) != 0)
@@ -167,6 +190,15 @@ public File openTextFile(string filename) {
 	return h;
 }
 	
+public File appendTextFile(string filename) {
+	ref<C.FILE> f = C.fopen(filename.c_str(), "a".c_str());
+	if (f == null) {
+//		throw new 
+	}
+	File h(f);
+	return h;
+}
+	
 public File createTextFile(string filename) {
 	ref<C.FILE> f = C.fopen(filename.c_str(), "w".c_str());
 	if (f == null) {
@@ -178,6 +210,15 @@ public File createTextFile(string filename) {
 
 public File openBinaryFile(string filename) {
 	ref<C.FILE> f = C.fopen(filename.c_str(), "rb".c_str());
+	if (f == null) {
+//		throw new 
+	}
+	File h(f);
+	return h;
+}
+	
+public File appendBinaryFile(string filename) {
+	ref<C.FILE> f = C.fopen(filename.c_str(), "ab".c_str());
 	if (f == null) {
 //		throw new 
 	}

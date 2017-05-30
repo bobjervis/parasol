@@ -49,6 +49,9 @@ public abstract int FindNextFile(address handle, ref<WIN32_FIND_DATA> data);
 @Windows("kernel32.dll", "FindClose")
 public abstract int FindClose(address handle);
 
+@Windows("kernel32.dll", "FlushFileBuffers")
+public abstract BOOL FlushFileBuffers(HANDLE hFile);
+
 @Windows("kernel32.dll", "GetFileAttributesA")
 public abstract DWORD GetFileAttributes(pointer<byte> filename);
 
@@ -111,6 +114,9 @@ public abstract BOOL RemoveDirectory(pointer<byte> lpPathName);
 @Windows("kernel32.dll", "DeleteFile")
 public abstract BOOL DeleteFile(pointer<byte> lpPathName);
 
+@Windows("kernel32.dll", "MoveFile")
+public abstract BOOL MoveFile(pointer<byte> lpExistingFilename, pointer<byte> lpNewFilename);
+
 @Windows("kernel32.dll", "CreateMutexA")
 public abstract address CreateMutex(address lpMutexAttributes, BOOL bInitialOwner, pointer<byte> lpName);
 @Windows("kernel32.dll", "ReleaseMutex")
@@ -119,6 +125,9 @@ private abstract BOOL ReleaseMutex(address hHandle);
 public BOOL ReleaseMutex(HANDLE hHandle) {
 	return ReleaseMutex(*ref<address>(&hHandle));
 }
+
+@Windows("kernel32.dll", "_get_osfhandle")
+public abstract HANDLE _get_osfhandle(int fd);
 
 public DWORD WAIT_FAILED = DWORD(~0);
 public DWORD WAIT_ABANDONED = 0x80;

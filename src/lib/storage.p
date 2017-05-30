@@ -184,6 +184,10 @@ public boolean ensure(string path) {
 	return makeDirectory(path);
 }
 
+public boolean rename(string oldName, string newName) {
+	return C.rename(oldName.c_str(), newName.c_str()) == 0;
+}
+
 public boolean deleteFile(string path) {
 	if (runtime.compileTarget == SectionType.X86_64_WIN) {
 		return DeleteFile(path.c_str()) != 0;

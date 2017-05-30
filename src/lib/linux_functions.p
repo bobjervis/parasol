@@ -59,6 +59,9 @@ public abstract void _exit(int status);
 @Linux("libc.so.6", "execv")
 public abstract int execv(pointer<byte> path, pointer<pointer<byte>> argv);
 
+@Linux("libc.so.6", "fdatasync")
+public abstract int fdatasync(int fd);
+
 @Linux("libc.so.6", "fork")
 public abstract pid_t fork();
 
