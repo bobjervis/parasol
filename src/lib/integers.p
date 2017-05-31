@@ -129,7 +129,6 @@ public class int {
 		}
 		return false;	
  	}
-	
 }
 
 public class long {

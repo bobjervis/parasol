@@ -135,9 +135,7 @@ public class Exception {
 				crawlStack(ip, rbpCandidate, comparator);
 		} else
 			crawlStack(ip, frame, comparator);
-		printf("\nFATAL: Could not find a stack handler for this address.\n", 
-				_exceptionContext.framePointer, _exceptionContext.stackPointer, 
-				stackTop, _exceptionContext.exceptionAddress);
+		printf("\nFATAL: Could not find a stack handler for this address.\n");
 		_exceptionContext.print();
 		process.exit(1);
 	}
@@ -151,6 +149,7 @@ public class Exception {
 			printf("No exceptions table for this image.\n");
 			process.exit(1);
 		}
+//		printf("crawlStack(%p, %p, ...)\n", ip, frame);
 		pointer<byte> lowCode = runtime.lowCodeAddress();
 		pointer<byte> highCode = runtime.highCodeAddress();
 //		int(address ip, address elem) comparator = comparatorCurrentIp;
@@ -159,10 +158,13 @@ public class Exception {
 		do {
 			if (ip >= lowCode && ip < highCode) {
 				int location = int(ip - lowCode);
+//				printf("Checking location %x", location);
 				address result = bsearch(&location, ee, count, ExceptionEntry.bytes, comparator);
+//				printf(" -> found %p", result);
 				if (result != null) {
 					ref<ExceptionEntry> ee = ref<ExceptionEntry>(result);
 
+//					printf("(handler %x)\n", ee.handler);
 					// If we have a handler, call it.
 					if (ee.handler != 0) {
 						_exceptionContext.lastCrawledFramePointer = frame;
@@ -170,6 +172,7 @@ public class Exception {
 						process.exit(1);
 					}
 				}
+//				printf("\n");
 			}
 			oldRbp = frame;
 			ip = pointer<byte>(frame[1]);
@@ -260,6 +263,21 @@ private int comparatorReturnAddress(address ip, address elem) {
 		return 0;
 	else
 		return 1;
+}
+
+public class BoundsException extends Exception {
+	public BoundsException() {
+	}
+	
+	public BoundsException(string message) {
+		super(message);
+	}
+
+	ref<BoundsException> clone() {
+		ref<BoundsException> n = new BoundsException(_message);
+		n._exceptionContext = _exceptionContext;
+		return n;
+	}	
 }
 
 public class RuntimeException extends Exception {
@@ -499,7 +517,6 @@ private boolean dispatchException(ref<Exception> e, ref<Type> t, ref<Exception> 
 	ref<Type> actual = **ref<ref<ref<Type>>>(e);
 /*
 	printf("dispatchException %p actual %p t %p equals %s isSubtype %s\n", e, actual, t, actual.equals(t) ? "true" : "false", actual.isSubtype(t) ? "true" : "false");
-//	if (!actual.equals(t)) {
 		printf("actual class %x t class %x\n", pxiOffset(**ref<ref<address>>(actual)), pxiOffset(**ref<ref<address>>(t)));
 		printf("actual vtable %x t vtable %x\n", pxiOffset(*ref<address>(actual)), pxiOffset(*ref<address>(t)));
 		printf("actual family %s t family %s\n", string(actual.family()), string(t.family()));

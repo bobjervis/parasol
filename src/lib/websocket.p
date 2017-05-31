@@ -350,6 +350,10 @@ public class WebSocket {
 		return send(OP_STRING, &message[0], message.length());
 	}
 	
+	public boolean send(byte[] message) {
+		return send(OP_BINARY, &message[0], message.length());
+	}
+	
 	public boolean send(byte opcode, pointer<byte> message, int length) {
 		do {
 			int frameLength = maxFrameSize <= length ? maxFrameSize : length;

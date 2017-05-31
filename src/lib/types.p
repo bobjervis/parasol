@@ -82,3 +82,98 @@ public class Object {
 		return &_members;
 	}
 }
+
+public class Queue<class T> {
+	@Constant
+	private static int MIN_CAPACITY = 16;
+	
+	pointer<T> _items;
+	int _capacity;
+	int _first;
+	int _last;
+	
+	
+	public Queue() {
+		resize(MIN_CAPACITY);
+	}
+	
+	public ~Queue() {
+		destroyItems();
+		memory.free(_items);
+	}
+	
+	public void clear() {
+		destroyItems();
+		_first = 0;
+		_last = 0;
+		resize(MIN_CAPACITY);
+	}
+	
+	private void destroyItems() {
+		// If the block of valid items is split, copy the high end first
+		if (_first > _last) {
+			for (int j = _first; j < _capacity; j++)
+				_items[j].~();
+			_first = 0;
+		}
+		for (int j = _first; j < _last; j++)
+			_items[j].~();
+	}
+
+	public boolean isEmpty() {
+		return _first == _last;
+	}
+	
+	public int length() {
+		if (_first <= _last)
+			return _last - _first;
+		else
+			return _last + _capacity - _first;
+	}
+	
+	public void enqueue(T t) {
+		if (length() >= _capacity - 1)
+			resize(_capacity << 1);
+		new (&_items[_last]) T();
+		_items[_last] = t;
+		_last++;
+		if (_last >= _capacity)
+			_last = 0;
+	}
+	
+	public T dequeue() {
+		if (_first == _last)
+			throw BoundsException("dequeue of empty queue");
+		T result = _items[_first];
+		_items[_first].~();
+		_first++;
+		if (_first >= _capacity)
+			_first = 0;
+		if (_capacity > MIN_CAPACITY) {
+			int halfCapacity = _capacity >> 1;
+			if (length() < halfCapacity)
+				resize(halfCapacity);
+		}
+		return result;
+	}
+
+	public void resize(int newLength) {
+		pointer<T> a = pointer<T>(memory.alloc(newLength * T.bytes));
+		if (_items != null) {
+			int i = 0;
+			// If the block of valid items is split, copy the high end first
+			if (_first > _last) {
+				for (int j = _first; j < _capacity; j++, i++)
+					a[i] = _items[j];
+				_first = 0;
+			}
+			for (int j = _first; j < _last; j++, i++)
+				a[i] = _items[j];
+			_first = 0;
+			_last = i;
+			memory.free(_items);
+		}
+		_items = a;
+		_capacity = newLength;
+	}
+}

@@ -39,6 +39,7 @@ import parasol:types.void;
 import parasol:types.ClassInfo;
 import parasol:exception.Exception;
 import parasol:exception.AssertionFailedException;
+import parasol:exception.BoundsException;
 //import parasol:collections.vector;
 
 // Eventually, we need another way to get these 'built ins' plumbed through.
