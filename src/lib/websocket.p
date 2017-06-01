@@ -1,5 +1,5 @@
 /*
-   Copyright 2015 Rovert Jervis
+   Copyright 2015 Robert Jervis
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -131,13 +131,14 @@ public class WebSocket {
 	public void shutDown(short cause, string reason) {
 		byte[] closeFrame;
 		
+		printf("websocket shutDown (%d, %s)\n", cause, reason);
 		networkOrder(&closeFrame, cause);
 		networkOrder(&closeFrame, reason);
 		send(OP_CLOSE, &closeFrame[0], closeFrame.length());
 		closesocket(_fd);
 	}
 	
-	public boolean readWholeMessage(ref<byte[]> buffer) {
+	public boolean, boolean readWholeMessage(ref<byte[]> buffer) {
 		boolean initialFrame = true;
 		for (;;) {
 			boolean lastFrame, success;
@@ -146,12 +147,17 @@ public class WebSocket {
 			(lastFrame, opcode, success) = readFrame(buffer, initialFrame); 
 			if (!success)
 				break;
-			if (lastFrame)
-				return true;
+			if (lastFrame) {
+				// If we got a close and this is not the initial frame, we might see a partial message in buffer. Do we care? 
+				if (opcode == 8)
+					return false, true;
+				else
+					return true, false;
+			}
 			if (opcode < 8)
 				initialFrame = false;
 		}
-		return false;
+		return false, false;
 	}
 	
 	public boolean, int, boolean readFrame(ref<byte[]> buffer, boolean initialFrame) {
@@ -253,7 +259,7 @@ public class WebSocket {
 		case 8:				// connection close
 			buffer.resize(offset);
 			shutDown(CLOSE_NORMAL, "Responding to close");
-			return false, 0, false;
+			return true, 8, true;
 			
 		case 9:				// ping
 			send(OP_PONG, &(*buffer)[offset], int(payloadLength));

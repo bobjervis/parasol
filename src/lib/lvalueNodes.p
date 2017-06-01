@@ -1,5 +1,5 @@
 /*
-   Copyright 2015 Rovert Jervis
+   Copyright 2015 Robert Jervis
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -406,6 +406,8 @@ class Identifier extends Node {
 						if (o.instances().length() == 1) {
 							if (o.kind() == Operator.TEMPLATE) {
 								add(MessageId.NOT_SIMPLE_VARIABLE, compileContext.pool(), _value);
+								type = compileContext.errorType();
+								return;
 							}
 							_symbol = (*o.instances())[0];
 						} else {

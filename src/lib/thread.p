@@ -1,5 +1,5 @@
 /*
-   Copyright 2015 Rovert Jervis
+   Copyright 2015 Robert Jervis
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -206,6 +206,14 @@ class Monitor {
 		}
 	}
 	
+	public boolean isLocked() {
+		return _mutex.isLocked();
+	}
+	
+	public ref<Thread> owner() {
+		return _mutex.owner();
+	}
+	
 	private void take() {
 		_mutex.take();
 	}
@@ -321,9 +329,8 @@ class Monitor {
 class Mutex {
 	private int _level;
 	private HANDLE _mutex;
-	private DWORD _ownerThreadId;
+	private ref<Thread> _owner;
 	private linux.pthread_mutex_t _linuxMutex;
-	private linux.pthread_t _linuxOwnerThreadId;
 	
 	public Mutex() {
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
@@ -343,29 +350,60 @@ class Mutex {
 		}
 	}
 	
+	public boolean isLocked() {
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			DWORD code = WaitForSingleObject(_mutex, 0);
+			if (code == WAIT_TIMEOUT)
+				return true;
+			else if (code == 0)
+				ReleaseMutex(_mutex);
+			return false;
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			int result = linux.pthread_mutex_trylock(&_linuxMutex);
+			if (result == 0) {
+				linux.pthread_mutex_unlock(&_linuxMutex);
+				if (_level > 0)
+					return true;
+			}
+			return result == linux.EBUSY;
+		} else
+			return false;
+	}
+	
+	public ref<Thread> owner() {
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			DWORD code = WaitForSingleObject(_mutex, 0);
+			if (code == WAIT_TIMEOUT)
+				return _owner;
+			else if (code == 0)
+				ReleaseMutex(_mutex);
+			return null;
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			int result = linux.pthread_mutex_trylock(&_linuxMutex);
+			if (result == 0) {
+				linux.pthread_mutex_unlock(&_linuxMutex);
+				if (_level > 0)
+					return _owner;
+			}
+			if (result == linux.EBUSY)
+				return _owner;
+		}
+		return null;
+	}
+	
 	void take() {
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 			WaitForSingleObject(_mutex, INFINITE);
-			DWORD currentThreadId = GetCurrentThreadId(); 
-			if (_ownerThreadId == currentThreadId) {
-				_level++;
-			} else {
-				_level = 1;
-				_ownerThreadId = currentThreadId;
-			}
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
 			linux.pthread_mutex_lock(&_linuxMutex);
-			linux.pthread_t currentThreadId = linux.pthread_self();
-			if (_linuxOwnerThreadId == currentThreadId) {
-				_level++;
-			} else {
-				_level = 1;
-				_linuxOwnerThreadId = currentThreadId;
-			}
 		}
+		_level++;
+		_owner = currentThread();
+//		printf("%p take by %s\n", this, _owner.name());
 	}
 	
 	void release() {
+//		printf("%p release by %s\n", this, _owner.name());
 		_level--;
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 			ReleaseMutex(_mutex);

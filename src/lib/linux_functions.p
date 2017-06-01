@@ -1,5 +1,5 @@
 /*
-   Copyright 2015 Rovert Jervis
+   Copyright 2015 Robert Jervis
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -124,6 +124,9 @@ public abstract int pthread_mutex_init(ref<pthread_mutex_t> mutex, ref<pthread_m
 
 @Linux("libpthread.so.0", "pthread_mutex_lock")
 public abstract int pthread_mutex_lock(ref<pthread_mutex_t> mutex);
+
+@Linux("libpthread.so.0", "pthread_mutex_trylock")
+public abstract int pthread_mutex_trylock(ref<pthread_mutex_t> mutex);
 
 @Linux("libpthread.so.0", "pthread_mutex_unlock")
 public abstract int pthread_mutex_unlock(ref<pthread_mutex_t> mutex);
@@ -400,7 +403,10 @@ public int _NSIG = 65;	/* Biggest signal number + 1 */
 #define	EACCES		13	/* Permission denied */
 #define	EFAULT		14	/* Bad address */
 #define	ENOTBLK		15	/* Block device required */
-#define	EBUSY		16	/* Device or resource busy */
+*/
+@Constant
+public int EBUSY = 16;	/* Device or resource busy */
+/*
 #define	EEXIST		17	/* File exists */
 #define	EXDEV		18	/* Cross-device link */
 #define	ENODEV		19	/* No such device */

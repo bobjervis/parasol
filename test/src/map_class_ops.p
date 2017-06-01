@@ -1,5 +1,5 @@
 /*
-   Copyright 2015 Rovert Jervis
+   Copyright 2015 Robert Jervis
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -55,6 +55,8 @@ assert(!saw246);
 deletingMap.remove("def");
 
 assert(deletingMap.size() == 2);
+
+assert(deletingMap.get("def") == null);
 
 iterateMap();
 assert(saw123);

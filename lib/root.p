@@ -1,5 +1,5 @@
 /*
-   Copyright 2015 Rovert Jervis
+   Copyright 2015 Robert Jervis
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -967,7 +967,7 @@ class map<class V, class K> {
 		int startx = x;
 		for(;;) {
 			ref<Entry> e = ref<Entry>(_entries + x);
-			if (!e.valid || e.key.compare(key) == 0)
+			if (!e.valid || e.deleted || e.key.compare(key) == 0)
 				return e;
 			x++;
 			if (x >= _allocatedEntries)
@@ -985,7 +985,7 @@ class map<class V, class K> {
 		int startx = x;
 		for(;;) {
 			ref<Entry> e = ref<Entry>(_entries + x);
-			if (!e.valid || e.key.compare(key) == 0)
+			if (!e.valid || e.deleted || e.key.compare(key) == 0)
 				return e;
 			x++;
 			if (x >= _allocatedEntries)
