@@ -220,6 +220,10 @@ public class HttpServer {
 //		printf("done.\n");
 		return false;
 	}
+	
+	public char port() {
+		return _port;
+	}
 }
 
 private class PathHandler {
