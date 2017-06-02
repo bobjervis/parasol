@@ -847,6 +847,7 @@ private class StaticContentService extends HttpService {
 						break;
 					response.write(&buffer[0], n);
 				}
+				f.close();
 			} else
 				response.error(500);
 		} else
