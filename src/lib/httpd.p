@@ -21,6 +21,7 @@ import parasol:file.Seek;
 import parasol:storage.constructPath;
 import parasol:storage.exists;
 import parasol:thread.ThreadPool;
+import parasol:thread.currentThread;
 import native:net.accept;
 import native:net.AF_INET;
 import native:net.bind;
@@ -195,6 +196,7 @@ public class HttpServer {
 			}
 //			printf("Dispatching");
 			ref<HttpContext> context = new HttpContext(this, acceptfd);
+//			printf("Calling execute\n");
 			_requestThreads.execute(processHttpRequest, context);
 		}
 		printf("listen loop broken\n");
@@ -260,7 +262,7 @@ private void processHttpRequest(address ctx) {
 		}
 	} else
 		response.error(400);
-//	printf("About to close socket %d\n", context.requestFd);
+//	printf("About to close socket %d %d\n", context.requestFd, currentThread().id());
 	response.close();
 	delete context;
 }
@@ -849,7 +851,9 @@ private class StaticContentService extends HttpService {
 					int n = f.read(buffer);
 					if (n <= 0)
 						break;
+//					printf("Read %d bytes\n", n);
 					response.write(&buffer[0], n);
+//					printf("Wrote a response\n");
 				}
 				f.close();
 			} else

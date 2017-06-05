@@ -1024,7 +1024,6 @@ class CompileContext {
 	public void markActiveLock(ref<Node> n) {
 		if (n == null || n.type == null)
 			return;
-//		n.print(4);
 		_liveSymbols.push(n);
 		_liveSymbolScopes.push(_current);
 	}

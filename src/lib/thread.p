@@ -223,13 +223,16 @@ class Monitor {
 	}
 	
 	public void notify() {
+//		printf("Entering notify\n");
 		_mutex.take();
+//		printf("taken\n");
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 			ReleaseSemaphore(_semaphore, 1, null);
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
 			linux.sem_post(&_linuxSemaphore);
 		}
 		--_waiting;
+//		printf("About to release\n");
 		_mutex.release();
 	}
 	
@@ -250,14 +253,18 @@ class Monitor {
 	}
 	
 	public void wait() {
+//		printf("entering wait\n");
 		_mutex.take();
+//		printf("taken\n");
 		_waiting++;
 		int level = _mutex.releaseForWait();
+//		printf("mutex %s\n", _mutex.isLocked() ? "isLocked" : "is not locked");
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 			WaitForSingleObject(_semaphore, INFINITE);
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
 			linux.sem_wait(&_linuxSemaphore);
 		}
+//		printf("Got the semaphore\n");
 		_mutex.takeAfterWait(level - 1);
 	}
 	
@@ -361,8 +368,9 @@ class Mutex {
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
 			int result = linux.pthread_mutex_trylock(&_linuxMutex);
 			if (result == 0) {
+				int level = _level;
 				linux.pthread_mutex_unlock(&_linuxMutex);
-				if (_level > 0)
+				if (level > 0)
 					return true;
 			}
 			return result == linux.EBUSY;
@@ -399,11 +407,11 @@ class Mutex {
 		}
 		_level++;
 		_owner = currentThread();
-//		printf("%p take by %s\n", this, _owner.name());
+//		printf("%p take by %s (level = %d)\n", this, _owner.name(), _level);
 	}
 	
 	void release() {
-//		printf("%p release by %s\n", this, _owner.name());
+//		printf("%p release by %s (level = %d)\n", this, _owner.name(), _level);
 		_level--;
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 			ReleaseMutex(_mutex);

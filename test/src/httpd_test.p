@@ -17,6 +17,7 @@ import parasol:http.HttpRequest;
 import parasol:http.HttpResponse;
 import parasol:http.HttpServer;
 import parasol:http.HttpService;
+import parasol:http.ServerScope;
 
 HttpServer server;
 
@@ -33,7 +34,7 @@ class TestService extends HttpService {
 		printf("Test Service! fetching %s\n", request.serviceResource);
 		if (request.method != HttpRequest.Method.POST) {
 			response.error(405);
-			return true;
+			return false;
 		}
 		long messageBodySize = request.contentLength();
 		printf("Reading %d bytes more\n", messageBodySize);

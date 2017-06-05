@@ -543,6 +543,7 @@ class Block extends Node {
 				nl.node = nl.node.fold(tree, true, compileContext);
 
 				compileContext.popLiveSymbol(scope);
+				
 				ref<NodeList> nlr = callMonitorMethod(monitorName, monitorName.type, temp, "release", tree, compileContext);
 				if (nlr == null) {
 					if (scope != null)

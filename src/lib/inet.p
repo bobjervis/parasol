@@ -25,7 +25,6 @@ public string base64encode(pointer<byte> data, long length) {
 	string result;
 	
 	while (length > 0) {
-		printf("result='%s'\n", result);
 		int triplet;
 		int digits;
 		switch (length) {
