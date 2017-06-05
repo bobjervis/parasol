@@ -280,6 +280,22 @@ public class BoundsException extends Exception {
 	}	
 }
 
+public class CRuntimeException extends RuntimeException {
+	public CRuntimeException() {
+		
+	}
+
+	CRuntimeException(ref<ExceptionContext> exceptionContext) {
+		super(exceptionContext);
+	}
+	
+	ref<CRuntimeException> clone() {
+		ref<CRuntimeException> n = new CRuntimeException();
+		n._exceptionContext = _exceptionContext;
+		return n;
+	}	
+}
+
 public class RuntimeException extends Exception {
 	RuntimeException() {
 	}
@@ -493,6 +509,9 @@ void hardwareExceptionHandler(ref<HardwareException> info) {
 			
 		case 0x402:						// SIGILL + ILL_ILLOPN
 			throw IllegalInstructionException(context);
+			
+		case 0x5fa:
+			throw CRuntimeException(context);
 		}
 	}
 	printf("exception %x at %p\n", info.exceptionType, info.codePointer);

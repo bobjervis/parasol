@@ -166,7 +166,7 @@ class Parser {
 				_scanner.pushBack(t);
 				return resync(MessageId.BREAK_NO_SEMI);
 			}
-			return _tree.newLeaf(Operator.BREAK, location);
+			return _tree.newJump(Operator.BREAK, location);
 
 		case	CASE:
 			x = parseExpression(0);
@@ -192,7 +192,7 @@ class Parser {
 				_scanner.pushBack(t);
 				return resync(MessageId.SYNTAX_ERROR);
 			}
-			return _tree.newLeaf(Operator.CONTINUE, location);
+			return _tree.newJump(Operator.CONTINUE, location);
 
 		case	DEFAULT:
 			t = _scanner.next();

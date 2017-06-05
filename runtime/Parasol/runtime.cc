@@ -416,6 +416,7 @@ int ExecutionContext::runNative(int (*start)(void *args)) {
 	struct sigaction oldSigSegvAction;
 	struct sigaction oldSigFpeAction;
 	struct sigaction oldSigQuitAction;
+	struct sigaction oldSigAbortAction;
 	struct sigaction newGeneralAction;
 	struct sigaction newSegvAction;
 
@@ -426,7 +427,8 @@ int ExecutionContext::runNative(int (*start)(void *args)) {
 	sigaction(SIGILL, &newGeneralAction, &oldSigIllAction);
 	sigaction(SIGSEGV, &newSegvAction, &oldSigSegvAction);
 	sigaction(SIGFPE, &newGeneralAction, &oldSigFpeAction);
-	sigaction(SIGQUIT, &newGeneralAction, &oldSigFpeAction);
+	sigaction(SIGQUIT, &newGeneralAction, &oldSigQuitAction);
+	sigaction(SIGABRT, &newGeneralAction, &oldSigAbortAction);
 #endif
 	int result = start(_sp);
 #if defined(__WIN64)
@@ -435,6 +437,8 @@ int ExecutionContext::runNative(int (*start)(void *args)) {
 	sigaction(SIGILL, &oldSigIllAction, null);
 	sigaction(SIGSEGV, &oldSigSegvAction, null);
 	sigaction(SIGFPE, &oldSigFpeAction, null);
+	sigaction(SIGQUIT, &oldSigQuitAction, null);
+	sigaction(SIGABRT, &oldSigAbortAction, null);
 #endif
 	return result;
 }

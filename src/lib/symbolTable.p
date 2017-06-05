@@ -1545,6 +1545,17 @@ class Scope {
 		return false;
 	}
 
+	public boolean inSwitch() {
+		if (_definition == null)
+			return false;
+		if (_definition.op() != Operator.BLOCK)
+			return false;
+		ref<Block> block = ref<Block>(_definition);
+		if (block.scope == null)
+			return false;
+		return block.inSwitch();
+	}
+	
 	public boolean isMonitor() {
 		return false;
 	}

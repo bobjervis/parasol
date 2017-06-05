@@ -132,10 +132,11 @@ enum Operator {
 	IMPORT,
 	// Selection
 	DOT,
-	// Leaf
-	EMPTY,
+	// Jump
 	BREAK,
 	CONTINUE,
+	// Leaf
+	EMPTY,
 	SUPER,
 	SELF,
 	THIS,
@@ -358,6 +359,10 @@ class SyntaxTree {
 		return _pool new StackArgumentAddress(offset, location);
 	}
 	
+	public ref<Jump> newJump(Operator op, Location location) {
+		return _pool new Jump(op, location);
+	}
+	
 	public ref<Leaf> newLeaf(Operator op, Location location) {
 		return _pool new Leaf(op, location);
 	}
@@ -532,6 +537,8 @@ class Block extends Node {
 				nln.next = nl.next;
 				nl.next = nln;
 
+				compileContext.markActiveLock(this);
+				
 				nl = nln.next;
 				nl.node = nl.node.fold(tree, true, compileContext);
 
@@ -570,6 +577,10 @@ class Block extends Node {
 		if (scope != null)
 			compileContext.setCurrent(outer);
 		return this;
+	}
+	
+	public ref<Scope> enclosing() {
+		return scope;
 	}
 	
 	private ref<NodeList> callMonitorMethod(ref<Node> errorMarker, ref<Type> monitorType, ref<Variable> temp, string methodName, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
@@ -636,6 +647,14 @@ class Block extends Node {
 		return Test.FAIL_TEST;
 	}
 
+	public void printTerse(int indent) {
+		printBasic(indent);
+		if (_inSwitch)
+			printf(" in switch");
+		printf("\n");
+		_statements.node.print(indent + INDENT);
+	}
+
 	public void print(int indent) {
 		printBasic(indent);
 		if (_inSwitch)
@@ -643,7 +662,7 @@ class Block extends Node {
 		printf("\n");
 		boolean firstTime = true;
 		for (ref<NodeList> nl = _statements; nl != null; nl = nl.next) {
-			if (!firstTime)
+			if (firstTime)
 				firstTime = false;
 			else
 				printf("%*c  {BLOCK}\n", indent, ' ');
@@ -1652,6 +1671,142 @@ class Import extends Node {
 	}
 }
 
+class Jump extends Node {
+	private ref<NodeList> _liveSymbols;
+	private ref<Scope> _leavingScope;			// This is the outer-most scope we will exit when we take this jump
+	private ref<Scope> _jumpFromScope;			// This is the inner-most scope we will exit when we take this jump
+	
+	Jump(Operator op, Location location) {
+		super(op, location);
+	}
+
+	public boolean traverse(Traversal t, TraverseAction func(ref<Node> n, address data), address data) {
+		return func(this, data) != TraverseAction.ABORT_TRAVERSAL;
+	}
+
+	public ref<Jump> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+		switch (op()) {
+		case	BREAK:
+		case	CONTINUE:
+			ref<Scope> last = _leavingScope;
+			if (last != null) {
+				ref<Scope> first = _jumpFromScope;
+
+				int n = compileContext.liveSymbolCount();
+//				ref<Node> output = this;
+				ref<NodeList> lastNode = null;
+				for (int i = n - 1; i >= 0; i--) {
+					ref<Scope> s = compileContext.getLiveSymbolScope(i);
+					
+					if (s != first) {
+						for (;;) {
+							if (first == last)
+								break;
+							first = first.enclosing();
+							if (first == s)
+								break;
+						}
+					}
+					if (first == s) {
+						// We know that 'live' symbols have a scope with a destructor or a lock to be released
+						ref<Node> n = compileContext.getLiveSymbol(i);
+						
+						ref<NodeList> nl = tree.newNodeList(n);
+						if (lastNode == null)
+							_liveSymbols = nl;
+						else
+							lastNode.next = nl;
+						lastNode = nl;
+					}
+				}
+			}
+/*
+			if (_liveSymbols != null) {
+				ref<FileStat> file = compileContext.current().file();
+				printf("  %s %d\n", file.filename(), file.scanner().lineNumber(location()) + 1);
+				print(4);
+				printf("JumpFromScope:\n");
+				_jumpFromScope.print(4, false);
+				printf("LeavingScope:\n");
+				_leavingScope.print(4, false);
+			}
+ */
+			break;
+			
+		default:
+			print(0);
+			assert(false);
+		}
+		return this;
+	}
+	
+	public ref<Jump> clone(ref<SyntaxTree> tree) {
+		return ref<Jump>(tree.newJump(op(), location()).finishClone(this, tree.pool()));
+	}
+
+	public ref<Jump> cloneRaw(ref<SyntaxTree> tree) {
+		return tree.newJump(op(), location());
+	}
+
+	public void print(int indent) {
+		printBasic(indent);
+		printf("\n");
+		if (_liveSymbols != null) {
+			int i = 0;
+			printf("%*.*c  Destructors:\n", indent, indent, ' ');
+			for (ref<NodeList> nl = _liveSymbols; nl != null; nl = nl.next, i++) {
+				printf("%*.*c    {destructor %d}\n", indent, indent, ' ', i);
+				nl.node.printTerse(indent + INDENT);
+			}
+		}
+	}
+	 
+	private void assignTypes(ref<CompileContext> compileContext) {
+		ref<ClassScope> classScope;
+		ref<Type> t;
+		ref<Scope> scope;
+		switch (op()) {
+		case	BREAK:
+		case	CONTINUE:
+			type = compileContext.arena().builtInType(TypeFamily.VOID);
+			break;
+		}
+	}
+	
+	public Test containsBreak() {
+		if (op() == Operator.BREAK)
+			return Test.PASS_TEST;
+		else
+			return Test.FAIL_TEST;
+	}
+	/**
+	 * The caller knows the scope we are about to jump to (either via a break or continue statement) and
+	 * the scope we are currently in. If they are the same, there is nothing to be done: no destructors or unlocks to do.
+	 */
+	public void assignJumpScopes(ref<Scope> enteringScope, ref<Scope> jumpFromScope) {
+		if (jumpFromScope != enteringScope) {
+			ref<Scope> leavingScope = jumpFromScope;
+			for (;;) {
+				ref<Scope> enclosing = leavingScope.enclosing();
+				if (enclosing == leavingScope) {
+					leavingScope.print(0, false);
+					assert(false);
+				}
+				if (enclosing == null || enclosing == enteringScope) {
+					_leavingScope = leavingScope;
+					break;
+				}
+				leavingScope = enclosing;
+			}
+		}
+		_jumpFromScope = jumpFromScope;
+	}
+	
+	public ref<NodeList> liveSymbols() {
+		return _liveSymbols;
+	}
+}
+
 class Leaf extends Node {
 	Leaf(Operator op, Location location) {
 		super(op, location);
@@ -1667,8 +1822,6 @@ class Leaf extends Node {
 
 	public ref<Leaf> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
 		switch (op()) {
-		case	BREAK:
-		case	CONTINUE:
 		case	EMPTY:
 		case	TRUE:
 		case	FALSE:
@@ -1722,10 +1875,6 @@ class Leaf extends Node {
 		}
 		return super.canCoerce(newType, explicitCast, compileContext);
 	}
-/*
-private:
-	Leaf(Operator op, Location location);
-*/
  
 	private void assignTypes(ref<CompileContext> compileContext) {
 		ref<ClassScope> classScope;
@@ -1733,8 +1882,6 @@ private:
 		ref<Scope> scope;
 		switch (op()) {
 		case	EMPTY:
-		case	BREAK:
-		case	CONTINUE:
 			type = compileContext.arena().builtInType(TypeFamily.VOID);
 			break;
 
@@ -1788,13 +1935,6 @@ private:
 			type = compileContext.arena().createRef(t, compileContext);
 			break;
 		}
-	}
-	
-	public Test containsBreak() {
-		if (op() == Operator.BREAK)
-			return Test.PASS_TEST;
-		else
-			return Test.FAIL_TEST;
 	}
 }
 
@@ -3091,6 +3231,10 @@ class Node {
 	
 	// Debugging API
 	
+	public void printTerse(int indent) {
+		print(indent);
+	}
+
 	public void print(int indent) {
 		assert(false);
 	}

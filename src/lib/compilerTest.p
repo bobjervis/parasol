@@ -701,6 +701,7 @@ class RunObject extends script.Object {
 		}
 		printf("--> %s\n", command);
 		printf("%s\n", output);
+		print("About to expecting\n");
 		printf("  Expecting %s got %s\n", string(_expect), string(outcome));
 		if (result < 0)
 			printf("    Saw an exception running %s: %s\n", _filename, string(exception));

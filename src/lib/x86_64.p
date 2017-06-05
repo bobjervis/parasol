@@ -44,6 +44,8 @@ import parasol:compiler.Identifier;
 import parasol:compiler.InterfaceImplementationScope;
 import parasol:compiler.InterfaceType;
 import parasol:compiler.InternalLiteral;
+import parasol:compiler.Jump;
+import parasol:compiler.LockScope;
 import parasol:compiler.MessageId;
 import parasol:compiler.Node;
 import parasol:compiler.NodeList;
@@ -1045,7 +1047,8 @@ public class X86_64 extends X86_64AssignTemps {
 		case	BLOCK:
 		case	UNIT:
 			ref<Block> block = ref<Block>(node);
-			generateDefaultConstructors(block.scope, compileContext);
+			if (!block.inSwitch())
+				generateDefaultConstructors(block.scope, compileContext);
 			for (ref<NodeList> nl = block.statements(); nl != null; nl = nl.next)
 				generate(nl.node, compileContext);
 			break;
@@ -1261,11 +1264,14 @@ public class X86_64 extends X86_64AssignTemps {
 			GatherCasesClosure closure;
 			closure.target = this;
 			gatherCases(b.right(), &closure);
+			assert(b.right().op() == Operator.BLOCK);
+			block = ref<Block>(b.right());
+			emitSourceLocation(compileContext.current().file(), node.location());
+			generateDefaultConstructors(block.scope, compileContext);
 			JumpContext switchContext(b, join, defaultSegment, &closure.nodes, this, jumpContext());
 			markAddressModes(b.left(), compileContext);
 			sethiUllman(b.left(), compileContext, this);
 			assignVoidContext(node, compileContext);		// Take the result in any register available.
-			emitSourceLocation(compileContext.current().file(), node.location());
 			generate(b.left(), compileContext);
 			f().r.generateSpills(node, this);
 			ref<CodeSegment>[] labels = switchContext.caseLabels();
@@ -1335,10 +1341,14 @@ public class X86_64 extends X86_64AssignTemps {
 			break;
 			
 		case	BREAK:
+			emitSourceLocation(compileContext.current().file(), node.location());
+			generateLiveSymbolDestructors(ref<Jump>(node).liveSymbols(), compileContext);
 			closeCodeSegment(CC.JMP, jumpContext().breakLabel());
 			break;
 			
 		case	CONTINUE:
+			emitSourceLocation(compileContext.current().file(), node.location());
+			generateLiveSymbolDestructors(ref<Jump>(node).liveSymbols(), compileContext);
 			closeCodeSegment(CC.JMP, jumpContext().continueLabel());
 			break;
 			
@@ -2621,12 +2631,19 @@ public class X86_64 extends X86_64AssignTemps {
 	
 	private void generateLiveSymbolDestructors(ref<NodeList> liveSymbols, ref<CompileContext> compileContext) {
 		while (liveSymbols != null) {
-			inst(X86.LEA, firstRegisterArgument(), liveSymbols.node, compileContext);
-			instCall(liveSymbols.node.type.scope().destructor(), compileContext);
+			if (liveSymbols.node.op() == Operator.LOCK) {
+				ref<LockScope> lockScope = ref<LockScope>(ref<Block>(liveSymbols.node).scope);
+				ref<Node> defn = compileContext.tree().newReference(lockScope.lockTemp, false, liveSymbols.node.location());
+				inst(X86.MOV, firstRegisterArgument(), defn, compileContext);
+				instCall(releaseMethod(compileContext), compileContext);
+			} else {
+				inst(X86.LEA, firstRegisterArgument(), liveSymbols.node, compileContext);
+				instCall(liveSymbols.node.type.scope().destructor(), compileContext);
+			}
 			liveSymbols = liveSymbols.next;
 		}
 	}
-	
+
 	private void generateNestedMultiReturn(ref<FunctionType> funcType, ref<Node> value, ref<CompileContext> compileContext) {
 		generate(ref<Binary>(value).left(), compileContext);
 		f().r.generateSpills(ref<Binary>(value).left(), this);

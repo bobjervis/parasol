@@ -151,6 +151,7 @@ class Binary extends Node {
 			switch (op()) {
 			case	DECLARATION:
 				markLiveSymbols(_right, StorageClass.AUTO, compileContext);
+				
 			case	BIND:
 				_left = _left.fold(tree, false, compileContext);
 				_right = _right.fold(tree, false, compileContext);		// Call this context not void, because if it were
@@ -2363,10 +2364,7 @@ class Binary extends Node {
 					_left.type = compileContext.errorType();
 				}
 			}
-			CompileContext.FlowContext flowContext(this, compileContext.flowContext());
-			compileContext.pushFlowContext(&flowContext);
 			compileContext.assignTypes(_right);
-			compileContext.popFlowContext();
 			type = compileContext.arena().builtInType(TypeFamily.VOID);
 			break;
 
@@ -2717,8 +2715,11 @@ public void markLiveSymbols(ref<Node> declarator, StorageClass storageClass, ref
 		ref<Identifier> id = ref<Identifier>(declarator);
 		if (id.deferAnalysis())
 			break;
-		if (id.symbol().storageClass() == storageClass)
-			compileContext.markLiveSymbol(id);
+		if (id.symbol().storageClass() == storageClass) {
+			ref<Scope> scope = id.symbol().enclosing();
+			if (!id.symbol().enclosing().inSwitch())
+				compileContext.markLiveSymbol(id);
+		}
 		break;
 		
 	case	INITIALIZE:

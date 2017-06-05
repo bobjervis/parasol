@@ -1,0 +1,7 @@
+#!/bin/bash
+set -e
+
+PARASOL_BIN=$(dirname `readlink -f $0`)/..
+export PARASOL_HOME=`readlink -f $PARASOL_BIN`
+
+runets --compileFromSource $@ $PARASOL_HOME/test/scripts/parasol_tests.ets

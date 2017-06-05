@@ -37,7 +37,9 @@ class CompileContext {
 	private ref<Variable>[] _variables;
 	private ref<Symbol>[] _staticSymbols;		// Populated when assigning storage
 	private ref<Node>[] _liveSymbols;			// Populated during fold actions with the set of live symbols that
-												// need destructor calls.
+												// need destructor calls and locks the need unlocked.
+	private ref<Scope>[] _liveSymbolScopes;		// Populated during fold actions with the scopes of the live symbols
+												// that need destructor calls and locks that need unlocked.
 	private int _baseLiveSymbol;				// >= 0, index of first symbol live in this function.
 	private ref<Type> _monitorClass;
 	private boolean _verbose;
@@ -45,14 +47,51 @@ class CompileContext {
 	public class FlowContext {
 		private ref<FlowContext> _next;
 		private ref<Node> _controller;
+		private ref<Scope> _enclosing;			// This is the scope that encloses the flow statement
 		
-		public FlowContext(ref<Node> controller, ref<FlowContext> next) {
+		public FlowContext(ref<Node> controller, ref<Scope> enclosing, ref<FlowContext> next) {
 			_next = next;
 			_controller = controller;
+			_enclosing = enclosing;
 		}
 
 		public ref<FlowContext> next() {
 			return _next;
+		}
+
+		public ref<Scope> enclosingJumpTargetScope() {
+			switch (_controller.op()) {
+			case	SWITCH:
+			case	FOR:
+			case	SCOPED_FOR:
+			case	WHILE:
+			case	DO_WHILE:
+				return _enclosing;
+
+			default:
+				if (_next != null)
+					return _next.enclosingJumpTargetScope();
+				else
+					return null;
+			}
+			return null;
+		}
+
+		public ref<Scope> enclosingLoopScope() {
+			switch (_controller.op()) {
+			case	FOR:
+			case	SCOPED_FOR:
+			case	WHILE:
+			case	DO_WHILE:
+				return _enclosing;
+
+			default:
+				if (_next != null)
+					return _next.enclosingLoopScope();
+				else
+					return null;
+			}
+			return null;
 		}
 
 		public ref<Binary> enclosingSwitch() {
@@ -728,13 +767,15 @@ class CompileContext {
 		for (int i = 0; i < _arena.scopes().length(); i++) {
 			_current = (*_arena.scopes())[i];
 
+			printf("[%d] ", i);
 			_current.printStatus();
 		}
  */
 		for (int i = 0; i < _arena.scopes().length(); i++) {
 			_current = (*_arena.scopes())[i];
 			if (_current.definition() != null) {
-//				printf("[%d] %s\n", i, string(_current.storageClass()));
+//				printf("[%d] ", i);
+//				_current.printStatus();
 				switch (_current.definition().op()) {
 				case	FUNCTION:
 					if (_current.definition().class != FunctionDeclaration) {
@@ -743,11 +784,11 @@ class CompileContext {
 					}
 					ref<FunctionDeclaration> f = ref<FunctionDeclaration>(_current.definition());
 					if (f.body != null && f.body.type != null)
-						assignControlFlow(f.body);
+						assignControlFlow(f.body, _current);
 					break;
 
 				case UNIT:
-					assignControlFlow(_current.definition());
+					assignControlFlow(_current.definition(), _current);
 				}
 			}
 		}
@@ -784,33 +825,36 @@ class CompileContext {
 		}
 	}
 	
-	public void assignControlFlow(ref<Node> n) {
+	public void assignControlFlow(ref<Node> n, ref<Scope> scope) {
 		switch (n.op()) {
 		case	UNIT:
 		case	BLOCK:
 		case	LOCK:
-			for (ref<NodeList> nl = ref<Block>(n).statements(); nl != null; nl = nl.next)
-				assignControlFlow(nl.node);
+			ref<Block> block = ref<Block>(n);
+			if (block.scope != null)
+				scope = block.scope;
+			for (ref<NodeList> nl = block.statements(); nl != null; nl = nl.next)
+				assignControlFlow(nl.node, scope);
 			break;
 
 		case	IF:
 			ref<Ternary> t = ref<Ternary>(n);
-			assignControlFlow(t.middle());
-			assignControlFlow(t.right());
+			assignControlFlow(t.middle(), scope);
+			assignControlFlow(t.right(), scope);
 			break;
 
 		case	ANNOTATED:
 			ref<Binary> b = ref<Binary>(n);
-			assignControlFlow(b.right());
+			assignControlFlow(b.right(), scope);
 			break;
 			
 		case	WHILE:
 		case	SWITCH:
 			b = ref<Binary>(n);
 			{
-				FlowContext flowContext(b, _flowContext);
+				FlowContext flowContext(b, scope, _flowContext);
 				pushFlowContext(&flowContext);
-				assignControlFlow(b.right());
+				assignControlFlow(b.right(), scope);
 				popFlowContext();
 			}
 			break;
@@ -818,16 +862,16 @@ class CompileContext {
 		case	DO_WHILE:
 			b = ref<Binary>(n);
 			{
-				FlowContext flowContext(b, _flowContext);
+				FlowContext flowContext(b, scope, _flowContext);
 				pushFlowContext(&flowContext);
-				assignControlFlow(b.left());
+				assignControlFlow(b.left(), scope);
 				popFlowContext();
 			}
 			break;
 
 		case	CASE:
 			b = ref<Binary>(n);
-			assignControlFlow(b.right());
+			assignControlFlow(b.right(), scope);
 			ref<Binary> swit = enclosingSwitch();
 			if (swit == null) {
 				b.add(MessageId.INVALID_CASE, _pool);
@@ -877,32 +921,34 @@ class CompileContext {
 				break;
 			}
 			ref<Unary> u = ref<Unary>(n);
-			assignControlFlow(u.operand());
+			assignControlFlow(u.operand(), scope);
 			break;
 
-		case	FOR:
 		case	SCOPED_FOR:
+		case	FOR:
 			ref<For> f = ref<For>(n);
 			{
-				FlowContext flowContext(f, _flowContext);
+				FlowContext flowContext(f, scope, _flowContext);
 				pushFlowContext(&flowContext);
-				assignControlFlow(f.body());
+				if (n.op() == Operator.SCOPED_FOR)
+					scope = f.scope;
+				assignControlFlow(f.body(), scope);
 				popFlowContext();
 			}
 			break;
 		
 		case TRY:
 			ref<Try> tr = ref<Try>(n);
-			assignControlFlow(tr.body());
+			assignControlFlow(tr.body(), scope);
 			if (tr.finallyClause() != null)
-				assignControlFlow(tr.finallyClause());
+				assignControlFlow(tr.finallyClause(), scope);
 			for (ref<NodeList> nl = tr.catchList(); nl != null; nl = nl.next)
-				assignControlFlow(nl.node);
+				assignControlFlow(nl.node, scope);
 			break;
 			
 		case	CATCH:
 			t = ref<Ternary>(n);
-			assignControlFlow(t.right());
+			assignControlFlow(t.right(), scope);
 			break;
 			
 		case	ABSTRACT:
@@ -928,13 +974,19 @@ class CompileContext {
 			if (enclosingSwitch() == null &&
 				enclosingLoop() == null) {
 				n.add(MessageId.INVALID_BREAK, _pool);
+				break;
 			}
+			ref<Jump> j = ref<Jump>(n);
+			j.assignJumpScopes(enclosingJumpTargetScope(), scope);
 			break;
 
 		case	CONTINUE:
 			if (enclosingLoop() == null) {
 				n.add(MessageId.INVALID_CONTINUE, _pool);
+				break;
 			}
+			j = ref<Jump>(n);
+			j.assignJumpScopes(enclosingLoopScope(), scope);
 			break;
 
 		case	SYNTAX_ERROR:
@@ -953,6 +1005,7 @@ class CompileContext {
 		_baseLiveSymbol = _liveSymbols.length();
 		ref<Node> n = node.fold(file.tree(), false, this);
 		_liveSymbols.resize(_baseLiveSymbol);
+		_liveSymbolScopes.resize(_baseLiveSymbol);
 		_baseLiveSymbol = outerBaseLive;
 		return n;
 	}
@@ -962,10 +1015,20 @@ class CompileContext {
 			return;
 //		printf("hasDestructor? %s\n", n.type.hasDestructor() ? "true" : "false");
 //		n.print(4);
-		if (n.type.hasDestructor())
+		if (n.type.hasDestructor()) {
 			_liveSymbols.push(n);
+			_liveSymbolScopes.push(_current);
+		}
 	}
 	
+	public void markActiveLock(ref<Node> n) {
+		if (n == null || n.type == null)
+			return;
+//		n.print(4);
+		_liveSymbols.push(n);
+		_liveSymbolScopes.push(_current);
+	}
+
 	public int liveSymbolCount() {
 		return _liveSymbols.length() - _baseLiveSymbol;
 	}
@@ -974,22 +1037,28 @@ class CompileContext {
 		return _liveSymbols[index + _baseLiveSymbol];
 	}
 	
+	public ref<Scope> getLiveSymbolScope(int index) {
+		return _liveSymbolScopes[index + _baseLiveSymbol];
+	}
+	
 	public ref<Node> popLiveSymbol(ref<Scope> scope) {
 		if (_liveSymbols.length() <= _baseLiveSymbol)
 			return null;
 		ref<Node> result = _liveSymbols.peek();
-		if (result.enclosing() == scope)
+		if (result.enclosing() == scope) {
+			_liveSymbolScopes.pop();
 			return _liveSymbols.pop();
-		else
+		} else
 			return null;
 	}
 	
 	public ref<Node> popLiveTemp(int priorLength) {
 		if (_liveSymbols.length() - _baseLiveSymbol <= priorLength)
 			return null;
-		if (_liveSymbols.peek().op() == Operator.VARIABLE)
+		if (_liveSymbols.peek().op() == Operator.VARIABLE) {
+			_liveSymbolScopes.pop();
 			return _liveSymbols.pop();
-		else
+		} else
 			return null;
 	}
 	
@@ -1030,6 +1099,18 @@ class CompileContext {
 
 	public ref<Type> errorType() {
 		return _arena.builtInType(TypeFamily.ERROR);
+	}
+
+	ref<Scope> enclosingJumpTargetScope() {
+		if (_flowContext == null)
+			return null;
+		return _flowContext.enclosingJumpTargetScope();
+	}
+
+	ref<Scope> enclosingLoopScope() {
+		if (_flowContext == null)
+			return null;
+		return _flowContext.enclosingLoopScope();
 	}
 
 	ref<Binary> enclosingSwitch() {

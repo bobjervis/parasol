@@ -1726,7 +1726,7 @@ class Return extends ParameterBag {
 			printf("%*.*c  Destructors:\n", indent, indent, ' ');
 			for (ref<NodeList> nl = _liveSymbols; nl != null; nl = nl.next, i++) {
 				printf("%*.*c    {destructor %d}\n", indent, indent, ' ', i);
-				nl.node.print(indent + INDENT);
+				nl.node.printTerse(indent + INDENT);
 			}
 		}
 	}

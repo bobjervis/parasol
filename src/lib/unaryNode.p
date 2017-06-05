@@ -401,11 +401,38 @@ class Unary extends Node {
 			return reduce(op(), tree, _operand, compileContext);
 			
 		case	EXPRESSION:
+			int liveCount = compileContext.liveSymbolCount();
 			_operand = foldVoidContext(_operand, tree, compileContext);
 			if (_operand.op() == Operator.IF)
-				return _operand;
+				x = _operand;
 			else
-				return this;
+				x = this;
+			if (compileContext.liveSymbolCount() > liveCount) {
+				ref<NodeList> liveSymbols;
+				ref<NodeList> last;
+				// We have some temps that need to be cleaned up.
+				while (compileContext.liveSymbolCount() > liveCount) {
+					ref<Node> n = compileContext.popLiveTemp(liveCount);
+					if (n == null) {
+						ref<FileStat> file = compileContext.current().file();
+						printf("Expression has live symbols: %s %d\n", file.filename(), file.scanner().lineNumber(x.location()) + 1);
+						x.print(4);
+						printf("Suspect live symbol:\n");
+						compileContext.getLiveSymbol(compileContext.liveSymbolCount() - 1).print(4);
+						assert(false);
+					}
+					ref<NodeList> nl = tree.newNodeList(n);
+					if (last == null)
+						liveSymbols = nl;
+					else
+						last.next = nl;
+					last = nl;
+					
+				}
+				ref<Node> d = tree.newDestructorList(liveSymbols, x.location());
+				x = tree.newBinary(Operator.SEQUENCE, x, d, x.location());
+			}
+			return x;
 			
 		default:
 			print(0);
