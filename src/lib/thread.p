@@ -41,6 +41,50 @@ import parasol:runtime;
 
 Thread.init();
 
+private monitor threads {
+	ref<Thread>[] _activeThreads;
+
+	void enlist(ref<Thread> newThread) {
+		for (int i = 0; i < _activeThreads.length(); i++)
+			if (_activeThreads[i] == null) {
+				newThread._index = i;
+				_activeThreads[i] = newThread;
+				return;
+			}
+		newThread._index = _activeThreads.length();
+		_activeThreads.append(newThread);
+	}
+
+	void delist(ref<Thread> oldThread) {
+		_activeThreads[oldThread._index] = null;
+	}
+
+	void activeThreads(ref<ref<Thread>[]> a) {
+		(*a) = _activeThreads;					// trigger the copy here, since the return statement will lazily copy (outside the lock).
+	}
+
+	void suspendAllOtherThreads() {
+		int tgid = linux.getpid();
+		ref<Thread> me = currentThread();
+		for (int i = 0; i < _activeThreads.length(); i++)
+			if (_activeThreads[i] != me)
+				linux.tgkill(tgid, int(_activeThreads[i].id()), linux.SIGTSTP);
+	}
+}
+
+public ref<Thread>[] getActiveThreads() {
+	ref<Thread>[] a;
+
+	threads.activeThreads(&a);
+	return a;
+}
+/*
+ * This is a hacky debug API to dump all threads. It can deadlock, if one of the other threads is inside, say, a memory allocator.
+ */
+public void suspendAllOtherThreads() {
+	threads.suspendAllOtherThreads();
+}
+
 public class Thread {
 	private string _name;
 	private HANDLE _threadHandle;
@@ -49,12 +93,14 @@ public class Thread {
 	private void(address) _function;
 	private address _parameter;
 	private address _context;
+	int _index;
 	
 	public Thread() {
 		if (runtime.compileTarget == SectionType.X86_64_WIN)
 			_threadHandle = INVALID_HANDLE_VALUE;
 		else if (runtime.compileTarget == SectionType.X86_64_LNX)
 			_pid = -1;
+		_index = -1;
 	}
 	
 	public Thread(string name) {
@@ -63,9 +109,12 @@ public class Thread {
 			_threadHandle = INVALID_HANDLE_VALUE;
 		else if (runtime.compileTarget == SectionType.X86_64_LNX)
 			_pid = -1;
+		_index = -1;
 	}
 	
 	~Thread() {
+		if (_index != -1)
+			threads.delist(this);
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 			if (_threadHandle != INVALID_HANDLE_VALUE)
 				CloseHandle(_threadHandle);
@@ -75,6 +124,11 @@ public class Thread {
 	static void init() {
 		ref<Thread> t = new Thread();
 		t._name.printf("TID-%d", getCurrentThreadId());
+		if (runtime.compileTarget == SectionType.X86_64_WIN)
+			t._threadHandle = INVALID_HANDLE_VALUE;
+		else if (runtime.compileTarget == SectionType.X86_64_LNX)
+			t._pid = linux.gettid();
+		threads.enlist(t);
 		parasolThread(t);
 	}
 
@@ -99,11 +153,13 @@ public class Thread {
 	private static unsigned wrapperFunction(address wrapperParameter) {
 		ref<Thread> t = ref<Thread>(wrapperParameter);
 		enterThread(t._context, &t);
+		threads.enlist(t);
 		parasolThread(t);
 		if (t._name == null)
 			t._name.printf("TID-%d", getCurrentThreadId());
 		nested(t);
 		exitThread();
+		threads.delist(t);
 		return 0;
 	}
 	
@@ -114,8 +170,14 @@ public class Thread {
 		if (t._name == null)
 			t._name.printf("TID-%d", t._pid);
 		enterThread(t._context, &t);
+//		printf("about to enlist %s - ", t._name);
+		threads.enlist(t);
+//		printf("%d\n", t._index);
 		parasolThread(t);
 		nested(t);
+//		printf("about to delist %s - %d\n", t._name, t._index);
+		threads.delist(t);
+//		print("delisted\n");
 		exitThread();
 		return null;
 	}
@@ -130,6 +192,16 @@ public class Thread {
 			printf("\nUncaught exception! (thread %s)\n\n%s\n", t._name, e.message());
 			e.printStackTrace();
 		}
+	}
+	/*
+	 * These are prone to deadlocks. Use with caution.
+	 */
+	public void suspend() {
+		linux.tgkill(linux.getpid(), _pid, linux.SIGTSTP);
+	}
+
+	public void resume() {
+		linux.tgkill(linux.getpid(), _pid, linux.SIGCONT);
 	}
 
 	public void join() {
@@ -179,6 +251,11 @@ public class Thread {
 		}
 	}
 }
+
+public void exit(int code) {
+	linux.pthread_exit(address(code));
+}
+
 /*
  * This is the runtime implementation class for the monitor feature. It supplies the public methods that are
  * implied in a declared monitor object.
@@ -668,4 +745,7 @@ private int getCurrentThreadId() {
 private abstract address dupExecutionContext();
 private abstract void enterThread(address newContext, address stackTop);
 private abstract void exitThread();
+/*
+ * Declare to the C runtime code the location of the Parasol Thread object for this thread.
+ */
 private abstract address parasolThread(address newThread);

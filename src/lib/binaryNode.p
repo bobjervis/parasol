@@ -381,6 +381,7 @@ class Binary extends Node {
 					assert(false);
 				}
 				
+			case	EXCEPTION:
 			case	CLASS:
 			case	VAR:
 				ref<ParameterScope> copyConstructor = type.copyConstructor();

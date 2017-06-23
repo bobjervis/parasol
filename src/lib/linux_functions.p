@@ -113,6 +113,9 @@ public abstract int pthread_cond_timedwait(ref<pthread_cond_t> conditionVariable
 @Linux("libpthread.so.0", "pthread_create")
 public abstract int pthread_create(ref<pthread_t> thread, ref<pthread_attr_t> attr, address start_routine(address arg), address arg);
 
+@Linux("libpthread.so.0", "pthread_exit")
+public abstract void pthread_exit(address retval);
+
 @Linux("libpthread.so.0", "pthread_join")
 public abstract int pthread_join(pthread_t thread, ref<address> retval);
 
@@ -172,11 +175,24 @@ public abstract int sigaction(int signum, ref<struct_sigaction> act, ref<struct_
 
 @Linux("libc.so.6", "syscall")
 public abstract long syscall(long callId);
+
+@Linux("libc.so.6", "syscall")
+public abstract long syscall(long callId, long p1);
+
+@Linux("libc.so.6", "syscall")
+public abstract long syscall(long callId, long p1, long p2);
+
+@Linux("libc.so.6", "syscall")
+public abstract long syscall(long callId, long p1, long p2, long p3);
 /*
  * Hack to get the tid - gettid is not in the Linux library, so we have to resort to this...
  */
 public pid_t gettid() {
 	return pid_t(syscall(186));
+}
+
+public int tgkill(int tgid, int tid, int sig) {
+	return int(syscall(234, tgid, tid, sig));
 }
 
 @Linux("libc.so.6", "__xstat")

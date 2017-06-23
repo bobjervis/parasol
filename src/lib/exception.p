@@ -23,8 +23,10 @@ import parasol:x86_64.SourceLocation;
 import parasol:memory;
 import parasol:process;
 import parasol:runtime;
+import parasol:thread;
 import parasol:pxi.SectionType;
 import native:windows;
+import native:linux;
 import native:C;
 
 int EXCEPTION_ACCESS_VIOLATION	= int(0xc0000005);
@@ -78,7 +80,7 @@ public class Exception {
 		int staticMemoryLength = int(runtime.highCodeAddress()) - lowCode;
 		int ignoreFrames = ignoreTopFrames();
 		while (_exceptionContext.valid(fp)) {
-//			printf("fp = %p ip = %p relative = %x", fp, ip, int(ip) - lowCode);
+//			printf("fp = %p ip = %p relative = %x\n", fp, ip, int(ip) - lowCode);
 			pointer<address> stack = pointer<address>(fp);
 			long nextFp = _exceptionContext.slot(fp);
 			int relative = int(ip) - lowCode;
@@ -110,9 +112,9 @@ public class Exception {
 	
 	void throwNow(address framePointer, address stackPointer) {
 		
-		// The default treatment is that the return address just under the stackPointer is the starting pooint for
+		// The default treatment is that the return address just under the stackPointer is the starting point for
 		// 'throw' resolution. That will cover the cases where the exception context doesn't exist (this is a plain
-		// 'throw' statement), or this is a re-thrown exception (in which case the lastCrawledFramePinter will not be
+		// 'throw' statement), or this is a re-thrown exception (in which case the lastCrawledFramePointer will not be
 		// null). If there is an _exceptionContext set but no lastCrawledFramePointer, we are processing a hardware
 		// exception for the first time.
 		
@@ -510,8 +512,16 @@ void hardwareExceptionHandler(ref<HardwareException> info) {
 		case 0x402:						// SIGILL + ILL_ILLOPN
 			throw IllegalInstructionException(context);
 			
-		case 0x5fa:
+		case 0x5fa:						// SIGABRT + tkill
 			throw CRuntimeException(context);
+
+		case 0x300:						// SIGQUIT - dump all threads
+			dumpAllThreads(context);
+			thread.exit(0);
+
+		case 0x3fa:						// SIGQUIT sent from inside the house - just dump me.
+			dumpMyThread(context);
+			thread.exit(0);
 		}
 	}
 	printf("exception %x at %p\n", info.exceptionType, info.codePointer);
@@ -682,5 +692,31 @@ public string formattedLocation(int offset, boolean locationIsExact) {
 		}
 	}
 	return result;
+}
+
+private monitor serializeDumps;
+
+private void dumpMyThread(ref<ExceptionContext> context) {
+	ref<thread.Thread> t = thread.currentThread();
+	context.inferredFramePointer = context.framePointer;;
+	Exception e(context);
+	lock (serializeDumps) {
+		printf("\nThread %s stack\n", t.name());
+		e.printStackTrace();
+	}
+}
+
+private void dumpAllThreads(ref<ExceptionContext> context) {
+	printf("SIGQUIT dump:\n\n");
+	dumpMyThread(context);
+	ref<thread.Thread> t = thread.currentThread();
+	ref<thread.Thread>[] threads = thread.getActiveThreads();
+	int pid = linux.getpid();
+	for (int i = 0; i < threads.length(); i++) {
+		if (threads[i] == t)
+			continue;
+		linux.tgkill(pid, int(threads[i].id()), linux.SIGQUIT);
+	}
+	thread.Thread.sleep(1000);
 }
 
