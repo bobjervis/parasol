@@ -371,7 +371,7 @@ static void fillExceptionInfo(HardwareException *he, siginfo_t *info, ucontext *
 	he->framePointer = (byte*)uContext->uc_mcontext.gregs[REG_RBP];
 	he->stackPointer = (byte*)uContext->uc_mcontext.gregs[REG_RSP];
 	he->exceptionType = (info->si_signo << 8) + info->si_code;
-	he->exceptionInfo1 = info->si_pid;
+	he->exceptionInfo1 = info->si_errno;
 }
 
 void sigGeneralHandler(int signum, siginfo_t *info, void *uContext) {
