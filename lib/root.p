@@ -983,10 +983,17 @@ class map<class V, class K> {
 		}
 		int x = key.hash() & (_allocatedEntries - 1);
 		int startx = x;
+		ref<Entry> deletedE = null;
 		for(;;) {
 			ref<Entry> e = ref<Entry>(_entries + x);
-			if (!e.valid || e.deleted || e.key.compare(key) == 0)
-				return e;
+			if (!e.valid || e.key.compare(key) == 0) {
+				if (deletedE != null)
+					return deletedE;
+				else
+					return e;
+			}
+			if (e.deleted)
+				deletedE = e;
 			x++;
 			if (x >= _allocatedEntries)
 				x = 0;
@@ -1001,10 +1008,17 @@ class map<class V, class K> {
 		}
 		int x = key.hash() & (_allocatedEntries - 1);
 		int startx = x;
+		ref<Entry> deletedE = null;
 		for(;;) {
 			ref<Entry> e = ref<Entry>(_entries + x);
-			if (!e.valid || e.key.compare(key) == 0)
-				return e;
+			if (!e.valid || e.key.compare(key) == 0) {
+				if (deletedE != null)
+					return deletedE;
+				else
+					return e;
+			}
+			if (e.deleted)
+				deletedE = e;
 			x++;
 			if (x >= _allocatedEntries)
 				x = 0;
@@ -1022,7 +1036,7 @@ class map<class V, class K> {
 				if (oldE[i].valid && !oldE[i].deleted) {
 					insert(oldE[i].key, oldE[i].value);
 					e--;
-//					oldE[i].value.~();
+					oldE[i].value.~();
 				}
 			}
 			setRehashThreshold();
@@ -1037,9 +1051,10 @@ class map<class V, class K> {
 			pointer<Entry> oldE = _entries;
 			_allocatedEntries *= 2;
 			_entries = pointer<Entry>(memory.alloc(_allocatedEntries * Entry.bytes));
-			int e = _entriesCount;
+			int e = _entriesCount - _deletedEntriesCount;
 			_entriesCount = 0;
 			for (int i = 0; e > 0; i++) {
+//				printf("[%d/%d] %s %s\n", i, e, oldE[i].valid ? "valid" : "empty", oldE[i].deleted ? "deleted" : "");
 				if (oldE[i].valid && !oldE[i].deleted) {
 					insert(oldE[i].key, oldE[i].value);
 					e--;
