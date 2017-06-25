@@ -480,7 +480,7 @@ class Mutex {
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 			WaitForSingleObject(_mutex, INFINITE);
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
-			linux.pthread_mutex_lock(&_linuxMutex);
+			assert(linux.pthread_mutex_lock(&_linuxMutex) == 0);
 		}
 		_level++;
 		_owner = currentThread();
@@ -493,13 +493,13 @@ class Mutex {
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 			ReleaseMutex(_mutex);
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
-			linux.pthread_mutex_unlock(&_linuxMutex);
+			assert(linux.pthread_mutex_unlock(&_linuxMutex) == 0);
 		}
 	}
 	
 	int releaseForWait() {
 		int priorLevel = _level;
-		while (_level > 0)
+		for (int i = 0; i < priorLevel; i++)
 			release();
 		return priorLevel;
 	}

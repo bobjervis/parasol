@@ -135,12 +135,12 @@ public class Exception {
 		ref<ExceptionEntry> ee;
 		if (frame < stack || frame >= searchEnd) {
 			for (pointer<address> rbpCandidate = stack; rbpCandidate < searchEnd; rbpCandidate++) {
-				ee = crawlStack(ip, rbpCandidate, comparator);
+				(ee, frame) = crawlStack(ip, rbpCandidate, comparator);
 				if (ee != null)
 					break;
 			}
 		} else
-			ee = crawlStack(ip, frame, comparator);
+			(ee, frame) = crawlStack(ip, frame, comparator);
 		if (ee != null) {
 			_exceptionContext.lastCrawledFramePointer = frame;
 			callCatchHandler(this, frame, ee.handler);
@@ -151,7 +151,7 @@ public class Exception {
 		process.exit(1);
 	}
 	
-	private ref<ExceptionEntry> crawlStack(pointer<byte> ip, pointer<address> frame, int comparator(address ip, address elem)) {
+	private ref<ExceptionEntry>, pointer<address> crawlStack(pointer<byte> ip, pointer<address> frame, int comparator(address ip, address elem)) {
 		_exceptionContext.inferredFramePointer = frame;
 		pointer<address> oldRbp;
 		pointer<ExceptionEntry> ee = pointer<ExceptionEntry>(exceptionsAddress());
@@ -178,7 +178,7 @@ public class Exception {
 //					printf("(handler %x)\n", ee.handler);
 					// If we have a handler, call it.
 					if (ee.handler != 0)
-						return ee;
+						return ee, frame;
 				}
 //				printf("\n");
 			}
@@ -187,14 +187,16 @@ public class Exception {
 			frame = pointer<address>(*frame);
 			comparator = comparatorReturnAddress;
 		} while (frame > oldRbp && frame < plausibleEnd);
-		return null;
+		return null, null;
 	}
 
 	void inferFramePointer() {
 		pointer<byte> ip = pointer<byte>(_exceptionContext.exceptionAddress);
+		ref<ExceptionEntry> ee;
 		pointer<address> frame = pointer<address>(_exceptionContext.framePointer);
 		if (_exceptionContext.valid(frame)) {
-			if (crawlStack(ip, frame, comparatorCurrentIp) != null) {
+			(ee, frame) = crawlStack(ip, frame, comparatorCurrentIp);
+			if (ee != null) {
 				_exceptionContext.inferredFramePointer = frame;
 				return;
 			}
@@ -202,11 +204,13 @@ public class Exception {
 		address stackTop = address(long(_exceptionContext.stackBase) + _exceptionContext.stackSize);
 		pointer<address> searchEnd = pointer<address>(stackTop) + -2;
 		pointer<address> stack = pointer<address>(_exceptionContext.stackPointer);
-		for (pointer<address> rbpCandidate = stack; rbpCandidate < searchEnd; rbpCandidate++)
-			if (crawlStack(ip, rbpCandidate, comparatorCurrentIp) != null) {
+		for (pointer<address> rbpCandidate = stack; rbpCandidate < searchEnd; rbpCandidate++) {
+			(ee, frame) = crawlStack(ip, rbpCandidate, comparatorCurrentIp);
+			if (ee != null) {
 				_exceptionContext.inferredFramePointer = rbpCandidate;
 				return;
 			}
+		}
 	}
 	/*
 	 * findStack confirms whether there are any valid stack frames (ones with Parasol code from
@@ -538,7 +542,7 @@ void hardwareExceptionHandler(ref<HardwareException> info) {
 		case 0x402:						// SIGILL + ILL_ILLOPN
 			throw IllegalInstructionException(context);
 			
-		case 0x5fa:						// SIGABRT + tkill
+		case 0x6fa:						// SIGABRT + tkill
 			throw CRuntimeException(context);
 
 		case 0x300:						// SIGQUIT - dump all threads
@@ -743,7 +747,7 @@ private void dumpAllThreads(ref<ExceptionContext> context) {
 	ref<thread.Thread>[] threads = thread.getActiveThreads();
 	int pid = linux.getpid();
 	for (int i = 0; i < threads.length(); i++) {
-		if (threads[i] == t)
+		if (threads[i] == t || threads[i] == null)
 			continue;
 		linux.tgkill(pid, int(threads[i].id()), linux.SIGQUIT);
 	}

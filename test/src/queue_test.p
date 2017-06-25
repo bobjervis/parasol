@@ -27,6 +27,8 @@ for (int i = 0; i < 200; i++) {
 	assert(!q.isEmpty());
 }
 
+printf("Queue loaded with %d strings\n", q.length());
+
 for (int i = 0; i < 200; i++) {
 	assert(q.length() == 200 - i);
 	string s = q.dequeue();
@@ -38,15 +40,35 @@ for (int i = 0; i < 200; i++) {
 	assert(x == i + 3);
 }
 
+printf("Queue drained to %d strings\n", q.length());
+
 assert(q.isEmpty());
 assert(q.length() == 0);
 
+void printSp() {
+	int x;
+
+	printf("&x = %p\n", &x);
+}
+
+printf("Testing exception handling.\n");
+
 boolean threw;
+
+printSp();
 
 try {
 	string x = q.dequeue();
+	printSp();
+	printf("Somehow didn't throw an exception.\n");
 } catch (BoundsException e) {
+	if (threw) {
+		printf("Somehow got back here.\n");
+	}
 	threw = true;
 }
+
+printSp();
+printf("Exception apparently caught.\n");
 
 assert(threw);
