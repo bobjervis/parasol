@@ -310,7 +310,7 @@ class string {
 				return false;
 		return true;
 	}
-	
+
 	public boolean equalIgnoreCase(string other) {
 		return false;
 	}
@@ -329,7 +329,7 @@ class string {
 		string output;
 
 		if (length() == 0)
-			return output;
+			return *this;
 		pointer<byte> cp = pointer<byte>(&_contents.data);
 		for (int i = 0; i < _contents.length; i++) {
 			switch (cp[i]) {
@@ -366,7 +366,7 @@ class string {
 		string output;
 
 		if (length() == 0)
-			return output;
+			return *this;
 		pointer<byte> cp = pointer<byte>(&_contents.data);
 		for (int i = 0; i < _contents.length; i++) {
 			switch (cp[i]) {
@@ -399,7 +399,7 @@ class string {
 		string output;
 
 		if (length() == 0)
-			return output;
+			return *this;
 		pointer<byte> cp = pointer<byte>(&_contents.data);
 		for (int i = 0; i < _contents.length; i++) {
 			switch (cp[i]) {
