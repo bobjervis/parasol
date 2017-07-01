@@ -833,7 +833,22 @@ class map<class V, class K> {
 		_allocatedEntries = 0;
 		_rehashThreshold = 0;
 	}
-	
+	/* Warning: this really only works for maps from string to an object that imlpements 'path' */	
+	public void dump() {
+		printf("Entries %d\n", _entriesCount);
+		int e = _entriesCount;
+		for (int i = 0; e > 0; i++) {
+			if (_entries[i].valid) {
+				printf("[%d]", i);
+				if (_entries[i].deleted)
+					printf(" deleted\n");
+				else
+					printf(" %s\n", _entries[i].value.path());
+				e--;
+			}
+		}
+	}
+
 	public V get(K key) {
 		ref<Entry> e = findEntryReadOnly(key);
 		if (e == null)
@@ -986,12 +1001,14 @@ class map<class V, class K> {
 		ref<Entry> deletedE = null;
 		for(;;) {
 			ref<Entry> e = ref<Entry>(_entries + x);
-			if (!e.valid || e.key.compare(key) == 0) {
+			if (!e.valid) {
 				if (deletedE != null)
 					return deletedE;
 				else
 					return e;
 			}
+			if (e.key.compare(key) == 0)
+				return e;
 			if (e.deleted)
 				deletedE = e;
 			x++;
@@ -1011,12 +1028,14 @@ class map<class V, class K> {
 		ref<Entry> deletedE = null;
 		for(;;) {
 			ref<Entry> e = ref<Entry>(_entries + x);
-			if (!e.valid || e.key.compare(key) == 0) {
+			if (!e.valid) {
 				if (deletedE != null)
 					return deletedE;
 				else
 					return e;
 			}
+			if (e.key.compare(key) == 0)
+				return e;
 			if (e.deleted)
 				deletedE = e;
 			x++;
