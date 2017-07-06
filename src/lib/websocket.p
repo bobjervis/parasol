@@ -22,6 +22,7 @@ import native:linux;
 import native:C;
 import openssl.org:crypto.SHA1;
 import parasol:net.base64encode;
+import parasol:net.Connection;
 import parasol:text;
 
 public class WebSocketService extends HttpService {
@@ -86,13 +87,13 @@ public class WebSocketFactory {
 		response.header("Upgrade", "websocket");
 		response.header("Sec-Websocket-Protocol", protocol);
 		response.endOfHeaders();
-		int fd = response.fd();
+		ref<Connection> connection = response.connection();
 		response.respond();
-		start(fd);
+		start(connection);
 		return true;
 	}
 
-	public abstract void start(int fd);
+	public abstract void start(ref<Connection> connection);
 }
 
 public class WebSocket {
@@ -115,15 +116,15 @@ public class WebSocket {
 
 	public int maxFrameSize;
 	
-	private int _fd;
+	private ref<Connection> _connection;
 	private boolean _server;
 	private byte[] _incomingData;		// A buffer of data being read from the websocket.
 	private int _incomingLength;		// The number of bytes in the buffer.
 	private int _incomingCursor;		// The index of the next byte to be read from the buffer.
 
-	public WebSocket(int fd, boolean server) {
+	public WebSocket(ref<Connection> connection, boolean server) {
 		maxFrameSize = 1024;
-		_fd = fd;
+		_connection = connection;
 		_server = server;
 		_incomingData.resize(1024);
 	}
@@ -135,7 +136,7 @@ public class WebSocket {
 		networkOrder(&closeFrame, cause);
 		networkOrder(&closeFrame, reason);
 		send(OP_CLOSE, &closeFrame[0], closeFrame.length());
-		closesocket(_fd);
+		_connection.close();
 	}
 	
 	public boolean, boolean readWholeMessage(ref<byte[]> buffer) {
@@ -206,7 +207,7 @@ public class WebSocket {
 		int copied = drainBuffer(&(*buffer)[offset], int(payloadLength));
 		
 		if (copied < payloadLength) {
-			int received = recv(_fd, &(*buffer)[offset + copied], int(payloadLength - copied), 0);
+			int received = _connection.read(&(*buffer)[offset + copied], int(payloadLength - copied));
 			if (received < int(payloadLength - copied)) {
 				printf("received = %d\n", received);
 				linux.perror(null);
@@ -340,7 +341,7 @@ public class WebSocket {
 	
 	private int getc() {
 		if (_incomingCursor >= _incomingLength) {
-			_incomingLength = recv(_fd, &_incomingData[0], _incomingData.length(), 0);
+			_incomingLength = _connection.read(&_incomingData[0], _incomingData.length());
 			if (_incomingLength <= 0) {
 				printf("_incomingLength = %d\n", _incomingLength);
 				linux.perror(null);
@@ -404,17 +405,17 @@ public class WebSocket {
 		frame.append(data, length);
 //		printf("Sending:\n");
 //		text.memDump(&frame[0], frame.length(), 0);
-		int result = send(_fd, &frame[0], frame.length(), 0);
+		int result = _connection.write(&frame[0], frame.length());
 		if (result == frame.length())
 			return true;
 		printf("WebSocket send failed\n");
 		linux.perror(null);
-		closesocket(_fd);
+		_connection.close();
 		return false;
 	}
 	
-	protected int fd() {
-		return _fd;
+	protected ref<Connection> connection() {
+		return _connection;
 	}
 }
 

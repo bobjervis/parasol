@@ -1696,15 +1696,38 @@ class Scope {
 	}
 	
 	public ref<Type> enclosingClassType() {
+		ref<ClassScope> scope = enclosingClassScope();
+		if (scope == null)
+			return null;
+		return scope.classType;
+	}
+	
+	public ref<ClassScope> enclosingClassScope() {
 		ref<Scope> scope = this;
 		while (scope != null && scope.storageClass() != StorageClass.MEMBER)
 			scope = scope.enclosing();
-		if (scope == null)
-			return null;
-		ref<ClassScope> classScope = ref<ClassScope>(scope);
-		return classScope.classType;
+		return ref<ClassScope>(scope);
 	}
 	
+	public boolean contextAllowsReferenceToThis() {
+		ref<ClassScope> classScope = enclosingClassScope();
+		if (classScope == null)
+			return false;
+
+		// We are in a class. Verify that we are in a non-static function.
+
+		ref<Scope> scope = this;
+		for (;;) {
+			// We are somehow nested directly under the classScope
+			if (scope == classScope)
+				return false;
+
+			if (scope.class == ParameterScope)
+				return !scope.isStaticFunction();
+			scope = scope.enclosing();
+		}
+	}
+
 	public ref<Namespace> getNamespace() {
 		if (_enclosing != null)
 			return _enclosing.getNamespace();

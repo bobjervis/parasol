@@ -20,42 +20,14 @@ import parasol:file.openBinaryFile;
 import parasol:file.Seek;
 import parasol:storage.constructPath;
 import parasol:storage.exists;
+import parasol:thread.Thread;
 import parasol:thread.ThreadPool;
 import parasol:thread.currentThread;
-import native:net.accept;
-import native:net.AF_INET;
-import native:net.bind;
-import native:net.closesocket;
-import native:net.gethostbyname;
-import native:net.hostent;
-import native:net.htons;
-import native:net.inet_addr;
-import native:net.inet_ntoa;
-import native:net.inet_ntop;
-import native:net.listen;
-import native:net.recv;
-import native:net.send;
-import native:net.setsockopt;
-import native:net.SOCK_STREAM;
-import native:net.sockaddr_in;
-import native:net.socket;
-import native:net.SOL_SOCKET;
-import native:net.SO_REUSEADDR;
-import native:net.SOMAXCONN;
-import native:net.WSADATA;
-import native:net.WSAGetLastError;
-import native:net.WSAStartup;
-import native:windows.WORD;
+import parasol:net.Socket;
+import parasol:net.Encryption;
+import parasol:net.ServerScope;
 import native:linux;
-import parasol:runtime;
-import parasol:pxi.SectionType;
-
-public enum ServerScope {
-	LOCALHOST,						// The HttpServer is only visible on the same machine as the server.
-	INTERNET,						// The HttpServer is visible across the Internet (using IPv4).
-}
-
-byte[] localhost = [ 127, 0, 0, 1 ];
+import parasol:net;
 
 /*
  * This class implements an HTTP server. It implements HTTP version 1.1 for an Origin Server only. Hooks are defined to allow for
@@ -66,9 +38,12 @@ byte[] localhost = [ 127, 0, 0, 1 ];
  */
 public class HttpServer {
 	private string _hostname;
-	private char _port;
+	private char _port;								// default to 80
+	private char _sslPort;								// default to 443
 	private ref<ThreadPool<int>> _requestThreads;
 	private PathHandler[] _handlers;
+	private ref<Thread> _httpsThread;
+	private ServerScope _serverScope;
 	/*
 	 * The various roles a server can play determine how messages should be interpreted. 
 	 */
@@ -82,6 +57,7 @@ public class HttpServer {
 	public HttpServer() {
 		_hostname = "";
 		_port = 80;
+		_sslPort = 443;
 		_requestThreads = new ThreadPool<int>(4);
 	}
 	/*
@@ -100,109 +76,49 @@ public class HttpServer {
 	public void setPort(char newPort) {
 		_port = newPort;
 	}
+
+	public void setSslPort(char newPort) {
+		_sslPort = newPort;
+	}
 	
 	public boolean start(ServerScope scope) {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
-			WSADATA data;
-			WORD version = 0x202;
-			
-			int result = WSAStartup(version, &data);
-			if (result != 0) {
-				// TODO: Make up an exception class for this error.
-				printf("WSAStartup returned %d\n", result);
-				assert(result == 0);
-			}
-		}
-		int socketfd = socket(AF_INET, SOCK_STREAM, 0);
-		if (socketfd < 0) {
-			printf("socket returned %d\n", socketfd);
-			return false;
-		}
-		int xx = 1;
-		if (setsockopt(socketfd, SOL_SOCKET, SO_REUSEADDR, &xx, xx.bytes) < 0) {
-		    printf("setsockopt(SO_REUSEADDR) failed\n");
-		    return false;
-		}
-		sockaddr_in s;
-		pointer<byte> ip;
-		
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
-			ref<hostent> localHost = gethostbyname(&_hostname[0]);
-			if (localHost == null) {
-				printf("gethostbyname failed for '%s'\n", _hostname);
-				return false;
-			}
-			ip = inet_ntoa (*ref<unsigned>(*localHost.h_addr_list));
-//			string n(localHost.h_name);
-//			printf("hostent name = '%s' ip = '%s'\n", n, x);
-			inet_addr(ip);
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
-			if (scope == ServerScope.LOCALHOST)
-				ip = &localhost[0];
-			else {					// must be INTERNET
-				ref<linux.ifaddrs> ifAddresses;
-				if (linux.getifaddrs(&ifAddresses) != 0) {
-					printf("getifaddrs failed\n");
-					return false;
-				}
-				int i = 1;
-				for (ref<linux.ifaddrs> ifa = ifAddresses; ; ifa = ifa.ifa_next, i++) {
-					if (ifa == null) {
-						printf("No identifiable IPv4 address to use\n");
-						return false;
-					}
-					if (ifa.ifa_addr.sa_family == AF_INET) {
-						pointer<byte> ipa = pointer<byte>(&(ref<sockaddr_in>(ifa.ifa_addr).sin_addr));
-						if (ipa[0] == 127 && ipa[1] == 0 && ipa[2] == 0 && ipa[3] == 1)
-							continue;
-						ip = ipa;
-						break;
-					}
-				}
-			}
-		}
-		string x(ip);
-		s.sin_family = AF_INET;
-		s.sin_addr.s_addr = *ref<unsigned>(ip);
-		s.sin_port = htons(_port);
-//		printf("s = { %d, %x, %x }\n", s.sin_family, s.sin_addr.s_addr, s.sin_port);
-		if (bind(socketfd, &s, s.bytes) != 0) {
-			printf("Binding failed!");
-			if (runtime.compileTarget == SectionType.X86_64_LNX)
-				linux.perror(" ".c_str());
-			printf("\n");
-			closesocket(socketfd);
-			return false;
-		}
-//		printf("socketfd = %d\n", socketfd);
-		for (;;) {
-			if (listen(socketfd, SOMAXCONN) != 0) {
-				printf("listen != 0: ");
-				linux.perror(null);
-				closesocket(socketfd);
-				return false;
-			}
-			sockaddr_in a;
-			int addrlen = a.bytes;
-//			printf("&a = %p a.bytes = %d\n", &a, a.bytes);
-			// TODO: Develop a test fraemwork that allows us to test this scenario.
-			int acceptfd = accept(socketfd, &a, &addrlen);
-//			printf("acceptfd = %d\n", acceptfd);
-			if (acceptfd < 0) {
-				printf("acceptfd < 0: ");
-				linux.perror(null);
-				closesocket(socketfd);
-				return false;
-			}
-//			printf("Dispatching");
-			ref<HttpContext> context = new HttpContext(this, acceptfd);
-//			printf("Calling execute\n");
-			_requestThreads.execute(processHttpRequest, context);
-		}
-		printf("listen loop broken\n");
+		_serverScope = scope;
+		_httpsThread = new Thread();
+		_httpsThread.start(startHttpsEntry, this);
+		ref<Socket> socket = Socket.create(Encryption.NONE);
+		if (socket.bind(_port, scope))
+			listenLoop(socket);
+		printf("http listen loop broken\n");
 		return true;
 	}
 	
+	private static void startHttpsEntry(address param) {
+		printf("%s https param = %p\n", currentThread().name(), param);
+		ref<HttpServer> server = ref<HttpServer>(param);
+		server.startHttps(_serverScope);
+	}
+
+	private void startHttps(ServerScope scope) {
+		ref<Socket> socket = Socket.create(Encryption.SSLv23);
+		if (socket.bind(_sslPort, scope))
+			listenLoop(socket);
+		printf("https listen loop broken\n");
+	}
+
+	private void listenLoop(ref<Socket> socket) {
+		if (!socket.listen())
+			return;
+		for (;;) {
+			ref<net.Connection> connection = socket.accept();
+			if (connection == null)
+				return;			
+//			printf("Dispatching");
+			ref<HttpContext> context = new HttpContext(this, connection);
+//			printf("Calling execute\n");
+			_requestThreads.execute(processHttpRequest, context);
+		}
+	}
+
 	boolean dispatch(ref<HttpRequest> request, ref<HttpResponse> response) {
 //		printf("dispatch %s %s\n", string(request.method), request.url);
 		for (int i = 0; i < _handlers.length(); i++) {
@@ -242,19 +158,27 @@ private class PathHandler {
 
 private class HttpContext {
 	public ref<HttpServer> server;
-	public int requestFd;
-	
-	public HttpContext(ref<HttpServer> server, int requestFd) {
+	public ref<net.Connection> connection;
+//	public int requestFd;
+//	public sockaddr_in sourceAddress;
+//	public int addressLength;
+
+	public HttpContext(ref<HttpServer> server, ref<net.Connection> connection) {
 		this.server = server;
-		this.requestFd = requestFd;
+		this.connection = connection;
+//		this.requestFd = requestFd;
+//		this.sourceAddress = sourceAddress;
+//		this.addressLength = addressLength;
 	}
 }
 
 private void processHttpRequest(address ctx) {
 	ref<HttpContext> context = ref<HttpContext>(ctx);
-	HttpRequest request(context.requestFd);
+	if (!context.connection.acceptSecurityHandshake())
+		return;
+	HttpRequest request(context.connection);
 	HttpParser parser(&request);
-	HttpResponse response(context.requestFd);
+	HttpResponse response(context.connection);
 	if (parser.parse()) {
 		if (context.server.dispatch(&request, &response)) {
 			delete context;
@@ -262,7 +186,7 @@ private void processHttpRequest(address ctx) {
 		}
 	} else
 		response.error(400);
-//	printf("About to close socket %d %d\n", context.requestFd, currentThread().id());
+//	printf("About to close socket %d %d\n", context.connection.requestFd(), currentThread().id());
 	response.close();
 	delete context;
 }
@@ -288,7 +212,7 @@ public class HttpRequest {
 	
 	public string serviceResource;
 	
-	private int _fd;
+	private ref<net.Connection> _connection;
 	private byte[] _buffer;
 	private int _bufferEnd;
 	private int _cursor;
@@ -305,8 +229,8 @@ public class HttpRequest {
 		CUSTOM
 	}
 	
-	public HttpRequest(int fd) {
-		_fd = fd;
+	public HttpRequest(ref<net.Connection> connection) {
+		_connection = connection;
 		_buffer.resize(65536);
 	}
 	
@@ -335,7 +259,7 @@ public class HttpRequest {
 		if (_cursor >= _bufferEnd) {
 			if (_bufferEnd < 0)
 				return -1;
-			_bufferEnd = recv(_fd, &_buffer[0], _buffer.length(), 0);
+			_bufferEnd = _connection.read(&_buffer[0], _buffer.length());
 			if (_bufferEnd <= 0) {
 				_bufferEnd = -1;
 				return -1;
@@ -364,28 +288,28 @@ public class HttpResponse {
 	@Constant
 	private static int BUFFER_SIZE = 2048;
 	
-	private int _fd;
+	private ref<net.Connection> _connection;
 	private byte[] _buffer;
 	private int _fill;
 	
 	HttpResponse() {
-		_fd = -1;
+		_connection = null;
 		_buffer.resize(BUFFER_SIZE);
 	}
 	
-	HttpResponse(int fd) {
-		_fd = fd;
+	HttpResponse(ref<net.Connection> connection) {
+		_connection = connection;
 		_buffer.resize(BUFFER_SIZE);
 	}
 	
 	void close() {
 		flush();
-		closesocket(_fd);
+		_connection.close();
 	}
 	
 	private void flush() {
 		if (_fill > 0) {
-			int x = send(_fd, &_buffer[0], _fill, 0);
+			int x = _connection.write(&_buffer[0], _fill);
 			if (x < 0) {
 				printf("flush failed\n");
 				linux.perror(null);
@@ -451,8 +375,8 @@ public class HttpResponse {
 	/**
 	 * Only make this visible to internal users, such as WebSocket.
 	 */
-	int fd() {
-		return _fd;
+	ref<net.Connection> connection() {
+		return _connection;
 	}
 	
 	void respond() {

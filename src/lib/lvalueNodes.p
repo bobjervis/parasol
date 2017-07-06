@@ -419,6 +419,14 @@ class Identifier extends Node {
 					type = _symbol.assignType(compileContext);
 					if (type == null)
 						type = compileContext.errorType();
+					else {
+						if (_symbol.storageClass() == StorageClass.MEMBER) {
+							if (!compileContext.current().contextAllowsReferenceToThis()) {
+								add(MessageId.MEMBER_REF_NOT_ALLOWED, compileContext.pool(), _value);
+								type = compileContext.errorType();
+							}
+						}
+					}
 					_symbol.markAsReferenced(compileContext);
 					return;
 				}

@@ -20,6 +20,8 @@ namespace native:C;
  */
 public class FILE {}
 
+public class size_t = long;
+
 public class va_list = address;
 /**
  * This is the GNU CC __builtin_va_list structure used internally by GNU CC runtime to implemant va_list.
