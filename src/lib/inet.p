@@ -102,11 +102,13 @@ public class Socket {
 			throw SocketException("Socket options could not be set");
 	}
 
-	public boolean bind(string hostname, char port, ServerScope scope) {
+	public boolean bind(char port, ServerScope scope) {
 		net.sockaddr_in s;
 		pointer<byte> ip;
 		
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			string hostname = "";
+
 			ref<net.hostent> localHost = net.gethostbyname(&hostname[0]);
 			if (localHost == null) {
 				printf("gethostbyname failed for '%s'\n", hostname);
@@ -145,9 +147,9 @@ public class Socket {
 		s.sin_family = net.AF_INET;
 		s.sin_addr.s_addr = *ref<unsigned>(ip);
 		s.sin_port = net.htons(port);
-//		printf("s = { %d, %x, %x }\n", s.sin_family, s.sin_addr.s_addr, s.sin_port);
+		printf("s = { %d, %x, %x }\n", s.sin_family, s.sin_addr.s_addr, s.sin_port);
 		if (net.bind(_socketfd, &s, s.bytes) != 0) {
-			printf("Binding failed!");
+			printf("Binding failed to %d!", port);
 			if (runtime.compileTarget == SectionType.X86_64_LNX)
 				linux.perror(" ".c_str());
 			printf("\n");

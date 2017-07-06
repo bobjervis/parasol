@@ -95,7 +95,7 @@ public class HttpServer {
 	private static void startHttpsEntry(address param) {
 		printf("%s https param = %p\n", currentThread().name(), param);
 		ref<HttpServer> server = ref<HttpServer>(param);
-		server.startHttps(_serverScope);
+		server.startHttps(server._serverScope);
 	}
 
 	private void startHttps(ServerScope scope) {
