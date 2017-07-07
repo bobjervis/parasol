@@ -64,7 +64,6 @@ private  monitor _init {
 	boolean _done;
 }
 public class Socket {
-
 	public static ref<Socket> create(Encryption encryption) {
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 			lock (_init) {
@@ -147,7 +146,7 @@ public class Socket {
 		s.sin_family = net.AF_INET;
 		s.sin_addr.s_addr = *ref<unsigned>(ip);
 		s.sin_port = net.htons(port);
-		printf("s = { %d, %x, %x }\n", s.sin_family, s.sin_addr.s_addr, s.sin_port);
+//		printf("s = { %d, %x, %x }\n", s.sin_family, s.sin_addr.s_addr, s.sin_port);
 		if (net.bind(_socketfd, &s, s.bytes) != 0) {
 			printf("Binding failed to %d!", port);
 			if (runtime.compileTarget == SectionType.X86_64_LNX)
@@ -187,6 +186,15 @@ public class Socket {
 	}
 
 	protected abstract ref<Connection> createConnection(int acceptfd, ref<net.sockaddr_in> address, int addressLength);
+
+	public void close() {
+		net.closesocket(_socketfd);
+		_socketfd = -1;
+	}
+
+	public boolean closed() {
+		return _socketfd < 0;
+	}
 }
 
 class Connection {
@@ -202,6 +210,18 @@ class Connection {
 
 	public int requestFd() {
 		return _acceptfd;
+	}
+
+	public ref<net.sockaddr_in> sourceAddress() {
+		return &_address;
+	}
+
+	public int sourceAddressLength() {
+		return _addressLength;
+	}
+
+	public void diagnoseError() {
+		linux.perror(null);
 	}
 
 	public abstract boolean acceptSecurityHandshake();
@@ -242,10 +262,20 @@ class PlainConnection extends Connection {
 	}
 }
 
+private monitor _init_ssl {
+	boolean _done;
+}
+
 class SSLSocket extends Socket {
 	private ref<ssl.SSL_CTX> _context;
 
 	SSLSocket(Encryption encryption) {
+		lock (_init_ssl) {
+			if (!_done) {
+				_done = true;
+				ssl.SSL_library_init();
+			}
+		}
 		ref<ssl.SSL_METHOD> method;
 		switch (encryption) {
 		case SSLv23:
@@ -255,9 +285,22 @@ class SSLSocket extends Socket {
 		default:
 			assert(false);
 		}
-		_context = ssl.SSL_CTX_new(ssl.SSLv23_server_method());
-//		ssl.SSL_CTX_set_client_CA_list(_context, ssl.SSL_load_client_CA_file(x));
-//		ssl.SSL_CTX_use_PrivateKey_file(_context, y, ssl.SSL_FILETYPE_PEM);
+		_context = ssl.SSL_CTX_new(method);
+		if (_context == null) {
+			printf("SSL_CTX_new failed: %d\n", ssl.SSL_get_error(null, 0));
+			printf("                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(null, 0), null));
+			for (;;) {
+				long e = ssl.ERR_get_error();
+				if (e == 0)
+					break;
+				printf("    %d %s\n", e, ssl.ERR_error_string(e, null));
+			}
+		}
+		printf("Loading self-signed certificate.\n");
+		ssl.SSL_CTX_use_certificate_file(_context, "test/certificates/self-signed.pem".c_str(), ssl.SSL_FILETYPE_PEM);
+//		ssl.SSL_CTX_set_client_CA_list(_context, ssl.SSL_load_client_CA_file("test/certificates/self-signed.pem".c_str()));
+		ssl.SSL_CTX_use_PrivateKey_file(_context, "test/certificates/self-signed.pem".c_str(), ssl.SSL_FILETYPE_PEM);
+		printf("Cert loaded\n");
 	}
 
 	protected ref<Connection> createConnection(int acceptfd, ref<net.sockaddr_in> address, int addressLength) {
@@ -276,25 +319,69 @@ class SSLConnection extends Connection {
 
 	public boolean acceptSecurityHandshake() {
 		// Do the TLS handshake
+//		printf("Starting TLS handshake...\n");
 		ref<ssl.BIO> bio = ssl.BIO_new_socket(_acceptfd, ssl.BIO_NOCLOSE);
 		_ssl = ssl.SSL_new(_context);
+		if (_ssl == null) {
+			printf("SSL_new failed: %d\n", ssl.SSL_get_error(null, 0));
+			printf("                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(null, 0), null));
+			for (;;) {
+				long e = ssl.ERR_get_error();
+				if (e == 0)
+					break;
+				printf("    %d %s\n", e, ssl.ERR_error_string(e, null));
+			}
+			return false;
+		}
 		ssl.SSL_set_accept_state(_ssl);
 		ssl.SSL_set_bio(_ssl, bio, bio);
 		int r = ssl.SSL_accept(_ssl);
+		if (r == -1) {
+			printf("SSL_accept failed: %d\n", ssl.SSL_get_error(null, 0));
+			printf("                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(null, 0), null));
+			for (;;) {
+				long e = ssl.ERR_get_error();
+				if (e == 0)
+					break;
+				printf("    %d %s\n", e, ssl.ERR_error_string(e, null));
+			}
+			return false;
+		}
 		// TLS handshake completed and everything ok to proceed.
+
+//		printf("AOK r = %d\n", r);
+
 		return r == 1;
 	}
 
 	public int read(pointer<byte> buffer, int length) {
-		return ssl.SSL_read(_ssl, buffer, length);
+		int x = ssl.SSL_read(_ssl, buffer, length);
+		if (x <= 0) {
+			printf("SSL_read failed return %d\n", x);
+			diagnoseError();
+			linux.perror("SSL_read".c_str());
+		}
+		return x;
 	}
 
 	public int write(pointer<byte> buffer, int length) {
 		return ssl.SSL_write(_ssl, buffer, length);
 	}
 
+	public void diagnoseError() {
+		printf("SSL call failed: %d\n", ssl.SSL_get_error(_ssl, 0));
+		printf("                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(_ssl, 0), null));
+		for (;;) {
+			long e = ssl.ERR_get_error();
+			if (e == 0)
+				break;
+			printf("    %d %s\n", e, ssl.ERR_error_string(e, null));
+		}
+	}
+
 	public void close() {
 		ssl.SSL_free(_ssl);
+		net.closesocket(_acceptfd);
 	}
 }
 

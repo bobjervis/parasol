@@ -43,6 +43,7 @@ public class HttpServer {
 	private ref<ThreadPool<int>> _requestThreads;
 	private PathHandler[] _handlers;
 	private ref<Thread> _httpsThread;
+	private ref<Thread> _httpThread;
 	private ServerScope _serverScope;
 	/*
 	 * The various roles a server can play determine how messages should be interpreted. 
@@ -80,43 +81,58 @@ public class HttpServer {
 	public void setSslPort(char newPort) {
 		_sslPort = newPort;
 	}
-	
-	public boolean start(ServerScope scope) {
+
+	public void start() {
+		start(ServerScope.INTERNET);
+	}
+
+	public void start(ServerScope scope) {
 		_serverScope = scope;
-		_httpsThread = new Thread();
-		_httpsThread.start(startHttpsEntry, this);
-		ref<Socket> socket = Socket.create(Encryption.NONE);
-		if (socket.bind(_port, scope))
-			listenLoop(socket);
-		printf("http listen loop broken\n");
-		return true;
+		if (_port > 0) {
+			_httpThread = new Thread();
+			_httpThread.start(startHttpEntry, this);
+		}
+		if (_sslPort > 0) {
+			_httpsThread = new Thread();
+			_httpsThread.start(startHttpsEntry, this);
+		}
 	}
 	
-	private static void startHttpsEntry(address param) {
-		printf("%s https param = %p\n", currentThread().name(), param);
+	public void wait() {
+		if (_httpThread != null)
+			_httpThread.join();
+		if (_httpsThread != null)
+			_httpsThread.join();
+	}
+
+	private static void startHttpEntry(address param) {
 		ref<HttpServer> server = ref<HttpServer>(param);
-		server.startHttps(server._serverScope);
+		printf("Starting http on port %d\n", server._port);
+		server.startHttp(server._serverScope, server._port, Encryption.NONE);
 	}
 
-	private void startHttps(ServerScope scope) {
-		ref<Socket> socket = Socket.create(Encryption.SSLv23);
-		if (socket.bind(_sslPort, scope))
-			listenLoop(socket);
-		printf("https listen loop broken\n");
+	private static void startHttpsEntry(address param) {
+		ref<HttpServer> server = ref<HttpServer>(param);
+		printf("Starting https on port %d\n", server._sslPort);
+		server.startHttp(server._serverScope, server._sslPort, Encryption.SSLv23);
 	}
 
-	private void listenLoop(ref<Socket> socket) {
-		if (!socket.listen())
-			return;
-		for (;;) {
-			ref<net.Connection> connection = socket.accept();
-			if (connection == null)
-				return;			
-//			printf("Dispatching");
-			ref<HttpContext> context = new HttpContext(this, connection);
-//			printf("Calling execute\n");
-			_requestThreads.execute(processHttpRequest, context);
-		}
+	private void startHttp(ServerScope scope, char port, Encryption encryption) {
+		ref<Socket> socket = Socket.create(encryption);
+		if (socket.bind(port, scope)) {
+			if (!socket.listen()) {
+				printf("listen failed\n");
+				return;
+			}
+			while (!socket.closed()) {
+				ref<net.Connection> connection = socket.accept();
+				if (connection != null) {
+					ref<HttpContext> context = new HttpContext(this, connection);
+					_requestThreads.execute(processHttpRequest, context);
+				}
+			}
+		} else
+			printf("bind failed\n");
 	}
 
 	boolean dispatch(ref<HttpRequest> request, ref<HttpResponse> response) {
@@ -186,7 +202,6 @@ private void processHttpRequest(address ctx) {
 		}
 	} else
 		response.error(400);
-//	printf("About to close socket %d %d\n", context.connection.requestFd(), currentThread().id());
 	response.close();
 	delete context;
 }
@@ -233,7 +248,19 @@ public class HttpRequest {
 		_connection = connection;
 		_buffer.resize(65536);
 	}
-	
+
+	public int sourceFamily() {
+		return _connection.sourceAddress().sin_family;
+	}
+
+	public int sourcePort() {
+		return _connection.sourceAddress().sin_port;
+	}
+
+	public unsigned sourceIp() {
+		return _connection.sourceAddress().sin_addr.s_addr;
+	}
+
 	public long contentLength() {
 		string s = headers["content-length"];
 		if (s == null)
@@ -272,6 +299,8 @@ public class HttpRequest {
 	}
 
 	void print() {
+		unsigned ip = sourceIp();
+		printf("Source family %d %d.%d.%d.%d:%d\n", sourceFamily(), ip & 0xff, (ip >> 8) & 0xff, (ip >> 16) & 0xff, ip >> 24, sourcePort());
 		printf("Method %s(%s)\n", string(method), methodString);
 		printf("Url %s\n", url);
 		printf("HTTP Version %s\n", httpVersion);
@@ -310,9 +339,9 @@ public class HttpResponse {
 	private void flush() {
 		if (_fill > 0) {
 			int x = _connection.write(&_buffer[0], _fill);
-			if (x < 0) {
+			if (x <= 0) {
 				printf("flush failed\n");
-				linux.perror(null);
+				_connection.diagnoseError();
 			}
 //			printf("sent %d bytes\n", _fill);
 //			text.memDump(&_buffer[0], _fill, 0);
@@ -714,8 +743,10 @@ private class HttpParser {
 				break;
 				
 			default:
-				if (pendingWhiteSpace)
+				if (pendingWhiteSpace){
 					_tokenValue.append(' ');
+					pendingWhiteSpace = false;
+				}
 				_tokenValue.append(byte(ch));
 			}
 		}
