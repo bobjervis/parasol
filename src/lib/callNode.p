@@ -496,6 +496,12 @@ class Call extends ParameterBag {
 		return _folded;
 	}
 	
+	public boolean isConstant() {
+		if (_category != CallCategory.COERCION)
+			return false;
+		return _arguments.node.isConstant();
+	}
+
 	public void print(int indent) {
 		if (_target != null)
 			_target.print(indent + INDENT);

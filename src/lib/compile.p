@@ -907,9 +907,7 @@ class CompileContext {
 				assignTypes(ref<Block>(swit.right()).scope, b.left());
 				if (b.left().deferAnalysis())
 					break;
-				b.left().coerce(_current.file().tree(), switchType, false, this);
-				if (!b.left().isConstant())
-					b.left().add(MessageId.NOT_CONSTANT, _pool);
+				b.assignCaseExpression(switchType, this);
 			}
 			break;
 

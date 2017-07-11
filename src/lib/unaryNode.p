@@ -128,7 +128,6 @@ class Unary extends Node {
 
 		case	CLASS_OF:
 		case	UNARY_PLUS:
-		case	NEGATE:
 		case	DECREMENT_BEFORE:
 		case	INCREMENT_BEFORE:
 		case	DECREMENT_AFTER:
@@ -139,6 +138,24 @@ class Unary extends Node {
 		case	LOAD:
 		case	STORE_V_TABLE:
 			break;
+
+		case	NEGATE:
+			if (voidContext)
+				return _operand.fold(tree, true, compileContext);
+			_operand = _operand.fold(tree, false, compileContext);
+			switch (_operand.op()) {
+			case INTERNAL_LITERAL:
+				ref<InternalLiteral>(_operand).negate();
+				return _operand;
+
+			case INTEGER:
+				ref<InternalLiteral> n = tree.newInternalLiteral(-ref<Constant>(_operand).intValue(), location());
+				n.type = type;
+				return n;
+
+//			case FLOATING_POINT:
+			}
+			return this;
 
 		case	BIT_COMPLEMENT:
 			if (type.family() == TypeFamily.FLAGS) {
@@ -188,13 +205,51 @@ class Unary extends Node {
 				break;
 				
 			case	BOOLEAN:
+			case	UNSIGNED_8:
 			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	SIGNED_16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 				switch (_operand.type.family()) {
 				case	VAR:
 					ref<Node> call = createMethodCall(_operand, "integerValue", tree, compileContext);
 					return call.fold(tree, false, compileContext);
+
+				case	BOOLEAN:
+				case	UNSIGNED_8:
+				case	UNSIGNED_16:
+				case	UNSIGNED_32:
+				case	SIGNED_16:
+				case	SIGNED_32:
+				case	SIGNED_64:
+					_operand = _operand.fold(tree, false, compileContext);
+					switch (_operand.op()) {
+					case INTERNAL_LITERAL:
+					case INTEGER:
+						long v = _operand.foldInt(compileContext.target, compileContext);
+						long vBefore = v;
+						if (type.size() < _operand.type.size()) {
+							switch (type.family()) {
+							case	SIGNED_16:
+							case	SIGNED_32:
+							case	SIGNED_64:
+								int shift = 64 - type.size() * 8;
+								v = (v << shift) >> shift;
+								break;
+
+							default:
+								v &= (long(1) << (type.size() * 8)) - 1;
+							}
+						}
+						if (v == vBefore) {
+							_operand.type = type;
+							return _operand;
+						}
+						ref<InternalLiteral> n = tree.newInternalLiteral(v, location());
+						n.type = type;
+						return n;
+					}
 				}
 				break;
 				
@@ -458,6 +513,12 @@ class Unary extends Node {
 		case	CAST:
 			long v = _operand.foldInt(target, compileContext);
 			switch (type.family()) {
+			case	UNSIGNED_8:
+				return v & 0xff;
+
+			case	SIGNED_32:
+				return (v << 32) >> 32;
+
 			case	SIGNED_64:
 				return v;
 				
@@ -475,6 +536,7 @@ class Unary extends Node {
 			t.assignSize(target, compileContext);
 			return t.size();
 		}
+		printf("-----  generate %s ---------\n", compileContext.current().sourceLocation(location()));
 		print(0);
 		assert(false);
 		return 0;
@@ -489,6 +551,7 @@ class Unary extends Node {
 			if (!_operand.isConstant())
 				return false;
 			switch (type.family()) {
+			case	SIGNED_16:
 			case	SIGNED_64:
 				return true;
 				

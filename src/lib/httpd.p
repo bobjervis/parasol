@@ -40,6 +40,7 @@ public class HttpServer {
 	private string _hostname;
 	private char _port;								// default to 80
 	private char _sslPort;								// default to 443
+	private string _cipherList;
 	private ref<ThreadPool<int>> _requestThreads;
 	private PathHandler[] _handlers;
 	private ref<Thread> _httpsThread;
@@ -67,11 +68,29 @@ public class HttpServer {
 	 */
 	public void staticContent(string absPath, string filename) {
 		ref<HttpService> handler = new StaticContentService(filename);
-		_handlers.append(PathHandler(absPath, handler));
+		_handlers.append(PathHandler(absPath, handler, ServiceClass.ANY_SECURITY_LEVEL));
+	}
+	
+	public void secureStaticContent(string absPath, string filename) {
+		ref<HttpService> handler = new StaticContentService(filename);
+		_handlers.append(PathHandler(absPath, handler, ServiceClass.SECURED_ONLY));
+	}
+	
+	public void unsecureStaticContent(string absPath, string filename) {
+		ref<HttpService> handler = new StaticContentService(filename);
+		_handlers.append(PathHandler(absPath, handler, ServiceClass.UNSECURED_ONLY));
 	}
 	
 	public void service(string absPath, ref<HttpService> handler) {
-		_handlers.append(PathHandler(absPath, handler));
+		_handlers.append(PathHandler(absPath, handler, ServiceClass.ANY_SECURITY_LEVEL));
+	}
+	
+	public void secureService(string absPath, ref<HttpService> handler) {
+		_handlers.append(PathHandler(absPath, handler, ServiceClass.SECURED_ONLY));
+	}
+	
+	public void unsecureService(string absPath, ref<HttpService> handler) {
+		_handlers.append(PathHandler(absPath, handler, ServiceClass.UNSECURED_ONLY));
 	}
 	
 	public void setPort(char newPort) {
@@ -80,6 +99,10 @@ public class HttpServer {
 
 	public void setSslPort(char newPort) {
 		_sslPort = newPort;
+	}
+
+	public void setCipherList(string cipherList) {
+		_cipherList = cipherList;
 	}
 
 	public void start() {
@@ -118,7 +141,7 @@ public class HttpServer {
 	}
 
 	private void startHttp(ServerScope scope, char port, Encryption encryption) {
-		ref<Socket> socket = Socket.create(encryption);
+		ref<Socket> socket = Socket.create(encryption, _cipherList);
 		if (socket.bind(port, scope)) {
 			if (!socket.listen()) {
 				printf("listen failed\n");
@@ -135,10 +158,21 @@ public class HttpServer {
 			printf("bind failed\n");
 	}
 
-	boolean dispatch(ref<HttpRequest> request, ref<HttpResponse> response) {
+	boolean dispatch(ref<HttpRequest> request, ref<HttpResponse> response, boolean secured) {
 //		printf("dispatch %s %s\n", string(request.method), request.url);
 		for (int i = 0; i < _handlers.length(); i++) {
 			if (request.url.startsWith(_handlers[i].absPath)) {
+				switch (_handlers[i].serviceClass) {
+				case SECURED_ONLY:
+					if (!secured)
+						continue;
+					break;
+
+				case UNSECURED_ONLY:
+					if (secured)
+						continue;
+					break;
+				}
 				if (request.url.length() > _handlers[i].absPath.length()) {
 					if (request.url[_handlers[i].absPath.length()] != '/')
 						continue;			// a false alarm, e.g. absPath = /foo url = /food
@@ -160,15 +194,23 @@ public class HttpServer {
 	}
 }
 
+private enum ServiceClass {
+	UNSECURED_ONLY,
+	SECURED_ONLY,
+	ANY_SECURITY_LEVEL,
+}
+
 private class PathHandler {
 	string absPath;
 	ref<HttpService> handler;
-	
+	ServiceClass serviceClass;
+
 	PathHandler() {}
 	
-	PathHandler(string absPath, ref<HttpService> handler) {
+	PathHandler(string absPath, ref<HttpService> handler, ServiceClass serviceClass) {
 		this.absPath = absPath;
 		this.handler = handler;
+		this.serviceClass = serviceClass;
 	}
 }
 
@@ -196,7 +238,7 @@ private void processHttpRequest(address ctx) {
 	HttpParser parser(&request);
 	HttpResponse response(context.connection);
 	if (parser.parse()) {
-		if (context.server.dispatch(&request, &response)) {
+		if (context.server.dispatch(&request, &response, context.connection.secured())) {
 			delete context;
 			return;				// if dispatch returns true, we want to keep the connection open (for at least a while).
 		}
@@ -320,6 +362,7 @@ public class HttpResponse {
 	private ref<net.Connection> _connection;
 	private byte[] _buffer;
 	private int _fill;
+	private boolean _headersEnded;
 	
 	HttpResponse() {
 		_connection = null;
@@ -332,6 +375,8 @@ public class HttpResponse {
 	}
 	
 	void close() {
+		if (!_headersEnded)
+			endOfHeaders();
 		flush();
 		_connection.close();
 	}
@@ -343,8 +388,6 @@ public class HttpResponse {
 				printf("flush failed\n");
 				_connection.diagnoseError();
 			}
-//			printf("sent %d bytes\n", _fill);
-//			text.memDump(&_buffer[0], _fill, 0);
 			_fill = 0;
 		}
 	}
@@ -388,6 +431,7 @@ public class HttpResponse {
 	}
 	
 	void endOfHeaders() {
+		_headersEnded = true;
 		write("\r\n");
 		flush();
 	}

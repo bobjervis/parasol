@@ -672,7 +672,8 @@ class X86_64Encoder extends Target {
 			assignStaticRegion(symbol, alignment, size);
 			if (symbol.accessFlags() & Access.CONSTANT) {
 				ref<PlainSymbol> sym = ref<PlainSymbol>(symbol);		// constants are constrained to be Plain
-				long value = sym.initializer().foldInt(this, compileContext);
+				ref<Node> n = compileContext.fold(sym.initializer(), sym.enclosing().file());
+				long value = n.foldInt(this, compileContext);
 				staticFixup(FixupKind.INT_CONSTANT, symbol, 0, address(value));
 			}
 		}
@@ -1022,6 +1023,7 @@ class X86_64Encoder extends Target {
 		case	UNSIGNED_8:
 		case	UNSIGNED_16:
 		case	UNSIGNED_32:
+		case	SIGNED_16:
 		case	SIGNED_32:
 		case	SIGNED_64:
 		case	STRING:
@@ -1058,6 +1060,7 @@ class X86_64Encoder extends Target {
 		case	UNSIGNED_8:
 		case	UNSIGNED_16:
 		case	UNSIGNED_32:
+		case	SIGNED_16:
 		case	SIGNED_32:
 		case	SIGNED_64:
 		case	STRING:
@@ -1205,14 +1208,14 @@ class X86_64Encoder extends Target {
 				family = TypeFamily.UNSIGNED_16;
 
 			case	UNSIGNED_16:
+			case	SIGNED_16:
 				emit(0x66);
 				emitRex(family, null, R.NO_REG, dest);
 				emit(byte(0xb8 + rmValues[dest]));
 				emitShort(int(operand));
 				return;
-
-			case	SIGNED_16:
-				emit(0x66);
+				
+			case	UNSIGNED_32:
 			case	SIGNED_32:
 				emitRex(family, null, R.NO_REG, dest);
 				emit(byte(0xb8 + rmValues[dest]));

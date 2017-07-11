@@ -1031,10 +1031,20 @@ class InternalLiteral extends Node {
 		return _value;
 	}
 
+	public void negate() {
+		_value = -_value;
+	}
+
 	public boolean isConstant() {
 		return true;
 	}
 	
+	public boolean canCoerce(ref<Type> newType, boolean explicitCast, ref<CompileContext> compileContext) {
+		if (type.widensTo(newType, compileContext))
+			return true;
+		return representedBy(newType);
+	}
+
 	boolean representedBy(ref<Type> newType) {
 		switch (newType.family()) {
 		case	UNSIGNED_8:

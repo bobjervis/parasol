@@ -2414,6 +2414,22 @@ class Binary extends Node {
 		}
 	}
 
+	public void assignCaseExpression(ref<Type> switchType, ref<CompileContext> compileContext) {
+		if (_left.isConstant()) {
+			if (_left.type.equals(switchType))
+				return;
+			ref<SyntaxTree> tree = compileContext.current().file().tree();
+			if (_left.canCoerce(switchType, false, compileContext))
+				_left = tree.newCast(switchType, _left);
+			else {
+				// TODO: Create a CAST_IF_FITS toswitchType that checks at compile time, after the expression has been
+				// folded to remove constant symbols and such.
+				_left = tree.newCast(switchType, _left);
+			}
+		} else
+			_left.add(MessageId.NOT_CONSTANT, compileContext.pool());
+	}
+
 	boolean balance(ref<CompileContext> compileContext) {
 		compileContext.assignTypes(_left);
 		compileContext.assignTypes(_right);

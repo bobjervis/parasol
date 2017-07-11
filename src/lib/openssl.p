@@ -36,14 +36,23 @@ public abstract int SSL_CTX_load_verify_locations(ref<SSL_CTX> ctx, pointer<byte
 @Linux("libssl.so", "SSL_CTX_new")
 public abstract ref<SSL_CTX> SSL_CTX_new(ref<SSL_METHOD> method);
 
+@Linux("libssl.so", "SSL_CTX_set_cipher_list")
+public abstract int SSL_CTX_set_cipher_list(ref<SSL_CTX> ctx, pointer<byte> str);
+
 @Linux("libssl.so", "SSL_CTX_set_client_CA_list")
 public abstract int SSL_CTX_set_client_CA_list(ref<SSL_CTX> ctx, ref<stack_st_X509_NAME> name_list);
+
+@Linux("libssl.so", "SSL_CTX_use_certificate_file")
+public abstract int SSL_CTX_use_certificate_file(ref<SSL_CTX> ctx, pointer<byte> file, int type);
 
 @Linux("libssl.so", "SSL_CTX_use_PrivateKey_file")
 public abstract int SSL_CTX_use_PrivateKey_file(ref<SSL_CTX> ctx, pointer<byte> file, int type);
 
 @Linux("libssl.so", "SSL_free")
 public abstract void SSL_free(ref<SSL> ssl);
+
+@Linux("libssl.so", "SSL_get_cipher_list")
+public abstract pointer<byte> SSL_get_cipher_list(ref<SSL> ssl, int priority);
 
 @Linux("libssl.so", "SSL_get_error")
 public abstract int SSL_get_error(ref<SSL> ssl, int return_value);
@@ -53,6 +62,9 @@ public abstract int SSL_library_init();
 
 @Linux("libssl.so", "SSL_load_client_CA_file")
 public abstract ref<stack_st_X509_NAME> SSL_load_client_CA_file(pointer<byte> file);
+
+@Linux("libssl.so", "SSL_load_error_strings")
+public abstract void SSL_load_error_strings();
 
 @Linux("libssl.so", "SSL_new")
 public abstract ref<SSL> SSL_new(ref<SSL_CTX> context);
@@ -65,9 +77,6 @@ public abstract void SSL_set_accept_state(ref<SSL> ssl);
 
 @Linux("libssl.so", "SSL_set_bio")
 public abstract void SSL_set_bio(ref<SSL> ssl, ref<BIO> rbio, ref<BIO> wbio);
-
-@Linux("libssl.so", "SSL_CTX_use_certificate_file")
-public abstract int SSL_CTX_use_certificate_file(ref<SSL_CTX> ctx, pointer<byte> file, int type);
 
 @Linux("libssl.so", "SSL_use_PrivateKey_file")
 public abstract int SSL_use_PrivateKey_file(ref<SSL> ssl, pointer<byte> file, int type);

@@ -286,8 +286,7 @@ public class LeakHeap extends Allocator {
 			nh = pointer<SectionHeader>(windows.VirtualAlloc(null, sectionLength, windows.MEM_COMMIT|windows.MEM_RESERVE, windows.PAGE_READWRITE));
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
 			nh = pointer<SectionHeader>(C.calloc(1, sectionLength));
-		} else
-			nh = 0;
+		}
 		if (nh == null)
 			return nh;
 		nh.sectionSize = SECTION_LENGTH;

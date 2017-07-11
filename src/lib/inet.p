@@ -64,7 +64,11 @@ private  monitor _init {
 	boolean _done;
 }
 public class Socket {
-	public static ref<Socket> create(Encryption encryption) {
+	public static ref<Socket> create() {
+		return create(Encryption.NONE, null);
+	}
+
+	public static ref<Socket> create(Encryption encryption, string cipherList) {
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 			lock (_init) {
 				if (!_done) {
@@ -85,7 +89,7 @@ public class Socket {
 		if (encryption == Encryption.NONE)
 			socket = new PlainSocket();
 		else
-			socket = new SSLSocket(encryption);
+			socket = new SSLSocket(encryption, cipherList);
 		return socket;
 	}
 
@@ -231,6 +235,8 @@ class Connection {
 	public abstract int write(pointer<byte> buffer, int length);
 
 	public abstract void close();
+
+	public abstract boolean secured();
 }
 
 class PlainSocket extends Socket {
@@ -260,6 +266,10 @@ class PlainConnection extends Connection {
 	public void close() {
 		net.closesocket(_acceptfd);
 	}
+
+	public boolean secured() {
+		return false;
+	}
 }
 
 private monitor _init_ssl {
@@ -269,10 +279,12 @@ private monitor _init_ssl {
 class SSLSocket extends Socket {
 	private ref<ssl.SSL_CTX> _context;
 
-	SSLSocket(Encryption encryption) {
+	SSLSocket(Encryption encryption, string cipherList) {
 		lock (_init_ssl) {
 			if (!_done) {
 				_done = true;
+				printf("SSL_library_init\n");
+				ssl.SSL_load_error_strings();
 				ssl.SSL_library_init();
 			}
 		}
@@ -300,6 +312,17 @@ class SSLSocket extends Socket {
 		ssl.SSL_CTX_use_certificate_file(_context, "test/certificates/self-signed.pem".c_str(), ssl.SSL_FILETYPE_PEM);
 //		ssl.SSL_CTX_set_client_CA_list(_context, ssl.SSL_load_client_CA_file("test/certificates/self-signed.pem".c_str()));
 		ssl.SSL_CTX_use_PrivateKey_file(_context, "test/certificates/self-signed.pem".c_str(), ssl.SSL_FILETYPE_PEM);
+		if (cipherList != null) {
+			printf("Setting cipher list to '%s'\n", cipherList);
+			if (ssl.SSL_CTX_set_cipher_list(_context, cipherList.c_str()) == 0) {
+				for (;;) {
+					long e = ssl.ERR_get_error();
+					if (e == 0)
+						break;
+					printf("    %d %s\n", e, ssl.ERR_error_string(e, null));
+				}
+			}
+		}
 		printf("Cert loaded\n");
 	}
 
@@ -333,6 +356,15 @@ class SSLConnection extends Connection {
 			}
 			return false;
 		}
+/*
+		printf("Ciphers:\n");
+		for (int prio = 0; ; prio++) {
+			pointer<byte> list = ssl.SSL_get_cipher_list(_ssl, prio);
+			if (list == null)
+				break;
+			printf("[%d] %s\n", prio, list);
+		}
+ */
 		ssl.SSL_set_accept_state(_ssl);
 		ssl.SSL_set_bio(_ssl, bio, bio);
 		int r = ssl.SSL_accept(_ssl);
@@ -382,6 +414,10 @@ class SSLConnection extends Connection {
 	public void close() {
 		ssl.SSL_free(_ssl);
 		net.closesocket(_acceptfd);
+	}
+
+	public boolean secured() {
+		return true;
 	}
 }
 

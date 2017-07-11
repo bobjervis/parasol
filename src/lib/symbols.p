@@ -265,6 +265,7 @@ class PlainSymbol extends Symbol {
 				}
 				compileContext.assignTypes(enclosing(), _initializer);
 				if (!_initializer.isConstant()) {
+					_initializer.print(0);
 					definition().add(MessageId.INITIALIZER_MUST_BE_CONSTANT, compileContext.pool());
 					return;
 				}

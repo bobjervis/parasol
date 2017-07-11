@@ -695,6 +695,9 @@ compile(expect: fail, message: CIRCULAR_EXTENDS) { "class B extends C{} class A 
 compile(expect: fail, message: MEMBER_REF_NOT_ALLOWED) { "class A { int b; static void f() { b = 3; } }" }
 compile(expect: fail, message: THIS_NOT_ALLOWED) { "class A { int b; static void f() { this.b = 3; } }" }
 
+compile() { "short x; switch (x) { case -1: break; }" }
+compile() { "class S = short; @Constant S x = S(-1);" }
+
 compile() { "class A { private byte z; int x; }; void f(A a) { int b = a.x; }" }
 // FOR NOw these are allowed again. Annotations need to be formalized at some point.
 compile(xexpect: fail, xmessage: DISALLOWED_ANNOTATION) { "@Shape @Shape class foo {}" }
