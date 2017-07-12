@@ -18,6 +18,7 @@ namespace parasol:net;
 import parasol:exception;
 import native:net;
 import native:linux;
+import native:C;
 import parasol:runtime;
 import parasol:pxi.SectionType;
 import openssl.org:ssl;
@@ -294,6 +295,10 @@ class SSLSocket extends Socket {
 			method = ssl.SSLv23_server_method();
 			break;
 
+		case TLSv1_2:
+			method = ssl.TLSv1_2_server_method();
+			break;
+
 		default:
 			assert(false);
 		}
@@ -310,8 +315,24 @@ class SSLSocket extends Socket {
 		}
 		printf("Loading self-signed certificate.\n");
 		ssl.SSL_CTX_use_certificate_file(_context, "test/certificates/self-signed.pem".c_str(), ssl.SSL_FILETYPE_PEM);
-//		ssl.SSL_CTX_set_client_CA_list(_context, ssl.SSL_load_client_CA_file("test/certificates/self-signed.pem".c_str()));
+		ssl.SSL_CTX_set_client_CA_list(_context, ssl.SSL_load_client_CA_file("/etc/ssl/certs/ca-certificates.crt".c_str()));
 		ssl.SSL_CTX_use_PrivateKey_file(_context, "test/certificates/self-signed.pem".c_str(), ssl.SSL_FILETYPE_PEM);
+		printf("Loading DH parameters\n");
+		ref<C.FILE> fp = C.fopen("test/certificates/dhparams.pem".c_str(), "r".c_str());
+		if (fp == null)
+			printf("Cannot open 'test/certificates/dhparams.pem' file\n");
+		else {
+			ref<ssl.DH> dh = ssl.PEM_read_DHparams(fp, null, null, "jrirba".c_str());
+			C.fclose(fp);
+			if (dh != null) {
+				if (ssl.SSL_CTX_set_tmp_dh(_context, dh) != 1)
+					printf("SSL_CTX_set_tmp_dh failed\n");
+				else
+					printf("SSL_CTX_set_tmp_dh succeeded\n");
+				ssl.DH_free(dh);
+			} else
+				printf("PEM_read_DHparams failed\n");
+		}
 		if (cipherList != null) {
 			printf("Setting cipher list to '%s'\n", cipherList);
 			if (ssl.SSL_CTX_set_cipher_list(_context, cipherList.c_str()) == 0) {
@@ -323,7 +344,7 @@ class SSLSocket extends Socket {
 				}
 			}
 		}
-		printf("Cert loaded\n");
+		printf("SSL configuration loaded\n");
 	}
 
 	protected ref<Connection> createConnection(int acceptfd, ref<net.sockaddr_in> address, int addressLength) {
@@ -392,6 +413,9 @@ class SSLConnection extends Connection {
 			printf("SSL_read failed return %d\n", x);
 			diagnoseError();
 			linux.perror("SSL_read".c_str());
+		} else {
+//			printf("SSLConnection.read:\n");
+//			text.memDump(buffer, x);
 		}
 		return x;
 	}
