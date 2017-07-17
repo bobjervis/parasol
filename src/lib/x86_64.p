@@ -1020,9 +1020,8 @@ public class X86_64 extends X86_64AssignTemps {
 	private void generateStaticBlock(ref<FileStat> file, ref<CompileContext> compileContext) {
 		
 		// Here is where all static initializers are folded:
-		
+
 		ref<Node> n = compileContext.fold(file.tree().root(), file);
-		
 		allocateStackForLocalVariables(compileContext);
 		if (file.fileScope() != null)
 			compileContext.setCurrent(file.fileScope());

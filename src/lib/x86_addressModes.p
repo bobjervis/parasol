@@ -652,6 +652,7 @@ class X86_64AddressModes extends X86_64Encoder {
 		case	DOT:
 			tryMakeMode(node, MC_FULL, nClass, compileContext);
 		case	IDENTIFIER:
+		case	VARIABLE:
 			node.nodeFlags |= ADDRESS_MODE;
 			break;
 			

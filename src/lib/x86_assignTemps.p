@@ -92,7 +92,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			f().r.cleanupTemps(node, depth);
 			break;
 			
-		case	EMPTY:
+		case	INTERNAL_LITERAL:
+		case	FALSE:
 		case	TRUE:
 			break;
 			

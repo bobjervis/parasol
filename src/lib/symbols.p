@@ -236,6 +236,17 @@ class PlainSymbol extends Symbol {
 		}
 		return _type;
 	}
+	/**
+	 * This folds an initializer expression in order to extract a constant expression that can be used to 
+	 * initialize a constant.
+	 *
+	 * Note: the expression must be cloned, because folding calls is not repeatable. If we did not clone
+	 * the expression here, then later code generation would choke if there were any embedded COERCION calls, for example.
+	 */
+	public ref<Node> foldInitializer(ref<CompileContext> compileContext) {
+		_initializer = compileContext.fold(_initializer.clone(_enclosing.file().tree()), _enclosing.file());
+		return _initializer;
+	}
 
 	protected void validateAnnotations(ref<CompileContext> compileContext) {
 		if (annotations() == null)

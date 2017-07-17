@@ -1461,7 +1461,10 @@ class Binary extends Node {
 					}
 				}
 				aggregate.assignArrayAggregateTypes(enumType, maxIndex, compileContext);
-				type = _right.type;
+				if (aggregate.deferAnalysis())
+					type = _right.type;
+				else
+					type = _left.type;
 				return;
 			}
 			compileContext.assignTypes(_right);

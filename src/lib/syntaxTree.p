@@ -838,6 +838,8 @@ class Class extends Block {
 	}
 
 	public ref<Class> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+		if (deferAnalysis())
+			return this;
 		super.fold(tree, voidContext, compileContext);
 		return this;
 	}
@@ -3287,6 +3289,7 @@ class Node {
 		case	AND_ASSIGN:
 		case	ANNOTATED:
 		case	ANNOTATION:
+		case	ARRAY_AGGREGATE:
 		case	ASSIGN:
 		case	BIND:
 		case	BIT_COMPLEMENT:

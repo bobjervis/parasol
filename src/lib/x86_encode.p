@@ -672,7 +672,7 @@ class X86_64Encoder extends Target {
 			assignStaticRegion(symbol, alignment, size);
 			if (symbol.accessFlags() & Access.CONSTANT) {
 				ref<PlainSymbol> sym = ref<PlainSymbol>(symbol);		// constants are constrained to be Plain
-				ref<Node> n = compileContext.fold(sym.initializer(), sym.enclosing().file());
+				ref<Node> n = sym.foldInitializer(compileContext);
 				long value = n.foldInt(this, compileContext);
 				staticFixup(FixupKind.INT_CONSTANT, symbol, 0, address(value));
 			}

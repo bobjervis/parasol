@@ -700,7 +700,8 @@ class CompileContext {
 			ref<EnumScope> scope = ref<EnumScope>(_current);
 			int offset = scope.symbols().size();
 			ref<Symbol> sym = id.bindEnumInstance(_current, scope.enumType.wrappedType(), null, this);
-			sym.offset = offset;
+			if (sym != null)
+				sym.offset = offset;
 		}
 	}
 

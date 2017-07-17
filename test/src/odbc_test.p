@@ -13,36 +13,73 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import parasol:odbc;
+import parasol:sql;
 
-ref<odbc.Environment> env = new odbc.Environment();
+ref<sql.Environment> env = new sql.Environment();
 
-env.setODBCVersion(odbc.ODBCVersion.V3);
+env.setODBCVersion(sql.ODBCVersion.V3);
 
-ref<odbc.DBConnection> connection = env.getDBConnection();
+ref<sql.DBConnection> connection = env.getDBConnection();
 
 assert(connection != null);
 
 assert(connection.connect("ImagineDB", "root", "jrirba"));
 
-ref<Statement> statement = connection.getStatement();
+ref<sql.Statement> statement = connection.getStatement();
 
 assert(statement != null);
 
 boolean success;
-odbc.SqlReturn return;
+sql.SqlReturn retn;
 
-(success, return) = statement.execDirect("describe User");
+(success, retn) = statement.execDirect("describe User");
 
+assert(success);
+assert(retn == sql.SqlReturn.SUCCESS);
+
+for (int i = 1; i < 1000; i++) {
+	string value;
+	boolean success;
+
+	(value, success) = statement.stringColumnAttribute(i, sql.FieldIdentifier.BASE_COLUMN_NAME);
+	if (!success)
+		break;
+	long type;
+
+	(type, success) = statement.integerColumnAttribute(i, sql.FieldIdentifier.TYPE);
+
+	printf("[%d] %d %s\n", i, type, value);
+}
+
+int i = 0;
+while (statement.fetch()) {
+	i++;
+	string s1;
+	string s2;
+	string s3;
+	string s4;
+	string s5;
+	string s6;
+	boolean success;
+
+	(s1, success) = statement.getString(1);
+	assert(success);
+	(s2, success) = statement.getString(2);
+	assert(success);
+	(s3, success) = statement.getString(3);
+	assert(success);
+	(s4, success) = statement.getString(4);
+	assert(success);
+	(s5, success) = statement.getString(5);
+	assert(success);
+	(s6, success) = statement.getString(6);
+	assert(success);
+
+	printf("[%d] %s | %s | %s | %s | %s | %s\n", i, s1, s2, s3, s4, s5, s6);
+}
+
+printf("Fetched %d rows\n", i);
 /*
-if (mysql.mysql_query(&m, "describe User".c_str()) != 0)
-	printf("Error number is %d\n", mysql.mysql_errno(&m));
-
-ref<mysql.MYSQL_RES> result = mysql.mysql_store_result(&m);
-
-if (result == null) {
-	if (mysql.mysql_field_count(&m) != 0)
-		printf("Query should have returned data. Error number is %d\n", mysql.mysql_errno(&m));
 } else {
 	int num_fields = mysql.mysql_num_fields(result);
 	printf("num_fields is %d\n", num_fields);

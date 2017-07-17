@@ -446,7 +446,7 @@ class SSLConnection extends Connection {
 }
 
 /**
- * Based on RFC 4648, performa a base-64 encoding of the byte array
+ * Based on RFC 4648, perform a base-64 encoding of the byte array
  */
 public string base64encode(byte[] data) {
 	return base64encode(&data[0], data.length());
