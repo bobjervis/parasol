@@ -3061,6 +3061,7 @@ class Node {
 		}
 		switch (context) {
 		case CLASS:
+		case EXPRESSION:
 			add(MessageId.NOT_A_TYPE, compileContext.pool());
 			break;
 			
@@ -3069,6 +3070,7 @@ class Node {
 			break;
 			
 		default:
+			printf("context: %s\n", string(context));
 			print(0);
 			assert(false);
 		}

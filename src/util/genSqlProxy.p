@@ -168,6 +168,7 @@ void parseProcedureDeclarator(ref<Scanner> s) {
 		switch (t) {
 		case BIGINT:
 		case BINARY:
+		case BOOLEAN:
 		case CHAR:
 		case DECIMAL:
 		case DOUBLE_PRECISION:
@@ -189,9 +190,13 @@ void parseProcedureDeclarator(ref<Scanner> s) {
 		t = s.next();
 		int length = -1, precision = -1;
 		if (t == Token.LEFT_PARENTHESIS) {
-			if (type == Token.ENUM)
-				parseEnum(s);
-			else {
+			if (type == Token.ENUM) {
+				length = parseEnum(s);
+				if (length < 0) {
+					error(s, s.location(), "Unable to parse ENUM parameter type");
+					break;
+				}
+			} else {
 				(length, precision) = parseLength(s);
 				if (length == -1)
 					break;
@@ -209,9 +214,21 @@ void parseProcedureDeclarator(ref<Scanner> s) {
 	}
 }
 
-void parseEnum(ref<Scanner> s) {
-	printf("enums are not yet supported.\n");
-	assert(false);
+int parseEnum(ref<Scanner> s) {
+	Token t = s.next();
+	int maxLength;
+	for (;;) {
+		t = s.next();
+		if (t == Token.RIGHT_PARENTHESIS)
+			return maxLength;
+		if (t == Token.END_OF_STREAM)
+			return -1;
+		if (t == Token.CHARACTER) {
+			int len = s.value().length();
+			if (len > maxLength)
+				maxLength = len;
+		}
+	}
 }
 
 int, int parseLength(ref<Scanner> s) {
@@ -246,10 +263,7 @@ class Procedure {
 
 	void generate(file.File output) {
 		for (int i = 0; i < parameters.length(); i++) {
-			if (parameters[i].parameterDirection == Token.IN) {
-				if (parameters[i].type == Token.VARCHAR)
-					parameters[i].length = -1;
-			} else		// INOUT or OUT
+			if (parameters[i].parameterDirection != Token.IN)
 				output.printf("// out param %d: %s\n", i + 1, parameters[i].name);
 		}
 		output.write("public ");
@@ -278,59 +292,84 @@ class Procedure {
 		output.write(") {\n");
 		for (int i = 0; i < parameters.length(); i++) {
 			switch (parameters[i].parameterDirection) {
+			case IN:
+				if (parameters[i].type == Token.VARBINARY || parameters[i].type == Token.BINARY)
+					output.printf("long strlen_%s;\n", parameters[i].name);
+				break;
+
 			case INOUT:
 				parameters[i].generateType(output);
 				output.printf(" out_%s = %s;\n", parameters[i].name, parameters[i].name);
 				if (parameters[i].length >= 0)
 					output.printf("out_%s.resize(%d);\n", parameters[i].name, parameters[i].length);
+				output.printf("long strlen_%s;\n", parameters[i].name);
 				break;
+
 			case OUT:
 				parameters[i].generateType(output);
 				output.printf(" %s;\n", parameters[i].name);
 				if (parameters[i].length >= 0)
 					output.printf("%s.resize(%d);\n", parameters[i].name, parameters[i].length);
-			}
-			if (parameters[i].length >= 0)
 				output.printf("long strlen_%s;\n", parameters[i].name);
+			}
 		}
-		output.write("ref<Statement> stmt = getStatement();\n");
+		output.write("ref<sql.Statement> stmt = getStatement();\n");
+		for (int i = 0; i < parameters.length(); i++) {
+			if (parameters[i].length >= 0) {
+				switch (parameters[i].type) {
+				case ENUM:
+				case VARCHAR:
+				case CHAR:
+					if (parameters[i].parameterDirection == Token.IN)
+						break;
+
+				case VARBINARY:
+					output.printf("strlen_%s = %s.length();\n", parameters[i].name, parameters[i].name);
+					break;
+
+				default:
+					if (parameters[i].length >= 0)
+						output.printf("strlen_%s = %d;\n", parameters[i].name, parameters[i].length);
+				}
+			}
+		}
 		output.write("if(");
 		for (int i = 0; i < parameters.length(); i++) {
 			string nm;
 			if (parameters[i].parameterDirection == Token.INOUT)
 				nm.append("out_");
 			nm.append(parameters[i].name);
-			if (parameters[i].length > 0)
+			if (parameters[i].length >= 0)
 				nm.append("[0]");
 			long bufferLength = parameters[i].length;
+			if (bufferLength < 0)
+				bufferLength = 0;
 			string indicator = "sql.Indicator.NO_ACTION";
 			string lengthBuffer = "null";
-			if (parameters[i].length >= 0) {
-				switch (parameters[i].type) {
-				case VARCHAR:
-					if (parameters[i].parameterDirection == Token.IN) {
-						indicator = "sql.Indicator.NTS";
-						break;
-					}
-
-				case VARBINARY:
-					output.printf("strlen_%s = %s.length();\n", parameters[i].name);
-					lengthBuffer = "&strLen_" + parameters[i].name;
+			switch (parameters[i].type) {
+			case ENUM:
+			case VARCHAR:
+			case CHAR:
+				if (parameters[i].parameterDirection == Token.IN) {
+					indicator = "sql.Indicator.NTS";
 					break;
-
-				default:
-					if (parameters[i].length >= 0) {
-
-						output.printf("strlen_%s = %d;\n", parameters[i].length);
-						lengthBuffer = "&strLen_" + parameters[i].name;
-					}
 				}
-			e
+
+			case VARBINARY:
+				lengthBuffer = "&strlen_" + parameters[i].name;
+				break;
+
+			default:
+				if (parameters[i].length >= 0 || parameters[i].parameterDirection != Token.IN)
+					lengthBuffer = "&strlen_" + parameters[i].name;
+			}
+			if (defaultLength[parameters[i].type] != 0)
+				bufferLength = defaultLength[parameters[i].type];
 			output.printf("stmt.bindParameter(%d, %s, %s, %d, %d, &%s, %d, %s, %s) &&\n", i + 1, 
 								parameterDirectionMap[parameters[i].parameterDirection], dataTypeMap[parameters[i].type],
 								parameters[i].length, parameters[i].scale, nm, bufferLength, indicator, lengthBuffer);
 		}
-		output.printf("stmt.execDirect(\"CALL %s(", name);
+		output.printf("stmt.execDirect(\"{CALL %s(", name);
 		boolean anyParams = false;
 		for (int i = 0; i < parameters.length(); i++) {
 			if (anyParams)
@@ -338,9 +377,37 @@ class Procedure {
 			anyParams = true;
 			output.write("?");
 		}
-		output.write(")\")) {\n");
-//		output.write("for(;;) {\n");
-//		output.write("}\n");
+		output.write(")}\")) {\n");
+		if (anyOuts) {
+			output.write("stmt.fetch();\n");
+			int param = 1;
+			for (int i = 0; i < parameters.length(); i++) {
+				if (parameters[i].parameterDirection != Token.IN) {		// INOUT or OUT
+					if (parameters[i].parameterDirection == Token.INOUT)
+						output.write("out_");
+					output.write(parameters[i].name);
+					output.write(" = ");
+					switch (parameters[i].type) {
+					case	BIGINT:
+						output.printf("stmt.getLong(%d);\n", param);
+						break;
+
+					case	CHAR:
+						output.printf("stmt.getString(%d, %d);\n", param, parameters[i].length);
+						break;
+
+					case	BOOLEAN:
+						output.printf("boolean(stmt.getLong(%d));\n", param);
+						break;
+
+					default:
+						output.write("@;\n");
+					}
+					param++;
+				}
+			}
+		}
+		output.write("delete stmt;\n");
 		output.write("return ");
 		if (anyOuts) {
 			anyOuts = false;
@@ -357,7 +424,13 @@ class Procedure {
 			output.write(",");
 		}
 		output.write("true;\n");
-		output.write("} else\n");
+		output.write("} else {\n");
+		output.write("string sqlState;\n");
+		output.write("long nativeError;\n");
+		output.write("string message;\n");
+		output.write("(sqlState, nativeError, message) = stmt.getDiagnosticRecord(1);\n");
+		output.write("printf(\"Error %s %d %s\\n\", sqlState, nativeError, message);\n");
+		output.write("delete stmt;\n");
 		output.write("return ");
 		if (anyOuts) {
 			anyOuts = false;
@@ -375,6 +448,7 @@ class Procedure {
 		}
 		output.write("false;\n");
 		output.write("}\n");
+		output.write("}\n");
 	}
 }
 
@@ -388,10 +462,11 @@ string[Token] dataTypeMap = [
 	BIGINT:				"sql.DataType.BIGINT",
 	BINARY:				"sql.DataType.BINARY",
 	BLOB:				"sql.DataType.BLOB",
+	BOOLEAN:			"sql.DataType.TINYINT",
 	CHAR:				"sql.DataType.CHAR",
 	DECIMAL:			"sql.DataType.DECIMAL",
 	DOUBLE_PRECISION:	"sql.DataType.DOUBLE_PRECISION",
-	ENUM:				"sql.DataType.ENUM",
+	ENUM:				"sql.DataType.VARCHAR",
 	FLOAT:				"sql.DataType.FLOAT",
 	INTEGER:			"sql.DataType.INTEGER",
 	SET:				"sql.DataType.SET",
@@ -400,6 +475,16 @@ string[Token] dataTypeMap = [
 	TINYINT:			"sql.DataType.TINYINT",
 	VARBINARY:			"sql.DataType.VARBINARY",
 	VARCHAR:			"sql.DataType.VARCHAR",
+];
+
+long[Token] defaultLength = [
+	BIGINT:				long.bytes,
+	BOOLEAN:			boolean.bytes,
+	DOUBLE_PRECISION:	double.bytes,
+	FLOAT:				float.bytes,
+	INTEGER:			int.bytes,
+	SMALLINT:			short.bytes,
+	TINYINT:			byte.bytes,
 ];
 
 class Parameter {
@@ -442,6 +527,8 @@ string[Token] parasolType = [
 	BINARY: "byte[]",
 	VARBINARY: "byte[]",
 	CHAR: "string",
+	ENUM: "string",
+	BOOLEAN: "boolean",
 	INTEGER: "int",
 	VARCHAR: "string",
 ];
@@ -451,8 +538,10 @@ string[Token] defaultValue = [
 	BINARY: "[]",
 	CHAR: "null",
 	INTEGER: "0",
+	ENUM: "null",
+	BOOLEAN: "false",
 	VARCHAR: "null",
-	VARBINARY: "[]";
+	VARBINARY: "[]",
 ];
 
 void error(ref<Scanner> s, int location, string message, var... args) {
@@ -589,6 +678,7 @@ enum Token {
 	BIGINT,
 	BINARY,
 	BLOB,
+	BOOLEAN,
 	CHAR,
 	CREATE,
 	CURRENT_USER,
@@ -1504,6 +1594,7 @@ Token[string] keywords = [
 	"bigint":		Token.BIGINT,
 	"binary":		Token.BINARY,
 	"blob":			Token.BLOB,
+	"boolean":		Token.BOOLEAN,
 	"char":			Token.CHAR,
 	"create":		Token.CREATE,
 	"current_user":	Token.CURRENT_USER,

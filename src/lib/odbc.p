@@ -351,6 +351,7 @@ public class Statement {
 		SQLRETURN ret = SQLExecDirect(_statement, &statementText[0], statementText.length());
 		_mapBuilt = false;
 		_columnMap.clear();
+		printf("execDirect('%s') ret = %d (%s)\n", statementText, ret, string(fromSQLRETURN(ret)));
 		return SQL_SUCCEEDED(ret), fromSQLRETURN(ret);
 	}
 
@@ -399,13 +400,13 @@ public class Statement {
 
 	public long, boolean getLong(int column) {
 		long v;
-		SQLRETURN ret = SQLGetData(_statement, SQLUSMALLINT(column), SQL_C_LONG, &v, 0, null);
+		SQLRETURN ret = SQLGetData(_statement, SQLUSMALLINT(column), SQL_C_SBIGINT, &v, v.bytes, null);
 		return v, SQL_SUCCEEDED(ret);
 	}
 
-	public string, boolean getString(int column) {
+	public string, boolean getString(int column, int length) {
 		string s;
-		s.resize(512);
+		s.resize(length);
 		SQLLEN actual;
 		SQLRETURN ret = SQLGetData(_statement, SQLUSMALLINT(column), SQL_C_CHAR, &s[0], s.length(), &actual);
 		if (SQL_SUCCEEDED(ret)) {
@@ -497,10 +498,20 @@ public class Statement {
 				*lengthInfo = indicatorMap[indicator];
 			break;
 		}
+		printf("bp #%d %s %s %d %d %p %d %s %p\n", parameterNumber, string(parameterDirection), string(dataType), columnSize, decimalDigits, parameterValuePtr, bufferLength, string(indicator), lengthInfo);
+		printf("vt %d pt %d\n", valueType[dataType], parameterType[dataType]);
 		SQLRETURN ret = SQLBindParameter(_statement, SQLUSMALLINT(parameterNumber), parameterDirectionMap[parameterDirection],
 					valueType[dataType], parameterType[dataType], columnSize, SQLSMALLINT(decimalDigits), parameterValuePtr,
 					bufferLength, lengthInfo);
+		printf("bindParameter ret = %d (%s)\n", ret, string(fromSQLRETURN(ret)));
 		return SQL_SUCCEEDED(ret), fromSQLRETURN(ret);
+	}
+
+	public SqlReturn moreResults() {
+		SQLRETURN ret = SQLMoreResults(_statement);
+		printf("moreResults ret = %d (%s)\n", ret, string(fromSQLRETURN(ret)));
+		
+		return fromSQLRETURN(ret);
 	}
 
 	public void inParameter(int param, DataType dataType, var value) {
@@ -846,15 +857,11 @@ private boolean SQL_SUCCEEDED(SQLRETURN ret) {
 	return (ret & ~1) == 0;
 }
 
-printf("about to initialize maps...\n");
-
 private SQLSMALLINT[ParameterDirection] parameterDirectionMap = [
 	IN:		SQL_PARAM_INPUT,
 	INOUT:	SQL_PARAM_INPUT_OUTPUT,
 	OUT:	SQL_PARAM_OUTPUT
 ];
-
-printf("second map\n");
 
 private SQLLEN[Indicator] indicatorMap = [
 	NTS:			SQL_NTS,
@@ -863,9 +870,7 @@ private SQLLEN[Indicator] indicatorMap = [
 	DATA_AT_EXEC:	SQL_DATA_AT_EXEC
 ];
 
-printf("third map\n");
-
-SQLSMALLINT[DataType] parameterType;/* = [
+SQLSMALLINT[DataType] parameterType = [
 	CHAR:						SQL_CHAR,
 	VARCHAR:					SQL_VARCHAR,
 	LONGVARCHAR:				SQL_LONGVARCHAR,
@@ -903,10 +908,8 @@ SQLSMALLINT[DataType] parameterType;/* = [
 	INTERVAL_MINUTE_TO_SECOND:	SQL_INTERVAL_MINUTE_TO_SECOND,
 	GUID:						SQL_GUID
 ];
-*/
-printf("fourth map\n");
 
-SQLSMALLINT[DataType] valueType;/* = [
+SQLSMALLINT[DataType] valueType = [
 	CHAR:						SQL_C_CHAR,
 	VARCHAR:					SQL_C_CHAR,
 	LONGVARCHAR:				SQL_C_CHAR,
@@ -944,8 +947,6 @@ SQLSMALLINT[DataType] valueType;/* = [
 	INTERVAL_MINUTE_TO_SECOND:	SQL_C_INTERVAL_MINUTE_TO_SECOND,
 	GUID:						SQL_C_GUID
 ];
-*/
-printf("done with sql\n");
 
 @Linux("libodbc.so", "SQLAllocHandle")
 private abstract SQLRETURN SQLAllocHandle(SQLSMALLINT HandleType, SQLHANDLE InputHandle, ref<SQLHANDLE> OutputHandlePtr);
@@ -992,6 +993,9 @@ private abstract SQLRETURN SQLGetDiagRec(SQLSMALLINT HandleType, SQLHANDLE Handl
 @Linux("libodbc.so", "SQLGetStmtAttr")
 private abstract SQLRETURN SQLGetStmtAttr(SQLHSTMT StatementHandle, SQLINTEGER Attribute, SQLPOINTER ValuePtr, SQLINTEGER BufferLength, 
 						ref<SQLINTEGER> StringLengthPtr);
+
+@Linux("libodbc.so", "SQLMoreResults")
+private abstract SQLRETURN SQLMoreResults(SQLHSTMT StatementHandle);
 
 @Linux("libodbc.so", "SQLNumResultCols")
 private abstract SQLRETURN SQLNumResultCols(SQLHSTMT StatementHandle, ref<SQLSMALLINT> ColumnCountPtr);

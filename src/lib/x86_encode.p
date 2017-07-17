@@ -3251,6 +3251,7 @@ class X86_64Encoder extends Target {
 				break;
 				
 			case	MEMBER:
+			case	LOCK:
 				int baseReg;
 				if (addressMode.op() == Operator.IDENTIFIER)
 					baseReg = rmValues[thisRegister()];
@@ -3475,6 +3476,7 @@ class X86_64Encoder extends Target {
 				case	FLAGS:
 					break;
 					
+				case	LOCK:
 				case	MEMBER:
 					int baseReg;
 					if (addressMode.op() != Operator.IDENTIFIER) {
