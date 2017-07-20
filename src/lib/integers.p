@@ -538,7 +538,9 @@ public class char {
 }
 
 public class unsigned {
+	@Constant
 	public static unsigned MIN_VALUE = 0x00000000;
+	@Constant
 	public static unsigned MAX_VALUE = 0xffffffff;
 
 //	public unsigned() {

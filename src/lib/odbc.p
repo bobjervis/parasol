@@ -408,8 +408,11 @@ public class Statement {
 		string s;
 		s.resize(length);
 		SQLLEN actual;
-		SQLRETURN ret = SQLGetData(_statement, SQLUSMALLINT(column), SQL_C_CHAR, &s[0], s.length(), &actual);
+		SQLRETURN ret;
+		ret = SQLGetData(_statement, SQLUSMALLINT(column), SQL_C_CHAR, &s[0], s.length(), &actual);
+		printf("getString %d ret = %d (%s)\n", column, ret, string(fromSQLRETURN(ret)));
 		if (SQL_SUCCEEDED(ret)) {
+			printf("actual = %d s = '%s'\n", actual, s);
 			if (actual == -1)
 				s = null;
 			else
@@ -419,11 +422,12 @@ public class Statement {
 			return null, false;
 	}
 
-	public string, boolean getString(string column) {
+	public string, boolean getString(int column) {
 		string s;
 		s.resize(512);
 		SQLLEN actual;
-		SQLRETURN ret = SQLGetData(_statement, SQLUSMALLINT(column), SQL_C_CHAR, &s[0], s.length(), &actual);
+		SQLRETURN ret;
+		ret = SQLGetData(_statement, SQLUSMALLINT(column), SQL_C_CHAR, &s[0], s.length(), &actual);
 		if (SQL_SUCCEEDED(ret)) {
 			if (actual == -1)
 				s = null;
@@ -499,7 +503,7 @@ public class Statement {
 			break;
 		}
 		printf("bp #%d %s %s %d %d %p %d %s %p\n", parameterNumber, string(parameterDirection), string(dataType), columnSize, decimalDigits, parameterValuePtr, bufferLength, string(indicator), lengthInfo);
-		printf("vt %d pt %d\n", valueType[dataType], parameterType[dataType]);
+		printf("vt %d pt %d *lengthInfo %d\n", valueType[dataType], parameterType[dataType], lengthInfo == null ? -7777 : *lengthInfo);
 		SQLRETURN ret = SQLBindParameter(_statement, SQLUSMALLINT(parameterNumber), parameterDirectionMap[parameterDirection],
 					valueType[dataType], parameterType[dataType], columnSize, SQLSMALLINT(decimalDigits), parameterValuePtr,
 					bufferLength, lengthInfo);

@@ -349,11 +349,23 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 		for (ref<NodeList> nl = aggregate.arguments(); nl != null; nl = nl.next) {
 			if (nl.node.op() == Operator.LABEL) {
 				ref<Binary> b = ref<Binary>(nl.node);
-				if (indexType.family() == TypeFamily.ENUM) {
+				switch (indexType.family()) {
+				case ENUM:
 					ref<EnumScope> scope = ref<EnumScope>(indexType.scope());
 					ref<Identifier> id = ref<Identifier>(b.left());
 					lastIndexValue = scope.indexOf(id.symbol()); 
-				} else {
+					break;
+
+				case UNSIGNED_8:
+				case UNSIGNED_16:
+				case UNSIGNED_32:
+				case SIGNED_16:
+				case SIGNED_32:
+				case SIGNED_64:
+					lastIndexValue = int(b.left().foldInt(null, compileContext));
+					break;
+
+				default:
 					vectorExpression.print(0);
 					assert(false);
 				}
@@ -399,12 +411,25 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 				ref<Node> val;
 				ref<Node> idx;
 				if (nl.node.op() == Operator.LABEL) {
-					val = ref<Binary>(nl.node).right();
-					if (indexType.family() == TypeFamily.ENUM) {
+					ref<Binary> b = ref<Binary>(nl.node);
+					val = b.right();
+					switch (indexType.family()) {
+					case ENUM:
 						ref<EnumScope> scope = ref<EnumScope>(indexType.scope());
-						ref<Identifier> id = ref<Identifier>(ref<Binary>(nl.node).left());
+						ref<Identifier> id = ref<Identifier>(b.left());
 						lastIndexValue = scope.indexOf(id.symbol()); 
-					} else {
+						break;
+	
+					case UNSIGNED_8:
+					case UNSIGNED_16:
+					case UNSIGNED_32:
+					case SIGNED_16:
+					case SIGNED_32:
+					case SIGNED_64:
+						lastIndexValue = int(b.left().foldInt(null, compileContext));
+						break;
+	
+					default:
 						vectorExpression.print(0);
 						assert(false);
 					}

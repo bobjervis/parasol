@@ -264,6 +264,8 @@ public class HttpRequest {
 	public Method method;
 	public string methodString;	// Only set for method == CUSTOM
 	public string url;
+	public string query;
+	public string fragment;
 	public string httpVersion;
 	public string[string] headers;
 	
@@ -468,7 +470,9 @@ private class HttpParser {
 	HttpToken _previousToken;
 	string _tokenValue;
 	ref<HttpRequest> _request;
-	
+	string _query;
+	string _fragment;
+
 	enum HttpToken {
 		END_OF_MESSAGE,
 		CR,
@@ -528,6 +532,7 @@ private class HttpParser {
 			return false;
 		if (!collectUrl())
 			return false;
+		
 		_request.url = _tokenValue;
 		if (token() != HttpToken.SP)
 			return false;
@@ -576,99 +581,69 @@ private class HttpParser {
 	 */
 	private boolean collectUrl() {
 		_tokenValue = null;
+		_query = null;
+		_fragment = null;
 		for (;;) {
 			int ch = _request.getc();
-			switch (ch) {
-			case 'a':
-			case 'b':
-			case 'c':
-			case 'd':
-			case 'e':
-			case 'f':
-			case 'g':
-			case 'h':
-			case 'i':
-			case 'j':
-			case 'k':
-			case 'l':
-			case 'm':
-			case 'n':
-			case 'o':
-			case 'p':
-			case 'q':
-			case 'r':
-			case 's':
-			case 't':
-			case 'u':
-			case 'v':
-			case 'w':
-			case 'x':
-			case 'y':
-			case 'z':
-			case 'A':
-			case 'B':
-			case 'C':
-			case 'D':
-			case 'E':
-			case 'F':
-			case 'G':
-			case 'H':
-			case 'I':
-			case 'J':
-			case 'K':
-			case 'L':
-			case 'M':
-			case 'N':
-			case 'O':
-			case 'P':
-			case 'Q':
-			case 'R':
-			case 'S':
-			case 'T':
-			case 'U':
-			case 'V':
-			case 'W':
-			case 'X':
-			case 'Y':
-			case 'Z':
-			case '0':
-			case '1':
-			case '2':
-			case '3':
-			case '4':
-			case '5':
-			case '6':
-			case '7':
-			case '8':
-			case '9':
-			case '/':
-			case ':':
-			case '?':
-			case '#':
-			case '[':
-			case ']':
-			case '@':
-			case '!':
-			case '$':
-			case '&':
-			case '\'':
-			case '(':
-			case ')':
-			case '*':
-			case '+':
-			case ',':
-			case ';':
-			case '=':
-			case '-':
-			case '.':
-			case '_':
-			case '~':
+			if (ch == -1)
+				return _tokenValue != null;
+			switch (urlClass[ch]) {
+			case UNRESERVED:
+			case GEN_DELIM:
+			case SUB_DELIM:
+			case PCHAR:
+			case SLASH:
 				_tokenValue.append(byte(ch));
 				break;
 				
-			case -1:
-				return _tokenValue != null;
+			case QUERY_DELIM:
+				for (;;) {
+					ch = _request.getc();
+					if (ch == -1)
+						return _tokenValue != null;
+					switch (urlClass[ch]) {
+					case UNRESERVED:
+					case GEN_DELIM:
+					case SUB_DELIM:
+					case SLASH:
+					case PCHAR:
+					case QUERY_DELIM:
+						_query.append(byte(ch));
+						break;
+	
+					case FRAGMENT_DELIM:
+						return collectFragment();
 
+					default:
+						_request.ungetc();
+						return _tokenValue != null;
+					}
+				}
+
+			case FRAGMENT_DELIM:
+				return collectFragment();
+
+			default:
+				_request.ungetc();
+				return _tokenValue != null;
+			}
+		}
+	}
+
+	private boolean collectFragment() {
+		for (;;) {
+			int ch = _request.getc();
+			if (ch == -1)
+				return _tokenValue != null;
+			switch (urlClass[ch]) {
+			case UNRESERVED:
+			case SUB_DELIM:
+			case PCHAR:
+			case SLASH:
+			case QUERY_DELIM:
+				_fragment.append(byte(ch));
+				break;
+				
 			default:
 				_request.ungetc();
 				return _tokenValue != null;
@@ -822,7 +797,7 @@ private class StaticContentService extends HttpService {
 	}
 
 	public boolean processRequest(ref<HttpRequest> request, ref<HttpResponse> response) {
-//		printf("Static Content! fetching %s / %s\n", _filename, request.serviceResource);
+		printf("Static Content! fetching %s / %s\n", _filename, request.serviceResource);
 		if (request.method != HttpRequest.Method.GET) {
 			response.error(501);
 			return false;
@@ -863,3 +838,104 @@ private class StaticContentService extends HttpService {
 		return false;
 	}
 }
+
+private enum UrlClass {
+	DISALLOWED,
+	UNRESERVED,
+	GEN_DELIM,
+	SUB_DELIM,
+	QUERY_DELIM,
+	FRAGMENT_DELIM,
+	PCHAR,
+	SLASH,
+}
+
+private UrlClass[] urlClass = [
+	'a':	UrlClass.UNRESERVED,
+	'b':	UrlClass.UNRESERVED,
+	'c':	UrlClass.UNRESERVED,
+	'd':	UrlClass.UNRESERVED,
+	'e':	UrlClass.UNRESERVED,
+	'f':	UrlClass.UNRESERVED,
+	'g':	UrlClass.UNRESERVED,
+	'h':	UrlClass.UNRESERVED,
+	'i':	UrlClass.UNRESERVED,
+	'j':	UrlClass.UNRESERVED,
+	'k':	UrlClass.UNRESERVED,
+	'l':	UrlClass.UNRESERVED,
+	'm':	UrlClass.UNRESERVED,
+	'n':	UrlClass.UNRESERVED,
+	'o':	UrlClass.UNRESERVED,
+	'p':	UrlClass.UNRESERVED,
+	'q':	UrlClass.UNRESERVED,
+	'r':	UrlClass.UNRESERVED,
+	's':	UrlClass.UNRESERVED,
+	't':	UrlClass.UNRESERVED,
+	'u':	UrlClass.UNRESERVED,
+	'v':	UrlClass.UNRESERVED,
+	'w':	UrlClass.UNRESERVED,
+	'x':	UrlClass.UNRESERVED,
+	'y':	UrlClass.UNRESERVED,
+	'z':	UrlClass.UNRESERVED,
+	'A':	UrlClass.UNRESERVED,
+	'B':	UrlClass.UNRESERVED,
+	'C':	UrlClass.UNRESERVED,
+	'D':	UrlClass.UNRESERVED,
+	'E':	UrlClass.UNRESERVED,
+	'F':	UrlClass.UNRESERVED,
+	'G':	UrlClass.UNRESERVED,
+	'H':	UrlClass.UNRESERVED,
+	'I':	UrlClass.UNRESERVED,
+	'J':	UrlClass.UNRESERVED,
+	'K':	UrlClass.UNRESERVED,
+	'L':	UrlClass.UNRESERVED,
+	'M':	UrlClass.UNRESERVED,
+	'N':	UrlClass.UNRESERVED,
+	'O':	UrlClass.UNRESERVED,
+	'P':	UrlClass.UNRESERVED,
+	'Q':	UrlClass.UNRESERVED,
+	'R':	UrlClass.UNRESERVED,
+	'S':	UrlClass.UNRESERVED,
+	'T':	UrlClass.UNRESERVED,
+	'U':	UrlClass.UNRESERVED,
+	'V':	UrlClass.UNRESERVED,
+	'W':	UrlClass.UNRESERVED,
+	'X':	UrlClass.UNRESERVED,
+	'Y':	UrlClass.UNRESERVED,
+	'Z':	UrlClass.UNRESERVED,
+	'0':	UrlClass.UNRESERVED,
+	'1':	UrlClass.UNRESERVED,
+	'2':	UrlClass.UNRESERVED,
+	'3':	UrlClass.UNRESERVED,
+	'4':	UrlClass.UNRESERVED,
+	'5':	UrlClass.UNRESERVED,
+	'6':	UrlClass.UNRESERVED,
+	'7':	UrlClass.UNRESERVED,
+	'8':	UrlClass.UNRESERVED,
+	'9':	UrlClass.UNRESERVED,
+	'-':	UrlClass.UNRESERVED,
+	'.':	UrlClass.UNRESERVED,
+	'_':	UrlClass.UNRESERVED,
+	'~':	UrlClass.UNRESERVED,
+	'%':	UrlClass.UNRESERVED,
+	'/':	UrlClass.SLASH,
+	':':	UrlClass.PCHAR,
+	'[':	UrlClass.GEN_DELIM,
+	']':	UrlClass.GEN_DELIM,
+	'@':	UrlClass.PCHAR,
+	'!':	UrlClass.SUB_DELIM,
+	'$':	UrlClass.SUB_DELIM,
+	'&':	UrlClass.SUB_DELIM,
+	'\'':	UrlClass.SUB_DELIM,
+	'(':	UrlClass.SUB_DELIM,
+	')':	UrlClass.SUB_DELIM,
+	'*':	UrlClass.SUB_DELIM,
+	'+':	UrlClass.SUB_DELIM,
+	',':	UrlClass.SUB_DELIM,
+	';':	UrlClass.SUB_DELIM,
+	'=':	UrlClass.SUB_DELIM,
+	'?':	UrlClass.QUERY_DELIM,
+	'#':	UrlClass.FRAGMENT_DELIM,
+	255:	UrlClass.DISALLOWED,
+];
+

@@ -21,10 +21,33 @@ namespace libsodium.org:crypto;
  * This function returns a verification string in the out buffer, which must be crypto_pwhash_scryptsalsa208sha256_STRBYTES long.
  */
 @Linux("libsodium.so", "crypto_pwhash_scryptsalsa208sha256_str")
-public abstract int crypto_pwhash_scryptsalsa208sha256_str(pointer<byte> out, pointer<byte> passwd, long passwdlen, long opslimit, long memlimit);
+public abstract int crypto_pwhash_scryptsalsa208sha256_str(pointer<byte> out, 
+					pointer<byte> passwd, long passwdlen, long opslimit, long memlimit);
 
 @Linux("libsodium.so", "crypto_pwhash_scryptsalsa208sha256_str_verify")
-public abstract int crypto_pwhash_scryptsalsa208sha256_str_verify(pointer<byte> str, pointer<byte> passwd, long passwdlen);
+public abstract int crypto_pwhash_scryptsalsa208sha256_str_verify(pointer<byte> str, 
+					pointer<byte> passwd, long passwdlen);
+
+@Constant
+public long crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_MIN = 32768;
+@Constant
+public long crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_MAX = 4294967295;
+@Constant
+public long crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_INTERACTIVE = 524288;
+@Constant
+public long crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_SENSITIVE = 33554432;
+
+@Constant
+public long crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_MIN = 16777216;
+@Constant
+public long crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_MAX = 68719476736;		// too big for any 32 bit system
+@Constant
+public long crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_INTERACTIVE = 16777216;
+@Constant
+public long crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_SENSITIVE = 1073741824;
+
+@Constant
+public unsigned crypto_pwhash_scryptsalsa208sha256_STRBYTES = 102;
 
 // Argon2 interface
 
@@ -41,6 +64,26 @@ public abstract int crypto_pwhash_verify(pointer<byte> str, pointer<byte> passwd
 public abstract int sodium_init();
 
 @Constant
-public unsigned crypto_pwhash_STRBYTES = 128;
+public long crypto_pwhash_OPSLIMIT_MIN = 3;
 @Constant
-public unsigned crypto_pwhash_scryptsalsa208sha256_STRBYTES = 102;
+public long crypto_pwhash_OPSLIMIT_MAX = 4294967295;
+@Constant
+public long crypto_pwhash_OPSLIMIT_INTERACTIVE = 4;
+@Constant
+public long crypto_pwhash_OPSLIMIT_MODERATE = 6;
+@Constant
+public long crypto_pwhash_OPSLIMIT_SENSITIVE = 8;
+
+@Constant
+public long crypto_pwhash_MEMLIMIT_MIN = 1;
+@Constant
+public long crypto_pwhash_MEMLIMIT_MAX = 4398046510080;		// too big for any 32 bit system
+@Constant
+public long crypto_pwhash_MEMLIMIT_INTERACTIVE = 33554432;
+@Constant
+public long crypto_pwhash_MEMLIMIT_MODERATE = 134217728;
+@Constant
+public long crypto_pwhash_MEMLIMIT_SENSITIVE = 536870912;
+
+@Constant
+public unsigned crypto_pwhash_STRBYTES = 128;
