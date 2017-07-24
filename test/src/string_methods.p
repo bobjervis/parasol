@@ -113,6 +113,11 @@ void indexOfTests() {
 	assert(value.indexOf('e', 2) == 4);
 	string repeater = "abcabc";
 	assert(repeater.indexOf('c', 3) == 5);
+	assert(value.lastIndexOf('b') == 1);
+	assert(value.lastIndexOf('x') == -1);
+	assert(value.lastIndexOf('e', 5) == 4);
+	assert(repeater.lastIndexOf('c', 3) == 2);
+	assert(repeater.lastIndexOf('c') == 5);
 }
 
 void printfTests() {

@@ -15,7 +15,7 @@
  */
 string s = "abcdef";
 
-assert(s.beginsWith("ab"));
+assert(s.startsWith("ab"));
 assert(s.endsWith("def"));
-assert(!s.beginsWith("abd"));
+assert(!s.startsWith("abd"));
 assert(!s.endsWith("gef"));

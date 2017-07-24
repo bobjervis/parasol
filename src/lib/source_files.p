@@ -83,7 +83,7 @@ class ImportDirectory {
 			if (logImports)
 				printf("Searching %s\n", _directoryName);
 			string dirName;
-			if (_directoryName.beginsWith("^/"))
+			if (_directoryName.startsWith("^/"))
 				dirName = compileContext.arena().rootFolder() + _directoryName.substring(1);
 			else
 				dirName = _directoryName;

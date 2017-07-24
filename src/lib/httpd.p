@@ -471,8 +471,6 @@ private class HttpParser {
 	HttpToken _previousToken;
 	string _tokenValue;
 	ref<HttpRequest> _request;
-	string _query;
-	string _fragment;
 
 	enum HttpToken {
 		END_OF_MESSAGE,
@@ -582,8 +580,6 @@ private class HttpParser {
 	 */
 	private boolean collectUrl() {
 		_tokenValue = null;
-		_query = null;
-		_fragment = null;
 		for (;;) {
 			int ch = _request.getc();
 			if (ch == -1)
@@ -609,7 +605,7 @@ private class HttpParser {
 					case SLASH:
 					case PCHAR:
 					case QUERY_DELIM:
-						_query.append(byte(ch));
+						_request.query.append(byte(ch));
 						break;
 	
 					case FRAGMENT_DELIM:
@@ -642,7 +638,7 @@ private class HttpParser {
 			case PCHAR:
 			case SLASH:
 			case QUERY_DELIM:
-				_fragment.append(byte(ch));
+				_request.fragment.append(byte(ch));
 				break;
 				
 			default:

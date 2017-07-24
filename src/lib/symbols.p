@@ -76,7 +76,7 @@ class Namespace extends Symbol {
 		else
 			(newName, x) = name.dottedName();
 		printf("          namespaceNode middle name = %s\n", newName);
-		if (!_dottedName.beginsWith(newName))
+		if (!_dottedName.startsWith(newName))
 			return false;
 		if (_dottedName.length() == newName.length()) {
 			printf("          lengths match\n");
