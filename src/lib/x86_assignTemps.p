@@ -732,7 +732,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				u.register = byte(int(f().r.getreg(u, longMask(), regMask)));
 				break;
 				
-			default:
+			default:					
 				assignRegisterTemp(u.operand(), longMask(), compileContext);
 				f().r.cleanupTemps(u, depth);
 				u.register = byte(int(f().r.latestResult(u.operand())));
@@ -1154,6 +1154,13 @@ class X86_64AssignTemps extends X86_64AddressModes {
 	}
 	
 	void assignMultiReturn(ref<Return> retn, ref<Node> value, ref<CompileContext> compileContext) {
+		if (value.op() ==  Operator.SEQUENCE) {
+			ref<Binary> b = ref<Binary>(value);
+
+			assignVoidContext(b.left(), compileContext);
+ 			assignMultiReturn(retn, b.right(), compileContext);
+			return;
+		}
 		ref<FunctionDeclaration> enclosing = f().current.enclosingFunction();
 		ref<FunctionType> functionType = ref<FunctionType>(enclosing.type);
 		ref<NodeList> returnType = functionType.returnType();
@@ -1400,6 +1407,16 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case FLOAT_64:
 			return floatMask;
 			
+		case VAR:
+		case EXCEPTION:
+			return 0;
+
+		case CLASS:
+		case TEMPLATE_INSTANCE:
+		case SHAPE:
+			if (node.type.size() > 8)
+				return 0;
+
 		case FLAGS:
 		case ENUM:
 			if (node.type.size() == 1)

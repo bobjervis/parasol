@@ -14,6 +14,7 @@
    limitations under the License.
  */
 import parasol:net.base64encode;
+import parasol:net.base64decode;
 
 byte[] example1 = [ 0xb3, 0x7a, 0x4f, 0x2c, 0xc0, 0x62, 0x4f, 0x16, 0x90, 0xf6, 0x46, 0x06, 0xcf, 0x38, 0x59, 0x45, 0xb2, 0xbe, 0xc4, 0xea ];
 
@@ -22,3 +23,13 @@ string encoded = base64encode(example1);
 
 printf("encoded = '%s'\n", encoded);
 assert(encoded == "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=");
+
+byte[] decoded = base64decode(encoded);
+
+assert(example1.length() == decoded.length());
+
+for (int i = 0; i < decoded.length(); i++) {
+	printf("[%d] 0x%02x : 0x%02x\n", i, example1[i], decoded[i]);
+	assert(example1[i] == decoded[i]);
+}
+

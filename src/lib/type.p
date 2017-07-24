@@ -815,7 +815,7 @@ class FunctionType extends Type {
 		if (this == other)
 			return true;
 		if (other == compileContext.arena().builtInType(TypeFamily.VAR))
-			return true;
+			return false;								// TODO: Fix the code gen for this.
 		if (other.family() != TypeFamily.FUNCTION)
 			return false;
 		return equals(other);
@@ -1739,8 +1739,9 @@ class Type {
 	public boolean widensTo(ref<Type> other, ref<CompileContext> compileContext) {
 		if (this == other)
 			return true;
-		if (other == compileContext.arena().builtInType(TypeFamily.VAR))
+		if (other == compileContext.arena().builtInType(TypeFamily.VAR)){
 			return true;
+		}
 		if (extendsFormally(other, compileContext))
 			return true;
 		ref<Type> ind = indirectType(compileContext);

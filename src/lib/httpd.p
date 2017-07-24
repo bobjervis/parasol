@@ -238,6 +238,7 @@ private void processHttpRequest(address ctx) {
 	HttpParser parser(&request);
 	HttpResponse response(context.connection);
 	if (parser.parse()) {
+//		request.print();
 		if (context.server.dispatch(&request, &response, context.connection.secured())) {
 			delete context;
 			return;				// if dispatch returns true, we want to keep the connection open (for at least a while).
@@ -301,7 +302,7 @@ public class HttpRequest {
 		return _connection.sourceAddress().sin_port;
 	}
 
-	public unsigned sourceIp() {
+	public unsigned sourceIP() {
 		return _connection.sourceAddress().sin_addr.s_addr;
 	}
 
@@ -343,7 +344,7 @@ public class HttpRequest {
 	}
 
 	void print() {
-		unsigned ip = sourceIp();
+		unsigned ip = sourceIP();
 		printf("Source family %d %d.%d.%d.%d:%d\n", sourceFamily(), ip & 0xff, (ip >> 8) & 0xff, (ip >> 16) & 0xff, ip >> 24, sourcePort());
 		printf("Method %s(%s)\n", string(method), methodString);
 		printf("Url %s\n", url);

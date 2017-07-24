@@ -490,4 +490,47 @@ public string base64encode(pointer<byte> data, long length) {
 	return result;
 }
 
+public byte[] base64decode(string data) {
+	byte[] a;
+
+	base64decode(data, &a);
+	// a will be empty if the input string is not valid.
+	return a;
+}
+
+public boolean base64decode(string data, ref<byte[]> a) {
+	if (data.length() % 4 != 0)
+		return false;
+	for (int i = 0; i < data.length(); i += 4) {
+		int b0 = decodeMap[data[i]];
+		if (b0 < 0)
+			return false;
+		int b1 = decodeMap[data[i + 1]];
+		if (b1 < 0)
+			return false;
+		a.append(byte((b0 << 2) + (b1 >> 4)));
+		int b2 = decodeMap[data[i + 2]];
+		if (b2 < -1)
+			return false;
+		if (b2 >= 0) {
+			a.append(byte(((b1 & 15) << 4) + (b2 >> 2)));
+			int b3 = decodeMap[data[i + 3]];
+			if (b3 < -1)
+				return false;
+			if (b3 >= 0)
+				a.append(byte(((b2 & 3) << 6) + b3));
+		}	
+	}
+	return true;
+}
+
 private string encoding = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+private int[] decodeMap;
+decodeMap.resize(256);
+for (int i = 0; i < decodeMap.length(); i++)
+	decodeMap[i] = -2;
+for (int i = 0; i < encoding.length(); i++)
+	decodeMap[encoding[i]] = i;
+decodeMap['='] = -1;
+
+

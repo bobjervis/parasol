@@ -16,6 +16,7 @@
 import parasol:file;
 import parasol:commandLine;
 import parasol:compiler;
+import parasol:sql;
 import parasol:stream.Utf8Reader;
 import parasol:stream.StringReader;
 
@@ -178,6 +179,7 @@ void parseProcedureDeclarator(ref<Scanner> s) {
 		case SET:
 		case SMALLINT:
 		case TEXT:
+		case TIMESTAMP:
 		case TINYINT:
 		case VARBINARY:
 		case VARCHAR:
@@ -300,22 +302,22 @@ class Procedure {
 			case INOUT:
 				parameters[i].generateType(output);
 				output.printf(" out_%s = %s;\n", parameters[i].name, parameters[i].name);
-				if (parameters[i].length >= 0)
-					output.printf("out_%s.resize(%d);\n", parameters[i].name, parameters[i].length);
+				if (parameters[i].length() >= 0)
+					output.printf("out_%s.resize(%d);\n", parameters[i].name, parameters[i].length());
 				output.printf("long strlen_%s;\n", parameters[i].name);
 				break;
 
 			case OUT:
 				parameters[i].generateType(output);
 				output.printf(" %s;\n", parameters[i].name);
-				if (parameters[i].length >= 0)
-					output.printf("%s.resize(%d);\n", parameters[i].name, parameters[i].length);
+				if (parameters[i].length() >= 0)
+					output.printf("%s.resize(%d);\n", parameters[i].name, parameters[i].length());
 				output.printf("long strlen_%s;\n", parameters[i].name);
 			}
 		}
 		output.write("ref<sql.Statement> stmt = getStatement();\n");
 		for (int i = 0; i < parameters.length(); i++) {
-			if (parameters[i].length >= 0) {
+			if (parameters[i].length() >= 0) {
 				switch (parameters[i].type) {
 				case ENUM:
 				case VARCHAR:
@@ -328,8 +330,8 @@ class Procedure {
 					break;
 
 				default:
-					if (parameters[i].length >= 0)
-						output.printf("strlen_%s = %d;\n", parameters[i].name, parameters[i].length);
+					if (parameters[i].length() >= 0)
+						output.printf("strlen_%s = %d;\n", parameters[i].name, parameters[i].length());
 				}
 			}
 		}
@@ -339,9 +341,9 @@ class Procedure {
 			if (parameters[i].parameterDirection == Token.INOUT)
 				nm.append("out_");
 			nm.append(parameters[i].name);
-			if (parameters[i].length >= 0)
+			if (parameters[i].length() >= 0)
 				nm.append("[0]");
-			long bufferLength = parameters[i].length;
+			long bufferLength = parameters[i].length();
 			if (bufferLength < 0)
 				bufferLength = 0;
 			string indicator = "sql.Indicator.NO_ACTION";
@@ -360,14 +362,14 @@ class Procedure {
 				break;
 
 			default:
-				if (parameters[i].length >= 0 || parameters[i].parameterDirection != Token.IN)
+				if (parameters[i].length() >= 0 || parameters[i].parameterDirection != Token.IN)
 					lengthBuffer = "&strlen_" + parameters[i].name;
 			}
 			if (defaultLength[parameters[i].type] != 0)
 				bufferLength = defaultLength[parameters[i].type];
 			output.printf("stmt.bindParameter(%d, %s, %s, %d, %d, &%s, %d, %s, %s) &&\n", i + 1, 
 								parameterDirectionMap[parameters[i].parameterDirection], dataTypeMap[parameters[i].type],
-								parameters[i].length, parameters[i].scale, nm, bufferLength, indicator, lengthBuffer);
+								parameters[i].length(), parameters[i].scale, nm, bufferLength, indicator, lengthBuffer);
 		}
 		output.printf("stmt.execDirect(\"{CALL %s(", name);
 		boolean anyParams = false;
@@ -393,11 +395,15 @@ class Procedure {
 						break;
 
 					case	CHAR:
-						output.printf("stmt.getString(%d, %d);\n", param, parameters[i].length);
+						output.printf("stmt.getString(%d, %d);\n", param, parameters[i].length());
 						break;
 
 					case	BOOLEAN:
 						output.printf("boolean(stmt.getLong(%d));\n", param);
+						break;
+
+					case	TIMESTAMP:
+						output.printf("stmt.getTimestamp(%d);\n", param);
 						break;
 
 					default:
@@ -472,6 +478,7 @@ string[Token] dataTypeMap = [
 	SET:				"sql.DataType.SET",
 	SMALLINT:			"sql.DataType.SMALLINT",
 	TEXT:				"sql.DataType.TEXT",
+	TIMESTAMP:			"sql.DataType.TYPE_TIMESTAMP",
 	TINYINT:			"sql.DataType.TINYINT",
 	VARBINARY:			"sql.DataType.VARBINARY",
 	VARCHAR:			"sql.DataType.VARCHAR",
@@ -484,6 +491,7 @@ long[Token] defaultLength = [
 	FLOAT:				float.bytes,
 	INTEGER:			int.bytes,
 	SMALLINT:			short.bytes,
+	TIMESTAMP:			sql.Timestamp.bytes,
 	TINYINT:			byte.bytes,
 ];
 
@@ -491,21 +499,21 @@ class Parameter {
 	Token parameterDirection;
 	string name;
 	Token type;
-	int length;
+	private int _length;
 	int scale;
 
 	Parameter(Token parameterDirection, string name, Token type, int length, int scale) {
 		this.parameterDirection = parameterDirection;
 		this.name = name;
 		this.type = type;
-		this.length = length;
+		this._length = length;
 		this.scale = scale;
 	}
 
 	void print() {
 		printf("%s %s %s", string(parameterDirection), name, string(type));
-		if (length >= 0) {
-			printf("(%d", length);
+		if (_length >= 0) {
+			printf("(%d", _length);
 			if (scale >= 0)
 				printf(",%d", scale);
 			printf(")");
@@ -520,6 +528,14 @@ class Parameter {
 		else
 			output.write("null");
 	}
+
+	int length() {
+		switch (type) {
+		case TIMESTAMP:
+			return -1;
+		}
+		return _length;
+	}
 }
 
 string[Token] parasolType = [
@@ -531,17 +547,7 @@ string[Token] parasolType = [
 	BOOLEAN: "boolean",
 	INTEGER: "int",
 	VARCHAR: "string",
-];
-
-string[Token] defaultValue = [
-	BIGINT: "0",
-	BINARY: "[]",
-	CHAR: "null",
-	INTEGER: "0",
-	ENUM: "null",
-	BOOLEAN: "false",
-	VARCHAR: "null",
-	VARBINARY: "[]",
+	TIMESTAMP: "sql.Timestamp",
 ];
 
 void error(ref<Scanner> s, int location, string message, var... args) {
@@ -695,6 +701,7 @@ enum Token {
 	SET,
 	SMALLINT,
 	TEXT,
+	TIMESTAMP,
 	TINYINT,
 	VARBINARY,
 	VARCHAR,
@@ -1598,6 +1605,7 @@ Token[string] keywords = [
 	"char":			Token.CHAR,
 	"create":		Token.CREATE,
 	"current_user":	Token.CURRENT_USER,
+	"datetime":		Token.TIMESTAMP,
 	"dec":			Token.DECIMAL,
 	"decimal":		Token.DECIMAL,
 	"definer":		Token.DEFINER,
@@ -1616,6 +1624,7 @@ Token[string] keywords = [
 	"smallint":		Token.SMALLINT,
 	"set":			Token.SET,
 	"text":			Token.TEXT,
+	"timestamp":	Token.TIMESTAMP,
 	"tinyint":		Token.TINYINT,
 	"varbinary":	Token.VARBINARY,
 	"varchar":		Token.VARCHAR,

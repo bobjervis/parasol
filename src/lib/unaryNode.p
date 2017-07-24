@@ -108,6 +108,8 @@ class Unary extends Node {
 		if (voidContext) {
 			switch (op()) {
 			case	ADDRESS:
+			case	NEGATE:
+			case	CAST:
 				return _operand.fold(tree, true, compileContext);
 			}
 		}
@@ -126,7 +128,6 @@ class Unary extends Node {
 		case	ABSTRACT:
 		case	DEFAULT:
 
-		case	CLASS_OF:
 		case	UNARY_PLUS:
 		case	DECREMENT_BEFORE:
 		case	INCREMENT_BEFORE:
@@ -139,9 +140,18 @@ class Unary extends Node {
 		case	STORE_V_TABLE:
 			break;
 
+		case	CLASS_OF:
+			if (_operand.type.indirectType(compileContext) == null) {
+				if (_operand.type.hasVtable(compileContext)) {
+					ref<Type> type = compileContext.arena().createRef(_operand.type, compileContext);
+					_operand = tree.newUnary(Operator.ADDRESS, _operand, _operand.location());
+					_operand.type = type;
+					return this;
+				}
+			}
+			break;
+
 		case	NEGATE:
-			if (voidContext)
-				return _operand.fold(tree, true, compileContext);
 			_operand = _operand.fold(tree, false, compileContext);
 			switch (_operand.op()) {
 			case INTERNAL_LITERAL:
@@ -182,8 +192,6 @@ class Unary extends Node {
 			break;
 			
 		case	CAST:
-			if (voidContext)
-				return _operand.fold(tree, true, compileContext);
 			if (_operand.op() == Operator.OBJECT_AGGREGATE) {
 				_operand.type = type;
 				return _operand.fold(tree, false, compileContext);

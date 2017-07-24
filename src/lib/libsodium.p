@@ -87,3 +87,27 @@ public long crypto_pwhash_MEMLIMIT_SENSITIVE = 536870912;
 
 @Constant
 public unsigned crypto_pwhash_STRBYTES = 128;
+
+// secretbox interface
+
+@Linux("libsodium.so", "crypto_secretbox_easy")
+public abstract int crypto_secretbox_easy(pointer<byte> cipher, pointer<byte> message, long mlen, pointer<byte> nonce, pointer<byte> key);
+
+@Linux("libsodium.so", "crypto_secretbox_open_easy")
+public abstract int crypto_secretbox_open_easy(pointer<byte> message, pointer<byte> cipher, long clen, pointer<byte> nonce, pointer<byte> key);
+
+// randombytes interface
+
+@Linux("libsodium.so", "randombytes")
+public abstract int randombytes(pointer<byte> data, long len);
+
+@Constant
+public int crypto_secretbox_KEYBYTES = 32;
+@Constant
+public int crypto_secretbox_NONCEBYTES = 24;
+@Constant
+public int crypto_secretbox_MACBYTES = 16;
+@Constant
+public int crypto_secretbox_BOXZEROBYTES = 16;
+//@Constant
+public int crypto_secretbox_ZEROBYTES = crypto_secretbox_MACBYTES + crypto_secretbox_BOXZEROBYTES;

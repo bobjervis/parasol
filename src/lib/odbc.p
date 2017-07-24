@@ -357,6 +357,7 @@ public class Statement {
 
 	public boolean, SqlReturn fetch() {
 		SQLRETURN ret = SQLFetch(_statement);
+		printf("fetch ret = %d (%s)\n", ret, string(fromSQLRETURN(ret)));
 		return SQL_SUCCEEDED(ret), fromSQLRETURN(ret);
 	}
 
@@ -422,21 +423,21 @@ public class Statement {
 			return null, false;
 	}
 
-	public string, boolean getString(int column) {
-		string s;
-		s.resize(512);
+	public Timestamp, boolean getTimestamp(int column) {
+		Timestamp t;
 		SQLLEN actual;
 		SQLRETURN ret;
-		ret = SQLGetData(_statement, SQLUSMALLINT(column), SQL_C_CHAR, &s[0], s.length(), &actual);
+		ret = SQLGetData(_statement, SQLUSMALLINT(column), SQL_C_TIMESTAMP, &t, t.bytes, &actual);
 		if (SQL_SUCCEEDED(ret)) {
 			if (actual == -1)
-				s = null;
+				return Timestamp.NULL, true;
 			else
-				s.resize(int(actual));
-			return s, true;
+				return t, true;
 		} else
-			return null, false;
+			return Timestamp.NULL, false;
 	}
+
+
 	/**
 	 * Return true if the cursor for this statement is scrollable. If so, fetchScroll can do interesting
 	 * things, otherwise only fetchScroll FetchOrientation.NEXT (which is equivalent to fetch()) is allowed.
@@ -471,7 +472,6 @@ public class Statement {
 	public boolean setParameterArraySize(int n) {
 		_paramStatusArray.resize(n);
 		SQLRETURN ret;
-
 		ret = SQLSetStmtAttr(_statement, SQL_ATTR_PARAMSET_SIZE, address(n), 0);
 		if (!SQL_SUCCEEDED(ret))
 			return false;
@@ -590,6 +590,48 @@ private SqlReturn fromSQLRETURN(SQLRETURN ret) {
 	return SqlReturn.UNKNOWN;
 }
 	
+public class Timestamp {
+	public short year;
+	public char month;
+	public char day;
+	public char hour;
+	public char minute;
+	public char second;
+	public unsigned fraction;			// in nanoseconds;
+
+	public Timestamp() {
+		fraction = unsigned.MAX_VALUE;
+	}
+
+	public Timestamp(int year, int month, int day, int hour, int minute, int second, unsigned fraction) {
+		this.year = short(year);
+		this.month = char(month);
+		this.day = char(day);
+		this.hour = char(hour);
+		this.minute = char(minute);
+		this.second = char(second);
+		this.fraction = fraction;
+	}
+
+	public boolean isNULL() {
+		return fraction == unsigned.MAX_VALUE;
+	}
+
+	public static Timestamp NULL;
+}
+
+public class Date {
+	short year;
+	char month;
+	char day;
+}
+
+public class Time {
+	char hour;
+	char minute;
+	char second;
+}
+
 // From here on down is the ODBC interface definition, which is mostly not exposed in favor of the more
 // 'classy' approach that would feel natural to a Parasol developer.
 

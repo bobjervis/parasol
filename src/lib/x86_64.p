@@ -2704,7 +2704,7 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.LEA, secondRegisterArgument(), value, compileContext);
 			inst(X86.MOV, firstRegisterArgument(), R.RBP, f().outParameterOffset);
 			if (outOffset > 0)
-				inst(X86.ADD, firstRegisterArgument(), outOffset);
+				inst(X86.ADD, TypeFamily.ADDRESS, firstRegisterArgument(), outOffset);
 			inst(X86.MOV, TypeFamily.SIGNED_32, thirdRegisterArgument(), value.type.size());
 			instCall(_memcpy, compileContext);
 		} else {
