@@ -502,6 +502,7 @@ class X86_64AddressModes extends X86_64Encoder {
 				tryMakeMode(operand, MC_FULL, 0, compileContext);
 				return;
 
+			case	STRING:
 			case	FLOAT_32:
 			case	FLOAT_64:
 				markAddressModes(operand, compileContext);

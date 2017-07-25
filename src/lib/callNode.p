@@ -1067,7 +1067,6 @@ class Call extends ParameterBag {
 		case	ADDRESS:
 		case	REF:
 		case	BOOLEAN:
-		case	ENUM:
 		case	FLAGS:
 		case	INTERFACE:
 			switch (newType.family()) {
@@ -1081,12 +1080,40 @@ class Call extends ParameterBag {
 			case	SIGNED_64:
 			case	FLOAT_32:
 			case	FLOAT_64:
-			case	STRING:
 			case	ADDRESS:
 			case	REF:
 			case	POINTER:
 			case	BOOLEAN:
 			case	ENUM:
+			case	FLAGS:
+			case	FUNCTION:
+			case	INTERFACE:
+				return true;
+
+			case STRING:
+				if (_arguments.node.op() == Operator.NULL)
+					return true;
+			}
+			break;
+
+		case	ENUM:
+			switch (newType.family()) {
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	UNSIGNED_64:
+			case	SIGNED_8:
+			case	SIGNED_16:
+			case	SIGNED_32:
+			case	SIGNED_64:
+			case	FLOAT_32:
+			case	FLOAT_64:
+			case	ADDRESS:
+			case	REF:
+			case	POINTER:
+			case	BOOLEAN:
+			case	ENUM:
+			case	STRING:
 			case	FLAGS:
 			case	FUNCTION:
 			case	INTERFACE:

@@ -948,6 +948,12 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				assignCast(result, operand, regMask, 0, compileContext);
 				return;
 
+			case	STRING:
+				int depth = tempStackDepth();
+				assignRegisterTemp(operand, getRegMask(firstRegisterArgument()), compileContext);
+				f().r.cleanupTemps(result, depth);
+				return;
+
 			case	FLOAT_32:
 			case	FLOAT_64:
 				assignCast(result, operand, regMask, longMask(), compileContext);

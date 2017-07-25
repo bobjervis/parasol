@@ -72,6 +72,7 @@ int main(string[] args) {
 		printf("Could not open '%s'\n", a[0]);
 		return 1;
 	}
+	boolean rsOut;
 	for (;;) {
 		Token t = s.next();
 		if (t == Token.END_OF_STREAM)
@@ -89,7 +90,15 @@ int main(string[] args) {
 						   t != Token.PROCEDURE);
 			}
 			if (t == Token.PROCEDURE) {	// got one!
-				parseProcedureDeclarator(&s);
+				parseProcedureDeclarator(&s, rsOut);
+				rsOut = false;
+			}
+		} else if (t == Token.ANNOTATION) {
+			string annotation = s.value().trim();
+			printf("value = '%s'\n", annotation);
+			switch (annotation) {
+			case "returns-record-set":
+				rsOut = true;
 			}
 		}
 	}
@@ -128,7 +137,7 @@ int main(string[] args) {
 	return 0;
 }
 
-void parseProcedureDeclarator(ref<Scanner> s) {
+void parseProcedureDeclarator(ref<Scanner> s, boolean rsOut) {
 	Token t;
 
 	if (s.next() != Token.IDENTIFIER) {
@@ -136,7 +145,7 @@ void parseProcedureDeclarator(ref<Scanner> s) {
 		return;
 	}
 	printf("Found procedure '%s'\n", s.value());
-	ref<Procedure> p = new Procedure(s.value());
+	ref<Procedure> p = new Procedure(s.value(), rsOut);
 	if (s.next() != Token.LEFT_PARENTHESIS) {
 		error(s, s.location(), "Expecting a ( after the procedure name");
 		return;
@@ -249,10 +258,12 @@ int, int parseLength(ref<Scanner> s) {
 
 class Procedure {
 	string name;
+	boolean rsOut;
 	ref<Parameter>[] parameters;
 
-	Procedure(string name) {
+	Procedure(string name, boolean rsOut) {
 		this.name = name;
+		this.rsOut = rsOut;
 	}
 
 	void print() {
@@ -272,15 +283,14 @@ class Procedure {
 		boolean anyOuts = false;
 		for (int i = 0; i < parameters.length(); i++) {
 			if (parameters[i].parameterDirection != Token.IN) {		// INOUT or OUT
-				if (anyOuts)
-					output.write(",");
 				anyOuts = true;
 				parameters[i].generateType(output);
+				output.write(",");
 			}
 		}
-		if (!anyOuts)
-			output.write(",");
-		output.printf(",boolean %s(", name);
+		if (rsOut)
+			output.write("ref<sql.Statement>,");
+		output.printf("boolean %s(", name);
 		boolean anyIns = false;
 		for (int i = 0; i < parameters.length(); i++) {
 			if (parameters[i].parameterDirection != Token.OUT) {		// IN or INOUT
@@ -413,7 +423,8 @@ class Procedure {
 				}
 			}
 		}
-		output.write("delete stmt;\n");
+		if (!rsOut)
+			output.write("delete stmt;\n");
 		output.write("return ");
 		if (anyOuts) {
 			anyOuts = false;
@@ -429,6 +440,8 @@ class Procedure {
 			}
 			output.write(",");
 		}
+		if (rsOut)
+			output.write("stmt,");
 		output.write("true;\n");
 		output.write("} else {\n");
 		output.write("string sqlState;\n");
@@ -452,6 +465,8 @@ class Procedure {
 			}
 			output.write(",");
 		}
+		if (rsOut)
+			output.write("null,");
 		output.write("false;\n");
 		output.write("}\n");
 		output.write("}\n");
@@ -642,43 +657,6 @@ enum Token {
 	QUESTION_MARK,
 	TILDE,
 
-	// These are multi-character tokens:
-
-	ELLIPSIS,
-	DOT_DOT,
-	SLASH_EQ,
-	PERCENT_EQ,
-	ASTERISK_EQ,
-	PLUS_EQ,
-	DASH_EQ,
-	AMPERSAND_EQ,
-	CARET_EQ,
-	VERTICAL_BAR_EQ,
-	EQ_EQ,						// ==
-	EQ_EQ_EQ,					// ===
-	LA_EQ,						// <=
-	RA_EQ,						// >=
-	LA_RA,						// <>
-	LA_RA_EQ,					// <>=
-	EXCLAMATION_EQ,				// !=
-	EX_EQ_EQ,					// !==
-	EX_LA,						// !<
-	EX_RA,						// !>
-	EX_LA_EQ,					// !<=
-	EX_RA_EQ,					// !>=
-	EX_LA_RA,					// !<>
-	EX_LA_RA_EQ,				// !<>=
-	LA_LA,						// <<
-	RA_RA,						// >>
-	RA_RA_RA,					// >>>
-	LA_LA_EQ,					// <<=
-	RA_RA_EQ,					// >>=
-	RA_RA_RA_EQ,				// >>>=
-	AMP_AMP,					// &&
-	VBAR_VBAR,					// ||
-	PLUS_PLUS,					// ++
-	DASH_DASH,					// --
-
 	// Keywords
 
 	BIGINT,
@@ -840,99 +818,20 @@ class Scanner {
 				return Token.ERROR;
 
 			case	' ':
-				int spLoc = _location;
-				_location = cursor();
-				c = getc();
-				if (c == '<') {
-					c = getc();
-					if (c == '=') {
-						_location = spLoc;
-						return Token.LA_EQ;
-					} else if (c == '<') {
-						_location = spLoc;
-						c = getc();
-						if (c == '=')
-							return Token.LA_LA_EQ;
-						ungetc();
-						return Token.LA_LA;
-					} else if (c == '>') {
-						_location = spLoc;
-						c = getc();
-						if (c == '=')
-							return Token.LA_RA_EQ;
-						ungetc();
-						return Token.LA_RA;
-					}
-					ungetc();
-					_location = spLoc;
-					return Token.SP_LA;
-				} else if (c == '>') {
-					c = getc();
-					if (c == '=') {
-						_location = spLoc;
-						return Token.RA_EQ;
-					} else if (c == '>') {
-						_location = spLoc;
-						c = getc();
-						if (c == '=') {
-							return Token.RA_RA_EQ;
-						} else if (c == '>') {
-							c = getc();
-							if (c == '=')
-								return Token.RA_RA_RA_EQ;
-							ungetc();
-							return Token.RA_RA_RA;
-						}
-						ungetc();
-						return Token.RA_RA;
-					}
-					ungetc();
-					_location = spLoc;
-					return Token.SP_RA;
-				}
-				ungetc();
 				continue;
 
 			case	'!':
-				c = getc();
-				switch (c) {
-				case	'=':
-					c = getc();
-					if (c == '=')
-						return Token.EX_EQ_EQ;
-					ungetc();
-					return Token.EXCLAMATION_EQ;
-
-				case	'<':
-					c = getc();
-					if (c == '=')
-						return Token.EX_LA_EQ;
-					else if (c == '>') {
-						c = getc();
-						if (c == '=')
-							return Token.EX_LA_RA_EQ;
-						ungetc();
-						return Token.EX_LA_RA;
-					}
-					ungetc();
-					return Token.EX_LA;
-
-				case	'>':
-					c = getc();
-					if (c == '=')
-						return Token.EX_RA_EQ;
-					ungetc();
-					return Token.EX_RA;
-
-				default:
-					ungetc();
-					return Token.EXCLAMATION;
-				}
+				return Token.EXCLAMATION;
 
 			case	'"':
 				return consume(Token.STRING, byte(c));
 
 			case	'#':
+				c = getc();
+				if (c == '!')
+					return consume(Token.ANNOTATION, '\n');
+				else
+					ungetc();
 				for (;;) {
 					c = getc();
 					if (c == '\n') {
@@ -949,19 +848,9 @@ class Scanner {
 				return Token.ERROR;
 
 			case	'%':
-				c = getc();
-				if (c == '=')
-					return Token.PERCENT_EQ;
-				ungetc();
 				return Token.PERCENT;
 
 			case	'&':
-				c = getc();
-				if (c == '=')
-					return Token.AMPERSAND_EQ;
-				else if (c == '&')
-					return Token.AMP_AMP;
-				ungetc();
 				return Token.AMPERSAND;
 
 			case	'\'':
@@ -974,55 +863,23 @@ class Scanner {
 				return Token.RIGHT_PARENTHESIS;
 
 			case	'*':
-				c = getc();
-				if (c == '=')
-					return Token.ASTERISK_EQ;
-				ungetc();
 				return Token.ASTERISK;
 
 			case	'+':
-				c = getc();
-				if (c == '=')
-					return Token.PLUS_EQ;
-				else if (c == '+')
-					return Token.PLUS_PLUS;
-				ungetc();
 				return Token.PLUS;
 
 			case	',':
 				return Token.COMMA;
 
 			case	'-':
-				c = getc();
-				if (c == '=')
-					return Token.DASH_EQ;
-				else if (c == '-')
-					return Token.DASH_DASH;
-				ungetc();
 				return Token.DASH;
 
 			case	'.':
-				c = getc();
-				if (c == '.') {
-					c = getc();
-					if (c == '.')
-						return Token.ELLIPSIS;
-					ungetc();
-					return Token.DOT_DOT;
-				} else if (byte(c).isDigit()) {
-					ungetc();
-					return number('.');
-				}
-				ungetc();
 				return Token.DOT;
 
 			case	'/':
 				c = getc();
-				if (c == '=')
-					return Token.SLASH_EQ;
-				else if (c == '*') {
-					// Block comments nest, this tracks the nesting depth
-					int depth = 0;
+				if (c == '*') {
 					for (;;) {
 						c = getc();
 						if (c == -1) {
@@ -1032,19 +889,11 @@ class Scanner {
 							addCharacter('*');
 							return Token.ERROR;
 						}
-						if (c == '/') {
+						if (c == '*') {
 							c = getc();
-							if (c == '*')
-								depth++;
+							if (c == '/')
+								break;
 							else
-								ungetc();
-						} else if (c == '*') {
-							c = getc();
-							if (c == '/') {
-								if (depth == 0)
-									break;
-								depth--;
-							} else
 								ungetc();
 						} else if (c == '\n')
 							_lines.append(cursor());
@@ -1076,61 +925,19 @@ class Scanner {
 				return Token.SEMI_COLON;
 
 			case	'<':
-				c = getc();
-				if (c == '=')
-					return Token.LA_EQ;
-				else if (c == '<') {
-					c = getc();
-					if (c == '=')
-						return Token.LA_LA_EQ;
-					ungetc();
-					return Token.LA_LA;
-				} else if (c == '>') {
-					c = getc();
-					if (c == '=')
-						return Token.LA_RA_EQ;
-					ungetc();
-					return Token.LA_RA;
-				}
-				ungetc();
 				return Token.LEFT_ANGLE;
 
 			case	'=':
-				c = getc();
-				if (c == '=') {
-					c = getc();
-					if (c == '=')
-						return Token.EQ_EQ_EQ;
-					ungetc();
-					return Token.EQ_EQ;
-				}
-				ungetc();
 				return Token.EQUALS;
 
 			case	'>':
-				c = getc();
-				if (c == '=')
-					return Token.RA_EQ;
-				ungetc();
 				return Token.RIGHT_ANGLE;
 
 			case	'?':
 				return Token.QUESTION_MARK;
 
 			case	'@':
-				_value = null;
-				for (;;) {
-					c = getc();
-					if (c == -1)
-						break;
-					if (byte(c).isAlphanumeric() || c == '_' || (c & 0x80) != 0)
-						addCharacter(c);
-					else {
-						ungetc();
-						break;
-					}
-				}
-				return Token.ANNOTATION;
+				continue;
 
 			case	'[':
 				return Token.LEFT_SQUARE;
@@ -1143,10 +950,6 @@ class Scanner {
 				return Token.RIGHT_SQUARE;
 
 			case	'^':
-				c = getc();
-				if (c == '=')
-					return Token.CARET_EQ;
-				ungetc();
 				return Token.CARET;
 
 			case	'`':
@@ -1156,12 +959,6 @@ class Scanner {
 				return Token.LEFT_CURLY;
 
 			case	'|':
-				c = getc();
-				if (c == '=')
-					return Token.VERTICAL_BAR_EQ;
-				else if (c == '|')
-					return Token.VBAR_VBAR;
-				ungetc();
 				return Token.VERTICAL_BAR;
 
 			case	'}':
