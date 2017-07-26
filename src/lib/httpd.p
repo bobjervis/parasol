@@ -346,9 +346,13 @@ public class HttpRequest {
 	void print() {
 		unsigned ip = sourceIP();
 		printf("Source family %d %d.%d.%d.%d:%d\n", sourceFamily(), ip & 0xff, (ip >> 8) & 0xff, (ip >> 16) & 0xff, ip >> 24, sourcePort());
-		printf("Method %s(%s)\n", string(method), methodString);
-		printf("Url %s\n", url);
-		printf("HTTP Version %s\n", httpVersion);
+		printf("Method           %s(%s)\n", string(method), methodString);
+		printf("Url              %s\n", url);
+		if (query != null)
+			printf("query            %s\n", query);
+		if (fragment != null)
+			printf("fragment         %s\n", fragment);
+		printf("HTTP Version     %s\n", httpVersion);
 		if (headers.size() > 0)
 			printf("Headers:\n");
 		for (string[string].iterator i = headers.begin(); i.hasNext(); i.next()) {
@@ -387,10 +391,8 @@ public class HttpResponse {
 	private void flush() {
 		if (_fill > 0) {
 			int x = _connection.write(&_buffer[0], _fill);
-			if (x <= 0) {
-				printf("flush failed\n");
+			if (x <= 0)
 				_connection.diagnoseError();
-			}
 			_fill = 0;
 		}
 	}
@@ -439,6 +441,12 @@ public class HttpResponse {
 		flush();
 	}
 	
+	public void printf(string format, var... args) {
+		string s;
+		s.printf(format, args);
+		write(s);
+	}
+
 	public void write(string s) {
 		for (int i = 0; i < s.length(); i++)
 			putc(s[i]);
