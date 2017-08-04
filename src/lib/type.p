@@ -523,14 +523,19 @@ class ClassType extends Type {
 			address a = allocateImageData(target, ClassType.bytes);
 			ref<ClassType> copy = ref<ClassType>(a);
 			transferBase(copy);
+			transferClass(copy, target);
 			target.fixupVtable(_ordinal, target.classType());
-			if (_extends != null)
-				_extends.copyToImage(target);
-			target.fixupType(_ordinal + int(&ref<ClassType>(null)._extends), _extends);
 		}
 		return _ordinal;
 	}
 	
+	protected void transferClass(ref<ClassType> copy, ref<Target> target) {
+		if (_extends != null) {
+			_extends.copyToImage(target);
+			target.fixupType(_ordinal + int(&ref<ClassType>(null)._extends), _extends);
+		}
+	}
+
 	public boolean widensTo(ref<Type> other, ref<CompileContext> compileContext) {
 		if (other.family() == TypeFamily.INTERFACE) {
 			ref<Type> t = this;
@@ -1154,6 +1159,9 @@ class TemplateInstanceType extends ClassType {
 		if (_ordinal == 0) {
 			address a = allocateImageData(target, TemplateInstanceType.bytes);
 			ref<TemplateInstanceType> t = ref<TemplateInstanceType>(a);
+			transferBase(t);
+			transferClass(t, target);
+			target.fixupVtable(_ordinal, target.classType());
 //			*t = *this;
 //			*ref<long>(t) = 0;
 //			t._concreteDefinition = null;
@@ -1162,11 +1170,6 @@ class TemplateInstanceType extends ClassType {
 //			memset(&t._arguments, 0, t._arguments.bytes);
 //			t._arguments.clear();
 //			t._templateType = null;
-//			t._extends = null;
-//			t._scope = null;
-//			t._definition = null;
-			// TODO: patch up the _arguments, _templateType, _next, etc.
-			// TODO: patchup _extends, _scope, _definition
 		}
 		return _ordinal;
 	}
@@ -1540,7 +1543,7 @@ class Type {
 	 *     true if other is a base class of this, false otherwise.
 	 */
 	public boolean isSubtype(ref<Type> other) {
-//		printf("this = %p other = %p\n", this, other);
+//		printf("this = %p (%p) other = %p (%p)\n", this, *ref<address>(this), other, *ref<address>(other));
 //		text.memDump(this, ClassType.bytes);
 		ref<Type> base = getSuper();
 		if (base == null)

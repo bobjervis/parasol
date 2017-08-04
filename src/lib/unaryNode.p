@@ -281,6 +281,7 @@ class Unary extends Node {
 				
 			case	REF:
 			case	POINTER:
+			case	ADDRESS:
 				switch (_operand.type.family()) {
 				case	VAR:
 					ref<Node> call = createMethodCall(_operand, "integerValue", tree, compileContext);

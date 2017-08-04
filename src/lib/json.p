@@ -31,7 +31,26 @@ public var, boolean parse(string text) {
 }
 
 public string stringify(var object) {
-	if (object.class == ref<Object>) {
+	if (object.class == long) {
+		string s;
+		
+		s.printf("%d", object);
+		return s;
+	} else if (object.class == double) {
+		string s;
+		
+		s.printf("%g", object);
+		return s;
+	} else if (object.class == string) {
+		string s;
+		
+		s.printf("\"%s\"", string(object).escapeJSON());
+		return s;
+	} else if (object.class == boolean)
+		return boolean(object) ? "true" : "false";
+	else if (object.class <= address && address(object) == null)
+		return "null";
+	else if (object.class == ref<Object>) {
 		string s;
 		
 		s = "{";
@@ -58,26 +77,7 @@ public string stringify(var object) {
 		}
 		s.append("]");
 		return s;
-	} else if (object.class == long) {
-		string s;
-		
-		s.printf("%d", object);
-		return s;
-	} else if (object.class == double) {
-		string s;
-		
-		s.printf("%g", object);
-		return s;
-	} else if (object.class == string) {
-		string s;
-		
-		s.printf("\"%s\"", string(object).escapeJSON());
-		return s;
-	} else if (object.class == boolean)
-		return boolean(object) ? "true" : "false";
-	else if (object == null)
-		return "null";
-	else
+	} else 
 		return "\"object (unknown schema)\"";
 }
 
