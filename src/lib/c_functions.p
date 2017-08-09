@@ -144,7 +144,11 @@ public abstract int sleep(unsigned seconds);
 
 @Windows("msvcrt.dll", "strcpy")
 @Linux("libc.so.6", "strcpy")
-public abstract double strcpy(pointer<byte> dest, pointer<byte> src);
+public abstract pointer<byte> strcpy(pointer<byte> dest, pointer<byte> src);
+
+@Windows("msvcrt.dll", "strncmp")
+@Linux("libc.so.6", "strncmp")
+public abstract int strncmp(pointer<byte> s1, pointer<byte> s2, size_t n);
 
 @Windows("msvcrt.dll", "strtod")
 @Linux("libc.so.6", "strtod")

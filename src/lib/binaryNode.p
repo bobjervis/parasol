@@ -1436,17 +1436,17 @@ class Binary extends Node {
 						
 					case	UNSIGNED_8:
 						enumType = null;
-						maxIndex = byte.MAX_VALUE;
+						maxIndex = byte.MAX_VALUE - 1;			// can't express a 256 entry byte-indexed array
 						break;
 						
 					case	UNSIGNED_16:
 						enumType = null;
-						maxIndex = char.MAX_VALUE;
+						maxIndex = char.MAX_VALUE - 1;
 						break;
 						
 					case	UNSIGNED_32:
 						enumType = null;
-						maxIndex = unsigned.MAX_VALUE;
+						maxIndex = unsigned.MAX_VALUE - 1;
 						break;
 						
 					case	ENUM:
@@ -1593,7 +1593,6 @@ class Binary extends Node {
 			}
 			break;
 
-			// This case arises when static initializers have to be 
 		case	INITIALIZE:
 			ref<Symbol> sym = ref<Identifier>(_left).symbol();
 			_left.type = sym.assignType(compileContext);

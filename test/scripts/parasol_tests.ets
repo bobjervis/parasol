@@ -159,6 +159,7 @@ run(filename: class_nested_vtable.p)
 run(filename: class_retn_init.p)
 run(filename: flags_ops.p)
 run(filename: class_meta_ops.p)
+run(filename: vector_byte.p)
 run(filename: vector_return.p)
 run(filename: vector_lvalue_ops.p)
 run(filename: type_compares.p)
@@ -342,6 +343,7 @@ compile(expect: fail, message: ABSTRACT_INSTANCE_DISALLOWED) {
 			"class Foo { abstract int f(); Foo() {} }; ref<Foo> a = new Foo();" 
 		}
 compile() { "void stat(int x) {} void foo(long x); foo = void(long)(stat);" }
+compile(expect: fail, message: INITIALIZER_BEYOND_RANGE) { "string[byte] f = [ 0xff: \"hello\" ];" }
 
 // The matrix of allowed operators for boolean operands:
 

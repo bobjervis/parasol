@@ -455,7 +455,23 @@ class Call extends ParameterBag {
 		}
 		return this;
 	}
-	
+
+	public long foldInt(ref<Target> target, ref<CompileContext> compileContext) {
+		if (_category != CallCategory.COERCION) {
+			print(0);
+			assert(false);
+		}
+		long x = _arguments.node.foldInt(target, compileContext);
+		int sz = type.size();
+		if (sz > 4)
+			return x;
+
+		if (type.isSigned())
+			return (x << sz * 8) >> sz * 8;
+		else
+			return x & ((1 << (sz * 8)) - 1);
+	}
+
 	public void setConstructorMemory(ref<Node> placement, ref<SyntaxTree> tree) {
 		if (_category != CallCategory.CONSTRUCTOR)
 			print(0);
@@ -587,6 +603,34 @@ class Call extends ParameterBag {
 				type = compileContext.arena().builtInType(TypeFamily.ARRAY_AGGREGATE);
 		} else
 			type = compileContext.errorType();
+	}
+
+	public void checkCompileTimeConstant(long minimumIndex, long maximumIndex, ref<CompileContext> compileContext) {
+		if (op() != Operator.CALL || _category != CallCategory.COERCION)
+			return;
+		if (deferAnalysis())
+			return;
+		switch (type.family()) {
+		case	UNSIGNED_8:
+			if (maximumIndex >= byte.MAX_VALUE && minimumIndex <= 0)
+				return;
+			break;
+
+		case	SIGNED_32:
+			if (maximumIndex >= int.MAX_VALUE && minimumIndex <= int.MIN_VALUE)
+				return;
+			break;
+			
+		case	SIGNED_64:
+			break;
+
+		default:
+			print(0);
+			assert(false);
+		}
+		_arguments.node.checkCompileTimeConstant(minimumIndex, maximumIndex, compileContext);
+		if (_arguments.node.deferAnalysis())
+			type = _arguments.node.type;
 	}
 	
 	void assignDeclarationTypes(ref<CompileContext> compileContext) {
@@ -891,8 +935,14 @@ class Call extends ParameterBag {
 							b.left().add(MessageId.LABEL_NOT_IDENTIFIER, compileContext.pool());
 							b.left().type = compileContext.errorType();
 						}
-					} else
+					} else {
 						compileContext.assignTypes(b.left());
+						if (b.left().deferAnalysis()) {
+							nl.node.type = compileContext.errorType();
+							break;
+						}
+						b.left().checkCompileTimeConstant(0, maximumIndex, compileContext);
+					}
 				} else {
 					if (intervals.length() == 0) {
 						Interval i = { start: 0, end: 0, first: nl };

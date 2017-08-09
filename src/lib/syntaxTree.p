@@ -1028,7 +1028,16 @@ class InternalLiteral extends Node {
 		}
 		return this;
 	}
-	
+
+	public void checkCompileTimeConstant(long minimumIndex, long maximumIndex, ref<CompileContext> compileContext) {
+		if (deferAnalysis())
+			return;
+		if (_value > maximumIndex || _value < minimumIndex) {
+			add(MessageId.INITIALIZER_BEYOND_RANGE, compileContext.pool());
+			type = compileContext.errorType();
+		}
+	}
+
 	public long foldInt(ref<Target> target, ref<CompileContext> compileContext) {
 		return _value;
 	}
@@ -1155,7 +1164,31 @@ class Constant extends Node {
 		}
 		return this;
 	}
-	
+
+	public void checkCompileTimeConstant(long minimumIndex, long maximumIndex, ref<CompileContext> compileContext) {
+		if (deferAnalysis())
+			return;
+		switch (op()) {
+		case INTEGER:
+			long x = intValue();
+			if (x < minimumIndex || x > maximumIndex) {
+				add(MessageId.INITIALIZER_BEYOND_RANGE, compileContext.pool());
+				type = compileContext.errorType();
+			}
+			break;
+
+		case CHARACTER:
+			boolean status;
+			(x, status) = charValue();
+			if (status) {
+				if (x < minimumIndex || x > maximumIndex) {
+					add(MessageId.INITIALIZER_BEYOND_RANGE, compileContext.pool());
+					type = compileContext.errorType();
+				}
+			}
+		}
+	}
+
 	public long foldInt(ref<Target> target, ref<CompileContext> compileContext) {
 		if ((nodeFlags & BAD_CONSTANT) != 0)
 			return 0;						// We've already flagged this node with an error
@@ -2959,6 +2992,13 @@ class Node {
 			}
 		}
 		return n;
+	}
+	/*
+	 * An aggregate array initializer has an index expression that may be a constant that is too large.
+	 * This method checks the compile-time constant value of the expression (if it is a compile-time constant).
+	 * If this is not a compile-time constant, do nothing. Rely on luck or the runtime checking values.
+	 */
+	public void checkCompileTimeConstant(long minimumIndex, long maximumIndex, ref<CompileContext> compileContext) {
 	}
 	
 	ref<Node> createMethodCall(ref<Node> object, string functionName, ref<SyntaxTree> tree, ref<CompileContext> compileContext, ref<Node>... arguments) {

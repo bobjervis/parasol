@@ -1655,6 +1655,20 @@ class Type {
 		return false;
 	}
 
+	boolean isSigned() {
+		switch (_family) {
+		case	SIGNED_8:
+		case	SIGNED_16:
+		case	SIGNED_32:
+		case	SIGNED_64:
+			return true;
+
+		default:
+			return false;
+		}
+		return false;
+	}
+
 	boolean isFloat() {
 		switch (_family) {
 		case	FLOAT_32:

@@ -513,7 +513,41 @@ class Unary extends Node {
 		}
 		return super.foldConditional(tree, compileContext);
 	}
-	
+
+	public void checkCompileTimeConstant(long minimumIndex, long maximumIndex, ref<CompileContext> compileContext) {
+		if (deferAnalysis())
+			return;
+		switch (op()) {
+		case	NEGATE:
+			_operand.checkCompileTimeConstant(-maximumIndex, -minimumIndex, compileContext);
+			break;
+
+		case	CAST:
+			switch (type.family()) {
+			case	UNSIGNED_8:
+				if (maximumIndex >= byte.MAX_VALUE && minimumIndex <= 0)
+					return;
+				break;
+
+			case	SIGNED_32:
+				if (maximumIndex >= int.MAX_VALUE && minimumIndex <= int.MIN_VALUE)
+					return;
+				break;
+				
+			case	SIGNED_64:
+				break;
+
+			default:
+				print(0);
+				assert(false);
+			}
+			_operand.checkCompileTimeConstant(minimumIndex, maximumIndex, compileContext);
+			break;
+		}
+		if (_operand.deferAnalysis())
+			type = _operand.type;
+	}
+
 	public long foldInt(ref<Target> target, ref<CompileContext> compileContext) {
 		switch (op()) {
 		case	NEGATE:
@@ -532,7 +566,8 @@ class Unary extends Node {
 				return v;
 				
 			default:
-				break;
+				print(0);
+				assert(false);
 			}
 			break;
 			

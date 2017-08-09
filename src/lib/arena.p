@@ -294,6 +294,7 @@ public class Arena {
 			case	STRING:
 				return _map.createVectorInstance(element, index, compileContext);
 			
+			case	UNSIGNED_8:
 			case	SIGNED_32:
 				break;
 			
