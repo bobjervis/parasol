@@ -170,6 +170,9 @@ public abstract int sem_timed_wait(ref<sem_t> sem, ref<timespec> abs_timeout);
 @Linux("libpthread.so.0", "sem_wait")
 public abstract int sem_wait(ref<sem_t> sem);
 
+@Linux("libc.so.6", "setenv")
+public abstract int setenv(pointer<byte> name, pointer<byte> value, int overwrite);
+
 @Linux("libc.so.6", "sigaction")
 public abstract int sigaction(int signum, ref<struct_sigaction> act, ref<struct_sigaction> oldact);
 
