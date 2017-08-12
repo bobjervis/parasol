@@ -328,6 +328,9 @@ class string {
 	 *	ASCII characters.  All characters with a high-order bit
 	 *	set are converted to hex escape sequences with two digits
 	 *	each (e.g. \xff).
+	 *
+	 *	Note: Because apostrophes are also escaped, this can be used to escape C
+	 *	character constants as well.
 	 */
 	string escapeC() {
 		string output;
@@ -337,13 +340,15 @@ class string {
 		pointer<byte> cp = pointer<byte>(&_contents.data);
 		for (int i = 0; i < _contents.length; i++) {
 			switch (cp[i]) {
-			case	'\\':	output.printf("\\\\");	break;
-			case	'\a':	output.printf("\\a");	break;
-			case	'\b':	output.printf("\\b");	break;
-			case	'\f':	output.printf("\\f");	break;
-			case	'\n':	output.printf("\\n");	break;
-			case	'\r':	output.printf("\\r");	break;
-			case	'\v':	output.printf("\\v");	break;
+			case	'\\':	output.append("\\\\");	break;
+			case	'\a':	output.append("\\a");	break;
+			case	'\b':	output.append("\\b");	break;
+			case	'\f':	output.append("\\f");	break;
+			case	'\n':	output.append("\\n");	break;
+			case	'\r':	output.append("\\r");	break;
+			case	'\v':	output.append("\\v");	break;
+			case	'\'':	output.append("\\'");	break;
+			case	'"':	output.append("\\\"");	break;
 			default:
 				if (cp[i] >= 0x20 &&
 					cp[i] < 0x7f)
@@ -360,11 +365,7 @@ class string {
 	 *	Take the string and convert it to a form, that when
 	 *	wrapped with double-quotes would be a well-formed JSON
 	 *	string literal token with the same string value as 
-	 *	this object.  This differs in C-escaping a string in that
-	 *	all well-formed extended Unicode characters are converted to
-	 *	\uNNNNN escape sequences.  Other sub-sequences of characters with
-	 *	high-order bits set will be converted using hex sequences as for
-	 *	escapeC.
+	 *	this object.
 	 */
 	string escapeJSON() {
 		string output;
@@ -374,13 +375,13 @@ class string {
 		pointer<byte> cp = pointer<byte>(&_contents.data);
 		for (int i = 0; i < _contents.length; i++) {
 			switch (cp[i]) {
-			case	'\"':	output.printf("\\\"");	break;
-			case	'\\':	output.printf("\\\\");	break;
-			case	'\b':	output.printf("\\b");	break;
-			case	'\f':	output.printf("\\f");	break;
-			case	'\n':	output.printf("\\n");	break;
-			case	'\r':	output.printf("\\r");	break;
-			case	'\t':	output.printf("\\t");	break;
+			case	'\\':	output.append("\\\\");	break;
+			case	'\b':	output.append("\\b");	break;
+			case	'\f':	output.append("\\f");	break;
+			case	'\n':	output.append("\\n");	break;
+			case	'\r':	output.append("\\r");	break;
+			case	'\t':	output.append("\\t");	break;
+			case	'"':	output.append("\\\"");	break;
 			default:
 				output.append(cp[i]);
 			}
@@ -398,6 +399,9 @@ class string {
 	 *	\uNNNNN escape sequences.  Other sub-sequences of characters with
 	 *	high-order bits set will be converted using hex sequences as for
 	 *	escapeC.
+	 *
+	 *	Note: Because apostrophes are also escaped, this can be used to escape C
+	 *	character constants as well.
 	 */
 	string escapeParasol() {
 		string output;
@@ -407,13 +411,15 @@ class string {
 		pointer<byte> cp = pointer<byte>(&_contents.data);
 		for (int i = 0; i < _contents.length; i++) {
 			switch (cp[i]) {
-			case	'\\':	output.printf("\\\\");	break;
-			case	'\a':	output.printf("\\a");	break;
-			case	'\b':	output.printf("\\b");	break;
-			case	'\f':	output.printf("\\f");	break;
-			case	'\n':	output.printf("\\n");	break;
-			case	'\r':	output.printf("\\r");	break;
-			case	'\v':	output.printf("\\v");	break;
+			case	'\\':	output.append("\\\\");	break;
+			case	'\a':	output.append("\\a");	break;
+			case	'\b':	output.append("\\b");	break;
+			case	'\f':	output.append("\\f");	break;
+			case	'\n':	output.append("\\n");	break;
+			case	'\r':	output.append("\\r");	break;
+			case	'\v':	output.append("\\v");	break;
+			case	'\'':	output.append("\\'");	break;
+			case	'"':	output.append("\\\"");	break;
 			default:
 				if (cp[i] >= 0x20 &&
 					cp[i] < 0x7f)
@@ -427,6 +433,30 @@ class string {
 		}
 		return output;
 	}
+	/*
+	 *	escapeShell
+	 *
+	 *	Take the string and convert it to a form, that when
+	 *	wrapped with double-quotes would be a well-formed shell command-line
+	 *  argument.
+	 */
+	string escapeShell() {
+		string output;
+
+		if (length() == 0)
+			return *this;
+		pointer<byte> cp = pointer<byte>(&_contents.data);
+		for (int i = 0; i < _contents.length; i++) {
+			switch (cp[i]) {
+			case	'\\':	output.append("\\\\");	break;
+			case	'\'':	output.append("\\'");	break;
+			case	'"':	output.append("\\\"");	break;
+			default:		output.append(cp[i]);
+			}
+		}
+		return output;
+	}
+
 
 //	public long fingerprint() {
 //		return 0;
@@ -1598,6 +1628,20 @@ public class substring {
 			_length = source.length();
 		}
 	}
+
+	public substring(string source, int start) {
+		if (source != null) {
+			_data = &source[start];
+			_length = source.length() - start;
+		}
+	}
+
+	public substring(string source, int start, int end) {
+		if (source != null) {
+			_data = &source[start];
+			_length = end - start;
+		}
+	}
 	
 	public substring(pointer<byte> cString) {
 		if (cString != null) {
@@ -1727,13 +1771,13 @@ public class substring {
 			return "";
 		for (int i = 0; i < _length; i++) {
 			switch (_data[i]) {
-			case	'\\':	output.printf("\\\\");	break;
-			case	'\a':	output.printf("\\a");	break;
-			case	'\b':	output.printf("\\b");	break;
-			case	'\f':	output.printf("\\f");	break;
-			case	'\n':	output.printf("\\n");	break;
-			case	'\r':	output.printf("\\r");	break;
-			case	'\v':	output.printf("\\v");	break;
+			case	'\\':	output.append("\\\\");	break;
+			case	'\a':	output.append("\\a");	break;
+			case	'\b':	output.append("\\b");	break;
+			case	'\f':	output.append("\\f");	break;
+			case	'\n':	output.append("\\n");	break;
+			case	'\r':	output.append("\\r");	break;
+			case	'\v':	output.append("\\v");	break;
 			default:
 				if (_data[i] >= 0x20 &&
 					_data[i] < 0x7f)
@@ -1765,13 +1809,13 @@ public class substring {
 			return "";
 		for (int i = 0; i < _length; i++) {
 			switch (_data[i]) {
-			case	'\"':	output.printf("\\\"");	break;
-			case	'\\':	output.printf("\\\\");	break;
-			case	'\b':	output.printf("\\b");	break;
-			case	'\f':	output.printf("\\f");	break;
-			case	'\n':	output.printf("\\n");	break;
-			case	'\r':	output.printf("\\r");	break;
-			case	'\t':	output.printf("\\t");	break;
+			case	'\"':	output.append("\\\"");	break;
+			case	'\\':	output.append("\\\\");	break;
+			case	'\b':	output.append("\\b");	break;
+			case	'\f':	output.append("\\f");	break;
+			case	'\n':	output.append("\\n");	break;
+			case	'\r':	output.append("\\r");	break;
+			case	'\t':	output.append("\\t");	break;
 			default:
 				output.append(_data[i]);
 			}
@@ -1799,13 +1843,13 @@ public class substring {
 			return "";
 		for (int i = 0; i < _length; i++) {
 			switch (_data[i]) {
-			case	'\\':	output.printf("\\\\");	break;
-			case	'\a':	output.printf("\\a");	break;
-			case	'\b':	output.printf("\\b");	break;
-			case	'\f':	output.printf("\\f");	break;
-			case	'\n':	output.printf("\\n");	break;
-			case	'\r':	output.printf("\\r");	break;
-			case	'\v':	output.printf("\\v");	break;
+			case	'\\':	output.append("\\\\");	break;
+			case	'\a':	output.append("\\a");	break;
+			case	'\b':	output.append("\\b");	break;
+			case	'\f':	output.append("\\f");	break;
+			case	'\n':	output.append("\\n");	break;
+			case	'\r':	output.append("\\r");	break;
+			case	'\v':	output.append("\\v");	break;
 			default:
 				if (_data[i] >= 0x20 &&
 					_data[i] < 0x7f)
@@ -1819,6 +1863,29 @@ public class substring {
 		}
 		return output;
 	}
+	/*
+	 *	escapeShell
+	 *
+	 *	Take the string and convert it to a form, that when
+	 *	wrapped with double-quotes would be a well-formed shell command-line
+	 *  argument.
+	 */
+	string escapeShell() {
+		string output;
+
+		if (_data == null)
+			return null;
+		for (int i = 0; i < _length; i++) {
+			switch (_data[i]) {
+			case	'\\':	output.append("\\\\");	break;
+			case	'\'':	output.append("\\'");	break;
+			case	'"':	output.append("\\\"");	break;
+			default:		output.append(_data[i]);
+			}
+		}
+		return output;
+	}
+
 
 //	public long fingerprint() {
 //		return 0;
@@ -2035,7 +2102,7 @@ public class substring {
 	
 	public text.substring trim() {
 		if (_data == null)
-			return text.substring(null, 0);
+			return text.substring();
 		for (int i = 0; i < _length; i++) {
 			if (!_data[i].isSpace()) {
 				for (int j = _length - 1; j > i; j--) {

@@ -32,6 +32,7 @@ import parasol:integers.unsigned;
 import parasol:floatingPoint.float;
 import parasol:floatingPoint.double;
 import parasol:text.string;
+import parasol:text.substring;
 import parasol:variant.var;
 import parasol:types.address;
 import parasol:types.boolean;

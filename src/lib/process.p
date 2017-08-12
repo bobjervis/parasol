@@ -193,16 +193,30 @@ private pointer<pointer<byte>> parseCommandLine(string command) {
 	C.memcpy(cmdCopy, &command[0], command.length());
 	argCount = 0;
 	inToken = false;
+	byte delimiter;
 	for (int i = 0; i < command.length(); i++) {
-		if (command[i].isSpace()) {
+		if (delimiter != 0) {
+			if (cmdCopy[i] == delimiter) {
+				cmdCopy[i] = 0;
+				inToken = false;
+				delimiter = 0;
+			}
+		} else if (command[i].isSpace()) {
 			cmdCopy[i] = 0;
 			inToken = false;
 		} else if (!inToken) {
+			if (cmdCopy[i] == '\'' || cmdCopy[i] == '"') {
+				delimiter = cmdCopy[i];
+				i++;
+			}
 			argv[argCount] = cmdCopy + i; 
 			argCount++;
 			inToken = true;
 		}
 	}
+	// If there was a delimited argument, and it wasn't closed reject the command-line.
+	if (delimiter != 0)
+		return null;
 	return argv;
 }
 
