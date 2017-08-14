@@ -46,6 +46,10 @@ public int SEEK_END = 2;
 @Linux("libc.so.6", "atof")
 public abstract double atof(pointer<byte> text);
 
+@Windows("msvcrt.dll", "atoi")
+@Linux("libc.so.6", "atoi")
+public abstract int atoi(pointer<byte> text);
+
 @Windows("msvcrt.dll", "calloc")
 @Linux("libc.so.6", "calloc")
 public abstract address calloc(long count, long size);
@@ -142,6 +146,10 @@ public abstract double sqrt(double x);
 @Linux("libc.so.6", "sleep")
 public abstract int sleep(unsigned seconds);
 
+@Windows("msvcrt.dll", "strchr")
+@Linux("libc.so.6", "strchr")
+public abstract pointer<byte> strchr(pointer<byte> s, int c);
+
 @Windows("msvcrt.dll", "strcpy")
 @Linux("libc.so.6", "strcpy")
 public abstract pointer<byte> strcpy(pointer<byte> dest, pointer<byte> src);
@@ -149,6 +157,10 @@ public abstract pointer<byte> strcpy(pointer<byte> dest, pointer<byte> src);
 @Windows("msvcrt.dll", "strncmp")
 @Linux("libc.so.6", "strncmp")
 public abstract int strncmp(pointer<byte> s1, pointer<byte> s2, size_t n);
+
+@Windows("msvcrt.dll", "strstr")
+@Linux("libc.so.6", "strstr")
+public abstract pointer<byte> strstr(pointer<byte> s1, pointer<byte> s2);
 
 @Windows("msvcrt.dll", "strtod")
 @Linux("libc.so.6", "strtod")
