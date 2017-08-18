@@ -207,9 +207,9 @@ private pointer<pointer<byte>> parseCommandLine(string command) {
 		} else if (!inToken) {
 			if (cmdCopy[i] == '\'' || cmdCopy[i] == '"') {
 				delimiter = cmdCopy[i];
-				i++;
-			}
-			argv[argCount] = cmdCopy + i; 
+				argv[argCount] = cmdCopy + i + 1; 
+			} else
+				argv[argCount] = cmdCopy + i; 
 			argCount++;
 			inToken = true;
 		}
