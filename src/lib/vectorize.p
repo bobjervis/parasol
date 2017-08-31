@@ -394,18 +394,21 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 					break;
 				}
 			}
-			if (constructor == null) {
-				vectorExpression.print(0);
-				assert(false);
+			if (constructor != null) {
+				ref<NodeList> args = tree.newNodeList(arg);
+				ref<Node> adr;
+				if (lhs.op() == Operator.ADDRESS) 
+					adr = lhs;
+				else
+					adr = tree.newUnary(Operator.ADDRESS, lhs, lhs.location());
+				result = tree.newCall(constructor, CallCategory.CONSTRUCTOR, adr, args, aggregate.location(), compileContext);
+				result.type = compileContext.arena().builtInType(TypeFamily.VOID);
+			} else {
+				// This should generate a runtime exception, because this was likely due to a catastrophic compile error somewhere
+				result = tree.newLeaf(Operator.SYNTAX_ERROR, vectorExpression.location());
+				result.type = compileContext.errorType();
+				return result;
 			}
-			ref<NodeList> args = tree.newNodeList(arg);
-			ref<Node> adr;
-			if (lhs.op() == Operator.ADDRESS) 
-				adr = lhs;
-			else
-				adr = tree.newUnary(Operator.ADDRESS, lhs, lhs.location());
-			result = tree.newCall(constructor, CallCategory.CONSTRUCTOR, adr, args, aggregate.location(), compileContext);
-			result.type = compileContext.arena().builtInType(TypeFamily.VOID);
 			lastIndexValue = -1;
 			for (ref<NodeList> nl = aggregate.arguments(); nl != null; nl = nl.next) {
 				ref<Node> val;

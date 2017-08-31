@@ -724,7 +724,7 @@ public string formattedLocation(int offset, boolean locationIsExact) {
 	return result;
 }
 
-private monitor serializeDumps;
+private Monitor serializeDumps;
 
 private void dumpMyThread(ref<ExceptionContext> context) {
 	ref<thread.Thread> t = thread.currentThread();

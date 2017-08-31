@@ -39,7 +39,6 @@ class Binary extends Node {
 		case	WHILE:
 		case	DECLARATION:
 		case	PLACEMENT_NEW:
-		case	MONITOR_DECLARATION:
 		case	INTERFACE_DECLARATION:
 		case	CLASS_DECLARATION:
 		case	FLAGS_DECLARATION:
@@ -202,7 +201,6 @@ class Binary extends Node {
 			return this;
 
 		case	FLAGS_DECLARATION:
-		case	MONITOR_DECLARATION:
 		case	ENUM_DECLARATION:
 		case	CLASS_DECLARATION:
 		case	INTERFACE_DECLARATION:
@@ -1309,7 +1307,6 @@ class Binary extends Node {
 
 	public Test fallsThrough() {
 		switch (op()) {
-		case	MONITOR_DECLARATION:
 		case	CLASS_DECLARATION:
 		case	ENUM_DECLARATION:
 		case	FLAGS_DECLARATION:
@@ -1551,14 +1548,6 @@ class Binary extends Node {
 	
 	private void assignTypes(ref<CompileContext> compileContext) {
 		switch (op()) {
-		case	MONITOR_DECLARATION:
-			type = _right.type;
-			_right.type = null;
-			compileContext.assignTypes(_right);
-			_right.type = type;
-//			type = compileContext.arena().builtInType(TypeFamily.VOID);
-			break;
-
 		case	ANNOTATED:
 			compileContext.assignTypes(_left);
 			if (_left.deferAnalysis()) {
@@ -2777,6 +2766,7 @@ public void markLiveSymbols(ref<Node> declarator, StorageClass storageClass, ref
 		break;
 		
 	case	EMPTY:
+	case	SYNTAX_ERROR:
 		break;
 		
 	default:

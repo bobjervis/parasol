@@ -413,6 +413,9 @@ class X86_64AddressModes extends X86_64Encoder {
 			return;
 		}
 		switch (impl(existingType)) {
+		case	ERROR:
+			return;
+
 		case	BOOLEAN:
 		case	UNSIGNED_8:
 			switch (impl(newType)) {

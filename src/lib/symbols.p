@@ -146,6 +146,7 @@ class PlainSymbol extends Symbol {
 	}
 	
 	public void print(int indent, boolean printChildScopes) {
+		printf("%p name [ %p. %d ]\n", this, _name.data, _name.length);
 		printf("%*.*c%s PlainSymbol %p %s", indent, indent, ' ', _name.asString(), this, string(visibility()));
 		if (declaredStorageClass() != StorageClass.ENCLOSING)
 			printf(" %s", string(declaredStorageClass()));
@@ -204,31 +205,7 @@ class PlainSymbol extends Symbol {
 					_typeDeclarator.op() == Operator.ENUM_DECLARATION ||
 					_typeDeclarator.op() == Operator.INTERFACE_DECLARATION)
 					_type = _typeDeclarator.type;
-				else if (_typeDeclarator.op() == Operator.MONITOR_DECLARATION) {
-					ref<Binary> mon = ref<Binary>(_typeDeclarator);
-					if (mon.right().op() == Operator.EMPTY) {
-						ref<Symbol> m = compileContext.arena().getSymbol("parasol", "thread.Monitor", compileContext);
-						if (m == null || m.class != PlainSymbol) {
-							if (m != null) {
-								m.print(0, false);
-							} else
-								assert(false);
-							_typeDeclarator.add(MessageId.NOT_A_TYPE, compileContext.pool());
-							_type = compileContext.errorType();
-						} else {
-							ref<Type> type = m.assignType(compileContext);
-							if (type.family() == TypeFamily.TYPEDEF) {		// if (type instanceof TypedefType)
-								ref<TypedefType> tp = ref<TypedefType>(type);
-								_type = tp.wrappedType();
-							} else {
-								m.print(0, false);
-								_typeDeclarator.add(MessageId.NOT_A_TYPE, compileContext.pool());
-								_type = compileContext.errorType();
-							}
-						}
-					} else
-						_type = _typeDeclarator.type;
-				} else if (_typeDeclarator.op() == Operator.FUNCTION)
+				else if (_typeDeclarator.op() == Operator.FUNCTION)
 					_type = _typeDeclarator.type;
 				else
 					_type = _typeDeclarator.unwrapTypedef(Operator.CLASS, compileContext);

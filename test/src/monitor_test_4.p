@@ -16,7 +16,7 @@
 
 import parasol:thread.Thread;
 
-monitor a {
+monitor class M {
 	private ref<Atom> list;
 	
 	ref<Atom> readOne() {
@@ -33,6 +33,8 @@ monitor a {
 		list = p;
 	}
 }
+
+M a;
 
 boolean t1Finished;
 

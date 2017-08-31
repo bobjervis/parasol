@@ -156,6 +156,8 @@ class Identifier extends Node {
 			switch (_symbol.storageClass()) {
 			case LOCK:
 				ref<LockScope> lockScope = ref<LockScope>(_symbol.enclosing());
+				if (lockScope.lockTemp == null)
+					return this;
 				ref<Node> lockRef = tree.newReference(lockScope.lockTemp, false, location());
 				if (lockRef == null)
 					return this;
@@ -295,6 +297,16 @@ class Identifier extends Node {
 		}
 	}
 
+	void bindMonitorName(ref<Scope> enclosing, ref<CompileContext> compileContext) {
+		_definition = true;
+		_symbol = enclosing.defineSimpleMonitor(compileContext.visibility, StorageClass.STATIC, compileContext.annotations, this, compileContext.monitorClass(), compileContext.pool());
+		if (_symbol != null) {
+			ref<Type> t = compileContext.makeTypedef(compileContext.monitorClass());
+			_symbol.bindType(t, compileContext);
+		} else
+			add(MessageId.DUPLICATE, compileContext.pool(), _value);
+	}
+
 	void bindEnumName(ref<Scope> enclosing, ref<Block> body, ref<CompileContext> compileContext) {
 		_definition = true;
 		ref<EnumScope> enumScope = compileContext.createEnumScope(body, this);
@@ -330,7 +342,7 @@ class Identifier extends Node {
 			add(MessageId.OVERLOAD_DISALLOWED, compileContext.pool(), _value);
 	}
 
-	void bindTemplateOverload(Operator visibility, boolean isStatic, ref<Node> annotations, ref<Scope> enclosing, ref<Template> templateDef, ref<CompileContext> compileContext) {
+	void bindTemplateOverload(Operator visibility, boolean isStatic, ref<Node> annotations, ref<Scope> enclosing, ref<Template> templateDef, boolean isMonitor, ref<CompileContext> compileContext) {
 		_definition = true;
 		ref<ParameterScope> templateScope = compileContext.createParameterScope(templateDef, ParameterScope.Kind.TEMPLATE);
 		ref<Overload> o = enclosing.defineOverload(&_value, Operator.TEMPLATE, compileContext);
@@ -338,7 +350,7 @@ class Identifier extends Node {
 			_symbol = o.addInstance(visibility, isStatic, annotations, this, templateScope, compileContext);
 			if (_symbol == null)
 				return;
-			ref<Type> t = compileContext.makeTypedef(compileContext.pool().newTemplateType(_symbol, templateDef, templateScope.file(), o, templateScope));
+			ref<Type> t = compileContext.makeTypedef(compileContext.pool().newTemplateType(_symbol, templateDef, templateScope.file(), o, templateScope, isMonitor));
 			_symbol.bindType(t, compileContext);
 		} else
 			add(MessageId.OVERLOAD_DISALLOWED, compileContext.pool(), _value);
@@ -399,8 +411,16 @@ class Identifier extends Node {
 				if (_symbol != null) {
 					// For non-lexical scopes (i.e. base classes), do not include private
 					// variables.
-					if (available != s && _symbol.visibility() == Operator.PRIVATE)
+					if (available != s && _symbol.visibility() == Operator.PRIVATE) {
+						_symbol = null;
 						break;
+					}
+					if (available.isMonitor()) {
+						if (!compileContext.current().enclosingClassScope().isMonitor()) {
+							add(MessageId.BAD_MONITOR_REF_IDENTIFIER, compileContext.pool(), _value);
+							type = compileContext.errorType();
+						}
+					}
 					if (_symbol.class == Overload) {
 						ref<Overload> o = ref<Overload>(_symbol);
 						if (o.instances().length() == 1) {

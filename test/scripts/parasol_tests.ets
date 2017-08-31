@@ -130,6 +130,7 @@ run(filename: monitor_test_5.p)
 run(filename: monitor_test_6.p)
 run(filename: monitor_test_7.p)
 run(filename: monitor_test_8.p)
+run(filename: monitor_test_9.p)
 run(filename: placement_delete_test.p)
 run(filename: vector_elem_constructor_test.p)
 run(filename: placement_new_test.p)
@@ -282,7 +283,7 @@ compile() { "interface a { void f(); } class b implements a { void f() {} void g
 compile(expect: fail, message: CLASS_MISSING_METHOD_FROM_INTERFACE) { "interface a { void f(); } class b implements a {}" }
 compile(expect: fail, message: CLASS_MISSING_METHOD_FROM_INTERFACE) { "interface a { void f(); } class b implements a { int f(long y) { return 5; } }" }
 compile(expect: fail, message: CLASS_MISSING_METHOD_FROM_INTERFACE) { "interface a { void f(); int f(int y); } class b implements a { int f(long y) { return 5; } }" }
-compile(expect: fail, message: NOT_AN_INTERFACE) { "monitor a { byte filler; } class b implements a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "monitor class a { byte filler; } class b implements a {}" }
 compile(expect: fail, message: NOT_AN_INTERFACE) { "int a; class b implements a {}" }
 compile(expect: fail, message: NOT_AN_INTERFACE) { "void a() {} class b implements a {}" }
 compile(expect: fail, message: NOT_AN_INTERFACE) { "class a {} class b implements a {}" }
@@ -300,7 +301,7 @@ compile(expect: fail) { "interface a { abstract int f(); }" }
 compile(expect: fail) { "interface a { class b{} }" }
 compile(expect: fail) { "interface a { enum b{} }" }
 compile(expect: fail) { "interface a { flags b{} }" }
-compile(expect: fail, message: NOT_AN_INTERFACE) { "monitor a { byte filler; } interface b extends a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "monitor class a { byte filler; } interface b extends a {}" }
 compile(expect: fail, message: NOT_AN_INTERFACE) { "int a; interface b extends a {}" }
 compile(expect: fail, message: NOT_AN_INTERFACE) { "void a() {} interface b extends a {}" }
 compile(expect: fail, message: NOT_AN_INTERFACE) { "class a {} interface b extends a {}" }
@@ -1302,26 +1303,38 @@ compile() { "ref<int> x = new int;" }
 //compile() { "lock { }" }
 //compile() { "lock { int x; }" }
 //compile() { "void func() lock {}" }
-//compile() { "void func() lock { int x; }" }
-compile() { "monitor a; lock(a) { }" }
-compile() { "monitor a; lock(a) { notify(); }" }
-compile() { "monitor a; lock(a) { notifyAll(); }" }
-compile() { "monitor a; lock(a) { wait(); }" }
-compile() { "monitor a; lock(a) { wait(10); }" }
-compile() { "monitor a; lock(a) { wait(10, 5); }" }
-compile() { "lock(a) { } monitor a;" }
-compile() { "monitor a {} lock(a) { }" }
-compile() { "monitor a { int b; } lock(a) { int c = b; }" }
-compile() { "lock(a) { int c = b; } monitor a { int b; }" }
-compile() { "monitor a { int b() { return 0; } } lock(a) { int c = b(); }" }
-compile() { "monitor a { void b() { } } a.b();" }
-compile() { "monitor a; lock(a) { int x; }" }
-compile() { "monitor a; void func() lock(a) {}" }
-compile() { "monitor a; void func() lock(a) { int x; }" }
+//compile() { "void func() lock { int x; }compile() { "monitor class M<class T> { T x; } M<int> a; lock(a) { x = 345678; }" }
+compile() { "monitor class M<class T> { T x; } monitor class N<class T> extends M<T> {}; N<int> a; lock(a) { x = 345678; }" }
+compile(expect: fail) { "monitor class M { int a; } class C extends M {} C x; x.a = 3;" }
+compile(expect: fail) { "monitor class M { int a; } class C extends M { void f() { a = 3; } }" }
+compile() { "monitor class M { } class C extends M { int a; } monitor class N extends C {} N x; x.a = 3;" }
+
+
+compile() { "Monitor a; lock(a) { }" }
+compile() { "Monitor a; lock(a) { notify(); }" }
+compile() { "Monitor a; lock(a) { notifyAll(); }" }
+compile() { "Monitor a; lock(a) { wait(); }" }
+compile() { "Monitor a; lock(a) { wait(10); }" }
+compile() { "Monitor a; lock(a) { wait(10, 5); }" }
+compile() { "lock(a) { } Monitor a;" }
+compile() { "monitor class M {} M a; lock(a) { }" }
+compile() { "monitor class M { int b; } M a; lock(a) { int c = b; }" }
+compile() { "M a; lock(a) { int c = b; } monitor class M { int b; }" }
+compile() { "monitor class M { int b() { return 0; } } M a; lock(a) { int c = b(); }" }
+compile() { "monitor class M { void b() { } } M a; a.b();" }
+compile() { "Monitor a; lock(a) { int x; }" }
+compile() { "Monitor a; void func() lock(a) {}" }
+compile() { "Monitor a; void func() lock(a) { int x; }" }
 
 compile(expect: fail) { "float a; lock(a) { }" }
 compile(expect: fail) { "float a; void func() lock(a) {}" }
-compile(expect: fail) { "monitor a { int b; } int c = a.b;" }
+compile(expect: fail) { "monitor class M { int b; }; M a; int c = a.b;" }
+
+compile() { "monitor class M { int b; } monitor class N extends M { int d; }" }
+compile() { "monitor class M { int b; } class N extends M { int d; }" }
+compile(expect: fail) { "class M { int b; } monitor class N extends M { int d; }" }
+compile() { "monitor class M { int b; } class N extends M { int d; } monitor class P extends N { int e; }" }
+
  
 compile() { "ref<int> x = new (null) int;" }
 compile(expect: fail, message: CANNOT_CONVERT) { "long x = new (null) int;" }
@@ -1459,9 +1472,8 @@ statement() { "@c(d) class q{}" }
 statement() { "@c(d) class q extends a {}" }
 statement() { "@c(d) class q implements a {}" }
 statement() { "@c(d) class q extends a implements b {}" }
-statement() { "monitor a;" }
-statement() { "monitor a { b; }" }
-statement() { "monitor a { }" }
+statement() { "monitor class a { b; }" }
+statement() { "monitor class a { }" }
 statement() { "flags a{b}" }
 statement() { "flags a{b,}" }
 statement() { "flags a{b,c}" }
@@ -1697,10 +1709,12 @@ statement(expect: fail) { class q extends a implements b }
 statement(expect: fail) { "class extends a implements b {" }
 statement(expect: recovered) { "class q extends a implements b {" }
 statement(expect: fail) { "monitor" }
-statement(expect: fail) { "monitor a" }
-statement(expect: recovered) { "monitor a {" }
-statement(expect: recovered) { "monitor a { b" }
-statement(expect: recovered) { "monitor a { b;" }
+statement(expect: fail) { "monitor class" }
+
+statement(expect: fail) { "monitor class a" }
+statement(expect: recovered) { "monitor class a {" }
+statement(expect: recovered) { "monitor class a { b" }
+statement(expect: recovered) { "monitor class a { b;" }
 statement(expect: fail) { "flags" }
 statement(expect: fail) { "flags a" }
 statement(expect: fail) { "flags {b}" }

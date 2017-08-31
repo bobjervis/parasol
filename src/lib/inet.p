@@ -61,9 +61,12 @@ public class SocketException extends exception.Exception {
 	
 }
 
-private  monitor _init {
+private  monitor class SocketInit {
 	boolean _done;
 }
+
+private SocketInit _init;
+
 public class Socket {
 	public static ref<Socket> create() {
 		return create(Encryption.NONE, null);
@@ -273,9 +276,11 @@ class PlainConnection extends Connection {
 	}
 }
 
-private monitor _init_ssl {
+private monitor class InitSSL {
 	boolean _done;
 }
+
+private InitSSL _init_ssl;
 
 class SSLSocket extends Socket {
 	private ref<ssl.SSL_CTX> _context;

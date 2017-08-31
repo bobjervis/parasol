@@ -4072,6 +4072,7 @@ CC continuation(Operator compare, ref<Type> type) {
 
 	case	NOT_EQUAL:
 		switch (type.family()) {
+		case	ERROR:
 		case	UNSIGNED_32:
 		case	SIGNED_32: 
 		case	SIGNED_64: 

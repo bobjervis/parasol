@@ -189,6 +189,10 @@ class BuiltInType extends Type {
 		return _ordinal;
 	}
 	
+	public boolean isLockable() {
+		return family() == TypeFamily.CLASS_DEFERRED;
+	}
+
 	public string signature() {
 		return builtinName[family()];
 	}
@@ -274,6 +278,7 @@ class MonitorType extends ClassType {
 	}
 
 	public  ref<Type> assignSuper(ref<CompileContext> compileContext) {
+		resolve(compileContext);
 		if (_extends == null)
 			_extends = compileContext.monitorClass();
 		return _extends;
@@ -281,7 +286,11 @@ class MonitorType extends ClassType {
 	
 	public boolean isMonitor() {
 		return true;
-	}	
+	}
+
+	public boolean isLockable() {
+		return true;
+	}
 }
 
 class InterfaceType extends ClassType {
@@ -312,17 +321,20 @@ class ClassType extends Type {
 	protected ref<Type> _extends;
 	protected ref<InterfaceType>[] _implements;
 	protected ref<Class> _definition;
+	protected boolean _isMonitor;
 
 	protected ClassType(TypeFamily family, ref<Class> definition, ref<Scope> scope) {
 		super(family);
 		_definition = definition;
 		_scope = scope;
+		_isMonitor = definition.op() == Operator.MONITOR_CLASS;
 	}
 
 	ClassType(ref<Class> definition, ref<Scope> scope) {
 		super(TypeFamily.CLASS);
 		_definition = definition;
 		_scope = scope;
+		_isMonitor = definition.op() == Operator.MONITOR_CLASS;
 	}
 
 	ClassType(TypeFamily effectiveFamily, ref<Type> base, ref<Scope> scope) {
@@ -333,7 +345,9 @@ class ClassType extends Type {
 
 	public void print() {
 		pointer<address> pa = pointer<address>(this);
-		printf("%s(%p) %p scope %p", string(family()), pa[1], _definition, _scope);
+		printf("%s%s(%p) %p scope %p", _isMonitor? "monitor " : "", string(family()), pa[1], _definition, _scope);
+		if (_extends != null)
+			printf(" extends %p", _extends);
 	}
 
 	public ref<OverloadInstance> initialConstructor() {
@@ -453,6 +467,15 @@ class ClassType extends Type {
 			return false;
 	}
 
+	public boolean isLockable() {
+		if (_isMonitor)
+			return true;
+		if (_extends != null)
+			return _extends.isLockable();
+		else
+			return false;
+	}
+
 	public  ref<Type> assignSuper(ref<CompileContext> compileContext) {
 		resolve(compileContext);
 		return _extends;
@@ -514,7 +537,9 @@ class ClassType extends Type {
 					_extends = base.type;
 				else
 					_extends = base.unwrapTypedef(family() == TypeFamily.INTERFACE ? Operator.INTERFACE : Operator.CLASS, compileContext);
-			}
+			} else if (_definition.op() == Operator.MONITOR_CLASS) 
+				_extends = compileContext.monitorClass();
+			_isMonitor = _definition.op() == Operator.MONITOR_CLASS;
 		}
 	}
 
@@ -995,18 +1020,20 @@ class TemplateType extends Type {
 	private ref<Scope> _templateScope;
 	private ref<Type> _extends;
 	private ref<Symbol> _definingSymbol;
+	private boolean _isMonitor;
 
-	TemplateType(ref<Symbol> symbol, ref<Template> definition, ref<FileStat>  definingFile, ref<Overload> overload, ref<Scope> templateScope) {
+	TemplateType(ref<Symbol> symbol, ref<Template> definition, ref<FileStat>  definingFile, ref<Overload> overload, ref<Scope> templateScope, boolean isMonitor) {
 		super(TypeFamily.TEMPLATE);
 		_definingSymbol = symbol;
 		_definition = definition;
 		_definingFile = definingFile;
 		_overload = overload;
 		_templateScope = templateScope;
+		_isMonitor = isMonitor;
 	}
 
 	public void print() {
-		printf("%s %p scope %p", string(family()), _definition, _templateScope);
+		printf("%s%s %p scope %p", _isMonitor ? "monitor " : "", string(family()), _definition, _templateScope);
 	}
 
 	public int parameterCount() {
@@ -1040,10 +1067,18 @@ class TemplateType extends Type {
 		return _definingSymbol;
 	}
 
+	public boolean isMonitorTemplate() {
+		return _isMonitor;
+	}
+
 	public string signature() {
-		return definingSymbol().name().asString();
+		return "Template " + definingSymbol().name().asString();
 	}
 	
+	public string templateName() {
+		return definingSymbol().name().asString();
+	}
+
 	private boolean sameAs(ref<Type> other) {
 		assert(false);
 		return false;
@@ -1080,6 +1115,7 @@ class TemplateInstanceType extends ClassType {
 		_templateType = templateType;
 		_next = next;
 		_concreteDefinition = concreteDefinition;
+		_isMonitor = templateType.isMonitorTemplate();
 	}
 
 	public ref<Type> indirectType(ref<CompileContext> compileContext) {
@@ -1123,6 +1159,13 @@ class TemplateInstanceType extends ClassType {
 		return tt.wrappedType() == _templateType;
 	}
 
+	public boolean isLockable() {
+		if (_templateType.isMonitorTemplate())
+			return true;
+		else
+			return super.isLockable();
+	}
+
 	public ref<Type> shapeType() {
 		return null;
 	}
@@ -1140,7 +1183,8 @@ class TemplateInstanceType extends ClassType {
 		if (base != null) {
 			compileContext.assignTypes(_scope.enclosing(), base);
 			_extends = base.unwrapTypedef(Operator.CLASS, compileContext);
-		}
+		} else if (_templateType.isMonitorTemplate())
+			_extends = compileContext.monitorClass();
 	}
 
 	public boolean match(var[] args) {
@@ -1175,7 +1219,7 @@ class TemplateInstanceType extends ClassType {
 	}
 	
 	public void print() {
-		printf("TemplateInstanceType %s <", string(family()));
+		printf("%sTemplateInstanceType %s <", _isMonitor ? "monitor " : "", string(family()));
 		for (int i = 0; i < _arguments.length(); i++) {
 			if (i > 0)
 				printf(", ");
@@ -1190,7 +1234,7 @@ class TemplateInstanceType extends ClassType {
 	}
 
 	public string signature() {
-		string sig = _templateType.signature();
+		string sig = _templateType.templateName();
 		sig.append('<');
 		
 		for (int i = 0; i < _arguments.length(); i++) {
@@ -1636,6 +1680,10 @@ class Type {
 	boolean isMonitor() {
 		return false;
 	}
+
+	boolean isLockable() {
+		return false;
+	}
 	
 	boolean isIntegral() {
 		switch (_family) {
@@ -1739,8 +1787,17 @@ class Type {
 		return result;
 	}
 	
+	public boolean monitorCanExtend(ref<CompileContext> compileContext) {
+		if (isMonitor())
+			return true;
+		ref<Type> base = assignSuper(compileContext);
+		if (base == null)
+			return false;		// We hit bottom and didn't see a monitor, so no dice.
+		return base.monitorCanExtend(compileContext);
+	}
+
 	public ref<Symbol> lookup(ref<CompileString> name, ref<CompileContext> compileContext) {
-		for (ref<Type> current = this; current != null; current = current.assignSuper(compileContext)) {
+		for (ref<Type> current = this; current != null; current = current.assignSuper(compileContext)) {				
 			if (current.scope() != null) {
 				ref<Symbol> sym = current.scope().lookup(name, compileContext);
 				if (sym != null) {
@@ -1826,6 +1883,16 @@ class Type {
 	
 	public boolean deferAnalysis() {
 		return _family == TypeFamily.ERROR || _family == TypeFamily.CLASS_DEFERRED;
+	}
+
+	public boolean baseChainDeferAnalysis() {
+		if (deferAnalysis())
+			return true;
+		ref<Type> sup = getSuper();
+		if (sup != null)
+			return sup.baseChainDeferAnalysis();
+		else
+			return false;
 	}
 
 	public TypeFamily family() {

@@ -16,9 +16,11 @@
 
 import parasol:thread.Thread;
 
-monitor a {
+monitor class M {
 	ref<Atom> list;
 }
+
+M a;
 
 boolean t1Finished;
 

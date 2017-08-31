@@ -57,16 +57,17 @@ class ClassScope extends ClasslikeScope {
 			target.assignStorageToObject(sym, this, offset, compileContext);
 		}
 	}
+
+	public boolean isMonitor() {
+		return _definition != null && _definition.op() == Operator.MONITOR_CLASS;
+	}
 }
 
 class MonitorScope extends ClassScope {
-	public MonitorScope(ref<Scope> enclosing, ref<Node> definition) {
-		super(enclosing, definition, null);
+	public MonitorScope(ref<Scope> enclosing, ref<Node> definition, ref<Identifier> className) {
+		super(enclosing, definition, className);
 	}
 	
-	public boolean isMonitor() {
-		return true;
-	}
 }
 
 class LockScope extends Scope {
@@ -88,9 +89,16 @@ class LockScope extends Scope {
 		if (sym != null)
 			return sym;
 		if (_monitor != null) {
-			sym = _monitor.type.lookup(name, compileContext);
-			if (sym == null)
+			if (_monitor.type == null || _monitor.type.family() == TypeFamily.ERROR)
 				return null;
+			sym = _monitor.type.lookup(name, compileContext);
+//			printf("Looking for %s in %s found %p\n", name.asString(), _monitor.type.signature(), sym);
+			if (sym == null) {
+				if (_monitor.type.baseChainDeferAnalysis())
+					return definePlaceholderDelegate(name, compileContext.arena().builtInType(TypeFamily.CLASS_DEFERRED), compileContext.pool());
+				else
+					return null;
+			}
 			return defineDelegate(sym, compileContext.pool());
 		}
 		return null;
@@ -1341,6 +1349,16 @@ class Scope {
 		return o;
 	}
 
+	public ref<Symbol> defineSimpleMonitor(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> source, ref<Type> type, ref<MemoryPool> memoryPool) {
+		SymbolKey key(source.identifier());
+		if (_symbols.contains(key))
+			return null;
+	//	printf("Define %s\n", source.identifier().asString());
+		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations, source.identifier(), source, type, null);
+		_symbols.insert(key, sym);
+		return sym;
+	}
+
 	public void defineConstructor(ref<ParameterScope> constructor, ref<MemoryPool> memoryPool) {
 		_constructors.append(constructor);
 	}
@@ -1369,6 +1387,16 @@ class Scope {
 		SymbolKey key(name);
 		_symbols.insert(key, nm);
 		return nm;
+	}
+
+	ref<Symbol> definePlaceholderDelegate(ref<CompileString> name, ref<Type> type, ref<MemoryPool> memoryPool) {
+		SymbolKey key(name);
+		if (_symbols.contains(key))
+			return null;
+		ref<Symbol> sym = memoryPool.newPlainSymbol(Operator.PRIVATE, StorageClass.STATIC, this, null, name, null, type, null);
+//		printf("definePlaceholderDelegate(%s [%p,%d], ...) -> %p %p\n", name.asString(), name.data, name.length, sym, memoryPool);
+		_symbols.insert(key, sym);
+		return sym;
 	}
 
 	ref<Symbol> defineDelegate(ref<Symbol> delegate, ref<MemoryPool> memoryPool) {
@@ -1424,12 +1452,8 @@ class Scope {
 				continue;
 			ref<ParameterScope> defaultConstructor = sym.type().defaultConstructor();
 			if (defaultConstructor == null) {
-				if (sym.type().hasConstructors()) {
-//					printf("no def. %s\n", sym.type().signature());
-//					sym.print(0, false);
-//					assert(false);
+				if (sym.type().hasConstructors())
 					sym.add(MessageId.NO_DEFAULT_CONSTRUCTOR, compileContext.pool());
-				}
 				continue;
 			}
 			if (defaultConstructor != null && defaultConstructor.definition() != null) {

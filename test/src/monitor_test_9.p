@@ -13,46 +13,51 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+monitor class M {
+	int m;
 
-/* Note this test declares a local variable inside a lock.
- * 
- */
-Monitor a;
-
-int x;
-
-assert(!a.isLocked());
-
-for (;; x++) {
-	string poopsalot;
-	lock (a) {
-		string poopssomemore;
-		assert(a.isLocked());
-		if (x < 3)
-			break;
+	void verify(int value) {
+		assert(m == value);
 	}
 }
 
-assert(!a.isLocked());
+monitor class N extends M {
+	int n;
 
-for (; x < 5; x++) {
-	lock (a) {
-		assert(a.isLocked());
-		if (x < 3)
-			continue;
+	void verifyN(int value) {
+		assert(n == value);
 	}
 }
 
-assert(!a.isLocked());
-
-f();
-
-void f() {
-	lock (a) {
-		assert(a.isLocked());
-		return;
-	}
+class C extends M {
+	int x;
 }
 
-assert(!a.isLocked());
+M a;
+N b;
+C c;
 
+lock (a) {
+	m = 3;
+}
+
+a.verify(3);
+
+lock (b) {
+	m = 2;
+	n = 7;
+}
+
+b.verify(2);
+b.verifyN(7);
+
+lock (c) {
+	m = 4;
+	x = 3;
+}
+
+c.x++;
+
+c.verify(4);
+
+assert(c.x == 4);

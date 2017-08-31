@@ -41,7 +41,7 @@ import parasol:runtime;
 
 Thread.init();
 
-private monitor threads {
+private monitor class ActiveThreads {
 	ref<Thread>[] _activeThreads;
 
 	void enlist(ref<Thread> newThread) {
@@ -71,6 +71,8 @@ private monitor threads {
 				linux.tgkill(tgid, int(_activeThreads[i].id()), linux.SIGTSTP);
 	}
 }
+
+private ActiveThreads threads;
 
 public ref<Thread>[] getActiveThreads() {
 	ref<Thread>[] a;
@@ -260,7 +262,7 @@ public void exit(int code) {
  * This is the runtime implementation class for the monitor feature. It supplies the public methods that are
  * implied in a declared monitor object.
  */
-class Monitor {
+public class Monitor {
 	private Mutex _mutex;
 	private HANDLE	_semaphore;
 	private linux.sem_t _linuxSemaphore;
@@ -517,13 +519,13 @@ private class WorkItem<class T> {
 	public address parameter;
 }
 
-public class ThreadPool<class T> {
-	private monitor _workload {
-		ref<WorkItem<T>> _first;
-		ref<WorkItem<T>> _last;
-		boolean _shutdownRequested;
-	}
-	
+private monitor class ThreadPoolData<class T> {
+	ref<WorkItem<T>> _first;
+	ref<WorkItem<T>> _last;
+	boolean _shutdownRequested;
+}
+
+public class ThreadPool<class T> extends ThreadPoolData<T> {
 	ref<Thread>[] _threads;
 	
 	public ThreadPool(int threadCount) {
@@ -534,7 +536,7 @@ public class ThreadPool<class T> {
 	}
 	
 	public void shutdown() {
-		lock (_workload) {
+		lock (*this) {
 			while (_first != null) {
 				ref<WorkItem<T>> wi = _first;
 				_first = wi.next;
@@ -556,7 +558,7 @@ public class ThreadPool<class T> {
 		wi.result = future;
 		wi.valueGenerator = f;
 		wi.parameter = parameter;
-		lock (_workload) {
+		lock (*this) {
 			if (_shutdownRequested) {
 				delete wi;
 				delete future;
@@ -577,7 +579,7 @@ public class ThreadPool<class T> {
 		wi.result = null;
 		wi.valueGenerator = T(address)(f);
 		wi.parameter = parameter;
-		lock (_workload) {
+		lock (*this) {
 			if (_shutdownRequested) {
 				delete wi;
 				return false;			// Don't do it! It's a trap. (Bug: compiler does not unlock the _workload lock)
@@ -613,7 +615,7 @@ public class ThreadPool<class T> {
 	private boolean getEvent() {
 		ref<WorkItem<T>> wi;
 
-		lock(_workload) {
+		lock(*this) {
 			if (_shutdownRequested)
 				return false;			// Don't do it! It's a trap. (Bug: compiler does not unlock the _workload lock)
 			wait();
@@ -638,94 +640,64 @@ public class ThreadPool<class T> {
 	}
 }
 
-public class Future<class T> {
-	private monitor _resources {
-		T _value;
-		boolean _calculating;
-		boolean _posted;
-		boolean _cancelled;
-		ref<Exception> _uncaught;
-	}
+public monitor class Future<class T> {
+	T _value;
+	boolean _calculating;
+	boolean _posted;
+	boolean _cancelled;
+	ref<Exception> _uncaught;
 	
 	public T get() {
-		T val;
-		lock (_resources) {
-			if (!_posted)
-				wait();
-			val = _value;
-		}
-		return val;
+		if (!_posted)
+			wait();
+		return _value;
 	}
 	
 	public boolean success() {
-		boolean result;
-		lock (_resources) {
-			if (!_posted)
-				wait();
-			result = !_cancelled && _uncaught == null;
-		}
-		return result;
+		if (!_posted)
+			wait();
+		return !_cancelled && _uncaught == null;
 	}
 	
 	public ref<Exception> uncaught() {
-		ref<Exception> e;
-		lock (_resources) {
-			if (!_posted)
-				wait();
-			e = _uncaught;
-		}
-		return e;
+		if (!_posted)
+			wait();
+		return _uncaught;
 	}
 	
 	public boolean cancelled() {
-		boolean c;
-		lock (_resources) {
-			if (!_posted)
-				wait();
-			c = _cancelled;
-		}
-		return c;
+		if (!_posted)
+			wait();
+		return _cancelled;
 	}
 	
 	public void post(T value) {
-		lock (_resources) {
-			_value = value;
-			_posted = true;
-			_calculating = false;
-			notifyAll();
-		}
+		_value = value;
+		_posted = true;
+		_calculating = false;
+		notifyAll();
 	}
 	
 	public void postFailure(ref<Exception> e) {
-		lock (_resources) {
-			_uncaught = e;
-			_posted = true;
-			_calculating = false;
-			notifyAll();
-		}
+		_uncaught = e;
+		_posted = true;
+		_calculating = false;
+		notifyAll();
 	}
 	
 	boolean calculating() {
-		boolean result;
-		lock (_resources) {
-			if (!_cancelled)
-				_calculating = true;
-			result = _calculating;
-		}
-		return result;
+		if (!_cancelled)
+			_calculating = true;
+		return _calculating;
 	}
 	
 	public boolean cancel() {
-		boolean result;
-		lock (_resources) {
-			if (!_posted && !_calculating) {
-				_cancelled = true;
-				_posted = true;
-				notifyAll();
-			}
-			result = _cancelled;
+		if (!_posted && !_calculating) {
+			_cancelled = true;
+			_posted = true;
+			notifyAll();
 		}
-		return result;
+		return _cancelled;
 	}
 }
 

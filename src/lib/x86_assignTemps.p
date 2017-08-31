@@ -717,6 +717,11 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	CLASS_OF:
 			u = ref<Unary>(node);
 			switch (u.operand().type.family()) {
+			case	ERROR:
+				// Make it something.
+				u.register = byte(R.RAX);
+				break;
+
 			case	VAR:
 				assignLvalueTemps(u.operand(), compileContext);
 				f().r.cleanupTemps(u, depth);
@@ -763,6 +768,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				node.register = byte(f().r.getreg(node, floatMask, regMask));
 			else {
 				node.register = byte(f().r.getreg(node, requiredMask(node), regMask));
+		//		printf("requiredMask = %x regMask = %x\n", requiredMask(node), regMask);
+		//		node.print(0);
 			}
 			break;
 			
@@ -844,6 +851,20 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			return;
 		}
 		switch (impl(existingType)) {
+		case	ERROR:
+			// Make it something for now.
+			switch (impl(newType)) {
+			default:
+				result.register = byte(R.RAX);
+				return;
+
+			case	FLOAT_32:
+			case	FLOAT_64:
+				result.register = byte(R.XMM0);
+				return;
+			}
+			return;
+
 		case	BOOLEAN:
 		case	UNSIGNED_8:
 			switch (impl(newType)) {

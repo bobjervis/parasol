@@ -226,6 +226,7 @@ class CompileContext {
 		case	LOCK:
 		case	BLOCK:
 		case	CLASS:
+		case	MONITOR_CLASS:
 			ref<Block> b = ref<Block>(definition);
 			for (ref<NodeList> nl = b.statements(); nl != null; nl = nl.next) {
 				// Reset these state conditions accumulated from the traversal so far.
@@ -233,7 +234,7 @@ class CompileContext {
 				buildScopesInTree(nl.node);
 			}
 			break;
-
+			
 		case	UNIT:
 			b = ref<Block>(definition);
 			for (ref<NodeList> nl = b.statements(); nl != null; nl = nl.next) {
@@ -285,18 +286,6 @@ class CompileContext {
 			buildScopesInTree(tern.right());
 			break;
 			
-		case	MONITOR_DECLARATION:
-			ref<Binary> bin = ref<Binary>(definition);
-			if (bin.right().op() != Operator.EMPTY) {
-				b = ref<Block>(bin.right());
-				for (ref<NodeList> nl = b.statements(); nl != null; nl = nl.next) {
-					// Reset these state conditions accumulated from the traversal so far.
-					clearDeclarationModifiers();
-					buildScopesInTree(nl.node);
-				}
-			}
-			break;
-			
 		default:
 			definition.print(0);
 			assert(false);
@@ -315,9 +304,9 @@ class CompileContext {
 	private void buildScopesInTree(ref<Node> n) {
 		n.traverse(Node.Traversal.PRE_ORDER, buildScopeInTree, this);
 		// TODO: Add nested functions so this can be:
-//		n.traverse(Node.Traversal.PRE_ORDER, TraverseAction (ref<Node> n, address data) {
+//		n.traverse(Node.Traversal.PRE_ORDER, TraverseAction (ref<Node> n) {
 //				return buildScopes(n);
-//			}, this);
+//			});
 	}
 
 	private static TraverseAction buildScopeInTree(ref<Node> n, address data) {
@@ -513,6 +502,7 @@ class CompileContext {
 			return TraverseAction.SKIP_CHILDREN;
 
 		case	CLASS:
+		case	MONITOR_CLASS:
 			ref<Class> c = ref<Class>(n);
 			ref<ClassScope> classScope = createClassScope(n, null);
 			c.scope = classScope;
@@ -524,7 +514,8 @@ class CompileContext {
 			id = ref<Identifier>(b.left());
 			if (b.right().op() == Operator.TEMPLATE) {
 				ref<Template> t = ref<Template>(b.right());
-				id.bindTemplateOverload(visibility, isStatic, annotations, _current, t, this);
+				boolean isMonitor = t.classDef.op() == Operator.MONITOR_CLASS;
+				id.bindTemplateOverload(visibility, isStatic, annotations, _current, t, isMonitor, this);
 			} else {
 				ref<Class> c = ref<Class>(b.right());
 				ref<ClassScope> classScope = createClassScope(c, id);
@@ -556,24 +547,6 @@ class CompileContext {
 			bindDeclarators(b.left(), b.right());
 			break;
 
-		case	MONITOR_DECLARATION:
-			b = ref<Binary>(n);
-			id = ref<Identifier>(b.left());
-			if (b.right().op() == Operator.EMPTY) {
-				id.bind(_current, n, null, this);
-				n.type = monitorClass();
-			} else {
-				ref<Class> c = ref<Class>(b.right());
-				ref<ClassScope> classScope = createMonitorScope(c);
-				classScope.classType = _pool.newMonitorType(c, classScope);
-				id.bind(_current, n, b.right(), this);
-				// By making the type of the 'monitor' node itself, when we get to running assignType later on,
-				// it will all just work out fine (hopefully). Since the node will have a type, there won't be any
-				// need to do further analysis. 
-				c.type = classScope.classType;
-			}
-			return TraverseAction.SKIP_CHILDREN;
-			
 		case	FUNCTION:
 			if (n.register == 1) {
 				n.register = 0;
@@ -658,8 +631,8 @@ class CompileContext {
 		return _arena.createLockScope(_current, definition);
 	}
 
-	public ref<MonitorScope> createMonitorScope(ref<Node> definition) {
-		return _arena.createMonitorScope(_current, definition);
+	public ref<MonitorScope> createMonitorScope(ref<Node> definition, ref<Identifier> className) {
+		return _arena.createMonitorScope(_current, definition, className);
 	}
 
 	void bindDeclarators(ref<Node> type, ref<Node> n) {
@@ -955,7 +928,7 @@ class CompileContext {
 		case	CLASS_DECLARATION:
 		case	ENUM_DECLARATION:
 		case	FLAGS_DECLARATION:
-		case	MONITOR_DECLARATION:
+		case	MONITOR_CLASS:
 		case	DECLARATION:
 		case	DECLARE_NAMESPACE:
 		case	EXPRESSION:
@@ -1002,6 +975,8 @@ class CompileContext {
 	public ref<Node> fold(ref<Node> node, ref<FileStat> file) {
 		int outerBaseLive = _baseLiveSymbol;
 		_baseLiveSymbol = _liveSymbols.length();
+//		printf("Folding:\n");
+//		node.print(0);
 		ref<Node> n = node.fold(file.tree(), false, this);
 		_liveSymbols.resize(_baseLiveSymbol);
 		_liveSymbolScopes.resize(_baseLiveSymbol);
@@ -1191,7 +1166,7 @@ class CompileContext {
 				ref<Type> type = m.assignType(this);
 				if (type.family() == TypeFamily.TYPEDEF) {		// if (type == TypedefType)
 					ref<TypedefType> tp = ref<TypedefType>(type);
-					return tp.wrappedType();
+					_monitorClass = tp.wrappedType();
 				} else {
 					m.print(0, false);
 					assert(false);
@@ -1200,7 +1175,13 @@ class CompileContext {
 		}
 		return _monitorClass;
 	}
-	
+
+	boolean isLockable(ref<Type> type) {
+		if (type.isLockable())
+			return true;
+		return type == monitorClass();
+	}
+
 	boolean isMonitor(ref<Type> type) {
 		if (type.isMonitor())
 			return true;
@@ -1305,8 +1286,9 @@ class MemoryPool extends memory.NoReleasePool {
 		return super new FlagsInstanceType(symbol, scope, instanceClass);
 	}
 
-	public ref<TemplateType> newTemplateType(ref<Symbol> symbol, ref<Template> definition, ref<FileStat> definingFile, ref<Overload> overload, ref<Scope> templateScope) {
-		return super new TemplateType(symbol, definition, definingFile, overload, templateScope);
+	public ref<TemplateType> newTemplateType(ref<Symbol> symbol, ref<Template> definition, ref<FileStat> definingFile,
+						ref<Overload> overload, ref<Scope> templateScope, boolean isMonitor) {
+		return super new TemplateType(symbol, definition, definingFile, overload, templateScope, isMonitor);
 	}
 
 	public ref<BuiltInType> newBuiltInType(TypeFamily family, ref<ClassType> classType) {

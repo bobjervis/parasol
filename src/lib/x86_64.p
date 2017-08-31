@@ -945,7 +945,7 @@ public class X86_64 extends X86_64AssignTemps {
 			int sz = var.stackSize();
 //			if (var.returns != null)
 //				var.print();
-			assert(sz > 0);
+//			assert(sz > 0);
 			f().autoSize += sz;
 			var.offset = -f().autoSize;
 //			printf("Var [%d] %p offset %d\n", i, var, var.offset);
@@ -1462,7 +1462,7 @@ public class X86_64 extends X86_64AssignTemps {
 		case	INTERFACE_DECLARATION:
 		case	ENUM_DECLARATION:
 		case	FLAGS_DECLARATION:
-		case	MONITOR_DECLARATION:
+		case	MONITOR_CLASS:
 		case	DECLARE_NAMESPACE:
 		case	IMPORT:
 		case	EMPTY:
@@ -2468,6 +2468,10 @@ public class X86_64 extends X86_64AssignTemps {
 		case	CLASS_OF:
 			expression = ref<Unary>(node);
 			switch (expression.operand().type.family()) {
+			case	ERROR:
+				// Should generate a runtime exception here
+				break;
+
 			case	VAR:
 				generate(expression.operand(), compileContext);
 				inst(X86.MOV, TypeFamily.ADDRESS, expression, expression.operand(), compileContext);
@@ -2757,13 +2761,20 @@ public class X86_64 extends X86_64AssignTemps {
 				generateStaticInitializers(nl.node, compileContext);
 			break;
 			
-		case	MONITOR_DECLARATION:
+		case	MONITOR_CLASS:
 			b = ref<Binary>(node);
-			classNode = ref<Class>(b.right());
-			for (ref<NodeList> nl = classNode.statements(); nl != null; nl = nl.next)
-				generateStaticInitializers(nl.node, compileContext);
-			break;
+			switch (b.right().op()) {
+			case	EMPTY:
+				break;
+
+			case	CLASS:
+				classNode = ref<Class>(b.right());
 			
+				for (ref<NodeList> nl = classNode.statements(); nl != null; nl = nl.next)
+					generateStaticInitializers(nl.node, compileContext);
+			}
+			break;
+
 		case	INITIALIZE:
 			b = ref<Binary>(node);
 			ref<Symbol> sym = b.left().symbol();
@@ -2951,6 +2962,10 @@ public class X86_64 extends X86_64AssignTemps {
 	
 	private void generateCompareInst(ref<Binary> b, ref<CompileContext> compileContext) {
 		switch (b.left().type.family()) {
+		case	ERROR:
+			// This hsould generate a runtime exception here
+			break;
+
 		case	FLAGS:
 		case	ENUM:
 		case	UNSIGNED_32:
@@ -3499,6 +3514,10 @@ public class X86_64 extends X86_64AssignTemps {
 			return;
 		}
 		switch (impl(existingType)) {
+		case	ERROR:
+			// TODO: Generate a runtime exception here.
+			return;
+
 		case	BOOLEAN:
 		case	UNSIGNED_8:
 			switch (impl(newType)) {
@@ -4123,6 +4142,7 @@ public class X86_64 extends X86_64AssignTemps {
 						
 					case	TYPEDEF:
 					case	ERROR:
+					case	CLASS_DEFERRED:
 					case	INTERFACE:
 						break;
 						

@@ -412,8 +412,8 @@ public class Arena {
 		return s;
 	}
 
-	public ref<MonitorScope> createMonitorScope(ref<Scope> enclosing, ref<Node> definition) {
-		ref<MonitorScope> s = new MonitorScope(enclosing, definition);
+	public ref<MonitorScope> createMonitorScope(ref<Scope> enclosing, ref<Node> definition, ref<Identifier> className) {
+		ref<MonitorScope> s = new MonitorScope(enclosing, definition, className);
 		_scopes.append(s);
 		return s;
 	}

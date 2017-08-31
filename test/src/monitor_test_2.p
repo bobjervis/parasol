@@ -16,7 +16,7 @@
 
 import parasol:thread.Thread;
 
-monitor a;
+Monitor a;
 
 boolean t1Finished;
 

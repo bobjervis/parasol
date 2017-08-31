@@ -25,10 +25,12 @@ import parasol:net.base64encode;
 import parasol:net.Connection;
 import parasol:text;
 
+private monitor class WebSocketServiceData {
+	ref<WebSocketFactory>[string] _webSocketProtocols;
+}
+
 public class WebSocketService extends HttpService {
-	private monitor _webSockets {
-		ref<WebSocketFactory>[string] _webSocketProtocols;
-	}
+	private WebSocketServiceData _webSockets;
 
 	public void webSocketProtocol(string protocol, ref<WebSocketFactory> webSocketFactory) {
 		ref<WebSocketFactory> oldProtocol;

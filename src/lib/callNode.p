@@ -181,6 +181,10 @@ class Call extends ParameterBag {
 					print(0);
 					assert(false);
 				}
+				if (_overload.type() != null && _overload.type().deferAnalysis()) {
+					type = _overload.type();
+					return this;
+				}
 				functionType = ref<FunctionType>(_overload.type());
 				if (voidContext)
 					thisParameter = _target;
@@ -242,6 +246,10 @@ class Call extends ParameterBag {
 				// All other calls can rely on the LHS expression type to be the correct function,
 				// but for LHS expressions that are function objects (i.e. function pointers), there is
 				// no overloaded symbol, so we can't use that..
+				if (_target.type.deferAnalysis()) {
+					type = _target.type;
+					return this;
+				}
 				functionType = ref<FunctionType>(_target.type);
 
 				ref<Variable> temp;

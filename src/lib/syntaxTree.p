@@ -83,7 +83,6 @@ enum Operator {
 	DECLARATION,
 	CLASS_DECLARATION,
 	INTERFACE_DECLARATION,
-	MONITOR_DECLARATION,
 	FLAGS_DECLARATION,
 	ENUM_DECLARATION,
 	INITIALIZE,
@@ -160,6 +159,7 @@ enum Operator {
 	VARIABLE,
 	// Class
 	CLASS,
+	MONITOR_CLASS,
 	INTERFACE,
 	// Template
 	TEMPLATE,
@@ -257,8 +257,8 @@ class SyntaxTree {
 		return _pool new Block(op, inSwitch, location);
 	}
 
-	public ref<Class> newClass(ref<Identifier> name, ref<Node> extendsClause, Location location) {
-		return _pool new Class(name, extendsClause, location);
+	public ref<Class> newClass(Operator op, ref<Identifier> name, ref<Node> extendsClause, Location location) {
+		return _pool new Class(op, name, extendsClause, location);
 	}
 
 	public ref<Template> newTemplate(ref<Identifier> name, Location location) {
@@ -695,7 +695,7 @@ class Block extends Node {
 			if (_statements.node.op() != Operator.EMPTY) {
 				ref<Unary> u = ref<Unary>(_statements.node);
 				if (!u.operand().deferAnalysis()) {
-					if (!compileContext.isMonitor(u.operand().type)) {
+					if (!compileContext.isLockable(u.operand().type)) {
 						add(MessageId.NEEDS_MONITOR, compileContext.pool());
 						type = compileContext.errorType();
 					}
@@ -735,8 +735,8 @@ class Class extends Block {
 	private ref<NodeList> _last;
 	private TypeFamily _effectiveFamily;		// Set by annotations (@Shape, @Ref, @Pointer)
 	
-	Class(ref<Identifier> name, ref<Node> extendsClause, Location location) {
-		super(Operator.CLASS, false, location);
+	Class(Operator op, ref<Identifier> name, ref<Node> extendsClause, Location location) {
+		super(op, false, location);
 		_name = name;
 		_extends = extendsClause;
 		_effectiveFamily = TypeFamily.CLASS;
@@ -821,7 +821,7 @@ class Class extends Block {
 	public ref<Class> clone(ref<SyntaxTree> tree) {
 		ref<Identifier> name = _name != null ? _name.clone(tree) : null;
 		ref<Node> extendsClause = _extends != null ? _extends.clone(tree) : null;
-		ref<Class> result = tree.newClass(name, extendsClause, location());
+		ref<Class> result = tree.newClass(op(), name, extendsClause, location());
 		if (statements() != null)
 			result.statement(statements().clone(tree));
 		result.scope = scope;
@@ -831,7 +831,7 @@ class Class extends Block {
 	public ref<Class> cloneRaw(ref<SyntaxTree> tree) {
 		ref<Identifier> name = _name != null ? _name.cloneRaw(tree) : null;
 		ref<Node> extendsClause = _extends != null ? _extends.cloneRaw(tree) : null;
-		ref<Class> result = tree.newClass(name, extendsClause, location());
+		ref<Class> result = tree.newClass(op(), name, extendsClause, location());
 		if (statements() != null)
 			result.statement(statements().cloneRaw(tree));
 		return result;
@@ -924,6 +924,13 @@ class Class extends Block {
 			ref<Type> t = _extends.unwrapTypedef(Operator.CLASS, compileContext);
 			if (t.isCircularExtension(scope, compileContext)) {
 				_extends.add(MessageId.CIRCULAR_EXTENDS, compileContext.pool());
+				type = compileContext.errorType();
+				ref<ClassScope>(scope).classType = null;
+				_extends.type = type;
+				return;
+			}
+			if (op() == Operator.MONITOR_CLASS && !t.isLockable()) {
+				_extends.add(MessageId.INVALID_MONITOR_EXTENSION, compileContext.pool());
 				type = compileContext.errorType();
 				ref<ClassScope>(scope).classType = null;
 				_extends.type = type;
@@ -2250,6 +2257,7 @@ class Template extends Node {
 	private ref<NodeList> _templateParameters;
 	private ref<NodeList> _last;
 
+	public boolean isMonitor;
 	public ref<Class> classDef;
 
 	Template(ref<Identifier> name, ref<SyntaxTree> tree, Location location) {
@@ -2359,7 +2367,7 @@ class Template extends Node {
 		printBasic(indent);
 		printf("\n");
 
-		printf("%*c  {TEMPLATE args}\n", indent, ' ');
+		printf("%*c  {TEMPLATE args}%s\n", indent, ' ', isMonitor ? " monitor" : "");
 		for (ref<NodeList> nl = _templateParameters; nl != null; nl = nl.next)
 			nl.node.print(indent + INDENT);
 		if (classDef != null) {
@@ -3394,7 +3402,7 @@ class Node {
 		case	LOCK:
 		case	LOGICAL_AND:
 		case	LOGICAL_OR:
-		case	MONITOR_DECLARATION:
+		case	MONITOR_CLASS:
 		case	MULTIPLY:
 		case	MULTIPLY_ASSIGN:
 		case	NAMESPACE:

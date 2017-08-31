@@ -38,8 +38,8 @@ printf("joined\n");
 delete t1;
 delete t2;
 
-monitor m1;
-monitor m2;
+Monitor m1;
+Monitor m2;
 
 boolean t1StartedWait;
 boolean t2StartedWait;
