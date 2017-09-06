@@ -586,7 +586,7 @@ class Block extends Node {
 	}
 	
 	private ref<NodeList> callMonitorMethod(ref<Node> errorMarker, ref<Type> monitorType, ref<Variable> temp, string methodName, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
-		ref<Node> call = callMethod(errorMarker, monitorType, temp, methodName, tree, compileContext);
+		ref<Node> call = callMethod(errorMarker, compileContext.monitorClass(), temp, methodName, tree, compileContext);
 		if (call == null)
 			return null;
 		ref<NodeList> nl = compileContext.pool() new NodeList;
