@@ -789,7 +789,7 @@ class Call extends ParameterBag {
 				break;
 
 			case	FUNCTION:
-				convertArguments(compileContext);
+				convertArguments(ref<FunctionType>(_target.type), compileContext);
 				_category = CallCategory.FUNCTION_CALL;
 				ref<Symbol> symbol = _target.symbol();
 				if (symbol != null) {
@@ -834,9 +834,12 @@ class Call extends ParameterBag {
 		return true;
 	}
 
-	void assignConstructorCall(ref<Type> classType, ref<CompileContext> compileContext) {
-		if (!assignArguments(LabelStatus.NO_LABELS, null, long.MAX_VALUE, compileContext))
-			return;
+	public void assignConstructorDeclarator(ref<Type> classType, ref<CompileContext> compileContext) {
+		if (assignArguments(LabelStatus.NO_LABELS, null, long.MAX_VALUE, compileContext))
+			assignConstructorCall(classType, compileContext);
+	}
+
+	private void assignConstructorCall(ref<Type> classType, ref<CompileContext> compileContext) {
 		OverloadOperation operation(Operator.FUNCTION, this, null, _arguments, compileContext);
 		if (classType.deferAnalysis()) {
 			type = classType;
@@ -852,15 +855,17 @@ class Call extends ParameterBag {
 			type = match;
 		else {
 			type = classType;
-			if (oi != null)
+			if (oi != null) {
 				_overload = ref<OverloadInstance>(oi).parameterScope();
+				convertArguments(_overload.type(), compileContext);
+			}
 			_category = CallCategory.CONSTRUCTOR;
 		}
 	}
 		
-	void convertArguments(ref<CompileContext> compileContext) {
+	void convertArguments(ref<FunctionType> funcType, ref<CompileContext> compileContext) {
 		boolean processingEllipsis = false;
-		ref<NodeList> param = ref<FunctionType>(_target.type).parameters();
+		ref<NodeList> param = funcType.parameters();
 		ref<NodeList> arguments = _arguments;
 		while (arguments != null) {
 			if (param.node.deferAnalysis())
@@ -875,6 +880,10 @@ class Call extends ParameterBag {
 					return;
 				// okay, we need to actually check the element type
 				t = t.elementType(compileContext);
+			}
+			if (compileContext.verbose()) {
+				printf("Coerce to %s\n", t.signature());
+				arguments.node.print(4);
 			}
 			arguments.node = arguments.node.coerce(compileContext.tree(), t, false, compileContext);
 			if (ellipsis != null)

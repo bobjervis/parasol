@@ -628,6 +628,14 @@ class RegisterState {
 	R latestResult(ref<Node> node) {
 		for (ref<Spill> s = _lastSpill; s != null; s = s.prev) {
 			if (s.affected == node){
+				if (!(s.spillKind == SpillKinds.MOVE ||
+					   s.spillKind == SpillKinds.XCHG ||
+					   s.spillKind == SpillKinds.POP)) {
+					printf("This spill failed:\n");
+					s.print();
+					printf("Full RegisterState\n");
+					print();
+				}
 				assert(s.spillKind == SpillKinds.MOVE ||
 					   s.spillKind == SpillKinds.XCHG ||
 					   s.spillKind == SpillKinds.POP);

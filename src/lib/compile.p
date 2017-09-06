@@ -1195,6 +1195,10 @@ class CompileContext {
 	ref<SyntaxTree> tree() {
 		return _current.file().tree();
 	}
+
+	boolean verbose() {
+		return _verbose;
+	}
 }
 
 class MemoryPool extends memory.NoReleasePool {

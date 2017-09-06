@@ -446,7 +446,7 @@ class DelegateOverload extends OverloadInstance {
 	ref<OverloadInstance> _delegate;
 	
 	DelegateOverload(ref<Scope> enclosing, ref<OverloadInstance> delegate, ref<MemoryPool> pool) {
-		super(Operator.UNIT, false, enclosing, null, pool, delegate.name(), null, delegate.parameterScope());
+		super(Operator.UNIT, delegate.storageClass() == StorageClass.STATIC, enclosing, null, pool, delegate.name(), null, delegate.parameterScope());
 		_delegate = delegate;
 	}
 	

@@ -419,6 +419,7 @@ class Identifier extends Node {
 						if (!compileContext.current().enclosingClassScope().isMonitor()) {
 							add(MessageId.BAD_MONITOR_REF_IDENTIFIER, compileContext.pool(), _value);
 							type = compileContext.errorType();
+							return;
 						}
 					}
 					if (_symbol.class == Overload) {

@@ -766,11 +766,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	STACK_PTR:
 			if (node.type.isFloat())
 				node.register = byte(f().r.getreg(node, floatMask, regMask));
-			else {
+			else
 				node.register = byte(f().r.getreg(node, requiredMask(node), regMask));
-		//		printf("requiredMask = %x regMask = %x\n", requiredMask(node), regMask);
-		//		node.print(0);
-			}
 			break;
 			
 		case	SUBSCRIPT:

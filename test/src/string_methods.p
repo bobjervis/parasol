@@ -42,6 +42,9 @@ void constructorTests() {
 	cp = &s[0];
 	s3 = string(cp, 2);
 	assert(s3 == "ab");
+
+	string sneg(-3);
+	assert(sneg == "-3");
 }
 
 void appendTests() {

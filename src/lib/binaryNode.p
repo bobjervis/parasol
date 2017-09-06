@@ -1394,7 +1394,7 @@ class Binary extends Node {
 				// A constructor initializer!!!
 				if (call.target() == null) {
 					// Must be a constructor, or else an error.
-					call.assignConstructorCall(t, compileContext);
+					call.assignConstructorDeclarator(t, compileContext);
 					type = t;
 					return;
 				}
