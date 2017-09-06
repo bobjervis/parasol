@@ -374,7 +374,7 @@ public class Monitor {
 				expirationTime.tv_sec++;
 				expirationTime.tv_nsec -= 1000000000;
 			}
-			linux.sem_timed_wait(&_linuxSemaphore, &expirationTime);
+			linux.sem_timedwait(&_linuxSemaphore, &expirationTime);
 		}
 		_mutex.takeAfterWait(level - 1);
 	}
@@ -406,7 +406,7 @@ public class Monitor {
 				expirationTime.tv_sec++;
 				expirationTime.tv_nsec -= 1000000000;
 			}
-			linux.sem_timed_wait(&_linuxSemaphore, &expirationTime);
+			linux.sem_timedwait(&_linuxSemaphore, &expirationTime);
 		}
 		_mutex.takeAfterWait(level - 1);
 	}

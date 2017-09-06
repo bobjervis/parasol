@@ -694,7 +694,7 @@ public class X86_64 extends X86_64AssignTemps {
 				}
 			}
 			reserveAutoMemory(false, compileContext);
-			if (parameterScope.enclosing().isMonitor()) {
+			if (parameterScope.enclosing().isMonitor() && func.functionCategory() != FunctionDeclaration.Category.CONSTRUCTOR) {
 				inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), thisRegister());
 				instCall(takeMethod(compileContext), compileContext);
 			}
@@ -3957,7 +3957,7 @@ public class X86_64 extends X86_64AssignTemps {
 				return true;
 			}
 			ref<ParameterScope> parameterScope = ref<ParameterScope>(scope);
-			if (parameterScope.enclosing().isMonitor()) {
+			if (parameterScope.enclosing().isMonitor() && func.functionCategory() != FunctionDeclaration.Category.CONSTRUCTOR) {
 				boolean returnRegisterBusy = functionType.returnCount() == 1 && 
 						!functionType.returnValueType().returnsViaOutParameter(compileContext);
 

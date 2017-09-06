@@ -164,8 +164,8 @@ public abstract int sem_init(ref<sem_t> sem, int pshared, unsigned value);
 @Linux("libpthread.so.0", "sem_post")
 public abstract int sem_post(ref<sem_t> sem);
 
-@Linux("libpthread.so.0", "sem_timed_wait")
-public abstract int sem_timed_wait(ref<sem_t> sem, ref<timespec> abs_timeout);
+@Linux("libpthread.so.0", "sem_timedwait")
+public abstract int sem_timedwait(ref<sem_t> sem, ref<timespec> abs_timeout);
 
 @Linux("libpthread.so.0", "sem_wait")
 public abstract int sem_wait(ref<sem_t> sem);
