@@ -1632,8 +1632,10 @@ class Binary extends Node {
 				type = _left.type;
 				break;
 			}
-			if (!type.isConcrete(compileContext))
-				_right.add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool());
+			if (!type.isConcrete(compileContext)) {
+				ref<OverloadInstance> oi = type.firstAbstractMethod(compileContext);
+				_right.add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool(), *oi.name());
+			}
 			type = compileContext.arena().createRef(type, compileContext);
 			break;
 
@@ -1681,8 +1683,10 @@ class Binary extends Node {
 					break;
 				}
 			}
-			if (!type.isConcrete(compileContext))
-				_right.add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool());
+			if (!type.isConcrete(compileContext)) {
+				ref<OverloadInstance> oi = type.firstAbstractMethod(compileContext);
+				_right.add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool(), *oi.name());
+			}
 			type = compileContext.arena().createRef(type, compileContext);
 			break;
 

@@ -3506,7 +3506,7 @@ class NodeList {
 	public ref<NodeList> next;
 	public ref<Node> node;
 
-	boolean traverse(Node.Traversal t, TraverseAction func(ref<Node> n, address data), address data) {
+	public boolean traverse(Node.Traversal t, TraverseAction func(ref<Node> n, address data), address data) {
 		for (ref<NodeList> nl = this; nl != null; nl = nl.next)
 			if (!nl.node.traverse(t, func, data))
 				return false;

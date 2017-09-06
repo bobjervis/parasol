@@ -983,6 +983,14 @@ class Symbol {
 		return _enclosing;
 	}
 
+	public ref<Namespace> enclosingNamespace() {
+		return _enclosing.getNamespace();
+	}
+
+	public ref<UnitScope> enclosingUnit() {
+		return _enclosing.enclosingUnit();
+	}
+
 	public ref<Type> type() {
 		return _type;
 	}

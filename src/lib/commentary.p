@@ -215,7 +215,7 @@ public string formatMessage(MessageId messageId, CompileString[] args) {
 //					printf("inclusionString=%s\n", inclusionString);
 					s.append(inclusionString);
 				} else {
-					s.append(''%'');
+					s.append('%');
 					s.append(format[i]);
 				}
 				break;
@@ -234,7 +234,7 @@ public string formatMessage(MessageId messageId, CompileString[] args) {
 }
 
 private string[MessageId] messageCatalog = [ 
-	ABSTRACT_INSTANCE_DISALLOWED: "Instance of abstract class disallowed",
+	ABSTRACT_INSTANCE_DISALLOWED: "Instance of abstract class disallowed, '%1' is not implemented.",
 	AMBIGUOUS_CONSTRUCTOR: 	"Ambiguous constructor call",
 	AMBIGUOUS_OVERLOAD: 	"Ambiguous call, cannot choose between multiple valid overloads",
 	AMBIGUOUS_REFERENCE: 	"Ambiguous function reference",

@@ -503,6 +503,10 @@ class ClassType extends Type {
 		return _scope.isConcrete(compileContext);
 	}
 
+	public ref<OverloadInstance> firstAbstractMethod(ref<CompileContext> compileContext) {
+		return _scope.firstAbstractMethod(compileContext);
+	}
+
 	public boolean hasVtable(ref<CompileContext> compileContext) {
 		return _scope.hasVtable(compileContext);
 	}
@@ -518,7 +522,7 @@ class ClassType extends Type {
 			return super.signature();
 	}
 	
-	private boolean sameAs(ref<Type> other) {
+	protected boolean sameAs(ref<Type> other) {
 		// 'other' in this case has already been checked for identity, so this != other.
 		// Two classes are considered the same only
 		// if they have the same declaration site, which
@@ -617,7 +621,7 @@ class EnumType extends TypedefType {
 		return false;
 	}
 
-	private boolean sameAs(ref<Type> other) {
+	protected boolean sameAs(ref<Type> other) {
 		assert(false);
 		return false;
 	}
@@ -654,7 +658,7 @@ class EnumInstanceType extends Type {
 		return _symbol;
 	}
 
-	private boolean sameAs(ref<Type> other) {
+	protected boolean sameAs(ref<Type> other) {
 		// Two enums are considered the same only
 		// if they have the same declaration site, which
 		// is equivalent to object identity on the type
@@ -722,7 +726,7 @@ class FlagsType extends TypedefType {
 		return false;
 	}
 
-	private boolean sameAs(ref<Type> other) {
+	protected boolean sameAs(ref<Type> other) {
 		assert(false);
 		return false;
 	}
@@ -792,7 +796,7 @@ class FlagsInstanceType extends Type {
 		return _symbol;
 	}
 
-	private boolean sameAs(ref<Type> other) {
+	protected boolean sameAs(ref<Type> other) {
 		// Two enums are considered the same only
 		// if they have the same declaration site, which
 		// is equivalent to object identity on the type
@@ -906,7 +910,7 @@ class FunctionType extends Type {
 			return _returnType.node.type;
 	}
 	
-	private boolean sameAs(ref<Type> other) {
+	protected boolean sameAs(ref<Type> other) {
 		ref<NodeList> nlThis;
 		ref<NodeList> nlOther;
 		ref<FunctionType> otherFunction = ref<FunctionType>(other);
@@ -1079,7 +1083,7 @@ class TemplateType extends Type {
 		return definingSymbol().name().asString();
 	}
 
-	private boolean sameAs(ref<Type> other) {
+	protected boolean sameAs(ref<Type> other) {
 		assert(false);
 		return false;
 	}	
@@ -1263,7 +1267,7 @@ class TemplateInstanceType extends ClassType {
 		return _definingFile; 
 	}
 
-	private boolean sameAs(ref<Type> other) {
+	protected boolean sameAs(ref<Type> other) {
 		return false;
 	}
 }
@@ -1862,6 +1866,12 @@ class Type {
 	public boolean isConcrete(ref<CompileContext> compileContext) {
 		return true;
 	}
+
+	public ref<OverloadInstance> firstAbstractMethod(ref<CompileContext> compileContext) {
+		return null;
+	}
+
+
 	/**
 	 * Note: If the interfaceType is not actually an interface, or is null, this function
 	 * will always return false.
@@ -1903,7 +1913,7 @@ class Type {
 		assert(false);
 	}
 
-	private boolean sameAs(ref<Type> other) {
+	protected boolean sameAs(ref<Type> other) {
 		// TypeFamily.ERROR is a unique type, so it is unclear
 		// how we could get here, but they should not be 'the same'
 		return false;

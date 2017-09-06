@@ -456,6 +456,15 @@ class ClasslikeScope extends Scope {
 			}
 		return true;
 	}
+
+	public ref<OverloadInstance> firstAbstractMethod(ref<CompileContext> compileContext) {
+		assignMethodMaps(compileContext);
+		for (int i = 0; i < _methods.length(); i++)
+			if (!_methods[i].isConcrete(compileContext)) {
+				return _methods[i];
+			}
+		return null;
+	}
 	/**
 	 * Note: the vtable member is set by code generators and is set late in the process.
 	 * 
@@ -485,8 +494,24 @@ class ClasslikeScope extends Scope {
 
 	private int matchingMethod(ref<OverloadInstance> candidate, int maxMatchableMethod) {
 		for (int i = 0; i < maxMatchableMethod; i++) {
-			if (candidate.overrides(_methods[i]))
+			if (candidate.overrides(_methods[i])) {
+				switch (_methods[i].visibility()) {
+				case PRIVATE:
+					if (!_methods[i].enclosing().encloses(this))	// If the existing method's scope does not enclose this scope, 
+																	// it is not visible and the candidate does not override.
+						return -1;
+					break;
+
+				case UNIT:
+					ref<Namespace> nm = _methods[i].enclosingNamespace();
+					if (nm == null) {								// Only methods in the same unit can override
+						if (enclosingUnit() != _methods[i].enclosingUnit())
+							return -1;
+					} else if (nm != getNamespace())
+						return -1;
+				}
 				return i;
+			}
 		}
 		return -1;
 	}
@@ -1000,6 +1025,10 @@ class UnitScope extends Scope {
 
 	public ref<Namespace> getNamespace() {
 		return _file.namespaceSymbol();
+	}
+
+	public ref<UnitScope> enclosingUnit() {
+		return this;
 	}
 
 	public ref<FileStat> file() {
@@ -1615,6 +1644,10 @@ class Scope {
 		return true;
 	}
 
+	public ref<OverloadInstance> firstAbstractMethod(ref<CompileContext> compileContext) {
+		return null;
+	}
+
 	public boolean hasVtable(ref<CompileContext> compileContext) {
 		return false;
 	}
@@ -1752,6 +1785,13 @@ class Scope {
 		}
 	}
 
+	public ref<UnitScope> enclosingUnit() {
+		if (_enclosing != null)
+			return _enclosing.enclosingUnit();
+		else
+			return null;
+	}
+
 	public ref<Namespace> getNamespace() {
 		if (_enclosing != null)
 			return _enclosing.getNamespace();
@@ -1829,8 +1869,10 @@ class Scope {
 			case	STATIC:
 			case	AUTO:
 			case	MEMBER:
-				if (!type.isConcrete(compileContext))
-					symbol.definition().add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool());
+				if (!type.isConcrete(compileContext)) {
+					ref<OverloadInstance> oi = type.firstAbstractMethod(compileContext);
+					symbol.definition().add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool(), *oi.name());
+				}
 				break;
 
 			case	PARAMETER:
