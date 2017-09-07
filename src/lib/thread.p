@@ -64,11 +64,14 @@ private monitor class ActiveThreads {
 	}
 
 	void suspendAllOtherThreads() {
-		int tgid = linux.getpid();
 		ref<Thread> me = currentThread();
-		for (int i = 0; i < _activeThreads.length(); i++)
-			if (_activeThreads[i] != me)
-				linux.tgkill(tgid, int(_activeThreads[i].id()), linux.SIGTSTP);
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			int tgid = linux.getpid();
+			for (int i = 0; i < _activeThreads.length(); i++)
+				if (_activeThreads[i] != me)
+					linux.tgkill(tgid, int(_activeThreads[i].id()), linux.SIGTSTP);
+		}
 	}
 }
 
@@ -721,3 +724,11 @@ private abstract void exitThread();
  * Declare to the C runtime code the location of the Parasol Thread object for this thread.
  */
 private abstract address parasolThread(address newThread);
+
+private class Monitor_Poly extends Monitor {
+	// THis exists to trick the compiler into generating a table for this class.
+	public ref<Thread> owner() {
+		return null;
+	}
+}
+
