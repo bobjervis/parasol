@@ -15,7 +15,23 @@
  */
 namespace parasol:types;
 
-public class address {}
+public class address {
+/*
+	public int hash() {
+		return int(*this);
+	}
+
+	public int compare(address a) {
+		long diff = long(*this) - long(a);
+		if (diff > 0)
+			return 1;
+		else if (diff < 0)
+			return -1;
+		else
+			return 0;
+	}
+ */
+}
 
 public class boolean {
 //	public boolean() {

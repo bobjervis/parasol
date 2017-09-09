@@ -30,8 +30,209 @@ public class Pair<class K, class V> {
 	}
 }
 
+public class Set<class K> {
+	@Constant
+	private static int INITIAL_TABLE_SIZE	= 64;		// must be power of two
+	@Constant
+	private static int REHASH_SHIFT = 3;				// rehash at ((1 << REHASH_SHIFT) - 1) / (1 << REHASH_SHIFT) keys filled
+
+	private pointer<Entry>	_entries;
+	private int				_entriesCount;
+	private int				_deletedEntriesCount;
+	private int				_allocatedEntries;
+	private int				_rehashThreshold;
+
+	public Set() {
+	}
+
+	~Set() {
+		clear();
+	}
+
+	public void add(K key) {
+		ref<Entry> e = findEntry(key);
+		if (!e.valid) {
+			if (hadToRehash())
+				e = findEntry(key);
+			_entriesCount++;
+		}
+		e.valid = true;
+		if (e.deleted) {
+			_deletedEntriesCount--;
+			e.deleted = false;
+		}
+		e.key = key;
+	}
+
+	public void clear() {
+		_entriesCount = 0;
+		_deletedEntriesCount = 0;
+		for (int i = 0; i < _allocatedEntries; i++)
+			_entries[i].key.~();
+		memory.free(_entries);
+		_allocatedEntries = 0;
+		_rehashThreshold = 0;
+	}
+
+	public int size() {
+		return _entriesCount - _deletedEntriesCount;
+	}
+
+	public boolean contains(K key) {
+		ref<Entry> e = findEntryReadOnly(key);
+		if (e != null)
+			return e.valid && !e.deleted;
+		else
+			return false;
+	}
+
+	public boolean remove(K key) {
+		ref<Entry> e = findEntry(key);
+		if (e.valid) {
+			if (!e.deleted) {
+				e.deleted = true;
+				_deletedEntriesCount++;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private ref<Entry> findEntryReadOnly(K key) {
+		if (_entries == null)
+			return null;
+		int x = hash(key) & (_allocatedEntries - 1);
+		int startx = x;
+		for(;;) {
+			ref<Entry> e = ref<Entry>(_entries + x);
+			if (!e.valid || e.deleted || compare(e.key, key) == 0)
+				return e;
+			x++;
+			if (x >= _allocatedEntries)
+				x = 0;
+		}
+	}
+
+	private ref<Entry> findEntry(K key) {
+		if (_entries == null) {
+			_entries = pointer<Entry>(memory.alloc(INITIAL_TABLE_SIZE * Entry.bytes));
+			_allocatedEntries = INITIAL_TABLE_SIZE;
+			setRehashThreshold();
+		}
+		int x = hash(key) & (_allocatedEntries - 1);
+		int startx = x;
+		ref<Entry> deletedE = null;
+		for(;;) {
+			ref<Entry> e = ref<Entry>(_entries + x);
+			if (!e.valid) {
+				if (deletedE != null)
+					return deletedE;
+				else
+					return e;
+			}
+			if (compare(e.key, key) == 0)
+				return e;
+			if (e.deleted)
+				deletedE = e;
+			x++;
+			if (x >= _allocatedEntries)
+				x = 0;
+		}
+	}
+
+	private boolean hadToRehash() {
+		if (_entriesCount >= _rehashThreshold) {
+			pointer<Entry> oldE = _entries;
+			_allocatedEntries *= 2;
+			_entries = pointer<Entry>(memory.alloc(_allocatedEntries * Entry.bytes));
+			int e = _entriesCount - _deletedEntriesCount;
+			_entriesCount = 0;
+			for (int i = 0; e > 0; i++) {
+//				printf("[%d/%d] %s %s\n", i, e, oldE[i].valid ? "valid" : "empty", oldE[i].deleted ? "deleted" : "");
+				if (oldE[i].valid && !oldE[i].deleted) {
+					add(oldE[i].key);
+					oldE[i].key.~();
+					e--;
+				}
+			}
+			setRehashThreshold();
+			memory.free(oldE);
+			return true;
+		} else
+			return false;
+	}
+
+	private void setRehashThreshold() {
+		_rehashThreshold = (_allocatedEntries * ((1 << REHASH_SHIFT) - 1)) >> REHASH_SHIFT;
+	}
+
+	private class Entry {
+		public K		key;
+		public boolean	valid;
+		public boolean	deleted;
+	}
+
+	public iterator begin() {
+		iterator i(this);
+		if (size() == 0)
+			i._index = _allocatedEntries;
+		else {
+			for (i._index = 0; i._index < _allocatedEntries; i._index++)
+				if (_entries[i._index].valid && !_entries[i._index].deleted)
+					break;
+		}
+		return i;
+	}
+
+	public class iterator {
+		int				_index;
+		ref<Set<K>>		_dictionary;
+
+		// This is to suppress the dumb rule that you can't initialize a variable with a value when there is no
+		// default constructor for the object.
+		iterator() {
+		}
+
+		iterator(ref<Set<K>> dict) {
+			_dictionary = dict;
+			_index = 0;
+		}
+
+		public boolean hasNext() {
+			return _index < _dictionary._allocatedEntries;
+		}
+
+		public void next() {
+			do
+				_index++;
+			while (_index < _dictionary._allocatedEntries &&
+				   !(_dictionary._entries[_index].valid && !_dictionary._entries[_index].deleted));
+		}
+
+		public K key() {
+			return _dictionary._entries[_index].key;
+		}
+
+	};
+
+}
+
+private int hash(address a) {
+	return int(long(a) >> 4);
+}
+
+private int compare(address a, address b) {
+	long diff = long(b) - long(a);
+	if (diff > 0)
+		return 1;
+	else if (diff < 0)
+		return -1;
+	else
+		return 0;
+}
+
 // Note: compiler code requires that this definition of 'vector' appears first. TODO: Remove this dependency.
-class vector<class E> extends vector<E, int>{
+class vector<class E> extends vector<E, int> {
 	public vector() {
 	}
 	
@@ -52,7 +253,7 @@ class vector<class E> extends vector<E, int>{
 }
 
 @Shape
-class vector<class E, class I> {
+public class vector<class E, class I> {
 	@Constant
 	private static int MIN_CAPACITY = 0x10;
 
