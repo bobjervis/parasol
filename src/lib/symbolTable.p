@@ -499,16 +499,16 @@ class ClasslikeScope extends Scope {
 				case PRIVATE:
 					if (!_methods[i].enclosing().encloses(this))	// If the existing method's scope does not enclose this scope, 
 																	// it is not visible and the candidate does not override.
-						return -1;
+						continue;
 					break;
 
 				case UNIT:
 					ref<Namespace> nm = _methods[i].enclosingNamespace();
 					if (nm == null) {								// Only methods in the same unit can override
 						if (enclosingUnit() != _methods[i].enclosingUnit())
-							return -1;
+							continue;
 					} else if (nm != getNamespace())
-						return -1;
+						continue;
 				}
 				return i;
 			}

@@ -674,6 +674,7 @@ class OverloadInstance extends Symbol {
 			if (!par.type().equals(basePar.type()))
 				return false;
 		}
+
 		// TODO: Validate correct override return types.  Must be equal, or if not, they must
 		// satisfy 'co-variance', that is the return type must be an address with a type that widens
 		// from the overriding method to the overridden method.
