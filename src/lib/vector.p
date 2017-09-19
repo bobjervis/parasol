@@ -231,6 +231,14 @@ private int compare(address a, address b) {
 		return 0;
 }
 
+private int hash(string a) {
+	return a.hash();
+}
+
+private int compare(string a, string b) {
+	return a.compare(b);
+}
+
 // Note: compiler code requires that this definition of 'vector' appears first. TODO: Remove this dependency.
 class vector<class E> extends vector<E, int> {
 	public vector() {
