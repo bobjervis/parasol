@@ -25,6 +25,9 @@ class mode_t = unsigned;
 @Linux("libc.so.6", "aligned_alloc")
 public abstract address aligned_alloc(long alignment, long length);
 
+@Linux("libc.so.6", "chmod")
+public abstract int chmod(pointer<byte> path, mode_t mode);
+
 @Linux("libc.so.6", "clock_gettime")
 public abstract int clock_gettime(int clock_id, ref<timespec> tp);
 
