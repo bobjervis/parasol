@@ -70,6 +70,7 @@ public class Set<class K> {
 		for (int i = 0; i < _allocatedEntries; i++)
 			_entries[i].key.~();
 		memory.free(_entries);
+		_entries = null;
 		_allocatedEntries = 0;
 		_rehashThreshold = 0;
 	}
