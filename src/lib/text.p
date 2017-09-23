@@ -547,13 +547,7 @@ class string {
 	}
 	
 	public int lastIndexOf(byte c) {
-		if (_contents != null) {
-			pointer<byte> cp = pointer<byte>(&_contents.data);
-			for (int i = _contents.length - 1; i >= 0; i--)
-				if (cp[i] == c)
-					return i;
-		}
-		return -1;
+		return lastIndexOf(c, length() - 1);
 	}
 	
 	public int lastIndexOf(byte c, int start) {
@@ -566,6 +560,28 @@ class string {
 		return -1;
 	}
 	
+	public int lastIndexOf(string s) {
+		return lastIndexOf(s, length() - 1);
+	}
+	
+	public int lastIndexOf(string s, int start) {
+		pointer<byte> cp = pointer<byte>(&_contents.data);
+		int tries =  2 + start - s.length();
+		start += 1 - s.length();
+		for (int i = 0; i < tries; i++){
+			boolean matched = true;
+			for (int j = 0; j < s.length(); j++) {
+				if (cp[start + j - i] != s[j]) {
+					matched = false;
+					break;
+				}
+			}
+			if (matched)
+				return start - i;
+		}
+		return -1;
+	}
+
 	public int length() {
 		if (_contents != null)
 			return _contents.length;

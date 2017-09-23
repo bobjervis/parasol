@@ -121,6 +121,15 @@ void indexOfTests() {
 	assert(value.lastIndexOf('e', 5) == 4);
 	assert(repeater.lastIndexOf('c', 3) == 2);
 	assert(repeater.lastIndexOf('c') == 5);
+	assert(value.indexOf("bc") == 1);
+	assert(value.indexOf("xy") == -1);
+	assert(value.indexOf("ef", 2) == 4);
+	assert(repeater.indexOf("bc", 3) == 4);
+	assert(value.lastIndexOf("bc") == 1);
+	assert(value.lastIndexOf("xy") == -1);
+	assert(value.lastIndexOf("ef", 5) == 4);
+	assert(repeater.lastIndexOf("bc", 3) == 1);
+	assert(repeater.lastIndexOf("bc") == 4);
 }
 
 void printfTests() {
