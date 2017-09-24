@@ -526,6 +526,8 @@ private:
 
 int debugSpawn(const string& cmd, string* captureData, exception_t* exception, time_t timeout);
 
+int debugSpawnInteractive(const string& cmd, string* captureData, exception_t* exception, string stdin, time_t timeout);
+
 #if defined(__WIN64)
 const DWORD WINDOWS_ABORT_EXCEPTION = 0xc1000001;
 const DWORD WINDOWS_DEBUGGER_TERMINATED = 0xc3770001;

@@ -344,7 +344,7 @@ int debugSpawn(const string& cmd, string* captureData, exception_t* exception, t
 	Pipe pipe;
 	
 	SetHandleInformation(pipe.reader(), HANDLE_FLAG_INHERIT, 0);
-	initStartupInfo(&info, pipe.writer(), pipe.writer());
+	initStartupInfo(&info, pipe.writer(), pipe.writer(), null);
 	BOOL result = CreateProcess(null, (LPSTR)cmd.c_str(), null, null, TRUE,
 													DEBUG_PROCESS, null/*environment*/, null, &info, &pinfo);
 	CloseHandle(pipe.writer());
@@ -363,8 +363,43 @@ int debugSpawn(const string& cmd, string* captureData, exception_t* exception, t
 #endif
 }
 
+int debugSpawnInteractive(const string& cmd, string* captureData, exception_t* exception, string *stdin, time_t timeout) {
 #if defined(__WIN64)
-static void initStartupInfo(STARTUPINFO* info, HANDLE stdoutHandle, HANDLE stderrHandle) {
+	PROCESS_INFORMATION pinfo;
+	STARTUPINFO info;
+	Pipe pipe;
+	Pipe stdinPipe;
+	
+	SetHandleInformation(pipe.reader(), HANDLE_FLAG_INHERIT, 0);
+	SetHandleInformation(stdinPipe.writer(), HANDLE_FLAG_INHERIT, 0);
+	initStartupInfo(&info, pipe.writer(), pipe.writer(), stdinPipe.reader());
+	BOOL result = CreateProcess(null, (LPSTR)cmd.c_str(), null, null, TRUE,
+													DEBUG_PROCESS, null/*environment*/, null, &info, &pinfo);
+	CloseHandle(stdinPipe.reader());
+	CloseHandle(pipe.writer());
+	if (result == FALSE){
+		CloseHandle(pipe.reader());
+		CloseHandle(stdinPipe.writer());
+		return -1;
+	} else {
+		Thread* t = Thread::start(drain, pipe.reader(), captureData);
+		DWORD n;
+		if (WriteFile(stdinPipe.writer(), stdin.c_str(), stdin.size(), &n, null) == FALSE) {
+			CloseHandle(stdinPipe.writer());
+			return;
+		}
+		int exitValue = monitorDebugEvents(pinfo.hProcess, pinfo.dwProcessId, exception, timeout);
+		WaitForSingleObject(t->hThread(), INFINITE);
+		delete t;
+		return exitValue;
+	}
+#elif __linux__
+	return -1;
+#endif
+}
+
+#if defined(__WIN64)
+static void initStartupInfo(STARTUPINFO* info, HANDLE stdoutHandle, HANDLE stderrHandle, HANDLE stdinHandle) {
 	fflush(stdout);
 	fflush(stderr);
 
@@ -383,7 +418,11 @@ static void initStartupInfo(STARTUPINFO* info, HANDLE stdoutHandle, HANDLE stder
 	info->wShowWindow = 0;
 	info->cbReserved2 = 0;
 	info->lpReserved2 = null;
-	info->hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+	if (stdinHandle != null) {
+		info->hStdInput = stdinHandle;
+		SetHandleInformation(stdinHandle, HANDLE_FLAG_INHERIT, 1);
+	} else
+		info->hStdInput = GetStdHandle(STD_INPUT_HANDLE);
 	if (stdoutHandle != null) {
 		info->hStdOutput = stdoutHandle;
 		SetHandleInformation(stdoutHandle, HANDLE_FLAG_INHERIT, 1);

@@ -702,6 +702,18 @@ static int processDebugSpawn(char *command, SpawnPayload *output, long long time
 	return result;
 }
 
+static int processDebugSpawnInteractive(char *command, SpawnPayload *output, string stdin, long long timeout) {
+	string out;
+	string cmd(command);
+
+	int result = process::debugSpawnInteractive(cmd, &out, &output->outcome, stdin, (time_t)timeout);
+	char *capture = new char[out.size()];
+	output->buffer = capture;
+	output->length = out.size();
+	memcpy(capture, out.c_str(), out.size());
+	return result;
+}
+
 static void disposeOfPayload(SpawnPayload *output) {
 	delete[] output->buffer;
 }
@@ -915,6 +927,7 @@ BuiltInFunctionMap builtInFunctionMap[] = {
 	{ "exitThread",							nativeFunction(exitThread),							0,	0, "parasol" },
 	{ "dupExecutionContext",				nativeFunction(dupExecutionContext),				0,	1, "parasol" },
 	{ "parasolThread",						nativeFunction(parasolThread),						1,	1, "parasol" },
+	{ "debugSpawnInteractiveImpl",			nativeFunction(processDebugSpawnInteractive),		4,	1, "parasol" },
 	{ 0 }
 };
 

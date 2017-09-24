@@ -229,6 +229,9 @@ public abstract pid_t wait(ref<int> exitStatus);
 @Linux("libc.so.6", "waitpid")
 public abstract pid_t waitpid(pid_t pid, ref<int> exitStatus, int options);
 
+@Linux("libc.so.6", "write")
+public abstract int write(int fd, address buffer, long bufferSize);
+
 public abstract int open(pointer<byte> filename, int ioFlags);
 
 public abstract int openCreat(pointer<byte> filename, int ioFlags, int mode);

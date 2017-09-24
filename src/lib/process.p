@@ -167,7 +167,103 @@ public int, string, exception_t spawn(string command, time.Time timeout) {
 		return -1, null, exception_t.UNKNOWN_PLATFORM;
 }
 
+public int, string, exception_t spawnInteractive(string command, string stdin, time.Time timeout) {
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		SpawnPayload payload;
+		
+		int result = debugSpawnInteractiveImpl(&command[0], &payload, stdin, timeout.value());
+		string output = string(payload.output, payload.outputLength);
+		exception_t outcome = exception_t(payload.outcome);
+		disposeOfPayload(&payload);
+		return result, output, outcome;
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		pointer<pointer<byte>> argv;
+		
+		argv = parseCommandLine(command);
+		if (argv == null) {
+			return -1, null, exception_t.NO_EXCEPTION;
+		}
+		linux.pid_t pid;
+		int[] pipefd;
+		
+		pipefd.resize(2);
+		
+		if (linux.pipe(&pipefd[0]) < 0)
+			return -1, null, exception_t.NO_EXCEPTION;
+
+		int[] stdinPipefd;
+
+		stdinPipefd.resize(2);
+
+		if (linux.pipe(&stdinPipefd[0]) < 0)
+			return -1, null, exception_t.NO_EXCEPTION;
+
+		TimeoutData timer;
+		ref<Thread> timerThread;
+		pid = linux.fork();
+		if (pid == 0) {
+			linux.close(pipefd[0]);
+			linux.dup2(pipefd[1], 1);
+			linux.dup2(pipefd[1], 2);
+			linux.close(stdinPipefd[1]);
+			linux.dup2(stdinPipefd[0], 0);
+			// This is the child process
+			linux.execv(argv[0], argv);
+			linux._exit(-1);
+		} else {
+			if (timeout.value() > 0) {
+				timerThread = new Thread();
+				timer.init(pid, timeout);
+				timerThread.start(countdownTimer, &timer);
+			}
+			linux.close(stdinPipefd[0]);
+			linux.close(pipefd[1]);
+			int exitStatus;
+			
+			ref<Thread> t = new Thread();
+			DrainData d;
+			d.fd = pipefd[0];
+			
+			t.start(drain, &d);
+			// If the stdin string is long, this may block waiting for the child process to read the data.
+			// This should not deadlock, because we are draining the stdout, so the pipe's shouldn't choke.
+			linux.write(stdinPipefd[1], stdin.c_str(), stdin.length());
+			// Once the write is done, the child has consumed all of its input, or else has closed the input pipe
+			// causing the write to fail (which we don't care about at this level). 
+			linux.close(stdinPipefd[1]);
+			linux.pid_t terminatedPid = linux.waitpid(pid, &exitStatus, 0);
+			if (terminatedPid != pid)
+				return -3, null, exception_t.NO_EXCEPTION;
+			if (timeout.value() > 0) {
+				timer.signalDone();
+				timerThread.join();
+			} else
+				timer.done = true;
+			t.join();
+			delete t;
+			linux.close(pipefd[0]);
+			if (timer.timedOut)
+				return -1, d.output, exception_t.TIMEOUT;
+			else if (linux.WIFEXITED(exitStatus))
+				return linux.WEXITSTATUS(exitStatus), d.output, exception_t.NO_EXCEPTION;
+			else {
+				int signal = linux.WTERMSIG(exitStatus);
+				if (signal == linux.SIGABRT)
+					return -1, d.output, exception_t.ABORT;
+				else if (signal == linux.SIGSEGV)
+					return -1, d.output, exception_t.ACCESS_VIOLATION;
+				else
+					return -1, d.output, exception_t.UNKNOWN_EXCEPTION;
+			}
+		}
+		return -1, null, exception_t.UNKNOWN_EXCEPTION;		// Shouldn't ever get here
+	} else
+		return -1, null, exception_t.UNKNOWN_PLATFORM;
+}
+
 private abstract int debugSpawnImpl(pointer<byte> command, ref<SpawnPayload> output, long timeout);
+
+private abstract int debugSpawnInteractiveImpl(pointer<byte> command, ref<SpawnPayload> output, string stdin, long timeout);
 
 private abstract void disposeOfPayload(ref<SpawnPayload> output);
 
