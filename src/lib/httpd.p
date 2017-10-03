@@ -269,9 +269,10 @@ public class HttpRequest {
 	public string fragment;
 	public string httpVersion;
 	public string[string] headers;
-	
+
 	public string serviceResource;
 	
+	private string[string] _parameters;			// These will be the parsed query parameters.
 	private ref<net.Connection> _connection;
 	private byte[] _buffer;
 	private int _bufferEnd;
@@ -341,6 +342,32 @@ public class HttpRequest {
 		}
 //		printf("after getc _cursor = %x\n", _cursor);
 		return _buffer[_cursor++];		
+	}
+
+	public string queryParameter(string name) {
+		if (query == null)
+			return null;
+		if (_parameters.size() == 0) {
+			int nextParam = 0;
+			while (nextParam < query.length()) {
+				int ampersand = query.indexOf('&', nextParam);
+				if (ampersand == -1)
+					ampersand = query.length();
+				text.substring ss(&query[nextParam], ampersand - nextParam);
+				int equals = ss.indexOf('=');
+				if (equals == -1) {
+					string param(ss);
+					_parameters[param] = "";
+				} else {
+					string param(ss.c_str(), equals);
+					int v = equals + 1;
+					string value(ss.c_str() + v, ss.length() - v);
+					_parameters[param] = value;
+				}
+				nextParam = ampersand + 1;
+			}
+		}
+		return _parameters[name];
 	}
 
 	void print() {

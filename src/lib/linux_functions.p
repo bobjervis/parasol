@@ -214,6 +214,9 @@ public abstract int sysconf(int parameter_index);
 @Linux("libc.so.6", "unlink")
 public abstract int unlink(pointer<byte> path);
 
+@Linux("libc.so.6", "unsetenv")
+public abstract int unsetenv(pointer<byte> name);
+
 @Linux("libc.so.6", "usleep")
 public abstract int usleep(useconds_t usec);
 
