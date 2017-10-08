@@ -15,16 +15,29 @@
  */
 namespace parasol:http;
 
+import parasol:net;
+
 public class HttpClient {
 	public HttpClient(string url) {
 		
 	}
-	
-	public boolean get(string url) {
+
+	~HttpClient() {
+	}
+
+	public boolean get() {
 		return false;
 	}
 	
-	public boolean post(string url, string body) {
+	public boolean post() {
+		return false;
+	}
+
+	public ref<net.Connection> connection() {
+		return null;
+	}
+
+	public boolean isWebSocket() {
 		return false;
 	}
 }

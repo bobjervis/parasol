@@ -13,10 +13,9 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-namespace parasol:commandLine;
+namespace parasol:process;
 
 import native:C;
-import parasol:process;
 
 class Command {
 	ref<BaseArgument>[string] _shortOptions;
@@ -192,7 +191,7 @@ class Command {
 		}
  */
  		printf("Use is: ");
- 		string prototype = process.binaryFilename();
+ 		string prototype = binaryFilename();
  		
 		if (_allArguments.length() > 0)
 			prototype.append(" [options]");

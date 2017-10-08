@@ -140,7 +140,22 @@ public class WebSocket {
 		send(OP_CLOSE, &closeFrame[0], closeFrame.length());
 		_connection.close();
 	}
-	
+	/**
+	 * readWholeMessage
+	 *
+	 * This method reads one message from the WebSocket. It is not thread-safe.
+	 *
+	 * The text of the message, if any, is returned in the byte array buffer argument.
+	 *
+	 * The two boolean return values are:
+	 *	success		true if a message was received successfully. The contents of the buffer are the message.
+	 *	sawClose	true if instead of a data message, we saw a 'close' control message. No further reads
+	 *				will succeed after receiving this indicator. The appropriate action is to reply with
+	 *				a 'close' control message and then close the connection.
+	 *
+	 * Note: in the current implementation, only one of the two flags can be true. If both are false, the
+	 * appropriate action is to send a'close' control message and close the connection.
+	 */
 	public boolean, boolean readWholeMessage(ref<byte[]> buffer) {
 		boolean initialFrame = true;
 		for (;;) {
@@ -354,15 +369,31 @@ public class WebSocket {
 		}
 		return _incomingData[_incomingCursor++];
 	}
-	
+	/**
+	 * send
+	 *
+	 * A convenience method for sending a message that consists of a single string.
+	 * It is transmitted as an OP_STRING.
+	 */
 	public boolean send(string message) {
 		return send(OP_STRING, &message[0], message.length());
 	}
-	
+	/**
+	 * send
+	 *
+	 * A convenience method for sending a binary message. The byte array is transmitted
+	 * as an OP_BINARY.
+	 */
 	public boolean send(byte[] message) {
 		return send(OP_BINARY, &message[0], message.length());
 	}
-	
+	/**
+	 * send
+	 *
+	 * The lower-level method that gives you full control of the message op code and
+	 * content. This can be used to send control messages as well as string or binary data
+	 * messages.
+	 */
 	public boolean send(byte opcode, pointer<byte> message, int length) {
 		do {
 			int frameLength = maxFrameSize <= length ? maxFrameSize : length;

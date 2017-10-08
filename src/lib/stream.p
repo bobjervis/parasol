@@ -151,6 +151,19 @@ public class Reader {
 
 public class Writer {
 	public abstract void write(byte c);
+
+	public int write(string s) {
+		for (int i = 0; i < s.length(); i++)
+			write(s[i]);
+		return s.length();
+	}
+
+	public int printf(string format, var... args) {
+		string s;
+
+		s.printf(format, args);
+		return write(s);
+	}
 }
 
 public class StringReader extends Reader {

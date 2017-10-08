@@ -13,7 +13,6 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import parasol:commandLine;
 import parasol:script;
 import parasol:storage;
 import parasol:process;
@@ -37,7 +36,7 @@ string COPYRIGHT_STRING = "2015 Robert Jervis";
  *		generated headers simplify data exchange.
  *		
  */
-class GenHeaderCommand extends commandLine.Command {
+class GenHeaderCommand extends process.Command {
 	public GenHeaderCommand() {
 		finalArguments(0, int.MAX_VALUE, "<filename> <header-filename>");
 		description("The given filename is parsed as a Parasol program. " +
@@ -70,11 +69,11 @@ class GenHeaderCommand extends commandLine.Command {
 					"Displays this help.");
 	}
 
-	ref<commandLine.Argument<string>> importPathArgument;
-	ref<commandLine.Argument<boolean>> verboseArgument;
-	ref<commandLine.Argument<string>> explicitArgument;
-	ref<commandLine.Argument<boolean>> logImportsArgument;
-	ref<commandLine.Argument<boolean>> symbolTableArgument;
+	ref<process.Argument<string>> importPathArgument;
+	ref<process.Argument<boolean>> verboseArgument;
+	ref<process.Argument<string>> explicitArgument;
+	ref<process.Argument<boolean>> logImportsArgument;
+	ref<process.Argument<boolean>> symbolTableArgument;
 }
 
 private ref<GenHeaderCommand> genHeaderCommand;

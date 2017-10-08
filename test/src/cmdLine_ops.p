@@ -13,11 +13,11 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import parasol:commandLine;
+import parasol:process;
 
-class TestCommand extends commandLine.Command {
-	ref<commandLine.Argument<string>> aStringArgument;
-	ref<commandLine.Argument<boolean>> aBooleanArgument;
+class TestCommand extends process.Command {
+	ref<process.Argument<string>> aStringArgument;
+	ref<process.Argument<boolean>> aBooleanArgument;
 
 	public TestCommand() {
 		finalArguments(1, 2, "parameter [ TEST-STRING-2 ]");

@@ -14,10 +14,10 @@
    limitations under the License.
  */
 // Binary differencer
-import parasol:commandLine;
+import parasol:process;
 import parasol:file;
 
-class BDiffCommand extends commandLine.Command {
+class BDiffCommand extends process.Command {
 	public BDiffCommand() {
 		finalArguments(2, 2, "<file1> <file2>");
 		description("Compares two binary files.");

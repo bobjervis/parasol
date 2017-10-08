@@ -14,7 +14,6 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import parasol:commandLine;
 import parasol:storage;
 import parasol:process;
 import parasol:runtime;
@@ -40,7 +39,7 @@ string COPYRIGHT_STRING = "2015 Robert Jervis";
  *		Runtime executes a runnable object
  *		
  */
-class ParasolCommand extends commandLine.Command {
+class ParasolCommand extends process.Command {
 	public ParasolCommand() {
 		finalArguments(0, int.MAX_VALUE, "<filename> [arguments ...]");
 		description("The given filename is run as a Parasol program. " +
@@ -91,16 +90,16 @@ class ParasolCommand extends commandLine.Command {
 					"Displays this help.");
 	}
 
-	ref<commandLine.Argument<string>> importPathArgument;
-	ref<commandLine.Argument<boolean>> verboseArgument;
-	ref<commandLine.Argument<boolean>> traceArgument;
-	ref<commandLine.Argument<boolean>> disassemblyArgument;
-	ref<commandLine.Argument<string>> explicitArgument;
-	ref<commandLine.Argument<string>> pxiArgument;
-	ref<commandLine.Argument<string>> targetArgument;
-	ref<commandLine.Argument<string>> rootArgument;
-	ref<commandLine.Argument<boolean>> logImportsArgument;
-	ref<commandLine.Argument<boolean>> symbolTableArgument;
+	ref<process.Argument<string>> importPathArgument;
+	ref<process.Argument<boolean>> verboseArgument;
+	ref<process.Argument<boolean>> traceArgument;
+	ref<process.Argument<boolean>> disassemblyArgument;
+	ref<process.Argument<string>> explicitArgument;
+	ref<process.Argument<string>> pxiArgument;
+	ref<process.Argument<string>> targetArgument;
+	ref<process.Argument<string>> rootArgument;
+	ref<process.Argument<boolean>> logImportsArgument;
+	ref<process.Argument<boolean>> symbolTableArgument;
 }
 
 private ref<ParasolCommand> parasolCommand;

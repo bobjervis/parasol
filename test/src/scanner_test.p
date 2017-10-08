@@ -13,7 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import parasol:commandLine;
+import parasol:process;
 import parasol:file;
 import parasol:random.Random;
 import parasol:compiler.FileStat;
@@ -22,7 +22,7 @@ import parasol:compiler.Scanner;
 import parasol:compiler.Token;
 import native:C;
 
-class TestCommand extends commandLine.Command {
+class TestCommand extends process.Command {
 	public TestCommand() {
 		finalArguments(1, int.MAX_VALUE, "<source-filename> ...");
 		description("The given filenames are scanned using the Parasol Scanner class. " +
@@ -43,9 +43,9 @@ class TestCommand extends commandLine.Command {
 					"Displays this help.");
 	}
 
-	ref<commandLine.Argument<string>> seedArgument;
-	ref<commandLine.Argument<boolean>> skipShuffleArgument;
-	ref<commandLine.Argument<boolean>> verboseArgument;
+	ref<process.Argument<string>> seedArgument;
+	ref<process.Argument<boolean>> skipShuffleArgument;
+	ref<process.Argument<boolean>> verboseArgument;
 }
 
 int seed = 1;

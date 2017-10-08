@@ -15,10 +15,10 @@
  */
 import parasol:pxi;
 import parasol:file;
-import parasol:commandLine;
+import parasol:process;
 import parasol:x86_64;
 
-class DumpPxiCommand extends commandLine.Command {
+class DumpPxiCommand extends process.Command {
 	public DumpPxiCommand() {
 		finalArguments(1, int.MAX_VALUE, "<file> ...");
 		description("Produce a formatted dump of a pxi file.");
@@ -27,7 +27,7 @@ class DumpPxiCommand extends commandLine.Command {
 		helpArgument('?', "help", "Display this help.");
 	}
 	
-	ref<commandLine.Argument<string>> sectionArgument;
+	ref<process.Argument<string>> sectionArgument;
 }
 
 DumpPxiCommand command;

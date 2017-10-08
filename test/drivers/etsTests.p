@@ -13,7 +13,6 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import parasol:commandLine;
 import parasol:script;
 import parasol:storage;
 import parasol:process;
@@ -42,7 +41,7 @@ string COPYRIGHT_STRING = "2015 Robert Jervis";
  *		Runtime executes a runnable object
  *		
  */
-class TestCommand extends commandLine.Command {
+class TestCommand extends process.Command {
 	public TestCommand() {
 		finalArguments(0, int.MAX_VALUE, "<script-filename> ...");
 		description("The given filenames are run as a Parasol test script in ets format. " +
@@ -85,16 +84,16 @@ class TestCommand extends commandLine.Command {
 					"Displays this help.");
 	}
 
-	ref<commandLine.Argument<string>> importPathArgument;
-	ref<commandLine.Argument<boolean>> verboseArgument;
-	ref<commandLine.Argument<boolean>> traceArgument;
-	ref<commandLine.Argument<string>> explicitArgument;
-	ref<commandLine.Argument<string>> headerArgument;
-	ref<commandLine.Argument<string>> targetArgument;
-	ref<commandLine.Argument<string>> testPxiArgument;
-	ref<commandLine.Argument<boolean>> logImportsArgument;
-	ref<commandLine.Argument<boolean>> symbolTableArgument;
-	ref<commandLine.Argument<boolean>> compileFromSourceArgument;
+	ref<process.Argument<string>> importPathArgument;
+	ref<process.Argument<boolean>> verboseArgument;
+	ref<process.Argument<boolean>> traceArgument;
+	ref<process.Argument<string>> explicitArgument;
+	ref<process.Argument<string>> headerArgument;
+	ref<process.Argument<string>> targetArgument;
+	ref<process.Argument<string>> testPxiArgument;
+	ref<process.Argument<boolean>> logImportsArgument;
+	ref<process.Argument<boolean>> symbolTableArgument;
+	ref<process.Argument<boolean>> compileFromSourceArgument;
 }
 
 int main(string[] args) {

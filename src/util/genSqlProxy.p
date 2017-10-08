@@ -14,7 +14,7 @@
    limitations under the License.
  */
 import parasol:file;
-import parasol:commandLine;
+import parasol:process;
 import parasol:compiler;
 import parasol:sql;
 import parasol:stream.Utf8Reader;
@@ -32,7 +32,7 @@ string DEFAULT_CLASS_NAME = "SQLDataBase";
  *		includes various CREATE TABLE, PROCEDURE and FUNCTION calls. If not, this generator
  *		will produce unpredictable results.
  */
-class SQLProxyCommand extends commandLine.Command {
+class SQLProxyCommand extends process.Command {
 	public SQLProxyCommand() {
 		finalArguments(2, 2, "<sql-filename> <class-filename>");
 		description("The given filename is parsed as a SQL schema definition script. " +
@@ -50,9 +50,9 @@ class SQLProxyCommand extends commandLine.Command {
 					"Displays this help.");
 	}
 
-	ref<commandLine.Argument<string>> classNameArgument;
-	ref<commandLine.Argument<string>> namespaceArgument;
-	ref<commandLine.Argument<boolean>> verboseArgument;
+	ref<process.Argument<string>> classNameArgument;
+	ref<process.Argument<string>> namespaceArgument;
+	ref<process.Argument<boolean>> verboseArgument;
 }
 
 SQLProxyCommand sqlProxyCommand();

@@ -13,7 +13,6 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import parasol:commandLine;
 import parasol:file;
 import parasol:process;
 
@@ -28,7 +27,7 @@ string COPYRIGHT_STRING = "2015 Robert Jervis";
  *		to classify incoming UTF-8 code sequences.
  *		
  */
-class UCDParserCommand extends commandLine.Command {
+class UCDParserCommand extends process.Command {
 	public UCDParserCommand() {
 		finalArguments(2, 2, "<UnicodeData.txt file> <classifier-filename>");
 		description("The first given filename is parsed as a UnicodeData.txt file. " +
@@ -45,7 +44,7 @@ class UCDParserCommand extends commandLine.Command {
 					"Displays this help.");
 	}
 
-	ref<commandLine.Argument<boolean>> verboseArgument;
+	ref<process.Argument<boolean>> verboseArgument;
 }
 
 private UCDParserCommand ucdParserCommand;
