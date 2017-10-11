@@ -23,17 +23,17 @@
  *	files and letting the normal scope rules do the rest. This file's UnitScope
  *	gets inserted as the root scope of all other file UnitScope's. 
  */
-import parasol:integers.short;
-import parasol:integers.int;
-import parasol:integers.long;
-import parasol:integers.byte;
-import parasol:integers.char;
-import parasol:integers.unsigned;
-import parasol:floatingPoint.float;
-import parasol:floatingPoint.double;
+import parasol:types.short;
+import parasol:types.int;
+import parasol:types.long;
+import parasol:types.byte;
+import parasol:types.char;
+import parasol:types.unsigned;
+import parasol:types.float;
+import parasol:types.double;
 import parasol:text.string;
 import parasol:text.substring;
-import parasol:variant.var;
+import parasol:types.var;
 import parasol:types.address;
 import parasol:types.boolean;
 import parasol:types.void;

@@ -13,7 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-namespace parasol:variant;
+namespace parasol:types;
 
 import native:C;
 

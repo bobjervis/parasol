@@ -62,10 +62,12 @@
 %token DO
 %token ELSE
 %token ENUM
+%token EVENT
 %token EXTENDS
 %token FALSE
 %token FINAL
 %token FINALLY
+%token FLAGS
 %token FOR
 %token FUNCTION
 %token IF
@@ -102,8 +104,7 @@ statement:	  SEMI_COLON
 			| expression SEMI_COLON
 			| expression catch_clause
 			| block
-			| visibility declaration
-			| declaration
+			| visibility_opt declaration
 			| BREAK SEMI_COLON
 			| CASE expression COLON statement
 			| CONTINUE SEMI_COLON
@@ -150,7 +151,8 @@ dotted_name:  IDENTIFIER
 block:		  LEFT_CURLY statement_list_opt RIGHT_CURLY
 			;
 		
-visibility:	  PUBLIC
+visibility:	| /* empty */
+			| PUBLIC
 			| PROTECTED
 			| PRIVATE
 			;
@@ -159,16 +161,22 @@ declaration:
 			  expression initializer_list SEMI_COLON
 			| STATIC expression initializer_list SEMI_COLON
 			| CLASS_NAME LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS function_body
-			| FINAL CLASS IDENTIFIER class_body
-			| CLASS IDENTIFIER class_body
+			| final_opt CLASS IDENTIFIER class_body
+			| final_opt INTERFACE IDENTIFIER interface_body
 			| ENUM IDENTIFIER LEFT_CURLY enum_body RIGHT_CURLY
-			| FINAL expression name LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS function_body
-			| expression name LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS function_body
+			| FLAGS IDENTIFIER LEFT_CURLY flags_list RIGHT_CURLY
+			| FLAGS IDENTIFIER LEFT_CURLY flags_list COMMA RIGHT_CURLY
+			| final_opt expression name LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS function_body
 			| STATIC expression name LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS function_body
 			| ABSTRACT expression name LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS SEMI_COLON
 			| TILDE CLASS_NAME LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS function_body
 			;
 			
+
+final_opt:	  /* empty */
+			| FINAL
+			;
+
 enum_body:	  enum_list
 			| enum_list SEMI_COLON statement_list_opt
 			;
@@ -180,7 +188,9 @@ enum_list:	  enum
 enum:		  IDENTIFIER
 			| IDENTIFIER LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS
 			;
-			
+
+flags_list:	  flag
+			| flags_list COMMA flag
 function_body:
 			  block
 			| SEMI_COLON
@@ -325,7 +335,15 @@ term_opt:	  /* empty */
 			
 class_body:	  template_opt base_opt implements_list_opt block
 			;
-			
+
+interface_body: base_opt LEFT_CURLY interface_statement RIGHT_CURLY
+			;
+
+interface_statement: SEMI_COLON
+			| expression name LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS SEMI_COLON
+			| EVENT name LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS SEMI_COLON
+			;
+
 template_opt:
 			  /* empty */
 			| LP_LA template_list RA_RP

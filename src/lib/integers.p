@@ -13,7 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-namespace parasol:integers;
+namespace parasol:types;
 
 public class short {
 	public static short MIN_VALUE = 0xffffffffffff8000;

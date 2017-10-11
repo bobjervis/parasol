@@ -16,10 +16,11 @@
 namespace parasol:http;
 
 import parasol:net;
+import native:net.gethostbyname;
 
 public class HttpClient {
 	public HttpClient(string url) {
-		
+		// First, parse out the protocol and hostname.
 	}
 
 	~HttpClient() {
