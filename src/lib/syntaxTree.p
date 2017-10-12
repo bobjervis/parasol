@@ -892,10 +892,6 @@ class Class extends Block {
 				ref<InterfaceType> tp = ref<InterfaceType>(nl.node.unwrapTypedef(Operator.INTERFACE, compileContext));
 				if (tp.deferAnalysis())
 					continue;
-				if (nl.node.op() != Operator.IDENTIFIER) {
-					nl.node.print(0);
-					assert(false);
-				}
 				if (scope != null) {
 					ref<ClassType> classType = ref<ClassScope>(scope).classType;
 					classType.implement(tp);
@@ -945,8 +941,22 @@ class Class extends Block {
 				type = tp;
 				continue;
 			}
-			assert(nl.node.op() == Operator.IDENTIFIER);
-			ref<Identifier> nm = ref<Identifier>(nl.node);
+			ref<CompileString> identifier;
+			switch (nl.node.op()) {
+			case IDENTIFIER:
+				ref<Identifier> nm = ref<Identifier>(nl.node);
+				identifier = nm.identifier();
+				break;
+
+			case DOT:
+				ref<Selection> sel = ref<Selection>(nl.node);
+				identifier = sel.identifier();
+				break;
+
+			default:
+				nl.node.print(0);
+				assert(false);
+			}
 			for (ref<Symbol>[Scope.SymbolKey].iterator i = tp.scope().symbols().begin(); i.hasNext(); i.next()) {
 				ref<Overload> o = ref<Overload>(i.get());
 				ref<Symbol> sym = scope.lookup(o.name(), compileContext);
@@ -960,14 +970,14 @@ class Class extends Block {
 						ref<OverloadInstance> oi = (*o.instances())[i];
 						// oi is the interface method, classFunctions are the class' methods of the same name
 						if (!classMethods.doesImplement(oi))
-							add(MessageId.CLASS_MISSING_METHOD_FROM_INTERFACE, compileContext.pool(), *oi.name(), *nm.identifier());
+							add(MessageId.CLASS_MISSING_METHOD_FROM_INTERFACE, compileContext.pool(), *oi.name(), *identifier);
 					}
 				} else {
 					for (int i = 0; i < o.instances().length(); i++) {
 						ref<OverloadInstance> oi = (*o.instances())[i];
 //						printf("nm = {%x:%x} '%s'\n", nm.identifier().data, nm.identifier().length, (*nm.identifier()).asString());
 //						printf("oi = {%x:%x} '%s'\n", oi.name().data, nm.identifier().length, (*oi.name()).asString());
-						add(MessageId.CLASS_MISSING_METHOD_FROM_INTERFACE, compileContext.pool(), *oi.name(), *nm.identifier());
+						add(MessageId.CLASS_MISSING_METHOD_FROM_INTERFACE, compileContext.pool(), *oi.name(), *identifier);
 					}
 				}
 			}
