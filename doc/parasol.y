@@ -72,6 +72,7 @@
 %token IF
 %token IMPLEMENTS
 %token IMPORT
+%token INTERFACE
 %token NAMESPACE
 %token NULL
 %token PRIVATE
