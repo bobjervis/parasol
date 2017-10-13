@@ -73,7 +73,10 @@
 %token IF
 %token IMPLEMENTS
 %token IMPORT
+%token INTERFACE
+%token MONITOR
 %token NAMESPACE
+%token NEW
 %token NULL
 %token PRIVATE
 %token PROTECTED
@@ -157,21 +160,25 @@ visibility:	| /* empty */
 			| PRIVATE
 			;
 				
-declaration:
-			  expression initializer_list SEMI_COLON
-			| STATIC expression initializer_list SEMI_COLON
+declaration:  static_opt expression initializer_list SEMI_COLON
 			| CLASS_NAME LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS function_body
-			| final_opt CLASS IDENTIFIER class_body
 			| final_opt INTERFACE IDENTIFIER interface_body
 			| ENUM IDENTIFIER LEFT_CURLY enum_body RIGHT_CURLY
 			| FLAGS IDENTIFIER LEFT_CURLY flags_list RIGHT_CURLY
 			| FLAGS IDENTIFIER LEFT_CURLY flags_list COMMA RIGHT_CURLY
 			| final_opt expression name LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS function_body
 			| STATIC expression name LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS function_body
-			| ABSTRACT expression name LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS SEMI_COLON
 			| TILDE CLASS_NAME LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS function_body
+			| final_opt CLASS IDENTIFIER class_body
+			| final_opt static_opt expression name LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS function_body
+			| static_opt EVENT name LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS function_body
+			| ABSTRACT expression name LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS SEMI_COLON
 			;
 			
+
+static_opt:	  /* empty */
+			| STATIC
+			;
 
 final_opt:	  /* empty */
 			| FINAL
