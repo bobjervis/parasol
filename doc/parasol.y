@@ -62,6 +62,7 @@
 %token DO
 %token ELSE
 %token ENUM
+%token EVENT
 %token EXTENDS
 %token FALSE
 %token FINAL
@@ -155,20 +156,24 @@ visibility:	  PUBLIC
 			| PRIVATE
 			;
 				
-declaration:
-			  expression initializer_list SEMI_COLON
-			| STATIC expression initializer_list SEMI_COLON
+declaration:  static_opt expression initializer_list SEMI_COLON
 			| CLASS_NAME LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS function_body
-			| FINAL CLASS IDENTIFIER class_body
-			| CLASS IDENTIFIER class_body
-			| ENUM IDENTIFIER LEFT_CURLY enum_body RIGHT_CURLY
-			| FINAL expression name LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS function_body
-			| expression name LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS function_body
-			| STATIC expression name LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS function_body
-			| ABSTRACT expression name LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS SEMI_COLON
 			| TILDE CLASS_NAME LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS function_body
+			| final_opt CLASS IDENTIFIER class_body
+			| ENUM IDENTIFIER LEFT_CURLY enum_body RIGHT_CURLY
+			| final_opt static_opt expression name LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS function_body
+			| static_opt EVENT name LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS function_body
+			| ABSTRACT expression name LEFT_PARENTHESIS parameter_list_opt RIGHT_PARENTHESIS SEMI_COLON
 			;
-			
+
+static_opt:	  /* empty */
+			| STATIC
+			;
+
+final_opt:	  /* empty */
+			| FINAL
+			;
+
 enum_body:	  enum_list
 			| enum_list SEMI_COLON statement_list_opt
 			;
