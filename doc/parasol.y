@@ -73,7 +73,9 @@
 %token IMPLEMENTS
 %token IMPORT
 %token INTERFACE
+%token MONITOR
 %token NAMESPACE
+%token NEW
 %token NULL
 %token PRIVATE
 %token PROTECTED
