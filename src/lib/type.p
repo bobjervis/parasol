@@ -533,7 +533,7 @@ class ClassType extends Type {
 
 	protected void doResolve(ref<CompileContext> compileContext) {
 		if (_definition != null) {
-			_definition.assignImplementsClause(compileContext);
+//			_definition.assignImplementsClause(compileContext);
 			ref<Node> base = _definition.extendsClause();
 			if (base != null) {
 				compileContext.assignTypes(_scope.enclosing(), base);
@@ -1762,9 +1762,7 @@ class Type {
 		if (_resolved)
 			return;
 		if (_resolving) {
-			printf("resolve error ");
-			print();
-			printf("\n");
+			printf("resolve error %s\n", signature());
 			assert(false);
 			_family = TypeFamily.ERROR;
 		} else {

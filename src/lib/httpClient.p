@@ -41,4 +41,8 @@ public class HttpClient {
 	public boolean isWebSocket() {
 		return false;
 	}
+
+	public ref<WebSocket> webSocket() {
+		return null;
+	}
 }

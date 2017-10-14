@@ -968,6 +968,7 @@ class Class extends Block {
 					}
 					for (int i = 0; i < o.instances().length(); i++) {
 						ref<OverloadInstance> oi = (*o.instances())[i];
+						oi.assignType(compileContext);
 						// oi is the interface method, classFunctions are the class' methods of the same name
 						if (!classMethods.doesImplement(oi))
 							add(MessageId.CLASS_MISSING_METHOD_FROM_INTERFACE, compileContext.pool(), *oi.name(), *identifier);
@@ -3212,7 +3213,7 @@ class Node {
 		if (newType.family() == TypeFamily.INTERFACE && !isLvalue()) {
 			add(MessageId.LVALUE_REQUIRED, compileContext.pool());
 			type = compileContext.errorType();
-			return false;
+			return true;
 		}
 		return true;
 	}
@@ -3282,6 +3283,7 @@ class Node {
 		case	INDIRECT:
 		case	SUBSCRIPT:
 		case	VARIABLE:
+		case	THIS:
 			return true;
 
 		default:
