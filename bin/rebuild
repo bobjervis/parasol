@@ -20,7 +20,7 @@ then
     fi
 fi
 $PARASOL_HOME/bin/parasolrt p2.pxi test/drivers/etsTests.p $@ --testpxi=p2.pxi test/scripts/parasol_tests.ets
-cp $PARASOL_PXI ${PARASOL_PXI}.save
 cp p1.pxi $PARASOL_PXI
 $PARASOL_HOME/bin/parasolrt $PARASOL_PXI $PARASOL_HOME/compiler/main.p --pxi=$PARASOL_HOME/bin/x86-64-win.pxi --target=x86-64-win $PARASOL_HOME/compiler/main.p
+rm p1.pxi p2.pxi
 echo SUCCESS
