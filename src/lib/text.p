@@ -23,6 +23,13 @@ import parasol:runtime;
 public boolean ignoring;
 public address[] deletedContents;
 
+int printf(string format, var... arguments) {
+	string s;
+	
+	s.printf(format, arguments);
+	return print(s);
+}
+
 class string {
 	private class allocation {
 		public int length;
@@ -50,6 +57,18 @@ class string {
 		}
 	}
 
+	public string(text.substring source, int startOffset) {
+		if (source._data != null) {
+			resize(source._length - startOffset);
+			C.memcpy(&_contents.data, source._data + startOffset, source._length - startOffset);
+		}
+	}
+	public string(text.substring source, int startOffset, int endOffset) {
+		if (source._data != null) {
+			resize(endOffset - startOffset);
+			C.memcpy(&_contents.data, source._data + startOffset, endOffset - startOffset);
+		}
+	}
 	public string(pointer<byte> cString) {
 		if (cString != null) {
 			int len = C.strlen(cString);

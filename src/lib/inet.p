@@ -60,6 +60,35 @@ public class SocketException extends exception.Exception {
 	}
 	
 }
+/**
+ * hostIPv4
+ *
+ * This method returns the host IPv4 address, if any, for the current host.
+ * If there was any error, or there are no IPv4 interfaces defined, this returns
+ * zero.
+ */
+public unsigned hostIPv4() {
+	ref<linux.ifaddrs> ifAddresses;
+	if (linux.getifaddrs(&ifAddresses) != 0) {
+		printf("getifaddrs failed\n");
+		return 0;
+	}
+	int i = 1;
+	for (ref<linux.ifaddrs> ifa = ifAddresses; ; ifa = ifa.ifa_next, i++) {
+		if (ifa == null) {
+			printf("No identifiable IPv4 address to use\n");
+			return 0;
+		}
+		if (ifa.ifa_addr.sa_family == net.AF_INET) {
+			pointer<byte> ipa = pointer<byte>(&(ref<net.sockaddr_in>(ifa.ifa_addr).sin_addr));
+			if (ipa[0] == 127 && ipa[1] == 0 && ipa[2] == 0 && ipa[3] == 1)
+				continue;
+			return *ref<unsigned>(ipa);
+		}
+	}
+	printf("No internet addresses found\n");
+	return 0;
+}
 
 private  monitor class SocketInit {
 	boolean _done;
@@ -203,12 +232,59 @@ public class Socket {
 	public boolean closed() {
 		return _socketfd < 0;
 	}
+
+	// Client side API's
+
+	public ref<Connection> connect(string hostname, char port) {
+		unsigned ip;
+		boolean success;
+
+		if (port == 0)
+			return null;
+		(ip, success) = resolveHostName(hostname);
+		if (!success)
+			return null;
+		net.sockaddr_in sock_addr;
+		sock_addr.sin_family = net.AF_INET;
+		sock_addr.sin_port = net.htons(port);
+		sock_addr.sin_addr.s_addr = ip;
+		int result = net.connect(_socketfd, &sock_addr, sock_addr.bytes);
+		if (result != 0) {
+			printf("net.connect failed: %d\n", result);
+			return null;
+		}
+		ref<Connection> connection = createConnection(_socketfd, &sock_addr, sock_addr.bytes);
+		return connection;
+	}
+
+	private unsigned, boolean resolveHostName(string hostname) {
+		if (hostname == null)
+			return 0, false;
+		net.in_addr in;
+		if (net.inet_aton(hostname.c_str(), &in) == 0) {
+			ref<net.hostent> host = net.gethostbyname(hostname.c_str());
+			if (host == null) {
+				printf("gethostbyname failed for '%s'\n", hostname);
+				return 0, false;
+			}
+			in.s_addr = *ref<unsigned>(*host.h_addr_list);
+		}
+		return in.s_addr, true;
+	}
+
 }
 
 class Connection {
-	int _acceptfd;
-	net.sockaddr_in _address;
-	int _addressLength;
+	@Constant
+	private static int BUFFER_MAX = 8192;
+
+	protected int _acceptfd;
+	private net.sockaddr_in _address;
+	private int _addressLength;
+	private string _buffer;
+	private string _inBuffer;
+	private int _cursor;
+	private int _actual;
 
 	Connection(int acceptfd, ref<net.sockaddr_in> addr, int addrLen) {
 		_address = *addr;
@@ -232,7 +308,95 @@ class Connection {
 		linux.perror(null);
 	}
 
+	// These implement buffered writes using _buffer.
+
+	public int printf(string format, var... parameters) {
+		string s;
+
+		s.printf(format, parameters);
+		return write(s);
+	}
+
+	public int write(string s) {
+		if (s.length() + _buffer.length() >= BUFFER_MAX) {
+			int fill = BUFFER_MAX - _buffer.length();
+			if (fill > 0) {
+				_buffer.append(&s[0], fill);
+				if (!flush())
+					return fill;
+			}
+			_buffer = s.substring(fill);
+		} else
+			_buffer.append(s);
+		return s.length();
+	}
+
+	public void putc(int c) {
+		_buffer.append(byte(c));
+		if (_buffer.length() >= BUFFER_MAX)
+			flush();
+	}
+
+	public boolean flush() {
+		if (_buffer.length() > 0) {
+			if (write(&_buffer[0], _buffer.length()) != _buffer.length())
+				return false;
+			_buffer = "";
+		}
+		return true;
+	}
+
+	// These implement buffered reads using _inBuffer;
+
+	public int read() {
+		if (_cursor >= _actual) {
+			if (_inBuffer.length() == 0)
+				_inBuffer.resize(8192);
+			_actual = read(&_inBuffer[0], _inBuffer.length());
+			if (_actual <= 0) {
+				text.printf("Failed to read from connection: %d\n", _actual);
+				return -1;
+			}
+			_cursor = 0;
+		}
+		return _inBuffer[_cursor++];
+	}
+
+	public void ungetc() {
+		_cursor--;
+	}
+
+	public string readHttpMessage() {
+		string message;
+		boolean empty = true;
+
+		for (;;) {
+			int c = read();
+			if (c < 0)
+				break;
+			switch (c) {
+			case '\r':
+				message.append(byte(c));
+				break;
+
+			case '\n':
+				message.append(byte(c));
+				if (empty)
+					return message;
+				empty = true;
+				break;
+
+			default:
+				empty = false;
+				message.append(byte(c));
+			}
+		}
+		return message;
+	}
+
 	public abstract boolean acceptSecurityHandshake();
+
+	public abstract boolean initiateSecurityHandshake();
 
 	public abstract int read(pointer<byte> buffer, int len);
 
@@ -256,6 +420,10 @@ class PlainConnection extends Connection {
 	}
 
 	public boolean acceptSecurityHandshake() {
+		return true;
+	}
+
+	public boolean initiateSecurityHandshake() {
 		return true;
 	}
 
@@ -410,6 +578,10 @@ class SSLConnection extends Connection {
 //		printf("AOK r = %d\n", r);
 
 		return r == 1;
+	}
+
+	public boolean initiateSecurityHandshake() {
+		return false;
 	}
 
 	public int read(pointer<byte> buffer, int length) {

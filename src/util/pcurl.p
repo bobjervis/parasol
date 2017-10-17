@@ -13,9 +13,9 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import parasol:commandLine;
 import parasol:file;
 import parasol:process;
+import parasol:http;
 
 /*
  * Date and Copyright holder of this code base.
@@ -25,21 +25,23 @@ string COPYRIGHT_STRING = "2015 Robert Jervis";
  * THe Parasol cURL command script. THis is a tiny subset of the full cURL command, but the intention is that
  * for whatever options this script does support, that it mimics the behavior of the cURL command.
  */
-class PcURLCommand extends commandLine.Command {
-	finalArguments(0, int.MAX_VALUE, "<url>");
-	description("Each of the URL's is fetched and written to the standard output. " +
-				"\n" +
-				"Only the http protocol is supported. " +
-				"Only GET and POST methods are supported. " +
-				"\n" +
-				"Copyright (c) " + COPYRIGHT_STRING
-				);
-	verboseArgument = booleanArgument('v', null,
-				"Enables verbose output.");
-	helpArgument('?', "help",
-				"Displays this help.");
+class PcURLCommand extends process.Command {
+	PcURLCommand() {
+		finalArguments(0, int.MAX_VALUE, "<url>");
+		description("Each of the URL's is fetched and written to the standard output. " +
+					"\n" +
+					"Only the http protocol is supported. " +
+					"Only GET and POST methods are supported. " +
+					"\n" +
+					"Copyright (c) " + COPYRIGHT_STRING
+					);
+		verboseArgument = booleanArgument('v', null,
+					"Enables verbose output.");
+		helpArgument('?', "help",
+					"Displays this help.");
+	}
 
-	ref<commandLine.Argument<boolean>> verboseArgument;
+	ref<process.Argument<boolean>> verboseArgument;
 }
 
 PcURLCommand command;
@@ -54,6 +56,9 @@ int main(string[] args) {
 	if (urls.length() <= 0)
 		command.help();
 	for (int i = 0; i < urls.length(); i++) {
-		HttpClient client(urls[i]);
+		http.HttpClient client(urls[i]);
+
+		client.get();
 	}
+	return 0;
 }

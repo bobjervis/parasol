@@ -23,6 +23,7 @@ import parasol:storage.exists;
 import parasol:thread.Thread;
 import parasol:thread.ThreadPool;
 import parasol:thread.currentThread;
+import parasol:net.Connection;
 import parasol:net.Socket;
 import parasol:net.Encryption;
 import parasol:net.ServerScope;
@@ -235,16 +236,18 @@ private void processHttpRequest(address ctx) {
 	if (!context.connection.acceptSecurityHandshake())
 		return;
 	HttpRequest request(context.connection);
-	HttpParser parser(&request);
+	HttpParser parser(context.connection);
 	HttpResponse response(context.connection);
-	if (parser.parse()) {
+	if (parser.parseRequest(&request)) {
 //		request.print();
 		if (context.server.dispatch(&request, &response, context.connection.secured())) {
 			delete context;
 			return;				// if dispatch returns true, we want to keep the connection open (for at least a while).
 		}
-	} else
+	} else {
+		request.print();
 		response.error(400);
+	}
 	response.close();
 	delete context;
 }
@@ -274,9 +277,6 @@ public class HttpRequest {
 	
 	private string[string] _parameters;			// These will be the parsed query parameters.
 	private ref<net.Connection> _connection;
-	private byte[] _buffer;
-	private int _bufferEnd;
-	private int _cursor;
 	
 	enum Method {
 		OPTIONS,
@@ -292,7 +292,6 @@ public class HttpRequest {
 	
 	public HttpRequest(ref<net.Connection> connection) {
 		_connection = connection;
-		_buffer.resize(65536);
 	}
 
 	public int sourceFamily() {
@@ -321,29 +320,6 @@ public class HttpRequest {
 			return value;
 	}
 	
-	void ungetc() {
-		if (_bufferEnd >= 0)
-			_cursor--;
-//		printf("after ungetc _cursor = %x\n", _cursor);
-	}
-	
-	int getc() {
-		// Refill the buffer until we get an empty read.
-		if (_cursor >= _bufferEnd) {
-			if (_bufferEnd < 0)
-				return -1;
-			_bufferEnd = _connection.read(&_buffer[0], _buffer.length());
-			if (_bufferEnd <= 0) {
-				_bufferEnd = -1;
-				return -1;
-			}
-//			text.memDump(&_buffer[0], _bufferEnd, 0);
-			_cursor = 0;
-		}
-//		printf("after getc _cursor = %x\n", _cursor);
-		return _buffer[_cursor++];		
-	}
-
 	public string queryParameter(string name) {
 		if (query == null)
 			return null;
@@ -370,6 +346,10 @@ public class HttpRequest {
 		return _parameters[name];
 	}
 
+	public ref<net.Connection> connection() {
+		return _connection;
+	}
+
 	void print() {
 		unsigned ip = sourceIP();
 		printf("Source family %d %d.%d.%d.%d:%d\n", sourceFamily(), ip & 0xff, (ip >> 8) & 0xff, (ip >> 16) & 0xff, ip >> 24, sourcePort());
@@ -390,44 +370,47 @@ public class HttpRequest {
 }
 
 public class HttpResponse {
+	public string httpVersion;
+	public string code;
+	public string reason;
+	public string[string] headers;
+
 	@Constant
 	private static int BUFFER_SIZE = 2048;
 	
 	private ref<net.Connection> _connection;
-	private byte[] _buffer;
-	private int _fill;
 	private boolean _headersEnded;
 	
 	HttpResponse() {
 		_connection = null;
-		_buffer.resize(BUFFER_SIZE);
 	}
 	
 	HttpResponse(ref<net.Connection> connection) {
 		_connection = connection;
-		_buffer.resize(BUFFER_SIZE);
 	}
 	
 	void close() {
 		if (!_headersEnded)
 			endOfHeaders();
-		flush();
+		_connection.flush();
 		_connection.close();
 	}
 	
-	private void flush() {
-		if (_fill > 0) {
-			int x = _connection.write(&_buffer[0], _fill);
-			if (x <= 0)
-				_connection.diagnoseError();
-			_fill = 0;
-		}
+	void printf(string format, var... parameters) {
+		_connection.printf(format, parameters);
 	}
-	
+
+	void write(string s) {
+		_connection.write(s);
+	}
+
+	void write(pointer<byte> data, int length) {
+		for (int i = 0; i < length; i++)
+			_connection.putc(data[i]);
+	}
+
 	void putc(byte c) {
-		_buffer[_fill++] = c;
-		if (_fill >= BUFFER_SIZE)
-			flush();
+		_connection.putc(c);
 	}
 	
 	void error(int statusCode) {
@@ -444,67 +427,55 @@ public class HttpResponse {
 		// emit headers?
 	}
 	
-	void ok() {
+	public void ok() {
 		statusLine(200, "OK");
 	}
 	
-	void statusLine(int statusCode, string reasonPhrase) {
-		string s;
-		
-		s.printf("HTTP/1.1 %d %s\r\n", statusCode, reasonPhrase);
-		write(s);
+	public void statusLine(int statusCode, string reasonPhrase) {
+		_connection.printf("HTTP/1.1 %d %s\r\n", statusCode, reasonPhrase);
 	}
 	
-	void header(string label, string value) {
-		write(label);
-		write(": ");
-		write(value);
-		write("\r\n");
+	public void header(string label, string value) {
+		_connection.printf("%s: %s\r\n", label, value);
 	}
 	
-	void endOfHeaders() {
+	public void endOfHeaders() {
 		_headersEnded = true;
-		write("\r\n");
-		flush();
+		_connection.write("\r\n");
+		_connection.flush();
 	}
 	
-	public void printf(string format, var... args) {
-		string s;
-		s.printf(format, args);
-		write(s);
-	}
-
-	public void write(string s) {
-		for (int i = 0; i < s.length(); i++)
-			putc(s[i]);
-	}
-	
-	public void write(pointer<byte> buffer, int len) {
-		for (int i = i; i < len; i++)
-			putc(buffer[i]);
-	}
 	/**
 	 * Only make this visible to internal users, such as WebSocket.
 	 */
-	ref<net.Connection> connection() {
+	public ref<net.Connection> connection() {
 		return _connection;
 	}
 	
-	void respond() {
-		flush();
+	public void respond() {
+		_connection.flush();
 	}
 	
-	void print() {
-		text.memDump(&_buffer[0], _fill, 0);
+	public void print() {
+		text.printf("HttpResponse\n");
+		text.printf("  HTTP Version     %s\n", httpVersion);
+		text.printf("  Code             %s\n", code);
+		text.printf("  Reason           %s\n", reason);
+		if (headers.size() > 0)
+			text.printf("  Headers:\n");
+		for (string[string].iterator i = headers.begin(); i.hasNext(); i.next()) {
+			text.printf("    %-20s %s\n", i.key(), i.get());
+		}
 	}
 }
 
 public class Url {
 }
 
-private class HttpParser {
+public class HttpParser {
 	HttpToken _previousToken;
 	string _tokenValue;
+	ref<Connection> _connection;
 	ref<HttpRequest> _request;
 
 	enum HttpToken {
@@ -533,11 +504,12 @@ private class HttpParser {
 		RC
 	}
 
-	HttpParser(ref<HttpRequest> request) {
-		_request = request;
+	HttpParser(ref<Connection> connection) {
+		_connection = connection;
 	}
 	
-	boolean parse() {
+	boolean parseRequest(ref<HttpRequest> request) {
+		_request = request;
 		HttpToken t = token();
 		while (t == HttpToken.CRLF)
 			t = token();
@@ -616,7 +588,7 @@ private class HttpParser {
 	private boolean collectUrl() {
 		_tokenValue = null;
 		for (;;) {
-			int ch = _request.getc();
+			int ch = _connection.read();
 			if (ch == -1)
 				return _tokenValue != null;
 			switch (urlClass[ch]) {
@@ -630,7 +602,7 @@ private class HttpParser {
 				
 			case QUERY_DELIM:
 				for (;;) {
-					ch = _request.getc();
+					ch = _connection.read();
 					if (ch == -1)
 						return _tokenValue != null;
 					switch (urlClass[ch]) {
@@ -647,7 +619,7 @@ private class HttpParser {
 						return collectFragment();
 
 					default:
-						_request.ungetc();
+						_connection.ungetc();
 						return _tokenValue != null;
 					}
 				}
@@ -656,7 +628,7 @@ private class HttpParser {
 				return collectFragment();
 
 			default:
-				_request.ungetc();
+				_connection.ungetc();
 				return _tokenValue != null;
 			}
 		}
@@ -664,7 +636,7 @@ private class HttpParser {
 
 	private boolean collectFragment() {
 		for (;;) {
-			int ch = _request.getc();
+			int ch = _connection.read();
 			if (ch == -1)
 				return _tokenValue != null;
 			switch (urlClass[ch]) {
@@ -677,11 +649,61 @@ private class HttpParser {
 				break;
 				
 			default:
-				_request.ungetc();
+				_connection.ungetc();
 				return _tokenValue != null;
 			}
 		}
 	}
+
+	public boolean parseResponse(ref<HttpResponse> response) {
+		HttpToken t = token();
+		while (t == HttpToken.CRLF)
+			t = token();
+		if (t != HttpToken.TOKEN)
+			return false;
+		if (_tokenValue != "HTTP")
+			return false;
+		if (token() != HttpToken.SL)
+			return false;
+		if (token() != HttpToken.TOKEN)
+			return false;
+		response.httpVersion = _tokenValue;
+		if (token() != HttpToken.SP)
+			return false;
+		if (token() != HttpToken.TOKEN)
+			return false;
+		response.code = _tokenValue;
+		if (token() != HttpToken.SP)
+			return false;
+		response.reason = readToEOL();
+				
+		for (;;) {
+			t = token();
+			if (t == HttpToken.CRLF)
+				break;
+			if (t != HttpToken.TOKEN)
+				return false;
+			string name = _tokenValue;
+			if (token() != HttpToken.CO)
+				return false;
+			skipWhiteSpace();
+			if (!fieldValue())
+				return false;
+			// header names are case-insensitive
+			name = name.toLower();
+			// The fieldValue() method consumed the CRLF, so we are ready to start parsing the next header
+			if (response.headers.contains(name)) {
+				string s = response.headers[name];
+				s.append(',');
+				s.append(_tokenValue);
+				response.headers[name] = s;
+			} else
+				response.headers[name] = _tokenValue;
+		}
+//		_request.print();
+		return true;
+	}
+
 	/*
 	 * Token values, always a string:
 	 *   - just a carriage return = just a carriage return in the input.
@@ -692,7 +714,7 @@ private class HttpParser {
 		_tokenValue = null;
 		
 		for (;;) {
-			int ch = _request.getc();
+			int ch = _connection.read();
 			if (ch == -1) {
 				if (_tokenValue == null)
 					return separator(HttpToken.END_OF_MESSAGE);
@@ -701,9 +723,9 @@ private class HttpParser {
 				if (_tokenValue == null) {
 					// we have no token, so this is the first character we saw, some special case processing
 					if (ch == '\r') {
-						ch = _request.getc();
+						ch = _connection.read();
 						if (ch != '\n') {
-							_request.ungetc();
+							_connection.ungetc();
 							
 							return _previousToken = HttpToken.CR;
 						}
@@ -714,20 +736,20 @@ private class HttpParser {
 						
 						if (_previousToken == HttpToken.CRLF)
 							return HttpToken.CRLF;
-						ch = _request.getc();
+						ch = _connection.read();
 						if (ch == ' ' || ch == '\t') {
 							// Yup, it's a line escape
 							skipWhiteSpace();
 							return _previousToken = HttpToken.SP;
 						} else {
-							_request.ungetc();
+							_connection.ungetc();
 							return _previousToken = HttpToken.CRLF;
 						}
 					}
 					_tokenValue.append(byte(ch));
 					return _previousToken = HttpToken.CTL;
 				}
-				_request.ungetc();
+				_connection.ungetc();
 				return _previousToken = HttpToken.TOKEN;
 			}
 			switch (ch) {
@@ -752,7 +774,7 @@ private class HttpParser {
 			case ' ':
 			case '\t':
 				if (_tokenValue != null) {
-					_request.ungetc();
+					_connection.ungetc();
 					return _previousToken = HttpToken.TOKEN;
 				}
 				skipWhiteSpace();
@@ -768,10 +790,10 @@ private class HttpParser {
 		_tokenValue = null;
 		boolean pendingWhiteSpace = false;
 		for (;;) {
-			int ch = _request.getc();
+			int ch = _connection.read();
 			switch (ch) {
 			case '\r':
-				_request.ungetc();
+				_connection.ungetc();
 				string saveArea = _tokenValue;
 				HttpToken t = token();
 				_tokenValue = saveArea;
@@ -807,7 +829,7 @@ private class HttpParser {
 		if (_tokenValue == null)
 			return _previousToken = sep;
 		else {
-			_request.ungetc();
+			_connection.ungetc();
 			return _previousToken = HttpToken.TOKEN;
 		}
 	}
@@ -815,9 +837,29 @@ private class HttpParser {
 	private void skipWhiteSpace() {
 		int ch;
 		do {
-			ch = _request.getc();
+			ch = _connection.read();
 		} while (ch == ' ' || ch == '\t');
-		_request.ungetc();
+		_connection.ungetc();
+	}
+
+	private string readToEOL() {
+		string text;
+		int ch;
+		for (;;) {
+			ch = _connection.read();
+			if (ch < 0)
+				return text;
+			if (ch == '\r') {
+				ch = _connection.read();
+				if (ch < 0)
+					return text;
+				if (ch == '\n')
+					return text;
+				_connection.ungetc();
+				continue;
+			}
+			text.append(byte(ch));
+		}
 	}
 }
 

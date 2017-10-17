@@ -232,9 +232,28 @@ public abstract int bind(int s, ref<sockaddr_in6> name, int nameLen);
 @Linux("libc.so.6", "bind")
 public abstract int bind(int s, ref<sockaddr_in6_old> name, int nameLen);
 
+// Note: there is only one C function, but the most convenient way to get some semblance of type-safety (that is restricting
+// the function calls to one of the sockaddr types) is to overload the various allowed signatures.
+@Windows("ws2_32.dll", "connect")
+@Linux("libc.so.6", "connect")
+public abstract int connect(int s, ref<sockaddr> name, int addrLen);
+@Windows("ws2_32.dll", "connect")
+@Linux("libc.so.6", "connect")
+public abstract int connect(int s, ref<sockaddr_in> name, int addrLen);
+@Windows("ws2_32.dll", "connect")
+@Linux("libc.so.6", "connect")
+public abstract int connect(int s, ref<sockaddr_in6> name, int addrLen);
+@Windows("ws2_32.dll", "connect")
+@Linux("libc.so.6", "connect")
+public abstract int connect(int s, ref<sockaddr_in6_old> name, int addrLen);
+
 @Windows("ws2_32.dll", "gethostbyname")
 @Linux("libc.so.6", "gethostbyname")
 public abstract ref<hostent> gethostbyname(pointer<byte> name);
+
+@Windows("ws2_32.dll", "htonl")
+@Linux("libc.so.6", "htonl")
+public abstract unsigned htonl(unsigned u16);
 
 @Windows("ws2_32.dll", "htons")
 @Linux("libc.so.6", "htons")
@@ -243,6 +262,10 @@ public abstract char htons(char u16);
 @Windows("ws2_32.dll", "inet_addr")
 @Linux("libc.so.6", "inet_addr")
 public abstract unsigned inet_addr(pointer<byte> cp);
+
+@Windows("ws2_32.dll", "inet_aton")
+@Linux("libc.so.6", "inet_aton")
+public abstract int inet_aton(pointer<byte> cp, ref<in_addr> inp);
 
 // Have to figure out what this is doing - does the argument need to be unsigned or in_addr or ref<in_addr>?
 @Windows("ws2_32.dll", "inet_ntoa")
@@ -303,5 +326,8 @@ public class WSADATA {
 public int SOL_SOCKET = 1;
 @Constant
 public int SO_REUSEADDR = 2;
+
+@Constant
+public unsigned INADDR_ANY = 0;
 
 

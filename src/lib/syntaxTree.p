@@ -3213,7 +3213,7 @@ class Node {
 		if (newType.family() == TypeFamily.INTERFACE && !isLvalue()) {
 			add(MessageId.LVALUE_REQUIRED, compileContext.pool());
 			type = compileContext.errorType();
-			return true;
+			return false;
 		}
 		return true;
 	}
