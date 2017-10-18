@@ -16,8 +16,8 @@
 namespace parasol:random;
 
 import native:C;
-//import parasol:math.log;
-//import parasol:math.sqrt;
+import parasol:runtime;
+import parasol:pxi.SectionType;
 
 class Random {
 	private class RandomState {
@@ -84,22 +84,35 @@ class Random {
 		return 69069 * jcong + 1234567;
 	}
 
-	void set(int seed) {
+	void set(long seed) {
 		string s(pointer<byte>(&seed), seed.bytes);
 		set(s);
 	}
 
 	void set() {
-	/*
-		HCRYPTPROV handle;
-
-		if (CryptAcquireContext(&handle, null, null, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT|CRYPT_SILENT)) {
-			CryptGenRandom(handle, _state.bytes, pointer<byte>(&_state));
-			CryptReleaseContext(handle, 0);
-		} else {
-		}
-	*/
-		set(0);
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			/*
+				HCRYPTPROV handle;
+		
+				if (CryptAcquireContext(&handle, null, null, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT|CRYPT_SILENT)) {
+					CryptGenRandom(handle, _state.bytes, pointer<byte>(&_state));
+					CryptReleaseContext(handle, 0);
+				} else {
+				}
+			*/
+			set(C.time(null));
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			ref<C.FILE> f = C.fopen("/dev/urandom".c_str(), "rb".c_str());
+			if (f == null)
+				set(C.time(null));
+			else {
+				long x;
+				C.fread(&x, 1, unsigned(x.bytes), f);
+				C.fclose(f);
+				set(x);
+			}
+		} else
+			set(C.time(null));
 	}
 
 	/*
@@ -118,7 +131,7 @@ class Random {
 		return next() / double(0x100000000);
 	}
 	/*
-	 * Returns a uniformly distributed 
+	 * Returns a uniformly distributed integer in the range from 0 - range-1, inclusive.
 	 */
 	int uniform(int range) {
 		return int(range * uniform());

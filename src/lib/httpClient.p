@@ -40,6 +40,7 @@ public class HttpClient {
 	private char _port;					// optional (default will be filled in from protocol)
 	private string _path;
 	private boolean _portDefaulted;
+	private unsigned _resolvedIP;
 
 	private string _cipherList;
 
@@ -119,31 +120,33 @@ public class HttpClient {
 		}
 	}
 
-	public boolean get() {
+	public boolean, unsigned get() {
 		boolean hasWebSocket;
 		boolean success;
+		unsigned hostIP;
 
-		(hasWebSocket, success) = startRequest("GET", null);
+		(hasWebSocket, success, hostIP) = startRequest("GET", null);
 		if (!success)
-			return false;
+			return false, hostIP;
 		if (hasWebSocket) {
 		}
-		return true;
+		return true, hostIP;
 	}
 
-	public boolean post(string body) {
+	public boolean, unsigned post(string body) {
 		boolean hasWebSocket;
 		boolean success;
+		unsigned hostIP;
 
-		(hasWebSocket, success) = startRequest("POST", body);
+		(hasWebSocket, success, hostIP) = startRequest("POST", body);
 		if (!success)
-			return false;
+			return false, hostIP;
 		if (hasWebSocket) {
 		}
-		return true;
+		return true, hostIP;
 	}
 
-	private boolean, boolean startRequest(string method, string body) {
+	private boolean, boolean, unsigned startRequest(string method, string body) {
 		net.Encryption encryption;
 		switch (_protocol) {
 		case "https":
@@ -155,17 +158,19 @@ public class HttpClient {
 		}
 		ref<net.Socket> socket = net.Socket.create(encryption, _cipherList);
 		if (socket == null)
-			return false, false;
-		ref<net.Connection> connection = socket.connect(_hostname, _port);
+			return false, false, 0;
+		ref<net.Connection> connection;
+		unsigned ip;
+		(connection, ip) = socket.connect(_hostname, _port);
 		if (connection == null) {
 			delete socket;
-			return false, false;
+			return false, false, ip;
 		}
 		if (!connection.initiateSecurityHandshake()) {
 			printf("Failed security handshake\n");
 			delete connection;
 			delete socket;
-			return false, false;
+			return false, false, ip;
 		}
 		delete socket;
 		boolean expectWebSocket;
@@ -199,9 +204,9 @@ public class HttpClient {
 		_response = new HttpResponse(null);
 		if (!parser.parseResponse(_response)) {
 			printf("Malformed response\n");
-			return false, false;
+			return false, false, ip;
 		}
-		return expectWebSocket, true;
+		return expectWebSocket, true, ip;
 	}
 
 	public ref<net.Connection> connection() {

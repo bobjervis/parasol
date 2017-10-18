@@ -22,10 +22,15 @@ boolean[] hits;
 hits.resize(100000);
 
 int hitCount = 0;
+int callCount = 0;
 while (hitCount < 100000) {
 	int x = r.uniform(100000);
+	callCount++;
 	if (!hits[x]) {
 		hitCount++;
+		if (hitCount > 99990 || hitCount % 10000 == 0) {
+			printf("Hits %d out of %d calls\n", hitCount, callCount);
+		}
 		hits[x] = true;
 	}
 }

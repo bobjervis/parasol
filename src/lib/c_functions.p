@@ -176,7 +176,7 @@ public abstract int strlen(pointer<byte> cp);
 
 @Windows("msvcrt.dll", "time")
 @Linux("libc.so.6", "time")
-public abstract int time(ref<int> t);
+public abstract long time(ref<long> t);
 
 //@Windows("msvcrt.dll", "vsprintf") - not yet implemented on Windows, Linux is pretty hacky, so beware
 @Linux("libc.so.6", "vsprintf")

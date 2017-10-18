@@ -138,6 +138,10 @@ public class Socket {
 			throw SocketException("Socket options could not be set");
 	}
 
+	~Socket() {
+		net.closesocket(_socketfd);
+	}
+
 	public boolean bind(char port, ServerScope scope) {
 		net.sockaddr_in s;
 		pointer<byte> ip;
@@ -235,15 +239,15 @@ public class Socket {
 
 	// Client side API's
 
-	public ref<Connection> connect(string hostname, char port) {
+	public ref<Connection>, unsigned connect(string hostname, char port) {
 		unsigned ip;
 		boolean success;
 
 		if (port == 0)
-			return null;
+			return null, 0;
 		(ip, success) = resolveHostName(hostname);
 		if (!success)
-			return null;
+			return null, 0;
 		net.sockaddr_in sock_addr;
 		sock_addr.sin_family = net.AF_INET;
 		sock_addr.sin_port = net.htons(port);
@@ -251,10 +255,10 @@ public class Socket {
 		int result = net.connect(_socketfd, &sock_addr, sock_addr.bytes);
 		if (result != 0) {
 			printf("net.connect failed: %d\n", result);
-			return null;
+			return null, ip;
 		}
 		ref<Connection> connection = createConnection(_socketfd, &sock_addr, sock_addr.bytes);
-		return connection;
+		return connection, ip;
 	}
 
 	private unsigned, boolean resolveHostName(string hostname) {

@@ -681,7 +681,7 @@ class RunObject extends script.Object {
 		string output;
 		process.exception_t exception;
 		
-		(result, output, exception) = process.spawn(command, timeout);
+		(result, output, exception) = process.execute(command, timeout);
 		Expect outcome;
 		if (result < 0)
 			outcome = Expect.FAIL;

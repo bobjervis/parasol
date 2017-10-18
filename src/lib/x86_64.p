@@ -2660,6 +2660,10 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 	
 	private void generateOutParameter(ref<Node> value, int outOffset, ref<CompileContext> compileContext) {
+		if (value.deferGeneration()) {
+			// TODO: Generate compile-caused exception
+			return;
+		}
 		if (value.op() == Operator.SEQUENCE) {
 			generate(ref<Binary>(value).left(), compileContext);
 			generateOutParameter(ref<Binary>(value).right(), outOffset, compileContext);

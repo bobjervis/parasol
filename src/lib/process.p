@@ -90,7 +90,7 @@ public int debugSpawn(string command, ref<string> output, ref<exception_t> outco
 	return result;
 }
 
-public int, string, exception_t spawn(string command, time.Time timeout) {
+public int, string, exception_t execute(string command, time.Time timeout) {
 	if (runtime.compileTarget == SectionType.X86_64_WIN) {
 		SpawnPayload payload;
 		
