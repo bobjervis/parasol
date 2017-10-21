@@ -139,6 +139,7 @@ public class Socket {
 	}
 
 	~Socket() {
+		printf("~Socket for %d\n", _socketfd);
 		net.closesocket(_socketfd);
 	}
 
@@ -358,7 +359,8 @@ class Connection {
 				_inBuffer.resize(8192);
 			_actual = read(&_inBuffer[0], _inBuffer.length());
 			if (_actual <= 0) {
-				text.printf("Failed to read from connection: %d\n", _actual);
+				if (_actual < 0)
+					text.printf("Failed to read from connection: %d\n", _actual);
 				return -1;
 			}
 			_cursor = 0;
@@ -469,11 +471,11 @@ class SSLSocket extends Socket {
 		ref<ssl.SSL_METHOD> method;
 		switch (encryption) {
 		case SSLv23:
-			method = ssl.SSLv23_server_method();
+			method = ssl.SSLv23_method();
 			break;
 
 		case TLSv1_2:
-			method = ssl.TLSv1_2_server_method();
+			method = ssl.TLSv1_2_method();
 			break;
 
 		default:
@@ -490,6 +492,7 @@ class SSLSocket extends Socket {
 				printf("    %d %s\n", e, ssl.ERR_error_string(e, null));
 			}
 		}
+		ssl.SSL_CTX_set_options(_context, ssl.SSL_OP_NO_SSLv2);
 		printf("Loading self-signed certificate.\n");
 		ssl.SSL_CTX_use_certificate_file(_context, "test/certificates/self-signed.pem".c_str(), ssl.SSL_FILETYPE_PEM);
 		ssl.SSL_CTX_set_client_CA_list(_context, ssl.SSL_load_client_CA_file("/etc/ssl/certs/ca-certificates.crt".c_str()));
@@ -544,13 +547,13 @@ class SSLConnection extends Connection {
 		ref<ssl.BIO> bio = ssl.BIO_new_socket(_acceptfd, ssl.BIO_NOCLOSE);
 		_ssl = ssl.SSL_new(_context);
 		if (_ssl == null) {
-			printf("SSL_new failed: %d\n", ssl.SSL_get_error(null, 0));
+			text.printf("SSL_new failed: %d\n", ssl.SSL_get_error(null, 0));
 			printf("                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(null, 0), null));
 			for (;;) {
 				long e = ssl.ERR_get_error();
 				if (e == 0)
 					break;
-				printf("    %d %s\n", e, ssl.ERR_error_string(e, null));
+				text.printf("    %d %s\n", e, ssl.ERR_error_string(e, null));
 			}
 			return false;
 		}
@@ -567,13 +570,13 @@ class SSLConnection extends Connection {
 		ssl.SSL_set_bio(_ssl, bio, bio);
 		int r = ssl.SSL_accept(_ssl);
 		if (r == -1) {
-			printf("SSL_accept failed: %d\n", ssl.SSL_get_error(null, 0));
-			printf("                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(null, 0), null));
+			text.printf("SSL_accept failed: %d\n", ssl.SSL_get_error(null, 0));
+			text.printf("                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(null, 0), null));
 			for (;;) {
 				long e = ssl.ERR_get_error();
 				if (e == 0)
 					break;
-				printf("    %d %s\n", e, ssl.ERR_error_string(e, null));
+				text.printf("    %d %s\n", e, ssl.ERR_error_string(e, null));
 			}
 			return false;
 		}
@@ -585,29 +588,70 @@ class SSLConnection extends Connection {
 	}
 
 	public boolean initiateSecurityHandshake() {
-		return false;
+		// Do the TLS handshake
+//		text.printf("Starting TLS handshake...\n");
+//		ref<ssl.BIO> bio = ssl.BIO_new_socket(_acceptfd, ssl.BIO_NOCLOSE);
+		_ssl = ssl.SSL_new(_context);
+		if (_ssl == null) {
+			text.printf("SSL_new failed: %d\n", ssl.SSL_get_error(null, 0));
+			text.printf("                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(null, 0), null));
+			for (;;) {
+				long e = ssl.ERR_get_error();
+				if (e == 0)
+					break;
+				text.printf("    %d %s\n", e, ssl.ERR_error_string(e, null));
+			}
+			return false;
+		}
+		if (ssl.SSL_set_fd(_ssl, _acceptfd) == 0) {
+			printf("SSL_set_fd failed\n");
+		}
+//		ssl.SSL_set_connect_state(_ssl);
+//		ssl.SSL_set_bio(_ssl, bio, bio);
+		int r = ssl.SSL_connect(_ssl);
+//		text.printf("r = %d\n", r);
+		if (r < 1) {
+			text.printf("SSL_connect failed: %d\n", ssl.SSL_get_error(null, r));
+			text.printf("                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(null, r), null));
+			for (;;) {
+				long e = ssl.ERR_get_error();
+				if (e == 0)
+					break;
+				text.printf("    %d %s\n", e, ssl.ERR_error_string(e, null));
+			}
+			return false;
+		}
+		return r == 1;
 	}
 
 	public int read(pointer<byte> buffer, int length) {
 		int x = ssl.SSL_read(_ssl, buffer, length);
-		if (x <= 0) {
-			printf("SSL_read failed return %d\n", x);
+		if (x < 0) {
+			text.printf("SSL_read failed return %d\n", x);
 			diagnoseError();
 			linux.perror("SSL_read".c_str());
 		} else {
-//			printf("SSLConnection.read:\n");
+//			text.printf("SSLConnection.read:\n");
 //			text.memDump(buffer, x);
 		}
 		return x;
 	}
 
 	public int write(pointer<byte> buffer, int length) {
-		return ssl.SSL_write(_ssl, buffer, length);
+//		text.printf("SSLConnection write to %d:\n", _acceptfd);
+//		text.memDump(buffer, length);
+		int result = ssl.SSL_write(_ssl, buffer, length);
+		if (result < 0) {
+			text.printf("SSL_write failed result = %d\n", result);
+			diagnoseError();
+			linux.perror("SSL_write".c_str());
+		}
+		return result;
 	}
 
 	public void diagnoseError() {
-		printf("SSL call failed: %d\n", ssl.SSL_get_error(_ssl, 0));
-		printf("                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(_ssl, 0), null));
+		text.printf("SSL call failed: %d\n", ssl.SSL_get_error(_ssl, 0));
+		text.printf("                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(_ssl, 0), null));
 		for (;;) {
 			long e = ssl.ERR_get_error();
 			if (e == 0)

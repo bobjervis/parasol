@@ -1905,7 +1905,7 @@ class Return extends ParameterBag {
 					type = compileContext.errorType();
 				}
 				type = returnType.node.type;
-				for (ref<NodeList> arg = _arguments; arg != null; arg = arg.next, returnType = returnType.next)
+				for (ref<NodeList> arg = _arguments; arg != null && returnType != null; arg = arg.next, returnType = returnType.next)
 					arg.node = arg.node.coerce(compileContext.tree(), returnType.node.type, false, compileContext);
 				for (ref<NodeList> arg = _arguments; arg != null; arg = arg.next) {
 					if (arg.node.deferAnalysis()) {

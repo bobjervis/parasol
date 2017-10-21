@@ -245,6 +245,10 @@ compile(){"class Foo { public static Foo x(-1); Foo(int z){} }"}
 
 compile(){"long i; string formatted(i);"}
 
+// These were regressions that caused the compiler to crash
+compile(expect: fail, message: TYPE_MISMATCH) { "void f(){} boolean g() { if (f() == 0) return false; else return true; }" }
+compile(expect: fail, message: INCORRECT_RETURN_COUNT) { "boolean, boolean f() { return null, true, true; }" }
+
 // This is a regression where pointer<Foo> does not widen to ref<Foo> if Foo is a plain old class.
 compile() { "class Foo{} ref<Foo[]> x; ref<Foo> y = &(*x)[0];" }
 

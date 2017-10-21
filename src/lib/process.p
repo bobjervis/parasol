@@ -58,6 +58,13 @@ private class SpawnPayload {
 	public int outcome;
 }
 
+public int getpid() {
+	if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		return linux.getpid();
+	} else
+		return -1;
+}
+
 init();
 private void init() {
 	if (runtime.compileTarget == SectionType.X86_64_LNX) {
@@ -70,6 +77,87 @@ private void init() {
 			printf("Failed to regsiter SIGCHLD handler: %d\n", result);
 			linux.perror("From sigaction".c_str());
 		}
+	}
+}
+
+public class Process {
+	private DrainData _stdout;
+	private ref<Thread> _drainer;
+
+	public Process() {
+	}
+
+	public boolean spawn(string command, string... args) {
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+//			SpawnPayload payload;
+			
+//			int result = debugSpawnImpl(&command[0], &payload, timeout.value());
+//			string output = string(payload.output, payload.outputLength);
+//			exception_t outcome = exception_t(payload.outcome);
+//			disposeOfPayload(&payload);
+//			return result, output, outcome;
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			pointer<byte>[] fullArgs;
+
+			fullArgs.append(command.c_str());
+			for (int i= 0; i < args.length(); i++)
+				fullArgs.append(args[i].c_str());
+			fullArgs.append(null);
+
+			pointer<pointer<byte>> argv = &fullArgs[0];
+
+			linux.pid_t pid;
+
+// TODO: Implement some scheme to capture the command output.
+
+//			int[] pipefd;
+
+//			pipefd.resize(2);
+
+//			if (linux.pipe(&pipefd[0]) < 0)
+//				return false;
+			printf("About to exec '%s'", command);
+			for (int i = 0; i < args.length(); i++)
+				printf(" '%s'", args[i]);
+			printf("\n");
+			pid = linux.fork();
+			if (pid == 0) {
+//				linux.close(pipefd[0]);
+//				linux.dup2(pipefd[1], 1);
+//				linux.dup2(pipefd[1], 2);
+				// This is the child process
+				linux.execv(argv[0], argv);
+				linux._exit(-1);
+			} else {
+//				linux.close(pipefd[1]);
+
+//				_drainer = new Thread();
+//				_stdout.fd = pipefd[0];
+
+//				_drainer.start(drain, &_stdout);
+/*
+				linux.pid_t terminatedPid = linux.waitpid(pid, &exitStatus, 0);
+				if (terminatedPid != pid)
+					return -3, null, exception_t.NO_EXCEPTION;
+				_drainer.join();
+				delete _drainer;
+				linux.close(_stdout.fd);
+				if (linux.WIFEXITED(exitStatus))
+					return linux.WEXITSTATUS(exitStatus), d.output, exception_t.NO_EXCEPTION;
+				else {
+					int signal = linux.WTERMSIG(exitStatus);
+					if (signal == linux.SIGABRT)
+						return -1, d.output, exception_t.ABORT;
+					else if (signal == linux.SIGSEGV)
+						return -1, d.output, exception_t.ACCESS_VIOLATION;
+					else
+						return -1, d.output, exception_t.UNKNOWN_EXCEPTION;
+				}
+ */
+			}
+			return true;		// Only the parent process gets here.
+		}
+		return false;
 	}
 }
 /**
@@ -379,4 +467,30 @@ private void countdownTimer(address data) {
 	ref<TimeoutData> t = ref<TimeoutData>(data);
 	
 	t.startTimer();
+}
+
+public Environment environment;
+
+class Environment {
+	public string get(string key) {
+		return string(C.getenv(key.c_str()));
+	}
+
+	public void set(string key, string value) {
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			assert(false);
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			linux.setenv(key.c_str(), value.c_str(), 1);
+		} else
+			assert(false);
+	}
+
+	public void remove(string key) {
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			assert(false);
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			linux.unsetenv(key.c_str());
+		} else
+			assert(false);
+	}
 }

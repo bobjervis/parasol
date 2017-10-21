@@ -38,6 +38,9 @@ public abstract ref<DH> PEM_read_DHparams(ref<C.FILE> fp, ref<ref<DH>> x, int(po
 @Linux("libssl.so", "SSL_accept")
 public abstract int SSL_accept(ref<SSL> ssl);
 
+@Linux("libssl.so", "SSL_connect")
+public abstract int SSL_connect(ref<SSL> ssl);
+
 @Linux("libssl.so", "SSL_CTX_ctrl")
 public abstract int SSL_CTX_ctrl(ref<SSL_CTX> ctx, int cmd, long varg, address parg);
 
@@ -52,6 +55,10 @@ public abstract int SSL_CTX_set_cipher_list(ref<SSL_CTX> ctx, pointer<byte> str)
 
 @Linux("libssl.so", "SSL_CTX_set_client_CA_list")
 public abstract int SSL_CTX_set_client_CA_list(ref<SSL_CTX> ctx, ref<stack_st_X509_NAME> name_list);
+
+public int SSL_CTX_set_options(ref<SSL_CTX> ctx, long options) {
+	return SSL_CTX_ctrl(ctx, SSL_CTRL_OPTIONS, options, null);
+}
 
 public int SSL_CTX_set_tmp_dh(ref<SSL_CTX> ctx, ref<DH> dh) {
 	return SSL_CTX_ctrl(ctx, SSL_CTRL_SET_TMP_DH, 0, dh);
@@ -93,17 +100,35 @@ public abstract void SSL_set_accept_state(ref<SSL> ssl);
 @Linux("libssl.so", "SSL_set_bio")
 public abstract void SSL_set_bio(ref<SSL> ssl, ref<BIO> rbio, ref<BIO> wbio);
 
+@Linux("libssl.so", "SSL_set_connect_state")
+public abstract void SSL_set_connect_state(ref<SSL> ssl);
+
+@Linux("libssl.so", "SSL_set_fd")
+public abstract int SSL_set_fd(ref<SSL> ssl, int fd);
+
 @Linux("libssl.so", "SSL_use_PrivateKey_file")
 public abstract int SSL_use_PrivateKey_file(ref<SSL> ssl, pointer<byte> file, int type);
 
 @Linux("libssl.so", "SSL_write")
 public abstract int SSL_write(ref<SSL> ssl, address buf, int num);
 
+@Linux("libssl.so", "SSLv23_method")
+public abstract ref<SSL_METHOD> SSLv23_method();
+
+@Linux("libssl.so", "TLSv1_2_method")
+public abstract ref<SSL_METHOD> TLSv1_2_method();
+
 @Linux("libssl.so", "SSLv23_server_method")
 public abstract ref<SSL_METHOD> SSLv23_server_method();
 
 @Linux("libssl.so", "TLSv1_2_server_method")
 public abstract ref<SSL_METHOD> TLSv1_2_server_method();
+
+@Linux("libssl.so", "SSLv23_client_method")
+public abstract ref<SSL_METHOD> SSLv23_client_method();
+
+@Linux("libssl.so", "TLSv1_2_client_method")
+public abstract ref<SSL_METHOD> TLSv1_2_client_method();
 
 public class SSL_CTX {
 }
@@ -123,6 +148,11 @@ public class stack_st_X509_NAME {
 public class DH {
 }
 
+@Constant
+public long SSL_OP_NO_SSLv2 =                                      0x01000000;
+@Constant
+public long SSL_OP_NO_SSLv3 =                                      0x02000000;
+
 public int BIO_NOCLOSE = 0x00;
 public int BIO_CLOSE = 0x01;
 
@@ -135,5 +165,6 @@ public int SSL_FILETYPE_ASN1  =     X509_FILETYPE_ASN1;
 public int SSL_FILETYPE_PEM   =     X509_FILETYPE_PEM;
 
 public int SSL_CTRL_SET_TMP_DH = 3;
+public int SSL_CTRL_OPTIONS = 32;
 
 

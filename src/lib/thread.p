@@ -246,12 +246,16 @@ public class Thread {
 			if (milliseconds > 0)
 				Sleep(DWORD(milliseconds));
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
-			if (milliseconds >= 1000) {
-				C.sleep(unsigned(milliseconds / 1000));
-				milliseconds %= 1000;
-			}
-			if (milliseconds > 0) {
-				linux.usleep(linux.useconds_t(milliseconds * 1000));
+			linux.timespec ts;
+			linux.timespec remaining;
+
+			ts.tv_sec = milliseconds / 1000;
+			ts.tv_nsec = (milliseconds % 1000) * 1000000;
+			for (;;) {
+				int result = linux.nanosleep(&ts, &remaining);
+				if (result == 0)
+					break;
+				ts = remaining;
 			}
 		}
 	}

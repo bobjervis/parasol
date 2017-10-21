@@ -233,8 +233,12 @@ private class HttpContext {
 
 private void processHttpRequest(address ctx) {
 	ref<HttpContext> context = ref<HttpContext>(ctx);
-	if (!context.connection.acceptSecurityHandshake())
+//	printf("accept security handshake... ");
+	if (!context.connection.acceptSecurityHandshake()) {
+//		printf("security handshake rejected\n");
 		return;
+	}
+//	printf("security handshake accepted.\n");
 	HttpRequest request(context.connection);
 	HttpParser parser(context.connection);
 	HttpResponse response(context.connection);

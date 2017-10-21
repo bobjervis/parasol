@@ -152,6 +152,7 @@ public class HttpClient {
 		case "https":
 		case "wss":
 			encryption = net.Encryption.SSLv23;
+			break;
 
 		default:
 			encryption = net.Encryption.NONE;
@@ -172,7 +173,7 @@ public class HttpClient {
 			delete socket;
 			return false, false, ip;
 		}
-		delete socket;
+//		delete socket;
 		boolean expectWebSocket;
 		// We have a good Connection object, so we are ready for the next stage, send the headers...
 		_connection = connection;
@@ -181,6 +182,7 @@ public class HttpClient {
 			path = _path;
 		else
 			path = "/";
+//		printf("Composing HTTP request...\n");
 		_connection.printf("%s %s HTTP/1.1\r\n", method, path);
 		// TODO: add other headers...
 		switch (_protocol) {
@@ -200,6 +202,7 @@ public class HttpClient {
 		if (body.length() > 0)
 			_connection.write(body);
 		_connection.flush();
+//		printf("HTTP request sent...\n");
 		HttpParser parser(_connection);
 		_response = new HttpResponse(null);
 		if (!parser.parseResponse(_response)) {

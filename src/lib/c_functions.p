@@ -70,6 +70,10 @@ public abstract int fclose(ref<FILE> fp);
 @Linux("libc.so.6", "fcvt")
 public abstract pointer<byte> fcvt(double number, int ndigits, ref<int> decpt, ref<int> sign);
 
+@Windows("msvcrt.dll", "fdopen")
+@Linux("libc.so.6", "fdopen")
+public abstract ref<FILE> fdopen(int fd, pointer<byte> mode);
+
 @Windows("msvcrt.dll", "ferror")
 @Linux("libc.so.6", "ferror")
 public abstract int ferror(ref<FILE> fp);

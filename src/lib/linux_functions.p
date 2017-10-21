@@ -38,6 +38,9 @@ public abstract int close(int fd);
 @Linux("libc.so.6", "closedir")
 public abstract int closedir(ref<DIR> dirp);
 
+@Linux("libc.so.6", "creat")
+public abstract int creat(pointer<byte> pathname, mode_t mode);
+
 @Linux("libdl.so.2", "dlclose")
 public abstract int dlclose(address handle);
 
@@ -88,6 +91,15 @@ public abstract int mkdir(pointer<byte> path, mode_t mode);
 
 @Linux("libc.so.6", "mprotect")
 public abstract int mprotect(address addr, long length, int prot);
+
+@Linux("libc.so.6", "nanosleep")
+public abstract int nanosleep(ref<timespec> req, ref<timespec> rem);
+
+@Linux("libc.so.6", "open")
+public abstract int open(pointer<byte> pathname, int openFlags);
+
+@Linux("libc.so.6", "open")
+public abstract int open(pointer<byte> pathname, int openFlags, mode_t mode);
 
 @Linux("libc.so.6", "opendir")
 public abstract ref<DIR> opendir(pointer<byte> name);
@@ -291,6 +303,43 @@ public class ifaddrs {
 
 	  public address ifa_data;			/* Address-specific data (may be unused).  */
 }
+
+@Constant
+public int O_ACCMODE =   00000003;
+@Constant
+public int O_RDONLY =    00000000;
+@Constant
+public int O_WRONLY =    00000001;
+@Constant
+public int O_RDWR =      00000002;
+@Constant
+public int O_CREATE =    00000100;
+@Constant
+public int O_EXCL =      00000200;
+@Constant
+public int O_NOCTTY =    00000400;
+@Constant
+public int O_TRUNC =     00001000;
+@Constant
+public int O_APPEND =    00002000;
+@Constant
+public int O_NONBLOCK =  00004000;
+@Constant
+public int O_DSYNC =     00010000;
+@Constant
+public int FASYNC =      00020000;
+@Constant
+public int O_DIRECT =    00040000;
+@Constant
+public int O_LARGEFILE = 00100000;
+@Constant
+public int O_DIRECTORY = 00200000;
+@Constant
+public int O_NOFOLLOW =  00400000;
+@Constant
+public int O_NOATIME =   01000000;
+@Constant
+public int O_CLOEXEC =   02000000;
 
 @Constant
 public int _PC_NAME_MAX = 4;@Constant
@@ -789,7 +838,38 @@ public class clock_t = int;
 /* Encoding of the file mode.  */
 
 @Constant
-public unsigned S_IFMT	= 0170000;	/* These bits determine file type.  */
+public unsigned S_IXOTH =   0000001;
+@Constant
+public unsigned S_IWOTH =   0000002;
+@Constant
+public unsigned S_IROTH =   0000004;
+@Constant
+public unsigned S_IRWXO =   0000007;
+@Constant
+public unsigned S_IXGRP =   0000010;
+@Constant
+public unsigned S_IWGRP =   0000020;
+@Constant
+public unsigned S_IRGRP =   0000040;
+@Constant
+public unsigned S_IRWXG =   0000070;
+@Constant
+public unsigned S_IXUSR =   0000100;
+@Constant
+public unsigned S_IWUSR =   0000200;
+@Constant
+public unsigned S_IRUSR =   0000400;
+@Constant
+public unsigned S_IRWXU =   0000700;
+@Constant
+public unsigned S_ISVTX =   0001000;
+@Constant
+public unsigned S_ISGID =   0002000;
+@Constant
+public unsigned S_ISUID =   0004000;
+
+@Constant
+public unsigned S_IFMT	=   0170000;	/* These bits determine file type.  */
 
 /* File types.  */
 @Constant

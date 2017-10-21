@@ -200,7 +200,14 @@ public File appendTextFile(string filename) {
 }
 	
 public File createTextFile(string filename) {
-	ref<C.FILE> f = C.fopen(filename.c_str(), "w".c_str());
+	ref<C.FILE> f;
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		f = C.fopen(filename.c_str(), "w".c_str());
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		int fd = linux.creat(filename.c_str(), 0660);
+		f = C.fdopen(fd, "w".c_str());
+	} else
+		f = C.fopen(filename.c_str(), "w".c_str());
 	if (f == null) {
 //		throw new 
 	}
@@ -227,7 +234,14 @@ public File appendBinaryFile(string filename) {
 }
 	
 public File createBinaryFile(string filename) {
-	ref<C.FILE> f = C.fopen(filename.c_str(), "wb".c_str());
+	ref<C.FILE> f;
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		f = C.fopen(filename.c_str(), "wb".c_str());
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		int fd = linux.creat(filename.c_str(), 0660);
+		f = C.fdopen(fd, "wb".c_str());
+	} else
+		f = C.fopen(filename.c_str(), "wb".c_str());
 	if (f == null) {
 //		throw new 
 	}

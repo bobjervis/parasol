@@ -3169,6 +3169,7 @@ class Node {
 			case	TYPEDEF:
 			case	SHAPE:
 			case	CLASS_VARIABLE:
+			case	VOID:
 				break;
 
 			default:
