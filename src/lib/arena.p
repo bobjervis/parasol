@@ -45,8 +45,6 @@ public class Arena {
 	private ref<OverloadInstance> _ref;
 	private ref<OverloadInstance> _pointer;
 	
-	private ref<SyntaxTree> _postCodeGeneration;
-	
 	int builtScopes;
 	boolean _deleteSourceCache;
 	boolean trace;
@@ -124,43 +122,44 @@ public class Arena {
 	
 	public ref<Target> compile(string filename, boolean countCurrentObjects, boolean verbose) {
 		ref<FileStat> mainFile = new FileStat(filename, false);
-		return compile(mainFile, countCurrentObjects, false, verbose);
+		return compile(mainFile, countCurrentObjects, verbose);
 	}
 	
-	public ref<Target> compile(ref<FileStat> mainFile, boolean countCurrentObjects, boolean cloneTree, boolean verbose) {
+	public ref<Target> compile(ref<FileStat> mainFile, boolean countCurrentObjects, boolean verbose) {
 		CompileContext context(this, _global, verbose);
 
-		cacheRootObjects(_root, &context);
+		compileOnly(mainFile, verbose, &context);
+		return codegen(mainFile, countCurrentObjects, verbose, &context);
+	}
 
-		mainFile.parseFile(&context);
+	public void compileOnly(ref<FileStat> mainFile, boolean verbose, ref<CompileContext> compileContext) {
+		cacheRootObjects(_root, compileContext);
+
+		mainFile.parseFile(compileContext);
 		if (verbose)
 			printf("Main file parsed\n");
 		_specialFiles.setFile(mainFile);
 //		mainFile.tree().root().print(0);
 		if (mainFile.hasNamespace())
-			mainFile.completeNamespace(&context);
+			mainFile.completeNamespace(compileContext);
 		else
-			mainFile.buildTopLevelScopes(&context);
+			mainFile.buildTopLevelScopes(compileContext);
 		if (verbose)
 			printf("Top level scopes constructed\n");
-		context.resolveImports();
-		createBuiltIns(_root, &context);
+		compileContext.resolveImports();
+		createBuiltIns(_root, compileContext);
 		
 		_main = mainFile.fileScope();
 		if (verbose)
 			printf("Initial compilation phases completed.\n");
-		context.compileFile();
-		_postCodeGeneration = null;
+		compileContext.compileFile();
+	}
+
+	public ref<Target> codegen(ref<FileStat> mainFile, boolean countCurrentObjects, boolean verbose, ref<CompileContext> compileContext) {
 		if (verbose)
 			printf("Beginning code generation\n");
 		ref<Target> target;
-		if (cloneTree) {
-			ref<SyntaxTree> copy = mainFile.tree().clone();
-			ref<SyntaxTree> original = mainFile.swapTree(copy);
-			target = Target.generate(this, mainFile, countCurrentObjects, &context, verbose);
-			_postCodeGeneration = mainFile.swapTree(original);
-		} else
-			target = Target.generate(this, mainFile, countCurrentObjects, &context, verbose);
+		target = Target.generate(this, mainFile, countCurrentObjects, compileContext, verbose);
 		return target;
 	}
 	
@@ -467,8 +466,6 @@ public class Arena {
 		_specialFiles.printMessages(_types);
 		for (int i = 0; i < _importPath.length(); i++)
 			_importPath[i].printMessages(_types);
-		if (_postCodeGeneration != null)
-			dumpMessages(_specialFiles.file(1), _postCodeGeneration.root());
 	}
 
 	void printSymbolTable() {
@@ -491,10 +488,6 @@ public class Arena {
 		_specialFiles.print();
 		for (int i = 0; i < _importPath.length(); i++)
 			_importPath[i].print();
-	}
-
-	public ref<SyntaxTree> postCodeGeneration() {
-		return _postCodeGeneration;
 	}
 	
 	public ref<MemoryPool> global() {

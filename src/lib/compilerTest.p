@@ -542,12 +542,14 @@ class CompileObject  extends script.Object {
 		}
 		
 		// Note: arena.compile takes ownership of f.
-		ref<Target> target = arena.compile(f, true, true, verboseFlag);
+		arena.compileOnly(f, verboseFlag, &context);
+		int preCodeGenerationMessages = arena.countMessages();
+		boolean nodesOrdered = checkInOrder(f.tree().root(), _source);
+		ref<Target> target = arena.codegen(f, true, verboseFlag, &context);
 
 		Expect outcome;
 		
-		int preCodeGenerationMessages = arena.countMessages();
-		int postCodeGenerationMessages = arena.postCodeGeneration().root().countMessages() - preCodeGenerationMessages;
+		int postCodeGenerationMessages = arena.countMessages() - preCodeGenerationMessages;
 
 		if (preCodeGenerationMessages > 0 || postCodeGenerationMessages > 0)
 			outcome = Expect.FAIL;
@@ -557,9 +559,8 @@ class CompileObject  extends script.Object {
 		Message[] messages;
 
 		boolean result = true;
-		if (!checkInOrder(f.tree().root(), _source) ||
+		if (!nodesOrdered ||
 			!checkMessages(f.tree().root(), get("message")) ||
-			postCodeGenerationMessages > 0 ||
 			_expect != outcome) {
 			printf("\n  Expecting %s got %s\n", string(_expect), string(outcome));
 			printf("      Messages flagged before code generation %d\n      Messages flagged after code generation %d\n", preCodeGenerationMessages, postCodeGenerationMessages);
@@ -717,7 +718,7 @@ class RunObject extends script.Object {
 				return false;
 			}
 			ref<FileStat> f = new FileStat(_filename, false);
-			arena.compile(f, true, false, false);
+			arena.compile(f, true, false);
 			arena.print();
 			delete f;
 		}

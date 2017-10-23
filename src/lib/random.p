@@ -115,6 +115,32 @@ class Random {
 			set(C.time(null));
 	}
 
+	byte[] getBytes(int length) {
+		byte[] b;
+
+		b.resize(length);
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			/*
+				HCRYPTPROV handle;
+		
+				if (CryptAcquireContext(&handle, null, null, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT|CRYPT_SILENT)) {
+					CryptGenRandom(handle, _state.bytes, pointer<byte>(&_state));
+					CryptReleaseContext(handle, 0);
+				} else {
+				}
+			*/
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			ref<C.FILE> f = C.fopen("/dev/urandom".c_str(), "rb".c_str());
+			if (f != null) {
+				C.fread(&b[0], 1, unsigned(length), f);
+				C.fclose(f);
+				return b;
+			}
+		}
+		for (int i = 0; i < length; i++)
+			b[i] = byte(uniform(256));
+		return b;
+	}
 	/*
 	 *	Returns a uniformly distributed 32-bit unsigned integer.
 	 */

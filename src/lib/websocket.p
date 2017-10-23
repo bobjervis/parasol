@@ -23,6 +23,7 @@ import native:C;
 import openssl.org:crypto.SHA1;
 import parasol:net.base64encode;
 import parasol:net.Connection;
+import parasol:random.Random;
 import parasol:text;
 
 private monitor class WebSocketServiceData {
@@ -71,19 +72,13 @@ public class WebSocketService extends HttpService {
 
 public class WebSocketFactory {
 	boolean processConnection(string protocol, ref<HttpRequest> request, ref<HttpResponse> response) {
-		response.statusLine(101, "Switching Protocols");
 		string key = request.headers["sec-websocket-key"];
 		if (key == null) {
 			response.error(400);
 			return false;
 		}
-		string value = key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-		byte[] hash;
-		
-		hash.resize(20);
-		
-		SHA1(&value[0], value.length(), &hash[0]);
-		string v = base64encode(hash);
+		response.statusLine(101, "Switching Protocols");
+		string v = computeWebSocketAccept(key);
 		response.header("Sec-WebSocket-Accept", v);
 		response.header("Connection", "Upgrade");
 		response.header("Upgrade", "websocket");
@@ -96,6 +91,22 @@ public class WebSocketFactory {
 	}
 
 	public abstract void start(ref<Connection> connection);
+}
+
+public string computeWebSocketKey(int byteCount) {
+	Random rand;
+	byte[] stuff = rand.getBytes(byteCount);
+	return base64encode(stuff);
+}
+
+public string computeWebSocketAccept(string webSocketKey) {
+	string value = webSocketKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+	byte[] hash;
+		
+	hash.resize(20);
+		
+	SHA1(&value[0], value.length(), &hash[0]);
+	return base64encode(hash);
 }
 
 public class WebSocket {

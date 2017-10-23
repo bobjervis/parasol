@@ -630,7 +630,7 @@ class SSLConnection extends Connection {
 			text.printf("SSL_read failed return %d\n", x);
 			diagnoseError();
 			linux.perror("SSL_read".c_str());
-		} else {
+//		} else {
 //			text.printf("SSLConnection.read:\n");
 //			text.memDump(buffer, x);
 		}

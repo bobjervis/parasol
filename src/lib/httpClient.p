@@ -31,6 +31,7 @@ import native:net.inet_ntoa;
  */
 public class HttpClient {
 	private ref<net.Connection> _connection;
+	private ref<WebSocket> _webSocket;
 	private ref<HttpResponse> _response;
 
 	private string _protocol;			// required for proper connection
@@ -41,12 +42,18 @@ public class HttpClient {
 	private string _path;
 	private boolean _portDefaulted;
 	private unsigned _resolvedIP;
+	private string _webSocketProtocol;
 
 	private string _cipherList;
 
 	public HttpClient(string url) {
 		// First, parse out the protocol and hostname.
 		parseUrl(url);
+	}
+
+	public HttpClient(string url, string webSocketProtocol) {
+		parseUrl(url);
+		_webSocketProtocol = webSocketProtocol;
 	}
 
 	~HttpClient() {
@@ -149,12 +156,35 @@ public class HttpClient {
 	private boolean, boolean, unsigned startRequest(string method, string body) {
 		net.Encryption encryption;
 		switch (_protocol) {
-		case "https":
+		case "ws":
+			if (_webSocketProtocol == null) {
+				printf("No Web Socket protocol defined.\n");
+				return false, false, 0;
+			}
+			encryption = net.Encryption.NONE;
+			break;
+
 		case "wss":
+			if (_webSocketProtocol == null) {
+				printf("No Web Socket protocol defined.\n");
+				return false, false, 0;
+			}
+			encryption = net.Encryption.SSLv23;
+			break;
+
+		case "https":
+			if (_webSocketProtocol != null) {
+				printf("Web Socket protocol defined - not a web socket URL.\n");
+				return false, false, 0;
+			}
 			encryption = net.Encryption.SSLv23;
 			break;
 
 		default:
+			if (_webSocketProtocol != null) {
+				printf("Web Socket protocol defined - not a web socket URL.\n");
+				return false, false, 0;
+			}
 			encryption = net.Encryption.NONE;
 		}
 		ref<net.Socket> socket = net.Socket.create(encryption, _cipherList);
@@ -184,11 +214,14 @@ public class HttpClient {
 			path = "/";
 //		printf("Composing HTTP request...\n");
 		_connection.printf("%s %s HTTP/1.1\r\n", method, path);
-		// TODO: add other headers...
+		string webSocketKey;
 		switch (_protocol) {
 		case "ws":
 		case "wss":
 			_connection.write("Upgrade: websocket\r\n");
+			_connection.printf("Sec-WebSocket-Protocol: %s\r\n", _webSocketProtocol);
+			webSocketKey = computeWebSocketKey(16);
+			_connection.printf("Sec-WebSocket-Key: %s\r\n", webSocketKey);
 			expectWebSocket = true;
 		}
 		_connection.printf("Host: %s:%d\r\n", _hostname, _port);
@@ -209,7 +242,21 @@ public class HttpClient {
 			printf("Malformed response\n");
 			return false, false, ip;
 		}
-		return expectWebSocket, true, ip;
+		boolean hasWebSocket;
+		if (expectWebSocket) {
+			if (_response.code != "101") {
+				printf("Expecting a Web SOcket, not a 101 response.\n");
+				return false, false, ip;
+			}
+			string webSocketAccept = computeWebSocketAccept(webSocketKey);
+			if (_response.headers["sec-websocket-accept"] != webSocketAccept) {
+				printf("Web Socket Accept does not match Web Socket Key\n");
+				return false, false, ip;
+			}
+			hasWebSocket = true;
+			_webSocket = new WebSocket(_connection, false);
+		}
+		return hasWebSocket, true, ip;
 	}
 
 	public ref<net.Connection> connection() {
@@ -217,11 +264,11 @@ public class HttpClient {
 	}
 
 	public boolean isWebSocket() {
-		return false;
+		return _webSocket != null;
 	}
 
 	public ref<WebSocket> webSocket() {
-		return null;
+		return _webSocket;
 	}
 
 	public void setCipherList(string cipherList) {

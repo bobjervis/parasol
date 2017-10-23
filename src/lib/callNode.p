@@ -959,6 +959,10 @@ class Call extends ParameterBag {
 							break;
 						}
 						b.left().checkCompileTimeConstant(0, maximumIndex, compileContext);
+						if (b.left().deferAnalysis()) {
+							nl.node.type = compileContext.errorType();
+							break;
+						}
 					}
 				} else {
 					if (intervals.length() == 0) {
