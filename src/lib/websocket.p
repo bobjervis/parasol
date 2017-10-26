@@ -25,6 +25,9 @@ import parasol:net.base64encode;
 import parasol:net.Connection;
 import parasol:random.Random;
 import parasol:text;
+import parasol:thread;
+import parasol:thread.Thread;
+import parasol:types.Queue;
 
 private monitor class WebSocketServiceData {
 	ref<WebSocketFactory>[string] _webSocketProtocols;
@@ -131,6 +134,7 @@ public class WebSocket {
 	
 	private ref<Connection> _connection;
 	private boolean _server;
+	private Random _random;				// For masking
 	private byte[] _incomingData;		// A buffer of data being read from the websocket.
 	private int _incomingLength;		// The number of bytes in the buffer.
 	private int _incomingCursor;		// The index of the next byte to be read from the buffer.
@@ -140,16 +144,6 @@ public class WebSocket {
 		_connection = connection;
 		_server = server;
 		_incomingData.resize(1024);
-	}
-	
-	public void shutDown(short cause, string reason) {
-		byte[] closeFrame;
-		
-		printf("websocket shutDown (%d, %s)\n", cause, reason);
-		networkOrder(&closeFrame, cause);
-		networkOrder(&closeFrame, reason);
-		send(OP_CLOSE, &closeFrame[0], closeFrame.length());
-		_connection.close();
 	}
 	/**
 	 * readWholeMessage
@@ -380,6 +374,28 @@ public class WebSocket {
 		}
 		return _incomingData[_incomingCursor++];
 	}
+
+	public void write(string message) {
+		writer.write(new Operation(this, OP_STRING, message));
+	}
+
+	public void write(byte opcode, string message) {
+		writer.write(new Operation(this, opcode, message));
+	}
+
+	public void shutDown(short cause, string reason) {
+		writer.write(new Operation(this, cause, reason));
+	}
+
+	void close(ref<Operation> op) {
+		byte[] closeFrame;
+
+		printf("websocket shutDown (%d, %s)\n", op.cause, op.message);
+		networkOrder(&closeFrame, op.cause);
+		networkOrder(&closeFrame, op.message);
+		op.webSocket.send(OP_CLOSE, &closeFrame[0], closeFrame.length());
+		op.webSocket._connection.close();
+	}
 	/**
 	 * send
 	 *
@@ -420,18 +436,16 @@ public class WebSocket {
 	
 	private boolean sendFrame(byte opcode, boolean lastFrame, pointer<byte> data, int length) {
 		byte[] frame;
-		
-		if (!_server) {
-			printf("Unsupported client-side WebSocket\n");
-			shutDown(CLOSE_PROTOCOL_ERROR, "Trying to send frames from a non-server endpoint (masking not supported)");
-			return false;
-		}
+		byte maskBit;
+
+		if (!_server)
+			maskBit = 0x80;
 		if (lastFrame)
 			opcode |= 0x80;
 		frame.append(opcode);
 		
 		if (length > 65535) {
-			frame.append(127);
+			frame.append(byte(maskBit | 127));
 			frame.append(0);
 			frame.append(0);
 			frame.append(0);
@@ -441,11 +455,21 @@ public class WebSocket {
 			frame.append(byte(length >> 8));
 			frame.append(byte(length));			
 		} else if (length > 125) {
-			frame.append(126);
+			frame.append(byte(maskBit | 126));
 			frame.append(byte(length >> 8));
 			frame.append(byte(length));			
 		} else
-			frame.append(byte(length));
+			frame.append(byte(maskBit | length));
+		if (!_server) {
+			unsigned mask = _random.next();
+			frame.append(byte(mask >> 24));
+			frame.append(byte(mask >> 16));
+			frame.append(byte(mask >> 8));
+			frame.append(byte(mask));
+			int part = 24;
+			for (int i = 0; i < length; i++, part = (part - 8) & 0x1f)
+				data[i] = byte(data[i] ^ byte(mask >> part)); 
+		}
 		frame.append(data, length);
 //		printf("Sending:\n");
 //		text.memDump(&frame[0], frame.length(), 0);
@@ -472,4 +496,64 @@ private void networkOrder(ref<byte[]> output, string x) {
 	for (int i = 0; i < x.length(); i++)
 		output.append(x[i]);
 }
+
+class Operation {
+	ref<WebSocket> webSocket;
+	byte opcode;
+	string message;
+	short cause;
+
+	Operation(ref<WebSocket> webSocket, byte opcode, string message) {
+		this.webSocket = webSocket;
+		this.opcode = opcode;
+		this.message = message;
+	}
+
+	Operation(ref<WebSocket> webSocket, short cause, string reason) {
+		this.webSocket = webSocket;
+		this.opcode = WebSocket.OP_CLOSE;
+		this.cause = cause;
+		this.message = reason;
+	}
+}
+
+monitor class MessageWriter {
+	ref<Thread> _writeThread;
+	
+	Queue<ref<Operation>> _q;
+
+	void write(ref<Operation> op) {
+		if (_writeThread == null) {
+			_writeThread = new Thread();
+			_writeThread.start(writeWrapper, null);
+		}
+		_q.enqueue(op);
+		notify();
+	}
+
+	ref<Operation> dequeue() {
+		wait();
+		return _q.dequeue();
+	}
+}
+
+void writeWrapper(address arg) {
+	for (;;) {
+		ref<Operation> op = writer.dequeue();
+		if (op.opcode == WebSocket.OP_CLOSE) {
+			op.webSocket.close(op);
+			delete op;
+			break;
+		}
+		string msg = op.message;
+		if (msg.length() > 200)
+			msg = msg.substring(0, 200) + "...";
+		if (!op.webSocket.send(op.opcode, &op.message[0], op.message.length()))
+			break;
+		delete op;
+	}
+	printf("Tata!\n");
+}
+
+MessageWriter writer;
 

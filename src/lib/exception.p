@@ -148,6 +148,7 @@ public class Exception {
 		}
 		printf("\nFATAL: Could not find a stack handler for this address.\n");
 		_exceptionContext.print();
+		print(textStackTrace());
 		process.exit(1);
 	}
 	

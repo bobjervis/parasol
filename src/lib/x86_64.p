@@ -27,6 +27,7 @@ import parasol:compiler.Call;
 import parasol:compiler.CallCategory;
 import parasol:compiler.Class;
 import parasol:compiler.ClassScope;
+import parasol:compiler.ClassType;
 import parasol:compiler.CompileContext;
 import parasol:compiler.CompileString;
 import parasol:compiler.Constant;
@@ -2785,7 +2786,7 @@ public class X86_64 extends X86_64AssignTemps {
 			if (sym.storageClass() == StorageClass.STATIC)
 				generateInitializers(node, compileContext);
 			break;
-				
+
 		case	IDENTIFIER:
 		case	FUNCTION:
 		case	EMPTY:
@@ -4005,7 +4006,7 @@ public class X86_64 extends X86_64AssignTemps {
 			instStoreVTable(firstRegisterArgument(), offset, R.RAX, iit);
 		}
 	}
-	
+
 	private void cacheCodegenObjects(ref<CompileContext> compileContext) {
 		ref<Symbol> re = _arena.getSymbol("parasol", "memory.alloc", compileContext);
 		if (re == null || re.class != Overload)

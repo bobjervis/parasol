@@ -15,12 +15,15 @@
  */
 namespace native:linux;
 import native:net.sockaddr;
+import native:C.size_t;
 
 class pid_t = int;
 class pthread_t = address;
 class uid_t = unsigned;
 class useconds_t = unsigned;
 class mode_t = unsigned;
+class fsblkcnt_t = long;
+class fsfilcnt_t = long;
 
 @Linux("libc.so.6", "aligned_alloc")
 public abstract address aligned_alloc(long alignment, long length);
@@ -74,6 +77,12 @@ public abstract pid_t fork();
 @Linux("libc.so.6", "getcwd")
 public abstract pointer<byte> getcwd(pointer<byte> buf, long len);
 
+@Linux("libc.so.6", "geteuid")
+public abstract uid_t geteuid();
+
+@Linux("libc.so.6", "gethostname")
+public abstract int gethostname(pointer<byte> name, size_t len);
+
 @Linux("libc.so.6", "getifaddrs")
 public abstract int getifaddrs(ref<ref<ifaddrs>> ifap);
 
@@ -82,6 +91,9 @@ public abstract pid_t getpid();
 
 @Linux("libc.so.6", "getppid")
 public abstract pid_t getppid();
+
+@Linux("libc.so.6", "getuid")
+public abstract uid_t getuid();
 
 @Linux("libc.so.6", "kill")
 public abstract int kill(pid_t pid, int sig);
@@ -188,6 +200,9 @@ public abstract int sem_wait(ref<sem_t> sem);
 @Linux("libc.so.6", "setenv")
 public abstract int setenv(pointer<byte> name, pointer<byte> value, int overwrite);
 
+@Linux("libc.so.6", "setuid")
+public abstract int setuid(uid_t uid);
+
 @Linux("libc.so.6", "sigaction")
 public abstract int sigaction(int signum, ref<struct_sigaction> act, ref<struct_sigaction> oldact);
 
@@ -219,6 +234,9 @@ public abstract int __xstat(int statVersion, pointer<byte> path, ref<statStruct>
 public int stat(pointer<byte> path, ref<statStruct> buf) {
 	return __xstat(1, path, buf);
 }
+
+@Linux("libc.so.6", "statvfs")
+public abstract int statvfs(pointer<byte> path, ref<statvfsStruct> buf);
 
 @Linux("libc.so.6", "sysconf")
 public abstract int sysconf(int parameter_index);
@@ -303,6 +321,29 @@ public class ifaddrs {
 
 	  public address ifa_data;			/* Address-specific data (may be unused).  */
 }
+
+public class statvfsStruct {
+	long f_bsize;
+	long f_frsize;
+	fsblkcnt_t f_blocks;
+	fsblkcnt_t f_bfree;
+	fsblkcnt_t f_bavail;
+	fsfilcnt_t f_files;
+	fsfilcnt_t f_ffree;
+	fsfilcnt_t f_favail;
+	long f_fsid;
+	long f_flag;
+	long f_namemax;
+	int f_spare0;
+	int f_spare1;
+	int f_spare2;
+	int f_spare3;
+	int f_spare4;
+	int f_spare5;
+}
+
+@Constant
+public int HOST_NAME_MAX = 64;
 
 @Constant
 public int O_ACCMODE =   00000003;

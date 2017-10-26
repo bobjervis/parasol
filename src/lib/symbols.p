@@ -160,6 +160,20 @@ class PlainSymbol extends Symbol {
 			ref<Type> declaredType = tt.wrappedType();
 			if (declaredType.class == BuiltInType)
 				declaredType = ref<BuiltInType>(declaredType).classType();
+			if (declaredType.class == ClassType) {
+				ref<ClassType> c = ref<ClassType>(declaredType);
+				if (c.definition() != null) {
+					if (c.definition().name().identifier() == _name) {
+						if (c.interfaceCount() > 0) {
+							ref<ref<InterfaceType>[]> it = c.interfaces();
+							for (int i = 0; i < it.length(); i++) {
+								ref<InterfaceType> itt = (*it)[i];
+								printf("%*.*c      Implements %s\n", indent, indent, ' ', itt.signature());
+							}
+						}
+					}
+				}
+			}
 			ref<ClassType> t = ref<ClassType>(declaredType);
 			t.scope().print(indent + INDENT, printChildScopes);
 		} else {

@@ -65,6 +65,16 @@ public int getpid() {
 		return -1;
 }
 
+public boolean isPrivileged() {
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		// TODO: Check for this being a process with elevated privileges, for now, ignore this possibility.
+		return false;
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		return linux.geteuid() == 0;
+	} else
+		return false;
+}
+
 init();
 private void init() {
 	if (runtime.compileTarget == SectionType.X86_64_LNX) {

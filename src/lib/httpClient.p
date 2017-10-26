@@ -268,6 +268,7 @@ public class HttpClient {
 	}
 
 	public ref<WebSocket> webSocket() {
+		_connection = null;					// The web socket takes possession of the connection object.
 		return _webSocket;
 	}
 

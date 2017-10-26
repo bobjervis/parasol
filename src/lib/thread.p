@@ -424,6 +424,7 @@ class Mutex {
 	private HANDLE _mutex;
 	private ref<Thread> _owner;
 	private linux.pthread_mutex_t _linuxMutex;
+	private static boolean _alreadySet;
 	
 	public Mutex() {
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
@@ -431,6 +432,11 @@ class Mutex {
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
 			linux.pthread_mutexattr_t attr;
 			linux.pthread_mutexattr_settype(&attr, linux.PTHREAD_MUTEX_RECURSIVE);
+			if (long(this) == long(&threads) + 8) {
+				if (_alreadySet)
+					assert(false);
+				_alreadySet = true;
+			}
 			linux.pthread_mutex_init(&_linuxMutex, &attr);
 		}
 	}
@@ -489,7 +495,8 @@ class Mutex {
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 			WaitForSingleObject(_mutex, INFINITE);
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
-			assert(linux.pthread_mutex_lock(&_linuxMutex) == 0);
+			int x = linux.pthread_mutex_lock(&_linuxMutex);
+			assert(x == 0);
 		}
 		_level++;
 		_owner = currentThread();

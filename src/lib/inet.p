@@ -309,6 +309,13 @@ class Connection {
 		return _addressLength;
 	}
 
+	public unsigned sourceIPv4() {
+		if (_address.sin_family == net.AF_INET) {
+			return _address.sin_addr.s_addr;
+		} else
+			return 0;
+	}
+
 	public void diagnoseError() {
 		linux.perror(null);
 	}
@@ -713,6 +720,12 @@ public string base64encode(pointer<byte> data, long length) {
 		data += 3;
 	}
 	return result;
+}
+
+public string dottedIP(unsigned ipv4) {
+	string s;
+	s.printf("%d.%d.%d.%d", ipv4 & 0xff, (ipv4 >> 8) & 0xff, (ipv4 >> 16) & 0xff, ipv4 >> 24);
+	return s; 
 }
 
 public byte[] base64decode(string data) {

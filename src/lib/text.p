@@ -1926,9 +1926,9 @@ public class substring {
 //		return 0;
 //	}
 	
-//	public char get(int index) {
-//		return ' ';
-//	}
+	public char get(int index) {
+		return _data[index];
+	}
 	
 	public int hash() {
 		if (_data == null)
