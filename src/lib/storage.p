@@ -117,6 +117,27 @@ public boolean exists(string filename) {
 		return false;
 }
 
+public boolean isSymLink(string filename) {
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		return false;
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		linux.statStruct statb;
+
+		int result = linux.lstat(filename.c_str(), &statb);
+		return result == 0 && (statb.st_mode & linux.S_IFMT) == linux.S_IFLNK;
+	} else
+		return false;
+}
+
+public boolean deleteSymLink(string filename) {
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		return false;
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX)
+		return deleteFile(filename);
+	else
+		return false;
+}
+
 public boolean isDirectory(string filename) {
 	if (runtime.compileTarget == SectionType.X86_64_WIN) {
 		DWORD r = GetFileAttributes(&filename[0]);
@@ -145,6 +166,15 @@ public boolean isLink(string filename) {
 		
 		int result = linux.stat(filename.c_str(), &statb);
 		return result == 0 && linux.S_ISLNK(statb.st_mode);
+	} else
+		return false;
+}
+
+public boolean createSymLink(string oldPath, string newPath) {
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		return false;
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		return linux.symlink(oldPath.c_str(), newPath.c_str()) == 0;
 	} else
 		return false;
 }
@@ -182,6 +212,15 @@ public boolean ensure(string path) {
 		return false;
 	// The final component of the path is not a directory, but the rest of the path checks out, so try and create the path as a directory.
 	return makeDirectory(path);
+}
+
+public boolean linkFile(string existingFile, string newFile) {
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		return false;
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		return linux.link(existingFile.c_str(), newFile.c_str()) == 0;
+	} else
+		return false;
 }
 
 public boolean rename(string oldName, string newName) {
@@ -232,4 +271,22 @@ public boolean deleteDirectoryTree(string path) {
 	}
 	delete dir;
 	return deleteDirectory(path);
+}
+
+public string[], boolean expandWildCard(string pattern) { 
+	string[] results;
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		return results, false;
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		linux.glob_t gl;
+
+		int result = linux.glob(pattern.c_str(), 0, null, &gl);
+		if (result != 0)
+			return results, false;
+		for (int i = 0; i < gl.gl_pathc; i++)
+			results.append(string(gl.gl_pathv[i]));
+		linux.globfree(&gl);
+		return results, true;
+	} else
+		return results, false;
 }

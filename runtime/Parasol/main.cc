@@ -43,14 +43,11 @@ public:
 		leaksArgument = booleanArgument(0, "leaks", "Check for memory leaks.");
 		verboseArgument = booleanArgument('v', null,
 					"Enables verbose output.");
-		traceArgument = booleanArgument(0, "trace",
-					"Trace execution of each instruction (byte code targets only).");
 		helpArgument('?', "help",
 					"Displays this help.");
 	}
 
 	commandLine::Argument<bool> *verboseArgument;
-	commandLine::Argument<bool> *traceArgument;
 	commandLine::Argument<bool> *leaksArgument;
 };
 
@@ -75,8 +72,6 @@ int runCommand() {
 	long long runtimeFlags = 0;
 	if (parasolCommand.leaksArgument->value())
 		runtimeFlags |= 1;
-	if (parasolCommand.traceArgument->value())
-		runtimeFlags |= 2;
 	char **args = parasolCommand.finalArgv();
 	int returnValue;
 	pxi::Pxi* pxi = pxi::Pxi::load(args[0]);

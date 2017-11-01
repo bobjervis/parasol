@@ -51,10 +51,10 @@ public class Object extends Atom {
 	public Object() {
 		
 	}
-	
-	public boolean isRunnable() {
-		return true;
-	}
+
+//	public boolean isRunnable() {
+//		return true;
+//	}
 
 	public string toSource() {
 		string s;
@@ -114,11 +114,6 @@ public class Object extends Atom {
 		} else
 			return true;
 	}
-/*
-	bool runAnyContent();
-
-	bool runAllContent();
-*/
 }
 
 public class String extends Atom {

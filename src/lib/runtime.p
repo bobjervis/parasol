@@ -45,8 +45,6 @@ public abstract int eval(int startObject, pointer<pointer<byte>> args, int argsC
 
 public abstract int evalNative(ref<X86_64SectionHeader> header, address image, pointer<pointer<byte>> args, int argsCount);
 
-public abstract boolean setTrace(boolean newValue);
-
 public abstract int supportedTarget(int index);
 
 public abstract int runningTarget();

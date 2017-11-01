@@ -182,7 +182,6 @@ public:
 
 	void *parasolThread(void *newThread);
 
-	bool trace;
 private:
 	bool run();
 

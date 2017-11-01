@@ -3766,6 +3766,8 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 		expression.type = u.operand().type;
 		break;
 		
+	case	FALSE:
+	case	TRUE:
 	case	INTEGER:
 	case	IDENTIFIER:
 		expression = tree.newLeaf(Operator.EMPTY, expression.location());

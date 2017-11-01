@@ -95,8 +95,17 @@ public abstract pid_t getppid();
 @Linux("libc.so.6", "getuid")
 public abstract uid_t getuid();
 
+@Linux("libc.so.6", "glob")
+public abstract int glob(pointer<byte> pattern, int _flags, int(pointer<byte>, int) errfunc, ref<glob_t> pglob);
+
+@Linux("libc.so.6", "globfree")
+public abstract int globfree(ref<glob_t> pglob);
+
 @Linux("libc.so.6", "kill")
 public abstract int kill(pid_t pid, int sig);
+
+@Linux("libc.so.6", "link")
+public abstract int link(pointer<byte> oldpath, pointer<byte> newpath);
 
 @Linux("libc.so.6", "mkdir")
 public abstract int mkdir(pointer<byte> path, mode_t mode);
@@ -206,6 +215,9 @@ public abstract int setuid(uid_t uid);
 @Linux("libc.so.6", "sigaction")
 public abstract int sigaction(int signum, ref<struct_sigaction> act, ref<struct_sigaction> oldact);
 
+@Linux("libc.so.6", "symlink")
+public abstract int symlink(pointer<byte> oldpath, pointer<byte> newpath);
+
 @Linux("libc.so.6", "syscall")
 public abstract long syscall(long callId);
 
@@ -233,6 +245,13 @@ public abstract int __xstat(int statVersion, pointer<byte> path, ref<statStruct>
 
 public int stat(pointer<byte> path, ref<statStruct> buf) {
 	return __xstat(1, path, buf);
+}
+
+@Linux("libc.so.6", "__lxstat")
+public abstract int __lxstat(int statVersion, pointer<byte> path, ref<statStruct> buf);
+
+public int lstat(pointer<byte> path, ref<statStruct> buf) {
+	return __lxstat(1, path, buf);
 }
 
 @Linux("libc.so.6", "statvfs")
@@ -341,6 +360,27 @@ public class statvfsStruct {
 	int f_spare4;
 	int f_spare5;
 }
+
+public class glob_t {
+	public size_t gl_pathc;       				/* Count of paths matched by the pattern.  */
+    public pointer<pointer<byte>> gl_pathv;     /* List of matched pathnames.  */
+    public size_t gl_offs;           /* Slots to reserve in `gl_pathv'.  */
+    public int gl_flags;               /* Set to FLAGS, maybe | GLOB_MAGCHAR.  */
+
+    /* If the GLOB_ALTDIRFUNC flag is set, the following functions
+       are used instead of the normal file access functions.  */
+    public void(address) gl_closedir;
+    public address(address) gl_readdir;
+	public address(pointer<byte>) gl_opendir;
+    public int(pointer<byte>, address) gl_lstat;
+    public int(pointer<byte>, address) gl_stat;
+}
+
+/* Error returns from `glob'.  */
+public int GLOB_NOSPACE =    1;       /* Ran out of memory.  */
+public int GLOB_ABORTED =    2;       /* Read error.  */
+public int GLOB_NOMATCH =    3;       /* No matches found.  */
+public int GLOB_NOSYS =      4;       /* Not implemented.  */
 
 @Constant
 public int HOST_NAME_MAX = 64;

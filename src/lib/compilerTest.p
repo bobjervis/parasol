@@ -163,9 +163,11 @@ class ScanObject extends script.Object {
 	public static ref<script.Object> factory() {
 		return new ScanObject();
 	}
-/*
-	virtual bool isRunnable() const { return true; }
-*/
+
+	public boolean isRunnable() {
+		return true;
+	}
+
 	public boolean validate(ref<script.Parser> parser) {
 		ref<script.Atom> a;
 

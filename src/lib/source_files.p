@@ -77,6 +77,23 @@ class ImportDirectory {
 		}
 		return importedSomething;
 	}
+	/**
+	 * This method is called on the 'package' directory in order to do a reference compile for
+	 * the package. Each source file should be loaded as if it had been needed in the compile.
+	 */
+	public void compilePackage(ref<CompileContext> compileContext) {
+		search(compileContext, false);
+		for (int i = 0; i < _files.length(); i++) {
+			ref<FileStat> fs = _files[i];
+			fs.parseFile(compileContext);
+			if (fs.hasNamespace())
+				fs.completeNamespace(compileContext);
+			else
+				fs.noNamespaceError(compileContext);	// Files in a package that have no namespace
+														// cannot get imported, so they only slow
+														// down the process.
+		}
+	}
 
 	private void search(ref<CompileContext> compileContext, boolean logImports) {
 		if (!_searched) {
@@ -281,6 +298,10 @@ class FileStat {
 		return true;
 	}
 
+	public void noNamespaceError(ref<CompileContext> compileContext) {
+		_tree.root().add(MessageId.NO_NAMESPACE_DEFINED, compileContext.pool());
+	}
+
 	private void registerNamespace() {
 		for (ref<NodeList> nl = _tree.root().statements(); nl != null; nl = nl.next) {
 			if (nl.node.op() == Operator.DECLARE_NAMESPACE) {
@@ -300,10 +321,6 @@ class FileStat {
 		if (_domain != domain)
 			return false;
 		return _namespaceNode.namespaceConforms(importNode);
-	}
-
-	public void buildTopLevelScopes(ref<CompileContext> compileContext) {
-		buildScopes(_domain, compileContext);
 	}
 
 	public boolean buildScopes(string domain, ref<CompileContext> compileContext) {

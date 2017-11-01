@@ -156,10 +156,8 @@ bool X86_64Section::run(char **args, int *returnValue, long long runtimeFlags) {
 	long long *vp = (long long*)(image + _header.vtablesOffset);
 	for (int i = 0; i < _header.vtableData; i++, vp++)
 		*vp += (long long)image;
-	ec.trace = (runtimeFlags & 2) != 0;
 	int value = evalNative((X86_64SectionHeader*)&_header, (byte*)_image, args + 1, argc);
 	*returnValue = value;
-	ec.trace = false;
 	Exception *exception = ec.exception();
 	if (exception != null) {
 		printf("\nUncaught Exception.\n");

@@ -47,7 +47,6 @@ public class Arena {
 	
 	int builtScopes;
 	boolean _deleteSourceCache;
-	boolean trace;
 	boolean verbose;
 	boolean logImports;
 	SectionType preferredTarget;
@@ -132,9 +131,18 @@ public class Arena {
 		return codegen(mainFile, countCurrentObjects, verbose, &context);
 	}
 
-	public void compileOnly(ref<FileStat> mainFile, boolean verbose, ref<CompileContext> compileContext) {
-		cacheRootObjects(_root, compileContext);
+	public void compilePackage(boolean countCurrentObjects, boolean verbose) {
+		CompileContext context(this, _global, verbose);
 
+		// 'import' all the 
+		// _importPath[0] is the ImportDirectory we need to pull in.
+
+		_importPath[0].compilePackage(&context);
+		createBuiltIns(&context);
+		context.compileFile();
+	}
+
+	public void compileOnly(ref<FileStat> mainFile, boolean verbose, ref<CompileContext> compileContext) {
 		mainFile.parseFile(compileContext);
 		if (verbose)
 			printf("Main file parsed\n");
@@ -143,11 +151,10 @@ public class Arena {
 		if (mainFile.hasNamespace())
 			mainFile.completeNamespace(compileContext);
 		else
-			mainFile.buildTopLevelScopes(compileContext);
+			mainFile.buildScopes(null, compileContext);
 		if (verbose)
 			printf("Top level scopes constructed\n");
-		compileContext.resolveImports();
-		createBuiltIns(_root, compileContext);
+		createBuiltIns(compileContext);
 		
 		_main = mainFile.fileScope();
 		if (verbose)
@@ -256,17 +263,19 @@ public class Arena {
 		treeRoot.scope = _root;
 		rootLoader.buildScopes();
 
+		cacheRootObjects(&rootLoader);
 		return treeRoot.countMessages() == 0;
 	}
 
-	public boolean createBuiltIns(ref<Scope> root, ref<CompileContext> compileContext) {
+	public boolean createBuiltIns(ref<CompileContext> compileContext) {
+		compileContext.resolveImports();
 		boolean allDefined = true;
 		for (int i = 0; i < builtInMap.length(); i++) {
-			ref<Symbol> sym = root.lookup(builtInMap[i].name, compileContext);
+			ref<Symbol> sym = _root.lookup(builtInMap[i].name, compileContext);
 			if (sym != null)
 				_builtInType[builtInMap[i].family] = sym.bindBuiltInType(builtInMap[i].family, compileContext);
 			if (_builtInType[builtInMap[i].family] == null) {
-				root.definition().add(MessageId.UNDEFINED_BUILT_IN, _global, CompileString(builtInMap[i].name));
+				_root.definition().add(MessageId.UNDEFINED_BUILT_IN, _global, CompileString(builtInMap[i].name));
 				allDefined = false;
 				_builtInType[builtInMap[i].family] = compileContext.pool().newBuiltInType(builtInMap[i].family, ref<ClassType>(null));
 			}
@@ -318,27 +327,27 @@ public class Arena {
 			return compileContext.errorType();
 	}
 
-	public void cacheRootObjects(ref<Scope> root, ref<CompileContext> compileContext) {
-		ref<Symbol> sym = root.lookup("ref", compileContext);
+	private void cacheRootObjects(ref<CompileContext> compileContext) {
+		ref<Symbol> sym = _root.lookup("ref", compileContext);
 		if (sym.class == Overload) {
 			ref<Overload> o = ref<Overload>(sym);
 			_ref = (*o.instances())[0];
 		}
-		sym = root.lookup("pointer", compileContext);
+		sym = _root.lookup("pointer", compileContext);
 		if (sym.class == Overload) {
 			ref<Overload> o = ref<Overload>(sym);
 			_pointer = (*o.instances())[0];
 		}
-		_int = root.lookup("int", compileContext);
-		_string = root.lookup("string", compileContext);
-		_var = root.lookup("var", compileContext);
-		sym = root.lookup("vector", compileContext);
+		_int = _root.lookup("int", compileContext);
+		_string = _root.lookup("string", compileContext);
+		_var = _root.lookup("var", compileContext);
+		sym = _root.lookup("vector", compileContext);
 		if (sym.class == Overload) {
 			ref<Overload> o = ref<Overload>(sym);
 			_vector = (*o.instances())[1];
 			_enumVector = _vector;//o.instances()[2];
 		}
-		sym = root.lookup("map", compileContext);
+		sym = _root.lookup("map", compileContext);
 		if (sym.class == Overload) {
 			ref<Overload> o = ref<Overload>(sym);
 			_map = (*o.instances())[0];

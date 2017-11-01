@@ -132,7 +132,6 @@ class CompileContext {
 	 * string.
 	 */
 	void compileFile() {
-		_arena.cacheRootObjects(_arena.root(), this);
 //		printf("before assignTypes\n");
 		assignTypes();
 //		printf("after assignTypes\n");

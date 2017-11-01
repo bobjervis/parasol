@@ -68,8 +68,6 @@ class ParasolCommand extends process.Command {
 					"Print the symbol table.");
 		logImportsArgument = booleanArgument(0, "logImports",
 					"Log all import processing");
-		traceArgument = booleanArgument(0, "trace",
-					"Trace execution of each instruction.");
 		disassemblyArgument = booleanArgument(0, "asm",
 					"Display disassembly of bytecodes");
 		explicitArgument = stringArgument('X', "explicit",
@@ -92,7 +90,6 @@ class ParasolCommand extends process.Command {
 
 	ref<process.Argument<string>> importPathArgument;
 	ref<process.Argument<boolean>> verboseArgument;
-	ref<process.Argument<boolean>> traceArgument;
 	ref<process.Argument<boolean>> disassemblyArgument;
 	ref<process.Argument<string>> explicitArgument;
 	ref<process.Argument<string>> pxiArgument;
@@ -233,9 +230,8 @@ boolean configureArena(ref<Arena> arena) {
 	if (parasolCommand.explicitArgument.set())
 		arena.setImportPath(parasolCommand.explicitArgument.value);
 	else if (parasolCommand.importPathArgument.set())
-		arena.setImportPath(parasolCommand.importPathArgument.value + ",^/src/lib,^/alys/lib");
+		arena.setImportPath(parasolCommand.importPathArgument.value + ",^/src/lib");
 	arena.verbose = parasolCommand.verboseArgument.value;
-	arena.trace = parasolCommand.traceArgument.value;
 	if (arena.logImports)
 		printf("Running with import path: %s\n", arena.importPath());
 	if (parasolCommand.targetArgument.set())

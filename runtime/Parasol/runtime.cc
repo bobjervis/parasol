@@ -131,7 +131,6 @@ ExecutionContext::ExecutionContext(void **objects, int objectCount) {
 	_pxiHeader = null;
 	_runtimeFlags = 0;
 	_parasolThread = null;
-	trace = false;
 }
 
 ExecutionContext::ExecutionContext(X86_64SectionHeader *pxiHeader, void *image, long long runtimeFlags) {
@@ -153,7 +152,6 @@ ExecutionContext::ExecutionContext(X86_64SectionHeader *pxiHeader, void *image, 
 	_sourceLocationsCount = 0;
 	_runtimeFlags = runtimeFlags;
 	_parasolThread = null;
-	trace = false;
 }
 
 ExecutionContext::~ExecutionContext() {
@@ -302,15 +300,6 @@ int evalNative(X86_64SectionHeader *header, byte *image, char **argv, int argc) 
 	return result;
 }
 
-static int setTrace(int newValue) {
-	ExecutionContext *context = threadContext.get();
-	bool oldValue = context->trace;
-	context->trace = (bool) newValue;
-//	printf("setTrace(%s) -> %s\n", newValue ? "true" : "false", oldValue ? "true" : "false");
-//	context->print();
-	return (int) oldValue;
-}
-
 StackState ExecutionContext::unloadFrame() {
 	StackState ss;
 	ss.frame = _active;
@@ -323,13 +312,8 @@ StackState ExecutionContext::unloadFrame() {
 }
 
 bool ExecutionContext::run(int objectId) {
-	if (trace)
-		printf("Entering [%d]\n", objectId);
-	if (objectId < 0 || objectId >= _objectCount) {
-		if (trace)
-			printf("   out of range [0-%d]\n", _objectCount - 1);
+	if (objectId < 0 || objectId >= _objectCount)
 		return false;
-	}
 	ExecutionContext *outer = threadContext.get();
 	_target = BYTE_CODE_TARGET;
 	threadContext.set(this);
@@ -525,164 +509,8 @@ int builtInFree(void *p) {
 void *builtInMemcpy(void *dest, void *src, int size) {
 	return memcpy(dest, src, size);
 }
-#if 0
-void *builtinVirtualAlloc(void *lpAddress, SIZE_T sz, DWORD flAllocationType, DWORD flProtect) {
-#if defined(__WIN64)
-	return VirtualAlloc(lpAddress, sz, flAllocationType, flProtect);
-#elif __linux__
-	return null;
-#endif
-}
 
-BOOL builtinVirtualProtect(void *lpAddress, SIZE_T sz, DWORD flNewProtect, DWORD *lpflOldProtect) {
-#if defined(__WIN64)
-	return VirtualProtect(lpAddress, sz, flNewProtect, lpflOldProtect);
-#elif __linux__
-	return 0;
-#endif
-}
-
-unsigned builtinGetLastError() {
-#if defined(__WIN64)
-	return GetLastError();
-#elif __linux__
-	return 0;
-#endif
-}
-
-bool Variant::equals(Variant &other) const {
-	if (_kind != other._kind)
-		return false;
-	return _value.integer == other._value.integer;
-}
-
-void Variant::clear() {
-	// TODO: CLean up allocated memory
-	_kind = null;
-	_value.integer = 0;
-}
-
-void Variant::init(const Variant& source) {
-	_kind = source._kind;
-//	switch (_kind->family()) {
-//	case	TF_STRING:
-//		new((void*)&_value.pointer) string(*(string*)&source._value.pointer);
-//		break;
-
-//	default:
-		// This will copy the necessary bits without altering them.
-		_value.integer = source._value.integer;
-//	}
-}
-
-static int varCompare(byte *bLeft, byte *bRight) {
-	Variant *left = (Variant*)bLeft;
-	Variant *right = (Variant*)bRight;
-
-	if (left->kind() != right->kind()) {
-		return INT_MIN;
-	}
-	long long diff = left->asLong() - right->asLong();
-	if (diff < 0)
-		return -1;
-	else if (diff > 0)
-		return 1;
-	else
-		return 0;
-}
-
-static void varAdd(byte *bLeft, byte *bRight) {
-	Variant *left = (Variant*)bLeft;
-	Variant *right = (Variant*)bRight;
-	long long val = left->asLong() + right->asLong();
-	left->setLong(val);
-}
-
-static void varSub(byte *bLeft, byte *bRight) {
-	Variant *left = (Variant*)bLeft;
-	Variant *right = (Variant*)bRight;
-	long long val = left->asLong() - right->asLong();
-	left->setLong(val);
-}
-
-static void varMul(byte *bLeft, byte *bRight) {
-	Variant *left = (Variant*)bLeft;
-	Variant *right = (Variant*)bRight;
-	long long val = left->asLong() * right->asLong();
-	left->setLong(val);
-}
-
-static void varDiv(byte *bLeft, byte *bRight) {
-	Variant *left = (Variant*)bLeft;
-	Variant *right = (Variant*)bRight;
-	long long val = left->asLong() / right->asLong();
-	left->setLong(val);
-}
-
-static void varRem(byte *bLeft, byte *bRight) {
-	Variant *left = (Variant*)bLeft;
-	Variant *right = (Variant*)bRight;
-	long long val = left->asLong() % right->asLong();
-	left->setLong(val);
-}
-
-static void varRsh(byte *bLeft, byte *bRight) {
-	Variant *left = (Variant*)bLeft;
-	Variant *right = (Variant*)bRight;
-	long long val = left->asLong() >> right->asLong();
-	left->setLong(val);
-}
-
-static void varLsh(byte *bLeft, byte *bRight) {
-	Variant *left = (Variant*)bLeft;
-	Variant *right = (Variant*)bRight;
-	long long val = left->asLong() << right->asLong();
-	left->setLong(val);
-}
-
-static void varUrs(byte *bLeft, byte *bRight) {
-	Variant *left = (Variant*)bLeft;
-	Variant *right = (Variant*)bRight;
-	long long val = (unsigned long long)left->asLong() >> right->asLong();
-	left->setLong(val);
-}
-
-static void varAnd(byte *bLeft, byte *bRight) {
-	Variant *left = (Variant*)bLeft;
-	Variant *right = (Variant*)bRight;
-	long long val = left->asLong() & right->asLong();
-	left->setLong(val);
-}
-
-static void varOr(byte *bLeft, byte *bRight) {
-	Variant *left = (Variant*)bLeft;
-	Variant *right = (Variant*)bRight;
-	long long val = left->asLong() | right->asLong();
-	left->setLong(val);
-}
-
-static void varXor(byte *bLeft, byte *bRight) {
-	Variant *left = (Variant*)bLeft;
-	Variant *right = (Variant*)bRight;
-	long long val = left->asLong() ^ right->asLong();
-	left->setLong(val);
-}
-
-static void *varInvoke(int methodName, int object) {
-	return null;
-}
-#endif
 #define nativeFunction(f) ((WORD(*)())f)
-
-#if 0
-static void *fMemcpy(void *dest, void *src, size_t len) {
-	return memcpy(dest, src, len);
-}
-
-static void *fMemset(void *dest, char c, size_t len) {
-	return memset(dest, c, len);
-}
-#endif
 
 struct SpawnPayload {
 	const char *buffer;
@@ -917,7 +745,7 @@ BuiltInFunctionMap builtInFunctionMap[] = {
 
 	{ "runningTarget",  					nativeFunction(runningTarget), 						0,  1, "parasol" },
 	{ "injectObjects",						nativeFunction(injectObjects),						2,	1, "parasol" },
-	{ "setTrace",							nativeFunction(setTrace),							1,	1, "parasol" },
+	{ "- unused -",							null,												0,	0, "" },
 	{ "eval",								nativeFunction(eval),								4,	1, "parasol" },
 	{ "evalNative",							nativeFunction(evalNative),							4,	1, "parasol" },
 	{ "debugSpawnImpl", 					nativeFunction(processDebugSpawn),					3,	1, "parasol" },
