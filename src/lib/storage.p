@@ -58,6 +58,19 @@ string absolutePath(string filename) {
 		return null;
 }
 
+
+public boolean makeExecutable(string filename) {
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		return false;
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		linux.statStruct s;
+		if (linux.stat(&filename[0], &s) != 0)
+			return false;
+		return linux.chmod(&filename[0], s.st_mode | (linux.S_IXUSR | linux.S_IXGRP)) == 0;
+	} else
+		return false;
+}
+
 public string basename(string filename) {
 	for (int x = filename.length() - 1; x >= 0; x--)
 		if (filename[x] == '\\' || filename[x] == '/')

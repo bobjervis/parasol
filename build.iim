@@ -1,5 +1,5 @@
 target(os: linux, cpu: x86-64) {
-	package(name: parasol) {
+	package(name: parasol, domain: parasol) {
 		folder(name: bin) {
 			file(name: dumppxi, src: bin)
 			file(name: genhdr, src: bin)
@@ -30,7 +30,7 @@ target(os: linux, cpu: x86-64) {
 }
 
 target(os: windows, cpu: x86-64) {
-	package(name: parasol) {
+	package(name: parasol, domain: parasol) {
 		folder(name: bin) {
 			file(name: genhdr.bat, src: bin)
 			exe(name: parasol.exe) {
