@@ -45,7 +45,7 @@ target(os: windows, cpu: x86-64) {
 		folder(name: compiler) {
 			file(name: main.p, src: compiler)
 		}
-		folder: name: lib) {
+		folder(name: lib) {
 			file(name: root.p, src: lib)
 		}
 		folder(name: src) {
