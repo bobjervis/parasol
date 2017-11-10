@@ -90,6 +90,10 @@ public class Object {
 		_members[key] = value;
 	}
 	
+	public void remove(string key) {
+		_members.remove(key);
+	}
+
 	public int size() {
 		return _members.size();
 	}

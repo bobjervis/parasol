@@ -80,6 +80,15 @@ public string stringify(var object) {
 	} else 
 		return "\"object (unknown schema)\"";
 }
+/**
+ * If object was returned from json.parse, this will delete all memory
+ * allocated by the parse. If you care about any of the Object or Array instances
+ * that were returned, you will need to prune the object or copy the interesting
+ * items before you dispose of them.
+ */
+public void dispose(var object) {
+	
+}
 
 class Parser {
 	Scanner _scanner;
