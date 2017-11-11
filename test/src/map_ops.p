@@ -15,6 +15,8 @@
  */
 string[string] testMap;
 
+assert(testMap["anything"] == null);
+
 testMap["abc"] = "xyz";
 
 testMap["def"] = "mno";

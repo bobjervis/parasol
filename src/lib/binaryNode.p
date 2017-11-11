@@ -759,6 +759,22 @@ class Binary extends Node {
 				break;
 				
 			case	STRING:
+				if (_left.op() == Operator.SUBSCRIPT) {
+					ref<Variable> temp = compileContext.newVariable(_left.type);
+					ref<Node> r = tree.newReference(temp, true, location());
+					ref<Node> x = tree.newBinary(Operator.ASSIGN_TEMP, r, _left, location());
+					x.type = _left.type;
+					ref<Node> y = tree.newReference(temp, false, location());
+					ref<Node> call = createMethodCall(y, "compare", tree, compileContext, _right);
+					call.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+					_left = tree.newBinary(Operator.SEQUENCE, x, call, location());
+					_left.type = call.type;
+					_left = _left.fold(tree, false, compileContext);
+					_right = tree.newConstant(0, location());
+					_right.type = _left.type;
+					break;
+				}
+
 			case	VAR:
 				ref<Node> call = createMethodCall(_left, "compare", tree, compileContext, _right);
 				call.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
