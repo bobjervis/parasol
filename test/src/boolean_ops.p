@@ -13,6 +13,9 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+@Constant
+boolean CONST = true;
+
 int main(string[] args) {
 	boolean a = true;
 	boolean b = false;
@@ -83,6 +86,8 @@ int main(string[] args) {
 	assert(d);
 
 	assert(func(d));
+
+	assert(CONST);
 	
 	print("Logical tests\n");
 	

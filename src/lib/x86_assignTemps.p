@@ -294,6 +294,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			assignLvalueTemps(dot, compileContext);
 			break;
 			
+		case	SUBSCRIPT:
 		case	IDENTIFIER:
 		case	TRUE:
 		case	FALSE:

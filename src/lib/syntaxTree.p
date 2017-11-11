@@ -2001,6 +2001,29 @@ class Leaf extends Node {
 			break;
 		}
 	}
+
+	public long foldInt(ref<Target> target, ref<CompileContext> compileContext) {
+		switch (op()) {
+		case TRUE:
+			return 1;
+		case FALSE:
+		case NULL:
+			return 0;
+		}
+		print(0);
+		assert(false);
+		return 0;
+	}
+
+	public boolean isConstant() {
+		switch (op()) {
+		case TRUE:
+		case FALSE:
+		case NULL:
+			return true;
+		}
+		return false;
+	}
 }
 
 class Loop extends Node {
