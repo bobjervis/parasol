@@ -130,3 +130,23 @@ pointer<byte> pb = pointer<byte>(&y);
 xl = long(pb);
 
 assert(xl == long(&y));
+
+// This following text was introduced because of a codegen assertion.
+
+class P<class I, class E> {
+	pointer<I> x;
+
+	E m() {
+		long i = 0;
+		E r = *x[E(i)];
+		return r;
+	}
+}
+
+P<ref<int>, int> pp;
+
+int ppn = 17;
+pp.x = pointer<ref<int>>(new ref<int>);
+*pp.x = &ppn;
+
+assert(pp.m() == 17);

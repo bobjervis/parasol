@@ -239,15 +239,19 @@ class vector<class E, class I> {
 		_capacity = I(0);
 		append(other);
 	}
-	
+
 	public void deleteAll() {
-		for (int i = 0; i < _length; i++)
+		for (long i = 0; i < long(_length); i++)
 			delete _data[i];
 		clear();
 	}
 
 	public I find(E key) {
-		return I(0);
+		for (long i = 0; i < long(_length); i++) {
+			if (_data[I(i)] == key)
+				return I(i);
+		}
+		return _length;
 	}
 	
 	public E get(I index) {

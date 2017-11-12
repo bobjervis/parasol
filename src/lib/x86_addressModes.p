@@ -786,7 +786,8 @@ class X86_64AddressModes extends X86_64Encoder {
 				markAddressModes(b.left(), compileContext);
 			}
 			break;
-	
+
+		case	SUBSCRIPT:
 		case	CAST:
 		case	INDIRECT:
 		case	CALL:

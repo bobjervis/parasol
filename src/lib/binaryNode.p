@@ -532,9 +532,10 @@ class Binary extends Node {
 			ref<Type> objType = _right.type.indirectType(compileContext);
 			ref<Node> destructors = null;
 			ref<Node> completion;
-			if (_left.op() == Operator.EMPTY)
+			if (_left.op() == Operator.EMPTY) {
+				_right = _right.fold(tree, false, compileContext);
 				completion = this;
-			else {
+			} else {
 				ref<Node> allocator = _left;
 				ref<Type> allocatorType = _left.type.indirectType(compileContext);
 				if (allocatorType != null) {
