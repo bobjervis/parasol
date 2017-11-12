@@ -393,7 +393,6 @@ class vector<class E, class I> {
 		return _data + int(index);
 	}
 	
-	
 	public void slice(vector<E, I> source, I beginIndex, I endIndex) {
 		I len = I(int(endIndex) - int(beginIndex));
 		resize(len);

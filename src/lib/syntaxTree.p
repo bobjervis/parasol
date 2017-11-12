@@ -3193,6 +3193,7 @@ class Node {
 			case	SHAPE:
 			case	CLASS_VARIABLE:
 			case	VOID:
+			case	INTERFACE:
 				break;
 
 			default:

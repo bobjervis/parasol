@@ -4086,6 +4086,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	POINTER:
 		case	FLAGS:
 		case	ENUM:
+		case	INTERFACE:
 		case	TYPEDEF:
 		case	CLASS:			return CC.JNE;
 		default:

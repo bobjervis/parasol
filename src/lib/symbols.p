@@ -146,7 +146,7 @@ class PlainSymbol extends Symbol {
 	}
 	
 	public void print(int indent, boolean printChildScopes) {
-		printf("%p name [ %p. %d ]\n", this, _name.data, _name.length);
+//		printf("%p name [ %p. %d ]\n", this, _name.data, _name.length);
 		printf("%*.*c%s PlainSymbol %p %s", indent, indent, ' ', _name.asString(), this, string(visibility()));
 		if (declaredStorageClass() != StorageClass.ENCLOSING)
 			printf(" %s", string(declaredStorageClass()));

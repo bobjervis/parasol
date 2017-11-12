@@ -2062,6 +2062,7 @@ class Binary extends Node {
 			case	FLAGS:
 			case	VAR:
 			case	CLASS_VARIABLE:
+			case	INTERFACE:
 			case	TYPEDEF:
 				type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
 				break;

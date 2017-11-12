@@ -2983,6 +2983,7 @@ public class X86_64 extends X86_64AssignTemps {
 		case	POINTER:
 		case	BOOLEAN:
 		case	FUNCTION:
+		case	INTERFACE:
 			inst(X86.CMP, impl(b.left().type), b.left(), b.right(), compileContext);
 			break;
 			
