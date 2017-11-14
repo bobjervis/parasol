@@ -80,6 +80,9 @@ public class WebSocketFactory {
 			response.error(400);
 			return false;
 		}
+		ref<Connection> connection = response.connection();
+		if (!start(request, response, connection))
+			return false;
 		response.statusLine(101, "Switching Protocols");
 		string v = computeWebSocketAccept(key);
 		response.header("Sec-WebSocket-Accept", v);
@@ -87,13 +90,11 @@ public class WebSocketFactory {
 		response.header("Upgrade", "websocket");
 		response.header("Sec-Websocket-Protocol", protocol);
 		response.endOfHeaders();
-		ref<Connection> connection = response.connection();
 		response.respond();
-		start(connection);
 		return true;
 	}
 
-	public abstract void start(ref<Connection> connection);
+	public abstract boolean start(ref<HttpRequest> request, ref<HttpResponse> response, ref<Connection> connection);
 }
 
 public string computeWebSocketKey(int byteCount) {
@@ -380,8 +381,10 @@ public class WebSocket {
 		if (_incomingCursor >= _incomingLength) {
 			_incomingLength = _connection.read(&_incomingData[0], _incomingData.length());
 			if (_incomingLength <= 0) {
-				printf("_incomingLength = %d\n", _incomingLength);
-				linux.perror(null);
+				if (_incomingLength < 0) {
+					printf("_incomingLength = %d\n", _incomingLength);
+					linux.perror(null);
+				}
 				shutDown(CLOSE_BAD_DATA, "recv failed");
 				return -1;
 			}
@@ -405,7 +408,7 @@ public class WebSocket {
 	void close(ref<Operation> op) {
 		byte[] closeFrame;
 
-		printf("websocket shutDown (%d, %s)\n", op.cause, op.message);
+//		printf("websocket shutDown (%d, %s)\n", op.cause, op.message);
 		networkOrder(&closeFrame, op.cause);
 		networkOrder(&closeFrame, op.message);
 		op.webSocket.send(OP_CLOSE, &closeFrame[0], closeFrame.length());
@@ -515,6 +518,80 @@ private void networkOrder(ref<byte[]> output, string x) {
 public interface WebSocketReader {
 	void readMessages();
 }
+/**
+ * Rendezvous
+ *
+ * When a WebSocket needs to make a call with a return value, the calling thread has to send
+ * a message, then wait for the reply to the message. Because a WebSocket is full-duplex any
+ * number of messages of any number of kinds can arrive before the reply that the calling thread
+ * is waiting for arrives.
+ *
+ * So, the sender creates a Rendezvous object to track the reply.
+ */
+public monitor class Rendezvous {
+	ref<WSPVolatileData> _proxy;
+	string _key;
+	public byte[] replyMessage;
+	public boolean success;
+
+	Rendezvous(ref<WSPVolatileData> proxy, string key) {
+		_proxy = proxy;
+		_key = key;
+	}
+
+	void postResult(byte[] message) {
+		replyMessage = message;
+		success = true;
+		notify();
+	}
+
+	void abandon() {
+		success = false;
+		notify();
+	}
+
+	void cancel() {
+		ref<Rendezvous> r = _proxy.extractRendezvous(_key);
+		delete r;
+	}
+}
+
+public monitor class WSPVolatileData {
+	ref<Rendezvous>[string] _pendingMessages;
+	int _nextMessage;
+	boolean _shuttingDown;
+
+	int getNextMessageID() {
+		return _nextMessage++;
+	}
+
+	ref<Rendezvous> createRendezvous(string key) {
+		if (_shuttingDown)
+			return null;
+		if (_pendingMessages[key] != null)
+			return null;
+
+		ref<Rendezvous> r = new Rendezvous(this, key);
+
+		_pendingMessages[key] = r;
+		return r;
+	}
+
+	ref<Rendezvous> extractRendezvous(string key) {
+		ref<Rendezvous> r = _pendingMessages[key];
+		_pendingMessages.remove(key);
+		return r;
+	}
+
+	ref<Rendezvous>[] extractAllRendezvous() {
+		_shuttingDown = true;
+		ref<Rendezvous>[] results;
+		for (ref<Rendezvous>[string].iterator i = _pendingMessages.begin(); i.hasNext(); i.next())
+			results.append(i.get());
+		_pendingMessages.clear();
+		return results;
+	}
+}
 
 class Operation {
 	ref<WebSocket> webSocket;
@@ -555,23 +632,25 @@ monitor class MessageWriter {
 		return _q.dequeue();
 	}
 }
-
+/**
+ * writeWrapper
+ *
+ *	This method is the main loop of the WebSocket writer thread. Once started, it remains running waiting for
+ *	some WebSocket to write some data.
+ */
 void writeWrapper(address arg) {
 	for (;;) {
 		ref<Operation> op = writer.dequeue();
 		if (op.opcode == WebSocket.OP_CLOSE) {
 			op.webSocket.close(op);
-			delete op;
-			break;
+		} else {
+			string msg = op.message;
+			if (msg.length() > 200)
+				msg = msg.substring(0, 200) + "...";
+			op.webSocket.send(op.opcode, &op.message[0], op.message.length());
 		}
-		string msg = op.message;
-		if (msg.length() > 200)
-			msg = msg.substring(0, 200) + "...";
-		if (!op.webSocket.send(op.opcode, &op.message[0], op.message.length()))
-			break;
 		delete op;
 	}
-	printf("Tata!\n");
 }
 
 MessageWriter writer;
