@@ -765,6 +765,7 @@ class X86_64AddressModes extends X86_64Encoder {
 		case	THIS:
 		case	SUPER:
 			node.nodeFlags |= ADDRESS_MODE;
+			node.register = byte(thisRegister());
 			return;
 		
 		case	IDENTIFIER:

@@ -133,6 +133,8 @@ public class WebSocket {
 	public int maxFrameSize;
 	
 	private ref<Connection> _connection;
+	private ref<Thread>	_readerThread;
+	private WebSocketReader _reader;
 	private boolean _server;
 	private Random _random;				// For masking
 	private byte[] _incomingData;		// A buffer of data being read from the websocket.
@@ -144,6 +146,19 @@ public class WebSocket {
 		_connection = connection;
 		_server = server;
 		_incomingData.resize(1024);
+	}
+
+	public boolean startReader(WebSocketReader reader) {
+		if (_readerThread != null)
+			return false;
+		_reader = reader;
+		_readerThread = new Thread();
+		_readerThread.start(readWrapper, this);
+		return true;
+	}
+
+	private static void readWrapper(address arg) {
+		ref<WebSocket>(arg)._reader.readMessages();
 	}
 	/**
 	 * readWholeMessage
@@ -495,6 +510,10 @@ private void networkOrder(ref<byte[]> output, short x) {
 private void networkOrder(ref<byte[]> output, string x) {
 	for (int i = 0; i < x.length(); i++)
 		output.append(x[i]);
+}
+
+public interface WebSocketReader {
+	void readMessages();
 }
 
 class Operation {
