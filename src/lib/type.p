@@ -1050,6 +1050,7 @@ class TemplateType extends Type {
 	}
 
 	public  ref<Type> assignSuper(ref<CompileContext> compileContext) {
+		printf("assignSuper for %s\n", signature());
 		assert(false);
 		return null;
 	}
@@ -1066,7 +1067,7 @@ class TemplateType extends Type {
 	public ref<Template> definition() {
 		return _definition;
 	}
-	
+
 	public ref<Symbol> definingSymbol() {
 		return _definingSymbol;
 	}

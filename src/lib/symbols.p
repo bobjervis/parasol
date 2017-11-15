@@ -644,16 +644,24 @@ class OverloadInstance extends Symbol {
 
 		boolean success = true;
 		for (ref<NodeList> nl = declaration.arguments(); nl != null; nl = nl.next) {
-			if (nl.node.type.family() == TypeFamily.TYPEDEF) {
-				ref<TypedefType> t = ref<TypedefType>(nl.node.type);
-				var v = t.wrappedType();
-				argValues.append(v);
-			} else {
+			if (nl.node.type.family() != TypeFamily.TYPEDEF) {
 				nl.node.add(MessageId.UNFINISHED_INSTANTIATE_TEMPLATE, compileContext.pool());
 				success = false;
+				continue;
 			}
+			ref<TypedefType> t = ref<TypedefType>(nl.node.type);
+			if (t.wrappedType().family() == TypeFamily.TEMPLATE) {
+				nl.node.add(MessageId.TEMPLATE_NAME_DISALLOWED, compileContext.pool());
+				success = false;
+				continue;
+			}
+			var v = t.wrappedType();
+			argValues.append(v);
 		}
-		return instantiateTemplate(argValues, compileContext);
+		if (success)
+			return instantiateTemplate(argValues, compileContext);
+		else
+			return compileContext.errorType();
 	}
 
 	public ref<Type> createAddressInstance(ref<Type> target, ref<CompileContext> compileContext) {
@@ -739,6 +747,7 @@ class OverloadInstance extends Symbol {
 		// corresponding argument, after coercing the argument to the symbol's type.
 
 //		memDump(_parameterScope, (*_parameterScope).bytes);
+		assert(arguments.length() == _parameterScope.parameterCount());
 		for (int i = 0; i < _parameterScope.parameterCount(); i++) {
 			ref<Symbol> sym = (*_parameterScope.parameters())[i];
 			if (sym.class != PlainSymbol)

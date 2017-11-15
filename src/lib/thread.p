@@ -576,7 +576,7 @@ public class ThreadPool<class T> extends ThreadPoolData<T> {
 			if (_shutdownRequested) {
 				delete wi;
 				delete future;
-				return null;			// Don't do it! It's a trap. (Bug: compiler does not unlock the _workload lock)
+				return null;
 			}
 			if (_first == null)
 				_first = wi;
@@ -596,7 +596,7 @@ public class ThreadPool<class T> extends ThreadPoolData<T> {
 		lock (*this) {
 			if (_shutdownRequested) {
 				delete wi;
-				return false;			// Don't do it! It's a trap. (Bug: compiler does not unlock the _workload lock)
+				return false;
 			}
 			if (_first == null)
 				_first = wi;
@@ -631,10 +631,10 @@ public class ThreadPool<class T> extends ThreadPoolData<T> {
 
 		lock(*this) {
 			if (_shutdownRequested)
-				return false;			// Don't do it! It's a trap. (Bug: compiler does not unlock the _workload lock)
+				return false;
 			wait();
 			if (_shutdownRequested)		// Note: _first will be null
-				return false;			// Don't do it! It's a trap. (Bug: compiler does not unlock the _workload lock)
+				return false;
 			wi = _first;
 			_first = wi.next;
 		}

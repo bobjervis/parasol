@@ -1594,8 +1594,14 @@ class Binary extends Node {
 				
 			default:
 				type = _left.unwrapTypedef(Operator.CLASS, compileContext);
-				if (!deferAnalysis())
-					_right.markupDeclarator(type, true, compileContext);
+				if (deferAnalysis())
+					break;
+				if (type.family() == TypeFamily.TEMPLATE) {
+					add(MessageId.TEMPLATE_NAME_DISALLOWED, compileContext.pool());
+					type = compileContext.errorType();
+					break;
+				}
+				_right.markupDeclarator(type, true, compileContext);
 			}
 			break;
 
