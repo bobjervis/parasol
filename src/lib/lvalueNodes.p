@@ -441,9 +441,16 @@ class Identifier extends Node {
 					if (type == null)
 						type = compileContext.errorType();
 					else {
-						if (_symbol.storageClass() == StorageClass.MEMBER) {
+						switch (_symbol.storageClass()) {
+						case MEMBER:
 							if (!compileContext.current().contextAllowsReferenceToThis()) {
 								add(MessageId.MEMBER_REF_NOT_ALLOWED, compileContext.pool(), _value);
+								type = compileContext.errorType();
+								break;
+							}
+						case LOCK:
+							if (_symbol.class == OverloadInstance && type.family() == TypeFamily.FUNCTION) {
+								add(MessageId.METHOD_MUST_BE_STATIC, compileContext.pool(), _value);
 								type = compileContext.errorType();
 							}
 						}
@@ -757,31 +764,39 @@ class Selection extends Node {
 
 	private boolean lookupInType(ref<Type> t, ref<CompileContext> compileContext) {
 		ref<Symbol> sym = t.lookup(&_name, compileContext);
-		if (sym != null) {
-			if (sym.class == Overload) {
-				ref<Overload> o = ref<Overload>(sym);
-				if (o.instances().length() == 1) {
-					_symbol = (*o.instances())[0];
-					type = _symbol.assignType(compileContext);
-					_symbol.markAsReferenced(compileContext);
-				} else {
-					add(MessageId.AMBIGUOUS_REFERENCE, compileContext.pool());
-					type = compileContext.errorType();
-				}
-				return true;
-			}
-			if (sym.class != PlainSymbol) {
-				add(MessageId.NOT_SIMPLE_VARIABLE, compileContext.pool(), _name);
+		if (sym == null)
+			return false;
+		if (sym.class == Overload) {
+			ref<Overload> o = ref<Overload>(sym);
+			if (o.instances().length() == 1) {
+				sym = (*o.instances())[0];
+				type = sym.assignType(compileContext);
+				sym.markAsReferenced(compileContext);
+			} else {
+				add(MessageId.AMBIGUOUS_REFERENCE, compileContext.pool());
 				type = compileContext.errorType();
 				return true;
 			}
+		} else if (sym.class != PlainSymbol) {
+			add(MessageId.NOT_SIMPLE_VARIABLE, compileContext.pool(), _name);
+			type = compileContext.errorType();
+			return true;
+		} else {
 			type = sym.assignType(compileContext);
 			if (sym.enclosing().isMonitor()) {
 				add(MessageId.BAD_MONITOR_REF, compileContext.pool(), _name);
 			}
-			_symbol = sym;
-			return true;
 		}
-		return false;
+		if (type == null)
+			type = compileContext.errorType();
+		else if (sym.storageClass() == StorageClass.MEMBER ||
+			sym.storageClass() == StorageClass.LOCK) {
+			if (sym.class == OverloadInstance && type.family() == TypeFamily.FUNCTION) {
+				add(MessageId.METHOD_MUST_BE_STATIC, compileContext.pool(), _name);
+				type = compileContext.errorType();
+			}
+		}
+		_symbol = sym;
+		return true;
 	}
 }

@@ -564,10 +564,6 @@ class OverloadInstance extends Symbol {
 		return _parameterScope.parameterCount();
 	}
 
-	public boolean isFunction() {
-		return definition() != null && definition().op() == Operator.FUNCTION;
-	}
-
 	public Callable callableWith(ref<NodeList> arguments, boolean hasEllipsis, ref<CompileContext> compileContext) {
 		int parameter = 0;
 		boolean processingEllipsis = false;
@@ -1001,10 +997,6 @@ class Symbol {
 		return _type != null;
 	}
 	
-	public boolean isFunction() {
-		return false;
-	}
-
 	public ref<Scope> enclosing() {
 		return _enclosing;
 	}
