@@ -753,10 +753,13 @@ public class unsigned {
 	
 //	public unsigned(unsigned value) {
 //	}
-/*	
+
 	public int compare(unsigned other) {
 		return int(*this - other);
 	}
- */
+
+    public int hash() {
+            return int(*this);
+    }
 }
 

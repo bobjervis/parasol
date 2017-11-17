@@ -3810,7 +3810,7 @@ public class X86_64 extends X86_64AssignTemps {
 		case	POINTER:
 			switch (impl(newType)) {
 			case	INTERFACE:
-				if (existingType.indirectType(compileContext) != null && existingType.indirectType(compileContext).doesImplement(newType)) {
+				if (existingType.indirectType(compileContext) != null && existingType.indirectType(compileContext).doesImplement(newType, compileContext)) {
 					inst(X86.MOV, TypeFamily.ADDRESS, result, n, compileContext);
 					inst(X86.ADD, result, existingType.indirectType(compileContext).interfaceOffset(newType, compileContext), compileContext);
 					return;

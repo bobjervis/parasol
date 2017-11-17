@@ -245,7 +245,8 @@ public class HttpClient {
 		boolean hasWebSocket;
 		if (expectWebSocket) {
 			if (_response.code != "101") {
-				printf("Expecting a Web SOcket, not a 101 response.\n");
+				printf("Expecting a Web Socket, not a 101 response.\n");
+				_response.print();
 				return false, false, ip;
 			}
 			string webSocketAccept = computeWebSocketAccept(webSocketKey);

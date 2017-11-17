@@ -425,12 +425,16 @@ class ClassType extends Type {
 		_implements.append(interfaceType);
 	}
 
-	public boolean doesImplement(ref<Type> interfaceType) {
+	public boolean doesImplement(ref<Type> interfaceType, ref<CompileContext> compileContext) {
+		if (_definition != null) {
+			compileContext.assignTypes(_scope.enclosing(), _definition);
+		}
+		assert(_definition == null || _definition.type != null);
 		for (int i = 0; i < _implements.length(); i++)
 			if (_implements[i] == interfaceType)
 				return true;
 		if (_extends != null)
-			return _extends.doesImplement(interfaceType);
+			return _extends.doesImplement(interfaceType, compileContext);
 		return false;
 	}
 
@@ -571,7 +575,7 @@ class ClassType extends Type {
 			do {
 				t = t.assignSuper(compileContext); 
 			} while (t != null);
-			if (doesImplement(other))
+			if (doesImplement(other, compileContext))
 				return true;
 			ref<Type> ind = indirectType(compileContext);
 			if (ind != null) {
@@ -579,7 +583,7 @@ class ClassType extends Type {
 				do {
 					t = t.assignSuper(compileContext); 
 				} while (t != null);
-				if (ind.doesImplement(other))
+				if (ind.doesImplement(other, compileContext))
 					return true;
 			}
 		}
@@ -1877,7 +1881,7 @@ class Type {
 	 * 
 	 * RETURNS: True if this type implements the named interface. False otherwise.
 	 */
-	public boolean doesImplement(ref<Type> interfaceType) {
+	public boolean doesImplement(ref<Type> interfaceType, ref<CompileContext> compileContext) {
 		return false;
 	}
 	/**
