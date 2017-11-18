@@ -101,6 +101,10 @@ public class Object {
 	public ref<var[string]> members() {
 		return &_members;
 	}
+
+	public boolean contains(string member) {
+		return _members.contains(member);
+	}
 }
 
 public class Queue<class T> {
