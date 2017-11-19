@@ -2510,22 +2510,33 @@ public class X86_64 extends X86_64AssignTemps {
 				break;
 
 			case	TYPEDEF:
-				if ((dot.nodeFlags & ADDRESS_MODE) == 0)
-					generateLoad(X86.LEA, dot, compileContext);
+				generateLoad(X86.LEA, dot, compileContext);
 				break;
 				
 			case	CLASS:
-				if ((dot.nodeFlags & ADDRESS_MODE) == 0)
-					generateLoad(X86.MOV, dot, compileContext);
+				generateLoad(X86.MOV, dot, compileContext);
 				break;
 				
+			case	FLOAT_32:
+				dest = R(node.register);
+				node.register = 0;
+				inst(X86.MOVSS, dest, node, compileContext);
+				node.register = byte(int(dest));
+				break;
+
+			case	FLOAT_64:
+				dest = R(node.register);
+				node.register = 0;
+				inst(X86.MOVSD, dest, node, compileContext);
+				node.register = byte(int(dest));
+				break;
+
 			case	FUNCTION:
 				if (generateFunctionAddress(node, compileContext))
 					break;
-				
+
 			default:
-				if ((dot.nodeFlags & ADDRESS_MODE) == 0)
-					generateLoad(X86.MOV, dot, compileContext);
+				generateLoad(X86.MOV, dot, compileContext);
 			}
 			break;
 				
