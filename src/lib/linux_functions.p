@@ -552,7 +552,10 @@ public int _NSIG = 65;	/* Biggest signal number + 1 */
 #define	EPERM		 1	/* Operation not permitted */
 #define	ENOENT		 2	/* No such file or directory */
 #define	ESRCH		 3	/* No such process */
-#define	EINTR		 4	/* Interrupted system call */
+ */
+@Constant
+public int EINTR = 4;	/* Interrupted system call */
+/*
 #define	EIO		 5	/* I/O error */
 #define	ENXIO		 6	/* No such device or address */
 #define	E2BIG		 7	/* Argument list too long */

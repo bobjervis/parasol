@@ -632,16 +632,23 @@ class SSLConnection extends Connection {
 	}
 
 	public int read(pointer<byte> buffer, int length) {
-		int x = ssl.SSL_read(_ssl, buffer, length);
-		if (x < 0) {
-			text.printf("SSL_read failed return %d\n", x);
-			diagnoseError();
-			linux.perror("SSL_read".c_str());
-//		} else {
-//			text.printf("SSLConnection.read:\n");
-//			text.memDump(buffer, x);
+		for (;;) {
+			int x = ssl.SSL_read(_ssl, buffer, length);
+			if (x < 0) {
+				if (x == -1) {
+					// If the failure was caused by an interrupted system call, just re-start the read.
+					if (linux.errno() == linux.EINTR)
+						continue;
+				}
+				text.printf("SSL_read failed return %d\n", x);
+				diagnoseError();
+				linux.perror("SSL_read".c_str());
+	//		} else {
+	//			text.printf("SSLConnection.read:\n");
+	//			text.memDump(buffer, x);
+			}
+			return x;
 		}
-		return x;
 	}
 
 	public int write(pointer<byte> buffer, int length) {
