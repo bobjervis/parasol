@@ -1036,6 +1036,7 @@ class X86_64Encoder extends Target {
 		case	BOOLEAN:
 		case	VOID:
 		case	FUNCTION:
+		case	INTERFACE:
 			inst(X86.PUSH, TypeFamily.SIGNED_64, reg);
 			break;
 			
@@ -1073,6 +1074,7 @@ class X86_64Encoder extends Target {
 		case	BOOLEAN:
 		case	VOID:
 		case	FUNCTION:
+		case	INTERFACE:
 			inst(X86.POP, TypeFamily.SIGNED_64, reg);
 			break;
 			

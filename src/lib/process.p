@@ -98,6 +98,10 @@ public class Process {
 	}
 
 	public boolean spawn(string command, string... args) {
+		return spawn(null, command, null, args);
+	}
+
+	public boolean spawn(string workingDirectory, string command, ref<string[]> environ, string... args) {
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 //			SpawnPayload payload;
 			
@@ -136,6 +140,18 @@ public class Process {
 //				linux.dup2(pipefd[1], 1);
 //				linux.dup2(pipefd[1], 2);
 				// This is the child process
+				if (workingDirectory != null) {
+					linux.chdir(workingDirectory.c_str());
+				}
+				if (environ != null) {
+					for (int i = 0; i < environ.length(); i++) {
+						int idx = (*environ)[i].indexOf('=');
+						if (idx < 0)
+							environment.set((*environ)[i], "");
+						else
+							environment.set((*environ)[i].substring(0, idx), (*environ)[i].substring(idx + 1));
+					}
+				}
 				linux.execv(argv[0], argv);
 				linux._exit(-1);
 			} else {

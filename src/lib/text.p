@@ -1624,10 +1624,12 @@ class string {
 						
 					case '0':
 						i++;
-						if (i >= _contents.length)
-							return output, false;
-						if (!pointer<byte>(&_contents.data)[i].isOctalDigit())
-							return output, false;
+						if (i >= _contents.length ||
+							!pointer<byte>(&_contents.data)[i].isOctalDigit()) {
+							i--;
+							output.append(byte(0));
+							break;
+						}
 						v = 0;
 						do {
 							v <<= 3;

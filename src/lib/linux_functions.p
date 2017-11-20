@@ -28,6 +28,9 @@ class fsfilcnt_t = long;
 @Linux("libc.so.6", "aligned_alloc")
 public abstract address aligned_alloc(long alignment, long length);
 
+@Linux("libc.so.6", "chdir")
+public abstract int chdir(pointer<byte> path);
+
 @Linux("libc.so.6", "chmod")
 public abstract int chmod(pointer<byte> path, mode_t mode);
 
