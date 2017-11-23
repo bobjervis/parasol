@@ -1008,11 +1008,11 @@ private abstract SQLRETURN SQLColAttribute(SQLHSTMT StatementHandle, SQLUSMALLIN
 						ref<SQLLEN> NumericAttributePtr);
 
 @Linux("libodbc.so", "SQLConnect")
-private abstract SQLRETURN SQLConnect(SQLHDBC ConnectionHadle, pointer<byte> ServerName, SQLSMALLINT NameLength1,
+private abstract SQLRETURN SQLConnect(SQLHDBC ConnectionHandle, pointer<byte> ServerName, SQLSMALLINT NameLength1,
 						pointer<byte> UserName, SQLSMALLINT NameLength2, pointer<byte> Authentication, SQLSMALLINT NameLength3);
 
 @Linux("libodbc.so", "SQLDriverConnect")
-private abstract SQLRETURN SQLDriverConnect(SQLHDBC ConnectionHadle, SQLHWND WindowHandle, pointer<byte> InConnectionString,
+private abstract SQLRETURN SQLDriverConnect(SQLHDBC ConnectionHandle, SQLHWND WindowHandle, pointer<byte> InConnectionString,
 						SQLSMALLINT StringLength1, pointer<byte> OutConnectionString, SQLSMALLINT BufferLength, 
 						ref<SQLSMALLINT> StringLength2Ptr, SQLUSMALLINT DriverCompletion);
 

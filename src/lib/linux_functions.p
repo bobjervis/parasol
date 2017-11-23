@@ -874,6 +874,7 @@ public class siginfo_t {
     int si_errno;		/* If non-zero, an errno value associated with
 				   			this signal, as defined in <errno.h>.  */
     int si_code;		/* Signal code.  */
+	int si_trapno;		/* Trap number. */
 }
 
 public class siginfo_t_kill extends siginfo_t {

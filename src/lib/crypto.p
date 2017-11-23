@@ -17,10 +17,10 @@ namespace openssl.org:crypto;
 /**
  * hashData points to an array of 16 bytes that is the output of the algorithm.
  */
-@Linux("libcrypto.so.1.0.0", "MD5")
+@Linux("libcrypto.so.10", "MD5")
 public abstract pointer<byte> MD5(pointer<byte> data, long nBytes, pointer<byte> hashData);
 /**
  * hashData points to an array of 20 bytes that is the output of the algorithm.
  */
-@Linux("libcrypto.so.1.0.0", "SHA1")
+@Linux("libcrypto.so.10", "SHA1")
 public abstract pointer<byte> SHA1(pointer<byte> data, long nBytes, pointer<byte> hashData);

@@ -84,7 +84,7 @@ private void init() {
 		action.sa_flags = linux.SA_SIGINFO;
 		int result = linux.sigaction(linux.SIGCHLD, &action, null);
 		if (result != 0) {
-			printf("Failed to regsiter SIGCHLD handler: %d\n", result);
+			printf("Failed to register SIGCHLD handler: %d\n", result);
 			linux.perror("From sigaction".c_str());
 		}
 	}
@@ -189,8 +189,12 @@ public class Process {
 /**
  * Our SIGCHLD handler does nothing but return
  */
-private void sigChldHandler(int x, ref<linux.siginfo_t> info, address arg) {
+private void sigChldHandler(int x, ref<linux.siginfo_t> rawInfo, address arg) {
+	ref<linux.siginfo_t_sigchld> info = ref<linux.siginfo_t_sigchld>(rawInfo);
+//	printf("sigChldHandler pid = %d: %d\n", info.si_pid, info.si_status);
 }
+
+
 
 public int debugSpawn(string command, ref<string> output, ref<exception_t> outcome, time.Time timeout) {
 	SpawnPayload payload;
