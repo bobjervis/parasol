@@ -625,11 +625,6 @@ public class char {
 	public static char, boolean parse(string text) {
 		long value = 0;
 		int i = 0;
-		boolean negative = false;
-		if (text[i] == '-') {
-			negative = true;
-			i++;
-		}
 		for (; i < text.length(); i++) {
 			byte x = text[i];
 			if (x.isDigit())
@@ -637,8 +632,6 @@ public class char {
 			else
 				return 0, false;
 		}
-		if (negative)
-			value = -value;
 		if (value != char(value))
 			return 0, false;
 		return char(value), true;
@@ -647,11 +640,6 @@ public class char {
 	public static char, boolean parse(string text, int radix) {
 		long value = 0;
 		int i = 0;
-		boolean negative = false;
-		if (text[i] == '-') {
-			negative = true;
-			i++;
-		}
 		for (; i < text.length(); i++) {
 			byte x = text[i];
 			int digit;
@@ -665,8 +653,6 @@ public class char {
 				return 0, false;
 			value = value * radix + digit;
 		}
-		if (negative)
-			value = -value;
 		if (value != char(value))
 			return 0, false;
 		return char(value), true;
@@ -675,11 +661,6 @@ public class char {
 	public static char, boolean parse(substring text) {
 		long value = 0;
 		int i = 0;
-		boolean negative = false;
-		if (text.c_str()[i] == '-') {
-			negative = true;
-			i++;
-		}
 		for (; i < text.length(); i++) {
 			byte x = text.c_str()[i];
 			if (x.isDigit())
@@ -687,8 +668,6 @@ public class char {
 			else
 				return 0, false;
 		}
-		if (negative)
-			value = -value;
 		if (value != char(value))
 			return 0, false;
 		return char(value), true;
@@ -697,11 +676,6 @@ public class char {
 	public static char, boolean parse(substring text, int radix) {
 		long value = 0;
 		int i = 0;
-		boolean negative = false;
-		if (text.c_str()[i] == '-') {
-			negative = true;
-			i++;
-		}
 		for (; i < text.length(); i++) {
 			byte x = text.c_str()[i];
 			int digit;
@@ -715,8 +689,6 @@ public class char {
 				return 0, false;
 			value = value * radix + digit;
 		}
-		if (negative)
-			value = -value;
 		if (value != char(value))
 			return 0, false;
 		return char(value), true;
@@ -753,6 +725,78 @@ public class unsigned {
 	
 //	public unsigned(unsigned value) {
 //	}
+
+	public static unsigned, boolean parse(string text) {
+		long value = 0;
+		int i = 0;
+		for (; i < text.length(); i++) {
+			byte x = text[i];
+			if (x.isDigit())
+				value = value * 10 + (x - '0');
+			else
+				return 0, false;
+		}
+		if (value != unsigned(value))
+			return 0, false;
+		return unsigned(value), true;
+	}
+
+	public static unsigned, boolean parse(string text, int radix) {
+		long value = 0;
+		int i = 0;
+		for (; i < text.length(); i++) {
+			byte x = text[i];
+			int digit;
+			if (x.isDigit())
+				digit = x - '0';
+			else if (x.isAlpha())
+				digit = 10 + (x.toLowercase() - 'a');
+			else
+				return 0, false;
+			if (digit >= radix)
+				return 0, false;
+			value = value * radix + digit;
+		}
+		if (value != unsigned(value))
+			return 0, false;
+		return unsigned(value), true;
+	}
+
+	public static unsigned, boolean parse(substring text) {
+		long value = 0;
+		int i = 0;
+		for (; i < text.length(); i++) {
+			byte x = text.c_str()[i];
+			if (x.isDigit())
+				value = value * 10 + (x - '0');
+			else
+				return 0, false;
+		}
+		if (value != unsigned(value))
+			return 0, false;
+		return unsigned(value), true;
+	}
+
+	public static unsigned, boolean parse(substring text, int radix) {
+		long value = 0;
+		int i = 0;
+		for (; i < text.length(); i++) {
+			byte x = text.c_str()[i];
+			int digit;
+			if (x.isDigit())
+				digit = x - '0';
+			else if (x.isAlpha())
+				digit = 10 + (x.toLowercase() - 'a');
+			else
+				return 0, false;
+			if (digit >= radix)
+				return 0, false;
+			value = value * radix + digit;
+		}
+		if (value != unsigned(value))
+			return 0, false;
+		return unsigned(value), true;
+	}
 
 	public int compare(unsigned other) {
 		return int(*this - other);

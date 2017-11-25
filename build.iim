@@ -1,3 +1,30 @@
+package(name: parasol, domain: parasol) {
+	folder(name: bin) {
+		file(name: dumppxi, src: bin)
+		file(name: genhdr, src: bin)
+		file(name: parasolrt, src:bin)
+		file(name: pc, src: bin)
+		file(name: rebuild, src: bin)
+		file(name: runets, src: bin)
+		file(name: unit, src: bin)
+		file(name: x86-64-lnx.pxi, src:bin)
+	}
+	folder(name: compiler) {
+		file(name: main.p, src: compiler)
+	}
+	folder(name: lib) {
+		file(name: root.p, src: lib)
+	}
+	folder(name: src) {
+		folder(name: lib) {
+			file(name: *, src: src/lib)
+		}
+		folder(name: util) {
+			file(name: *, src: src/util)
+		}
+	}
+}
+
 target(os: linux, cpu: x86-64) {
 	package(name: parasol, domain: parasol) {
 		folder(name: bin) {

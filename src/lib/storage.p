@@ -51,7 +51,7 @@ string absolutePath(string filename) {
 		return buffer.toLower();
 	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
 		pointer<byte> f = linux.realpath(filename.c_str(), null);
-		string result = string(f);
+		string result(f);
 		C.free(f);
 		return result;
 	} else

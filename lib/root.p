@@ -253,7 +253,15 @@ class vector<class E, class I> {
 		}
 		return _length;
 	}
-	
+
+	public I find(E key, I startAt) {
+		for (long i = I(startAt); i < long(_length); i++) {
+			if (_data[I(i)] == key)
+				return I(i);
+		}
+		return _length;
+	}
+
 	public E get(I index) {
 		return _data[int(index)];
 	}

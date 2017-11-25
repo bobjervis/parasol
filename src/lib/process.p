@@ -78,23 +78,35 @@ public boolean isPrivileged() {
 init();
 private void init() {
 	if (runtime.compileTarget == SectionType.X86_64_LNX) {
-		linux.struct_sigaction action;
-		
-		action.set_sa_sigaction(sigChldHandler);
-		action.sa_flags = linux.SA_SIGINFO;
-		int result = linux.sigaction(linux.SIGCHLD, &action, null);
-		if (result != 0) {
-			printf("Failed to register SIGCHLD handler: %d\n", result);
-			linux.perror("From sigaction".c_str());
-		}
+//		linux.struct_sigaction action;
+		linux.sigset_t set;
+
+		// Mask SIGCHLD - we will spawn a waiter thread as soon as we exec a process. 
+
+		linux.sigemptyset(&set);
+		linux.sigaddset(&set, linux.SIGCHLD);
+		linux.pthread_sigmask(linux.SIG_BLOCK, &set, null);
+
+//		action.set_sa_sigaction(sigChldHandler);
+//		action.sa_flags = linux.SA_SIGINFO;
+//		int result = linux.sigaction(linux.SIGCHLD, &action, null);
+//		if (result != 0) {
+//			printf("Failed to register SIGCHLD handler: %d\n", result);
+//			linux.perror("From sigaction".c_str());
+//		}
 	}
 }
 
 public class Process {
 	private DrainData _stdout;
 	private ref<Thread> _drainer;
+	private linux.pid_t _pid;
 
 	public Process() {
+	}
+
+	~Process() {
+		pendingChildren.cancelChild(_pid);
 	}
 
 	public boolean spawn(string command, string... args) {
@@ -120,8 +132,6 @@ public class Process {
 
 			pointer<pointer<byte>> argv = &fullArgs[0];
 
-			linux.pid_t pid;
-
 // TODO: Implement some scheme to capture the command output.
 
 //			int[] pipefd;
@@ -134,67 +144,141 @@ public class Process {
 			for (int i = 0; i < args.length(); i++)
 				printf(" '%s'", args[i]);
 			printf("\n");
-			pid = linux.fork();
-			if (pid == 0) {
-//				linux.close(pipefd[0]);
-//				linux.dup2(pipefd[1], 1);
-//				linux.dup2(pipefd[1], 2);
-				// This is the child process
-				if (workingDirectory != null) {
-					linux.chdir(workingDirectory.c_str());
-				}
-				if (environ != null) {
-					for (int i = 0; i < environ.length(); i++) {
-						int idx = (*environ)[i].indexOf('=');
-						if (idx < 0)
-							environment.set((*environ)[i], "");
-						else
-							environment.set((*environ)[i].substring(0, idx), (*environ)[i].substring(idx + 1));
+
+			// This will guarantee that our handler does not race the SIG_CHLD signal
+			lock (pendingChildren) {
+				_pid = linux.fork();
+				if (_pid == 0) {
+	//				linux.close(pipefd[0]);
+	//				linux.dup2(pipefd[1], 1);
+	//				linux.dup2(pipefd[1], 2);
+					// This is the child process
+					if (workingDirectory != null) {
+						linux.chdir(workingDirectory.c_str());
 					}
-				}
-				linux.execv(argv[0], argv);
-				linux._exit(-1);
-			} else {
-//				linux.close(pipefd[1]);
+					if (environ != null) {
+						for (int i = 0; i < environ.length(); i++) {
+							int idx = (*environ)[i].indexOf('=');
+							if (idx < 0)
+								environment.set((*environ)[i], "");
+							else
+								environment.set((*environ)[i].substring(0, idx), (*environ)[i].substring(idx + 1));
+						}
+					}
+					linux.execv(argv[0], argv);
+					linux._exit(-1);
+				} else {
+					ref<PendingChild> pc = new PendingChild;
+					pc.pid = _pid;
+					pc.handler = sigChldHandlerWrapper;
+					pc.arg = this;
 
-//				_drainer = new Thread();
-//				_stdout.fd = pipefd[0];
-
-//				_drainer.start(drain, &_stdout);
-/*
-				linux.pid_t terminatedPid = linux.waitpid(pid, &exitStatus, 0);
-				if (terminatedPid != pid)
-					return -3, null, exception_t.NO_EXCEPTION;
-				_drainer.join();
-				delete _drainer;
-				linux.close(_stdout.fd);
-				if (linux.WIFEXITED(exitStatus))
-					return linux.WEXITSTATUS(exitStatus), d.output, exception_t.NO_EXCEPTION;
-				else {
-					int signal = linux.WTERMSIG(exitStatus);
-					if (signal == linux.SIGABRT)
-						return -1, d.output, exception_t.ABORT;
-					else if (signal == linux.SIGSEGV)
-						return -1, d.output, exception_t.ACCESS_VIOLATION;
-					else
-						return -1, d.output, exception_t.UNKNOWN_EXCEPTION;
+					pendingChildren.declareChild(pc);
+	//				linux.close(pipefd[1]);
+	
+	//				_drainer = new Thread();
+	//				_stdout.fd = pipefd[0];
+	
+	//				_drainer.start(drain, &_stdout);
+	/*
+					linux.pid_t terminatedPid = linux.waitpid(pid, &exitStatus, 0);
+					if (terminatedPid != pid)
+						return -3, null, exception_t.NO_EXCEPTION;
+					_drainer.join();
+					delete _drainer;
+					linux.close(_stdout.fd);
+					if (linux.WIFEXITED(exitStatus))
+						return linux.WEXITSTATUS(exitStatus), d.output, exception_t.NO_EXCEPTION;
+					else {
+						int signal = linux.WTERMSIG(exitStatus);
+						if (signal == linux.SIGABRT)
+							return -1, d.output, exception_t.ABORT;
+						else if (signal == linux.SIGSEGV)
+							return -1, d.output, exception_t.ACCESS_VIOLATION;
+						else
+							return -1, d.output, exception_t.UNKNOWN_EXCEPTION;
+					}
+	 */
 				}
- */
 			}
 			return true;		// Only the parent process gets here.
 		}
 		return false;
 	}
-}
-/**
- * Our SIGCHLD handler does nothing but return
- */
-private void sigChldHandler(int x, ref<linux.siginfo_t> rawInfo, address arg) {
-	ref<linux.siginfo_t_sigchld> info = ref<linux.siginfo_t_sigchld>(rawInfo);
-//	printf("sigChldHandler pid = %d: %d\n", info.si_pid, info.si_status);
+
+	private static void sigChldHandlerWrapper(ref<linux.siginfo_t_sigchld> info, address arg) {
+		ref<Process>(arg).sigChldHandler(info);
+	}
+
+	private void sigChldHandler(ref<linux.siginfo_t_sigchld> info) {
+		printf("sigChldHandler pid = %d: %d\n", info.si_pid, info.si_status);
+	}
 }
 
+private monitor class PendingChildren {
+	private ref<PendingChild>[] _children;
+	private ref<Thread> _waiter;
 
+	void declareChild(ref<PendingChild> pc) {
+		if (_waiter == null) {
+			_waiter = new Thread();
+			_waiter.start(childWaiter, null);
+		}
+		for (int i = 0; i < _children.length(); i++)
+			if (_children[i] == null) {
+				_children[i] = pc;
+				return;
+			}
+		_children.append(pc);
+	}
+
+	void cancelChild(linux.pid_t pid) {
+		for (int i = 0; i < _children.length(); i++)
+			if (_children[i] != null && _children[i].pid == pid) {
+				_children[i].handler = null;
+				return;
+			}
+	}
+
+	void reportChildStateChange(linux.pid_t pid, ref<linux.siginfo_t_sigchld> info) {
+		if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			for (int i = 0; i < _children.length(); i++)
+				if (_children[i] != null && _children[i].pid == pid) {
+					if (_children[i].handler != null)
+						_children[i].handler(info, _children[i].arg);
+					delete _children[i];
+					_children[i] = null;
+					int exitStatus;
+					if (linux.WIFEXITED(info.si_status))
+						linux.waitpid(pid, &exitStatus, 0);
+					return;
+				}
+		}
+	}
+}
+
+private void childWaiter(address arg) {
+	if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		linux.sigset_t set;
+		linux.siginfo_t_sigchld info;
+	
+		linux.sigemptyset(&set);
+		linux.sigaddset(&set, linux.SIGCHLD);
+		for (;;) {
+			// A return value less than zerro can only be EINTR, which just requires that we retry
+			if (linux.sigwaitinfo(&set, &info) >= 0)
+				pendingChildren.reportChildStateChange(info.si_pid, &info);
+		}
+	}
+}
+
+private PendingChildren pendingChildren;
+
+private class PendingChild {
+	public linux.pid_t pid;
+	public void (ref<linux.siginfo_t_sigchld>, address) handler;
+	public address arg;
+}
 
 public int debugSpawn(string command, ref<string> output, ref<exception_t> outcome, time.Time timeout) {
 	SpawnPayload payload;

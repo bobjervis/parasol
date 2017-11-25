@@ -179,6 +179,9 @@ public abstract int pthread_mutexattr_settype(ref<pthread_mutexattr_t> attr, int
 @Linux("libpthread.so.0", "pthread_self")
 public abstract pthread_t pthread_self();
 
+@Linux("libpthread.so.0", "pthread_sigmask")
+public abstract pthread_t pthread_sigmask(int how, ref<sigset_t> set, ref<sigset_t> oldset);
+
 @Linux("libc.so.6", "read")
 public abstract int read(int fd, address buffer, long bufferSize);
 
@@ -217,6 +220,9 @@ public abstract int setuid(uid_t uid);
 
 @Linux("libc.so.6", "sigaction")
 public abstract int sigaction(int signum, ref<struct_sigaction> act, ref<struct_sigaction> oldact);
+
+@Linux("libc.so.6", "sigwaitinfo")
+public abstract int sigwaitinfo(ref<sigset_t> set, ref<siginfo_t> info);
 
 @Linux("libc.so.6", "symlink")
 public abstract int symlink(pointer<byte> oldpath, pointer<byte> newpath);
@@ -523,6 +529,17 @@ public int SIGPWR = 30;		/* Power failure restart (System V).  */
 public int SIGSYS = 31;		/* Bad system call.  */
 @Constant
 public int SIGUNUSED = 31;
+
+/* 'How' parameter to sigprocmask or pthread_sigmask */
+
+@Constant
+public int SIG_BLOCK = 0;
+
+@Constant
+public int SIG_UNBLOCK = 1;
+
+@Constant
+public int SIG_SETMASK = 2;
 
 /* Bits in `sa_flags'.  */
 @Constant
@@ -843,6 +860,30 @@ public class sigset_t {
 	private long _word15; 
 }
 
+@Linux("libc.so.6", "sigemptyset")
+public abstract int sigemptyset(ref<sigset_t> set);
+
+@Linux("libc.so.6", "sigfillset")
+public abstract int sigfillset(ref<sigset_t> set);
+
+@Linux("libc.so.6", "sigaddset")
+public abstract int sigaddset(ref<sigset_t> set, int signum);
+
+@Linux("libc.so.6", "sigdelset")
+public abstract int sigdelset(ref<sigset_t> set, int signum);
+
+@Linux("libc.so.6", "sigismember")
+public abstract int sigismember(ref<sigset_t> set, int signum);
+
+@Linux("libc.so.6", "sigisemptyset")
+public abstract int sigisemptyset(ref<sigset_t> set);
+
+@Linux("libc.so.6", "sigandset")
+public abstract int sigandset(ref<sigset_t> dest, ref<sigset_t> left, ref<sigset_t> right);
+
+@Linux("libc.so.6", "sigorset")
+public abstract int sigorset(ref<sigset_t> dest, ref<sigset_t> left, ref<sigset_t> right);
+
 public class struct_sigaction {
 	private address _handler;
 	public sigset_t sa_mask;
@@ -870,54 +911,54 @@ public class struct_sigaction {
  * 
  */
 public class siginfo_t {
-    int si_signo;		/* Signal number.  */
-    int si_errno;		/* If non-zero, an errno value associated with
-				   			this signal, as defined in <errno.h>.  */
-    int si_code;		/* Signal code.  */
-	int si_trapno;		/* Trap number. */
+    public int si_signo;		/* Signal number.  */
+    public int si_errno;		/* If non-zero, an errno value associated with
+						   		   this signal, as defined in <errno.h>.  */
+    public int si_code;			/* Signal code.  */
+	public int si_trapno;		/* Trap number. */
 }
 
 public class siginfo_t_kill extends siginfo_t {
-    pid_t si_pid;	/* Sending process ID.  */
-    uid_t si_uid;	/* Real user ID of sending process.  */
+    public pid_t si_pid;		/* Sending process ID.  */
+    public uid_t si_uid;		/* Real user ID of sending process.  */
 }
 
 public class siginfo_t_timer extends siginfo_t {
-    int si_tid;		/* Timer ID.  */
-    int si_overrun;	/* Overrun count.  */
-    sigval_t si_sigval;	/* Signal value.  */
+    public int si_tid;			/* Timer ID.  */
+    public int si_overrun;		/* Overrun count.  */
+    public sigval_t si_sigval;	/* Signal value.  */
 }
 
 public class siginfo_t_rt extends siginfo_t {
-    pid_t si_pid;	/* Sending process ID.  */
-    uid_t si_uid;	/* Real user ID of sending process.  */
-    sigval_t si_sigval;	/* Signal value.  */
+    public pid_t si_pid;		/* Sending process ID.  */
+    public uid_t si_uid;		/* Real user ID of sending process.  */
+    public sigval_t si_sigval;	/* Signal value.  */
 }
 
 public class siginfo_t_sigchld extends siginfo_t {
-    pid_t si_pid;	/* Which child.  */
-    uid_t si_uid;	/* Real user ID of sending process.  */
-    int si_status;	/* Exit value or signal.  */
-    clock_t si_utime;
-    clock_t si_stime;
+    public pid_t si_pid;		/* Which child.  */
+    public uid_t si_uid;		/* Real user ID of sending process.  */
+    public int si_status;		/* Exit value or signal.  */
+    public clock_t si_utime;
+    public clock_t si_stime;
 }
 
 public class siginfo_t_sigfault extends siginfo_t {
-    address si_addr;	/* Faulting insn/memory ref.  */
-    short si_addr_lsb;	/* Valid LSB of the reported address.  */
-    address si_addr_bnd_lower;
-    address si_addr_bnd_upper;
+    public address si_addr;		/* Faulting insn/memory ref.  */
+    public short si_addr_lsb;	/* Valid LSB of the reported address.  */
+    public address si_addr_bnd_lower;
+    public address si_addr_bnd_upper;
 }
 
 public class siginfo_t_sigpoll extends siginfo_t {
-    int si_band;	/* Band event for SIGPOLL.  */
-    int si_fd;
+    public int si_band;			/* Band event for SIGPOLL.  */
+    public int si_fd;
 }
 
 public class siginfo_t_sigsys extends siginfo_t {
-    address _call_addr;	/* Calling user insn.  */
-    int _syscall;	/* Triggering system call number.  */
-    unsigned _arch; /* AUDIT_ARCH_* of syscall.  */
+    public address _call_addr;	/* Calling user insn.  */
+    public int _syscall;		/* Triggering system call number.  */
+    public unsigned _arch;		/* AUDIT_ARCH_* of syscall.  */
 }
 
 public class sigval_t = address;		// in C actually a union
