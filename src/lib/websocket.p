@@ -27,6 +27,7 @@ import parasol:random.Random;
 import parasol:text;
 import parasol:thread;
 import parasol:thread.Thread;
+import parasol:thread.currentThread;
 import parasol:types.Queue;
 
 private monitor class WebSocketServiceData {
@@ -113,7 +114,36 @@ public string computeWebSocketAccept(string webSocketKey) {
 	return base64encode(hash);
 }
 
-public class WebSocket {
+private monitor class WebSocketVolatileData {
+	protected int _waitingWrites;
+	private boolean _shuttingDown;
+
+	public boolean stopWriting() {
+		if (_shuttingDown)
+			return false;
+		_shuttingDown = true;
+		if (_waitingWrites > 0)
+			wait();
+		return true;
+	}
+
+	public boolean enqueueWrite() {
+		if (_shuttingDown)
+			return false;
+		_waitingWrites++;
+		return true;
+	}
+
+	public void writeFinished() {
+		if (_waitingWrites <= 0)
+			assert(false);
+		_waitingWrites--;
+		if (_shuttingDown && _waitingWrites == 0)
+			notify();
+	}
+}
+
+public class WebSocket extends WebSocketVolatileData {
 //	@Constant
 	public static byte OP_STRING = 1;
 //	@Constant
@@ -124,6 +154,8 @@ public class WebSocket {
 	public static byte OP_PING = 9;
 //	@Constant
 	public static byte OP_PONG = 10;
+//	@Constant
+	public static byte OP_SHUTDOWN = 255;			// Not really a Web Socket operation - used internally
 
 //	@Constant
 	public static short CLOSE_NORMAL = 1000;
@@ -149,6 +181,26 @@ public class WebSocket {
 		_incomingData.resize(1024);
 	}
 
+	~WebSocket() {
+		if (_readerThread != null) {
+			// I am counting on this being in a race with the readWrapper below, but that I don't case
+			// if I lose. There are two scenarios to trigger a destructor call:
+			//	a. We got an EOF on the reader thread. If that's the case, then _reader should be null
+			//	   by the time we get here.
+			// 	b. The creator of this web socket has decided that they are done with the object, so
+			//	   there is no need for any further message exchange, except an OP_CLOSE from us.
+			//	   The catch with this case is that any number of issues could drop the connection and
+			//	   cause the reader thread to stop the moment the _reader test is applied. Thus, any effort
+			//	   to transmit an OP_CLOSE control frame will be pointless. Tht's fortunately the key
+			//	   phrase: pointless, not harmful.
+			if (_reader != null)
+				shutDown(CLOSE_NORMAL, "normal close");
+
+			_readerThread.join();
+			stopWriting();
+		}
+	}
+
 	public boolean startReader(WebSocketReader reader) {
 		if (_readerThread != null)
 			return false;
@@ -159,7 +211,9 @@ public class WebSocket {
 	}
 
 	private static void readWrapper(address arg) {
+//		printf("%s %p reader thread starting readMessages...\n", currentThread().name(), arg);
 		ref<WebSocket>(arg)._reader.readMessages();
+		ref<WebSocket>(arg)._reader = null;
 	}
 	/**
 	 * readWholeMessage
@@ -175,7 +229,7 @@ public class WebSocket {
 	 *				a 'close' control message and then close the connection.
 	 *
 	 * Note: in the current implementation, only one of the two flags can be true. If both are false, the
-	 * appropriate action is to send a'close' control message and close the connection.
+	 * appropriate action is to send a 'close' control message and close the connection.
 	 */
 	public boolean, boolean readWholeMessage(ref<byte[]> buffer) {
 		boolean initialFrame = true;
@@ -297,11 +351,12 @@ public class WebSocket {
 		switch (opcode & 0x7f) {
 		case 8:				// connection close
 			buffer.resize(offset);
-			shutDown(CLOSE_NORMAL, "Responding to close");
-			return true, 8, true;
+			return true, OP_CLOSE, true;
 			
 		case 9:				// ping
-			send(OP_PONG, &(*buffer)[offset], int(payloadLength));
+			string pong(&(*buffer)[offset], int(payloadLength));
+
+			writer.write(new Operation(this, OP_PONG, pong));
 			buffer.resize(offset);
 			return false, OP_PING, true;
 			
@@ -379,6 +434,7 @@ public class WebSocket {
 	
 	private int getc() {
 		if (_incomingCursor >= _incomingLength) {
+//			printf("About to read from connection %p\n", _connection);
 			_incomingLength = _connection.read(&_incomingData[0], _incomingData.length());
 			if (_incomingLength <= 0) {
 				if (_incomingLength < 0) {
@@ -403,16 +459,11 @@ public class WebSocket {
 
 	public void shutDown(short cause, string reason) {
 		writer.write(new Operation(this, cause, reason));
-	}
-
-	void close(ref<Operation> op) {
-		byte[] closeFrame;
-
-//		printf("websocket shutDown (%d, %s)\n", op.cause, op.message);
-		networkOrder(&closeFrame, op.cause);
-		networkOrder(&closeFrame, op.message);
-		op.webSocket.send(OP_CLOSE, &closeFrame[0], closeFrame.length());
-		op.webSocket._connection.close();
+//		if (_readerThread != null) {
+//			printf("%s %p Waiting on reader thread...\n", currentThread().name(), this);
+//			_readerThread.join();
+//			printf("%s %p Reader thread joined.\n", currentThread().name(), this);
+//		}
 	}
 	/**
 	 * send
@@ -615,23 +666,48 @@ class Operation {
 
 monitor class MessageWriter {
 	ref<Thread> _writeThread;
-	
+
 	Queue<ref<Operation>> _q;
 
 	void write(ref<Operation> op) {
+//		printf("%s %p writer.write\n", currentThread().name(), this);
 		if (_writeThread == null) {
-			_writeThread = new Thread();
+			_writeThread = new Thread("WebSocketWriter");
 			_writeThread.start(writeWrapper, null);
 		}
-		_q.enqueue(op);
-		notify();
+		if (op.webSocket == null || op.webSocket.enqueueWrite()) {
+			_q.enqueue(op);
+//			printf("%s %p notify...\n", currentThread().name(), this);
+			notify();
+		} else
+			delete op;
 	}
 
 	ref<Operation> dequeue() {
+//		printf("%s %p dequeue...\n", currentThread().name(), this);
 		wait();
+//		printf("%s %p un-waited...\n", currentThread().name(), this);
 		return _q.dequeue();
 	}
+
+	ref<Thread> active() {
+//		printf("%s %p trying to shutdown! writeThread = %p\n", currentThread().name(), this, _writeThread);
+		return _writeThread;
+	}
 }
+
+class MessageWriterShutDown {
+	~MessageWriterShutDown() {
+		ref<Thread> t = writer.active();
+		if (t != null) {
+			writer.write(new Operation(null, WebSocket.OP_SHUTDOWN, null));
+			t.join();
+			delete t;
+		}
+	}
+	
+}
+
 /**
  * writeWrapper
  *
@@ -640,18 +716,27 @@ monitor class MessageWriter {
  */
 void writeWrapper(address arg) {
 	for (;;) {
+//		printf("%s writer waiting...\n", currentThread().name());
 		ref<Operation> op = writer.dequeue();
+//		printf("%s writer got something to write %d\n", currentThread().name(), op.opcode);
 		if (op.opcode == WebSocket.OP_CLOSE) {
-			op.webSocket.close(op);
-		} else {
-			string msg = op.message;
-			if (msg.length() > 200)
-				msg = msg.substring(0, 200) + "...";
+			byte[] closeFrame;
+
+			networkOrder(&closeFrame, op.cause);
+			networkOrder(&closeFrame, op.message);
+			op.webSocket.send(WebSocket.OP_CLOSE, &closeFrame[0], closeFrame.length());
+		} else if (op.opcode == WebSocket.OP_SHUTDOWN) {
+//			printf("%s shutting down...\n", currentThread().name());
+			delete op;
+			break;
+		} else
 			op.webSocket.send(op.opcode, &op.message[0], op.message.length());
-		}
+		op.webSocket.writeFinished();
 		delete op;
 	}
 }
 
 MessageWriter writer;
+
+private MessageWriterShutDown writerShutDown;
 

@@ -297,6 +297,10 @@ class Connection {
 		_acceptfd = acceptfd;
 	}
 
+	~Connection() {
+		printf("~Connection %p\n", this);
+	}
+
 	public int requestFd() {
 		return _acceptfd;
 	}
@@ -633,7 +637,9 @@ class SSLConnection extends Connection {
 
 	public int read(pointer<byte> buffer, int length) {
 		for (;;) {
+//			text.printf("about to SSL_read\n");
 			int x = ssl.SSL_read(_ssl, buffer, length);
+//			text.printf("Got %d bytes\n", x);
 			if (x < 0) {
 				if (x == -1) {
 					// If the failure was caused by an interrupted system call, just re-start the read.
@@ -675,6 +681,7 @@ class SSLConnection extends Connection {
 	}
 
 	public void close() {
+		text.printf("SSL_close\n");
 		ssl.SSL_free(_ssl);
 		net.closesocket(_acceptfd);
 	}

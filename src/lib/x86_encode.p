@@ -4115,6 +4115,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLAGS:
 		case	ENUM:
 		case	TYPEDEF:
+		case	INTERFACE:
 		case	CLASS:			return CC.JE; 
 		default:
 			printf("continuation(%s,", string(compare));

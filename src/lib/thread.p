@@ -221,6 +221,10 @@ public class Thread {
 			address retval;
 			
 			int result = linux.pthread_join(_threadId, &retval);
+			if (result != 0) {
+				printf("%s pthread_join %s: %d\n", currentThread().name(), _name, result);
+				assert(false);
+			}
 		}
 	}
 	
@@ -339,18 +343,18 @@ public class Monitor {
 	}
 	
 	public void wait() {
-//		printf("entering wait\n");
+//		printf("%s %p entering wait\n", currentThread().name(), this);
 		_mutex.take();
-//		printf("taken\n");
+//		printf("%s %p taken\n", currentThread().name(), this);
 		_waiting++;
 		int level = _mutex.releaseForWait();
-//		printf("mutex %s\n", _mutex.isLocked() ? "isLocked" : "is not locked");
+//		printf("%s %p mutex %s\n", currentThread().name(), this, _mutex.isLocked() ? "isLocked" : "is not locked");
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 			WaitForSingleObject(_semaphore, INFINITE);
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
 			linux.sem_wait(&_linuxSemaphore);
 		}
-//		printf("Got the semaphore\n");
+//		printf("%s %p Got the semaphore: level %d\n", currentThread().name(), this, level);
 		_mutex.takeAfterWait(level - 1);
 	}
 	
@@ -495,12 +499,13 @@ class Mutex {
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 			WaitForSingleObject(_mutex, INFINITE);
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+//			printf("%p try lock by %s (level = %d)\n", this, currentThread() != null ? currentThread().name() : "?", _level);
 			int x = linux.pthread_mutex_lock(&_linuxMutex);
 			assert(x == 0);
 		}
 		_level++;
 		_owner = currentThread();
-//		printf("%p take by %s (level = %d)\n", this, _owner.name(), _level);
+//		printf("%p take by %s (level = %d)\n", this, _owner != null ? _owner.name() : "?", _level);
 	}
 	
 	void release() {

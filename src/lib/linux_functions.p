@@ -20,6 +20,7 @@ import native:C.size_t;
 class pid_t = int;
 class pthread_t = address;
 class uid_t = unsigned;
+class gid_t = unsigned;
 class useconds_t = unsigned;
 class mode_t = unsigned;
 class fsblkcnt_t = long;
@@ -82,6 +83,9 @@ public abstract pointer<byte> getcwd(pointer<byte> buf, long len);
 
 @Linux("libc.so.6", "geteuid")
 public abstract uid_t geteuid();
+
+@Linux("libc.so.6", "getgrouplist")
+public abstract uid_t getgrouplist(pointer<byte> user, gid_t group, pointer<gid_t> groups, ref<int> ngroups);
 
 @Linux("libc.so.6", "gethostname")
 public abstract int gethostname(pointer<byte> name, size_t len);
@@ -1044,6 +1048,16 @@ public boolean S_ISSOCK(unsigned mode) {
 	return (mode & S_IFMT) == S_IFSOCK;
 }
 
+public class passwd {
+	pointer<byte> pw_name;
+	pointer<byte> pw_passwd;
+	uid_t pw_uid;
+	gid_t pw_gid;
+	pointer<byte> pw_gecos;
+	pointer<byte> pw_dir;
+	pointer<byte> pw_shell;
+}
+
 @Constant
 public int CLOCK_REALTIME = 0;
 
@@ -1106,5 +1120,44 @@ enum SysConf {
 	_SC_PII_SOCKET,
 	_SC_PII_INTERNET,
 	_SC_PII_OSI,
+	_SC_POLL,
+	_SC_SELECT,
+	_SC_UID_MAXIOV,
+	_SC_PII_INTERNET_STREAM,
+	_SC_PII_INTERNET_DGRAM,
+	_SC_PII_OSI_COTS,
+	_SC_PII_OSI_CLTS,
+	_SC_PII_OSI_M,
+	_SC_T_IOV_MAX,
+	_SC_THREADS,
+	_SC_THREAD_SAFE_FUNCTIONS,
+	_SC_GETGR_R_SIZE_MAX,
+	_SC_GETPW_R_SIZE_MAX,
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+	
+	
+	
+
+	
+	
+	
+	
+	
+	
+	
 	// ... plus a lot more than I have the energy to enter today.
 }
+
