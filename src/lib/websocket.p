@@ -196,9 +196,12 @@ public class WebSocket extends WebSocketVolatileData {
 			if (_reader != null)
 				shutDown(CLOSE_NORMAL, "normal close");
 
+//			printf("about to join...\n");
 			_readerThread.join();
-			stopWriting();
 		}
+//		printf("about to stop writing...\n");
+		stopWriting();
+//		printf("Socket cleaned up!\n");
 	}
 
 	public boolean startReader(WebSocketReader reader) {
@@ -212,7 +215,9 @@ public class WebSocket extends WebSocketVolatileData {
 
 	private static void readWrapper(address arg) {
 //		printf("%s %p reader thread starting readMessages...\n", currentThread().name(), arg);
-		ref<WebSocket>(arg)._reader.readMessages();
+		boolean sawClose = ref<WebSocket>(arg)._reader.readMessages();
+		if (sawClose)
+			ref<WebSocket>(arg).shutDown(CLOSE_NORMAL, "normal close");
 		ref<WebSocket>(arg)._reader = null;
 	}
 	/**
@@ -567,7 +572,7 @@ private void networkOrder(ref<byte[]> output, string x) {
 }
 
 public interface WebSocketReader {
-	void readMessages();
+	boolean readMessages();
 }
 /**
  * Rendezvous
@@ -698,6 +703,7 @@ monitor class MessageWriter {
 
 class MessageWriterShutDown {
 	~MessageWriterShutDown() {
+//		printf("destructor!\n");
 		ref<Thread> t = writer.active();
 		if (t != null) {
 			writer.write(new Operation(null, WebSocket.OP_SHUTDOWN, null));
@@ -718,7 +724,7 @@ void writeWrapper(address arg) {
 	for (;;) {
 //		printf("%s writer waiting...\n", currentThread().name());
 		ref<Operation> op = writer.dequeue();
-//		printf("%s writer got something to write %d\n", currentThread().name(), op.opcode);
+//		printf("%s writer got something to write opcode %d\n", currentThread().name(), op.opcode);
 		if (op.opcode == WebSocket.OP_CLOSE) {
 			byte[] closeFrame;
 
