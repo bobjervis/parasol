@@ -59,14 +59,32 @@ string absolutePath(string filename) {
 }
 
 
-public boolean makeExecutable(string filename) {
+public boolean setExecutable(string filename, boolean executable) {
 	if (runtime.compileTarget == SectionType.X86_64_WIN) {
 		return false;
 	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
 		linux.statStruct s;
 		if (linux.stat(&filename[0], &s) != 0)
 			return false;
-		return linux.chmod(&filename[0], s.st_mode | (linux.S_IXUSR | linux.S_IXGRP)) == 0;
+		if (executable)
+			return linux.chmod(&filename[0], s.st_mode | (linux.S_IXUSR | linux.S_IXGRP)) == 0;
+		else
+			return linux.chmod(&filename[0], s.st_mode & ~(linux.S_IXUSR | linux.S_IXGRP | linux.S_IXOTH)) == 0;
+	} else
+		return false;
+}
+
+public boolean setReadOnly(string filename, boolean readOnly) {
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		return false;
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		linux.statStruct s;
+		if (linux.stat(&filename[0], &s) != 0)
+			return false;
+		if (readOnly)
+			return linux.chmod(&filename[0], s.st_mode & ~(linux.S_IRUSR | linux.S_IRGRP | linux.S_IROTH)) == 0;
+		else
+			return linux.chmod(&filename[0], s.st_mode | (linux.S_IRUSR | linux.S_IRGRP)) == 0;
 	} else
 		return false;
 }

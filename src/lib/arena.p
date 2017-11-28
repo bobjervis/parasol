@@ -456,7 +456,7 @@ public class Arena {
 	
 	boolean collectStaticInitializers(ref<Target> target) {
 		boolean result = _specialFiles.collectStaticInitializers(target);
-		for (int i = 0; i < _importPath.length(); i++)
+		for (int i = _importPath.length() - 1; i >= 0; i--)
 			result |= _importPath[i].collectStaticInitializers(target);
 		return result;
 	}

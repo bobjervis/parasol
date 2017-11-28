@@ -133,8 +133,10 @@ public class Thread {
 			t._threadHandle = INVALID_HANDLE_VALUE;
 		else if (runtime.compileTarget == SectionType.X86_64_LNX)
 			t._pid = linux.gettid();
-		threads.enlist(t);
 		parasolThread(t);
+//		printf("init of %s\n", t._name);
+		threads.enlist(t);
+//		printf("-\n");
 	}
 
 	public boolean start(void func(address p), address parameter) {

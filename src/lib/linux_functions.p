@@ -754,7 +754,7 @@ public boolean WIFEXITED(int status) {
 
 /* Nonzero if STATUS indicates termination by a signal.  */
 public boolean WIFSIGNALED(int status) {
-  return (((status & 0x7f) + 1) >> 1 << 24 >> 24) > 0;
+  return (((status & 0x7f) + 1) << 24 >> 25) > 0;
 }
 
 /* Nonzero if STATUS indicates the child is stopped.  */
@@ -768,6 +768,10 @@ public boolean WIFCONTINUED(int status) {
 	return status == __W_CONTINUED;
 }
 
+public boolean WCOREDUMP(int status) {
+	return (status & __WCOREFLAG) != 0;
+}
+
 /* Nonzero if STATUS indicates the child dumped core.  */
 //#define	__WCOREDUMP(status)	((status) & __WCOREFLAG)
 
@@ -776,7 +780,8 @@ public boolean WIFCONTINUED(int status) {
 //#define	__W_STOPCODE(sig)	((sig) << 8 | 0x7f)
 @Constant
 private int __W_CONTINUED = 0xffff;
-//#define	__WCOREFLAG		0x80
+@Constant
+private int __WCOREFLAG = 0x80;
 
 @Constant
 public int PTHREAD_MUTEX_NORMAL = 0;

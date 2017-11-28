@@ -149,7 +149,7 @@ public class Exception {
 		printf("\nFATAL: Could not find a stack handler for this address.\n");
 		_exceptionContext.print();
 		print(textStackTrace());
-		process.exit(1);
+//		process.exit(1);
 	}
 	
 	private ref<ExceptionEntry>, pointer<address> crawlStack(pointer<byte> ip, pointer<address> frame, int comparator(address ip, address elem)) {

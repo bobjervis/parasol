@@ -97,16 +97,30 @@ private void init() {
 	}
 }
 
-public class Process {
+private monitor class ProcessVolatileData {
+	int _exitStatus;
+	boolean _running;
+}
+
+public class Process extends ProcessVolatileData {
 	private DrainData _stdout;
 	private ref<Thread> _drainer;
 	private linux.pid_t _pid;
+	private boolean _captureOutput;
 
 	public Process() {
 	}
 
 	~Process() {
 		pendingChildren.cancelChild(_pid);
+		if (_drainer != null) {
+			_drainer.join();
+			delete _drainer;
+		}
+	}
+
+	public void captureOutput() {
+		_captureOutput = true;
 	}
 
 	public boolean spawn(string command, string... args) {
@@ -132,14 +146,15 @@ public class Process {
 
 			pointer<pointer<byte>> argv = &fullArgs[0];
 
-// TODO: Implement some scheme to capture the command output.
+			int[] pipefd;
 
-//			int[] pipefd;
+			if (_captureOutput) {
+				pipefd.resize(2);
 
-//			pipefd.resize(2);
+				if (linux.pipe(&pipefd[0]) < 0)
+					return false;
+			}
 
-//			if (linux.pipe(&pipefd[0]) < 0)
-//				return false;
 			printf("About to exec '%s'", command);
 			for (int i = 0; i < args.length(); i++)
 				printf(" '%s'", args[i]);
@@ -149,10 +164,12 @@ public class Process {
 			lock (pendingChildren) {
 				_pid = linux.fork();
 				if (_pid == 0) {
-	//				linux.close(pipefd[0]);
-	//				linux.dup2(pipefd[1], 1);
-	//				linux.dup2(pipefd[1], 2);
 					// This is the child process
+					if (_captureOutput) {
+						linux.close(pipefd[0]);
+						linux.dup2(pipefd[1], 1);
+						linux.dup2(pipefd[1], 2);
+					}
 					if (workingDirectory != null) {
 						linux.chdir(workingDirectory.c_str());
 					}
@@ -170,35 +187,21 @@ public class Process {
 				} else {
 					ref<PendingChild> pc = new PendingChild;
 					pc.pid = _pid;
-					pc.handler = sigChldHandlerWrapper;
+					pc.handler = processExitInfoWrapper;
 					pc.arg = this;
 
 					pendingChildren.declareChild(pc);
-	//				linux.close(pipefd[1]);
-	
-	//				_drainer = new Thread();
-	//				_stdout.fd = pipefd[0];
-	
-	//				_drainer.start(drain, &_stdout);
-	/*
-					linux.pid_t terminatedPid = linux.waitpid(pid, &exitStatus, 0);
-					if (terminatedPid != pid)
-						return -3, null, exception_t.NO_EXCEPTION;
-					_drainer.join();
-					delete _drainer;
-					linux.close(_stdout.fd);
-					if (linux.WIFEXITED(exitStatus))
-						return linux.WEXITSTATUS(exitStatus), d.output, exception_t.NO_EXCEPTION;
-					else {
-						int signal = linux.WTERMSIG(exitStatus);
-						if (signal == linux.SIGABRT)
-							return -1, d.output, exception_t.ABORT;
-						else if (signal == linux.SIGSEGV)
-							return -1, d.output, exception_t.ACCESS_VIOLATION;
-						else
-							return -1, d.output, exception_t.UNKNOWN_EXCEPTION;
+					lock (*this) {
+						_running = true;
 					}
-	 */
+					if (_captureOutput) {
+						linux.close(pipefd[1]);
+	
+						_drainer = new Thread();
+						_stdout.fd = pipefd[0];
+	
+						_drainer.start(drain, &_stdout);
+					}
 				}
 			}
 			return true;		// Only the parent process gets here.
@@ -206,14 +209,41 @@ public class Process {
 		return false;
 	}
 
-	private static void sigChldHandlerWrapper(ref<linux.siginfo_t_sigchld> info, address arg) {
-		ref<Process>(arg).sigChldHandler(info);
+	public int waitForExit() {
+		lock (*this) {
+			if (_running)
+				wait();
+			return _exitStatus;
+		}
 	}
 
-	private void sigChldHandler(ref<linux.siginfo_t_sigchld> info) {
-		printf("sigChldHandler pid = %d: %d\n", info.si_pid, info.si_status);
+	public string collectOutput() {
+		if (!_captureOutput)
+			return null;
+		_drainer.join();
+		delete _drainer;
+		_drainer = null;
+		linux.close(_stdout.fd);
+		return _stdout.output;
+	}
+
+	private static void processExitInfoWrapper(ref<linux.siginfo_t_sigchld> info, address arg) {
+		ref<Process>(arg).processExitInfo(info);
+	}
+
+	protected void processExitInfo(ref<linux.siginfo_t_sigchld> info) {
+		printf("processExitInfo pid = %d: %d\n", info.si_pid, info.si_status);
+		if (linux.WIFEXITED(info.si_status) || linux.WIFSIGNALED(info.si_status)) {
+			lock (*this) {
+				_running = false;
+				_exitStatus = info.si_status;
+				notify();
+			}
+		}
 	}
 }
+
+public ref<string[]> useParentEnvironment;
 
 private monitor class PendingChildren {
 	private ref<PendingChild>[] _children;
@@ -246,11 +276,12 @@ private monitor class PendingChildren {
 				if (_children[i] != null && _children[i].pid == pid) {
 					if (_children[i].handler != null)
 						_children[i].handler(info, _children[i].arg);
-					delete _children[i];
-					_children[i] = null;
 					int exitStatus;
-					if (linux.WIFEXITED(info.si_status))
+					if (linux.WIFEXITED(info.si_status) || linux.WIFSIGNALED(info.si_status)) {
 						linux.waitpid(pid, &exitStatus, 0);
+						delete _children[i];
+						_children[i] = null;
+					}
 					return;
 				}
 		}
