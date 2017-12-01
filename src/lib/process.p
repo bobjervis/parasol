@@ -24,6 +24,9 @@ import parasol:memory;
 import parasol:thread.Thread;
 import native:windows;
 import native:linux;
+import native:linux.CLD_EXITED;
+import native:linux.CLD_STOPPED;
+import native:linux.CLD_CONTINUED;
 import native:C;
 
 public string binaryFilename() {
@@ -123,11 +126,26 @@ public class Process extends ProcessVolatileData {
 		_captureOutput = true;
 	}
 
+	public boolean, int execute(string command, string... args) {
+		return execute(null, command, null, args);
+	}
+
+	public boolean, int execute(string workingDirectory, string command, ref<string[string]> environ, string... args) {
+		if (spawn(workingDirectory, command, environ, args)) {
+			int exitStatus = waitForExit();
+			if (exitStatus == 0)
+				return true, 0;
+			else
+				return false, exitStatus;
+		}
+		return false, int.MIN_VALUE;
+	}
+
 	public boolean spawn(string command, string... args) {
 		return spawn(null, command, null, args);
 	}
 
-	public boolean spawn(string workingDirectory, string command, ref<string[]> environ, string... args) {
+	public boolean spawn(string workingDirectory, string command, ref<string[string]> environ, string... args) {
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
 //			SpawnPayload payload;
 			
@@ -154,12 +172,12 @@ public class Process extends ProcessVolatileData {
 				if (linux.pipe(&pipefd[0]) < 0)
 					return false;
 			}
-
+/*
 			printf("About to exec '%s'", command);
 			for (int i = 0; i < args.length(); i++)
 				printf(" '%s'", args[i]);
 			printf("\n");
-
+ */
 			// This will guarantee that our handler does not race the SIG_CHLD signal
 			lock (pendingChildren) {
 				_pid = linux.fork();
@@ -174,13 +192,8 @@ public class Process extends ProcessVolatileData {
 						linux.chdir(workingDirectory.c_str());
 					}
 					if (environ != null) {
-						for (int i = 0; i < environ.length(); i++) {
-							int idx = (*environ)[i].indexOf('=');
-							if (idx < 0)
-								environment.set((*environ)[i], "");
-							else
-								environment.set((*environ)[i].substring(0, idx), (*environ)[i].substring(idx + 1));
-						}
+						for (string[string].iterator i = environ.begin(); i.hasNext(); i.next())
+							environment.set(i.key(), i.get());
 					}
 					linux.execv(argv[0], argv);
 					linux._exit(-1);
@@ -232,18 +245,36 @@ public class Process extends ProcessVolatileData {
 	}
 
 	protected void processExitInfo(ref<linux.siginfo_t_sigchld> info) {
-		printf("processExitInfo pid = %d: %d\n", info.si_pid, info.si_status);
-		if (linux.WIFEXITED(info.si_status) || linux.WIFSIGNALED(info.si_status)) {
+//		printf("processExitInfo pid = %d: %d %d\n", info.si_pid, info.si_code, info.si_status);
+		switch (info.si_code) {
+		case CLD_STOPPED:
+		case CLD_CONTINUED:
+			break;
+
+		case CLD_EXITED:
 			lock (*this) {
 				_running = false;
 				_exitStatus = info.si_status;
 				notify();
 			}
+			break;
+
+		default:
+			lock (*this) {
+				_running = false;
+				_exitStatus = -info.si_status;
+				notify();
+			}
+			break;
 		}
 	}
 }
-
-public ref<string[]> useParentEnvironment;
+/**
+ *	Use this as the third parameter to the Process.spawn or Process.execute methods to provide
+ *	a self-documenting value where 'null' might cause confusion (or where the compiler needs help).
+ *	The equivalent (but not at all obvious) expression is: ref<string[string]>(null).
+ */
+public ref<string[string]> useParentEnvironment;
 
 private monitor class PendingChildren {
 	private ref<PendingChild>[] _children;

@@ -568,6 +568,20 @@ public int SA_ONESHOT = SA_RESETHAND;
 public int SA_STACK = SA_ONSTACK;
 
 @Constant
+public int	CLD_EXITED = 1;               /* Child has exited.  */
+@Constant
+public int	CLD_KILLED = 2;               /* Child was killed.  */
+@Constant
+public int	CLD_DUMPED = 3;               /* Child terminated abnormally.  */
+@Constant
+public int	CLD_TRAPPED = 4;              /* Traced child has trapped.  */
+@Constant
+public int	CLD_STOPPED = 5;              /* Child has stopped.  */
+@Constant
+public int	CLD_CONTINUED = 6;            /* Stopped child has continued.  */
+
+
+@Constant
 public int _NSIG = 65;	/* Biggest signal number + 1 */
 /*
 #define	EPERM		 1	/* Operation not permitted */
@@ -1140,28 +1154,6 @@ enum SysConf {
 	_SC_GETPW_R_SIZE_MAX,
 
 
-
-
-
-
-
-
-
-
-
-
-
-	
-	
-	
-	
-
-	
-	
-	
-	
-	
-	
 	
 	// ... plus a lot more than I have the energy to enter today.
 }

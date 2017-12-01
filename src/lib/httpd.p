@@ -131,13 +131,13 @@ public class HttpServer {
 
 	private static void startHttpEntry(address param) {
 		ref<HttpServer> server = ref<HttpServer>(param);
-		printf("Starting http on port %d\n", server._port);
+//		printf("Starting http on port %d\n", server._port);
 		server.startHttp(server._serverScope, server._port, Encryption.NONE);
 	}
 
 	private static void startHttpsEntry(address param) {
 		ref<HttpServer> server = ref<HttpServer>(param);
-		printf("Starting https on port %d\n", server._sslPort);
+//		printf("Starting https on port %d\n", server._sslPort);
 		server.startHttp(server._serverScope, server._sslPort, Encryption.SSLv23);
 	}
 
@@ -867,7 +867,7 @@ public class HttpParser {
 	}
 }
 
-private class StaticContentService extends HttpService {
+public class StaticContentService extends HttpService {
 	private string _filename;
 	
 	StaticContentService(string filename) {

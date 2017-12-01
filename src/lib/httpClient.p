@@ -128,54 +128,40 @@ public class HttpClient {
 	}
 
 	public boolean, unsigned get() {
-		boolean hasWebSocket;
-		boolean success;
-		unsigned hostIP;
-
-		(hasWebSocket, success, hostIP) = startRequest("GET", null);
-		if (!success)
-			return false, hostIP;
-		if (hasWebSocket) {
-		}
-		return true, hostIP;
+		return startRequest("GET", null);
 	}
 
 	public boolean, unsigned post(string body) {
-		boolean hasWebSocket;
-		boolean success;
-		unsigned hostIP;
-
-		(hasWebSocket, success, hostIP) = startRequest("POST", body);
-		if (!success)
-			return false, hostIP;
-		if (hasWebSocket) {
-		}
-		return true, hostIP;
+		return startRequest("POST", body);
 	}
 
-	private boolean, boolean, unsigned startRequest(string method, string body) {
+	private boolean, unsigned startRequest(string method, string body) {
 		net.Encryption encryption;
 		switch (_protocol) {
 		case "ws":
 			if (_webSocketProtocol == null) {
 				printf("No Web Socket protocol defined.\n");
-				return false, false, 0;
+				return false, 0;
 			}
+			if (method != "GET")
+				return false, 0;
 			encryption = net.Encryption.NONE;
 			break;
 
 		case "wss":
 			if (_webSocketProtocol == null) {
 				printf("No Web Socket protocol defined.\n");
-				return false, false, 0;
+				return false, 0;
 			}
+			if (method != "GET")
+				return false, 0;
 			encryption = net.Encryption.SSLv23;
 			break;
 
 		case "https":
 			if (_webSocketProtocol != null) {
 				printf("Web Socket protocol defined - not a web socket URL.\n");
-				return false, false, 0;
+				return false, 0;
 			}
 			encryption = net.Encryption.SSLv23;
 			break;
@@ -183,25 +169,25 @@ public class HttpClient {
 		default:
 			if (_webSocketProtocol != null) {
 				printf("Web Socket protocol defined - not a web socket URL.\n");
-				return false, false, 0;
+				return false, 0;
 			}
 			encryption = net.Encryption.NONE;
 		}
 		ref<net.Socket> socket = net.Socket.create(encryption, _cipherList);
 		if (socket == null)
-			return false, false, 0;
+			return false, 0;
 		ref<net.Connection> connection;
 		unsigned ip;
 		(connection, ip) = socket.connect(_hostname, _port);
 		if (connection == null) {
 			delete socket;
-			return false, false, ip;
+			return false, ip;
 		}
 		if (!connection.initiateSecurityHandshake()) {
 			printf("Failed security handshake\n");
 			delete connection;
 			delete socket;
-			return false, false, ip;
+			return false, ip;
 		}
 //		delete socket;
 		boolean expectWebSocket;
@@ -240,24 +226,22 @@ public class HttpClient {
 		_response = new HttpResponse(null);
 		if (!parser.parseResponse(_response)) {
 			printf("Malformed response\n");
-			return false, false, ip;
+			return false, ip;
 		}
-		boolean hasWebSocket;
 		if (expectWebSocket) {
 			if (_response.code != "101") {
 				printf("Expecting a Web Socket, not a 101 response.\n");
 				_response.print();
-				return false, false, ip;
+				return false, ip;
 			}
 			string webSocketAccept = computeWebSocketAccept(webSocketKey);
 			if (_response.headers["sec-websocket-accept"] != webSocketAccept) {
 				printf("Web Socket Accept does not match Web Socket Key\n");
-				return false, false, ip;
+				return false, ip;
 			}
-			hasWebSocket = true;
 			_webSocket = new WebSocket(_connection, false);
 		}
-		return hasWebSocket, true, ip;
+		return true, ip;
 	}
 
 	public ref<net.Connection> connection() {

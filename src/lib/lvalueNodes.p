@@ -415,13 +415,6 @@ class Identifier extends Node {
 						_symbol = null;
 						break;
 					}
-					if (available.isMonitor()) {
-						if (!compileContext.current().enclosingClassScope().isMonitor()) {
-							add(MessageId.BAD_MONITOR_REF_IDENTIFIER, compileContext.pool(), _value);
-							type = compileContext.errorType();
-							return;
-						}
-					}
 					if (_symbol.class == Overload) {
 						ref<Overload> o = ref<Overload>(_symbol);
 						if (o.instances().length() == 1) {
@@ -453,6 +446,13 @@ class Identifier extends Node {
 								add(MessageId.METHOD_MUST_BE_STATIC, compileContext.pool(), _value);
 								type = compileContext.errorType();
 							}
+						}
+					}
+					if (available.isMonitor()) {
+						if (!compileContext.current().enclosingClassScope().isMonitor() && _symbol.isMutable()) {
+							add(MessageId.BAD_MONITOR_REF_IDENTIFIER, compileContext.pool(), _value);
+							type = compileContext.errorType();
+							return;
 						}
 					}
 					_symbol.markAsReferenced(compileContext);

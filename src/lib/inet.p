@@ -474,7 +474,7 @@ class SSLSocket extends Socket {
 		lock (_init_ssl) {
 			if (!_done) {
 				_done = true;
-				printf("SSL_library_init\n");
+//				printf("SSL_library_init\n");
 				ssl.SSL_load_error_strings();
 				ssl.SSL_library_init();
 			}
@@ -504,11 +504,11 @@ class SSLSocket extends Socket {
 			}
 		}
 		ssl.SSL_CTX_set_options(_context, ssl.SSL_OP_NO_SSLv2);
-		printf("Loading self-signed certificate.\n");
+//		printf("Loading self-signed certificate.\n");
 		ssl.SSL_CTX_use_certificate_file(_context, "test/certificates/self-signed.pem".c_str(), ssl.SSL_FILETYPE_PEM);
 		ssl.SSL_CTX_set_client_CA_list(_context, ssl.SSL_load_client_CA_file("/etc/ssl/certs/ca-certificates.crt".c_str()));
 		ssl.SSL_CTX_use_PrivateKey_file(_context, "test/certificates/self-signed.pem".c_str(), ssl.SSL_FILETYPE_PEM);
-		printf("Loading DH parameters\n");
+//		printf("Loading DH parameters\n");
 		ref<C.FILE> fp = C.fopen("test/certificates/dhparams.pem".c_str(), "r".c_str());
 		if (fp == null)
 			printf("Cannot open 'test/certificates/dhparams.pem' file\n");
@@ -518,14 +518,14 @@ class SSLSocket extends Socket {
 			if (dh != null) {
 				if (ssl.SSL_CTX_set_tmp_dh(_context, dh) != 1)
 					printf("SSL_CTX_set_tmp_dh failed\n");
-				else
-					printf("SSL_CTX_set_tmp_dh succeeded\n");
+//				else
+//					printf("SSL_CTX_set_tmp_dh succeeded\n");
 				ssl.DH_free(dh);
 			} else
 				printf("PEM_read_DHparams failed\n");
 		}
 		if (cipherList != null) {
-			printf("Setting cipher list to '%s'\n", cipherList);
+//			printf("Setting cipher list to '%s'\n", cipherList);
 			if (ssl.SSL_CTX_set_cipher_list(_context, cipherList.c_str()) == 0) {
 				for (;;) {
 					long e = ssl.ERR_get_error();
@@ -535,7 +535,7 @@ class SSLSocket extends Socket {
 				}
 			}
 		}
-		printf("SSL configuration loaded\n");
+//		printf("SSL configuration loaded\n");
 	}
 
 	protected ref<Connection> createConnection(int acceptfd, ref<net.sockaddr_in> address, int addressLength) {

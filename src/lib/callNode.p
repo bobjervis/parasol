@@ -1134,7 +1134,6 @@ class Call extends ParameterBag {
 		case	SIGNED_64:
 		case	FLOAT_32:
 		case	FLOAT_64:
-		case	STRING:
 		case	ADDRESS:
 		case	REF:
 		case	BOOLEAN:

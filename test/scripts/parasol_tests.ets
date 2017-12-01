@@ -652,6 +652,26 @@ compile() { "interface A {} A src; enum Foo { A, B }; Foo x; x = Foo(src);" }
 compile() { "interface A {} A src; flags Foo { A, B }; Foo x; x = Foo(src);" }
 compile() { "interface A {} A src; int x(double z); x = int(double)(src);" }
 
+// From string - coercions from string to non-string generally require a call to T.parse 
+
+compile(expect: fail) { "char x = char(\"abc\");" }
+compile(expect: fail) { "char x = char(\"abc\");" }
+compile(expect: fail) { "byte x = byte(\"abc\");" }
+compile(expect: fail) { "unsigned x = unsigned(\"abc\");" }
+compile(expect: fail) { "short x = short(\"abc\");" }
+compile(expect: fail) { "int x = int(\"abc\");" }
+compile(expect: fail) { "long x = long(\"abc\");" }
+compile(expect: fail) { "float x = float(\"abc\");" }
+compile(expect: fail) { "double x = double(\"abc\");" }
+compile(expect: fail) { "pointer<int> x = pointer<int>(\"abc\");" }
+compile(expect: fail) { "ref<int> x = ref<int>(\"abc\");" }
+compile(expect: fail) { "enum X { A, B, C} X x = X(\"abc\");" }
+compile(expect: fail) { "flags X { A, B, C} X x = X(\"abc\");" }
+compile(expect: fail) { "interface X { void f(expect: fail); } X x = X(\"abc\");" }
+compile(expect: fail) { "address x = address(\"abc\");" }
+compile(expect: fail) { "boolean x = boolean(\"abc\");" }
+compile(expect: fail) { "void(int) x = void(int)(\"abc\");" }
+
 // Disallowed implicit casts.
 
 compile(expect: fail, message: CANNOT_CONVERT) { "int x; byte b; b = x;" }

@@ -992,7 +992,16 @@ class Symbol {
 	public boolean initializedWithConstructor() {
 		return false;
 	}
-	
+
+	public boolean isMutable() {
+		assert(_type != null);
+		if (accessFlags() & Access.CONSTANT)
+			return false;
+		if (_type.family() == TypeFamily.TYPEDEF)
+			return false;
+		return true;
+	}
+
 	public boolean isFullyAnalyzed() {
 		return _type != null;
 	}

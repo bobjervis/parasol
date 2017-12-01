@@ -51,6 +51,10 @@ public class WebSocketService extends HttpService {
 	}
 	
 	public boolean processRequest(ref<HttpRequest> request, ref<HttpResponse> response) {
+		if (request.method != HttpRequest.Method.GET) {
+			response.error(400);				// you gotta use GET
+			return false;
+		}
 		string upgradeHeader = request.headers["upgrade"];
 		if (upgradeHeader != null && upgradeHeader == "websocket") {
 			string protocol = request.headers["sec-websocket-protocol"];
