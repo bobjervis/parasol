@@ -344,93 +344,12 @@ class Binary extends Node {
 			break;
 
 		case	INITIALIZE:
-			if (_right.op() == Operator.CALL) {
-				ref<Call> constructor = ref<Call>(_right);
-				if (constructor.category() == CallCategory.CONSTRUCTOR) {
-					ref<Node> adr = tree.newUnary(Operator.ADDRESS, _left, _left.location());
-					adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
-					constructor.setConstructorMemory(adr, tree);
-					return constructor.fold(tree, true, compileContext);
-				}
-			}
-			switch (type.family()) {
-			case	BOOLEAN:
-			case	UNSIGNED_8:
-			case	UNSIGNED_16:
-			case	UNSIGNED_32:
-			case	SIGNED_16:
-			case	SIGNED_32:
-			case	SIGNED_64:
-			case	FLOAT_32:
-			case	FLOAT_64:
-			case	ENUM:
-			case	FLAGS:
-			case	ADDRESS:
-			case	REF:
-			case	POINTER:
-			case	FUNCTION:
-			case	TYPEDEF:
-			case	INTERFACE:
-				break;
-				
-			case	SHAPE:
-				if (shouldVectorize(_right)) {
-					print(0);
-					assert(false);
-				}
-				
-			case	EXCEPTION:
-			case	CLASS:
-			case	VAR:
-				ref<ParameterScope> copyConstructor = type.copyConstructor();
-				if (copyConstructor != null) {
-					ref<Node> adr = tree.newUnary(Operator.ADDRESS, _left, location());
-					adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
-					ref<NodeList> args = tree.newNodeList(_right);
-					ref<Call> constructor = tree.newCall(copyConstructor, CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
-					constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
-					return constructor.fold(tree, true, compileContext);
-				} else {
-					ref<Node> result = foldClassCopy(tree, true, compileContext);
-					if (result != null)
-						return result;
-				}
-				break;
-				
-			case	STRING:
-				if (_right.op() == Operator.CALL) {
-					ref<OverloadInstance> oi = type.stringAllocationConstructor(compileContext);
-					if (oi == null) {
-						type = compileContext.errorType();
-						return this;
-					}
-					ref<Selection> method = tree.newSelection(_left, oi, false, _left.location());
-					method.type = oi.type();
-					ref<NodeList> args = tree.newNodeList(_right);
-					ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
-					call.type = compileContext.arena().builtInType(TypeFamily.VOID);
-					return call.fold(tree, true, compileContext);
-				}
-				copyConstructor = type.copyConstructor();
-				if (copyConstructor != null) {
-					ref<Node> adr = tree.newUnary(Operator.ADDRESS, _left, location());
-					adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
-					ref<NodeList> args = tree.newNodeList(_right);
-					ref<Call> constructor = tree.newCall(copyConstructor, CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
-					constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
-					return constructor.fold(tree, true, compileContext);
-				} else {
-					ref<Node> result = foldClassCopy(tree, true, compileContext);
-					if (result != null)
-						return result;
-				}
-				break;
-				
-			default:
-				print(0);
-				assert(false);
-			}
-			break;
+			int liveCount = compileContext.liveSymbolCount();
+			ref<Node> foldedInit = foldInitialization(tree, compileContext);
+			if (compileContext.liveSymbolCount() == liveCount)
+				return foldedInit;
+			ref<Node> d = attachLiveTempDestructors(tree, liveCount, compileContext);
+			return tree.newBinary(Operator.SEQUENCE, foldedInit, d, foldedInit.location());
 			
 		case	PLACEMENT_NEW:
 			entityType = type.indirectType(compileContext);
@@ -1030,6 +949,98 @@ class Binary extends Node {
 		return this;
 	}
 	
+	public ref<Node> foldInitialization(ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
+		if (_right.op() == Operator.CALL) {
+			ref<Call> constructor = ref<Call>(_right);
+			if (constructor.category() == CallCategory.CONSTRUCTOR) {
+				ref<Node> adr = tree.newUnary(Operator.ADDRESS, _left, _left.location());
+				adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+				constructor.setConstructorMemory(adr, tree);
+				return constructor.fold(tree, true, compileContext);
+			}
+		}
+		switch (type.family()) {
+		case	BOOLEAN:
+		case	UNSIGNED_8:
+		case	UNSIGNED_16:
+		case	UNSIGNED_32:
+		case	SIGNED_16:
+		case	SIGNED_32:
+		case	SIGNED_64:
+		case	FLOAT_32:
+		case	FLOAT_64:
+		case	ENUM:
+		case	FLAGS:
+		case	ADDRESS:
+		case	REF:
+		case	POINTER:
+		case	FUNCTION:
+		case	TYPEDEF:
+		case	INTERFACE:
+			break;
+			
+		case	SHAPE:
+			if (shouldVectorize(_right)) {
+				print(0);
+				assert(false);
+			}
+			
+		case	EXCEPTION:
+		case	CLASS:
+		case	VAR:
+			ref<ParameterScope> copyConstructor = type.copyConstructor();
+			if (copyConstructor != null) {
+				ref<Node> adr = tree.newUnary(Operator.ADDRESS, _left, location());
+				adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+				ref<NodeList> args = tree.newNodeList(_right);
+				ref<Call> constructor = tree.newCall(copyConstructor, CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
+				constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
+				return constructor.fold(tree, true, compileContext);
+			} else {
+				ref<Node> result = foldClassCopy(tree, true, compileContext);
+				if (result != null)
+					return result;
+			}
+			break;
+			
+		case	STRING:
+			if (_right.op() == Operator.CALL) {
+				ref<OverloadInstance> oi = type.stringAllocationConstructor(compileContext);
+				if (oi == null) {
+					type = compileContext.errorType();
+					return this;
+				}
+				ref<Selection> method = tree.newSelection(_left, oi, false, _left.location());
+				method.type = oi.type();
+				ref<NodeList> args = tree.newNodeList(_right);
+				ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
+				call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+				return call.fold(tree, true, compileContext);
+			}
+			copyConstructor = type.copyConstructor();
+			if (copyConstructor != null) {
+				ref<Node> adr = tree.newUnary(Operator.ADDRESS, _left, location());
+				adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+				ref<NodeList> args = tree.newNodeList(_right);
+				ref<Call> constructor = tree.newCall(copyConstructor, CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
+				constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
+				return constructor.fold(tree, true, compileContext);
+			} else {
+				ref<Node> result = foldClassCopy(tree, true, compileContext);
+				if (result != null)
+					return result;
+			}
+			break;
+			
+		default:
+			print(0);
+			assert(false);
+		}
+//		_left = _left.fold(tree, false, compileContext); - the left side of an initialization is an identifier
+		_right = _right.fold(tree, false, compileContext);
+		return this;
+	}
+
 	public ref<Node> foldConditional(ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
 		switch (op()) {
 		case	LOGICAL_AND:
@@ -2793,6 +2804,7 @@ public void markLiveSymbols(ref<Node> declarator, StorageClass storageClass, ref
 		markLiveSymbols(u.operand(), storageClass, compileContext);
 		break;
 		
+	case	DESTRUCTOR_LIST:
 	case	EMPTY:
 	case	SYNTAX_ERROR:
 		break;

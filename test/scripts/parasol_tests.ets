@@ -106,6 +106,7 @@ run(filename: memory_test.p)
 
 // Regressions
 
+run(filename: switch_temp.p)
 run(filename: virtual_call_w_constructor.p)
 run(filename: virtual_call_1.p)
 run(filename: class_call_as_argument.p)

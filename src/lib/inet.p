@@ -139,7 +139,7 @@ public class Socket {
 	}
 
 	~Socket() {
-		printf("~Socket for %d\n", _socketfd);
+//		printf("~Socket for %d\n", _socketfd);
 		net.closesocket(_socketfd);
 	}
 
@@ -681,7 +681,7 @@ class SSLConnection extends Connection {
 	}
 
 	public void close() {
-		text.printf("SSL_close\n");
+//		text.printf("SSL_close\n");
 		ssl.SSL_free(_ssl);
 		net.closesocket(_acceptfd);
 	}

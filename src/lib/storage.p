@@ -82,9 +82,9 @@ public boolean setReadOnly(string filename, boolean readOnly) {
 		if (linux.stat(&filename[0], &s) != 0)
 			return false;
 		if (readOnly)
-			return linux.chmod(&filename[0], s.st_mode & ~(linux.S_IRUSR | linux.S_IRGRP | linux.S_IROTH)) == 0;
+			return linux.chmod(&filename[0], s.st_mode & ~(linux.S_IWUSR | linux.S_IWGRP | linux.S_IWOTH)) == 0;
 		else
-			return linux.chmod(&filename[0], s.st_mode | (linux.S_IRUSR | linux.S_IRGRP)) == 0;
+			return linux.chmod(&filename[0], s.st_mode | (linux.S_IWUSR | linux.S_IWGRP)) == 0;
 	} else
 		return false;
 }

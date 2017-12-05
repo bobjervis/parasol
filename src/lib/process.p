@@ -110,8 +110,20 @@ public class Process extends ProcessVolatileData {
 	private ref<Thread> _drainer;
 	private linux.pid_t _pid;
 	private boolean _captureOutput;
+	private linux.uid_t _user;
+	private int _fdLimit;
 
 	public Process() {
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			linux.rlimit rlim = { rlim_cur: 1024 };
+
+			linux.getrlimit(linux.RLIMIT_NOFILE, &rlim);
+			if (rlim.rlim_cur == linux.RLIM_INFINITY)
+				_fdLimit = int.MAX_VALUE;
+			else
+				_fdLimit = int(rlim.rlim_cur);
+		}
 	}
 
 	~Process() {
@@ -124,6 +136,29 @@ public class Process extends ProcessVolatileData {
 
 	public void captureOutput() {
 		_captureOutput = true;
+	}
+
+	public boolean user(string username) {
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			linux.passwd pwd;
+			ref<linux.passwd> out;
+
+			byte[] buffer;
+			buffer.resize(linux.sysconf(int(linux.SysConf._SC_GETPW_R_SIZE_MAX)));
+			int result = linux.getpwnam_r(username.c_str(), &pwd, &buffer[0], buffer.length(), &out);
+			if (out == null) {
+				if (result == 0)
+					printf("User '%s' not found\n", username);
+				else {
+					printf("getpwnam_r failed for user '%s'\n", username);
+					linux.perror("getpwnam_r".c_str());
+				}
+				return false;
+			}
+			_user = pwd.pw_uid;
+		}
+		return true;
 	}
 
 	public boolean, int execute(string command, string... args) {
@@ -183,11 +218,30 @@ public class Process extends ProcessVolatileData {
 				_pid = linux.fork();
 				if (_pid == 0) {
 					// This is the child process
+					if (_user != 0) {
+						if (linux.setuid(_user) != 0) {
+							printf("setuid to %d FAILED\n", _user);
+							linux.perror("setuid".c_str());
+							linux._exit(-1);
+						}
+					}
 					if (_captureOutput) {
 						linux.close(pipefd[0]);
 						linux.dup2(pipefd[1], 1);
 						linux.dup2(pipefd[1], 2);
 					}
+					/*
+						In the child process is the only reliable place we can
+						ensure that all open network handles get closed. Otherwise,
+						there is a race between the moment the fd gets opened in the
+						'accept' system call and when we could use fcntl to set the 
+						FD_CLOEXEC bit. Since we know we are about to call execv, we
+						might as well just close the potential network connections
+						here.
+					 */
+					for (int i = 3; i < _fdLimit; i++)
+						linux.close(i);
+
 					if (workingDirectory != null) {
 						linux.chdir(workingDirectory.c_str());
 					}
@@ -198,6 +252,7 @@ public class Process extends ProcessVolatileData {
 					linux.execv(argv[0], argv);
 					linux._exit(-1);
 				} else {
+//					printf("Forked child %d\n", _pid);
 					ref<PendingChild> pc = new PendingChild;
 					pc.pid = _pid;
 					pc.handler = processExitInfoWrapper;

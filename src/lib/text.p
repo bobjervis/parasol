@@ -49,7 +49,23 @@ class string {
 			C.memcpy(&_contents.data, &source._contents.data, source._contents.length + 1);
 		}
 	}
-	
+
+	public string(string source, int startOffset) {
+		if (source != null) {
+			resize(source.length() - startOffset);
+			C.memcpy(&_contents.data, pointer<byte>(&source._contents.data) + startOffset, _contents.length);
+			pointer<byte>(&source._contents.data)[_contents.length] = 0;
+		}
+	}
+
+	public string(string source, int startOffset, int endOffset) {
+		if (source != null) {
+			resize(endOffset - startOffset);
+			C.memcpy(&_contents.data, pointer<byte>(&source._contents.data) + startOffset, endOffset - startOffset);
+			pointer<byte>(&source._contents.data)[_contents.length] = 0;
+		}
+	}
+
 	public string(text.substring source) {
 		if (source._data != null) {
 			resize(source._length);
@@ -63,12 +79,14 @@ class string {
 			C.memcpy(&_contents.data, source._data + startOffset, source._length - startOffset);
 		}
 	}
+
 	public string(text.substring source, int startOffset, int endOffset) {
 		if (source._data != null) {
 			resize(endOffset - startOffset);
 			C.memcpy(&_contents.data, source._data + startOffset, endOffset - startOffset);
 		}
 	}
+
 	public string(pointer<byte> cString) {
 		if (cString != null) {
 			int len = C.strlen(cString);

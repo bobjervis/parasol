@@ -3092,6 +3092,11 @@ public class X86_64 extends X86_64AssignTemps {
 			instCall(_memcpy, compileContext);
 			break;
 
+		case	DESTRUCTOR_LIST:
+			ref<DestructorList> dl = ref<DestructorList>(node);
+			generateLiveSymbolDestructors(dl.arguments(), compileContext);
+			break;
+
 		case	EMPTY:
 			break;
 			

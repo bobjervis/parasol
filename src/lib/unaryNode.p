@@ -472,28 +472,7 @@ class Unary extends Node {
 			else
 				x = this;
 			if (compileContext.liveSymbolCount() > liveCount) {
-				ref<NodeList> liveSymbols;
-				ref<NodeList> last;
-				// We have some temps that need to be cleaned up.
-				while (compileContext.liveSymbolCount() > liveCount) {
-					ref<Node> n = compileContext.popLiveTemp(liveCount);
-					if (n == null) {
-						ref<FileStat> file = compileContext.current().file();
-						printf("Expression has live symbols: %s %d\n", file.filename(), file.scanner().lineNumber(x.location()) + 1);
-						x.print(4);
-						printf("Suspect live symbol:\n");
-						compileContext.getLiveSymbol(compileContext.liveSymbolCount() - 1).print(4);
-						assert(false);
-					}
-					ref<NodeList> nl = tree.newNodeList(n);
-					if (last == null)
-						liveSymbols = nl;
-					else
-						last.next = nl;
-					last = nl;
-					
-				}
-				ref<Node> d = tree.newDestructorList(liveSymbols, x.location());
+				ref<Node> d = attachLiveTempDestructors(tree, liveCount, compileContext);
 				x = tree.newBinary(Operator.SEQUENCE, x, d, x.location());
 			}
 			return x;
@@ -505,7 +484,7 @@ class Unary extends Node {
 		_operand = _operand.fold(tree, false, compileContext);
 		return this;
 	}
-	
+
 	public ref<Node> foldConditional(ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
 		if (op() == Operator.NOT) {
 			_operand = _operand.foldConditional(tree, compileContext);

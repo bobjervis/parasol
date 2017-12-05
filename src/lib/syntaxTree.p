@@ -3261,6 +3261,33 @@ class Node {
 		}
 	}
 
+	public ref<Node> attachLiveTempDestructors(ref<SyntaxTree> tree, int liveCount, ref<CompileContext> compileContext) {
+		ref<NodeList> liveSymbols;
+		ref<NodeList> last;
+		// We have some temps that need to be cleaned up.
+		while (compileContext.liveSymbolCount() > liveCount) {
+			ref<Node> n = compileContext.popLiveTemp(liveCount);
+			if (n == null) {
+				ref<FileStat> file = compileContext.current().file();
+				printf("Expression has live symbols: %s %d\n", file.filename(), file.scanner().lineNumber(location()) + 1);
+				print(4);
+				printf("Suspect live symbol:\n");
+				compileContext.getLiveSymbol(compileContext.liveSymbolCount() - 1).print(4);
+				assert(false);
+			}
+			ref<NodeList> nl = tree.newNodeList(n);
+			if (last == null)
+				liveSymbols = nl;
+			else
+				last.next = nl;
+			last = nl;
+			
+		}
+		ref<Node> d = tree.newDestructorList(liveSymbols, location());
+		d.type = compileContext.arena().builtInType(TypeFamily.VOID);
+		return d;
+	}
+
 	public ref<Unary> getProperEllipsis() {
 		if (op() == Operator.ELLIPSIS)
 			return ref<Unary>(this);
@@ -3401,6 +3428,7 @@ class Node {
 		case	DECREMENT_BEFORE:
 		case	DEFAULT:
 		case	DELETE:
+		case	DESTRUCTOR_LIST:
 		case	DIVIDE:
 		case	DIVIDE_ASSIGN:
 		case	DO_WHILE:
@@ -3829,3 +3857,4 @@ private ref<Node> foldMultiValueReturn(ref<Node> left, ref<SyntaxTree> tree, ref
 	} else
 		return left.fold(tree, false, compileContext);
 }
+

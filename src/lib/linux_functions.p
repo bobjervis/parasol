@@ -72,6 +72,9 @@ public abstract void _exit(int status);
 @Linux("libc.so.6", "execv")
 public abstract int execv(pointer<byte> path, pointer<pointer<byte>> argv);
 
+@Linux("libc.so.6", "fcntl")
+public abstract int fcntl(int fd, int cmd, int arg0);
+
 @Linux("libc.so.6", "fdatasync")
 public abstract int fdatasync(int fd);
 
@@ -98,6 +101,12 @@ public abstract pid_t getpid();
 
 @Linux("libc.so.6", "getppid")
 public abstract pid_t getppid();
+
+@Linux("libc.so.6", "getpwnam_r")
+public abstract int getpwnam_r(pointer<byte> name, ref<passwd> pwd, address buffer, size_t buflen, ref<ref<passwd>> result);
+
+@Linux("libc.so.6", "getrlimit")
+public abstract int getrlimit(int resource, ref<rlimit> rlim);
 
 @Linux("libc.so.6", "getuid")
 public abstract uid_t getuid();
@@ -219,11 +228,38 @@ public abstract int sem_wait(ref<sem_t> sem);
 @Linux("libc.so.6", "setenv")
 public abstract int setenv(pointer<byte> name, pointer<byte> value, int overwrite);
 
+@Linux("libc.so.6", "setrlimit")
+public abstract int setrlimit(int resource, ref<rlimit> rlim);
+
 @Linux("libc.so.6", "setuid")
 public abstract int setuid(uid_t uid);
 
 @Linux("libc.so.6", "sigaction")
 public abstract int sigaction(int signum, ref<struct_sigaction> act, ref<struct_sigaction> oldact);
+
+@Linux("libc.so.6", "sigaddset")
+public abstract int sigaddset(ref<sigset_t> set, int signum);
+
+@Linux("libc.so.6", "sigandset")
+public abstract int sigandset(ref<sigset_t> dest, ref<sigset_t> left, ref<sigset_t> right);
+
+@Linux("libc.so.6", "sigdelset")
+public abstract int sigdelset(ref<sigset_t> set, int signum);
+
+@Linux("libc.so.6", "sigemptyset")
+public abstract int sigemptyset(ref<sigset_t> set);
+
+@Linux("libc.so.6", "sigfillset")
+public abstract int sigfillset(ref<sigset_t> set);
+
+@Linux("libc.so.6", "sigisemptyset")
+public abstract int sigisemptyset(ref<sigset_t> set);
+
+@Linux("libc.so.6", "sigismember")
+public abstract int sigismember(ref<sigset_t> set, int signum);
+
+@Linux("libc.so.6", "sigorset")
+public abstract int sigorset(ref<sigset_t> dest, ref<sigset_t> left, ref<sigset_t> right);
 
 @Linux("libc.so.6", "sigwaitinfo")
 public abstract int sigwaitinfo(ref<sigset_t> set, ref<siginfo_t> info);
@@ -242,30 +278,6 @@ public abstract long syscall(long callId, long p1, long p2);
 
 @Linux("libc.so.6", "syscall")
 public abstract long syscall(long callId, long p1, long p2, long p3);
-/*
- * Hack to get the tid - gettid is not in the Linux library, so we have to resort to this...
- */
-public pid_t gettid() {
-	return pid_t(syscall(186));
-}
-
-public int tgkill(int tgid, int tid, int sig) {
-	return int(syscall(234, tgid, tid, sig));
-}
-
-@Linux("libc.so.6", "__xstat")
-public abstract int __xstat(int statVersion, pointer<byte> path, ref<statStruct> buf);
-
-public int stat(pointer<byte> path, ref<statStruct> buf) {
-	return __xstat(1, path, buf);
-}
-
-@Linux("libc.so.6", "__lxstat")
-public abstract int __lxstat(int statVersion, pointer<byte> path, ref<statStruct> buf);
-
-public int lstat(pointer<byte> path, ref<statStruct> buf) {
-	return __lxstat(1, path, buf);
-}
 
 @Linux("libc.so.6", "statvfs")
 public abstract int statvfs(pointer<byte> path, ref<statvfsStruct> buf);
@@ -297,9 +309,34 @@ public abstract pid_t waitpid(pid_t pid, ref<int> exitStatus, int options);
 @Linux("libc.so.6", "write")
 public abstract int write(int fd, address buffer, long bufferSize);
 
+@Linux("libc.so.6", "__lxstat")
+public abstract int __lxstat(int statVersion, pointer<byte> path, ref<statStruct> buf);
+
+@Linux("libc.so.6", "__xstat")
+public abstract int __xstat(int statVersion, pointer<byte> path, ref<statStruct> buf);
+
 public abstract int open(pointer<byte> filename, int ioFlags);
 
 public abstract int openCreat(pointer<byte> filename, int ioFlags, int mode);
+
+/*
+ * Hack to get the tid - gettid is not in the Linux library, so we have to resort to this...
+ */
+public pid_t gettid() {
+	return pid_t(syscall(186));
+}
+
+public int lstat(pointer<byte> path, ref<statStruct> buf) {
+	return __lxstat(1, path, buf);
+}
+
+public int stat(pointer<byte> path, ref<statStruct> buf) {
+	return __xstat(1, path, buf);
+}
+
+public int tgkill(int tgid, int tid, int sig) {
+	return int(syscall(234, tgid, tid, sig));
+}
 /**
  * Note that errno() in Parasol is a call to a function, rather than a simple variable.
  */
@@ -883,30 +920,6 @@ public class sigset_t {
 	private long _word15; 
 }
 
-@Linux("libc.so.6", "sigemptyset")
-public abstract int sigemptyset(ref<sigset_t> set);
-
-@Linux("libc.so.6", "sigfillset")
-public abstract int sigfillset(ref<sigset_t> set);
-
-@Linux("libc.so.6", "sigaddset")
-public abstract int sigaddset(ref<sigset_t> set, int signum);
-
-@Linux("libc.so.6", "sigdelset")
-public abstract int sigdelset(ref<sigset_t> set, int signum);
-
-@Linux("libc.so.6", "sigismember")
-public abstract int sigismember(ref<sigset_t> set, int signum);
-
-@Linux("libc.so.6", "sigisemptyset")
-public abstract int sigisemptyset(ref<sigset_t> set);
-
-@Linux("libc.so.6", "sigandset")
-public abstract int sigandset(ref<sigset_t> dest, ref<sigset_t> left, ref<sigset_t> right);
-
-@Linux("libc.so.6", "sigorset")
-public abstract int sigorset(ref<sigset_t> dest, ref<sigset_t> left, ref<sigset_t> right);
-
 public class struct_sigaction {
 	private address _handler;
 	public sigset_t sa_mask;
@@ -1152,9 +1165,134 @@ enum SysConf {
 	_SC_THREAD_SAFE_FUNCTIONS,
 	_SC_GETGR_R_SIZE_MAX,
 	_SC_GETPW_R_SIZE_MAX,
-
-
-	
 	// ... plus a lot more than I have the energy to enter today.
 }
+
+@Constant
+public int F_DUPFD =       0;       /* dup */
+@Constant
+public int F_GETFD =       1;       /* get close_on_exec */
+@Constant
+public int F_SETFD =       2;       /* set/clear close_on_exec */
+@Constant
+public int F_GETFL =       3;       /* get file->f_flags */
+@Constant
+public int F_SETFL =       4;       /* set file->f_flags */
+@Constant
+public int F_GETLK =       5;
+@Constant
+public int F_SETLK =       6;
+@Constant
+public int F_SETLKW =      7;
+@Constant
+public int F_SETOWN =      8;       /* for sockets. */
+@Constant
+public int F_GETOWN =      9;       /* for sockets. */
+@Constant
+public int F_SETSIG =      10;      /* for sockets. */
+@Constant
+public int F_GETSIG =      11;      /* for sockets. */
+@Constant
+public int F_GETLK64 =     12;      /*  using 'struct flock64' */
+@Constant
+public int F_SETLK64 =     13;
+@Constant
+public int F_SETLKW64 =    14;
+@Constant
+public int F_SETOWN_EX =   15;
+@Constant
+public int F_GETOWN_EX =   16;
+@Constant
+public int F_GETOWNER_UIDS = 17;
+
+@Constant
+public int FD_CLOEXEC =     1;      /* actually anything with low bit set goes */
+
+public class rlim_t = long;			// actually Unsigned<64>
+
+@Constant
+public rlim_t RLIM_INFINITY = -1;
+
+public class rlimit {
+	public rlim_t rlim_cur;
+	public rlim_t rlim_max;
+}
+
+  /* Per-process CPU limit, in seconds.  */
+@Constant
+public int RLIMIT_CPU = 0;
+
+  /* Largest file that can be created, in bytes.  */
+@Constant
+public int RLIMIT_FSIZE = 1;
+
+  /* Maximum size of data segment, in bytes.  */
+@Constant
+public int RLIMIT_DATA = 2;
+
+  /* Maximum size of stack segment, in bytes.  */
+@Constant
+public int RLIMIT_STACK = 3;
+
+  /* Largest core file that can be created, in bytes.  */
+@Constant
+public int RLIMIT_CORE = 4;
+
+  /* Largest resident set size, in bytes.
+     This affects swapping; processes that are exceeding their
+     resident set size will be more likely to have physical memory
+     taken from them.  */
+@Constant
+public int RLIMIT_RSS = 5;
+
+  /* Number of open files.  */
+@Constant
+public int RLIMIT_NOFILE = 7;
+@Constant
+public int RLIMIT_OFILE = RLIMIT_NOFILE; /* BSD name for same.  */
+
+  /* Address space limit.  */
+@Constant
+public int RLIMIT_AS = 9;
+
+  /* Number of processes.  */
+@Constant
+public int RLIMIT_NPROC = 6;
+
+  /* Locked-in-memory address space.  */
+@Constant
+public int RLIMIT_MEMLOCK = 8;
+
+  /* Maximum number of file locks.  */
+@Constant
+public int RLIMIT_LOCKS = 10;
+
+  /* Maximum number of pending signals.  */
+@Constant
+public int RLIMIT_SIGPENDING = 11;
+
+  /* Maximum bytes in POSIX message queues.  */
+@Constant
+public int RLIMIT_MSGQUEUE = 12;
+
+  /* Maximum nice priority allowed to raise to.
+     Nice levels 19 .. -20 correspond to 0 .. 39
+     values of this resource limit.  */
+@Constant
+public int RLIMIT_NICE = 13;
+
+  /* Maximum realtime priority allowed for non-priviledged
+     processes.  */
+@Constant
+public int RLIMIT_RTPRIO = 14;
+// TODO: THere be dragons below this point in the file. Need to fix srcServer issue #21.
+  /* Maximum CPU time in µs that a process scheduled under a real-time
+     scheduling policy may consume without making a blocking system
+     call before being forcibly descheduled.  */
+@Constant
+public int RLIMIT_RTTIME = 15;
+@Constant
+public int RLIMIT_NLIMITS = 16;
+@Constant
+public int RLIM_NLIMITS = RLIMIT_NLIMITS;
 
