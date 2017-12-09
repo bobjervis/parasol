@@ -21,6 +21,7 @@ namespace native:C;
 public class FILE {}
 
 public class size_t = long;
+public class time_t = long;
 
 public class va_list = address;
 /**

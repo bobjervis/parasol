@@ -16,6 +16,7 @@
 namespace native:linux;
 import native:net.sockaddr;
 import native:C.size_t;
+import native:C.time_t;
 
 class pid_t = int;
 class pthread_t = address;
@@ -294,6 +295,12 @@ public abstract int unsetenv(pointer<byte> name);
 @Linux("libc.so.6", "usleep")
 public abstract int usleep(useconds_t usec);
 
+@Linux("libc.so.6", "utime")
+public abstract int utime(pointer<byte> filename, ref<utimbuf> times);
+
+@Linux("libc.so.6", "utimes")
+public abstract int utimes(pointer<byte> filename, ref<timevalPair> times);
+
 @Linux("libc.so.6", "vfork")
 public abstract pid_t vfork();
 
@@ -411,6 +418,21 @@ public class statvfsStruct {
 	int f_spare5;
 }
 
+public class utimbuf {
+	time_t actime;					/* access time */
+	time_t modtime;					/* modification time */
+}
+
+public class timeval {
+	long tv_sec;					/* seconds */
+	long tv_usec;					/* microseconds */
+}
+
+public class timevalPair {
+	public timeval accessTime;
+	public timeval modificationTime;
+}
+	
 public class glob_t {
 	public size_t gl_pathc;       				/* Count of paths matched by the pattern.  */
     public pointer<pointer<byte>> gl_pathv;     /* List of matched pathnames.  */

@@ -258,6 +258,105 @@ public boolean rename(string oldName, string newName) {
 	return C.rename(oldName.c_str(), newName.c_str()) == 0;
 }
 
+public boolean copyFile(string source, string destination) {
+	file.File s = file.openBinaryFile(source);
+	if (!s.opened())
+		return false;
+	file.File d = file.createBinaryFile(destination);
+	if (!d.opened()) {
+		s.close();
+		return false;
+	}
+	byte[] buffer;
+	buffer.resize(4096);
+	for (;;) {
+		int actual = s.read(&buffer);
+		if (actual < 0) {
+			s.close();
+			d.close();
+			deleteFile(destination);
+			return false;
+		}
+		if (actual == 0)
+			break;
+		d.write(&buffer[0], actual);
+	}
+	s.close();
+	d.close();
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		linux.statStruct s;
+		if (linux.stat(source.c_str(), &s) != 0) {
+			deleteFile(destination);
+			return false;
+		}
+		// Only try to duplicate the source file mode bits, not setuid/setgid, etc.
+		linux.chmod(destination.c_str(), s.st_mode & (linux.S_IRWXO | linux.S_IRWXG | linux.S_IRWXU));
+		linux.timevalPair times;
+		times.accessTime.tv_sec = s.st_atim.tv_sec;
+		times.accessTime.tv_usec = s.st_atim.tv_nsec / 1000;
+		times.modificationTime.tv_sec = s.st_mtim.tv_sec;
+		times.modificationTime.tv_usec = s.st_mtim.tv_nsec / 1000;
+		linux.utimes(destination.c_str(), &times);
+	}
+	return true;
+}
+/**
+ * Note: This will follow links, so take care with symbolic link cycles as that will cause the
+ *			procedure to loop indefinitely.
+ *
+ * tryAllFiles - true if the copy operation should try to copy all files and keep the ones that
+ *			succeeded, false if the copy operation should stop on the first failure and delete
+ *			the destination directory tree if there were any failures.
+ */
+public boolean copyDirectoryTree(string source, string destination, boolean tryAllFiles) {
+	if (!isDirectory(source))
+		return false;
+	if (!makeDirectory(destination))
+		return false;
+	ref<file.Directory> dir = new file.Directory(source);
+	dir.pattern("*");
+	if (dir.first()) {
+		do {
+			if (dir.basename() == "." || dir.basename() == "..")
+				continue;
+			string filename = dir.path();
+			string destFilename;
+			destFilename.printf("%s/%s", destination, dir.basename());
+			if (isDirectory(filename)) {
+				if (!copyDirectoryTree(filename, destFilename, tryAllFiles)) {
+					delete dir;
+					if (!tryAllFiles)
+						deleteDirectoryTree(destination);
+					return false;
+				}
+			} else if (!copyFile(filename, destFilename)) {
+				delete dir;
+				if (!tryAllFiles)
+					deleteDirectoryTree(destination);
+				return false;
+			}
+		} while (dir.next());
+	}
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		linux.statStruct s;
+		if (linux.stat(source.c_str(), &s) != 0 && !tryAllFiles) {
+			deleteDirectoryTree(destination);
+			return false;
+		}
+		// Only try to duplicate the source file mode bits, not setuid/setgid, etc.
+		linux.chmod(destination.c_str(), s.st_mode & (linux.S_IRWXO | linux.S_IRWXG | linux.S_IRWXU));
+		linux.timevalPair times;
+		times.accessTime.tv_sec = s.st_atim.tv_sec;
+		times.accessTime.tv_usec = s.st_atim.tv_nsec / 1000;
+		times.modificationTime.tv_sec = s.st_mtim.tv_sec;
+		times.modificationTime.tv_usec = s.st_mtim.tv_nsec / 1000;
+		linux.utimes(destination.c_str(), &times);
+	}
+	return true;
+}
+
 public boolean deleteFile(string path) {
 	if (runtime.compileTarget == SectionType.X86_64_WIN) {
 		return DeleteFile(path.c_str()) != 0;

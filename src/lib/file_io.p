@@ -156,8 +156,8 @@ public class File {
 			return false;
 	}
 
-	public int read(byte[] buffer) {
-		unsigned n = C.fread(&buffer[0], 1, unsigned(buffer.length()), _handle);
+	public int read(ref<byte[]> buffer) {
+		unsigned n = C.fread(&(*buffer)[0], 1, unsigned(buffer.length()), _handle);
 		if (C.ferror(_handle) != 0)
 			return -1;
 		return int(n);

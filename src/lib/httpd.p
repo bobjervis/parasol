@@ -900,7 +900,7 @@ public class StaticContentService extends HttpService {
 				byte[] buffer;
 				buffer.resize(8192);
 				for (;;) {
-					int n = f.read(buffer);
+					int n = f.read(&buffer);
 					if (n <= 0)
 						break;
 //					printf("Read %d bytes\n", n);
