@@ -265,16 +265,16 @@ public class Socket {
 	private unsigned, boolean resolveHostName(string hostname) {
 		if (hostname == null)
 			return 0, false;
-		net.in_addr in;
-		if (net.inet_aton(hostname.c_str(), &in) == 0) {
+		net.in_addr inet;
+		if (net.inet_aton(hostname.c_str(), &inet) == 0) {
 			ref<net.hostent> host = net.gethostbyname(hostname.c_str());
 			if (host == null) {
 				printf("gethostbyname failed for '%s'\n", hostname);
 				return 0, false;
 			}
-			in.s_addr = *ref<unsigned>(*host.h_addr_list);
+			inet.s_addr = *ref<unsigned>(*host.h_addr_list);
 		}
-		return in.s_addr, true;
+		return inet.s_addr, true;
 	}
 
 }

@@ -946,8 +946,8 @@ class Call extends ParameterBag {
 								break;
 							}
 							int i = scope.indexOf(id.symbol()); 
-							Interval in = { start: i, end: i, first: nl };
-							intervals.append(in);
+							Interval interval = { start: i, end: i, first: nl };
+							intervals.append(interval);
 						} else {
 							b.left().add(MessageId.LABEL_NOT_IDENTIFIER, compileContext.pool());
 							b.left().type = compileContext.errorType();

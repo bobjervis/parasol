@@ -32,16 +32,16 @@ statement() { "for (;; c) d;" }
 statement() { "for (; b;) d;" }
 statement() { "for (a;;) d;" }
 statement() { "for (;;) d;" }
-statement() { "for (a  b : c) d;" }
+statement() { "for (a in c) d;" }
 statement() { "if (a) b;" }
 statement() { "if (a) b; else c;" }
 statement() { "if (a) b; else if (c) d;" }
 statement() { "if (a) if (b) c; else d; else e;" }
 statement() { return; }
 statement() { return a; }
-statement() { "switch (a) b;" }
+statement() { "switch (a) { b; }" }
 statement() { "while (a) b;" }
-statement() { "@n switch (a) b;" }
+statement() { "@n switch (a) { b; }" }
 statement() { "@n while (a) b;" }
 statement() { "int main(string[] args){a;}" }
 statement() { "int<64> x;" }
@@ -57,8 +57,8 @@ statement() { "@c public int x;" }
 statement() { "@c protected int x;" }
 statement() { "@c private int x;" }
 statement() { "@c int x;" }
-statement() { "final interface q{a;b;}" }
-statement() { "interface q{a;b;}" }
+statement() { "final interface q{void a(); int b(int a);}" }
+statement() { "interface q{long a(a b, c d);x b(x y, p... q);}" }
 statement() { "interface q extends a {}" }
 statement() { "interface q;" }
 statement() { "interface q = c;" }
@@ -90,9 +90,8 @@ statement() { "@c(d) class q{}" }
 statement() { "@c(d) class q extends a {}" }
 statement() { "@c(d) class q implements a {}" }
 statement() { "@c(d) class q extends a implements b {}" }
-statement() { "monitor a;" }
-statement() { "monitor a { b; }" }
-statement() { "monitor a { }" }
+statement() { "monitor class a { b; }" }
+statement() { "monitor class a { }" }
 statement() { "flags a{b}" }
 statement() { "flags a{b,}" }
 statement() { "flags a{b,c}" }
@@ -122,6 +121,21 @@ statement(expect: recovered, message: EXPECTING_TERM) { "{ for (int i : array) ;
 statement(expect: fail, message: UNEXPECTED_EOF) { a }
 statement(expect: recovered, message: UNEXPECTED_EOF) { "{" }
 statement(expect: fail, message: UNEXPECTED_RC) { "}" }
+statement(expect: recovered) { "lock { " }
+statement(expect: recovered) { "lock { a " }
+statement(expect: recovered) { "lock { a; " }
+statement(expect: recovered) { "lock ( " }
+statement(expect: recovered) { "lock (a " }
+statement(expect: recovered) { "lock (a) " }
+statement(expect: recovered) { "lock (a) {" }
+statement(expect: recovered) { "lock (a) { b " }
+statement(expect: recovered) { "lock (a) { b; " }
+statement(expect: recovered) { "class C { C() lock " }
+statement(expect: recovered) { "class C { C() lock { " }
+statement(expect: recovered) { "class C { ~C() lock  " }
+statement(expect: recovered) { "class C { ~C() lock {" }
+statement(expect: recovered) { "void func() lock " }
+statement(expect: recovered) { "void func() lock { " }
 statement(expect: fail, message: BREAK_NO_SEMI) { break }
 statement(expect: fail, message: EXPECTING_TERM) { case }
 statement(expect: fail, message: CASE_NO_CO) { case a }
@@ -220,7 +234,7 @@ statement(expect: fail) { "for (a  b" }
 statement(expect: fail) { "for (a  b :" }
 statement(expect: fail) { "for (a  b : c" }
 statement(expect: fail) { "for (a  b : c)" }
-statement(expect: fail, message: UNEXPECTED_EOF) { "for (a  b : c) d" }
+statement(expect: fail, message: UNEXPECTED_EOF) { "for (a in c) d" }
 statement(expect: fail) { "for a  b : c) d;" }
 statement(expect: fail) { "for (a  b c) d;" }
 statement(expect: fail) { "for (a  b : c d;" }
@@ -241,9 +255,10 @@ statement(expect: fail) { "switch" }
 statement(expect: fail) { "switch (" }
 statement(expect: fail) { "switch (a" }
 statement(expect: fail) { "switch (a)" }
-statement(expect: fail, message: UNEXPECTED_EOF) { "switch (a) b" }
-statement(expect: fail) { "switch a) b;" }
-statement(expect: fail) { "switch (a b;" }
+statement(expect: recovered, message: UNEXPECTED_EOF) { "switch (a) {" }
+statement(expect: recovered, message: UNEXPECTED_EOF) { "switch (a) { b" }
+statement(expect: fail) { "switch a) { b; }" }
+statement(expect: fail) { "switch (a { b; }" }
 statement(expect: fail) { "while" }
 statement(expect: fail) { "while (" }
 statement(expect: fail) { "while (a" }
@@ -312,10 +327,12 @@ statement(expect: fail) { class q extends a implements b }
 statement(expect: fail) { "class extends a implements b {" }
 statement(expect: recovered) { "class q extends a implements b {" }
 statement(expect: fail) { "monitor" }
-statement(expect: fail) { "monitor a" }
-statement(expect: recovered) { "monitor a {" }
-statement(expect: recovered) { "monitor a { b" }
-statement(expect: recovered) { "monitor a { b;" }
+statement(expect: fail) { "monitor class" }
+
+statement(expect: fail) { "monitor class a" }
+statement(expect: recovered) { "monitor class a {" }
+statement(expect: recovered) { "monitor class a { b" }
+statement(expect: recovered) { "monitor class a { b;" }
 statement(expect: fail) { "flags" }
 statement(expect: fail) { "flags a" }
 statement(expect: fail) { "flags {b}" }
@@ -545,8 +562,6 @@ expression() { a.b }
 expression() { a.bytes }
 expression() { a[b] }
 expression() { a[b] }
-expression() { "a[b]{ c }" }
-expression() { "a[b]{ c, d }" }
 expression() { a[b:] }
 expression() { a[b:c] }
 expression() { "a()" }

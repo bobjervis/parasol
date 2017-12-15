@@ -1442,7 +1442,7 @@ statement() { "for (;; c) d;" }
 statement() { "for (; b;) d;" }
 statement() { "for (a;;) d;" }
 statement() { "for (;;) d;" }
-statement() { "for (a  b : c) d;" }
+statement() { "for (a in b) c;" }
 statement() { "if (a) b;" }
 statement() { "if (a) b; else c;" }
 statement() { "if (a) b; else if (c) d;" }
@@ -1645,7 +1645,7 @@ statement(expect: fail) { "for (a  b" }
 statement(expect: fail) { "for (a  b :" }
 statement(expect: fail) { "for (a  b : c" }
 statement(expect: fail) { "for (a  b : c)" }
-statement(expect: fail, message: UNEXPECTED_EOF) { "for (a  b : c) d" }
+statement(expect: fail, message: UNEXPECTED_EOF) { "for (a in c) d" }
 statement(expect: fail) { "for a  b : c) d;" }
 statement(expect: fail) { "for (a  b c) d;" }
 statement(expect: fail) { "for (a  b : c d;" }

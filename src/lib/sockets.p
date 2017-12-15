@@ -270,7 +270,7 @@ public abstract int inet_aton(pointer<byte> cp, ref<in_addr> inp);
 // Have to figure out what this is doing - does the argument need to be unsigned or in_addr or ref<in_addr>?
 @Windows("ws2_32.dll", "inet_ntoa")
 @Linux("libc.so.6", "inet_ntoa")
-public abstract pointer<byte> inet_ntoa(unsigned in);
+public abstract pointer<byte> inet_ntoa(unsigned inet);
 
 @Linux("libc.so.6", "inet_ntop")
 public abstract pointer<byte> inet_ntop(int af, address src, pointer<byte> dst, unsigned size);

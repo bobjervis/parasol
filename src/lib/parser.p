@@ -255,7 +255,9 @@ class Parser {
 			if (t == Token.SEMI_COLON)
 				return parseGeneralizedFor(x, location);
 			else if (t == Token.IDENTIFIER)
-				return parseCollectionFor(x, location);
+				return parseScopedFor(x, location);
+			else if (t == Token.IN)
+				return parseIteratorFor(x, location);
 			else {
 				_scanner.pushBack(t);
 				return resync(MessageId.SYNTAX_ERROR);
@@ -1122,33 +1124,33 @@ class Parser {
 		return _tree.newFor(op, initializer, test, increment, body, location);
 	}
 
-	private ref<Node> parseCollectionFor(ref<Node> type, Location location) {
+	private ref<Node> parseScopedFor(ref<Node> type, Location location) {
 		ref<Identifier> id = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
 		Token t = _scanner.next();
-		if (t == Token.EQUALS) {
-			Location loc = _scanner.location();
-			ref<Node> initializer = parseExpression(0);
-			if (initializer.op() == Operator.SYNTAX_ERROR)
-				return initializer;
-			t = _scanner.next();
-			if (t != Token.SEMI_COLON) {
-				_scanner.pushBack(t);
-				return resync(MessageId.SYNTAX_ERROR);
-			}
-			ref<Node> x = _tree.newBinary(Operator.INITIALIZE, id, initializer, loc);
-			x = _tree.newDeclaration(type, x, location);
-			return parseGeneralizedFor(x, location);
-		}
-		if (t != Token.COLON) {
+		if (t != Token.EQUALS) {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
+		Location loc = _scanner.location();
+		ref<Node> initializer = parseExpression(0);
+		if (initializer.op() == Operator.SYNTAX_ERROR)
+			return initializer;
+		t = _scanner.next();
+		if (t != Token.SEMI_COLON) {
+			_scanner.pushBack(t);
+			return resync(MessageId.SYNTAX_ERROR);
+		}
+		ref<Node> x = _tree.newBinary(Operator.INITIALIZE, id, initializer, loc);
+		x = _tree.newDeclaration(type, x, location);
+		return parseGeneralizedFor(x, location);
+	}
+
+	private ref<Node> parseIteratorFor(ref<Node> iteratorVar, Location location) {
 		ref<Loop> loop = _tree.newLoop(location);
-		ref<Node> declarator = _tree.newBinary(Operator.BIND, type, id, id.location());
 		ref<Node> aggregate = parseExpression(0);
 		if (aggregate.op() == Operator.SYNTAX_ERROR)
 			return aggregate;
-		t = _scanner.next();
+		Token t = _scanner.next();
 		if (t != Token.RIGHT_PARENTHESIS) {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
@@ -1156,7 +1158,7 @@ class Parser {
 		ref<Node> body = parseStatement();
 		if (body.op() == Operator.SYNTAX_ERROR)
 			return body;
-		loop.attachParts(declarator, aggregate, body);
+		loop.attachParts(iteratorVar, aggregate, body);
 		return loop;
 	}
 
