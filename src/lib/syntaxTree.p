@@ -2027,10 +2027,12 @@ class Leaf extends Node {
 }
 
 class Loop extends Node {
-	private ref<Node> _declarator;
+	private ref<Identifier> _declarator;
 	private ref<Node> _aggregate;
 	private ref<Node> _body;
 	
+	ref<Scope> scope;
+
 	Loop(Location location) {
 		super(Operator.LOOP, location);
 	}
@@ -2108,15 +2110,57 @@ class Loop extends Node {
 		return null;
 	}
 
-	public ref<Loop> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
-		return this;
-	}
-	
-	public void print(int indent) {
-		assert(false);
+	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+		ref<Node> init;
+		ref<Node> test;
+		ref<Node> increment;
+		if (_aggregate.type.isVector(compileContext)) {
+			ref<Identifier> id = _declarator.clone(tree);
+			ref<Node> zero = tree.newInternalLiteral(0, location());
+			zero.type = id.type;
+			ref<Node> assign = tree.newBinary(Operator.ASSIGN, id, zero, location());
+			assign.type = _declarator.type;
+			ref<Variable> len = compileContext.newVariable(_declarator.type);
+			ref<Node> r = tree.newReference(len, true, location());
+			ref<OverloadInstance> oi;
+			ref<Node> value = createMethodCall(_aggregate, "length", tree, compileContext);
+			value.type = _declarator.type;
+			ref<Node> assign2 = tree.newBinary(Operator.ASSIGN, r, value, location());
+			assign2.type = _declarator.type;
+			init = tree.newBinary(Operator.SEQUENCE, assign, assign2, location());
+			init.type = _declarator.type;
+			init = init.fold(tree, true, compileContext);
+			id = _declarator.clone(tree);
+			r = tree.newReference(len, false, location());
+			test = tree.newBinary(Operator.LESS, id, r, location());
+			test.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+			increment = tree.newUnary(Operator.INCREMENT_BEFORE, _declarator, location());
+			increment.type = _declarator.type;
+		} else {
+			printf("Not a vector aggregate\n");
+			print(0);
+//			assert(false);
+			return _body.fold(tree, true, compileContext);
+		}
+		ref<Node> loop = tree.newFor(Operator.FOR, init, test, increment, _body.fold(tree, true, compileContext), location());
+		loop.type = type;
+//		loop.print(0);
+		return loop;
 	}
 
-	public void attachParts(ref<Node> declarator, ref<Node> aggregate, ref<Node> body) {
+	public void print(int indent) {
+		if (_declarator != null)
+			_declarator.print(indent + INDENT);
+		printBasic(indent);
+		printf("\n");
+		if (_aggregate != null)
+			_aggregate.print(indent + INDENT);
+		printf("%*.*c  {loop body}\n", indent, indent, ' ');
+		if (_body != null)
+			_body.print(indent + INDENT);
+	}
+
+	public void attachParts(ref<Identifier> declarator, ref<Node> aggregate, ref<Node> body) {
 		_declarator = declarator;
 		_aggregate = aggregate;
 		_body = body;
@@ -2125,6 +2169,36 @@ class Loop extends Node {
 	boolean definesScope() {
 		assert(false);
 		return false;
+	}
+	
+	void assignTypes(ref<CompileContext> compileContext) {
+//		compileContext.assignTypes(_declarator);
+		compileContext.assignTypes(_aggregate);
+		type = compileContext.arena().builtInType(TypeFamily.VOID);
+		if (_aggregate.type.deferAnalysis())
+			type = _declarator.type = _aggregate.type;
+		else {
+			_declarator.type = _aggregate.type.indexType(compileContext);
+			if (_declarator.type == null) {
+				_aggregate.add(MessageId.NOT_A_SHAPE, compileContext.pool());
+				type = _declarator.type = compileContext.errorType();
+			}
+		}
+		ref<Scope> outer = compileContext.setCurrent(scope);
+		compileContext.assignTypes(_body);
+		compileContext.setCurrent(outer);
+	}
+
+	public ref<Identifier> declarator() {
+		return _declarator;
+	}
+
+	public ref<Node> aggregate() {
+		return _aggregate;
+	}
+
+	public ref<Node> body() {
+		return _body;
 	}
 }
 
@@ -3467,6 +3541,7 @@ class Node {
 		case	LOCK:
 		case	LOGICAL_AND:
 		case	LOGICAL_OR:
+		case	LOOP:
 		case	MONITOR_CLASS:
 		case	MULTIPLY:
 		case	MULTIPLY_ASSIGN:

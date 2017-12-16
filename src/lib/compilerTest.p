@@ -49,18 +49,20 @@ import parasol:compiler.TraverseAction;
 
 private boolean verboseFlag;
 private boolean compileFromSourceArgument;
+private boolean printSymbolTable;
 private string rootFolder;
 private string srcFolder;
 private string parasolCommand;
 private string targetArgument;
 
-public void initTestObjects(string argv0, boolean verbose, boolean compileFromSource, string target) {
+public void initTestObjects(string argv0, boolean verbose, boolean compileFromSource, boolean symbols, string target) {
 	verboseFlag = verbose;
 	rootFolder = storage.directory(storage.directory(process.binaryFilename()));
 	srcFolder = rootFolder + "/test/src";
 	parasolCommand = argv0;
 	targetArgument = target;
 	compileFromSourceArgument = compileFromSource;
+	printSymbolTable = symbols;
 	script.objectFactory("codePoint", CodePointObject.factory);
 	script.objectFactory("compile", CompileObject.factory);
 	script.objectFactory("expression", ExpressionObject.factory);
@@ -548,6 +550,9 @@ class CompileObject  extends script.Object {
 		int preCodeGenerationMessages = arena.countMessages();
 		boolean nodesOrdered = checkInOrder(f.tree().root(), _source);
 		ref<Target> target = arena.codegen(f, true, verboseFlag, &context);
+
+		if (printSymbolTable)
+			arena.printSymbolTable();
 
 		Expect outcome;
 		

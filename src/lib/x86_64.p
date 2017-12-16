@@ -47,6 +47,7 @@ import parasol:compiler.InterfaceType;
 import parasol:compiler.InternalLiteral;
 import parasol:compiler.Jump;
 import parasol:compiler.LockScope;
+import parasol:compiler.Loop;
 import parasol:compiler.MessageId;
 import parasol:compiler.Node;
 import parasol:compiler.NodeList;
@@ -1210,6 +1211,31 @@ public class X86_64 extends X86_64AssignTemps {
 			JumpContext forContext(forStmt, join, topOfLoop, null, this, jumpContext());
 			pushJumpContext(&forContext);
 			generate(forStmt.body(), compileContext);
+			popJumpContext();
+			closeCodeSegment(CC.JMP, topOfLoop);
+			join.start(this);
+			break;
+
+		case	LOOP:
+			ref<Loop> loop = ref<Loop>(node);
+//			loop.print(0);
+			testSegment = _storage new CodeSegment;
+			join = _storage new CodeSegment;
+			topOfLoop = _storage new CodeSegment;
+
+			closeCodeSegment(CC.JMP, testSegment);
+			topOfLoop.start(this);
+//			generate(forStmt.increment(), compileContext);
+			testSegment.start(this);
+			trueSegment = _storage new CodeSegment;
+//			markAddressModes(forStmt.test(), compileContext);
+//			sethiUllman(forStmt.test(), compileContext, this);
+//			assignConditionCode(forStmt.test(), compileContext);
+//			generateConditional(forStmt.test(), trueSegment, join, compileContext);
+			trueSegment.start(this);
+			JumpContext loopContext(loop, join, topOfLoop, null, this, jumpContext());
+			pushJumpContext(&loopContext);
+			generate(loop.body(), compileContext);
 			popJumpContext();
 			closeCodeSegment(CC.JMP, topOfLoop);
 			join.start(this);

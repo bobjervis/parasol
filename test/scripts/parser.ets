@@ -230,14 +230,22 @@ statement(expect: fail) { "for (a;; d;" }
 statement(expect: fail) { "for (;;)" }
 statement(expect: fail, message: UNEXPECTED_EOF) { "for (;;) d" }
 statement(expect: fail) { "for (;) d;" }
+statement(expect: fail) { "for (a b" }
+statement(expect: fail) { "for (a in" }
 statement(expect: fail) { "for (a  b" }
-statement(expect: fail) { "for (a  b :" }
-statement(expect: fail) { "for (a  b : c" }
-statement(expect: fail) { "for (a  b : c)" }
+statement(expect: fail) { "for (a  b =" }
+statement(expect: fail) { "for (a  b = c" }
+statement(expect: fail) { "for (a  b = c; " }
+statement(expect: fail) { "for (a  b = c; d" }
+statement(expect: fail) { "for (a  b = c; d;" }
+statement(expect: fail) { "for (a  b = c; d; e" }
+statement(expect: fail) { "for (a  b = c; d; e) " }
+statement(expect: fail, message: UNEXPECTED_EOF) { "for (a  b = c; d; e) f" }
+statement(expect: fail) { "for (a in c" }
+statement(expect: fail) { "for (a in c)" }
 statement(expect: fail, message: UNEXPECTED_EOF) { "for (a in c) d" }
-statement(expect: fail) { "for a  b : c) d;" }
-statement(expect: fail) { "for (a  b c) d;" }
-statement(expect: fail) { "for (a  b : c d;" }
+statement(expect: fail) { "for a in c) d;" }
+statement(expect: fail) { "for (a in c d;" }
 statement(expect: fail) { if }
 statement(expect: fail) { "if (" }
 statement(expect: fail) { "if (a" }

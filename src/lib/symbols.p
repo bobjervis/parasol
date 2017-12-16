@@ -215,14 +215,33 @@ class PlainSymbol extends Symbol {
 					_type = compileContext.arena().builtInType(TypeFamily.CLASS_VARIABLE);
 			} else {
 				compileContext.assignTypes(enclosing(), _typeDeclarator);
-				if (_typeDeclarator.op() == Operator.CLASS_DECLARATION ||
-					_typeDeclarator.op() == Operator.ENUM_DECLARATION ||
-					_typeDeclarator.op() == Operator.INTERFACE_DECLARATION)
+				switch (_typeDeclarator.op()) {
+				case CLASS_DECLARATION:
+				case ENUM_DECLARATION:
+				case INTERFACE_DECLARATION:
 					_type = _typeDeclarator.type;
-				else if (_typeDeclarator.op() == Operator.FUNCTION)
+					break;
+
+				case FUNCTION:
 					_type = _typeDeclarator.type;
-				else
+					break;
+
+				case LOOP:
+					ref<Loop> loop = ref<Loop>(_typeDeclarator);
+					ref<Type> t = loop.aggregate().type;
+					if (t.deferAnalysis())
+						_type = t;
+					else if (t.family() == TypeFamily.SHAPE)
+						_type = t.indexType(compileContext);
+					else {
+						loop.aggregate().add(MessageId.NOT_A_SHAPE, compileContext.pool());
+						_type = compileContext.errorType();
+					}
+					break;
+					
+				default:
 					_type = _typeDeclarator.unwrapTypedef(Operator.CLASS, compileContext);
+				}
 			}
 		}
 		return _type;

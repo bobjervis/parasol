@@ -122,6 +122,7 @@ int main(string[] args) {
 		pxiName = parasolCommand.testPxiArgument.value;
 	initTestObjects(process.binaryFilename() + " " + pxiName, parasolCommand.verboseArgument.value, 
 			parasolCommand.compileFromSourceArgument.value,
+			parasolCommand.symbolTableArgument.value,
 			parasolCommand.targetArgument.value);
 //		initCommonTestObjects();
 	string[] s = parasolCommand.finalArgs();

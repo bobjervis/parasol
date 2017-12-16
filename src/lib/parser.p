@@ -1146,6 +1146,8 @@ class Parser {
 	}
 
 	private ref<Node> parseIteratorFor(ref<Node> iteratorVar, Location location) {
+		if (iteratorVar.op() != Operator.IDENTIFIER)
+			return resync(MessageId.SYNTAX_ERROR);
 		ref<Loop> loop = _tree.newLoop(location);
 		ref<Node> aggregate = parseExpression(0);
 		if (aggregate.op() == Operator.SYNTAX_ERROR)
@@ -1158,7 +1160,7 @@ class Parser {
 		ref<Node> body = parseStatement();
 		if (body.op() == Operator.SYNTAX_ERROR)
 			return body;
-		loop.attachParts(iteratorVar, aggregate, body);
+		loop.attachParts(ref<Identifier>(iteratorVar), aggregate, body);
 		return loop;
 	}
 

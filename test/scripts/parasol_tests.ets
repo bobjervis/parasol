@@ -195,6 +195,7 @@ run(filename: unsigned_ops.p)
 run(filename: enum_ops.p)
 run(filename: private_enum_access.p)
 run(filename: control_flow.p)
+run(filename: loop_ops.p)
 run(filename: call_args.p)
 run(filename: coerce_ops.p)
 run(filename: lib_ref.p, exitCode: 5)
@@ -781,7 +782,6 @@ compile(expect: fail, message: NOT_NUMERIC) { "boolean a; a = a++;" }
 
 compile(expect: fail) { "ref<int> x; if (x == 0) x = new int;" }
 
-compile() { "int β; β = 56;" }
 
 // The matrix of allowed operators for pointer operands:
 
@@ -1378,6 +1378,11 @@ compile() { "int[] a = [ 1, 2, 3 ];" }
 compile() { "int[string] b = [ \"a\": 4, \"b\": 17, \"c\": -23, ];" }
 compile() { "enum E { A, B, C } string[E] x = [ B: \"abc\", \"def\" ];" }
 
+compile() { "int[] a; for (i in a) { ref<int> p = &i; }" }
+
+compile(expect: fail) { "pointer<int> a; for (i in a) { ref<int> p = &i; }" }
+
+
 compile(expect: fail) { "class C { C(int x) {} } C x;" }
 
 compile() { "class C { int a, b, c; } C c = { a: 3, c: 7, b: -1 };" }
@@ -1406,6 +1411,8 @@ compile(expect: fail) { "void foo(foo bar);" }
 
 compile(expect: fail, message: DUPLICATE) { "int i, i;" }
 compile() { ";" }
+compile() { "int β; β = 56;" }
+
 
 statement() { ; }
 statement() { a; }
@@ -1642,13 +1649,13 @@ statement(expect: fail) { "for (;;)" }
 statement(expect: fail, message: UNEXPECTED_EOF) { "for (;;) d" }
 statement(expect: fail) { "for (;) d;" }
 statement(expect: fail) { "for (a  b" }
-statement(expect: fail) { "for (a  b :" }
-statement(expect: fail) { "for (a  b : c" }
-statement(expect: fail) { "for (a  b : c)" }
+statement(expect: fail) { "for (a in" }
+statement(expect: fail) { "for (a in c" }
+statement(expect: fail) { "for (a in c)" }
 statement(expect: fail, message: UNEXPECTED_EOF) { "for (a in c) d" }
-statement(expect: fail) { "for a  b : c) d;" }
-statement(expect: fail) { "for (a  b c) d;" }
-statement(expect: fail) { "for (a  b : c d;" }
+statement(expect: fail) { "for a in c) d;" }
+statement(expect: fail) { "for (a in c d;" }
+
 statement(expect: fail) { if }
 statement(expect: fail) { "if (" }
 statement(expect: fail) { "if (a" }

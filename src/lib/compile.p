@@ -284,7 +284,13 @@ class CompileContext {
 			// Note: middle is always IDENTIFIER so no new scopes.
 			buildScopesInTree(tern.right());
 			break;
-			
+
+		case	LOOP:
+			ref<Loop> loop = ref<Loop>(definition);
+			buildScopesInTree(loop.aggregate());
+			buildScopesInTree(loop.body());
+			break;
+
 		default:
 			definition.print(0);
 			assert(false);
@@ -484,7 +490,9 @@ class CompileContext {
 			return TraverseAction.SKIP_CHILDREN;
 			
 		case	LOOP:
-			createScope(n, StorageClass.AUTO);
+			ref<Loop> loop = ref<Loop>(n);
+			loop.scope = createScope(n, StorageClass.AUTO);
+			loop.declarator().bind(loop.scope, loop, null, this);
 			return TraverseAction.SKIP_CHILDREN;
 	
 		case	CATCH:
@@ -907,7 +915,18 @@ class CompileContext {
 				popFlowContext();
 			}
 			break;
-		
+
+		case LOOP:
+			ref<Loop> loop = ref<Loop>(n);
+			{
+				FlowContext flowContext(loop, scope, _flowContext);
+				pushFlowContext(&flowContext);
+				scope = loop.scope;
+				assignControlFlow(loop.body(), scope);
+				popFlowContext();
+			}
+			break;
+
 		case TRY:
 			ref<Try> tr = ref<Try>(n);
 			assignControlFlow(tr.body(), scope);
