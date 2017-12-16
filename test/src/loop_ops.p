@@ -65,3 +65,51 @@ assert(case1);
 assert(case2);
 assert(case3);
 
+string[string] m;
+
+m["abc"] = "def";
+m["ghi"] = "jkl";
+m["mno"] = "pqr";
+m["stu"] = "vwx";
+
+case0 = false;
+case1 = false;
+case2 = false;
+case3 = false;
+
+for (i in m) {
+	switch (i) {
+	case "abc":
+		assert(!case0);
+		assert(m[i] == "def");
+		case0 = true;
+		break;
+
+	case "ghi":
+		assert(!case1);
+		assert(m[i] == "jkl");
+		case1 = true;
+		break;
+
+	case "mno":
+		assert(!case2);
+		assert(m[i] == "pqr");
+		case2 = true;
+		break;
+
+	case "stu":
+		assert(!case3);
+		assert(m[i] == "vwx");
+		case3 = true;
+		break;
+
+	default:
+		assert(false);
+	}
+}
+
+assert(case0);
+assert(case1);
+assert(case2);
+assert(case3);
+

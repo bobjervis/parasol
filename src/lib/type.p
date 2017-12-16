@@ -1168,6 +1168,35 @@ class TemplateInstanceType extends ClassType {
 		return tt.wrappedType() == _templateType;
 	}
 
+	public ref<Type> mapIterator(ref<CompileContext> compileContext) {
+		ref<Symbol> sym = scope().lookup("iterator", compileContext);
+		if (sym == null) {
+			printf("iterator not defined\n");
+			return null;
+		}
+		if (sym.class != PlainSymbol) {
+			printf("iterator is not a PlainSymbol\n");
+			return null;
+		}
+		ref<PlainSymbol> ps = ref<PlainSymbol>(sym);
+		ref<Type> tp = ps.assignType(compileContext);
+		if (tp.family() != TypeFamily.TYPEDEF) {
+			printf("iterator is not a type: %s\n", tp.signature());
+			return null;
+		}
+		tp = ref<TypedefType>(tp).wrappedType();
+		if (tp == null) {
+			printf("Cannot unwrap iterator type: %s\n", ps.type().signature());
+			return null;
+		}
+		if (tp.family() != TypeFamily.CLASS) {
+			printf("iterator's type is not a CLASS: %s\n", tp.signature());
+			return null;
+		}
+		return tp;
+
+	}
+
 	public boolean isLockable() {
 		if (_templateType.isMonitorTemplate())
 			return true;
@@ -1665,6 +1694,10 @@ class Type {
 		return false;
 	}
 	
+	public ref<Type> mapIterator(ref<CompileContext> compileContext) {
+		return null;
+	}
+
 	boolean isCompactIndexType() {
 		switch (_family) {
 		case	UNSIGNED_8:

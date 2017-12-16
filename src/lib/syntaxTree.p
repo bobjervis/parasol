@@ -2111,6 +2111,8 @@ class Loop extends Node {
 	}
 
 	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+		if (type.deferAnalysis())
+			return this;
 		ref<Node> init;
 		ref<Node> test;
 		ref<Node> increment;
@@ -2137,10 +2139,43 @@ class Loop extends Node {
 			increment = tree.newUnary(Operator.INCREMENT_BEFORE, _declarator, location());
 			increment.type = _declarator.type;
 		} else {
-			printf("Not a vector aggregate\n");
-			print(0);
-//			assert(false);
-			return _body.fold(tree, true, compileContext);
+			ref<Type> iteratorClass = _aggregate.type.mapIterator(compileContext);
+			if (iteratorClass == null) {
+				printf("Not a well-formed aggregate: %s\n", _aggregate.type.signature());
+				print(0);
+				assert(false);
+			}
+			ref<Variable> iterator = compileContext.newVariable(iteratorClass);
+			ref<Node> r = tree.newReference(iterator, true, location());
+			ref<Node> value = createMethodCall(_aggregate, "begin", tree, compileContext);
+			value.type = iteratorClass;
+			init = tree.newBinary(Operator.INITIALIZE, r, value, location());
+			init.type = iteratorClass;
+			init = init.fold(tree, true, compileContext);
+			r = tree.newReference(iterator, false, location());
+			test = createMethodCall(r, "hasNext", tree, compileContext);
+			test.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+			test = test.fold(tree, false, compileContext);
+			r = tree.newReference(iterator, false, location());
+			increment = createMethodCall(r, "next", tree, compileContext);
+			increment.type = compileContext.arena().builtInType(TypeFamily.VOID);
+			increment = increment.fold(tree, true, compileContext);
+
+			r = tree.newReference(iterator, false, location());
+			value = createMethodCall(r, "key", tree, compileContext);
+			value.type = _declarator.type;
+			value = tree.newBinary(Operator.ASSIGN_TEMP, _declarator, value, location());
+			value.type = _declarator.type;
+			value = tree.newUnary(Operator.EXPRESSION, value, location());
+			value.type = increment.type;
+			ref<Block> b = tree.newBlock(Operator.BLOCK, false, location());
+ 			b.statement(tree.newNodeList(value));
+			b.statement(tree.newNodeList(_body));
+			if (_body.class <= Block) {
+				ref<Block> inner = ref<Block>(_body);
+				b.closeCurlyLocation = inner.closeCurlyLocation;
+			}
+			_body = b;
 		}
 		ref<Node> loop = tree.newFor(Operator.FOR, init, test, increment, _body.fold(tree, true, compileContext), location());
 		loop.type = type;
@@ -3856,6 +3891,7 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 	case	PLACEMENT_NEW:
 	case	CALL_DESTRUCTOR:
 	case	IF:
+	case	ASSIGN_TEMP:
 		break;
 		
 	case	ASSIGN:
