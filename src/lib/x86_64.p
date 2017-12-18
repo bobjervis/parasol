@@ -616,8 +616,12 @@ public class X86_64 extends X86_64AssignTemps {
 					
 				case	THUNK:
 					ref<ThunkScope> thunk = ref<ThunkScope>(parameterScope);
-					inst(X86.SUB, TypeFamily.ADDRESS, firstRegisterArgument(), thunk.thunkOffset());
-					instJump(thunk.func(), compileContext);
+					if (thunk.func() == null)
+						inst(X86.RET);
+					else {
+						inst(X86.SUB, TypeFamily.ADDRESS, firstRegisterArgument(), thunk.thunkOffset());
+						instJump(thunk.func(), compileContext);
+					}
 					break;
 					
 				default:

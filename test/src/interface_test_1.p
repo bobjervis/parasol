@@ -20,7 +20,7 @@ interface A {
 }
 
 class B {
-	long _fillter;		// TO give the interface slot a non-zero offset.
+	long _filler;		// TO give the interface slot a non-zero offset.
 }
 
 class C extends B implements A {
@@ -31,7 +31,7 @@ class C extends B implements A {
 	void g(string z) {
 		printf(z);
 		assert(z.startsWith("hel"));
-		_fillter = 17;
+		_filler = 17;
 	}
 }
 
@@ -40,7 +40,7 @@ ref<C> c = new C;
 A testInterface = c;
 
 testInterface.g("hello");
-assert(c._fillter == 17);
+assert(c._filler == 17);
 
 printf("testInterface.f(0x200000045) = %d\n", testInterface.f(0x200000045));
 assert(testInterface.f(0x200000045) == 69);

@@ -550,6 +550,7 @@ class X86_64Encoder extends Target {
 				getFunctionAddress(functionScope, compileContext);
 			}
 			if (scope.class == InterfaceImplementationScope) {
+				getFunctionAddress(scope.destructor(), compileContext);
 				ref<ref<ThunkScope>[]> thunks = ref<InterfaceImplementationScope>(scope).thunks();
 				for (int i = 0; i < thunks.length(); i++)
 					getFunctionAddress((*thunks)[i], compileContext);
@@ -567,17 +568,19 @@ class X86_64Encoder extends Target {
 			int tableEnd = tableStart + entries * address.bytes;
 			pointer<address> table = pointer<address>(_segments[Segments.VTABLES].at(tableStart));
 			*table = address(_pxiHeader.typeDataOffset + scope.classType.copyToImage(this) - 1);
-			if (scope.destructor() != null) {
+			if (scope.class == InterfaceImplementationScope) {
 				int target = int(scope.destructor().value) - 1;
 				table[1] = address(target);
-			}
-			if (scope.class == InterfaceImplementationScope) {
 				ref<ref<ThunkScope>[]> thunks = ref<InterfaceImplementationScope>(scope).thunks();
 				for (int j = 0; j < thunks.length(); j++) {
 					int target = int((*thunks)[j].value) - 1;
 					table[j + FIRST_USER_METHOD] = address(target);
 				}
 			} else {
+				if (scope.destructor() != null) {
+					int target = int(scope.destructor().value) - 1;
+					table[1] = address(target);
+				}
 				for (int j = 0; j < scope.methods().length(); j++) {
 					ref<OverloadInstance> oi = (*scope.methods())[j];
 					ref<ParameterScope> functionScope = oi.parameterScope();

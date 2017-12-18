@@ -124,6 +124,7 @@ run(filename: loop_fallthrough_test.p)
 
 run(filename: interface_test_1.p)
 run(filename: interface_test_2.p)
+run(filename: interface_test_3.p)
 run(filename: monitor_test_1.p)
 run(filename: monitor_test_2.p)
 run(filename: monitor_test_3.p)

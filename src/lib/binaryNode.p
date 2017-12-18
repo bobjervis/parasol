@@ -426,15 +426,14 @@ class Binary extends Node {
 				defn.type = type;
 				r = tree.newReference(temp, false, location());
 				constructor.setConstructorMemory(r, tree);
-				ref<Node> seq = tree.newBinary(Operator.SEQUENCE, defn, constructor, location());
+				ref<Node> seq = tree.newBinary(Operator.SEQUENCE, defn, constructor.fold(tree, true, compileContext), location());
 				seq.type = compileContext.arena().builtInType(TypeFamily.VOID);
 				if (voidContext)
-					return seq.fold(tree, true, compileContext);
+					return seq;
 				r = tree.newReference(temp, false, location());
 				seq = tree.newBinary(Operator.SEQUENCE, seq, r, location());
 				seq.type = type;
-				ref<Node> result = seq.fold(tree, false, compileContext);
-				return result;
+				return seq;
 			} else {
 				if (allocation == this) {
 					_right = tree.newLeaf(Operator.EMPTY, location());
@@ -448,11 +447,12 @@ class Binary extends Node {
 			break;
 			
 		case	DELETE:
-			ref<Type> objType = _right.type.indirectType(compileContext);
-			ref<Node> destructors = null;
+			ref<Node> defn;
+			ref<Node> value;
+			(defn, value) = cloneDefnValue(tree, _right, compileContext);
 			ref<Node> completion;
 			if (_left.op() == Operator.EMPTY) {
-				_right = _right.fold(tree, false, compileContext);
+				_right = value.fold(tree, false, compileContext);
 				completion = this;
 			} else {
 				ref<Node> allocator = _left;
@@ -461,39 +461,36 @@ class Binary extends Node {
 					allocator = tree.newUnary(Operator.INDIRECT, _left, location());
 					allocator.type = allocatorType;
 				}
-				ref<Node> call = createMethodCall(allocator.fold(tree, false, compileContext), "free", tree, compileContext, _right);
+				ref<Node> call = createMethodCall(allocator.fold(tree, false, compileContext), "free", tree, compileContext, value);
 				call.type = type;
 				completion = call.fold(tree, true, compileContext);
 			}
+			ref<Type> objType = value.type.indirectType(compileContext);
+			if (value.type.family() == TypeFamily.INTERFACE)
+				objType = value.type;
+			else
+				objType = value.type.indirectType(compileContext);
 			if (objType.hasDestructor()) {
-				ref<Node> defn;
-				ref<Node> value;
-				(defn, value) = cloneDefnValue(tree, _right, compileContext);
-				_right = value.clone(tree);
 				ref<ParameterScope> des = objType.scope().destructor();
 				ref<Call> call = tree.newCall(des, CallCategory.DESTRUCTOR, value, null, location(), compileContext);
-				call.type = type;			// We know this is VOID
 				value = value.clone(tree);
+				call.type = type;			// We know this is VOID
+				completion = tree.newBinary(Operator.SEQUENCE, call.fold(tree, false, compileContext), completion, location());
+				completion.type = type;
 				ref<Node> con = tree.newConstant(0, location());
 				con.type = value.type;
 				ref<Node> compare = tree.newBinary(Operator.NOT_EQUAL, value, con, location());
 				compare.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
 				ref<Node> nullPath = tree.newLeaf(Operator.EMPTY, location());
 				nullPath.type = call.type;
-				completion = tree.newBinary(Operator.SEQUENCE, call.fold(tree, false, compileContext), completion, location());
-				completion.type = type;
-				ref<Node> choice = tree.newTernary(Operator.CONDITIONAL, compare, completion, nullPath, location());
-				choice.type = call.type;
-				if (defn != null) {
-					destructors = tree.newBinary(Operator.SEQUENCE, defn.fold(tree, true, compileContext), choice, location());
-					destructors.type = choice.type;
-				} else
-					destructors = choice;
-				return destructors;
-			} else
-				return completion;
-			break;
-			
+				completion = tree.newTernary(Operator.CONDITIONAL, compare, completion, nullPath, location());
+				completion.type = call.type;
+			}
+			if (defn != null) {
+				completion = tree.newBinary(Operator.SEQUENCE, defn.fold(tree, true, compileContext), completion, location());
+				completion.type = this.type;
+			}
+			return completion;
 			
 		case	MULTIPLY:
 			if (type.family() == TypeFamily.VAR) {
@@ -1097,7 +1094,7 @@ class Binary extends Node {
 	
 	private ref<Node> defaultNewInitialization(ref<Node> allocation, ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
 		ref<Type> objType = type.indirectType(compileContext);
-		if (objType.hasVtable(compileContext)) {
+		if (objType.hasVtable(compileContext) || objType.interfaceCount() > 0) {
 			ref<Variable> temp = compileContext.newVariable(type);
 			ref<Reference> r = tree.newReference(temp, true, location());
 			ref<Node> defn = tree.newBinary(Operator.ASSIGN, r, allocation, location());
@@ -1752,7 +1749,9 @@ class Binary extends Node {
 				type = _right.type;
 				break;
 			}
-			if (_right.canCoerce(compileContext.arena().builtInType(TypeFamily.ADDRESS), false, compileContext)) 
+			if (_right.type.family() == TypeFamily.INTERFACE)
+				type = compileContext.arena().builtInType(TypeFamily.VOID);
+			else if (_right.canCoerce(compileContext.arena().builtInType(TypeFamily.ADDRESS), false, compileContext)) 
 				type = compileContext.arena().builtInType(TypeFamily.VOID);
 			else {
 				_right.add(MessageId.CANNOT_CONVERT, compileContext.pool());

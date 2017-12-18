@@ -399,9 +399,10 @@ class ClasslikeScope extends Scope {
 						ref<ref<InterfaceImplementationScope>[]> interfaces = baseClass.interfaces();
 						for (int i = 0; i < interfaces.length(); i++) {
 							ref<InterfaceImplementationScope> iface = (*interfaces)[i];
-							if (iface.implementingClass().destructor() != classType.destructor())
+							if (iface.implementingClass().destructor() != classType.destructor()) {
 								iface = compileContext.arena().createInterfaceImplementationScope(iface.iface(), classType, iface, 0);
-							else
+								iface.defineDestructor(compileContext.arena().createThunkScope(iface, destructor()), compileContext.pool());
+							} else
 								iface = mergeNovelImplementationMethods(iface, compileContext);
 							iface.makeThunks(compileContext);
 							_interfaces.append(iface);
@@ -422,6 +423,7 @@ class ClasslikeScope extends Scope {
 						for (int j = 0; ; j++) {
 							if (j >= _interfaces.length()) {
 								ref<InterfaceImplementationScope> impl = compileContext.arena().createInterfaceImplementationScope(iface, classType, _reservedInterfaceSlots);
+								impl.defineDestructor(compileContext.arena().createThunkScope(impl, destructor()), compileContext.pool());
 								_reservedInterfaceSlots++;
 								impl.makeThunks(compileContext);
 								_interfaces.append(impl);
@@ -444,9 +446,12 @@ class ClasslikeScope extends Scope {
 			ref<ref<OverloadInstance>[]> methods = interfaceClass.methods();
 			for (int j = 0; j < methods.length(); j++) {
 				for (int k = 0; k < _methods.length(); k++) {
-					if (_methods[k].overrides((*methods)[j]))
+					if (_methods[k].overrides((*methods)[j])) {
 						// Bingo, we need a new interface implementation for this particular class, and we need to populate it.
-						return compileContext.arena().createInterfaceImplementationScope(ifaceDefinition, classType, iface, j);
+						ref<InterfaceImplementationScope> impl = compileContext.arena().createInterfaceImplementationScope(ifaceDefinition, classType, iface, j);
+						impl.defineDestructor(compileContext.arena().createThunkScope(impl, destructor()), compileContext.pool());
+						return impl;
+					}
 				}
 			}
 		}
@@ -571,8 +576,8 @@ class InterfaceImplementationScope extends ClassScope {
 		populateFromBase(baseInterface, firstNewMethod);
 	}
 	/**
-	 * This populates the methid table for this implementation based on the baseInterface.
-	 * 
+	 * This populates the method table for this implementation based on the baseInterface.
+	 *
 	 * Note that the Number of methods matching does not have to equal the number of methods on the interface. Such an interface
 	 * is missing a method in the class, so the class definition is broken. Any effort to use this InterfaceImplementation should fail
 	 */
@@ -966,6 +971,10 @@ class ThunkScope extends ParameterScope {
 	public boolean usesVTable(ref<CompileContext> compileContext) {
 		return true;
 	}
+
+	void printDetails() {
+		printf(" ThunkScope -> %p\n", _function);
+	}
 }
 
 class RootScope extends Scope {
@@ -1304,7 +1313,10 @@ class Scope {
 			switch (_definition.op()) {
 			case	FUNCTION:
 				ref<FunctionDeclaration> f = ref<FunctionDeclaration>(_definition);
-				if (f.name() != null)
+				if (f.functionCategory() == FunctionDeclaration.Category.DESTRUCTOR) {
+					if (f.name() != null)
+						return _enclosing.label() + ".~" + f.name().value().asString();
+				} else if (f.name() != null)
 					return _enclosing.label() + "." + f.name().value().asString();
 				break;
 				
