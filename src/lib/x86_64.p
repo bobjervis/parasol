@@ -616,11 +616,25 @@ public class X86_64 extends X86_64AssignTemps {
 					
 				case	THUNK:
 					ref<ThunkScope> thunk = ref<ThunkScope>(parameterScope);
-					if (thunk.func() == null)
+					if (thunk.isDestructor()) {
+						if (thunk.func() == null) {
+							inst(X86.LEA, R.RAX, R.RDI, -thunk.thunkOffset());
+						} else {
+							inst(X86.SUB, TypeFamily.ADDRESS, firstRegisterArgument(), thunk.thunkOffset());
+							inst(X86.PUSH, TypeFamily.ADDRESS, R.RDI);
+							inst(X86.SUB, TypeFamily.ADDRESS, R.RSP, 8);
+							instCall(thunk.func(), compileContext);
+							inst(X86.ADD, TypeFamily.ADDRESS, R.RSP, 8);
+							inst(X86.POP, TypeFamily.ADDRESS, R.RAX);
+						}
 						inst(X86.RET);
-					else {
-						inst(X86.SUB, TypeFamily.ADDRESS, firstRegisterArgument(), thunk.thunkOffset());
-						instJump(thunk.func(), compileContext);
+					} else {
+						if (thunk.func() == null)
+							inst(X86.RET);
+						else {
+							inst(X86.SUB, TypeFamily.ADDRESS, firstRegisterArgument(), thunk.thunkOffset());
+							instJump(thunk.func(), compileContext);
+						}
 					}
 					break;
 					
@@ -2178,8 +2192,12 @@ public class X86_64 extends X86_64AssignTemps {
 		case	DELETE:
 			b = ref<Binary>(node);
 			assert(b.left().op() == Operator.EMPTY);
-			generate(b.right(), compileContext);
-			f().r.generateSpills(node, this);
+			if (b.right().type.family() == TypeFamily.INTERFACE)
+				inst(X86.MOV, TypeFamily.ADDRESS, R.RDI, R.RAX);
+			else {
+				generate(b.right(), compileContext);
+				f().r.generateSpills(node, this);
+			}
 			instCall(_free, compileContext);
 			break;
 			

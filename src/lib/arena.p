@@ -396,8 +396,8 @@ public class Arena {
 		return s;
 	}
 	
-	public ref<ThunkScope> createThunkScope(ref<InterfaceImplementationScope> enclosing, ref<ParameterScope> func) {
-		ref<ThunkScope> s = new ThunkScope(enclosing, func);
+	public ref<ThunkScope> createThunkScope(ref<InterfaceImplementationScope> enclosing, ref<ParameterScope> func, boolean isDestructor) {
+		ref<ThunkScope> s = new ThunkScope(enclosing, func, isDestructor);
 		_scopes.append(s);
 		return s;
 	}

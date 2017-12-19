@@ -401,7 +401,7 @@ class ClasslikeScope extends Scope {
 							ref<InterfaceImplementationScope> iface = (*interfaces)[i];
 							if (iface.implementingClass().destructor() != classType.destructor()) {
 								iface = compileContext.arena().createInterfaceImplementationScope(iface.iface(), classType, iface, 0);
-								iface.defineDestructor(compileContext.arena().createThunkScope(iface, destructor()), compileContext.pool());
+								iface.defineDestructor(compileContext.arena().createThunkScope(iface, destructor(), true), compileContext.pool());
 							} else
 								iface = mergeNovelImplementationMethods(iface, compileContext);
 							iface.makeThunks(compileContext);
@@ -423,7 +423,7 @@ class ClasslikeScope extends Scope {
 						for (int j = 0; ; j++) {
 							if (j >= _interfaces.length()) {
 								ref<InterfaceImplementationScope> impl = compileContext.arena().createInterfaceImplementationScope(iface, classType, _reservedInterfaceSlots);
-								impl.defineDestructor(compileContext.arena().createThunkScope(impl, destructor()), compileContext.pool());
+								impl.defineDestructor(compileContext.arena().createThunkScope(impl, destructor(), true), compileContext.pool());
 								_reservedInterfaceSlots++;
 								impl.makeThunks(compileContext);
 								_interfaces.append(impl);
@@ -449,7 +449,7 @@ class ClasslikeScope extends Scope {
 					if (_methods[k].overrides((*methods)[j])) {
 						// Bingo, we need a new interface implementation for this particular class, and we need to populate it.
 						ref<InterfaceImplementationScope> impl = compileContext.arena().createInterfaceImplementationScope(ifaceDefinition, classType, iface, j);
-						impl.defineDestructor(compileContext.arena().createThunkScope(impl, destructor()), compileContext.pool());
+						impl.defineDestructor(compileContext.arena().createThunkScope(impl, destructor(), true), compileContext.pool());
 						return impl;
 					}
 				}
@@ -604,7 +604,7 @@ class InterfaceImplementationScope extends ClassScope {
 
 	public void makeThunks(ref<CompileContext> compileContext) {
 		for (int i = _thunks.length(); i < _methods.length(); i++)
-			_thunks.append(compileContext.arena().createThunkScope(this, _methods[i].parameterScope()));
+			_thunks.append(compileContext.arena().createThunkScope(this, _methods[i].parameterScope(), false));
 	}
 	
 	public ref<InterfaceType> iface() {
@@ -930,14 +930,19 @@ class ParameterScope extends Scope {
 
 class ThunkScope extends ParameterScope {
 	ref<ParameterScope> _function;
+	boolean _isDestructor;
 	
-	public ThunkScope(ref<InterfaceImplementationScope> enclosing, ref<ParameterScope> func) {
+	public ThunkScope(ref<InterfaceImplementationScope> enclosing, ref<ParameterScope> func, boolean isDestructor) {
 		super(enclosing, null, Kind.THUNK);
 		_function = func;
+		_isDestructor = isDestructor;
 	}
 	
 	public ref<ParameterScope> func() {
-		return _function;
+		if (_isDestructor)
+			return ref<InterfaceImplementationScope>(enclosing()).implementingClass().destructor();
+		else
+			return _function;
 	}
 
 	public int thunkOffset() {
@@ -953,7 +958,7 @@ class ThunkScope extends ParameterScope {
 	}
 	
 	public boolean isDestructor() {
-		return _function.isDestructor();
+		return _isDestructor || _function.isDestructor();
 	}
 
 	public ref<FunctionType> type() {

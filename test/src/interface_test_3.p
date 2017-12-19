@@ -68,3 +68,40 @@ a.action();
 assert(actionCCalled);
 
 delete a;		// no destructor defined, but should not blow up
+
+printf("B and C worked\n");
+
+boolean actionDerivedCalled;
+boolean destructorBaseCalled;
+
+class Base {
+	~Base() {
+		destructorBaseCalled = true;
+	}
+
+	void someFunc() {
+	}
+}
+
+class Derived extends Base implements AA {
+	void someFunc() {
+	}
+
+	void action() {
+		actionDerivedCalled = true;
+	}
+}
+
+ref<Derived> d = new Derived;
+
+a = d;
+
+a.action();
+
+assert(actionDerivedCalled);
+
+delete a;
+
+assert(destructorBaseCalled);
+
+
