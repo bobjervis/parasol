@@ -201,6 +201,16 @@ public boolean isLink(string filename) {
 		return false;
 }
 
+public long, boolean size(string filename) {
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		linux.statStruct s;
+		if (linux.stat(filename.c_str(), &s) == 0)
+			return s.st_size, true;
+	}
+	return -1, false;
+}
+
 public boolean createSymLink(string oldPath, string newPath) {
 	if (runtime.compileTarget == SectionType.X86_64_WIN) {
 		return false;

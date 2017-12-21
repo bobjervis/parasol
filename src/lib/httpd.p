@@ -142,7 +142,7 @@ public class HttpServer {
 	}
 
 	private void startHttp(ServerScope scope, char port, Encryption encryption) {
-		ref<Socket> socket = Socket.create(encryption, _cipherList);
+		ref<Socket> socket = Socket.create(encryption, _cipherList, true);
 		if (socket.bind(port, scope)) {
 			if (!socket.listen()) {
 				printf("listen failed\n");
