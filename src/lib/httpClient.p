@@ -43,6 +43,7 @@ public class HttpClient {
 	private boolean _portDefaulted;
 	private unsigned _resolvedIP;
 	private string _webSocketProtocol;
+	private string _additionalHeaders;
 
 	private string _cipherList;
 
@@ -59,6 +60,10 @@ public class HttpClient {
 	~HttpClient() {
 		delete _response;
 		delete _connection;
+	}
+
+	public void setHeader(string name, string value) {
+		_additionalHeaders.printf("%s: %s\r\n", name, value);
 	}
 
 	private void parseUrl(string url) {
@@ -213,6 +218,8 @@ public class HttpClient {
 		_connection.printf("Host: %s:%d\r\n", _hostname, _port);
 		_connection.write("User-Agent: Parasol/0.1.0\r\n");
 		_connection.write("Accept: text/html; charset=UTF-8\r\n");
+		if (_additionalHeaders != null)
+		_connection.write(_additionalHeaders);
 		//_connection.write("Accept-Encoding: gzip, deflate, br\r\n");
 		_connection.write("Accept-Language: en-US,en;q=0.8\r\n");
 		if (body.length() > 0)

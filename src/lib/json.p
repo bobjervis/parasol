@@ -87,7 +87,20 @@ public string stringify(var object) {
  * items before you dispose of them.
  */
 public void dispose(var object) {
-	
+	if (object.class == ref<Object>) {
+		ref<Object> o = ref<Object>(object);
+		for (i in (*o.members())) {
+			var x = (*o.members())[i];
+			dispose(x);
+		}
+		delete o;
+	} else if (object.class == ref<Array>) {
+		ref<Array> a = ref<Array>(object);
+		for (int i = 0; i < a.length(); i++) {
+			dispose(a.get(i));
+		}
+		delete a;
+	}
 }
 
 class Parser {

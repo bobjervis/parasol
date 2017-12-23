@@ -989,8 +989,10 @@ class map<class V, class K> {
 		int startx = x;
 		for(;;) {
 			ref<Entry> e = ref<Entry>(_entries + x);
-			if (!e.valid || e.deleted || e.key.compare(key) == 0)
-				return e;
+			if (!e.valid || e.key.compare(key) == 0) {
+				if (!e.deleted)
+					return e;
+			}
 			x++;
 			if (x >= _allocatedEntries)
 				x = 0;
@@ -1014,8 +1016,10 @@ class map<class V, class K> {
 				else
 					return e;
 			}
-			if (e.key.compare(key) == 0)
-				return e;
+			if (e.key.compare(key) == 0) {
+				if (!e.deleted)
+					return e;
+			}
 			if (e.deleted)
 				deletedE = e;
 			x++;

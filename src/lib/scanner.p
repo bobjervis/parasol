@@ -922,6 +922,7 @@ class Scanner {
 					break;
 
 				case	'\n':
+					_lines.append(_location);
 					break;
 
 				default:
