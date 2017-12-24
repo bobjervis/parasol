@@ -3267,7 +3267,9 @@ class X86_64Encoder extends Target {
 						ref<Binary> b = ref<Binary>(object);
 						object = b.right();
 					}
-					if ((object.nodeFlags & ADDRESS_MODE) != 0) {
+					if (object.op() == Operator.THIS || object.op() == Operator.SUPER)
+						baseReg = rmValues[thisRegister()];
+					else if ((object.nodeFlags & ADDRESS_MODE) != 0) {
 						modRM(object, regOpcode, ipAdjust, sym.offset + allAdjust);
 						return;
 					} else

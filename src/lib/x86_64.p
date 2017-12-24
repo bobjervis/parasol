@@ -3174,7 +3174,7 @@ public class X86_64 extends X86_64AssignTemps {
 					break;
 				}
 				if (call.target() == null) {
-					// This can arise as a result of a comile-time error in the call, such as 'no 
+					// This can arise as a result of a compile-time error in the call, such as 'no 
 					// matching definition'.
 					// TODO: Generate the appropriate 'throw' statement.
 					break;

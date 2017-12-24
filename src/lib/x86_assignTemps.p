@@ -1292,7 +1292,6 @@ class X86_64AssignTemps extends X86_64AddressModes {
 					switch (u.type.family()) {
 					case STRING:
 						assignRegisterTemp(u.operand(), getRegMask(secondRegisterArgument()), compileContext);
-						reserveReg(u.operand(), firstRegisterArgument(), getRegMask(firstRegisterArgument()));
 						break;
 						
 					case VAR:

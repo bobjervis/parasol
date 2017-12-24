@@ -488,7 +488,7 @@ class Binary extends Node {
 			}
 			if (defn != null) {
 				completion = tree.newBinary(Operator.SEQUENCE, defn.fold(tree, true, compileContext), completion, location());
-				completion.type = this.type;
+				completion.type = type;
 			}
 			return completion;
 			

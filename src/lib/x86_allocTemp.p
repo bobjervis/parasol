@@ -368,6 +368,7 @@ class RegisterState {
 			 */
 
 		r = latestResult(tm.node);
+
 		if	(r == R.NO_REG)
 			return r;
 
