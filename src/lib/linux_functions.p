@@ -229,6 +229,12 @@ public abstract int sem_wait(ref<sem_t> sem);
 @Linux("libc.so.6", "setenv")
 public abstract int setenv(pointer<byte> name, pointer<byte> value, int overwrite);
 
+@Linux("libc.so.6", "seteuid")
+public abstract int seteuid(uid_t uid);
+
+@Linux("libc.so.6", "setfsuid")
+public abstract int setfsuid(uid_t uid);
+
 @Linux("libc.so.6", "setrlimit")
 public abstract int setrlimit(int resource, ref<rlimit> rlim);
 
@@ -331,6 +337,14 @@ public abstract int openCreat(pointer<byte> filename, int ioFlags, int mode);
  */
 public pid_t gettid() {
 	return pid_t(syscall(186));
+}
+/*
+ * POSIX requires that seteuid set all thread's permissions in the process, but this call side-steps
+ * the POSIX requirements and switches just the calling thread's permissions. This should be used with caution
+ * (duh!)
+ */
+public int thread_seteuid(uid_t uid) {
+	return int(syscall(117, -1, uid, -1));
 }
 
 public int lstat(pointer<byte> path, ref<statStruct> buf) {

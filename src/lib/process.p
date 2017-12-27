@@ -106,8 +106,7 @@ private monitor class ProcessVolatileData {
 }
 
 public class Process extends ProcessVolatileData {
-	private DrainData _stdout;
-	private ref<Thread> _drainer;
+	private int _stdout;							// The process output fd when the spawn returns and _captureOutput is true
 	private linux.pid_t _pid;
 	private boolean _captureOutput;
 	private linux.uid_t _user;
@@ -128,10 +127,6 @@ public class Process extends ProcessVolatileData {
 
 	~Process() {
 		pendingChildren.cancelChild(_pid);
-		if (_drainer != null) {
-			_drainer.join();
-			delete _drainer;
-		}
 	}
 
 	public void captureOutput() {
@@ -258,17 +253,13 @@ public class Process extends ProcessVolatileData {
 					pc.handler = processExitInfoWrapper;
 					pc.arg = this;
 
+					if (_captureOutput) {
+						_stdout = pipefd[0];
+						linux.close(pipefd[1]);
+					}
 					pendingChildren.declareChild(pc);
 					lock (*this) {
 						_running = true;
-					}
-					if (_captureOutput) {
-						linux.close(pipefd[1]);
-	
-						_drainer = new Thread();
-						_stdout.fd = pipefd[0];
-	
-						_drainer.start(drain, &_stdout);
 					}
 				}
 			}
@@ -288,11 +279,28 @@ public class Process extends ProcessVolatileData {
 	public string collectOutput() {
 		if (!_captureOutput)
 			return null;
-		_drainer.join();
-		delete _drainer;
-		_drainer = null;
-		linux.close(_stdout.fd);
-		return _stdout.output;
+
+		// Spawn a thread to drain the process output into a string.
+		ref<Thread> drainer = new Thread();
+		DrainData dd;
+
+		dd.fd = _stdout;
+		drainer.start(drain, &dd);
+		drainer.join();
+		delete drainer;
+		linux.close(_stdout);
+		return dd.output;
+	}
+
+	public int stdout() {
+		if (_captureOutput)
+			return _stdout;
+		else
+			return -1;
+	}
+
+	public linux.uid_t uid() {
+		return _user;
 	}
 
 	private static void processExitInfoWrapper(ref<linux.siginfo_t_sigchld> info, address arg) {
