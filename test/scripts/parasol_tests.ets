@@ -1382,6 +1382,8 @@ compile() { "int[string] b = [ \"a\": 4, \"b\": 17, \"c\": -23, ];" }
 compile() { "enum E { A, B, C } string[E] x = [ B: \"abc\", \"def\" ];" }
 
 compile() { "int[] a; for (i in a) { ref<int> p = &i; }" }
+compile() { "byte[] a; for (i in a) { break; }"  }
+compile() { "byte[] a; for (i in a) { continue; }"  }
 
 compile(expect: fail) { "pointer<int> a; for (i in a) { ref<int> p = &i; }" }
 

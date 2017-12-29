@@ -62,6 +62,7 @@ class CompileContext {
 		public ref<Scope> enclosingJumpTargetScope() {
 			switch (_controller.op()) {
 			case	SWITCH:
+			case	LOOP:
 			case	FOR:
 			case	SCOPED_FOR:
 			case	WHILE:
@@ -79,6 +80,7 @@ class CompileContext {
 
 		public ref<Scope> enclosingLoopScope() {
 			switch (_controller.op()) {
+			case	LOOP:
 			case	FOR:
 			case	SCOPED_FOR:
 			case	WHILE:
@@ -105,6 +107,7 @@ class CompileContext {
 
 		public ref<Node> enclosingLoop() {
 			switch (_controller.op()) {
+			case	LOOP:
 			case	FOR:
 			case	SCOPED_FOR:
 			case	WHILE:
