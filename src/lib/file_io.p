@@ -39,7 +39,7 @@ public class File {
 	public boolean opened() {
 		return _handle != null;
 	}
-	
+
 	public boolean close() {
 		if (_handle != null) {
 			boolean result = C.fclose(_handle) == 0;

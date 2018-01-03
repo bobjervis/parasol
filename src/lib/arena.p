@@ -62,12 +62,20 @@ public class Arena {
 		init();
 	}
 
+	public Arena(string rootFolder) {
+		_sourceCache = new SourceCache();
+		_deleteSourceCache = true;
+		_rootFolder = rootFolder;
+		init();
+	}
+
 	private void init() {
-		setImportPath("^/src/lib,^/alys/lib");
+		setImportPath("^/src/lib");
 		_global = new MemoryPool();
 		_builtInType.resize(TypeFamily.BUILTIN_TYPES);
 		_builtInType[TypeFamily.ERROR] = _global.newBuiltInType(TypeFamily.ERROR, null);
-		_rootFolder = storage.directory(storage.directory(process.binaryFilename()));
+		if (_rootFolder == null)
+			_rootFolder = storage.directory(storage.directory(process.binaryFilename()));
 		_specialFiles = new ImportDirectory("");
 	}
 	
@@ -134,7 +142,7 @@ public class Arena {
 	public void compilePackage(boolean countCurrentObjects, boolean verbose) {
 		CompileContext context(this, _global, verbose);
 
-		// 'import' all the 
+		// 'import' all the namespaces in the primary import directory (the package directory).
 		// _importPath[0] is the ImportDirectory we need to pull in.
 
 		_importPath[0].compilePackage(&context);

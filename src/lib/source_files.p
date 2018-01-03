@@ -57,7 +57,7 @@ class ImportDirectory {
 	
 	public boolean conjureNamespace(string domain, ref<Ternary> importNode, ref<CompileContext> compileContext, boolean logImports) {
 		if (logImports)
-			printf("conjureNamespace %p\n", this);
+			printf("conjureNamespace %s\n", _directoryName);
 		search(compileContext, logImports);
 		boolean importedSomething = false;
 		for (int i = 0; i < _files.length(); i++) {
@@ -83,7 +83,7 @@ class ImportDirectory {
 	 */
 	public void compilePackage(ref<CompileContext> compileContext) {
 		search(compileContext, false);
-		for (int i = 0; i < _files.length(); i++) {
+		for (i in _files) {
 			ref<FileStat> fs = _files[i];
 			fs.parseFile(compileContext);
 			if (fs.hasNamespace())

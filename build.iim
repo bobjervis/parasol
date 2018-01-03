@@ -17,7 +17,7 @@ package(name: parasol, domain: parasol) {
 	}
 	folder(name: src) {
 		folder(name: lib) {
-			file(name: *, src: src/lib)
+			file(name: *, src: src/lib, contents: import)
 		}
 		folder(name: util) {
 			file(name: *, src: src/util)
