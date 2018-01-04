@@ -485,6 +485,12 @@ public class Arena {
 			_importPath[i].printMessages(_types);
 	}
 
+	void allNodes(void(ref<FileStat>, ref<Node>, ref<Commentary>, address) callback, address arg) {
+		_specialFiles.allNodes(_types, callback, arg);
+		for (i in _importPath)
+			_importPath[i].allNodes(_types, callback, arg);
+	}
+
 	void printSymbolTable() {
 		_specialFiles.printSymbolTable();
 		printf("\nMain scope:\n");

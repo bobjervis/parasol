@@ -56,7 +56,7 @@ public class HttpServer {
 		GATEWAY,
 		TUNNEL
 	}
-	
+
 	public HttpServer() {
 		_hostname = "";
 		_port = 80;

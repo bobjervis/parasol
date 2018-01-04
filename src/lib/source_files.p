@@ -163,6 +163,30 @@ class ImportDirectory {
 		}
 	}
 
+	public void allNodes(ref<TemplateInstanceType>[] instances, 
+			void(ref<FileStat>, ref<Node>, ref<Commentary>, address) callback, address arg) {
+		for (i in _files) {
+			ref<SyntaxTree> tree = _files[i].tree();
+			if (tree != null) {
+				allNodes(_files[i], tree.root(), callback, arg);
+			}
+			for (j in instances) {
+				ref<TemplateInstanceType> instance = instances[j];
+				if (instance.definingFile() == _files[i]) {
+					if (instance.concreteDefinition().countMessages() > 0)
+						allNodes(_files[i], instance.concreteDefinition(), callback, arg);
+				}
+			}
+			for (j in instances) {
+				ref<TemplateInstanceType> instance = instances[j];
+				if (instance.definingFile() == _files[i]) {
+					if (instance.concreteDefinition().countMessages() > 0)
+						allNodes(_files[i], instance.concreteDefinition(), callback, arg);
+				}
+			}
+		}			
+	}
+
 	public void printSymbolTable() {
 		for (int i = 0; i < _files.length(); i++) {
 			printf("    %s (%s)\n", _files[i].filename(), _files[i].getNamespaceString());
@@ -214,19 +238,19 @@ void dumpMessages(ref<FileStat> file, ref<Node> n) {
 	Message[] messages;
 	n.getMessageList(&messages);
 	if (messages.length() > 0) {
-		ref<Scanner> scanner = file.scanner();
 		for (int j = 0; j < messages.length(); j++) {
 			ref<Commentary> comment = messages[j].commentary;
-			if (!messages[j].location.isInFile()) {
-				printf("%s :", file.filename()); 
-				printf(" %s\n", comment.message());
-			} else {
-				int lineNumber = scanner.lineNumber(messages[j].location);
-				if (lineNumber >= 0)
-					printf("%s %d: %s\n", file.filename(), lineNumber + 1, comment.message());
-				else
-					printf("%s [byte %d]: %s\n", file.filename(), messages[j].location.offset, comment.message());
-			}
+			file.dumpMessage(messages[j].node, comment);
+		}
+	}
+}
+
+void allNodes(ref<FileStat> file, ref<Node> n, void(ref<FileStat>, ref<Node>, ref<Commentary>, address) callback, address arg) {
+	Message[] messages;
+	n.getMessageList(&messages);
+	if (messages.length() > 0) {
+		for (j in messages) {
+			callback(file, messages[j].node, messages[j].commentary, arg);
 		}
 	}
 }
@@ -276,6 +300,10 @@ class FileStat {
 		return _scanner;
 	}
 	
+	public ref<Scanner> newScanner() {
+		return Scanner.create(this);
+	}
+
 	public boolean setSource(string source) {
 		if (_filename != null)
 			return false;
@@ -409,5 +437,18 @@ class FileStat {
 	
 	public boolean scopesBuilt() {
 		return _scopesBuilt;
+	}
+
+	public void dumpMessage(ref<Node> node, ref<Commentary> comment) {
+		if (!node.location().isInFile()) {
+			printf("%s :", filename()); 
+			printf(" %s\n", comment.message());
+		} else {
+			int lineNumber = _scanner.lineNumber(node.location());
+			if (lineNumber >= 0)
+				printf("%s %d: %s\n", filename(), lineNumber + 1, comment.message());
+			else
+				printf("%s [byte %d]: %s\n", filename(), node.location().offset, comment.message());
+		}
 	}
 }

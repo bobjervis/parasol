@@ -1020,7 +1020,7 @@ class Scanner {
 	 * This function returns the current 'cursor' location of the
 	 * Scanner.  This value is the offset of the next byte to be read
 	 */
-	protected Location cursor() {
+	public Location cursor() {
 		return Location(_cursor);
 	}
 

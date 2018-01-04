@@ -189,7 +189,7 @@ class Commentary {
 
 class Message {
 	public ref<Commentary> commentary;
-	public Location location;
+	public ref<Node> node;
 }
 
 public string formatMessage(MessageId messageId, CompileString[] args) {

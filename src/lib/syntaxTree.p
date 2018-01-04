@@ -3669,7 +3669,7 @@ private TraverseAction getMessage(ref<Node> n, address data) {
 	ref<Message[]> output = ref<Message[]>(data);
 	Message m;
 
-	m.location = n.location();
+	m.node = n;
 	for (ref<Commentary> comment = n.commentary(); comment != null; comment = comment.next()) {
 		m.commentary = comment;
 		output.append(m);
