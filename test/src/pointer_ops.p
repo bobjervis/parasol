@@ -131,6 +131,18 @@ xl = long(pb);
 
 assert(xl == long(&y));
 
+string s = "abcdef";
+
+pointer<byte> cp = &s[2];
+
+assert(*cp == 'c');
+assert(*++cp == 'd');
+assert(*cp++ == 'd');
+assert(*cp == 'e');
+assert(*--cp == 'd');
+assert(*cp-- == 'd');
+assert(*cp == 'c');
+
 // This following text was introduced because of a codegen assertion.
 
 class P<class I, class E> {

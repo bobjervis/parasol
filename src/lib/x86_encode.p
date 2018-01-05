@@ -3986,13 +3986,12 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	UNSIGNED_32:
 		case	SIGNED_32: 
 		case	SIGNED_64: 
+		case	ADDRESS:
 		case	POINTER:
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JE; 
 		default:
-			printf("continuation(%s,", string(compare));
-			type.print();
-			printf(")\n");
+			printf("continuation(%s,%s)\n", string(compare), type.signature());
 			assert(false);
 		}
 		break;
@@ -4002,19 +4001,19 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	UNSIGNED_32:
 		case	SIGNED_32: 
 		case	SIGNED_64: 
+		case	ADDRESS:
 		case	POINTER:
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JNE; 
 		default:
-			printf("continuation(%s,", string(compare));
-			type.print();
-			printf(")\n");
+			printf("continuation(%s,%s)\n", string(compare), type.signature());
 			assert(false);
 		}
 		break;
 
 	case	NOT_LESS:
 		switch (type.family()) {
+		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JNB;
 		case	SIGNED_32: 
@@ -4022,15 +4021,14 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JNB;
 		default:
-			printf("continuation(%s,", string(compare));
-			type.print();
-			printf(")\n");
+			printf("continuation(%s,%s)\n", string(compare), type.signature());
 			assert(false);
 		}
 		break;
 
 	case	NOT_GREATER:
 		switch (type.family()) {
+		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JNA;
 		case	SIGNED_32: 
@@ -4038,15 +4036,14 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JNA;
 		default:
-			printf("continuation(%s,", string(compare));
-			type.print();
-			printf(")\n");
+			printf("continuation(%s,%s)\n", string(compare), type.signature());
 			assert(false);
 		}
 		break;
 
 	case	NOT_LESS_EQUAL:
 		switch (type.family()) {
+		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JA;
 		case	SIGNED_32: 
@@ -4054,15 +4051,14 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JA;
 		default:
-			printf("continuation(%s,", string(compare));
-			type.print();
-			printf(")\n");
+			printf("continuation(%s,%s)\n", string(compare), type.signature());
 			assert(false);
 		}
 		break;
 
 	case	NOT_GREATER_EQUAL:
 		switch (type.family()) {
+		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JB;
 		case	SIGNED_32: 
@@ -4070,9 +4066,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JB;
 		default:
-			printf("continuation(%s,", string(compare));
-			type.print();
-			printf(")\n");
+			printf("continuation(%s,%s)\n", string(compare), type.signature());
 			assert(false);
 		}
 		break;
@@ -4097,9 +4091,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	TYPEDEF:
 		case	CLASS:			return CC.JNE;
 		default:
-			printf("continuation(%s,", string(compare));
-			type.print();
-			printf(")\n");
+			printf("continuation(%s,%s)\n", string(compare), type.signature());
 			assert(false);
 		}
 		break;
@@ -4123,15 +4115,14 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	INTERFACE:
 		case	CLASS:			return CC.JE; 
 		default:
-			printf("continuation(%s,", string(compare));
-			type.print();
-			printf(")\n");
+			printf("continuation(%s,%s)\n", string(compare), type.signature());
 			assert(false);
 		}
 		break;
 
 	case	GREATER:
 		switch (type.family()) {
+		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JA;
 		case	SIGNED_32: 
@@ -4139,15 +4130,14 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JA;
 		default:
-			printf("continuation(%s,", string(compare));
-			type.print();
-			printf(")\n");
+			printf("continuation(%s,%s)\n", string(compare), type.signature());
 			assert(false);
 		}
 		break;
 
 	case	GREATER_EQUAL:
 		switch (type.family()) {
+		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JNB;
 		case	SIGNED_32: 
@@ -4155,15 +4145,14 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JNB;
 		default:
-			printf("continuation(%s,", string(compare));
-			type.print();
-			printf(")\n");
+			printf("continuation(%s,%s)\n", string(compare), type.signature());
 			assert(false);
 		}
 		break;
 
 	case	LESS:
 		switch (type.family()) {
+		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JB;
 		case	SIGNED_32: 
@@ -4171,15 +4160,14 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JB;
 		default:
-			printf("continuation(%s,", string(compare));
-			type.print();
-			printf(")\n");
+			printf("continuation(%s,%s)\n", string(compare), type.signature());
 			assert(false);
 		}
 		break;
 
 	case	LESS_EQUAL:
 		switch (type.family()) {
+		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JNA;
 		case	CLASS_VARIABLE:
@@ -4188,9 +4176,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JNA;		// also need JNP
 		default:
-			printf("continuation(%s,", string(compare));
-			type.print();
-			printf(")\n");
+			printf("continuation(%s,%s)\n", string(compare), type.signature());
 			assert(false);
 		}
 		break;
@@ -4200,9 +4186,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JNP;
 		default:
-			printf("continuation(%s,", string(compare));
-			type.print();
-			printf(")\n");
+			printf("continuation(%s,%s)\n", string(compare), type.signature());
 			assert(false);
 		}
 		break;
@@ -4212,17 +4196,13 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	FLOAT_32:
 		case	FLOAT_64:		return CC.JP;
 		default:
-			printf("continuation(%s,", string(compare));
-			type.print();
-			printf(")\n");
+			printf("continuation(%s,%s)\n", string(compare), type.signature());
 			assert(false);
 		}
 		break;
 
 	default:
-		printf("continuation(%s,", string(compare));
-		type.print();
-		printf(")\n");
+		printf("continuation(%s,%s)\n", string(compare), type.signature());
 		assert(false);
 	}
 	return CC.ERROR;

@@ -794,6 +794,10 @@ class X86_64AddressModes extends X86_64Encoder {
 		case	CALL:
 		case	ADDRESS:
 		case	ASSIGN:
+		case	INCREMENT_BEFORE:
+		case	INCREMENT_AFTER:
+		case	DECREMENT_BEFORE:
+		case	DECREMENT_AFTER:
 			markAddressModes(node, compileContext);
 			break;
 			
