@@ -121,6 +121,48 @@ public string computeWebSocketAccept(string webSocketKey) {
 private monitor class WebSocketVolatileData {
 	protected int _waitingWrites;
 	private boolean _shuttingDown;
+	private ref<Thread>	_readerThread;
+	private WebSocketReader _reader;
+
+	public boolean startReader(WebSocketReader reader) {
+		if (_readerThread != null)
+			return false;
+		_reader = reader;
+		_readerThread = new Thread();
+		_readerThread.start(readWrapper, this);
+		return true;
+	}
+
+	public void discardReader() {
+		_reader = null;
+	}
+
+	public WebSocketReader reader() {
+		return _reader;
+	}
+
+	public ref<Thread> stopReading() {
+		ref<Thread> t = _readerThread;
+		if (_readerThread != null) {
+			// I am counting on this being in a race with the readWrapper below, but that I don't care
+			// if I lose. There are two scenarios to trigger a destructor call:
+			//	a. We got an EOF on the reader thread. If that's the case, then _reader should be null
+			//	   by the time we get here.
+			// 	b. The creator of this web socket has decided that they are done with the object, so
+			//	   there is no need for any further message exchange, except an OP_CLOSE from us.
+			//	   The catch with this case is that any number of issues could drop the connection and
+			//	   cause the reader thread to stop the moment the _reader test is applied. Thus, any effort
+			//	   to transmit an OP_CLOSE control frame will be pointless. Tht's fortunately the key
+			//	   phrase: pointless, not harmful.
+			
+			if (_reader != null)
+				ref<WebSocket>(this).shutDown(WebSocket.CLOSE_NORMAL, "normal close");
+
+//			printf("about to join...\n");
+			_readerThread = null;
+		}
+		return t;
+	}
 
 	public boolean stopWriting() {
 		if (_shuttingDown)
@@ -147,6 +189,14 @@ private monitor class WebSocketVolatileData {
 	}
 }
 
+private void readWrapper(address arg) {
+//		printf("%s %p reader thread starting readMessages...\n", currentThread().name(), arg);
+	boolean sawClose = ref<WebSocket>(arg).reader().readMessages();
+	if (sawClose)
+		ref<WebSocket>(arg).shutDown(WebSocket.CLOSE_NORMAL, "normal close");
+	ref<WebSocket>(arg).discardReader();
+}
+
 public class WebSocket extends WebSocketVolatileData {
 //	@Constant
 	public static byte OP_STRING = 1;
@@ -170,8 +220,6 @@ public class WebSocket extends WebSocketVolatileData {
 	public int maxFrameSize;
 	
 	private ref<Connection> _connection;
-	private ref<Thread>	_readerThread;
-	private WebSocketReader _reader;
 	private boolean _server;
 	private Random _random;				// For masking
 	private byte[] _incomingData;		// A buffer of data being read from the websocket.
@@ -186,43 +234,15 @@ public class WebSocket extends WebSocketVolatileData {
 	}
 
 	~WebSocket() {
-		if (_readerThread != null) {
-			// I am counting on this being in a race with the readWrapper below, but that I don't case
-			// if I lose. There are two scenarios to trigger a destructor call:
-			//	a. We got an EOF on the reader thread. If that's the case, then _reader should be null
-			//	   by the time we get here.
-			// 	b. The creator of this web socket has decided that they are done with the object, so
-			//	   there is no need for any further message exchange, except an OP_CLOSE from us.
-			//	   The catch with this case is that any number of issues could drop the connection and
-			//	   cause the reader thread to stop the moment the _reader test is applied. Thus, any effort
-			//	   to transmit an OP_CLOSE control frame will be pointless. Tht's fortunately the key
-			//	   phrase: pointless, not harmful.
-			if (_reader != null)
-				shutDown(CLOSE_NORMAL, "normal close");
-
+		ref<Thread> readerThread = stopReading();
+		
+		if (readerThread != null) {
 //			printf("about to join...\n");
-			_readerThread.join();
+			readerThread.join();
 		}
 //		printf("about to stop writing...\n");
 		stopWriting();
 //		printf("Socket cleaned up!\n");
-	}
-
-	public boolean startReader(WebSocketReader reader) {
-		if (_readerThread != null)
-			return false;
-		_reader = reader;
-		_readerThread = new Thread();
-		_readerThread.start(readWrapper, this);
-		return true;
-	}
-
-	private static void readWrapper(address arg) {
-//		printf("%s %p reader thread starting readMessages...\n", currentThread().name(), arg);
-		boolean sawClose = ref<WebSocket>(arg)._reader.readMessages();
-		if (sawClose)
-			ref<WebSocket>(arg).shutDown(CLOSE_NORMAL, "normal close");
-		ref<WebSocket>(arg)._reader = null;
 	}
 	/**
 	 * readWholeMessage
