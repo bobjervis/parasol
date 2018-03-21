@@ -79,9 +79,11 @@ public class File {
 				else
 					return line, false;
 			}
-			line.append(byte(c));
+			if (c == '\r')
+				continue;
 			if (c == '\n')
 				return line, true;
+			line.append(byte(c));
 		}
 	}
 	

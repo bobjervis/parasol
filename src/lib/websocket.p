@@ -327,14 +327,12 @@ public class WebSocket extends WebSocketVolatileData {
 		
 		int copied = drainBuffer(&(*buffer)[offset], int(payloadLength));
 		
-		if (copied < payloadLength) {
+		while (copied < payloadLength) {
 			int received = _connection.read(&(*buffer)[offset + copied], int(payloadLength - copied));
-			if (received < int(payloadLength - copied)) {
-				printf("received = %d\n", received);
-				linux.perror(null);
-				shutDown(CLOSE_BAD_DATA, "recv failed");
-				return false, 0, false;
-			}
+			if (received >= int(payloadLength - copied))
+				break;
+			copied += received;
+			printf("received = %d copied = %d payloadLength= %d\n", received, copied, payloadLength);
 		}
 		// Unmask the frame data if necessary
 		if (mask != 0) {
