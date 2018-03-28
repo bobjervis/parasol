@@ -1,12 +1,12 @@
-import parasol:stream.Utf8Reader;
-import parasol:stream.Utf8Writer;
+import parasol:stream.UTF8Reader;
+import parasol:stream.UTF8Writer;
 import parasol:stream.StringReader;
 import parasol:stream.StringWriter;
 
 string s = "\xea\xa9\xba";
 
 StringReader r(&s);
-Utf8Reader ru(&r);
+UTF8Reader ru(&r);
 
 int c = ru.read();
 
@@ -19,9 +19,9 @@ assert(ru.read() == -1);
 string o;
 
 StringWriter w(&o);
-Utf8Writer wu(&w);
+UTF8Writer wu(&w);
 
-wu.write(0xaa7a);
+assert(wu.write(0xaa7a) == 3);
 
 assert(o.length() == 3);
 assert(o[0] == 0xea);

@@ -17,7 +17,7 @@ namespace parasol:compiler;
 
 import native:C;
 import parasol:text;
-import parasol:stream.Utf8Reader;
+import parasol:stream.UTF8Reader;
 
 enum Operator {
 	// SyntaxError
@@ -1317,7 +1317,7 @@ class Constant extends Node {
 		if (_value.length == 0)
 			return -1;
 		CompileStringReader r(_value);
-		Utf8Reader ur(&r);
+		UTF8Reader ur(&r);
 		
 		int c = ur.read();
 		if (codePointClass(c) == 0) {

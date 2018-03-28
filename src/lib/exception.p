@@ -313,6 +313,22 @@ public class BoundsException extends Exception {
 	}	
 }
 
+public class IllegalArgumentException extends Exception {
+	public IllegalArgumentException() {
+	}
+
+	public IllegalArgumentException(string message) {
+		super(message);
+	}
+
+	ref<IllegalArgumentException> clone() {
+		ref<IllegalArgumentException> n = new IllegalArgumentException(_message);
+		n._exceptionContext = _exceptionContext;
+		return n;
+	}
+}
+
+
 public class CRuntimeException extends RuntimeException {
 	public CRuntimeException() {
 		
