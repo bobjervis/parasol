@@ -15,7 +15,6 @@
  */
 namespace parasol:script;
 
-import parasol:file;
 import parasol:storage;
 
 private string commandPrefix;
@@ -286,13 +285,13 @@ public:
 	~Parser();
 */
 	public static ref<Parser> load(string filename) {
-		file.File f = file.openTextFile(filename);
-		if (!f.opened())
+		ref<Reader> f = storage.openTextFile(filename);
+		if (f == null)
 			return null;
 		string s;
 		boolean result;
 		(s, result) = f.readAll();
-		f.close();
+		delete f;
 		if (!result)
 			return null;
 		ref<Parser> p = new Parser(s);

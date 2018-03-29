@@ -15,8 +15,8 @@
  */
 namespace parasol:stream;
 
-import parasol:file.File;
-import parasol:file.Seek;
+import parasol:storage.File;
+import parasol:storage.Seek;
 import native:C;
 
 public class UTF8Reader {
@@ -39,7 +39,7 @@ public class UTF8Reader {
 	public int read() {
 		if (_lastChar < 0) {	// did we have EOF or an unget?
 			if (_lastChar == -1)
-				return -1;		// EOF just keep returning EOF
+				return EOF;		// EOF just keep returning EOF
 			int result = -2 - _lastChar;
 			_lastChar = result;	// unget was called, undo it's effects and return the last char again
 			return result;
@@ -158,12 +158,47 @@ public class UTF8Writer {
 	}
 }
 
+@Constant
+public int EOF = -1;
+
 public class Reader {
 	public abstract int read();
+
+	public string, boolean readAll() {
+		return "", false;
+	}
+
+	public string readLine() {
+		string line;
+
+		for (;;) {
+			int c = read();
+			if (c == EOF) {
+				if (line.length() == 0)
+					return null;
+				else
+					return line;
+			}
+			if (c == '\r')
+				continue;
+			if (c == '\n')
+				return line;
+			line.append(byte(c));
+		}
+	}
+
+	public void close() {
+	}
 }
 
 public class Writer {
 	public abstract void write(byte c);
+
+	public void flush() {
+	}
+
+	public void close() {
+	}
 
 	public int write(address buffer, int length) {
 		for (int i = 0; i < length; i++)
@@ -816,44 +851,3 @@ public class Writer {
 		return bytesWritten;
 	}
 }
-
-public class StringReader extends Reader {
-	private ref<string> _source;
-	private int _cursor;
-	
-	public StringReader(ref<string> source) {
-		_source = source;
-	}
-	
-	public int read() {
-		if (_cursor >= _source.length())
-			return -1;
-		else
-			return (*_source)[_cursor++];
-	}
-}
-
-public class StringWriter extends Writer {
-	private ref<string> _output;
-	
-	public StringWriter(ref<string> output) {
-		_output = output;
-	}
-	
-	public void write(byte c) {
-		_output.append(c);
-	}
-}
-
-public class FileReader {
-	private File _file;
-	
-	public FileReader(File file) {
-		_file = file;
-	}
-	
-	public int read() {
-		return _file.read();
-	}
-}
-

@@ -15,7 +15,7 @@
  */
 namespace parasol:compiler;
 
-import parasol:file.File;
+import parasol:storage.File;
 
 enum StorageClass {
 	ERROR,
@@ -1129,7 +1129,7 @@ class Scope {
 		return false;
 	}
 		
-	boolean writeHeader(File header) {
+	boolean writeHeader(ref<Writer> header) {
 		for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
 			ref<Symbol> sym = i.get();
 			if (sym.deferAnalysis())

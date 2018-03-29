@@ -1,7 +1,7 @@
 import parasol:stream.UTF8Reader;
 import parasol:stream.UTF8Writer;
-import parasol:stream.StringReader;
-import parasol:stream.StringWriter;
+import parasol:text.StringReader;
+import parasol:text.StringWriter;
 
 string s = "\xea\xa9\xba";
 

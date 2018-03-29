@@ -54,7 +54,7 @@ import parasol:compiler.TypedefType;
 import parasol:compiler.TypeFamily;
 import parasol:compiler.Unary;
 import parasol:compiler.Variable;
-import parasol:file;
+import parasol:storage;
 import parasol:math.abs;
 import parasol:pxi.Pxi;
 import parasol:pxi.SectionType;
@@ -3825,9 +3825,12 @@ class X86_64Encoder extends Target {
 		return X86_64SectionHeader.bytes + _staticMemoryLength;
 	}
 	
-	public void writePxiFile(file.File pxiFile) {
-		pxiFile.write(&_pxiHeader, _pxiHeader.bytes);
-		pxiFile.write(_staticMemory, _staticMemoryLength);
+	public boolean writePxiFile(storage.File pxiFile) {
+		if (pxiFile.write(&_pxiHeader, _pxiHeader.bytes) < 0)
+			return false;
+		if (pxiFile.write(_staticMemory, _staticMemoryLength) < 0)
+			return false;
+		return true;
 	}
 	
 	public ref<X86_64SectionHeader> pxiHeader() {

@@ -5,12 +5,12 @@
 	
 	Uses the test suite data files from http://www.json.org/JSON_checker/
  */
-import parasol:file;
+import parasol:storage;
 import parasol:json;
 
 int main(string[] args) {
-	file.File f = file.openTextFile(args[0]);
-	if (f.opened()) {
+	ref<Reader> f = storage.openTextFile(args[0]);
+	if (f != null) {
 		string data;
 		boolean success;
 		
@@ -19,7 +19,7 @@ int main(string[] args) {
 			printf("Failed reading from %s\n", args[0]);
 			return 1;
 		}
-		f.close();
+		delete f;
 		
 		var x;
 		

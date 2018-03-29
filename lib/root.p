@@ -42,6 +42,8 @@ import parasol:exception.Exception;
 import parasol:exception.AssertionFailedException;
 import parasol:exception.BoundsException;
 import parasol:exception.IllegalArgumentException;
+import parasol:stream.Reader;
+import parasol:stream.Writer;
 
 //import parasol:collections.vector;
 

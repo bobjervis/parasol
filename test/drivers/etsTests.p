@@ -22,7 +22,6 @@ import parasol:pxi.SectionType;
 import parasol:compiler.Arena;
 import parasol:compiler.Target;
 import parasol:compiler.test.initTestObjects;
-import parasol:file;
 import parasol:test.launch;
 import parasol:test.listAllTests;
 import parasol:time;

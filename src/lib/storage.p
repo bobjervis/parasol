@@ -17,7 +17,6 @@ namespace parasol:storage;
 
 import parasol:runtime;
 import parasol:pxi.SectionType;
-import parasol:file;
 
 import native:C;
 import native:linux;
@@ -269,30 +268,29 @@ public boolean rename(string oldName, string newName) {
 }
 
 public boolean copyFile(string source, string destination) {
-	file.File s = file.openBinaryFile(source);
-	if (!s.opened())
+	File r, w;
+	if (!r.open(source))
 		return false;
-	file.File d = file.createBinaryFile(destination);
-	if (!d.opened()) {
-		s.close();
+	if (!w.create(destination)) {
+		r.close();
 		return false;
 	}
 	byte[] buffer;
 	buffer.resize(4096);
 	for (;;) {
-		int actual = s.read(&buffer);
+		int actual = r.read(&buffer);
 		if (actual < 0) {
-			s.close();
-			d.close();
+			r.close();
+			w.close();
 			deleteFile(destination);
 			return false;
 		}
 		if (actual == 0)
 			break;
-		d.write(&buffer[0], actual);
+		w.write(&buffer[0], actual);
 	}
-	s.close();
-	d.close();
+	r.close();
+	w.close();
 	if (runtime.compileTarget == SectionType.X86_64_WIN) {
 	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
 		linux.statStruct s;
@@ -324,7 +322,7 @@ public boolean copyDirectoryTree(string source, string destination, boolean tryA
 		return false;
 	if (!makeDirectory(destination))
 		return false;
-	ref<file.Directory> dir = new file.Directory(source);
+	ref<Directory> dir = new Directory(source);
 	dir.pattern("*");
 	if (dir.first()) {
 		do {
@@ -391,7 +389,7 @@ public boolean deleteDirectory(string path) {
 public boolean deleteDirectoryTree(string path) {
 	if (!isDirectory(path))
 		return false;
-	ref<file.Directory> dir = new file.Directory(path);
+	ref<Directory> dir = new Directory(path);
 	dir.pattern("*");
 	if (dir.first()) {
 		do {

@@ -126,6 +126,45 @@ public BOOL ReleaseMutex(HANDLE hHandle) {
 	return ReleaseMutex(*ref<address>(&hHandle));
 }
 
+
+@Windows("kernel32.dll", "CreateFile")
+public abstract HANDLE CreateFile(pointer<byte> lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, ref<SECURITY_ATTRIBUTES> lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
+
+@Windows("kernel32.dll", "SetFilePointerEx")
+public abstract BOOL SetFilePointerEx(HANDLE hFile, long lDistanceToMove, ref<long> lpDistanceToMoveHigh, DWORD dwMoveMethod);
+
+@Windows("kernel32.dll", "ReadFile")
+public abstract BOOL ReadFile(HANDLE hFile, address lpBuffer, DWORD nNumberOfBytesToRead, ref<DWORD> lpNumbersOfBytesRead, ref<OVERLAPPED> lpOverlapped);
+
+@Windows("kernel32.dll", "WriteFile")
+public abstract BOOL WriteFile(HANDLE hFile, address lpBuffer, DWORD nNumberOfBytesToWrite, ref<DWORD> lpNumbersOfBytesWritten, ref<OVERLAPPED> lpOverlapped);
+
+public class OVERLAPPED {
+	long Internal;
+	long InternalHigh;
+	long Offset;			// Possibly also a poiner, depending on the usage
+	HANDLE hEvent;
+}
+
+public DWORD GENERIC_READ = 	0x80000000;
+public DWORD GENERIC_WRITE = 	0x40000000;
+public DWORD GENERIC_EXECUTE = 	0x20000000;
+public DWORD GENERIC_ALL = 		0x10000000;
+
+public DWORD FILE_SHARE_READ = 		0x1;
+public DWORD FILE_SHARE_WRITE =		0x2;
+public DWORD FILE_SHARE_DELETE = 	0x4;
+
+public DWORD CREATE_NEW = 1;
+public DWORD CREATE_ALWAYS = 2;
+public DWORD OPEN_EXISTING = 3;
+public DWORD OPEN_ALWAYS = 4;
+public DWORD TRUNCATE_EXISTING = 5;
+
+public DWORD FILE_BEGIN = 0;
+public DWORD FILE_CURRENT = 1;
+public DWORD FILE_END = 2;
+
 @Windows("kernel32.dll", "_get_osfhandle")
 public abstract HANDLE _get_osfhandle(int fd);
 

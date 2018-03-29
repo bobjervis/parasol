@@ -15,7 +15,7 @@
  */
 namespace parasol:compiler;
 
-import parasol:file;
+import parasol:storage;
 
 enum Token {
 	ERROR,
@@ -151,11 +151,11 @@ enum Token {
 }
 
 class FileScanner extends Scanner {
-	private file.File _file;
+	private ref<storage.FileReader> _file;
 	
 	public FileScanner(ref<FileStat> fileInfo) {
 		super(0, fileInfo);
-		_file = file.openBinaryFile(fileInfo.filename());
+		_file = storage.openBinaryFile(fileInfo.filename());
 	}
 
 	~FileScanner() {
@@ -163,27 +163,27 @@ class FileScanner extends Scanner {
 	}
 	
 	int getByte() {
-		if (!_file.opened())
+		if (_file == null)
 			return -1;			// Should be a throw, maybe?
 		int b = _file.read();
-		if (b != file.EOF)
+		if (b != storage.EOF)
 			return b;
 		else
 			return -1;
 	}
 
 	public void seek(Location location) {
-		_file.seek(location.offset, file.Seek.START);
+		_file.seek(location.offset, storage.Seek.START);
 		super.seek(location);
 	}
 
 	public boolean opened() { 
-		return _file.opened(); 
+		return _file != null; 
 	}
 
 	public void close() {
-		if (_file.opened())
-			_file.close();
+		delete _file;
+		_file = null;
 	}	
 }
 

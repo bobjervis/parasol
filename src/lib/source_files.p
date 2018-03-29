@@ -15,7 +15,7 @@
  */
 namespace parasol:compiler;
 
-import parasol:file.Directory;
+import parasol:storage.Directory;
 
 public class SourceCache {
 	private ref<ImportDirectory>[string] _map;

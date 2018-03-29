@@ -15,9 +15,9 @@
  */
 namespace parasol:http;
 
-import parasol:file.File;
-import parasol:file.openBinaryFile;
-import parasol:file.Seek;
+import parasol:storage.File;
+import parasol:storage.openBinaryFile;
+import parasol:storage.Seek;
 import parasol:storage.constructPath;
 import parasol:storage.exists;
 import parasol:thread.Thread;
@@ -886,11 +886,11 @@ public class StaticContentService extends HttpService {
 		else
 			filename = _filename;
 		if (exists(filename)) {
-			File f = openBinaryFile(filename);
-			if (f.opened()) {
+			File f;
+			if (f.open(filename)) {
 				response.ok();
 				f.seek(0, Seek.END);
-				int size = f.tell(); 
+				long size = f.tell(); 
 				f.seek(0, Seek.START);
 				string s;
 				s.printf("%d", size);

@@ -15,7 +15,7 @@
  */
 namespace parasol:x86_64;
 
-import parasol:file;
+import parasol:storage;
 import parasol:pxi;
 
 public class ExceptionEntry {
@@ -58,8 +58,8 @@ class X86_64WinSection extends pxi.Section {
 		return _target.imageLength();
 	}
 	
-	public void write(file.File pxiFile) {
-		_target.writePxiFile(pxiFile);
+	public boolean write(storage.File pxiFile) {
+		return _target.writePxiFile(pxiFile);
 	}
 }
 

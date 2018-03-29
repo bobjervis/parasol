@@ -26,6 +26,7 @@ class useconds_t = unsigned;
 class mode_t = unsigned;
 class fsblkcnt_t = long;
 class fsfilcnt_t = long;
+class off_t = long;
 
 @Linux("libc.so.6", "aligned_alloc")
 public abstract address aligned_alloc(long alignment, long length);
@@ -123,6 +124,9 @@ public abstract int kill(pid_t pid, int sig);
 
 @Linux("libc.so.6", "link")
 public abstract int link(pointer<byte> oldpath, pointer<byte> newpath);
+
+@Linux("libc.so.6", "lseek")
+public abstract off_t lseek(int fd, off_t offset, int whence);
 
 @Linux("libc.so.6", "mkdir")
 public abstract int mkdir(pointer<byte> path, mode_t mode);

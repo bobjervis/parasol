@@ -15,7 +15,7 @@
  */
 namespace parasol:test;
 
-import parasol:file;
+import parasol:storage;
 import parasol:script;
 import parasol:script.Object;
 import parasol:script.Vector;
@@ -139,10 +139,10 @@ private ref<ref<script.Atom>[]> parseOne(string arg) {
 		flattenSet(results, atoms);
 		return results;
 	} else {
-		file.File f = file.openTextFile(arg);
-		if (f.opened()) {
+		ref<Reader> f = storage.openTextFile(arg);
+		if (f != null) {
 			printf("Parse of %s failed\n", arg);
-			f.close();
+			delete f;
 		} else
 			printf("Could not open %s\n", arg);
 		assert(false);

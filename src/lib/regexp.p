@@ -223,7 +223,7 @@
 
 namespace parasol:text;
 
-import parasol:file;
+import parasol:storage;
 
 
 public class RegularExpressionException extends Exception {	// raised on compile or search

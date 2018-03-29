@@ -14,7 +14,7 @@
    limitations under the License.
  */
 import parasol:process;
-import parasol:file;
+import parasol:storage;
 import parasol:random.Random;
 import parasol:compiler.FileStat;
 import parasol:compiler.Location;
@@ -86,10 +86,10 @@ class TokenInfo {
 boolean scan(string filename) {
 	string reference;
 	
-	file.File reader = file.openBinaryFile(filename);
-	if (reader.opened()) {
+	ref<Reader> reader = storage.openBinaryFile(filename);
+	if (reader != null) {
 		reference = reader.readAll();
-		reader.close();
+		delete reader;
 	} else {
 		printf("Unable to read text file %s\n", filename);
 		return false;

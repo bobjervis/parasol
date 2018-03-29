@@ -15,8 +15,6 @@
  */
 namespace parasol:compiler;
 
-import parasol:file.File;
-
 class Namespace extends Symbol {
 	private ref<Scope> _symbols;
 	private string _dottedName;

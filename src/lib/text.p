@@ -2429,6 +2429,34 @@ public class substring {
 	}
 }
 
+public class StringReader extends Reader {
+	private ref<string> _source;
+	private int _cursor;
+	
+	public StringReader(ref<string> source) {
+		_source = source;
+	}
+	
+	public int read() {
+		if (_cursor >= _source.length())
+			return -1;
+		else
+			return (*_source)[_cursor++];
+	}
+}
+
+public class StringWriter extends Writer {
+	private ref<string> _output;
+	
+	public StringWriter(ref<string> output) {
+		_output = output;
+	}
+	
+	public void write(byte c) {
+		_output.append(c);
+	}
+}
+
 public void memDump(address buffer, int length) {
 	memDump(buffer, length, long(buffer));
 }
@@ -2473,6 +2501,7 @@ private void dumpPtr(address x) {
 	pointer<long> np = pointer<long>(&x);
 	printf("%16.16x", *np);
 }
+
 
 class RegularExpression {
 }

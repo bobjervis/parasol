@@ -21,7 +21,6 @@ import parasol:pxi;
 import parasol:pxi.SectionType;
 import parasol:compiler.Arena;
 import parasol:compiler.Target;
-import parasol:file;
 import parasol:time;
 
 /*

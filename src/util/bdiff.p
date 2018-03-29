@@ -15,7 +15,7 @@
  */
 // Binary differencer
 import parasol:process;
-import parasol:file;
+import parasol:storage;
 
 class BDiffCommand extends process.Command {
 	public BDiffCommand() {
@@ -31,35 +31,31 @@ int main(string[] args) {
 	if (!command.parse(args))
 		command.help();
 	string[] files = command.finalArgs();
-	file.File left = file.openBinaryFile(files[0]);
-	file.File right = file.openBinaryFile(files[1]);
+	ref<Reader> left = storage.openBinaryFile(files[0]);
+	ref<Reader> right = storage.openBinaryFile(files[1]);
 	
 	boolean allGood = true;
-	if (!left.opened()) {
+	if (left == null) {
 		printf("Could not open file '%s'\n", files[0]);
 		allGood = false;
 	}
-	if (!right.opened()) {
+	if (right == null) {
 		printf("Could not open file '%s'\n", files[1]);
 		allGood = false;
 	}
 	if (!allGood)
 		return 1;
-	left.seek(0, file.Seek.END);
-	int sizeLeft = left.tell();
-	right.seek(0, file.Seek.END);
-	int sizeRight = right.tell();
+	long sizeLeft = storage.size(files[0]);
+	long sizeRight = storage.size(files[1]);
 	if (sizeLeft != sizeRight) {
 		printf("Files have different sizes: %s (%d) %s (%d)\n", files[0], sizeLeft, files[1], sizeRight);
 		return 1;
 	}
-	left.seek(0, file.Seek.START);
-	right.seek(0, file.Seek.START);
 	int offset = 0;
 	boolean differences = false;
 	for (;;) {
 		int xLeft = left.read();
-		if (xLeft == file.EOF)
+		if (xLeft == storage.EOF)
 			break;
 		int xRight = right.read();
 		if (xLeft != xRight) {

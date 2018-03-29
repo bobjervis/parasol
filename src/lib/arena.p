@@ -17,7 +17,6 @@ namespace parasol:compiler;
 
 import parasol:text;
 import parasol:storage;
-import parasol:file;
 import parasol:process;
 import parasol:runtime;
 import parasol:pxi.SectionType;
@@ -185,7 +184,7 @@ public class Arena {
 		return -1;
 	}
 
-	boolean writeHeader(file.File header) {
+	boolean writeHeader(ref<Writer> header) {
 		for (ref<Scope>[string].iterator i = _domains.begin(); i.hasNext(); i.next()) {
 			ref<Scope> s = i.get();
 			if (!s.writeHeader(header))

@@ -13,7 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-namespace parasol:file;
+namespace parasol:storage;
 
 import native:C;
 import native:windows;
@@ -26,42 +26,147 @@ import parasol:pxi.SectionType;
 public int EOF = -1;
 
 public class File {
-	
-	private ref<C.FILE> _handle;
-	
-	public File(ref<C.FILE> handle) {
-		_handle = handle;
-	}
-	
-	public File() {
+	private long _fd;
+
+	File(long fd) {
+		_fd = fd;
 	}
 
-	public boolean opened() {
-		return _handle != null;
+	public File() {
+		_fd = -1;
+	}
+
+	public boolean open(string filename) {
+		return open(filename, Access.READ);
+	}
+
+	public boolean open(string filename, Access access) {
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			windows.DWORD rights;
+			windows.DWORD sharing;
+			windows.DWORD disposition;
+			if (access & Access.READ) {
+				rights = windows.GENERIC_READ;
+				if (access & Access.WRITE)
+					rights |= windows.GENERIC_WRITE;
+				else
+					sharing = windows.FILE_SHARE_READ;
+				disposition = windows.OPEN_EXISTING;
+			} else if (access & Access.WRITE) {
+				rights = windows.GENERIC_WRITE;
+			}
+			windows.HANDLE handle = windows.CreateFile(filename.c_str(), rights, sharing, null, 
+													disposition, windows.FILE_ATTRIBUTE_NORMAL, null);
+			if (handle != windows.INVALID_HANDLE_VALUE) {
+				_fd = long(handle);
+				return true;
+			}
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			int openFlags;
+
+			if (access & Access.READ) {
+				if (access & Access.WRITE)
+					openFlags = linux.O_RDWR;
+				else
+					openFlags = linux.O_RDONLY;
+			} else if (access & Access.WRITE) {
+				openFlags = linux.O_WRONLY;
+			}
+		
+			_fd = linux.open(filename.c_str(), openFlags);
+			if (_fd >= 0)
+				return true;
+		}
+		return false;
+	}
+
+	public boolean create(string filename) {
+		return create(filename, Access.WRITE);
+	}
+
+	public boolean create(string filename, Access access) {
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			windows.DWORD rights;
+			if (access & Access.READ) {
+				rights = windows.GENERIC_READ;
+				if (access & Access.WRITE)
+					rights |= windows.GENERIC_WRITE;
+			} else if (access & Access.WRITE) {
+				rights = windows.GENERIC_WRITE;
+			}
+			windows.HANDLE handle = windows.CreateFile(filename.c_str(), rights, 0, null, 
+													windows.CREATE_ALWAYS, windows.FILE_ATTRIBUTE_NORMAL, null);
+			if (handle != windows.INVALID_HANDLE_VALUE) {
+				_fd = long(handle);
+				return true;
+			}
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			int openFlags;
+
+			if (access & Access.READ) {
+				if (access & Access.WRITE)
+					openFlags = linux.O_RDWR;
+				else
+					openFlags = linux.O_RDONLY;
+			} else if (access & Access.WRITE) {
+				openFlags = linux.O_WRONLY;
+			}
+			openFlags |= linux.O_CREATE|linux.O_TRUNC;
+		
+			_fd = linux.open(filename.c_str(), openFlags);
+			if (_fd >= 0)
+				return true;
+		}
+		return false;
+	}
+
+	public boolean append(string filename) {
+		return append(filename, Access.WRITE);
+	}
+
+	public boolean append(string filename, Access access) {
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			// append always fails on Windows
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			int openFlags;
+
+			if (access & Access.READ) {
+				if (access & Access.WRITE)
+					openFlags = linux.O_RDWR;
+				else
+					openFlags = linux.O_RDONLY;
+			} else if (access & Access.WRITE) {
+				openFlags = linux.O_WRONLY;
+			}
+			openFlags |= linux.O_CREATE|linux.O_APPEND;
+			_fd = linux.open(filename.c_str(), openFlags);
+			if (_fd >= 0)
+				return true;
+		}
+		return false;
+	}
+
+	public boolean isOpen() {
+		return _fd >= 0;
 	}
 
 	public boolean close() {
-		if (_handle != null) {
-			boolean result = C.fclose(_handle) == 0;
-			_handle = null;
-			return result;
-		} else
-			return false;
+		if (_fd >= 0) {
+			if (runtime.compileTarget == SectionType.X86_64_WIN) {
+				if (windows.CloseHandle(windows.HANDLE(_fd)) != 0) {
+					_fd = -1;
+					return true;
+				}
+			} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+				if (linux.close(int(_fd)) == 0) {
+					_fd = -1;
+					return true;
+				}
+			}
+		}
+		return false;
 	}
-	
-	public string, boolean readAll() {
-		seek(0, Seek.END);
-		int pos = tell();
-		seek(0, Seek.START);
-		string data;
-		
-		data.resize(pos);
-		unsigned n = C.fread(&data[0], 1, unsigned(pos), _handle);
-		if (C.ferror(_handle) != 0)
-			return "", false;
-		data.resize(int(n));
-		return data, true;
-	}
+/*
 	
 	public string, boolean readLine() {
 		string line;
@@ -86,95 +191,119 @@ public class File {
 			line.append(byte(c));
 		}
 	}
-	
-	public int read() {
-		return C.fgetc(_handle);
-	}
-	
-	public int tell() {
-		return C.ftell(_handle);
-	}
-	
-	public int seek(int offset, Seek whence) {
-		switch (whence) {
-		case START:
-			return C.fseek(_handle, offset, C.SEEK_SET);
-			
-		case CURRENT:
-			return C.fseek(_handle, offset, C.SEEK_CUR);
-			
-		case END:
-			return C.fseek(_handle, offset, C.SEEK_END);
+ */
+	/**
+	 * @RETURN A value greater then or equal to zero on success, with the size of the file.
+	 * A negative return value indicates an error. In the event of an error, the file position
+	 * for any subsequent read or write operation is undefined.
+	 */
+	public long tell() {
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			long current;
+			long end;
+			if (windows.SetFilePointerEx(windows.HANDLE(_fd), 0, &current, windows.FILE_CURRENT) == 0)
+				return -1;
+			if (windows.SetFilePointerEx(windows.HANDLE(_fd), 0, &end, windows.FILE_END) == 0)
+				return -1;
+			if (windows.SetFilePointerEx(windows.HANDLE(_fd), current, null, windows.FILE_BEGIN) == 0)
+				return -1;
+			return end;
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			linux.off_t current = linux.lseek(int(_fd), 0, C.SEEK_CUR);
+			linux.off_t end = linux.lseek(int(_fd), 0, C.SEEK_END);
+			linux.lseek(int(_fd), current, C.SEEK_SET);
+			return end;
 		}
 		return -1;
 	}
-	
-	public int printf(string format, var... args) {
-		string s;
-		
-		s.printf(format, args);
-		return write(&s[0], s.length());
+
+	public long seek(long offset, Seek whence) {
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			long result;
+			if (windows.SetFilePointerEx(windows.HANDLE(_fd), offset, &result, windows.DWORD(whence)) == 0)
+				return -1;
+			return result;
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			return linux.lseek(int(_fd), offset, int(whence));
+		}
+		return -1;
 	}
-	
-	public int putc(byte b) {
-		return C.fputc(b, _handle);
-	}
-	
+
 	public int write(byte[] buffer) {
-		unsigned n = C.fwrite(&buffer[0], 1, unsigned(buffer.length()), _handle);
-		if (C.ferror(_handle) != 0)
-			return -1;
-		return int(n);
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			windows.DWORD result;
+			if (windows.WriteFile(windows.HANDLE(_fd), &buffer[0], windows.DWORD(buffer.length()), &result, null) == 0)
+				return -1;
+			return int(result);
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			return linux.write(int(_fd), &buffer[0], buffer.length());
+		}
+		return -1;
 	}
 
 	public int write(string buffer) {
-		unsigned n = C.fwrite(&buffer[0], 1, unsigned(buffer.length()), _handle);
-		if (C.ferror(_handle) != 0)
-			return -1;
-		return int(n);
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			windows.DWORD result;
+			if (windows.WriteFile(windows.HANDLE(_fd), &buffer[0], windows.DWORD(buffer.length()), &result, null) == 0)
+				return -1;
+			return int(result);
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			return linux.write(int(_fd), &buffer[0], buffer.length());
+		}
+		return -1;
 	}
 
 	public int write(address buffer, int length) {
-		unsigned n = C.fwrite(buffer, 1, unsigned(length), _handle);
-		if (C.ferror(_handle) != 0)
-			return -1;
-		return int(n);
-	}
-	
-	public boolean flush() {
-		return C.fflush(_handle) == 0;
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			windows.DWORD result;
+			if (windows.WriteFile(windows.HANDLE(_fd), buffer, windows.DWORD(length), &result, null) == 0)
+				return -1;
+			return int(result);
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			return linux.write(int(_fd), buffer, length);
+		}
+		return -1;
 	}
 	/**
-	 * Force the file contents to disk. 
+	 * Force the file contents to disk.
 	 */
 	public boolean sync() {
-		if (C.fflush(_handle) != 0)
-			return false;
 		if (runtime.compileTarget == SectionType.X86_64_WIN) {
-			return windows.FlushFileBuffers(windows._get_osfhandle(C.fileno(_handle))) != 0;
+			return windows.FlushFileBuffers(windows.HANDLE(_fd)) != 0;
 		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
-			return linux.fdatasync(C.fileno(_handle)) == 0;
+			return linux.fdatasync(int(_fd)) == 0;
 		} else
 			return false;
 	}
 
 	public int read(ref<byte[]> buffer) {
-		unsigned n = C.fread(&(*buffer)[0], 1, unsigned(buffer.length()), _handle);
-		if (C.ferror(_handle) != 0)
-			return -1;
-		return int(n);
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			windows.DWORD result;
+			if (windows.ReadFile(windows.HANDLE(_fd), &(*buffer)[0], windows.DWORD(buffer.length()), &result, null) == 0)
+				return -1;
+			return int(result);
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			return linux.read(int(_fd), &(*buffer)[0], buffer.length());
+		}
+		return -1;
 	}
 
 	public int read(address buffer, int length) {
-		unsigned n = C.fread(buffer, 1, unsigned(length), _handle);
-		if (C.ferror(_handle) != 0)
-			return -1;
-		return int(n);
+		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			windows.DWORD result;
+			if (windows.ReadFile(windows.HANDLE(_fd), buffer, windows.DWORD(length), &result, null) == 0)
+				return -1;
+			return int(result);
+		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			return linux.read(int(_fd), buffer, length);
+		}
+		return -1;
 	}
-	
-	public boolean hasError() {
-		return C.ferror(_handle) != 0;
-	}
+}
+
+flags Access {
+	READ,
+	WRITE
 }
 
 enum Seek {
@@ -183,72 +312,245 @@ enum Seek {
 	END
 }
 
-public File openTextFile(string filename) {
-	ref<C.FILE> f = C.fopen(filename.c_str(), "r".c_str());
-	if (f == null) {
-//		throw new 
+@Constant
+int BUFFER_SIZE = 64 * 1024;
+
+public class FileReader = BinaryFileReader;
+
+public class BinaryFileReader extends Reader {
+	private File _file;
+	private byte[] _buffer;
+	private int _cursor;
+	private int _length;
+
+	BinaryFileReader(File file) {
+		_file = file;
+		_buffer.resize(BUFFER_SIZE);
 	}
-	File h(f);
-	return h;
-}
-	
-public File appendTextFile(string filename) {
-	ref<C.FILE> f = C.fopen(filename.c_str(), "a".c_str());
-	if (f == null) {
-//		throw new 
+
+	~BinaryFileReader() {
+		_file.close();
 	}
-	File h(f);
-	return h;
-}
-	
-public File createTextFile(string filename) {
-	ref<C.FILE> f;
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
-		f = C.fopen(filename.c_str(), "w".c_str());
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
-		int fd = linux.creat(filename.c_str(), 0660);
-		f = C.fdopen(fd, "w".c_str());
-	} else
-		f = C.fopen(filename.c_str(), "w".c_str());
-	if (f == null) {
-//		throw new 
+
+	public string, boolean readAll() {
+		seek(0, Seek.END);
+		long pos = tell();
+		seek(0, Seek.START);
+		string data;
+
+		if (pos > int.MAX_VALUE)
+			return "", false;
+		data.resize(int(pos));
+		
+		int n = _file.read(&data[0], int(pos));
+		if (n < 0)
+			return "", false;
+		data.resize(n);
+		return data, true;
 	}
-	File h(f);
-	return h;
+
+	public int read() {
+		if (_cursor >= _length) {
+			_length = _file.read(&_buffer);
+			if (_length == 0)
+				return EOF;
+			_cursor = 1;
+			return _buffer[0];
+		}
+		return _buffer[_cursor++];
+	}
+
+	public void unread() {
+		if (_cursor > 0)
+			_cursor--;
+	}
+
+	public long tell() {
+		return _file.seek(0, Seek.CURRENT) + _cursor - _length;
+	}
+
+	public long seek(long offset, Seek whence) {
+		_length = 0;
+		_cursor = 0;
+		return _file.seek(offset, whence);
+	}
+
+	public void close() {
+		_file.close();
+		_buffer.clear();			// Release the file buffer now since we won't need it any more
+		_length = 0;
+		_cursor = 0;
+	}
 }
 
-public File openBinaryFile(string filename) {
-	ref<C.FILE> f = C.fopen(filename.c_str(), "rb".c_str());
-	if (f == null) {
-//		throw new 
+public class TextFileReader extends BinaryFileReader {
+	TextFileReader(File file) {
+		super(file);
 	}
-	File h(f);
-	return h;
-}
-	
-public File appendBinaryFile(string filename) {
-	ref<C.FILE> f = C.fopen(filename.c_str(), "ab".c_str());
-	if (f == null) {
-//		throw new 
+
+	public int read() {
+		int c;
+
+		do {
+			c = super.read();
+			if (c == 26) { // A ctrl-Z marks a text file EOF
+				unread();
+				return EOF;
+			}
+		} while (c == '\r');
+		return c;
 	}
-	File h(f);
-	return h;
 }
-	
-public File createBinaryFile(string filename) {
-	ref<C.FILE> f;
+
+public class FileWriter = BinaryFileWriter;
+
+public class BinaryFileWriter extends Writer {
+	private File _file;
+	private byte[] _buffer;
+	private int _fill;
+
+	BinaryFileWriter(File file) {
+		_file = file;
+		_buffer.resize(BUFFER_SIZE);
+	}
+
+	~BinaryFileWriter() {
+		flush();
+		_file.close();
+	}
+
+	public void write(byte c) {
+		_buffer[_fill] = c;
+		_fill++;
+		if (_fill >= BUFFER_SIZE)
+			flush();
+	}
+
+	public long tell() {
+		return _file.seek(0, Seek.CURRENT) + _fill;
+	}
+
+	public long seek(long offset, Seek whence) {
+		flush();
+		return _file.seek(offset, whence);
+	}
+
+	public void flush() {
+		if (_fill > 0) {
+			_file.write(&_buffer[0], _fill);
+			_fill = 0;
+		}
+	}
+
+	public void close() {
+		flush();
+		_file.close();
+		_buffer.clear();			// Release the file buffer now since we won't need it any more
+	}
+}
+
+public class BinaryFileAppendWriter extends BinaryFileWriter {
+	BinaryFileAppendWriter(File file) {
+		super(file);
+	}
+
+	public void flush() {
+		seek(0, Seek.END);
+		super.flush();
+	}
+}
+
+public class TextFileWriter extends BinaryFileWriter {
+	TextFileWriter(File file) {
+		super(file);
+	}
+
+	public void write(byte c) {
+		if (c == '\n')
+			super.write('\r');
+		super.write(c);
+	}
+}
+/**
+ * NOte: This class should nly be needed for Windows, which has no Append mode for files.
+ */
+public class TextFileAppendWriter extends TextFileWriter {
+	TextFileAppendWriter(File file) {
+		super(file);
+	}
+
+	public void flush() {
+		seek(0, Seek.END);
+		super.flush();
+	}
+}
+
+public ref<FileReader> openTextFile(string filename) {
+	File f;
+
+	if (f.open(filename))
+		return new TextFileReader(f);
+	else
+		return null;
+}
+
+public ref<FileWriter> appendTextFile(string filename) {
 	if (runtime.compileTarget == SectionType.X86_64_WIN) {
-		f = C.fopen(filename.c_str(), "wb".c_str());
+		windows.HANDLE handle = windows.CreateFile(filename.c_str(), windows.GENERIC_WRITE, 0, null, 
+												windows.OPEN_ALWAYS, windows.FILE_ATTRIBUTE_NORMAL, null);
+		if (handle == windows.INVALID_HANDLE_VALUE)
+			return null;
+		return new TextFileAppendWriter(File(long(handle)));
 	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
-		int fd = linux.creat(filename.c_str(), 0660);
-		f = C.fdopen(fd, "wb".c_str());
-	} else
-		f = C.fopen(filename.c_str(), "wb".c_str());
-	if (f == null) {
-//		throw new 
+		File f;
+
+		if (f.append(filename))
+			return new TextFileWriter(f);
 	}
-	File h(f);
-	return h;
+	return null;
+}
+
+public ref<FileWriter> createTextFile(string filename) {
+	File f;
+
+	if (f.create(filename))
+		return new TextFileWriter(f);
+	else
+		return null;
+}
+
+public ref<FileReader> openBinaryFile(string filename) {
+	File f;
+
+	if (f.open(filename))
+		return new BinaryFileReader(f);
+	else
+		return null;
+}
+
+public ref<FileWriter> appendBinaryFile(string filename) {
+	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		windows.HANDLE handle = windows.CreateFile(filename.c_str(), windows.GENERIC_WRITE, 0, null, 
+												windows.OPEN_ALWAYS, windows.FILE_ATTRIBUTE_NORMAL, null);
+		if (handle == windows.INVALID_HANDLE_VALUE)
+			return null;
+		return new BinaryFileAppendWriter(File(long(handle)));
+	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		File f;
+
+		if (f.append(filename))
+			return new BinaryFileWriter(f);
+	}
+	return null;
+}
+
+public ref<FileWriter> createBinaryFile(string filename) {
+	File f;
+
+	if (f.create(filename))
+		return new BinaryFileWriter(f);
+	else
+		return null;
 }
 
 public class Directory {

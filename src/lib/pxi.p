@@ -15,7 +15,7 @@
  */
 namespace parasol:pxi;
 
-import parasol:file;
+import parasol:storage;
 /*
  * Pxi: Parasol eXecutable Image
  * 
@@ -51,7 +51,7 @@ import parasol:file;
 public class Pxi {
 	private ref<Section>[] _sections;
 	private string _filename;
-	private file.File _pxiFile;
+	private storage.File _pxiFile;
 	private SectionEntry[] _entries;
 
 	public static ref<Pxi> load(string filename) {
@@ -81,12 +81,15 @@ public class Pxi {
 	}
 	
 	public boolean write() {
-		file.File f = file.createBinaryFile(_filename);
-		if (!f.opened())
+		storage.File f;
+
+		if (!f.create(_filename))
 			return false;
 		PxiHeader header;
 		header.sections = char(_sections.length());
-		f.write(&header, header.bytes);
+		if (f.write(&header, header.bytes) < 0)
+			return false;
+
 		long offset = header.bytes + _sections.length() * SectionEntry.bytes;
 		for (int i = 0; i < _sections.length(); i++) {
 			ref<Section> s = _sections[i];
@@ -95,23 +98,23 @@ public class Pxi {
 			se.offset = offset;
 			se.length = s.length();
 			offset += se.length;
-			f.write(&se, se.bytes);
+			if (f.write(&se, se.bytes) < 0)
+				return false;
 		}
 		for (int i = 0; i < _sections.length(); i++)
-			_sections[i].write(f);
-		boolean result = f.hasError();
-		return f.close() && !result;
+			if (!_sections[i].write(f))
+				return false;
+		return true;
 	}
 
 	PxiStatus read() {
-		_pxiFile = file.openBinaryFile(_filename);
-		if (!_pxiFile.opened())
+		if (!_pxiFile.open(_filename))
 			return PxiStatus.COULD_NOT_OPEN;
 		PxiStatus status = read(_pxiFile);
 		return status;
 	}
 
-	PxiStatus read(file.File pxiFile) {
+	PxiStatus read(storage.File pxiFile) {
 		PxiHeader header;
 		if (pxiFile.read(&header, header.bytes) != header.bytes)
 			return PxiStatus.FILE_HEADER_INCOMPLETE;
@@ -150,7 +153,7 @@ public class Pxi {
 		for (int j = 0; j < readerMap.length(); j++) {
 			if (_entries[sectionIndex].sectionType == int(readerMap[j].sectionType) &&
 				readerMap[j].sectionReader != null) {
-				if (_pxiFile.seek(int(_entries[sectionIndex].offset), file.Seek.START) < 0)
+				if (_pxiFile.seek(int(_entries[sectionIndex].offset), storage.Seek.START) < 0)
 					return null;
 				ReaderMap r = readerMap[j];
 				return r.sectionReader(_pxiFile, _entries[sectionIndex].length);
@@ -195,7 +198,7 @@ public class Section {
 	
 	public abstract long length();
 	
-	public abstract void write(file.File pxiFile);
+	public abstract boolean write(storage.File pxiFile);
 }
 
 unsigned MAGIC_NUMBER = unsigned(~0x50584920);
@@ -257,7 +260,7 @@ private SectionType[string] sectionTypes = [
 
 private class ReaderMap {
 	public SectionType sectionType;
-	public ref<Section> sectionReader(file.File pxiFile, long length);
+	public ref<Section> sectionReader(storage.File pxiFile, long length);
 	
 //	ref<Section> sectionReader(file.File pxiFile, long length) {
 //		return sectionReader(pxiFile, length);
@@ -268,7 +271,7 @@ private ReaderMap[] readerMap;
 /**
  * Register a section reader to process the section when it is loaded.
  */
-public boolean registerSectionReader(SectionType sectionType, ref<Section> sectionReader(file.File pxiFile, long length)) {
+public boolean registerSectionReader(SectionType sectionType, ref<Section> sectionReader(storage.File pxiFile, long length)) {
 	for (int i = 0; i < readerMap.length(); i++)
 		if (readerMap[i].sectionType == sectionType)
 			return false;
