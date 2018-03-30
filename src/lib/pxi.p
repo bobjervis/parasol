@@ -16,6 +16,7 @@
 namespace parasol:pxi;
 
 import parasol:storage;
+import parasol:runtime;
 /*
  * Pxi: Parasol eXecutable Image
  * 
@@ -166,8 +167,8 @@ public class Pxi {
 		return _pxiFile.close();
 	}
 	
-	SectionType sectionType(int i) {
-		return SectionType(_entries[i].sectionType);
+	runtime.Target sectionType(int i) {
+		return runtime.Target(_entries[i].sectionType);
 	}
 	
 	SectionEntry entry(int i) {
@@ -186,13 +187,13 @@ public enum PxiStatus {
 }
 
 public class Section {
-	private SectionType _sectionType;
+	private runtime.Target _sectionType;
 	
-	public Section(SectionType st) {
+	public Section(runtime.Target st) {
 		_sectionType = st;
 	}
 	
-	public SectionType sectionType() {
+	public runtime.Target sectionType() {
 		return _sectionType;
 	}
 	
@@ -231,35 +232,25 @@ class SectionEntry {
 	long length;			// The length of the section, in bytes.
 }
 
-@Header("ST_")
-public enum SectionType {
-	ERROR,						// 0x00 A section given this type has unknown data at the section offset
-	SOURCE,						// 0x01 the region is in POSIX IEEE P1003.1 USTar archive format.
-	NOT_USED_2,					// 0x02 Parasol byte codes
-	X86_64_LNX,					// 0x03 Parasol 64-bit for Intel and AMD processors, Linux calling conventions.
-	X86_64_WIN,					// 0x04 Parasol 64-bit for Intel and AMD processors, Windows calling conventions.
-	FILLER
-}
-
-public SectionType sectionType(string name) {
+public runtime.Target sectionType(string name) {
 	return sectionTypes[name];
 }
 
-public string sectionTypeName(SectionType st) {
-	if (unsigned(int(st)) < unsigned(SectionType.FILLER))
+public string sectionTypeName(runtime.Target st) {
+	if (unsigned(int(st)) < unsigned(runtime.Target.FILLER))
 		return string(st);
 	else
 		return "<unknown>";
 }
 
-private SectionType[string] sectionTypes = [
-	"x86-64-lnx":	SectionType.X86_64_LNX,
-	"x86-64-win":	SectionType.X86_64_WIN,
+private runtime.Target[string] sectionTypes = [
+	"x86-64-lnx":	runtime.Target.X86_64_LNX,
+	"x86-64-win":	runtime.Target.X86_64_WIN,
 ];
 
 
 private class ReaderMap {
-	public SectionType sectionType;
+	public runtime.Target sectionType;
 	public ref<Section> sectionReader(storage.File pxiFile, long length);
 	
 //	ref<Section> sectionReader(file.File pxiFile, long length) {
@@ -271,7 +262,7 @@ private ReaderMap[] readerMap;
 /**
  * Register a section reader to process the section when it is loaded.
  */
-public boolean registerSectionReader(SectionType sectionType, ref<Section> sectionReader(storage.File pxiFile, long length)) {
+public boolean registerSectionReader(runtime.Target sectionType, ref<Section> sectionReader(storage.File pxiFile, long length)) {
 	for (int i = 0; i < readerMap.length(); i++)
 		if (readerMap[i].sectionType == sectionType)
 			return false;

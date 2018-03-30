@@ -24,7 +24,6 @@ import parasol:memory;
 import parasol:process;
 import parasol:runtime;
 import parasol:thread;
-import parasol:pxi.SectionType;
 import native:windows;
 import native:linux;
 import native:C;
@@ -359,7 +358,7 @@ public class RuntimeException extends Exception {
 		string output;
 		output.printf("RuntimeException: ");
 
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			pointer<byte> message = formatMessage(unsigned(_exceptionContext.exceptionType));
 
 			string text(message);
@@ -370,7 +369,7 @@ public class RuntimeException extends Exception {
 				output.printf(" (%s)", text);
 			}
 			output.printf(" ip %p", _exceptionContext.exceptionAddress, runtime.lowCodeAddress());
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX)
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX)
 			output.printf("%x", _exceptionContext.exceptionType);
 		return output;
 	}
@@ -529,7 +528,7 @@ void hardwareExceptionHandler(ref<HardwareException> info) {
 	context.memoryAddress = address(info.exceptionInfo0);
 	context.exceptionFlags = info.exceptionInfo1;
 	context.exceptionType = info.exceptionType;
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		if (info.exceptionType == 0xffffffffc0000374) {
 			throw CorruptHeapException(context);
 		} else if (info.exceptionType == 0xffffffffc00000fd) {
@@ -541,7 +540,7 @@ void hardwareExceptionHandler(ref<HardwareException> info) {
 				throw AccessException(context);
 		} else if (info.exceptionType == int(0xc0000094))
 			throw DivideByZeroException(context);
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		switch (info.exceptionType) {
 		case 0xb80:						// SIGSEGV + SI_KERNEL
 		case 0xb01:						// SIGSEGV + SEGV_MAPERR

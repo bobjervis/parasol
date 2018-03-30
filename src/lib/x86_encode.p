@@ -57,7 +57,6 @@ import parasol:compiler.Variable;
 import parasol:storage;
 import parasol:math.abs;
 import parasol:pxi.Pxi;
-import parasol:pxi.SectionType;
 import parasol:runtime;
 import parasol:text;
 /*
@@ -2882,7 +2881,7 @@ class X86_64Encoder extends Target {
 		if (func == null)
 			return false;
 		if (isBuiltIn) {
-			if (sectionType() == SectionType.X86_64_WIN)
+			if (sectionType() == runtime.Target.X86_64_WIN)
 				inst(X86.SUB, TypeFamily.ADDRESS, R.RSP, 16);
 			emit(0xff);
 			modRM(0, 2, 5);
@@ -2891,7 +2890,7 @@ class X86_64Encoder extends Target {
 			else
 				fixup(FixupKind.BUILTIN32, functionScope.value);
 			emitInt(0);
-			if (sectionType() == SectionType.X86_64_WIN)
+			if (sectionType() == runtime.Target.X86_64_WIN)
 				inst(X86.ADD, TypeFamily.ADDRESS, R.RSP, 16);
 		} else {
 			emit(0xe8);

@@ -17,7 +17,6 @@ namespace parasol:random;
 
 import native:C;
 import parasol:runtime;
-import parasol:pxi.SectionType;
 
 class Random {
 	private class RandomState {
@@ -90,7 +89,7 @@ class Random {
 	}
 
 	void set() {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			/*
 				HCRYPTPROV handle;
 		
@@ -101,7 +100,7 @@ class Random {
 				}
 			*/
 			set(C.time(null));
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			ref<C.FILE> f = C.fopen("/dev/urandom".c_str(), "rb".c_str());
 			if (f == null)
 				set(C.time(null));
@@ -119,7 +118,7 @@ class Random {
 		byte[] b;
 
 		b.resize(length);
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			/*
 				HCRYPTPROV handle;
 		
@@ -129,7 +128,7 @@ class Random {
 				} else {
 				}
 			*/
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			ref<C.FILE> f = C.fopen("/dev/urandom".c_str(), "rb".c_str());
 			if (f != null) {
 				C.fread(&b[0], 1, unsigned(length), f);

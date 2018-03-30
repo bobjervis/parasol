@@ -19,7 +19,6 @@ import parasol:text;
 import parasol:storage;
 import parasol:process;
 import parasol:runtime;
-import parasol:pxi.SectionType;
 
 public class Arena {
 	private ref<Type>[TypeFamily] _builtInType;
@@ -48,7 +47,7 @@ public class Arena {
 	boolean _deleteSourceCache;
 	boolean verbose;
 	boolean logImports;
-	SectionType preferredTarget;
+	runtime.Target preferredTarget;
 
 	public Arena() {
 		_sourceCache = new SourceCache();

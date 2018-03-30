@@ -79,7 +79,6 @@ import parasol:compiler.Variable;
 import parasol:exception;
 import parasol:exception.ExceptionContext;
 import parasol:pxi.Pxi;
-import parasol:pxi.SectionType;
 import parasol:runtime;
 import native:C;
 
@@ -178,12 +177,12 @@ public class X86_64Lnx extends X86_64 {
 		return RAXmask|RCXmask|RDXmask|R8mask|R9mask|RSImask|RDImask|R10mask|R11mask;			// RBX, R12, R13, R14, R15, RBP and RSP are reserved
 	}
 	
-	public SectionType sectionType() {
-		return SectionType.X86_64_LNX;
+	public runtime.Target sectionType() {
+		return runtime.Target.X86_64_LNX;
 	}
 
 	public int, boolean run(string[] args) {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			printf("Running Linux target in Windows\n");
 			return 0, false;
 		}
@@ -252,12 +251,12 @@ public class X86_64Win extends X86_64 {
 		return RAXmask|RCXmask|RDXmask|R8mask|R9mask|R10mask|R11mask;			// RBP and RSP are reserved
 	}
 
-	public SectionType sectionType() {
-		return SectionType.X86_64_WIN;
+	public runtime.Target sectionType() {
+		return runtime.Target.X86_64_WIN;
 	}
 
 	public int, boolean run(string[] args) {
-		if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			printf("Running windows target in Linux\n");
 			return 0, false;
 		}
@@ -359,7 +358,7 @@ public class X86_64 extends X86_64AssignTemps {
 				*vp += long(address(_staticMemory));
 			pointer<NativeBinding> nativeBindings = pointer<NativeBinding>(_staticMemory + _pxiHeader.nativeBindingsOffset);
 			for (int i = 0; i < _pxiHeader.nativeBindingsCount; i++) {
-				if (runtime.compileTarget == SectionType.X86_64_WIN) {
+				if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 					windows.HMODULE dll = windows.GetModuleHandle(nativeBindings[i].dllName);
 					if (dll == null) {
 						dll = windows.LoadLibrary(nativeBindings[i].dllName);
@@ -370,7 +369,7 @@ public class X86_64 extends X86_64AssignTemps {
 						}
 					}
 					nativeBindings[i].functionAddress = windows.GetProcAddress(dll, nativeBindings[i].symbolName);
-				} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+				} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 					address handle = linux.dlopen(nativeBindings[i].dllName, linux.RTLD_LAZY);
 					if (handle == null) {
 						printf("Unable to locate shared object %s (%s)\n", nativeBindings[i].dllName, linux.dlerror());
@@ -402,7 +401,7 @@ public class X86_64 extends X86_64AssignTemps {
 				*vp += long(address(generatedCode));
 			pointer<NativeBinding> nativeBindings = pointer<NativeBinding>(generatedCode + _pxiHeader.nativeBindingsOffset);
 			for (int i = 0; i < _pxiHeader.nativeBindingsCount; i++) {
-				if (runtime.compileTarget == SectionType.X86_64_WIN) {
+				if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 					windows.HMODULE dll = windows.GetModuleHandle(nativeBindings[i].dllName);
 					if (dll == null) {
 						dll = windows.LoadLibrary(nativeBindings[i].dllName);
@@ -413,7 +412,7 @@ public class X86_64 extends X86_64AssignTemps {
 						}
 					}
 					nativeBindings[i].functionAddress = windows.GetProcAddress(dll, nativeBindings[i].symbolName);
-				} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+				} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 					address handle = linux.dlopen(nativeBindings[i].dllName, linux.RTLD_LAZY);
 					if (handle == null) {
 						printf("Unable to locate shared object %s (%s)\n", nativeBindings[i].dllName, linux.dlerror());
@@ -479,13 +478,13 @@ public class X86_64 extends X86_64AssignTemps {
 					if (binding != null) {
 						ref<NodeList> args = binding.arguments();
 						if (args == null || args.next == null || args.next.next != null) {
-							binding.add(sectionType() == SectionType.X86_64_WIN ? MessageId.BAD_WINDOWS_BINDING : MessageId.BAD_LINUX_BINDING, compileContext.pool());
+							binding.add(sectionType() == runtime.Target.X86_64_WIN ? MessageId.BAD_WINDOWS_BINDING : MessageId.BAD_LINUX_BINDING, compileContext.pool());
 							return null, false;
 						}
 						ref<Node> dll = args.node;
 						ref<Node> symbol = args.next.node;
 						if (dll.op() != Operator.STRING || symbol.op() != Operator.STRING) {
-							binding.add(sectionType() == SectionType.X86_64_WIN ? MessageId.BAD_WINDOWS_BINDING : MessageId.BAD_LINUX_BINDING, compileContext.pool());
+							binding.add(sectionType() == runtime.Target.X86_64_WIN ? MessageId.BAD_WINDOWS_BINDING : MessageId.BAD_LINUX_BINDING, compileContext.pool());
 							return null, false;
 						}
 						CompileString dllName = ref<Constant>(dll).value();

@@ -20,7 +20,6 @@ import native:net;
 import native:linux;
 import native:C;
 import parasol:runtime;
-import parasol:pxi.SectionType;
 import openssl.org:ssl;
 import native:windows.WORD;
 
@@ -102,7 +101,7 @@ public class Socket {
 	}
 
 	public static ref<Socket> create(Encryption encryption, string cipherList, boolean forAccept) {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			lock (_init) {
 				if (!_done) {
 					_done = true;
@@ -147,7 +146,7 @@ public class Socket {
 		net.sockaddr_in s;
 		pointer<byte> ip;
 		
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			string hostname = "";
 
 			ref<net.hostent> localHost = net.gethostbyname(&hostname[0]);
@@ -159,7 +158,7 @@ public class Socket {
 //			string n(localHost.h_name);
 //			printf("hostent name = '%s' ip = '%s'\n", n, x);
 			net.inet_addr(ip);
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			if (scope == ServerScope.LOCALHOST)
 				ip = &localhost[0];
 			else {					// must be INTERNET
@@ -191,7 +190,7 @@ public class Socket {
 //		printf("s = { %d, %x, %x }\n", s.sin_family, s.sin_addr.s_addr, s.sin_port);
 		if (net.bind(_socketfd, &s, s.bytes) != 0) {
 			printf("Binding failed to %d!", port);
-			if (runtime.compileTarget == SectionType.X86_64_LNX)
+			if (runtime.compileTarget == runtime.Target.X86_64_LNX)
 				linux.perror(" ".c_str());
 			printf("\n");
 			net.closesocket(_socketfd);

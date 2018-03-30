@@ -16,6 +16,7 @@
 namespace parasol:x86_64;
 
 import parasol:storage;
+import parasol:runtime;
 import parasol:pxi;
 
 public class ExceptionEntry {
@@ -50,7 +51,7 @@ class X86_64WinSection extends pxi.Section {
 	private ref<X86_64> _target;
 	
 	public X86_64WinSection(ref<X86_64> target) {
-		super(pxi.SectionType.X86_64_WIN);
+		super(runtime.Target.X86_64_WIN);
 		_target = target;
 	}
 	

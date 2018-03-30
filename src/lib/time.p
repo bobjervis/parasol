@@ -19,7 +19,6 @@ import native:windows;
 import native:C;
 import native:linux;
 import parasol:runtime;
-import parasol:pxi.SectionType;
 
 @Constant
 private long ERA_DIFF = 0x019DB1DED53E8000;
@@ -69,7 +68,7 @@ public class Time {
 }
 
 public Time now() {
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		windows.SYSTEMTIME s;
 		windows.FILETIME f;
 
@@ -77,7 +76,7 @@ public Time now() {
 		windows.SystemTimeToFileTime(&s, &f);
 		Time result(f);
 		return result;
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		linux.timespec t;
 		linux.clock_gettime(linux.CLOCK_REALTIME, &t);
 		return Time(t);

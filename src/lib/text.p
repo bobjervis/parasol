@@ -17,8 +17,6 @@ namespace parasol:text;
 
 import native:C;
 import parasol:memory;
-import parasol:pxi.SectionType;
-import parasol:runtime;
 
 public boolean ignoring;
 public address[] deletedContents;

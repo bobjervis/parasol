@@ -178,7 +178,7 @@ class ConditionalObject extends script.Object {
 		ref<script.Atom> a = get("target");
 		if (a == null)
 			return false;
-		pxi.SectionType sectionType = pxi.sectionType(a.toString());
+		runtime.Target sectionType = pxi.sectionType(a.toString());
 		if (sectionType == null) {
 			printf("Unexpected section type name in 'target' attribute: '%s'\n", a.toString());
 			return false;

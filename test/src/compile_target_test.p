@@ -14,7 +14,6 @@
    limitations under the License.
  */
 
-import parasol:pxi.SectionType;
 import parasol:runtime.compileTarget;
 import parasol:runtime;
 
@@ -24,7 +23,7 @@ abstract int getpgid(int pid);
 @Windows("kernel32.dll", "GetExitCodeProcess")
 abstract int GetExitCodeProcess(int handle, ref<int> pid);
 
-if (compileTarget == SectionType.X86_64_WIN) {
+if (compileTarget == runtime.Target.X86_64_WIN) {
 	int exitCode;
 	
 	int status = GetExitCodeProcess(-1, &exitCode);
@@ -36,7 +35,7 @@ if (compileTarget == SectionType.X86_64_WIN) {
 	}
 }
 
-if (runtime.compileTarget == SectionType.X86_64_LNX) {
+if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 	int x = getpgid(-3);
 	if (x < 0) {
 		printf("Expecting getpgid to fail: it did\n");

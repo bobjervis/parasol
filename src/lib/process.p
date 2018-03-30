@@ -17,7 +17,6 @@ namespace parasol:process;
 
 import parasol:pxi;
 import parasol:runtime;
-import parasol:pxi.SectionType;
 import parasol:storage;
 import parasol:time;
 import parasol:memory;
@@ -34,9 +33,9 @@ public string binaryFilename() {
 	filename.resize(storage.FILENAME_MAX + 1);
 	int length = 0;
 	
-	if (runtime.compileTarget == pxi.SectionType.X86_64_WIN)
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN)
 		length = windows.GetModuleFileName(null, &filename[0], filename.length());
-	else if (runtime.compileTarget == pxi.SectionType.X86_64_LNX)
+	else if (runtime.compileTarget == runtime.Target.X86_64_LNX)
 		length = linux.readlink("/proc/self/exe".c_str(), &filename[0], filename.length());
 	filename.resize(length);
 	string s(filename);
@@ -62,17 +61,17 @@ private class SpawnPayload {
 }
 
 public int getpid() {
-	if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		return linux.getpid();
 	} else
 		return -1;
 }
 
 public boolean isPrivileged() {
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		// TODO: Check for this being a process with elevated privileges, for now, ignore this possibility.
 		return false;
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		return linux.geteuid() == 0;
 	} else
 		return false;
@@ -80,7 +79,7 @@ public boolean isPrivileged() {
 
 init();
 private void init() {
-	if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 //		linux.struct_sigaction action;
 		linux.sigset_t set;
 
@@ -113,8 +112,8 @@ public class Process extends ProcessVolatileData {
 	private int _fdLimit;
 
 	public Process() {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			linux.rlimit rlim = { rlim_cur: 1024 };
 
 			linux.getrlimit(linux.RLIMIT_NOFILE, &rlim);
@@ -134,8 +133,8 @@ public class Process extends ProcessVolatileData {
 	}
 
 	public boolean user(string username) {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			linux.passwd pwd;
 			ref<linux.passwd> out;
 
@@ -176,7 +175,7 @@ public class Process extends ProcessVolatileData {
 	}
 
 	public boolean spawn(string workingDirectory, string command, ref<string[string]> environ, string... args) {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 //			SpawnPayload payload;
 			
 //			int result = debugSpawnImpl(&command[0], &payload, timeout.value());
@@ -184,7 +183,7 @@ public class Process extends ProcessVolatileData {
 //			exception_t outcome = exception_t(payload.outcome);
 //			disposeOfPayload(&payload);
 //			return result, output, outcome;
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			pointer<byte>[] fullArgs;
 
 			fullArgs.append(command.c_str());
@@ -365,7 +364,7 @@ private monitor class PendingChildren {
 	}
 
 	void reportChildStateChange(linux.pid_t pid, ref<linux.siginfo_t_sigchld> info) {
-		if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			for (int i = 0; i < _children.length(); i++)
 				if (_children[i] != null && _children[i].pid == pid) {
 					if (_children[i].handler != null)
@@ -383,7 +382,7 @@ private monitor class PendingChildren {
 }
 
 private void childWaiter(address arg) {
-	if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		linux.sigset_t set;
 		linux.siginfo_t_sigchld info;
 	
@@ -418,7 +417,7 @@ public int debugSpawn(string command, ref<string> output, ref<exception_t> outco
 }
 
 public int, string, exception_t execute(string command, time.Time timeout) {
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		SpawnPayload payload;
 		
 		int result = debugSpawnImpl(&command[0], &payload, timeout.value());
@@ -426,7 +425,7 @@ public int, string, exception_t execute(string command, time.Time timeout) {
 		exception_t outcome = exception_t(payload.outcome);
 		disposeOfPayload(&payload);
 		return result, output, outcome;
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		pointer<pointer<byte>> argv;
 		
 		argv = parseCommandLine(command);
@@ -495,7 +494,7 @@ public int, string, exception_t execute(string command, time.Time timeout) {
 }
 
 public int, string, exception_t spawnInteractive(string command, string stdin, time.Time timeout) {
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		SpawnPayload payload;
 		
 		int result = debugSpawnInteractiveImpl(&command[0], &payload, stdin, timeout.value());
@@ -503,7 +502,7 @@ public int, string, exception_t spawnInteractive(string command, string stdin, t
 		exception_t outcome = exception_t(payload.outcome);
 		disposeOfPayload(&payload);
 		return result, output, outcome;
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		pointer<pointer<byte>> argv;
 		
 		argv = parseCommandLine(command);
@@ -716,18 +715,18 @@ class Environment {
 	}
 
 	public void set(string key, string value) {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			assert(false);
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			linux.setenv(key.c_str(), value.c_str(), 1);
 		} else
 			assert(false);
 	}
 
 	public void remove(string key) {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			assert(false);
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			linux.unsetenv(key.c_str());
 		} else
 			assert(false);

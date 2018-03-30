@@ -20,7 +20,6 @@ import native:windows;
 import native:windows.HANDLE;
 import native:linux;
 import parasol:runtime;
-import parasol:pxi.SectionType;
 
 @Constant
 public int EOF = -1;
@@ -41,7 +40,7 @@ public class File {
 	}
 
 	public boolean open(string filename, Access access) {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD rights;
 			windows.DWORD sharing;
 			windows.DWORD disposition;
@@ -61,7 +60,7 @@ public class File {
 				_fd = long(handle);
 				return true;
 			}
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			int openFlags;
 
 			if (access & Access.READ) {
@@ -85,7 +84,7 @@ public class File {
 	}
 
 	public boolean create(string filename, Access access) {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD rights;
 			if (access & Access.READ) {
 				rights = windows.GENERIC_READ;
@@ -100,7 +99,7 @@ public class File {
 				_fd = long(handle);
 				return true;
 			}
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			int openFlags;
 
 			if (access & Access.READ) {
@@ -125,9 +124,9 @@ public class File {
 	}
 
 	public boolean append(string filename, Access access) {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			// append always fails on Windows
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			int openFlags;
 
 			if (access & Access.READ) {
@@ -152,12 +151,12 @@ public class File {
 
 	public boolean close() {
 		if (_fd >= 0) {
-			if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 				if (windows.CloseHandle(windows.HANDLE(_fd)) != 0) {
 					_fd = -1;
 					return true;
 				}
-			} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 				if (linux.close(int(_fd)) == 0) {
 					_fd = -1;
 					return true;
@@ -198,7 +197,7 @@ public class File {
 	 * for any subsequent read or write operation is undefined.
 	 */
 	public long tell() {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			long current;
 			long end;
 			if (windows.SetFilePointerEx(windows.HANDLE(_fd), 0, &current, windows.FILE_CURRENT) == 0)
@@ -208,7 +207,7 @@ public class File {
 			if (windows.SetFilePointerEx(windows.HANDLE(_fd), current, null, windows.FILE_BEGIN) == 0)
 				return -1;
 			return end;
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			linux.off_t current = linux.lseek(int(_fd), 0, C.SEEK_CUR);
 			linux.off_t end = linux.lseek(int(_fd), 0, C.SEEK_END);
 			linux.lseek(int(_fd), current, C.SEEK_SET);
@@ -218,48 +217,48 @@ public class File {
 	}
 
 	public long seek(long offset, Seek whence) {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			long result;
 			if (windows.SetFilePointerEx(windows.HANDLE(_fd), offset, &result, windows.DWORD(whence)) == 0)
 				return -1;
 			return result;
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			return linux.lseek(int(_fd), offset, int(whence));
 		}
 		return -1;
 	}
 
 	public int write(byte[] buffer) {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD result;
 			if (windows.WriteFile(windows.HANDLE(_fd), &buffer[0], windows.DWORD(buffer.length()), &result, null) == 0)
 				return -1;
 			return int(result);
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			return linux.write(int(_fd), &buffer[0], buffer.length());
 		}
 		return -1;
 	}
 
 	public int write(string buffer) {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD result;
 			if (windows.WriteFile(windows.HANDLE(_fd), &buffer[0], windows.DWORD(buffer.length()), &result, null) == 0)
 				return -1;
 			return int(result);
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			return linux.write(int(_fd), &buffer[0], buffer.length());
 		}
 		return -1;
 	}
 
 	public int write(address buffer, int length) {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD result;
 			if (windows.WriteFile(windows.HANDLE(_fd), buffer, windows.DWORD(length), &result, null) == 0)
 				return -1;
 			return int(result);
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			return linux.write(int(_fd), buffer, length);
 		}
 		return -1;
@@ -268,33 +267,33 @@ public class File {
 	 * Force the file contents to disk.
 	 */
 	public boolean sync() {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			return windows.FlushFileBuffers(windows.HANDLE(_fd)) != 0;
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			return linux.fdatasync(int(_fd)) == 0;
 		} else
 			return false;
 	}
 
 	public int read(ref<byte[]> buffer) {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD result;
 			if (windows.ReadFile(windows.HANDLE(_fd), &(*buffer)[0], windows.DWORD(buffer.length()), &result, null) == 0)
 				return -1;
 			return int(result);
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			return linux.read(int(_fd), &(*buffer)[0], buffer.length());
 		}
 		return -1;
 	}
 
 	public int read(address buffer, int length) {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD result;
 			if (windows.ReadFile(windows.HANDLE(_fd), buffer, windows.DWORD(length), &result, null) == 0)
 				return -1;
 			return int(result);
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			return linux.read(int(_fd), buffer, length);
 		}
 		return -1;
@@ -495,13 +494,13 @@ public ref<FileReader> openTextFile(string filename) {
 }
 
 public ref<FileWriter> appendTextFile(string filename) {
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		windows.HANDLE handle = windows.CreateFile(filename.c_str(), windows.GENERIC_WRITE, 0, null, 
 												windows.OPEN_ALWAYS, windows.FILE_ATTRIBUTE_NORMAL, null);
 		if (handle == windows.INVALID_HANDLE_VALUE)
 			return null;
 		return new TextFileAppendWriter(File(long(handle)));
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		File f;
 
 		if (f.append(filename))
@@ -529,13 +528,13 @@ public ref<FileReader> openBinaryFile(string filename) {
 }
 
 public ref<FileWriter> appendBinaryFile(string filename) {
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		windows.HANDLE handle = windows.CreateFile(filename.c_str(), windows.GENERIC_WRITE, 0, null, 
 												windows.OPEN_ALWAYS, windows.FILE_ATTRIBUTE_NORMAL, null);
 		if (handle == windows.INVALID_HANDLE_VALUE)
 			return null;
 		return new BinaryFileAppendWriter(File(long(handle)));
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		File f;
 
 		if (f.append(filename))
@@ -566,16 +565,16 @@ public class Directory {
 //			assert(false);
 		_directory = path;
 		_wildcard = "*";
-		if (runtime.compileTarget == SectionType.X86_64_WIN)
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN)
 			_data = memory.alloc(windows.sizeof_WIN32_FIND_DATA);
 	}
 
 	~Directory() {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			if (_handle != windows.INVALID_HANDLE_VALUE)
 				windows.FindClose(_handle);
 			memory.free(_data);
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			linux.closedir(ref<linux.DIR>(_data));
 		}
 	}
@@ -586,10 +585,10 @@ public class Directory {
 
 	boolean first() {
 		string s = _directory + "\\" + _wildcard;
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			_handle = HANDLE(windows.FindFirstFile(s.c_str(), ref<windows.WIN32_FIND_DATA>(_data)));
 			return _handle != windows.INVALID_HANDLE_VALUE;
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			_data = linux.opendir(_directory.c_str());
 			if (_data == null)
 				return false;
@@ -599,13 +598,13 @@ public class Directory {
 	}
 
 	boolean next() {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			int result = windows.FindNextFile(_handle, ref<windows.WIN32_FIND_DATA>(_data));
 			if (result != 0)
 				return true;
 			windows.FindClose(_handle);
 			_handle = windows.INVALID_HANDLE_VALUE;
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			if (_dirent == null) {
 				int name_max = linux.pathconf(_directory.c_str(), linux._PC_NAME_MAX);
 				if (name_max == -1)         /* Limit not defined, or error */
@@ -624,18 +623,18 @@ public class Directory {
 	}
 
 	public string path() {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			return _directory + "/" + ref<windows.WIN32_FIND_DATA>(_data).fileName();
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			return _directory + "/" + string(pointer<byte>(&_dirent.d_name));
 		} else
 			return null;
 	}
 
 	public string basename() {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			return ref<windows.WIN32_FIND_DATA>(_data).fileName();
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			return string(pointer<byte>(&_dirent.d_name));
 		} else
 			return null;

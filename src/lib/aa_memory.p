@@ -23,7 +23,6 @@ import native:windows;
 import parasol:runtime;
 import parasol:exception;
 import parasol:thread;
-import parasol:pxi.SectionType;
 
 private long LEAKS_FLAG = 0x1;
 
@@ -282,9 +281,9 @@ public class LeakHeap extends Allocator {
 	private pointer<SectionHeader> allocateSection(long sectionLength) {
 		sectionLength = (sectionLength + BLOCK_ALIGNMENT - 1) & ~(BLOCK_ALIGNMENT - 1);
 		pointer<SectionHeader> nh;
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			nh = pointer<SectionHeader>(windows.VirtualAlloc(null, sectionLength, windows.MEM_COMMIT|windows.MEM_RESERVE, windows.PAGE_READWRITE));
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			nh = pointer<SectionHeader>(C.calloc(1, sectionLength));
 		}
 		if (nh == null)

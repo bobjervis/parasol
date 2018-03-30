@@ -18,7 +18,6 @@ import parasol:storage;
 import parasol:process;
 import parasol:runtime;
 import parasol:pxi;
-import parasol:pxi.SectionType;
 import parasol:compiler.Arena;
 import parasol:compiler.Target;
 import parasol:time;
@@ -79,7 +78,7 @@ class ParasolCommand extends process.Command {
 					"Does not execute the program.");
 		targetArgument = stringArgument(0, "target",
 					"Selects the target runtime for this execution. " +
-					"Default: " + pxi.sectionTypeName(SectionType(runtime.supportedTarget(0))));
+					"Default: " + pxi.sectionTypeName(runtime.Target(runtime.supportedTarget(0))));
 		rootArgument = stringArgument(0, "root",
 					"Designates a specific directory to treat as the 'root' of the install tree. " +
 					"The default is the parent directory of the runtime binary program.");

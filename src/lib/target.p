@@ -18,7 +18,6 @@ namespace parasol:compiler;
 import parasol:x86_64.X86_64Lnx;
 import parasol:x86_64.X86_64Win;
 import parasol:pxi.Pxi;
-import parasol:pxi.SectionType;
 import parasol:runtime;
 
 import native:C;
@@ -41,11 +40,11 @@ public class Target {
 		ref<Target> target;
 		
 		// Magic: select target
-		SectionType selectedTarget;
+		runtime.Target selectedTarget;
 		if (arena.preferredTarget != null)
 			selectedTarget = arena.preferredTarget;
 		else
-			selectedTarget = SectionType(runtime.supportedTarget(0));
+			selectedTarget = runtime.Target(runtime.supportedTarget(0));
 		if (verbose)
 			printf("Targeting %s\n", string(selectedTarget));
 		switch (selectedTarget) {
@@ -131,7 +130,7 @@ public class Target {
 
 	public abstract void writePxi(ref<Pxi> output);
 
-	public abstract SectionType sectionType();
+	public abstract runtime.Target sectionType();
 	
 	/*
 	 * Write a disassembly of the target to the console.

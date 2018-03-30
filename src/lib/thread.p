@@ -36,7 +36,6 @@ import native:windows.GetLastError;
 import native:linux;
 import native:C;
 import parasol:exception.HardwareException;
-import parasol:pxi.SectionType;
 import parasol:runtime;
 
 Thread.init();
@@ -65,8 +64,8 @@ private monitor class ActiveThreads {
 
 	void suspendAllOtherThreads() {
 		ref<Thread> me = currentThread();
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			int tgid = linux.getpid();
 			for (int i = 0; i < _activeThreads.length(); i++)
 				if (_activeThreads[i] != me)
@@ -101,18 +100,18 @@ public class Thread {
 	int _index;
 	
 	public Thread() {
-		if (runtime.compileTarget == SectionType.X86_64_WIN)
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN)
 			_threadHandle = INVALID_HANDLE_VALUE;
-		else if (runtime.compileTarget == SectionType.X86_64_LNX)
+		else if (runtime.compileTarget == runtime.Target.X86_64_LNX)
 			_pid = -1;
 		_index = -1;
 	}
 	
 	public Thread(string name) {
 		_name = name;
-		if (runtime.compileTarget == SectionType.X86_64_WIN)
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN)
 			_threadHandle = INVALID_HANDLE_VALUE;
-		else if (runtime.compileTarget == SectionType.X86_64_LNX)
+		else if (runtime.compileTarget == runtime.Target.X86_64_LNX)
 			_pid = -1;
 		_index = -1;
 	}
@@ -120,7 +119,7 @@ public class Thread {
 	~Thread() {
 		if (_index != -1)
 			threads.delist(this);
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			if (_threadHandle != INVALID_HANDLE_VALUE)
 				CloseHandle(_threadHandle);
 		}
@@ -129,9 +128,9 @@ public class Thread {
 	static void init() {
 		ref<Thread> t = new Thread();
 		t._name.printf("TID-%d", getCurrentThreadId());
-		if (runtime.compileTarget == SectionType.X86_64_WIN)
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN)
 			t._threadHandle = INVALID_HANDLE_VALUE;
-		else if (runtime.compileTarget == SectionType.X86_64_LNX)
+		else if (runtime.compileTarget == runtime.Target.X86_64_LNX)
 			t._pid = linux.gettid();
 		parasolThread(t);
 //		printf("init of %s\n", t._name);
@@ -143,11 +142,11 @@ public class Thread {
 		_function = func;
 		_parameter = parameter;
 		_context = dupExecutionContext();
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			address x = _beginthreadex(null, 0, wrapperFunction, this, 0, null);
 			_threadHandle = *ref<HANDLE>(&x);
 			return _threadHandle != INVALID_HANDLE_VALUE;
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			int result = linux.pthread_create(&_threadId, null, linuxWrapperFunction, this);
 			return result == 0;
 		} else
@@ -212,14 +211,14 @@ public class Thread {
 	}
 
 	public void join() {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			DWORD dw = WaitForSingleObject(_threadHandle, INFINITE);
 			if (dw == WAIT_FAILED) {
 				printf("WaitForSingleObject failed %x\n", GetLastError());
 			}
 			CloseHandle(_threadHandle);
 			_threadHandle = INVALID_HANDLE_VALUE;
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			address retval;
 			
 			int result = linux.pthread_join(_threadId, &retval);
@@ -235,23 +234,23 @@ public class Thread {
 	}
 	
 	public long id() {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			return GetCurrentThreadId();
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			return _pid;
 		} else
 			return -1;
 	}
 
 	public static void sleep(long milliseconds) {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			while (milliseconds > 1000000000) {
 				Sleep(1000000000);
 				milliseconds -= 1000000000;
 			}
 			if (milliseconds > 0)
 				Sleep(DWORD(milliseconds));
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			linux.timespec ts;
 			linux.timespec remaining;
 
@@ -282,18 +281,18 @@ public class Monitor {
 	private int _waiting;
 	
 	public Monitor() {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			_semaphore = HANDLE(CreateSemaphore(null, 0, int.MAX_VALUE, null));
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			if (linux.sem_init(&_linuxSemaphore, 0, 0) != 0)
 				linux.perror("sem_init".c_str());
 		}
 	}
 	
 	~Monitor() {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			CloseHandle(_semaphore);
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			linux.sem_destroy(&_linuxSemaphore);
 		}
 	}
@@ -318,9 +317,9 @@ public class Monitor {
 //		printf("Entering notify\n");
 		_mutex.take();
 //		printf("taken\n");
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			ReleaseSemaphore(_semaphore, 1, null);
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			linux.sem_post(&_linuxSemaphore);
 		}
 		--_waiting;
@@ -331,9 +330,9 @@ public class Monitor {
 	public void notifyAll() {
 		_mutex.take();
 		if (_waiting > 0) {
-			if (runtime.compileTarget == SectionType.X86_64_WIN) {
+			if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 				ReleaseSemaphore(_semaphore, _waiting, null);
-			} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+			} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 				while (_waiting > 0) {
 					linux.sem_post(&_linuxSemaphore);
 					_waiting--;
@@ -351,9 +350,9 @@ public class Monitor {
 		_waiting++;
 		int level = _mutex.releaseForWait();
 //		printf("%s %p mutex %s\n", currentThread().name(), this, _mutex.isLocked() ? "isLocked" : "is not locked");
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			WaitForSingleObject(_semaphore, INFINITE);
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			linux.sem_wait(&_linuxSemaphore);
 		}
 //		printf("%s %p Got the semaphore: level %d\n", currentThread().name(), this, level);
@@ -366,7 +365,7 @@ public class Monitor {
 		_mutex.take();
 		_waiting++;
 		int level = _mutex.releaseForWait();
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			DWORD outcome = WaitForSingleObject(_semaphore, DWORD(lower));
 			if (outcome == WAIT_TIMEOUT) {
 				for (int i = 0; i < upper; i++) {
@@ -375,7 +374,7 @@ public class Monitor {
 						break;
 				}
 			}
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			linux.timespec expirationTime;
 			linux.clock_gettime(linux.CLOCK_REALTIME, &expirationTime);
 			if (timeout >= 1000) {
@@ -398,7 +397,7 @@ public class Monitor {
 		_mutex.take();
 		_waiting++;
 		int level = _mutex.releaseForWait();
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			DWORD outcome = WaitForSingleObject(_semaphore, DWORD(lower));
 			if (outcome == WAIT_TIMEOUT) {
 				for (int i = 0; i < upper; i++) {
@@ -407,7 +406,7 @@ public class Monitor {
 						break;
 				}
 			}
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			linux.timespec expirationTime;
 			linux.clock_gettime(linux.CLOCK_REALTIME, &expirationTime);
 			if (timeout >= 1000) {
@@ -433,9 +432,9 @@ class Mutex {
 	private static boolean _alreadySet;
 	
 	public Mutex() {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			_mutex = HANDLE(CreateMutex(null, 0, null));
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			linux.pthread_mutexattr_t attr;
 			linux.pthread_mutexattr_settype(&attr, linux.PTHREAD_MUTEX_RECURSIVE);
 			if (long(this) == long(&threads) + 8) {
@@ -448,22 +447,22 @@ class Mutex {
 	}
 	
 	~Mutex() {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			CloseHandle(_mutex);
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			linux.pthread_mutex_destroy(&_linuxMutex);
 		}
 	}
 	
 	public boolean isLocked() {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			DWORD code = WaitForSingleObject(_mutex, 0);
 			if (code == WAIT_TIMEOUT)
 				return true;
 			else if (code == 0)
 				ReleaseMutex(_mutex);
 			return false;
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			int result = linux.pthread_mutex_trylock(&_linuxMutex);
 			if (result == 0) {
 				int level = _level;
@@ -477,14 +476,14 @@ class Mutex {
 	}
 	
 	public ref<Thread> owner() {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			DWORD code = WaitForSingleObject(_mutex, 0);
 			if (code == WAIT_TIMEOUT)
 				return _owner;
 			else if (code == 0)
 				ReleaseMutex(_mutex);
 			return null;
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			int result = linux.pthread_mutex_trylock(&_linuxMutex);
 			if (result == 0) {
 				linux.pthread_mutex_unlock(&_linuxMutex);
@@ -498,9 +497,9 @@ class Mutex {
 	}
 	
 	void take() {
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			WaitForSingleObject(_mutex, INFINITE);
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 //			printf("%p try lock by %s (level = %d)\n", this, currentThread() != null ? currentThread().name() : "?", _level);
 			int x = linux.pthread_mutex_lock(&_linuxMutex);
 			assert(x == 0);
@@ -513,9 +512,9 @@ class Mutex {
 	void release() {
 //		printf("%p release by %s (level = %d)\n", this, _owner.name(), _level);
 		_level--;
-		if (runtime.compileTarget == SectionType.X86_64_WIN) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			ReleaseMutex(_mutex);
-		} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			assert(linux.pthread_mutex_unlock(&_linuxMutex) == 0);
 		}
 	}
@@ -727,9 +726,9 @@ public ref<Thread> currentThread() {
 }
 
 private int getCurrentThreadId() {
-	if (runtime.compileTarget == SectionType.X86_64_WIN)
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN)
 		return int(GetCurrentThreadId());
-	else if (runtime.compileTarget == SectionType.X86_64_LNX)
+	else if (runtime.compileTarget == runtime.Target.X86_64_LNX)
 		return linux.gettid();
 	else
 		return -1;

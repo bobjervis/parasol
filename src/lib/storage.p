@@ -16,7 +16,6 @@
 namespace parasol:storage;
 
 import parasol:runtime;
-import parasol:pxi.SectionType;
 
 import native:C;
 import native:linux;
@@ -38,7 +37,7 @@ string absolutePath(string filename) {
 	string buffer;
 	buffer.resize(256);
 	
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		unsigned len = GetFullPathName(filename.c_str(), unsigned(buffer.length()), buffer.c_str(), null);
 		if (len == 0)
 			return string();
@@ -48,7 +47,7 @@ string absolutePath(string filename) {
 		} else
 			buffer.resize(int(len));
 		return buffer.toLower();
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		pointer<byte> f = linux.realpath(filename.c_str(), null);
 		string result(f);
 		C.free(f);
@@ -59,9 +58,9 @@ string absolutePath(string filename) {
 
 
 public boolean setExecutable(string filename, boolean executable) {
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		return false;
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		linux.statStruct s;
 		if (linux.stat(&filename[0], &s) != 0)
 			return false;
@@ -74,9 +73,9 @@ public boolean setExecutable(string filename, boolean executable) {
 }
 
 public boolean setReadOnly(string filename, boolean readOnly) {
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		return false;
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		linux.statStruct s;
 		if (linux.stat(&filename[0], &s) != 0)
 			return false;
@@ -132,13 +131,13 @@ public string directory(string filename) {
 }
 
 public boolean exists(string filename) {
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		DWORD r = GetFileAttributes(&filename[0]);
 		if (r == 0xffffffff)
 			return false;
 		else
 			return true;
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		linux.statStruct statb;
 		
 		int result = linux.stat(filename.c_str(), &statb);
@@ -148,9 +147,9 @@ public boolean exists(string filename) {
 }
 
 public boolean isSymLink(string filename) {
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		return false;
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		linux.statStruct statb;
 
 		int result = linux.lstat(filename.c_str(), &statb);
@@ -160,22 +159,22 @@ public boolean isSymLink(string filename) {
 }
 
 public boolean deleteSymLink(string filename) {
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		return false;
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX)
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX)
 		return deleteFile(filename);
 	else
 		return false;
 }
 
 public boolean isDirectory(string filename) {
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		DWORD r = GetFileAttributes(&filename[0]);
 		if (r == 0xffffffff)
 			return false;
 		else
 			return (r & FILE_ATTRIBUTE_DIRECTORY) != 0;
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		linux.statStruct statb;
 		
 		int result = linux.stat(filename.c_str(), &statb);
@@ -185,13 +184,13 @@ public boolean isDirectory(string filename) {
 }
 
 public boolean isLink(string filename) {
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		DWORD r = GetFileAttributes(&filename[0]);
 		if (r == 0xffffffff)
 			return false;
 		else
 			return (r & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		linux.statStruct statb;
 		
 		int result = linux.stat(filename.c_str(), &statb);
@@ -201,8 +200,8 @@ public boolean isLink(string filename) {
 }
 
 public long, boolean size(string filename) {
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		linux.statStruct s;
 		if (linux.stat(filename.c_str(), &s) == 0)
 			return s.st_size, true;
@@ -211,9 +210,9 @@ public long, boolean size(string filename) {
 }
 
 public boolean createSymLink(string oldPath, string newPath) {
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		return false;
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		return linux.symlink(oldPath.c_str(), newPath.c_str()) == 0;
 	} else
 		return false;
@@ -224,12 +223,12 @@ public boolean makeDirectory(string path) {
 }
 
 public boolean makeDirectory(string path, boolean shared) {
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		if (!shared)
 			return CreateDirectory(path.c_str(), null) != 0;
 		else
 			return false;								// TODO: There's much work to make a Windows file shared to others and/or read-only, so for now fail.
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		linux.mode_t mode = 0777;
 		
 		if (!shared)
@@ -255,9 +254,9 @@ public boolean ensure(string path) {
 }
 
 public boolean linkFile(string existingFile, string newFile) {
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		return false;
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		return linux.link(existingFile.c_str(), newFile.c_str()) == 0;
 	} else
 		return false;
@@ -291,8 +290,8 @@ public boolean copyFile(string source, string destination) {
 	}
 	r.close();
 	w.close();
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		linux.statStruct s;
 		if (linux.stat(source.c_str(), &s) != 0) {
 			deleteFile(destination);
@@ -346,8 +345,8 @@ public boolean copyDirectoryTree(string source, string destination, boolean tryA
 			}
 		} while (dir.next());
 	}
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		linux.statStruct s;
 		if (linux.stat(source.c_str(), &s) != 0 && !tryAllFiles) {
 			deleteDirectoryTree(destination);
@@ -366,18 +365,18 @@ public boolean copyDirectoryTree(string source, string destination, boolean tryA
 }
 
 public boolean deleteFile(string path) {
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		return DeleteFile(path.c_str()) != 0;
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		return linux.unlink(path.c_str()) == 0;
 	} else
 		return false;
 }
 
 public boolean deleteDirectory(string path) {
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		return RemoveDirectory(path.c_str()) != 0;
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		return linux.rmdir(path.c_str()) == 0;
 	} else
 		return false;
@@ -413,9 +412,9 @@ public boolean deleteDirectoryTree(string path) {
 
 public string[], boolean expandWildCard(string pattern) { 
 	string[] results;
-	if (runtime.compileTarget == SectionType.X86_64_WIN) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		return results, false;
-	} else if (runtime.compileTarget == SectionType.X86_64_LNX) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		linux.glob_t gl;
 
 		int result = linux.glob(pattern.c_str(), 0, null, &gl);

@@ -17,7 +17,6 @@ namespace parasol:runtime;
 
 import native:linux;
 import native:windows;
-import parasol:pxi.SectionType;
 import parasol:exception.ExceptionContext;
 import parasol:x86_64.X86_64SectionHeader;
 
@@ -35,7 +34,17 @@ public string RUNTIME_VERSION = "0.1.0";
  * runtime.
  */
 @CompileTarget
-public SectionType compileTarget = SectionType.X86_64_WIN;	// TODO: Remove this as there should be magic setting this value
+public Target compileTarget = Target.X86_64_WIN;	// TODO: Remove this as there should be magic setting this value
+
+@Header("ST_")
+public enum Target {
+	ERROR,						// 0x00 A section given this type has unknown data at the section offset
+	SOURCE,						// 0x01 the region is in POSIX IEEE P1003.1 USTar archive format.
+	NOT_USED_2,					// 0x02 Parasol byte codes
+	X86_64_LNX,					// 0x03 Parasol 64-bit for Intel and AMD processors, Linux calling conventions.
+	X86_64_WIN,					// 0x04 Parasol 64-bit for Intel and AMD processors, Windows calling conventions.
+	FILLER
+}
 
 public abstract int injectObjects(pointer<address> objects, int objectCount);
 
@@ -63,9 +72,9 @@ public abstract long getRuntimeFlags();
 
 public address allocateRegion(long length) {
 	address v;
-	if (compileTarget == SectionType.X86_64_WIN) {
+	if (compileTarget == Target.X86_64_WIN) {
 		v = windows.VirtualAlloc(null, length, windows.MEM_COMMIT|windows.MEM_RESERVE, windows.PAGE_READWRITE);
-	} else if (compileTarget == SectionType.X86_64_LNX) {
+	} else if (compileTarget == Target.X86_64_LNX) {
 		int pagesize = linux.sysconf(int(linux.SysConf._SC_PAGESIZE));
 		if (pagesize == -1) {
 			printf("sysconf failed\n");
@@ -78,12 +87,12 @@ public address allocateRegion(long length) {
 }
 
 public boolean makeRegionExecutable(address location, long length) {
-	if (compileTarget == SectionType.X86_64_WIN) {
+	if (compileTarget == Target.X86_64_WIN) {
 		unsigned oldProtection;
 		int result = windows.VirtualProtect(location, length, windows.PAGE_EXECUTE_READWRITE, &oldProtection);
 //		printf("VirtualProtect(%p, %d, %x, %p) -> %d oldProtection %x\n", location, length, int(windows.PAGE_EXECUTE_READWRITE), null, result, int(oldProtection));
 		return result != 0;
-	} else if (compileTarget == SectionType.X86_64_LNX)
+	} else if (compileTarget == Target.X86_64_LNX)
 		return linux.mprotect(location, length, linux.PROT_EXEC|linux.PROT_READ|linux.PROT_WRITE) == 0;
 	return false;
 }

@@ -18,7 +18,6 @@ import parasol:storage;
 import parasol:process;
 import parasol:runtime;
 import parasol:pxi;
-import parasol:pxi.SectionType;
 import parasol:compiler.Arena;
 import parasol:compiler.Target;
 import parasol:compiler.test.initTestObjects;
@@ -76,7 +75,7 @@ class TestCommand extends process.Command {
 					"Uses this pxi file with run tests.");
 		targetArgument = stringArgument(0, "target",
 					"Selects the target runtime for this execution. " +
-					"Default: " + pxi.sectionTypeName(SectionType(runtime.supportedTarget(0))));
+					"Default: " + pxi.sectionTypeName(runtime.Target(runtime.supportedTarget(0))));
 		compileFromSourceArgument = booleanArgument('s', "compileFromSource",
 					"In --test mode, any 'run' tests are run with 'compiler/main.p' included.");
 		helpArgument('?', "help",
@@ -113,7 +112,7 @@ int main(string[] args) {
 	script.setCommandPrefix(storage.absolutePath(process.binaryFilename()) + " --test");
 	listAllTests = parasolCommand.traceArgument.value;
 	string pxiName;
-	if (runtime.compileTarget == SectionType.X86_64_WIN)
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN)
 		pxiName = "bin/x86-64-win.pxi";
 	else
 		pxiName = "bin/x86-64-lnx.pxi";
