@@ -23,6 +23,7 @@ import native:windows;
 import parasol:runtime;
 import parasol:exception;
 import parasol:thread;
+import parasol:storage;
 
 private long LEAKS_FLAG = 0x1;
 
@@ -50,7 +51,7 @@ public void free(address p) {
 }
 
 /*
- * On startup, initialize the heap for normal or link-detection mode.
+ * On startup, initialize the heap for normal or leak-detection mode.
  */
 private ref<Allocator> currentHeap;
 
@@ -61,9 +62,13 @@ exception.registerHardwareExceptionHandler(exception.hardwareExceptionHandler);
 
 if ((runtime.getRuntimeFlags() & LEAKS_FLAG) != 0) {
 	currentHeap = &leakHeap;
-	printf("Checking for leaks!\n");
+	print("Checking for leaks!\n");
 } else
 	currentHeap = &heap;
+/*
+ * Set up the process streams as soon as the heap is established.
+ */
+storage.setProcessStreams();
 
 public class OutOfMemoryException extends Exception {
 	public long requestedAmount;

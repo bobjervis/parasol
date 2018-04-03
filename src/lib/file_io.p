@@ -20,6 +20,51 @@ import native:windows;
 import native:windows.HANDLE;
 import native:linux;
 import parasol:runtime;
+import parasol:process;
+
+public void setProcessStreams() {
+	boolean stdinIsATTY;
+	boolean stdoutIsATTY;
+	boolean stderrIsATTY;
+
+//	print("setProcessStreams\n");
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		process.stdin = new TextFileReader(File(0));
+		process.stdout = new TextFileWriter(File(1));
+		process.stderr = new TextFileWriter(File(2));
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		process.stdin = new FileReader(File(0));
+		process.stdout = new FileWriter(File(1));
+		process.stderr = new FileWriter(File(2));
+		if (linux.isatty(0) == 1)
+			stdinIsATTY = true;
+		if (linux.isatty(1) == 1)
+			stdoutIsATTY = true;
+		if (linux.isatty(2) == 1)
+			stderrIsATTY = true;
+	}
+	if (stdoutIsATTY) {
+//		print("stdout tty\n");
+		process.stdout = new LineWriter(process.stdout);
+		if (stdinIsATTY) {
+			process.stdin = new StdinReader(process.stdin);
+//			print("stdin tty\n");
+		}
+	}
+	if (stderrIsATTY) {
+		process.stderr = new ErrorWriter(process.stderr);
+//		print("stderr tty\n");
+	}
+//	print("Process streams set up\n");
+}
+
+class FileShutdown {
+	~FileShutdown() {
+		process.stdout.flush();
+	}
+}
+
+private FileShutdown f;
 
 @Constant
 public int EOF = -1;
@@ -199,19 +244,11 @@ public class File {
 	public long tell() {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			long current;
-			long end;
 			if (windows.SetFilePointerEx(windows.HANDLE(_fd), 0, &current, windows.FILE_CURRENT) == 0)
 				return -1;
-			if (windows.SetFilePointerEx(windows.HANDLE(_fd), 0, &end, windows.FILE_END) == 0)
-				return -1;
-			if (windows.SetFilePointerEx(windows.HANDLE(_fd), current, null, windows.FILE_BEGIN) == 0)
-				return -1;
-			return end;
+			return current;
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-			linux.off_t current = linux.lseek(int(_fd), 0, C.SEEK_CUR);
-			linux.off_t end = linux.lseek(int(_fd), 0, C.SEEK_END);
-			linux.lseek(int(_fd), current, C.SEEK_SET);
-			return end;
+			return linux.lseek(int(_fd), 0, C.SEEK_CUR);
 		}
 		return -1;
 	}
@@ -317,6 +354,7 @@ int BUFFER_SIZE = 64 * 1024;
 public class FileReader = BinaryFileReader;
 
 public class BinaryFileReader extends Reader {
+	private Monitor _lock;
 	private File _file;
 	private byte[] _buffer;
 	private int _cursor;
@@ -332,23 +370,37 @@ public class BinaryFileReader extends Reader {
 	}
 
 	public string, boolean readAll() {
-		seek(0, Seek.END);
-		long pos = tell();
-		seek(0, Seek.START);
-		string data;
+		lock (_lock) {
+			seek(0, Seek.END);					// seek the stream to flush the buffer.
+			long pos = _file.tell();
+			_file.seek(0, Seek.START);
+			string data;
+	
+			if (pos > int.MAX_VALUE)
+				return "", false;
+			data.resize(int(pos));
+	
+			int n = _file.read(&data[0], int(pos));
+			if (n < 0)
+				return "", false;
+			data.resize(n);
+			return data, true;
+		}
+	}
 
-		if (pos > int.MAX_VALUE)
-			return "", false;
-		data.resize(int(pos));
-		
-		int n = _file.read(&data[0], int(pos));
-		if (n < 0)
-			return "", false;
-		data.resize(n);
-		return data, true;
+	public string readLine() {
+		lock (_lock) {
+			return super.readLine();
+		}
 	}
 
 	public int read() {
+		lock (_lock) {
+			return _read();
+		}
+	}
+
+	public int _read() {
 		if (_cursor >= _length) {
 			_length = _file.read(&_buffer);
 			if (_length == 0)
@@ -365,20 +417,26 @@ public class BinaryFileReader extends Reader {
 	}
 
 	public long tell() {
-		return _file.seek(0, Seek.CURRENT) + _cursor - _length;
+		lock (_lock) {
+			return _file.seek(0, Seek.CURRENT) + _cursor - _length;
+		}
 	}
 
 	public long seek(long offset, Seek whence) {
-		_length = 0;
-		_cursor = 0;
-		return _file.seek(offset, whence);
+		lock (_lock) {
+			_length = 0;
+			_cursor = 0;
+			return _file.seek(offset, whence);
+		}
 	}
 
 	public void close() {
-		_file.close();
-		_buffer.clear();			// Release the file buffer now since we won't need it any more
-		_length = 0;
-		_cursor = 0;
+		lock (_lock) {
+			_file.close();
+			_buffer.clear();			// Release the file buffer now since we won't need it any more
+			_length = 0;
+			_cursor = 0;
+		}
 	}
 }
 
@@ -404,6 +462,7 @@ public class TextFileReader extends BinaryFileReader {
 public class FileWriter = BinaryFileWriter;
 
 public class BinaryFileWriter extends Writer {
+	private Monitor _lock;
 	private File _file;
 	private byte[] _buffer;
 	private int _fill;
@@ -418,7 +477,7 @@ public class BinaryFileWriter extends Writer {
 		_file.close();
 	}
 
-	public void write(byte c) {
+	public void _write(byte c) {
 		_buffer[_fill] = c;
 		_fill++;
 		if (_fill >= BUFFER_SIZE)
@@ -426,25 +485,51 @@ public class BinaryFileWriter extends Writer {
 	}
 
 	public long tell() {
-		return _file.seek(0, Seek.CURRENT) + _fill;
+		lock (_lock) {
+			return _file.seek(0, Seek.CURRENT) + _fill;
+		}
 	}
 
 	public long seek(long offset, Seek whence) {
-		flush();
-		return _file.seek(offset, whence);
+		lock (_lock) {
+			flush();
+			return _file.seek(offset, whence);
+		}
 	}
 
 	public void flush() {
-		if (_fill > 0) {
-			_file.write(&_buffer[0], _fill);
-			_fill = 0;
+		lock (_lock) {
+			if (_fill > 0) {
+				_file.write(&_buffer[0], _fill);
+				_fill = 0;
+			}
 		}
 	}
 
 	public void close() {
-		flush();
-		_file.close();
-		_buffer.clear();			// Release the file buffer now since we won't need it any more
+		lock (_lock) {
+			flush();
+			_file.close();
+			_buffer.clear();			// Release the file buffer now since we won't need it any more
+		}
+	}
+
+	public int write(address buffer, int length) {
+		lock (_lock) {
+			return super.write(buffer, length);
+		}
+	}
+
+	public int write(string s) {
+		lock (_lock) {
+			return super.write(s);
+		}
+	}
+
+	public int printf(string format, var... arguments) {
+		lock (_lock) {
+			return super.printf(format, arguments);
+		}
 	}
 }
 
@@ -464,10 +549,58 @@ public class TextFileWriter extends BinaryFileWriter {
 		super(file);
 	}
 
-	public void write(byte c) {
+	public void _write(byte c) {
 		if (c == '\n')
-			super.write('\r');
-		super.write(c);
+			super._write('\r');
+		super._write(c);
+	}
+}
+/*
+ * Reading from stdin when it is connected to a terminal triggers the stdout
+ * stream to flush.
+ */
+public class StdinReader extends Reader {
+	private ref<Reader> _reader;
+
+	StdinReader(ref<Reader> reader) {
+		_reader = reader;
+	}
+
+	protected int _read() {
+		process.stdout.flush();
+		return _reader._read();
+	}
+}
+/*
+ * Writing to stdout when it is connected to a terminal flushes at every newline.
+ */
+public class LineWriter extends Writer {
+	private ref<Writer> _writer;
+
+	LineWriter(ref<Writer> writer) {
+		_writer = writer;
+	}
+
+	protected void _write(byte c) {
+//		print("Writing!\n");
+		_writer._write(c);
+		if (c == '\n')
+			_writer.flush();
+	}
+}
+/*
+ * Writing to stderr when it is connected to a terminal flushes at every operation.
+ */
+public class ErrorWriter extends Writer {
+	private ref<Writer> _writer;
+
+	ErrorWriter(ref<Writer> writer) {
+		_writer = writer;
+	}
+
+	protected void _write(byte c) {
+		_writer._write(c);
+		_writer.flush();
 	}
 }
 /**

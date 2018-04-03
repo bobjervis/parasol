@@ -119,6 +119,9 @@ public abstract int glob(pointer<byte> pattern, int _flags, int(pointer<byte>, i
 @Linux("libc.so.6", "globfree")
 public abstract int globfree(ref<glob_t> pglob);
 
+@Linux("libc.so.6", "isatty")
+public abstract int isatty(int fd);
+
 @Linux("libc.so.6", "kill")
 public abstract int kill(pid_t pid, int sig);
 

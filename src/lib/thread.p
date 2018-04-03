@@ -176,14 +176,10 @@ public class Thread {
 		if (t._name == null)
 			t._name.printf("TID-%d", t._pid);
 		enterThread(t._context, &t);
-//		printf("about to enlist %s - ", t._name);
 		threads.enlist(t);
-//		printf("%d\n", t._index);
 		parasolThread(t);
 		nested(t);
-//		printf("about to delist %s - %d\n", t._name, t._index);
 		threads.delist(t);
-//		print("delisted\n");
 		exitThread();
 		return null;
 	}

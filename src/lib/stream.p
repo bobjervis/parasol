@@ -162,7 +162,14 @@ public class UTF8Writer {
 public int EOF = -1;
 
 public class Reader {
-	public abstract int read();
+	protected abstract int _read();
+
+	public int read() {
+		return _read();
+	}
+
+	public void unread() {
+	}
 
 	public string, boolean readAll() {
 		return "", false;
@@ -172,7 +179,7 @@ public class Reader {
 		string line;
 
 		for (;;) {
-			int c = read();
+			int c = _read();
 			if (c == EOF) {
 				if (line.length() == 0)
 					return null;
@@ -192,7 +199,11 @@ public class Reader {
 }
 
 public class Writer {
-	public abstract void write(byte c);
+	protected abstract void _write(byte c);
+
+	public void write(byte c) {
+		_write(c);
+	}
 
 	public void flush() {
 	}
@@ -202,7 +213,7 @@ public class Writer {
 
 	public int write(address buffer, int length) {
 		for (int i = 0; i < length; i++)
-			write(pointer<byte>(buffer)[i]);
+			_write(pointer<byte>(buffer)[i]);
 		return length;
 	}
 
@@ -365,13 +376,13 @@ public class Writer {
 								current = ParseState.IN_FLAGS;
 							case IN_FLAGS:
 								alwaysIncludeSign = true;
-								break;
-								
-							default:
-								current = ParseState.ERROR;
-							}
 							break;
-						
+							
+						default:
+							current = ParseState.ERROR;
+						}
+						break;
+
 						case	' ':
 							switch (current) {
 							case INITIAL:
@@ -501,36 +512,36 @@ public class Writer {
 
 								if (!leftJustified) {
 									while (width > actualLength) {
-										write(' ');
+										_write(' ');
 										width--;
 										bytesWritten++;
 									}
 								}
 								if (ivalue >= 0) {
 									if (alwaysIncludeSign) {
-										write('+');
+										_write('+');
 										bytesWritten++;
 									} else if (leadingSpaceForPositive) {
-										write(' ');
+										_write(' ');
 										bytesWritten++;
 									}
 								} else {
-									write('-');
+									_write('-');
 									bytesWritten++;
 								}
 								while (precision > formatted.length()) {
-									write('0');
+									_write('0');
 									precision--;
 									bytesWritten++;
 								}
 								while (nextChar < formatted.length()) {
-									write(formatted[nextChar]);
+									_write(formatted[nextChar]);
 									nextChar++;
 									bytesWritten++;
 								}
 								if (leftJustified) {
 									while (width > formatted.length()) {
-										write(' ');
+										_write(' ');
 										width--;
 										bytesWritten++;
 									}
@@ -553,29 +564,29 @@ public class Writer {
 									actualLength++;
 								if (!leftJustified) {
 									while (actualLength < width) {
-										write(' ');
+										_write(' ');
 										width--;
 										bytesWritten++;
 									}
 								}
 								if (sign != 0) {
-									write('-');
+									_write('-');
 									bytesWritten++;
 								} else if (alwaysIncludeSign) {
-									write('+');
+									_write('+');
 									bytesWritten++;
 								} else if (leadingSpaceForPositive) {
-									write(' ');
+									_write(' ');
 									bytesWritten++;
 								}
-								write(result[0]);
-								write('.');
+								_write(result[0]);
+								_write('.');
 								write(result + 1, precision);
-								write(format[i]);
+								_write(format[i]);
 								printf("%+2.2d", decimalPoint);
 								bytesWritten += 7;
 								while (actualLength < width) {
-									write(' ');
+									_write(' ');
 									width--;
 									bytesWritten++;
 								}
@@ -594,19 +605,19 @@ public class Writer {
 									actualLength++;
 								if (!leftJustified) {
 									while (actualLength < width) {
-										write(' ');
+										_write(' ');
 										width--;
 										bytesWritten++;
 									}
 								}
 								if (sign != 0) {
-									write('-');
+									_write('-');
 									bytesWritten++;
 								} else if (alwaysIncludeSign) {
-									write('+');
+									_write('+');
 									bytesWritten++;
 								} else if (leadingSpaceForPositive) {
-									write(' ');
+									_write(' ');
 									bytesWritten++;
 								}
 								if (decimalPoint > 0) {
@@ -614,11 +625,11 @@ public class Writer {
 									bytesWritten += decimalPoint;
 								}
 								if (precision > 0) {
-									write('.');
+									_write('.');
 									bytesWritten++;
 									if (decimalPoint < 0) {
 										for (int i = -decimalPoint; i > 0 && precision > 0; i--, precision--) {
-											write('0');
+											_write('0');
 											bytesWritten++;
 										}
 										decimalPoint = 0;
@@ -627,7 +638,7 @@ public class Writer {
 									bytesWritten += precision;
 								}
 								while (actualLength < width) {
-									write(' ');
+									_write(' ');
 									width--;
 									bytesWritten++;
 								}
@@ -667,23 +678,23 @@ public class Writer {
 								}
 								if (!leftJustified) {
 									while (actualLength < width) {
-										write(' ');
+										_write(' ');
 										width--;
 										bytesWritten++;
 									}
 								}
 								if (value >= 0) {
 									if (alwaysIncludeSign) {
-										write('+');
+										_write('+');
 										bytesWritten++;
 									} else if (leadingSpaceForPositive) {
-										write(' ');
+										_write(' ');
 										bytesWritten++;
 									}
 								}
 								write(&buffer[0], resultLen);
 								while (actualLength < width) {
-									write(' ');
+									_write(' ');
 									width--;
 									bytesWritten++;
 								}
@@ -714,7 +725,7 @@ public class Writer {
 								}
 								if (!leftJustified) {
 									while (width > hex.length()) {
-										write(' ');
+										_write(' ');
 										width--;
 										bytesWritten++;
 									}
@@ -723,7 +734,7 @@ public class Writer {
 								bytesWritten += hex.length();
 								if (leftJustified) {
 									while (width > hex.length()) {
-										write(' ');
+										_write(' ');
 										width--;
 										bytesWritten++;
 									}
@@ -741,16 +752,16 @@ public class Writer {
 							case	'%':
 								if (!leftJustified) {
 									while (width > 1) {
-										write(' ');
+										_write(' ');
 										width--;
 										bytesWritten++;
 									}
 								}
-								write('%');
+								_write('%');
 								bytesWritten++;
 								if (leftJustified) {
 									while (width > 1) {
-										write(' ');
+										_write(' ');
 										width--;
 										bytesWritten++;
 									}
@@ -763,7 +774,7 @@ public class Writer {
 								nextArgument++;
 								if (!leftJustified) {
 									while (width > 1) {
-										write(' ');
+										_write(' ');
 										width--;
 										bytesWritten++;
 									}
@@ -774,7 +785,7 @@ public class Writer {
 								}
 								if (leftJustified) {
 									while (width > 1) {
-										write(' ');
+										_write(' ');
 										width--;
 										bytesWritten++;
 									}
@@ -809,7 +820,7 @@ public class Writer {
 								}
 								if (!leftJustified) {
 									while (width > len) {
-										write(' ');
+										_write(' ');
 										width--;
 										bytesWritten++;
 									}
@@ -820,7 +831,7 @@ public class Writer {
 								write(cp, len);
 								if (leftJustified) {
 									while (width > len) {
-										write(' ');
+										_write(' ');
 										width--;
 										bytesWritten++;
 									}
@@ -836,7 +847,7 @@ public class Writer {
 						current = ParseState.ERROR;
 					if (current == ParseState.ERROR) {
 						while (formatStart <= i) {
-							write(format[formatStart]);
+							_write(format[formatStart]);
 							formatStart++;
 							bytesWritten++;
 						}
@@ -844,7 +855,7 @@ public class Writer {
 					}
 				} while (!done);
 			} else {
-				write(format[i]);
+				_write(format[i]);
 				bytesWritten++;
 			}
 		}

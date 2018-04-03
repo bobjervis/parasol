@@ -28,6 +28,14 @@ import native:linux.CLD_STOPPED;
 import native:linux.CLD_CONTINUED;
 import native:C;
 
+public ref<Reader> stdin;
+public ref<Writer> stdout;
+public ref<Writer> stderr;
+
+public int printf(string format, var... arguments) {
+	return stdout.printf(format, arguments);
+}
+
 public string binaryFilename() {
 	byte[] filename;
 	filename.resize(storage.FILENAME_MAX + 1);

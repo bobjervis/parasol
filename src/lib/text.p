@@ -1850,7 +1850,7 @@ public class StringReader extends Reader {
 		_source = source;
 	}
 	
-	public int read() {
+	public int _read() {
 		if (_cursor >= _source.length())
 			return -1;
 		else
@@ -1865,7 +1865,7 @@ public class StringWriter extends Writer {
 		_output = output;
 	}
 	
-	public void write(byte c) {
+	public void _write(byte c) {
 		_output.append(c);
 	}
 }

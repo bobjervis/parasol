@@ -361,7 +361,7 @@ static void fillExceptionInfo(HardwareException *he, siginfo_t *info, ucontext *
 void sigGeneralHandler(int signum, siginfo_t *info, void *uContext) {
 	ExecutionContext *context = threadContext.get();
 
-	if (context->hasHardwareExceptionHandler()) {
+	if (context != null && context->hasHardwareExceptionHandler()) {
 		HardwareException he;
 
 		fillExceptionInfo(&he, info, (ucontext*)uContext);
@@ -376,7 +376,7 @@ void sigGeneralHandler(int signum, siginfo_t *info, void *uContext) {
 void sigSegvHandler(int signum, siginfo_t *info, void *uContext) {
 	ExecutionContext *context = threadContext.get();
 
-	if (context->hasHardwareExceptionHandler()) {
+	if (context != null && context->hasHardwareExceptionHandler()) {
 		HardwareException he;
 
 		fillExceptionInfo(&he, info, (ucontext*)uContext);

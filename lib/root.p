@@ -73,11 +73,10 @@ class ref<class T> extends address {
 class pointer<class T> extends address {
 }
 
+import parasol:process;
+
 int printf(string format, var... arguments) {
-	string s;
-	
-	s.printf(format, arguments);
-	return print(s);
+	return process.printf(format, arguments);
 }
 
 // Use printf instead
