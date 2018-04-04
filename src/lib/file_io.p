@@ -354,7 +354,6 @@ int BUFFER_SIZE = 64 * 1024;
 public class FileReader = BinaryFileReader;
 
 public class BinaryFileReader extends Reader {
-	private Monitor _lock;
 	private File _file;
 	private byte[] _buffer;
 	private int _cursor;
@@ -370,34 +369,20 @@ public class BinaryFileReader extends Reader {
 	}
 
 	public string, boolean readAll() {
-		lock (_lock) {
-			seek(0, Seek.END);					// seek the stream to flush the buffer.
-			long pos = _file.tell();
-			_file.seek(0, Seek.START);
-			string data;
-	
-			if (pos > int.MAX_VALUE)
-				return "", false;
-			data.resize(int(pos));
-	
-			int n = _file.read(&data[0], int(pos));
-			if (n < 0)
-				return "", false;
-			data.resize(n);
-			return data, true;
-		}
-	}
+		seek(0, Seek.END);					// seek the stream to flush the buffer.
+		long pos = _file.tell();
+		_file.seek(0, Seek.START);
+		string data;
 
-	public string readLine() {
-		lock (_lock) {
-			return super.readLine();
-		}
-	}
+		if (pos > int.MAX_VALUE)
+			return "", false;
+		data.resize(int(pos));
 
-	public int read() {
-		lock (_lock) {
-			return _read();
-		}
+		int n = _file.read(&data[0], int(pos));
+		if (n < 0)
+			return "", false;
+		data.resize(n);
+		return data, true;
 	}
 
 	public int _read() {
@@ -417,26 +402,20 @@ public class BinaryFileReader extends Reader {
 	}
 
 	public long tell() {
-		lock (_lock) {
-			return _file.seek(0, Seek.CURRENT) + _cursor - _length;
-		}
+		return _file.seek(0, Seek.CURRENT) + _cursor - _length;
 	}
 
 	public long seek(long offset, Seek whence) {
-		lock (_lock) {
-			_length = 0;
-			_cursor = 0;
-			return _file.seek(offset, whence);
-		}
+		_length = 0;
+		_cursor = 0;
+		return _file.seek(offset, whence);
 	}
 
 	public void close() {
-		lock (_lock) {
-			_file.close();
-			_buffer.clear();			// Release the file buffer now since we won't need it any more
-			_length = 0;
-			_cursor = 0;
-		}
+		_file.close();
+		_buffer.clear();			// Release the file buffer now since we won't need it any more
+		_length = 0;
+		_cursor = 0;
 	}
 }
 
