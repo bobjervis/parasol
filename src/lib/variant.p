@@ -67,7 +67,12 @@ public class var {
 		_value = value;
 		_actualType = actualType;
 	}
-	
+
+	private var(address actualType, address opAdr, int opLen) {
+		C.memcpy(&_value, opAdr, opLen);
+		_actualType = actualType;
+	}
+
 	public address actualType() { 
 		return _actualType;
 	}
@@ -134,6 +139,10 @@ public class var {
 		return *ref<double>(&_value);
 	}
 	
+	public void classValue(address out, int len) {
+		C.memcpy(out, &_value, len);
+	}
+
 	public var leftShift(var other) {
 		long x = _value << int(other);
 		return x;

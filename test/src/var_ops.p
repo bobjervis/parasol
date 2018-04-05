@@ -13,6 +13,8 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+import parasol:time.Time;
+
 basicIntegerArithmetic();
 basicStringOps();
 conversions();
@@ -203,6 +205,14 @@ void conversions() {
 	assert(isBytePointer(y));
 	assert(!isBytePointer(x));
 	assert(!isBytePointer(f));
+
+	Time t(17);
+
+	var vt = t;
+
+	Time tx = Time(vt);
+
+	assert(tx.value() == 17);
 }
 
 boolean isBytePointer(var v) {

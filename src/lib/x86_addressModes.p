@@ -109,10 +109,11 @@ class X86_64AddressModes extends X86_64Encoder {
 				break;
 				
 			case	CLASS:
-				if (u.operand().type.indirectType(compileContext) != null) {
+				if (u.operand().type.indirectType(compileContext) != null || u.operand().type.size() <= 8) {
 					tryMakeMode(u.operand(), MC_ADDRESS|MC_REG, nClass, compileContext);
 					break;
 				}
+
 			default:
 				markAddressModes(u.operand(), compileContext);
 			}

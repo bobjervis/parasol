@@ -299,8 +299,29 @@ class Unary extends Node {
 				break;
 				
 			case	CLASS:
+				switch (_operand.type.family()) {
+				case	VAR:
+					if (type.size() <= 8) {
+						ref<Variable> temp = compileContext.newVariable(type);
+						ref<Reference> r = tree.newReference(temp, true, location());
+						ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
+						adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+						ref<Node> opLen = tree.newInternalLiteral(type.size(), location());
+						opLen.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+						ref<Node> call = createMethodCall(_operand, "classValue", tree, compileContext, adr, opLen);
+						call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+						r = tree.newReference(temp, false, location());
+						ref<Binary> seq = tree.newBinary(Operator.SEQUENCE, call, r, location());
+						seq.type = type;
+						return seq.fold(tree, false, compileContext);
+					}
+
+				default:
+					print(0);
+					assert(false);
+				}
 				break;
-				
+
 			case	VAR:
 				assert(type.scope() != null);
 				ref<Type> targetType = null;
@@ -370,6 +391,44 @@ class Unary extends Node {
 				case	ENUM:
 					print(0);
 					assert(false);
+
+				case	CLASS:
+					// TODO: Make this more frienly for cross-compilation scenarios
+					if (_operand.type.size() <= address.bytes) {
+						for (int i = 0; i < type.scope().constructors().length(); i++) {
+							ref<FunctionDeclaration> f = ref<FunctionDeclaration>((*type.scope().constructors())[i].definition());
+							ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
+							if (oi.parameterCount() != 3)
+								continue;
+							if ((*oi.parameterScope().parameters())[0].type().family() == TypeFamily.ADDRESS &&
+								(*oi.parameterScope().parameters())[1].type().family() == TypeFamily.ADDRESS &&
+								(*oi.parameterScope().parameters())[2].type().family() == TypeFamily.SIGNED_32) {
+								ref<Variable> temp = compileContext.newVariable(type);
+								_operand = _operand.fold(tree, false, compileContext);
+								ref<Node> empty = tree.newLeaf(Operator.EMPTY, location());
+								empty.type = _operand.type;
+								ref<Node> typeOperand = tree.newUnary(Operator.CLASS_OF, empty, location());
+								// The type of the CLASS_OF operand is irrelevant.
+								typeOperand.type = compileContext.arena().builtInType(TypeFamily.VOID);
+								ref<Node> opAdr = tree.newUnary(Operator.ADDRESS, _operand, location());
+								opAdr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+								ref<Node> opLen = tree.newInternalLiteral(_operand.type.size(), location());
+								opLen.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+								ref<NodeList> args = tree.newNodeList(typeOperand, opAdr, opLen);
+								ref<Reference> r = tree.newReference(temp, true, location());
+								ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
+								adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+								ref<Call> constructor = tree.newCall(oi.parameterScope(), CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
+								constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
+								if (voidContext)
+									return constructor.fold(tree, true, compileContext);
+								r = tree.newReference(temp, false, location());
+								ref<Binary> seq = tree.newBinary(Operator.SEQUENCE, constructor, r, location());
+								seq.type = type;
+								return seq.fold(tree, false, compileContext);
+							}
+						}
+					}
 
 				default:
 					print(0);

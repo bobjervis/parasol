@@ -728,7 +728,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				f().r.cleanupTemps(u, depth);
 				u.register = byte(f().r.getreg(u, longMask(), regMask));
 				break;
-				
+
 			case	REF:
 			case	POINTER:
 				if (u.operand().op() != Operator.EMPTY) {
@@ -737,7 +737,12 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				}
 				u.register = byte(int(f().r.getreg(u, longMask(), regMask)));
 				break;
-				
+
+			case	CLASS:
+				assert(u.operand().op() == Operator.EMPTY);
+				u.register = byte(int(f().r.getreg(u, longMask(), regMask)));
+				break;
+
 			default:					
 				assignRegisterTemp(u.operand(), longMask(), compileContext);
 				f().r.cleanupTemps(u, depth);
