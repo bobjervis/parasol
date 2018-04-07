@@ -17,7 +17,11 @@ namespace parasol:stream;
 
 import parasol:storage.File;
 import parasol:storage.Seek;
+import parasol:time.Time;
 import native:C;
+
+@Constant
+int MILLIS_PER_SECOND = 1000;
 
 public class UTF8Reader {
 	private ref<Reader> _reader;
@@ -837,7 +841,90 @@ public class Writer {
 									}
 								}
 								break;
-								
+							
+							case	't':
+							case	'T':
+								if (i + 1 >= format.length()) {
+									current = ParseState.ERROR;
+									break;
+								}
+								i++;
+								Time t;
+
+								if (arguments[nextArgument].class == long)
+									t = Time(long(arguments[nextArgument]));
+								else
+									t = Time(arguments[nextArgument]);
+								switch (format[i]) {
+								case	'a':
+								case	'A':
+								case	'b':
+								case	'B':
+								case	'c':
+								case	'C':
+								case	'd':
+								case	'D':
+								case	'e':
+								case	'F':
+								case	'H':
+								case	'I':
+								case	'j':
+								case	'k':
+								case	'l':
+								case	'L':
+								case	'm':
+								case	'M':
+								case	'N':
+								case	'p':
+									current = ParseState.ERROR;
+									break;
+
+								case	'Q':
+									buffer.printf("%d", t.value());
+									break;
+
+								case	'r':
+								case	'R':
+									current = ParseState.ERROR;
+									break;
+
+								case	's':
+									buffer.printf("%d", t.value() / MILLIS_PER_SECOND);
+									break;
+
+								case	'S':
+								case	'T':
+								case	'y':
+								case	'Y':
+								case	'z':
+								case	'Z':
+								default:
+									current = ParseState.ERROR;
+									break;
+								}
+								if (current == ParseState.ERROR)
+									break;
+								len = buffer.length();
+								if (!leftJustified) {
+									while (width > len) {
+										_write(' ');
+										width--;
+										bytesWritten++;
+									}
+								}
+
+								if (precisionSpecified && precision < len)
+									len = precision;
+								write(&buffer[0], len);
+								if (leftJustified) {
+									while (width > len) {
+										_write(' ');
+										width--;
+										bytesWritten++;
+									}
+								}
+								break;
+
 							default:
 								current = ParseState.ERROR;
 							}

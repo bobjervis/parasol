@@ -127,6 +127,18 @@ public abstract pointer<byte> gcvt(double number, int ndigit, pointer<byte> buf)
 @Linux("libc.so.6", "getenv")
 public abstract pointer<byte> getenv(pointer<byte> variable);
 
+@Linux("libc.so.6", "gmtime")
+public abstract ref<tm> gmtime(ref<time_t> time);
+
+@Linux("libc.so.6", "gmtime_s")
+public abstract ref<tm> gmtime_s(ref<time_t> time, ref<tm> result);
+
+@Linux("libc.so.6", "localtime")
+public abstract ref<tm> localtime(ref<time_t> time);
+
+@Linux("libc.so.6", "localtime_s")
+public abstract ref<tm> localtime_s(ref<time_t> time, ref<tm> result);
+
 @Windows("msvcrt.dll", "malloc")
 @Linux("libc.s0.6", "malloc")
 public abstract address malloc(unsigned size);
@@ -186,3 +198,18 @@ public abstract long time(ref<long> t);
 //@Windows("msvcrt.dll", "vsprintf") - not yet implemented on Windows, Linux is pretty hacky, so beware
 @Linux("libc.so.6", "vsprintf")
 public abstract int vsprintf(pointer<byte> buffer, pointer<byte> format, va_list ap);
+
+public class tm {
+  int tm_sec;                   /* Seconds.     [0-60] (1 leap second) */
+  int tm_min;                   /* Minutes.     [0-59] */
+  int tm_hour;                  /* Hours.       [0-23] */
+  int tm_mday;                  /* Day.         [1-31] */
+  int tm_mon;                   /* Month.       [0-11] */
+  int tm_year;                  /* Year - 1900.  */
+  int tm_wday;                  /* Day of week. [0-6] */
+  int tm_yday;                  /* Days in year.[0-365] */
+  int tm_isdst;                 /* DST.         [-1/0/1]*/
+
+  int tm_gmtoff;           		/* Seconds east of UTC.  */
+  pointer<byte> tm_zone;		/* Timezone abbreviation.  */
+}

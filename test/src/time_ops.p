@@ -15,4 +15,30 @@
  */
 import parasol:time;
 
-time.Time x(4000);
+time.Time x(24317);
+
+string output1;
+
+output1.printf("%tQ", x);
+
+assert(output1 == "24317");
+
+string output2;
+
+output2.printf("%ts", x);
+
+assert(output2 == "24");
+
+time.Time y(-24317);
+
+string output1y;
+
+output1y.printf("%tQ", y);
+
+assert(output1y == "-24317");
+
+string output2y;
+
+output2y.printf("%ts", y);
+
+assert(output2y == "-24");

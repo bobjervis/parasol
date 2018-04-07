@@ -1368,6 +1368,11 @@ class Binary extends Node {
 			y = _right.foldInt(target, compileContext);
 			return x * y;
 
+		case	DIVIDE:
+			x = _left.foldInt(target, compileContext);
+			y = _right.foldInt(target, compileContext);
+			return x / y;
+
 		default:
 			print(0);
 			assert(false);
@@ -1380,6 +1385,7 @@ class Binary extends Node {
 		case	ADD:
 		case	SUBTRACT:
 		case	MULTIPLY:
+		case	DIVIDE:
 			if (_left.isConstant() && _right.isConstant())
 				return true;
 		}

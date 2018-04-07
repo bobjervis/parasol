@@ -24,3 +24,9 @@ int x = MAGIC_VALUE;
 int MAGIC_VALUE = 0x34718f2e;
 
 assert(x == 0x34718f2e);
+
+@Constant
+int z = 10 / 3;
+
+assert(z == 3);
+
