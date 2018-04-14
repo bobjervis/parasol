@@ -130,13 +130,15 @@ public abstract pointer<byte> getenv(pointer<byte> variable);
 @Linux("libc.so.6", "gmtime")
 public abstract ref<tm> gmtime(ref<time_t> time);
 
-@Linux("libc.so.6", "gmtime_s")
+@Windows("msvcrt.dll", "_gmtime64_s")
+@Linux("libc.so.6", "gmtime_r")
 public abstract ref<tm> gmtime_s(ref<time_t> time, ref<tm> result);
 
 @Linux("libc.so.6", "localtime")
 public abstract ref<tm> localtime(ref<time_t> time);
 
-@Linux("libc.so.6", "localtime_s")
+@Windows("msvcrt.dll", "_localtime64_s")
+@Linux("libc.so.6", "localtime_r")
 public abstract ref<tm> localtime_s(ref<time_t> time, ref<tm> result);
 
 @Windows("msvcrt.dll", "malloc")
@@ -150,6 +152,9 @@ public abstract address memcpy(address destination, address source, int amount);
 @Windows("msvcrt.dll", "memset")
 @Linux("libc.so.6", "memset")
 public abstract address memset(address destination, byte value, int amount);
+
+@Linux("libc.so.6", "mktime")
+public abstract time_t mktime(ref<tm> time);
 
 @Windows("msvcrt.dll", "rename")
 @Linux("libc.so.6", "rename")
@@ -210,6 +215,6 @@ public class tm {
   int tm_yday;                  /* Days in year.[0-365] */
   int tm_isdst;                 /* DST.         [-1/0/1]*/
 
-  int tm_gmtoff;           		/* Seconds east of UTC.  */
+  long tm_gmtoff;           	/* Seconds east of UTC.  */
   pointer<byte> tm_zone;		/* Timezone abbreviation.  */
 }

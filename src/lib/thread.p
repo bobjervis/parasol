@@ -161,8 +161,9 @@ public class Thread {
 		enterThread(t._context, &t);
 		threads.enlist(t);
 		parasolThread(t);
+		t._pid = getCurrentThreadId();
 		if (t._name == null)
-			t._name.printf("TID-%d", getCurrentThreadId());
+			t._name.printf("TID-%d", t._pid);
 		nested(t);
 		exitThread();
 		threads.delist(t);
@@ -229,13 +230,8 @@ public class Thread {
 		return _name;
 	}
 	
-	public long id() {
-		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-			return GetCurrentThreadId();
-		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-			return _pid;
-		} else
-			return -1;
+	public int id() {
+		return _pid;
 	}
 
 	public static void sleep(long milliseconds) {

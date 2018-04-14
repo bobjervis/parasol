@@ -120,13 +120,15 @@ public class Exception {
 		int(address, address) comparator = comparatorReturnAddress;
 		pointer<byte> ip = pointer<pointer<byte>>(stackPointer)[-1];
 		if (_exceptionContext == null) {
+			// An inital throw statement of an unthrown exception
 			_exceptionContext = createExceptionContext(stackPointer);
 			_exceptionContext.framePointer = framePointer;
 			_exceptionContext.exceptionAddress = pointer<address>(stackPointer)[-1];
 		} else if (_exceptionContext.lastCrawledFramePointer == null) {
+			// first time handling of a hardware exception
 			ip = pointer<byte>(_exceptionContext.exceptionAddress);
 			comparator = comparatorCurrentIp;
-		}
+		} // else a re-thrown exception
 		address stackTop = address(long(_exceptionContext.stackBase) + _exceptionContext.stackSize);
 		pointer<address> searchEnd = pointer<address>(stackTop) + -2;
 		pointer<address> frame = pointer<address>(_exceptionContext.framePointer);

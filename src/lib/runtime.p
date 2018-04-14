@@ -24,7 +24,9 @@ import parasol:x86_64.X86_64SectionHeader;
  * Major Release: Incremented when a breaking change is released
  * Minor Feature Release: Incremented when significant new features
  * are released.
- * Fix Release: Incremented when big fixes are released.
+ * Fix Release: Incremented when bug fixes are released.
+ *
+ * Note: Since Major Release == 0 means this is 'unreleased' and any public API can change at any moment.
  */
 public string RUNTIME_VERSION = "0.1.0";
 
@@ -67,6 +69,21 @@ public abstract int builtInFunctionReturns(int index);
 public abstract pointer<byte> lowCodeAddress();
 public abstract pointer<byte> highCodeAddress();
 public abstract address stackTop();
+
+/**
+ * This method returns the byte address of the next instruction after the call to the currently running function.
+ * A value of null indicates that the returnAddress of this function is unavailable.
+ */
+public /*abstract*/ address returnAddress() {
+	return null;
+}
+/**
+ * This method returns the frame pointer for the current function. A value of null indicates that a frame pointer
+ * for this method is unavailable. 
+ */
+public /*abstract*/ address framePointer() {
+	return null;
+}
 
 public abstract long getRuntimeFlags();
 

@@ -50,8 +50,20 @@ public class Time {
 		_value = value;
 	}
 
+	public Time(Time t) {
+		_value = t._value;
+	}
+
 	public Time(Instant i) {
 		_value = i._seconds * MILLIS_PER_SECOND + i._nanos / NANOS_PER_MILLI;
+	}
+
+	public Time(ref<Date> date) {
+		*this = localTimeZone.toTime(date);
+	}
+
+	public Time(ref<Date> date, ref<TimeZone> timeZone) {
+		*this = timeZone.toTime(date);
 	}
 	/*
 	 * This is a constructor defined for local use only to construct a Parasol Time object
@@ -104,6 +116,27 @@ public Time now() {
 	}
 }
 
+public Instant instantNow() {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		windows.SYSTEMTIME s;
+		windows.FILETIME f;
+
+		windows.GetSystemTime(&s);
+		windows.SystemTimeToFileTime(&s, &f);
+		Instant result(f);
+		return result;
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		linux.timespec t;
+		linux.clock_gettime(linux.CLOCK_REALTIME, &t);
+		return Instant(t);
+	} else {
+		return Instant(0, 0);
+	}
+}
+/**
+ * This value is defined for timeout call arguments that use a Time of 0 milliseconds
+ * to mean an infinite duration.
+ */
 public Time infinite(0);
 /*
  * An Instance represents a time with the greatest precision and range. Where a
@@ -125,6 +158,19 @@ public class Instant {
 		long v = t._value;
 		_seconds = v / MILLIS_PER_SECOND;
 		_nanos = (v % MILLIS_PER_SECOND) * NANOS_PER_MILLI;
+	}
+
+	public Instant(Instant i) {
+		_seconds = i._seconds;
+		_nanos = i._nanos;
+	}
+
+	public Instant(ref<Date> d) {
+		*this = localTimeZone.toInstant(d);
+	}
+
+	public Instant(ref<Date> date, ref<TimeZone> timeZone) {
+		*this = timeZone.toInstant(date);
 	}
 	/*
 	 * This is a constructor defined for local use only to construct a Parasol Time object
@@ -179,11 +225,126 @@ public class Instant {
 		}
 	}
 }
-
+/**
+ * The Clock class defines a framework for using the underlyinh system high-precision timers.
+ *
+ * Content TBD.
+ */
 public class Clock {
 }
 
+public ProlepticGregorianTimeZone UTC;
+public LocalTimeZone localTimeZone;
+
+public class ProlepticGregorian extends Calendar {
+}
+
+class LocalTimeZone extends TimeZone {
+	LocalTimeZone() { }
+
+	public Time toTime(ref<Date> date) {
+		return super.toTime(date);
+	}
+
+	public Instant toInstant(ref<Date> date) {
+		return super.toInstant(date);
+	}
+
+	public void toDate(ref<Date> result, Time t) {
+		C.time_t ct = C.time_t(t._value / MILLIS_PER_SECOND);
+		secondsToDate(result, ct);
+		result.nanosecond = (t._value % MILLIS_PER_SECOND) * NANOS_PER_MILLI;
+	}
+
+	public void toDate(ref<Date> result, Instant i) {
+		secondsToDate(result, i._seconds);
+		result.nanosecond = i._nanos;
+	}
+
+	private void secondsToDate(ref<Date> d, C.time_t t) {
+		d.toLocal(t);
+	}
+	/**
+	 * Calculate the offset for the local time zone.
+	 *
+	void init() {
+		C.tm local;
+		C.tm utc;
+		C.time_t t = C.time(null);
+
+		C.localtime_s(&t, &local);
+		C.gmtime_s(&t, &utc);
+		_offsetSeconds = ((local.tm_hour - utc.tm_hour) * 60 + (local.tm_min - utc.tm_min)) * 60 + (local.tm_sec - utc.tm_sec);
+		int delta_day = local.tm_mday - utc.tm_mday;
+		if ((delta_day == 1) || (delta_day < -1)) {
+			_offsetSeconds += 24 * 60 * 60;
+		} else if ((delta_day == -1) || (delta_day > 1)) {
+			_offsetSeconds -= 24 * 60 * 60;
+  		}
+	}
+*/
+}
+
+class ProlepticGregorianTimeZone extends TimeZone {
+	ProlepticGregorianTimeZone() {
+	}
+
+	public Time toTime(ref<Date> date) {
+		return Time(internalToInstant(date));
+	}
+
+	public Instant toInstant(ref<Date> date) {
+		return internalToInstant(date);
+	}
+
+	Instant internalToInstant(ref<Date> date) {
+		C.time_t t;
+		C.tm tm;
+
+		tm.tm_year = int(date.year) - 1900;
+		tm.tm_mon = date.month;
+		tm.tm_mday = date.day;
+		tm.tm_hour = date.hour;
+		tm.tm_min = date.minute;
+		tm.tm_sec = date.second;
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+			assert(false);
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+			t = linux.timegm(&tm);
+		} else {
+			assert(false);
+		}
+		printf("t = %d\n", t);		
+		Instant i(t, date.nanosecond);
+
+
+		return i;
+	}
+
+	public void toDate(ref<Date> result, Time t) {
+		C.time_t ct = C.time_t(t._value / MILLIS_PER_SECOND);
+		secondsToDate(result, ct);
+		result.nanosecond = (t._value % MILLIS_PER_SECOND) * NANOS_PER_MILLI;
+	}
+
+	public void toDate(ref<Date> result, Instant i) {
+		secondsToDate(result, i._seconds);
+		result.nanosecond = i._nanos;
+	}
+
+	private void secondsToDate(ref<Date> d, C.time_t t) {
+		d.toUtc(t);
+	}
+}
+
 public class TimeZone {
+	public abstract Time toTime(ref<Date> date);
+
+	public abstract Instant toInstant(ref<Date> date);
+
+	public abstract void toDate(ref<Date> result, Time t);
+
+	public abstract void toDate(ref<Date> result, Instant i);
 }
 
 public class Calendar {
@@ -266,49 +427,91 @@ public enum DateField {
  * limited to the calendar supported by the C time functions.
  */
 public class Date {
-	private C.tm _data;
-	private long _nanos;
-	private ref<TimeZone> _timeZone;		// The time-zone used to convert the time.
-	private ref<Calendar> _calendar;		// The Calendar used to convert the time.
-	private long _offset;					// The offset in seconds from UTC used to convert the time.
-											// long.MIN_VALUE implies no offset was applied.
+	public long year;
+	public int month;
+	public int day;
+	public int hour;
+	public int minute;
+	public int second;
+	public long nanosecond;
+	// Supplemental fields that do not get used to convert to Time/Instant:
+	public int weekDay;
+	public int yearDay;
 	/**
 	 * Constructor to fill out a Date from a Time according to the current system Calendar and TimeZone or offset.
 	 */
 	public Date(Time t) {
 		C.time_t ct = C.time_t(t._value / MILLIS_PER_SECOND);
-		C.localtime_s(&ct, &_data);
-		_nanos = (t._value % MILLIS_PER_SECOND) * NANOS_PER_MILLI;
-		_offset = long.MIN_VALUE;
+		toLocal(ct);
+		nanosecond = (t._value % MILLIS_PER_SECOND) * NANOS_PER_MILLI;
 	}
+
+	public Date(Time t, ref<TimeZone> tz) {
+		tz.toDate(this, t);
+		nanosecond = (t._value % MILLIS_PER_SECOND) * NANOS_PER_MILLI;
+	}
+
 	/**
 	 * Constructor to fill out a Date from an Instant according to the current system Calendar and TimeZone or offset.
 	 */
 	public Date(Instant i) {
 		C.time_t t = C.time_t(i._seconds);
-		C.localtime_s(&t, &_data);
-		_nanos = i._nanos;
-		_offset = long.MIN_VALUE;
+		toLocal(t);
+		nanosecond = i._nanos;
+	}
+
+	public Date(Instant i, ref<TimeZone> tz) {
+		tz.toDate(this, i);
+		nanosecond = i._nanos;
 	}
 
 	public Date() {
-		_offset = long.MIN_VALUE;
 	}
 
 	public void utc(Time t) {
-		C.time_t ct = C.time_t(t._value / MILLIS_PER_SECOND);
-		C.gmtime_s(&ct, &_data);
-		_nanos = (t._value % MILLIS_PER_SECOND) * NANOS_PER_MILLI;
-		_offset = 0;
+		UTC.toDate(this, t);
 	}
 
 	public void utc(Instant i) {
-		C.time_t t = C.time_t(i._seconds);
-		C.gmtime_s(&t, &_data);
-		_nanos = i._nanos;
-		_offset = 0;
+		UTC.toDate(this, i);
+	}
+
+	void toLocal(C.time_t t) {
+		C.tm data;
+
+		if (C.localtime_s(&t, &data) == null) {
+			string msg;
+			msg.printf("%d", t);
+			throw IllegalArgumentException(msg);
+		}
+		year = data.tm_year + 1900;
+		month = data.tm_mon;
+		day = data.tm_mday;
+		hour = data.tm_hour;
+		minute = data.tm_min;
+		second = data.tm_sec;
+		weekDay = data.tm_wday;
+		yearDay = data.tm_yday;
+	}
+
+	void toUtc(C.time_t t) {
+		C.tm data;
+
+		ref<C.tm> res = C.gmtime_s(&t, &data);
+		if (res == null) {
+			string msg;
+			msg.printf("%d", t);
+			throw IllegalArgumentException(msg);
+		}
+		year = data.tm_year + 1900;
+		month = data.tm_mon;
+		day = data.tm_mday;
+		hour = data.tm_hour;
+		minute = data.tm_min;
+		second = data.tm_sec;
+		weekDay = data.tm_wday;
+		yearDay = data.tm_yday;
 	}
 }
-
 
 

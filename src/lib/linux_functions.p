@@ -17,6 +17,7 @@ namespace native:linux;
 import native:net.sockaddr;
 import native:C.size_t;
 import native:C.time_t;
+import native:C.tm;
 
 class pid_t = int;
 class pthread_t = address;
@@ -298,6 +299,9 @@ public abstract int statvfs(pointer<byte> path, ref<statvfsStruct> buf);
 
 @Linux("libc.so.6", "sysconf")
 public abstract int sysconf(int parameter_index);
+
+@Linux("libc.so.6", "timegm")
+public abstract time_t timegm(ref<tm> time);
 
 @Linux("libc.so.6", "unlink")
 public abstract int unlink(pointer<byte> path);

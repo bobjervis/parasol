@@ -78,6 +78,8 @@ class Call extends ParameterBag {
 				return false;
 			if (_arguments != null && !_arguments.traverse(t, func, data))
 				return false;
+			if (_stackArguments != null && !_stackArguments.traverse(t, func, data))
+				return false;
 			break;
 
 		case	IN_ORDER:
@@ -90,12 +92,16 @@ class Call extends ParameterBag {
 				break;
 			if (_arguments != null && !_arguments.traverse(t, func, data))
 				return false;
+			if (_stackArguments != null && !_stackArguments.traverse(t, func, data))
+				return false;
 			break;
 
 		case	POST_ORDER:
 			if (_target != null && !_target.traverse(t, func, data))
 				return false;
 			if (_arguments != null && !_arguments.traverse(t, func, data))
+				return false;
+			if (_stackArguments != null && !_stackArguments.traverse(t, func, data))
 				return false;
 			result = func(this, data);
 			if (result == TraverseAction.ABORT_TRAVERSAL)
@@ -108,6 +114,8 @@ class Call extends ParameterBag {
 				return false;
 			if (result == TraverseAction.SKIP_CHILDREN)
 				break;
+			if (_stackArguments != null && !_stackArguments.traverse(t, func, data))
+				return false;
 			if (_arguments != null && !_arguments.reverse(t, func, data))
 				return false;
 			if (_target != null && !_target.traverse(t, func, data))
@@ -115,6 +123,8 @@ class Call extends ParameterBag {
 			break;
 
 		case	REVERSE_IN_ORDER:
+			if (_stackArguments != null && !_stackArguments.traverse(t, func, data))
+				return false;
 			if (_arguments != null && !_arguments.reverse(t, func, data))
 				return false;
 			result = func(this, data);
@@ -127,6 +137,8 @@ class Call extends ParameterBag {
 			break;
 
 		case	REVERSE_POST_ORDER:
+			if (_stackArguments != null && !_stackArguments.traverse(t, func, data))
+				return false;
 			if (_arguments != null && !_arguments.reverse(t, func, data))
 				return false;
 			if (_target != null && !_target.traverse(t, func, data))
