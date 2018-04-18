@@ -19,15 +19,20 @@ import native:C.size_t;
 import native:C.time_t;
 import native:C.tm;
 
-class pid_t = int;
-class pthread_t = address;
-class uid_t = unsigned;
-class gid_t = unsigned;
-class useconds_t = unsigned;
-class mode_t = unsigned;
-class fsblkcnt_t = long;
-class fsfilcnt_t = long;
-class off_t = long;
+public class pid_t = int;
+public class pthread_t = address;
+public class uid_t = unsigned;
+public class gid_t = unsigned;
+public class useconds_t = unsigned;
+public class mode_t = unsigned;
+public class fsblkcnt_t = long;
+public class fsfilcnt_t = long;
+public class off_t = long;
+
+public class locale_t = ref<__locale_t>;
+
+class __locale_t {
+}
 
 @Linux("libc.so.6", "aligned_alloc")
 public abstract address aligned_alloc(long alignment, long length);
@@ -478,6 +483,64 @@ public int GLOB_NOSPACE =    1;       /* Ran out of memory.  */
 public int GLOB_ABORTED =    2;       /* Read error.  */
 public int GLOB_NOMATCH =    3;       /* No matches found.  */
 public int GLOB_NOSYS =      4;       /* Not implemented.  */
+
+@Constant
+public int LC_CTYPE              = 0;
+@Constant
+public int LC_NUMERIC            = 1;
+@Constant
+public int LC_TIME               = 2;
+@Constant
+public int LC_COLLATE            = 3;
+@Constant
+public int LC_MONETARY           = 4;
+@Constant
+public int LC_MESSAGES           = 5;
+@Constant
+public int LC_ALL                = 6;
+@Constant
+public int LC_PAPER              = 7;
+@Constant
+public int LC_NAME               = 8;
+@Constant
+public int LC_ADDRESS            = 9;
+@Constant
+public int LC_TELEPHONE          = 10;
+@Constant
+public int LC_MEASUREMENT        = 11;
+@Constant
+public int LC_IDENTIFICATION     = 12;
+
+/* These are the bits that can be set in the CATEGORY_MASK argument to
+   `newlocale'.  In the GNU implementation, LC_FOO_MASK has the value
+   of (1 << LC_FOO), but this is not a part of the interface that
+   callers can assume will be true.  */
+//@Constant
+public int LC_CTYPE_MASK          = (1 << LC_CTYPE);
+public int LC_NUMERIC_MASK        = (1 << LC_NUMERIC);
+public int LC_TIME_MASK           = (1 << LC_TIME);
+public int LC_COLLATE_MASK        = (1 << LC_COLLATE);
+public int LC_MONETARY_MASK       = (1 << LC_MONETARY);
+public int LC_MESSAGES_MASK       = (1 << LC_MESSAGES);
+public int LC_PAPER_MASK          = (1 << LC_PAPER);
+public int LC_NAME_MASK           = (1 << LC_NAME);
+public int LC_ADDRESS_MASK        = (1 << LC_ADDRESS);
+public int LC_TELEPHONE_MASK      = (1 << LC_TELEPHONE);
+public int LC_MEASUREMENT_MASK    = (1 << LC_MEASUREMENT);
+public int LC_IDENTIFICATION_MASK = (1 << LC_IDENTIFICATION);
+public int LC_ALL_MASK            = (LC_CTYPE_MASK
+                                 | LC_NUMERIC_MASK
+                                 | LC_TIME_MASK
+                                 | LC_COLLATE_MASK
+                                 | LC_MONETARY_MASK
+                                 | LC_MESSAGES_MASK
+                                 | LC_PAPER_MASK
+                                 | LC_NAME_MASK
+                                 | LC_ADDRESS_MASK
+                                 | LC_TELEPHONE_MASK
+                                 | LC_MEASUREMENT_MASK
+                                 | LC_IDENTIFICATION_MASK
+                                 );
 
 @Constant
 public int HOST_NAME_MAX = 64;

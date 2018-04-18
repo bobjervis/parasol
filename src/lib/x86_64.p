@@ -4530,8 +4530,10 @@ boolean isCompileTimeConstant(ref<Node> t) {
 }
 
 private TraverseAction collectStaticDestructors(ref<Node> n, address data) {
-	if (n.op() == Operator.DECLARATION)
+	if (n.op() == Operator.DECLARATION) {
+		//n.print(0);
 		compiler.markLiveSymbols(ref<Binary>(n).right(), StorageClass.STATIC, ref<CompileContext>(data));
+	}
 	return TraverseAction.CONTINUE_TRAVERSAL;
 }
 

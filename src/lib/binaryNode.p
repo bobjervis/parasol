@@ -1373,6 +1373,23 @@ class Binary extends Node {
 			y = _right.foldInt(target, compileContext);
 			return x / y;
 
+		case	LEFT_SHIFT:
+			x = _left.foldInt(target, compileContext);
+			y = _right.foldInt(target, compileContext);
+			return x << y;
+
+		case	RIGHT_SHIFT:
+			if (type.isSigned()) {
+				x = _left.foldInt(target, compileContext);
+				y = _right.foldInt(target, compileContext);
+				return x >> y;
+			}
+
+		case	UNSIGNED_RIGHT_SHIFT:
+			x = _left.foldInt(target, compileContext);
+			y = _right.foldInt(target, compileContext);
+			return x >>> y;
+
 		default:
 			print(0);
 			assert(false);
@@ -1386,6 +1403,9 @@ class Binary extends Node {
 		case	SUBTRACT:
 		case	MULTIPLY:
 		case	DIVIDE:
+		case	LEFT_SHIFT:
+		case	RIGHT_SHIFT:
+		case	UNSIGNED_RIGHT_SHIFT:
 			if (_left.isConstant() && _right.isConstant())
 				return true;
 		}
@@ -2809,6 +2829,8 @@ public void markLiveSymbols(ref<Node> declarator, StorageClass storageClass, ref
 		markLiveSymbols(u.operand(), storageClass, compileContext);
 		break;
 		
+	case	CLASS_CLEAR:
+	case	ASSIGN:
 	case	DESTRUCTOR_LIST:
 	case	EMPTY:
 	case	SYNTAX_ERROR:

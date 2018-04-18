@@ -2032,14 +2032,14 @@ int[TypeFamily] familyAlignment = [
 ];
 
 string[TypeFamily] builtinName = [
-  	SIGNED_8:			"signed<8>",
+  	SIGNED_8:			"Signed<8>",
   	SIGNED_16:			"short",
   	SIGNED_32:			"int",
   	SIGNED_64:			"long",
   	UNSIGNED_8:			"byte",
   	UNSIGNED_16:		"char",
   	UNSIGNED_32:		"unsigned",
-  	UNSIGNED_64:		"unsigned<64>",
+  	UNSIGNED_64:		"Unsigned<64>",
   	FLOAT_32:			"float",
   	FLOAT_64:			"double",
   	BOOLEAN:			"boolean",

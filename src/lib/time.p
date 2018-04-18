@@ -19,6 +19,7 @@ import native:windows;
 import native:C;
 import native:linux;
 import parasol:runtime;
+import parasol:international;
 
 @Constant
 private long ERA_DIFF = 0x019DB1DED53E8000;
@@ -226,7 +227,7 @@ public class Instant {
 	}
 }
 /**
- * The Clock class defines a framework for using the underlyinh system high-precision timers.
+ * The Clock class defines a framework for using the underlying system high-precision timers.
  *
  * Content TBD.
  */
@@ -349,7 +350,7 @@ public class TimeZone {
 
 public class Calendar {
 }
-
+/*
 public enum Month {
 	JANUARY,
 	FEBRUARY,
@@ -418,6 +419,7 @@ public enum DateField {
 	MICROSECOND_OF_SECOND,
 	NANOSECOND_OF_SECOND,
 }
+ */
 /**
  * The Date class represents a moment in time interpreted by a Calendar to
  * reflect fields such as era, year, month, day, hour, minute and second, along with possible
@@ -512,6 +514,12 @@ public class Date {
 		weekDay = data.tm_wday;
 		yearDay = data.tm_yday;
 	}
+}
+
+public class Formatter {
+	public Calendar calendar;
+	public ref<international.DecimalStyle> decimalStyle;
+	public ref<international.Locale> locale;
 }
 
 

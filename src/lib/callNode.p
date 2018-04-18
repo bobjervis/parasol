@@ -452,8 +452,9 @@ class Call extends ParameterBag {
 				ref<Selection> member = tree.newSelection(r, sym, false, nl.node.location());
 				member.type = sym.type();
 				value = value.coerce(tree, member.type, false, compileContext);
-				ref<Binary> init = tree.newBinary(Operator.ASSIGN, member, value.fold(tree, false, compileContext), nl.node.location());
+				ref<Node> init = tree.newBinary(Operator.ASSIGN, member, value, nl.node.location());
 				init.type = member.type;
+				init = init.fold(tree, true, compileContext);
 				if (result != null) {
 					result = tree.newBinary(Operator.SEQUENCE, result, init, location());
 					result.type = init.type;
@@ -1033,11 +1034,20 @@ class Call extends ParameterBag {
 	public boolean canCoerce(ref<Type> newType, boolean explicitCast, ref<CompileContext> compileContext) {
 		switch (op()) {
 		case	ARRAY_AGGREGATE:
-			printf("\nnewType: ");
-			newType.print();
-			printf("\n");
-			print(0);
-			assert(false);
+			switch (newType.family()) {
+			case	VAR:
+				return true;
+				
+			case	SHAPE:
+				break;
+
+			default:
+				printf("\nnewType: (%s) ", newType.signature());
+				newType.print();
+				printf("\n");
+				print(0);
+				assert(false);
+			}
 			break;
 			
 		case	OBJECT_AGGREGATE:

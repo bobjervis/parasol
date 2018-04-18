@@ -331,12 +331,13 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 	}
 	ref<Node> result = null;
 	if (!lhs.isSimpleLvalue()) {
-		ref<Variable> lhv = compileContext.newVariable(compileContext.arena().builtInType(TypeFamily.ADDRESS));
+		ref<Type> refVector = compileContext.arena().createRef(vectorType, compileContext);
+
+		ref<Variable> lhv = compileContext.newVariable(refVector);
 		ref<Reference> def = tree.newReference(lhv, true, lhs.location());
 		ref<Node> adr = tree.newUnary(Operator.ADDRESS, lhs, lhs.location());
 		result = tree.newBinary(Operator.ASSIGN, def, adr, lhs.location());
-		ref<Reference> use = tree.newReference(lhv, false, lhs.location());
-		lhs = tree.newUnary(Operator.ADDRESS, use, lhs.location());
+		lhs = tree.newReference(lhv, false, lhs.location());
 	}
 	ref<Type> indexType = vectorType.indexType(compileContext);
 	if (indexType.isCompactIndexType()) {
@@ -463,9 +464,8 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 				CompileString append("append");
 
 				ref<Node> arrayRef = lhs.clone(tree);
-				
-				ref<Symbol> sym = vectorType.lookup(&append, compileContext);
 
+				ref<Symbol> sym = vectorType.lookup(&append, compileContext);
 				if (sym == null || sym.class != Overload) {
 					vectorExpression.add(MessageId.UNDEFINED, compileContext.pool(), append);
 					return vectorExpression;
@@ -487,14 +487,14 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 		}
 	} else {
 		for (ref<NodeList> nl = aggregate.arguments(); nl != null; nl = nl.next) {
-			CompileString append("set");
+			CompileString set("set");
 
 			ref<Node> arrayRef = lhs.clone(tree);
 			
-			ref<Symbol> sym = vectorType.lookup(&append, compileContext);
+			ref<Symbol> sym = vectorType.lookup(&set, compileContext);
 
 			if (sym == null || sym.class != Overload) {
-				vectorExpression.add(MessageId.UNDEFINED, compileContext.pool(), append);
+				vectorExpression.add(MessageId.UNDEFINED, compileContext.pool(), set);
 				return vectorExpression;
 			}
 			ref<OverloadInstance> oi = (*ref<Overload>(sym).instances())[0];
