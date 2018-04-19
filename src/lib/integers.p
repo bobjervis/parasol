@@ -101,7 +101,7 @@ public class int {
 			if (x.isDigit())
 				digit = x - '0';
 			else if (x.isAlpha())
-				digit = 10 + (x.toLowercase() - 'a');
+				digit = 10 + (x.toLowerCase() - 'a');
 			else
 				return 0, false;
 			if (digit >= radix)
@@ -147,7 +147,7 @@ public class int {
 			if (x.isDigit())
 				digit = x - '0';
 			else if (x.isAlpha())
-				digit = 10 + (x.toLowercase() - 'a');
+				digit = 10 + (x.toLowerCase() - 'a');
 			else
 				return 0, false;
 			if (digit >= radix)
@@ -220,7 +220,7 @@ public class long {
 			if (x.isDigit())
 				digit = x - '0';
 			else if (x.isAlpha())
-				digit = 10 + (x.toLowercase() - 'a');
+				digit = 10 + (x.toLowerCase() - 'a');
 			else
 				return 0, false;
 			if (digit >= radix)
@@ -266,7 +266,7 @@ public class long {
 			if (x.isDigit())
 				digit = x - '0';
 			else if (x.isAlpha())
-				digit = 10 + (x.toLowercase() - 'a');
+				digit = 10 + (x.toLowerCase() - 'a');
 			else
 				return 0, false;
 			if (digit >= radix)
@@ -532,7 +532,7 @@ public class byte {
 		return false;
 	}
 	
-	public boolean isUppercase() {
+	public boolean isUpperCase() {
 		switch (*this) {
 		case 'A':
 		case 'B':
@@ -565,7 +565,7 @@ public class byte {
 		return false;
 	}
 
-	public boolean isLowercase() {
+	public boolean isLowerCase() {
 		switch (*this) {
 		case 'a':
 		case 'b':
@@ -598,15 +598,15 @@ public class byte {
 		return false;
 	}
 	
-	byte toUppercase() {
-		if ((*this).isLowercase())
+	byte toUpperCase() {
+		if ((*this).isLowerCase())
 			return byte(*this + ('A' - 'a'));
 		else
 			return *this;
 	}
 	
-	byte toLowercase() {
-		if ((*this).isUppercase())
+	byte toLowerCase() {
+		if ((*this).isUpperCase())
 			return byte(*this + ('a' - 'A'));
 		else
 			return *this;
@@ -646,7 +646,7 @@ public class char {
 			if (x.isDigit())
 				digit = x - '0';
 			else if (x.isAlpha())
-				digit = 10 + (x.toLowercase() - 'a');
+				digit = 10 + (x.toLowerCase() - 'a');
 			else
 				return 0, false;
 			if (digit >= radix)
@@ -682,7 +682,7 @@ public class char {
 			if (x.isDigit())
 				digit = x - '0';
 			else if (x.isAlpha())
-				digit = 10 + (x.toLowercase() - 'a');
+				digit = 10 + (x.toLowerCase() - 'a');
 			else
 				return 0, false;
 			if (digit >= radix)
@@ -750,7 +750,7 @@ public class unsigned {
 			if (x.isDigit())
 				digit = x - '0';
 			else if (x.isAlpha())
-				digit = 10 + (x.toLowercase() - 'a');
+				digit = 10 + (x.toLowerCase() - 'a');
 			else
 				return 0, false;
 			if (digit >= radix)
@@ -786,7 +786,7 @@ public class unsigned {
 			if (x.isDigit())
 				digit = x - '0';
 			else if (x.isAlpha())
-				digit = 10 + (x.toLowercase() - 'a');
+				digit = 10 + (x.toLowerCase() - 'a');
 			else
 				return 0, false;
 			if (digit >= radix)

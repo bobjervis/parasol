@@ -46,7 +46,7 @@ string absolutePath(string filename) {
 			GetFullPathName(filename.c_str(), unsigned(len + 1), buffer.c_str(), null);
 		} else
 			buffer.resize(int(len));
-		return buffer.toLower();
+		return buffer.toLowerCase();
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		pointer<byte> f = linux.realpath(filename.c_str(), null);
 		string result(f);

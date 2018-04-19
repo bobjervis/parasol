@@ -268,3 +268,12 @@ class WNDPROC = address;
 
 @Windows("user32.dll", "RegisterClassExA")
 public abstract ATOM RegisterClassEx(ref<WNDCLASSEX> lpwcx);
+
+public class _locale_t = ref<__locale_t>;
+@Windows("msvcrt.dll", "_create_locale")
+public abstract _locale_t _create_locale(int category, pointer<byte> locale);
+
+class __locale_t {
+}
+
+

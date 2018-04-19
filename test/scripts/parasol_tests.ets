@@ -137,6 +137,7 @@ run(filename: monitor_test_7.p)
 run(filename: monitor_test_8.p)
 run(filename: monitor_test_9.p)
 run(filename: monitor_test_10.p)
+run(filename: class_aggregate.p)
 run(filename: placement_delete_test.p)
 run(filename: vector_elem_constructor_test.p)
 run(filename: placement_new_test.p)
@@ -249,6 +250,11 @@ compile(){"pointer<int> ip; var v = ip;" }
 compile(){"class Foo { public static Foo x(-1); Foo(int z){} }"}
 
 compile(){"long i; string formatted(i);"}
+
+compile() { "@Constant int x = 1 << 17;"  }
+compile() { "@Constant int x = 0x1000000 >> 17;"  }
+compile() { "@Constant int x = 0x1000000 >>> 17;"  }
+compile() { "class A { public int[] b; } A a = { b: [ 3, 0 ] };" }
 
 // This was an obscure bug in constructor 
 compile(expect: fail) { "import parasol:time; time.Instant i(4);"  }

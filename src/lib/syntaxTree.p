@@ -1331,7 +1331,7 @@ class Constant extends Node {
 					if (c < 0)
 						break;
 					if (codePointClass(c) == CPC_LETTER)
-						digit = 10 + byte(c).toLowercase() - 'a';
+						digit = 10 + byte(c).toLowerCase() - 'a';
 					else
 						digit = codePointClass(c);
 					v = v * 16 + digit;
@@ -1380,7 +1380,7 @@ class Constant extends Node {
 			break;
 			
 		case	FLOATING_POINT:
-			if (_value.length > 0 && _value.data[_value.length - 1].toLowercase() == 'f')
+			if (_value.length > 0 && _value.data[_value.length - 1].toLowerCase() == 'f')
 				type = compileContext.arena().builtInType(TypeFamily.FLOAT_32);
 			else
 				type = compileContext.arena().builtInType(TypeFamily.FLOAT_64);
@@ -3836,7 +3836,7 @@ int, boolean unescapeParasolCharacter(string str) {
 					if (str[i].isDigit())
 						v += str[i] - '0';
 					else
-						v += 10 + str[i].toLowercase() - 'a';
+						v += 10 + str[i].toLowerCase() - 'a';
 					i++;
 				} while (i < str.length() && str[i].isHexDigit());
 				return v, ++i >= str.length();

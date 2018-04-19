@@ -146,6 +146,9 @@ public abstract int mprotect(address addr, long length, int prot);
 @Linux("libc.so.6", "nanosleep")
 public abstract int nanosleep(ref<timespec> req, ref<timespec> rem);
 
+@Linux("libc.so.6", "newlocale")
+public abstract locale_t newlocale(int categoryMask, pointer<byte> locale, locale_t base);
+
 @Linux("libc.so.6", "open")
 public abstract int open(pointer<byte> pathname, int openFlags);
 

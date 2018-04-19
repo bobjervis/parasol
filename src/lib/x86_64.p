@@ -3148,6 +3148,41 @@ public class X86_64 extends X86_64AssignTemps {
 			break;
 			
 		case	ASSIGN:
+//			printf("Initialize:\n");
+//			node.print(4);
+//			print("!!--\n");
+			markAddressModes(node, compileContext);
+//			print("--\n");
+			sethiUllman(node, compileContext, this);
+//			printf("Initialize:\n");
+//			node.print(4);
+//			print("<<--\n");
+			assignVoidContext(node, compileContext);
+			seq = ref<Binary>(node);
+			if (seq.right().op() == Operator.CALL) {
+				ref<Call> call = ref<Call>(seq.right());
+//				printf("RHS...\n");
+//				call.print(0);
+				if (call.commentary() != null) {
+					generate(call, compileContext);
+					break;
+				}
+				if (call.target() == null) {
+					// This can arise as a result of a compile-time error in the call, such as 'no 
+					// matching definition'.
+					// TODO: Generate the appropriate 'throw' statement.
+					break;
+				} else if (call.category() == CallCategory.CONSTRUCTOR) {
+					call.print(0);
+					assert(false);
+				}
+//				printf("not a special case\n");
+			}
+//			printf("generateInitializers:\n");
+//			seq.print(4);
+			generate(seq, compileContext);
+			break;
+
 		case	INITIALIZE:
 			if (node.type == null) {
 				unfinished(node, "initialize type == null", compileContext);
@@ -3183,9 +3218,6 @@ public class X86_64 extends X86_64AssignTemps {
 				}
 //				printf("not a special case\n");
 			}
-//			printf("Initialize:\n");
-//			node.print(4);
-//			print("-->>\n");
 			switch (seq.type.family()) {
 			case	STRING:
 				node.print(0);
@@ -3207,7 +3239,8 @@ public class X86_64 extends X86_64AssignTemps {
 			case	FUNCTION:
 			case	INTERFACE:
 //				seq.print(0);
-				generate(seq.right(), compileContext);
+				generateOperands(seq, compileContext);
+				f().r.generateSpills(seq, this);
 				inst(X86.MOV, impl(seq.type), seq.left(), seq.right(), compileContext);
 				break;
 				

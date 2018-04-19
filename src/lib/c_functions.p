@@ -204,6 +204,19 @@ public abstract long time(ref<long> t);
 @Linux("libc.so.6", "vsprintf")
 public abstract int vsprintf(pointer<byte> buffer, pointer<byte> format, va_list ap);
 
+@Constant
+public int LC_CTYPE              = 0;
+@Constant
+public int LC_NUMERIC            = 1;
+@Constant
+public int LC_TIME               = 2;
+@Constant
+public int LC_COLLATE            = 3;
+@Constant
+public int LC_MONETARY           = 4;
+@Constant
+public int LC_ALL                = 6;
+
 public class tm {
   int tm_sec;                   /* Seconds.     [0-60] (1 leap second) */
   int tm_min;                   /* Minutes.     [0-59] */

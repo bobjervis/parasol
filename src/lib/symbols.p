@@ -1056,7 +1056,7 @@ class Symbol {
 		if (other._name.length < min)
 			min = other._name.length;
 		for (int i = 0; i < min; i++) {
-			int diff = _name.data[i].toLowercase() - other._name.data[i].toLowercase();
+			int diff = _name.data[i].toLowerCase() - other._name.data[i].toLowerCase();
 			if (diff != 0)
 				return diff;
 		}

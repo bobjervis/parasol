@@ -17,21 +17,102 @@ namespace parasol:international;
 
 import parasol:runtime;
 import native:linux;
+import native:windows;
+import native:C;
+/**
+ * This function gets a Locale object for the named locale. Note that the 
+ * special value "C" (or on Linux "POSIX") gets the C locale. Note also that the special
+ * value "" gets the operating system's notion of the locale of the program.
+ *
+ * If the string is any other, it is treated as a locale name with the following syntax:
+ *
+ *		language[-country][.codepage]
+ *
+ * Language is an ISO 639 language code. Country is an ISO-3166-1 country/region identifier.
+ * Codepage identifies a code page that determines the mapping of 8-bit text data to Unicode.
+ *
+ * Note that operating system-specific transformations are then applied to the string to
+ * the native form of a locale name. For example, on Linux the language, country and codepage are
+ * converted to lower-case and the dash (if present) is changed to an underbar.
+ */
+public ref<Locale> getLocale(string locale) {
+	if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		string localeName;
+
+		if (locale == "C" || locale == "POSIX")
+			localeName = locale;
+		else
+			localeName = locale.toLowerCase();
+
+		int dashLoc = locale.indexOf('-');
+		if (dashLoc >= 0)
+			localeName[dashLoc] = '_';
+		linux.locale_t localeID = linux.newlocale(linux.LC_ALL_MASK, localeName.c_str(), null);
+		if (localeID != null)
+			return new LinuxLocale(localeID);
+	} else if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		string localeName;
+
+		if (locale == "C")
+			localeName = locale;
+		else
+			localeName = locale.toLowerCase();
+
+		int dashLoc = locale.indexOf('-');
+		int dotLoc;
+		if (dashLoc >= 0) {
+			dotLoc = locale.indexOf('.', dashLoc);
+			if (dotLoc < 0)
+				dotLoc = locale.length();
+			for (int i = dashLoc + 1; i < dotLoc; i++)
+				localeName[i] = localeName[i].toUpperCase();
+		} else
+			dotLoc = locale.indexOf('.');
+		if (dotLoc >= 0) {
+			string codepage = locale.substring(dotLoc + 1);
+//			if (codepage == "utf8") {
+//				localeName = localeName.substring(0, dotLoc + 1) + "utf-8";
+//			}
+		}
+		windows._locale_t localeID = windows._create_locale(C.LC_ALL, localeName.c_str());
+		if (localeID != null)
+			return new WindowsLocale(localeID);
+	}
+	return null;
+}
+
 /**
  * This locale gives you the settings that the "C" locale uses.
  */
 public ref<Locale> cLocale() {					// By using the default settings on everything, we get the C Locale.
-	return null;
+	lock (globalState) {
+		if (cLocaleMemory == null)
+			cLocaleMemory = getLocale("C");
+		return cLocaleMemory;
+	}
+}
+/**
+ * This is the default locale of the underlying operating system. 
+ */
+public ref<Locale> defaultLocale() {
+	lock (globalState) {
+		if (defaultLocaleMemory == null)
+			defaultLocaleMemory = getLocale("");
+		return defaultLocaleMemory;
+	}
 }
 
+Monitor globalState;
+
 ref<Locale> cLocaleMemory;
+ref<Locale> defaultLocaleMemory;
 /*
 if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 	//LinuxLocale linuxCLocale("C");
 } else if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 }
  */
-DecimalStyle defaultDecimalStyle; /* = {
+DecimalStyle defaultDecimalStyle;/* = {
 	decimalSeparator: ".",
 	groupSeparator: ",",
 	//grouping: [ 3, 0 ],
@@ -51,12 +132,6 @@ public PaperStyle usLetterSize = {
 	width: 210,
 	height: 279
 };
-/**
- * This is the default locale used by any locale-dependent functions. 
- */
-public ref<Locale> defaultLocale() {
-	return null;
-}
 
 public monitor class Locale {
 	protected ref<DecimalStyle> _decimalStyle;
@@ -81,7 +156,8 @@ public monitor class Locale {
 public class LinuxLocale extends Locale {
 	private linux.locale_t _locale;
 
-	LinuxLocale(string locale) {
+	LinuxLocale(linux.locale_t locale) {
+		_locale = locale;
 	}
 
 	~LinuxLocale() {
@@ -99,7 +175,7 @@ public class LinuxLocale extends Locale {
 		lock (*this) {
 			if (_paperStyle == null) {
 				_paperStyle = new PaperStyle;
-			
+				
 			}
 			return _paperStyle;
 		}
@@ -108,7 +184,12 @@ public class LinuxLocale extends Locale {
 /**
  *
  */
-public class WindowsLocale {
+public class WindowsLocale extends Locale {
+	private windows._locale_t _locale;
+
+	WindowsLocale(windows._locale_t locale) {
+		_locale = locale;
+	}
 }
 
 public class DecimalStyle {

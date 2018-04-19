@@ -475,7 +475,7 @@ class Scanner {
 							if (byte(c).isDigit())
 								value = (value << 4) + unsigned(c - '0');
 							else
-								value = (value << 4) + 10 + unsigned(byte(c).toLowercase() - 'a');
+								value = (value << 4) + 10 + unsigned(byte(c).toLowerCase() - 'a');
 							addCharacter(c);
 						} else {
 							ungetc();

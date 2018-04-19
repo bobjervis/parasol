@@ -784,28 +784,28 @@ class string {
 		return result;
 	}
 	
-	public string toLower() {
+	public string toLowerCase() {
 		if (length() == 0)
 			return *this;
 		string out;
 		pointer<byte> cp = pointer<byte>(&_contents.data);
 		for (int i = 0; i < _contents.length; i++) {
-			if (cp[i].isUppercase())
-				out.append(cp[i].toLowercase());
+			if (cp[i].isUpperCase())
+				out.append(cp[i].toLowerCase());
 			else
 				out.append(cp[i]);
 		}
 		return out;
 	}
 	
-	public string toUpper() {
+	public string toUpperCase() {
 		if (length() == 0)
 			return *this;
 		string out;
 		pointer<byte> cp = pointer<byte>(&_contents.data);
 		for (int i = 0; i < _contents.length; i++) {
-			if (cp[i].isLowercase())
-				out.append(cp[i].toUppercase());
+			if (cp[i].isLowerCase())
+				out.append(cp[i].toUpperCase());
 			else
 				out.append(cp[i]);
 		}
@@ -883,7 +883,7 @@ class string {
 							if (pointer<byte>(&_contents.data)[i].isDigit())
 								v += pointer<byte>(&_contents.data)[i] - '0';
 							else
-								v += 10 + pointer<byte>(&_contents.data)[i].toLowercase() - 'a';
+								v += 10 + pointer<byte>(&_contents.data)[i].toLowerCase() - 'a';
 							i++;
 						} while (i < _contents.length && pointer<byte>(&_contents.data)[i].isHexDigit());
 						output.append(v);
@@ -969,7 +969,7 @@ class string {
 							if (pointer<byte>(&_contents.data)[i].isDigit())
 								v += pointer<byte>(&_contents.data)[i] - '0';
 							else
-								v += 10 + pointer<byte>(&_contents.data)[i].toLowercase() - 'a';
+								v += 10 + pointer<byte>(&_contents.data)[i].toLowerCase() - 'a';
 							i++;
 						} while (i < _contents.length && pointer<byte>(&_contents.data)[i].isHexDigit());
 						// TODO: Implement Unicode escape sequence. 
@@ -1046,7 +1046,7 @@ class string {
 							if (pointer<byte>(&_contents.data)[i].isDigit())
 								v += pointer<byte>(&_contents.data)[i] - '0';
 							else
-								v += 10 + pointer<byte>(&_contents.data)[i].toLowercase() - 'a';
+								v += 10 + pointer<byte>(&_contents.data)[i].toLowerCase() - 'a';
 							i++;
 						} while (i < _contents.length && pointer<byte>(&_contents.data)[i].isHexDigit());
 						output.append(byte(v));
@@ -1538,30 +1538,30 @@ public class substring {
 		return text.substring(_data + first, last - first);
 	}
 	
-	public string toLower() {
+	public string toLowerCase() {
 		if (_data == null)
 			return null;
 		if (_length == 0)
 			return "";
 		string out;
 		for (int i = 0; i < _length; i++) {
-			if (_data[i].isUppercase())
-				out.append(_data[i].toLowercase());
+			if (_data[i].isUpperCase())
+				out.append(_data[i].toLowerCase());
 			else
 				out.append(_data[i]);
 		}
 		return out;
 	}
 	
-	public string toUpper() {
+	public string toUpperCase() {
 		if (_data == null)
 			return null;
 		if (_length == 0)
 			return "";
 		string out;
 		for (int i = 0; i < _length; i++) {
-			if (_data[i].isLowercase())
-				out.append(_data[i].toUppercase());
+			if (_data[i].isLowerCase())
+				out.append(_data[i].toUpperCase());
 			else
 				out.append(_data[i]);
 		}
@@ -1640,7 +1640,7 @@ public class substring {
 							if (_data[i].isDigit())
 								v += _data[i] - '0';
 							else
-								v += 10 + _data[i].toLowercase() - 'a';
+								v += 10 + _data[i].toLowerCase() - 'a';
 							i++;
 						} while (i < _length && _data[i].isHexDigit());
 						output.append(v);
@@ -1728,7 +1728,7 @@ public class substring {
 							if (_data[i].isDigit())
 								v += _data[i] - '0';
 							else
-								v += 10 + _data[i].toLowercase() - 'a';
+								v += 10 + _data[i].toLowerCase() - 'a';
 							i++;
 						} while (i < _length && _data[i].isHexDigit());
 						// TODO: Implement Unicode escape sequence. 
@@ -1807,7 +1807,7 @@ public class substring {
 							if (_data[i].isDigit())
 								v += _data[i] - '0';
 							else
-								v += 10 + _data[i].toLowercase() - 'a';
+								v += 10 + _data[i].toLowerCase() - 'a';
 							i++;
 						} while (i < _length && _data[i].isHexDigit());
 						output.append(byte(v));
