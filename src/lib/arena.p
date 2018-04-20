@@ -148,6 +148,20 @@ public class Arena {
 		context.compileFile();
 	}
 
+	public ref<ImportDirectory> compilePackage(int index, boolean verbose) {
+		if (index >= _importPath.length())
+			return null;
+		CompileContext context(this, _global, verbose);
+
+		// 'import' all the namespaces in the primary import directory (the package directory).
+		// _importPath[0] is the ImportDirectory we need to pull in.
+
+		_importPath[index].compilePackage(&context);
+		createBuiltIns(&context);
+		context.compileFile();
+		return _importPath[index];
+	}
+
 	public void compileOnly(ref<FileStat> mainFile, boolean verbose, ref<CompileContext> compileContext) {
 		mainFile.parseFile(compileContext);
 		if (verbose)

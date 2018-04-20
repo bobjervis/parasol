@@ -1678,7 +1678,6 @@ class Type {
 	}
 	
 	public ref<Type> indexType(ref<CompileContext> compileContext) {
-		assert(false);
 		return null;
 	}
 

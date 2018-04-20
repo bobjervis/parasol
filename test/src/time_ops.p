@@ -54,7 +54,8 @@ printf("%4.4d-%2.2d-%2.2d %d:%2.2d:%2.2d week day %d year day %d\n",
 			idesDate.hour, idesDate.minute, idesDate.second,
 			idesDate.weekDay, idesDate.yearDay);
 
-assert(idesDate.year == -43);
+assert(idesDate.era == 1);
+assert(idesDate.year == 44);
 assert(idesDate.month == 2);
 assert(idesDate.day == 25);
 assert(idesDate.hour == 0);
@@ -73,6 +74,7 @@ printf("%4.4d-%2.2d-%2.2d %d:%2.2d:%2.2d week day %d year day %d\n",
 			sixtiesDate.hour, sixtiesDate.minute, sixtiesDate.second,
 			sixtiesDate.weekDay, sixtiesDate.yearDay);
 
+assert(sixtiesDate.era == 0);
 assert(sixtiesDate.year == 1965);
 assert(sixtiesDate.month == 0);
 assert(sixtiesDate.day == 1);
@@ -92,6 +94,7 @@ printf("%4.4d-%2.2d-%2.2d %d:%2.2d:%2.2d week day %d year day %d\n",
 			seventiesDate.hour, seventiesDate.minute, seventiesDate.second,
 			seventiesDate.weekDay, seventiesDate.yearDay);
 
+assert(seventiesDate.era == 0);
 assert(seventiesDate.year == 1970);
 assert(seventiesDate.month == 1);
 assert(seventiesDate.day == 5);
@@ -111,6 +114,7 @@ printf("%4.4d-%2.2d-%2.2d %d:%2.2d:%2.2d week day %d year day %d\n",
 			recentDate.hour, recentDate.minute, recentDate.second,
 			recentDate.weekDay, recentDate.yearDay);
 
+assert(recentDate.era == 0);
 assert(recentDate.year == 2017);
 assert(recentDate.month == 3);
 assert(recentDate.day == 1);
@@ -130,6 +134,7 @@ printf("%4.4d-%2.2d-%2.2d %d:%2.2d:%2.2d week day %d year day %d\n",
 			futureDate.hour, futureDate.minute, futureDate.second,
 			futureDate.weekDay, futureDate.yearDay);
 
+assert(futureDate.era == 0);
 assert(futureDate.year == 8571);
 assert(futureDate.month == 2);
 assert(futureDate.day == 3);
@@ -151,7 +156,8 @@ printf("%4.4d-%2.2d-%2.2d %d:%2.2d:%2.2d week day %d year day %d\n",
 			iidesDate.hour, iidesDate.minute, iidesDate.second,
 			iidesDate.weekDay, iidesDate.yearDay);
 
-assert(iidesDate.year == -43);
+assert(iidesDate.era == 1);
+assert(iidesDate.year == 44);
 assert(iidesDate.month == 2);
 assert(iidesDate.day == 25);
 assert(iidesDate.hour == 0);
@@ -170,6 +176,7 @@ printf("%4.4d-%2.2d-%2.2d %d:%2.2d:%2.2d week day %d year day %d\n",
 			isixtiesDate.hour, isixtiesDate.minute, isixtiesDate.second,
 			isixtiesDate.weekDay, isixtiesDate.yearDay);
 
+assert(isixtiesDate.era == 0);
 assert(isixtiesDate.year == 1965);
 assert(isixtiesDate.month == 0);
 assert(isixtiesDate.day == 1);
@@ -189,6 +196,7 @@ printf("%4.4d-%2.2d-%2.2d %d:%2.2d:%2.2d week day %d year day %d\n",
 			iseventiesDate.hour, iseventiesDate.minute, iseventiesDate.second,
 			iseventiesDate.weekDay, iseventiesDate.yearDay);
 
+assert(iseventiesDate.era == 0);
 assert(iseventiesDate.year == 1970);
 assert(iseventiesDate.month == 1);
 assert(iseventiesDate.day == 5);
@@ -208,6 +216,7 @@ printf("%4.4d-%2.2d-%2.2d %d:%2.2d:%2.2d week day %d year day %d\n",
 			irecentDate.hour, irecentDate.minute, irecentDate.second,
 			irecentDate.weekDay, irecentDate.yearDay);
 
+assert(irecentDate.era == 0);
 assert(irecentDate.year == 2017);
 assert(irecentDate.month == 3);
 assert(irecentDate.day == 1);
@@ -227,6 +236,7 @@ printf("%4.4d-%2.2d-%2.2d %d:%2.2d:%2.2d week day %d year day %d\n",
 			ifutureDate.hour, ifutureDate.minute, ifutureDate.second,
 			ifutureDate.weekDay, ifutureDate.yearDay);
 
+assert(ifutureDate.era == 0);
 assert(ifutureDate.year == 8571);
 assert(ifutureDate.month == 2);
 assert(ifutureDate.day == 3);

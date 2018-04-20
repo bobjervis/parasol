@@ -15,6 +15,7 @@
  */
 namespace parasol:international;
 
+import parasol:thread;
 import parasol:runtime;
 import native:linux;
 import native:windows;
@@ -102,24 +103,39 @@ public ref<Locale> defaultLocale() {
 	}
 }
 
+public ref<Locale> setDefaultLocale(ref<Locale> locale) {
+	ref<Locale> prior = defaultLocale();
+
+	if (locale != null && prior != locale) {
+		lock (globalState) {
+			defaultLocaleMemory = locale;
+		}
+	}
+	return prior;
+}
+
+public ref<Locale> myLocale() {
+	ref<thread.Thread> th = thread.currentThread();
+
+	if (th.locale != null)
+		return th.locale;
+	else
+		return defaultLocale();
+}
+
 Monitor globalState;
 
 ref<Locale> cLocaleMemory;
 ref<Locale> defaultLocaleMemory;
-/*
-if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-	//LinuxLocale linuxCLocale("C");
-} else if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-}
- */
-DecimalStyle defaultDecimalStyle;/* = {
+
+DecimalStyle defaultDecimalStyle; /* = {
 	decimalSeparator: ".",
 	groupSeparator: ",",
-	//grouping: [ 3, 0 ],
+	grouping: [ byte(3), byte(0) ],
 	negativeSign: "-",
 	positiveSign: "+",
 	zeroDigit: '0',
-};*/
+}; */
 /**
  * Use the ISO A4 paper size as the default.
  */

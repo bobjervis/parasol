@@ -82,6 +82,7 @@ run(filename: string_cons_add_test.p)
 run(filename: map_ops.p)
 run(filename: map_ops_2.p)
 run(filename: time_ops.p)
+run(filename: date_format_test.p)
 run(filename: gen_header.p)
 run(filename: abstract_call_test.p)
 run(filename: class_ops.p)
@@ -250,6 +251,9 @@ compile(){"pointer<int> ip; var v = ip;" }
 compile(){"class Foo { public static Foo x(-1); Foo(int z){} }"}
 
 compile(){"long i; string formatted(i);"}
+
+// a bug in type checking would assert for some invalid aggregate types in the loop
+compile(expect: fail) { "string s; for (i in s) ;" }
 
 compile() { "@Constant int x = 1 << 17;"  }
 compile() { "@Constant int x = 0x1000000 >> 17;"  }

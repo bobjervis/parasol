@@ -37,6 +37,7 @@ import native:linux;
 import native:C;
 import parasol:exception.HardwareException;
 import parasol:runtime;
+import parasol:international.Locale;
 
 Thread.init();
 
@@ -90,6 +91,7 @@ public void suspendAllOtherThreads() {
 }
 
 public class Thread {
+	public ref<Locale> locale;
 	private string _name;
 	private HANDLE _threadHandle;
 	private linux.pthread_t _threadId;

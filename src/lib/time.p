@@ -44,7 +44,7 @@ private int WIN_TICKS_PER_SECOND = NANOS_PER_SECOND / NANOS_PER_WIN_TICK;
  */
 public class Time {
 	long _value;
-	
+
 	public Time() {}
 	
 	public Time(long value) {
@@ -234,6 +234,8 @@ public class Instant {
 public class Clock {
 }
 
+public ProlepticGregorian ISO8601;
+
 public ProlepticGregorianTimeZone UTC;
 public LocalTimeZone localTimeZone;
 
@@ -302,7 +304,10 @@ class ProlepticGregorianTimeZone extends TimeZone {
 		C.time_t t;
 		C.tm tm;
 
-		tm.tm_year = int(date.year) - 1900;
+		if (date.era == 1)
+			tm.tm_year = -(int(date.year) + 1899);
+		else
+			tm.tm_year = int(date.year) - 1900;
 		tm.tm_mon = date.month;
 		tm.tm_mday = date.day;
 		tm.tm_hour = date.hour;
@@ -429,6 +434,7 @@ public enum DateField {
  * limited to the calendar supported by the C time functions.
  */
 public class Date {
+	public int era;
 	public long year;
 	public int month;
 	public int day;
@@ -470,6 +476,12 @@ public class Date {
 	public Date() {
 	}
 
+	public string format(string pattern) {
+		Formatter f(pattern);
+
+		return f.format(this);
+	}
+
 	public void utc(Time t) {
 		UTC.toDate(this, t);
 	}
@@ -487,6 +499,10 @@ public class Date {
 			throw IllegalArgumentException(msg);
 		}
 		year = data.tm_year + 1900;
+		if (year <= 0) {
+			era = 1;
+			year = 1 - year;
+		}
 		month = data.tm_mon;
 		day = data.tm_mday;
 		hour = data.tm_hour;
@@ -506,6 +522,10 @@ public class Date {
 			throw IllegalArgumentException(msg);
 		}
 		year = data.tm_year + 1900;
+		if (year <= 0) {
+			era = 1;
+			year = 1 - year;
+		}
 		month = data.tm_mon;
 		day = data.tm_mday;
 		hour = data.tm_hour;
@@ -517,9 +537,262 @@ public class Date {
 }
 
 public class Formatter {
-	public Calendar calendar;
-	public ref<international.DecimalStyle> decimalStyle;
+	@Constant
+	static unsigned MAX_LETTER_COUNT = 255;
+
+	static FormatCodes[] formatCodes = [
+		'd':	FormatCodes.DAY_OF_MONTH,
+		'H':	FormatCodes.HOUR_24,
+		'M':	FormatCodes.MONTH,
+		'm':	FormatCodes.MINUTE,
+		'p':	FormatCodes.MODIFY_PAD,
+		'S':	FormatCodes.FRACTION_OF_SECOND,
+		's':	FormatCodes.SECOND,
+		'y':	FormatCodes.YEAR_FULL,
+	];
+	/**
+	 * indexed by letter count, the nanoseconds value is divided by the number here.
+	 */
+	static int[] fractionTable = [
+		1000000000,
+		100000000,
+		10000000,
+		1000000,
+		100000,
+		10000,
+		1000,
+		100,
+		10,
+		1,
+	];
+
+	public ref<TimeZone> timeZone;
 	public ref<international.Locale> locale;
+	public ref<Calendar> calendar;
+
+	enum FormatCodes {
+		LITERAL_1,							// followed by a literal byte of data.
+		MODIFY_PAD,							// Modify padding on next field; Followed by a byte containing pad width.
+		YEAR_2,								// 2-digit year; no additional data.
+		YEAR_FULL,							// full year (4 digit); followed by a byte containing pad width.
+		MONTH,								// month (1-12); followed by a byte containing pad width.
+		DAY_OF_MONTH,						// day of the month (1-31); followed by a byte containing pad width.
+		HOUR_24,							// 24 hour (0-23); followed by a byte containing pad width.
+		MINUTE,								// minute (0-59); followed by a byte containing pad width.
+		SECOND,								// second (0-59); followed by a byte containing pad width.
+		FRACTION_OF_SECOND,					// fraction of a second; followed by a byte containing pad width - maximum 9.
+	}
+
+	byte[] _pattern;
+
+	public Formatter(string pattern) {
+		byte lastLetter;
+		int letterCount;
+
+		// parse the pattern
+		for (int i = 0; i < pattern.length(); i++) {
+			if (lastLetter != pattern[i] && letterCount > 0) {
+				if (!recordLetter(lastLetter, letterCount))
+					throw IllegalArgumentException(pattern);
+				letterCount = 0;
+			}
+			if (pattern[i].isAlpha()) {
+				lastLetter = pattern[i];
+				letterCount++;
+			} else if (pattern[i] == '\'') {
+				i++;
+				if (i >= pattern.length())
+					throw IllegalArgumentException(pattern);
+				_pattern.append(byte(FormatCodes.LITERAL_1));
+				_pattern.append(pattern[i]);				
+			} else {
+				_pattern.append(byte(FormatCodes.LITERAL_1));
+				_pattern.append(pattern[i]);
+			}
+		}
+		if (letterCount > 0 && !recordLetter(lastLetter, letterCount))
+			throw IllegalArgumentException(pattern);
+	}
+
+	private boolean recordLetter(byte lastLetter, int letterCount) {
+		if (unsigned(letterCount) > MAX_LETTER_COUNT)
+			return false;
+			
+		switch (lastLetter) {
+		case 'y':
+			if (letterCount == 2)
+				_pattern.append(byte(FormatCodes.YEAR_2));
+			else {
+				_pattern.append(byte(FormatCodes.YEAR_FULL));
+				_pattern.append(byte(letterCount));
+			}
+			break;
+
+		case 'd':
+		case 'H':
+		case 'M':
+		case 'm':
+		case 'p':
+		case 's':
+			_pattern.append(byte(formatCodes[lastLetter]));
+			_pattern.append(byte(letterCount));
+			break;
+
+		case 'S':
+			if (letterCount > 9)
+				return false;
+			_pattern.append(byte(formatCodes[lastLetter]));
+			_pattern.append(byte(letterCount));
+			break;
+
+		default:
+			return false;
+		}
+		return true;
+	}
+
+	public string format(ref<Date> input) {
+		ref<TimeZone> tz;
+		ref<international.Locale> lcl;
+		ref<Calendar> cal;
+
+		if (timeZone != null)
+			tz = timeZone;
+		else
+			tz = &localTimeZone;
+		if (locale != null)
+			lcl = locale;
+		else
+			lcl = international.myLocale();
+		if (calendar != null)
+			cal = calendar;
+		else
+			cal = &ISO8601;
+		return format(input, tz, lcl, cal);
+	}
+
+	public string format(ref<Date> input, ref<TimeZone> timeZone) {
+		ref<international.Locale> lcl;
+		ref<Calendar> cal;
+
+		if (locale != null)
+			lcl = locale;
+		else
+			lcl = international.myLocale();
+		if (calendar != null)
+			cal = calendar;
+		else
+			cal = &ISO8601;
+		return format(input, timeZone, lcl, cal);
+	}
+
+	public string format(ref<Date> input, ref<international.Locale> locale) {
+		ref<TimeZone> tz;
+		ref<Calendar> cal;
+
+		if (timeZone != null)
+			tz = timeZone;
+		else
+			tz = &localTimeZone;
+		if (calendar != null)
+			cal = calendar;
+		else
+			cal = &ISO8601;
+		return format(input, tz, locale, cal);
+	}
+
+	public string format(ref<Date> input, ref<TimeZone> timeZone, ref<international.Locale> locale, ref<Calendar> calendar) {
+		string output;
+		int modifyPad;
+
+		for (i in _pattern) {
+			switch (FormatCodes(_pattern[i])) {
+			case	LITERAL_1:
+				i++;
+				output.append(_pattern[i]);
+				break;
+
+			case	MODIFY_PAD:
+				i++;
+				modifyPad = _pattern[i];
+				break;
+				
+			case	YEAR_2:
+				output.printf("%2.2d", input.year % 100);
+				break;
+
+			case	YEAR_FULL:
+				i++;
+				int width = _pattern[i];
+				if (modifyPad > 0)
+					output.printf("%*d", modifyPad, input.year);
+				else
+					output.printf("%*.*d", width, width, input.year);
+				break;
+
+			case	MONTH:
+				i++;
+				width = _pattern[i];
+				if (modifyPad > 0)
+					output.printf("%*d", modifyPad, input.month + 1);
+				else
+					output.printf("%*.*d", width, width, input.month + 1);
+				break;
+
+			case	DAY_OF_MONTH:
+				i++;
+				width = _pattern[i];
+				if (modifyPad > 0)
+					output.printf("%*d", modifyPad, input.day);
+				else
+					output.printf("%*.*d", width, width, input.day);
+				break;
+
+			case	HOUR_24:
+				i++;
+				width = _pattern[i];
+				if (modifyPad > 0)
+					output.printf("%*d", modifyPad, input.hour);
+				else
+					output.printf("%*.*d", width, width, input.hour);
+				break;
+
+			case	MINUTE:
+				i++;
+				width = _pattern[i];
+				if (modifyPad > 0)
+					output.printf("%*d", modifyPad, input.minute);
+				else
+					output.printf("%*.*d", width, width, input.minute);
+				break;
+
+			case	SECOND:
+				i++;
+				width = _pattern[i];
+				if (modifyPad > 0)
+					output.printf("%*d", modifyPad, input.second);
+				else
+					output.printf("%*.*d", width, width, input.second);
+				break;
+
+			case	FRACTION_OF_SECOND:
+				i++;
+				width = _pattern[i];
+				long frac = input.nanosecond / fractionTable[width];
+				if (modifyPad > 0)
+					output.printf("%*d", modifyPad, frac);
+				else
+					output.printf("%*.*d", width, width, frac);
+				break;
+
+			default:
+				assert(false);
+			}
+		}
+		return output;
+	}
+
+	public boolean parse(string input, ref<Date> output) {
+		return false;
+	}
 }
-
-

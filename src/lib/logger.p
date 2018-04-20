@@ -24,7 +24,7 @@ import parasol:time;
 // Message levels are positive to indicate an informative, but not alarming
 // condition or event, while negative to indicate a cause for concern.
 // Log filtering is done on the magnitude of the level, so that high level
-// positive messages can be logged without artificially flaggin them as FATAL or
+// positive messages can be logged without artificially flagging them as FATAL or
 // ERROR. Log level zero implies that the level is taken from the parent.
 
 @Constant
@@ -52,8 +52,10 @@ public monitor class Logger {
 		return result;
 	}
 
-	public int setParent(ref<Logger> parent) {
+	public ref<Logger> setParent(ref<Logger> parent) {
+		ref<Logger> old = _parent;
 		_parent = parent;
+		return old;
 	}
 
 	public ref<LogHandler> setDestination(ref<LogHandler> newHandler) {
@@ -147,8 +149,20 @@ public class LogEvent {
 }
 
 public class ConsoleLogHandler extends LogHandler {
+	ref<time.Formatter> _formatter;
+
+	ConsoleLogHandler() {
+		_formatter = new time.Formatter("yyyy/MM/dd HH:mm:ss.SSS");
+	}
+
 	public void processEvent(ref<LogEvent> logEvent) {
-		time.Date d;
+		time.Date d(logEvent.when, &time.UTC);
+		string logTime = _formatter.format(d);				// Note: if the format includes locale-specific stuff,
+															// like a named time zone or month, we would have to add
+															// some arguments to the format call.
+		string label = label(level);
+
+		printf("%s %d %s %s\n", logTime, threadId, label, msg);
 	}
 }
 
@@ -180,6 +194,33 @@ public monitor class LogHandler {
 	}
 
 	public abstract void processEvent(ref<LogEvent> logEvent);
+
+	public string label(int level) {
+		switch (level) {
+		case 1:
+			return "DEBUG";
+
+		case 2:
+			return "INFO";
+
+		case -3:
+			return "WARN";
+
+		case -4:
+			return "ERROR";
+
+		case -5:
+			return "FATAL";
+
+		default:
+			string s;
+			if (level >= 0)
+				s.printf("NOTE-%d", level);
+			else
+				s.printf("ALARM%d", level);
+			return s;
+		}
+	}
 }
 /**
  * writeWrapper

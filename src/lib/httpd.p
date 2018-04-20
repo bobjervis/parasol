@@ -572,7 +572,7 @@ public class HttpParser {
 			if (!fieldValue())
 				return false;
 			// header names are case-insensitive
-			name = name.toLower();
+			name = name.toLowerCase();
 			// The fieldValue() method consumed the CRLF, so we are ready to start parsing the next header
 			if (_request.headers.contains(name)) {
 				string s = _request.headers[name];
@@ -694,7 +694,7 @@ public class HttpParser {
 			if (!fieldValue())
 				return false;
 			// header names are case-insensitive
-			name = name.toLower();
+			name = name.toLowerCase();
 			// The fieldValue() method consumed the CRLF, so we are ready to start parsing the next header
 			if (response.headers.contains(name)) {
 				string s = response.headers[name];

@@ -1,4 +1,3 @@
-
 /*
    Copyright 2015 Robert Jervis
 
@@ -58,7 +57,7 @@ class ParasolCommand extends process.Command {
 					);
 		importPathArgument = stringArgument('I', "importPath", 
 					"Sets the path of directories like the --explicit option, " +
-					"but the directories ^/lib and ^/alys/lib' are appended to " +
+					"but the directory ^/src/lib is appended to " +
 					"those specified with this option.");
 		verboseArgument = booleanArgument('v', null,
 					"Enables verbose output.");
