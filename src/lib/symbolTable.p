@@ -1011,6 +1011,8 @@ class UnitScope extends Scope {
 		ref<Scope> namespaceScope = nm.symbols();
 		for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
 			ref<Symbol> sym = i.get();
+			if (sym.visibility() == Operator.PRIVATE)
+				continue;
 			if (sym.class == PlainSymbol) {
 				ref<Symbol> n = namespaceScope.lookup(sym.name(), compileContext);
 				if (n != null) {

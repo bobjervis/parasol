@@ -179,6 +179,18 @@ public class Reader {
 		return "", false;
 	}
 
+	public long read(address buffer, long length) {
+		pointer<byte> input = pointer<byte>(buffer);
+
+		for (int i = 0; i < length; i++) {
+			int c = _read();
+			if (c == EOF)
+				return i;
+			input[i] = byte(c);
+		}
+		return length;
+	}
+
 	public string readLine() {
 		string line;
 

@@ -24,3 +24,6 @@ class foo {
 		bar = 3;
 	}
 }
+
+private int should_not_duplicate = 7;
+

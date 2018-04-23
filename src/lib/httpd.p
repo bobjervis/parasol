@@ -38,10 +38,16 @@ import parasol:net;
  *  future.
  */
 public class HttpServer {
+	public char port;									// default to 80
+	public char sslPort;								// default to 443
+	public string cipherList;
+	public string certificatesFile;
+	public string privateKeyFile;
+	public string dhParamsFile;
 	private string _hostname;
-	private char _port;								// default to 80
-	private char _sslPort;								// default to 443
-	private string _cipherList;
+														// NOte: one will be non-zero is the server has started
+	private char _port;									// actual port used, if not zero
+	private char _sslPort;								// actual port used, if not zero
 	private ref<ThreadPool<int>> _requestThreads;
 	private PathHandler[] _handlers;
 	private ref<Thread> _httpsThread;
@@ -93,18 +99,6 @@ public class HttpServer {
 	public void unsecureService(string absPath, ref<HttpService> handler) {
 		_handlers.append(PathHandler(absPath, handler, ServiceClass.UNSECURED_ONLY));
 	}
-	
-	public void setPort(char newPort) {
-		_port = newPort;
-	}
-
-	public void setSslPort(char newPort) {
-		_sslPort = newPort;
-	}
-
-	public void setCipherList(string cipherList) {
-		_cipherList = cipherList;
-	}
 
 	public void start() {
 		start(ServerScope.INTERNET);
@@ -112,6 +106,8 @@ public class HttpServer {
 
 	public void start(ServerScope scope) {
 		_serverScope = scope;
+		_port = port;
+		_sslPort = sslPort;
 		if (_port > 0) {
 			_httpThread = new Thread();
 			_httpThread.start(startHttpEntry, this);
@@ -142,7 +138,7 @@ public class HttpServer {
 	}
 
 	private void startHttp(ServerScope scope, char port, Encryption encryption) {
-		ref<Socket> socket = Socket.create(encryption, _cipherList, true);
+		ref<Socket> socket = Socket.create(encryption, cipherList, certificatesFile, privateKeyFile, dhParamsFile);
 		if (socket.bind(port, scope)) {
 			if (!socket.listen()) {
 				printf("listen failed\n");
@@ -188,10 +184,6 @@ public class HttpServer {
 		response.error(404);
 //		printf("done.\n");
 		return false;
-	}
-	
-	public char port() {
-		return _port;
 	}
 }
 
@@ -875,7 +867,7 @@ public class StaticContentService extends HttpService {
 	}
 
 	public boolean processRequest(ref<HttpRequest> request, ref<HttpResponse> response) {
-		printf("Static Content! fetching %s / %s\n", _filename, request.serviceResource);
+//		printf("Static Content! fetching %s / %s\n", _filename, request.serviceResource);
 		if (request.method != HttpRequest.Method.GET) {
 			response.error(501);
 			return false;

@@ -434,6 +434,9 @@ class Overload extends Symbol {
 	public void merge(ref<Overload> unitDeclarations, ref<CompileContext> compileContext) {
 		for (int i = 0; i < unitDeclarations._instances.length(); i++) {
 			ref<OverloadInstance> s = unitDeclarations._instances[i];
+//			TODO: Uncommenting these next lines causes an exception. Also, this code should check for duplicates.
+//			if (s.visibility() == Operator.PRIVATE)
+//				continue;
 			_instances.append(s, compileContext.pool());
 		}
 	}

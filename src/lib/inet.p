@@ -97,10 +97,10 @@ private SocketInit _init;
 
 public class Socket {
 	public static ref<Socket> create() {
-		return create(Encryption.NONE, null, false /* this value doesn't matter for no encryption */);
+		return create(Encryption.NONE, null, null, null, null);
 	}
 
-	public static ref<Socket> create(Encryption encryption, string cipherList, boolean forAccept) {
+	public static ref<Socket> create(Encryption encryption, string cipherList, string certificatesFile, string privateKeyFile, string dhParamsFile) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			lock (_init) {
 				if (!_done) {
@@ -121,7 +121,7 @@ public class Socket {
 		if (encryption == Encryption.NONE)
 			socket = new PlainSocket();
 		else
-			socket = new SSLSocket(encryption, cipherList, forAccept);
+			socket = new SSLSocket(encryption, cipherList, certificatesFile, privateKeyFile, dhParamsFile);
 		return socket;
 	}
 
@@ -469,7 +469,7 @@ private InitSSL _init_ssl;
 class SSLSocket extends Socket {
 	private ref<ssl.SSL_CTX> _context;
 
-	SSLSocket(Encryption encryption, string cipherList, boolean forAccept) {
+	SSLSocket(Encryption encryption, string cipherList, string certificatesFile, string privateKeyFile, string dhParamsFile) {
 		lock (_init_ssl) {
 			if (!_done) {
 				_done = true;
@@ -503,15 +503,18 @@ class SSLSocket extends Socket {
 			}
 		}
 		ssl.SSL_CTX_set_options(_context, ssl.SSL_OP_NO_SSLv2);
-		if (forAccept) {
+		if (certificatesFile != null) {
 	//		printf("Loading self-signed certificate.\n");
-			ssl.SSL_CTX_use_certificate_file(_context, "test/certificates/self-signed.pem".c_str(), ssl.SSL_FILETYPE_PEM);
+			ssl.SSL_CTX_use_certificate_file(_context, certificatesFile.c_str(), ssl.SSL_FILETYPE_PEM);
 			ssl.SSL_CTX_set_client_CA_list(_context, ssl.SSL_load_client_CA_file("/etc/ssl/certs/ca-certificates.crt".c_str()));
-			ssl.SSL_CTX_use_PrivateKey_file(_context, "test/certificates/self-signed.pem".c_str(), ssl.SSL_FILETYPE_PEM);
+		}
+		if (privateKeyFile != null)
+			ssl.SSL_CTX_use_PrivateKey_file(_context, privateKeyFile.c_str(), ssl.SSL_FILETYPE_PEM);
+		if (dhParamsFile != null) {
 	//		printf("Loading DH parameters\n");
-			ref<C.FILE> fp = C.fopen("test/certificates/dhparams.pem".c_str(), "r".c_str());
+			ref<C.FILE> fp = C.fopen(dhParamsFile.c_str(), "r".c_str());
 			if (fp == null)
-				printf("Cannot open 'test/certificates/dhparams.pem' file\n");
+				printf("Cannot open '%s' file\n", dhParamsFile);
 			else {
 				ref<ssl.DH> dh = ssl.PEM_read_DHparams(fp, null, null, "jrirba".c_str());
 				C.fclose(fp);

@@ -20,6 +20,7 @@ import parasol:process;
 import parasol:runtime;
 import parasol:thread;
 import parasol:time;
+import parasol:types.Queue;
 
 // Message levels are positive to indicate an informative, but not alarming
 // condition or event, while negative to indicate a cause for concern.
@@ -38,24 +39,94 @@ public int INFO = 2;
 @Constant
 public int DEBUG = 1;
 
+Monitor globalState;
+
+ref<Logger>[string] loggerMap;
+/**
+ * Get a named logger.
+ *
+ * Loggers form a tree, with a single, un-named logger designated as the Root Logger.
+ * All other loggers have names that consist of non-empty text sequences separated by periods.
+ *
+ * @param path This function fetches the logger named by the path argument. If the path is null,
+ * then the Root Logger is returned.
+ *
+ * @return The function returns the named logger, creating Logger objects as needed to complete the
+ * name hierarchy of the path. If the path either begins with or ends with a period, contains two consecutive
+ * periods or is empty (""), the function returns null.
+ *
+ * @threading This function is thread-safe.
+ */
+public ref<Logger> getLogger(string path) {
+	ref<Logger> result;
+
+	if (path == null)
+		return &rootLogger;
+	if (path.length() == 0)
+		return null;
+	string[] parts = path.split('.');
+	for (i in parts)
+		if (parts[i].length() == 0)
+			return null;
+	lock (globalState) {
+		result = loggerMap[path];
+		if (result != null)
+			return result;
+		ref<LogChain> current = &chainRoot;
+		for (i in parts) {
+			ref<LogChain> child = current.children[parts[i]];
+			if (child == null) {
+				child = new LogChain;
+				child.thisLogger = new Logger(current.thisLogger, null);
+				string newPath = parts[0];
+				for (int j = 1; j <= i; j++) {
+					newPath.append('.');
+					newPath.append(parts[j]);
+				}
+				loggerMap[newPath] = child.thisLogger;
+				current.children[parts[i]] = child;
+			}
+			current = child;
+		}
+		return current.thisLogger;
+	}
+}
+
+ConsoleLogHandler defaultHandler;
+Logger rootLogger(null, &defaultHandler);
+LogChain chainRoot = {
+	thisLogger: &rootLogger
+};
+/**
+ * The Logger class is designed to provide a convenient way for programmers to decorate a program
+ * with output statements that can be configured at run time to write to designated files, remote servers or the
+ * program's standard output. 
+ *
+ * The various output methods, like 'debug' or 'info', are all thread-safe. The actual writing to any output
+ * is performed by a separate thread, so the logging thread is minimally delayed when logging.
+ *
+ * The parent-child relationship among Logger objects is determined at the time that the Logger is created and
+ * is entirely based on the name hierarchy used in the program.
+ */
 public monitor class Logger {
 	private int _level;
 	private ref<Logger> _parent;
 	private ref<LogHandler> _destination;
 
-	Logger() {
+	Logger(ref<Logger> parent, ref<LogHandler> destination) {
+		_parent = parent;
+		_destination = destination;
 	}
 
 	public int setLevel(int level) {
 		int result = _level;
-		_level = math.abs(level);
+		if (level != int.MIN_VALUE)
+			_level = math.abs(level);
 		return result;
 	}
 
-	public ref<Logger> setParent(ref<Logger> parent) {
-		ref<Logger> old = _parent;
-		_parent = parent;
-		return old;
+	public ref<Logger> parent() {
+		return _parent;
 	}
 
 	public ref<LogHandler> setDestination(ref<LogHandler> newHandler) {
@@ -65,36 +136,52 @@ public monitor class Logger {
 	}
 
 	public void info(string msg) {
+		if (msg == null)
+			return;
 		if (needToCheck(INFO))
 			queueEvent(runtime.returnAddress(), INFO, msg);
 	}
 
 	public void debug(string msg) {
+		if (msg == null)
+			return;
 		if (needToCheck(DEBUG))
 			queueEvent(runtime.returnAddress(), DEBUG, msg);
 	}
 
 	public void warn(string msg) {
+		if (msg == null)
+			return;
 		if (needToCheck(WARN))
 			queueEvent(runtime.returnAddress(), WARN, msg);
 	}
 
 	public  void error(string msg) {
+		if (msg == null)
+			return;
 		if (needToCheck(ERROR))
 			queueEvent(runtime.returnAddress(), ERROR, msg);
 	}
 
 	public void fatal(string msg) {
+		if (msg == null)
+			return;
 		if (needToCheck(FATAL))
 			queueEvent(runtime.returnAddress(), FATAL, msg);
 	}
 
 	public void log(int level, string msg) {
+		if (level < -5 || level > 5)
+			throw IllegalArgumentException(string(level));
+		if (msg == null)
+			return;
 		if (needToCheck(level))
 			queueEvent(runtime.returnAddress(), level, msg);
 	}
 
 	public void format(int level, string format, var... arguments) {
+		if (level < -5 || level > 5)
+			throw IllegalArgumentException(string(level));
 		if (needToCheck(level)) {
 			string msg;
 
@@ -107,6 +194,8 @@ public monitor class Logger {
 		if (_level == 0) {
 			if (_parent != null)
 				return _parent.needToCheck(level);
+			else // this is the Root Logger and it has no filter, so allow all LogEvent's to print.
+				return true;
 		} else if (math.abs(level) >= _level)
 			return true;
 		return false;
@@ -121,21 +210,28 @@ public monitor class Logger {
 			level: level, 
 			msg: msg, 
 			returnAddress: returnAddress,
-			threadId: thread.getCurrentThreadId(),		// The thread may disappear before we write the message,
-														// so remember the thread id, not the Thread object.
+			threadId: thread.currentThread().id(),	// The thread may disappear before we write the message,
+													// so remember the thread id, not the Thread object.
 		};
 
 		ref<Logger> context = this;
 		do {
-			if (context._destination != null)
-				context._destination.enqueue(&logEvent);
-			context = context._parent;
+			lock (*context) {
+				if (_destination != null)
+					_destination.enqueue(&logEvent);
+				context = _parent;
+			}
 		} while (context != null);
 	}
 }
 
-public class LogEvent {
-	Time when;
+class LogChain {
+	ref<Logger> thisLogger;
+	ref<LogChain>[string] children;
+};
+
+class LogEvent {
+	time.Time when;
 	int level;
 	string msg;
 	address returnAddress;
@@ -151,24 +247,32 @@ public class LogEvent {
 public class ConsoleLogHandler extends LogHandler {
 	ref<time.Formatter> _formatter;
 
-	ConsoleLogHandler() {
-		_formatter = new time.Formatter("yyyy/MM/dd HH:mm:ss.SSS");
-	}
-
 	public void processEvent(ref<LogEvent> logEvent) {
+		if (_formatter == null)
+			_formatter = new time.Formatter("yyyy/MM/dd HH:mm:ss.SSS");
 		time.Date d(logEvent.when, &time.UTC);
-		string logTime = _formatter.format(d);				// Note: if the format includes locale-specific stuff,
+		string logTime = _formatter.format(&d);				// Note: if the format includes locale-specific stuff,
 															// like a named time zone or month, we would have to add
 															// some arguments to the format call.
-		string label = label(level);
+		string lab = label(logEvent.level);
 
-		printf("%s %d %s %s\n", logTime, threadId, label, msg);
+		printf("%s %d %s %s\n", logTime, logEvent.threadId, lab, logEvent.msg);
+		process.stdout.flush();
 	}
 }
 
 public monitor class LogHandler {
-	ref<Thread> _writeThread;
+	ref<thread.Thread> _writeThread;
 	private Queue<ref<LogEvent>> _events;
+
+	~LogHandler() {
+		if (_writeThread != null) {
+			LogEvent terminator;
+
+			enqueue(&terminator);
+			_writeThread.join();
+		}
+	}
 
 	public void close() {
 		if (_writeThread != null) {
@@ -179,16 +283,16 @@ public monitor class LogHandler {
 		}
 	}
 
-	public void enqueue(ref<LogEvent> logEvent) {
+	void enqueue(ref<LogEvent> logEvent) {
 		_events.enqueue(logEvent.clone());
 		if (_writeThread == null) {
-			_writeThread = new Thread("LogWriter");
+			_writeThread = new thread.Thread("LogWriter");
 			_writeThread.start(writeWrapper, this);
 		}
 		notify();
 	}
 
-	public ref<LogEvent> dequeue() {
+	ref<LogEvent> dequeue() {
 		wait();
 		return _events.dequeue();
 	}
@@ -211,28 +315,26 @@ public monitor class LogHandler {
 
 		case -5:
 			return "FATAL";
-
-		default:
-			string s;
-			if (level >= 0)
-				s.printf("NOTE-%d", level);
-			else
-				s.printf("ALARM%d", level);
-			return s;
 		}
+		string s;
+		if (level >= 0)
+			s.printf("NOTICE %d", level);
+		else
+			s.printf("CAUTION %d", level);
+		return s;
 	}
 }
 /**
  * writeWrapper
  *
- *	This method is the main loop of the WebSocket writer thread. Once started, it remains running waiting for
- *	some WebSocket to write some data.
+ *	This method is the main loop of the log writer thread. Once started, it remains running waiting for
+ *	any thread to write some data.
  */
 void writeWrapper(address arg) {
 	ref<LogHandler> handler = ref<LogHandler>(arg);
 	for (;;) {
 		ref<LogEvent> logEvent = handler.dequeue();
-		if (logEvent.msg != null && logEvent.format != null) {
+		if (logEvent.msg == null) {
 			delete logEvent;
 			break;
 		} else {

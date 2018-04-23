@@ -23,7 +23,7 @@ import parasol:time;
 import parasol:pxi;
 import parasol:runtime;
 
-private boolean listAllTests = false;
+public boolean listAllTests = false;
 
 int launch(string[] args) {
 	ref<ref<script.Atom>[]>[] scripts;

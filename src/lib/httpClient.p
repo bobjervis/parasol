@@ -178,7 +178,7 @@ public class HttpClient {
 			}
 			encryption = net.Encryption.NONE;
 		}
-		ref<net.Socket> socket = net.Socket.create(encryption, _cipherList, false);
+		ref<net.Socket> socket = net.Socket.create(encryption, _cipherList, null, null, null);
 		if (socket == null)
 			return false, 0;
 		ref<net.Connection> connection;

@@ -22,3 +22,10 @@ int visibleFunc() {
 int value = 6;
 
 foo baz;
+
+int get_possible_dup() {
+	return should_not_duplicate;
+}
+
+private int should_not_duplicate = 5;
+

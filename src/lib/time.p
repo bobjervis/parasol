@@ -620,13 +620,10 @@ public class Formatter {
 			
 		switch (lastLetter) {
 		case 'y':
-			if (letterCount == 2)
+			if (letterCount == 2) {
 				_pattern.append(byte(FormatCodes.YEAR_2));
-			else {
-				_pattern.append(byte(FormatCodes.YEAR_FULL));
-				_pattern.append(byte(letterCount));
+				break;
 			}
-			break;
 
 		case 'd':
 		case 'H':

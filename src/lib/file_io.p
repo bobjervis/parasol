@@ -29,13 +29,13 @@ public void setProcessStreams() {
 
 //	print("setProcessStreams\n");
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-		process.stdin = new TextFileReader(File(0));
-		process.stdout = new TextFileWriter(File(1));
-		process.stderr = new TextFileWriter(File(2));
+		process.stdin = new TextFileReader(File(0), true);
+		process.stdout = new TextFileWriter(File(1), true);
+		process.stderr = new TextFileWriter(File(2), true);
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-		process.stdin = new FileReader(File(0));
-		process.stdout = new FileWriter(File(1));
-		process.stderr = new FileWriter(File(2));
+		process.stdin = new FileReader(File(0), true);
+		process.stdout = new FileWriter(File(1), true);
+		process.stderr = new FileWriter(File(2), true);
 		if (linux.isatty(0) == 1)
 			stdinIsATTY = true;
 		if (linux.isatty(1) == 1)
@@ -78,6 +78,32 @@ public class File {
 
 	public File() {
 		_fd = -1;
+	}
+
+	public ref<Reader> getBinaryReader() {
+		return new BinaryFileReader(*this, false);
+	}
+
+	public ref<Reader> getTextReader() {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+			return new TextFileReader(*this, false);
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+			return new BinaryFileReader(*this, false);
+		} else
+			return null;
+	}
+
+	public ref<Writer> getBinaryWriter() {
+		return new BinaryFileWriter(*this, false);
+	}
+
+	public ref<Writer> getTextWriter() {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+			return new TextFileWriter(*this, false);
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+			return new BinaryFileWriter(*this, false);
+		} else
+			return null;
 	}
 
 	public boolean open(string filename) {
@@ -157,7 +183,7 @@ public class File {
 			}
 			openFlags |= linux.O_CREATE|linux.O_TRUNC;
 		
-			_fd = linux.open(filename.c_str(), openFlags);
+			_fd = linux.open(filename.c_str(), openFlags, 0666);
 			if (_fd >= 0)
 				return true;
 		}
@@ -337,7 +363,7 @@ public class File {
 	}
 }
 
-flags Access {
+public flags Access {
 	READ,
 	WRITE
 }
@@ -358,14 +384,17 @@ public class BinaryFileReader extends Reader {
 	private byte[] _buffer;
 	private int _cursor;
 	private int _length;
+	private boolean _closeOnDelete;
 
-	BinaryFileReader(File file) {
+	BinaryFileReader(File file, boolean closeOnDelete) {
 		_file = file;
+		_closeOnDelete = closeOnDelete;
 		_buffer.resize(BUFFER_SIZE);
 	}
 
 	~BinaryFileReader() {
-		_file.close();
+		if (_closeOnDelete)
+			_file.close();
 	}
 
 	public string, boolean readAll() {
@@ -420,8 +449,8 @@ public class BinaryFileReader extends Reader {
 }
 
 public class TextFileReader extends BinaryFileReader {
-	TextFileReader(File file) {
-		super(file);
+	TextFileReader(File file, boolean closeOnDelete) {
+		super(file, closeOnDelete);
 	}
 
 	public int read() {
@@ -445,15 +474,18 @@ public class BinaryFileWriter extends Writer {
 	private File _file;
 	private byte[] _buffer;
 	private int _fill;
+	private boolean _closeOnDelete;
 
-	BinaryFileWriter(File file) {
+	BinaryFileWriter(File file, boolean closeOnDelete) {
 		_file = file;
+		_closeOnDelete = closeOnDelete;
 		_buffer.resize(BUFFER_SIZE);
 	}
 
 	~BinaryFileWriter() {
 		flush();
-		_file.close();
+		if (_closeOnDelete)
+			_file.close();
 	}
 
 	public void _write(byte c) {
@@ -513,8 +545,8 @@ public class BinaryFileWriter extends Writer {
 }
 
 public class BinaryFileAppendWriter extends BinaryFileWriter {
-	BinaryFileAppendWriter(File file) {
-		super(file);
+	BinaryFileAppendWriter(File file, boolean closeOnDelete) {
+		super(file, closeOnDelete);
 	}
 
 	public void flush() {
@@ -524,8 +556,8 @@ public class BinaryFileAppendWriter extends BinaryFileWriter {
 }
 
 public class TextFileWriter extends BinaryFileWriter {
-	TextFileWriter(File file) {
-		super(file);
+	TextFileWriter(File file, boolean closeOnDelete) {
+		super(file, closeOnDelete);
 	}
 
 	public void _write(byte c) {
@@ -586,8 +618,8 @@ public class ErrorWriter extends Writer {
  * NOte: This class should nly be needed for Windows, which has no Append mode for files.
  */
 public class TextFileAppendWriter extends TextFileWriter {
-	TextFileAppendWriter(File file) {
-		super(file);
+	TextFileAppendWriter(File file, boolean closeOnDelete) {
+		super(file, closeOnDelete);
 	}
 
 	public void flush() {
@@ -599,10 +631,13 @@ public class TextFileAppendWriter extends TextFileWriter {
 public ref<FileReader> openTextFile(string filename) {
 	File f;
 
-	if (f.open(filename))
-		return new TextFileReader(f);
-	else
-		return null;
+	if (f.open(filename)) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN)
+			return new TextFileReader(f, true);
+		else if (runtime.compileTarget == runtime.Target.X86_64_LNX)
+			return new FileReader(f, true);
+	}
+	return null;
 }
 
 public ref<FileWriter> appendTextFile(string filename) {
@@ -611,12 +646,12 @@ public ref<FileWriter> appendTextFile(string filename) {
 												windows.OPEN_ALWAYS, windows.FILE_ATTRIBUTE_NORMAL, null);
 		if (handle == windows.INVALID_HANDLE_VALUE)
 			return null;
-		return new TextFileAppendWriter(File(long(handle)));
+		return new TextFileAppendWriter(File(long(handle)), true);
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		File f;
 
 		if (f.append(filename))
-			return new TextFileWriter(f);
+			return new FileWriter(f, true);
 	}
 	return null;
 }
@@ -624,17 +659,20 @@ public ref<FileWriter> appendTextFile(string filename) {
 public ref<FileWriter> createTextFile(string filename) {
 	File f;
 
-	if (f.create(filename))
-		return new TextFileWriter(f);
-	else
-		return null;
+	if (f.create(filename)) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN)
+			return new TextFileWriter(f, true);
+		else if (runtime.compileTarget == runtime.Target.X86_64_LNX)
+			return new FileWriter(f, true);
+	}
+	return null;
 }
 
 public ref<FileReader> openBinaryFile(string filename) {
 	File f;
 
 	if (f.open(filename))
-		return new BinaryFileReader(f);
+		return new BinaryFileReader(f, true);
 	else
 		return null;
 }
@@ -645,12 +683,12 @@ public ref<FileWriter> appendBinaryFile(string filename) {
 												windows.OPEN_ALWAYS, windows.FILE_ATTRIBUTE_NORMAL, null);
 		if (handle == windows.INVALID_HANDLE_VALUE)
 			return null;
-		return new BinaryFileAppendWriter(File(long(handle)));
+		return new BinaryFileAppendWriter(File(long(handle)), true);
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		File f;
 
 		if (f.append(filename))
-			return new BinaryFileWriter(f);
+			return new FileWriter(f, true);
 	}
 	return null;
 }
@@ -659,7 +697,7 @@ public ref<FileWriter> createBinaryFile(string filename) {
 	File f;
 
 	if (f.create(filename))
-		return new BinaryFileWriter(f);
+		return new BinaryFileWriter(f, true);
 	else
 		return null;
 }
