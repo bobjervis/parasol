@@ -150,6 +150,8 @@ public class Instant {
 	long _seconds;
 	long _nanos;
 
+	public Instant() {}
+
 	public Instant(long seconds, long nanos) {
 		_seconds = seconds;
 		_nanos = nanos;
@@ -224,6 +226,14 @@ public class Instant {
 		} else {
 			return Instant(0, 0);
 		}
+	}
+
+	public long seconds() {
+		return _seconds;
+	}
+
+	public long nanoseconds() {
+		return _nanos;
 	}
 }
 /**
@@ -593,7 +603,7 @@ public class Formatter {
 		for (int i = 0; i < pattern.length(); i++) {
 			if (lastLetter != pattern[i] && letterCount > 0) {
 				if (!recordLetter(lastLetter, letterCount))
-					throw IllegalArgumentException(pattern);
+					throw IllegalArgumentException(string(i) + ": " + pattern);
 				letterCount = 0;
 			}
 			if (pattern[i].isAlpha()) {

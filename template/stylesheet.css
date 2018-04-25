@@ -1,0 +1,86 @@
+a:link, a:visited {
+    text-decoration:none;
+    color:#4A6782;
+}
+a:hover, a:focus {
+    text-decoration:none;
+    color:#bb7a2a;
+}
+a:active {
+    text-decoration:none;
+    color:#4A6782;
+}
+a[name] {
+    color:#353833;
+}
+a[name]:hover {
+    text-decoration:none;
+    color:#353833;
+}
+
+.code {
+	font-family: "Courier New", monospace;
+}
+
+.linkcol {
+	font-family: "Courier New", monospace;
+	width: 25%;
+	vertical-align: top;
+}
+
+.overviewSummary {
+	width: 100%;
+	border-left: 1px solid #888;
+	border-right: 1px solid #888;
+	border-bottom: 1px solid #888;
+}
+/*
+.overviewSummary td.linkcol {
+	width: 25%;
+	vertical-align: top;
+}
+ */
+.overviewSummary caption {
+	position: relative;
+	text-align: left;
+	font-weight: bold;
+	color:#253441;
+	padding-left: 2mm;
+	padding-top: 5mm;
+}
+
+.overviewSummary .tabEnd, .memberSummary .tabEnd, .typeSummary .tabEnd,
+.useSummary .tabEnd, .constantsSummary .tabEnd, .deprecatedSummary .tabEnd {
+    display:none;
+    width:2mm;
+    position:relative;
+    float:left;
+    background-color:#F8981D;
+}
+.overviewSummary caption span {
+	display: inline-block;
+	float: left;
+	background-color:#F8981D;
+    padding-top:2mm;
+    padding-left:1mm;
+    padding-right:5mm;
+    padding-bottom:3mm;
+}
+
+.overviewSummary caption a:link, .memberSummary caption a:link, .typeSummary caption a:link,
+.useSummary caption a:link, .constantsSummary caption a:link, .deprecatedSummary caption a:link,
+.overviewSummary caption a:hover, .memberSummary caption a:hover, .typeSummary caption a:hover,
+.useSummary caption a:hover, .constantsSummary caption a:hover, .deprecatedSummary caption a:hover,
+.overviewSummary caption a:active, .memberSummary caption a:active, .typeSummary caption a:active,
+.useSummary caption a:active, .constantsSummary caption a:active, .deprecatedSummary caption a:active,
+.overviewSummary caption a:visited, .memberSummary caption a:visited, .typeSummary caption a:visited,
+.useSummary caption a:visited, .constantsSummary caption a:visited, .deprecatedSummary caption a:visited {
+    color:#FFFFFF;
+}
+
+.altColor {
+    background-color:#FFFFFF;
+}
+.rowColor {
+    background-color:#EEEEEF;
+}

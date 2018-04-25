@@ -1448,11 +1448,20 @@ class FunctionDeclaration extends ParameterBag {
 				retType.node.type.family() == TypeFamily.VOID)
 				retType = null;
 		}
-		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
+		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 			if (nl.node.deferAnalysis()) {
 				type = nl.node.type;
 				return;
 			}
+			if (nl.node.type != null && nl.node.type.family() == TypeFamily.TYPEDEF) {
+				ref<Type> t = nl.node.type.wrappedType();
+				if (t.family() == TypeFamily.VOID) {
+					nl.node.add(MessageId.INVALID_VOID, compileContext.pool());
+					type = nl.node.type = compileContext.errorType();
+					return;
+				}
+			}
+		}
 		if (deferAnalysis()) {
 			return;
 		}

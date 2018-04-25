@@ -74,7 +74,7 @@ public abstract void GetSystemTime(ref<SYSTEMTIME> lpSystemTime);
 public abstract WINBOOL SystemTimeToFileTime(ref<SYSTEMTIME> lpSystemTime, ref<FILETIME> lpFileTome);
 
 @Windows("kernel32.dll", "GetCurrentThreadId")
-public abstract DWORD GetCurrentThreadId(void);
+public abstract DWORD GetCurrentThreadId();
 @Windows("kernel32.dll", "CreateThread")
 public abstract HANDLE CreateThread(address lpThreadAttributes, SIZE_T dwStackSize, DWORD lpStartAddress(address p), address lpParameter, DWORD dwCreationFlags, ref<DWORD> lpThreadId);
 @Windows("kernel32.dll", "Sleep")

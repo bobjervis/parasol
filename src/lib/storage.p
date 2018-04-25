@@ -16,6 +16,7 @@
 namespace parasol:storage;
 
 import parasol:runtime;
+import parasol:time;
 
 import native:C;
 import native:linux;
@@ -207,6 +208,32 @@ public long, boolean size(string filename) {
 			return s.st_size, true;
 	}
 	return -1, false;
+}
+/**
+ * This function returns the access, modified and created times for a given filename,
+ * if the underlying operating system and file system provide all three times.
+ *
+ * @param filename The path to the file for which time stamps are desired.
+ *
+ * @return The last access time.
+ * @return The last modified time.
+ * @return The file creation time.
+ * @return true if the file information could be obtained, false otherwise (such as the 
+ * file did not exist or the user did not have permissions to obtain this information.
+ */
+public time.Instant, time.Instant, time.Instant, boolean fileTimes(string filename) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		linux.statStruct s;
+		if (linux.stat(filename.c_str(), &s) == 0) {
+			time.Instant accessed(s.st_atim);
+			time.Instant modified(s.st_mtim);
+			time.Instant created(s.st_ctim);
+
+			return accessed, modified, created, true;
+		}
+	}
+	return time.Instant(-1, -1), time.Instant(-1, -1), time.Instant(-1, -1), false;
 }
 
 public boolean createSymLink(string oldPath, string newPath) {

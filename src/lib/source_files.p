@@ -359,12 +359,11 @@ class FileStat {
 		_tree.root().scope = _fileScope;
 		compileContext.buildScopes();
 		ref<Scope> domainScope = compileContext.arena().createDomain(domain);
-		if (_namespaceNode != null)
+		if (_namespaceNode != null) {
 			_namespaceSymbol = _namespaceNode.middle().makeNamespaces(domainScope, compileContext);
-		else
+			_fileScope.mergeIntoNamespace(_namespaceSymbol, compileContext);
+		} else
 			_namespaceSymbol = compileContext.arena().anonymous();
-
-		_fileScope.mergeIntoNamespace(_namespaceSymbol, compileContext);
 
 		return true;
 	}

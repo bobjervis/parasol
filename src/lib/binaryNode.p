@@ -1631,7 +1631,11 @@ class Binary extends Node {
 				if (deferAnalysis())
 					break;
 				if (type.family() == TypeFamily.TEMPLATE) {
-					add(MessageId.TEMPLATE_NAME_DISALLOWED, compileContext.pool());
+					_left.add(MessageId.TEMPLATE_NAME_DISALLOWED, compileContext.pool());
+					type = compileContext.errorType();
+					break;
+				} else if (type.family() == TypeFamily.VOID) {
+					_left.add(MessageId.INVALID_VOID, compileContext.pool());
 					type = compileContext.errorType();
 					break;
 				}
@@ -2173,6 +2177,10 @@ class Binary extends Node {
 
 		case	BIND:
 			type = _left.unwrapTypedef(Operator.CLASS, compileContext);
+			if (type.family() == TypeFamily.VOID) {
+				_left.add(MessageId.INVALID_VOID, compileContext.pool());
+				type = compileContext.errorType();
+			}
 			break;
 
 		case	SEQUENCE:

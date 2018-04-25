@@ -1705,12 +1705,13 @@ class Import extends Node {
 			boolean result;
 			
 			(domain, result) = _namespaceNode.left().dottedName();
+
 			ref<Symbol> symbol = compileContext.arena().getImport(true, domain, _namespaceNode, compileContext);
-			if (_localIdentifier != null)
-				localName = _localIdentifier;
-			else
-				localName = ref<Identifier>(_namespaceNode.right());
 			if (symbol != null) {
+				if (_localIdentifier != null)
+					localName = _localIdentifier;
+				else
+					localName = ref<Identifier>(_namespaceNode.right());
 				if (isAllowedImport(symbol)) {
 					if (!_enclosingScope.defineImport(localName, symbol, compileContext.pool()))
 						_namespaceNode.add(MessageId.DUPLICATE, compileContext.pool(), localName.value());

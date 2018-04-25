@@ -1019,6 +1019,10 @@ class FunctionType extends Type {
 		}
 		return sig;
 	}
+
+	public ref<ParameterScope> functionScope() {
+		return _functionScope;
+	}
 }
 
 class TemplateType extends Type {
@@ -1770,6 +1774,10 @@ class Type {
 		return false;
 	}
 	
+	ref<Type> wrappedType() {
+		return null;
+	}
+
 	boolean requiresAutoStorage() {
 		switch (_family) {
 		case	TYPEDEF:
@@ -1896,6 +1904,16 @@ class Type {
 
 	public boolean isBuiltIn() {
 		return int(_family) < int(TypeFamily.BUILTIN_TYPES);
+	}
+
+	public boolean isException() {
+		if (_family == TypeFamily.EXCEPTION)
+			return true;
+		ref<Type> sup = getSuper();
+		if (sup == null)
+			return false;
+		else
+			return sup.isException();
 	}
 
 	public boolean isConcrete(ref<CompileContext> compileContext) {

@@ -15,7 +15,7 @@
  */
 namespace parasol:compiler;
 
-class Namespace extends Symbol {
+public class Namespace extends Symbol {
 	private ref<Scope> _symbols;
 	private string _dottedName;
 
@@ -60,7 +60,11 @@ class Namespace extends Symbol {
 			else
 				return null;
 		} else {
-			return _symbols.lookup(id.identifier(), compileContext);
+			ref<Symbol> sym = _symbols.lookup(id.identifier(), compileContext);
+//			if (sym != null && sym.visibility() == Operator.PUBLIC)
+				return sym;
+//			else
+//				return null;
 		}
 	}
 
@@ -239,6 +243,8 @@ class PlainSymbol extends Symbol {
 					
 				default:
 					_type = _typeDeclarator.unwrapTypedef(Operator.CLASS, compileContext);
+					if (_type.family() == TypeFamily.VOID)
+						_type = compileContext.errorType();
 				}
 			}
 		}
@@ -1002,13 +1008,13 @@ class Symbol {
 	public Access accessFlags() {
 		return Access.CONSTRUCTED;
 	}
-	/**
-	 * returns true if this symbol is initialized via a constructor call, and false if not.
-	 */
+
 	public boolean configureDefaultConstructors() {
 		return false;
 	}
-	
+	/**
+	 * returns true if this symbol is initialized via a constructor call, and false if not.
+	 */
 	public boolean initializedWithConstructor() {
 		return false;
 	}

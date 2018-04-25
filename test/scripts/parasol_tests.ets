@@ -252,6 +252,18 @@ compile(){"class Foo { public static Foo x(-1); Foo(int z){} }"}
 
 compile(){"long i; string formatted(i);"}
 
+// BinaryOperators is namespace-private, so this should fail
+compile(expect: fail) { "import parasol:compiler.BinaryOperators;" }
+
+// binaryOperators is private, so this should fail
+compile(expect: fail) { "import parasol:compiler.binaryOperators;" }
+
+// Some void declarations that are not valid.
+compile(expect: fail) { "int f(void) { return 0; }" }
+compile(expect: fail) { "abstract int f(void);" }
+compile(expect: fail) { "int g(int z, void foo) { return 0; }" }
+compile(expect: fail) { "void x;" }
+
 // a bug in type checking would assert for some invalid aggregate types in the loop
 compile(expect: fail) { "string s; for (i in s) ;" }
 
