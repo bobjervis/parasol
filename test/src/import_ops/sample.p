@@ -21,10 +21,10 @@ private void f(ref<int> x, int y) {
 		y = 5;
 }
 
-boolean calledConstructor;
-StaticConstructor staticConstructor;
+public boolean calledConstructor;
+public StaticConstructor staticConstructor;
 
-class Sample {
+public class Sample {
 	public int y;
 	public int z;
 }
