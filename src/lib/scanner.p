@@ -17,7 +17,7 @@ namespace parasol:compiler;
 
 import parasol:storage;
 
-enum Token {
+public enum Token {
 	ERROR,
 	END_OF_STREAM,
 
@@ -209,7 +209,7 @@ public class StringScanner extends Scanner {
 	}
 }
 
-class Scanner {
+public class Scanner {
 	private Token _pushback;
 	private Location[] _lines;
 	private string _value;

@@ -278,7 +278,7 @@ public class Socket {
 
 }
 
-class Connection {
+public class Connection {
 	@Constant
 	private static int BUFFER_MAX = 8192;
 

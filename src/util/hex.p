@@ -13,16 +13,17 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import parasol:file;
+import parasol:storage;
 import parasol:text;
 
 int main(string[] args) {
 	for (int i = 0; i < args.length(); i++) {
 		string filename = args[i];
-		file.File f = file.openBinaryFile(filename);
+		ref<Reader> f = storage.openBinaryFile(filename);
 		string content;
 		boolean success;
 		(content, success) = f.readAll();
+		delete f;
 		if (success) {
 			printf("%s:\n", filename);
 			text.memDump(&content[0], content.length(), 0);

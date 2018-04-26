@@ -18,7 +18,7 @@ namespace parasol:random;
 import native:C;
 import parasol:runtime;
 
-class Random {
+public class Random {
 	private class RandomState {
 		public unsigned	z;
 		public unsigned	w;

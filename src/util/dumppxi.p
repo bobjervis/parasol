@@ -14,8 +14,9 @@
    limitations under the License.
  */
 import parasol:pxi;
-import parasol:file;
+import parasol:storage;
 import parasol:process;
+import parasol:runtime;
 import parasol:x86_64;
 
 class DumpPxiCommand extends process.Command {
@@ -32,7 +33,7 @@ class DumpPxiCommand extends process.Command {
 
 DumpPxiCommand command;
 
-pxi.SectionType verbose;
+runtime.Target verbose;
 
 int main(string[] args) {
 	if (!command.parse(args))
@@ -65,7 +66,7 @@ boolean dump(string filename) {
 	int best = p.bestSection();
 	for (int i = 0; i < p.sectionCount(); i++) {
 		pxi.SectionEntry entry = p.entry(i);
-		pxi.SectionType st = p.sectionType(i);
+		runtime.Target st = p.sectionType(i);
 		string label;
 		label.printf("[%d]", i);
 		string type;
@@ -73,8 +74,8 @@ boolean dump(string filename) {
 		string offset;
 		offset.printf("@%x", entry.offset);
 		printf("  %c %4s %16s %10s [%d bytes]\n", i == best ? '*' : ' ', label, type, offset, entry.length);
-		if (st == pxi.SectionType.X86_64_WIN)
-			pxi.registerSectionReader(pxi.SectionType.X86_64_WIN, x86_64NextReader);
+		if (st == runtime.Target.X86_64_WIN)
+			pxi.registerSectionReader(runtime.Target.X86_64_WIN, x86_64NextReader);
 		else
 			continue;
 		ref<pxi.Section> s = p.readSection(i);
@@ -86,7 +87,7 @@ boolean dump(string filename) {
 }
 
 
-ref<pxi.Section> x86_64NextReader(file.File pxiFile, long length) {
+ref<pxi.Section> x86_64NextReader(storage.File pxiFile, long length) {
 	x86_64.X86_64SectionHeader header;
 	
 	if (pxiFile.read(&header, header.bytes) != header.bytes) {
@@ -99,13 +100,13 @@ ref<pxi.Section> x86_64NextReader(file.File pxiFile, long length) {
 
 class PlaceHolder extends pxi.Section {
 	PlaceHolder() {
-		super(pxi.SectionType.FILLER);
+		super(runtime.Target.FILLER);
 	}
 	
 	public long length() {
 		return 0;
 	}
 	
-	public void write(file.File pxiFile) {
+	public void write(storage.File pxiFile) {
 	}
 }

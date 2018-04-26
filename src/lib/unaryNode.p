@@ -15,7 +15,7 @@
  */
 namespace parasol:compiler;
 
-class Unary extends Node {
+public class Unary extends Node {
 	private ref<Node> _operand;
 
 	Unary(Operator op, ref<Node> operand, Location location) {

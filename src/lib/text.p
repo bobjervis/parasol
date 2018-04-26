@@ -28,7 +28,7 @@ int printf(string format, var... arguments) {
 	return print(s);
 }
 
-class string {
+public class string {
 	private class allocation {
 		public int length;
 		public byte data;

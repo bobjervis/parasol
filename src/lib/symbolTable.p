@@ -17,7 +17,7 @@ namespace parasol:compiler;
 
 import parasol:storage.File;
 
-enum StorageClass {
+public enum StorageClass {
 	ERROR,
 	AUTO,
 	PARAMETER,
@@ -42,7 +42,7 @@ int NOT_PARAMETERIZED_TYPE = -1000000;
 
 public int FIRST_USER_METHOD = 2;
 
-class ClassScope extends ClasslikeScope {
+public class ClassScope extends ClasslikeScope {
 	public ClassScope(ref<Scope> enclosing, ref<Node> definition, ref<Identifier> className) {
 		super(enclosing, definition, className);
 	}
@@ -70,7 +70,7 @@ class MonitorScope extends ClassScope {
 	
 }
 
-class LockScope extends Scope {
+public class LockScope extends Scope {
 	private ref<Node> _monitor;
 	
 	public ref<Variable> lockTemp;			// The temp used to hold the reference to the monitor being locked.
@@ -548,7 +548,7 @@ class ClasslikeScope extends Scope {
 	}
 }
 
-class InterfaceImplementationScope extends ClassScope {
+public class InterfaceImplementationScope extends ClassScope {
 	public int thunkOffset;
 
 	private ref<InterfaceType> _interface;
@@ -657,7 +657,7 @@ class InterfaceImplementationScope extends ClassScope {
 	}
 }
 
-class EnumScope extends ClasslikeScope {
+public class EnumScope extends ClasslikeScope {
 	public ref<EnumType> enumType;
 	
 	private ref<Symbol>[] _instances;
@@ -769,7 +769,7 @@ class FlagsScope extends ClasslikeScope {
  *  					
  * The ParameterScope is the Scope recorded with the FunctionType for a function declaration.
  */
-class ParameterScope extends Scope {
+public class ParameterScope extends Scope {
 	public enum Kind {
 		FUNCTION,				// any ordinary constructor, destructor, method or function
 		TEMPLATE,				// any template
@@ -928,7 +928,7 @@ class ParameterScope extends Scope {
 	}
 }
 
-class ThunkScope extends ParameterScope {
+public class ThunkScope extends ParameterScope {
 	ref<ParameterScope> _function;
 	boolean _isDestructor;
 	
@@ -1057,7 +1057,7 @@ class UnitScope extends Scope {
 	}
 }
 
-class Scope {
+public class Scope {
 
 	// Class-specific information
 

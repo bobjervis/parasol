@@ -368,7 +368,7 @@ public flags Access {
 	WRITE
 }
 
-enum Seek {
+public enum Seek {
 	START,
 	CURRENT,
 	END

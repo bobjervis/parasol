@@ -13,12 +13,12 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import parasol:file;
+import parasol:storage;
 import parasol:process;
 import parasol:compiler;
 import parasol:sql;
-import parasol:stream.Utf8Reader;
-import parasol:stream.StringReader;
+import parasol:stream.UTF8Reader;
+import parasol:text.StringReader;
 
 string DEFAULT_CLASS_NAME = "SQLDataBase";
 /*
@@ -58,7 +58,7 @@ class SQLProxyCommand extends process.Command {
 SQLProxyCommand sqlProxyCommand();
 private string[] finalArgs;
 boolean errorsFound;
-file.File output;
+ref<Writer> output;
 ref<Procedure>[] procedures;
 
 int main(string[] args) {
@@ -108,8 +108,8 @@ int main(string[] args) {
 		printf("Not writing output due to discovered errors.\n");
 		return 1;
 	}
-	output = file.createTextFile(a[1]);
-	if (!output.opened()) {
+	output = storage.createTextFile(a[1]);
+	if (output == null) {
 		printf("Could not create output file '%s'\n", a[1]);
 		return 1;
 	}
@@ -131,7 +131,7 @@ int main(string[] args) {
 	output.write("}\n");
 	output.close();
 
-	file.File x = file.openTextFile(a[1]);
+	ref<Reader> x = storage.openTextFile(a[1]);
 	string z = x.readAll();
 	printf("%s:\n%s", a[1], z); 
 	return 0;
@@ -274,7 +274,7 @@ class Procedure {
 		}
 	}
 
-	void generate(file.File output) {
+	void generate(ref<Writer> output) {
 		for (int i = 0; i < parameters.length(); i++) {
 			if (parameters[i].parameterDirection != Token.IN)
 				output.printf("// out param %d: %s\n", i + 1, parameters[i].name);
@@ -536,7 +536,7 @@ class Parameter {
 		printf("\n");
 	}
 
-	void generateType(file.File output) {
+	void generateType(ref<Writer> output) {
 		string value = parasolType[type];
 		if (value != null)
 			output.write(value);
@@ -578,7 +578,7 @@ long intValue(string value) {
 	if (value.length() == 0)
 		return -1;
 	StringReader r(&value);
-	Utf8Reader ur(&r);
+	UTF8Reader ur(&r);
 	
 	int c = ur.read();
 	if (compiler.codePointClass(c) == 0) {
@@ -592,7 +592,7 @@ long intValue(string value) {
 				if (c < 0)
 					break;
 				if (compiler.codePointClass(c) == compiler.CPC_LETTER)
-					digit = 10 + byte(c).toLowercase() - 'a';
+					digit = 10 + byte(c).toLowerCase() - 'a';
 				else
 					digit = compiler.codePointClass(c);
 				v = v * 16 + digit;
@@ -691,7 +691,7 @@ enum Token {
 }
 
 class Scanner {
-	private file.File _file;
+	private ref<Reader> _file;
 	private Token _pushback;
 	private int[] _lines;
 	private string _value;
@@ -727,7 +727,7 @@ class Scanner {
 	
 	public Scanner(string filename) {
 		_filename = filename;
-		_file = file.openBinaryFile(filename);
+		_file = storage.openBinaryFile(filename);
 		_pushback = Token.EMPTY;
 		_lastByte = -1;
 		_baseLineNumber = 0;
@@ -742,12 +742,11 @@ class Scanner {
 	}
 
 	public boolean opened() { 
-		return _file.opened(); 
+		return _file != null; 
 	}
 
 	public void close() {
-		if (_file.opened())
-			_file.close();
+		delete _file;
 	}	
 	
 	public Token next() {
@@ -1006,7 +1005,7 @@ class Scanner {
 			} else
 				addCharacter(c);
 		}
-		Token t = keywords[_value.toLower()];
+		Token t = keywords[_value.toLowerCase()];
 		if (t != null)
 			return t;
 		return Token.IDENTIFIER;
@@ -1161,7 +1160,7 @@ class Scanner {
 							if (byte(c).isDigit())
 								value = (value << 4) + unsigned(c - '0');
 							else
-								value = (value << 4) + 10 + unsigned(byte(c).toLowercase() - 'a');
+								value = (value << 4) + 10 + unsigned(byte(c).toLowerCase() - 'a');
 							addCharacter(c);
 						} else {
 							ungetc();
@@ -1185,7 +1184,7 @@ class Scanner {
 							if (byte(c).isDigit())
 								value = (value << 4) + unsigned(c - '0');
 							else
-								value = (value << 4) + 10 + unsigned(byte(c).toLowercase() - 'a');
+								value = (value << 4) + 10 + unsigned(byte(c).toLowerCase() - 'a');
 							addCharacter(c);
 						} else {
 							ungetc();
@@ -1374,10 +1373,10 @@ class Scanner {
 	 * At end of stream, getByte will continue to return -1 indefinitely.
 	 */
 	private int getByte() {
-		if (!_file.opened())
+		if (_file == null)
 			return -1;			// Should be a throw, maybe?
 		int b = _file.read();
-		if (b != file.EOF)
+		if (b != storage.EOF)
 			return b;
 		else
 			return -1;

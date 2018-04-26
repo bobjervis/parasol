@@ -650,7 +650,7 @@ abstract int sourceLocationsCount();
 
 abstract void callCatchHandler(ref<Exception> exception, address frame, int handler);
 
-class ExceptionContext {
+public class ExceptionContext {
 	public address exceptionAddress;		// The machine instruction causing the exception
 	public address stackPointer;			// The thread stack point at the moment of the exception
 	public address framePointer;			// The hardware frame pointer at the moment of the exception
@@ -704,7 +704,7 @@ class ExceptionContext {
 }
 
 @Header
-class HardwareException {
+public class HardwareException {
 	public address codePointer;
 	public address framePointer;
 	public address stackPointer;

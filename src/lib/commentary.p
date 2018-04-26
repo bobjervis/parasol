@@ -15,7 +15,7 @@
  */
 namespace parasol:compiler;
 
-enum MessageId {
+public enum MessageId {
 	ABSTRACT_INSTANCE_DISALLOWED,
 	AMBIGUOUS_CONSTRUCTOR,
 	AMBIGUOUS_OVERLOAD,
@@ -153,7 +153,7 @@ enum MessageId {
 	MAX_MESSAGE
 }
 
-class Commentary {
+public class Commentary {
 	MessageId _messageId;
 	ref<Commentary> _next;
 	string _message;
@@ -188,7 +188,7 @@ class Commentary {
 	}
 }
 
-class Message {
+public class Message {
 	public ref<Commentary> commentary;
 	public ref<Node> node;
 }

@@ -18,7 +18,7 @@ namespace parasol:compiler;
 import native:C;
 import parasol:stream;
 
-class CompileString {
+public class CompileString {
 	pointer<byte> data;
 	int length;
 
@@ -102,7 +102,7 @@ class CompileStringReader extends stream.Reader {
 	}
 }
 
-class Location {
+public class Location {
 	public static Location OUT_OF_FILE(-1);
 
 	public int		offset;

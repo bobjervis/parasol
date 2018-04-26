@@ -15,7 +15,7 @@
  */
 namespace parasol:compiler;
 
-class Binary extends Node {
+public class Binary extends Node {
 	private ref<Node> _left;
 	private ref<Node> _right;
 

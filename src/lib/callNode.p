@@ -15,7 +15,7 @@
  */
 namespace parasol:compiler;
 
-enum CallCategory {
+public enum CallCategory {
 	ERROR,
 	COERCION,
 	CONSTRUCTOR,
@@ -25,7 +25,7 @@ enum CallCategory {
 	DECLARATOR,			// type1(type2, type3, ...) ,_ if all expressions have 'class' type, then this must be a function type
 }
 
-class Call extends ParameterBag {
+public class Call extends ParameterBag {
 	// Populated at parse time:
 	private ref<Node> _target;						// the 'function' being called
 													//   COERCION: the type expression of the new type
@@ -1221,7 +1221,7 @@ class Call extends ParameterBag {
 	}
 }
 
-class FunctionDeclaration extends ParameterBag {
+public class FunctionDeclaration extends ParameterBag {
 	public enum Category {
 		NORMAL,
 		CONSTRUCTOR,
@@ -1487,7 +1487,7 @@ class FunctionDeclaration extends ParameterBag {
 	}
 }
 
-class DestructorList extends ParameterBag {
+public class DestructorList extends ParameterBag {
 	DestructorList(ref<NodeList> destructors, Location location) {
 		super(Operator.DESTRUCTOR_LIST, destructors, location);
 	}
@@ -1609,7 +1609,7 @@ class ParameterBag extends Node {
 	}
 }
 
-class StackArgumentAddress extends Node {
+public class StackArgumentAddress extends Node {
 	int	_offset;
 	
 	StackArgumentAddress(int offset, Location location) {
@@ -1643,7 +1643,7 @@ class StackArgumentAddress extends Node {
 	}
 }
 
-class EllipsisArguments extends ParameterBag {
+public class EllipsisArguments extends ParameterBag {
 	EllipsisArguments(ref<NodeList> args, Location location) {
 		super(Operator.ELLIPSIS_ARGUMENTS, args, location);
 	}
@@ -1727,7 +1727,7 @@ class EllipsisArguments extends ParameterBag {
 	}
 }
 
-class Return extends ParameterBag {
+public class Return extends ParameterBag {
 	private ref<NodeList> _liveSymbols;
 	private boolean _multiReturnOfMultiCall;
 	

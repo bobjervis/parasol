@@ -17,7 +17,7 @@ namespace parasol:compiler;
 
 import parasol:process;
 
-class Parser {
+public class Parser {
 	private ref<SyntaxTree> _tree;
 	private ref<Scanner> _scanner;
 	private ref<Class> _enclosing;

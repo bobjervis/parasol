@@ -4122,16 +4122,51 @@ public class X86_64 extends X86_64AssignTemps {
 		 o = ref<Overload>(re);
 		_memcpy = ref<ParameterScope>((*o.instances())[0].type().scope());
 		ref<Type> stringType = _arena.builtInType(TypeFamily.STRING);
-		for (int i = 0; i < stringType.scope().constructors().length(); i++) {
-			ref<Scope> scope = (*stringType.scope().constructors())[i];
-			ref<FunctionDeclaration> func = ref<FunctionDeclaration>(scope.definition());
-			ref<NodeList> args = func.arguments();
-			if (args == null ||
-				args.next != null)
-				continue;
-			if (args.node.type.equals(stringType)) {
-				_stringCopyConstructor = ref<OverloadInstance>(func.name().symbol());
-				break;
+		if (stringType != null && stringType.scope() != null) {
+			for (int i = 0; i < stringType.scope().constructors().length(); i++) {
+				ref<Scope> scope = (*stringType.scope().constructors())[i];
+				ref<FunctionDeclaration> func = ref<FunctionDeclaration>(scope.definition());
+				ref<NodeList> args = func.arguments();
+				if (args == null ||
+					args.next != null)
+					continue;
+				if (args.node.type.equals(stringType)) {
+					_stringCopyConstructor = ref<OverloadInstance>(func.name().symbol());
+					break;
+				}
+			}
+			ref<Symbol> assign = stringType.scope().lookup("assign", compileContext);
+			if (assign != null) {
+				ref<Overload> o = ref<Overload>(assign);
+				if (o.instances().length() == 1) {
+					ref<OverloadInstance> oi = (*o.instances())[0];
+					// TODO: Validate that we have the correct symbol;
+					_stringAssign = oi;
+				}
+			}
+			ref<Symbol> compare = stringType.scope().lookup("compare", compileContext);
+			if (assign != null) {
+				ref<Overload> o = ref<Overload>(compare);
+				if (o.instances().length() == 1) {
+					ref<OverloadInstance> oi = (*o.instances())[0];
+					// TODO: Validate that we have the correct symbol;
+					_stringCompare = oi;
+				}
+			}
+			ref<Symbol> append = stringType.scope().lookup("append", compileContext);
+			if (append != null) {
+				ref<Overload> o = ref<Overload>(append);
+				for (int i = 0; i < o.instances().length(); i++) {
+					ref<OverloadInstance> oi = (*o.instances())[i];
+					if (oi.parameterCount() != 1)
+						continue;
+					ref<Scope> s = oi.parameterScope();
+					ref<Symbol>[Scope.SymbolKey].iterator iter = s.symbols().begin();
+					if (iter.get().type().family() == TypeFamily.STRING) {
+						_stringAppendString = oi;
+						break;
+					}
+				}
 			}
 		}
 		ref<Type> varType = _arena.builtInType(TypeFamily.VAR);
@@ -4166,39 +4201,6 @@ public class X86_64 extends X86_64AssignTemps {
 		if (one != null)
 			_doubleOne = one;
 		
-		ref<Symbol> assign = stringType.scope().lookup("assign", compileContext);
-		if (assign != null) {
-			ref<Overload> o = ref<Overload>(assign);
-			if (o.instances().length() == 1) {
-				ref<OverloadInstance> oi = (*o.instances())[0];
-				// TODO: Validate that we have the correct symbol;
-				_stringAssign = oi;
-			}
-		}
-		ref<Symbol> compare = stringType.scope().lookup("compare", compileContext);
-		if (assign != null) {
-			ref<Overload> o = ref<Overload>(compare);
-			if (o.instances().length() == 1) {
-				ref<OverloadInstance> oi = (*o.instances())[0];
-				// TODO: Validate that we have the correct symbol;
-				_stringCompare = oi;
-			}
-		}
-		ref<Symbol> append = stringType.scope().lookup("append", compileContext);
-		if (append != null) {
-			ref<Overload> o = ref<Overload>(append);
-			for (int i = 0; i < o.instances().length(); i++) {
-				ref<OverloadInstance> oi = (*o.instances())[i];
-				if (oi.parameterCount() != 1)
-					continue;
-				ref<Scope> s = oi.parameterScope();
-				ref<Symbol>[Scope.SymbolKey].iterator iter = s.symbols().begin();
-				if (iter.get().type().family() == TypeFamily.STRING) {
-					_stringAppendString = oi;
-					break;
-				}
-			}
-		}
 	}
 	
 	private void generateDefaultConstructors(ref<Scope> scope, ref<CompileContext> compileContext) {

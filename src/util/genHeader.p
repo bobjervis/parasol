@@ -18,10 +18,8 @@ import parasol:storage;
 import parasol:process;
 import parasol:runtime;
 import parasol:pxi;
-import parasol:pxi.SectionType;
 import parasol:compiler.Arena;
 import parasol:compiler.Target;
-import parasol:file;
 import parasol:time;
 
 /*
@@ -111,8 +109,8 @@ int main(string[] args) {
 		arena.printMessages();
 		return 1;
 	}
-	file.File header = file.createTextFile(finalArgs[1]);
-	if (!header.opened()) {
+	ref<Writer> header = storage.createTextFile(finalArgs[1]);
+	if (header == null) {
 		printf("Could not create file %s\n", finalArgs[1]);
 		return 1;
 	}
@@ -122,12 +120,12 @@ int main(string[] args) {
 	header.write("#ifndef PARASOL_HEADER_H\n");
 	header.write("#define PARASOL_HEADER_H\n");
 	if (!arena.writeHeader(header)) {
-		header.close();
+		delete header;
 		printf("Failed to write header %s\n", finalArgs[1]);
 		return 0;
 	} else {
 		header.write("#endif // PARASOL_HEADER_H\n");
-		header.close();
+		delete header;
 		return 1;
 	}
 }

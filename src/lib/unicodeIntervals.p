@@ -4,19 +4,32 @@
 namespace parasol:compiler;
 
 // 0-9 = digit value, 254 = white space, 255 = letter, -1 = unclassified
-int CPC_ERROR = -1;
-int CPC_WHITE_SPACE = 254;
-int CPC_LETTER = 255;
-int CPC_DIGIT_0 = 0;
-int CPC_DIGIT_1 = 1;
-int CPC_DIGIT_2 = 2;
-int CPC_DIGIT_3 = 3;
-int CPC_DIGIT_4 = 4;
-int CPC_DIGIT_5 = 5;
-int CPC_DIGIT_6 = 6;
-int CPC_DIGIT_7 = 7;
-int CPC_DIGIT_8 = 8;
-int CPC_DIGIT_9 = 9;
+@Constant
+public int CPC_ERROR = -1;
+@Constant
+public int CPC_WHITE_SPACE = 254;
+@Constant
+public int CPC_LETTER = 255;
+@Constant
+public int CPC_DIGIT_0 = 0;
+@Constant
+public int CPC_DIGIT_1 = 1;
+@Constant
+public int CPC_DIGIT_2 = 2;
+@Constant
+public int CPC_DIGIT_3 = 3;
+@Constant
+public int CPC_DIGIT_4 = 4;
+@Constant
+public int CPC_DIGIT_5 = 5;
+@Constant
+public int CPC_DIGIT_6 = 6;
+@Constant
+public int CPC_DIGIT_7 = 7;
+@Constant
+public int CPC_DIGIT_8 = 8;
+@Constant
+public int CPC_DIGIT_9 = 9;
 public int codePointClass(int codePoint) {
     int match = intervalLast.binarySearchClosestGreater(codePoint);
     if (match >= 0 && match < intervalLast.length() && codePoint >= intervalFirst[match])

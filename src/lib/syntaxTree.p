@@ -19,7 +19,7 @@ import native:C;
 import parasol:text;
 import parasol:stream.UTF8Reader;
 
-enum Operator {
+public enum Operator {
 	// SyntaxError
 	SYNTAX_ERROR,
 	// Binary
@@ -197,13 +197,13 @@ enum Operator {
 	MAX_OPERATOR
 }
 
-enum TraverseAction {
+public enum TraverseAction {
 	CONTINUE_TRAVERSAL,
 	ABORT_TRAVERSAL,
 	SKIP_CHILDREN
 }
 
-enum Test {
+public enum Test {
 	PASS_TEST,			// Returned if a test passes
 	FAIL_TEST,			// Returned if a test fails
 	IGNORE_TEST,		// Returned if the test result should be ignored (due to other errors)
@@ -217,7 +217,7 @@ public byte VECTOR_LVALUE = 0x02;
 public byte VECTOR_OPERAND = 0x04;
 public byte PUSH_OUT_PARAMETER = 0x08;
 
-class SyntaxTree {
+public class SyntaxTree {
 	private ref<Block> _root;
 	private ref<MemoryPool> _pool;
 	private ref<Scanner> _scanner;
@@ -408,7 +408,7 @@ class SyntaxTree {
 	}
 }
 
-class Block extends Node {
+public class Block extends Node {
 	private ref<NodeList> _statements;
 	private ref<NodeList> _last;
 	private boolean _inSwitch;
@@ -727,7 +727,7 @@ private Test blockFallsThrough(ref<NodeList> nl) {
 		return t;
 }
 
-class Class extends Block {
+public class Class extends Block {
 	protected ref<Node> _extends;
 	private ref<Identifier> _name;
 	private ref<NodeList> _implements;
@@ -1013,7 +1013,7 @@ class Class extends Block {
  * implementation to some future date.  For now, it is easier to just use the existing Constant
  * class.
  */
-class InternalLiteral extends Node {
+public class InternalLiteral extends Node {
 	private long _value;
 	
 	InternalLiteral(long value, Location location) {
@@ -1132,7 +1132,7 @@ class InternalLiteral extends Node {
 	}
 }
 
-class Constant extends Node {
+public class Constant extends Node {
 	private CompileString _value;
 	
 	public int offset;					// For constants that get stored out-of-line, like FP data,
@@ -1388,7 +1388,7 @@ class Constant extends Node {
 	}
 }
 
-class For extends Node {
+public class For extends Node {
 	private ref<Node> _initializer;
 	private ref<Node> _test;
 	private ref<Node> _increment;
@@ -1737,7 +1737,7 @@ class Import extends Node {
 	}
 }
 
-class Jump extends Node {
+public class Jump extends Node {
 	private ref<NodeList> _liveSymbols;
 	private ref<Scope> _leavingScope;			// This is the outer-most scope we will exit when we take this jump
 	private ref<Scope> _jumpFromScope;			// This is the inner-most scope we will exit when we take this jump
@@ -2027,7 +2027,7 @@ class Leaf extends Node {
 	}
 }
 
-class Loop extends Node {
+public class Loop extends Node {
 	private ref<Identifier> _declarator;
 	private ref<Node> _aggregate;
 	private ref<Node> _body;
@@ -2554,7 +2554,7 @@ class Template extends Node {
 }
 
 
-class Ternary extends Node {
+public class Ternary extends Node {
 	ref<Node>	_left;
 	ref<Node>	_middle;
 	ref<Node>	_right;
@@ -2865,7 +2865,7 @@ class Ternary extends Node {
 	}
 }
 
-class Try extends Node {
+public class Try extends Node {
 	ref<Node>		_body;
 	ref<Node>		_finally;
 	ref<NodeList>	_catchList;
@@ -3029,7 +3029,7 @@ class Try extends Node {
 	}
 }
 
-class Node {
+public class Node {
 	private Operator _op;
 	private Location _location;
 	private ref<Commentary> _commentary;
@@ -3678,7 +3678,7 @@ private TraverseAction getMessage(ref<Node> n, address data) {
 	return TraverseAction.CONTINUE_TRAVERSAL;
 }
 
-class NodeList {
+public class NodeList {
 	public ref<NodeList> next;
 	public ref<Node> node;
 

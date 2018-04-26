@@ -61,10 +61,10 @@ public class Namespace extends Symbol {
 				return null;
 		} else {
 			ref<Symbol> sym = _symbols.lookup(id.identifier(), compileContext);
-//			if (sym != null && sym.visibility() == Operator.PUBLIC)
+			if (sym != null && sym.visibility() == Operator.PUBLIC)
 				return sym;
-//			else
-//				return null;
+			else
+				return null;
 		}
 	}
 
@@ -96,7 +96,7 @@ public class Namespace extends Symbol {
 	}
 }
 
-flags Access {
+public flags Access {
 	CONSTANT,
 	COMPILE_TARGET,
 	CONSTRUCTED			// If the object is not initialized with a constructor, it will be constructed at scope start.						// the bit will be set any constructor initializer is performed.
@@ -130,7 +130,7 @@ class DelegateSymbol extends PlainSymbol {
 	There are two relevant components that define a symbol: the type declaration and any initializer supplied
 	with the declaration.
  */
-class PlainSymbol extends Symbol {
+public class PlainSymbol extends Symbol {
 	private ref<Node> _typeDeclarator;
 	private ref<Node> _initializer;
 	private Access _accessFlags;
@@ -403,7 +403,7 @@ class PlainSymbol extends Symbol {
 	}
 }
 
-class Overload extends Symbol {
+public class Overload extends Symbol {
 	private Operator _kind;
 	ref<OverloadInstance>[] _instances;
 
@@ -510,7 +510,7 @@ class DelegateOverload extends OverloadInstance {
 	}
 }
 
-class OverloadInstance extends Symbol {
+public class OverloadInstance extends Symbol {
 	private boolean _overridden;
 	private ref<ParameterScope> _parameterScope;
 	private ref<TemplateInstanceType> _instances;	// For template's, the actual instances of those
@@ -791,7 +791,7 @@ class OverloadInstance extends Symbol {
 	}
 }
 
-class Symbol {
+public class Symbol {
 	public int offset;				// Variable offset within scope block
 	public address segment;			// Variable segment, for static variables used by code generators
 	public address value;			// Scratch address for use by code generators.

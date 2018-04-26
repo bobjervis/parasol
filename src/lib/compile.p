@@ -20,7 +20,7 @@ import parasol:memory;
 
 int INDENT = 4;
 
-class CompileContext {
+public class CompileContext {
 	public Operator visibility;
 	public boolean isStatic;
 	public ref<Node> annotations;
@@ -1222,7 +1222,7 @@ class CompileContext {
 	}
 }
 
-class MemoryPool extends memory.NoReleasePool {
+public class MemoryPool extends memory.NoReleasePool {
 	
 	public MemoryPool() {
 	}

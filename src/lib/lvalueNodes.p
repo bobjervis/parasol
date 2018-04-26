@@ -17,7 +17,7 @@ namespace parasol:compiler;
 
 import native:C;
 
-class Reference extends Node {
+public class Reference extends Node {
 	private ref<Variable> _variable;
 	private boolean _definition;
 	private int _offset;
@@ -67,7 +67,7 @@ class Reference extends Node {
 	}
 }
 
-class Identifier extends Node {
+public class Identifier extends Node {
 	private CompileString _value;
 	private boolean _definition;
 	private ref<Symbol> _symbol;
@@ -472,7 +472,7 @@ class Identifier extends Node {
 	}
 }
 
-class Selection extends Node {
+public class Selection extends Node {
 	private ref<Node> _left;
 	private CompileString _name;
 	private ref<Symbol> _symbol;

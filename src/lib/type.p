@@ -15,7 +15,7 @@
  */
 namespace parasol:compiler;
 
-enum TypeFamily {
+public enum TypeFamily {
 	// numeric types
 	
 	SIGNED_8,
@@ -60,7 +60,7 @@ enum TypeFamily {
 //	MIN_TYPE = SIGNED_8
 }
 
-class BuiltInType extends Type {
+public class BuiltInType extends Type {
 	private ref<ClassType> _classType;
 
 	BuiltInType(TypeFamily family, ref<ClassType> classType) {
@@ -293,7 +293,7 @@ class MonitorType extends ClassType {
 	}
 }
 
-class InterfaceType extends ClassType {
+public class InterfaceType extends ClassType {
 	InterfaceType(ref<Class> definition, ref<Scope> scope) {
 		super(TypeFamily.INTERFACE, definition, scope);
 	}
@@ -316,7 +316,7 @@ class InterfaceType extends ClassType {
 
 }
 
-class ClassType extends Type {
+public class ClassType extends Type {
 	protected ref<Scope> _scope;
 	protected ref<Type> _extends;
 	protected ref<InterfaceType>[] _implements;
@@ -631,7 +631,7 @@ class EnumType extends TypedefType {
 	}
 }
 
-class EnumInstanceType extends Type {
+public class EnumInstanceType extends Type {
 	private ref<Symbol> _symbol;
 	private ref<Scope> _scope;
 	private ref<ClassType> _instanceClass;
@@ -736,7 +736,7 @@ class FlagsType extends TypedefType {
 	}
 }
 
-class FlagsInstanceType extends Type {
+public class FlagsInstanceType extends Type {
 	private ref<Symbol> _symbol;
 	private ref<Scope> _scope;
 	private ref<ClassType> _instanceClass;
@@ -815,7 +815,7 @@ class FlagsInstanceType extends Type {
 	}
 }
 
-class FunctionType extends Type {
+public class FunctionType extends Type {
 	private ref<NodeList> _returnType;
 	private ref<NodeList> _parameters;
 	private ref<ParameterScope> _functionScope;
@@ -1113,7 +1113,7 @@ class TemplateType extends Type {
 	}
 }
 
-class TemplateInstanceType extends ClassType {
+public class TemplateInstanceType extends ClassType {
 	private ref<TemplateInstanceType> _next;
 	private ref<Template> _concreteDefinition;
 	private ref<FileStat> _definingFile;
@@ -1310,7 +1310,7 @@ class TemplateInstanceType extends ClassType {
 	}
 }
 
-class TypedefType extends Type {
+public class TypedefType extends Type {
 	private ref<Type> _wrappedType;
 
 	protected TypedefType(TypeFamily family, ref<Type> wrappedType) {
@@ -1372,7 +1372,7 @@ public CompareMethodCategory compareMethodCategory(ref<Type> type, ref<CompileCo
 	return CompareMethodCategory.ORDERED;
 }
 	
-class Type {
+public class Type {
 	private TypeFamily _family;
 	private boolean _resolved;
 	private boolean _resolving;

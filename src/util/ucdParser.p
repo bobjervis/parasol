@@ -13,7 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import parasol:file;
+import parasol:storage;
 import parasol:process;
 
 /*
@@ -85,8 +85,8 @@ int main(string[] args) {
 
 	string unicodeData_txt = finalArgs[0];
 	
-	file.File ucd = file.openTextFile(unicodeData_txt);
-	if (!ucd.opened()) {
+	ref<Reader> ucd = storage.openTextFile(unicodeData_txt);
+	if (ucd == null) {
 		printf("Could not read file %s\n", unicodeData_txt);
 		return 1;
 	}
@@ -101,15 +101,10 @@ int main(string[] args) {
 	
 	for (;; lineNumber++) {
 		string line;
-		boolean status;
 		
-		(line, status) = ucd.readLine();
-		if (status == false) {
-			printf("IO error reading file ", unicodeData_txt);
-			return 1;
-		}
+		line = ucd.readLine();
 		if (line == null) {
-			ucd.close();
+			delete ucd;
 			break;
 		}
 		string[] fields = line.split(';');
@@ -119,6 +114,7 @@ int main(string[] args) {
 			return 1;
 		}
 		int codePoint;
+		boolean status;
 		(codePoint, status) = int.parse(fields[0], 16);
 		if (!status) {
 			printf("Invalid code point: %s\n", fields[0]);
@@ -170,8 +166,8 @@ int main(string[] args) {
 
 	printf("Total Intervals - %d Total Letters %d Total White Space %d Total Decimals %d\n", intervals.length(),
 			totalLetters, totalWhiteSpace, totalDecimals);
-	file.File classifier = file.createTextFile(finalArgs[1]);
-	if (!classifier.opened()) {
+	ref<Writer> classifier = storage.createTextFile(finalArgs[1]);
+	if (classifier == null) {
 		printf("Could not create file %s\n", finalArgs[1]);
 		return 1;
 	}
@@ -179,12 +175,12 @@ int main(string[] args) {
 	classifier.write(" * Generated file - DO NOT MODIFY\n");
 	classifier.write(" */\n");
 	if (!writeClassifier(classifier)) {
-		classifier.close();
+		delete classifier;
 		printf("Failed to write classifier %s\n", finalArgs[1]);
-		return 0;
-	} else {
-		classifier.close();
 		return 1;
+	} else {
+		delete classifier;
+		return 0;
 	}
 }
 
@@ -214,22 +210,35 @@ void recordCodePoint(string generalCategory, int codePoint, ref<Interval> x) {
 	}
 }
 
-boolean writeClassifier(file.File classifier) {
+boolean writeClassifier(ref<Writer> classifier) {
 	classifier.write("namespace parasol:compiler;\n\n");
 	classifier.write("// 0-9 = digit value, 254 = white space, 255 = letter, -1 = unclassified\n");
-	classifier.write("int CPC_ERROR = -1;\n");
-	classifier.write("int CPC_WHITE_SPACE = 254;\n");
-	classifier.write("int CPC_LETTER = 255;\n");
-	classifier.write("int CPC_DIGIT_0 = 0;\n");
-	classifier.write("int CPC_DIGIT_1 = 1;\n");
-	classifier.write("int CPC_DIGIT_2 = 2;\n");
-	classifier.write("int CPC_DIGIT_3 = 3;\n");
-	classifier.write("int CPC_DIGIT_4 = 4;\n");
-	classifier.write("int CPC_DIGIT_5 = 5;\n");
-	classifier.write("int CPC_DIGIT_6 = 6;\n");
-	classifier.write("int CPC_DIGIT_7 = 7;\n");
-	classifier.write("int CPC_DIGIT_8 = 8;\n");
-	classifier.write("int CPC_DIGIT_9 = 9;\n");
+	classifier.write("@Constant\n");
+	classifier.write("public int CPC_ERROR = -1;\n");
+	classifier.write("@Constant\n");
+	classifier.write("public int CPC_WHITE_SPACE = 254;\n");
+	classifier.write("@Constant\n");
+	classifier.write("public int CPC_LETTER = 255;\n");
+	classifier.write("@Constant\n");
+	classifier.write("public int CPC_DIGIT_0 = 0;\n");
+	classifier.write("@Constant\n");
+	classifier.write("public int CPC_DIGIT_1 = 1;\n");
+	classifier.write("@Constant\n");
+	classifier.write("public int CPC_DIGIT_2 = 2;\n");
+	classifier.write("@Constant\n");
+	classifier.write("public int CPC_DIGIT_3 = 3;\n");
+	classifier.write("@Constant\n");
+	classifier.write("public int CPC_DIGIT_4 = 4;\n");
+	classifier.write("@Constant\n");
+	classifier.write("public int CPC_DIGIT_5 = 5;\n");
+	classifier.write("@Constant\n");
+	classifier.write("public int CPC_DIGIT_6 = 6;\n");
+	classifier.write("@Constant\n");
+	classifier.write("public int CPC_DIGIT_7 = 7;\n");
+	classifier.write("@Constant\n");
+	classifier.write("public int CPC_DIGIT_8 = 8;\n");
+	classifier.write("@Constant\n");
+	classifier.write("public int CPC_DIGIT_9 = 9;\n");
 	classifier.write("public int codePointClass(int codePoint) {\n");
 	classifier.write("    int match = intervalLast.binarySearchClosestGreater(codePoint);\n");
 	classifier.write("    if (match >= 0 && match < intervalLast.length() && codePoint >= intervalFirst[match])\n");

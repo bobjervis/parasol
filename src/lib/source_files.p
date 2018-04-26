@@ -35,7 +35,7 @@ public class SourceCache {
 	}
 }
 
-class ImportDirectory {
+public class ImportDirectory {
 	private string _directoryName;
 	private boolean _searched;			// true when the directory has been searched and the _files array populated.
 	private ref<FileStat>[] _files;
@@ -255,7 +255,7 @@ void allNodes(ref<FileStat> file, ref<Node> n, void(ref<FileStat>, ref<Node>, re
 	}
 }
 
-class FileStat {
+public class FileStat {
 	private string	_filename;
 	private boolean _parsed;
 	private boolean _rootFile;
