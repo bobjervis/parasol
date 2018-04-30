@@ -494,13 +494,20 @@ class Mutex {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			WaitForSingleObject(_mutex, INFINITE);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-//			printf("%p try lock by %s (level = %d)\n", this, currentThread() != null ? currentThread().name() : "?", _level);
+//			string s;
+//			s.printf("%p try lock by %s (level = %d)\n", this, currentThread() != null ? currentThread().name() : "?", _level);
+//			print(s);
 			int x = linux.pthread_mutex_lock(&_linuxMutex);
+			if (x != 0)
+				printf("mutex_lock returned %d\n", x);
+				
 			assert(x == 0);
 		}
 		_level++;
 		_owner = currentThread();
-//		printf("%p take by %s (level = %d)\n", this, _owner != null ? _owner.name() : "?", _level);
+//		string s;
+//		s.printf("%p take by %s (level = %d)\n", this, _owner != null ? _owner.name() : "?", _level);
+//		print(s);
 	}
 	
 	void release() {

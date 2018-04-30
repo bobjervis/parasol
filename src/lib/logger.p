@@ -261,27 +261,9 @@ public class ConsoleLogHandler extends LogHandler {
 	}
 }
 
-public monitor class LogHandler {
+monitor class LogHandlerVolatileData {
 	ref<thread.Thread> _writeThread;
-	private Queue<ref<LogEvent>> _events;
-
-	~LogHandler() {
-		if (_writeThread != null) {
-			LogEvent terminator;
-
-			enqueue(&terminator);
-			_writeThread.join();
-		}
-	}
-
-	public void close() {
-		if (_writeThread != null) {
-			LogEvent shutdown = { msg: null };
-			enqueue(&shutdown);
-			_writeThread.join();
-			_writeThread = null;
-		}
-	}
+	Queue<ref<LogEvent>> _events;
 
 	void enqueue(ref<LogEvent> logEvent) {
 		_events.enqueue(logEvent.clone());
@@ -295,6 +277,34 @@ public monitor class LogHandler {
 	ref<LogEvent> dequeue() {
 		wait();
 		return _events.dequeue();
+	}
+
+}
+
+public class LogHandler extends LogHandlerVolatileData {
+
+	~LogHandler() {
+		close();
+	}
+
+	public void close() {
+		ref<thread.Thread> t;
+
+		lock (*this) {
+			if (_writeThread != null) {
+				LogEvent terminator;
+
+				enqueue(&terminator);
+				t = _writeThread;
+			}
+		}
+		// We really can't do this call under this lock, since the write thread wants to use the same lock
+		if (t != null) {
+			t.join();
+			lock (*this) {
+				_writeThread = null;
+			}
+		}
 	}
 
 	public abstract void processEvent(ref<LogEvent> logEvent);

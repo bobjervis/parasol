@@ -130,6 +130,43 @@ public string directory(string filename) {
 	}
 	return ".";
 }
+/**
+ * This function determines whether, on the host operating system, the given enlosingPath
+ * names a prefix directory in the enclosedPath. 
+ *
+ * @return true if the following is true:
+ *
+ *		- enclosedPath.startsWith(enclosingPath) - up to case sensitivity in the host 
+ *		  operating system. Note that for some file systems mounted on Linux, the file
+ *		  system may not distinguish upper- and lower-case letters even though native
+ *		  Linux file systems do. In such a case, this function will not check the
+ *		  paths to determine whether they refer to files in such a file system.
+ *		- The next character in the enclosedPath is a directory delimiter character;
+ *		  in other words the enclosingPath prefix names a complete directory component in 
+ *		  the enclosed path.
+ */
+public boolean pathEncloses(string enclosingPath, string enclosedPath) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		// TODO: cannot modify a string paramter - fix this when this constraint is relaxed.
+		string enclosing = enclosingPath.toLowerCase();
+		string enclosed = enclosedPath.toLowerCase();
+		if (!enclosed.startsWith(enclosing))
+			return false;
+		if (enclosedPath.length() == enclosingPath.length())
+			return true;
+		byte b = enclosedPath[enclosingPath.length()];
+		if (b == '\\' || b == '/')
+			return true;
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		if (!enclosedPath.startsWith(enclosingPath))
+			return false;
+		if (enclosedPath.length() == enclosingPath.length())
+			return true;
+		if (enclosedPath[enclosingPath.length()] == '/')
+			return true;
+	}
+	return false;
+}
 
 public boolean exists(string filename) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {

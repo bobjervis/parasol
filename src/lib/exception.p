@@ -748,7 +748,8 @@ private void dumpMyThread(ref<ExceptionContext> context) {
 	ref<thread.Thread> t = thread.currentThread();
 	Exception e(context);
 	lock (serializeDumps) {
-		printf("\nThread %s stack\n", t.name());
+		printf("\nThread %s (%d) stack\n", t.name(), t.id());
+		process.stdout.flush();
 		e.inferFramePointer();
 		string s = e.textStackTrace();
 		if (s.length() == 0)
@@ -767,6 +768,7 @@ private void dumpAllThreads(ref<ExceptionContext> context) {
 	for (int i = 0; i < threads.length(); i++) {
 		if (threads[i] == t || threads[i] == null)
 			continue;
+//		printf("t %p thread %p\n", t, threads[i]);
 		linux.tgkill(pid, int(threads[i].id()), linux.SIGQUIT);
 	}
 	thread.Thread.sleep(1000);
