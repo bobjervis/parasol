@@ -56,6 +56,9 @@ public abstract int closedir(ref<DIR> dirp);
 @Linux("libc.so.6", "creat")
 public abstract int creat(pointer<byte> pathname, mode_t mode);
 
+@Linux("libdl.so.2", "dladdr")
+public abstract int dladdr(address addr, ref<Dl_info> info);
+
 @Linux("libdl.so.2", "dlclose")
 public abstract int dlclose(address handle);
 
@@ -386,6 +389,13 @@ public int errno() {
 
 public class DIR {
 	private int dummy;			// Don't expose anything about this structure
+}
+
+public class Dl_info {
+	public pointer<byte> dli_fname;        /* File name of defining object.  */
+  	public address       dli_fbase;        /* Load address of that object.  */
+	public pointer<byte> dli_sname;        /* Name of nearest symbol.  */
+	public address		 dli_saddr;        /* Exact value of nearest symbol.  */
 }
 
 public class statStruct {

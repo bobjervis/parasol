@@ -15,6 +15,7 @@
  */
 namespace parasol:http;
 
+import parasol:log;
 import parasol:storage.File;
 import parasol:storage.openBinaryFile;
 import parasol:storage.Seek;
@@ -30,6 +31,7 @@ import parasol:net.ServerScope;
 import native:linux;
 import parasol:net;
 
+private ref<log.Logger> logger = log.getLogger("parasol.httpd");
 /*
  * This class implements an HTTP server. It implements HTTP version 1.1 for an Origin Server only. Hooks are defined to allow for
  * future expansion.
@@ -235,13 +237,15 @@ private void processHttpRequest(address ctx) {
 	HttpParser parser(context.connection);
 	HttpResponse response(context.connection);
 	if (parser.parseRequest(&request)) {
-//		request.print();
-		if (context.server.dispatch(&request, &response, context.connection.secured())) {
+		if (request.method == HttpRequest.Method.NO_CONTENTS)
+			response.error(400);
+		else if (context.server.dispatch(&request, &response, context.connection.secured())) {
 			delete context;
 			return;				// if dispatch returns true, we want to keep the connection open (for at least a while).
 		}
 	} else {
-		request.print();
+		logger.format(log.DEBUG, "Could not parse request for fd %d", context.connection.requestFd());
+//		request.print();
 		response.error(400);
 	}
 	response.close();
@@ -275,6 +279,7 @@ public class HttpRequest {
 	private ref<net.Connection> _connection;
 	
 	enum Method {
+		NO_CONTENTS,							// Not actually part of HTTP. Indicates empty HTTP payload.
 		OPTIONS,
 		GET,
 		HEAD,
@@ -507,6 +512,8 @@ public class HttpParser {
 	boolean parseRequest(ref<HttpRequest> request) {
 		_request = request;
 		HttpToken t = token();
+		if (t == HttpToken.END_OF_MESSAGE)
+			return true;
 		while (t == HttpToken.CRLF)
 			t = token();
 		if (t != HttpToken.TOKEN)
@@ -727,7 +734,7 @@ public class HttpParser {
 						}
 						// We have a CR/LF
 						
-						// Consecutvie CRLF tokens means end-of-headers, so don't read ahead - that might hang a get or other
+						// Consecutive CRLF tokens means end-of-headers, so don't read ahead - that might hang a get or other
 						// message that has no body.
 						
 						if (_previousToken == HttpToken.CRLF)

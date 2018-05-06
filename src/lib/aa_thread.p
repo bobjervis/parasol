@@ -258,6 +258,19 @@ public class Thread {
 			}
 		}
 	}
+
+	public int compare(ref<Thread> other) {
+		if (this == other)
+			return 0;
+		else if (long(this) > long(other))		// A meaningless, but consistent and cheap calculation
+			return 1;
+		else
+			return -1;
+	}
+
+	public int hash() {
+		return int(long(this) >> 8);
+	}
 }
 
 public void exit(int code) {

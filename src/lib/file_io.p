@@ -209,7 +209,7 @@ public class File {
 				openFlags = linux.O_WRONLY;
 			}
 			openFlags |= linux.O_CREATE|linux.O_APPEND;
-			_fd = linux.open(filename.c_str(), openFlags);
+			_fd = linux.open(filename.c_str(), openFlags, 0666);
 			if (_fd >= 0)
 				return true;
 		}
@@ -781,7 +781,7 @@ public class Directory {
 			return null;
 	}
 
-	public string basename() {
+	public string filename() {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			return ref<windows.WIN32_FIND_DATA>(_data).fileName();
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {

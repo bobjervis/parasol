@@ -88,9 +88,9 @@ public class Exception {
 			else {
 				string locationLabel;
 				if (relative >= staticMemoryLength || relative < 0)
-					locationLabel.printf("ext @%x", ip);
+					locationLabel = formattedExternalLocation(ip);
 				else
-					locationLabel = formattedLocation(relative, locationIsExact);
+					locationLabel = formattedLocation(ip, relative, locationIsExact);
 				output.printf(" %2s %s\n", tag, locationLabel);
 				tag = "";
 			}
@@ -712,8 +712,15 @@ public class HardwareException {
 	public int exceptionInfo1;
 	public int exceptionType;
 }
-
-public string formattedLocation(int offset, boolean locationIsExact) {
+/**
+ * @param ip The machine address to obtain a symbol for.
+ * @param offset The offset into the Parasol code image where the symbol could be found. If
+ * the value is -1, then only the ip is used and it is assumed to be outside Parasol code.
+ * @param locationIsExact true if this is the exact address you care about. For example, if
+ * it is the return address from a function, it may be pointing to the next source line so
+ * this code will adjust to look for the location one byte before the given address.
+ */
+public string formattedLocation(address ip, int offset, boolean locationIsExact) {
 	if (offset < 0)
 		return "-";
 	int unadjustedOffset = offset;
@@ -723,10 +730,8 @@ public string formattedLocation(int offset, boolean locationIsExact) {
 	int interval = sourceLocationsCount();
 	string result;
 	for (;;) {
-		if (interval <= 0) {
-			result.printf("@%x", offset);
-			break;
-		}
+		if (interval <= 0)
+			return formattedExternalLocation(ip);
 		int middle = interval / 2;
 		if (psl[middle].offset > offset)
 			interval = middle;
@@ -739,6 +744,25 @@ public string formattedLocation(int offset, boolean locationIsExact) {
 			interval = interval - middle - 1;
 		}
 	}
+	return result;
+}
+
+private string formattedExternalLocation(address ip) {
+	string result;
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		linux.Dl_info info;
+
+		if (ip != null && linux.dladdr(ip, &info) != 0) {
+			long symOffset = long(ip) - long(info.dli_saddr);
+			if (info.dli_sname == null)
+				result.printf("%s (@%p)", string(info.dli_fname), ip); 
+			else
+				result.printf("%s %s+0x%x (@%p)", string(info.dli_fname), string(info.dli_sname), symOffset, ip); 
+			return result;
+		}
+	}
+	result.printf("@%p", ip);
 	return result;
 }
 

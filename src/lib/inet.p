@@ -16,12 +16,16 @@
 namespace parasol:net;
 
 import parasol:exception;
+import parasol:log;
 import native:net;
 import native:linux;
 import native:C;
 import parasol:runtime;
+import parasol:thread;
 import openssl.org:ssl;
 import native:windows.WORD;
+
+private ref<log.Logger> logger = log.getLogger("parasol.net");
 
 private byte[] localhost = [ 127, 0, 0, 1 ];
 
@@ -111,7 +115,7 @@ public class Socket {
 					int result = net.WSAStartup(version, &data);
 					if (result != 0) {
 						// TODO: Make up an exception class for this error.
-						printf("WSAStartup returned %d\n", result);
+						logger.format(log.DEBUG,"WSAStartup returned %d\n", result);
 						assert(result == 0);
 					}
 				}
@@ -138,7 +142,7 @@ public class Socket {
 	}
 
 	~Socket() {
-//		printf("~Socket for %d\n", _socketfd);
+//		logger.format(log.DEBUG,"~Socket for %d\n", _socketfd);
 		net.closesocket(_socketfd);
 	}
 
@@ -151,12 +155,12 @@ public class Socket {
 
 			ref<net.hostent> localHost = net.gethostbyname(&hostname[0]);
 			if (localHost == null) {
-				printf("gethostbyname failed for '%s'\n", hostname);
+				logger.format(log.DEBUG,"gethostbyname failed for '%s'\n", hostname);
 				return false;
 			}
 			ip = net.inet_ntoa (*ref<unsigned>(*localHost.h_addr_list));
 //			string n(localHost.h_name);
-//			printf("hostent name = '%s' ip = '%s'\n", n, x);
+//			logger.format(log.DEBUG,"hostent name = '%s' ip = '%s'\n", n, x);
 			net.inet_addr(ip);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			if (scope == ServerScope.LOCALHOST)
@@ -164,13 +168,13 @@ public class Socket {
 			else {					// must be INTERNET
 				ref<linux.ifaddrs> ifAddresses;
 				if (linux.getifaddrs(&ifAddresses) != 0) {
-					printf("getifaddrs failed\n");
+					logger.format(log.DEBUG,"getifaddrs failed\n");
 					return false;
 				}
 				int i = 1;
 				for (ref<linux.ifaddrs> ifa = ifAddresses; ; ifa = ifa.ifa_next, i++) {
 					if (ifa == null) {
-						printf("No identifiable IPv4 address to use\n");
+						logger.format(log.DEBUG,"No identifiable IPv4 address to use\n");
 						return false;
 					}
 					if (ifa.ifa_addr.sa_family == net.AF_INET) {
@@ -187,22 +191,22 @@ public class Socket {
 		s.sin_family = net.AF_INET;
 		s.sin_addr.s_addr = *ref<unsigned>(ip);
 		s.sin_port = net.htons(port);
-//		printf("s = { %d, %x, %x }\n", s.sin_family, s.sin_addr.s_addr, s.sin_port);
+//		logger.format(log.DEBUG,"s = { %d, %x, %x }\n", s.sin_family, s.sin_addr.s_addr, s.sin_port);
 		if (net.bind(_socketfd, &s, s.bytes) != 0) {
-			printf("Binding failed to %d!", port);
+			logger.format(log.DEBUG,"Binding failed to %d!", port);
 			if (runtime.compileTarget == runtime.Target.X86_64_LNX)
 				linux.perror(" ".c_str());
-			printf("\n");
+			logger.format(log.DEBUG,"\n");
 			net.closesocket(_socketfd);
 			return false;
 		}
-//		printf("socketfd = %d\n", _socketfd);
+//		logger.format(log.DEBUG,"socketfd = %d\n", _socketfd);
 		return true;
 	}
 
 	public boolean listen() {
 		if (net.listen(_socketfd, net.SOMAXCONN) != 0) {
-			printf("listen != 0: ");
+			logger.format(log.DEBUG,"listen != 0: ");
 			linux.perror(null);
 			net.closesocket(_socketfd);
 			return false;
@@ -213,12 +217,12 @@ public class Socket {
 	public ref<Connection> accept() {
 		net.sockaddr_in a;
 		int addrlen = a.bytes;
-//		printf("&a = %p a.bytes = %d\n", &a, a.bytes);
+//		logger.format(log.DEBUG,"&a = %p a.bytes = %d\n", &a, a.bytes);
 		// TODO: Develop a test framework that allows us to test this scenario.
 		int acceptfd = net.accept(_socketfd, &a, &addrlen);
-//		printf("acceptfd = %d\n", acceptfd);
+//		logger.format(log.DEBUG,"acceptfd = %d\n", acceptfd);
 		if (acceptfd < 0) {
-			printf("acceptfd < 0: ");
+			logger.format(log.DEBUG,"accept failed: %d", acceptfd);
 			linux.perror(null);
 			net.closesocket(_socketfd);
 			return null;
@@ -254,7 +258,7 @@ public class Socket {
 		sock_addr.sin_addr.s_addr = ip;
 		int result = net.connect(_socketfd, &sock_addr, sock_addr.bytes);
 		if (result != 0) {
-			printf("net.connect failed: %d\n", result);
+			logger.format(log.DEBUG,"net.connect failed: %d\n", result);
 			return null, ip;
 		}
 		ref<Connection> connection = createConnection(_socketfd, &sock_addr, sock_addr.bytes);
@@ -268,7 +272,7 @@ public class Socket {
 		if (net.inet_aton(hostname.c_str(), &inet) == 0) {
 			ref<net.hostent> host = net.gethostbyname(hostname.c_str());
 			if (host == null) {
-				printf("gethostbyname failed for '%s'\n", hostname);
+				logger.format(log.DEBUG,"gethostbyname failed for '%s'\n", hostname);
 				return 0, false;
 			}
 			inet.s_addr = *ref<unsigned>(*host.h_addr_list);
@@ -297,7 +301,7 @@ public class Connection {
 	}
 
 	~Connection() {
-		printf("~Connection %p\n", this);
+		logger.format(log.DEBUG,"~Connection %p\n", this);
 	}
 
 	public int requestFd() {
@@ -361,6 +365,8 @@ public class Connection {
 		return true;
 	}
 
+//	static Monitor mon;
+
 	// These implement buffered reads using _inBuffer;
 
 	public int read() {
@@ -370,9 +376,15 @@ public class Connection {
 			_actual = read(&_inBuffer[0], _inBuffer.length());
 			if (_actual <= 0) {
 				if (_actual < 0)
-					text.printf("Failed to read from connection: %d\n", _actual);
+					logger.format(log.ERROR, "Failed to read from connection %d: %d\n", _acceptfd, _actual);
+//				else
+//					logger.format(log.DEBUG, "Read 0 bytes from connection %d", _acceptfd);
 				return -1;
 			}
+
+//			lock (mon) {
+//				logMemDump(_acceptfd, &_inBuffer[0], _actual, 0);
+//			}
 			_cursor = 0;
 		}
 		return _inBuffer[_cursor++];
@@ -467,194 +479,272 @@ private monitor class InitSSL {
 private InitSSL _init_ssl;
 
 class SSLSocket extends Socket {
-	private ref<ssl.SSL_CTX> _context;
+	string _cipherList;
+	string _certificatesFile;
+	string _privateKeyFile;
+	string _dhParamsFile;
+	ref<ssl.SSL_METHOD> _method;
+
+	private monitor class SSLContextPool {
+		private map<ref<ssl.SSL_CTX>, ref<thread.Thread>> _contexts;
+
+		~SSLContextPool() {
+			_contexts.deleteAll();
+		}
+
+		public ref<ssl.SSL_CTX> getContext(ref<thread.Thread> t) {
+			return _contexts[t];
+		}
+
+		public void setContext(ref<thread.Thread> t, ref<ssl.SSL_CTX> context) {
+//			logger.format(log.DEBUG, "thread %s <- context %p", t.name(), context);
+			_contexts[t] = context;
+		}
+	}
+
+	private SSLContextPool _contextPool;
 
 	SSLSocket(Encryption encryption, string cipherList, string certificatesFile, string privateKeyFile, string dhParamsFile) {
 		lock (_init_ssl) {
 			if (!_done) {
 				_done = true;
-//				printf("SSL_library_init\n");
+//				logger.format(log.DEBUG,"SSL_library_init\n");
 				ssl.SSL_load_error_strings();
 				ssl.SSL_library_init();
 			}
 		}
-		ref<ssl.SSL_METHOD> method;
 		switch (encryption) {
 		case SSLv23:
-			method = ssl.SSLv23_method();
+			_method = ssl.SSLv23_method();
 			break;
 
 		case TLSv1_2:
-			method = ssl.TLSv1_2_method();
+			_method = ssl.TLSv1_2_method();
 			break;
 
 		default:
 			assert(false);
 		}
-		_context = ssl.SSL_CTX_new(method);
-		if (_context == null) {
-			printf("SSL_CTX_new failed: %d\n", ssl.SSL_get_error(null, 0));
-			printf("                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(null, 0), null));
+//		logger.format(log.DEBUG,"SSL configuration loaded\n");
+		_cipherList = cipherList;
+		_certificatesFile = certificatesFile;
+		_privateKeyFile = privateKeyFile;
+		_dhParamsFile = dhParamsFile;
+	}
+
+	protected ref<Connection> createConnection(int acceptfd, ref<net.sockaddr_in> address, int addressLength) {
+		return new SSLConnection(acceptfd, address, addressLength, this);
+	}
+
+	public ref<ssl.SSL_CTX> getContext() {
+		ref<thread.Thread> t = thread.currentThread();
+		ref<ssl.SSL_CTX> context = _contextPool.getContext(t);
+		if (context == null) {
+			context = createSSLContext(_method, _cipherList, _certificatesFile, _privateKeyFile, _dhParamsFile);
+			if (context == null)
+				return null;
+			_contextPool.setContext(t, context);
+		}
+		return context;
+	}
+
+	public ref<ssl.SSL_CTX> createSSLContext(ref<ssl.SSL_METHOD> method, string cipherList, string certificatesFile, string privateKeyFile, string dhParamsFile) {
+		ref<ssl.SSL_CTX> context = ssl.SSL_CTX_new(method);
+		if (context == null) {
+			logger.format(log.ERROR, "SSL_CTX_new failed: %d", ssl.SSL_get_error(null, 0));
+			logger.format(log.DEBUG, "                %s", ssl.ERR_error_string(ssl.SSL_get_error(null, 0), null));
 			for (;;) {
 				long e = ssl.ERR_get_error();
 				if (e == 0)
 					break;
-				printf("    %d %s\n", e, ssl.ERR_error_string(e, null));
+				logger.format(log.DEBUG,"    %d %s", e, ssl.ERR_error_string(e, null));
 			}
+			return null;
 		}
-		ssl.SSL_CTX_set_options(_context, ssl.SSL_OP_NO_SSLv2);
+		ssl.SSL_CTX_set_options(context, ssl.SSL_OP_NO_SSLv2);
 		if (certificatesFile != null) {
-	//		printf("Loading self-signed certificate.\n");
-			ssl.SSL_CTX_use_certificate_file(_context, certificatesFile.c_str(), ssl.SSL_FILETYPE_PEM);
-			ssl.SSL_CTX_set_client_CA_list(_context, ssl.SSL_load_client_CA_file("/etc/ssl/certs/ca-certificates.crt".c_str()));
+	//		logger.format(log.DEBUG,"Loading self-signed certificate.\n");
+			ssl.SSL_CTX_use_certificate_file(context, certificatesFile.c_str(), ssl.SSL_FILETYPE_PEM);
+			ssl.SSL_CTX_set_client_CA_list(context, ssl.SSL_load_client_CA_file("/etc/ssl/certs/ca-certificates.crt".c_str()));
 		}
 		if (privateKeyFile != null)
-			ssl.SSL_CTX_use_PrivateKey_file(_context, privateKeyFile.c_str(), ssl.SSL_FILETYPE_PEM);
+			ssl.SSL_CTX_use_PrivateKey_file(context, privateKeyFile.c_str(), ssl.SSL_FILETYPE_PEM);
 		if (dhParamsFile != null) {
-	//		printf("Loading DH parameters\n");
+	//		logger.format(log.DEBUG,"Loading DH parameters\n");
 			ref<C.FILE> fp = C.fopen(dhParamsFile.c_str(), "r".c_str());
 			if (fp == null)
-				printf("Cannot open '%s' file\n", dhParamsFile);
+				logger.format(log.DEBUG,"Cannot open '%s' file", dhParamsFile);
 			else {
 				ref<ssl.DH> dh = ssl.PEM_read_DHparams(fp, null, null, "jrirba".c_str());
 				C.fclose(fp);
 				if (dh != null) {
-					if (ssl.SSL_CTX_set_tmp_dh(_context, dh) != 1)
-						printf("SSL_CTX_set_tmp_dh failed\n");
+					if (ssl.SSL_CTX_set_tmp_dh(context, dh) != 1)
+						logger.format(log.DEBUG,"SSL_CTX_set_tmp_dh failed");
 	//				else
-	//					printf("SSL_CTX_set_tmp_dh succeeded\n");
+	//					logger.format(log.DEBUG,"SSL_CTX_set_tmp_dh succeeded\n");
 					ssl.DH_free(dh);
 				} else
-					printf("PEM_read_DHparams failed\n");
+					logger.format(log.DEBUG,"PEM_read_DHparams failed");
 			}
 		}
 		if (cipherList != null) {
-//			printf("Setting cipher list to '%s'\n", cipherList);
-			if (ssl.SSL_CTX_set_cipher_list(_context, cipherList.c_str()) == 0) {
+//			logger.format(log.DEBUG,"Setting cipher list to '%s'\n", cipherList);
+			if (ssl.SSL_CTX_set_cipher_list(context, cipherList.c_str()) == 0) {
+				logger.format(log.ERROR, "Could not load cipher list");
 				for (;;) {
 					long e = ssl.ERR_get_error();
 					if (e == 0)
 						break;
-					printf("    %d %s\n", e, ssl.ERR_error_string(e, null));
+					logger.format(log.DEBUG,"    %d %s", e, ssl.ERR_error_string(e, null));
 				}
 			}
 		}
-//		printf("SSL configuration loaded\n");
+//		logger.format(log.DEBUG, "context created for %d", _acceptfd);
+		return context;
 	}
 
-	protected ref<Connection> createConnection(int acceptfd, ref<net.sockaddr_in> address, int addressLength) {
-		return new SSLConnection(acceptfd, address, addressLength, _context);
-	}
 }
 
 class SSLConnection extends Connection {
+	private ref<SSLSocket> _socket;
 	private ref<ssl.SSL_CTX> _context;
 	private ref<ssl.SSL> _ssl;
 
-	SSLConnection(int acceptfd, ref<net.sockaddr_in> addr, int addrLen, ref<ssl.SSL_CTX> context) {
+	SSLConnection(int acceptfd, ref<net.sockaddr_in> addr, int addrLen, ref<SSLSocket> socket) {
 		super(acceptfd, addr, addrLen);
-		_context = context;
+//		logger.format(log.DEBUG, "new SSLConnection(%d, -)\n", acceptfd); 
+		_socket = socket;
 	}
 
 	public boolean acceptSecurityHandshake() {
+		if (!initializeContext())
+			return false;
 		// Do the TLS handshake
-//		printf("Starting TLS handshake...\n");
+//		logger.debug("Starting TLS handshake...");
 		ref<ssl.BIO> bio = ssl.BIO_new_socket(_acceptfd, ssl.BIO_NOCLOSE);
 		_ssl = ssl.SSL_new(_context);
 		if (_ssl == null) {
-			text.printf("SSL_new failed: %d\n", ssl.SSL_get_error(null, 0));
-			printf("                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(null, 0), null));
+			logger.format(log.DEBUG, "SSL_new failed: %d", ssl.SSL_get_error(null, 0));
+			logger.format(log.DEBUG, "                %s", ssl.ERR_error_string(ssl.SSL_get_error(null, 0), null));
 			for (;;) {
 				long e = ssl.ERR_get_error();
 				if (e == 0)
 					break;
-				text.printf("    %d %s\n", e, ssl.ERR_error_string(e, null));
+				logger.format(log.DEBUG, "    %d %s", e, ssl.ERR_error_string(e, null));
 			}
 			return false;
 		}
 /*
-		printf("Ciphers:\n");
+		logger.format(log.DEBUG,"Ciphers:\n");
 		for (int prio = 0; ; prio++) {
 			pointer<byte> list = ssl.SSL_get_cipher_list(_ssl, prio);
 			if (list == null)
 				break;
-			printf("[%d] %s\n", prio, list);
+			logger.format(log.DEBUG,"[%d] %s\n", prio, list);
 		}
  */
 		ssl.SSL_set_accept_state(_ssl);
 		ssl.SSL_set_bio(_ssl, bio, bio);
+//		logger.format(log.DEBUG, "_ssl %p before SSL_accept", _ssl);
 		int r = ssl.SSL_accept(_ssl);
 		if (r == -1) {
-			text.printf("SSL_accept failed: %d\n", ssl.SSL_get_error(null, 0));
-			text.printf("                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(null, 0), null));
+			logger.format(log.DEBUG,"SSL_accept failed: %d", ssl.SSL_get_error(_ssl, r));
+			logger.format(log.DEBUG,"                %s", ssl.ERR_error_string(ssl.SSL_get_error(_ssl, r), null));
 			for (;;) {
 				long e = ssl.ERR_get_error();
 				if (e == 0)
 					break;
-				text.printf("    %d %s\n", e, ssl.ERR_error_string(e, null));
+				logger.format(log.DEBUG,"    %d %s", e, ssl.ERR_error_string(e, null));
 			}
 			return false;
 		}
 		// TLS handshake completed and everything ok to proceed.
 
-//		printf("AOK r = %d\n", r);
+//		logger.format(log.DEBUG,"_ssl %p acceptFd %d AOK r = %d", _ssl, _acceptfd, r);
 
 		return r == 1;
 	}
 
 	public boolean initiateSecurityHandshake() {
+		if (!initializeContext())
+			return false;
 		// Do the TLS handshake
-//		text.printf("Starting TLS handshake...\n");
+//		logger.format(log.DEBUG,"Starting TLS handshake...\n");
 //		ref<ssl.BIO> bio = ssl.BIO_new_socket(_acceptfd, ssl.BIO_NOCLOSE);
 		_ssl = ssl.SSL_new(_context);
 		if (_ssl == null) {
-			text.printf("SSL_new failed: %d\n", ssl.SSL_get_error(null, 0));
-			text.printf("                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(null, 0), null));
+			logger.format(log.DEBUG,"SSL_new failed: %d\n", ssl.SSL_get_error(null, 0));
+			logger.format(log.DEBUG,"                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(null, 0), null));
 			for (;;) {
 				long e = ssl.ERR_get_error();
 				if (e == 0)
 					break;
-				text.printf("    %d %s\n", e, ssl.ERR_error_string(e, null));
+				logger.format(log.DEBUG,"    %d %s\n", e, ssl.ERR_error_string(e, null));
 			}
 			return false;
 		}
 		if (ssl.SSL_set_fd(_ssl, _acceptfd) == 0) {
-			printf("SSL_set_fd failed\n");
+			logger.format(log.DEBUG,"SSL_set_fd failed\n");
 		}
 //		ssl.SSL_set_connect_state(_ssl);
 //		ssl.SSL_set_bio(_ssl, bio, bio);
 		int r = ssl.SSL_connect(_ssl);
-//		text.printf("r = %d\n", r);
+//		logger.format(log.DEBUG,"r = %d\n", r);
 		if (r < 1) {
-			text.printf("SSL_connect failed: %d\n", ssl.SSL_get_error(null, r));
-			text.printf("                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(null, r), null));
+			logger.format(log.DEBUG,"SSL_connect failed: %d\n", ssl.SSL_get_error(_ssl, r));
+			logger.format(log.DEBUG,"                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(_ssl, r), null));
 			for (;;) {
 				long e = ssl.ERR_get_error();
 				if (e == 0)
 					break;
-				text.printf("    %d %s\n", e, ssl.ERR_error_string(e, null));
+				logger.format(log.DEBUG,"    %d %s\n", e, ssl.ERR_error_string(e, null));
 			}
 			return false;
 		}
 		return r == 1;
 	}
 
+	private boolean initializeContext() {
+		if (_context == null) {
+			_context = _socket.getContext();
+//			logger.format(log.DEBUG, "got context for %d: %p", _acceptfd, _context);
+			if (_context == null)
+				return false;
+		}
+		return true;
+	}
+
 	public int read(pointer<byte> buffer, int length) {
 		for (;;) {
-//			text.printf("about to SSL_read\n");
+//			logger.format(log.DEBUG,"about to SSL_read\n");
 			int x = ssl.SSL_read(_ssl, buffer, length);
-//			text.printf("Got %d bytes\n", x);
-			if (x < 0) {
-				if (x == -1) {
+//			logger.format(log.DEBUG,"Got %d bytes\n", x);
+			if (x <= 0) {
+				if (x == 0) {
+					int err = ssl.SSL_get_error(_ssl, x);
+					if (err == ssl.SSL_ERROR_SYSCALL) {
+						if (ssl.ERR_get_error() == 0)
+							return 0;
+					} else if (err == ssl.SSL_ERROR_ZERO_RETURN)
+						return 0;
+					logger.format(log.DEBUG,"SSL_read of %d returned zero: %d\n", _acceptfd, ssl.SSL_get_error(_ssl, x));
+					for (;;) {
+						long e = ssl.ERR_get_error();
+						if (e == 0)
+							break;
+						logger.format(log.DEBUG,"    %d %s\n", e, ssl.ERR_error_string(e, null));
+					}
+					return -1;
+				} else if (x == -1) {
 					// If the failure was caused by an interrupted system call, just re-start the read.
 					if (linux.errno() == linux.EINTR)
 						continue;
 				}
-				text.printf("SSL_read failed return %d\n", x);
+				logger.format(log.DEBUG,"SSL_read failed return %d\n", x);
 				diagnoseError();
 				linux.perror("SSL_read".c_str());
 	//		} else {
-	//			text.printf("SSLConnection.read:\n");
+	//			logger.format(log.DEBUG,"SSLConnection.read:\n");
 	//			text.memDump(buffer, x);
 			}
 			return x;
@@ -662,11 +752,11 @@ class SSLConnection extends Connection {
 	}
 
 	public int write(pointer<byte> buffer, int length) {
-//		text.printf("SSLConnection write to %d:\n", _acceptfd);
+//		logger.format(log.DEBUG,"SSLConnection write to %d:\n", _acceptfd);
 //		text.memDump(buffer, length);
 		int result = ssl.SSL_write(_ssl, buffer, length);
 		if (result < 0) {
-			text.printf("SSL_write failed result = %d\n", result);
+			logger.format(log.DEBUG,"SSL_write failed result = %d\n", result);
 			diagnoseError();
 			linux.perror("SSL_write".c_str());
 		}
@@ -674,20 +764,27 @@ class SSLConnection extends Connection {
 	}
 
 	public void diagnoseError() {
-		text.printf("SSL call failed: %d\n", ssl.SSL_get_error(_ssl, 0));
-		text.printf("                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(_ssl, 0), null));
+		logger.format(log.DEBUG,"SSL call failed: %d\n", ssl.SSL_get_error(_ssl, 0));
+		logger.format(log.DEBUG,"                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(_ssl, 0), null));
 		for (;;) {
 			long e = ssl.ERR_get_error();
 			if (e == 0)
 				break;
-			printf("    %d %s\n", e, ssl.ERR_error_string(e, null));
+			logger.format(log.DEBUG,"    %d %s\n", e, ssl.ERR_error_string(e, null));
 		}
 	}
 
 	public void close() {
-//		text.printf("SSL_close\n");
-		ssl.SSL_free(_ssl);
+//		logger.debug("SSL_close");
+		if (_ssl != null) {
+			ssl.SSL_free(_ssl);
+			_ssl = null;
+//			ssl.SSL_CTX_free(_context);
+			_context = null;
+		} else
+			logger.debug("null _ssl indicates possible double close?");
 		net.closesocket(_acceptfd);
+//		logger.debug("SSL_closed done");
 	}
 
 	public boolean secured() {
@@ -788,5 +885,50 @@ for (int i = 0; i < decodeMap.length(); i++)
 for (int i = 0; i < encoding.length(); i++)
 	decodeMap[encoding[i]] = i;
 decodeMap['='] = -1;
+
+
+public void logMemDump(int fd, address buffer, long length, long startingOffset) {
+	pointer<byte> printed = pointer<byte>(startingOffset);
+	pointer<byte> firstRow = printed + -int(startingOffset & 15);
+	pointer<byte> data = pointer<byte>(buffer) + -int(startingOffset & 15);
+	pointer<byte> next = printed + int(length);
+	pointer<byte> nextRow = next + ((16 - int(next) & 15) & 15);
+	string output;
+	output.printf("read from %d\n", fd);
+	for (pointer<byte> p = firstRow; int(p) < int(nextRow); p += 16, data += 16) {
+		dumpPtr(&output, p);
+		output.printf(" ");
+		for (int i = 0; i < 8; i++) {
+			if (int(p + i) >= int(printed) && int(p + i) < int(next))
+				output.printf(" %2.2x", int(data[i]));
+			else
+				output.printf("   ");
+		}
+		output.printf(" ");
+		for (int i = 8; i < 16; i++) {
+			if (int(p + i) >= int(printed) && int(p + i) < int(next))
+				output.printf(" %2.2x", int(data[i]));
+			else
+				output.printf("   ");
+		}
+		output.printf(" ");
+		for (int i = 0; i < 16; i++) {
+			if (int(p + i) >= int(printed) && int(p + i) < int(next)) {
+				if (data[i].isPrintable())
+					output.printf("%c", int(data[i]));
+				else
+					output.printf(".");
+			} else
+				output.printf(" ");
+		}
+		output.printf("\n");
+	}
+	logger.format(log.DEBUG, output);
+}
+
+private void dumpPtr(ref<string> output, address x) {
+	pointer<long> np = pointer<long>(&x);
+	output.printf("%16.16x", *np);
+}
 
 

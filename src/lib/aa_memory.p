@@ -441,10 +441,10 @@ public class LeakHeap extends Allocator {
 			if (offset == -1)
 				printf(" Total\n");
 			else {
-				printf(" %s", exception.formattedLocation(offset, false));
+				printf(" %s", exception.formattedLocation(null, offset, false));
 				while (cs != null && cs.next == null) {
 					// We have only one call site, so merge it with this one...
-					printf(" %s", exception.formattedLocation(cs.offset, false));
+					printf(" %s", exception.formattedLocation(null, cs.offset, false));
 					cs = cs.callers;
 				}
 				printf("\n");

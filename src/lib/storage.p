@@ -87,11 +87,24 @@ public boolean setReadOnly(string filename, boolean readOnly) {
 	} else
 		return false;
 }
-
-public string basename(string filename) {
-	for (int x = filename.length() - 1; x >= 0; x--)
-		if (filename[x] == '\\' || filename[x] == '/')
-			return filename.substring(x + 1);
+/**
+ * Returns the last component (the filename part) of a path string.
+ *
+ * @param filename Ab absolute or relative path for a file.
+ *
+ * @return The substring following the last path separator character recognized by the host operating system.
+ * If the string contains no such separator, the function returns the filename parameter.
+ */
+public string filename(string filename) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		for (int x = filename.length() - 1; x >= 0; x--)
+			if (filename[x] == '\\' || filename[x] == '/')
+				return filename.substring(x + 1);
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		int idx = filename.lastIndexOf('/');
+		if (idx >= 0)
+			return filename.substring(idx + 1);
+	}
 	return filename;
 }
 
@@ -106,7 +119,7 @@ public string constructPath(string directory, string baseName, string extension)
 	} else
 		base = baseName;
 	if (extension.length() > 0) {
-		string b = basename(base);
+		string b = filename(base);
 		int i = b.lastIndexOf('.');
 		if (i != -1) {
 			int extSize = b.length() - i;
@@ -131,38 +144,38 @@ public string directory(string filename) {
 	return ".";
 }
 /**
- * This function determines whether, on the host operating system, the given enlosingPath
- * names a prefix directory in the enclosedPath. 
+ * This function determines whether, on the host operating system, the given prefix
+ * names the initial directory in the path.
  *
  * @return true if the following is true:
  *
- *		- enclosedPath.startsWith(enclosingPath) - up to case sensitivity in the host 
+ *		- path.startsWith(prefix) - up to case sensitivity in the host 
  *		  operating system. Note that for some file systems mounted on Linux, the file
  *		  system may not distinguish upper- and lower-case letters even though native
  *		  Linux file systems do. In such a case, this function will not check the
  *		  paths to determine whether they refer to files in such a file system.
- *		- The next character in the enclosedPath is a directory delimiter character;
- *		  in other words the enclosingPath prefix names a complete directory component in 
- *		  the enclosed path.
+ *		- The next character in the path is a directory delimiter character;
+ *		  in other words the prefix names a complete directory component in 
+ *		  the path.
  */
-public boolean pathEncloses(string enclosingPath, string enclosedPath) {
+public boolean pathStartsWith(string path, string prefix) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-		// TODO: cannot modify a string paramter - fix this when this constraint is relaxed.
-		string enclosing = enclosingPath.toLowerCase();
-		string enclosed = enclosedPath.toLowerCase();
-		if (!enclosed.startsWith(enclosing))
+		// TODO: cannot modify a string parameter - fix this when this constraint is relaxed.
+		string lprefix = prefix.toLowerCase();
+		string lpath = path.toLowerCase();
+		if (!lpath.startsWith(lprefix))
 			return false;
-		if (enclosedPath.length() == enclosingPath.length())
+		if (path.length() == prefix.length())
 			return true;
-		byte b = enclosedPath[enclosingPath.length()];
+		byte b = path[prefix.length()];
 		if (b == '\\' || b == '/')
 			return true;
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-		if (!enclosedPath.startsWith(enclosingPath))
+		if (!path.startsWith(prefix))
 			return false;
-		if (enclosedPath.length() == enclosingPath.length())
+		if (path.length() == prefix.length())
 			return true;
-		if (enclosedPath[enclosingPath.length()] == '/')
+		if (path[prefix.length()] == '/')
 			return true;
 	}
 	return false;
@@ -306,13 +319,21 @@ public boolean makeDirectory(string path, boolean shared) {
  * 
  * If it fails, that is because one or more of the directories in the path do not exist and you do not have permissions to create
  * it, or it does exist and is not a directory.
+ *
+ * @param path A file system path of a directory that exists or willl be created
+ *
+ * @return true if the directory did exist or could be created. False if the directory did not exist and either it or some
+ * directory in the path could not be created.
  */
 public boolean ensure(string path) {
 	if (isDirectory(path))
 		return true;
+//	printf("path %s does not exist - creating it\n", path);
 	string dir = directory(path);
-	if (!ensure(dir))
+	if (!ensure(dir)) {
+//		printf("could not ensure %s\n", dir);
 		return false;
+	}
 	// The final component of the path is not a directory, but the rest of the path checks out, so try and create the path as a directory.
 	return makeDirectory(path);
 }
@@ -389,19 +410,19 @@ public boolean copyDirectoryTree(string source, string destination, boolean tryA
 	dir.pattern("*");
 	if (dir.first()) {
 		do {
-			if (dir.basename() == "." || dir.basename() == "..")
+			if (dir.filename() == "." || dir.filename() == "..")
 				continue;
-			string filename = dir.path();
+			string filepath = dir.path();
 			string destFilename;
-			destFilename.printf("%s/%s", destination, dir.basename());
-			if (isDirectory(filename)) {
-				if (!copyDirectoryTree(filename, destFilename, tryAllFiles)) {
+			destFilename.printf("%s/%s", destination, dir.filename());
+			if (isDirectory(filepath)) {
+				if (!copyDirectoryTree(filepath, destFilename, tryAllFiles)) {
 					delete dir;
 					if (!tryAllFiles)
 						deleteDirectoryTree(destination);
 					return false;
 				}
-			} else if (!copyFile(filename, destFilename)) {
+			} else if (!copyFile(filepath, destFilename)) {
 				delete dir;
 				if (!tryAllFiles)
 					deleteDirectoryTree(destination);
@@ -456,15 +477,15 @@ public boolean deleteDirectoryTree(string path) {
 	dir.pattern("*");
 	if (dir.first()) {
 		do {
-			if (dir.basename() == "." || dir.basename() == "..")
+			if (dir.filename() == "." || dir.filename() == "..")
 				continue;
-			string filename = dir.path();
-			if (isDirectory(filename) && !isLink(filename)) {
-				if (!deleteDirectoryTree(filename)) {
+			string filepath = dir.path();
+			if (isDirectory(filepath) && !isLink(filepath)) {
+				if (!deleteDirectoryTree(filepath)) {
 					delete dir;
 					return false;
 				}
-			} else if (!deleteFile(filename)) {
+			} else if (!deleteFile(filepath)) {
 				delete dir;
 				return false;
 			}

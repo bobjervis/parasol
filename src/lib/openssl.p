@@ -47,6 +47,9 @@ public abstract int SSL_CTX_ctrl(ref<SSL_CTX> ctx, int cmd, long varg, address p
 @Linux("libssl.so.10", "SSL_CTX_load_verify_locations")
 public abstract int SSL_CTX_load_verify_locations(ref<SSL_CTX> ctx, pointer<byte> CAfile, pointer<byte> CApath);
 
+@Linux("libssl.so.10", "SSL_CTX_free")
+public abstract void SSL_CTX_free(ref<SSL_CTX> ctx);
+
 @Linux("libssl.so.10", "SSL_CTX_new")
 public abstract ref<SSL_CTX> SSL_CTX_new(ref<SSL_METHOD> method);
 
@@ -166,5 +169,25 @@ public int SSL_FILETYPE_PEM   =     X509_FILETYPE_PEM;
 
 public int SSL_CTRL_SET_TMP_DH = 3;
 public int SSL_CTRL_OPTIONS = 32;
+
+@Constant
+public int SSL_ERROR_NONE =                  0;
+@Constant
+public int SSL_ERROR_SSL =                   1;
+@Constant
+public int SSL_ERROR_WANT_READ =             2;
+@Constant
+public int SSL_ERROR_WANT_WRITE =            3;
+@Constant
+public int SSL_ERROR_WANT_X509_LOOKUP =      4;
+@Constant
+public int SSL_ERROR_SYSCALL =               5;/* look at error stack/return
+                                           * value/errno */
+@Constant
+public int SSL_ERROR_ZERO_RETURN =           6;
+@Constant
+public int SSL_ERROR_WANT_CONNECT =          7;
+@Constant
+public int SSL_ERROR_WANT_ACCEPT =           8;
 
 
