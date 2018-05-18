@@ -278,6 +278,23 @@ public class File {
 		}
 		return -1;
 	}
+	/**
+	 * @RETURN A value greater then or equal to zero on success, with the size of the file.
+	 * A negative return value indicates an error. In the event of an error, the file position
+	 * for any subsequent read or write operation is undefined.
+	 */
+	public long size() {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+			linux.statStruct statb;
+
+			int result = linux.fstat(int(_fd), &statb);
+			if (result != 0)
+				return -1;
+			return statb.st_size;
+		}
+		return -1;
+	}
 
 	public long seek(long offset, Seek whence) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {

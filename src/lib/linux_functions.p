@@ -344,15 +344,14 @@ public abstract pid_t waitpid(pid_t pid, ref<int> exitStatus, int options);
 @Linux("libc.so.6", "write")
 public abstract int write(int fd, address buffer, long bufferSize);
 
+@Linux("libc.so.6", "__fxstat")
+public abstract int __fxstat(int statVersion, int fd, ref<statStruct> buf);
+
 @Linux("libc.so.6", "__lxstat")
 public abstract int __lxstat(int statVersion, pointer<byte> path, ref<statStruct> buf);
 
 @Linux("libc.so.6", "__xstat")
 public abstract int __xstat(int statVersion, pointer<byte> path, ref<statStruct> buf);
-
-public abstract int open(pointer<byte> filename, int ioFlags);
-
-public abstract int openCreat(pointer<byte> filename, int ioFlags, int mode);
 
 /*
  * Hack to get the tid - gettid is not in the Linux library, so we have to resort to this...
@@ -375,6 +374,10 @@ public int lstat(pointer<byte> path, ref<statStruct> buf) {
 
 public int stat(pointer<byte> path, ref<statStruct> buf) {
 	return __xstat(1, path, buf);
+}
+
+public int fstat(int fd, ref<statStruct> buf) {
+	return __fxstat(1, fd, buf);
 }
 
 public int tgkill(int tgid, int tid, int sig) {

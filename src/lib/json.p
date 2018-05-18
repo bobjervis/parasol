@@ -21,6 +21,10 @@ import parasol:compiler.CPC_LETTER;
 
 import parasol:text.memDump;
 
+import parasol:log;
+
+private ref<log.Logger> logger = log.getLogger("parasol.json");
+
 public var, boolean parse(string text) {
 	Parser parser(text);
 	var x;
