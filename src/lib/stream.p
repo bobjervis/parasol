@@ -23,14 +23,20 @@ import native:C;
 @Constant
 int MILLIS_PER_SECOND = 1000;
 
+@Constant
+public int REPLACEMENT_CHARACTER = 0xfffd;
+/**
+ * This converter will read a stream of UTF-8 byte text and return a UTF-32 stream
+ * of Unicode code points.
+ */
 public class UTF8Reader {
 	private ref<Reader> _reader;
 	/*
-	 * _lastChar is the last value returned by getc
+	 * _lastChar is the last value returned by read
 	 */
 	private int _lastChar;
 	/*
-	 * _lastByte is the last character read and pushed back  
+	 * _lastByte is the last byte read and pushed back  
 	 */
 	private int _lastByte;
 	private int _errorByte;
@@ -60,9 +66,9 @@ public class UTF8Reader {
 			return x;
 		} else if (x < 0xe0) {
 			if (x < 0xc0) {		// this is a trailing multi-byte value, not legal
-				_lastChar = int.MAX_VALUE;			// unget will turn this into int.MIN_VALUE
+				_lastChar = REPLACEMENT_CHARACTER;
 				_errorByte = x;
-				return int.MAX_VALUE;
+				return REPLACEMENT_CHARACTER;
 			} else {
 				x &= 0x1f;
 				extraBytes = 1;			// A two-byte sequence (0-7ff)
@@ -81,24 +87,58 @@ public class UTF8Reader {
 				x &= 0x1;
 				extraBytes = 5;			// A six-byte sequence (0-7fffffff)
 			} else {
-				_lastChar = int.MAX_VALUE;			// unget will turn this into int.MIN_VALUE
+				_lastChar = REPLACEMENT_CHARACTER;
 				_errorByte = x;
-				return int.MAX_VALUE;
+				return REPLACEMENT_CHARACTER;
 			}
 		}
 		for (int i = 0; i < extraBytes; i++) {
 			int n = _reader.read();
 			if ((n & ~0x3f) != 0x80) {				// This is not a continuation byte
-				_lastChar = int.MAX_VALUE;			// unget will turn this into int.MIN_VALUE
+				_lastChar = REPLACEMENT_CHARACTER;
 				_lastByte = n;
 				_errorByte = -1;
-				return int.MAX_VALUE;
+				return REPLACEMENT_CHARACTER;
 			}
 			int increment = n & 0x3f;
 			x = (x << 6) + increment;
 		}
 		_lastChar = x;
 		return x;
+	}
+
+	public int read(pointer<int> buffer, int length) {
+		int count;
+		while (length > 0) {
+			int c = read();
+
+			if (c == EOF)
+				break;
+
+			*buffer++ = c;
+			length--;
+			count++;
+		}
+		return count;
+	}
+	/**
+	 * Read into an int array buffer. Code points are read up to the
+	 * number of elements in the array. Any existing contents are over-written
+	 * starting at index 0.
+	 *
+	 * @return The number of code points read. A return of 0 indicates end of stream.
+	 */
+	public int read(ref<int[]> buffer) {
+		int count;
+		while (count < buffer.length()) {
+			int c = read();
+
+			if (c == EOF)
+				break;
+
+			(*buffer)[count++] = c;
+		}
+		return count;
 	}
 
 	public void unget() {
@@ -111,6 +151,125 @@ public class UTF8Reader {
 	}
 }
 
+@Constant
+int SURROGATE_START = 0xd800;
+@Constant
+int HI_SURROGATE_START = 0xd800;
+@Constant
+int HI_SURROGATE_END = 0xdbff;
+@Constant
+int LO_SURROGATE_START = 0xdc00;
+@Constant
+int LO_SURROGATE_END = 0xdfff;
+@Constant
+int SURROGATE_END = 0xdfff;
+
+/**
+ * This converter will read a stream of UTF-16 char text and return a UTF-32 stream
+ * of Unicode code points.
+ */
+public class UTF16Reader {
+	private ref<Reader> _reader;
+	/*
+	 * _lastChar is the last value returned by read
+	 */
+	private int _lastChar;
+	/*
+	 * The last code unit read and pushed back
+	 */
+	private int _lastCodeUnit;
+
+	public UTF16Reader(ref<Reader> reader) {
+		_reader = reader;
+		_lastCodeUnit = EOF;
+	}
+
+	public int read() {
+		if (_lastChar < 0) {	// did we have EOF or an unget?
+			if (_lastChar == EOF)
+				return EOF;		// EOF just keep returning EOF
+			int result = -2 - _lastChar;
+			_lastChar = result;	// unget was called, undo it's effects and return the last char again
+			return result;
+		}
+		int x;
+		if (_lastCodeUnit >= 0) {
+			x = _lastCodeUnit;
+			_lastCodeUnit = EOF;
+		} else
+			x = getCodeUnit();
+		if (x < SURROGATE_START || x > SURROGATE_END) {		// Not a surrogate unit, return it as a code point
+			_lastChar = x;
+			return x;
+		}
+		if (x >= LO_SURROGATE_START)
+			return REPLACEMENT_CHARACTER;		// The x code unit is a low surrogate unit
+
+		_lastCodeUnit = getCodeUnit();
+		if (_lastCodeUnit == EOF)
+			return REPLACEMENT_CHARACTER;		// There is a high surrogate followed by nothing
+
+		if (_lastCodeUnit < LO_SURROGATE_START || _lastCodeUnit > LO_SURROGATE_END)
+			return REPLACEMENT_CHARACTER;		// A high surrogate unit has been followed by a non-low surrogate.
+
+		_lastChar = ((x - HI_SURROGATE_START) << 10) + (_lastCodeUnit - LO_SURROGATE_START) + 0x10000;
+		_lastCodeUnit = EOF;
+		return _lastChar;
+	}
+
+	private int getCodeUnit() {
+		int lo = _reader.read();
+		if (lo == EOF)
+			return EOF;
+		int hi = _reader.read();
+		if (hi == EOF)
+			return EOF;
+		return (hi << 8) | lo;
+	}
+
+	public int read(pointer<int> buffer, int length) {
+		int count;
+		while (length > 0) {
+			int c = read();
+
+			if (c == EOF)
+				break;
+
+			*buffer++ = c;
+			length--;
+			count++;
+		}
+		return count;
+	}
+	/**
+	 * Read into an int array buffer. Code points are read up to the
+	 * number of elements in the array. Any existing contents are over-written
+	 * starting at index 0.
+	 *
+	 * @return The number of code points read. A return of 0 indicates end of stream.
+	 */
+	public int read(ref<int[]> buffer) {
+		int count;
+		while (count < buffer.length()) {
+			int c = read();
+
+			if (c == EOF)
+				break;
+
+			(*buffer)[count++] = c;
+		}
+		return count;
+	}
+
+	public void unget() {
+		if (_lastChar >= 0)
+			_lastChar = -2 - _lastChar;
+	}
+}
+/**
+ * This converter will take a stream of UTF-32 Unicode code points and write them as a stream of
+ * UTF-8 byte text.
+ */
 public class UTF8Writer {
 	ref<Writer> _writer;
 	
@@ -160,6 +319,149 @@ public class UTF8Writer {
 		// Bug in flow detector around 'throw' expressions TODO: Fix it.
 		return -1;
 	}
+
+	public int write(pointer<int> buffer, int length) {
+		int written;
+		while (length > 0) {
+			written += write(*buffer++);
+			length--;
+		}
+		return written;
+	}
+
+	public int write(ref<int[]> buffer) {
+		int written;
+		for (i in *buffer)
+			written += write((*buffer)[i]);
+		return written;
+	}
+	/**
+	 * Write a UTF-16 char array
+	 */
+	public int write(pointer<char> buffer, int length) {
+		BufferReader r(buffer, length * char.bytes);
+		UTF16Reader u(&r);
+
+		int written;
+		for (;;) {
+			int c = u.read();
+			if (c == EOF)
+				break;
+			written += write(c);
+		}
+		return written;
+	}
+	/**
+	 * Write a UTF-16 char array
+	 */
+	public int write(ref<char[]> buffer) {
+		BufferReader r(&(*buffer)[0], buffer.length() * char.bytes);
+		UTF16Reader u(&r);
+
+		int written;
+		for (;;) {
+			int c = u.read();
+			if (c == EOF)
+				break;
+			written += write(c);
+		}
+		return written;
+	}
+}
+/**
+ * This converter will take a stream of UTF-32 Unicode code points and write them as a stream of
+ * UTF-16 char text.
+ */
+public class UTF16Writer {
+	ref<Writer> _writer;
+	
+	public UTF16Writer(ref<Writer> writer) {
+		_writer = writer;
+	}
+	/**
+	 * @return The number of 16-bit code units (char's) written.
+	 */
+	public int write(int c) {
+		if (c >= 0x10000) {
+			c -= 0x10000;
+			writeCodeUnit(char(HI_SURROGATE_START + (c >> 10)));
+			writeCodeUnit(char(LO_SURROGATE_START + (c & 0x3ff)));
+			return 2;
+		} else if (c >= SURROGATE_START && c <= SURROGATE_END)
+			writeCodeUnit(char(REPLACEMENT_CHARACTER));
+		else
+			writeCodeUnit(char(c));
+		return 1;
+	}
+
+	private void writeCodeUnit(char c) {
+		_writer.write(byte(c & 0xff));
+		_writer.write(byte(c >> 8));
+	}
+
+	public int write(pointer<int> buffer, int length) {
+		int written;
+		while (length > 0) {
+			written += write(*buffer++);
+			length--;
+		}
+		return written;
+	}
+
+	public int write(ref<int[]> buffer) {
+		int written;
+		for (i in *buffer)
+			written += write((*buffer)[i]);
+		return written;
+	}
+	/**
+	 * Write a UTF-8 byte array
+	 */
+	public int write(pointer<byte> buffer, int length) {
+		BufferReader r(buffer, length);
+		UTF8Reader u(&r);
+
+		int written;
+		for (;;) {
+			int c = u.read();
+			if (c == EOF)
+				break;
+			written += write(c);
+		}
+		return written;
+	}
+	/**
+	 * Write a UTF-8 byte array
+	 */
+	public int write(ref<byte[]> buffer) {
+		BufferReader r(&(*buffer)[0], buffer.length());
+		UTF8Reader u(&r);
+
+		int written;
+		for (;;) {
+			int c = u.read();
+			if (c == EOF)
+				break;
+			written += write(c);
+		}
+		return written;
+	}
+	/**
+	 * Write a string
+	 */
+	public int write(string s) {
+		BufferReader r(&s[0], s.length());
+		UTF8Reader u(&r);
+
+		int written;
+		for (;;) {
+			int c = u.read();
+			if (c == EOF)
+				break;
+			written += write(c);
+		}
+		return written;
+	}
 }
 
 @Constant
@@ -190,6 +492,19 @@ public class Reader {
 		}
 		return length;
 	}
+	/**
+	 * Reads text into a byte array buffer. 
+	 */
+	public int read(ref<byte[]> buffer) {
+		int i;
+		for (i = 0; i < buffer.length(); i++) {
+			int c = _read();
+			if (c == EOF)
+				break;
+			(*buffer)[i] = byte(c);
+		}
+		return i;
+	}
 
 	public string readLine() {
 		string line;
@@ -211,6 +526,29 @@ public class Reader {
 	}
 
 	public void close() {
+	}
+}
+
+public class BufferReader extends Reader {
+	pointer<byte> _buffer;
+	int _length;
+
+	public BufferReader(address buffer, int length) {
+		_buffer = pointer<byte>(buffer);
+		_length = length;
+	}
+
+	public BufferReader(ref<byte[]> buffer) {
+		_buffer = &(*buffer)[0];
+		_length = buffer.length();
+	}
+
+	public int _read() {
+		if (_length > 0) {
+			_length--;
+			return *_buffer++;
+		} else
+			return EOF;
 	}
 }
 
@@ -961,3 +1299,28 @@ public class Writer {
 		return bytesWritten;
 	}
 }
+
+public class BufferWriter extends Writer {
+	pointer<byte> _buffer;
+	int _length;
+
+	public BufferWriter(address buffer, int length) {
+		_buffer = pointer<byte>(buffer);
+		_length = length;
+	}
+
+	public BufferWriter(ref<byte[]> buffer) {
+		_buffer = &(*buffer)[0];
+		_length = buffer.length();
+	}
+
+	public int _write(byte c) {
+		if (_length > 0) {
+			_length--;
+			return *_buffer++;
+		} else
+			throw IllegalArgumentException(string(c));
+		return -1;
+	}
+}
+
