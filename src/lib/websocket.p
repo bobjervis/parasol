@@ -21,6 +21,7 @@ import native:net.send;
 import native:linux;
 import native:C;
 import openssl.org:crypto.SHA1;
+import parasol:log;
 import parasol:net.base64encode;
 import parasol:net.Connection;
 import parasol:random.Random;
@@ -29,6 +30,8 @@ import parasol:thread;
 import parasol:thread.Thread;
 import parasol:thread.currentThread;
 import parasol:types.Queue;
+
+private ref<log.Logger> logger = log.getLogger("parasol.http");
 
 private monitor class WebSocketServiceData {
 	ref<WebSocketFactory>[string] _webSocketProtocols;
@@ -299,7 +302,7 @@ public class WebSocket extends WebSocketVolatileData {
 		case 126:
 			short s;
 			(s, success) = readShort();
-			payloadLength = s;
+			payloadLength = char(s);
 			if (!success)
 				return false, 0, false;
 			break;
@@ -325,6 +328,7 @@ public class WebSocket extends WebSocketVolatileData {
 		int offset = buffer.length();
 		buffer.resize(int(offset + payloadLength));
 		
+//		logger.format(log.DEBUG, "offset = %d payloadLength = %d buffer = %p", offset, payloadLength, buffer);
 		int copied = drainBuffer(&(*buffer)[offset], int(payloadLength));
 		
 		while (copied < payloadLength) {
