@@ -1004,6 +1004,7 @@ public class Binary extends Node {
 			if (_right.op() == Operator.CALL) {
 				ref<OverloadInstance> oi = type.stringAllocationConstructor(compileContext);
 				if (oi == null) {
+					_right.add(MessageId.INTERNAL_ERROR, compileContext.pool());
 					type = compileContext.errorType();
 					return this;
 				}

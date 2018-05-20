@@ -28,15 +28,13 @@ int printf(string format, var... arguments) {
 	return print(s);
 }
 
-public class string {
-	private class allocation {
+public class string extends String<byte> {
+	// The special 'stringAllocationConstructor' allocation class has to be in the string class.
+	// TODO: fix this
+	protected class allocationX {
 		public int length;
 		public byte data;
 	}
-	
-	private static int MIN_SIZE = 0x10;
-
-	private ref<allocation> _contents;
 	
 	public string() {
 	}
@@ -119,8 +117,8 @@ public class string {
 		appendDigits(value);		
 	}
 	
-	private string(ref<allocation> other) {
-		_contents = other;
+	private string(ref<allocationX> other) {
+		_contents = ref<allocation>(other);
 	}
 	
 	private void appendDigits(long value) {
@@ -191,17 +189,6 @@ public class string {
 		}
 	}
 
-	public void append(byte b) {
-		if (_contents == null) {
-			resize(1);
-			_contents.data = b;
-		} else {
-			int len = _contents.length;
-			resize(len + 1);
-			*(pointer<byte>(&_contents.data) + len) = b;
-		}
-	}
-	
 	public void append(pointer<byte> p, int length) {
 		if (_contents == null) {
 			resize(length);
@@ -212,37 +199,6 @@ public class string {
 			C.memcpy(pointer<byte>(&_contents.data) + len, p, length);
 		}
 		*(pointer<byte>(&_contents.data) + _contents.length) = 0;
-	}
-	
-	public void append(int ch) {
-		if (ch <= 0x7f)
-			append(byte(ch));
-		else if (ch <= 0x7ff) {
-			append(byte(0xc0 + (ch >> 6)));
-			append(byte(0x80 + (ch & 0x3f)));
-		} else if (ch <= 0xffff) {
-			append(byte(0xe0 + (ch >> 12)));
-			append(byte(0x80 + ((ch >> 6) & 0x3f)));
-			append(byte(0x80 + (ch & 0x3f)));
-		} else if (ch <= 0x1fffff) {
-			append(byte(0xf0 + (ch >> 18)));
-			append(byte(0x80 + ((ch >> 12) & 0x3f)));
-			append(byte(0x80 + ((ch >> 6) & 0x3f)));
-			append(byte(0x80 + (ch & 0x3f)));
-		} else if (ch <= 0x3ffffff) {
-			append(byte(0xf8 + (ch >> 24)));
-			append(byte(0x80 + ((ch >> 18) & 0x3f)));
-			append(byte(0x80 + ((ch >> 12) & 0x3f)));
-			append(byte(0x80 + ((ch >> 6) & 0x3f)));
-			append(byte(0x80 + (ch & 0x3f)));
-		} else if (ch <= 0x7fffffff) {
-			append(byte(0xfc + (ch >> 30)));
-			append(byte(0x80 + ((ch >> 24) & 0x3f)));
-			append(byte(0x80 + ((ch >> 18) & 0x3f)));
-			append(byte(0x80 + ((ch >> 12) & 0x3f)));
-			append(byte(0x80 + ((ch >> 6) & 0x3f)));
-			append(byte(0x80 + (ch & 0x3f)));
-		}
 	}
 	
 	public string center(int size) {
@@ -617,13 +573,6 @@ public class string {
 		return -1;
 	}
 
-	public int length() {
-		if (_contents != null)
-			return _contents.length;
-		else
-			return 0;
-	}
-
 	public int printf(string format, var... arguments) {
 		StringWriter w(this);
 		return w.printf(format, arguments);
@@ -631,40 +580,6 @@ public class string {
 
 	public string remove(RegularExpression pattern) {
 		return null;
-	}
-	
-	public void resize(int newLength) {
-		int newSize = reservedSize(newLength);
-		if (_contents != null) {
-			if (_contents.length >= newLength) {
-				_contents.length = newLength;
-				return;
-			}
-			int oldSize = reservedSize(_contents.length);
-			if (oldSize == newSize) {
-				_contents.length = newLength;
-				return;
-			}
-		}
-		ref<allocation> a = ref<allocation>(memory.alloc(newSize));
-		if (_contents != null) {
-			C.memcpy(&a.data, &_contents.data, _contents.length + 1);
-			memory.free(_contents);
-		}
-		a.length = newLength;
-		*(pointer<byte>(&a.data) + newLength) = 0;
-		_contents = a;
-	}
-
-	private int reservedSize(int length) {
-		int usedSize = length + int.bytes + 1;
-		if (usedSize >= 0x40000000) {
-			return (usedSize + 15) & ~15;
-		}
-		int allocSize = MIN_SIZE;
-		while (allocSize < usedSize)
-			allocSize <<= 1;
-		return allocSize;
 	}
 	
 	public void set(int index, char value) {
@@ -987,6 +902,120 @@ public class string {
 		}
 		return output, true;
 	}
+
+	string, boolean unescapeParasol() {
+		String<byte> result;
+		boolean success;
+
+		(result, success) = super.unescapeParasolT();
+		// This makes some big assumptions about the relationship between the base template class
+		// and the derived class, but if the language runtime can't know about the intricacies of
+		// its own implementation, who can?
+		return *(ref<string>(&result)), success;
+	}
+}
+
+public class string16 extends String<char> {
+}
+
+class String<class T> {
+	protected class allocation {
+		public int length;
+		public T data;
+	}
+
+	protected static int MIN_SIZE = 0x10;
+
+	protected ref<allocation> _contents;
+	/**
+	 * Note: This is not the correct algorithm for depositing a Unicode code point into
+	 * UTF-16. It needs a test for the value of T, and for performance reasons that test
+	 * should resolve as a compile-time constant, which it does not at present do. So, full
+	 * implementation of this will have to wait until I get  some compiler work to support it.
+	 */
+	public void append(int ch) {
+		if (ch <= 0x7f)
+			append(T(ch));
+		else if (ch <= 0x7ff) {
+			append(T(0xc0 + (ch >> 6)));
+			append(T(0x80 + (ch & 0x3f)));
+		} else if (ch <= 0xffff) {
+			append(T(0xe0 + (ch >> 12)));
+			append(T(0x80 + ((ch >> 6) & 0x3f)));
+			append(T(0x80 + (ch & 0x3f)));
+		} else if (ch <= 0x1fffff) {
+			append(T(0xf0 + (ch >> 18)));
+			append(T(0x80 + ((ch >> 12) & 0x3f)));
+			append(T(0x80 + ((ch >> 6) & 0x3f)));
+			append(T(0x80 + (ch & 0x3f)));
+		} else if (ch <= 0x3ffffff) {
+			append(T(0xf8 + (ch >> 24)));
+			append(T(0x80 + ((ch >> 18) & 0x3f)));
+			append(T(0x80 + ((ch >> 12) & 0x3f)));
+			append(T(0x80 + ((ch >> 6) & 0x3f)));
+			append(T(0x80 + (ch & 0x3f)));
+		} else if (ch <= 0x7fffffff) {
+			append(T(0xfc + (ch >> 30)));
+			append(T(0x80 + ((ch >> 24) & 0x3f)));
+			append(T(0x80 + ((ch >> 18) & 0x3f)));
+			append(T(0x80 + ((ch >> 12) & 0x3f)));
+			append(T(0x80 + ((ch >> 6) & 0x3f)));
+			append(T(0x80 + (ch & 0x3f)));
+		}
+	}
+
+	public void append(T b) {
+		if (_contents == null) {
+			resize(1);
+			_contents.data = b;
+		} else {
+			int len = _contents.length;
+			resize(len + 1);
+			*(pointer<T>(&_contents.data) + len) = b;
+		}
+	}
+	
+	public int length() {
+		if (_contents != null)
+			return _contents.length;
+		else
+			return 0;
+	}
+
+	private int reservedSize(int length) {
+		int usedSize = length + int.bytes + 1;
+		if (usedSize >= 0x40000000) {
+			return (usedSize * T.bytes + (MIN_SIZE - 1)) & ~(MIN_SIZE - 1);
+		}
+		int allocSize = MIN_SIZE;
+		while (allocSize < usedSize)
+			allocSize <<= 1;
+		return allocSize * T.bytes;
+	}
+	
+	public void resize(int newLength) {
+		int newSize = reservedSize(newLength);
+		if (_contents != null) {
+			if (_contents.length >= newLength) {
+				_contents.length = newLength;
+				return;
+			}
+			int oldSize = reservedSize(_contents.length);
+			if (oldSize == newSize) {
+				_contents.length = newLength;
+				return;
+			}
+		}
+		ref<allocation> a = ref<allocation>(memory.alloc(newSize));
+		if (_contents != null) {
+			C.memcpy(&a.data, &_contents.data, (_contents.length + 1) * T.bytes);
+			memory.free(_contents);
+		}
+		a.length = newLength;
+		*(pointer<T>(&a.data) + newLength) = 0;
+		_contents = a;
+	}
+
 	/*
 	 *	unescapeParasol
 	 *
@@ -1009,19 +1038,19 @@ public class string {
 	 *		false	If the sequence is not well-formed.
 	 *		string	The converted string (if the boolean is true).
 	 */
-	string,boolean unescapeParasol() {
-		string output;
+	String<T>, boolean unescapeParasolT() {
+		String<T> output;
 		
 		if (length() == 0)
 			return *this, true;
 		for (int i = 0; i < _contents.length; i++) {
-			if (pointer<byte>(&_contents.data)[i] == '\\') {
+			if (pointer<T>(&_contents.data)[i] == '\\') {
 				if (i == _contents.length - 1)
 					return output, false;
 				else {
 					int v;
 					i++;
-					switch (pointer<byte>(&_contents.data)[i]) {
+					switch (pointer<T>(&_contents.data)[i]) {
 					case 'a':	output.append('\a');	break;
 					case 'b':	output.append('\b');	break;
 					case 'f':	output.append('\f');	break;
@@ -1036,29 +1065,29 @@ public class string {
 						i++;;
 						if (i >= _contents.length)
 							return output, false;
-						if (!pointer<byte>(&_contents.data)[i].isHexDigit())
+						if (!pointer<T>(&_contents.data)[i].isHexDigit())
 							return output, false;
 						v = 0;
 						do {
 							v <<= 4;
 							if (v > 0xff)
 								return output, false;
-							if (pointer<byte>(&_contents.data)[i].isDigit())
-								v += pointer<byte>(&_contents.data)[i] - '0';
+							if (pointer<T>(&_contents.data)[i].isDigit())
+								v += pointer<T>(&_contents.data)[i] - '0';
 							else
-								v += 10 + pointer<byte>(&_contents.data)[i].toLowerCase() - 'a';
+								v += 10 + pointer<T>(&_contents.data)[i].toLowerCase() - 'a';
 							i++;
-						} while (i < _contents.length && pointer<byte>(&_contents.data)[i].isHexDigit());
-						output.append(byte(v));
+						} while (i < _contents.length && pointer<T>(&_contents.data)[i].isHexDigit());
+						output.append(T(v));
 						i--;
 						break;
 						
 					case '0':
 						i++;
 						if (i >= _contents.length ||
-							!pointer<byte>(&_contents.data)[i].isOctalDigit()) {
+							!pointer<T>(&_contents.data)[i].isOctalDigit()) {
 							i--;
-							output.append(byte(0));
+							output.append(T(0));
 							break;
 						}
 						v = 0;
@@ -1066,18 +1095,18 @@ public class string {
 							v <<= 3;
 							if (v > 0xff)
 								return output, false;
-							v += pointer<byte>(&_contents.data)[i] - '0';
+							v += pointer<T>(&_contents.data)[i] - '0';
 							i++;
-						} while (i < _contents.length && pointer<byte>(&_contents.data)[i].isOctalDigit());
+						} while (i < _contents.length && pointer<T>(&_contents.data)[i].isOctalDigit());
 						output.append(v);
 						break;
 						
 					default:
-						output.append(pointer<byte>(&_contents.data)[i]);
+						output.append(pointer<T>(&_contents.data)[i]);
 					}
 				}
 			} else
-				output.append(pointer<byte>(&_contents.data)[i]);
+				output.append(pointer<T>(&_contents.data)[i]);
 		}
 		return output, true;
 	}
@@ -1768,7 +1797,7 @@ public class substring {
 	 *		false	If the sequence is not well-formed.
 	 *		string	The converted string (if the boolean is true).
 	 */
-	string,boolean unescapeParasol() {
+	string, boolean unescapeParasol() {
 		string output;
 		
 		if (_data == null)
