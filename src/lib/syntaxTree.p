@@ -553,6 +553,7 @@ public class Block extends Node {
 
 				nl.next = nlr;
 			} else {
+				print(0);
 				// TODO: Handle the case for anonymous locks.
 				assert(false);
 			}
@@ -3328,6 +3329,10 @@ public class Node {
 				return null;
 			}
 			b.right().assignMultiReturn(nl, compileContext);
+			if (b.right().deferAnalysis()) {
+				type = b.right().type;
+				return null;
+			}
 			return nl.next;
 		} else {
 			if (!isLvalue()) {
@@ -3337,6 +3342,8 @@ public class Node {
 			}
 			if (!returnType.node.type.equals(type)) {
 				add(MessageId.CANNOT_CONVERT, compileContext.pool());
+				type = compileContext.errorType();
+				return null;
 			}
 			return returnType.next;
 		}

@@ -18,6 +18,7 @@ namespace parasol:stream;
 import parasol:storage.File;
 import parasol:storage.Seek;
 import parasol:time.Time;
+import parasol:text.string16;
 import native:C;
 
 @Constant
@@ -505,6 +506,22 @@ public class Reader {
 		}
 		return i;
 	}
+	/**
+	 * Reads text into a char array buffer. 
+	 */
+	public int read(ref<char[]> buffer) {
+		int i;
+		for (i = 0; i < buffer.length(); i++) {
+			int lo = _read();
+			if (lo == EOF)
+				break;
+			int hi = _read();
+			if (hi == EOF)
+				break;
+			(*buffer)[i] = char(lo | (hi << 8));
+		}
+		return i;
+	}
 
 	public string readLine() {
 		string line;
@@ -575,6 +592,10 @@ public class Writer {
 		for (int i = 0; i < s.length(); i++)
 			write(s[i]);
 		return s.length();
+	}
+
+	public int write(string16 s) {
+		return write(s.c_str(), s.length() * char.bytes);
 	}
 
 	public int printf(string format, var... arguments) {
@@ -1163,6 +1184,14 @@ public class Writer {
 									nextArgument++;
 								} else if (arguments[nextArgument].class == string) {
 									s = string(arguments[nextArgument]);
+									if (s == null)
+										s = "<null>";
+									nextArgument++;
+									cp = s.c_str();
+									len = s.length();
+								} else if (arguments[nextArgument].class == string16) {
+									s = string(string16(arguments[nextArgument]));
+
 									if (s == null)
 										s = "<null>";
 									nextArgument++;

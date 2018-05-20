@@ -20,6 +20,7 @@ import parasol:compiler.CompileString;
 import parasol:compiler.CPC_LETTER;
 
 import parasol:text.memDump;
+import parasol:text.string16;
 
 import parasol:log;
 
@@ -49,6 +50,11 @@ public string stringify(var object) {
 		string s;
 		
 		s.printf("\"%s\"", string(object).escapeJSON());
+		return s;
+	} else if (object.class == string16) {
+		string s;
+		
+		s.printf("\"%s\"", string16(object).escapeJSON());
 		return s;
 	} else if (object.class == boolean)
 		return boolean(object) ? "true" : "false";

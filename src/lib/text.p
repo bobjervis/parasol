@@ -17,6 +17,7 @@ namespace parasol:text;
 
 import native:C;
 import parasol:memory;
+import parasol:stream;
 
 public boolean ignoring;
 public address[] deletedContents;
@@ -120,7 +121,21 @@ public class string extends String<byte> {
 	private string(ref<allocationX> other) {
 		_contents = ref<allocation>(other);
 	}
-	
+
+	public string(string16 other) {
+		String16Reader r(&other);
+		stream.UTF16Reader ur(&r);
+		StringWriter w(this);
+		stream.UTF8Writer uw(&w);
+
+		for (;;) {
+			int c = ur.read();
+			if (c == stream.EOF)
+				break;
+			uw.write(c);
+		}
+	}
+
 	private void appendDigits(long value) {
 		if (value > 9)
 			appendDigits(value / 10);
@@ -145,10 +160,6 @@ public class string extends String<byte> {
 		}
 	}
 	
-	public pointer<byte> c_str() {
-		return pointer<byte>(&_contents.data);
-	}
-	
 	@Deprecated
 	public void assign(string other) {
 		if (_contents != null) {
@@ -161,26 +172,6 @@ public class string extends String<byte> {
 		}
 	}
 	
-	public void append(string other) {
-//		print("'");
-//		print(*this);
-//		print("'+'");
-//		print(other);
-//		print("'");
-		int len = other.length();
-		if (len > 0) {
-//			print("appending\n");
-			int oldLength = length();
-			resize(oldLength + len);
-//			print("resized\n");
-			C.memcpy(pointer<byte>(&_contents.data) + oldLength, &other._contents.data, len + 1);
-//			print("appended\n");
-		}
-//		print("=");
-//		print(*this);
-//		print("\n");
-	}
-	
 	public void append(text.substring other) {
 		if (other._length > 0) {
 			int oldLength = length();
@@ -189,18 +180,6 @@ public class string extends String<byte> {
 		}
 	}
 
-	public void append(pointer<byte> p, int length) {
-		if (_contents == null) {
-			resize(length);
-			C.memcpy(&_contents.data, p, length);
-		} else {
-			int len = _contents.length;
-			resize(len + length);
-			C.memcpy(pointer<byte>(&_contents.data) + len, p, length);
-		}
-		*(pointer<byte>(&_contents.data) + _contents.length) = 0;
-	}
-	
 	public string center(int size) {
 		return center(size, ' ');
 	}
@@ -226,10 +205,6 @@ public class string extends String<byte> {
 //		print(result);
 //		print("'\n");
 		return result;
-	}
-	
-	public void clear() {
-		copy(null);
 	}
 	
 	public int compare(string other) {
@@ -263,7 +238,7 @@ public class string extends String<byte> {
 	public int compareIgnoreCase(string other) {
 		return 0;
 	}
-	
+
 	public void copy(string other) {
 		if (other != null) {
 			if (_contents == other._contents)
@@ -911,11 +886,83 @@ public class string extends String<byte> {
 		// This makes some big assumptions about the relationship between the base template class
 		// and the derived class, but if the language runtime can't know about the intricacies of
 		// its own implementation, who can?
-		return *(ref<string>(&result)), success;
+		return *ref<string>(&result), success;
+	}
+	// TODO: Remove this when cast from string -> String<byte> works.
+	public void append(string other) {
+//		print("'");
+//		print(*this);
+//		print("'+'");
+//		print(other);
+//		print("'");
+		int len = other.length();
+		if (len > 0) {
+//			print("appending\n");
+			int oldLength = length();
+			resize(oldLength + len);
+//			print("resized\n");
+			C.memcpy(pointer<byte>(&_contents.data) + oldLength, &other._contents.data, len + 1);
+//			print("appended\n");
+		}
+//		print("=");
+//		print(*this);
+//		print("\n");
 	}
 }
 
 public class string16 extends String<char> {
+	public string16() {
+	}
+
+	public string16(string other) {
+		StringReader r(&other);
+		stream.UTF8Reader u(&r);
+		String16Writer w(this);
+		stream.UTF16Writer u16(&w);
+		for (;;) {
+			int c = u.read();
+			if (c == stream.EOF)
+				break;
+			u16.write(c);
+		}
+	}
+
+	public string16(pointer<char> buffer, int len) {
+		if (buffer != null) {
+			resize(len);
+			C.memcpy(&_contents.data, buffer, len * char.bytes);
+		}
+	}
+
+	public string16 escapeJSON() {
+		String<char> s = escapeJSON_T();
+
+		return *ref<string16>(&s);
+	}
+	/*
+	 *	substring
+	 *
+	 *	Return a substring of this string, starting at the character
+	 *	given by first and continuing to the end of the string.
+	 */
+	public string16 substring(int first) {
+		return substring(first, length());
+	}
+	/*
+	 *	substring
+	 *
+	 *	Return a substring of this string, starting at the character
+	 *	given by first and continuing to (but not including) the
+	 *	character given by last.
+	 *
+	 *	TODO: Out of range values should produce exceptions
+	 */
+	public string16 substring(int first, int last) {
+		string16 result;
+		
+		result.append(pointer<char>(&_contents.data) + first, last - first);
+		return result;
+	}
 }
 
 class String<class T> {
@@ -927,6 +974,39 @@ class String<class T> {
 	protected static int MIN_SIZE = 0x10;
 
 	protected ref<allocation> _contents;
+
+	public void append(String<T> other) {
+//		print("'");
+//		print(*this);
+//		print("'+'");
+//		print(other);
+//		print("'");
+		int len = other.length();
+		if (len > 0) {
+//			print("appending\n");
+			int oldLength = length();
+			resize(oldLength + len);
+//			print("resized\n");
+			C.memcpy(pointer<T>(&_contents.data) + oldLength, &other._contents.data, (len + 1) * T.bytes);
+//			print("appended\n");
+		}
+//		print("=");
+//		print(*this);
+//		print("\n");
+	}
+
+	public void append(pointer<T> p, int length) {
+		if (_contents == null) {
+			resize(length);
+			C.memcpy(&_contents.data, p, length * T.bytes);
+		} else {
+			int len = _contents.length;
+			resize(len + length);
+			C.memcpy(pointer<T>(&_contents.data) + len, p, length * T.bytes);
+		}
+		*(pointer<T>(&_contents.data) + _contents.length) = 0;
+	}
+
 	/**
 	 * Note: This is not the correct algorithm for depositing a Unicode code point into
 	 * UTF-16. It needs a test for the value of T, and for performance reasons that test
@@ -975,6 +1055,46 @@ class String<class T> {
 		}
 	}
 	
+	public pointer<T> c_str() {
+		return pointer<T>(&_contents.data);
+	}
+
+	public void clear() {
+		if (_contents != null) {
+			memory.free(_contents);
+			_contents = null;
+		}
+	}
+	/*
+	 *	escapeJSON
+	 *
+	 *	Take the string and convert it to a form, that when
+	 *	wrapped with double-quotes would be a well-formed JSON
+	 *	string literal token with the same string value as 
+	 *	this object.
+	 */
+	String<T> escapeJSON_T() {
+		String<T> output;
+
+		if (length() == 0)
+			return *this;
+		pointer<T> cp = pointer<T>(&_contents.data);
+		for (int i = 0; i < _contents.length; i++) {
+			switch (cp[i]) {
+			case	'\\':	output.append('\\');	output.append('\\');	break;
+			case	'\b':	output.append('\\');	output.append('b');		break;
+			case	'\f':	output.append('\\');	output.append('f');		break;
+			case	'\n':	output.append('\\');	output.append('n');		break;
+			case	'\r':	output.append('\\');	output.append('r');		break;
+			case	'\t':	output.append('\\');	output.append('t');		break;
+			case	'"':	output.append('\\');	output.append('"');		break;
+			default:
+				output.append(cp[i]);
+			}
+		}
+		return output;
+	}
+
 	public int length() {
 		if (_contents != null)
 			return _contents.length;
@@ -1896,6 +2016,40 @@ public class StringWriter extends Writer {
 	
 	public void _write(byte c) {
 		_output.append(c);
+	}
+}
+
+public class String16Reader extends Reader {
+	private ref<string16> _source;
+	private int _cursor;
+
+	public String16Reader(ref<string16> source) {
+		_source = source;
+	}
+
+	public int _read() {
+		if (_cursor >= _source.length() * char.bytes)
+			return -1;
+		else
+			return pointer<byte>(_source.c_str())[_cursor++];
+	}
+}
+
+public class String16Writer extends Writer {
+	private short _lo;
+	private ref<string16> _output;
+	
+	public String16Writer(ref<string16> output) {
+		_output = output;
+		_lo = short.MIN_VALUE;
+	}
+	
+	public void _write(byte c) {
+		if (_lo >= 0) {
+			_output.append(char(_lo | (int(c) << 8)));
+			_lo = short.MIN_VALUE;
+		} else
+			_lo = c;
 	}
 }
 
