@@ -183,6 +183,20 @@ public class string extends String<byte> {
 		}
 	}
 
+	public void append(pointer<char> cp, int length) {
+		StringWriter w(this);
+		stream.BufferReader r(cp, length * char.bytes);
+		stream.UTF16Reader ur(&r);
+		stream.UTF8Writer uw(&w);
+
+		for (;;) {
+			int c = ur.read();
+			if (c == stream.EOF)
+				break;
+			uw.write(c);
+		}
+	}
+
 	public string center(int size) {
 		return center(size, ' ');
 	}
