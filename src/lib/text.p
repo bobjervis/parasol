@@ -123,6 +123,9 @@ public class string extends String<byte> {
 	}
 
 	public string(string16 other) {
+		if (other.isNull())
+			return;
+		resize(0);
 		String16Reader r(&other);
 		stream.UTF16Reader ur(&r);
 		StringWriter w(this);
@@ -915,6 +918,10 @@ public class string16 extends String<char> {
 	}
 
 	public string16(string other) {
+		if (other == null)
+			return;
+		resize(0);
+		assert(_contents != null);
 		StringReader r(&other);
 		stream.UTF8Reader u(&r);
 		String16Writer w(this);
@@ -1093,6 +1100,10 @@ class String<class T> {
 			}
 		}
 		return output;
+	}
+
+	public boolean isNull() {
+		return _contents == null;
 	}
 
 	public int length() {
