@@ -127,6 +127,7 @@ run(filename: loop_fallthrough_test.p)
 
 run(filename: string16_test_1.p, arguments: src/lib/x86_64.p)
 run(filename: string16_test_1.p, arguments: test/scripts/parasol_tests.ets)
+run(filename: string16_test_2.p)
 run(filename: interface_test_1.p)
 run(filename: interface_test_2.p)
 run(filename: interface_test_3.p)
