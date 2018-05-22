@@ -1,8 +1,8 @@
 #!/bin/bash
 
-PARASOL_BIN=$(dirname `readlink -f $0`)/..
-export PARASOL_HOME=`readlink -f $PARASOL_BIN`
+PARASOL_BIN=$(dirname "`readlink -f \"$0\"`")/..
+export PARASOL_HOME=`readlink -f "$PARASOL_BIN"`
 
 FILENAME=$1
 shift
-$PARASOL_HOME/bin/pc $PARASOL_HOME/compiler/main.p $@ $PARASOL_HOME/test/src/$FILENAME.p
+"$PARASOL_HOME/bin/pc" "$PARASOL_HOME/compiler/main.p" "$@" "$PARASOL_HOME/test/src/$FILENAME.p"

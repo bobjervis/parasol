@@ -16,12 +16,145 @@
 namespace parasol:http;
 
 import parasol:net;
+import parasol:text;
 import native:net.gethostbyname;
 import native:net.hostent;
 import native:net.in_addr;
 import native:net.inet_addr;
 import native:net.inet_aton;
 import native:net.inet_ntoa;
+
+public string encodeURI(string uri) {
+	string result;
+
+	for (int i = 0; i < uri.length(); i++) {
+		switch (uri[i]) {
+		default:
+			result.append(uri[i]);
+		}
+	}
+	return result;
+}
+
+public string encodeURIComponent(string component) {
+	string result;
+
+	for (int i = 0; i < component.length(); i++) {
+		byte c = component[i];
+		switch (c) {
+		case	'-':
+		case	'_':
+		case	'.':
+		case	'!':
+		case	'~':
+		case	'*':
+		case	'\'':
+		case	'(':
+		case	')':
+		case	'"':
+		case	'0':
+		case	'1':
+		case	'2':
+		case	'3':
+		case	'4':
+		case	'5':
+		case	'6':
+		case	'7':
+		case	'8':
+		case	'9':
+		case	'a':
+		case	'b':
+		case	'c':
+		case	'd':
+		case	'e':
+		case	'f':
+		case	'g':
+		case	'h':
+		case	'i':
+		case	'j':
+		case	'k':
+		case	'l':
+		case	'm':
+		case	'n':
+		case	'o':
+		case	'p':
+		case	'q':
+		case	'r':
+		case	's':
+		case	't':
+		case	'u':
+		case	'v':
+		case	'w':
+		case	'x':
+		case	'y':
+		case	'z':
+		case	'A':
+		case	'B':
+		case	'C':
+		case	'D':
+		case	'E':
+		case	'F':
+		case	'G':
+		case	'H':
+		case	'I':
+		case	'J':
+		case	'K':
+		case	'L':
+		case	'M':
+		case	'N':
+		case	'O':
+		case	'P':
+		case	'Q':
+		case	'R':
+		case	'S':
+		case	'T':
+		case	'U':
+		case	'V':
+		case	'W':
+		case	'X':
+		case	'Y':
+		case	'Z':
+			result.append(c);
+			break;
+
+		default:
+			result.append('%');
+			result.printf("%2.2X", c);
+		}
+	}
+	return result;
+}
+
+public string decodeURI(string uri) {
+	string result;
+
+	for (int i = 0; i < uri.length(); i++) {
+		switch (uri[i]) {
+		default:
+			result.append(uri[i]);
+		}
+	}
+	return result;
+}
+
+public string decodeURIComponent(string component) {
+	string result;
+
+	for (int i = 0; i < component.length(); i++) {
+		switch (component[i]) {
+		default:
+			result.append(component[i]);
+		}
+	}
+	return result;
+}
+
+public class URIError extends Exception {
+	public URIError(string message) {
+		super(message);
+	}
+}
+
 /**
  * HttpClient
  *
