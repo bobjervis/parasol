@@ -301,7 +301,8 @@ public class Connection {
 	}
 
 	~Connection() {
-		logger.format(log.DEBUG,"~Connection %p\n", this);
+//		logger.format(log.DEBUG,"~Connection %p %d\n", this, _acceptfd);
+		net.closesocket(_acceptfd);
 	}
 
 	public int requestFd() {
@@ -886,49 +887,5 @@ for (int i = 0; i < encoding.length(); i++)
 	decodeMap[encoding[i]] = i;
 decodeMap['='] = -1;
 
-
-public void logMemDump(int fd, address buffer, long length, long startingOffset) {
-	pointer<byte> printed = pointer<byte>(startingOffset);
-	pointer<byte> firstRow = printed + -int(startingOffset & 15);
-	pointer<byte> data = pointer<byte>(buffer) + -int(startingOffset & 15);
-	pointer<byte> next = printed + int(length);
-	pointer<byte> nextRow = next + ((16 - int(next) & 15) & 15);
-	string output;
-	output.printf("read from %d\n", fd);
-	for (pointer<byte> p = firstRow; int(p) < int(nextRow); p += 16, data += 16) {
-		dumpPtr(&output, p);
-		output.printf(" ");
-		for (int i = 0; i < 8; i++) {
-			if (int(p + i) >= int(printed) && int(p + i) < int(next))
-				output.printf(" %2.2x", int(data[i]));
-			else
-				output.printf("   ");
-		}
-		output.printf(" ");
-		for (int i = 8; i < 16; i++) {
-			if (int(p + i) >= int(printed) && int(p + i) < int(next))
-				output.printf(" %2.2x", int(data[i]));
-			else
-				output.printf("   ");
-		}
-		output.printf(" ");
-		for (int i = 0; i < 16; i++) {
-			if (int(p + i) >= int(printed) && int(p + i) < int(next)) {
-				if (data[i].isPrintable())
-					output.printf("%c", int(data[i]));
-				else
-					output.printf(".");
-			} else
-				output.printf(" ");
-		}
-		output.printf("\n");
-	}
-	logger.format(log.DEBUG, output);
-}
-
-private void dumpPtr(ref<string> output, address x) {
-	pointer<long> np = pointer<long>(&x);
-	output.printf("%16.16x", *np);
-}
 
 

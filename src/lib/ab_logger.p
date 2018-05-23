@@ -190,6 +190,58 @@ public monitor class Logger {
 		}
 	}
 
+	public void memDump(int level, string caption, address buffer, long length, long startingOffset) {
+		if (level < -5 || level > 5)
+			throw IllegalArgumentException(string(level));
+		if (!needToCheck(level))
+			return;
+		pointer<byte> printed = pointer<byte>(startingOffset);
+		pointer<byte> firstRow = printed + -int(startingOffset & 15);
+		pointer<byte> data = pointer<byte>(buffer) + -int(startingOffset & 15);
+		pointer<byte> next = printed + int(length);
+		pointer<byte> nextRow = next + ((16 - int(next) & 15) & 15);
+		string output;
+		if (caption != null)
+			output.printf("%s", caption);
+		else
+			output.printf("Memory dump");
+		output.printf("\n");
+		for (pointer<byte> p = firstRow; int(p) < int(nextRow); p += 16, data += 16) {
+			dumpPtr(&output, p);
+			output.printf(" ");
+			for (int i = 0; i < 8; i++) {
+				if (int(p + i) >= int(printed) && int(p + i) < int(next))
+					output.printf(" %2.2x", int(data[i]));
+				else
+					output.printf("   ");
+			}
+			output.printf(" ");
+			for (int i = 8; i < 16; i++) {
+				if (int(p + i) >= int(printed) && int(p + i) < int(next))
+					output.printf(" %2.2x", int(data[i]));
+				else
+					output.printf("   ");
+			}
+			output.printf(" ");
+			for (int i = 0; i < 16; i++) {
+				if (int(p + i) >= int(printed) && int(p + i) < int(next)) {
+					if (data[i].isPrintable())
+						output.printf("%c", int(data[i]));
+					else
+						output.printf(".");
+				} else
+					output.printf(" ");
+			}
+			output.printf("\n");
+		}
+		log(level, output);
+	}
+	
+	private void dumpPtr(ref<string> output, address x) {
+		pointer<long> np = pointer<long>(&x);
+		output.printf("%16.16x", *np);
+	}
+	
 	private boolean needToCheck(int level) {
 		if (_level == 0) {
 			if (_parent != null)

@@ -158,8 +158,10 @@ private monitor class WebSocketVolatileData {
 			//	   to transmit an OP_CLOSE control frame will be pointless. Tht's fortunately the key
 			//	   phrase: pointless, not harmful.
 			
-			if (_reader != null)
+			if (_reader != null) {
+//				logger.format(log.DEBUG, "stopReading... _waitingWrites %d _shuttingDown %s", _waitingWrites, _shuttingDown ? "true" : "false");
 				ref<WebSocket>(this).shutDown(WebSocket.CLOSE_NORMAL, "normal close");
+			}
 
 //			printf("about to join...\n");
 			_readerThread = null;
@@ -171,12 +173,14 @@ private monitor class WebSocketVolatileData {
 		if (_shuttingDown)
 			return false;
 		_shuttingDown = true;
+//		logger.format(log.DEBUG, "stopWriting... _waitingWrites %d _shuttingDown %s", _waitingWrites, _shuttingDown ? "true" : "false");
 		if (_waitingWrites > 0)
 			wait();
 		return true;
 	}
 
 	public boolean enqueueWrite() {
+//		logger.format(log.DEBUG, "enqueueWrite... _waitingWrites %d _shuttingDown %s", _waitingWrites, _shuttingDown ? "true" : "false");
 		if (_shuttingDown)
 			return false;
 		_waitingWrites++;
@@ -184,6 +188,7 @@ private monitor class WebSocketVolatileData {
 	}
 
 	public void writeFinished() {
+//		logger.format(log.DEBUG, "writeFinished... _waitingWrites %d _shuttingDown %s", _waitingWrites, _shuttingDown ? "true" : "false");
 		if (_waitingWrites <= 0)
 			assert(false);
 		_waitingWrites--;
@@ -193,11 +198,17 @@ private monitor class WebSocketVolatileData {
 }
 
 private void readWrapper(address arg) {
+	ref<WebSocket> socket = ref<WebSocket>(arg);
 //		printf("%s %p reader thread starting readMessages...\n", currentThread().name(), arg);
-	boolean sawClose = ref<WebSocket>(arg).reader().readMessages();
+	boolean sawClose = socket.reader().readMessages();
+//	logger.format(log.DEBUG, "%s.readWrapper sawClose %s", socket.server() ? "server" : "client", sawClose ? "true" : "false");
 	if (sawClose)
-		ref<WebSocket>(arg).shutDown(WebSocket.CLOSE_NORMAL, "normal close");
-	ref<WebSocket>(arg).discardReader();
+		socket.shutDown(WebSocket.CLOSE_NORMAL, "normal close");
+//	else
+//		logger.format(log.ERROR, "Abnormal close on WebSocket %d", socket.connection().requestFd());
+	socket.discardReader();
+	if (socket.server())
+		socket.clientDisconnected(sawClose);
 }
 
 public class WebSocket extends WebSocketVolatileData {
@@ -228,6 +239,8 @@ public class WebSocket extends WebSocketVolatileData {
 	private byte[] _incomingData;		// A buffer of data being read from the websocket.
 	private int _incomingLength;		// The number of bytes in the buffer.
 	private int _incomingCursor;		// The index of the next byte to be read from the buffer.
+	private void (address, boolean) _disconnectFunction;
+	private address _disconnectParameter;
 
 	public WebSocket(ref<Connection> connection, boolean server) {
 		maxFrameSize = 1024;
@@ -240,12 +253,13 @@ public class WebSocket extends WebSocketVolatileData {
 		ref<Thread> readerThread = stopReading();
 		
 		if (readerThread != null) {
-//			printf("about to join...\n");
+//			logger.debug("about to join...\n");
 			readerThread.join();
 		}
-//		printf("about to stop writing...\n");
+//		logger.debug("about to stop writing...\n");
 		stopWriting();
-//		printf("Socket cleaned up!\n");
+//		logger.debug("Socket cleaned up!\n");
+		delete _connection;
 	}
 	/**
 	 * readWholeMessage
@@ -336,7 +350,7 @@ public class WebSocket extends WebSocketVolatileData {
 			if (received >= int(payloadLength - copied))
 				break;
 			copied += received;
-			printf("received = %d copied = %d payloadLength= %d\n", received, copied, payloadLength);
+//			logger.format(log.DEBUG, "received = %d copied = %d payloadLength= %d", received, copied, payloadLength);
 		}
 		// Unmask the frame data if necessary
 		if (mask != 0) {
@@ -353,7 +367,7 @@ public class WebSocket extends WebSocketVolatileData {
 				
 			default:					// Not valid in an initial frame
 				buffer.resize(offset);
-				printf("initial opcode == %d\n", opcode & 0x7f);
+				logger.format(log.ERROR, "initial opcode == %d", opcode & 0x7f);
 				shutDown(CLOSE_BAD_DATA, "Unexpected opcode");
 				return false, opcode & 0x7f, false;
 				
@@ -369,7 +383,7 @@ public class WebSocket extends WebSocketVolatileData {
 
 			default:					// Not valid in an initial frame
 				buffer.resize(offset);
-				printf("Unexpected non-zero opcode (%d) on non-initial frame\n", opcode & 0x7f);
+				logger.format(log.ERROR, "Unexpected non-zero opcode (%d) on non-initial frame", opcode & 0x7f);
 				shutDown(CLOSE_PROTOCOL_ERROR, "Unexpected opcode");
 				return false, opcode & 0x7f, false;
 				
@@ -469,7 +483,7 @@ public class WebSocket extends WebSocketVolatileData {
 			_incomingLength = _connection.read(&_incomingData[0], _incomingData.length());
 			if (_incomingLength <= 0) {
 				if (_incomingLength < 0) {
-					printf("_incomingLength = %d\n", _incomingLength);
+					logger.format(log.ERROR, "_incomingLength = %d\n", _incomingLength);
 					linux.perror(null);
 				}
 				shutDown(CLOSE_BAD_DATA, "recv failed");
@@ -497,12 +511,37 @@ public class WebSocket extends WebSocketVolatileData {
 //		}
 	}
 	/**
+	 * A server class this method on the web socket to register a client
+	 * disconnect event handler.
+	 *
+	 * @param func The function to call when the client disconnect event occurs.
+	 * It takes the param value as its first argument and a boolean indicating
+	 * whether the disconnect was a normal close (true) or an error (false).
+	 * @param param The value to pass to the function when it is called.
+	 */
+	public void onClientDisconnect(void (address, boolean) func, address param) {
+		_disconnectFunction = func;
+		_disconnectParameter = param;
+	}
+	/**
+	 * This method is called on the server side of a WebSocket to let the server
+	 * know when this happens.
+	 *
+	 * @param normalClose true if the client disconnected with a normal close, false
+	 * if there was an error.
+	 */
+	public void clientDisconnected(boolean normalClose) {
+//		logger.debug("clientDisconnected");
+		if (_disconnectFunction != null)
+			_disconnectFunction(_disconnectParameter, normalClose);
+	}
+	/**
 	 * send
 	 *
 	 * A convenience method for sending a message that consists of a single string.
 	 * It is transmitted as an OP_STRING.
 	 */
-	public boolean send(string message) {
+	boolean send(string message) {
 		return send(OP_STRING, &message[0], message.length());
 	}
 	/**
@@ -511,7 +550,7 @@ public class WebSocket extends WebSocketVolatileData {
 	 * A convenience method for sending a binary message. The byte array is transmitted
 	 * as an OP_BINARY.
 	 */
-	public boolean send(byte[] message) {
+	boolean send(byte[] message) {
 		return send(OP_BINARY, &message[0], message.length());
 	}
 	/**
@@ -521,7 +560,7 @@ public class WebSocket extends WebSocketVolatileData {
 	 * content. This can be used to send control messages as well as string or binary data
 	 * messages.
 	 */
-	public boolean send(byte opcode, pointer<byte> message, int length) {
+	boolean send(byte opcode, pointer<byte> message, int length) {
 		do {
 			int frameLength = maxFrameSize <= length ? maxFrameSize : length;
 			boolean lastFrame = frameLength >= length;
@@ -576,7 +615,7 @@ public class WebSocket extends WebSocketVolatileData {
 		int result = _connection.write(&frame[0], frame.length());
 		if (result == frame.length())
 			return true;
-		printf("WebSocket send failed\n");
+		logger.error("WebSocket send failed\n");
 		linux.perror(null);
 		_connection.close();
 		return false;
@@ -584,6 +623,10 @@ public class WebSocket extends WebSocketVolatileData {
 	
 	protected ref<Connection> connection() {
 		return _connection;
+	}
+
+	public boolean server() {
+		return _server;
 	}
 }
 
@@ -752,6 +795,8 @@ void writeWrapper(address arg) {
 		ref<Operation> op = writer.dequeue();
 //		printf("%s writer got something to write opcode %d\n", currentThread().name(), op.opcode);
 		if (op.opcode == WebSocket.OP_CLOSE) {
+//			logger.format(log.DEBUG, "%d Sending OP_CLOSE message: %d %s", op.webSocket.connection().requestFd(),
+//									op.cause, op.message);
 			byte[] closeFrame;
 
 			networkOrder(&closeFrame, op.cause);
