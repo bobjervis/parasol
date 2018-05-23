@@ -1077,14 +1077,20 @@ public class Writer {
 								
 							case	'p':
 							case	'x':
+							case	'X':
 								ivalue = long(arguments[nextArgument]);
 								nextArgument++;
 								string hex();
 								
 								if (!precisionSpecified)
 									precision = 1;
-								if (alternateForm)
-									hex.append("0x");
+								if (alternateForm) {
+									hex.append('0');
+									if (format[i] == 'X')
+										hex.append('X');
+									else
+										hex.append('x');
+								}
 								int digitCount = 16;
 								while ((ivalue & 0xf000000000000000) == 0 && digitCount > precision) {
 									ivalue <<= 4;
@@ -1094,6 +1100,8 @@ public class Writer {
 									int digit = int(ivalue >>> 60);
 									if (digit < 10)
 										hex.append('0' + digit);
+									else if (format[i] == 'X')
+										hex.append(('A' - 10) + digit);
 									else
 										hex.append(('a' - 10) + digit);
 									ivalue <<= 4;
@@ -1116,7 +1124,6 @@ public class Writer {
 								}
 								break;
 								
-							case	'X':
 							case	'i':
 							case	'u':
 							case	'o':

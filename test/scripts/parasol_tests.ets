@@ -14,6 +14,7 @@ conditional(target: x86-64-lnx) {
 
 run(filename: compile_target_test.p)
 //run(filename: httpd_test.p)
+run(filename: uri_code_test.p)
 run(filename: json_test.p)
 run(filename: json_checker.p, arguments: "test/data/json/pass1.json")
 run(filename: json_checker.p, arguments: "test/data/json/pass2.json")
@@ -103,6 +104,7 @@ run(filename: printf_4_ops.p, expectedOutput: "1234abcdef\n")
 run(filename: printf_5_ops.p, expectedOutput: "365")
 run(filename: printf_6_ops.p, expectedOutput: "506\n")
 run(filename: printf_7_ops.p)
+run(filename: printf_8_ops.p)
 
 run(filename: memory_test.p)
 

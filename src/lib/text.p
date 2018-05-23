@@ -1205,6 +1205,26 @@ class String<class T> {
 					case 'v':	output.append('\v');	break;
 					case 'u':
 					case 'U':
+						i++;;
+						if (i >= _contents.length)
+							return output, false;
+						if (!pointer<T>(&_contents.data)[i].isHexDigit())
+							return output, false;
+						v = 0;
+						do {
+							v <<= 4;
+							if (v > 0xff)
+								return output, false;
+							if (pointer<T>(&_contents.data)[i].isDigit())
+								v += pointer<T>(&_contents.data)[i] - '0';
+							else
+								v += 10 + pointer<T>(&_contents.data)[i].toLowerCase() - 'a';
+							i++;
+						} while (i < _contents.length && pointer<T>(&_contents.data)[i].isHexDigit());
+						output.append(v);			// emits UTF-8.
+						i--;
+						break;
+						
 					case 'x':
 					case 'X':
 						i++;;
