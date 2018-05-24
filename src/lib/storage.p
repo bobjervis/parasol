@@ -57,6 +57,38 @@ string absolutePath(string filename) {
 		return null;
 }
 
+public flags AccessFlags {
+	EXECUTE,
+	WRITE,
+	READ
+}
+
+public AccessFlags, boolean getUserAccess(string filename) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		return 0, false;
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		linux.statStruct s;
+		if (linux.stat(&filename[0], &s) != 0)
+			return 0, false;
+		return AccessFlags((s.st_mode & (linux.S_IXUSR | linux.S_IRUSR | linux.S_IWUSR)) >> 6), true;
+	} else
+		return 0, false;
+}
+
+public boolean setUserAccess(string filename, AccessFlags newAccess) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		return false;
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		linux.statStruct s;
+		if (linux.stat(filename.c_str(), &s) != 0)
+			return false;
+		linux.mode_t newMode = s.st_mode & ~linux.S_IRWXU;		// Turn off all user modes.
+		newMode |= linux.mode_t(newAccess) << 6;
+		if (linux.chmod(filename.c_str(), newMode) == 0)
+			return true;
+	}
+	return false;
+}
 
 public boolean setExecutable(string filename, boolean executable) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
