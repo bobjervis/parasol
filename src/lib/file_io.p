@@ -615,6 +615,10 @@ public class LineWriter extends Writer {
 		if (c == '\n')
 			_writer.flush();
 	}
+
+	public void flush() {
+		_writer.flush();
+	}
 }
 /*
  * Writing to stderr when it is connected to a terminal flushes at every operation.

@@ -34,6 +34,8 @@ command(name: hex, main: src/util/hex.p)
 command(name: paradoc, main: src/util/paradoc.p)
 command(name: pcurl, main: src/util/pcurl.p)
 command(name: ucdParser, main: src/util/ucdParser.p)
+command(name: phost, main: src/util/phost.p)
+command(name: etsTests, main: test/drivers/etsTests.p)
 
 target(os: linux, cpu: x86-64) {
 	package(name: parasol, domain: parasol) {

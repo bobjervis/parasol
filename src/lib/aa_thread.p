@@ -236,29 +236,6 @@ public class Thread {
 		return _pid;
 	}
 
-	public static void sleep(long milliseconds) {
-		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-			while (milliseconds > 1000000000) {
-				Sleep(1000000000);
-				milliseconds -= 1000000000;
-			}
-			if (milliseconds > 0)
-				Sleep(DWORD(milliseconds));
-		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-			linux.timespec ts;
-			linux.timespec remaining;
-
-			ts.tv_sec = milliseconds / 1000;
-			ts.tv_nsec = (milliseconds % 1000) * 1000000;
-			for (;;) {
-				int result = linux.nanosleep(&ts, &remaining);
-				if (result == 0)
-					break;
-				ts = remaining;
-			}
-		}
-	}
-
 	public int compare(ref<Thread> other) {
 		if (this == other)
 			return 0;
@@ -737,6 +714,29 @@ public monitor class Future<class T> {
 
 public ref<Thread> currentThread() {
 	return ref<Thread>(parasolThread(null));
+}
+
+public void sleep(long milliseconds) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		while (milliseconds > 1000000000) {
+			Sleep(1000000000);
+			milliseconds -= 1000000000;
+		}
+		if (milliseconds > 0)
+			Sleep(DWORD(milliseconds));
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		linux.timespec ts;
+		linux.timespec remaining;
+
+		ts.tv_sec = milliseconds / 1000;
+		ts.tv_nsec = (milliseconds % 1000) * 1000000;
+		for (;;) {
+			int result = linux.nanosleep(&ts, &remaining);
+			if (result == 0)
+				break;
+			ts = remaining;
+		}
+	}
 }
 
 private int getCurrentThreadId() {

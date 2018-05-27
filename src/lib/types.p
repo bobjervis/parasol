@@ -154,7 +154,13 @@ public class Queue<class T> {
 		else
 			return _last + _capacity - _first;
 	}
-	
+
+	public T peek(int i) {
+		i += _first;
+		i %= _capacity;
+		return _items[i];
+	}
+
 	public void enqueue(T t) {
 		if (length() >= _capacity - 1)
 			resize(_capacity << 1);

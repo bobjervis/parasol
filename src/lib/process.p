@@ -15,11 +15,13 @@
  */
 namespace parasol:process;
 
+import parasol:log;
 import parasol:pxi;
 import parasol:runtime;
 import parasol:storage;
 import parasol:time;
 import parasol:memory;
+import parasol:thread;
 import parasol:thread.Thread;
 import native:windows;
 import native:linux;
@@ -27,6 +29,8 @@ import native:linux.CLD_EXITED;
 import native:linux.CLD_STOPPED;
 import native:linux.CLD_CONTINUED;
 import native:C;
+
+private ref<log.Logger> logger = log.getLogger("parasol.process");
 
 public ref<Reader> stdin;
 public ref<Writer> stdout;
@@ -130,10 +134,13 @@ public class Process extends ProcessVolatileData {
 			else
 				_fdLimit = int(rlim.rlim_cur);
 		}
+		_stdout = -1;
 	}
 
 	~Process() {
 		pendingChildren.cancelChild(_pid);
+		if (_stdout >= 0)
+			linux.close(_stdout);
 	}
 
 	public void captureOutput() {
@@ -172,9 +179,12 @@ public class Process extends ProcessVolatileData {
 			int exitStatus = waitForExit();
 			if (exitStatus == 0)
 				return true, 0;
-			else
+			else {
+				logger.format(log.DEBUG, "exit = %d", exitStatus);
 				return false, exitStatus;
-		}
+			}
+		} else
+			logger.debug("spawn failed");
 		return false, int.MIN_VALUE;
 	}
 
@@ -201,13 +211,19 @@ public class Process extends ProcessVolatileData {
 
 			pointer<pointer<byte>> argv = &fullArgs[0];
 
-			int[] pipefd;
+			int ptyMasterFd;
 
 			if (_captureOutput) {
-				pipefd.resize(2);
-
-				if (linux.pipe(&pipefd[0]) < 0)
+				ptyMasterFd = linux.posix_openpt(linux.O_RDWR);
+				if (ptyMasterFd < 0)
 					return false;
+//				logger.format(log.DEBUG, "ptyMasterFd = %d", ptyMasterFd);
+				linux.termios t;
+
+				linux.tcgetattr(ptyMasterFd, &t);
+				t.c_oflag |= linux.ONLRET;
+				if (linux.tcsetattr(ptyMasterFd, 0, &t) != 0)
+					logger.format(log.ERROR, "tcsetattr failed: %d", linux.errno());
 			}
 /*
 			printf("About to exec '%s'", command);
@@ -220,17 +236,62 @@ public class Process extends ProcessVolatileData {
 				_pid = linux.fork();
 				if (_pid == 0) {
 					// This is the child process
-					if (_user != 0) {
-						if (linux.setuid(_user) != 0) {
-							printf("setuid to %d FAILED\n", _user);
-							linux.perror("setuid".c_str());
+					log.resetChildProcess();
+					if (_captureOutput) {
+						// If the child process changes users, the grantpt has to happen with ruid == _user and euid == 9
+						if (_user != 0) {
+							if (linux.setreuid(_user, 0) != 0) {
+								logger.format(log.ERROR, "setreuid to %d FAILED", _user);
+								thread.sleep(1000);
+								linux._exit(-1);
+							}
+						}
+						int result = linux.grantpt(ptyMasterFd);
+						if (result != 0) {
+							logger.format(log.ERROR, "grantpt failed: %d", linux.errno());
+							thread.sleep(1000);
+							linux._exit(-1);
+						}
+						result = linux.unlockpt(ptyMasterFd);
+						if (result != 0) {
+							logger.format(log.ERROR, "unlockpt failed: %d", linux.errno());
+							thread.sleep(1000);
+							linux._exit(-1);
+						}
+						byte[] buffer;
+						buffer.resize(linux.PATH_MAX);
+						if (linux.ptsname_r(ptyMasterFd, &buffer[0], buffer.length()) != 0) {
+							logger.format(log.ERROR, "ptsname_r failed: %d", linux.errno());
+							thread.sleep(1000);
+							linux._exit(-1);
+						}
+						int fd = linux.open(&buffer[0], linux.O_RDWR);
+						if (fd < 3) {
+							logger.format(log.ERROR, "pty open failed: %s %d %d", string(&buffer[0]), fd, linux.errno());
+							thread.sleep(1000);
+							linux._exit(-1);
+						}
+						if (linux.dup2(fd, 0) != 0) {
+							logger.format(log.ERROR, "dup2 failed: %d -> 0 %d", fd, linux.errno());
+							thread.sleep(1000);
+							linux._exit(-1);
+						}
+						if (linux.dup2(fd, 1) != 1) {
+							stderr.printf("dup2 failed: %d -> 1 %d\n", fd, linux.errno());
+							linux._exit(-1);
+						}
+						if (linux.dup2(fd, 2) != 2) {
+							stderr.printf("dup2 failed: %d -> 2 %d\n", fd, linux.errno());
 							linux._exit(-1);
 						}
 					}
-					if (_captureOutput) {
-						linux.close(pipefd[0]);
-						linux.dup2(pipefd[1], 1);
-						linux.dup2(pipefd[1], 2);
+					// Okay, lock it down now.
+					if (_user != 0) {
+						if (linux.setuid(_user) != 0) {
+							logger.format(log.ERROR, "setreuid to %d FAILED", _user);
+							thread.sleep(1000);
+							linux._exit(-1);
+						}
 					}
 					/*
 						In the child process is the only reliable place we can
@@ -261,8 +322,7 @@ public class Process extends ProcessVolatileData {
 					pc.arg = this;
 
 					if (_captureOutput) {
-						_stdout = pipefd[0];
-						linux.close(pipefd[1]);
+						_stdout = ptyMasterFd;
 					}
 					pendingChildren.declareChild(pc);
 					lock (*this) {
@@ -292,10 +352,12 @@ public class Process extends ProcessVolatileData {
 		DrainData dd;
 
 		dd.fd = _stdout;
+		dd.output = "";
 		drainer.start(drain, &dd);
 		drainer.join();
 		delete drainer;
 		linux.close(_stdout);
+		_stdout = -1;
 		return dd.output;
 	}
 
@@ -424,22 +486,26 @@ public int debugSpawn(string command, ref<string> output, ref<exception_t> outco
 	return result;
 }
 
-public int, string, exception_t execute(string command, time.Time timeout) {
+public int, string, exception_t execute(time.Time timeout, string... args) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		SpawnPayload payload;
-		
+		string command;
+
+		for (i in args) {
+			if (i > 0)
+				command.append(" ");
+			command.append(args[i]);
+		}
 		int result = debugSpawnImpl(&command[0], &payload, timeout.value());
 		string output = string(payload.output, payload.outputLength);
 		exception_t outcome = exception_t(payload.outcome);
 		disposeOfPayload(&payload);
 		return result, output, outcome;
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-		pointer<pointer<byte>> argv;
-		
-		argv = parseCommandLine(command);
-		if (argv == null) {
-			return -1, null, exception_t.NO_EXCEPTION;
-		}
+		pointer<byte>[] argv;
+
+		for (i in args)
+			argv.append(args[i].c_str());
 		linux.pid_t pid;
 		int[] pipefd;
 		
@@ -455,7 +521,7 @@ public int, string, exception_t execute(string command, time.Time timeout) {
 			linux.dup2(pipefd[1], 1);
 			linux.dup2(pipefd[1], 2);
 			// This is the child process
-			linux.execv(argv[0], argv);
+			linux.execv(argv[0], &argv[0]);
 			linux._exit(-1);
 		} else {
 			if (timeout.value() > 0) {
@@ -469,6 +535,8 @@ public int, string, exception_t execute(string command, time.Time timeout) {
 			ref<Thread> t = new Thread();
 			DrainData d;
 			d.fd = pipefd[0];
+			d.output = "";
+			d.stopOnZero = true;
 			
 			t.start(drain, &d);
 			linux.pid_t terminatedPid = linux.waitpid(pid, &exitStatus, 0);
@@ -501,7 +569,8 @@ public int, string, exception_t execute(string command, time.Time timeout) {
 		return -1, null, exception_t.UNKNOWN_PLATFORM;
 }
 
-public int, string, exception_t spawnInteractive(string command, string stdin, time.Time timeout) {
+// TODO: Do we need this or something better?
+/*public*/private int, string, exception_t spawnInteractive(string command, string stdin, time.Time timeout) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		SpawnPayload payload;
 		
@@ -513,7 +582,7 @@ public int, string, exception_t spawnInteractive(string command, string stdin, t
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		pointer<pointer<byte>> argv;
 		
-		argv = parseCommandLine(command);
+//		argv = parseCommandLine(command);
 		if (argv == null) {
 			return -1, null, exception_t.NO_EXCEPTION;
 		}
@@ -557,6 +626,8 @@ public int, string, exception_t spawnInteractive(string command, string stdin, t
 			ref<Thread> t = new Thread();
 			DrainData d;
 			d.fd = pipefd[0];
+			d.output = "";
+			d.stopOnZero = true;
 			
 			t.start(drain, &d);
 			// If the stdin string is long, this may block waiting for the child process to read the data.
@@ -605,54 +676,10 @@ public void exit(int code) {
 	C.exit(code);
 }
 
-private pointer<pointer<byte>> parseCommandLine(string command) {
-	if (command == null)
-		return null;
-	int argCount = 0;
-	boolean inToken = false;
-	for (int i = 0; i < command.length(); i++) {
-		if (command[i].isSpace())
-			inToken = false;
-		else if (!inToken) {
-			argCount++;
-			inToken = true;
-		}
-	}
-	pointer<pointer<byte>> argv = pointer<pointer<byte>>(memory.alloc((argCount + 1) * address.bytes + command.length() + 1));
-	pointer<byte> cmdCopy = pointer<byte>(argv + argCount + 1);
-	C.memcpy(cmdCopy, &command[0], command.length());
-	argCount = 0;
-	inToken = false;
-	byte delimiter;
-	for (int i = 0; i < command.length(); i++) {
-		if (delimiter != 0) {
-			if (cmdCopy[i] == delimiter) {
-				cmdCopy[i] = 0;
-				inToken = false;
-				delimiter = 0;
-			}
-		} else if (command[i].isSpace()) {
-			cmdCopy[i] = 0;
-			inToken = false;
-		} else if (!inToken) {
-			if (cmdCopy[i] == '\'' || cmdCopy[i] == '"') {
-				delimiter = cmdCopy[i];
-				argv[argCount] = cmdCopy + i + 1; 
-			} else
-				argv[argCount] = cmdCopy + i; 
-			argCount++;
-			inToken = true;
-		}
-	}
-	// If there was a delimited argument, and it wasn't closed reject the command-line.
-	if (delimiter != 0)
-		return null;
-	return argv;
-}
-
 private class DrainData {
 	public int fd;
 	public string output;
+	public boolean stopOnZero;
 }
 
 private void drain(address data) {
@@ -662,9 +689,13 @@ private void drain(address data) {
 	buffer.resize(64*1024);
 	for (;;) {
 		int result = linux.read(d.fd, &buffer[0], buffer.length());
-		if (result <= 0)
+		if (result < 0)
 			break;
-		d.output.append(&buffer[0], result);
+		if (d.stopOnZero && result == 0)
+			break;
+		for (int i = 0; i < result; i++)
+			if (buffer[i] != '\r')
+				d.output.append(buffer[i]);
 	}
 }
 

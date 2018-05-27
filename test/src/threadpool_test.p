@@ -13,7 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import parasol:thread.Thread;
+import parasol:thread;
 //import parasol:thread.ThreadPool;
 
 ThreadPool<int> pool(4);
@@ -24,7 +24,7 @@ assert(value == 0);
 
 pool.execute(f, &value);
 
-Thread.sleep(300);
+thread.sleep(300);
 
 assert(value == 17);
 
@@ -47,7 +47,7 @@ private monitor class ThreadPoolData<class T> {
 }
 
 public class ThreadPool<class T> extends ThreadPoolData<T> {
-	ref<Thread>[] _threads;
+	ref<thread.Thread>[] _threads;
 	
 	public ThreadPool(int threadCount) {
 		resize(threadCount);
@@ -120,7 +120,7 @@ public class ThreadPool<class T> extends ThreadPoolData<T> {
 			assert(false);		// Need to have a way to shut down threads.
 		} else {
 			while (newThreadCount > _threads.length()) {
-				ref<Thread> t = new Thread();
+				ref<thread.Thread> t = new thread.Thread();
 				_threads.append(t);
 				t.start(workLoop, this);
 			}

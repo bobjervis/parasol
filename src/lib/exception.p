@@ -795,6 +795,6 @@ private void dumpAllThreads(ref<ExceptionContext> context) {
 //		printf("t %p thread %p\n", t, threads[i]);
 		linux.tgkill(pid, int(threads[i].id()), linux.SIGQUIT);
 	}
-	thread.Thread.sleep(1000);
+	thread.sleep(1000);
 }
 

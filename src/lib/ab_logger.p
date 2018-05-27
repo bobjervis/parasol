@@ -98,6 +98,17 @@ LogChain chainRoot = {
 	thisLogger: &rootLogger
 };
 /**
+ * If you want to use the logger infrastructure across a linux fork, you will need to make this call. It will
+ * reset the logger thread states as appropriate for the child to begin logging again. Any log statements made in
+ * a child process will queue up until this call is made. Making this call more than once within a single process
+ * (or calling it at all after any logging statements are made in a parent process) will produce unexpected results,
+ * including the possibility of out-of-order log statements.
+ */
+public void resetChildProcess() {
+	defaultHandler.newThread();
+}
+
+/**
  * The Logger class is designed to provide a convenient way for programmers to decorate a program
  * with output statements that can be configured at run time to write to designated files, remote servers or the
  * program's standard output. 
@@ -275,6 +286,19 @@ public monitor class Logger {
 			}
 		} while (context != null);
 	}
+	/**
+	 * Wait until all downstream log handlers have written their queues.
+	 */
+	public void drain() {
+		ref<Logger> context = this;
+		do {
+			lock (*context) {
+				if (_destination != null)
+					_destination.drain();
+				context = _parent;
+			}
+		} while (context != null);
+	}
 }
 
 class LogChain {
@@ -316,6 +340,8 @@ public class ConsoleLogHandler extends LogHandler {
 monitor class LogHandlerVolatileData {
 	ref<thread.Thread> _writeThread;
 	Queue<ref<LogEvent>> _events;
+	Monitor _drainDone;
+	int _shouldSignal;
 
 	void enqueue(ref<LogEvent> logEvent) {
 		_events.enqueue(logEvent.clone());
@@ -331,6 +357,18 @@ monitor class LogHandlerVolatileData {
 		return _events.dequeue();
 	}
 
+	void writeDone() {
+		if (_events.isEmpty()) {
+			while (_shouldSignal > 0) {
+				_drainDone.notify();
+				_shouldSignal--;
+			}
+		}
+	}
+
+	void newThread() {
+		_writeThread = null;			// Just assume that no such thread exists in the process.
+	}
 }
 
 public class LogHandler extends LogHandlerVolatileData {
@@ -385,6 +423,22 @@ public class LogHandler extends LogHandlerVolatileData {
 			s.printf("CAUTION %d", level);
 		return s;
 	}
+
+	/**
+	 * block the calling thread until the queue is empty
+	 */
+	void drain() {
+		ref<Monitor> mon;
+		lock (*this) {
+			if (!_events.isEmpty()) {
+				mon = &_drainDone;;
+				_shouldSignal++;
+			}
+		}
+		if (mon != null)
+			mon.wait();
+	}
+
 }
 /**
  * writeWrapper
@@ -398,10 +452,12 @@ void writeWrapper(address arg) {
 		ref<LogEvent> logEvent = handler.dequeue();
 		if (logEvent.msg == null) {
 			delete logEvent;
+			handler.writeDone();
 			break;
 		} else {
 			handler.processEvent(logEvent);
 			delete logEvent;
+			handler.writeDone();
 		}
 	}
 }

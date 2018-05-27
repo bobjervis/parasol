@@ -1,0 +1,27 @@
+#!/bin/bash
+set -e
+
+PARASOL_BIN=$(dirname "`readlink -f \"$0\"`")/..
+export PARASOL_HOME=`readlink -f "$PARASOL_BIN"`
+
+PARASOL_PXI=$PARASOL_HOME/bin/x86-64-lnx.pxi
+
+mkdir -p "$PARASOL_HOME/build"
+
+"$PARASOL_HOME/bin/parasolrt" "$PARASOL_PXI" "$PARASOL_HOME/compiler/main.p" "--pxi=$PARASOL_HOME/build/p1.pxi" "$PARASOL_HOME/compiler/main.p"
+
+"$PARASOL_HOME/bin/parasolrt"  "$PARASOL_HOME/build/p1.pxi" "--pxi=$PARASOL_HOME/build/p2.pxi" "$PARASOL_HOME/compiler/main.p"
+if ! "$PARASOL_HOME/bin/pc" "$PARASOL_HOME/src/util/bdiff.p" "$PARASOL_HOME/build/p1.pxi" "$PARASOL_HOME/build/p2.pxi"
+then
+    echo Trying a third generation...
+    "$PARASOL_HOME/bin/parasolrt"  "$PARASOL_HOME/build/p2.pxi" "--pxi=$PARASOL_HOME/build/p3.pxi" "$PARASOL_HOME/compiler/main.p"
+    if ! "$PARASOL_HOME/bin/pc" "$PARASOL_HOME/src/util/bdiff.p" "$PARASOL_HOME/build/p2.pxi" "$PARASOL_HOME/build/p3.pxi"
+    then
+        echo  FAILED: binaries not converging after 3 generations
+        exit 1
+    fi
+fi
+cd "$PARASOL_HOME"
+cp "$PARASOL_HOME/build/p1.pxi" "$PARASOL_PXI"
+"$PARASOL_HOME/bin/parasolrt" "$PARASOL_PXI" "$PARASOL_HOME/compiler/main.p" "--pxi=$PARASOL_HOME/bin/x86-64-win.pxi" --target=x86-64-win "$PARASOL_HOME/compiler/main.p"
+echo SUCCESS

@@ -52,13 +52,15 @@ private boolean printSymbolTable;
 private string rootFolder;
 private string srcFolder;
 private string parasolCommand;
+private string pxiFile;
 private string targetArgument;
 
-public void initTestObjects(string argv0, boolean verbose, boolean compileFromSource, boolean symbols, string target) {
+public void initTestObjects(string argv0, string argv1, boolean verbose, boolean compileFromSource, boolean symbols, string target) {
 	verboseFlag = verbose;
 	rootFolder = storage.directory(storage.directory(process.binaryFilename()));
 	srcFolder = rootFolder + "/test/src";
 	parasolCommand = argv0;
+	pxiFile = argv1;
 	targetArgument = target;
 	compileFromSourceArgument = compileFromSource;
 	printSymbolTable = symbols;
@@ -665,19 +667,24 @@ class RunObject extends script.Object {
 	}
 
 	public boolean run() {
-		string command = parasolCommand + " ";
+		string[] args;
+
+		args.append(parasolCommand);
+		args.append(pxiFile);
 		if (compileFromSourceArgument)
-			command.append("compiler/main.p ");
+			args.append("compiler/main.p");
 		if (targetArgument != null)
-			command.printf("--target=%s ", targetArgument);
-		if (_importPath.length() > 0)
-			command.printf("-I %s ", _importPath);
+			args.append("--target=" + targetArgument);
+		if (_importPath.length() > 0) {
+			args.append("-I");
+			args.append(_importPath);
+		}
 		if (verboseFlag)
-			command.append("-v ");
-		command.append(_filename);
+			args.append("-v");
+		args.append(_filename);
 		if (_arguments.length() > 0) {
-			command.append(" ");
-			command.append(_arguments);
+			string[] finalArgs = _arguments.split(' ');
+			args.append(finalArgs);
 		}
 		time.Time timeout(_timeout);
 
@@ -685,7 +692,7 @@ class RunObject extends script.Object {
 		string output;
 		process.exception_t exception;
 		
-		(result, output, exception) = process.execute(command, timeout);
+		(result, output, exception) = process.execute(timeout, args);
 		Expect outcome;
 		if (result < 0)
 			outcome = Expect.FAIL;
@@ -703,7 +710,10 @@ class RunObject extends script.Object {
 			}
 			return true;
 		}
-		printf("--> %s\n", command);
+		printf("-->");
+		for (i in args)
+			printf(" %s", args[i]);
+		printf("\n");
 		printf("%s\n", output);
 		printf("  Expecting %s got %s\n", string(_expect), string(outcome));
 		if (result < 0)

@@ -874,7 +874,7 @@ public class StaticContentService extends HttpService {
 	}
 
 	public boolean processRequest(ref<HttpRequest> request, ref<HttpResponse> response) {
-//		printf("Static Content! fetching %s / %s\n", _filename, request.serviceResource);
+		logger.format(log.DEBUG, "Static Content! fetching %s / %s", _filename, request.serviceResource);
 		if (request.method != HttpRequest.Method.GET) {
 			response.error(501);
 			return false;
@@ -884,6 +884,7 @@ public class StaticContentService extends HttpService {
 			filename = constructPath(_filename, request.serviceResource, null);
 		else
 			filename = _filename;
+		logger.format(log.DEBUG, "Looking for '%s'", filename);
 		if (exists(filename)) {
 			File f;
 			if (f.open(filename)) {

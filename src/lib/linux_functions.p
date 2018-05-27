@@ -128,6 +128,9 @@ public abstract int glob(pointer<byte> pattern, int _flags, int(pointer<byte>, i
 @Linux("libc.so.6", "globfree")
 public abstract int globfree(ref<glob_t> pglob);
 
+@Linux("libc.so.6", "grantpt")
+public abstract int grantpt(int fd);
+
 @Linux("libc.so.6", "isatty")
 public abstract int isatty(int fd);
 
@@ -169,6 +172,9 @@ public abstract void perror(pointer<byte> message);
 
 @Linux("libc.so.6", "pipe")
 public abstract int pipe(pointer<int> pipefd);
+
+@Linux("libc.so.6", "posix_openpt")
+public abstract int posix_openpt(int openFlags);
 
 @Linux("libpthread.so.0", "pthread_cond_destroy")
 public abstract pthread_t pthread_cond_destroy(ref<pthread_cond_t> conditionVariable);
@@ -215,6 +221,9 @@ public abstract pthread_t pthread_self();
 @Linux("libpthread.so.0", "pthread_sigmask")
 public abstract pthread_t pthread_sigmask(int how, ref<sigset_t> set, ref<sigset_t> oldset);
 
+@Linux("libc.so.6", "ptsname_r")
+public abstract int ptsname_r(int fd, pointer<byte> buf, size_t buflen);
+
 @Linux("libc.so.6", "read")
 public abstract int read(int fd, address buffer, long bufferSize);
 
@@ -253,6 +262,9 @@ public abstract int seteuid(uid_t uid);
 
 @Linux("libc.so.6", "setfsuid")
 public abstract int setfsuid(uid_t uid);
+
+@Linux("libc.so.6", "setreuid")
+public abstract int setreuid(uid_t ruid, uid_t euid);
 
 @Linux("libc.so.6", "setrlimit")
 public abstract int setrlimit(int resource, ref<rlimit> rlim);
@@ -311,11 +323,20 @@ public abstract int statvfs(pointer<byte> path, ref<statvfsStruct> buf);
 @Linux("libc.so.6", "sysconf")
 public abstract int sysconf(int parameter_index);
 
+@Linux("libc.so.6", "tcgetattr")
+public abstract int tcgetattr(int fd, ref<termios> termios_p);
+
+@Linux("libc.so.6", "tcsetattr")
+public abstract int tcsetattr(int fd, int optional_actions, ref<termios> termios_p);
+
 @Linux("libc.so.6", "timegm")
 public abstract time_t timegm(ref<tm> time);
 
 @Linux("libc.so.6", "unlink")
 public abstract int unlink(pointer<byte> path);
+
+@Linux("libc.so.6", "unlockpt")
+public abstract int unlockpt(int fd);
 
 @Linux("libc.so.6", "unsetenv")
 public abstract int unsetenv(pointer<byte> name);
@@ -389,6 +410,87 @@ public int tgkill(int tgid, int tid, int sig) {
 public int errno() {
 	return *__errno_location();
 }
+
+public class cc_t = byte;
+public class tcflag_t = unsigned;
+public class speed_t = unsigned;
+
+public class termios {
+    public tcflag_t c_iflag;           /* input mode flags */
+    public tcflag_t c_oflag;           /* output mode flags */
+    public tcflag_t c_cflag;           /* control mode flags */
+    public tcflag_t c_lflag;           /* local mode flags */
+    public cc_t c_line;                /* line discipline */
+	// The C struct defines an array of 32 control characters.
+    public cc_t c_cc1;	               /* control characters */
+    public cc_t c_cc2;	               /* control characters */
+    public cc_t c_cc3;	               /* control characters */
+    public cc_t c_cc4;	               /* control characters */
+    public cc_t c_cc5;	               /* control characters */
+    public cc_t c_cc6;	               /* control characters */
+    public cc_t c_cc7;	               /* control characters */
+    public long c_cc08_15;             /* control characters */
+    public long c_cc16_23;             /* control characters */
+    public long c_cc24_31;             /* control characters */
+	public cc_t c_cc32;                /* control characters */
+    public speed_t c_ispeed;           /* input speed */
+    public speed_t c_ospeed;           /* output speed */
+
+	// Use these accessors to manipulate the cc elements.
+	public void set_cc(int i, byte value) {
+		pointer<byte> p = pointer<byte>(&c_cc1);
+		p[i] = value;
+	}
+
+	public byte get_cc(int i) {
+		pointer<byte> p = pointer<byte>(&c_cc1);
+		return p[i];
+	}
+}
+
+/* c_oflag bits */
+/*
+#define OPOST   0000001
+#define OLCUC   0000002
+#define ONLCR   0000004
+#define OCRNL   0000010
+#define ONOCR   0000020
+*/
+@constant
+public unsigned ONLRET = 0000040;
+/*
+#define OFILL   0000100
+#define OFDEL   0000200
+#if defined __USE_MISC || defined __USE_XOPEN
+# define NLDLY  0000400
+# define   NL0  0000000
+# define   NL1  0000400
+# define CRDLY  0003000
+# define   CR0  0000000
+# define   CR1  0001000
+# define   CR2  0002000
+# define   CR3  0003000
+# define TABDLY 0014000
+# define   TAB0 0000000
+# define   TAB1 0004000
+# define   TAB2 0010000
+# define   TAB3 0014000
+# define BSDLY  0020000
+# define   BS0  0000000
+# define   BS1  0020000
+# define FFDLY  0100000
+# define   FF0  0000000
+# define   FF1  0100000
+#endif
+
+#define VTDLY   0040000
+#define   VT0   0000000
+#define   VT1   0040000
+
+#ifdef __USE_MISC
+# define XTABS  0014000
+#endif
+*/
 
 public class DIR {
 	private int dummy;			// Don't expose anything about this structure
@@ -493,6 +595,9 @@ public class glob_t {
     public int(pointer<byte>, address) gl_lstat;
     public int(pointer<byte>, address) gl_stat;
 }
+
+@Constant
+public int PATH_MAX = 4096;
 
 /* Error returns from `glob'.  */
 public int GLOB_NOSPACE =    1;       /* Ran out of memory.  */
@@ -753,8 +858,9 @@ public int _NSIG = 65;	/* Biggest signal number + 1 */
  */
 @Constant
 public int EINTR = 4;	/* Interrupted system call */
+@Constant
+public int EIO = 5;		/* I/O error */
 /*
-#define	EIO		 5	/* I/O error */
 #define	ENXIO		 6	/* No such device or address */
 #define	E2BIG		 7	/* Argument list too long */
 #define	ENOEXEC		 8	/* Exec format error */

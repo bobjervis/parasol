@@ -97,6 +97,30 @@ public class string extends String<byte> {
 		C.memcpy(&_contents.data, &value[0], value.length());
 	}
 	
+	public string(byte[] value, int startAt) {
+		if (startAt < 0)
+			throw IllegalArgumentException(string(startAt));
+		if (startAt >= value.length()) {
+			resize(0);
+			return;
+		}
+		resize(value.length() - startAt);
+		C.memcpy(&_contents.data, &value[startAt], length());
+	}
+	
+	public string(byte[] value, int startAt, int endAt) {
+		if (startAt < 0 || endAt < 0)
+			throw IllegalArgumentException(string(startAt));
+		if (endAt > value.length())
+			endAt = value.length();
+		if (startAt >= endAt) {
+			resize(0);
+			return;
+		}
+		resize(endAt - startAt);
+		C.memcpy(&_contents.data, &value[startAt], length());
+	}
+	
 	public string(pointer<byte> buffer, int len) {
 		if (buffer != null) {
 			resize(len);

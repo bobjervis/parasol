@@ -118,7 +118,7 @@ int main(string[] args) {
 		pxiName = "bin/x86-64-lnx.pxi";
 	if (parasolCommand.testPxiArgument.set())
 		pxiName = parasolCommand.testPxiArgument.value;
-	initTestObjects(process.binaryFilename() + " " + pxiName, parasolCommand.verboseArgument.value, 
+	initTestObjects(process.binaryFilename(), pxiName, parasolCommand.verboseArgument.value, 
 			parasolCommand.compileFromSourceArgument.value,
 			parasolCommand.symbolTableArgument.value,
 			parasolCommand.targetArgument.value);
