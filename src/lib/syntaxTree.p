@@ -553,9 +553,7 @@ public class Block extends Node {
 
 				nl.next = nlr;
 			} else {
-				print(0);
 				// TODO: Handle the case for anonymous locks.
-				assert(false);
 			}
 		} else if (_statements != null) {
 			for (ref<NodeList> nl = _statements;; nl = nl.next) {
@@ -693,7 +691,10 @@ public class Block extends Node {
 			compileContext.assignTypes(nl.node);
 		type = compileContext.arena().builtInType(TypeFamily.VOID);
 		if (op() == Operator.LOCK) {
-			if (_statements.node.op() != Operator.EMPTY) {
+			if (_statements.node.op() == Operator.EMPTY) {
+				add(MessageId.UNFINISHED_LOCK, compileContext.pool());
+				type = compileContext.errorType();
+			} else {
 				ref<Unary> u = ref<Unary>(_statements.node);
 				if (!u.operand().deferAnalysis()) {
 					if (!compileContext.isLockable(u.operand().type)) {

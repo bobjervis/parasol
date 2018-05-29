@@ -343,6 +343,24 @@ public class Process extends ProcessVolatileData {
 		}
 	}
 
+	public boolean kill(int signal) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+//			SpawnPayload payload;
+			
+//			int result = debugSpawnImpl(&command[0], &payload, timeout.value());
+//			string output = string(payload.output, payload.outputLength);
+//			exception_t outcome = exception_t(payload.outcome);
+//			disposeOfPayload(&payload);
+//			return result, output, outcome;
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+			lock (*this) {
+				if (_running)
+					return linux.kill(_pid, signal) == 0;
+			}
+		}
+		return false;
+	}
+
 	public string collectOutput() {
 		if (!_captureOutput)
 			return null;
@@ -387,7 +405,7 @@ public class Process extends ProcessVolatileData {
 			lock (*this) {
 				_running = false;
 				_exitStatus = info.si_status;
-				notify();
+				notifyAll();
 			}
 			break;
 
@@ -395,7 +413,7 @@ public class Process extends ProcessVolatileData {
 			lock (*this) {
 				_running = false;
 				_exitStatus = -info.si_status;
-				notify();
+				notifyAll();
 			}
 			break;
 		}

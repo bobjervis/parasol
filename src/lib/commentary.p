@@ -149,6 +149,7 @@ public enum MessageId {
 	UNFINISHED_ASSIGN_STORAGE,
 	UNFINISHED_FIXED_ARRAY,
 	UNFINISHED_CONSTRUCTION,
+	UNFINISHED_LOCK,
 	
 	MAX_MESSAGE
 }
@@ -366,6 +367,7 @@ private string[MessageId] messageCatalog = [
 	UNFINISHED_GENERATE: 	"Unfinished: generate %1/%2: %3",
 	UNFINISHED_INITIALIZER: "Unfinished: static initializer",
 	UNFINISHED_INSTANTIATE_TEMPLATE: "Unfinished: instantiateTemplate",
+	UNFINISHED_LOCK:		"Unfinished: lock statement without monitor",
 	UNFINISHED_MAP_TO_VALUES: "Unfinished: mapToValues",
 	UNFINISHED_MARKUP_DECLARATOR: "Unfinished: markupDeclarator %1/%2",
 	UNFINISHED_NAMESPACE: "Unfinished: anonymous namespace",
