@@ -84,3 +84,56 @@ a[name]:hover {
 .rowColor {
     background-color:#EEEEEF;
 }
+
+div.namespace-info {
+	font: 14pt Arial;
+}
+
+div.namespace-title, div.class-title {
+	font: bold 16pt Arial;
+}
+
+div.block {
+	padding: 2mm;
+	background-color:#fff7e6;
+	border-left: 1px solid #888;
+	border-right: 1px solid #888;
+	border-bottom: 1px solid #888;
+}
+
+div.block-header {
+	font: italic 16pt Arial;
+	padding-top: 3mm;
+	background-color:#fff7e6;
+	padding-bottom: 2mm;
+}
+
+div.entity {
+	padding: 2mm;
+	font: bold 12pt Arial;
+    background-color:#EEEEEF;
+}
+
+div.declaration {
+	padding-top: 2mm;
+	font: 12pt "Courier New", monospace;
+	white-space: pre;
+	padding-left: 3mm;
+    background-color:#FFFFFF;
+}
+
+div.class-hierarchy {
+	font: 12pt "Courier New", monospace;
+	padding-top: 5mm;
+	white-space: pre;
+}
+
+div.impl-iface-caption {
+	padding-top: 2mm;
+	font: bold 12pt Arial;
+}
+
+div.impl-ifaces {
+	font: 12pt "Courier New", monospace;
+}
+

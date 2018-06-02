@@ -160,10 +160,6 @@ public abstract time_t mktime(ref<tm> time);
 @Linux("libc.so.6", "rename")
 public abstract int rename(pointer<byte> oldName, pointer<byte> newName);
 
-@Windows("msvcrt.dll", "sqrt")
-@Linux("libm.so.6", "sqrt")
-public abstract double sqrt(double x);
-
 @Windows("msvcrt.dll", "sleep")
 @Linux("libc.so.6", "sleep")
 public abstract int sleep(unsigned seconds);
@@ -199,6 +195,10 @@ public abstract int strlen(pointer<byte> cp);
 @Windows("msvcrt.dll", "time")
 @Linux("libc.so.6", "time")
 public abstract long time(ref<long> t);
+
+//@Windows("msvcrt.dll", "vsprintf") - not yet implemented on Windows, Linux is pretty hacky, so beware
+@Linux("libc.so.6", "vsnprintf")
+public abstract int vsnprintf(pointer<byte> buffer, size_t size, pointer<byte> format, va_list ap);
 
 //@Windows("msvcrt.dll", "vsprintf") - not yet implemented on Windows, Linux is pretty hacky, so beware
 @Linux("libc.so.6", "vsprintf")

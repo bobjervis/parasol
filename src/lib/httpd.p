@@ -77,29 +77,39 @@ public class HttpServer {
 	 */
 	public void staticContent(string absPath, string filename) {
 		ref<HttpService> handler = new StaticContentService(filename);
-		_handlers.append(PathHandler(absPath, handler, ServiceClass.ANY_SECURITY_LEVEL));
+		post(PathHandler(absPath, handler, ServiceClass.ANY_SECURITY_LEVEL));
 	}
 	
 	public void secureStaticContent(string absPath, string filename) {
 		ref<HttpService> handler = new StaticContentService(filename);
-		_handlers.append(PathHandler(absPath, handler, ServiceClass.SECURED_ONLY));
+		post(PathHandler(absPath, handler, ServiceClass.SECURED_ONLY));
 	}
 	
 	public void unsecureStaticContent(string absPath, string filename) {
 		ref<HttpService> handler = new StaticContentService(filename);
-		_handlers.append(PathHandler(absPath, handler, ServiceClass.UNSECURED_ONLY));
+		post(PathHandler(absPath, handler, ServiceClass.UNSECURED_ONLY));
 	}
 	
 	public void service(string absPath, ref<HttpService> handler) {
-		_handlers.append(PathHandler(absPath, handler, ServiceClass.ANY_SECURITY_LEVEL));
+		post(PathHandler(absPath, handler, ServiceClass.ANY_SECURITY_LEVEL));
 	}
 	
 	public void secureService(string absPath, ref<HttpService> handler) {
-		_handlers.append(PathHandler(absPath, handler, ServiceClass.SECURED_ONLY));
+		post(PathHandler(absPath, handler, ServiceClass.SECURED_ONLY));
 	}
 	
 	public void unsecureService(string absPath, ref<HttpService> handler) {
-		_handlers.append(PathHandler(absPath, handler, ServiceClass.UNSECURED_ONLY));
+		post(PathHandler(absPath, handler, ServiceClass.UNSECURED_ONLY));
+	}
+
+	private void post(PathHandler ph) {
+		for (i in _handlers) {
+			if (ph.absPath.length() > _handlers[i].absPath.length()) {
+				_handlers.insert(i, ph);
+				return;
+			}
+		}
+		_handlers.append(ph);
 	}
 
 	public void start() {
@@ -160,7 +170,11 @@ public class HttpServer {
 	boolean dispatch(ref<HttpRequest> request, ref<HttpResponse> response, boolean secured) {
 //		printf("dispatch %s %s\n", string(request.method), request.url);
 		for (int i = 0; i < _handlers.length(); i++) {
-			if (request.url.startsWith(_handlers[i].absPath)) {
+			if (_handlers[i].absPath == "/") {
+				request.serviceResource = request.url.substring(1);
+//				printf("hit handler %d absPath = %s\n", i, _handlers[i].absPath);
+				return _handlers[i].handler.processRequest(request, response);
+			} else if (request.url.startsWith(_handlers[i].absPath)) {
 				switch (_handlers[i].serviceClass) {
 				case SECURED_ONLY:
 					if (!secured)
@@ -884,7 +898,6 @@ public class StaticContentService extends HttpService {
 			filename = constructPath(_filename, request.serviceResource, null);
 		else
 			filename = _filename;
-		logger.format(log.DEBUG, "Looking for '%s'", filename);
 		if (exists(filename)) {
 			File f;
 			if (f.open(filename)) {

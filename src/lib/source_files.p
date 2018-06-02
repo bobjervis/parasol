@@ -360,7 +360,7 @@ public class FileStat {
 		compileContext.buildScopes();
 		ref<Scope> domainScope = compileContext.arena().createDomain(domain);
 		if (_namespaceNode != null) {
-			_namespaceSymbol = _namespaceNode.middle().makeNamespaces(domainScope, compileContext);
+			_namespaceSymbol = _namespaceNode.middle().makeNamespaces(domainScope, domain, compileContext);
 			_fileScope.mergeIntoNamespace(_namespaceSymbol, compileContext);
 		} else
 			_namespaceSymbol = compileContext.arena().anonymous();

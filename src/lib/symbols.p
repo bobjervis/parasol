@@ -18,8 +18,9 @@ namespace parasol:compiler;
 public class Namespace extends Symbol {
 	private ref<Scope> _symbols;
 	private string _dottedName;
+	private string _domain;
 
-	Namespace(ref<Node> namespaceNode, ref<Scope> enclosing, ref<Scope> symbols, ref<Node> annotations, ref<MemoryPool> pool, ref<CompileString> name) {
+	Namespace(string domain, ref<Node> namespaceNode, ref<Scope> enclosing, ref<Scope> symbols, ref<Node> annotations, ref<MemoryPool> pool, ref<CompileString> name) {
 		super(Operator.PUBLIC, StorageClass.ENCLOSING, enclosing, annotations, pool, name, null);
 		_symbols = symbols;
 		if (namespaceNode != null) {
@@ -27,6 +28,7 @@ public class Namespace extends Symbol {
 			
 			(_dottedName, x) = namespaceNode.dottedName();
 		}
+		_domain = domain;
 	}
 
 	public void print(int indent, boolean printChildScopes) {
@@ -93,6 +95,10 @@ public class Namespace extends Symbol {
 	
 	public string dottedName() {
 		return _dottedName;
+	}
+
+	public string fullNamespace() {
+		return _domain + ":" + _dottedName;
 	}
 }
 
@@ -234,7 +240,7 @@ public class PlainSymbol extends Symbol {
 					if (t.deferAnalysis())
 						_type = t;
 					else if (t.family() == TypeFamily.SHAPE)
-						_type = t.indexType(compileContext);
+						_type = t.indexType();
 					else {
 						loop.aggregate().add(MessageId.NOT_A_SHAPE, compileContext.pool());
 						_type = compileContext.errorType();
@@ -615,7 +621,7 @@ public class OverloadInstance extends Symbol {
 					arguments.node.type.equals(t))
 					return Callable.YES;
 				// okay, we need to actually check the element type
-				t = t.elementType(compileContext);
+				t = t.elementType();
 			}
 			if (t.family() == TypeFamily.CLASS_VARIABLE) {
 				if (arguments.node.type.family() != TypeFamily.TYPEDEF)

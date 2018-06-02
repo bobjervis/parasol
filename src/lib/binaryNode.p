@@ -1461,7 +1461,7 @@ public class Binary extends Node {
 				ref<EnumInstanceType> enumType;
 				long maxIndex;
 				if (_left.type.family() == TypeFamily.SHAPE) {
-					ref<Type> indexType = _left.type.indexType(compileContext);
+					ref<Type> indexType = _left.type.indexType();
 					switch (indexType.family()) {
 					case	BOOLEAN:
 						enumType = null;
@@ -2211,12 +2211,12 @@ public class Binary extends Node {
 			} else if (_left.type.isVector(compileContext) || 
 					   _left.type.isMap(compileContext) ||
 					   _left.type.family() == TypeFamily.SHAPE) {
-				_right = _right.coerce(compileContext.tree(), _left.type.indexType(compileContext), false, compileContext);
+				_right = _right.coerce(compileContext.tree(), _left.type.indexType(), false, compileContext);
 				if (_right.deferAnalysis()) {
 					type = _right.type;
 					return;
 				}
-				type = _left.type.elementType(compileContext);
+				type = _left.type.elementType();
 			} else if (_left.type.family() == TypeFamily.STRING) {
 				_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_32, false, compileContext);
 				type = compileContext.arena().builtInType(TypeFamily.UNSIGNED_8);

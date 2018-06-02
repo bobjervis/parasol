@@ -19,7 +19,6 @@ import parasol:compiler.BuiltInType;
 import parasol:compiler.FileStat;
 import parasol:compiler.Type;
 import parasol:x86_64.ExceptionEntry;
-import parasol:x86_64.SourceLocation;
 import parasol:memory;
 import parasol:process;
 import parasol:runtime;
@@ -644,10 +643,6 @@ public abstract ref<Exception> fetchExposedException();
 abstract address exceptionsAddress();
 abstract int exceptionsCount();
 
-abstract void setSourceLocations(address location, int count);
-abstract pointer<SourceLocation> sourceLocations();
-abstract int sourceLocationsCount();
-
 abstract void callCatchHandler(ref<Exception> exception, address frame, int handler);
 
 public class ExceptionContext {
@@ -713,38 +708,24 @@ public class HardwareException {
 	public int exceptionType;
 }
 /**
- * @param ip The machine address to obtain a symbol for.
+ * @param ip The machine address to obtain a source location for.
  * @param offset The offset into the Parasol code image where the symbol could be found. If
- * the value is -1, then only the ip is used and it is assumed to be outside Parasol code.
+ * the value is negative, then only the ip is used and it is assumed to be outside Parasol code.
  * @param locationIsExact true if this is the exact address you care about. For example, if
  * it is the return address from a function, it may be pointing to the next source line so
  * this code will adjust to look for the location one byte before the given address.
  */
-public string formattedLocation(address ip, int offset, boolean locationIsExact) {
-	if (offset < 0)
-		return "-";
-	int unadjustedOffset = offset;
-	if (!locationIsExact)
-		offset--;
-	pointer<SourceLocation> psl = sourceLocations();
-	int interval = sourceLocationsCount();
-	string result;
-	for (;;) {
-		if (interval <= 0)
-			return formattedExternalLocation(ip);
-		int middle = interval / 2;
-		if (psl[middle].offset > offset)
-			interval = middle;
-		else if (middle == interval - 1 || psl[middle + 1].offset > offset) {
-			ref<FileStat> file = psl[middle].file;
-			result.printf("%s %d (@%x)", file.filename(), file.scanner().lineNumber(psl[middle].location) + 1, unadjustedOffset);
-			break;
-		} else {
-			psl = &psl[middle + 1];
-			interval = interval - middle - 1;
-		}
+string formattedLocation(address ip, int offset, boolean locationIsExact) {
+	ref<runtime.SourceLocation> sl = runtime.getSourceLocation(ip, locationIsExact);
+	if (sl == null)
+		return formattedExternalLocation(ip);
+	else {
+		string result;
+
+		ref<FileStat> file = sl.file;
+		result.printf("%s %d (@%x)", file.filename(), file.scanner().lineNumber(sl.location) + 1, offset);
+		return result;
 	}
-	return result;
 }
 
 private string formattedExternalLocation(address ip) {

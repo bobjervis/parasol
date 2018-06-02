@@ -16,6 +16,7 @@
 namespace parasol:random;
 
 import native:C;
+import parasol:math;
 import parasol:runtime;
 
 public class Random {
@@ -47,8 +48,8 @@ public class Random {
 	public Random(int seed) {
 		set(seed);
 	}
-	/*
-	 *	This constructor initializes the state of the generator using
+	/*+
+ *	This constructor initializes the state of the generator using
 	 *	a cryptographically secure method native to the host operating
 	 *	system (CryptGenRandom in Windows).  This constructor may require
 	 *	operating system or even external device interactions, and so should
@@ -113,37 +114,10 @@ public class Random {
 		} else
 			set(C.time(null));
 	}
-
-	byte[] getBytes(int length) {
-		byte[] b;
-
-		b.resize(length);
-		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-			/*
-				HCRYPTPROV handle;
-		
-				if (CryptAcquireContext(&handle, null, null, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT|CRYPT_SILENT)) {
-					CryptGenRandom(handle, _state.bytes, pointer<byte>(&_state));
-					CryptReleaseContext(handle, 0);
-				} else {
-				}
-			*/
-		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-			ref<C.FILE> f = C.fopen("/dev/urandom".c_str(), "rb".c_str());
-			if (f != null) {
-				C.fread(&b[0], 1, unsigned(length), f);
-				C.fclose(f);
-				return b;
-			}
-		}
-		for (int i = 0; i < length; i++)
-			b[i] = byte(uniform(256));
-		return b;
-	}
 	/*
 	 *	Returns a uniformly distributed 32-bit unsigned integer.
 	 */
-	unsigned next() {
+	public unsigned next() {
 		_state.z = 36969 * (_state.z & 0xffff) + (_state.z >> 16);
 		_state.w = 18000 * (_state.w & 0xffff) + (_state.w >> 16);
 		return (_state.z << 16) + (_state.w & 0xffff);
@@ -152,13 +126,13 @@ public class Random {
 	 *	Returns a uniformly distributed number in the range from
 	 *  0 to 1.  Neither zero nor one can be returned.
 	 */
-	double uniform() {
+	public double uniform() {
 		return next() / double(0x100000000);
 	}
 	/*
 	 * Returns a uniformly distributed integer in the range from 0 - range-1, inclusive.
 	 */
-	int uniform(int range) {
+	public int uniform(int range) {
 		return int(range * uniform());
 	}
 	/*
@@ -168,8 +142,7 @@ public class Random {
 	 * distribution with a mean of 0 and standard
 	 * deviation of 1.
 	 */
-	/*
-	double normal()  {
+	public double normal()  {
 		double x1, x2, r;
 
 		do {
@@ -177,10 +150,9 @@ public class Random {
 			x2 = 2 * uniform() - 1;
 			r = x1 * x1 + x2 * x2;
 		} while (r >= 1);
-		double fac = sqrt(-2 * log(r) / r);
+		double fac = math.sqrt(-2 * math.log(r) / r);
 		return x2 * fac;
 	}
-	*/
 	/*
 	 * binomial
 	 *
@@ -188,8 +160,7 @@ public class Random {
 	 * to a binomial distribution with n trials and probability of
 	 * p at each trial
 	 */
-	/*
-	int binomial(int n, double p) {
+	public int binomial(int n, double p) {
 		double mean = n * p;
 		double sdev = mean * (1 - p);
 		int x = int(normal() * sdev + mean);
@@ -199,14 +170,13 @@ public class Random {
 			x = n;
 		return x;
 	}
-	*/
 	/*
 	 * This function returns the sum on n random die rolls where
 	 * sides is the number of sides on each die.  The assumption is
 	 * that all sides are equally likely to appear and are numbered
 	 * from 1 through sides in value.
 	 */
-	int dieRoll(int n, int sides) {
+	public int dieRoll(int n, int sides) {
 		int sum = 0;
 		while (n > 0) {
 			sum += int(sides * uniform()) + 1;
@@ -214,5 +184,34 @@ public class Random {
 		}
 		return sum;
 	}
+}
+
+public byte[] getBytes(int length) {
+	byte[] b;
+
+	b.resize(length);
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		/*
+			HCRYPTPROV handle;
+	
+			if (CryptAcquireContext(&handle, null, null, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT|CRYPT_SILENT)) {
+				CryptGenRandom(handle, _state.bytes, pointer<byte>(&_state));
+				CryptReleaseContext(handle, 0);
+			} else {
+			}
+		*/
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		ref<C.FILE> f = C.fopen("/dev/urandom".c_str(), "rb".c_str());
+		if (f != null) {
+			C.fread(&b[0], 1, unsigned(length), f);
+			C.fclose(f);
+			return b;
+		}
+	}
+	// fallback used when OS-specific solutions are not available.
+	Random r;
+	for (int i = 0; i < length; i++)
+		b[i] = byte(r.uniform(256));
+	return b;
 }
 

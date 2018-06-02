@@ -480,6 +480,10 @@ public class ClassType extends Type {
 			return false;
 	}
 
+	boolean isMonitorClass() {
+		return _isMonitor;
+	}
+
 	public  ref<Type> assignSuper(ref<CompileContext> compileContext) {
 		resolve(compileContext);
 		return _extends;
@@ -1025,7 +1029,7 @@ public class FunctionType extends Type {
 	}
 }
 
-class TemplateType extends Type {
+public class TemplateType extends Type {
 	private ref<Template> _definition;
 	private ref<FileStat> _definingFile;
 	private ref<Overload> _overload;
@@ -1064,8 +1068,7 @@ class TemplateType extends Type {
 	}
 
 	public ref<Type> getSuper() {
-		assert(false);
-		return null;
+		return _extends;
 	}
 
 	public ref<FileStat> definingFile() {
@@ -1141,11 +1144,11 @@ public class TemplateInstanceType extends ClassType {
 
 	// Vector sub-types
 	
-	public ref<Type> elementType(ref<CompileContext> compileContext) {
+	public ref<Type> elementType() {
 		return ref<Type>(_arguments[0]);
 	}
 	
-	public ref<Type> indexType(ref<CompileContext> compileContext) {
+	public ref<Type> indexType() {
 		return ref<Type>(_arguments[1]);
 	}
 
@@ -1308,6 +1311,14 @@ public class TemplateInstanceType extends ClassType {
 	protected boolean sameAs(ref<Type> other) {
 		return false;
 	}
+
+	public ref<var[]> arguments() {
+		return &_arguments;
+	}
+
+	public ref<TemplateType> templateType() {
+		return _templateType;
+	}
 }
 
 public class TypedefType extends Type {
@@ -1352,7 +1363,7 @@ public class TypedefType extends Type {
 	}
 }
 
-enum CompareMethodCategory {
+public enum CompareMethodCategory {
 	ORDERED,
 	PARTIALLY_ORDERED,
 	UNORDERED,
@@ -1402,7 +1413,7 @@ public class Type {
 	
 	public TypeFamily scalarFamily(ref<CompileContext> compileContext) {
 		if (_family == TypeFamily.SHAPE) {
-			ref<Type> t = elementType(compileContext);
+			ref<Type> t = elementType();
 			if (t == null)
 				return TypeFamily.ERROR;
 			else
@@ -1413,7 +1424,7 @@ public class Type {
 	
 	public ref<Type> scalarType(ref<CompileContext> compileContext) {
 		if (_family == TypeFamily.SHAPE)
-			return elementType(compileContext);
+			return elementType();
 		else
 			return this;	
 	}
@@ -1676,12 +1687,12 @@ public class Type {
 		return null;
 	}
 	
-	public ref<Type> elementType(ref<CompileContext> compileContext) {
+	public ref<Type> elementType() {
 		assert(false);
 		return null;
 	}
 	
-	public ref<Type> indexType(ref<CompileContext> compileContext) {
+	public ref<Type> indexType() {
 		return null;
 	}
 
@@ -1730,6 +1741,10 @@ public class Type {
 		return false;
 	}
 	
+	boolean isMonitorClass() {
+		return false;
+	}
+
 	boolean isIntegral() {
 		switch (_family) {
 		case	UNSIGNED_8:

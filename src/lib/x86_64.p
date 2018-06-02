@@ -80,6 +80,7 @@ import parasol:exception;
 import parasol:exception.ExceptionContext;
 import parasol:pxi.Pxi;
 import parasol:runtime;
+import parasol:storage;
 import native:C;
 
 /*
@@ -344,8 +345,8 @@ public class X86_64 extends X86_64AssignTemps {
 			*pa = runtime.builtInFunctionAddress(int(*pa));
 			pa++;
 		}
-		pointer<SourceLocation> outerSource = exception.sourceLocations();
-		int outerSourceCount = exception.sourceLocationsCount();
+		pointer<runtime.SourceLocation> outerSource = runtime.sourceLocations();
+		int outerSourceCount = runtime.sourceLocationsCount();
 		if (runtime.makeRegionExecutable(_staticMemory, _staticMemoryLength)) {
 			pointer<int> pxiFixups = pointer<int>(&_staticMemory[_pxiHeader.relocationOffset]);
 			pointer<long> vp;
@@ -370,9 +371,15 @@ public class X86_64 extends X86_64AssignTemps {
 					}
 					nativeBindings[i].functionAddress = windows.GetProcAddress(dll, nativeBindings[i].symbolName);
 				} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-					address handle = linux.dlopen(nativeBindings[i].dllName, linux.RTLD_LAZY);
+					string soName(nativeBindings[i].dllName);
+					if (soName == "libparasol.so.1") {
+						string binary = process.binaryFilename();
+						string dir = storage.directory(binary);
+						soName = storage.constructPath(dir, soName, null);
+					}
+					address handle = linux.dlopen(soName.c_str(), linux.RTLD_LAZY);
 					if (handle == null) {
-						printf("Unable to locate shared object %s (%s)\n", nativeBindings[i].dllName, linux.dlerror());
+						printf("Unable to locate shared object %s (%s)\n", soName, linux.dlerror());
 						assert(false);
 					} else
 						nativeBindings[i].functionAddress = linux.dlsym(handle, nativeBindings[i].symbolName);
@@ -385,7 +392,7 @@ public class X86_64 extends X86_64AssignTemps {
 					assert(false);
 				}
 			}
-			exception.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
+			runtime.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
 			returnValue = runtime.evalNative(&_pxiHeader, _staticMemory, &runArgs[0], runArgs.length());
 		} else {
 			pointer<byte> generatedCode = pointer<byte>(runtime.allocateRegion(_staticMemoryLength));
@@ -429,14 +436,14 @@ public class X86_64 extends X86_64AssignTemps {
 				}
 			}
 			if (runtime.makeRegionExecutable(generatedCode, _staticMemoryLength)) {
-				exception.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
+				runtime.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
 				returnValue = runtime.evalNative(&_pxiHeader, generatedCode, &runArgs[0], runArgs.length());
 			} else {
 				assert(false);
 				return 0, false;
 			}
 		}
-		exception.setSourceLocations(outerSource, outerSourceCount);
+		runtime.setSourceLocations(outerSource, outerSourceCount);
 		if (exception.fetchExposedException() == null)
 			return returnValue, true;
 		else
@@ -619,11 +626,10 @@ public class X86_64 extends X86_64AssignTemps {
 						if (thunk.func() == null) {
 							inst(X86.LEA, R.RAX, R.RDI, -thunk.thunkOffset());
 						} else {
-							inst(X86.SUB, TypeFamily.ADDRESS, firstRegisterArgument(), thunk.thunkOffset());
+							if (thunk.thunkOffset() > 0)
+								inst(X86.SUB, TypeFamily.ADDRESS, firstRegisterArgument(), thunk.thunkOffset());
 							inst(X86.PUSH, TypeFamily.ADDRESS, R.RDI);
-							inst(X86.SUB, TypeFamily.ADDRESS, R.RSP, 8);
 							instCall(thunk.func(), compileContext);
-							inst(X86.ADD, TypeFamily.ADDRESS, R.RSP, 8);
 							inst(X86.POP, TypeFamily.ADDRESS, R.RAX);
 						}
 						inst(X86.RET);

@@ -295,7 +295,7 @@ public class MYSQL_FIELD {
  */
 }
 
-class MYSQL_RES {
+public class MYSQL_RES {
 }
 
 class MEM_ROOT {

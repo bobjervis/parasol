@@ -235,6 +235,7 @@ public class Process extends ProcessVolatileData {
 			lock (pendingChildren) {
 				_pid = linux.fork();
 				if (_pid == 0) {
+					linux.setpgrp();
 					// This is the child process
 					log.resetChildProcess();
 					if (_captureOutput) {
@@ -355,7 +356,7 @@ public class Process extends ProcessVolatileData {
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			lock (*this) {
 				if (_running)
-					return linux.kill(_pid, signal) == 0;
+					return linux.kill(-_pid, signal) == 0;
 			}
 		}
 		return false;

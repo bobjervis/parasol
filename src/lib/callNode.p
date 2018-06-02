@@ -354,14 +354,14 @@ public class Call extends ParameterBag {
 						ref<EllipsisArguments> ea = null;			// TODO: Remove this initializer to test implied re-initialization.
 						if (args == null) {
 							ea = tree.newEllipsisArguments(null, location());
-							ea.type = params.node.type.elementType(compileContext);
+							ea.type = params.node.type.elementType();
 							args = tree.newNodeList(ea);
 						} else if (args.next == null && args.node.type.equals(params.node.type)) {
 							args.node = tree.newUnary(Operator.STACK_ARGUMENT, args.node, args.node.location());
 							args.node.type = params.node.type;
 						} else {
 							ea = tree.newEllipsisArguments(args, location());
-							ea.type = params.node.type.elementType(compileContext);
+							ea.type = params.node.type.elementType();
 							args = tree.newNodeList(ea);
 						}
 						args.next = _stackArguments;
@@ -892,7 +892,7 @@ public class Call extends ParameterBag {
 					arguments.node.type.equals(t))
 					return;
 				// okay, we need to actually check the element type
-				t = t.elementType(compileContext);
+				t = t.elementType();
 			}
 			if (compileContext.verbose()) {
 				printf("Coerce to %s\n", t.signature());

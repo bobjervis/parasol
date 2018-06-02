@@ -24,7 +24,7 @@ import openssl.org:crypto.SHA1;
 import parasol:log;
 import parasol:net.base64encode;
 import parasol:net.Connection;
-import parasol:random.Random;
+import parasol:random;
 import parasol:text;
 import parasol:thread;
 import parasol:thread.Thread;
@@ -106,8 +106,7 @@ public class WebSocketFactory {
 }
 
 public string computeWebSocketKey(int byteCount) {
-	Random rand;
-	byte[] stuff = rand.getBytes(byteCount);
+	byte[] stuff = random.getBytes(byteCount);
 	return base64encode(stuff);
 }
 
@@ -235,7 +234,7 @@ public class WebSocket extends WebSocketVolatileData {
 	
 	private ref<Connection> _connection;
 	private boolean _server;
-	private Random _random;				// For masking
+	private random.Random _random;				// For masking
 	private byte[] _incomingData;		// A buffer of data being read from the websocket.
 	private int _incomingLength;		// The number of bytes in the buffer.
 	private int _incomingCursor;		// The index of the next byte to be read from the buffer.
@@ -654,12 +653,12 @@ public interface WebSocketReader {
  * So, the sender creates a Rendezvous object to track the reply.
  */
 public monitor class Rendezvous {
-	ref<WSPVolatileData> _proxy;
+	ref<RendezvousManager> _proxy;
 	string _key;
 	public byte[] replyMessage;
 	public boolean success;
 
-	Rendezvous(ref<WSPVolatileData> proxy, string key) {
+	Rendezvous(ref<RendezvousManager> proxy, string key) {
 		_proxy = proxy;
 		_key = key;
 	}
@@ -681,16 +680,16 @@ public monitor class Rendezvous {
 	}
 }
 
-public monitor class WSPVolatileData {
+public monitor class RendezvousManager {
 	ref<Rendezvous>[string] _pendingMessages;
 	int _nextMessage;
 	boolean _shuttingDown;
 
-	int getNextMessageID() {
+	public int getNextMessageID() {
 		return _nextMessage++;
 	}
 
-	ref<Rendezvous> createRendezvous(string key) {
+	public ref<Rendezvous> createRendezvous(string key) {
 		if (_shuttingDown)
 			return null;
 		if (_pendingMessages[key] != null)
@@ -702,7 +701,7 @@ public monitor class WSPVolatileData {
 		return r;
 	}
 
-	ref<Rendezvous> extractRendezvous(string key) {
+	public ref<Rendezvous> extractRendezvous(string key) {
 		ref<Rendezvous> r = _pendingMessages[key];
 		_pendingMessages.remove(key);
 		return r;

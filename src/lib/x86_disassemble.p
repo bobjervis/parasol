@@ -23,6 +23,7 @@ import parasol:compiler.OverloadInstance;
 import parasol:compiler.ParameterScope;
 import parasol:compiler.Scope;
 import parasol:compiler.Symbol;
+import parasol:runtime.SourceLocation;
 import native:C;
 
 class Disassembler {
@@ -1862,7 +1863,10 @@ public void printHeader(ref<X86_64SectionHeader> header, long fileOffset) {
 	printf("\n");
 	printf("        exceptionsCount      %8d.\n", header.exceptionsCount);
 }
-
+/**
+ * This is a bug: There should not be duplicate functions in a single scope.
+ * TODO: Fix this
+ */
 public void printHeader(ref<X86_64SectionHeader> header, long fileOffset) {
 	printf("\n");
 	if (fileOffset >= 0)
@@ -1901,5 +1905,4 @@ public void printHeader(ref<X86_64SectionHeader> header, long fileOffset) {
 	if (fileOffset >= 0)
 		printf(" (file offset %x)", header.exceptionsOffset + fileOffset);
 	printf("\n");
-	printf("        exceptionsCount      %8d.\n", header.exceptionsCount);
 }

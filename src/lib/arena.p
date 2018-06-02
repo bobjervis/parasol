@@ -148,18 +148,20 @@ public class Arena {
 		context.compileFile();
 	}
 
-	public ref<ImportDirectory> compilePackage(int index, boolean verbose) {
+	public ref<ImportDirectory> compilePackage(int index, ref<CompileContext> compileContext) {
 		if (index >= _importPath.length())
 			return null;
-		CompileContext context(this, _global, verbose);
 
 		// 'import' all the namespaces in the primary import directory (the package directory).
 		// _importPath[0] is the ImportDirectory we need to pull in.
 
-		_importPath[index].compilePackage(&context);
-		createBuiltIns(&context);
-		context.compileFile();
+		_importPath[index].compilePackage(compileContext);
 		return _importPath[index];
+	}
+
+	public void finishCompilePackages(ref<CompileContext> compileContext) {
+		createBuiltIns(compileContext);
+		compileContext.compileFile();
 	}
 
 	public void compileOnly(ref<FileStat> mainFile, boolean verbose, ref<CompileContext> compileContext) {
@@ -327,10 +329,31 @@ public class Arena {
 				break;
 			
 			default:
-				return null;
+				if (validMapIndex(index))
+					return _map.createVectorInstance(element, index, compileContext);
+				else
+					return null;
 			}
 		}
 		return _vector.createVectorInstance(element, index, compileContext);
+	}
+
+	public boolean validMapIndex(ref<Type> index) {
+		switch (index.family()) {
+		case	CLASS:
+			if (index.compareMethod(null) == null)
+				return false;
+
+		case	FLOAT_32:
+		case	FLOAT_64:
+		case	ADDRESS:
+		case	POINTER:
+		case	REF:
+		case	STRING:
+		case	INTERFACE:
+			return true;
+		}
+		return false;
 	}
 
 	ref<Type> createRef(ref<Type> target, ref<CompileContext> compileContext) {
@@ -453,14 +476,14 @@ public class Arena {
 //			printf("Creating domain for '%s'\n", domain);
 			_domains[domain] = s;
 			if (domain.length() == 0 && _anonymous == null)
-				_anonymous = _global.newNamespace(null, _root, s, null, null); 
+				_anonymous = _global.newNamespace(null, null, _root, s, null, null); 
 		}
 		return s;
 	}
 
 	public ref<Namespace> anonymous() {
 		if (_anonymous == null)
-			_anonymous = _global.newNamespace(null, _root, createScope(_root, null, StorageClass.STATIC), null, null);
+			_anonymous = _global.newNamespace(null, null, _root, createScope(_root, null, StorageClass.STATIC), null, null);
 		return _anonymous;
 	}
 
@@ -549,6 +572,20 @@ public class Arena {
 		return _string;
 	}
 	
+	public boolean isVector(ref<Type> type) {
+		if (type.family() != TypeFamily.SHAPE)
+			return false;
+		ref<TypedefType> tt = ref<TypedefType>(_vector.type());
+		return tt.wrappedType() == ref<TemplateInstanceType>(type).templateType();
+	}
+
+	public boolean isMap(ref<Type> type) {
+		if (type.family() != TypeFamily.SHAPE)
+			return false;
+		ref<TypedefType> tt = ref<TypedefType>(_map.type());
+		return tt.wrappedType() == ref<TemplateInstanceType>(type).templateType();
+	}
+
 	ref<OverloadInstance> refTemplate() { 
 		return _ref; 
 	}

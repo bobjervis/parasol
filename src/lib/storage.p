@@ -544,3 +544,69 @@ public string[], boolean expandWildCard(string pattern) {
 	} else
 		return results, false;
 }
+
+public string pathRelativeTo(string filename, string baseFilename) {
+	if (isRelativePath(filename))
+		return constructPath(directory(baseFilename), filename, null);
+	else
+		return filename;
+}
+
+public boolean isRelativePath(string filename) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		if (filename.length() == 0 || filename[0] == '\\' || filename[0] == '/' || filename.indexOf(':') >= 0)
+			return false;
+		else
+			return true;
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		if (filename.length() == 0 || filename[0] == '/')
+			return false;
+		else
+			return true;
+	} else
+			return false;
+}
+
+public string makeCompactPath(string filename, string baseFilename) {
+//	if (isRelativePath(filename))
+//		return filename;
+	string a1 = absolutePath(filename);
+	string a2 = absolutePath(baseFilename);
+
+	int span;
+	if (a1.length() < a2.length())
+		span = a1.length();
+	else
+		span = a2.length();
+	int i;
+	int firstSlash = -1;
+	int lastSlash = -1;
+	for (i = 0; i < span; i++) {
+		if (a1[i] != a2[i]) {
+			if (firstSlash == lastSlash)
+				break;
+
+				// There is a common directory prefix!
+
+			int slashCount = 0;
+			for (int j = i + 1; j < a2.length(); j++)
+				if (a2[j] == '/')
+					slashCount++;
+			if (slashCount == 0)
+				return a1.substring(lastSlash + 1);
+			string result;
+			while (slashCount > 0) {
+				result.append("../");
+				slashCount--;
+			}
+			return result + a1.substring(lastSlash + 1);
+		}
+		if (a1[i] == '/') {
+			lastSlash = i;
+			if (firstSlash < 0)
+				firstSlash = i;
+		}
+	}
+	return a1;
+}
+

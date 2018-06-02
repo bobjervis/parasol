@@ -237,8 +237,9 @@ public class Identifier extends Node {
 		return _value.equals(id._value);
 	}
 
-	public ref<Namespace> makeNamespaces(ref<Scope> domainScope, ref<CompileContext> compileContext) {
-		ref<Namespace> nm = domainScope.defineNamespace(this, &_value, compileContext);
+
+	public ref<Namespace> makeNamespaces(ref<Scope> domainScope, string domain, ref<CompileContext> compileContext) {
+		ref<Namespace> nm = domainScope.defineNamespace(domain, this, &_value, compileContext);
 		if (nm == null) {
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
 			return null;
@@ -658,10 +659,10 @@ public class Selection extends Node {
 		return _symbol;
 	}
 
-	public ref<Namespace> makeNamespaces(ref<Scope> domainScope, ref<CompileContext> compileContext) {
-		ref<Namespace> outer = _left.makeNamespaces(domainScope, compileContext);
+	public ref<Namespace> makeNamespaces(ref<Scope> domainScope, string domain, ref<CompileContext> compileContext) {
+		ref<Namespace> outer = _left.makeNamespaces(domainScope, domain, compileContext);
 		if (outer != null)
-			return outer.symbols().defineNamespace(this, identifier(), compileContext);
+			return outer.symbols().defineNamespace(domain, this, identifier(), compileContext);
 		else
 			return outer;
 	}

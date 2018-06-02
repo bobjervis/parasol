@@ -263,6 +263,9 @@ public abstract int seteuid(uid_t uid);
 @Linux("libc.so.6", "setfsuid")
 public abstract int setfsuid(uid_t uid);
 
+@Linux("libc.so.6", "setpgrp")
+public abstract int setpgrp();
+
 @Linux("libc.so.6", "setreuid")
 public abstract int setreuid(uid_t ruid, uid_t euid);
 

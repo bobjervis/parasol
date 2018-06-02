@@ -128,12 +128,6 @@ enum JumpDistance {
 	NEAR
 }
 
-public class SourceLocation {
-	ref<FileStat>	file;			// Source file containing this location
-	Location		location;		// Source byte offset
-	int				offset;			// Code location
-}
-
 class DeferredTry {
 	public ref<X86_64Encoder.CodeSegment> primaryHandler;
 	public ref<Try> tryStatement;
@@ -174,7 +168,7 @@ class X86_64Encoder extends Target {
 	protected memory.NoReleasePool _storage;
 	protected pointer<byte> _staticMemory;
 	protected int _staticMemoryLength;
-	protected SourceLocation[] _sourceLocations;
+	protected runtime.SourceLocation[] _sourceLocations;
 	protected DeferredTry[] _deferredTry;
 	protected ref<Segment<Segments>>[Segments] _segments;
 	protected ref<Symbol>[] _nativeBindingSymbols;
@@ -484,11 +478,11 @@ class X86_64Encoder extends Target {
 		// 		  R9 / XMM3 (as needed)
 		//    On Linux (non-floating and floating arguments can be intermixed, register are in order within each subset):
 		//		  RDI, RSI, RDX, RCX, R8, R9
-		//         XMM), XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7
+		//         XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7
 		// 		  local variables
 		//		  possible 8-byte padding to align stack on 16 byte boundary
 		//		  32-byte register save area (per Win64 ABI)
-		//		  TODO: Remove 32-byte register save are on Linux
+		//		  TODO: Remove 32-byte register save area on Linux
 		//
 		int regStackOffset = 0;
 		if (scope.hasThis()) {
@@ -878,7 +872,7 @@ class X86_64Encoder extends Target {
 		public int length;
 		public int ordinal;
 		public int segmentOffset;
-		public SourceLocation[] sourceLocations;
+		public runtime.SourceLocation[] sourceLocations;
 		
 		CodeSegment() {
 			continuation = CC.NOP;
@@ -3589,7 +3583,7 @@ class X86_64Encoder extends Target {
 	void emitSourceLocation(ref<FileStat> file, Location location) {
 		ensureCodeSegment();
 
-		SourceLocation loc;
+		runtime.SourceLocation loc;
 		
 		loc.file = file;;
 		loc.location = location;

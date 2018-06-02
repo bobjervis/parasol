@@ -959,6 +959,7 @@ public class CompileContext {
 		case	IMPORT:
 		case	PUBLIC:
 		case	PRIVATE:
+		case	PROTECTED:					// comes up in error scenarios (seen in a mismatched curly brace)
 		case	STATIC:
 		case	THROW:
 			break;
@@ -1267,8 +1268,8 @@ public class MemoryPool extends memory.NoReleasePool {
 		return super new DelegateOverload(overloadSym.enclosing(), delegate, this);
 	}
 	
-	public ref<Namespace> newNamespace(ref<Node> namespaceNode, ref<Scope> enclosing, ref<Scope> symbols, ref<Node> annotations, ref<CompileString> name) {
-		return super new Namespace(namespaceNode, enclosing, symbols, annotations, this, name);
+	public ref<Namespace> newNamespace(string domain, ref<Node> namespaceNode, ref<Scope> enclosing, ref<Scope> symbols, ref<Node> annotations, ref<CompileString> name) {
+		return super new Namespace(domain, namespaceNode, enclosing, symbols, annotations, this, name);
 	}
 
 	public ref<Commentary> newCommentary(ref<Commentary> next, MessageId messageId, string message) {

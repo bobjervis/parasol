@@ -74,9 +74,13 @@ public long max(long x, long y) {
 }
 
 public float sqrt(float x) {
-	return float(C.sqrt(x));
+	return float(sqrt(double(x)));
 }
 
-public double sqrt(double x) {
-	return C.sqrt(x);
-}
+@Windows("msvcrt.dll", "log")
+@Linux("libm.so.6", "log")
+public abstract double log(double x);
+
+@Windows("msvcrt.dll", "sqrt")
+@Linux("libm.so.6", "sqrt")
+public abstract double sqrt(double x);

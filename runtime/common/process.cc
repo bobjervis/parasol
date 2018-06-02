@@ -363,7 +363,7 @@ int debugSpawn(const string& cmd, string* captureData, exception_t* exception, t
 #endif
 }
 
-int debugSpawnInteractive(const string& cmd, string* captureData, exception_t* exception, string *stdin, time_t timeout) {
+int debugSpawnInteractive(const string& cmd, string* captureData, exception_t* exception, string stdinText, time_t timeout) {
 #if defined(__WIN64)
 	PROCESS_INFORMATION pinfo;
 	STARTUPINFO info;
@@ -384,7 +384,7 @@ int debugSpawnInteractive(const string& cmd, string* captureData, exception_t* e
 	} else {
 		Thread* t = Thread::start(drain, pipe.reader(), captureData);
 		DWORD n;
-		if (WriteFile(stdinPipe.writer(), stdin.c_str(), stdin.size(), &n, null) == FALSE) {
+		if (WriteFile(stdinPipe.writer(), stdinText.c_str(), stdinText.size(), &n, null) == FALSE) {
 			CloseHandle(stdinPipe.writer());
 			return;
 		}

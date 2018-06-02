@@ -17,6 +17,8 @@ namespace parasol:runtime;
 
 import native:linux;
 import native:windows;
+import parasol:compiler.FileStat;
+import parasol:compiler.Location;
 import parasol:exception.ExceptionContext;
 import parasol:x86_64.X86_64SectionHeader;
 
@@ -113,3 +115,41 @@ public boolean makeRegionExecutable(address location, long length) {
 		return linux.mprotect(location, length, linux.PROT_EXEC|linux.PROT_READ|linux.PROT_WRITE) == 0;
 	return false;
 }
+
+public class SourceLocation {
+	public ref<FileStat>	file;			// Source file containing this location
+	public Location			location;		// Source byte offset
+	public int				offset;			// Code location
+}
+
+abstract void setSourceLocations(address location, int count);
+abstract pointer<SourceLocation> sourceLocations();
+abstract int sourceLocationsCount();
+
+public ref<SourceLocation> getSourceLocation(address ip, boolean locationIsExact) {
+	int lowCode = int(lowCodeAddress());
+	int offset = int(ip) - lowCode;
+	if (offset < 0)
+		return null;
+	if (!locationIsExact)
+		offset--;
+	pointer<SourceLocation> psl = sourceLocations();
+	int interval = sourceLocationsCount();
+	for (;;) {
+		if (interval <= 0)
+			return null;
+		int middle = interval / 2;
+		if (psl[middle].offset > offset)
+			interval = middle;
+		else if (middle == interval - 1 || psl[middle + 1].offset > offset) {
+			return psl + middle;
+		} else {
+			psl = &psl[middle + 1];
+			interval = interval - middle - 1;
+		}
+	}
+}
+
+@Linux("libparasol.so.1", "parasol_gFormat")
+public abstract int parasol_gFormat(pointer<byte> buffer, int length, double value, int precision);
+

@@ -278,18 +278,18 @@ public class long {
 		return value, true;
 	}
 
-        public int compare(long other) {
-                if (*this < other)
-                        return -1;
-                else if (*this == other)
-                        return 0;
-                else
-                        return 1;
-        }
+    public int compare(long other) {
+            if (*this < other)
+                    return -1;
+            else if (*this == other)
+                    return 0;
+            else
+                    return 1;
+    }
 
-        public int hash() {
-                return int(*this);
-        }
+    public int hash() {
+            return int(*this);
+    }
 }
 
 public class byte {

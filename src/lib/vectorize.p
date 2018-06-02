@@ -30,8 +30,8 @@ boolean shouldVectorize(ref<Node> node) {
 }
 
 ref<Node> reduce(Operator op, ref<SyntaxTree> tree, ref<Node> vectorExpression, ref<CompileContext> compileContext) {
-	ref<Variable> accumulator = compileContext.newVariable(vectorExpression.type.elementType(compileContext));
-	ref<Variable> iterator = compileContext.newVariable(vectorExpression.type.indexType(compileContext));
+	ref<Variable> accumulator = compileContext.newVariable(vectorExpression.type.elementType());
+	ref<Variable> iterator = compileContext.newVariable(vectorExpression.type.indexType());
 	ref<Reference> def = tree.newReference(iterator, true, vectorExpression.location());
 	CompileString init("0");
 	ref<Node> start = tree.newConstant(Operator.INTEGER, init, vectorExpression.location());
@@ -113,7 +113,7 @@ ref<Node> vectorize(ref<SyntaxTree> tree, ref<Node> vectorExpression, ref<Compil
 	ref<Binary> b = ref<Binary>(vectorExpression);
 	if (b.right().op() == Operator.ARRAY_AGGREGATE)
 		return vectorizeAggregateAssignment(tree, b, compileContext);
-	ref<Variable> iterator = compileContext.newVariable(vectorExpression.type.indexType(compileContext));
+	ref<Variable> iterator = compileContext.newVariable(vectorExpression.type.indexType());
 	ref<Reference> def = tree.newReference(iterator, true, vectorExpression.location());
 	CompileString init("0");
 	ref<Node> start = tree.newConstant(Operator.INTEGER, init, vectorExpression.location());
@@ -339,7 +339,7 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 		result = tree.newBinary(Operator.ASSIGN, def, adr, lhs.location());
 		lhs = tree.newReference(lhv, false, lhs.location());
 	}
-	ref<Type> indexType = vectorType.indexType(compileContext);
+	ref<Type> indexType = vectorType.indexType();
 	if (indexType.isCompactIndexType()) {
 		boolean anyLabels = false;
 		int maxIndexValue = -1;

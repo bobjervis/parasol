@@ -864,7 +864,7 @@ public class ParameterScope extends Scope {
 	
 	public ref<OverloadInstance> symbol() {
 		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(definition());
-		if (func == null)		// a generate default constructor has no 'definition'
+		if (func == null)		// a generated default constructor has no 'definition'
 			return null;		// and no type.
 		if (func.deferAnalysis())
 			return null;
@@ -1427,7 +1427,7 @@ public class Scope {
 		return true;
 	}
 
-	public ref<Namespace> defineNamespace(ref<Node> namespaceNode, ref<CompileString> name, ref<CompileContext> compileContext) {
+	public ref<Namespace> defineNamespace(string domain, ref<Node> namespaceNode, ref<CompileString> name, ref<CompileContext> compileContext) {
 		ref<Symbol> sym = lookup(name, compileContext);
 		if (sym != null) {
 			if (sym.class == Namespace)
@@ -1436,7 +1436,7 @@ public class Scope {
 				return null;
 		}
 		ref<Scope> scope = compileContext.arena().createScope(null, null, StorageClass.STATIC);
-		ref<Namespace> nm = compileContext.pool().newNamespace(namespaceNode, this, scope, compileContext.annotations, name);
+		ref<Namespace> nm = compileContext.pool().newNamespace(domain, namespaceNode, this, scope, compileContext.annotations, name);
 		SymbolKey key(name);
 		_symbols.insert(key, nm);
 		return nm;
@@ -1865,6 +1865,10 @@ public class Scope {
 
 	public ref<Node> definition() {
 		return _definition;
+	}
+
+	public ref<Identifier> className() {
+		return _className;
 	}
 
 	public boolean printed() {

@@ -20,6 +20,8 @@
 #include <errno.h>
 #include <unistd.h>
 #include <dlfcn.h>
+#include <unistd.h>
+#include "common/file_system.h"
 #endif
 #include "runtime.h"
 #include "x86_pxi.h"
@@ -98,7 +100,7 @@ bool X86_64Section::run(char **args, int *returnValue, long long runtimeFlags) {
 	for (int i = 0; i < _header.builtInCount; i++, builtIns++) {
 		if ((unsigned long long)*builtIns > 80) {
 			printf("builtIns = %p *builtIns = %p\n", builtIns, *builtIns);
-			*(char*)argc = 0;	// This should cause a crash.
+			*(char*)(long long)argc = 0;	// This should cause a crash.
 		}
 		*builtIns = (void*)builtInFunctionAddress(int((long long)*builtIns));
 	}
@@ -116,25 +118,43 @@ bool X86_64Section::run(char **args, int *returnValue, long long runtimeFlags) {
 		HMODULE dll = GetModuleHandle(nativeBindings[i].dllName);
 		if (dll == 0) {
 			printf("Unable to locate DLL %s\n", nativeBindings[i].dllName);
-			*(char*)argc = 0;	// This should cause a crash.
+			*(char*)(long long)argc = 0;	// This should cause a crash.
 		} else {
 			nativeBindings[i].address = (void*) GetProcAddress(dll, nativeBindings[i].symbolName);
 			if (nativeBindings[i].address == 0) {
 				printf("Unable to locate symbol %s in %s\n", nativeBindings[i].symbolName, nativeBindings[i].dllName);
-				*(char*)argc = 0;	// This should cause a crash.
+				*(char*)(long long)argc = 0;	// This should cause a crash.
 			}
 		}
 		CloseHandle(dll);
 #elif __linux__
-		void *handle = dlopen(nativeBindings[i].dllName, RTLD_LAZY);
+		char *soName = nativeBindings[i].dllName;
+		if (strcmp(soName, "libparasol.so.1") == 0) {
+			char buffer[1024];
+
+			ssize_t result = readlink("/proc/self/exe", buffer, sizeof buffer);
+			if (result < 0) {
+				perror("readlink failed");
+				exit(1);
+			}
+
+			buffer[result] = 0;
+			string binary(buffer);
+			string dir = fileSystem::directory(binary);
+			string x = fileSystem::constructPath(dir, soName, "");
+			soName = strdup(x.c_str());
+		}
+		void *handle = dlopen(soName, RTLD_LAZY);
+		if (soName != nativeBindings[i].dllName)
+			free(soName);
 		if (handle == null) {
 			printf("Unable to locate shared object %s (%s)\n", nativeBindings[i].dllName, dlerror());
-			*(char*)argc = 0;	// This should cause a crash.
+			*(char*)(long long)argc = 0;	// This should cause a crash.
 		} else {
 			nativeBindings[i].address = dlsym(handle, nativeBindings[i].symbolName);
 			if (nativeBindings[i].address == 0) {
 				printf("Unable to locate symbol %s in %s (%s)\n", nativeBindings[i].symbolName, nativeBindings[i].dllName, dlerror());
-				*(char*)argc = 0;	// This should cause a crash.
+				*(char*)(long long)argc = 0;	// This should cause a crash.
 			}
 		}
 		dlclose(handle);
@@ -146,11 +166,11 @@ bool X86_64Section::run(char **args, int *returnValue, long long runtimeFlags) {
 	int result = VirtualProtect(_image, _imageLength, PAGE_EXECUTE_READWRITE, &oldProtection);
 	if (result == 0) {
 		printf("GetLastError=%x\n", GetLastError());
-		*(char*)argc = 0;	// This should cause a crash.
+		*(char*)(long long)argc = 0;	// This should cause a crash.
 	}
 #elif __linux__
 	if (mprotect(_image, _imageLength, PROT_EXEC|PROT_READ|PROT_WRITE) < 0) {
-		printf("Could not protect %p [%x] errno = %d (%s)\n", _image, _imageLength, errno, strerror(errno));
+		printf("Could not protect %p [%lx] errno = %d (%s)\n", _image, _imageLength, errno, strerror(errno));
 	}
 #endif
 	long long *vp = (long long*)(image + _header.vtablesOffset);

@@ -3,6 +3,7 @@ package(name: parasol, domain: parasol) {
 		file(name: dumppxi, src: bin)
 		file(name: genhdr, src: bin)
 		file(name: parasolrt, src:bin)
+		file(name: libparasol.so.1, src:bin)
 		file(name: pc, src: bin)
 		file(name: rebuild, src: bin)
 		file(name: runets, src: bin)

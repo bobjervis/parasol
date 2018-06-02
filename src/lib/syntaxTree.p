@@ -987,7 +987,7 @@ public class Class extends Block {
 		}
 
 		if (scope != null) {
-			// should read for (ref<Symbol> sym : scope.symbols()) {
+			// should read for (i in scope.symbols()) {
 			for (ref<Symbol>[Scope.SymbolKey].iterator i = scope.symbols().begin(); i.hasNext(); i.next()) {
 				ref<Symbol> sym = i.get();
 				if (sym.class != Overload)
@@ -2216,7 +2216,7 @@ public class Loop extends Node {
 		if (_aggregate.type.deferAnalysis())
 			type = _declarator.type = _aggregate.type;
 		else {
-			_declarator.type = _aggregate.type.indexType(compileContext);
+			_declarator.type = _aggregate.type.indexType();
 			if (_declarator.type == null) {
 				_aggregate.add(MessageId.NOT_A_SHAPE, compileContext.pool());
 				type = _declarator.type = compileContext.errorType();
@@ -2397,7 +2397,7 @@ class SyntaxError extends Node {
 	}
 }
 
-class Template extends Node {
+public class Template extends Node {
 	private ref<Identifier> _name;
 	private ref<SyntaxTree> _tree;
 	private ref<NodeList> _templateParameters;
@@ -3228,7 +3228,7 @@ public class Node {
 		return output, true;
 	}
 
-	public ref<Namespace> makeNamespaces(ref<Scope> domainScope, ref<CompileContext> compileContext) {
+	public ref<Namespace> makeNamespaces(ref<Scope> domainScope, string domain, ref<CompileContext> compileContext) {
 		return null;
 	}
 

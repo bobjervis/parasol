@@ -108,6 +108,10 @@ run(filename: printf_8_ops.p)
 
 run(filename: memory_test.p)
 
+// Test against libparasol.so.1/parasol/dll
+
+//run(filename:floatFormat_test.p)
+
 // Regressions
 
 run(filename: this_test_1.p)
@@ -130,6 +134,7 @@ run(filename: loop_fallthrough_test.p)
 run(filename: string16_test_1.p, arguments: src/lib/x86_64.p)
 run(filename: string16_test_1.p, arguments: test/scripts/parasol_tests.ets)
 run(filename: string16_test_2.p)
+run(filename: iface_destructor_test.p)
 run(filename: interface_test_1.p)
 run(filename: interface_test_2.p)
 run(filename: interface_test_3.p)
