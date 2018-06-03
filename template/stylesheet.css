@@ -85,6 +85,18 @@ a[name]:hover {
     background-color:#EEEEEF;
 }
 
+div.descriptioncol {
+	padding-top: 2mm;
+	padding-bottom: 2mm;
+}
+
+div.func-description {
+	padding-top: 2mm;
+	margin-bottom: 2mm;
+	padding-left: 3mm;
+    background-color:#FFFFFF;
+}
+
 div.namespace-info {
 	font: 14pt Arial;
 }
@@ -135,5 +147,15 @@ div.impl-iface-caption {
 
 div.impl-ifaces {
 	font: 12pt "Courier New", monospace;
+}
+
+div.namespace-text {
+}
+
+div.class-text {
+	margin-top: 3mm;
+	border-style: solid;
+	border-color: black;
+	border-width: 1px 0 0 0;
 }
 

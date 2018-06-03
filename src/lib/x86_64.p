@@ -13,6 +13,10 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * This namespace provides code generation facilities for both Windows and Linux running on an Intel x86-64
+ * machine instruction set.
+ */
 namespace parasol:x86_64;
 
 import native:windows;

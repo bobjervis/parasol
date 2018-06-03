@@ -222,7 +222,8 @@ public class SyntaxTree {
 	private ref<MemoryPool> _pool;
 	private ref<Scanner> _scanner;
 	private string _filename;
-	
+	private map<ref<Doclet>, long> _docletMap;
+
 	public SyntaxTree() {
 		_pool = new MemoryPool();
 	}
@@ -241,7 +242,11 @@ public class SyntaxTree {
 	
 	void parse(ref<FileStat> file, ref<CompileContext> compileContext) {
 		_filename = file.filename();
-		ref<Scanner> scanner = file.scanner();
+		ref<Scanner> scanner;
+		if (compileContext.arena().paradoc)
+			scanner = file.paradocScanner();
+		else
+			scanner = file.scanner();
 		if (scanner.opened()) {
 			_scanner = scanner;
 			Parser parser(this, _scanner);
@@ -398,7 +403,17 @@ public class SyntaxTree {
 		}
 		return list;
 	}
-	
+
+	public void newDoclet(ref<Node> owner, ref<Doclet> doclet) {
+		long key = long(owner);
+		_docletMap[key] = doclet;
+	}
+
+	public ref<Doclet> getDoclet(ref<Node> possibleOwner) {
+		long key = long(possibleOwner);
+		return _docletMap[key];
+	}
+
 	public ref<Block> root() { 
 		return _root; 
 	}

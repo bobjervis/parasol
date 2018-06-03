@@ -801,12 +801,13 @@ public class Symbol {
 	public int offset;				// Variable offset within scope block
 	public address segment;			// Variable segment, for static variables used by code generators
 	public address value;			// Scratch address for use by code generators.
-
 	protected ref<CompileString> _name;
 	protected ref<Type> _type;
 	protected ref<Scope> _enclosing;
 	private ref<ref<Call>[string]> _annotations;
 	private ref<Node> _annotationNode;
+
+	ref<Doclet> _doclet;			// Doclet used for this symbol.
 	
 	private boolean _inProgress;
 	private ref<Node> _definition;
@@ -1083,4 +1084,7 @@ public class Symbol {
 			return 1;
 	}
 
+	public ref<Doclet> doclet() {
+		return _doclet;
+	}
 }

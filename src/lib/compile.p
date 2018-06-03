@@ -206,6 +206,7 @@ public class CompileContext {
 				s.storageClass() != StorageClass.TEMPLATE_INSTANCE)
 				buildUnderScope(s);
 		}
+		annotations = null;
 	}
 	
 	private void buildUnderScope(ref<Scope> s) {
@@ -1181,6 +1182,7 @@ public class CompileContext {
 		if (_monitorClass == null) {
 			ref<Symbol> m = _arena.getSymbol("parasol", "thread.Monitor", this);
 			if (m == null || m.class != PlainSymbol) {
+				printf("Couldn't find parasol:thread.Monitor\n");
 				if (m != null)
 					m.print(0, false);
 				assert(false);

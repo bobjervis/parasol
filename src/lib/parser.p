@@ -448,12 +448,15 @@ public class Parser {
 			return parseImportStatement();
 
 		case	NAMESPACE:
+			ref<Doclet> doclet = _scanner.extractDoclet();
 			x = parseNamespace(null, false);
 			if (x.op() == Operator.SYNTAX_ERROR)
 				return x;
 			t = _scanner.next();
-			if (t == Token.SEMI_COLON)
-				return _tree.newUnary(Operator.DECLARE_NAMESPACE, x, location);;
+			if (t == Token.SEMI_COLON) {
+				_tree.newDoclet(x, doclet);
+				return _tree.newUnary(Operator.DECLARE_NAMESPACE, x, location);
+			}
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 
@@ -665,6 +668,7 @@ public class Parser {
 		ref<Node> name = parseName(_scanner.next());
 		if (name.op() == Operator.SYNTAX_ERROR)
 			return name;
+		ref<Doclet> doclet = _scanner.extractDoclet();
 		ref<Identifier> id = ref<Identifier>(name);
 		Token t = _scanner.next();
 		Location loc = _scanner.location();
@@ -681,6 +685,7 @@ public class Parser {
 			return resync(MessageId.SYNTAX_ERROR);
 		}
 		ref<FunctionDeclaration> func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.ABSTRACT, returnType, id, parameters, loc);
+		_tree.newDoclet(id, doclet);
 		return _tree.newUnary(Operator.ABSTRACT, func, location);
 	}
 
@@ -820,6 +825,7 @@ public class Parser {
 				break;
 			}
 		}
+		ref<Doclet> doclet = _scanner.extractDoclet();
 		Token t = _scanner.next();
 		if (t == Token.IDENTIFIER ||
 			t == Token.ANNOTATION) {
@@ -838,6 +844,7 @@ public class Parser {
 					return parameters.node;
 				if (parameters.hasBindings()) {
 					func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.NORMAL, type, id, parameters, loc);
+					_tree.newDoclet(id, doclet);
 					t = _scanner.next();
 					if (t == Token.LOCK)
 						func.body = parseLockStatement();
@@ -940,6 +947,8 @@ public class Parser {
 			return resync(MessageId.SYNTAX_ERROR);
 		}
 		ref<Identifier> identifier = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
+		ref<Doclet> doclet = _scanner.extractDoclet();
+		_tree.newDoclet(identifier, doclet);
 		// Look ahead to get the correct location for the CLASS node.
 		t = _scanner.next();
 		if (t == Token.EQUALS) {
@@ -981,6 +990,8 @@ public class Parser {
 			return resync(MessageId.SYNTAX_ERROR);
 		}
 		ref<Identifier> identifier = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
+		ref<Doclet> doclet = _scanner.extractDoclet();
+		_tree.newDoclet(identifier, doclet);
 		// Look ahead to get the correct location for the CLASS node.
 		t = _scanner.next();
 		_scanner.pushBack(t);
@@ -1671,20 +1682,11 @@ public class Parser {
 	}
 
 	private ref<Node> parseName(Token t) {
-/*
-		ref<Node> annotation;
-
-		if (t == Token.ANNOTATION) {
-			annotation = parseAnnotations();
-			t = _scanner.next();
-		} else
-			annotation = null;
- */
 		if (t != Token.IDENTIFIER) {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
-		return _tree.newIdentifier(/*annotation, */_scanner.value(), _scanner.location());
+		return _tree.newIdentifier(_scanner.value(), _scanner.location());
 	}
 
 	private ref<Node> parseAnnotations() {

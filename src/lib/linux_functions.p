@@ -13,7 +13,18 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * This namespace provides access to the linux C-language library and system calls.
+ *
+ * Most of the functions and types defined here should be familiar to anyone who has programmed 
+ * Linux in C.
+ *
+ * One notable difference is the (@link native:linux#stat) call, which fills in a C stat structure.
+ * Since Parasol does not allow a function and a class in the same scope to have the same name, for
+ * Parasol, the class is called (@link native:linux#statStruct).
+ */
 namespace native:linux;
+
 import native:net.sockaddr;
 import native:C.size_t;
 import native:C.time_t;
@@ -505,7 +516,9 @@ public class Dl_info {
 	public pointer<byte> dli_sname;        /* Name of nearest symbol.  */
 	public address		 dli_saddr;        /* Exact value of nearest symbol.  */
 }
-
+/**
+ * The Parasol equivalent of the C stat structure.
+ */
 public class statStruct {
     long st_dev;		/* Device.  */
     long st_ino;		/* File serial number.	*/

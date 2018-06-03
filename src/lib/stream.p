@@ -371,6 +371,10 @@ public class UTF8Writer {
 		}
 		return written;
 	}
+
+	public int write(string s) {
+		return _writer.write(s);
+	}
 }
 /**
  * This converter will take a stream of UTF-32 Unicode code points and write them as a stream of

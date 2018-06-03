@@ -601,7 +601,17 @@ public class InterfaceImplementationScope extends ClassScope {
 			}
 		}
 	}
-
+	/**
+	 * Each new interface implementation must define a thunk for each method implemented for this interface.
+	 *
+	 * The constructor combined an InterfaceType with a ClassType to produce a list of methods from the class (that correspond
+	 * exactly to the methods of the interface itself). For each such class method, there needs to be a thunk at runtime
+	 * to adjust the 'this' pointer from the interface object passed in the call to the class object that the class method
+	 * will be referring to.
+	 *
+	 * At this stage, creating a ThunkScope for each method is sufficient. Later stages of code generation will
+	 * produce the machine code for each thunk.
+	 */
 	public void makeThunks(ref<CompileContext> compileContext) {
 		for (int i = _thunks.length(); i < _methods.length(); i++)
 			_thunks.append(compileContext.arena().createThunkScope(this, _methods[i].parameterScope(), false));
@@ -1436,7 +1446,7 @@ public class Scope {
 				return null;
 		}
 		ref<Scope> scope = compileContext.arena().createScope(null, null, StorageClass.STATIC);
-		ref<Namespace> nm = compileContext.pool().newNamespace(domain, namespaceNode, this, scope, compileContext.annotations, name);
+		ref<Namespace> nm = compileContext.pool().newNamespace(domain, namespaceNode, this, scope, compileContext.annotations, name); 
 		SymbolKey key(name);
 		_symbols.insert(key, nm);
 		return nm;

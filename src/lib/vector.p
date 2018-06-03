@@ -13,6 +13,12 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * This namespace defines facilities for defined various collection classes.
+ *
+ * These classes tend to be templates as they are designed to be flexibly usable
+ * across a broad range of applications.
+ */
 namespace parasol:collections;
 
 import native:C;

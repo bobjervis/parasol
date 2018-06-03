@@ -13,6 +13,18 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * The Windows namespace provides facilities to access the Windows WIN64 C-language API.
+ *
+ * The emphasis has been to define the Windows functions needed to support the Parasol runtime.
+ * Since the Linux port of Parasol has been the focus for the last year, the Windows upport is
+ * well behind and a refresh of the Windows code is overdue.
+ *
+ * Only the ASCII versions of functions in the API are exposed, since Parasol encourages you to
+ * use UTF-8, rather than UTF-16 in your programs (due to the more limited support for UTF-16
+ * versions of Parasol runtime functions). In the future, both narrow and wide versions of Windows
+ * function could easily be added. 
+ */
 namespace native:windows;
 
 public class HANDLE = address;

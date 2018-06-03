@@ -13,6 +13,17 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * The compiler namespace defines the facilities necessary to compile Parasol programs into
+ * executable code.
+ *
+ * You must first create and load an Arena object. The Arena object holds global state information
+ * about the compilation, such as the symbol table.
+ *
+ * <i>This is important</i> if you want to put a &lt; character into your comment, to avoid it
+ * being mistaken for an HTML tag, be sure to escape it either with the \&lt; HTML escape syntax or
+ * the somewhat less hard to read escape of \\\<.
+ */
 namespace parasol:compiler;
 
 import parasol:text;
@@ -47,6 +58,12 @@ public class Arena {
 	boolean _deleteSourceCache;
 	boolean verbose;
 	boolean logImports;
+	/**
+	 * This is set during configuration to true in order to decorate the parse trees with
+	 * references to doclets (and of course to parse those doclets).
+	 */
+	public boolean paradoc;
+
 	runtime.Target preferredTarget;
 
 	public Arena() {

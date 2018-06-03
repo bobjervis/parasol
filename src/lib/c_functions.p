@@ -13,6 +13,20 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * This namespace provides access to portably defined C functions.
+ *
+ * Currently, many standard C function are provided here. Parasol has no syntax to describe a C variadic
+ * function like <b>printf</b> or <b>scanf</b>, so there is no way to add these to this namespace, nor are most of the
+ * variants that take a va_list object, which is highly specific to the C compiler used. Properly navigating the
+ * compiler internals is quite complicated and not recommended for the faint of heart.
+ *
+ * As much as possible, the C funcions are exposed using some conventions for describing data types that are not
+ * directly equivalent. Simple types like int or double are the same in both Parasol and C. The Parasol long type is
+ * equivalent to a Java long, and to a C long long type. Since Parasol currently has no support for unsigned long long, 
+ * the rare C methods that use this type (no portable functions in this namespace happen to), will use the Parasol
+ * long type, even though it is signed and there is some risk of confusion for values with the high-order bit set.
+ */
 namespace native:C;
 /*
  * FILE type.  Mimics the C FILE type.  Used here just as an opaque type to ensure

@@ -13,6 +13,15 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * This namespace provides facilities to manipulate the sockets API for either Windows or Linux (since they are
+ * very close to compatible).
+ *
+ * Windows has a startup function called WSAStartup that must be called once in each process before making any
+ * calls to create or access a socket. These facilities are very low level and you are welcome to use them, but
+ * the parasol:net namespace has a more object-oriented API that provides essentially the same services, and will
+ * hide underlying operating system differences such as WSAStartup.
+ */
 namespace native:net;
 
 import native:windows.WORD;

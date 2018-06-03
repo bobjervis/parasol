@@ -291,6 +291,7 @@ public class Identifier extends Node {
 			ref<ClassScope> classScope = ref<ClassScope>(body.scope);
 			ref<Type> t = compileContext.makeTypedef(classScope.classType);
 			_symbol.bindType(t, compileContext);
+			_symbol._doclet = enclosing.file().tree().getDoclet(this);
 			return classScope;
 		} else {
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
@@ -337,9 +338,10 @@ public class Identifier extends Node {
 	void bindFunctionOverload(Operator visibility, boolean isStatic, ref<Node> annotations, ref<Scope> enclosing, ref<ParameterScope> funcScope, ref<CompileContext> compileContext) {
 		_definition = true;
 		ref<Overload> o = enclosing.defineOverload(&_value, Operator.FUNCTION, compileContext);
-		if (o != null)
+		if (o != null) {
 			_symbol = o.addInstance(visibility, isStatic, annotations, this, funcScope, compileContext);
-		else
+			_symbol._doclet = enclosing.file().tree().getDoclet(this);
+		} else
 			add(MessageId.OVERLOAD_DISALLOWED, compileContext.pool(), _value);
 	}
 

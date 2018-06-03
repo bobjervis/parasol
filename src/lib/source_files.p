@@ -300,6 +300,12 @@ public class FileStat {
 		return _scanner;
 	}
 	
+	public ref<Scanner> paradocScanner() {
+		if (_scanner == null)
+			_scanner = Scanner.createParadoc(this);
+		return _scanner;
+	}
+	
 	public ref<Scanner> newScanner() {
 		return Scanner.create(this);
 	}
@@ -361,6 +367,13 @@ public class FileStat {
 		ref<Scope> domainScope = compileContext.arena().createDomain(domain);
 		if (_namespaceNode != null) {
 			_namespaceSymbol = _namespaceNode.middle().makeNamespaces(domainScope, domain, compileContext);
+			ref<Doclet> doclet = _tree.getDoclet(_namespaceNode);
+			if (doclet != null) {
+				if (_namespaceSymbol._doclet == null)
+					_namespaceSymbol._doclet = doclet;
+				else
+					_namespaceNode.add(MessageId.REDUNDANT_DOCLET, compileContext.pool());
+			}
 			_fileScope.mergeIntoNamespace(_namespaceSymbol, compileContext);
 		} else
 			_namespaceSymbol = compileContext.arena().anonymous();

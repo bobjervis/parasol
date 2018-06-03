@@ -20,6 +20,7 @@ import parasol:compiler.Arena;
 import parasol:compiler.BuiltInType;
 import parasol:compiler.Class;
 import parasol:compiler.CompileContext;
+import parasol:compiler.Doclet;
 import parasol:compiler.EnumInstanceType;
 import parasol:compiler.FileStat;
 import parasol:compiler.FlagsInstanceType;
@@ -134,11 +135,13 @@ int main(string[] args) {
 	for (int i = 1; i < finalArgs.length(); i++)
 		libraries.append(arena.compilePackage(i - 1, &context));
 	arena.finishCompilePackages(&context);
+
+	// We are now done with compiling, time to analyze the results
+
 	if (paradocCommand.symbolTableArgument.value)
 		arena.printSymbolTable();
-	if (paradocCommand.verboseArgument.value) {
+	if (paradocCommand.verboseArgument.value)
 		arena.print();
-	}
 	boolean anyFailure = false;
 	if (arena.countMessages() > 0) {
 		printf("Failed to compile\n");
@@ -190,6 +193,7 @@ void parseCommandLine(string[] args) {
 }
 
 boolean configureArena(ref<Arena> arena) {
+	arena.paradoc = true;
 	arena.logImports = paradocCommand.logImportsArgument.value;
 	if (paradocCommand.rootArgument.set())
 		arena.setRootFolder(paradocCommand.rootArgument.value);
@@ -380,6 +384,10 @@ boolean generateNamespaceDocumentation() {
 		overview.printf("<tr class=\"%s\">\n", i % 2 == 0 ? "altColor" : "rowColor");
 		overview.printf("<td class=\"linkcol\"><a href=\"%s/namespace-summary.html\">%s</a></td>\n", dirName, names[i].name);
 		overview.write("<td class=\"descriptioncol\">");
+		ref<Symbol> sym = names[i].symbol;
+		ref<Doclet> doclet = sym.doclet();
+		if (doclet != null)
+			overview.write(doclet.summary);
 		overview.write("</td>\n");
 		overview.write("</tr>\n");
 		generateNamespaceSummary(names[i].name, names[i].symbol);
@@ -416,6 +424,10 @@ void generateNamespaceSummary(string name, ref<Namespace> nm) {
 	overview.printf("<title>%s</title>\n", name);
 	overview.write("<body>\n");
 	overview.printf("<div class=namespace-title>Namespace %s</div>\n", name);
+
+	ref<Doclet> doclet = nm.doclet();
+	if (doclet != null)
+		overview.printf("<div class=namespace-text>%s</div>\n", doclet.text);
 
 	string classesDir = storage.constructPath(dirName, "classes", null);
 
@@ -520,9 +532,10 @@ boolean generateClassPage(ref<Symbol> sym, string name, string dirName) {
 			}
 			classPage.write("</div>\n");
 		}
-
-//		generateImplementedInterfaces();
 	}
+	ref<Doclet> doclet = sym.doclet();
+	if (doclet != null)
+		classPage.printf("<div class=class-text>%s</div>\n", doclet.text);
 
 	string subDir = storage.constructPath(dirName, name, null);
 
@@ -888,7 +901,7 @@ void functionSummary(ref<Writer> output, ref<ref<OverloadInstance>[]> functions,
 				}
 			}
 		}
-		output.write("</td>\n<td class=\"descriptioncol\">");
+		output.write("</td>\n<td>");
 		output.printf("<span class=code><a href=\"#%s\">%s</a>(", sym.name().asString(), sym.name().asString());
 		nl = ft.parameters();
 		ref<ParameterScope> scope = ft.functionScope();
@@ -908,7 +921,10 @@ void functionSummary(ref<Writer> output, ref<ref<OverloadInstance>[]> functions,
 			nl = nl.next;
 			j++;
 		}
-		output.write(")</span><br>\n");
+		output.write(")</span>");
+		ref<Doclet> doclet = sym.doclet();
+		if (doclet != null)
+			output.printf("\n<div class=descriptioncol>%s</div>", doclet.summary);
 		output.write("</td>\n");
 		output.write("</tr>\n");
 	}
@@ -973,6 +989,9 @@ void functionDetail(ref<Writer> output, ref<ref<OverloadInstance>[]> functions, 
 			j++;
 		}
 		output.write(")\n</div>\n");
+		ref<Doclet> doclet = sym.doclet();
+		if (doclet != null)
+			output.printf("\n<div class=func-description>%s</div>", doclet.text);
 	}
 	output.write("</div>\n");
 }
@@ -1026,6 +1045,9 @@ void generateClassSummaryEntry(ref<Writer> output, int i, ref<Symbol> sym, strin
 	output.printf("%s</td>\n", typeString(sym.type(), baseName));
 
 	output.write("<td class=\"descriptioncol\">");
+	ref<Doclet> doclet = sym.doclet();
+	if (doclet != null)
+		output.write(doclet.summary);
 	output.write("</td>\n");
 	output.write("</tr>\n");
 }

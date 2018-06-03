@@ -16,6 +16,7 @@
 namespace parasol:compiler;
 
 import parasol:storage;
+import parasol:stream;
 
 public enum Token {
 	ERROR,
@@ -216,6 +217,8 @@ public class Scanner {
 	private ref<FileStat> _file;
 	private boolean _utfError;
 	private int _baseLineNumber;		// Line number of first character in scanner input.
+	private boolean _paradoc;			// Parse paradoc doclet's and make them available to the parser.
+	private ref<Doclet> _doclet;		// The last successfully parsed doclet during a scan.
 	/*
 	 * Location of the last token read.
 	 */
@@ -243,6 +246,12 @@ public class Scanner {
 	 */
 	private int _cursor;
 	
+	public static ref<Scanner> createParadoc(ref<FileStat> file) {
+		ref<Scanner> scanner = new FileScanner(file);
+		scanner._paradoc = true;
+		return scanner;
+	}
+
 	public static ref<Scanner> create(ref<FileStat> file) {
 		ref<Scanner> scanner;
 		if (file.source() != null)
@@ -515,6 +524,24 @@ public class Scanner {
 					}
 					continue;
 				} else if (c == '*') {
+					if (_paradoc) {
+						c = getc();
+						if (c == '*') {
+							c = getc();
+							if (c == '/')
+								continue;			// This was a /**/ empty comment, not a Doclet.
+							ungetc();
+							if (!parseDoclet()) {
+								// Set up a 'value' that will indicate
+								// the context of the error.
+								startValue('/');
+								addCharacter('*');
+								addCharacter('*');
+								return Token.ERROR;
+							}
+							continue;
+						}
+					}
 					// Block comments nest, this tracks the nesting depth
 					int depth = 0;
 					for (;;) {
@@ -940,6 +967,105 @@ public class Scanner {
 		}
 	}
 
+	private boolean parseDoclet() {
+		delete _doclet;
+		_doclet = new Doclet();
+		// Block comments nest, this tracks the nesting depth
+		int depth = 0;
+		boolean atStartOfLine = true;
+		text.StringWriter sw(&_doclet.text);
+		stream.UTF8Writer w(&sw);
+		ref<stream.UTF8Writer> writer = &w;
+		int c = getc();
+		while (c == ' ' || c == '\t')
+			c = getc();
+		if (c == '\r')
+			c = getc();
+		if (c == '\n')
+			c = getc();
+		for (;;) {
+			c = getc();
+			switch (c) {
+			case -1:
+				return false;
+			
+			case '/':
+				int x = getc();
+				if (x == '*') {
+					depth++;
+					continue;
+				} else
+					ungetc();
+				break;
+
+			case '*':
+				x = getc();
+				if (x == '/') {
+					if (depth == 0) {
+						if (_doclet.summary == null)
+							_doclet.summary = _doclet.text;
+						return true;
+					}
+					depth--;
+					continue;
+				} else
+					ungetc();
+
+			case ' ':
+			case '\t':
+				if (atStartOfLine)
+					continue;				// ignore any leading sequences of white space or asterisks
+				break;
+
+			case '\r':
+				continue;
+
+			case '\n':
+				_lines.append(cursor());
+				break;
+
+			case '\\':
+				x = getc();
+				switch (x) {
+				case	'<':
+					c = ';';
+					writer.write("&lt");
+					break;
+
+				case	'>':
+					c = ';';
+					writer.write("&gt");
+					break;
+
+				case	'&':
+					c = ';';
+					writer.write("&amp");
+					break;
+
+				default:
+					c = x;
+				}
+				break;
+
+			case '@':						// A special comment marker
+				break;
+			}
+			if (atStartOfLine && c == '\n') {
+				if (_doclet.summary == null)
+					_doclet.summary = _doclet.text;
+				writer.write("<p>");
+			}
+			writer.write(c);
+			atStartOfLine = c == '\n';
+		}
+	}
+
+	public ref<Doclet> extractDoclet() {
+		 ref<Doclet> d = _doclet;
+		_doclet = null;
+		return d;
+	}
+
 	public void seek(Location location) {
 		_pushback = Token.EMPTY;
 		_lastByte = -1;
@@ -1083,6 +1209,17 @@ public class Scanner {
 		_value.append(c);
 	}
 
+}
+/**
+ * This is the parsed text of a paradoc doclet.
+ *
+ * It consists of the various parts
+ * of the comment after it has been scanned and parsed into the various pieces that
+ * a doclet could potentially contain.
+ */
+public class Doclet {
+	public string text;
+	public string summary;
 }
 
 Token[string] keywords = [
