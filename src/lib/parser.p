@@ -471,7 +471,7 @@ public class Parser {
 			x = parseExpression(0);
 			if (x.op() == Operator.SYNTAX_ERROR) {
 				return x;
-				}
+			}
 			t = _scanner.next();
 			if (t == Token.SEMI_COLON)
 				return _tree.newUnary(Operator.EXPRESSION, x, location);
@@ -716,7 +716,9 @@ public class Parser {
 				block.statement(_tree.newNodeList(name));
 				continue;
 			}
+			ref<Doclet> doclet = _scanner.extractDoclet();
 			ref<Identifier> id = ref<Identifier>(name);
+			_tree.newDoclet(id, doclet);
 			t = _scanner.next();
 			Location loc = _scanner.location();
 			if (t != Token.LEFT_PARENTHESIS) {
@@ -804,6 +806,7 @@ public class Parser {
 	}
 
 	private ref<Node> parseDeclarators(ref<Node> type, Location location) {
+		ref<Doclet> doclet = _scanner.extractDoclet();
 		if (enclosingClassName() != null) {
 			switch (type.op()) {
 			case	BIT_COMPLEMENT:	// possible destructor
@@ -817,18 +820,18 @@ public class Parser {
 
 			case	CALL:			// possible constructor
 				ref<Call> call = ref<Call>(type);
-				if (isClassName(call.target()))
+				if (isClassName(call.target())) {
+					_tree.newDoclet(call.target(), doclet);
 					return parseConstructor(call);
+				}
 				break;
 
 			default:
 				break;
 			}
 		}
-		ref<Doclet> doclet = _scanner.extractDoclet();
 		Token t = _scanner.next();
-		if (t == Token.IDENTIFIER ||
-			t == Token.ANNOTATION) {
+		if (t == Token.IDENTIFIER) {
 			ref<Node> x = parseName(t);
 			if (x.op() == Operator.SYNTAX_ERROR)
 				return x;
@@ -838,13 +841,13 @@ public class Parser {
 			t = _scanner.next();
 			Location loc = _scanner.location();
 			ref<NodeList> parameters;
+			_tree.newDoclet(id, doclet);
 			switch (t) {
 			case	LEFT_PARENTHESIS:
 				if (!parseParameterList(Token.RIGHT_PARENTHESIS, &parameters))
 					return parameters.node;
 				if (parameters.hasBindings()) {
 					func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.NORMAL, type, id, parameters, loc);
-					_tree.newDoclet(id, doclet);
 					t = _scanner.next();
 					if (t == Token.LOCK)
 						func.body = parseLockStatement();

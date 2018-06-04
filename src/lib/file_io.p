@@ -636,7 +636,7 @@ public class ErrorWriter extends Writer {
 	}
 }
 /**
- * NOte: This class should nly be needed for Windows, which has no Append mode for files.
+ * Note: This class should only be needed for Windows, which has no Append mode for files.
  */
 public class TextFileAppendWriter extends TextFileWriter {
 	TextFileAppendWriter(File file, boolean closeOnDelete) {

@@ -266,14 +266,6 @@ private void processHttpRequest(address ctx) {
 	delete context;
 }
 
-public class Http {
-	public static HttpResponse get(string url) {
-		HttpResponse response();
-		// TODO: Add some code to issue a request.
-		return response;
-	}
-}
-
 public class HttpService {
 	public abstract boolean processRequest(ref<HttpRequest> request, ref<HttpResponse> response);
 }

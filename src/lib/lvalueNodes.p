@@ -263,7 +263,8 @@ public class Identifier extends Node {
 		if (_symbol == null) {
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
 			type = compileContext.errorType();
-		}
+		} else
+			_symbol._doclet = enclosing.file().tree().getDoclet(this);
 	}
 /*
 	ref<Symbol> bind(ref<Scope> enclosing, ref<Type> type, ref<Node> initializer, ref<CompileContext> compileContext);
@@ -303,6 +304,7 @@ public class Identifier extends Node {
 		_definition = true;
 		_symbol = enclosing.defineSimpleMonitor(compileContext.visibility, StorageClass.STATIC, compileContext.annotations, this, compileContext.monitorClass(), compileContext.pool());
 		if (_symbol != null) {
+			_symbol._doclet = enclosing.file().tree().getDoclet(this);
 			ref<Type> t = compileContext.makeTypedef(compileContext.monitorClass());
 			_symbol.bindType(t, compileContext);
 		} else
@@ -314,6 +316,7 @@ public class Identifier extends Node {
 		ref<EnumScope> enumScope = compileContext.createEnumScope(body, this);
 		_symbol = enclosing.define(compileContext.visibility, StorageClass.STATIC, compileContext.annotations, this, body, body, compileContext.pool());
 		if (_symbol != null) {
+			_symbol._doclet = enclosing.file().tree().getDoclet(this);
 			ref<ClassType> c = compileContext.pool().newClassType(TypeFamily.CLASS, ref<Type>(null), enumScope);
 			ref<Type> t = compileContext.pool().newEnumInstanceType(_symbol, enumScope, c);
 			enumScope.enumType = compileContext.pool().newEnumType(body, enumScope, t);
@@ -327,6 +330,7 @@ public class Identifier extends Node {
 		ref<FlagsScope> flagsScope = compileContext.createFlagsScope(body, this);
 		_symbol = enclosing.define(compileContext.visibility, StorageClass.STATIC, compileContext.annotations, this, body, body, compileContext.pool());
 		if (_symbol != null) {
+			_symbol._doclet = enclosing.file().tree().getDoclet(this);
 			ref<ClassType> c = compileContext.pool().newClassType(TypeFamily.CLASS, ref<Type>(null), flagsScope);
 			ref<Type> t = compileContext.pool().newFlagsInstanceType(_symbol, flagsScope, c);
 			flagsScope.flagsType = compileContext.pool().newFlagsType(body, flagsScope, t);
@@ -362,6 +366,7 @@ public class Identifier extends Node {
 	void bindConstructor(Operator visibility, ref<Scope> enclosing, ref<ParameterScope> funcScope, ref<CompileContext> compileContext) {
 		_definition = true;
 		_symbol = compileContext.pool().newOverloadInstance(visibility, false, enclosing, compileContext.annotations, &_value, funcScope.definition(), funcScope);
+		_symbol._doclet = enclosing.file().tree().getDoclet(this);
 	}
 
 	void bindDestructor(Operator visibility, ref<Scope> enclosing, ref<ParameterScope> funcScope, ref<CompileContext> compileContext) {

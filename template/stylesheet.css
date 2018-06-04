@@ -22,6 +22,10 @@ a[name]:hover {
 	font-family: "Courier New", monospace;
 }
 
+td.nowrap {
+	white-space: pre;
+}
+
 .linkcol {
 	font-family: "Courier New", monospace;
 	width: 25%;

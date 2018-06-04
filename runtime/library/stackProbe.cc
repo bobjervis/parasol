@@ -22,6 +22,8 @@
  * conventions, the code is the same three instructions, but Windows uses a different set of instructions than
  * Linux does.
  */
+extern "C" {
+
 void callAndSetFramePtr(void *newRbp, void *newRip, void *arg) {
 #if defined(__WIN64)
 	asm ("mov %rcx,%rbp");
@@ -46,3 +48,4 @@ void *framePointer() {
 	return 0;
 }
 
+}

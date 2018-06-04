@@ -74,18 +74,20 @@ public abstract address stackTop();
 
 /**
  * This method returns the byte address of the next instruction after the call to the currently running function.
+ *
  * A value of null indicates that the returnAddress of this function is unavailable.
  */
-public /*abstract*/ address returnAddress() {
-	return null;
-}
+@Linux("libparasol.so.1", "returnAddress")
+@Windows("parasol.dll", "returnAddress")
+public abstract address returnAddress();
 /**
- * This method returns the frame pointer for the current function. A value of null indicates that a frame pointer
+ * This method returns the frame pointer for the current function.
+ *
+ * A value of null indicates that a frame pointer
  * for this method is unavailable. 
  */
-public /*abstract*/ address framePointer() {
-	return null;
-}
+@Linux("libparasol.so.1", "framePointer")
+public abstract address framePointer();
 
 public abstract long getRuntimeFlags();
 

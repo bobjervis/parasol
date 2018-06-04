@@ -105,12 +105,12 @@ public class WebSocketFactory {
 	public abstract boolean start(ref<HttpRequest> request, ref<HttpResponse> response, ref<Connection> connection);
 }
 
-public string computeWebSocketKey(int byteCount) {
+string computeWebSocketKey(int byteCount) {
 	byte[] stuff = random.getBytes(byteCount);
 	return base64encode(stuff);
 }
 
-public string computeWebSocketAccept(string webSocketKey) {
+string computeWebSocketAccept(string webSocketKey) {
 	string value = webSocketKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 	byte[] hash;
 		
@@ -638,8 +638,28 @@ private void networkOrder(ref<byte[]> output, string x) {
 	for (int i = 0; i < x.length(); i++)
 		output.append(x[i]);
 }
-
+/**
+ * A class that is serving as either a proxy or stub connected to a Web Socket will
+ * implement this interface.
+ *
+ * It is possible to write your own code to read from a Web Socket, but the framework
+ * makes it easier to manage, since the Web Socket itself will spawn the reader thread
+ * for you, using the (@link parasol:http.WebSocket#startReader) method.
+ */
 public interface WebSocketReader {
+	/**
+	 * The implementor of this method should call (@link parasol:http.WebSocket#readWholeMessage)
+	 * in a loop to obtain each message and respond appropriately.
+	 *
+	 * @return Returns true if the last call to readWholeMessage returned true for the sawClose
+	 * return value. The effect of returning true is to send a close frame and then shut down
+	 * the Web Socket connection. Returning false will skip the send and close the connection
+	 * immediately.
+	 *
+	 * While the connection will get closed either way, the Web Socket protocol requires the
+	 * close frame reply when you receive a close frame yourself. The remote party could respond
+	 * badly if you do not properly reply on a close request.
+	 */
 	boolean readMessages();
 }
 /**
