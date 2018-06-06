@@ -1960,7 +1960,7 @@ class Leaf extends Node {
 	}
  
 	private void assignTypes(ref<CompileContext> compileContext) {
-		ref<ClassScope> classScope;
+		ref<ClasslikeScope> classScope;
 		ref<Type> t;
 		ref<Scope> scope;
 		switch (op()) {
@@ -1993,15 +1993,12 @@ class Leaf extends Node {
 			break;
 
 		case	SUPER:
-			scope = compileContext.current();
-			while (scope != null && scope.storageClass() != StorageClass.MEMBER)
-				scope = scope.enclosing();
-			if (scope == null) {
+			classScope = compileContext.current().enclosingClassScope();
+			if (classScope == null) {
 				add(MessageId.SUPER_NOT_ALLOWED, compileContext.pool());
 				type = compileContext.errorType();
 				break;
 			}
-			classScope = ref<ClassScope>(scope);
 			t = classScope.classType;
 			if (t == null) {
 				add(MessageId.INTERNAL_ERROR, compileContext.pool());

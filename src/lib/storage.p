@@ -15,6 +15,7 @@
  */
 namespace parasol:storage;
 
+import parasol:math;
 import parasol:runtime;
 import parasol:time;
 
@@ -50,6 +51,8 @@ string absolutePath(string filename) {
 		return buffer.toLowerCase();
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		pointer<byte> f = linux.realpath(filename.c_str(), null);
+		if (f == null)
+			return filename;		// couldn't canonicalize, really should do some interal cleanup (to remove ..'s, etc.)
 		string result(f);
 		C.free(f);
 		return result;
@@ -573,11 +576,8 @@ public string makeCompactPath(string filename, string baseFilename) {
 	string a1 = absolutePath(filename);
 	string a2 = absolutePath(baseFilename);
 
-	int span;
-	if (a1.length() < a2.length())
-		span = a1.length();
-	else
-		span = a2.length();
+	int span = math.min(a1.length(), a2.length());
+//		printf("span %d a1 = '%s' a2 = '%s'\n", span, a1, a2);
 	int i;
 	int firstSlash = -1;
 	int lastSlash = -1;
@@ -592,6 +592,7 @@ public string makeCompactPath(string filename, string baseFilename) {
 			for (int j = i + 1; j < a2.length(); j++)
 				if (a2[j] == '/')
 					slashCount++;
+//			printf("slashCount %d\n", slashCount);
 			if (slashCount == 0)
 				return a1.substring(lastSlash + 1);
 			string result;

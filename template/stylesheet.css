@@ -94,11 +94,60 @@ div.descriptioncol {
 	padding-bottom: 2mm;
 }
 
-div.func-description {
+table.func-params {
+	border-spacing: 0px;
+}
+
+div.deprecated-outline {
+	margin: 3mm;
+	border-radius: 8mm;
+	border: 1px solid black;
+	padding-left: 5mm;
+}
+
+div.deprecated-caption {
+	padding-top: 2mm;
+	font-weight: bold;
+	font-style: italic;
+}
+
+div.threading, div.since, div.see, div.deprecated {
+	padding-top: 1mm;
+	padding-bottom: 2mm;
+}
+
+div.param-text {
+	font: 12pt "Times New Roman", serif;
+	padding-left: 3mm;
+}
+
+div.func-description, div.enum-description {
 	padding-top: 2mm;
 	margin-bottom: 2mm;
 	padding-left: 3mm;
     background-color:#FFFFFF;
+}
+
+div.func-return-caption {
+	font-weight: bold;
+	padding-bottom: 2mm;
+}
+
+div.func-return {
+	padding-left: 40px;
+}
+
+ol.func-return {
+	margin-top: 0px;
+}
+
+li.func-return {
+	padding-bottom: 2mm;
+}
+
+div.threading-caption, div.since-caption, div.see-caption {
+	font-weight: bold;
+	padding-bottom: 2mm;
 }
 
 div.namespace-info {

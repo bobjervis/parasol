@@ -13,6 +13,11 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * The Parasol binding for the native mysql C library.
+ *
+ * @deprecated Use the parasol:sql interface for more standards-based access to SQL databases.
+ */
 namespace mysql.com:mysql;
 
 import native:C;

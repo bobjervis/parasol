@@ -39,15 +39,35 @@ public string RUNTIME_VERSION = "0.1.0";
  */
 @CompileTarget
 public Target compileTarget = Target.X86_64_WIN;	// TODO: Remove this as there should be magic setting this value
-
+/**
+ * The target machine/OS of the code generator is also the identifier of the running environment.
+ */
 @Header("ST_")
 public enum Target {
-	ERROR,						// 0x00 A section given this type has unknown data at the section offset
-	SOURCE,						// 0x01 the region is in POSIX IEEE P1003.1 USTar archive format.
-	NOT_USED_2,					// 0x02 Parasol byte codes
-	X86_64_LNX,					// 0x03 Parasol 64-bit for Intel and AMD processors, Linux calling conventions.
-	X86_64_WIN,					// 0x04 Parasol 64-bit for Intel and AMD processors, Windows calling conventions.
-	FILLER
+	/**
+	 * This indicates some sort of error condition, like an invalid target option.
+	 */
+	ERROR,
+	/**
+	 * RESERVED - DO NOT USE
+	 */
+	NOT_USED_1,
+	/**
+	 * RESERVED - DO NOT USE
+	 */
+	NOT_USED_2,
+	/**
+	 * This is an Intel x64-64 machine instruction set running the Linux operating system.
+	 */
+	X86_64_LNX,
+	/**
+	 * This is an Intel x86-64 machine instruction set running the Windows operating system.
+	 */
+	X86_64_WIN,	
+	/**
+	 * This is not an actual target, but one greater than the maximum valid target value.
+	 */
+	MAX_TARGET
 }
 
 public abstract int injectObjects(pointer<address> objects, int objectCount);
@@ -75,7 +95,7 @@ public abstract address stackTop();
 /**
  * This method returns the byte address of the next instruction after the call to the currently running function.
  *
- * A value of null indicates that the returnAddress of this function is unavailable.
+ * @return The byte address of the return address of the current function. A value of null indicates that the returnAddress of this function is unavailable.
  */
 @Linux("libparasol.so.1", "returnAddress")
 @Windows("parasol.dll", "returnAddress")
@@ -83,7 +103,7 @@ public abstract address returnAddress();
 /**
  * This method returns the frame pointer for the current function.
  *
- * A value of null indicates that a frame pointer
+ * @return The value of the frame pointer. A value of null indicates that a frame pointer
  * for this method is unavailable. 
  */
 @Linux("libparasol.so.1", "framePointer")

@@ -498,6 +498,10 @@ public class Arena {
 		return s;
 	}
 
+	public ref<Scope> getDomain(string domain) {
+		return _domains[domain];
+	}
+
 	public ref<Namespace> anonymous() {
 		if (_anonymous == null)
 			_anonymous = _global.newNamespace(null, null, _root, createScope(_root, null, StorageClass.STATIC), null, null);

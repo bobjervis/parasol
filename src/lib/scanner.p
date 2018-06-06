@@ -973,6 +973,9 @@ public class Scanner {
 		// Block comments nest, this tracks the nesting depth
 		int depth = 0;
 		boolean atStartOfLine = true;
+		boolean accumulatingText = true;
+		boolean paragraphBreak = false;
+		boolean inineTag;
 		text.StringWriter sw(&_doclet.text);
 		stream.UTF8Writer w(&sw);
 		ref<stream.UTF8Writer> writer = &w;
@@ -1025,6 +1028,10 @@ public class Scanner {
 				break;
 
 			case '\\':
+				if (paragraphBreak) {
+					writer.write("<p>");
+					paragraphBreak = false;
+				}
 				x = getc();
 				switch (x) {
 				case	'<':
@@ -1047,15 +1054,169 @@ public class Scanner {
 				}
 				break;
 
+			case '{':
+				if (paragraphBreak) {
+					writer.write("<p>");
+					paragraphBreak = false;
+				}
+				x = getc();
+				if (x == '@') {
+					string tag;
+					for (;;) {
+						c = getc();
+						if (c.isAlpha())
+							tag.append(byte(c));
+						else {
+							ungetc();
+							break;
+						} 
+					}
+					switch (tag) {
+					case "code":
+						c = 'c';
+						break;
+	
+					case "link":
+						c = 'l';
+						break;
+	
+					case "linkplain":
+						c = 'p';
+						break;
+		
+					default:
+						writer.write("{{@");
+						writer.write(tag);
+						continue;
+					}
+					writer.write('{');
+					writer.write(c);
+					for (;;) {
+						c = getc();
+						if (c == -1)
+							break;
+						if (c == '}') {
+							writer.write("{}");
+							break;
+						} else if (c == '{') {
+							writer.write(c);
+						} else if (c == '\\') {
+							c = getc();
+							if (c == -1)
+								break;
+						}
+						writer.write(c);
+					}
+					atStartOfLine = false;
+					continue;
+				} else
+					ungetc();
+				atStartOfLine = false;
+				writer.write("{");
+				break;
+
 			case '@':						// A special comment marker
+				string tag;
+				for (;;) {
+					c = getc();
+					if (c.isAlpha())
+						tag.append(byte(c));
+					else {
+						ungetc();
+						break;
+					} 
+				}
+				atStartOfLine = false;
+				switch (tag) {
+				case "author":
+					accumulatingText = false;
+					text.StringWriter sw2(&_doclet.author);
+					sw = sw2;
+					atStartOfLine = true;
+					paragraphBreak = false;
+					continue;
+
+				case "deprecated":
+					accumulatingText = false;
+					text.StringWriter sw3(&_doclet.deprecated);
+					sw = sw3;
+					atStartOfLine = true;
+					paragraphBreak = false;
+					continue;
+
+				case "exception":
+					accumulatingText = false;
+					_doclet.exceptions.append("");
+					text.StringWriter sw4(&_doclet.exceptions[_doclet.exceptions.length() - 1]);
+					sw = sw4;
+					atStartOfLine = true;
+					paragraphBreak = false;
+					continue;
+
+				case "param":
+					accumulatingText = false;
+					_doclet.params.append("");
+					text.StringWriter sw5(&_doclet.params[_doclet.params.length() - 1]);
+					sw = sw5;
+					atStartOfLine = true;
+					paragraphBreak = false;
+					continue;
+
+				case "return":
+					accumulatingText = false;
+					_doclet.returns.append("");
+					text.StringWriter sw6(&_doclet.returns[_doclet.returns.length() - 1]);
+					sw = sw6;
+					atStartOfLine = true;
+					paragraphBreak = false;
+					continue;
+
+				case "see":
+					accumulatingText = false;
+					text.StringWriter sw7(&_doclet.see);
+					sw = sw7;
+					atStartOfLine = true;
+					paragraphBreak = false;
+					continue;
+
+				case "since":
+					accumulatingText = false;
+					text.StringWriter sw8(&_doclet.since);
+					sw = sw8;
+					atStartOfLine = true;
+					paragraphBreak = false;
+					continue;
+
+				case "threading":
+					accumulatingText = false;
+					text.StringWriter sw9(&_doclet.threading);
+					sw = sw9;
+					atStartOfLine = true;
+					paragraphBreak = false;
+					continue;
+
+				default:
+					writer.write('@');
+					writer.write(tag);
+					continue;
+				}
 				break;
 			}
 			if (atStartOfLine && c == '\n') {
-				if (_doclet.summary == null)
-					_doclet.summary = _doclet.text;
+				if (accumulatingText) {
+					if (_doclet.summary == null)
+						_doclet.summary = _doclet.text;
+					paragraphBreak = true;
+				}
+				accumulatingText = true;
+				continue;
+			}
+			if (paragraphBreak) {
 				writer.write("<p>");
+				paragraphBreak = false;
 			}
 			writer.write(c);
+			accumulatingText = true;
 			atStartOfLine = c == '\n';
 		}
 	}
@@ -1208,7 +1369,6 @@ public class Scanner {
 	private void addCharacter(int c) {
 		_value.append(c);
 	}
-
 }
 /**
  * This is the parsed text of a paradoc doclet.
@@ -1216,10 +1376,37 @@ public class Scanner {
  * It consists of the various parts
  * of the comment after it has been scanned and parsed into the various pieces that
  * a doclet could potentially contain.
+ *
+ * In each of the strings below, there may be any number of in-line tags. These tags
+ * have been transformed to make it easier to expand the results later on.
+ *
+ * The only character that needs to be looked for is the left-curly brace. There are
+ * several possible characters that could follow (and all instances of left-curly brace
+ * are followed by at least one more character):
+ *
+ * <ul>
+ *     <li>{@code {{} - The original text string had a left-curly brace in it.
+ *     <li>{@code {c} - This is the replacement of the string {@code {\@code} in the original text.
+ *     <li>{@code {l} - This is the replacement of the string {@code {\@link} in the original text.
+ *     <li>{@code {p} - This is the replacement of the string {@code {\@linkplain} in the original text.
+ *     <li>{@code {\}} - This is the replacement of the closing {@code \}} in an inline tag in the original text.
+ * </ul>
+ *
+ * Thus, processing a Doclet string only involves looking for the left-curly braces, then the next
+ * character to know what to do. And if you discover a left-curly brace inside the expansion string,
+ * it was there in the original comment.
  */
 public class Doclet {
 	public string text;
 	public string summary;
+	public string author;
+	public string deprecated;
+	public string[] exceptions;
+	public string[] params;
+	public string[] returns;
+	public string see;
+	public string since;
+	public string threading;
 }
 
 Token[string] keywords = [

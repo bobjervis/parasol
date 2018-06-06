@@ -377,9 +377,28 @@ public class HttpRequest {
 }
 
 public class HttpResponse {
+	/**
+	 * The value of the HTTP version string passed in the response.
+	 */
 	public string httpVersion;
+	/**
+	 * The HTTP code returned from the server. For example, a 'page not fund' error
+	 * would have a code of "404".
+	 */
 	public string code;
+	/**
+	 * The text of the 'reason' string supplied following the code.
+	 */
 	public string reason;
+	/**
+	 * A map of all headers, keyed by the header name.
+	 *
+	 * Header names are converted to lower-case in the map, since they are case-insensitive.
+	 * Note that the values of the headers are case sensitive.
+	 *
+	 * If a header occurs more than once in a response, all the supplied values are concatenated,
+	 * separated by commas, as a single string.
+	 */
 	public string[string] headers;
 
 	@Constant
@@ -451,18 +470,17 @@ public class HttpResponse {
 		_connection.write("\r\n");
 		_connection.flush();
 	}
-	
-	/**
-	 * Only make this visible to internal users, such as WebSocket.
-	 */
-	public ref<net.Connection> connection() {
+
+	ref<net.Connection> connection() {
 		return _connection;
 	}
 	
 	public void respond() {
 		_connection.flush();
 	}
-	
+	/**
+	 * This function is supplied as a debugging aid.
+	 */
 	public void print() {
 		text.printf("HttpResponse\n");
 		text.printf("  HTTP Version     %s\n", httpVersion);

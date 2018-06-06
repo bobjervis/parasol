@@ -19,9 +19,9 @@
  * Most of the functions and types defined here should be familiar to anyone who has programmed 
  * Linux in C.
  *
- * One notable difference is the (@link native:linux#stat) call, which fills in a C stat structure.
+ * One notable difference is the {@link native:linux.stat} call, which fills in a C stat structure.
  * Since Parasol does not allow a function and a class in the same scope to have the same name, for
- * Parasol, the class is called (@link native:linux#statStruct).
+ * Parasol, the class is called {@link native:linux.statStruct}.
  */
 namespace native:linux;
 

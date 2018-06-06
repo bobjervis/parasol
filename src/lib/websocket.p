@@ -644,11 +644,11 @@ private void networkOrder(ref<byte[]> output, string x) {
  *
  * It is possible to write your own code to read from a Web Socket, but the framework
  * makes it easier to manage, since the Web Socket itself will spawn the reader thread
- * for you, using the (@link parasol:http.WebSocket#startReader) method.
+ * for you, using the {@link parasol:http.WebSocket.startReader} method.
  */
 public interface WebSocketReader {
 	/**
-	 * The implementor of this method should call (@link parasol:http.WebSocket#readWholeMessage)
+	 * The implementor of this method should call {@link parasol:http.WebSocket.readWholeMessage}
 	 * in a loop to obtain each message and respond appropriately.
 	 *
 	 * @return Returns true if the last call to readWholeMessage returned true for the sawClose

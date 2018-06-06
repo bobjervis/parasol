@@ -2083,6 +2083,7 @@ public class X86_64 extends X86_64AssignTemps {
 					unfinished(node, "string +", compileContext);
 				} else {
 					generateOperands(b, compileContext);
+					inst(X86.LEA, R.RDI, b.left(), compileContext);
 					if (!instCall(_stringAppendString.parameterScope(), compileContext))
 						return;
 				}

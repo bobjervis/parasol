@@ -274,6 +274,8 @@ public class Identifier extends Node {
 		_symbol = enclosing.define(compileContext.visibility, StorageClass.ENUMERATION, compileContext.annotations, this, type, initializer, compileContext.pool());
 		if (_symbol == null)
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
+		else
+			_symbol._doclet = enclosing.file().tree().getDoclet(this);
 		return _symbol;
 	}
 
@@ -282,6 +284,8 @@ public class Identifier extends Node {
 		_symbol = enclosing.define(compileContext.visibility, StorageClass.FLAGS, compileContext.annotations, this, type, null, compileContext.pool());
 		if (_symbol == null)
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
+		else
+			_symbol._doclet = enclosing.file().tree().getDoclet(this);
 		return _symbol;
 	}
 
@@ -321,6 +325,7 @@ public class Identifier extends Node {
 			ref<Type> t = compileContext.pool().newEnumInstanceType(_symbol, enumScope, c);
 			enumScope.enumType = compileContext.pool().newEnumType(body, enumScope, t);
 			_symbol.bindType(enumScope.enumType, compileContext);
+			_symbol._doclet = enclosing.file().tree().getDoclet(this);
 		} else
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
 	}
@@ -335,6 +340,7 @@ public class Identifier extends Node {
 			ref<Type> t = compileContext.pool().newFlagsInstanceType(_symbol, flagsScope, c);
 			flagsScope.flagsType = compileContext.pool().newFlagsType(body, flagsScope, t);
 			_symbol.bindType(flagsScope.flagsType, compileContext);
+			_symbol._doclet = enclosing.file().tree().getDoclet(this);
 		} else
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
 	}

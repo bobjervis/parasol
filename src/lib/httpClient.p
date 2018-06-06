@@ -31,7 +31,7 @@ import native:net.inet_ntoa;
  * in a URI, such as a slash character, are not escaped. All extended Unicode characters are
  * escaped.
  *
- * An escaped character is replaced in the returned string with a three character seuqence, a
+ * An escaped character is replaced in the returned string with a three character sequence, a
  * percent sign (%), then two hexadecimal digits (where upper-case letters are used).
  */
 public string encodeURI(string uri) {
@@ -139,7 +139,7 @@ public string encodeURI(string uri) {
  * This is the function to use when you have a parameter or query string that may have special
  * characters in it that are not allowed in a URI. Apply this function to each query parameter
  * before you compose the URI. This is less likely to cause errors in the URI than to compose
- * first and use (@link parasol:http#encodeURI).
+ * first and use {@link parasol:http.encodeURI}.
  *
  * ASCII Alphanumeric characters and unreserved characters. All extended Unicode characters are
  * escaped.
@@ -279,11 +279,11 @@ public class URIError extends Exception {
  *
  * This class will accept either http, https, ws or wss URL's. If the ws or
  * wss protocols successfully connect, you can obtain the WebSocket created as a result of the
- * http request from the HttpClient using the (@link parasol:http.HttpClient#webSocket) method.
+ * http request from the HttpClient using the {@link parasol:http.HttpClient.webSocket webSocket} method.
  *
  * You can repeat the same URL request again with this object, but the only change you can make
- * that would alter the request itself is you can add another header (with (@link #addHeader) or
- * change the cipher list using (@link #setCipherList).
+ * that would alter the request itself is you can add another header with {@link setHeader} or
+ * change the cipher list using {@link setCipherList}.
  */
 public class HttpClient {
 	private ref<net.Connection> _connection;
@@ -307,7 +307,7 @@ public class HttpClient {
 	 *
 	 * You should use this constructor for http and https URL's.
 	 *
-	 * @parameter url The url to use for the HTTP request.
+	 * @param url The url to use for the HTTP request.
 	 */
 	public HttpClient(string url) {
 		// First, parse out the protocol and hostname.
@@ -320,8 +320,8 @@ public class HttpClient {
 	 * webSocketProtocol parameter specifies a protocol that the server
 	 * expects to see.
 	 *
-	 * @parameter url The url to use for the HTTP request.
-	 * @parameter webSocketProtocol A protocol string that describes how
+	 * @param url The url to use for the HTTP request.
+	 * @param webSocketProtocol A protocol string that describes how
 	 * you expect to use the Web Socket
 	 */
 	public HttpClient(string url, string webSocketProtocol) {
@@ -337,7 +337,7 @@ public class HttpClient {
 	/**
 	 * Add a header to the request.
 	 *
-	 * Call this method before any request initiation methods (like (@link #get) or (@link #post)).
+	 * Call this method before any request initiation methods (like {@link get} or {@link post}).
 	 *
 	 * The HttpClient code will automatically include the following headers
 	 *
@@ -393,8 +393,8 @@ public class HttpClient {
 	 *
 	 * In the current implementation you cannot specify any of these headers in this method call.
 	 *
-	 * @parameter name The header name to use
-	 * @parameter value The value string to use for the header
+	 * @param name The header name to use
+	 * @param value The value string to use for the header
 	 */
 	public void setHeader(string name, string value) {
 		_additionalHeaders.printf("%s: %s\r\n", name, value);
@@ -479,7 +479,7 @@ public class HttpClient {
 	/**
 	 * Issue a POST request.
 	 *
-	 * @parameter body The body to accompany the reuqest headers.
+	 * @param body The body to accompany the reuqest headers.
 	 *
 	 * @return true if the request succeeded, false otherwise.
 	 * @return The IPv4 ip address of the host. If the hostname failed to resolve
@@ -624,7 +624,7 @@ public class HttpClient {
 	/**
 	 * Extract the Web Socket from this object.
 	 *
-	 * Once extracted, the (@link #hasWebSocket) value will be false and subsequent
+	 * Once extracted, the {@link hasWebSocket} value will be false and subsequent
 	 * calls to this method will yield null.
 	 *
 	 * @return The value of the Web Socket stored in this object, or null if no such object
@@ -643,7 +643,7 @@ public class HttpClient {
 	 * You should not need to use this method unless there is some specific
 	 * issue with the server you are trying to connect with.
 	 *
-	 * @parameter cipherList The SSL cipher-list string to use in the next request.
+	 * @param cipherList The SSL cipher-list string to use in the next request.
 	 */
 	public void setCipherList(string cipherList) {
 		_cipherList = cipherList;

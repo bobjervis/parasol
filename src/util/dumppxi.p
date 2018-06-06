@@ -100,7 +100,7 @@ ref<pxi.Section> x86_64NextReader(storage.File pxiFile, long length) {
 
 class PlaceHolder extends pxi.Section {
 	PlaceHolder() {
-		super(runtime.Target.FILLER);
+		super(runtime.Target.MAX_TARGET);
 	}
 	
 	public long length() {

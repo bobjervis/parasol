@@ -149,6 +149,10 @@ int main(string[] args) {
 		anyFailure = true;
 	}
 	if (outputFolder != null) {
+		if (storage.exists(outputFolder) && !storage.deleteDirectoryTree(outputFolder)) {
+			printf("Failed to clean up old output folder '%s'\n", outputFolder);
+			return 1;
+		}
 		printf("Writing to %s\n", outputFolder);
 		if (storage.ensure(outputFolder)) {
 			if (paradocCommand.templateDirectoryArgument.set()) {
@@ -387,7 +391,7 @@ boolean generateNamespaceDocumentation() {
 		ref<Symbol> sym = names[i].symbol;
 		ref<Doclet> doclet = sym.doclet();
 		if (doclet != null)
-			overview.write(doclet.summary);
+			overview.write(expandDocletString(doclet.summary, sym, overviewPage));
 		overview.write("</td>\n");
 		overview.write("</tr>\n");
 		generateNamespaceSummary(names[i].name, names[i].symbol);
@@ -411,12 +415,12 @@ boolean generateNamespaceDocumentation() {
 }
 
 void generateNamespaceSummary(string name, ref<Namespace> nm) {
-	string dirName = namespaceFile(nm);
+	string dirName = namespaceDir(nm);
 	if (!storage.ensure(dirName)) {
 		printf("Could not create directory '%s'\n", dirName);
 		process.exit(1);
 	}
-	string overviewPage = storage.constructPath(dirName, "namespace-summary", "html");
+	string overviewPage = namespaceFile(nm);
 	ref<Writer> overview = storage.createTextFile(overviewPage);
 
 	insertTemplate1(overview, overviewPage);
@@ -426,8 +430,19 @@ void generateNamespaceSummary(string name, ref<Namespace> nm) {
 	overview.printf("<div class=namespace-title>Namespace %s</div>\n", name);
 
 	ref<Doclet> doclet = nm.doclet();
-	if (doclet != null)
-		overview.printf("<div class=namespace-text>%s</div>\n", doclet.text);
+	if (doclet != null) {
+		if (doclet.author != null)
+			overview.printf("<div class=author><span class=author-caption>Author: </span>%s</div>\n", expandDocletString(doclet.author, nm, overviewPage));
+		if (doclet.deprecated != null)
+			overview.printf("<div class=deprecated-outline><div class=deprecated-caption>Deprecated</div><div class=deprecated>%s</div></div>\n", expandDocletString(doclet.deprecated, nm, overviewPage));
+		overview.printf("<div class=namespace-text>%s</div>\n", expandDocletString(doclet.text, nm, overviewPage));
+		if (doclet.threading != null)
+			overview.printf("<div class=threading-caption>Since</div><div class=threading>%s</div>\n", expandDocletString(doclet.threading, nm, overviewPage));
+		if (doclet.since != null)
+			overview.printf("<div class=since-caption>Since</div><div class=since>%s</div>\n", expandDocletString(doclet.since, nm, overviewPage));
+		if (doclet.see != null)
+			overview.printf("<div class=see-caption>See Also</div><div class=see>%s</div>\n", expandDocletString(doclet.see, nm, overviewPage));
+	}
 
 	string classesDir = storage.constructPath(dirName, "classes", null);
 
@@ -445,6 +460,10 @@ string namespaceReference(ref<Namespace> nm) {
 }
 
 string namespaceFile(ref<Namespace> nm) {
+	return storage.constructPath(namespaceDir(nm), "namespace-summary", "html");
+}
+
+string namespaceDir(ref<Namespace> nm) {
 	string s;
 	string dirName = nm.fullNamespace();
 	for (int i = 0; i < dirName.length(); i++)
@@ -534,8 +553,19 @@ boolean generateClassPage(ref<Symbol> sym, string name, string dirName) {
 		}
 	}
 	ref<Doclet> doclet = sym.doclet();
-	if (doclet != null)
-		classPage.printf("<div class=class-text>%s</div>\n", doclet.text);
+	if (doclet != null) {
+		if (doclet.author != null)
+			classPage.printf("<div class=author><span class=author-caption>Author: </span>%s</div>\n", expandDocletString(doclet.author, sym, classFile));
+		if (doclet.deprecated != null)
+			classPage.printf("<div class=deprecated-outline><div class=deprecated-caption>Deprecated</div><div class=deprecated>%s</div></div>\n", expandDocletString(doclet.deprecated, sym, classFile));
+		classPage.printf("<div class=class-text>%s</div>\n", expandDocletString(doclet.text, sym, classFile));
+		if (doclet.threading != null)
+			classPage.printf("<div class=threading-caption>Since</div><div class=threading>%s</div>\n", expandDocletString(doclet.threading, sym, classFile));
+		if (doclet.since != null)
+			classPage.printf("<div class=since-caption>Since</div><div class=since>%s</div>\n", expandDocletString(doclet.since, sym, classFile));
+		if (doclet.see != null)
+			classPage.printf("<div class=see-caption>See Also</div><div class=see>%s</div>\n", expandDocletString(doclet.see, sym, classFile));
+	}
 
 	string subDir = storage.constructPath(dirName, name, null);
 
@@ -707,6 +737,9 @@ void generateScopeContents(ref<Scope> scope, ref<Writer> output, string dirName,
 			ref<Type> type = sym.type();
 			output.printf("<td class=\"linkcol\"><a href=\"#%s\"\">%s</a></td>\n", sym.name().asString(), sym.name().asString());
 			output.write("<td class=\"descriptioncol\">");
+			ref<Doclet> doclet = sym.doclet();
+			if (doclet != null)
+				output.write(expandDocletString(doclet.summary, sym, baseName));
 			output.write("</td>\n");
 			output.write("</tr>\n");
 		}
@@ -748,6 +781,9 @@ void generateScopeContents(ref<Scope> scope, ref<Writer> output, string dirName,
 			output.printf("<td class=\"linkcol\">%s</td>\n", typeString(type, baseName));
 			output.write("<td class=\"descriptioncol\">");
 			output.printf("<a href=\"#%s\"><span class=code>%s</span></a><br>", sym.name().asString(), sym.name().asString());
+			ref<Doclet> doclet = sym.doclet();
+			if (doclet != null)
+				output.printf("\n%s", expandDocletString(doclet.summary, sym, baseName));
 			output.write("</td>\n");
 			output.write("</tr>\n");
 		}
@@ -822,6 +858,9 @@ void generateScopeContents(ref<Scope> scope, ref<Writer> output, string dirName,
 			output.printf("<a id=\"%s\"></a>\n", name);
 			output.printf("<div class=entity>%s</div>\n", name);
 			output.printf("<div class=declaration>public static final %s %s</div>\n", typeString(sym.type(), baseName), name);
+			ref<Doclet> doclet = sym.doclet();
+			if (doclet != null)
+				output.printf("\n<div class=enum-description>%s</div>", expandDocletString(doclet.text, sym, baseName));
 		}
 		output.printf("</div>\n");
 	}
@@ -849,6 +888,9 @@ void generateScopeContents(ref<Scope> scope, ref<Writer> output, string dirName,
 			if (sym.storageClass() == StorageClass.STATIC && sym.enclosing().storageClass() != StorageClass.STATIC)
 				output.printf("static ");
 			output.printf("%s %s</div>\n", typeString(type, baseName), name);
+			ref<Doclet> doclet = sym.doclet();
+			if (doclet != null)
+				output.printf("\n<div class=enum-description>%s</div>", expandDocletString(doclet.text, sym, baseName));
 		}
 		output.printf("</div>\n");
 	}
@@ -924,7 +966,7 @@ void functionSummary(ref<Writer> output, ref<ref<OverloadInstance>[]> functions,
 		output.write(")</span>");
 		ref<Doclet> doclet = sym.doclet();
 		if (doclet != null)
-			output.printf("\n<div class=descriptioncol>%s</div>", doclet.summary);
+			output.printf("\n<div class=descriptioncol>%s</div>", expandDocletString(doclet.summary, sym, baseName));
 		output.write("</td>\n");
 		output.write("</tr>\n");
 	}
@@ -942,6 +984,9 @@ void functionDetail(ref<Writer> output, ref<ref<OverloadInstance>[]> functions, 
 		output.printf("<a id=\"%s\"></a>\n", name);
 		output.printf("<div class=entity>%s</div>\n", name);
 		output.printf("<div class=declaration>");
+		output.printf("<table class=func-params>\n");
+		output.printf("<tr>\n");
+		output.printf("<td>");
 		switch (sym.visibility()) {
 		case	PUBLIC:
 			output.write("public ");
@@ -970,28 +1015,93 @@ void functionDetail(ref<Writer> output, ref<ref<OverloadInstance>[]> functions, 
 			output.write(' ');
 		}
 		output.printf("%s(", name);
+		output.write("</td>\n<td>");
+
 		nl = ft.parameters();
 		ref<ParameterScope> scope = ft.functionScope();
 		ref<ref<Symbol>[]> parameters = scope.parameters();
 		int j = 0;
+		ref<Doclet> doclet = sym.doclet();
+		string[string] paramMap;
+		if (doclet != null) {
+			for (i in doclet.params) {
+				int idx = doclet.params[i].indexOf(' ');
+				if (idx < 0)
+					continue;
+				string pname = doclet.params[i].substring(0, idx);
+				string value = doclet.params[i].substring(idx + 1).trim();
+				if (value.length() > 0)
+					paramMap[pname] = value;
+			}
+		}
+		if (nl == null)
+			output.write(")</td>\n");
 		while (nl != null) {
 			if (nl.node.getProperEllipsis() != null)
 				output.printf("%s...", typeString(nl.node.type.elementType(), baseName));
 			else
 				output.printf("%s", typeString(nl.node.type, baseName));
+			string pname = (*parameters)[j].name().asString();
 			if (parameters != null && parameters.length() > j)
-				output.printf(" %s", (*parameters)[j].name().asString());
+				output.printf(" %s", pname);
 			else
 				output.write(" ???");
 			if (nl.next != null)
-				output.write(",\n                ");
+				output.write(",");
 			nl = nl.next;
+			if (nl != null)
+				output.write("</td>\n");
+			else
+				output.write(")</td>\n");
+			string comment = paramMap[pname];
+			if (comment != null)
+				output.printf("<td><div class=param-text>%s</div></td>\n", expandDocletString(comment, sym, baseName));
+			if (nl != null)
+				output.write("</tr>\n<tr>\n<td></td><td>");
 			j++;
 		}
-		output.write(")\n</div>\n");
-		ref<Doclet> doclet = sym.doclet();
-		if (doclet != null)
-			output.printf("\n<div class=func-description>%s</div>", doclet.text);
+		output.write("</tr>\n</table>\n</div>\n");
+		if (doclet != null) {
+			output.write("\n<div class=func-description>\n");
+			if (doclet.deprecated != null)
+				output.printf("<div class=deprecated-outline><div class=deprecated-caption>Deprecated</div><div class=deprecated>%s</div></div>\n", expandDocletString(doclet.deprecated, sym, baseName));
+			output.printf("\n<div class=func-text>%s</div>", expandDocletString(doclet.text, sym, baseName));
+			if (doclet.returns.length() > 0) {
+				output.write("\n<div class=func-return-caption>Returns:</div>");
+				if (doclet.returns.length() == 1) {
+					output.printf("\n<div class=func-return>%s</div>", expandDocletString(doclet.returns[0], sym, baseName));
+				} else {
+					output.printf("\n<ol class=func-return>\n");
+					for (i in doclet.returns)
+						output.printf("<li class=func-return>%s</li>\n", expandDocletString(doclet.returns[i], sym, baseName));
+					output.printf("</ol>\n");
+				}
+			}
+			if (doclet.exceptions.length() > 0) {
+				output.write("<div class=exceptions-caption>Exceptions:</div>\n<table>\n");
+				for (i in doclet.exceptions) {
+					int idx = doclet.exceptions[i].indexOf(' ');
+					string ename;
+					string value;
+					if (idx < 0) {
+						ename = doclet.exceptions[i];
+						value = "";
+					} else {
+						ename = doclet.exceptions[i].substring(0, idx);
+						value = doclet.exceptions[i].substring(idx + 1).trim();
+					}
+					output.printf("<td><td>%s</td><td>%s</td></tr>\n", ename, expandDocletString(value, sym, baseName));
+				}
+				output.write("</table>\n");
+			}
+			if (doclet.threading != null)
+				output.printf("<div class=threading-caption>Threading</div><div class=threading>%s</div>\n", expandDocletString(doclet.threading, sym, baseName));
+			if (doclet.since != null)
+				output.printf("<div class=since-caption>Since</div><div class=since>%s</div>\n", expandDocletString(doclet.since, sym, baseName));
+			if (doclet.see != null)
+				output.printf("<div class=see-caption>See Also</div><div class=see>%s</div>\n", expandDocletString(doclet.see, sym, baseName));
+			output.write("</div>\n");
+		}
 	}
 	output.write("</div>\n");
 }
@@ -1047,9 +1157,239 @@ void generateClassSummaryEntry(ref<Writer> output, int i, ref<Symbol> sym, strin
 	output.write("<td class=\"descriptioncol\">");
 	ref<Doclet> doclet = sym.doclet();
 	if (doclet != null)
-		output.write(doclet.summary);
+		output.write(expandDocletString(doclet.summary, sym, baseName));
 	output.write("</td>\n");
 	output.write("</tr>\n");
+}
+
+string expandDocletString(string text, ref<Symbol> sym, string baseName) {
+	string result = "";
+	string linkText;
+	boolean inlineTag;
+	boolean closeA;
+	boolean closeSpan;
+
+	for (int i = 0; i < text.length(); i++) {
+		if (text[i] == '{') {
+			i++;
+			switch (text[i]) {
+			case '{':
+				if (inlineTag)
+					linkText.append('{');
+				else
+					result.append('{');
+				break;
+
+			case 'c':
+				result.append("<span class=code>");
+				inlineTag = false;
+				closeSpan = true;
+				break;
+
+			case 'l':
+				result.append("<span class=code>");
+				inlineTag = true;
+				closeSpan = true;
+				closeA = true;
+				break;
+
+			case 'p':
+				inlineTag = true;
+				closeA = true;
+				break;
+
+			case '}':
+				if (closeA) {
+					result.append(transformLink(linkText, sym, baseName));
+					closeA = false;
+				}
+				if (closeSpan) {
+					closeSpan = false;
+					result.append("</span>");
+				}
+				linkText = null;
+				inlineTag = false;
+			}
+		} else if (inlineTag)
+			linkText.append(text[i]);
+		else
+			result.append(text[i]);
+	}
+	if (closeA) {
+		result.append(transformLink(linkText, sym, baseName));
+		result.append("</a>");
+	}
+	if (closeSpan)
+		result.append("</span>");
+	return result;
+}
+/*
+ * linkText consists of a link and an optional caption. Everything before the first space is the link.
+ * The rest of the linkText is the caption.
+ *
+ * The actual link could be:
+ *		<i>domain</i>:<i>namespace</i>.<i>class-chain</i>.<i>symbol</i>
+ *		<i>domain</i>:<i>namespace</i>.<i>class-chain</i>
+ *		<i>domain</i>:<i>namespace</i>.<i>symbol</i>
+ *		<i>class-chain</i>.<i>symbol<i>
+ *		<i>class-chain</i>
+ * or
+ *		<i>symbol</i>
+ */
+string transformLink(string linkTextIn, ref<Symbol> sym, string baseName) {
+	string linkText = linkTextIn.trim();
+	printf("transformLink('%s', '%s', '%s')\n", linkText, sym.name().asString(), baseName);
+	int idx = linkText.indexOf(' ');
+	string caption;
+	if (idx >= 0) {
+		caption = linkText.substring(idx + 1).trim();
+		linkText.resize(idx);
+	} else
+		caption = linkText;
+	idx = linkText.indexOf(':');
+	string path;
+	if (idx >= 0) {
+		string domain = linkText.substring(0, idx);
+		ref<Scope> scope = arena.getDomain(domain);
+		if (scope == null)
+			return caption;
+		path = linkText.substring(idx + 1);
+		string[] components = path.split('.');
+		string directory = domain + "_";
+		ref<Symbol> nm;
+		int i;
+		for (i = 0; i < components.length(); i++) {
+			nm = scope.lookup(components[i], null);
+			if (nm == null)
+				return caption;
+			if (nm.class != Namespace)
+				break;
+			scope = ref<Namespace>(nm).symbols();
+			if (i > 0)
+				directory += ".";
+			directory += components[i];
+		}
+		path = storage.constructPath(outputFolder, directory, null);
+		if (i >= components.length()) {
+			path = storage.constructPath(path, "namespace-summary", "html");
+			linkText = storage.makeCompactPath(path, baseName);
+		} else {
+			boolean hasClasses;
+			for (; i < components.length() - 1; i++) {
+				if (nm.type().family() != TypeFamily.TYPEDEF)
+					return caption;
+				if (!hasClasses) {
+					hasClasses = true;
+					path = storage.constructPath(path, "classes", null);
+				}
+				path = storage.constructPath(path, nm.name().asString(), null);
+				scope = scopeFor(nm);
+				if (scope == null)
+					return caption;
+				nm = scope.lookup(components[i + 1], null);
+				if (nm == null)
+					return caption;
+			}
+			if (nm.type() != null && nm.type().family() == TypeFamily.TYPEDEF) {
+				if (!hasClasses)
+					path = storage.constructPath(path, "classes", null);
+				path = storage.constructPath(path, nm.name().asString(), "html");
+				if (path == baseName)
+					return caption;
+				linkText = storage.makeCompactPath(path, baseName);
+			} else {
+				path += ".html";
+				if (path == baseName)
+					linkText = "#" + components[i];
+				else
+					linkText = storage.makeCompactPath(path, baseName) + "#" + components[i];
+			}	
+		}
+	} else {
+		ref<Namespace> nm;
+		boolean hasClasses;
+		if (sym.class == Namespace) {
+			nm = ref<Namespace>(sym);
+			path = storage.constructPath(outputFolder, nm.domain() + "_" + nm.dottedName(), null);
+		} else {
+			nm = sym.enclosingNamespace();
+			path = pathToMyParent(sym);
+			if (sym.enclosing() != sym.enclosingUnit())
+				hasClasses = true;
+		}
+		string[] components = linkText.split('.');
+		ref<Scope> scope = scopeFor(sym);
+		ref<Symbol> s = scope.lookup(components[0], null);
+		if (s == null) {
+			if (sym == nm)
+				return caption;					// If we didn't find a symbol by looking in the namespace,
+												// it's undefined, there's nowhere else to go.
+			scope = sym.enclosing();
+			if (scope == sym.enclosingUnit())
+				scope = nm.type().scope();
+			s = scope.lookup(components[0], null);
+			if (s == null)
+				return caption;
+		} else {
+			if (!hasClasses) {
+				hasClasses = true;
+				path = storage.constructPath(path, "classes", null);
+			}
+			path = storage.constructPath(path, sym.name().asString(), null);
+		}
+		for (int i = 0; i < components.length() - 1; i++) {
+			if (s.type().family() != TypeFamily.TYPEDEF)
+				return caption;
+			if (!hasClasses) {
+				hasClasses = true;
+				path = storage.constructPath(path, "classes", null);
+			}
+			path = storage.constructPath(path, s.name().asString(), null);
+			scope = scopeFor(s);
+			if (scope == null) {
+				printf("%s has no scope\n", s.name().asString());
+				return caption;
+			}
+			s = scope.lookup(components[i + 1], null);
+			if (s == null)
+				return caption;
+		}
+		if (s.type() != null && s.type().family() == TypeFamily.TYPEDEF) {
+			if (!hasClasses)
+				path = storage.constructPath(path, "classes", null);
+			path = storage.constructPath(path, s.name().asString(), "html");
+			if (path == baseName)
+				return caption;
+			linkText = storage.makeCompactPath(path, baseName);
+		} else {
+			path += ".html";
+			if (path == baseName)
+				linkText = "#" + components[components.length() - 1];
+			else
+				linkText = storage.makeCompactPath(path, baseName) + "#" + components[components.length() - 1];
+		}
+	}
+	printf("  path '%s'\n  baseName '%s'\n  linkText '%s'\n", path, baseName, linkText);
+	return "<a href=\"" + linkText + "\">" + caption + "</a>";
+}
+/*
+ * sym is a symbol, possibly a namespace, class, function  or object.
+ */
+string pathToMyParent(ref<Symbol> sym) {
+	return pathToMyParent(sym.enclosing());
+}
+
+string pathToMyParent(ref<Scope> scope) {
+	if (scope == scope.enclosingUnit()) {
+		ref<Namespace> nm = scope.getNamespace();
+		return storage.constructPath(outputFolder, nm.domain() + "_" + nm.dottedName(), null);
+	}
+	ref<Type> type = scope.enclosingClassType();
+	scope = type.scope();
+	string path = pathToMyParent(scope.enclosing());
+	if (scope.enclosing() == scope.enclosingUnit())
+		path = storage.constructPath(path, "classes", null);
+	return storage.constructPath(path, type.signature(), null);
 }
 
 int compareSymbols(ref<Symbol> sym1, ref<Symbol> sym2) {

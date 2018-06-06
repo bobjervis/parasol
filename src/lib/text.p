@@ -597,7 +597,32 @@ public class string extends String<byte> {
 	public string remove(RegularExpression pattern) {
 		return null;
 	}
-	
+	/**
+ 	 * Replaces each instance of the match string with the replacement.
+	 *
+	 * @param match The sub-string to look for.
+	 * @param replacement The text to substitute for each matching sub-string.
+	 *
+	 * @return The original string with each instance of match replacemby replacement.
+	 */
+	public string replaceAll(string match, string replacement) {
+		string result;
+
+		int start = 0;
+		for (;;) {
+			int idx = indexOf(match, start);
+			if (idx < 0) {
+				result.append(substring(start));
+				break;
+			} else {
+				result.append(substring(start, idx));
+				result.append(replacement);
+				start = idx + match.length();
+			}
+		}
+		return result;
+	}
+
 	public void set(int index, char value) {
 	}
 	/*

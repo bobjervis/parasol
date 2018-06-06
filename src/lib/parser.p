@@ -1012,7 +1012,9 @@ public class Parser {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
+		ref<Doclet> doclet = _scanner.extractDoclet();
 		ref<Identifier> identifier = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
+		_tree.newDoclet(identifier, doclet);
 		t = _scanner.next();
 		Location blockLoc = _scanner.location();
 		if (t != Token.LEFT_CURLY) {
@@ -1041,7 +1043,9 @@ public class Parser {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
+		ref<Doclet> doclet = _scanner.extractDoclet();
 		ref<Identifier> identifier = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
+		_tree.newDoclet(identifier, doclet);
 		t = _scanner.next();
 		Location blockLoc = _scanner.location();
 		if (t != Token.LEFT_CURLY) {
@@ -1071,8 +1075,10 @@ public class Parser {
 		Token t;
 		for (;;) {
 			t = _scanner.next();
+			ref<Doclet> doclet = _scanner.extractDoclet();
 			if (t == Token.IDENTIFIER) {
 				ref<Node> x = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
+				_tree.newDoclet(x, doclet);
 				if (e != null)
 					e = _tree.newBinary(Operator.SEQUENCE, e, x, commaLocation);
 				else

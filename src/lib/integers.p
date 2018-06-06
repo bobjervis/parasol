@@ -112,7 +112,28 @@ public class int {
 			value = -value;
 		return value, true;
 	}
-
+	/**
+	 * Parses a string as a decimal integer.
+	 *
+	 * Note that the status argument is second, so that if you have
+	 * high confidence that the number is properly coded, you can use this as if it were
+	 * a value function in an expression.
+	 *
+	 * For example: {@code int x = int.parse("1234");}
+	 * 
+	 * The text may start with a leading negative sign.
+	 *
+	 * While the string must consist of only digits and an optional leading negative sign,
+	 * there is currently no check for overflow of the supplied value.
+	 *
+	 * @param text Takes a valid substring object as the text to parse.
+	 *
+	 * @return The integer value as an int object.
+	 *
+	 * @return True if the text was properly formatted, false otherwise.
+	 *
+	 * @threading This method is thread safe.
+	 */
 	public static int, boolean parse(substring text) {
 		int value = 0;
 		int i = 0;
@@ -175,6 +196,66 @@ public class int {
 		}
 		return false;	
  	}
+
+	public boolean isAlpha() {
+		switch (*this) {
+		case 'A':
+		case 'B':
+		case 'C':
+		case 'D':
+		case 'E':
+		case 'F':
+		case 'G':
+		case 'H':
+		case 'I':
+		case 'J':
+		case 'K':
+		case 'L':
+		case 'M':
+		case 'N':
+		case 'O':
+		case 'P':
+		case 'Q':
+		case 'R':
+		case 'S':
+		case 'T':
+		case 'U':
+		case 'V':
+		case 'W':
+		case 'X':
+		case 'Y':
+		case 'Z':
+		case 'a':
+		case 'b':
+		case 'c':
+		case 'd':
+		case 'e':
+		case 'f':
+		case 'g':
+		case 'h':
+		case 'i':
+		case 'j':
+		case 'k':
+		case 'l':
+		case 'm':
+		case 'n':
+		case 'o':
+		case 'p':
+		case 'q':
+		case 'r':
+		case 's':
+		case 't':
+		case 'u':
+		case 'v':
+		case 'w':
+		case 'x':
+		case 'y':
+		case 'z':
+			return true;
+		}
+		return false;
+	}
+	
 }
 
 public class long {

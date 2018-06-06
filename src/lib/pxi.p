@@ -237,7 +237,7 @@ public runtime.Target sectionType(string name) {
 }
 
 public string sectionTypeName(runtime.Target st) {
-	if (unsigned(int(st)) < unsigned(runtime.Target.FILLER))
+	if (unsigned(int(st)) < unsigned(runtime.Target.MAX_TARGET))
 		return string(st);
 	else
 		return "<unknown>";

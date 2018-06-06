@@ -1787,21 +1787,21 @@ public class Scope {
 	}
 	
 	public ref<Type> enclosingClassType() {
-		ref<ClassScope> scope = enclosingClassScope();
+		ref<ClasslikeScope> scope = enclosingClassScope();
 		if (scope == null)
 			return null;
 		return scope.classType;
 	}
 	
-	public ref<ClassScope> enclosingClassScope() {
+	public ref<ClasslikeScope> enclosingClassScope() {
 		ref<Scope> scope = this;
 		while (scope != null && scope.storageClass() != StorageClass.MEMBER)
 			scope = scope.enclosing();
-		return ref<ClassScope>(scope);
+		return ref<ClasslikeScope>(scope);
 	}
 	
 	public boolean contextAllowsReferenceToThis() {
-		ref<ClassScope> classScope = enclosingClassScope();
+		ref<ClasslikeScope> classScope = enclosingClassScope();
 		if (classScope == null)
 			return false;
 

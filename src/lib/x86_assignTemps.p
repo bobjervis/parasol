@@ -170,6 +170,17 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	AND_ASSIGN:
 		case	EXCLUSIVE_OR_ASSIGN:
 			b = ref<Binary>(node);
+			if (b.type.family() == TypeFamily.STRING) {
+				assert(node.op() == Operator.ADD_ASSIGN);
+				if (b.sethi < 0) {
+					assignLvalueTemps(b.left(), compileContext);
+					assignRegisterTemp(b.right(), RSImask, compileContext);
+				} else {
+					assignRegisterTemp(b.right(), RSImask, compileContext);
+					assignLvalueTemps(b.left(), compileContext);
+				}
+				break;
+			}
 			if (b.left().op() == Operator.SEQUENCE) {
 				b.print(0);
 				assert(false);

@@ -93,6 +93,14 @@ public class Namespace extends Symbol {
 		return _symbols;
 	}
 	
+	public string domain() {
+		return _domain;
+	}
+	/**
+	 * This is the namespace string, excluding the domain.
+	 *
+	 * @return The dotted list of identifiers that compose the namespace.
+	 */
 	public string dottedName() {
 		return _dottedName;
 	}
@@ -1049,6 +1057,10 @@ public class Symbol {
 
 	public ref<UnitScope> enclosingUnit() {
 		return _enclosing.enclosingUnit();
+	}
+
+	public ref<ClasslikeScope> enclosingClassScope() {
+		return _enclosing.enclosingClassScope();
 	}
 
 	public ref<Type> type() {
