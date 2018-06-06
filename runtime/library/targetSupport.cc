@@ -13,12 +13,31 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-#include <stdio.h>
+#include "Parasol/runtime.h"
 
 extern "C" {
 
-int parasol_gFormat(char *buffer, int length, double value, int precision) {
-	return snprintf(buffer, length, "%.*g", precision, value);
+int supportedTarget(int index) {
+	switch (index) {
+#if defined(__WIN64)
+	case 0:			return ST_X86_64_WIN;
+#elif __linux__
+	case 0:			return ST_X86_64_LNX;
+#endif
+	default:		return -1;
+	}
 }
-
+/*
+static int runningTarget() {
+	ExecutionContext *context = threadContext.get();
+	switch (context->target()) {
+#if defined(__WIN64)
+	case NATIVE_64_TARGET:		return ST_X86_64_WIN;
+#elif __linux__
+	case NATIVE_64_TARGET:		return ST_X86_64_LNX;
+#endif
+	default:					return -1;
+	}
+}
+*/
 }
