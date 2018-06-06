@@ -1395,17 +1395,56 @@ public class Scanner {
  * Thus, processing a Doclet string only involves looking for the left-curly braces, then the next
  * character to know what to do. And if you discover a left-curly brace inside the expansion string,
  * it was there in the original comment.
+ *
+ * Not all tagged sections have significance for every documented entity. For example, an author can
+ * be tagged for a namespace or a class, but nothing else. The treatment of @author is, in part, following the lead of 
+ * javadoc system, where authorship seems associated with files, which are almost always classes in
+ * Java.
+ *
+ * In the future, paradoc may be extended to use all tagged sections in the documentation of any entity.
  */
 public class Doclet {
+	/**
+	 * The full text of the comment before any section tags.
+	 */
 	public string text;
+	/**
+	 * The first paragraph of the comment.
+	 */
 	public string summary;
+	/**
+	 * The contents of the {@code @author} tagged section
+	 */
 	public string author;
+	/**
+	 * The contents of the {@code @deprecated} tagged section.
+	 */
 	public string deprecated;
+	/**
+	 * The contents of each {@code @exception} tagged section, in the order they appear in the doclet.
+	 */
 	public string[] exceptions;
+	/**
+	 * The contents of each {@code @param} tagged section, in the order they appear in the doclet.
+	 *
+	 * The parameter name is the first token of the string.
+	 */
 	public string[] params;
+	/**
+	 * The contentsof each {@code @return} tagged section, in the order they appear in the doclet.
+	 */
 	public string[] returns;
+	/**
+	 * The contents of the {@code @see} tagged section.
+	 */
 	public string see;
+	/**
+	 * The contents of the {@code @since} tagged section.
+	 */
 	public string since;
+	/**
+	 * The contents of the {@code @threading} tagged section.
+	 */
 	public string threading;
 }
 

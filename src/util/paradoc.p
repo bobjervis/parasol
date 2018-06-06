@@ -1238,7 +1238,6 @@ string expandDocletString(string text, ref<Symbol> sym, string baseName) {
  */
 string transformLink(string linkTextIn, ref<Symbol> sym, string baseName) {
 	string linkText = linkTextIn.trim();
-	printf("transformLink('%s', '%s', '%s')\n", linkText, sym.name().asString(), baseName);
 	int idx = linkText.indexOf(' ');
 	string caption;
 	if (idx >= 0) {
@@ -1369,7 +1368,6 @@ string transformLink(string linkTextIn, ref<Symbol> sym, string baseName) {
 				linkText = storage.makeCompactPath(path, baseName) + "#" + components[components.length() - 1];
 		}
 	}
-	printf("  path '%s'\n  baseName '%s'\n  linkText '%s'\n", path, baseName, linkText);
 	return "<a href=\"" + linkText + "\">" + caption + "</a>";
 }
 /*

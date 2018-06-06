@@ -172,6 +172,3 @@ public ref<SourceLocation> getSourceLocation(address ip, boolean locationIsExact
 	}
 }
 
-@Linux("libparasol.so.1", "parasol_gFormat")
-public abstract int parasol_gFormat(pointer<byte> buffer, int length, double value, int precision);
-

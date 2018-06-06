@@ -1034,12 +1034,7 @@ public class Writer {
 								buffer.resize(80);
 								if (!precisionSpecified)
 									precision = 6;
-								if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-									C.gcvt(value, precision, &buffer[0]);
-								} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-									runtime.parasol_gFormat(&buffer[0], buffer.length(), value, precision);
-								} else
-									assert(false);									
+								C.gcvt(value, precision, &buffer[0]);
 								for (pointer<byte> b = &buffer[0]; *b != 0; b++) {
 									if (*b == 'e') {
 										if (format[i] == 'G')
