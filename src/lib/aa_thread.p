@@ -198,7 +198,7 @@ public class Thread {
 			e.printStackTrace();
 		}
 	}
-	/*
+	/*
 	 * These are prone to deadlocks. Use with caution.
 	 */
 	public void suspend() {
@@ -749,17 +749,21 @@ private int getCurrentThreadId() {
 }
 
 @Linux("libparasol.so.1", "dupExecutionContext")
+@Windows("parasol.dll", "dupExecutionContext")
 private abstract address dupExecutionContext();
 
 @Linux("libparasol.so.1", "enterThread")
+@Windows("parasol.dll", "enterThread")
 private abstract void enterThread(address newContext, address stackTop);
 
 @Linux("libparasol.so.1", "exitThread")
+@Windows("parasol.dll", "exitThread")
 private abstract void exitThread();
 /*
  * Declare to the C runtime code the location of the Parasol Thread object for this thread.
  */
 @Linux("libparasol.so.1", "parasolThread")
+@Windows("parasol.dll", "parasolThread")
 private abstract address parasolThread(address newThread);
 
 private class Monitor_Poly extends Monitor {

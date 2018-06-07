@@ -629,17 +629,17 @@ BuiltInFunctionMap builtInFunctionMap[] = {
 	{ "- unused -",							null,												0,	0, "" },
 
 	{ "- unused -",							null,												0,	0, "" },
-	{ "injectObjects",						nativeFunction(injectObjects),						2,	1, "parasol" },
+	{ "- unused -",							null,												0,	0, "" },
 	{ "- unused -",							null,												0,	0, "" },
 	{ "- unused -",							null,												0,	0, "" },
 	{ "evalNative",							nativeFunction(evalNative),							4,	1, "parasol" },
 	{ "debugSpawnImpl", 					nativeFunction(processDebugSpawn),					3,	1, "parasol" },
 	{ "disposeOfPayload",					nativeFunction(disposeOfPayload),					1,	0, "parasol" },
 
-	{ "enterThread",						nativeFunction(enterThread),						2,	0, "parasol" },
-	{ "exitThread",							nativeFunction(exitThread),							0,	0, "parasol" },
-	{ "dupExecutionContext",				nativeFunction(dupExecutionContext),				0,	1, "parasol" },
-	{ "parasolThread",						nativeFunction(parasolThread),						1,	1, "parasol" },
+	{ "- unused -",							null,												0,	0, "" },
+	{ "- unused -",							null,												0,	0, "" },
+	{ "- unused -",							null,												0,	0, "" },
+	{ "- unused -",							null,												0,	0, "" },
 	{ "debugSpawnInteractiveImpl",			nativeFunction(processDebugSpawnInteractive),		4,	1, "parasol" },
 	{ 0 }
 };

@@ -20,6 +20,7 @@
 #include "parasol_enums.h"
 #include "pxi.h"
 #include "x86_pxi.h"
+#include "library/exceptionSupport.h"
 
 namespace parasol {
 
@@ -38,33 +39,6 @@ static const int STACK_SIZE = STACK_SLOT * 128 * 1024;
 class Code;
 class Exception;
 class Type;
-
-struct HardwareException {
-	void *codePointer;
-	void *framePointer;
-	void *stackPointer;
-	long long exceptionInfo0;
-	int exceptionInfo1;
-	int exceptionType;
-};
-
-struct StackFrame {
-	byte *fp;
-	byte *code;
-	int ip;
-};
-
-struct StackState {
-	byte *sp;
-	byte *stack;
-	byte *stackTop;
-	Exception *parasolException;
-	StackFrame frame;
-	int target;
-	int exceptionType;
-	int exceptionFlags;
-	void *memoryAddress;			// Valid only for memory exceptions
-};
 
 class ExecutionContext {
 public:
@@ -99,8 +73,6 @@ public:
 	int runNative(int (*start)(void *args));
 
 	void reloadFrame(const StackState &saved);
-
-	int injectObjects(void **objects, int objectCount);
 
 	void registerHardwareExceptionHandler(void (*handler)(HardwareException *exceptionContext));
 
@@ -226,99 +198,6 @@ private:
 	void *_parasolThread;
 };
 
-// Exception table consist of some number of these entries, sorted by ascending location value.
-// Any IP value between the location of one entry and the next is processed by the assicated handler.
-// A handler value of 0 indicates no handler exists.
-class ExceptionEntry {
-public:
-	int location;
-	int handler;
-};
-
-class ExceptionTable {
-public:
-	int length;
-	int capacity;
-	ExceptionEntry *entries;
-};
-
-class ExceptionInfo {
-
-};
-
-class Exception {
-public:
-	void *vtable;
-};
-#if 0
-enum VariantKind {
-	K_EMPTY,			// No value at all, equals null
-	K_INT,				// An integer value
-	K_DOUBLE,			// A double value
-	K_STRING,			// A string value
-	K_OBJECT,			// An object value (pointer to object stored indirectly (not currently supported)
-	K_REF				// A reference to an object (same bits as an object, but
-						// no delete in the destructor
-};
-
-class Variant {
-	friend class ExecutionContext;
-public:
-	Variant() {
-		_kind = null;
-	}
-
-	~Variant() {
-		clear();
-	}
-
-	Variant(const Variant& source) {
-		init(source);
-	}
-
-	Variant(Type *kind, void *value) {
-		_kind = kind;
-		_value.pointer = value;
-	}
-
-	bool equals(Variant &other) const;
-
-	const Variant& operator= (const Variant &source) {
-		clear();
-		init(source);
-		return source;
-	}
-
-	void clear();
-
-	Type *kind() const { return _kind; }
-
-	long long asLong() const { return _value.integer; }
-
-	double asDouble() const { return _value.floatingPoint; }
-
-	void *asRef() const { return _value.pointer; }
-
-	string *asString() { return (string*)&_value.pointer; }
-
-	void setLong(long long x) { _value.integer = x; }
-
-	void setAddress(void *a) { _value.pointer = a; }
-
-private:
-	Type *_kind;
-
-	void init(const Variant& source);
-
-	union {
-		long long	integer;
-		double		floatingPoint;
-//		string		text;				C++ doesn't like this sort of type in a union.
-		void		*pointer;
-	} _value;
-
-};
-#endif
 /*
 	Returns non-null function name for valid index values, null for invalid values (< 0 or > maximum function).
  */
