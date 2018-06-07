@@ -78,8 +78,10 @@ public abstract int eval(int startObject, pointer<pointer<byte>> args, int argsC
 
 public abstract int evalNative(ref<X86_64SectionHeader> header, address image, pointer<pointer<byte>> args, int argsCount);
 
+@Linux("libparasol.so.1", "supportedTarget")
 public abstract int supportedTarget(int index);
 
+@Linux("libparasol.so.1", "runningTarget")
 public abstract int runningTarget();
 
 public abstract pointer<byte> builtInFunctionName(int index);

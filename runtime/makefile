@@ -26,10 +26,11 @@ CFLAGS = -std=c++11 -O3 -I runtime
 all: build/libparasol.so.1 build/parasolrt 
 
 build/parasolrt: build/prep $(COMMON_OBJECTS) $(RUNTIME_OBJECTS)
-	$(CXX) $(CFLAGS) -o build/parasolrt $(COMMON_OBJECTS) $(RUNTIME_OBJECTS) -lpthread -ldl
+	$(CXX) $(CFLAGS) -Lbuild -o build/parasolrt $(COMMON_OBJECTS) $(RUNTIME_OBJECTS) -lpthread -ldl -lparasol
 
 build/libparasol.so.1: $(LIB_OBJECTS)
 	$(CXX) $(CFLAGS) -fPIC -shared -o $@ $(LIB_OBJECTS) -lpthread -ldl
+	ln -sfT libparasol.so.1 build/libparasol.so
 
 $(COMMON_OBJECTS): build/o/%.o : runtime/common/%.cc
 	$(CXX) $(CFLAGS) -c $< $(LIB_PATH) $(LIBS) -o $@

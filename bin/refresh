@@ -10,14 +10,16 @@ mkdir -p "$PARASOL_HOME/build"
 
 (cd "$PARASOL_HOME"; make -f runtime/makefile)
 
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PARASOL_HOME/build
+
 "$PARASOL_HOME/build/parasolrt" "$PARASOL_PXI" "$PARASOL_HOME/compiler/main.p" "--pxi=$PARASOL_HOME/build/p1.pxi" "$PARASOL_HOME/compiler/main.p"
 
 "$PARASOL_HOME/build/parasolrt"  "$PARASOL_HOME/build/p1.pxi" "--pxi=$PARASOL_HOME/build/p2.pxi" "$PARASOL_HOME/compiler/main.p"
-if ! "$PARASOL_HOME/bin/pc" "$PARASOL_HOME/src/util/bdiff.p" "$PARASOL_HOME/build/p1.pxi" "$PARASOL_HOME/build/p2.pxi"
+if ! diff -q "$PARASOL_HOME/build/p1.pxi" "$PARASOL_HOME/build/p2.pxi"
 then
     echo Trying a third generation...
     "$PARASOL_HOME/build/parasolrt"  "$PARASOL_HOME/build/p2.pxi" "--pxi=$PARASOL_HOME/build/p3.pxi" "$PARASOL_HOME/compiler/main.p"
-    if ! "$PARASOL_HOME/bin/pc" "$PARASOL_HOME/src/util/bdiff.p" "$PARASOL_HOME/build/p2.pxi" "$PARASOL_HOME/build/p3.pxi"
+    if ! diff -q "$PARASOL_HOME/build/p2.pxi" "$PARASOL_HOME/build/p3.pxi"
     then
         echo  FAILED: binaries not converging after 3 generations
         exit 1

@@ -3,4 +3,4 @@
 PARASOL_BIN=$(dirname `readlink -f $0`)/..
 export PARASOL_HOME=`readlink -f $PARASOL_BIN`
 
-$PARASOL_HOME/bin/parasolrt $PARASOL_HOME/bin/x86-64-lnx.pxi $PARASOL_HOME/src/util/genHeader.p $@
+$PARASOL_HOME/bin/pc $PARASOL_HOME/src/util/genHeader.p $@

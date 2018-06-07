@@ -14,6 +14,10 @@
    limitations under the License.
  */
 #include "Parasol/runtime.h"
+#include "targetSupport.h"
+#include "Parasol/parasol_enums.h"
+
+namespace parasol {
 
 extern "C" {
 
@@ -27,8 +31,8 @@ int supportedTarget(int index) {
 	default:		return -1;
 	}
 }
-/*
-static int runningTarget() {
+
+int runningTarget() {
 	ExecutionContext *context = threadContext.get();
 	switch (context->target()) {
 #if defined(__WIN64)
@@ -39,5 +43,9 @@ static int runningTarget() {
 	default:					return -1;
 	}
 }
-*/
+
+}
+
+__thread ExecutionContext *ThreadContext::_threadContextValue;
+
 }

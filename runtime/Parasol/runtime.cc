@@ -37,6 +37,7 @@ typedef int BOOL;
 #include <signal.h>
 #endif
 #include "common/process.h"
+#include "library/targetSupport.h"
 #include "basic_types.h"
 
 namespace parasol {
@@ -54,45 +55,6 @@ public:
 
 extern BuiltInFunctionMap builtInFunctionMap[];
 
-#if __linux__
-static __thread ExecutionContext *_threadContextValue;
-#endif
-
-class ThreadContext {
-public:
-	ThreadContext() {
-#if defined(__WIN64)
-		_slot = TlsAlloc();
-#endif
-	}
-
-	bool set(ExecutionContext *value) {
-#if defined(__WIN64)
-		if (TlsSetValue(_slot, value))
-			return true;
-		else
-			return false;
-#elif __linux__
-		_threadContextValue = value;
-		return true;
-#endif
-	}
-
-	ExecutionContext *get() {
-#if defined(__WIN64)
-		return (ExecutionContext*)TlsGetValue(_slot);
-#elif __linux__
-		return _threadContextValue;
-#endif
-	}
-
-private:
-#if defined(__WIN64)
-	DWORD	_slot;
-#endif
-};
-
-static ThreadContext threadContext;
 #if 0
 static int varCompare(byte *left, byte *right);
 // Results stored in left:
@@ -544,29 +506,6 @@ static int processDebugSpawnInteractive(char *command, SpawnPayload *output, str
 
 static void disposeOfPayload(SpawnPayload *output) {
 	delete[] output->buffer;
-}
-
-static int supportedTarget(int index) {
-	switch (index) {
-#if defined(__WIN64)
-	case 0:			return ST_X86_64_WIN;
-#elif __linux__
-	case 0:			return ST_X86_64_LNX;
-#endif
-	default:		return -1;
-	}
-}
-
-static int runningTarget() {
-	ExecutionContext *context = threadContext.get();
-	switch (context->target()) {
-#if defined(__WIN64)
-	case NATIVE_64_TARGET:		return ST_X86_64_WIN;
-#elif __linux__
-	case NATIVE_64_TARGET:		return ST_X86_64_LNX;
-#endif
-	default:					return -1;
-	}
 }
 
 void *formatMessage(unsigned NTStatusMessage) {
