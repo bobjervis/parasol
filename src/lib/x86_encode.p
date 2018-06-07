@@ -208,7 +208,7 @@ class X86_64Encoder extends Target {
 		_segments[Segments.RELOCATIONS] = new Segment<Segments>(4);
 	}
 	
-	boolean generateCode(ref<FileStat> mainFile, int valueOffset, ref<CompileContext> compileContext) {
+	boolean generateCode(ref<FileStat> mainFile, ref<CompileContext> compileContext) {
 		
 		// Initialize storage - somewhere along here needs to happen
 		// 
@@ -432,7 +432,11 @@ class X86_64Encoder extends Target {
 				}
 			} else if (sym.class == PlainSymbol) {
 				ref<PlainSymbol> ps = ref<PlainSymbol>(sym);
-				if (ps.initializer() != null) {
+				if (ps.accessFlags() & Access.COMPILE_TARGET) {
+					long x = long(sectionType());
+					address p = &_code[sym.offset];
+					C.memcpy(p, &x, sym.type().size());
+				} else if (ps.initializer() != null) {
 					switch (ps.initializer().op()) {
 					case	INTEGER:
 						ref<Constant> c = ref<Constant>(ps.initializer());

@@ -37,7 +37,7 @@ typedef int BOOL;
 #include <signal.h>
 #endif
 #include "common/process.h"
-#include "library/targetSupport.h"
+#include "library/threadSupport.h"
 #include "basic_types.h"
 
 namespace parasol {
@@ -209,37 +209,6 @@ void xxdump(byte *x, int len, int match) {
 void stackDump(ExecutionContext *context) {
 	printf("  Stack %p sp %p fp %p\n", context->stack(), context->sp(), context->fp());
 	xxdump(context->sp(), 128, context->fp() - context->sp());
-}
-
-static int eval(int startObject, char **argv, int argc, byte** exceptionInfo) {
-/*
-	printf("In eval(%d, [", startObject);
-	for (int i = 0; i < argc; i++) {
-		if (i > 0)
-			printf(",");
-		printf(" \"%s\"", argv[i]);
-	}
-	printf(" ], %d)\n", argc);
-*/
-	ExecutionContext *context = threadContext.get();
-	StackState outer = context->unloadFrame();
-	context->push(argv, argc);
-	bool result = context->run(startObject);
-	if (result) {
-		WORD result = context->pop();
-		context->reloadFrame(outer);
-		return result;
-	} else {
-		StackState exceptionState = context->unloadFrame();
-		exceptionInfo[0] = exceptionState.frame.code;
-		exceptionInfo[1] = (byte*) (WORD) context->lastIp();
-		exceptionInfo[2] = exceptionState.frame.fp;
-		exceptionInfo[3] = exceptionState.sp;
-		exceptionInfo[4] = exceptionState.stack;
-		exceptionInfo[5] = outer.sp;
-		context->reloadFrame(outer);
-		return INT_MIN;
-	}
 }
 
 int evalNative(X86_64SectionHeader *header, byte *image, char **argv, int argc) {
@@ -636,29 +605,6 @@ ExecutionContext *ExecutionContext::clone() {
 	return newContext;
 }
 
-void enterThread(ExecutionContext *newContext, void *stackTop) {
-	threadContext.set(newContext);
-	newContext->setStackTop(stackTop);
-}
-
-void exitThread() {
-	ExecutionContext *context = threadContext.get();
-	if (context != null) {
-		threadContext.set(null);
-		delete context;
-	}
-}
-
-ExecutionContext *dupExecutionContext() {
-	ExecutionContext *context = threadContext.get();
-	return context->clone();
-}
-
-void *parasolThread(void *newThread) {
-	ExecutionContext *context = threadContext.get();
-	return context->parasolThread(newThread);
-}
-
 BuiltInFunctionMap builtInFunctionMap[] = {
 	{ "print",								nativeFunction(builtInPrint),						1,	1 },
 	{ "formatMessage",						nativeFunction(formatMessage),						1,	1, "native" },
@@ -680,12 +626,12 @@ BuiltInFunctionMap builtInFunctionMap[] = {
 	{ "lowCodeAddress",						nativeFunction(lowCodeAddress),						0,	1, "parasol" },
 	{ "highCodeAddress",					nativeFunction(highCodeAddress),					0,	1, "parasol" },
 	{ "getRuntimeFlags",					nativeFunction(getRuntimeFlags),					0,	1, "parasol" },
-	{ "supportedTarget",					nativeFunction(supportedTarget),					1,	1, "parasol" },
+	{ "- unused -",							null,												0,	0, "" },
 
-	{ "runningTarget",  					nativeFunction(runningTarget), 						0,  1, "parasol" },
+	{ "- unused -",							null,												0,	0, "" },
 	{ "injectObjects",						nativeFunction(injectObjects),						2,	1, "parasol" },
 	{ "- unused -",							null,												0,	0, "" },
-	{ "eval",								nativeFunction(eval),								4,	1, "parasol" },
+	{ "- unused -",							null,												0,	0, "" },
 	{ "evalNative",							nativeFunction(evalNative),							4,	1, "parasol" },
 	{ "debugSpawnImpl", 					nativeFunction(processDebugSpawn),					3,	1, "parasol" },
 	{ "disposeOfPayload",					nativeFunction(disposeOfPayload),					1,	0, "parasol" },

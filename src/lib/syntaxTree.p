@@ -3586,6 +3586,7 @@ public class Node {
 		case	INDIRECT:
 		case	INITIALIZE:
 		case	INTEGER:
+		case	INTERNAL_LITERAL:
 		case	INTERFACE_DECLARATION:
 		case	LABEL:
 		case	LEFT_SHIFT:

@@ -2843,6 +2843,7 @@ public void markLiveSymbols(ref<Node> declarator, StorageClass storageClass, ref
 	case	DESTRUCTOR_LIST:
 	case	EMPTY:
 	case	SYNTAX_ERROR:
+	case	INTERNAL_LITERAL:
 		break;
 		
 	default:

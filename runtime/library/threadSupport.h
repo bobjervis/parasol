@@ -58,9 +58,17 @@ private:
 
 extern ThreadContext threadContext;
 
-extern "C" int supportedTarget(int index);
+extern "C" {
 
-extern "C" int runningTarget();
+void enterThread(ExecutionContext *newContext, void *stackTop);
+
+void exitThread();
+
+void *parasolThread(void *newThread);
+
+ExecutionContext *dupExecutionContext();
+
+}
 
 }
 

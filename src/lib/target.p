@@ -58,7 +58,7 @@ public class Target {
 		}
 		target.populateTypeMap(compileContext);
 		compileContext.target = target;
-		if (target.generateCode(mainFile, countCurrentObjects ? runtime.injectObjects(null, 0) : 0, compileContext))
+		if (target.generateCode(mainFile, compileContext))
 			return target;
 		else
 			return null;
@@ -78,7 +78,7 @@ public class Target {
 		_classType = t.wrappedType();
 	}
 	
-	public abstract boolean generateCode(ref<FileStat> mainFile, int valueOffset, ref<CompileContext> compileContext);
+	public abstract boolean generateCode(ref<FileStat> mainFile, ref<CompileContext> compileContext);
 
 	public address, int allocateImageData(int size, int alignment) {
 		printf("allocateImageData(%d, %d)\n", size, alignment);

@@ -748,12 +748,18 @@ private int getCurrentThreadId() {
 		return -1;
 }
 
+@Linux("libparasol.so.1", "dupExecutionContext")
 private abstract address dupExecutionContext();
+
+@Linux("libparasol.so.1", "enterThread")
 private abstract void enterThread(address newContext, address stackTop);
+
+@Linux("libparasol.so.1", "exitThread")
 private abstract void exitThread();
 /*
  * Declare to the C runtime code the location of the Parasol Thread object for this thread.
  */
+@Linux("libparasol.so.1", "parasolThread")
 private abstract address parasolThread(address newThread);
 
 private class Monitor_Poly extends Monitor {

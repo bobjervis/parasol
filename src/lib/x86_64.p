@@ -302,7 +302,7 @@ public class X86_64 extends X86_64AssignTemps {
 		return _verbose;
 	}
 
-	boolean generateCode(ref<FileStat> mainFile, int valueOffset, ref<CompileContext> compileContext) {
+	boolean generateCode(ref<FileStat> mainFile, ref<CompileContext> compileContext) {
 		cacheCodegenObjects(compileContext);
 		ref<Block> unit = mainFile.tree().root();
 //		printf("unit = %p\n", unit);
@@ -327,7 +327,7 @@ public class X86_64 extends X86_64AssignTemps {
 		}
 		if (_verbose)
 			printf("Variable storage assigned\n");
-		return super.generateCode(mainFile, valueOffset, compileContext);
+		return super.generateCode(mainFile, compileContext);
 	}
 	
 	public void writePxi(ref<Pxi> output) {

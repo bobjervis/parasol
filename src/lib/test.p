@@ -183,8 +183,7 @@ class ConditionalObject extends script.Object {
 			printf("Unexpected section type name in 'target' attribute: '%s'\n", a.toString());
 			return false;
 		}
-		int enabledTarget = int(sectionType);
-		_isEnabled = enabledTarget == runtime.runningTarget();
+		_isEnabled = sectionType == runtime.compileTarget;
 		return true;
 	}
 	

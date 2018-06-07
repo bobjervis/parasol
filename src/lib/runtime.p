@@ -38,7 +38,7 @@ public string RUNTIME_VERSION = "0.1.0";
  * runtime.
  */
 @CompileTarget
-public Target compileTarget = Target.X86_64_WIN;	// TODO: Remove this as there should be magic setting this value
+public Target compileTarget;
 /**
  * The target machine/OS of the code generator is also the identifier of the running environment.
  */
@@ -70,19 +70,11 @@ public enum Target {
 	MAX_TARGET
 }
 
-public abstract int injectObjects(pointer<address> objects, int objectCount);
-
-// eval calls the ByteCodes interpreter.  startObject is the byteCode function that should be run.
-
-public abstract int eval(int startObject, pointer<pointer<byte>> args, int argsCount, pointer<pointer<byte>> exceptionInfo);
-
 public abstract int evalNative(ref<X86_64SectionHeader> header, address image, pointer<pointer<byte>> args, int argsCount);
 
 @Linux("libparasol.so.1", "supportedTarget")
+@Windows("parasol.dll", "supportedTarget")
 public abstract int supportedTarget(int index);
-
-@Linux("libparasol.so.1", "runningTarget")
-public abstract int runningTarget();
 
 public abstract pointer<byte> builtInFunctionName(int index);
 public abstract pointer<byte> builtInFunctionDomain(int index);

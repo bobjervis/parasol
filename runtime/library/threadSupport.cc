@@ -14,13 +14,15 @@
    limitations under the License.
  */
 #include "Parasol/runtime.h"
-#include "targetSupport.h"
+#include "threadSupport.h"
 #include "Parasol/parasol_enums.h"
 
 namespace parasol {
 
 extern "C" {
-
+/*
+ * Used by the compiler to decide what compile target to choose, or validate a selected target.
+ */
 int supportedTarget(int index) {
 	switch (index) {
 #if defined(__WIN64)
@@ -32,16 +34,22 @@ int supportedTarget(int index) {
 	}
 }
 
-int runningTarget() {
+void enterThread(ExecutionContext *newContext, void *stackTop) {
+	threadContext.set(newContext);
+	newContext->setStackTop(stackTop);
+}
+
+void exitThread() {
 	ExecutionContext *context = threadContext.get();
-	switch (context->target()) {
-#if defined(__WIN64)
-	case NATIVE_64_TARGET:		return ST_X86_64_WIN;
-#elif __linux__
-	case NATIVE_64_TARGET:		return ST_X86_64_LNX;
-#endif
-	default:					return -1;
+	if (context != null) {
+		threadContext.set(null);
+		delete context;
 	}
+}
+
+void *parasolThread(void *newThread) {
+	ExecutionContext *context = threadContext.get();
+	return context->parasolThread(newThread);
 }
 
 }
