@@ -13,28 +13,28 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-print("constructor tests\n");
+printf("constructor tests\n");
 constructorTests();
-print("append tests\n");
+printf("append tests\n");
 appendTests();
-print("center tests\n");
+printf("center tests\n");
 centerTests();
-print("indexOf tests\n");
+printf("indexOf tests\n");
 indexOfTests();
-print("printf tests\n");
+printf("printf tests\n");
 printfTests();
-print("substring tests\n");
+printf("substring tests\n");
 substringTests();
 
 void constructorTests() {
 	string s = "abc";
-	print(s);
-	print("\n");
+	printf(s);
+	printf("\n");
 	pointer<byte> cp = &s[1];
 	string s2(cp);
-	print("s2:");
-	print(s2);
-	print("\n");
+	printf("s2:");
+	printf(s2);
+	printf("\n");
 	assert(s2 == "bc");
 	
 	string s3;
@@ -62,13 +62,13 @@ void appendTests() {
 	string b = "def";
 	string c = a;
 	c.append(b);
-	print(c);
-	print("\n");
+	printf(c);
+	printf("\n");
 	assert(c == "abcdef");
 	byte by = '!';
 	c.append(by);
-	print(c);
-	print("\n");
+	printf(c);
+	printf("\n");
 	assert(c == "abcdef!");
 	pointer<byte> p = &c[4];
 	string d;
@@ -76,8 +76,8 @@ void appendTests() {
 	assert(d == "ef");
 	assert(c[3] == 'd');
 	c[3] = 'x';
-	print(c);
-	print("\n");
+	printf(c);
+	printf("\n");
 	assert(c == "abcxef!");
 }
 
@@ -89,26 +89,26 @@ void centerTests() {
 	string a = "abc";
 	
 	string c = a.center(10);
-	print("'");
-	print(c);
-	print("'\n");
+	printf("'");
+	printf(c);
+	printf("'\n");
 	assert(c.length() == 10);
-	print("length ok!\n");
+	printf("length ok!\n");
 	assert(c == "   abc    ");
 	
-	print("value ok!\n");
+	printf("value ok!\n");
 	string d = a.center(12, '#');
-	print("'");
-	print(d);
-	print("'\n");
+	printf("'");
+	printf(d);
+	printf("'\n");
 	assert(d.length() == 12);
-	print("d length ok\n");
+	printf("d length ok\n");
 	assert(d == "####abc#####");
-	print("d value ok\n");
+	printf("d value ok\n");
 }
 
 void indexOfTests() {
-	print("indexOfTests()\n");
+	printf("indexOfTests()\n");
 	string value = "abcdef";
 	
 	assert(value.indexOf('b') == 1);
@@ -133,7 +133,7 @@ void indexOfTests() {
 }
 
 void printfTests() {
-	print("printfTests()\n");
+	printf("printfTests()\n");
 	string s;
 	
 	s.printf("x%%y");
@@ -141,14 +141,14 @@ void printfTests() {
 }
 
 void substringTests() {
-	print("substringTests()\n");
+	printf("substringTests()\n");
 	string full = "abcdef";
 	
 	string prefix = full.substring(0, 3);
 	assert(prefix == "abc");
 	string suffix = full.substring(4);
-	print(suffix);
-	print("\n");
+	printf(suffix);
+	printf("\n");
 	assert(suffix == "ef");
 	string empty = full.substring(3, 3);
 	assert(empty != null);

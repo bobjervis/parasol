@@ -79,10 +79,6 @@ int printf(string format, var... arguments) {
 	return process.printf(format, arguments);
 }
 
-// Use printf instead
-@Deprecated
-abstract int print(string text);
-
 void assert(boolean test) {
 	if (!test)
 		throw AssertionFailedException();

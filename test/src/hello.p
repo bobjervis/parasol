@@ -14,4 +14,4 @@
    limitations under the License.
  */
 // Test of basic 'hello world' compilation.
-print("Hello world!\n");
+printf("Hello world!\n");

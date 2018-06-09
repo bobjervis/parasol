@@ -191,7 +191,7 @@ void basicStringOps() {
 
 void conversions() {
 	var f = "xx";
-	print("conversions\n");
+	printf("conversions\n");
 	string s = string(f);
 	assert(s == "xx");
 	char c = 'g';

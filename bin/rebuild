@@ -27,7 +27,7 @@ then
 fi
 cd "$PARASOL_HOME"
 "$PARASOL_HOME/build/parasolrt" "$PARASOL_HOME/build/p2.pxi" "$PARASOL_HOME/test/drivers/etsTests.p" $@ "--testpxi=$PARASOL_HOME/build/p2.pxi" "$PARASOL_HOME/test/scripts/parasol_tests.ets"
-"$PARASOL_HOME/build/parasolrt" "$PARASOL_PXI" "$PARASOL_HOME/compiler/main.p" "--pxi=$PARASOL_HOME/bin/x86-64-win.pxi" --target=x86-64-win "$PARASOL_HOME/compiler/main.p"
+"$PARASOL_HOME/build/parasolrt" "$PARASOL_PXI" "$PARASOL_HOME/compiler/main.p" "--pxi=$PARASOL_HOME/build/x86-64-win.pxi" --target=x86-64-win "$PARASOL_HOME/compiler/main.p"
 #
 # Can't use bdiff.p for these next file compares, since the compiler is not fully upgraded until all three files are in sync
 #
@@ -36,6 +36,12 @@ then
     cp "$PARASOL_HOME/build/p1.pxi" "$PARASOL_PXI"
 else
 	echo skipping x86-64-lnx.pxi
+fi
+if ! diff -q "$PARASOL_HOME/build/x86-64-win.pxi" "$PARASOL_HOME/bin/x86-64-win.pxi"
+then
+    cp "$PARASOL_HOME/build/x86-64-win.pxi" "$PARASOL_HOME/bin/x86-64-win.pxi"
+else
+	echo skipping x86-64-win.pxi
 fi
 if ! diff -q "$PARASOL_HOME/build/parasolrt" "$PARASOL_HOME/bin/parasolrt"
 then

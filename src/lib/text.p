@@ -22,13 +22,6 @@ import parasol:stream;
 public boolean ignoring;
 public address[] deletedContents;
 
-int printf(string format, var... arguments) {
-	string s;
-	
-	s.printf(format, arguments);
-	return print(s);
-}
-
 public class string extends String<byte> {
 	// The special 'stringAllocationConstructor' allocation class has to be in the string class.
 	// TODO: fix this
@@ -142,6 +135,13 @@ public class string extends String<byte> {
 		appendDigits(value);		
 	}
 	
+	public string(boolean b) {
+		if (b)
+			append("true");
+		else
+			append("false");
+	}
+
 	private string(ref<allocationX> other) {
 		_contents = ref<allocation>(other);
 	}
@@ -529,7 +529,7 @@ public class string extends String<byte> {
 	public int indexOf(string s, int start) {
 		pointer<byte> cp = pointer<byte>(&_contents.data);
 		int tries =  1 + length() - s.length() - start;
-		for (int i = 0; i < tries; i++){
+		for (int i = 0; i < tries; i++){
 			boolean matched = true;
 			for (int j = 0; j < s.length(); j++) {
 				if (cp[i + start + j] != s[j]) {
@@ -575,7 +575,7 @@ public class string extends String<byte> {
 		pointer<byte> cp = pointer<byte>(&_contents.data);
 		int tries =  2 + start - s.length();
 		start += 1 - s.length();
-		for (int i = 0; i < tries; i++){
+		for (int i = 0; i < tries; i++){
 			boolean matched = true;
 			for (int j = 0; j < s.length(); j++) {
 				if (cp[start + j - i] != s[j]) {
@@ -1192,11 +1192,13 @@ class String<class T> {
 		if (_contents != null) {
 			if (_contents.length >= newLength) {
 				_contents.length = newLength;
+				*(pointer<T>(&_contents.data) + newLength) = 0;
 				return;
 			}
 			int oldSize = reservedSize(_contents.length);
 			if (oldSize == newSize) {
 				_contents.length = newLength;
+				*(pointer<T>(&_contents.data) + newLength) = 0;
 				return;
 			}
 		}
@@ -1664,7 +1666,7 @@ public class substring {
 		if (_data == null)
 			return -1;
 		int tries =  1 + _length - s.length() - start;
-		for (int i = 0; i < tries; i++){
+		for (int i = 0; i < tries; i++){
 			boolean matched = true;
 			for (int j = 0; j < s.length(); j++) {
 				if (_data[i + start + j] != s[j]) {
@@ -1697,7 +1699,7 @@ public class substring {
 	public string remove(RegularExpression pattern) {
 		return null;
 	}
-		
+		
 	public void set(int index, char value) {
 	}
 	/*

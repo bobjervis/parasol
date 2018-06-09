@@ -492,7 +492,7 @@ private class PendingChild {
 	public void (ref<linux.siginfo_t_sigchld>, address) handler;
 	public address arg;
 }
-
+/*
 public int debugSpawn(string command, ref<string> output, ref<exception_t> outcome, time.Time timeout) {
 	SpawnPayload payload;
 	
@@ -504,9 +504,10 @@ public int debugSpawn(string command, ref<string> output, ref<exception_t> outco
 	disposeOfPayload(&payload);
 	return result;
 }
-
+*/
 public int, string, exception_t execute(time.Time timeout, string... args) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+/*
 		SpawnPayload payload;
 		string command;
 
@@ -520,6 +521,8 @@ public int, string, exception_t execute(time.Time timeout, string... args) {
 		exception_t outcome = exception_t(payload.outcome);
 		disposeOfPayload(&payload);
 		return result, output, outcome;
+*/
+		return -1, null, exception_t.UNKNOWN_PLATFORM;
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		pointer<byte>[] argv;
 
@@ -589,6 +592,7 @@ public int, string, exception_t execute(time.Time timeout, string... args) {
 }
 
 // TODO: Do we need this or something better?
+/*
 /*public*/private int, string, exception_t spawnInteractive(string command, string stdin, time.Time timeout) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		SpawnPayload payload;
@@ -690,7 +694,7 @@ private abstract int debugSpawnImpl(pointer<byte> command, ref<SpawnPayload> out
 private abstract int debugSpawnInteractiveImpl(pointer<byte> command, ref<SpawnPayload> output, string stdin, long timeout);
 
 private abstract void disposeOfPayload(ref<SpawnPayload> output);
-
+*/
 public void exit(int code) {
 	C.exit(code);
 }

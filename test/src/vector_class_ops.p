@@ -23,13 +23,13 @@ assert(vec_v.length() == 1);
 
 assert(vec_v.get(0) == 3);
 
-print("Basic append / get confirmed\n");
+printf("Basic append / get confirmed\n");
 
 vec_v.clear();
 
 assert(vec_v.length() == 0);
 
-print("clear confirmed\n");
+printf("clear confirmed\n");
 
 for (int i = 0; i < 100; i++) {
 	vec_v.append(0);
@@ -38,46 +38,46 @@ for (int i = 0; i < 100; i++) {
 	
 assert(vec_v.length() == 100);
 
-print("Vector filled to 100 elements\n");
+printf("Vector filled to 100 elements\n");
 
 for (int i = 0; i < 100; i++)
 	assert(vec_v.get(i) == i + 1);
 
-print("vector contents confirmed.\n");
+printf("vector contents confirmed.\n");
 
 vector<int> x;
 
 x.slice(vec_v, 10, 20);
 
-print("sliced\n");
+printf("sliced\n");
 
 assert(x.length() == 10);
 
 for (int i = 0; i < 10; i++)
 	assert(x.get(i) == i + 11);
 
-print("slice confirmed\n");
+printf("slice confirmed\n");
 
 *x.elementAddress(7) = 46;
 
 assert(x.get(7) == 46);
 
-print("elementAddress assignment confirmed\n");
+printf("elementAddress assignment confirmed\n");
 
 vector<string> vs;
 
 vs.append("ab");
-print("'ab' appended\n");
+printf("'ab' appended\n");
 for (int i = 0; i < vs.length(); i++) {
-	print("x1 element:");
-	print(vs.get(i));
-	print("\n");
+	printf("x1 element:");
+	printf(vs.get(i));
+	printf("\n");
 }
 vs.append("cd");
 for (int i = 0; i < vs.length(); i++) {
-	print("x2 element:");
-	print(vs.get(i));
-	print("\n");
+	printf("x2 element:");
+	printf(vs.get(i));
+	printf("\n");
 }
 vs.append("ef");
 vs.append("gh");
@@ -86,23 +86,23 @@ vs.append("ij");
 assert(vs.length() == 5);
 
 for (int i = 0; i < vs.length(); i++) {
-	print("src element:");
-	print(vs.get(i));
-	print("\n");
+	printf("src element:");
+	printf(vs.get(i));
+	printf("\n");
 }
 vector<string> vsCopy;
 
 vsCopy.slice(vs, 2, 4);
 
-print("slice completed\n");
+printf("slice completed\n");
 assert(vsCopy.length() == 2);
 for (int i = 0; i < vsCopy.length(); i++) {
-	print("element:");
-	print(vsCopy.get(i));
-	print("\n");
+	printf("element:");
+	printf(vsCopy.get(i));
+	printf("\n");
 }
 assert(vsCopy.get(0) == "ef");
 assert(vsCopy.get(1) == "gh");
 
-print("Passed\n");
+printf("Passed\n");
 

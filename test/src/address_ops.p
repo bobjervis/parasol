@@ -25,7 +25,7 @@ byte y;
 start = &y;
 end = pointer<byte>(&y) + 3;
 
-print("Address difference test:\n");
+printf("Address difference test:\n");
 
 assert(x != start);
 
@@ -33,13 +33,13 @@ address xx = &y;
 
 assert(xx == start);
 
-print("Basic address operations confirmed.\n");
+printf("Basic address operations confirmed.\n");
 
 address bp;
 
 assert(bp == address(0));
 
-print("Null pointer initialization test passed.\n");
+printf("Null pointer initialization test passed.\n");
 
 pointer<long> zz = pointer<long>(xx);
 

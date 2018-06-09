@@ -23,36 +23,36 @@ int main(string[] args) {
 	g(x, y);
 	boolean looping = true;
 	boolean firstTime = true;
-	print("Starting loop\n");
+	printf("Starting loop\n");
 	while (looping) {
 		if (firstTime) {
-			print("First time\n");
+			printf("First time\n");
 			string s = sb(3);
 		
-			print(s);
-			print("\n");
+			printf(s);
+			printf("\n");
 			assert(s == "abc");
 		
-			print("sb done\n");
+			printf("sb done\n");
 			string aa = "xx" + sb(-2);
-			print("aa done\n");
-			print(aa);
-			print("\n");
+			printf("aa done\n");
+			printf(aa);
+			printf("\n");
 			string t = sb(3) + "xx" + sb(-2);
 		
-			print("added ");
-			print(t);
-			print("\n");
+			printf("added ");
+			printf(t);
+			printf("\n");
 			assert(t == "abcxxdef");
 			firstTime = false;
 		} else {
-			print("Not first time\n");
+			printf("Not first time\n");
 			string x = sb(1);
 			assert(x == "abc");
 			looping = false;
 		}
 	}
-	print("Loop done\n");
+	printf("Loop done\n");
 	return 0;
 }
 

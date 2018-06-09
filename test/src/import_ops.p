@@ -25,16 +25,16 @@ int main(string[] args) {
 	x.z = 5;
 	assert(x.y + 2 == x.z);
 	assert(calledConstructor);
-	print("Passed\n");
+	printf("Passed\n");
 	return 0;
 }
 
 test.SampleEnum se;
 
-print("Setting se\n");
+printf("Setting se\n");
 
 se = test.SampleEnum(2);
 
 assert(se == test.SampleEnum.C);
 
-print("Static initializers finished\n");
+printf("Static initializers finished\n");

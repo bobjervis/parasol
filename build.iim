@@ -2,9 +2,12 @@ package(name: parasol, domain: parasol) {
 	folder(name: bin) {
 		file(name: dumppxi, src: bin)
 		file(name: genhdr, src: bin)
-		file(name: parasolrt, src:bin)
+		link(name: libparasol.so, target: libparasol.so.1)
 		file(name: libparasol.so.1, src:bin)
+		file(name: paradoc, src: bin)
+		file(name: parasolrt, src:bin)
 		file(name: pc, src: bin)
+		file(name: refresh, src: bin)
 		file(name: rebuild, src: bin)
 		file(name: runets, src: bin)
 		file(name: unit, src: bin)
@@ -27,7 +30,6 @@ package(name: parasol, domain: parasol) {
 }
 
 command(name: bdiff, main: src/util/bdiff.p)
-command(name: builtins, main: src/util/builtins.p)
 command(name: dumppxi, main: src/util/dumppxi.p)
 command(name: genHeader, main: src/util/genHeader.p)
 command(name: genSqlProxy, main: src/util/genSqlProxy.p)
@@ -43,10 +45,16 @@ target(os: linux, cpu: x86-64) {
 		folder(name: bin) {
 			file(name: dumppxi, src: bin)
 			file(name: genhdr, src: bin)
+			link(name: libparasol.so, target: libparasol.so.1)
+			elf(name: libparasol.so.1, product: shared) {
+				...
+			}
+			file(name: paradoc, src: bin)
 			elf(name: parasolrt) {
 				...
 			}
 			file(name: pc, src: bin)
+			file(name: refresh, src: bin)
 			file(name: rebuild, src: bin)
 			file(name: runets, src: bin)
 			file(name: unit, src: bin)

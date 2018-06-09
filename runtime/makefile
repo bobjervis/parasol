@@ -21,15 +21,15 @@ COMMON_OBJECTS = $(COMMON_FILES:runtime/common/%.cc=build/o/%.o)
 RUNTIME_OBJECTS = $(RUNTIME_FILES:runtime/Parasol/%.cc=build/o/%.o)
 LIB_OBJECTS = $(LIB_FILES:runtime/library/%.cc=build/o/%.o)
 
-CFLAGS = -std=c++11 -O3 -I runtime
+CFLAGS = -std=c++11 -O3 -I runtime -fPIC -g
 
 all: build/libparasol.so.1 build/parasolrt 
 
-build/parasolrt: build/prep $(COMMON_OBJECTS) $(RUNTIME_OBJECTS)
-	$(CXX) $(CFLAGS) -Lbuild -o build/parasolrt $(COMMON_OBJECTS) $(RUNTIME_OBJECTS) -lpthread -ldl -lparasol
+build/parasolrt: build/prep $(RUNTIME_OBJECTS)
+	$(CXX) $(CFLAGS) -Lbuild -o build/parasolrt $(RUNTIME_OBJECTS) -lpthread -ldl -lparasol
 
-build/libparasol.so.1: $(LIB_OBJECTS)
-	$(CXX) $(CFLAGS) -fPIC -shared -o $@ $(LIB_OBJECTS) -lpthread -ldl
+build/libparasol.so.1: $(COMMON_OBJECTS) $(LIB_OBJECTS)
+	$(CXX) $(CFLAGS) -fPIC -shared -o $@ $(COMMON_OBJECTS) $(LIB_OBJECTS) -lpthread -ldl
 	ln -sfT libparasol.so.1 build/libparasol.so
 
 $(COMMON_OBJECTS): build/o/%.o : runtime/common/%.cc

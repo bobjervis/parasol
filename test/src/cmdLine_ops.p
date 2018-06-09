@@ -35,10 +35,10 @@ private TestCommand testCommand;
 
 int main(string[] args) {
 	if (!testCommand.parse(args)) {
-		print("Arguments parse failed\n");
+		printf("Arguments parse failed\n");
 		return 7;
 	}
-	print("Arguments parse succeeded\n");
+	printf("Arguments parse succeeded\n");
 	string[] params = testCommand.finalArgs();
 	pointer<long> xp = pointer<long>(&params);
 	if (params.length() == 2) {

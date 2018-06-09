@@ -82,7 +82,7 @@ void destructorTests() {
 	// If the destructor gets called for s, then there should only be one 'x'
 	// character in it on the second iteration.
 	for (int i = 0; i < 2; i++) {
-		print("iteration\n");
+		printf("iteration\n");
 		string s;
 		s.append("x");
 		assert(s.length() == 1);

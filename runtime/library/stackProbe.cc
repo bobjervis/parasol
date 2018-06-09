@@ -22,6 +22,11 @@
  * conventions, the code is the same three instructions, but Windows uses a different set of instructions than
  * Linux does.
  */
+#include "executionContext.h"
+#include "threadSupport.h"
+
+namespace parasol {
+
 extern "C" {
 
 void callAndSetFramePtr(void *newRbp, void *newRip, void *arg) {
@@ -46,6 +51,13 @@ void *framePointer() {
 	asm("mov %rbp,%rax");
 	asm("ret");
 	return 0;
+}
+
+byte *stackTop() {
+	ExecutionContext *context = threadContext.get();
+	return context->stackTop();
+}
+
 }
 
 }

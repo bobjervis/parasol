@@ -94,7 +94,7 @@ int main(string[] args) {
 	d *= 3;
 	assert(d == 51);
 
-	print("multiply-assign ok\n");
+	printf("multiply-assign ok\n");
 	d = 17;
 	d /= 3;
 	assert(d == 5);
@@ -110,7 +110,7 @@ int main(string[] args) {
 	d = 17;
 	d >>= 1;
 	assert(d == 8);
-	print("right-shift-assign ok\n");
+	printf("right-shift-assign ok\n");
 	d = 17;
 	d >>>= 1;
 	assert(d == 8);
@@ -127,7 +127,7 @@ int main(string[] args) {
 	d = 17;
 	assert((d ^= b) == 17);
 
-	print("xor-assign ok\n");
+	printf("xor-assign ok\n");
 	d = 17;
 	assert((d &= a) == 1);
 
@@ -137,19 +137,19 @@ int main(string[] args) {
 	d = 17;
 	assert((d -= a) == 16);
 
-	print("subtract-assign ok\n");
+	printf("subtract-assign ok\n");
 	d = 17;
 	assert((d *= 3) == 51);
 
-	print("multiply-assign ok\n");
+	printf("multiply-assign ok\n");
 	d = 17;
 	assert((d /= 3) == 5);
 
-	print("divide-assign ok\n");
+	printf("divide-assign ok\n");
 	d = 17;
 	assert((d %= 5) == 2);
 
-	print("remainder-assign ok\n");
+	printf("remainder-assign ok\n");
 	d = 17;
 	assert((d <<= 3) == 0x88);
 
@@ -176,7 +176,7 @@ int main(string[] args) {
 	assert(d-- == 17);
 	assert(d == 16);
 
-	print("post decrement ok\n");
+	printf("post decrement ok\n");
 	d = 17;
 	assert(func(d) == 17);
 	return 0;

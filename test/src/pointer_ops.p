@@ -25,7 +25,7 @@ byte y;
 start = pointer<byte>(&y);
 end = pointer<byte>(&y) + 3;
 
-print("Byte pointer difference test:\n");
+printf("Byte pointer difference test:\n");
 assert(end - start == 3); 
 
 pointer<int> sL, eL;
@@ -33,13 +33,13 @@ pointer<int> sL, eL;
 sL = pointer<int>(&x);
 eL = pointer<int>(&x) + 3;
 
-print("Int pointer difference test:\n");
+printf("Int pointer difference test:\n");
 
 assert(eL - sL == 3); 
 
 assert(pointer<byte>(eL) - pointer<byte>(sL) == 3 * int.bytes);
 
-print("Increment/decrement tests:\n");
+printf("Increment/decrement tests:\n");
 sL++;
 
 assert(eL - sL == 2);
@@ -56,7 +56,7 @@ sL -= 2;
 
 assert(eL - sL == 1);
 
-print("Basic pointer arithmetic confirmed.\n");
+printf("Basic pointer arithmetic confirmed.\n");
 
 boolean coerceTest1(address data) {
 	ref<boolean> resultp = ref<boolean>(data);
@@ -69,13 +69,13 @@ boolean coerceFlag2 = false;
 assert(coerceTest1(&coerceFlag1));
 assert(!coerceTest1(&coerceFlag2));
 
-print("Coercion tests passed.\n");
+printf("Coercion tests passed.\n");
 
 ref<byte> bp;
 
 assert(bp == ref<byte>(0));
 
-print("Null pointer initialization test passed.\n");
+printf("Null pointer initialization test passed.\n");
 
 address retAddress(ref<int> p) {
 	return p;
@@ -85,7 +85,7 @@ assert(sL == retAddress(sL));
 
 ref<int> xp = sL;
 
-print("pointer -> ref conversion test passed.\n");
+printf("pointer -> ref conversion test passed.\n");
 
 pointer<int> arrayElemPtr;
 
@@ -94,18 +94,18 @@ int[] a;
 a.append(3);
 a.append(4);
 
-print("Array constructed.\n");
+printf("Array constructed.\n");
 
 arrayElemPtr = &a[1];
 
 assert(*arrayElemPtr == 4);
 assert(arrayElemPtr[-1] == 3);
 
-print("Array contents confirmed via pointers.\n");
+printf("Array contents confirmed via pointers.\n");
 
 ff();
 
-print("Pointer tests passed.\n");
+printf("Pointer tests passed.\n");
 
 void ff() {
 	byte b = 3;

@@ -70,7 +70,9 @@ public enum Target {
 	MAX_TARGET
 }
 
-public abstract int evalNative(ref<X86_64SectionHeader> header, address image, pointer<pointer<byte>> args, int argsCount);
+@Linux("libparasol.so.1", "eval")
+@Windows("parasol.dll", "eval")
+public abstract int eval(ref<X86_64SectionHeader> header, address image, long runtimeFlags, pointer<pointer<byte>> args, int argsCount);
 
 @Linux("libparasol.so.1", "supportedTarget")
 @Windows("parasol.dll", "supportedTarget")
@@ -82,8 +84,14 @@ public abstract address builtInFunctionAddress(int index);
 public abstract int builtInFunctionArguments(int index);
 public abstract int builtInFunctionReturns(int index);
 
+@Linux("libparasol.so.1", "lowCodeAddress")
+@Windows("parasol.dll", "lowCodeAddress")
 public abstract pointer<byte> lowCodeAddress();
+@Linux("libparasol.so.1", "highCodeAddress")
+@Windows("parasol.dll", "highCodeAddress")
 public abstract pointer<byte> highCodeAddress();
+@Linux("libparasol.so.1", "stackTop")
+@Windows("parasol.dll", "stackTop")
 public abstract address stackTop();
 
 /**
@@ -101,8 +109,11 @@ public abstract address returnAddress();
  * for this method is unavailable. 
  */
 @Linux("libparasol.so.1", "framePointer")
+@Windows("parasol.dll", "framePointer")
 public abstract address framePointer();
 
+@Linux("libparasol.so.1", "getRuntimeFlags")
+@Windows("parasol.dll", "getRuntimeFlags")
 public abstract long getRuntimeFlags();
 
 public address allocateRegion(long length) {
@@ -138,8 +149,14 @@ public class SourceLocation {
 	public int				offset;			// Code location
 }
 
+@Linux("libparasol.so.1", "setSourceLocations")
+@Windows("parasol.dll", "setSourceLocations")
 abstract void setSourceLocations(address location, int count);
+@Linux("libparasol.so.1", "sourceLocations")
+@Windows("parasol.dll", "sourceLocations")
 abstract pointer<SourceLocation> sourceLocations();
+@Linux("libparasol.so.1", "sourceLocationsCount")
+@Windows("parasol.dll", "sourceLocationsCount")
 abstract int sourceLocationsCount();
 
 public ref<SourceLocation> getSourceLocation(address ip, boolean locationIsExact) {

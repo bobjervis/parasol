@@ -22,7 +22,7 @@ int main(string[] args) {
 	boolean c = true;
 	boolean d = false;
 
-	print("Begin basic operations tests...\n");
+	printf("Begin basic operations tests...\n");
 	
 	// All of these expressions should be true (given the above)
 
@@ -36,7 +36,7 @@ int main(string[] args) {
 	assert(a != b);
 	assert(d != c);
 	
-	print("Begin assignment operators tests...\n");
+	printf("Begin assignment operators tests...\n");
 	
 	// Assigning true should make the result variable true
 
@@ -89,7 +89,7 @@ int main(string[] args) {
 
 	assert(CONST);
 	
-	print("Logical tests\n");
+	printf("Logical tests\n");
 	
 	logicalTests();
 	return 0;

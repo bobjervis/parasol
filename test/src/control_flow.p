@@ -19,13 +19,13 @@ int main(string[] args) {
 	int k = 7, m = 22;
 	
 	if (k < m)
-		print("k < m\n");
+		printf("k < m\n");
 	else
 		assert(false);
 	if (i == j)
 		assert(false);
 	else
-		print("i != j\n");
+		printf("i != j\n");
 	int count = 0;
 	while (i < k) {
 		i++;

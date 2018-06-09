@@ -15,7 +15,7 @@
  */
 #ifndef _TARGET_SUPPORT_H
 #define _TARGET_SUPPORT_H
-#include "Parasol/runtime.h"
+#include "executionContext.h"
 
 namespace parasol {
 
@@ -57,18 +57,6 @@ private:
 };
 
 extern ThreadContext threadContext;
-
-extern "C" {
-
-void enterThread(ExecutionContext *newContext, void *stackTop);
-
-void exitThread();
-
-void *parasolThread(void *newThread);
-
-ExecutionContext *dupExecutionContext();
-
-}
 
 }
 

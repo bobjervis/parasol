@@ -282,7 +282,7 @@ public class UTF8Writer {
 	}
 	
 	public int write(int c) {
-		if (c <= 0x7f) {
+		if (c <= 0x7f) {
 			_writer.write(byte(c));
 			return 1;
 		} else if (c <= 0x7ff) {
@@ -1208,6 +1208,11 @@ public class Writer {
 
 									if (s == null)
 										s = "<null>";
+									nextArgument++;
+									cp = s.c_str();
+									len = s.length();
+								} else if (arguments[nextArgument].class == boolean) {
+									s = string(boolean(arguments[nextArgument]));
 									nextArgument++;
 									cp = s.c_str();
 									len = s.length();

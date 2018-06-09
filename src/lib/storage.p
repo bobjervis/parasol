@@ -330,6 +330,21 @@ public boolean createSymLink(string oldPath, string newPath) {
 		return false;
 }
 
+public string readSymLink(string path) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		string buffer;
+		linux.statStruct s;
+		if (linux.lstat(path.c_str(), &s) != 0)
+			return null;
+		buffer.resize(int(s.st_size));						// Parasol strings null terminate
+		int length = linux.readlink(path.c_str(), &buffer[0], buffer.length());
+		if (length == s.st_size)
+			return buffer;
+	}
+	return null;
+}
+
 public boolean makeDirectory(string path) {
 	return makeDirectory(path, false);
 }
@@ -453,6 +468,18 @@ public boolean copyDirectoryTree(string source, string destination, boolean tryA
 			if (isDirectory(filepath)) {
 				if (!copyDirectoryTree(filepath, destFilename, tryAllFiles)) {
 					delete dir;
+					if (!tryAllFiles)
+						deleteDirectoryTree(destination);
+					return false;
+				}
+			} else if (isSymLink(filepath)) {
+				string target = readSymLink(filepath);
+				if (target == null) {
+					if (!tryAllFiles)
+						deleteDirectoryTree(destination);
+					return false;
+				}
+				if (!createSymLink(target, destFilename)) {
 					if (!tryAllFiles)
 						deleteDirectoryTree(destination);
 					return false;

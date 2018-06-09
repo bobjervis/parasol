@@ -223,8 +223,6 @@ class X86_64Encoder extends Target {
 		}
 		appendExceptionEntry(int.MAX_VALUE, null);
 		
-		assignBuiltInVectors();
-
 		_pxiHeader.typeDataOffset = _code.length();
 		
 		populateVTables(compileContext);
@@ -355,11 +353,6 @@ class X86_64Encoder extends Target {
 			case	INT_CONSTANT:
 				location = f.locationSymbol.offset + f.location;
 				C.memcpy(&_code[location], &f.value, f.locationSymbol.type().size());
-				break;
-				
-			case	BUILTIN32:						// Fixup value is builtIn index
-				*ref<int>(&_code[f.location]) = _pxiHeader.builtInOffset + int(f.value) * long.bytes - 
-								(f.location + int.bytes);
 				break;
 				
 			case	NATIVE32:
@@ -2883,10 +2876,7 @@ class X86_64Encoder extends Target {
 				inst(X86.SUB, TypeFamily.ADDRESS, R.RSP, 16);
 			emit(0xff);
 			modRM(0, 2, 5);
-			if (functionScope.nativeBinding)
-				fixup(FixupKind.NATIVE32, functionScope.value);
-			else
-				fixup(FixupKind.BUILTIN32, functionScope.value);
+			fixup(FixupKind.NATIVE32, functionScope.value);
 			emitInt(0);
 			if (sectionType() == runtime.Target.X86_64_WIN)
 				inst(X86.ADD, TypeFamily.ADDRESS, R.RSP, 16);
@@ -2928,10 +2918,7 @@ class X86_64Encoder extends Target {
 			// MOV
 			emit(0x8b);
 			modRM(0, rmValues[dest], 5);
-			if (functionScope.nativeBinding)
-				fixup(FixupKind.NATIVE32, functionScope.value);
-			else
-				fixup(FixupKind.BUILTIN32, functionScope.value);
+			fixup(FixupKind.NATIVE32, functionScope.value);
 			emitInt(0);
 		} else {
 			// LEA
@@ -2963,10 +2950,7 @@ class X86_64Encoder extends Target {
 			emit(byte(REX_W | rexValues[dest]));
 			emit(0x8b);
 			modRM(0, rmValues[dest], 5);
-			if (functionScope.nativeBinding)
-				fixup(FixupKind.NATIVE32, functionScope.value);
-			else
-				fixup(FixupKind.BUILTIN32, functionScope.value);
+			fixup(FixupKind.NATIVE32, functionScope.value);
 			emitInt(0);
 			break;
 			
@@ -3784,23 +3768,6 @@ class X86_64Encoder extends Target {
 		 _fixups = f;
 	}
 	
-	private void assignBuiltInVectors() {
-		
-		for (ref<Fixup> f = _fixups; f != null; f = f.next) {
-			if (f.kind == FixupKind.BUILTIN32) {
-				int b = int(f.value) - 1;
-				f.value = address(assignBuiltInVector(b));
-			}
-		}
-		_pxiHeader.builtInsText = _segments[Segments.BUILT_INS_TEXT].length();
-		for (int i = 0; i < _builtIns.length(); i++) {
-			int location = _segments[Segments.BUILT_INS].reserve(long.bytes);
-			*ref<long>(_segments[Segments.BUILT_INS].at(location)) = _builtIns[i];
-			string name(runtime.builtInFunctionName(_builtIns[i]));
-			_segments[Segments.BUILT_INS_TEXT].append(&name[0], name.length() + 1);
-		}
-	}
-	
 	private int assignBuiltInVector(int builtInId) {
 		int i;
 		for (i = 0; i < _builtIns.length(); i++)
@@ -3874,7 +3841,6 @@ enum FixupKind {
 	ABSOLUTE64_TYPE,				// Fixup value is a ref<Type>
 	ABSOLUTE64_VTABLE,				// Fixup value is a ref<ClassScope>
 	INT_CONSTANT,					// Fixup value is the value of the constant
-	BUILTIN32,						// Fixup value is builtIn index
 	NATIVE32,						// Fixup value is NativeBindings index
 }
 
@@ -3901,7 +3867,6 @@ class Fixup {
 		case	ABSOLUTE64_TYPE:				// Fixup value is a ref<Type>
 		case	ABSOLUTE64_VTABLE:				// Fixup value is a ref<Type>
 		case	INT_CONSTANT:
-		case	BUILTIN32:						// Fixup value is builtIn index
 		case	NATIVE32:						// Fixup value is nativeBindings index
 			printf("    @%x %s %p\n", location, string(kind), value);
 			break;

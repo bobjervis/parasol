@@ -16,6 +16,7 @@
 namespace parasol:http;
 
 import parasol:log;
+import parasol:process;
 import parasol:storage.File;
 import parasol:storage.openBinaryFile;
 import parasol:storage.Seek;
@@ -482,14 +483,14 @@ public class HttpResponse {
 	 * This function is supplied as a debugging aid.
 	 */
 	public void print() {
-		text.printf("HttpResponse\n");
-		text.printf("  HTTP Version     %s\n", httpVersion);
-		text.printf("  Code             %s\n", code);
-		text.printf("  Reason           %s\n", reason);
+		process.printf("HttpResponse\n");
+		process.printf("  HTTP Version     %s\n", httpVersion);
+		process.printf("  Code             %s\n", code);
+		process.printf("  Reason           %s\n", reason);
 		if (headers.size() > 0)
-			text.printf("  Headers:\n");
+			process.printf("  Headers:\n");
 		for (string[string].iterator i = headers.begin(); i.hasNext(); i.next()) {
-			text.printf("    %-20s %s\n", i.key(), i.get());
+			process.printf("    %-20s %s\n", i.key(), i.get());
 		}
 	}
 }
@@ -629,7 +630,7 @@ public class HttpParser {
 				
 			case QUERY_DELIM:
 				for (;;) {
-					ch = _connection.read();
+					ch = _connection.read();
 					if (ch == -1)
 						return _tokenValue != null;
 					switch (urlClass[ch]) {
@@ -843,7 +844,7 @@ public class HttpParser {
 				break;
 				
 			default:
-				if (pendingWhiteSpace){
+				if (pendingWhiteSpace){
 					_tokenValue.append(' ');
 					pendingWhiteSpace = false;
 				}

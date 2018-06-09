@@ -33,20 +33,12 @@
 
 namespace fileSystem {
 
-FILE* openTextFile(const string& filename);
-
-FILE* createTextFile(const string& filename);
-
 FILE* openBinaryFile(const string& filename);
 
-FILE* createBinaryFile(const string& filename);
-
-bool createBackupFile(const string& filename);
-
-string basename(const string& filename);
+//string basename(const string& filename);
 string directory(const string& filename);
-string absolutePath(const string& filename);
-const char* extension(const string& filename);
+//string absolutePath(const string& filename);
+//const char* extension(const string& filename);
 /*
  *	Construct path
  *
@@ -60,7 +52,7 @@ const char* extension(const string& filename);
  *		   resulting string is returned.
  */
 string constructPath(const string& directory, const string& baseName, const string& extension);
-
+/*
 static const long long UNITS_PER_SECOND = 10000000;			// Record as 100 nsec units.
 static const long long NANOS_PER_TIMESTAMP = 100;
 
@@ -151,6 +143,7 @@ bool writable(const string& fn);
 bool isDirectory(const string& filename);
 bool ensure(const string& dir);
 bool readAll(FILE* fp, string* output);
+*/
 /*
  *	pathRelativeTo
  *
@@ -166,7 +159,7 @@ bool readAll(FILE* fp, string* output);
  *		relative.  If the baseFilename has no directory, then the 'filename'
  *		argument is returned with a '.' directory added.
  */
-string pathRelativeTo(const string& filename, const string& baseFilename);
+//string pathRelativeTo(const string& filename, const string& baseFilename);
 /*
  *	isRelativePath
  *
@@ -177,7 +170,7 @@ string pathRelativeTo(const string& filename, const string& baseFilename);
  *	not begin with a /.  In Windows it is relative if it contains neither a
  *	drive specifier (:) not does it begin with a / or a \.
  */
-bool isRelativePath(const string& filename);
+//bool isRelativePath(const string& filename);
 /*
  *	makeCompactPath
  *
@@ -191,6 +184,7 @@ bool isRelativePath(const string& filename);
  *	If no suitable relative path can be constructed, the absolutePath(filename)
  *	is returned.
  */
+/*
 string makeCompactPath(const string& filename, const string& baseFilename);
 
 class Directory {
@@ -218,5 +212,5 @@ private:
 	string				_directory;
 	string				_wildcard;
 };
-
+ */
 }  // namespace fileSystem

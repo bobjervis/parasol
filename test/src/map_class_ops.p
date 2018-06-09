@@ -19,13 +19,13 @@ printf("%d\n", long.MIN_VALUE);
 
 assert(testMap.size() == 0);
 
-print("Before\n");
+printf("Before\n");
 *testMap.createEmpty("abc") = "xyz";
-print("After\n");
+printf("After\n");
 *testMap.createEmpty("def") = "mno";
-print("After 2\n");
+printf("After 2\n");
 assert(testMap.get("abc") == "xyz");
-print("Done!\n");
+printf("Done!\n");
 
 map<int, string> intMap;
 
@@ -35,7 +35,7 @@ intMap.set("abc", 1);
 
 assert(intMap.get("abc") == 1);
 
-print("intMap passed\n");
+printf("intMap passed\n");
 
 map<string, string> deletingMap;
 
@@ -47,7 +47,7 @@ boolean saw123, saw456, saw789, saw246;
 
 assert(deletingMap.size() == 3);
 
-print("deletingMap phase I passed\n");
+printf("deletingMap phase I passed\n");
 
 iterateMap();
 assert(saw123);
@@ -55,7 +55,7 @@ assert(saw456);
 assert(saw789);
 assert(!saw246);
 
-print("deletingMap phase Ia passed\n");
+printf("deletingMap phase Ia passed\n");
 
 deletingMap.remove("def");
 
@@ -63,7 +63,7 @@ assert(deletingMap.size() == 2);
 
 assert(deletingMap.get("def") == null);
 
-print("deletingMap phase II passed\n");
+printf("deletingMap phase II passed\n");
 
 iterateMap();
 assert(saw123);
@@ -75,7 +75,7 @@ deletingMap.set("def", "246");
 
 assert(deletingMap.size() == 3);
 
-print("deletingMap phase III passed\n");
+printf("deletingMap phase III passed\n");
 
 iterateMap();
 assert(saw123);
@@ -83,7 +83,7 @@ assert(!saw456);
 assert(saw789);
 assert(saw246);
 
-print("deletingMap phase IV passed\n");
+printf("deletingMap phase IV passed\n");
 
 
 void iterateMap() {
@@ -93,8 +93,8 @@ void iterateMap() {
 	saw246 = false;
 	int n = 0;
 	for (map<string, string>.iterator i = deletingMap.begin(); i.hasNext(); i.next(), n++) {
-		print(i.key());
-		print("\n");
+		printf(i.key());
+		printf("\n");
 		switch (i.get()) {
 		case "123":
 			assert(i.key() == "abc");

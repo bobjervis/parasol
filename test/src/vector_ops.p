@@ -15,14 +15,14 @@
  */
 int[] x;
 
-print("Phase I: simple integer array\n");
+printf("Phase I: simple integer array\n");
 
 x.resize(10);
 
 for (int i = 0; i < x.length(); i++)
 	x[i] = i;
 
-print("Phase II: Append values to integer array\n");
+printf("Phase II: Append values to integer array\n");
 
 int[] v;
 
@@ -36,7 +36,7 @@ assert(v.length() == 100);
 for (int i = 0; i < 100; i++)
 	assert(v[i] == i + 1);
 	
-print("Phase III: Summing the values in an array\n");
+printf("Phase III: Summing the values in an array\n");
 
 int y = 0;
 
@@ -58,7 +58,7 @@ int[] f() {
 	return a;
 }
 
-print("Phase IV: Returning an array by value\n");
+printf("Phase IV: Returning an array by value\n");
 
 int[] xx;
 
@@ -74,21 +74,21 @@ enum E {
    EC
 }
 
-print("Phase V: Enum array\n");
+printf("Phase V: Enum array\n");
 
 int[E] e;
 
-print("append first\n");
+printf("append first\n");
 
 e.append(2);
-print("append second\n");
+printf("append second\n");
 
 e.append(5);
-print("append third\n");
+printf("append third\n");
 
 e.append(17);
 
-print("check first\n");
+printf("check first\n");
 
 string s("E is ");
 s.append(byte('a' + int(e.length())));
@@ -103,8 +103,7 @@ for (int i = 0; i < 3; i++) {
 }
 printf("\n");
 
-print(s);
-print("\n");
+printf("%s\n", s);
 assert(e[E.EA] == 2);
 assert(e[E.EC] == 17);
 

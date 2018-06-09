@@ -43,7 +43,6 @@ public address alloc(long size) {
  * This implements the 'delete' operator. It is called from inline code.
  */
 public void free(address p) {
-//	print("free\n");
 	if (currentHeap != null)
 		currentHeap.free(p);
 	else
@@ -60,10 +59,9 @@ private LeakHeap leakHeap;
 
 exception.registerHardwareExceptionHandler(exception.hardwareExceptionHandler);
 
-if ((runtime.getRuntimeFlags() & LEAKS_FLAG) != 0) {
+if ((runtime.getRuntimeFlags() & LEAKS_FLAG) != 0)
 	currentHeap = &leakHeap;
-	print("Checking for leaks!\n");
-} else
+else
 	currentHeap = &heap;
 /*
  * Set up the process streams as soon as the heap is established.

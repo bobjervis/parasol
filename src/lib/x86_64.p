@@ -288,7 +288,6 @@ public class X86_64 extends X86_64AssignTemps {
 	private ref<Symbol> _doubleSignMask;
 	private ref<Symbol> _doubleOne;
 	
-//	private byte[] _data;
 	public int maxTypeOrdinal;
 	private boolean _verbose;
 	private int _stackLocalVariables;
@@ -341,14 +340,6 @@ public class X86_64 extends X86_64AssignTemps {
 			runArgs.append(args[i].c_str());
 		int returnValue;
 		pointer<address> pa = pointer<address>(&_staticMemory[_pxiHeader.builtInOffset]);
-		for (int i = 0; i < _pxiHeader.builtInCount; i++) {
-			if (unsigned(int(*pa)) > 80) {
-				printf("pa = %p *pa = %d\n", pa, *pa);
-				assert(false);
-			}
-			*pa = runtime.builtInFunctionAddress(int(*pa));
-			pa++;
-		}
 		pointer<runtime.SourceLocation> outerSource = runtime.sourceLocations();
 		int outerSourceCount = runtime.sourceLocationsCount();
 		if (runtime.makeRegionExecutable(_staticMemory, _staticMemoryLength)) {
@@ -397,7 +388,7 @@ public class X86_64 extends X86_64AssignTemps {
 				}
 			}
 			runtime.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
-			returnValue = runtime.evalNative(&_pxiHeader, _staticMemory, &runArgs[0], runArgs.length());
+			returnValue = runtime.eval(&_pxiHeader, _staticMemory, 0, &runArgs[0], runArgs.length());
 		} else {
 			pointer<byte> generatedCode = pointer<byte>(runtime.allocateRegion(_staticMemoryLength));
 			C.memcpy(generatedCode, _staticMemory, _staticMemoryLength);
@@ -441,7 +432,7 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			if (runtime.makeRegionExecutable(generatedCode, _staticMemoryLength)) {
 				runtime.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
-				returnValue = runtime.evalNative(&_pxiHeader, generatedCode, &runArgs[0], runArgs.length());
+				returnValue = runtime.eval(&_pxiHeader, generatedCode, 0, &runArgs[0], runArgs.length());
 			} else {
 				assert(false);
 				return 0, false;
@@ -516,19 +507,6 @@ public class X86_64 extends X86_64AssignTemps {
 						functionScope.value = v;
 						functionScope.nativeBinding = true;
 						return functionScope, true;
-					}
-					// Runtime built-ins, accessed via ordinal. 
-					for (int i = 0;; i++) {
-						pointer<byte> name = runtime.builtInFunctionName(i);
-						if (name == null)
-							break;
-						// TODO: Add code to verify correct domain/namespace.
-						if (func.name().value().equals(name)) {
-							address v = address(long(i + 1));
-							fsym.value = v;
-							functionScope.value = v;
-							return functionScope, true;
-						}
 					}
 					func.add(MessageId.UNDEFINED_BUILT_IN, compileContext.pool(), func.name().value());
 					return null, false;

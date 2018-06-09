@@ -17,12 +17,21 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
-#include "common/process.h"
-#include "basic_types.h"
-#include "pxi.h"
+#include "library/pxi.h"
 #include "common/command_line.h"
 #include "common/file_system.h"
 #include "common/platform.h"
+/*
+ * Date and Copyright holder of this code base.
+ */
+#define COPYRIGHT_STRING "2015 Robert Jervis"
+/*
+ * Major Release: Incremented when a breaking change is released
+ * Minor Feature Release: Incremented when significant new features
+ * are released.
+ * Fix Release: Incremented when big fixes are released.
+ */
+#define RUNTIME_VERSION "1.0.0"
 /*
  *	Parasol engine architecture:
  *

@@ -58,7 +58,7 @@ public class Exception {
 	
 	public void printStackTrace() {
 		string s = textStackTrace();
-		print(s);
+		printf(s);
 	}
 	
 	public string textStackTrace() {
@@ -148,7 +148,7 @@ public class Exception {
 		}
 		printf("\nFATAL: Could not find a stack handler for this address.\n");
 		_exceptionContext.print();
-		print(textStackTrace());
+		printf(textStackTrace());
 //		process.exit(1);
 	}
 	
@@ -382,6 +382,8 @@ public class RuntimeException extends Exception {
 
 }
 
+@Linux("libparasol.so.1", "formatMessage")
+@Windows("parasol.dll", "formatMessage")
 public abstract pointer<byte> formatMessage(unsigned ntstatus);
 
 public class DivideByZeroException extends RuntimeException {
@@ -628,21 +630,32 @@ ref<ExceptionContext> createExceptionContext(address stackPointer) {
 	return results;
 }
 
-
-public abstract ref<ExceptionContext> exceptionContext(ref<ExceptionContext> newContext);
 /**
  * This method records in the runtime's ExecutionContext the given exception, if this is passed a null,
  * the 'uncaught exception' indicator is effectively reset. If passed a null, the enclosing ExecutionContext
  * will detect that an uncaught exception terminated execution.
  */
+@Linux("libparasol.so.1", "exposeException")
+@Windows("parasol.dll", "exposeException")
 private abstract void exposeException(ref<Exception> e);
 
+@Linux("libparasol.so.1", "registerHardwareExceptionHandler")
+@Windows("parasol.dll", "registerHardwareExceptionHandler")
 abstract void registerHardwareExceptionHandler(void handler(ref<HardwareException> info));
 
+@Linux("libparasol.so.1", "fetchExposedException")
+@Windows("parasol.dll", "fetchExposedException")
 public abstract ref<Exception> fetchExposedException();
+
+@Linux("libparasol.so.1", "exceptionsAddress")
+@Windows("parasol.dll", "exceptionsAddress")
 abstract address exceptionsAddress();
+@Linux("libparasol.so.1", "exceptionsCount")
+@Windows("parasol.dll", "exceptionsCount")
 abstract int exceptionsCount();
 
+@Linux("libparasol.so.1", "callCatchHandler")
+@Windows("parasol.dll", "callCatchHandler")
 abstract void callCatchHandler(ref<Exception> exception, address frame, int handler);
 
 public class ExceptionContext {
@@ -760,7 +773,7 @@ private void dumpMyThread(ref<ExceptionContext> context) {
 		if (s.length() == 0)
 			context.print();
 		else
-			print(s);
+			printf(s);
 	}
 }
 
