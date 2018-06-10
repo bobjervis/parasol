@@ -21,7 +21,7 @@ COMMON_OBJECTS = $(COMMON_FILES:runtime/common/%.cc=build/o/%.o)
 RUNTIME_OBJECTS = $(RUNTIME_FILES:runtime/Parasol/%.cc=build/o/%.o)
 LIB_OBJECTS = $(LIB_FILES:runtime/library/%.cc=build/o/%.o)
 
-CFLAGS = -std=c++11 -O3 -I runtime -fPIC -g
+CFLAGS = -std=c++11 -O3 -I runtime -fPIC
 
 all: build/libparasol.so.1 build/parasolrt 
 

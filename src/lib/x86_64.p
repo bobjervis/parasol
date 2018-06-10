@@ -368,9 +368,7 @@ public class X86_64 extends X86_64AssignTemps {
 				} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 					string soName(nativeBindings[i].dllName);
 					if (soName == "libparasol.so.1") {
-						string binary = process.binaryFilename();
-						string dir = storage.directory(binary);
-						soName = storage.constructPath(dir, soName, null);
+						soName = "libparasol.so";
 					}
 					address handle = linux.dlopen(soName.c_str(), linux.RTLD_LAZY);
 					if (handle == null) {

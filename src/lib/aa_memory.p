@@ -68,6 +68,8 @@ else
  */
 storage.setProcessStreams();
 
+//printf("Hello\n");
+
 public class OutOfMemoryException extends Exception {
 	public long requestedAmount;
 	

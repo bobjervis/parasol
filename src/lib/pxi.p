@@ -17,7 +17,7 @@ namespace parasol:pxi;
 
 import parasol:storage;
 import parasol:runtime;
-/*
+/**
  * Pxi: Parasol eXecutable Image
  * 
  * This format describes the platform-independent image format used to encode and distribute compiled

@@ -21,6 +21,9 @@
 #include <unistd.h>
 #include <dlfcn.h>
 #include <unistd.h>
+#include <stdlib.h>
+#include <link.h>
+
 #include "common/file_system.h"
 #endif
 #include "x86_pxi.h"
@@ -36,8 +39,11 @@ public:
 };
 
 Loader::Loader() {
-	if (!pxi::registerSectionReader(ST_X86_64_WIN, x86_64Reader))
+	if (!pxi::registerSectionReader(ST_X86_64_WIN, x86_64Reader)) {
 		printf("Could not register x86_64SectionReader for ST_X86_64_WIN\n");
+		int (*f)() = (int (*)())(0);
+		int x = f();
+	}
 }
 
 Loader loader;
@@ -71,6 +77,7 @@ X86_64Section::X86_64Section(FILE *pxiFile, long long length) {
 		printf("Could not allocate image area\n");
 		return;
 	}
+	_libParasolPath = null;
 
 	// Do any post-load initializations and fixups
 }
@@ -85,6 +92,16 @@ public:
 	char *symbolName;
 	void *address;
 };
+
+int plunker(dl_phdr_info *info, size_t size, void * args) {
+	X86_64Section* section = (X86_64Section*)args;
+
+	if (strstr(info->dlpi_name, "libparasol.so") != null) {
+		section->reportLibParasolPath(info->dlpi_name);
+		return 1;
+	}
+	return 0;
+}
 
 bool X86_64Section::run(char **args, int *returnValue, long long runtimeFlags) {
 	ExecutionContext ec((X86_64SectionHeader*)&_header, _image, runtimeFlags);
@@ -110,43 +127,28 @@ bool X86_64Section::run(char **args, int *returnValue, long long runtimeFlags) {
 		HMODULE dll = GetModuleHandle(nativeBindings[i].dllName);
 		if (dll == 0) {
 			printf("Unable to locate DLL %s\n", nativeBindings[i].dllName);
-			*(char*)(long long)argc = 0;	// This should cause a crash.
+			abort();
 		} else {
 			nativeBindings[i].address = (void*) GetProcAddress(dll, nativeBindings[i].symbolName);
 			if (nativeBindings[i].address == 0) {
 				printf("Unable to locate symbol %s in %s\n", nativeBindings[i].symbolName, nativeBindings[i].dllName);
-				*(char*)(long long)argc = 0;	// This should cause a crash.
+				abort();
 			}
 		}
 		CloseHandle(dll);
 #elif __linux__
 		char *soName = nativeBindings[i].dllName;
-		if (strcmp(soName, "libparasol.so.1") == 0) {
-			char buffer[1024];
-
-			ssize_t result = readlink("/proc/self/exe", buffer, sizeof buffer);
-			if (result < 0) {
-				perror("readlink failed");
-				exit(1);
-			}
-
-			buffer[result] = 0;
-			string binary(buffer);
-			string dir = fileSystem::directory(binary);
-			string x = fileSystem::constructPath(dir, soName, "");
-			soName = strdup(x.c_str());
-		}
+		if (strcmp(soName, "libparasol.so.1") == 0)
+			soName = "libparasol.so";//_libParasolPath;
 		void *handle = dlopen(soName, RTLD_LAZY);
-		if (soName != nativeBindings[i].dllName)
-			free(soName);
 		if (handle == null) {
 			printf("Unable to locate shared object %s (%s)\n", nativeBindings[i].dllName, dlerror());
-			*(char*)(long long)argc = 0;	// This should cause a crash.
+			abort();
 		} else {
 			nativeBindings[i].address = dlsym(handle, nativeBindings[i].symbolName);
 			if (nativeBindings[i].address == 0) {
 				printf("Unable to locate symbol %s in %s (%s)\n", nativeBindings[i].symbolName, nativeBindings[i].dllName, dlerror());
-				*(char*)(long long)argc = 0;	// This should cause a crash.
+				abort();
 			}
 		}
 		dlclose(handle);

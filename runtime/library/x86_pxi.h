@@ -17,6 +17,7 @@
 #define X86_PXI_H_
 
 #include "pxi.h"
+#include <string.h>
 
 namespace parasol {
 
@@ -44,6 +45,7 @@ class X86_64Section : public pxi::Section {
 	X86_64SectionHeader _header;
 	void *_image;
 	size_t _imageLength;
+	char *_libParasolPath;
 
 public:
 	X86_64Section(FILE *pxiFile, long long length);
@@ -56,6 +58,9 @@ public:
 		return _image != null;
 	}
 
+	void reportLibParasolPath(const char *path) {
+		_libParasolPath = strdup(path);
+	}
 };
 
 }
