@@ -1397,7 +1397,7 @@ public class Scanner {
  * it was there in the original comment.
  *
  * Not all tagged sections have significance for every documented entity. For example, an author can
- * be tagged for a namespace or a class, but nothing else. The treatment of @author is, in part, following the lead of 
+ * be tagged for a namespace or a class, but nothing else. The treatment of {@code @author} is, in part, following the lead of 
  * javadoc system, where authorship seems associated with files, which are almost always classes in
  * Java.
  *

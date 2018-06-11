@@ -271,12 +271,13 @@ public class Parser {
 	private ref<ref<Atom>[]> _atoms;
 	private Scanner _scanner;
 	private string _filename;
-	private ref<MessageLog> _log;
 	private boolean _errorsFound;
-	
+
 	private Parser(string source) {
 		_scanner = Scanner(source);
 	}
+
+	public ref<MessageLog> log;
 /*
 public:
 
@@ -299,13 +300,20 @@ public:
 		return p;
 	}
 
+	public static ref<Parser> loadFromString(string filename, string content) {
+		ref<Parser> p = new Parser(content);
+		p._filename = filename;
+		return p;
+	}
+
 	public void content(ref<ref<Atom>[]> output) {
 		_atoms = output;
 	}
 
 	public boolean parse() {
-		if (_log == null)
-			_log = new ScannerMessageLog(this, &_scanner);
+		if (log == null)
+			log = new ScannerMessageLog();
+		log.declareScanner(_filename, &_scanner);
 		_errorsFound = false;
 		parseGroup(null, Token.END_OF_INPUT);
 		return !_errorsFound;
@@ -324,8 +332,7 @@ public:
 			case END_OF_INPUT:
 				if (terminator != Token.END_OF_INPUT) {
 					_errorsFound = true;
-					if (_log != null)
-						_log.error(_scanner.location(), "Unexpected end of file");
+					log.error(_scanner.location(), "Unexpected end of file");
 				}
 				if (run != null)
 					_atoms.append(new TextRun(run, endOfRun - run));
@@ -369,15 +376,13 @@ public:
 						_atoms.append(new TextRun(run, endOfRun - run));
 					return;
 				}
-				if (_log != null)
-					_log.error(_scanner.location(), "Unexpected right parenthesis");
+				log.error(_scanner.location(), "Unexpected right parenthesis");
 				_errorsFound = true;
 				break;
 
 			case	RIGHT_CURLY:
 				if (t != terminator) {
-					if (_log != null)
-						_log.error(_scanner.location(), "Unexpected right curly brace");
+					log.error(_scanner.location(), "Unexpected right curly brace");
 					_errorsFound = true;
 					_scanner.backup();
 				}
@@ -418,8 +423,7 @@ public:
 			if (t == Token.RIGHT_PARENTHESIS)
 				break;
 			if (t == Token.RIGHT_CURLY) {
-				if (_log != null)
-					_log.error(_scanner.location(), "Unexpected right curly brace");
+				log.error(_scanner.location(), "Unexpected right curly brace");
 				_errorsFound = true;
 				_scanner.backup();
 				return;
@@ -469,8 +473,7 @@ public:
 		if (object.validate(this))
 			_atoms.append(object);
 		else {
-			if (_log != null)
-				_log.error(location, "Object is not valid");
+			log.error(location, "Object is not valid");
 			_errorsFound = true;
 		}
 	}
@@ -488,10 +491,6 @@ public:
 		return new String(content);
 	}
 	
-	public ref<MessageLog> log() {
-		return _log;
-	}
-
 }
 
 private enum Token {
@@ -772,22 +771,33 @@ public:
 }
 
 class ScannerMessageLog extends MessageLog {
-	private ref<Parser> _parser;
-	private ref<Scanner> _scanner;
 
-	public ScannerMessageLog(ref<Parser> parser, ref<Scanner> scanner) {
-		_parser = parser;
-		_scanner = scanner;
+	public ScannerMessageLog() {
 	}
 
 	public void error(int offset, string msg) {
-		printf("%s %d : %s\n", _parser.filename(), _scanner.lineNumber(offset), msg);
+		printf("%s %d : %s\n", filename(), lineNumber(offset), msg);
 	}
 }
 
 public class MessageLog {
 	private int _baseLocation;
-	
+	private ref<Scanner> _scanner;
+	private string _filename;
+
+	void declareScanner(string filename, ref<Scanner> scanner) {
+		_filename = filename;
+		_scanner = scanner;
+	}
+
+	public string filename() {
+		return _filename;
+	}
+
+	public int lineNumber(int offset) {
+		return _scanner.lineNumber(offset);
+	}
+
 	public void print() {
 	}
 /*
@@ -813,9 +823,7 @@ public:
 		error(_baseLocation, msg); 
 	}
 
-	void error(int loc, string msg) {
-		assert(false);
-	}
+	public abstract void error(int loc, string msg);
 /*
 	void error(int offset, const string& msg) { error(_baseLocation + offset, msg); }
 

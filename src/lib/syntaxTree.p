@@ -3955,12 +3955,14 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 	case	TRUE:
 	case	INTEGER:
 	case	IDENTIFIER:
+	case	STRING:
 		expression = tree.newLeaf(Operator.EMPTY, expression.location());
 		expression.type = compileContext.arena().builtInType(TypeFamily.VOID);
 		return expression;
 		
 	case	SEQUENCE:
 	case	EQUALITY:
+	case	ADD:
 		ref<Binary> b = ref<Binary>(expression);
 		ref<Node> left = foldVoidContext(b.left(), tree, compileContext);
 		ref<Node> right = foldVoidContext(b.right(), tree, compileContext);

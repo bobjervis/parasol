@@ -155,17 +155,21 @@ int main(string[] args) {
 		}
 		printf("Writing to %s\n", outputFolder);
 		if (storage.ensure(outputFolder)) {
-			if (paradocCommand.templateDirectoryArgument.set()) {
-				string dir = paradocCommand.templateDirectoryArgument.value;
-	
-				string cssFile = storage.constructPath(dir, "stylesheet", "css");
-				string newCss = storage.constructPath(outputFolder, "stylesheet", "css");
-				if (!storage.copyFile(cssFile, newCss))
-					printf("Could not copy CSS file from %s to %s\n", cssFile, newCss);
-				template1file = storage.constructPath(dir, "template1", "html");
-				template1bFile = storage.constructPath(dir, "template1b", "html");
-				template2file = storage.constructPath(dir, "template2", "html");
+			string dir;
+			if (paradocCommand.templateDirectoryArgument.set())
+				dir = paradocCommand.templateDirectoryArgument.value;
+			else {
+				string bin = process.binaryFilename();
+				
+				dir = storage.constructPath(storage.directory(bin), "../template", null);
 			}
+			string cssFile = storage.constructPath(dir, "stylesheet", "css");
+			string newCss = storage.constructPath(outputFolder, "stylesheet", "css");
+			if (!storage.copyFile(cssFile, newCss))
+				printf("Could not copy CSS file from %s to %s\n", cssFile, newCss);
+			template1file = storage.constructPath(dir, "template1", "html");
+			template1bFile = storage.constructPath(dir, "template1b", "html");
+			template2file = storage.constructPath(dir, "template2", "html");
 			stylesheetPath = storage.constructPath(outputFolder, "stylesheet", "css");
 			if (!collectNamespacesToDocument())
 				anyFailure = true;

@@ -107,22 +107,22 @@ public class File {
 	}
 
 	public boolean open(string filename) {
-		return open(filename, Access.READ);
+		return open(filename, AccessFlags.READ);
 	}
 
-	public boolean open(string filename, Access access) {
+	public boolean open(string filename, AccessFlags access) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD rights;
 			windows.DWORD sharing;
 			windows.DWORD disposition;
-			if (access & Access.READ) {
+			if (access & AccessFlags.READ) {
 				rights = windows.GENERIC_READ;
-				if (access & Access.WRITE)
+				if (access & AccessFlags.WRITE)
 					rights |= windows.GENERIC_WRITE;
 				else
 					sharing = windows.FILE_SHARE_READ;
 				disposition = windows.OPEN_EXISTING;
-			} else if (access & Access.WRITE) {
+			} else if (access & AccessFlags.WRITE) {
 				rights = windows.GENERIC_WRITE;
 			}
 			windows.HANDLE handle = windows.CreateFile(filename.c_str(), rights, sharing, null, 
@@ -134,12 +134,12 @@ public class File {
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			int openFlags;
 
-			if (access & Access.READ) {
-				if (access & Access.WRITE)
+			if (access & AccessFlags.READ) {
+				if (access & AccessFlags.WRITE)
 					openFlags = linux.O_RDWR;
 				else
 					openFlags = linux.O_RDONLY;
-			} else if (access & Access.WRITE) {
+			} else if (access & AccessFlags.WRITE) {
 				openFlags = linux.O_WRONLY;
 			}
 		
@@ -151,17 +151,17 @@ public class File {
 	}
 
 	public boolean create(string filename) {
-		return create(filename, Access.WRITE);
+		return create(filename, AccessFlags.WRITE);
 	}
 
-	public boolean create(string filename, Access access) {
+	public boolean create(string filename, AccessFlags access) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD rights;
-			if (access & Access.READ) {
+			if (access & AccessFlags.READ) {
 				rights = windows.GENERIC_READ;
-				if (access & Access.WRITE)
+				if (access & AccessFlags.WRITE)
 					rights |= windows.GENERIC_WRITE;
-			} else if (access & Access.WRITE) {
+			} else if (access & AccessFlags.WRITE) {
 				rights = windows.GENERIC_WRITE;
 			}
 			windows.HANDLE handle = windows.CreateFile(filename.c_str(), rights, 0, null, 
@@ -173,12 +173,12 @@ public class File {
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			int openFlags;
 
-			if (access & Access.READ) {
-				if (access & Access.WRITE)
+			if (access & AccessFlags.READ) {
+				if (access & AccessFlags.WRITE)
 					openFlags = linux.O_RDWR;
 				else
 					openFlags = linux.O_RDONLY;
-			} else if (access & Access.WRITE) {
+			} else if (access & AccessFlags.WRITE) {
 				openFlags = linux.O_WRONLY;
 			}
 			openFlags |= linux.O_CREATE|linux.O_TRUNC;
@@ -191,21 +191,21 @@ public class File {
 	}
 
 	public boolean append(string filename) {
-		return append(filename, Access.WRITE);
+		return append(filename, AccessFlags.WRITE);
 	}
 
-	public boolean append(string filename, Access access) {
+	public boolean append(string filename, AccessFlags access) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			// append always fails on Windows
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			int openFlags;
 
-			if (access & Access.READ) {
-				if (access & Access.WRITE)
+			if (access & AccessFlags.READ) {
+				if (access & AccessFlags.WRITE)
 					openFlags = linux.O_RDWR;
 				else
 					openFlags = linux.O_RDONLY;
-			} else if (access & Access.WRITE) {
+			} else if (access & AccessFlags.WRITE) {
 				openFlags = linux.O_WRONLY;
 			}
 			openFlags |= linux.O_CREATE|linux.O_APPEND;
@@ -379,15 +379,26 @@ public class File {
 		return -1;
 	}
 }
-
-public flags Access {
-	READ,
-	WRITE
-}
-
+/**
+ * File seek operations are relative to one of three places in the file.
+ *
+ * Positions in a file are always numbered from 0 at the start of the file.
+ * File systems may provide sparse file implementations that permit unused sections
+ * of the file to be unallocated, but at this level, the illusion of a contiguous
+ * array of bytes is maintained.
+ */
 public enum Seek {
+	/**
+	 * The offset for the seek operation is relative to the start of the file.
+	 */
 	START,
+	/**
+	 * The offset for the seek operation is relative to the current offset of the file.
+	 */
 	CURRENT,
+	/**
+	 * The offset for the seek operation is relative to the end of the file.
+	 */
 	END
 }
 

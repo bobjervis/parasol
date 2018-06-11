@@ -78,12 +78,6 @@ public abstract int eval(ref<X86_64SectionHeader> header, address image, long ru
 @Windows("parasol.dll", "supportedTarget")
 public abstract int supportedTarget(int index);
 
-public abstract pointer<byte> builtInFunctionName(int index);
-public abstract pointer<byte> builtInFunctionDomain(int index);
-public abstract address builtInFunctionAddress(int index);
-public abstract int builtInFunctionArguments(int index);
-public abstract int builtInFunctionReturns(int index);
-
 @Linux("libparasol.so.1", "lowCodeAddress")
 @Windows("parasol.dll", "lowCodeAddress")
 public abstract pointer<byte> lowCodeAddress();

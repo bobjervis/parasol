@@ -163,6 +163,13 @@ public class string extends String<byte> {
 		}
 	}
 
+	public string(pointer<char> buffer, int len) {
+		if (buffer == null)
+			return;
+		resize(0);
+		append(buffer, len);
+	}
+
 	private void appendDigits(long value) {
 		if (value > 9)
 			appendDigits(value / 10);
