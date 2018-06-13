@@ -539,9 +539,11 @@ public class HttpClient {
 			return false, ip;
 		}
 		if (!connection.initiateSecurityHandshake()) {
-			printf("Failed security handshake\n");
+			printf("Failed security handshake!! connection = %p\n", connection);
 			delete connection;
+			printf("Maybe... socket = %p\n", socket);
 			delete socket;
+			printf("Phew!\n");
 			return false, ip;
 		}
 //		delete socket;

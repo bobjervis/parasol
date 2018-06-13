@@ -142,7 +142,7 @@ public class Socket {
 	}
 
 	~Socket() {
-//		logger.format(log.DEBUG,"~Socket for %d\n", _socketfd);
+		logger.format(log.DEBUG,"~Socket for %d\n", _socketfd);
 		net.closesocket(_socketfd);
 	}
 
@@ -210,7 +210,7 @@ public class Socket {
 			linux.perror(null);
 			net.closesocket(_socketfd);
 			return false;
-		}else
+		}else
 			return true;
 	}
 
@@ -690,7 +690,6 @@ class SSLConnection extends Connection {
 //		ssl.SSL_set_connect_state(_ssl);
 //		ssl.SSL_set_bio(_ssl, bio, bio);
 		int r = ssl.SSL_connect(_ssl);
-//		logger.format(log.DEBUG,"r = %d\n", r);
 		if (r < 1) {
 			logger.format(log.DEBUG,"SSL_connect failed: %d\n", ssl.SSL_get_error(_ssl, r));
 			logger.format(log.DEBUG,"                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(_ssl, r), null));
@@ -698,7 +697,7 @@ class SSLConnection extends Connection {
 				long e = ssl.ERR_get_error();
 				if (e == 0)
 					break;
-				logger.format(log.DEBUG,"    %d %s\n", e, ssl.ERR_error_string(e, null));
+				logger.format(log.DEBUG,"    %s\n", ssl.ERR_error_string(e, null));
 			}
 			return false;
 		}

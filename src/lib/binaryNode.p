@@ -470,7 +470,7 @@ public class Binary extends Node {
 				objType = value.type;
 			else
 				objType = value.type.indirectType(compileContext);
-			if (objType.hasDestructor()) {
+			if (objType != null && objType.hasDestructor()) {
 				ref<ParameterScope> des = objType.scope().destructor();
 				ref<Call> call = tree.newCall(des, CallCategory.DESTRUCTOR, value, null, location(), compileContext);
 				value = value.clone(tree);

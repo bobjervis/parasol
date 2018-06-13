@@ -3914,6 +3914,7 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 	case	CALL_DESTRUCTOR:
 	case	IF:
 	case	ASSIGN_TEMP:
+	case	NEW:
 		break;
 		
 	case	ASSIGN:

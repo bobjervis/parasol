@@ -28,7 +28,7 @@ all: build/libparasol.so.1 build/parasolrt
 build/parasolrt: build/prep $(RUNTIME_OBJECTS)
 	$(CXX) $(CFLAGS) -Lbuild -o build/parasolrt $(RUNTIME_OBJECTS) -lpthread -ldl -lparasol
 
-build/libparasol.so.1: $(COMMON_OBJECTS) $(LIB_OBJECTS)
+build/libparasol.so.1: build/prep $(COMMON_OBJECTS) $(LIB_OBJECTS)
 	$(CXX) $(CFLAGS) -fPIC -shared -o $@ $(COMMON_OBJECTS) $(LIB_OBJECTS) -lpthread -ldl
 	ln -sfT libparasol.so.1 build/libparasol.so
 

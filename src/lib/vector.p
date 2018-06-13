@@ -19,7 +19,7 @@
  * These classes tend to be templates as they are designed to be flexibly usable
  * across a broad range of applications.
  */
-namespace parasol:collections;
+namespace parasol:types;
 
 import native:C;
 
