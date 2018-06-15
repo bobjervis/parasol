@@ -2100,6 +2100,7 @@ public class Binary extends Node {
 				switch (_left.type.family()) {
 				case	REF:
 				case	POINTER:
+				case	INTERFACE:
 					break;
 
 				default:
