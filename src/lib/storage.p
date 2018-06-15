@@ -295,7 +295,7 @@ public long, boolean size(string filename) {
 	return -1, false;
 }
 /**
- * This function returns the access, modified and created times for a given filename,
+ * This function returns the modified, accessed and created times for a given filename,
  * if the underlying operating system and file system provide all three times.
  *
  * @param filename The path to the file for which time stamps are desired.
@@ -304,7 +304,7 @@ public long, boolean size(string filename) {
  * @return The last modified time.
  * @return The file creation time.
  * @return true if the file information could be obtained, false otherwise (such as the 
- * file did not exist or the user did not have permissions to obtain this information.
+ * file did not exist or the user did not have permissions to obtain this information).
  */
 public time.Instant, time.Instant, time.Instant, boolean fileTimes(string filename) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {

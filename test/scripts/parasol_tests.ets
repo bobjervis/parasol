@@ -131,6 +131,7 @@ run(filename: loop_fallthrough_test.p)
 
 // Basic runtime execution tests
 
+run(filename: class_compare_test.p)
 run(filename: string16_test_1.p, arguments: src/lib/x86_64.p)
 run(filename: string16_test_1.p, arguments: test/scripts/parasol_tests.ets)
 run(filename: string16_test_2.p)
@@ -470,6 +471,177 @@ compile() { "class A { int x; A() {} } A b; A a; a = b;" }
 compile(expect: fail) { "class A { int x; A(int y) {} } A b;" }
 compile(expect: fail) { "class A { int x; A(int y) {} } A a(2); A b = a;" }
 compile(expect: fail) { "class A { int x; A(int y) {} } A a(2); a = b; A b(5);" }
+
+// Class compare methods
+
+compile(expect: fail) { "class C {  } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile(expect: fail) { "class C {  } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile(expect: fail) { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile(expect: fail) { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile(expect: fail) { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile(expect: fail) { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile(expect: fail) { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile(expect: fail) { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile() { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile() { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile() { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile() { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile() { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile() { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile() { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile() { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
 
 // Casts
 

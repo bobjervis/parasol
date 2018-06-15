@@ -216,6 +216,7 @@ public byte BAD_CONSTANT = 0x01;
 public byte VECTOR_LVALUE = 0x02;
 public byte VECTOR_OPERAND = 0x04;
 public byte PUSH_OUT_PARAMETER = 0x08;
+public byte USE_COMPARE_METHOD = 0x10;		// Assigned to a compare operator node for cases where a compare method must be used.
 
 public class SyntaxTree {
 	private ref<Block> _root;
@@ -3963,6 +3964,19 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 		
 	case	SEQUENCE:
 	case	EQUALITY:
+	case	NOT_EQUAL:
+	case	LESS:
+	case	NOT_LESS:
+	case	GREATER:
+	case	NOT_GREATER:
+	case	LESS_EQUAL:
+	case	NOT_LESS_EQUAL:
+	case	GREATER_EQUAL:
+	case	NOT_GREATER_EQUAL:
+	case	LESS_GREATER:
+	case	NOT_LESS_GREATER:
+	case	LESS_GREATER_EQUAL:
+	case	NOT_LESS_GREATER_EQUAL:
 	case	ADD:
 		ref<Binary> b = ref<Binary>(expression);
 		ref<Node> left = foldVoidContext(b.left(), tree, compileContext);

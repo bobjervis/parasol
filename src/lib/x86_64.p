@@ -79,6 +79,7 @@ import parasol:compiler.Type;
 import parasol:compiler.TypedefType;
 import parasol:compiler.TypeFamily;
 import parasol:compiler.Unary;
+import parasol:compiler.USE_COMPARE_METHOD;
 import parasol:compiler.Variable;
 import parasol:exception;
 import parasol:exception.ExceptionContext;
@@ -96,9 +97,9 @@ byte REX_X = 0x42;
 byte REX_B = 0x41;
 
 /*
- * Flags for the Node.nodeFlags field. (0x0f are reserved for non-codegen flags)
+ * Flags for the Node.nodeFlags field. (0x1f are reserved for non-codegen flags)
  */
-byte ADDRESS_MODE = 0x10;
+byte ADDRESS_MODE = 0x80;
 
 long PXI_FIXUP = 0xff;
 byte PXI_FIXUP_RELATIVE32 = 0x01;
@@ -285,8 +286,10 @@ public class X86_64 extends X86_64AssignTemps {
 	
 	private ref<Symbol> _floatSignMask;
 	private ref<Symbol> _floatOne;
+	private ref<Symbol> _floatZero;
 	private ref<Symbol> _doubleSignMask;
 	private ref<Symbol> _doubleOne;
+	private ref<Symbol> _doubleZero;
 	
 	public int maxTypeOrdinal;
 	private boolean _verbose;
@@ -3004,9 +3007,73 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 
 	private void generateCompare(ref<Binary> b, ref<CodeSegment> trueSegment, ref<CodeSegment> falseSegment, ref<CompileContext> compileContext) {
-		generateOperands(b, compileContext);
-		generateCompareInst(b, compileContext);
-		generateConditionalJump(b.op(), b.left().type, trueSegment, falseSegment, compileContext);
+		if ((b.nodeFlags & USE_COMPARE_METHOD) != 0) {
+			ref<OverloadInstance> oi = ref<ClassType>(b.left().type).getCompareMethod(compileContext);
+			if (b.sethi < 0) {
+				generate(b.left(), compileContext);
+				if (b.left().isLvalue()) {
+					R result = R(b.left().register);
+					b.left().register = 0;
+					inst(X86.LEA, result, b.left(), compileContext);
+				} else {
+					b.print(0);
+					assert(false);
+				}
+				generate(b.right(), compileContext);
+				if (b.right().isLvalue()) {
+					R result = R(b.right().register);
+					b.right().register = 0;
+					inst(X86.LEA, result, b.right(), compileContext);
+				} else {
+					b.print(0);
+					assert(false);
+				}
+			} else {
+				generate(b.right(), compileContext);
+				if (b.right().isLvalue()) {
+					R result = R(b.right().register);
+					b.right().register = 0;
+					inst(X86.LEA, result, b.right(), compileContext);
+				} else {
+					b.print(0);
+					assert(false);
+				}
+				generate(b.left(), compileContext);
+				if (b.left().isLvalue()) {
+					R result = R(b.left().register);
+					b.left().register = 0;
+					inst(X86.LEA, result, b.left(), compileContext);
+				} else {
+					b.print(0);
+					assert(false);
+				}
+			}
+			f().r.generateSpills(b, this);
+			instCall(oi.parameterScope(), compileContext);
+			ref<Type> t = oi.parameterScope().type().returnType().node.type;
+			switch (t.family()) {
+			case	BOOLEAN:
+				inst(X86.XOR, TypeFamily.BOOLEAN, R.RAX, 1);
+				inst(X86.CMP, TypeFamily.BOOLEAN, R.RAX, 0);
+				break;
+
+			case	FLOAT_32:
+				inst(X86.UCOMISS, R.XMM0, _floatZero);
+				break;
+
+			case	FLOAT_64:
+				inst(X86.UCOMISD, R.XMM0, _doubleZero);
+				break;
+
+			default:
+				inst(X86.CMP, t.family(), R.RAX, 0);
+			}
+			generateConditionalJump(b.op(), t, trueSegment, falseSegment, compileContext);
+		} else {
+			generateOperands(b, compileContext);
+			generateCompareInst(b, compileContext);
+			generateConditionalJump(b.op(), b.left().type, trueSegment, falseSegment, compileContext);
+		}
 	}
 	
 	private void generateCompareInst(ref<Binary> b, ref<CompileContext> compileContext) {
@@ -4180,6 +4247,9 @@ public class X86_64 extends X86_64AssignTemps {
 		ref<Symbol> one = floatType.scope().lookup("ONE", compileContext);
 		if (one != null)
 			_floatOne = one;
+		ref<Symbol> zero = floatType.scope().lookup("ZERO", compileContext);
+		if (zero != null)
+			_floatZero = zero;
 		ref<Type> doubleType = _arena.builtInType(TypeFamily.FLOAT_64);
 		signMask = doubleType.scope().lookup("SIGN_MASK", compileContext);
 		if (signMask != null)
@@ -4187,7 +4257,9 @@ public class X86_64 extends X86_64AssignTemps {
 		one = doubleType.scope().lookup("ONE", compileContext);
 		if (one != null)
 			_doubleOne = one;
-		
+		zero = doubleType.scope().lookup("ZERO", compileContext);
+		if (zero != null)
+			_doubleZero = zero;
 	}
 	
 	private void generateDefaultConstructors(ref<Scope> scope, ref<CompileContext> compileContext) {

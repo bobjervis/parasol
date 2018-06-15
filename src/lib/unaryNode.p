@@ -36,6 +36,7 @@ public class Unary extends Node {
 		case	VECTOR_OF:
 		case	BYTES:
 		case	CLASS_OF:
+		case	UNWRAP_TYPEDEF:
 			switch (t) {
 			case	IN_ORDER:
 				t = Traversal.POST_ORDER;

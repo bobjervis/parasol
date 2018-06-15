@@ -43,6 +43,7 @@ import parasol:compiler.Type;
 import parasol:compiler.TypedefType;
 import parasol:compiler.TypeFamily;
 import parasol:compiler.Unary;
+import parasol:compiler.USE_COMPARE_METHOD;
 
 class X86_64AssignTemps extends X86_64AddressModes {
 	void assignVoidContext(ref<Node> node, ref<CompileContext> compileContext) {
@@ -112,6 +113,10 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	NOT_LESS_GREATER:
 		case	NOT_LESS_GREATER_EQUAL:
 			b = ref<Binary>(node);
+			if ((b.nodeFlags & USE_COMPARE_METHOD) != 0) {
+				assignCompareMethod(b, compileContext);
+				break;
+			}
 			b.register = byte(int(R.NO_REG));
 			if	(b.sethi < 0) {
 				assignRegisterTemp(b.left(), requiredMask(b.left()), compileContext);
@@ -266,6 +271,10 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	NOT_LESS_GREATER:
 		case	NOT_LESS_GREATER_EQUAL:
 			ref<Binary> b = ref<Binary>(node);
+			if ((b.nodeFlags & USE_COMPARE_METHOD) != 0) {
+				assignCompareMethod(b, compileContext);
+				break;
+			}
 			if	(b.sethi < 0) {
 				assignRegisterTemp(b.left(), requiredMask(b.left()), compileContext);
 				assignRegisterTemp(b.right(), requiredMask(b.right()), compileContext);
@@ -707,7 +716,11 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	NOT_LESS_GREATER:
 		case	NOT_LESS_GREATER_EQUAL:
 			ref<Binary> b = ref<Binary>(node);
-			assignBinaryOperands(b, regMask, 0, compileContext);
+			if ((b.nodeFlags & USE_COMPARE_METHOD) != 0) {
+				assignCompareMethod(b, compileContext);
+				b.register = byte(f().r.getreg(b, regMask, regMask));
+			} else
+				assignBinaryOperands(b, regMask, 0, compileContext);
 			break;
 
 		case	ADDRESS:
@@ -836,9 +849,44 @@ class X86_64AssignTemps extends X86_64AddressModes {
 //		f().r.print();
 	}
 
-	private void assignLargeClass(ref<Binary> assignment, ref<CompileContext> compileContext) {
+	private void assignCompareMethod(ref<Binary> b, ref<CompileContext> compileContext) {
 		int depth = tempStackDepth();
+		f().r.clobberSomeRegisters(b, callMask());
+		if (b.sethi < 0) {
+			if (b.left().isLvalue())
+				assignLvalueTemps(b.left(), compileContext);
+			else {
+				b.print(0);
+				assert(false);
+			}
+			if (b.right().isLvalue())
+				assignLvalueTemps(b.right(), compileContext);
+			else {
+				b.print(0);
+				assert(false);
+			}
+		} else {
+			if (b.right().isLvalue())
+				assignLvalueTemps(b.right(), compileContext);
+			else {
+				b.print(0);
+				assert(false);
+			}
+			if (b.left().isLvalue())
+				assignLvalueTemps(b.left(), compileContext);
+			else {
+				b.print(0);
+				assert(false);
+			}
+		}
+		b.left().register = byte(R.RDI);
+		b.right().register = byte(R.RSI);
+		f().r.cleanupTemps(b, depth);
+	}
+
+	private void assignLargeClass(ref<Binary> assignment, ref<CompileContext> compileContext) {
 		f().r.clobberSomeRegisters(assignment, callMask());
+		int depth = tempStackDepth();
 		if	(assignment.sethi < 0) {
 			assignRegisterTemp(assignment.left(), getRegMask(firstRegisterArgument()), compileContext);
 			assignRegisterTemp(assignment.right(), getRegMask(secondRegisterArgument()), compileContext);

@@ -41,6 +41,7 @@ import parasol:compiler.Ternary;
 import parasol:compiler.Type;
 import parasol:compiler.TypeFamily;
 import parasol:compiler.Unary;
+import parasol:compiler.USE_COMPARE_METHOD;
 
 int MC_REG = 1;
 int MC_CONST = 2;
@@ -161,6 +162,17 @@ class X86_64AddressModes extends X86_64Encoder {
 		case	NOT_LESS_GREATER:
 		case	NOT_LESS_GREATER_EQUAL:
 			b = ref<Binary>(node);
+			if ((node.nodeFlags & USE_COMPARE_METHOD) != 0) {
+				if (b.left().isLvalue())
+					tryMakeMode(b.left(), MC_ADDRESS|MC_REG, nClass, compileContext);
+				else
+					markAddressModes(b.left(), compileContext);
+				if (b.right().isLvalue())
+					tryMakeMode(b.right(), MC_ADDRESS|MC_REG, nClass, compileContext);
+				else
+					markAddressModes(b.right(), compileContext);
+				break;
+			}
 			if (b.left().type.isFloat()) {
 				markAddressModes(b.left(), compileContext);
 				modeComplexity = MC_ADDRESS|MC_REG;

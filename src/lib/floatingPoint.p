@@ -19,7 +19,8 @@ import native:C;
 
 public class float {
 	private static unsigned SIGN_MASK = 0x80000000;
-	private static unsigned ONE = 0x3f800000;
+	private static unsigned ONE = 		0x3f800000;
+	private static unsigned ZERO = 		0x00000000;
 	
 	public static float NaN = 0.0f / 0.0f;
 	
@@ -40,6 +41,7 @@ public class float {
 public class double {
 	private static long SIGN_MASK = 0x8000000000000000;
 	private static long ONE =       0x3ff0000000000000;
+	private static long ZERO =      0x0000000000000000;
 
 	public static double NaN = 0.0 / 0.0;
 

@@ -3135,7 +3135,15 @@ class X86_64Encoder extends Target {
 			emit(0x0f);
 			emit(0x5c);
 			break;
-			
+		
+		case UCOMISD:
+			emit(0x66);
+		case UCOMISS:
+			emit(0x0f);
+			emit(0x2e);
+			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
+			break;
+
 		default:
 			printf("%s %s \n", string(instruction), string(dest));
 			constant.print(0, false);
@@ -3949,6 +3957,7 @@ CC continuation(Operator compare, ref<Type> type) {
 	case	NOT_LESS_GREATER:
 		switch (type.family()) {
 		case	UNSIGNED_32:
+		case	SIGNED_16: 
 		case	SIGNED_32: 
 		case	SIGNED_64: 
 		case	ADDRESS:
@@ -3964,6 +3973,7 @@ CC continuation(Operator compare, ref<Type> type) {
 	case	LESS_GREATER:
 		switch (type.family()) {
 		case	UNSIGNED_32:
+		case	SIGNED_16: 
 		case	SIGNED_32: 
 		case	SIGNED_64: 
 		case	ADDRESS:
@@ -3981,6 +3991,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JNB;
+		case	SIGNED_16: 
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JGE; 
 		case	FLOAT_32:
@@ -3996,6 +4007,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JNA;
+		case	SIGNED_16: 
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JLE; 
 		case	FLOAT_32:
@@ -4011,6 +4023,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JA;
+		case	SIGNED_16: 
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JG; 
 		case	FLOAT_32:
@@ -4026,6 +4039,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JB;
+		case	SIGNED_16: 
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JL; 
 		case	FLOAT_32:
@@ -4039,7 +4053,10 @@ CC continuation(Operator compare, ref<Type> type) {
 	case	NOT_EQUAL:
 		switch (type.family()) {
 		case	ERROR:
+		case	UNSIGNED_8:
+		case	UNSIGNED_16:
 		case	UNSIGNED_32:
+		case	SIGNED_16: 
 		case	SIGNED_32: 
 		case	SIGNED_64: 
 		case	FLOAT_32:
@@ -4063,7 +4080,10 @@ CC continuation(Operator compare, ref<Type> type) {
 
 	case	EQUALITY:
 		switch (type.family()) {
+		case	UNSIGNED_8:
+		case	UNSIGNED_16:
 		case	UNSIGNED_32:
+		case	SIGNED_16: 
 		case	SIGNED_32: 
 		case	SIGNED_64: 
 		case	FLOAT_32:
@@ -4090,6 +4110,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JA;
+		case	SIGNED_16: 
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JG; 
 		case	FLOAT_32:
@@ -4105,6 +4126,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JNB;
+		case	SIGNED_16: 
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JGE; 
 		case	FLOAT_32:
@@ -4120,6 +4142,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JB;
+		case	SIGNED_16: 
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JL; 
 		case	FLOAT_32:
@@ -4136,6 +4159,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JNA;
 		case	CLASS_VARIABLE:
+		case	SIGNED_16: 
 		case	SIGNED_32: 
 		case	SIGNED_64:		return CC.JLE; 
 		case	FLOAT_32:

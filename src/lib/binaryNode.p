@@ -542,6 +542,8 @@ public class Binary extends Node {
 		case	NOT_GREATER_EQUAL:
 		case	LESS_GREATER:
 		case	NOT_LESS_GREATER:
+			if ((nodeFlags & USE_COMPARE_METHOD) != 0)
+				return this;
 			switch (_left.type.family()) {
 			case	TYPEDEF:
 			case	CLASS_VARIABLE:
@@ -2094,28 +2096,18 @@ public class Binary extends Node {
 		case	NOT_EQUAL:
 			if (!balance(compileContext))
 				break;
-			switch (_left.type.family()) {
-			case	SIGNED_32:
-			case	SIGNED_64:
-			case	UNSIGNED_32:
-			case	FLOAT_32:
-			case	FLOAT_64:
-			case	BOOLEAN:
-			case	STRING:
-			case	ADDRESS:
-			case	REF:
-			case	POINTER:
-			case	FUNCTION:
-			case	ENUM:
-			case	FLAGS:
-			case	VAR:
-			case	CLASS_VARIABLE:
-			case	INTERFACE:
-			case	TYPEDEF:
-				type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
-				break;
+			if (_left.type.canCheckEquality(compileContext)) {
+				switch (_left.type.family()) {
+				case	REF:
+				case	POINTER:
+					break;
 
-			default:
+				default:
+					if (_left.type.class <= ClassType)
+						nodeFlags |= USE_COMPARE_METHOD;
+				}
+				type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+			} else {
 				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}
@@ -2133,22 +2125,18 @@ public class Binary extends Node {
 		case	NOT_LESS_GREATER:
 			if (!balance(compileContext))
 				break;
-			switch (_left.type.family()) {
-			case	SIGNED_32:
-			case	SIGNED_64:
-			case	UNSIGNED_32:
-			case	FLOAT_32:
-			case	FLOAT_64:
-			case	VAR:
-			case	POINTER:
-			case	STRING:
-			case	CLASS_VARIABLE:
-			case	TYPEDEF:
-				type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
-				break;
+			if (_left.type.canCheckOrder(compileContext)) {
+				switch (_left.type.family()) {
+				case	REF:
+				case	POINTER:
+					break;
 
-			case	BOOLEAN:
-			default:
+				default:
+					if (_left.type.class <= ClassType)
+						nodeFlags |= USE_COMPARE_METHOD;
+				}
+				type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+			} else {
 				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}
@@ -2158,19 +2146,18 @@ public class Binary extends Node {
 		case	NOT_LESS_GREATER_EQUAL:
 			if (!balance(compileContext))
 				break;
-			switch (_left.type.family()) {
-			case	FLOAT_32:
-			case	FLOAT_64:
-			case	CLASS_VARIABLE:
-			case	TYPEDEF:
-				type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
-				break;
+			if (_left.type.canCheckPartialOrder(compileContext)) {
+				switch (_left.type.family()) {
+				case	REF:
+				case	POINTER:
+					break;
 
-			case	SIGNED_32:
-			case	SIGNED_64:
-			case	UNSIGNED_32:
-			case	BOOLEAN:
-			default:
+				default:
+					if (_left.type.class <= ClassType)
+						nodeFlags |= USE_COMPARE_METHOD;
+				}
+				type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+			} else {
 				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
 			}

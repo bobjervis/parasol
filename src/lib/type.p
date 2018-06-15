@@ -196,6 +196,63 @@ public class BuiltInType extends Type {
 	public string signature() {
 		return builtinName[family()];
 	}
+
+	boolean canCheckEquality(ref<CompileContext> compileContext) {
+		switch (family()) {
+		case	SIGNED_8:
+		case	SIGNED_16:
+		case	SIGNED_32:
+		case	SIGNED_64:
+		case	UNSIGNED_8:
+		case	UNSIGNED_16:
+		case	UNSIGNED_32:
+		case	UNSIGNED_64:
+		case	FLOAT_32:
+		case	FLOAT_64:
+		case	BOOLEAN:
+		case	CLASS_VARIABLE:
+		case	VAR:
+		case	STRING:
+		case	ADDRESS:
+		case	REF:
+		case	POINTER:
+			return true;
+		}
+		return false;
+	}
+
+	boolean canCheckOrder(ref<CompileContext> compileContext) {
+		switch (family()) {
+		case	SIGNED_8:
+		case	SIGNED_16:
+		case	SIGNED_32:
+		case	SIGNED_64:
+		case	UNSIGNED_8:
+		case	UNSIGNED_16:
+		case	UNSIGNED_32:
+		case	UNSIGNED_64:
+		case	FLOAT_32:
+		case	FLOAT_64:
+		case	CLASS_VARIABLE:
+		case	VAR:
+		case	STRING:
+		case	POINTER:
+			return true;
+		}
+		return false;
+	}
+
+	boolean canCheckPartialOrder(ref<CompileContext> compileContext) {
+		switch (family()) {
+		case	FLOAT_32:
+		case	FLOAT_64:
+		case	CLASS_VARIABLE:
+		case	VAR:
+			return true;
+		}
+		return false;
+	}
+
 }
 
 boolean[TypeFamily][TypeFamily] widens;
@@ -314,6 +371,17 @@ public class InterfaceType extends ClassType {
 		return true;
 	}
 
+	boolean canCheckEquality(ref<CompileContext> compileContext) {
+		return true;
+	}
+
+	boolean canCheckOrder(ref<CompileContext> compileContext) {
+		return false;
+	}
+
+	boolean canCheckPartialOrder(ref<CompileContext> compileContext) {
+		return false;
+	}
 }
 
 public class ClassType extends Type {
@@ -322,6 +390,7 @@ public class ClassType extends Type {
 	protected ref<InterfaceType>[] _implements;
 	protected ref<Class> _definition;
 	protected boolean _isMonitor;
+	private ref<OverloadInstance> _compareMethod;
 
 	protected ClassType(TypeFamily family, ref<Class> definition, ref<Scope> scope) {
 		super(family);
@@ -593,6 +662,144 @@ public class ClassType extends Type {
 		}
 		return super.widensTo(other, compileContext);
 	}
+
+	boolean canCheckEquality(ref<CompileContext> compileContext) {
+		switch (family()) {
+		case	REF:
+		case	POINTER:
+			return true;
+		}
+		ref<Type> t = getCompareReturnType(compileContext);
+		if (t == null)
+			return false;
+		// Don't complain if we can't be sure
+		if (t.deferAnalysis())
+			return true;
+		switch (t.family()) {
+		case	BOOLEAN:
+		case	UNSIGNED_8:
+		case	UNSIGNED_16:
+		case	UNSIGNED_32:
+		case	UNSIGNED_64:
+		case	SIGNED_8:
+		case	SIGNED_16:
+		case	SIGNED_32:
+		case	SIGNED_64:
+		case	FLOAT_32:
+		case	FLOAT_64:
+			return true;
+		}
+		return false;
+	}
+
+	boolean canCheckOrder(ref<CompileContext> compileContext) {
+		switch (family()) {
+		case	POINTER:
+			return true;
+		}
+		ref<Type> t = getCompareReturnType(compileContext);
+		if (t == null)
+			return false;
+		// Don't complain if we can't be sure
+		if (t.deferAnalysis())
+			return true;
+		switch (t.family()) {
+		case	SIGNED_8:
+		case	SIGNED_16:
+		case	SIGNED_32:
+		case	SIGNED_64:
+		case	FLOAT_32:
+		case	FLOAT_64:
+			return true;
+		}
+		return false;
+	}
+
+	boolean canCheckPartialOrder(ref<CompileContext> compileContext) {
+		ref<Type> t = getCompareReturnType(compileContext);
+		if (t == null)
+			return false;
+		// Don't complain if we can't be sure
+		if (t.deferAnalysis())
+			return true;
+		switch (t.family()) {
+		case	FLOAT_32:
+		case	FLOAT_64:
+			return true;
+		}
+		return false;
+	}
+
+	ref<OverloadInstance> getCompareMethod(ref<CompileContext> compileContext) {
+		if (_compareMethod != null)
+			return _compareMethod;
+		ref<Symbol> sym = _scope.lookup("compare", null);
+		if (sym == null)
+			return null;
+		if (sym.class != Overload)
+			return null;
+		ref<Overload> o = ref<Overload>(sym);
+		if (o.kind() != Operator.FUNCTION)
+			return null;
+		// ... etc.
+		for (i in *o.instances()) {
+			ref<OverloadInstance> oi = (*o.instances())[i];
+			if (oi.parameterCount() != 1)
+				continue;
+			ref<ParameterScope> scope = oi.parameterScope();
+			ref<Symbol> param = (*scope.parameters())[0];
+			ref<Type> t = param.type();
+			if (t.deferAnalysis())
+				continue;
+			if (t.family() != TypeFamily.REF)
+				continue;
+			if (this != t.indirectType(compileContext))
+				continue;
+			ref<FunctionType> f = scope.type();
+			if (f.returnCount() != 1)
+				continue;
+			_compareMethod = oi;
+			// we have a compare method on T that takes a single ref<T> parameter and returns a single value, close enough.
+			return oi;
+		}	
+		return null;
+	}
+
+	ref<Type> getCompareReturnType(ref<CompileContext> compileContext) {
+		if (_compareMethod != null)
+			return _compareMethod.parameterScope().type().returnType().node.type;
+
+		ref<Symbol> sym = _scope.lookup("compare", compileContext);
+		if (sym == null)
+			return null;
+		if (sym.class != Overload)
+			return null;
+		ref<Overload> o = ref<Overload>(sym);
+		if (o.kind() != Operator.FUNCTION)
+			return null;
+		// ... etc.
+		for (i in *o.instances()) {
+			ref<OverloadInstance> oi = (*o.instances())[i];
+			if (oi.parameterCount() != 1)
+				continue;
+			ref<ParameterScope> scope = oi.parameterScope();
+			ref<Symbol> param = (*scope.parameters())[0];
+			ref<Type> t = param.assignType(compileContext);
+			if (t.deferAnalysis())
+				return t;
+			if (t.family() != TypeFamily.REF)
+				continue;
+			if (this != t.indirectType(compileContext))
+				continue;
+			ref<FunctionType> f = scope.type();
+			if (f.returnCount() != 1)
+				continue;
+			_compareMethod = oi;
+			// we have a compare method on T that takes a single ref<T> parameter and returns a single value, close enough.
+			return f.returnType().node.type;
+		}	
+		return null;
+	}
 }
 
 class EnumType extends TypedefType {
@@ -705,6 +912,15 @@ public class EnumInstanceType extends Type {
 		else
 			return long.bytes;
 	}
+
+	boolean canCheckEquality(ref<CompileContext> compileContext) {
+		return true;
+	}
+
+	boolean canCheckOrder(ref<CompileContext> compileContext) {
+		return true;
+	}
+
 }
 
 class FlagsType extends TypedefType {
@@ -817,6 +1033,10 @@ public class FlagsInstanceType extends Type {
 			_toStringMethod = target.generateFlagsToStringMethod(this, compileContext);
 		return _toStringMethod;
 	}
+
+	boolean canCheckEquality(ref<CompileContext> compileContext) {
+		return true;
+	}
 }
 
 public class FunctionType extends Type {
@@ -857,7 +1077,7 @@ public class FunctionType extends Type {
 		if (this == other)
 			return true;
 		if (other == compileContext.arena().builtInType(TypeFamily.VAR))
-			return false;								// TODO: Fix the code gen for this.
+			return false;								// TODO: Fix the code gen for this.
 		if (other.family() != TypeFamily.FUNCTION)
 			return false;
 		return equals(other);
@@ -981,6 +1201,10 @@ public class FunctionType extends Type {
 	public boolean extendsFormally(ref<Type> other, ref<CompileContext> compileContext) {
 //		assert(false);
 		return false;
+	}
+
+	boolean canCheckEquality(ref<CompileContext> compileContext) {
+		return true;
 	}
 
 	public void print() {
@@ -1361,6 +1585,19 @@ public class TypedefType extends Type {
 		else
 			return false;
 	}
+
+	boolean canCheckEquality(ref<CompileContext> compileContext) {
+		return true;
+	}
+
+	boolean canCheckOrder(ref<CompileContext> compileContext) {
+		return true;
+	}
+
+	boolean canCheckPartialOrder(ref<CompileContext> compileContext) {
+		return true;
+	}
+
 }
 
 public enum CompareMethodCategory {
@@ -1777,6 +2014,47 @@ public class Type {
 		return false;
 	}
 
+	boolean canCheckEquality(ref<CompileContext> compileContext) {
+		return false;
+	}
+
+	boolean canCheckOrder(ref<CompileContext> compileContext) {
+		return false;
+	}
+
+	boolean canCheckPartialOrder(ref<CompileContext> compileContext) {
+		return false;
+	}
+
+	string myType() {
+		if (this.class == Type)
+			return "Type";
+		else if (this.class == BuiltInType)
+			return "BuiltInType";
+		else if (this.class == InterfaceType)
+			return "InterfaceType";
+		else if (this.class == ClassType)
+			return "ClassType";
+		else if (this.class == EnumInstanceType)
+			return "EnumInstanceType";
+		else if (this.class == FlagsInstanceType)
+			return "FlagsInstanceType";
+		else if (this.class == FunctionType)
+			return "FunctionType";
+		else if (this.class == TemplateType)
+			return "TemplateType";
+		else if (this.class == TemplateInstanceType)
+			return "TemplateInstanceType";
+		else if (this.class == TypedefType)
+			return "TypedefType";
+		else if (this.class == EnumType)
+			return "EnumType";
+		else if (this.class == FlagsType)
+			return "FlagsType";
+		else
+			return "???Type";
+	}
+
 	boolean isFloat() {
 		switch (_family) {
 		case	FLOAT_32:
@@ -1859,7 +2137,7 @@ public class Type {
 	}
 
 	public ref<Symbol> lookup(ref<CompileString> name, ref<CompileContext> compileContext) {
-		for (ref<Type> current = this; current != null; current = current.assignSuper(compileContext)) {				
+		for (ref<Type> current = this; current != null; current = current.assignSuper(compileContext)) {				
 			if (current.scope() != null) {
 				ref<Symbol> sym = current.scope().lookup(name, compileContext);
 				if (sym != null) {
@@ -1875,7 +2153,7 @@ public class Type {
 	public boolean widensTo(ref<Type> other, ref<CompileContext> compileContext) {
 		if (this == other)
 			return true;
-		if (other == compileContext.arena().builtInType(TypeFamily.VAR)){
+		if (other == compileContext.arena().builtInType(TypeFamily.VAR)){
 			return true;
 		}
 		if (extendsFormally(other, compileContext))
