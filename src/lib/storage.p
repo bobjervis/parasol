@@ -184,14 +184,18 @@ public string directory(string filename) {
  *
  * @return true if the following is true:
  *
- *		- path.startsWith(prefix) - up to case sensitivity in the host 
+ * <ul>
+ *   <li>
+ *		path.startsWith(prefix) - up to case sensitivity in the host 
  *		  operating system. Note that for some file systems mounted on Linux, the file
  *		  system may not distinguish upper- and lower-case letters even though native
  *		  Linux file systems do. In such a case, this function will not check the
  *		  paths to determine whether they refer to files in such a file system.
- *		- The next character in the path is a directory delimiter character;
+ *   <li>
+ *		The next character in the path is a directory delimiter character;
  *		  in other words the prefix names a complete directory component in 
  *		  the path.
+ * </ul>
  */
 public boolean pathStartsWith(string path, string prefix) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
@@ -293,6 +297,55 @@ public long, boolean size(string filename) {
 			return s.st_size, true;
 	}
 	return -1, false;
+}
+/**
+ * Check whether any files under a path are newer than some reference time.
+ *
+ * If path is a directory, then all contents of the directory are recursively checked.
+ * The first entry (excluding .. or .) under a directory to have a modification time
+ * greater than the reference time will stop the search and return.
+ *
+ * If any sym links or inaccessible files are encountered, they are treated as not
+ * having anything newer.
+ *
+ * @param path The path to start searching for a newer file. This can indicate a file.
+ * Note that if this path names a symbolic link, it is not followed and the time stamp
+ * of the link itself is checked.
+ *
+ * @param referenceTime The time against which all directory entries are checked.
+ *
+ * @return true if there is at least one directory entry that is newer than the
+ * reference time, false otherwise.
+ */
+public boolean anyFilesNewer(string path, time.Instant referenceTime) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		return false;
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		linux.statStruct s;
+		if (linux.lstat(path.c_str(), &s) == 0) {
+			time.Instant modified(s.st_mtim);
+			if (modified > referenceTime)
+				return true;
+			if ((s.st_mode & linux.S_IFMT) == linux.S_IFLNK)
+				return false;
+			if (!linux.S_ISDIR(s.st_mode))
+				return false;
+		} else
+			return false;
+	} else
+		return false;
+	// Directories fall through to here
+	Directory dir(path);
+	dir.pattern("*");
+	if (dir.first()) {
+		do {
+			if (dir.filename() == "." || dir.filename() == "..")
+				continue;
+			if (anyFilesNewer(dir.path(), referenceTime))
+				return true;
+		} while (dir.next());
+	}
+	return false;
 }
 /**
  * This function returns the modified, accessed and created times for a given filename,

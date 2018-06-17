@@ -542,8 +542,9 @@ public class Binary extends Node {
 		case	NOT_GREATER_EQUAL:
 		case	LESS_GREATER:
 		case	NOT_LESS_GREATER:
-			if ((nodeFlags & USE_COMPARE_METHOD) != 0)
-				return this;
+			if ((nodeFlags & USE_COMPARE_METHOD) != 0) {
+				break;
+			}
 			switch (_left.type.family()) {
 			case	TYPEDEF:
 			case	CLASS_VARIABLE:

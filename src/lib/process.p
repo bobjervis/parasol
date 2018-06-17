@@ -115,14 +115,35 @@ private monitor class ProcessVolatileData {
 	int _exitStatus;
 	boolean _running;
 }
-
+/**
+ * Process allows creation and management of a child process. 
+ *
+ * Depending on the parameters defined, that interaction can be a simple command execution or a more
+ * complex interactive exchange of data through the standard input and output files of the child.
+ *
+ * To launch a child process, you must go through several steps, depending on the complexity of the
+ * interaction you want with the child.
+ *
+ * After constructing a Process, you may choose to make configuration calls to declare your intent to
+ * collect output or to declare that you want the child process to execute under a different user identity.
+ *
+ * Once fully configured, you may {@link Process.spawn spawn} the child process, and wait for completion by calling
+ * {@link Process.waitForExit waitForExit}. The {@link Process.execute execute} methods combine spawning and waiting into a single convenience
+ * call.
+ *
+ * After the child process has actually started running, you can read all the child's output by calling
+ * {@link Process.collectOutput collectOutput} or you can process the output yourself by asking for the standard output file
+ * descriptor with the {@link Process.stdout stdout} method.
+ */
 public class Process extends ProcessVolatileData {
 	private int _stdout;							// The process output fd when the spawn returns and _captureOutput is true
 	private linux.pid_t _pid;
 	private boolean _captureOutput;
 	private linux.uid_t _user;
 	private int _fdLimit;
-
+	/**
+	 * Create a Process with default behavior.
+	 */
 	public Process() {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
@@ -173,7 +194,34 @@ public class Process extends ProcessVolatileData {
 	public boolean, int execute(string command, string... args) {
 		return execute(null, command, null, args);
 	}
-
+	/**
+	 * Execute a command in the Process.
+	 *
+ 	 * This method will spawn and wait for the spawned process to complete before returning.
+	 *
+	 * If you called {@link captureOutput}, this call may hang if the quantity of captured output
+	 * fills the pty device used to collect it. If so, you will have to use spawn explicitly and
+	 * begin collecting output before you wait for the process to exit.
+	 *
+	 * @param workingDirectory The worknig directory the child process will use when executing the
+	 * command. If workingDirectory is null, the child process runs in the same directory as the parent.
+	 *
+	 * @param command The path to the command file to run. The file must be a proper filename path.
+	 * No command-line path search for the command will occur. The file must be executable by the user
+	 * running in the child process.
+	 *
+	 * @param environ If not null, a reference to a map of environment variable definitions that should
+	 * be added to the parent's environment strings for the child process. The environment variable name
+	 * is the key of each element in the map and the value is the environment variable value.
+	 *
+	 * @param args Zero or more string arguments to be passed to the command.
+	 *
+	 * @return true if the process spawned successfully and the resulitng exit code was zero.
+	 * In the event of an error during spawn, or a subsequent non-zero exit code, false is returned.
+.	 *
+	 * @return The actual exit code returned by the spawned process, or {@code int.MIN_VALUE} if the
+	 * spawn itself failed.
+	 */
 	public boolean, int execute(string workingDirectory, string command, ref<string[string]> environ, string... args) {
 		if (spawn(workingDirectory, command, environ, args)) {
 			int exitStatus = waitForExit();

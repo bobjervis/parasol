@@ -98,6 +98,10 @@ table.func-params {
 	border-spacing: 0px;
 }
 
+table.func-params tr td {
+	vertical-align: top;
+}
+
 div.deprecated-outline {
 	margin: 3mm;
 	border-radius: 8mm;

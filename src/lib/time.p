@@ -545,7 +545,136 @@ public class Date {
 		yearDay = data.tm_yday;
 	}
 }
-
+/**
+ * Converts between a broken-down Date object and a string.
+ *
+ * The formatting of a string from a Date, as well as the parsing of a Date from a string
+ * are both specified by a pattern string. The interpretation of the fields of a pattern strings
+ * are highly analogous between the foramtting and parsing process, and so the details of
+ * pattern contents are described here.
+ *
+ * A Formatter may be used repeatedly for any mix of calls to format or parse.
+ *
+ * <i><b>Patterns for Formatting and Parsing</b></i>
+ *
+ * Patterns are composed of a simple sequence of letters plus any
+ * amount of white space and punctuation and extended Unicode characters that may be desired. 
+ * Only the ASCII letters (upper- and lower-case) plus the apostrophe are reserved with special
+ * meaning. All other characters are treated as <i>literal</i> characters.
+ *
+ * When formatting, literal characters will be copied directly to the output string. When parsing
+ * the input string is matched for exactly those literal characters.
+ *
+ * An apostrophe serves as a <i>literal-escape</i>. The next Unicode character, regardless of
+ * what it is, is treated as a literal character. Of course, to get a literal apostrophe, you
+ * need to supply two apostrophes.
+ *
+ * The following table summarizes the meaning of the letters. If a letter occurs in a pattern string
+ * and does not appear in the list below, the constructor will throw an
+ * {@link parasol:exception.IllegalArgumentException}. Letters occur in repeating blocks, with the
+ * number of letters serving as a field width.
+ *
+ * <table>
+ * <tr>
+ *     <th><u>Letter</u></th>
+ *     <th><u>Meaning</u></th>
+ *     <th><u>Presentation</u> <u>Style</u></th>
+ *     <th><u>Examples</u></th>
+ * </tr>
+ * <tr>
+ *     <td>d</td>
+ *     <td>day-of-month</td>
+ *     <td>{@code &nbsp;numeric}</td>
+ *     <td>{@code 10}; {@code 03}</td>
+ * </tr>
+ * <tr>
+ *     <td>H</td>
+ *     <td>hour (0-23)</td>
+ *     <td>{@code &nbsp;numeric}</td>
+ *     <td>{@code 5}</td>
+ * </tr>
+ * <tr>
+ *     <td>M</td>
+ *     <td>month</td>
+ *     <td>{@code &nbsp;numeric }/{@code text}</td>
+ *     <td>{@code 9; 09; Sep; September}</td>
+ * </tr>
+ * <tr>
+ *     <td>m</td>
+ *     <td>minute</td>
+ *     <td>{@code &nbsp;numeric}</td>
+ *     <td>{@code 09; 17}</td>
+ * </tr>
+ * <tr>
+ *     <td>p</td>
+ *     <td>pad modifier</td>
+ *     <td>{@code &nbsp;pad modifier}</td>
+ *     <td>{@code &nbsp;7}</td>
+ * </tr>
+ * <tr>
+ *     <td>s</td>
+ *     <td>second</td>
+ *     <td>{@code &nbsp;numeric}</td>
+ *     <td>{@code 04; 32}</td>
+ * </tr>
+ * <tr>
+ *     <td>S</td>
+ *     <td>fraction-of-second</td>
+ *     <td>{@code &nbsp;fraction}</td>
+ *     <td>{@code 01; 201}</td>
+ * </tr>
+ * <tr>
+ *     <td>y</td>
+ *     <td>year</td>
+ *     <td>{@code &nbsp;year}</td>
+ *     <td>{@code 18; 2018}</td>
+ * </tr>
+ * </table>
+ *
+ * <i>Presentation Styles</i>
+ *
+ * <b>Text:</b> The field width determines the form of the field labels. If the field width is 3 or less, 
+ * the short form is used. A field width of 4 uses the narrow form, and a width of 5 or more uses the full form.
+ * When parsing, any text beyond the field width that cannot match the next part of the pattern is included
+ * in the current field.
+ *
+ * <b>Numeric:</b> For formatting, the field width is the minimum number of characters output will
+ * consume, with leading zeros as needed. For parsing, it is the minimum number of characters that
+ * must appear in the field, with leading zeros as needed. When parsing, if the next character in the
+ * pattern is not part of a numeric field, then additional digits are interpreted as part of this
+ * field.
+ *
+ * Example:{@code<br>
+   &nbsp;&nbsp;&nbsp;&nbsp;Formatter f("yyyyMMdd");<br>
+   &nbsp;&nbsp;&nbsp;&nbsp;Date d;<br>
+   &nbsp;&nbsp;&nbsp;&nbsp;f.parse("19720613", &d);}
+ *
+ * This example would yield a {@code year} of 1972, a {@code month} of 6 and a {@code day} of 13.
+ *
+ * <b>Numeric / Text:</b> If the field width is 3 or more, use the text rules above. Otherwise, use the numeric
+ * rules above.
+ *
+ * <b>Fraction:</b> Converts the {@link parasol:time.Date.nanosecond nanosecond} field to a fraction.
+ * The field width can be anywhere from 1 to 9. That number of digits will be formatted or parsed with 
+ * the value interpreted as if it were a decimal fraction of a second with an implied decimal point to
+ * the left of the digits. This fraction field will often appear following a field of seconds, separated
+ * by a period.
+ *
+ * <b>Year:</b> If the field width is two, a shortened two-digit year form is used. Only the low-order
+ * two digits of the year is used. For parsing, the two digit value is added to 2000 to produce the
+ * {@code year} value. 
+ * <b>Pad Modifier:</b> For formatting, The next field will use space padding (which only
+ * affects numeric fields that normally zero-fill).
+ * @threading A Formatter object's methods are thread safe. If you modify the {@code calendar}, 
+ * {@code locale} or {@code timeZone} members while other threads could call methods on a Formatter
+ * object, you are responsible for ensuring that no thread can call while these values are being
+ * changed.
+ *
+ * In general, if you want to share a Formatter across threads, you should ensure that all members are
+ * fully initialized before you start using it. If necessary, it is probably better to configure several
+ * different Formatter objects, even if they share a common pattern, rather than try to coordinate
+ * changing one object's configuration.
+ */
 public class Formatter {
 	@Constant
 	static unsigned MAX_LETTER_COUNT = 255;

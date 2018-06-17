@@ -65,10 +65,9 @@ public class Environment {
 	/**
 	 * Collects the SQL diagnostic record information.
 	 *
-	 * RETURNS:
-	 *	string - The SQLSTATE string.
-	 *	long - The numeric native error code.
-	 *	string - Tthe mssage text.
+	 * @return The SQLSTATE string.
+	 * @return The numeric native error code.
+	 * @return The message text.
 	 */
 	public string, long, string getDiagnosticRecord(int record) {
 		string sqlstate;
@@ -112,9 +111,9 @@ public class DBConnection {
 	/**
 	 * This function connects to a data source using a name, a user id and a password.
 	 *
-	 * dataSourceName - A defined data source.
-	 * userName - A user id.
-	 * authenticaion - Authentication string (typically the password).
+	 * @param dataSourceName A defined data source.
+	 * @param userName A user id.
+	 * @param authenticaion Authentication string (typically the password).
 	 */
 	public boolean, SqlReturn connect(string dataSourceName, string userName, string authentication) {
 		SQLRETURN ret = SQLConnect(_connection, &dataSourceName[0], SQLSMALLINT(dataSourceName.length()), 
@@ -125,9 +124,8 @@ public class DBConnection {
 	 * This function connects to a data source in coordination with the Data Manager. If
 	 * specified to do so, the Data Manager will open a dialog to collect additional parameters.
 	 *
-	 * PARAMETERS:
-	 * 	url - The connection string, with the DSN plus additional attributes as needed.
-	 *	completion - Specifies the prompting behavior of the Data Manager (see DriverCompletion for details). 
+	 * 	@param url The connection string, with the DSN plus additional attributes as needed.
+	 *	@param completion Specifies the prompting behavior of the Data Manager (see DriverCompletion for details). 
 	 */
 	public boolean, string, SqlReturn driverConnect(string url, DriverCompletion completion) {
 		string outstr;
@@ -162,10 +160,9 @@ public class DBConnection {
 	/**
 	 * Collects the SQL diagnostic record information.
 	 *
-	 * RETURNS:
-	 *	string - The SQLSTATE string.
-	 *	long - The numeric native error code.
-	 *	string - Tthe mssage text.
+	 * @return The SQLSTATE string.
+	 * @return The numeric native error code.
+	 * @return The message text.
 	 */
 	public string, long, string getDiagnosticRecord(int record) {
 		string sqlstate;

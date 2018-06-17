@@ -441,7 +441,7 @@ void generateNamespaceSummary(string name, ref<Namespace> nm) {
 			overview.printf("<div class=deprecated-outline><div class=deprecated-caption>Deprecated</div><div class=deprecated>%s</div></div>\n", expandDocletString(doclet.deprecated, nm, overviewPage));
 		overview.printf("<div class=namespace-text>%s</div>\n", expandDocletString(doclet.text, nm, overviewPage));
 		if (doclet.threading != null)
-			overview.printf("<div class=threading-caption>Since</div><div class=threading>%s</div>\n", expandDocletString(doclet.threading, nm, overviewPage));
+			overview.printf("<div class=threading-caption>Threading</div><div class=threading>%s</div>\n", expandDocletString(doclet.threading, nm, overviewPage));
 		if (doclet.since != null)
 			overview.printf("<div class=since-caption>Since</div><div class=since>%s</div>\n", expandDocletString(doclet.since, nm, overviewPage));
 		if (doclet.see != null)
@@ -564,7 +564,7 @@ boolean generateClassPage(ref<Symbol> sym, string name, string dirName) {
 			classPage.printf("<div class=deprecated-outline><div class=deprecated-caption>Deprecated</div><div class=deprecated>%s</div></div>\n", expandDocletString(doclet.deprecated, sym, classFile));
 		classPage.printf("<div class=class-text>%s</div>\n", expandDocletString(doclet.text, sym, classFile));
 		if (doclet.threading != null)
-			classPage.printf("<div class=threading-caption>Since</div><div class=threading>%s</div>\n", expandDocletString(doclet.threading, sym, classFile));
+			classPage.printf("<div class=threading-caption>Threading</div><div class=threading>%s</div>\n", expandDocletString(doclet.threading, sym, classFile));
 		if (doclet.since != null)
 			classPage.printf("<div class=since-caption>Since</div><div class=since>%s</div>\n", expandDocletString(doclet.since, sym, classFile));
 		if (doclet.see != null)
@@ -993,15 +993,15 @@ void functionDetail(ref<Writer> output, ref<ref<OverloadInstance>[]> functions, 
 		output.printf("<td>");
 		switch (sym.visibility()) {
 		case	PUBLIC:
-			output.write("public ");
+			output.write("public&nbsp;");
 			break;
 
 		case	PROTECTED:
-			output.write("protected ");
+			output.write("protected&nbsp;");
 			break;
 		}
 		if (!sym.isConcrete(null))
-			output.write("abstract ");
+			output.write("abstract&nbsp;");
 		ref<NodeList> nl;
 		ref<FunctionType> ft = ref<FunctionType>(sym.type());
 		if (!asConstructors) {
@@ -1012,11 +1012,11 @@ void functionDetail(ref<Writer> output, ref<ref<OverloadInstance>[]> functions, 
 				while (nl != null) {
 					output.printf("%s", typeString(nl.node.type, baseName));
 					if (nl.next != null)
-						output.write(", ");
+						output.write(",&nbsp;");
 					nl = nl.next;
 				}
 			}
-			output.write(' ');
+			output.write("&nbsp;");
 		}
 		output.printf("%s(", name);
 		output.write("</td>\n<td>");
@@ -1047,9 +1047,9 @@ void functionDetail(ref<Writer> output, ref<ref<OverloadInstance>[]> functions, 
 				output.printf("%s", typeString(nl.node.type, baseName));
 			string pname = (*parameters)[j].name().asString();
 			if (parameters != null && parameters.length() > j)
-				output.printf(" %s", pname);
+				output.printf("&nbsp;%s", pname);
 			else
-				output.write(" ???");
+				output.write("&nbsp;???");
 			if (nl.next != null)
 				output.write(",");
 			nl = nl.next;
@@ -1070,14 +1070,20 @@ void functionDetail(ref<Writer> output, ref<ref<OverloadInstance>[]> functions, 
 			if (doclet.deprecated != null)
 				output.printf("<div class=deprecated-outline><div class=deprecated-caption>Deprecated</div><div class=deprecated>%s</div></div>\n", expandDocletString(doclet.deprecated, sym, baseName));
 			output.printf("\n<div class=func-text>%s</div>", expandDocletString(doclet.text, sym, baseName));
-			if (doclet.returns.length() > 0) {
+			nl = ft.returnType();
+			if (doclet.returns.length() > 0 && nl != null) {
 				output.write("\n<div class=func-return-caption>Returns:</div>");
 				if (doclet.returns.length() == 1) {
 					output.printf("\n<div class=func-return>%s</div>", expandDocletString(doclet.returns[0], sym, baseName));
 				} else {
 					output.printf("\n<ol class=func-return>\n");
-					for (i in doclet.returns)
-						output.printf("<li class=func-return>%s</li>\n", expandDocletString(doclet.returns[i], sym, baseName));
+					for (i in doclet.returns) {
+						if (nl == null)
+							break;
+						string ts = typeString(nl.node.type, baseName);
+						nl = nl.next;
+						output.printf("<li class=func-return>(<span class=code>%s</span>) %s</li>\n", ts, expandDocletString(doclet.returns[i], sym, baseName));
+					}
 					output.printf("</ol>\n");
 				}
 			}

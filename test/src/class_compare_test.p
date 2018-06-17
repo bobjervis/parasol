@@ -170,6 +170,8 @@ if (cshort1 !<> cshort2)
 class Cint {
 	int x;
 
+	Cint() { }
+
 	Cint(int n) {
 		x = n;
 	}
@@ -339,8 +341,25 @@ assert(cdouble1 != cdouble2);
 if (cdouble1 != cdouble1)
 	assert(false);
 
+monitor class E {}
 
+class D extends E {
+	long filler;
+	Cint n;
 
+	boolean f(Cint m) {
+		lock (*this) {
+			return n > m;
+		}
+	}
+}
+
+Cint mx(3);
+D d;
+d.filler = 4;
+d.n.x = -1;
+
+assert(!d.f(mx));
 
 
 
