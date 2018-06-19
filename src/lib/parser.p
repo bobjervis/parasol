@@ -1439,6 +1439,7 @@ public class Parser {
 
 			case	DOT:
 				t = _scanner.next();
+				location = _scanner.location();
 				switch (t) {
 				case	BYTES:
 					x = _tree.newUnary(Operator.BYTES, x, location);

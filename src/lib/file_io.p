@@ -21,7 +21,13 @@ import native:windows.HANDLE;
 import native:linux;
 import parasol:runtime;
 import parasol:process;
-
+/**
+ * DO NOT CALL THIS FUNCTION
+ *
+ * This is an internal support function called early in the runtime startup. 
+ * It is not intended for general use and calling it can cause memory leaks and loss
+ * of any buffered input or output.
+ */
 public void setProcessStreams() {
 	boolean stdinIsATTY;
 	boolean stdoutIsATTY;
