@@ -224,6 +224,7 @@ class ClasslikeScope extends Scope {
 			case	FUNCTION:
 			case	OBJECT_AGGREGATE:
 			case	ARRAY_AGGREGATE:
+			case	INTERFACE:
 				return true;
 				
 			case	SHAPE:
