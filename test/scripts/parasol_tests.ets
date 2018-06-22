@@ -257,6 +257,9 @@ compile(){ "int(address) func; void(address) f = void(address)(func);" }
 
 compile() { "class a = int; a b; int c; b = c;" }
 
+// You should be able to override the root scope definition of vector with 'the same' type as an import.
+compile() { "import parasol:types.vector; vector<int, int> x; x.resize(3);" }
+
 compile(){"pointer<int> ip; var v = ip;" }
 
 compile(){"class Foo { public static Foo x(-1); Foo(int z){} }"}

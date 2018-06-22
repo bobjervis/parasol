@@ -14,6 +14,7 @@
    limitations under the License.
  */
 import parasol:types.Queue;
+import parasol:exception.BoundsException;
 
 Queue<string> q;
 

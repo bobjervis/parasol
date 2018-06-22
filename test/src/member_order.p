@@ -15,7 +15,7 @@
  */
 
 
-vector<int> v;
+vector<int, int> v;
 
 v.append(3);
 

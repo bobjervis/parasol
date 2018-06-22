@@ -20,6 +20,7 @@ import parasol:storage.File;
 import parasol:storage.Seek;
 import parasol:time.Time;
 import parasol:text.string16;
+import parasol:exception.IllegalArgumentException;
 
 import native:C;
 

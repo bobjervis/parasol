@@ -95,7 +95,7 @@ class OverloadOperation {
 		if (_overload == null)
 			_overload = o;
 		for (int i = 0; i < o.instances().length(); i++) {
-			ref<Symbol> oi = (*o.instances())[i];
+			ref<OverloadInstance> oi = (*o.instances())[i];
 			_anyPotentialOverloads = true;
 			if (!s.encloses(lexicalScope)) {
 				if (oi.visibility() == Operator.PRIVATE)
@@ -111,7 +111,7 @@ class OverloadOperation {
 		return null;
 	}
 
-	public ref<Type> includeOverload(ref<Symbol> oi) {
+	public ref<Type> includeOverload(ref<OverloadInstance> oi) {
 		oi.assignType(_compileContext);
 		if (oi.deferAnalysis())
 			return oi.type();
@@ -145,9 +145,6 @@ class OverloadOperation {
 			// one of the current best list, remove that one.
 			// If one of the overloads is actually better than this one,
 			// then discard this one.
-
-			// An implicit assumption in this algorithm is that the
-			// partialOrdering of overloads is 
 			boolean includeOi = true;
 			for (int i = 0; i < _best.length();) {
 				if (oi == _best[i] ||

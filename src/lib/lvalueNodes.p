@@ -371,13 +371,13 @@ public class Identifier extends Node {
 
 	void bindConstructor(Operator visibility, ref<Scope> enclosing, ref<ParameterScope> funcScope, ref<CompileContext> compileContext) {
 		_definition = true;
-		_symbol = compileContext.pool().newOverloadInstance(visibility, false, enclosing, compileContext.annotations, &_value, funcScope.definition(), funcScope);
+		_symbol = compileContext.pool().newOverloadInstance(null, visibility, false, enclosing, compileContext.annotations, &_value, funcScope.definition(), funcScope);
 		_symbol._doclet = enclosing.file().tree().getDoclet(this);
 	}
 
 	void bindDestructor(Operator visibility, ref<Scope> enclosing, ref<ParameterScope> funcScope, ref<CompileContext> compileContext) {
 		_definition = true;
-		_symbol = compileContext.pool().newOverloadInstance(visibility, false, enclosing, compileContext.annotations, &_value, funcScope.definition(), funcScope);
+		_symbol = compileContext.pool().newOverloadInstance(null, visibility, false, enclosing, compileContext.annotations, &_value, funcScope.definition(), funcScope);
 	}
 
 	void resolveAsEnum(ref<Type> enumType, ref<CompileContext>  compileContext) {

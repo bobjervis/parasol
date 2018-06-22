@@ -27,9 +27,6 @@ public class float {
 	public float() {
 	}
 	
-//	public float(float value) {
-		
-//	}
 	public static float, boolean parse(string text) {
 		pointer<byte> endptr;
 		
@@ -47,10 +44,6 @@ public class double {
 
 	public double() {
 	}
-	
-//	public double(double value) {
-		
-//	}
 	
 	public static double, boolean parse(string text) {
 		pointer<byte> endptr;

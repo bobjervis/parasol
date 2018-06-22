@@ -17,6 +17,7 @@ namespace parasol:compiler;
 
 import parasol:storage;
 import parasol:stream;
+import parasol:text;
 
 public enum Token {
 	ERROR,

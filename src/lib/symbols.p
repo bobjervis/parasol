@@ -20,9 +20,9 @@ public class Namespace extends Symbol {
 	private string _dottedName;
 	private string _domain;
 
-	Namespace(string domain, ref<Node> namespaceNode, ref<Scope> enclosing, ref<Scope> symbols, ref<Node> annotations, ref<MemoryPool> pool, ref<CompileString> name) {
+	Namespace(string domain, ref<Node> namespaceNode, ref<Scope> enclosing, ref<Node> annotations, ref<CompileString> name, ref<Arena> arena, ref<MemoryPool> pool) {
 		super(Operator.PUBLIC, StorageClass.ENCLOSING, enclosing, annotations, pool, name, null);
-		_symbols = symbols;
+		_symbols = arena.createNamespaceScope(enclosing, this);
 		if (namespaceNode != null) {
 			boolean x;
 			
@@ -214,9 +214,7 @@ public class PlainSymbol extends Symbol {
 	public ref<Type> assignThisType(ref<CompileContext> compileContext) {
 		if (_type == null) {
 			ref<Scope> current = compileContext.current();
-			if (_enclosing.storageClass() == StorageClass.TEMPLATE)
-				_type = compileContext.arena().builtInType(TypeFamily.CLASS_DEFERRED);
-			else if (_typeDeclarator.op() == Operator.EMPTY) {
+			if (_typeDeclarator.op() == Operator.EMPTY) {
 				if (_initializer != null) {
 					compileContext.assignTypes(enclosing(), _initializer);
 					if (_initializer.deferAnalysis())
@@ -259,6 +257,8 @@ public class PlainSymbol extends Symbol {
 					_type = _typeDeclarator.unwrapTypedef(Operator.CLASS, compileContext);
 					if (_type.family() == TypeFamily.VOID)
 						_type = compileContext.errorType();
+					if (_enclosing.storageClass() == StorageClass.TEMPLATE && _type.family() == TypeFamily.CLASS_VARIABLE)
+						_type = compileContext.arena().builtInType(TypeFamily.CLASS_DEFERRED);
 				}
 			}
 		}
@@ -427,7 +427,7 @@ public class Overload extends Symbol {
 	}
 
 	public ref<Symbol> addInstance(Operator visibility, boolean isStatic, ref<Node> annotations, ref<Identifier> name, ref<ParameterScope> functionScope, ref<CompileContext> compileContext) {
-		ref<OverloadInstance> sym = compileContext.pool().newOverloadInstance(visibility, isStatic, _enclosing, annotations, name.identifier(), name, functionScope);
+		ref<OverloadInstance> sym = compileContext.pool().newOverloadInstance(this, visibility, isStatic, _enclosing, annotations, name.identifier(), name, functionScope);
 		_instances.append(sym, compileContext.pool());
 		return sym;
 	}
@@ -499,8 +499,8 @@ public class Overload extends Symbol {
 class DelegateOverload extends OverloadInstance {
 	ref<OverloadInstance> _delegate;
 	
-	DelegateOverload(ref<Scope> enclosing, ref<OverloadInstance> delegate, ref<MemoryPool> pool) {
-		super(Operator.UNIT, delegate.storageClass() == StorageClass.STATIC, enclosing, null, pool, delegate.name(), null, delegate.parameterScope());
+	DelegateOverload(ref<Overload> overload, ref<OverloadInstance> delegate, ref<MemoryPool> pool) {
+		super(overload, Operator.UNIT, delegate.storageClass() == StorageClass.STATIC, overload.enclosing(), null, pool, delegate.name(), null, delegate.parameterScope());
 		_delegate = delegate;
 	}
 	
@@ -528,22 +528,23 @@ public class OverloadInstance extends Symbol {
 	private boolean _overridden;
 	private ref<ParameterScope> _parameterScope;
 	private ref<TemplateInstanceType> _instances;	// For template's, the actual instances of those
+	private ref<Overload> _overload;
 
-	OverloadInstance(Operator visibility, boolean isStatic, ref<Scope> enclosing, ref<Node> annotations, ref<MemoryPool> pool, ref<CompileString> name, ref<Node> source, ref<ParameterScope> parameterScope) {
+	OverloadInstance(ref<Overload> overload, Operator visibility, boolean isStatic, ref<Scope> enclosing, ref<Node> annotations, ref<MemoryPool> pool, ref<CompileString> name, ref<Node> source, ref<ParameterScope> parameterScope) {
 		super(visibility, isStatic ? StorageClass.STATIC : StorageClass.ENCLOSING, enclosing, annotations, pool, name, source);
+		_overload = overload;
 		_parameterScope = parameterScope;
 	}
 
 	public void print(int indent, boolean printChildScopes) {
-		printf("%*.*c%s OverloadInstance %p %s %s%s", indent, indent, ' ', _name.asString(), this, string(visibility()), string(storageClass()), _overridden ? " overridden" : "");
-		if (_parameterScope.nativeBinding) {
-			printf(" @%x ", offset);
-			if (_type != null)
-				printf("%s", _type.signature());
-		} else if (_type != null)
-			printf(" @%d %s", offset, _type.signature());
-		printf("\n");
-		switch (_parameterScope.definition().op()) {
+		printf("%*.*c", indent, indent, ' ');
+		printSimple();
+		Operator kind = Operator.FUNCTION;
+		if (_overload != null)
+			kind = _overload.kind();
+		else
+			kind = Operator.FUNCTION;
+		switch (kind) {
 		case	FUNCTION:
 			if (printChildScopes)
 				_parameterScope.print(indent + INDENT, printChildScopes);
@@ -570,10 +571,21 @@ public class OverloadInstance extends Symbol {
 			break;
 
 		default:
-			_parameterScope.definition().printBasic(indent + INDENT);
+			_overload.print(indent + INDENT, false);
 			printf("\n");
 		}
 		printAnnotations(indent + INDENT);
+	}
+
+	public void printSimple() {
+		printf("%s OverloadInstance %p %s %s%s", _name.asString(), this, string(visibility()), string(storageClass()), _overridden ? " overridden" : "");
+		if (_parameterScope.nativeBinding) {
+			printf(" @%x ", offset);
+			if (_type != null)
+				printf("%s", _type.signature());
+		} else if (_type != null)
+			printf(" @%d %s", offset, _type.signature());
+		printf("\n");
 	}
 
 	public ref<Type> assignThisType(ref<CompileContext> compileContext) {
@@ -600,6 +612,10 @@ public class OverloadInstance extends Symbol {
 		}
 	}
 	
+	public ref<Overload> overload() {
+		return _overload;
+	}
+
 	public int parameterCount() {
 		return _parameterScope.parameterCount();
 	}
@@ -653,7 +669,7 @@ public class OverloadInstance extends Symbol {
 
 		int parameter = 0;
 		int bias = 0;
-		// TODO: This doens't look right - what effect does it have?
+		// TODO: This doesn't look right - what effect does it have?
 		while (parameter < _parameterScope.parameters().length()) {
 			ref<Symbol> symThis = (*_parameterScope.parameters())[parameter];
 			ref<Symbol> symOther = (*oiOther._parameterScope.parameters())[parameter];
@@ -835,6 +851,10 @@ public class Symbol {
 		_definition = definition;
 	}
 
+	public void printSimple() {
+		print(0, false);
+	}
+
 	public abstract void print(int indent, boolean printChildScopes);
 
 	protected void printAnnotations(int indent) {
@@ -932,16 +952,13 @@ public class Symbol {
 		assert(false);
 		return Callable.NO;
 	}
-	/*
-	 *	partialOrder
+	/**
+	 * Determines which symbol better matches the given argument list (this vs. other).
 	 *
-	 *	Determines which symbol better matches the
-	 *	given argument list (this vs. other).
-	 *
-	 *	RETURNS
-	 *		< 0	this less good than other
-	 *		== 0 this neither better nor worse than other
-	 *		> 0 this better than other
+	 * 
+	 * @return < 0 this less good than other<br>
+	 * == 0 this neither better nor worse than other<br>
+	 * > 0 this better than other
 	 */
 	public int partialOrder(ref<Symbol> other, ref<NodeList> arguments, ref<CompileContext> compileContext) {
 		assert(false);

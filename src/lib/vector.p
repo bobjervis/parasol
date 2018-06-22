@@ -21,6 +21,8 @@
  */
 namespace parasol:types;
 
+import parasol:memory;
+
 import native:C;
 
 public class Pair<class K, class V> {
@@ -245,28 +247,15 @@ private int hash(string a) {
 private int compare(string a, string b) {
 	return a.compare(b);
 }
-
-// Note: compiler code requires that this definition of 'vector' appears first. TODO: Remove this dependency.
-class vector<class E> extends vector<E, int> {
-	public vector() {
-	}
-	
-	public vector(int initialSize) {
-		super(initialSize);
-	}
-	
-	public vector(vector<E> other) {
-		super(other);
-	}
-	
-	public vector(vector<E, int> other) {
-		super(other);
-	}
-	
-	~vector() {
-	}
-}
-
+/**
+ * Vector the template class that defines the type of arrays.
+ *
+ * Any array declaration with either empty brackets ({@code\T[]}) or brackets containing an
+ * enum or integral type is declared to be a vector type.
+ *
+ * @param E The element type of the vector. Can be any class type.
+ * @param I The index type of the vector. Can be any enum or integral type.
+ */
 @Shape
 public class vector<class E, class I> {
 	@Constant
@@ -294,6 +283,8 @@ public class vector<class E, class I> {
 	}
 	
 	~vector() {
+		for (int i = 0; i < int(_length); i++)
+			_data[i].~();
 		memory.free(_data);
 	}
 	
@@ -381,16 +372,36 @@ public class vector<class E, class I> {
 		append(other);
 	}
 	
+	void copyTemp(vector<E, I> other) {
+		// a temp is assumed to be random stack trash - so clear it first.
+		_data = null;
+		_length = I(0);
+		_capacity = I(0);
+		append(other);
+	}
+
 	public void deleteAll() {
-		for (int i = 0; i < _length; i++)
+		for (long i = 0; i < long(_length); i++)
 			delete _data[i];
 		clear();
 	}
 
 	public I find(E key) {
-		return I(0);
+		for (long i = 0; i < long(_length); i++) {
+			if (_data[I(i)] == key)
+				return I(i);
+		}
+		return _length;
 	}
-	
+
+	public I find(E key, I startAt) {
+		for (long i = I(startAt); i < long(_length); i++) {
+			if (_data[I(i)] == key)
+				return I(i);
+		}
+		return _length;
+	}
+
 	public E get(I index) {
 		return _data[int(index)];
 	}
@@ -431,6 +442,11 @@ public class vector<class E, class I> {
 	}
 	
 	public void remove(I index) {
+		if (int(index) < 0 || int(index) >= int(_length))
+			return;
+		for (int j = int(index); j < int(_length) - 1; j++)
+			_data[j] = _data[j + 1];
+		resize(I(int(_length) - 1));
 	}
 	
 	public void remove(I index, I count) {
@@ -439,7 +455,9 @@ public class vector<class E, class I> {
 	public void resize(I newLength) {
 		I newSize;
 		if (_data != null) {
-			if (int(_capacity) >= int(newLength)) {
+			if (int(_length) >= int(newLength)) {
+				for (int i = int(newLength); i < int(_length); i++)
+					_data[i].~();
 				if (int(newLength) == 0)
 					clear();
 				else
@@ -448,10 +466,13 @@ public class vector<class E, class I> {
 			}
 			newSize = reservedSize(newLength);
 			if (_capacity == newSize) {
+				for (int i = int(_length); i < int(newLength); i++)
+					new (&_data[i]) E();
 				_length = newLength;
 				return;
 			}
 		} else {
+			_length = I(0);
 			if (int(newLength) == 0)
 				return;
 			newSize = reservedSize(newLength);
@@ -462,6 +483,8 @@ public class vector<class E, class I> {
 				a[int(i)] = _data[int(i)];
 			memory.free(_data);
 		}
+		for (int i = int(_length); i < int(newLength); i++)
+			new (&a[i]) E();
 		_capacity = newSize;
 		_data = a;
 		_length = newLength;
@@ -501,8 +524,12 @@ public class vector<class E, class I> {
 	private I reservedSize(I length) {
 		I usedSize = length;
 		I allocSize = I(MIN_CAPACITY);
-		while (int(allocSize) < int(usedSize))
-			allocSize = I(int(allocSize) << 1);
+		while (int(allocSize) < int(usedSize)) {
+			I nextAllocSize = I(int(allocSize) << 1);
+			if (int(nextAllocSize) <= 0)
+				return I((int(allocSize) << 1) - 1);
+			allocSize = nextAllocSize;
+		}
 		return allocSize;
 	}
 	
@@ -517,7 +544,6 @@ public class vector<class E, class I> {
 	public pointer<E> elementAddress(I index) {
 		return _data + int(index);
 	}
-	
 	
 	public void slice(vector<E, I> source, I beginIndex, I endIndex) {
 		I len = I(int(endIndex) - int(beginIndex));
@@ -794,53 +820,430 @@ public class vector<class E, class I> {
 //		return sum;
 //	}
 }
-/*
-class vector<class E, enum I> {
-	private pointer<E> _data;
-	
-	public vector() {
-		_data = pointer<E>(memory.alloc(I.length * E.bytes));
+
+@Shape
+class map<class V, class K> {
+	@Constant
+	private static int INITIAL_TABLE_SIZE	= 64;		// must be power of two
+	@Constant
+	private static int REHASH_SHIFT = 3;				// rehash at ((1 << REHASH_SHIFT) - 1) / (1 << REHASH_SHIFT) keys filled
+
+	private pointer<Entry>	_entries;
+	private int				_entriesCount;
+	private int				_deletedEntriesCount;
+	private int				_allocatedEntries;
+	private int				_rehashThreshold;
+
+	public map() {
 	}
 	
-	public vector(vector<E, I> other) {
-	}
-	
-	~vector() {
+	~map() {
+		clear();
 	}
 	
 	public void clear() {
-		memset(_data, 0, I.length * E.bytes);
+		int e = _entriesCount;
+		_entriesCount = 0;
+		_deletedEntriesCount = 0;
+		for (int i = 0; e > 0; i++) {
+			if (_entries[i].valid) {
+				e--;
+				if (!_entries[i].deleted)
+					_entries[i].value.~();
+			}
+		}
+		memory.free(_entries);
+		_entries = null;
+		_allocatedEntries = 0;
+		_rehashThreshold = 0;
 	}
 	
-	public boolean contains(E probe) {
+	public void clear(ref<memory.Allocator> allocator) {
+		int e = _entriesCount;
+		_entriesCount = 0;
+		_deletedEntriesCount = 0;
+		for (int i = 0; e > 0; i++) {
+			if (_entries[i].valid) {
+				e--;
+				if (!_entries[i].deleted)
+					_entries[i].value.~();
+			}
+		}
+		allocator.free(_entries);
+		_allocatedEntries = 0;
+		_rehashThreshold = 0;
+	}
+
+	public int size() {
+		return _entriesCount - _deletedEntriesCount;
+	}
+	
+	public boolean contains(K key) {
+		ref<Entry> e = findEntryReadOnly(key);
+		if (e != null)
+			return e.valid && !e.deleted;
+		else
+			return false;
+	}
+
+	public boolean deleteOne(K key) {
+		ref<Entry> e = findEntry(key);
+		if (e.valid) {
+			if (!e.deleted) {
+				delete e.value;
+				e.value.~();
+				e.deleted = true;
+				_deletedEntriesCount++;
+				return true;
+			}
+		}
 		return false;
 	}
 	
-	public I find(E key) {
-		return null;
+	public boolean deleteOne(K key, ref<memory.Allocator> allocator) {
+		ref<Entry> e = findEntry(key, allocator);
+		if (e.valid) {
+			if (!e.deleted) {
+				allocator delete e.value;
+				e.value.~();
+				e.deleted = true;
+				return true;
+			}
+		}
+		return false;
 	}
 	
-	public E get(I index) {
-		return _data[index.index];
+	public void deleteAll() {
+		int e = _entriesCount;
+		_entriesCount = 0;
+		for (int i = 0; e > 0; i++) {
+			if (_entries[i].valid) {
+				e--;
+				if (!_entries[i].deleted) {
+					delete _entries[i].value;
+					_entries[i].value.~();
+				}
+			}
+		}
+		memory.free(_entries);
+		_allocatedEntries = 0;
+		_rehashThreshold = 0;
 	}
 	
-	public int length() {
-		return I.length;
+	public void deleteAll(ref<memory.Allocator> allocator) {
+		int e = _entriesCount;
+		_entriesCount = 0;
+		for (int i = 0; e > 0; i++) {
+			if (_entries[i].valid) {
+				e--;
+				if (!_entries[i].deleted) {
+					allocator delete _entries[i].value;
+					_entries[i].value.~();
+				}
+			}
+		}
+		allocator.free(_entries);
+		_allocatedEntries = 0;
+		_rehashThreshold = 0;
+	}
+
+	public V get(K key) {
+		ref<Entry> e = findEntryReadOnly(key);
+		if (e == null)
+			return V(null);
+		if (e.valid && !e.deleted)
+			return e.value;
+		else
+			return V(null);
+	}
+
+	public V first() {
+		for (int i = 0; i < _allocatedEntries; i++)
+			if (_entries[i].valid && !_entries[i].deleted)
+				return _entries[i].value;
+		static V v;
+		return v;
+	}
+
+	public boolean insert(K key, V value, ref<memory.Allocator> allocator) {
+		ref<Entry> e = findEntry(key, allocator);
+		if (e.valid && !e.deleted)
+			return false;
+		else {
+			if (hadToRehash(allocator))
+				e = findEntry(key, allocator);
+			_entriesCount++;
+			e.valid = true;
+			if (e.deleted) {
+				_deletedEntriesCount--;
+				e.deleted = false;
+			}
+			e.key = key;
+			new (&e.value) V();
+			e.value = value;
+			return true;
+		}
 	}
 	
-	public void set(I index, E value) {
-		_data[index.index] = value;
+	public boolean insert(K key, V value) {
+		ref<Entry> e = findEntry(key);
+		if (e.valid && !e.deleted)
+			return false;
+		else {
+			if (hadToRehash())
+				e = findEntry(key);
+			_entriesCount++;
+			if (e.deleted) {
+				_deletedEntriesCount--;
+				e.deleted = false;
+			}
+			e.valid = true;
+			e.key = key;
+			new (&e.value) V();
+			e.value = value;
+			return true;
+		}
 	}
 	
-	public pointer<E> elementAddress(I index) {
-		return _data + index.index;
+	public V replace(K key, V value) {
+		ref<Entry> e = findEntry(key);
+		V result;
+		if (e.valid && !e.deleted) {
+			result = e.value;
+			e.value = value;
+		} else {
+			result = V(null);
+			insert(key, value);
+		}
+		return result;
 	}
 	
-	public void sort() {
-		sort(true);
+	public ref<V> elementAddress(K key) {
+		ref<Entry> e = findEntry(key);
+		if (e.valid && !e.deleted)
+			return &e.value;
+		else
+			return null;
 	}
 	
-	public void sort(boolean ascending) {
+	public ref<V> createEmpty(K key) {
+		ref<Entry> e = findEntry(key);
+		if (!e.valid) {
+			if (hadToRehash())
+				e = findEntry(key);
+			_entriesCount++;
+		}
+		e.valid = true;
+		if (e.deleted) {
+			_deletedEntriesCount--;
+			e.deleted = false;
+		}
+		e.key = key;
+		new (&e.value) V();
+		return &e.value;
 	}
+	
+	public boolean remove(K key) {
+		ref<Entry> e = findEntry(key);
+		if (e.valid) {
+			if (!e.deleted) {
+				e.value.~();
+				e.deleted = true;
+				_deletedEntriesCount++;
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	public boolean remove(K key, ref<memory.Allocator> allocator) {
+		ref<Entry> e = findEntry(key, allocator);
+		if (e.valid) {
+			if (!e.deleted) {
+				e.value.~();
+				e.deleted = true;
+				_deletedEntriesCount++;
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	public void set(K key, V value) {
+		*createEmpty(key) = value;
+	}
+	
+	private ref<Entry> findEntryReadOnly(K key) {
+		if (_entries == null)
+			return null;
+		int x = key.hash() & (_allocatedEntries - 1);
+		int startx = x;
+		for(;;) {
+			ref<Entry> e = ref<Entry>(_entries + x);
+			if (!e.valid || e.key.compare(key) == 0) {
+				if (!e.deleted)
+					return e;
+			}
+			x++;
+			if (x >= _allocatedEntries)
+				x = 0;
+		}
+	}
+
+	private ref<Entry> findEntry(K key, ref<memory.Allocator> allocator) {
+		if (_entries == null) {
+			_entries = pointer<Entry>(allocator.alloc(INITIAL_TABLE_SIZE * Entry.bytes));
+			_allocatedEntries = INITIAL_TABLE_SIZE;
+			setRehashThreshold();
+		}
+		int x = key.hash() & (_allocatedEntries - 1);
+		int startx = x;
+		ref<Entry> deletedE = null;
+		for(;;) {
+			ref<Entry> e = ref<Entry>(_entries + x);
+			if (!e.valid) {
+				if (deletedE != null)
+					return deletedE;
+				else
+					return e;
+			}
+			if (e.key.compare(key) == 0) {
+				if (!e.deleted)
+					return e;
+			}
+			if (e.deleted)
+				deletedE = e;
+			x++;
+			if (x >= _allocatedEntries)
+				x = 0;
+		}
+	}
+
+	private ref<Entry> findEntry(K key) {
+		if (_entries == null) {
+			_entries = pointer<Entry>(memory.alloc(INITIAL_TABLE_SIZE * Entry.bytes));
+			_allocatedEntries = INITIAL_TABLE_SIZE;
+			setRehashThreshold();
+		}
+		int x = key.hash() & (_allocatedEntries - 1);
+		int startx = x;
+		ref<Entry> deletedE = null;
+		for(;;) {
+			ref<Entry> e = ref<Entry>(_entries + x);
+			if (!e.valid) {
+				if (deletedE != null)
+					return deletedE;
+				else
+					return e;
+			}
+			if (e.key.compare(key) == 0)
+				return e;
+			if (e.deleted)
+				deletedE = e;
+			x++;
+			if (x >= _allocatedEntries)
+				x = 0;
+		}
+	}
+
+	private boolean hadToRehash(ref<memory.Allocator> allocator) {
+		if (_entriesCount >= _rehashThreshold) {
+			pointer<Entry> oldE = _entries;
+			_allocatedEntries *= 2;
+			_entries = pointer<Entry>(allocator.alloc(_allocatedEntries * Entry.bytes));
+			int e = _entriesCount;
+			_entriesCount = 0;
+			for (int i = 0; e > 0; i++) {
+				if (oldE[i].valid && !oldE[i].deleted) {
+					insert(oldE[i].key, oldE[i].value);
+					e--;
+					oldE[i].value.~();
+				}
+			}
+			setRehashThreshold();
+			allocator.free(oldE);
+			return true;
+		} else
+			return false;
+	}
+	
+	private boolean hadToRehash() {
+		if (_entriesCount >= _rehashThreshold) {
+			pointer<Entry> oldE = _entries;
+			_allocatedEntries *= 2;
+			_entries = pointer<Entry>(memory.alloc(_allocatedEntries * Entry.bytes));
+			int e = _entriesCount - _deletedEntriesCount;
+			_entriesCount = 0;
+			for (int i = 0; e > 0; i++) {
+//				printf("[%d/%d] %s %s\n", i, e, oldE[i].valid ? "valid" : "empty", oldE[i].deleted ? "deleted" : "");
+				if (oldE[i].valid && !oldE[i].deleted) {
+					insert(oldE[i].key, oldE[i].value);
+					e--;
+					oldE[i].value.~();
+				}
+			}
+			setRehashThreshold();
+			memory.free(oldE);
+			return true;
+		} else
+			return false;
+	}
+	
+	private void setRehashThreshold() {
+		_rehashThreshold = (_allocatedEntries * ((1 << REHASH_SHIFT) - 1)) >> REHASH_SHIFT;
+	}
+	
+	private class Entry {
+		public K		key;
+		public V		value;
+		public boolean	valid;
+		public boolean	deleted;
+	}
+
+	public iterator begin() {
+		iterator i(this);
+		if (size() == 0)
+			i._index = _allocatedEntries;
+		else {
+			for (i._index = 0; i._index < _allocatedEntries; i._index++)
+				if (_entries[i._index].valid && !_entries[i._index].deleted)
+					break;
+		}
+		return i;
+	}
+
+	public class iterator {
+		int				_index;
+		ref<map<V, K>>	_dictionary;
+
+		// This is to suppress the dumb rule that you can't initialize a variable with a value when there is no
+		// default constructor for the object.
+		iterator() {
+		}
+		
+		iterator(ref<map<V, K>> dict) {
+			_dictionary = dict;
+			_index = 0;
+		}
+
+		public boolean hasNext() {
+			return _index < _dictionary._allocatedEntries;
+		}
+
+		public void next() {
+			do
+				_index++;
+			while (_index < _dictionary._allocatedEntries &&
+				   !(_dictionary._entries[_index].valid && !_dictionary._entries[_index].deleted));
+		}
+
+		public V get() {
+			return _dictionary._entries[_index].value;
+		}
+
+		public K key() {
+			return _dictionary._entries[_index].key;
+		}
+
+	};
 }
-*/

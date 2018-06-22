@@ -1050,7 +1050,9 @@ class UnitScope extends Scope {
 			}
 		}
 	}
-
+	/**
+	 * The 'base' scope of a unit scope is the scope of the unit's namespace.
+	 */
 	public ref<Scope> base(ref<CompileContext> compileContext) {
 		return _file.namespaceSymbol().symbols();
 	}
@@ -1065,6 +1067,19 @@ class UnitScope extends Scope {
 
 	public ref<FileStat> file() {
 		return _file;
+	}
+}
+
+public class NamespaceScope extends Scope {
+	private ref<Namespace> _namespaceSymbol;
+
+	public NamespaceScope(ref<Scope> enclosing, ref<Namespace> namespaceSymbol) {
+		super(enclosing, null, StorageClass.STATIC, null);
+		_namespaceSymbol = namespaceSymbol;
+	}
+
+	public ref<Namespace> getNamespace() {
+		return _namespaceSymbol;
 	}
 }
 
@@ -1446,8 +1461,7 @@ public class Scope {
 			else
 				return null;
 		}
-		ref<Scope> scope = compileContext.arena().createScope(null, null, StorageClass.STATIC);
-		ref<Namespace> nm = compileContext.pool().newNamespace(domain, namespaceNode, this, scope, compileContext.annotations, name); 
+		ref<Namespace> nm = compileContext.pool().newNamespace(domain, namespaceNode, this, compileContext.annotations, name, compileContext.arena()); 
 		SymbolKey key(name);
 		_symbols.insert(key, nm);
 		return nm;
@@ -1758,7 +1772,16 @@ public class Scope {
 		(result, symbol) = operation.result();
 		return result, symbol;
 	}
-	
+	/**
+	 * Retrieve the scope of the base class for this (class-like) scope.
+	 *
+	 * @param compileContext The compile context for the compile that is happening. It is needed to
+	 * resolve any un-resolved symbol references in any 'extends' clause.
+	 *
+	 * @return If not null, the scope of the base class for this scope. If this scope has no meaningful
+	 * base (such as for a function parameter scope), or if the declaration of the base was somehow in
+	 * error, the method return null.
+	 */
 	public ref<Scope> base(ref<CompileContext> compileContext) {
 		return null;
 	}

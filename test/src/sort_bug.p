@@ -13,6 +13,8 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+import parasol:memory;
+
 class vec<class E, class I> {
 	private I _length;
 	private I _capacity;

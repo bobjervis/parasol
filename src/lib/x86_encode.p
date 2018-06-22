@@ -56,6 +56,7 @@ import parasol:compiler.Unary;
 import parasol:compiler.Variable;
 import parasol:storage;
 import parasol:math.abs;
+import parasol:memory;
 import parasol:pxi.Pxi;
 import parasol:runtime;
 import parasol:text;

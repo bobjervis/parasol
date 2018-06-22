@@ -337,7 +337,7 @@ public class HttpRequest {
 				int ampersand = query.indexOf('&', nextParam);
 				if (ampersand == -1)
 					ampersand = query.length();
-				text.substring ss(&query[nextParam], ampersand - nextParam);
+				substring ss(&query[nextParam], ampersand - nextParam);
 				int equals = ss.indexOf('=');
 				if (equals == -1) {
 					string param(ss);

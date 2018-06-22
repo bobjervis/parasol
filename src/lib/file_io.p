@@ -19,6 +19,7 @@ import native:C;
 import native:windows;
 import native:windows.HANDLE;
 import native:linux;
+import parasol:memory;
 import parasol:runtime;
 import parasol:process;
 /**

@@ -27,6 +27,11 @@ import native:windows;
 import native:linux;
 import native:C;
 
+public void assert(boolean test) {
+	if (!test)
+		throw AssertionFailedException();
+}
+
 int EXCEPTION_ACCESS_VIOLATION	= int(0xc0000005);
 int EXCEPTION_IN_PAGE_ERROR		= int(0xc0000006);
 

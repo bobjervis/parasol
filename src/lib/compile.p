@@ -1262,16 +1262,17 @@ public class MemoryPool extends memory.NoReleasePool {
 		return super new Overload(enclosing, null, this, name, kind);
 	}
 
-	public ref<OverloadInstance> newOverloadInstance(Operator visibility, boolean isStatic, ref<Scope> enclosing, ref<Node> annotations, ref<CompileString> name, ref<Node> source, ref<ParameterScope> functionScope) {
-		return super new OverloadInstance(visibility, isStatic, enclosing, annotations, this, name, source, functionScope);
+	public ref<OverloadInstance> newOverloadInstance(ref<Overload> overload, Operator visibility, boolean isStatic, ref<Scope> enclosing, ref<Node> annotations, ref<CompileString> name, ref<Node> source, ref<ParameterScope> functionScope) {
+		return super new OverloadInstance(overload, visibility, isStatic, enclosing, annotations, this, name, source, functionScope);
 	}
 
 	public ref<OverloadInstance> newDelegateOverload(ref<Overload> overloadSym, ref<OverloadInstance> delegate) {
-		return super new DelegateOverload(overloadSym.enclosing(), delegate, this);
+		return super new DelegateOverload(overloadSym, delegate, this);
 	}
 	
-	public ref<Namespace> newNamespace(string domain, ref<Node> namespaceNode, ref<Scope> enclosing, ref<Scope> symbols, ref<Node> annotations, ref<CompileString> name) {
-		return super new Namespace(domain, namespaceNode, enclosing, symbols, annotations, this, name);
+	public ref<Namespace> newNamespace(string domain, ref<Node> namespaceNode, ref<Scope> enclosing, 
+									ref<Node> annotations, ref<CompileString> name, ref<Arena> arena) {
+		return super new Namespace(domain, namespaceNode, enclosing, annotations, name, arena, this);
 	}
 
 	public ref<Commentary> newCommentary(ref<Commentary> next, MessageId messageId, string message) {
@@ -1315,7 +1316,7 @@ public class MemoryPool extends memory.NoReleasePool {
 	}
 
 	public ref<TemplateType> newTemplateType(ref<Symbol> symbol, ref<Template> definition, ref<FileStat> definingFile,
-						ref<Overload> overload, ref<Scope> templateScope, boolean isMonitor) {
+						ref<Overload> overload, ref<ParameterScope> templateScope, boolean isMonitor) {
 		return super new TemplateType(symbol, definition, definingFile, overload, templateScope, isMonitor);
 	}
 

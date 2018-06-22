@@ -1257,12 +1257,12 @@ public class TemplateType extends Type {
 	private ref<Template> _definition;
 	private ref<FileStat> _definingFile;
 	private ref<Overload> _overload;
-	private ref<Scope> _templateScope;
+	private ref<ParameterScope> _templateScope;
 	private ref<Type> _extends;
 	private ref<Symbol> _definingSymbol;
 	private boolean _isMonitor;
 
-	TemplateType(ref<Symbol> symbol, ref<Template> definition, ref<FileStat>  definingFile, ref<Overload> overload, ref<Scope> templateScope, boolean isMonitor) {
+	TemplateType(ref<Symbol> symbol, ref<Template> definition, ref<FileStat>  definingFile, ref<Overload> overload, ref<ParameterScope> templateScope, boolean isMonitor) {
 		super(TypeFamily.TEMPLATE);
 		_definingSymbol = symbol;
 		_definition = definition;
@@ -1323,6 +1323,24 @@ public class TemplateType extends Type {
 		assert(false);
 		return false;
 	}	
+	/**
+	 * For a TemplateType, canOverride is used to decide when multiple template's can be 
+	 * applied to the same template declaration.
+	 */
+	public boolean canOverride(ref<Type> other, ref<CompileContext> compileContext) {
+		ref<TemplateType> tt = ref<TemplateType>(other);
+		ref<ref<Symbol>[]> thisParams = _templateScope.parameters();
+		ref<ref<Symbol>[]> otherParams = tt._templateScope.parameters();
+		for (i in (*thisParams)) {
+			ref<PlainSymbol> thisSym = ref<PlainSymbol>((*thisParams)[i]);
+			ref<PlainSymbol> otherSym = ref<PlainSymbol>((*otherParams)[i]);
+			if (thisSym.typeDeclarator().deferAnalysis() || otherSym.typeDeclarator().deferAnalysis())
+				continue;
+			if (!thisSym.typeDeclarator().type.equals(otherSym.typeDeclarator().type))
+				return false;
+		}
+		return true;
+	}
 
 	public boolean extendsFormally(ref<Type> other, ref<CompileContext> compileContext) {
 		resolve(compileContext);
@@ -1598,6 +1616,20 @@ public class TypedefType extends Type {
 		return true;
 	}
 
+	/**
+	 * For a TypedefType, canOverride is used to decide when multiple template's can be 
+	 * applied to the same template declaration. For non-Template's this is false.
+	 */
+	public boolean canOverride(ref<Type> other, ref<CompileContext> compileContext) {
+		if (other.family() != TypeFamily.TYPEDEF)
+			return false;
+		if (_wrappedType.family() != TypeFamily.TEMPLATE)
+			return false;
+		ref<TypedefType> tt = ref<TypedefType>(other);
+		if (tt._wrappedType.family() != TypeFamily.TEMPLATE)
+			return false;
+		return _wrappedType.canOverride(tt._wrappedType, compileContext);
+	}
 }
 
 public enum CompareMethodCategory {

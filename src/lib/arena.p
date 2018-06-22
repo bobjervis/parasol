@@ -26,7 +26,6 @@
  */
 namespace parasol:compiler;
 
-import parasol:text;
 import parasol:storage;
 import parasol:process;
 import parasol:runtime;
@@ -45,9 +44,6 @@ public class Arena {
 	private ref<Namespace> _anonymous;
 	private ref<TemplateInstanceType>[]	_types;
 
-	private ref<Symbol> _int;
-	private ref<Symbol> _string;
-	private ref<Symbol> _var;
 	private ref<OverloadInstance> _map;
 	private ref<OverloadInstance> _vector;
 	private ref<OverloadInstance> _enumVector;
@@ -150,7 +146,8 @@ public class Arena {
 	public ref<Target> compile(ref<FileStat> mainFile, boolean countCurrentObjects, boolean verbose) {
 		CompileContext context(this, _global, verbose);
 
-		compileOnly(mainFile, verbose, &context);
+		if (!compileOnly(mainFile, verbose, &context))
+			return null;
 		return codegen(mainFile, countCurrentObjects, verbose, &context);
 	}
 
@@ -161,8 +158,8 @@ public class Arena {
 		// _importPath[0] is the ImportDirectory we need to pull in.
 
 		_importPath[0].compilePackage(&context);
-		createBuiltIns(&context);
-		context.compileFile();
+		if (createBuiltIns(&context))
+			context.compileFile();
 	}
 
 	public ref<ImportDirectory> compilePackage(int index, ref<CompileContext> compileContext) {
@@ -177,11 +174,11 @@ public class Arena {
 	}
 
 	public void finishCompilePackages(ref<CompileContext> compileContext) {
-		createBuiltIns(compileContext);
-		compileContext.compileFile();
+		if (createBuiltIns(compileContext))
+			compileContext.compileFile();
 	}
 
-	public void compileOnly(ref<FileStat> mainFile, boolean verbose, ref<CompileContext> compileContext) {
+	public boolean compileOnly(ref<FileStat> mainFile, boolean verbose, ref<CompileContext> compileContext) {
 		mainFile.parseFile(compileContext);
 		if (verbose)
 			printf("Main file parsed\n");
@@ -193,12 +190,14 @@ public class Arena {
 			mainFile.buildScopes(null, compileContext);
 		if (verbose)
 			printf("Top level scopes constructed\n");
-		createBuiltIns(compileContext);
+		if (!createBuiltIns(compileContext))
+			return false;
 		
 		_main = mainFile.fileScope();
 		if (verbose)
 			printf("Initial compilation phases completed.\n");
 		compileContext.compileFile();
+		return true;
 	}
 
 	public ref<Target> codegen(ref<FileStat> mainFile, boolean countCurrentObjects, boolean verbose, ref<CompileContext> compileContext) {
@@ -301,25 +300,66 @@ public class Arena {
 		_root = createRootScope(treeRoot, f);
 		treeRoot.scope = _root;
 		rootLoader.buildScopes();
-
-		cacheRootObjects(&rootLoader);
 		return treeRoot.countMessages() == 0;
 	}
 
 	public boolean createBuiltIns(ref<CompileContext> compileContext) {
 		compileContext.resolveImports();
+		ref<Symbol> sym = _root.lookup("ref", compileContext);
+		if (sym == null) {
+			missingRootSymbol("ref");
+			return false;
+		}
+		if (sym.class == Overload) {
+			ref<Overload> o = ref<Overload>(sym);
+			_ref = (*o.instances())[0];
+		}
+		sym = _root.lookup("pointer", compileContext);
+		if (sym == null) {
+			missingRootSymbol("pointer");
+			return false;
+		}
+		if (sym.class == Overload) {
+			ref<Overload> o = ref<Overload>(sym);
+			_pointer = (*o.instances())[0];
+		}
+		sym = _root.lookup("vector", compileContext);
+		if (sym == null) {
+			missingRootSymbol("vector");
+			return false;
+		}
+		if (sym.class == Overload) {
+			ref<Overload> o = ref<Overload>(sym);
+			_vector = (*o.instances())[0];
+			if (_vector.parameterCount() != 2)
+				_vector = (*o.instances())[1];
+			_enumVector = _vector;
+		}
+		sym = _root.lookup("map", compileContext);
+		if (sym == null) {
+			missingRootSymbol("map");
+			return false;
+		}
+		if (sym.class == Overload) {
+			ref<Overload> o = ref<Overload>(sym);
+			_map = (*o.instances())[0];
+		}
 		boolean allDefined = true;
 		for (int i = 0; i < builtInMap.length(); i++) {
 			ref<Symbol> sym = _root.lookup(builtInMap[i].name, compileContext);
 			if (sym != null)
 				_builtInType[builtInMap[i].family] = sym.bindBuiltInType(builtInMap[i].family, compileContext);
 			if (_builtInType[builtInMap[i].family] == null) {
-				_root.definition().add(MessageId.UNDEFINED_BUILT_IN, _global, CompileString(builtInMap[i].name));
+				missingRootSymbol(builtInMap[i].name);
 				allDefined = false;
 				_builtInType[builtInMap[i].family] = compileContext.pool().newBuiltInType(builtInMap[i].family, ref<ClassType>(null));
 			}
 		}
 		return allDefined;
+	}
+
+	private void missingRootSymbol(string name) {
+		_root.definition().add(MessageId.UNDEFINED_BUILT_IN, _global, CompileString(name));
 	}
 
 	public ref<Type> builtInType(TypeFamily family) {
@@ -387,33 +427,6 @@ public class Arena {
 			return compileContext.errorType();
 	}
 
-	private void cacheRootObjects(ref<CompileContext> compileContext) {
-		ref<Symbol> sym = _root.lookup("ref", compileContext);
-		if (sym.class == Overload) {
-			ref<Overload> o = ref<Overload>(sym);
-			_ref = (*o.instances())[0];
-		}
-		sym = _root.lookup("pointer", compileContext);
-		if (sym.class == Overload) {
-			ref<Overload> o = ref<Overload>(sym);
-			_pointer = (*o.instances())[0];
-		}
-		_int = _root.lookup("int", compileContext);
-		_string = _root.lookup("string", compileContext);
-		_var = _root.lookup("var", compileContext);
-		sym = _root.lookup("vector", compileContext);
-		if (sym.class == Overload) {
-			ref<Overload> o = ref<Overload>(sym);
-			_vector = (*o.instances())[1];
-			_enumVector = _vector;//o.instances()[2];
-		}
-		sym = _root.lookup("map", compileContext);
-		if (sym.class == Overload) {
-			ref<Overload> o = ref<Overload>(sym);
-			_map = (*o.instances())[0];
-		}
-	}
-
 	public ref<Scope> createScope(ref<Scope> enclosing, ref<Node> definition, StorageClass storageClass) {
 		ref<Scope> s = new Scope(enclosing, definition, storageClass, null);
 		_scopes.append(s);
@@ -422,6 +435,12 @@ public class Arena {
 
 	public ref<UnitScope> createUnitScope(ref<Scope> rootScope, ref<Node> definition, ref<FileStat> file) {
 		ref<UnitScope>  s = new UnitScope(rootScope, file, definition);
+		_scopes.append(s);
+		return s;
+	}
+
+	public ref<NamespaceScope> createNamespaceScope(ref<Scope> enclosing, ref<Namespace> namespaceSymbol) {
+		ref<NamespaceScope>  s = new NamespaceScope(enclosing, namespaceSymbol);
 		_scopes.append(s);
 		return s;
 	}
@@ -489,11 +508,14 @@ public class Arena {
 	public ref<Scope> createDomain(string domain) {
 		ref<Scope> s = _domains[domain];
 		if (s == null) {
-			s = createScope(_root, null, StorageClass.STATIC);
 //			printf("Creating domain for '%s'\n", domain);
+			ref<Namespace> nm;
+			if (domain.length() == 0)
+				nm = anonymous();
+			else
+				nm = _global.newNamespace(domain, null, _root, null, null, this);
+			s = nm.symbols();
 			_domains[domain] = s;
-			if (domain.length() == 0 && _anonymous == null)
-				_anonymous = _global.newNamespace(null, null, _root, s, null, null); 
 		}
 		return s;
 	}
@@ -504,7 +526,7 @@ public class Arena {
 
 	public ref<Namespace> anonymous() {
 		if (_anonymous == null)
-			_anonymous = _global.newNamespace(null, null, _root, createScope(_root, null, StorageClass.STATIC), null, null);
+			_anonymous = _global.newNamespace(null, null, _root, null, null, this);
 		return _anonymous;
 	}
 
@@ -589,10 +611,6 @@ public class Arena {
 		return &_types; 
 	}
 
-	ref<Symbol> stringType() {
-		return _string;
-	}
-	
 	public boolean isVector(ref<Type> type) {
 		if (type.family() != TypeFamily.SHAPE)
 			return false;

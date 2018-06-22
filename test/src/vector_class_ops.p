@@ -13,7 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-vector<int> vec_v;
+vector<int, int> vec_v;
 
 assert(vec_v.length() == 0);
 
@@ -45,7 +45,7 @@ for (int i = 0; i < 100; i++)
 
 printf("vector contents confirmed.\n");
 
-vector<int> x;
+vector<int, int> x;
 
 x.slice(vec_v, 10, 20);
 
@@ -64,7 +64,7 @@ assert(x.get(7) == 46);
 
 printf("elementAddress assignment confirmed\n");
 
-vector<string> vs;
+vector<string, int> vs;
 
 vs.append("ab");
 printf("'ab' appended\n");
@@ -90,7 +90,7 @@ for (int i = 0; i < vs.length(); i++) {
 	printf(vs.get(i));
 	printf("\n");
 }
-vector<string> vsCopy;
+vector<string, int> vsCopy;
 
 vsCopy.slice(vs, 2, 4);
 
@@ -104,5 +104,19 @@ for (int i = 0; i < vsCopy.length(); i++) {
 assert(vsCopy.get(0) == "ef");
 assert(vsCopy.get(1) == "gh");
 
+printf("test of imported alternate name for 'vector'\n");
+
+import ivec=parasol:types.vector;
+
+ivec<int, int> ivn;
+
+ivn.append(3);
+ivn.append(4);
+
+assert(ivn.length() == 2);
+assert(ivn.get(0) == 3);
+assert(ivn.get(1) == 4);
+
+assert(ivn[1] == 4);
 printf("Passed\n");
 

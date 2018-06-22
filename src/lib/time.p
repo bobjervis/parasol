@@ -20,6 +20,7 @@ import native:C;
 import native:linux;
 import parasol:runtime;
 import parasol:international;
+import parasol:exception.IllegalArgumentException;
 
 @Constant
 private long ERA_DIFF = 0x019DB1DED53E8000;

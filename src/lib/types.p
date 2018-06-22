@@ -15,33 +15,23 @@
  */
 namespace parasol:types;
 
-public class address {
-/*
-	public int hash() {
-		return int(*this);
-	}
+import parasol:memory;
+import parasol:exception.BoundsException;
 
-	public int compare(address a) {
-		long diff = long(*this) - long(a);
-		if (diff > 0)
-			return 1;
-		else if (diff < 0)
-			return -1;
-		else
-			return 0;
-	}
- */
+public class address {
 }
 
 public class boolean {
-//	public boolean() {
-//	}
-	
-//	public boolean(boolean value) {
-//	}
 }
-
-@Final 
+/**
+ * A pseudo-class that serves a primarily syntactic function.
+ *
+ * This can only appear as the single return type of a function. In that one instance,
+ * the type 'void' is re-interpreted to mean that the function returns no value at all.
+ *
+ * The identifier 'void' can be used at runtime to refer to the void class itself, although
+ * what purpose that could serve is unclear.
+ */
 public class void {}
 
 public class ClassInfo {}
@@ -49,6 +39,14 @@ public class `*Namespace*` {}
 public class `*deferred*`{}
 public class `*array*`{}
 public class `*object*`{}
+
+@Ref
+public class ref<class T> extends address {
+}
+
+@Pointer
+public class pointer<class T> extends address {
+}
 
 public class Array {
 	private var[] _elements;

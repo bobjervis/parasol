@@ -21,6 +21,7 @@ import parasol:runtime;
 import parasol:thread;
 import parasol:time;
 import parasol:types.Queue;
+import parasol:exception.IllegalArgumentException;
 
 // Message levels are positive to indicate an informative, but not alarming
 // condition or event, while negative to indicate a cause for concern.
