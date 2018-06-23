@@ -505,6 +505,7 @@ boolean generateClassPage(ref<Symbol> sym, string name, string dirName) {
 	boolean isInterface;
 	boolean hasConstants;
 	string enumLabel;
+	ref<Doclet> doclet = sym.doclet();
 	switch (t.family()) {
 	case	INTERFACE:
 		classPage.printf("<div class=class-title>Interface %s</div>", name);
@@ -524,39 +525,54 @@ boolean generateClassPage(ref<Symbol> sym, string name, string dirName) {
 		enumLabel = "Enum";
 		break;
 
+	case	TEMPLATE:
+		classPage.printf("<table class=template-params>\n");
+		classPage.printf("<tr>\n");
+		classPage.printf("<td>%sClass&nbsp;%s&lt;</td>\n<td>", t.isConcrete(null) ? "" : "Abstract&nbsp;", name);
+		ref<ParameterScope> p = ref<ParameterScope>(scope);
+		assert(t.class == TemplateType);
+		ref<ref<Symbol>[]> params = p.parameters();
+		string[string] paramMap;
+		if (doclet != null) {
+			for (i in doclet.params) {
+				int idx = doclet.params[i].indexOf(' ');
+				if (idx < 0)
+					continue;
+				string pname = doclet.params[i].substring(0, idx);
+				string value = doclet.params[i].substring(idx + 1).trim();
+				if (value.length() > 0)
+					paramMap[pname] = value;
+			}
+		}
+		for (i in *params) {
+			ref<Symbol> param = (*params)[i];
+			string pname = param.name().asString();
+			if (param.type() == null)
+				classPage.printf("&lt;null&gt;&nbsp;%s", pname);
+			else
+				classPage.printf("%s&nbsp;%s", typeString(param.type(), classFile), pname);
+			if (i < params.length() - 1)
+				classPage.write(",</td>\n");
+			else
+				classPage.write("&gt;</td>\n");
+			string comment = paramMap[pname];
+			if (comment != null)
+				classPage.printf("<td><div class=param-text>%s</div></td>\n", expandDocletString(comment, sym, classFile));
+			if (i < params.length() - 1)
+				classPage.write("</tr>\n<tr>\n<td></td><td>");
+		}
+		classPage.write("</tr>\n</table>\n");
+		generateClassInfo(t, classPage, classFile);
+		ref<TemplateType> template = ref<TemplateType>(t);
+		ref<Template> temp = template.definition();
+		scope = temp.classDef.scope;
+		break;
+
 	default:
 		classPage.printf("<div class=class-title>%sClass %s", t.isConcrete(null) ? "" : "Abstract ", name);
-		if (t.family() == TypeFamily.TEMPLATE) {
-			classPage.write("&lt;");
-			ref<ParameterScope> p = ref<ParameterScope>(t.scope());
-			ref<ref<Symbol>[]> params = p.parameters();
-			for (i in *params) {
-				ref<Symbol> sym = (*params)[i];
-				if (i > 0)
-					classPage.write(", ");
-				classPage.printf("%s %s", typeString(sym.type(), classFile), sym.name().asString());
-			}
-			classPage.write("&gt;");
-		}
 		classPage.printf("</div>\n");
-		classPage.printf("<div class=class-hierarchy>");
-		generateBaseClassName(classPage, t, classFile, false);
-		classPage.printf("</div>\n");
-		ref<ref<InterfaceType>[]> interfaces = t.interfaces();
-		if (interfaces != null && interfaces.length() > 0) {
-			printf("Got one: %s\n", name);
-			classPage.write("<div class=impl-iface-caption>All implemented interfaces:</div>\n");
-			classPage.write("<div class=impl-ifaces>\n");
-			for (i in *interfaces) {
-				ref<Type> iface = (*interfaces)[i];
-
-				classPage.write(typeString(iface, classFile));
-				classPage.write('\n');
-			}
-			classPage.write("</div>\n");
-		}
+		generateClassInfo(t, classPage, classFile);
 	}
-	ref<Doclet> doclet = sym.doclet();
 	if (doclet != null) {
 		if (doclet.author != null)
 			classPage.printf("<div class=author><span class=author-caption>Author: </span>%s</div>\n", expandDocletString(doclet.author, sym, classFile));
@@ -577,6 +593,24 @@ boolean generateClassPage(ref<Symbol> sym, string name, string dirName) {
 
 	delete classPage;
 	return true;
+}
+
+void generateClassInfo(ref<Type> t, ref<Writer> classPage, string classFile) {
+	classPage.printf("<div class=class-hierarchy>");
+	generateBaseClassName(classPage, t, classFile, false);
+	classPage.printf("</div>\n");
+	ref<ref<InterfaceType>[]> interfaces = t.interfaces();
+	if (interfaces != null && interfaces.length() > 0) {
+		classPage.write("<div class=impl-iface-caption>All implemented interfaces:</div>\n");
+		classPage.write("<div class=impl-ifaces>\n");
+		for (i in *interfaces) {
+			ref<Type> iface = (*interfaces)[i];
+
+			classPage.write(typeString(iface, classFile));
+			classPage.write('\n');
+		}
+		classPage.write("</div>\n");
+	}
 }
 
 int generateBaseClassName(ref<Writer> output, ref<Type> t, string baseName, boolean includeLink) {
@@ -661,6 +695,8 @@ void generateScopeContents(ref<Scope> scope, ref<Writer> output, string dirName,
 
 		if (sym.class == PlainSymbol) {
 			ref<Type> type = sym.type();
+			if (type == null)
+				continue;
 			if (!isInterface && 
 				sym.visibility() != Operator.PUBLIC &&
 				sym.visibility() != Operator.PROTECTED) {
@@ -921,6 +957,11 @@ void functionSummary(ref<Writer> output, ref<ref<OverloadInstance>[]> functions,
 	for (i in *functions) {
 		ref<NodeList> nl;
 		ref<OverloadInstance> sym = (*functions)[i];
+//		sym.printSimple();
+		ref<Type> symType = sym.type();
+		if (symType.family() == TypeFamily.CLASS_DEFERRED) {
+			continue;
+		}
 		ref<FunctionType> ft = ref<FunctionType>(sym.type());
 		output.printf("<tr class=\"%s\">\n", i % 2 == 0 ? "altColor" : "rowColor");
 		output.write("<td class=\"linkcol\">");
@@ -940,7 +981,10 @@ void functionSummary(ref<Writer> output, ref<ref<OverloadInstance>[]> functions,
 				output.write("void");
 			else {
 				while (nl != null) {
-					output.printf("%s", typeString(nl.node.type, baseName));
+					if (nl.node == null || nl.node.type == null)
+						output.printf("&lt;null&gt;");
+					else
+						output.printf("%s", typeString(nl.node.type, baseName));
 					if (nl.next != null)
 						output.write(", ");
 					nl = nl.next;
@@ -983,6 +1027,10 @@ void functionDetail(ref<Writer> output, ref<ref<OverloadInstance>[]> functions, 
 	output.printf("<div class=block-header>%s Detail</div>\n", functionLabel);
 	for (i in *functions) {
 		ref<OverloadInstance> sym = (*functions)[i];
+		ref<Type> symType = sym.type();
+		if (symType.family() == TypeFamily.CLASS_DEFERRED) {
+			continue;
+		}
 		string name = sym.name().asString();
 
 		output.printf("<a id=\"%s\"></a>\n", name);
@@ -1162,7 +1210,10 @@ void generateClassSummaryEntry(ref<Writer> output, int i, ref<Symbol> sym, strin
 	output.printf("<td class=\"linkcol\">");
 	if (sym.definition() != scope.className() && t.family() != TypeFamily.TEMPLATE)
 		output.printf("%s = ", name);
-	output.printf("%s</td>\n", typeString(sym.type(), baseName));
+	if (sym.type() == null)
+		output.printf("&lt;null&gt;</td>\n");
+	else		
+		output.printf("%s</td>\n", typeString(sym.type(), baseName));
 
 	output.write("<td class=\"descriptioncol\">");
 	ref<Doclet> doclet = sym.doclet();
@@ -1493,7 +1544,10 @@ string typeString(ref<Type> type, string baseName) {
 			ref<Symbol> sym = (*params)[i];
 			if (i > 0)
 				s.append(", ");
-			s.printf("%s %s", typeString(sym.type(), baseName), sym.name().asString());
+			if (sym.type() == null)
+				s.printf("&lt;null&gt; %s", sym.name().asString());
+			else
+				s.printf("%s %s", typeString(sym.type(), baseName), sym.name().asString());
 		}
 		s.append("&gt;");
 		return s;

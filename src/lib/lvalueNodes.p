@@ -363,6 +363,7 @@ public class Identifier extends Node {
 			_symbol = o.addInstance(visibility, isStatic, annotations, this, templateScope, compileContext);
 			if (_symbol == null)
 				return;
+			_symbol._doclet = enclosing.file().tree().getDoclet(this);
 			ref<Type> t = compileContext.makeTypedef(compileContext.pool().newTemplateType(_symbol, templateDef, templateScope.file(), o, templateScope, isMonitor));
 			_symbol.bindType(t, compileContext);
 		} else

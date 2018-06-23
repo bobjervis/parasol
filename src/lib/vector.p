@@ -248,10 +248,13 @@ private int compare(string a, string b) {
 	return a.compare(b);
 }
 /**
- * Vector the template class that defines the type of arrays.
+ * This is the template class that defines the type for arrays.
  *
  * Any array declaration with either empty brackets ({@code\T[]}) or brackets containing an
- * enum or integral type is declared to be a vector type.
+ * enum or integral type is internally declared to be a vector type. Declaring an array with
+ * the template syntax or with array syntax is completely equivalent. You may declare an array
+ * using template syntax and refer to elements using subscripting, and you may declare an array
+ * using array syntax and use the {@link get} and {@link set} methods.
  *
  * @param E The element type of the vector. Can be any class type.
  * @param I The index type of the vector. Can be any enum or integral type.
