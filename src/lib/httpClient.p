@@ -288,7 +288,7 @@ public class URIError extends Exception {
 public class HttpClient {
 	private ref<net.Connection> _connection;
 	private ref<WebSocket> _webSocket;
-	private ref<HttpResponse> _response;
+	private ref<HttpParsedResponse> _response;
 
 	private string _protocol;			// required for proper connection
 	private string _username;
@@ -583,7 +583,7 @@ public class HttpClient {
 		_connection.flush();
 //		printf("HTTP request sent...\n");
 		HttpParser parser(_connection);
-		_response = new HttpResponse(null);
+		_response = new HttpParsedResponse();
 		if (!parser.parseResponse(_response)) {
 			printf("Malformed response\n");
 			return false, ip;
@@ -724,7 +724,7 @@ public class HttpClient {
  	 *
 	 * @return The value of the HTTPResponse, if any.
 	 */
-	public ref<HttpResponse> response() {
+	public ref<HttpParsedResponse> response() {
 		return _response;
 	}
 }

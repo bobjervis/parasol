@@ -1478,6 +1478,8 @@ string typeString(ref<Type> type, string baseName) {
 	case	INTERFACE:
 	case	STRING:
 	case	EXCEPTION:
+	case	OBJECT_AGGREGATE:
+	case	ARRAY_AGGREGATE:
 		string t = type.signature();
 		string classFile = classFiles[long(type.scope())];
 		if (classFile == null)
@@ -1492,6 +1494,7 @@ string typeString(ref<Type> type, string baseName) {
 	case	REF:
 		args = ref<TemplateInstanceType>(type).arguments();
 		return "ref&lt;" + typeString(ref<Type>((*args)[0]), baseName) + "&gt;";
+
 
 	case	FUNCTION:
 		ref<FunctionType> ft = ref<FunctionType>(type);

@@ -47,7 +47,16 @@ public class ref<class T> extends address {
 @Pointer
 public class pointer<class T> extends address {
 }
-
+/**
+ * The Array class is designed to mirror the JavaScript Array type.
+ *
+ * In parsed JSON, JSON arrays are represented as {@code ref&lt;Array&gt;} objects.
+ *
+ * If you assign an array aggregate to a var object, that aggregate will be converted
+ * to an Array, with each aggregate array element corresponding to an element in the Array
+ * object. If the initializers in an array aggregate are sparse, the Array will be large enough
+ * to contain all of the aggregate's elements.
+ */
 public class Array {
 	private var[] _elements;
 	
@@ -58,7 +67,15 @@ public class Array {
 	public void set(int i, var x) {
 		_elements[i] = x;
 	}
-	
+
+	public void resize(int newLength) {
+		_elements.resize(newLength);
+	}
+	/**
+ 	 * Push (i.e. append) an element onto the array.
+	 *
+	 * @param x The value to be pushed into the array.
+	 */
 	public void push(var x) {
 		_elements.append(x);
 	}

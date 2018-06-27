@@ -376,8 +376,10 @@ public class HttpRequest {
 		printf("body size: %d\n", contentLength());
 	}
 }
-
-public class HttpResponse {
+/**
+ * This class is used to store the parsed fields of an HTTP response in an HTTP client.
+ */
+public class HttpParsedResponse {
 	/**
 	 * The value of the HTTP version string passed in the response.
 	 */
@@ -401,10 +403,50 @@ public class HttpResponse {
 	 * separated by commas, as a single string.
 	 */
 	public string[string] headers;
-
-	@Constant
-	private static int BUFFER_SIZE = 2048;
-	
+	/**
+	 * This function is supplied as a debugging aid.
+	 */
+	public void print() {
+		process.printf("HttpResponse\n");
+		process.printf("  HTTP Version     %s\n", httpVersion);
+		process.printf("  Code             %s\n", code);
+		process.printf("  Reason           %s\n", reason);
+		if (headers.size() > 0)
+			process.printf("  Headers:\n");
+		for (string[string].iterator i = headers.begin(); i.hasNext(); i.next()) {
+			process.printf("    %-20s %s\n", i.key(), i.get());
+		}
+	}
+}
+/**
+ * This class is used to generate the response to an HTTP request inside an
+ * HTTP server.
+ *
+ * It is important to understand that an HTTPResponse object is quite stateful.
+ * An HTTPResponse object goes through three phases corresponding to the three
+ * segments of an HTTP response message. This is done to minimize the amount of
+ * information that must be held in memory at once. 
+ *
+ * The initial phase generates the status line, the first line of the HTTP response
+ * message. The class will always respond with HTTP 1.1 as the protocol version. You
+ * can specify both the status code and the reason phrase by calling {@link statusLine}.
+ * That will compose and write the status line to the connection. Once called, the
+ * HTTPResponse object transitions to the second phase and the only options are completing the
+ * message or aborting it and severing the connection.
+ *
+ * Several convenience functions are provided that devolve to a call to {@link statusLine}:
+ * <ul>
+ *     <li>{@link ok} - This function composes a status line with a code of 200 and a
+ *                      reason of ok.
+ *     <li>{@link error} - This function takes an error code and supplies the standard
+ *                      reason for that code. Currently, the implementation only supports
+ *                      a few of the codes, so check the source code.
+ *     <li>{@link redirect} - This function take a URL and responds with the necessary
+ *						headers to signal a redirection to the URL.
+ * </ul>
+ * The second phase involves the generation of headers.
+ */
+public class HttpResponse {
 	private ref<net.Connection> _connection;
 	private boolean _headersEnded;
 	
@@ -440,20 +482,35 @@ public class HttpResponse {
 		_connection.putc(c);
 	}
 	
-	void error(int statusCode) {
+	public void error(int statusCode) {
 		string reasonPhrase;
 		switch (statusCode) {
 		case	400:	reasonPhrase = "Bad Request";			break;
+		case	401:	reasonPhrase = "Unauthorized";			break;
 		case	404:	reasonPhrase = "Not Found";				break;
 		case	405:	reasonPhrase = "Method Not Allowed";	break;
+		case	410:	reasonPhrase = "Gone";					break;
 		case	500:	reasonPhrase = "Internal Server Error";	break;
 		case	501:	reasonPhrase = "Not Implemented";		break;
 		default:		reasonPhrase = "Unknown";				break;
 		}
 		statusLine(statusCode, reasonPhrase);
-		// emit headers?
 	}
-	
+	/**
+	 * Respond with a redirect to a given uri.
+	 *
+	 * The recommendation is to follow this call by writing a short
+	 * web page that contains a link the user can click on to get to 
+	 * the intended destination.
+	 *
+	 * @param uri The redirect URI. The intention is that the browser
+	 * should re-issue the request to the new location.
+	 */
+	public void redirect(string uri) {
+		statusLine(302, "Found");
+		header("Location", uri);
+	}
+
 	public void ok() {
 		statusLine(200, "OK");
 	}
@@ -478,20 +535,6 @@ public class HttpResponse {
 	
 	public void respond() {
 		_connection.flush();
-	}
-	/**
-	 * This function is supplied as a debugging aid.
-	 */
-	public void print() {
-		process.printf("HttpResponse\n");
-		process.printf("  HTTP Version     %s\n", httpVersion);
-		process.printf("  Code             %s\n", code);
-		process.printf("  Reason           %s\n", reason);
-		if (headers.size() > 0)
-			process.printf("  Headers:\n");
-		for (string[string].iterator i = headers.begin(); i.hasNext(); i.next()) {
-			process.printf("    %-20s %s\n", i.key(), i.get());
-		}
 	}
 }
 
@@ -683,7 +726,7 @@ public class HttpParser {
 		}
 	}
 
-	public boolean parseResponse(ref<HttpResponse> response) {
+	public boolean parseResponse(ref<HttpParsedResponse> response) {
 		HttpToken t = token();
 		while (t == HttpToken.CRLF)
 			t = token();
