@@ -1096,7 +1096,18 @@ public class Scanner {
 						c = getc();
 						if (c == -1)
 							break;
-						if (c == '}') {
+						else if (c == '\n') {
+							atStartOfLine = true;
+							writer.write(c);
+							continue;
+						} else if (atStartOfLine) {
+							if (c == ' ' || c == '\t')
+								continue;
+							if (c == '*') {
+								atStartOfLine = false;
+								continue;
+							}
+						} else if (c == '}') {
 							writer.write("{}");
 							break;
 						} else if (c == '{') {
@@ -1106,6 +1117,7 @@ public class Scanner {
 							if (c == -1)
 								break;
 						}
+						atStartOfLine = false;
 						writer.write(c);
 					}
 					atStartOfLine = false;
