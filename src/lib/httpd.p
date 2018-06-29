@@ -942,7 +942,7 @@ public class StaticContentService extends HttpService {
 	}
 
 	public boolean processRequest(ref<HttpRequest> request, ref<HttpResponse> response) {
-		logger.format(log.DEBUG, "Static Content! fetching %s / %s", _filename, request.serviceResource);
+//		logger.format(log.DEBUG, "Static Content! fetching %s / %s", _filename, request.serviceResource);
 		if (request.method != HttpRequest.Method.GET) {
 			response.error(501);
 			return false;

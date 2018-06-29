@@ -197,11 +197,11 @@ public class File {
 		return false;
 	}
 
-	public boolean append(string filename) {
-		return append(filename, AccessFlags.WRITE);
+	public boolean appendTo(string filename) {
+		return appendTo(filename, AccessFlags.WRITE);
 	}
 
-	public boolean append(string filename, AccessFlags access) {
+	public boolean appendTo(string filename, AccessFlags access) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			// append always fails on Windows
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
@@ -689,7 +689,7 @@ public ref<FileWriter> appendTextFile(string filename) {
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		File f;
 
-		if (f.append(filename))
+		if (f.appendTo(filename))
 			return new FileWriter(f, true);
 	}
 	return null;
@@ -726,7 +726,7 @@ public ref<FileWriter> appendBinaryFile(string filename) {
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		File f;
 
-		if (f.append(filename))
+		if (f.appendTo(filename))
 			return new FileWriter(f, true);
 	}
 	return null;
