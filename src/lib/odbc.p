@@ -15,6 +15,8 @@
  */
 namespace parasol:sql;
 
+import parasol:time;
+
 public enum ODBCVersion {
 	V2,
 	V3,
@@ -151,8 +153,12 @@ public class DBConnection {
 			return false, null, fromSQLRETURN(ret);
 		}
 	}
-
-	ref<Statement> getStatement() {
+	/**
+	 * Get a new statement for this connection.
+	 *
+	 * @return The new Statement object.
+	 */
+	public ref<Statement> getStatement() {
 		SQLHSTMT stmt;
 		SQLAllocHandle(SQL_HANDLE_STMT, _connection, &stmt);
 		return new Statement(stmt);
@@ -615,6 +621,25 @@ public class Timestamp {
 	}
 
 	public static Timestamp NULL;
+
+	public time.Time toTime() {
+		time.Time t(toInstant());
+		return t;
+	}
+
+	public time.Instant toInstant() {
+		time.Date d;
+
+		d.year = year;
+		d.month = month;
+		d.day = day;
+		d.hour = hour;
+		d.minute = minute;
+		d.second = second;
+		d.nanosecond = fraction;
+		time.Instant i(&d, &time.UTC);
+		return i;
+	}
 }
 
 public class Date {

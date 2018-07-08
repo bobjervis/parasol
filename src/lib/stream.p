@@ -487,7 +487,13 @@ public class Reader {
 	}
 
 	public string, boolean readAll() {
-		return "", false;
+		string s;
+		for (;;) {
+			int c = _read();
+			if (c == EOF)
+				return s, true;
+			s.append(byte(c));
+		}
 	}
 
 	public long read(address buffer, long length) {

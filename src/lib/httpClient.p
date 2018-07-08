@@ -479,7 +479,11 @@ public class HttpClient {
 	/**
 	 * Issue a POST request.
 	 *
-	 * @param body The body to accompany the reuqest headers.
+	 *
+	 * If the request is successful, the content of the response object may still indicate
+	 * problems. Check the code, and if you expect a body
+	 *
+	 * @param body The body to accompany the request headers.
 	 *
 	 * @return true if the request succeeded, false otherwise.
 	 * @return The IPv4 ip address of the host. If the hostname failed to resolve
@@ -713,7 +717,7 @@ public class HttpClient {
 		return _path;
 	}
 	/**
-	 * Obtain the response to the reuqest.
+	 * Obtain the response to the request.
 	 *
 	 * This method returns null (has no response object) before a request is
 	 * initiated, or if the request failed before a response could be received, or

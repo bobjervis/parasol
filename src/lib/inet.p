@@ -21,6 +21,8 @@ import native:net;
 import native:linux;
 import native:C;
 import parasol:runtime;
+import parasol:storage;
+import parasol:stream;
 import parasol:thread;
 import openssl.org:ssl;
 import native:windows.WORD;
@@ -282,6 +284,49 @@ public class Socket {
 
 }
 
+// TODO: Implement unread() without using the buffering code in the Reader itself.
+
+class ConnectionReader extends Reader {
+	private ref<Connection> _connection;
+
+	public ConnectionReader(ref<Connection> connection) {
+		_connection = connection;
+	}
+
+	public int _read() {
+		byte b;
+		int i = _connection.read(pointer<byte>(&b), 1);
+		if (i > 0)
+			return b;
+		else
+			return stream.EOF;
+	}
+
+	public int read(ref<byte[]> buffer) {
+		return _connection.read(&(*buffer)[0], buffer.length());
+	}
+
+	public long read(address buffer, long length) {
+		return _connection.read(pointer<byte>(buffer), int(length));
+	}
+
+	public int read(ref<char[]> buffer) {
+		return _connection.read(pointer<byte>(&(*buffer)[0]), buffer.length() * char.bytes);
+	}
+}
+
+class ConnectionWriter extends Writer {
+	private ref<Connection> _connection;
+
+	public ConnectionWriter(ref<Connection> connection) {
+		_connection = connection;
+	}
+
+	protected void _write(byte c) {
+		_connection.putc(c);
+	}
+}
+
 public class Connection {
 	@Constant
 	private static int BUFFER_MAX = 8192;
@@ -422,6 +467,18 @@ public class Connection {
 		}
 		return message;
 	}
+	/**
+	 * Obtain a Reader that can be used to collect data from the Connection.
+	 *
+ 	 * @return A Reader object positioned at the current location on the file stream.
+	 */
+	public abstract ref<Reader> getReader();
+	/**
+	 * Obtain a Writer that can be used to send data to the Connection.
+	 *
+	 * @return A Writer object that will write through to the underlying Connection.
+	 */
+	public abstract ref<Writer> getWriter();
 
 	public abstract boolean acceptSecurityHandshake();
 
@@ -454,6 +511,22 @@ class PlainConnection extends Connection {
 
 	public boolean initiateSecurityHandshake() {
 		return true;
+	}
+
+	public ref<Reader> getReader() {
+		if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+			storage.File f(_acceptfd);
+			return f.getBinaryReader();
+		} else
+			return new ConnectionReader(this);
+	}
+
+	public ref<Writer> getWriter() {
+		if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+			storage.File f(_acceptfd);
+			return f.getBinaryWriter();
+		} else
+			return new ConnectionWriter(this);
 	}
 
 	public int read(pointer<byte> buffer, int length) {
@@ -712,6 +785,14 @@ class SSLConnection extends Connection {
 				return false;
 		}
 		return true;
+	}
+
+	public ref<Reader> getReader() {
+		return new ConnectionReader(this);
+	}
+
+	public ref<Writer> getWriter() {
+		return new ConnectionWriter(this);
 	}
 
 	public int read(pointer<byte> buffer, int length) {

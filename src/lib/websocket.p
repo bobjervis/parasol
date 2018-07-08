@@ -80,7 +80,13 @@ public class WebSocketService extends HttpService {
 		return false;
 	}
 }
-
+/**
+ * Factory class that creates WebSocket objects for requests.
+ *
+ * Each WebSocketFactory is defined to process one or more protocols. When a request comes in with
+ * a Web Socket upgrade header and a protocol header naming this factory, the processConnection
+ * method is called to complete the response.
+ */
 public class WebSocketFactory {
 	boolean processConnection(string protocol, ref<HttpRequest> request, ref<HttpResponse> response) {
 		string key = request.headers["sec-websocket-key"];
@@ -88,9 +94,10 @@ public class WebSocketFactory {
 			response.error(400);
 			return false;
 		}
-		ref<Connection> connection = response.connection();
-		if (!start(request, response, connection))
+		if (!start(request, response)) {
+			response.error(400);
 			return false;
+		}
 		response.statusLine(101, "Switching Protocols");
 		string v = computeWebSocketAccept(key);
 		response.header("Sec-WebSocket-Accept", v);
@@ -101,8 +108,19 @@ public class WebSocketFactory {
 		response.respond();
 		return true;
 	}
-
-	public abstract boolean start(ref<HttpRequest> request, ref<HttpResponse> response, ref<Connection> connection);
+	/**
+	 * Start a Web Socket request.
+	 *
+	 * This method may implement secutiry checks or other validation of the request before accepting the connection.
+	 *
+	 * @param request The incoming HTTP Request object.
+	 *
+	 * @param response The associated HTTP Response object.
+	 *
+	 * @return true if the request is acceptable and the connection should be confirmed as a valid Web Socket.
+	 * false if the connection should be refused.
+	 */
+	public abstract boolean start(ref<HttpRequest> request, ref<HttpResponse> response);
 }
 
 string computeWebSocketKey(int byteCount) {

@@ -346,6 +346,7 @@ public class HttpRequest {
 					string param(ss.c_str(), equals);
 					int v = equals + 1;
 					string value(ss.c_str() + v, ss.length() - v);
+					// TODO: decode URI component to unescape character sequences.
 					_parameters[param] = value;
 				}
 				nextParam = ampersand + 1;
