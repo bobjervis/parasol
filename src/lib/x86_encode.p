@@ -3957,6 +3957,7 @@ CC continuation(Operator compare, ref<Type> type) {
 	switch (compare) {
 	case	NOT_LESS_GREATER:
 		switch (type.family()) {
+		case	ENUM:
 		case	UNSIGNED_32:
 		case	SIGNED_16: 
 		case	SIGNED_32: 
@@ -3973,6 +3974,7 @@ CC continuation(Operator compare, ref<Type> type) {
 
 	case	LESS_GREATER:
 		switch (type.family()) {
+		case	ENUM:
 		case	UNSIGNED_32:
 		case	SIGNED_16: 
 		case	SIGNED_32: 
@@ -3991,6 +3993,7 @@ CC continuation(Operator compare, ref<Type> type) {
 		switch (type.family()) {
 		case	ADDRESS:
 		case	POINTER:
+		case	ENUM:
 		case	UNSIGNED_32:	return CC.JNB;
 		case	SIGNED_16: 
 		case	SIGNED_32: 
@@ -4005,6 +4008,7 @@ CC continuation(Operator compare, ref<Type> type) {
 
 	case	NOT_GREATER:
 		switch (type.family()) {
+		case	ENUM:
 		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JNA;
@@ -4021,6 +4025,7 @@ CC continuation(Operator compare, ref<Type> type) {
 
 	case	NOT_LESS_EQUAL:
 		switch (type.family()) {
+		case	ENUM:
 		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JA;
@@ -4037,6 +4042,7 @@ CC continuation(Operator compare, ref<Type> type) {
 
 	case	NOT_GREATER_EQUAL:
 		switch (type.family()) {
+		case	ENUM:
 		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JB;
@@ -4108,6 +4114,7 @@ CC continuation(Operator compare, ref<Type> type) {
 
 	case	GREATER:
 		switch (type.family()) {
+		case	ENUM:
 		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JA;
@@ -4124,6 +4131,7 @@ CC continuation(Operator compare, ref<Type> type) {
 
 	case	GREATER_EQUAL:
 		switch (type.family()) {
+		case	ENUM:
 		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JNB;
@@ -4140,6 +4148,7 @@ CC continuation(Operator compare, ref<Type> type) {
 
 	case	LESS:
 		switch (type.family()) {
+		case	ENUM:
 		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JB;
@@ -4156,6 +4165,7 @@ CC continuation(Operator compare, ref<Type> type) {
 
 	case	LESS_EQUAL:
 		switch (type.family()) {
+		case	ENUM:
 		case	ADDRESS:
 		case	POINTER:
 		case	UNSIGNED_32:	return CC.JNA;
