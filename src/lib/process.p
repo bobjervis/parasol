@@ -553,7 +553,7 @@ public int debugSpawn(string command, ref<string> output, ref<exception_t> outco
 	return result;
 }
 */
-public int, string, exception_t execute(time.Time timeout, string... args) {
+public int, string, exception_t execute(time.Duration timeout, string... args) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 /*
 		SpawnPayload payload;
@@ -594,7 +594,7 @@ public int, string, exception_t execute(time.Time timeout, string... args) {
 			linux.execv(argv[0], &argv[0]);
 			linux._exit(-1);
 		} else {
-			if (timeout.value() > 0) {
+			if (timeout.isFinite()) {
 				timerThread = new Thread();
 				timer.init(pid, timeout);
 				timerThread.start(countdownTimer, &timer);
@@ -612,7 +612,7 @@ public int, string, exception_t execute(time.Time timeout, string... args) {
 			linux.pid_t terminatedPid = linux.waitpid(pid, &exitStatus, 0);
 			if (terminatedPid != pid)
 				return -3, null, exception_t.NO_EXCEPTION;
-			if (timeout.value() > 0) {
+			if (timeout.isFinite()) {
 				timer.signalDone();
 				timerThread.join();
 			} else
@@ -778,12 +778,15 @@ private class TimeoutData {
 	public boolean done;
 	public boolean timedOut;
 
-	public void init(linux.pid_t pid, time.Time timeout) {
+	public void init(linux.pid_t pid, time.Duration timeout) {
 		childPid = pid;
 		linux.pthread_cond_init(&timerVariable, null);
 		linux.pthread_mutex_init(&timerLock, null);
 		linux.clock_gettime(linux.CLOCK_REALTIME, &expirationTime);
-		expirationTime.tv_sec += timeout.value();
+		time.Instant now = time.instantNow();
+		now.add(timeout);
+		expirationTime.tv_sec += timeout.seconds();
+
 	}
 	
 	public void startTimer() {

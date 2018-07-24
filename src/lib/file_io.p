@@ -740,20 +740,65 @@ public ref<FileWriter> createBinaryFile(string filename) {
 	else
 		return null;
 }
-
+/**
+ * The Directory class is used to scan the contents of a directory using a wildcard pattern.
+ *
+ * The pattern must conform to the rules of the native operating system.
+ *
+ * TODO: For Linux, the wildcard string is ignored and effectively is treated as '*'. THis
+ * needs to be fixed.
+ *
+ * The calling pattern is:
+ *
+ *<pre>{@code        ref<Directory> d = new Directory(path);
+ *        if (d.first()) { 
+ *            do { 
+ *                string path = d.path();
+ *                ...
+ *            \} while (d.next());
+ *        \} 
+ *        delete d;
+ *}</pre>
+ */
 public class Directory {
 	private windows.HANDLE						_handle;
 	private address								_data;
 	private ref<linux.dirent>					_dirent;
 	private string								_directory;
 	private string								_wildcard;
-
+	/**
+	 * Constructo a Directory object that will read all entries
+	 * of the named path.
+	 *
+	 * @param path A path naming a readable directory.
+	 */
 	public Directory(string path) {
 		_handle = windows.INVALID_HANDLE_VALUE;
-//		if (path.length() == 0)
-//			assert(false);
 		_directory = path;
 		_wildcard = "*";
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN)
+			_data = memory.alloc(windows.sizeof_WIN32_FIND_DATA);
+	}
+	/**
+	 * Constructo a Directory object that will read all entries
+	 * of the named path that match the given pattern.
+	 *
+	 * All characters in the pattern string will match exactly the
+	 * corresponding character in the directory, except for the
+	 * following:
+	 * <ul>
+	 *     <li>An asterisk matches any number of characters.
+	 *     <li> A question mark matches exactly one character.
+	 * </ul>
+	 *
+	 * @param path A path naming a readable directory.
+	 * @param pattern A wildcard pattern. Only entries matching the
+	 * pattern will be returned.
+	 */
+	public Directory(string path, string pattern) {
+		_handle = windows.INVALID_HANDLE_VALUE;
+		_directory = path;
+		_wildcard = pattern;
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN)
 			_data = memory.alloc(windows.sizeof_WIN32_FIND_DATA);
 	}
@@ -767,12 +812,13 @@ public class Directory {
 			linux.closedir(ref<linux.DIR>(_data));
 		}
 	}
-	
-	public void pattern(string wildcard) {
-		_wildcard = wildcard;
-	}
-
-	boolean first() {
+	/**
+	 * Advance to the first directory entry.
+	 *
+	 * @return true if there is at least one entry in the directory that matched the
+	 * pattern, false if not, or if the directory is not readable.
+	 */
+	public boolean first() {
 		string s = _directory + "\\" + _wildcard;
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			_handle = HANDLE(windows.FindFirstFile(s.c_str(), ref<windows.WIN32_FIND_DATA>(_data)));
@@ -785,8 +831,12 @@ public class Directory {
 		} else
 			return false;
 	}
-
-	boolean next() {
+	/**
+	 * Advance to the next directory entry,
+	 *
+	 * @return true if there is another directory entry to read, false otherwise.
+	 */
+	public boolean next() {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			int result = windows.FindNextFile(_handle, ref<windows.WIN32_FIND_DATA>(_data));
 			if (result != 0)
@@ -810,7 +860,15 @@ public class Directory {
 		}
 		return false;
 	}
-
+	/**
+	 * Get the path entry from the Directory, including the directory path passed in the constructor.
+	 *
+ 	 * If the Directory returns true from either {@link first} or {@link next}, then
+	 * the value of this method is the path of the entry read. If the previous call to
+	 * either function returns false, then the value of this method is undefined.
+	 *
+	 * @return the path last read from the Directory.
+	 */
 	public string path() {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			return _directory + "/" + ref<windows.WIN32_FIND_DATA>(_data).fileName();
@@ -819,7 +877,15 @@ public class Directory {
 		} else
 			return null;
 	}
-
+	/**
+	 * Get the filename entry from the Directory, excluding the directory path.
+	 *
+ 	 * If the Directory returns true from either {@link first} or {@link next}, then
+	 * the value of this method is the filename of the entry read. If the previous call to
+	 * either function returns false, then the value of this method is undefined.
+	 *
+	 * @return the filename last read from the Directory.
+	 */
 	public string filename() {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			return ref<windows.WIN32_FIND_DATA>(_data).fileName();

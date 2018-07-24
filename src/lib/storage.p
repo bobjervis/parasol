@@ -336,7 +336,6 @@ public boolean anyFilesNewer(string path, time.Instant referenceTime) {
 		return false;
 	// Directories fall through to here
 	Directory dir(path);
-	dir.pattern("*");
 	if (dir.first()) {
 		do {
 			if (dir.filename() == "." || dir.filename() == "..")
@@ -510,7 +509,6 @@ public boolean copyDirectoryTree(string source, string destination, boolean tryA
 	if (!makeDirectory(destination))
 		return false;
 	ref<Directory> dir = new Directory(source);
-	dir.pattern("*");
 	if (dir.first()) {
 		do {
 			if (dir.filename() == "." || dir.filename() == "..")
@@ -545,6 +543,7 @@ public boolean copyDirectoryTree(string source, string destination, boolean tryA
 			}
 		} while (dir.next());
 	}
+	delete dir;
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		linux.statStruct s;
@@ -589,7 +588,6 @@ public boolean deleteDirectoryTree(string path) {
 	if (!isDirectory(path))
 		return false;
 	ref<Directory> dir = new Directory(path);
-	dir.pattern("*");
 	if (dir.first()) {
 		do {
 			if (dir.filename() == "." || dir.filename() == "..")

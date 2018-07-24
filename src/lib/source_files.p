@@ -105,7 +105,6 @@ public class ImportDirectory {
 			else
 				dirName = _directoryName;
 			ref<Directory> dir = new Directory(dirName);
-			dir.pattern("*");
 			if (dir.first()) {
 				if (logImports)
 					printf("Found %s\n", dir.path());

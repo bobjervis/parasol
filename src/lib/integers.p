@@ -15,6 +15,8 @@
  */
 namespace parasol:types;
 
+import parasol:time;
+
 public class short {
 	public static short MIN_VALUE = 0xffffffffffff8000;
 	public static short MAX_VALUE = 0x7fff;
@@ -256,6 +258,37 @@ public class int {
 		return false;
 	}
 	
+	public time.Duration minute() {
+		return time.Duration(60 * *this);
+	}
+
+	public time.Duration minutes() {
+		return time.Duration(60 * *this);
+	}
+
+	public time.Duration second() {
+		return time.Duration(*this);
+	}
+
+	public time.Duration seconds() {
+		return time.Duration(*this);
+	}
+
+	public time.Duration millisecond() {
+		return time.Duration(0, 1000000 * *this);
+	}
+
+	public time.Duration milliseconds() {
+		return time.Duration(0, 1000000 * *this);
+	}
+
+	public time.Duration nanosecond() {
+		return time.Duration(0, *this);
+	}
+
+	public time.Duration nanoseconds() {
+		return time.Duration(0, *this);
+	}
 }
 
 public class long {
@@ -371,6 +404,38 @@ public class long {
     public int hash() {
             return int(*this);
     }
+
+	public time.Duration minute() {
+		return time.Duration(60 * *this);
+	}
+
+	public time.Duration minutes() {
+		return time.Duration(60 * *this);
+	}
+
+	public time.Duration second() {
+		return time.Duration(*this);
+	}
+
+	public time.Duration seconds() {
+		return time.Duration(*this);
+	}
+
+	public time.Duration millisecond() {
+		return time.Duration(0, 1000000 * *this);
+	}
+
+	public time.Duration milliseconds() {
+		return time.Duration(0, 1000000 * *this);
+	}
+
+	public time.Duration nanosecond() {
+		return time.Duration(0, *this);
+	}
+
+	public time.Duration nanoseconds() {
+		return time.Duration(0, *this);
+	}
 }
 
 public class byte {

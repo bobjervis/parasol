@@ -686,13 +686,12 @@ class RunObject extends script.Object {
 			string[] finalArgs = _arguments.split(' ');
 			args.append(finalArgs);
 		}
-		time.Time timeout(_timeout);
 
 		int result;
 		string output;
 		process.exception_t exception;
 		
-		(result, output, exception) = process.execute(timeout, args);
+		(result, output, exception) = process.execute(_timeout.seconds(), args);
 		Expect outcome;
 		if (result < 0)
 			outcome = Expect.FAIL;

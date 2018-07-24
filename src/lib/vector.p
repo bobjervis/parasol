@@ -453,6 +453,17 @@ public class vector<class E, class I> {
 	}
 	
 	public void remove(I index, I count) {
+		if (int(index) < 0 || int(index) >= int(_length))
+			return;
+		if (count <= 0)
+			return;
+		if (index + count > _length)
+			resize(index);
+		else {
+			for (int j = int(index); j < int(_length) - count; j++)
+				_data[j] = _data[j + count];
+			resize(I(int(_length) - count));
+		}
 	}
 	
 	public void resize(I newLength) {

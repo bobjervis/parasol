@@ -135,11 +135,112 @@ public Instant instantNow() {
 		return Instant(0, 0);
 	}
 }
+
+public class Duration {
+	long _seconds;
+	long _nanoseconds;
+
+	public Duration() {}
+
+	public Duration(long seconds) {
+		_seconds = seconds;
+	}
+
+	public Duration(long seconds, long nanoseconds) {
+		_seconds = seconds;
+		_nanoseconds = nanoseconds;
+	}
+
+	public Duration plus(Duration... more) {
+		// Check for infinite duration
+		if (_nanoseconds == long.MAX_VALUE)
+			return *this;
+		Duration x = *this;
+		for (i in more) {
+			if (more[i]._nanoseconds == long.MAX_VALUE)
+				return more[i];
+			x._seconds += more[i]._seconds;
+			x._nanoseconds += more[i]._nanoseconds;
+		}
+		x.normalize();
+		return x;
+	}
+
+	public Duration minus(Duration... more) {
+		// Check for infinite duration
+		if (_nanoseconds == long.MAX_VALUE)
+			return *this;
+		Duration x = *this;
+		for (i in more) {
+			if (more[i]._nanoseconds == long.MAX_VALUE)
+				return more[i];
+			x._seconds -= more[i]._seconds;
+			x._nanoseconds -= more[i]._nanoseconds;
+		}
+		x.normalize();
+		return x;
+	}
+
+	public Duration negated() {
+		Duration x = {
+				_seconds: -this._seconds,
+				_nanoseconds: -this._nanoseconds
+			};
+		return x;
+	}
+
+	private void normalize() {
+		_seconds += _nanoseconds / NANOS_PER_SECOND;
+		_nanoseconds %= NANOS_PER_SECOND;
+	}
+	/*
+	 * Implement a partially ordered relation of Time objects so that times can be compared
+	 * correctly.
+	 *
+	 * @return 1 if the left operand is greater than the right, 0 if they are equal and -1 if the left
+	 * operand is less than the right. Returns NaN if both values are infinite. If only one operand
+	 * is infinite, that is the larger.
+	 */
+	public float compare(ref<Duration> other) {
+		// Check for infinite duration
+		if (_nanoseconds == long.MAX_VALUE) {
+			if (other._nanoseconds == long.MAX_VALUE)
+				return float.NaN;
+			else
+				return 1;
+		} else if (other._nanoseconds == long.MAX_VALUE)
+			return -1;
+
+		if (_seconds > other._seconds)
+			return 1;
+		else if (_seconds < other._seconds)
+			return -1;
+		else if (_nanoseconds > other._nanoseconds)
+			return 1;
+		else if (_nanoseconds < other._nanoseconds)
+			return -1;
+		else
+			return 0;
+	}
+
+	public boolean isFinite() {
+		return _nanoseconds != long.MAX_VALUE;
+	}
+
+	public long seconds() {
+		return _seconds;
+	}
+
+	public long nanoseconds() {
+		return _nanoseconds;
+	}
+}
+
 /**
- * This value is defined for timeout call arguments that use a Time of 0 milliseconds
- * to mean an infinite duration.
+ * This value is defined for timeout call arguments that use a denormalized INterval
+ * to represent an infinite duration.
  */
-public Time infinite(0);
+public Duration infinite(long.MAX_VALUE, long.MAX_VALUE);
 /*
  * An Instance represents a time with the greatest precision and range. Where a
  * Time object has a little more than a one billion year range, an Instant spans
@@ -229,6 +330,20 @@ public class Instant {
 		}
 	}
 
+	public void add(Duration d) {
+		_seconds += d.seconds();
+		_nanos += d.nanoseconds();
+		_seconds += _nanos / NANOS_PER_SECOND;
+		_nanos %= NANOS_PER_SECOND;
+	}
+
+	public void subtract(Duration d) {
+		_seconds -= d.seconds();
+		_nanos -= d.nanoseconds();
+		_seconds += _nanos / NANOS_PER_SECOND;
+		_nanos %= NANOS_PER_SECOND;
+	}
+	
 	public long seconds() {
 		return _seconds;
 	}

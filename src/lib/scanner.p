@@ -1256,6 +1256,10 @@ public class Scanner {
 		return result;
 	}
 	
+	public int byteLocation() {
+		return _location.offset;
+	}
+
 	public Location location() { 
 		return _location; 
 	}
