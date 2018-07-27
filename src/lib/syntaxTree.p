@@ -84,7 +84,6 @@ public enum Operator {
 	CLASS_DECLARATION,
 	INTERFACE_DECLARATION,
 	FLAGS_DECLARATION,
-	ENUM_DECLARATION,
 	INITIALIZE,
 	ANNOTATED,
 	CLASS_COPY,
@@ -161,6 +160,7 @@ public enum Operator {
 	CLASS,
 	MONITOR_CLASS,
 	INTERFACE,
+	ENUM,
 	// Template
 	TEMPLATE,
 	// Loop
@@ -171,7 +171,6 @@ public enum Operator {
 	// Block
 	BLOCK,
 	UNIT,
-	ENUM,
 	FLAGS,
 	// Map
 	MAP,
@@ -746,6 +745,9 @@ private Test blockFallsThrough(ref<NodeList> nl) {
 }
 
 public class Class extends Block {
+	/**
+	 * For 
+	 */
 	protected ref<Node> _extends;
 	private ref<Identifier> _name;
 	private ref<NodeList> _implements;
@@ -919,84 +921,90 @@ public class Class extends Block {
 	}
 	
 	private void assignTypes(ref<CompileContext> compileContext) {
-		if (_extends != null)
-			compileContext.assignTypes(_extends);
-		assignImplementsClause(compileContext);
-		if (_extends != null) {
-			if (_extends.deferAnalysis()) {
-				type = _extends.type;
-				return;
+		if (op() != Operator.ENUM) {
+
+			if (_extends != null)
+				compileContext.assignTypes(_extends);
+			assignImplementsClause(compileContext);
+			if (_extends != null) {
+				if (_extends.deferAnalysis()) {
+					type = _extends.type;
+					return;
+				}
+			}
+			for (ref<NodeList> nl = _implements; nl != null; nl = nl.next)
+				if (nl.node.deferAnalysis()) {
+					type = nl.node.type;
+					return;
+				}
+			
+			if (_extends != null) {
+				ref<Type> t = _extends.unwrapTypedef(Operator.CLASS, compileContext);
+				if (t.isCircularExtension(scope, compileContext)) {
+					_extends.add(MessageId.CIRCULAR_EXTENDS, compileContext.pool());
+					type = compileContext.errorType();
+					ref<ClassScope>(scope).classType = null;
+					_extends.type = type;
+					return;
+				}
+				if (op() == Operator.MONITOR_CLASS && !t.isLockable()) {
+					_extends.add(MessageId.INVALID_MONITOR_EXTENSION, compileContext.pool());
+					type = compileContext.errorType();
+					ref<ClassScope>(scope).classType = null;
+					_extends.type = type;
+					return;
+				}
 			}
 		}
-		for (ref<NodeList> nl = _implements; nl != null; nl = nl.next)
-			if (nl.node.deferAnalysis()) {
-				type = nl.node.type;
-				return;
-			}
-		
-		if (_extends != null) {
-			ref<Type> t = _extends.unwrapTypedef(Operator.CLASS, compileContext);
-			if (t.isCircularExtension(scope, compileContext)) {
-				_extends.add(MessageId.CIRCULAR_EXTENDS, compileContext.pool());
-				type = compileContext.errorType();
-				ref<ClassScope>(scope).classType = null;
-				_extends.type = type;
-				return;
-			}
-			if (op() == Operator.MONITOR_CLASS && !t.isLockable()) {
-				_extends.add(MessageId.INVALID_MONITOR_EXTENSION, compileContext.pool());
-				type = compileContext.errorType();
-				ref<ClassScope>(scope).classType = null;
-				_extends.type = type;
-				return;
-			}
-		}
+
 		super.assignTypes(compileContext);
-		
-		for (ref<NodeList> nl = _implements; nl != null; nl = nl.next) {
-			ref<InterfaceType> tp = ref<InterfaceType>(nl.node.unwrapTypedef(Operator.INTERFACE, compileContext));
-			if (tp.deferAnalysis()) {
-				type = tp;
-				continue;
-			}
-			ref<CompileString> identifier;
-			switch (nl.node.op()) {
-			case IDENTIFIER:
-				ref<Identifier> nm = ref<Identifier>(nl.node);
-				identifier = nm.identifier();
-				break;
 
-			case DOT:
-				ref<Selection> sel = ref<Selection>(nl.node);
-				identifier = sel.identifier();
-				break;
-
-			default:
-				nl.node.print(0);
-				assert(false);
-			}
-			for (ref<Symbol>[Scope.SymbolKey].iterator i = tp.scope().symbols().begin(); i.hasNext(); i.next()) {
-				ref<Overload> o = ref<Overload>(i.get());
-				ref<Symbol> sym = scope.lookup(o.name(), compileContext);
-				if (sym != null && sym.class == Overload) {
-					ref<Overload> classMethods = ref<Overload>(sym);
-					for (int i = 0; i < classMethods.instances().length(); i++) {
-						ref<OverloadInstance> oi = (*classMethods.instances())[i];
-						oi.assignType(compileContext);
-					}
-					for (int i = 0; i < o.instances().length(); i++) {
-						ref<OverloadInstance> oi = (*o.instances())[i];
-						oi.assignType(compileContext);
-						// oi is the interface method, classFunctions are the class' methods of the same name
-						if (!classMethods.doesImplement(oi))
+		if (op() != Operator.ENUM) {
+			for (ref<NodeList> nl = _implements; nl != null; nl = nl.next) {
+				ref<InterfaceType> tp = ref<InterfaceType>(nl.node.unwrapTypedef(Operator.INTERFACE, compileContext));
+				if (tp.deferAnalysis()) {
+					type = tp;
+					continue;
+				}
+				ref<CompileString> identifier;
+				switch (nl.node.op()) {
+				case IDENTIFIER:
+					ref<Identifier> nm = ref<Identifier>(nl.node);
+					identifier = nm.identifier();
+					break;
+	
+				case DOT:
+					ref<Selection> sel = ref<Selection>(nl.node);
+					identifier = sel.identifier();
+					break;
+	
+				default:
+					nl.node.print(0);
+					assert(false);
+				}
+				for (ref<Symbol>[Scope.SymbolKey].iterator i = tp.scope().symbols().begin(); i.hasNext(); i.next()) {
+					ref<Overload> o = ref<Overload>(i.get());
+					ref<Symbol> sym = scope.lookup(o.name(), compileContext);
+					if (sym != null && sym.class == Overload) {
+						ref<Overload> classMethods = ref<Overload>(sym);
+						for (int i = 0; i < classMethods.instances().length(); i++) {
+							ref<OverloadInstance> oi = (*classMethods.instances())[i];
+							oi.assignType(compileContext);
+						}
+						for (int i = 0; i < o.instances().length(); i++) {
+							ref<OverloadInstance> oi = (*o.instances())[i];
+							oi.assignType(compileContext);
+							// oi is the interface method, classFunctions are the class' methods of the same name
+							if (!classMethods.doesImplement(oi))
+								add(MessageId.CLASS_MISSING_METHOD_FROM_INTERFACE, compileContext.pool(), *oi.name(), *identifier);
+						}
+					} else {
+						for (int i = 0; i < o.instances().length(); i++) {
+							ref<OverloadInstance> oi = (*o.instances())[i];
+	//						printf("nm = {%x:%x} '%s'\n", nm.identifier().data, nm.identifier().length, (*nm.identifier()).asString());
+	//						printf("oi = {%x:%x} '%s'\n", oi.name().data, nm.identifier().length, (*oi.name()).asString());
 							add(MessageId.CLASS_MISSING_METHOD_FROM_INTERFACE, compileContext.pool(), *oi.name(), *identifier);
-					}
-				} else {
-					for (int i = 0; i < o.instances().length(); i++) {
-						ref<OverloadInstance> oi = (*o.instances())[i];
-//						printf("nm = {%x:%x} '%s'\n", nm.identifier().data, nm.identifier().length, (*nm.identifier()).asString());
-//						printf("oi = {%x:%x} '%s'\n", oi.name().data, nm.identifier().length, (*oi.name()).asString());
-						add(MessageId.CLASS_MISSING_METHOD_FROM_INTERFACE, compileContext.pool(), *oi.name(), *identifier);
+						}
 					}
 				}
 			}
@@ -2584,7 +2592,9 @@ public class Ternary extends Node {
 	public boolean traverse(Traversal t, TraverseAction func(ref<Node> n, address data), address data) {
 		TraverseAction result;
 		Traversal t_this = t;
-		if (op() == Operator.IF || op() == Operator.CATCH) {
+		switch (op()) {
+		case IF:
+		case CATCH:
 			switch (t) {
 			case	IN_ORDER:
 				t_this = Traversal.PRE_ORDER;
@@ -2746,7 +2756,8 @@ public class Ternary extends Node {
 	}
 
 	public Test fallsThrough() {
-		if (op() == Operator.IF) {
+		switch (op()) {
+		case IF:
 			Test t = _middle.fallsThrough();
 			if (t == Test.INCONCLUSIVE_TEST)
 				return Test.PASS_TEST;
@@ -2757,8 +2768,8 @@ public class Ternary extends Node {
 				return Test.PASS_TEST;
 			else
 				return t;
-		} else
-			return Test.PASS_TEST;
+		}
+		return Test.PASS_TEST;
 	}
 
 	public Test containsBreak() {
@@ -2894,6 +2905,7 @@ public class Try extends Node {
 
 	public boolean traverse(Traversal t, TraverseAction func(ref<Node> n, address data), address data) {
 		TraverseAction result;
+
 		switch (t) {
 		case	PRE_ORDER:
 		case	IN_ORDER:
@@ -3467,6 +3479,7 @@ public class Node {
 		case	SUBSCRIPT:
 		case	VARIABLE:
 		case	THIS:
+		case	SUPER:
 			return true;
 
 		default:
@@ -3567,7 +3580,6 @@ public class Node {
 		case	ELLIPSIS:
 		case	EMPTY:
 		case	ENUM:
-		case	ENUM_DECLARATION:
 		case	EQUALITY:
 		case	EXCLUSIVE_OR:
 		case	EXCLUSIVE_OR_ASSIGN:

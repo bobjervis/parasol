@@ -635,7 +635,7 @@ class X86_64Encoder extends Target {
 
 			case	ENUMERATION:
 				ref<EnumInstanceType> eit = ref<EnumInstanceType>(type);
-				ref<Symbol> typeDefinition = eit.symbol();
+				ref<Symbol> typeDefinition = eit.typeSymbol();
 				if (typeDefinition.value == null)
 					assignStorageToObject(typeDefinition, typeDefinition.enclosing(), 0, compileContext);
 				symbol.value = typeDefinition.value;
@@ -3231,7 +3231,9 @@ class X86_64Encoder extends Target {
 				break;
 				
 			case	ENUMERATION:
-				assert(false);
+				ref<EnumInstanceType> eit = ref<EnumInstanceType>(sym.type());
+				enumAddressModRM(eit.typeSymbol(), regOpcode, ipAdjust, allAdjust + sym.offset * eit.enumType().size());
+				break;
 				
 			case	AUTO:
 			case	PARAMETER:
@@ -3396,6 +3398,12 @@ class X86_64Encoder extends Target {
 			fixup(FixupKind.RELATIVE32_DATA, sym);
 			emitInt(-ipAdjust + allAdjust);
 		}
+	}
+
+	private void enumAddressModRM(ref<Symbol> sym, int regOpcode, int ipAdjust, int allAdjust) {
+		modRM(0, regOpcode, 5);
+		fixup(FixupKind.RELATIVE32_DATA, sym);
+		emitInt(-ipAdjust + allAdjust);
 	}
 
 	private void subscriptModRM(ref<Node> addressMode, int regOpcode, int offset) {

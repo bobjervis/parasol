@@ -231,7 +231,7 @@ public class PlainSymbol extends Symbol {
 				compileContext.assignTypes(enclosing(), _typeDeclarator);
 				switch (_typeDeclarator.op()) {
 				case CLASS_DECLARATION:
-				case ENUM_DECLARATION:
+				case ENUM:
 				case INTERFACE_DECLARATION:
 					_type = _typeDeclarator.type;
 					break;

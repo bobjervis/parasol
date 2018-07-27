@@ -802,29 +802,26 @@ public class ClassType extends Type {
 	}
 }
 
-class EnumType extends TypedefType {
-	private ref<Block> _definition;
-	private ref<Scope> _scope;
+class EnumType extends ClassType {
+	private ref<Symbol> _symbol;
+	private int _enumCount;
 
-	EnumType(ref<Block> definition, ref<Scope> scope, ref<Type> wrappedType) {
-		super(TypeFamily.TYPEDEF, wrappedType);
-		_definition = definition;
-		_scope = scope;
+	EnumType(ref<Symbol> symbol, ref<Class> definition, ref<EnumScope> scope) {
+		super(TypeFamily.CLASS, definition, scope);
+		_symbol = symbol;
+		_enumCount = scope.symbols().size();
 	}
 
 	public int size() {
-		if (family() == TypeFamily.TYPEDEF) {
-			return int.bytes * _scope.symbols().size();
-		} else
-			return int.bytes;
+		return super.size() * _enumCount;
 	}
 
 	boolean requiresAutoStorage() {
-		return true;
+		return false;
 	}
 
 	public void print() {
-		printf("%s %p", string(family()), _definition);
+		printf("CLASS/enum %p %p", _definition, _scope);
 	}
 
 	public ref<Scope> scope() {
@@ -840,28 +837,57 @@ class EnumType extends TypedefType {
 		assert(false);
 		return false;
 	}
+
+	public int enumCount() {
+		return _enumCount;
+	}
+
+	public ref<Symbol> symbol() {
+		return _symbol;
+	}
+
+	public TypeFamily instanceFamily() {
+		if (_enumCount <= 256)
+			return TypeFamily.UNSIGNED_8;
+		else if (_enumCount <= 65536)
+			return TypeFamily.UNSIGNED_16;
+		else
+			return TypeFamily.UNSIGNED_32;
+	}
+
+	public int copyToImage(ref<Target> target) {
+		if (_ordinal == 0) {
+			address a = allocateImageData(target, Type.bytes);
+			ref<Type> t = ref<Type>(a);
+//			*t = *this;
+//			*ref<long>(t) = 0;
+		}
+		print();
+		assert(false);
+		return _ordinal;
+	}
 }
 
 public class EnumInstanceType extends Type {
-	private ref<Symbol> _symbol;
-	private ref<Scope> _scope;
-	private ref<ClassType> _instanceClass;
+	private ref<EnumScope> _scope;
 	
 	private ref<ParameterScope> _toStringMethod;
 
-	protected EnumInstanceType(ref<Symbol> symbol, ref<Scope> scope, ref<ClassType> instanceClass) {
+	protected EnumInstanceType(ref<EnumScope> scope) {
 		super(TypeFamily.ENUM);
-		_symbol = symbol;
 		_scope = scope;
-		_instanceClass = instanceClass;
 	}
 
 	public void print() {
-		printf("%s %p", string(family()), _instanceClass);
+		printf("%s %p", string(family()), _scope);
 	}
 
 	public ref<Scope> scope() {
 		return _scope;
+	}
+
+	public ref<EnumType> enumType() {
+		return _scope.enumType;
 	}
 
 	public boolean equals(ref<Type> other) {
@@ -869,8 +895,8 @@ public class EnumInstanceType extends Type {
 		return this == other;
 	}
 
-	public ref<Symbol> symbol() {
-		return _symbol;
+	public ref<Symbol> typeSymbol() {
+		return _scope.enumType.symbol();
 	}
 
 	protected boolean sameAs(ref<Type> other) {
@@ -888,7 +914,7 @@ public class EnumInstanceType extends Type {
 	}
 
 	public int size() {
-		long numberOfEnums = _scope.symbols().size();
+		long numberOfEnums = _scope.enumType.enumCount();
 		
 		if (numberOfEnums <= byte.MAX_VALUE)
 			return byte.bytes;
@@ -901,7 +927,7 @@ public class EnumInstanceType extends Type {
 	}
 
 	public int alignment() {
-		long numberOfEnums = _scope.symbols().size();
+		long numberOfEnums = _scope.enumType.enumCount();
 		
 		if (numberOfEnums <= byte.MAX_VALUE)
 			return byte.bytes;
@@ -921,6 +947,17 @@ public class EnumInstanceType extends Type {
 		return true;
 	}
 
+	public int copyToImage(ref<Target> target) {
+		if (_ordinal == 0) {
+			address a = allocateImageData(target, Type.bytes);
+			ref<Type> t = ref<Type>(a);
+//			*t = *this;
+//			*ref<long>(t) = 0;
+		}
+		print();
+		assert(false);
+		return _ordinal;
+	}
 }
 
 class FlagsType extends TypedefType {

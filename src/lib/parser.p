@@ -1047,15 +1047,15 @@ public class Parser {
 		ref<Identifier> identifier = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
 		_tree.newDoclet(identifier, doclet);
 		t = _scanner.next();
-		Location blockLoc = _scanner.location();
+		Location enumLoc = _scanner.location();
 		if (t != Token.LEFT_CURLY) {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
-		ref<Block> body = _tree.newBlock(Operator.ENUM, false, _scanner.location());
 		ref<Node> e = parseIdentifierList();
-		body.statement(_tree.newNodeList(e));
+
 		t = _scanner.next();
+		ref<Class> body = _tree.newClass(Operator.ENUM, identifier, e, enumLoc);
 		if (t == Token.SEMI_COLON) {
 			parseBlock(body);
 		} else if (t != Token.RIGHT_CURLY) {
@@ -1066,7 +1066,7 @@ public class Parser {
 			}
 			parseBlock(body);
 		}
-		return _tree.newBinary(Operator.ENUM_DECLARATION, identifier, body, location);
+		return body;
 	}
 
 	private ref<Node> parseIdentifierList() {

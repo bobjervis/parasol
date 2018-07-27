@@ -565,9 +565,8 @@ public class X86_64 extends X86_64AssignTemps {
 					ref<EnumScope> enclosing = ref<EnumScope>(scope.enclosing());
 					
 					ref<ref<Symbol>[]> instances = enclosing.instances();
-					ref<EnumInstanceType> t = ref<EnumInstanceType>(enclosing.enumType.wrappedType());
 					R indexRegister = firstRegisterArgument();
-					switch (impl(t)) {
+					switch (enclosing.enumType.instanceFamily()) {
 					case UNSIGNED_8:
 						if ((getRegMask(firstRegisterArgument()) & byteMask) != 0) {
 							indexRegister = R.RDX;
@@ -1473,13 +1472,8 @@ public class X86_64 extends X86_64AssignTemps {
 			break;
 			
 		case	CLASS_DECLARATION:
-			b = ref<Binary>(node);
-			node = b.right();			// Get the CLASS node
-			if (node.op() != Operator.CLASS)
-				break;
-			ref<Class> classNode = ref<Class>(node);
-			for (ref<NodeList> nl = classNode.statements(); nl != null; nl = nl.next)
-				generateStaticInitializers(nl.node, compileContext);
+		case	ENUM:
+			generateStaticInitializers(node, compileContext);
 			break;
 
 		case	DESTRUCTOR_LIST:
@@ -1489,7 +1483,6 @@ public class X86_64 extends X86_64AssignTemps {
 			break;
 			
 		case	INTERFACE_DECLARATION:
-		case	ENUM_DECLARATION:
 		case	FLAGS_DECLARATION:
 		case	MONITOR_CLASS:
 		case	DECLARE_NAMESPACE:
@@ -2805,6 +2798,8 @@ public class X86_64 extends X86_64AssignTemps {
 			node = b.right();			// Get the CLASS node
 			if (node.op() != Operator.CLASS)
 				break;
+
+		case	ENUM:
 			ref<Class> classNode = ref<Class>(node);
 			for (ref<NodeList> nl = classNode.statements(); nl != null; nl = nl.next)
 				generateStaticInitializers(nl.node, compileContext);
@@ -2834,7 +2829,6 @@ public class X86_64 extends X86_64AssignTemps {
 		case	IDENTIFIER:
 		case	FUNCTION:
 		case	EMPTY:
-		case	ENUM_DECLARATION:
 		case	INTERFACE_DECLARATION:
 			// The ones below here only show up in mal-formed class declarations.
 		case	BLOCK:

@@ -170,7 +170,11 @@ public class Identifier extends Node {
 				return member;
 
 			case ENUMERATION:
-				return tree.newInternalLiteral(_symbol.offset, location());
+				if (type.class == EnumInstanceType) {
+					ref<Node> n = tree.newInternalLiteral(_symbol.offset, location());
+					n.type = type;
+					return n;
+				}
 			}
 		}
 		return this;
@@ -271,7 +275,7 @@ public class Identifier extends Node {
 */
 	ref<Symbol> bindEnumInstance(ref<Scope> enclosing, ref<Type> type, ref<Node> initializer, ref<CompileContext> compileContext) {
 		_definition = true;
-		_symbol = enclosing.define(compileContext.visibility, StorageClass.ENUMERATION, compileContext.annotations, this, type, initializer, compileContext.pool());
+		_symbol = enclosing.define(Operator.PUBLIC, StorageClass.ENUMERATION, compileContext.annotations, this, type, initializer, compileContext.pool());
 		if (_symbol == null)
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
 		else
@@ -281,7 +285,7 @@ public class Identifier extends Node {
 
 	ref<Symbol> bindFlagsInstance(ref<Scope> enclosing, ref<Type> type, ref<CompileContext> compileContext) {
 		_definition = true;
-		_symbol = enclosing.define(compileContext.visibility, StorageClass.FLAGS, compileContext.annotations, this, type, null, compileContext.pool());
+		_symbol = enclosing.define(Operator.PUBLIC, StorageClass.FLAGS, compileContext.annotations, this, type, null, compileContext.pool());
 		if (_symbol == null)
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
 		else
@@ -315,19 +319,16 @@ public class Identifier extends Node {
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
 	}
 
-	void bindEnumName(ref<Scope> enclosing, ref<Block> body, ref<CompileContext> compileContext) {
+	boolean bindEnumName(ref<Scope> enclosing, ref<Class> body, ref<CompileContext> compileContext) {
 		_definition = true;
-		ref<EnumScope> enumScope = compileContext.createEnumScope(body, this);
 		_symbol = enclosing.define(compileContext.visibility, StorageClass.STATIC, compileContext.annotations, this, body, body, compileContext.pool());
 		if (_symbol != null) {
 			_symbol._doclet = enclosing.file().tree().getDoclet(this);
-			ref<ClassType> c = compileContext.pool().newClassType(TypeFamily.CLASS, ref<Type>(null), enumScope);
-			ref<Type> t = compileContext.pool().newEnumInstanceType(_symbol, enumScope, c);
-			enumScope.enumType = compileContext.pool().newEnumType(body, enumScope, t);
-			_symbol.bindType(enumScope.enumType, compileContext);
-			_symbol._doclet = enclosing.file().tree().getDoclet(this);
-		} else
+			return true;
+		} else {
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
+			return false;
+		}
 	}
 
 	void bindFlagsName(ref<Scope> enclosing, ref<Block> body, ref<CompileContext> compileContext) {
@@ -709,16 +710,26 @@ public class Selection extends Node {
 		if (_symbol != null) {
 			switch (_symbol.storageClass()) {
 			case FLAGS:
-			case ENUMERATION:
 				ref<Node> n = tree.newInternalLiteral(_symbol.offset, location());
 				n.type = type;
 				return n;
+
+			case ENUMERATION:
+				if (type.class == EnumInstanceType) {
+					ref<Node> n = tree.newInternalLiteral(_symbol.offset, location());
+					n.type = type;
+					return n;
+				}
 			}
 		}
-		if (_left.op() == Operator.SUBSCRIPT) {
+		if (_left.type.class == EnumInstanceType)
+			_left.type = ref<EnumInstanceType>(_left.type).enumType();
+		switch (_left.op()) {
+		case SUBSCRIPT:
 			ref<Node> element = ref<Binary>(_left).subscriptModify(tree, compileContext);
 			if (element != null)
 				_left = element;
+			break;
 		}
 		_left = _left.fold(tree, false, compileContext);
 		// Flatten an INDIRECT node to simplify code gen later.

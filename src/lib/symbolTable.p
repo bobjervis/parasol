@@ -674,7 +674,7 @@ public class EnumScope extends ClasslikeScope {
 	private ref<Symbol>[] _instances;
 	
 	public EnumScope(ref<Scope> enclosing, ref<Block> definition, ref<Identifier> enumName) {
-		super(enclosing, definition, StorageClass.ENUMERATION, enumName);
+		super(enclosing, definition, StorageClass.MEMBER, enumName);
 	}
 
 	ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> source, ref<Type> type, ref<Node> initializer, ref<MemoryPool> memoryPool) {
@@ -1611,7 +1611,7 @@ public class Scope {
 			
 		case FUNCTION:
 		case CLASS_DECLARATION:
-		case ENUM_DECLARATION:
+		case ENUM:
 		case FLAGS_DECLARATION:
 			return TraverseAction.SKIP_CHILDREN;
 		}
@@ -1943,7 +1943,7 @@ public class Scope {
 
 			case	ENUMERATION:
 				ref<EnumInstanceType> eit = ref<EnumInstanceType>(type);
-				ref<Symbol> typeDefinition = eit.symbol();
+				ref<Symbol> typeDefinition = eit.typeSymbol();
 				typeDefinition.enclosing().checkStorageOfObject(typeDefinition, compileContext);
 				break;
 

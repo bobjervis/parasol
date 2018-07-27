@@ -42,7 +42,6 @@ public class Binary extends Node {
 		case	INTERFACE_DECLARATION:
 		case	CLASS_DECLARATION:
 		case	FLAGS_DECLARATION:
-		case	ENUM_DECLARATION:
 			switch (t) {
 			case	IN_ORDER:
 				t_this = Traversal.PRE_ORDER;
@@ -201,7 +200,6 @@ public class Binary extends Node {
 			return this;
 
 		case	FLAGS_DECLARATION:
-		case	ENUM_DECLARATION:
 		case	CLASS_DECLARATION:
 		case	INTERFACE_DECLARATION:
 		case	SWITCH:
@@ -1337,7 +1335,6 @@ public class Binary extends Node {
 	public Test fallsThrough() {
 		switch (op()) {
 		case	CLASS_DECLARATION:
-		case	ENUM_DECLARATION:
 		case	FLAGS_DECLARATION:
 			return Test.INCONCLUSIVE_TEST;
 
@@ -1613,7 +1610,6 @@ public class Binary extends Node {
 		case	INTERFACE_DECLARATION:
 		case	CLASS_DECLARATION:
 		case	FLAGS_DECLARATION:
-		case	ENUM_DECLARATION:
 			compileContext.assignTypes(_right);
 			type = compileContext.arena().builtInType(TypeFamily.VOID);
 			break;

@@ -226,6 +226,7 @@ public class CompileContext {
 				buildScopesInTree(func.body);
 			break;
 
+		case	ENUM:
 		case	LOCK:
 		case	BLOCK:
 		case	CLASS:
@@ -248,21 +249,9 @@ public class CompileContext {
 			}
 			break;
 		
-		case	ENUM:
-			b = ref<Block>(definition);
-			ref<NodeList> nl = b.statements();
-			bindEnums(nl.node);
-			nl = nl.next;
-			for (; nl != null; nl = nl.next) {
-				// Reset these state conditions accumulated from the traversal so far.
-				clearDeclarationModifiers();
-				buildScopesInTree(nl.node);
-			}
-			break;
-
 		case	FLAGS:
 			b = ref<Block>(definition);
-			nl = b.statements();
+			ref<NodeList> nl = b.statements();
 			bindFlags(nl.node);
 			break;
 			
@@ -506,10 +495,18 @@ public class CompileContext {
 			id.bind(s, t.left(), null, this);
 			return TraverseAction.SKIP_CHILDREN;
 	
-		case	ENUM_DECLARATION:
-			b = ref<Binary>(n);
-			id = ref<Identifier>(b.left());
-			id.bindEnumName(_current, ref<Block>(b.right()), this);
+		case	ENUM:
+			c = ref<Class>(n);
+			id = c.className();
+			ref<EnumScope> enumScope = createEnumScope(c, id);
+			ref<Type> instanceType;
+			if (id.bindEnumName(_current, c, this)) {
+				enumScope.enumType = _pool.newEnumType(id.symbol(), c, enumScope);
+				instanceType = _pool.newEnumInstanceType(enumScope);
+				id.symbol().bindType(_pool.newTypedefType(TypeFamily.TYPEDEF, instanceType), this);
+			} else
+				instanceType = errorType();
+			bindEnums(enumScope, instanceType, c.extendsClause());
 			return TraverseAction.SKIP_CHILDREN;
 
 		case	CLASS:
@@ -671,19 +668,18 @@ public class CompileContext {
 		}
 	}
 
-	void bindEnums(ref<Node> n) {
+	private void bindEnums(ref<EnumScope> enumScope, ref<Type> instanceType, ref<Node> n) {
 		switch (n.op()) {
 		case SEQUENCE:
 			ref<Binary> b = ref<Binary>(n);
-			bindEnums(b.left());
-			bindEnums(b.right());
+			bindEnums(enumScope, instanceType, b.left());
+			bindEnums(enumScope, instanceType, b.right());
 			break;
 			
 		case	IDENTIFIER:
 			ref<Identifier> id = ref<Identifier>(n);
-			ref<EnumScope> scope = ref<EnumScope>(_current);
-			int offset = scope.symbols().size();
-			ref<Symbol> sym = id.bindEnumInstance(_current, scope.enumType.wrappedType(), null, this);
+			int offset = enumScope.symbols().size();
+			ref<Symbol> sym = id.bindEnumInstance(enumScope, instanceType, null, this);
 			if (sym != null)
 				sym.offset = offset;
 		}
@@ -948,7 +944,7 @@ public class CompileContext {
 		case	ABSTRACT:
 		case	INTERFACE_DECLARATION:
 		case	CLASS_DECLARATION:
-		case	ENUM_DECLARATION:
+		case	ENUM:
 		case	FLAGS_DECLARATION:
 		case	MONITOR_CLASS:
 		case	DECLARATION:
@@ -1299,12 +1295,12 @@ public class MemoryPool extends memory.NoReleasePool {
 		return super new InterfaceType(definition, scope);
 	}
 
-	public ref<EnumType> newEnumType(ref<Block> definition, ref<Scope> scope, ref<Type> wrappedType) {
-		return super new EnumType(definition, scope, wrappedType);
+	public ref<EnumType> newEnumType(ref<Symbol> symbol, ref<Class> definition, ref<EnumScope> scope) {
+		return super new EnumType(symbol, definition, scope);
 	}
 
-	public ref<EnumInstanceType> newEnumInstanceType(ref<Symbol> symbol, ref<Scope> scope, ref<ClassType> instanceClass) {
-		return super new EnumInstanceType(symbol, scope, instanceClass);
+	public ref<EnumInstanceType> newEnumInstanceType(ref<EnumScope> scope) {
+		return super new EnumInstanceType(scope);
 	}
 
 	public ref<FlagsType> newFlagsType(ref<Block> definition, ref<Scope> scope, ref<Type> wrappedType) {
