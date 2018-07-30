@@ -411,9 +411,6 @@ class ClasslikeScope extends Scope {
 					}
 				}
 				assert(definition() != null);
-				if (definition().op() != Operator.CLASS && definition().op() != Operator.MONITOR_CLASS)
-					definition().print(0);
-				assert(definition().op() == Operator.CLASS || definition().op() == Operator.MONITOR_CLASS);
 				compileContext.assignTypes(this, definition());
 				// Now build out the InterfaceImplementationScope objects (for their vtables).
 				ref<ref<InterfaceType>[]> interfaces = classType.interfaces();
@@ -668,7 +665,7 @@ public class InterfaceImplementationScope extends ClassScope {
 	}
 }
 
-public class EnumScope extends ClasslikeScope {
+public class EnumScope extends ClassScope {
 	public ref<EnumType> enumType;
 	
 	private ref<Symbol>[] _instances;

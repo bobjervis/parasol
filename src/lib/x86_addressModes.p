@@ -295,6 +295,7 @@ class X86_64AddressModes extends X86_64Encoder {
 			markCast(u, u.operand(), compileContext);
 			break;
 			
+		case	ADDRESS_OF_ENUM:
 		case	ADDRESS:
 			u = ref<Unary>(node);
 			tryMakeMode(u.operand(), MC_ADDRESS, nClass, compileContext);

@@ -324,7 +324,7 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 		}
 		for (int i = 0; i < compileContext.staticSymbols().length(); i++) {
-			ref<Symbol> symbol = (*compileContext.staticSymbols())[i];
+			ref<PlainSymbol> symbol = (*compileContext.staticSymbols())[i];
 			assignStaticSymbolStorage(symbol, compileContext);
 		}
 		if (_verbose)
@@ -2309,6 +2309,14 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.LEA, R(expression.register), expression.operand(), compileContext);
 			break;
 			
+		case	ADDRESS_OF_ENUM:
+			expression = ref<Unary>(node);
+			generate(expression.operand(), compileContext);
+			if (expression.operand().deferGeneration())
+				break;
+			instLoadEnumAddress(R(expression.register), expression.operand(), 0);
+			break;
+
 		case	INDIRECT:
 			expression = ref<Unary>(node);
 			generate(expression.operand(), compileContext);
@@ -2801,6 +2809,13 @@ public class X86_64 extends X86_64AssignTemps {
 
 		case	ENUM:
 			ref<Class> classNode = ref<Class>(node);
+			if (node.op() == Operator.ENUM) {
+				ref<EnumScope> escope = ref<EnumScope>(classNode.scope);
+				if (escope.enumType.hasConstructors()) {
+					ref<Node> n = classNode.extendsClause();
+					generateEnumConstructors(n, compileContext);
+				}
+			}
 			for (ref<NodeList> nl = classNode.statements(); nl != null; nl = nl.next)
 				generateStaticInitializers(nl.node, compileContext);
 			break;
@@ -2852,6 +2867,33 @@ public class X86_64 extends X86_64AssignTemps {
 		}
 	}
 	
+	private void generateEnumConstructors(ref<Node> n, ref<CompileContext> compileContext) {
+		switch (n.op()) {
+		case SEQUENCE:
+			ref<Binary> b = ref<Binary>(n);
+			generateEnumConstructors(b.left(), compileContext);
+			generateEnumConstructors(b.right(), compileContext);
+			break;
+
+		case IDENTIFIER:
+			if (n.type == null)
+				break;
+
+			emitSourceLocation(compileContext.current().file(), n.location());
+			ref<ParameterScope> constructor = n.type.defaultConstructor();
+			if (constructor != null) {
+				instLoadEnumAddress(firstRegisterArgument(), n, n.symbol().offset);
+				instCall(constructor, compileContext);
+			}
+			break;
+
+		case CALL:
+			emitSourceLocation(compileContext.current().file(), n.location());
+			generateInitializers(n, compileContext);
+			break;
+		}
+	}
+
 	private void generateOperands(ref<Binary> b, ref<CompileContext> compileContext) {
 		if (b.sethi < 0) {
 			generate(b.left(), compileContext);
@@ -4266,7 +4308,7 @@ public class X86_64 extends X86_64AssignTemps {
 			if (!sym.initializedWithConstructor()) {
 				ref<ParameterScope> constructor = sym.type().defaultConstructor();
 				if (constructor != null) {
-					inst(X86.LEA,firstRegisterArgument(),  sym.definition(), compileContext);
+					inst(X86.LEA,firstRegisterArgument(), sym.definition(), compileContext);
 					if (sym.type().hasVtable(compileContext))
 						storeVtable(sym.type(), compileContext);
 					storeITables(sym.type(), 0, compileContext);

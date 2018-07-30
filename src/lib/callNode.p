@@ -198,9 +198,12 @@ public class Call extends ParameterBag {
 					return this;
 				}
 				functionType = ref<FunctionType>(_overload.type());
-				if (voidContext)
+				if (voidContext) {
 					thisParameter = _target;
-				else {
+					// we see INDIRECT nodes here for enum constructors.
+					if (thisParameter.op() == Operator.INDIRECT)
+						thisParameter = ref<Unary>(thisParameter).operand();
+				} else {
 					ref<Variable> temp = compileContext.newVariable(type);
 					thisParameter = tree.newReference(temp, true, location());
 					compileContext.markLiveSymbol(thisParameter);
@@ -950,15 +953,14 @@ public class Call extends ParameterBag {
 				if (nl.node.op() == Operator.LABEL) {
 					ref<Binary> b = ref<Binary>(nl.node);
 					if (enumType != null) {
-						ref<EnumScope> scope = ref<EnumScope>(enumType.scope());
 						if (b.left().op() == Operator.IDENTIFIER) {
 							ref<Identifier> id = ref<Identifier>(b.left());
 							id.resolveAsEnum(enumType, compileContext);
-							if (b.left().deferAnalysis()) {
+							if (id.deferAnalysis()) {
 								nl.node.type = compileContext.errorType();
 								break;
 							}
-							int i = scope.indexOf(id.symbol()); 
+							int i = id.symbol().offset;
 							Interval interval = { start: i, end: i, first: nl };
 							intervals.append(interval);
 						} else {

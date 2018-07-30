@@ -802,35 +802,36 @@ public class ClassType extends Type {
 	}
 }
 
-class EnumType extends ClassType {
+public class EnumType extends ClassType {
+	public int instanceCount;
 	private ref<Symbol> _symbol;
-	private int _enumCount;
 
 	EnumType(ref<Symbol> symbol, ref<Class> definition, ref<EnumScope> scope) {
 		super(TypeFamily.CLASS, definition, scope);
 		_symbol = symbol;
-		_enumCount = scope.symbols().size();
-	}
-
-	public int size() {
-		return super.size() * _enumCount;
 	}
 
 	boolean requiresAutoStorage() {
 		return false;
 	}
 
+	public int interfaceCount() {
+		return 0;
+	}
+	
+	public ref<ref<InterfaceType>[]> interfaces() {
+		return null;
+	}
+
 	public void print() {
 		printf("CLASS/enum %p %p", _definition, _scope);
 	}
 
-	public ref<Scope> scope() {
-		return _scope;
-	}
-
 	public boolean equals(ref<Type> other) {
-		assert(false);
-		return false;
+		if (this == other)
+			return true;
+		else
+			return false;
 	}
 
 	protected boolean sameAs(ref<Type> other) {
@@ -838,18 +839,14 @@ class EnumType extends ClassType {
 		return false;
 	}
 
-	public int enumCount() {
-		return _enumCount;
-	}
-
 	public ref<Symbol> symbol() {
 		return _symbol;
 	}
 
 	public TypeFamily instanceFamily() {
-		if (_enumCount <= 256)
+		if (instanceCount <= 256)
 			return TypeFamily.UNSIGNED_8;
-		else if (_enumCount <= 65536)
+		else if (instanceCount <= 65536)
 			return TypeFamily.UNSIGNED_16;
 		else
 			return TypeFamily.UNSIGNED_32;
@@ -866,11 +863,18 @@ class EnumType extends ClassType {
 		assert(false);
 		return _ordinal;
 	}
+
+	protected void doResolve(ref<CompileContext> compileContext) {
+	}
+
+	public string signature() {
+		return super.signature();
+	}
 }
 
 public class EnumInstanceType extends Type {
 	private ref<EnumScope> _scope;
-	
+
 	private ref<ParameterScope> _toStringMethod;
 
 	protected EnumInstanceType(ref<EnumScope> scope) {
@@ -884,6 +888,18 @@ public class EnumInstanceType extends Type {
 
 	public ref<Scope> scope() {
 		return _scope;
+	}
+
+	public boolean hasConstructors() {
+		return false;						// The constructors in the _scope are not for us, so ignore it and always report false.
+	}
+
+	public boolean hasDestructor() {
+		return false;						// The destructor in the _scope is not for us, so ignore it and always report false.
+	}
+
+	public int instanceCount() {
+		return _scope.enumType.instanceCount;
 	}
 
 	public ref<EnumType> enumType() {
@@ -914,7 +930,7 @@ public class EnumInstanceType extends Type {
 	}
 
 	public int size() {
-		long numberOfEnums = _scope.enumType.enumCount();
+		long numberOfEnums = _scope.enumType.instanceCount;
 		
 		if (numberOfEnums <= byte.MAX_VALUE)
 			return byte.bytes;
@@ -927,7 +943,7 @@ public class EnumInstanceType extends Type {
 	}
 
 	public int alignment() {
-		long numberOfEnums = _scope.enumType.enumCount();
+		long numberOfEnums = _scope.enumType.instanceCount;
 		
 		if (numberOfEnums <= byte.MAX_VALUE)
 			return byte.bytes;
@@ -958,6 +974,11 @@ public class EnumInstanceType extends Type {
 		assert(false);
 		return _ordinal;
 	}
+
+	public string signature() {
+		return "[" + _scope.enumType.signature() + "]";
+	}
+	
 }
 
 class FlagsType extends TypedefType {

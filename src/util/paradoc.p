@@ -1573,7 +1573,7 @@ string typeString(ref<Type> type, string baseName) {
 		if (classFile == null)
 			return null;
 		url = storage.makeCompactPath(classFile, baseName);
-		ref<Symbol> sym = ref<EnumInstanceType>(type).symbol();
+		ref<Symbol> sym = ref<EnumInstanceType>(type).typeSymbol();
 		string name = sym.name().asString();
 		s.printf("<a href=\"%s\">%s</a>", url, name);
 		return s;

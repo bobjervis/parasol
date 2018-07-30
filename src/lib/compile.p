@@ -35,7 +35,7 @@ public class CompileContext {
 	private ref<Scope> _current;
 	private int _importedScopes;
 	private ref<Variable>[] _variables;
-	private ref<Symbol>[] _staticSymbols;		// Populated when assigning storage
+	private ref<PlainSymbol>[] _staticSymbols;	// Populated when assigning storage
 	private ref<Node>[] _liveSymbols;			// Populated during fold actions with the set of live symbols that
 												// need destructor calls and locks the need unlocked.
 	private ref<Scope>[] _liveSymbolScopes;		// Populated during fold actions with the scopes of the live symbols
@@ -499,14 +499,16 @@ public class CompileContext {
 			c = ref<Class>(n);
 			id = c.className();
 			ref<EnumScope> enumScope = createEnumScope(c, id);
+			c.scope = enumScope;
 			ref<Type> instanceType;
 			if (id.bindEnumName(_current, c, this)) {
-				enumScope.enumType = _pool.newEnumType(id.symbol(), c, enumScope);
+				enumScope.classType = enumScope.enumType = _pool.newEnumType(id.symbol(), c, enumScope);
 				instanceType = _pool.newEnumInstanceType(enumScope);
 				id.symbol().bindType(_pool.newTypedefType(TypeFamily.TYPEDEF, instanceType), this);
 			} else
 				instanceType = errorType();
 			bindEnums(enumScope, instanceType, c.extendsClause());
+			enumScope.enumType.instanceCount = enumScope.symbols().size();
 			return TraverseAction.SKIP_CHILDREN;
 
 		case	CLASS:
@@ -668,20 +670,25 @@ public class CompileContext {
 		}
 	}
 
-	private void bindEnums(ref<EnumScope> enumScope, ref<Type> instanceType, ref<Node> n) {
+	private void bindEnums(ref<Scope> instancesScope, ref<Type> instanceType, ref<Node> n) {
 		switch (n.op()) {
 		case SEQUENCE:
 			ref<Binary> b = ref<Binary>(n);
-			bindEnums(enumScope, instanceType, b.left());
-			bindEnums(enumScope, instanceType, b.right());
+			bindEnums(instancesScope, instanceType, b.left());
+			bindEnums(instancesScope, instanceType, b.right());
 			break;
 			
 		case	IDENTIFIER:
 			ref<Identifier> id = ref<Identifier>(n);
-			int offset = enumScope.symbols().size();
-			ref<Symbol> sym = id.bindEnumInstance(enumScope, instanceType, null, this);
+			int offset = instancesScope.symbols().size();
+			ref<Symbol> sym = id.bindEnumInstance(instancesScope, instanceType, null, this);
 			if (sym != null)
 				sym.offset = offset;
+			break;
+
+		case	CALL:
+			ref<Call> c = ref<Call>(n);
+			bindEnums(instancesScope, instanceType, c.target());
 		}
 	}
 
@@ -874,7 +881,7 @@ public class CompileContext {
 					break;
 				}
 				ref<Identifier> id = ref<Identifier>(b.left());
-				id.resolveAsEnum(switchType, this);
+				id.resolveAsEnum(ref<EnumInstanceType>(switchType), this);
 				break;
 				
 			case STRING:
@@ -1077,11 +1084,11 @@ public class CompileContext {
 			return _current.storageClass();
 	}
 
-	public void rememberStaticSymbol(ref<Symbol> staticSymbol) {
+	public void rememberStaticSymbol(ref<PlainSymbol> staticSymbol) {
 		_staticSymbols.append(staticSymbol);
 	}
 	
-	public ref<ref<Symbol>[]> staticSymbols() {
+	public ref<ref<PlainSymbol>[]> staticSymbols() {
 		return &_staticSymbols;
 	}
 	

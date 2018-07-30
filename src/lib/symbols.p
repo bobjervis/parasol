@@ -342,6 +342,12 @@ public class PlainSymbol extends Symbol {
 			_accessFlags |= Access.COMPILE_TARGET;
 		}
 	}
+
+	public boolean isEnumClass() {
+		if (_typeDeclarator == null)
+			return false;
+		return _typeDeclarator.op() == Operator.ENUM;
+	}
 	
 	public ref<Node> typeDeclarator() {
 		return _typeDeclarator;
@@ -1048,6 +1054,10 @@ public class Symbol {
 	 * returns true if this symbol is initialized via a constructor call, and false if not.
 	 */
 	public boolean initializedWithConstructor() {
+		return false;
+	}
+
+	public boolean isEnumClass() {
 		return false;
 	}
 

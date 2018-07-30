@@ -21,7 +21,7 @@ import parasol:stream.UTF8Reader;
 import parasol:text.StringReader;
 
 string DEFAULT_CLASS_NAME = "SQLDataBase";
-/*
+/*
  *	SQL Proxy Generator:
  *
  *		This code loads a SQL database schema file, finds the CREATE PROCEDURE statements
@@ -244,7 +244,7 @@ int parseEnum(ref<Scanner> s) {
 
 int, int parseLength(ref<Scanner> s) {
 	Token t = s.next();
-	if (t != Token.INTEGER) {
+	if (t != Token.INTEGER_CONSTANT) {
 		error(s, s.location(), "Expecting a length or precision");
 		return -1, -1;
 	}
@@ -491,7 +491,7 @@ string[Token] dataTypeMap = [
 	FLOAT:				"sql.DataType.FLOAT",
 	INTEGER:			"sql.DataType.INTEGER",
 	SET:				"sql.DataType.SET",
-	SMALLINT:			"sql.DataType.SMALLINT",
+	SMALLINT:			"sql.DataType.SMALLINT",
 	TEXT:				"sql.DataType.TEXT",
 	TIMESTAMP:			"sql.DataType.TYPE_TIMESTAMP",
 	TINYINT:			"sql.DataType.TINYINT",
@@ -505,7 +505,7 @@ long[Token] defaultLength = [
 	DOUBLE_PRECISION:	double.bytes,
 	FLOAT:				float.bytes,
 	INTEGER:			int.bytes,
-	SMALLINT:			short.bytes,
+	SMALLINT:			short.bytes,
 	TIMESTAMP:			sql.Timestamp.bytes,
 	TINYINT:			byte.bytes,
 ];
@@ -619,7 +619,7 @@ enum Token {
 	// Each of these tokens has an associated 'value'
 
 	IDENTIFIER,
-	INTEGER,
+	INTEGER_CONSTANT,
 	FLOATING_POINT,
 	CHARACTER,
 	STRING,
@@ -677,7 +677,7 @@ enum Token {
 	OUT,
 	PROCEDURE,
 	SET,
-	SMALLINT,
+	SMALLINT,
 	TEXT,
 	TIMESTAMP,
 	TINYINT,
@@ -1012,7 +1012,7 @@ class Scanner {
 	}
 	
 	private Token number(int c) {
-		Token t = Token.INTEGER;
+		Token t = Token.INTEGER_CONSTANT;
 		startValue(c);
 		boolean hexConstant = false;
 		if (c == '.')

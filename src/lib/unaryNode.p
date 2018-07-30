@@ -492,6 +492,7 @@ public class Unary extends Node {
 			_operand.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 			return this;
 			
+		case	ADDRESS_OF_ENUM:
 		case	ADDRESS:
 			switch (_operand.op()) {
 			case SUBSCRIPT:

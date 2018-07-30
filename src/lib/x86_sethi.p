@@ -61,6 +61,7 @@ void sethiUllman(ref<Node> node, ref<CompileContext> compileContext, ref<Target>
 		u.sethi = CALL_REG_USE;
 		break;
 		
+	case	ADDRESS_OF_ENUM:
 	case	ADDRESS:
 		ref<Unary> u = ref<Unary>(node);
 		if (u.operand().op() == Operator.IDENTIFIER) {
@@ -283,6 +284,7 @@ private int regneeds(ref<Node> node, ref<CompileContext> compileContext, ref<Tar
 	case	NULL:
 	case	TRUE:
 	case	FALSE:
+	case	ADDRESS_OF_ENUM:
 	case	ADDRESS:
 	case	EMPTY:
 	case	INITIALIZE:

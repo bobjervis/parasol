@@ -26,6 +26,7 @@ import parasol:compiler.CompileContext;
 import parasol:compiler.CompileString;
 import parasol:compiler.Constant;
 import parasol:compiler.EnumInstanceType;
+import parasol:compiler.EnumType;
 import parasol:compiler.FileStat;
 import parasol:compiler.FIRST_USER_METHOD;
 import parasol:compiler.FlagsInstanceType;
@@ -417,7 +418,10 @@ class X86_64Encoder extends Target {
 		_dataMap[0].append(_dataMap[alignment]);
 		for (int i = 0; i < _dataMap[alignment].length(); i++) {
 			ref<Symbol> sym = _dataMap[alignment][i];
-			if (sym.type().family() == TypeFamily.TYPEDEF) {
+			if (sym.isEnumClass()) {
+//				ref<PlainSymbol> s = ref<PlainSymbol>(sym);
+//				ref<EnumType> type = ref<EnumInstanceType>(symbol.type().wrappedType()).enumType();
+			} else if (sym.type().family() == TypeFamily.TYPEDEF) {
 				ref<Scope> s = sym.type().scope();
 				pointer<int> p = pointer<int>(&_code[sym.offset]);
 				for (ref<Symbol>[Scope.SymbolKey].iterator indicia = s.symbols().begin(); indicia.hasNext(); indicia.next()) {
@@ -583,11 +587,17 @@ class X86_64Encoder extends Target {
 		}
 	}
 
-	public void assignStorageToObject(ref<Symbol> symbol, ref<Scope> scope, int offset, ref<CompileContext> compileContext) {
-		if (symbol.class == PlainSymbol) {
+	public void assignStorageToObject(ref<Symbol> sym, ref<Scope> scope, int offset, ref<CompileContext> compileContext) {
+		if (sym.class == PlainSymbol) {
+			ref<PlainSymbol> symbol = ref<PlainSymbol>(sym);
 			ref<Type> type = symbol.assignType(compileContext);
 			if (type == null)
 				return;
+			// As a special case, enums may produce static storage, if they have actual constructors and such.
+			if (symbol.isEnumClass()) {
+				assignStaticSymbolStorage(symbol, compileContext);
+				return;
+			}
 			if (!type.requiresAutoStorage())
 				return;
 			int size;
@@ -657,11 +667,22 @@ class X86_64Encoder extends Target {
 		}
 	}
 	
-	protected void assignStaticSymbolStorage(ref<Symbol> symbol, ref<CompileContext> compileContext) {
+	protected void assignStaticSymbolStorage(ref<PlainSymbol> symbol, ref<CompileContext> compileContext) {
 		if (symbol.value == null) {
 			symbol.value = symbol;
-			ref<Type> type = symbol.type();
-			int size = type.size();
+			ref<Type> type;
+			int size;
+			if (symbol.isEnumClass()) {
+				ref<EnumType> etype = ref<EnumInstanceType>(symbol.type().wrappedType()).enumType();
+				if (!etype.hasConstructors())
+					return;
+				etype.assignSize(this, compileContext);
+				type = etype;
+				size = type.size() * etype.instanceCount;
+			} else {
+				type = symbol.type();
+				size = type.size();
+			}
 			int alignment = type.alignment();
 			assignStaticRegion(symbol, alignment, size);
 			if (symbol.accessFlags() & Access.CONSTANT) {
@@ -2509,6 +2530,18 @@ class X86_64Encoder extends Target {
 		}
 	}
 	
+	void instLoadEnumAddress(R reg, ref<Node> n, int offset) {
+		// Generate an LEA reg,n
+		emitRex(TypeFamily.SIGNED_64, n, reg, R.NO_REG);
+		emit(0x8d);
+		ref<Symbol> symbol;
+		if (n.type.class == EnumType)
+			symbol = ref<EnumType>(n.type).symbol();
+		else
+			symbol = n.symbol();
+		enumAddressModRM(symbol, rmValues[reg], 0, n.type != null ? offset * n.type.size() : 0);
+	}
+
 	void inst(X86 instruction, R left, ref<Node> right, int immediate) {
 		switch (instruction) {
 		case	IMUL:

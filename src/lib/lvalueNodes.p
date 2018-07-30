@@ -176,6 +176,21 @@ public class Identifier extends Node {
 					return n;
 				}
 			}
+			if (type != null && type.class == EnumType) {
+				ref<Node> n = tree.newIdentifier(ref<EnumType>(type).symbol(), location());
+				n.type = compileContext.arena().builtInType(TypeFamily.UNSIGNED_8);
+				n = tree.newUnary(Operator.ADDRESS_OF_ENUM, n, location());
+				n.type = compileContext.arena().createPointer(type, compileContext);
+				ref<Node> r = tree.newUnary(Operator.CAST, this, location());
+				r.type = compileContext.arena().builtInType(TypeFamily.SIGNED_64);
+				r = tree.newBinary(Operator.ADD, n, r, location());
+				r.type = n.type;
+				r = tree.newUnary(Operator.INDIRECT, r, location());
+				r.type = type;
+				type = _symbol.type();
+				r = r.fold(tree, false, compileContext);
+				return r;
+			}
 		}
 		return this;
 	}
@@ -382,7 +397,7 @@ public class Identifier extends Node {
 		_symbol = compileContext.pool().newOverloadInstance(null, visibility, false, enclosing, compileContext.annotations, &_value, funcScope.definition(), funcScope);
 	}
 
-	void resolveAsEnum(ref<Type> enumType, ref<CompileContext>  compileContext) {
+	void resolveAsEnum(ref<EnumInstanceType> enumType, ref<CompileContext>  compileContext) {
 		_symbol = enumType.scope().lookup(&_value, compileContext);
 		if (_symbol == null) {
 			type = compileContext.errorType();

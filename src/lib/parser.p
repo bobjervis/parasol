@@ -1052,23 +1052,63 @@ public class Parser {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
-		ref<Node> e = parseIdentifierList();
+		ref<Node> e = parseEnumInstanceList();
 
 		t = _scanner.next();
 		ref<Class> body = _tree.newClass(Operator.ENUM, identifier, e, enumLoc);
-		if (t == Token.SEMI_COLON) {
-			parseBlock(body);
-		} else if (t != Token.RIGHT_CURLY) {
+		if (t == Token.RIGHT_CURLY)
+			return body;
+		else if (t != Token.SEMI_COLON) {
 			if (e.op() != Operator.SYNTAX_ERROR) {
 				ref<Node> err = _tree.newSyntaxError(_scanner.location());
 				err.add(MessageId.SYNTAX_ERROR, _tree.pool());
 				body.statement(_tree.newNodeList(err));
 			}
-			parseBlock(body);
 		}
+		ref<Class> oldEnclosing = pushEnclosing(body);
+		parseBlock(body);
+		pushEnclosing(oldEnclosing);
 		return body;
 	}
 
+	private ref<Node> parseEnumInstanceList() {
+		ref<Node> e = null;
+		Location commaLocation;
+		Token t;
+		for (;;) {
+			t = _scanner.next();
+			ref<Doclet> doclet = _scanner.extractDoclet();
+			if (t == Token.IDENTIFIER) {
+				ref<Node> x = _tree.newIdentifier(/*null, */_scanner.value(), _scanner.location());
+				_tree.newDoclet(x, doclet);
+				t = _scanner.next();
+				Location location = _scanner.location();
+				if (t == Token.LEFT_PARENTHESIS) {
+					ref<NodeList> parameters;
+					if (!parseParameterList(Token.RIGHT_PARENTHESIS, &parameters))
+						return parameters.node;
+					x = _tree.newCall(Operator.CALL, x, parameters, location);
+					t = _scanner.next();
+				}
+				if (e != null)
+					e = _tree.newBinary(Operator.SEQUENCE, e, x, commaLocation);
+				else
+					e = x;
+				if (t == Token.COMMA)
+					commaLocation = _scanner.location();
+				else
+					break;
+			} else if (e != null)
+				break;
+			else {
+				_scanner.pushBack(t);
+				return resync(MessageId.SYNTAX_ERROR);
+			}
+		}
+		_scanner.pushBack(t);
+		return e;
+	}
+	
 	private ref<Node> parseIdentifierList() {
 		ref<Node> e = null;
 		Location commaLocation;

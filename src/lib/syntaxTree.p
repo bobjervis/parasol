@@ -95,6 +95,7 @@ public enum Operator {
 	BIT_COMPLEMENT,
 	NOT,
 	ADDRESS,
+	ADDRESS_OF_ENUM,
 	INDIRECT,
 	BYTES,
 	CALL_DESTRUCTOR,
@@ -860,10 +861,34 @@ public class Class extends Block {
 	public ref<Class> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
 		if (deferAnalysis())
 			return this;
+		if (op() == Operator.ENUM) {
+			_extends = foldEnumConstructors(_extends, tree, compileContext);
+		}
 		super.fold(tree, voidContext, compileContext);
 		return this;
 	}
 	
+	private static ref<Node> foldEnumConstructors(ref<Node> n, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
+		switch (n.op()) {
+		case SEQUENCE:
+			ref<Binary> b = ref<Binary>(n);
+			ref<Node> left = foldEnumConstructors(b.left(), tree, compileContext);
+			ref<Node> right = foldEnumConstructors(b.right(), tree, compileContext);
+			if (left != b.left() || right != b.right()) {
+				n = tree.newBinary(Operator.SEQUENCE, left, right, n.location());
+				n.type = b.type;
+			}
+			break;
+
+		case IDENTIFIER:
+			break;
+
+		case CALL:
+			return n.fold(tree, true, compileContext);
+		}
+		return n;
+	}
+
 	public ref<Identifier> className() {
 		return _name;
 	}
@@ -921,8 +946,11 @@ public class Class extends Block {
 	}
 	
 	private void assignTypes(ref<CompileContext> compileContext) {
-		if (op() != Operator.ENUM) {
-
+		if (op() == Operator.ENUM) {
+			type = ref<EnumScope>(scope).enumType;
+			if (type.hasConstructors())
+				assignEnumConstructors(type, _extends, compileContext);
+		} else {
 			if (_extends != null)
 				compileContext.assignTypes(_extends);
 			assignImplementsClause(compileContext);
@@ -1030,6 +1058,34 @@ public class Class extends Block {
 					}
 				}
 			}
+		}
+	}
+
+	private void assignEnumConstructors(ref<Type> enumType, ref<Node> n, ref<CompileContext> compileContext) {
+		switch (n.op()) {
+		case SEQUENCE:
+			ref<Binary> b = ref<Binary>(n);
+			assignEnumConstructors(enumType, b.left(), compileContext);
+			assignEnumConstructors(enumType, b.right(), compileContext);
+			break;
+
+		case IDENTIFIER:
+			if (!enumType.hasDefaultConstructor()) {
+				n.add(MessageId.NO_DEFAULT_CONSTRUCTOR, compileContext.pool());
+				n.type = compileContext.errorType();
+			} else
+				n.type = enumType;
+			break;
+
+		case CALL:
+			ref<Call> c = ref<Call>(n);
+			c.target().type = enumType;
+			c.assignConstructorDeclarator(enumType, compileContext);
+			break;
+
+		default:
+			n.print(0);
+			assert(false);
 		}
 	}
 }
@@ -1957,6 +2013,7 @@ class Leaf extends Node {
 				return true;
 
 			case	SIGNED_32:
+
 			case	SIGNED_64:
 				return explicitCast;
 
@@ -3376,6 +3433,8 @@ public class Node {
 	}
 	
 	public boolean canCoerce(ref<Type> newType, boolean explicitCast, ref<CompileContext> compileContext) {
+		if (type == null)
+			print(0);
 		if (!type.widensTo(newType, compileContext))
 			return false;
 		if (newType.family() == TypeFamily.INTERFACE && !isLvalue()) {
@@ -3472,7 +3531,7 @@ public class Node {
 		switch (_op) {
 		case	IDENTIFIER:
 		case	DOT:
-			if (symbol() != null && symbol().storageClass() == StorageClass.ENUMERATION)
+			if (symbol() != null && symbol().storageClass() == StorageClass.ENUMERATION && type != null && type.class == EnumInstanceType)
 				return false;
 			
 		case	INDIRECT:

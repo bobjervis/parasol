@@ -723,6 +723,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				assignBinaryOperands(b, regMask, 0, compileContext);
 			break;
 
+		case	ADDRESS_OF_ENUM:
 		case	ADDRESS:
 			u = ref<Unary>(node);
 			assignLvalueTemps(u.operand(), compileContext);

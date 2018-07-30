@@ -149,6 +149,7 @@ run(filename: monitor_test_7.p)
 run(filename: monitor_test_8.p)
 run(filename: monitor_test_9.p)
 run(filename: monitor_test_10.p)
+run(filename: enum_class.p)
 run(filename: class_aggregate.p)
 run(filename: placement_delete_test.p)
 run(filename: vector_elem_constructor_test.p)
@@ -318,6 +319,15 @@ compile(expect: fail, message: NO_MATCHING_OVERLOAD) { "void f(ref<int> y, int z
 
 compile() { "void f(int x(int z)){}" }
 compile() { "void f(int x(int z)){} f(g.h); class g { static int h(int y) { return 0;} }" }
+
+// enum class tests
+
+compile() { "enum A { B, C; int x; } int y = A.C.x;" }
+compile() { "enum Axy { B, C; Axy() {} } Axy a;" }
+compile(expect: fail) { "enum Axy { B, C; Axy(int n) {} } Axy a;" }
+compile() { "enum A { B, C; int f() { return 1; } } int y = A.C.f();" }
+compile() { "enum A { B(1), C(4); A(int z) {} }" }
+compile(expect: fail) { "enum A { B(\"a\"), C(4); A(int z) {} }" }
 
 // Interface tests
 

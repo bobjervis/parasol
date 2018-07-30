@@ -33,7 +33,8 @@ int main(string[] args) {
 			string filename = d.filename();
 			if (filename == "." || filename == "..")
 				continue;
-			tests.append(filename);
+			if (storage.isDirectory(d.path()))
+				tests.append(filename);
 		} while (d.next());
 		printf("Read %d entries\n", tests.length());
 		tests.sort(sortByNumber, true);
@@ -59,7 +60,7 @@ int main(string[] args) {
 
 			storage.deleteFile(storage.constructPath(dir, "crash.output.txt", null));
 			storage.deleteFile(storage.constructPath(dir, "errors.output.txt", null));
-			(exitcode, output, ex) = process.execute(5.seconds(), actual);
+			(exitcode, output, ex) = process.execute(5 .seconds(), actual);
 			if (exitcode == 0)
 				printf("%s compiled\n", dir);
 			else {

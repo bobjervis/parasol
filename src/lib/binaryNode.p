@@ -1500,8 +1500,7 @@ public class Binary extends Node {
 						
 					case	ENUM:
 						enumType = ref<EnumInstanceType>(indexType);
-						ref<EnumScope> enumScope = ref<EnumScope>(enumType.scope());
-						maxIndex = enumScope.instances().length() - 1;
+						maxIndex = enumType.instanceCount() - 1;
 						break;
 						
 					default:

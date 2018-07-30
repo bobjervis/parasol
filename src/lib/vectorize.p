@@ -352,9 +352,8 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 				ref<Binary> b = ref<Binary>(nl.node);
 				switch (indexType.family()) {
 				case ENUM:
-					ref<EnumScope> scope = ref<EnumScope>(indexType.scope());
 					ref<Identifier> id = ref<Identifier>(b.left());
-					lastIndexValue = scope.indexOf(id.symbol()); 
+					lastIndexValue = id.symbol().offset; 
 					break;
 
 				case UNSIGNED_8:
@@ -419,9 +418,8 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 					val = b.right();
 					switch (indexType.family()) {
 					case ENUM:
-						ref<EnumScope> scope = ref<EnumScope>(indexType.scope());
 						ref<Identifier> id = ref<Identifier>(b.left());
-						lastIndexValue = scope.indexOf(id.symbol()); 
+						lastIndexValue = id.symbol().offset; 
 						break;
 	
 					case UNSIGNED_8:
