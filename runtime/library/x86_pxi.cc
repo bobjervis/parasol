@@ -140,7 +140,7 @@ bool X86_64Section::run(char **args, int *returnValue, long long runtimeFlags) {
 		char *soName = nativeBindings[i].dllName;
 		if (strcmp(soName, "libparasol.so.1") == 0)
 			soName = "libparasol.so";//_libParasolPath;
-		void *handle = dlopen(soName, RTLD_LAZY);
+		void *handle = dlopen(soName, RTLD_LAZY|RTLD_NODELETE);
 		if (handle == null) {
 			printf("Unable to locate shared object %s (%s)\n", nativeBindings[i].dllName, dlerror());
 			abort();

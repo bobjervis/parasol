@@ -749,6 +749,10 @@ public class OverloadInstance extends Symbol {
 		for (int i = 0; i < _parameterScope.parameters().length(); i++) {
 			ref<Symbol> basePar = (*baseMethod._parameterScope.parameters())[i];
 			ref<Symbol> par = (*_parameterScope.parameters())[i];
+			if (basePar.type() == null) {
+				print(0, false);
+				baseMethod.print(0, false);
+			}
 //			printf("par type is %p basePar type is %p\n", par.type(), basePar.type());
 //			printf("par type is %s basePar type is %s\n", par.type().signature(), basePar.type().signature());
 			if (par.type() == null)
