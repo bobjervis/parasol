@@ -228,7 +228,7 @@ public class Process extends ProcessVolatileData {
 			if (exitStatus == 0)
 				return true, 0;
 			else {
-				logger.format(log.DEBUG, "exit = %d", exitStatus);
+//				logger.format(log.DEBUG, "exit = %d", exitStatus);
 				return false, exitStatus;
 			}
 		} else
@@ -279,49 +279,43 @@ public class Process extends ProcessVolatileData {
 				printf(" '%s'", args[i]);
 			printf("\n");
  */
+			byte[] buffer;
+			buffer.resize(linux.PATH_MAX);
 			// This will guarantee that our handler does not race the SIG_CHLD signal
 			lock (pendingChildren) {
 				_pid = linux.fork();
 				if (_pid == 0) {
-					linux.setpgrp();
 					// This is the child process
-					log.resetChildProcess();
+					linux.setpgrp();
 					if (_captureOutput) {
 						// If the child process changes users, the grantpt has to happen with ruid == _user and euid == 9
 						if (_user != 0) {
 							if (linux.setreuid(_user, 0) != 0) {
-								logger.format(log.ERROR, "setreuid to %d FAILED", _user);
-								thread.sleep(1000);
+								stderr.printf("setreuid to %d FAILED\n", _user);
 								linux._exit(-1);
 							}
 						}
 						int result = linux.grantpt(ptyMasterFd);
 						if (result != 0) {
-							logger.format(log.ERROR, "grantpt failed: %d", linux.errno());
-							thread.sleep(1000);
+							stderr.printf("grantpt failed: %d\n", linux.errno());
 							linux._exit(-1);
 						}
 						result = linux.unlockpt(ptyMasterFd);
 						if (result != 0) {
-							logger.format(log.ERROR, "unlockpt failed: %d", linux.errno());
-							thread.sleep(1000);
+							stderr.printf("unlockpt failed: %d\n", linux.errno());
 							linux._exit(-1);
 						}
-						byte[] buffer;
-						buffer.resize(linux.PATH_MAX);
 						if (linux.ptsname_r(ptyMasterFd, &buffer[0], buffer.length()) != 0) {
-							logger.format(log.ERROR, "ptsname_r failed: %d", linux.errno());
-							thread.sleep(1000);
+							stderr.printf("ptsname_r failed: %d\n", linux.errno());
 							linux._exit(-1);
 						}
 						int fd = linux.open(&buffer[0], linux.O_RDWR);
 						if (fd < 3) {
-							logger.format(log.ERROR, "pty open failed: %s %d %d", string(&buffer[0]), fd, linux.errno());
-							thread.sleep(1000);
+							stderr.printf("pty open failed: %s %d %d", string(&buffer[0]), fd, linux.errno());
 							linux._exit(-1);
 						}
 						if (linux.dup2(fd, 0) != 0) {
-							logger.format(log.ERROR, "dup2 failed: %d -> 0 %d", fd, linux.errno());
+							stderr.printf("dup2 failed: %d -> 0 %d\n", fd, linux.errno());
 							thread.sleep(1000);
 							linux._exit(-1);
 						}
@@ -337,8 +331,7 @@ public class Process extends ProcessVolatileData {
 					// Okay, lock it down now.
 					if (_user != 0) {
 						if (linux.setuid(_user) != 0) {
-							logger.format(log.ERROR, "setreuid to %d FAILED", _user);
-							thread.sleep(1000);
+							stderr.printf("setreuid to %d FAILED\n", _user);
 							linux._exit(-1);
 						}
 					}
@@ -386,6 +379,7 @@ public class Process extends ProcessVolatileData {
 
 	public int waitForExit() {
 		lock (*this) {
+//			logger.format(log.DEBUG, "wait for %d running? %s", _pid, string(_running));
 			if (_running)
 				wait();
 			return _exitStatus;
@@ -439,32 +433,17 @@ public class Process extends ProcessVolatileData {
 		return _user;
 	}
 
-	private static void processExitInfoWrapper(ref<linux.siginfo_t_sigchld> info, address arg) {
-		ref<Process>(arg).processExitInfo(info);
+	private static void processExitInfoWrapper(int exitCode, address arg) {
+		ref<Process>(arg).processExitInfo(exitCode);
 	}
 
-	protected void processExitInfo(ref<linux.siginfo_t_sigchld> info) {
+	protected void processExitInfo(int exitCode) {
 //		printf("processExitInfo pid = %d: %d %d\n", info.si_pid, info.si_code, info.si_status);
-		switch (info.si_code) {
-		case CLD_STOPPED:
-		case CLD_CONTINUED:
-			break;
-
-		case CLD_EXITED:
-			lock (*this) {
-				_running = false;
-				_exitStatus = info.si_status;
-				notifyAll();
-			}
-			break;
-
-		default:
-			lock (*this) {
-				_running = false;
-				_exitStatus = -info.si_status;
-				notifyAll();
-			}
-			break;
+//		logger.format(log.DEBUG, "child exit %d with %d", _pid, exitCode);
+		lock (*this) {
+			_running = false;
+			_exitStatus = exitCode;
+			notifyAll();
 		}
 	}
 }
@@ -500,19 +479,19 @@ private monitor class PendingChildren {
 			}
 	}
 
-	void reportChildStateChange(linux.pid_t pid, ref<linux.siginfo_t_sigchld> info) {
+	void reportChildStateChange(linux.pid_t pid, int exitStatus) {
 		if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+			if (linux.WIFEXITED(exitStatus))
+				exitStatus = linux.WEXITSTATUS(exitStatus);
+			else
+				exitStatus = -linux.WTERMSIG(exitStatus);
 			for (int i = 0; i < _children.length(); i++)
 				if (_children[i] != null && _children[i].pid == pid) {
 					if (_children[i].handler != null)
-						_children[i].handler(info, _children[i].arg);
-					int exitStatus;
-					if (linux.WIFEXITED(info.si_status) || linux.WIFSIGNALED(info.si_status)) {
-						linux.waitpid(pid, &exitStatus, 0);
-						delete _children[i];
-						_children[i] = null;
-					}
-					return;
+						_children[i].handler(exitStatus, _children[i].arg);
+					delete _children[i];
+					_children[i] = null;
+					break;
 				}
 		}
 	}
@@ -520,15 +499,13 @@ private monitor class PendingChildren {
 
 private void childWaiter(address arg) {
 	if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-		linux.sigset_t set;
-		linux.siginfo_t_sigchld info;
-	
-		linux.sigemptyset(&set);
-		linux.sigaddset(&set, linux.SIGCHLD);
 		for (;;) {
-			// A return value less than zerro can only be EINTR, which just requires that we retry
-			if (linux.sigwaitinfo(&set, &info) >= 0)
-				pendingChildren.reportChildStateChange(info.si_pid, &info);
+			int exitStatus;
+			linux.pid_t pid = linux.waitpid(-1, &exitStatus, 0);
+			if (pid > 0) {
+//				logger.format(log.DEBUG, "waitpid %d with %d", pid, exitStatus);
+				pendingChildren.reportChildStateChange(pid, exitStatus);
+			}
 		}
 	}
 }
@@ -537,7 +514,7 @@ private PendingChildren pendingChildren;
 
 private class PendingChild {
 	public linux.pid_t pid;
-	public void (ref<linux.siginfo_t_sigchld>, address) handler;
+	public void (int, address) handler;
 	public address arg;
 }
 /*

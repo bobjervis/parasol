@@ -1030,6 +1030,19 @@ public int ETIMEDOUT = 110;	/* Connection timed out */
 #define EHWPOISON	133	/* Memory page has hardware error */
 */
 
+@constant
+public int WNOHANG         = 0x00000001;
+@constant
+public int WUNTRACED       = 0x00000002;
+@constant
+public int WSTOPPED        = 0x00000002;
+@constant
+public int WEXITED         = 0x00000004;
+@constant
+public int WCONTINUED      = 0x00000008;
+@constant
+public int WNOWAIT         = 0x01000000;      /* Don't reap, just poll status.  */
+
 
 /* If WIFEXITED(STATUS), the low-order 8 bits of the status.  */
 public int WEXITSTATUS(int status) {
