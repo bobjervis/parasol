@@ -28,21 +28,21 @@ class Command {
 	ref<Argument<boolean>> _helpArgument;
 	ref<BaseArgument>[] _allArguments;
 
-	void finalArguments(int min, int max, string helpText) {
+	public void finalArguments(int min, int max, string helpText) {
 		_finalMin = min;
 		_finalMax = max;
 		_finalArgumentsHelpText = helpText;
 	}
 
-	void description(string helpText) {
+	public void description(string helpText) {
 		_description = helpText;
 	}
 
-	ref<Argument<int>> integerArgument(string longOption, string helpText) {
+	public ref<Argument<int>> integerArgument(string longOption, string helpText) {
 		return integerArgument(0, longOption, helpText);
 	}
 	
-	ref<Argument<int>> integerArgument(char shortOption, string longOption, string helpText) {
+	public ref<Argument<int>> integerArgument(char shortOption, string longOption, string helpText) {
 		ref<Argument<int>> arg = new Argument<int>(ArgumentClass.INTEGER, shortOption, longOption, helpText);
 		if (defineOption(shortOption, longOption, arg))
 			return arg;
@@ -52,11 +52,11 @@ class Command {
 		}
 	}
 	
-	ref<Argument<string>> stringArgument(string longOption, string helpText) {
+	public ref<Argument<string>> stringArgument(string longOption, string helpText) {
 		return stringArgument(0, longOption, helpText);
 	}
 	
-	ref<Argument<string>> stringArgument(char shortOption, string longOption, string helpText) {
+	public ref<Argument<string>> stringArgument(char shortOption, string longOption, string helpText) {
 		ref<Argument<string>> arg = new Argument<string>(ArgumentClass.STRING, shortOption, longOption, helpText);
 		if (defineOption(shortOption, longOption, arg))
 			return arg;
@@ -66,11 +66,11 @@ class Command {
 		}
 	}
 
-	ref<Argument<boolean>> booleanArgument(string longOption, string helpText) {
+	public ref<Argument<boolean>> booleanArgument(string longOption, string helpText) {
 		return booleanArgument(0, longOption, helpText);
 	}
 	
-	ref<Argument<boolean>> booleanArgument(char shortOption, string longOption, string helpText) {
+	public ref<Argument<boolean>> booleanArgument(char shortOption, string longOption, string helpText) {
 		ref<Argument<boolean>> arg = new Argument<boolean>(ArgumentClass.BOOLEAN, shortOption, longOption, helpText);
 		if (defineOption(shortOption, longOption, arg))
 			return arg;
@@ -80,11 +80,11 @@ class Command {
 		}
 	}
 
-	boolean helpArgument(string longOption, string helpText) {
+	public boolean helpArgument(string longOption, string helpText) {
 		return helpArgument(0, longOption, helpText);
 	}
 
-	boolean helpArgument(char shortOption, string longOption, string helpText) {
+	public boolean helpArgument(char shortOption, string longOption, string helpText) {
 		if (_helpArgument != null)
 			return false;
 		ref<Argument<boolean>> arg = new Argument<boolean>(ArgumentClass.HELP, shortOption, longOption, helpText);
@@ -95,7 +95,7 @@ class Command {
 			return false;
 	}
 
-	boolean parse(string[] args) {
+	public boolean parse(string[] args) {
 		int i;
 		for (i = 0; i < args.length(); i++) {
 			if (args[i][0] == '-') {

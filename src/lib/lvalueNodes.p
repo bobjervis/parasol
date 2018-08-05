@@ -416,7 +416,7 @@ public class Identifier extends Node {
 		return _symbol;
 	}
 	
-	CompileString value() {
+	public CompileString value() {
 		return _value;
 	}
 /*

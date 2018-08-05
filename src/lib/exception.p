@@ -528,8 +528,17 @@ void uncaughtException(ref<Exception> e) {
 	e.printStackTrace();
 	exposeException(e);
 }
-
-void hardwareExceptionHandler(ref<HardwareException> info) {
+/**
+ * The default hardware exception handler. This is registered early in the process start-up initialization.
+ *
+ * It can be replaced with a call to {@link setHardwareExceptionHandler}. You may use the address of this
+ * function to restore the default handler if you have replaced it.
+ *
+ * This function will only throw an exception and will never return normally.
+ *
+ * @param info The @{link HardwareException} object contianing the detailed information about the exception.
+ */
+public void hardwareExceptionHandler(ref<HardwareException> info) {
 	ref<ExceptionContext> context = createExceptionContext(info.stackPointer);
 	context.framePointer = info.framePointer;
 	context.exceptionAddress = info.codePointer;
@@ -646,7 +655,7 @@ private abstract void exposeException(ref<Exception> e);
 
 @Linux("libparasol.so.1", "registerHardwareExceptionHandler")
 @Windows("parasol.dll", "registerHardwareExceptionHandler")
-abstract void registerHardwareExceptionHandler(void handler(ref<HardwareException> info));
+public abstract void registerHardwareExceptionHandler(void handler(ref<HardwareException> info));
 
 @Linux("libparasol.so.1", "fetchExposedException")
 @Windows("parasol.dll", "fetchExposedException")
@@ -726,14 +735,26 @@ public class HardwareException {
 	public int exceptionType;
 }
 /**
+ * Construct a string representing a machine location, including information about relative location
+ * within a compiled image.
+ *
  * @param ip The machine address to obtain a source location for.
  * @param offset The offset into the Parasol code image where the symbol could be found. If
  * the value is negative, then only the ip is used and it is assumed to be outside Parasol code.
  * @param locationIsExact true if this is the exact address you care about. For example, if
  * it is the return address from a function, it may be pointing to the next source line so
  * this code will adjust to look for the location one byte before the given address.
+ *
+ * @return The formatted string.
+ *
+ * If the location is outside a compiled Parasol image, a native operating system utility is used to obtain
+ * as good a symbolic address as reasonably possible. If no good symbolic address is available, then the
+ * hex address is formatted.
+ *
+ * If the location is inside a compile Parasol image, the Parasol source filename and line number is returned,
+ * along with the image-relative offset of the machine code.
  */
-string formattedLocation(address ip, int offset, boolean locationIsExact) {
+public string formattedLocation(address ip, int offset, boolean locationIsExact) {
 	ref<runtime.SourceLocation> sl = runtime.getSourceLocation(ip, locationIsExact);
 	if (sl == null)
 		return formattedExternalLocation(ip);

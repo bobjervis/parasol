@@ -836,7 +836,7 @@ public class vector<class E, class I> {
 }
 
 @Shape
-class map<class V, class K> {
+public class map<class V, class K> {
 	@Constant
 	private static int INITIAL_TABLE_SIZE	= 64;		// must be power of two
 	@Constant

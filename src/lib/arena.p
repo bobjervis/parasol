@@ -451,7 +451,7 @@ public class Arena {
 		return s;
 	}
 
-	ref<ParameterScope> createParameterScope(ref<Scope> enclosing, ref<Node> definition, ParameterScope.Kind kind) {
+	public ref<ParameterScope> createParameterScope(ref<Scope> enclosing, ref<Node> definition, ParameterScope.Kind kind) {
 		ref<ParameterScope> s = new ParameterScope(enclosing, definition, kind);
 		_scopes.append(s);
 		return s;
@@ -534,13 +534,13 @@ public class Arena {
 		_types.append(t);
 	}
 
-	void clearStaticInitializers() {
+	public void clearStaticInitializers() {
 		_specialFiles.clearStaticInitializers();
 		for (int i = 0; i < _importPath.length(); i++)
 			_importPath[i].clearStaticInitializers();
 	}
 	
-	boolean collectStaticInitializers(ref<Target> target) {
+	public boolean collectStaticInitializers(ref<Target> target) {
 		boolean result = _specialFiles.collectStaticInitializers(target);
 		for (int i = _importPath.length() - 1; i >= 0; i--)
 			result |= _importPath[i].collectStaticInitializers(target);
@@ -603,11 +603,11 @@ public class Arena {
 		return _root; 
 	}
 
-	ref<ref<Scope>[]> scopes() { 
+	public ref<ref<Scope>[]> scopes() { 
 		return &_scopes;
 	}
 
-	ref<ref<TemplateInstanceType>[]> types() { 
+	public ref<ref<TemplateInstanceType>[]> types() { 
 		return &_types; 
 	}
 
@@ -625,19 +625,19 @@ public class Arena {
 		return tt.wrappedType() == ref<TemplateInstanceType>(type).templateType();
 	}
 
-	ref<OverloadInstance> refTemplate() { 
+	public ref<OverloadInstance> refTemplate() { 
 		return _ref; 
 	}
 
-	ref<OverloadInstance> pointerTemplate() {
+	public ref<OverloadInstance> pointerTemplate() {
 		return _pointer;
 	}
 
-	ref<OverloadInstance> vectorTemplate() {
+	public ref<OverloadInstance> vectorTemplate() {
 		return _vector;
 	}
 
-	ref<OverloadInstance> mapTemplate() {
+	public ref<OverloadInstance> mapTemplate() {
 		return _map;
 	}
 }

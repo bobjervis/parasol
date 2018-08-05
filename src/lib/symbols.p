@@ -506,7 +506,7 @@ class DelegateOverload extends OverloadInstance {
 	ref<OverloadInstance> _delegate;
 	
 	DelegateOverload(ref<Overload> overload, ref<OverloadInstance> delegate, ref<MemoryPool> pool) {
-		super(overload, Operator.UNIT, delegate.storageClass() == StorageClass.STATIC, overload.enclosing(), null, pool, delegate.name(), null, delegate.parameterScope());
+		super(overload, Operator.NAMESPACE, delegate.storageClass() == StorageClass.STATIC, overload.enclosing(), null, pool, delegate.name(), null, delegate.parameterScope());
 		_delegate = delegate;
 	}
 	
@@ -669,7 +669,16 @@ public class OverloadInstance extends Symbol {
 		// the call includes zero ellipsis arguments.
 		return Callable.YES;
 	}
-
+	/**
+	 * Evaluate which of a pair of methods are a 'better fit' to the
+	 * given argument list.
+	 *
+	 * @return -1 if other is a better fit to the argument list, or
+	 * 0 if they are equally a good fit to the argument list, or
+	 * 1 if this is a better fit than other. The 'better fit' criteria
+	 * are reflexive, that is switching this with other reverses the sign of 
+	 * the return value.
+	 */
 	public int partialOrder(ref<Symbol> other, ref<NodeList> arguments, ref<CompileContext> compileContext) {
 		ref<OverloadInstance> oiOther = ref<OverloadInstance>(other);
 
@@ -678,8 +687,14 @@ public class OverloadInstance extends Symbol {
 		// TODO: This doesn't look right - what effect does it have?
 		while (parameter < _parameterScope.parameters().length()) {
 			ref<Symbol> symThis = (*_parameterScope.parameters())[parameter];
+			if (parameter >= oiOther._parameterScope.parameters().length())
+				return bias; 
 			ref<Symbol> symOther = (*oiOther._parameterScope.parameters())[parameter];
 			ref<Type> typeThis = symThis.assignType(compileContext);
+			if (symOther == null) {
+				print(0, false);
+				other.print(0, false);
+			}
 			ref<Type> typeOther = symOther.assignType(compileContext);
 			if (!typeThis.equals(typeOther)) {
 				if (typeThis.widensTo(typeOther, compileContext)) {
@@ -693,6 +708,8 @@ public class OverloadInstance extends Symbol {
 				}
 			}
 			parameter++;
+		}
+		if (parameter < oiOther._parameterScope.parameters().length()) {
 		}
 		return bias;
 	}
@@ -934,6 +951,25 @@ public class Symbol {
 			ref<Identifier> id = ref<Identifier>(b.target());
 			_annotations.insert(id.identifier().asString(), b, pool);
 		}
+	}
+
+	public boolean isVisibleIn(ref<Scope> scope, ref<CompileContext> compileContext) {
+		if (_enclosing.encloses(scope))
+			return true;
+		switch (_visibility) {
+		case PRIVATE:
+			return false;
+
+		case PROTECTED:
+			if (!_enclosing.isBaseScope(scope, compileContext))
+				return false;
+			break;
+
+		case NAMESPACE:
+			if (_enclosing.getNamespace() != scope.getNamespace())
+				return false;
+		}
+		return true;
 	}
 	/*
 	 *	callableWith

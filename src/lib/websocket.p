@@ -745,7 +745,7 @@ public monitor class RendezvousManager {
 		return r;
 	}
 
-	ref<Rendezvous>[] extractAllRendezvous() {
+	public ref<Rendezvous>[] extractAllRendezvous() {
 		_shuttingDown = true;
 		ref<Rendezvous>[] results;
 		for (ref<Rendezvous>[string].iterator i = _pendingMessages.begin(); i.hasNext(); i.next())

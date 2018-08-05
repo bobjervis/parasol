@@ -46,7 +46,7 @@ class OverloadOperation {
 	public ref<Type> includeClass(ref<Type>  classType, ref<CompileContext> compileContext) {
 		for (ref<Type> current = classType; current != null; current = current.assignSuper(compileContext)) {
 			if (current.scope() != null) {
-				ref<Type> type = includeScope(compileContext.current(), current.scope());
+				ref<Type> type = includeScope(classType.scope(), current.scope());
 				if (type != null)
 					return type;
 				if (_done)
@@ -56,13 +56,13 @@ class OverloadOperation {
 		return null;
 	}
 
-	public ref<Type> includeScope(ref<Scope> lexicalScope, ref<Scope> s) {
+	public ref<Type> includeScope(ref<Scope> lexicalScope, ref<Scope> symbolScope) {
 //		string ts = "Unit";
 //		if (ts == _name.asString()) {
 //			printf("Looking for Unit...\n");
 //			s.print(0, false);
 //		}
-		ref<Symbol> sym = s.lookup(_name, _compileContext);
+		ref<Symbol> sym = symbolScope.lookup(_name, _compileContext);
 		if (sym == null)
 			return null;
 //		if (ts == _name.asString())
@@ -97,13 +97,8 @@ class OverloadOperation {
 		for (int i = 0; i < o.instances().length(); i++) {
 			ref<OverloadInstance> oi = (*o.instances())[i];
 			_anyPotentialOverloads = true;
-			if (!s.encloses(lexicalScope)) {
-				if (oi.visibility() == Operator.PRIVATE)
-					continue;
-				else if (oi.visibility() == Operator.PROTECTED) {
-					// TODO: what is in scope for protected variables?
-				}
-			}
+			if (!oi.isVisibleIn(lexicalScope, _compileContext))
+				continue;
 			ref<Type> t = includeOverload(oi);
 			if (t != null)
 				return t;

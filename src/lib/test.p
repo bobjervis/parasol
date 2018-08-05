@@ -25,7 +25,7 @@ import parasol:runtime;
 
 public boolean listAllTests = false;
 
-int launch(string[] args) {
+public int launch(string[] args) {
 	ref<ref<script.Atom>[]>[] scripts;
 	string[] filenames;
 	time.Time start = time.now();

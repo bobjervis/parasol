@@ -456,6 +456,17 @@ class ClasslikeScope extends Scope {
 		return iface;
 	}
 
+	public boolean isBaseScope(ref<Scope> derived, ref<CompileContext> compileContext) {
+		for (;;) {
+			ref<Scope> base = derived.base(compileContext);
+			if (base == null)
+				return false;
+			if (base == this)
+				return true;
+			derived = base;
+		}
+	}
+
 	public boolean isConcrete(ref<CompileContext> compileContext) {
 		assignMethodMaps(compileContext);
 		for (int i = 0; i < _methods.length(); i++)
@@ -510,9 +521,9 @@ class ClasslikeScope extends Scope {
 						continue;
 					break;
 
-				case UNIT:
+				case NAMESPACE:
 					ref<Namespace> nm = _methods[i].enclosingNamespace();
-					if (nm == null) {								// Only methods in the same unit can override
+					if (nm == null) {								// Only methods in the same namespace can override
 						if (enclosingUnit() != _methods[i].enclosingUnit())
 							continue;
 					} else if (nm != getNamespace())
@@ -800,7 +811,7 @@ public class ParameterScope extends Scope {
 		_kind = kind;
 	}
 
-	ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> definition, ref<Node> declaration, ref<Node> initializer, ref<MemoryPool> memoryPool) {
+	public ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> definition, ref<Node> declaration, ref<Node> initializer, ref<MemoryPool> memoryPool) {
 		ref<Symbol> sym = super.define(visibility, storageClass, annotations, definition, declaration, initializer, memoryPool);
 		if (sym != null)
 			_parameters.append(sym);
@@ -1091,7 +1102,7 @@ public class Scope {
 
 	protected ref<Symbol>[SymbolKey] _symbols;
 
-	class SymbolKey {
+	public class SymbolKey {
 		ref<CompileString> _key;
 		
 		public SymbolKey() {}
@@ -1309,7 +1320,7 @@ public class Scope {
 	void printDetails() {
 	}
 	
-	void printStatus() {
+	public void printStatus() {
 		printf("%p %s %s", this, string(_storageClass), isTemplateFunction() ? "template function " : "");
 		if (_definition != null) {
 			ref<FileStat> fs = file();
@@ -1331,7 +1342,7 @@ public class Scope {
 		printf("\n");
 	}
 	
-	string sourceLocation(Location loc) {
+	public string sourceLocation(Location loc) {
 		string result;
 		ref<FileStat> fs = file();
 		result.printf("%s %d: ", fs.filename(), fs.scanner().lineNumber(loc) + 1);
@@ -1388,7 +1399,7 @@ public class Scope {
 		return sym;
 	}
 
-	ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> source, ref<Type> type, ref<Node> initializer, ref<MemoryPool> memoryPool) {
+	public ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> source, ref<Type> type, ref<Node> initializer, ref<MemoryPool> memoryPool) {
 		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations, source.identifier(), source, type, initializer);
 		SymbolKey key(source.identifier());
 		if (_symbols.contains(key))
@@ -1397,7 +1408,7 @@ public class Scope {
 		return sym;
 	}
 
-	ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, string name, ref<Type> type, ref<Node> initializer, ref<MemoryPool> memoryPool) {
+	public ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, string name, ref<Type> type, ref<Node> initializer, ref<MemoryPool> memoryPool) {
 		CompileString cs = memoryPool.newCompileString(name);
 		ref<CompileString> pcs = memoryPool new CompileString(cs.data, cs.length);
 		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations, pcs, null, type, initializer);
@@ -1643,6 +1654,24 @@ public class Scope {
 		}
 		return false;
 	}
+	/**
+	 * Check whether this scope is a base scope of the derived scope.
+	 *
+	 * This is the method that determines whether a 'protected' modifier permits a symbol to be visible.
+	 * This scope is the scope of the protected symbol. Derived is the scope containing the reference. It can
+	 * therefore be any old kind of scope. If it is not a derived class scope of this, then this method returns
+	 * false and the symbol reference is a compile-tmie error.
+	 *
+	 * @param derived Any scope.
+	 *
+	 * @param compileContext The context of the current compile. 
+	 *
+	 * @return true if this scope is the class scope of a base class of the class whose scope is in derived.
+	 * If derived is not a class scope, the method returns false.
+	 */
+	public boolean isBaseScope(ref<Scope> derived, ref<CompileContext> compileContext) {
+		return false;
+	}
 
 	public boolean inSwitch() {
 		if (_definition == null)
@@ -1861,7 +1890,7 @@ public class Scope {
 			return null;
 	}
 
-	ref<ref<Symbol>[SymbolKey]> symbols() {
+	public ref<ref<Symbol>[SymbolKey]> symbols() {
 		return &_symbols;
 	}
 
@@ -1869,15 +1898,15 @@ public class Scope {
 		return _enclosing;
 	}
 
-	ref<ref<ParameterScope>[]> constructors() {
+	public ref<ref<ParameterScope>[]> constructors() {
 		return &_constructors;
 	}
 
-	ref<ParameterScope> destructor() {
+	public ref<ParameterScope> destructor() {
 		return _destructor;
 	}
 	
-	ref<ParameterScope> defaultConstructor() {
+	public ref<ParameterScope> defaultConstructor() {
 		for (int i = 0; i < _constructors.length(); i++)
 			if (_constructors[i].parameterCount() == 0) {
 				if (_constructors[i].definition() != null &&
@@ -1890,7 +1919,7 @@ public class Scope {
 		return null;
 	}
 	
-	StorageClass storageClass() {
+	public StorageClass storageClass() {
 		return _storageClass;
 	}
 

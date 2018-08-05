@@ -726,11 +726,11 @@ public class Block extends Node {
 			compileContext.setCurrent(outer);
 	}
 
-	boolean definesScope() {
+	public boolean definesScope() {
 		return true;
 	}
 	
-	boolean inSwitch() {
+	public boolean inSwitch() {
 		return _inSwitch;
 	}
 }
@@ -1199,11 +1199,11 @@ public class InternalLiteral extends Node {
 		return false;
 	}
 
-	long intValue() {
+	public long intValue() {
 		return _value;
 	}
 
-	long, boolean charValue() {
+	public long, boolean charValue() {
 		return -1, false;
 	}
  
@@ -1394,7 +1394,7 @@ public class Constant extends Node {
 		return false;
 	}
 
-	long intValue() {
+	public long intValue() {
 		long v = 0;
 		if (_value.length == 0)
 			return -1;
@@ -1433,7 +1433,7 @@ public class Constant extends Node {
 		return v;
 	}
 
-	long, boolean charValue() {
+	public long, boolean charValue() {
 		string s(_value.data, _value.length);
 		int output;
 		boolean status;
@@ -1441,7 +1441,7 @@ public class Constant extends Node {
 		return output, status;
 	}
 
-	CompileString value() {
+	public CompileString value() {
 		return _value;
 	}
  

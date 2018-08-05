@@ -730,7 +730,7 @@ public class ClassType extends Type {
 		return false;
 	}
 
-	ref<OverloadInstance> getCompareMethod(ref<CompileContext> compileContext) {
+	public ref<OverloadInstance> getCompareMethod(ref<CompileContext> compileContext) {
 		if (_compareMethod != null)
 			return _compareMethod;
 		ref<Symbol> sym = _scope.lookup("compare", null);
@@ -2145,7 +2145,7 @@ public class Type {
 			return "???Type";
 	}
 
-	boolean isFloat() {
+	public boolean isFloat() {
 		switch (_family) {
 		case	FLOAT_32:
 		case	FLOAT_64:

@@ -295,7 +295,7 @@ public class CompileContext {
 
 	private void clearDeclarationModifiers() {
 		isStatic = false;
-		visibility = Operator.UNIT;
+		visibility = Operator.NAMESPACE;
 		annotations = null;
 	}
 	
@@ -1142,7 +1142,7 @@ public class CompileContext {
 		return t;
 	}
 
-	ref<Variable> newVariable(ref<Type> type) {
+	public ref<Variable> newVariable(ref<Type> type) {
 		ref<Variable> v = new Variable;
 		v.type = type;
 		v.enclosing = _current;
@@ -1150,7 +1150,7 @@ public class CompileContext {
 		return v;
 	}
 
-	ref<Variable> newVariable(ref<NodeList> returns) {
+	public ref<Variable> newVariable(ref<NodeList> returns) {
 		ref<Variable> v = new Variable;
 		v.returns = returns;
 		v.enclosing = _current;
@@ -1158,15 +1158,15 @@ public class CompileContext {
 		return v;
 	}
 	
-	int variableCount() {
+	public int variableCount() {
 		return _variables.length();
 	}
 	
-	void resetVariables(int originalCount) {
+	public void resetVariables(int originalCount) {
 		_variables.resize(originalCount);
 	}
 	
-	ref<ref<Variable>[]> variables() {
+	public ref<ref<Variable>[]> variables() {
 		return &_variables;
 	}
 	
@@ -1181,7 +1181,7 @@ public class CompileContext {
 		return _current;
 	}
 
-	ref<Type> monitorClass() {
+	public ref<Type> monitorClass() {
 		if (_monitorClass == null) {
 			ref<Symbol> m = _arena.getSymbol("parasol", "thread.Monitor", this);
 			if (m == null || m.class != PlainSymbol) {
@@ -1215,11 +1215,11 @@ public class CompileContext {
 		return type == monitorClass();
 	}
 	
-	ref<MemoryPool> pool() {
+	public ref<MemoryPool> pool() {
 		return _pool;
 	}
 	
-	ref<SyntaxTree> tree() {
+	public ref<SyntaxTree> tree() {
 		return _current.file().tree();
 	}
 

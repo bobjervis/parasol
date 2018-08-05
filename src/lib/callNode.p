@@ -1218,7 +1218,7 @@ public class Call extends ParameterBag {
 		return false;
 	}
 	
-	CallCategory category() {
+	public CallCategory category() {
 		return _category;
 	}
 }
@@ -1957,7 +1957,7 @@ public class Return extends ParameterBag {
 		}
 	}
 	
-	ref<NodeList> liveSymbols() {
+	public ref<NodeList> liveSymbols() {
 		return _liveSymbols;
 	}
 }

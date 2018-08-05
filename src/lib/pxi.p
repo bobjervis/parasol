@@ -77,7 +77,7 @@ public class Pxi {
 		_pxiFile.close();
 	}
 	
-	void declareSection(ref<Section> s) {
+	public void declareSection(ref<Section> s) {
 		_sections.append(s);
 	}
 	

@@ -145,13 +145,13 @@ public class SourceLocation {
 
 @Linux("libparasol.so.1", "setSourceLocations")
 @Windows("parasol.dll", "setSourceLocations")
-abstract void setSourceLocations(address location, int count);
+public abstract void setSourceLocations(address location, int count);
 @Linux("libparasol.so.1", "sourceLocations")
 @Windows("parasol.dll", "sourceLocations")
-abstract pointer<SourceLocation> sourceLocations();
+public abstract pointer<SourceLocation> sourceLocations();
 @Linux("libparasol.so.1", "sourceLocationsCount")
 @Windows("parasol.dll", "sourceLocationsCount")
-abstract int sourceLocationsCount();
+public abstract int sourceLocationsCount();
 
 public ref<SourceLocation> getSourceLocation(address ip, boolean locationIsExact) {
 	int lowCode = int(lowCodeAddress());

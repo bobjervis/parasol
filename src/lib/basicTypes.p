@@ -63,7 +63,7 @@ public class CompileString {
 		}
 	}
 	
-	boolean equals(CompileString other) {
+	public boolean equals(CompileString other) {
 		if (length != other.length)
 			return false;
 		for (int i = 0; i < length; i++)
@@ -72,7 +72,7 @@ public class CompileString {
 		return true;
 	}
 
-	boolean equals(pointer<byte> other) {
+	public boolean equals(pointer<byte> other) {
 		if (length != C.strlen(other))
 			return false;
 		for (int i = 0; i < length; i++)
@@ -81,7 +81,7 @@ public class CompileString {
 		return true;
 	}
 	
-	string asString() {
+	public string asString() {
 		return string(data, length);
 	}
 }
