@@ -1788,6 +1788,8 @@ public class Return extends ParameterBag {
 	}
 
 	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+		if (deferAnalysis())
+			return this;
 		if (_multiReturnOfMultiCall) {
 			// This is the special case of a multi-return 'return' statement matching a call to another multi-return function.
 			_arguments.node = ref<Call>(_arguments.node).foldMultiReturnOfMultiCall(tree, compileContext);

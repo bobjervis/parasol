@@ -737,6 +737,8 @@ public class Selection extends Node {
 				}
 			}
 		}
+		if (_left.type == null)
+			print(0);
 		if (_left.type.class == EnumInstanceType)
 			_left.type = ref<EnumInstanceType>(_left.type).enumType();
 		switch (_left.op()) {
