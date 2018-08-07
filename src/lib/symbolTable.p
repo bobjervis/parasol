@@ -376,9 +376,8 @@ class ClasslikeScope extends Scope {
 					ref<Overload> o = ref<Overload>(sym);
 					for (int i = 0; i < o.instances().length(); i++) {
 						ref<OverloadInstance> oi = (*o.instances())[i];
-						oi.assignType(compileContext);
 //						printf("methods in map: %d\n", _methods.length());
-//						oi.print(0, false);
+						oi.assignType(compileContext);
 						int index = matchingMethod(oi, maxMatchableMethod);
 						if (index >= 0) {
 							oi.offset = index + FIRST_USER_METHOD;
@@ -1204,6 +1203,13 @@ public class Scope {
 		return true;
 	}
 	
+	void assignTypes(ref<CompileContext> compileContext) {
+		for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
+			ref<Symbol> sym = i.get();
+			sym.assignType(compileContext);
+		}
+	}
+
 	void print(int indent, boolean printChildren) {
 		if (int(_storageClass) < 0)
 			printf("%*.*cScope %p[%d] storageClass <%d>", indent, indent, ' ', this, variableStorage, int(_storageClass));

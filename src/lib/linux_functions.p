@@ -600,8 +600,8 @@ public class timevalPair {
 public class glob_t {
 	public size_t gl_pathc;       				/* Count of paths matched by the pattern.  */
     public pointer<pointer<byte>> gl_pathv;     /* List of matched pathnames.  */
-    public size_t gl_offs;           /* Slots to reserve in `gl_pathv'.  */
-    public int gl_flags;               /* Set to FLAGS, maybe | GLOB_MAGCHAR.  */
+    public size_t gl_offs;           			/* Slots to reserve in `gl_pathv'.  */
+    public int gl_flags;               			/* Set to FLAGS, maybe | GLOB_MAGCHAR.  */
 
     /* If the GLOB_ALTDIRFUNC flag is set, the following functions
        are used instead of the normal file access functions.  */

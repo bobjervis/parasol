@@ -791,8 +791,11 @@ public class Call extends ParameterBag {
 
 			case	TYPEDEF:
 				ref<Type> t = _target.unwrapTypedef(Operator.CLASS, compileContext);
-				if (_arguments != null && assignFunctionType(compileContext))
-					break;
+				if (_arguments == null) {
+					if (t.family() == TypeFamily.VOID)
+						break;
+				} else if (assignFunctionType(compileContext))
+					break;					
 				if (builtInCoercion(compileContext))
 					_category = CallCategory.COERCION;
 				else {
@@ -867,9 +870,9 @@ public class Call extends ParameterBag {
 		ref<Type> match;
 		ref<Symbol> oi;
 		(match, oi) = operation.result();
-		if (match.deferAnalysis())
+		if (match.deferAnalysis()) {
 			type = match;
-		else {
+		} else {
 			type = classType;
 			if (oi != null) {
 				_overload = ref<OverloadInstance>(oi).parameterScope();
@@ -1469,7 +1472,7 @@ public class FunctionDeclaration extends ParameterBag {
 		}
 		type = compileContext.pool().newFunctionType(retType, _arguments, definesScope() ? compileContext.current() : null);
 		if (_name != null && _name.symbol() != null) {
-			_name.symbol().bindType(type, compileContext);
+//			_name.symbol().assignType(compileContext);
 			_name.type = type;
 		}
 		if (body == null)

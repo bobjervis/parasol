@@ -1567,7 +1567,6 @@ public class Binary extends Node {
 			if (_left.type.family() == TypeFamily.TYPEDEF)
 				arrayDeclaration(compileContext);
 			else {
-				print(0);
 				_left.add(MessageId.NOT_A_TYPE, compileContext.pool());
 				type = compileContext.errorType();
 			}

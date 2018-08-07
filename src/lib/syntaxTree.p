@@ -701,8 +701,10 @@ public class Block extends Node {
  
 	protected void assignTypes(ref<CompileContext> compileContext) {
 		ref<Scope> outer;
-		if (scope != null)
+		if (scope != null) {
+			scope.assignTypes(compileContext);
 			outer = compileContext.setCurrent(scope);
+		}
 		for (ref<NodeList> nl = _statements; nl != null; nl = nl.next)
 			compileContext.assignTypes(nl.node);
 		type = compileContext.arena().builtInType(TypeFamily.VOID);
@@ -3326,8 +3328,6 @@ public class Node {
 			return type;
 		if (_op == Operator.UNWRAP_TYPEDEF)
 			return type;
-		if (type == null)
-			print(0);
 		if (type.family() == TypeFamily.TYPEDEF) {		// if (type instanceof TypedefType)
 			ref<TypedefType> tp = ref<TypedefType>(type);
 			if (context != Operator.INTERFACE || tp.wrappedType().family() == TypeFamily.INTERFACE)

@@ -818,7 +818,8 @@ public class X86_64 extends X86_64AssignTemps {
 			if (re == null || re.class != Overload)
 				assert(false);
 			o = ref<Overload>(re);
-			ref<ParameterScope> uncaughtException = ref<ParameterScope>((*o.instances())[0].type().scope());
+			ref<Type> tp = (*o.instances())[0].assignType(compileContext);
+			ref<ParameterScope> uncaughtException = ref<ParameterScope>(tp.scope());
 			instCall(uncaughtException, compileContext);
 			closeCodeSegment(CC.JMP, join);
 			resolveDeferredTrys(false, compileContext);
@@ -871,12 +872,14 @@ public class X86_64 extends X86_64AssignTemps {
 		if (re == null || re.class != Overload)
 			assert(false);
 		ref<Overload> o = ref<Overload>(re);
-		ref<ParameterScope> dispatchException = ref<ParameterScope>((*o.instances())[0].type().scope());
+		ref<Type> tp = (*o.instances())[0].assignType(compileContext);
+		ref<ParameterScope> dispatchException = ref<ParameterScope>(tp.scope());
 		re = compileContext.arena().getSymbol("parasol", "exception.throwException", compileContext);
 		if (re == null || re.class != Overload)
 			assert(false);
 		o = ref<Overload>(re);
-		ref<ParameterScope> throwException = ref<ParameterScope>((*o.instances())[0].type().scope());
+		tp = (*o.instances())[0].assignType(compileContext);
+		ref<ParameterScope> throwException = ref<ParameterScope>(tp.scope());
 		for (int i = f().knownDeferredTrys; i < _deferredTry.length(); i++) {
 			ref<DeferredTry> dt = &_deferredTry[i];
 			ref<CodeSegment> outer = pushExceptionHandler(dt.exceptionHandler);

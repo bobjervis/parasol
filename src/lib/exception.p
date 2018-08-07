@@ -413,6 +413,12 @@ public class IllegalInstructionException extends RuntimeException {
 		return n;
 	}	
 
+	public string message() {
+		if (_exceptionContext == null)
+			return "IllegalInstructionException (not thrown)\n";
+		return "IllegalInstructionException";
+	}
+	
 }
 
 public class AssertionFailedException extends RuntimeException {
@@ -607,17 +613,16 @@ public void hardwareExceptionHandler(ref<HardwareException> info) {
  */
 private boolean dispatchException(ref<Exception> e, ref<Type> t, ref<Exception> destination, int size) {
 	ref<Type> actual = **ref<ref<ref<Type>>>(e);
-/*
-	printf("dispatchException %p actual %p t %p equals %s isSubtype %s\n", e, actual, t, actual.equals(t) ? "true" : "false", actual.isSubtype(t) ? "true" : "false");
-		printf("actual class %x t class %x\n", pxiOffset(**ref<ref<address>>(actual)), pxiOffset(**ref<ref<address>>(t)));
-		printf("actual vtable %x t vtable %x\n", pxiOffset(*ref<address>(actual)), pxiOffset(*ref<address>(t)));
-		printf("actual family %s t family %s\n", string(actual.family()), string(t.family()));
+
+//	printf("dispatchException %p actual %p t %p equals %s isSubtype %s\n", e, actual, t, actual.equals(t) ? "true" : "false", actual.isSubtype(t) ? "true" : "false");
+//		printf("actual class %x t class %x\n", pxiOffset(**ref<ref<address>>(actual)), pxiOffset(**ref<ref<address>>(t)));
+//		printf("actual vtable %x t vtable %x\n", pxiOffset(*ref<address>(actual)), pxiOffset(*ref<address>(t)));
+//		printf("actual family %s t family %s\n", string(actual.family()), string(t.family()));
 //	}
-	if (t.class == BuiltInType) {
-		printf("t._classType = %x\n", pxiOffset(ref<BuiltInType>(t).classType()));
-		printf("t._classType vatble %x\n", pxiOffset(*ref<address>(ref<BuiltInType>(t).classType())));
-	}
-*/
+//	if (t.class == BuiltInType) {
+//		printf("t._classType = %x\n", pxiOffset(ref<BuiltInType>(t).classType()));
+//		printf("t._classType vatble %x\n", pxiOffset(*ref<address>(ref<BuiltInType>(t).classType())));
+//	}
 	if (actual.equals(t) || actual.isSubtype(t)) {
 		C.memcpy(destination, e, size);
 		return true;

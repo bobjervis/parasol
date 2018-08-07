@@ -228,7 +228,7 @@ public class PlainSymbol extends Symbol {
 				} else
 					_type = compileContext.arena().builtInType(TypeFamily.CLASS_VARIABLE);
 			} else {
-				compileContext.assignTypes(enclosing(), _typeDeclarator);
+				compileContext.assignDeclarationTypes(enclosing(), _typeDeclarator);
 				switch (_typeDeclarator.op()) {
 				case CLASS_DECLARATION:
 				case ENUM:
@@ -252,7 +252,7 @@ public class PlainSymbol extends Symbol {
 						_type = compileContext.errorType();
 					}
 					break;
-					
+				
 				default:
 					_type = _typeDeclarator.unwrapTypedef(Operator.CLASS, compileContext);
 					if (_type.family() == TypeFamily.VOID)
@@ -489,7 +489,8 @@ public class Overload extends Symbol {
 	}
 
 	public ref<Type> assignThisType(ref<CompileContext> compileContext) {
-		assert(false);
+		for (i in _instances)
+			_instances[i].assignType(compileContext);
 		return null;
 	}
 
@@ -768,9 +769,9 @@ public class OverloadInstance extends Symbol {
 			ref<Symbol> par = (*_parameterScope.parameters())[i];
 			if (basePar.type() == null) {
 				print(0, false);
-				baseMethod.print(0, false);
+				baseMethod.print(0, true);
+				printf("par type is %p basePar type is %p\n", par.type(), basePar.type());
 			}
-//			printf("par type is %p basePar type is %p\n", par.type(), basePar.type());
 //			printf("par type is %s basePar type is %s\n", par.type().signature(), basePar.type().signature());
 			if (par.type() == null)
 				return false;

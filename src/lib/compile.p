@@ -794,6 +794,15 @@ public class CompileContext {
 			assignTypeToNode(n);
 	}
 
+	public void assignDeclarationTypes(ref<Scope> scope, ref<Node> n) {
+		if (n.type == null) {
+			ref<Scope> outer = _current;
+			_current = scope;
+			n.assignDeclarationTypes(this);
+			_current = outer;
+		}
+	}
+
 	public void assignTypeToNode(ref<Node> n) {
 		if (n.type == null) {
 			if (_verbose) {

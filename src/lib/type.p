@@ -183,8 +183,10 @@ public class BuiltInType extends Type {
 			ref<BuiltInType> copy = ref<BuiltInType>(a);
 			transferBase(copy);
 			target.fixupVtable(_ordinal, target.builtInType());
-			_classType.copyToImage(target);
-			target.fixupType(_ordinal + int(&ref<BuiltInType>(null)._classType), _classType);
+			if (_classType != null) {
+				_classType.copyToImage(target);
+				target.fixupType(_ordinal + int(&ref<BuiltInType>(null)._classType), _classType);
+			}
 		}
 		return _ordinal;
 	}
