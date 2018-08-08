@@ -2849,10 +2849,26 @@ public class X86_64 extends X86_64AssignTemps {
 		case	FUNCTION:
 		case	EMPTY:
 		case	INTERFACE_DECLARATION:
+		case	FLAGS_DECLARATION:
 			// The ones below here only show up in mal-formed class declarations.
 		case	BLOCK:
 		case	SCOPED_FOR:
 		case	EXPRESSION:
+		case	SWITCH:
+		case	FOR:
+		case	CLASS_COPY:
+		case	DESTRUCTOR_LIST:
+		case	IF:
+		case	ASSIGN:
+		case	DIVIDE_ASSIGN:
+		case	REMAINDER_ASSIGN:
+		case	MULTIPLY_ASSIGN:
+		case	ADD_ASSIGN:
+		case	SUBTRACT_ASSIGN:
+		case	AND_ASSIGN:
+		case	OR_ASSIGN:
+		case	EXCLUSIVE_OR_ASSIGN:
+		case	LOCK:
 			break;
 			
 		case	SEQUENCE:
