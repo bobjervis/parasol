@@ -1962,11 +1962,12 @@ public class Type {
 			return false;
 		return sameAs(other);
 	}
-	/*
+	/**
 	 * This is the implementation method for class <. This is a subtype of other if other is one of the base class chain.
 	 * 
-	 * RETURNS
-	 *     true if other is a base class of this, false otherwise.
+	 * @param other The possible base class of this.
+	 *
+	 * @return true if other is a base class of this, false otherwise.
 	 */
 	public boolean isSubtype(ref<Type> other) {
 //		printf("this = %p (%p) other = %p (%p)\n", this, *ref<address>(this), other, *ref<address>(other));

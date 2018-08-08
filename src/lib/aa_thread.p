@@ -506,7 +506,10 @@ class Mutex {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			ReleaseMutex(_mutex);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-			assert(linux.pthread_mutex_unlock(&_linuxMutex) == 0);
+			int x = linux.pthread_mutex_unlock(&_linuxMutex);
+			if (x != 0)
+				printf("mutex_unlock returned %d\n", x);
+			assert(x == 0);
 		}
 	}
 	

@@ -503,7 +503,7 @@ public class Overload extends Symbol {
 	}
 }
 
-class DelegateOverload extends OverloadInstance {
+public class DelegateOverload extends OverloadInstance {
 	ref<OverloadInstance> _delegate;
 	
 	DelegateOverload(ref<Overload> overload, ref<OverloadInstance> delegate, ref<MemoryPool> pool) {

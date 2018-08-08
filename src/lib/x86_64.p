@@ -697,7 +697,8 @@ public class X86_64 extends X86_64AssignTemps {
 				}
 			}
 			reserveAutoMemory(false, compileContext);
-			if (parameterScope.enclosing().isMonitor() && func.functionCategory() != FunctionDeclaration.Category.CONSTRUCTOR) {
+			if (parameterScope.enclosing().isMonitor() && func.functionCategory() != FunctionDeclaration.Category.CONSTRUCTOR &&
+				parameterScope.hasThis()) {
 				inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), thisRegister());
 				instCall(takeMethod(compileContext), compileContext);
 			}
@@ -2772,7 +2773,7 @@ public class X86_64 extends X86_64AssignTemps {
 	
 	private boolean generateFunctionAddress(ref<Node> node, ref<CompileContext> compileContext) {
 		ref<Symbol> symbol = node.symbol();
-		if (symbol == null || symbol.class != OverloadInstance)
+		if (symbol == null || symbol.class !<= OverloadInstance)
 			return false;
 		ref<OverloadInstance> functionSym = ref<OverloadInstance>(symbol);
 		return instLoadFunctionAddress(R(int(node.register)), functionSym.parameterScope(), compileContext);
@@ -4151,7 +4152,8 @@ public class X86_64 extends X86_64AssignTemps {
 				return true;
 			}
 			ref<ParameterScope> parameterScope = ref<ParameterScope>(scope);
-			if (parameterScope.enclosing().isMonitor() && func.functionCategory() != FunctionDeclaration.Category.CONSTRUCTOR) {
+			if (parameterScope.enclosing().isMonitor() && func.functionCategory() != FunctionDeclaration.Category.CONSTRUCTOR &&
+				parameterScope.hasThis()) {
 				boolean returnRegisterBusy = functionType.returnCount() == 1 && 
 						!functionType.returnValueType().returnsViaOutParameter(compileContext);
 
