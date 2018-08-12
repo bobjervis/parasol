@@ -284,22 +284,27 @@ class RegisterState {
 				for (int i = stackDepth; i < _t.stackDepth(); i++) {
 					tm = _t.getTemp(i);
 					ref<Temporary> tp1;
+					if	(tm.currentReg == R.NO_REG)
+						continue;
 					if	(fits(tm.currentReg, tm.desired))
 						continue;
 					for (int j = stackDepth; j < _t.stackDepth(); j++) {
 						tp1 = _t.getTemp(j);
+						if	(tp1.currentReg == R.NO_REG)
+							continue;
 						if	(fits(tm.currentReg, tp1.desired))
 							break;
 					}
 					if	(tp1 != null) {
 						makeSpill(SpillKinds.XCHG, node, tp1.currentReg,
 							tm.node, tp1.node);
+//						printf("xchg %s <-> %s\n", string(tm.currentReg), string(tp1.currentReg));
+						if (!fits(tp1.currentReg, tp1.desired))
+							doesFit++;
 						R xchg = tp1.currentReg;
 						tp1.currentReg = tm.currentReg;
 						tm.currentReg = xchg;
-						doesFit++;
-						if	(fits(tp1.currentReg, tp1.desired) &&
-							 !fits(tm.currentReg, tp1.desired))
+						if	(fits(tm.currentReg, tm.desired))
 							doesFit++;
 					} else {
 						node.print(0);
