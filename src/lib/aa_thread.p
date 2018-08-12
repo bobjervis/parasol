@@ -488,10 +488,10 @@ class Mutex {
 //			s.printf("%p try lock by %s (level = %d)\n", this, currentThread() != null ? currentThread().name() : "?", _level);
 //			print(s);
 			int x = linux.pthread_mutex_lock(&_linuxMutex);
-			if (x != 0)
-				printf("mutex_lock returned %d\n", x);
-				
-			assert(x == 0);
+			if (x != 0) {
+				printf("mutex_lock returned %d at %p\n", x, runtime.returnAddress());
+				linux._exit(1);
+			}
 		}
 		_level++;
 		_owner = currentThread();

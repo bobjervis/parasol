@@ -2869,6 +2869,8 @@ public class X86_64 extends X86_64AssignTemps {
 		case	OR_ASSIGN:
 		case	EXCLUSIVE_OR_ASSIGN:
 		case	LOCK:
+		case	SYNTAX_ERROR:
+		case	CLASS_CLEAR:
 			break;
 			
 		case	SEQUENCE:
