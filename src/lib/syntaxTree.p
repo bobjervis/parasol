@@ -3500,6 +3500,14 @@ public class Node {
 		return null;
 	}
 
+	public void addUnique(MessageId messageId, ref<MemoryPool> pool, CompileString... args) {
+		for (ref<Commentary> c = _commentary; c != null; c = c.next()) {
+			if (c.messageId() == messageId)
+				return;
+		}
+		add(messageId, pool, args);
+	}
+
 	public void add(MessageId messageId, ref<MemoryPool> pool, CompileString... args) {
 		string message = formatMessage(messageId, args);
 		_commentary = pool.newCommentary(_commentary, messageId, message);

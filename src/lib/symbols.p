@@ -468,7 +468,8 @@ public class Overload extends Symbol {
 	}
 
 	public void markAsDuplicates(ref<MemoryPool> pool) {
-		assert(false);
+		for (i in _instances)
+			_instances[i].definition().addUnique(MessageId.DUPLICATE, pool, *_instances[i].name());
 	}
 
 	public boolean doesImplement(ref<OverloadInstance> interfaceMethod) {

@@ -1351,7 +1351,7 @@ public class X86_64 extends X86_64AssignTemps {
 			pushJumpContext(&switchContext);
 			generate(b.right(), compileContext);
 			popJumpContext();
-			defaultSegment = switchContext.defaultLabel();
+			defaultSegment = switchContext.consumeDefaultLabel();
 			if (defaultSegment != null)
 				defaultSegment.start(this);
 			join.start(this);
@@ -1367,7 +1367,11 @@ public class X86_64 extends X86_64AssignTemps {
 		case	DEFAULT:
 			expression = ref<Unary>(node);
 			context = jumpContext().enclosingSwitch();
-			context.defaultLabel().start(this);
+			if (context != null) {
+				ref<CodeSegment> cs = context.consumeDefaultLabel();
+				if (cs != null)
+					cs.start(this);
+			}
 			generate(expression.operand(), compileContext);
 			break;
 			

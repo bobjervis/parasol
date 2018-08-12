@@ -547,10 +547,8 @@ public class Binary extends Node {
 			case	TYPEDEF:
 			case	CLASS_VARIABLE:
 				ref<Symbol> typeType = compileContext.arena().getSymbol("parasol", "compiler.Type", compileContext);
-				if (typeType == null || typeType.class != PlainSymbol) {
-					print(0);
-					assert(false);
-				}
+				if (typeType == null || typeType.class != PlainSymbol)
+					return this;
 				ref<Type> t = typeType.assignType(compileContext);
 				assert(t.family() == TypeFamily.TYPEDEF);
 				t = ref<TypedefType>(t).wrappedType();

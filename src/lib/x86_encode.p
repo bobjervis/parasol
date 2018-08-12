@@ -3732,7 +3732,7 @@ class X86_64Encoder extends Target {
 				return _continueLabel;
 		}
 
-		public ref<CodeSegment> defaultLabel() {
+		public ref<CodeSegment> consumeDefaultLabel() {
 			ref<CodeSegment> defaultLabel = _continueLabel;
 			_continueLabel = null;
 			return defaultLabel;
