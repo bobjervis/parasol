@@ -63,7 +63,13 @@ int main(string[] args) {
 			(exitcode, output, ex) = process.execute(5 .seconds(), actual);
 			if (exitcode == 0)
 				printf("%s compiled\n", dir);
-			else {
+			else if (ex != process.exception_t.NO_EXCEPTION) {
+				printf("%s failed: %s exception\n", dir, string(ex));
+				string outFile = storage.constructPath(dir, "crash.output.txt", null);
+				ref<Writer> writer = storage.createTextFile(outFile);
+				writer.write(output);
+				delete writer;
+			} else {
 				int arrow = output.indexOf("->");
 				if (arrow >= 0) {
 					printf("%s crashed: %d\n", dir, exitcode);
