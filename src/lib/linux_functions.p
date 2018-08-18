@@ -990,7 +990,10 @@ public int EBUSY = 16;	/* Device or resource busy */
 #define	ENETUNREACH	101	/* Network is unreachable */
 #define	ENETRESET	102	/* Network dropped connection because of reset */
 #define	ECONNABORTED	103	/* Software caused connection abort */
-#define	ECONNRESET	104	/* Connection reset by peer */
+*/
+@Constant
+public int ECONNRESET = 104;	/* Connection reset by peer */
+/*
 #define	ENOBUFS		105	/* No buffer space available */
 #define	EISCONN		106	/* Transport endpoint is already connected */
 #define	ENOTCONN	107	/* Transport endpoint is not connected */

@@ -32,6 +32,9 @@ public abstract pointer<byte> ERR_error_string(long e, pointer<byte> buf);
 @Linux("libssl.so.10", "ERR_get_error")
 public abstract long ERR_get_error();
 
+@Linux("libssl.so.10", "ERR_print_errors")
+public abstract void ERR_print_errors(ref<BIO> bp);
+
 @Linux("libssl.so.10", "PEM_read_DHparams")
 public abstract ref<DH> PEM_read_DHparams(ref<C.FILE> fp, ref<ref<DH>> x, int(pointer<byte>, int, int, address) cb, address u);
 

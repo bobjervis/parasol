@@ -758,6 +758,25 @@ public class Selection extends Node {
 		return this;
 	}
 	
+	public long foldInt(ref<Target> target, ref<CompileContext> compileContext) {
+		if (isConstant()) {
+			ref<Node> initializer = ref<PlainSymbol>(_symbol).initializer();
+			if (initializer == null)
+				return 0;
+			return initializer.foldInt(target, compileContext);
+		} else {
+			add(MessageId.NOT_CONSTANT, compileContext.pool());
+			return 0;
+		}
+	}
+
+	public boolean isConstant() {
+		if (_symbol == null)
+			return false;
+		else
+			return (_symbol.accessFlags() & Access.CONSTANT) != 0;
+	}
+	
 	private void assignTypes(ref<CompileContext> compileContext) {
 		compileContext.assignTypes(_left);
 		if (_left.deferAnalysis()) {

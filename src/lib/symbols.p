@@ -170,6 +170,8 @@ public class PlainSymbol extends Symbol {
 			printf(" @%d[%d] %s", offset, _type.size(), _type.signature());
 		if (value != null)
 			printf(" val=%p", value);
+		if (_accessFlags)
+			printf(" _accessFlags=%x", long(_accessFlags));
 		printf("\n");
 		if (_initializer != null && _initializer.op() == Operator.CLASS && _type != null && _type.family() == TypeFamily.TYPEDEF) {
 			ref<TypedefType> tt = ref<TypedefType>(_type);

@@ -369,7 +369,7 @@ public class Connection {
 			return 0;
 	}
 
-	public void diagnoseError() {
+	public void diagnoseError(int ret) {
 		linux.perror(null);
 	}
 
@@ -683,6 +683,7 @@ class SSLConnection extends Connection {
 	private ref<SSLSocket> _socket;
 	private ref<ssl.SSL_CTX> _context;
 	private ref<ssl.SSL> _ssl;
+	private ref<ssl.BIO> _bio;
 
 	SSLConnection(int acceptfd, ref<net.sockaddr_in> addr, int addrLen, ref<SSLSocket> socket) {
 		super(acceptfd, addr, addrLen);
@@ -695,7 +696,7 @@ class SSLConnection extends Connection {
 			return false;
 		// Do the TLS handshake
 //		logger.debug("Starting TLS handshake...");
-		ref<ssl.BIO> bio = ssl.BIO_new_socket(_acceptfd, ssl.BIO_NOCLOSE);
+		_bio = ssl.BIO_new_socket(_acceptfd, ssl.BIO_NOCLOSE);
 		_ssl = ssl.SSL_new(_context);
 		if (_ssl == null) {
 			logger.format(log.DEBUG, "SSL_new failed: %d", ssl.SSL_get_error(null, 0));
@@ -718,7 +719,7 @@ class SSLConnection extends Connection {
 		}
  */
 		ssl.SSL_set_accept_state(_ssl);
-		ssl.SSL_set_bio(_ssl, bio, bio);
+		ssl.SSL_set_bio(_ssl, _bio, _bio);
 //		logger.format(log.DEBUG, "_ssl %p before SSL_accept", _ssl);
 		int r = ssl.SSL_accept(_ssl);
 		if (r == -1) {
@@ -748,7 +749,6 @@ class SSLConnection extends Connection {
 		_ssl = ssl.SSL_new(_context);
 		if (_ssl == null) {
 			logger.format(log.DEBUG,"SSL_new failed: %d\n", ssl.SSL_get_error(null, 0));
-			logger.format(log.DEBUG,"                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(null, 0), null));
 			for (;;) {
 				long e = ssl.ERR_get_error();
 				if (e == 0)
@@ -818,15 +818,16 @@ class SSLConnection extends Connection {
 					return -1;
 				} else if (x == -1) {
 					// If the failure was caused by an interrupted system call, just re-start the read.
-					if (linux.errno() == linux.EINTR)
+					switch (linux.errno()) {
+					case linux.EINTR:
 						continue;
+
+					case linux.ECONNRESET:
+						return 0;
+					}
 				}
 				logger.format(log.DEBUG,"SSL_read failed return %d\n", x);
-				diagnoseError();
-				linux.perror("SSL_read".c_str());
-	//		} else {
-	//			logger.format(log.DEBUG,"SSLConnection.read:\n");
-	//			text.memDump(buffer, x);
+				diagnoseError(x);
 			}
 			return x;
 		}
@@ -838,15 +839,14 @@ class SSLConnection extends Connection {
 		int result = ssl.SSL_write(_ssl, buffer, length);
 		if (result < 0) {
 			logger.format(log.DEBUG,"SSL_write failed result = %d\n", result);
-			diagnoseError();
+			diagnoseError(result);
 			linux.perror("SSL_write".c_str());
 		}
 		return result;
 	}
 
-	public void diagnoseError() {
-		logger.format(log.DEBUG,"SSL call failed: %d\n", ssl.SSL_get_error(_ssl, 0));
-		logger.format(log.DEBUG,"                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(_ssl, 0), null));
+	public void diagnoseError(int ret) {
+		logger.format(log.DEBUG,"SSL call failed: %s\n", ssl_error_strings[ssl.SSL_get_error(_ssl, ret)]);
 		for (;;) {
 			long e = ssl.ERR_get_error();
 			if (e == 0)
@@ -872,6 +872,18 @@ class SSLConnection extends Connection {
 		return true;
 	}
 }
+
+string[] ssl_error_strings = [
+	"SSL_ERROR_NONE",
+	"SSL_ERROR_SSL",
+	"SSL_ERROR_WANT_READ",
+	"SSL_ERROR_WANT_WRITE",
+	"SSL_ERROR_WANT_X509_LOOKUP",
+	"SSL_ERROR_SYSCALL",
+	"SSL_ERROR_ZERO_RETURN",
+	"SSL_ERROR_WANT_CONNECT",
+	"SSL_ERROR_WANT_ACCEPT"
+];
 
 /**
  * Based on RFC 4648, perform a base-64 encoding of the byte array
