@@ -219,10 +219,8 @@ public class Socket {
 	public ref<Connection> accept() {
 		net.sockaddr_in a;
 		int addrlen = a.bytes;
-//		logger.format(log.DEBUG,"&a = %p a.bytes = %d\n", &a, a.bytes);
 		// TODO: Develop a test framework that allows us to test this scenario.
 		int acceptfd = net.accept(_socketfd, &a, &addrlen);
-//		logger.format(log.DEBUG,"acceptfd = %d\n", acceptfd);
 		if (acceptfd < 0) {
 			logger.format(log.DEBUG,"accept failed: %d", acceptfd);
 			linux.perror(null);
@@ -734,9 +732,6 @@ class SSLConnection extends Connection {
 			return false;
 		}
 		// TLS handshake completed and everything ok to proceed.
-
-//		logger.format(log.DEBUG,"_ssl %p acceptFd %d AOK r = %d", _ssl, _acceptfd, r);
-
 		return r == 1;
 	}
 

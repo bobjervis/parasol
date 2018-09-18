@@ -15,6 +15,7 @@
  */
 namespace parasol:http;
 
+import parasol:log;
 import parasol:net;
 import parasol:text;
 import native:net.gethostbyname;
@@ -23,6 +24,9 @@ import native:net.in_addr;
 import native:net.inet_addr;
 import native:net.inet_aton;
 import native:net.inet_ntoa;
+
+private ref<log.Logger> logger = log.getLogger("parasol.http.client");
+
 /**
  * This function escapes certain characters in the URI (Universal Resource Identifier) passed
  * as a parameter.
@@ -532,6 +536,7 @@ public class HttpClient {
 			}
 			encryption = net.Encryption.NONE;
 		}
+
 		ref<net.Socket> socket = net.Socket.create(encryption, _cipherList, null, null, null);
 		if (socket == null)
 			return false, 0;
@@ -543,14 +548,10 @@ public class HttpClient {
 			return false, ip;
 		}
 		if (!connection.initiateSecurityHandshake()) {
-			printf("Failed security handshake!! connection = %p\n", connection);
 			delete connection;
-			printf("Maybe... socket = %p\n", socket);
 			delete socket;
-			printf("Phew!\n");
 			return false, ip;
 		}
-//		delete socket;
 		boolean expectWebSocket;
 		// Delete any connection object left over from a previous request.
 		delete _connection;

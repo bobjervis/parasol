@@ -181,6 +181,7 @@ public class Thread {
 		enterThread(t._context, &t);
 		threads.enlist(t);
 		parasolThread(t);
+		// All set up, now call the thread main function
 		nested(t);
 		threads.delist(t);
 		exitThread();
@@ -541,7 +542,8 @@ private monitor class ThreadPoolData<class T> {
 
 public class ThreadPool<class T> extends ThreadPoolData<T> {
 	ref<Thread>[] _threads;
-	
+	int _idle;
+
 	public ThreadPool(int threadCount) {
 		resize(threadCount);
 	}
@@ -620,6 +622,24 @@ public class ThreadPool<class T> extends ThreadPoolData<T> {
 		}
 	}
 
+	public int totalThreads() {
+		lock (*this) {
+			return _threads.length();
+		}
+	}
+
+	public int idleThreads() {
+		lock (*this) {
+			return _idle;
+		}
+	}
+
+	public int busyThreads() {
+		lock (*this) {
+			return _threads.length() - _idle;
+		}
+	}
+
 	private static void workLoop(address p) {
 		ref<ThreadPool<T>> pool = ref<ThreadPool<T>>(p);
 		while (pool.getEvent())
@@ -632,7 +652,9 @@ public class ThreadPool<class T> extends ThreadPoolData<T> {
 		lock(*this) {
 			if (_shutdownRequested)
 				return false;
+			_idle++;
 			wait();
+			_idle--;
 			if (_shutdownRequested)		// Note: _first will be null
 				return false;
 			wi = _first;

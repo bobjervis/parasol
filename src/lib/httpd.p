@@ -32,7 +32,7 @@ import parasol:net.ServerScope;
 import native:linux;
 import parasol:net;
 
-private ref<log.Logger> logger = log.getLogger("parasol.httpd");
+private ref<log.Logger> logger = log.getLogger("parasol.http.server");
 /*
  * This class implements an HTTP server. It implements HTTP version 1.1 for an Origin Server only. Hooks are defined to allow for
  * future expansion.
@@ -161,6 +161,7 @@ public class HttpServer {
 				ref<net.Connection> connection = socket.accept();
 				if (connection != null) {
 					ref<HttpContext> context = new HttpContext(this, connection);
+					logger.format(log.DEBUG, "about to execute 'processHttpRequest' threads %d", _requestThreads.idleThreads());
 					_requestThreads.execute(processHttpRequest, context);
 				}
 			}
@@ -169,7 +170,6 @@ public class HttpServer {
 	}
 
 	boolean dispatch(ref<HttpRequest> request, ref<HttpResponse> response, boolean secured) {
-//		printf("dispatch %s %s\n", string(request.method), request.url);
 		for (int i = 0; i < _handlers.length(); i++) {
 			if (_handlers[i].absPath == "/") {
 				request.serviceResource = request.url.substring(1);
@@ -242,12 +242,9 @@ private class HttpContext {
 
 private void processHttpRequest(address ctx) {
 	ref<HttpContext> context = ref<HttpContext>(ctx);
-//	printf("accept security handshake... ");
 	if (!context.connection.acceptSecurityHandshake()) {
-//		printf("security handshake rejected\n");
 		return;
 	}
-//	printf("security handshake accepted.\n");
 	HttpRequest request(context.connection);
 	HttpParser parser(context.connection);
 	HttpResponse response(context.connection);
@@ -259,7 +256,7 @@ private void processHttpRequest(address ctx) {
 			return;				// if dispatch returns true, we want to keep the connection open (for at least a while).
 		}
 	} else {
-		logger.format(log.DEBUG, "Could not parse request for fd %d", context.connection.requestFd());
+		logger.format(log.DEBUG, "Could not parse request from %s", net.dottedIP(context.connection.sourceIPv4()));
 //		request.print();
 		response.error(400);
 	}
@@ -361,7 +358,7 @@ public class HttpRequest {
 
 	void print() {
 		unsigned ip = sourceIP();
-		printf("Source family %d %d.%d.%d.%d:%d\n", sourceFamily(), ip & 0xff, (ip >> 8) & 0xff, (ip >> 16) & 0xff, ip >> 24, sourcePort());
+		printf("Source family %d %s:%d\n", sourceFamily(), net.dottedIP(ip), sourcePort());
 		printf("Method           %s(%s)\n", string(method), methodString);
 		printf("Url              %s\n", url);
 		if (query != null)
@@ -788,8 +785,10 @@ public class HttpParser {
 		for (;;) {
 			int ch = _connection.read();
 			if (ch == -1) {
-				if (_tokenValue == null)
+				if (_tokenValue == null) {
+//					logger.debug("token END_OF_MESSAGE");
 					return separator(HttpToken.END_OF_MESSAGE);
+				}
 			}
 			if (ch <= 31 || ch >= 127) {
 				if (_tokenValue == null) {
@@ -799,6 +798,7 @@ public class HttpParser {
 						if (ch != '\n') {
 							_connection.ungetc();
 							
+//							logger.debug("token CR");
 							return _previousToken = HttpToken.CR;
 						}
 						// We have a CR/LF
@@ -806,22 +806,28 @@ public class HttpParser {
 						// Consecutive CRLF tokens means end-of-headers, so don't read ahead - that might hang a get or other
 						// message that has no body.
 						
-						if (_previousToken == HttpToken.CRLF)
+						if (_previousToken == HttpToken.CRLF) {
+//							logger.debug("token CRLF");
 							return HttpToken.CRLF;
+						}
 						ch = _connection.read();
 						if (ch == ' ' || ch == '\t') {
 							// Yup, it's a line escape
 							skipWhiteSpace();
+//							logger.debug("token SP");
 							return _previousToken = HttpToken.SP;
 						} else {
 							_connection.ungetc();
+//							logger.debug("token CRLF");
 							return _previousToken = HttpToken.CRLF;
 						}
 					}
 					_tokenValue.append(byte(ch));
+//					logger.format(log.DEBUG, "CTL '%s'", _tokenValue);
 					return _previousToken = HttpToken.CTL;
 				}
 				_connection.ungetc();
+//				logger.format(log.DEBUG, "TOKEN %s", _tokenValue);
 				return _previousToken = HttpToken.TOKEN;
 			}
 			switch (ch) {
@@ -847,9 +853,11 @@ public class HttpParser {
 			case '\t':
 				if (_tokenValue != null) {
 					_connection.ungetc();
+//					logger.format(log.DEBUG, "TOKEN %s", _tokenValue);
 					return _previousToken = HttpToken.TOKEN;
 				}
 				skipWhiteSpace();
+//				logger.debug("token SP");
 				return _previousToken = HttpToken.SP;
 				
 			default:
@@ -898,9 +906,11 @@ public class HttpParser {
 	}
 	
 	private HttpToken separator(HttpToken sep) {
-		if (_tokenValue == null)
+		if (_tokenValue == null) {
+//			logger.format(log.DEBUG, "separator(%s)", string(sep));
 			return _previousToken = sep;
-		else {
+		} else {
+//			logger.format(log.DEBUG, "TOKEN '%s' -> %s", _tokenValue, string(sep));
 			_connection.ungetc();
 			return _previousToken = HttpToken.TOKEN;
 		}

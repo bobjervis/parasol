@@ -138,7 +138,14 @@ private monitor class ProcessVolatileData {
 public class Process extends ProcessVolatileData {
 	private int _stdout;							// The process output fd when the spawn returns and _captureOutput is true
 	private linux.pid_t _pid;
-	private boolean _captureOutput;
+
+	private enum StdioHandling {
+		IGNORE,
+		CAPTURE_OUTPUT,
+		INTERACTIVE
+	}
+
+	private StdioHandling _stdioHandling;
 	private linux.uid_t _user;
 	private int _fdLimit;
 	/**
@@ -163,9 +170,26 @@ public class Process extends ProcessVolatileData {
 		if (_stdout >= 0)
 			linux.close(_stdout);
 	}
-
+	/**
+	 * Set the spawn to use a pipe to collect output from stdout and stderr. THis also will redirect
+	 * standard input from /dev/null, which will cause the process to see an end-of-file on the first
+	 * read from stdin (if any).
+	 *
+	 * The return value of the {@link Process.stdout stdout} method will be the read end of the pipe.
+	 */
 	public void captureOutput() {
-		_captureOutput = true;
+		_stdioHandling = StdioHandling.CAPTURE_OUTPUT;
+	}
+	/**
+	 * Set the spawn to use a PTY to interact with the spawned process. It will be launched
+	 * under a new session, with the newly opened PTY as the controlling terminal (so all children
+	 * will receive SIGHUP when the PTY is closed by the parent process (the process with this object
+	 * in it).
+	 *
+	 * The return value of the {@link Process.stdout stdout} method will be the master side of the PTY.
+	 */
+	public void runInteractive() {
+		_stdioHandling = StdioHandling.INTERACTIVE;
 	}
 
 	public boolean user(string username) {
@@ -260,8 +284,10 @@ public class Process extends ProcessVolatileData {
 			pointer<pointer<byte>> argv = &fullArgs[0];
 
 			int ptyMasterFd;
+			int[] pipeFd;
 
-			if (_captureOutput) {
+			switch (_stdioHandling) {
+			case INTERACTIVE:
 				ptyMasterFd = linux.posix_openpt(linux.O_RDWR);
 				if (ptyMasterFd < 0)
 					return false;
@@ -272,7 +298,27 @@ public class Process extends ProcessVolatileData {
 				t.c_oflag |= linux.ONLRET;
 				if (linux.tcsetattr(ptyMasterFd, 0, &t) != 0)
 					logger.format(log.ERROR, "tcsetattr failed: %d", linux.errno());
+				int result = linux.grantpt(ptyMasterFd);
+				if (result != 0) {
+					logger.format(log.ERROR, "grantpt failed: %d", linux.errno());
+					return false;
+				}
+				result = linux.unlockpt(ptyMasterFd);
+				if (result != 0) {
+					logger.format(log.ERROR, "unlockpt failed: %d", linux.errno());
+					return false;
+				}
+				break;
+
+			case CAPTURE_OUTPUT:
+				pipeFd.resize(2);
+				if (linux.pipe(&pipeFd[0]) != 0) {
+					logger.format(log.ERROR, "pipe failed: %d", linux.errno());
+					return false;
+				}
+				break;
 			}
+
 /*
 			printf("About to exec '%s'", command);
 			for (int i = 0; i < args.length(); i++)
@@ -281,58 +327,82 @@ public class Process extends ProcessVolatileData {
  */
 			byte[] buffer;
 			buffer.resize(linux.PATH_MAX);
+
 			// This will guarantee that our handler does not race the SIG_CHLD signal
 			lock (pendingChildren) {
 				_pid = linux.fork();
 				if (_pid == 0) {
 					// This is the child process
-					linux.setpgrp();
-					if (_captureOutput) {
-						// If the child process changes users, the grantpt has to happen with ruid == _user and euid == 9
+					switch (_stdioHandling) {
+					case INTERACTIVE:
+						// If the child process changes users, the grantpt has to happen with ruid == _user and euid == 0
 						if (_user != 0) {
 							if (linux.setreuid(_user, 0) != 0) {
 								stderr.printf("setreuid to %d FAILED\n", _user);
 								linux._exit(-1);
 							}
 						}
-						int result = linux.grantpt(ptyMasterFd);
-						if (result != 0) {
-							stderr.printf("grantpt failed: %d\n", linux.errno());
-							linux._exit(-1);
-						}
-						result = linux.unlockpt(ptyMasterFd);
-						if (result != 0) {
-							stderr.printf("unlockpt failed: %d\n", linux.errno());
-							linux._exit(-1);
-						}
+						linux.pid_t pid = linux.getpid();
 						if (linux.ptsname_r(ptyMasterFd, &buffer[0], buffer.length()) != 0) {
 							stderr.printf("ptsname_r failed: %d\n", linux.errno());
-							linux._exit(-1);
+							linux._exit(-4);
 						}
 						int fd = linux.open(&buffer[0], linux.O_RDWR);
 						if (fd < 3) {
 							stderr.printf("pty open failed: %s %d %d", string(&buffer[0]), fd, linux.errno());
-							linux._exit(-1);
+							linux._exit(-5);
 						}
+						if (linux.setsid() < 0) {
+							linux.perror("setsid".c_str());
+							linux._exit(-2);
+						}
+						int ioc = linux.ioctl(ptyMasterFd, linux.TIOCSCTTY, 0);
+						if (ioc < 0) {
+							linux.perror("ioctl".c_str());
+							linux._exit(-3);
+						}
+						linux.close(ptyMasterFd);
 						if (linux.dup2(fd, 0) != 0) {
 							stderr.printf("dup2 failed: %d -> 0 %d\n", fd, linux.errno());
-							thread.sleep(1000);
-							linux._exit(-1);
+							linux._exit(-9);
 						}
 						if (linux.dup2(fd, 1) != 1) {
 							stderr.printf("dup2 failed: %d -> 1 %d\n", fd, linux.errno());
-							linux._exit(-1);
+							linux._exit(-10);
 						}
 						if (linux.dup2(fd, 2) != 2) {
 							stderr.printf("dup2 failed: %d -> 2 %d\n", fd, linux.errno());
-							linux._exit(-1);
+							linux._exit(-11);
 						}
+						break;
+
+					case CAPTURE_OUTPUT:
+						linux.setpgrp();
+						int devNull = linux.open("/dev/null".c_str(), linux.O_RDONLY);
+						if (devNull < 0 || linux.dup2(devNull, 0) != 0) {
+							stderr.printf("dup2 failed: %d -> 0 %d\n", fd, linux.errno());
+							linux._exit(-12);
+						}
+						if (linux.dup2(pipeFd[1], 1) != 1) {
+							stderr.printf("dup2 failed: %d -> 1 %d\n", fd, linux.errno());
+							linux._exit(-13);
+						}
+						if (linux.dup2(pipeFd[1], 2) != 2) {
+							stderr.printf("dup2 failed: %d -> 2 %d\n", fd, linux.errno());
+							linux._exit(-14);
+						}
+						linux.close(pipeFd[0]);
+						linux.close(pipeFd[1]);
+						break;
+
+//					default:
+//						linux.setpgrp();
 					}
 					// Okay, lock it down now.
 					if (_user != 0) {
 						if (linux.setuid(_user) != 0) {
 							stderr.printf("setreuid to %d FAILED\n", _user);
-							linux._exit(-1);
+							linux._exit(-15);
 						}
 					}
 					/*
@@ -355,16 +425,22 @@ public class Process extends ProcessVolatileData {
 							environment.set(i.key(), i.get());
 					}
 					linux.execv(argv[0], argv);
-					linux._exit(-1);
+					linux._exit(-16);
 				} else {
-//					printf("Forked child %d\n", _pid);
 					ref<PendingChild> pc = new PendingChild;
 					pc.pid = _pid;
 					pc.handler = processExitInfoWrapper;
 					pc.arg = this;
 
-					if (_captureOutput) {
+					switch (_stdioHandling) {
+					case INTERACTIVE:
 						_stdout = ptyMasterFd;
+						break;
+
+					case CAPTURE_OUTPUT:
+						_stdout = pipeFd[0];
+						linux.close(pipeFd[1]);
+						break;
 					}
 					pendingChildren.declareChild(pc);
 					lock (*this) {
@@ -403,9 +479,17 @@ public class Process extends ProcessVolatileData {
 		}
 		return false;
 	}
-
+	/**
+	 * This method will spawn a thread to read the standard output of the spawned process.
+	 * Note that if the process was configured by the {@link Process.runInteractive runInteractive}
+	 * method, this method will not return until an end-of-file is detected. For en interactive
+	 * process using a PTY, this will appear as an error condition with errno set to EIO.
+	 *
+	 * @return the output of the process, or null if the process is ignoring output (the
+	 * default behavior).
+	 */
 	public string collectOutput() {
-		if (!_captureOutput)
+		if (_stdioHandling == StdioHandling.IGNORE)
 			return null;
 
 		// Spawn a thread to drain the process output into a string.
@@ -414,6 +498,7 @@ public class Process extends ProcessVolatileData {
 
 		dd.fd = _stdout;
 		dd.output = "";
+		dd.stopOnZero = true;
 		drainer.start(drain, &dd);
 		drainer.join();
 		delete drainer;
@@ -421,9 +506,10 @@ public class Process extends ProcessVolatileData {
 		_stdout = -1;
 		return dd.output;
 	}
-
+	/**
+	 */
 	public int stdout() {
-		if (_captureOutput)
+		if (_stdioHandling != StdioHandling.IGNORE)
 			return _stdout;
 		else
 			return -1;
