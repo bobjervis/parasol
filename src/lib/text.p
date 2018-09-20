@@ -384,26 +384,10 @@ public class string extends String<byte> {
 	 *	string literal token with the same string value as 
 	 *	this object.
 	 */
-	string escapeJSON() {
-		string output;
+	public string escapeJSON() {
+		String<byte> s = escapeJSON_T();
 
-		if (length() == 0)
-			return *this;
-		pointer<byte> cp = pointer<byte>(&_contents.data);
-		for (int i = 0; i < _contents.length; i++) {
-			switch (cp[i]) {
-			case	'\\':	output.append("\\\\");	break;
-			case	'\b':	output.append("\\b");	break;
-			case	'\f':	output.append("\\f");	break;
-			case	'\n':	output.append("\\n");	break;
-			case	'\r':	output.append("\\r");	break;
-			case	'\t':	output.append("\\t");	break;
-			case	'"':	output.append("\\\"");	break;
-			default:
-				output.append(cp[i]);
-			}
-		}
-		return output;
+		return *ref<string>(&s);
 	}
 	/*
 	 *	escapeParasol
@@ -1169,7 +1153,21 @@ class String<class T> {
 			case	'\t':	output.append('\\');	output.append('t');		break;
 			case	'"':	output.append('\\');	output.append('"');		break;
 			default:
-				output.append(cp[i]);
+				if (cp[i] < 0x20) {
+					output.append('\\');
+					output.append('u');
+					int mask = 0xf000;
+					int value = cp[i];
+					int shift = 12;
+					for (int i = 0; i < 4; i++, shift -= 4, mask >>= 4) {
+						int nibble = (value & mask) >> shift;
+						if (nibble <= 9)
+							output.append('0' + nibble);
+						else
+							output.append('a' + nibble - 10);
+					}
+				} else
+					output.append(cp[i]);
 			}
 		}
 		return output;
