@@ -161,7 +161,7 @@ public class HttpServer {
 				ref<net.Connection> connection = socket.accept();
 				if (connection != null) {
 					ref<HttpContext> context = new HttpContext(this, connection);
-					logger.format(log.DEBUG, "about to execute 'processHttpRequest' threads %d", _requestThreads.idleThreads());
+//					logger.format(log.DEBUG, "about to execute 'processHttpRequest' threads %d", _requestThreads.idleThreads());
 					_requestThreads.execute(processHttpRequest, context);
 				}
 			}
