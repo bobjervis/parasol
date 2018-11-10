@@ -1570,8 +1570,7 @@ compile() { "Monitor a; lock(a) { }" }
 compile() { "Monitor a; lock(a) { notify(); }" }
 compile() { "Monitor a; lock(a) { notifyAll(); }" }
 compile() { "Monitor a; lock(a) { wait(); }" }
-compile() { "Monitor a; lock(a) { wait(10); }" }
-compile() { "Monitor a; lock(a) { wait(10, 5); }" }
+compile() { "import parasol:time; Monitor a; lock(a) { wait(time.Duration(10)); }" }
 compile() { "lock(a) { } Monitor a;" }
 compile() { "monitor class M {} M a; lock(a) { }" }
 compile() { "monitor class M { int b; } M a; lock(a) { int c = b; }" }

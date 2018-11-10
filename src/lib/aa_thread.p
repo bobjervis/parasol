@@ -38,6 +38,7 @@ import native:C;
 import parasol:exception.HardwareException;
 import parasol:runtime;
 import parasol:international.Locale;
+import parasol:time;
 
 Thread.init();
 
@@ -344,45 +345,18 @@ public class Monitor {
 		_mutex.takeAfterWait(level - 1);
 	}
 	
-	public void wait(long timeout) {
-		long upper = timeout >> 31;
-		int lower = int(timeout & ((long(1) << 31) - 1));
-		_mutex.take();
-		_waiting++;
-		int level = _mutex.releaseForWait();
-		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-			DWORD outcome = WaitForSingleObject(_semaphore, DWORD(lower));
-			if (outcome == WAIT_TIMEOUT) {
-				for (int i = 0; i < upper; i++) {
-					outcome = WaitForSingleObject(_semaphore, DWORD(int.MAX_VALUE));
-					if (outcome != WAIT_TIMEOUT)
-						break;
-				}
-			}
-		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-			linux.timespec expirationTime;
-			linux.clock_gettime(linux.CLOCK_REALTIME, &expirationTime);
-			if (timeout >= 1000) {
-				expirationTime.tv_sec += timeout / 1000;
-				timeout %= 1000;
-			}
-			expirationTime.tv_nsec += timeout * 1000000;
-			if (expirationTime.tv_nsec >= 1000000000) {
-				expirationTime.tv_sec++;
-				expirationTime.tv_nsec -= 1000000000;
-			}
-			linux.sem_timedwait(&_linuxSemaphore, &expirationTime);
+	public void wait(time.Duration timeout) {
+		if (timeout.isInfinite()) {
+			wait();
+			return;
 		}
-		_mutex.takeAfterWait(level - 1);
-	}
-	// Sorry, Windows doesn't support nano second timing on semaphores.
-	public void wait(long timeout, int nanos) {
-		long upper = timeout >> 31;
-		int lower = int(timeout & ((long(1) << 31) - 1));
 		_mutex.take();
 		_waiting++;
 		int level = _mutex.releaseForWait();
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+			long millis = timeout.milliseconds();
+			long upper = millis >> 31;
+			int lower = int(millis & ((long(1) << 31) - 1));
 			DWORD outcome = WaitForSingleObject(_semaphore, DWORD(lower));
 			if (outcome == WAIT_TIMEOUT) {
 				for (int i = 0; i < upper; i++) {
@@ -394,11 +368,8 @@ public class Monitor {
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			linux.timespec expirationTime;
 			linux.clock_gettime(linux.CLOCK_REALTIME, &expirationTime);
-			if (timeout >= 1000) {
-				expirationTime.tv_sec += timeout / 1000;
-				timeout %= 1000;
-			}
-			expirationTime.tv_nsec += timeout * 1000000 + nanos;
+			expirationTime.tv_sec += timeout.seconds();
+			expirationTime.tv_nsec += timeout.nanoseconds();
 			while (expirationTime.tv_nsec >= 1000000000) { // this loop might repeat twice if nanos, millis and current time all have a big nanos value.
 				expirationTime.tv_sec++;
 				expirationTime.tv_nsec -= 1000000000;

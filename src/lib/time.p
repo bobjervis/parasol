@@ -147,9 +147,17 @@ public class Duration {
 	}
 
 	public Duration(long seconds, long nanoseconds) {
+		if (nanoseconds < 0 || nanoseconds >= 1000000000) {
+			if (this != &infinite)
+				throw IllegalArgumentException("Nanoseconds out of range");
+		}
 		_seconds = seconds;
 		_nanoseconds = nanoseconds;
 	}
+	/**
+	 * This value describes an infinite duration.
+	 */
+	public static Duration infinite(0, long.MAX_VALUE);
 
 	public Duration plus(Duration... more) {
 		// Check for infinite duration
@@ -227,20 +235,22 @@ public class Duration {
 		return _nanoseconds != long.MAX_VALUE;
 	}
 
+	public boolean isInfinite() {
+		return _nanoseconds == long.MAX_VALUE;
+	}
+
 	public long seconds() {
 		return _seconds;
+	}
+
+	public long milliseconds() {
+		return _seconds * 1000 + _nanoseconds / 1000000;
 	}
 
 	public long nanoseconds() {
 		return _nanoseconds;
 	}
 }
-
-/**
- * This value is defined for timeout call arguments that use a denormalized INterval
- * to represent an infinite duration.
- */
-public Duration infinite(long.MAX_VALUE, long.MAX_VALUE);
 /*
  * An Instance represents a time with the greatest precision and range. Where a
  * Time object has a little more than a one billion year range, an Instant spans
