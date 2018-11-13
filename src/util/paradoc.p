@@ -959,7 +959,7 @@ void functionSummary(ref<Writer> output, ref<ref<OverloadInstance>[]> functions,
 		ref<OverloadInstance> sym = (*functions)[i];
 //		sym.printSimple();
 		ref<Type> symType = sym.type();
-		if (symType.family() == TypeFamily.CLASS_DEFERRED) {
+		if (symType == null || symType.family() == TypeFamily.CLASS_DEFERRED) {
 			continue;
 		}
 		ref<FunctionType> ft = ref<FunctionType>(sym.type());
@@ -1028,7 +1028,7 @@ void functionDetail(ref<Writer> output, ref<ref<OverloadInstance>[]> functions, 
 	for (i in *functions) {
 		ref<OverloadInstance> sym = (*functions)[i];
 		ref<Type> symType = sym.type();
-		if (symType.family() == TypeFamily.CLASS_DEFERRED) {
+		if (symType == null || symType.family() == TypeFamily.CLASS_DEFERRED) {
 			continue;
 		}
 		string name = sym.name().asString();
