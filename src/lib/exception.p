@@ -26,7 +26,11 @@ import parasol:thread;
 import native:windows;
 import native:linux;
 import native:C;
-
+/**
+ * This function throws an AssertionFailedException if the test is false.
+ *
+ * @exception AssertionFailedException when the test argument value is false.
+ */
 public void assert(boolean test) {
 	if (!test)
 		throw AssertionFailedException();
@@ -34,15 +38,32 @@ public void assert(boolean test) {
 
 int EXCEPTION_ACCESS_VIOLATION	= int(0xc0000005);
 int EXCEPTION_IN_PAGE_ERROR		= int(0xc0000006);
-
+/**
+ * THis is the base class for all exceptions.
+ *
+ * An object must have a class that extends Exception to be used as an operand of a {@code throw}
+ * statement.
+ *
+ * Note: Currently, a thrown exception caches an ExceptionContext object to hold the stack trace
+ * of the exception. This memory is not re-claimed.
+ * 
+ * @threading It is not thread safe to throw the same exception object in two different threads
+ * at the same time.
+ */
 public class Exception {
 	protected ref<ExceptionContext> _exceptionContext;
 	string _message;
-	
+	/**
+	 * Constructs a new Exception with no message text.
+	 */
 	public Exception() {
 		
 	}
-	
+	/**
+	 * Constructs a new Exception with message text.
+	 *
+	 * @param message The text of the message to be printed.
+	 */
 	public Exception(string message) {
 		_message = message;
 	}
@@ -56,19 +77,33 @@ public class Exception {
 		n._exceptionContext = _exceptionContext;
 		return n;
 	}
-	
+	/**
+	 * Retrieves the value of the Exception message text, if any.
+	 *
+	 * @return If not null, the message text of the Exception.
+	 */
 	public string message() {
 		return _message;
 	}
-	
+	/**
+	 * Write the contents of the {@link textStackTrace) return value
+	 * to the process standard output.
+	 */
 	public void printStackTrace() {
 		string s = textStackTrace();
-		printf(s);
+		if (s == null)
+			s = "Exception was never thrown, no stack trace.\n";
+		process.stdout.write(s);
 	}
-	
+	/**
+	 * Compose a text stack trace.
+	 *
+	 * @return If the exception was thrown, then this returns the text stack trace. If the
+	 * Exception has never been thrown, then it returns null.
+	 */
 	public string textStackTrace() {
 		if (_exceptionContext == null)
-			return "Exception was never thrown, no stack trace.\n";
+			return null;
 		string output;
 		boolean locationIsExact = true;
 
@@ -302,7 +337,9 @@ private int comparatorReturnAddress(address ip, address elem) {
 	else
 		return 1;
 }
-
+/**
+ * This exception is thrown by array subscript operations that are out of bounds for the array.
+ */
 public class BoundsException extends Exception {
 	public BoundsException() {
 	}
@@ -317,7 +354,10 @@ public class BoundsException extends Exception {
 		return n;
 	}	
 }
-
+/**
+ * This exception is thrown by a variety of runtime functions if an invalid argument value
+ * is supplied.
+ */
 public class IllegalArgumentException extends Exception {
 	public IllegalArgumentException() {
 	}
@@ -332,8 +372,10 @@ public class IllegalArgumentException extends Exception {
 		return n;
 	}
 }
-
-
+/**
+ * This exception is triggered by a SIGABRT signal and is generally a symptom of a
+ * C runtime library failure. Most commonly, this is caused by corruption of the C memory heap.
+ */
 public class CRuntimeException extends RuntimeException {
 	public CRuntimeException() {
 		
@@ -349,7 +391,9 @@ public class CRuntimeException extends RuntimeException {
 		return n;
 	}	
 }
-
+/**
+ * This is the base class for a group of (usually) hardware-detected exceptions.
+ */
 public class RuntimeException extends Exception {
 	RuntimeException() {
 	}
@@ -374,7 +418,7 @@ public class RuntimeException extends Exception {
 					text = text.substring(0, text.length() - 2);
 				output.printf(" (%s)", text);
 			}
-			output.printf(" ip %p", _exceptionContext.exceptionAddress, runtime.lowCodeAddress());
+			output.printf(" ip %p", _exceptionContext.exceptionAddress);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX)
 			output.printf("%x", _exceptionContext.exceptionType);
 		return output;

@@ -51,14 +51,7 @@ import parasol:thread.Monitor;
 import parasol:exception.assert;
 import parasol:process.printf;
 
-/*
- * The global symbol 'undefined' can be used with var symbols to check whether
- * the var has any value at all. In other words, the default constructor for a
- * var object will create a value that compares equal to the symbol 'undefined',
- * and since it is a @Constant, user code cannot change it. 
- */
-//@Constant
-var undefined;
+import parasol:types.undefined;
 
 // Eventually, we need another way to get these 'built ins' plumbed through.
 

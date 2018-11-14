@@ -17,6 +17,17 @@ namespace parasol:types;
 
 import native:C;
 
+/**
+ * A variant with undefined value.
+ *
+ * The global symbol 'undefined' can be used with var symbols to check whether
+ * the var has any value at all. In other words, the default constructor for a
+ * var object will create a value that compares equal to the symbol 'undefined',
+ * and since it is a @Constant, user code cannot change it. 
+ */
+//@Constant
+public var undefined;
+
 public class var {
 //	private class _actualType;
 	private address _actualType;
