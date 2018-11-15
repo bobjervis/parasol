@@ -19,7 +19,6 @@ import native:linux;
 import native:windows;
 import parasol:compiler.FileStat;
 import parasol:compiler.Location;
-import parasol:exception.ExceptionContext;
 import parasol:x86_64.X86_64SectionHeader;
 
 /*

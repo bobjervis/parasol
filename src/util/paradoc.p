@@ -208,15 +208,25 @@ boolean configureArena(ref<Arena> arena) {
 	string importPath;
 
 	for (int i = 1; i < finalArgs.length(); i++) {
+		if (i > 1)
+			importPath.append(',');
 		importPath.append(finalArgs[i]);
-		importPath.append(',');
 	}
-	if (paradocCommand.explicitArgument.set())
-		importPath.append(paradocCommand.explicitArgument.value);
-	else if (paradocCommand.importPathArgument.set())
+	if (paradocCommand.explicitArgument.set()) {
+		if (paradocCommand.explicitArgument.value.length() > 0) {
+			if (finalArgs.length() > 1)
+				importPath.append(',');
+			importPath.append(paradocCommand.explicitArgument.value);
+		}
+	} else if (paradocCommand.importPathArgument.set()) {
+		if (finalArgs.length() > 1)
+			importPath.append(',');
 		importPath.append(paradocCommand.importPathArgument.value + ",^/src/lib");
-	else
-		importPath.append(",^/src/lib");
+	} else {
+		if (finalArgs.length() > 1)
+			importPath.append(',');
+		importPath.append("^/src/lib");
+	}
 	arena.setImportPath(importPath);
 	arena.verbose = paradocCommand.verboseArgument.value;
 	if (arena.logImports)

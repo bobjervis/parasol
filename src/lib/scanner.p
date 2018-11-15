@@ -980,14 +980,22 @@ public class Scanner {
 		text.StringWriter sw(&_doclet.text);
 		stream.UTF8Writer w(&sw);
 		ref<stream.UTF8Writer> writer = &w;
+		Location location = cursor();
 		int c = getc();
-		while (c == ' ' || c == '\t')
+		while (c == ' ' || c == '\t') {
+			location = cursor();
 			c = getc();
-		if (c == '\r')
+		}
+		if (c == '\r') {
+			location = cursor();
 			c = getc();
-		if (c == '\n')
+		}
+		if (c == '\n') {
+			_lines.append(location);
 			c = getc();
+		}
 		for (;;) {
+			location = cursor();
 			c = getc();
 			switch (c) {
 			case -1:
@@ -1025,7 +1033,7 @@ public class Scanner {
 				continue;
 
 			case '\n':
-				_lines.append(cursor());
+				_lines.append(location);
 				break;
 
 			case '\\':
@@ -1093,12 +1101,28 @@ public class Scanner {
 					writer.write('{');
 					writer.write(c);
 					for (;;) {
+						location = cursor();
 						c = getc();
+						if (c == '*') {
+							x = getc();
+							if (x == '/') {
+								if (depth == 0) {
+									writer.write("{}");
+									if (_doclet.summary == null)
+										_doclet.summary = _doclet.text;
+									return true;
+								}
+								depth--;
+								continue;
+							} else
+								ungetc();
+						}
 						if (c == -1)
 							break;
 						else if (c == '\n') {
 							atStartOfLine = true;
 							writer.write(c);
+							_lines.append(location);
 							continue;
 						} else if (atStartOfLine) {
 							if (c == ' ' || c == '\t')

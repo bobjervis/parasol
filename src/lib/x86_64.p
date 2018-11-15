@@ -82,7 +82,6 @@ import parasol:compiler.Unary;
 import parasol:compiler.USE_COMPARE_METHOD;
 import parasol:compiler.Variable;
 import parasol:exception;
-import parasol:exception.ExceptionContext;
 import parasol:pxi.Pxi;
 import parasol:runtime;
 import parasol:storage;
