@@ -408,6 +408,13 @@ public class Statement {
 		return v, SQL_SUCCEEDED(ret);
 	}
 
+	public long, boolean, boolean getNullableLong(int column) {
+		long v;
+		SQLLEN indicator;
+		SQLRETURN ret = SQLGetData(_statement, SQLUSMALLINT(column), SQL_C_SBIGINT, &v, v.bytes, &indicator);
+		return v, indicator == SQL_NULL_DATA, SQL_SUCCEEDED(ret);
+	}
+
 	public string, boolean getString(int column, int length) {
 		string s;
 		s.resize(length);
@@ -614,6 +621,28 @@ public class Timestamp {
 		this.minute = char(minute);
 		this.second = char(second);
 		this.fraction = fraction;
+	}
+
+	public Timestamp(time.Time t) {
+		time.Date d(t);
+		this.year = short(d.year);
+		this.month = char(d.month);
+		this.day = char(d.day);
+		this.hour = char(d.hour);
+		this.minute = char(d.minute);
+		this.second = char(d.second);
+		this.fraction = unsigned(d.nanosecond);
+	}
+
+	public Timestamp(time.Instant i) {
+		time.Date d(i);
+		this.year = short(d.year);
+		this.month = char(d.month);
+		this.day = char(d.day);
+		this.hour = char(d.hour);
+		this.minute = char(d.minute);
+		this.second = char(d.second);
+		this.fraction = unsigned(d.nanosecond);
 	}
 
 	public boolean isNULL() {
