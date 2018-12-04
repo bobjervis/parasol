@@ -452,8 +452,6 @@ public class Statement {
 		SQLRETURN ret;
 		ret = SQLGetData(_statement, SQLUSMALLINT(column), SQL_C_TIMESTAMP, &t, t.bytes, &actual);
 		if (SQL_SUCCEEDED(ret)) {
-			logger.format(log.DEBUG, "actual = %d SQL_NULL_DATA = %d", actual, SQL_NULL_DATA);
-			logger.memDump(log.DEBUG, "NULL", &Timestamp.NULL, Timestamp.bytes, 0);
 			if (actual == SQL_NULL_DATA)
 				return Timestamp.NULL, true;
 			else
