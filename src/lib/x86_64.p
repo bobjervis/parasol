@@ -2859,7 +2859,6 @@ public class X86_64 extends X86_64AssignTemps {
 		case	EXPRESSION:
 		case	SWITCH:
 		case	FOR:
-		case	CLASS_COPY:
 		case	DESTRUCTOR_LIST:
 		case	IF:
 		case	ASSIGN:
@@ -2881,6 +2880,8 @@ public class X86_64 extends X86_64AssignTemps {
 			generateStaticInitializers(b.left(), compileContext);
 			generateStaticInitializers(b.right(), compileContext);
 			break;
+
+		case	CLASS_COPY:
 			
 		case	CALL:			// must be a constructor
 			generateInitializers(node, compileContext);

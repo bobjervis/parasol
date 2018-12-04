@@ -15,7 +15,10 @@
  */
 namespace parasol:sql;
 
+import parasol:log;
 import parasol:time;
+
+private ref<log.Logger> logger = log.getLogger("parasol.sql");
 
 public enum ODBCVersion {
 	V2,
@@ -181,6 +184,16 @@ public class DBConnection {
 								&messageText[0],SQLSMALLINT( messageText.length()), &actual);
 		messageText.resize(actual);
 		return sqlstate, nativeError, messageText;
+	}
+
+	public boolean commit() {
+		SQLRETURN ret = SQLEndTran(SQL_HANDLE_DBC, _connection, SQL_COMMIT);
+		return SQL_SUCCEEDED(ret);	
+	}
+
+	public boolean rollback() {
+		SQLRETURN ret = SQLEndTran(SQL_HANDLE_DBC, _connection, SQL_ROLLBACK);
+		return SQL_SUCCEEDED(ret);	
 	}
 }
 
@@ -421,9 +434,9 @@ public class Statement {
 		SQLLEN actual;
 		SQLRETURN ret;
 		ret = SQLGetData(_statement, SQLUSMALLINT(column), SQL_C_CHAR, &s[0], s.length(), &actual);
-		printf("getString %d ret = %d (%s)\n", column, ret, string(fromSQLRETURN(ret)));
+//		printf("getString %d ret = %d (%s)\n", column, ret, string(fromSQLRETURN(ret)));
 		if (SQL_SUCCEEDED(ret)) {
-			printf("actual = %d s = '%s'\n", actual, s);
+//			printf("actual = %d s = '%s'\n", actual, s);
 			if (actual == -1)
 				s = null;
 			else
@@ -439,12 +452,20 @@ public class Statement {
 		SQLRETURN ret;
 		ret = SQLGetData(_statement, SQLUSMALLINT(column), SQL_C_TIMESTAMP, &t, t.bytes, &actual);
 		if (SQL_SUCCEEDED(ret)) {
-			if (actual == -1)
+			logger.format(log.DEBUG, "actual = %d SQL_NULL_DATA = %d", actual, SQL_NULL_DATA);
+			logger.memDump(log.DEBUG, "NULL", &Timestamp.NULL, Timestamp.bytes, 0);
+			if (actual == SQL_NULL_DATA)
 				return Timestamp.NULL, true;
 			else
 				return t, true;
-		} else
+		} else {
+			string sqlState;
+			long nativeError;
+			string message;
+			(sqlState, nativeError, message) = getDiagnosticRecord(1);
+			logger.format(log.ERROR, "getTimestamp Error %s %d %s\n", sqlState, nativeError, message);
 			return Timestamp.NULL, false;
+		}
 	}
 
 
@@ -649,7 +670,7 @@ public class Timestamp {
 		return fraction == unsigned.MAX_VALUE;
 	}
 
-	public static Timestamp NULL;
+	public static Timestamp NULL = { fraction: unsigned.MAX_VALUE };
 
 	public time.Time toTime() {
 		time.Time t(toInstant());
@@ -950,6 +971,11 @@ private SQLSMALLINT SQL_DATA_AT_EXEC = SQLSMALLINT(-2);
 @Constant
 private SQLSMALLINT SQL_DEFAULT_PARAM = SQLSMALLINT(-5);
 
+@Constant
+private SQLSMALLINT SQL_COMMIT = 0;
+@Constant
+private SQLSMALLINT SQL_ROLLBACK = 1;
+
 private boolean SQL_SUCCEEDED(SQLRETURN ret) {
 	return (ret & ~1) == 0;
 }
@@ -1066,6 +1092,9 @@ private abstract SQLRETURN SQLConnect(SQLHDBC ConnectionHandle, pointer<byte> Se
 private abstract SQLRETURN SQLDriverConnect(SQLHDBC ConnectionHandle, SQLHWND WindowHandle, pointer<byte> InConnectionString,
 						SQLSMALLINT StringLength1, pointer<byte> OutConnectionString, SQLSMALLINT BufferLength, 
 						ref<SQLSMALLINT> StringLength2Ptr, SQLUSMALLINT DriverCompletion);
+
+@Linux("libodbc.so", "SQLEndTran")
+private abstract SQLRETURN SQLEndTran(SQLSMALLINT HandleType, SQLHANDLE Handle, SQLSMALLINT CompletionType);
 
 @Linux("libodbc.so", "SQLExecDirect")
 private abstract SQLRETURN SQLExecDirect(SQLHSTMT StatementHandle, pointer<byte> StatementText, SQLINTEGER TextLength);

@@ -25,3 +25,14 @@ A a = {
 
 assert(a.b == "abc");
 assert(a.c == '0');
+
+class B {
+	public long f;
+
+	public static B b = {
+			f: long.MAX_VALUE
+	};
+}
+
+assert(B.b.f == long.MAX_VALUE);
+

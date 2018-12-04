@@ -62,17 +62,17 @@ while (statement.fetch()) {
 	string s6;
 	boolean success;
 
-	(s1, success) = statement.getString(1);
+	(s1, success) = statement.getString(1, 100);
 	assert(success);
-	(s2, success) = statement.getString(2);
+	(s2, success) = statement.getString(2, 100);
 	assert(success);
-	(s3, success) = statement.getString(3);
+	(s3, success) = statement.getString(3, 100);
 	assert(success);
-	(s4, success) = statement.getString(4);
+	(s4, success) = statement.getString(4, 100);
 	assert(success);
-	(s5, success) = statement.getString(5);
+	(s5, success) = statement.getString(5, 100);
 	assert(success);
-	(s6, success) = statement.getString(6);
+	(s6, success) = statement.getString(6, 100);
 	assert(success);
 
 	printf("[%d] %s | %s | %s | %s | %s | %s\n", i, s1, s2, s3, s4, s5, s6);
