@@ -59,9 +59,16 @@ public abstract int crypto_pwhash_str(pointer<byte> out, pointer<byte> passwd, l
 
 @Linux("libsodium.so", "crypto_pwhash_verify")
 public abstract int crypto_pwhash_verify(pointer<byte> str, pointer<byte> passwd, long passwdlen);
-
+/**
+ * The sodium library initialization function.
+ *
+ * A call to this function is made by the runtime. You should not have to call this function yourself.
+ */
 @Linux("libsodium.so", "sodium_init")
-public abstract int sodium_init();
+private abstract int sodium_init();
+
+sodium_init();
+
 
 @Constant
 public long crypto_pwhash_OPSLIMIT_MIN = 3;

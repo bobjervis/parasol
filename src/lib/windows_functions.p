@@ -44,6 +44,9 @@ public class WORD = short;
 public class DWORD = unsigned;
 public class SIZE_T = address;
 public class HTHREAD = address;
+public class BCRYPT_ALG_HANDLE = address;
+public class ULONG = unsigned;
+public class NTSTATUS = int;
 
 @Windows("kernel32.dll", "GetModuleFileNameA")
 public abstract int GetModuleFileName(HMODULE hModule, pointer<byte> filename, int filenameSize);
@@ -150,6 +153,9 @@ public abstract BOOL ReadFile(HANDLE hFile, address lpBuffer, DWORD nNumberOfByt
 
 @Windows("kernel32.dll", "WriteFile")
 public abstract BOOL WriteFile(HANDLE hFile, address lpBuffer, DWORD nNumberOfBytesToWrite, ref<DWORD> lpNumbersOfBytesWritten, ref<OVERLAPPED> lpOverlapped);
+
+@Windows("kernel32.dll", "BCryptGenRandom")
+public abstract NTSTATUS BCryptGenRandom(BCRYPT_ALG_HANDLE hProv, pointer<byte> pbBuffer, ULONG cbBuffer, ULONG dwFlags);
 
 public class OVERLAPPED {
 	long Internal;
@@ -287,5 +293,11 @@ public abstract _locale_t _create_locale(int category, pointer<byte> locale);
 
 class __locale_t {
 }
+
+@Constant
+public ULONG BCRYPT_USE_SYSTEM_PREFERRED_RNG = 2;
+
+@Constant
+public NTSTATUS STATUS_SUCCESS = 0;
 
 

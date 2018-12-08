@@ -16,6 +16,7 @@
 namespace parasol:random;
 
 import native:C;
+import native:windows;
 import parasol:math;
 import parasol:runtime;
 /**
@@ -109,16 +110,12 @@ public class Random {
 
 	void set() {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-			/*
-				HCRYPTPROV handle;
-		
-				if (CryptAcquireContext(&handle, null, null, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT|CRYPT_SILENT)) {
-					CryptGenRandom(handle, _state.bytes, pointer<byte>(&_state));
-					CryptReleaseContext(handle, 0);
-				} else {
-				}
-			*/
-			set(C.time(null));
+			byte[] b;
+			b.resize(long.bytes);
+			if (windows.BCryptGenRandom(null, &b[0], windows.ULONG(b.length()), windows.BCRYPT_USE_SYSTEM_PREFERRED_RNG) == windows.STATUS_SUCCESS)
+				set(*ref<long>(&b[0]));
+			else
+				set(C.time(null));
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			ref<C.FILE> f = C.fopen("/dev/urandom".c_str(), "rb".c_str());
 			if (f == null)
@@ -221,15 +218,8 @@ public byte[] getBytes(int length) {
 
 	b.resize(length);
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-		/*
-			windows.HCRYPTPROV handle;
-	
-			if (windows.CryptAcquireContext(&handle, null, null, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT|CRYPT_SILENT)) {
-				windows.CryptGenRandom(handle, _state.bytes, pointer<byte>(&_state));
-				windows.CryptReleaseContext(handle, 0);
-			} else {
-			}
-		*/
+		if (windows.BCryptGenRandom(null, &b[0], windows.ULONG(b.length()), windows.BCRYPT_USE_SYSTEM_PREFERRED_RNG) == windows.STATUS_SUCCESS)
+			return b;
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		ref<C.FILE> f = C.fopen("/dev/urandom".c_str(), "rb".c_str());
 		if (f != null) {
