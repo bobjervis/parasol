@@ -3628,6 +3628,7 @@ public class Node {
 		case	CATCH:
 		case	CHARACTER:
 		case	CLASS:
+		case	CLASS_COPY:
 		case	CLASS_DECLARATION:
 		case	CLASS_OF:
 		case	CLASS_TYPE:

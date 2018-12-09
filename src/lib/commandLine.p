@@ -227,7 +227,7 @@ class Command {
 		}
 		if (_description != null)
 			wrapTo(0, 0, lineLength, _description);
-		C.exit(1);
+		exit(1);
 	}
 
 	private boolean defineOption(char shortOption, string longOption, ref<BaseArgument> arg) {

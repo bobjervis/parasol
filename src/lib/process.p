@@ -40,6 +40,13 @@ public int printf(string format, var... arguments) {
 	return stdout.printf(format, arguments);
 }
 
+C.atexit(flushBuffers);
+
+private void flushBuffers() {
+	stderr.flush();
+	stdout.flush();
+}
+
 public string binaryFilename() {
 	byte[] filename;
 	filename.resize(storage.FILENAME_MAX + 1);

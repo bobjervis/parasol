@@ -28,6 +28,8 @@
  * long type, even though it is signed and there is some risk of confusion for values with the high-order bit set.
  */
 namespace native:C;
+
+import parasol:runtime;
 /*
  * FILE type.  Mimics the C FILE type.  Used here just as an opaque type to ensure
  * type-safe handling.
@@ -56,6 +58,28 @@ public int SEEK_SET = 0;
 public int SEEK_CUR = 1;
 @Constant
 public int SEEK_END = 2;
+
+@Windows("msvcrt.dll", "atexit")
+private abstract int __atexit(void() exitHandler);
+
+@Linux("libc.so.6", "__cxa_atexit")
+private abstract int __cxa_atexit(void() exitHandler, address arg, address dso_handle);
+/**
+ * Register an atexit handler with the C runtime.
+ *
+ * The Linux C runtime does a little dance to get atexit appropriately defined (atexit is statically bound). As
+ * a result, we can't dynamically link directly to it. We have to use the 'binary standard' atexit handler which
+ * is __cxa_atexit.
+ *
+ * In order to mask this wrinkle, Parasol defines an 'atexit' entry point in Parasol, but maps it appropriately
+ * depending on the operating system.
+ */
+public int atexit(void() exitHandler) {
+	if (runtime.compileTarget == runtime.Target.X86_64_LNX)
+		return __cxa_atexit(exitHandler, null, null);
+	else
+		return __atexit(exitHandler);
+}
 
 @Windows("msvcrt.dll", "atof")
 @Linux("libc.so.6", "atof")
