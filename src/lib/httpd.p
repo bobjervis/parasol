@@ -33,6 +33,7 @@ import native:linux;
 import parasol:net;
 
 private ref<log.Logger> logger = log.getLogger("parasol.http.server");
+
 /*
  * This class implements an HTTP server. It implements HTTP version 1.1 for an Origin Server only. Hooks are defined to allow for
  * future expansion.
@@ -41,21 +42,21 @@ private ref<log.Logger> logger = log.getLogger("parasol.http.server");
  *  future.
  */
 public class HttpServer {
-	public char port;									// default to 80
-	public char sslPort;								// default to 443
 	public string cipherList;
 	public string certificatesFile;
 	public string privateKeyFile;
 	public string dhParamsFile;
+	boolean _publicServiceEnabled;
+	boolean _secureServiceEnabled;
+	char _httpPort;									// actual port used, if not zero
+	char _httpsPort;								// actual port used, if not zero
+	ref<Socket> _publicSocket;
+	ref<Socket> _secureSocket;
 	private string _hostname;
-														// NOte: one will be non-zero is the server has started
-	private char _port;									// actual port used, if not zero
-	private char _sslPort;								// actual port used, if not zero
 	private ref<ThreadPool<int>> _requestThreads;
 	private PathHandler[] _handlers;
 	private ref<Thread> _httpsThread;
 	private ref<Thread> _httpThread;
-	private ServerScope _serverScope;
 	/*
 	 * The various roles a server can play determine how messages should be interpreted. 
 	 */
@@ -67,11 +68,72 @@ public class HttpServer {
 	}
 
 	public HttpServer() {
+		_publicServiceEnabled = true;
+		_httpPort = 80;
+		_secureServiceEnabled = true;
+		_httpsPort = 443;
 		_hostname = "";
-		_port = 80;
-		_sslPort = 443;
 		_requestThreads = new ThreadPool<int>(4);
 	}
+
+	~HttpServer() {
+		wait();
+		delete _publicSocket;
+		delete _secureSocket;
+	}
+
+	public boolean enableHttp() {
+		boolean priorState = _publicServiceEnabled;
+		_publicServiceEnabled = true;
+		return priorState;
+	}
+
+	public boolean disableHttp() {
+		boolean priorState = _publicServiceEnabled;
+		_publicServiceEnabled = false;
+		return priorState;
+	}
+
+	public boolean setHttpActivation(boolean newState) {
+		boolean priorState = _publicServiceEnabled;
+		_publicServiceEnabled = newState;
+		return priorState;
+	}
+
+	public boolean enableHttps() {
+		boolean priorState = _secureServiceEnabled;
+		_secureServiceEnabled = true;
+		return priorState;
+	}
+
+	public boolean disableHttps() {
+		boolean priorState = _secureServiceEnabled;
+		_secureServiceEnabled = false;
+		return priorState;
+	}
+
+	public boolean setHttpsActivation(boolean newState) {
+		boolean priorState = _secureServiceEnabled;
+		_secureServiceEnabled = newState;
+		return priorState;
+	}
+
+	public char httpPort() {
+		return _httpPort;
+	}
+
+	public char httpsPort() {
+		return _httpsPort;
+	}
+
+	public void setHttpPort(char port) {
+		_httpPort = port;
+	}
+
+	public void setHttpsPort(char sslPort) {
+		_httpsPort = sslPort;
+	}
+
 	/*
 	 * Binds the absPath in any incoming URL to the local file-system
 	 * file or directory name filename.
@@ -81,12 +143,12 @@ public class HttpServer {
 		post(PathHandler(absPath, handler, ServiceClass.ANY_SECURITY_LEVEL));
 	}
 	
-	public void secureStaticContent(string absPath, string filename) {
+	public void httpsStaticContent(string absPath, string filename) {
 		ref<HttpService> handler = new StaticContentService(filename);
 		post(PathHandler(absPath, handler, ServiceClass.SECURED_ONLY));
 	}
 	
-	public void unsecureStaticContent(string absPath, string filename) {
+	public void httpStaticContent(string absPath, string filename) {
 		ref<HttpService> handler = new StaticContentService(filename);
 		post(PathHandler(absPath, handler, ServiceClass.UNSECURED_ONLY));
 	}
@@ -95,11 +157,11 @@ public class HttpServer {
 		post(PathHandler(absPath, handler, ServiceClass.ANY_SECURITY_LEVEL));
 	}
 	
-	public void secureService(string absPath, ref<HttpService> handler) {
+	public void httpsService(string absPath, ref<HttpService> handler) {
 		post(PathHandler(absPath, handler, ServiceClass.SECURED_ONLY));
 	}
 	
-	public void unsecureService(string absPath, ref<HttpService> handler) {
+	public void httpService(string absPath, ref<HttpService> handler) {
 		post(PathHandler(absPath, handler, ServiceClass.UNSECURED_ONLY));
 	}
 
@@ -117,20 +179,56 @@ public class HttpServer {
 		start(ServerScope.INTERNET);
 	}
 
-	public void start(ServerScope scope) {
-		_serverScope = scope;
-		_port = port;
-		_sslPort = sslPort;
-		if (_port > 0) {
+	public boolean start(ServerScope scope) {
+		if (_publicServiceEnabled) {
+			_publicSocket = bindSocket(scope, _httpPort, Encryption.NONE);
+			if (_publicSocket == null)
+				return false;
+			if (_httpPort == 0)
+				_httpPort = _publicSocket.port();
 			_httpThread = new Thread();
 			_httpThread.start(startHttpEntry, this);
 		}
-		if (_sslPort > 0) {
+		if (_secureServiceEnabled) {
+			_secureSocket = bindSocket(scope, _httpsPort, Encryption.SSLv23);
+			if (_secureSocket == null)
+				return false;
+			if (_httpsPort == 0)
+				_httpsPort = _secureSocket.port();
 			_httpsThread = new Thread();
 			_httpsThread.start(startHttpsEntry, this);
 		}
+		return true;
 	}
-	
+
+	private ref<Socket> bindSocket(ServerScope scope, char port, Encryption encryption) {
+		ref<Socket> socket = Socket.create(encryption, cipherList, certificatesFile, privateKeyFile, dhParamsFile);
+		if (socket.bind(port, scope)) {
+			if (!socket.listen()) {
+				printf("listen failed\n");
+				delete socket;
+				return null;
+			}
+		} else {
+			printf("bind failed\n");
+			delete socket;
+			return null;
+		}
+		return socket;
+	}
+
+	private static void startHttpEntry(address param) {
+		ref<HttpServer> server = ref<HttpServer>(param);
+//		printf("Starting http on port %d\n", server._httpPort);
+			server.acceptLoop(server._publicSocket);
+	}
+
+	private static void startHttpsEntry(address param) {
+		ref<HttpServer> server = ref<HttpServer>(param);
+//		printf("Starting https on port %d\n", server._httpsPort);
+		server.acceptLoop(server._secureSocket);
+	}
+
 	public void wait() {
 		if (_httpThread != null)
 			_httpThread.join();
@@ -138,35 +236,15 @@ public class HttpServer {
 			_httpsThread.join();
 	}
 
-	private static void startHttpEntry(address param) {
-		ref<HttpServer> server = ref<HttpServer>(param);
-//		printf("Starting http on port %d\n", server._port);
-		server.startHttp(server._serverScope, server._port, Encryption.NONE);
-	}
-
-	private static void startHttpsEntry(address param) {
-		ref<HttpServer> server = ref<HttpServer>(param);
-//		printf("Starting https on port %d\n", server._sslPort);
-		server.startHttp(server._serverScope, server._sslPort, Encryption.SSLv23);
-	}
-
-	private void startHttp(ServerScope scope, char port, Encryption encryption) {
-		ref<Socket> socket = Socket.create(encryption, cipherList, certificatesFile, privateKeyFile, dhParamsFile);
-		if (socket.bind(port, scope)) {
-			if (!socket.listen()) {
-				printf("listen failed\n");
-				return;
+	void acceptLoop(ref<Socket> socket) {
+		while (!socket.closed()) {
+			ref<net.Connection> connection = socket.accept();
+			if (connection != null) {
+				ref<HttpContext> context = new HttpContext(this, connection);
+//				logger.format(log.DEBUG, "about to execute 'processHttpRequest' threads %d", _requestThreads.idleThreads());
+				_requestThreads.execute(processHttpRequest, context);
 			}
-			while (!socket.closed()) {
-				ref<net.Connection> connection = socket.accept();
-				if (connection != null) {
-					ref<HttpContext> context = new HttpContext(this, connection);
-//					logger.format(log.DEBUG, "about to execute 'processHttpRequest' threads %d", _requestThreads.idleThreads());
-					_requestThreads.execute(processHttpRequest, context);
-				}
-			}
-		} else
-			printf("bind failed\n");
+		}
 	}
 
 	boolean dispatch(ref<HttpRequest> request, ref<HttpResponse> response, boolean secured) {

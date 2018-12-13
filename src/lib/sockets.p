@@ -211,6 +211,8 @@ public class in6_addr {
 	public long long2;
 }
 
+public class socklen_t = unsigned;
+
 // Note: there is only one C function, but the most convenient way to get some semblance of type-safety (that is restricting
 // the function calls to one of the sockaddr types) is to overload the various allowed signatures.
 @Windows("ws2_32.dll", "accept")
@@ -260,6 +262,10 @@ public abstract int connect(int s, ref<sockaddr_in6_old> name, int addrLen);
 @Linux("libc.so.6", "gethostbyname")
 public abstract ref<hostent> gethostbyname(pointer<byte> name);
 
+@Windows("ws2_32.dll", "getsockname")
+@Linux("libc.so.6", "getsockname")
+public abstract int getsockname(int sockfd, ref<sockaddr> name, ref<socklen_t> addrlen);
+
 @Windows("ws2_32.dll", "htonl")
 @Linux("libc.so.6", "htonl")
 public abstract unsigned htonl(unsigned u16);
@@ -287,6 +293,10 @@ public abstract pointer<byte> inet_ntop(int af, address src, pointer<byte> dst, 
 @Windows("ws2_32.dll", "listen")
 @Linux("libc.so.6", "listen")
 public abstract int listen(int socketfd, int backlog);
+
+@Windows("ws2_32.dll", "ntohs")
+@Linux("libc.so.6", "ntohs")
+public abstract char ntohs(char u16);
 
 @Windows("ws2_32.dll", "setsockopt")
 @Linux("libc.so.6", "setsockopt")

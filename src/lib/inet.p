@@ -202,7 +202,15 @@ public class Socket {
 			net.closesocket(_socketfd);
 			return false;
 		}
-//		logger.format(log.DEBUG,"socketfd = %d\n", _socketfd);
+		if (port == 0) {
+			net.sockaddr_in this_addr;
+			net.socklen_t len = net.socklen_t(this_addr.bytes);
+
+			net.getsockname(_socketfd, ref<net.sockaddr>(&this_addr), &len);
+			_port = net.ntohs(this_addr.sin_port); 
+		} else
+			_port = port;
+//		logger.format(log.DEBUG,"socketfd = %d port = %d", _socketfd, _port);
 		return true;
 	}
 
@@ -239,6 +247,10 @@ public class Socket {
 
 	public boolean closed() {
 		return _socketfd < 0;
+	}
+
+	public char port() {
+		return _port;
 	}
 
 	// Client side API's

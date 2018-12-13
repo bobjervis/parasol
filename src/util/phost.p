@@ -50,7 +50,7 @@ int main(string[] args) {
 		port = char(phostCommand.portArgument.value);
 
 	string[] params = phostCommand.finalArgs();
-	server.port = port;
+	server.setHttpPort(port);
 	printf("Hosting %s on port %d\n", params[0], port);
 	server.staticContent("/", params[0]);
 
