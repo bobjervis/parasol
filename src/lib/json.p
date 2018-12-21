@@ -113,6 +113,27 @@ public void dispose(var object) {
 	}
 }
 
+public var clone(var object) {
+	if (object.class == ref<Object>) {
+		ref<Object> o = ref<Object>(object);
+		ref<Object> n = new Object();
+		for (i in (*o.members())) {
+			var x = (*o.members())[i];
+			n.set(i, clone(x));
+		}
+		return n;
+	} else if (object.class == ref<Array>) {
+		ref<Array> a = ref<Array>(object);
+		ref<Array> n = new Array();
+		n.resize(a.length());
+		for (int i = 0; i < a.length(); i++) {
+			n.set(i, clone(a.get(i)));
+		}
+		return n;
+	} else
+		return object;
+}
+
 class Parser {
 	Scanner _scanner;
 	boolean _error;
