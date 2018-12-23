@@ -32,3 +32,20 @@ printf("set4 -> '%s'\n", http.encodeURIComponent(set4));
 assert(http.encodeURIComponent(set4) == "ABC%20abc%20123");
 printf("set5 -> '%s'\n", http.encodeURIComponent(set5));
 assert(http.encodeURIComponent(set5) == "%C2%A0");
+
+string eset1 = http.encodeURIComponent(set1);
+string eset2 = http.encodeURIComponent(set2);
+string eset3 = http.encodeURIComponent(set3);
+string eset4 = http.encodeURIComponent(set4);
+string eset5 = http.encodeURIComponent(set5);
+
+printf("eset1 -> '%s'\n", http.decodeURIComponent(eset1));
+assert(http.decodeURIComponent(eset1) == ";,/?:@&=+$");
+printf("eset2 -> '%s'\n", http.decodeURIComponent(eset2));
+assert(http.decodeURIComponent(eset2) == "-_.!~*'()");
+printf("eset3 -> '%s'\n", http.decodeURIComponent(eset3));
+assert(http.decodeURIComponent(eset3) == "#");
+printf("eset4 -> '%s'\n", http.decodeURIComponent(eset4));
+assert(http.decodeURIComponent(eset4) == "ABC abc 123");
+printf("eset5 -> '%s'\n", http.decodeURIComponent(eset5));
+assert(http.decodeURIComponent(eset5) == "\ua0");

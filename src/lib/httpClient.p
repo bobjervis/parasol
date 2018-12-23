@@ -240,33 +240,104 @@ public string encodeURIComponent(string component) {
 	return result;
 }
 /**
- * NOT YET IMPLEMENTED
+ * This returns the uri string in a form that replaces certain escape sequences with the escaped character values.
  *
- * Do not call this function as it currently just returns its parameter value.
+ * Certain escaped characters are not changed: ; , / ? : @ & = + $ #
+ *
+ * These characters have significance in the parsing of a URI and unescaping them could yield and invalid uri.
+ *
+ * @param uri The uri string to be decoded.
+ *
+ * @return The decode URI with certain escape sequences replaced with their character values.
  */
 public string decodeURI(string uri) {
 	string result;
 
 	for (int i = 0; i < uri.length(); i++) {
-		switch (uri[i]) {
+		byte c = uri[i];
+		switch (c) {
+		case	'%':
+			if (i + 2 !< uri.length() || !uri[i + 1].isHexDigit() || !uri[i + 2].isHexDigit())
+				throw URIError(uri);
+			byte b;
+			i++;
+			if (uri[i].isDigit())
+				b = byte(uri[i] - '0');
+			else
+				b = byte(10 + uri[i].toLowerCase() - 'a');
+			i++;
+			int b2;
+			if (uri[i].isDigit())
+				b2 = byte(uri[i] - '0');
+			else
+				b2 = byte(10 + uri[i].toLowerCase() - 'a');
+			b = byte((b << 4) + b2);
+			if ((b & 0x80) == 0) {
+				switch (b) {
+				case	';':
+				case	',':
+				case	'/':
+				case	'?':
+				case	':':
+				case	'@':
+				case	'&':
+				case	'=':
+				case	'+':
+				case	'$':
+				case	'#':
+					result.append('%');
+					result.append(uri[i - 1]);
+					result.append(uri[i]);
+					break;
+
+				default:
+					result.append(byte(b));
+				}
+			} else
+					result.append(byte(b));
+			break;
+
 		default:
-			result.append(uri[i]);
+			result.append(c);
+			break;
 		}
 	}
 	return result;
 }
 /**
- * NOT YET IMPLEMENTED
+ * This returns a URI component with all escaped characters converted to their unescaped value.
  *
- * Do not call this function as it currently just returns its parameter value.
+ * @param component The URI component, possibly containing escape sequences.
+ *
+ * @return The converted component string with no escape sequences present.
  */
 public string decodeURIComponent(string component) {
 	string result;
 
 	for (int i = 0; i < component.length(); i++) {
-		switch (component[i]) {
+		byte c = component[i];
+		switch (c) {
+		case	'%':
+			if (i + 2 !< component.length() || !component[i + 1].isHexDigit() || !component[i + 2].isHexDigit())
+				throw URIError(component);
+			byte b;
+			i++;
+			if (component[i].isDigit())
+				b = byte(component[i] - '0');
+			else
+				b = byte(10 + component[i].toLowerCase() - 'a');
+			i++;
+			byte b2;
+			if (component[i].isDigit())
+				b2 = byte(component[i] - '0');
+			else
+				b2 = byte(10 + component[i].toLowerCase() - 'a');
+			result.append(byte((b << 4) + b2));
+			break;
+
 		default:
-			result.append(component[i]);
+			result.append(c);
+			break;
 		}
 	}
 	return result;
