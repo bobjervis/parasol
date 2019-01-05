@@ -21,6 +21,7 @@ import parasol:storage.Seek;
 import parasol:time.Time;
 import parasol:text.string16;
 import parasol:exception.IllegalArgumentException;
+import parasol:exception.IllegalOperationException;
 
 import native:C;
 
@@ -558,6 +559,19 @@ public class Reader {
 
 	public void close() {
 	}
+
+	public boolean hasLength() {
+		return false;
+	}
+
+	public long length() {
+		throw IllegalOperationException("length");
+		return 0;
+	}
+
+	public void reset() {
+		throw IllegalOperationException("reset");
+	}
 }
 
 public class BufferReader extends Reader {
@@ -580,6 +594,10 @@ public class BufferReader extends Reader {
 			return *_buffer++;
 		} else
 			return EOF;
+	}
+
+	public boolean hasLength() {
+		return true;
 	}
 }
 
@@ -610,6 +628,19 @@ public class Writer {
 
 	public int write(string16 s) {
 		return write(s.c_str(), s.length() * char.bytes);
+	}
+
+	public int write(ref<Reader> reader) {
+		byte[] b;
+		b.resize(8096);
+		int totalWritten = 0;
+		for (;;) {
+			int actual = reader.read(&b);
+			if (actual <= 0)
+				break;
+			totalWritten += write(&b[0], actual);
+		}
+		return totalWritten;
 	}
 
 	public int printf(string format, var... arguments) {

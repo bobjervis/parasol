@@ -947,6 +947,7 @@ compile(expect: fail, message: UNDEFINED) { "class X { X(int foo, int bar) {} } 
 compile(expect: fail) { "class A { private int x; }; void f(A a) { int b = a.x; }" }
 
 compile(expect: fail, message: ABSTRACT_INSTANCE_DISALLOWED) { "class A { public abstract void f(); } class B extends A { } B b;" }
+compile(expect: fail, message: ABSTRACT_INSTANCE_DISALLOWED) { "class A { public abstract void f(); } class B extends A { } void g() { B b; }" }
 
 compile(expect: fail, message: CIRCULAR_EXTENDS) { "class A extends A {}" }
 compile(expect: fail, message: CIRCULAR_EXTENDS) { "class B extends A{} class A extends B {}" }

@@ -19,6 +19,25 @@ namespace openssl.org:crypto;
  */
 @Linux("libcrypto.so.10", "MD5")
 public abstract pointer<byte> MD5(pointer<byte> data, long nBytes, pointer<byte> hashData);
+
+@Linux("libcrypto.so.10", "MD5_Init")
+public abstract pointer<byte> MD5_Init(ref<MD5_CTX> c);
+
+@Linux("libcrypto.so.10", "MD5_Update")
+public abstract pointer<byte> MD5_Update(ref<MD5_CTX> c, pointer<byte> data, long nBytes);
+
+@Linux("libcrypto.so.10", "MD5_Final")
+public abstract pointer<byte> MD5_Final(pointer<byte> hashData, ref<MD5_CTX> c);
+
+public class MD5_CTX {
+    unsigned A, B, C, D;
+    unsigned Nl, Nh;
+    unsigned data1, data2, data3, data4, data5, data6, data7, data8, data9, data10, data11, data12, data13, data14, data15, data16;
+    unsigned num;
+}
+
+@Constant
+public int MD5_DIGEST_LENGTH = 16;
 /**
  * hashData points to an array of 20 bytes that is the output of the algorithm.
  */

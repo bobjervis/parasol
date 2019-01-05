@@ -1560,10 +1560,12 @@ public class Scope {
 	public void checkVariableStorage(ref<CompileContext> compileContext) {
 		switch (_storageClass) {
 		case	TEMPLATE:
-		case	AUTO:
+//		case	AUTO:
 			return;
 
 		default:
+//			printf("checkVariableStorage \n");
+//			print(4, false);
 			checkStorage(compileContext);
 		}
 	}
@@ -1966,6 +1968,7 @@ public class Scope {
 				if (!type.isConcrete(compileContext)) {
 					ref<OverloadInstance> oi = type.firstAbstractMethod(compileContext);
 					symbol.definition().add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool(), *oi.name());
+//					assert(false);
 				}
 				break;
 

@@ -52,7 +52,7 @@ time.Date idesDate(ides, &time.UTC);
 printf("%4.4d-%2.2d-%2.2d %d:%2.2d:%2.2d week day %d year day %d\n", 
 			idesDate.year, idesDate.month + 1, idesDate.day,
 			idesDate.hour, idesDate.minute, idesDate.second,
-			idesDate.weekDay, idesDate.yearDay);
+			int(idesDate.weekDay), idesDate.yearDay);
 
 assert(idesDate.era == 1);
 assert(idesDate.year == 44);
@@ -62,7 +62,7 @@ assert(idesDate.hour == 0);
 assert(idesDate.minute == 0);
 assert(idesDate.second == 0);
 assert(idesDate.nanosecond == 0);
-assert(idesDate.weekDay == 1);
+assert(idesDate.weekDay == time.DayOfWeek.MONDAY);
 assert(idesDate.yearDay == 83);
 
 time.Time sixties(-157766400000);
@@ -72,7 +72,7 @@ time.Date sixtiesDate(sixties, &time.UTC);
 printf("%4.4d-%2.2d-%2.2d %d:%2.2d:%2.2d week day %d year day %d\n", 
 			sixtiesDate.year, sixtiesDate.month + 1, sixtiesDate.day,
 			sixtiesDate.hour, sixtiesDate.minute, sixtiesDate.second,
-			sixtiesDate.weekDay, sixtiesDate.yearDay);
+			int(sixtiesDate.weekDay), sixtiesDate.yearDay);
 
 assert(sixtiesDate.era == 0);
 assert(sixtiesDate.year == 1965);
@@ -82,7 +82,7 @@ assert(sixtiesDate.hour == 0);
 assert(sixtiesDate.minute == 0);
 assert(sixtiesDate.second == 0);
 assert(sixtiesDate.nanosecond == 0);
-assert(sixtiesDate.weekDay == 5);
+assert(sixtiesDate.weekDay == time.DayOfWeek.FRIDAY);
 assert(sixtiesDate.yearDay == 0);
 
 time.Time seventies(3024000000);
@@ -92,7 +92,7 @@ time.Date seventiesDate(seventies, &time.UTC);
 printf("%4.4d-%2.2d-%2.2d %d:%2.2d:%2.2d week day %d year day %d\n", 
 			seventiesDate.year, seventiesDate.month + 1, seventiesDate.day,
 			seventiesDate.hour, seventiesDate.minute, seventiesDate.second,
-			seventiesDate.weekDay, seventiesDate.yearDay);
+			int(seventiesDate.weekDay), seventiesDate.yearDay);
 
 assert(seventiesDate.era == 0);
 assert(seventiesDate.year == 1970);
@@ -102,7 +102,7 @@ assert(seventiesDate.hour == 0);
 assert(seventiesDate.minute == 0);
 assert(seventiesDate.second == 0);
 assert(seventiesDate.nanosecond == 0);
-assert(seventiesDate.weekDay == 4);
+assert(seventiesDate.weekDay == time.DayOfWeek.THURSDAY);
 assert(seventiesDate.yearDay == 35);
 
 time.Time recent(1491004800000);
@@ -112,7 +112,7 @@ time.Date recentDate(recent, &time.UTC);
 printf("%4.4d-%2.2d-%2.2d %d:%2.2d:%2.2d week day %d year day %d\n", 
 			recentDate.year, recentDate.month + 1, recentDate.day,
 			recentDate.hour, recentDate.minute, recentDate.second,
-			recentDate.weekDay, recentDate.yearDay);
+			int(recentDate.weekDay), recentDate.yearDay);
 
 assert(recentDate.era == 0);
 assert(recentDate.year == 2017);
@@ -122,7 +122,7 @@ assert(recentDate.hour == 0);
 assert(recentDate.minute == 0);
 assert(recentDate.second == 0);
 assert(recentDate.nanosecond == 0);
-assert(recentDate.weekDay == 6);
+assert(recentDate.weekDay == time.DayOfWeek.SATURDAY);
 assert(recentDate.yearDay == 90);
 
 time.Time future(208312732800000);
@@ -132,7 +132,7 @@ time.Date futureDate(future, &time.UTC);
 printf("%4.4d-%2.2d-%2.2d %d:%2.2d:%2.2d week day %d year day %d\n", 
 			futureDate.year, futureDate.month + 1, futureDate.day,
 			futureDate.hour, futureDate.minute, futureDate.second,
-			futureDate.weekDay, futureDate.yearDay);
+			int(futureDate.weekDay), futureDate.yearDay);
 
 assert(futureDate.era == 0);
 assert(futureDate.year == 8571);
@@ -142,7 +142,7 @@ assert(futureDate.hour == 0);
 assert(futureDate.minute == 0);
 assert(futureDate.second == 0);
 assert(futureDate.nanosecond == 0);
-assert(futureDate.weekDay == 0);
+assert(futureDate.weekDay == time.DayOfWeek.SUNDAY);
 assert(futureDate.yearDay == 61);
 
 // Conversion to Date from Instant
@@ -154,7 +154,7 @@ time.Date iidesDate(iides, &time.UTC);
 printf("%4.4d-%2.2d-%2.2d %d:%2.2d:%2.2d week day %d year day %d\n", 
 			iidesDate.year, iidesDate.month + 1, iidesDate.day,
 			iidesDate.hour, iidesDate.minute, iidesDate.second,
-			iidesDate.weekDay, iidesDate.yearDay);
+			int(iidesDate.weekDay), iidesDate.yearDay);
 
 assert(iidesDate.era == 1);
 assert(iidesDate.year == 44);
@@ -164,7 +164,7 @@ assert(iidesDate.hour == 0);
 assert(iidesDate.minute == 0);
 assert(iidesDate.second == 0);
 assert(iidesDate.nanosecond == 0);
-assert(iidesDate.weekDay == 1);
+assert(iidesDate.weekDay == time.DayOfWeek.MONDAY);
 assert(iidesDate.yearDay == 83);
 
 time.Instant isixties(-157766400, 0);
@@ -174,7 +174,7 @@ time.Date isixtiesDate(isixties, &time.UTC);
 printf("%4.4d-%2.2d-%2.2d %d:%2.2d:%2.2d week day %d year day %d\n", 
 			isixtiesDate.year, isixtiesDate.month + 1, isixtiesDate.day,
 			isixtiesDate.hour, isixtiesDate.minute, isixtiesDate.second,
-			isixtiesDate.weekDay, isixtiesDate.yearDay);
+			int(isixtiesDate.weekDay), isixtiesDate.yearDay);
 
 assert(isixtiesDate.era == 0);
 assert(isixtiesDate.year == 1965);
@@ -184,7 +184,7 @@ assert(isixtiesDate.hour == 0);
 assert(isixtiesDate.minute == 0);
 assert(isixtiesDate.second == 0);
 assert(isixtiesDate.nanosecond == 0);
-assert(isixtiesDate.weekDay == 5);
+assert(isixtiesDate.weekDay == time.DayOfWeek.FRIDAY);
 assert(isixtiesDate.yearDay == 0);
 
 time.Instant iseventies(3024000, 0);
@@ -194,7 +194,7 @@ time.Date iseventiesDate(iseventies, &time.UTC);
 printf("%4.4d-%2.2d-%2.2d %d:%2.2d:%2.2d week day %d year day %d\n", 
 			iseventiesDate.year, iseventiesDate.month + 1, iseventiesDate.day,
 			iseventiesDate.hour, iseventiesDate.minute, iseventiesDate.second,
-			iseventiesDate.weekDay, iseventiesDate.yearDay);
+			int(iseventiesDate.weekDay), iseventiesDate.yearDay);
 
 assert(iseventiesDate.era == 0);
 assert(iseventiesDate.year == 1970);
@@ -204,7 +204,7 @@ assert(iseventiesDate.hour == 0);
 assert(iseventiesDate.minute == 0);
 assert(iseventiesDate.second == 0);
 assert(iseventiesDate.nanosecond == 0);
-assert(iseventiesDate.weekDay == 4);
+assert(iseventiesDate.weekDay == time.DayOfWeek.THURSDAY);
 assert(iseventiesDate.yearDay == 35);
 
 time.Instant irecent(1491004800, 0);
@@ -214,7 +214,7 @@ time.Date irecentDate(irecent, &time.UTC);
 printf("%4.4d-%2.2d-%2.2d %d:%2.2d:%2.2d week day %d year day %d\n", 
 			irecentDate.year, irecentDate.month + 1, irecentDate.day,
 			irecentDate.hour, irecentDate.minute, irecentDate.second,
-			irecentDate.weekDay, irecentDate.yearDay);
+			int(irecentDate.weekDay), irecentDate.yearDay);
 
 assert(irecentDate.era == 0);
 assert(irecentDate.year == 2017);
@@ -224,7 +224,7 @@ assert(irecentDate.hour == 0);
 assert(irecentDate.minute == 0);
 assert(irecentDate.second == 0);
 assert(irecentDate.nanosecond == 0);
-assert(irecentDate.weekDay == 6);
+assert(irecentDate.weekDay == time.DayOfWeek.SATURDAY);
 assert(irecentDate.yearDay == 90);
 
 time.Instant ifuture(208312732800, 0);
@@ -234,7 +234,7 @@ time.Date ifutureDate(ifuture, &time.UTC);
 printf("%4.4d-%2.2d-%2.2d %d:%2.2d:%2.2d week day %d year day %d\n", 
 			ifutureDate.year, ifutureDate.month + 1, ifutureDate.day,
 			ifutureDate.hour, ifutureDate.minute, ifutureDate.second,
-			ifutureDate.weekDay, ifutureDate.yearDay);
+			int(ifutureDate.weekDay), ifutureDate.yearDay);
 
 assert(ifutureDate.era == 0);
 assert(ifutureDate.year == 8571);
@@ -244,7 +244,7 @@ assert(ifutureDate.hour == 0);
 assert(ifutureDate.minute == 0);
 assert(ifutureDate.second == 0);
 assert(ifutureDate.nanosecond == 0);
-assert(ifutureDate.weekDay == 0);
+assert(ifutureDate.weekDay == time.DayOfWeek.SUNDAY);
 assert(ifutureDate.yearDay == 61);
 
 time.Time idesTime(&idesDate, &time.UTC);

@@ -383,6 +383,26 @@ public class IllegalArgumentException extends Exception {
 	}
 }
 /**
+ * This exception is thrown by a variety of runtime functions if an invalid call is mode.
+ *
+ * This is usually caused when a method on an object is called and the object is not in a valid
+ * state for that method.
+ */
+public class IllegalOperationException extends Exception {
+	public IllegalOperationException() {
+	}
+
+	public IllegalOperationException(string message) {
+		super(message);
+	}
+
+	ref<IllegalOperationException> clone() {
+		ref<IllegalOperationException> n = new IllegalOperationException(_message);
+		n._exceptionContext = _exceptionContext;
+		return n;
+	}
+}
+/**
  * This exception is triggered by a SIGABRT signal and is generally a symptom of a
  * C runtime library failure. Most commonly, this is caused by corruption of the C memory heap.
  */

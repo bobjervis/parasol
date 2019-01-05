@@ -15,9 +15,11 @@
  */
 namespace parasol:http;
 
+import parasol:exception.IllegalOperationException;
 import parasol:log;
 import parasol:net;
 import parasol:text;
+import parasol:time;
 import native:net.gethostbyname;
 import native:net.hostent;
 import native:net.in_addr;
@@ -27,6 +29,34 @@ import native:net.inet_ntoa;
 
 private ref<log.Logger> logger = log.getLogger("parasol.http.client");
 
+public string XML_CONTENT_TYPE = "application/xml";
+
+public string CONTENT_MD5_HEADER = "content-md5";
+public string CONTENT_LENGTH_HEADER = "content-length";
+public string CONTENT_TYPE_HEADER = "content-type";
+
+public string RFC822_DATE_FORMAT_STR_MINUS_Z = "EEE, dd mm yy HH:MM:SS";
+public string RFC822_DATE_FORMAT_STR_WITH_Z = "EEE, dd mm yy HH:MM:SS xx";
+
+public string toRfc822LocalTime(time.Instant t) {
+	time.Date d(t);
+	return d.format(RFC822_DATE_FORMAT_STR_WITH_Z);
+}
+
+public string toRfc822UTCTime(time.Instant t) {
+	time.Date d(t, &time.UTC);
+	return d.format(RFC822_DATE_FORMAT_STR_MINUS_Z);
+}
+
+public string toRfc822LocalTime(time.Time t) {
+	time.Date d(t);
+	return d.format(RFC822_DATE_FORMAT_STR_WITH_Z);
+}
+
+public string toRfc822UTCTime(time.Time t) {
+	time.Date d(t, &time.UTC);
+	return d.format(RFC822_DATE_FORMAT_STR_MINUS_Z);
+}
 /**
  * This function escapes certain characters in the URI (Universal Resource Identifier) passed
  * as a parameter.
@@ -365,18 +395,20 @@ public class HttpClient {
 	private ref<WebSocket> _webSocket;
 	private ref<HttpParsedResponse> _response;
 
-	private string _protocol;			// required for proper connection
-	private string _username;
-	private string _password;
-	private string _hostname;			// required for proper connection
-	private char _port;					// optional (default will be filled in from protocol)
-	private string _path;
-	private boolean _portDefaulted;
+	private Uri _uri;			// required for proper connection
 	private unsigned _resolvedIP;
 	private string _webSocketProtocol;
-	private string _additionalHeaders;
+	private string[string] _additionalHeaders;
+	private string[string] _queryParameters;
 
 	private string _cipherList;
+
+	public string userAgent;
+
+	public HttpClient(ref<Uri> uri) {
+		_uri = *uri;
+		userAgent = "Parasol/0.1.0";
+	}
 	/**
 	 * Create a client for a simple HTTP request.
 	 *
@@ -385,8 +417,8 @@ public class HttpClient {
 	 * @param url The url to use for the HTTP request.
 	 */
 	public HttpClient(string url) {
-		// First, parse out the protocol and hostname.
-		parseUrl(url);
+		_uri.parse(url);
+		userAgent = "Parasol/0.1.0";
 	}
 	/**
 	 * Create a client for a Web Socket request.
@@ -400,14 +432,29 @@ public class HttpClient {
 	 * you expect to use the Web Socket
 	 */
 	public HttpClient(string url, string webSocketProtocol) {
-		parseUrl(url);
+		_uri.parse(url);
 		_webSocketProtocol = webSocketProtocol;
 	}
 
 	~HttpClient() {
+		reset();
+	}
+	/**
+	 * This method resets the client after a request has been issued.
+	 *
+	 * If this method is called before an HTTP request has actualy been issued
+	 * the call has no effect. Calling this method twice without issuing another
+	 * request also has no effect.
+	 *
+	 * Any open connection is closed.
+	 */
+	public void reset() {
 		delete _response;
 		delete _connection;
 		delete _webSocket;
+		_response = null;
+		_connection = null;
+		_webSocket = null;
 	}
 	/**
 	 * Add a header to the request.
@@ -472,73 +519,15 @@ public class HttpClient {
 	 * @param value The value string to use for the header
 	 */
 	public void setHeader(string name, string value) {
-		_additionalHeaders.printf("%s: %s\r\n", name, value);
+		_additionalHeaders[name.toLowerCase()] = value;
 	}
 
-	private void parseUrl(string url) {
-		int colonIdx = -1;
-		int hostIdx;
-		for (int i = 0; i < url.length(); i++) {
-			if (colonIdx == -1 && url[i] == ':')
-				colonIdx = i;
-			else if (url[i] == '/') {
-				if (i != colonIdx + 1) {					// The first slash does not immediately follow the protocol
-					// This will leave the URL unparsed, so a call to get() or post() will fail.
-					return;
-				}
-				if (colonIdx == -1)
-					_protocol = "file";
-				else
-					_protocol = url.substring(0, colonIdx);
-				if (i + 1 < url.length() && url[i + 1] == '/') {
-					hostIdx = i + 2;
-					int nextSlash = url.indexOf('/', hostIdx);
-					if (nextSlash == -1)
-						nextSlash = url.length();
-					else
-						_path = url.substring(nextSlash);
-					substring hostInfo(url, hostIdx, nextSlash);
-					substring user;
-					substring password;
-					int atIdx = hostInfo.indexOf('@');
-					int portIdx = hostInfo.indexOf(':', atIdx + 1);
-					if (portIdx != -1) {
-						boolean success;
-						(_port, success) = char.parse(hostInfo.substring(portIdx + 1));
-						if (!success)
-							// This will leave the URL unparsed, so a call to get() or post() will fail.
-							return;				
-					} else {
-						_port = defaultPort[_protocol];
-						if (_port == 0)
-							// This will leave the URL unparsed, so a call to get() or post() will fail.
-							return;
-						_portDefaulted = true;
-					}
-					if (atIdx != -1) {
-						if (portIdx == -1)
-							_hostname = string(hostInfo, atIdx + 1);
-						else
-							_hostname = string(hostInfo, atIdx + 1, portIdx);
-						hostInfo = hostInfo.substring(0, atIdx);
-						int passIdx = hostInfo.indexOf(':');
-						if (passIdx == -1)
-							_username = string(hostInfo);
-						else {
-							_username = string(hostInfo, 0, passIdx);
-							_password = string(hostInfo, passIdx + 1);
-						}
-					} else {
-						if (portIdx == -1)
-							_hostname = string(hostInfo);
-						else
-							_hostname = string(hostInfo, 0, portIdx);
-					}
-//					printf("'%s' :// '%s' : '%s' @ '%s' : '%d' '%s'\n", _protocol, _username, _password, _hostname, _port, _path);
-				}
-				return;	
-			}
-		}
+	public boolean hasHeader(string name) {
+		return _additionalHeaders.contains(name.toLowerCase());
+	}
+
+	public void addQueryParameter(string key, string value) {
+		_queryParameters[key] = value;
 	}
 	/**
 	 * Issue a GET request.
@@ -566,12 +555,17 @@ public class HttpClient {
 	 * with the POST method, the returned ip value is 0.
 	 */
 	public boolean, unsigned post(string body) {
+		text.StringReader reader(&body);
+		return post(&reader);
+	}
+
+	public boolean, unsigned post(ref<Reader> body) {
 		return startRequest("POST", body);
 	}
 
-	private boolean, unsigned startRequest(string method, string body) {
+	private boolean, unsigned startRequest(string method, ref<Reader> body) {
 		net.Encryption encryption;
-		switch (_protocol) {
+		switch (_uri.protocol) {
 		case "ws":
 			if (_webSocketProtocol == null) {
 				printf("No Web Socket protocol defined.\n");
@@ -613,7 +607,7 @@ public class HttpClient {
 			return false, 0;
 		ref<net.Connection> connection;
 		unsigned ip;
-		(connection, ip) = socket.connect(_hostname, _port);
+		(connection, ip) = socket.connect(_uri.hostname, _uri.port);
 		if (connection == null) {
 			delete socket;
 			return false, ip;
@@ -629,32 +623,61 @@ public class HttpClient {
 		// We have a good Connection object, so we are ready for the next stage, send the headers...
 		_connection = connection;
 		string path;
-		if (_path.length() > 0)
-			path = _path;
+		if (_uri.path.length() > 0)
+			path = _uri.path;
 		else
 			path = "/";
 //		printf("Composing HTTP request...\n");
-		_connection.printf("%s %s HTTP/1.1\r\n", method, path);
+		_connection.printf("%s %s", method, path);
+		for (string[string].iterator i = _queryParameters.begin(); i.hasNext(); i.next()) {
+			string key = encodeURIComponent(i.key());
+			string value = encodeURIComponent(i.get());
+			_connection.printf("&%s=%s", key, value);
+		}
+		_connection.write(" HTTP/1.1\r\n");
 		string webSocketKey;
-		switch (_protocol) {
+		switch (_uri.protocol) {
 		case "ws":
 		case "wss":
-			_connection.write("Upgrade: websocket\r\n");
-			_connection.printf("Sec-WebSocket-Protocol: %s\r\n", _webSocketProtocol);
+			setHeader("Upgrade", "websocket");
+			setHeader("Sec-WebSocket-Protocol", _webSocketProtocol);
 			webSocketKey = computeWebSocketKey(16);
-			_connection.printf("Sec-WebSocket-Key: %s\r\n", webSocketKey);
+			setHeader("Sec-WebSocket-Key", webSocketKey);
 			expectWebSocket = true;
 		}
-		_connection.printf("Host: %s:%d\r\n", _hostname, _port);
-		_connection.write("User-Agent: Parasol/0.1.0\r\n");
-		_connection.write("Accept: text/html; charset=UTF-8\r\n");
-		_connection.write("Accept-Language: en-US,en;q=0.8\r\n");
-		if (_additionalHeaders != null)
-			_connection.write(_additionalHeaders);
-		if (body.length() > 0)
-			_connection.printf("Content-Length: %d\r\n", body.length());
+		if (_additionalHeaders["host"] == null)
+			_additionalHeaders["host"] = _uri.hostname + ":" + string(_uri.port);
+		if (_additionalHeaders["user-agent"] == null)
+			_additionalHeaders["user-Agent"] = userAgent;
+		if (_additionalHeaders["accept"] == null)
+			_additionalHeaders["accept"] = "text/html; charset=UTF-8";
+		if (_additionalHeaders["accept-language"] == null)
+			_additionalHeaders["accept-language"] = "en-US,en;q=0.8";
+		boolean writeBody;
+		if (body != null) {
+			if (_additionalHeaders["content-length"] == null) {
+				if (!body.hasLength())
+					throw IllegalOperationException("cannot determine content-length");
+				if (body.length() > 0)
+					_additionalHeaders["content-Length"] = string(body.length());		
+			}
+			if (body.length() > 0)
+				writeBody = true;
+		} else {
+			switch (method) {
+			case "post":
+			case "put":
+				_additionalHeaders["content-Length"] = "0";		
+				break;
+
+			default:
+				_additionalHeaders.remove("content-length");
+			}
+		}
+		for (string[string].iterator i = _additionalHeaders.begin(); i.hasNext(); i.next())
+			_connection.printf("%s: %s\r\n", i.key(), i.get());
 		_connection.printf("\r\n");
-		if (body.length() > 0)
+		if (writeBody)
 			_connection.write(body);
 		_connection.flush();
 //		printf("HTTP request sent...\n");
@@ -732,7 +755,7 @@ public class HttpClient {
 	 * @return The host name parsed from the URL.
 	 */
 	public string hostname() {
-		return _hostname;
+		return _uri.hostname;
 	}
 	/**
 	 * Get the protocol from the URL.
@@ -743,7 +766,7 @@ public class HttpClient {
 	 * @return The protocol of the parsed URL.
 	 */
 	public string protocol() {
-		return _protocol;
+		return _uri.protocol;
 	}
 	/**
 	 * Get the port from the URL.
@@ -754,7 +777,7 @@ public class HttpClient {
 	 * @return The port of the parsed URL.
 	 */
 	public char port() {
-		return _port;
+		return _uri.port;
 	}
 	/**
 	 * Get the username, if any, from the URL.
@@ -762,7 +785,7 @@ public class HttpClient {
 	 * @return The username of the parsed URL, or null if none was specified.
 	 */
 	public string username() {
-		return _username;
+		return _uri.username;
 	}
 	/**
 	 * Get the password, if any, from the URL.
@@ -770,7 +793,7 @@ public class HttpClient {
 	 * @return The password of the parsed URL, or null if none was specified.
 	 */
 	public string password() {
-		return _password;
+		return _uri.password;
 	}
 	/**
 	 * Get whether the port value was defaulted (i.e. not specified).
@@ -778,7 +801,7 @@ public class HttpClient {
 	 * @return true if the URL did not include a port, false if it did.
 	 */
 	public boolean portDefaulted() {
-		return _portDefaulted;
+		return _uri.portDefaulted;
 	}
 	/**
 	 * Get the path portion of the URL.
@@ -786,7 +809,7 @@ public class HttpClient {
 	 * @return the path port of the URL.
 	 */
 	public string path() {
-		return _path;
+		return _uri.path;
 	}
 	/**
 	 * Obtain the response to the request.
@@ -804,10 +827,3 @@ public class HttpClient {
 		return _response;
 	}
 }
-
-private char[string] defaultPort = [
-	"http": 80,
-	"https": 443,
-	"ws": 80,
-	"wss": 443
-];

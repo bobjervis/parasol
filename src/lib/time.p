@@ -506,17 +506,17 @@ public enum Month {
 	NOVEMBER,
 	DECEMBER
 }
-
+*/
 public enum DayOfWeek {
+	SUNDAY,
 	MONDAY,
 	TUESDAY,
 	WEDNESDAY,
 	THURSDAY,
 	FRIDAY,
-	SATURDAY,
-	SUNDAY
+	SATURDAY
 }
-
+/*
 public enum DateUnit {
 	ERA,
 	MILLENIUM,
@@ -579,8 +579,10 @@ public class Date {
 	public int second;
 	public long nanosecond;
 	// Supplemental fields that do not get used to convert to Time/Instant:
-	public int weekDay;
+	public DayOfWeek weekDay;
 	public int yearDay;
+
+	public int offsetSeconds;		// The time zone offset in seconds of this time.
 	/**
 	 * Constructor to fill out a Date from a Time according to the current system Calendar and TimeZone or offset.
 	 */
@@ -644,8 +646,9 @@ public class Date {
 		hour = data.tm_hour;
 		minute = data.tm_min;
 		second = data.tm_sec;
-		weekDay = data.tm_wday;
+		weekDay = DayOfWeek(data.tm_wday);
 		yearDay = data.tm_yday;
+		offsetSeconds = int(data.tm_gmtoff);
 	}
 
 	void toUtc(C.time_t t) {
@@ -667,8 +670,9 @@ public class Date {
 		hour = data.tm_hour;
 		minute = data.tm_min;
 		second = data.tm_sec;
-		weekDay = data.tm_wday;
+		weekDay = DayOfWeek(data.tm_wday);
 		yearDay = data.tm_yday;
+		offsetSeconds = 0;
 	}
 }
 /**
@@ -714,6 +718,12 @@ public class Date {
  *     <td>{@code 10}; {@code 03}</td>
  * </tr>
  * <tr>
+ *     <td>E</td>
+ *     <td>day-of-week</td>
+ *     <td>{@code &nbsp;text}</td>
+ *     <td>{@code Tue; Tuesday; T}</td>
+ * </tr>
+ * <tr>
  *     <td>H</td>
  *     <td>hour (0-23)</td>
  *     <td>{@code &nbsp;numeric}</td>
@@ -748,6 +758,12 @@ public class Date {
  *     <td>fraction-of-second</td>
  *     <td>{@code &nbsp;fraction}</td>
  *     <td>{@code 01; 201}</td>
+ * </tr>
+ * <tr>
+ *     <td>x</td>
+ *     <td>Time-zone id</td>
+ *     <td>{@code &nbsp;zone-x}</td>
+ *     <td>{@code Z; +03, +0100}</td>
  * </tr>
  * <tr>
  *     <td>y</td>
@@ -786,6 +802,12 @@ public class Date {
  * the left of the digits. This fraction field will often appear following a field of seconds, separated
  * by a period.
  *
+ * <b>Zone-x:</b> If the field width is one, just the our is output with two digits, e.g. +01. If the
+ * minute is non-zero, then minutes are included, .e.g +0130. If the field width is two, hours and
+ * Minutes are included without a colon. If the field width is 3, then hours and minutes are included with a colon.
+ * If the field width is 4, then hours, minutes and optional seconds are included with no colon. If the field width
+ * is 5, then hours, minutes and optional seconds are included with colons.
+ *
  * <b>Year:</b> If the field width is two, a shortened two-digit year form is used. Only the low-order
  * two digits of the year is used. For parsing, the two digit value is added to 2000 to produce the
  * {@code year} value. 
@@ -807,12 +829,14 @@ public class Formatter {
 
 	static FormatCodes[] formatCodes = [
 		'd':	FormatCodes.DAY_OF_MONTH,
+		'E':	FormatCodes.DAY_OF_WEEK,
 		'H':	FormatCodes.HOUR_24,
 		'M':	FormatCodes.MONTH,
 		'm':	FormatCodes.MINUTE,
 		'p':	FormatCodes.MODIFY_PAD,
 		'S':	FormatCodes.FRACTION_OF_SECOND,
 		's':	FormatCodes.SECOND,
+		'x':	FormatCodes.ZONE_X,
 		'y':	FormatCodes.YEAR_FULL,
 	];
 	/**
@@ -831,6 +855,36 @@ public class Formatter {
 		1,
 	];
 
+	static string[DayOfWeek] shortWeekDays = [
+		"Sun",
+		"Mon",
+		"Tue",
+		"Wed",
+		"Thu",
+		"Fri",
+		"Sat",
+	];
+
+	static string[DayOfWeek] narrowWeekDays = [
+		"Sunday",
+		"Monday",
+		"Tuesday",
+		"Wednesday",
+		"Thursday",
+		"Friday",
+		"Saturday",
+	];
+
+	static string[DayOfWeek] fullWeekDays = [
+		"Sunday",
+		"Monday",
+		"Tuesday",
+		"Wednesday",
+		"Thursday",
+		"Friday",
+		"Saturday",
+	];
+
 	public ref<TimeZone> timeZone;
 	public ref<international.Locale> locale;
 	public ref<Calendar> calendar;
@@ -846,6 +900,8 @@ public class Formatter {
 		MINUTE,								// minute (0-59); followed by a byte containing pad width.
 		SECOND,								// second (0-59); followed by a byte containing pad width.
 		FRACTION_OF_SECOND,					// fraction of a second; followed by a byte containing pad width - maximum 9.
+		DAY_OF_WEEK,						// day of the week (Monday, Tuesday, etc.); followed by a byte containing pad width.
+		ZONE_X,								// Time zone in 
 	}
 
 	byte[] _pattern;
@@ -891,11 +947,13 @@ public class Formatter {
 			}
 
 		case 'd':
+		case 'E':
 		case 'H':
 		case 'M':
 		case 'm':
 		case 'p':
 		case 's':
+		case 'x':
 			_pattern.append(byte(formatCodes[lastLetter]));
 			_pattern.append(byte(letterCount));
 			break;
@@ -992,6 +1050,24 @@ public class Formatter {
 					output.printf("%*.*d", width, width, input.year);
 				break;
 
+			case	DAY_OF_WEEK:
+				i++;
+				width = _pattern[i];
+				ref<string[DayOfWeek]> dayLabels;
+				if (width <= 3)
+					dayLabels = &shortWeekDays;
+				else if (width == 4)
+					dayLabels = &narrowWeekDays;
+				else
+					dayLabels = &fullWeekDays;
+
+				if (modifyPad > 0)
+					output.printf("%*s", modifyPad, (*dayLabels)[input.weekDay]);
+				else if (width < 4)
+					output.printf("%*.*s", width, width, (*dayLabels)[input.weekDay]);
+				else
+					output.printf("%s", (*dayLabels)[input.weekDay]);
+
 			case	MONTH:
 				i++;
 				width = _pattern[i];
@@ -1045,6 +1121,54 @@ public class Formatter {
 					output.printf("%*d", modifyPad, frac);
 				else
 					output.printf("%*.*d", width, width, frac);
+				break;
+
+			case ZONE_X:
+				i++;
+				width = _pattern[i];
+				if (input.offsetSeconds == 0)
+					output.append('Z');
+				else {
+					int x = input.offsetSeconds;
+					if (x < 0) {
+						x = -x;
+						output.append('-');
+					} else
+						output.append('+');
+					int hours = x / 3600;
+					x %= 3600;
+					int minutes = x / 60;
+					int seconds = x % 60;
+					switch (width) {
+					case 1:
+						if (minutes > 0)
+							output.printf("%2.2d%2.2d", hours, minutes);
+						else
+							output.printf("%2.2d", hours);
+						break;
+
+					case 2:
+						output.printf("%2.2d%2.2d", hours, minutes);
+						break;
+
+					case 3:
+						output.printf("%2.2d:%2.2d", hours, minutes);
+						break;
+
+					case 4:
+						if (seconds != 0)
+							output.printf("%2.2d%2.2d%2.2d", hours, minutes, seconds);
+						else
+							output.printf("%2.2d%2.2d", hours, minutes);
+						break;
+
+					case 5:
+						if (seconds != 0)
+							output.printf("%2.2d:%2.2d:%2.2d", hours, minutes, seconds);
+						else
+							output.printf("%2.2d:%2.2d", hours, minutes);
+					}
+				}
 				break;
 
 			default:

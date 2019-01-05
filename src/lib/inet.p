@@ -406,6 +406,21 @@ public class Connection {
 		return s.length();
 	}
 
+	public int write(ref<Reader> reader) {
+		byte[] b;
+		b.resize(8096);
+		int totalWritten = 0;
+		for (;;) {
+			int actual = reader.read(&b);
+			if (actual <= 0)
+				break;
+			for (int i = 0; i < actual; i++)
+				putc(b[i]);
+			totalWritten += actual;
+		}
+		return totalWritten;
+	}
+
 	public void putc(int c) {
 		_buffer.append(byte(c));
 		if (_buffer.length() >= BUFFER_MAX)

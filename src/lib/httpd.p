@@ -614,8 +614,87 @@ public class HttpResponse {
 	}
 }
 
-public class Url {
+public class Uri {
+	public string protocol;			// required for proper connection
+	public string username;
+	public string password;
+	public string hostname;			// required for proper connection
+	public char port;					// optional (default will be filled in from protocol)
+	public string path;
+	public boolean portDefaulted;
+
+	public void parse(string url) {
+		int colonIdx = -1;
+		int hostIdx;
+		for (int i = 0; i < url.length(); i++) {
+			if (colonIdx == -1 && url[i] == ':')
+				colonIdx = i;
+			else if (url[i] == '/') {
+				if (i != colonIdx + 1) {					// The first slash does not immediately follow the protocol
+					// This will leave the URL unparsed, so a call to get() or post() will fail.
+					return;
+				}
+				if (colonIdx == -1)
+					protocol = "file";
+				else
+					protocol = url.substring(0, colonIdx);
+				if (i + 1 < url.length() && url[i + 1] == '/') {
+					hostIdx = i + 2;
+					int nextSlash = url.indexOf('/', hostIdx);
+					if (nextSlash == -1)
+						nextSlash = url.length();
+					else
+						path = url.substring(nextSlash);
+					substring hostInfo(url, hostIdx, nextSlash);
+					substring user;
+					int atIdx = hostInfo.indexOf('@');
+					int portIdx = hostInfo.indexOf(':', atIdx + 1);
+					if (portIdx != -1) {
+						boolean success;
+						(port, success) = char.parse(hostInfo.substring(portIdx + 1));
+						if (!success)
+							// This will leave the URL unparsed, so a call to get() or post() will fail.
+							return;				
+					} else {
+						port = defaultPort[protocol];
+						if (port == 0)
+							// This will leave the URL unparsed, so a call to get() or post() will fail.
+							return;
+						portDefaulted = true;
+					}
+					if (atIdx != -1) {
+						if (portIdx == -1)
+							hostname = string(hostInfo, atIdx + 1);
+						else
+							hostname = string(hostInfo, atIdx + 1, portIdx);
+						hostInfo = hostInfo.substring(0, atIdx);
+						int passIdx = hostInfo.indexOf(':');
+						if (passIdx == -1)
+							username = string(hostInfo);
+						else {
+							username = string(hostInfo, 0, passIdx);
+							password = string(hostInfo, passIdx + 1);
+						}
+					} else {
+						if (portIdx == -1)
+							hostname = string(hostInfo);
+						else
+							hostname = string(hostInfo, 0, portIdx);
+					}
+//					printf("'%s' :// '%s' : '%s' @ '%s' : '%d' '%s'\n", protocol, username, password, hostname, port, path);
+				}
+				return;	
+			}
+		}
+	}
 }
+
+private char[string] defaultPort = [
+	"http": 80,
+	"https": 443,
+	"ws": 80,
+	"wss": 443
+];
 
 public class HttpParser {
 	HttpToken _previousToken;
@@ -1071,6 +1150,34 @@ public class StaticContentService extends HttpService {
 		
 		return false;
 	}
+}
+
+public boolean isValidDnsLabel(string label) {
+	if (label.length() ==  0)
+		return false;
+	if (label.length() > 63)
+		return false;
+	if (!label[0].isAlphanumeric())
+		return false;
+	if (!label[label.length() - 1].isAlphanumeric())
+		return false;
+	for (int i = 1; i < label.length() - 2; i++) {
+		byte c = label[i];
+		if (c != '-' && !c.isAlphanumeric())
+			return false;
+	}
+	return true;
+}
+
+public boolean isValidHost(string host) {
+	string[] labels = host.split('.');
+	if (labels.length() == 0)
+		return false;
+	// return &/isValidDnsLabel(labels); - needs reductions and vectorized function calls.
+	for (i in labels)
+		if (!isValidDnsLabel(labels[i]))
+			return false;
+	return true;
 }
 
 private enum UrlClass {
