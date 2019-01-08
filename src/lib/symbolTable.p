@@ -823,6 +823,13 @@ public class ParameterScope extends Scope {
 		return &_parameters;
 	}
 
+	public int parameterCount() {
+		if (_hasEllipsis)
+			return -_parameters.length();
+		else
+			return _parameters.length();
+	}
+
 	public int functionAddress() {
 		return int(value) - 1;
 	}
@@ -943,6 +950,33 @@ public class ParameterScope extends Scope {
 				return false;
 		}
 		return true;
+	}
+
+	void verifyBaseClassConstructorChain(ref<CompileContext> compileContext) {
+		// No definition probably is indicative of another error, so forge tchecking.
+		if (_definition == null)
+			return;
+		if (_definition.op() != Operator.FUNCTION)
+			return;
+		ref<Scope> base = enclosing().base(compileContext);
+		if (base == null)
+			return;
+		ref<Node> body = ref<FunctionDeclaration>(_definition).body;
+		if (body == null || body.op() != Operator.BLOCK)
+			return;
+		ref<Block> b = ref<Block>(body);
+		ref<NodeList> nl = b.statements();
+		if (nl != null && nl.node.op() == Operator.EXPRESSION) {
+			ref<Unary> u = ref<Unary>(nl.node);
+			if (u.operand().op() == Operator.CALL) {
+				ref<Call> c = ref<Call>(u.operand());
+				// The constructor begins with a call to either super or self, no checks needed.
+				if (c.target() != null && (c.target().op() == Operator.SUPER || c.target().op() == Operator.SELF))
+					return;
+			}
+		}
+		if (base.constructors().length() > 0 && base.defaultConstructor() == null)
+			_definition.add(MessageId.NO_DEFAULT_CONSTRUCTOR, compileContext.pool());
 	}
 }
 
@@ -1208,6 +1242,8 @@ public class Scope {
 			ref<Symbol> sym = i.get();
 			sym.assignType(compileContext);
 		}
+		for (i in _constructors)
+			_constructors[i].verifyBaseClassConstructorChain(compileContext);
 	}
 
 	void print(int indent, boolean printChildren) {
@@ -1917,11 +1953,11 @@ public class Scope {
 	public ref<ParameterScope> defaultConstructor() {
 		for (int i = 0; i < _constructors.length(); i++)
 			if (_constructors[i].parameterCount() == 0) {
-				if (_constructors[i].definition() != null &&
-					_constructors[i].definition().type == null) {
-					_constructors[i].definition().print(0);
-					assert(false);
-				}
+//				if (_constructors[i].definition() != null &&
+//					_constructors[i].definition().type == null) {
+//					_constructors[i].definition().print(0);
+//					assert(false);
+//				}
 				return _constructors[i];
 			}
 		return null;

@@ -149,7 +149,7 @@ public class DBConnection {
 											&outstrlen, completionCode);
 		if (SQL_SUCCEEDED(ret)) {
 			outstr.resize(outstrlen);
-			printf("Resulting connection string is '%s'\n", outstr);
+//			printf("Resulting connection string is '%s'\n", outstr);
 			return true, outstr, fromSQLRETURN(ret);
 		} else {
 			printf("return value = %d\n", ret);
@@ -367,13 +367,13 @@ public class Statement {
 		SQLRETURN ret = SQLExecDirect(_statement, &statementText[0], statementText.length());
 		_mapBuilt = false;
 		_columnMap.clear();
-		printf("execDirect('%s') ret = %d (%s)\n", statementText, ret, string(fromSQLRETURN(ret)));
+//		printf("execDirect('%s') ret = %d (%s)\n", statementText, ret, string(fromSQLRETURN(ret)));
 		return SQL_SUCCEEDED(ret), fromSQLRETURN(ret);
 	}
 
 	public boolean, SqlReturn fetch() {
 		SQLRETURN ret = SQLFetch(_statement);
-		printf("fetch ret = %d (%s)\n", ret, string(fromSQLRETURN(ret)));
+//		printf("fetch ret = %d (%s)\n", ret, string(fromSQLRETURN(ret)));
 		return SQL_SUCCEEDED(ret), fromSQLRETURN(ret);
 	}
 
@@ -531,18 +531,18 @@ public class Statement {
 				*lengthInfo = indicatorMap[indicator];
 			break;
 		}
-		printf("bp #%d %s %s %d %d %p %d %s %p\n", parameterNumber, string(parameterDirection), string(dataType), columnSize, decimalDigits, parameterValuePtr, bufferLength, string(indicator), lengthInfo);
-		printf("vt %d pt %d *lengthInfo %d\n", valueType[dataType], parameterType[dataType], lengthInfo == null ? -7777 : *lengthInfo);
+//		printf("bp #%d %s %s %d %d %p %d %s %p\n", parameterNumber, string(parameterDirection), string(dataType), columnSize, decimalDigits, parameterValuePtr, bufferLength, string(indicator), lengthInfo);
+//		printf("vt %d pt %d *lengthInfo %d\n", valueType[dataType], parameterType[dataType], lengthInfo == null ? -7777 : *lengthInfo);
 		SQLRETURN ret = SQLBindParameter(_statement, SQLUSMALLINT(parameterNumber), parameterDirectionMap[parameterDirection],
 					valueType[dataType], parameterType[dataType], columnSize, SQLSMALLINT(decimalDigits), parameterValuePtr,
 					bufferLength, lengthInfo);
-		printf("bindParameter ret = %d (%s)\n", ret, string(fromSQLRETURN(ret)));
+//		printf("bindParameter ret = %d (%s)\n", ret, string(fromSQLRETURN(ret)));
 		return SQL_SUCCEEDED(ret), fromSQLRETURN(ret);
 	}
 
 	public SqlReturn moreResults() {
 		SQLRETURN ret = SQLMoreResults(_statement);
-		printf("moreResults ret = %d (%s)\n", ret, string(fromSQLRETURN(ret)));
+//		printf("moreResults ret = %d (%s)\n", ret, string(fromSQLRETURN(ret)));
 		
 		return fromSQLRETURN(ret);
 	}
@@ -634,7 +634,7 @@ public class Timestamp {
 
 	public Timestamp(int year, int month, int day, int hour, int minute, int second, unsigned fraction) {
 		this.year = short(year);
-		this.month = char(month);
+		this.month = char(month + 1);
 		this.day = char(day);
 		this.hour = char(hour);
 		this.minute = char(minute);
@@ -645,7 +645,7 @@ public class Timestamp {
 	public Timestamp(time.Time t) {
 		time.Date d(t);
 		this.year = short(d.year);
-		this.month = char(d.month);
+		this.month = char(d.month + 1);
 		this.day = char(d.day);
 		this.hour = char(d.hour);
 		this.minute = char(d.minute);
@@ -656,7 +656,29 @@ public class Timestamp {
 	public Timestamp(time.Instant i) {
 		time.Date d(i);
 		this.year = short(d.year);
-		this.month = char(d.month);
+		this.month = char(d.month + 1);
+		this.day = char(d.day);
+		this.hour = char(d.hour);
+		this.minute = char(d.minute);
+		this.second = char(d.second);
+		this.fraction = unsigned(d.nanosecond);
+	}
+
+	public Timestamp(time.Time t, ref<time.TimeZone> tz) {
+		time.Date d(t, tz);
+		this.year = short(d.year);
+		this.month = char(d.month + 1);
+		this.day = char(d.day);
+		this.hour = char(d.hour);
+		this.minute = char(d.minute);
+		this.second = char(d.second);
+		this.fraction = unsigned(d.nanosecond);
+	}
+
+	public Timestamp(time.Instant i, ref<time.TimeZone> tz) {
+		time.Date d(i, tz);
+		this.year = short(d.year);
+		this.month = char(d.month + 1);
 		this.day = char(d.day);
 		this.hour = char(d.hour);
 		this.minute = char(d.minute);

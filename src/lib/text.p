@@ -1350,6 +1350,18 @@ public class StringReader extends Reader {
 		else
 			return (*_source)[_cursor++];
 	}
+
+	public boolean hasLength() {
+		return true;
+	}
+
+	public long length() {
+		return _source.length() - _cursor;
+	}
+
+	public void reset() {
+		_cursor = 0;
+	}
 }
 
 public class StringWriter extends Writer {
@@ -1377,6 +1389,18 @@ public class String16Reader extends Reader {
 			return -1;
 		else
 			return pointer<byte>(_source.c_str())[_cursor++];
+	}
+
+	public boolean hasLength() {
+		return true;
+	}
+
+	public long length() {
+		return _source.length() - _cursor;
+	}
+
+	public void reset() {
+		_cursor = 0;
 	}
 }
 

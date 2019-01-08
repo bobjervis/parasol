@@ -275,6 +275,7 @@ public class HttpServer {
 				return _handlers[i].handler.processRequest(request, response);
 			}
 		}
+		logger.format(log.ERROR, "Failed request for %s from %s", request.serviceResource, request.connection().sourceIPv4());
 //		printf("miss!\n");
 		response.error(404);
 //		printf("done.\n");
