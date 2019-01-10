@@ -407,13 +407,21 @@ public class Identifier extends Node {
 	}
 
 	ref<Symbol> resolveAsMember(ref<Type> classType, ref<CompileContext>  compileContext) {
-		_symbol = classType.scope().lookup(&_value, compileContext);
-		if (_symbol == null) {
-			type = compileContext.errorType();
-			add(MessageId.UNDEFINED, compileContext.pool(), _value);
-		} else
-			type = _symbol.assignType(compileContext);
-		return _symbol;
+		for (;;) {
+			_symbol = classType.scope().lookup(&_value, compileContext);
+			if (_symbol == null) {
+				classType = classType.assignSuper(compileContext);
+				if (classType == null)
+					break;
+			} else {
+				type = _symbol.assignType(compileContext);
+				return _symbol;
+			}
+		}
+		printf(" -> null\n");
+		type = compileContext.errorType();
+		add(MessageId.UNDEFINED, compileContext.pool(), _value);
+		return null;
 	}
 	
 	public CompileString value() {

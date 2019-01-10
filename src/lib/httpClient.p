@@ -565,7 +565,7 @@ public class HttpClient {
 
 	private boolean, unsigned startRequest(string method, ref<Reader> body) {
 		net.Encryption encryption;
-		switch (_uri.protocol) {
+		switch (_uri.scheme) {
 		case "ws":
 			if (_webSocketProtocol == null) {
 				printf("No Web Socket protocol defined.\n");
@@ -607,7 +607,7 @@ public class HttpClient {
 			return false, 0;
 		ref<net.Connection> connection;
 		unsigned ip;
-		(connection, ip) = socket.connect(_uri.hostname, _uri.port);
+		(connection, ip) = socket.connect(_uri.host, _uri.port);
 		if (connection == null) {
 			delete socket;
 			return false, ip;
@@ -636,7 +636,7 @@ public class HttpClient {
 		}
 		_connection.write(" HTTP/1.1\r\n");
 		string webSocketKey;
-		switch (_uri.protocol) {
+		switch (_uri.scheme) {
 		case "ws":
 		case "wss":
 			setHeader("Upgrade", "websocket");
@@ -646,7 +646,7 @@ public class HttpClient {
 			expectWebSocket = true;
 		}
 		if (_additionalHeaders["host"] == null)
-			_additionalHeaders["host"] = _uri.hostname + ":" + string(_uri.port);
+			_additionalHeaders["host"] = _uri.host + ":" + string(_uri.port);
 		if (_additionalHeaders["user-agent"] == null)
 			_additionalHeaders["user-Agent"] = userAgent;
 		if (_additionalHeaders["accept"] == null)
@@ -754,8 +754,8 @@ public class HttpClient {
 	 *
 	 * @return The host name parsed from the URL.
 	 */
-	public string hostname() {
-		return _uri.hostname;
+	public string host() {
+		return _uri.host;
 	}
 	/**
 	 * Get the protocol from the URL.
@@ -765,8 +765,8 @@ public class HttpClient {
 	 *
 	 * @return The protocol of the parsed URL.
 	 */
-	public string protocol() {
-		return _uri.protocol;
+	public string scheme() {
+		return _uri.scheme;
 	}
 	/**
 	 * Get the port from the URL.
@@ -780,20 +780,12 @@ public class HttpClient {
 		return _uri.port;
 	}
 	/**
-	 * Get the username, if any, from the URL.
+	 * Get the userinfo, if any, from the URL.
 	 *
 	 * @return The username of the parsed URL, or null if none was specified.
 	 */
-	public string username() {
-		return _uri.username;
-	}
-	/**
-	 * Get the password, if any, from the URL.
-	 *
-	 * @return The password of the parsed URL, or null if none was specified.
-	 */
-	public string password() {
-		return _uri.password;
+	public string userinfo() {
+		return _uri.userinfo;
 	}
 	/**
 	 * Get whether the port value was defaulted (i.e. not specified).
@@ -810,6 +802,22 @@ public class HttpClient {
 	 */
 	public string path() {
 		return _uri.path;
+	}
+	/**
+	 * Get the query portion of the URL.
+	 *
+	 * @return the query port of the URL.
+	 */
+	public string query() {
+		return _uri.query;
+	}
+	/**
+	 * Get the fragment portion of the URL.
+	 *
+	 * @return the fragment port of the URL.
+	 */
+	public string fragment() {
+		return _uri.fragment;
 	}
 	/**
 	 * Obtain the response to the request.

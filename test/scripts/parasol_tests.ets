@@ -15,6 +15,7 @@ conditional(target: x86-64-lnx) {
 run(filename: compile_target_test.p)
 //run(filename: httpd_test.p)
 run(filename: uri_code_test.p)
+run(filename: uri_parse_test.p)
 run(filename: json_test.p)
 run(filename: json_checker.p, arguments: "test/data/json/pass1.json")
 run(filename: json_checker.p, arguments: "test/data/json/pass2.json")
@@ -281,6 +282,9 @@ compile(expect: fail) { "abstract int f(void);" }
 compile(expect: fail) { "int g(int z, void foo) { return 0; }" }
 compile(expect: fail) { "void x;" }
 
+// Constructors in a derived class must call a base-class constructor if there is no base-class default constructor
+compile(expect: fail) { "class A { A(string b) {} } class B extends A { B() {} } ref<B> b = new B();" }
+
 // a bug in type checking would assert for some invalid aggregate types in the loop
 compile(expect: fail) { "string s; for (i in s) ;" }
 
@@ -303,6 +307,8 @@ compile() { "class Foo{} ref<Foo[]> x; ref<Foo> y = &(*x)[0];" }
 
 // This test checks a regression concering accepting ... arguments.
 compile() { "class Bar { void f(int... args) { } } ref<Bar> x; x.f(4);" }
+
+compile(expect: fail) { "class A { public string a; string b; } class B extends A { A() {} } void f() { B b = { a: "a", b: "b" };}" }
 
 compile(expect: fail) { "ref<int> x = = new int();" }
 compile(expect: fail) { "ref<int> a = int new int;" }

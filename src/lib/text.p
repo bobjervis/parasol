@@ -730,6 +730,12 @@ public class string extends String<byte> {
 	public string substring(int first, int last) {
 		string result;
 		
+		if (first == last)
+			return "";
+		if (first > last || first > length())
+			throw IllegalArgumentException();
+		if (last > length())
+			last = length();
 		result.append(pointer<byte>(&_contents.data) + first, last - first);
 		return result;
 	}

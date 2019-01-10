@@ -614,79 +614,170 @@ public class HttpResponse {
 		_connection.flush();
 	}
 }
-
+/**
+ * This class is used to convert between a string and a parsed URI.
+ *
+ * This implements the syntax described in RFC 3986.
+ */
 public class Uri {
-	public string protocol;			// required for proper connection
-	public string username;
-	public string password;
-	public string hostname;			// required for proper connection
-	public char port;					// optional (default will be filled in from protocol)
+	public string scheme;
+	public string userinfo;
+	public string host;
 	public string path;
+	public string query;
+	public string fragment;
+	public char port;				// optional (default will be filled in from scheme)
 	public boolean portDefaulted;
+	public boolean parsed;
+	/**
+	 * Parses a URI applying the precise rules of RFC 2986.
+	 *
+	 * On a successful parse, the public members of the structure will be initialized with
+	 * the values of the various fields in the URI.
+	 *
+	 * @param uri A string containing a URI
+	 *
+	 * @return true if the string contains a valid RFC3986 URI, false otherwise.
+	 */
+	public boolean parseRFC3986(string uri) {
+		return parse(uri, true);
+	}
+	/**
+	 * Parses a URI with a few rules relaxed to permit additional strings to be parsed
+	 *
+	 * @param uri A string containing a URI
+	 *
+	 * @return true if the string contains a valid URI using relaxed rules from RFC3986, false otherwise.
+	 */
+	public boolean parse(string uri) {
+		return parse(uri, false);
+	}
+	/**
+	 * Parse a URI.
+	 *
+	 * @param uri A string containing a URI
+	 * @param strict true if the URI should be parsed as if calling {@link parseRFC3986}, or false
+	 * if the URI should be parsed as if callid {@link parse}.
+	 *
+	 * @return true if the string contains a valid URI using the rules selected by {@link strict}, false otherwise.
+	 */
+	public boolean parse(string uri, boolean strict) {
+		reset();
+		int colonIdx = uri.indexOf(':');
+		if (colonIdx < 0) {
+			if (strict)
+				return false;
+		} else if (colonIdx == 0) {
+			if (strict)
+				return false;
+			scheme = "";
+		} else
+			scheme = uri.substring(0, colonIdx);
 
-	public void parse(string url) {
-		int colonIdx = -1;
-		int hostIdx;
-		for (int i = 0; i < url.length(); i++) {
-			if (colonIdx == -1 && url[i] == ':')
-				colonIdx = i;
-			else if (url[i] == '/') {
-				if (i != colonIdx + 1) {					// The first slash does not immediately follow the protocol
-					// This will leave the URL unparsed, so a call to get() or post() will fail.
-					return;
+		if (colonIdx + 1 >= uri.length()) {
+			path = "";
+			return parsed = true;			// This is scheme:
+		}
+
+		int slashIdx = uri.indexOf('/', colonIdx + 1);
+
+		int pathIdx;
+		if (slashIdx > 0) {
+			if (slashIdx == colonIdx + 1) {
+				if (slashIdx + 1 >= uri.length()) {
+					// This is: scheme:/
+					path = "/";
+					return parsed = true;
 				}
-				if (colonIdx == -1)
-					protocol = "file";
-				else
-					protocol = url.substring(0, colonIdx);
-				if (i + 1 < url.length() && url[i + 1] == '/') {
-					hostIdx = i + 2;
-					int nextSlash = url.indexOf('/', hostIdx);
-					if (nextSlash == -1)
-						nextSlash = url.length();
-					else
-						path = url.substring(nextSlash);
-					substring hostInfo(url, hostIdx, nextSlash);
-					substring user;
-					int atIdx = hostInfo.indexOf('@');
-					int portIdx = hostInfo.indexOf(':', atIdx + 1);
-					if (portIdx != -1) {
+				if (uri[slashIdx + 1] == '/') {
+					int authIdx = slashIdx + 2;
+					// This is: scheme://something
+					pathIdx = uri.indexOf('/', authIdx);
+					if (pathIdx < 0)
+						pathIdx = uri.length();
+					// This is: scheme:://authority path
+					int atIdx = uri.indexOf('@', authIdx);
+					if (atIdx > 0) {
+						userinfo = uri.substring(authIdx, atIdx);
+						authIdx = atIdx + 1;
+					}
+					int portIdx = uri.indexOf(':', authIdx);
+					if (portIdx > 0) {
 						boolean success;
-						(port, success) = char.parse(hostInfo.substring(portIdx + 1));
+						(port, success) = char.parse(uri.substring(portIdx + 1, pathIdx));
 						if (!success)
-							// This will leave the URL unparsed, so a call to get() or post() will fail.
-							return;				
+							// This will leave the URI unparsed
+							return false;				
+						portDefaulted = false;
 					} else {
-						port = defaultPort[protocol];
+						port = defaultPort[scheme];
 						if (port == 0)
-							// This will leave the URL unparsed, so a call to get() or post() will fail.
-							return;
-						portDefaulted = true;
+							// This will leave the URI unparsed
+							return false;
+						portIdx = pathIdx;
 					}
-					if (atIdx != -1) {
-						if (portIdx == -1)
-							hostname = string(hostInfo, atIdx + 1);
-						else
-							hostname = string(hostInfo, atIdx + 1, portIdx);
-						hostInfo = hostInfo.substring(0, atIdx);
-						int passIdx = hostInfo.indexOf(':');
-						if (passIdx == -1)
-							username = string(hostInfo);
-						else {
-							username = string(hostInfo, 0, passIdx);
-							password = string(hostInfo, passIdx + 1);
-						}
-					} else {
-						if (portIdx == -1)
-							hostname = string(hostInfo);
-						else
-							hostname = string(hostInfo, 0, portIdx);
-					}
-//					printf("'%s' :// '%s' : '%s' @ '%s' : '%d' '%s'\n", protocol, username, password, hostname, port, path);
+					host = uri.substring(authIdx, portIdx);
 				}
-				return;	
+			} else {
+				// This is scheme:something-containing-a-slash
+				pathIdx = colonIdx + 1;
+				if (strict) {
+					if (pathIdx < uri.length())
+						return false;
+				}
+			}
+		} else {
+			// This is scheme:something-not-containing-a-slash
+			pathIdx = colonIdx + 1;
+			if (strict) {
+				if (pathIdx < uri.length())
+					return false;
 			}
 		}
+
+		int fragIdx = uri.indexOf('#', pathIdx);
+		if (fragIdx > 0)
+			fragment = uri.substring(fragIdx + 1);
+		else
+			fragIdx = uri.length();
+
+		int quesIdx = uri.indexOf('?', pathIdx);
+		if (quesIdx > 0)
+			query = uri.substring(quesIdx + 1, fragIdx);
+		else
+			quesIdx = fragIdx;
+
+		path = uri.substring(pathIdx, quesIdx);
+		return parsed = true;
+	}
+
+	public void reset() {
+		scheme = null;
+		userinfo = null;
+		host = null;
+		port = 0;
+		path = null;
+		portDefaulted = true;
+		query = null;
+		fragment = null;
+		parsed = false;
+	}
+
+	public string toString() {
+		string result;
+
+		result = scheme + "://";
+		if (userinfo != null)
+			result += userinfo + "@";
+		result += host;
+		if (!portDefaulted)
+			result += string(port);
+		result += path;
+		if (query != null)
+			result += "?" + query;
+		if (fragment != null)
+			result += "#" + fragment;
+		return result;
 	}
 }
 

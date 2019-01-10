@@ -555,7 +555,7 @@ public class ClassType extends Type {
 		return _isMonitor;
 	}
 
-	public  ref<Type> assignSuper(ref<CompileContext> compileContext) {
+	public ref<Type> assignSuper(ref<CompileContext> compileContext) {
 		resolve(compileContext);
 		return _extends;
 	}
