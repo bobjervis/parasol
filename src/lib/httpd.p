@@ -435,7 +435,7 @@ public class HttpRequest {
 		return _connection;
 	}
 
-	void print() {
+	public void print() {
 		unsigned ip = sourceIP();
 		printf("Source family %d %s:%d\n", sourceFamily(), net.dottedIP(ip), sourcePort());
 		printf("Method           %s(%s)\n", string(method), methodString);

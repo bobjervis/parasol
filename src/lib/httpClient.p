@@ -398,7 +398,7 @@ public class HttpClient {
 	private Uri _uri;			// required for proper connection
 	private unsigned _resolvedIP;
 	private string _webSocketProtocol;
-	private string[string] _additionalHeaders;
+	private string[string] _headers;
 	private string[string] _queryParameters;
 
 	private string _cipherList;
@@ -519,11 +519,11 @@ public class HttpClient {
 	 * @param value The value string to use for the header
 	 */
 	public void setHeader(string name, string value) {
-		_additionalHeaders[name.toLowerCase()] = value;
+		_headers[name.toLowerCase()] = value;
 	}
 
 	public boolean hasHeader(string name) {
-		return _additionalHeaders.contains(name.toLowerCase());
+		return _headers.contains(name.toLowerCase());
 	}
 
 	public void addQueryParameter(string key, string value) {
@@ -645,21 +645,21 @@ public class HttpClient {
 			setHeader("Sec-WebSocket-Key", webSocketKey);
 			expectWebSocket = true;
 		}
-		if (_additionalHeaders["host"] == null)
-			_additionalHeaders["host"] = _uri.host + ":" + string(_uri.port);
-		if (_additionalHeaders["user-agent"] == null)
-			_additionalHeaders["user-Agent"] = userAgent;
-		if (_additionalHeaders["accept"] == null)
-			_additionalHeaders["accept"] = "text/html; charset=UTF-8";
-		if (_additionalHeaders["accept-language"] == null)
-			_additionalHeaders["accept-language"] = "en-US,en;q=0.8";
+		if (_headers["host"] == null)
+			_headers["host"] = _uri.host + ":" + string(_uri.port);
+		if (_headers["user-agent"] == null)
+			_headers["user-Agent"] = userAgent;
+		if (_headers["accept"] == null)
+			_headers["accept"] = "text/html; charset=UTF-8";
+		if (_headers["accept-language"] == null)
+			_headers["accept-language"] = "en-US,en;q=0.8";
 		boolean writeBody;
 		if (body != null) {
-			if (_additionalHeaders["content-length"] == null) {
+			if (_headers["content-length"] == null) {
 				if (!body.hasLength())
 					throw IllegalOperationException("cannot determine content-length");
 				if (body.length() > 0)
-					_additionalHeaders["content-Length"] = string(body.length());		
+					_headers["content-Length"] = string(body.length());		
 			}
 			if (body.length() > 0)
 				writeBody = true;
@@ -667,14 +667,14 @@ public class HttpClient {
 			switch (method) {
 			case "post":
 			case "put":
-				_additionalHeaders["content-Length"] = "0";		
+				_headers["content-Length"] = "0";		
 				break;
 
 			default:
-				_additionalHeaders.remove("content-length");
+				_headers.remove("content-length");
 			}
 		}
-		for (string[string].iterator i = _additionalHeaders.begin(); i.hasNext(); i.next())
+		for (string[string].iterator i = _headers.begin(); i.hasNext(); i.next())
 			_connection.printf("%s: %s\r\n", i.key(), i.get());
 		_connection.printf("\r\n");
 		if (writeBody)
@@ -818,6 +818,14 @@ public class HttpClient {
 	 */
 	public string fragment() {
 		return _uri.fragment;
+	}
+
+	public void print() {
+		printf("URI: %s\n", _uri.toString());
+		printf("Headers:\n");
+		for (string[string].iterator i = _headers.begin(); i.hasNext(); i.next()) {
+			printf("    %s: '%s'\n", i.key(), i.get());
+		}
 	}
 	/**
 	 * Obtain the response to the request.

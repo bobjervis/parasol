@@ -17,6 +17,7 @@ import SampleIn = parasol:test.Sample;
 import parasol:test.staticConstructor;
 import parasol:test.calledConstructor;
 import parasol:test;
+import parasol:http.XML_CONTENT_TYPE;		// There was a regression where this didn't work.
 
 int main(string[] args) {
 	SampleIn x;
@@ -36,5 +37,9 @@ printf("Setting se\n");
 se = test.SampleEnum(2);
 
 assert(se == test.SampleEnum.C);
+
+printf("x = '%s'\n", XML_CONTENT_TYPE);
+
+assert(XML_CONTENT_TYPE == "application/xml");
 
 printf("Static initializers finished\n");

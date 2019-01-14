@@ -4332,6 +4332,8 @@ public class X86_64 extends X86_64AssignTemps {
 			ref<Symbol> sym = i.get();
 			if (sym.class != PlainSymbol)
 				continue;
+			if (sym.enclosing() != scope)
+				continue;
 			if (!sym.initializedWithConstructor()) {
 				ref<ParameterScope> constructor = sym.type().defaultConstructor();
 				if (constructor != null) {
