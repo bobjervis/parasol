@@ -210,6 +210,11 @@ public abstract pointer<byte> strchr(pointer<byte> s, int c);
 @Linux("libc.so.6", "strcpy")
 public abstract pointer<byte> strcpy(pointer<byte> dest, pointer<byte> src);
 
+@Windows("msvcrt.dll", "strftime")
+@Linux("libc.so.6", "strftime")
+public abstract size_t strftime(pointer<byte> s, size_t max, pointer<byte> format,
+                       ref<tm> tmData);
+
 @Windows("msvcrt.dll", "strncmp")
 @Linux("libc.so.6", "strncmp")
 public abstract int strncmp(pointer<byte> s1, pointer<byte> s2, size_t n);

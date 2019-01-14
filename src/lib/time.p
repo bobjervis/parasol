@@ -771,6 +771,12 @@ public class Date {
  *     <td>{@code &nbsp;year}</td>
  *     <td>{@code 18; 2018}</td>
  * </tr>
+ * <tr>
+ *     <td>z</td>
+ *     <td>time-zone name</td>
+ *     <td>{@code &nbsp;zone-name}</td>
+ *     <td>{@code Pacfici Standard Time; PST}</td>
+ * </tr>
  * </table>
  *
  * <i>Presentation Styles</i>
@@ -838,6 +844,7 @@ public class Formatter {
 		's':	FormatCodes.SECOND,
 		'x':	FormatCodes.ZONE_X,
 		'y':	FormatCodes.YEAR_FULL,
+		'z':	FormatCodes.ZONE_NAME,
 	];
 	/**
 	 * indexed by letter count, the nanoseconds value is divided by the number here.
@@ -885,6 +892,21 @@ public class Formatter {
 		"Saturday",
 	];
 
+	static string[] monthNames = [
+		"January",
+		"February",
+		"March",
+		"April",
+		"May",
+		"June",
+		"July",
+		"August",
+		"September",
+		"October",
+		"November",
+		"December"
+	];
+
 	public ref<TimeZone> timeZone;
 	public ref<international.Locale> locale;
 	public ref<Calendar> calendar;
@@ -902,6 +924,7 @@ public class Formatter {
 		FRACTION_OF_SECOND,					// fraction of a second; followed by a byte containing pad width - maximum 9.
 		DAY_OF_WEEK,						// day of the week (Monday, Tuesday, etc.); followed by a byte containing pad width.
 		ZONE_X,								// Time zone in 
+		ZONE_NAME,							// Time zone name
 	}
 
 	byte[] _pattern;
@@ -938,7 +961,6 @@ public class Formatter {
 	private boolean recordLetter(byte lastLetter, int letterCount) {
 		if (unsigned(letterCount) > MAX_LETTER_COUNT)
 			return false;
-			
 		switch (lastLetter) {
 		case 'y':
 			if (letterCount == 2) {
@@ -954,6 +976,9 @@ public class Formatter {
 		case 'p':
 		case 's':
 		case 'x':
+		case 'z':
+//			printf("'%c' -> %d ", lastLetter, int(formatCodes[lastLetter]));
+//			printf(" %s\n", string(formatCodes[lastLetter]));
 			_pattern.append(byte(formatCodes[lastLetter]));
 			_pattern.append(byte(letterCount));
 			break;
@@ -1067,14 +1092,22 @@ public class Formatter {
 					output.printf("%*.*s", width, width, (*dayLabels)[input.weekDay]);
 				else
 					output.printf("%s", (*dayLabels)[input.weekDay]);
+				break;
 
 			case	MONTH:
 				i++;
 				width = _pattern[i];
-				if (modifyPad > 0)
-					output.printf("%*d", modifyPad, input.month + 1);
-				else
-					output.printf("%*.*d", width, width, input.month + 1);
+				if (width < 3) {
+					if (modifyPad > 0)
+						output.printf("%*d", modifyPad, input.month + 1);
+					else
+						output.printf("%*.*d", width, width, input.month + 1);
+				} else {
+					if (modifyPad > 0)
+						output.printf("%*s", modifyPad, monthNames[input.month]);
+					else
+						output.printf("%*.*s", width, width, monthNames[input.month]);
+				}
 				break;
 
 			case	DAY_OF_MONTH:
@@ -1122,6 +1155,22 @@ public class Formatter {
 				else
 					output.printf("%*.*d", width, width, frac);
 				break;
+
+			case ZONE_NAME:
+				i++;
+				width = _pattern[i];
+				if (input.offsetSeconds == 0)
+					output.append("GMT");
+				else {
+					C.tm cdata;
+					string name;
+					name.resize(32);
+	
+					cdata.tm_gmtoff = input.offsetSeconds;
+					C.size_t sz = C.strftime(&name[0], name.length(), "%z".c_str(), &cdata);
+					output.append(&name[0], int(sz));
+				}
+				break;				
 
 			case ZONE_X:
 				i++;
@@ -1182,3 +1231,5 @@ public class Formatter {
 		return false;
 	}
 }
+
+public Formatter RFC_1123_DATE_TIME("EEE, d MMM yyyy HH:mm:ss zzz");
