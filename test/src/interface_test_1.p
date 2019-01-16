@@ -35,6 +35,15 @@ class C extends B implements A {
 	}
 }
 
+class D {
+	A defaultNull;
+}
+
+// This is a case that was not tested, and produced the wrong answer (essentially initializing the
+// object with a bogus value.
+D d;
+assert(d.defaultNull == null);
+
 ref<C> c = new C;
 
 A testInterface = c;

@@ -981,7 +981,7 @@ public class X86_64 extends X86_64AssignTemps {
 			if (sym.class != PlainSymbol || sym.storageClass() != StorageClass.MEMBER)
 				continue;
 			ref<ParameterScope> defaultConstructor = sym.type().defaultConstructor();
-			if (sym.type().hasVtable(compileContext)) {
+			if (!sym.type().isInterface() && sym.type().hasVtable(compileContext)) {
 				inst(X86.LEA, firstRegisterArgument(), thisRegister(), sym.offset);
 				storeVtable(sym.type(), compileContext);
 				if (defaultConstructor != null)
@@ -4337,7 +4337,7 @@ public class X86_64 extends X86_64AssignTemps {
 			if (!sym.initializedWithConstructor()) {
 				ref<ParameterScope> constructor = sym.type().defaultConstructor();
 				if (constructor != null) {
-					inst(X86.LEA,firstRegisterArgument(), sym.definition(), compileContext);
+					inst(X86.LEA, firstRegisterArgument(), sym.definition(), compileContext);
 					if (sym.type().hasVtable(compileContext))
 						storeVtable(sym.type(), compileContext);
 					storeITables(sym.type(), 0, compileContext);

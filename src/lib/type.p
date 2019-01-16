@@ -361,6 +361,10 @@ public class InterfaceType extends ClassType {
 		return true;
 	}
 	
+	public boolean isInterface() {
+		return true;
+	}
+
 	public int size() {
 		return 8;
 	}
@@ -2304,6 +2308,10 @@ public class Type {
 
 	public boolean isConcrete(ref<CompileContext> compileContext) {
 		return true;
+	}
+
+	public boolean isInterface() {
+		return false;
 	}
 
 	public ref<OverloadInstance> firstAbstractMethod(ref<CompileContext> compileContext) {
