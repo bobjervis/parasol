@@ -247,11 +247,19 @@ public class PlainSymbol extends Symbol {
 					ref<Type> t = loop.aggregate().type;
 					if (t.deferAnalysis())
 						_type = t;
-					else if (t.family() == TypeFamily.SHAPE)
-						_type = t.indexType();
 					else {
-						loop.aggregate().add(MessageId.NOT_A_SHAPE, compileContext.pool());
-						_type = compileContext.errorType();
+						switch (t.family()) {
+						case SHAPE:
+							_type = t.indexType();
+							break;
+
+						case STRING:
+							_type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+							break;
+
+						default:	// Any error message is being assigned elsewhere
+							_type = compileContext.errorType();
+						}
 					}
 					break;
 				

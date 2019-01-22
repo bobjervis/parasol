@@ -18,6 +18,7 @@ int main(string[] args) {
 	destructorTests();
 	stringParamTests();
 	resizeTests();
+	loopTests();
 	string a, b, c;
 	
 	a = "sample";
@@ -108,5 +109,23 @@ void resizeTests() {
 	printf("s / %d = '%s'\n", s.length(), s);
 	assert(s.length() == 4);
 	assert(s == "abce");
+}
+
+void loopTests() {
+	string empty;
+	int maximum = -25;
+
+	for (i in empty)
+		maximum = i;
+
+	assert(maximum == -25);
+
+	string s = "abcd";
+
+	string reverse;
+	for (i in s) {
+		reverse = s.substring(i, i + 1) + reverse;
+	}
+	assert(reverse == "dcba");
 }
 

@@ -1607,14 +1607,18 @@ public class For extends Node {
 	}
 
 	public void print(int indent) {
-		_initializer.print(indent + INDENT);
+		if (_initializer != null)
+			_initializer.print(indent + INDENT);
 		printBasic(indent);
 		printf("\n");
-		_test.print(indent + INDENT);
+		if (_test != null)
+			_test.print(indent + INDENT);
 		printf("%*c  {FOR}\n", indent, ' ');
-		_increment.print(indent + INDENT);
+		if (_increment != null)
+			_increment.print(indent + INDENT);
 		printf("%*c  {FOR}\n", indent, ' ');
-		_body.print(indent + INDENT);
+		if (_body != null)
+			_body.print(indent + INDENT);
 	}
 
 	public Test fallsThrough() {
@@ -2199,7 +2203,7 @@ public class Loop extends Node {
 		ref<Node> init;
 		ref<Node> test;
 		ref<Node> increment;
-		if (_aggregate.type.isVector(compileContext)) {
+		if (_aggregate.type.family() == TypeFamily.STRING || _aggregate.type.isVector(compileContext)) {
 			ref<Identifier> id = _declarator.clone(tree);
 			ref<Node> zero = tree.newInternalLiteral(0, location());
 			zero.type = id.type;
@@ -2295,6 +2299,8 @@ public class Loop extends Node {
 		type = compileContext.arena().builtInType(TypeFamily.VOID);
 		if (_aggregate.type.deferAnalysis())
 			type = _declarator.type = _aggregate.type;
+		else if (_aggregate.type.family() == TypeFamily.STRING)
+			_declarator.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
 		else {
 			_declarator.type = _aggregate.type.indexType();
 			if (_declarator.type == null) {

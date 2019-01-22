@@ -30,6 +30,31 @@ public string SHA256(string input) {
 	return hash;
 }
 /**
+ * A SHA256 hash computed from a reader. This maps an input stream to a (binary) SHA256 digest.
+ *
+ * The stream is positioned at the end-of-stream on conclusion of this function.
+ *
+ * @param input The input Reader to be hashed. This string may be binary data, ASCII or UTF-8.
+ * @return the SHA256 hash of the input stream.
+ */
+public string SHA256(ref<Reader> input) {
+	crypto.SHA256_CTX ctx;
+	byte[] buffer;
+	buffer.resize(8192);
+
+	crypto.SHA256_Init(&ctx);
+	for (;;) {
+		int actual = input.read(&buffer);
+		if (actual <= 0)
+			break;
+		crypto.SHA256_Update(&ctx, &buffer[0], actual);
+	}
+	string hash;
+	hash.resize(crypto.SHA256_DIGEST_LENGTH);
+	crypto.SHA256_Final(&hash[0], &ctx);
+	return hash;
+}
+/**
  * Calculate an HMAC-SHA256 signature given a string-to-sign and a key.
  *
  * @param stringToSign The text to be included in the signature.

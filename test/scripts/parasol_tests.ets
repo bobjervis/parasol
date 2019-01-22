@@ -286,9 +286,6 @@ compile(expect: fail) { "void x;" }
 // Constructors in a derived class must call a base-class constructor if there is no base-class default constructor
 compile(expect: fail) { "class A { A(string b) {} } class B extends A { B() {} } ref<B> b = new B();" }
 
-// a bug in type checking would assert for some invalid aggregate types in the loop
-compile(expect: fail) { "string s; for (i in s) ;" }
-
 compile() { "@Constant int x = 1 << 17;"  }
 compile() { "@Constant int x = 0x1000000 >> 17;"  }
 compile() { "@Constant int x = 0x1000000 >>> 17;"  }
@@ -1615,6 +1612,7 @@ compile() { "enum E { A, B, C } string[E] x = [ B: \"abc\", \"def\" ];" }
 compile() { "int[] a; for (i in a) { ref<int> p = &i; }" }
 compile() { "byte[] a; for (i in a) { break; }"  }
 compile() { "byte[] a; for (i in a) { continue; }"  }
+compile() { "string n; for (i in n) { break; }" }
 
 compile(expect: fail) { "pointer<int> a; for (i in a) { ref<int> p = &i; }" }
 

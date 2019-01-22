@@ -820,6 +820,10 @@ public class HttpClient {
 		return _uri.fragment;
 	}
 
+	public ref<string[string]> headers() {
+		return &_headers;
+	}
+
 	public void print() {
 		printf("URI: %s\n", _uri.toString());
 		printf("Headers:\n");
