@@ -57,7 +57,7 @@ public abstract pointer<byte> SHA256_Update(ref<SHA256_CTX> c, pointer<byte> dat
 public abstract pointer<byte> SHA256_Final(pointer<byte> hashData, ref<SHA256_CTX> c);
 
 public class SHA256_CTX {
-    unsigned h0, h1, h2, h3, h4, h5;
+    unsigned h0, h1, h2, h3, h4, h5, h6, h7, h8;
     unsigned Nl, Nh;
     unsigned data1, data2, data3, data4, data5, data6, data7, data8, data9, data10, data11, data12, data13, data14, data15, data16;
     unsigned num, md_len;

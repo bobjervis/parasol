@@ -512,14 +512,7 @@ public class Reader {
 	 * Reads text into a byte array buffer. 
 	 */
 	public int read(ref<byte[]> buffer) {
-		int i;
-		for (i = 0; i < buffer.length(); i++) {
-			int c = _read();
-			if (c == EOF)
-				break;
-			(*buffer)[i] = byte(c);
-		}
-		return i;
+		return int(read(&(*buffer)[0], buffer.length()));
 	}
 	/**
 	 * Reads text into a char array buffer. 

@@ -412,22 +412,22 @@ public enum Seek {
 @Constant
 int BUFFER_SIZE = 64 * 1024;
 
-public class FileReader = BinaryFileReader;
+public class BinaryFileReader = FileReader;
 
-public class BinaryFileReader extends Reader {
+public class FileReader extends Reader {
 	private File _file;
 	private byte[] _buffer;
 	private int _cursor;
 	private int _length;
 	private boolean _closeOnDelete;
 
-	BinaryFileReader(File file, boolean closeOnDelete) {
+	FileReader(File file, boolean closeOnDelete) {
 		_file = file;
 		_closeOnDelete = closeOnDelete;
 		_buffer.resize(BUFFER_SIZE);
 	}
 
-	~BinaryFileReader() {
+	~FileReader() {
 		if (_closeOnDelete)
 			_file.close();
 	}
@@ -481,9 +481,24 @@ public class BinaryFileReader extends Reader {
 		_length = 0;
 		_cursor = 0;
 	}
+
+	public boolean hasLength() {
+		return true;
+	}
+
+	public long length() {
+		long here = tell();
+		long len = _file.seek(0, Seek.END) - here;
+		_file.seek(here, Seek.START);
+		return len;
+	}
+
+	public void reset() {
+		seek(0, Seek.START);
+	}
 }
 
-public class TextFileReader extends BinaryFileReader {
+public class TextFileReader extends FileReader {
 	TextFileReader(File file, boolean closeOnDelete) {
 		super(file, closeOnDelete);
 	}
@@ -502,22 +517,22 @@ public class TextFileReader extends BinaryFileReader {
 	}
 }
 
-public class FileWriter = BinaryFileWriter;
+public class BinaryFileWriter = FileWriter;
 
-public class BinaryFileWriter extends Writer {
+public class FileWriter extends Writer {
 	private Monitor _lock;
 	private File _file;
 	private byte[] _buffer;
 	private int _fill;
 	private boolean _closeOnDelete;
 
-	BinaryFileWriter(File file, boolean closeOnDelete) {
+	FileWriter(File file, boolean closeOnDelete) {
 		_file = file;
 		_closeOnDelete = closeOnDelete;
 		_buffer.resize(BUFFER_SIZE);
 	}
 
-	~BinaryFileWriter() {
+	~FileWriter() {
 		flush();
 		if (_closeOnDelete)
 			_file.close();
@@ -590,7 +605,7 @@ public class BinaryFileAppendWriter extends BinaryFileWriter {
 	}
 }
 
-public class TextFileWriter extends BinaryFileWriter {
+public class TextFileWriter extends FileWriter {
 	TextFileWriter(File file, boolean closeOnDelete) {
 		super(file, closeOnDelete);
 	}

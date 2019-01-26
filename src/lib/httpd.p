@@ -747,7 +747,10 @@ public class Uri {
 		else
 			quesIdx = fragIdx;
 
-		path = uri.substring(pathIdx, quesIdx);
+		if (pathIdx < quesIdx)
+			path = uri.substring(pathIdx, quesIdx);
+		else
+			path = "/";
 		return parsed = true;
 	}
 
@@ -761,6 +764,22 @@ public class Uri {
 		query = null;
 		fragment = null;
 		parsed = false;
+	}
+
+	public string authority() {
+		string a = host;
+		switch (scheme) {
+		case "https":
+		case "wss":
+			if (port != 443)
+				a += ":" + string(port);
+			break;
+
+		default:
+			if (port != 80)
+				a += ":" + string(port);
+		}
+		return a;
 	}
 
 	public string toString() {

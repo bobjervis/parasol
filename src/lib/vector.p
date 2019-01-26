@@ -940,6 +940,7 @@ public class map<class V, class K> {
 			}
 		}
 		memory.free(_entries);
+		_entries = null;
 		_allocatedEntries = 0;
 		_rehashThreshold = 0;
 	}
@@ -957,6 +958,7 @@ public class map<class V, class K> {
 			}
 		}
 		allocator.free(_entries);
+		_entries = null;
 		_allocatedEntries = 0;
 		_rehashThreshold = 0;
 	}

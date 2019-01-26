@@ -408,6 +408,8 @@ public class HttpClient {
 	public HttpClient(ref<Uri> uri) {
 		_uri = *uri;
 		userAgent = "Parasol/0.1.0";
+		if (_headers["host"] == null)
+			_headers["host"] = _uri.authority();
 	}
 	/**
 	 * Create a client for a simple HTTP request.
@@ -419,6 +421,8 @@ public class HttpClient {
 	public HttpClient(string url) {
 		_uri.parse(url);
 		userAgent = "Parasol/0.1.0";
+		if (_headers["host"] == null)
+			_headers["host"] = _uri.authority();
 	}
 	/**
 	 * Create a client for a Web Socket request.
@@ -434,6 +438,8 @@ public class HttpClient {
 	public HttpClient(string url, string webSocketProtocol) {
 		_uri.parse(url);
 		_webSocketProtocol = webSocketProtocol;
+		if (_headers["host"] == null)
+			_headers["host"] = _uri.host + ":" + string(_uri.port);
 	}
 
 	~HttpClient() {
@@ -563,6 +569,15 @@ public class HttpClient {
 		return startRequest("POST", body);
 	}
 
+	public boolean, unsigned put(string body) {
+		text.StringReader reader(&body);
+		return post(&reader);
+	}
+
+	public boolean, unsigned put(ref<Reader> body) {
+		return startRequest("PUT", body);
+	}
+
 	private boolean, unsigned startRequest(string method, ref<Reader> body) {
 		net.Encryption encryption;
 		switch (_uri.scheme) {
@@ -645,8 +660,6 @@ public class HttpClient {
 			setHeader("Sec-WebSocket-Key", webSocketKey);
 			expectWebSocket = true;
 		}
-		if (_headers["host"] == null)
-			_headers["host"] = _uri.host + ":" + string(_uri.port);
 		if (_headers["user-agent"] == null)
 			_headers["user-Agent"] = userAgent;
 		if (_headers["accept"] == null)
@@ -665,8 +678,8 @@ public class HttpClient {
 				writeBody = true;
 		} else {
 			switch (method) {
-			case "post":
-			case "put":
+			case "POST":
+			case "PUT":
 				_headers["content-Length"] = "0";		
 				break;
 
@@ -828,7 +841,7 @@ public class HttpClient {
 		printf("URI: %s\n", _uri.toString());
 		printf("Headers:\n");
 		for (string[string].iterator i = _headers.begin(); i.hasNext(); i.next()) {
-			printf("    %s: '%s'\n", i.key(), i.get());
+			printf("    %-20s %s\n", i.key(), i.get());
 		}
 	}
 	/**

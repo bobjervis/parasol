@@ -674,7 +674,7 @@ public void hardwareExceptionHandler(ref<HardwareException> info) {
 		case 0xb02:						// SIGSEGV + SEGV_ACCERR
 			throw PermissionsException(context);	
 			
-		case 0x801:						// SIGTRAP + FPE_INTDIV
+		case 0x801:						// SIGFPE + FPE_INTDIV
 			throw DivideByZeroException(context);
 			
 		case 0x402:						// SIGILL + ILL_ILLOPN
@@ -690,6 +690,9 @@ public void hardwareExceptionHandler(ref<HardwareException> info) {
 		case 0x3fa:						// SIGQUIT sent from inside the house - just dump me.
 			dumpMyThread(context);
 			thread.exit(0);
+
+		case 0x5fa:						// SIGTRAP + SI_TKILL = tkill system call.				
+			throw CRuntimeException(context);
 		}
 	}
 	printf("exception %x at %p\n", info.exceptionType, info.codePointer);

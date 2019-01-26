@@ -16,6 +16,7 @@
 namespace parasol:storage;
 
 import parasol:math;
+import parasol:process;
 import parasol:runtime;
 import parasol:time;
 
@@ -415,6 +416,20 @@ public boolean makeDirectory(string path, boolean shared) {
 		return linux.mkdir(path.c_str(), mode) == 0;
 	} else
 		return false;
+}
+/**
+ * Returns the current user's home directory path.
+ *
+ * @return The path to the user's home directory.
+ */
+public string homeDirectory() {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		// TODO: Implement this
+		return null;
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		return process.environment.get("HOME");
+	} else
+		return null;
 }
 /**
  * This call ensures that the given path exists and that the final element of the path is indeed a directory (or a link to one).
