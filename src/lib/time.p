@@ -775,7 +775,7 @@ public class Date {
  *     <td>z</td>
  *     <td>time-zone name</td>
  *     <td>{@code &nbsp;zone-name}</td>
- *     <td>{@code Pacfici Standard Time; PST}</td>
+ *     <td>{@code Pacific Standard Time; PST}</td>
  * </tr>
  * </table>
  *
