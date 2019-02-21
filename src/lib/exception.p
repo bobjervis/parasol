@@ -199,7 +199,7 @@ public class Exception {
 		printf("\nFATAL: Could not find a stack handler for this address.\n");
 		_exceptionContext.print();
 		printf(textStackTrace());
-//		process.exit(1);
+		process.exit(1);
 	}
 	
 	private ref<ExceptionEntry>, pointer<address> crawlStack(pointer<byte> ip, pointer<address> frame, int comparator(address ip, address elem)) {
@@ -693,12 +693,47 @@ public void hardwareExceptionHandler(ref<HardwareException> info) {
 
 		case 0x5fa:						// SIGTRAP + SI_TKILL = tkill system call.				
 			throw CRuntimeException(context);
+
+		case 0xf00:						// SIGTERM (simple kill command).
+			if (interruptResponse.interrupt())
+				return;
 		}
 	}
 	printf("exception %x at %p\n", info.exceptionType, info.codePointer);
 	printf("Unexpected exception type\n");
 	throw RuntimeException(context);
 }
+
+public boolean(address), address handleInterrupt(boolean(address) handler, address argument) {
+	return interruptResponse.handleInterrupt(handler, argument);
+}
+
+monitor class InterruptResponse {
+	private boolean(address) _handler;
+	private address _argument;
+
+	public boolean interrupt() {
+		if (_handler != null)
+			return _handler(_argument);
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+			linux.signal(linux.SIGTERM, linux.SIG_DFL);
+			linux.kill(linux.getpid(), linux.SIGTERM);
+		}
+		return false;
+	}
+
+	public boolean(address), address handleInterrupt(boolean(address) handler, address argument) {
+		boolean(address) oldHandler = _handler;
+		address oldArgument = _argument;
+		_handler = handler;
+		_argument = _argument;
+		return oldHandler, oldArgument;
+	}
+}
+
+InterruptResponse interruptResponse;
+
 /*
  * dispatchException is called from the compiler when deciding which catch clause to execute when an exception is
  * thrown.

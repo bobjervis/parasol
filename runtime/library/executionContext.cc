@@ -83,6 +83,7 @@ int ExecutionContext::runNative(int (*start)(void *args)) {
 	struct sigaction oldSigFpeAction;
 	struct sigaction oldSigQuitAction;
 	struct sigaction oldSigAbortAction;
+	struct sigaction oldSigTermAction;
 	struct sigaction newGeneralAction;
 	struct sigaction newSegvAction;
 
@@ -95,6 +96,7 @@ int ExecutionContext::runNative(int (*start)(void *args)) {
 	sigaction(SIGFPE, &newGeneralAction, &oldSigFpeAction);
 	sigaction(SIGQUIT, &newGeneralAction, &oldSigQuitAction);
 	sigaction(SIGABRT, &newGeneralAction, &oldSigAbortAction);
+	sigaction(SIGTERM, &newGeneralAction, &oldSigTermAction);
 #endif
 	long long inlineParasolArray[2];		// Arguments are a string array.
 
@@ -109,6 +111,7 @@ int ExecutionContext::runNative(int (*start)(void *args)) {
 	sigaction(SIGFPE, &oldSigFpeAction, null);
 	sigaction(SIGQUIT, &oldSigQuitAction, null);
 	sigaction(SIGABRT, &oldSigAbortAction, null);
+	sigaction(SIGTERM, &oldSigTermAction, null);
 #endif
 	return result;
 }

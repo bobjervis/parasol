@@ -96,10 +96,10 @@ public boolean isPrivileged() {
 		return false;
 }
 
+// Do this in a function so the 'set' local variable is reclaimed.
 init();
 private void init() {
 	if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-//		linux.struct_sigaction action;
 		linux.sigset_t set;
 
 		// Mask SIGCHLD - we will spawn a waiter thread as soon as we exec a process. 
@@ -107,14 +107,6 @@ private void init() {
 		linux.sigemptyset(&set);
 		linux.sigaddset(&set, linux.SIGCHLD);
 		linux.pthread_sigmask(linux.SIG_BLOCK, &set, null);
-
-//		action.set_sa_sigaction(sigChldHandler);
-//		action.sa_flags = linux.SA_SIGINFO;
-//		int result = linux.sigaction(linux.SIGCHLD, &action, null);
-//		if (result != 0) {
-//			printf("Failed to register SIGCHLD handler: %d\n", result);
-//			linux.perror("From sigaction".c_str());
-//		}
 	}
 }
 
@@ -342,7 +334,7 @@ public class Process extends ProcessVolatileData {
 					// This is the child process
 					switch (_stdioHandling) {
 					case INTERACTIVE:
-						// If the child process changes users, the grantpt has to happen with ruid == _user and euid == 0
+						// If the child process changes users, the open has to happen with ruid == _user and euid == 0
 						if (_user != 0) {
 							if (linux.setreuid(_user, 0) != 0) {
 								stderr.printf("setreuid to %d FAILED\n", _user);
@@ -538,7 +530,7 @@ public class Process extends ProcessVolatileData {
 /**
  *	Use this as the third parameter to the Process.spawn or Process.execute methods to provide
  *	a self-documenting value where 'null' might cause confusion (or where the compiler needs help).
- *	The equivalent (but not at all obvious) expression is: ref<string[string]>(null).
+ *	The equivalent (but not at all obvious) expression is: ref&lt;string[string]&gt;(null).
  */
 public ref<string[string]> useParentEnvironment;
 

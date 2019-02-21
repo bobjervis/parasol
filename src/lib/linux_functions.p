@@ -333,6 +333,9 @@ public abstract int sigisemptyset(ref<sigset_t> set);
 @Linux("libc.so.6", "sigismember")
 public abstract int sigismember(ref<sigset_t> set, int signum);
 
+@Linux("libc.so.6", "signal")
+public abstract int signal(int signum, void(int) handler);
+
 @Linux("libc.so.6", "sigorset")
 public abstract int sigorset(ref<sigset_t> dest, ref<sigset_t> left, ref<sigset_t> right);
 
@@ -857,6 +860,10 @@ public int SIG_UNBLOCK = 1;
 
 @Constant
 public int SIG_SETMASK = 2;
+
+public void(int) SIG_IGN = void(int)(1);
+
+public void(int) SIG_DFL = null;
 
 /* Bits in `sa_flags'.  */
 @Constant

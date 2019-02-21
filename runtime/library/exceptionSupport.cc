@@ -108,6 +108,7 @@ LONG CALLBACK windowsExceptionHandler(PEXCEPTION_POINTERS ExceptionInfo) {
 		}
 		context->callHardwareExceptionHandler(&info);
 		printf("Did not expect this to return\n");
+		exit(1);
 	}
 	printf("No hardware exception handler defined\n");
 	exit(1);
@@ -134,7 +135,9 @@ void sigGeneralHandler(int signum, siginfo_t *info, void *uContext) {
 		fillExceptionInfo(&he, info, (ucontext*)uContext);
 		he.exceptionInfo0 = 0;
 		context->callHardwareExceptionHandler(&he);
-		printf("Did not expect this to return\n");
+		// Most exception handlers throw an exception and crash out elsewhere.
+		// But, the SIGTERM handler allows for a user-defined interruptr handler.
+		return;
 	}
 	printf("No hardware exception handler defined\n");
 	exit(1);
@@ -150,6 +153,7 @@ void sigSegvHandler(int signum, siginfo_t *info, void *uContext) {
 		he.exceptionInfo0 = (long long)info->si_addr;
 		context->callHardwareExceptionHandler(&he);
 		printf("Did not expect this to return\n");
+		exit(1);
 	}
 	printf("No hardware exception handler defined\n");
 	exit(1);
