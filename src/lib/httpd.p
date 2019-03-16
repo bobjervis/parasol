@@ -436,21 +436,28 @@ public class HttpRequest {
 	}
 
 	public void print() {
+		process.stdout.write(toString());
+	}
+
+	public string toString() {
+		string result;
+
 		unsigned ip = sourceIP();
-		printf("Source family %d %s:%d\n", sourceFamily(), net.dottedIP(ip), sourcePort());
-		printf("Method           %s(%s)\n", string(method), methodString);
-		printf("Url              %s\n", url);
+		result.printf("Source family %d %s:%d\n", sourceFamily(), net.dottedIP(ip), sourcePort());
+		result.printf("Method           %s(%s)\n", string(method), methodString);
+		result.printf("Url              %s\n", url);
 		if (query != null)
-			printf("query            %s\n", query);
+			result.printf("query            %s\n", query);
 		if (fragment != null)
-			printf("fragment         %s\n", fragment);
-		printf("HTTP Version     %s\n", httpVersion);
+			result.printf("fragment         %s\n", fragment);
+		result.printf("HTTP Version     %s\n", httpVersion);
 		if (headers.size() > 0)
-			printf("Headers:\n");
+			result.printf("Headers:\n");
 		for (string[string].iterator i = headers.begin(); i.hasNext(); i.next()) {
-			printf("  %-20s %s\n", i.key(), i.get());
+			result.printf("  %-20s %s\n", i.key(), i.get());
 		}
-		printf("body size: %d\n", contentLength());
+		result.printf("body size: %d\n", contentLength());
+		return result;
 	}
 }
 /**
@@ -780,6 +787,16 @@ public class Uri {
 				a += ":" + string(port);
 		}
 		return a;
+	}
+	/**
+	 * @return The portion of the parsed URI that would appear in an HTTP request line (excludes scheme and authority).
+	 */
+	public string httpRequestUri() {
+		string result = path;
+
+		if (query != null)
+			result += "?" + query;
+		return result;
 	}
 
 	public string toString() {

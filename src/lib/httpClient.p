@@ -639,7 +639,7 @@ public class HttpClient {
 		_connection = connection;
 		string path;
 		if (_uri.path.length() > 0)
-			path = _uri.path;
+			path = _uri.httpRequestUri();
 		else
 			path = "/";
 //		printf("Composing HTTP request...\n");
