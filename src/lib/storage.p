@@ -144,6 +144,10 @@ public string filename(string filename) {
 	return filename;
 }
 
+public string constructPath(string directory, string filename) {
+	return constructPath(directory, filename, null);
+}
+
 public string constructPath(string directory, string baseName, string extension) {
 	string base;
 	if (directory.length() > 0) {
