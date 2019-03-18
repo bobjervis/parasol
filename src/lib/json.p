@@ -34,8 +34,31 @@ public var, boolean parse(string text) {
 	(x, success) = parser.parse();
 	return x, success;
 }
-
+/**
+ * Convert an Object containing JSON -compatible data to a JSON formatted string. White space is inserted
+ * into the text to produce a readable sring with white space indentation for each object and array and
+ * newlines separating fields.
+ *
+ * @param object The JSON object to be converted.
+ *
+ * @return The JSON text.
+ */
+public string prettyPrint(var object) {
+	return prettyPrint(object, 0);
+}
+/**
+ * Convert an Object containing JSON -compatible data to a JSON formatted string. No white space is inserted
+ * into the text to minimize the size of the text payload.
+ *
+ * @param object The JSON object to be converted.
+ *
+ * @return The JSON text.
+ */
 public string stringify(var object) {
+	return prettyPrint(object, -1);
+}
+
+private string prettyPrint(var object, int indent) {
 	if (object.class == long) {
 		string s;
 		
@@ -62,33 +85,64 @@ public string stringify(var object) {
 		return "null";
 	else if (object.class == ref<Object>) {
 		string s;
-		
+		int nextIndent = -1;
+
 		s = "{";
+		if (indent >= 0) {
+			nextIndent = indent + 4;
+			s += pad(indent);
+		}
 		ref<var[string]> members = ref<Object>(object).members();
 		boolean serializedMember;
 		for (var[string].iterator i = members.begin(); i.hasNext(); i.next()) {
-			if (serializedMember)
+			if (serializedMember) {
 				s.append(',');
+				if (indent >= 0)
+					s += pad(nextIndent);
+			} else if (indent >= 0)
+				s += "    ";
 			s.printf("\"%s\":", i.key().escapeJSON());
-			s.append(stringify(i.get()));
+			s.append(prettyPrint(i.get(), nextIndent));
 			serializedMember = true;
 		}
+		if (serializedMember)
+			s += pad(indent);
 		s.append("}");
 		return s;
 	} else if (object.class == ref<Array>) {
 		string s;
 		ref<Array> array = ref<Array>(object);
+		int nextIndent = -1;
 		
 		s = "[";
-		for (int i = 0; i < array.length(); i++) {
-			if (i > 0)
-				s.append(',');
-			s.append(stringify(array.get(i)));
+		if (indent >= 0) {
+			nextIndent = indent + 4;
+			s += pad(indent);
 		}
+		boolean serializedMember;
+		for (int i = 0; i < array.length(); i++) {
+			if (i > 0) {
+				s.append(',');
+				if (indent >= 0)
+					s += pad(nextIndent);
+			} else if (indent >= 0)
+				s += "    ";
+			s.append(prettyPrint(array.get(i), nextIndent));
+			serializedMember = true;
+		}
+		if (serializedMember)
+			s += pad(indent);
 		s.append("]");
 		return s;
 	} else 
 		return "\"object (unknown schema)\"";
+}
+
+private string pad(int n) {
+	string s = "\n";
+	for (int i = 0; i < n; i++)
+		s += " ";
+	return s;
 }
 /**
  * If object was returned from json.parse, this will delete all memory
