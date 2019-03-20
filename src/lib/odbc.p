@@ -461,7 +461,7 @@ public class Statement {
 			long nativeError;
 			string message;
 			(sqlState, nativeError, message) = getDiagnosticRecord(1);
-			logger.format(log.ERROR, "getTimestamp Error %s %d %s\n", sqlState, nativeError, message);
+			logger.error( "getTimestamp Error %s %d %s\n", sqlState, nativeError, message);
 			return Timestamp.NULL, false;
 		}
 	}

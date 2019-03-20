@@ -147,39 +147,49 @@ public monitor class Logger {
 		return result;
 	}
 
-	public void info(string msg) {
-		if (msg == null)
-			return;
-		if (needToCheck(INFO))
+	public void info(string format, var... arguments) {
+		if (needToCheck(INFO)) {
+			string msg;
+
+			msg.printf(format, arguments);
 			queueEvent(runtime.returnAddress(), INFO, msg);
+		}
 	}
 
-	public void debug(string msg) {
-		if (msg == null)
-			return;
-		if (needToCheck(DEBUG))
+	public void debug(string format, var... arguments) {
+		if (needToCheck(DEBUG)) {
+			string msg;
+
+			msg.printf(format, arguments);
 			queueEvent(runtime.returnAddress(), DEBUG, msg);
+		}
 	}
 
-	public void warn(string msg) {
-		if (msg == null)
-			return;
-		if (needToCheck(WARN))
+	public void warn(string format, var... arguments) {
+		if (needToCheck(WARN)) {
+			string msg;
+
+			msg.printf(format, arguments);
 			queueEvent(runtime.returnAddress(), WARN, msg);
+		}
 	}
 
-	public  void error(string msg) {
-		if (msg == null)
-			return;
-		if (needToCheck(ERROR))
+	public  void error(string format, var... arguments) {
+		if (needToCheck(ERROR)) {
+			string msg;
+
+			msg.printf(format, arguments);
 			queueEvent(runtime.returnAddress(), ERROR, msg);
+		}
 	}
 
-	public void fatal(string msg) {
-		if (msg == null)
-			return;
-		if (needToCheck(FATAL))
+	public void fatal(string format, var... arguments) {
+		if (needToCheck(FATAL)) {
+			string msg;
+
+			msg.printf(format, arguments);
 			queueEvent(runtime.returnAddress(), FATAL, msg);
+		}
 	}
 
 	public void log(int level, string msg) {

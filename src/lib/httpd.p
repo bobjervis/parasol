@@ -241,7 +241,7 @@ public class HttpServer {
 			ref<net.Connection> connection = socket.accept();
 			if (connection != null) {
 				ref<HttpContext> context = new HttpContext(this, connection);
-//				logger.format(log.DEBUG, "about to execute 'processHttpRequest' threads %d", _requestThreads.idleThreads());
+//				logger.debug( "about to execute 'processHttpRequest' threads %d", _requestThreads.idleThreads());
 				_requestThreads.execute(processHttpRequest, context);
 			}
 		}
@@ -275,7 +275,7 @@ public class HttpServer {
 				return _handlers[i].handler.processRequest(request, response);
 			}
 		}
-		logger.format(log.ERROR, "Failed request for %s from %s", request.serviceResource, request.connection().sourceIPv4());
+		logger.error("Failed request for %s from %s", request.serviceResource, request.connection().sourceIPv4());
 //		printf("miss!\n");
 		response.error(404);
 //		printf("done.\n");
@@ -335,7 +335,7 @@ private void processHttpRequest(address ctx) {
 			return;				// if dispatch returns true, we want to keep the connection open (for at least a while).
 		}
 	} else {
-		logger.format(log.DEBUG, "Could not parse request from %s", net.dottedIP(context.connection.sourceIPv4()));
+		logger.debug( "Could not parse request from %s", net.dottedIP(context.connection.sourceIPv4()));
 //		request.print();
 		response.error(400);
 	}
@@ -1108,11 +1108,11 @@ public class HttpParser {
 						}
 					}
 					_tokenValue.append(byte(ch));
-//					logger.format(log.DEBUG, "CTL '%s'", _tokenValue);
+//					logger.debug( "CTL '%s'", _tokenValue);
 					return _previousToken = HttpToken.CTL;
 				}
 				_connection.ungetc();
-//				logger.format(log.DEBUG, "TOKEN %s", _tokenValue);
+//				logger.debug( "TOKEN %s", _tokenValue);
 				return _previousToken = HttpToken.TOKEN;
 			}
 			switch (ch) {
@@ -1138,7 +1138,7 @@ public class HttpParser {
 			case '\t':
 				if (_tokenValue != null) {
 					_connection.ungetc();
-//					logger.format(log.DEBUG, "TOKEN %s", _tokenValue);
+//					logger.debug( "TOKEN %s", _tokenValue);
 					return _previousToken = HttpToken.TOKEN;
 				}
 				skipWhiteSpace();
@@ -1192,10 +1192,10 @@ public class HttpParser {
 	
 	private HttpToken separator(HttpToken sep) {
 		if (_tokenValue == null) {
-//			logger.format(log.DEBUG, "separator(%s)", string(sep));
+//			logger.debug( "separator(%s)", string(sep));
 			return _previousToken = sep;
 		} else {
-//			logger.format(log.DEBUG, "TOKEN '%s' -> %s", _tokenValue, string(sep));
+//			logger.debug( "TOKEN '%s' -> %s", _tokenValue, string(sep));
 			_connection.ungetc();
 			return _previousToken = HttpToken.TOKEN;
 		}
@@ -1238,7 +1238,7 @@ public class StaticContentService extends HttpService {
 	}
 
 	public boolean processRequest(ref<HttpRequest> request, ref<HttpResponse> response) {
-//		logger.format(log.DEBUG, "Static Content! fetching %s / %s", _filename, request.serviceResource);
+//		logger.debug( "Static Content! fetching %s / %s", _filename, request.serviceResource);
 		if (request.method != HttpRequest.Method.GET) {
 			response.error(501);
 			return false;

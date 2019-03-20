@@ -296,15 +296,15 @@ public class Process extends ProcessVolatileData {
 				linux.tcgetattr(ptyMasterFd, &t);
 				t.c_oflag |= linux.ONLRET;
 				if (linux.tcsetattr(ptyMasterFd, 0, &t) != 0)
-					logger.format(log.ERROR, "tcsetattr failed: %d", linux.errno());
+					logger.error("tcsetattr failed: %d", linux.errno());
 				int result = linux.grantpt(ptyMasterFd);
 				if (result != 0) {
-					logger.format(log.ERROR, "grantpt failed: %d", linux.errno());
+					logger.error("grantpt failed: %d", linux.errno());
 					return false;
 				}
 				result = linux.unlockpt(ptyMasterFd);
 				if (result != 0) {
-					logger.format(log.ERROR, "unlockpt failed: %d", linux.errno());
+					logger.error("unlockpt failed: %d", linux.errno());
 					return false;
 				}
 				break;
@@ -312,7 +312,7 @@ public class Process extends ProcessVolatileData {
 			case CAPTURE_OUTPUT:
 				pipeFd.resize(2);
 				if (linux.pipe(&pipeFd[0]) != 0) {
-					logger.format(log.ERROR, "pipe failed: %d", linux.errno());
+					logger.error("pipe failed: %d", linux.errno());
 					return false;
 				}
 				break;

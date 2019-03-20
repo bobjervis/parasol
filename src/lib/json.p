@@ -13,6 +13,17 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * JSON is a structured data format derived from Javascript and capable of contianing a variety of data
+ * types and structures.
+ *
+ * Parasol supports conversion between strings containing JSON data and Parasol objects that correspond to various
+ * JSON features.
+ *
+ * Conversely, an appropriately constructed set of Parasol objects can be converted readily to JSON. There are
+ * restrictions on the kinds of Parasol objects that can be converted to JSON, as well as some restrictions on
+ * the contents of Array and Object instances.
+ */
 namespace parasol:json;
 
 import parasol:compiler.codePointClass;
@@ -25,7 +36,9 @@ import parasol:text.string16;
 import parasol:log;
 
 private ref<log.Logger> logger = log.getLogger("parasol.json");
-
+/**
+ * Parse a JSON string into Parasol objects.
+ */
 public var, boolean parse(string text) {
 	Parser parser(text);
 	var x;

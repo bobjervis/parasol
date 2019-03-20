@@ -384,7 +384,7 @@ public class WebSocket extends WebSocketVolatileData {
 				
 			default:					// Not valid in an initial frame
 				buffer.resize(offset);
-				logger.format(log.ERROR, "initial opcode == %d", opcode & 0x7f);
+				logger.error("initial opcode == %d", opcode & 0x7f);
 				shutDown(CLOSE_BAD_DATA, "Unexpected opcode");
 				return false, opcode & 0x7f, false;
 				
@@ -400,7 +400,7 @@ public class WebSocket extends WebSocketVolatileData {
 
 			default:					// Not valid in an initial frame
 				buffer.resize(offset);
-				logger.format(log.ERROR, "Unexpected non-zero opcode (%d) on non-initial frame", opcode & 0x7f);
+				logger.error("Unexpected non-zero opcode (%d) on non-initial frame", opcode & 0x7f);
 				shutDown(CLOSE_PROTOCOL_ERROR, "Unexpected opcode");
 				return false, opcode & 0x7f, false;
 				
@@ -500,7 +500,7 @@ public class WebSocket extends WebSocketVolatileData {
 			_incomingLength = _connection.read(&_incomingData[0], _incomingData.length());
 			if (_incomingLength <= 0) {
 				if (_incomingLength < 0) {
-					logger.format(log.ERROR, "_incomingLength = %d\n", _incomingLength);
+					logger.error("_incomingLength = %d\n", _incomingLength);
 					linux.perror(null);
 				}
 				shutDown(CLOSE_BAD_DATA, "recv failed");

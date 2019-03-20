@@ -117,7 +117,7 @@ public class Socket {
 					int result = net.WSAStartup(version, &data);
 					if (result != 0) {
 						// TODO: Make up an exception class for this error.
-						logger.format(log.DEBUG,"WSAStartup returned %d\n", result);
+						logger.debug("WSAStartup returned %d\n", result);
 						assert(result == 0);
 					}
 				}
@@ -144,7 +144,7 @@ public class Socket {
 	}
 
 	~Socket() {
-		logger.format(log.DEBUG,"~Socket for %d\n", _socketfd);
+		logger.debug("~Socket for %d\n", _socketfd);
 		net.closesocket(_socketfd);
 	}
 
@@ -157,12 +157,12 @@ public class Socket {
 
 			ref<net.hostent> localHost = net.gethostbyname(&hostname[0]);
 			if (localHost == null) {
-				logger.format(log.DEBUG,"gethostbyname failed for '%s'\n", hostname);
+				logger.debug("gethostbyname failed for '%s'\n", hostname);
 				return false;
 			}
 			ip = net.inet_ntoa (*ref<unsigned>(*localHost.h_addr_list));
 //			string n(localHost.h_name);
-//			logger.format(log.DEBUG,"hostent name = '%s' ip = '%s'\n", n, x);
+//			logger.debug("hostent name = '%s' ip = '%s'\n", n, x);
 			net.inet_addr(ip);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			if (scope == ServerScope.LOCALHOST)
@@ -170,13 +170,13 @@ public class Socket {
 			else {					// must be INTERNET
 				ref<linux.ifaddrs> ifAddresses;
 				if (linux.getifaddrs(&ifAddresses) != 0) {
-					logger.format(log.DEBUG,"getifaddrs failed\n");
+					logger.debug("getifaddrs failed\n");
 					return false;
 				}
 				int i = 1;
 				for (ref<linux.ifaddrs> ifa = ifAddresses; ; ifa = ifa.ifa_next, i++) {
 					if (ifa == null) {
-						logger.format(log.DEBUG,"No identifiable IPv4 address to use\n");
+						logger.debug("No identifiable IPv4 address to use\n");
 						return false;
 					}
 					if (ifa.ifa_addr.sa_family == net.AF_INET) {
@@ -193,12 +193,12 @@ public class Socket {
 		s.sin_family = net.AF_INET;
 		s.sin_addr.s_addr = *ref<unsigned>(ip);
 		s.sin_port = net.htons(port);
-//		logger.format(log.DEBUG,"s = { %d, %x, %x }\n", s.sin_family, s.sin_addr.s_addr, s.sin_port);
+//		logger.debug("s = { %d, %x, %x }\n", s.sin_family, s.sin_addr.s_addr, s.sin_port);
 		if (net.bind(_socketfd, &s, s.bytes) != 0) {
-			logger.format(log.DEBUG,"Binding failed to %d!", port);
+			logger.debug("Binding failed to %d!", port);
 			if (runtime.compileTarget == runtime.Target.X86_64_LNX)
 				linux.perror(" ".c_str());
-			logger.format(log.DEBUG,"\n");
+			logger.debug("\n");
 			net.closesocket(_socketfd);
 			return false;
 		}
@@ -210,13 +210,13 @@ public class Socket {
 			_port = net.ntohs(this_addr.sin_port); 
 		} else
 			_port = port;
-//		logger.format(log.DEBUG,"socketfd = %d port = %d", _socketfd, _port);
+//		logger.debug("socketfd = %d port = %d", _socketfd, _port);
 		return true;
 	}
 
 	public boolean listen() {
 		if (net.listen(_socketfd, net.SOMAXCONN) != 0) {
-			logger.format(log.DEBUG,"listen != 0: ");
+			logger.debug("listen != 0: ");
 			linux.perror(null);
 			net.closesocket(_socketfd);
 			return false;
@@ -230,7 +230,7 @@ public class Socket {
 		// TODO: Develop a test framework that allows us to test this scenario.
 		int acceptfd = net.accept(_socketfd, &a, &addrlen);
 		if (acceptfd < 0) {
-			logger.format(log.DEBUG,"accept failed: %d", acceptfd);
+			logger.debug("accept failed: %d", acceptfd);
 			linux.perror(null);
 			net.closesocket(_socketfd);
 			return null;
@@ -270,7 +270,7 @@ public class Socket {
 		sock_addr.sin_addr.s_addr = ip;
 		int result = net.connect(_socketfd, &sock_addr, sock_addr.bytes);
 		if (result != 0) {
-			logger.format(log.DEBUG,"net.connect failed: %d\n", result);
+			logger.debug("net.connect failed: %d\n", result);
 			return null, ip;
 		}
 		ref<Connection> connection = createConnection(_socketfd, &sock_addr, sock_addr.bytes);
@@ -284,7 +284,7 @@ public class Socket {
 		if (net.inet_aton(hostname.c_str(), &inet) == 0) {
 			ref<net.hostent> host = net.gethostbyname(hostname.c_str());
 			if (host == null) {
-				logger.format(log.DEBUG,"gethostbyname failed for '%s'\n", hostname);
+				logger.debug("gethostbyname failed for '%s'\n", hostname);
 				return 0, false;
 			}
 			inet.s_addr = *ref<unsigned>(*host.h_addr_list);
@@ -356,7 +356,7 @@ public class Connection {
 	}
 
 	~Connection() {
-//		logger.format(log.DEBUG,"~Connection %p %d\n", this, _acceptfd);
+//		logger.debug("~Connection %p %d\n", this, _acceptfd);
 		net.closesocket(_acceptfd);
 	}
 
@@ -447,9 +447,9 @@ public class Connection {
 			_actual = read(&_inBuffer[0], _inBuffer.length());
 			if (_actual <= 0) {
 				if (_actual < 0)
-					logger.format(log.ERROR, "Failed to read from connection %d: %d\n", _acceptfd, _actual);
+					logger.error("Failed to read from connection %d: %d\n", _acceptfd, _actual);
 //				else
-//					logger.format(log.DEBUG, "Read 0 bytes from connection %d", _acceptfd);
+//					logger.debug( "Read 0 bytes from connection %d", _acceptfd);
 				return -1;
 			}
 
@@ -596,7 +596,7 @@ class SSLSocket extends Socket {
 		}
 
 		public void setContext(ref<thread.Thread> t, ref<ssl.SSL_CTX> context) {
-//			logger.format(log.DEBUG, "thread %s <- context %p", t.name(), context);
+//			logger.debug( "thread %s <- context %p", t.name(), context);
 			_contexts[t] = context;
 		}
 	}
@@ -607,7 +607,7 @@ class SSLSocket extends Socket {
 		lock (_init_ssl) {
 			if (!_done) {
 				_done = true;
-//				logger.format(log.DEBUG,"SSL_library_init\n");
+//				logger.debug("SSL_library_init\n");
 				ssl.SSL_load_error_strings();
 				ssl.SSL_library_init();
 			}
@@ -624,7 +624,7 @@ class SSLSocket extends Socket {
 		default:
 			assert(false);
 		}
-//		logger.format(log.DEBUG,"SSL configuration loaded\n");
+//		logger.debug("SSL configuration loaded\n");
 		_cipherList = cipherList;
 		_certificatesFile = certificatesFile;
 		_privateKeyFile = privateKeyFile;
@@ -650,55 +650,55 @@ class SSLSocket extends Socket {
 	public ref<ssl.SSL_CTX> createSSLContext(ref<ssl.SSL_METHOD> method, string cipherList, string certificatesFile, string privateKeyFile, string dhParamsFile) {
 		ref<ssl.SSL_CTX> context = ssl.SSL_CTX_new(method);
 		if (context == null) {
-			logger.format(log.ERROR, "SSL_CTX_new failed: %d", ssl.SSL_get_error(null, 0));
-			logger.format(log.DEBUG, "                %s", ssl.ERR_error_string(ssl.SSL_get_error(null, 0), null));
+			logger.error("SSL_CTX_new failed: %d", ssl.SSL_get_error(null, 0));
+			logger.debug( "                %s", ssl.ERR_error_string(ssl.SSL_get_error(null, 0), null));
 			for (;;) {
 				long e = ssl.ERR_get_error();
 				if (e == 0)
 					break;
-				logger.format(log.DEBUG,"    %d %s", e, ssl.ERR_error_string(e, null));
+				logger.debug("    %d %s", e, ssl.ERR_error_string(e, null));
 			}
 			return null;
 		}
 		ssl.SSL_CTX_set_options(context, ssl.SSL_OP_NO_SSLv2);
 		if (certificatesFile != null) {
-	//		logger.format(log.DEBUG,"Loading self-signed certificate.\n");
+	//		logger.debug("Loading self-signed certificate.\n");
 			ssl.SSL_CTX_use_certificate_file(context, certificatesFile.c_str(), ssl.SSL_FILETYPE_PEM);
 			ssl.SSL_CTX_set_client_CA_list(context, ssl.SSL_load_client_CA_file("/etc/ssl/certs/ca-certificates.crt".c_str()));
 		}
 		if (privateKeyFile != null)
 			ssl.SSL_CTX_use_PrivateKey_file(context, privateKeyFile.c_str(), ssl.SSL_FILETYPE_PEM);
 		if (dhParamsFile != null) {
-	//		logger.format(log.DEBUG,"Loading DH parameters\n");
+	//		logger.debug("Loading DH parameters\n");
 			ref<C.FILE> fp = C.fopen(dhParamsFile.c_str(), "r".c_str());
 			if (fp == null)
-				logger.format(log.DEBUG,"Cannot open '%s' file", dhParamsFile);
+				logger.debug("Cannot open '%s' file", dhParamsFile);
 			else {
 				ref<ssl.DH> dh = ssl.PEM_read_DHparams(fp, null, null, "jrirba".c_str());
 				C.fclose(fp);
 				if (dh != null) {
 					if (ssl.SSL_CTX_set_tmp_dh(context, dh) != 1)
-						logger.format(log.DEBUG,"SSL_CTX_set_tmp_dh failed");
+						logger.debug("SSL_CTX_set_tmp_dh failed");
 	//				else
-	//					logger.format(log.DEBUG,"SSL_CTX_set_tmp_dh succeeded\n");
+	//					logger.debug("SSL_CTX_set_tmp_dh succeeded\n");
 					ssl.DH_free(dh);
 				} else
-					logger.format(log.DEBUG,"PEM_read_DHparams failed");
+					logger.debug("PEM_read_DHparams failed");
 			}
 		}
 		if (cipherList != null) {
-//			logger.format(log.DEBUG,"Setting cipher list to '%s'\n", cipherList);
+//			logger.debug("Setting cipher list to '%s'\n", cipherList);
 			if (ssl.SSL_CTX_set_cipher_list(context, cipherList.c_str()) == 0) {
-				logger.format(log.ERROR, "Could not load cipher list");
+				logger.error("Could not load cipher list");
 				for (;;) {
 					long e = ssl.ERR_get_error();
 					if (e == 0)
 						break;
-					logger.format(log.DEBUG,"    %d %s", e, ssl.ERR_error_string(e, null));
+					logger.debug("    %d %s", e, ssl.ERR_error_string(e, null));
 				}
 			}
 		}
-//		logger.format(log.DEBUG, "context created for %d", _acceptfd);
+//		logger.debug( "context created for %d", _acceptfd);
 		return context;
 	}
 
@@ -712,7 +712,7 @@ class SSLConnection extends Connection {
 
 	SSLConnection(int acceptfd, ref<net.sockaddr_in> addr, int addrLen, ref<SSLSocket> socket) {
 		super(acceptfd, addr, addrLen);
-//		logger.format(log.DEBUG, "new SSLConnection(%d, -)\n", acceptfd); 
+//		logger.debug( "new SSLConnection(%d, -)\n", acceptfd); 
 		_socket = socket;
 	}
 
@@ -724,37 +724,37 @@ class SSLConnection extends Connection {
 		_bio = ssl.BIO_new_socket(_acceptfd, ssl.BIO_NOCLOSE);
 		_ssl = ssl.SSL_new(_context);
 		if (_ssl == null) {
-			logger.format(log.DEBUG, "SSL_new failed: %d", ssl.SSL_get_error(null, 0));
-			logger.format(log.DEBUG, "                %s", ssl.ERR_error_string(ssl.SSL_get_error(null, 0), null));
+			logger.debug( "SSL_new failed: %d", ssl.SSL_get_error(null, 0));
+			logger.debug( "                %s", ssl.ERR_error_string(ssl.SSL_get_error(null, 0), null));
 			for (;;) {
 				long e = ssl.ERR_get_error();
 				if (e == 0)
 					break;
-				logger.format(log.DEBUG, "    %d %s", e, ssl.ERR_error_string(e, null));
+				logger.debug( "    %d %s", e, ssl.ERR_error_string(e, null));
 			}
 			return false;
 		}
 /*
-		logger.format(log.DEBUG,"Ciphers:\n");
+		logger.debug("Ciphers:\n");
 		for (int prio = 0; ; prio++) {
 			pointer<byte> list = ssl.SSL_get_cipher_list(_ssl, prio);
 			if (list == null)
 				break;
-			logger.format(log.DEBUG,"[%d] %s\n", prio, list);
+			logger.debug("[%d] %s\n", prio, list);
 		}
  */
 		ssl.SSL_set_accept_state(_ssl);
 		ssl.SSL_set_bio(_ssl, _bio, _bio);
-//		logger.format(log.DEBUG, "_ssl %p before SSL_accept", _ssl);
+//		logger.debug( "_ssl %p before SSL_accept", _ssl);
 		int r = ssl.SSL_accept(_ssl);
 		if (r == -1) {
-			logger.format(log.DEBUG,"SSL_accept failed: %d", ssl.SSL_get_error(_ssl, r));
-			logger.format(log.DEBUG,"                %s", ssl.ERR_error_string(ssl.SSL_get_error(_ssl, r), null));
+			logger.debug("SSL_accept failed: %d", ssl.SSL_get_error(_ssl, r));
+			logger.debug("                %s", ssl.ERR_error_string(ssl.SSL_get_error(_ssl, r), null));
 			for (;;) {
 				long e = ssl.ERR_get_error();
 				if (e == 0)
 					break;
-				logger.format(log.DEBUG,"    %d %s", e, ssl.ERR_error_string(e, null));
+				logger.debug("    %d %s", e, ssl.ERR_error_string(e, null));
 			}
 			return false;
 		}
@@ -766,33 +766,33 @@ class SSLConnection extends Connection {
 		if (!initializeContext())
 			return false;
 		// Do the TLS handshake
-//		logger.format(log.DEBUG,"Starting TLS handshake...\n");
+//		logger.debug("Starting TLS handshake...\n");
 //		ref<ssl.BIO> bio = ssl.BIO_new_socket(_acceptfd, ssl.BIO_NOCLOSE);
 		_ssl = ssl.SSL_new(_context);
 		if (_ssl == null) {
-			logger.format(log.DEBUG,"SSL_new failed: %d\n", ssl.SSL_get_error(null, 0));
+			logger.debug("SSL_new failed: %d\n", ssl.SSL_get_error(null, 0));
 			for (;;) {
 				long e = ssl.ERR_get_error();
 				if (e == 0)
 					break;
-				logger.format(log.DEBUG,"    %d %s\n", e, ssl.ERR_error_string(e, null));
+				logger.debug("    %d %s\n", e, ssl.ERR_error_string(e, null));
 			}
 			return false;
 		}
 		if (ssl.SSL_set_fd(_ssl, _acceptfd) == 0) {
-			logger.format(log.DEBUG,"SSL_set_fd failed\n");
+			logger.debug("SSL_set_fd failed\n");
 		}
 //		ssl.SSL_set_connect_state(_ssl);
 //		ssl.SSL_set_bio(_ssl, bio, bio);
 		int r = ssl.SSL_connect(_ssl);
 		if (r < 1) {
-			logger.format(log.DEBUG,"SSL_connect failed: %d\n", ssl.SSL_get_error(_ssl, r));
-			logger.format(log.DEBUG,"                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(_ssl, r), null));
+			logger.debug("SSL_connect failed: %d\n", ssl.SSL_get_error(_ssl, r));
+			logger.debug("                %s\n", ssl.ERR_error_string(ssl.SSL_get_error(_ssl, r), null));
 			for (;;) {
 				long e = ssl.ERR_get_error();
 				if (e == 0)
 					break;
-				logger.format(log.DEBUG,"    %s\n", ssl.ERR_error_string(e, null));
+				logger.debug("    %s\n", ssl.ERR_error_string(e, null));
 			}
 			return false;
 		}
@@ -802,7 +802,7 @@ class SSLConnection extends Connection {
 	private boolean initializeContext() {
 		if (_context == null) {
 			_context = _socket.getContext();
-//			logger.format(log.DEBUG, "got context for %d: %p", _acceptfd, _context);
+//			logger.debug( "got context for %d: %p", _acceptfd, _context);
 			if (_context == null)
 				return false;
 		}
@@ -819,9 +819,9 @@ class SSLConnection extends Connection {
 
 	public int read(pointer<byte> buffer, int length) {
 		for (;;) {
-//			logger.format(log.DEBUG,"about to SSL_read\n");
+//			logger.debug("about to SSL_read\n");
 			int x = ssl.SSL_read(_ssl, buffer, length);
-//			logger.format(log.DEBUG,"Got %d bytes\n", x);
+//			logger.debug("Got %d bytes\n", x);
 			if (x <= 0) {
 				if (x == 0) {
 					int err = ssl.SSL_get_error(_ssl, x);
@@ -830,12 +830,12 @@ class SSLConnection extends Connection {
 							return 0;
 					} else if (err == ssl.SSL_ERROR_ZERO_RETURN)
 						return 0;
-					logger.format(log.DEBUG,"SSL_read of %d returned zero: %d\n", _acceptfd, ssl.SSL_get_error(_ssl, x));
+					logger.debug("SSL_read of %d returned zero: %d\n", _acceptfd, ssl.SSL_get_error(_ssl, x));
 					for (;;) {
 						long e = ssl.ERR_get_error();
 						if (e == 0)
 							break;
-						logger.format(log.DEBUG,"    %d %s\n", e, ssl.ERR_error_string(e, null));
+						logger.debug("    %d %s\n", e, ssl.ERR_error_string(e, null));
 					}
 					return -1;
 				} else if (x == -1) {
@@ -848,7 +848,7 @@ class SSLConnection extends Connection {
 						return 0;
 					}
 				}
-				logger.format(log.DEBUG,"SSL_read failed return %d\n", x);
+				logger.debug("SSL_read failed return %d\n", x);
 				diagnoseError(x);
 			}
 			return x;
@@ -856,11 +856,11 @@ class SSLConnection extends Connection {
 	}
 
 	public int write(pointer<byte> buffer, int length) {
-//		logger.format(log.DEBUG,"SSLConnection write to %d:\n", _acceptfd);
+//		logger.debug("SSLConnection write to %d:\n", _acceptfd);
 //		text.memDump(buffer, length);
 		int result = ssl.SSL_write(_ssl, buffer, length);
 		if (result < 0) {
-			logger.format(log.DEBUG,"SSL_write failed result = %d\n", result);
+			logger.debug("SSL_write failed result = %d\n", result);
 			diagnoseError(result);
 			linux.perror("SSL_write".c_str());
 		}
@@ -868,12 +868,12 @@ class SSLConnection extends Connection {
 	}
 
 	public void diagnoseError(int ret) {
-		logger.format(log.DEBUG,"SSL call failed: %s\n", ssl_error_strings[ssl.SSL_get_error(_ssl, ret)]);
+		logger.debug("SSL call failed: %s\n", ssl_error_strings[ssl.SSL_get_error(_ssl, ret)]);
 		for (;;) {
 			long e = ssl.ERR_get_error();
 			if (e == 0)
 				break;
-			logger.format(log.DEBUG,"    %d %s\n", e, ssl.ERR_error_string(e, null));
+			logger.debug("    %d %s\n", e, ssl.ERR_error_string(e, null));
 		}
 	}
 
