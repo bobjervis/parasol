@@ -15,6 +15,7 @@
  */
 namespace parasol:http;
 
+import parasol:exception.IllegalOperationException;
 import parasol:log;
 import parasol:process;
 import parasol:storage.File;
@@ -532,6 +533,7 @@ public class HttpParsedResponse {
  */
 public class HttpResponse {
 	private ref<net.Connection> _connection;
+	private boolean _statusWritten;
 	private boolean _headersEnded;
 	
 	HttpResponse() {
@@ -543,6 +545,8 @@ public class HttpResponse {
 	}
 	
 	void close() {
+		if (!_statusWritten)
+			throw IllegalOperationException("no status line");
 		if (!_headersEnded)
 			endOfHeaders();
 		_connection.flush();
@@ -550,23 +554,41 @@ public class HttpResponse {
 	}
 	
 	void printf(string format, var... parameters) {
+		if (!_statusWritten)
+			throw IllegalOperationException("no status line");
+		if (!_headersEnded)
+			endOfHeaders();
 		_connection.printf(format, parameters);
 	}
 
 	void write(string s) {
+		if (!_statusWritten)
+			throw IllegalOperationException("no status line");
+		if (!_headersEnded)
+			endOfHeaders();
 		_connection.write(s);
 	}
 
 	void write(pointer<byte> data, int length) {
+		if (!_statusWritten)
+			throw IllegalOperationException("no status line");
+		if (!_headersEnded)
+			endOfHeaders();
 		for (int i = 0; i < length; i++)
 			_connection.putc(data[i]);
 	}
 
 	void putc(byte c) {
+		if (!_statusWritten)
+			throw IllegalOperationException("no status line");
+		if (!_headersEnded)
+			endOfHeaders();
 		_connection.putc(c);
 	}
 	
 	public void error(int statusCode) {
+		if (_statusWritten)
+			throw IllegalOperationException("status line already written");
 		string reasonPhrase;
 		switch (statusCode) {
 		case	400:	reasonPhrase = "Bad Request";			break;
@@ -600,14 +622,23 @@ public class HttpResponse {
 	}
 	
 	public void statusLine(int statusCode, string reasonPhrase) {
+		if (_statusWritten)
+			throw IllegalOperationException("status line already written");
+		_statusWritten = true;
 		_connection.printf("HTTP/1.1 %d %s\r\n", statusCode, reasonPhrase);
 	}
 	
 	public void header(string label, string value) {
+		if (!_statusWritten)
+			throw IllegalOperationException("no status line");
+		if (_headersEnded)
+			throw IllegalOperationException("heaaders ended");
 		_connection.printf("%s: %s\r\n", label, value);
 	}
 	
 	public void endOfHeaders() {
+		if (!_statusWritten)
+			throw IllegalOperationException("no status line");
 		_headersEnded = true;
 		_connection.write("\r\n");
 		_connection.flush();
@@ -1013,36 +1044,56 @@ public class HttpParser {
 		HttpToken t = token();
 		while (t == HttpToken.CRLF)
 			t = token();
-		if (t != HttpToken.TOKEN)
+		if (t != HttpToken.TOKEN) {
+			logger.error("HTTP response does not begin with a token");
 			return false;
-		if (_tokenValue != "HTTP")
+		}
+		if (_tokenValue != "HTTP") {
+			logger.error("HTTP response does not begin with HTTP");
 			return false;
-		if (token() != HttpToken.SL)
+		}
+		if (token() != HttpToken.SL) {
+			logger.error("HTTP response does not begin with HTTP /");
 			return false;
-		if (token() != HttpToken.TOKEN)
+		}
+		if (token() != HttpToken.TOKEN) {
+			logger.error("HTTP response does not begin with HTTP / and a code token");
 			return false;
+		}
 		response.httpVersion = _tokenValue;
-		if (token() != HttpToken.SP)
+		if (token() != HttpToken.SP) {
+			logger.error("HTTP response does not begin with HTTP / code-token SP");
 			return false;
-		if (token() != HttpToken.TOKEN)
+		}
+		if (token() != HttpToken.TOKEN) {
+			logger.error("HTTP response does not begin with HTTP / code-token SP token");
 			return false;
+		}
 		response.code = _tokenValue;
-		if (token() != HttpToken.SP)
+		if (token() != HttpToken.SP) {
+			logger.error("HTTP response does not begin with HTTP / code=-token SP token SP");
 			return false;
+		}
 		response.reason = readToEOL();
 				
 		for (;;) {
 			t = token();
 			if (t == HttpToken.CRLF)
 				break;
-			if (t != HttpToken.TOKEN)
+			if (t != HttpToken.TOKEN) {
+				logger.error("HTTP response header does not begin with a token");
 				return false;
+			}
 			string name = _tokenValue;
-			if (token() != HttpToken.CO)
+			if (token() != HttpToken.CO) {
+				logger.error("HTTP response header does not begin with a token CO");
 				return false;
+			}
 			skipWhiteSpace();
-			if (!fieldValue())
+			if (!fieldValue()) {
+				logger.error("HTTP response header does not have a proper value");
 				return false;
+			}
 			// header names are case-insensitive
 			name = name.toLowerCase();
 			// The fieldValue() method consumed the CRLF, so we are ready to start parsing the next header

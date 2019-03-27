@@ -665,6 +665,19 @@ public class string extends String<byte> {
 				return false;
 		return true;
 	}
+	/**
+	 * Matches a prefix byte against the target string.
+	 *
+	 * @param prefix The byte to match against the first byte of the string.
+	 *
+	 * @return true if the first byte of the string is the prefix. If the string is empty, null or has any
+	 * other value in the first byte, the return value is false.
+	 */
+	public boolean startsWith(byte prefix) {
+		if (length() <= 0)
+			return false;
+		return _contents.data == prefix;
+	}
 
 	public boolean startsWith(substringClass prefix) {
 		if (_contents == null)

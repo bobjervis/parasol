@@ -436,8 +436,6 @@ public class Connection {
 		return true;
 	}
 
-//	static Monitor mon;
-
 	// These implement buffered reads using _inBuffer;
 
 	public int read() {
@@ -453,9 +451,7 @@ public class Connection {
 				return -1;
 			}
 
-//			lock (mon) {
-//				logMemDump(_acceptfd, &_inBuffer[0], _actual, 0);
-//			}
+//			logger.memDump(log.DEBUG, "Read buffer", &_inBuffer[0], _actual, 0);
 			_cursor = 0;
 		}
 		return _inBuffer[_cursor++];
