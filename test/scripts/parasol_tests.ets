@@ -14,6 +14,7 @@ conditional(target: x86-64-lnx) {
 
 run(filename: compile_target_test.p)
 //run(filename: httpd_test.p)
+run(filename: dotted_ip_test.p)
 run(filename: uri_code_test.p)
 run(filename: uri_parse_test.p)
 run(filename: hmac_test.p)

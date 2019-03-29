@@ -954,6 +954,28 @@ public string dottedIP(unsigned ipv4) {
 	return s; 
 }
 
+public unsigned, boolean parseDottedIP(string dottedIP) {
+	string[] parts = dottedIP.split('.');
+	if (parts.length() != 4)
+		return 0, false;
+	byte o1, o2, o3, o4;
+	boolean success;
+
+	(o1, success) = byte.parse(parts[0]);
+	if (!success)
+		return 0, false;
+	(o2, success) = byte.parse(parts[1]);
+	if (!success)
+		return 0, false;
+	(o3, success) = byte.parse(parts[2]);
+	if (!success)
+		return 0, false;
+	(o4, success) = byte.parse(parts[3]);
+	if (!success)
+		return 0, false;
+	return unsigned(o1 | (o2 << 8) | (o3 << 16) | (o4 << 24)), true;
+}
+
 public byte[] base64decode(string data) {
 	byte[] a;
 
