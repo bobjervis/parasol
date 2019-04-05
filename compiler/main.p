@@ -81,6 +81,8 @@ class ParasolCommand extends process.Command {
 		rootArgument = stringArgument(0, "root",
 					"Designates a specific directory to treat as the 'root' of the install tree. " +
 					"The default is the parent directory of the runtime binary program.");
+		compileOnlyArgument = booleanArgument('c', "compile",
+					"Only compile the application, do not run it.");
 		helpArgument('?', "help",
 					"Displays this help.");
 	}
@@ -94,6 +96,7 @@ class ParasolCommand extends process.Command {
 	ref<process.Argument<string>> rootArgument;
 	ref<process.Argument<boolean>> logImportsArgument;
 	ref<process.Argument<boolean>> symbolTableArgument;
+	ref<process.Argument<boolean>> compileOnlyArgument;
 }
 
 private ref<ParasolCommand> parasolCommand;
@@ -172,12 +175,14 @@ int runCommand() {
 	}
 	if (!disassemble(&arena, target, args[0]))
 		return 1;
-	(returnValue, result) = target.run(args);
-	if (!result) {
-		if (returnValue == -1) {
-		} else
-			printf("%s failed!\n", args[0]);
-		return 1;
+	if (!parasolCommand.compileOnlyArgument.value) {
+		(returnValue, result) = target.run(args);
+		if (!result) {
+			if (returnValue == -1) {
+			} else
+				printf("%s failed!\n", args[0]);
+			return 1;
+		}
 	}
 	delete target;
 	return returnValue;

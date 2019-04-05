@@ -442,7 +442,7 @@ public class LogHandler extends LogHandlerVolatileData {
 		ref<Monitor> mon;
 		lock (*this) {
 			if (!_events.isEmpty()) {
-				mon = &_drainDone;;
+				mon = &_drainDone;
 				_shouldSignal++;
 			}
 		}

@@ -121,16 +121,21 @@ public class Exception {
 			locationIsExact = false;
 //		printf("    failure address %p\n", _exceptionContext.exceptionAddress);
 		address stackHigh = pointer<byte>(_exceptionContext.stackPointer) + _exceptionContext.stackSize;
-		address fp = _exceptionContext.inferredFramePointer;
 		address ip = _exceptionContext.exceptionAddress;
 		string tag = "->";
 		int lowCode = int(runtime.lowCodeAddress());
 		int staticMemoryLength = int(runtime.highCodeAddress()) - lowCode;
 		int ignoreFrames = ignoreTopFrames();
-		while (_exceptionContext.valid(fp)) {
-//			printf("fp = %p ip = %p relative = %x\n", fp, ip, int(ip) - lowCode);
-			pointer<address> stack = pointer<address>(fp);
-			long nextFp = _exceptionContext.slot(fp);
+		pointer<address> frame;
+		int(address, address) comparator = comparatorCurrentIp;
+		for (;;) {
+			ref<ExceptionEntry> ee;
+			address ip;
+			(ee, frame, ip) = nextFrame(frame, false, comparator);
+			if (frame == null)
+				break;
+			comparator = comparatorReturnAddress;
+
 			int relative = int(ip) - lowCode;
 			if (ignoreFrames > 0)
 				ignoreFrames--;
@@ -143,13 +148,6 @@ public class Exception {
 				output.printf(" %2s %s\n", tag, locationLabel);
 				tag = "";
 			}
-//			if (nextFp != 0 && nextFp < long(fp)) {
-//				printf("    *** Stored frame pointer out of sequence: %p\n", nextFp);
-//				break;
-//			}
-			fp = address(nextFp);
-			ip = address(_exceptionContext.slot(stack + 1));
-			locationIsExact = false;
 		}
 		return output;
 	}
@@ -167,7 +165,8 @@ public class Exception {
 		// exception for the first time.
 		
 		int(address, address) comparator = comparatorReturnAddress;
-		pointer<byte> ip = pointer<pointer<byte>>(stackPointer)[-1];
+		pointer<address> frame;
+		boolean useRealStack;
 		if (_exceptionContext == null) {
 			// An inital throw statement of an unthrown exception
 			_exceptionContext = createExceptionContext(stackPointer);
@@ -175,94 +174,105 @@ public class Exception {
 			_exceptionContext.exceptionAddress = pointer<address>(stackPointer)[-1];
 		} else if (_exceptionContext.lastCrawledFramePointer == null) {
 			// first time handling of a hardware exception
-			ip = pointer<byte>(_exceptionContext.exceptionAddress);
 			comparator = comparatorCurrentIp;
-		} // else a re-thrown exception
-		address stackTop = address(long(_exceptionContext.stackBase) + _exceptionContext.stackSize);
-		pointer<address> searchEnd = pointer<address>(stackTop) + -2;
-		pointer<address> frame = pointer<address>(_exceptionContext.framePointer);
-		pointer<address> stack = pointer<address>(_exceptionContext.stackPointer);
-		ref<ExceptionEntry> ee;
-		if (frame < stack || frame >= searchEnd) {
-			for (pointer<address> rbpCandidate = stack; rbpCandidate < searchEnd; rbpCandidate++) {
-				(ee, frame) = crawlStack(ip, rbpCandidate, comparator);
-				if (ee != null)
-					break;
+		} else { // else a re-thrown exception
+			frame = pointer<address>(stackPointer) + -2;
+			useRealStack = true;
+		}
+		for (;;) {
+			ref<ExceptionEntry> ee;
+			address ip;
+			(ee, frame, ip) = nextFrame(frame, useRealStack, comparator);
+			if (frame == null)
+				break;
+			comparator = comparatorReturnAddress;
+
+			if (ee != null) {
+				_exceptionContext.lastCrawledFramePointer = frame;
+				callCatchHandler(this, frame, ee.handler);
+				process.exit(1);
 			}
-		} else
-			(ee, frame) = crawlStack(ip, frame, comparator);
-		if (ee != null) {
-			_exceptionContext.lastCrawledFramePointer = frame;
-			callCatchHandler(this, frame, ee.handler);
-			process.exit(1);
 		}
 		printf("\nFATAL: Could not find a stack handler for this address.\n");
 		_exceptionContext.print();
 		printf(textStackTrace());
 		process.exit(1);
 	}
-	
-	private ref<ExceptionEntry>, pointer<address> crawlStack(pointer<byte> ip, pointer<address> frame, int comparator(address ip, address elem)) {
-		_exceptionContext.inferredFramePointer = frame;
-		pointer<address> oldRbp;
+
+	private ref<ExceptionEntry>, pointer<address>, address nextFrame(pointer<address> lastFrame, boolean useRealStack, int comparator(address ip, address elem)) {
+//		printf("nextFrame(%p, %s)\n", lastFrame, comparator == comparatorCurrentIp ? "current ip" : "return address");
+		pointer<address> frame;
+		pointer<byte> ip;
+
+		pointer<byte> lowCode = runtime.lowCodeAddress();
+		pointer<byte> highCode = runtime.highCodeAddress();
 		pointer<ExceptionEntry> ee = pointer<ExceptionEntry>(exceptionsAddress());
 		int count = exceptionsCount();
 		if (count == 0) {
 			printf("No exceptions table for this image.\n");
 			process.exit(1);
 		}
-//		printf("crawlStack(%p, %p, ...)\n", ip, frame);
-		pointer<byte> lowCode = runtime.lowCodeAddress();
-		pointer<byte> highCode = runtime.highCodeAddress();
-//		int(address ip, address elem) comparator = comparatorCurrentIp;
-		address stackTop = address(long(_exceptionContext.stackBase) + _exceptionContext.stackSize);
-		pointer<address> plausibleEnd = pointer<address>(stackTop) + -2;
-		do {
-			if (ip >= lowCode && ip < highCode) {
-				int location = int(ip - lowCode);
-//				printf("Checking location %x", location);
-				address result = bsearch(&location, ee, count, ExceptionEntry.bytes, comparator);
-//				printf(" -> found %p", result);
-				if (result != null) {
-					ref<ExceptionEntry> ee = ref<ExceptionEntry>(result);
 
-//					printf("(handler %x)\n", ee.handler);
-					// If we have a handler, call it.
-					if (ee.handler != 0)
-						return ee, frame;
-				}
-//				printf("\n");
-			}
-			oldRbp = frame;
-			ip = pointer<byte>(frame[1]);
-			frame = pointer<address>(*frame);
-			comparator = comparatorReturnAddress;
-		} while (frame > oldRbp && frame < plausibleEnd);
-		return null, null;
-	}
-
-	void inferFramePointer() {
-		pointer<byte> ip = pointer<byte>(_exceptionContext.exceptionAddress);
-		ref<ExceptionEntry> ee;
-		pointer<address> frame = pointer<address>(_exceptionContext.framePointer);
-		if (_exceptionContext.valid(frame)) {
-			(ee, frame) = crawlStack(ip, frame, comparatorCurrentIp);
-			if (ee != null) {
-				_exceptionContext.inferredFramePointer = frame;
-				return;
+		if (lastFrame == null) {
+			frame = pointer<address>(_exceptionContext.framePointer);
+			ip = pointer<byte>(_exceptionContext.exceptionAddress);
+			// The initial 'lastFrame' starting point (as if there was a saved RBP, IP pair there) would
+			// be just below the stack pointer.
+			lastFrame = pointer<address>(_exceptionContext.stackPointer) + -2;
+		} else {
+			if (useRealStack) {
+				frame = pointer<address>(lastFrame[0]);
+				ip = pointer<byte>(lastFrame[1]);
+			} else {
+				frame = pointer<address>(_exceptionContext.slot(lastFrame));
+				ip = pointer<byte>(_exceptionContext.slot(lastFrame + 1));
 			}
 		}
 		address stackTop = address(long(_exceptionContext.stackBase) + _exceptionContext.stackSize);
 		pointer<address> searchEnd = pointer<address>(stackTop) + -2;
-		pointer<address> stack = pointer<address>(_exceptionContext.stackPointer);
-		for (pointer<address> rbpCandidate = stack; rbpCandidate < searchEnd; rbpCandidate++) {
-			(ee, frame) = crawlStack(ip, rbpCandidate, comparatorCurrentIp);
-			if (ee != null) {
-				_exceptionContext.inferredFramePointer = rbpCandidate;
-				return;
+		int location = int(ip - lowCode);
+//		printf("location %x %p ? %p ? %p\n", location, address(lastFrame + 2), frame, searchEnd);
+
+
+		if (frame < lastFrame + 2 || frame >= searchEnd) {
+			// For whatever reason, the frame we are trying to use as the next place to start looking
+			// for a return address is no good, so guess by checking all possible values. As soon as we
+			// see a stack slot containing a possible next 
+			for (frame = lastFrame + 2; ; frame++) {
+				if (frame >= searchEnd) {
+					frame = null;
+					break;
+				}
+				pointer<address> nextFrame;
+				if (useRealStack)
+					nextFrame = pointer<address>(*frame);
+				else
+					nextFrame = pointer<address>(_exceptionContext.slot(frame));
+				if (nextFrame >= frame + 2 && nextFrame < searchEnd)
+					break;
 			}
 		}
-	}
+
+		if (ip >= lowCode && ip < highCode) {
+			int location = int(ip - lowCode);
+//			printf("%x Checking location %x", frame, location);
+			address result = bsearch(&location, ee, count, ExceptionEntry.bytes, comparator);
+//			printf(" -> found %p", result);
+			if (result != null) {
+				ref<ExceptionEntry> ee = ref<ExceptionEntry>(result);
+
+//				printf("(handler %x)\n", ee.handler);
+
+				// If we have a handler, call it.
+				if (ee.handler != 0)
+					return ee, frame, ip;
+			} //else 
+//				printf("\n");
+		} //else
+//			printf("frame with non-Parasol ip %x\n", frame);
+
+		return null, frame, ip;
+	} 
 	/*
 	 * findStack confirms whether there are any valid stack frames (ones with Parasol code from
 	 * this image in them). Second, if it is valid, it counts how many frames there are so calling code
@@ -631,6 +641,7 @@ void throwException(ref<Exception> e, address frame, address stackPointer) {
 void uncaughtException(ref<Exception> e) {
 	printf("\nUncaught exception!\n\n%s\n", e.message());
 	e.printStackTrace();
+	process.stdout.flush();
 	exposeException(e);
 }
 /**
@@ -852,9 +863,6 @@ class ExceptionContext {
 	int exceptionType;			// Exception type
 	int exceptionFlags;			// Flags (dependent on type).
 	int stackSize;				// The length of the copy
-	address inferredFramePointer;	// The frame pointer inferred when the hardware value is not valid.
-											// Note: C++ and OS ilbraries do not maintain a proper frame pointer
-											// so hardware exceptions can leave the stack chain corrupted at the top.
 	
 	boolean valid(address stackAddress) {
 		return pointer<byte>(stackBase) <= pointer<byte>(stackAddress) &&
@@ -876,7 +884,6 @@ class ExceptionContext {
 		printf("    exception address          %p\n", exceptionAddress);
 		printf("    stack pointer              %p\n", stackPointer);
 		printf("    frame pointer              %p\n", framePointer);
-		printf("    inferred frame pointer     %p\n", inferredFramePointer);
 		printf("    last crawled frame pointer %p\n", lastCrawledFramePointer);
 		printf("    stack base                 %p\n", stackBase);
 		printf("    stack top                  %p\n", long(stackBase) + stackSize);
@@ -962,12 +969,11 @@ private void dumpMyThread(ref<ExceptionContext> context) {
 	lock (serializeDumps) {
 		printf("\nThread %s (%d) stack\n", t.name(), t.id());
 		process.stdout.flush();
-		e.inferFramePointer();
 		string s = e.textStackTrace();
 		if (s.length() == 0)
 			context.print();
 		else
-			printf(s);
+			printf("%s", s);
 	}
 }
 

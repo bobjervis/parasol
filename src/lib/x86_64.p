@@ -50,6 +50,7 @@ import parasol:compiler.InterfaceImplementationScope;
 import parasol:compiler.InterfaceType;
 import parasol:compiler.InternalLiteral;
 import parasol:compiler.Jump;
+import parasol:compiler.Location;
 import parasol:compiler.LockScope;
 import parasol:compiler.Loop;
 import parasol:compiler.MessageId;
@@ -88,7 +89,7 @@ import parasol:storage;
 import native:C;
 
 /*
- * These are combined to produce the necessary instruciton encodings.
+ * These are combined to produce the necessary instruction encodings.
  */
 byte REX_W = 0x48;
 byte REX_R = 0x44;
@@ -762,6 +763,9 @@ public class X86_64 extends X86_64AssignTemps {
 			generateStaticBlock(scope.file(), compileContext);
 			node = ref<Block>(scope.definition());
 			ref<Symbol> main = scope.lookup("main", compileContext);
+			Location loc;
+			loc.offset = int(storage.size(scope.file().filename()));
+			emitSourceLocation(scope.file(), loc);
 			if (main != null &&
 				main.class == Overload) {
 				ref<Overload> m = ref<Overload>(main);
@@ -785,7 +789,6 @@ public class X86_64 extends X86_64AssignTemps {
 			insertPreamble();
 			inst(X86.ENTER, 0);
 			reserveAutoMemory(true, compileContext);
-
 			pushExceptionHandler(handler);
 			join.start(this);
 			inst(X86.PUSH, TypeFamily.SIGNED_64, R.RAX);
@@ -799,6 +802,7 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			inst(X86.ADD, TypeFamily.ADDRESS, R.RSP, 8);
 			inst(X86.POP, TypeFamily.SIGNED_64, R.RAX);
+
 			inst(X86.POP, TypeFamily.SIGNED_64, firstRegisterArgument());
 			inst(X86.POP, TypeFamily.SIGNED_64, R.R15);
 			inst(X86.POP, TypeFamily.SIGNED_64, R.R14);
@@ -810,6 +814,7 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.LEAVE);
 			if (!generateReturn(scope, compileContext))
 				unfinished(node, "generateReturn failed - default end-of-static block", compileContext);
+			pushExceptionHandler(null);
 			handler.start(this);
 			inst(X86.LEA, R.RSP, R.RBP, -(f().autoSize + 8 * address.bytes));
 			ref<Symbol> re;
@@ -821,7 +826,20 @@ public class X86_64 extends X86_64AssignTemps {
 			ref<Type> tp = (*o.instances())[0].assignType(compileContext);
 			ref<ParameterScope> uncaughtException = ref<ParameterScope>(tp.scope());
 			instCall(uncaughtException, compileContext);
-			closeCodeSegment(CC.JMP, join);
+			int reserveSpace = f().autoSize - f().registerSaveSize;
+			inst(X86.LEA, R.RSP, R.RBP, -reserveSpace); 
+			inst(X86.POP, TypeFamily.SIGNED_64, firstRegisterArgument());
+			inst(X86.POP, TypeFamily.SIGNED_64, R.R15);
+			inst(X86.POP, TypeFamily.SIGNED_64, R.R14);
+			inst(X86.POP, TypeFamily.SIGNED_64, R.R13);
+			inst(X86.POP, TypeFamily.SIGNED_64, R.R12);
+			inst(X86.POP, TypeFamily.SIGNED_64, R.RDI);
+			inst(X86.POP, TypeFamily.SIGNED_64, R.RSI);
+			inst(X86.POP, TypeFamily.SIGNED_64, R.RBX);
+			inst(X86.LEAVE);
+			if (!generateReturn(scope, compileContext))
+				unfinished(node, "generateReturn failed - default end-of-static block", compileContext);
+			closeCodeSegment(CC.NOP, null);
 			resolveDeferredTrys(false, compileContext);
 		}
 		_deferredTry.resize(f().knownDeferredTrys);

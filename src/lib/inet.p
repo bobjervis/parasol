@@ -195,10 +195,19 @@ public class Socket {
 		s.sin_port = net.htons(port);
 //		logger.debug("s = { %d, %x, %x }\n", s.sin_family, s.sin_addr.s_addr, s.sin_port);
 		if (net.bind(_socketfd, &s, s.bytes) != 0) {
-			logger.debug("Binding failed to %d!", port);
-			if (runtime.compileTarget == runtime.Target.X86_64_LNX)
-				linux.perror(" ".c_str());
-			logger.debug("\n");
+			if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+				string buffer;
+				buffer.resize(256);
+				int err = linux.errno();
+				linux.set_errno(0);
+				pointer<byte> retn = linux.strerror_r(err, &buffer[0], buffer.length());
+				if (linux.errno() == 0)
+					buffer = string(retn);
+				else
+					buffer = "errno " + string(err);
+				logger.debug("Binding failed to %d, %s", port, buffer);
+			} else
+				logger.debug("Binding failed to %d", port);
 			net.closesocket(_socketfd);
 			return false;
 		}

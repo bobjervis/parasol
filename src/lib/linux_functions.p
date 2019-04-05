@@ -360,6 +360,9 @@ public abstract long syscall(long callId, long p1, long p2, long p3);
 @Linux("libc.so.6", "statvfs")
 public abstract int statvfs(pointer<byte> path, ref<statvfsStruct> buf);
 
+@Linux("libc.so.6", "strerror_r")
+public abstract pointer<byte> strerror_r(int errno, pointer<byte> buf, size_t buflen);
+
 @Linux("libc.so.6", "sysconf")
 public abstract int sysconf(int parameter_index);
 
@@ -452,6 +455,12 @@ public int tgkill(int tgid, int tid, int sig) {
  */
 public int errno() {
 	return *__errno_location();
+}
+/**
+ * Because errno involves magic in C, you cannot just set it. You must use this function to set the value of errno. 
+ */
+public void set_errno(int value) {
+	*__errno_location() = value;
 }
 
 public class cc_t = byte;

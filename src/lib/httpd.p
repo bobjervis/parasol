@@ -206,12 +206,11 @@ public class HttpServer {
 		ref<Socket> socket = Socket.create(encryption, cipherList, certificatesFile, privateKeyFile, dhParamsFile);
 		if (socket.bind(port, scope)) {
 			if (!socket.listen()) {
-				printf("listen failed\n");
+				logger.debug("listen failed\n");
 				delete socket;
 				return null;
 			}
 		} else {
-			printf("bind failed\n");
 			delete socket;
 			return null;
 		}
