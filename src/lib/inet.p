@@ -144,7 +144,6 @@ public class Socket {
 	}
 
 	~Socket() {
-		logger.debug("~Socket for %d\n", _socketfd);
 		net.closesocket(_socketfd);
 	}
 

@@ -1007,7 +1007,8 @@ public class X86_64 extends X86_64AssignTemps {
 			} else if (defaultConstructor != null) {
 				inst(X86.LEA, firstRegisterArgument(), thisRegister(), sym.offset);
 				instCall(defaultConstructor, compileContext);
-			}
+			} else if (sym.type().interfaceCount() > 0)
+				inst(X86.LEA, firstRegisterArgument(), thisRegister(), sym.offset);
 			storeITables(sym.type(), sym.offset, compileContext);
 		}
 		if (constructorBody != null) {
@@ -3259,7 +3260,8 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.XOR, TypeFamily.UNSIGNED_16, secondRegisterArgument(), secondRegisterArgument());
 				inst(X86.MOV, TypeFamily.SIGNED_32, thirdRegisterArgument(), node.type.size());
 				instCall(_memset, compileContext);
-			}
+			} else if (node.type.interfaceCount() > 0)
+				inst(X86.MOV, firstRegisterArgument(), u.operand(), compileContext);
 			storeITables(node.type, 0, compileContext);
 			break;
 			
@@ -4392,10 +4394,12 @@ public class X86_64 extends X86_64AssignTemps {
 						break;
 						
 					case	CLASS:
+						
 						if (sym.type().hasVtable(compileContext)) {
 							inst(X86.LEA,firstRegisterArgument(),  sym.definition(), compileContext);
 							storeVtable(sym.type(), compileContext);
-						}
+						} else if (sym.type().interfaceCount() > 0)
+							inst(X86.LEA,firstRegisterArgument(),  sym.definition(), compileContext);
 						storeITables(sym.type(), 0, compileContext);
 						break;
 													
