@@ -885,6 +885,7 @@ public class Unary extends Node {
 			case	CLASS:
 			case	VAR:
 			case	STRING:
+			case	ADDRESS:
 				type = compileContext.arena().builtInType(TypeFamily.CLASS_VARIABLE);
 				break;
 

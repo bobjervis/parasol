@@ -15,6 +15,7 @@
  */
 namespace parasol:process;
 
+import parasol:exception.IllegalOperationException;
 import parasol:log;
 import parasol:pxi;
 import parasol:runtime;
@@ -113,6 +114,16 @@ private void init() {
 private monitor class ProcessVolatileData {
 	int _exitStatus;
 	boolean _running;
+	/**
+	 * Returns whether a process is running or stopped.
+	 *
+	 * @return Returns true if the process successfully forked, but has not yet returned
+	 * exit status. The method returns false otherwise.
+	 */
+	public boolean running() {
+		return _running;
+	}
+
 }
 /**
  * Process allows creation and management of a child process. 
@@ -144,6 +155,7 @@ public class Process extends ProcessVolatileData {
 		INTERACTIVE
 	}
 
+	private boolean _setpgrp;
 	private StdioHandling _stdioHandling;
 	private linux.uid_t _user;
 	private int _fdLimit;
@@ -162,6 +174,7 @@ public class Process extends ProcessVolatileData {
 				_fdLimit = int(rlim.rlim_cur);
 		}
 		_stdout = -1;
+		_pid = -1;
 	}
 
 	~Process() {
@@ -178,6 +191,20 @@ public class Process extends ProcessVolatileData {
 	 */
 	public void captureOutput() {
 		_stdioHandling = StdioHandling.CAPTURE_OUTPUT;
+	}
+	/**
+	 * This method ssets the spawn mode to use setpgrp so that the child process is a new process group
+	 * leader.
+	 *
+	 * This is a UNIX and Linux feature. Calling this method on Windows has no effect.
+	 *
+	 * Calling this function when the {@link running} method returns true (i.e. when the child process
+	 * is actually running) will throw an {@link IllegalOperationException}.
+	 */
+	public void setpgrp() {
+		if (running())
+			throw IllegalOperationException("setpgrp - already running");
+		_setpgrp = true;
 	}
 	/**
 	 * Set the spawn to use a PTY to interact with the spawned process. It will be launched
@@ -394,8 +421,9 @@ public class Process extends ProcessVolatileData {
 						linux.close(pipeFd[1]);
 						break;
 
-//					default:
-//						linux.setpgrp();
+					default:
+						if (_setpgrp)
+							linux.setpgrp();
 					}
 					// Okay, lock it down now.
 					if (_user != 0) {
@@ -454,6 +482,28 @@ public class Process extends ProcessVolatileData {
 				wait();
 			return _exitStatus;
 		}
+	}
+	/**
+	 * Return the native operating system process id of the process.
+	 *
+	 * @return If the process has been successfully started, returns the process
+	 * id. If the process has never been started returns -1. 
+	 */
+	public int id() {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+//			SpawnPayload payload;
+			
+//			int result = debugSpawnImpl(&command[0], &payload, timeout.value());
+//			string output = string(payload.output, payload.outputLength);
+//			exception_t outcome = exception_t(payload.outcome);
+//			disposeOfPayload(&payload);
+//			return result, output, outcome;
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+			lock (*this) {
+				return _pid;
+			}
+		}
+		return -1;
 	}
 
 	public boolean kill(int signal) {
