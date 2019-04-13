@@ -13,6 +13,18 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * The openssl.org SSL sockets library.
+ *
+ * This is the SSL implementation used in a variety of Linux https implementations,
+ * including the Parasol {@link http.HttpServer} and {@link http.HttpClient}.
+ *
+ * Please refer to the documentation at https://www.openssl.org/docs/ for information
+ * on how to use this library. While this binding has been used and tested in the Parasol
+ * Http, not all methods and certainly not all combinations of methods and arguments have been
+ * tested. The most likely source of such errors are mistakes in the function argument types or
+ * return types.
+ */
 namespace openssl.org:ssl;
 
 import native:C;

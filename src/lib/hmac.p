@@ -13,6 +13,15 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * A collection of convenience functions that allow for easy computation of cryptographic
+ * functions.
+ *
+ * Currently, only SHA256 is defined.
+ *
+ * The openssl.org libcrypto library is used as the actual implementation of the cryptogrpahic
+ * functions.
+ */
 namespace parasol:crypto;
 
 import parasol:text;
@@ -34,7 +43,7 @@ public string SHA256(string input) {
  *
  * The stream is positioned at the end-of-stream on conclusion of this function.
  *
- * @param input The input Reader to be hashed. This string may be binary data, ASCII or UTF-8.
+ * @param input The input Reader to be hashed. This Reader may return binary data, ASCII or UTF-8.
  * @return the SHA256 hash of the input stream.
  */
 public string SHA256(ref<Reader> input) {
@@ -59,7 +68,7 @@ public string SHA256(ref<Reader> input) {
  *
  * @param stringToSign The text to be included in the signature.
  * @param key The key string to use to create the signature.
- * @return The 20-byte signature.
+ * @return The 32-byte signature.
  */
 public string HMAC_SHA256(string key, string stringToSign) {
 	string ipad;

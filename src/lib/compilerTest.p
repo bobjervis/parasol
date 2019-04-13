@@ -13,6 +13,10 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * @ignore - This namespace is for internal compiler testing and is not intended for end-user
+ * services.
+ */
 namespace parasol:compiler.test;
 
 import parasol:process;
