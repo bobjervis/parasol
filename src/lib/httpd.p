@@ -562,7 +562,10 @@ public class HttpService {
 	 */
 	public abstract boolean processRequest(ref<HttpRequest> request, ref<HttpResponse> response);
 }
-
+/**
+ * The parsed HTTP request being processed by an HttpServer.
+ *
+ */
 public class HttpRequest {
 	public Method method;
 	public string methodString;	// Only set for method == CUSTOM
@@ -577,7 +580,7 @@ public class HttpRequest {
 	private string[string] _parameters;			// These will be the parsed query parameters.
 	private ref<net.Connection> _connection;
 	
-	enum Method {
+	public enum Method {
 		NO_CONTENTS,							// Not actually part of HTTP. Indicates empty HTTP payload.
 		OPTIONS,
 		GET,
@@ -605,7 +608,12 @@ public class HttpRequest {
 	public unsigned sourceIP() {
 		return _connection.sourceAddress().sin_addr.s_addr;
 	}
-
+	/**
+	 * Fetch the content length of the request.
+	 *
+	 * @return The integer value of the content-length HTTP header. If the header is absent or
+	 * not a valid integer, the method returns zero.
+	 */
 	public long contentLength() {
 		string s = headers["content-length"];
 		if (s == null)
