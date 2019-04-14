@@ -30,10 +30,18 @@ import native:windows.WORD;
 private ref<log.Logger> logger = log.getLogger("parasol.net");
 
 private byte[] localhost = [ 127, 0, 0, 1 ];
-
+/**
+ * The scope of the port bound to a socket server.
+ */
 public enum ServerScope {
-	LOCALHOST,						// The Socket is only visible on the same machine as the server.
-	INTERNET,						// The Socket is visible across the Internet (using IPv4).
+	/**
+	 * The socket is only visible on the same machine as the server.
+	 */
+	LOCALHOST,
+	/**
+	 * The socket is visible across the Internet (using IPv4).
+	 */
+	INTERNET,
 }
 
 public enum Encryption {

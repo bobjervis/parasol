@@ -14,7 +14,7 @@
    limitations under the License.
  */
 /**
- * This namespace provides access to the linux C-language library and system calls.
+ * Provides access to the linux C-language library and system calls.
  *
  * Most of the functions and types defined here should be familiar to anyone who has programmed 
  * Linux in C.

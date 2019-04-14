@@ -14,7 +14,7 @@
    limitations under the License.
  */
 /**
- * The exception namespace defines facilities for performing exception handling and
+ * Provides facilities for performing exception handling and
  * also a set of commonly thrown exceptions.
  *
  * Much of the code in this namespace is present there (and not public) to proide support to

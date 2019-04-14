@@ -13,6 +13,15 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * Provides facilities to implement an HTP 1.1 server or client request.
+ *
+ * This is a work in progress.
+ * The server and client are missing a number of HTTP 1.1 functions, such a client side redirection,
+ * server side support for '100 Continue' messaging, etc.
+ *
+ * The server and client do support Web sockets, https and wss protocols.
+ */
 namespace parasol:http;
 
 import parasol:exception.IllegalOperationException;
@@ -35,17 +44,71 @@ import parasol:net;
 
 private ref<log.Logger> logger = log.getLogger("parasol.http.server");
 
-/*
+/**
  * This class implements an HTTP server. It implements HTTP version 1.1 for an Origin Server only. Hooks are defined to allow for
  * future expansion.
  * 
  *  This class is under construction and as such has numerous places where configurability will need to be expanded in the
  *  future.
+ *
+ * <b>Handling URL's</b>
+ *
+ * The HttpServer allows a user to describe the space of acceptable URL's and map them onto either static content
+ * located in the local file system, or to dynamic services that will process URL's in code.
+ *
+ * Before starting the server, the initialization code will need to make one call for each distinct subset of
+ * URL's to one of the folloiwng methods:
+ *
+ * <ul>
+ *		<li>{@link staticContent}. For static content available on http or https protocols.
+ *		<li>{@link httpStaticContent}. For static content available only on http protocol requests.
+ *		<li>{@link httpsStaticContent}. For static content available only on https protocol requests.
+ *		<li>{@link service}. For service responses available on http or https protocols.
+ *		<li>{@link httpService}. For service responses available only on http protocol requests.
+ *		<li>{@link httpsService}. For service responses available only on https protocol requests.
+ * </ul> 
+ *
+ * You must supply an absPath for each such call. All incoming URL's whose absPath begins with the same components
+ * as one of the above calls will be routed to that call's service or static content, assuming the protocols
+ * match.
+ *
+ * As a special case, the absPath value of "/" in one of these calls matches all incoming URL's.
+ *
+ * Note that when processing an incoming URL, the set of absPath parameters to the above calls are checked.
+ * The incoming URL will be directed to the service or static conetnt whose absPath matches and is the longest
+ * absPath to match the incoming URL. Thus you should not have to take extreme care in ordering your calls.
+ * If, for example, you want a custom response to all URL's, you can define a service with an absPath of "/" and
+ * then define other services and static content for other paths. An incoming URL will only match the
+ * "/" service if no other path does match.
+ *
+ * @threading
+ * These calls are not thread safe, so calling any of these methods on a server that has been started will
+ * produce unpredictable results.
  */
 public class HttpServer {
+	/**
+	 * The List of ciphers to use in https protocol handshakes.
+	 *
+	 * This value has no effect if https is disabled.
+	 */
 	public string cipherList;
+	/**
+	 * The certificates file to use in https protocol handshakes.
+	 *
+	 * This value has no effect if https is disabled.
+	 */
 	public string certificatesFile;
+	/**
+	 * The private key file to use in https protocol handshakes.
+	 *
+	 * This value has no effect if https is disabled.
+	 */
 	public string privateKeyFile;
+	/**
+	 * The dh parameters file to use in https protocols.
+	 *
+	 * This value has no effect if https is disabled.
+	 */
 	public string dhParamsFile;
 	boolean _publicServiceEnabled;
 	boolean _secureServiceEnabled;
@@ -58,7 +121,7 @@ public class HttpServer {
 	private PathHandler[] _handlers;
 	private ref<Thread> _httpsThread;
 	private ref<Thread> _httpThread;
-	/*
+	/**
 	 * The various roles a server can play determine how messages should be interpreted. 
 	 */
 	enum Type {
@@ -67,7 +130,10 @@ public class HttpServer {
 		GATEWAY,
 		TUNNEL
 	}
-
+	/**
+	 * Create an HTTP Origin server. By default, both the http (port 80) and https (port 443)
+	 * services are enabled.
+	 */
 	public HttpServer() {
 		_publicServiceEnabled = true;
 		_httpPort = 80;
@@ -82,86 +148,204 @@ public class HttpServer {
 		delete _publicSocket;
 		delete _secureSocket;
 	}
-
+	/**
+	 * Enables requests on the http protocol.
+	 *
+	 * @return the prior http status, true if it was enabled, false if not.
+	 */
 	public boolean enableHttp() {
 		boolean priorState = _publicServiceEnabled;
 		_publicServiceEnabled = true;
 		return priorState;
 	}
-
+	/**
+	 * Disables requests on the http protocol.
+	 *
+	 * @return the prior http status, true if it was enabled, false if not.
+	 */
 	public boolean disableHttp() {
 		boolean priorState = _publicServiceEnabled;
 		_publicServiceEnabled = false;
 		return priorState;
 	}
-
+	/**
+	 * Sets the enabled status for requests on the http protocol.
+	 *
+	 * @param newState true to enable http, false to disable.
+	 *
+	 * @return the prior http status, true if it was enabled, false if not.
+	 */
 	public boolean setHttpActivation(boolean newState) {
 		boolean priorState = _publicServiceEnabled;
 		_publicServiceEnabled = newState;
 		return priorState;
 	}
-
+	/**
+	 * Enables requests on the https protocol.
+	 *
+	 * @return the prior https status, true if it was enabled, false if not.
+	 */
 	public boolean enableHttps() {
 		boolean priorState = _secureServiceEnabled;
 		_secureServiceEnabled = true;
 		return priorState;
 	}
-
+	/**
+	 * Disables requests on the https protocol.
+	 *
+	 * @return the prior https status, true if it was enabled, false if not.
+	 */
 	public boolean disableHttps() {
 		boolean priorState = _secureServiceEnabled;
 		_secureServiceEnabled = false;
 		return priorState;
 	}
-
+	/**
+	 * Sets the enabled status for requests on the https protocol.
+	 *
+	 * @param newState true to enable https, false to disable.
+	 *
+	 * @return the prior https status, true if it was enabled, false if not.
+	 */
 	public boolean setHttpsActivation(boolean newState) {
 		boolean priorState = _secureServiceEnabled;
 		_secureServiceEnabled = newState;
 		return priorState;
 	}
-
+	/**
+	 * Returns the http port.
+	 *
+	 * @return The http protocol port number.
+	 */
 	public char httpPort() {
 		return _httpPort;
 	}
-
+	/**
+	 * Returns the https port.
+	 *
+	 * @return The https protocol port number.
+	 */
 	public char httpsPort() {
 		return _httpsPort;
 	}
-
+	/**
+	 * Set the value of the http protocol port.
+	 *
+	 * @param port The port value to use when enabling the http service.
+	 */
 	public void setHttpPort(char port) {
 		_httpPort = port;
 	}
-
+	/**
+	 * Set the value of the https protocol port.
+	 *
+	 * @param port The port value to use when enabling the https service.
+	 */
 	public void setHttpsPort(char sslPort) {
 		_httpsPort = sslPort;
 	}
-
-	/*
+	/**
 	 * Binds the absPath in any incoming URL to the local file-system
 	 * file or directory name filename.
+	 *
+	 * This content is available on either the http or https protocols.
+	 *
+	 * @param absPath A prefix of a URL. See the documentation under {@link HttpServer}
+	 * for a detailed explanation of how absPath values are compared against an incoming URL.
+	 * @param filename The local file system path of the static content to serve up.
+	 *
+	 * @threading
+	 * This method is not thread safe. Calling this method on a server that has been started will
+	 * produce unpredictable results.
 	 */
 	public void staticContent(string absPath, string filename) {
 		ref<HttpService> handler = new StaticContentService(filename);
 		post(PathHandler(absPath, handler, ServiceClass.ANY_SECURITY_LEVEL));
 	}
-	
+	/**
+	 * Binds the absPath in any incoming URL to the local file-system
+	 * file or directory name filename.
+	 *
+	 * This content is only available on the https protocol.
+	 *
+	 * @param absPath A prefix of a URL. See the documentation under {@link HttpServer}
+	 * for a detailed explanation of how absPath values are compared against an incoming URL.
+	 * @param filename The local file system path of the static content to serve up.
+	 *
+	 * @threading
+	 * This method is not thread safe. Calling this method on a server that has been started will
+	 * produce unpredictable results.
+	 */
 	public void httpsStaticContent(string absPath, string filename) {
 		ref<HttpService> handler = new StaticContentService(filename);
 		post(PathHandler(absPath, handler, ServiceClass.SECURED_ONLY));
 	}
-	
+	/**
+	 * Binds the absPath in any incoming URL to the local file-system
+	 * file or directory name filename.
+	 *
+	 * This content is only available on the http protocol.
+	 *
+	 * @param absPath A prefix of a URL. See the documentation under {@link HttpServer}
+	 * for a detailed explanation of how absPath values are compared against an incoming URL.
+	 * @param filename The local file system path of the static content to serve up.
+	 *
+	 * @threading
+	 * This method is not thread safe. Calling this method on a server that has been started will
+	 * produce unpredictable results.
+	 */
 	public void httpStaticContent(string absPath, string filename) {
 		ref<HttpService> handler = new StaticContentService(filename);
 		post(PathHandler(absPath, handler, ServiceClass.UNSECURED_ONLY));
 	}
-	
+	/**
+	 * Binds the absPath in any incoming URL to a service.
+	 *
+	 * This service is available on the http or https protocols.
+	 *
+	 * @param absPath A prefix of a URL. See the documentation under {@link HttpServer}
+	 * for a detailed explanation of how absPath values are compared against an incoming URL.
+	 * @param handler An instance of a class derived from HttpService that will process any matching
+	 * requests.
+	 *
+	 * @threading
+	 * This method is not thread safe. Calling this method on a server that has been started will
+	 * produce unpredictable results.
+	 */
 	public void service(string absPath, ref<HttpService> handler) {
 		post(PathHandler(absPath, handler, ServiceClass.ANY_SECURITY_LEVEL));
 	}
-	
+	/**
+	 * Binds the absPath in any incoming URL to a service.
+	 *
+	 * This service is only available on the https protocol.
+	 *
+	 * @param absPath A prefix of a URL. See the documentation under {@link HttpServer}
+	 * for a detailed explanation of how absPath values are compared against an incoming URL.
+	 * @param handler An instance of a class derived from HttpService that will process any matching
+	 * requests.
+	 *
+	 * @threading
+	 * This method is not thread safe. Calling this method on a server that has been started will
+	 * produce unpredictable results.
+	 */
 	public void httpsService(string absPath, ref<HttpService> handler) {
 		post(PathHandler(absPath, handler, ServiceClass.SECURED_ONLY));
 	}
-	
+	/**
+	 * Binds the absPath in any incoming URL to a service.
+	 *
+	 * This service is only available on the http protocol.
+	 *
+	 * @param absPath A prefix of a URL. See the documentation under {@link HttpServer}
+	 * for a detailed explanation of how absPath values are compared against an incoming URL.
+	 * @param handler An instance of a class derived from HttpService that will process any matching
+	 * requests.
+	 *
+	 * @threading
+	 * This method is not thread safe. Calling this method on a server that has been started will
+	 * produce unpredictable results.
+	 */
 	public void httpService(string absPath, ref<HttpService> handler) {
 		post(PathHandler(absPath, handler, ServiceClass.UNSECURED_ONLY));
 	}
@@ -175,11 +359,22 @@ public class HttpServer {
 		}
 		_handlers.append(ph);
 	}
-
+	/**
+	 * Starts an initialized server.
+	 *
+	 * The server will be started with Internet scope, so requests coming from any internet
+	 * interface to the system will reach this server.
+	 */
 	public void start() {
 		start(ServerScope.INTERNET);
 	}
-
+	/**
+	 * Starts an initialized server.
+	 *
+	 * The server will be started with provided scope.
+	 *
+	 * @param scope The scope of the socket connection(s) to use.
+	 */
 	public boolean start(ServerScope scope) {
 		if (_publicServiceEnabled) {
 			_publicSocket = bindSocket(scope, _httpPort, Encryption.NONE);
@@ -228,7 +423,12 @@ public class HttpServer {
 //		printf("Starting https on port %d\n", server._httpsPort);
 		server.acceptLoop(server._secureSocket);
 	}
-
+	/**
+	 * Wait for the server to shut down.
+	 *
+	 * The calling thread will block until all enabled
+	 * protocol threads have terminated.
+	 */
 	public void wait() {
 		if (_httpThread != null)
 			_httpThread.join();

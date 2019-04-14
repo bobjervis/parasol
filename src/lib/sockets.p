@@ -14,7 +14,7 @@
    limitations under the License.
  */
 /**
- * This namespace provides facilities to manipulate the sockets API for either Windows or Linux (since they are
+ * Provides facilities to manipulate the sockets API for either Windows or Linux (since they are
  * very close to compatible).
  *
  * Windows has a startup function called WSAStartup that must be called once in each process before making any

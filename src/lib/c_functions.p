@@ -14,7 +14,7 @@
    limitations under the License.
  */
 /**
- * This namespace provides access to portably defined C functions.
+ * Provides access to portably defined C functions.
  *
  * Currently, many standard C function are provided here. Parasol has no syntax to describe a C variadic
  * function like <b>printf</b> or <b>scanf</b>, so there is no way to add these to this namespace, nor are most of the
