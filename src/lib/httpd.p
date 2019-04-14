@@ -655,7 +655,11 @@ public class HttpRequest {
 	public int sourcePort() {
 		return _connection.sourceAddress().sin_port;
 	}
-
+	/**
+	 * A convenience method to extract the IP field of the source connection's IPv4 network address.
+	 *
+	 * @return The value of the IP address field of the source connection's network address.
+	 */
 	public unsigned sourceIP() {
 		return _connection.sourceAddress().sin_addr.s_addr;
 	}
