@@ -628,7 +628,13 @@ public class HttpRequest {
 		CONNECT,
 		CUSTOM
 	}
-	
+	/**
+	 * To construct an HttpRequest, you must supply a live {@link parasol:net.Connection} object. All
+	 * fields can then be intiialized the user code.
+	 *
+	 * This constructor is primarily useful to either test a service or spoof a request in a call to the
+	 * service's processRequest method.
+	 */
 	public HttpRequest(ref<net.Connection> connection) {
 		_connection = connection;
 	}
