@@ -727,11 +727,19 @@ public class HttpRequest {
 	public ref<net.Connection> connection() {
 		return _connection;
 	}
-
+	/**
+	 * A debugging method to print the result of the {@link toString} method onto the process' stdout stream.
+	 */
 	public void print() {
 		process.stdout.write(toString());
 	}
-
+	/**
+	 * Produce a string representation of the request object.
+	 *
+	 * This is a debugging aid. The format of the data is intended to be human readable.
+	 *
+	 * @return The string representation of the object.
+	 */
 	public string toString() {
 		string result;
 
