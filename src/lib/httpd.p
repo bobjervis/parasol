@@ -567,6 +567,11 @@ public class HttpService {
  *
  */
 public class HttpRequest {
+	/**
+	 * The method of the request.
+	 *
+	 * This field will never be set to {@link Method.NO_CONTENTS} in a call to {@link HttpService.processRequest}.
+	 */
 	public Method method;
 	public string methodString;	// Only set for method == CUSTOM
 	public string url;
