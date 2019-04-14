@@ -542,8 +542,24 @@ private void processHttpRequest(address ctx) {
 	response.close();
 	delete context;
 }
-
+/**
+ * The base class used for all services defined on {@link HttpServer}.
+ *
+ * This is an abstract class, so you must define a sub-class to provide the desired functionality.
+ */
 public class HttpService {
+	/**
+	 * This method is called from the HttpServer whenever a URL request arrives that matches this service's
+	 * absPath prefix, provided during server initializaton.
+	 *
+	 * @param request The parsed HTTP request. The service can inspect that various fields, headers and
+	 * parameters of the incoming request to decide how to respond.
+	 * @param response The object that must be used to respond to the request.
+	 *
+	 * @return true if the socket connection for this request should be held open, false if the connection
+	 * should be closed. For example, a WebSocketFactory will hold the connection open indefinitely after
+	 * the inital request is done. For simple HTTP requests the return value should be false.
+	 */
 	public abstract boolean processRequest(ref<HttpRequest> request, ref<HttpResponse> response);
 }
 
