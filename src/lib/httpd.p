@@ -571,15 +571,44 @@ public class HttpRequest {
 	 * The method of the request.
 	 *
 	 * This field will never be set to {@link Method.NO_CONTENTS} in a call to {@link HttpService.processRequest}.
+	 *
+	 * The field will have the value {@link Method.CUSTOM} if the supplied method does not match any of the
+	 * pre-defined HTTP method strings exactly. The matching is case-sensitive. Use the methodString parameter 
+	 * to distinguish different CUSTOM methods.
 	 */
 	public Method method;
-	public string methodString;	// Only set for method == CUSTOM
+	/**
+	 * The literal string value of the HTTP method token.
+	 */
+	public string methodString;
+	/**
+	 * The url portion of the request, excluding any query string (and the ? character initiaing the query string).
+	 */
 	public string url;
+	/**
+	 * The query string portion of the URL in the request.
+	 *
+	 * Note that if no query string is present (no ? character appears), this field is set to null.
+	 */
 	public string query;
-	public string fragment;
+	/**
+	 * The HTTP version string supplied with the request.
+	 */
 	public string httpVersion;
+	/**
+	 * The set of parsed headers.
+	 */
 	public string[string] headers;
-
+	/**
+	 * The url field value with the service's absPath prefix stripped away.
+	 *
+	 * If the service was defined with an absPath of "/", only the initial "/" character is stripped
+	 * from the url.
+	 *
+	 * If any other absPath is defined for the service, then if the request URL string exactly matches the
+	 * service's absPath, this field will be set to null. If the request URL is longer, then the absPath
+	 * prefix is stripped including the path separator at the end of the prefix.
+	 */
 	public string serviceResource;
 	
 	private string[string] _parameters;			// These will be the parsed query parameters.
@@ -1129,24 +1158,42 @@ public class HttpParser {
 		if (t != HttpToken.TOKEN)
 			return false;
 		_request.methodString = _tokenValue;
-		if (_tokenValue == "OPTIONS")
+		switch (_tokenValue) {
+		case "OPTIONS":
 			_request.method = HttpRequest.Method.OPTIONS;
-		else if (_tokenValue == "GET")
+			break;
+
+		case "GET":
 			_request.method = HttpRequest.Method.GET;
-		else if (_tokenValue == "HEAD")
+			break;
+
+		case "HEAD":
 			_request.method = HttpRequest.Method.HEAD;
-		else if (_tokenValue == "POST")
+			break;
+
+		case "POST":
 			_request.method = HttpRequest.Method.POST;
-		else if (_tokenValue == "PUT")
+			break;
+
+		case "PUT":
 			_request.method = HttpRequest.Method.PUT;
-		else if (_tokenValue == "DELETE")
+			break;
+
+		case "DELETE":
 			_request.method = HttpRequest.Method.DELETE;
-		else if (_tokenValue == "TRACE")
+			break;
+
+		case "TRACE":
 			_request.method = HttpRequest.Method.TRACE;
-		else if (_tokenValue == "CONNECT")
+			break;
+
+		case "CONNECT":
 			_request.method = HttpRequest.Method.CONNECT;
-		else
+			break;
+
+		default:
 			_request.method = HttpRequest.Method.CUSTOM;
+		}
 		if (token() != HttpToken.SP)
 			return false;
 		if (!collectUrl())
@@ -1228,17 +1275,11 @@ public class HttpParser {
 						_request.query.append(byte(ch));
 						break;
 	
-					case FRAGMENT_DELIM:
-						return collectFragment();
-
 					default:
 						_connection.ungetc();
 						return _tokenValue != null;
 					}
 				}
-
-			case FRAGMENT_DELIM:
-				return collectFragment();
 
 			default:
 				_connection.ungetc();
