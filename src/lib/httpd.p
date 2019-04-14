@@ -613,7 +613,9 @@ public class HttpRequest {
 	
 	private string[string] _parameters;			// These will be the parsed query parameters.
 	private ref<net.Connection> _connection;
-	
+	/**
+	 * The set of values returned in the method field of the HttpRequest class.
+	 */
 	public enum Method {
 		NO_CONTENTS,							// Not actually part of HTTP. Indicates empty HTTP payload.
 		OPTIONS,
