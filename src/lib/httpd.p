@@ -682,7 +682,15 @@ public class HttpRequest {
 		else
 			return value;
 	}
-	
+	/**
+	 * Fetches a query parameter by name.
+	 *
+	 * Parameter names are case sensitive.
+	 *
+	 * @param name The parameter name.
+	 *
+	 * @return The value of the named parameter, or null if the named parameter is not present in the request.
+	 */
 	public string queryParameter(string name) {
 		if (query == null)
 			return null;
