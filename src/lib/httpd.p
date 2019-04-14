@@ -647,7 +647,11 @@ public class HttpRequest {
 	public int sourceFamily() {
 		return _connection.sourceAddress().sin_family;
 	}
-
+	/**
+	 * A convenience method to extract the port field of the source connection's network address.
+	 *
+	 * @return The integer value of the source connection's port.
+	 */
 	public int sourcePort() {
 		return _connection.sourceAddress().sin_port;
 	}
