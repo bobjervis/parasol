@@ -137,7 +137,7 @@ bool X86_64Section::run(char **args, int *returnValue, long long runtimeFlags) {
 		}
 		CloseHandle(dll);
 #elif __linux__
-		char *soName = nativeBindings[i].dllName;
+		const char *soName = nativeBindings[i].dllName;
 		if (strcmp(soName, "libparasol.so.1") == 0)
 			soName = "libparasol.so";//_libParasolPath;
 		void *handle = dlopen(soName, RTLD_LAZY|RTLD_NODELETE);

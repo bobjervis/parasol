@@ -638,7 +638,12 @@ public class HttpRequest {
 	public HttpRequest(ref<net.Connection> connection) {
 		_connection = connection;
 	}
-
+	/**
+	 * A convenience method to extract the family field of the source connection's network address.
+	 *
+	 * @return Any of the AF_* values defined in {@link native:net}. Most likely, the value will be
+	 * {@link native:net.AF_INET}.
+	 */
 	public int sourceFamily() {
 		return _connection.sourceAddress().sin_family;
 	}
@@ -714,8 +719,6 @@ public class HttpRequest {
 		result.printf("Url              %s\n", url);
 		if (query != null)
 			result.printf("query            %s\n", query);
-		if (fragment != null)
-			result.printf("fragment         %s\n", fragment);
 		result.printf("HTTP Version     %s\n", httpVersion);
 		if (headers.size() > 0)
 			result.printf("Headers:\n");
@@ -1289,27 +1292,6 @@ public class HttpParser {
 					}
 				}
 
-			default:
-				_connection.ungetc();
-				return _tokenValue != null;
-			}
-		}
-	}
-
-	private boolean collectFragment() {
-		for (;;) {
-			int ch = _connection.read();
-			if (ch == -1)
-				return _tokenValue != null;
-			switch (urlClass[ch]) {
-			case UNRESERVED:
-			case SUB_DELIM:
-			case PCHAR:
-			case SLASH:
-			case QUERY_DELIM:
-				_request.fragment.append(byte(ch));
-				break;
-				
 			default:
 				_connection.ungetc();
 				return _tokenValue != null;
