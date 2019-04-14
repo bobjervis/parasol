@@ -717,7 +717,13 @@ public class HttpRequest {
 		}
 		return _parameters[name];
 	}
-
+	/**
+	 * Fetch the Connection object of the request.
+	 *
+	 * The Connection will generally still be open, allowing the service to respond to the reuqest.
+	 *
+	 * @return A reference to the Connection object of the request.
+	 */
 	public ref<net.Connection> connection() {
 		return _connection;
 	}
