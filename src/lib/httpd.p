@@ -827,13 +827,16 @@ public class HttpParsedResponse {
  *     <li>{@link redirect} - This function take a URL and responds with the necessary
  *						headers to signal a redirection to the URL.
  * </ul>
- * The second phase involves the generation of headers.
+ * The second phase involves the generation of headers. You are responsible for generating the headers
+ * so that headers are not duplicated.
+ *
+ * Once you have written all headers, 
  */
 public class HttpResponse {
 	private ref<net.Connection> _connection;
 	private boolean _statusWritten;
 	private boolean _headersEnded;
-	
+
 	HttpResponse() {
 		_connection = null;
 	}
@@ -850,24 +853,58 @@ public class HttpResponse {
 		_connection.flush();
 		_connection.close();
 	}
-	
-	void printf(string format, var... parameters) {
+	/**
+	 * This writes content data to the connection.
+	 *
+	 * Calling this method before writing the status line will throw an 
+	 * {@link parasol:exception.IllegalOperationException}.
+	 *
+	 * Calling this method before calling {@link endOfHeaders} will close the
+	 * headers section.
+	 *
+	 * @param format A valid printf format string. See the description at {@link parasol:stream:Writer.printf}
+	 * for details concerning the contents of a format string.
+	 * @param arguments Zero or more arguments. The number and type of arguments is determined by the 
+	 * contents of the format string.
+	 */
+	public void printf(string format, var... arguments) {
 		if (!_statusWritten)
 			throw IllegalOperationException("no status line");
 		if (!_headersEnded)
 			endOfHeaders();
-		_connection.printf(format, parameters);
+		_connection.printf(format, arguments);
 	}
-
-	void write(string s) {
+	/**
+	 * This writes content data to the connection.
+	 *
+	 * Calling this method before writing the status line will throw an 
+	 * {@link parasol:exception.IllegalOperationException}.
+	 *
+	 * Calling this method before calling {@link endOfHeaders} will close the
+	 * headers section.
+	 *
+	 * @param s The string to be written to the connection.
+	 */
+	public void write(string s) {
 		if (!_statusWritten)
 			throw IllegalOperationException("no status line");
 		if (!_headersEnded)
 			endOfHeaders();
 		_connection.write(s);
 	}
-
-	void write(pointer<byte> data, int length) {
+	/**
+	 * This writes content data to the connection.
+	 *
+	 * Calling this method before writing the status line will throw an 
+	 * {@link parasol:exception.IllegalOperationException}.
+	 *
+	 * Calling this method before calling {@link endOfHeaders} will close the
+	 * headers section.
+	 *
+	 * @param data A pointer to an array of bytes.
+	 * @param length The number of bytes to write to the connection.
+	 */
+	public void write(pointer<byte> data, int length) {
 		if (!_statusWritten)
 			throw IllegalOperationException("no status line");
 		if (!_headersEnded)
@@ -875,18 +912,43 @@ public class HttpResponse {
 		for (int i = 0; i < length; i++)
 			_connection.putc(data[i]);
 	}
-
-	void putc(byte c) {
+	/**
+	 * This writes content data to the connection.
+	 *
+	 * Calling this method before writing the status line will throw an 
+	 * {@link parasol:exception.IllegalOperationException}.
+	 *
+	 * Calling this method before calling {@link endOfHeaders} will close the
+	 * headers section.
+	 *
+	 * @param c The byte to be written to the connection.
+	 */
+	public void putc(byte c) {
 		if (!_statusWritten)
 			throw IllegalOperationException("no status line");
 		if (!_headersEnded)
 			endOfHeaders();
 		_connection.putc(c);
 	}
-	
+	/**
+	 * A convenience function to write a standard status line for a number of error
+	 * conditions.
+	 *
+	 * If the status line has already been written by error, redirect, ok or a direct call
+	 * to statusLine, this method will throw an IllegalOperation Exception.
+	 *
+
+	 * <ul>
+	 *		<li>400 <b>Bad Request</b>: 
+	 *		<li>401 <b>Unauthorized</b>: 
+	 *		<li>404 <b>Not Found</b>: 
+	 *		<li>405 <b>Method Not Allowed</b>: 
+	 *		<li>410 <b>Gone</b>: 
+	 *		<li>500 <b>Internal Server Error</b>: 
+	 *		<li>501 <b>Not Implemented</b>: 
+	 * </ul>
+	 */
 	public void error(int statusCode) {
-		if (_statusWritten)
-			throw IllegalOperationException("status line already written");
 		string reasonPhrase;
 		switch (statusCode) {
 		case	400:	reasonPhrase = "Bad Request";			break;
@@ -896,29 +958,102 @@ public class HttpResponse {
 		case	410:	reasonPhrase = "Gone";					break;
 		case	500:	reasonPhrase = "Internal Server Error";	break;
 		case	501:	reasonPhrase = "Not Implemented";		break;
-		default:		reasonPhrase = "Unknown";				break;
+		default:
+			throw IllegalOperationException(string(statusCode));
 		}
 		statusLine(statusCode, reasonPhrase);
 	}
 	/**
 	 * Respond with a redirect to a given uri.
 	 *
-	 * The recommendation is to follow this call by writing a short
+	 * This method writes the status line and possibly one or two headers.
+	 *
+	 * The recommendation for codes other than 304 is to follow this call by writing a short
 	 * web page that contains a link the user can click on to get to 
 	 * the intended destination.
 	 *
-	 * @param uri The redirect URI. The intention is that the browser
-	 * should re-issue the request to the new location.
+	 * If the status line has already been written by error, redirect, ok or a direct call
+	 * to statusLine, this method will throw an IllegalOperation Exception.
+	 *
+	 * <ul>
+	 *		<li>300 <b>Multiple Choices</b>: Not widely used, the response should contain
+	 *		multiple alternate representations with corresponding URI's. THere is no
+	 *		standard for specifying the choises. The uri argument, if supplied, expresses
+	 *		the preferred destination of the server.
+	 *		<li>301 <b>Moved Permanently</b>: The requested URI has been permanently moved to 
+	 *		a new location (the uri argument). The client should update any link information
+	 *		to the new uri value.
+	 *		<li>302 <b>Found</b>: The requested URI is temporarily found at the new location.
+	 *		The client should continue to request the resource from the original location
+	 *		and should not update any local links.
+	 *		<li>303 <b>See Other</b>: The response to the request can be found under the uri
+	 *		argument's location and should be retrieved with a GET request. The intent is
+	 *		to allow a POST-activated script to redirect the user to another resource.
+	 *		<li>304 <b>Not Modified</b>: This should occur in response to a conditional GET and should
+	 *		not transmit the actual resource data. If the client does not have the resource's value
+	 *		cached, it should re-issue the GET without the condition to fetch the value.
+	 *		<li>305 <b>Use Proxy</b>: The client must access the requested resource through
+	 *		the proxy given by the uri argument.
+	 *		<li>306 <b>Temporary Redirect</b>: The requested URI is temporarily found at the new location.
+	 *		The client should continue to request the resource from the original location
+	 *		and should not update any local links.
+	 * </ul>
+	 * @param statusCode The status code to include in the status line. The
+	 * values can only be 300 through 305 or 307. Calling this method with any other
+	 * status code will throw an IllegalOperationException.
+	 * @param uri The redirect URI, which willbe written to a Location header.
+	 * The intention is that the browser should re-issue the request to the new location.
+	 * If the value is null, no Location header is written.
 	 */
-	public void redirect(string uri) {
-		statusLine(302, "Found");
-		header("Location", uri);
-	}
+	public void redirect(int statusCode, string uri) {
+		switch (statusCode) {
+		case 300:
+			statusLine(300, "Multiple Choices");
+			break;
 
+		case 301:
+			statusLine(301, "Moved Permanently");
+			break;
+
+		case 302:
+			statusLine(302, "Found");
+			break;
+
+		case 303:
+			statusLine(303, "See Other");
+			break;
+
+		case 304:
+			statusLine(304, "Not Modified");
+			break;
+
+		case 305:
+			statusLine(305, "Use Proxy");
+			break;
+
+		case 307:
+			statusLine(307, "Temporary Redirect");
+			break;
+
+		default:
+			throw IllegalOperationException(string(statusCode));
+		}
+		if (uri != null)
+			header("Location", uri);
+	}
+	/**
+	 *
+	 * If the status line has already been written by error, redirect, ok or a direct call
+	 * to statusLine, this method will throw an IllegalOperation Exception.
+	 */
 	public void ok() {
 		statusLine(200, "OK");
 	}
-	
+	/**
+	 *
+	 * If the status line has already been written by error, redirect, ok or a direct call
+	 * to statusLine, this method will throw an IllegalOperation Exception.
+	 */
 	public void statusLine(int statusCode, string reasonPhrase) {
 		if (_statusWritten)
 			throw IllegalOperationException("status line already written");
