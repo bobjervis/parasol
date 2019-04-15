@@ -937,15 +937,25 @@ public class HttpResponse {
 	 * If the status line has already been written by error, redirect, ok or a direct call
 	 * to statusLine, this method will throw an IllegalOperation Exception.
 	 *
-
 	 * <ul>
-	 *		<li>400 <b>Bad Request</b>: 
-	 *		<li>401 <b>Unauthorized</b>: 
-	 *		<li>404 <b>Not Found</b>: 
-	 *		<li>405 <b>Method Not Allowed</b>: 
-	 *		<li>410 <b>Gone</b>: 
-	 *		<li>500 <b>Internal Server Error</b>: 
-	 *		<li>501 <b>Not Implemented</b>: 
+	 *		<li>400 <b>Bad Request</b>: The request could not be understood because of a syntax
+	 *		error. Do not retry the request.
+	 *		<li>401 <b>Unauthorized</b>: Either credentials were not supplied and are required, or
+	 *		the supplied credentials were not recognized. 
+	 *		<li>403 <b>Forbidden</b>: The request was recognized and the server refuses to fulfill it. 
+	 *		Authorization will not help. The request should not be repeated. A server may choose to 
+	 *		include diagnostic information in the response.
+	 *		<li>404 <b>Not Found</b>: The reuested resource is unavailable. There is no indication of
+	 *		the cause, whether retrying later might work.
+	 *		<li>405 <b>Method Not Allowed</b>: The specified method is not allowed for the requested
+	 *		URI. The response must include an Allow header with the list of recognized methods.
+	 *		<li>410 <b>Gone</b>: The requested resource is gone and no forwarding address is known.
+	 *		The client should remove links to this resource.
+	 *		<li>500 <b>Internal Server Error</b>: The server deteted an internal error of some kind.
+	 *		Diagnostic information should be supplied in the response.
+	 *		<li>501 <b>Not Implemented</b>: The server does not support the functionality required
+	 *		for this request. This is the appropriate response when a server does not recognize
+	 *		the requested method for any resource.
 	 * </ul>
 	 */
 	public void error(int statusCode) {
@@ -953,6 +963,7 @@ public class HttpResponse {
 		switch (statusCode) {
 		case	400:	reasonPhrase = "Bad Request";			break;
 		case	401:	reasonPhrase = "Unauthorized";			break;
+		case	403:	reasonPhrase = "Forbidden";				break;
 		case	404:	reasonPhrase = "Not Found";				break;
 		case	405:	reasonPhrase = "Method Not Allowed";	break;
 		case	410:	reasonPhrase = "Gone";					break;
