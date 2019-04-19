@@ -15,19 +15,26 @@ target(os: linux, cpu: x86-64) {
 			file(name: dumppxi, src: bin)
 			file(name: genhdr, src: bin)
 			link(name: libparasol.so, target: libparasol.so.1)
-			elf(name: libparasol.so.1, src: build/libparasol.so.1) {
-				make(target: build/libparasol.so.1, makefile: runtime/makefile)
+			elf(name: libparasol.so.1, target: build/libparasol.so.1, makefile: runtime/makefile) {
+				file(name: *.h, src: runtime/common)
+				file(name: *.cc, src: runtime/common)
+				file(name: *.h, src: runtime/library)
+				file(name: *.cc, src: runtime/library)
+			}
+			elf(name: parasolrt, target: build/parasolrt, makefile: runtime/makefile) {
+				file(name: *.cc, src: runtime/Parasol)
+				file(name: *.h, src: runtime/common)
+				file(name: *.h, src: runtime/library)
 			}
 			file(name: paradoc, src: bin)
-			elf(name: parasolrt, src: build/parasolrt) {
-				make(target: build/parasolrt, makefile: runtime/makefile)
-			}
 			file(name: pc, src: bin)
 			file(name: refresh, src: bin)
 			file(name: rebuild, src: bin)
 			file(name: runets, src: bin)
 			file(name: unit, src: bin)
-			pxi(name: x86-64-lnx.pxi, main: compiler/main.p, target: x86-64-lnx)
+			pxi(name: x86-64-lnx.pxi, main: compiler/main.p, target: x86-64-lnx) {
+				file(name: *.p, src: src/lib)
+			}
 		}
 		folder(name: compiler) {
 			file(name: main.p, src: compiler)
@@ -42,6 +49,64 @@ target(os: linux, cpu: x86-64) {
 			folder(name: util) {
 				file(name: *, src: src/util)
 			}
+		}
+	}
+
+	tests(suite: update_git) {
+		include(suite: full)
+	
+		on_pass() {
+			set +v
+			if ! diff -q build/p1.pxi bin/x86-64-lnx.pxi
+			then
+				echo replacing bin/x86-64-lnx.pxi
+			    cp build/p1.pxi bin/x86-64-lnx.pxi
+			else
+				echo skipping x86-64-lnx.pxi
+			fi
+			if ! diff -q build/parasolrt bin/parasolrt
+			then
+				echo replacing bin/parasolrt
+			    cp build/parasolrt bin/parasolrt
+			else
+				echo skipping parasolrt
+			fi
+			if ! diff -q build/libparasol.so.1 bin/libparasol.so.1
+			then
+				echo replacing bin/libparasol.so.1
+			    cp build/libparasol.so.1 bin/libparasol.so.1
+				ln -sfT libparasol.so.1 bin/libparasol.so
+			else
+				echo skipping libparasol.so.1
+			fi
+		}
+	}
+
+	tests(suite: freshen) {
+		on_pass() {
+			set +v
+			if ! diff -q build/p1.pxi bin/x86-64-lnx.pxi
+			then
+				echo replacing bin/x86-64-lnx.pxi
+			    cp build/p1.pxi bin/x86-64-lnx.pxi
+			else
+				echo skipping x86-64-lnx.pxi
+			fi
+			if ! diff -q build/parasolrt bin/parasolrt
+			then
+				echo replacing bin/parasolrt
+			    cp build/parasolrt bin/parasolrt
+			else
+				echo skipping parasolrt
+			fi
+			if ! diff -q build/libparasol.so.1 bin/libparasol.so.1
+			then
+				echo replacing bin/libparasol.so.1
+			    cp build/libparasol.so.1 bin/libparasol.so.1
+				ln -sfT libparasol.so.1 bin/libparasol.so
+			else
+				echo skipping libparasol.so.1
+			fi
 		}
 	}
 }
@@ -57,7 +122,9 @@ target(os: windows, cpu: x86-64) {
 			file(name: rebuild.bat, src: bin)
 			file(name: runets.bat, src: bin)
 			file(name: unit.bat, src: bin)
-			pxi(name: x86-64-win.pxi, main: compiler/main.p. target: x86-64-win)
+			pxi(name: x86-64-win.pxi, main: compiler/main.p. target: x86-64-win) {
+				file(name: *.p, src: src/lib)
+			}
 		}
 		folder(name: compiler) {
 			file(name: main.p, src: compiler)
@@ -74,13 +141,41 @@ target(os: windows, cpu: x86-64) {
 			}
 		}
 	}
+
+	tests(suite: update_git) {
+		include(suite: full)
+	
+		on_pass() {
+			fc /b build\\x86-64-win.pxi bin\\x86-64-win.pxi
+			if not errorlevel 0 copy build\\x86-64-win.pxi bin\\x86-64-win.pxi
+			fc /b build\\parasol.exe bin\\parasol.exe
+			if not errorlevel 0 copy build\\parasol.exe bin\\parasol.exe
+			fc /b build\\parasol.dll bin\\parasol.dll
+			if not errorlevel 0 copy build\\parasol.dll bin\\libparasol.dll
+		}
+	}
+
+	tests(suite: freshen) {
+		on_pass() {
+			fc /b build\\x86-64-win.pxi bin\\x86-64-win.pxi
+			if not errorlevel 0 copy build\\x86-64-win.pxi bin\\x86-64-win.pxi
+			fc /b build\\parasol.exe bin\\parasol.exe
+			if not errorlevel 0 copy build\\parasol.exe bin\\parasol.exe
+			fc /b build\\parasol.dll bin\\parasol.dll
+			if not errorlevel 0 copy build\\parasol.dll bin\\libparasol.dll
+		}
+	}}
+
+tests(suite: new_tests) {
+	ets(name: test/scripts/new_tests.ets)
 }
 
 tests(suite: unit) {
 }
 
 tests(suite: full) {
-	include (suite: unit)
-}
+	include(suite: unit)
 
+	ets(name: test/scripts/parasol_tests.ets)
+}
 

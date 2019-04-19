@@ -32,12 +32,7 @@
  * Fix Release: Incremented when big fixes are released.
  */
 #define RUNTIME_VERSION "1.0.0"
-/*
- *	Parasol engine architecture:
- *
- *		Runtime executes a runnable object
- *		
- */
+
 class ParasolCommand : public commandLine::Command {
 public:
 	ParasolCommand() {
@@ -64,20 +59,18 @@ static ParasolCommand parasolCommand;
 
 static void parseCommandLine(int argc, char **argv);
 static int runCommand();
-
+/*
+ * The C++ code of the Parasol runtime is primarily in a shared object, so that symbols can be looked up (a
+ * requirement of the Parasol native binding machenaism..
+ *
+ * As a result, this executable just does the most basic command line parsing and then loads the PXI argument
+ * and runs it.
+ */
 int main(int argc, char **argv) {
 	platform::setup();
-	parseCommandLine(argc, argv);
-	return runCommand();
-}
-
-void parseCommandLine(int argc, char **argv) {
 	if (!parasolCommand.parse(argc, argv) ||
 		parasolCommand.finalArgc() == 0)
 		parasolCommand.help();
-}
-
-int runCommand() {
 	long long runtimeFlags = 0;
 	if (parasolCommand.leaksArgument->value())
 		runtimeFlags |= 1;

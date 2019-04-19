@@ -46,6 +46,9 @@ private int WIN_TICKS_PER_SECOND = NANOS_PER_SECOND / NANOS_PER_WIN_TICK;
 public class Time {
 	long _value;
 
+	public static Time MIN_VALUE(long.MIN_VALUE);
+	public static Time MAX_VALUE(long.MAX_VALUE);
+
 	public Time() {}
 	
 	public Time(long value) {
@@ -261,6 +264,9 @@ public class Duration {
 public class Instant {
 	long _seconds;
 	long _nanos;
+
+	public static Instant MIN_VALUE(long.MIN_VALUE, 0);
+	public static Instant MAX_VALUE(long.MAX_VALUE, 999999999);
 
 	public Instant() {}
 
