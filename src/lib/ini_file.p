@@ -23,7 +23,11 @@ namespace parasol:storage;
 public class IniFile {
 	private string _path;
 	private ref<Object>[string] _sections;
-
+	/**
+	 * Creates an .ini file reader from the file at the given path.
+	 *
+	 * @param path The local filesystem path of the .ini file.
+	 */
 	public IniFile(string path) {
 		_path = path;
 	}
@@ -31,7 +35,13 @@ public class IniFile {
 	~IniFile() {
 		_sections.deleteAll();
 	}
-
+	/**
+	 * reads and parses the file into sections.
+	 *
+	 * @return true if the file contained well-formed sections, false
+	 * if the file did not exist or otherwise could not be read, or if it
+	 * could be read, but contained malformed or no sections of data.
+	 */
 	public boolean load() {
 		ref<Reader> reader = openTextFile(_path);
 		ref<Object> currentSection;
@@ -82,7 +92,19 @@ public class IniFile {
 		delete reader;
 		return true;
 	}
-
+	/**
+	 * Retrieve a section by name.
+	 *
+	 * This method will only return any values after a successful call to the {@link load} method.
+	 * Attempting to call this method if load was never called, or if it did not return true on the
+	 * last call may return no or incomplete information.
+	 *
+	 * @param The name of the section from the .ini file.
+	 *
+	 * @return an Object instance. Each field of the Object has label of the property as its key and
+	 * the value of the property as its value. If the requested section was not present in the .ini file,
+	 * the the value null is returned.
+	 */
 	public ref<Object> section(string name) {
 		return _sections[name];
 	}
