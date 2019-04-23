@@ -55,10 +55,10 @@ target(os: linux, cpu: x86-64) {
 	
 		on_pass() {
 			set +v
-			if ! diff -q build/p1.pxi bin/x86-64-lnx.pxi
+			if ! diff -q build/parasol/parasol/bin/x86-64-lnx.pxi bin/x86-64-lnx.pxi
 			then
 				echo replacing bin/x86-64-lnx.pxi
-			    cp build/p1.pxi bin/x86-64-lnx.pxi
+			    cp build/parasol/parasol/bin/x86-64-lnx.pxi bin/x86-64-lnx.pxi
 			else
 				echo skipping x86-64-lnx.pxi
 			fi
@@ -83,10 +83,10 @@ target(os: linux, cpu: x86-64) {
 	tests(suite: freshen) {
 		on_pass() {
 			set +v
-			if ! diff -q build/p1.pxi bin/x86-64-lnx.pxi
+			if ! diff -q build/parasol/parasol/bin/x86-64-lnx.pxi bin/x86-64-lnx.pxi
 			then
 				echo replacing bin/x86-64-lnx.pxi
-			    cp build/p1.pxi bin/x86-64-lnx.pxi
+			    cp build/parasol/parasol/bin/x86-64-lnx.pxi bin/x86-64-lnx.pxi
 			else
 				echo skipping x86-64-lnx.pxi
 			fi

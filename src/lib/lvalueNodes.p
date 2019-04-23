@@ -361,22 +361,28 @@ public class Identifier extends Node {
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
 	}
 
-	void bindFunctionOverload(Operator visibility, boolean isStatic, ref<Node> annotations, ref<Scope> enclosing, ref<ParameterScope> funcScope, ref<CompileContext> compileContext) {
+	void bindFunctionOverload(Operator visibility, boolean isStatic, boolean isFinal, ref<Node> annotations, ref<Scope> enclosing, ref<ParameterScope> funcScope, ref<CompileContext> compileContext) {
 		_definition = true;
 		ref<Overload> o = enclosing.defineOverload(&_value, Operator.FUNCTION, compileContext);
 		if (o != null) {
-			_symbol = o.addInstance(visibility, isStatic, annotations, this, funcScope, compileContext);
+			_symbol = o.addInstance(visibility, isStatic, isFinal, annotations, this, funcScope, compileContext);
+			switch (_symbol.storageClass()) {
+			case STATIC:
+			case AUTO:
+				if (isFinal)
+					add(MessageId.UNEXPECTED_FINAL, compileContext.pool());
+			}
 			_symbol._doclet = enclosing.file().tree().getDoclet(this);
 		} else
 			add(MessageId.OVERLOAD_DISALLOWED, compileContext.pool(), _value);
 	}
 
-	void bindTemplateOverload(Operator visibility, boolean isStatic, ref<Node> annotations, ref<Scope> enclosing, ref<Template> templateDef, boolean isMonitor, ref<CompileContext> compileContext) {
+	void bindTemplateOverload(Operator visibility, boolean isStatic, boolean isFinal, ref<Node> annotations, ref<Scope> enclosing, ref<Template> templateDef, boolean isMonitor, ref<CompileContext> compileContext) {
 		_definition = true;
 		ref<ParameterScope> templateScope = compileContext.createParameterScope(templateDef, ParameterScope.Kind.TEMPLATE);
 		ref<Overload> o = enclosing.defineOverload(&_value, Operator.TEMPLATE, compileContext);
 		if (o != null) {
-			_symbol = o.addInstance(visibility, isStatic, annotations, this, templateScope, compileContext);
+			_symbol = o.addInstance(visibility, isStatic, isFinal, annotations, this, templateScope, compileContext);
 			if (_symbol == null)
 				return;
 			_symbol._doclet = enclosing.file().tree().getDoclet(this);
@@ -388,13 +394,13 @@ public class Identifier extends Node {
 
 	void bindConstructor(Operator visibility, ref<Scope> enclosing, ref<ParameterScope> funcScope, ref<CompileContext> compileContext) {
 		_definition = true;
-		_symbol = compileContext.pool().newOverloadInstance(null, visibility, false, enclosing, compileContext.annotations, &_value, funcScope.definition(), funcScope);
+		_symbol = compileContext.pool().newOverloadInstance(null, visibility, false, false, enclosing, compileContext.annotations, &_value, funcScope.definition(), funcScope);
 		_symbol._doclet = enclosing.file().tree().getDoclet(this);
 	}
 
 	void bindDestructor(Operator visibility, ref<Scope> enclosing, ref<ParameterScope> funcScope, ref<CompileContext> compileContext) {
 		_definition = true;
-		_symbol = compileContext.pool().newOverloadInstance(null, visibility, false, enclosing, compileContext.annotations, &_value, funcScope.definition(), funcScope);
+		_symbol = compileContext.pool().newOverloadInstance(null, visibility, false, false, enclosing, compileContext.annotations, &_value, funcScope.definition(), funcScope);
 	}
 
 	void resolveAsEnum(ref<EnumInstanceType> enumType, ref<CompileContext>  compileContext) {

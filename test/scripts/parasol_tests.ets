@@ -336,6 +336,24 @@ compile() { "enum A { B, C; int f() { return 1; } } int y = A.C.f();" }
 compile() { "enum A { B(1), C(4); A(int z) {} }" }
 compile(expect: fail) { "enum A { B(\"a\"), C(4); A(int z) {} }" }
 
+// final tests
+
+compile() { "class A { final int f() { return 3; } }" }
+compile() { "class A { int f() { return 3; } } class B extends A { int f() { return -17; } }" }
+compile(expect: fail) { "class A { final int f() { return 3; } } class B extends A { int f() { return -17; } }" }
+compile(expect: fail) { "final class A { } class B extends A {}" }
+compile(expect: fail) { "final interface A {} interface B extends A {}" }
+compile(expect: fail) { "final enum A { C }" }
+compile(expect: fail) { "enum A { C } class B extends A {}" }
+compile(expect: fail) { "class A { final A() { } }" }
+compile(expect: fail) { "class A { final ~A() { } }" }
+compile(expect: fail) { "final int f() { return 3; }" }
+compile(expect: fail) { "int f() { final int g() { return 4; } return 3; }" }
+compile(expect: fail) { "final int x;" }
+compile(expect: fail) { "interface A { final int f(); }" }
+compile(expect: fail) { "interface A { abstract int f(); }" }
+compile() { "interface A { int f(); } interface B extends A { int f(); }" }
+
 // Interface tests
 
 compile() { "interface A {} class B implements A {} class C extends B {} ref<C> c; A a = c;" }

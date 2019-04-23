@@ -135,6 +135,8 @@ private ref<ref<script.Atom>[]> parseOne(string arg) {
 			atoms = null;
 		}
 		delete p;
+		if (atoms == null)
+			return null;
 		ref<ref<script.Atom>[]> results = new ref<script.Atom>[];
 		flattenSet(results, atoms);
 		return results;

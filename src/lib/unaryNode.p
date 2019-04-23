@@ -122,6 +122,7 @@ public class Unary extends Node {
 		case	PUBLIC:
 		case	PRIVATE:
 		case	PROTECTED:
+		case	FINAL:
 		case	STATIC:
 		case	ELLIPSIS:
 		case	UNWRAP_TYPEDEF:
@@ -666,6 +667,7 @@ public class Unary extends Node {
 		case	PRIVATE:
 		case	PROTECTED:
 		case	PUBLIC:
+		case	FINAL:
 		case	STATIC:
 		case	DEFAULT:
 		case	EXPRESSION:

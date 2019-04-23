@@ -3659,6 +3659,7 @@ public class Node {
 		case	EXCLUSIVE_OR_ASSIGN:
 		case	EXPRESSION:
 		case	FALSE:
+		case	FINAL:
 		case	FLAGS:
 		case	FLAGS_DECLARATION:
 		case	FLOATING_POINT:

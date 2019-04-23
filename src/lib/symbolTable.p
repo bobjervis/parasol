@@ -381,7 +381,8 @@ class ClasslikeScope extends Scope {
 						int index = matchingMethod(oi, maxMatchableMethod);
 						if (index >= 0) {
 							oi.offset = index + FIRST_USER_METHOD;
-							_methods[index].overrideMethod();
+							if (!_methods[index].overrideMethod())
+								_methods[index].definition().add(MessageId.METHOD_IS_FINAL, compileContext.pool());
 							_methods[index] = oi;
 						} else {
 							oi.offset = _methods.length() + FIRST_USER_METHOD;

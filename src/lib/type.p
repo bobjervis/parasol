@@ -331,30 +331,9 @@ widens[TypeFamily.ADDRESS][TypeFamily.ADDRESS] = true;
 widens[TypeFamily.CLASS_VARIABLE][TypeFamily.CLASS_VARIABLE] = true;
 widens[TypeFamily.CLASS_DEFERRED][TypeFamily.CLASS_DEFERRED] = true;
 
-class MonitorType extends ClassType {
-	MonitorType(ref<Class> definition, ref<Scope> scope) {
-		super(definition, scope);
-	}
-
-	public  ref<Type> assignSuper(ref<CompileContext> compileContext) {
-		resolve(compileContext);
-		if (_extends == null)
-			_extends = compileContext.monitorClass();
-		return _extends;
-	}
-	
-	public boolean isMonitor() {
-		return true;
-	}
-
-	public boolean isLockable() {
-		return true;
-	}
-}
-
 public class InterfaceType extends ClassType {
-	InterfaceType(ref<Class> definition, ref<Scope> scope) {
-		super(TypeFamily.INTERFACE, definition, scope);
+	InterfaceType(ref<Class> definition, boolean isFinal, ref<Scope> scope) {
+		super(TypeFamily.INTERFACE, definition, isFinal, scope);
 	}
 	
 	public boolean isConcrete(ref<CompileContext> compileContext) {
@@ -396,20 +375,23 @@ public class ClassType extends Type {
 	protected ref<InterfaceType>[] _implements;
 	protected ref<Class> _definition;
 	protected boolean _isMonitor;
+	protected boolean _final;
 	private ref<OverloadInstance> _compareMethod;
 
-	protected ClassType(TypeFamily family, ref<Class> definition, ref<Scope> scope) {
+	protected ClassType(TypeFamily family, ref<Class> definition, boolean isFinal, ref<Scope> scope) {
 		super(family);
 		_definition = definition;
 		_scope = scope;
 		_isMonitor = definition.op() == Operator.MONITOR_CLASS;
+		_final = isFinal;
 	}
 
-	ClassType(ref<Class> definition, ref<Scope> scope) {
+	ClassType(ref<Class> definition, boolean isFinal, ref<Scope> scope) {
 		super(TypeFamily.CLASS);
 		_definition = definition;
 		_scope = scope;
 		_isMonitor = definition.op() == Operator.MONITOR_CLASS;
+		_final = isFinal;
 	}
 
 	ClassType(TypeFamily effectiveFamily, ref<Type> base, ref<Scope> scope) {
@@ -420,7 +402,7 @@ public class ClassType extends Type {
 
 	public void print() {
 		pointer<address> pa = pointer<address>(this);
-		printf("%s%s(%p) %p scope %p", _isMonitor? "monitor " : "", string(family()), pa[1], _definition, _scope);
+		printf("%s%s%s(%p) %p scope %p", _final ? "final " : "", _isMonitor? "monitor " : "", string(family()), pa[1], _definition, _scope);
 		if (_extends != null)
 			printf(" extends %p", _extends);
 	}
@@ -586,6 +568,10 @@ public class ClassType extends Type {
 		return _scope.isConcrete(compileContext);
 	}
 
+	public boolean isFinal() {
+		return _final;
+	}
+
 	public ref<OverloadInstance> firstAbstractMethod(ref<CompileContext> compileContext) {
 		return _scope.firstAbstractMethod(compileContext);
 	}
@@ -599,9 +585,12 @@ public class ClassType extends Type {
 	}
 
 	public string signature() {
-		if (_definition != null && _definition.name() != null)
-			return _definition.name().identifier().asString();
-		else
+		if (_definition != null && _definition.name() != null) {
+			if (_final)
+				return "final " + _definition.name().identifier().asString();
+			else
+				return _definition.name().identifier().asString();
+		} else
 			return super.signature();
 	}
 	
@@ -622,8 +611,15 @@ public class ClassType extends Type {
 				compileContext.assignTypes(_scope.enclosing(), base);
 				if (base.deferAnalysis())
 					_extends = base.type;
-				else
+				else {
 					_extends = base.unwrapTypedef(family() == TypeFamily.INTERFACE ? Operator.INTERFACE : Operator.CLASS, compileContext);
+					if (_extends.family() == TypeFamily.ENUM)
+						base.add(MessageId.CANNOT_EXTEND_ENUM, compileContext.pool());
+					else if (_extends.isFinal()) {
+						_definition.add(isInterface() ? MessageId.FINAL_BASE_INTERFACE : 
+													MessageId.FINAL_BASE_CLASS, compileContext.pool());
+					}
+				}
 			} else if (_definition.op() == Operator.MONITOR_CLASS) 
 				_extends = compileContext.monitorClass();
 			_isMonitor = _definition.op() == Operator.MONITOR_CLASS;
@@ -813,7 +809,7 @@ public class EnumType extends ClassType {
 	private ref<Symbol> _symbol;
 
 	EnumType(ref<Symbol> symbol, ref<Class> definition, ref<EnumScope> scope) {
-		super(TypeFamily.CLASS, definition, scope);
+		super(TypeFamily.CLASS, definition, false, scope);
 		_symbol = symbol;
 	}
 
@@ -2311,6 +2307,10 @@ public class Type {
 	}
 
 	public boolean isInterface() {
+		return false;
+	}
+
+	public boolean isFinal() {
 		return false;
 	}
 

@@ -1098,6 +1098,7 @@ public class X86_64 extends X86_64AssignTemps {
 		case	PUBLIC:
 		case	PRIVATE:
 		case	PROTECTED:
+		case	FINAL:
 		case	ABSTRACT:
 			expression = ref<Unary>(node);
 			generate(expression.operand(), compileContext);
@@ -2810,6 +2811,7 @@ public class X86_64 extends X86_64AssignTemps {
 		case	PUBLIC:
 		case	PRIVATE:
 		case	PROTECTED:
+		case	FINAL:
 		case	STATIC:
 		case	ABSTRACT:
 			ref<Unary> u = ref<Unary>(node);

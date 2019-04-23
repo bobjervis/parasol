@@ -703,8 +703,12 @@ public class Parser {
 				block.closeCurlyLocation = _scanner.location();
 				block.statement(_tree.newNodeList(syntaxError(MessageId.UNEXPECTED_EOF)));
 				return block;
-			}
-			_scanner.pushBack(t);
+			} else if (t == Token.FINAL)
+				block.statement(_tree.newNodeList(syntaxError(MessageId.UNEXPECTED_FINAL)));
+			else if (t == Token.ABSTRACT)
+				block.statement(_tree.newNodeList(syntaxError(MessageId.UNEXPECTED_ABSTRACT)));
+			else
+				_scanner.pushBack(t);
 			Location location = _scanner.location();
 			ref<Node> returnType = parseExpression(0);
 			if (returnType.op() == Operator.SYNTAX_ERROR) {
@@ -763,6 +767,8 @@ public class Parser {
 			n = parseClassOrInterfaceDeclaration(ClassContext.INTERFACE);
 		else if (t == Token.MONITOR)
 			n = parseMonitorDeclaration();
+		else if (t == Token.ENUM)
+			n = parseEnumDeclaration();
 		else {
 			Location loc = _scanner.location();
 			_scanner.pushBack(t);
@@ -770,6 +776,10 @@ public class Parser {
 			if (x.op() == Operator.SYNTAX_ERROR)
 				return x;
 			n = parseDeclarators(x, loc);
+			if (n.op() == Operator.SYNTAX_ERROR)
+				return n;
+			if (n.op() != Operator.FUNCTION && n.op() != Operator.SYNTAX_ERROR)
+				n.add(MessageId.UNEXPECTED_FINAL, _tree.pool());
 		}
 		if (n.op() == Operator.SYNTAX_ERROR)
 			return n;

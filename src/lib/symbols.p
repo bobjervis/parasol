@@ -442,8 +442,8 @@ public class Overload extends Symbol {
 		_kind = kind;
 	}
 
-	public ref<Symbol> addInstance(Operator visibility, boolean isStatic, ref<Node> annotations, ref<Identifier> name, ref<ParameterScope> functionScope, ref<CompileContext> compileContext) {
-		ref<OverloadInstance> sym = compileContext.pool().newOverloadInstance(this, visibility, isStatic, _enclosing, annotations, name.identifier(), name, functionScope);
+	public ref<Symbol> addInstance(Operator visibility, boolean isStatic, boolean isFinal, ref<Node> annotations, ref<Identifier> name, ref<ParameterScope> functionScope, ref<CompileContext> compileContext) {
+		ref<OverloadInstance> sym = compileContext.pool().newOverloadInstance(this, visibility, isStatic, isFinal, _enclosing, annotations, name.identifier(), name, functionScope);
 		_instances.append(sym, compileContext.pool());
 		return sym;
 	}
@@ -518,7 +518,7 @@ public class DelegateOverload extends OverloadInstance {
 	ref<OverloadInstance> _delegate;
 	
 	DelegateOverload(ref<Overload> overload, ref<OverloadInstance> delegate, ref<MemoryPool> pool) {
-		super(overload, Operator.NAMESPACE, delegate.storageClass() == StorageClass.STATIC, overload.enclosing(), null, pool, delegate.name(), null, delegate.parameterScope());
+		super(overload, Operator.NAMESPACE, delegate.storageClass() == StorageClass.STATIC, delegate.isFinal(), overload.enclosing(), null, pool, delegate.name(), null, delegate.parameterScope());
 		_delegate = delegate;
 	}
 	
@@ -544,14 +544,16 @@ public class DelegateOverload extends OverloadInstance {
 
 public class OverloadInstance extends Symbol {
 	private boolean _overridden;
+	private boolean _final;
 	private ref<ParameterScope> _parameterScope;
 	private ref<TemplateInstanceType> _instances;	// For template's, the actual instances of those
 	private ref<Overload> _overload;
 
-	OverloadInstance(ref<Overload> overload, Operator visibility, boolean isStatic, ref<Scope> enclosing, ref<Node> annotations, ref<MemoryPool> pool, ref<CompileString> name, ref<Node> source, ref<ParameterScope> parameterScope) {
+	OverloadInstance(ref<Overload> overload, Operator visibility, boolean isStatic, boolean isFinal, ref<Scope> enclosing, ref<Node> annotations, ref<MemoryPool> pool, ref<CompileString> name, ref<Node> source, ref<ParameterScope> parameterScope) {
 		super(visibility, isStatic ? StorageClass.STATIC : StorageClass.ENCLOSING, enclosing, annotations, pool, name, source);
 		_overload = overload;
 		_parameterScope = parameterScope;
+		_final = isFinal;
 	}
 
 	public void print(int indent, boolean printChildScopes) {
@@ -796,8 +798,11 @@ public class OverloadInstance extends Symbol {
 		return true;
 	}
 
-	public void overrideMethod() {
+	public boolean overrideMethod() {
+		if (_final)
+			return false;
 		_overridden = true;
+		return true;
 	}
 
 	public boolean isConcrete(ref<CompileContext> compileContext) {
@@ -822,6 +827,10 @@ public class OverloadInstance extends Symbol {
 
 	public boolean overridden() {
 		return _overridden;
+	}
+
+	public boolean isFinal() {
+		return _final;
 	}
 
 	private ref<Type> instantiateTemplate(var[] arguments, ref<CompileContext> compileContext) {

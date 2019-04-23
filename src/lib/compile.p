@@ -23,6 +23,7 @@ int INDENT = 4;
 public class CompileContext {
 	public Operator visibility;
 	public boolean isStatic;
+	public boolean isFinal;
 	public ref<Node> annotations;
 	public ref<FileStat> definingFile;
 	public ref<Target> target;
@@ -217,10 +218,13 @@ public class CompileContext {
 		case	FUNCTION:
 			ref<FunctionDeclaration> func = ref<FunctionDeclaration>(definition);
 			boolean outer = isStatic;
+			boolean outerFinal = isFinal;
 			isStatic = false;
+			isFinal = false;
 			for (ref<NodeList> nl = func.arguments(); nl != null; nl = nl.next) {
 				buildScopesInTree(nl.node);
 			}
+			isFinal = outerFinal;
 			isStatic = outer;
 			if (func.body != null)
 				buildScopesInTree(func.body);
@@ -244,6 +248,7 @@ public class CompileContext {
 			for (ref<NodeList> nl = b.statements(); nl != null; nl = nl.next) {
 				// Reset these state conditions accumulated from the traversal so far.
 				isStatic = false;
+				isFinal = false;
 				clearDeclarationModifiers();
 				buildScopesInTree(nl.node);
 			}
@@ -295,6 +300,7 @@ public class CompileContext {
 
 	private void clearDeclarationModifiers() {
 		isStatic = false;
+		isFinal = false;
 		visibility = Operator.NAMESPACE;
 		annotations = null;
 	}
@@ -430,6 +436,10 @@ public class CompileContext {
 			isStatic = true;
 			break;
 
+		case	FINAL:
+			isFinal = true;
+			break;
+
 		case	PRIVATE:
 		case	PROTECTED:
 		case	PUBLIC:
@@ -501,6 +511,8 @@ public class CompileContext {
 			ref<EnumScope> enumScope = createEnumScope(c, id);
 			c.scope = enumScope;
 			ref<Type> instanceType;
+			if (isFinal)
+				c.add(MessageId.UNEXPECTED_FINAL, _pool);
 			if (id.bindEnumName(_current, c, this)) {
 				enumScope.classType = enumScope.enumType = _pool.newEnumType(id.symbol(), c, enumScope);
 				instanceType = _pool.newEnumInstanceType(enumScope);
@@ -516,7 +528,7 @@ public class CompileContext {
 			ref<Class> c = ref<Class>(n);
 			ref<ClassScope> classScope = createClassScope(n, null);
 			c.scope = classScope;
-			classScope.classType = _pool.newClassType(c, classScope);
+			classScope.classType = _pool.newClassType(c, isFinal, classScope);
 			return TraverseAction.SKIP_CHILDREN;
 		
 		case	CLASS_DECLARATION:
@@ -525,12 +537,12 @@ public class CompileContext {
 			if (b.right().op() == Operator.TEMPLATE) {
 				ref<Template> t = ref<Template>(b.right());
 				boolean isMonitor = t.classDef.op() == Operator.MONITOR_CLASS;
-				id.bindTemplateOverload(visibility, isStatic, annotations, _current, t, isMonitor, this);
+				id.bindTemplateOverload(visibility, isStatic, isFinal, annotations, _current, t, isMonitor, this);
 			} else {
 				ref<Class> c = ref<Class>(b.right());
 				ref<ClassScope> classScope = createClassScope(c, id);
 				c.scope = classScope;
-				classScope.classType = _pool.newClassType(c, classScope);
+				classScope.classType = _pool.newClassType(c, isFinal, classScope);
 				id.bindClassName(_current, c, this);
 			}
 			return TraverseAction.SKIP_CHILDREN;
@@ -542,7 +554,7 @@ public class CompileContext {
 			c = ref<Class>(b.right());
 			classScope = createClassScope(c, id);
 			c.scope = classScope;
-			classScope.classType = _pool.newInterfaceType(c, classScope);
+			classScope.classType = _pool.newInterfaceType(c, isFinal, classScope);
 			id.bindClassName(_current, c, this);
 			return TraverseAction.SKIP_CHILDREN;
 			
@@ -574,6 +586,11 @@ public class CompileContext {
 						f.type = errorType();
 						break;
 					}
+					if (isFinal) {
+						f.add(MessageId.UNEXPECTED_FINAL, _pool);
+						f.type = errorType();
+						break;
+					}
 					_current.defineConstructor(functionScope, _pool);
 					f.name().bindConstructor(visibility, _current, functionScope, this);
 					break;
@@ -581,6 +598,11 @@ public class CompileContext {
 				case	DESTRUCTOR:
 					if (isStatic) {
 						f.add(MessageId.STATIC_DISALLOWED, _pool);
+						f.type = errorType();
+						break;
+					}
+					if (isFinal) {
+						f.add(MessageId.UNEXPECTED_FINAL, _pool);
 						f.type = errorType();
 						break;
 					}
@@ -594,11 +616,11 @@ public class CompileContext {
 					if (f.body == null)
 						f.name().bind(_current, f, null, this);
 					else
-						f.name().bindFunctionOverload(visibility, isStatic, annotations, _current, functionScope, this);
+						f.name().bindFunctionOverload(visibility, isStatic, isFinal, annotations, _current, functionScope, this);
 					break;
 
 				case	ABSTRACT:
-					f.name().bindFunctionOverload(visibility, isStatic, annotations, _current, functionScope, this);
+					f.name().bindFunctionOverload(visibility, isStatic, isFinal, annotations, _current, functionScope, this);
 					break;
 
 				default:
@@ -973,6 +995,7 @@ public class CompileContext {
 		case	PUBLIC:
 		case	PRIVATE:
 		case	PROTECTED:					// comes up in error scenarios (seen in a mismatched curly brace)
+		case	FINAL:
 		case	STATIC:
 		case	THROW:
 			break;
@@ -1274,8 +1297,8 @@ public class MemoryPool extends memory.NoReleasePool {
 		return super new Overload(enclosing, null, this, name, kind);
 	}
 
-	public ref<OverloadInstance> newOverloadInstance(ref<Overload> overload, Operator visibility, boolean isStatic, ref<Scope> enclosing, ref<Node> annotations, ref<CompileString> name, ref<Node> source, ref<ParameterScope> functionScope) {
-		return super new OverloadInstance(overload, visibility, isStatic, enclosing, annotations, this, name, source, functionScope);
+	public ref<OverloadInstance> newOverloadInstance(ref<Overload> overload, Operator visibility, boolean isStatic, boolean isFinal, ref<Scope> enclosing, ref<Node> annotations, ref<CompileString> name, ref<Node> source, ref<ParameterScope> functionScope) {
+		return super new OverloadInstance(overload, visibility, isStatic, isFinal, enclosing, annotations, this, name, source, functionScope);
 	}
 
 	public ref<OverloadInstance> newDelegateOverload(ref<Overload> overloadSym, ref<OverloadInstance> delegate) {
@@ -1295,20 +1318,16 @@ public class MemoryPool extends memory.NoReleasePool {
 		return super new Type(family);
 	}
 
-	public ref<ClassType> newClassType(ref<Class> definition, ref<Scope> scope) {
-		return super new ClassType(definition, scope);
+	public ref<ClassType> newClassType(ref<Class> definition, boolean isFinal, ref<Scope> scope) {
+		return super new ClassType(definition, isFinal, scope);
 	}
 
 	public ref<ClassType> newClassType(TypeFamily effectiveFamily, ref<Type> base, ref<Scope> scope) {
 		return super new ClassType(effectiveFamily, base, scope);
 	}
 
-	public ref<MonitorType> newMonitorType(ref<Class> definition, ref<Scope> scope) {
-		return super new MonitorType(definition, scope);
-	}
-
-	public ref<InterfaceType> newInterfaceType(ref<Class> definition, ref<Scope> scope) {
-		return super new InterfaceType(definition, scope);
+	public ref<InterfaceType> newInterfaceType(ref<Class> definition, boolean isFinal, ref<Scope> scope) {
+		return super new InterfaceType(definition, isFinal, scope);
 	}
 
 	public ref<EnumType> newEnumType(ref<Symbol> symbol, ref<Class> definition, ref<EnumScope> scope) {
