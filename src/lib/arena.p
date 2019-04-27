@@ -49,7 +49,9 @@ public class Arena {
 	private ref<OverloadInstance> _enumVector;
 	private ref<OverloadInstance> _ref;
 	private ref<OverloadInstance> _pointer;
-	
+	private ref<PlainSymbol> _Object;
+	private ref<PlainSymbol> _Array;
+
 	int builtScopes;
 	boolean _deleteSourceCache;
 	boolean verbose;
@@ -344,6 +346,21 @@ public class Arena {
 			ref<Overload> o = ref<Overload>(sym);
 			_map = (*o.instances())[0];
 		}
+		sym = _root.lookup("Object", compileContext);
+		if (sym == null) {
+			missingRootSymbol("Object");
+			return false;
+		}
+		if (sym.class == PlainSymbol)
+			_Object = ref<PlainSymbol>(sym);
+		sym = _root.lookup("Array", compileContext);
+		if (sym == null) {
+			missingRootSymbol("Array");
+			return false;
+		}
+		if (sym.class == PlainSymbol)
+			_Array = ref<PlainSymbol>(sym);
+
 		boolean allDefined = true;
 		for (int i = 0; i < builtInMap.length(); i++) {
 			ref<Symbol> sym = _root.lookup(builtInMap[i].name, compileContext);
@@ -639,6 +656,14 @@ public class Arena {
 
 	public ref<OverloadInstance> mapTemplate() {
 		return _map;
+	}
+
+	public ref<PlainSymbol> objectClass() {
+		return _Object;
+	}
+
+	public ref<PlainSymbol> arrayClass() {
+		return _Array;
 	}
 }
 

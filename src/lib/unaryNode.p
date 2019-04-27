@@ -194,7 +194,9 @@ public class Unary extends Node {
 			break;
 			
 		case	CAST:
-			if (_operand.op() == Operator.OBJECT_AGGREGATE) {
+			switch (_operand.op()) {
+			case OBJECT_AGGREGATE:
+			case ARRAY_AGGREGATE:
 				_operand.type = type;
 				return _operand.fold(tree, false, compileContext);
 			}

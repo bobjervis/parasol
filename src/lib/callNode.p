@@ -375,7 +375,6 @@ public class Call extends ParameterBag {
 								nl.node = tree.newUnary(Operator.ELLIPSIS_ARGUMENT, nl.node, nl.node.location());
 								nl.node.type = t;
 							}
-//							ea.reverseArgumentOrder();
 						}
 						break;
 					}
@@ -427,50 +426,163 @@ public class Call extends ParameterBag {
 			return result;
 			
 		case	TEMPLATE_INSTANCE:
-		case	ARRAY_AGGREGATE:
 			for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
 				nl.node = nl.node.fold(tree, false, compileContext);
 			if (_target != null)
 				_target = _target.fold(tree, false, compileContext);
 			break;
 			
+		case	ARRAY_AGGREGATE:
+			// Is this a ref<Array> type ARRAY_AGGREGATE?
+			Interval[] intervals;
+			ref<Type> indexType, elementType;
+
+			if (type.family() == TypeFamily.REF) {						// it's a ref<Array>, convert accordingly
+				indexType = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+				elementType = compileContext.arena().builtInType(TypeFamily.VAR);
+			} else {
+				indexType = type.indexType();
+				elementType = type.elementType();
+			}
+			for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
+				nl.node = nl.node.fold(tree, false, compileContext);
+				if (indexType.family() == TypeFamily.STRING)
+					continue;
+				if (nl.node.op() == Operator.LABEL) {
+					ref<Binary> b = ref<Binary>(nl.node);
+					long v = b.left().foldInt(compileContext.target, compileContext);
+					InternalLiteral il(indexType.family() == TypeFamily.ENUM ? v : v + 1, Location());
+					if (v < 0 || !il.representedBy(indexType)) {
+						b.left().add(MessageId.INITIALIZER_BEYOND_RANGE, compileContext.pool());
+						type = compileContext.errorType();
+					}
+					Interval interval = { start: v, end: v, first: nl };
+					intervals.append(interval);
+				} else {
+					if (intervals.length() == 0) {
+						Interval i = { start: 0, end: 0, first: nl };
+						intervals.append(i);
+					} else {
+						ref<Interval> i = &intervals[intervals.length() - 1];
+						i.end++;
+						InternalLiteral il(indexType.family() == TypeFamily.ENUM ? i.end : i.end + 1, Location());
+						if (i.end < 0 || !il.representedBy(indexType)) {
+							nl.node.add(MessageId.INITIALIZER_BEYOND_RANGE, compileContext.pool());
+							type = nl.node.type = compileContext.errorType();
+						}
+					}
+				}
+			}
+			if (type.family() == TypeFamily.REF) {
+				ref<Variable> temp = compileContext.newVariable(type);
+				ref<Reference> r = tree.newReference(temp, true, location());
+				ref<Node> o = tree.newIdentifier(compileContext.arena().arrayClass(), location());
+				o.type = o.symbol().assignType(compileContext);
+				ref<Node> newObject = tree.newBinary(Operator.NEW, tree.newLeaf(Operator.EMPTY, location()),
+								o, location());
+				newObject.type = type;
+				result = tree.newBinary(Operator.ASSIGN, r, newObject, location());
+				result.type = type;
+
+				ref<OverloadInstance> pushMethod = getOverloadInstance(type.indirectType(compileContext), "push", compileContext);
+				for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
+					r = tree.newReference(temp, false, location());
+					ref<Selection> method = tree.newSelection(r, pushMethod, true, location());
+					method.type = pushMethod.type();
+					ref<Call> call = tree.newCall(pushMethod.parameterScope(), CallCategory.METHOD_CALL, method, tree.newNodeList(nl.node), location(), compileContext);
+					call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+					result = tree.newBinary(Operator.SEQUENCE, result, call, location());
+					result.type = call.type;
+				}
+
+				if (result.op() == Operator.SEQUENCE) {
+					r = tree.newReference(temp, false, location());
+					result = tree.newBinary(Operator.SEQUENCE, result, r, location());
+					result.type = type;
+				}
+				return result.fold(tree, false, compileContext);
+			}
+			if (intervals.length() > 1) {
+				intervals.sort();
+				for (int i = 1; i < intervals.length(); i++) {
+					if (intervals[i - 1].end >= intervals[i].start) {
+						intervals[i].first.node.add(MessageId.DUPLICATE_INDEX, compileContext.pool());
+						type = compileContext.errorType();
+					}
+				}
+			}
+			break;
+			
 		case	OBJECT_AGGREGATE:
 			ref<Variable> temp = compileContext.newVariable(type);
 			result = null;
-			ref<ParameterScope> constructor = type.defaultConstructor();
-			if (constructor != null) {
+			if (type.family() == TypeFamily.REF) {
 				ref<Reference> r = tree.newReference(temp, true, location());
-				ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
-				adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
-				ref<Call> call = tree.newCall(constructor, CallCategory.CONSTRUCTOR, adr, null, location(), compileContext);
-				call.type = compileContext.arena().builtInType(TypeFamily.VOID);
-				result = call.fold(tree, true, compileContext);
-			}
-			for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
-				ref<Binary> b = ref<Binary>(nl.node);		// We know this must be a LABEL node.
-				ref<Identifier> id = ref<Identifier>(b.left());	// and the left is an identifier.
-				ref<Node> value = b.right();
-				ref<Symbol> sym = id.symbol();
-				ref<Reference> r = tree.newReference(temp, false, nl.node.location());
-				ref<Selection> member = tree.newSelection(r, sym, false, nl.node.location());
-				member.type = sym.type();
-				value = value.coerce(tree, member.type, false, compileContext);
-				ref<Node> init = tree.newBinary(Operator.ASSIGN, member, value, nl.node.location());
-				init.type = member.type;
-				init = init.fold(tree, true, compileContext);
-				if (result != null) {
-					result = tree.newBinary(Operator.SEQUENCE, result, init, location());
-					result.type = init.type;
-				} else
-					result = init;
-			}
-			if (result == null)
-				return tree.newReference(temp, false, location());
-			else {
-				ref<Reference> r = tree.newReference(temp, false, location());
-				result = tree.newBinary(Operator.SEQUENCE, result, r, location());
-				result.type = r.type;
-				return result;
+				ref<Node> o = tree.newIdentifier(compileContext.arena().objectClass(), location());
+				o.type = o.symbol().assignType(compileContext);
+				ref<Node> newObject = tree.newBinary(Operator.NEW, tree.newLeaf(Operator.EMPTY, location()),
+								o, location());
+				newObject.type = type;
+				result = tree.newBinary(Operator.ASSIGN, r, newObject, location());
+				result.type = type;
+
+				ref<OverloadInstance> setMethod = getOverloadInstance(type.indirectType(compileContext), "set", compileContext);
+				for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
+					ref<Binary> b = ref<Binary>(nl.node);
+					r = tree.newReference(temp, false, location());
+					ref<Selection> method = tree.newSelection(r, setMethod, true, location());
+					method.type = setMethod.type();
+					ref<Node> label = tree.newConstant(Operator.STRING, ref<Identifier>(b.left()).value(), location());
+					label.type = compileContext.arena().builtInType(TypeFamily.STRING);
+					ref<Node> value = b.right().coerce(tree, compileContext.arena().builtInType(TypeFamily.VAR), false, compileContext);
+					ref<Call> call = tree.newCall(setMethod.parameterScope(), CallCategory.METHOD_CALL, method, tree.newNodeList(label, value), location(), compileContext);
+					call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+					result = tree.newBinary(Operator.SEQUENCE, result, call, location());
+					result.type = call.type;
+				}
+
+				if (result.op() == Operator.SEQUENCE) {
+					r = tree.newReference(temp, false, location());
+					result = tree.newBinary(Operator.SEQUENCE, result, r, location());
+					result.type = type;
+				}
+				return result.fold(tree, false, compileContext);
+			} else {
+				ref<ParameterScope> constructor = type.defaultConstructor();
+				if (constructor != null) {
+					ref<Reference> r = tree.newReference(temp, true, location());
+					ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
+					adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+					ref<Call> call = tree.newCall(constructor, CallCategory.CONSTRUCTOR, adr, null, location(), compileContext);
+					call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+					result = call.fold(tree, true, compileContext);
+				}
+				for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
+					ref<Binary> b = ref<Binary>(nl.node);		// We know this must be a LABEL node.
+					ref<Identifier> id = ref<Identifier>(b.left());	// and the left is an identifier.
+					ref<Node> value = b.right();
+					ref<Symbol> sym = id.symbol();
+					ref<Reference> r = tree.newReference(temp, false, nl.node.location());
+					ref<Selection> member = tree.newSelection(r, sym, false, nl.node.location());
+					member.type = sym.type();
+					value = value.coerce(tree, member.type, false, compileContext);
+					ref<Node> init = tree.newBinary(Operator.ASSIGN, member, value, nl.node.location());
+					init.type = member.type;
+					init = init.fold(tree, true, compileContext);
+					if (result != null) {
+						result = tree.newBinary(Operator.SEQUENCE, result, init, location());
+						result.type = init.type;
+					} else
+						result = init;
+				}
+				if (result == null)
+					return tree.newReference(temp, false, location());
+				else {
+					ref<Reference> r = tree.newReference(temp, false, location());
+					result = tree.newBinary(Operator.SEQUENCE, result, r, location());
+					result.type = r.type;
+					return result;
+				}
 			}
 			
 		default:
@@ -564,71 +676,6 @@ public class Call extends ParameterBag {
 			nl.node.print(indent + INDENT);
 	}
 
-	public void assignArrayAggregateTypes(ref<EnumInstanceType> enumType, long maximumIndex, ref<CompileContext> compileContext) {
-		if (assignArguments(LabelStatus.OPTIONAL_LABELS, enumType, maximumIndex, compileContext)) {
-			ref<Type> indexType = null;
-			boolean indexTypeValid = true;
-			boolean anyUnlabeled = false;
-			ref<Type> scalarType = null;
-			if (_arguments != null) {
-				scalarType = _arguments.node.type;
-				if (_arguments.node.op() == Operator.LABEL) {
-					indexType = ref<Binary>(_arguments.node).left().type;
-					indexTypeValid = indexType != null;
-				} else
-					anyUnlabeled = true;
-				for (ref<NodeList> nl = _arguments; nl.next != null; nl = nl.next) {
-					scalarType = findCommonType(scalarType, nl.next.node.type, compileContext);
-					if (scalarType == null) {
-						nl.next.node.add(MessageId.TYPE_MISMATCH, compileContext.pool());
-						nl.next.node.type = compileContext.errorType();
-						break;
-					}
-					if (indexType != null && nl.next.node.op() == Operator.LABEL) {
-						ref<Binary> b = ref<Binary>(nl.next.node);
-						indexType = findCommonType(indexType, b.left().type, compileContext);
-						if (indexType == null) {
-							indexTypeValid = false;
-							b.left().add(MessageId.TYPE_MISMATCH, compileContext.pool());
-							b.left().type = compileContext.errorType();
-						}
-					} else
-						anyUnlabeled = true;
-				}
-				if (scalarType == null || !indexTypeValid) {
-					type = compileContext.errorType();
-					return;
-				}
-				if (indexType != null) {
-					boolean anyFailed = false;
-					if (!indexType.isCompactIndexType()) {
-						for (ref<NodeList> nl = _arguments; nl.next != null; nl = nl.next) {
-							if (nl.node.op() != Operator.LABEL) {
-								nl.node.add(MessageId.LABEL_MISSING, compileContext.pool());
-								nl.node.type = compileContext.errorType();
-								anyFailed = true;
-							}
-						}
-					}
-					if (anyFailed) {
-						type = compileContext.errorType();
-						return;
-					}
-				}
-				for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
-					if (scalarType != nl.node.type)
-						nl.node = nl.node.coerce(compileContext.tree(), scalarType, false, compileContext);
-			}
-			if (scalarType != null) {
-				if (indexType == null)
-					indexType = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
-				type = compileContext.arena().buildVectorType(scalarType, indexType, compileContext);
-			} else // This is the class-less empty array initializer [ ]
-				type = compileContext.arena().builtInType(TypeFamily.ARRAY_AGGREGATE);
-		} else
-			type = compileContext.errorType();
-	}
-
 	public void checkCompileTimeConstant(long minimumIndex, long maximumIndex, ref<CompileContext> compileContext) {
 		if (op() != Operator.CALL || _category != CallCategory.COERCION)
 			return;
@@ -709,11 +756,14 @@ public class Call extends ParameterBag {
 	private void assignTypes(ref<CompileContext> compileContext) {
 		switch (op()) {
 		case	ARRAY_AGGREGATE:
-			assignArrayAggregateTypes(null, long.MAX_VALUE, compileContext);
+			if (assignArguments(LabelStatus.OPTIONAL_LABELS, compileContext))
+				type = compileContext.arena().builtInType(TypeFamily.ARRAY_AGGREGATE);
+			else
+				type = compileContext.errorType();
 			break;
 			
 		case	OBJECT_AGGREGATE:
-			if (assignArguments(LabelStatus.REQUIRED_LABELS, null, long.MAX_VALUE, compileContext))
+			if (assignArguments(LabelStatus.REQUIRED_LABELS, compileContext))
 				type = compileContext.arena().builtInType(TypeFamily.OBJECT_AGGREGATE);
 			else
 				type = compileContext.errorType();
@@ -843,7 +893,7 @@ public class Call extends ParameterBag {
 	}
 
 	private boolean assignSub(Operator kind, ref<CompileContext> compileContext) {
-		if (!assignArguments(LabelStatus.NO_LABELS, null, long.MAX_VALUE, compileContext))
+		if (!assignArguments(LabelStatus.NO_LABELS, compileContext))
 			return false;
 		_target.assignOverload(_arguments, kind, compileContext);
 		if (_target.deferAnalysis()) {
@@ -854,7 +904,7 @@ public class Call extends ParameterBag {
 	}
 
 	public void assignConstructorDeclarator(ref<Type> classType, ref<CompileContext> compileContext) {
-		if (assignArguments(LabelStatus.NO_LABELS, null, long.MAX_VALUE, compileContext))
+		if (assignArguments(LabelStatus.NO_LABELS, compileContext))
 			assignConstructorCall(classType, compileContext);
 	}
 
@@ -881,7 +931,57 @@ public class Call extends ParameterBag {
 			_category = CallCategory.CONSTRUCTOR;
 		}
 	}
-		
+
+	public boolean coerceAggregateType(ref<Type> newType, ref<CompileContext> compileContext) {
+//		printf("coerceAggregateType to %s\n", newType.signature());
+		ref<Type> indexType;
+		ref<Type> elementType;
+		if (newType.family() == TypeFamily.REF) {						// it's a ref<Array>, convert accordingly
+			indexType = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+			elementType = compileContext.arena().builtInType(TypeFamily.VAR);
+		} else {
+			indexType = newType.indexType();
+			elementType = newType.elementType();
+		}
+		boolean success = true;
+		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
+			if (nl.node.op() == Operator.LABEL) {
+				ref<Binary> b = ref<Binary>(nl.node);
+				ref<Node> lbl;
+				if (indexType.family() == TypeFamily.ENUM) {
+					ref<Identifier> id = ref<Identifier>(b.left());
+					id.resolveAsEnum(ref<EnumInstanceType>(indexType), compileContext);
+					lbl = b.left();
+				} else {
+					if (!b.left().isConstant()) {
+						b.left().add(MessageId.NOT_CONSTANT, compileContext.pool());
+						success = false;
+					}
+					lbl = b.left().coerce(compileContext.tree(), indexType, true, compileContext);
+					if (lbl.deferAnalysis())
+						success = false;
+				}
+				ref<Node> x = b.right().coerce(compileContext.tree(), elementType, true, compileContext);
+				if (x.deferAnalysis())
+					success = false;
+				if (lbl != b.left() || x != b.right()) {
+					b = compileContext.tree().newBinary(Operator.LABEL, lbl, x, b.location());
+					b.type = nl.node.type;
+					nl.node = b;
+				}
+			} else {
+				nl.node = nl.node.coerce(compileContext.tree(), elementType, true, compileContext);
+				if (nl.node.deferAnalysis())
+					success = false;
+			}
+		}
+		if (success)
+			type = newType;
+		else
+			type = compileContext.errorType();
+		return success;
+	}
+
 	void convertArguments(ref<FunctionType> funcType, ref<CompileContext> compileContext) {
 		boolean processingEllipsis = false;
 		ref<NodeList> param = funcType.parameters();
@@ -934,10 +1034,9 @@ public class Call extends ParameterBag {
 				return 0;
 		}
 	}
-	
-	boolean assignArguments(LabelStatus status, ref<EnumInstanceType> enumType, long maximumIndex, ref<CompileContext> compileContext) {
-		Interval[] intervals;
-		long nextIndex = 0;
+
+	boolean assignArguments(LabelStatus status, ref<CompileContext> compileContext) {
+//		long nextIndex = 0;
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 			compileContext.assignTypes(nl.node);
 			switch (status) {
@@ -947,54 +1046,8 @@ public class Call extends ParameterBag {
 					// argument expressions.
 					nl.node.print(0);
 					assert(false);
-					nl.node.add(MessageId.NOT_A_FUNCTION, compileContext.pool());
-					nl.node.type = compileContext.errorType();
-				}
-				break;
-				
-			case	OPTIONAL_LABELS:		// An array aggregate
-				if (nl.node.op() == Operator.LABEL) {
-					ref<Binary> b = ref<Binary>(nl.node);
-					if (enumType != null) {
-						if (b.left().op() == Operator.IDENTIFIER) {
-							ref<Identifier> id = ref<Identifier>(b.left());
-							id.resolveAsEnum(enumType, compileContext);
-							if (id.deferAnalysis()) {
-								nl.node.type = compileContext.errorType();
-								break;
-							}
-							int i = id.symbol().offset;
-							Interval interval = { start: i, end: i, first: nl };
-							intervals.append(interval);
-						} else {
-							b.left().add(MessageId.LABEL_NOT_IDENTIFIER, compileContext.pool());
-							b.left().type = compileContext.errorType();
-						}
-					} else {
-						compileContext.assignTypes(b.left());
-						if (b.left().deferAnalysis()) {
-							nl.node.type = compileContext.errorType();
-							break;
-						}
-						b.left().checkCompileTimeConstant(0, maximumIndex, compileContext);
-						if (b.left().deferAnalysis()) {
-							nl.node.type = compileContext.errorType();
-							break;
-						}
-					}
-				} else {
-					if (intervals.length() == 0) {
-						Interval i = { start: 0, end: 0, first: nl };
-						intervals.append(i);
-					} else {
-						ref<Interval> i = &intervals[intervals.length() - 1];
-						if (i.end < maximumIndex)
-							i.end++;
-						else {
-							nl.node.add(MessageId.INITIALIZER_BEYOND_RANGE, compileContext.pool());
-							nl.node.type = compileContext.errorType();
-						}
-					}
+//					nl.node.add(MessageId.NOT_A_FUNCTION, compileContext.pool());
+//					nl.node.type = compileContext.errorType();
 				}
 				break;
 
@@ -1016,6 +1069,7 @@ public class Call extends ParameterBag {
 				type = nl.node.type;
 				return false;
 			}
+/*
 		if (status == LabelStatus.OPTIONAL_LABELS && intervals.length() > 1) {
 			intervals.sort();
 			for (int i = 1; i < intervals.length(); i++) {
@@ -1026,6 +1080,7 @@ public class Call extends ParameterBag {
 				}
 			}
 		}
+ */
 		return true;
 	}
 
@@ -1044,7 +1099,78 @@ public class Call extends ParameterBag {
 				return true;
 				
 			case	SHAPE:
-				break;
+				boolean isMap = newType.isMap(compileContext);
+				ref<Type> indexType = newType.indexType();
+				ref<Type> elementType = newType.elementType();
+				for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
+					if (nl.node.op() == Operator.LABEL) {
+						ref<Binary> b = ref<Binary>(nl.node);
+						if (indexType.family() == TypeFamily.ENUM) {
+							if (b.left().op() != Operator.IDENTIFIER)
+								return false;
+							if (!ref<EnumInstanceType>(indexType).hasInstance(ref<Identifier>(b.left())))
+								return false;
+						} else {
+							if (b.left().op() == Operator.IDENTIFIER) {
+								compileContext.assignTypes(b.left());
+								if (b.left().deferAnalysis() ||
+									!b.left().canCoerce(indexType, false, compileContext)) {
+									b.left().type = null;
+									return false;
+								}
+								b.left().type = null;
+							} else {
+								compileContext.assignTypes(b.left());
+								if (b.left().deferAnalysis())
+									return false;
+								if (!b.left().canCoerce(indexType, false, compileContext))
+									return false;
+							}
+						}
+						if (!b.right().canCoerce(elementType, false, compileContext))
+							return false;
+					} else {
+						if (isMap)
+							return false;
+						if (!nl.node.canCoerce(elementType, false, compileContext))
+							return false;
+					}
+				}
+				return true;
+
+			case REF:
+				if (newType.indirectType(compileContext) != 
+						compileContext.arena().builtInType(TypeFamily.ARRAY_AGGREGATE))
+					return false;
+					// it's a ref<Array>, convert accordingly
+				indexType = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+				elementType = compileContext.arena().builtInType(TypeFamily.VAR);
+				for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
+					if (nl.node.op() == Operator.LABEL) {
+						ref<Binary> b = ref<Binary>(nl.node);
+						if (b.left().op() == Operator.IDENTIFIER) {
+							compileContext.assignTypes(b.left());
+							if (b.left().deferAnalysis() ||
+								!b.left().canCoerce(indexType, false, compileContext)) {
+								b.left().type = null;
+								return false;
+							}
+							b.left().type = null;
+						} else {
+							compileContext.assignTypes(b.left());
+							if (b.left().deferAnalysis())
+								return false;
+							if (!b.left().canCoerce(indexType, false, compileContext))
+								return false;
+						}
+						if (!b.right().canCoerce(elementType, false, compileContext))
+							return false;
+					} else {
+						if (!nl.node.canCoerce(elementType, false, compileContext))
+							return false;
+					}
+				}
+				return true;
 
 			default:
 				printf("\nnewType: (%s) ", newType.signature());
@@ -1081,6 +1207,10 @@ public class Call extends ParameterBag {
 				}
 				return success;
 
+			case REF:
+				if (newType.indirectType(compileContext) == type)
+					return true;
+
 			default:
 				return false;
 			}
@@ -1088,6 +1218,14 @@ public class Call extends ParameterBag {
 		return super.canCoerce(newType, explicitCast, compileContext);
 	}
 	
+	public ref<Node> coerce(ref<SyntaxTree> tree, ref<Type> newType, boolean explicitCast, ref<CompileContext> compileContext) {
+		if (op() == Operator.ARRAY_AGGREGATE) {
+			type = newType;
+			return this;
+		}
+		return super.coerce(tree, newType, explicitCast, compileContext);
+	}
+
 	public ref<Node> target() {
 		return _target;
 	}

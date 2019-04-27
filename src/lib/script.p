@@ -332,6 +332,7 @@ public:
 			case END_OF_INPUT:
 				if (terminator != Token.END_OF_INPUT) {
 					_errorsFound = true;
+//					printf("terminator == %s\n", string(terminator));
 					log.error(_scanner.location(), "Unexpected end of file");
 				}
 				if (run != null)
@@ -531,9 +532,9 @@ public:
 */
 	Token next() {
 		for (;;) {
+			_previous = _cursor;
 			if (_cursor >= _text.length())
 				return Token.END_OF_INPUT;
-			_previous = _cursor;
 			switch (_text[_cursor]) {
 			case	'a':
 			case	'b':

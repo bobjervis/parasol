@@ -135,6 +135,8 @@ run(filename: loop_fallthrough_test.p)
 
 // Basic runtime execution tests
 
+run(filename: object_init_test.p)
+run(filename: array_init_test.p)
 run(filename: class_compare_test.p)
 run(filename: string16_test_1.p, arguments: src/lib/x86_64.p)
 run(filename: string16_test_1.p, arguments: test/scripts/parasol_tests.ets)
@@ -326,6 +328,10 @@ compile(expect: fail, message: NO_MATCHING_OVERLOAD) { "void f(ref<int> y, int z
 
 compile() { "void f(int x(int z)){}" }
 compile() { "void f(int x(int z)){} f(g.h); class g { static int h(int y) { return 0;} }" }
+
+compile() { "ref<Object> o = { abc: \"def\" };" }
+compile() { "ref<Array> a = [ 1, 2, 3.5 ];" }
+compile() { "void f(ref<Array> a) {} f([ 1, 2, 3.5 ]);" }
 
 // enum class tests
 

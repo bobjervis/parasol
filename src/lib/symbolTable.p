@@ -710,6 +710,13 @@ public class EnumScope extends ClassScope {
 				return i;
 		return -1;
 	}
+
+	public boolean hasInstance(ref<CompileString> name) {
+		for (i in _instances)
+			if (_instances[i].name().equals(*name))
+				return true;
+		return false;
+	}
 }
 
 class FlagsScope extends ClasslikeScope {

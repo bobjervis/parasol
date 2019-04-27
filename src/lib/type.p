@@ -917,6 +917,10 @@ public class EnumInstanceType extends Type {
 		return _scope.enumType.symbol();
 	}
 
+	public boolean hasInstance(ref<Identifier> id) {
+		return _scope.hasInstance(id.identifier());
+	}
+
 	protected boolean sameAs(ref<Type> other) {
 		// Two enums are considered the same only
 		// if they have the same declaration site, which
@@ -2012,7 +2016,15 @@ public class Type {
 	public int interfaceOffset(int implementsIndex, ref<CompileContext> compileContext) {
 		return -1;
 	}
-	
+	/**
+	 * Return the indirect type pointed to by a ref/pointer type.
+	 *
+	 * @param compileContext The current compile context. This may be needed to resolve 
+	 * the current compilation's 'address' type.
+	 *
+	 * @return The type of the object pointed to, if any. This method returns null for
+	 * types that are not reference types.
+	 */
 	public ref<Type> indirectType(ref<CompileContext> compileContext) {
 		return null;
 	}

@@ -1456,61 +1456,21 @@ public class Binary extends Node {
 					return;
 				}
 				ref<Call> aggregate = ref<Call>(_right);
-				ref<EnumInstanceType> enumType;
-				long maxIndex;
-				if (_left.type.family() == TypeFamily.SHAPE) {
-					ref<Type> indexType = _left.type.indexType();
-					switch (indexType.family()) {
-					case	BOOLEAN:
-						enumType = null;
-						maxIndex = 1;
-						break;
-						
-					case	SIGNED_8:
-						enumType = null;
-						maxIndex = 127;
-						break;
-						
-					case	SIGNED_16:
-						enumType = null;
-						maxIndex = short.MAX_VALUE;
-						break;
-						
-					case	SIGNED_32:
-						enumType = null;
-						maxIndex = int.MAX_VALUE;
-						break;
-						
-					case	UNSIGNED_8:
-						enumType = null;
-						maxIndex = byte.MAX_VALUE - 1;			// can't express a 256 entry byte-indexed array
-						break;
-						
-					case	UNSIGNED_16:
-						enumType = null;
-						maxIndex = char.MAX_VALUE - 1;
-						break;
-						
-					case	UNSIGNED_32:
-						enumType = null;
-						maxIndex = unsigned.MAX_VALUE - 1;
-						break;
-						
-					case	ENUM:
-						enumType = ref<EnumInstanceType>(indexType);
-						maxIndex = enumType.instanceCount() - 1;
-						break;
-						
-					default:
-						enumType = null;
-						maxIndex = long.MAX_VALUE;
-					}
-				}
-				aggregate.assignArrayAggregateTypes(enumType, maxIndex, compileContext);
+				compileContext.assignTypes(aggregate);
 				if (aggregate.deferAnalysis())
 					type = _right.type;
-				else
-					type = _left.type;
+				else {
+					if (!aggregate.canCoerce(_left.type, false, compileContext)) { 
+						aggregate.add(MessageId.CANNOT_CONVERT, compileContext.pool());
+						aggregate.type = compileContext.errorType();
+						type = aggregate.type;
+						return;
+					}
+					if (aggregate.coerceAggregateType(_left.type, compileContext)) 
+						type = _left.type;
+					else
+						type = _right.type;
+				}
 				return;
 			}
 			compileContext.assignTypes(_right);
@@ -2825,6 +2785,7 @@ public void markLiveSymbols(ref<Node> declarator, StorageClass storageClass, ref
 	case	EMPTY:
 	case	SYNTAX_ERROR:
 	case	INTERNAL_LITERAL:
+	case	ARRAY_AGGREGATE:
 		break;
 		
 	default:

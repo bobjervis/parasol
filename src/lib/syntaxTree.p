@@ -1161,8 +1161,8 @@ public class InternalLiteral extends Node {
 	boolean representedBy(ref<Type> newType) {
 		switch (newType.family()) {
 		case	UNSIGNED_8:
-//			printf("v = %d byte.MAX_VALUE=%d\n", v, int(byte.MAX_VALUE));
-			return _value >= 0 && _value <= byte.MAX_VALUE;
+//			printf("v = %d byte.MAX_VALUE=%d\n", _value, int(byte.MAX_VALUE));
+			return _value >= 0 && _value <= int(byte.MAX_VALUE);
 
 		case	UNSIGNED_16:
 //			printf("_value = %d char.MAX_VALUE=%d\n", _value, int(char.MAX_VALUE));
@@ -1181,6 +1181,9 @@ public class InternalLiteral extends Node {
 		case	SIGNED_64:
 			return true;
 			
+		case	ENUM:
+			return _value < ref<EnumInstanceType>(newType).instanceCount();
+				
 		case	FLAGS:
 			if (_value == 0)
 				return true;
@@ -1318,6 +1321,7 @@ public class Constant extends Node {
 
 	public boolean isConstant() {
 		switch (op()) {
+		case	STRING:
 		case	INTEGER:
 		case	CHARACTER:
 			return true;
@@ -3265,7 +3269,7 @@ public class Node {
 		return call;
 	}
 	
-	ref<OverloadInstance> getOverloadInstance(ref<Type> objType, string functionName, ref<CompileContext> compileContext) {
+	static ref<OverloadInstance> getOverloadInstance(ref<Type> objType, string functionName, ref<CompileContext> compileContext) {
 		CompileString name(functionName);
 		ref<Symbol> sym = objType.lookup(&name, compileContext);
 		if (sym == null || sym.class != Overload) {

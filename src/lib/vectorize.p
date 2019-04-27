@@ -25,6 +25,10 @@ boolean shouldVectorize(ref<Node> node) {
 	case	SEQUENCE:
 		ref<Binary> b = ref<Binary>(node);
 		return shouldVectorize(b.right());
+
+	case	ARRAY_AGGREGATE:
+		if (node.type != null && node.type.family() == TypeFamily.REF)
+			return false;							// This is a ref<Array> initializer
 	}
 	return true;
 }
@@ -323,6 +327,11 @@ private Operator reduceToAssignment(Operator reduce) {
 
 private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary> vectorExpression, ref<CompileContext> compileContext) {
 	ref<Call> aggregate = ref<Call>(vectorExpression.right());
+	ref<Node> folded = aggregate.fold(tree, false, compileContext);
+	assert(folded.class == Call);
+	aggregate = ref<Call>(folded);
+	if (aggregate.deferAnalysis())
+		return aggregate;
 	ref<Type> vectorType = vectorExpression.type;
 	ref<Node> lhs = vectorExpression.left();
 	if (lhs.commentary() != null) {
@@ -352,10 +361,6 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 				ref<Binary> b = ref<Binary>(nl.node);
 				switch (indexType.family()) {
 				case ENUM:
-					ref<Identifier> id = ref<Identifier>(b.left());
-					lastIndexValue = id.symbol().offset; 
-					break;
-
 				case UNSIGNED_8:
 				case UNSIGNED_16:
 				case UNSIGNED_32:
@@ -418,10 +423,6 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 					val = b.right();
 					switch (indexType.family()) {
 					case ENUM:
-						ref<Identifier> id = ref<Identifier>(b.left());
-						lastIndexValue = id.symbol().offset; 
-						break;
-	
 					case UNSIGNED_8:
 					case UNSIGNED_16:
 					case UNSIGNED_32:
