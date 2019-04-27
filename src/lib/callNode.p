@@ -810,8 +810,7 @@ public class Call extends ParameterBag {
 					type = compileContext.errorType();
 					break;
 				}
-				// The SUPER call is in the right scope, is it the first statement of the
-				// current block.
+				// First, check that we are within the function's main fody.
 				ref<Node> def = compileContext.current().enclosing().definition();
 				if (def.op() != Operator.FUNCTION) {
 					_target.add(MessageId.INVALID_SUPER, compileContext.pool());
@@ -819,12 +818,26 @@ public class Call extends ParameterBag {
 					break;
 				}
 				ref<FunctionDeclaration> func = ref<FunctionDeclaration>(def);
-				if (func.functionCategory() != FunctionDeclaration.Category.CONSTRUCTOR ||
-					func.body != compileContext.current().definition()) {
+
+				if (func.functionCategory() != FunctionDeclaration.Category.CONSTRUCTOR) {
 					_target.add(MessageId.INVALID_SUPER, compileContext.pool());
 					type = compileContext.errorType();
 					break;
 				}
+
+				ref<NodeList> stmt1 = func.body.statements();
+				while (stmt1 != null) {
+					if (hasCode(stmt1))
+						break;
+					stmt1 = stmt1.next;
+				}
+				if (stmt1 == null || stmt1.node.op() != Operator.EXPRESSION ||
+					ref<Unary>(stmt1.node).operand() != this) {
+					_target.add(MessageId.INVALID_SUPER, compileContext.pool());
+					type = compileContext.errorType();
+					break;
+				}
+
 				ref<Type> t = compileContext.current().getSuper();
 				if (t == null) {
 					_target.add(MessageId.SUPER_NOT_ALLOWED, compileContext.pool());
@@ -890,6 +903,14 @@ public class Call extends ParameterBag {
 			}
 			break;
 		}
+	}
+
+	private boolean hasCode(ref<NodeList> stmt) {
+		switch (stmt.node.op()) {
+		case STATIC:
+			return false;
+		}
+		return true;
 	}
 
 	private boolean assignSub(Operator kind, ref<CompileContext> compileContext) {

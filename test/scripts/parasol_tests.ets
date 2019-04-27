@@ -1586,6 +1586,10 @@ compile(expect: fail, message: UNEXPECTED_RC) { "switch (5) { default: }" }
 
 compile() { "ref<int> x = new int;" }
 
+// super test
+
+compile(expect: fail){"class A{ A(int x) {} int f() { return 3; } } class B extends A { B() { super(2); f(); super(3); } }"}
+
 //compile() { "lock { }" }
 //compile() { "lock { int x; }" }
 //compile() { "void func() lock {}" }
