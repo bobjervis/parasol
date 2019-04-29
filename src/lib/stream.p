@@ -532,7 +532,7 @@ public class Reader {
 	}
 
 	public string readLine() {
-		string line;
+		string line = "";
 
 		for (;;) {
 			int c = _read();
@@ -544,11 +544,8 @@ public class Reader {
 			}
 			if (c == '\r')
 				continue;
-			if (c == '\n') {
-				if (line == null)
-					line = "";
+			if (c == '\n')
 				return line;
-			}
 			line.append(byte(c));
 		}
 	}
