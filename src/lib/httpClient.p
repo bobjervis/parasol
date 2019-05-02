@@ -28,31 +28,72 @@ import native:net.inet_aton;
 import native:net.inet_ntoa;
 
 private ref<log.Logger> logger = log.getLogger("parasol.http.client");
-
+/**
+ * Content type value for xml data.
+ */
 public string XML_CONTENT_TYPE = "application/xml";
-
+/**
+ * The name of the content-md5 header.
+ */
 public string CONTENT_MD5_HEADER = "content-md5";
+/**
+ * The name of the content-length header.
+ */
 public string CONTENT_LENGTH_HEADER = "content-length";
+/**
+ * The name of the content-type header.
+ */
 public string CONTENT_TYPE_HEADER = "content-type";
-
+/**
+ * The date format string appropriate to produce an RFC 822-compatible date format without the
+ * z time zone element.
+ */
 public string RFC822_DATE_FORMAT_STR_MINUS_Z = "EEE, dd mm yy HH:MM:SS";
+/**
+ * The date format string appropriate to produce an RFC 822-compatible date format with the
+ * z time zone element.
+ */
 public string RFC822_DATE_FORMAT_STR_WITH_Z = "EEE, dd mm yy HH:MM:SS xx";
-
+/**
+ * Convert a time to RFC 822 format in the local time zone.
+ *
+ * @param t The time to convert.
+ *
+ * @return The converted date/time string.
+ */
 public string toRfc822LocalTime(time.Instant t) {
 	time.Date d(t);
 	return d.format(RFC822_DATE_FORMAT_STR_WITH_Z);
 }
-
+/**
+ * Convert a time to RFC 822 format in the UTC (GMT) time zone.
+ *
+ * @param t The time to convert.
+ *
+ * @return The converted date/time string.
+ */
 public string toRfc822UTCTime(time.Instant t) {
 	time.Date d(t, &time.UTC);
 	return d.format(RFC822_DATE_FORMAT_STR_MINUS_Z);
 }
-
+/**
+ * Convert a time to RFC 822 format in the local time zone.
+ *
+ * @param t The time to convert.
+ *
+ * @return The converted date/time string.
+ */
 public string toRfc822LocalTime(time.Time t) {
 	time.Date d(t);
 	return d.format(RFC822_DATE_FORMAT_STR_WITH_Z);
 }
-
+/**
+ * Convert a time to RFC 822 format in the UTC (GMT) time zone.
+ *
+ * @param t The time to convert.
+ *
+ * @return The converted date/time string.
+ */
 public string toRfc822UTCTime(time.Time t) {
 	time.Date d(t, &time.UTC);
 	return d.format(RFC822_DATE_FORMAT_STR_MINUS_Z);
@@ -67,6 +108,10 @@ public string toRfc822UTCTime(time.Time t) {
  *
  * An escaped character is replaced in the returned string with a three character sequence, a
  * percent sign (%), then two hexadecimal digits (where upper-case letters are used).
+ *
+ * @param uri The uri string to be encoded.
+ *
+ * @return The encoded uri string.
  */
 public string encodeURI(string uri) {
 	string result;
@@ -180,6 +225,10 @@ public string encodeURI(string uri) {
  *
  * An escaped character is replaced in the returned string with a three character seuqence, a
  * percent sign (%), then two hexadecimal digits (where upper-case letters are used).
+ *
+ * @param component The component string to be encoded.
+ *
+ * @return The encoded component string.
  */
 public string encodeURIComponent(string component) {
 	string result;
@@ -279,6 +328,9 @@ public string encodeURIComponent(string component) {
  * @param uri The uri string to be decoded.
  *
  * @return The decode URI with certain escape sequences replaced with their character values.
+ *
+ * @exception URIError when the input uri string contains malformed % escape sequences (such as a percent character
+ * as the last character of the uri string).
  */
 public string decodeURI(string uri) {
 	string result;
@@ -340,6 +392,9 @@ public string decodeURI(string uri) {
  * @param component The URI component, possibly containing escape sequences.
  *
  * @return The converted component string with no escape sequences present.
+ *
+ * @exception URIError when the input component string contains malformed % escape sequences (such as a percent character
+ * as the last character of the component string).
  */
 public string decodeURIComponent(string component) {
 	string result;
@@ -372,8 +427,15 @@ public string decodeURIComponent(string component) {
 	}
 	return result;
 }
-
+/**
+ * This exception is thrown from the decode functions when the encoded input is malformed.
+ */
 public class URIError extends Exception {
+	/**
+	 * The constructor takes a message.
+	 *
+	 * @param message The message to be returned by the {@link message} method.
+	 */
 	public URIError(string message) {
 		super(message);
 	}
@@ -402,9 +464,21 @@ public class HttpClient {
 	private string[string] _queryParameters;
 
 	private string _cipherList;
-
+	/**
+	 * The user agent string to be included in requests.
+	 *
+	 * The default value is 'Parasol/0.1.0'.
+	 * 
+	 * If you explicitly define a user-agent header, this member is ignored.
+	 */
 	public string userAgent;
-
+	/**
+	 * Create a client for a simple HTTP request.
+	 *
+	 * You should use this constructor for http and https URL's.
+	 *
+	 * @param uri The parsed Uri object to use for the HTTP request.
+	 */
 	public HttpClient(ref<Uri> uri) {
 		_uri = *uri;
 		userAgent = "Parasol/0.1.0";
@@ -427,7 +501,7 @@ public class HttpClient {
 	/**
 	 * Create a client for a Web Socket request.
 	 *
-	 * Use this constructor when you wan tto obtain a Web Socket. The 
+	 * Use this constructor when you want to obtain a Web Socket. The 
 	 * webSocketProtocol parameter specifies a protocol that the server
 	 * expects to see.
 	 *
@@ -437,6 +511,7 @@ public class HttpClient {
 	 */
 	public HttpClient(string url, string webSocketProtocol) {
 		_uri.parse(url);
+		userAgent = "Parasol/0.1.0";
 		_webSocketProtocol = webSocketProtocol;
 		if (_headers["host"] == null)
 			_headers["host"] = _uri.host + ":" + string(_uri.port);
@@ -519,7 +594,12 @@ public class HttpClient {
 	 * </tr>
 	 * </table>
 	 *
-	 * In the current implementation you cannot specify any of these headers in this method call.
+	 * You may specify these headers explicitly, except for Upgrade, Sec-Websocket-Key and
+	 * Sec-WebSocket-Protocol on a web socket request. For web socket requests, these headers
+	 * are generated and any explicit values you provided are replaced with the computed values.
+	 *
+	 * Header names are not case sensitive. Defining headers whose names only differ in case will
+	 * only define the last call and any prior values are discarded.
 	 *
 	 * @param name The header name to use
 	 * @param value The value string to use for the header
@@ -527,11 +607,31 @@ public class HttpClient {
 	public void setHeader(string name, string value) {
 		_headers[name.toLowerCase()] = value;
 	}
-
+	/**
+	 * Check whether a given header is currently defined.
+	 *
+	 * @param name The header name to use
+	 *
+	 * @return true if the given header is currently defined, false otherwise.
+	 */
 	public boolean hasHeader(string name) {
 		return _headers.contains(name.toLowerCase());
 	}
-
+	/**
+	 * The given query parameter is defined.
+	 *
+	 * Query parameters defined in this way use the ?key=value&key=value syntax for the query
+	 * parameter string included in the submitted url
+	 *
+	 * If you supply multiple values for the same key using this method, only the last supplied
+	 * value is retained.
+	 *
+	 * Both the key and value strings of a query parameter are encoded using {@link encodeUriComponent}
+	 * function.
+	 *
+	 * @param key The key of the query parameter.
+	 * @param value The value of the parameter.
+	 */
 	public void addQueryParameter(string key, string value) {
 		_queryParameters[key] = value;
 	}
@@ -549,9 +649,8 @@ public class HttpClient {
 	/**
 	 * Issue a POST request.
 	 *
-	 *
 	 * If the request is successful, the content of the response object may still indicate
-	 * problems. Check the code, and if you expect a body
+	 * problems. Check the code, and if you expect a body, check that the body is present.
 	 *
 	 * @param body The body to accompany the request headers.
 	 *
@@ -564,16 +663,58 @@ public class HttpClient {
 		text.StringReader reader(&body);
 		return post(&reader);
 	}
-
+	/**
+	 * Issue a POST request.
+	 *
+	 * If the request is successful, the content of the response object may still indicate
+	 * problems. Check the code, and if you expect a body, check that the body is present.
+	 *
+	 * @param body A Reader containing the body to accompany the request headers.
+	 *
+	 * @return true if the request succeeded, false otherwise.
+	 * @return The IPv4 ip address of the host. If the hostname failed to resolve
+	 * or if the combination of constructor used and URL protocol are not compatible
+	 * with the POST method, the returned ip value is 0.
+	 *
+	 * @exception IllegalOperationException thrown if the body Reader object returns false
+	 * for {@link Reader.hasLength}.
+	 */
 	public boolean, unsigned post(ref<Reader> body) {
 		return startRequest("POST", body);
 	}
-
+	/**
+	 * Issue a PUT request.
+	 *
+	 * If the request is successful, the content of the response object may still indicate
+	 * problems. Check the code, and if you expect a body, check that the body is present.
+	 *
+	 * @param body The body to accompany the request headers.
+	 *
+	 * @return true if the request succeeded, false otherwise.
+	 * @return The IPv4 ip address of the host. If the hostname failed to resolve
+	 * or if the combination of constructor used and URL protocol are not compatible
+	 * with the POST method, the returned ip value is 0.
+	 */
 	public boolean, unsigned put(string body) {
 		text.StringReader reader(&body);
 		return post(&reader);
 	}
-
+	/**
+	 * Issue a PUT request.
+	 *
+	 * If the request is successful, the content of the response object may still indicate
+	 * problems. Check the code, and if you expect a body, check that the body is present.
+	 *
+	 * @param body A Reader containing the body to accompany the request headers.
+	 *
+	 * @return true if the request succeeded, false otherwise.
+	 * @return The IPv4 ip address of the host. If the hostname failed to resolve
+	 * or if the combination of constructor used and URL protocol are not compatible
+	 * with the POST method, the returned ip value is 0.
+	 *
+	 * @exception IllegalOperationException thrown if the body Reader object returns false
+	 * for {@link Reader.hasLength}.
+	 */
 	public boolean, unsigned put(ref<Reader> body) {
 		return startRequest("PUT", body);
 	}
@@ -661,7 +802,7 @@ public class HttpClient {
 			expectWebSocket = true;
 		}
 		if (_headers["user-agent"] == null)
-			_headers["user-Agent"] = userAgent;
+			_headers["user-agent"] = userAgent;
 		if (_headers["accept"] == null)
 			_headers["accept"] = "text/html; charset=UTF-8";
 		if (_headers["accept-language"] == null)
@@ -680,7 +821,7 @@ public class HttpClient {
 			switch (method) {
 			case "POST":
 			case "PUT":
-				_headers["content-Length"] = "0";		
+				_headers["content-length"] = "0";		
 				break;
 
 			default:

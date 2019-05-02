@@ -140,6 +140,7 @@ div.func-description, div.enum-description {
 div.func-return-caption {
 	font-weight: bold;
 	padding-bottom: 2mm;
+	padding-top: 2mm;
 }
 
 div.func-return {
@@ -154,9 +155,10 @@ li.func-return {
 	padding-bottom: 2mm;
 }
 
-div.threading-caption, div.since-caption, div.see-caption {
+div.threading-caption, div.since-caption, div.see-caption, div.exceptions-caption {
 	font-weight: bold;
 	padding-bottom: 2mm;
+	padding-top: 2mm;
 }
 
 div.namespace-info {
