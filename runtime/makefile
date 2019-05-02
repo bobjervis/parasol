@@ -29,7 +29,7 @@ build/parasolrt: build/prep $(RUNTIME_OBJECTS)
 	$(CXX) $(CFLAGS) -Lbuild -o build/parasolrt $(RUNTIME_OBJECTS) -lpthread -ldl -lparasol
 
 build/libparasol.so.1: build/prep $(COMMON_OBJECTS) $(LIB_OBJECTS)
-	$(CXX) $(CFLAGS) -fPIC -shared -o $@ $(COMMON_OBJECTS) $(LIB_OBJECTS) -lpthread -ldl
+	$(CXX) $(CFLAGS) -shared -o $@ $(COMMON_OBJECTS) $(LIB_OBJECTS) -lpthread -ldl
 	ln -sfT libparasol.so.1 build/libparasol.so
 
 $(COMMON_OBJECTS): build/o/%.o : runtime/common/%.cc
@@ -39,7 +39,7 @@ $(RUNTIME_OBJECTS): build/o/%.o : runtime/Parasol/%.cc
 	$(CXX) $(CFLAGS) -c $< $(LIB_PATH) $(LIBS) -o $@
 
 $(LIB_OBJECTS): build/o/%.o : runtime/library/%.cc
-	$(CXX) $(CFLAGS) -fPIC -c $< $(LIB_PATH) $(LIBS) -o $@
+	$(CXX) $(CFLAGS) -c $< $(LIB_PATH) $(LIBS) -o $@
 
 build/prep:
 	mkdir -p build/o
