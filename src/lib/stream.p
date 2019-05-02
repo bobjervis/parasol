@@ -532,7 +532,7 @@ public class Reader {
 	}
 
 	public string readLine() {
-		string line;
+		string line = "";
 
 		for (;;) {
 			int c = _read();
@@ -635,13 +635,7 @@ public class Writer {
 		}
 		return totalWritten;
 	}
-	/**
-	 * Write a formatted string to the stream.
-	 *
-	 * @param format A valid printf format string.
-	 * @param arguments Zero or more arguments. The arguments and their types are determined by the
-	 * contents of the format string.
-	 */
+
 	public int printf(string format, var... arguments) {
 		int bytesWritten = 0;
 		int nextArgument = 0;
