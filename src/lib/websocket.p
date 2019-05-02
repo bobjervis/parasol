@@ -275,7 +275,7 @@ public class WebSocket extends WebSocketVolatileData {
 		}
 //		logger.debug("about to stop writing...\n");
 		stopWriting();
-//		logger.debug("Socket cleaned up!\n");
+		logger.debug("Socket cleaned up!\n");
 		delete _connection;
 	}
 	/**
@@ -503,6 +503,7 @@ public class WebSocket extends WebSocketVolatileData {
 					logger.error("_incomingLength = %d\n", _incomingLength);
 					linux.perror(null);
 				}
+				logger.debug("CLOSE_BAD_DATA - recv failed");
 				shutDown(CLOSE_BAD_DATA, "recv failed");
 				return -1;
 			}
