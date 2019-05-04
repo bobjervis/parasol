@@ -831,9 +831,10 @@ void writeWrapper(address arg) {
 	for (;;) {
 //		printf("%s writer waiting...\n", currentThread().name());
 		ref<Operation> op = writer.dequeue();
-//		printf("%s writer got something to write opcode %d\n", currentThread().name(), op.opcode);
+		logger.debug("web write opcode %d len %d", op.opcode, op.message.length());
+		logger.debug("%*.*s", op.message.length(), op.message.length(), &op.message[0]);
 		if (op.opcode == WebSocket.OP_CLOSE) {
-//			logger.format(log.DEBUG, "%d Sending OP_CLOSE message: %d %s", op.webSocket.connection().requestFd(),
+//			logger.debug("%d Sending OP_CLOSE message: %d %s", op.webSocket.connection().requestFd(),
 //									op.cause, op.message);
 			byte[] closeFrame;
 

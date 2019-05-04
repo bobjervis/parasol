@@ -179,6 +179,13 @@ class ClasslikeScope extends Scope {
 				}
 	//			assert(false);
 			}
+		} else {
+			ref<ref<ParameterScope>[]> c = constructors();
+			for (i in *c) {
+				ref<OverloadInstance> sym = (*c)[i].symbol();
+				if (sym != null)
+					sym.assignType(compileContext);
+			}
 		}
 	}
 	
