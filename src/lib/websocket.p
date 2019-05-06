@@ -143,6 +143,7 @@ private monitor class WebSocketVolatileData {
 	private boolean _shuttingDown;
 	private ref<Thread>	_readerThread;
 	private WebSocketReader _reader;
+	private boolean _sentClose;
 
 	public boolean startReader(WebSocketReader reader) {
 		if (_readerThread != null)
@@ -176,8 +177,9 @@ private monitor class WebSocketVolatileData {
 			//	   phrase: pointless, not harmful.
 			
 			if (_reader != null) {
-//				logger.format(log.DEBUG, "stopReading... _waitingWrites %d _shuttingDown %s", _waitingWrites, _shuttingDown ? "true" : "false");
+//				logger.debug("stopReading... _waitingWrites %d _shuttingDown %s", _waitingWrites, _shuttingDown ? "true" : "false");
 				ref<WebSocket>(this).shutDown(WebSocket.CLOSE_NORMAL, "normal close");
+				_sentClose = true;
 			}
 
 //			printf("about to join...\n");
@@ -212,6 +214,10 @@ private monitor class WebSocketVolatileData {
 		if (_shuttingDown && _waitingWrites == 0)
 			notify();
 	}
+
+	public boolean sentClose() {
+		return _sentClose;
+	}
 }
 
 private void readWrapper(address arg) {
@@ -219,7 +225,7 @@ private void readWrapper(address arg) {
 //		printf("%s %p reader thread starting readMessages...\n", currentThread().name(), arg);
 	boolean sawClose = socket.reader().readMessages();
 //	logger.format(log.DEBUG, "%s.readWrapper sawClose %s", socket.server() ? "server" : "client", sawClose ? "true" : "false");
-	if (sawClose)
+	if (sawClose && !socket.sentClose())
 		socket.shutDown(WebSocket.CLOSE_NORMAL, "normal close");
 //	else
 //		logger.format(log.ERROR, "Abnormal close on WebSocket %d", socket.connection().requestFd());
@@ -263,6 +269,10 @@ public class WebSocket extends WebSocketVolatileData {
 		maxFrameSize = 1024;
 		_connection = connection;
 		_server = server;
+		if (server && connection != null)
+			logger.debug("Creating Web socket for socket %d", connection.requestFd());
+		else if (connection != null)
+			logger.debug("Creating client wb socket for socket %d", connection.requestFd());
 		_incomingData.resize(1024);
 	}
 
@@ -275,7 +285,7 @@ public class WebSocket extends WebSocketVolatileData {
 		}
 //		logger.debug("about to stop writing...\n");
 		stopWriting();
-		logger.debug("Socket cleaned up!\n");
+//		logger.debug("Socket %d cleaned up!\n", _connection.requestFd());
 		delete _connection;
 	}
 	/**
@@ -633,7 +643,7 @@ public class WebSocket extends WebSocketVolatileData {
 		int result = _connection.write(&frame[0], frame.length());
 		if (result == frame.length())
 			return true;
-		logger.error("WebSocket send failed\n");
+		logger.error("WebSocket %d send failed\n", _connection.requestFd());
 		linux.perror(null);
 		_connection.close();
 		return false;
@@ -831,8 +841,8 @@ void writeWrapper(address arg) {
 	for (;;) {
 //		printf("%s writer waiting...\n", currentThread().name());
 		ref<Operation> op = writer.dequeue();
-		logger.debug("web write opcode %d len %d", op.opcode, op.message.length());
-		logger.debug("%*.*s", op.message.length(), op.message.length(), &op.message[0]);
+		logger.debug("Socket %d web write opcode %d len %d", op.webSocket != null && op.webSocket.connection() != null ? op.webSocket.connection().requestFd() : -1, op.opcode, op.message.length());
+//		logger.dumpMemory(log.DEBUG, "message", &op.message[0], op.message.length(), 0);
 		if (op.opcode == WebSocket.OP_CLOSE) {
 //			logger.debug("%d Sending OP_CLOSE message: %d %s", op.webSocket.connection().requestFd(),
 //									op.cause, op.message);
