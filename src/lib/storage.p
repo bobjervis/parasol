@@ -644,7 +644,20 @@ public string[], boolean expandWildCard(string pattern) {
 	} else
 		return results, false;
 }
-
+/**
+ * Compute a file path for a relative path that should not be found relative to the
+ * current working directory, but relative to the directory of anotehr file.
+ *
+ * For example, if you have a relative path in an HTML link, it is found relative to
+ * the directory containing the HTML file that contains the link.
+ *
+ * @param filename The (possibly relative) path to a file.
+ * @param baseFilename The path to a file.
+ *
+ * @return If the filename argument contains a relative path, the result is found by combining the 
+ * directory portion of the baseFilename with the contents of filename. If filename contains an
+ * absolute path, then the function returns filename.
+ */
 public string pathRelativeTo(string filename, string baseFilename) {
 	if (isRelativePath(filename))
 		return constructPath(directory(baseFilename), filename, null);
@@ -666,7 +679,28 @@ public boolean isRelativePath(string filename) {
 	} else
 			return false;
 }
-
+/**
+ * Given two file paths, return a file path that would identify the file
+ * of filename, but be relative to the directory containing baseFIlename.
+ *
+ * If filename or baseFilename are themselves relative, they are assumed to be
+ * relative to the current working directory.
+ *
+ * If the path named by filename does not exist, then the path must be absolute.
+ * A relative path to a non-existent file will cause unpredictable results.
+ *
+ * For example:
+ *{@code
+ *    "../bb/cc.x" = makeCompactPath("aa/bb/cc.x", "aa/dd/ee.y");
+ *}
+ * In this case, 
+ * @param filename The path to a file.
+ * @param baseFilename The path to another file that will server as the base
+ * for the returned relative path.
+ *
+ * @return A path, possibly containing leading '..' directories, that identifies
+ * filename relative to baseFilename.
+ */
 public string makeCompactPath(string filename, string baseFilename) {
 //	if (isRelativePath(filename))
 //		return filename;

@@ -89,27 +89,28 @@ public class HttpServer {
 	/**
 	 * The List of ciphers to use in https protocol handshakes.
 	 *
-	 * This value has no effect if https is disabled.
+	 * This value has no effect if https is disabled. Unencrypted Http requests do not use a cipher list.
 	 */
 	public string cipherList;
 	/**
 	 * The certificates file to use in https protocol handshakes.
 	 *
-	 * This value has no effect if https is disabled.
+	 * This value has no effect if https is disabled. Unencrypted Http requests do not use a certificates file.
 	 */
 	public string certificatesFile;
 	/**
 	 * The private key file to use in https protocol handshakes.
 	 *
-	 * This value has no effect if https is disabled.
+	 * This value has no effect if https is disabled. Unencrypted Http requests do not use a private key file.
 	 */
 	public string privateKeyFile;
 	/**
 	 * The dh parameters file to use in https protocols.
 	 *
-	 * This value has no effect if https is disabled.
+	 * This value has no effect if https is disabled. Unencrypted Http requests do not use a DH parameters file.
 	 */
 	public string dhParamsFile;
+
 	boolean _publicServiceEnabled;
 	boolean _secureServiceEnabled;
 	char _httpPort;									// actual port used, if not zero
@@ -830,7 +831,10 @@ public class HttpParsedResponse {
  * The second phase involves the generation of headers. You are responsible for generating the headers
  * so that headers are not duplicated.
  *
- * Once you have written all headers, 
+ * Once you have written all headers, you can call {@link endOfHeaders} to signal that you have
+ * no more headesr to include. If you transmit a response body, using methods like {@link printf},
+ * {@link write} or {@link putc}, you do not need to call {@linnk endOfHeaders}. Those functions wil
+ * call {@link endOfHeaders} thenselves on the first call in a response.
  */
 public class HttpResponse {
 	private ref<net.Connection> _connection;
@@ -1053,7 +1057,6 @@ public class HttpResponse {
 			header("Location", uri);
 	}
 	/**
-	 *
 	 * If the status line has already been written by error, redirect, ok or a direct call
 	 * to statusLine, this method will throw an IllegalOperation Exception.
 	 */
@@ -1061,9 +1064,11 @@ public class HttpResponse {
 		statusLine(200, "OK");
 	}
 	/**
+	 * If the status line has already been written by {@link error}, {@link redirect}, {@link ok}
+	 * or a direct call to {@code statusLine}, this method will throw an IllegalOperation Exception.
 	 *
-	 * If the status line has already been written by error, redirect, ok or a direct call
-	 * to statusLine, this method will throw an IllegalOperation Exception.
+	 * @param statusCode The three digit HTTP status code for an HTTP response message.
+	 * @param reasonPhrase The text of the reason phrase to be included in the HTTP response status line.
 	 */
 	public void statusLine(int statusCode, string reasonPhrase) {
 		if (_statusWritten)
@@ -1071,7 +1076,12 @@ public class HttpResponse {
 		_statusWritten = true;
 		_connection.printf("HTTP/1.1 %d %s\r\n", statusCode, reasonPhrase);
 	}
-	
+	/**
+	 * Add a header to the response.
+	 *
+	 * @param label The header name.
+	 * @param value The value of the header.
+	 */
 	public void header(string label, string value) {
 		if (!_statusWritten)
 			throw IllegalOperationException("no status line");
@@ -1079,7 +1089,9 @@ public class HttpResponse {
 			throw IllegalOperationException("heaaders ended");
 		_connection.printf("%s: %s\r\n", label, value);
 	}
-	
+	/**
+	 * Signal the end of the headers section of your response.
+	 */
 	public void endOfHeaders() {
 		if (!_statusWritten)
 			throw IllegalOperationException("no status line");
@@ -1091,7 +1103,17 @@ public class HttpResponse {
 	ref<net.Connection> connection() {
 		return _connection;
 	}
-	
+	/**
+	 * Flush your buffered response text to the connection.
+	 *
+	 * Under most circumstances, you will not need to call this method
+	 * explicitly. Returning from your {@link processRequest} method
+	 * will call this method for you.
+	 *
+	 * If you are using '100 Conitnue' to delay transmission of the message
+	 * body, you will need to explicitly call this method to respond with your
+	 * headers before you then read the sender's message body.
+	 */
 	public void respond() {
 		_connection.flush();
 	}
@@ -1102,14 +1124,99 @@ public class HttpResponse {
  * This implements the syntax described in RFC 3986.
  */
 public class Uri {
+	/**
+	 * The scheme of the URI, such as {@code http}, {@code https}, etc.
+	 *
+	 * This is all the text that appears ahead of the first colon character in the
+	 * URI string.
+	 *
+	 * If no colon character appears in the URI, this field is set to null.
+	 */
 	public string scheme;
+	/**
+	 * The userinfo portion of the URI.
+	 *
+	 * This is the text that appears after the initial // and ahead of the first
+	 * at-sign character in the URI string.
+	 *
+	 * If the URI has no initial // or no @ character between the // and the first slash
+	 * character afterward, this field will be set to null.
+	 */
 	public string userinfo;
+	/**
+	 * The host portion of the URI.
+	 *
+	 * This is the portion of the URI string following any initial // and any user info
+	 * string, but before the first slash of the path.
+	 *
+	 * If there is no initial // in the URI, the host field is set to null.
+	 *
+	 * The host string will contain a port value if it is included in the URI, but if a host
+	 * does not include an explicit port, no default port value will be added. The host
+	 * string is always the text that appeared in the original URI.
+	 */
 	public string host;
+	/**
+	 * The path portion of the URI.
+	 *
+	 * If the URI begins with a //, the path is the string from the next slash
+	 * character. If there is no initial //, then the path begins after the colon character
+	 * of the scheme.
+	 *
+	 * The path extends to the first question-mark or the first hash character.
+	 *
+	 * If the URI successfully parses, this field is never null.
+	 */
 	public string path;
+	/**
+	 * The query portion of the URI.
+	 *
+	 * If there is a question-mark character at the end of the path portion of the URI,
+	 * this field is set to the text after the question-makr and up to any hash character.
+	 *
+	 * If no hash character appears in the URI, any query string extends to the end of the URI.
+	 *
+	 * If no question-mark character appears in the URI, this field is set to null.
+	 */
 	public string query;
+	/**
+	 * The fragment portion of the URI.
+	 *
+	 * If there is a hash character in the URI, this field is set to the text after the hash
+	 * character up to the end of the URI.
+	 *
+	 * If no hash character appears in the URI, this field is set to null.
+	 */
 	public string fragment;
-	public char port;				// optional (default will be filled in from scheme)
+	/**
+	 * The (possibly implied) port of the host portion of the URI.
+	 *
+	 * If no scheme appears in the URI, this value will be zero (and the {@link portDefaulted}
+	 * field will be set to true).
+	 *
+	 * If a scheme does appear and the host string contains a port, the value is converted
+	 * and stored in this field. If the value is not a valid port number (between 1 and 65536) 
+	 * the {@link parse} method will throw an {@link IllegalOperationException}.
+	 *
+	 * If a scheme is specified with a host string that does not include a port, then this field
+	 * is set to the default port for that scheme.
+	 */
+	public char port;
+	/**
+	 * Whether a port was set from the default for the scheme.
+	 *
+	 * The value is true if there is no scheme, or if there is a scheme but no port specified in
+	 * the host string.
+	 *
+	 * If this field is false, the host string is present and does contain a value port value.
+	 */
 	public boolean portDefaulted;
+	/**
+	 * A success indicator for the last call to parse.
+	 *
+	 * This field is set to true if the last call to {@link parse} succeeded and no call to
+	 * {@link reset) has been made or the field otherwise modified.
+	 */
 	public boolean parsed;
 	/**
 	 * Parses a URI applying the precise rules of RFC 2986.
@@ -1177,17 +1284,17 @@ public class Uri {
 					pathIdx = uri.indexOf('/', authIdx);
 					if (pathIdx < 0)
 						pathIdx = uri.length();
-					// This is: scheme:://authority path
+					// This is: scheme://authority path
 					int atIdx = uri.indexOf('@', authIdx);
-					if (atIdx > 0) {
+					if (atIdx > 0 && atIdx < pathIdx) {
 						userinfo = uri.substring(authIdx, atIdx);
 						authIdx = atIdx + 1;
 					}
 					int portIdx = uri.indexOf(':', authIdx);
-					if (portIdx > 0) {
+					if (portIdx > 0 && portIdx < pathIdx) {
 						boolean success;
 						(port, success) = char.parse(uri.substring(portIdx + 1, pathIdx));
-						if (!success)
+						if (!success || port == 0)
 							// This will leave the URI unparsed
 							return false;				
 						portDefaulted = false;
@@ -1235,7 +1342,12 @@ public class Uri {
 			path = "/";
 		return parsed = true;
 	}
-
+	/**
+	 * Clear the parsed field of this object.
+	 *
+	 * All public fields are cleared. Strings are set to null, the port field is set to zero
+	 * and {@link portDefaulted} is set to true and {@link parsed} is set to false.
+	 */
 	public void reset() {
 		scheme = null;
 		userinfo = null;
@@ -1247,23 +1359,20 @@ public class Uri {
 		fragment = null;
 		parsed = false;
 	}
-
+	/**
+	 * Return the host, with the port value appended if it was defaulted.
+	 */
 	public string authority() {
+		if (host == null)
+			return host;
 		string a = host;
-		switch (scheme) {
-		case "https":
-		case "wss":
-			if (port != 443)
-				a += ":" + string(port);
-			break;
-
-		default:
-			if (port != 80)
-				a += ":" + string(port);
-		}
+		if (portDefaulted)
+			a += ":" + string(port);
 		return a;
 	}
 	/**
+	 * Fetch the HTTP request URI.
+	 *
 	 * @return The portion of the parsed URI that would appear in an HTTP request line (excludes scheme and authority).
 	 */
 	public string httpRequestUri() {
@@ -1273,16 +1382,28 @@ public class Uri {
 			result += "?" + query;
 		return result;
 	}
-
+	/**
+	 * Convert the parsed URI to a string.
+	 *
+	 * If the contents of this Uri object was composed by a successfil call to {@link parse}, then
+	 * this will generally return the original URI string.
+	 *
+	 * If the fields were filled in explicitly (or selective fields modified after a call to
+	 * {@link parse}), the resulting string may not be a well-formed URI. This method does not validate
+	 * the fields.
+	 */
 	public string toString() {
 		string result;
 
-		result = scheme + "://";
-		if (userinfo != null)
-			result += userinfo + "@";
-		result += host;
-		if (!portDefaulted)
-			result += string(port);
+		if (scheme != null) {
+			result = scheme + "://";
+			if (userinfo != null)
+				result += userinfo + "@";
+			result += host;
+			if (!portDefaulted)
+				result += string(port);
+		} else
+			result = "";
 		result += path;
 		if (query != null)
 			result += "?" + query;
@@ -1293,13 +1414,49 @@ public class Uri {
 }
 
 private char[string] defaultPort = [
-	"http": 80,
-	"https": 443,
-	"ws": 80,
-	"wss": 443
+	"acap": 674, 
+	"afp": 548, 
+	"dict": 2628, 
+	"dns": 53, 
+	"ftp": 21, 
+	"git": 9418, 
+	"gopher": 70, 
+	"http": 80, 
+	"https": 443, 
+	"imap": 143, 
+	"ipp": 631, 
+	"ipps": 631, 
+	"irc": 194, 
+	"ircs": 6697, 
+	"ldap": 389, 
+	"ldaps": 636, 
+	"mms": 1755, 
+	"msrp": 2855, 
+	"mtqp": 1038, 
+	"nfs": 111, 
+	"nntp": 119, 
+	"nntps": 563, 
+	"pop": 110, 
+	"prospero": 1525, 
+	"redis": 6379, 
+	"rsync": 873, 
+	"rtsp": 554, 
+	"rtsps": 322, 
+	"rtspu": 5005, 
+	"sftp": 22, 
+	"smb": 445, 
+	"snmp": 161, 
+	"ssh": 22, 
+	"svn": 3690, 
+	"telnet": 23, 
+	"ventrilo": 3784, 
+	"vnc": 5900, 
+	"wais": 210, 
+	"ws": 80, 
+	"wss": 443, 
 ];
 
-public class HttpParser {
+class HttpParser {
 	HttpToken _previousToken;
 	string _tokenValue;
 	ref<Connection> _connection;
@@ -1715,8 +1872,10 @@ public class HttpParser {
 		}
 	}
 }
-
-public class StaticContentService extends HttpService {
+/**
+ * This is the implementation class for hosting static content through an {@link HttpServer}.
+ */
+class StaticContentService extends HttpService {
 	private string _filename;
 	
 	StaticContentService(string filename) {

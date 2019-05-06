@@ -13,6 +13,15 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * Provides facilities for generating random data or random number sequences.
+ *
+ * The core of the random number generator is based on  note at this like 
+ * http://mathforum.org/kb/message.jspa?messageID=1607566.
+ *
+ * As stated there, the period is ~2^60, which should be long enough for most purposes.
+ * It only has 32 bits of significance in the results of calls such as {@link Random.uniform}.
+ */
 namespace parasol:random;
 
 import native:C;

@@ -973,11 +973,24 @@ public class HttpClient {
 	public string fragment() {
 		return _uri.fragment;
 	}
-
+	/**
+	 * Get the headers map for the current client.
+	 *
+	 * The keys of the map are all in lower-case. Modifying the header map will alter the set of
+	 * headers the next request will include. Inserting a key with upper-case letters will cause
+	 * the named header to be included, even though a {@link hasHeader} call would report false for
+	 * the same string.
+	 *
+	 * @return A reference to the map of headers. 
+	 */
 	public ref<string[string]> headers() {
 		return &_headers;
 	}
-
+	/**
+	 * This is a debugging aid.
+	 *
+	 * The function prints the parsed URI with the set of currently defined headers.
+	 */
 	public void print() {
 		printf("URI: %s\n", _uri.toString());
 		printf("Headers:\n");
