@@ -269,10 +269,10 @@ public class WebSocket extends WebSocketVolatileData {
 		maxFrameSize = 1024;
 		_connection = connection;
 		_server = server;
-		if (server && connection != null)
-			logger.debug("Creating Web socket for socket %d", connection.requestFd());
-		else if (connection != null)
-			logger.debug("Creating client wb socket for socket %d", connection.requestFd());
+//		if (server && connection != null)
+//			logger.debug("Creating Web socket for socket %d", connection.requestFd());
+//		else if (connection != null)
+//			logger.debug("Creating client wb socket for socket %d", connection.requestFd());
 		_incomingData.resize(1024);
 	}
 
@@ -841,7 +841,7 @@ void writeWrapper(address arg) {
 	for (;;) {
 //		printf("%s writer waiting...\n", currentThread().name());
 		ref<Operation> op = writer.dequeue();
-		logger.debug("Socket %d web write opcode %d len %d", op.webSocket != null && op.webSocket.connection() != null ? op.webSocket.connection().requestFd() : -1, op.opcode, op.message.length());
+//		logger.debug("Socket %d web write opcode %d len %d", op.webSocket != null && op.webSocket.connection() != null ? op.webSocket.connection().requestFd() : -1, op.opcode, op.message.length());
 //		logger.dumpMemory(log.DEBUG, "message", &op.message[0], op.message.length(), 0);
 		if (op.opcode == WebSocket.OP_CLOSE) {
 //			logger.debug("%d Sending OP_CLOSE message: %d %s", op.webSocket.connection().requestFd(),
