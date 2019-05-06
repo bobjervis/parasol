@@ -31,6 +31,8 @@ import native:linux.CLD_STOPPED;
 import native:linux.CLD_CONTINUED;
 import native:C;
 
+int FILENAME_MAX = 260;		// A reasonable maximum size for a string that might contain a filename path.
+
 private ref<log.Logger> logger = log.getLogger("parasol.process");
 
 public ref<Reader> stdin;
@@ -50,7 +52,7 @@ private void flushBuffers() {
 
 public string binaryFilename() {
 	byte[] filename;
-	filename.resize(storage.FILENAME_MAX + 1);
+	filename.resize(FILENAME_MAX + 1);
 	int length = 0;
 	
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN)

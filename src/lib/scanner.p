@@ -18,6 +18,7 @@ namespace parasol:compiler;
 import parasol:storage;
 import parasol:stream;
 import parasol:text;
+import parasol:stream.EOF;
 
 public enum Token {
 	ERROR,
@@ -168,7 +169,7 @@ class FileScanner extends Scanner {
 		if (_file == null)
 			return -1;			// Should be a throw, maybe?
 		int b = _file.read();
-		if (b != storage.EOF)
+		if (b != EOF)
 			return b;
 		else
 			return -1;

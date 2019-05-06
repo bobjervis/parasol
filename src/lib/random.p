@@ -16,8 +16,8 @@
 /**
  * Provides facilities for generating random data or random number sequences.
  *
- * The core of the random number generator is based on  note at this like 
- * http://mathforum.org/kb/message.jspa?messageID=1607566.
+ * The core of the random number generator is based on a note at this link: 
+ * <a href=http://mathforum.org/kb/message.jspa?messageID=1607566>A RANDOM NUMBER GEGERATOR FOR C</a>.
  *
  * As stated there, the period is ~2^60, which should be long enough for most purposes.
  * It only has 32 bits of significance in the results of calls such as {@link Random.uniform}.
@@ -45,7 +45,7 @@ public class Random {
 	 *	This constructor allows an arbitrary quantity of random data.
 	 *	Typically, this might be used to clone the internal state
 	 *	of the random number generator or restore the state from
-	 *	external storage (by using the output of Random::save).
+	 *	external storage (by using the output of {@link save}).
 	 *
 	 *	If the supplied data is more than is needed by the algorithm,
 	 *	the excess is ignored.  If less, then the additional data is
@@ -88,7 +88,15 @@ public class Random {
 	public string save() {
 		return string(pointer<byte>(&_state), _state.bytes);
 	}
-
+	/**
+	 * Set the seed of the random number generator to the given string value. Calling
+	 * this method has the same effect as constructing a new random number generator
+	 * with the same string constructor argument.
+	 *
+	 * @param seed The string used to initialize the random number generator. The value may be
+	 * empty or null. A seed value of empty or null will produce the same resulting sequence
+	 * of random numbers.
+	 */
 	public void set(string seed) {
 		int i = seed.length();
 		if (i < _state.bytes) {
@@ -140,6 +148,8 @@ public class Random {
 	}
 	/**
 	 *	Returns a uniformly distributed 32-bit unsigned integer.
+	 *
+	 * @return any unsigned integer (with equal probability, probably).
 	 */
 	public unsigned next() {
 		_state.z = 36969 * (_state.z & 0xffff) + (_state.z >> 16);
@@ -150,13 +160,17 @@ public class Random {
 	 *	Returns a uniformly distributed number in the range from
 	 *  0 to 1.
 	 *
-	 * Zero can be returned, but one cannot be.
+	 * @return a floating point value between 0 and 1. Zero can be returned, but one cannot be.
 	 */
 	public double uniform() {
 		return next() / double(0x100000000);
 	}
 	/**
 	 * Returns a uniformly distributed integer in the range from 0 - range-1, inclusive.
+	 *
+	 * @param range The range of numbers to return.
+	 *
+	 * @return an integer value between 0 and range - 1, inclusive.
 	 */
 	public int uniform(int range) {
 		return int(range * uniform());
@@ -164,7 +178,7 @@ public class Random {
 	/**
 	 * calculate a normal distribution
 	 *
-	 * This function returns a number with a normal
+	 * @return a number with a normal
 	 * distribution with a mean of 0 and standard
 	 * deviation of 1.
 	 */
@@ -182,9 +196,12 @@ public class Random {
 	/**
 	 * Calculate a binomial distribution
 	 *
-	 * This function returns a number between 0 and n according
+	 * @param n The number of trials.
+	 * @param p The probability (between 0 and 1, inclusive) of each trial succeeding.
+	 *
+	 * @return a number between 0 and n according
 	 * to a binomial distribution with n trials and probability of
-	 * p at each trial
+	 * p at each trial.
 	 */
 	public int binomial(int n, double p) {
 		double mean = n * p;
@@ -203,6 +220,17 @@ public class Random {
 	 *  The assumption is
 	 * that all sides are equally likely to appear and are numbered
 	 * from 1 through sides in value.
+	 *
+	 * For example,
+	 *
+	 *{@code    dieRoll(2, 6)}
+	 *
+	 * will produce a return value between 2 and 12, inclusive.
+	 *
+	 * @param n The number of dice. A value of 0 will always return 0, regardless of the value of sides.
+	 * @param sides The number of sides of each die.
+	 *
+	 * @return The sum of the results of each die roll.
 	 */
 	public int dieRoll(int n, int sides) {
 		int sum = 0;
@@ -221,6 +249,10 @@ public class Random {
  *
  * If no suitable operating system service is available, a {@link Random} object is seeded using a
  * default seed computed from the time of day.
+ *
+ * @param length The number of bytes of data to return.
+ *
+ * @return An array of {@code length} bytes.
  */
 public byte[] getBytes(int length) {
 	byte[] b;

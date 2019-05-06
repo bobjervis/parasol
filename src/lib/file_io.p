@@ -22,6 +22,7 @@ import native:linux;
 import parasol:memory;
 import parasol:runtime;
 import parasol:process;
+import parasol:stream.EOF;
 /**
  * DO NOT CALL THIS FUNCTION
  *
@@ -72,9 +73,6 @@ class FileShutdown {
 }
 
 private FileShutdown f;
-
-@Constant
-public int EOF = -1;
 
 public class File {
 	private long _fd;
@@ -243,32 +241,6 @@ public class File {
 		}
 		return false;
 	}
-/*
-	
-	public string, boolean readLine() {
-		string line;
-		
-		for (;;) {
-			int c = read();
-			if (c == EOF) {
-				if (C.ferror(_handle) == 0) {
-					if (line.length() == 0)
-						return null, true;
-					else
-						return line, true;
-				} else if (line.length() == 0)
-					return null, false;
-				else
-					return line, false;
-			}
-			if (c == '\r')
-				continue;
-			if (c == '\n')
-				return line, true;
-			line.append(byte(c));
-		}
-	}
- */
 	/**
 	 * @RETURN A value greater then or equal to zero on success, with the size of the file.
 	 * A negative return value indicates an error. In the event of an error, the file position
