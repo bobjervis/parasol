@@ -83,6 +83,8 @@ run(filename: utf8stream.p)
 run(filename: c_ops.p, exitCode: 1)
 run(filename: string_ops.p)
 run(filename: string_cons_add_test.p)
+run(filename: filename_ops.p)
+
 run(filename: map_ops.p)
 run(filename: map_ops_2.p)
 run(filename: time_ops.p)
