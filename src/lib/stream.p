@@ -27,7 +27,10 @@ import native:C;
 
 @Constant
 int MILLIS_PER_SECOND = 1000;
-
+/**
+ * The Unicode code point for the replacement character, used to substitute in a malformed input
+ * stream for incorrect UTF encodings.
+ */
 @Constant
 public int REPLACEMENT_CHARACTER = 0xfffd;
 /**
@@ -473,7 +476,9 @@ public class UTF16Writer {
 		return written;
 	}
 }
-
+/**
+ * An indicator of end of file returned by functions such as {@link Reader.read}.
+ */
 @Constant
 public int EOF = -1;
 

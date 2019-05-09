@@ -16,6 +16,7 @@
 // Binary differencer
 import parasol:process;
 import parasol:storage;
+import parasol:stream.EOF;
 
 class BDiffCommand extends process.Command {
 	public BDiffCommand() {
@@ -55,7 +56,7 @@ int main(string[] args) {
 	boolean differences = false;
 	for (;;) {
 		int xLeft = left.read();
-		if (xLeft == storage.EOF)
+		if (xLeft == EOF)
 			break;
 		int xRight = right.read();
 		if (xLeft != xRight) {

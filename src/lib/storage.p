@@ -13,6 +13,13 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * Provides facilities for amnipulation of file paths, as well as various file system
+ * operations, such as copying, renaming or deleting files and directories.
+ *
+ * The purpose of these functions is to provide a portable means to manage the local
+ * file system for a running process. 
+ */
 namespace parasol:storage;
 
 import parasol:math;
@@ -30,8 +37,6 @@ import native:windows.FILE_ATTRIBUTE_REPARSE_POINT;
 import native:windows.GetFileAttributes;
 import native:windows.GetFullPathName;
 import native:windows.RemoveDirectory;
-
-public int FILENAME_MAX = 260;
 
 public class FileSystem {
 }
@@ -664,7 +669,15 @@ public string pathRelativeTo(string filename, string baseFilename) {
 	else
 		return filename;
 }
-
+/**
+ * Determine whether a path string is a relative path. 
+ *
+ * The path is not checked to see if it names an actual file.
+ *
+ * @param filename The path to be checked.
+ *
+ * @return true if the path is relative, false if it is absolute or empty or null.
+ */
 public boolean isRelativePath(string filename) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		if (filename.length() == 0 || filename[0] == '\\' || filename[0] == '/' || filename.indexOf(':') >= 0)
@@ -686,20 +699,26 @@ public boolean isRelativePath(string filename) {
  * If filename or baseFilename are themselves relative, they are assumed to be
  * relative to the current working directory.
  *
- * If the path named by filename does not exist, then the path must be absolute.
- * A relative path to a non-existent file will cause unpredictable results.
- *
  * For example:
+ *
  *{@code
  *    "../bb/cc.x" = makeCompactPath("aa/bb/cc.x", "aa/dd/ee.y");
  *}
- * In this case, 
+ *
+ * In this case, the common prefix directory {@code aa} is shared. in order to navigate
+ * from the {@code dd} directory containing the base file to the common directory, one
+ * {@code ..} directory must be used.
+ *
  * @param filename The path to a file.
- * @param baseFilename The path to another file that will server as the base
+ * If the path named by filename does not exist, then the path must be absolute.
+ * A relative path to a non-existent file will cause unpredictable results.
+ *
+ * @param baseFilename The path to another file that will serve as the base
  * for the returned relative path.
  *
  * @return A path, possibly containing leading '..' directories, that identifies
  * filename relative to baseFilename.
+ * If there is no common directory in the paths, the filename string is returned.
  */
 public string makeCompactPath(string filename, string baseFilename) {
 //	if (isRelativePath(filename))

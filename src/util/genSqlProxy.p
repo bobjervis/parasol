@@ -17,6 +17,7 @@ import parasol:storage;
 import parasol:process;
 import parasol:compiler;
 import parasol:sql;
+import parasol:stream.EOF;
 import parasol:stream.UTF8Reader;
 import parasol:text.StringReader;
 
@@ -1376,7 +1377,7 @@ class Scanner {
 		if (_file == null)
 			return -1;			// Should be a throw, maybe?
 		int b = _file.read();
-		if (b != storage.EOF)
+		if (b != EOF)
 			return b;
 		else
 			return -1;
