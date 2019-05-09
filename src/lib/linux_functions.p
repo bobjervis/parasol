@@ -359,6 +359,30 @@ public abstract long syscall(long callId, long p1, long p2, long p3);
 
 @Linux("libc.so.6", "statvfs")
 public abstract int statvfs(pointer<byte> path, ref<statvfsStruct> buf);
+/**
+ * Fetch the error string that perror would print out for a given errno.
+ *
+ * @param errno The value of errno returned from some system call.
+ *
+ * @return The appropriate error message for the given errno value, possibly in the current
+ * locale. On success, the process errno is unchanged. If the errno string could not be
+ * obtained, the function returns null and sets errno to an appropriate value. See the
+ */
+public string strerror(int errnum) {
+	string output;
+	byte[] buffer;
+
+	buffer.resize(1024);
+
+	int err = errno();
+	set_errno(0);
+	pointer<byte> retn = strerror_r(errnum, &buffer[0], buffer.length());
+	if (errno() == 0) {
+		set_errno(err);
+		output = string(retn);
+	}
+	return output;
+}
 
 @Linux("libc.so.6", "strerror_r")
 public abstract pointer<byte> strerror_r(int errno, pointer<byte> buf, size_t buflen);

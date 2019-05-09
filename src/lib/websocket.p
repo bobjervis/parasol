@@ -643,8 +643,6 @@ public class WebSocket extends WebSocketVolatileData {
 		int result = _connection.write(&frame[0], frame.length());
 		if (result == frame.length())
 			return true;
-		logger.error("WebSocket %d send failed\n", _connection.requestFd());
-		linux.perror(null);
 		_connection.close();
 		return false;
 	}

@@ -203,15 +203,7 @@ public class Socket {
 //		logger.debug("s = { %d, %x, %x }\n", s.sin_family, s.sin_addr.s_addr, s.sin_port);
 		if (net.bind(_socketfd, &s, s.bytes) != 0) {
 			if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-				string buffer;
-				buffer.resize(256);
-				int err = linux.errno();
-				linux.set_errno(0);
-				pointer<byte> retn = linux.strerror_r(err, &buffer[0], buffer.length());
-				if (linux.errno() == 0)
-					buffer = string(retn);
-				else
-					buffer = "errno " + string(err);
+				string buffer = linux.strerror(linux.errno());
 				logger.debug("Binding failed to %d, %s", port, buffer);
 			} else
 				logger.debug("Binding failed to %d", port);
@@ -872,20 +864,19 @@ class SSLConnection extends Connection {
 //		text.memDump(buffer, length);
 		int result = ssl.SSL_write(_ssl, buffer, length);
 		if (result < 0) {
-			logger.debug("SSL_write failed result = %d\n", result);
+			logger.error("SSL_write to %d failed result = %d %s", _acceptfd, result, linux.strerror(linux.errno()));
 			diagnoseError(result);
-			linux.perror("SSL_write".c_str());
 		}
 		return result;
 	}
 
 	public void diagnoseError(int ret) {
-		logger.debug("SSL call failed: %s\n", ssl_error_strings[ssl.SSL_get_error(_ssl, ret)]);
+		logger.error("SSL call failed: %s", ssl_error_strings[ssl.SSL_get_error(_ssl, ret)]);
 		for (;;) {
 			long e = ssl.ERR_get_error();
 			if (e == 0)
 				break;
-			logger.debug("    %d %s\n", e, ssl.ERR_error_string(e, null));
+			logger.error("    %d %s", e, ssl.ERR_error_string(e, null));
 		}
 	}
 
