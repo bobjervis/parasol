@@ -166,6 +166,8 @@ private string pad(int n) {
 public void dispose(var object) {
 	if (object.class == ref<Object>) {
 		ref<Object> o = ref<Object>(object);
+		if (o == null)
+			return;
 		for (i in (*o.members())) {
 			var x = (*o.members())[i];
 			dispose(x);
@@ -173,6 +175,8 @@ public void dispose(var object) {
 		delete o;
 	} else if (object.class == ref<Array>) {
 		ref<Array> a = ref<Array>(object);
+		if (a == null)
+			return;
 		for (int i = 0; i < a.length(); i++) {
 			dispose(a.get(i));
 		}
@@ -183,6 +187,8 @@ public void dispose(var object) {
 public var clone(var object) {
 	if (object.class == ref<Object>) {
 		ref<Object> o = ref<Object>(object);
+		if (o == null)
+			return o;
 		ref<Object> n = new Object();
 		for (i in (*o.members())) {
 			var x = (*o.members())[i];
@@ -191,6 +197,8 @@ public var clone(var object) {
 		return n;
 	} else if (object.class == ref<Array>) {
 		ref<Array> a = ref<Array>(object);
+		if (a == null)
+			return a;
 		ref<Array> n = new Array();
 		n.resize(a.length());
 		for (int i = 0; i < a.length(); i++) {
