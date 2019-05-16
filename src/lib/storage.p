@@ -152,7 +152,22 @@ public string filename(string filename) {
 public string constructPath(string directory, string filename) {
 	return constructPath(directory, filename, null);
 }
-
+/**
+ * Construct a path from a directory, baseName and extension.
+ *
+ * If the baseName already has an extension, that extension is replaced with the extension
+ * string. Otherwise, the the extension is appended to the baseName with a period.
+ *
+ * If the baseName had an extension that extension is ignored and replaced with the new extension.
+ *
+ * @param directory The directory portion of the path. This string may end with a path
+ * separator character.
+ * @param baseName A base file name, which may contian an extension.
+ * @param extension The new extension for the resulting filename path.
+ *
+ * @return The constructed path name. Only one path separator character appears between
+ * the directory and baseName parts of the path.
+ */
 public string constructPath(string directory, string baseName, string extension) {
 	string base;
 	if (directory.length() > 0) {
@@ -640,6 +655,8 @@ public string[], boolean expandWildCard(string pattern) {
 		linux.glob_t gl;
 
 		int result = linux.glob(pattern.c_str(), 0, null, &gl);
+		if (result == linux.GLOB_NOMATCH)
+			return results, true;
 		if (result != 0)
 			return results, false;
 		for (int i = 0; i < gl.gl_pathc; i++)

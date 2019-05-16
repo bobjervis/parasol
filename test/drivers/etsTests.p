@@ -50,9 +50,11 @@ class TestCommand extends process.Command {
 					"Parasol Runtime Version " + runtime.RUNTIME_VERSION + "\r" +
 					"Copyright (c) " + COPYRIGHT_STRING
 					);
+		rootDirArgument = stringArgument('r', "root",
+					"Set's the root of the test tree to this directory.");
 		importPathArgument = stringArgument('I', "importPath", 
 					"Sets the path of directories like the --explicit option, " +
-					"but the directories ^/lib and ^/alys/lib' are appended to " +
+					"but the directory ^/src/lib are appended to " +
 					"those specified with this option.");
 		verboseArgument = booleanArgument('v', null,
 					"Enables verbose output.");
@@ -82,6 +84,7 @@ class TestCommand extends process.Command {
 					"Displays this help.");
 	}
 
+	ref<process.Argument<string>> rootDirArgument;
 	ref<process.Argument<string>> importPathArgument;
 	ref<process.Argument<boolean>> verboseArgument;
 	ref<process.Argument<boolean>> traceArgument;
@@ -95,34 +98,39 @@ class TestCommand extends process.Command {
 }
 
 int main(string[] args) {
-	TestCommand parasolCommand;
-	if (!parasolCommand.parse(args))
-		parasolCommand.help();
-	if (parasolCommand.importPathArgument.set() &&
-		parasolCommand.explicitArgument.set()) {
+	TestCommand runetsCommand;
+	if (!runetsCommand.parse(args))
+		runetsCommand.help();
+	if (runetsCommand.importPathArgument.set() &&
+		runetsCommand.explicitArgument.set()) {
 		printf("Cannot set both --explicit and --importPath arguments.\n");
-		parasolCommand.help();
+		runetsCommand.help();
 	}
-	if (parasolCommand.targetArgument.set()) {
-		if (pxi.sectionType(parasolCommand.targetArgument.value) == null) {
-			printf("Invalid value for target argument: %s\n", parasolCommand.targetArgument.value);
-			parasolCommand.help();
+	if (runetsCommand.targetArgument.set()) {
+		if (pxi.sectionType(runetsCommand.targetArgument.value) == null) {
+			printf("Invalid value for target argument: %s\n", runetsCommand.targetArgument.value);
+			runetsCommand.help();
 		}
 	}
 	script.setCommandPrefix(storage.absolutePath(process.binaryFilename()) + " --test");
-	listAllTests = parasolCommand.traceArgument.value;
+	listAllTests = runetsCommand.traceArgument.value;
 	string pxiName;
-	if (runtime.compileTarget == runtime.Target.X86_64_WIN)
-		pxiName = "bin/x86-64-win.pxi";
-	else
-		pxiName = "bin/x86-64-lnx.pxi";
-	if (parasolCommand.testPxiArgument.set())
-		pxiName = parasolCommand.testPxiArgument.value;
-	initTestObjects(process.binaryFilename(), pxiName, parasolCommand.verboseArgument.value, 
-			parasolCommand.compileFromSourceArgument.value,
-			parasolCommand.symbolTableArgument.value,
-			parasolCommand.targetArgument.value);
+	if (runetsCommand.testPxiArgument.set())
+		pxiName = runetsCommand.testPxiArgument.value;
+	else {
+		string binDir = storage.directory(process.binaryFilename());
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN)
+			pxiName = storage.constructPath(binDir, "x86-64-win.pxi");
+		else
+			pxiName = storage.constructPath(binDir, "x86-64-lnx.pxi");
+	}
+	initTestObjects(process.binaryFilename(), pxiName, runetsCommand.verboseArgument.value, 
+			runetsCommand.compileFromSourceArgument.value,
+			runetsCommand.symbolTableArgument.value,
+			runetsCommand.targetArgument.value,
+			runetsCommand.importPathArgument.value,
+			runetsCommand.rootDirArgument.value);
 //		initCommonTestObjects();
-	string[] s = parasolCommand.finalArgs();
-	return launch(parasolCommand.finalArgs());
+	string[] s = runetsCommand.finalArgs();
+	return launch(runetsCommand.finalArgs());
 }

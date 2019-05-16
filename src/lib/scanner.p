@@ -1191,6 +1191,10 @@ public class Scanner {
 					paragraphBreak = false;
 					continue;
 
+				case "ignore":
+					_doclet.ignore = true;
+					break;
+
 				case "param":
 					accumulatingText = false;
 					_doclet.params.append("");
@@ -1446,6 +1450,11 @@ public class Scanner {
  * In the future, paradoc may be extended to use all tagged sections in the documentation of any entity.
  */
 public class Doclet {
+	/**
+	 * true if the symbol documented by this doclet should be ignored and not produced in the
+	 * paradoc output.
+	 */
+	public boolean ignore;
 	/**
 	 * The full text of the comment before any section tags.
 	 */

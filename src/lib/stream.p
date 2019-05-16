@@ -573,6 +573,7 @@ public class Reader {
 }
 
 public class BufferReader extends Reader {
+	int _index;
 	pointer<byte> _buffer;
 	int _length;
 
@@ -587,15 +588,22 @@ public class BufferReader extends Reader {
 	}
 
 	public int _read() {
-		if (_length > 0) {
-			_length--;
-			return *_buffer++;
+		if (_index < _length) {
+			return _buffer[_index++];
 		} else
 			return EOF;
 	}
 
 	public boolean hasLength() {
 		return true;
+	}
+
+	public long length() {
+		return _length - _index;
+	}
+
+	public void reset() {
+		_index = 0;
 	}
 }
 

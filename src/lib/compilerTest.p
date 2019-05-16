@@ -58,14 +58,20 @@ private string srcFolder;
 private string parasolCommand;
 private string pxiFile;
 private string targetArgument;
+private string importPathArgument;
 
-public void initTestObjects(string argv0, string argv1, boolean verbose, boolean compileFromSource, boolean symbols, string target) {
+public void initTestObjects(string argv0, string argv1, boolean verbose, 
+				boolean compileFromSource, boolean symbols, string target, string importPathArg, string rootDir) {
 	verboseFlag = verbose;
-	rootFolder = storage.directory(storage.directory(process.binaryFilename()));
+	if (rootDir != null)
+		rootFolder = rootDir;
+	else
+		rootFolder = storage.directory(storage.directory(process.binaryFilename()));
 	srcFolder = rootFolder + "/test/src";
 	parasolCommand = argv0;
 	pxiFile = argv1;
 	targetArgument = target;
+	importPathArgument = importPathArg;
 	compileFromSourceArgument = compileFromSource;
 	printSymbolTable = symbols;
 	script.objectFactory("codePoint", CodePointObject.factory);
@@ -675,13 +681,18 @@ class RunObject extends script.Object {
 
 		args.append(parasolCommand);
 		args.append(pxiFile);
-		if (compileFromSourceArgument)
-			args.append("compiler/main.p");
+		if (compileFromSourceArgument) {
+			string rootDir = storage.directory(storage.directory(parasolCommand));
+			args.append(storage.constructPath(rootDir, "compiler/main.p"));
+		}
 		if (targetArgument != null)
 			args.append("--target=" + targetArgument);
 		if (_importPath.length() > 0) {
 			args.append("-I");
 			args.append(_importPath);
+		} else if (importPathArgument.length() > 0) {
+			args.append("-I");
+			args.append(importPathArgument);
 		}
 		if (verboseFlag)
 			args.append("-v");

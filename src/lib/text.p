@@ -196,7 +196,41 @@ public class string extends String<byte> {
 			memory.free(_contents);
 		}
 	}
-	
+	/**
+	 * Open a Reader from the contents of the string.
+	 *
+	 * If you modify a string while a Reader is open to the string,
+	 * the Reader will not produce any exceptions. Each read operation
+	 * takes the contents of the string at the moment it is being read.
+	 * If a string is shortened to a length less than the current read
+	 * position of the Reader, the next read operation will return end-of-file.
+	 *
+	 * Reading from a string's Reader after the string's lifetime produces
+	 * undefined behavior.
+	 * 
+	 * @return A Reader positioned at the beginning of the current contents of the
+	 * string.
+	 */
+	public ref<Reader> openReader() {
+		return new StringReader(this);
+	}
+	/**
+	 * Open a Writer to the string.
+	 *
+	 * Any write operations through the Writer will be appended to the string.
+	 * Other modifications of any kind can take place and the next write operation
+	 * will append its data to the contents at the time of the write.
+	 *
+	 * Writing through a string's Writer after the string's lifetime produces
+	 * undefined behavior.
+	 *
+	 * @return a Writer positioned at the end of the current contents of
+	 * the sring.
+	 */
+	public ref<Writer> openWriter() {
+		return new StringWriter(this);
+	}
+
 	@Deprecated
 	public void assign(string other) {
 		if (_contents != null) {
