@@ -1595,7 +1595,7 @@ public class FunctionDeclaration extends ParameterBag {
 			return false;
 	}
  
-	private void assignTypes(ref<CompileContext> compileContext) {
+	public void assignTypes(ref<CompileContext> compileContext) {
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
 			compileContext.assignTypes(nl.node);
 		ref<NodeList> retType = _returnType;
@@ -1626,17 +1626,14 @@ public class FunctionDeclaration extends ParameterBag {
 				}
 			}
 		}
-		if (deferAnalysis()) {
+		if (deferAnalysis())
 			return;
-		}
 		type = compileContext.pool().newFunctionType(retType, _arguments, definesScope() ? compileContext.current() : null);
 		if (_name != null && _name.symbol() != null) {
-//			_name.symbol().assignType(compileContext);
 			_name.type = type;
 		}
 		if (body == null)
 			return;
-//		compileContext.assignTypes(body);
 		if (retType == null)
 			return;
 		Test t = body.fallsThrough();
@@ -2047,6 +2044,8 @@ public class Return extends ParameterBag {
 					return;
 				}
 		}
+		if (func.type == null)
+			compileContext.assignTypeToNode(func);
 		if (func.deferAnalysis()) {
 			type = func.type;
 			return;
