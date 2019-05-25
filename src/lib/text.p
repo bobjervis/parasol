@@ -780,7 +780,7 @@ public class string extends String<byte> {
 		if (first == last)
 			return "";
 		if (first > last || first > length())
-			throw IllegalArgumentException();
+			throw IllegalArgumentException("substring");
 		if (last > length())
 			last = length();
 		result.append(pointer<byte>(&_contents.data) + first, last - first);

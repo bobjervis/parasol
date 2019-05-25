@@ -151,11 +151,17 @@ public class Duration {
 
 	public Duration(long seconds, long nanoseconds) {
 		if (nanoseconds < 0 || nanoseconds >= 1000000000) {
-			if (this != &infinite)
+			// Alow the special case of 'infinite'
+			if (seconds != 0 || nanoseconds != long.MAX_VALUE)
 				throw IllegalArgumentException("Nanoseconds out of range");
 		}
 		_seconds = seconds;
 		_nanoseconds = nanoseconds;
+	}
+
+	public Duration(Duration d) {
+		_seconds = d.seconds();
+		_nanoseconds = d.nanoseconds();
 	}
 	/**
 	 * This value describes an infinite duration.

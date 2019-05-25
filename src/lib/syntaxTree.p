@@ -4053,6 +4053,10 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 		expression.type = compileContext.arena().builtInType(TypeFamily.VOID);
 		return expression;
 		
+	case	DOT:
+		ref<Selection> sel = ref<Selection>(expression);
+		return foldVoidContext(sel.left(), tree, compileContext);
+
 	case	SEQUENCE:
 	case	EQUALITY:
 	case	NOT_EQUAL:
