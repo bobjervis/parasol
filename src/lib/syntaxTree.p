@@ -2306,6 +2306,7 @@ public class Loop extends Node {
 		else if (_aggregate.type.family() == TypeFamily.STRING)
 			_declarator.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
 		else {
+//			print(0);
 			_declarator.type = _aggregate.type.indexType();
 			if (_declarator.type == null) {
 				_aggregate.add(MessageId.NOT_A_SHAPE, compileContext.pool());

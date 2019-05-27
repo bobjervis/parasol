@@ -1451,11 +1451,19 @@ public class TemplateInstanceType extends ClassType {
 	// Vector sub-types
 	
 	public ref<Type> elementType() {
-		return ref<Type>(_arguments[0]);
+		if (_arguments.length() > 1)
+			return ref<Type>(_arguments[0]);
+		else
+			return null;
 	}
 	
 	public ref<Type> indexType() {
-		return ref<Type>(_arguments[1]);
+		if (_arguments.length() > 1)
+			return ref<Type>(_arguments[1]);
+		else if (_arguments.length() == 1 && family() == TypeFamily.SHAPE)
+			return ref<Type>(_arguments[0]);
+		else
+			return null;
 	}
 
 	public boolean isPointer(ref<CompileContext> compileContext) {

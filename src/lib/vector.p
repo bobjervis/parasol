@@ -38,6 +38,7 @@ public class Pair<class K, class V> {
 	}
 }
 
+@Shape
 public class Set<class K> {
 	@Constant
 	private static int INITIAL_TABLE_SIZE	= 64;		// must be power of two
