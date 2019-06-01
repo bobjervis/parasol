@@ -1470,6 +1470,8 @@ int compareOverloadedSymbols(ref<OverloadInstance> sym1, ref<OverloadInstance> s
 }
 
 string typeString(ref<Type> type, string baseName) {
+	if (type == null)
+		return "<null>";
 	switch (type.family()) {
 	case	UNSIGNED_8:
 	case	UNSIGNED_16:

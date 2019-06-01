@@ -420,7 +420,9 @@ class ClasslikeScope extends Scope {
 				assert(definition() != null);
 				compileContext.assignTypes(this, definition());
 				// Now build out the InterfaceImplementationScope objects (for their vtables).
-				ref<ref<InterfaceType>[]> interfaces = classType.interfaces();
+				ref<ref<InterfaceType>[]> interfaces;
+				if (classType != null)
+					interfaces = classType.interfaces();
 				if (interfaces != null) {
 					for (int i = 0; i < interfaces.length(); i++) {
 						ref<InterfaceType> iface = (*interfaces)[i];
@@ -1160,6 +1162,8 @@ public class Scope {
 		}
 		
 		int compare(SymbolKey other) {
+			if (_key.data == null)
+				return other._key.data != null ? -1 : 0;
 			return _key.compare(*other._key);
 		}
 		

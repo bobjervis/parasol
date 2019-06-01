@@ -2060,8 +2060,12 @@ class Leaf extends Node {
 		case	THIS:
 			if (compileContext.current().contextAllowsReferenceToThis()) {
 				classScope = compileContext.current().enclosingClassScope();
-				t = compileContext.convertToAnyBuiltIn(classScope.classType);
-				type = compileContext.arena().createRef(t, compileContext);
+				if (classScope.classType == null)
+					type = compileContext.errorType();
+				else {
+					t = compileContext.convertToAnyBuiltIn(classScope.classType);
+					type = compileContext.arena().createRef(t, compileContext);
+				}
 			} else {
 				add(MessageId.THIS_NOT_ALLOWED, compileContext.pool());
 				type = compileContext.errorType();
