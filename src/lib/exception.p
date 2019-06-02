@@ -714,7 +714,33 @@ public void hardwareExceptionHandler(ref<HardwareException> info) {
 	printf("Unexpected exception type\n");
 	throw RuntimeException(context);
 }
-
+/**
+ * Register an interrupt handler.
+ *
+ * An operating system generally has some mechanism for communicating asynchronous events to
+ * a running process. One such event is usually designated 'interrupt' and is intended to trigger
+ * a graceful but expeditious shutdown of the process.
+ *
+ *
+ * The handler function is expected to return true if the process should ignore the interrupt
+ * signal. If the function returns false, the interrupt wil generate an operating system specific 
+ * failure, which may be to throw a RunTimeException.
+ *
+ * If the desire is to have the process issue a successful completion, the interrupt handler
+ * should explicitly call process.exit and not return at all.
+ *
+ * On Linux, registering an interrupt handler will catch the SIGTERM signal. If the handler
+ * function returns false, the SIGTERM handler is set to default and a SIGTERM signal is sent to
+ * the process.
+ *
+ * @param handler The function to call when an interrupt signal is received.
+ * @param argument The argument to pass to the handler function.
+ *
+ * @threading This function is thread safe.
+ *
+ * @return The previous intterupt handler, or null if no handler has yet been registered.
+ * @return The previous handler argument, or null if no handler has yet been registered.
+ */
 public boolean(address), address handleInterrupt(boolean(address) handler, address argument) {
 	return interruptResponse.handleInterrupt(handler, argument);
 }
@@ -738,7 +764,7 @@ monitor class InterruptResponse {
 		boolean(address) oldHandler = _handler;
 		address oldArgument = _argument;
 		_handler = handler;
-		_argument = _argument;
+		_argument = argument;
 		return oldHandler, oldArgument;
 	}
 }
