@@ -142,14 +142,14 @@ Monitor globalState;
 ref<Locale> cLocaleMemory;
 ref<Locale> defaultLocaleMemory;
 
-DecimalStyle defaultDecimalStyle; /* = {
+DecimalStyle defaultDecimalStyle = {
 	decimalSeparator: ".",
 	groupSeparator: ",",
 	grouping: [ byte(3), byte(0) ],
 	negativeSign: "-",
 	positiveSign: "+",
 	zeroDigit: '0',
-}; */
+};
 /**
  * Use the ISO A4 paper size as the default.
  */
@@ -157,12 +157,16 @@ PaperStyle A4Style = {
 	width: 210,
 	height: 297,
 };
-
+/**
+ * This describes the US Letter size.
+ */
 public PaperStyle usLetterSize = {
 	width: 210,
 	height: 279
 };
-
+/**
+ * This class describes a locale, with all its attendant data.
+ */
 public monitor class Locale {
 	protected ref<DecimalStyle> _decimalStyle;
 	protected ref<PaperStyle> _paperStyle;
