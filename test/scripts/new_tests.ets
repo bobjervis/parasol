@@ -1,1 +1,1 @@
-compile(expect: fail) { "pointer<int> a; for (i in a) { ref<int> p = &i; }" }
+compile(expect: fail) { "class A { A(int x) {} } class B extends A {} class C extends B { C() {} }" }
