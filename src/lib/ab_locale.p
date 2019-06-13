@@ -180,8 +180,8 @@ public monitor class Locale {
 	}
 }
 /**
- * Because of the wildly differing capabilites of sunderlying operating systems,
- * locale data has to be 
+ * Because of the wildly differing capabilites of underlying operating systems,
+ * locale data has to be configured specifically to each system.
  */
 public class LinuxLocale extends Locale {
 	private linux.locale_t _locale;
@@ -212,7 +212,8 @@ public class LinuxLocale extends Locale {
 	}
 }
 /**
- *
+ * Because of the wildly differing capabilites of underlying operating systems,
+ * locale data has to be configured specifically to each system.
  */
 public class WindowsLocale extends Locale {
 	private windows._locale_t _locale;
@@ -221,7 +222,9 @@ public class WindowsLocale extends Locale {
 		_locale = locale;
 	}
 }
-
+/**
+ * Specifies the manner in which decimal values should be formatted.
+ */
 public class DecimalStyle {
 	public string decimalSeparator;		// A string representing a locale's decimal separator (commonly , or .).
 	public string groupSeparator;		// A string representing a locale's digit group separator.
@@ -284,8 +287,7 @@ public class TelephoneStyle {
 public class TimeStyle {
 	string[] abbreviatedDay;			// An array of 7 abbreviated day-of-week names.
 	string[] day;						// An array of 7 full day of week names.
-	/**
-
+/*
 	public ref<string[]> abbreviatedMonth(ref<time.Calendar> calendar) {
 	}
 */
