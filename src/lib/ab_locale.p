@@ -273,8 +273,14 @@ public class NameStyle {
  * Specifies the expected paper dimensions in the given locale.
  */
 public class PaperStyle {
-	public int width;					// In millimeters
-	public int height;					// In millimeters
+	/**
+	 * width in  millimeters
+	 */
+	public int width;
+	/**
+	 * height in millimeters
+	 */
+	public int height;
 }
 /**
  * Reserved for future expansion.
