@@ -13,6 +13,9 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * Provides facilities for creating an internationalized Parasol application. 
+ */
 namespace parasol:international;
 
 import parasol:thread;
