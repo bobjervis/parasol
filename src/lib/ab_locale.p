@@ -151,9 +151,9 @@ DecimalStyle defaultDecimalStyle = {
 	zeroDigit: '0',
 };
 /**
- * Use the ISO A4 paper size as the default.
+ * This describe the ISO A4 paper size.
  */
-PaperStyle A4Style = {
+public PaperStyle A4Style = {
 	width: 210,
 	height: 297,
 };
