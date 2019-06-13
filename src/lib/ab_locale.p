@@ -170,13 +170,17 @@ public PaperStyle usLetterSize = {
 public monitor class Locale {
 	protected ref<DecimalStyle> _decimalStyle;
 	protected ref<PaperStyle> _paperStyle;
-
+	/**
+	 * Fetch the decimal style parameters for this locale.
+	 *
+	 * @return A DecimalStyle object describing this locale's decimal formatting. Do not modify this object.
+	 */
 	public ref<DecimalStyle> decimalStyle() {
 		if (_decimalStyle == null)
 			_decimalStyle = &defaultDecimalStyle;
 		return _decimalStyle;
 	}
-
+	
 	public ref<PaperStyle> paperStyle() {
 		if (_paperStyle == null)
 			_paperStyle = &A4Style;
