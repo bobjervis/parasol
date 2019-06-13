@@ -98,6 +98,8 @@ public ref<Locale> cLocale() {					// By using the default settings on everythin
 }
 /**
  * This is the default locale of the underlying operating system. 
+ *
+ * @return The default process locale.
  */
 public ref<Locale> defaultLocale() {
 	lock (globalState) {
@@ -106,18 +108,26 @@ public ref<Locale> defaultLocale() {
 		return defaultLocaleMemory;
 	}
 }
-
+/**
+ * This sets the default locale of the process.
+ *
+ * @param locale The new locale to set.
+ * @return The previous defualt locale.
+ */
 public ref<Locale> setDefaultLocale(ref<Locale> locale) {
-	ref<Locale> prior = defaultLocale();
-
-	if (locale != null && prior != locale) {
-		lock (globalState) {
+	ref<Locale> prior;
+	lock (globalState) {
+		prior = defaultLocale();
+		if (locale != null && prior != locale)
 			defaultLocaleMemory = locale;
-		}
 	}
 	return prior;
 }
-
+/**
+ * Gets the current thread locale.
+ *
+ * @return The thread locale, if one is defined, otherwise the process locale.
+ */
 public ref<Locale> myLocale() {
 	ref<thread.Thread> th = thread.currentThread();
 
