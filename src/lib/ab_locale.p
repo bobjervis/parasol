@@ -202,7 +202,13 @@ public class LinuxLocale extends Locale {
 	}	
 
 	public ref<DecimalStyle> decimalStyle() {
-		return null;
+		if (_decimalStyle == null) {
+			_decimalStype = new DecimalStyle;
+			_decimalStyle.decimalSeparator = linux.nl_langinfo_l(linux.DECIMAL_POINT, _locale);
+			_decimalStyle.groupSeparator = linux.nl_langinfo_l(linux.THOUSANDS_SEP, _locale);
+			_decimalStyle.grouping = linux.nl_langinfo_l(linux.GROUPING, _locale);
+		}
+		return _decimalStyle;
 	}
 
 	public ref<PaperStyle> paperStyle() {
