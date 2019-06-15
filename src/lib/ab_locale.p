@@ -206,13 +206,28 @@ public class LinuxLocale extends Locale {
 	}	
 
 	public ref<DecimalStyle> decimalStyle() {
-		if (_decimalStyle == null) {
-			_decimalStype = new DecimalStyle;
-			_decimalStyle.decimalSeparator = linux.nl_langinfo_l(linux.DECIMAL_POINT, _locale);
-			_decimalStyle.groupSeparator = linux.nl_langinfo_l(linux.THOUSANDS_SEP, _locale);
-			_decimalStyle.grouping = linux.nl_langinfo_l(linux.GROUPING, _locale);
+		lock (*this){
+			if (_decimalStyle == null) {
+				_decimalStyle = new DecimalStyle;
+				_decimalStyle.decimalSeparator = string(linux.nl_langinfo_l(linux.DECIMAL_POINT, _locale));
+				_decimalStyle.groupSeparator = string(linux.nl_langinfo_l(linux.THOUSANDS_SEP, _locale));
+				pointer<byte> b = linux.nl_langinfo_l(linux.GROUPING, _locale);
+				if (b != null) {
+					for (;;) {
+						if (*b == 0) {
+							_decimalStyle.grouping.append(0);
+							break;
+						} else if (*b == 127 || *b == 255) {
+							_decimalStyle.grouping.append(byte.MAX_VALUE);
+							break;
+						} else
+							_decimalStyle.grouping.append(*b);
+						b++;
+					}
+				}
+			}
+			return _decimalStyle;
 		}
-		return _decimalStyle;
 	}
 
 	public ref<PaperStyle> paperStyle() {
