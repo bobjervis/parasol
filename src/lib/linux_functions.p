@@ -748,6 +748,14 @@ public int LC_ALL_MASK            = (LC_CTYPE_MASK
                                  | LC_IDENTIFICATION_MASK
                                  );
 
+
+@Constant
+public int DECIMAL_POINT = LC_NUMERIC << 16;
+@Constant
+public int THOUSANDS_SEP = DECIMAL_POINT + 1;
+@Constant
+public int GROUPING = THOUSANDS_SEP + 1;
+
 @Constant
 public int DECIMAL_POINT = LC_NUMERIC << 16;
 @Constant
