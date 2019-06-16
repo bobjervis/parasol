@@ -15,6 +15,7 @@
  */
 namespace parasol:stream;
 
+import parasol:international;
 import parasol:runtime;
 import parasol:storage.File;
 import parasol:storage.Seek;
@@ -650,6 +651,7 @@ public class Writer {
 	}
 
 	public int printf(string format, var... arguments) {
+		ref<international.Locale> locale;
 		int bytesWritten = 0;
 		int nextArgument = 0;
 		for (int i = 0; i < format.length(); i++) {
@@ -982,10 +984,15 @@ public class Writer {
 									precision = 6;
 								int decimalPoint;
 								int sign;
+								string sep;
 								pointer<byte> result = C.ecvt(value, precision + 1, &decimalPoint, &sign);
 								if (value == 0)
 									sign = 0;
-								actualLength = precision + 7;
+								actualLength = precision + 6;
+								if (locale == null)
+									locale = international.myLocale();
+								sep = locale.decimalStyle().decimalSeparator;
+								actualLength += sep.length();
 								if (sign != 0 || alwaysIncludeSign || leadingSpaceForPositive)
 									actualLength++;
 								if (!leftJustified) {
@@ -1006,11 +1013,11 @@ public class Writer {
 									bytesWritten++;
 								}
 								_write(result[0]);
-								_write('.');
+								bytesWritten += write(sep);
 								write(result + 1, precision);
 								_write(format[i]);
 								printf("%+2.2d", decimalPoint);
-								bytesWritten += 7;
+								bytesWritten += 6;
 								while (actualLength < width) {
 									_write(' ');
 									width--;
@@ -1023,10 +1030,13 @@ public class Writer {
 								nextArgument++;
 								if (!precisionSpecified)
 									precision = 6;
+								if (locale == null)
+									locale = international.myLocale();
+								sep = locale.decimalStyle().decimalSeparator;
 								result = C.fcvt(value, precision, &decimalPoint, &sign);
 								actualLength = decimalPoint + precision;
 								if (precision > 0)
-									actualLength++;
+									actualLength += sep.length();
 								if (sign != 0 || alwaysIncludeSign || leadingSpaceForPositive)
 									actualLength++;
 								if (!leftJustified) {
@@ -1051,8 +1061,7 @@ public class Writer {
 									bytesWritten += decimalPoint;
 								}
 								if (precision > 0) {
-									_write('.');
-									bytesWritten++;
+									bytesWritten += write(sep);
 									if (decimalPoint < 0) {
 										for (int i = -decimalPoint; i > 0 && precision > 0; i--, precision--) {
 											_write('0');

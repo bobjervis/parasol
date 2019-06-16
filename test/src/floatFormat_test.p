@@ -13,30 +13,18 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import native:C;
-import parasol:runtime;
+import parasol:thread;
+import parasol:international;
 
-string buffer;
 
-buffer.resize(512);
+ref<international.Locale> germany = international.getLocale("de-DE.utf8");
+assert(germany != null);
 
-int x = runtime.parasol_gFormat(&buffer[0], buffer.length(), 5.76449, 3);
+thread.currentThread().locale = germany;
 
-string output(&buffer[0]);
+string s;
 
-printf("x = %d buffer = '%s'\n", x, output);
+s.printf("%10f", 25.762);
 
-assert(output == "5.76");
-
-assert(x == 4);
-
-int y = runtime.parasol_gFormat(&buffer[0], buffer.length(), 0.0, 6);
-
-string output2(&buffer[0]);
-
-printf("y = %d output2 = '%s'\n", y, output2);
-
-assert(y == 1);
-
-assert(output2 == "0");
-
+printf("s = '%s'\n", s);
+assert(s == " 25,762000");

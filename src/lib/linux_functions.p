@@ -40,6 +40,7 @@ public class mode_t = unsigned;
 public class fsblkcnt_t = long;
 public class fsfilcnt_t = long;
 public class off_t = long;
+public class nl_item = int;
 
 public class locale_t = ref<__locale_t>;
 
@@ -182,6 +183,9 @@ public abstract int mprotect(address addr, long length, int prot);
 
 @Linux("libc.so.6", "nanosleep")
 public abstract int nanosleep(ref<timespec> req, ref<timespec> rem);
+
+@Linux("libc.so.6", "nl_langinfo_l")
+public abstract pointer<byte> nl_langinfo_l(nl_item item, locale_t locale);
 
 @Linux("libc.so.6", "newlocale")
 public abstract locale_t newlocale(int categoryMask, pointer<byte> locale, locale_t base);
@@ -743,6 +747,13 @@ public int LC_ALL_MASK            = (LC_CTYPE_MASK
                                  | LC_MEASUREMENT_MASK
                                  | LC_IDENTIFICATION_MASK
                                  );
+
+@Constant
+public int DECIMAL_POINT = LC_NUMERIC << 16;
+@Constant
+public int THOUSANDS_SEP = DECIMAL_POINT + 1;
+@Constant
+public int GROUPING = THOUSANDS_SEP + 1;
 
 @Constant
 public int HOST_NAME_MAX = 64;

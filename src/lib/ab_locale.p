@@ -47,7 +47,7 @@ public ref<Locale> getLocale(string locale) {
 		if (locale == "C" || locale == "POSIX")
 			localeName = locale;
 		else
-			localeName = locale.toLowerCase();
+			localeName = locale;//.toLowerCase();
 
 		int dashLoc = locale.indexOf('-');
 		if (dashLoc >= 0)
@@ -55,6 +55,9 @@ public ref<Locale> getLocale(string locale) {
 		linux.locale_t localeID = linux.newlocale(linux.LC_ALL_MASK, localeName.c_str(), null);
 		if (localeID != null)
 			return new LinuxLocale(localeID);
+		else {
+			printf("newlocale of '%s' failed: %s\n", localeName, linux.strerror(linux.errno()));
+		}
 	} else if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		string localeName;
 
@@ -202,7 +205,28 @@ public class LinuxLocale extends Locale {
 	}	
 
 	public ref<DecimalStyle> decimalStyle() {
-		return null;
+		lock (*this){
+			if (_decimalStyle == null) {
+				_decimalStyle = new DecimalStyle;
+				_decimalStyle.decimalSeparator = string(linux.nl_langinfo_l(linux.DECIMAL_POINT, _locale));
+				_decimalStyle.groupSeparator = string(linux.nl_langinfo_l(linux.THOUSANDS_SEP, _locale));
+				pointer<byte> b = linux.nl_langinfo_l(linux.GROUPING, _locale);
+				if (b != null) {
+					for (;;) {
+						if (*b == 0) {
+							_decimalStyle.grouping.append(0);
+							break;
+						} else if (*b == 127 || *b == 255) {
+							_decimalStyle.grouping.append(byte.MAX_VALUE);
+							break;
+						} else
+							_decimalStyle.grouping.append(*b);
+						b++;
+					}
+				}
+			}
+			return _decimalStyle;
+		}
 	}
 
 	public ref<PaperStyle> paperStyle() {
