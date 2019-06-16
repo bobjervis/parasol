@@ -757,13 +757,6 @@ public int THOUSANDS_SEP = DECIMAL_POINT + 1;
 public int GROUPING = THOUSANDS_SEP + 1;
 
 @Constant
-public int DECIMAL_POINT = LC_NUMERIC << 16;
-@Constant
-public int THOUSANDS_SEP = DECIMAL_POINT + 1;
-@Constant
-public int GROUPING = THOUSANDS_SEP + 1;
-
-@Constant
 public int HOST_NAME_MAX = 64;
 
 @Constant
