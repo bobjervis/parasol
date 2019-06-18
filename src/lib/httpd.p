@@ -17,7 +17,7 @@
  * Provides facilities to implement an HTP 1.1 server or client request.
  *
  * This is a work in progress.
- * The server and client are missing a number of HTTP 1.1 functions, such a client side redirection,
+ * The server and client are missing a number of HTTP 1.1 functions, such as client side redirection,
  * server side support for '100 Continue' messaging, etc.
  *
  * The server and client do support Web sockets, https and wss protocols.
@@ -1924,7 +1924,17 @@ class StaticContentService extends HttpService {
 		return false;
 	}
 }
-
+/**
+ * Tests whether a given string is a valid DNS value.
+ *
+ * A string is a valid DNS label if it contains between 1 and 63 ASCII alpha-numeric characters and dashes.
+ * Dashes may not appear as the first or last character of the label.
+ * 
+ * @param label The string to be tested.
+ *
+ * @return true if the label is a valid DNS label, false if the label argument is null, the empty string
+ * or otherwise not a valid DNS label.
+ */
 public boolean isValidDnsLabel(string label) {
 	if (label.length() ==  0)
 		return false;
@@ -1941,7 +1951,15 @@ public boolean isValidDnsLabel(string label) {
 	}
 	return true;
 }
-
+/**
+ * Tests whether a host string is well-formed.
+ *
+ * A host string is a sequence of one or more valid DNS labels separated by periods.
+ *
+ * @param host The string to test.
+ *
+ * @return true if the host arguemnt is a valid host string, false otherwise.
+ */
 public boolean isValidHost(string host) {
 	string[] labels = host.split('.');
 	if (labels.length() == 0)

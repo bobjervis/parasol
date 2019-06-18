@@ -113,9 +113,10 @@ run(filename: printf_8_ops.p)
 
 run(filename: memory_test.p)
 
-// Test against libparasol.so.1/parasol/dll
+// Locale tests
 
-run(filename:floatFormat_test.p)
+run(filename: floatFormat_test.p)
+run(filename: paper_size_test.p)
 
 // Regressions
 
