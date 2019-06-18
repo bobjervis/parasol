@@ -41,24 +41,37 @@ import native:windows.RemoveDirectory;
 public class FileSystem {
 }
 
-string absolutePath(string filename) {
+string absolutePath(string filepath) {
 	string buffer;
 	buffer.resize(256);
 	
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-		unsigned len = GetFullPathName(filename.c_str(), unsigned(buffer.length()), buffer.c_str(), null);
+		unsigned len = GetFullPathName(filepath.c_str(), unsigned(buffer.length()), buffer.c_str(), null);
 		if (len == 0)
 			return string();
 		if (len >= unsigned(buffer.length())) {
 			buffer.resize(int(len));
-			GetFullPathName(filename.c_str(), unsigned(len + 1), buffer.c_str(), null);
+			GetFullPathName(filepath.c_str(), unsigned(len + 1), buffer.c_str(), null);
 		} else
 			buffer.resize(int(len));
 		return buffer.toLowerCase();
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-		pointer<byte> f = linux.realpath(filename.c_str(), null);
-		if (f == null)
-			return filename;		// couldn't canonicalize, really should do some interal cleanup (to remove ..'s, etc.)
+		pointer<byte> f = linux.realpath(filepath.c_str(), null);
+		if (f == null) {
+			string dir = directory(filepath);
+			f = linux.realpath(dir.c_str(), null);
+			if (f == null)
+				return null;
+			string absDir = string(f);
+			C.free(f);
+			string file = filename(filepath);
+			if (file == "..")
+				return directory(absDir);
+			else if (file == ".")
+				return absDir;
+			else
+				return constructPath(absDir, file);
+		}
 		string result(f);
 		C.free(f);
 		return result;
