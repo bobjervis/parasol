@@ -40,8 +40,32 @@ import native:windows.RemoveDirectory;
 
 public class FileSystem {
 }
-
-string absolutePath(string filepath) {
+/**
+ * Construct an absoluute path to the file system entity described by the argument.
+ *
+ * If the argument names an existing file system entity, then native operating system 
+ * facilities are used to construct an absolute path. Thus, under Linux, for example,
+ * symbolic links are followed so that the resulting path may have no common elements
+ * with the original file path.
+ *
+ * If the argument does not name an existing file system entity, then a general algorithm
+ * will be used that will not recognize things like symbolic links. The general algorithm 
+ * will:
+ * <ol>
+ *   <li> convert any relative path to a fully qualified path by taking the current working
+ *        directory and combining that with the function argument.
+ *   <li> the resulting fully qualified path has any empty path elements removed.
+ *   <li> the resulting fully qualified path has any path elements in it that are '.'
+ *        removed.
+ *   <li> any path elelments that are '..' are removed as well as the prior path component as well.
+ *        If there are unmatched '..' path elements, they are discarded. For example, the path 
+ *        {@code /aa/../../bb} will return {@code /bb}.
+ *
+ * @param filepath The filename path convert to an absolute path.
+ *
+ * @return The constructed absolute path, or null if no meaning absolute path could be constructed.
+ */
+public string absolutePath(string filepath) {
 	string buffer;
 	buffer.resize(256);
 	
@@ -57,26 +81,54 @@ string absolutePath(string filepath) {
 		return buffer.toLowerCase();
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		pointer<byte> f = linux.realpath(filepath.c_str(), null);
-		if (f == null) {
-			string dir = directory(filepath);
-			f = linux.realpath(dir.c_str(), null);
-			if (f == null)
-				return null;
-			string absDir = string(f);
+		if (f != null) {
+			string result(f);
 			C.free(f);
-			string file = filename(filepath);
-			if (file == "..")
-				return directory(absDir);
-			else if (file == ".")
-				return absDir;
-			else
-				return constructPath(absDir, file);
+			return result;
 		}
-		string result(f);
-		C.free(f);
-		return result;
+	}
+	if (isRelativePath(filepath)) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+			return null;
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+			pointer<byte> cwdbuf = linux.getcwd(null, 0);
+			string cwd(cwdbuf);
+			C.free(cwdbuf);
+			string[] components;
+			string path = constructPath(cwd, filepath);
+			components = path.split('/');
+			return composeAbsolutePath(components);
+		} else
+			return null;
+	} else if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+			return filepath;
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+			string[] components;
+			components = filepath.split('/');
+			return composeAbsolutePath(components);
 	} else
-		return null;
+			return filepath;
+}
+
+private string composeAbsolutePath(string[] components) {
+	string[] results;
+
+	for (i in components) {
+		if (components[i].length() == 0)
+			continue;
+		if (components[i] == ".")
+			continue;
+		if (components[i] == "..") {
+			if (results.length() > 0)
+				results.resize(results.length() - 1);
+			continue;
+		}
+		results.append(components[i]);
+	}
+	string path;
+	for (i in results)
+		path += "/" + results[i];
+	return path;
 }
 
 public flags AccessFlags {

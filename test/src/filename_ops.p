@@ -16,4 +16,5 @@
 import parasol:storage;
 
 string results = storage.makeCompactPath("/aa/bb/cc.x", "/aa/dd/ee.y");
+printf("results = '%s'\n", results);
 assert(results == "../bb/cc.x");
