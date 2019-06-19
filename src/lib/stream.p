@@ -615,6 +615,12 @@ public class Writer {
 		_write(c);
 	}
 
+	public int writeCodePoint(int codePoint) {
+		UTF8Writer w(this);
+
+		return w.write(codePoint);
+	}
+
 	public void flush() {
 	}
 
@@ -947,15 +953,17 @@ public class Writer {
 								}
 								if (ivalue >= 0) {
 									if (alwaysIncludeSign) {
-										_write('+');
-										bytesWritten++;
+										if (locale == null)
+											locale = international.myLocale();
+										bytesWritten += write(locale.decimalStyle().positiveSign);
 									} else if (leadingSpaceForPositive) {
 										_write(' ');
 										bytesWritten++;
 									}
 								} else {
-									_write('-');
-									bytesWritten++;
+									if (locale == null)
+										locale = international.myLocale();
+									bytesWritten += write(locale.decimalStyle().negativeSign);
 								}
 								while (precision > formatted.length()) {
 									_write('0');
@@ -1002,13 +1010,11 @@ public class Writer {
 										bytesWritten++;
 									}
 								}
-								if (sign != 0) {
-									_write('-');
-									bytesWritten++;
-								} else if (alwaysIncludeSign) {
-									_write('+');
-									bytesWritten++;
-								} else if (leadingSpaceForPositive) {
+								if (sign != 0)
+									bytesWritten += write(locale.decimalStyle().negativeSign);
+								else if (alwaysIncludeSign)
+									bytesWritten += write(locale.decimalStyle().positiveSign);
+								else if (leadingSpaceForPositive) {
 									_write(' ');
 									bytesWritten++;
 								}
@@ -1046,27 +1052,21 @@ public class Writer {
 										bytesWritten++;
 									}
 								}
-								if (sign != 0) {
-									_write('-');
-									bytesWritten++;
-								} else if (alwaysIncludeSign) {
-									_write('+');
-									bytesWritten++;
-								} else if (leadingSpaceForPositive) {
+								if (sign != 0)
+									bytesWritten += write(locale.decimalStyle().negativeSign);
+								else if (alwaysIncludeSign)
+									bytesWritten += write(locale.decimalStyle().positiveSign);
+								else if (leadingSpaceForPositive) {
 									_write(' ');
 									bytesWritten++;
 								}
-								if (decimalPoint > 0) {
-									write(result, decimalPoint);
-									bytesWritten += decimalPoint;
-								}
+								if (decimalPoint > 0)
+									bytesWritten += write(result, decimalPoint);
 								if (precision > 0) {
 									bytesWritten += write(sep);
 									if (decimalPoint < 0) {
-										for (int i = -decimalPoint; i > 0 && precision > 0; i--, precision--) {
-											_write('0');
-											bytesWritten++;
-										}
+										for (int i = -decimalPoint; i > 0 && precision > 0; i--, precision--)
+											bytesWritten += writeCodePoint(locale.decimalStyle().zeroDigit);
 										decimalPoint = 0;
 									}
 									write(result + decimalPoint, precision);

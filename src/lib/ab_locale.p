@@ -18,12 +18,14 @@
  */
 namespace parasol:international;
 
+import parasol:log;
 import parasol:thread;
 import parasol:runtime;
 import native:linux;
 import native:windows;
 import native:C;
 
+private ref<log.Logger> logger = log.getLogger("parasol.international");
 /**
  * This function gets a Locale object for the named locale. Note that the 
  * special value "C" (or on Linux "POSIX") gets the C locale. Note also that the special
@@ -54,7 +56,7 @@ public ref<Locale> getLocale(string locale) {
 			localeName[dashLoc] = '_';
 		linux.locale_t localeID = linux.newlocale(linux.LC_ALL_MASK, localeName.c_str(), null);
 		if (localeID != null)
-			return new LinuxLocale(localeID);
+			return new LinuxLocale(localeID, localeName);
 		else {
 			printf("newlocale of '%s' failed: %s\n", localeName, linux.strerror(linux.errno()));
 		}
@@ -84,7 +86,7 @@ public ref<Locale> getLocale(string locale) {
 		}
 		windows._locale_t localeID = windows._create_locale(C.LC_ALL, localeName.c_str());
 		if (localeID != null)
-			return new WindowsLocale(localeID);
+			return new WindowsLocale(localeID, localeName);
 	}
 	return null;
 }
@@ -164,7 +166,7 @@ public PaperStyle A4Style = {
  * This describes the US Letter size.
  */
 public PaperStyle usLetterSize = {
-	width: 210,
+	width: 216,
 	height: 279
 };
 /**
@@ -173,6 +175,28 @@ public PaperStyle usLetterSize = {
 public monitor class Locale {
 	protected ref<DecimalStyle> _decimalStyle;
 	protected ref<PaperStyle> _paperStyle;
+	protected string _localeName;
+	protected string _language;
+	protected string _country;
+	protected string _encoding;
+
+	protected Locale(string localeName) {
+		_localeName = localeName;
+		int idx = _localeName.indexOf('_');
+		if (idx < 0)
+			_language = _localeName.toLowerCase();
+		else {
+			_language = _localeName.substring(0, idx).toLowerCase();
+			int idx2 = _localeName.indexOf('.', idx + 1);
+			if (idx2 < 0)
+				_country = _localeName.substring(idx + 1).toLowerCase();
+			else {
+				_country = _localeName.substring(idx + 1, idx2).toLowerCase();
+				_encoding = _localeName.substring(idx2 + 1).toLowerCase();
+			}
+		}
+		logger.debug("lang = %s country = %s encoiding = %s", _language, _country, _encoding);
+	}
 	/**
 	 * Fetch the decimal style parameters for this locale.
 	 *
@@ -194,10 +218,11 @@ public monitor class Locale {
  * Because of the wildly differing capabilites of underlying operating systems,
  * locale data has to be configured specifically to each system.
  */
-public class LinuxLocale extends Locale {
+class LinuxLocale extends Locale {
 	private linux.locale_t _locale;
 
-	LinuxLocale(linux.locale_t locale) {
+	LinuxLocale(linux.locale_t locale, string localeName) {
+		super(localeName);
 		_locale = locale;
 	}
 
@@ -228,6 +253,9 @@ public class LinuxLocale extends Locale {
 						b++;
 					}
 				}
+				_decimalStyle.negativeSign = "-";
+				_decimalStyle.positiveSign = "+";
+				_decimalStyle.zeroDigit = '0';
 			}
 			return _decimalStyle;
 		}
@@ -236,8 +264,16 @@ public class LinuxLocale extends Locale {
 	public ref<PaperStyle> paperStyle() {
 		lock (*this) {
 			if (_paperStyle == null) {
-				_paperStyle = new PaperStyle;
-				
+				switch (_country) {
+				case "us":
+				case "ca":
+				case "ph":
+					_paperStyle = &usLetterSize;
+					break;
+
+				default:
+					_paperStyle = &A4Style;
+				}
 			}
 			return _paperStyle;
 		}
@@ -247,10 +283,11 @@ public class LinuxLocale extends Locale {
  * Because of the wildly differing capabilites of underlying operating systems,
  * locale data has to be configured specifically to each system.
  */
-public class WindowsLocale extends Locale {
+class WindowsLocale extends Locale {
 	private windows._locale_t _locale;
 
-	WindowsLocale(windows._locale_t locale) {
+	WindowsLocale(windows._locale_t locale, string localeName) {
+		super(localeName);
 		_locale = locale;
 	}
 }
@@ -258,17 +295,35 @@ public class WindowsLocale extends Locale {
  * Specifies the manner in which decimal values should be formatted.
  */
 public class DecimalStyle {
-	public string decimalSeparator;		// A string representing a locale's decimal separator (commonly , or .).
-	public string groupSeparator;		// A string representing a locale's digit group separator.
-	public byte[] grouping;				// Each element is the number of digits in a group. Elements with higher
-										// indices are further left. An element with byte.MAX_VALUE means that
-										// no further grouping is done. An element with a zero value means that
-										// the previous element is used for all further left grouping.
-	public string negativeSign;			// A string representing a locale's negative sign.
-	public string positiveSign;			// A string representing a locale's positive sign.
-	public int zeroDigit;				// A Unicode code point representing a locale's zero digit. Other digits
-										// are assumed to be consecutive code points. Thus, only a Unicode defined
-										// decimal digit character group can meaningfully be used here.
+	/**
+	 * A string representing a locale's decimal separator (commonly , or .).
+	 */
+	public string decimalSeparator;
+	/**
+	 * A string representing a locale's digit group separator (commonly , or .).
+	 */
+	public string groupSeparator;
+	/**
+	 * Each element is the number of digits in a group. Elements with higher
+	 * indices are further left. An element with byte.MAX_VALUE means that
+	 * no further grouping is done. An element with a zero value means that
+	 * the previous element is used for all further left grouping.
+	 */
+	public byte[] grouping;
+	/**
+	 * A string representin         g a locale's negative sign.
+	 */
+	public string negativeSign;
+	/**
+	 * A string representing a locale's positive sign.
+	 */
+	public string positiveSign;
+	/**
+	 * A Unicode code point representing a locale's zero digit. Other digits
+	 * are assumed to be consecutive code points. Thus, only a Unicode defined
+	 * decimal digit character group can meaningfully be used here.
+	 */
+	public int zeroDigit;
 }
 /**
  * Reserved for future expansion.
