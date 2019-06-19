@@ -15,16 +15,22 @@
  */
 import parasol:international;
 
-ref<international.Locale> locale1 = international.getLocale("en_CA.utf8");
+// US, Canada and Phillippines use Letter Size
+
+ref<international.Locale> locale1 = international.getLocale("en-CA.utf-8");
 assert(locale1 != null);
+ref<international.PaperStyle> ps1 = locale1.paperStyle();
 
 printf("CA paper size = %d x %d\n", locale1.paperStyle().width, locale1.paperStyle().height);
-assert(locale1.paperStyle().width == 216);
-assert(locale1.paperStyle().height == 279);
+assert(ps1.width == 216);
+assert(ps1.height == 279);
 
-ref<international.Locale> locale2 = international.getLocale("de_DE.utf8");
+// Everybody else uses A4 Size
+
+ref<international.Locale> locale2 = international.getLocale("de-DE.utf-8");
 assert(locale2 != null);
+ref<international.PaperStyle> ps2 = locale2.paperStyle();
 
 printf("DE paper size = %d x %d\n", locale2.paperStyle().width, locale2.paperStyle().height);
-assert(locale2.paperStyle().width == 210);
-assert(locale2.paperStyle().height == 297);
+assert(ps2.width == 210);
+assert(ps2.height == 297);

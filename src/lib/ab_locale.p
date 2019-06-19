@@ -195,7 +195,7 @@ public monitor class Locale {
 				_encoding = _localeName.substring(idx2 + 1).toLowerCase();
 			}
 		}
-		logger.debug("lang = %s country = %s encoiding = %s", _language, _country, _encoding);
+//		printf("lang = %s country = %s encoding = %s", _language, _country, _encoding);
 	}
 	/**
 	 * Fetch the decimal style parameters for this locale.
