@@ -242,28 +242,61 @@ private void readWrapper(address arg) {
  * and reception is the same regardless of role.
  */
 public class WebSocket extends WebSocketVolatileData {
+	/**
+	 * This op code is used for string messages.
+	 */
 	@Constant
 	public static byte OP_STRING = 1;
+	/**
+	 * This op code is used for binary data messages.
+	 */
 	@Constant
 	public static byte OP_BINARY = 2;
+	/**
+	 * This op code is used for a close message.
+	 */
 	@Constant
 	public static byte OP_CLOSE = 8;
+	/**
+	 * This op code is used for the initial message of a ping-pong exchange.
+	 */
 	@Constant
 	public static byte OP_PING = 9;
+	/**
+	 * This op code is used for the reply message of a pig-pong exchange.
+	 */
 	@Constant
 	public static byte OP_PONG = 10;
 	@Constant
-	public static byte OP_SHUTDOWN = 255;			// Not really a Web Socket operation - used internally
-
+	static byte OP_SHUTDOWN = 255;			// Not really a Web Socket operation - used internally
+	/**
+	 * A normal, non-error close
+	 */
 	@Constant
 	public static short CLOSE_NORMAL = 1000;
+	/**
+	 * The end-point is going away.
+	 */
 	@Constant
 	public static short CLOSE_GOING_AWAY = 1001;
+	/**
+	 * This close was initiated because a protocol error was detected
+	 */
 	@Constant
 	public static short CLOSE_PROTOCOL_ERROR = 1002;
+	/**
+	 * This close was initiated because of bad data detected on the socket.
+	 */
 	@Constant
 	public static short CLOSE_BAD_DATA = 1003;
-
+	/**
+	 * The maximum size for a frame this object will write.
+	 *
+	 * This value has no effect on incoming frames. The processing code will always accept frames of any
+	 * length.
+	 *
+	 * @threading 
+	 */
 	public int maxFrameSize;
 	
 	private ref<Connection> _connection;
@@ -274,7 +307,18 @@ public class WebSocket extends WebSocketVolatileData {
 	private int _incomingCursor;		// The index of the next byte to be read from the buffer.
 	private void (address, boolean) _disconnectFunction;
 	private address _disconnectParameter;
-
+	/**
+	 * Constructor.
+	 *
+	 * It is assumed that the connection has completed whatever initial handshake was needed. The HTTP
+	 * message handler constructs the WebSocket object with the correct connection object and the correct
+	 * server setting.
+	 *
+	 * @param connection An open connection, such as an HTTP connection that has completed the WebSocket
+	 * request protocol.
+	 * @param server true if this is a server-side WebSocket. There are small differences in the frame
+	 * headers, so a server-side connection cannot successfully communicate with another server-side connection.
+	 */
 	public WebSocket(ref<Connection> connection, boolean server) {
 		maxFrameSize = 1024;
 		_connection = connection;
@@ -313,6 +357,8 @@ public class WebSocket extends WebSocketVolatileData {
 	 *
 	 * Note: in the current implementation, only one of the two flags can be true. If both are false, the
 	 * appropriate action is to send a 'close' control message and close the connection.
+	 *
+	 * @threading This method is not thread safe.
 	 */
 	public boolean, boolean readWholeMessage(ref<byte[]> buffer) {
 		boolean initialFrame = true;
@@ -335,8 +381,11 @@ public class WebSocket extends WebSocketVolatileData {
 		}
 		return false, false;
 	}
-	
-	public boolean, int, boolean readFrame(ref<byte[]> buffer, boolean initialFrame) {
+	/**
+	 * @return true if this is the last frame of the message or false if more frames follow.
+	 * @return The opcode of the message.
+	 */
+	boolean, int, boolean readFrame(ref<byte[]> buffer, boolean initialFrame) {
 		boolean lastFrame;
 		
 		int opcode = getc();
@@ -418,7 +467,7 @@ public class WebSocket extends WebSocketVolatileData {
 			case 0:
 				return (opcode & 0x80) != 0, opcode & 0x7f, true;
 
-			default:					// Not valid in an initial frame
+			default:					// Not valid in a non-initial frame
 				buffer.resize(offset);
 				logger.error("Unexpected non-zero opcode (%d) on non-initial frame", opcode & 0x7f);
 				shutDown(CLOSE_PROTOCOL_ERROR, "Unexpected opcode");
@@ -531,15 +580,42 @@ public class WebSocket extends WebSocketVolatileData {
 		}
 		return _incomingData[_incomingCursor++];
 	}
-
+	/**
+	 * Write a string message.
+	 *
+	 * This is equavalent to calling the two-argument {@link write} method
+	 * with an opcode of {@link OP_STRING}.
+	 *
+	 * @threading This method is thread-safe.
+	 *
+	 * @param message The message text.
+	 */
 	public void write(string message) {
 		writer.write(new Operation(this, OP_STRING, message));
 	}
-
+	/**
+	 * Write a message with an arbitrary opcode.
+	 *
+	 * @threading This method is thread-safe.
+	 *
+	 * @param opcode One of the defined opcodes ({@link OP_STRING}, {@link OP_BINARY}, {@link OP_CLOSE},
+	 * {@link OP_PING} or {@link OP_PONG}. Passing any other value for the opcode is undefined.
+	 */
 	public void write(byte opcode, string message) {
 		writer.write(new Operation(this, opcode, message));
 	}
-
+	/**
+	 * Write a shutdown message.
+	 *
+	 * A single-frame message with an {@link OP_CLOSE} opcode is sent. The cause and reason values
+	 * are formatted according to the WebSocket protocol.
+	 *
+	 * @threading This method is thread-safe.
+	 *
+	 * @param cause The cause of the shutdown. Possible values include {@link CLOSE_NORMAL}, {@link CLOSE_GOING_AWAY},
+	 * {@link CLOSE_PROTOCOL_ERROR} or {@link CLOSE_BAD_DATA}.
+	 * @param reason A reason string that provides additional details about the cause.
+	 */
 	public void shutDown(short cause, string reason) {
 		writer.write(new Operation(this, cause, reason));
 //		if (_readerThread != null) {
@@ -551,6 +627,10 @@ public class WebSocket extends WebSocketVolatileData {
 	/**
 	 * A server class this method on the web socket to register a client
 	 * disconnect event handler.
+	 *
+	 * @threading This method is not thread-safe. It is recommended that this method
+	 * is called before calling {@link readWholeMessage}, since a client-disconnect can be
+	 * triggered when that method reads from the connection.
 	 *
 	 * @param func The function to call when the client disconnect event occurs.
 	 * It takes the param value as its first argument and a boolean indicating
@@ -568,7 +648,7 @@ public class WebSocket extends WebSocketVolatileData {
 	 * @param normalClose true if the client disconnected with a normal close, false
 	 * if there was an error.
 	 */
-	public void clientDisconnected(boolean normalClose) {
+	void clientDisconnected(boolean normalClose) {
 //		logger.debug("clientDisconnected");
 		if (_disconnectFunction != null)
 			_disconnectFunction(_disconnectParameter, normalClose);
@@ -660,7 +740,11 @@ public class WebSocket extends WebSocketVolatileData {
 	protected ref<Connection> connection() {
 		return _connection;
 	}
-
+	/**
+	 * Retrieve the server/client role of the WebSocket.
+	 *
+	 * @return true if this is a server-side WebSocket, false if client-side.
+	 */
 	public boolean server() {
 		return _server;
 	}
