@@ -769,7 +769,7 @@ public class HttpParsedResponse {
 	 */
 	public string httpVersion;
 	/**
-	 * The HTTP code returned from the server. For example, a 'page not fund' error
+	 * The HTTP code returned from the server. For example, a 'page not found' error
 	 * would have a code of "404".
 	 */
 	public string code;
