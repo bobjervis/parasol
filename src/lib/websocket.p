@@ -31,28 +31,57 @@ import parasol:thread.Thread;
 import parasol:thread.currentThread;
 import parasol:types.Queue;
 
-private ref<log.Logger> logger = log.getLogger("parasol.http");
+private ref<log.Logger> logger = log.getLogger("parasol.http.websocket");
 
 private monitor class WebSocketServiceData {
 	ref<WebSocketFactory>[string] _webSocketProtocols;
 }
-
+/**
+ * A service class that accepts web socket requests.
+ *
+ * When this object is passed to an HttpServer object then HTTP GET requests to the service
+ * URL will call this object to validate and complete the connection.
+ *
+ * During server configuration, one or more calls to {@link webSocketProtocol} should be made
+ * to define the set of protocols recognized by the service.
+ *
+ * This class should not need to be extended to provide addtional validation. The {@link WebSocketFactory.start} abstract
+ * method has access to the same HttpRequest data and can validate for a specific protocol.
+ */
 public class WebSocketService extends HttpService {
 	private WebSocketServiceData _webSockets;
-
+	/**
+	 * Define a protocol for this web socket url.
+	 *
+	 * THis method should be called duting server initialization. Adding or removing protocols after the
+	 * server begins processing requests may produce unpredictable results.
+	 *
+	 * @param protocol The protocol string that needs to be included in the sec-websocket-protocol header
+	 * of the incoming HTTP request.
+	 * @param webSocketFactory The {@link WebSocketFactory} object that will do final validation of the
+	 * incoming request, or null to delete any currently defined .
+	 */
 	public void webSocketProtocol(string protocol, ref<WebSocketFactory> webSocketFactory) {
-		ref<WebSocketFactory> oldProtocol;
+		ref<WebSocketFactory> oldFactory;
 		lock (_webSockets) {
-			oldProtocol = _webSocketProtocols[protocol];
+			oldFactory = _webSocketProtocols[protocol];
 			if (webSocketFactory == null)
 				_webSocketProtocols.remove(protocol);
 			else
 				_webSocketProtocols[protocol] = webSocketFactory;
 		}
-		if (oldProtocol != null)
-			delete oldProtocol;
+		delete oldFactory;
 	}
-	
+	/**
+	 * Process an HTTP request to validate that it is a valid web socket request.
+	 *
+	 * @param request the {@link HttpRequest} object containing the parsed HTTP request
+	 * data.
+	 * @param respose The {@link HttpResponse} object used to compose and send the
+	 * response to the request.
+	 *
+	 * @return true if the request successfully made a WebSocket object, false otherwise.
+	 */
 	public boolean processRequest(ref<HttpRequest> request, ref<HttpResponse> response) {
 		if (request.method != HttpRequest.Method.GET) {
 			response.error(400);				// you gotta use GET
@@ -111,7 +140,7 @@ public class WebSocketFactory {
 	/**
 	 * Start a Web Socket request.
 	 *
-	 * This method may implement secutiry checks or other validation of the request before accepting the connection.
+	 * This method may implement security checks or other validation of the request before accepting the connection.
 	 *
 	 * @param request The incoming HTTP Request object.
 	 *
@@ -235,7 +264,7 @@ private void readWrapper(address arg) {
 }
 /**
  * An object that implements the Web Socket message frame protocol once an HTTP message has determined
- * that a usccessful Web Socket request has been sen tor received.
+ * that a usccessful Web Socket request has been sent or received.
  *
  * Note that the same object is used for either the client or server side of the connection. Since the Web
  * Socket protocol is symmetric and once the connection has been established, subsequent message transmission
@@ -736,8 +765,12 @@ public class WebSocket extends WebSocketVolatileData {
 		_connection.close();
 		return false;
 	}
-	
-	protected ref<Connection> connection() {
+	/**
+	 * Retrieve the underlying connection for this WebSocket.
+	 *
+	 * @return The connection used to construct the object.
+	 */
+	public ref<Connection> connection() {
 		return _connection;
 	}
 	/**

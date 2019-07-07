@@ -14,7 +14,25 @@
    limitations under the License.
  */
 /**
- * Provides facilities for creating an internationalized Parasol application. 
+ * Provides facilities for creating an internationalized Parasol application.
+ *
+ * A process has a default locale inherited from the underlying operating system locale settings.
+ * Most functions, such as printf, are sensitive to this locale. You don't have to do anything to get
+ * formatting functions to use the correct decimal point, locale time formats and so on.
+ *
+ * Each thread also can have a locale specific to it by setting the locale member of the {@link Thread} object.
+ * For example, to set the current threads locale to German, the following code can be used:
+ *
+ * <pre>{@code
+ *	thread.currentThread().locale = getLocale("de-DE");
+ *}</pre>
+ *
+ * You can restore a thread to the default process locale by settting the thread's locale member to null.
+ *
+ * You can obtain a new Locale object using the {@link getLocale} function. You can then obtain detailed
+ * style information for that Locale if you wish to do your own formatting or you can use standard formatting
+ * functions by either setting the current thread's locale as described above, or change the process's 
+ * default locale using the {@link setDefaultLocale} function.
  */
 namespace parasol:international;
 
@@ -27,9 +45,11 @@ import native:C;
 
 private ref<log.Logger> logger = log.getLogger("parasol.international");
 /**
- * This function gets a Locale object for the named locale. Note that the 
- * special value "C" (or on Linux "POSIX") gets the C locale. Note also that the special
- * value "" gets the operating system's notion of the locale of the program.
+ * This function gets a Locale object for the named locale.
+ *
+ * Note that the special value "C" (or on Linux "POSIX") gets the C locale.
+ * The special value "" gets the operating system's notion
+ * of the locale of the program (the default process locale).
  *
  * If the string is any other, it is treated as a locale name with the following syntax:
  *
@@ -117,7 +137,7 @@ public ref<Locale> defaultLocale() {
  * This sets the default locale of the process.
  *
  * @param locale The new locale to set.
- * @return The previous defualt locale.
+ * @return The previous default locale.
  */
 public ref<Locale> setDefaultLocale(ref<Locale> locale) {
 	ref<Locale> prior;
@@ -173,14 +193,14 @@ public PaperStyle usLetterSize = {
  * This class describes a locale, with all its attendant data.
  */
 public monitor class Locale {
-	protected ref<DecimalStyle> _decimalStyle;
-	protected ref<PaperStyle> _paperStyle;
-	protected string _localeName;
-	protected string _language;
-	protected string _country;
-	protected string _encoding;
+	ref<DecimalStyle> _decimalStyle;
+	ref<PaperStyle> _paperStyle;
+	string _localeName;
+	string _language;
+	string _country;
+	string _encoding;
 
-	protected Locale(string localeName) {
+	Locale(string localeName) {
 		_localeName = localeName;
 		int idx = _localeName.indexOf('_');
 		if (idx < 0)
@@ -200,14 +220,18 @@ public monitor class Locale {
 	/**
 	 * Fetch the decimal style parameters for this locale.
 	 *
-	 * @return A DecimalStyle object describing this locale's decimal formatting. Do not modify this object.
+	 * @return A {@link DecimalStyle} object describing this locale's decimal formatting. Do not modify this object.
 	 */
 	public ref<DecimalStyle> decimalStyle() {
 		if (_decimalStyle == null)
 			_decimalStyle = &defaultDecimalStyle;
 		return _decimalStyle;
 	}
-	
+	/**
+	 * Fetch the paper style parameters for this locale.
+	 *
+	 * @return A {@link PaperStyle} object describing this locale's paper formatting. Do not modify this object.
+	 */
 	public ref<PaperStyle> paperStyle() {
 		if (_paperStyle == null)
 			_paperStyle = &A4Style;

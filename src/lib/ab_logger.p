@@ -13,6 +13,39 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * Provides facilities for generating event logs.
+ *
+ * A process can have any number of logger objects. 
+
+ * Each logger is assigned a name when it is created. Names can contain any character,
+ * except that the period (.) character has special significance. Each period in a logger
+ * name delineates a component of a path. A properly formatted logger name cannot begin
+ * or end with a period and cannot contain two consecutive periods.
+ *
+ * For example, {@code "a.b.c"} is a valid logger name. In a program that uses that logger name
+ * actually creates three loggers, {@code "a"}, {@code "a.b"} and {@code "a.b.c"}.
+ *
+ * As a special case, the empty string {@code ""} is the Root Logger.
+ *
+ * Every Logger but the root logger has a parent. The parent of all loggers with no periods in their
+ * name is the root logger. For all other loggers, the parent's name is found by truncating the logger's
+ * name at the last period. This the parent of {@code "a.b.c"} is {@code "a.b"}.
+ *
+ * Every logger can have a level from 1 through 6. All loggers initially have a level of 1. You may change
+ * the level setting of a logger by calling the {@link Logger.setLevel} method.
+ *
+ * All messages have a level from -5 through 5, excluding zero, based either on the name of the
+ * method used to create the message (for example, {@link Logger.info}), or is passed as an explicit parameter.
+ *
+ * When a message is logged, the logger's level is checked and if the magnitude of the message's level is 
+ * less than that of it's logger, the message is discarded. Then, if the logger has a defined destination,
+ * the message is written to that destination. Otherwise, the message is passed to the logger's parent.
+ * If the root logger has no destination then all messages that reach it are discarded.
+ *
+ * You may, for example, set the level of the logger named "parasol" to {@link log.INFO} in order to set
+ * all logging by the Parasol runtime to exclude {@link log.DEBUG} level messages.
+ */
 namespace parasol:log;
 
 import parasol:math;
@@ -29,14 +62,39 @@ import parasol:exception.IllegalArgumentException;
 // positive messages can be logged without artificially flagging them as FATAL or
 // ERROR. Log level zero implies that the level is taken from the parent.
 
+/**
+ * A message level for the most important dangerous messages.
+ *
+ * Messages using this level typically will precede an application shutdown.
+ */
 @Constant
 public int FATAL = -5;
+/**
+ * A message level for important dangerous messages.
+ *
+ * Messages should use this level if the condition is actionable and indicates a defective condition 
+ * in the application.
+ */
 @Constant
 public int ERROR = -4;
+/**
+ * A message level for unimportant or not very dangerous messages.
+ *
+ * Messages should use this level if the condition is not especially actionable, but should be
+ * marked in the log for future reference.
+ */
 @Constant
 public int WARN = -3;
+/**
+ * A message level for normal operating conditions that might be worth noting in a production log.
+ */
 @Constant
 public int INFO = 2;
+/**
+ * A message level for messages that should not typically be enabled in a production setting.
+ *
+ * Debugging messages are often verbose and enabling them will often produce large volumes of log data.
+ */
 @Constant
 public int DEBUG = 1;
 
@@ -92,8 +150,14 @@ public ref<Logger> getLogger(string path) {
 		return current.thisLogger;
 	}
 }
-
-ConsoleLogHandler defaultHandler;
+/**
+ * The default handler for the root logger.
+ *
+ * If you are configuring a complex logging environment, you could
+ * assign this handler to other loggers. Using this handler rather than constructing a new one is preferred, since each
+ * {@link LogHandler} object starts its own write thread.
+ */
+public ConsoleLogHandler defaultHandler;
 Logger rootLogger(null, &defaultHandler);
 LogChain chainRoot = {
 	thisLogger: &rootLogger
@@ -128,6 +192,7 @@ public monitor class Logger {
 	Logger(ref<Logger> parent, ref<LogHandler> destination) {
 		_parent = parent;
 		_destination = destination;
+		_level = 1;
 	}
 
 	public int setLevel(int level) {
@@ -213,7 +278,7 @@ public monitor class Logger {
 	}
 
 	public void memDump(int level, string caption, address buffer, long length, long startingOffset) {
-		if (level < -5 || level > 5)
+		if (level < -5 || level > 5 || level == 0)
 			throw IllegalArgumentException(string(level));
 		if (!needToCheck(level))
 			return;
@@ -409,7 +474,15 @@ public class LogHandler extends LogHandlerVolatileData {
 	}
 
 	public abstract void processEvent(ref<LogEvent> logEvent);
-
+	/**
+	 * Compose a label string for the given level.
+	 *
+	 * @param level The message level to be formatted.
+	 *
+	 * @return A string giving some sense of the importance and danger of a message. Words like "DEBUG", "INFO" or 
+	 * "NOTICE" suggest non-dangerous messages of increasing importance. Words like "CAUTION", "WARN", "ERROR" or
+	 * "FATAL" denote messages of increasing importance and danger.
+	 */
 	public string label(int level) {
 		switch (level) {
 		case 1:
