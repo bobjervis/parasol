@@ -172,17 +172,18 @@ LogChain chainRoot = {
 public void resetChildProcess() {
 	defaultHandler.newThread();
 }
-
 /**
  * The Logger class is designed to provide a convenient way for programmers to decorate a program
  * with output statements that can be configured at run time to write to designated files, remote servers or the
  * program's standard output. 
  *
- * The various output methods, like 'debug' or 'info', are all thread-safe. The actual writing to any output
+ * @threading The various output methods, like 'debug' or 'info', are all thread-safe. The actual writing to any output
  * is performed by a separate thread, so the logging thread is minimally delayed when logging.
  *
  * The parent-child relationship among Logger objects is determined at the time that the Logger is created and
- * is entirely based on the name hierarchy used in the program.
+ * is entirely based on the name hierarchy used in the program. Messages are written to a Logger and then passed from
+ * the logger up its parent chain toward the root logger until either a logger is encountered whose importance level is 
+ * larger in magnitude than the message's importance level.
  */
 public monitor class Logger {
 	private int _level;
@@ -194,24 +195,67 @@ public monitor class Logger {
 		_destination = destination;
 		_level = 1;
 	}
-
+	/**
+	 * Sets the message importance level for the given logger. All messages that reach this logger are checked
+	 * against this importance level.
+	 *
+	 * @param level The new importance level for this logger.
+	 *
+	 * @return The previous value of the importance level.
+	 *
+	 * @threading This method is thread-safe.
+	 *
+	 * @exception IllegalArgumentException Thrown if the level parameter is not in the range from -5
+	 * through 5, or is zero.
+	 */
 	public int setLevel(int level) {
+		if (level < -5 || level > 5 || level == 0)
+			throw IllegalArgumentException(string(level));
 		int result = _level;
-		if (level != int.MIN_VALUE)
-			_level = math.abs(level);
+		_level = math.abs(level);
 		return result;
 	}
-
+	/**
+	 * Retrieve the logger's parent logger.
+	 *
+	 * This property cannot change during the lifetime of a logger.
+	 *
+	 * @return The parent of this logger, null if this logger is the root logger.
+	 */
 	public ref<Logger> parent() {
 		return _parent;
 	}
-
+	/**
+	 * Set the destination {@link LogHandler}.
+	 *
+	 * Setting the destination to null means that all messages reaching this logger
+	 * will be passed to the parent. If this is the root logger, setting the destination
+	 * for the root logger to null will cause all messages reaching the root logger to be
+	 * discarded, regardless of importance.
+	 *
+	 * @param newHandler The value of the new log handler for this logger.
+	 *
+	 * @return The previous value of the destination.
+	 *
+	 * @threading This method is thread-safe.
+	 */
 	public ref<LogHandler> setDestination(ref<LogHandler> newHandler) {
 		ref<LogHandler> result = _destination;
 		_destination = newHandler;
 		return result;
 	}
-
+	/**
+	 * Print a formatted messages with importance {@link INFO}.
+	 *
+	 * Calling this method is equivalent to:
+	 *
+	 *<pre>{@code format(INFO, format, arguments)}
+	 *</pre>
+	 * @param format A format string. See {@link stream.Writer.printf} for details.
+	 * @param arguments The argument list corresponding to the format string.
+	 *
+	 * @threading This method is thread-safe.
+	 */
 	public void info(string format, var... arguments) {
 		if (needToCheck(INFO)) {
 			string msg;
@@ -220,7 +264,18 @@ public monitor class Logger {
 			queueEvent(runtime.returnAddress(), INFO, msg);
 		}
 	}
-
+	/**
+	 * Print a formatted messages with importance {@link DEBUG}.
+	 *
+	 * Calling this method is equivalent to:
+	 *
+	 *<pre>{@code format(DEBUG, format, arguments)}
+	 *</pre>
+	 * @param format A format string. See {@link stream.Writer.printf} for details.
+	 * @param arguments The argument list corresponding to the format string.
+	 *
+	 * @threading This method is thread-safe.
+	 */
 	public void debug(string format, var... arguments) {
 		if (needToCheck(DEBUG)) {
 			string msg;
@@ -229,7 +284,18 @@ public monitor class Logger {
 			queueEvent(runtime.returnAddress(), DEBUG, msg);
 		}
 	}
-
+	/**
+	 * Print a formatted messages with importance {@link WARN}.
+	 *
+	 * Calling this method is equivalent to:
+	 *
+	 *<pre>{@code format(WARN, format, arguments)}
+	 *</pre>
+	 * @param format A format string. See {@link stream.Writer.printf} for details.
+	 * @param arguments The argument list corresponding to the format string.
+	 *
+	 * @threading This method is thread-safe.
+	 */
 	public void warn(string format, var... arguments) {
 		if (needToCheck(WARN)) {
 			string msg;
@@ -238,7 +304,18 @@ public monitor class Logger {
 			queueEvent(runtime.returnAddress(), WARN, msg);
 		}
 	}
-
+	/**
+	 * Print a formatted messages with importance {@link ERROR}.
+	 *
+	 * Calling this method is equivalent to:
+	 *
+	 *<pre>{@code format(ERROR, format, arguments)}
+	 *</pre>
+	 * @param format A format string. See {@link stream.Writer.printf} for details.
+	 * @param arguments The argument list corresponding to the format string.
+	 *
+	 * @threading This method is thread-safe.
+	 */
 	public  void error(string format, var... arguments) {
 		if (needToCheck(ERROR)) {
 			string msg;
@@ -247,7 +324,18 @@ public monitor class Logger {
 			queueEvent(runtime.returnAddress(), ERROR, msg);
 		}
 	}
-
+	/**
+	 * Print a formatted messages with importance {@link FATAL}.
+	 *
+	 * Calling this method is equivalent to:
+	 *
+	 *<pre>{@code format(FATAL, format, arguments)}
+	 *</pre>
+	 * @param format A format string. See {@link stream.Writer.printf} for details.
+	 * @param arguments The argument list corresponding to the format string.
+	 *
+	 * @threading This method is thread-safe.
+	 */
 	public void fatal(string format, var... arguments) {
 		if (needToCheck(FATAL)) {
 			string msg;
@@ -256,18 +344,52 @@ public monitor class Logger {
 			queueEvent(runtime.returnAddress(), FATAL, msg);
 		}
 	}
-
+	/**
+	 * Print a literal string with the given importance
+	 *
+	 * The importance level is checked against the logger's current level. If the message
+	 * has at least the same magnitude of importance as the logger level setting, the
+	 * message is processed. If the logger has a non-null destination, the message is printed
+	 * to that destination and processing terminates. Otherwise, the message is passed to the
+	 * parent logger. If this is the root logger, and there is no destination the message is discarded.
+	 *
+	 * @param level The importance level of the message.
+	 * @param msg The content of the message. If the value is null, no message is logged.
+	 *
+	 * @threading This method is thread-safe.
+	 *
+	 * @exception IllegalArgumentException Thrown if the level parameter is not in the range from -5
+	 * through 5, or is zero.
+	 */
 	public void log(int level, string msg) {
-		if (level < -5 || level > 5)
+		if (level < -5 || level > 5 || level == 0)
 			throw IllegalArgumentException(string(level));
 		if (msg == null)
 			return;
 		if (needToCheck(level))
 			queueEvent(runtime.returnAddress(), level, msg);
 	}
-
+	/**
+	 * Print a formatted string with the given importance
+	 *
+	 * Calling this method is equivalent to:
+	 *
+	 *<pre>{@code
+	 * string msg;
+	 * msg.printf(format, arguments);
+	 * log(level, msg);}
+	 *</pre>
+	 * @param level The importance level of the message.
+	 * @param format A format string. See {@link stream.Writer.printf} for details.
+	 * @param arguments The argument list corresponding to the format string.
+	 *
+	 * @threading This method is thread-safe.
+	 *
+	 * @exception IllegalArgumentException Thrown if the level parameter is not in the range from -5
+	 * through 5, or is zero.
+	 */
 	public void format(int level, string format, var... arguments) {
-		if (level < -5 || level > 5)
+		if (level < -5 || level > 5 || level == 0)
 			throw IllegalArgumentException(string(level));
 		if (needToCheck(level)) {
 			string msg;
@@ -276,12 +398,37 @@ public monitor class Logger {
 			queueEvent(runtime.returnAddress(), level, msg);
 		}
 	}
-
+	/**
+	 * Print a formatted memory dump with the given importance.
+	 *
+	 * A caption is displayed as the first line of the logging message. It is followed by one or more lines
+	 * of formatted text. Each line begins with the offset of the next bytes, beginning with the starting offset.
+	 * This is followed by up to 16 hexadecimal digit pairs, each representing a byte. The same 16 bytes are
+	 * then followed by the same byte values, printed as ASCII text or a period if the byte has a value higher than 
+	 * 127 or is not a printable ASCII character.
+	 *
+	 * Note: The memory dump format is inspired by the memory dumps produced by the IBM 360 mainframe.
+	 *
+	 * @param level The importance level of the message.
+	 * @param caption If not null, this string will appear as the first line of the log output for this
+	 * message.
+	 * @param buffer The memory address to start dumping memory.
+	 * @param length The number of bytes to dump.
+	 * @param startingOffset The value to use when labelling the memory contents. A value of -1 indicates that
+	 * the machine address of the buffer should be used.
+	 * 
+	 * @threading This method is thread-safe.
+	 *
+	 * @exception IllegalArgumentException Thrown if the level parameter is not in the range from -5
+	 * through 5, or is zero.
+	 */
 	public void memDump(int level, string caption, address buffer, long length, long startingOffset) {
 		if (level < -5 || level > 5 || level == 0)
 			throw IllegalArgumentException(string(level));
 		if (!needToCheck(level))
 			return;
+		if (startingOffset == -1)
+			startingOffset = long(buffer);
 		pointer<byte> printed = pointer<byte>(startingOffset);
 		pointer<byte> firstRow = printed + -int(startingOffset & 15);
 		pointer<byte> data = pointer<byte>(buffer) + -int(startingOffset & 15);
@@ -364,13 +511,37 @@ public monitor class Logger {
 	}
 	/**
 	 * Wait until all downstream log handlers have written their queues.
+	 *
+	 * Beginning with this logger and proceeding toward the root logger, this
+	 * method finds the first non-null destination value and blocks until all messages that were in
+	 * the destination's message queue have been written.
+	 *
+	 * Using this method a thread may write a log message, call this method and then immediately call
+	 * {@link process.exit} without worrying that the just-written message might not get written
+	 * before the process actually exits.
+	 *
+	 * Note that this method will return even if there is another process spewing large numbers of messages
+	 * to the destination's output queue.
 	 */
 	public void drain() {
+		Monitor drainDone;
+
+		// Post a 'drain' event.
+
+		LogEvent logEvent = {
+			level: -1, 
+			msg: null,
+			returnAddress: &drainDone,
+		};
+
 		ref<Logger> context = this;
 		do {
 			lock (*context) {
-				if (_destination != null)
-					_destination.drain();
+				if (_destination != null) {
+					_destination.enqueue(&logEvent);
+					drainDone.wait();
+					return;
+				}
 				context = _parent;
 			}
 		} while (context != null);
@@ -416,8 +587,6 @@ public class ConsoleLogHandler extends LogHandler {
 monitor class LogHandlerVolatileData {
 	ref<thread.Thread> _writeThread;
 	Queue<ref<LogEvent>> _events;
-	Monitor _drainDone;
-	int _shouldSignal;
 
 	void enqueue(ref<LogEvent> logEvent) {
 		_events.enqueue(logEvent.clone());
@@ -431,15 +600,6 @@ monitor class LogHandlerVolatileData {
 	ref<LogEvent> dequeue() {
 		wait();
 		return _events.dequeue();
-	}
-
-	void writeDone() {
-		if (_events.isEmpty()) {
-			while (_shouldSignal > 0) {
-				_drainDone.notify();
-				_shouldSignal--;
-			}
-		}
 	}
 
 	void newThread() {
@@ -507,22 +667,6 @@ public class LogHandler extends LogHandlerVolatileData {
 			s.printf("CAUTION %d", level);
 		return s;
 	}
-
-	/**
-	 * block the calling thread until the queue is empty
-	 */
-	void drain() {
-		ref<Monitor> mon;
-		lock (*this) {
-			if (!_events.isEmpty()) {
-				mon = &_drainDone;
-				_shouldSignal++;
-			}
-		}
-		if (mon != null)
-			mon.wait();
-	}
-
 }
 /**
  * writeWrapper
@@ -535,14 +679,15 @@ void writeWrapper(address arg) {
 	for (;;) {
 		ref<LogEvent> logEvent = handler.dequeue();
 		if (logEvent.msg == null) {
-			delete logEvent;
-			handler.writeDone();
-			break;
-		} else {
+			if (logEvent.level == -1)
+				ref<Monitor>(logEvent.returnAddress).notify();
+			else {
+				delete logEvent;
+				break;
+			}
+		} else
 			handler.processEvent(logEvent);
-			delete logEvent;
-			handler.writeDone();
-		}
+		delete logEvent;
 	}
 }
 
