@@ -1388,6 +1388,10 @@ compile() { "int a; a = ++a;" }
 compile() { "int a; a = a--;" }
 compile() { "int a; a = a++;" }
 
+// Check that the int type properties are accessible.
+
+compile() { "int x; int y = x.MIN_VALUE;" }
+
 // The matrix of allowed operators for short operands:
 
 compile() { "short a = short(37 & 37);" }

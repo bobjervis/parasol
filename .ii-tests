@@ -1,2 +1,2 @@
 {"name":"paradoc test","script":"set -e\ncd ws\nbin/paradoc --explicit= --template=template build/doc src/lib\nbin/phost --port=4993 build/doc\n\n"}
-{"name":"unit test","script":"cd ws\nbin/unit filename_ops\n"}
+{"name":"unit test","script":"cd ws\nbin/unit short_ops\n"}

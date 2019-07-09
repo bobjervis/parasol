@@ -19,6 +19,7 @@ int main(string[] args) {
 	short c = 35;
 	short d = 17;
 
+	assert(a.MIN_VALUE == -32768);
 	assert(0x10 == 16);
 	
 	// All of these expressions should be true (given the above)
