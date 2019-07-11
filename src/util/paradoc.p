@@ -1454,6 +1454,8 @@ string pathToMyParent(ref<Scope> scope) {
 		return storage.constructPath(outputFolder, nm.domain() + "_" + nm.dottedName(), null);
 	}
 	ref<Type> type = scope.enclosingClassType();
+	if (type == null)
+		return "type <null>";
 	scope = type.scope();
 	string path = pathToMyParent(scope.enclosing());
 	if (scope.enclosing() == scope.enclosingUnit())
