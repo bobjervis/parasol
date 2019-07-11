@@ -468,7 +468,7 @@ public monitor class Logger {
 			}
 			output.printf("\n");
 		}
-		log(level, output);
+		queueEvent(runtime.returnAddress(), level, output);
 	}
 	
 	private void dumpPtr(ref<string> output, address x) {
@@ -552,13 +552,32 @@ class LogChain {
 	ref<Logger> thisLogger;
 	ref<LogChain>[string] children;
 };
-
-class LogEvent {
-	time.Time when;
-	int level;
-	string msg;
-	address returnAddress;
-	int threadId;
+/**
+ * The structured message metadata associated with a log message.
+ */
+public class LogEvent {
+	/**
+	 * The time when the message was queued
+	 */
+	public time.Time when;
+	/**
+	 * The importance level of the message
+	 */
+	public int level;
+	/**
+	 * The text of the message itself.
+	 */
+	public string msg;
+	/**
+	 * The return address of the logging call.
+	 *
+	 * This identifies the source location of the log message.
+	 */
+	public address returnAddress;
+	/**
+	 * The operating system-specific thread id of the logging thread.
+	 */
+	public int threadId;
 
 	ref<LogEvent> clone() {
 		ref<LogEvent> logEvent = new LogEvent;
@@ -566,10 +585,24 @@ class LogEvent {
 		return logEvent;
 	}
 }
-
+/**
+ * This class provides log handling to the process standard output.
+ *
+ * It is possible that log messages written to different instances of the
+ * ConsoleLogHandler could get written out of order. Rather than creating
+ * a new ConsoleLogHandler, it is also more efficient to use the {@link defaultHandler}.
+ *
+ * @threading This class is thread-safe.
+ */
 public class ConsoleLogHandler extends LogHandler {
 	ref<time.Formatter> _formatter;
-
+	/**
+	 * Prints the message data to the process' stdout stream.
+	 *
+	 * Currently, the metadata is written in a fixed format with time, thread id, importance and the message text.
+	 *
+	 * @param logEvent The structured data of the message.
+	 */
 	public void processEvent(ref<LogEvent> logEvent) {
 		if (_formatter == null)
 			_formatter = new time.Formatter("yyyy/MM/dd HH:mm:ss.SSS");
@@ -606,13 +639,34 @@ monitor class LogHandlerVolatileData {
 		_writeThread = null;			// Just assume that no such thread exists in the process.
 	}
 }
-
+/**
+ * This is the base class for all logger destinations.
+ *
+ * Each LogHandler instance maintains a write thread and a message queue of messages that have high enough
+ * importance to be printed. The write thread is created when the first message is written to the LogHandler.
+ * It is terminated by a call to the {@link close} method or by deleting the LogHandler;
+ *
+ * A LogHandler can be attached as a destination for any number of loggers. Logged messages will be enqueued
+ * correctly.
+ */
 public class LogHandler extends LogHandlerVolatileData {
 
 	~LogHandler() {
 		close();
 	}
-
+	/**
+	 * This method drains the current contents of the LogHandler and terminate the write thread.
+	 *
+	 * Calling close while this LogHandler is attached as a destination of an active logger
+	 * can leave unprinted messages in the LogHandler's message queue. To avoid this, be sure to
+	 * remove the LogHandler from all destinations before calling close.
+	 *
+	 * If your application is using a Logger to generate bursts of activity to a particular LogHandler,
+	 * you can reduce the resources of the LogHandler between bursts by calling close.
+	 *
+	 * A LogHandler will automatically restart the write thread when more messages get added to its
+	 * message queue.
+	 */
 	public void close() {
 		ref<thread.Thread> t;
 
@@ -628,11 +682,16 @@ public class LogHandler extends LogHandlerVolatileData {
 		if (t != null) {
 			t.join();
 			lock (*this) {
-				_writeThread = null;
+				if (_writeThread == t)
+					_writeThread = null;
 			}
 		}
 	}
-
+	/**
+	 * Provides processing to format and print the message.
+	 *
+	 * @param logEvent The message to be printed.
+	 */
 	public abstract void processEvent(ref<LogEvent> logEvent);
 	/**
 	 * Compose a label string for the given level.
