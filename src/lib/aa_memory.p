@@ -16,6 +16,9 @@
 /* TODO: This file relies on the sort order of the file names to ensure that this gets
  * run first in the list of static initializers. It is a hack!!!!
  */
+/**
+ * Provides facilities for dynamically allocating memory.
+ */
 namespace parasol:memory;
 
 import native:C;
@@ -71,8 +74,16 @@ else
  */
 storage.setProcessStreams();
 
-//printf("Hello\n");
-
+/**
+ * Thrown when a memory allocator cannot satisfy a request.
+ *
+ * This can occur either because the requested quantity of memory exceeds what is
+ * available from the underlying operating system, or because the cumulative quantity of allocated
+ * memory exhaust the available space.
+ *
+ * In a 64-bit memory space, you will run out of real memory before you run out of swap space. As
+ * A result, your application performance is likely to suffer catastrophically.
+ */
 public class OutOfMemoryException extends Exception {
 	public long requestedAmount;
 	
@@ -87,7 +98,9 @@ public class OutOfMemoryException extends Exception {
 		return n;
 	}
 }
-
+/**
+ * Thrown when a memory allocator detects corrupted data structures or an invalid argument to free.
+ */
 public class CorruptHeapException extends Exception {
 	public CorruptHeapException(ref<Allocator> heap, address freeArg) {
 		super("Corrupt Heap");
@@ -157,7 +170,12 @@ public class Heap extends Allocator {
 		C.free(p);
 	}
 }
-
+/**
+ * This form of heap provides checking for memory leaks.
+ *
+ * It includes debugging logic that tracks the stack at the time of each call, at termination the
+ * process will examine the heap and report on any objects still allocated.
+ */
 public class LeakHeap extends Allocator {
 	@Constant
 	private static int BLOCK_ALIGNMENT = 32;	// Allows for blocks to be used in MMX instructions, and avoids 
@@ -636,7 +654,17 @@ public class LeakHeap extends Allocator {
 	}
 	
 }
-
+/**
+ * An allocator that only releases memory all at once.
+ *
+ * This allocator provides for efficient allocation of small memory blocks in
+ * situations where all of the memory allocated can be released at once.
+ *
+ * A compiler is a classic example of an application that allocates large numbers of 
+ * objects and retains most of them until specific points in time where all the memory gets
+ * freed at once. Even allowing for the creation of some garbage, the higher efficiency of the
+ * allocaiton process and dramatically improve overall application performance.
+ */
 public class NoReleasePool extends Allocator {
 	private static long BLOCK_SIZE = 64 * 1024;
 
@@ -650,7 +678,9 @@ public class NoReleasePool extends Allocator {
 	~NoReleasePool() {
 		clear();
 	}
-	
+	/**
+	 * Releases all memory allocated through this allocator.
+	 */
 	public void clear() {
 		for (int i = 0; i < _blocks.length(); i++)
 			currentHeap.free(_blocks[i]);
@@ -676,16 +706,25 @@ public class NoReleasePool extends Allocator {
 			return block;
 		}
 	}
-	
+	/**
+	 * This method does nothing. Blocks cannot be individually deleted.
+	 *
+	 * @param p the address of the block to delete
+	 */
 	public void free(address p) {
-		// No release allocator just ignores deletes.
 	}
 }
 
 private pointer<address> getRBP(var v) {
 	return pointer<pointer<address>>(&v)[-2];
 }
-
+/**
+ * Fill all bytes of a memory area with the same value.
+ *
+ * @param dest The address of the memory block to be filled.
+ * @param value The byte value to fill memory with.
+ * @param length The number of bytes to fill.
+ */
 public void setMemory(address dest, byte value, long length) {
 	while (length > int.MAX_VALUE - 15) {
 		C.memset(dest, value, int.MAX_VALUE - 15);

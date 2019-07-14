@@ -43,12 +43,17 @@ public enum ServerScope {
 	 */
 	INTERNET,
 }
-
+/**
+ * The particular form of encryption to use, if any.
+ */
 public enum Encryption {
 	NONE,
 	SSLv2,
 	SSLv3,
-	SSLv23,							// Best available SSL/TLS
+	/**
+	 * Best available SSL/TLS
+	 */
+	SSLv23,
 	TLSv1,
 	TLSv1_1,
 	TLSv1_2,
@@ -56,7 +61,9 @@ public enum Encryption {
 	DTLSv1_2,						// DTLS 1.2
 	DTLS,							// DTLS 1.0 and 1.2
 }
-
+/**
+ * Thrown in response to failure to properly create a socket.
+ */
 public class SocketException extends exception.Exception {
 	public SocketException() {
 		super();
@@ -74,11 +81,10 @@ public class SocketException extends exception.Exception {
 	
 }
 /**
- * hostIPv4
- *
  * This method returns the host IPv4 address, if any, for the current host.
- * If there was any error, or there are no IPv4 interfaces defined, this returns
- * zero.
+ *
+ * @return The host's IPv4 address. If there was any error, or there are no
+ * IPv4 interfaces defined, this returns zero.
  */
 public unsigned hostIPv4() {
 	ref<linux.ifaddrs> ifAddresses;
@@ -108,12 +114,33 @@ private  monitor class SocketInit {
 }
 
 private SocketInit _init;
-
+/**
+ * The abstract base class for all sockets.
+ */
 public class Socket {
+	/**
+	 * Create an unencrypted socket.
+	 *
+	 * @return The created socket object.
+	 *
+	 * @exception SocketException Thrown if the socket could not be created.
+	 */
 	public static ref<Socket> create() {
 		return create(Encryption.NONE, null, null, null, null);
 	}
-
+	/**
+	 * Create a socket.
+	 *
+	 * @param encryption The form of encryption to use on the socket.
+	 * @param cipherList An optional list of ciphers to use. If null, then a default set of ciphers is selected.
+	 * @param certificatesFile The path of a certificates file to be used for connection negotiation.
+	 * @param privateKeyFile The path of a private key file to be used for connection negotiation.
+	 * @param dhParamsFile The path of a DH parameters file to be used in connection negotiation.
+	 *
+	 * @return The created socket object.
+	 *
+	 * @exception SocketException Thrown if the socket could not be created.
+	 */
 	public static ref<Socket> create(Encryption encryption, string cipherList, string certificatesFile, string privateKeyFile, string dhParamsFile) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			lock (_init) {
@@ -154,7 +181,15 @@ public class Socket {
 	~Socket() {
 		net.closesocket(_socketfd);
 	}
-
+	/**
+	 * This call transforms the socket into a server-side socket and binds it to the designated port id.
+	 *
+	 * @param port The port to use, or zero if the system should choose a port number.
+	 * @param scope The scope to use for the binding.
+	 *
+	 * @return true if the socket could be bound to the indicated port with the intended scope, false
+	 * otherwise.
+	 */
 	public boolean bind(char port, ServerScope scope) {
 		net.sockaddr_in s;
 		pointer<byte> ip;
@@ -221,25 +256,37 @@ public class Socket {
 //		logger.debug("socketfd = %d port = %d", _socketfd, _port);
 		return true;
 	}
-
+	/**
+	 * Listen for an incoming connection.
+	 *
+	 * Once bound to a port, a server-side socket must listen for incoming connections.
+	 *
+	 * @return true if the listen step succeeded, false otherwise.
+	 */
 	public boolean listen() {
 		if (net.listen(_socketfd, net.SOMAXCONN) != 0) {
-			logger.debug("listen != 0: ");
-			linux.perror(null);
+			string buffer = linux.strerror(linux.errno());
+			logger.debug("listen failed %s", buffer);
 			net.closesocket(_socketfd);
 			return false;
 		}else
 			return true;
 	}
-
+	/**
+	 * Accept an incoming connection.
+	 *
+	 * After a socket is bound and is listening, it must call accept to create a connection.
+	 *
+	 * @return The open connection on success, null on failure.
+	 */
 	public ref<Connection> accept() {
 		net.sockaddr_in a;
 		int addrlen = a.bytes;
 		// TODO: Develop a test framework that allows us to test this scenario.
 		int acceptfd = net.accept(_socketfd, &a, &addrlen);
 		if (acceptfd < 0) {
-			logger.debug("accept failed: %d", acceptfd);
-			linux.perror(null);
+			string buffer = linux.strerror(linux.errno());
+			logger.debug("accept on port %d failed %s", _port, buffer);
 			net.closesocket(_socketfd);
 			return null;
 		}
@@ -247,22 +294,47 @@ public class Socket {
 	}
 
 	protected abstract ref<Connection> createConnection(int acceptfd, ref<net.sockaddr_in> address, int addressLength);
-
+	/**
+	 * Close a socket.
+	 */
 	public void close() {
 		net.closesocket(_socketfd);
 		_socketfd = -1;
 	}
-
+	/**
+	 * Check whether a socket is closed.
+	 *
+	 * @return true if the socket is closed, false if it is open.
+	 */
 	public boolean closed() {
 		return _socketfd < 0;
 	}
-
+	/**
+	 * The port this socket is using.
+	 *
+	 * Before calling bind or connect, the value will be zero.
+	 *
+	 * @return the value of the port the socket is using. If the bind call used port 0, this value
+	 * will be the port selected by the system.
+	 */
 	public char port() {
 		return _port;
 	}
 
 	// Client side API's
 
+	/**
+	 * Connect to a designated host and port combination.
+	 *
+	 * This must be called on a closed socket. It will make this a client-side socket.
+	 *
+	 * @param hostname Either an IPv4 dotted IP address or a DNS name to be resolved t runtime.
+	 * @param port The non-zero port to connect to on the named host.
+	 *
+	 * @return The open connection, or null if the connection failed.
+	 * @return The IPv4 address of the host afer name resolution. If name resolution failed, this value
+	 * will be zero (the connection will also be null, because you cannot connect to IP address 0).
+	 */
 	public ref<Connection>, unsigned connect(string hostname, char port) {
 		unsigned ip;
 		boolean success;
@@ -344,7 +416,18 @@ class ConnectionWriter extends Writer {
 		_connection.putc(c);
 	}
 }
-
+/**
+ * This is an abstract base class to provide generalized access to encrypted or unencrypted socket
+ * connections.
+ *
+ * Data written to a connection is buffered. You will need to call {@link flush} to force the written
+ * data out to the wire.
+ *
+ * Data read from a connection is also buffered.
+ *
+ * Connections are bidirectional. You may interleave reads and writes on the same connection, and may
+ * have one thread reading from the connection while anotehr thread writes to the connection.
+ */
 public class Connection {
 	@Constant
 	private static int BUFFER_MAX = 8192;
@@ -364,42 +447,82 @@ public class Connection {
 	}
 
 	~Connection() {
+		flush();
 //		logger.debug("~Connection %p %d\n", this, _acceptfd);
 		net.closesocket(_acceptfd);
 	}
-
+	/**
+	 * The connection's file descriptor.
+	 */
 	public int requestFd() {
 		return _acceptfd;
 	}
-
+	/**
+	 * The Internet address of the source for this connection.
+	 *
+	 * This will typically be of interest to server-side threads that may want
+	 * to log the IP addresses of accepted connections.
+	 *
+	 * @return A reference to the connectin's address structure. Do not modify this data.
+	 */
 	public ref<net.sockaddr_in> sourceAddress() {
 		return &_address;
 	}
-
+	/**
+	 * Get the length of the data in the {@link sourceAddress} address object.
+	 *
+	 * @return The length in bytes of the address data.
+	 */
 	public int sourceAddressLength() {
 		return _addressLength;
 	}
-
+	/**
+	 * Get the IPv4 address of the connection.
+	 *
+	 * @return The IPv4 address of the connection if it is an AI_INET connection. Zero otherwise.
+	 */
 	public unsigned sourceIPv4() {
 		if (_address.sin_family == net.AF_INET) {
 			return _address.sin_addr.s_addr;
 		} else
 			return 0;
 	}
-
+	/**
+	 * A crude debugging aid to dump pertinent information after an error.
+	 *
+	 * @param ret The return value of the failing call.
+	 */
 	public void diagnoseError(int ret) {
 		linux.perror(null);
 	}
 
 	// These implement buffered writes using _buffer.
 
+	/**
+	 * Print formatted output to the connection.
+	 *
+	 * @param format The format. The string uses the specification defined for {@link stream.Writer.printf}.
+	 * @param parameters The value parameters to be printed using the specified format.
+	 *
+	 * @return The number of bytes written to the connection.
+	 *
+	 * @threading This call is not thread-safe.
+	 */
 	public int printf(string format, var... parameters) {
 		string s;
 
 		s.printf(format, parameters);
 		return write(s);
 	}
-
+	/**
+	 * Write string data to the connection.
+	 *
+	 * @param s The string to write.
+	 *
+	 * @return The number of bytes written to the connection.
+	 *
+	 * @threading This call is not thread-safe.
+	 */
 	public int write(string s) {
 		if (s.length() + _buffer.length() >= BUFFER_MAX) {
 			int fill = BUFFER_MAX - _buffer.length();
@@ -413,7 +536,17 @@ public class Connection {
 			_buffer.append(s);
 		return s.length();
 	}
-
+	/**
+	 * Copy the contents of a reader to a connection/
+	 *
+	 * This method will read from the Reader object until it reports end-of-file.
+	 *
+	 * @param reader The Reader object to read from.
+	 *
+	 * @return The total number of bytes written to the connection.
+	 *
+	 * @threading This call is not thread-safe.
+	 */
 	public int write(ref<Reader> reader) {
 		byte[] b;
 		b.resize(8096);
@@ -428,13 +561,25 @@ public class Connection {
 		}
 		return totalWritten;
 	}
-
+	/**
+	 * Write a byte to the connection.
+	 *
+	 * @param c The byte value to be written.
+	 *
+	 * @threading This call is not thread-safe.
+	 */
 	public void putc(int c) {
 		_buffer.append(byte(c));
 		if (_buffer.length() >= BUFFER_MAX)
 			flush();
 	}
-
+	/**
+	 * Flush buffered output data to the connection.
+	 *
+	 * @return true if the write to the connection succeeded, false otherwise.
+	 *
+	 * @threading This call is not thread-safe.
+	 */
 	public boolean flush() {
 		if (_buffer.length() > 0) {
 			if (write(&_buffer[0], _buffer.length()) != _buffer.length())
@@ -446,6 +591,13 @@ public class Connection {
 
 	// These implement buffered reads using _inBuffer;
 
+	/**
+	 * Read a byte from the connection.
+	 *
+	 * This data is read from an internal buffer.
+	 *
+	 * @return The next byte value, or -1 on end-of-file.
+	 */
 	public int read() {
 		if (_cursor >= _actual) {
 			if (_inBuffer.length() == 0)
@@ -464,11 +616,22 @@ public class Connection {
 		}
 		return _inBuffer[_cursor++];
 	}
-
+	/**
+	 * Unread the last byte read from the buffer.
+	 *
+	 * Note: If the last call to {@link read} reported end-of-file, calling this
+	 * method is undefined.
+	 */
 	public void ungetc() {
 		_cursor--;
 	}
-
+	/**
+	 * Read lines of text from the connection until either end-of-file or a blank
+	 * line is read.
+	 *
+	 * @return All lines of text including the last, blank, line. If the last text is
+	 * not a blank line, thenend-of-file was read.
+	 */
 	public string readHttpMessage() {
 		string message;
 		boolean empty = true;
@@ -499,6 +662,8 @@ public class Connection {
 	/**
 	 * Obtain a Reader that can be used to collect data from the Connection.
 	 *
+	 * The Reader will use the read buffer of the Connecction.
+	 *
  	 * @return A Reader object positioned at the current location on the file stream.
 	 */
 	public abstract ref<Reader> getReader();
@@ -508,17 +673,64 @@ public class Connection {
 	 * @return A Writer object that will write through to the underlying Connection.
 	 */
 	public abstract ref<Writer> getWriter();
-
+	/**
+	 * On a server-side connection, accept the security handshake.
+	 *
+	 * On an unencrypted Connection, this call has no affect.
+	 *
+	 * Calling this menthod on a client-side connection is undefined.
+	 *
+	 * If the securtiy handshale fails, the appropriate action is to close the connection.
+	 *
+	 * @return true if the security handshake succeeded, false otherwise.
+	 */
 	public abstract boolean acceptSecurityHandshake();
-
+	/**
+	 * On a client-side connection, initiate the security handshake.
+	 *
+	 * On an unencrypted Connection, this call has no effect.
+	 *
+	 * Calling this method on a server-side connection is undefined.
+	 */
 	public abstract boolean initiateSecurityHandshake();
-
+	/**
+	 * Read a block of data from the connection.
+	 *
+	 * This call does not use the read buffer. Do not mix calls using this method
+	 * with either a Reader (obtained from {@link getReader}) or other read calls.
+	 *
+	 * @param buffer An array of bytes of at least length {@code len} to hold the data.
+	 * @param len The maximum amount of data to read.
+	 *
+	 * @return The number of bytes read. A value of 0 indicates end-of-file. A value of
+	 * -1 indicates some sort of error.
+	 */
 	public abstract int read(pointer<byte> buffer, int len);
-
+	/**
+	 * Write a block of data to the connection.
+	 *
+	 * This call writes a block of data to the connection, ignoring the contents
+	 * of the write buffer.
+	 *
+	 * Mixing calls to this method with calls to other write methods is undefeind.
+	 *
+	 * @param buffer An array of {@code lnegth} bytes containing the data to write.
+	 * @param length The number of bytes to write.
+	 *
+	 * @return The number of bytes written or -1 on error.
+	 */
 	public abstract int write(pointer<byte> buffer, int length);
-
+	/**
+	 * Close a connection.
+	 *
+	 * Flushes any partially filled write buffer and closes the network connection.
+	 */
 	public abstract void close();
-
+	/**
+	 * Text whether this connection is encrypted.
+	 *
+	 * @return true if the connection is secured (i.e. encrypted), false if not encrypted.
+	 */
 	public abstract boolean secured();
 }
 
@@ -567,6 +779,7 @@ class PlainConnection extends Connection {
 	}
 
 	public void close() {
+		flush();
 		net.closesocket(_acceptfd);
 	}
 
@@ -881,6 +1094,7 @@ class SSLConnection extends Connection {
 	}
 
 	public void close() {
+		flush();
 //		logger.debug("SSL_close");
 		if (_ssl != null) {
 			ssl.SSL_free(_ssl);
@@ -909,14 +1123,24 @@ string[] ssl_error_strings = [
 	"SSL_ERROR_WANT_CONNECT",
 	"SSL_ERROR_WANT_ACCEPT"
 ];
-
 /**
  * Based on RFC 4648, perform a base-64 encoding of the byte array
+ *
+ * @param data The array of data to encode.
+ *
+ * @return The encoded string.
  */
 public string base64encode(byte[] data) {
 	return base64encode(&data[0], data.length());
 }
-
+/**
+ * Based on RFC 4648, perform a base-64 encoding of the byte array
+ *
+ * @param data The array of data to encode.
+ * @param length The length of the data array.
+ *
+ * @return The encoded string.
+ */
 public string base64encode(pointer<byte> data, long length) {
 	string result;
 	
@@ -954,13 +1178,28 @@ public string base64encode(pointer<byte> data, long length) {
 	}
 	return result;
 }
-
+/**
+ * Format a dotted-IP string from an IPv4 address.
+ *
+ * @param ipv4 The IP v4 host address.
+ *
+ * @return The formatted string, consisting of four groups of up to three decimal digits (value in the range 0-127)
+ * separated by periods, from the low order to the high order byte of the address. Thus a hex ipv4 value of
+ * {@code 0x12345678} is returned as "120.86.52.18".
+ */
 public string dottedIP(unsigned ipv4) {
 	string s;
 	s.printf("%d.%d.%d.%d", ipv4 & 0xff, (ipv4 >> 8) & 0xff, (ipv4 >> 16) & 0xff, ipv4 >> 24);
 	return s; 
 }
-
+/**
+ * Parse a dotted-ip string into an IP v4 address.
+ *
+ * @param dottedIP A string consisting of four groups each of up to three decimal digits, separated by periods.
+ *
+ * @return The IP v4 address.
+ * @return true if the string was properly formatted, false otherwise.
+ */
 public unsigned, boolean parseDottedIP(string dottedIP) {
 	string[] parts = dottedIP.split('.');
 	if (parts.length() != 4)
@@ -982,39 +1221,41 @@ public unsigned, boolean parseDottedIP(string dottedIP) {
 		return 0, false;
 	return unsigned(o1 | (o2 << 8) | (o3 << 16) | (o4 << 24)), true;
 }
-
-public byte[] base64decode(string data) {
+/**
+ * Based on RFC 4648, perform a base-64 decoding of a string.
+ *
+ * @param data The encoded base-64 data.
+ *
+ * @return The decoded data. If the input string is not well-formed, the contents of the array 
+ * are undefined.
+ * @return true if the data was well-formed, false otherwise.
+ */
+public byte[], boolean base64decode(string data) {
 	byte[] a;
 
-	base64decode(data, &a);
-	// a will be empty if the input string is not valid.
-	return a;
-}
-
-public boolean base64decode(string data, ref<byte[]> a) {
 	if (data.length() % 4 != 0)
-		return false;
+		return a, false;
 	for (int i = 0; i < data.length(); i += 4) {
 		int b0 = decodeMap[data[i]];
 		if (b0 < 0)
-			return false;
+			return a, false;
 		int b1 = decodeMap[data[i + 1]];
 		if (b1 < 0)
-			return false;
+			return a, false;
 		a.append(byte((b0 << 2) + (b1 >> 4)));
 		int b2 = decodeMap[data[i + 2]];
 		if (b2 < -1)
-			return false;
+			return a, false;
 		if (b2 >= 0) {
 			a.append(byte(((b1 & 15) << 4) + (b2 >> 2)));
 			int b3 = decodeMap[data[i + 3]];
 			if (b3 < -1)
-				return false;
+				return a, false;
 			if (b3 >= 0)
 				a.append(byte(((b2 & 3) << 6) + b3));
 		}	
 	}
-	return true;
+	return a, true;
 }
 
 private string encoding = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
