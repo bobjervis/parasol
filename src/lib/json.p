@@ -183,7 +183,37 @@ public void dispose(var object) {
 		delete a;
 	}
 }
-
+/**
+ * Clone JSON data.
+ *
+ * While most commonly applied to the data returned from a successful parse, or a sub-element of such
+ * data, the following data can be successfully used:
+ *
+ *<ul>
+ *  <li> A number. Any integer or floating-point numeric value. Stirctly speaking, The JSON parse method
+ *       will not produce integer variants. Nevertheless, functions like {@link stringify} or {@link prettyPrint}
+ *       will format the output correctly.
+ *  <li> A string. Any string.
+ *  <li> A boolean. Any boolean value.
+ *  <li> Null. The value null.
+ *  <li> A reference to a {@link parasol:types.Array Array} object. As long as every element in the Array is also
+ *       valid JSON data and the Array does not recursively contain a reference to itself, then the Array object
+ *       is valid. 
+ *  <li> A reference to a {@link Parasol:type.Object Object} object. As long as every member of the Object is also
+ *       valid JSON data and the Object does not recursively contain a reference to itself, then the Object
+ *       object is valid.
+ *</ul>
+ *
+ * JSON data can contain multiple references to Array or Object instances, as long as none contain themselves
+ * recursively. A call to {@link clone} will create multiple copies, so that each Array or Object instance occurs
+ * only once in a returned set of JSON data. Calls to {@link stringify} or {@link prettyPrint} will similarly
+ * display multiple copies of the data, as if they were distinct objects.
+ *
+ * @param object The object containing json data.
+ *
+ * @return A copy of the json data. All objects and arrays will be replicated recursively to reproduce
+ * the entire structure.
+ */
 public var clone(var object) {
 	if (object.class == ref<Object>) {
 		ref<Object> o = ref<Object>(object);

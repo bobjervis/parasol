@@ -709,16 +709,8 @@ void generateScopeContents(ref<Scope> scope, ref<Writer> output, string dirName,
 				continue;
 			if (!isInterface && 
 				sym.visibility() != Operator.PUBLIC &&
-				sym.visibility() != Operator.PROTECTED) {
-				switch (type.family()) {
-				case	ENUM:
-				case	FLAGS:
-					if (hasConstants)
-						enumConstants.append(sym);
-					break;
-				}
+				sym.visibility() != Operator.PROTECTED)
 				continue;
-			}
 			switch (type.family()) {
 			case INTERFACE:
 				interfaces.append(sym);
@@ -726,6 +718,8 @@ void generateScopeContents(ref<Scope> scope, ref<Writer> output, string dirName,
 
 			case FLAGS:
 			case ENUM:
+				if (hasConstants)
+					enumConstants.append(sym);
 				break;
 
 			case TYPEDEF:
@@ -907,7 +901,7 @@ void generateScopeContents(ref<Scope> scope, ref<Writer> output, string dirName,
 
 			output.printf("<a id=\"%s\"></a>\n", name);
 			output.printf("<div class=entity>%s</div>\n", name);
-			output.printf("<div class=declaration>public static final %s %s</div>\n", typeString(sym.type(), baseName), name);
+			output.printf("<div class=declaration>public static final %s %s <span class=\"enum-value\">(%d)</span></div>\n", typeString(sym.type(), baseName), name, sym.offset);
 			ref<Doclet> doclet = sym.doclet();
 			if (doclet != null)
 				output.printf("\n<div class=enum-description>%s</div>", expandDocletString(doclet.text, sym, baseName));
@@ -1060,6 +1054,8 @@ void functionDetail(ref<Writer> output, ref<ref<OverloadInstance>[]> functions, 
 		}
 		if (!sym.isConcrete(null))
 			output.write("abstract&nbsp;");
+		else if (sym.enclosing() == sym.enclosingClassScope() && sym.storageClass() == StorageClass.STATIC)
+			output.write("static&nbsp;");
 		ref<NodeList> nl;
 		ref<FunctionType> ft = ref<FunctionType>(sym.type());
 		if (!asConstructors) {

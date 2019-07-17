@@ -13,6 +13,9 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * Provides facilities for spawning and interacting with other processes as well as process-global state information.
+ */
 namespace parasol:process;
 
 import parasol:exception.IllegalOperationException;
@@ -32,11 +35,28 @@ import native:linux.CLD_CONTINUED;
 import native:C;
 
 private ref<log.Logger> logger = log.getLogger("parasol.process");
-
+/**
+ * A Reader reading from the process' stdin file descriptor.
+ */
 public ref<Reader> stdin;
+/**
+ * A Writer writing to the process' stdout file descriptor.
+ */
 public ref<Writer> stdout;
+/**
+ * A Writer writing to the process' stderr file descriptor.
+ */
 public ref<Writer> stderr;
-
+/**
+ * Do a formatted print to the {@link stdout} Writer.
+ *
+ * @param format The printf format string.
+ * @param arguments Zero or more arguments that correspond to the format string.
+ *
+ * @eur
+ * @see {@link parasol:stream.Writer.printf} for complete documentation of
+ * formatted printing.
+ */
 public int printf(string format, var... arguments) {
 	return stdout.printf(format, arguments);
 }
@@ -61,17 +81,44 @@ public string binaryFilename() {
 	string s(filename);
 	return s;
 }
-
+/**
+ * The set of possible process execution outcomes.
+ */
 public enum exception_t {
+	/**
+	 * The process completed without producing any exceptions.
+	 */
 	NO_EXCEPTION,
+	/**
+	 * The process was aborted.
+	 */
 	ABORT,
+	/**
+	 * The process has hit a breakpoint.
+	 *
+	 * THis is only relevant to debugging scenarios, which are not currently supported.
+	 */
 	BREAKPOINT,
-	TIMEOUT,							// debugSpawn exceeded specified timeout
-	TOO_MANY_EXCEPTIONS,				// too many exceptions raised by child process
-	ACCESS_VIOLATION,					// hardware memory access violation
-	UNKNOWN_PLATFORM,					// The running runtime is not recognized where custom code is needed.
-	UNKNOWN_EXCEPTION					// A system or application exception not known to the
-										// runtime
+	/**
+	 * Exceeded specified timeout
+	 */
+	TIMEOUT,
+	/**
+	 * Too many exceptions raised by child process
+	 */
+	TOO_MANY_EXCEPTIONS,
+	/**
+	 * Hardware memory access violation
+	 */
+	ACCESS_VIOLATION,
+	/**
+	 * The running runtime does not know how to execute processes.
+	 */
+	UNKNOWN_PLATFORM,
+	/**
+	 * A system or application exception not known to the runtime
+	 */
+	UNKNOWN_EXCEPTION
 }
 
 private class SpawnPayload {
@@ -79,14 +126,24 @@ private class SpawnPayload {
 	public int outputLength;
 	public int outcome;
 }
-
+/**
+ * Returns the current process id.
+ *
+ * @return The process id or -1 if the runtime does not support this function.
+ */
 public int getpid() {
 	if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		return linux.getpid();
 	} else
 		return -1;
 }
-
+/**
+ * Tests whether the process is running in a privileged state.
+ *
+ * For Linux, this is true if the effective uer id is zero (super user).
+ *
+ * @return true, if the process is privileged, false otherwise.
+ */
 public boolean isPrivileged() {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		// TODO: Check for this being a process with elevated privileges, for now, ignore this possibility.
@@ -217,7 +274,16 @@ public class Process extends ProcessVolatileData {
 	public void runInteractive() {
 		_stdioHandling = StdioHandling.INTERACTIVE;
 	}
-
+	/**
+	 * The the user name of the spawned process.
+	 * 
+	 * On Linux, this call will succeed even if the current process is not privileged. However, the
+	 * subsequent spawn will fail.
+	 *
+	 * @param username A valid user name.
+	 *
+	 * @return true if the user name could be found, false otherwise.
+	 */
 	public boolean user(string username) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
@@ -240,7 +306,21 @@ public class Process extends ProcessVolatileData {
 		}
 		return true;
 	}
-
+	/**
+	 * Execute the given command with the given arguments.
+	 *
+	 * The command is executed in this processes current working directory and uses this processes
+	 * environment vairables.
+	 *
+	 * @param command The path to the command to execute.
+	 * @param args Zero or more string arguments to be passed to the command.
+	 * 
+	 * @return true if the process spawned successfully and the resulitng exit code was zero.
+	 * In the event of an error during spawn, or a subsequent non-zero exit code, false is returned.
+	 *
+	 * @return The actual exit code returned by the spawned process, or {@code int.MIN_VALUE} if the
+	 * spawn itself failed.
+	 */
 	public boolean, int execute(string command, string... args) {
 		return execute(null, command, null, args);
 	}
@@ -268,7 +348,7 @@ public class Process extends ProcessVolatileData {
 	 *
 	 * @return true if the process spawned successfully and the resulitng exit code was zero.
 	 * In the event of an error during spawn, or a subsequent non-zero exit code, false is returned.
-.	 *
+	 *
 	 * @return The actual exit code returned by the spawned process, or {@code int.MIN_VALUE} if the
 	 * spawn itself failed.
 	 */
@@ -285,11 +365,35 @@ public class Process extends ProcessVolatileData {
 			logger.debug("spawn failed");
 		return false, int.MIN_VALUE;
 	}
-
+	/**
+	 * Spawn a process using the given command and arguments.
+	 *
+	 * The command is executed in this processes current working directory and uses this processes
+	 * environment vairables.
+	 *
+	 * This call returns as soon as the child process is spawned. It does not wait for the child to exit.
+	 *
+	 * @param command The path to the command to execute.
+	 * @param args Zero or more string arguments to be passed to the command.
+	 * 
+	 * @return true if the process spawned successfully.
+	 */
 	public boolean spawn(string command, string... args) {
 		return spawn(null, command, null, args);
 	}
-
+	/**
+	 * Spawn a process using the given command and arguments.
+	 *
+	 * @param workingDirectory If not null, the path to the working directory to run the command in.
+	 * Note that if the command path is relative, it will be found relative to the working directory
+	 * supplied.
+	 * @param command The path to the command to execute.
+	 * @param environ A map of environment variables to add to the parent process\' environment, or null
+	 * to just use the parent\'s environment.
+	 * @param args Zero or more string arguments to be passed to the command.
+	 * 
+	 * @return true if the process spawned successfully.
+	 */
 	public boolean spawn(string workingDirectory, string command, ref<string[string]> environ, string... args) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 //			SpawnPayload payload;
@@ -474,7 +578,13 @@ public class Process extends ProcessVolatileData {
 		}
 		return false;
 	}
-
+	/**
+	 * After a spawn, wait for the child process to exit.
+	 *
+	 * If the child process has not terminated, the calling thread will wait for it to exit.
+	 *
+ 	 * @return The exit status of the child process.
+	 */
 	public int waitForExit() {
 		lock (*this) {
 //			logger.format(log.DEBUG, "wait for %d running? %s", _pid, string(_running));
@@ -505,7 +615,17 @@ public class Process extends ProcessVolatileData {
 		}
 		return -1;
 	}
-
+	/**
+	 * Kill a spawned child process.
+	 *
+	 * The call will return immediately. You should then call {@link waitForExit} if
+	 * you wish to wait for the child to actually terminate. Note that if the signal can
+	 * be caught or ignored, the child process may not terminate in response to this call.
+	 *
+	 * @param signal The signal to use to kill the child process.
+	 *
+	 * @return true if the child process was successfully sent the signal, false otherwise.
+	 */
 	public boolean kill(int signal) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 //			SpawnPayload payload;
@@ -551,6 +671,12 @@ public class Process extends ProcessVolatileData {
 		return dd.output;
 	}
 	/**
+	 * Retrieve the file descriptor for the child process\' output.
+	 *
+	 * This call will only return a valid file descriptor if either {@link collectOutput} or
+	 * {@link runInteractively) were called before calling spawn.
+	 *
+	 * @return The file descriptor, or -1 if no special standard output handling was specified.
 	 */
 	public int stdout() {
 		if (_stdioHandling != StdioHandling.IGNORE)
@@ -558,7 +684,13 @@ public class Process extends ProcessVolatileData {
 		else
 			return -1;
 	}
-
+	/**
+	 * Retrieve the operating system user id of the child process.
+	 *
+	 * This call will only return a non-zero value if a call was first placed to {@link username}.
+	 *
+ 	 * @return A non-zero user id if one was defined, or zero if no valid call to {@link username} was made.
+	 */
 	public linux.uid_t uid() {
 		return _user;
 	}
@@ -566,7 +698,17 @@ public class Process extends ProcessVolatileData {
 	private static void processExitInfoWrapper(int exitCode, address arg) {
 		ref<Process>(arg).processExitInfo(exitCode);
 	}
-
+	/**
+	 * Process exit information.
+	 *
+	 * This method cannot be directly called, but sub-classes of Process can override the definition
+	 * And provide special processing.
+	 *
+	 * Failing to call the {@code super.processExitInfo} will fail to notify any threads waiting for
+	 * the child process to exit, nor will future calls to {@link waitForExit} return.
+	 *
+	 * @param exitCode The reported exit code of the terminated child process.
+	 */
 	protected void processExitInfo(int exitCode) {
 //		printf("processExitInfo pid = %d: %d %d\n", info.si_pid, info.si_code, info.si_status);
 //		logger.format(log.DEBUG, "child exit %d with %d", _pid, exitCode);
@@ -745,7 +887,9 @@ private void executeDone(int exitStatus, address arg) {
 	ref<TimeoutData> t = ref<TimeoutData>(arg);
 	t.done(exitStatus);
 }
-
+/**
+ * Terminate the current process.
+ */
 public void exit(int code) {
 	C.exit(code);
 }
@@ -799,23 +943,54 @@ private monitor class TimeoutData {
 		notify();
 	}
 }
-
+/**
+ * The current process environment variables.
+ */
 public Environment environment;
-
-class Environment {
+/**
+ * This call provides access to the underlying process environment.
+ *
+ * The process environment is a set of key-value pairs of strings.
+ *
+ * The key is case sensitive.
+ */
+public class Environment {
+	private Environment() {
+	}
+	/**
+	 * Get an environment variable.
+	 *
+	 * @param key The environment variable name.
+	 *
+	 * @return The environment variable value, or null if the given environment variable is not defined.
+	 */
 	public string get(string key) {
 		return string(C.getenv(key.c_str()));
 	}
-
-	public void set(string key, string value) {
+	/**
+	 * Set an environment variable.
+	 *
+	 * This function will replace any existing value for the environment variable.
+	 *
+	 * On Linux, if the name contians an equal sign (=), the call fails.
+	 *
+	 * @param key The name of the environment variable to set.
+	 * @param value The new value for the environment vairable.
+	 *
+	 * @return true if the environment variable was successfully defined, false otherwise.
+	 */
+	public boolean set(string key, string value) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			assert(false);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-			linux.setenv(key.c_str(), value.c_str(), 1);
+			linux.setenv(key.c_str(), value.c_str(), 1) == 0;
 		} else
 			assert(false);
+		return false;
 	}
-
+	/**
+	 * Remove an environment variable
+	 */
 	public void remove(string key) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			assert(false);

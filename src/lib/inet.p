@@ -13,6 +13,10 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * Provides facilities for creating and minpulating sockets and socket connections, including support
+ * for SSL encrypted sockets.
+ */
 namespace parasol:net;
 
 import parasol:exception;
@@ -292,8 +296,17 @@ public class Socket {
 		}
 		return createConnection(acceptfd, &a, addrlen);
 	}
-
-	protected abstract ref<Connection> createConnection(int acceptfd, ref<net.sockaddr_in> address, int addressLength);
+	/**
+	 * An abstract method that must be implemented by one of the Socket subclasses to create connection in 
+ 	 * response to an accept or connect call.
+	 *
+	 * @param fd The file descriptor to use for the connection.
+	 * @param address The socket address data for the connection.
+	 * @param addressLength The size in bytes of the socket address information.
+	 *
+	 * @return The created connection object.
+	 */
+	protected abstract ref<Connection> createConnection(int fd, ref<net.sockaddr_in> address, int addressLength);
 	/**
 	 * Close a socket.
 	 */

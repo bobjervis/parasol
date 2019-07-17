@@ -223,3 +223,8 @@ div.class-text {
 	border-width: 1px 0 0 0;
 }
 
+span.enum-value {
+	color: grey
+}
+
+

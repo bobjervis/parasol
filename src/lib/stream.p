@@ -21,6 +21,7 @@ import parasol:storage.File;
 import parasol:storage.Seek;
 import parasol:time.Time;
 import parasol:text.string16;
+import parasol:exception.BoundsException;
 import parasol:exception.IllegalArgumentException;
 import parasol:exception.IllegalOperationException;
 
@@ -655,7 +656,85 @@ public class Writer {
 		}
 		return totalWritten;
 	}
-
+	/**
+	 * Write a formatted string
+	 *
+	 * The method writes characters from the format string to this Writer object until
+	 * a percent character is encountered (%). The percent character introduces a formatting
+	 * specifier which will describe a formatting operation that depends on zero or more
+	 * arguments. Copying text to the Writer object resumes after the formatting specifier and
+	 * continues copying text and processing formatting specifiers until the end of the format
+	 * string is reached.
+	 * 
+	 * A formatting specifier uses the following syntax:
+	 *
+	 *  {@code %[argument_index$][flags][width][.precision]conversion}
+	 *
+	 * <b>Argument Index</b>
+	 *
+	 * The argument index may be the following:
+	 *
+	 *<ul>
+	 *  <li> a sequence of decimal digits. The specific argument corresponding to
+	 *       that decimal value will be formatted. If the number is outside the
+	 *		 range of the arguments array, a BoundsException will be thrown.
+	 *  <li> A less-than character (\<). If present on the first formatting specifier. an
+	 *       IllegalArgumentException is thrown. On subsequent formatting specifiers, this
+	 *		 designates that the same arguments value should be used as was used in the prior
+	 *		 formatting specifier.
+	 *</ul>
+	 *
+	 * <b>Flags</b>
+	 *
+	 * Flags may be a sequence of any or all of the following characters in any order.
+	 *
+	 *<table>
+	 *  <tr>
+	 *    <td><b>0</b></td>
+	 *		  <td>Zero-fill. Numeric values should pad using a leading zero digit.
+	 * 			  The default is a space character.</td>
+	 *  </tr>
+	 *    <td>(space)</td>
+	 *		  <td>Leading space for positive. Positive numeric values will be written with at
+	 *			  least a single space character before the value. The default is no sign character.</td>
+	 *  <tr>
+	 *  </tr>
+	 *    <td><b>-</b></td>
+	 *		  <td>Left-justified. The field value will be left-justified in the specified width. The
+	 * 			  default is to right-justify.</td>
+	 *  <tr>
+	 *    <td><b>+</b></td>
+	 *		  <td>Always include sign. Positive numeric values will be written with a Locale-dependent
+	 *			  positive sign character before the field value. The default is no sign character.</td>
+	 *  </tr>
+	 *  <tr>
+	 *    <td><b>#</b></td>
+	 *		  <td>Alternate form. Numeric values will be formatted in an alternate form, depending on
+	 *			  the conversion.</td>
+	 *  </tr>
+	 *  <tr>
+	 *    <td><b>,</b></td>
+	 *		  <td>Grouping separators. Large numeric values will will use a Locale-dependaent grouping separator.
+	 *			  For example, in United States locales, every three digits to the left of any decimal point are
+	 *			  separated by commas. The default is no grouping separators.</td>
+	 *  </tr>
+	 *  <tr>
+	 *    <td><b>(</b></td>
+	 *		  <td>Denote negative with parentheses. Negative numeric values will be enclosed in parenthese.
+	 *		      The default is a Locale-dependent negative sign character before the field value.</td>
+	 *  </tr>
+	 *</table>
+	 *
+	 * @param format The format string to print
+	 * @param arguments The argument list to print using the given format
+	 *
+	 * @return The number of bytes printed.
+	 *
+	 * @exception BoundsException Thrown when a formatting specifier designates an
+	 * out-of-bounds elemenet in the arguments array.
+	 * @exception IllegalArgumentExceptio Thrown when a formatting specifier is malformed
+	 * in some way. The message should provides additional detail.
+	 */
 	public int printf(string format, var... arguments) {
 		ref<international.Locale> locale;
 		int bytesWritten = 0;
@@ -727,7 +806,7 @@ public class Writer {
 								if (nextArgument > 0)
 									current = ParseState.AFTER_LT;
 								else
-									current = ParseState.ERROR;
+									throw new IllegalArgumentException("<$ on first formatting specifier");
 								break;
 								
 							default:
@@ -937,16 +1016,27 @@ public class Writer {
 								if (ivalue >= 0) {
 									if (alwaysIncludeSign || leadingSpaceForPositive)
 										actualLength++;
-								} else
+								} else {
 									nextChar++;
-								if (precision > formatted.length())
+									actualLength++;
+									int negs = 1;
+									if (negativeInParentheses) {
+										actualLength++;
+										negs = 2;
+									}
+									if (zeroPadded) {
+										if (precision < width - negs)
+											precision = width - negs;
+									}
+								}
+								if (precision > formatted.length() - nextChar)
 									actualLength += precision;
 								else
-									actualLength += formatted.length();
+									actualLength += formatted.length() - nextChar;
 
 								if (!leftJustified) {
 									while (width > actualLength) {
-										_write(' ');
+										_write(byte(zeroPadded ? '0' : ' '));
 										width--;
 										bytesWritten++;
 									}
@@ -963,9 +1053,12 @@ public class Writer {
 								} else {
 									if (locale == null)
 										locale = international.myLocale();
-									bytesWritten += write(locale.decimalStyle().negativeSign);
+									if (negativeInParentheses)
+										bytesWritten += write("(");
+									else
+										bytesWritten += write(locale.decimalStyle().negativeSign);
 								}
-								while (precision > formatted.length()) {
+								while (precision > formatted.length() - nextChar) {
 									_write('0');
 									precision--;
 									bytesWritten++;
@@ -975,8 +1068,10 @@ public class Writer {
 									nextChar++;
 									bytesWritten++;
 								}
+								if (ivalue < 0 && negativeInParentheses)
+									bytesWritten += write(")");
 								if (leftJustified) {
-									while (width > formatted.length()) {
+									while (width > actualLength) {
 										_write(' ');
 										width--;
 										bytesWritten++;

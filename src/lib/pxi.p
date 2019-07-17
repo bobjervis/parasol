@@ -13,6 +13,9 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * - This namespace is for internal compiler implementation and is not intended for end-user services.
+ */
 namespace parasol:pxi;
 
 import parasol:storage;

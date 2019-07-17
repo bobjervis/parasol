@@ -110,6 +110,7 @@ run(filename: printf_5_ops.p, expectedOutput: "365")
 run(filename: printf_6_ops.p, expectedOutput: "506\n")
 run(filename: printf_7_ops.p)
 run(filename: printf_8_ops.p)
+run(filename: printf_9_ops.p)
 
 run(filename: memory_test.p)
 
