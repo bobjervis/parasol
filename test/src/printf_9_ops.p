@@ -63,3 +63,7 @@ f("space negative", "-573412", "% d", negative);
 f("space positive", " 948012034", "% d", positive);
 f("space zero", " 0", "% d", zero);
 
+f("width comma negative", "     -573,412", "%,13d", negative);
+f("width comma positive", "  948,012,034", "%,13d", positive);
+f("width comma zero", "            0", "%,13d", zero);
+

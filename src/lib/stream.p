@@ -1034,6 +1034,11 @@ public class Writer {
 								else
 									actualLength += formatted.length() - nextChar;
 
+								if (groupingSeparators) {
+									if (locale == null)
+										locale = international.myLocale();
+									actualLength += countGrouping(formatted.length() - nextChar, locale.decimalStyle()) * locale.decimalStyle().groupSeparator.length();
+								}
 								if (!leftJustified) {
 									while (width > actualLength) {
 										_write(byte(zeroPadded ? '0' : ' '));
@@ -1058,6 +1063,11 @@ public class Writer {
 									else
 										bytesWritten += write(locale.decimalStyle().negativeSign);
 								}
+								if (groupingSeparators) {
+									formatted = insertSeparators(&formatted[nextChar], formatted.length() - nextChar, locale.decimalStyle());
+									nextChar = 0;
+								}
+								
 								while (precision > formatted.length() - nextChar) {
 									_write('0');
 									precision--;
@@ -1494,6 +1504,95 @@ public class Writer {
 		}
 		return bytesWritten;
 	}
+}
+
+private int countGrouping(int digits, ref<international.DecimalStyle> style) {
+	byte lastGrouping = 0;
+	int separators = 0;
+	for (i in style.grouping) {
+		byte b = style.grouping[i];
+		switch (b) {
+		case byte.MAX_VALUE:
+			return separators;
+
+		case 0:
+			if (lastGrouping == 0)
+				return 0;
+			else
+				return separators + (digits - 1) / lastGrouping;
+
+		default:
+			if (b >= digits)
+				return separators;
+			digits -= b;
+			lastGrouping = b;
+			separators++;
+		}
+	}
+	return separators;
+}
+
+private string insertSeparators(pointer<byte> digits, int length, ref<international.DecimalStyle> style) {
+	byte lastGrouping = 0;
+	int separatedDigits = 0;
+	int remaining = length;
+	pointer<byte> grouping = &style.grouping[style.grouping.length() - 1];
+	string result;
+	for (i in style.grouping) {
+		if (style.grouping[i] != byte.MAX_VALUE)
+			separatedDigits += style.grouping[i];
+		if (separatedDigits >= length) {
+			// This pathway handles the case where the digit string is not longer than the sum of the separations listed.
+			separatedDigits -= style.grouping[i];
+
+			while (separatedDigits < length) {
+				result.append(*digits);
+				digits++;
+				length--;
+			}
+			while (i > 0) {
+				result.append(style.groupSeparator);
+				i--;
+				int g = style.grouping[i];
+				result.append(digits, g);
+				digits += g;
+			}
+			return result;
+		}
+	}
+	if (*grouping == 0) {
+		if (grouping == &style.grouping[0])
+			return string(digits, length);			// This is the weird case where a grouping string is just a 0 byte.
+		// This is the case where the last grouping is repeated, like US locales do.
+		grouping--;
+		int rem = (length - separatedDigits) % *grouping;
+		if (rem == 0)
+			rem = *grouping;
+		result.append(digits, rem);
+		digits += rem;
+		length -= rem;
+		while (separatedDigits < length) {
+			result.append(style.groupSeparator);
+			result.append(digits, *grouping);
+			digits += *grouping;
+			length -= *grouping;
+		}
+	} else {
+		if (grouping == &style.grouping[0])
+			return string(digits, length);			// This is the weird case where a grouping string is just a MAX_VALUE byte.
+		// This is the case where separations end. We also know separatedDigits < length.
+		int rem = length - separatedDigits;
+		result.append(digits, rem);
+		digits += rem;
+		length -= rem;
+	}
+	while (grouping >= &style.grouping[0]) {
+		result.append(style.groupSeparator);
+		result.append(digits, *grouping);
+		digits += *grouping;
+		grouping--;
+	}
+	return result;
 }
 
 public class BufferWriter extends Writer {

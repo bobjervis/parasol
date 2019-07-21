@@ -18,7 +18,9 @@ namespace parasol:types;
 import parasol:time;
 
 public class short {
+	@Constant
 	public static short MIN_VALUE = 0xffffffffffff8000;
+	@Constant
 	public static short MAX_VALUE = 0x7fff;
 
 //	public short() {
@@ -55,7 +57,9 @@ public class short {
 }
 
 public class int {
+	@Constant
 	public static int MIN_VALUE = 0xffffffff80000000;
+	@Constant
 	public static int MAX_VALUE = 0x7fffffff;
 
 //	public int() {
@@ -292,7 +296,9 @@ public class int {
 }
 
 public class long {
+	@Constant
 	public static long MIN_VALUE = 0x8000000000000000;
+	@Constant
 	public static long MAX_VALUE = 0x7fffffffffffffff;
 	
 //	public long() {
@@ -439,7 +445,9 @@ public class long {
 }
 
 public class byte {
+	@Constant
 	public static byte MIN_VALUE = 0;
+	@Constant
 	public static byte MAX_VALUE = 255;
 	
 //	public byte() {
@@ -760,6 +768,7 @@ public class byte {
 }
 
 public class char {
+	@Constant
 	public static char MAX_VALUE = 65535;
 	
 //	public char() {

@@ -164,12 +164,16 @@ class ClasslikeScope extends Scope {
 		_defaultConstructorChecked = true;
 		if (constructors().length() == 0) {
 			if (hasBaseConstructor(compileContext) || hasMembersNeedingInitialization(compileContext)) {
+				ref<Scope> baseClass = base(compileContext);
+
+				if (baseClass != null && baseClass.defaultConstructor() == null)
+					return;
+
 				ref<ParameterScope> functionScope = compileContext.arena().createParameterScope(this, null, ParameterScope.Kind.DEFAULT_CONSTRUCTOR);
 //				printf("scope = %p ", this);
 //				printf("functionScope = %p\n---\n", functionScope);
 				defineConstructor(functionScope, compileContext.pool());
 				if (compileContext.arena().verbose) {
-					ref<Scope> baseClass = base(compileContext);
 					if (baseClass != null)
 						printf("current %p tree = %p base constructors %d constructors %d\n", compileContext.current(), compileContext.tree(), baseClass.constructors().length(), constructors().length());
 					else
@@ -205,6 +209,17 @@ class ClasslikeScope extends Scope {
 			return true;
 	}
 	
+	public boolean requiresConstruction(ref<CompileContext> compileContext) {
+		if (constructors().length() > 0)
+			return true;
+		if (hasMembersNeedingInitialization(compileContext))
+			return true;
+		ref<Scope> baseClass = base(compileContext);
+		if (baseClass == null)
+			return false;
+		return baseClass.requiresConstruction(compileContext);
+	}
+
 	private boolean hasMembersNeedingInitialization(ref<CompileContext> compileContext) {
 		for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
 			ref<Symbol> sym = i.get();
@@ -992,7 +1007,7 @@ public class ParameterScope extends Scope {
 					return;
 			}
 		}
-		if (base.constructors().length() > 0 && base.defaultConstructor() == null)
+		if (base.defaultConstructor() == null && base.requiresConstruction(compileContext))
 			_definition.add(MessageId.NO_DEFAULT_CONSTRUCTOR, compileContext.pool());
 	}
 }
@@ -1261,8 +1276,6 @@ public class Scope {
 			ref<Symbol> sym = i.get();
 			sym.assignType(compileContext);
 		}
-		for (i in _constructors)
-			_constructors[i].verifyBaseClassConstructorChain(compileContext);
 	}
 
 	void print(int indent, boolean printChildren) {
@@ -1640,6 +1653,9 @@ public class Scope {
 	}
 
 	public void configureDefaultConstructors(ref<CompileContext> compileContext) {
+		for (i in _constructors)
+			_constructors[i].verifyBaseClassConstructorChain(compileContext);
+
 		if (_symbols.size() == 0)
 			return;
 		if (_definition == null)
@@ -1982,6 +1998,10 @@ public class Scope {
 		return null;
 	}
 	
+	public boolean requiresConstruction(ref<CompileContext> compileContext) {
+		return false;
+	}
+
 	public StorageClass storageClass() {
 		return _storageClass;
 	}
