@@ -844,7 +844,7 @@ private abstract void exposeException(ref<Exception> e);
 @Linux("libparasol.so.1", "registerHardwareExceptionHandler")
 @Windows("parasol.dll", "registerHardwareExceptionHandler")
 public abstract void registerHardwareExceptionHandler(void handler(ref<HardwareException> info));
-/**
+/** @ignore
  * This function is a support routine the Parasol compiler uses when running a compiled image.
  *
  * After calling the image entry point and returning, the compiler code calls this function to

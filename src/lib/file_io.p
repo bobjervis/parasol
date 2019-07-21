@@ -24,7 +24,7 @@ import parasol:runtime;
 import parasol:process;
 import parasol:stream.EOF;
 /**
- * DO NOT CALL THIS FUNCTION
+ * @ignore DO NOT CALL THIS FUNCTION
  *
  * This is an internal support function called early in the runtime startup. 
  * It is not intended for general use and calling it can cause memory leaks and loss
