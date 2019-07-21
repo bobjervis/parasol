@@ -14,7 +14,7 @@
    limitations under the License.
  */
 /**
- * - This namespace is for internal compiler implementation and is not intended for end-user services.
+ * @ignore - This namespace is for internal compiler implementation and is not intended for end-user services.
  */
 namespace parasol:pxi;
 

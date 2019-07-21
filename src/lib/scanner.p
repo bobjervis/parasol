@@ -995,6 +995,7 @@ public class Scanner {
 			_lines.append(location);
 			c = getc();
 		}
+		ungetc();
 		for (;;) {
 			location = cursor();
 			c = getc();

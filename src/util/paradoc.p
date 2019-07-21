@@ -271,10 +271,13 @@ boolean collectNamespacesToDocument() {
 				else {
 					nm = f.namespaceSymbol();
 					nameMap[nameSpace] = nm;
-					Names item;
-					item.name = nameSpace;
-					item.symbol = nm;
-					names.append(item);
+					ref<Doclet> doclet = nm.doclet();
+					if (doclet == null || !doclet.ignore) {
+						Names item;
+						item.name = nameSpace;
+						item.symbol = nm;
+						names.append(item);
+					}
 				}
 			}
 		}
@@ -343,6 +346,8 @@ void indexTypesInScope(ref<Scope> symbols, string dirName, string baseName) {
 		if (sym.class == PlainSymbol) {
 			if (sym.visibility() != Operator.PUBLIC)
 				continue;
+			if (sym.doclet() != null && sym.doclet().ignore)
+				continue;
 			ref<Type> type = sym.type();
 			switch (type.family()) {
 			case CLASS:
@@ -358,6 +363,8 @@ void indexTypesInScope(ref<Scope> symbols, string dirName, string baseName) {
 				ref<OverloadInstance> oi = (*instances)[j];
 
 				if (oi.visibility() != Operator.PUBLIC)
+					continue;
+				if (oi.doclet() != null && oi.doclet().ignore)
 					continue;
 				if (o.kind() != Operator.FUNCTION)
 					classes.append(oi);
@@ -704,6 +711,8 @@ void generateScopeContents(ref<Scope> scope, ref<Writer> output, string dirName,
 		ref<Symbol> sym = (*symMap)[i];
 
 		if (sym.class == PlainSymbol) {
+			if (sym.doclet() != null && sym.doclet().ignore)
+				continue;
 			ref<Type> type = sym.type();
 			if (type == null)
 				continue;
@@ -746,6 +755,8 @@ void generateScopeContents(ref<Scope> scope, ref<Writer> output, string dirName,
 			for (j in *instances) {
 				ref<OverloadInstance> oi = (*instances)[j];
 
+				if (oi.doclet() != null && oi.doclet().ignore)
+					continue;
 				if (!isInterface && oi.visibility() != Operator.PUBLIC && oi.visibility() != Operator.PROTECTED)
 					continue;
 				if (o.kind() == Operator.FUNCTION)
