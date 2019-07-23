@@ -532,7 +532,7 @@ public class Process extends ProcessVolatileData {
 					// Okay, lock it down now.
 					if (_user != 0) {
 						if (linux.setuid(_user) != 0) {
-							stderr.printf("setreuid to %d FAILED\n", _user);
+							stderr.printf("setuid to %d FAILED\n", _user);
 							linux._exit(-15);
 						}
 					}
@@ -549,7 +549,15 @@ public class Process extends ProcessVolatileData {
 						linux.close(i);
 
 					if (workingDirectory != null) {
-						linux.chdir(workingDirectory.c_str());
+						int result = linux.chdir(workingDirectory.c_str());
+						if (_stdioHandling == StdioHandling.IGNORE) {
+							if (result != 0) {
+								string s;
+
+								s.printf("chdir %s error: %s\n", workingDirectory, linux.strerror(linux.errno()));
+								linux.write(1, &s[0], s.length());
+							}
+						}
 					}
 					if (environ != null) {
 						for (string[string].iterator i = environ.begin(); i.hasNext(); i.next())
