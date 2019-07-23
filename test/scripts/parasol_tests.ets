@@ -269,6 +269,9 @@ compile(){ "int(address) func; void(address) f = void(address)(func);" }
 
 compile() { "class a = int; a b; int c; b = c;" }
 
+// Complex extend-chains can introduce bogus constructor chains.
+compile(expect: fail) { "class A { A(int x) {} } class B extends A {} class C extends B { C() {} }" }
+
 // You should be able to override the root scope definition of vector with 'the same' type as an import.
 compile() { "import parasol:types.vector; vector<int, int> x; x.resize(3);" }
 
