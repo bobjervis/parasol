@@ -13,28 +13,37 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * Provides facilities for manipulating the Parasol language runtime.
+ */
 namespace parasol:runtime;
 
+import native:C;
 import native:linux;
 import native:windows;
 import parasol:compiler.FileStat;
 import parasol:compiler.Location;
 import parasol:x86_64.X86_64SectionHeader;
 
-/*
+/**
+ * The Parasol Runtime version string.
+ *
+ *{@code &lt;Major Release&gt;.&lt;Minor Release&gt;.&lt;Fix Release&gt;}
+ *
  * Major Release: Incremented when a breaking change is released
  * Minor Feature Release: Incremented when significant new features
  * are released.
  * Fix Release: Incremented when bug fixes are released.
  *
- * Note: Since Major Release == 0 means this is 'unreleased' and any public API can change at any moment.
+ * Note: Major Release == 0 means this is 'unreleased' and any public API can change at any moment.
  */
 public string RUNTIME_VERSION = "0.1.0";
 
-/*
- * This is a special variable used to control compile-time conditional compilation. For now, this is hacked in
- * to the compiler optimization logic to coomunicate precisely which compile target was selected to build this
- * runtime.
+/**
+ * This is a special variable used to control compile-time conditional compilation.
+ *
+ * For now, this is hacked in to the compiler optimization logic to coomunicate precisely which compile
+ * target was selected to build this runtime.
  */
 @CompileTarget
 public Target compileTarget;
@@ -48,11 +57,11 @@ public enum Target {
 	 */
 	ERROR,
 	/**
-	 * RESERVED - DO NOT USE
+	 * @ignore RESERVED - DO NOT USE
 	 */
 	NOT_USED_1,
 	/**
-	 * RESERVED - DO NOT USE
+	 * @ignore RESERVED - DO NOT USE
 	 */
 	NOT_USED_2,
 	/**
@@ -68,25 +77,26 @@ public enum Target {
 	 */
 	MAX_TARGET
 }
-
+/** @ignore */
 @Linux("libparasol.so.1", "eval")
 @Windows("parasol.dll", "eval")
 public abstract int eval(ref<X86_64SectionHeader> header, address image, long runtimeFlags, pointer<pointer<byte>> args, int argsCount);
-
+/** @ignore */
 @Linux("libparasol.so.1", "supportedTarget")
 @Windows("parasol.dll", "supportedTarget")
 public abstract int supportedTarget(int index);
-
+/** @ignore */
 @Linux("libparasol.so.1", "lowCodeAddress")
 @Windows("parasol.dll", "lowCodeAddress")
 public abstract pointer<byte> lowCodeAddress();
+/** @ignore */
 @Linux("libparasol.so.1", "highCodeAddress")
 @Windows("parasol.dll", "highCodeAddress")
 public abstract pointer<byte> highCodeAddress();
+/** @ignore */
 @Linux("libparasol.so.1", "stackTop")
 @Windows("parasol.dll", "stackTop")
 public abstract address stackTop();
-
 /**
  * This method returns the byte address of the next instruction after the call to the currently running function.
  *
@@ -104,11 +114,17 @@ public abstract address returnAddress();
 @Linux("libparasol.so.1", "framePointer")
 @Windows("parasol.dll", "framePointer")
 public abstract address framePointer();
-
+/** @ignore */
 @Linux("libparasol.so.1", "getRuntimeFlags")
 @Windows("parasol.dll", "getRuntimeFlags")
 public abstract long getRuntimeFlags();
-
+/**
+ * Allocate a large page-aligned region of storage, outside the Heap.
+ *
+ * @param length The size of the region in bytes.
+ *
+ * @return The address of the allocated region, or null if the region could not be allocated.
+ */
 public address allocateRegion(long length) {
 	address v;
 	if (compileTarget == Target.X86_64_WIN) {
@@ -124,7 +140,14 @@ public address allocateRegion(long length) {
 		return null;
 	return v;
 }
-
+/**
+ * Make a region of storage executable.
+ *
+ * @param location The starting address to be marked.
+ * @param length The number of bytes to be marked as executable.
+ *
+ * @return true if the region could be marked, false otherwise.
+ */
 public boolean makeRegionExecutable(address location, long length) {
 	if (compileTarget == Target.X86_64_WIN) {
 		unsigned oldProtection;
@@ -135,23 +158,38 @@ public boolean makeRegionExecutable(address location, long length) {
 		return linux.mprotect(location, length, linux.PROT_EXEC|linux.PROT_READ|linux.PROT_WRITE) == 0;
 	return false;
 }
-
+/**
+ * Free a region allocated via {@link allocateRegion}
+ *
+ * @param region The address of a region returned from a prior call to {@link allocateRegion}.
+ * @param length The length supplied with the original call to {@link allocateRegion).
+ */
+public void freeRegion(address region, long length) {
+	if (compileTarget == Target.X86_64_WIN) {
+		windows.VirtualFree(region, length, windows.MEM_RELEASE);
+	} else if (compileTarget == Target.X86_64_LNX) {
+		C.free(region);
+	}
+}
+/** @ignore */
 public class SourceLocation {
 	public ref<FileStat>	file;			// Source file containing this location
 	public Location			location;		// Source byte offset
 	public int				offset;			// Code location
 }
-
+/** @ignore */
 @Linux("libparasol.so.1", "setSourceLocations")
 @Windows("parasol.dll", "setSourceLocations")
 public abstract void setSourceLocations(address location, int count);
+/** @ignore */
 @Linux("libparasol.so.1", "sourceLocations")
 @Windows("parasol.dll", "sourceLocations")
 public abstract pointer<SourceLocation> sourceLocations();
+/** @ignore */
 @Linux("libparasol.so.1", "sourceLocationsCount")
 @Windows("parasol.dll", "sourceLocationsCount")
 public abstract int sourceLocationsCount();
-
+/** @ignore */
 public ref<SourceLocation> getSourceLocation(address ip, boolean locationIsExact) {
 	int lowCode = int(lowCodeAddress());
 	int offset = int(ip) - lowCode;

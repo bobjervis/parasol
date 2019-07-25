@@ -256,6 +256,8 @@ public class SECURITY_ATTRIBUTES {
 
 public unsigned MEM_COMMIT = 0x00001000;
 public unsigned MEM_RESERVE = 0x00002000;
+public unsigned MEM_DECOMMIT = 0x00004000;
+public unsigned MEM_RELEASE = 0x00008000;
 
 public unsigned PAGE_EXECUTE = 0x10;
 public unsigned PAGE_EXECUTE_READ = 0x20;
@@ -266,6 +268,8 @@ public unsigned PAGE_READWRITE = 0x04;
 public abstract address VirtualAlloc(address lpAddress, long sz, unsigned flAllocationType, unsigned flProtect);
 @Windows("kernel32.dll", "VirtualProtect")
 public abstract int VirtualProtect(address lpAddress, long sz, unsigned flNewProtect, ref<unsigned> lpflOldProtect);
+@Windows("kernel32.dll", "VirtualFree")
+public abstract BOOL VirtualFree(address lpAddress, long sz, unsigned dwFreeType);
 
 public class WNDCLASSEX {
 	public unsigned cbSize;

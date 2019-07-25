@@ -13,27 +13,76 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * Provides facilities for using ODBC to interact with SQL databases.
+ *
+ * You start your interaction with ODBC by creating an instance of an {@link Environment}
+ * object.
+ */
 namespace parasol:sql;
 
 import parasol:log;
 import parasol:time;
 
 private ref<log.Logger> logger = log.getLogger("parasol.sql");
-
+/**
+ * The ODBC Version to use.
+ */
 public enum ODBCVersion {
+	/**
+	 * This version shoulld only be used for backward compaticility with older drivers.
+	 */
 	V2,
+	/**
+	 * This is the preferred version to use.
+	 */
 	V3,
 }
-
+/**
+ * Specifies the type of connection pooling to use.
+ */
 public enum ConnectionPooling {
-	OFF,
-	ONE_PER_DRIVER,
-	ONE_PER_ENVIRONMENT,
-}
+	/**
+	 * Do not use connection pooling.
+	 */
+	OFF(SQL_CP_OFF),
+	/**
+	 * Use one connection per driver.
+	 */
+	ONE_PER_DRIVER(SQL_CP_ONE_PER_DRIVER),
+	/**
+	 * Use one connection per environment.
+	 */
+	ONE_PER_ENVIRONMENT(SQL_CP_ONE_PER_HENV),
+	;
 
+	long _pooling;
+
+	ConnectionPooling(long p) {
+		_pooling = p;
+	}
+
+	address pooling() {
+		return address(_pooling);
+	}
+}
+/**
+ * A configuration object that is used to obtain database connections.
+ *
+ * The configuration information contained in the environment are:
+ *
+ *<ul>
+ *  <li> Connection Pooling. Whether and how to pool connections.
+ *  <li> ODBC Version. Used to select drivers and protocol versions.
+ *</ul>
+ */
 public class Environment {
 	private SQLHENV _environment;
-
+	/**
+	 * Create a new ODBC environment.
+	 *
+	 * The new environment is set to use ODBC version 3.
+	 */
 	public Environment() {
 		SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &_environment);
 		setODBCVersion(ODBCVersion.V3);
@@ -42,33 +91,49 @@ public class Environment {
 	~Environment() {
 		SQLFreeHandle(SQL_HANDLE_ENV, _environment);
 	}
-
+	/**
+	 * Get a new datbase connection.
+	 *
+	 * @return A reference to a database connection object, or null is a connection could not be obtained.
+	 */
 	public ref<DBConnection> getDBConnection() {
 		SQLHDBC dbc;
 		SQLAllocHandle(SQL_HANDLE_DBC, _environment, &dbc);
 		return new DBConnection(dbc);
 	}
-
+	/**
+	 * Set connection pooling parameters.
+	 *
+	 * If this operation failed because of strictMatch, the state of the connection pooling type may have
+ 	 * been changed.
+	 *
+	 * @param pooling The type of connection pooling to use.
+	 * @param strictMatch If true, is strict matching on pooled connections, if false, use relaxed matching.
+	 *
+	 * @return true if the operation succeeded and the parameters have been set, false if the operation failed.
+	 */
 	public boolean setConnnectionPooling(ConnectionPooling pooling, boolean strictMatch) {
-		long p;
-
-		switch (pooling) {
-		case OFF:					p = SQL_CP_OFF;					break;
-		case ONE_PER_DRIVER:		p = SQL_CP_ONE_PER_DRIVER;		break;
-		case ONE_PER_ENVIRONMENT:	p = SQL_CP_ONE_PER_HENV;		break;
-		}
-		if (!SQL_SUCCEEDED(SQLSetEnvAttr(_environment, SQL_ATTR_CONNECTION_POOLING, address(p), 0)))
+		if (!SQL_SUCCEEDED(SQLSetEnvAttr(_environment, SQL_ATTR_CONNECTION_POOLING, pooling.pooling(), 0)))
 			return false;
 		return SQL_SUCCEEDED(SQLSetEnvAttr(_environment, SQL_ATTR_CP_MATCH, 
 								address(strictMatch ? SQL_CP_STRICT_MATCH : SQL_CP_RELAXED_MATCH), 0));
 	}
-
+	/**
+	 * Set the ODBC Version
+	 *
+	 * @param version The new version to use.
+	 *
+	 * @return true if the operation succeeded, false otherwise.
+	 */
 	public boolean setODBCVersion(ODBCVersion version) {
 		return SQL_SUCCEEDED(SQLSetEnvAttr(_environment, SQL_ATTR_ODBC_VERSION, 
 								address(version == ODBCVersion.V2 ? SQL_OV_ODBC2 : SQL_OV_ODBC3), 0));
 	}
 	/**
 	 * Collects the SQL diagnostic record information.
+	 *
+	 * This information can be extracted to obtain a more detailed explanation of the cause of an 
+	 * operation's failure.
 	 *
 	 * @return The SQLSTATE string.
 	 * @return The numeric native error code.
@@ -93,12 +158,41 @@ public class Environment {
 }
 
 public enum DriverCompletion {
-	PROMPT,								// prompt even if the connection string is correct and has enough information to connect
-	COMPLETE,							// prompt if the connection string is incorrect or incomplete
-	COMPLETE_REQUIRED,					// prompt if the connection string is incorrect or incomplete, only allow required info to be entered
-	NOPROMPT,							// never prompt
-}
+	/**
+	 * prompt even if the connection string is correct and has enough information to connect
+	 */
+	PROMPT(SQL_DRIVER_PROMPT),
+	/**
+	 * prompt if the connection string is incorrect or incomplete
+	 */
+	COMPLETE(SQL_DRIVER_COMPLETE),
+	/**
+	 * prompt if the connection string is incorrect or incomplete, only allow required info to be entered
+	 */
+	COMPLETE_REQUIRED(SQL_DRIVER_COMPLETE_REQUIRED),
+	/**
+	 * never prompt
+	 */
+	NOPROMPT(SQL_DRIVER_NOPROMPT),
+	;
 
+	SQLUSMALLINT _completionCode;
+
+	DriverCompletion(SQLUSMALLINT completionCode) {
+		completionCode = _completionCode;
+	}
+
+	SQLUSMALLINT completionCode() {
+		return _completionCode;
+	}
+}
+/**
+ * A Database Connection
+ *
+ * A series of queries and modification statements can be issued to a single database server
+ * through one connection. Because database connections consume valuable resources in a server,
+ * connections should be dropped (the object should be deleted) when not in use.
+ */
 public class DBConnection {
 	private SQLHDBC _connection;
 
@@ -136,17 +230,9 @@ public class DBConnection {
 		string outstr;
 		outstr.resize(1024);
 		SQLSMALLINT outstrlen;
-		SQLUSMALLINT completionCode;
-
-		switch (completion) {
-		case COMPLETE:			completionCode = SQL_DRIVER_COMPLETE;			break;
-		case PROMPT:			completionCode = SQL_DRIVER_PROMPT;				break;
-		case NOPROMPT:			completionCode = SQL_DRIVER_NOPROMPT;			break;
-		case COMPLETE_REQUIRED:	completionCode = SQL_DRIVER_COMPLETE_REQUIRED;	break;
-		}
 	
 		SQLRETURN ret = SQLDriverConnect(_connection, null, url.c_str(), SQL_NTS, &outstr[0], SQLSMALLINT(outstr.length()), 
-											&outstrlen, completionCode);
+											&outstrlen, completion.completionCode());
 		if (SQL_SUCCEEDED(ret)) {
 			outstr.resize(outstrlen);
 //			printf("Resulting connection string is '%s'\n", outstr);
@@ -185,12 +271,20 @@ public class DBConnection {
 		messageText.resize(actual);
 		return sqlstate, nativeError, messageText;
 	}
-
+	/**
+	 * Commit a transaction.
+	 *
+	 * @return true if the transaction was committed.
+	 */
 	public boolean commit() {
 		SQLRETURN ret = SQLEndTran(SQL_HANDLE_DBC, _connection, SQL_COMMIT);
 		return SQL_SUCCEEDED(ret);	
 	}
-
+	/**
+	 * Roll back a transaction
+	 *
+	 * @return true if the transaction was rolled back.
+	 */
 	public boolean rollback() {
 		SQLRETURN ret = SQLEndTran(SQL_HANDLE_DBC, _connection, SQL_ROLLBACK);
 		return SQL_SUCCEEDED(ret);	
@@ -198,98 +292,60 @@ public class DBConnection {
 }
 
 public enum FieldIdentifier {
-	COUNT,
-	TYPE,
-	LENGTH,
-	OCTET_LENGTH_PTR,
-	PRECISION,
-	SCALE,
-	DATETIME_INTERVAL_CODE,
-	NULLABLE,
-	INDICATOR_PTR,
-	DATA_PTR,
-	NAME,
-	UNNAMED,
-	OCTET_LENGTH,
-	ALLOC_TYPE,
-	ARRAY_SIZE,
-	ARRAY_STATUS_PTR,
-	AUTO_UNIQUE_VALUE,
-	BASE_COLUMN_NAME,
-	BASE_TABLE_NAME,
-	BIND_OFFSET_PTR,
-	BIND_TYPE,
-	CASE_SENSITIVE,
-	CATALOG_NAME,
-	CONCISE_TYPE,
-	DATETIME_INTERVAL_PRECISION,
-	DISPLAY_SIZE,
-	FIXED_PREC_SCALE,
-	LABEL,
-	LITERAL_PREFIX,
-	LITERAL_SUFFIX,
-	LOCAL_TYPE_NAME,
-	MAXIMUM_SCALE,
-	MINIMUM_SCALE,
-	NUM_PREC_RADIX,
-	PARAMETER_TYPE,
-	ROWS_PROCESSED_PTR,
-	ROWVER,
-	SCHEMA_NAME,
-	SEARCHABLE,
-	TYPE_NAME,
-	TABLE_NAME,
-	UNSIGNED,
-	UPDATABLE,
-}
+	COUNT(SQL_DESC_COUNT),
+	TYPE(SQL_DESC_TYPE),
+	LENGTH(SQL_DESC_LENGTH),
+	OCTET_LENGTH_PTR(SQL_DESC_OCTET_LENGTH_PTR),
+	PRECISION(SQL_DESC_PRECISION),
+	SCALE(SQL_DESC_SCALE),
+	DATETIME_INTERVAL_CODE(SQL_DESC_DATETIME_INTERVAL_CODE),
+	NULLABLE(SQL_DESC_NULLABLE),
+	INDICATOR_PTR(SQL_DESC_INDICATOR_PTR),
+	DATA_PTR(SQL_DESC_DATA_PTR),
+	NAME(SQL_DESC_NAME),
+	UNNAMED(SQL_DESC_UNNAMED),
+	OCTET_LENGTH(SQL_DESC_OCTET_LENGTH),
+	ALLOC_TYPE(SQL_DESC_ALLOC_TYPE),
+	ARRAY_SIZE(SQL_DESC_ARRAY_SIZE),
+	ARRAY_STATUS_PTR(SQL_DESC_ARRAY_STATUS_PTR),
+	AUTO_UNIQUE_VALUE(SQL_DESC_AUTO_UNIQUE_VALUE),
+	BASE_COLUMN_NAME(SQL_DESC_BASE_COLUMN_NAME),
+	BASE_TABLE_NAME(SQL_DESC_BASE_TABLE_NAME),
+	BIND_OFFSET_PTR(SQL_DESC_BIND_OFFSET_PTR),
+	BIND_TYPE(SQL_DESC_BIND_TYPE),
+	CASE_SENSITIVE(SQL_DESC_CASE_SENSITIVE),
+	CATALOG_NAME(SQL_DESC_CATALOG_NAME),
+	CONCISE_TYPE(SQL_DESC_CONCISE_TYPE),
+	DATETIME_INTERVAL_PRECISION(SQL_DESC_DATETIME_INTERVAL_PRECISION),
+	DISPLAY_SIZE(SQL_DESC_DISPLAY_SIZE),
+	FIXED_PREC_SCALE(SQL_DESC_FIXED_PREC_SCALE),
+	LABEL(SQL_DESC_LABEL),
+	LITERAL_PREFIX(SQL_DESC_LITERAL_PREFIX),
+	LITERAL_SUFFIX(SQL_DESC_LITERAL_SUFFIX),
+	LOCAL_TYPE_NAME(SQL_DESC_LOCAL_TYPE_NAME),
+	MAXIMUM_SCALE(SQL_DESC_MAXIMUM_SCALE),
+	MINIMUM_SCALE(SQL_DESC_MINIMUM_SCALE),
+	NUM_PREC_RADIX(SQL_DESC_NUM_PREC_RADIX),
+	PARAMETER_TYPE(SQL_DESC_PARAMETER_TYPE),
+	ROWS_PROCESSED_PTR(SQL_DESC_ROWS_PROCESSED_PTR),
+	ROWVER(SQL_DESC_ROWVER),
+	SCHEMA_NAME(SQL_DESC_SCHEMA_NAME),
+	SEARCHABLE(SQL_DESC_SEARCHABLE),
+	TYPE_NAME(SQL_DESC_TYPE_NAME),
+	TABLE_NAME(SQL_DESC_TABLE_NAME),
+	UNSIGNED(SQL_DESC_UNSIGNED),
+	UPDATABLE(SQL_DESC_UPDATABLE),
+	;
 
-private SQLUSMALLINT sqlField(FieldIdentifier fi) {
-	switch (fi) {
-	case COUNT: return SQL_DESC_COUNT;
-	case TYPE: return SQL_DESC_TYPE;
-	case LENGTH: return SQL_DESC_LENGTH;
-	case OCTET_LENGTH_PTR: return SQL_DESC_OCTET_LENGTH_PTR;
-	case PRECISION: return SQL_DESC_PRECISION;
-	case SCALE: return SQL_DESC_SCALE;
-	case DATETIME_INTERVAL_CODE: return SQL_DESC_DATETIME_INTERVAL_CODE;
-	case NULLABLE: return SQL_DESC_NULLABLE;
-	case INDICATOR_PTR: return SQL_DESC_INDICATOR_PTR;
-	case DATA_PTR: return SQL_DESC_DATA_PTR;
-	case NAME: return SQL_DESC_NAME;
-	case UNNAMED: return SQL_DESC_UNNAMED;
-	case OCTET_LENGTH: return SQL_DESC_OCTET_LENGTH;
-	case ALLOC_TYPE: return SQL_DESC_ALLOC_TYPE;
-	case ARRAY_SIZE: return SQL_DESC_ARRAY_SIZE;
-	case ARRAY_STATUS_PTR: return SQL_DESC_ARRAY_STATUS_PTR;
-	case AUTO_UNIQUE_VALUE: return SQL_DESC_AUTO_UNIQUE_VALUE;
-	case BASE_COLUMN_NAME: return SQL_DESC_BASE_COLUMN_NAME;
-	case BASE_TABLE_NAME: return SQL_DESC_BASE_TABLE_NAME;
-	case BIND_OFFSET_PTR: return SQL_DESC_BIND_OFFSET_PTR;
-	case BIND_TYPE: return SQL_DESC_BIND_TYPE;
-	case CASE_SENSITIVE: return SQL_DESC_CASE_SENSITIVE;
-	case CATALOG_NAME: return SQL_DESC_CATALOG_NAME;
-	case CONCISE_TYPE: return SQL_DESC_CONCISE_TYPE;
-	case DATETIME_INTERVAL_PRECISION: return SQL_DESC_DATETIME_INTERVAL_PRECISION;
-	case DISPLAY_SIZE: return SQL_DESC_DISPLAY_SIZE;
-	case FIXED_PREC_SCALE: return SQL_DESC_FIXED_PREC_SCALE;
-	case LABEL: return SQL_DESC_LABEL;
-	case LITERAL_PREFIX: return SQL_DESC_LITERAL_PREFIX;
-	case LITERAL_SUFFIX: return SQL_DESC_LITERAL_SUFFIX;
-	case LOCAL_TYPE_NAME: return SQL_DESC_LOCAL_TYPE_NAME;
-	case MAXIMUM_SCALE: return SQL_DESC_MAXIMUM_SCALE;
-	case MINIMUM_SCALE: return SQL_DESC_MINIMUM_SCALE;
-	case NUM_PREC_RADIX: return SQL_DESC_NUM_PREC_RADIX;
-	case PARAMETER_TYPE: return SQL_DESC_PARAMETER_TYPE;
-	case ROWS_PROCESSED_PTR: return SQL_DESC_ROWS_PROCESSED_PTR;
-	case ROWVER: return SQL_DESC_ROWVER;
-	case SCHEMA_NAME: return SQL_DESC_SCHEMA_NAME;
-	case SEARCHABLE: return SQL_DESC_SEARCHABLE;
-	case TYPE_NAME: return SQL_DESC_TYPE_NAME;
-	case TABLE_NAME: return SQL_DESC_TABLE_NAME;
-	case UNSIGNED: return SQL_DESC_UNSIGNED;
-	case UPDATABLE: return SQL_DESC_UPDATABLE;
+	SQLUSMALLINT _sqlField;
+
+	FieldIdentifier(SQLUSMALLINT sqlField) {
+		_sqlField = sqlField;
 	}
-	return 0;
+
+	SQLUSMALLINT sqlField() {
+		return _sqlField;
+	}
 }
 
 public enum DataType {
@@ -395,7 +451,7 @@ public class Statement {
 		string buffer;
 		buffer.resize(512);
 		SQLSMALLINT slp;
-		SQLRETURN ret = SQLColAttribute(_statement, SQLUSMALLINT(column), sqlField(field), &buffer[0], SQLSMALLINT(buffer.length()), &slp, null);
+		SQLRETURN ret = SQLColAttribute(_statement, SQLUSMALLINT(column), field.sqlField(), &buffer[0], SQLSMALLINT(buffer.length()), &slp, null);
 		if (SQL_SUCCEEDED(ret)) {
 			buffer.resize(slp);
 			return buffer, true, fromSQLRETURN(ret);
@@ -408,19 +464,35 @@ public class Statement {
 		buffer.resize(512);
 		SQLSMALLINT slp;
 		SQLLEN n;
-		SQLRETURN ret = SQLColAttribute(_statement, SQLUSMALLINT(column), sqlField(field), null, 0, null, &n);
+		SQLRETURN ret = SQLColAttribute(_statement, SQLUSMALLINT(column), field.sqlField(), null, 0, null, &n);
 		if (SQL_SUCCEEDED(ret)) {
 			return n, true, fromSQLRETURN(ret);
 		} else
 			return 0, false, fromSQLRETURN(ret);
 	}
-
+	/**
+	 * Get an integer column's value from a record set.
+	 *
+	 * @param The column number.
+	 *
+	 * @return The integer value of the column.
+	 * @return true if the fetch operation succeeded, false otherwise.
+	 */
 	public long, boolean getLong(int column) {
 		long v;
 		SQLRETURN ret = SQLGetData(_statement, SQLUSMALLINT(column), SQL_C_SBIGINT, &v, v.bytes, null);
 		return v, SQL_SUCCEEDED(ret);
 	}
-
+	/**
+	 * Get a nullable integer column's value from a record set.
+	 *
+	 * @param The column number.
+	 *
+	 * @return The integer value of the column, assuming the second return value is false. If the second reutrn value
+	 * is true, then this value is undefined and should be ignored.
+	 * @return true if the value is actually NULL. If false, the column's value is the first returned object.
+	 * @return true if the fetch operation succeeded, false otherwise.
+	 */
 	public long, boolean, boolean getNullableLong(int column) {
 		long v;
 		SQLLEN indicator;
@@ -468,7 +540,7 @@ public class Statement {
 
 
 	/**
-	 * Return true if the cursor for this statement is scrollable. If so, fetchScroll can do interesting
+	 * @return true if the cursor for this statement is scrollable. If so, fetchScroll can do interesting
 	 * things, otherwise only fetchScroll FetchOrientation.NEXT (which is equivalent to fetch()) is allowed.
 	 */
 	public boolean getCursorScrollable() {
@@ -713,15 +785,15 @@ public class Timestamp {
 }
 
 public class Date {
-	short year;
-	char month;
-	char day;
+	public short year;
+	public char month;
+	public char day;
 }
 
 public class Time {
-	char hour;
-	char minute;
-	char second;
+	public char hour;
+	public char minute;
+	public char second;
 }
 
 // From here on down is the ODBC interface definition, which is mostly not exposed in favor of the more
