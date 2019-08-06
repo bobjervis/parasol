@@ -3451,15 +3451,16 @@ public class X86_64 extends X86_64AssignTemps {
 		int stackAlignment = 0;
 		for (ref<NodeList> args = call.stackArguments(); args != null; args = args.next) {
 			if (args.node.op() == Operator.ELLIPSIS_ARGUMENTS)
-				cleanup = ref<EllipsisArguments>(args.node).stackConsumed(); 
-			stackPushes += args.node.type.stackSize();
+				cleanup = ref<EllipsisArguments>(args.node).stackConsumed();
+			else
+				stackPushes += args.node.type.stackSize();
 		}
 		for (ref<NodeList> args = call.stackArguments(); args != null; args = args.next) {
 			generate(args.node, compileContext);
 			if (args.node.op() == Operator.VACATE_ARGUMENT_REGISTERS) {
 				int depth = f().r.bytesPushed();
 				stackAlignment = (stackPushes + cleanup + depth + f().stackAdjustment) & 15;
-				// Th only viable stack alignment value has to be 8, anything else is a compiler bug.
+				// The only viable stack alignment value has to be 16, anything else is a compiler bug.
 				if (stackAlignment != 0) {
 					assert(stackAlignment == 8);
 					cleanup += 8;
