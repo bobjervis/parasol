@@ -1,1 +1,2 @@
-run(filename: printf_9_ops.p)
+run(filename: exception_lock_test.p)
+
