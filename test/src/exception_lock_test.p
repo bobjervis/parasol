@@ -20,7 +20,7 @@ boolean lockedAfterThrow;
 
 try {
 
-	lock {m) {
+	lock (m) {
 
 		throw Exception("test");
 
@@ -36,8 +36,9 @@ try {
 
 	t.start(f, null);
 	t.join();
-	assert(lockedAftrThrow);
 }
+
+assert(lockedAfterThrow);
 
 void f(address arg) {
 	lock (m) {

@@ -122,7 +122,6 @@ public enum Operator {
 	LOAD,
 	STORE_V_TABLE,
 	CLASS_CLEAR,
-	LOCK,
 	// EllipsisArguments
 	ELLIPSIS_ARGUMENTS,
 	// StackArgumentAddress
@@ -169,6 +168,8 @@ public enum Operator {
 	// For
 	FOR,
 	SCOPED_FOR,
+	// Lock
+	LOCK,
 	// Block
 	BLOCK,
 	UNIT,
@@ -257,6 +258,10 @@ public class SyntaxTree {
 			_root = newBlock(Operator.UNIT, false, Location.OUT_OF_FILE);
 			_root.add(MessageId.FILE_NOT_READ, _pool);
 		}
+	}
+
+	public ref<Lock> newLock(ref<Node> lockReference, ref<Node> block, Location location) {
+		return _pool new Lock(lockReference, block, location);
 	}
 
 	public ref<Block> newBlock(Operator op, boolean inSwitch, Location location) {
@@ -424,6 +429,252 @@ public class SyntaxTree {
 	}
 }
 
+public class Lock extends Node {
+	private ref<Node> _lockReference;
+	private ref<Node> _body;
+	private ref<Node> _takeCall;
+	private ref<Node> _releaseCallInLine;
+	private ref<Node> _releaseCallException;
+	public ref<Scope> scope;
+
+	Lock(ref<Node> lockReference, ref<Node> body, Location location) {
+		super(Operator.LOCK, location);
+		_lockReference = lockReference;
+		_body = body;
+	}
+
+	public boolean traverse(Traversal t, TraverseAction func(ref<Node> n, address data), address data) {
+		TraverseAction result;
+		switch (t) {
+		case	PRE_ORDER:
+		case	IN_ORDER:
+			result = func(this, data);
+			if (result == TraverseAction.ABORT_TRAVERSAL)
+				return false;
+			if (result == TraverseAction.SKIP_CHILDREN)
+				break;
+			if (_lockReference != null && !_lockReference.traverse(t, func, data))
+				return false;
+			if (_body != null && !_body.traverse(t, func, data))
+				return false;
+			break;
+
+		case	POST_ORDER:
+			if (_lockReference != null && !_lockReference.traverse(t, func, data))
+				return false;
+			if (_body != null && !_body.traverse(t, func, data))
+				return false;
+			result = func(this, data);
+			if (result == TraverseAction.ABORT_TRAVERSAL)
+				return false;
+			break;
+
+		case	REVERSE_PRE_ORDER:
+			result = func(this, data);
+			if (result == TraverseAction.ABORT_TRAVERSAL)
+				return false;
+			if (result == TraverseAction.SKIP_CHILDREN)
+				break;
+			if (_body != null && !_body.traverse(t, func, data))
+				return false;
+			if (_lockReference != null && !_lockReference.traverse(t, func, data))
+				return false;
+			break;
+
+		case	REVERSE_IN_ORDER:
+		case	REVERSE_POST_ORDER:
+			if (_body != null && !_body.traverse(t, func, data))
+				return false;
+			if (_lockReference != null && !_lockReference.traverse(t, func, data))
+				return false;
+			result = func(this, data);
+			if (result == TraverseAction.ABORT_TRAVERSAL)
+				return false;
+			if (result == TraverseAction.SKIP_CHILDREN)
+				break;
+			break;
+
+		default:
+			return false;
+		}
+		return true;
+	}
+	
+	public ref<Lock> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+		ref<Scope> outer;
+		if (scope != null)
+			outer = compileContext.setCurrent(scope);
+		if (deferAnalysis()) {
+			// This can arise if the lock expression is not a valid monitor.
+			_body = _body.fold(tree, true, compileContext);
+			if (scope != null)
+				compileContext.setCurrent(outer);
+			return this;
+		}
+		if (_lockReference.op() == Operator.EXPRESSION) {
+			ref<Unary> expression = ref<Unary>(_lockReference);
+			if (expression.operand().deferAnalysis()) {
+				_body = _body.fold(tree, true, compileContext);
+				if (scope != null)
+					compileContext.setCurrent(outer);
+				return this;
+			}
+			ref<Node> monitorName = expression.operand();
+			ref<Variable> temp = compileContext.newVariable(compileContext.arena().builtInType(TypeFamily.ADDRESS));
+			ref<LockScope> lockScope = ref<LockScope>(scope);
+			lockScope.lockTemp = temp;
+			ref<Node> defn = tree.newReference(temp, true, expression.location());
+			ref<Node> adr = tree.newUnary(Operator.ADDRESS, monitorName, monitorName.location());
+			adr.type = defn.type;
+			defn = tree.newBinary(Operator.ASSIGN, defn, adr, expression.location());
+			defn.type = adr.type;
+
+			ref<Node> takeCall = callMonitorMethod(monitorName, monitorName.type, temp, "take", tree, compileContext);
+			if (takeCall == null) {
+				if (scope != null)
+					compileContext.setCurrent(outer);
+				return this;
+			}
+			ref<Node> seq = tree.newBinary(Operator.SEQUENCE, defn, takeCall, expression.location());
+			_takeCall = tree.newUnary(Operator.EXPRESSION, seq, seq.location());
+			_takeCall.type = compileContext.arena().builtInType(TypeFamily.VOID);
+
+			compileContext.markActiveLock(this);
+			
+			_body = _body.fold(tree, true, compileContext);
+
+			compileContext.popLiveSymbol(scope);
+			
+			_releaseCallInLine = releaseCall(monitorName, monitorName.type, temp, "release", tree, compileContext);
+			_releaseCallException = releaseCall(monitorName, monitorName.type, temp, "release", tree, compileContext);
+		} else {
+			// TODO: Handle the case for anonymous locks.
+		}
+		if (scope != null)
+			compileContext.setCurrent(outer);
+		return this;
+	}
+
+	private ref<Node> releaseCall(ref<Node> errorMarker, ref<Type> monitorType, ref<Variable> temp, string methodName, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
+		ref<Node> rc = callMonitorMethod(errorMarker, monitorType, temp, methodName, tree, compileContext);
+		if (rc != null) {
+			rc = tree.newUnary(Operator.EXPRESSION, rc, rc.location());
+			rc.type = compileContext.arena().builtInType(TypeFamily.VOID);
+		}
+		return rc;
+	}
+
+	private ref<Node> callMonitorMethod(ref<Node> errorMarker, ref<Type> monitorType, ref<Variable> temp, string methodName, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
+		return callMethod(errorMarker, compileContext.monitorClass(), temp, methodName, tree, compileContext);
+	}
+
+	public ref<Node> callMethod(ref<Node> errorMarker, ref<Type> monitorType, ref<Variable> temp, string methodName, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
+		ref<Node> defn;
+		if (temp != null)
+			defn = tree.newReference(temp, false, location());
+		else {
+			defn = tree.newLeaf(Operator.THIS, location());
+			defn.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+		}
+		ref<OverloadInstance> oi = getMethodSymbol(errorMarker, methodName, monitorType, compileContext);
+		if (oi == null)
+			return null;
+		// This is the assignment method for this class!!!
+		// (all strings go through here).
+		ref<Selection> method = tree.newSelection(defn, oi, true, location());
+		method.type = oi.type();
+		ref<Call> call = tree.newCall(oi.parameterScope(), null, method, null, location(), compileContext);
+		call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+		return call.fold(tree, true, compileContext);
+	}
+	
+	public ref<Lock> clone(ref<SyntaxTree> tree) {
+		ref<Lock> b = tree.newLock(_lockReference.clone(tree), _body.clone(tree), location());
+		return ref<Lock>(b.finishClone(this, tree.pool()));
+	}
+
+	public ref<Lock> cloneRaw(ref<SyntaxTree> tree) {
+		ref<Lock> b = tree.newLock(_lockReference.cloneRaw(tree), _body.cloneRaw(tree), location());
+		return b;
+	}
+
+	public Test fallsThrough() {
+		Test t = _body.fallsThrough();
+		if (t == Test.INCONCLUSIVE_TEST)
+			return Test.PASS_TEST;
+		else
+			return t;
+	}
+
+	public Test containsBreak() {
+		return _body.containsBreak();
+	}
+
+	public void print(int indent) {
+		if (_lockReference != null)
+			_lockReference.print(indent + INDENT);
+		printBasic(indent);
+		printf("\n");
+		if (_body != null)
+			_body.print(indent + INDENT);
+	}
+
+	protected void assignTypes(ref<CompileContext> compileContext) {
+		ref<Scope> outer;
+		compileContext.assignTypes(_lockReference);
+		if (scope != null) {
+			scope.assignTypes(compileContext);
+			outer = compileContext.setCurrent(scope);
+		}
+		compileContext.assignTypes(_body);
+		type = compileContext.arena().builtInType(TypeFamily.VOID);
+		if (_lockReference.op() == Operator.EMPTY) {
+			add(MessageId.UNFINISHED_LOCK, compileContext.pool());
+			type = compileContext.errorType();
+		} else {
+			ref<Unary> u = ref<Unary>(_lockReference);
+			if (!u.operand().deferAnalysis()) {
+				if (!compileContext.isLockable(u.operand().type)) {
+					add(MessageId.NEEDS_MONITOR, compileContext.pool());
+					type = compileContext.errorType();
+				}
+			}
+		}
+		if (scope != null)
+			scope.checkDefaultConstructorCalls(compileContext);
+		if (outer != null)
+			compileContext.setCurrent(outer);
+	}
+
+	public ref<Scope> enclosing() {
+		return scope;
+	}
+	
+	public boolean definesScope() {
+		return true;
+	}
+	
+	public ref<Node> lockReference() {
+		return _lockReference;
+	}
+
+	public ref<Node> body() {
+		return _body;
+	}
+
+	public ref<Node> takeCall() {
+		return _takeCall;
+	}
+
+	public ref<Node> releaseCallInLine() {
+		return _releaseCallInLine;
+	}
+
+	public ref<Node> releaseCallException() {
+		return _releaseCallException;
+	}
+}
+
 public class Block extends Node {
 	private ref<NodeList> _statements;
 	private ref<NodeList> _last;
@@ -515,63 +766,7 @@ public class Block extends Node {
 		ref<Scope> outer;
 		if (scope != null)
 			outer = compileContext.setCurrent(scope);
-		if (op() == Operator.LOCK) {
-			if (deferAnalysis()) {
-				// This can arise if the lock expression is not a valid monitor.
-				_statements.next.node = _statements.next.node.fold(tree, true, compileContext);
-				if (scope != null)
-					compileContext.setCurrent(outer);
-				return this;
-			}
-			ref<NodeList> nl = _statements;
-			if (nl.node.op() == Operator.EXPRESSION) {
-				ref<Unary> expression = ref<Unary>(nl.node);
-				if (expression.operand().deferAnalysis()) {
-					_statements.next.node = _statements.next.node.fold(tree, true, compileContext);
-					if (scope != null)
-						compileContext.setCurrent(outer);
-					return this;
-				}
-				ref<Node> monitorName = expression.operand();
-				ref<Variable> temp = compileContext.newVariable(compileContext.arena().builtInType(TypeFamily.ADDRESS));
-				ref<LockScope> lockScope = ref<LockScope>(scope);
-				lockScope.lockTemp = temp;
-				ref<Node> defn = tree.newReference(temp, true, expression.location());
-				ref<Node> adr = tree.newUnary(Operator.ADDRESS, monitorName, monitorName.location());
-				adr.type = defn.type;
-				defn = tree.newBinary(Operator.ASSIGN, defn, adr, expression.location());
-				defn.type = adr.type;
-				nl.node = tree.newUnary(Operator.EXPRESSION, defn, defn.location());
-				nl.node.type = compileContext.arena().builtInType(TypeFamily.VOID);
-
-				ref<NodeList> nln = callMonitorMethod(monitorName, monitorName.type, temp, "take", tree, compileContext);
-				if (nln == null) {
-					if (scope != null)
-						compileContext.setCurrent(outer);
-					return this;
-				}
-				nln.next = nl.next;
-				nl.next = nln;
-
-				compileContext.markActiveLock(this);
-				
-				nl = nln.next;
-				nl.node = nl.node.fold(tree, true, compileContext);
-
-				compileContext.popLiveSymbol(scope);
-				
-				ref<NodeList> nlr = callMonitorMethod(monitorName, monitorName.type, temp, "release", tree, compileContext);
-				if (nlr == null) {
-					if (scope != null)
-						compileContext.setCurrent(outer);
-					return this;
-				}
-
-				nl.next = nlr;
-			} else {
-				// TODO: Handle the case for anonymous locks.
-			}
-		} else if (_statements != null) {
+		if (_statements != null) {
 			for (ref<NodeList> nl = _statements;; nl = nl.next) {
 				nl.node = nl.node.fold(tree, true, compileContext);
 				if (nl.next == null) {
@@ -598,36 +793,6 @@ public class Block extends Node {
 	
 	public ref<Scope> enclosing() {
 		return scope;
-	}
-	
-	private ref<NodeList> callMonitorMethod(ref<Node> errorMarker, ref<Type> monitorType, ref<Variable> temp, string methodName, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
-		ref<Node> call = callMethod(errorMarker, compileContext.monitorClass(), temp, methodName, tree, compileContext);
-		if (call == null)
-			return null;
-		ref<NodeList> nl = compileContext.pool() new NodeList;
-		nl.node = tree.newUnary(Operator.EXPRESSION, call, location());
-		nl.node.type = type;
-		return nl;
-	}
-
-	public ref<Node> callMethod(ref<Node> errorMarker, ref<Type> monitorType, ref<Variable> temp, string methodName, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
-		ref<Node> defn;
-		if (temp != null)
-			defn = tree.newReference(temp, false, location());
-		else {
-			defn = tree.newLeaf(Operator.THIS, location());
-			defn.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
-		}
-		ref<OverloadInstance> oi = getMethodSymbol(errorMarker, methodName, monitorType, compileContext);
-		if (oi == null)
-			return null;
-		// This is the assignment method for this class!!!
-		// (all strings go through here).
-		ref<Selection> method = tree.newSelection(defn, oi, true, location());
-		method.type = oi.type();
-		ref<Call> call = tree.newCall(oi.parameterScope(), null, method, null, location(), compileContext);
-		call.type = compileContext.arena().builtInType(TypeFamily.VOID);
-		return call.fold(tree, true, compileContext);
 	}
 	
 	public ref<Block> clone(ref<SyntaxTree> tree) {
@@ -708,20 +873,6 @@ public class Block extends Node {
 		for (ref<NodeList> nl = _statements; nl != null; nl = nl.next)
 			compileContext.assignTypes(nl.node);
 		type = compileContext.arena().builtInType(TypeFamily.VOID);
-		if (op() == Operator.LOCK) {
-			if (_statements.node.op() == Operator.EMPTY) {
-				add(MessageId.UNFINISHED_LOCK, compileContext.pool());
-				type = compileContext.errorType();
-			} else {
-				ref<Unary> u = ref<Unary>(_statements.node);
-				if (!u.operand().deferAnalysis()) {
-					if (!compileContext.isLockable(u.operand().type)) {
-						add(MessageId.NEEDS_MONITOR, compileContext.pool());
-						type = compileContext.errorType();
-					}
-				}
-			}
-		}
 		if (scope != null)
 			scope.checkDefaultConstructorCalls(compileContext);
 		if (outer != null)

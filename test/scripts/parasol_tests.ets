@@ -1816,8 +1816,8 @@ statement(expect: fail, message: UNEXPECTED_RC) { "}" }
 statement(expect: recovered) { "lock { " }
 statement(expect: recovered) { "lock { a " }
 statement(expect: recovered) { "lock { a; " }
-statement(expect: recovered) { "lock ( " }
-statement(expect: recovered) { "lock (a " }
+statement(expect: fail, message: EXPECTING_TERM) { "lock ( " }
+statement(expect: fail, message: SYNTAX_ERROR) { "lock (a " }
 statement(expect: recovered) { "lock (a) " }
 statement(expect: recovered) { "lock (a) {" }
 statement(expect: recovered) { "lock (a) { b " }

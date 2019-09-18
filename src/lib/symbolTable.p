@@ -75,11 +75,10 @@ public class LockScope extends Scope {
 	
 	public ref<Variable> lockTemp;			// The temp used to hold the reference to the monitor being locked.
 	
-	public LockScope(ref<Scope> enclosing, ref<Node> definition) {
+	public LockScope(ref<Scope> enclosing, ref<Lock> definition) {
 		super(enclosing, definition, StorageClass.LOCK, null);
-		ref<Block> b = ref<Block>(definition);
-		if (b.statements().node.op() != Operator.EMPTY) {
-			ref<Unary> u = ref<Unary>(b.statements().node);
+		if (definition.lockReference().op() != Operator.EMPTY) {
+			ref<Unary> u = ref<Unary>(definition.lockReference());
 			_monitor = u.operand();
 		}
 	}

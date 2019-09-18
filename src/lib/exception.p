@@ -690,7 +690,7 @@ public void hardwareExceptionHandler(ref<HardwareException> info) {
 			
 		case 0x402:						// SIGILL + ILL_ILLOPN
 			throw IllegalInstructionException(context);
-			
+
 		case 0x6fa:						// SIGABRT + tkill
 			throw CRuntimeException(context);
 
@@ -698,6 +698,7 @@ public void hardwareExceptionHandler(ref<HardwareException> info) {
 			dumpAllThreads(context);
 			thread.exit(0);
 
+		case 0x2fa:
 		case 0x3fa:						// SIGQUIT sent from inside the house - just dump me.
 			dumpMyThread(context);
 			thread.exit(0);

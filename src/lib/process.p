@@ -931,7 +931,7 @@ private monitor class TimeoutData {
 	int _exitStatus;
 
 	TimeoutData() {
-		_exitStatus = -1;			// indicates not actuall exitted.
+		_exitStatus = -1;			// indicates not actually exitted.
 	}
 
 	public int waitForChild(time.Duration timeout) {

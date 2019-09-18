@@ -51,6 +51,7 @@ import parasol:compiler.InterfaceType;
 import parasol:compiler.InternalLiteral;
 import parasol:compiler.Jump;
 import parasol:compiler.Location;
+import parasol:compiler.Lock;
 import parasol:compiler.LockScope;
 import parasol:compiler.Loop;
 import parasol:compiler.MessageId;
@@ -1068,6 +1069,13 @@ public class X86_64 extends X86_64AssignTemps {
 		}
 		switch (node.op()) {
 		case	LOCK:
+			ref<Lock> k = ref<Lock>(node);
+			generateDefaultConstructors(k.scope, compileContext);
+			generate(k.takeCall(), compileContext);
+			generate(k.body(), compileContext);
+			generate(k.releaseCallInLine(), compileContext);
+			break;
+
 		case	BLOCK:
 		case	UNIT:
 			ref<Block> block = ref<Block>(node);
@@ -2710,7 +2718,7 @@ public class X86_64 extends X86_64AssignTemps {
 	private void generateLiveSymbolDestructors(ref<NodeList> liveSymbols, ref<CompileContext> compileContext) {
 		while (liveSymbols != null) {
 			if (liveSymbols.node.op() == Operator.LOCK) {
-				ref<LockScope> lockScope = ref<LockScope>(ref<Block>(liveSymbols.node).scope);
+				ref<LockScope> lockScope = ref<LockScope>(ref<Lock>(liveSymbols.node).scope);
 				ref<Node> defn = compileContext.tree().newReference(lockScope.lockTemp, false, liveSymbols.node.location());
 				inst(X86.MOV, firstRegisterArgument(), defn, compileContext);
 				instCall(releaseMethod(compileContext), compileContext);

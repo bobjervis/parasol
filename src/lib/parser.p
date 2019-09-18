@@ -481,38 +481,31 @@ public class Parser {
 		return null;
 	}
 
-	private ref<Block> parseLockStatement() {
+	private ref<Node> parseLockStatement() {
 		Location location = _scanner.location();
 		Token t = _scanner.next();
 		ref<Node> lockReference;
 		if (t == Token.LEFT_PARENTHESIS) {
 			lockReference = parseExpression(0);
-			if (lockReference.op() == Operator.SYNTAX_ERROR) {
-				ref<Block> block = _tree.newBlock(Operator.BLOCK, false, location);
-				block.statement(_tree.newNodeList(lockReference));
-				return block;
-			}
+			if (lockReference.op() == Operator.SYNTAX_ERROR)
+				return lockReference;
 			t = _scanner.next();
 			if (t != Token.RIGHT_PARENTHESIS) {
 				_scanner.pushBack(t);
-				ref<Block> block = _tree.newBlock(Operator.BLOCK, false, _scanner.location());
-				block.statement(_tree.newNodeList(resync(MessageId.SYNTAX_ERROR)));
-				return block;
+				return resync(MessageId.SYNTAX_ERROR);
 			}
 			t = _scanner.next();
 			lockReference = _tree.newUnary(Operator.EXPRESSION, lockReference, lockReference.location());
 		} else
 			lockReference = _tree.newLeaf(Operator.EMPTY, location);
-		ref<Block> lockEnclosure = _tree.newBlock(Operator.LOCK, false, location);
 		ref<Block> block = _tree.newBlock(Operator.BLOCK, false, _scanner.location());
-		lockEnclosure.statement(_tree.newNodeList(lockReference, block));
 		if (t != Token.LEFT_CURLY) {
 			_scanner.pushBack(t);
 			block.statement(_tree.newNodeList(resync(MessageId.SYNTAX_ERROR)));
 		} else {
 			parseBlock(block);
 		}
-		return lockEnclosure;
+		return _tree.newLock(lockReference, block, location);
 	}
 	
 	private ref<Node> parseImportStatement() {
@@ -859,9 +852,13 @@ public class Parser {
 				if (parameters.hasBindings()) {
 					func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.NORMAL, type, id, parameters, loc);
 					t = _scanner.next();
-					if (t == Token.LOCK)
-						func.body = parseLockStatement();
-					else if (t == Token.LEFT_CURLY) {
+					if (t == Token.LOCK) {
+						ref<Node> n = parseLockStatement();
+						if (n.op() == Operator.SYNTAX_ERROR)
+							return n;
+						func.body = _tree.newBlock(Operator.BLOCK, false, n.location());
+						func.body.statement(_tree.newNodeList(n));						
+					} else if (t == Token.LEFT_CURLY) {
 						func.body = _tree.newBlock(Operator.BLOCK, false, _scanner.location());
 						parseBlock(func.body);
 					} else if (t != Token.SEMI_COLON) {
@@ -873,7 +870,11 @@ public class Parser {
 					t = _scanner.next();
 					if (t == Token.LOCK) {
 						func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.NORMAL, type, id, parameters, loc);
-						func.body = parseLockStatement();
+						ref<Node> n = parseLockStatement();
+						if (n.op() == Operator.SYNTAX_ERROR)
+							return n;
+						func.body = _tree.newBlock(Operator.BLOCK, false, n.location());
+						func.body.statement(_tree.newNodeList(n));						
 						return func;
 					} else if (t == Token.LEFT_CURLY) {
 						func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.NORMAL, type, id, parameters, loc);
@@ -1426,9 +1427,13 @@ public class Parser {
 				if (inFunctionLiteral) {
 					t = _scanner.next();
 					ref<FunctionDeclaration> func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.NORMAL, x, null, parameters, location);
-					if (t == Token.LOCK)
-						func.body = parseLockStatement();
-					else if (t == Token.LEFT_CURLY) {
+					if (t == Token.LOCK) {
+						ref<Node> n = parseLockStatement();
+						if (n.op() == Operator.SYNTAX_ERROR)
+							return n;
+						func.body = _tree.newBlock(Operator.BLOCK, false, n.location());
+						func.body.statement(_tree.newNodeList(n));						
+					} else if (t == Token.LEFT_CURLY) {
 						func.body = _tree.newBlock(Operator.BLOCK, false, _scanner.location());
 						parseBlock(func.body);
 					} else {

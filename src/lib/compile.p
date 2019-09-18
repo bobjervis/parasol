@@ -230,8 +230,12 @@ public class CompileContext {
 				buildScopesInTree(func.body);
 			break;
 
-		case	ENUM:
 		case	LOCK:
+			ref<Lock> k = ref<Lock>(definition);
+			buildScopesInTree(k.body());
+			break;
+
+		case	ENUM:
 		case	BLOCK:
 		case	CLASS:
 		case	MONITOR_CLASS:
@@ -478,8 +482,8 @@ public class CompileContext {
 			break;
 
 		case	LOCK:
-			blk = ref<Block>(n);
-			blk.scope = createLockScope(n);
+			ref<Lock> k = ref<Lock>(n);
+			k.scope = createLockScope(k);
 			return TraverseAction.SKIP_CHILDREN;
 			
 		case	BLOCK:
@@ -659,7 +663,7 @@ public class CompileContext {
 		return _arena.createFlagsScope(_current, definition, className);
 	}
 
-	public ref<LockScope> createLockScope(ref<Node> definition) {
+	public ref<LockScope> createLockScope(ref<Lock> definition) {
 		return _arena.createLockScope(_current, definition);
 	}
 
@@ -846,9 +850,16 @@ public class CompileContext {
 	
 	public void assignControlFlow(ref<Node> n, ref<Scope> scope) {
 		switch (n.op()) {
+		case	LOCK:
+			ref<Lock> k = ref<Lock>(n);
+			if (k.scope != null)
+				scope = k.scope;
+			assignControlFlow(k.lockReference(), scope);
+			assignControlFlow(k.body(), scope);
+			break;
+
 		case	UNIT:
 		case	BLOCK:
-		case	LOCK:
 			ref<Block> block = ref<Block>(n);
 			if (block.scope != null)
 				scope = block.scope;

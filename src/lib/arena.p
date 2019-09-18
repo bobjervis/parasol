@@ -510,7 +510,7 @@ public class Arena {
 		return s;
 	}
 
-	public ref<LockScope> createLockScope(ref<Scope> enclosing, ref<Node> definition) {
+	public ref<LockScope> createLockScope(ref<Scope> enclosing, ref<Lock> definition) {
 		ref<LockScope> s = new LockScope(enclosing, definition);
 		_scopes.append(s);
 		return s;
