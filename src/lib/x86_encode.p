@@ -33,6 +33,7 @@ import parasol:compiler.FlagsInstanceType;
 import parasol:compiler.FunctionType;
 import parasol:compiler.InterfaceImplementationScope;
 import parasol:compiler.Location;
+import parasol:compiler.Lock;
 import parasol:compiler.MessageId;
 import parasol:compiler.Node;
 import parasol:compiler.NodeList;
@@ -133,6 +134,7 @@ enum JumpDistance {
 class DeferredTry {
 	public ref<X86_64Encoder.CodeSegment> primaryHandler;
 	public ref<Try> tryStatement;
+	public ref<Lock> lockStatement;
 	public ref<X86_64Encoder.CodeSegment> join;
 	public ref<X86_64Encoder.CodeSegment> exceptionHandler;
 }

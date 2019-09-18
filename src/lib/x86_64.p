@@ -906,32 +906,39 @@ public class X86_64 extends X86_64AssignTemps {
 			int adjust = -f().autoSize;
 			if (!isFunction)
 				adjust -= 8 * address.bytes;
-			// An exception handler enters with RBP correct and RCX pointing to the exception itself.
+			// An exception handler enters with RBP correct and th first regsiter argument pointing to the
+			// exception itself.
 			// First we have to chop the stack, so we can proceed to dispatch to one of a set of catch
 			// clauses. The clauses were sorted during the fold phase to put the most specific Exception
 			// first. That way we only have to move down the list in sequence.
 			inst(X86.LEA, R.RSP, R.RBP, adjust);
-			ref<NodeList> nl = dt.tryStatement.catchList();
-			ref<Node> temp = nl.node;
-			inst(X86.MOV, temp, firstRegisterArgument(), compileContext);
-			for (nl = nl.next; nl != null; nl = nl.next) {
-				ref<CodeSegment> nextCheck = _storage new CodeSegment;
-				ref<Binary> b = ref<Binary>(nl.node);
-				ref<Type> t = ref<TypedefType>(b.left().type).wrappedType();	// Get the catch Exception class
-				instLoadType(secondRegisterArgument(), t);	// target type
+			if (dt.tryStatement != null) {
+				ref<NodeList> nl = dt.tryStatement.catchList();
+				ref<Node> temp = nl.node;
+				inst(X86.MOV, temp, firstRegisterArgument(), compileContext);
+				for (nl = nl.next; nl != null; nl = nl.next) {
+					ref<CodeSegment> nextCheck = _storage new CodeSegment;
+					ref<Binary> b = ref<Binary>(nl.node);
+					ref<Type> t = ref<TypedefType>(b.left().type).wrappedType();	// Get the catch Exception class
+					instLoadType(secondRegisterArgument(), t);	// target type
+					inst(X86.MOV, firstRegisterArgument(), temp, compileContext);
+					inst(X86.LEA, thirdRegisterArgument(), b.right(), compileContext);
+					inst(X86.MOV, TypeFamily.SIGNED_32, fourthRegisterArgument(), t.size());
+					instCall(dispatchException, compileContext);
+					inst(X86.OR, TypeFamily.BOOLEAN, R.RAX, R.RAX);
+					closeCodeSegment(CC.JE, nextCheck);
+					generate(nl.node, compileContext);
+					closeCodeSegment(CC.JMP, dt.join);
+					nextCheck.start(this);
+				}
+				if (dt.tryStatement.finallyClause() != null)
+					generate(dt.tryStatement.finallyClause(), compileContext);
 				inst(X86.MOV, firstRegisterArgument(), temp, compileContext);
-				inst(X86.LEA, thirdRegisterArgument(), b.right(), compileContext);
-				inst(X86.MOV, TypeFamily.SIGNED_32, fourthRegisterArgument(), t.size());
-				instCall(dispatchException, compileContext);
-				inst(X86.OR, TypeFamily.BOOLEAN, R.RAX, R.RAX);
-				closeCodeSegment(CC.JE, nextCheck);
-				generate(nl.node, compileContext);
-				closeCodeSegment(CC.JMP, dt.join);
-				nextCheck.start(this);
+			} else if (dt.lockStatement != null) {
+				inst(X86.PUSH, TypeFamily.ADDRESS, firstRegisterArgument());
+				generate(dt.lockStatement.releaseCallException(), compileContext);
+				inst(X86.POP, TypeFamily.ADDRESS, firstRegisterArgument());
 			}
-			if (dt.tryStatement.finallyClause() != null)
-				generate(dt.tryStatement.finallyClause(), compileContext);
-			inst(X86.MOV, firstRegisterArgument(), temp, compileContext);
 			inst(X86.MOV, TypeFamily.ADDRESS, secondRegisterArgument(), R.RBP);
 			inst(X86.MOV, TypeFamily.ADDRESS, thirdRegisterArgument(), R.RSP);
 			instCall(throwException, compileContext);
@@ -1072,7 +1079,7 @@ public class X86_64 extends X86_64AssignTemps {
 			ref<Lock> k = ref<Lock>(node);
 			generateDefaultConstructors(k.scope, compileContext);
 			generate(k.takeCall(), compileContext);
-			generate(k.body(), compileContext);
+			generateTryBody(null, k, k.body(), compileContext);
 			generate(k.releaseCallInLine(), compileContext);
 			break;
 
@@ -1492,18 +1499,7 @@ public class X86_64 extends X86_64AssignTemps {
 			
 		case	TRY:
 			ref<Try> tr = ref<Try>(node);
-			ref<CodeSegment> primaryHandler = _storage new CodeSegment;
-//			ref<CodeSegment> secondaryHandler = tr.finallyClause() != null ? _storage new CodeSegment : null;
-			join = _storage new CodeSegment;
-			ref<CodeSegment> outer = pushExceptionHandler(primaryHandler);
-			generate(tr.body(), compileContext);
-			pushExceptionHandler(outer);
-			join.start(this);
-			if (tr.finallyClause() != null) {
-				generate(tr.finallyClause().clone(compileContext.tree()), compileContext);
-			}
-			DeferredTry dt = { tryStatement: tr, primaryHandler: primaryHandler, join: join, exceptionHandler: outer };
-			_deferredTry.append(dt);
+			generateTryBody(tr, null, tr.body(), compileContext);
 			break;
 			
 		case	CLASS_DECLARATION:
@@ -2704,6 +2700,22 @@ public class X86_64 extends X86_64AssignTemps {
 			node.print(0);
 			assert(false);
 		}
+	}
+
+	private void generateTryBody(ref<Try> tr, ref<Lock> lockStatement, ref<Node> body, ref<CompileContext> compileContext) {
+		ref<CodeSegment> primaryHandler = _storage new CodeSegment;
+		ref<CodeSegment> join = _storage new CodeSegment;
+		ref<CodeSegment> outer = pushExceptionHandler(primaryHandler);
+		generate(body, compileContext);
+		pushExceptionHandler(outer);
+		join.start(this);
+		if (tr != null) {
+			if (tr.finallyClause() != null) {
+				generate(tr.finallyClause().clone(compileContext.tree()), compileContext);
+			}
+		}
+		DeferredTry dt = { tryStatement: tr, lockStatement: lockStatement, primaryHandler: primaryHandler, join: join, exceptionHandler: outer };
+		_deferredTry.append(dt);
 	}
 
 	private static boolean containsNestedMultiReturn(ref<Node> node) {

@@ -139,6 +139,7 @@ run(filename: loop_fallthrough_test.p)
 
 // Basic runtime execution tests
 
+run(filename: exception_lock_test.p)
 run(filename: object_init_test.p)
 run(filename: array_init_test.p)
 run(filename: class_compare_test.p)
