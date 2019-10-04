@@ -636,6 +636,8 @@ public class ThreadPool<class T> extends ThreadPoolData<T> {
 				if (wi.result.calculating())
 					wi.result.post(wi.valueGenerator(wi.parameter));
 			} catch (Exception e) {
+				printf("Failed ThreadPool work item: Uncaught exception! %s\n%s", 
+								e.message(), e.textStackTrace());
 				wi.result.postFailure(e.clone());
 			}
 		} else {

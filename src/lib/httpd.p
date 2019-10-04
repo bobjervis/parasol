@@ -14,7 +14,7 @@
    limitations under the License.
  */
 /**
- * Provides facilities to implement an HTP 1.1 server or client request.
+ * Provides facilities to implement an HTTP 1.1 server or client request.
  *
  * This is a work in progress.
  * The server and client are missing a number of HTTP 1.1 functions, such as client side redirection,
@@ -449,34 +449,40 @@ public class HttpServer {
 	}
 
 	boolean dispatch(ref<HttpRequest> request, ref<HttpResponse> response, boolean secured) {
-		for (int i = 0; i < _handlers.length(); i++) {
-			if (_handlers[i].absPath == "/") {
-				request.serviceResource = request.url.substring(1);
-//				printf("hit handler %d absPath = %s\n", i, _handlers[i].absPath);
-				return _handlers[i].handler.processRequest(request, response);
-			} else if (request.url.startsWith(_handlers[i].absPath)) {
-				switch (_handlers[i].serviceClass) {
-				case SECURED_ONLY:
-					if (!secured)
-						continue;
-					break;
-
-				case UNSECURED_ONLY:
-					if (secured)
-						continue;
-					break;
+		try {
+			for (int i = 0; i < _handlers.length(); i++) {
+				if (_handlers[i].absPath == "/") {
+					request.serviceResource = request.url.substring(1);
+	//				printf("hit handler %d absPath = %s\n", i, _handlers[i].absPath);
+					return _handlers[i].handler.processRequest(request, response);
+				} else if (request.url.startsWith(_handlers[i].absPath)) {
+					switch (_handlers[i].serviceClass) {
+					case SECURED_ONLY:
+						if (!secured)
+							continue;
+						break;
+	
+					case UNSECURED_ONLY:
+						if (secured)
+							continue;
+						break;
+					}
+					if (request.url.length() > _handlers[i].absPath.length()) {
+						if (request.url[_handlers[i].absPath.length()] != '/')
+							continue;			// a false alarm, e.g. absPath = /foo url = /food
+						request.serviceResource = request.url.substring(_handlers[i].absPath.length() + 1);
+					} else
+						request.serviceResource = null;
+	//				printf("hit handler %d absPath = %s\n", i, _handlers[i].absPath);
+					return _handlers[i].handler.processRequest(request, response);
 				}
-				if (request.url.length() > _handlers[i].absPath.length()) {
-					if (request.url[_handlers[i].absPath.length()] != '/')
-						continue;			// a false alarm, e.g. absPath = /foo url = /food
-					request.serviceResource = request.url.substring(_handlers[i].absPath.length() + 1);
-				} else
-					request.serviceResource = null;
-//				printf("hit handler %d absPath = %s\n", i, _handlers[i].absPath);
-				return _handlers[i].handler.processRequest(request, response);
 			}
+			logger.error("Failed request for %s from %s", request.serviceResource, request.connection().sourceIPv4());
+		} catch (Exception e) {
+			logger.error("Failed request for %s from %s: Uncaught exception! %s\n%s", 
+								request.serviceResource, request.connection().sourceIPv4(), 
+								e.message(), e.textStackTrace());
 		}
-		logger.error("Failed request for %s from %s", request.serviceResource, request.connection().sourceIPv4());
 //		printf("miss!\n");
 		response.error(404);
 //		printf("done.\n");
