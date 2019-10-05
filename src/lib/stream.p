@@ -13,6 +13,21 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * Provides facilities for processing streams of characters or bytes, including
+ * conversion between various UTF encodings.
+ *
+ * Streams are represented as either some kind of Reader class or some kind of Writer
+ * class. 
+ *
+ * Readers iteratively return a stream of objects of some type. Whether a Reader
+ * consumes an external resource (such as a network message) is dependent on the class.
+ *
+ * Writers take objects or arrays of objects of some type and arranges them into a stream.
+ *
+ * @threading Readers are never thread safe. Writers may or may not be thread safe. Any
+ * thread safety will be documented with the class.
+ */
 namespace parasol:stream;
 
 import parasol:international;
@@ -31,7 +46,7 @@ import native:C;
 int MILLIS_PER_SECOND = 1000;
 /**
  * The Unicode code point for the replacement character, used to substitute in a malformed input
- * stream for incorrect UTF encodings.
+ * stream for incorrect UTF encodings. It has the hexadecimal value of 0xFFFD.
  */
 @Constant
 public int REPLACEMENT_CHARACTER = 0xfffd;
@@ -51,12 +66,23 @@ public class UTF8Reader {
 	 */
 	private int _lastByte;
 	private int _errorByte;
-	
+	/**
+	 * Constructs this Reader to consume the contents of the Reader object passed in.
+	 *
+	 * @param reader The byte-stream reader to use to obtain the Unicode data.
+	 */
 	public UTF8Reader(ref<Reader> reader) {
 		_reader = reader;
 		_lastByte = -1;
 	}
-	
+	/**
+	 * Read the next Unicode code point from the UTF-8 stream.
+	 *
+	 * @return The next Unicode code point in the stream. If the stream is not
+	 * well-formed UTF-8, then a value of {@link REPLACEMENT_CHARACTER} is returned and the 
+	 * incorrectly coded byte is skipped. The value of the skipped byte can be obtained by calling
+	 * the {@link errorByte} method.
+	 */
 	public int read() {
 		if (_lastChar < 0) {	// did we have EOF or an unget?
 			if (_lastChar == -1)
@@ -108,16 +134,26 @@ public class UTF8Reader {
 			if ((n & ~0x3f) != 0x80) {				// This is not a continuation byte
 				_lastChar = REPLACEMENT_CHARACTER;
 				_lastByte = n;
-				_errorByte = -1;
+				_errorByte = -(x << (6 * (extraBytes - i)));
 				return REPLACEMENT_CHARACTER;
 			}
 			int increment = n & 0x3f;
 			x = (x << 6) + increment;
 		}
 		_lastChar = x;
+		_errorByte = 0;
 		return x;
 	}
-
+	/**
+	 * Reads zero or more Unicode code points into the buffer
+	 * argument.
+	 *
+	 * @param buffer The address where the Unicode code points should be stored.
+	 * @param length The maximum number of code points to read into the buffer.
+	 *
+	 * @return The number of code points actually stored. A return value of zero indicates 
+	 * end of stream.
+	 */
 	public int read(pointer<int> buffer, int length) {
 		int count;
 		while (length > 0) {
@@ -151,12 +187,26 @@ public class UTF8Reader {
 		}
 		return count;
 	}
-
+	/**
+	 * Ungets the last code point read from the stream. The next call to {@link read} will
+	 * returieve the same value again.
+	 */
 	public void unget() {
 		if (_lastChar >= 0)
 			_lastChar = -2 - _lastChar;
 	}
-	
+	/**
+	 * The erronoeous byte that triggered the REPLACEMENT_CHARACTER last returned. 
+	 *
+	 * @return The byte that was unexpected and skipped. A negative value indicates that
+	 * one or more bytes of an incomplete multi-byte sequence were processed. The magnitude of
+	 * the value contains the high order bits of the bytes that were present. The number of
+	 * missing low order bytes is indeterminate.
+	 *
+	 * If this method is called before any REPLACEMENT_VALUE code points are returned, the value
+	 * is zero.
+	 * If the stream actually contained a REPLACE_VALUE code point in it, the return value is zero.
+ 	 */
 	public int errorByte() {
 		return _errorByte;
 	}
@@ -189,12 +239,21 @@ public class UTF16Reader {
 	 * The last code unit read and pushed back
 	 */
 	private int _lastCodeUnit;
-
+	/**
+	 * Constructs this Reader to consume the contents of the Reader object passed in.
+	 *
+	 * @param reader The byte-stream reader to use to obtain the Unicode data.
+	 */
 	public UTF16Reader(ref<Reader> reader) {
 		_reader = reader;
 		_lastCodeUnit = EOF;
 	}
-
+	/**
+	 * Read the next Unicode code point from the UTF-8 stream.
+	 *
+	 * @return The next Unicode code point in the stream. If the stream is not
+	 * well-formed UTF-16, then a value of {@link REPLACEMENT_CHARACTER} is returned.
+	 */
 	public int read() {
 		if (_lastChar < 0) {	// did we have EOF or an unget?
 			if (_lastChar == EOF)
@@ -237,7 +296,16 @@ public class UTF16Reader {
 			return EOF;
 		return (hi << 8) | lo;
 	}
-
+	/**
+	 * Reads zero or more Unicode code points into the buffer
+	 * argument.
+	 *
+	 * @param buffer The address where the Unicode code points should be stored.
+	 * @param length The maximum number of code points to read into the buffer.
+	 *
+	 * @return The number of code points actually stored. A return value of zero indicates 
+	 * end of stream.
+	 */
 	public int read(pointer<int> buffer, int length) {
 		int count;
 		while (length > 0) {
@@ -271,7 +339,10 @@ public class UTF16Reader {
 		}
 		return count;
 	}
-
+	/**
+	 * Ungets the last code point read from the stream. The next call to {@link read} will
+	 * returieve the same value again.
+	 */
 	public void unget() {
 		if (_lastChar >= 0)
 			_lastChar = -2 - _lastChar;
