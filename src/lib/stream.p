@@ -354,12 +354,30 @@ public class UTF16Reader {
  */
 public class UTF8Writer {
 	ref<Writer> _writer;
-	
+	/**
+	 * Constructs this Writer to generate the octets of a UTF-8 text stream to be written as
+	 * bytes to the writer parameter.
+	 *
+	 * @param writer The byte-stream Writer to use to generate the Unicode data.
+	 */
 	public UTF8Writer(ref<Writer> writer) {
 		_writer = writer;
 	}
-	
+	/**
+	 * @param c The code point to write
+	 *
+	 * @return The number of bytes written to the underlying Writer.
+	 *
+	 * @exception IllegalArgumentException thrown if an invalid Unicode code point is written to the stream.
+	 */
 	public int write(int c) {
+		unsigned x = unsigned(c);
+		if (x > 0x10ffff ||
+			(x >= unsigned(SURROGATE_START) && x <= unsigned(SURROGATE_END))) {
+			string s;
+			s.printf("%d", c);
+			throw IllegalArgumentException(s);
+		}
 		if (c <= 0x7f) {
 			_writer.write(byte(c));
 			return 1;
@@ -372,12 +390,13 @@ public class UTF8Writer {
 			_writer.write(byte(0x80 + ((c >> 6) & 0x3f)));
 			_writer.write(byte(0x80 + (c & 0x3f)));
 			return 3;
-		} else if (c <= 0x1fffff) {
+		} else {//if (c <= 0x1fffff) {
 			_writer.write(byte(0xf0 + (c >> 18)));
 			_writer.write(byte(0x80 + ((c >> 12) & 0x3f)));
 			_writer.write(byte(0x80 + ((c >> 6) & 0x3f)));
 			_writer.write(byte(0x80 + (c & 0x3f)));
 			return 4;
+/*
 		} else if (c <= 0x3ffffff) {
 			_writer.write(byte(0xf8 + (c >> 24)));
 			_writer.write(byte(0x80 + ((c >> 18) & 0x3f)));
@@ -397,11 +416,19 @@ public class UTF8Writer {
 			string s;
 			s.printf("%d", c);
 			throw IllegalArgumentException(s);
+ */
 		}
 		// Bug in flow detector around 'throw' expressions TODO: Fix it.
 		return -1;
 	}
-
+	/**
+	 * Write zero or more Unicode code points to the stream.
+	 *
+	 * @param buffer The address of an array of Unicde code points.
+	 * @param length The number of code points in the array.
+	 *
+	 * @return The number of bytes written to the underlying Writer.
+	 */
 	public int write(pointer<int> buffer, int length) {
 		int written;
 		while (length > 0) {
@@ -410,7 +437,14 @@ public class UTF8Writer {
 		}
 		return written;
 	}
-
+	/**
+	 * Write zero or more Unicode code points to the stream. The entire
+	 * contents of the array are written to the Writer stream.
+	 *
+	 * @param buffer A reference to an array of Unicde code points.
+	 *
+	 * @return The number of bytes written to the underlying Writer.
+	 */
 	public int write(ref<int[]> buffer) {
 		int written;
 		for (i in *buffer)
@@ -418,7 +452,16 @@ public class UTF8Writer {
 		return written;
 	}
 	/**
-	 * Write a UTF-16 char array
+	 * Write a UTF-16 char array.
+	 * Write zero or more Unicode code points to the stream.
+	 *
+	 * If the input array contains malformed surrogate pairs, the
+	 * malformed pairs are written as the {@link REPLACEMENT_CHARACTER}.
+	 *
+	 * @param buffer The address of an array of UTF-16 text.
+	 * @param length The number of UTF-16 characters in the array.
+	 *
+	 * @return The number of bytes written to the underlying Writer.
 	 */
 	public int write(pointer<char> buffer, int length) {
 		BufferReader r(buffer, length * char.bytes);
@@ -434,7 +477,16 @@ public class UTF8Writer {
 		return written;
 	}
 	/**
-	 * Write a UTF-16 char array
+	 * Write a UTF-16 char array.
+	 * Write zero or more Unicode code points to the stream. The entire
+	 * contents of the array are written to the Writer stream.
+	 *
+	 * If the input array contains malformed surrogate pairs, the
+	 * malformed pairs are written as the {@link REPLACEMENT_CHARACTER}.
+	 *
+	 * @param buffer A reference ot an array of UTF-16 text.
+	 *
+	 * @return The number of bytes written to the underlying Writer.
 	 */
 	public int write(ref<char[]> buffer) {
 		BufferReader r(&(*buffer)[0], buffer.length() * char.bytes);
@@ -449,91 +501,17 @@ public class UTF8Writer {
 		}
 		return written;
 	}
-
-	public int write(string s) {
-		return _writer.write(s);
-	}
-}
-/**
- * This converter will take a stream of UTF-32 Unicode code points and write them as a stream of
- * UTF-16 char text.
- */
-public class UTF16Writer {
-	ref<Writer> _writer;
-	
-	public UTF16Writer(ref<Writer> writer) {
-		_writer = writer;
-	}
 	/**
-	 * @return The number of 16-bit code units (char's) written.
-	 */
-	public int write(int c) {
-		if (c >= 0x10000) {
-			c -= 0x10000;
-			writeCodeUnit(char(HI_SURROGATE_START + (c >> 10)));
-			writeCodeUnit(char(LO_SURROGATE_START + (c & 0x3ff)));
-			return 2;
-		} else if (c >= SURROGATE_START && c <= SURROGATE_END)
-			writeCodeUnit(char(REPLACEMENT_CHARACTER));
-		else
-			writeCodeUnit(char(c));
-		return 1;
-	}
-
-	private void writeCodeUnit(char c) {
-		_writer.write(byte(c & 0xff));
-		_writer.write(byte(c >> 8));
-	}
-
-	public int write(pointer<int> buffer, int length) {
-		int written;
-		while (length > 0) {
-			written += write(*buffer++);
-			length--;
-		}
-		return written;
-	}
-
-	public int write(ref<int[]> buffer) {
-		int written;
-		for (i in *buffer)
-			written += write((*buffer)[i]);
-		return written;
-	}
-	/**
-	 * Write a UTF-8 byte array
-	 */
-	public int write(pointer<byte> buffer, int length) {
-		BufferReader r(buffer, length);
-		UTF8Reader u(&r);
-
-		int written;
-		for (;;) {
-			int c = u.read();
-			if (c == EOF)
-				break;
-			written += write(c);
-		}
-		return written;
-	}
-	/**
-	 * Write a UTF-8 byte array
-	 */
-	public int write(ref<byte[]> buffer) {
-		BufferReader r(&(*buffer)[0], buffer.length());
-		UTF8Reader u(&r);
-
-		int written;
-		for (;;) {
-			int c = u.read();
-			if (c == EOF)
-				break;
-			written += write(c);
-		}
-		return written;
-	}
-	/**
-	 * Write a string
+	 * Write a string.
+	 * Write zero or more Unicode code points to the stream.
+	 *
+	 * No validation is performed on the contents of the string.
+	 *
+	 * @param s The string to be written.
+	 *
+	 * @return The number of bytes written to the underlying Writer.
+	 *
+	 * @exception IllegalArgumentException thrown if an invalid Unicode code point is written to the stream.
 	 */
 	public int write(string s) {
 		BufferReader r(&s[0], s.length());
@@ -547,6 +525,186 @@ public class UTF16Writer {
 			written += write(c);
 		}
 		return written;
+	}
+	/**
+	 * Write a string.
+	 * Write zero or more Unicode code points to the stream.
+	 *
+	 * If the input array contains malformed surrogate pairs, the
+	 * malformed pairs are written as the {@link REPLACEMENT_CHARACTER}.
+	 *
+	 * @param s The string to be written.
+	 *
+	 * @return The number of bytes written to the underlying Writer.
+	 */
+	public int write(string16 s) {
+		return write(s.c_str(), s.length());
+	}
+}
+/**
+ * This converter will take a stream of UTF-32 Unicode code points and write them as a stream of
+ * UTF-16 char text.
+ */
+public class UTF16Writer {
+	ref<Writer> _writer;
+	/**
+	 * Constructs this Writer to generate the octets of a UTF-16 text stream to be written as
+	 * bytes to the writer parameter.
+	 *
+	 * @param writer The byte-stream Writer to use to generate the Unicode data.
+	 */
+	public UTF16Writer(ref<Writer> writer) {
+		_writer = writer;
+	}
+	/**
+	 * Write a code point to the stream.
+	 *
+	 * If the value is not a valid Unicode code point, a REPLACEMENT_CHARACTER
+	 * is written to the Writer.
+	 *
+	 * @param c The code point to write
+	 *
+	 * @return The number of chars written to the underlying Writer.
+	 */
+	public int write(int c) {
+		if (c >= 0x10000) {
+			if (c > 0x10ffff)
+				writeCodeUnit(char(REPLACEMENT_CHARACTER));
+			else {
+				c -= 0x10000;
+				writeCodeUnit(char(HI_SURROGATE_START + (c >> 10)));
+				writeCodeUnit(char(LO_SURROGATE_START + (c & 0x3ff)));
+				return 2;
+			}
+		} else if (c >= SURROGATE_START && c <= SURROGATE_END)
+			writeCodeUnit(char(REPLACEMENT_CHARACTER));
+		else
+			writeCodeUnit(char(c));
+		return 1;
+	}
+
+	private void writeCodeUnit(char c) {
+		_writer.write(byte(c & 0xff));
+		_writer.write(byte(c >> 8));
+	}
+	/**
+	 * Write zero or more Unicode code points to the stream.
+	 *
+	 * @param buffer The address of an array of Unicde code points.
+	 * @param length The number of code points in the array.
+	 *
+	 * @return The number of chars written to the underlying Writer.
+	 */
+	public int write(pointer<int> buffer, int length) {
+		int written;
+		while (length > 0) {
+			written += write(*buffer++);
+			length--;
+		}
+		return written;
+	}
+	/**
+	 * Write zero or more Unicode code points to the stream. The entire
+	 * contents of the array are written to the Writer stream.
+	 *
+	 * @param buffer A reference to an array of Unicde code points.
+	 *
+	 * @return The number of chars written to the underlying Writer.
+	 */
+	public int write(ref<int[]> buffer) {
+		int written;
+		for (i in *buffer)
+			written += write((*buffer)[i]);
+		return written;
+	}
+	/**
+	 * Write a UTF-16 char array.
+	 * Write zero or more Unicode code points to the stream.
+	 *
+	 * If the input array contains malformed surrogate pairs, the
+	 * malformed pairs are written as the {@link REPLACEMENT_CHARACTER}.
+	 *
+	 * @param buffer The address of an array of UTF-16 text.
+	 * @param length The number of UTF-16 characters in the array.
+	 *
+	 * @return The number of bytes written to the underlying Writer.
+	 */
+	public int write(pointer<char> buffer, int length) {
+		BufferReader r(buffer, length * char.bytes);
+		UTF16Reader u(&r);
+
+		int written;
+		for (;;) {
+			int c = u.read();
+			if (c == EOF)
+				break;
+			written += write(c);
+		}
+		return written;
+	}
+	/**
+	 * Write a UTF-16 char array.
+	 * Write zero or more Unicode code points to the stream. The entire
+	 * contents of the array are written to the Writer stream.
+	 *
+	 * If the input array contains malformed surrogate pairs, the
+	 * malformed pairs are written as the {@link REPLACEMENT_CHARACTER}.
+	 *
+	 * @param buffer A reference ot an array of UTF-16 text.
+	 *
+	 * @return The number of bytes written to the underlying Writer.
+	 */
+	public int write(ref<char[]> buffer) {
+		BufferReader r(&(*buffer)[0], buffer.length() * char.bytes);
+		UTF16Reader u(&r);
+
+		int written;
+		for (;;) {
+			int c = u.read();
+			if (c == EOF)
+				break;
+			written += write(c);
+		}
+		return written;
+	}
+	/**
+	 * Write a string.
+	 * Write zero or more Unicode code points to the stream.
+	 *
+	 * No validation is performed on the contents of the string.
+	 *
+	 * @param s The string to be written.
+	 *
+	 * @return The number of bytes written to the underlying Writer.
+	 *
+	 * @exception IllegalArgumentException thrown if an invalid Unicode code point is written to the stream.
+	 */
+	public int write(string s) {
+		BufferReader r(&s[0], s.length());
+		UTF8Reader u(&r);
+
+		int written;
+		for (;;) {
+			int c = u.read();
+			if (c == EOF)
+				break;
+			written += write(c);
+		}
+		return written;
+	}
+	/**
+	 * Write a string.
+	 * Write zero or more Unicode code points to the stream.
+	 *
+	 * If the input array contains malformed surrogate pairs, the
+	 * malformed pairs are written as the {@link REPLACEMENT_CHARACTER}.
+	 *
+	 * @param s The string to be written.
+	 *
+	 * @return The number of bytes written to the underlying Writer.
+	 */
+	public int write(string16 s) {
+		return write(s.c_str(), s.length());
 	}
 }
 /**
