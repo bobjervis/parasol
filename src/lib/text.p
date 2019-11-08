@@ -506,8 +506,13 @@ public class string extends String<byte> {
 			return 0;
 		if (_contents.length == 1)
 			return pointer<byte>(&_contents.data)[0];
-		else
-			return pointer<byte>(&_contents.data)[0] + (pointer<byte>(&_contents.data)[_contents.length - 1] << 7);
+		else {
+			int sum = 0;
+			for (int i = 0; i < _contents.length; i++)
+				sum += pointer<byte>(&_contents.data)[i] << (i & 0x1f);
+			return sum;
+//			return pointer<byte>(&_contents.data)[0] + (pointer<byte>(&_contents.data)[_contents.length - 1] << 7);
+		}
 	}
 	/*
 	 *	indexOf

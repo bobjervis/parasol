@@ -480,7 +480,7 @@ public class HttpServer {
 			logger.error("Failed request for %s from %s", request.serviceResource, request.connection().sourceIPv4());
 		} catch (Exception e) {
 			logger.error("Failed request for %s from %s: Uncaught exception! %s\n%s", 
-								request.serviceResource, request.connection().sourceIPv4(), 
+								request.serviceResource, net.dottedIP(request.connection().sourceIPv4()), 
 								e.message(), e.textStackTrace());
 		}
 //		printf("miss!\n");

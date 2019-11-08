@@ -17,7 +17,7 @@ namespace parasol:process;
 
 import native:C;
 
-class Command {
+public class Command {
 	ref<BaseArgument>[string] _shortOptions;
 	ref<BaseArgument>[string] _longOptions;
 	int _finalMin;
