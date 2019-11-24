@@ -23,12 +23,15 @@ import parasol:memory;
 import parasol:runtime;
 import parasol:process;
 import parasol:stream.EOF;
+import parasol:exception.IllegalOperationException;
 /**
- * @ignore DO NOT CALL THIS FUNCTION
+ * DO NOT CALL THIS FUNCTION
  *
  * This is an internal support function called early in the runtime startup. 
  * It is not intended for general use and calling it can cause memory leaks and loss
  * of any buffered input or output.
+ *
+ * @ignore - do not document this function
  */
 public void setProcessStreams() {
 	boolean stdinIsATTY;
@@ -404,28 +407,31 @@ public class FileReader extends Reader {
 			_file.close();
 	}
 
-	public string, boolean readAll() {
+	public string readAll() {
 		seek(0, Seek.END);					// seek the stream to flush the buffer.
 		long pos = _file.tell();
 		_file.seek(0, Seek.START);
 		string data;
 
 		if (pos > int.MAX_VALUE)
-			return "", false;
+			throw IllegalOperationException("too large");
 		data.resize(int(pos));
 
 		int n = _file.read(&data[0], int(pos));
 		if (n < 0)
-			return "", false;
+			return "";
 		data.resize(n);
-		return data, true;
+		return data;
 	}
 
 	public int _read() {
 		if (_cursor >= _length) {
-			_length = _file.read(&_buffer);
-			if (_length == 0)
+			// If we don't reset the buffer contents until we know we are not at EOF,
+			// then when we do, unread will still work.
+			int len = _file.read(&_buffer);
+			if (len == 0)
 				return EOF;
+			_length = len;
 			_cursor = 1;
 			return _buffer[0];
 		}
@@ -602,6 +608,10 @@ public class StdinReader extends Reader {
 	protected int _read() {
 		process.stdout.flush();
 		return _reader._read();
+	}
+
+	public void unread() {
+		_reader.unread();
 	}
 }
 /*

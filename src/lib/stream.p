@@ -25,6 +25,28 @@
  *
  * Writers take objects or arrays of objects of some type and arranges them into a stream.
  *
+ * <h3>Text and encodings</h3>
+ *
+ * For historical reasons, the representation of files of text varies from one operating system
+ * to another. For that reason, Parasol, like C and C++, differentiate between text and binary files.
+ * Currently, this is an issue of sharing text files between Windows and Linux/UNIX systems.
+ * Various formats have been used by other operating systems that are now obsolete. While it is 
+ * possible that some future operating system may choose yet another format to promote, that seems
+ * technically unlikely. Masses of modern software have been written to the surviving two text formats
+ * (at least in part because the differences are so minor). As a result, none of that software could
+ * cheaply migrate to an operating system that did not employ one or the other of the existing
+ * formats.
+ *
+ * The text file format returned by a reader contains lines of text separated by a single newline
+ * character ('\n'). Each line of text is represented as a sequence of bytes. Whether the contents of the
+ * lines of text are encoded using UTF-8 or some other encoding is not specified.
+ *
+ * The intention of the design of the various Reader and Writer streams is to allow a developer to choose
+ * a class that is as simple as possible for the task at hand. For many applications, treating a file as
+ * binary will still yield correct results for text files. For applications that are sensitive to text
+ * line-separation may not need to care about which of a set of encodings (such as UTF-8 or ISO 8859-1) the 
+ * file uses.
+ *
  * @threading Readers are never thread safe. Writers may or may not be thread safe. Any
  * thread safety will be documented with the class.
  */
@@ -712,27 +734,93 @@ public class UTF16Writer {
  */
 @Constant
 public int EOF = -1;
-
+/**
+ * The general Reader class. Manipulation of input data is primarily driven through
+ * Reader objects.
+ *
+ * An input stream is modeled by instances of the Reader class to provide a source for
+ * a stream of bytes of data. Input streams have a variety of capabilities in keeping
+ * with the specifics of the underlying technology the data streams are using. For example, 
+ * files typically have a fixed size and can efficiently read the file contents continuously
+ * from beginning to end, or can randomly seek to various file positions and read data
+ * there. For another example, streams reading from a console device, like standard input, cannot
+ * be randomly positioned at all and can continue to read bytes indefinitely.
+ *
+ * The Reader class itself is abstract. It relies on each of several subclasses implementing
+ * a _read method that will actually interact with the underlying input source.
+ *
+ * There are also a number of methods provided that include default implementations. Sub-classes of Reader
+ * shall preserve the semantics of the default implementation but may override the implementation with 
+ * one optimized for the specific source of the Reader.
+ */
 public class Reader {
+	/**
+	 * Read the next byte from the input stream.
+	 *
+	 * This must be implemented by any sub-class of Reader.
+	 *
+	 * @return The next byte in the input stream. On end-of-file, the method returns {@link EOF}.
+	 *
+	 * @exception IOException Thrown if any error condition was encountered reading from the stream.
+	 */
 	protected abstract int _read();
-
+	/**
+	 * Read the next byte from the input stream.
+	 *
+	 * Each byte read will be converted to an int. THis is done to permit the use of a distinct value
+	 * for {@link EOF}. It will require, typically, that you use an explicit  conversion back to
+	 * byte once you have determined that the method did not return {@link EOF}.
+	 *
+	 * @return The next byte in the input stream. On end-of-file, the method returns {@link EOF}.
+	 *
+	 * @exception {@link parasol:exception.IOException} Thrown if any error condition was encountered reading from the stream.
+	 */
 	public int read() {
 		return _read();
 	}
-
-	public void unread() {
-	}
-
-	public string, boolean readAll() {
-		string s;
+	/**
+	 * Restore the last byte read.
+	 *
+	 * This method will adjust the position of the input stream to just before the last byte read.
+	 * If the stream is at the initial position or has just been positioned using a {@link seek}
+	 * method, this call has no effect.
+	 *
+	 * One byte of pushback is supported by all Readers. Each Reader class should document what
+	 * happens when this method is called more than once with no intervening calls that read data
+	 * from the stream. 
+	 */
+	public abstract void unread();
+	/**
+	 * Read the entire contents of a Reader into a string.
+	 *
+	 * @return The contents of the Reader. If the Reader immediately return EOF, an empty string is
+	 * returned.
+	 *
+	 * @exception parasol:exception.IOException Thrown if any error condition was encountered reading from the stream.
+	 *
+	 * @exception parasol:memory.OutOfMemoryException Thrown if the Reader's contents are larger
+	 * than {@link int.MAX_VALUE} bytes.
+	 */
+	public string readAll() {
+		string s = "";
 		for (;;) {
 			int c = _read();
 			if (c == EOF)
-				return s, true;
+				return s;
 			s.append(byte(c));
 		}
 	}
-
+	/**
+	 * Read bytes from the Reader.
+	 *
+	 * @param buffer he memory location of the buffer to hold the bytes that were read.
+	 *
+	 * @param length The number of bytes to read.
+	 *
+	 * @return The actual number of bytes read.
+	 *
+	 * @exception parasol:exception.IOException Thrown if any error condition was encountered reading from the stream.
+	 */
 	public long read(address buffer, long length) {
 		pointer<byte> input = pointer<byte>(buffer);
 
@@ -745,13 +833,32 @@ public class Reader {
 		return length;
 	}
 	/**
-	 * Reads text into a byte array buffer. 
+	 * Reads text into a byte array buffer.
+	 *
+	 * @param buffer A reference to the byte array to populate. The maximum number of bytes
+	 * that can be read is the length of the array before the call.
+	 *
+	 * @return The actual number of bytes read. The length of the array is not adjusted. Any
+	 * bytes in the array beyond the bytes read are unchanged.
+	 *
+	 * @exception parasol:exception.IOException Thrown if any error condition was encountered reading from the stream.
 	 */
 	public int read(ref<byte[]> buffer) {
 		return int(read(&(*buffer)[0], buffer.length()));
 	}
 	/**
 	 * Reads text into a char array buffer. 
+	 *
+	 * @param buffer A reference to the char array to populate. The maximum number of chars
+	 * that can be read is the length of the array before the call.
+	 *
+	 * @return The actual number of chars read. The length of the array is not adjusted. Any
+	 * chars in the array beyond the bytes read are unchanged.
+	 *
+	 * If an odd number of bytes are read when the Reader encounters end-of-file, the last byte
+	 * is pushed back on the Reader. Only full char's are returned.
+	 *
+	 * @exception parasol:exception.IOException Thrown if any error condition was encountered reading from the stream.
 	 */
 	public int read(ref<char[]> buffer) {
 		int i;
@@ -760,13 +867,24 @@ public class Reader {
 			if (lo == EOF)
 				break;
 			int hi = _read();
-			if (hi == EOF)
+			if (hi == EOF) {
+				unread();
 				break;
+			}
 			(*buffer)[i] = char(lo | (hi << 8));
 		}
 		return i;
 	}
-
+	/**
+	 * Read a line of text from the Reader.
+	 *
+	 * @return The line of text, excluding any line separator character. If the Reader
+	 * reports end-of-file before any content bytes are read, the methoed return null.
+	 * If a line separator is read and no content bytes appear on the line, an empty
+	 * string is returned.
+	 *
+	 * @exception parasol:exception.IOException Thrown if any error condition was encountered reading from the stream.
+	 */
 	public string readLine() {
 		string line = "";
 
@@ -785,19 +903,47 @@ public class Reader {
 			line.append(byte(c));
 		}
 	}
-
+	/**
+	 * Close any external connection associated with the Reader and rekease
+	 * any buffered data held by the Reader.
+	 *
+	 * @exception parasol:exception.IOException Thrown if any error condition was encountered trying to close the stream.
+	 */
 	public void close() {
 	}
-
+	/**
+	 * Check whether the Reader has a specific length.
+	 *
+	 * Some Readers are connected to objects like strings or files and therefore have a length
+	 * that can be interrogated.
+	 *
+	 * @return true if the {@link length} and {@link reset} methods can be called on this Reader, false otherwise.
+	 */
 	public boolean hasLength() {
 		return false;
 	}
-
+	/**
+	 * Fetch the remaining bytes to read.
+	 *
+	 * @eeturn The remaining number of bytes to be read from the Reader.
+	 *
+	 * @exception IllegalOperationException Thrown if the Reader returns false for the {@link hasLength} method.
+	 */
 	public long length() {
 		throw IllegalOperationException("length");
 		return 0;
 	}
-
+	/**
+	 * Reset the Reader.
+	 *
+	 * If this method does not throw an exception, the Reader will be reset to read all of the bytes from the 
+	 * input source. Note that if this Reader had been obtained from a File object that was not positioned at the
+	 * start of the file, then resetting the Reader will cause the entire file to be read after the call to reset.
+	 *
+	 * @exception IllegalOperationException Thrown if the Reader returns false for the {@link hasLength} method.
+	 *
+	 * @exception parasol:exception.IOException Thrown if any error condition was encountered trying to close the stream.
+	 */
 	public void reset() {
 		throw IllegalOperationException("reset");
 	}
@@ -823,6 +969,11 @@ public class BufferReader extends Reader {
 			return _buffer[_index++];
 		} else
 			return EOF;
+	}
+
+	public void unread() {
+		if (_index > 0)
+			--_index;
 	}
 
 	public boolean hasLength() {

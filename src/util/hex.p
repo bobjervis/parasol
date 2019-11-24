@@ -21,10 +21,9 @@ int main(string[] args) {
 		string filename = args[i];
 		ref<Reader> f = storage.openBinaryFile(filename);
 		string content;
-		boolean success;
-		(content, success) = f.readAll();
+		content = f.readAll();
 		delete f;
-		if (success) {
+		if (content != null) {
 			printf("%s:\n", filename);
 			text.memDump(&content[0], content.length(), 0);
 		} else

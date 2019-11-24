@@ -413,6 +413,28 @@ public class IllegalOperationException extends Exception {
 	}
 }
 /**
+ * This exception is thrown by a variety of runtime functions if a call detected an error on
+ * an external I/O device.
+ *
+ * This is most commonly triggered when reading or writing to an external device like a disk
+ * or network connection. It is not triggered by an end-of-file condition, nor by a failed
+ * file system operation. Those conditions must be detected by inspection of return values.
+ */
+public class IOException extends Exception {
+	public IOException() {
+	}
+
+	public IOException(string message) {
+		super(message);
+	}
+
+	ref<IOException> clone() {
+		ref<IOException> n = new IOException(_message);
+		n._exceptionContext = _exceptionContext;
+		return n;
+	}
+}
+/**
  * This exception is triggered by a SIGABRT signal and is generally a symptom of a
  * C runtime library failure. Most commonly, this is caused by corruption of the C memory heap.
  */

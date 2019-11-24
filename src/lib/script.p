@@ -292,12 +292,8 @@ public:
 		ref<Reader> f = storage.openTextFile(filename);
 		if (f == null)
 			return null;
-		string s;
-		boolean result;
-		(s, result) = f.readAll();
+		string s = f.readAll();
 		delete f;
-		if (!result)
-			return null;
 		ref<Parser> p = new Parser(s);
 		p._filename = storage.absolutePath(filename);
 		return p;

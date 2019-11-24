@@ -898,7 +898,7 @@ public monitor class Rendezvous {
 	}
 }
 /**
- * Base class useful for implementing synchronous sed-reply message pairs.
+ * Base class useful for implementing synchronous send-reply message pairs.
  *
  * This is a support class that can be used to build a synchronous call-response message pair. These give you the
  * functionality of an RPC. The typical approach would be to implement your proxy class by extending {@code RendezvousManager}

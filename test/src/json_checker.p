@@ -11,16 +11,14 @@ import parasol:json;
 int main(string[] args) {
 	ref<Reader> f = storage.openTextFile(args[0]);
 	if (f != null) {
-		string data;
-		boolean success;
-		
-		(data, success) = f.readAll();
-		if (!success) {
+		string data = f.readAll();
+		if (data == null) {
 			printf("Failed reading from %s\n", args[0]);
 			return 1;
 		}
 		delete f;
-		
+
+		boolean success;
 		var x;
 		
 		(x, success) = json.parse(data);

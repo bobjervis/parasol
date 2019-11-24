@@ -96,9 +96,14 @@ class CompileStringReader extends stream.Reader {
 	
 	public int _read() {
 		if (_cursor >= _source.length)
-			return -1;
+			return stream.EOF;
 		else
 			return _source.data[_cursor++];
+	}
+
+	public void unread() {
+		if (_cursor > 0)
+			--_cursor;
 	}
 }
 

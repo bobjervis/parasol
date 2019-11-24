@@ -89,6 +89,10 @@ td.nowrap {
     background-color:#EEEEEF;
 }
 
+div {
+	font-family: Arial, sans serif;
+}
+
 div.descriptioncol {
 	padding-top: 2mm;
 	padding-bottom: 2mm;
@@ -105,6 +109,7 @@ table.func-params {
 
 td {
 	vertical-align: top;
+	font-family: Arial, sans serif;
 }
 
 div.deprecated-outline {
@@ -126,7 +131,7 @@ div.threading, div.since, div.see, div.deprecated {
 }
 
 div.param-text {
-	font: 12pt "Times New Roman", serif;
+	font: 12pt "Arial", sans serif;
 	padding-left: 3mm;
 }
 

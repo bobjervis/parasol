@@ -22,6 +22,11 @@
  * One notable difference is the {@link native:linux.stat} call, which fills in a C stat structure.
  * Since Parasol does not allow a function and a class in the same scope to have the same name, for
  * Parasol, the class is called {@link native:linux.statStruct}.
+ *
+ * Another difference is that in C, the global variable errno looks like a normal variable. It is, in fact,
+ * some under-the-covers magic that actually uses a function (since each thread gets its own copy of errno).
+ * In Parasol, you must use the {@link errno} function to read the current value and the {@link set_errorno}
+ * function to change the value.
  */
 namespace native:linux;
 

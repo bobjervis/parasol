@@ -1242,26 +1242,27 @@ class String<class T> {
 			return 0;
 	}
 
-	private int reservedSize(int length) {
-		int usedSize = length + int.bytes + 1;
-		if (usedSize >= 0x40000000) {
-			return (usedSize * T.bytes + (MIN_SIZE - 1)) & ~(MIN_SIZE - 1);
-		}
-		int allocSize = MIN_SIZE;
+	private long reservedSize(int length) {
+		long usedSize = length + int.bytes + 1;
+		if (usedSize > int.MAX_VALUE)
+			// size overflow, indicates the new string length is too long
+			throw memory.OutOfMemoryException(length);
+
+		long allocSize = MIN_SIZE;
 		while (allocSize < usedSize)
 			allocSize <<= 1;
 		return allocSize * T.bytes;
 	}
 	
 	public void resize(int newLength) {
-		int newSize = reservedSize(newLength);
+		long newSize = reservedSize(newLength);
 		if (_contents != null) {
 			if (_contents.length >= newLength) {
 				_contents.length = newLength;
 				*(pointer<T>(&_contents.data) + newLength) = 0;
 				return;
 			}
-			int oldSize = reservedSize(_contents.length);
+			long oldSize = reservedSize(_contents.length);
 			if (oldSize == newSize) {
 				_contents.length = newLength;
 				*(pointer<T>(&_contents.data) + newLength) = 0;
@@ -1409,6 +1410,11 @@ public class StringReader extends Reader {
 			return (*_source)[_cursor++];
 	}
 
+	public void unread() {
+		if (_cursor > 0)
+			--_cursor;
+	}
+
 	public boolean hasLength() {
 		return true;
 	}
@@ -1447,6 +1453,11 @@ public class String16Reader extends Reader {
 			return -1;
 		else
 			return pointer<byte>(_source.c_str())[_cursor++];
+	}
+
+	public void unread() {
+		if (_cursor > 0)
+			--_cursor;
 	}
 
 	public boolean hasLength() {

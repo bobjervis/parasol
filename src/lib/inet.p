@@ -30,6 +30,7 @@ import parasol:stream;
 import parasol:thread;
 import openssl.org:ssl;
 import native:windows.WORD;
+import parasol:exception.IllegalOperationException;
 
 private ref<log.Logger> logger = log.getLogger("parasol.net");
 
@@ -391,30 +392,66 @@ public class Socket {
 
 class ConnectionReader extends Reader {
 	private ref<Connection> _connection;
+	private int _lastRead;
+	private boolean _unreadCalled;
 
 	public ConnectionReader(ref<Connection> connection) {
 		_connection = connection;
+		_lastRead = stream.EOF;
 	}
 
 	public int _read() {
 		byte b;
-		int i = _connection.read(pointer<byte>(&b), 1);
-		if (i > 0)
-			return b;
-		else
-			return stream.EOF;
+		if (_unreadCalled) {
+			b = byte(_lastRead);
+			_unreadCalled = false;
+		} else {
+			int i = _connection.read(pointer<byte>(&b), 1);
+			if (i <= 0)
+				return _lastRead = stream.EOF;
+			else
+				_lastRead = b;
+		}
+		return b;
+	}
+
+	public void unread() {
+		if (_lastRead != stream.EOF)
+			_unreadCalled = true;
 	}
 
 	public int read(ref<byte[]> buffer) {
-		return _connection.read(&(*buffer)[0], buffer.length());
+		if (_unreadCalled) {
+			buffer.resize(1);
+			(*buffer)[0] = byte(_lastRead);
+			_unreadCalled = false;
+			return 1;
+		} else {
+			_lastRead = stream.EOF;
+			return _connection.read(&(*buffer)[0], buffer.length());
+		}
 	}
 
 	public long read(address buffer, long length) {
-		return _connection.read(pointer<byte>(buffer), int(length));
+		if (_unreadCalled) {
+			*ref<byte>(buffer) = byte(_lastRead);
+			_unreadCalled = false;
+			return 1;
+		} else {
+			_lastRead = stream.EOF;
+			return _connection.read(pointer<byte>(buffer), int(length));
+		}
 	}
 
 	public int read(ref<char[]> buffer) {
-		return _connection.read(pointer<byte>(&(*buffer)[0]), buffer.length() * char.bytes);
+		if (_unreadCalled) {
+			_unreadCalled = false;
+			throw IllegalOperationException("read char array after unread");
+			return 1;
+		} else {
+			_lastRead = stream.EOF;
+			return _connection.read(pointer<byte>(&(*buffer)[0]), buffer.length() * char.bytes);
+		}
 	}
 }
 
