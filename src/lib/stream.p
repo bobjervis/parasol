@@ -37,9 +37,15 @@
  * cheaply migrate to an operating system that did not employ one or the other of the existing
  * formats.
  *
- * The text file format returned by a reader contains lines of text separated by a single newline
+ * The text file format returned by a Reader contains lines of text separated by a single newline
  * character ('\n'). Each line of text is represented as a sequence of bytes. Whether the contents of the
  * lines of text are encoded using UTF-8 or some other encoding is not specified.
+ *
+ * The text file format written by a Writer expects lines of text separated by the single newline (0x0a).
+ * As each line of text is written. The bytes of the text are written to the output stream without modification.
+ * Line separators are written in the format appropriate to the host operating system. Any bytes inserted
+ * into the output to represent a line separator are not counted in the bytes written by the call. Each line
+ * separator is counted as one byte written to the stream, regardless of host operating system.
  *
  * The intention of the design of the various Reader and Writer streams is to allow a developer to choose
  * a class that is as simple as possible for the task at hand. For many applications, treating a file as
@@ -747,7 +753,7 @@ public int EOF = -1;
  * be randomly positioned at all and can continue to read bytes indefinitely.
  *
  * The Reader class itself is abstract. It relies on each of several subclasses implementing
- * a _read method that will actually interact with the underlying input source.
+ * a _read and an unread method that will actually interact with the underlying input source.
  *
  * There are also a number of methods provided that include default implementations. Sub-classes of Reader
  * shall preserve the semantics of the default implementation but may override the implementation with 
@@ -767,7 +773,7 @@ public class Reader {
 	/**
 	 * Read the next byte from the input stream.
 	 *
-	 * Each byte read will be converted to an int. THis is done to permit the use of a distinct value
+	 * Each byte read will be converted to an int. This is done to permit the use of a distinct value
 	 * for {@link EOF}. It will require, typically, that you use an explicit  conversion back to
 	 * byte once you have determined that the method did not return {@link EOF}.
 	 *
@@ -948,17 +954,49 @@ public class Reader {
 		throw IllegalOperationException("reset");
 	}
 }
-
+/**
+ * Read bytes from a buffer.
+ *
+ * This Reader can be used to serialize any Parasol object, or an array of objects.
+ * In general, it is only valid to deserialize such data into the same object type
+ * using a {@link BufferWriter}.
+ *
+ * It is not portable to interpret the bytes returned from this Reader as any particular
+ * member of a class. 
+ * The order in memory of members of a class is unspecified. A Parasol compiler is free
+ * to assign memory offsets to members without regard to lexical order, for example.
+ *
+ * It is portable to assume that the first bytes of elements of an array of objects are the bytes of
+ * the first element selected for the BufferReader. The elements of an array are read in
+ * ascending index order.
+ */
 public class BufferReader extends Reader {
-	int _index;
+	long _index;
 	pointer<byte> _buffer;
-	int _length;
-
-	public BufferReader(address buffer, int length) {
+	long _length;
+	/**
+	 * Construct from the region of storage.
+	 *
+	 * If the address passed in the buffer parameter is a simple object, it is an error
+	 * to pass a length that is not the number of bytes in the class of the object.
+	 *
+	 * If the address passed in the buffer parameter is in an array of objects, it is an
+	 * error to pass a length that is not a multiple of the number of bytes in the class
+	 * of the array elements. Further, the range of object instances shall appear correctly
+	 * within and correctly align with the elements of the array.
+	 *
+	 * @param buffer The address of an object in memory.
+	 * @param length The number of bytes to read.
+	 */
+	public BufferReader(address buffer, long length) {
 		_buffer = pointer<byte>(buffer);
 		_length = length;
 	}
-
+	/**
+	 * Construct from a byte array.
+	 *
+	 * @param buffer A non-null reference to the array object.
+	 */
 	public BufferReader(ref<byte[]> buffer) {
 		_buffer = &(*buffer)[0];
 		_length = buffer.length();
@@ -988,46 +1026,149 @@ public class BufferReader extends Reader {
 		_index = 0;
 	}
 }
-
+/**
+ * The general Writer class. Manipulation of output data is primarily driven through
+ * Writer objects.
+ *
+ * An output stream is modeled by instances of the Writer class to provide a destination for
+ * a stream of bytes of data. You may only write data to the end of a stream. A Writer may
+ * buffer output data, so there is no guarantee that data written to different streams will
+ * appear in any particular order unless you call the {@link flush} method to ensure that
+ * any buffered data has been written to the destination.
+ *
+ * The Writer class itself is abstract. It relies on each of several subclasses implementing
+ * a _write method that will actually interact with the underlying output destination.
+ *
+ * There are also a number of methods provided that include default implementations. Sub-classes of Writer
+ * shall preserve the semantics of the default implementation but may override the implementation with 
+ * one optimized for the specific destination of the Writer.
+ */
 public class Writer {
+	/**
+	 * Write a byte to the output stream.
+	 *
+	 * This must be implemented by any sub-class of Reader.
+	 *
+	 * @param c The byte to be written.
+	 *
+	 * @exception IOException Thrown if any error condition was encountered writing to the stream.
+	 */
 	protected abstract void _write(byte c);
-
+	/**
+	 * Write a byte to the output stream.
+	 *
+	 * @param c The byte to be written.
+	 *
+	 * @exception IOException Thrown if any error condition was encountered writing to the stream.
+	 */
 	public void write(byte c) {
 		_write(c);
 	}
-
+	/**
+	 * Write a Unicode code point to the output stream.
+	 *
+	 * The code point is written in UTF-8 format.
+	 *
+	 * @param codePoint The code point to be written.
+	 *
+	 * @return The actual number of bytes written to the output stream.
+	 *
+	 * @exception IOException Thrown if any error condition was encountered writing to the stream.
+	 */
 	public int writeCodePoint(int codePoint) {
 		UTF8Writer w(this);
 
 		return w.write(codePoint);
 	}
-
+	/**
+	 * Flush any buffered data to the output stream.
+	 *
+	 * The call will return when all data has been written to the output stream.
+	 *
+	 * @exception IOException Thrown if any error condition was encountered writing to the stream.
+	 */
 	public void flush() {
 	}
-
+	/**
+	 * Close any external connection associated with the Writer and rekease
+	 * any buffered data held by the Writer.
+	 *
+	 * @exception parasol:exception.IOException Thrown if any error condition was encountered trying to close the stream.
+	 */
 	public void close() {
 	}
-
-	public int write(address buffer, int length) {
+	/**
+	 * Write object(s) to an output stream.
+	 *
+	 * If the address passed in the buffer parameter is a simple object, it is an error
+	 * to pass a length that is not the number of bytes in the class of the object.
+	 *
+	 * If the address passed in the buffer parameter is in an array of objects, it is an
+	 * error to pass a length that is not a multiple of the number of bytes in the class
+	 * of the array elements. Further, the range of object instances shall appear correctly
+	 * within and correctly align with the elements of the array.
+	 *
+	 * @param buffer The address of the memory to be written.
+	 * @param length The number of bytes to write.
+	 *
+	 * @return The number of bytes written.
+	 *
+	 * @exception IOException Thrown if any error condition was encountered writing to the stream.
+	 */
+	public long write(address buffer, long length) {
 		for (int i = 0; i < length; i++)
 			_write(pointer<byte>(buffer)[i]);
 		return length;
 	}
-
+	/**
+	 * Write the contents of a string.
+	 *
+	 * The bytes of the string are written as they are stored. No validation of the text encoding is
+	 * done.
+	 *
+	 * @param s The string to write.
+	 *
+	 * @return The number of bytes written.
+	 *
+	 * @exception IOException Thrown if any error condition was encountered writing to the stream.
+	 */
 	public int write(string s) {
 		for (int i = 0; i < s.length(); i++)
 			write(s[i]);
 		return s.length();
 	}
-
-	public int write(string16 s) {
+	/**
+	 * Write the contents of a string.
+	 *
+	 * The char's of the string are written as they are stored. No validation of the text encoding is
+	 * done. An even number of bytes will always be written.
+	 *
+	 * @param s The string to write.
+	 *
+	 * @return The number of bytes written.
+	 *
+	 * @exception IOException Thrown if any error condition was encountered writing to the stream.
+	 */
+	public long write(string16 s) {
 		return write(s.c_str(), s.length() * char.bytes);
 	}
-
-	public int write(ref<Reader> reader) {
+	/**
+	 * Write the contents of a stream provided by a Reader.
+	 *
+	 * The bytes of the Reader are read and copied to this output stream until end-of-file is
+	 * encountered. This call will block if the Reader has to wait for input.
+	 *
+	 * @param reader The Reader to use as the source for data.
+	 *
+	 * @return The number of bytes written.
+	 *
+	 * @exception IOException Thrown if any error condition was encountered reading from the
+	 * input or writing to the output stream.
+	 */
+	public long write(ref<Reader> reader) {
 		byte[] b;
 		b.resize(8096);
-		int totalWritten = 0;
+		long totalWritten = 0;
 		for (;;) {
 			int actual = reader.read(&b);
 			if (actual <= 0)
@@ -1104,6 +1245,25 @@ public class Writer {
 	 *		      The default is a Locale-dependent negative sign character before the field value.</td>
 	 *  </tr>
 	 *</table>
+	 *
+	 * <b>Width</b>
+	 *
+	 * Width may be:
+	 *
+	 * <ul>
+	 *     <li> A sequence of one or more decimal digits.
+	 *     <li> An asterisk (*) character. If present, the argument immediately after the last argument referenced
+	 *           is accessed as an integer.
+	 * </ul>
+	 *
+	 * The value of width shall be non-negative. The value specifies the minimum width in characters. If the actual
+	 * number of characters being formatted for the field value is less than the width, then pad characters are
+	 * written to ensure that at least the width is filled. What character is used as the pad and whether the padding
+	 * is placed on the left or right side of the field characters is determined by flags (see above).
+	 *
+	 * <b>Precision</b>
+	 *
+	 * <b>Conversions</b>
 	 *
 	 * @param format The format string to print
 	 * @param arguments The argument list to print using the given format
@@ -1546,7 +1706,7 @@ public class Writer {
 									bytesWritten++;
 								}
 								if (decimalPoint > 0)
-									bytesWritten += write(result, decimalPoint);
+									bytesWritten += int(write(result, decimalPoint));
 								if (precision > 0) {
 									bytesWritten += write(sep);
 									if (decimalPoint < 0) {

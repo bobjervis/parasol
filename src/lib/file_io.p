@@ -522,14 +522,14 @@ public class FileWriter extends Writer {
 		if (_fill >= BUFFER_SIZE)
 			flush();
 	}
-
+/*
 	public long tell() {
 		lock (_lock) {
 			return _file.seek(0, Seek.CURRENT) + _fill;
 		}
 	}
-
-	public long seek(long offset, Seek whence) {
+ */
+	protected long seek(long offset, Seek whence) {
 		lock (_lock) {
 			flush();
 			return _file.seek(offset, whence);
@@ -553,7 +553,7 @@ public class FileWriter extends Writer {
 		}
 	}
 
-	public int write(address buffer, int length) {
+	public long write(address buffer, int length) {
 		lock (_lock) {
 			return super.write(buffer, length);
 		}
