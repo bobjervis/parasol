@@ -975,7 +975,7 @@ public class BufferReader extends Reader {
 	pointer<byte> _buffer;
 	long _length;
 	/**
-	 * Construct from the region of storage.
+	 * Construct from a region of storage.
 	 *
 	 * If the address passed in the buffer parameter is a simple object, it is an error
 	 * to pass a length that is not the number of bytes in the class of the object.
@@ -1178,7 +1178,7 @@ public class Writer {
 		return totalWritten;
 	}
 	/**
-	 * Write a formatted string
+	 * Write a formatted string.
 	 *
 	 * The method writes characters from the format string to this Writer object until
 	 * a percent character is encountered (%). The percent character introduces a formatting
@@ -2353,16 +2353,43 @@ private string insertSeparators(pointer<byte> digits, int length, ref<internatio
 	}
 	return result;
 }
-
+/**
+ * Write bytes to a buffer.
+ *
+ * This Writer can be used to deserialize a Parasol object, or an array of objects.
+ * In general, it is only portable to deserialize such data into the same object type
+ * as was serialized using a {@link BufferReader}.
+ *
+ * It is portable to assume that the first bytes of elements of an array of objects are the bytes of
+ * the first element selected for the BufferWriter. The elements of an array are written in
+ * ascending index order.
+ */
 public class BufferWriter extends Writer {
 	pointer<byte> _buffer;
 	int _length;
-
+	/**
+	 * Construct from a region of storage.
+	 *
+	 * If the address passed in the buffer parameter is a simple object, it is an error
+	 * to pass a length that is not the number of bytes in the class of the object.
+	 *
+	 * If the address passed in the buffer parameter is in an array of objects, it is an
+	 * error to pass a length that is not a multiple of the number of bytes in the class
+	 * of the array elements. Further, the range of object instances shall appear correctly
+	 * within and correctly align with the elements of the array.
+	 *
+	 * @param buffer The address of an object in memory.
+	 * @param length The maximum number of bytes to write.
+	 */
 	public BufferWriter(address buffer, int length) {
 		_buffer = pointer<byte>(buffer);
 		_length = length;
 	}
-
+	/**
+	 * Construct from a byte array.
+	 *
+	 * @param buffer A non-null reference to the array object.
+	 */
 	public BufferWriter(ref<byte[]> buffer) {
 		_buffer = &(*buffer)[0];
 		_length = buffer.length();
