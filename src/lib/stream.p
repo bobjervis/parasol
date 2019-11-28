@@ -1191,6 +1191,10 @@ public class Writer {
 	 *
 	 *  {@code %[argument_index$][flags][width][.precision]conversion}
 	 *
+	 * If a format specifier is malformed due to invalid flag or conversion characters or the
+	 * conversion does not match the data type of the selected argument, the format specifier
+	 * itself is written to the output stream.
+	 *
 	 * <b>Argument Index</b>
 	 *
 	 * The argument index may be the following:
@@ -1253,27 +1257,240 @@ public class Writer {
 	 * <ul>
 	 *     <li> A sequence of one or more decimal digits.
 	 *     <li> An asterisk (*) character. If present, the argument immediately after the last argument referenced
-	 *           is accessed as an integer.
+	 *           is accessed as an integer. That becomes the new last argument referenced.
 	 * </ul>
 	 *
-	 * The value of width shall be non-negative. The value specifies the minimum width in characters. If the actual
-	 * number of characters being formatted for the field value is less than the width, then pad characters are
+	 * The value specifies the minimum width in characters. If the actual number of characters being formatted for
+	 * the field value is less than the width, then pad characters are
 	 * written to ensure that at least the width is filled. What character is used as the pad and whether the padding
 	 * is placed on the left or right side of the field characters is determined by flags (see above).
 	 *
 	 * <b>Precision</b>
 	 *
+	 * Precision may be:
+	 *
+	 * <ul>
+	 *     <li> A sequence of one or more decimal digits.
+	 *     <li> An asterisk (*) character. If present, the argument immediately after the last argument referenced
+	 *           is accessed as an integer. That becomes the new last argument referenced.
+	 * </ul>
+	 *
+	 * The value  of precision is interpreted according to the conversion applied.
+	 *
 	 * <b>Conversions</b>
+	 *
+	 * A valid conversion is a single character from the following list:
+	 *
+	 * <table class=options>
+	 *     <trh><th>Character</th><th>Description</th></tr>
+	 *     <tr><td>%</td><td>
+	 *			The percent (%) character itself is printed. The width field and alignment flag
+	 *			are used to pad the field. Other flags and fields are ignored. No argument is
+	 *			fetched from the argument list, but the identity of the last referenced argument
+	 *			is set if the format specifier includes an argument index.
+	 *     </td></tr>
+	 *     <tr><td>c</td><td>
+	 *			The next argument must be an integer. It's value is interpreted as a Unicode code point
+	 *			and the corresponding character is written as UTF-8 text. If the value is not a valid Unicode code point,
+	 *			an IllegalArgumentException is thrown. Precision is ignored.
+	 *     </td></tr>
+	 *     <tr><td>d</td><td>
+	 *			The next argument must be a number. The value is converted to long and formatted
+	 *			as a string of decimal digits. Leading zero digits are added to ensure that the
+	 *			number of characters of output are at least the precision. The flags determine
+	 *			how sign is written and whether grouping separators are used in the number.
+	 *     </td></tr>
+	 *     <tr><td>e, E</td><td>
+	 *			Scientific notation decimal value.
+	 *			<p>
+	 *			The next argument must be a number. The value is converted to double and formatted
+	 *			as a single digit, a locale-specific decimal point character, a string of decimal
+	 *			digits representing the fraction with as many digits as specified by the precision,
+	 *			followed by an exponent.
+	 *			<p>
+	 *			If the precision is not included in the format specifier the default precision is 6.
+	 *			<p>
+	 *			The exponent consists of an e or E (corresponding to the conversion character), a
+	 *			locale-specific sign character and at least two decimal digits.
+	 *     </td></tr>
+	 *     <tr><td>f</td><td>
+	 *			Fixed decimal point value.
+	 *			<p>
+	 *			The next argument must be a number. The value is converted to double and formatted
+	 *			as one or more decimal digits, a locale-specific decimal point character, and a string
+	 *			of decimal digits representing the fraction with as many digits as specified by the precision.
+	 *			<p>
+	 *			If the precision is not included in the format specifier the default precision is 6.
+	 *     </td></tr>
+	 *     <tr><td>g, G</td><td>
+	 *			The next argument must be a number. The value is converted to double and formatted
+	 *			using either fixed or scientific notation, whichever is shorter. If scientific notation
+	 *			is used, the exponent begins with a lower-case letter e if this conversion character is
+	 *			lower-case, otherwise an upper-case E is printed.
+	 *     </td></tr>
+	 *     <tr><td>p</td><td>
+	 *			The next argument must be an address. The value is formatted in a manner consistent with
+	 *			the way that address values are typically displayed on the system in question. Typically
+	 *			this will be some form of hexadecimal display.
+	 *     </td></tr>
+	 *     <tr><td>s</td><td>
+	 *			The next argument must be a {@link boolean}, {@link string}, {@link string16} or a 
+	 *			{@code pointer<byte>}. Each type is converted to a Unicode string and written to the
+	 *			output stream as utf-8 text. Width and precision are applied in terms of Unicode characters
+	 *			not bytes. Thus a character that requires two or three bytes of utf-8 encoding would only
+	 *			count as a single character for width or precision effects.
+	 *			<p>
+	 *			<table class=options>
+	 *				<tr><th>Type</th><th>Formatting</th></tr>
+	 *				<tr><td>boolean</td><td>
+	 *					The value is converted to string.
+	 *				</td></tr>
+	 *				<tr><td>string</td><td>
+	 *					The bytes of the string are converted to Unicode characters and then written 
+	 *					encoded using utf-8. If any bytes of the string are not valid utf-8 encoded characters,
+	 *					they are converted to Unicode substituTe characters.
+	 *				</td></tr>
+	 *				<tr><td>string16</td><td>
+	 *					The string16 text is converted from utf-16 to utf-8.
+	 *				</td></tr>
+	 *				<tr><td>pointer<byte></td><td>
+	 *					A string is constructed from the pointer value, thus including all bytes at
+	 *					the pointer location up to the next null byte. The resulting string is then
+	 *					converted to a number of Unicode characters and then encoded in utf-8. If any 
+	 *					bytes of the CONSTRUCTED string are not valid utf-8 encoded characters,
+	 *					they are converted to Unicode substituTe characters.
+	 *				</td></tr>
+	 *			</table>
+	 *			<p>
+	 *			Padding is applied sufficient to ensure at least width characters are written.
+	 *			<p>
+	 *			If a precision is specified then the initial characters of the text will be written
+	 *			up to the value of precision. 
+	 *     </td></tr>
+	 *     <tr><td>t, T</td><td>
+	 *			The next argument must be a long or a {@link parasol:time.Time Time} object. If the
+	 *			argument is a long, a Time object is constructed from it. The resulting time value is then
+	 *			formatted according to the second conversion character.
+	 *			<p>
+	 *			<table class=options>
+	 *				<tr><th>Time Conversion</th><th>Formatting</th></tr>
+	 *				<tr><td>a</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>A</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>b</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>B</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>c</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>C</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>d</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>D</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>e</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>F</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>H</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>I</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>j</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>k</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>l</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>L</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>m</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>M</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>N</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>p</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>Q</td><td>
+	 *					Milliseconds since the beginning of the epoch, January 1, 1970 00:00:00 UTC.
+	 *				</td></tr>
+	 *				<tr><td>r</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>R</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>s</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>S</td><td>
+	 *					Seconds since the beginning of the epoch, January 1, 1970 00:00:00 UTC.
+	 *				</td></tr>
+	 *				<tr><td>T</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>y</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>Y</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>z</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>z</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *			</table>
+	 *			<p>
+	 *			Precision is ignored.
+	 *     </td></tr>
+	 *     <tr><td>x, X</td><td>
+	 *			The next argument must be a number. The value is converted to long and formatted
+	 *			as a string of hexadecimal digits. Leading zero digits are added to ensure that the
+	 *			number of characters of output are at least the precision.
+	 *			<p>
+	 *			Any alphabetic characters in the output are lower-case if the conversion character is
+	 *			lower-case, otherwise they are upper-case.
+	 *			<p>
+	 *			If the alternate form flag (#) is present, a leading {@code 0x} is added to the
+	 *			field value. 
+	 *     </td></tr>
+	 * </table>
 	 *
 	 * @param format The format string to print
 	 * @param arguments The argument list to print using the given format
 	 *
-	 * @return The number of bytes printed.
+	 * @return The number of bytes printed. Because of UTF encoding, this may be more than the number
+	 * of Unicode characters written.
 	 *
 	 * @exception BoundsException Thrown when a formatting specifier designates an
 	 * out-of-bounds elemenet in the arguments array.
 	 * @exception IllegalArgumentExceptio Thrown when a formatting specifier is malformed
-	 * in some way. The message should provides additional detail.
+	 * in some way. The message should provide additional detail.
 	 */
 	public int printf(string format, var... arguments) {
 		ref<international.Locale> locale;
@@ -1546,7 +1763,6 @@ public class Writer {
 								width = precision;
 							switch (format[i]) {
 							case	'd':
-							case	'D':
 								long ivalue = long(arguments[nextArgument]);
 								nextArgument++;
 								string formatted(ivalue);
@@ -1705,8 +1921,13 @@ public class Writer {
 									_write(' ');
 									bytesWritten++;
 								}
-								if (decimalPoint > 0)
-									bytesWritten += int(write(result, decimalPoint));
+								if (decimalPoint > 0) {
+									if (groupingSeparators) {
+										string formatted = insertSeparators(&result[0], decimalPoint, locale.decimalStyle());
+										bytesWritten += write(formatted);
+									} else
+										bytesWritten += int(write(result, decimalPoint));
+								}
 								if (precision > 0) {
 									bytesWritten += write(sep);
 									if (decimalPoint < 0) {
@@ -2009,8 +2230,6 @@ public class Writer {
 									}
 								}
 
-								if (precisionSpecified && precision < len)
-									len = precision;
 								write(&buffer[0], len);
 								if (leftJustified) {
 									while (width > len) {

@@ -112,6 +112,23 @@ td {
 	font-family: Arial, sans serif;
 }
 
+table.options {
+	border-width: 2px;
+	border-style: solid;
+	border-color: black;
+	border-collapse: collapse;
+	margin-left: 4mm;
+	margin-right: 4mm;
+}
+
+table.options td, table.options th {
+	border-width: 1px;
+	border-style: solid;
+	border-color: black;
+	border-collapse: collapse;
+	padding: 1mm;
+}
+
 div.deprecated-outline {
 	margin: 3mm;
 	border-radius: 8mm;
