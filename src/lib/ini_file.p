@@ -101,7 +101,7 @@ public class IniFile {
 	 *
 	 * @param The name of the section from the .ini file.
 	 *
-	 * @return an Object instance. Each field of the Object has label of the property as its key and
+	 * @return an Object instance. Each field of the Object has the label of the property as its key and
 	 * the value of the property as its value. If the requested section was not present in the .ini file,
 	 * the the value null is returned.
 	 */

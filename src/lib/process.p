@@ -37,14 +37,20 @@ import native:C;
 private ref<log.Logger> logger = log.getLogger("parasol.process");
 /**
  * A Reader reading from the process' stdin file descriptor.
+ *
+ * Deleting the Reader will close the stdin stream.
  */
 public ref<Reader> stdin;
 /**
  * A Writer writing to the process' stdout file descriptor.
+ *
+ * Deleting the Writer will close the stdout stream.
  */
 public ref<Writer> stdout;
 /**
  * A Writer writing to the process' stderr file descriptor.
+ *
+ * Deleting the Writer will close the stderr stream.
  */
 public ref<Writer> stderr;
 /**
@@ -914,12 +920,12 @@ private void drain(address data) {
 	
 	buffer.resize(64*1024);
 	for (;;) {
-		int result = linux.read(d.fd, &buffer[0], buffer.length());
+		long result = linux.read(d.fd, &buffer[0], buffer.length());
 		if (result < 0)
 			break;
 		if (d.stopOnZero && result == 0)
 			break;
-		for (int i = 0; i < result; i++)
+		for (int i = 0; i < int(result); i++)
 			if (buffer[i] != '\r')
 				d.output.append(buffer[i]);
 	}

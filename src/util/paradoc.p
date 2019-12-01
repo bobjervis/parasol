@@ -119,6 +119,7 @@ map<string, long> classFiles;
 Arena arena;
 
 int main(string[] args) {
+	process.stdout.flush();
 	parseCommandLine(args);
 	outputFolder = finalArgs[0];
 
@@ -128,12 +129,14 @@ int main(string[] args) {
 //		anyFailure = true;
 	}
 
+//	printf("Configuring\n");
 	if (!configureArena(&arena))
 		return 1;
 	CompileContext context(&arena, arena.global(), paradocCommand.verboseArgument.value);
 
 	for (int i = 1; i < finalArgs.length(); i++)
 		libraries.append(arena.compilePackage(i - 1, &context));
+//	printf("Starting!\n");
 	arena.finishCompilePackages(&context);
 
 	// We are now done with compiling, time to analyze the results
@@ -148,6 +151,7 @@ int main(string[] args) {
 		arena.printMessages();
 		anyFailure = true;
 	}
+//	printf("Done!\n");
 	if (outputFolder != null) {
 		if (storage.exists(outputFolder) && !storage.deleteDirectoryTree(outputFolder)) {
 			printf("Failed to clean up old output folder '%s'\n", outputFolder);

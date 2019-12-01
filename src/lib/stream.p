@@ -1134,7 +1134,7 @@ public class Writer {
 	 */
 	public int write(string s) {
 		for (int i = 0; i < s.length(); i++)
-			write(s[i]);
+			_write(s[i]);
 		return s.length();
 	}
 	/**

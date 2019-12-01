@@ -265,7 +265,7 @@ public abstract pthread_t pthread_sigmask(int how, ref<sigset_t> set, ref<sigset
 public abstract int ptsname_r(int fd, pointer<byte> buf, size_t buflen);
 
 @Linux("libc.so.6", "read")
-public abstract int read(int fd, address buffer, long bufferSize);
+public abstract long read(int fd, address buffer, long bufferSize);
 
 @Linux("libc.so.6", "readdir_r")
 public abstract int readdir_r(ref<DIR> dir, ref<dirent> entry, ref<ref<dirent>> result);
@@ -442,7 +442,7 @@ public abstract pid_t wait(ref<int> exitStatus);
 public abstract pid_t waitpid(pid_t pid, ref<int> exitStatus, int options);
 
 @Linux("libc.so.6", "write")
-public abstract int write(int fd, address buffer, long bufferSize);
+public abstract long write(int fd, address buffer, long bufferSize);
 
 @Linux("libc.so.6", "__fxstat")
 public abstract int __fxstat(int statVersion, int fd, ref<statStruct> buf);

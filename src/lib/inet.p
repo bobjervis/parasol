@@ -807,7 +807,9 @@ class PlainConnection extends Connection {
 	public ref<Reader> getReader() {
 		if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			storage.File f(_acceptfd);
-			return f.getBinaryReader();
+			ref<Reader> r = f.getBinaryReader();
+			f.dontCloseOnDestructor();
+			return r;
 		} else
 			return new ConnectionReader(this);
 	}
@@ -815,7 +817,9 @@ class PlainConnection extends Connection {
 	public ref<Writer> getWriter() {
 		if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			storage.File f(_acceptfd);
-			return f.getBinaryWriter();
+			ref<Writer> w = f.getBinaryWriter();
+			f.dontCloseOnDestructor();
+			return w;
 		} else
 			return new ConnectionWriter(this);
 	}
