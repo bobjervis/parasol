@@ -17,7 +17,6 @@ namespace parasol:compiler;
 
 import native:C;
 import parasol:text;
-import parasol:stream.UTF8Reader;
 
 public enum Operator {
 	// SyntaxError
@@ -1556,17 +1555,17 @@ public class Constant extends Node {
 		if (_value.length == 0)
 			return -1;
 		CompileStringReader r(_value);
-		UTF8Reader ur(&r);
+		text.UTF8Decoder ur(&r);
 		
-		int c = ur.read();
+		int c = ur.decodeNext();
 		if (codePointClass(c) == 0) {
-			c = ur.read();
+			c = ur.decodeNext();
 			if (c < 0)
 				return 0;			// the constant is just a '0' (or alternate decimal zero)
 			if (c == 'x' || c == 'X') {
 				for (;;) {
 					int digit;
-					c = ur.read();
+					c = ur.decodeNext();
 					if (c < 0)
 						break;
 					if (codePointClass(c) == CPC_LETTER)
@@ -1578,13 +1577,13 @@ public class Constant extends Node {
 			} else {
 				do {
 					v = v * 8 + codePointClass(c);
-					c = ur.read();
+					c = ur.decodeNext();
 				} while (c >= 0);
 			}
 		} else {
 			do {
 				v = v * 10 + codePointClass(c);
-				c = ur.read();
+				c = ur.decodeNext();
 			} while (c >= 0);
 		}
 		return v;

@@ -15,6 +15,7 @@
  */
 import parasol:text.string16;
 import parasol:storage;
+import parasol:text;
 
 int main(string[] args) {
 	if (args.length() != 1) {
@@ -31,6 +32,14 @@ int main(string[] args) {
 	string s3(s2);
 
 	printf("s has %d octets s2 has %d char's and s3 has %d octets\n", s.length(), s2.length(), s3.length());
+	if (s != s3) {
+		printf("s:\n");
+		text.memDump(&s[0], s.length(), 0);
+		printf("s2:\n");
+		text.memDump(s2.c_str(), s2.length() * char.bytes, 0);
+		printf("s3:\n");
+		text.memDump(&s3[0], s3.length(), 0);
+	}
 	assert(s == s3);
 	return 0;
 }

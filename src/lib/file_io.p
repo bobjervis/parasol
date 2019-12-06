@@ -23,7 +23,7 @@ import parasol:memory;
 import parasol:runtime;
 import parasol:process;
 import parasol:stream.EOF;
-import parasol:stream.UTF8Writer;
+import parasol:text.UTF8Encoder;
 import parasol:text.StringWriter;
 import parasol:exception.IllegalOperationException;
 import parasol:exception.IOException;
@@ -804,20 +804,7 @@ public class FileWriter extends Writer {
 			_write(c);
 		}
 	}
-/*
-	public long tell() {
-		lock (_lock) {
-			return _file.seek(0, Seek.CURRENT) + _fill;
-		}
-	}
 
-	protected long seek(long offset, Seek whence) {
-		lock (_lock) {
-			flush();
-			return _file.seek(offset, whence);
-		}
-	}
- */
 	public void flush() {
 		lock (_lock) {
 			if (_fill > 0) {
@@ -854,12 +841,12 @@ public class FileWriter extends Writer {
 	}
 
 	public int writeCodePoint(int codePoint) {
-		lock (_lock) {
-			string s;
-			StringWriter sw(&s);
-			UTF8Writer w(&sw);
+		string s;
+		StringWriter sw(&s);
+		UTF8Encoder e(&sw);
 
-			w.write(codePoint);
+		e.encode(codePoint);
+		lock (_lock) {
 			return super.write(s);
 		}
 	}

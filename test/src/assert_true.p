@@ -15,8 +15,4 @@
  */
 import parasol:text;
 
-text.ignoring = true;
-printf("Deleted %d strings\n", text.deletedContents.length());
-for (int i = 0; i < text.deletedContents.length(); i++)
-	printf("[%3.3d] %p\n", i, text.deletedContents[i]);
 assert(true);
