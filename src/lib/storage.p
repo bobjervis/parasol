@@ -37,9 +37,10 @@ import native:windows.FILE_ATTRIBUTE_REPARSE_POINT;
 import native:windows.GetFileAttributes;
 import native:windows.GetFullPathName;
 import native:windows.RemoveDirectory;
-
+/*
 public class FileSystem {
 }
+ */
 /**
  * Construct an absoluute path to the file system entity described by the argument.
  *
@@ -63,7 +64,7 @@ public class FileSystem {
  *
  * @param filepath The filename path convert to an absolute path.
  *
- * @return The constructed absolute path, or null if no meaning absolute path could be constructed.
+ * @return The constructed absolute path, or null if no meaningful absolute path could be constructed.
  */
 public string absolutePath(string filepath) {
 	string buffer;
@@ -130,13 +131,40 @@ private string composeAbsolutePath(string[] components) {
 		path += "/" + results[i];
 	return path;
 }
-
+/**
+ * File Access flags.
+ *
+ * The only portable file access settings are the current user's settings. Each file
+ * in the local file system can be accessed in one of three ways: read, write or execute.
+ *
+ * The runtime allows you to query or set these values. Having access to a file does not
+ * necessarily permit you to change those permissions.
+ */
 public flags AccessFlags {
+	/**
+	 * The calling user has permission to execute this file.
+	 */
 	EXECUTE,
+	/**
+	 * The calling user has permission to write data to this file.
+	 */
 	WRITE,
+	/**
+	 * The calling user has permission to read data from this file.
+	 */
 	READ
 }
-
+/**
+ * Get the current user's access permissions for a file.
+ *
+ * @param filename The file to read permissions from.
+ *
+ * @return The access values for the current user. If the value of the second return expression
+ * is false, this value is zero.
+ *
+ * @return true if the access flags could be read for the named file, or false otherwise. 
+ * For example, if the file does not exist, this return expression would be false.
+ */
 public AccessFlags, boolean getUserAccess(string filename) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		return 0, false;
@@ -148,7 +176,18 @@ public AccessFlags, boolean getUserAccess(string filename) {
 	} else
 		return 0, false;
 }
-
+/**
+ * Set the owner's access permissions for a file.
+ *
+ * This function will succeed if the current user owns the file or has special permissions. For
+ * example, on Linux, if the user is root, this function sets the owner's permissions, whether the
+ * file is owned by root or by any other user.
+ * 
+ * @param filename The file to set permissions for.
+ *
+ * @return true if the access flags could be set for the named file, or false otherwise. For example,
+ * if the file does not exist, this value would be false.
+ */
 public boolean setUserAccess(string filename, AccessFlags newAccess) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		return false;
@@ -163,7 +202,20 @@ public boolean setUserAccess(string filename, AccessFlags newAccess) {
 	}
 	return false;
 }
-
+/**
+ * Make the named file executable (or not) for the owner.
+ *
+ * This function will succeed if the current user owns the file or has special permissions. For
+ * example, on Linux, if the user is root, this function sets the owner's permissions, whether the
+ * file is owned by root or by any other user.
+ * 
+ * @param filename The file to set permissions for.
+ *
+ * @param executable True to make the file executable, or false to make the file not executable.
+ *
+ * @return true if the executable flag could be set or cleared for the named file, or false otherwise. For example,
+ * if the file does not exist, this value would be false.
+ */
 public boolean setExecutable(string filename, boolean executable) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		return false;
@@ -178,7 +230,20 @@ public boolean setExecutable(string filename, boolean executable) {
 	} else
 		return false;
 }
-
+/**
+ * Make the named file read-only (or writable) for the owner.
+ *
+ * This function will succeed if the current user owns the file or has special permissions. For
+ * example, on Linux, if the user is root, this function sets the owner's permissions, whether the
+ * file is owned by root or by any other user.
+ * 
+ * @param filename The file to set permissions for.
+ *
+ * @param executable True to make the file read-only, or false to make the file writable.
+ *
+ * @return true if the write access flag could be set for the named file, or false otherwise. For example,
+ * if the file does not exist, this value would be false.
+ */
 public boolean setReadOnly(string filename, boolean readOnly) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		return false;
@@ -196,7 +261,7 @@ public boolean setReadOnly(string filename, boolean readOnly) {
 /**
  * Returns the last component (the filename part) of a path string.
  *
- * @param filename Ab absolute or relative path for a file.
+ * @param filename Absolute or relative path for a file.
  *
  * @return The substring following the last path separator character recognized by the host operating system.
  * If the string contains no such separator, the function returns the filename parameter.
@@ -213,7 +278,20 @@ public string filename(string filename) {
 	}
 	return filename;
 }
-
+/**
+ * Construct a path from a directory and a file name.
+ *
+ * The resulting path is created by combining the directory and filename portions
+ * with a path separator. If the directory portion ends with such a separator, the
+ * filename is simply appended to the directory and the resulting string is returned.
+ *
+ * @param directory The directory portion of the path. This string may end with a path
+ * separator character.
+ *
+ * @param filename The filename portion of the path.
+ *
+ * @return The resulting file path. 
+ */
 public string constructPath(string directory, string filename) {
 	return constructPath(directory, filename, null);
 }
@@ -256,7 +334,18 @@ public string constructPath(string directory, string baseName, string extension)
 	}
 	return base;
 }
-
+/**
+ * Extract the directory portion of a file path.
+ *
+ * The portion of the string after the last path separator is returned.
+ * If the last path separator character appears as the first character in the
+ * string (e.g. '/abc', then the directory "/" is returned. If no path
+ * separator at all appears in the filename, the directory "." is returned.
+ *
+ * @param filename The filename path.
+ *
+ * @return The directory portion.
+ */
 public string directory(string filename) {
 	for (int x = filename.length() - 1; x >= 0; x--) {
 		if (filename[x] == '\\' || filename[x] == '/') {
@@ -309,7 +398,15 @@ public boolean pathStartsWith(string path, string prefix) {
 	}
 	return false;
 }
-
+/**
+ * Check for the existence of a file.
+ *
+ * @param filename The path of the file being checked.
+ *
+ * @return true if the path names an existing file, false otherwise.
+ * If any of the directories named in the path exist but the user does not
+ * have permission to search that directory, this call will return false.
+ */
 public boolean exists(string filename) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		DWORD r = GetFileAttributes(&filename[0]);
@@ -325,19 +422,45 @@ public boolean exists(string filename) {
 	} else
 		return false;
 }
-
+/**
+ * Check whether a filename is a symbolic link.
+ *
+ * Note that if a path names a symbolic link, the {@link exists} method may
+ * return false because the target of the link does not exist, but this method will
+ * return true because the link does exist.
+ *
+ * @param filename The path of the file being checked.
+ *
+ * @return true if the path names a symbolic link, false otherwise.
+ * If any of the directories named in the path exist but the user does not
+ * have permission to search that directory, this call will return false.
+ */
 public boolean isSymLink(string filename) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-		return false;
+		DWORD r = GetFileAttributes(&filename[0]);
+		if (r == 0xffffffff)
+			return false;
+		else
+			return (r & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		linux.statStruct statb;
 
 		int result = linux.lstat(filename.c_str(), &statb);
-		return result == 0 && (statb.st_mode & linux.S_IFMT) == linux.S_IFLNK;
+		return result == 0 && linux.S_ISLNK(statb.st_mode);
 	} else
 		return false;
 }
-
+/**
+ * Delete a symbolic link.
+ *
+ * The target of the link is unaffected by this call.
+ *
+ * @param filename The path of the symbolic link being deleted.
+ *
+ * @return true if the path names a symbolic link and it was deleted, false otherwise.
+ * If any of the directories named in the path exist but the user does not
+ * have permission to search that directory, this call will return false.
+ */
 public boolean deleteSymLink(string filename) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		return false;
@@ -346,7 +469,15 @@ public boolean deleteSymLink(string filename) {
 	else
 		return false;
 }
-
+/**
+ * Check whether a filename is a directory.
+ *
+ * @param filename The path of the file being checked.
+ *
+ * @return true if the path names a directory, false otherwise.
+ * If any of the directories named in the path exist but the user does not
+ * have permission to search that directory, this call will return false.
+ */
 public boolean isDirectory(string filename) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		DWORD r = GetFileAttributes(&filename[0]);
@@ -362,23 +493,16 @@ public boolean isDirectory(string filename) {
 	} else
 		return false;
 }
-
-public boolean isLink(string filename) {
-	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-		DWORD r = GetFileAttributes(&filename[0]);
-		if (r == 0xffffffff)
-			return false;
-		else
-			return (r & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
-	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-		linux.statStruct statb;
-		
-		int result = linux.stat(filename.c_str(), &statb);
-		return result == 0 && linux.S_ISLNK(statb.st_mode);
-	} else
-		return false;
-}
-
+/**
+ * Get the size, in bytes, of a file.
+ *
+ * @param filename The file path to check.
+ *
+ * @return The size, in bytes, of the file. If the file does not exist or otherwise
+ * cannot determine a size, -1 is returned.
+ *
+ * @return true if the file size can be determined, false otherwise.
+ */
 public long, boolean size(string filename) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
@@ -462,7 +586,15 @@ public time.Instant, time.Instant, time.Instant, boolean fileTimes(string filena
 	}
 	return time.Instant(-1, -1), time.Instant(-1, -1), time.Instant(-1, -1), false;
 }
-
+/**
+ * Create a symbolic link to a path.
+ *
+ * @param oldPath The path that should become the target of the link.
+ *
+ * @param newPath The symbolic link to create.
+ *
+ * @return true if the symbolic link could be created, false otehrwise.
+ */
 public boolean createSymLink(string oldPath, string newPath) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		return false;
@@ -471,7 +603,14 @@ public boolean createSymLink(string oldPath, string newPath) {
 	} else
 		return false;
 }
-
+/**
+ * Read the target of a symbolic link.
+ *
+ * @param path The path to the symbolic link.
+ *
+ * @return The target of the symbolic link, or null if the symbolic link does not 
+ * exist or otherwise could not be read.
+ */
 public string readSymLink(string path) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
@@ -486,11 +625,32 @@ public string readSymLink(string path) {
 	}
 	return null;
 }
-
+/**
+ * Create a directory.
+ *
+ * The resulting directory will not be readable, writable or searchable by another user.
+ *
+ * @param path The path of the new directory to create.
+ *
+ * @return true if the directory could be created, false otherwise.
+ */
 public boolean makeDirectory(string path) {
 	return makeDirectory(path, false);
 }
-
+/**
+ * Create a directory.
+ *
+ * The resulting directory may be readable or searchable by another user.
+ * On linux systems, for example, there is a default user mask that may disable
+ * some or all shared access to the directory.
+ *
+ * @param path The path of the new directory to create.
+ *
+ * @param shared true if the directory should be readable and searchable by other
+ * users, false if the directory should be private to the user.
+ *
+ * @return true if the directory could be created, false otherwise.
+ */
 public boolean makeDirectory(string path, boolean shared) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		if (!shared)
@@ -543,7 +703,20 @@ public boolean ensure(string path) {
 	// The final component of the path is not a directory, but the rest of the path checks out, so try and create the path as a directory.
 	return makeDirectory(path);
 }
-
+/**
+ * Link a name to a file.
+ *
+ * This function is not supported on all native operating systems or even on
+ * some file systems in an operating system that does support them. For example,
+ * a native Linux file system allows path to link to the same underlying file,
+ * but would not extend to a memory stick formatted to be compatible with Windows.
+ *
+ * @param existingFile The path to an existing file.
+ *
+ * @param newFile The path to be created.
+ *
+ * @return true if the link operation succeeded, false otherwise.
+ */
 public boolean linkFile(string existingFile, string newFile) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		return false;
@@ -552,11 +725,43 @@ public boolean linkFile(string existingFile, string newFile) {
 	} else
 		return false;
 }
-
+/**
+ * Rename an existing file.
+ *
+ * Files can be renamed to appear in any directory of the
+ * same mounted volume.
+ *
+ * Rename operations are atomic. If the newName exists before the call, another process
+ * will eitehr see the previously existing file or the new one. The other process will not
+ * detect a state where the newName does not exist. 
+ *
+ * @param oldName The name of an existing file.
+ *
+ * @param newName The new name for that file.
+ *
+ * @return true if the rename operation succeeded, false otherwise.
+ */
 public boolean rename(string oldName, string newName) {
 	return C.rename(oldName.c_str(), newName.c_str()) == 0;
 }
-
+/**
+ * Copy an existing file.
+ *
+ * If the destination path names a pre-existing file, it is removed and the source
+ * file copied to the same name. Whether the copy can be opened by another process
+ * while the copy operation is under way is dependent on the native operating system.
+ *
+ * Access flags and, access and modification times are preserved.
+ *
+ * @param source The existing file.
+ *
+ * @param destination The file to create.
+ *
+ * @return true if the copy completed successfully, false otherwise.
+ *
+ * @exception IOException Thrown if the copy operation encountered an I/O device error
+ * either on the source or destination. 
+ */
 public boolean copyFile(string source, string destination) {
 	File r, w;
 	if (!r.open(source))
@@ -600,12 +805,26 @@ public boolean copyFile(string source, string destination) {
 	return true;
 }
 /**
- * Note: This will follow links, so take care with symbolic link cycles as that will cause the
- *			procedure to loop indefinitely.
+ * Copy a whole directory tree.
  *
- * tryAllFiles - true if the copy operation should try to copy all files and keep the ones that
+ * This code will detect symbolic links and copy the value of the link's target. If that target is relative it
+ * will be preserved. If the link target is an absolute path, the path is copied without modification.
+ *
+ * Access flags and, access and modification times are preserved.
+ *
+ * @param source The path of an existing, accessible directory.
+ *
+ * @param destination The path where a directory can be created by the user.
+ *
+ * @param tryAllFiles true if the copy operation should try to copy all files and keep the ones that
  *			succeeded, false if the copy operation should stop on the first failure and delete
  *			the destination directory tree if there were any failures.
+ *
+ * @return true if the operation succeeded, false otherwise. The status of the destination directory
+ * after a failure is determined by the tryAllFiles parameter.
+ *
+ * @exception IOException Thrown if the copy operation encountered an I/O device error
+ * either on the source or destination. 
  */
 public boolean copyDirectoryTree(string source, string destination, boolean tryAllFiles) {
 	if (!isDirectory(source))
@@ -618,8 +837,7 @@ public boolean copyDirectoryTree(string source, string destination, boolean tryA
 			if (dir.filename() == "." || dir.filename() == "..")
 				continue;
 			string filepath = dir.path();
-			string destFilename;
-			destFilename.printf("%s/%s", destination, dir.filename());
+			string destFilename = constructPath(destination, dir.filename());
 			if (isDirectory(filepath)) {
 				if (!copyDirectoryTree(filepath, destFilename, tryAllFiles)) {
 					delete dir;
@@ -666,7 +884,15 @@ public boolean copyDirectoryTree(string source, string destination, boolean tryA
 	}
 	return true;
 }
-
+/**
+ * Delete a file.
+ *
+ * This operation will fail on a directory.
+ *
+ * @param path The path of the file to be deleted.
+ *
+ * @return true if the delete operation succeeded, false otherwise.
+ */
 public boolean deleteFile(string path) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		return DeleteFile(path.c_str()) != 0;
@@ -675,7 +901,15 @@ public boolean deleteFile(string path) {
 	} else
 		return false;
 }
-
+/**
+ * Delete a directory.
+ *
+ * If the directory contains files, this operation will fail.
+ *
+ * @param path The path of an existing directory.
+ *
+ * @return true if the directory could be deleted, false otherwise.
+ */
 public boolean deleteDirectory(string path) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		return RemoveDirectory(path.c_str()) != 0;
@@ -685,8 +919,14 @@ public boolean deleteDirectory(string path) {
 		return false;
 }
 /**
+ * Delete a whole directory tree.
+ *
  * This function tries to delete n entire directory tree. It will try to delete each file in turn, in no particular order. If the
  * file cannot be deleted, then the whole operation stops immediately.
+ *
+ * @param path The path of an existing directory.
+ *
+ * @return true if the directory could be deleted, false otherwise.
  */
 public boolean deleteDirectoryTree(string path) {
 	if (!isDirectory(path))
@@ -697,8 +937,13 @@ public boolean deleteDirectoryTree(string path) {
 			if (dir.filename() == "." || dir.filename() == "..")
 				continue;
 			string filepath = dir.path();
-			if (isDirectory(filepath) && !isLink(filepath)) {
+			if (isDirectory(filepath)) {
 				if (!deleteDirectoryTree(filepath)) {
+					delete dir;
+					return false;
+				}
+			} else if (isSymLink(filepath)) {
+				if (!deleteSymLink(filepath)) {
 					delete dir;
 					return false;
 				}
@@ -711,7 +956,20 @@ public boolean deleteDirectoryTree(string path) {
 	delete dir;
 	return deleteDirectory(path);
 }
-
+/**
+ * Expand a wild card path.
+ *
+ * The native operating system rules for wild card expansion are applied to the pattern
+ * to construct a list of matching paths.
+ *
+ * @param pattern The file path, possibly containing wild card characters.
+ *
+ * @return An array containing all of the matching file paths for the given pattern.
+ * If the pattern was well formed, but did not match any files, the returned array will
+ * be empty but the next return expression will be true.
+ *
+ * @return true if the operation succeeded, false otherwise.
+ */
 public string[], boolean expandWildCard(string pattern) { 
 	string[] results;
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
@@ -775,8 +1033,15 @@ public boolean isRelativePath(string filename) {
 			return false;
 }
 /**
+ * Construct a relative file path.
+ *
+ * Numerous applications read files containing paths to other files. In many
+ * cases these embedded file names are determined relative to the directory
+ * containing the application's file. For example, include statements in C source
+ * files are calculated in this way.
+ *
  * Given two file paths, return a file path that would identify the file
- * of filename, but be relative to the directory containing baseFIlename.
+ * of filename, but be relative to the directory containing baseFilename.
  *
  * If filename or baseFilename are themselves relative, they are assumed to be
  * relative to the current working directory.

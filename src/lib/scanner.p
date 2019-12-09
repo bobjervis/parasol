@@ -16,7 +16,6 @@
 namespace parasol:compiler;
 
 import parasol:storage;
-import parasol:stream;
 import parasol:text;
 import parasol:stream.EOF;
 
@@ -979,8 +978,7 @@ public class Scanner {
 		boolean paragraphBreak = false;
 		boolean inineTag;
 		text.StringWriter sw(&_doclet.text);
-		stream.UTF8Writer w(&sw);
-		ref<stream.UTF8Writer> writer = &w;
+		text.UTF8Encoder encoder(&sw);
 		Location location = cursor();
 		int c = getc();
 		while (c == ' ' || c == '\t') {
@@ -1040,24 +1038,24 @@ public class Scanner {
 
 			case '\\':
 				if (paragraphBreak) {
-					writer.write("<p>");
+					encoder.encode("<p>");
 					paragraphBreak = false;
 				}
 				x = getc();
 				switch (x) {
 				case	'<':
 					c = ';';
-					writer.write("&lt");
+					encoder.encode("&lt");
 					break;
 
 				case	'>':
 					c = ';';
-					writer.write("&gt");
+					encoder.encode("&gt");
 					break;
 
 				case	'&':
 					c = ';';
-					writer.write("&amp");
+					encoder.encode("&amp");
 					break;
 
 				default:
@@ -1067,7 +1065,7 @@ public class Scanner {
 
 			case '{':
 				if (paragraphBreak) {
-					writer.write("<p>");
+					encoder.encode("<p>");
 					paragraphBreak = false;
 				}
 				x = getc();
@@ -1096,12 +1094,12 @@ public class Scanner {
 						break;
 		
 					default:
-						writer.write("{{@");
-						writer.write(tag);
+						encoder.encode("{{@");
+						encoder.encode(tag);
 						continue;
 					}
-					writer.write('{');
-					writer.write(c);
+					encoder.encode('{');
+					encoder.encode(c);
 					for (;;) {
 						location = cursor();
 						c = getc();
@@ -1109,7 +1107,7 @@ public class Scanner {
 							x = getc();
 							if (x == '/') {
 								if (depth == 0) {
-									writer.write("{}");
+									encoder.encode("{}");
 									if (_doclet.summary == null)
 										_doclet.summary = _doclet.text;
 									return true;
@@ -1123,7 +1121,7 @@ public class Scanner {
 							break;
 						else if (c == '\n') {
 							atStartOfLine = true;
-							writer.write(c);
+							encoder.encode(c);
 							_lines.append(location);
 							continue;
 						} else if (atStartOfLine) {
@@ -1134,24 +1132,24 @@ public class Scanner {
 								continue;
 							}
 						} else if (c == '}') {
-							writer.write("{}");
+							encoder.encode("{}");
 							break;
 						} else if (c == '{') {
-							writer.write(c);
+							encoder.encode(c);
 						} else if (c == '\\') {
 							c = getc();
 							if (c == -1)
 								break;
 						}
 						atStartOfLine = false;
-						writer.write(c);
+						encoder.encode(c);
 					}
 					atStartOfLine = false;
 					continue;
 				} else
 					ungetc();
 				atStartOfLine = false;
-				writer.write("{");
+				encoder.encode("{");
 				break;
 
 			case '@':						// A special comment marker
@@ -1239,8 +1237,8 @@ public class Scanner {
 					continue;
 
 				default:
-					writer.write('@');
-					writer.write(tag);
+					encoder.encode('@');
+					encoder.encode(tag);
 					continue;
 				}
 				break;
@@ -1255,10 +1253,10 @@ public class Scanner {
 				continue;
 			}
 			if (paragraphBreak) {
-				writer.write("<p>");
+				encoder.encode("<p>");
 				paragraphBreak = false;
 			}
-			writer.write(c);
+			encoder.encode(c);
 			accumulatingText = true;
 			atStartOfLine = c == '\n';
 		}

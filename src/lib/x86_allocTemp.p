@@ -447,6 +447,7 @@ class RegisterState {
 				case	SIGNED_32:
 				case	SIGNED_64:
 				case	STRING:
+				case	STRING16:
 				case	ENUM:
 				case	ADDRESS:
 				case	REF:

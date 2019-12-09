@@ -1554,6 +1554,7 @@ public class X86_64 extends X86_64AssignTemps {
 			} else {
 				switch (b.type.family()) {
 				case	STRING:
+				case	STRING16:
 					node.print(0);
 					assert(false);
 				case	TYPEDEF:
@@ -3491,7 +3492,7 @@ public class X86_64 extends X86_64AssignTemps {
 		}
 
 		if (call.arguments() != null) {
-			// Now the register arguments.  They're pretty easy
+			// Now the stack arguments.  They're pretty easy
 			for (ref<NodeList> args = call.arguments(); args != null; args = args.next)
 				generate(args.node, compileContext);
 		}
@@ -4078,6 +4079,7 @@ public class X86_64 extends X86_64AssignTemps {
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	STRING:
+			case	STRING16:
 			case	ADDRESS:
 			case	REF:
 			case	POINTER:

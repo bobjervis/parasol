@@ -216,6 +216,14 @@ public class Unary extends Node {
 				}
 				break;
 				
+			case	STRING16:
+				switch (_operand.type.family()) {
+				case	VAR:
+					ref<Node> call = createMethodCall(_operand, "string16Value", tree, compileContext);
+					return call.fold(tree, false, compileContext);
+				}
+				break;
+				
 			case	BOOLEAN:
 			case	UNSIGNED_8:
 			case	UNSIGNED_16:
@@ -389,9 +397,12 @@ public class Unary extends Node {
 					break;
 
 				case	STRING:
-					targetType = compileContext.arena().builtInType(TypeFamily.STRING);
+				case	STRING16:
+				case	SUBSTRING:
+				case	SUBSTRING16:
+					targetType = _operand.type;
 					break;
-					
+
 				case	ENUM:
 					print(0);
 					assert(false);

@@ -23,7 +23,10 @@ import parasol:memory;
 import parasol:runtime;
 import parasol:process;
 import parasol:stream.EOF;
+import parasol:text.UTF8Encoder;
+import parasol:text.StringWriter;
 import parasol:exception.IllegalOperationException;
+import parasol:exception.IOException;
 /**
  * DO NOT CALL THIS FUNCTION
  *
@@ -34,41 +37,36 @@ import parasol:exception.IllegalOperationException;
  * @ignore - do not document this function
  */
 public void setProcessStreams() {
-	boolean stdinIsATTY;
-	boolean stdoutIsATTY;
-	boolean stderrIsATTY;
-
 //	print("setProcessStreams\n");
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-		process.stdin = new TextFileReader(File(0), true);
-		process.stdout = new TextFileWriter(File(1), true);
-		process.stderr = new TextFileWriter(File(2), true);
+		process.stdin = new TextFileReader(0, true);
+		process.stdout = new TextFileWriter(1, true);
+		process.stderr = new TextFileWriter(2, true);
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-		process.stdin = new FileReader(File(0), true);
-		process.stdout = new FileWriter(File(1), true);
-		process.stderr = new FileWriter(File(2), true);
-		if (linux.isatty(0) == 1)
-			stdinIsATTY = true;
-		if (linux.isatty(1) == 1)
-			stdoutIsATTY = true;
-		if (linux.isatty(2) == 1)
-			stderrIsATTY = true;
-	}
-	if (stdoutIsATTY) {
-//		print("stdout tty\n");
-		process.stdout = new LineWriter(process.stdout);
-		if (stdinIsATTY) {
-			process.stdin = new StdinReader(process.stdin);
-//			print("stdin tty\n");
+		if (linux.isatty(1) == 1) {
+			process.stdout = new LineWriter(1, true);
+			if (linux.isatty(0) == 1)
+				process.stdin = new StdinReader(0, true);
+			else
+				process.stdin = new FileReader(0, true);
+		} else {
+			process.stdin = new FileReader(0, true);
+			process.stdout = new FileWriter(1, true);
 		}
-	}
-	if (stderrIsATTY) {
-		process.stderr = new ErrorWriter(process.stderr);
-//		print("stderr tty\n");
+		if (linux.isatty(2) == 1)
+			process.stderr = new ErrorWriter(2, true);
+		else
+			process.stderr = new FileWriter(2, true);
 	}
 //	print("Process streams set up\n");
 }
-
+/*
+void print(string format, var... args) {
+	string s;
+	s.printf(format, args);
+	linux.write(1, &s[0], s.length());
+}
+ */
 class FileShutdown {
 	~FileShutdown() {
 		process.stdout.flush();
@@ -76,48 +74,145 @@ class FileShutdown {
 }
 
 private FileShutdown f;
-
+/**
+ * This class is available for operations on a file. If this class is
+ * used to access devices, some file operations may not succeed.
+ *
+ * A File object is automatically closed when the File object is destroyed. Do not
+ * try to copy File objects around.
+ *
+ * You may obtain a Reader or Writer from an open File object. Reader's and
+ * Writer's obtained this way differ from those obtained through the {@link openTextFile},
+ * {@link createBinaryFile}, etc. because deleting those objects will close the 
+ * (anonymous) underlying File. The goal of the design is to allow you to implement
+ * various strategies to perform random I/O on a file either through the {@link read}
+ * and {@link write} methods of this class, which are not buffered, and the more flexible
+ * operations of Reader's and Writer's which are buffered.
+ *
+ * Note that reading or writing data both through Reader's and/or Writer's and the File
+ * object requires some care, since buffered data may adjust the file position in ways
+ * that are not entirely predictable. In general, you should {@link Writer.flush flush}
+ * any Writer's and delete any Reader's that were used to read or write data before you
+ * either get any new Reader's or Writer's or call methods directly on the File object itself.
+ */
 public class File {
 	private long _fd;
-
-	File(long fd) {
+	/**
+	 * @ignore - this has to be public to be useful to the parasol:net namespace, but this needs to
+	 * be actively discouraged.
+	 */
+	public File(long fd) {
 		_fd = fd;
 	}
-
+	/**
+	 * Create a new File object in closed state.
+ 	 */
 	public File() {
 		_fd = -1;
 	}
-
-	public ref<Reader> getBinaryReader() {
-		return new BinaryFileReader(*this, false);
+	/**
+	 * Set the file descriptor directly.
+	 *
+	 * This allows Readers and Writers to hold a File object and populate it.
+	 */
+	void setFd(long fd) {
+		_fd = fd;
+	}
+	/**
+	 * Called from Readers and Writers to implment 'dontCloseOnDelete'
+	 *
+	 * @ignore - This has to be public to be useful to the parasol:net namespace, but this needs to
+	 * be actively discouraged.
+	 */
+	public void dontCloseOnDestructor() {
+		_fd = -1;
+	}
+	/**
+	 * Called from support functions to create Readers and Writers.
+	 */
+	long transferFd() {
+		long fd = _fd;
+		_fd = -1;
+		return fd;
 	}
 
+	~File() {
+		if (_fd != -1)
+			close();
+	}
+	/**
+	 * Get a Reader appropriate for the binary file format of the native operating system.
+	 *
+	 * Deleting the returned Reader will not close the File object.
+	 *
+	 * @return A Reader positioned at the current File position.
+	 */
+	public ref<Reader> getBinaryReader() {
+		return new BinaryFileReader(_fd, false);
+	}
+	/**
+	 * Get a Reader appropriate for the text file format of the native operating system.
+	 *
+	 * Deleting the returned Reader will not close the File object.
+	 *
+	 * @return A Reader positioned at the current File position.
+	 */
 	public ref<Reader> getTextReader() {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-			return new TextFileReader(*this, false);
+			return new TextFileReader(_fd, false);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-			return new BinaryFileReader(*this, false);
+			return new BinaryFileReader(_fd, false);
 		} else
 			return null;
 	}
-
+	/**
+	 * Get a Writer appropriate for the binary file format of the native operating system.
+	 *
+	 * Deleting the returned Writer will not close the File object.
+	 *
+	 * @return A Writer positioned at the current File position.
+	 */
 	public ref<Writer> getBinaryWriter() {
-		return new BinaryFileWriter(*this, false);
+		return new BinaryFileWriter(_fd, false);
 	}
-
+	/**
+	 * Get a Writer appropriate for the text file format of the native operating system.
+	 *
+	 * Deleting the returned Writer will not close the File object.
+	 *
+	 * @return A Writer positioned at the current File position.
+	 */
 	public ref<Writer> getTextWriter() {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-			return new TextFileWriter(*this, false);
+			return new TextFileWriter(_fd, false);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-			return new BinaryFileWriter(*this, false);
+			if (linux.isatty(int(_fd)) == 1)
+				return new LineWriter(_fd, false);
+			else
+				return new BinaryFileWriter(_fd, false);
 		} else
 			return null;
 	}
-
+	/**
+	 * Open an existing file for reading.
+	 *
+	 * @param filename The path of the file to open.
+	 *
+	 * @return true if the file was successfully opened, false otherwise.
+	 */
 	public boolean open(string filename) {
 		return open(filename, AccessFlags.READ);
 	}
-
+	/**
+	 * Open an existing file for reading and/or writing.
+	 *
+	 * @param filename The path of the file to open.
+	 *
+	 * @param access AccessFlags describing the intended operations. The {@link AccessFlags.EXECUTE EXECUTE}
+	 * flag is ignored.
+	 *
+	 * @return true if the file was successfully opened, false otherwise.
+	 */
 	public boolean open(string filename, AccessFlags access) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD rights;
@@ -157,11 +252,30 @@ public class File {
 		}
 		return false;
 	}
-
+	/**
+	 * Create a new file for writing.
+	 *
+	 * If the file already exists, its contents are truncated.
+	 *
+	 * @param filename A path to a file to be created.
+	 *
+	 * @param access AccessFlags describing the intended operations. The {@link AccessFlags.EXECUTE EXECUTE}
+	 * flag is ignored.
+	 *
+	 * @return true if the create operation succeeded, false otherwise.
+	 */
 	public boolean create(string filename) {
 		return create(filename, AccessFlags.WRITE);
 	}
-
+	/**
+	 * Create a new file for reading and/or writing.
+	 *
+	 * If the file already exists, its contents are truncated.
+	 *
+	 * @param filename A path to a file to be created.
+	 *
+	 * @return true if the create operation succeeded, false otherwise.
+	 */
 	public boolean create(string filename, AccessFlags access) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD rights;
@@ -197,11 +311,33 @@ public class File {
 		}
 		return false;
 	}
-
+	/**
+	 * Open an existing file to append data.
+	 *
+	 * All write operations to an append-mode File will write the data
+	 * at the end of the file, regardless of the file position before
+	 * the write call.
+	 *
+	 * @param filename A path to an existing file to be appended to.
+	 *
+	 * @return true if the open operation succeeded, false otherwise.
+	 */
 	public boolean appendTo(string filename) {
 		return appendTo(filename, AccessFlags.WRITE);
 	}
-
+	/**
+	 * Open an existing file to read and/or append data.
+	 *
+	 * Note that this method with only AccessFlags.READ set is equivalent to a call
+	 * to {@link open}.
+	 *
+	 * @param filename A path to an existing file to be appended to.
+	 *
+	 * @param access AccessFlags describing the intended operations. The {@link AccessFlags.EXECUTE EXECUTE}
+	 * flag is ignored.
+	 *
+	 * @return true if the open operation succeeded, false otherwise.
+	 */
 	public boolean appendTo(string filename, AccessFlags access) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			// append always fails on Windows
@@ -223,11 +359,20 @@ public class File {
 		}
 		return false;
 	}
-
+	/**
+	 * Check whether a File is currently open.
+	 *
+	 * @return true if the file is open, false otherwise.
+	 */
 	public boolean isOpen() {
 		return _fd >= 0;
 	}
-
+	/**
+	 * Close an open file.
+	 *
+	 * @return true if the file was open and successfully was closed, false
+	 * otherwise.
+	 */
 	public boolean close() {
 		if (_fd >= 0) {
 			if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
@@ -245,7 +390,9 @@ public class File {
 		return false;
 	}
 	/**
-	 * @RETURN A value greater then or equal to zero on success, with the size of the file.
+	 * Return the current file position.
+	 *
+	 * @return A value greater then or equal to zero on success, with the size of the file.
 	 * A negative return value indicates an error. In the event of an error, the file position
 	 * for any subsequent read or write operation is undefined.
 	 */
@@ -261,7 +408,11 @@ public class File {
 		return -1;
 	}
 	/**
-	 * @RETURN A value greater then or equal to zero on success, with the size of the file.
+	 * Return the size of a file.
+	 *
+	 * This operation fails if the File is not open.
+	 *
+	 * @return A value greater then or equal to zero on success, with the size of the file in bytes.
 	 * A negative return value indicates an error. In the event of an error, the file position
 	 * for any subsequent read or write operation is undefined.
 	 */
@@ -277,7 +428,15 @@ public class File {
 		}
 		return -1;
 	}
-
+	/**
+	 * Set the file position.
+	 *
+	 * @param offset The position, in bytes, to set, relative to the whence paramter.
+	 *
+	 * @param whence The starting point for calculating the File position.
+	 *
+	 * @return The new file position, or -1 if there was an error.
+	 */
 	public long seek(long offset, Seek whence) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			long result;
@@ -289,44 +448,102 @@ public class File {
 		}
 		return -1;
 	}
-
+	/**
+	 * Write the contents of a byte array to the File.
+	 *
+	 * @param buffer The bytes to write.
+	 *
+	 * @return The number of bytes actually written.
+	 *
+	 * @exception IllegalOperationException Thrown if the file is not open or the operating system does not support this operation.
+	 *
+	 * @exception IOException Thrown if any device error was detected during the write operation.
+	 */
 	public int write(byte[] buffer) {
+		if (_fd == -1)
+			throw IllegalOperationException("write");
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD result;
 			if (windows.WriteFile(windows.HANDLE(_fd), &buffer[0], windows.DWORD(buffer.length()), &result, null) == 0)
-				return -1;
+				throw IOException();
 			return int(result);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-			return linux.write(int(_fd), &buffer[0], buffer.length());
+			long result = linux.write(int(_fd), &buffer[0], buffer.length());
+			if (result >= 0)
+				return int(result);
+			else
+				throw IOException();
 		}
-		return -1;
+		throw IllegalOperationException("write");
+		return -1; // TODO: fix when compiler handles throw statements orrectly
 	}
-
+	/**
+	 * Write the contents of a string to the File.
+	 *
+	 * @param buffer The string to write.
+	 *
+	 * @return The number of bytes actually written.
+	 *
+	 * @exception IllegalOperationException Thrown if the file is not open or the operating system does not support this operation.
+	 *
+	 * @exception IOException Thrown if any device error was detected during the write operation.
+	 */
 	public int write(string buffer) {
+		if (_fd == -1)
+			throw IllegalOperationException("write");
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD result;
 			if (windows.WriteFile(windows.HANDLE(_fd), &buffer[0], windows.DWORD(buffer.length()), &result, null) == 0)
-				return -1;
+				throw IOException();
 			return int(result);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-			return linux.write(int(_fd), &buffer[0], buffer.length());
+			long result = linux.write(int(_fd), &buffer[0], buffer.length());
+			if (result >= 0)
+				return int(result);
+			else
+				throw IOException();
 		}
-		return -1;
+		throw IllegalOperationException("write");
+		return -1; // TODO: fix when compiler handles throw statements orrectly
 	}
-
-	public int write(address buffer, int length) {
+	/**
+	 * Write the contents of a buffer to the File.
+	 *
+	 * @param buffer The address of the buffer to write.
+	 *
+	 * @param length The number of bytes to write.
+	 *
+	 * @return The number of bytes actually written.
+	 *
+	 * @exception IllegalOperationException Thrown if the file is not open or the operating system does not support this operation.
+	 *
+	 * @exception IOException Thrown if any device error was detected during the write operation.
+	 */
+	public long write(address buffer, long length) {
+		if (_fd == -1)
+			throw IllegalOperationException("write");
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD result;
 			if (windows.WriteFile(windows.HANDLE(_fd), buffer, windows.DWORD(length), &result, null) == 0)
-				return -1;
-			return int(result);
+				throw IOException();
+			return long(result);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-			return linux.write(int(_fd), buffer, length);
+			long result = linux.write(int(_fd), buffer, length);
+			if (result >= 0)
+				return result;
+			else
+				throw IOException();
 		}
-		return -1;
+		throw IllegalOperationException("write");
+		return -1; // TODO: fix when compiler handles throw statements orrectly
 	}
 	/**
 	 * Force the file contents to disk.
+	 *
+	 * Modern operating systems buffer data in memory, so applications may wish to guarantee
+	 * that data is actually written to disk before proceeding.
+	 *
+	 * @return true if the operation succeeded, false otherwise.
 	 */
 	public boolean sync() {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
@@ -336,29 +553,65 @@ public class File {
 		} else
 			return false;
 	}
-
+	/**
+	 * Read data from a file to fill a byte array.
+	 *
+	 * @param buffer The array to fill.
+	 *
+	 * @return The number of bytes actually read.
+	 *
+	 * @exception IllegalOperationException Thrown if the file is not open or the operating system does not support this operation.
+	 *
+	 * @exception IOException Thrown if any device error was detected during the write operation.
+	 */
 	public int read(ref<byte[]> buffer) {
+		if (_fd == -1)
+			throw IllegalOperationException("read");
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD result;
 			if (windows.ReadFile(windows.HANDLE(_fd), &(*buffer)[0], windows.DWORD(buffer.length()), &result, null) == 0)
-				return -1;
+				throw IOException();
 			return int(result);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-			return linux.read(int(_fd), &(*buffer)[0], buffer.length());
+			long result = linux.read(int(_fd), &(*buffer)[0], buffer.length());
+			if (result >= 0)
+				return int(result);
+			else
+				throw IOException();
 		}
-		return -1;
+		throw IllegalOperationException("read");
+		return -1; // TODO: fix when compiler handles throw statements orrectly
 	}
-
-	public int read(address buffer, int length) {
+	/**
+	 * Read data from a file to fill a byte buffer.
+	 *
+	 * @param buffer The address of the buffer to fill.
+	 *
+	 * @param length The number of bytes in the buffer.
+	 *
+	 * @return The number of bytes actually read.
+	 *
+	 * @exception IllegalOperationException Thrown if the file is not open or the operating system does not support this operation.
+	 *
+	 * @exception IOException Thrown if any device error was detected during the write operation.
+	 */
+	public long read(address buffer, long length) {
+		if (_fd == -1)
+			throw IllegalOperationException("read");
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD result;
 			if (windows.ReadFile(windows.HANDLE(_fd), buffer, windows.DWORD(length), &result, null) == 0)
 				return -1;
 			return int(result);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-			return linux.read(int(_fd), buffer, length);
+			long result = linux.read(int(_fd), buffer, length);
+			if (result >= 0)
+				return result;
+			else
+				throw IOException();
 		}
-		return -1;
+		throw IllegalOperationException("read");
+		return -1; // TODO: fix when compiler handles throw statements orrectly
 	}
 }
 /**
@@ -388,7 +641,14 @@ public enum Seek {
 int BUFFER_SIZE = 64 * 1024;
 
 public class BinaryFileReader = FileReader;
-
+/**
+ * A Reader that does buffered reading from files.
+ *
+ * This Reader implements the basic functionality for all variations needed for Linux and Windows
+ * files. Windows text files must use a TextFileReader, which extends this class.
+ *
+ * Because of buffering, the {@link unread} method only guarantees one byte of pushback.
+ */
 public class FileReader extends Reader {
 	private File _file;
 	private byte[] _buffer;
@@ -396,15 +656,15 @@ public class FileReader extends Reader {
 	private int _length;
 	private boolean _closeOnDelete;
 
-	FileReader(File file, boolean closeOnDelete) {
-		_file = file;
+	FileReader(long fd, boolean closeOnDelete) {
+		_file.setFd(fd);
 		_closeOnDelete = closeOnDelete;
 		_buffer.resize(BUFFER_SIZE);
 	}
 
 	~FileReader() {
-		if (_closeOnDelete)
-			_file.close();
+		if (!_closeOnDelete)
+			_file.dontCloseOnDestructor();
 	}
 
 	public string readAll() {
@@ -417,10 +677,10 @@ public class FileReader extends Reader {
 			throw IllegalOperationException("too large");
 		data.resize(int(pos));
 
-		int n = _file.read(&data[0], int(pos));
+		long n = _file.read(&data[0], pos);
 		if (n < 0)
 			return "";
-		data.resize(n);
+		data.resize(int(n));
 		return data;
 	}
 
@@ -475,17 +735,23 @@ public class FileReader extends Reader {
 		seek(0, Seek.START);
 	}
 }
-
+/**
+ * This class implements reading Windows text files.
+ *
+ * A ctrl-Z character acts as an end-of-file marker and the line
+ * separator is a carriage-return +  newline sequence. So all
+ * carriage return characters are discarded.
+ */
 public class TextFileReader extends FileReader {
-	TextFileReader(File file, boolean closeOnDelete) {
-		super(file, closeOnDelete);
+	TextFileReader(long fd, boolean closeOnDelete) {
+		super(fd, closeOnDelete);
 	}
 
-	public int read() {
+	public int _read() {
 		int c;
 
 		do {
-			c = super.read();
+			c = super._read();
 			if (c == 26) { // A ctrl-Z marks a text file EOF
 				unread();
 				return EOF;
@@ -496,24 +762,34 @@ public class TextFileReader extends FileReader {
 }
 
 public class BinaryFileWriter = FileWriter;
-
+/**
+ * A Writer that does buffered writing to files.
+ *
+ * This Writer implements the basic functionality for all variations needed for Linux and Windows
+ * files. Windows text files must use a TextFileWriter, which extends this class.
+ *
+ * @threading This class implements all of it's public methods to use a lock for exclusive access.
+ * Thus, separate threads can write to a common FileWriter and output is written in atomic chunks.
+ * The main advantage of this is that threads can simple call printf (which defaults to the stdout
+ * stream) and get lines of text written as discrete units, allowing a reasonable performance.
+ */
 public class FileWriter extends Writer {
-	private Monitor _lock;
-	private File _file;
+	protected Monitor _lock;
+	protected File _file;
 	private byte[] _buffer;
 	private int _fill;
 	private boolean _closeOnDelete;
 
-	FileWriter(File file, boolean closeOnDelete) {
-		_file = file;
+	FileWriter(long fd, boolean closeOnDelete) {
+		_file.setFd(fd);
 		_closeOnDelete = closeOnDelete;
 		_buffer.resize(BUFFER_SIZE);
 	}
 
 	~FileWriter() {
 		flush();
-		if (_closeOnDelete)
-			_file.close();
+		if (!_closeOnDelete)
+			_file.dontCloseOnDestructor();
 	}
 
 	public void _write(byte c) {
@@ -523,16 +799,9 @@ public class FileWriter extends Writer {
 			flush();
 	}
 
-	public long tell() {
+	public void write(byte c) {
 		lock (_lock) {
-			return _file.seek(0, Seek.CURRENT) + _fill;
-		}
-	}
-
-	public long seek(long offset, Seek whence) {
-		lock (_lock) {
-			flush();
-			return _file.seek(offset, whence);
+			_write(c);
 		}
 	}
 
@@ -553,7 +822,7 @@ public class FileWriter extends Writer {
 		}
 	}
 
-	public int write(address buffer, int length) {
+	public long write(address buffer, int length) {
 		lock (_lock) {
 			return super.write(buffer, length);
 		}
@@ -570,170 +839,267 @@ public class FileWriter extends Writer {
 			return super.printf(format, arguments);
 		}
 	}
-}
 
+	public int writeCodePoint(int codePoint) {
+		string s;
+		StringWriter sw(&s);
+		UTF8Encoder e(&sw);
+
+		e.encode(codePoint);
+		lock (_lock) {
+			return super.write(s);
+		}
+	}
+	/*
+	 * This method is called by a subclass to clear the buffer and release any consumed memory.
+	 * In order for this to be safe, both the _write and flush methods need to be overridden.
+	 */
+	void clearBuffer() {
+		_buffer.clear();
+	}	
+}
+/**
+ * This Writer implements append-mode writing without native operating system
+ * support. It is used on Windows.
+ */
 public class BinaryFileAppendWriter extends BinaryFileWriter {
-	BinaryFileAppendWriter(File file, boolean closeOnDelete) {
-		super(file, closeOnDelete);
+	BinaryFileAppendWriter(long fd, boolean closeOnDelete) {
+		super(fd, closeOnDelete);
 	}
 
 	public void flush() {
-		seek(0, Seek.END);
-		super.flush();
+		lock(_lock) {
+			_file.seek(0, Seek.END);
+			super.flush();
+		}
 	}
 }
-
+/**
+ * This Writer creates a Windows text file.
+ *
+ * It does this by writing a carriage-return character before
+ * each newline character.
+ *
+ * Note that the ctrl-Z character that denotes end-of-file is optional. There
+ * is no reason to append one to a file. It might be useful to explicitly insert
+ * one, knowing that it allows you to inject extra text after the ctrl-Z that
+ * many Windows applications would not read. 
+ */
 public class TextFileWriter extends FileWriter {
-	TextFileWriter(File file, boolean closeOnDelete) {
-		super(file, closeOnDelete);
+	TextFileWriter(long fd, boolean closeOnDelete) {
+		super(fd, closeOnDelete);
 	}
 
-	public void _write(byte c) {
+	protected void _write(byte c) {
 		if (c == '\n')
 			super._write('\r');
 		super._write(c);
 	}
 }
-/*
- * Reading from stdin when it is connected to a terminal triggers the stdout
- * stream to flush.
+/**
+ * This Reader is suitable for a process where both stdin and
+ * stdout are connected to terminals.
+ *
+ * Initially, if stdin and stdout are both connected to a terminal, then
+ * stdin is set up with this class.
+ *
+ * Afterwards, whenever the process reads from stdin, if stdout is still
+ * connected to a LineWriter, an indicator that stdout is connected to a
+ * terminal, the stdout stream is automatically flushed.
  */
-public class StdinReader extends Reader {
-	private ref<Reader> _reader;
-
-	StdinReader(ref<Reader> reader) {
-		_reader = reader;
+public class StdinReader extends FileReader {
+	StdinReader(long fd, boolean closeOnDelete) {
+		super(fd, closeOnDelete);
 	}
 
-	protected int _read() {
-		process.stdout.flush();
-		return _reader._read();
-	}
-
-	public void unread() {
-		_reader.unread();
+ 	public int _read() {
+		if (process.stdout.class == LineWriter)
+			process.stdout.flush();
+		return super._read();
 	}
 }
-/*
- * Writing to stdout when it is connected to a terminal flushes at every newline.
- */
-public class LineWriter extends Writer {
-	private ref<Writer> _writer;
 
-	LineWriter(ref<Writer> writer) {
-		_writer = writer;
+/**
+ * This is a line-buffered Writer appropriate for terminal devices.
+ *
+ * This will be the form a Writer returned whenever you open a Writer
+ * to a terminal device.
+ */
+public class LineWriter extends FileWriter {
+	LineWriter(long fd, boolean closeOnDelete) {
+		super(fd, closeOnDelete);
 	}
 
 	protected void _write(byte c) {
 //		print("Writing!\n");
-		_writer._write(c);
+		super._write(c);
 		if (c == '\n')
-			_writer.flush();
-	}
-
-	public void flush() {
-		_writer.flush();
-	}
-}
-/*
- * Writing to stderr when it is connected to a terminal flushes at every operation.
- */
-public class ErrorWriter extends Writer {
-	private ref<Writer> _writer;
-
-	ErrorWriter(ref<Writer> writer) {
-		_writer = writer;
-	}
-
-	protected void _write(byte c) {
-		_writer._write(c);
-		_writer.flush();
+			flush();
 	}
 }
 /**
- * Note: This class should only be needed for Windows, which has no Append mode for files.
+ * Thie is an unbuffered Writer appropriate for stderr.
+ *
+ * Writing to stderr when it is connected to a terminal flushes at every operation.
+ * Performance in that situation is less than critical. Getting the text written to
+ * the terminal as soon as possible is the prime motivation.
  */
-public class TextFileAppendWriter extends TextFileWriter {
-	TextFileAppendWriter(File file, boolean closeOnDelete) {
-		super(file, closeOnDelete);
+public class ErrorWriter extends FileWriter {
+	ErrorWriter(long fd, boolean closeOnDelete) {
+		super(fd, closeOnDelete);
+		clearBuffer();
+	}
+
+	protected void _write(byte c) {
+		_file.write(&c, 1);
 	}
 
 	public void flush() {
-		seek(0, Seek.END);
+	}
+}
+/**
+ * This Writer is designed to implement append mode for an output file.
+ *
+ * This class is usefil for Windows, which has no Append mode for files.
+ */
+class TextFileAppendWriter extends TextFileWriter {
+	TextFileAppendWriter(long fd, boolean closeOnDelete) {
+		super(fd, closeOnDelete);
+	}
+
+	public void flush() {
+		_file.seek(0, Seek.END);
 		super.flush();
 	}
 }
-
+/**
+ * Open a text file for reading.
+ *
+ * @param filename A path naming an existing file.
+ *
+ * @return A FileReader appropriate to read the native text file format
+ * of the host operating system. The function returns null if the file
+ * could not be opened.
+ */
 public ref<FileReader> openTextFile(string filename) {
 	File f;
 
 	if (f.open(filename)) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN)
-			return new TextFileReader(f, true);
+			return new TextFileReader(f.transferFd(), true);
 		else if (runtime.compileTarget == runtime.Target.X86_64_LNX)
-			return new FileReader(f, true);
+			return new FileReader(f.transferFd(), true);
 	}
 	return null;
 }
-
+/**
+ * Append to an existing text file.
+ *
+ * All data is written after any file contents already present.
+ *
+ * @param filename A path naming an existing file.
+ *
+ * @return A FileWriter appropriate to write the native text file format
+ * of the host operating system. The function returns null if the file
+ * could not be opened.
+ */
 public ref<FileWriter> appendTextFile(string filename) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		windows.HANDLE handle = windows.CreateFile(filename.c_str(), windows.GENERIC_WRITE, 0, null, 
 												windows.OPEN_ALWAYS, windows.FILE_ATTRIBUTE_NORMAL, null);
 		if (handle == windows.INVALID_HANDLE_VALUE)
 			return null;
-		return new TextFileAppendWriter(File(long(handle)), true);
+		return new TextFileAppendWriter(long(handle), true);
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		File f;
 
 		if (f.appendTo(filename))
-			return new FileWriter(f, true);
+			return new FileWriter(f.transferFd(), true);
 	}
 	return null;
 }
-
+/**
+ * Create a new text file.
+ *
+ * If the file already exists, its contents are truncated.
+ *
+ * @param filename A path naming an existing file.
+ *
+ * @return A FileWriter appropriate to write the native text file format
+ * of the host operating system. The function returns null if the file
+ * could not be opened.
+ */
 public ref<FileWriter> createTextFile(string filename) {
 	File f;
 
 	if (f.create(filename)) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN)
-			return new TextFileWriter(f, true);
+			return new TextFileWriter(f.transferFd(), true);
 		else if (runtime.compileTarget == runtime.Target.X86_64_LNX)
-			return new FileWriter(f, true);
+			return new FileWriter(f.transferFd(), true);
 	}
 	return null;
 }
-
+/**
+ * Open a binary file for reading.
+ *
+ * @param filename A path naming an existing file.
+ *
+ * @return A FileReader appropriate to read the native binary file format
+ * of the host operating system. The function returns null if the file
+ * could not be opened.
+ */
 public ref<FileReader> openBinaryFile(string filename) {
 	File f;
 
 	if (f.open(filename))
-		return new BinaryFileReader(f, true);
+		return new BinaryFileReader(f.transferFd(), true);
 	else
 		return null;
 }
-
+/**
+ * Append to an existing binary file.
+ *
+ * All data is written to the end of any file contens that exists when
+ * the Writer is opened.
+ *
+ * @param filename A path naming an existing file.
+ *
+ * @return A FileWriter appropriate to write the native binary file format
+ * of the host operating system. The function returns null if the file
+ * could not be opened.
+ */
 public ref<FileWriter> appendBinaryFile(string filename) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		windows.HANDLE handle = windows.CreateFile(filename.c_str(), windows.GENERIC_WRITE, 0, null, 
 												windows.OPEN_ALWAYS, windows.FILE_ATTRIBUTE_NORMAL, null);
 		if (handle == windows.INVALID_HANDLE_VALUE)
 			return null;
-		return new BinaryFileAppendWriter(File(long(handle)), true);
+		return new BinaryFileAppendWriter(long(handle), true);
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		File f;
 
 		if (f.appendTo(filename))
-			return new FileWriter(f, true);
+			return new FileWriter(f.transferFd(), true);
 	}
 	return null;
 }
-
+/**
+ * Create a new binary file.
+ *
+ * If the file already exists, its contents are truncated.
+ *
+ * @param filename A path naming an existing file.
+ *
+ * @return A FileWriter appropriate to write the native binary file format
+ * of the host operating system. The function returns null if the file
+ * could not be opened.
+ */
 public ref<FileWriter> createBinaryFile(string filename) {
 	File f;
 
 	if (f.create(filename))
-		return new BinaryFileWriter(f, true);
+		return new BinaryFileWriter(f.transferFd(), true);
 	else
 		return null;
 }

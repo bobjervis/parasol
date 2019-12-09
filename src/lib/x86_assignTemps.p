@@ -1084,6 +1084,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	POINTER:
 			switch (impl(newType)) {
 			case	STRING:
+			case	STRING16:
 			case	ADDRESS:
 			case	REF:
 			case	POINTER:

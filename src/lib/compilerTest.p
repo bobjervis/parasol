@@ -24,6 +24,7 @@ import parasol:runtime;
 import parasol:script;
 import parasol:script.Vector;
 import parasol:storage;
+import parasol:text;
 import parasol:time;
 import parasol:pxi;
 import parasol:compiler.Arena;
@@ -128,25 +129,37 @@ class CodePointObject extends script.Object {
 	}
 
 	public boolean run() {
+		boolean success = runTest(false);
+		if (_expectSuccess) {
+			if (!success) {
+				printf("expecting %d characters\n", _expectedValue.length());
+				text.memDump(&_source[0], _source.length());
+				runTest(true);
+			}
+			return success;
+		} else
+			return !success;
+	}
+
+	private boolean runTest(boolean verbose) {
 		StringScanner scanner(_source, 0, "StringScanner test");
 
+		boolean success = true;
 		for (int i = 0; i < _expectedValue.length(); i++) {
 			int actual = scanner.getc();
 			if (actual != _expectedValue[i]) {
-				if (_expectSuccess) {
-					printf("Expected: %x Actual: %x\n", _expectedValue[i], actual);
-					return false;
-				} else
-					return true;
+				if (verbose)
+					printf("[%d] Expected: %#x Actual: %#x\n", i, _expectedValue[i], actual);
+				success = false;
 			}
 		}
 		int next = scanner.getc();
 		if (next != -1) {
-			if (_expectSuccess)
-				printf("Expecting end of stream, got '%x'\n", next);
-			return !_expectSuccess;
+			if (verbose)
+				printf("Expecting end of stream, got '%#x'\n", next);
+			success = false;
 		}
-		return _expectSuccess;
+		return success;
 	}
 
 	private CodePointObject() {
@@ -558,9 +571,13 @@ class CompileObject  extends script.Object {
 		
 		// Note: arena.compile takes ownership of f.
 		arena.compileOnly(f, verboseFlag, &context);
+//		printf("After parse and type analysis:\n");
+//		f.tree().root().print(0);
 		int preCodeGenerationMessages = arena.countMessages();
 		boolean nodesOrdered = checkInOrder(f.tree().root(), _source);
 		ref<Target> target = arena.codegen(f, true, verboseFlag, &context);
+//		printf("after folding and codegen:\n");
+//		f.tree().root().print(0);
 
 		if (printSymbolTable)
 			arena.printSymbolTable();

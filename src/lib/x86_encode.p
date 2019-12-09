@@ -1898,6 +1898,7 @@ class X86_64Encoder extends Target {
 			case	REF:
 			case	POINTER:
 			case	STRING:
+			case	STRING16:
 			case	SIGNED_64:
 			case	FUNCTION:
 			case	VAR:
@@ -2400,6 +2401,7 @@ class X86_64Encoder extends Target {
 			case	REF:
 			case	POINTER:
 			case	STRING:
+			case	STRING16:
 			case	VAR:
 			case	TYPEDEF:
 			case	CLASS_VARIABLE:

@@ -566,6 +566,7 @@ class X86_64AddressModes extends X86_64Encoder {
 		case	INTERFACE:
 			switch (impl(newType)) {
 			case	STRING:
+			case	STRING16:
 			case	ADDRESS:
 			case	BOOLEAN:
 			case	UNSIGNED_8:

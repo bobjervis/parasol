@@ -32,6 +32,9 @@ public enum TypeFamily {
 	BOOLEAN,
 	
 	STRING,
+	STRING16,
+	SUBSTRING,
+	SUBSTRING16,
 	VAR,
 	ADDRESS,
 	VOID,
@@ -174,7 +177,13 @@ public class BuiltInType extends Type {
 	}
 	
 	public boolean passesViaStack(ref<CompileContext> compileContext) {
-		return family() == TypeFamily.VAR;
+		switch (family()) {
+		case VAR:
+		case SUBSTRING:
+		case SUBSTRING16:
+			return true;
+		}
+		return false;
 	}
 	
 	public int copyToImage(ref<Target> target) {
@@ -215,6 +224,7 @@ public class BuiltInType extends Type {
 		case	CLASS_VARIABLE:
 		case	VAR:
 		case	STRING:
+		case	STRING16:
 		case	ADDRESS:
 		case	REF:
 		case	POINTER:
@@ -238,6 +248,7 @@ public class BuiltInType extends Type {
 		case	CLASS_VARIABLE:
 		case	VAR:
 		case	STRING:
+		case	STRING16:
 		case	POINTER:
 			return true;
 		}
@@ -323,7 +334,21 @@ widens[TypeFamily.FLOAT_64][TypeFamily.VAR] = true;
 widens[TypeFamily.BOOLEAN][TypeFamily.BOOLEAN] = true;
 widens[TypeFamily.BOOLEAN][TypeFamily.VAR] = true;
 widens[TypeFamily.STRING][TypeFamily.STRING] = true;
+widens[TypeFamily.STRING][TypeFamily.STRING16] = true;
+widens[TypeFamily.STRING][TypeFamily.SUBSTRING] = true;
 widens[TypeFamily.STRING][TypeFamily.VAR] = true;
+widens[TypeFamily.STRING16][TypeFamily.STRING] = true;
+widens[TypeFamily.STRING16][TypeFamily.STRING16] = true;
+widens[TypeFamily.STRING16][TypeFamily.SUBSTRING16] = true;
+widens[TypeFamily.STRING16][TypeFamily.VAR] = true;
+widens[TypeFamily.SUBSTRING][TypeFamily.STRING] = true;
+widens[TypeFamily.SUBSTRING][TypeFamily.STRING16] = true;
+widens[TypeFamily.SUBSTRING][TypeFamily.SUBSTRING] = true;
+widens[TypeFamily.SUBSTRING][TypeFamily.VAR] = true;
+widens[TypeFamily.SUBSTRING16][TypeFamily.STRING] = true;
+widens[TypeFamily.SUBSTRING16][TypeFamily.STRING16] = true;
+widens[TypeFamily.SUBSTRING16][TypeFamily.SUBSTRING16] = true;
+widens[TypeFamily.SUBSTRING16][TypeFamily.VAR] = true;
 widens[TypeFamily.VAR][TypeFamily.VAR] = true;
 widens[TypeFamily.EXCEPTION][TypeFamily.EXCEPTION] = true;
 widens[TypeFamily.ADDRESS][TypeFamily.VAR] = true;
@@ -1880,24 +1905,17 @@ public class Type {
 	}
 	
 	public ref<OverloadInstance> stringAllocationConstructor(ref<CompileContext> compileContext) {
-		if (scope() == null)
+		if (scope() == null || scope().constructors().length() < 1)
 			return null;
-		for (int i = 0; i < scope().constructors().length(); i++) {
-			ref<FunctionDeclaration> f = ref<FunctionDeclaration>((*scope().constructors())[i].definition());
-			ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
-			if (oi.parameterCount() != 1)
-				continue;
-			ref<Type> parameterType = (*oi.parameterScope().parameters())[0].type();
-			ref<Type> allocationType = parameterType.indirectType(compileContext);
-			if (allocationType == null)
-				continue;
-			ref<Scope> allocationClass = allocationType.scope();
-			if (allocationClass == null)
-				continue;
-			if (allocationClass.enclosing() == scope())
-				return oi;
-		}
-		return null;
+		ref<FunctionDeclaration> f = ref<FunctionDeclaration>((*scope().constructors())[0].definition());
+		ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
+		if (oi.parameterCount() != 1)
+			return null;
+		ref<Type> parameterType = (*oi.parameterScope().parameters())[0].type();
+		ref<Type> allocationType = parameterType.indirectType(compileContext);
+		if (allocationType == null)
+			return null;
+		return oi;
 	}
 	
 	public boolean hasConstructors() {
@@ -2286,6 +2304,125 @@ public class Type {
 		return false;
 	}
 
+	public boolean builtInCoercionFrom(ref<Node> n, ref<CompileContext> compileContext) {
+		if (_family == TypeFamily.VAR)
+			return true;
+		if (n.op() == Operator.OBJECT_AGGREGATE)
+			return true;
+		switch (n.type._family) {
+		case	VAR:
+			return true;
+
+		case	POINTER:
+			switch (_family) {
+			case	STRING:
+			case	STRING16:
+				ref<Type> object = n.type.indirectType(compileContext);
+				if (object != null && object.family() == TypeFamily.UNSIGNED_8)
+					return false;									// This is a string/string16 constructor
+				else
+					return true;
+				
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	UNSIGNED_64:
+			case	SIGNED_8:
+			case	SIGNED_16:
+			case	SIGNED_32:
+			case	SIGNED_64:
+			case	FLOAT_32:
+			case	FLOAT_64:
+			case	ADDRESS:
+			case	REF:
+			case	POINTER:
+			case	BOOLEAN:
+			case	ENUM:
+			case	FLAGS:
+			case	FUNCTION:
+			case	INTERFACE:
+				return true;
+			}
+			break;
+			
+		case	FUNCTION:
+		case	UNSIGNED_8:
+		case	UNSIGNED_16:
+		case	UNSIGNED_32:
+		case	UNSIGNED_64:
+		case	SIGNED_8:
+		case	SIGNED_16:
+		case	SIGNED_32:
+		case	SIGNED_64:
+		case	FLOAT_32:
+		case	FLOAT_64:
+		case	ADDRESS:
+		case	REF:
+		case	BOOLEAN:
+		case	FLAGS:
+		case	INTERFACE:
+			switch (_family) {
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	UNSIGNED_64:
+			case	SIGNED_8:
+			case	SIGNED_16:
+			case	SIGNED_32:
+			case	SIGNED_64:
+			case	FLOAT_32:
+			case	FLOAT_64:
+			case	ADDRESS:
+			case	REF:
+			case	POINTER:
+			case	BOOLEAN:
+			case	ENUM:
+			case	FLAGS:
+			case	FUNCTION:
+			case	INTERFACE:
+				return true;
+
+			case STRING:
+			case STRING16:
+				if (n.op() == Operator.NULL)
+					return true;
+			}
+			break;
+
+		case	CLASS:
+			if (_family == TypeFamily.INTERFACE)
+				return true;
+			break;
+
+		case	ENUM:
+			switch (_family) {
+			case	UNSIGNED_8:
+			case	UNSIGNED_16:
+			case	UNSIGNED_32:
+			case	UNSIGNED_64:
+			case	SIGNED_8:
+			case	SIGNED_16:
+			case	SIGNED_32:
+			case	SIGNED_64:
+			case	FLOAT_32:
+			case	FLOAT_64:
+			case	ADDRESS:
+			case	REF:
+			case	POINTER:
+			case	BOOLEAN:
+			case	ENUM:
+			case	STRING:
+			case	STRING16:
+			case	FLAGS:
+			case	FUNCTION:
+			case	INTERFACE:
+				return true;
+			}
+			break;
+		}
+		return false;
+	}
+
 	public boolean derivesFrom(TypeFamily family) {
 		if (_family == family)
 			return true;
@@ -2401,6 +2538,9 @@ int[TypeFamily] familySize = [
 	BOOLEAN:			 1,
 	ADDRESS:			 8,
 	STRING: 			 8,
+	STRING16: 			 8,
+	SUBSTRING: 			16,
+	SUBSTRING16: 		16,
 	VAR: 				16,
 	VOID: 				-1,
 	ERROR: 				-1,
@@ -2439,6 +2579,9 @@ int[TypeFamily] familyAlignment = [
 	FLOAT_64:			 8,
 	BOOLEAN: 			 1,
 	STRING: 			 8,
+	STRING16: 			 8,
+	SUBSTRING: 			 8,
+	SUBSTRING16: 		 8,
 	VAR: 				 8,
 	VOID: 				-1,
 	ERROR: 				-1,
@@ -2476,6 +2619,9 @@ string[TypeFamily] builtinName = [
   	BOOLEAN:			"boolean",
   	ADDRESS:			"address",
   	STRING: 			"string",
+  	STRING16: 			"string16",
+  	SUBSTRING: 			"substring",
+  	SUBSTRING16: 		"substring16",
   	VAR: 				"var",
   	VOID: 				"void",
   	ERROR: 				"<error>",

@@ -675,6 +675,7 @@ public class Binary extends Node {
 				break;
 				
 			case	STRING:
+			case	STRING16:
 				if (_left.op() == Operator.SUBSCRIPT) {
 					ref<Variable> temp = compileContext.newVariable(_left.type);
 					ref<Node> r = tree.newReference(temp, true, location());
@@ -850,6 +851,9 @@ public class Binary extends Node {
 				break;
 				
 			case	STRING:
+			case	STRING16:
+			case	SUBSTRING:
+			case	SUBSTRING16:
 				if (_right.op() == Operator.CALL && ref<Call>(_right).category() != CallCategory.CONSTRUCTOR) {
 					ref<OverloadInstance> oi;
 					if (op() == Operator.ASSIGN_TEMP)
@@ -871,7 +875,7 @@ public class Binary extends Node {
 					call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 					return call.fold(tree, voidContext, compileContext);
 				}
-				
+
 			case	CLASS:
 			case	SHAPE:
 				ref<OverloadInstance> oi;

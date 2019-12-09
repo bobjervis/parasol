@@ -17,7 +17,6 @@ namespace parasol:compiler;
 
 import native:C;
 import parasol:text;
-import parasol:stream.UTF8Reader;
 
 public enum Operator {
 	// SyntaxError
@@ -1556,17 +1555,17 @@ public class Constant extends Node {
 		if (_value.length == 0)
 			return -1;
 		CompileStringReader r(_value);
-		UTF8Reader ur(&r);
+		text.UTF8Decoder ur(&r);
 		
-		int c = ur.read();
+		int c = ur.decodeNext();
 		if (codePointClass(c) == 0) {
-			c = ur.read();
+			c = ur.decodeNext();
 			if (c < 0)
 				return 0;			// the constant is just a '0' (or alternate decimal zero)
 			if (c == 'x' || c == 'X') {
 				for (;;) {
 					int digit;
-					c = ur.read();
+					c = ur.decodeNext();
 					if (c < 0)
 						break;
 					if (codePointClass(c) == CPC_LETTER)
@@ -1578,13 +1577,13 @@ public class Constant extends Node {
 			} else {
 				do {
 					v = v * 8 + codePointClass(c);
-					c = ur.read();
+					c = ur.decodeNext();
 				} while (c >= 0);
 			}
 		} else {
 			do {
 				v = v * 10 + codePointClass(c);
-				c = ur.read();
+				c = ur.decodeNext();
 			} while (c >= 0);
 		}
 		return v;
@@ -2166,6 +2165,7 @@ class Leaf extends Node {
 		case	NULL:
 			switch (newType.family()) {
 			case	STRING:
+			case	STRING16:
 			case	ENUM:
 			case	FUNCTION:
 			case	REF:
@@ -2174,7 +2174,6 @@ class Leaf extends Node {
 				return true;
 
 			case	SIGNED_32:
-
 			case	SIGNED_64:
 				return explicitCast;
 
@@ -3542,6 +3541,9 @@ public class Node {
 			case	REF:
 			case	POINTER:
 			case	STRING:
+			case	STRING16:
+			case	SUBSTRING:
+			case	SUBSTRING16:
 			case	SIGNED_32:
 			case	SIGNED_64:
 			case	UNSIGNED_32:
@@ -3620,9 +3622,49 @@ public class Node {
 			print(0);
 		if (type.equals(newType))
 			return this;
-		if (canCoerce(newType, explicitCast, compileContext))
-			return tree.newCast(newType, this);
-		else {
+		if (canCoerce(newType, explicitCast, compileContext)) {
+			if (newType.builtInCoercionFrom(this, compileContext))
+				return tree.newCast(newType, this);
+			else {
+				// To get here, we've determined that we want to do a cast and it's allowed, but it isn't
+				// built-in, so it must need a constructor. In order for canCoerce to return true and builtInConversionFrom
+				// to return false, the runtime has to have an appropriate constructor to use. Otherwise, the compiler dies
+				// a horrible death.
+				if (newType.scope() != null) {
+					for (int i = 0; i < newType.scope().constructors().length(); i++) {
+						ref<ParameterScope> constructor = (*newType.scope().constructors())[i];
+						ref<FunctionDeclaration> f = ref<FunctionDeclaration>(constructor.definition());
+						if (f == null || f.name() == null)
+							continue;
+						ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
+						if (oi.parameterCount() != 1)
+							continue;
+						ref<Symbol> param = (*oi.parameterScope().parameters())[0];
+						ref<Type> argType = param.assignType(compileContext);
+						if (argType.deferAnalysis())
+							continue;
+						if (argType == type) {
+							ref<Variable> temp = compileContext.newVariable(newType);
+							ref<NodeList> args = tree.newNodeList(this);
+							ref<Reference> r = tree.newReference(temp, true, location());
+							ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
+							ref<Call> call = tree.newCall(oi.parameterScope(), CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
+							call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+							r = tree.newReference(temp, false, location());
+							ref<Node> seq = tree.newBinary(Operator.SEQUENCE, call, r, location());
+							seq.type = newType;
+//							seq.print(0);
+							return seq;
+						}
+					}
+				}
+				
+				printf("Converting to %s\n", newType.signature());
+				print(0);
+				assert(false);
+				return this;
+			}
+		} else {
 			add(MessageId.CANNOT_CONVERT, compileContext.pool());
 			type = compileContext.errorType();
 			return this;

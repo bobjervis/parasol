@@ -13,29 +13,102 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * Provides facilities for manipulating strings of text.
+ *
+ * Parasol provides robust facilities for manipulating text data. These facilities
+ * are designed for general purpose use and may not be suitable for applications
+ * that need to store and process large volumes of text in complex ways. Nevertheless,
+ * Parasol's objects can be used to write efficient code for a broad class of applications.
+ *
+ * The Parasol text namespace includes two primary and two secondary classes that are most
+ * useful for representing strings of Unicode text.
+ *
+ * The primary classes are:
+ *
+ * <ul>
+ *     <li>{@link string}: Represents a sequence of Unicode characters stored in UTF-8.
+ *     <li>{@link string16}: Represents a sequence of Unicode characters stored in UTF-16.
+ * </ul>
+ *
+ * The secondary classes are:
+ *
+ * <ul>
+ *     <li>{@link substring}: Represents a sub-sequence of Unicode characters stored in UTF-8.
+ *     <li>{@link substring16}: Represents a sub-sequence of Unicode characters stored in UTF-16.
+ * </ul>
+ *
+ * Each of the above 'sub' classes is constructed from an instance of the corresponding primary
+ * classes. For example, a substring instance is a portion of a string object's contents. Operations on
+ * substring's provide relatively light-weight ways to search and select ranges of larger string objects.
+ *
+ * All four classes represent sequences of Unicode characters, so there is no notion of 'width' that
+ * affects the conversion of numeric types, for example. As far as operations like copying or string
+ * addition, all four types can be readily converted without loss of information. Any of the four classes
+ * can coerce to any of the other four. Converting to either of the primary string classes will involve
+ * copying text and may require a conversion between UTF-8 and UTF-16.
+ *
+ * This namespace provides full support for two encodings: UTF-8 and UTF-16 for textual data. One additional
+ * encoding, ISO 8859-1, can be safely stored in a string, but is not fully supported. Several of the 
+ * methods that construct, extend or modify string objects are agnostic and will function correctly
+ * regardless of the encoding actually present in the bytes or chars of the string. You should be aware 
+ * of the sources of your text data before you apply functions or methods that do explicitly depend on
+ * text having a specific encoding. The individual methods will indicate whether they depend on having correct
+ * Unicode text stored in their operands. Obviously, conversion between UTF-8 and UTF-16 encodings will
+ * result in unpredictable and probably garbled results if the source string does not contain valid Unicode
+ * text.
+ */
 namespace parasol:text;
 
 import native:C;
 import parasol:memory;
 import parasol:stream;
+import parasol:stream.EOF;
 import parasol:exception.IllegalArgumentException;
+import parasol:exception.IllegalOperationException;
 
 private class substringClass = substring;
 
-public boolean ignoring;
-public address[] deletedContents;
-
+/**
+ * This is the preferred representation for text in Parasol.
+ *
+ */
 public class string extends String<byte> {
+	//** DO NOT MOVE THIS ** THIS MUST BE THE FIRST CONSTRUCTOR ** THE COMPILER RELIES ON THIS PLACEMENT **//
+	/*
+	 * This constructor is used in certain special cases where the compiler can determine that the current string object
+	 * can simply take ownership of whatever content the source string is (and avoid a copy of the contents).
+	 */
+	private string(ref<allocation> other) {
+		_contents = other;
+	}
+	//** DO NOT MOVE THIS ** THIS MUST BE THE FIRST CONSTRUCTOR ** THE COMPILER RELIES ON THIS PLACEMENT **//
+	
 	// The special 'stringAllocationConstructor' allocation class has to be in the string class.
 	// TODO: fix this
 	protected class allocationX {
 		public int length;
 		public byte data;
 	}
-	
+	// TODO: remove this when the compiler is looking for 
+	private string(ref<allocationX> other) {
+		_contents = ref<allocation>(other);
+	}
+	/**
+	 * The default constructor.
+	 *
+	 * By default, the string value is null.
+	 */
 	public string() {
 	}
-	
+	/**
+	 * A copy constructor.
+	 *
+	 * The contents of the source string are copied. If source is
+	 * null, the newly constructed string is null as well.
+	 *
+	 * @param source An existing string.
+	 */
 	public string(string source) {
 		if (source != null) {
 			resize(source.length());
@@ -145,32 +218,37 @@ public class string extends String<byte> {
 			append("false");
 	}
 
-	private string(ref<allocationX> other) {
-		_contents = ref<allocation>(other);
-	}
-
 	public string(string16 other) {
 		if (other.isNull())
 			return;
-		resize(0);
-		String16Reader r(&other);
-		stream.UTF16Reader ur(&r);
-		StringWriter w(this);
-		stream.UTF8Writer uw(&w);
+		resize(0);				// This makes the value != null (i.e. the empty string), if other is the empty string
 
-		for (;;) {
-			int c = ur.read();
-			if (c == stream.EOF)
-				break;
-			uw.write(c);
-		}
+		StringWriter w(this);
+		UTF8Encoder ue(&w);
+
+		ue.encode(other);
+	}
+
+	public string(substring16 other) {
+		if (other.isNull())
+			return;
+		resize(0);				// This makes the value != null (i.e. the empty string), if other is the empty string
+
+		StringWriter w(this);
+		UTF8Encoder ue(&w);
+
+		ue.encode(other);
 	}
 
 	public string(pointer<char> buffer, int len) {
 		if (buffer == null)
 			return;
-		resize(0);
-		append(buffer, len);
+
+		stream.BufferReader r(buffer, len * char.bytes);
+		UTF16Decoder ud(&r);
+
+		string s = ud.decode();
+		_contents = s._contents;
 	}
 
 	private void appendDigits(long value) {
@@ -252,16 +330,47 @@ public class string extends String<byte> {
 	}
 
 	public void append(pointer<char> cp, int length) {
-		StringWriter w(this);
 		stream.BufferReader r(cp, length * char.bytes);
-		stream.UTF16Reader ur(&r);
-		stream.UTF8Writer uw(&w);
+		UTF16Decoder ud(&r);
+		StringWriter w(this);
+		UTF8Encoder ue(&w);
 
 		for (;;) {
-			int c = ur.read();
-			if (c == stream.EOF)
+			int c = ud.decodeNext();
+			if (c == EOF)
 				break;
-			uw.write(c);
+			ue.encode(c);
+		}
+	}
+	/**
+	 * Append a Unicode character.
+	 *
+	 * If the argument value is not a valid Unicode code point, the 
+	 * {@link REPLACEMENT_CHARACTER) is stored instead.
+	 *
+	 * @param ch The character to append.
+	 */
+	public void append(int ch) {
+		if (ch <= 0x7f)
+			append(byte(ch));
+		else if (ch <= 0x7ff) {
+			append(byte(0xc0 + (ch >> 6)));
+			append(byte(0x80 + (ch & 0x3f)));
+		} else if (ch <= 0xffff) {
+			if (ch < SURROGATE_START ||
+				ch > SURROGATE_END) {
+				append(byte(0xe0 + (ch >> 12)));
+				append(byte(0x80 + ((ch >> 6) & 0x3f)));
+				append(byte(0x80 + (ch & 0x3f)));
+			} else
+				append(REPLACEMENT_CHARACTER);
+		} else if (ch <= 0x10ffff) {
+			append(byte(0xf0 + (ch >> 18)));
+			append(byte(0x80 + ((ch >> 12) & 0x3f)));
+			append(byte(0x80 + ((ch >> 6) & 0x3f)));
+			append(byte(0x80 + (ch & 0x3f)));
+		} else {
+			append(REPLACEMENT_CHARACTER);
 		}
 	}
 
@@ -1037,22 +1146,80 @@ public class string16 extends String<char> {
 			return;
 		resize(0);
 		assert(_contents != null);
-		StringReader r(&other);
-		stream.UTF8Reader u(&r);
 		String16Writer w(this);
-		stream.UTF16Writer u16(&w);
-		for (;;) {
-			int c = u.read();
-			if (c == stream.EOF)
-				break;
-			u16.write(c);
-		}
+		UTF16Encoder u16(&w);
+
+		u16.encode(other);
+	}
+
+	public string16(substringClass other) {
+		if (other.isNull())
+			return;
+		resize(0);
+		assert(_contents != null);
+		String16Writer w(this);
+		UTF16Encoder u16(&w);
+
+		u16.encode(other);
+	}
+
+	public string16(substring16 other) {
+		if (other.isNull())
+			return;
+		resize(0);
+		assert(_contents != null);
+		String16Writer w(this);
+		UTF16Encoder u16(&w);
+
+		u16.encode(other);
 	}
 
 	public string16(pointer<char> buffer, int len) {
 		if (buffer != null) {
 			resize(len);
 			C.memcpy(&_contents.data, buffer, len * char.bytes);
+		}
+	}
+
+	public int compare(string16 other) {
+		if (_contents == null) {
+			if (other._contents == null)
+				return 0;
+			else
+				return -1;
+		} else if (other._contents == null)
+			return 1;
+		pointer<char> cp = pointer<char>(&_contents.data);
+		pointer<char> ocp = pointer<char>(&other._contents.data);
+		if (_contents.length < other._contents.length) {
+			for (int i = 0; i < _contents.length; i++) {
+				if (cp[i] != ocp[i])
+					return cp[i] < ocp[i] ? -1 : 1;
+			}
+			return -1;
+		} else {
+			for (int i = 0; i < other._contents.length; i++) {
+				if (cp[i] != ocp[i])
+					return cp[i] < ocp[i] ? -1 : 1;
+			}
+			if (_contents.length > other._contents.length)
+				return 1;
+			else
+				return 0;
+		}
+	}
+	
+	public void copy(string16 other) {
+		if (other._contents != null) {
+			if (_contents == other._contents)
+				return;
+			resize(other._contents.length);
+			C.memcpy(&_contents.data, &other._contents.data, (other._contents.length + 1) * char.bytes);
+		} else {
+			if (_contents != null) {
+				memory.free(_contents);
+				_contents = null;
+			}
 		}
 	}
 
@@ -1084,6 +1251,28 @@ public class string16 extends String<char> {
 		
 		result.append(pointer<char>(&_contents.data) + first, last - first);
 		return result;
+	}
+	/**
+	 * Append a Unicode character.
+	 *
+	 * If the argument value is not a valid Unicode code point, the 
+	 * {@link REPLACEMENT_CHARACTER) is stored instead.
+	 *
+	 * @param ch The character to append.
+	 */
+	public void append(int ch) {
+		if (ch < SURROGATE_START)
+			append(char(ch));
+		else if (ch <= SURROGATE_END)
+			append(REPLACEMENT_CHARACTER);
+		else if (ch <= 0xffff)
+			append(char(ch));
+		else if (ch <= 0x10ffff) {
+			ch -= 0x10000;
+			append(char(HI_SURROGATE_START + (ch >> 10)));
+			append(char(LO_SURROGATE_START + (ch & 0x3ff)));
+		} else
+			append(REPLACEMENT_CHARACTER);
 	}
 }
 
@@ -1127,43 +1316,6 @@ class String<class T> {
 			C.memcpy(pointer<T>(&_contents.data) + len, p, length * T.bytes);
 		}
 		*(pointer<T>(&_contents.data) + _contents.length) = 0;
-	}
-
-	/**
-	 * Note: This is not the correct algorithm for depositing a Unicode code point into
-	 * UTF-16. It needs a test for the value of T, and for performance reasons that test
-	 * should resolve as a compile-time constant, which it does not at present do. So, full
-	 * implementation of this will have to wait until I get  some compiler work to support it.
-	 */
-	public void append(int ch) {
-		if (ch <= 0x7f)
-			append(T(ch));
-		else if (ch <= 0x7ff) {
-			append(T(0xc0 + (ch >> 6)));
-			append(T(0x80 + (ch & 0x3f)));
-		} else if (ch <= 0xffff) {
-			append(T(0xe0 + (ch >> 12)));
-			append(T(0x80 + ((ch >> 6) & 0x3f)));
-			append(T(0x80 + (ch & 0x3f)));
-		} else if (ch <= 0x1fffff) {
-			append(T(0xf0 + (ch >> 18)));
-			append(T(0x80 + ((ch >> 12) & 0x3f)));
-			append(T(0x80 + ((ch >> 6) & 0x3f)));
-			append(T(0x80 + (ch & 0x3f)));
-		} else if (ch <= 0x3ffffff) {
-			append(T(0xf8 + (ch >> 24)));
-			append(T(0x80 + ((ch >> 18) & 0x3f)));
-			append(T(0x80 + ((ch >> 12) & 0x3f)));
-			append(T(0x80 + ((ch >> 6) & 0x3f)));
-			append(T(0x80 + (ch & 0x3f)));
-		} else if (ch <= 0x7fffffff) {
-			append(T(0xfc + (ch >> 30)));
-			append(T(0x80 + ((ch >> 24) & 0x3f)));
-			append(T(0x80 + ((ch >> 18) & 0x3f)));
-			append(T(0x80 + ((ch >> 12) & 0x3f)));
-			append(T(0x80 + ((ch >> 6) & 0x3f)));
-			append(T(0x80 + (ch & 0x3f)));
-		}
 	}
 
 	public void append(T b) {
@@ -1220,9 +1372,9 @@ class String<class T> {
 					for (int i = 0; i < 4; i++, shift -= 4, mask >>= 4) {
 						int nibble = (value & mask) >> shift;
 						if (nibble <= 9)
-							output.append('0' + nibble);
+							output.append(T('0' + nibble));
 						else
-							output.append('a' + nibble - 10);
+							output.append(T('a' + nibble - 10));
 					}
 				} else
 					output.append(cp[i]);
@@ -1339,7 +1491,10 @@ class String<class T> {
 								v += 10 + pointer<T>(&_contents.data)[i].toLowerCase() - 'a';
 							i++;
 						} while (i < _contents.length && pointer<T>(&_contents.data)[i].isHexDigit());
-						output.append(v);			// emits UTF-8.
+						if (T.bytes == byte.bytes)
+							ref<string>(&output).append(v);			// emits UTF-8.
+						else
+							ref<string16>(&output).append(v);			// emits UTF-16.
 						i--;
 						break;
 						
@@ -1361,7 +1516,10 @@ class String<class T> {
 								v += 10 + pointer<T>(&_contents.data)[i].toLowerCase() - 'a';
 							i++;
 						} while (i < _contents.length && pointer<T>(&_contents.data)[i].isHexDigit());
-						output.append(T(v));
+						if (T.bytes == byte.bytes)
+							ref<string>(&output).append(byte(v));			// emits UTF-8.
+						else
+							ref<string16>(&output).append(char(v));			// emits UTF-16.
 						i--;
 						break;
 						
@@ -1381,7 +1539,10 @@ class String<class T> {
 							v += pointer<T>(&_contents.data)[i] - '0';
 							i++;
 						} while (i < _contents.length && pointer<T>(&_contents.data)[i].isOctalDigit());
-						output.append(v);
+						if (T.bytes == byte.bytes)
+							ref<string>(&output).append(v);			// emits UTF-8.
+						else
+							ref<string16>(&output).append(v);			// emits UTF-16.
 						break;
 						
 					default:
@@ -1490,11 +1651,99 @@ public class String16Writer extends Writer {
 			_lo = c;
 	}
 }
-
-public void memDump(address buffer, int length) {
+/**
+ * Write a memory dump to stdout.
+ *
+ * This is a debugging function that is useful for examining
+ * the contents of memory. The memory contents are displayed
+ * in hexadecimal and as displayable ASCII characters. Each line
+ * of output displays up to 16 bytes of memory and is labeled
+ * with the memory address.
+ *
+ * If the memory address to be dumped is not a multiple of
+ * sixteen, the first line of output with use the address
+ * truncated to the nearest multiple of sixteen and white space
+ * will fill the bytes that precede the first byte of data to be dumped.
+ *
+ * You may display the contents of an entire object with a call
+ * like:
+ *<pre>{@code
+ *        memDump(&x, x.bytes);
+ *}</pre>
+ *
+ * You can display all the elements of an array or string using
+ * the following:
+ *<pre>{@code
+ *        T[] a;
+ *
+ *        memDump(&a[0], a.length() * T.bytes);
+ *}</pre>
+ * or
+ *<pre>{@code
+ *        string s;
+ *
+ *        memDump(&s[0], s.length());
+ *}</pre>
+ *
+ * Supplying a length value larger than the object or array
+ * being dumped produces undefined behavior.
+ *
+ * @param buffer The address of memory to dump.
+ * @param length The number of bytes to dump.
+ */
+public void memDump(address buffer, long length) {
 	memDump(buffer, length, long(buffer));
 }
-
+/**
+ * Write a memory dump to stdout.
+ *
+ * This is a debugging function that is useful for examining
+ * the contents of memory. The memory contents are displayed
+ * in hexadecimal and as displayable ASCII characters. Each line
+ * of output displays up to 16 bytes of memory and is labeled
+ * with an offset. The startingOffset parameter can be useful 
+ * in labelling dumped data. For example, if you want to compare
+ * the contents of two large arrays, dumping them both with the
+ * same starting offset allows you to use automated text comparison
+ * without much effort.
+ *
+ * If the memory address to be dumped is not a multiple of
+ * sixteen, the first line of output with use the address
+ * truncated to the nearest multiple of sixteen and white space
+ * will fill the bytes that precede the first byte of data to be dumped.
+ * with the memory address. If the memory address to be dumped is not
+ * a multiple of sixteen, the first line of output with use the
+ * address truncated to the nearest multiple of sixteen and
+ * white space will fill the bytes that precede the first byte
+ * of data to be dumped.
+ *
+ * You may display the contents of an entire object with a call
+ * like:
+ *<pre>{@code
+ *        memDump(&x, x.bytes, 0);
+ *}</pre>
+ *
+ * You can display all the elements of an array or string using
+ * the following:
+ *<pre>{@code
+ *        T[] a;
+ *
+ *        memDump(&a[0], a.length() * T.bytes, 0);
+ *}</pre>
+ * or
+ *<pre>{@code
+ *        string s;
+ *
+ *        memDump(&s[0], s.length(), 0);
+ *}</pre>
+ *
+ * Supplying a length value larger than the object or array
+ * being dumped produces undefined behavior.
+ *
+ * @param buffer The address of memory to dump.
+ * @param length The number of bytes to dump.
+ * @param startingOffset The offset of the first byte to be displayed. 
+ */
 public void memDump(address buffer, long length, long startingOffset) {
 	pointer<byte> printed = pointer<byte>(startingOffset);
 	pointer<byte> firstRow = printed + -int(startingOffset & 15);
@@ -1539,3 +1788,9 @@ private void dumpPtr(address x) {
 
 class RegularExpression {
 }
+/**
+ * The Unicode code point for the replacement character, used to substitute in a malformed input
+ * stream for incorrect UTF encodings. It has the hexadecimal value of 0xFFFD.
+ */
+@Constant
+public int REPLACEMENT_CHARACTER = 0xfffd;

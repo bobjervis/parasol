@@ -698,7 +698,6 @@ public class OverloadInstance extends Symbol {
 
 		int parameter = 0;
 		int bias = 0;
-		// TODO: This doesn't look right - what effect does it have?
 		while (parameter < _parameterScope.parameters().length()) {
 			ref<Symbol> symThis = (*_parameterScope.parameters())[parameter];
 			if (parameter >= oiOther._parameterScope.parameters().length())
@@ -712,9 +711,26 @@ public class OverloadInstance extends Symbol {
 			ref<Type> typeOther = symOther.assignType(compileContext);
 			if (!typeThis.equals(typeOther)) {
 				if (typeThis.widensTo(typeOther, compileContext)) {
-					if (bias < 0)
-						return 0;
-					bias = 1;
+					if (typeOther.widensTo(typeThis, compileContext)) {
+						// mutually convertible. prefer an exact match.
+						ref<Node> arg = nthArgument(arguments, parameter);
+
+						if (arg != null && arg.type != null) {
+							if (arg.type.equals(typeThis)) {
+								if (bias < 0)
+									return 0;
+								bias = 1;
+							} else if (arg.type.equals(typeOther)) {
+								if (bias > 0)
+									return 0;
+								bias = -1;
+							}
+						}
+					} else {
+						if (bias < 0)
+							return 0;
+						bias = 1;
+					}
 				} else if (typeOther.widensTo(typeThis, compileContext)) {
 					if (bias > 0)
 						return 0;
@@ -726,6 +742,16 @@ public class OverloadInstance extends Symbol {
 		if (parameter < oiOther._parameterScope.parameters().length()) {
 		}
 		return bias;
+	}
+
+	private ref<Node> nthArgument(ref<NodeList> arguments, int parameter) {
+		while (arguments != null) {
+			if (parameter == 0)
+				return arguments.node;
+			parameter--;
+			arguments = arguments.next;
+		}
+		return null;
 	}
 
 	public ref<Type> instantiateTemplate(ref<Call> declaration, ref<CompileContext> compileContext) {

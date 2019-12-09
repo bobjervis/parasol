@@ -918,6 +918,9 @@ compile() { "interface A {} A src; enum Foo { A, B }; Foo x; x = Foo(src);" }
 compile() { "interface A {} A src; flags Foo { A, B }; Foo x; x = Foo(src);" }
 compile() { "interface A {} A src; int x(double z); x = int(double)(src);" }
 
+compile() { "string src; var x; x = src;" }
+compile() { "string16 src; var x; x = src;" }
+
 // From string - coercions from string to non-string generally require a call to T.parse 
 
 compile(expect: fail) { "char x = char(\"abc\");" }
@@ -937,6 +940,80 @@ compile(expect: fail) { "interface X { void f(expect: fail); } X x = X(\"abc\");
 compile(expect: fail) { "address x = address(\"abc\");" }
 compile(expect: fail) { "boolean x = boolean(\"abc\");" }
 compile(expect: fail) { "void(int) x = void(int)(\"abc\");" }
+
+// From string16 - coercions from string to non-string generally require a call to T.parse 
+
+compile(expect: fail) { "string16 src; byte x; x = byte(src);" }
+compile(expect: fail) { "string16 src; char x; x = char(src);" }
+compile(expect: fail) { "string16 src; unsigned x; x = unsigned(src);" }
+compile(expect: fail) { "string16 src; short x; x = short(src);" }
+compile(expect: fail) { "string16 src; int x; x = int(src);" }
+compile(expect: fail) { "string16 src; long x; x = long(src);" }
+compile(expect: fail) { "string16 src; float x; x = float(src);" }
+compile(expect: fail) { "string16 src; double x; x = double(src);" }
+compile(expect: fail) { "string16 src; boolean x; x = boolean(src);" }
+compile(expect: fail) { "string16 src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile(expect: fail) { "string16 src; flags Foo { A, B }; Foo x; x = Foo(src);" }
+compile(expect: fail) { "string16 src; int x(double z); x = int(double)(src);" }
+compile(expect: fail) { "string16 src; interface A {} A x; x = A(src);" }
+
+// From substring - coercions from string to non-string generally require a call to T.parse 
+
+compile(expect: fail) { "substring src; byte x; x = byte(src);" }
+compile(expect: fail) { "substring src; char x; x = char(src);" }
+compile(expect: fail) { "substring src; unsigned x; x = unsigned(src);" }
+compile(expect: fail) { "substring src; short x; x = short(src);" }
+compile(expect: fail) { "substring src; int x; x = int(src);" }
+compile(expect: fail) { "substring src; long x; x = long(src);" }
+compile(expect: fail) { "substring src; float x; x = float(src);" }
+compile() { "substring src; var x; x = src;" }
+compile(expect: fail) { "substring src; double x; x = double(src);" }
+compile(expect: fail) { "substring src; boolean x; x = boolean(src);" }
+compile(expect: fail) { "substring src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile(expect: fail) { "substring src; flags Foo { A, B }; Foo x; x = Foo(src);" }
+compile(expect: fail) { "substring src; int x(double z); x = int(double)(src);" }
+compile(expect: fail) { "substring src; interface A {} A x; x = A(src);" }
+
+// From substring16 - coercions from string to non-string generally require a call to T.parse 
+
+compile(expect: fail) { "substring16 src; byte x; x = byte(src);" }
+compile(expect: fail) { "substring16 src; char x; x = char(src);" }
+compile(expect: fail) { "substring16 src; unsigned x; x = unsigned(src);" }
+compile(expect: fail) { "substring16 src; short x; x = short(src);" }
+compile(expect: fail) { "substring16 src; int x; x = int(src);" }
+compile(expect: fail) { "substring16 src; long x; x = long(src);" }
+compile(expect: fail) { "substring16 src; float x; x = float(src);" }
+compile() { "substring16 src; var x; x = src;" }
+compile(expect: fail) { "substring16 src; double x; x = double(src);" }
+compile(expect: fail) { "substring16 src; boolean x; x = boolean(src);" }
+compile(expect: fail) { "substring16 src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile(expect: fail) { "substring16 src; flags Foo { A, B }; Foo x; x = Foo(src);" }
+compile(expect: fail) { "substring16 src; int x(double z); x = int(double)(src);" }
+compile(expect: fail) { "substring16 src; interface A {} A x; x = A(src);" }
+
+// String assignments
+
+compile() { "string16 x; boolean b = x != null;" }
+compile() { "string a; string b; a = b;" }
+compile() { "string a; string16 b; a = b;" }
+compile() { "string a; substring b; a = b;" }
+compile() { "string a; substring16 b; a = b;" }
+compile() { "string16 a; string b; a = b;" }
+compile() { "string16 a; string16 b; a = b;" }
+compile() { "string16 a; substring b; a = b;" }
+compile() { "string16 a; substring16 b; a = b;" }
+compile() { "substring a; string b; a = b;" }
+compile(expect: fail) { "substring a; string16 b; a = b;" }
+compile() { "substring a; substring b; a = b;" }
+compile(expect: fail) { "substring a; substring16 b; a = b;" }
+compile(expect: fail) { "substring16 a; string b; a = b;" }
+compile() { "substring16 a; string16 b; a = b;" }
+compile(expect: fail) { "substring16 a; substring b; a = b;" }
+compile() { "substring16 a; substring16 b; a = b;" }
+
+// String addition
+
+compile() { "string a; string b; string c; a = b + c;" }
 
 // Disallowed implicit casts.
 

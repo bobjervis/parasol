@@ -37,9 +37,15 @@
  * cheaply migrate to an operating system that did not employ one or the other of the existing
  * formats.
  *
- * The text file format returned by a reader contains lines of text separated by a single newline
+ * The text file format returned by a Reader contains lines of text separated by a single newline
  * character ('\n'). Each line of text is represented as a sequence of bytes. Whether the contents of the
  * lines of text are encoded using UTF-8 or some other encoding is not specified.
+ *
+ * The text file format written by a Writer expects lines of text separated by the single newline (0x0a).
+ * As each line of text is written. The bytes of the text are written to the output stream without modification.
+ * Line separators are written in the format appropriate to the host operating system. Any bytes inserted
+ * into the output to represent a line separator are not counted in the bytes written by the call. Each line
+ * separator is counted as one byte written to the stream, regardless of host operating system.
  *
  * The intention of the design of the various Reader and Writer streams is to allow a developer to choose
  * a class that is as simple as possible for the task at hand. For many applications, treating a file as
@@ -57,6 +63,7 @@ import parasol:runtime;
 import parasol:storage.File;
 import parasol:storage.Seek;
 import parasol:time.Time;
+import parasol:text;
 import parasol:text.string16;
 import parasol:exception.BoundsException;
 import parasol:exception.IllegalArgumentException;
@@ -66,669 +73,6 @@ import native:C;
 
 @Constant
 int MILLIS_PER_SECOND = 1000;
-/**
- * The Unicode code point for the replacement character, used to substitute in a malformed input
- * stream for incorrect UTF encodings. It has the hexadecimal value of 0xFFFD.
- */
-@Constant
-public int REPLACEMENT_CHARACTER = 0xfffd;
-/**
- * This converter will read a stream of UTF-8 byte text and return a UTF-32 stream
- * of Unicode code points.
- */
-public class UTF8Reader {
-	private ref<Reader> _reader;
-	/*
-	 * _lastChar is the last value returned by read
-	 */
-
-	private int _lastChar;
-	/*
-	 * _lastByte is the last byte read and pushed back  
-	 */
-	private int _lastByte;
-	private int _errorByte;
-	/**
-	 * Constructs this Reader to consume the contents of the Reader object passed in.
-	 *
-	 * @param reader The byte-stream reader to use to obtain the Unicode data.
-	 */
-	public UTF8Reader(ref<Reader> reader) {
-		_reader = reader;
-		_lastByte = -1;
-	}
-	/**
-	 * Read the next Unicode code point from the UTF-8 stream.
-	 *
-	 * @return The next Unicode code point in the stream. If the stream is not
-	 * well-formed UTF-8, then a value of {@link REPLACEMENT_CHARACTER} is returned and the 
-	 * incorrectly coded byte is skipped. The value of the skipped byte can be obtained by calling
-	 * the {@link errorByte} method.
-	 */
-	public int read() {
-		if (_lastChar < 0) {	// did we have EOF or an unget?
-			if (_lastChar == -1)
-				return EOF;		// EOF just keep returning EOF
-			int result = -2 - _lastChar;
-			_lastChar = result;	// unget was called, undo it's effects and return the last char again
-			return result;
-		}
-		int x;
-		if (_lastByte >= 0) {
-			x = _lastByte;
-			_lastByte = -1;
-		} else
-			x = _reader.read();
-		int extraBytes;
-		if (x < 0x80) { 		// THis is 7-bit ascii, return as is.
-			_lastChar = x;
-			return x;
-		} else if (x < 0xe0) {
-			if (x < 0xc0) {		// this is a trailing multi-byte value, not legal
-				_lastChar = REPLACEMENT_CHARACTER;
-				_errorByte = x;
-				return REPLACEMENT_CHARACTER;
-			} else {
-				x &= 0x1f;
-				extraBytes = 1;			// A two-byte sequence (0-7ff)
-			}
-		} else {
-			if ((x & 0xf0) == 0xe0) {
-				x &= 0xf;
-				extraBytes = 2;			// A three-byte sequence (0-ffff)
-			} else if ((x & 0xf8) == 0xf0) {
-				x &= 0x7;
-				extraBytes = 3;			// A four-byte sequence (0-1fffff)
-			} else if ((x & 0xfc) == 0xf8) {
-				x &= 0x3;
-				extraBytes = 4;			// A five-byte sequence (0-3ffffff)
-			} else if ((x & 0xfe) == 0xfc) {
-				x &= 0x1;
-				extraBytes = 5;			// A six-byte sequence (0-7fffffff)
-			} else {
-				_lastChar = REPLACEMENT_CHARACTER;
-				_errorByte = x;
-				return REPLACEMENT_CHARACTER;
-			}
-		}
-		for (int i = 0; i < extraBytes; i++) {
-			int n = _reader.read();
-			if ((n & ~0x3f) != 0x80) {				// This is not a continuation byte
-				_lastChar = REPLACEMENT_CHARACTER;
-				_lastByte = n;
-				_errorByte = -(x << (6 * (extraBytes - i)));
-				return REPLACEMENT_CHARACTER;
-			}
-			int increment = n & 0x3f;
-			x = (x << 6) + increment;
-		}
-		_lastChar = x;
-		_errorByte = 0;
-		return x;
-	}
-	/**
-	 * Reads zero or more Unicode code points into the buffer
-	 * argument.
-	 *
-	 * @param buffer The address where the Unicode code points should be stored.
-	 * @param length The maximum number of code points to read into the buffer.
-	 *
-	 * @return The number of code points actually stored. A return value of zero indicates 
-	 * end of stream.
-	 */
-	public int read(pointer<int> buffer, int length) {
-		int count;
-		while (length > 0) {
-			int c = read();
-
-			if (c == EOF)
-				break;
-
-			*buffer++ = c;
-			length--;
-			count++;
-		}
-		return count;
-	}
-	/**
-	 * Read into an int array buffer. Code points are read up to the
-	 * number of elements in the array. Any existing contents are over-written
-	 * starting at index 0.
-	 *
-	 * @return The number of code points read. A return of 0 indicates end of stream.
-	 */
-	public int read(ref<int[]> buffer) {
-		int count;
-		while (count < buffer.length()) {
-			int c = read();
-
-			if (c == EOF)
-				break;
-
-			(*buffer)[count++] = c;
-		}
-		return count;
-	}
-	/**
-	 * Ungets the last code point read from the stream. The next call to {@link read} will
-	 * returieve the same value again.
-	 */
-	public void unget() {
-		if (_lastChar >= 0)
-			_lastChar = -2 - _lastChar;
-	}
-	/**
-	 * The erronoeous byte that triggered the REPLACEMENT_CHARACTER last returned. 
-	 *
-	 * @return The byte that was unexpected and skipped. A negative value indicates that
-	 * one or more bytes of an incomplete multi-byte sequence were processed. The magnitude of
-	 * the value contains the high order bits of the bytes that were present. The number of
-	 * missing low order bytes is indeterminate.
-	 *
-	 * If this method is called before any REPLACEMENT_VALUE code points are returned, the value
-	 * is zero.
-	 * If the stream actually contained a REPLACE_VALUE code point in it, the return value is zero.
- 	 */
-	public int errorByte() {
-		return _errorByte;
-	}
-}
-
-@Constant
-int SURROGATE_START = 0xd800;
-@Constant
-int HI_SURROGATE_START = 0xd800;
-@Constant
-int HI_SURROGATE_END = 0xdbff;
-@Constant
-int LO_SURROGATE_START = 0xdc00;
-@Constant
-int LO_SURROGATE_END = 0xdfff;
-@Constant
-int SURROGATE_END = 0xdfff;
-
-/**
- * This converter will read a stream of UTF-16 char text and return a UTF-32 stream
- * of Unicode code points.
- */
-public class UTF16Reader {
-	private ref<Reader> _reader;
-	/*
-	 * _lastChar is the last value returned by read
-	 */
-	private int _lastChar;
-	/*
-	 * The last code unit read and pushed back
-	 */
-	private int _lastCodeUnit;
-	/**
-	 * Constructs this Reader to consume the contents of the Reader object passed in.
-	 *
-	 * @param reader The byte-stream reader to use to obtain the Unicode data.
-	 */
-	public UTF16Reader(ref<Reader> reader) {
-		_reader = reader;
-		_lastCodeUnit = EOF;
-	}
-	/**
-	 * Read the next Unicode code point from the UTF-8 stream.
-	 *
-	 * @return The next Unicode code point in the stream. If the stream is not
-	 * well-formed UTF-16, then a value of {@link REPLACEMENT_CHARACTER} is returned.
-	 */
-	public int read() {
-		if (_lastChar < 0) {	// did we have EOF or an unget?
-			if (_lastChar == EOF)
-				return EOF;		// EOF just keep returning EOF
-			int result = -2 - _lastChar;
-			_lastChar = result;	// unget was called, undo it's effects and return the last char again
-			return result;
-		}
-		int x;
-		if (_lastCodeUnit >= 0) {
-			x = _lastCodeUnit;
-			_lastCodeUnit = EOF;
-		} else
-			x = getCodeUnit();
-		if (x < SURROGATE_START || x > SURROGATE_END) {		// Not a surrogate unit, return it as a code point
-			_lastChar = x;
-			return x;
-		}
-		if (x >= LO_SURROGATE_START)
-			return REPLACEMENT_CHARACTER;		// The x code unit is a low surrogate unit
-
-		_lastCodeUnit = getCodeUnit();
-		if (_lastCodeUnit == EOF)
-			return REPLACEMENT_CHARACTER;		// There is a high surrogate followed by nothing
-
-		if (_lastCodeUnit < LO_SURROGATE_START || _lastCodeUnit > LO_SURROGATE_END)
-			return REPLACEMENT_CHARACTER;		// A high surrogate unit has been followed by a non-low surrogate.
-
-		_lastChar = ((x - HI_SURROGATE_START) << 10) + (_lastCodeUnit - LO_SURROGATE_START) + 0x10000;
-		_lastCodeUnit = EOF;
-		return _lastChar;
-	}
-
-	private int getCodeUnit() {
-		int lo = _reader.read();
-		if (lo == EOF)
-			return EOF;
-		int hi = _reader.read();
-		if (hi == EOF)
-			return EOF;
-		return (hi << 8) | lo;
-	}
-	/**
-	 * Reads zero or more Unicode code points into the buffer
-	 * argument.
-	 *
-	 * @param buffer The address where the Unicode code points should be stored.
-	 * @param length The maximum number of code points to read into the buffer.
-	 *
-	 * @return The number of code points actually stored. A return value of zero indicates 
-	 * end of stream.
-	 */
-	public int read(pointer<int> buffer, int length) {
-		int count;
-		while (length > 0) {
-			int c = read();
-
-			if (c == EOF)
-				break;
-
-			*buffer++ = c;
-			length--;
-			count++;
-		}
-		return count;
-	}
-	/**
-	 * Read into an int array buffer. Code points are read up to the
-	 * number of elements in the array. Any existing contents are over-written
-	 * starting at index 0.
-	 *
-	 * @return The number of code points read. A return of 0 indicates end of stream.
-	 */
-	public int read(ref<int[]> buffer) {
-		int count;
-		while (count < buffer.length()) {
-			int c = read();
-
-			if (c == EOF)
-				break;
-
-			(*buffer)[count++] = c;
-		}
-		return count;
-	}
-	/**
-	 * Ungets the last code point read from the stream. The next call to {@link read} will
-	 * returieve the same value again.
-	 */
-	public void unget() {
-		if (_lastChar >= 0)
-			_lastChar = -2 - _lastChar;
-	}
-}
-/**
- * This converter will take a stream of UTF-32 Unicode code points and write them as a stream of
- * UTF-8 byte text.
- */
-public class UTF8Writer {
-	ref<Writer> _writer;
-	/**
-	 * Constructs this Writer to generate the octets of a UTF-8 text stream to be written as
-	 * bytes to the writer parameter.
-	 *
-	 * @param writer The byte-stream Writer to use to generate the Unicode data.
-	 */
-	public UTF8Writer(ref<Writer> writer) {
-		_writer = writer;
-	}
-	/**
-	 * @param c The code point to write
-	 *
-	 * @return The number of bytes written to the underlying Writer.
-	 *
-	 * @exception IllegalArgumentException thrown if an invalid Unicode code point is written to the stream.
-	 */
-	public int write(int c) {
-		unsigned x = unsigned(c);
-		if (x > 0x10ffff ||
-			(x >= unsigned(SURROGATE_START) && x <= unsigned(SURROGATE_END))) {
-			string s;
-			s.printf("%d", c);
-			throw IllegalArgumentException(s);
-		}
-		if (c <= 0x7f) {
-			_writer.write(byte(c));
-			return 1;
-		} else if (c <= 0x7ff) {
-			_writer.write(byte(0xc0 + (c >> 6)));
-			_writer.write(byte(0x80 + (c & 0x3f)));
-			return 2;
-		} else if (c <= 0xffff) {
-			_writer.write(byte(0xe0 + (c >> 12)));
-			_writer.write(byte(0x80 + ((c >> 6) & 0x3f)));
-			_writer.write(byte(0x80 + (c & 0x3f)));
-			return 3;
-		} else {//if (c <= 0x1fffff) {
-			_writer.write(byte(0xf0 + (c >> 18)));
-			_writer.write(byte(0x80 + ((c >> 12) & 0x3f)));
-			_writer.write(byte(0x80 + ((c >> 6) & 0x3f)));
-			_writer.write(byte(0x80 + (c & 0x3f)));
-			return 4;
-/*
-		} else if (c <= 0x3ffffff) {
-			_writer.write(byte(0xf8 + (c >> 24)));
-			_writer.write(byte(0x80 + ((c >> 18) & 0x3f)));
-			_writer.write(byte(0x80 + ((c >> 12) & 0x3f)));
-			_writer.write(byte(0x80 + ((c >> 6) & 0x3f)));
-			_writer.write(byte(0x80 + (c & 0x3f)));
-			return 5;
-		} else if (c <= 0x7fffffff) {
-			_writer.write(byte(0xfc + (c >> 30)));
-			_writer.write(byte(0x80 + ((c >> 24) & 0x3f)));
-			_writer.write(byte(0x80 + ((c >> 18) & 0x3f)));
-			_writer.write(byte(0x80 + ((c >> 12) & 0x3f)));
-			_writer.write(byte(0x80 + ((c >> 6) & 0x3f)));
-			_writer.write(byte(0x80 + (c & 0x3f)));
-			return 6;
-		} else {
-			string s;
-			s.printf("%d", c);
-			throw IllegalArgumentException(s);
- */
-		}
-		// Bug in flow detector around 'throw' expressions TODO: Fix it.
-		return -1;
-	}
-	/**
-	 * Write zero or more Unicode code points to the stream.
-	 *
-	 * @param buffer The address of an array of Unicde code points.
-	 * @param length The number of code points in the array.
-	 *
-	 * @return The number of bytes written to the underlying Writer.
-	 */
-	public int write(pointer<int> buffer, int length) {
-		int written;
-		while (length > 0) {
-			written += write(*buffer++);
-			length--;
-		}
-		return written;
-	}
-	/**
-	 * Write zero or more Unicode code points to the stream. The entire
-	 * contents of the array are written to the Writer stream.
-	 *
-	 * @param buffer A reference to an array of Unicde code points.
-	 *
-	 * @return The number of bytes written to the underlying Writer.
-	 */
-	public int write(ref<int[]> buffer) {
-		int written;
-		for (i in *buffer)
-			written += write((*buffer)[i]);
-		return written;
-	}
-	/**
-	 * Write a UTF-16 char array.
-	 * Write zero or more Unicode code points to the stream.
-	 *
-	 * If the input array contains malformed surrogate pairs, the
-	 * malformed pairs are written as the {@link REPLACEMENT_CHARACTER}.
-	 *
-	 * @param buffer The address of an array of UTF-16 text.
-	 * @param length The number of UTF-16 characters in the array.
-	 *
-	 * @return The number of bytes written to the underlying Writer.
-	 */
-	public int write(pointer<char> buffer, int length) {
-		BufferReader r(buffer, length * char.bytes);
-		UTF16Reader u(&r);
-
-		int written;
-		for (;;) {
-			int c = u.read();
-			if (c == EOF)
-				break;
-			written += write(c);
-		}
-		return written;
-	}
-	/**
-	 * Write a UTF-16 char array.
-	 * Write zero or more Unicode code points to the stream. The entire
-	 * contents of the array are written to the Writer stream.
-	 *
-	 * If the input array contains malformed surrogate pairs, the
-	 * malformed pairs are written as the {@link REPLACEMENT_CHARACTER}.
-	 *
-	 * @param buffer A reference ot an array of UTF-16 text.
-	 *
-	 * @return The number of bytes written to the underlying Writer.
-	 */
-	public int write(ref<char[]> buffer) {
-		BufferReader r(&(*buffer)[0], buffer.length() * char.bytes);
-		UTF16Reader u(&r);
-
-		int written;
-		for (;;) {
-			int c = u.read();
-			if (c == EOF)
-				break;
-			written += write(c);
-		}
-		return written;
-	}
-	/**
-	 * Write a string.
-	 * Write zero or more Unicode code points to the stream.
-	 *
-	 * No validation is performed on the contents of the string.
-	 *
-	 * @param s The string to be written.
-	 *
-	 * @return The number of bytes written to the underlying Writer.
-	 *
-	 * @exception IllegalArgumentException thrown if an invalid Unicode code point is written to the stream.
-	 */
-	public int write(string s) {
-		BufferReader r(&s[0], s.length());
-		UTF8Reader u(&r);
-
-		int written;
-		for (;;) {
-			int c = u.read();
-			if (c == EOF)
-				break;
-			written += write(c);
-		}
-		return written;
-	}
-	/**
-	 * Write a string.
-	 * Write zero or more Unicode code points to the stream.
-	 *
-	 * If the input array contains malformed surrogate pairs, the
-	 * malformed pairs are written as the {@link REPLACEMENT_CHARACTER}.
-	 *
-	 * @param s The string to be written.
-	 *
-	 * @return The number of bytes written to the underlying Writer.
-	 */
-	public int write(string16 s) {
-		return write(s.c_str(), s.length());
-	}
-}
-/**
- * This converter will take a stream of UTF-32 Unicode code points and write them as a stream of
- * UTF-16 char text.
- */
-public class UTF16Writer {
-	ref<Writer> _writer;
-	/**
-	 * Constructs this Writer to generate the octets of a UTF-16 text stream to be written as
-	 * bytes to the writer parameter.
-	 *
-	 * @param writer The byte-stream Writer to use to generate the Unicode data.
-	 */
-	public UTF16Writer(ref<Writer> writer) {
-		_writer = writer;
-	}
-	/**
-	 * Write a code point to the stream.
-	 *
-	 * If the value is not a valid Unicode code point, a REPLACEMENT_CHARACTER
-	 * is written to the Writer.
-	 *
-	 * @param c The code point to write
-	 *
-	 * @return The number of chars written to the underlying Writer.
-	 */
-	public int write(int c) {
-		if (c >= 0x10000) {
-			if (c > 0x10ffff)
-				writeCodeUnit(char(REPLACEMENT_CHARACTER));
-			else {
-				c -= 0x10000;
-				writeCodeUnit(char(HI_SURROGATE_START + (c >> 10)));
-				writeCodeUnit(char(LO_SURROGATE_START + (c & 0x3ff)));
-				return 2;
-			}
-		} else if (c >= SURROGATE_START && c <= SURROGATE_END)
-			writeCodeUnit(char(REPLACEMENT_CHARACTER));
-		else
-			writeCodeUnit(char(c));
-		return 1;
-	}
-
-	private void writeCodeUnit(char c) {
-		_writer.write(byte(c & 0xff));
-		_writer.write(byte(c >> 8));
-	}
-	/**
-	 * Write zero or more Unicode code points to the stream.
-	 *
-	 * @param buffer The address of an array of Unicde code points.
-	 * @param length The number of code points in the array.
-	 *
-	 * @return The number of chars written to the underlying Writer.
-	 */
-	public int write(pointer<int> buffer, int length) {
-		int written;
-		while (length > 0) {
-			written += write(*buffer++);
-			length--;
-		}
-		return written;
-	}
-	/**
-	 * Write zero or more Unicode code points to the stream. The entire
-	 * contents of the array are written to the Writer stream.
-	 *
-	 * @param buffer A reference to an array of Unicde code points.
-	 *
-	 * @return The number of chars written to the underlying Writer.
-	 */
-	public int write(ref<int[]> buffer) {
-		int written;
-		for (i in *buffer)
-			written += write((*buffer)[i]);
-		return written;
-	}
-	/**
-	 * Write a UTF-16 char array.
-	 * Write zero or more Unicode code points to the stream.
-	 *
-	 * If the input array contains malformed surrogate pairs, the
-	 * malformed pairs are written as the {@link REPLACEMENT_CHARACTER}.
-	 *
-	 * @param buffer The address of an array of UTF-16 text.
-	 * @param length The number of UTF-16 characters in the array.
-	 *
-	 * @return The number of bytes written to the underlying Writer.
-	 */
-	public int write(pointer<char> buffer, int length) {
-		BufferReader r(buffer, length * char.bytes);
-		UTF16Reader u(&r);
-
-		int written;
-		for (;;) {
-			int c = u.read();
-			if (c == EOF)
-				break;
-			written += write(c);
-		}
-		return written;
-	}
-	/**
-	 * Write a UTF-16 char array.
-	 * Write zero or more Unicode code points to the stream. The entire
-	 * contents of the array are written to the Writer stream.
-	 *
-	 * If the input array contains malformed surrogate pairs, the
-	 * malformed pairs are written as the {@link REPLACEMENT_CHARACTER}.
-	 *
-	 * @param buffer A reference ot an array of UTF-16 text.
-	 *
-	 * @return The number of bytes written to the underlying Writer.
-	 */
-	public int write(ref<char[]> buffer) {
-		BufferReader r(&(*buffer)[0], buffer.length() * char.bytes);
-		UTF16Reader u(&r);
-
-		int written;
-		for (;;) {
-			int c = u.read();
-			if (c == EOF)
-				break;
-			written += write(c);
-		}
-		return written;
-	}
-	/**
-	 * Write a string.
-	 * Write zero or more Unicode code points to the stream.
-	 *
-	 * No validation is performed on the contents of the string.
-	 *
-	 * @param s The string to be written.
-	 *
-	 * @return The number of bytes written to the underlying Writer.
-	 *
-	 * @exception IllegalArgumentException thrown if an invalid Unicode code point is written to the stream.
-	 */
-	public int write(string s) {
-		BufferReader r(&s[0], s.length());
-		UTF8Reader u(&r);
-
-		int written;
-		for (;;) {
-			int c = u.read();
-			if (c == EOF)
-				break;
-			written += write(c);
-		}
-		return written;
-	}
-	/**
-	 * Write a string.
-	 * Write zero or more Unicode code points to the stream.
-	 *
-	 * If the input array contains malformed surrogate pairs, the
-	 * malformed pairs are written as the {@link REPLACEMENT_CHARACTER}.
-	 *
-	 * @param s The string to be written.
-	 *
-	 * @return The number of bytes written to the underlying Writer.
-	 */
-	public int write(string16 s) {
-		return write(s.c_str(), s.length());
-	}
-}
 /**
  * An indicator of end of file returned by functions such as {@link Reader.read}.
  */
@@ -747,7 +91,7 @@ public int EOF = -1;
  * be randomly positioned at all and can continue to read bytes indefinitely.
  *
  * The Reader class itself is abstract. It relies on each of several subclasses implementing
- * a _read method that will actually interact with the underlying input source.
+ * a _read and an unread method that will actually interact with the underlying input source.
  *
  * There are also a number of methods provided that include default implementations. Sub-classes of Reader
  * shall preserve the semantics of the default implementation but may override the implementation with 
@@ -767,7 +111,7 @@ public class Reader {
 	/**
 	 * Read the next byte from the input stream.
 	 *
-	 * Each byte read will be converted to an int. THis is done to permit the use of a distinct value
+	 * Each byte read will be converted to an int. This is done to permit the use of a distinct value
 	 * for {@link EOF}. It will require, typically, that you use an explicit  conversion back to
 	 * byte once you have determined that the method did not return {@link EOF}.
 	 *
@@ -948,17 +292,49 @@ public class Reader {
 		throw IllegalOperationException("reset");
 	}
 }
-
+/**
+ * Read bytes from a buffer.
+ *
+ * This Reader can be used to serialize any Parasol object, or an array of objects.
+ * In general, it is only valid to deserialize such data into the same object type
+ * using a {@link BufferWriter}.
+ *
+ * It is not portable to interpret the bytes returned from this Reader as any particular
+ * member of a class. 
+ * The order in memory of members of a class is unspecified. A Parasol compiler is free
+ * to assign memory offsets to members without regard to lexical order, for example.
+ *
+ * It is portable to assume that the first bytes of elements of an array of objects are the bytes of
+ * the first element selected for the BufferReader. The elements of an array are read in
+ * ascending index order.
+ */
 public class BufferReader extends Reader {
-	int _index;
+	long _index;
 	pointer<byte> _buffer;
-	int _length;
-
-	public BufferReader(address buffer, int length) {
+	long _length;
+	/**
+	 * Construct from a region of storage.
+	 *
+	 * If the address passed in the buffer parameter is a simple object, it is an error
+	 * to pass a length that is not the number of bytes in the class of the object.
+	 *
+	 * If the address passed in the buffer parameter is in an array of objects, it is an
+	 * error to pass a length that is not a multiple of the number of bytes in the class
+	 * of the array elements. Further, the range of object instances shall appear correctly
+	 * within and correctly align with the elements of the array.
+	 *
+	 * @param buffer The address of an object in memory.
+	 * @param length The number of bytes to read.
+	 */
+	public BufferReader(address buffer, long length) {
 		_buffer = pointer<byte>(buffer);
 		_length = length;
 	}
-
+	/**
+	 * Construct from a byte array.
+	 *
+	 * @param buffer A non-null reference to the array object.
+	 */
 	public BufferReader(ref<byte[]> buffer) {
 		_buffer = &(*buffer)[0];
 		_length = buffer.length();
@@ -988,46 +364,170 @@ public class BufferReader extends Reader {
 		_index = 0;
 	}
 }
-
+/**
+ * The general Writer class. Manipulation of output data is primarily driven through
+ * Writer objects.
+ *
+ * An output stream is modeled by instances of the Writer class to provide a destination for
+ * a stream of bytes of data. You may only write data to the end of a stream. A Writer may
+ * buffer output data, so there is no guarantee that data written to different streams will
+ * appear in any particular order unless you call the {@link flush} method to ensure that
+ * any buffered data has been written to the destination.
+ *
+ * The Writer class itself is abstract. It relies on each of several subclasses implementing
+ * a _write method that will actually interact with the underlying output destination.
+ *
+ * There are also a number of methods provided that include default implementations. Sub-classes of Writer
+ * shall preserve the semantics of the default implementation but may override the implementation with 
+ * one optimized for the specific destination of the Writer.
+ */
 public class Writer {
+	/**
+	 * Write a byte to the output stream.
+	 *
+	 * This must be implemented by any sub-class of Reader.
+	 *
+	 * @param c The byte to be written.
+	 *
+	 * @exception IOException Thrown if any device error condition was encountered writing to the stream.
+	 *
+	 * @exception IllegalOperationException Thrown if the stream has exceeded the capacity of the output
+	 * and cannot accept any more data.
+	 */
 	protected abstract void _write(byte c);
-
+	/**
+	 * Write a byte to the output stream.
+	 *
+	 * @param c The byte to be written.
+	 *
+	 * @exception IOException Thrown if any device error condition was encountered writing to the stream.
+	 *
+	 * @exception IllegalOperationException Thrown if the stream has exceeded the capacity of the output
+	 * and cannot accept any more data.
+	 */
 	public void write(byte c) {
 		_write(c);
 	}
-
+	/**
+	 * Write a Unicode code point to the output stream.
+	 *
+	 * The code point is written in UTF-8 format.
+	 *
+	 * @param codePoint The code point to be written.
+	 *
+	 * @return The actual number of bytes written to the output stream.
+	 *
+	 * @exception IOException Thrown if any device error condition was encountered writing to the stream.
+	 *
+	 * @exception IllegalOperationException Thrown if the stream has exceeded the capacity of the output
+	 * and cannot accept any more data.
+	 */
 	public int writeCodePoint(int codePoint) {
-		UTF8Writer w(this);
+		text.UTF8Encoder e(this);
 
-		return w.write(codePoint);
+		return e.encode(codePoint);
 	}
-
+	/**
+	 * Flush any buffered data to the output stream.
+	 *
+	 * The call will return when all data has been written to the output stream.
+	 *
+	 * @exception IOException Thrown if any device error condition was encountered writing to the stream.
+	 */
 	public void flush() {
 	}
-
+	/**
+	 * Close any external connection associated with the Writer and rekease
+	 * any buffered data held by the Writer.
+	 *
+	 * @exception IOException Thrown if any device error condition was encountered trying to close the stream.
+	 */
 	public void close() {
 	}
-
-	public int write(address buffer, int length) {
+	/**
+	 * Write object(s) to an output stream.
+	 *
+	 * If the address passed in the buffer parameter is a simple object, it is an error
+	 * to pass a length that is not the number of bytes in the class of the object.
+	 *
+	 * If the address passed in the buffer parameter is in an array of objects, it is an
+	 * error to pass a length that is not a multiple of the number of bytes in the class
+	 * of the array elements. Further, the range of object instances shall appear correctly
+	 * within and correctly align with the elements of the array.
+	 *
+	 * @param buffer The address of the memory to be written.
+	 * @param length The number of bytes to write.
+	 *
+	 * @return The number of bytes written.
+	 *
+	 * @exception IOException Thrown if any device error condition was encountered writing to the stream.
+	 *
+	 * @exception IllegalOperationException Thrown if the stream has exceeded the capacity of the output
+	 * and cannot accept any more data.
+	 */
+	public long write(address buffer, long length) {
 		for (int i = 0; i < length; i++)
 			_write(pointer<byte>(buffer)[i]);
 		return length;
 	}
-
+	/**
+	 * Write the contents of a string.
+	 *
+	 * The bytes of the string are written as they are stored. No validation of the text encoding is
+	 * done.
+	 *
+	 * @param s The string to write.
+	 *
+	 * @return The number of bytes written.
+	 *
+	 * @exception IOException Thrown if any error condition was encountered writing to the stream.
+	 *
+	 * @exception IllegalOperationException Thrown if the stream has exceeded the capacity of the output
+	 * and cannot accept any more data.
+	 */
 	public int write(string s) {
 		for (int i = 0; i < s.length(); i++)
-			write(s[i]);
+			_write(s[i]);
 		return s.length();
 	}
-
-	public int write(string16 s) {
+	/**
+	 * Write the contents of a string.
+	 *
+	 * The char's of the string are written as they are stored. No validation of the text encoding is
+	 * done. An even number of bytes will always be written.
+	 *
+	 * @param s The string to write.
+	 *
+	 * @return The number of bytes written.
+	 *
+	 * @exception IOException Thrown if any error condition was encountered writing to the stream.
+	 *
+	 * @exception IllegalOperationException Thrown if the stream has exceeded the capacity of the output
+	 * and cannot accept any more data.
+	 */
+	public long write(string16 s) {
 		return write(s.c_str(), s.length() * char.bytes);
 	}
-
-	public int write(ref<Reader> reader) {
+	/**
+	 * Write the contents of a stream provided by a Reader.
+	 *
+	 * The bytes of the Reader are read and copied to this output stream until end-of-file is
+	 * encountered. This call will block if the Reader has to wait for input.
+	 *
+	 * @param reader The Reader to use as the source for data.
+	 *
+	 * @return The number of bytes written.
+	 *
+	 * @exception IOException Thrown if any error condition was encountered reading from the
+	 * input or writing to the output stream.
+	 *
+	 * @exception IllegalOperationException Thrown if the stream has exceeded the capacity of the output
+	 * and cannot accept any more data.
+	 */
+	public long write(ref<Reader> reader) {
 		byte[] b;
 		b.resize(8096);
-		int totalWritten = 0;
+		long totalWritten = 0;
 		for (;;) {
 			int actual = reader.read(&b);
 			if (actual <= 0)
@@ -1037,7 +537,7 @@ public class Writer {
 		return totalWritten;
 	}
 	/**
-	 * Write a formatted string
+	 * Write a formatted string.
 	 *
 	 * The method writes characters from the format string to this Writer object until
 	 * a percent character is encountered (%). The percent character introduces a formatting
@@ -1049,6 +549,10 @@ public class Writer {
 	 * A formatting specifier uses the following syntax:
 	 *
 	 *  {@code %[argument_index$][flags][width][.precision]conversion}
+	 *
+	 * If a format specifier is malformed due to invalid flag or conversion characters or the
+	 * conversion does not match the data type of the selected argument, the format specifier
+	 * itself is written to the output stream.
 	 *
 	 * <b>Argument Index</b>
 	 *
@@ -1105,15 +609,252 @@ public class Writer {
 	 *  </tr>
 	 *</table>
 	 *
+	 * <b>Width</b>
+	 *
+	 * Width may be:
+	 *
+	 * <ul>
+	 *     <li> A sequence of one or more decimal digits.
+	 *     <li> An asterisk (*) character. If present, the argument immediately after the last argument referenced
+	 *           is accessed as an integer. That becomes the new last argument referenced.
+	 * </ul>
+	 *
+	 * The value specifies the minimum width in characters. If the actual number of characters being formatted for
+	 * the field value is less than the width, then pad characters are
+	 * written to ensure that at least the width is filled. What character is used as the pad and whether the padding
+	 * is placed on the left or right side of the field characters is determined by flags (see above).
+	 *
+	 * <b>Precision</b>
+	 *
+	 * Precision may be:
+	 *
+	 * <ul>
+	 *     <li> A sequence of one or more decimal digits.
+	 *     <li> An asterisk (*) character. If present, the argument immediately after the last argument referenced
+	 *           is accessed as an integer. That becomes the new last argument referenced.
+	 * </ul>
+	 *
+	 * The value  of precision is interpreted according to the conversion applied.
+	 *
+	 * <b>Conversions</b>
+	 *
+	 * A valid conversion is a single character from the following list:
+	 *
+	 * <table class=options>
+	 *     <trh><th>Character</th><th>Description</th></tr>
+	 *     <tr><td>%</td><td>
+	 *			The percent (%) character itself is printed. The width field and alignment flag
+	 *			are used to pad the field. Other flags and fields are ignored. No argument is
+	 *			fetched from the argument list, but the identity of the last referenced argument
+	 *			is set if the format specifier includes an argument index.
+	 *     </td></tr>
+	 *     <tr><td>c</td><td>
+	 *			The next argument must be an integer. It's value is interpreted as a Unicode code point
+	 *			and the corresponding character is written as UTF-8 text. If the value is not a valid Unicode code point,
+	 *			an IllegalArgumentException is thrown. Precision is ignored.
+	 *     </td></tr>
+	 *     <tr><td>d</td><td>
+	 *			The next argument must be a number. The value is converted to long and formatted
+	 *			as a string of decimal digits. Leading zero digits are added to ensure that the
+	 *			number of characters of output are at least the precision. The flags determine
+	 *			how sign is written and whether grouping separators are used in the number.
+	 *     </td></tr>
+	 *     <tr><td>e, E</td><td>
+	 *			Scientific notation decimal value.
+	 *			<p>
+	 *			The next argument must be a number. The value is converted to double and formatted
+	 *			as a single digit, a locale-specific decimal point character, a string of decimal
+	 *			digits representing the fraction with as many digits as specified by the precision,
+	 *			followed by an exponent.
+	 *			<p>
+	 *			If the precision is not included in the format specifier the default precision is 6.
+	 *			<p>
+	 *			The exponent consists of an e or E (corresponding to the conversion character), a
+	 *			locale-specific sign character and at least two decimal digits.
+	 *     </td></tr>
+	 *     <tr><td>f</td><td>
+	 *			Fixed decimal point value.
+	 *			<p>
+	 *			The next argument must be a number. The value is converted to double and formatted
+	 *			as one or more decimal digits, a locale-specific decimal point character, and a string
+	 *			of decimal digits representing the fraction with as many digits as specified by the precision.
+	 *			<p>
+	 *			If the precision is not included in the format specifier the default precision is 6.
+	 *     </td></tr>
+	 *     <tr><td>g, G</td><td>
+	 *			The next argument must be a number. The value is converted to double and formatted
+	 *			using either fixed or scientific notation, whichever is shorter. If scientific notation
+	 *			is used, the exponent begins with a lower-case letter e if this conversion character is
+	 *			lower-case, otherwise an upper-case E is printed.
+	 *     </td></tr>
+	 *     <tr><td>p</td><td>
+	 *			The next argument must be an address. The value is formatted in a manner consistent with
+	 *			the way that address values are typically displayed on the system in question. Typically
+	 *			this will be some form of hexadecimal display.
+	 *     </td></tr>
+	 *     <tr><td>s</td><td>
+	 *			The next argument must be a {@link boolean}, {@link string}, {@link string16} or a 
+	 *			{@code pointer<byte>}. Each type is converted to a Unicode string and written to the
+	 *			output stream as utf-8 text. Width and precision are applied in terms of Unicode characters
+	 *			not bytes. Thus a character that requires two or three bytes of utf-8 encoding would only
+	 *			count as a single character for width or precision effects.
+	 *			<p>
+	 *			<table class=options>
+	 *				<tr><th>Type</th><th>Formatting</th></tr>
+	 *				<tr><td>boolean</td><td>
+	 *					The value is converted to string.
+	 *				</td></tr>
+	 *				<tr><td>string</td><td>
+	 *					The bytes of the string are converted to Unicode characters and then written 
+	 *					encoded using utf-8. If any bytes of the string are not valid utf-8 encoded characters,
+	 *					they are converted to Unicode substituTe characters.
+	 *				</td></tr>
+	 *				<tr><td>string16</td><td>
+	 *					The string16 text is converted from utf-16 to utf-8.
+	 *				</td></tr>
+	 *				<tr><td>pointer<byte></td><td>
+	 *					A string is constructed from the pointer value, thus including all bytes at
+	 *					the pointer location up to the next null byte. The resulting string is then
+	 *					converted to a number of Unicode characters and then encoded in utf-8. If any 
+	 *					bytes of the CONSTRUCTED string are not valid utf-8 encoded characters,
+	 *					they are converted to Unicode substituTe characters.
+	 *				</td></tr>
+	 *			</table>
+	 *			<p>
+	 *			Padding is applied sufficient to ensure at least width characters are written.
+	 *			<p>
+	 *			If a precision is specified then the initial characters of the text will be written
+	 *			up to the value of precision. 
+	 *     </td></tr>
+	 *     <tr><td>t, T</td><td>
+	 *			The next argument must be a long or a {@link parasol:time.Time Time} object. If the
+	 *			argument is a long, a Time object is constructed from it. The resulting time value is then
+	 *			formatted according to the second conversion character.
+	 *			<p>
+	 *			<table class=options>
+	 *				<tr><th>Time Conversion</th><th>Formatting</th></tr>
+	 *				<tr><td>a</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>A</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>b</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>B</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>c</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>C</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>d</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>D</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>e</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>F</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>H</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>I</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>j</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>k</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>l</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>L</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>m</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>M</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>N</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>p</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>Q</td><td>
+	 *					Milliseconds since the beginning of the epoch, January 1, 1970 00:00:00 UTC.
+	 *				</td></tr>
+	 *				<tr><td>r</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>R</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>s</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>S</td><td>
+	 *					Seconds since the beginning of the epoch, January 1, 1970 00:00:00 UTC.
+	 *				</td></tr>
+	 *				<tr><td>T</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>y</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>Y</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>z</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *				<tr><td>z</td><td>
+	 *					Not yet implemented.
+	 *				</td></tr>
+	 *			</table>
+	 *			<p>
+	 *			Precision is ignored.
+	 *     </td></tr>
+	 *     <tr><td>x, X</td><td>
+	 *			The next argument must be a number. The value is converted to long and formatted
+	 *			as a string of hexadecimal digits. Leading zero digits are added to ensure that the
+	 *			number of characters of output are at least the precision.
+	 *			<p>
+	 *			Any alphabetic characters in the output are lower-case if the conversion character is
+	 *			lower-case, otherwise they are upper-case.
+	 *			<p>
+	 *			If the alternate form flag (#) is present, a leading {@code 0x} is added to the
+	 *			field value. 
+	 *     </td></tr>
+	 * </table>
+	 *
 	 * @param format The format string to print
 	 * @param arguments The argument list to print using the given format
 	 *
-	 * @return The number of bytes printed.
+	 * @return The number of bytes printed. Because of UTF encoding, this may be more than the number
+	 * of Unicode characters written.
 	 *
 	 * @exception BoundsException Thrown when a formatting specifier designates an
 	 * out-of-bounds elemenet in the arguments array.
 	 * @exception IllegalArgumentExceptio Thrown when a formatting specifier is malformed
-	 * in some way. The message should provides additional detail.
+	 * in some way. The message should provide additional detail.
+	 *
+	 * @exception IOException Thrown if any error condition was encountered writing to the stream.
+	 *
+	 * @exception IllegalOperationException Thrown if the stream has exceeded the capacity of the output
+	 * and cannot accept any more data.
 	 */
 	public int printf(string format, var... arguments) {
 		ref<international.Locale> locale;
@@ -1386,7 +1127,6 @@ public class Writer {
 								width = precision;
 							switch (format[i]) {
 							case	'd':
-							case	'D':
 								long ivalue = long(arguments[nextArgument]);
 								nextArgument++;
 								string formatted(ivalue);
@@ -1545,8 +1285,13 @@ public class Writer {
 									_write(' ');
 									bytesWritten++;
 								}
-								if (decimalPoint > 0)
-									bytesWritten += write(result, decimalPoint);
+								if (decimalPoint > 0) {
+									if (groupingSeparators) {
+										string formatted = insertSeparators(&result[0], decimalPoint, locale.decimalStyle());
+										bytesWritten += write(formatted);
+									} else
+										bytesWritten += int(write(result, decimalPoint));
+								}
 								if (precision > 0) {
 									bytesWritten += write(sep);
 									if (decimalPoint < 0) {
@@ -1707,8 +1452,8 @@ public class Writer {
 									}
 								}
 								if (!precisionSpecified || precision >= 1) {
-									UTF8Writer w(this);
-									bytesWritten += w.write(c);
+									text.UTF8Encoder e(this);
+									bytesWritten += e.encode(c);
 								}
 								if (leftJustified) {
 									while (width > 1) {
@@ -1849,8 +1594,6 @@ public class Writer {
 									}
 								}
 
-								if (precisionSpecified && precision < len)
-									len = precision;
 								write(&buffer[0], len);
 								if (leftJustified) {
 									while (width > len) {
@@ -1974,16 +1717,43 @@ private string insertSeparators(pointer<byte> digits, int length, ref<internatio
 	}
 	return result;
 }
-
+/**
+ * Write bytes to a buffer.
+ *
+ * This Writer can be used to deserialize a Parasol object, or an array of objects.
+ * In general, it is only portable to deserialize such data into the same object type
+ * as was serialized using a {@link BufferReader}.
+ *
+ * It is portable to assume that the first bytes of elements of an array of objects are the bytes of
+ * the first element selected for the BufferWriter. The elements of an array are written in
+ * ascending index order.
+ */
 public class BufferWriter extends Writer {
 	pointer<byte> _buffer;
-	int _length;
-
-	public BufferWriter(address buffer, int length) {
+	long _length;
+	/**
+	 * Construct from a region of storage.
+	 *
+	 * If the address passed in the buffer parameter is a simple object, it is an error
+	 * to pass a length that is not the number of bytes in the class of the object.
+	 *
+	 * If the address passed in the buffer parameter is in an array of objects, it is an
+	 * error to pass a length that is not a multiple of the number of bytes in the class
+	 * of the array elements. Further, the range of object instances shall appear correctly
+	 * within and correctly align with the elements of the array.
+	 *
+	 * @param buffer The address of an object in memory.
+	 * @param length The maximum number of bytes to write.
+	 */
+	public BufferWriter(address buffer, long length) {
 		_buffer = pointer<byte>(buffer);
 		_length = length;
 	}
-
+	/**
+	 * Construct from a byte array.
+	 *
+	 * @param buffer A non-null reference to the array object.
+	 */
 	public BufferWriter(ref<byte[]> buffer) {
 		_buffer = &(*buffer)[0];
 		_length = buffer.length();
@@ -1994,7 +1764,7 @@ public class BufferWriter extends Writer {
 			_length--;
 			return *_buffer++;
 		} else
-			throw IllegalArgumentException(string(c));
+			throw IllegalOperationException(string(c));
 		return -1;
 	}
 }

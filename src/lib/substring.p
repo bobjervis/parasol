@@ -15,6 +15,7 @@
  */
 namespace parasol:text;
 
+import parasol:exception.IllegalOperationException;
 import native:C;
 
 private class substringClass = substring;
@@ -371,6 +372,10 @@ public class substring {
 		return -1;
 	}
 	
+	public boolean isNull() {
+		return _data == null;
+	}
+
 	public int lastIndexOf(byte c) {
 		if (_data != null) {
 			for (int i = _length - 1; i >= 0; i--)
@@ -391,7 +396,8 @@ public class substring {
 		return null;
 	}
 		
-	public void set(int index, char value) {
+	public void set(int index, byte value) {
+		_data[index] = value;
 	}
 	/*
 	 *	split
@@ -777,3 +783,142 @@ public class substring {
 		return output, true;
 	}
 }
+
+public class substring16 {
+	pointer<char> _data;
+	int _length;
+
+	public substring16() {
+	}
+
+	public substring16(string16 source) {
+		if (!source.isNull()) {
+			_data = source.c_str();
+			_length = source.length();
+		}
+	}
+
+	public pointer<char> c_str() {
+		return _data;
+	}
+
+	public boolean isNull() {
+		return _data == null;
+	}
+
+	public int length() {
+		if (_data != null)
+			return _length;
+		else
+			return 0;
+	}
+	
+	public void set(int index, char value) {
+		_data[index] = value;
+	}
+}
+
+public class SubstringReader extends Reader {
+	private ref<substring> _source;
+	private int _cursor;
+	
+	public SubstringReader(ref<substring> source) {
+		_source = source;
+	}
+	
+	public int _read() {
+		if (_cursor >= _source.length())
+			return -1;
+		else
+			return (*_source).get(_cursor++);
+	}
+
+	public void unread() {
+		if (_cursor > 0)
+			--_cursor;
+	}
+
+	public boolean hasLength() {
+		return true;
+	}
+
+	public long length() {
+		return _source.length() - _cursor;
+	}
+
+	public void reset() {
+		_cursor = 0;
+	}
+}
+
+public class SubstringWriter extends Writer {
+	private ref<substring> _output;
+	private int _index;
+	
+	public SubstringWriter(ref<substring> output) {
+		_output = output;
+	}
+	
+	public void _write(byte c) {
+		if (_index < _output.length())
+			_output.set(_index++, c);
+		else
+			throw IllegalOperationException("overflow");
+	}
+}
+
+public class Substring16Reader extends Reader {
+	private ref<substring16> _source;
+	private int _cursor;
+
+	public Substring16Reader(ref<substring16> source) {
+		_source = source;
+	}
+
+	public int _read() {
+		if (_cursor >= _source.length() * char.bytes)
+			return -1;
+		else
+			return pointer<byte>(_source.c_str())[_cursor++];
+	}
+
+	public void unread() {
+		if (_cursor > 0)
+			--_cursor;
+	}
+
+	public boolean hasLength() {
+		return true;
+	}
+
+	public long length() {
+		return _source.length() * char.bytes - _cursor;
+	}
+
+	public void reset() {
+		_cursor = 0;
+	}
+}
+
+public class Substring16Writer extends Writer {
+	private short _lo;
+	private ref<substring16> _output;
+	private int _index;
+	
+	public Substring16Writer(ref<substring16> output) {
+		_output = output;
+		_lo = short.MIN_VALUE;
+	}
+	
+	public void _write(byte c) {
+		if (_lo >= 0) {
+			if (_index < _output.length())
+				_output.set(_index++, char(_lo | (int(c) << 8)));
+			else
+				throw IllegalOperationException("overflow");
+			_lo = short.MIN_VALUE;
+		} else
+			_lo = c;
+	}
+}
+

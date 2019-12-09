@@ -46,6 +46,21 @@ public class var {
 		*ref<string>(&_value) = other;
 	}
 	
+	public var(string16 other) {
+		_actualType = string16;
+		*ref<string16>(&_value) = other;
+	}
+	
+	public var(substring other) {
+		_actualType = string;
+		*ref<string>(&_value) = string(other);
+	}
+	
+	public var(substring16 other) {
+		_actualType = string16;
+		*ref<string16>(&_value) = string16(other);
+	}
+	
 	public var(long value) {
 		_value = value;
 		_actualType = long;
@@ -139,6 +154,10 @@ public class var {
 
 	public string stringValue() {
 		return *ref<string>(&_value);
+	}
+	
+	public string16 string16Value() {
+		return *ref<string16>(&_value);
 	}
 	
 	public long integerValue() {
