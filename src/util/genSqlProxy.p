@@ -18,7 +18,7 @@ import parasol:process;
 import parasol:compiler;
 import parasol:sql;
 import parasol:stream.EOF;
-import parasol:stream.UTF8Reader;
+import parasol:text.UTF8Decoder;
 import parasol:text.StringReader;
 
 string DEFAULT_CLASS_NAME = "SQLDataBase";
@@ -579,17 +579,17 @@ long intValue(string value) {
 	if (value.length() == 0)
 		return -1;
 	StringReader r(&value);
-	UTF8Reader ur(&r);
+	UTF8Decoder ud(&r);
 	
-	int c = ur.read();
+	int c = ud.decodeNext();
 	if (compiler.codePointClass(c) == 0) {
-		c = ur.read();
+		c = ud.decodeNext();
 		if (c < 0)
 			return 0;			// the constant is just a '0' (or alternate decimal zero)
 		if (c == 'x' || c == 'X') {
 			for (;;) {
 				int digit;
-				c = ur.read();
+				c = ud.decodeNext();
 				if (c < 0)
 					break;
 				if (compiler.codePointClass(c) == compiler.CPC_LETTER)
@@ -601,13 +601,13 @@ long intValue(string value) {
 		} else {
 			do {
 				v = v * 8 + compiler.codePointClass(c);
-				c = ur.read();
+				c = ud.decodeNext();
 			} while (c >= 0);
 		}
 	} else {
 		do {
 			v = v * 10 + compiler.codePointClass(c);
-			c = ur.read();
+			c = ud.decodeNext();
 		} while (c >= 0);
 	}
 	return v;

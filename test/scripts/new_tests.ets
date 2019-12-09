@@ -1,5 +1,3 @@
-compile(){"interface a {} class b implements a {} b x; a y = x;"}
-
 compile() { "string a; string b; string16 c; a = b + c;" }
 compile() { "string a; string b; substring c; a = b + c;" }
 compile() { "string a; string b; substring16 c; a = b + c;" }
@@ -34,4 +32,3 @@ compile() { "string16 a; substring16 b; substring16 c; a = b + c;" }
 
 compile() { "substring x; boolean b = x != null;" }
 compile() { "substring16 x; boolean b = x != null;" }
-

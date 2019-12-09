@@ -27,4 +27,3 @@ assert(o.length() == 3);
 assert(o[0] == 0xea);
 assert(o[1] == 0xa9);
 assert(o[2] == 0xba);
-
