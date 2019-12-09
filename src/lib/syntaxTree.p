@@ -3658,11 +3658,8 @@ public class Node {
 						}
 					}
 				}
-				
-				printf("Converting to %s\n", newType.signature());
-				print(0);
-				assert(false);
-				return this;
+				// Okay, so it's not a constructor, there must be some down-stream special processing.
+				return tree.newCast(newType, this);
 			}
 		} else {
 			add(MessageId.CANNOT_CONVERT, compileContext.pool());
