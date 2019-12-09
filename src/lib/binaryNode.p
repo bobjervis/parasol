@@ -1004,6 +1004,7 @@ public class Binary extends Node {
 			break;
 			
 		case	STRING:
+		case	STRING16:
 			if (_right.op() == Operator.CALL) {
 				ref<OverloadInstance> oi = type.stringAllocationConstructor(compileContext);
 				if (oi == null) {

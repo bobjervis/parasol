@@ -1138,6 +1138,16 @@ public class string extends String<byte> {
 }
 
 public class string16 extends String<char> {
+	//** DO NOT MOVE THIS ** THIS MUST BE THE FIRST CONSTRUCTOR ** THE COMPILER RELIES ON THIS PLACEMENT **//
+	/*
+	 * This constructor is used in certain special cases where the compiler can determine that the current string object
+	 * can simply take ownership of whatever content the source string is (and avoid a copy of the contents).
+	 */
+	private string16(ref<allocation> other) {
+		_contents = other;
+	}
+	//** DO NOT MOVE THIS ** THIS MUST BE THE FIRST CONSTRUCTOR ** THE COMPILER RELIES ON THIS PLACEMENT **//
+
 	public string16() {
 	}
 
@@ -1227,6 +1237,35 @@ public class string16 extends String<char> {
 		String<char> s = escapeJSON_T();
 
 		return *ref<string16>(&s);
+	}
+	/**
+	 * store
+	 * 
+	 * This is only in generated code in those circumstances where a string returned from a function can short-
+	 * circuit a copy and a delete by just taing the live string value returned from the function and calling this
+	 * method to use that live value.
+	 */
+	void store(ref<allocation> other) {
+		copy(null);			// First, just remove whatever data we have in the string
+		_contents = other;	// Then. store the new data - note that other == null is the right value for a null string.
+//		print("after store: ");
+//		print(*this);
+//		print("\n");
+	}
+	/**
+	 * storeTemp
+	 * 
+	 * This is only in generated code in those circumstances where a string returned from a function can short-
+	 * circuit a copy and a delete by just taing the live string value returned from the function and calling this
+	 * method to use that live value.
+	 * 
+	 * Note that this assumes the memory being assigned-to is not constructed.
+	 */
+	void storeTemp(ref<allocation> other) {
+		_contents = other;	// Then. store the new data - note that other == null is the right value for a null string.
+//		print("after store: ");
+//		print(*this);
+//		print("\n");
 	}
 	/*
 	 *	substring
