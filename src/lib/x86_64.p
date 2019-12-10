@@ -3379,6 +3379,7 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			switch (seq.type.family()) {
 			case	STRING:
+			case	STRING16:
 				node.print(0);
 				assert(false);
 				break;

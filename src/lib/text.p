@@ -1268,8 +1268,8 @@ public class string16 extends String<char> {
 	 *	Return a substring of this string, starting at the character
 	 *	given by first and continuing to the end of the string.
 	 */
-	public substring16 substr(int first) {
-		return substring16(pointer<char>(&_contents.data) + first, length() - first);
+	public string16 substr(int first) {
+		return string16(pointer<char>(&_contents.data) + first, length() - first);
 	}
 	/*
 	 *	substring
@@ -1280,8 +1280,8 @@ public class string16 extends String<char> {
 	 *
 	 *	TODO: Out of range values should produce exceptions
 	 */
-	public substring16 substr(int first, int last) {
-		return substring16(pointer<char>(&_contents.data) + first, last - first);
+	public string16 substr(int first, int last) {
+		return string16(pointer<char>(&_contents.data) + first, last - first);
 	}
 	/**
 	 * Append a Unicode character.
