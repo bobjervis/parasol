@@ -559,8 +559,8 @@ boolean generateClassPage(ref<Symbol> sym, string name, string dirName) {
 				int idx = doclet.params[i].indexOf(' ');
 				if (idx < 0)
 					continue;
-				string pname = doclet.params[i].substring(0, idx);
-				string value = doclet.params[i].substring(idx + 1).trim();
+				string pname = doclet.params[i].substr(0, idx);
+				string value = doclet.params[i].substr(idx + 1).trim();
 				if (value.length() > 0)
 					paramMap[pname] = value;
 			}
@@ -1101,8 +1101,8 @@ void functionDetail(ref<Writer> output, ref<ref<OverloadInstance>[]> functions, 
 				int idx = doclet.params[i].indexOf(' ');
 				if (idx < 0)
 					continue;
-				string pname = doclet.params[i].substring(0, idx);
-				string value = doclet.params[i].substring(idx + 1).trim();
+				string pname = doclet.params[i].substr(0, idx);
+				string value = doclet.params[i].substr(idx + 1).trim();
 				if (value.length() > 0)
 					paramMap[pname] = value;
 			}
@@ -1166,8 +1166,8 @@ void functionDetail(ref<Writer> output, ref<ref<OverloadInstance>[]> functions, 
 						ename = doclet.exceptions[i];
 						value = "";
 					} else {
-						ename = doclet.exceptions[i].substring(0, idx);
-						value = doclet.exceptions[i].substring(idx + 1).trim();
+						ename = doclet.exceptions[i].substr(0, idx);
+						value = doclet.exceptions[i].substr(idx + 1).trim();
 					}
 					output.printf("<td><td>%s</td><td>%s</td></tr>\n", ename, expandDocletString(value, sym, baseName));
 				}
@@ -1323,18 +1323,18 @@ string transformLink(string linkTextIn, ref<Symbol> sym, string baseName) {
 	int idx = linkText.indexOf(' ');
 	string caption;
 	if (idx >= 0) {
-		caption = linkText.substring(idx + 1).trim();
+		caption = linkText.substr(idx + 1).trim();
 		linkText.resize(idx);
 	} else
 		caption = linkText;
 	idx = linkText.indexOf(':');
 	string path;
 	if (idx >= 0) {
-		string domain = linkText.substring(0, idx);
+		string domain = linkText.substr(0, idx);
 		ref<Scope> scope = arena.getDomain(domain);
 		if (scope == null)
 			return caption;
-		path = linkText.substring(idx + 1);
+		path = linkText.substr(idx + 1);
 		string[] components = path.split('.');
 		string directory = domain + "_";
 		ref<Symbol> nm;

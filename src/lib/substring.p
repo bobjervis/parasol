@@ -798,6 +798,11 @@ public class substring16 {
 		}
 	}
 
+	public substring16(pointer<char> data, int length) {
+		_data = data;
+		_length = length;
+	}
+
 	public pointer<char> c_str() {
 		return _data;
 	}

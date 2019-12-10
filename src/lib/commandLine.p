@@ -110,10 +110,10 @@ public class Command {
 					string key;
 					string value;
 					if (equals >= 0) {
-						key = args[i].substring(2, equals);
-						value = args[i].substring(equals + 1);
+						key = args[i].substr(2, equals);
+						value = args[i].substr(equals + 1);
 					} else
-						key = args[i].substring(2);
+						key = args[i].substr(2);
 					ref<BaseArgument> b = _longOptions[key];
 					if (b == null) {
 						printf("Unknown argument: %s\n", key);

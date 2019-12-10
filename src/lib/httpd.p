@@ -452,7 +452,7 @@ public class HttpServer {
 		try {
 			for (int i = 0; i < _handlers.length(); i++) {
 				if (_handlers[i].absPath == "/") {
-					request.serviceResource = request.url.substring(1);
+					request.serviceResource = request.url.substr(1);
 	//				printf("hit handler %d absPath = %s\n", i, _handlers[i].absPath);
 					return _handlers[i].handler.processRequest(request, response);
 				} else if (request.url.startsWith(_handlers[i].absPath)) {
@@ -470,7 +470,7 @@ public class HttpServer {
 					if (request.url.length() > _handlers[i].absPath.length()) {
 						if (request.url[_handlers[i].absPath.length()] != '/')
 							continue;			// a false alarm, e.g. absPath = /foo url = /food
-						request.serviceResource = request.url.substring(_handlers[i].absPath.length() + 1);
+						request.serviceResource = request.url.substr(_handlers[i].absPath.length() + 1);
 					} else
 						request.serviceResource = null;
 	//				printf("hit handler %d absPath = %s\n", i, _handlers[i].absPath);
@@ -1267,7 +1267,7 @@ public class Uri {
 				return false;
 			scheme = "";
 		} else
-			scheme = uri.substring(0, colonIdx);
+			scheme = uri.substr(0, colonIdx);
 
 		if (colonIdx + 1 >= uri.length()) {
 			path = "";
@@ -1293,13 +1293,13 @@ public class Uri {
 					// This is: scheme://authority path
 					int atIdx = uri.indexOf('@', authIdx);
 					if (atIdx > 0 && atIdx < pathIdx) {
-						userinfo = uri.substring(authIdx, atIdx);
+						userinfo = uri.substr(authIdx, atIdx);
 						authIdx = atIdx + 1;
 					}
 					int portIdx = uri.indexOf(':', authIdx);
 					if (portIdx > 0 && portIdx < pathIdx) {
 						boolean success;
-						(port, success) = char.parse(uri.substring(portIdx + 1, pathIdx));
+						(port, success) = char.parse(uri.substr(portIdx + 1, pathIdx));
 						if (!success || port == 0)
 							// This will leave the URI unparsed
 							return false;				
@@ -1311,7 +1311,7 @@ public class Uri {
 							return false;
 						portIdx = pathIdx;
 					}
-					host = uri.substring(authIdx, portIdx);
+					host = uri.substr(authIdx, portIdx);
 				}
 			} else {
 				// This is scheme:something-containing-a-slash
@@ -1332,18 +1332,18 @@ public class Uri {
 
 		int fragIdx = uri.indexOf('#', pathIdx);
 		if (fragIdx > 0)
-			fragment = uri.substring(fragIdx + 1);
+			fragment = uri.substr(fragIdx + 1);
 		else
 			fragIdx = uri.length();
 
 		int quesIdx = uri.indexOf('?', pathIdx);
 		if (quesIdx > 0)
-			query = uri.substring(quesIdx + 1, fragIdx);
+			query = uri.substr(quesIdx + 1, fragIdx);
 		else
 			quesIdx = fragIdx;
 
 		if (pathIdx < quesIdx)
-			path = uri.substring(pathIdx, quesIdx);
+			path = uri.substr(pathIdx, quesIdx);
 		else
 			path = "/";
 		return parsed = true;

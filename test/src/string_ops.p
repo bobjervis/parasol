@@ -124,7 +124,7 @@ void loopTests() {
 
 	string reverse;
 	for (i in s) {
-		reverse = s.substring(i, i + 1) + reverse;
+		reverse = s.substr(i, i + 1) + reverse;
 	}
 	assert(reverse == "dcba");
 }

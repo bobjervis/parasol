@@ -1,3 +1,5 @@
+comile() { ";" }
+
 compile() { "string a; string b; string16 c; a = b + c;" }
 compile() { "string a; string b; substring c; a = b + c;" }
 compile() { "string a; string b; substring16 c; a = b + c;" }

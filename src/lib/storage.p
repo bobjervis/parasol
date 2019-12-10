@@ -270,11 +270,11 @@ public string filename(string filename) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		for (int x = filename.length() - 1; x >= 0; x--)
 			if (filename[x] == '\\' || filename[x] == '/')
-				return filename.substring(x + 1);
+				return filename.substr(x + 1);
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		int idx = filename.lastIndexOf('/');
 		if (idx >= 0)
-			return filename.substring(idx + 1);
+			return filename.substr(idx + 1);
 	}
 	return filename;
 }
@@ -352,7 +352,7 @@ public string directory(string filename) {
 			if (x == 0)
 				return "/";
 			else
-				return filename.substring(0, x);
+				return filename.substr(0, x);
 		}
 	}
 	return ".";
@@ -1091,13 +1091,13 @@ public string makeCompactPath(string filename, string baseFilename) {
 					slashCount++;
 //			printf("slashCount %d\n", slashCount);
 			if (slashCount == 0)
-				return a1.substring(lastSlash + 1);
+				return a1.substr(lastSlash + 1);
 			string result;
 			while (slashCount > 0) {
 				result.append("../");
 				slashCount--;
 			}
-			return result + a1.substring(lastSlash + 1);
+			return result + a1.substr(lastSlash + 1);
 		}
 		if (a1[i] == '/') {
 			lastSlash = i;

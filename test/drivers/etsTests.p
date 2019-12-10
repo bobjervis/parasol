@@ -58,6 +58,9 @@ class TestCommand extends process.Command {
 					"those specified with this option.");
 		verboseArgument = booleanArgument('v', null,
 					"Enables verbose output.");
+		showParseStageErrorsArgument = booleanArgument('p', "parseErrors",
+					"Show errors know at the end of the parse stage. " +
+					"Showing these messages still lets an expected failure test pass.");
 		symbolTableArgument = booleanArgument(0, "syms",
 					"Print the symbol table.");
 		logImportsArgument = booleanArgument(0, "logImports",
@@ -95,6 +98,7 @@ class TestCommand extends process.Command {
 	ref<process.Argument<boolean>> logImportsArgument;
 	ref<process.Argument<boolean>> symbolTableArgument;
 	ref<process.Argument<boolean>> compileFromSourceArgument;
+	ref<process.Argument<boolean>> showParseStageErrorsArgument;
 }
 
 int main(string[] args) {
@@ -129,7 +133,7 @@ int main(string[] args) {
 			runetsCommand.symbolTableArgument.value,
 			runetsCommand.targetArgument.value,
 			runetsCommand.importPathArgument.value,
-			runetsCommand.rootDirArgument.value);
+			runetsCommand.rootDirArgument.value, runetsCommand.showParseStageErrorsArgument.value);
 //		initCommonTestObjects();
 	string[] s = runetsCommand.finalArgs();
 	return launch(runetsCommand.finalArgs());

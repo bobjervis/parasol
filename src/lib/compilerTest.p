@@ -54,6 +54,7 @@ import parasol:compiler.TraverseAction;
 private boolean verboseFlag;
 private boolean compileFromSourceArgument;
 private boolean printSymbolTable;
+private boolean showParseStageErrors;
 private string rootFolder;
 private string srcFolder;
 private string parasolCommand;
@@ -62,8 +63,9 @@ private string targetArgument;
 private string importPathArgument;
 
 public void initTestObjects(string argv0, string argv1, boolean verbose, 
-				boolean compileFromSource, boolean symbols, string target, string importPathArg, string rootDir) {
+				boolean compileFromSource, boolean symbols, string target, string importPathArg, string rootDir, boolean showParseStageErrorsArgument) {
 	verboseFlag = verbose;
+	showParseStageErrors = showParseStageErrorsArgument;
 	if (rootDir != null)
 		rootFolder = rootDir;
 	else
@@ -574,6 +576,8 @@ class CompileObject  extends script.Object {
 //		printf("After parse and type analysis:\n");
 //		f.tree().root().print(0);
 		int preCodeGenerationMessages = arena.countMessages();
+		if (showParseStageErrors && preCodeGenerationMessages > 0)
+			arena.printMessages();
 		boolean nodesOrdered = checkInOrder(f.tree().root(), _source);
 		ref<Target> target = arena.codegen(f, true, verboseFlag, &context);
 //		printf("after folding and codegen:\n");

@@ -148,7 +148,7 @@ boolean scan(string filename) {
 		int endloc = loc + 4;
 		if (endloc > reference.length())
 			endloc = reference.length();
-		string quot = reference.substring(loc, endloc);
+		string quot = reference.substr(loc, endloc);
 		if (t != tokens[i].token) {
 			printf("[%4d] Tokens (%s:%s) {%s} do not match at reported line(location) %d(%d)\n", i, string(tokens[i].token), string(t), quot, scanner.lineNumber(tokens[i].location) + 1, tokens[i].location.offset);
 			return false;

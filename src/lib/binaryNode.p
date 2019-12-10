@@ -988,6 +988,8 @@ public class Binary extends Node {
 		case	EXCEPTION:
 		case	CLASS:
 		case	VAR:
+		case	SUBSTRING:
+		case	SUBSTRING16:
 			ref<ParameterScope> copyConstructor = type.copyConstructor();
 			if (copyConstructor != null) {
 				ref<Node> adr = tree.newUnary(Operator.ADDRESS, _left, location());
@@ -1033,7 +1035,7 @@ public class Binary extends Node {
 					return result;
 			}
 			break;
-			
+
 		default:
 			print(0);
 			assert(false);

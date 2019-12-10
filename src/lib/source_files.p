@@ -101,7 +101,7 @@ public class ImportDirectory {
 				printf("Searching %s\n", _directoryName);
 			string dirName;
 			if (_directoryName.startsWith("^/"))
-				dirName = compileContext.arena().rootFolder() + _directoryName.substring(1);
+				dirName = compileContext.arena().rootFolder() + _directoryName.substr(1);
 			else
 				dirName = _directoryName;
 			ref<Directory> dir = new Directory(dirName);

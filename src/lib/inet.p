@@ -581,7 +581,7 @@ public class Connection {
 				if (!flush())
 					return fill;
 			}
-			_buffer = s.substring(fill);
+			_buffer = s.substr(fill);
 		} else
 			_buffer.append(s);
 		return s.length();

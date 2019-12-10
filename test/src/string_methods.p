@@ -144,13 +144,13 @@ void substringTests() {
 	printf("substringTests()\n");
 	string full = "abcdef";
 	
-	string prefix = full.substring(0, 3);
+	string prefix = full.substr(0, 3);
 	assert(prefix == "abc");
-	string suffix = full.substring(4);
+	string suffix = full.substr(4);
 	printf(suffix);
 	printf("\n");
 	assert(suffix == "ef");
-	string empty = full.substring(3, 3);
+	string empty = full.substr(3, 3);
 	assert(empty != null);
 	assert(empty.length() == 0);
 }

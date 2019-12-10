@@ -99,9 +99,9 @@ public ref<Locale> getLocale(string locale) {
 		} else
 			dotLoc = locale.indexOf('.');
 		if (dotLoc >= 0) {
-			string codepage = locale.substring(dotLoc + 1);
+			string codepage = locale.substr(dotLoc + 1);
 //			if (codepage == "utf8") {
-//				localeName = localeName.substring(0, dotLoc + 1) + "utf-8";
+//				localeName = localeName.substr(0, dotLoc + 1) + "utf-8";
 //			}
 		}
 		windows._locale_t localeID = windows._create_locale(C.LC_ALL, localeName.c_str());
@@ -206,13 +206,13 @@ public monitor class Locale {
 		if (idx < 0)
 			_language = _localeName.toLowerCase();
 		else {
-			_language = _localeName.substring(0, idx).toLowerCase();
+			_language = _localeName.substr(0, idx).toLowerCase();
 			int idx2 = _localeName.indexOf('.', idx + 1);
 			if (idx2 < 0)
-				_country = _localeName.substring(idx + 1).toLowerCase();
+				_country = _localeName.substr(idx + 1).toLowerCase();
 			else {
-				_country = _localeName.substring(idx + 1, idx2).toLowerCase();
-				_encoding = _localeName.substring(idx2 + 1).toLowerCase();
+				_country = _localeName.substr(idx + 1, idx2).toLowerCase();
+				_encoding = _localeName.substr(idx2 + 1).toLowerCase();
 			}
 		}
 //		printf("lang = %s country = %s encoding = %s", _language, _country, _encoding);

@@ -69,7 +69,7 @@ public class IniFile {
 					delete reader;
 					return false;
 				}
-				string name = line.substring(1, line.length() - 1).trim();
+				string name = line.substr(1, line.length() - 1).trim();
 				currentSection = _sections[name];
 				if (currentSection == null) {
 					currentSection = new Object();
@@ -87,7 +87,7 @@ public class IniFile {
 			if (eqPos < 0)
 				currentSection.set(line, "");
 			else
-				currentSection.set(line.substring(0, eqPos).trim(), line.substring(eqPos + 1).trim());
+				currentSection.set(line.substr(0, eqPos).trim(), line.substr(eqPos + 1).trim());
 		}
 		delete reader;
 		return true;

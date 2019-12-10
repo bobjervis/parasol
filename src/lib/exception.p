@@ -477,7 +477,7 @@ public class RuntimeException extends Exception {
 			output.printf("%x", _exceptionContext.exceptionType);
 			if (message != null) {
 				if (text.endsWith("\r\n"))
-					text = text.substring(0, text.length() - 2);
+					text = text.substr(0, text.length() - 2);
 				output.printf(" (%s)", text);
 			}
 			output.printf(" ip %p", _exceptionContext.exceptionAddress);

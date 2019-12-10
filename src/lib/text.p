@@ -67,8 +67,6 @@ import parasol:stream.EOF;
 import parasol:exception.IllegalArgumentException;
 import parasol:exception.IllegalOperationException;
 
-private class substringClass = substring;
-
 /**
  * This is the preferred representation for text in Parasol.
  *
@@ -132,21 +130,21 @@ public class string extends String<byte> {
 		}
 	}
 
-	public string(substringClass source) {
+	public string(substring source) {
 		if (source._data != null) {
 			resize(source._length);
 			C.memcpy(&_contents.data, source._data, source._length);
 		}
 	}
 
-	public string(substringClass source, int startOffset) {
+	public string(substring source, int startOffset) {
 		if (source._data != null) {
 			resize(source._length - startOffset);
 			C.memcpy(&_contents.data, source._data + startOffset, source._length - startOffset);
 		}
 	}
 
-	public string(substringClass source, int startOffset, int endOffset) {
+	public string(substring source, int startOffset, int endOffset) {
 		if (source._data != null) {
 			resize(endOffset - startOffset);
 			C.memcpy(&_contents.data, source._data + startOffset, endOffset - startOffset);
@@ -321,7 +319,7 @@ public class string extends String<byte> {
 		}
 	}
 	
-	public void append(substringClass other) {
+	public void append(substring other) {
 		if (other._length > 0) {
 			int oldLength = length();
 			resize(oldLength + other._length);
@@ -754,10 +752,10 @@ public class string extends String<byte> {
 		for (;;) {
 			int idx = indexOf(match, start);
 			if (idx < 0) {
-				result.append(substring(start));
+				result.append(substr(start));
 				break;
 			} else {
-				result.append(substring(start, idx));
+				result.append(substr(start, idx));
 				result.append(replacement);
 				start = idx + match.length();
 			}
@@ -827,7 +825,7 @@ public class string extends String<byte> {
 		return _contents.data == prefix;
 	}
 
-	public boolean startsWith(substringClass prefix) {
+	public boolean startsWith(substring prefix) {
 		if (_contents == null)
 			return false;
 		if (prefix._data == null)
@@ -876,8 +874,8 @@ public class string extends String<byte> {
 	 *	Return a substring of this string, starting at the character
 	 *	given by first and continuing to the end of the string.
 	 */
-	public string substring(int first) {
-		return substring(first, length());
+	public string substr(int first) {
+		return string(pointer<byte>(&_contents.data) + first, length() - first);
 	}
 	/*
 	 *	substring
@@ -888,17 +886,14 @@ public class string extends String<byte> {
 	 *
 	 *	TODO: Out of range values should produce exceptions
 	 */
-	public string substring(int first, int last) {
-		string result;
-		
+	public string substr(int first, int last) {
 		if (first == last)
 			return "";
 		if (first > last || first > length())
 			throw IllegalArgumentException("substring");
 		if (last > length())
 			last = length();
-		result.append(pointer<byte>(&_contents.data) + first, last - first);
-		return result;
+		return string(pointer<byte>(&_contents.data) + first, last - first);
 	}
 	
 	public string toLowerCase() {
@@ -1162,7 +1157,7 @@ public class string16 extends String<char> {
 		u16.encode(other);
 	}
 
-	public string16(substringClass other) {
+	public string16(substring other) {
 		if (other.isNull())
 			return;
 		resize(0);
@@ -1273,8 +1268,8 @@ public class string16 extends String<char> {
 	 *	Return a substring of this string, starting at the character
 	 *	given by first and continuing to the end of the string.
 	 */
-	public string16 substring(int first) {
-		return substring(first, length());
+	public substring16 substr(int first) {
+		return substring16(pointer<char>(&_contents.data) + first, length() - first);
 	}
 	/*
 	 *	substring
@@ -1285,11 +1280,8 @@ public class string16 extends String<char> {
 	 *
 	 *	TODO: Out of range values should produce exceptions
 	 */
-	public string16 substring(int first, int last) {
-		string16 result;
-		
-		result.append(pointer<char>(&_contents.data) + first, last - first);
-		return result;
+	public substring16 substr(int first, int last) {
+		return substring16(pointer<char>(&_contents.data) + first, last - first);
 	}
 	/**
 	 * Append a Unicode character.
