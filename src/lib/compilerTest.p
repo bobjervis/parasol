@@ -799,6 +799,9 @@ boolean checkInOrder(ref<Node> n, string source) {
 }
 
 TraverseAction checkAscending(ref<Node> n, address data) {
+	if (n.op() == Operator.CAST)
+		return TraverseAction.CONTINUE_TRAVERSAL;
+		
 	ref<Location> locp = ref<Location>(data);
 
 	if (locp.offset > n.location().offset) {
@@ -809,6 +812,9 @@ TraverseAction checkAscending(ref<Node> n, address data) {
 }
 
 static TraverseAction checkDescending(ref<Node> n, address data) {
+	if (n.op() == Operator.CAST)
+		return TraverseAction.CONTINUE_TRAVERSAL;
+
 	ref<Location> locp = ref<Location>(data);
 
 	if (locp.offset < n.location().offset) {

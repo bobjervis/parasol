@@ -146,7 +146,6 @@ public enum MessageId {
 	UNFINISHED_INSTANTIATE_TEMPLATE			("Unfinished: instantiateTemplate"),
 	UNFINISHED_NAMESPACE					("Unfinished: anonymous namespace"),
 	UNFINISHED_INITIALIZER					("Unfinished: static initializer"),
-	UNFINISHED_ASSIGN_TYPE					("Unfinished: assignTypes %1/%2"),
 	UNFINISHED_CONTROL_FLOW					("Unfinished: control flow %1/%2"),
 	UNFINISHED_MARKUP_DECLARATOR			("Unfinished: markupDeclarator %1/%2"),
 	UNFINISHED_BUILD_SCOPE					("Unfinished: buildScopes %1/%2"),

@@ -792,7 +792,7 @@ public class substring16 {
 	}
 
 	public substring16(string16 source) {
-		if (!source.isNull()) {
+		if (source != null) {
 			_data = source.c_str();
 			_length = source.length();
 		}

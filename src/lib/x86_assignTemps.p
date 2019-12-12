@@ -1078,6 +1078,14 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			}
 			break;
 
+		case	STRING16:
+			switch (newType.family()) {
+			case	STRING16:
+				assignCast(result, operand, regMask, 0, compileContext);
+				return;
+			}
+			break;
+
 		case	INTERFACE:
 		case	ADDRESS:
 		case	REF:

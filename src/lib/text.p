@@ -217,7 +217,7 @@ public class string extends String<byte> {
 	}
 
 	public string(string16 other) {
-		if (other.isNull())
+		if (other == null)
 			return;
 		resize(0);				// This makes the value != null (i.e. the empty string), if other is the empty string
 
@@ -318,7 +318,31 @@ public class string extends String<byte> {
 			C.memcpy(&_contents.data, &other._contents.data, other._contents.length + 1);
 		}
 	}
+
+	public void append(string16 other) {
+		String16Reader sr(&other);
+		UTF16Decoder d(&sr);
+
+		for (;;) {
+			int c = d.decodeNext();
+			if (c < 0)
+				break;
+			append(c);
+		}
+	}
 	
+	public void append(substring16 other) {
+		Substring16Reader sr(&other);
+		UTF16Decoder d(&sr);
+
+		for (;;) {
+			int c = d.decodeNext();
+			if (c < 0)
+				break;
+			append(c);
+		}
+	}
+
 	public void append(substring other) {
 		if (other._length > 0) {
 			int oldLength = length();
@@ -1157,6 +1181,13 @@ public class string16 extends String<char> {
 		u16.encode(other);
 	}
 
+	public string16(string16 source) {
+		if (source != null) {
+			resize(source.length());
+			C.memcpy(&_contents.data, &source._contents.data, (source._contents.length + 1) * char.bytes);
+		}
+	}
+
 	public string16(substring other) {
 		if (other.isNull())
 			return;
@@ -1169,20 +1200,79 @@ public class string16 extends String<char> {
 	}
 
 	public string16(substring16 other) {
-		if (other.isNull())
-			return;
-		resize(0);
-		assert(_contents != null);
-		String16Writer w(this);
-		UTF16Encoder u16(&w);
-
-		u16.encode(other);
+		if (!other.isNull()) {
+			resize(other.length());
+			C.memcpy(&_contents.data, other.c_str(), other.length() * char.bytes);
+		}
 	}
 
 	public string16(pointer<char> buffer, int len) {
 		if (buffer != null) {
 			resize(len);
 			C.memcpy(&_contents.data, buffer, len * char.bytes);
+		}
+	}
+	/**
+	 * Append a Unicode character.
+	 *
+	 * If the argument value is not a valid Unicode code point, the 
+	 * {@link REPLACEMENT_CHARACTER) is stored instead.
+	 *
+	 * @param ch The character to append.
+	 */
+	public void append(int ch) {
+		if (ch < SURROGATE_START)
+			append(char(ch));
+		else if (ch <= SURROGATE_END)
+			append(REPLACEMENT_CHARACTER);
+		else if (ch <= 0xffff)
+			append(char(ch));
+		else if (ch <= 0x10ffff) {
+			ch -= 0x10000;
+			append(char(HI_SURROGATE_START + (ch >> 10)));
+			append(char(LO_SURROGATE_START + (ch & 0x3ff)));
+		} else
+			append(REPLACEMENT_CHARACTER);
+	}
+
+	public void append(string other) {
+		StringReader sr(&other);
+		UTF8Decoder d(&sr);
+
+		for (;;) {
+			int c = d.decodeNext();
+			if (c < 0)
+				break;
+			append(c);
+		}
+	}
+
+	public void append(string16 other) {
+		int len = other.length();
+		if (len > 0) {
+			int oldLength = length();
+			resize(oldLength + len);
+			C.memcpy(pointer<char>(&_contents.data) + oldLength, &other._contents.data, (len + 1) * char.bytes);
+		}
+	}
+	
+	public void append(substring16 other) {
+		if (other._length > 0) {
+			int oldLength = length();
+			resize(oldLength + other._length);
+			C.memcpy(pointer<char>(&_contents.data) + oldLength, other._data, other._length * char.bytes);
+		}
+	}
+
+	public void append(substring other) {
+		SubstringReader sr(&other);
+		UTF8Decoder d(&sr);
+
+		for (;;) {
+			int c = d.decodeNext();
+			if (c < 0)
+				break;
+			append(c);
 		}
 	}
 
@@ -1283,28 +1373,6 @@ public class string16 extends String<char> {
 	public string16 substr(int first, int last) {
 		return string16(pointer<char>(&_contents.data) + first, last - first);
 	}
-	/**
-	 * Append a Unicode character.
-	 *
-	 * If the argument value is not a valid Unicode code point, the 
-	 * {@link REPLACEMENT_CHARACTER) is stored instead.
-	 *
-	 * @param ch The character to append.
-	 */
-	public void append(int ch) {
-		if (ch < SURROGATE_START)
-			append(char(ch));
-		else if (ch <= SURROGATE_END)
-			append(REPLACEMENT_CHARACTER);
-		else if (ch <= 0xffff)
-			append(char(ch));
-		else if (ch <= 0x10ffff) {
-			ch -= 0x10000;
-			append(char(HI_SURROGATE_START + (ch >> 10)));
-			append(char(LO_SURROGATE_START + (ch & 0x3ff)));
-		} else
-			append(REPLACEMENT_CHARACTER);
-	}
 }
 
 class String<class T> {
@@ -1316,7 +1384,7 @@ class String<class T> {
 	protected static int MIN_SIZE = 0x10;
 
 	protected ref<allocation> _contents;
-
+/*
 	public void append(String<T> other) {
 //		print("'");
 //		print(*this);
@@ -1336,7 +1404,7 @@ class String<class T> {
 //		print(*this);
 //		print("\n");
 	}
-
+ */
 	public void append(pointer<T> p, int length) {
 		if (_contents == null) {
 			resize(length);

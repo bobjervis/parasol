@@ -588,6 +588,14 @@ class RegisterState {
 	}
 
 	private void makeSpill(SpillKinds sKind, ref<Node> tree, R r, ref<Node> affected, ref<Node> other) {
+		if (affected.type == null) {
+			printf("tree:\n");
+			tree.print(0);
+			printf("affected:\n");
+			affected.print(0);
+			print();
+		}
+
 		int i = affected.type.size();
 		if	(sKind == SpillKinds.XCHG) {
 			int j = other.type.size();

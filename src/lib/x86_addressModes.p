@@ -560,6 +560,14 @@ class X86_64AddressModes extends X86_64Encoder {
 			}
 			break;
 
+		case	STRING16:
+			switch (newType.family()) {
+			case	STRING16:
+				tryMakeMode(operand, MC_FULL, 0, compileContext);
+				return;
+			}
+			break;
+
 		case	ADDRESS:
 		case	REF:
 		case	POINTER:

@@ -1,3 +1,4 @@
+
 // Platform specific tests
 conditional(target: x86-64-win) {
     run(filename: win_ui_test.p)
@@ -921,6 +922,72 @@ compile() { "interface A {} A src; int x(double z); x = int(double)(src);" }
 compile() { "string src; var x; x = src;" }
 compile() { "string16 src; var x; x = src;" }
 
+compile() { "string a = f(); string f() { return null; }" }
+compile() { "string a = f(); string16 f() { return null; }" }
+compile() { "string a = f(); substring f() { return null; }" }
+compile() { "string a = f(); substring16 f() { return null; }" }
+compile() { "string16 b; b = f(); string16 a = f(); string f() { return null; }" }
+compile() { "string16 a = f(); string16 f() { return null; }" }
+compile() { "string16 a = f(); substring f() { return null; }" }
+compile() { "string16 a = f(); substring16 f() { return null; }" }
+compile(expect: fail) { "substring a = f(); string f() { return null; }" }
+compile(expect: fail) { "substring a = f(); string16 f() { return null; }" }
+compile() { "substring a = f(); substring f() { return null; }" }
+compile(expect: fail) { "substring a = f(); substring16 f() { return null; }" }
+compile(expect: fail) { "substring16 a = f(); string f() { return null; }" }
+compile(expect: fail) { "substring16 a = f(); string16 f() { return null; }" }
+compile(expect: fail) { "substring16 a = f(); substring f() { return null; }" }
+compile() { "substring16 a = f(); substring16 f() { return null; }" }
+
+compile() { "string a; string b; string16 c; a = b + c;" }
+compile() { "string a; string b; substring c; a = b + c;" }
+compile() { "string a; string b; substring16 c; a = b + c;" }
+compile() { "string a; string16 b; string c; a = b + c;" }
+compile() { "string a; string16 b; string16 c; a = b + c;" }
+compile() { "string a; string16 b; substring c; a = b + c;" }
+compile() { "string a; string16 b; substring16 c; a = b + c;" }
+compile() { "string a; substring b; string c; a = b + c;" }
+compile() { "string a; substring b; string16 c; a = b + c;" }
+compile() { "string a; substring b; substring c; a = b + c;" }
+compile() { "string a; substring b; substring16 c; a = b + c;" }
+compile() { "string a; substring16 b; string c; a = b + c;" }
+compile() { "string a; substring16 b; string16 c; a = b + c;" }
+compile() { "string a; substring16 b; substring c; a = b + c;" }
+compile() { "string a; substring16 b; substring16 c; a = b + c;" }
+compile() { "string16 a; string b; string c; a = b + c;" }
+compile() { "string16 a; string b; string16 c; a = b + c;" }
+compile() { "string16 a; string b; substring c; a = b + c;" }
+compile() { "string16 a; string b; substring16 c; a = b + c;" }
+compile() { "string16 a; string16 b; string c; a = b + c;" }
+compile() { "string16 a; string16 b; string16 c; a = b + c;" }
+compile() { "string16 a; string16 b; substring c; a = b + c;" }
+compile() { "string16 a; string16 b; substring16 c; a = b + c;" }
+compile() { "string16 a; substring b; string c; a = b + c;" }
+compile() { "string16 a; substring b; string16 c; a = b + c;" }
+compile() { "string16 a; substring b; substring c; a = b + c;" }
+compile() { "string16 a; substring b; substring16 c; a = b + c;" }
+compile() { "string16 a; substring16 b; string c; a = b + c;" }
+compile() { "string16 a; substring16 b; string16 c; a = b + c;" }
+compile() { "string16 a; substring16 b; substring c; a = b + c;" }
+compile() { "string16 a; substring16 b; substring16 c; a = b + c;" }
+
+compile() { "string a; string b; a += b;" }
+compile() { "string a; string16 b; a += b;" }
+compile() { "string a; substring b; a += b;" }
+compile() { "string a; substring16 b; a += b;" }
+compile() { "string16 a; string b; a += b;" }
+compile() { "string16 a; string16 b; a += b;" }
+compile() { "string16 a; substring b; a += b;" }
+compile() { "string16 a; substring16 b; a += b;" }
+compile(expect:fail) { "substring a; string b; a += b;" }
+compile(expect:fail) { "substring a; string16 b; a += b;" }
+compile(expect:fail) { "substring a; substring b; a += b;" }
+compile(expect:fail) { "substring a; substring16 b; a += b;" }
+compile(expect:fail) { "substring16 a; string b; a += b;" }
+compile(expect:fail) { "substring16 a; string16 b; a += b;" }
+compile(expect:fail) { "substring16 a; substring b; a += b;" }
+compile(expect:fail) { "substring16 a; substring16 b; a += b;" }
+
 // From string - coercions from string to non-string generally require a call to T.parse 
 
 compile(expect: fail) { "char x = char(\"abc\");" }
@@ -1002,6 +1069,7 @@ compile() { "string16 a; string b; a = b;" }
 compile() { "string16 a; string16 b; a = b;" }
 compile() { "string16 a; substring b; a = b;" }
 compile() { "string16 a; substring16 b; a = b;" }
+
 compile() { "substring a; string b; a = b;" }
 compile(expect: fail) { "substring a; string16 b; a = b;" }
 compile() { "substring a; substring b; a = b;" }

@@ -2166,6 +2166,8 @@ class Leaf extends Node {
 			switch (newType.family()) {
 			case	STRING:
 			case	STRING16:
+			case	SUBSTRING:
+			case	SUBSTRING16:
 			case	ENUM:
 			case	FUNCTION:
 			case	REF:
@@ -3622,46 +3624,9 @@ public class Node {
 			print(0);
 		if (type.equals(newType))
 			return this;
-		if (canCoerce(newType, explicitCast, compileContext)) {
-			if (newType.builtInCoercionFrom(this, compileContext))
-				return tree.newCast(newType, this);
-			else {
-				// To get here, we've determined that we want to do a cast and it's allowed, but it isn't
-				// built-in, so it must need a constructor. In order for canCoerce to return true and builtInConversionFrom
-				// to return false, the runtime has to have an appropriate constructor to use. Otherwise, the compiler dies
-				// a horrible death.
-				if (newType.scope() != null) {
-					for (int i = 0; i < newType.scope().constructors().length(); i++) {
-						ref<ParameterScope> constructor = (*newType.scope().constructors())[i];
-						ref<FunctionDeclaration> f = ref<FunctionDeclaration>(constructor.definition());
-						if (f == null || f.name() == null)
-							continue;
-						ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
-						if (oi.parameterCount() != 1)
-							continue;
-						ref<Symbol> param = (*oi.parameterScope().parameters())[0];
-						ref<Type> argType = param.assignType(compileContext);
-						if (argType.deferAnalysis())
-							continue;
-						if (argType == type) {
-							ref<Variable> temp = compileContext.newVariable(newType);
-							ref<NodeList> args = tree.newNodeList(this);
-							ref<Reference> r = tree.newReference(temp, true, location());
-							ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
-							ref<Call> call = tree.newCall(oi.parameterScope(), CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
-							call.type = compileContext.arena().builtInType(TypeFamily.VOID);
-							r = tree.newReference(temp, false, location());
-							ref<Node> seq = tree.newBinary(Operator.SEQUENCE, call, r, location());
-							seq.type = newType;
-//							seq.print(0);
-							return seq;
-						}
-					}
-				}
-				// Okay, so it's not a constructor, there must be some down-stream special processing.
-				return tree.newCast(newType, this);
-			}
-		} else {
+		if (canCoerce(newType, explicitCast, compileContext))
+			return tree.newCast(newType, this);
+		else {
 			add(MessageId.CANNOT_CONVERT, compileContext.pool());
 			type = compileContext.errorType();
 			return this;
@@ -3776,7 +3741,8 @@ public class Node {
 	// Debugging API
 	
 	public void printTerse(int indent) {
-		print(indent);
+		printBasic(indent);
+		printf("\n");
 	}
 
 	public void print(int indent) {
@@ -3784,6 +3750,7 @@ public class Node {
 	}
 
 	public void printBasic(int indent) {
+
 		string name = " ";//this.class.name();
 
 		for (ref<Commentary> comment = _commentary; comment != null; comment = comment.next())
@@ -3797,6 +3764,7 @@ public class Node {
 			printf(" nodeFlags %x", int(nodeFlags));
 		if (sethi != 0)
 			printf(" sethi %d", sethi);
+		assert(indent < 1000);
 	}
 
 

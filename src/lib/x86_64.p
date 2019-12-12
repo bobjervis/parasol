@@ -2079,7 +2079,7 @@ public class X86_64 extends X86_64AssignTemps {
 					inst(X86.MOVSD, b.type.family(), b.left(), b.right(), compileContext);
 				}
 				break;
-				
+/*				
 			case	STRING:
 				if (b.op() == Operator.ADD) {
 					b.type.print();
@@ -2092,7 +2092,7 @@ public class X86_64 extends X86_64AssignTemps {
 						return;
 				}
 				break;
-				
+ */				
 			case	CLASS:
 				printf("\n>> non pointer type\n");
 				b.print(4);
@@ -4116,23 +4116,14 @@ public class X86_64 extends X86_64AssignTemps {
 
 		case	STRING:
 			switch (newType.family()) {
-			/*
-			case	VAR:
-				ref<TypedefType> tt = ref<TypedefType>(target.arena().stringType().type());
-				ref<Type> t = tt.wrappedType();
-				if (target.unit() != null) {
-					ref<TypeRef> tr = target.unit().newTypeRef(t, target.arena().stringType().enclosing());
-					target.byteCode(ByteCodes.LDSA);
-					target.byteCode(tr.index());
-				} else {
-					target.byteCode(ByteCodes.VALUE);
-					target.byteCode(0);
-				}
-				target.byteCode(ByteCodes.CVTSV);
-				target.pushSp(var.bytes - address.bytes);
-				return;
-				*/
 			case	STRING:
+				return;
+			}
+			break;
+
+		case	STRING16:
+			switch (newType.family()) {
+			case	STRING16:
 				return;
 			}
 			break;

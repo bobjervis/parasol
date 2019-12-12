@@ -173,7 +173,13 @@ public class BuiltInType extends Type {
 	}
 	
 	public boolean returnsViaOutParameter(ref<CompileContext> compileContext) {
-		return family() == TypeFamily.VAR;
+		switch (family()) {
+		case VAR:
+		case SUBSTRING:
+		case SUBSTRING16:
+			return true;
+		}
+		return false;
 	}
 	
 	public boolean passesViaStack(ref<CompileContext> compileContext) {
@@ -2184,6 +2190,20 @@ public class Type {
 			return "FlagsType";
 		else
 			return "???Type";
+	}
+
+	public boolean isString() {
+		switch (family()) {
+		case STRING:
+		case STRING16:
+		case SUBSTRING:
+		case SUBSTRING16:
+			return true;
+
+		default:
+			return false;
+		}
+		return false;
 	}
 
 	public boolean isFloat() {

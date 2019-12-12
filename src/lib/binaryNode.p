@@ -769,6 +769,10 @@ public class Binary extends Node {
 				}
 				break;
 				
+			case STRING:
+			case STRING16:
+				return foldStringAppend(this, tree, voidContext, compileContext);
+
 			case	VAR:
 				return processAssignmentOp(tree, voidContext, compileContext);
 			}
@@ -790,6 +794,7 @@ public class Binary extends Node {
 		case	ADD:
 			switch (type.family()) {
 			case	STRING:
+			case	STRING16:
 				ref<Node> n;
 				ref<Variable> v;
 				
@@ -850,8 +855,8 @@ public class Binary extends Node {
 			case	INTERFACE:
 				break;
 				
-			case	STRING:
 			case	STRING16:
+			case	STRING:
 			case	SUBSTRING:
 			case	SUBSTRING16:
 				if (_right.op() == Operator.CALL && ref<Call>(_right).category() != CallCategory.CONSTRUCTOR) {
@@ -1005,8 +1010,8 @@ public class Binary extends Node {
 			}
 			break;
 			
-		case	STRING:
 		case	STRING16:
+		case	STRING:
 			if (_right.op() == Operator.CALL) {
 				ref<OverloadInstance> oi = type.stringAllocationConstructor(compileContext);
 				if (oi == null) {
@@ -1489,6 +1494,26 @@ public class Binary extends Node {
 				type = _right.type;
 				break;
 			}
+			switch (_left.type.family()) {
+			case SUBSTRING:
+				if (_right.type.family() == TypeFamily.STRING) {
+					if (!_right.isLvalue()) {
+						_right.add(MessageId.LVALUE_REQUIRED, compileContext.pool());
+						type = compileContext.errorType();
+						return;
+					}
+				}
+				break;
+
+			case SUBSTRING16:
+				if (_right.type.family() == TypeFamily.STRING16) {
+					if (!_right.isLvalue()) {
+						_right.add(MessageId.LVALUE_REQUIRED, compileContext.pool());
+						type = compileContext.errorType();
+						return;
+					}
+				}
+			}
 			_right = _right.coerce(compileContext.tree(), t, false, compileContext);
 			type = _right.type;
 			break;
@@ -1759,7 +1784,9 @@ public class Binary extends Node {
 				type = _left.type;
 				break;
 			}
-			if (_left.type.family() == TypeFamily.POINTER) {
+			TypeFamily stringAddition = TypeFamily.VOID;
+			switch (_left.type.family()) {
+			case POINTER:
 				compileContext.assignTypes(_right);
 				if (_right.deferAnalysis()) {
 					type = _right.type;
@@ -1772,11 +1799,58 @@ public class Binary extends Node {
 				}
 				type = _left.type;
 				break;
+
+			case STRING:
+			case SUBSTRING:
+				stringAddition = TypeFamily.STRING;
+				break;
+
+			case STRING16:
+			case SUBSTRING16:
+				stringAddition == TypeFamily.STRING16;
 			}
+			if (stringAddition == TypeFamily.VOID) {
+				compileContext.assignTypes(_right);
+				if (_right.deferAnalysis()) {
+					type = _right.type;
+					break;
+				}
+				switch (_right.type.family()) {
+				case STRING:
+				case SUBSTRING:
+					stringAddition = TypeFamily.STRING;
+					break;
+
+				case STRING16:
+				case SUBSTRING16:
+					stringAddition = TypeFamily.STRING16;
+				}
+			}
+			// Process string addition here.
+			if (stringAddition != TypeFamily.VOID) {
+				compileContext.assignTypes(_right);
+				if (_right.deferAnalysis()) {
+					type = _right.type;
+					break;
+				}
+				_left = _left.coerce(compileContext.tree(), stringAddition, false, compileContext);
+				_right = _right.coerce(compileContext.tree(), stringAddition, false, compileContext);
+				if (_left.deferAnalysis()) {
+					type = _left.type;
+					break;
+				}
+				if (_right.deferAnalysis()) {
+					type = _right.type;
+					break;
+				}
+				type = _left.type;
+				break;
+			}
+			if (type != null)
+				break;
 			if (!balance(compileContext))
 				break;
 			switch (_left.type.scalarFamily(compileContext)) {
-			case	STRING:
 			case	UNSIGNED_32:
 			case	SIGNED_32:
 			case	SIGNED_64:
@@ -1809,9 +1883,13 @@ public class Binary extends Node {
 				type = compileContext.errorType();
 				break;
 			}
-			if (_left.type.family() == TypeFamily.STRING) {
+			if (_left.type.family() == TypeFamily.STRING ||
+				_left.type.family() == TypeFamily.STRING16) {
 				switch (_right.type.family()) {
 				case	STRING:
+				case	STRING16:
+				case	SUBSTRING:
+				case	SUBSTRING16:
 					if (_left.isLvalue()) 
 						type = _left.type;
 					else {
@@ -2618,7 +2696,8 @@ private ref<Node>, ref<Variable> foldStringAddition(ref<Node> leftHandle, ref<Va
 	} else {
 		addNode = addNode.fold(tree, false, compileContext);
 		if (leftHandle != null) {
-			ref<Node> appender = appendString(variable, addNode, tree, compileContext);
+			ref<Reference> r = tree.newReference(variable, false, addNode.location());				
+			ref<Node> appender = appendString(r, addNode, tree, compileContext);
 			ref<Node> seq = tree.newBinary(Operator.SEQUENCE, leftHandle, appender, addNode.location());
 			seq.type = compileContext.arena().builtInType(TypeFamily.VOID);
 			return seq, variable;
@@ -2636,29 +2715,101 @@ private ref<Node>, ref<Variable> foldStringAddition(ref<Node> leftHandle, ref<Va
 		}
 	}
 }
-	
-private ref<Node> appendString(ref<Variable> variable, ref<Node> value, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
-	ref<Reference> r = tree.newReference(variable, false, value.location());				
+
+private ref<Node> foldStringAppend(ref<Binary> node, ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+	ref<Node> addTree = addOperand(node.right());
+	if (addTree == null)			// There's no string additions on the right, just append to the left.
+		return appendString(node.left(), node.right(), tree, compileContext);
+
+	ref<Node> lhs, leftHandle;
+	if (node.left().isSimpleLvalue()) {
+		lhs = node.left();
+		leftHandle = null;
+	} else {
+		ref<Variable> variable = compileContext.newVariable(compileContext.arena().builtInType(TypeFamily.ADDRESS));
+		ref<Reference> r = tree.newReference(variable, true, node.location());
+		ref<Node> adr = tree.newUnary(Operator.ADDRESS, node.left(), node.location());
+		adr.type = r.type;
+		leftHandle = tree.newBinary(Operator.ASSIGN, r, adr, node.location());
+		leftHandle.type = r.type;
+		lhs = tree.newReference(variable, false, node.location());				
+	}
+	ref<Node> n = foldAddOperands(lhs, leftHandle, addTree, tree, compileContext); 
+	if (!voidContext) {
+		n = tree.newBinary(Operator.SEQUENCE, n, lhs, node.location());
+		n.type = lhs.type;
+	}
+	return n;
+}
+
+private ref<Node> foldAddOperands(ref<Node> lvalue, ref<Node> leftHandle, ref<Node> addNode, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
+	if (addNode.op() == Operator.ADD) {
+		ref<Binary> b = ref<Binary>(addNode);
+		leftHandle = foldAddOperands(lvalue, leftHandle, b.left(), tree, compileContext);
+		leftHandle = foldAddOperands(lvalue, leftHandle, b.right(), tree, compileContext);
+		return leftHandle;
+	} else {
+		ref<Node> bare = unconvertedString(addNode);
+		if (bare != null)
+			addNode = bare;
+		ref<Node> n = appendString(lvalue.clone(tree), addNode, tree, compileContext);
+		if (leftHandle != null) {
+			leftHandle = tree.newBinary(Operator.SEQUENCE, leftHandle, n, lvalue.location());
+			leftHandle.type = n.type;
+		} else
+			leftHandle = n;
+		return leftHandle;
+	}
+}
+
+private ref<Node> addOperand(ref<Node> rhs) {
+	switch (rhs.op()) {
+	case CAST:												// The add could have been done 
+		return addOperand(ref<Unary>(rhs).operand());
+
+	case ADD:
+		return rhs;
+	}
+	return null;
+}
+
+private ref<Node> unconvertedString(ref<Node> rhs) {
+	if (rhs.op() == Operator.CAST)												// The add could have been done 
+		return unconvertedString(ref<Unary>(rhs).operand());
+
+	if (rhs.type.isString())
+		return rhs;
+	else
+		return null;
+}
+
+private ref<Node> appendString(ref<Node> destination, ref<Node> value, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
 	CompileString name("append");
 	
-	ref<Symbol> sym = value.type.lookup(&name, compileContext);
+	ref<Symbol> sym = destination.type.lookup(&name, compileContext);
 	if (sym == null || sym.class != Overload) {
-		value.add(MessageId.UNDEFINED, compileContext.pool(), name);
-		return value;
+		destination.add(MessageId.UNDEFINED, compileContext.pool(), name);
+		return destination;
 	}
 	ref<Overload> over = ref<Overload>(sym);
 	ref<OverloadInstance> oi = null;
 	ref<ParameterScope> scope = null;
 	for (int i = 0; i < over.instances().length(); i++) {
-		oi = (*over.instances())[i];
-		scope = oi.parameterScope();
+		ref<OverloadInstance> noi = (*over.instances())[i];
+		scope = noi.parameterScope();
 		if (scope.parameters().length() != 1)
 			continue;
-		if ((*scope.parameters())[0].type() == value.type)
+		if ((*scope.parameters())[0].type() == value.type) {
+			oi = noi;
 			break;
+		}
+	}
+	if (oi == null) {
+		destination.add(MessageId.UNDEFINED, compileContext.pool(), name);
+		return destination;
 	}
 	assert(scope != null);
-	ref<Selection> method = tree.newSelection(r, oi, false, value.location());
+	ref<Selection> method = tree.newSelection(destination, oi, false, value.location());
 	method.type = oi.type();
 	ref<NodeList> args = tree.newNodeList(value);
 	ref<Call> call = tree.newCall(scope, null, method, args, value.location(), compileContext);
@@ -2675,7 +2826,7 @@ boolean balancePair(ref<Node> parent, ref<ref<Node>> leftp, ref<ref<Node>> right
 			if (right.canCoerce(left.type, false, compileContext)) {
 				if (left.type.widensTo(right.type, compileContext)) {
 					if (right.type.widensTo(left.type, compileContext)) {
-						parent.add(MessageId.UNFINISHED_ASSIGN_TYPE, compileContext.pool(), CompileString("  "/*parent.class.name()*/), CompileString(string(parent.op())));
+						parent.add(MessageId.TYPE_MISMATCH, compileContext.pool());
 						parent.type = compileContext.errorType();
 						return false;
 					} else
