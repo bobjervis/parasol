@@ -857,8 +857,6 @@ public class Binary extends Node {
 				
 			case	STRING16:
 			case	STRING:
-			case	SUBSTRING:
-			case	SUBSTRING16:
 				if (_right.op() == Operator.CALL && ref<Call>(_right).category() != CallCategory.CONSTRUCTOR) {
 					ref<OverloadInstance> oi;
 					if (op() == Operator.ASSIGN_TEMP)
@@ -881,6 +879,8 @@ public class Binary extends Node {
 					return call.fold(tree, voidContext, compileContext);
 				}
 
+			case	SUBSTRING:
+			case	SUBSTRING16:
 			case	CLASS:
 			case	SHAPE:
 				ref<OverloadInstance> oi;
@@ -2726,7 +2726,7 @@ private ref<Node> foldStringAppend(ref<Binary> node, ref<SyntaxTree> tree, boole
 		lhs = node.left();
 		leftHandle = null;
 	} else {
-		ref<Variable> variable = compileContext.newVariable(compileContext.arena().builtInType(TypeFamily.ADDRESS));
+		ref<Variable> variable = compileContext.newVariable(node.type);
 		ref<Reference> r = tree.newReference(variable, true, node.location());
 		ref<Node> adr = tree.newUnary(Operator.ADDRESS, node.left(), node.location());
 		adr.type = r.type;

@@ -113,23 +113,60 @@ public class string extends String<byte> {
 			C.memcpy(&_contents.data, &source._contents.data, source._contents.length + 1);
 		}
 	}
-
+	/**
+	 * A constructor from a sub-string.
+	 *
+	 * The contents of the source string, beginning at the startOffset are copied. The resulting string is never
+	 * null.
+	 *
+	 * @param source An existing string.
+	 * @param startOffset The index of the first byte of the source string to copy. If this value is
+	 * exactly the same as the length of source, the newly constructed string is the empty string.
+	 *
+	 * @exception IllegalArgumentException Thrown if source is null or the startOffset is negative or 
+	 * greater than the length of source.
+	 */
 	public string(string source, int startOffset) {
 		if (source != null) {
+			if (unsigned(startOffset) > unsigned(source.length()))
+				throw IllegalArgumentException("startOffset");
 			resize(source.length() - startOffset);
 			C.memcpy(&_contents.data, pointer<byte>(&source._contents.data) + startOffset, _contents.length);
 			pointer<byte>(&source._contents.data)[_contents.length] = 0;
-		}
+		} else
+			throw IllegalArgumentException("source");
 	}
-
+	/**
+	 * A constructor from a sub-string.
+	 *
+	 * The contents of the source string, beginning at the startOffset up to the endOffset are copied.
+	 * The resulting string is never null.
+	 *
+	 * @param source An existing string.
+	 * @param startOffset The index of the first byte of the source string to copy. If this value is
+	 * exactly the same as the length of source, the newly constructed string is the empty string.
+	 * @param endOffset The index of the next byte after the last byte to copy.
+	 *
+	 * @exception IllegalArgumentException Thrown if source is null, the startOffset is negative or 
+	 * greater than the length of source or the endOffset is less than the startOffset or greater
+	 * than the source length.
+	 */
 	public string(string source, int startOffset, int endOffset) {
 		if (source != null) {
+			if (unsigned(startOffset) > unsigned(source.length()) || startOffset > endOffset || endOffset > source.length())
+				throw IllegalArgumentException("startOffset");
 			resize(endOffset - startOffset);
 			C.memcpy(&_contents.data, pointer<byte>(&source._contents.data) + startOffset, endOffset - startOffset);
 			pointer<byte>(&source._contents.data)[_contents.length] = 0;
-		}
+		} else
+			throw IllegalArgumentException("source");
 	}
-
+	/**
+	 * A constructor from a substring object.
+	 *
+	 * If the source string is null, the constructed string will be 
+	 * @param source The source string to copy.
+	 */
 	public string(substring source) {
 		if (source._data != null) {
 			resize(source._length);
@@ -898,8 +935,8 @@ public class string extends String<byte> {
 	 *	Return a substring of this string, starting at the character
 	 *	given by first and continuing to the end of the string.
 	 */
-	public string substr(int first) {
-		return string(pointer<byte>(&_contents.data) + first, length() - first);
+	public substring substr(int first) {
+		return substring(pointer<byte>(&_contents.data) + first, length() - first);
 	}
 	/*
 	 *	substring
@@ -910,14 +947,12 @@ public class string extends String<byte> {
 	 *
 	 *	TODO: Out of range values should produce exceptions
 	 */
-	public string substr(int first, int last) {
-		if (first == last)
-			return "";
+	public substring substr(int first, int last) {
 		if (first > last || first > length())
 			throw IllegalArgumentException("substring");
 		if (last > length())
 			last = length();
-		return string(pointer<byte>(&_contents.data) + first, last - first);
+		return substring(pointer<byte>(&_contents.data) + first, last - first);
 	}
 	
 	public string toLowerCase() {

@@ -1555,8 +1555,6 @@ public class X86_64 extends X86_64AssignTemps {
 				switch (b.type.family()) {
 				case	STRING:
 				case	STRING16:
-					node.print(0);
-					assert(false);
 				case	TYPEDEF:
 				case	CLASS_VARIABLE:
 				case	UNSIGNED_8:

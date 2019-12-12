@@ -18,8 +18,6 @@ namespace parasol:text;
 import parasol:exception.IllegalOperationException;
 import native:C;
 
-private class substringClass = substring;
-
 public class substring {
 	pointer<byte> _data;
 	int _length;
@@ -448,7 +446,7 @@ public class substring {
 	}
 
 
-	public boolean startsWith(substringClass prefix) {
+	public boolean startsWith(substring prefix) {
 		if (_data == null)
 			return false;
 		if (prefix._length > _length)
@@ -464,8 +462,8 @@ public class substring {
 	 *	Return a substring of this string, starting at the character
 	 *	given by first and continuing to the end of the string.
 	 */
-	public substringClass substring(int first) {
-		return this.substring(first, _length);
+	public substring substr(int first) {
+		return this.substr(first, _length);
 	}
 	/*
 	 *	substring
@@ -476,8 +474,8 @@ public class substring {
 	 *
 	 *	TODO: Out of range values should produce exceptions
 	 */
-	public substringClass substring(int first, int last) {
-		return substringClass(_data + first, last - first);
+	public substring substr(int first, int last) {
+		return substring(_data + first, last - first);
 	}
 	
 	public string toLowerCase() {
@@ -510,19 +508,19 @@ public class substring {
 		return out;
 	}
 	
-	public substringClass trim() {
+	public substring trim() {
 		if (_data == null)
-			return substringClass();
+			return substring();
 		for (int i = 0; i < _length; i++) {
 			if (!_data[i].isSpace()) {
 				for (int j = _length - 1; j > i; j--) {
 					if (!_data[j].isSpace())
-						return substringClass(_data + i, 1 + (j - i));
+						return substring(_data + i, 1 + (j - i));
 				}
-				return substringClass(_data, 1);
+				return substring(_data, 1);
 			}
 		}
-		return substringClass(&""[0], 0);
+		return substring(&""[0], 0);
 	}
 	/*
 	 *	unescapeC
