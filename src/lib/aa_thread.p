@@ -37,6 +37,7 @@ import native:linux;
 import native:C;
 import parasol:exception.HardwareException;
 import parasol:runtime;
+import parasol:process;
 import parasol:international.Locale;
 import parasol:time;
 
@@ -198,6 +199,7 @@ public class Thread {
 		} catch (Exception e) {
 			printf("\nUncaught exception! (thread %s)\n\n%s\n", t._name, e.message());
 			e.printStackTrace();
+			process.stdout.flush();
 		}
 	}
 	/*
@@ -638,6 +640,7 @@ public class ThreadPool<class T> extends ThreadPoolData<T> {
 			} catch (Exception e) {
 				printf("Failed ThreadPool work item: Uncaught exception! %s\n%s", 
 								e.message(), e.textStackTrace());
+				process.stdout.flush();
 				wi.result.postFailure(e.clone());
 			}
 		} else {

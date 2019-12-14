@@ -3564,6 +3564,7 @@ class X86_64Encoder extends Target {
 		case	SIGNED_64:
 		case	UNSIGNED_64:
 		case	STRING:
+		case	STRING16:
 		case	ADDRESS:
 		case	REF:
 		case	POINTER:
