@@ -927,6 +927,9 @@ public class CompileContext {
 				break;
 				
 			case STRING:
+			case STRING16:
+			case SUBSTRING:
+			case SUBSTRING16:
 				if (b.left().op() != Operator.STRING) {
 					b.left().add(MessageId.STRING_LITERAL_EXPECTED, _pool);
 					b.left().type = errorType();

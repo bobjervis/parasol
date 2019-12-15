@@ -1083,6 +1083,11 @@ compile() { "substring16 a; substring16 b; a = b;" }
 
 compile() { "string a; string b; string c; a = b + c;" }
 
+compile() { "string s; switch (s) { case \"abc\": break; }" }
+compile() { "string16 s; switch (s) { case \"abc\": break; }" }
+compile() { "substring s; switch (s) { case \"abc\": break; }" }
+compile() { "substring16 s; switch (s) { case \"abc\": break; }" }
+
 // Disallowed implicit casts.
 
 compile(expect: fail, message: CANNOT_CONVERT) { "int x; byte b; b = x;" }

@@ -31,6 +31,18 @@
  *     <li>{@link string16}: Represents a sequence of Unicode characters stored in UTF-16.
  * </ul>
  *
+ * These classes implement distinct copies of their text contents and can be modified. The
+ * subscript operator can be used, as can the for-in collection iterator. They automatically
+ * convert to one another so you can freely assign instances of one class to the other. All
+ * Unicode code points can be represented in either UTF-8 and UTF-16. While there are higher costs
+ * in translating from one format to ther other, there is never any information loss.
+ *
+ * You can also use the addition operator to concatenate strings. You may mix operands of
+ * scalar numeric type as well as any string or substring class in a sequence of additions.
+ * All necessary conversions are performed to produce the correct result text.
+ *
+ * You can compare string objects or use them as operands in a switch statement.
+ *
  * The secondary classes are:
  *
  * <ul>
@@ -41,12 +53,23 @@
  * Each of the above 'sub' classes is constructed from an instance of the corresponding primary
  * classes. For example, a substring instance is a portion of a string object's contents. Operations on
  * substring's provide relatively light-weight ways to search and select ranges of larger string objects.
+ * This can prove handy when parsing large quantities of text, for example.
  *
  * All four classes represent sequences of Unicode characters, so there is no notion of 'width' that
  * affects the conversion of numeric types, for example. As far as operations like copying or string
  * addition, all four types can be readily converted without loss of information. Any of the four classes
  * can coerce to any of the other four. Converting to either of the primary string classes will involve
  * copying text and may require a conversion between UTF-8 and UTF-16.
+ *
+ * It's important to note that while Parasol code assumes that UTF-8 is the encoding for string objects,
+ * If you use a Decoder to validate and filter input data, you can be assured that the resulting string or
+ * string16 objects are correct UTF and all characters are stored with the fewest bytes possible. Nevertheless,
+ * the performance cost of such validation has to be weighed against the benefit for downstream computations.
+ * Many methods on the string classes will produce 'correct' results for data that is not UTF text. An
+ * application may choose to read text into a string object without deciding what the encoding is. It may
+ * prove to be convenient to delay the decoding process until other contextual information is available. It
+ * may also be desirable to retain the raw bytes of the input so that one can recover the original content when
+ * a iece of text is decoded using the wrong format.
  *
  * This namespace provides full support for two encodings: UTF-8 and UTF-16 for textual data. One additional
  * encoding, ISO 8859-1, can be safely stored in a string, but is not fully supported. Several of the 
@@ -61,6 +84,7 @@
 namespace parasol:text;
 
 import native:C;
+import parasol:international;
 import parasol:memory;
 import parasol:stream;
 import parasol:stream.EOF;
@@ -119,6 +143,11 @@ public class string extends String<byte> {
 	 * The contents of the source string, beginning at the startOffset are copied. The resulting string is never
 	 * null.
 	 *
+	 * <h4>Encoding</h4>
+	 *
+	 * The startOffset is a byte offset. If that offset is in the middle of a multi-byte sequence, the newly
+	 * constructed string will be malformed.
+	 *
 	 * @param source An existing string.
 	 * @param startOffset The index of the first byte of the source string to copy. If this value is
 	 * exactly the same as the length of source, the newly constructed string is the empty string.
@@ -141,6 +170,11 @@ public class string extends String<byte> {
 	 *
 	 * The contents of the source string, beginning at the startOffset up to the endOffset are copied.
 	 * The resulting string is never null.
+	 *
+	 * <h4>Encoding</h4>
+	 *
+	 * The startOffset and endOffset are byte offsets. If either offset is in the middle of a multi-byte
+	 * sequence, the newly constructed string will be malformed.
 	 *
 	 * @param source An existing string.
 	 * @param startOffset The index of the first byte of the source string to copy. If this value is
@@ -173,21 +207,75 @@ public class string extends String<byte> {
 			C.memcpy(&_contents.data, source._data, source._length);
 		}
 	}
-
+	/**
+	 * A constructor from a substring object.
+	 *
+	 * The contents of the source string, beginning at the startOffset are copied. The resulting string is never
+	 * null.
+	 *
+	 * <h4>Encoding</h4>
+	 *
+	 * The startOffset is a byte offset. If that offset is in the middle of a multi-byte sequence, the newly
+	 * constructed string will be malformed.
+	 *
+	 * @param source An existing string.
+	 * @param startOffset The index of the first byte of the source string to copy. If this value is
+	 * exactly the same as the length of source, the newly constructed string is the empty string.
+	 *
+	 * @exception IllegalArgumentException Thrown if source is null or the startOffset is negative or 
+	 * greater than the length of source.
+	 */
 	public string(substring source, int startOffset) {
 		if (source._data != null) {
+			if (unsigned(startOffset) > unsigned(source.length()))
+				throw IllegalArgumentException("startOffset");
 			resize(source._length - startOffset);
 			C.memcpy(&_contents.data, source._data + startOffset, source._length - startOffset);
-		}
+		} else
+			throw IllegalArgumentException("source");
 	}
-
+	/**
+	 * A constructor from a sub-string.
+	 *
+	 * The contents of the source string, beginning at the startOffset up to the endOffset are copied.
+	 * The resulting string is never null.
+	 *
+	 * <h4>Encoding</h4>
+	 *
+	 * The startOffset and endOffset are byte offsets. If either offset is in the middle of a multi-byte
+	 * sequence, the newly constructed string will be malformed.
+	 *
+	 * @param source An existing string.
+	 * @param startOffset The index of the first byte of the source string to copy. If this value is
+	 * exactly the same as the length of source, the newly constructed string is the empty string.
+	 * @param endOffset The index of the next byte after the last byte to copy.
+	 *
+	 * @exception IllegalArgumentException Thrown if source is null, the startOffset is negative or 
+	 * greater than the length of source or the endOffset is less than the startOffset or greater
+	 * than the source length.
+	 */
 	public string(substring source, int startOffset, int endOffset) {
 		if (source._data != null) {
+			if (unsigned(startOffset) > unsigned(source.length()) || startOffset > endOffset || endOffset > source.length())
+				throw IllegalArgumentException("startOffset");
 			resize(endOffset - startOffset);
 			C.memcpy(&_contents.data, source._data + startOffset, endOffset - startOffset);
-		}
+		} else
+			throw IllegalArgumentException("source");
 	}
-
+	/**
+	 * A constructor from a C language string.
+	 *
+	 * C stores strings as null-terminated pointers (a char* in C). In Parasol the corresponding type is
+	 * pointer<byte>. Note that in Parasol, the byte type is unsigned, while the C char type is often treated
+	 * as signed. Parasol has no signed-byte type to use for this.
+	 *
+	 * <h4>Encoding</h4>
+	 *
+	 * The constructor assumes the source encoding does not use the null byte for any multi-byte encodings.
+	 *
+	 * @param cString The C pointer value.	 
+	 */
 	public string(pointer<byte> cString) {
 		if (cString != null) {
 			int len = C.strlen(cString);
@@ -195,64 +283,144 @@ public class string extends String<byte> {
 			C.memcpy(&_contents.data, cString, len);
 		}
 	}
-	
+	/**
+	 * A constructor from a byte array.
+	 *
+	 * @param value The byte array.
+	 */
 	public string(byte[] value) {
 		resize(value.length());
 		C.memcpy(&_contents.data, &value[0], value.length());
 	}
-	
-	public string(byte[] value, int startAt) {
-		if (startAt < 0)
-			throw IllegalArgumentException(string(startAt));
-		if (startAt >= value.length()) {
+	/**
+	 * A constructor from a substring within a byte array object.
+	 *
+	 * The contents of the source string, beginning at the startOffset are copied. The resulting string is never
+	 * null.
+	 *
+	 * <h4>Encoding</h4>
+	 *
+	 * The startOffset is a byte offset. If that offset is in the middle of a multi-byte sequence, the newly
+	 * constructed string will be malformed.
+	 *
+	 * @param source An existing string.
+	 * @param startOffset The index of the first byte of the source string to copy. If this value is
+	 * exactly the same as the length of source, the newly constructed string is the empty string.
+	 *
+	 * @exception IllegalArgumentException Thrown if source is null or the startOffset is negative or 
+	 * greater than the length of source.
+	 */
+	public string(byte[] value, int startOffset) {
+		if (startOffset < 0)
+			throw IllegalArgumentException(string(startOffset));
+		if (startOffset >= value.length()) {
 			resize(0);
 			return;
 		}
-		resize(value.length() - startAt);
-		C.memcpy(&_contents.data, &value[startAt], length());
+		resize(value.length() - startOffset);
+		C.memcpy(&_contents.data, &value[startOffset], length());
 	}
-	
-	public string(byte[] value, int startAt, int endAt) {
-		if (startAt < 0 || endAt < 0)
-			throw IllegalArgumentException(string(startAt));
-		if (endAt > value.length())
-			endAt = value.length();
-		if (startAt >= endAt) {
+	/**
+	 * A constructor from a sub-string in a byte arrya object.
+	 *
+	 * The contents of the source string, beginning at the startOffset up to the endOffset are copied.
+	 * The resulting string is never null.
+	 *
+	 * <h4>Encoding</h4>
+	 *
+	 * The startOffset and endOffset are byte offsets. If either offset is in the middle of a multi-byte
+	 * sequence, the newly constructed string will be malformed.
+	 *
+	 * @param source An existing string.
+	 * @param startOffset The index of the first byte of the source string to copy. If this value is
+	 * exactly the same as the length of source, the newly constructed string is the empty string.
+	 * @param endOffset The index of the next byte after the last byte to copy.
+	 *
+	 * @exception IllegalArgumentException Thrown if source is null, the startOffset is negative or 
+	 * greater than the length of source or the endOffset is less than the startOffset or greater
+	 * than the source length.
+	 */
+	public string(byte[] value, int startOffset, int endOffset) {
+		if (startOffset < 0 || endOffset < 0)
+			throw IllegalArgumentException(string(startOffset));
+		if (endOffset > value.length())
+			endOffset = value.length();
+		if (startOffset >= endOffset) {
 			resize(0);
 			return;
 		}
-		resize(endAt - startAt);
-		C.memcpy(&_contents.data, &value[startAt], length());
+		resize(endOffset - startOffset);
+		C.memcpy(&_contents.data, &value[startOffset], length());
 	}
-	
+	/**
+	 * A constructor from a range of bytes.
+	 *
+	 * <h4>Encoding</h4>
+	 *
+	 * The source bytes will be copied unchanged. The data could be binary or any
+	 * text encoding format.
+	 *
+	 * @param buffer The address of the first byte to copy.
+	 * @param length The number of bytes to copy.
+	 *
+	 * @exception IllegalArgumentException Thrown if buffer is null.
+	 */
 	public string(pointer<byte> buffer, int len) {
 		if (buffer != null) {
 			resize(len);
 			C.memcpy(&_contents.data, buffer, len);
-		}
+		} else
+			throw IllegalArgumentException("buffer");
 	}
-	
+	/**
+	 * A constructor converting from a signed integer
+	 *
+	 * This constructs a string consisting of decimal digits possibly
+	 * preceded by a locale-specific negative sign character.
+	 *
+	 * @param value The integral value to convert.
+	 */	
 	public string(long value) {
 		if (value == 0) {
 			append('0');
 			return;
-		} else if (value == long.MIN_VALUE) {
-			append("-9223372036854775808");
-			return;
 		} else if (value < 0) {
-			append('-');
+			append(international.myLocale().decimalStyle().negativeSign);
+			if (value == long.MIN_VALUE) {
+				append("9223372036854775808");
+				return;
+			}
 			value = -value;
 		}
 		appendDigits(value);		
 	}
-	
-	public string(boolean b) {
-		if (b)
+	/**
+	 * A constructor converting from a boolean
+	 *
+	 * This constructs a string consisting of either {@code true} or
+	 * {@code false}.
+	 *
+	 * @value The boolean value to convert.
+	 */	
+	public string(boolean value) {
+		if (value)
 			append("true");
 		else
 			append("false");
 	}
-
+	/**
+	 * A constructor converting from a string16.
+	 *
+	 * The content of the argument is converted from UTF-16 to
+	 * UTF-8.
+	 *
+	 * <h4>Encoding</h4>
+	 *
+	 * Any text in the source string that is not a valid Unicode
+	 * code point is copied as the {@link REPLACEMENT_CHARACTER}.
+	 *
+	 * @param other The UTF-16 string to convert.
+	 */
 	public string(string16 other) {
 		if (other == null)
 			return;
@@ -263,7 +431,19 @@ public class string extends String<byte> {
 
 		ue.encode(other);
 	}
-
+	/**
+	 * A constructor converting from a substring16.
+	 *
+	 * The content of the argument is converted from UTF-16 to
+	 * UTF-8.
+	 *
+	 * <h4>Encoding</h4>
+	 *
+	 * Any text in the source string that is not a valid Unicode
+	 * code point is copied as the {@link REPLACEMENT_CHARACTER}.
+	 *
+	 * @param other The UTF-16 string to convert.
+	 */
 	public string(substring16 other) {
 		if (other.isNull())
 			return;
@@ -274,7 +454,20 @@ public class string extends String<byte> {
 
 		ue.encode(other);
 	}
-
+	/**
+	 * A constructor converting from a sequence of char's.
+	 *
+	 * The content of the argument is converted from UTF-16 to
+	 * UTF-8.
+	 *
+	 * <h4>Encoding</h4>
+	 *
+	 * Any text in the source string that is not a valid Unicode
+	 * code point is copied as the {@link REPLACEMENT_CHARACTER}.
+	 *
+	 * @param buffer The first UTF-16 char to convert.
+	 * @param The number of char's to convert.
+	 */
 	public string(pointer<char> buffer, int len) {
 		if (buffer == null)
 			return;
@@ -282,17 +475,15 @@ public class string extends String<byte> {
 		stream.BufferReader r(buffer, len * char.bytes);
 		UTF16Decoder ud(&r);
 
-		string s = ud.decode();
-		_contents = s._contents;
+		*this = ud.decode();
 	}
-
-	private void appendDigits(long value) {
-		if (value > 9)
-			appendDigits(value / 10);
-		value %= 10;
-		append('0' + int(value));
-	}
-	
+	/**
+	 * A constructor converting from a floatng-point double
+	 *
+	 * This constructs a string using the %g format from {@link parasol:stream.Writer.printf printf}..
+	 *
+	 * @value The double value to convert.
+	 */	
 	public string(double value) {
 		printf("%g", value);
 	}
@@ -308,6 +499,13 @@ public class string extends String<byte> {
 //				print("Delete\n");
 			memory.free(_contents);
 		}
+	}
+
+	private void appendDigits(long value) {
+		if (value > 9)
+			appendDigits(value / 10);
+		value %= 10;
+		append('0' + int(value));
 	}
 	/**
 	 * Open a Reader from the contents of the string.
@@ -405,7 +603,7 @@ public class string extends String<byte> {
 	 * Append a Unicode character.
 	 *
 	 * If the argument value is not a valid Unicode code point, the 
-	 * {@link REPLACEMENT_CHARACTER) is stored instead.
+	 * {@link REPLACEMENT_CHARACTER} is stored instead.
 	 *
 	 * @param ch The character to append.
 	 */
@@ -1338,6 +1536,10 @@ public class string16 extends String<char> {
 				return 0;
 		}
 	}
+
+	public int compare(string other) {
+		return compare(string16(other));
+	}
 	
 	public void copy(string16 other) {
 		if (other._contents != null) {
@@ -1515,6 +1717,10 @@ class String<class T> {
 			}
 		}
 		return output;
+	}
+
+	public T get(int index) {
+		return _contents.data[index];
 	}
 
 	public boolean isNull() {

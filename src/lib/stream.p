@@ -702,7 +702,8 @@ public class Writer {
 	 *			<table class=options>
 	 *				<tr><th>Type</th><th>Formatting</th></tr>
 	 *				<tr><td>boolean</td><td>
-	 *					The value is converted to string.
+	 *					The value is converted to string. The result is either the string {@code true} or 
+	 *					{@code false}.
 	 *				</td></tr>
 	 *				<tr><td>string</td><td>
 	 *					The bytes of the string are converted to Unicode characters and then written 

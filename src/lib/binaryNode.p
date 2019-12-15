@@ -209,6 +209,32 @@ public class Binary extends Node {
 		case	DELETE:
 		case	LABEL:
 			break;
+
+		case	SWITCH:
+			if (_left.type.isString()) {
+				type = _left.type;
+				if (!_left.isLvalue()) {
+					ref<Variable> temp = compileContext.newVariable(type);
+					ref<Reference> r = tree.newReference(temp, true, location());
+					compileContext.markLiveSymbol(r);
+					ref<Node> call = tree.newBinary(Operator.STORE_TEMP, r, _left, location());
+					call.type = type;
+					call = call.fold(tree, true, compileContext);
+					r = tree.newReference(temp, false, location());
+					ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
+					adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+					ref<Node> seq = tree.newBinary(Operator.SEQUENCE, call, adr, location());
+					seq.type = type;
+					_left = seq;
+				} else {
+					_left = _left.fold(tree, false, compileContext);
+					_left = tree.newUnary(Operator.ADDRESS, _left, location());
+					_left.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+				}
+				_right = _right.fold(tree, true, compileContext);
+				return this;
+			}
+			break;
 			
 		case	LOGICAL_AND:
 		case	LOGICAL_OR:
@@ -2243,9 +2269,15 @@ public class Binary extends Node {
 					return;
 				}
 				type = _left.type.elementType();
-			} else if (_left.type.family() == TypeFamily.STRING) {
+			} else if (_left.type.isString()) {
 				_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_32, false, compileContext);
-				type = compileContext.arena().builtInType(TypeFamily.UNSIGNED_8);
+				TypeFamily elementFamily = TypeFamily.UNSIGNED_8;
+				switch (_left.type.family()) {
+				case STRING16:
+				case SUBSTRING16:
+					elementFamily = TypeFamily.UNSIGNED_16;
+				}
+				type = compileContext.arena().builtInType(elementFamily);
 			} else {
 				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
@@ -2441,6 +2473,9 @@ public class Binary extends Node {
 			if (!_left.deferAnalysis()) {
 				switch (_left.type.family()) {
 				case	STRING:
+				case	STRING16:
+				case	SUBSTRING:
+				case	SUBSTRING16:
 				case	UNSIGNED_8:
 				case	UNSIGNED_16:
 				case	UNSIGNED_32:
@@ -2509,15 +2544,23 @@ public class Binary extends Node {
 			if (_left.type.equals(switchType))
 				return;
 			ref<SyntaxTree> tree = compileContext.current().file().tree();
+			switch (switchType.family()) {
+			case SIGNED_8:
+			case UNSIGNED_8:
+			case SIGNED_16:
+			case UNSIGNED_16:
+				switchType = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+			}
 			if (_left.canCoerce(switchType, false, compileContext))
 				_left = tree.newCast(switchType, _left);
 			else {
-				// TODO: Create a CAST_IF_FITS toswitchType that checks at compile time, after the expression has been
-				// folded to remove constant symbols and such.
-				_left = tree.newCast(switchType, _left);
+				_left.add(MessageId.CANNOT_CONVERT, compileContext.pool());
+				type = compileContext.errorType();
 			}
-		} else
+		} else {
 			_left.add(MessageId.NOT_CONSTANT, compileContext.pool());
+			type = compileContext.errorType();
+		}
 	}
 
 	boolean balance(ref<CompileContext> compileContext) {

@@ -805,6 +805,36 @@ public class substring16 {
 		return _data;
 	}
 
+	public int compare(string16 other) {
+		if (_data == null) {
+			if (other == null)
+				return 0;
+			else
+				return -1;
+		} else if (other == null)
+			return 1;
+		pointer<char> ocp = other.c_str();
+		if (_length < other.length()) {
+			for (int i = 0; i < _length; i++) {
+				if (_data[i] != ocp[i])
+					return _data[i] < ocp[i] ? -1 : 1;
+			}
+			return -1;
+		} else {
+			for (int i = 0; i < other.length(); i++) {
+				if (_data[i] != ocp[i])
+					return _data[i] < ocp[i] ? -1 : 1;
+			}
+			if (_length > other.length())
+				return 1;
+			else
+				return 0;
+		}
+	}
+
+	public int compare(string other) {
+		return compare(string16(other));
+	}	
 	public boolean isNull() {
 		return _data == null;
 	}

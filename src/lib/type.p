@@ -1960,6 +1960,25 @@ public class Type {
 		return null;
 	}
 
+	public ref<OverloadInstance> stringConstantCompareMethod(ref<CompileContext> compileContext) {
+		CompileString name("compare");
+		
+		ref<Symbol> sym = lookup(&name, compileContext);
+		if (sym != null && sym.class == Overload) {
+			ref<Overload> o = ref<Overload>(sym);
+			for (int i = 0; i < o.instances().length(); i++) {
+				ref<OverloadInstance> oi = (*o.instances())[i];
+				oi.assignType(compileContext);
+				if (oi.parameterCount() != 1)
+					continue;
+				if ((*oi.parameterScope().parameters())[0].type() == 
+							compileContext.arena().builtInType(TypeFamily.STRING))
+					return oi;
+			}
+		}
+		return null;
+	}
+
 	public int ordinal(int maxOrdinal) {
 		if (_ordinal == 0)
 			_ordinal = maxOrdinal + 1;

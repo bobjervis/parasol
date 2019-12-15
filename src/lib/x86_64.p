@@ -278,7 +278,6 @@ public class X86_64 extends X86_64AssignTemps {
 	private ref<OverloadInstance> _stringAppendString;		// string.append(string)
 	private ref<OverloadInstance> _stringCopyConstructor;
 	private ref<OverloadInstance> _stringAssign;
-	private ref<OverloadInstance> _stringCompare;
 	private ref<OverloadInstance> _varCopyConstructor;
 	private ref<ParameterScope> _memset;
 	private ref<ParameterScope> _memcpy;
@@ -1350,18 +1349,15 @@ public class X86_64 extends X86_64AssignTemps {
 			for (int i = 0; i < labels.length(); i++) {
 				ref<Binary> caseNode = ref<Binary>(closure.nodes[i]);
 				if (caseNode.left().deferGeneration()) {
-					// TODO: generate exception
+					// TODO: generate runtime exception
 					continue;
 				}
-				if (b.left().type.family() == TypeFamily.STRING) {
+				if (b.type.isString()) {
 					ref<Node> literal = caseNode.left();
-					inst(X86.LEA, firstRegisterArgument(), literal, compileContext);
-					inst(X86.PUSH, TypeFamily.ADDRESS, firstRegisterArgument());
-					inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), R.RSP);
+					inst(X86.LEA, secondRegisterArgument(), literal, compileContext);
 					inst(X86.PUSH, TypeFamily.ADDRESS, controlReg);
-					instCall(_stringCompare.parameterScope(), compileContext);
+					instCall(b.type.stringConstantCompareMethod(compileContext).parameterScope(), compileContext);
 					inst(X86.POP, TypeFamily.ADDRESS, controlReg);
-					inst(X86.ADD, TypeFamily.ADDRESS, R.RSP, 8);
 					inst(X86.CMP, TypeFamily.SIGNED_32, R.RAX, 0);
 					closeCodeSegment(CC.JE, labels[i]);
 					ref<CodeSegment> n = _storage new CodeSegment;
@@ -4294,15 +4290,6 @@ public class X86_64 extends X86_64AssignTemps {
 					ref<OverloadInstance> oi = (*o.instances())[0];
 					// TODO: Validate that we have the correct symbol;
 					_stringAssign = oi;
-				}
-			}
-			ref<Symbol> compare = stringType.scope().lookup("compare", compileContext);
-			if (assign != null) {
-				ref<Overload> o = ref<Overload>(compare);
-				if (o.instances().length() == 1) {
-					ref<OverloadInstance> oi = (*o.instances())[0];
-					// TODO: Validate that we have the correct symbol;
-					_stringCompare = oi;
 				}
 			}
 			ref<Symbol> append = stringType.scope().lookup("append", compileContext);

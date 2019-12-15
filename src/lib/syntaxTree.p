@@ -3530,6 +3530,7 @@ public class Node {
 			ref<Type> t;
 			switch (type.family()) {
 			case	UNSIGNED_8:
+			case	SIGNED_8:
 			case	UNSIGNED_16:
 			case	SIGNED_16:
 				t = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
@@ -3718,6 +3719,9 @@ public class Node {
 		case	THIS:
 		case	SUPER:
 			return true;
+
+		case	SEQUENCE:
+			return ref<Binary>(this).right().isLvalue();
 
 		default:
 			return false;

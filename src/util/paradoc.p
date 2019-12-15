@@ -1502,6 +1502,9 @@ string typeString(ref<Type> type, string baseName) {
 	case	CLASS:
 	case	INTERFACE:
 	case	STRING:
+	case	STRING16:
+	case	SUBSTRING:
+	case	SUBSTRING16:
 	case	EXCEPTION:
 	case	OBJECT_AGGREGATE:
 	case	ARRAY_AGGREGATE:
