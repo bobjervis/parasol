@@ -71,6 +71,15 @@
  * may also be desirable to retain the raw bytes of the input so that one can recover the original content when
  * a iece of text is decoded using the wrong format.
  *
+ * Strings can be compared using Parasol relational and equality operators, but the comparison should not be
+ * regarded as appropriate for a locale-specific
+ * textual sort. It is designed to be efficient, so using {@link string.compare} to sort a set of Unicode
+ * strings may not produce very satisfactory results. Also, if a UTF-8 encoded string is not encoded with the
+ * shortest encodings possible, you may encounter strings that display identically and produce an identical
+ * sequence of code points (through a {@link Decoder} for example), but still report as not-equal. Cirrectly
+ * encoded UTF-16 strings will always compare equal to another UTF-16 string that contains the same sequence of
+ * code points.
+ *
  * This namespace provides full support for two encodings: UTF-8 and UTF-16 for textual data. One additional
  * encoding, ISO 8859-1, can be safely stored in a string, but is not fully supported. Several of the 
  * methods that construct, extend or modify string objects are agnostic and will function correctly
@@ -541,19 +550,18 @@ public class string extends String<byte> {
 	public ref<Writer> openWriter() {
 		return new StringWriter(this);
 	}
-
-	@Deprecated
-	public void assign(string other) {
-		if (_contents != null) {
-			memory.free(_contents);
-			_contents = null;
-		}
-		if (other != null) {
-			resize(other._contents.length);
-			C.memcpy(&_contents.data, &other._contents.data, other._contents.length + 1);
-		}
-	}
-
+	/**
+	 * Append a string
+	 *
+	 * The source string is converted from UTF-16.
+	 *
+	 * <h4>Encoding</h4>
+	 *
+	 * If the source string contains improper UTF-16, {@link REPLACEMENT_CHARACTER}
+	 * value are substituted in the copy.
+	 *
+	 * @param other The string to copy.
+	 */
 	public void append(string16 other) {
 		String16Reader sr(&other);
 		UTF16Decoder d(&sr);
@@ -565,7 +573,19 @@ public class string extends String<byte> {
 			append(c);
 		}
 	}
-	
+	/**
+	 * Append a string
+	 *
+	 * The source string is converted from UTF-16 and appended to any existing
+	 * contents.
+	 *
+	 * <h4>Encoding</h4>
+	 *
+	 * If the source string contains improper UTF-16, {@link REPLACEMENT_CHARACTER}
+	 * values are substituted in the copy.
+	 *
+	 * @param other The string to copy.
+	 */
 	public void append(substring16 other) {
 		Substring16Reader sr(&other);
 		UTF16Decoder d(&sr);
@@ -577,7 +597,17 @@ public class string extends String<byte> {
 			append(c);
 		}
 	}
-
+	/**
+	 * Append a string
+	 *
+	 * The source string is appended to any existing contents..
+	 *
+	 * <h4>Encoding</h4>
+	 *
+	 * No validation of the UTF-8 is done. The bytes are copied without modification.
+	 *
+	 * @param other The string to copy.
+	 */
 	public void append(substring other) {
 		if (other._length > 0) {
 			int oldLength = length();
@@ -585,7 +615,20 @@ public class string extends String<byte> {
 			C.memcpy(pointer<byte>(&_contents.data) + oldLength, other._data, other._length);
 		}
 	}
-
+	/**
+	 * Append a string
+	 *
+	 * The source char's are converted from UTF-16 and appended to any existing
+	 * contents.
+	 *
+	 * <h4>Encoding</h4>
+	 *
+	 * If the source char's contain improper UTF-16, {@link REPLACEMENT_CHARACTER}
+	 * values are substituted in the copy.
+	 *
+	 * @param cp The first char to copy.
+	 * @param length The number of char's to copy.
+	 */
 	public void append(pointer<char> cp, int length) {
 		stream.BufferReader r(cp, length * char.bytes);
 		UTF16Decoder ud(&r);
@@ -630,34 +673,84 @@ public class string extends String<byte> {
 			append(REPLACEMENT_CHARACTER);
 		}
 	}
-
+	/**
+	 * Center the string.
+	 *
+	 * If the string has more characters than the size parameter, a copy of the
+	 * string is returned.
+	 *
+	 * It is important to note that this is at best a rough scheme for centering
+	 * text that is only suitable for fixed-width fonts and will not accurately
+	 * reflect certain combining forms and special characters.
+	 *
+	 * <h4>Encoding</h4>
+	 *
+	 * The existing string is scanned to count the number of Unicode characters
+	 * encoded in the string using UTF-8. If the string is not valid UTF-8, the
+	 * count will be unreliable.
+	 *
+	 * @param size The size in characters to fill with space characters (0x20).
+	 *
+	 * @return The string centered inside space characters.
+	 */
 	public string center(int size) {
 		return center(size, ' ');
 	}
-	
-	public string center(int size, char pad) {
-		int margin = size - _contents.length;
+	/**
+	 * Center the string.
+	 *
+	 * If the string has more characters than the size parameter, a copy of the
+	 * string is returned.
+	 *
+	 * It is important to note that this is at best a rough scheme for centering
+	 * text that is only suitable for fixed-width fonts and will not accurately
+	 * reflect certain combining forms and special characters.
+	 *
+	 * <h4>Encoding</h4>
+	 *
+	 * The existing string is scanned to count the number of Unicode characters
+	 * encoded in the string using UTF-8. If the string is not valid UTF-8, the
+	 * count will be unreliable.
+	 *
+	 * @param size The size in characters to fill with space characters (0x20).
+	 * @param pad The Unicode character to use on each end to pad short strings..
+
+	 * @return The string centered inside space characters.
+	 */
+	public string center(int size, int pad) {
+		StringReader r(this);
+		UTF8Decoder d(&r);
+
+		int characters = d.count();
+
+		int margin = size - characters;
 		if (margin <= 0)
 			return *this;
 		string result = "";
 		int half = margin / 2;
 		for (int i = 0; i < half; i++, margin--)
 			result.append(pad);
-//		print("a '");
-//		print(result);
-//		print("'\n");
 		result.append(*this);
-//		print("b '");
-//		print(result);
-//		print("'\n");
 		for (int i = 0; i < margin; i++)
 			result.append(pad);
-//		print("c '");
-//		print(result);
-//		print("'\n");
 		return result;
 	}
-	
+	/**
+	 * This function omplements string compares for the equality and relational operators.
+	 *
+	 * The function carries out a byte-by-byte comparison of the strings. The null value is equal to
+	 * null and less than any other string value. If two strings are of different lengths and all of the
+	 * bytes of the shorter string match the initial bytes of the longer, then the longer string is
+	 * greater.
+	 *
+	 * In usage as operators, the left hand operand of the is the object and the right-hand operand 
+	 * is passed as the argument value.
+	 *
+	 * @param other The string value to compare this string to.
+	 *
+	 * @return A negative value if this string is less than the other, zero if they are equal or
+	 * a positive value if this string is greater than the other.
+	 */
 	public int compare(string other) {
 		if (_contents == null) {
 			if (other._contents == null)
@@ -685,11 +778,31 @@ public class string extends String<byte> {
 				return 0;
 		}
 	}
-	
+	/**
+	 * Compare two strings, ignoring differences in lower and upper-case letters.
+	 *
+	 * @param other The string value to compare this string to.
+	 *
+	 * @return A negative value if this string is less than the other, zero if they are equal or
+	 * a positive value if this string is greater than the other.
+	 *
+	 * @exception IllegalOperationException Thrown always. This function is not yet implemented
+	 * and calling will fail. 
+	 */
 	public int compareIgnoreCase(string other) {
+		throw IllegalOperationException("not yet implemented");
 		return 0;
 	}
-
+	/**
+	 * The implementation function of the string assignment operator.
+	 *
+	 * The assignment operator makes the left hand operand the value of this and the
+	 * right-hand operand the argument value.
+	 *
+	 * Assigning a string to itself has no effect.
+	 *
+	 * @param other The string value to copy.
+	 */
 	public void copy(string other) {
 		if (other != null) {
 			if (_contents == other._contents)
@@ -711,15 +824,39 @@ public class string extends String<byte> {
 			C.memcpy(&_contents.data, &other._contents.data, other._contents.length + 1);
 		}
 	}
-	
+	/**
+	 *
+	 * @exception IllegalOperationException Thrown always. This function is not yet implemented
+	 * and calling will fail. 
+	 */	
 	public int count(RegularExpression pattern) {
+		throw IllegalOperationException("not yet implemented");
 		return 0;
 	}
-	
+	/**
+	 *
+	 * @exception IllegalOperationException Thrown always. This function is not yet implemented
+	 * and calling will fail. 
+	 */
 	public string encrypt(string salt) {
+		throw IllegalOperationException("not yet implemented");
 		return *this;
 	}
-	
+	/**
+	 * Determine whether a string ends with the given suffix.
+	 *
+	 * <h4>Encoding</h4>
+	 *
+	 * The comparison is done byte-by-byte, so if the suffix string begins in the middle
+	 * of a multi-byte sequence, this method will return true for any multi-byte sequence
+	 * that ends with the suffix.
+	 *
+	 * @param suffix The suffix string to look for.
+	 *
+	 * @return true if this string ends with the bytes of the suffix. The method returns false if
+	 * the suffix is longer than this string. The method returns true for any value of this string
+	 * if the suffix is either null or the empty string,.
+	 */
 	public boolean endsWith(string suffix) {
 		if (suffix.length() > length())
 			return false;

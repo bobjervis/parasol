@@ -222,6 +222,22 @@ public class Decoder {
 		}
 		return s;
 	}
+	/**
+	 * Calculate the count of Unicode characters.
+	 *
+	 * @return The count of decoded Unicode characters.
+	 */
+	public int count() {
+		int result;
+
+		for (;;) {
+			int c = decodeNext();
+
+			if (c < 0)
+				return result;
+			result++;
+		}
+	}
 }
 /**
  * This class defines the framework for converting text stored in strings to some specific
