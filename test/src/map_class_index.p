@@ -23,7 +23,7 @@ class Key {
 		stuff = s;
 	}
 	
-	int compare(Key k) {
+	public int compare(Key k) {
 		if (stuff > k.stuff)
 			return 1;
 		else if (stuff < k.stuff)
@@ -32,7 +32,7 @@ class Key {
 			return 0;
 	}
 	
-	int hash() {
+	public int hash() {
 		return int(stuff);
 	}
 }

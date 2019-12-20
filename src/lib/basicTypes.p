@@ -45,7 +45,7 @@ public class CompileString {
 		data = &s[0];
 	}
 
-	int compare(CompileString other) {
+	public int compare(CompileString other) {
 		if (length < other.length) {
 			for (int i = 0; i < length; i++) {
 				int diff = data[i] - other.data[i];
@@ -82,7 +82,10 @@ public class CompileString {
 	}
 	
 	public string asString() {
-		return string(data, length);
+		if (data != null)
+			return string(data, length);
+		else
+			return null;
 	}
 }
 
@@ -119,7 +122,7 @@ public class Location {
 		offset = v;
 	}
 
-	int compare(Location loc) {
+	public int compare(Location loc) {
 		return offset - loc.offset;
 	}
 

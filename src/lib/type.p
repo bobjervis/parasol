@@ -231,6 +231,8 @@ public class BuiltInType extends Type {
 		case	VAR:
 		case	STRING:
 		case	STRING16:
+		case	SUBSTRING:
+		case	SUBSTRING16:
 		case	ADDRESS:
 		case	REF:
 		case	POINTER:
@@ -255,6 +257,8 @@ public class BuiltInType extends Type {
 		case	VAR:
 		case	STRING:
 		case	STRING16:
+		case	SUBSTRING:
+		case	SUBSTRING16:
 		case	POINTER:
 			return true;
 		}
@@ -505,6 +509,10 @@ public class ClassType extends Type {
 		return indirectType(compileContext) == null;
 	}
 	
+	public ref<ClassType> classType() {
+		return this;
+	}
+
 	public ref<Scope> scope() {
 		return _scope;
 	}
@@ -786,7 +794,7 @@ public class ClassType extends Type {
 				continue;
 			if (t.family() != TypeFamily.REF)
 				continue;
-			if (this != t.indirectType(compileContext))
+			if (this != t.indirectType(compileContext).classType())
 				continue;
 			ref<FunctionType> f = scope.type();
 			if (f.returnCount() != 1)
@@ -1808,6 +1816,11 @@ public class Type {
 			return null;	
 	}
 	
+	public ref<ClassType> classType() {
+		assert(false);
+		return null;
+	}
+
 	public void assignSize(ref<Target> target, ref<CompileContext> compileContext) {
 	}
 
@@ -2134,7 +2147,7 @@ public class Type {
 		return false;
 	}
 	
-	boolean isMonitorClass() {
+	public boolean isMonitorClass() {
 		return false;
 	}
 
@@ -2237,11 +2250,11 @@ public class Type {
 		return false;
 	}
 	
-	ref<Type> wrappedType() {
+	public ref<Type> wrappedType() {
 		return null;
 	}
 
-	boolean requiresAutoStorage() {
+	public boolean requiresAutoStorage() {
 		switch (_family) {
 		case	TYPEDEF:
 		case	ERROR:

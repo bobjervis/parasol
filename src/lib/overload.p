@@ -46,7 +46,7 @@ class OverloadOperation {
 	public ref<Type> includeClass(ref<Type>  classType, ref<CompileContext> compileContext) {
 		for (ref<Type> current = classType; current != null; current = current.assignSuper(compileContext)) {
 			if (current.scope() != null) {
-				ref<Type> type = includeScope(classType.scope(), current.scope());
+				ref<Type> type = includeScope(compileContext.current(), current.scope());
 				if (type != null)
 					return type;
 				if (_done)

@@ -101,6 +101,33 @@ public class substring {
 		_length = 0;
 	}
 	
+	public int compare(ref<substring> other) {
+		assert(other != null);
+		if (_data == null) {
+			if (other._data == null)
+				return 0;
+			else
+				return -1;
+		} else if (other._data == null)
+			return 1;
+		if (_length < other._length) {
+			for (int i = 0; i < _length; i++) {
+				if (_data[i] != other._data[i])
+					return _data[i] < other._data[i] ? -1 : 1;
+			}
+			return -1;
+		} else {
+			for (int i = 0; i < other._length; i++) {
+				if (_data[i] != other._data[i])
+					return _data[i] < other._data[i] ? -1 : 1;
+			}
+			if (_length > other._length)
+				return 1;
+			else
+				return 0;
+		}
+	}
+
 	public int compare(string other) {
 		if (_data == null) {
 			if (other == null)
@@ -803,6 +830,33 @@ public class substring16 {
 
 	public pointer<char> c_str() {
 		return _data;
+	}
+
+	public int compare(ref<substring16> other) {
+		assert(other != null);
+		if (_data == null) {
+			if (other._data == null)
+				return 0;
+			else
+				return -1;
+		} else if (other._data == null)
+			return 1;
+		if (_length < other._length) {
+			for (int i = 0; i < _length; i++) {
+				if (_data[i] != other._data[i])
+					return _data[i] < other._data[i] ? -1 : 1;
+			}
+			return -1;
+		} else {
+			for (int i = 0; i < other._length; i++) {
+				if (_data[i] != other._data[i])
+					return _data[i] < other._data[i] ? -1 : 1;
+			}
+			if (_length > other._length)
+				return 1;
+			else
+				return 0;
+		}
 	}
 
 	public int compare(string16 other) {

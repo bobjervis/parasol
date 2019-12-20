@@ -1000,20 +1000,23 @@ public class Symbol {
 		}
 	}
 
-	public boolean isVisibleIn(ref<Scope> scope, ref<CompileContext> compileContext) {
-		if (_enclosing.encloses(scope))
+	public boolean isVisibleIn(ref<Scope> lexicalScope, ref<CompileContext> compileContext) {
+		if (_enclosing.encloses(lexicalScope))
 			return true;
 		switch (_visibility) {
 		case PRIVATE:
 			return false;
 
 		case PROTECTED:
-			if (!_enclosing.isBaseScope(scope, compileContext))
+			ref<Scope> lexicalClassScope = lexicalScope.enclosingClassScope();
+			if (lexicalClassScope == null)
+				return false;
+			if (!_enclosing.isBaseScope(lexicalClassScope, compileContext))
 				return false;
 			break;
 
 		case NAMESPACE:
-			if (_enclosing.getNamespace() != scope.getNamespace())
+			if (_enclosing.getNamespace() != lexicalScope.getNamespace())
 				return false;
 		}
 		return true;
@@ -1193,7 +1196,7 @@ public class Symbol {
 		return _annotationNode;
 	}
 	
-	int compare(ref<Symbol> other) {
+	public int compare(ref<Symbol> other) {
 		int min = _name.length;
 		if (other._name.length < min)
 			min = other._name.length;

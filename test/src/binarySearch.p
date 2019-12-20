@@ -1,7 +1,7 @@
 class Foo {
 	int offset;
 
-	int compare(Foo loc) {
+	public int compare(Foo loc) {
 		return offset - loc.offset;
 	}
 

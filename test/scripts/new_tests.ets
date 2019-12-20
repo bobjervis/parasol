@@ -1,5 +1,2 @@
-compile(){"short x; switch (x) { case -1: break; }"}
-
-compile() { "substring x; boolean b = x != null;" }
-compile() { "substring16 x; boolean b = x != null;" }
+run(filename: scanner_test.p, arguments: src/lib/x86_64.p)
 

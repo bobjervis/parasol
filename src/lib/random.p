@@ -82,6 +82,8 @@ public class Random {
 	 * passed to the constructor of another Random object, which will then generate
 	 * the same values this generator will.
 	 *
+	 * The string value contains binary data and is not UTF-8 encoded.
+	 *
 	 * @return The state of the generator, represented as a string of bytes
 	 * (but not utf-8).
 	 */
@@ -119,13 +121,23 @@ public class Random {
 // Use these constants for a 64-bit generator (from Knuth)
 //		return 6364136223846793005 * jcong + 1442695040888963407;
 	}
-
-	void set(long seed) {
+	/**
+	 * Set the seed to a particular numeric value.
+	 *
+	 * @param seed A long integer containing the seed.
+	 */
+	public void set(long seed) {
 		string s(pointer<byte>(&seed), seed.bytes);
 		set(s);
 	}
-
-	void set() {
+	/**
+	 * Set the seed to a random value.
+	 *
+	 * This method uses an operating-system specific mechanism for generating
+	 * random values. If the underlying operating system has no such API, then
+	 * the time of day is used to set the seed.
+	 */
+	public void set() {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			byte[] b;
 			b.resize(long.bytes);
@@ -214,7 +226,7 @@ public class Random {
 		return x;
 	}
 	/**
-	 * This function returns the sum on n random die rolls where
+	 * This function returns the sum of n random die rolls where
 	 * sides is the number of sides on each die.
 	 *
 	 *  The assumption is

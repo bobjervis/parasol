@@ -1,6 +1,6 @@
 namespace parasollanguage.org:template;
 
-class Template<class T> {
+public class Template<class T> {
 	T _data;
 	
 	public Template(T x) {

@@ -3106,7 +3106,7 @@ public class X86_64 extends X86_64AssignTemps {
 
 	private void generateCompare(ref<Binary> b, ref<CodeSegment> trueSegment, ref<CodeSegment> falseSegment, ref<CompileContext> compileContext) {
 		if ((b.nodeFlags & USE_COMPARE_METHOD) != 0) {
-			ref<OverloadInstance> oi = ref<ClassType>(b.left().type).getCompareMethod(compileContext);
+			ref<OverloadInstance> oi = b.left().type.classType().getCompareMethod(compileContext);
 			f().r.generateSpills(b, this);
 			if (b.sethi < 0) {
 				generate(b.left(), compileContext);

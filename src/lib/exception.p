@@ -82,7 +82,7 @@ public class Exception {
 		_exceptionContext = exceptionContext;
 	}
 	
-	ref<Exception> clone() {
+	public ref<Exception> clone() {
 		ref<Exception> n = new Exception(_message);
 		n._exceptionContext = _exceptionContext;
 		return n;

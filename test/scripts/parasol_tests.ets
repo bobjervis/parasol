@@ -696,6 +696,9 @@ compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } 
 compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
 compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
 
+compile(expect: fail, message: NO_MATCHING_OVERLOAD) { "class A { private int method(int x) { return x; } } A a; int b = a.method(5);" }
+compile(expect: fail, message: NO_MATCHING_OVERLOAD) { "class A { protected int method(int x) { return x; } } A a; int b = a.method(5);" }
+
 // Casts
 
 // From byte
@@ -938,6 +941,11 @@ compile(expect: fail) { "substring16 a = f(); string f() { return null; }" }
 compile(expect: fail) { "substring16 a = f(); string16 f() { return null; }" }
 compile(expect: fail) { "substring16 a = f(); substring f() { return null; }" }
 compile() { "substring16 a = f(); substring16 f() { return null; }" }
+
+compile() { "string a, c; int b; a = b + c; a = c + b;" }
+
+compile() { "substring x; boolean bbq = x != null;" }
+compile() { "substring16 x; boolean bbq = x != null;" }
 
 compile() { "string a; string b; string16 c; a = b + c;" }
 compile() { "string a; string b; substring c; a = b + c;" }

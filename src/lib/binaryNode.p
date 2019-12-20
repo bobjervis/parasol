@@ -1859,8 +1859,8 @@ public class Binary extends Node {
 					type = _right.type;
 					break;
 				}
-				_left = _left.coerce(compileContext.tree(), stringAddition, false, compileContext);
-				_right = _right.coerce(compileContext.tree(), stringAddition, false, compileContext);
+				_left = _left.coerceStringAdditionOperand(compileContext.tree(), stringAddition, false, compileContext);
+				_right = _right.coerceStringAdditionOperand(compileContext.tree(), stringAddition, false, compileContext);
 				if (_left.deferAnalysis()) {
 					type = _left.type;
 					break;
@@ -2167,6 +2167,11 @@ public class Binary extends Node {
 				case	INTERFACE:
 					break;
 
+				case SUBSTRING:
+				case SUBSTRING16:
+					nodeFlags |= USE_COMPARE_METHOD;
+					break;
+					
 				default:
 					if (_left.type.class <= ClassType)
 						nodeFlags |= USE_COMPARE_METHOD;
@@ -2196,6 +2201,11 @@ public class Binary extends Node {
 				case	POINTER:
 					break;
 
+				case SUBSTRING:
+				case SUBSTRING16:
+					nodeFlags |= USE_COMPARE_METHOD;
+					break;
+					
 				default:
 					if (_left.type.class <= ClassType)
 						nodeFlags |= USE_COMPARE_METHOD;

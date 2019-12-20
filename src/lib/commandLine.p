@@ -251,7 +251,7 @@ public class Command {
 
 };
 
-class Argument<class T> extends BaseArgument {
+public class Argument<class T> extends BaseArgument {
 	public T value;
 	
 	public Argument(ArgumentClass argumentClass, char shortOption, string longOption, string helpText) {
@@ -275,7 +275,7 @@ class BaseArgument {
 		_helpText = helpText;
 	}
 
-	int compare(ref<BaseArgument> other)  {
+	public int compare(ref<BaseArgument> other)  {
 		if (_longOption != null) {
 			if (other._longOption == null)
 				return 1;

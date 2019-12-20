@@ -564,7 +564,7 @@ public class Arena {
 		return result;
 	}
 
-	int countMessages() {
+	public int countMessages() {
 		int count = 0;
 		count += _specialFiles.countMessages();
 		for (int i = 0; i < _types.length(); i++)
@@ -574,7 +574,7 @@ public class Arena {
 		return count;
 	}
 
-	void printMessages() {
+	public void printMessages() {
 		_specialFiles.printMessages(_types);
 		for (int i = 0; i < _importPath.length(); i++)
 			_importPath[i].printMessages(_types);
@@ -586,7 +586,7 @@ public class Arena {
 			_importPath[i].allNodes(_types, callback, arg);
 	}
 
-	void printSymbolTable() {
+	public void printSymbolTable() {
 		_specialFiles.printSymbolTable();
 		printf("\nMain scope:\n");
 		if (_main != null)
@@ -601,7 +601,7 @@ public class Arena {
 		}
 	}
 	
-	void print() {
+	public void print() {
 		printSymbolTable();
 		_specialFiles.print();
 		for (int i = 0; i < _importPath.length(); i++)

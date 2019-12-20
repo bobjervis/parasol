@@ -1299,7 +1299,7 @@ public class Scanner {
 	/*
 	 * Get the next Unicode code point from the input.
 	 */
-	int getc() {
+	public int getc() {
 		if (_lastChar < 0) {	// did we have EOF or an ungetc?
 			if (_lastChar == -1)
 				return -1;		// EOF just keep returning EOF

@@ -1308,7 +1308,7 @@ public class InternalLiteral extends Node {
 		return representedBy(newType);
 	}
 
-	boolean representedBy(ref<Type> newType) {
+	public boolean representedBy(ref<Type> newType) {
 		switch (newType.family()) {
 		case	UNSIGNED_8:
 //			printf("v = %d byte.MAX_VALUE=%d\n", _value, int(byte.MAX_VALUE));
@@ -1491,7 +1491,7 @@ public class Constant extends Node {
 		return false;
 	}
 
-	boolean representedBy(ref<Type> newType) {
+	public boolean representedBy(ref<Type> newType) {
 		long v;
 		boolean status;
 		switch (op()) {
@@ -3632,6 +3632,50 @@ public class Node {
 			type = compileContext.errorType();
 			return this;
 		}
+	}
+
+	public ref<Node> coerceStringAdditionOperand(ref<SyntaxTree> tree, TypeFamily newType, boolean explicitCast, ref<CompileContext> compileContext) {
+		ref<Type> coercedType = compileContext.arena().builtInType(newType);
+		if (type.equals(coercedType))
+			return this;
+		ref<Type> intermediateType;
+		switch (type.family()) {
+		case SIGNED_8:
+		case SIGNED_16:
+		case SIGNED_32:
+		case UNSIGNED_8:
+		case UNSIGNED_16:
+		case UNSIGNED_32:
+			intermediateType = compileContext.arena().builtInType(TypeFamily.SIGNED_64);
+			break;
+
+		case FLOAT_32:
+			intermediateType = compileContext.arena().builtInType(TypeFamily.FLOAT_64);
+			break;
+
+		case BOOLEAN:
+		case SIGNED_64:
+		case UNSIGNED_64:
+		case FLOAT_64:
+		case STRING:
+		case STRING16:
+		case SUBSTRING:
+		case SUBSTRING16:
+			break;
+
+		// 
+		case REF:
+		case POINTER:
+		
+		default:
+			add(MessageId.CANNOT_CONVERT, compileContext.pool());
+			type = compileContext.errorType();
+			return this;
+		}
+		ref<Node> n = this;
+		if (intermediateType != null)
+			n = tree.newCast(intermediateType, n);
+		return tree.newCast(coercedType, n);
 	}
 
 	public ref<Node> attachLiveTempDestructors(ref<SyntaxTree> tree, int liveCount, ref<CompileContext> compileContext) {

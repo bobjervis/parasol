@@ -332,7 +332,7 @@ public class vector<class E, class I> {
 	 *		N < size	If element N is the smallest greater than the key.
 	 *		size		If no element is greater than the key.
 	 */
-	I binarySearchClosestGreater(E key) {
+	public I binarySearchClosestGreater(E key) {
 		int min = 0;
 		int max = int(_length) - 1;
 		int mid = -1;

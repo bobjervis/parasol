@@ -752,14 +752,14 @@ public class byte {
 		return false;
 	}
 	
-	byte toUpperCase() {
+	public byte toUpperCase() {
 		if ((*this).isLowerCase())
 			return byte(*this + ('A' - 'a'));
 		else
 			return *this;
 	}
 	
-	byte toLowerCase() {
+	public byte toLowerCase() {
 		if ((*this).isUpperCase())
 			return byte(*this + ('a' - 'A'));
 		else

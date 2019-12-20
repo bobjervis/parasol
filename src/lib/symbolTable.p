@@ -865,7 +865,7 @@ public class ParameterScope extends Scope {
 		return int(value) - 1;
 	}
 
-	string label() {
+	public string label() {
 		switch (_kind) {
 		case	DEFAULT_CONSTRUCTOR:
 			string enc = enclosing().label();
@@ -1175,13 +1175,13 @@ public class Scope {
 			_key = key;
 		}
 		
-		int compare(SymbolKey other) {
+		public int compare(SymbolKey other) {
 			if (_key.data == null)
 				return other._key.data != null ? -1 : 0;
 			return _key.compare(*other._key);
 		}
 		
-		int hash() {
+		public int hash() {
 			if (_key.length == 1)
 				return _key.data[0];
 			else
