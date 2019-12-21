@@ -1,2 +1,2 @@
-run(filename: scanner_test.p, arguments: src/lib/x86_64.p)
+compile(expect:fail){"interface a { abstract int f(); }"}
 

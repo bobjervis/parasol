@@ -735,7 +735,8 @@ public class Parser {
 				continue;
 			}
 			ref<FunctionDeclaration> func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.ABSTRACT, returnType, id, parameters, loc);
-			block.statement(_tree.newNodeList(func));
+			ref<Unary> u = _tree.newUnary(Operator.PUBLIC, func, location);
+			block.statement(_tree.newNodeList(u));
 		}
 	}
 	

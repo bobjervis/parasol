@@ -790,7 +790,7 @@ public class ISO8859_1Decoder extends Decoder {
 	}
 }
 /**
- * This class implements an Encoder to produce UTF-16 bytes.
+ * This class implements an Encoder to produce ISO 8859-1 bytes.
  *
  */
 public class ISO8859_1Encoder extends Encoder {

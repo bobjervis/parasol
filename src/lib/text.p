@@ -2481,15 +2481,29 @@ class String<class T> {
 		return output, true;
 	}
 }
-
+/**
+ * A Reader for string objects.
+ *
+ * A StringReader can report its length and can be reset.
+ *
+ * A StringReader can unread the entire string at any point.
+ */
 public class StringReader extends Reader {
 	private ref<string> _source;
 	private int _cursor;
-	
+	/**
+	 * Constructor.
+	 *
+	 * The Reader is positioned at the beginning of the
+	 * string and will report EOF when the last character
+	 * of the string is read.
+	 *
+	 * @param source The string to read from.
+	 */
 	public StringReader(ref<string> source) {
 		_source = source;
 	}
-	
+
 	public int _read() {
 		if (_cursor >= _source.length())
 			return -1;
@@ -2514,10 +2528,22 @@ public class StringReader extends Reader {
 		_cursor = 0;
 	}
 }
-
+/**
+ * A Writer for string objects.
+ *
+ * Output written to the Writer will be appended to any text
+ * already in the string. You may alter the string in other
+ * ways between writing data through the StringWriter and the
+ * next output to the string will append the data to whatever
+ * contents the string has at the moment the write takes place.
+ */
 public class StringWriter extends Writer {
 	private ref<string> _output;
-	
+	/**
+	 * Constructor.
+	 *
+	 * @param output A reference to the string object to populate.
+	 */
 	public StringWriter(ref<string> output) {
 		_output = output;
 	}
@@ -2526,11 +2552,32 @@ public class StringWriter extends Writer {
 		_output.append(c);
 	}
 }
-
+/**
+ * A Reader for string objects.
+ *
+ * A StringReader can report its length and can be reset.
+ *
+ * A StringReader can unread the entire string at any point.
+ * Take care when unreading data so that you don't confuse the
+ * char boundaries and potentially corrupt any UTF-16 data in
+ * the byte stream.
+ *
+ * Since a Reader reads bytes, the char's of a {@link string16}
+ * will be read one byte at a time, thus requiring two reads for
+ * each char. EOF will be reported when the last full char is exhausted.
+ */
 public class String16Reader extends Reader {
 	private ref<string16> _source;
 	private int _cursor;
-
+	/**
+	 * Constructor.
+	 *
+	 * The Reader is positioned at the beginning of the
+	 * string and will report EOF when the last character
+	 * of the string is read.
+	 *
+	 * @param source The string to read from.
+	 */
 	public String16Reader(ref<string16> source) {
 		_source = source;
 	}
@@ -2559,12 +2606,31 @@ public class String16Reader extends Reader {
 		_cursor = 0;
 	}
 }
-
+/**
+ * A Writer for string objects.
+ *
+ * Output written to the Writer will be appended to any text
+ * already in the string. You may alter the string in other
+ * ways between writing data through the StringWriter and the
+ * next output to the string will append the data to whatever
+ * contents the string has at the moment the write takes place.
+ *
+ * The first byte of a char is written to a buffer in the Writer
+ * object and does not affect the value of the underlying string. 
+ * Only when the second byte of the char is written will the underlying
+ * string be modified. Use care when mising write's through this
+ * Writer and other manipulations of the underlying string to ensure
+ * that correct text is properly written.
+ */
 public class String16Writer extends Writer {
 	private short _lo;
 	private ref<string16> _output;
-	
-	public String16Writer(ref<string16> output) {
+	/**
+	 * Constructor.
+	 *
+	 * @param output A reference to the string object to populate.
+	 */
+ 	public String16Writer(ref<string16> output) {
 		_output = output;
 		_lo = short.MIN_VALUE;
 	}

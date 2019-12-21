@@ -29,3 +29,9 @@ int get_possible_dup() {
 
 private int should_not_duplicate = 5;
 
+// This is for the interface_test_4
+
+public interface A {
+	int f();
+}
+
