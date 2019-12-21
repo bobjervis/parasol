@@ -15,54 +15,147 @@
  */
 namespace parasol:text;
 
+import parasol:exception.IllegalArgumentException;
 import parasol:exception.IllegalOperationException;
 import native:C;
-
+/**
+ * This class implements a read-only sub-string of a string object.
+ *
+ * A substring relies on some region of memory that must remain alive for the lifetime
+ * of this substring. If the substring is set to be part or all of a string or byte array,
+ * the underlying string or array cannot change size, be deleted or go out of scope.
+ * MOdifying the contents of the string through this object, other substrings or the original
+ * object will be reflected as all share common byte storage for the characters of the string.
+ *
+ * Once defined, you may modify individual bytes in a substring. You may not modify the length
+ * of the substring. You may construct a new substring from an existing one and copy the
+ * new value over the old.
+ *
+ * While all string literals are encoded as UTF-8 and a number of methods assume UTF-8
+ * text, a string is an array of bytes. The documentation of the individual methods indicate 
+ * where UTF-8 encoding is assumed and where other encodings will work.
+ */
 public class substring {
 	pointer<byte> _data;
 	int _length;
-
+	/**
+	 * The default constructor.
+	 *
+	 * By default, the string value is null.
+	 */
 	public substring() {
 	}
-	
+	/**
+	 * A constructor to make this substring a synonym for the argument string.
+	 *
+	 * @param source The string that this substring 
+	 */
 	public substring(string source) {
 		if (source != null) {
 			_data = &source[0];
 			_length = source.length();
 		}
 	}
-
+	/**
+	 * A constructor from a sub-string.
+	 *
+	 * The specificed subrange of characters in the string are set as the value of a contents of the
+	 * source string, beginning at the start offset are copied. The resulting string is never
+	 * null.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * The start is a byte offset. If that offset is in the middle of a multi-byte sequence, the newly
+	 * constructed string will be malformed.
+	 *
+	 * @param source An existing string.
+	 * @param start The index of the first byte of the source string to copy. If this value is
+	 * exactly the same as the length of source, the newly constructed string is the empty string.
+	 *
+	 * @exception IllegalArgumentException Thrown if source is null or the startOffset is negative or 
+	 * greater than the length of source.
+	 */
 	public substring(string source, int start) {
 		if (source != null) {
+			if (unsigned(start) > unsigned(source.length()))
+				throw IllegalArgumentException("start");
 			_data = &source[start];
 			_length = source.length() - start;
-		}
+		} else
+			throw IllegalArgumentException("source");
 	}
-
+	/**
+	 * A constructor from a sub-string.
+	 *
+	 * The specificed subrange of characters in the string are set as the value of a contents of the
+	 * source string, beginning at the start offset are copied. The resulting string is never
+	 * null.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * The start and end are byte offsets. If either offset is in the middle of a multi-byte
+	 * sequence, the newly constructed string will be malformed.
+	 *
+	 * @param source An existing string.
+	 * @param start The index of the first byte of the source string to copy. If this value is
+	 * exactly the same as the length of source, the newly constructed string is the empty string.
+	 * @param end The index of the next byte after the last byte to copy.
+	 *
+	 * @exception IllegalArgumentException Thrown if source is null, the start is negative or 
+	 * greater than the length of source or the end is less than the start or greater
+	 * than the source length.
+	 */
 	public substring(string source, int start, int end) {
 		if (source != null) {
+			if (unsigned(start) > unsigned(source.length()) || start > end || end > source.length())
+				throw IllegalArgumentException("start");
 			_data = &source[start];
 			_length = end - start;
-		}
+		} else
+			throw IllegalArgumentException("source");
 	}
-	
+	/**
+	 * A constructor from a C language string.
+	 *
+	 * C stores strings as null-terminated pointers (a char* in C). In Parasol the corresponding type is
+	 * pointer<byte>. Note that in Parasol, the byte type is unsigned, while the C char type is often treated
+	 * as signed. Parasol has no signed-byte type to use for this.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * The constructor assumes the source encoding does not use the null byte for any multi-byte encodings.
+	 *
+	 * @param cString The C pointer value.	 
+	 */
 	public substring(pointer<byte> cString) {
 		if (cString != null) {
 			_length = C.strlen(cString);
 			_data = cString;
 		}
 	}
-	
+	/**
+	 * A constructor from a byte array.
+	 *
+	 * @param value The byte array.
+	 */
 	public substring(ref<byte[]> value) {
 		_length = value.length();
 		_data = &(*value)[0];
 	}
-	
+	/**
+	 * A constructor from a range of bytes.
+	 *
+	 * @param buffer The address of the first byte of the substring.
+	 * @param length The number of bytes in the substring.
+	 *
+	 * @exception IllegalArgumentException Thrown if buffer is null.
+	 */
 	public substring(pointer<byte> buffer, int len) {
 		if (buffer != null) {
 			_length = len;
 			_data = buffer;
-		}
+		} else
+			throw IllegalArgumentException("buffer");
 	}
 	
 	public pointer<byte> c_str() {
@@ -427,7 +520,7 @@ public class substring {
 	 *	as the number of delimiters in the input string plus one.
 	 *	The delimiter characters are not included in the output.
 	 */
-	string[] split(char delimiter) {
+	public string[] split(byte delimiter) {
 		string[] output;
 		if (_data != null) {
 			int tokenStart = 0;

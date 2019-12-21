@@ -1,2 +1,2 @@
-compile(expect:fail){"interface a { abstract int f(); }"}
+compile() { "void f(byte x) {} f('\0');" }
 
