@@ -159,10 +159,6 @@ public class substring {
 		return 0;
 	}
 	
-	public int count(RegularExpression pattern) {
-		return 0;
-	}
-	
 	public string encrypt(string salt) {
 		return string(*this);
 	}
@@ -415,10 +411,6 @@ public class substring {
 			return _length;
 		else
 			return 0;
-	}
-	
-	public string remove(RegularExpression pattern) {
-		return null;
 	}
 		
 	public void set(int index, byte value) {

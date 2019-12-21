@@ -99,10 +99,12 @@ import parasol:stream;
 import parasol:stream.EOF;
 import parasol:exception.IllegalArgumentException;
 import parasol:exception.IllegalOperationException;
-
 /**
  * This is the preferred representation for text in Parasol.
  *
+ * While all string literals are encoded as UTF-8 and a number of methods assume UTF-8
+ * text, a string is an array of bytes. The documentation of the individual methods indicate 
+ * where UTF-8 encoding is assumed and where other encodings will work.
  */
 public class string extends String<byte> {
 	//** DO NOT MOVE THIS ** THIS MUST BE THE FIRST CONSTRUCTOR ** THE COMPILER RELIES ON THIS PLACEMENT **//
@@ -745,14 +747,14 @@ public class string extends String<byte> {
 		return result;
 	}
 	/**
-	 * This function omplements string compares for the equality and relational operators.
+	 * This function implements string compares for the equality and relational operators.
 	 *
 	 * The function carries out a byte-by-byte comparison of the strings. The null value is equal to
 	 * null and less than any other string value. If two strings are of different lengths and all of the
 	 * bytes of the shorter string match the initial bytes of the longer, then the longer string is
 	 * greater.
 	 *
-	 * In usage as operators, the left hand operand of the is the object and the right-hand operand 
+	 * In usage as operators, the left hand operand is the object and the right-hand operand 
 	 * is passed as the argument value.
 	 *
 	 * @param other The string value to compare this string to.
@@ -832,15 +834,6 @@ public class string extends String<byte> {
 			resize(other._contents.length);
 			C.memcpy(&_contents.data, &other._contents.data, other._contents.length + 1);
 		}
-	}
-	/**
-	 *
-	 * @exception IllegalOperationException Thrown always. This function is not yet implemented
-	 * and calling will fail. 
-	 */	
-	public int count(RegularExpression pattern) {
-		throw IllegalOperationException("not yet implemented");
-		return 0;
 	}
 	/**
 	 *
@@ -977,7 +970,7 @@ public class string extends String<byte> {
 	 * <h4>Encoding:</h4>
 	 *
 	 * Regardless of text encoding used in the string, or even if it is binary
-	 * data, the resulting C string literal will produce the same sequence of
+	 * data, the resulting JSON string literal will produce the same sequence of
 	 * bytes as are contained in this string.
 	 *
 	 * @return The escaped text.
@@ -1326,13 +1319,6 @@ public class string extends String<byte> {
 		return w.printf(format, arguments);
 	}
 	/**
-	 * @exception IllegalOperationException Thrown lways. THis method is not yet implemented.
-	 */
-	public string remove(RegularExpression pattern) {
-		throw IllegalOperationException("not yet implemented");
-		return null;
-	}
-	/**
  	 * Replaces each instance of the match string with the replacement.
 	 *
 	 * @param match The sub-string to look for.
@@ -1510,7 +1496,7 @@ public class string extends String<byte> {
 	 */
 	public substring substr(int first) {
 		if (first < 0 || first > length())
-			throw IllegalArgumentException(string(first));
+			throw IllegalArgumentException("first " + first);
 		return substring(pointer<byte>(&_contents.data) + first, length() - first);
 	}
 	/**
@@ -1526,9 +1512,9 @@ public class string extends String<byte> {
 	 */
 	public substring substr(int first, int last) {
 		if (first < 0 || first > length())
-			throw IllegalArgumentException("first " + string(first));
+			throw IllegalArgumentException("first " + first);
 		if (last < first || last > length())
-			throw IllegalArgumentException("last " + string(last));
+			throw IllegalArgumentException("last " + last);
 		return substring(pointer<byte>(&_contents.data) + first, last - first);
 	}
 	/**
@@ -1818,7 +1804,12 @@ public class string extends String<byte> {
 		return *ref<string>(&result), success;
 	}
 }
-
+/**
+ * This class contains a UTF-16 encoded string.
+ *
+ * While a number of methods assume UTF-16 text, a string16 is an array of char's. The documentation
+ * of the individual methods indicate where UTF-16 encoding is assumed and where other encodings will work.
+ */
 public class string16 extends String<char> {
 	//** DO NOT MOVE THIS ** THIS MUST BE THE FIRST CONSTRUCTOR ** THE COMPILER RELIES ON THIS PLACEMENT **//
 	/*
@@ -1829,28 +1820,65 @@ public class string16 extends String<char> {
 		_contents = other;
 	}
 	//** DO NOT MOVE THIS ** THIS MUST BE THE FIRST CONSTRUCTOR ** THE COMPILER RELIES ON THIS PLACEMENT **//
-
+	/**
+	 * The default constructor.
+	 *
+	 * By default, the string value is null.
+	 */
 	public string16() {
 	}
-
+	/**
+	 * A constructor converting from a string.
+	 *
+	 * The content of the argument is converted from UTF-8 to
+	 * UTF-16.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * Any text in the source string that is not a valid Unicode
+	 * code point is copied as the {@link REPLACEMENT_CHARACTER}.
+	 *
+	 * @param other The UTF-8 string to convert.
+	 */
 	public string16(string other) {
 		if (other == null)
 			return;
+		// Assure that we have at least an empty string and not null
 		resize(0);
-		assert(_contents != null);
 		String16Writer w(this);
 		UTF16Encoder u16(&w);
 
 		u16.encode(other);
 	}
-
+	/**
+	 * A copy constructor.
+	 *
+	 * The contents of the source string are copied. If source is
+	 * null, the newly constructed string is null as well.
+	 *
+	 * @param source An existing string.
+	 */
 	public string16(string16 source) {
 		if (source != null) {
 			resize(source.length());
 			C.memcpy(&_contents.data, &source._contents.data, (source._contents.length + 1) * char.bytes);
 		}
 	}
-
+	/**
+	 * A constructor from a substring object.
+	 *
+	 * If the other string is null, the constructed string will be null as well.
+	 *
+	 * The content of the argument is converted from UTF-8 to
+	 * UTF-16.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * Any text in the source string that is not a valid Unicode
+	 * code point is copied as the {@link REPLACEMENT_CHARACTER}.
+	 *
+	 * @param other The source string to copy.
+	 */
 	public string16(substring other) {
 		if (other.isNull())
 			return;
@@ -1861,19 +1889,38 @@ public class string16 extends String<char> {
 
 		u16.encode(other);
 	}
-
+	/**
+	 * A constructor from a substring object.
+	 *
+	 * If the other string is null, the constructed string will be as well.
+	 *
+	 * @param other The source string to copy.
+	 */
 	public string16(substring16 other) {
 		if (!other.isNull()) {
 			resize(other.length());
 			C.memcpy(&_contents.data, other.c_str(), other.length() * char.bytes);
 		}
 	}
-
+	/**
+	 * A constructor from a range of char's.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * The source char's will be copied unchanged. The data could be binary or any
+	 * text encoding format.
+	 *
+	 * @param buffer The address of the first char to copy.
+	 * @param length The number of char's to copy.
+	 *
+	 * @exception IllegalArgumentException Thrown if buffer is null.
+	 */
 	public string16(pointer<char> buffer, int len) {
 		if (buffer != null) {
 			resize(len);
 			C.memcpy(&_contents.data, buffer, len * char.bytes);
-		}
+		} else
+			throw IllegalArgumentException("buffer");
 	}
 	/**
 	 * Append a Unicode character.
@@ -1897,7 +1944,18 @@ public class string16 extends String<char> {
 		} else
 			append(REPLACEMENT_CHARACTER);
 	}
-
+	/**
+	 * Append a string
+	 *
+	 * The source string is converted from UTF-8.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * If the source string contains improper UTF-8, {@link REPLACEMENT_CHARACTER}
+	 * value are substituted in the copy.
+	 *
+	 * @param other The string to copy.
+	 */
 	public void append(string other) {
 		StringReader sr(&other);
 		UTF8Decoder d(&sr);
@@ -1909,7 +1967,19 @@ public class string16 extends String<char> {
 			append(c);
 		}
 	}
-
+	// TODO: Remove this when cast from string -> String<byte> works.
+	/**
+	 * Append a string
+	 *
+	 * The source string is copied char-for-char.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * Bytes are appended without regard to encodings. If both this string
+	 * and other are well-formed UTF-16, the result will be as well.
+	 *
+	 * @param other The string to copy.
+	 */
 	public void append(string16 other) {
 		int len = other.length();
 		if (len > 0) {
@@ -1918,7 +1988,17 @@ public class string16 extends String<char> {
 			C.memcpy(pointer<char>(&_contents.data) + oldLength, &other._contents.data, (len + 1) * char.bytes);
 		}
 	}
-	
+	/**
+	 * Append a string
+	 *
+	 * The source string is appended to any existing contents..
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * No validation of the UTF-16 is done. The char's are copied without modification.
+	 *
+	 * @param other The string to copy.
+	 */
 	public void append(substring16 other) {
 		if (other._length > 0) {
 			int oldLength = length();
@@ -1926,7 +2006,19 @@ public class string16 extends String<char> {
 			C.memcpy(pointer<char>(&_contents.data) + oldLength, other._data, other._length * char.bytes);
 		}
 	}
-
+	/**
+	 * Append a string
+	 *
+	 * The source string is converted from UTF-8 and appended to any existing
+	 * contents.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * If the source string contains improper UTF-8, {@link REPLACEMENT_CHARACTER}
+	 * values are substituted in the copy.
+	 *
+	 * @param other The string to copy.
+	 */
 	public void append(substring other) {
 		SubstringReader sr(&other);
 		UTF8Decoder d(&sr);
@@ -1938,7 +2030,22 @@ public class string16 extends String<char> {
 			append(c);
 		}
 	}
-
+	/**
+	 * This function implements string compares for the equality and relational operators.
+	 *
+	 * The function carries out a char-by-char comparison of the strings. The null value is equal to
+	 * null and less than any other string value. If two strings are of different lengths and all of the
+	 * char's of the shorter string match the initial char's of the longer, then the longer string is
+	 * greater.
+	 *
+	 * In usage as operators, the left hand operand is the object and the right-hand operand 
+	 * is passed as the argument value.
+	 *
+	 * @param other The string value to compare this string to.
+	 *
+	 * @return A negative value if this string is less than the other, zero if they are equal or
+	 * a positive value if this string is greater than the other.
+	 */
 	public int compare(string16 other) {
 		if (_contents == null) {
 			if (other._contents == null)
@@ -1966,11 +2073,32 @@ public class string16 extends String<char> {
 				return 0;
 		}
 	}
-
+	/**
+	 * Compare this to a UTF-8 string.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * If the argument string contains malformed UTF-8 text, the malformed
+	 * characters will be converted to the {@link REPLACEMENT_CHARACTER}.
+	 *
+	 * @param other The string to compare this with.
+	 *
+	 * @return <0 if this string is less than the other, 0 if they are equal
+	 * and >0 if this string is greater than the other string.
+	 */
 	public int compare(string other) {
 		return compare(string16(other));
 	}
-	
+	/**
+	 * The implementation function of the string assignment operator.
+	 *
+	 * The assignment operator makes the left hand operand the value of this and the
+	 * right-hand operand the argument value.
+	 *
+	 * Assigning a string to itself has no effect.
+	 *
+	 * @param other The string value to copy.
+	 */
 	public void copy(string16 other) {
 		if (other._contents != null) {
 			if (_contents == other._contents)
@@ -1984,7 +2112,22 @@ public class string16 extends String<char> {
 			}
 		}
 	}
-
+	/**
+	 * Escape possibly non-printable characters using JSON escape syntax.
+	 *
+	 * Take the string and convert it to a form that, when
+	 * wrapped with double-quotes would be a well-formed JSON
+	 * string literal token with the same string value as 
+	 * this object.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * Regardless of text encoding used in the string, or even if it is binary
+	 * data, the resulting JSON string literal will produce the same sequence of
+	 * bytes as are contained in this string.
+	 *
+	 * @return The escaped text.
+	 */
 	public string16 escapeJSON() {
 		String<char> s = escapeJSON_T();
 
@@ -2019,26 +2162,39 @@ public class string16 extends String<char> {
 //		print(*this);
 //		print("\n");
 	}
-	/*
-	 *	substring
+	/**
+	 * Identify a sub-string of this string.	
 	 *
-	 *	Return a substring of this string, starting at the character
-	 *	given by first and continuing to the end of the string.
+	 * @param first The first character position of the sub-string.
+	 *
+	 * @return a substring of this string, starting at the character
+	 * given by first and continuing to the end of the string.
+	 *
+	 * @exception IllegalArgumentException Thrown if the first is less than zero or
+	 * greater than the length of the string.
 	 */
-	public string16 substr(int first) {
-		return string16(pointer<char>(&_contents.data) + first, length() - first);
+	public substring16 substr(int first) {
+		if (first < 0 || first > length())
+			throw IllegalArgumentException("first " + first);
+		return substring16(pointer<char>(&_contents.data) + first, length() - first);
 	}
-	/*
-	 *	substring
+	/**
+	 * Identify a sub-string of this string.
 	 *
-	 *	Return a substring of this string, starting at the character
-	 *	given by first and continuing to (but not including) the
-	 *	character given by last.
+	 * Return a substring of this string, starting at the character
+	 * given by first and continuing to (but not including) the
+	 * character given by last.
 	 *
-	 *	TODO: Out of range values should produce exceptions
+	 * @exception IllegalArgumentException Thrown if the first is less than zero or
+	 * greater than the length of the string, if the last is less than the first or
+	 * greater than the length of the string.
 	 */
-	public string16 substr(int first, int last) {
-		return string16(pointer<char>(&_contents.data) + first, last - first);
+	public substring16 substr(int first, int last) {
+		if (first < 0 || first > length())
+			throw IllegalArgumentException("first " + first);
+		if (last < first || last > length())
+			throw IllegalArgumentException("last " + last);
+		return substring16(pointer<char>(&_contents.data) + first, last - first);
 	}
 }
 
@@ -2204,7 +2360,7 @@ class String<class T> {
 	/*
 	 *	unescapeParasol
 	 *
-	 *	Process the input string as if it were a C string literal.
+	 *	Process the input string as if it were a Parasol string literal.
 	 *	Escape sequences are:
 	 *
 	 *		\a		audible bell
@@ -2553,10 +2709,6 @@ public void memDump(address buffer, long length, long startingOffset) {
 private void dumpPtr(address x) {
 	pointer<long> np = pointer<long>(&x);
 	printf("%16.16x", *np);
-}
-
-
-class RegularExpression {
 }
 /**
  * The Unicode code point for the replacement character, used to substitute in a malformed input
