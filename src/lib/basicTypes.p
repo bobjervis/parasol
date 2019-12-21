@@ -126,7 +126,7 @@ public class Location {
 		return offset - loc.offset;
 	}
 
-	boolean isInFile() {
+	public boolean isInFile() {
 		return offset != OUT_OF_FILE.offset;
 	}
 }
