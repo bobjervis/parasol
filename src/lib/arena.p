@@ -217,7 +217,7 @@ public class Arena {
 		return -1;
 	}
 
-	boolean writeHeader(ref<Writer> header) {
+	public boolean writeHeader(ref<Writer> header) {
 		for (ref<Scope>[string].iterator i = _domains.begin(); i.hasNext(); i.next()) {
 			ref<Scope> s = i.get();
 			if (!s.writeHeader(header))
@@ -580,7 +580,7 @@ public class Arena {
 			_importPath[i].printMessages(_types);
 	}
 
-	void allNodes(void(ref<FileStat>, ref<Node>, ref<Commentary>, address) callback, address arg) {
+	public void allNodes(void(ref<FileStat>, ref<Node>, ref<Commentary>, address) callback, address arg) {
 		_specialFiles.allNodes(_types, callback, arg);
 		for (i in _importPath)
 			_importPath[i].allNodes(_types, callback, arg);

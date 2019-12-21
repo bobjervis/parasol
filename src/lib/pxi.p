@@ -134,11 +134,11 @@ public class Pxi {
 			return PxiStatus.SUCCESS;
 	}
 	
-	int sectionCount() {
+	public int sectionCount() {
 		return _entries.length();
 	}
 	
-	int bestSection() {
+	public int bestSection() {
 		int best = -1;
 		int bestPriority = readerMap.length();
 		for (int i = 0; i < _entries.length(); i++) {
@@ -153,7 +153,7 @@ public class Pxi {
 		return best;
 	}
 	
-	ref<Section> readSection(int sectionIndex) {
+	public ref<Section> readSection(int sectionIndex) {
 		for (int j = 0; j < readerMap.length(); j++) {
 			if (_entries[sectionIndex].sectionType == int(readerMap[j].sectionType) &&
 				readerMap[j].sectionReader != null) {
@@ -166,15 +166,15 @@ public class Pxi {
 		return null;
 	}
 
-	boolean close() {
+	public boolean close() {
 		return _pxiFile.close();
 	}
 	
-	runtime.Target sectionType(int i) {
+	public runtime.Target sectionType(int i) {
 		return runtime.Target(_entries[i].sectionType);
 	}
 	
-	SectionEntry entry(int i) {
+	public SectionEntry entry(int i) {
 		return _entries[i];
 	}
 }
