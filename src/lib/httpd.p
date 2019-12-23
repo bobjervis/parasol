@@ -1105,8 +1105,12 @@ public class HttpResponse {
 		_connection.write("\r\n");
 		_connection.flush();
 	}
-
-	ref<net.Connection> connection() {
+	/**
+	 * Get the underlying socket Connection object.
+	 *
+	 * @return A reference to the socket Connection object.
+	 */
+	public ref<net.Connection> connection() {
 		return _connection;
 	}
 	/**
