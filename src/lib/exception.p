@@ -718,12 +718,12 @@ public void hardwareExceptionHandler(ref<HardwareException> info) {
 
 		case 0x300:						// SIGQUIT - dump all threads
 			dumpAllThreads(context);
-			thread.exit(0);
+			thread.exit();
 
 		case 0x2fa:
 		case 0x3fa:						// SIGQUIT sent from inside the house - just dump me.
 			dumpMyThread(context);
-			thread.exit(0);
+			thread.exit();
 
 		case 0x5fa:						// SIGTRAP + SI_TKILL = tkill system call.				
 			throw CRuntimeException(context);

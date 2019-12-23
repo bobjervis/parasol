@@ -24,12 +24,11 @@ import native:C;
  * A substring relies on some region of memory that must remain alive for the lifetime
  * of this substring. If the substring is set to be part or all of a string or byte array,
  * the underlying string or array cannot change size, be deleted or go out of scope.
- * MOdifying the contents of the string through this object, other substrings or the original
+ * Modifying the contents of the string through this object, other substrings or the original
  * object will be reflected as all share common byte storage for the characters of the string.
  *
  * Once defined, you may modify individual bytes in a substring. You may not modify the length
- * of the substring. You may construct a new substring from an existing one and copy the
- * new value over the old.
+ * of the substring. You may construct a new substring from an existing one.
  *
  * While all string literals are encoded as UTF-8 and a number of methods assume UTF-8
  * text, a string is an array of bytes. The documentation of the individual methods indicate 
@@ -48,7 +47,7 @@ public class substring {
 	/**
 	 * A constructor to make this substring a synonym for the argument string.
 	 *
-	 * @param source The string that this substring 
+	 * @param source The string that this substring will describe. 
 	 */
 	public substring(string source) {
 		if (source != null) {
@@ -157,43 +156,100 @@ public class substring {
 		} else
 			throw IllegalArgumentException("buffer");
 	}
-	
+	/**
+	 * Fetch a pointer to the first byte in the substring.
+	 *
+	 * @return The address of the first byte of the substring, or null
+	 * if the substring compares equal to null.
+	 */
 	public pointer<byte> c_str() {
 		return _data;
 	}
-
+	/**
+	 * Center the string.
+	 *
+	 * If the string has more characters than the size parameter, a copy of the
+	 * string is returned.
+	 *
+	 * It is important to note that this is at best a rough scheme for centering
+	 * text that is only suitable for fixed-width fonts and will not accurately
+	 * reflect certain combining forms and special characters.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * The existing string is scanned to count the number of Unicode characters
+	 * encoded in the string using UTF-8. If the string is not valid UTF-8, the
+	 * count will be unreliable.
+	 *
+	 * @param size The size in characters to fill with space characters (0x20).
+	 *
+	 * @return The string centered inside space characters.
+	 */
 	public string center(int size) {
 		return center(size, ' ');
 	}
-	
+	/**
+	 * Center the string.
+	 *
+	 * If the string has more characters than the size parameter, a copy of the
+	 * string is returned.
+	 *
+	 * It is important to note that this is at best a rough scheme for centering
+	 * text that is only suitable for fixed-width fonts and will not accurately
+	 * reflect certain combining forms and special characters.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * The existing string is scanned to count the number of Unicode characters
+	 * encoded in the string using UTF-8. If the string is not valid UTF-8, the
+	 * count will be unreliable.
+	 *
+	 * @param size The size in characters to fill with space characters (0x20).
+	 * @param pad The Unicode character to use on each end to pad short strings..
+
+	 * @return The string centered inside space characters.
+	 */
 	public string center(int size, char pad) {
-		int margin = size - _length;
+		SubstringReader r(this);
+		UTF8Decoder d(&r);
+
+		int characters = d.count();
+
+		int margin = size - characters;
 		if (margin <= 0)
 			return string(*this);
 		string result = "";
 		int half = margin / 2;
 		for (int i = 0; i < half; i++, margin--)
 			result.append(pad);
-//		print("a '");
-//		print(result);
-//		print("'\n");
 		result.append(*this);
-//		print("b '");
-//		print(result);
-//		print("'\n");
 		for (int i = 0; i < margin; i++)
 			result.append(pad);
-//		print("c '");
-//		print(result);
-//		print("'\n");
 		return result;
 	}
-	
+	/**
+	 * Reset the substring to the null value.
+	 */
 	public void clear() {
 		_data = null;
 		_length = 0;
 	}
-	
+	/**
+	 * This function implements substring compares for the equality and relational operators.
+	 *
+	 * The function carries out a byte-by-byte comparison of the strings. The null value is equal to
+	 * null and less than any other string value. If two strings are of different lengths and all of the
+	 * bytes of the shorter string match the initial bytes of the longer, then the longer string is
+	 * greater.
+	 *
+	 * In usage as operators, the left hand operand is the object and the right-hand operand 
+	 * is passed as the argument value.
+	 *
+	 * @param other The string value to compare this string to.
+	 *
+	 * @return A negative value if this string is less than the other, zero if they are equal or
+	 * a positive value if this string is greater than the other.
+	 */
 	public int compare(ref<substring> other) {
 		assert(other != null);
 		if (_data == null) {
@@ -220,7 +276,17 @@ public class substring {
 				return 0;
 		}
 	}
-
+	/**
+	 * Compare this to a string.
+	 *
+	 * This method does a byte-by-byte compare to the string's contents
+	 * exactly as if the argument were first converted to a substring.
+	 *
+	 * @param other The string to compare this with.
+	 *
+	 * @return <0 if this string is less than the other, 0 if they are equal
+	 * and >0 if this string is greater than the other string.
+	 */
 	public int compare(string other) {
 		if (_data == null) {
 			if (other == null)
@@ -247,15 +313,45 @@ public class substring {
 				return 0;
 		}
 	}
-	
-	public int compareIgnoreCase(string other) {
+	/**
+	 * Compare two strings, ignoring differences in lower and upper-case letters.
+	 *
+	 * @param other The string value to compare this string to.
+	 *
+	 * @return A negative value if this string is less than the other, zero if they are equal or
+	 * a positive value if this string is greater than the other.
+	 *
+	 * @exception IllegalOperationException Thrown always. This function is not yet implemented
+	 * and calling will fail. 
+	 */
+	public int compareIgnoreCase(substring other) {
+		throw IllegalOperationException("not yet implemented");
 		return 0;
 	}
-	
+	/**
+	 *
+	 * @exception IllegalOperationException Thrown always. This function is not yet implemented
+	 * and calling will fail. 
+	 */
 	public string encrypt(string salt) {
+		throw IllegalOperationException("not yet implemented");
 		return string(*this);
 	}
-	
+	/**
+	 * Determine whether a string ends with the given suffix.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * The comparison is done byte-by-byte, so if the suffix string begins in the middle
+	 * of a multi-byte sequence, this method will return true for any multi-byte sequence
+	 * that ends with the suffix.
+	 *
+	 * @param suffix The suffix string to look for.
+	 *
+	 * @return true if this string ends with the bytes of the suffix. The method returns false if
+	 * the suffix is longer than this string. The method returns true for any value of this string
+	 * if the suffix is either null or the empty string,.
+	 */
 	public boolean endsWith(string suffix) {
 		if (suffix.length() > _length)
 			return false;
@@ -266,29 +362,64 @@ public class substring {
 				return false;
 		return true;
 	}
-
+	/**
+	 * Compare two strings, ignoring differences in lower and upper-case letters.
+	 *
+	 * @param other The string value to compare this string to.
+	 *
+	 * @return true if the only differences between the strings is the case of letters, false
+	 * otherwise. A null string is still equal to another null string.
+	 *
+	 * @exception IllegalOperationException Thrown always. This function is not yet implemented
+	 * and calling will fail. 
+	 */
 	public boolean equalIgnoreCase(string other) {
+		throw IllegalOperationException("not yet implemented");
 		return false;
 	}
-	/*
-	 *	escapeC
+	/**
+	 * Escape possibly non-printable characters using C escape syntax.
 	 *
-	 *	Take the string and convert it to a form, that when
-	 *	wrapped with double-quotes would be a well-formed C
-	 *	string literal token with the same string value as 
-	 *	this object, but which consists exclusively of 7-bit
-	 *	ASCII characters.  All characters with a high-order bit
-	 *	set are converted to hex escape sequences with two digits
-	 *	each (e.g. \xff).
+	 * Take the string and convert it to a form that, when
+	 * wrapped with double-quotes would be a well-formed C
+	 * string literal token with the same string value as 
+	 * this object, but which consists exclusively of 7-bit
+	 * ASCII characters.  All characters with a high-order bit
+	 * set are converted to hex escape sequences with one or two digits
+	 * each (e.g. \xff).
+	 *
+	 * Two consecutive question marks will escape the first to avoid trigraphs.
+	 *
+	 * Any character that requires a hex escape will also force the next
+	 * character to be escaped if it happens to be a hexadecimal digit. This
+	 * avoids confusing the C compiler about where the first hex escape ends.
+	 * The primary application of this and related 'escape' functions is for
+	 * machine-generated source code, where readabililty is of less concern
+	 * than producing the correct compiled string literal value.
+	 *  
+	 * Note: Because apostrophes are also escaped, this can be used to escape C
+	 * character constants as well as string literals.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * Regardless of text encoding used in the string, or even if it is binary
+	 * data, the resulting C string literal will produce the same sequence of
+	 * bytes as are contained in this string.
+	 *
+	 * @return The escaped text.
 	 */
-	string escapeC() {
+	public string escapeC() {
 		string output;
 
-		if (_data == null)
-			return null;
-		if (_length == 0)
-			return "";
+		if (length() == 0)
+			return *this;
+		boolean escapeNext;
 		for (int i = 0; i < _length; i++) {
+			if (escapeNext) {
+				output.printf("\\x%x", _data[i] & 0xff);
+				if (!_data[i + 1].isHexDigit())
+					escapeNext = false;
+			}
 			switch (_data[i]) {
 			case	'\\':	output.append("\\\\");	break;
 			case	'\a':	output.append("\\a");	break;
@@ -297,99 +428,120 @@ public class substring {
 			case	'\n':	output.append("\\n");	break;
 			case	'\r':	output.append("\\r");	break;
 			case	'\v':	output.append("\\v");	break;
-			default:
-				if (_data[i] >= 0x20 &&
-					_data[i] < 0x7f)
-					output.append(_data[i]);
+			case	'\'':	output.append("\\'");	break;
+			case	'"':	output.append("\\\"");	break;
+			case	'?':
+				if (_data[i + 1] == '?')
+					output.append("\\x3f");
 				else
-					output.printf("\\x%x", _data[i] & 0xff);
-			}
-		}
-		return output;
-	}
-	/*
-	 *	escapeJSON
-	 *
-	 *	Take the string and convert it to a form, that when
-	 *	wrapped with double-quotes would be a well-formed JSON
-	 *	string literal token with the same string value as 
-	 *	this object.  This differs in C-escaping a string in that
-	 *	all well-formed extended Unicode characters are converted to
-	 *	\uNNNNN escape sequences.  Other sub-sequences of characters with
-	 *	high-order bits set will be converted using hex sequences as for
-	 *	escapeC.
-	 */
-	string escapeJSON() {
-		string output;
+					output.append('?');
+				break;
 
-		if (_data == null)
-			return null;
-		if (_length == 0)
-			return "";
-		for (int i = 0; i < _length; i++) {
-			switch (_data[i]) {
-			case	'\"':	output.append("\\\"");	break;
-			case	'\\':	output.append("\\\\");	break;
-			case	'\b':	output.append("\\b");	break;
-			case	'\f':	output.append("\\f");	break;
-			case	'\n':	output.append("\\n");	break;
-			case	'\r':	output.append("\\r");	break;
-			case	'\t':	output.append("\\t");	break;
-			default:
-				output.append(_data[i]);
-			}
-		}
-		return output;
-	}
-	/*
-	 *	escapeParasol
-	 *
-	 *	Take the string and convert it to a form, that when
-	 *	wrapped with double-quotes would be a well-formed Parasol
-	 *	string literal token with the same string value as 
-	 *	this object.  This differs in C-escaping a string in that
-	 *	all well-formed extended Unicode characters are converted to
-	 *	\uNNNNN escape sequences.  Other sub-sequences of characters with
-	 *	high-order bits set will be converted using hex sequences as for
-	 *	escapeC.
-	 */
-	string escapeParasol() {
-		string output;
-
-		if (_data == null)
-			return null;
-		if (_length == 0)
-			return "";
-		for (int i = 0; i < _length; i++) {
-			switch (_data[i]) {
-			case	'\\':	output.append("\\\\");	break;
-			case	'\a':	output.append("\\a");	break;
-			case	'\b':	output.append("\\b");	break;
-			case	'\f':	output.append("\\f");	break;
-			case	'\n':	output.append("\\n");	break;
-			case	'\r':	output.append("\\r");	break;
-			case	'\v':	output.append("\\v");	break;
 			default:
 				if (_data[i] >= 0x20 &&
 					_data[i] < 0x7f)
 					output.append(_data[i]);
 				else {
-					// TODO: Implement \uNNNNN sequence
-					//assert(false);
-					output.printf("\\x%x", _data[i]);
+					output.printf("\\x%x", _data[i] & 0xff);
+					if (_data[i + 1].isHexDigit())
+						escapeNext = true;
 				}
 			}
 		}
 		return output;
 	}
-	/*
-	 *	escapeShell
+	/**
+	 * Escape possibly non-printable characters using JSON escape syntax.
 	 *
-	 *	Take the string and convert it to a form, that when
-	 *	wrapped with double-quotes would be a well-formed shell command-line
-	 *  argument.
+	 * Take the string and convert it to a form that, when
+	 * wrapped with double-quotes would be a well-formed JSON
+	 * string literal token with the same string value as 
+	 * this object.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * Regardless of text encoding used in the string, or even if it is binary
+	 * data, the resulting JSON string literal will produce the same sequence of
+	 * bytes as are contained in this string.
+	 *
+	 * @return The escaped text.
 	 */
-	string escapeShell() {
+	public string escapeJSON() {
+		if (length() == 0)
+			return string(*this);
+		else
+			return string(*this).escapeJSON();
+	}
+	/**
+	 * Escape possibly non-printable characters using Parasol escape syntax.
+	 *
+	 * Take the string and convert it to a form that, when
+	 * wrapped with double-quotes would be a well-formed Parasol
+	 * string literal token with the same string value as 
+	 * this object.
+	 *
+	 * Note: Because apostrophes are also escaped, this can be used to escape Parasol
+	 * character constants as well.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * Regardless of text encoding used in the string, or even if it is binary
+	 * data, the resulting Parasol string literal will produce the same sequence of
+	 * bytes as are contained in this string.
+	 *
+	 * @return The escaped text.
+	 */
+	public string escapeParasol() {
+		string output;
+
+		if (length() == 0)
+			return *this;
+		boolean escapeNext;
+		for (int i = 0; i < _length; i++) {
+			if (escapeNext) {
+				output.printf("\\x%x", _data[i] & 0xff);
+				if (!_data[i + 1].isHexDigit())
+					escapeNext = false;
+			}
+			switch (_data[i]) {
+			case	'\\':	output.append("\\\\");	break;
+			case	'\a':	output.append("\\a");	break;
+			case	'\b':	output.append("\\b");	break;
+			case	'\f':	output.append("\\f");	break;
+			case	'\n':	output.append("\\n");	break;
+			case	'\r':	output.append("\\r");	break;
+			case	'\v':	output.append("\\v");	break;
+			case	'\'':	output.append("\\'");	break;
+			case	'"':	output.append("\\\"");	break;
+			default:
+				if (_data[i] >= 0x20 &&
+					_data[i] < 0x7f)
+					output.append(_data[i]);
+				else {
+					output.printf("\\x%x", _data[i] & 0xff);
+					if (_data[i + 1].isHexDigit())
+						escapeNext = true;
+				}
+			}
+		}
+		return output;
+	}
+	/**
+	 * Escape characters using Shell escape syntax.
+	 *
+	 * Process the contents of the string so that, when quoted on a UNIX or
+	 * Linux shell command-line, the string will be processed as a single 
+	 * command-line parameter with the same value as the contents of this string.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * Regardless of text encoding used in the string, or even if it is binary
+	 * data, the resulting Parasol string literal will produce the same sequence of
+	 * bytes as are contained in this string.
+	 *
+	 * @return The escaped text.
+	 */
+	public string escapeShell() {
 		string output;
 
 		if (_data == null)
@@ -404,74 +556,120 @@ public class substring {
 		}
 		return output;
 	}
-
-
-//	public long fingerprint() {
-//		return 0;
-//	}
-	
+	/**
+	 * Get the byte at a position within the substring.
+	 *
+	 * @param index The index of the byte to get.
+	 *
+	 * @return The value of the byte at position {@code index}.
+	 */
 	public char get(int index) {
 		return _data[index];
 	}
-	
+	/**
+	 * Calculate a 32-bit hash of the string value.
+	 *
+	 * This hash is used in arrays indexed by string type as well as in {@link parasol:types.map map}
+	 * objects whose key type is string.
+	 *
+	 * @return A pseudo-random value derived from the contents of the string.
+	 */	
 	public int hash() {
 		if (_data == null)
 			return 0;
 		if (_length == 1)
 			return _data[0];
-		else
-			return _data[0] + (_data[_length - 1] << 7);
+		else {
+			int sum = 0;
+			for (int i = 0; i < _length; i++)
+				sum += _data[i] << (i & 0x1f);
+			return sum;
+		}
 	}
-	/*
-	 *	indexOf
+	/**
+	 * Find the first instance of a byte value.
 	 *
-	 *	Returns the index of the first occurrance of the byte c
-	 *	in the string.
+	 * Returns the index of the first occurrance of the byte c
+	 * in the string.
 	 *
-	 *	Returns -1 if the byte does not appear in the string
+	 * <h4>Encoding:</h4>
+	 *
+	 * If you want to search for a multi-byte Unicode value, you
+	 * will need to pass the sought-after value as a string.
+	 *
+	 * @param c The byte to search for.
+	 *
+	 * @return The index of the first occurrance of c in the string, or
+	 * -1 if the byte does not appear in the string.
 	 */
 	public int indexOf(byte c) {
 		return indexOf(c, 0);
 	}
-	/*
-	 *	indexOf
+	/**
+	 * Find the first instance of a sub-string.
 	 *
-	 *	Returns the index of the first occurance of the string s
-	 *	in this object.
+	 * Returns the index of the first occurrance of the sub-string s
+	 * in this string.
 	 *
-	 *	Returns -1 if the substring does not appear in the object.
+	 * @param s The value to search for.
+	 *
+	 * @return The index of the first occurrance of s in the string, or
+	 * -1 if the sub-string does not appear in the string.
 	 */
 	public int indexOf(string s) {
 		return indexOf(s, 0);
 	}
-	/*
-	 *	indexOf
+	/**
+	 * Find the first instance, after a starting point, of a byte value.
 	 *
-	 *	Returns the index of the first occurrance of the byte c
-	 *	in the string, starting with the index given by start.
+	 * Returns the index of the first occurrance of the byte c
+	 * in the string after the start index, inclusive.
 	 *
-	 *	Returns -1 if the byte does not appear in the string
+	 * If you want to search for a multi-byte Unicode value, you
+	 * will need to pass the sought-after value as a string.
+	 *
+	 * @param c The byte to search for.
+	 * @param start The index of this string at which to start searching.
+	 *
+	 * @return The index of the first occurrance of c in the string after
+	 * start, or -1 if the byte does not appear in the string after start.
+	 *
+	 * @exception IllegalArgumentException Thrown if the index is less than zero or
+	 * greater than the length of the string.
 	 */
 	public int indexOf(byte c, int start) {
+		int len = length();
+		if (start < 0 || start > len)
+			throw IllegalArgumentException(string(start));
 		if (_data == null)
 			return -1;
-		for (int i = start; i < _length; i++)
+		for (int i = start; i < len; i++)
 			if (_data[i] == c)
 				return i;
 		return -1;
 	}
-	/*
-	 *	indexOf
+	/**
+	 * Find the first instance, after a starting point, of a sub-string.
 	 *
-	 *	Returns the index of the first occurrance of the string s
-	 *	in the string, starting with the index given by start.
+	 * Returns the index of the first occurrance of the sub-string s
+	 * in the string after the start index, inclusive.
 	 *
-	 *	Returns -1 if the byte does not appear in the string
+	 * @param s The value to search for.
+	 * @param start The index of this string at which to start searching.
+	 *
+	 * @return The index of the first occurrance of s in the string after
+	 * start, or -1 if the sub-string does not appear in the string after start.
+	 *
+	 * @exception IllegalArgumentException Thrown if the index is less than zero or
+	 * greater than the length of the string.
 	 */
 	public int indexOf(string s, int start) {
+		int len = length();
+		if (start < 0 || start > len)
+			throw IllegalArgumentException(string(start));
 		if (_data == null)
 			return -1;
-		int tries =  1 + _length - s.length() - start;
+		int tries =  1 + len - s.length() - start;
 		for (int i = 0; i < tries; i++){
 			boolean matched = true;
 			for (int j = 0; j < s.length(); j++) {
@@ -485,11 +683,30 @@ public class substring {
 		}
 		return -1;
 	}
-	
+	/**
+	 * Return whether this substirng is null.
+	 *
+	 * @return true if the substring value is null, false otherwise.
+	 */
 	public boolean isNull() {
 		return _data == null;
 	}
-
+	/**
+	 * Find the last instance of a byte value.
+	 *
+	 * Returns the index of the last occurrance of the byte c
+	 * in the string.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * If you want to search for a multi-byte Unicode value, you
+	 * will need to pass the sought-after value as a string.
+	 *
+	 * @param c The byte to search for.
+	 *
+	 * @return The index of the last occarrance of c in the string, or
+	 * -1 if the byte does not appear in the string.
+	 */
 	public int lastIndexOf(byte c) {
 		if (_data != null) {
 			for (int i = _length - 1; i >= 0; i--)
@@ -498,27 +715,49 @@ public class substring {
 		}
 		return -1;
 	}
-	
+	/**
+	 * Get the length of the ubstring.
+	 *
+	 * @return the length of the substring in bytes, or 0 if the value is null.
+	 */
 	public int length() {
 		if (_data != null)
 			return _length;
 		else
 			return 0;
 	}
-		
+	/**
+	 * Set the value of a byte in the string.
+	 *
+	 * @param index The index of the byte to set.
+	 * @param value The new value to set.
+	 *
+	 * @exception IllegalArgumentException Thrown if the start is less than zero or
+	 * greater than or equal to the length of the string.
+	 */
 	public void set(int index, byte value) {
+		if (index < 0 || index > length())
+			throw IllegalArgumentException(string(index));
 		_data[index] = value;
 	}
-	/*
-	 *	split
+	/**
+	 * Split a string into parts.
 	 *
-	 *	Splits a string into one or more sub-strings and
-	 *	stores them in the output vector.  If no instances of the
-	 *	delimiter character are present, then the vector is
-	 *	filled with a single element that is the entire
-	 *	string.  The output vector always has as many elements
-	 *	as the number of delimiters in the input string plus one.
-	 *	The delimiter characters are not included in the output.
+	 * Splits a string into one or more sub-strings and
+	 * stores them in the output vector. If no instances of the
+	 * delimiter character are present, then the vector is
+	 * filled with a single element that is the entire
+	 * string. The output vector always has as many elements
+	 * as the number of delimiters in the input string plus one.
+	 * The delimiter characters are not included in the output.
+	 *
+	 * If two or more delimiters are adjacent, then the intervening
+	 * element of the output is the empty string.
+	 *
+	 * @param delimiter The delimiter byte to split the string.
+	 *
+	 * @return An array of one or more strings that are the delimited
+	 * parts of the original.
 	 */
 	public string[] split(byte delimiter) {
 		string[] output;
@@ -538,58 +777,78 @@ public class substring {
 			output.resize(1);
 		return output;
 	}
-	/*
-	 * startsWith - matches a prefix against the target string. If this string is a byte-by-byte match for the other
-	 * string, this method returns true. If this string is null, this method returns false, regardless of the value of the
-	 * prefix. 
+	/**
+	 * Match a prefix.
+	 *
+	 * Both the prefix value null and the empty string match all possible strings, except
+	 * null.
+	 *
+	 * @param prefix The prefix string to look for.
+	 *
+ 	 * @return true if the initiall bytes of the string match, byte-for-byte, the prefix,
+	 * false otherwise.
 	 */
-	public boolean startsWith(string prefix) {
+	public boolean startsWith(substring prefix) {
 		if (_data == null)
 			return false;
 		// If the prefix is longer, it can't match
 		if (_length < prefix.length())
 			return false;
 		// Check the first N bytes (N = the length of the shorter, the prefix).
-		for (int i = 0; i < prefix.length(); i++) {
+		for (int i = 0; i < prefix._length; i++) {
 			if (_data[i] != prefix[i])
 				return false;
 		}
 		return true;
 	}
-
-
-	public boolean startsWith(substring prefix) {
-		if (_data == null)
-			return false;
-		if (prefix._length > _length)
-			return false;
-		for (int i = 0; i < prefix._length; i++)
-			if (prefix._data[i] != _data[i])
-				return false;
-		return true;
-	}
-	/*
-	 *	substring
+	/**
+	 * Identify a sub-string of this string.	
 	 *
-	 *	Return a substring of this string, starting at the character
-	 *	given by first and continuing to the end of the string.
+	 * @param first The first character position of the sub-string.
+	 *
+	 * @return a substring of this string, starting at the character
+	 * given by first and continuing to the end of the string.
+	 *
+	 * @exception IllegalArgumentException Thrown if the first is less than zero or
+	 * greater than the length of the string.
 	 */
 	public substring substr(int first) {
+		if (first < 0 || first > length())
+			throw IllegalArgumentException("first " + first);
 		return this.substr(first, _length);
 	}
-	/*
-	 *	substring
+	/**
+	 * Identify a sub-string of this string.
 	 *
-	 *	Return a substring of this string, starting at the character
-	 *	given by first and continuing to (but not including) the
-	 *	character given by last.
+	 * Return a substring of this string, starting at the character
+	 * given by first and continuing to (but not including) the
+	 * character given by last.
 	 *
-	 *	TODO: Out of range values should produce exceptions
+	 * @exception IllegalArgumentException Thrown if the first is less than zero or
+	 * greater than the length of the string, if the last is less than the first or
+	 * greater than the length of the string.
 	 */
 	public substring substr(int first, int last) {
+		if (first < 0 || first > length())
+			throw IllegalArgumentException("first " + first);
+		if (last < first || last > length())
+			throw IllegalArgumentException("last " + last);
 		return substring(_data + first, last - first);
 	}
-	
+	/**
+	 * Convert the string to lower case.
+	 *
+	 * This conversion only applies to the ASCII letters, not to all Unicode 
+	 * characters. Any byte that is not an upper-case ASCII letter is unchanged.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * Converting upper-case to lower-case letters across all Unicode characters
+	 * is complex and this method does not try to do that. 
+	 *
+	 * @return The string with all upper-case ASCII letter converted to lower-case.
+	 * The null value is returned as null.
+	 */
 	public string toLowerCase() {
 		if (_data == null)
 			return null;
@@ -604,7 +863,20 @@ public class substring {
 		}
 		return out;
 	}
-	
+	/**
+	 * Convert the string to upper case.
+	 *
+	 * This conversion only applies to the ASCII letters, not to all Unicode 
+	 * characters. Any byte that is not a lower-case ASCII letter is unchanged.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * Converting lower-case to upper-case letters across all Unicode characters
+	 * is complex and this method does not try to do that. 
+	 *
+	 * @return The string with all lower-case ASCII letter converted to upper-case.
+	 * The null value is returned as null.
+	 */
 	public string toUpperCase() {
 		if (_data == null)
 			return null;
@@ -619,7 +891,22 @@ public class substring {
 		}
 		return out;
 	}
-	
+	/**
+	 * Trim white-space from the ends of a string.
+	 *
+	 * Any byte for which the {@link byte.isSpace} method returns true
+	 * is considered white space. White space in the interior of the string
+	 * is retained, but any number of white space characters at either end of
+	 * the string is removed.
+	 *
+	 * <h4>Encoding:</h4>
+	 *
+	 * There are a number of Unicode characters beyond the ASCII range that
+	 * are alternative white space. They are not recognized and are not trimmed.
+	 *
+	 * @return The string with any ASCII white space bytes at either end
+	 * of the string removed. The null value is returned as null.
+	 */
 	public substring trim() {
 		if (_data == null)
 			return substring();
@@ -634,28 +921,32 @@ public class substring {
 		}
 		return substring(&""[0], 0);
 	}
-	/*
-	 *	unescapeC
+	/**
+	 * Un-escape a text string according to the C string literal syntax
 	 *
-	 *	Process the input string as if it were a C string literal.
-	 *	Escape sequences are:
+	 * Process the input string as if it were a C string literal.
 	 *
-	 *		\a		audible bell
-	 *		\b		backspace
-	 *		\f		form-feed
-	 *		\n		newline
-	 *		\r		carriage return
-	 *		\t		tab
-	 *		\v		vertical tab
-	 *		\xHH	hex escape
-	 *		\0DDD	octal escape
-	 *		\\		\
+	 * Escape sequences are:
 	 *
-	 *	RETURNS
-	 *		false	If the sequence is not well-formed.
-	 *		string	The converted string (if the boolean is true).
+	 * <table>
+	 *		<tr><td>\\a</td><td>audible bell</td></tr>
+	 *		<tr><td>\\b</td><td>backspace</td></tr>
+	 *		<tr><td>\\f</td><td>form-feed</td></tr>
+	 *		<tr><td>\\n</td><td>newline</td></tr>
+	 *		<tr><td>\\r</td><td>carriage return</td></tr>
+	 *		<tr><td>\\t</td><td>tab</td></tr>
+	 *		<tr><td>\\v</td><td>vertical tab</td></tr>
+	 *		<tr><td>\\?</td><td>question mark</td></tr>
+	 *		<tr><td>\\xH</td><td>hex escape</td></tr>
+	 *		<tr><td>\\0DDD</td><td>octal escape</td></tr>
+	 *		<tr><td>\\\\</td><td>\\</td></tr>
+	 * </table>
+	 *
+	 * @return The converted string, or an unspecified value if the second return expression is false.
+	 * @return true if the string could be unescaped (the string conforms to C literal syntax), false
+	 * otherwise.
 	 */
-	string,boolean unescapeC() {
+	public string, boolean unescapeC() {
 		string output;
 		
 		if (_data == null)
@@ -677,6 +968,7 @@ public class substring {
 					case 'r':	output.append('\r');	break;
 					case 't':	output.append('\t');	break;
 					case 'v':	output.append('\v');	break;
+					case '?':	output.append('?');		break;
 					case 'x':
 					case 'X':
 						i++;;
@@ -722,27 +1014,29 @@ public class substring {
 		}
 		return output, true;
 	}
-	/*
-	 *	unescapeJSON
+	/**
+	 * Un-escape a text string according to JSON string literal syntax
 	 *
-	 *	Process the input string as if it were a C string literal.
-	 *	Escape sequences are:
+	 * Process the input string as if it were a JSON string literal.
+	 * Escape sequences are:
 	 *
-	 *		\b		backspace
-	 *		\f		form-feed
-	 *		\n		newline
-	 *		\r		carriage return
-	 *		\t		tab
-	 *		\uNNNN	Unicode code point
-	 *		\\		\
-	 *		\/		/
-	 *		\"		"
+	 * <table>
+	 *		<tr><td>\\b</td><td>backspace</td></tr>
+	 *		<tr><td>\\f</td><td>form-feed</td></tr>
+	 *		<tr><td>\\n</td><td>newline</td></tr>
+	 *		<tr><td>\\r</td><td>carriage return</td></tr>
+	 *		<tr><td>\\t</td><td>tab</td></tr>
+	 *		<tr><td>\\uNNNN</td><td>Unicode code point</td></tr>
+	 *		<tr><td>\\\\</td><td>\\</td></tr>
+	 *		<tr><td>\\/</td><td>/</td></tr>
+	 *		<tr><td>\\"</td><td>"</td></tr>
+	 * </table>
 	 *
-	 *	RETURNS
-	 *		false	If the sequence is not well-formed.
-	 *		string	The converted string (if the boolean is true).
+	 * @return The converted string, or an unspecified value if the second return expression is false.
+	 * @return true if the string could be unescaped (the string conforms to JSON syntax), false
+	 * otherwise.
 	 */
-	string, boolean unescapeJSON() {
+	public string, boolean unescapeJSON() {
 		string output;
 		
 		if (_data == null)
@@ -798,29 +1092,31 @@ public class substring {
 		}
 		return output, true;
 	}
-	/*
-	 *	unescapeParasol
+	/**
+	 * Un-escape a text string according to Parasol string literal syntax
 	 *
-	 *	Process the input string as if it were a C string literal.
-	 *	Escape sequences are:
+	 * Process the input string as if it were a Parasol string literal.
+	 * Escape sequences are:
 	 *
-	 *		\a		audible bell
-	 *		\b		backspace
-	 *		\f		form-feed
-	 *		\n		newline
-	 *		\r		carriage return
-	 *		\t		tab
-	 *		\uNNNN	Unicode code point
-	 *		\v		vertical tab
-	 *		\xHH	hex escape
-	 *		\0DDD	octal escape
-	 *		\\		\
+	 * <table>
+	 *		<tr><td>\\a</td><td>audible bell</td></tr>
+	 *		<tr><td>\\b</td><td>backspace</td></tr>
+	 *		<tr><td>\\f</td><td>form-feed</td></tr>
+	 *		<tr><td>\\n</td><td>newline</td></tr>
+	 *		<tr><td>\\r</td><td>carriage return</td></tr>
+	 *		<tr><td>\\t</td><td>tab</td></tr>
+	 *		<tr><td>\\uNNNN</td><td>Unicode code point</td></tr>
+	 *		<tr><td>\\v</td><td>vertical tab</td></tr>
+	 *		<tr><td>\\xHH</td><td>hex escape</td></tr>
+	 *		<tr><td>\\0DDD</td><td>octal escape</td></tr>
+	 *		<tr><td>\\\\</td><td>\\</td></tr>
+	 * </table>
 	 *
-	 *	RETURNS
-	 *		false	If the sequence is not well-formed.
-	 *		string	The converted string (if the boolean is true).
+	 * @return The converted string, or an unspecified value if the second return expression is false.
+	 * @return true if the string could be unescaped (the string conforms to Parasol syntax), false
+	 * otherwise.
 	 */
-	string, boolean unescapeParasol() {
+	public string, boolean unescapeParasol() {
 		string output;
 		
 		if (_data == null)
@@ -893,30 +1189,78 @@ public class substring {
 		return output, true;
 	}
 }
-
+/**
+ * This class implements a read-only sub-string of a string object.
+ *
+ * A substring relies on some region of memory that must remain alive for the lifetime
+ * of this substring. If the substring is set to be part or all of a string16 or char array,
+ * the underlying string or array cannot change size, be deleted or go out of scope.
+ * Modifying the contents of the string through this object, other substring16s or the original
+ * object will be reflected as all share common char storage for the characters of the string.
+ *
+ * Once defined, you may modify individual char's in a substring16. You may not modify the length
+ * of the substring16. You may construct a new substring16 from an existing one.
+ *
+ * While a number of methods assume UTF-16 text, a string16 is an array of char's. The
+ * documentation of the individual methods indicate where UTF-16 encoding is assumed and
+ * where other encodings will work.
+ */
 public class substring16 {
 	pointer<char> _data;
 	int _length;
-
+	/**
+	 * The default constructor.
+	 *
+	 * By default, the string value is null.
+	 */
 	public substring16() {
 	}
-
+	/**
+	 * A constructor to make this substring a synonym for the argument string.
+	 *
+	 * @param source The string16 object that this substring16 will describe.
+	 */
 	public substring16(string16 source) {
 		if (source != null) {
 			_data = source.c_str();
 			_length = source.length();
 		}
 	}
-
+	/**
+	 * A constructor from a range of char's.
+	 *
+	 * @param data The address of the first char of the substring.
+	 * @param length The number of char's in the substring.
+	 */
 	public substring16(pointer<char> data, int length) {
 		_data = data;
 		_length = length;
 	}
-
+	/**
+	 * Fetch a pointer to the first char in the substring.
+	 *
+	 * @return The address of the first char of the substring, or null
+	 * if the substring compares equal to null.
+	 */
 	public pointer<char> c_str() {
 		return _data;
 	}
-
+	/**
+	 * This function implements substring16 compares for the equality and relational operators.
+	 *
+	 * The function carries out a char-by-char comparison of the strings. The null value is equal to
+	 * null and less than any other string value. If two strings are of different lengths and all of the
+	 * char's of the shorter string match the initial char's of the longer, then the longer string is
+	 * greater.
+	 *
+	 * In usage as operators, the left hand operand is the object and the right-hand operand 
+	 * is passed as the argument value.
+	 *
+	 * @param other The string value to compare this string to.
+	 *
+	 * @return A negative value if this string is less than the other, zero if they are equal or
+	 * a positive value if this string is greater than the other.
+	 */
 	public int compare(ref<substring16> other) {
 		assert(other != null);
 		if (_data == null) {
@@ -943,7 +1287,17 @@ public class substring16 {
 				return 0;
 		}
 	}
-
+	/**
+	 * Compare this to a string.
+	 *
+	 * This method does a char-by-char compare to the string's contents
+	 * exactly as if the argument were first converted to a substring16.
+	 *
+	 * @param other The string to compare this with.
+	 *
+	 * @return <0 if this string is less than the other, 0 if they are equal
+	 * and >0 if this string is greater than the other string.
+	 */
 	public int compare(string16 other) {
 		if (_data == null) {
 			if (other == null)
@@ -970,30 +1324,71 @@ public class substring16 {
 				return 0;
 		}
 	}
-
+	/**
+	 * Compare this to a string.
+	 *
+	 * This method does a char-by-char compare to the string's contents
+	 * exactly as if the argument were first converted to a string16.
+	 *
+	 * @param other The string to compare this with.
+	 *
+	 * @return <0 if this string is less than the other, 0 if they are equal
+	 * and >0 if this string is greater than the other string.
+	 */
 	public int compare(string other) {
 		return compare(string16(other));
 	}	
+	/**
+	 * Return whether this substirng is null.
+	 *
+	 * @return true if the substring value is null, false otherwise.
+	 */
 	public boolean isNull() {
 		return _data == null;
 	}
-
+	/**
+	 * Get the length of the ubstring.
+	 *
+	 * @return the length of the substring in char's, or 0 if the value is null.
+	 */
 	public int length() {
 		if (_data != null)
 			return _length;
 		else
 			return 0;
 	}
-	
+	/**
+	 * Set the value of a byte in the string.
+	 *
+	 * @param index The index of the byte to set.
+	 * @param value The new value to set.
+	 *
+	 * @exception IllegalArgumentException Thrown if the start is less than zero or
+	 * greater than or equal to the length of the string.
+	 */
 	public void set(int index, char value) {
 		_data[index] = value;
 	}
 }
-
+/**
+ * A Reader for substring objects.
+ *
+ * A SubstringReader can report its length and can be reset.
+ *
+ * A SubstringReader can unread the entire substring at any point.
+ */
 public class SubstringReader extends Reader {
 	private ref<substring> _source;
 	private int _cursor;
-	
+	/**
+	 * Constructor.
+	 *
+	 * The Reader is positioned at the beginning of the
+	 * string and will report EOF when the last character
+	 * of the string is read.
+	 *
+	 * @param source The string to read from.
+	 */
 	public SubstringReader(ref<substring> source) {
 		_source = source;
 	}
@@ -1022,11 +1417,24 @@ public class SubstringReader extends Reader {
 		_cursor = 0;
 	}
 }
-
+/**
+ * A Writer for substring objects.
+ *
+ * This Writer is initially positioned at the beginning of the
+ * substring. If you write more bytes than the length of the
+ * substring, the write operation throws an {@link IllegalOperationException}.
+ *
+ * Modifying the value of the substring in between write operations
+ * can produce unexpected results.
+ */
 public class SubstringWriter extends Writer {
 	private ref<substring> _output;
 	private int _index;
-	
+	/**
+	 * Constructor.
+	 *
+	 * @param output A reference to the substring object to populate.
+	 */
 	public SubstringWriter(ref<substring> output) {
 		_output = output;
 	}
@@ -1038,11 +1446,25 @@ public class SubstringWriter extends Writer {
 			throw IllegalOperationException("overflow");
 	}
 }
-
+/**
+ * A Reader for substring16 objects.
+ *
+ * A SubstringReader can report its length and can be reset.
+ *
+ * A SubstringReader can unread the entire substring16 at any point.
+ */
 public class Substring16Reader extends Reader {
 	private ref<substring16> _source;
 	private int _cursor;
-
+	/**
+	 * Constructor.
+	 *
+	 * The Reader is positioned at the beginning of the
+	 * string and will report EOF when the last character
+	 * of the string is read.
+	 *
+	 * @param source The string to read from.
+	 */
 	public Substring16Reader(ref<substring16> source) {
 		_source = source;
 	}
@@ -1071,12 +1493,32 @@ public class Substring16Reader extends Reader {
 		_cursor = 0;
 	}
 }
-
+/**
+ * A Writer for substring objects.
+ *
+ * This Writer is initially positioned at the beginning of the
+ * substring. If you write more bytes than the length of the
+ * substring, the write operation throws an {@link IllegalOperationException}.
+ *
+ * Modifying the value of the substring in between write operations
+ * can produce unexpected results.
+ *
+ * The first byte of a char is written to a buffer in the Writer
+ * object and does not affect the value of the underlying string. 
+ * Only when the second byte of the char is written will the underlying
+ * string be modified. Use care when mixing write's through this
+ * Writer and other manipulations of the underlying string to ensure
+ * that correct text is properly written.
+ */
 public class Substring16Writer extends Writer {
 	private short _lo;
 	private ref<substring16> _output;
 	private int _index;
-	
+	/**
+	 * Constructor.
+	 *
+	 * @param output A reference to the substring16 object to populate.
+	 */
 	public Substring16Writer(ref<substring16> output) {
 		_output = output;
 		_lo = short.MIN_VALUE;

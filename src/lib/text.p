@@ -917,47 +917,7 @@ public class string extends String<byte> {
 	 * @return The escaped text.
 	 */
 	public string escapeC() {
-		string output;
-
-		if (length() == 0)
-			return *this;
-		pointer<byte> cp = pointer<byte>(&_contents.data);
-		boolean escapeNext;
-		for (int i = 0; i < _contents.length; i++) {
-			if (escapeNext) {
-				output.printf("\\x%x", cp[i] & 0xff);
-				if (!cp[i + 1].isHexDigit())
-					escapeNext = false;
-			}
-			switch (cp[i]) {
-			case	'\\':	output.append("\\\\");	break;
-			case	'\a':	output.append("\\a");	break;
-			case	'\b':	output.append("\\b");	break;
-			case	'\f':	output.append("\\f");	break;
-			case	'\n':	output.append("\\n");	break;
-			case	'\r':	output.append("\\r");	break;
-			case	'\v':	output.append("\\v");	break;
-			case	'\'':	output.append("\\'");	break;
-			case	'"':	output.append("\\\"");	break;
-			case	'?':
-				if (cp[i + 1] == '?')
-					output.append("\\x3f");
-				else
-					output.append('?');
-				break;
-
-			default:
-				if (cp[i] >= 0x20 &&
-					cp[i] < 0x7f)
-					output.append(cp[i]);
-				else {
-					output.printf("\\x%x", cp[i] & 0xff);
-					if (cp[i + 1].isHexDigit())
-						escapeNext = true;
-				}
-			}
-		}
-		return output;
+		return substring(*this).escapeC();
 	}
 	/**
 	 * Escape possibly non-printable characters using JSON escape syntax.
@@ -1000,40 +960,10 @@ public class string extends String<byte> {
 	 * @return The escaped text.
 	 */
 	public string escapeParasol() {
-		string output;
-
 		if (length() == 0)
 			return *this;
-		pointer<byte> cp = pointer<byte>(&_contents.data);
-		boolean escapeNext;
-		for (int i = 0; i < _contents.length; i++) {
-			if (escapeNext) {
-				output.printf("\\x%x", cp[i] & 0xff);
-				if (!cp[i + 1].isHexDigit())
-					escapeNext = false;
-			}
-			switch (cp[i]) {
-			case	'\\':	output.append("\\\\");	break;
-			case	'\a':	output.append("\\a");	break;
-			case	'\b':	output.append("\\b");	break;
-			case	'\f':	output.append("\\f");	break;
-			case	'\n':	output.append("\\n");	break;
-			case	'\r':	output.append("\\r");	break;
-			case	'\v':	output.append("\\v");	break;
-			case	'\'':	output.append("\\'");	break;
-			case	'"':	output.append("\\\"");	break;
-			default:
-				if (cp[i] >= 0x20 &&
-					cp[i] < 0x7f)
-					output.append(cp[i]);
-				else {
-					output.printf("\\x%x", cp[i] & 0xff);
-					if (cp[i + 1].isHexDigit())
-						escapeNext = true;
-				}
-			}
-		}
-		return output;
+		else
+			return substring(*this).escapeParasol();
 	}
 	/**
 	 * Escape characters using Shell escape syntax.
@@ -2618,7 +2548,7 @@ public class String16Reader extends Reader {
  * The first byte of a char is written to a buffer in the Writer
  * object and does not affect the value of the underlying string. 
  * Only when the second byte of the char is written will the underlying
- * string be modified. Use care when mising write's through this
+ * string be modified. Use care when mixing write's through this
  * Writer and other manipulations of the underlying string to ensure
  * that correct text is properly written.
  */

@@ -2348,13 +2348,19 @@ public class Loop extends Node {
 	}	
 
 	public ref<Loop> clone(ref<SyntaxTree> tree) {
-		assert(false);
-		return null;
+		ref<Loop> lp = ref<Loop>(tree.newLoop(location()).finishClone(this, tree.pool()));
+		lp._declarator = _declarator.clone(tree);
+		lp._aggregate = _aggregate.clone(tree);
+		lp._body = _body.clone(tree);
+		return lp;		
 	}
 
 	public ref<Loop> cloneRaw(ref<SyntaxTree> tree) {
-		assert(false);
-		return null;
+		ref<Loop> lp = ref<Loop>(tree.newLoop(location()));
+		lp._declarator = _declarator.cloneRaw(tree);
+		lp._aggregate = _aggregate.cloneRaw(tree);
+		lp._body = _body.cloneRaw(tree);
+		return lp;
 	}
 
 	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {

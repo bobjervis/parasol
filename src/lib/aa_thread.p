@@ -36,6 +36,8 @@ import native:windows.GetLastError;
 import native:linux;
 import native:C;
 import parasol:exception.HardwareException;
+import parasol:exception.IllegalArgumentException;
+import parasol:exception.IllegalOperationException;
 import parasol:runtime;
 import parasol:process;
 import parasol:international.Locale;
@@ -59,6 +61,7 @@ private monitor class ActiveThreads {
 
 	void delist(ref<Thread> oldThread) {
 		_activeThreads[oldThread._index] = null;
+		oldThread._index = -1;
 	}
 
 	void activeThreads(ref<ref<Thread>[]> a) {
@@ -78,20 +81,39 @@ private monitor class ActiveThreads {
 }
 
 private ActiveThreads threads;
-
+/**
+ * Fetch the set of active Parasol threads.
+ *
+ * Threads that were initiated by C code and which have not interacted with
+ * the Parasol runtime are not included.
+ *
+ * @threading Note that under the current implementation, the returned Thread
+ * objects may be deleted while these references are live. The Thread object
+ * should be guarded in situations like this to avoid races.
+ *
+ * In general, this call is only safe after a call to {@link suspendAllOtherThreads}
+ * and before resuming any of those threads.
+ *
+ * @return An array of references to Threads.
+ */
 public ref<Thread>[] getActiveThreads() {
 	ref<Thread>[] a;
 
 	threads.activeThreads(&a);
 	return a;
 }
-/*
- * This is a hacky debug API to dump all threads. It can deadlock, if one of the other threads is inside, say, a memory allocator.
+/**
+ * Suspend all other threads.
+ *
+ * @threading This can cause all sorts of problems if one of the suspended threads is
+ * holding locks, such as in a memory allocator.
  */
 public void suspendAllOtherThreads() {
 	threads.suspendAllOtherThreads();
 }
-
+/**
+ * This class holds per-thread data.
+ */
 public class Thread {
 	public ref<Locale> locale;
 	private string _name;
@@ -102,7 +124,18 @@ public class Thread {
 	private address _parameter;
 	private address _context;
 	int _index;
-	
+	/**
+	 * The default constructor.
+	 *
+	 * The Thread object is created in a dormant state before any
+	 * operating system initialization. As a result, a Parasol program
+	 * can create millions of such objects, but could not start them all.
+	 *
+	 * A THread object that has never been started will not appear in the list
+	 * of active Thread's until the thread has started executing.
+	 *
+	 * The thread has no name assigned to it.
+	 */
 	public Thread() {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN)
 			_threadHandle = INVALID_HANDLE_VALUE;
@@ -110,7 +143,16 @@ public class Thread {
 			_pid = -1;
 		_index = -1;
 	}
-	
+	/**
+	 * The constructor for a named thread.
+	 *
+	 * The Thread object is created in a dormant state before any
+	 * operating system initialization. As a result, a Parasol program
+	 * can create millions of such objects, but could not start them all.
+	 *
+	 * @param name The name the Thread will report during it's lifetime.
+	 * This information is primarily for debugging purposes.
+	 */
 	public Thread(string name) {
 		_name = name;
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN)
@@ -128,7 +170,9 @@ public class Thread {
 				CloseHandle(_threadHandle);
 		}
 	}
-	
+	/*
+	 * Initialize a Thread object for the 'main' thread of the process.
+	 */
 	static void init() {
 		ref<Thread> t = new Thread();
 		t._name.printf("TID-%d", getCurrentThreadId());
@@ -141,17 +185,43 @@ public class Thread {
 		threads.enlist(t);
 //		printf("-\n");
 	}
-
+	/**
+	 * Start a Thread running.
+	 *
+	 * @param func The function to call on start-up. The thread exists when this
+	 * function returns or calls {@link parasol:thread.exit}.
+	 *
+	 * @param parameter This value is passed to the functionon startup.
+	 *
+	 * @return true if the Thread started successfully, false otherwise.
+	 *
+	 * @threading This method should not be called on the same Thread object by more
+	 * than one thread at a time.
+	 *
+	 * @exception IllegalArgumentException Thrown if the func argument is null.
+	 *
+	 * @exception IllegalOperationException Throw if this thread has already been started.
+	 */
 	public boolean start(void func(address p), address parameter) {
+		if (func == null)
+			throw IllegalArgumentException("func");
+		if (_function != null)
+			throw IllegalOperationException("thread.start");
 		_function = func;
 		_parameter = parameter;
 		_context = dupExecutionContext();
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			address x = _beginthreadex(null, 0, wrapperFunction, this, 0, null);
 			_threadHandle = *ref<HANDLE>(&x);
+			if (_threadHandle == INVALID_HANDLE_VALUE)
+				func = null;
 			return _threadHandle != INVALID_HANDLE_VALUE;
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			int result = linux.pthread_create(&_threadId, null, linuxWrapperFunction, this);
+			if (result != 0) {
+				func = null;
+				_threadId = null;
+			}
 			return result == 0;
 		} else
 			return false;
@@ -166,20 +236,15 @@ public class Thread {
 		threads.enlist(t);
 		parasolThread(t);
 		t._pid = getCurrentThreadId();
-		if (t._name == null)
-			t._name.printf("TID-%d", t._pid);
 		nested(t);
-		exitThread();
 		threads.delist(t);
+		exitThread();
 		return 0;
 	}
 	
 	private static address linuxWrapperFunction(address wrapperParameter) {
 		ref<Thread> t = ref<Thread>(wrapperParameter);
-		t._threadId = linux.pthread_self();
 		t._pid = linux.gettid();
-		if (t._name == null)
-			t._name.printf("TID-%d", t._pid);
 		enterThread(t._context, &t);
 		threads.enlist(t);
 		parasolThread(t);
@@ -202,18 +267,35 @@ public class Thread {
 			process.stdout.flush();
 		}
 	}
-	/*
-	 * These are prone to deadlocks. Use with caution.
+	/**
+	 * Suspend this Thread.
+	 *
+	 * @threading This is prone to deadlocks. Use with caution.
 	 */
 	public void suspend() {
 		linux.tgkill(linux.getpid(), _pid, linux.SIGTSTP);
 	}
-
+	/**
+	 * Resume this Thread.
+	 *
+	 * If the indicated Thread is not stopped, this call has no effect.
+	 */
 	public void resume() {
 		linux.tgkill(linux.getpid(), _pid, linux.SIGCONT);
 	}
-
+	/**
+	 * Wait for a Thread to exit.
+	 *
+	 * If the Thread is currently running, the caller waits for the Thread to exit.
+	 *
+	 * When this method returns, the Thread may be started again.
+	 *
+	 * @exception IllegalOperationException THrown if the Thread object has not been
+	 * started, or if this is the main thread of the process.
+	 */
 	public void join() {
+		if (_function == null)
+			throw IllegalOperationException("join");
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			DWORD dw = WaitForSingleObject(_threadHandle, INFINITE);
 			if (dw == WAIT_FAILED) {
@@ -222,89 +304,175 @@ public class Thread {
 			CloseHandle(_threadHandle);
 			_threadHandle = INVALID_HANDLE_VALUE;
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-			address retval;
-			
-			int result = linux.pthread_join(_threadId, &retval);
+			int result = linux.pthread_join(_threadId, null);
 			if (result != 0) {
 				printf("%s pthread_join %s: %d\n", currentThread().name(), _name, result);
 				assert(false);
 			}
 		}
+		_function = null;
+		_pid = -1;
 	}
-	
+	/**
+	 * Fetch the Thread's name.
+	 *
+	 * An un-named thread will report a name of the form "TID-NNNN" where NNNN
+	 * is the operating system thread id when the Thread is running. The 'name' of
+	 * an un-started (or started but not yet running), un-named thread is a single qustion mark.
+	 */
 	public string name() {
-		return _name;
+		if (_name != null)
+			return _name;
+		else if (_pid != -1)
+			return "TID-" + _pid;
+		else
+			return "?";
 	}
-	
+	/**
+	 * Fetch the Thread's id.
+	 *
+	 * @return If the Thread has been started and is running. If the thread has not been started,
+	 * has been started but has not begun running, or has exited and has been joined the value is -1.
+	 */
 	public int id() {
 		return _pid;
 	}
-
+	/**
+	 * A handy mechanism for sorting Thread's. For active Thread's they will be in id order.
+	 */
 	public int compare(ref<Thread> other) {
 		if (this == other)
 			return 0;
-		else if (long(this) > long(other))		// A meaningless, but consistent and cheap calculation
+		else if (_pid > other._pid)
 			return 1;
 		else
 			return -1;
 	}
-
+	/**
+	 * A hash function useful for map's of Thread objects.
+	 */
 	public int hash() {
 		return int(long(this) >> 8);
 	}
 }
-
-public void exit(int code) {
-	linux.pthread_exit(address(code));
+/**
+ * Exit the current thread.
+ */
+public void exit() {
+	linux.pthread_exit(null);
 }
 
-/*
- * This is the runtime implementation class for the monitor feature. It supplies the public methods that are
- * implied in a declared monitor object.
+/**
+ * This class implements a thread synchronization Monitor object.
+ *
+ * Monitor's were created by Brinch Hanson and C.A.R. Hoare in the early 1970's (see this
+ * <a href='https://en.wikipedia.org/wiki/Monitor_(synchronization)'>Wikipedia article</a>).
+ *
+ * A Monitor provides both the capabilities of a Mutex (allowing for mutual exclusion between
+ * threads) along with semaphore semantics (wait and notify).
+ *
+ * While it is reasonable to create a Monitor object and call the wait and notify methods directly,
+ * you should use the lock statement, naming the Monitor to gain exclusive access for a region of
+ * code.. The lock statement will ensure that all control flow paths out of the lock statement,
+ * including uncaught exceptions will release any taken locks.
+ *
+ * @threading This object is thread-safe. You may call any method on this object at any time from as many
+ * threads as you wish.
  */
 public class Monitor {
 	private Mutex _mutex;
 	private HANDLE	_semaphore;
 	private linux.sem_t _linuxSemaphore;
 	private int _waiting;
-	
+	private boolean _initialized;
+	/**
+	 * The constructor.
+	 *
+	 * The Monitor is created in an unlocked state.
+	 */
 	public Monitor() {
+	}
+	
+	~Monitor() {
+		if (_initialized) {
+			if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+				CloseHandle(_semaphore);
+			} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+				linux.sem_destroy(&_linuxSemaphore);
+			}
+		}
+	}
+	
+	private void initialize() {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			_semaphore = HANDLE(CreateSemaphore(null, 0, int.MAX_VALUE, null));
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			if (linux.sem_init(&_linuxSemaphore, 0, 0) != 0)
 				linux.perror("sem_init".c_str());
 		}
+		_initialized = true;
 	}
-	
-	~Monitor() {
-		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-			CloseHandle(_semaphore);
-		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-			linux.sem_destroy(&_linuxSemaphore);
-		}
-	}
-	
+	/**
+	 * Detect whether a Monitor is currently locked.
+	 *
+	 * If the conditions causing the lock are transient, whether or not this
+	 * method returns true at any point in time says nothing about it's condition
+	 * the moment the condition is tested and acted upon.
+	 *
+	 * @return true if the Monitor is locked and false if it is not.
+	 */
 	public boolean isLocked() {
 		return _mutex.isLocked();
 	}
-	
+	/**
+	 * Return the current owner of the lock on this Monitor.
+	 *
+	 * @return A reference to the Thread that owns this ock, or null if the Montior
+	 * is not currently locked.
+	 */
 	public ref<Thread> owner() {
 		return _mutex.owner();
 	}
-	
+	/**
+	 * Take the Monitor (set a lock on it).
+	 *
+	 * If the Monitor is currently unlocked, the MOnitor becomes locked. If it is
+	 * currently locked by another Thread, the calling Thread blocks until the Monitor
+	 * becomes unlocked due to a call to {@link release}. Thread's will be given control
+	 * of the MOnitor in the order in which they call this method.
+	 *
+	 * If a Thread already holds a lock on this Monitor, a nested lock is granted. In
+	 * this way, a Thread can take as many lock's on a Monitor as it likes and can reliably
+	 * unwind them by calling {@link release} for each lock taken.
+	 */
 	private void take() {
 		_mutex.take();
 	}
-	
+	/**
+	 * Release the Monitor (clear a lock on it).
+	 *
+	 * If the current Thread holds a lock on this Monitor, the lock is released. If this is the
+	 * last lock held by the Thread, then a Thread waiting for a lock (in the {@link take}
+	 * method) will be unblocked and take it's lock.
+	 */
 	private void release() {
 		_mutex.release();
 	}
-	
+	/**
+	 * Notify the first waiting thread.
+	 *
+	 * If there are threads waiting on this Monitor, the first such thread is notified and
+	 * returns from it's wait call.
+	 *
+	 * If no thread is currently waiting on this Monitor, then for each call to notify, one
+	 * corresponding call to wait will immediately return.
+	 */
 	public void notify() {
 //		printf("Entering notify\n");
 		_mutex.take();
 //		printf("taken\n");
+		if (!_initialized)
+			initialize();
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			ReleaseSemaphore(_semaphore, 1, null);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
@@ -314,26 +482,42 @@ public class Monitor {
 //		printf("About to release\n");
 		_mutex.release();
 	}
-	
+	/**
+	 * Notify all currently waiting threads.
+	 *
+	 * If there are threads waiting on this MOnitor, then all are notified and immediately
+	 * return from their wait call.
+	 *
+	 * If no threads are currently waiting, this method has no effect.
+	 */
 	public void notifyAll() {
 		_mutex.take();
+		if (!_initialized)
+			initialize();
 		if (_waiting > 0) {
 			if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 				ReleaseSemaphore(_semaphore, _waiting, null);
+				_waiting = 0;
 			} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 				while (_waiting > 0) {
 					linux.sem_post(&_linuxSemaphore);
 					_waiting--;
 				}
 			}
-			_waiting = 0;
 		}
 		_mutex.release();
 	}
-	
+	/**
+	 * The current thread waits.
+	 *
+	 * If no un-matched call to notify has occurred, the current thread will block
+	 * waiting for a {@link notify} or {@link notifyAll} call to occur.
+	 */
 	public void wait() {
 //		printf("%s %p entering wait\n", currentThread().name(), this);
 		_mutex.take();
+		if (!_initialized)
+			initialize();
 //		printf("%s %p taken\n", currentThread().name(), this);
 		_waiting++;
 		int level = _mutex.releaseForWait();
@@ -346,13 +530,26 @@ public class Monitor {
 //		printf("%s %p Got the semaphore: level %d\n", currentThread().name(), this, level);
 		_mutex.takeAfterWait(level - 1);
 	}
-	
+	/**
+	 * THe current thread waits for some time to pass.
+	 *
+	 * If no un-matched call to notify has occurred, the current thread will block
+	 * waiting for a {@link notify} or {@link notifyAll} call to occur.
+	 * 
+	 * If the indicated timeout period elapses before any notify call happens, the
+	 * wait is cancelled and the calling thread resumes execution. The thread must determine
+	 * whether the conditions of the wait were satisfied by some other means.
+	 *
+	 * @param timeout The amount of time to wait.
+	 */
 	public void wait(time.Duration timeout) {
 		if (timeout.isInfinite()) {
 			wait();
 			return;
 		}
 		_mutex.take();
+		if (!_initialized)
+			initialize();
 		_waiting++;
 		int level = _mutex.releaseForWait();
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
@@ -372,7 +569,7 @@ public class Monitor {
 			linux.clock_gettime(linux.CLOCK_REALTIME, &expirationTime);
 			expirationTime.tv_sec += timeout.seconds();
 			expirationTime.tv_nsec += timeout.nanoseconds();
-			while (expirationTime.tv_nsec >= 1000000000) { // this loop might repeat twice if nanos, millis and current time all have a big nanos value.
+			if (expirationTime.tv_nsec >= 1000000000) {
 				expirationTime.tv_sec++;
 				expirationTime.tv_nsec -= 1000000000;
 			}
@@ -412,7 +609,7 @@ class Mutex {
 		}
 	}
 	
-	public boolean isLocked() {
+	boolean isLocked() {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			DWORD code = WaitForSingleObject(_mutex, 0);
 			if (code == WAIT_TIMEOUT)
@@ -433,7 +630,7 @@ class Mutex {
 			return false;
 	}
 	
-	public ref<Thread> owner() {
+	ref<Thread> owner() {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			DWORD code = WaitForSingleObject(_mutex, 0);
 			if (code == WAIT_TIMEOUT)
@@ -512,18 +709,41 @@ private monitor class ThreadPoolData<class T> {
 	ref<WorkItem<T>> _last;
 	boolean _shutdownRequested;
 }
-
+/**
+ * A pool of threads available to share work.
+ *
+ * It is often more efficient to create a set of threads once and then feed them units of
+ * work, rather than spawn and terminate threads constantly.Particularly, if the work is CPU
+ * intensive it may not make sense to have more than the number of CPU's in the processor
+ * allocated to doing work at one time. Additional threads will consume more memory and 
+ * overhead as well as contention for available CPU's.
+ *
+ * Calls to the {@link execute} method add work items to the pool, forming a queue. Idle
+ * threads each take one work item at a time from the queue and return when that work item
+ * is completed.
+ *
+ * @threading ThreadPool objects are thread-safe and can be called from any number of threads.
+ */
 public class ThreadPool<class T> extends ThreadPoolData<T> {
 	ref<Thread>[] _threads;
 	int _idle;
-
+	/**
+	 * Construct a pool of N threads.
+	 *
+	 * @param threadCount The number of threads to start in the pool.
+	 */
 	public ThreadPool(int threadCount) {
 		resize(threadCount);
 	}
 	
 	~ThreadPool() {
+		shutdown();
 	}
-	
+	/**
+	 * Shut down all of the threads in the pool.
+	 *
+	 * Any unstarted work items are cancelled.
+	 */
 	public void shutdown() {
 		lock (*this) {
 			while (_first != null) {
@@ -536,11 +756,25 @@ public class ThreadPool<class T> extends ThreadPoolData<T> {
 			_shutdownRequested = true;
 			notifyAll();
 		}
-		for (int i = 0; i < _threads.length(); i++) {
+//		for (i in _threads)
+		for (int i = 0; i < _threads.length(); i++)
 			_threads[i].join();
-		}
+		_threads.clear();
 	}
-	
+	/**
+	 * Execute some work and create a {@link Future} to track completion
+	 * of the work.
+	 *
+	 * If the pool is being shut down, no work item is queued.
+	 *
+	 * @param f A function to call to perform the work.
+	 *
+	 * @param parameter A value to be passed to the function when the work
+	 * gets performed.
+	 *
+	 * @return A reference to a Future that was allocated to track the work.
+	 * If the pool is being shut down null is returned.
+	 */
 	public ref<Future<T>> execute(T f(address p), address parameter) {
 		ref<Future<T>> future = new Future<T>;
 		ref<WorkItem<T>> wi = new WorkItem<T>;
@@ -562,7 +796,19 @@ public class ThreadPool<class T> extends ThreadPoolData<T> {
 		}
 		return future;
 	}
-	
+	/**
+	 * Execute some work.
+	 *
+	 * If the pool is being shut down, no work item is queued.
+	 *
+	 * @param f A function to call to perform the work.
+	 *
+	 * @param parameter A value to be passed to the function when the work
+	 * gets performed.
+	 *
+	 * @return true if the work was queued successfully, or false if the
+	 * pool is being shut down.
+	 */
 	public boolean execute(void f(address p), address parameter) {
 		ref<WorkItem<T>> wi = new WorkItem<T>;
 		wi.result = null;
@@ -582,31 +828,52 @@ public class ThreadPool<class T> extends ThreadPoolData<T> {
 		}
 		return true;
 	}
-	
+	/**
+	 * Increase the number of threads in the pool.
+	 *
+	 * @param newThreadCount The number of threads the pool should contain.
+	 *
+	 * @exception IllegalArgumentException THrown if the new number of threads
+	 * is less than the current number of threads.
+	 */
 	public void resize(int newThreadCount) {
-		if (newThreadCount < _threads.length()) {
-			assert(false);		// Need to have a way to shut down threads.
-		} else {
-			while (newThreadCount > _threads.length()) {
-				ref<Thread> t = new Thread();
-				_threads.append(t);
-				t.start(workLoop, this);
+		lock (*this) {
+			if (newThreadCount < _threads.length())
+				throw IllegalArgumentException("new threads < " + _threads.length());
+			else {
+				while (newThreadCount > _threads.length()) {
+					ref<Thread> t = new Thread();
+					_threads.append(t);
+					t.start(workLoop, this);
+				}
 			}
 		}
 	}
-
+	/**
+	 * Get the total number of threads in the pool.
+	 *
+	 * @return The number of threads currently running in the pool.
+	 */
 	public int totalThreads() {
 		lock (*this) {
 			return _threads.length();
 		}
 	}
-
+	/**
+	 * Get the number of idle threads.
+	 *
+	 * @return The current number of idle threads in the pool.
+	 */
 	public int idleThreads() {
 		lock (*this) {
 			return _idle;
 		}
 	}
-
+	/**
+	 * Get the number of busy threads.
+	 *
+	 * @return The current number of busy threads in the pool.
+	 */
 	public int busyThreads() {
 		lock (*this) {
 			return _threads.length() - _idle;
@@ -651,7 +918,9 @@ public class ThreadPool<class T> extends ThreadPoolData<T> {
 		return true;
 	}
 }
-
+/**
+ *
+ */
 public monitor class Future<class T> {
 	T _value;
 	boolean _calculating;
