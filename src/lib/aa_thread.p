@@ -13,6 +13,9 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * Provides facilities for starting and controlling threads.
+ */
 namespace parasol:thread;
 
 import native:windows.GetCurrentThreadId;
@@ -919,7 +922,24 @@ public class ThreadPool<class T> extends ThreadPoolData<T> {
 	}
 }
 /**
+ * A 'future' value.
  *
+ * This object tracks the eventual completion of a work-item and the production of a
+ * value of type T.
+ *
+ * There are several attributes of a Future aside from the computed value. For example,
+ * the Future could have been cancelled, successful or might have produced an uncaught
+ * exception. Methods can be used to interrogate those attributes.
+ *
+ * The general pattern for using Future's is to ubmit a set of work items to a thread pool,
+ * collecting the Future's in an array. When all owrk-items are submitted, you can then
+ * iterate over the Future's, either just calling {@link wait} on each one, or by calling
+ * one of the methods that fetches a value that is computed as a result of the work being
+ * done. Those that are already finished by the time you call one of these methods won't wait
+ * but will immediately return with whatever value you care about, while those that are not
+ * finished will wait until the work item is finished.
+ *
+ * @threading All methods on this object are thread-safe.
  */
 public monitor class Future<class T> {
 	T _value;
@@ -927,39 +947,65 @@ public monitor class Future<class T> {
 	boolean _posted;
 	boolean _cancelled;
 	ref<Exception> _uncaught;
-	
+	/**
+	 * Get the computed value.
+	 *
+	 * This method waits for the work item to finish. 
+	 *
+	 * @return The return value of the function called to perform the work item.
+	 */
 	public T get() {
 		if (!_posted)
 			wait();
 		return _value;
 	}
-	
+	/**
+	 * Determine whether the work item completed successfully.
+	 *
+	 * This method waits for the work item to finish.
+	 *
+	 * @return true if the function successfully returned a value, false otherwise.
+	 */
 	public boolean success() {
 		if (!_posted)
 			wait();
 		return !_cancelled && _uncaught == null;
 	}
-	
+	/**
+	 * Fetch any uncaught Exception thrown by the called function.
+	 *
+	 * This method waits for the work item to finish.
+	 *
+	 * @return A reference to an Exception, or null if the function was either
+	 * cancelled or succeeded.
+	 */
 	public ref<Exception> uncaught() {
 		if (!_posted)
 			wait();
 		return _uncaught;
 	}
-	
+	/**
+	 * Determine whether a work item was cancelled.
+	 *
+	 * This method waits for the work item to finish.
+	 *
+	 * @return true if the Future was cancelled before any work was done,
+	 * false if the work was done.
+	 */
 	public boolean cancelled() {
 		if (!_posted)
 			wait();
 		return _cancelled;
 	}
 	
-	public void post(T value) {
+	void post(T value) {
 		_value = value;
 		_posted = true;
 		_calculating = false;
 		notifyAll();
 	}
 	
-	public void postFailure(ref<Exception> e) {
+	void postFailure(ref<Exception> e) {
 		_uncaught = e;
 		_posted = true;
 		_calculating = false;
@@ -971,7 +1017,15 @@ public monitor class Future<class T> {
 			_calculating = true;
 		return _calculating;
 	}
-	
+	/**
+	 * Cancel a pending work item.
+	 *
+	 * If work has not begun on the owrk item (it is still queued in the
+	 * thread pool), the item will be marked as cancelled.
+	 *
+	 * @return true if the work item was cancelled, false if it is either already
+	 * complete or at least has started (the function has been called).
+	 */
 	public boolean cancel() {
 		if (!_posted && !_calculating) {
 			_cancelled = true;
@@ -981,11 +1035,19 @@ public monitor class Future<class T> {
 		return _cancelled;
 	}
 }
-
+/**
+ * Get the current running Thread object.
+ *
+ * @return The Thread object of the currently running thread.
+ */
 public ref<Thread> currentThread() {
 	return ref<Thread>(parasolThread(null));
 }
-
+/**
+ * Pause the current Thread for some interval of time.
+ *
+ * @param milliseconds The time to pause in milliseconds.
+ */
 public void sleep(long milliseconds) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		while (milliseconds > 1000000000) {
@@ -1037,7 +1099,7 @@ private abstract void exitThread();
 private abstract address parasolThread(address newThread);
 
 private class Monitor_Poly extends Monitor {
-	// THis exists to trick the compiler into generating a table for this class.
+	// This exists to trick the compiler into generating a table for this class.
 	public ref<Thread> owner() {
 		return null;
 	}
