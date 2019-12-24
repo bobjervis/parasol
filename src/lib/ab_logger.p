@@ -492,7 +492,7 @@ public monitor class Logger {
 	private void queueEvent(address returnAddress, int level, string msg) {
 		// All log messages go through here. Level has been confirmed as high enough to care about.
 		LogEvent logEvent = {
-			when: time.now(), 
+			when: time.Time.now(), 
 			level: level, 
 			msg: msg, 
 			returnAddress: returnAddress,

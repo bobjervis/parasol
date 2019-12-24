@@ -4388,7 +4388,16 @@ public class X86_64 extends X86_64AssignTemps {
 							inst(X86.MOV, sym.definition(), 0, compileContext);
 						}
 						break;
-						
+
+					case	FLOAT_32:
+					case	FLOAT_64:
+						if (sym.storageClass() != StorageClass.STATIC) {
+							if (sym.definition().type == null)
+								sym.definition().type = sym.type();		// probably caused by some error condition, patch it
+							inst(X86.MOV, sym.definition(), 0, compileContext);
+						}
+						break;
+
 					case	TYPEDEF:
 					case	ERROR:
 					case	CLASS_DEFERRED:

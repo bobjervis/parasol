@@ -16,7 +16,9 @@
 namespace parasol:types;
 
 import native:C;
-
+/**
+ * An IEEE single-precision floating point value.
+ */
 public class float {
 	private static unsigned SIGN_MASK = 0x80000000;
 	private static unsigned ONE = 		0x3f800000;
@@ -25,7 +27,7 @@ public class float {
 	 * Not a number.
 	 *
 	 * This value will compare false for all relations
-	 * with any other double value.
+	 * with any other float value.
 	 */
 //	@Constant
 	public static float NaN = 0.0f / 0.0f;
@@ -181,7 +183,9 @@ abstract int isinf(float x);
 
 @Linux("libm.so.6", "finitef")
 abstract int finite(float x);
-
+/**
+ * An IEEE double precision floating point value.
+ */
 public class double {
 	private static long SIGN_MASK = 0x8000000000000000;
 	private static long ONE =       0x3ff0000000000000;

@@ -2747,6 +2747,8 @@ class X86_64Encoder extends Target {
 				emitShort(immediate);
 				break;
 
+			case	FLOAT_32:
+			case	FLOAT_64:
 			case	UNSIGNED_32:
 			case	SIGNED_32:
 			case	STRING:

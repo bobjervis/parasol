@@ -22,12 +22,31 @@ import native:C;
  *
  * The global symbol 'undefined' can be used with var symbols to check whether
  * the var has any value at all. In other words, the default constructor for a
- * var object will create a value that compares equal to the symbol 'undefined',
- * and since it is a @Constant, user code cannot change it. 
+ * var object will create a value that compares equal to the symbol 'undefined'. 
  */
 //@Constant
 public var undefined;
-
+/**
+ * An object that can hold 'any' value.
+ *
+ * Substring and substring16 objects are converted to the correspond string or
+ * string16 class.
+ *
+ * Integer numeric objects are converted to long.
+ *
+ * Floating point objects are converted to double.
+ *
+ * Pointers and references are stored with their class,
+ * so you can query the class of the var object to determine
+ * exactly which address type it contains.
+ *
+ * Enum's and flag's are not currently convertible to var's.
+ *
+ * Small class types, like Time, can be stored in a var object.
+ *
+ * Large class types, larger than a long, cannot be stored in a
+ * var object.
+ */
 public class var {
 //	private class _actualType;
 	private address _actualType;
@@ -103,7 +122,7 @@ public class var {
 		return _actualType;
 	}
 	
-	public var add(var other) {
+	var add(var other) {
 		if (this.class == string || other.class == string) {
 			string otherValue = string(other);
 			string value = *ref<string>(&_value);
@@ -113,7 +132,7 @@ public class var {
 		return x;
 	}
 
-	public var and(var other) {
+	var and(var other) {
 		long x = _value & long(other);
 		return x;
 	}
@@ -142,68 +161,68 @@ public class var {
 		C.memcpy(this, &source, var.bytes);
 	}
 	
-	public var divide(var other) {
+	var divide(var other) {
 		long x = _value / long(other);
 		return x;
 	}
 	
-	public var exclusiveOr(var other) {
+	var exclusiveOr(var other) {
 		long x = _value ^ long(other);
 		return x;
 	}
 
-	public string stringValue() {
+	string stringValue() {
 		return *ref<string>(&_value);
 	}
 	
-	public string16 string16Value() {
+	string16 string16Value() {
 		return *ref<string16>(&_value);
 	}
 	
-	public long integerValue() {
+	long integerValue() {
 		// TODO: Validate type and convert when necessary
 		return _value;
 	}
 
-	public double floatValue() {
+	double floatValue() {
 		return *ref<double>(&_value);
 	}
 	
-	public void classValue(address out, int len) {
+	void classValue(address out, int len) {
 		C.memcpy(out, &_value, len);
 	}
 
-	public var leftShift(var other) {
+	var leftShift(var other) {
 		long x = _value << int(other);
 		return x;
 	}
 	
-	public var multiply(var other) {
+	var multiply(var other) {
 		long x = _value * long(other);
 		return x;
 	}
 	
-	public var or(var other) {
+	var or(var other) {
 		long x = _value | long(other);
 		return x;
 	}
 
-	public var remainder(var other) {
+	var remainder(var other) {
 		long x = _value % long(other);
 		return x;
 	}
 
-	public var rightShift(var other) {
+	var rightShift(var other) {
 		long x = _value >> int(other);
 		return x;
 	}
 
-	public var subtract(var other) {
+	var subtract(var other) {
 		long x = _value - long(other);
 		return x;
 	}
 
-	public var unsignedRightShift(var other) {
+	var unsignedRightShift(var other) {
 		long x = _value >>> int(other);
 		return x;
 	}

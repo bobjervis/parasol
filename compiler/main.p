@@ -192,7 +192,7 @@ int compileCommand() {
 	Arena arena;
 
 	printf("Compiling to %s\n", parasolCommand.pxiArgument.value);
-	time.Time start = time.now();
+	time.Time start = time.Time.now();
 	if (!configureArena(&arena))
 		return 1;
 	string filename = parasolCommand.finalArgs()[0];
@@ -217,7 +217,7 @@ int compileCommand() {
 		printf("Error writing to %s\n", parasolCommand.pxiArgument.value);
 		anyFailure = true;
 	}
-	time.Time end = time.now();
+	time.Time end = time.Time.now();
 	printf("Done in %d milliseconds\n", end.value() - start.value());
 	if (anyFailure)
 		return 1;

@@ -31,7 +31,7 @@ public boolean listAllTests = false;
 public int launch(string[] args) {
 	ref<ref<script.Atom>[]>[] scripts;
 	string[] filenames;
-	time.Time start = time.now();
+	time.Time start = time.Time.now();
 	
 	script.init();
 	init();
@@ -104,7 +104,7 @@ public int launch(string[] args) {
 			result = 0;
 		}
 	}
-	time.Time end = time.now();
+	time.Time end = time.Time.now();
 	long millis = end.value() - start.value();
 	long seconds = millis / 1000;
 	long minutes = seconds / 60;

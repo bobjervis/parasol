@@ -13,6 +13,17 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * This namespace defines facilities for defined various general purpose classes.
+ *
+ * The classes include numeric classes for native machine arithmetic, address
+ * classes for objects that are machine addresses, boolean for the value of test
+ * conditions in looping and alternation statements, var as a class that can hold a
+ * value of a variety of types, and an assortment of collection classes.
+ *
+ * Collection classes tend to be templates as they are designed to be flexibly usable
+ * across a broad range of applications.
+ */
 namespace parasol:types;
 
 import parasol:memory;

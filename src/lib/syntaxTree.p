@@ -1497,6 +1497,7 @@ public class Constant extends Node {
 		switch (op()) {
 		case	CHARACTER:
 			(v, status) = charValue();
+//			printf("'%s' v = %d status = %s\n", _value.asString(), v, status);
 			if (!status)
 				return false;
 			break;
@@ -1510,7 +1511,7 @@ public class Constant extends Node {
 		}
 		switch (newType.family()) {
 		case	UNSIGNED_8:
-//			printf("v = %d byte.MAX_VALUE=%d\n", v, int(byte.MAX_VALUE));
+//			printf("'%s' v = %d byte.MAX_VALUE=%d\n", _value.asString(), v, int(byte.MAX_VALUE));
 			return v >= 0 && v <= byte.MAX_VALUE;
 
 		case	UNSIGNED_16:
@@ -4175,7 +4176,7 @@ int, boolean unescapeParasolCharacter(string str) {
 			case '0':
 				i++;
 				if (i >= str.length())
-					return 0, false;
+					return 0, true;
 				if (!str[i].isOctalDigit())
 					return 0, false;
 				v = 0;

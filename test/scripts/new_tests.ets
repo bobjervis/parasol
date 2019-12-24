@@ -1,2 +1,2 @@
-compile() { "void f(byte x) {} f('\0');" }
+compile() { "substring ss; ss.split('\\0');" }
 
