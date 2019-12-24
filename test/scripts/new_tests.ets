@@ -1,2 +1,2 @@
-compile() { "substring ss; ss.split('\\0');" }
+compile() { "substring ss; int i; byte b = ss[i];" }
 

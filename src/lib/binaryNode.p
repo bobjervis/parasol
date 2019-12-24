@@ -750,6 +750,8 @@ public class Binary extends Node {
 				}
 			} else if (_left.type.isVector(compileContext) ||
 					   _left.type.isMap(compileContext) ||
+					   _left.type.family() == TypeFamily.SUBSTRING ||
+					   _left.type.family() == TypeFamily.SUBSTRING16 ||
 					   _left.type.family() == TypeFamily.SHAPE) {
 				CompileString name("get");
 				

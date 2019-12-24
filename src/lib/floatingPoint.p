@@ -38,9 +38,6 @@ public class float {
 	 */	
 	@Constant
 	public static int RADIX = 2;
-
-	public float() {
-	}
 	/**
 	 * Parse a floating point number
 	 *
@@ -205,9 +202,6 @@ public class double {
 	 */	
 	@Constant
 	public static int RADIX = 2;
-
-	public double() {
-	}
 	/**
 	 * Parse a floating point number
 	 *

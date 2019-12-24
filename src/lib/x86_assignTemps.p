@@ -803,7 +803,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	SUBSCRIPT:
 			b = ref<Binary>(node);
 			if (b.left().type.indirectType(compileContext) != null || 
-				b.left().type.family() == TypeFamily.STRING) {
+				b.left().type.isString()) {
 				if (b.sethi < 0) {
 					assignRegisterTemp(b.left(), longMask(), compileContext);
 					assignRegisterTemp(b.right(), longMask(), compileContext);
