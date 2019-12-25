@@ -103,7 +103,7 @@ public class float {
 	/**
 	 * Test whether a value is finite
 	 *
-	 * @return true if the vlaue is finite, false otherwise
+	 * @return true if the value is finite, false otherwise
 	 */
 	public boolean finite() {
 		return finite(*this) != 0;
@@ -267,7 +267,7 @@ public class double {
 	/**
 	 * Test whether a value is finite
 	 *
-	 * @return true if the vlaue is finite, false otherwise
+	 * @return true if the value is finite, false otherwise
 	 */
 	public boolean finite() {
 		return finite(*this) != 0;

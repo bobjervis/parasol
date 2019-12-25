@@ -507,14 +507,14 @@ class Scanner {
 		if (c == '0') {
 			int x = getc();
 			ungetc();
-			if (x.isDigit())
+			if (byte(x).isDigit())
 				t = Token.ERROR;
 		}
 		addCharacter(c);
 		// We know we have a prefix already stored, either a digit or minus and a digit.
 		for (;;) {
 			c = getc();
-			if (!c.isDigit())
+			if (!byte(c).isDigit())
 				break;
 			addCharacter(c);
 		}
@@ -523,7 +523,7 @@ class Scanner {
 			boolean anyDigits;
 			for (;;) {
 				c = getc();
-				if (!c.isDigit())
+				if (!byte(c).isDigit())
 					break;
 				addCharacter(c);
 				anyDigits = true;
@@ -540,7 +540,7 @@ class Scanner {
 			}
 			boolean anyDigits;
 			for (;;) {
-				if (!c.isDigit())
+				if (!byte(c).isDigit())
 					break;
 				addCharacter(c);
 				anyDigits = true;

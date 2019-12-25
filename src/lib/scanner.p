@@ -27,6 +27,8 @@ public enum Token {
 
 	IDENTIFIER,
 	INTEGER,
+	INTEGER_DOT,			// Actually two tokens: INTEGER then DOT
+	INTEGER_DOT_DOT,		// Actually two tokens: INTEGER then DOT_DOT
 	FLOATING_POINT,
 	CHARACTER,
 	STRING,
@@ -741,7 +743,8 @@ public class Scanner {
 		Token t = Token.INTEGER;
 		startValue(c);
 		boolean hexConstant = false;
-		if (c == '.')
+		if (c == '.')					// The main token logic has already looked to see the
+										// next character is a digit.
 			t = Token.FLOATING_POINT;
 		else if (c == '0') {
 			c = getc();
@@ -766,8 +769,15 @@ public class Scanner {
 						ungetc();
 						return t;
 					}
-					t = Token.FLOATING_POINT;
 					addCharacter(c);
+					// The complexity here is that t is Token.INTEGER. 
+					c = getc();
+					if (c == '.')
+						return Token.INTEGER_DOT_DOT;
+					ungetc();
+					if (!byte(c).isDigit() && c != 'e' && c != 'E' && c != 'f' && c != 'F')
+						return Token.INTEGER_DOT;
+					t = Token.FLOATING_POINT;
 					continue;
 				}
 				ungetc();
@@ -1073,7 +1083,7 @@ public class Scanner {
 					string tag;
 					for (;;) {
 						c = getc();
-						if (c.isAlpha())
+						if (byte(c).isAlpha())
 							tag.append(byte(c));
 						else {
 							ungetc();
@@ -1156,7 +1166,7 @@ public class Scanner {
 				string tag;
 				for (;;) {
 					c = getc();
-					if (c.isAlpha())
+					if (byte(c).isAlpha())
 						tag.append(byte(c));
 					else {
 						ungetc();
@@ -1378,8 +1388,7 @@ public class Scanner {
 			_cursor = _lastCursor;
 		}
 	}
-
-/*
+	/*
 	 * A Scanner must implement getByte.
 	 *
 	 * This function returns the next character in
@@ -1387,7 +1396,7 @@ public class Scanner {
 	 * should return -1.  Windows implementations should
 	 * treat a ctrl-Z as end of file inside the getByte function
 	 * when treating the input as a 'text file'.  UNIX
-	 * implementations reutrn all characters in a file.
+	 * implementations return all characters in a file.
 	 *
 	 * Scanners that read non-Unicode source files should
 	 * convert their inputs to UTF-8.  Each call to getByte should

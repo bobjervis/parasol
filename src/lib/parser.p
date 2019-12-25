@@ -1340,6 +1340,13 @@ public class Parser {
 			x = _tree.newConstant(Operator.INTEGER, _scanner.value(), location);
 			break;
 
+		case	INTEGER_DOT:
+			x = _tree.newConstant(Operator.INTEGER, _scanner.value(), location);
+			x = parseDotOperand(x);
+			if (x.op() == Operator.SYNTAX_ERROR)
+				return x;
+			break;
+			
 		case	FLOATING_POINT:
 			x = _tree.newConstant(Operator.FLOATING_POINT, _scanner.value(), location);
 			break;
@@ -1494,39 +1501,9 @@ public class Parser {
 				break;
 
 			case	DOT:
-				t = _scanner.next();
-				location = _scanner.location();
-				switch (t) {
-				case	BYTES:
-					x = _tree.newUnary(Operator.BYTES, x, location);
-					break;
-					
-				case	TILDE:
-					t = _scanner.next();
-					if (t != Token.LEFT_PARENTHESIS) {
-						_scanner.pushBack(t);
-						return resync(MessageId.SYNTAX_ERROR);
-					}
-					t = _scanner.next();
-					if (t != Token.RIGHT_PARENTHESIS) {
-						_scanner.pushBack(t);
-						return resync(MessageId.SYNTAX_ERROR);
-					}
-					x = _tree.newUnary(Operator.CALL_DESTRUCTOR, x, location);
-					break;
-					
-				case	CLASS:
-					x = _tree.newUnary(Operator.CLASS_OF, x, location);
-					break;
-					
-				case	IDENTIFIER:
-					x = _tree.newSelection(x, _scanner.value(), location);
-					break;
-					
-				default:
-					_scanner.pushBack(t);
-					return resync(MessageId.SYNTAX_ERROR);
-				}
+				x = parseDotOperand(x);
+				if (x.op() == Operator.SYNTAX_ERROR)
+					return x;
 				break;
 
 			case	ERROR:
@@ -1537,6 +1514,32 @@ public class Parser {
 				return x;
 			}
 		}
+	}
+
+	private ref<Node> parseDotOperand(ref<Node> x) {
+		Token t = _scanner.next();
+		Location location = _scanner.location();
+		switch (t) {
+		case	BYTES:
+			return _tree.newUnary(Operator.BYTES, x, location);
+			
+		case	TILDE:
+			t = _scanner.next();
+			if (t != Token.LEFT_PARENTHESIS)
+				break;
+			t = _scanner.next();
+			if (t != Token.RIGHT_PARENTHESIS)
+				break;
+			return _tree.newUnary(Operator.CALL_DESTRUCTOR, x, location);
+			
+		case	CLASS:
+			return _tree.newUnary(Operator.CLASS_OF, x, location);
+			
+		case	IDENTIFIER:
+			return _tree.newSelection(x, _scanner.value(), location);
+		}
+		_scanner.pushBack(t);
+		return resync(MessageId.SYNTAX_ERROR);
 	}
 
 	private ref<Node> parseAggregateInitializer(Token startingToken) {

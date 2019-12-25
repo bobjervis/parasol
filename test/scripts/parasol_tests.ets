@@ -270,6 +270,8 @@ compile(filename: stray_token_enum.p, expect: fail)
 
 compile(){ "int(address) func; void(address) f = void(address)(func);" }
 
+compile() { "substring ss; int i; byte b = ss[i];" }
+
 compile() { "class a = int; a b; int c; b = c;" }
 
 // Complex extend-chains can introduce bogus constructor chains.
