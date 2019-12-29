@@ -753,9 +753,9 @@ public class Binary extends Node {
 					   _left.type.family() == TypeFamily.SUBSTRING ||
 					   _left.type.family() == TypeFamily.SUBSTRING16 ||
 					   _left.type.family() == TypeFamily.SHAPE) {
-				CompileString name("get");
+				substring name("get");
 				
-				ref<Symbol> sym = _left.type.lookup(&name, compileContext);
+				ref<Symbol> sym = _left.type.lookup(name, compileContext);
 				if (sym == null || sym.class != Overload) {
 					add(MessageId.UNDEFINED, compileContext.pool(), name);
 					break;
@@ -1314,9 +1314,9 @@ public class Binary extends Node {
 		if (subscript.left().type.isVector(compileContext) ||
 			subscript.left().type.isMap(compileContext) ||
 			subscript.left().type.family() == TypeFamily.SHAPE) {
-			CompileString name("set");
+			substring name("set");
 			
-			ref<Symbol> sym = subscript.left().type.lookup(&name, compileContext);
+			ref<Symbol> sym = subscript.left().type.lookup(name, compileContext);
 			if (sym == null || sym.class != Overload) {
 				subscript.add(MessageId.UNDEFINED, compileContext.pool(), name);
 				return this;
@@ -1337,9 +1337,9 @@ public class Binary extends Node {
 		if (_left.type.isVector(compileContext) ||
 			_left.type.isMap(compileContext) ||
 			_left.type.family() == TypeFamily.SHAPE) {
-			CompileString name("elementAddress");
+			substring name("elementAddress");
 			
-			ref<Symbol> sym = _left.type.lookup(&name, compileContext);
+			ref<Symbol> sym = _left.type.lookup(name, compileContext);
 			if (sym == null || sym.class != Overload) {
 				add(MessageId.UNDEFINED, compileContext.pool(), name);
 				return this;
@@ -1711,7 +1711,7 @@ public class Binary extends Node {
 			}
 			if (!type.isConcrete(compileContext)) {
 				ref<OverloadInstance> oi = type.firstAbstractMethod(compileContext);
-				_right.add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool(), *oi.name());
+				_right.add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool(), oi.name());
 			}
 			type = compileContext.arena().createRef(type, compileContext);
 			break;
@@ -1762,7 +1762,7 @@ public class Binary extends Node {
 			}
 			if (!type.isConcrete(compileContext)) {
 				ref<OverloadInstance> oi = type.firstAbstractMethod(compileContext);
-				_right.add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool(), *oi.name());
+				_right.add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool(), oi.name());
 			}
 			type = compileContext.arena().createRef(type, compileContext);
 			break;
@@ -2839,9 +2839,9 @@ private ref<Node> unconvertedString(ref<Node> rhs) {
 }
 
 private ref<Node> appendString(ref<Node> destination, ref<Node> value, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
-	CompileString name("append");
+	substring name("append");
 	
-	ref<Symbol> sym = destination.type.lookup(&name, compileContext);
+	ref<Symbol> sym = destination.type.lookup(name, compileContext);
 	if (sym == null || sym.class != Overload) {
 		destination.add(MessageId.UNDEFINED, compileContext.pool(), name);
 		return destination;
@@ -3008,11 +3008,9 @@ public void markLiveSymbols(ref<Node> declarator, StorageClass storageClass, ref
 }
 
 ref<OverloadInstance> getMethodSymbol(ref<Node> parent, string name, ref<Type> type, ref<CompileContext> compileContext) {
-	CompileString csName(name);
-	
-	ref<Symbol> sym = type.lookup(&csName, compileContext);
+	ref<Symbol> sym = type.lookup(name, compileContext);
 	if (sym == null || sym.class != Overload) {
-		parent.add(MessageId.UNDEFINED, compileContext.pool(), csName);
+		parent.add(MessageId.UNDEFINED, compileContext.pool(), name);
 		return null;
 	}
 	ref<Overload> over = ref<Overload>(sym);

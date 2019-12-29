@@ -23,7 +23,6 @@ import parasol:compiler.Binary;
 import parasol:compiler.Block;
 import parasol:compiler.ClassScope;
 import parasol:compiler.CompileContext;
-import parasol:compiler.CompileString;
 import parasol:compiler.Constant;
 import parasol:compiler.EnumInstanceType;
 import parasol:compiler.EnumType;
@@ -638,7 +637,7 @@ class X86_64Encoder extends Target {
 				size = type.size();
 				alignment = type.alignment();
 				if (alignment == -1) {
-					symbol.add(MessageId.UNFINISHED_ASSIGN_STORAGE, compileContext.pool(), CompileString(string(scope.storageClass())));
+					symbol.add(MessageId.UNFINISHED_ASSIGN_STORAGE, compileContext.pool(), string(scope.storageClass()));
 				}
 				scope.variableStorage = (scope.variableStorage + alignment - 1) & ~(alignment - 1);
 				symbol.offset = scope.variableStorage;
@@ -3329,13 +3328,13 @@ class X86_64Encoder extends Target {
 			pointer<byte> endPtr;
 			ref<Constant> con = ref<Constant>(addressMode);
 			if (con.type.family() == TypeFamily.FLOAT_32) {
-				string s(con.value().data, con.value().length - 1); // omit the trailing f
+				string s(con.value().c_str(), con.value().length() - 1); // omit the trailing f
 				double x = C.strtod(s.c_str(), &endPtr);
 				assert(endPtr == s.c_str() + s.length());
 				float y = float(x);
 				con.offset = _segments[Segments.DATA_4].append(&y, float.bytes);
 			} else {
-				string s = con.value().asString();
+				string s = con.value();
 				double x = C.strtod(s.c_str(), &endPtr);
 				assert(endPtr == s.c_str() + s.length());
 				con.offset = _segments[Segments.DATA_8].append(&x, double.bytes);
@@ -3384,8 +3383,7 @@ class X86_64Encoder extends Target {
 			
 		case	STRING:
 			ref<Constant> c = ref<Constant>(addressMode);
-			CompileString cs = c.value();
-			string s(cs.data, cs.length);
+			string s(c.value());
 			string output;
 			boolean result;
 			(output, result) = s.unescapeParasol();
@@ -3474,12 +3472,12 @@ class X86_64Encoder extends Target {
 			emitInt(offset);
 	}
 	
-	public int addStringLiteral(string value) {
+	public int addStringLiteral(substring value) {
 		int sLength = value.length();
 		int offset = _segments[Segments.STRINGS].reserve(value.length() + int.bytes + 1);
 		pointer<byte> dest = _segments[Segments.STRINGS].at(offset);
 		*ref<int>(dest) = sLength;
-		C.memcpy(dest + int.bytes, &value[0], sLength);
+		C.memcpy(dest + int.bytes, &value.c_str()[0], sLength);
 		return offset;
 	}
 	/*

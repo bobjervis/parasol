@@ -215,7 +215,7 @@ public class Message {
 	public ref<Node> node;
 }
 
-public string formatMessage(MessageId messageId, CompileString[] args) {
+public string formatMessage(MessageId messageId, substring[] args) {
 	string format = messageId.message();
 	string s;
 	int i = 0;
@@ -238,7 +238,7 @@ public string formatMessage(MessageId messageId, CompileString[] args) {
 //				printf("messageId %s position = %d args.length=%d\n", string(messageId), position, args.length());
 //				printf("args[%d]={%x,%d}\n", position, int(args[position].data), args[position].length);
 				if (position < args.length()) {
-					string inclusionString(args[position].data, args[position].length);
+					string inclusionString(args[position]);
 //					printf("inclusionString=%s\n", inclusionString);
 					s.append(inclusionString);
 				} else {

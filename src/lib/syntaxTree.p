@@ -283,7 +283,7 @@ public class SyntaxTree {
 		return _pool new Reference(v, offset, definition, location);
 	}
 	
-	public ref<Identifier> newIdentifier(CompileString value, Location location) {
+	public ref<Identifier> newIdentifier(substring value, Location location) {
 		return _pool new Identifier(_pool.newCompileString(value), location);
 	}
 
@@ -333,7 +333,7 @@ public class SyntaxTree {
 		return _pool new For(op, initializer, test, increment, body, location);
 	}
 
-	public ref<Selection> newSelection(ref<Node> left, CompileString name, Location location) {
+	public ref<Selection> newSelection(ref<Node> left, substring name, Location location) {
 		return _pool new Selection(left, _pool.newCompileString(name), location);
 	}
 
@@ -382,13 +382,10 @@ public class SyntaxTree {
 	}
 	
 	public ref<Constant> newConstant(long value, Location location) {
-		string s;
-		s.printf("%d", value);
-		CompileString v(s);
-		return newConstant(Operator.INTEGER, v, location);
+		return newConstant(Operator.INTEGER, string(value), location);
 	}
 	
-	public ref<Constant> newConstant(Operator op, CompileString value, Location location) {
+	public ref<Constant> newConstant(Operator op, substring value, Location location) {
 		return _pool new Constant(op, _pool.newCompileString(value), location);
 	}
 
@@ -1146,7 +1143,7 @@ public class Class extends Block {
 					type = tp;
 					continue;
 				}
-				ref<CompileString> identifier;
+				substring identifier;
 				switch (nl.node.op()) {
 				case IDENTIFIER:
 					ref<Identifier> nm = ref<Identifier>(nl.node);
@@ -1176,14 +1173,14 @@ public class Class extends Block {
 							oi.assignType(compileContext);
 							// oi is the interface method, classFunctions are the class' methods of the same name
 							if (!classMethods.doesImplement(oi))
-								add(MessageId.CLASS_MISSING_METHOD_FROM_INTERFACE, compileContext.pool(), *oi.name(), *identifier);
+								add(MessageId.CLASS_MISSING_METHOD_FROM_INTERFACE, compileContext.pool(), oi.name(), identifier);
 						}
 					} else {
 						for (int i = 0; i < o.instances().length(); i++) {
 							ref<OverloadInstance> oi = (*o.instances())[i];
 	//						printf("nm = {%x:%x} '%s'\n", nm.identifier().data, nm.identifier().length, (*nm.identifier()).asString());
 	//						printf("oi = {%x:%x} '%s'\n", oi.name().data, nm.identifier().length, (*oi.name()).asString());
-							add(MessageId.CLASS_MISSING_METHOD_FROM_INTERFACE, compileContext.pool(), *oi.name(), *identifier);
+							add(MessageId.CLASS_MISSING_METHOD_FROM_INTERFACE, compileContext.pool(), oi.name(), identifier);
 						}
 					}
 				}
@@ -1370,12 +1367,12 @@ public class InternalLiteral extends Node {
 }
 
 public class Constant extends Node {
-	private CompileString _value;
+	private substring _value;
 	
 	public int offset;					// For constants that get stored out-of-line, like FP data,
 										// this records the offset into the data section where the data was assigned.
 	
-	Constant(Operator op, CompileString value, Location location) {
+	Constant(Operator op, substring value, Location location) {
 		super(op, location);
 		_value = value;
 	}
@@ -1394,7 +1391,7 @@ public class Constant extends Node {
 
 	public void print(int indent) {
 		printBasic(indent);
-		printf(" '%s'", _value.asString());
+		printf(" '%s'", _value);
 		if (offset != 0)
 			printf(" offset %x", offset);
 		printf("\n");
@@ -1464,7 +1461,7 @@ public class Constant extends Node {
 		default:
 			print(0);
 			assert(false);
-			add(MessageId.UNFINISHED_GENERATE, compileContext.pool(), CompileString(" "/*this.class.name()*/), CompileString(string(op())), CompileString("Constant.foldInt"));
+			add(MessageId.UNFINISHED_GENERATE, compileContext.pool(), " "/*this.class.name()*/, string(op()), "Constant.foldInt");
 		}
 		return 0;
 	}
@@ -1553,9 +1550,9 @@ public class Constant extends Node {
 
 	public long intValue() {
 		long v = 0;
-		if (_value.length == 0)
+		if (_value.length() == 0)
 			return -1;
-		CompileStringReader r(_value);
+		text.SubstringReader r(&_value);
 		text.UTF8Decoder ur(&r);
 		
 		int c = ur.decodeNext();
@@ -1591,14 +1588,14 @@ public class Constant extends Node {
 	}
 
 	public long, boolean charValue() {
-		string s(_value.data, _value.length);
+		string s(_value);
 		int output;
 		boolean status;
 		(output, status) = unescapeParasolCharacter(s);
 		return output, status;
 	}
 
-	public CompileString value() {
+	public substring value() {
 		return _value;
 	}
  
@@ -1619,7 +1616,8 @@ public class Constant extends Node {
 			break;
 			
 		case	FLOATING_POINT:
-			if (_value.length > 0 && _value.data[_value.length - 1].toLowerCase() == 'f')
+			pointer<byte> pb = _value.c_str();
+			if (_value.length() > 0 && pb[_value.length() - 1].toLowerCase() == 'f')
 				type = compileContext.arena().builtInType(TypeFamily.FLOAT_32);
 			else
 				type = compileContext.arena().builtInType(TypeFamily.FLOAT_64);
@@ -1957,11 +1955,11 @@ class Import extends Node {
 					localName = ref<Identifier>(_namespaceNode.right());
 				if (isAllowedImport(symbol)) {
 					if (!_enclosingScope.defineImport(localName, symbol, compileContext.pool()))
-						_namespaceNode.add(MessageId.DUPLICATE, compileContext.pool(), localName.value());
+						_namespaceNode.add(MessageId.DUPLICATE, compileContext.pool(), localName.identifier());
 				} else
 					_namespaceNode.add(MessageId.INVALID_IMPORT, compileContext.pool());
 			} else
-				_namespaceNode.add(MessageId.UNDEFINED, compileContext.pool(), ref<Identifier>(_namespaceNode.right()).value());
+				_namespaceNode.add(MessageId.UNDEFINED, compileContext.pool(), ref<Identifier>(_namespaceNode.right()).identifier());
 			_importResolved = true;
 		}
 	}
@@ -3024,7 +3022,7 @@ public class Ternary extends Node {
 		// a file.
 		if (importNode.right() == null)
 			return false;
-		if (!_middle.identifier().equals(*importNode.right().identifier()))
+		if (_middle.identifier() != importNode.right().identifier())
 			return false;
 		if (_middle.op() == Operator.IDENTIFIER)
 			return importNode.middle().op() == Operator.EMPTY;
@@ -3354,7 +3352,7 @@ public class Node {
 		return this;
 	}
 
-	public ref<CompileString> identifier() {
+	public substring identifier() {
 		return null;
 	}
 
@@ -3414,14 +3412,13 @@ public class Node {
 	}
 	
 	ref<Node> createMethodCall(ref<Node> object, string functionName, ref<SyntaxTree> tree, ref<CompileContext> compileContext, ref<Node>... arguments) {
-		CompileString name(functionName);
 		ref<Type> objType = object.type.indirectType(compileContext);
 		
 		if (objType == null)
 			objType = object.type;
-		ref<Symbol> sym = objType.lookup(&name, compileContext);
+		ref<Symbol> sym = objType.lookup(functionName, compileContext);
 		if (sym == null || sym.class != Overload) {
-			add(MessageId.UNDEFINED, compileContext.pool(), name);
+			add(MessageId.UNDEFINED, compileContext.pool(), functionName);
 			return this;
 		}
 		ref<OverloadInstance> oi = (*ref<Overload>(sym).instances())[0];
@@ -3434,10 +3431,9 @@ public class Node {
 	}
 	
 	static ref<OverloadInstance> getOverloadInstance(ref<Type> objType, string functionName, ref<CompileContext> compileContext) {
-		CompileString name(functionName);
-		ref<Symbol> sym = objType.lookup(&name, compileContext);
+		ref<Symbol> sym = objType.lookup(functionName, compileContext);
 		if (sym == null || sym.class != Overload) {
-			add(MessageId.UNDEFINED, compileContext.pool(), name);
+			add(MessageId.UNDEFINED, compileContext.pool(), functionName);
 			return null;
 		}
 		return (*ref<Overload>(sym).instances())[0];
@@ -3463,7 +3459,7 @@ public class Node {
 	public string, boolean dottedName() {
 		string output;
 		boolean result;
-		ref<CompileString> identifier;
+		substring identifier;
 		switch (_op) {
 		case	DOT:
 			ref<Selection> s = ref<Selection>(this);
@@ -3482,7 +3478,7 @@ public class Node {
 		default:
 			return null, false;
 		}
-		output.append(identifier.data, identifier.length);
+		output.append(identifier);
 		return output, true;
 	}
 
@@ -3722,7 +3718,7 @@ public class Node {
 		return null;
 	}
 
-	public void addUnique(MessageId messageId, ref<MemoryPool> pool, CompileString... args) {
+	public void addUnique(MessageId messageId, ref<MemoryPool> pool, substring... args) {
 		for (ref<Commentary> c = _commentary; c != null; c = c.next()) {
 			if (c.messageId() == messageId)
 				return;
@@ -3730,7 +3726,7 @@ public class Node {
 		add(messageId, pool, args);
 	}
 
-	public void add(MessageId messageId, ref<MemoryPool> pool, CompileString... args) {
+	public void add(MessageId messageId, ref<MemoryPool> pool, substring... args) {
 		string message = formatMessage(messageId, args);
 		_commentary = pool.newCommentary(_commentary, messageId, message);
 	}
@@ -4062,11 +4058,11 @@ public class NodeList {
 		for (ref<NodeList> nl = this; nl != null; nl = nl.next) {
 			if (nl.node.op() == Operator.BIND) {
 				ref<Identifier> id = ref<Identifier>(ref<Binary>(nl.node).right());
-				nl.node.add(MessageId.INVALID_BINDING, compileContext.pool(), id.value());
+				nl.node.add(MessageId.INVALID_BINDING, compileContext.pool(), id.identifier());
 				nl.node.type = compileContext.errorType();
 			} else if (nl.node.op() == Operator.FUNCTION) {
 				ref<Identifier> id = ref<FunctionDeclaration>(nl.node).name();
-				nl.node.add(MessageId.INVALID_BINDING, compileContext.pool(), id.value());
+				nl.node.add(MessageId.INVALID_BINDING, compileContext.pool(), id.identifier());
 				nl.node.type = compileContext.errorType();
 			}
 		}

@@ -30,7 +30,6 @@ import parasol:pxi;
 import parasol:compiler.Arena;
 import parasol:compiler.Block;
 import parasol:compiler.CompileContext;
-import parasol:compiler.CompileString;
 import parasol:compiler.containsErrors;
 import parasol:compiler.FileStat;
 import parasol:compiler.ImportDirectory;
@@ -174,7 +173,7 @@ class CodePointObject extends script.Object {
 		Token t;
 		do {
 			t = scanner.next();
-			printf("%s %s\n", string(t), scanner.value().asString());
+			printf("%s %s\n", string(t), scanner.value());
 		} while(t != Token.END_OF_STREAM);
 		expression.print(0);
 		printSyntaxErrors(expression, &_source);
@@ -251,16 +250,16 @@ class ScanObject extends script.Object {
 		if (a != null) {
 			string s = a.toString();
 			boolean matches = false;
-			if (s.length() == scanner.value().length) {
+			if (s.length() == scanner.value().length()) {
 				matches = true;
 				for (int i = 0; i < s.length(); i++)
-					if (s[i] != scanner.value().data[i]) {
+					if (s[i] != scanner.value().c_str()[i]) {
 						matches = false;
 						break;
 					}
 			}
 			if (!matches) {
-				printf("Not the correct value: %s :: %s\n", s, scanner.value().asString());
+				printf("Not the correct value: %s :: %s\n", s, scanner.value());
 				return false;
 			}
 		}
@@ -321,11 +320,11 @@ class ScanObject extends script.Object {
 		Token t;
 		do {
 			t = scanner.next();
-			CompileString value = scanner.value();
+			substring value = scanner.value();
 			if (t == Token.ERROR)
-				printf("%s '%c' (%<$2.2x)\n", string(t), value.data[0]);
+				printf("%s '%c' (%<$2.2x)\n", string(t), value.c_str()[0]);
 			else
-				printf("%s %s\n", string(t), value.asString());
+				printf("%s %s\n", string(t), value);
 		} while(t != Token.END_OF_STREAM);
 	}
 }
@@ -407,7 +406,7 @@ class ExpressionObject extends script.Object {
 		Token t;
 		do {
 			t = scanner.next();
-			printf("%s %s\n", string(t), scanner.value().asString());
+			printf("%s %s\n", string(t), scanner.value());
 		} while(t != Token.END_OF_STREAM);
 		expression.print(0);
 		printSyntaxErrors(expression, &_source);
@@ -503,8 +502,8 @@ class StatementObject extends script.Object {
 		Token t;
 		do {
 			t = scanner.next();
-			CompileString value = scanner.value();
-			printf("%s %s\n", string(t), value.asString());
+			substring value = scanner.value();
+			printf("%s %s\n", string(t), value);
 		} while(t != Token.END_OF_STREAM);
 		expression.print(0);
 		printSyntaxErrors(expression, &_source);

@@ -83,7 +83,7 @@ public class LockScope extends Scope {
 		}
 	}
 
-	public ref<Symbol> lookup(ref<CompileString> name, ref<CompileContext> compileContext) {
+	public ref<Symbol> lookup(substring name, ref<CompileContext> compileContext) {
 		ref<Symbol> sym = super.lookup(name, compileContext);
 		if (sym != null)
 			return sym;
@@ -734,9 +734,9 @@ public class EnumScope extends ClassScope {
 		return -1;
 	}
 
-	public boolean hasInstance(ref<CompileString> name) {
+	public boolean hasInstance(substring name) {
 		for (i in _instances)
-			if (_instances[i].name().equals(*name))
+			if (_instances[i].name() == name)
 				return true;
 		return false;
 	}
@@ -1100,8 +1100,8 @@ class UnitScope extends Scope {
 				ref<Symbol> n = namespaceScope.lookup(sym.name(), compileContext);
 				if (n != null) {
 					if (n.definition().countMessages() == 0)
-						n.definition().add(MessageId.DUPLICATE, compileContext.pool(), *n.name());
-					sym.definition().add(MessageId.DUPLICATE, compileContext.pool(), *sym.name());
+						n.definition().add(MessageId.DUPLICATE, compileContext.pool(), n.name());
+					sym.definition().add(MessageId.DUPLICATE, compileContext.pool(), sym.name());
 				} else
 					namespaceScope.put(sym, compileContext.pool());
 			} else if (sym.class == Overload) {
@@ -1116,7 +1116,7 @@ class UnitScope extends Scope {
 					no.merge(o, compileContext);
 				} else {
 					if (n.definition().countMessages() == 0)
-						n.definition().add(MessageId.DUPLICATE, compileContext.pool(), *n.name());
+						n.definition().add(MessageId.DUPLICATE, compileContext.pool(), n.name());
 					o.markAsDuplicates(compileContext.pool());
 				}
 			}
@@ -1167,25 +1167,25 @@ public class Scope {
 	protected ref<Symbol>[SymbolKey] _symbols;
 
 	public class SymbolKey {
-		ref<CompileString> _key;
+		substring _key;
 		
 		public SymbolKey() {}
 		
-		SymbolKey(ref<CompileString> key) {
+		SymbolKey(substring key) {
 			_key = key;
 		}
 		
 		public int compare(SymbolKey other) {
-			if (_key.data == null)
-				return other._key.data != null ? -1 : 0;
-			return _key.compare(*other._key);
+			if (_key == null)
+				return other._key != null ? -1 : 0;
+			return _key.compare(other._key);
 		}
 		
 		public int hash() {
-			if (_key.length == 1)
-				return _key.data[0];
+			if (_key.length() == 1)
+				return _key.c_str()[0];
 			else
-				return _key.data[0] + (_key.data[_key.length - 1] << 7);
+				return _key.c_str()[0] + (_key.c_str()[_key.length() - 1] << 7);
 		}
 	}
 
@@ -1249,18 +1249,18 @@ public class Scope {
 			
 			if (arguments != null && arguments.node.op() == Operator.STRING) {
 				ref<Constant> str = ref<Constant>(arguments.node);
-				prefix = str.value().asString();
+				prefix = str.value();
 			}
 			ref<Type> t = sym.type();
 			if (t.family() == TypeFamily.TYPEDEF) {
 				ref<TypedefType> tt = ref<TypedefType>(t);
 				t = tt.wrappedType();
 				if (t.family() == TypeFamily.ENUM) {
-					header.printf("enum %s {\n", sym.name().asString());
+					header.printf("enum %s {\n", sym.name());
 					ref<EnumScope> s = ref<EnumScope>(t.scope());
 					for (int i = 0; i < s.instances().length(); i++) {
 						ref<Symbol> c = (*s.instances())[i];
-						header.printf("\t%s%s,\n", prefix, c.name().asString());
+						header.printf("\t%s%s,\n", prefix, c.name());
 					}
 					header.printf("};\n");
 				}
@@ -1292,7 +1292,7 @@ public class Scope {
 				}
 				ref<FunctionDeclaration> f = ref<FunctionDeclaration>(_definition);
 				if (f.name() != null)
-					printf(" func %s", f.name().value().asString());
+					printf(" func %s", f.name().identifier());
 				ref<ParameterScope> p = ref<ParameterScope>(this);
 				if (p.hasEllipsis())
 					printf(" has ellipsis");
@@ -1308,7 +1308,7 @@ public class Scope {
 //					printf(" c.name %p\n", c.name());
 //					c.name().print(4);
 //					printf(" c.name.value %p %d\n", c.name().value().data, c.name().value().length);
-					printf(" class %s", c.name().value().asString());
+					printf(" class %s", c.name().identifier());
 				}
 				break;
 				
@@ -1320,7 +1320,7 @@ public class Scope {
 				}
 				ref<Template> t = ref<Template>(_definition);
 				if (t.name() != null)
-					printf(" template %s", t.name().value().asString());
+					printf(" template %s", t.name().identifier());
 				break;
 				
 			default:
@@ -1334,7 +1334,7 @@ public class Scope {
 			if (sym.enclosing() == this)
 				i.get().print(indent + INDENT, printChildren);
 			else
-				printf("%*.*c    %s (imported)\n", indent, indent, ' ', sym.name().asString());
+				printf("%*.*c    %s (imported)\n", indent, indent, ' ', sym.name());
 		}
 		for (int i = 0; i < _constructors.length(); i++) {
 			printf("%*.*c  {Constructor} %p\n", indent, indent, ' ', _constructors[i].definition());
@@ -1429,21 +1429,21 @@ public class Scope {
 				ref<FunctionDeclaration> f = ref<FunctionDeclaration>(_definition);
 				if (f.functionCategory() == FunctionDeclaration.Category.DESTRUCTOR) {
 					if (f.name() != null)
-						return _enclosing.label() + ".~" + f.name().value().asString();
+						return _enclosing.label() + ".~" + f.name().identifier();
 				} else if (f.name() != null)
-					return _enclosing.label() + "." + f.name().value().asString();
+					return _enclosing.label() + "." + f.name().identifier();
 				break;
 				
 			case	CLASS:
 				ref<Class> c = ref<Class>(_definition);
 				if (c.name() != null)
-					return _enclosing.label() + "." + c.name().value().asString();
+					return _enclosing.label() + "." + c.name().identifier();
 				break;
 				
 			case	TEMPLATE:
 				ref<Template> t = ref<Template>(_definition);
 				if (t.name() != null)
-					return _enclosing.label() + "." + t.name().value().asString();
+					return _enclosing.label() + "." + t.name().identifier();
 				break;
 			}
 		}
@@ -1482,17 +1482,16 @@ public class Scope {
 	}
 
 	public ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, string name, ref<Type> type, ref<Node> initializer, ref<MemoryPool> memoryPool) {
-		CompileString cs = memoryPool.newCompileString(name);
-		ref<CompileString> pcs = memoryPool new CompileString(cs.data, cs.length);
-		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations, pcs, null, type, initializer);
-		SymbolKey key(pcs);
+		substring cs = memoryPool.newCompileString(name);
+		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations, cs, null, type, initializer);
+		SymbolKey key(cs);
 		if (_symbols.contains(key))
 			return null;
 		_symbols.insert(key, sym);
 		return sym;
 	}
 
-	public ref<Overload> defineOverload(ref<CompileString> name, Operator kind, ref<CompileContext> compileContext) {
+	public ref<Overload> defineOverload(substring name, Operator kind, ref<CompileContext> compileContext) {
 		ref<Symbol> sym = lookup(name, compileContext);
 		ref<Overload> o;
 		if (sym != null) {
@@ -1534,7 +1533,7 @@ public class Scope {
 		return true;
 	}
 
-	public ref<Namespace> defineNamespace(string domain, ref<Node> namespaceNode, ref<CompileString> name, ref<CompileContext> compileContext) {
+	public ref<Namespace> defineNamespace(string domain, ref<Node> namespaceNode, substring name, ref<CompileContext> compileContext) {
 		ref<Symbol> sym = lookup(name, compileContext);
 		if (sym != null) {
 			if (sym.class == Namespace)
@@ -1548,7 +1547,7 @@ public class Scope {
 		return nm;
 	}
 
-	ref<Symbol> definePlaceholderDelegate(ref<CompileString> name, ref<Type> type, ref<MemoryPool> memoryPool) {
+	ref<Symbol> definePlaceholderDelegate(substring name, ref<Type> type, ref<MemoryPool> memoryPool) {
 		SymbolKey key(name);
 		if (_symbols.contains(key))
 			return null;
@@ -1839,24 +1838,24 @@ public class Scope {
 		_symbols.insert(key, sym);
 	}
 
-	public ref<Symbol> lookup(ref<CompileString> name, ref<CompileContext> compileContext) {
+	public ref<Symbol> lookup(substring name, ref<CompileContext> compileContext) {
 		SymbolKey key(name);
 		ref<Symbol> sym = _symbols[key];
 		return sym;
 	}
 
 	public ref<Symbol> lookup(string name, ref<CompileContext> compileContext) {
-		CompileString cs(name);
-		return lookup(&cs, compileContext);
+		substring cs(name);
+		return lookup(cs, compileContext);
 	}
 
 	public ref<Symbol> lookup(pointer<byte> name, ref<CompileContext> compileContext) {
-		CompileString cs(name);
-		return lookup(&cs, compileContext);
+		substring cs(name);
+		return lookup(cs, compileContext);
 	}
 
-	public ref<Type>, ref<Symbol> assignOverload(ref<Node> node, CompileString name, ref<NodeList> arguments, Operator kind, ref<CompileContext> compileContext) {
-		OverloadOperation operation(kind, node, &name, arguments, compileContext);
+	public ref<Type>, ref<Symbol> assignOverload(ref<Node> node, substring name, ref<NodeList> arguments, Operator kind, ref<CompileContext> compileContext) {
+		OverloadOperation operation(kind, node, name, arguments, compileContext);
 		ref<Type> result;
 		ref<Symbol> symbol;
 
@@ -2041,7 +2040,7 @@ public class Scope {
 			case	MEMBER:
 				if (!type.isConcrete(compileContext)) {
 					ref<OverloadInstance> oi = type.firstAbstractMethod(compileContext);
-					symbol.definition().add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool(), *oi.name());
+					symbol.definition().add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool(), oi.name());
 //					assert(false);
 				}
 				break;
@@ -2066,7 +2065,7 @@ public class Scope {
 				printf("Unexpected storageClass: %s\n", string(symbol.storageClass()));
 				symbol.print(0, false);
 				assert(false);
-				symbol.add(MessageId.UNFINISHED_CHECK_STORAGE, compileContext.pool(), CompileString(string(symbol.storageClass())));
+				symbol.add(MessageId.UNFINISHED_CHECK_STORAGE, compileContext.pool(), string(symbol.storageClass()));
 			}
 		}
 	}

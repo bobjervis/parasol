@@ -494,9 +494,9 @@ public class Unary extends Node {
 			case SUBSCRIPT:
 				ref<Binary> b = ref<Binary>(_operand);
 				if (b.left().type.isVector(compileContext)) {
-					CompileString name("elementAddress");
+					substring name("elementAddress");
 					
-					ref<Symbol> sym = b.left().type.lookup(&name, compileContext);
+					ref<Symbol> sym = b.left().type.lookup(name, compileContext);
 					if (sym == null || sym.class != Overload) {
 						add(MessageId.UNDEFINED, compileContext.pool(), name);
 						break;

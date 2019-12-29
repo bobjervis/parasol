@@ -376,7 +376,7 @@ public class Arena {
 	}
 
 	private void missingRootSymbol(string name) {
-		_root.definition().add(MessageId.UNDEFINED_BUILT_IN, _global, CompileString(name));
+		_root.definition().add(MessageId.UNDEFINED_BUILT_IN, _global, name);
 	}
 
 	public ref<Type> builtInType(TypeFamily family) {

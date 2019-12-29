@@ -296,7 +296,7 @@ public class CompileContext {
 		default:
 			definition.print(0);
 			assert(false);
-			definition.add(MessageId.UNFINISHED_BUILD_SCOPE, _pool, CompileString("  "/*definition.class.name()*/), CompileString(string(definition.op())));
+			definition.add(MessageId.UNFINISHED_BUILD_SCOPE, _pool, "  "/*definition.class.name()*/, string(definition.op()));
 			definition.type = errorType();
 		}
 		_current = outer;
@@ -636,7 +636,7 @@ public class CompileContext {
 		default:
 			n.print(0);
 			assert(false);
-			n.add(MessageId.UNFINISHED_BUILD_SCOPE, _pool, CompileString(/*n.class.name()*/"***"), CompileString(string(n.op())));
+			n.add(MessageId.UNFINISHED_BUILD_SCOPE, _pool, /*n.class.name()*/"***", string(n.op()));
 			n.type = errorType();
 		}
 		
@@ -691,7 +691,7 @@ public class CompileContext {
 			break;
 
 		default:
-			n.add(MessageId.UNFINISHED_BIND_DECLARATORS, _pool, CompileString("   "/*n.class.name()*/), CompileString(string(n.op())));
+			n.add(MessageId.UNFINISHED_BIND_DECLARATORS, _pool, "   "/*n.class.name()*/, string(n.op()));
 			n.type = errorType();
 		}
 	}
@@ -1039,7 +1039,7 @@ public class CompileContext {
 		default:
 			n.print(0);
 			assert(false);
-			n.add(MessageId.UNFINISHED_CONTROL_FLOW, _pool, CompileString("  "/*n.class.name()*/), CompileString(string(n.op())));
+			n.add(MessageId.UNFINISHED_CONTROL_FLOW, _pool, "  "/*n.class.name()*/, string(n.op()));
 			n.type = errorType();
 		}
 	}
@@ -1283,23 +1283,23 @@ public class MemoryPool extends memory.NoReleasePool {
 		clear();
 	}
 	
-	public CompileString newCompileString(string s) {
+	public substring newCompileString(string s) {
 		pointer<byte> data = pointer<byte>(alloc(s.length()));
 		C.memcpy(data, &s[0], s.length());
-		return CompileString(data, s.length());
+		return substring(data, s.length());
 	}
 	
-	public CompileString newCompileString(CompileString s) {
-		pointer<byte> data = pointer<byte>(alloc(s.length));
-		C.memcpy(data, s.data, s.length);
-		return CompileString(data, s.length);
+	public substring newCompileString(substring s) {
+		pointer<byte> data = pointer<byte>(alloc(s.length()));
+		C.memcpy(data, s.c_str(), s.length());
+		return substring(data, s.length());
 	}
 	
-	public ref<Symbol> newPlainSymbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<CompileString> name, ref<Node> source, ref<Node> type, ref<Node> initializer) {
+	public ref<Symbol> newPlainSymbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, substring name, ref<Node> source, ref<Node> type, ref<Node> initializer) {
 		return super new PlainSymbol(visibility, storageClass, enclosing, annotations, this, name, source, type, initializer);
 	}
 
-	public ref<Symbol> newPlainSymbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<CompileString> name, ref<Node> source, ref<Type> type, ref<Node> initializer) {
+	public ref<Symbol> newPlainSymbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, substring name, ref<Node> source, ref<Type> type, ref<Node> initializer) {
 		return super new PlainSymbol(visibility, storageClass, enclosing, annotations, this, name, source, type, initializer);
 	}
 
@@ -1307,11 +1307,11 @@ public class MemoryPool extends memory.NoReleasePool {
 		return super new DelegateSymbol(enclosing, delegate, this);
 	}
 	
-	public ref<Overload> newOverload(ref<Scope> enclosing, ref<CompileString> name, Operator kind) {
+	public ref<Overload> newOverload(ref<Scope> enclosing, substring name, Operator kind) {
 		return super new Overload(enclosing, null, this, name, kind);
 	}
 
-	public ref<OverloadInstance> newOverloadInstance(ref<Overload> overload, Operator visibility, boolean isStatic, boolean isFinal, ref<Scope> enclosing, ref<Node> annotations, ref<CompileString> name, ref<Node> source, ref<ParameterScope> functionScope) {
+	public ref<OverloadInstance> newOverloadInstance(ref<Overload> overload, Operator visibility, boolean isStatic, boolean isFinal, ref<Scope> enclosing, ref<Node> annotations, substring name, ref<Node> source, ref<ParameterScope> functionScope) {
 		return super new OverloadInstance(overload, visibility, isStatic, isFinal, enclosing, annotations, this, name, source, functionScope);
 	}
 
@@ -1320,7 +1320,7 @@ public class MemoryPool extends memory.NoReleasePool {
 	}
 	
 	public ref<Namespace> newNamespace(string domain, ref<Node> namespaceNode, ref<Scope> enclosing, 
-									ref<Node> annotations, ref<CompileString> name, ref<Arena> arena) {
+									ref<Node> annotations, substring name, ref<Arena> arena) {
 		return super new Namespace(domain, namespaceNode, enclosing, annotations, name, arena, this);
 	}
 

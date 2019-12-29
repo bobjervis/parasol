@@ -31,9 +31,7 @@ public class Parser {
 		ref<Block> block = _tree.newBlock(Operator.UNIT, false, _scanner.location());
 		for (;;) {
 			Token t = _scanner.next();
-			CompileString cs = _scanner.value();
 			int line = _scanner.lineNumber(_scanner.location());
-			string s(cs.data, cs.length);
 			if (t == Token.END_OF_STREAM) {
 				_scanner.close();
 				return block;
@@ -579,10 +577,10 @@ public class Parser {
 		}
 		Location lastIdentifier = _scanner.location();
 		string text;
-		CompileString spelling = _scanner.value();
+		substring spelling = _scanner.value();
 		for (;;) {
-			text = spelling.asString();
-			spelling.data = &text[0];
+			text = spelling;
+			spelling = text;
 			t = _scanner.next();
 			if (t != Token.DOT) {
 				if (lastName != null)
@@ -1906,7 +1904,9 @@ public class Parser {
 		if (n.op() != Operator.IDENTIFIER)
 			return false;
 		ref<Identifier> id = ref<Identifier>(n);
-		return id.value().equals(enclosingClassName().value());
+		substring ss = enclosingClassName().identifier();
+//		printf("isClassName %s == %s -> %s\n", id.identifier(), ss, id.identifier() == ss);
+		return id.identifier() == ss;
 	}
 }
 

@@ -116,7 +116,7 @@ boolean scan(string filename) {
 		case CHARACTER:
 		case STRING:
 		case ANNOTATION:
-			ti.value = string(scanner.value().asString());
+			ti.value = scanner.value();
 		}
 		printf("[] %s ", string(ti.token));
 		switch (ti.token){
@@ -160,7 +160,7 @@ boolean scan(string filename) {
 		case CHARACTER:
 		case STRING:
 		case ANNOTATION:
-			string s = nscanner.value().asString();
+			string s = nscanner.value();
 			if (tokens[i].value != s) {
 				printf("[%4d] Token %s does not match value: %s:%s {%s} %d(%d)\n", i, string(t), tokens[i].value, s, quot, scanner.lineNumber(tokens[i].location) + 1, tokens[i].location.offset);
 				return false;

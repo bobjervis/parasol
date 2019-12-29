@@ -27,7 +27,6 @@
 namespace parasol:json;
 
 import parasol:compiler.codePointClass;
-import parasol:compiler.CompileString;
 import parasol:compiler.CPC_LETTER;
 
 import parasol:text.memDump;

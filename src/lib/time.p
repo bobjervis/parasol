@@ -215,6 +215,24 @@ public class Time {
 			return Time(0);
 		}
 	}
+	/**
+	 * Add a Duration to the current time.
+	 *
+	 * @param d The Duration to add to this time.
+	 */
+	public Time plus(Duration d) {
+		long millis = d.seconds() / MILLIS_PER_SECOND + d.nanoseconds() * NANOS_PER_MILLI;
+		return Time(_value + millis);
+	}
+	/**
+	 * Subtract a Duration from the current time.
+	 *
+	 * @param d The Duration to subtract from this time.
+	 */
+	public Time minus(Duration d) {
+		long millis = d.seconds() / MILLIS_PER_SECOND + d.nanoseconds() * NANOS_PER_MILLI;
+		return Time(_value + millis);
+	}
 }
 /**
  * This class represents an interval of time, not a particular point in time.

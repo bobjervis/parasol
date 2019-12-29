@@ -626,9 +626,9 @@ public class ClassType extends Type {
 	public string signature() {
 		if (_definition != null && _definition.name() != null) {
 			if (_final)
-				return "final " + _definition.name().identifier().asString();
+				return "final " + _definition.name().identifier();
 			else
-				return _definition.name().identifier().asString();
+				return _definition.name().identifier();
 		} else
 			return super.signature();
 	}
@@ -1415,11 +1415,11 @@ public class TemplateType extends Type {
 	}
 
 	public string signature() {
-		return "Template " + definingSymbol().name().asString();
+		return "Template " + definingSymbol().name();
 	}
 	
 	public string templateName() {
-		return definingSymbol().name().asString();
+		return definingSymbol().name();
 	}
 
 	protected boolean sameAs(ref<Type> other) {
@@ -1845,9 +1845,7 @@ public class Type {
 	}
 
 	public ref<OverloadInstance> assignmentMethod(ref<CompileContext> compileContext) {
-		CompileString name("copy");
-		
-		ref<Symbol> sym = lookup(&name, compileContext);
+		ref<Symbol> sym = lookup("copy", compileContext);
 		if (sym != null && sym.class == Overload) {
 			ref<Overload> o = ref<Overload>(sym);
 			for (int i = 0; i < o.instances().length(); i++) {
@@ -1862,9 +1860,7 @@ public class Type {
 	}
 
 	public ref<OverloadInstance> tempAssignmentMethod(ref<CompileContext> compileContext) {
-		CompileString name("copyTemp");
-		
-		ref<Symbol> sym = lookup(&name, compileContext);
+		ref<Symbol> sym = lookup("copyTemp", compileContext);
 		if (sym != null && sym.class == Overload) {
 			ref<Overload> o = ref<Overload>(sym);
 			for (int i = 0; i < o.instances().length(); i++) {
@@ -1879,9 +1875,7 @@ public class Type {
 	}
 
 	public ref<OverloadInstance> storeMethod(ref<CompileContext> compileContext) {
-		CompileString name("store");
-		
-		ref<Symbol> sym = lookup(&name, compileContext);
+		ref<Symbol> sym = lookup("store", compileContext);
 		if (sym != null && sym.class == Overload) {
 			ref<Overload> o = ref<Overload>(sym);
 			for (int i = 0; i < o.instances().length(); i++) {
@@ -1956,9 +1950,7 @@ public class Type {
 	}
 	
 	public ref<OverloadInstance> compareMethod(ref<CompileContext> compileContext) {
-		CompileString name("compare");
-		
-		ref<Symbol> sym = lookup(&name, compileContext);
+		ref<Symbol> sym = lookup("compare", compileContext);
 		if (sym != null && sym.class == Overload) {
 			ref<Overload> o = ref<Overload>(sym);
 			for (int i = 0; i < o.instances().length(); i++) {
@@ -1974,9 +1966,7 @@ public class Type {
 	}
 
 	public ref<OverloadInstance> stringConstantCompareMethod(ref<CompileContext> compileContext) {
-		CompileString name("compare");
-		
-		ref<Symbol> sym = lookup(&name, compileContext);
+		ref<Symbol> sym = lookup("compare", compileContext);
 		if (sym != null && sym.class == Overload) {
 			ref<Overload> o = ref<Overload>(sym);
 			for (int i = 0; i < o.instances().length(); i++) {
@@ -2319,7 +2309,7 @@ public class Type {
 		return base.monitorCanExtend(compileContext);
 	}
 
-	public ref<Symbol> lookup(ref<CompileString> name, ref<CompileContext> compileContext) {
+	public ref<Symbol> lookup(substring name, ref<CompileContext> compileContext) {
 		for (ref<Type> current = this; current != null; current = current.assignSuper(compileContext)) {				
 			if (current.scope() != null) {
 				ref<Symbol> sym = current.scope().lookup(name, compileContext);

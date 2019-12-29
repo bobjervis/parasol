@@ -68,11 +68,11 @@ public class Reference extends Node {
 }
 
 public class Identifier extends Node {
-	private CompileString _value;
+	private substring _value;
 	private boolean _definition;
 	private ref<Symbol> _symbol;
 
-	Identifier(CompileString value, Location location) {
+	Identifier(substring value, Location location) {
 		super(Operator.IDENTIFIER, location);
 		_value = value;
 	}
@@ -130,11 +130,7 @@ public class Identifier extends Node {
 	}
 
 	public ref<Identifier> clone(ref<SyntaxTree> tree) {
-		byte[] value;
-		value.resize(_value.length);
-		C.memcpy(&value[0], _value.data, _value.length);
-		CompileString cs(&value);
-		ref<Identifier> id = tree.newIdentifier(cs, location());
+		ref<Identifier> id = tree.newIdentifier(_value, location());
 		id._symbol = _symbol;
 		id._definition = _definition;
 		return ref<Identifier>(id.finishClone(this, tree.pool()));
@@ -216,7 +212,7 @@ public class Identifier extends Node {
 	
 	public void print(int indent) {
 		printBasic(indent);
-		printf(" %s S%p '%s'", _definition ? "def" : "", _symbol, _value.asString());
+		printf(" %s S%p '%s'", _definition ? "def" : "", _symbol, _value);
 		if (_symbol != null)
 			printf(" %s", string(_symbol.storageClass()));
 		printf("\n");
@@ -229,7 +225,7 @@ public class Identifier extends Node {
 					printf("bindType failed for %s\n", t == null ? "<null>" : t.signature());
 					_symbol.print(0, false);
 					assert(false);
-					add(MessageId.UNFINISHED_MARKUP_DECLARATOR, compileContext.pool(), CompileString("  "/*this.class.name()*/), CompileString(string(op())));
+					add(MessageId.UNFINISHED_MARKUP_DECLARATOR, compileContext.pool(), "  "/*this.class.name()*/, string(op()));
 					type = compileContext.errorType();
 					return;
 				}
@@ -253,12 +249,12 @@ public class Identifier extends Node {
 		if (other.op() != op())
 			return false;
 		ref<Identifier> id = ref<Identifier>(other);
-		return _value.equals(id._value);
+		return _value == id._value;
 	}
 
 
 	public ref<Namespace> makeNamespaces(ref<Scope> domainScope, string domain, ref<CompileContext> compileContext) {
-		ref<Namespace> nm = domainScope.defineNamespace(domain, this, &_value, compileContext);
+		ref<Namespace> nm = domainScope.defineNamespace(domain, this, _value, compileContext);
 		if (nm == null) {
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
 			return null;
@@ -269,7 +265,7 @@ public class Identifier extends Node {
 	}
 
 	public ref<Namespace> getNamespace(ref<Scope> domainScope, ref<CompileContext> compileContext) {
-		ref<Symbol> sym = domainScope.lookup(&_value, compileContext);
+		ref<Symbol> sym = domainScope.lookup(_value, compileContext);
 		if (sym != null && sym.class == Namespace)
 			return ref<Namespace>(sym);
 		else
@@ -363,7 +359,7 @@ public class Identifier extends Node {
 
 	void bindFunctionOverload(Operator visibility, boolean isStatic, boolean isFinal, ref<Node> annotations, ref<Scope> enclosing, ref<ParameterScope> funcScope, ref<CompileContext> compileContext) {
 		_definition = true;
-		ref<Overload> o = enclosing.defineOverload(&_value, Operator.FUNCTION, compileContext);
+		ref<Overload> o = enclosing.defineOverload(_value, Operator.FUNCTION, compileContext);
 		if (o != null) {
 			_symbol = o.addInstance(visibility, isStatic, isFinal, annotations, this, funcScope, compileContext);
 			switch (_symbol.storageClass()) {
@@ -380,7 +376,7 @@ public class Identifier extends Node {
 	void bindTemplateOverload(Operator visibility, boolean isStatic, boolean isFinal, ref<Node> annotations, ref<Scope> enclosing, ref<Template> templateDef, boolean isMonitor, ref<CompileContext> compileContext) {
 		_definition = true;
 		ref<ParameterScope> templateScope = compileContext.createParameterScope(templateDef, ParameterScope.Kind.TEMPLATE);
-		ref<Overload> o = enclosing.defineOverload(&_value, Operator.TEMPLATE, compileContext);
+		ref<Overload> o = enclosing.defineOverload(_value, Operator.TEMPLATE, compileContext);
 		if (o != null) {
 			_symbol = o.addInstance(visibility, isStatic, isFinal, annotations, this, templateScope, compileContext);
 			if (_symbol == null)
@@ -394,17 +390,17 @@ public class Identifier extends Node {
 
 	void bindConstructor(Operator visibility, ref<Scope> enclosing, ref<ParameterScope> funcScope, ref<CompileContext> compileContext) {
 		_definition = true;
-		_symbol = compileContext.pool().newOverloadInstance(null, visibility, false, false, enclosing, compileContext.annotations, &_value, funcScope.definition(), funcScope);
+		_symbol = compileContext.pool().newOverloadInstance(null, visibility, false, false, enclosing, compileContext.annotations, _value, funcScope.definition(), funcScope);
 		_symbol._doclet = enclosing.file().tree().getDoclet(this);
 	}
 
 	void bindDestructor(Operator visibility, ref<Scope> enclosing, ref<ParameterScope> funcScope, ref<CompileContext> compileContext) {
 		_definition = true;
-		_symbol = compileContext.pool().newOverloadInstance(null, visibility, false, false, enclosing, compileContext.annotations, &_value, funcScope.definition(), funcScope);
+		_symbol = compileContext.pool().newOverloadInstance(null, visibility, false, false, enclosing, compileContext.annotations, _value, funcScope.definition(), funcScope);
 	}
 
 	void resolveAsEnum(ref<EnumInstanceType> enumType, ref<CompileContext>  compileContext) {
-		_symbol = enumType.scope().lookup(&_value, compileContext);
+		_symbol = enumType.scope().lookup(_value, compileContext);
 		if (_symbol == null) {
 			type = compileContext.errorType();
 			add(MessageId.UNDEFINED, compileContext.pool(), _value);
@@ -414,7 +410,7 @@ public class Identifier extends Node {
 
 	ref<Symbol> resolveAsMember(ref<Type> classType, ref<CompileContext>  compileContext) {
 		for (;;) {
-			_symbol = classType.scope().lookup(&_value, compileContext);
+			_symbol = classType.scope().lookup(_value, compileContext);
 			if (_symbol == null) {
 				classType = classType.assignSuper(compileContext);
 				if (classType == null)
@@ -430,16 +426,10 @@ public class Identifier extends Node {
 		return null;
 	}
 	
-	public CompileString value() {
+	public substring identifier() {
 		return _value;
 	}
-/*
-	bool definition() const { return _definition; }
-*/
-	public ref<CompileString> identifier() { 
-		return &_value;
-	}
- 
+
 	private void assignTypes(ref<CompileContext> compileContext) {
 		if (_definition) {
 			if (_symbol != null && _symbol.declaredStorageClass() == StorageClass.STATIC && _symbol.enclosing().storageClass() == StorageClass.STATIC) {
@@ -452,7 +442,7 @@ public class Identifier extends Node {
 		for (ref<Scope> s = compileContext.current(); s != null; s = s.enclosing()) {
 			ref<Scope> available = s;
 			do {
-				_symbol = available.lookup(&_value, compileContext);
+				_symbol = available.lookup(_value, compileContext);
 				if (_symbol != null) {
 					// For non-lexical scopes (i.e. base classes), do not include private
 					// variables.
@@ -519,11 +509,11 @@ public class Identifier extends Node {
 
 public class Selection extends Node {
 	private ref<Node> _left;
-	private CompileString _name;
+	private substring _name;
 	private ref<Symbol> _symbol;
 	private boolean _indirect;
 
-	Selection(ref<Node> left, CompileString name, Location location) {
+	Selection(ref<Node> left, substring name, Location location) {
 		super(Operator.DOT, location);
 		_left = left;
 		_name = name;
@@ -534,7 +524,7 @@ public class Selection extends Node {
 		_left = left;
 		_symbol = symbol;
 		_indirect = indirect;
-		_name = *symbol.name();
+		_name = symbol.name();
 	}
 
 	public boolean traverse(Traversal t, TraverseAction func(ref<Node> n, address data), address data) {
@@ -620,7 +610,7 @@ public class Selection extends Node {
 			type = _left.type;
 			return;
 		}
-		OverloadOperation operation(kind, this, &_name, arguments, compileContext);
+		OverloadOperation operation(kind, this, _name, arguments, compileContext);
 		ref<Type> t;
 		switch (_left.type.family()) {
 		case	VAR:
@@ -642,7 +632,7 @@ public class Selection extends Node {
 			break;
 
 		default:
-			ref<Symbol> sym = _left.type.lookup(&_name, compileContext);
+			ref<Symbol> sym = _left.type.lookup(_name, compileContext);
 			if (sym != null && sym.class == PlainSymbol) {
 				type = sym.assignType(compileContext);
 				_symbol = sym;
@@ -679,7 +669,7 @@ public class Selection extends Node {
 		if (other.op() != Operator.DOT)
 			return false;
 		ref<Selection> sel = ref<Selection>(other);
-		if (!_name.equals(sel._name))
+		if (_name != sel._name)
 			return false;
 		return _left.conforms(sel._left);
 	}
@@ -687,7 +677,7 @@ public class Selection extends Node {
 	public void print(int indent) {
 		_left.print(indent + INDENT);
 		printBasic(indent);
-		printf(" '%s'", _name.asString());
+		printf(" '%s'", _name);
 		if (_indirect)
 			printf(" indirect ");
 		if (_symbol != null)
@@ -695,8 +685,8 @@ public class Selection extends Node {
 		printf("\n");
 	}
 
-	public ref<CompileString> identifier() {
-		return &_name;
+	public substring identifier() {
+		return _name;
 	}
 
 	public ref<Symbol> symbol() {
@@ -725,7 +715,7 @@ public class Selection extends Node {
 		return _left; 
 	}
 
-	public CompileString name() {
+	public substring name() {
 		return _name; 
 	}
 
@@ -839,7 +829,7 @@ public class Selection extends Node {
 	}
 
 	private boolean lookupInType(ref<Type> t, ref<CompileContext> compileContext) {
-		ref<Symbol> sym = t.lookup(&_name, compileContext);
+		ref<Symbol> sym = t.lookup(_name, compileContext);
 		if (sym == null)
 			return false;
 		if (sym.class == Overload) {

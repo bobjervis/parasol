@@ -131,7 +131,7 @@ class Disassembler {
 		for (int i = 0; i < _dataMapLength; i++) {
 			string prefix;
 			prefix.printf("[%d]", i);
-			printf("      %8s %8.8x %s\n", prefix, _dataMap[i].offset, _dataMap[i].name().asString());
+			printf("      %8s %8.8x %s\n", prefix, _dataMap[i].offset, _dataMap[i].name());
 		}
 		printf("\n    vtables\n");
 		pointer<address> vp = pointer<address>(_physical + _pxiHeader.vtablesOffset);
@@ -153,7 +153,7 @@ class Disassembler {
 				}
 				printf("        %2d: %8x", i, vp[i]);
 				if (methodIndex >= FIRST_USER_METHOD && methodIndex - FIRST_USER_METHOD < methods.length())
-					printf(" %s", (*methods)[methodIndex - FIRST_USER_METHOD].name().asString());
+					printf(" %s", (*methods)[methodIndex - FIRST_USER_METHOD].name());
 				printf("\n");
 			}
 		}
@@ -1486,7 +1486,7 @@ class Disassembler {
 			// It's somewhere in static data.
 			int index = findSymbol(location);
 			if (index >= 0) {
-				printf(" %s", _dataMap[index].name().asString());
+				printf(" %s", _dataMap[index].name());
 				if (_dataMap[index].offset < location)
 					printf("+%d", location - _dataMap[index].offset);
 			}

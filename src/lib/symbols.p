@@ -20,7 +20,7 @@ public class Namespace extends Symbol {
 	private string _dottedName;
 	private string _domain;
 
-	Namespace(string domain, ref<Node> namespaceNode, ref<Scope> enclosing, ref<Node> annotations, ref<CompileString> name, ref<Arena> arena, ref<MemoryPool> pool) {
+	Namespace(string domain, ref<Node> namespaceNode, ref<Scope> enclosing, ref<Node> annotations, substring name, ref<Arena> arena, ref<MemoryPool> pool) {
 		super(Operator.PUBLIC, StorageClass.ENCLOSING, enclosing, annotations, pool, name, null);
 		_symbols = arena.createNamespaceScope(enclosing, this);
 		if (namespaceNode != null) {
@@ -34,7 +34,7 @@ public class Namespace extends Symbol {
 	public void print(int indent, boolean printChildScopes) {
 		printf("%*.*c", indent, indent, ' ');
 		if (_name != null)
-			printf("%s", _name.asString());
+			printf("%s", _name);
 		else
 			printf("<null>");
 		printf(" Namespace %p %s", this, string(visibility()));
@@ -57,7 +57,7 @@ public class Namespace extends Symbol {
 	ref<Symbol> findImport(ref<Ternary> namespaceNode, ref<CompileContext> compileContext) {
 		ref<Identifier> id = ref<Identifier>(namespaceNode.right());
 		if (namespaceNode.middle().op() == Operator.EMPTY) {
-			if (name() != null && name().equals(*id.identifier()))
+			if (name() != null && name() == id.identifier())
 				return this;
 			else
 				return null;
@@ -149,13 +149,13 @@ public class PlainSymbol extends Symbol {
 	private ref<Node> _initializer;
 	private Access _accessFlags;
 	
-	PlainSymbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<MemoryPool> pool, ref<CompileString> name, ref<Node> source, ref<Node> typeDeclarator, ref<Node> initializer) {
+	PlainSymbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<MemoryPool> pool, substring name, ref<Node> source, ref<Node> typeDeclarator, ref<Node> initializer) {
 		super(visibility, storageClass, enclosing, annotations, pool, name, source);
 		_typeDeclarator = typeDeclarator;
 		_initializer = initializer;
 	}
 	
-	PlainSymbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<MemoryPool> pool, ref<CompileString> name, ref<Node> source, ref<Type> type, ref<Node> initializer) {
+	PlainSymbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<MemoryPool> pool, substring name, ref<Node> source, ref<Type> type, ref<Node> initializer) {
 		super(visibility, storageClass, enclosing, annotations, pool, name, source);
 		_type = type;
 		_initializer = initializer;
@@ -163,7 +163,7 @@ public class PlainSymbol extends Symbol {
 	
 	public void print(int indent, boolean printChildScopes) {
 //		printf("%p name [ %p. %d ]\n", this, _name.data, _name.length);
-		printf("%*.*c%s PlainSymbol %p %s", indent, indent, ' ', _name.asString(), this, string(visibility()));
+		printf("%*.*c%s PlainSymbol %p %s", indent, indent, ' ', _name, this, string(visibility()));
 		if (declaredStorageClass() != StorageClass.ENCLOSING)
 			printf(" %s", string(declaredStorageClass()));
 		if (_type != null)
@@ -437,7 +437,7 @@ public class Overload extends Symbol {
 	private Operator _kind;
 	ref<OverloadInstance>[] _instances;
 
-	Overload(ref<Scope>  enclosing, ref<Node> annotations, ref<MemoryPool> pool, ref<CompileString> name, Operator kind) {
+	Overload(ref<Scope>  enclosing, ref<Node> annotations, ref<MemoryPool> pool, substring name, Operator kind) {
 		super(Operator.PUBLIC, StorageClass.ENCLOSING, enclosing, annotations, pool, name, null);
 		_kind = kind;
 	}
@@ -452,8 +452,8 @@ public class Overload extends Symbol {
 		for (int i = 0; i < _instances.length(); i++) {
 			for (int j = i + 1; j < _instances.length(); j++) {
 				if (_instances[i].parameterScope().equals(_instances[j].parameterScope(), compileContext)) {
-					_instances[i].definition().add(MessageId.DUPLICATE, compileContext.pool(), *_name);
-					_instances[j].definition().add(MessageId.DUPLICATE, compileContext.pool(), *_name);
+					_instances[i].definition().add(MessageId.DUPLICATE, compileContext.pool(), _name);
+					_instances[j].definition().add(MessageId.DUPLICATE, compileContext.pool(), _name);
 				}
 			}
 		}
@@ -479,7 +479,7 @@ public class Overload extends Symbol {
 
 	public void markAsDuplicates(ref<MemoryPool> pool) {
 		for (i in _instances)
-			_instances[i].definition().addUnique(MessageId.DUPLICATE, pool, *_instances[i].name());
+			_instances[i].definition().addUnique(MessageId.DUPLICATE, pool, _instances[i].name());
 	}
 
 	public boolean doesImplement(ref<OverloadInstance> interfaceMethod) {
@@ -493,7 +493,7 @@ public class Overload extends Symbol {
 	}
 
 	public void print(int indent, boolean printChildScopes) {
-		printf("%*.*c%s Overload %p %s %s\n", indent, indent, ' ', _name.asString(), this, string(visibility()), string(_kind));
+		printf("%*.*c%s Overload %p %s %s\n", indent, indent, ' ', _name, this, string(visibility()), string(_kind));
 		for (int i = 0; i < _instances.length(); i++)
 			_instances[i].print(indent + INDENT, printChildScopes);
 		printAnnotations(indent + INDENT);
@@ -533,7 +533,7 @@ public class DelegateOverload extends OverloadInstance {
 	}
 
 	public void print(int indent, boolean printChildScopes) {
-		printf("%*.*c%s DelegateOverload %p ", indent, indent, ' ', _delegate.name().asString(), this);
+		printf("%*.*c%s DelegateOverload %p ", indent, indent, ' ', _delegate.name(), this);
 		printf("\n");
 	}
 
@@ -549,7 +549,7 @@ public class OverloadInstance extends Symbol {
 	private ref<TemplateInstanceType> _instances;	// For template's, the actual instances of those
 	private ref<Overload> _overload;
 
-	OverloadInstance(ref<Overload> overload, Operator visibility, boolean isStatic, boolean isFinal, ref<Scope> enclosing, ref<Node> annotations, ref<MemoryPool> pool, ref<CompileString> name, ref<Node> source, ref<ParameterScope> parameterScope) {
+	OverloadInstance(ref<Overload> overload, Operator visibility, boolean isStatic, boolean isFinal, ref<Scope> enclosing, ref<Node> annotations, ref<MemoryPool> pool, substring name, ref<Node> source, ref<ParameterScope> parameterScope) {
 		super(visibility, isStatic ? StorageClass.STATIC : StorageClass.ENCLOSING, enclosing, annotations, pool, name, source);
 		_overload = overload;
 		_parameterScope = parameterScope;
@@ -598,7 +598,7 @@ public class OverloadInstance extends Symbol {
 	}
 
 	public void printSimple() {
-		printf("%s OverloadInstance %p %s %s%s", _name.asString(), this, string(visibility()), string(storageClass()), _overridden ? " overridden" : "");
+		printf("%s OverloadInstance %p %s %s%s", _name, this, string(visibility()), string(storageClass()), _overridden ? " overridden" : "");
 		if (_parameterScope.nativeBinding) {
 			printf(" @%x ", offset);
 			if (_type != null)
@@ -798,7 +798,7 @@ public class OverloadInstance extends Symbol {
 	}
 
 	public boolean overrides(ref<OverloadInstance> baseMethod) {
-		if (!baseMethod.name().equals(*_name))
+		if (baseMethod.name() != _name)
 			return false;
 		// either they must both have ellipsis, or neither
 		if (_parameterScope.parameters().length() != baseMethod._parameterScope.parameters().length())
@@ -899,7 +899,7 @@ public class Symbol {
 	public int offset;				// Variable offset within scope block
 	public address segment;			// Variable segment, for static variables used by code generators
 	public address value;			// Scratch address for use by code generators.
-	protected ref<CompileString> _name;
+	protected substring _name;
 	protected ref<Type> _type;
 	protected ref<Scope> _enclosing;
 	private ref<ref<Call>[string]> _annotations;
@@ -912,7 +912,7 @@ public class Symbol {
 	private StorageClass _storageClass;
 	private Operator _visibility;
 
-	protected Symbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<MemoryPool> pool, ref<CompileString> name, ref<Node> definition) {
+	protected Symbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<MemoryPool> pool, substring name, ref<Node> definition) {
 		_visibility = visibility;
 		if (annotations != null) {
 			_annotations = pool new ref<Call>[string];
@@ -945,7 +945,7 @@ public class Symbol {
 //			printf("assignType()\n");
 //			print(4, false);
 			if (_inProgress) {
-				_definition.add(MessageId.CIRCULAR_DEFINITION, compileContext.pool(), *_name);
+				_definition.add(MessageId.CIRCULAR_DEFINITION, compileContext.pool(), _name);
 				_type = compileContext.errorType();
 			} else {
 				_inProgress = true;
@@ -996,7 +996,7 @@ public class Symbol {
 		} else {
 			ref<Call> b = ref<Call>(annotations);
 			ref<Identifier> id = ref<Identifier>(b.target());
-			_annotations.insert(id.identifier().asString(), b, pool);
+			_annotations.insert(id.identifier(), b, pool);
 		}
 	}
 
@@ -1061,7 +1061,7 @@ public class Symbol {
 		return 0;
 	}
 
-	public void add(MessageId messageId, ref<MemoryPool> pool, CompileString... args) {
+	public void add(MessageId messageId, ref<MemoryPool> pool, substring... args) {
 		_definition.add(messageId, pool, args);
 	}
 
@@ -1125,7 +1125,7 @@ public class Symbol {
 		return _storageClass;
 	}
 
-	public ref<CompileString> name() {
+	public substring name() {
 		return _name;
 	}
 
@@ -1197,17 +1197,17 @@ public class Symbol {
 	}
 	
 	public int compare(ref<Symbol> other) {
-		int min = _name.length;
-		if (other._name.length < min)
-			min = other._name.length;
+		int min = _name.length();
+		if (other._name.length() < min)
+			min = other._name.length();
 		for (int i = 0; i < min; i++) {
-			int diff = _name.data[i].toLowerCase() - other._name.data[i].toLowerCase();
+			int diff = _name.c_str()[i].toLowerCase() - other._name.c_str()[i].toLowerCase();
 			if (diff != 0)
 				return diff;
 		}
-		if (_name.length < other._name.length)
+		if (_name.length() < other._name.length())
 			return -1;
-		else if (_name.length == other._name.length)
+		else if (_name.length() == other._name.length())
 			return 0;
 		else
 			return 1;

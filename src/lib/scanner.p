@@ -1289,9 +1289,8 @@ public class Scanner {
 		_pushback = t;
 	}
 	
-	public CompileString value() {
-		CompileString result(&_value[0], _value.length());
-		return result;
+	public substring value() {
+		return _value;
 	}
 	
 	public int byteLocation() {

@@ -152,7 +152,7 @@ public class Target {
 	}
 	
 	public void unfinished(ref<Node> n, string explanation, ref<CompileContext> compileContext) {
-		n.add(MessageId.UNFINISHED_GENERATE, compileContext.pool(), CompileString(" "/*n.class.name()*/), CompileString(string(n.op())), CompileString(explanation));
+		n.add(MessageId.UNFINISHED_GENERATE, compileContext.pool(), " "/*n.class.name()*/, string(n.op()), explanation);
 	}
 	
 	public ref<Type> builtInType() {

@@ -532,7 +532,7 @@ public class Call extends ParameterBag {
 					r = tree.newReference(temp, false, location());
 					ref<Selection> method = tree.newSelection(r, setMethod, true, location());
 					method.type = setMethod.type();
-					ref<Node> label = tree.newConstant(Operator.STRING, ref<Identifier>(b.left()).value(), location());
+					ref<Node> label = tree.newConstant(Operator.STRING, ref<Identifier>(b.left()).identifier(), location());
 					label.type = compileContext.arena().builtInType(TypeFamily.STRING);
 					ref<Node> value = b.right().coerce(tree, compileContext.arena().builtInType(TypeFamily.VAR), false, compileContext);
 					ref<Call> call = tree.newCall(setMethod.parameterScope(), CallCategory.METHOD_CALL, method, tree.newNodeList(label, value), location(), compileContext);
@@ -734,7 +734,7 @@ public class Call extends ParameterBag {
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 			if (nl.node.op() == Operator.BIND) {
 				ref<Identifier> id = ref<Identifier>(ref<Binary>(nl.node).right());
-				nl.node.add(MessageId.INVALID_BINDING, compileContext.pool(), id.value());
+				nl.node.add(MessageId.INVALID_BINDING, compileContext.pool(), id.identifier());
 				type = compileContext.errorType();
 			} else
 				nl.node.type = nl.node.unwrapTypedef(Operator.CLASS, compileContext);
@@ -795,7 +795,7 @@ public class Call extends ParameterBag {
 			for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 				if (nl.node.op() == Operator.BIND) {
 					ref<Identifier> id = ref<Identifier>(ref<Binary>(nl.node).right());
-					nl.node.add(MessageId.INVALID_BINDING, compileContext.pool(), id.value());
+					nl.node.add(MessageId.INVALID_BINDING, compileContext.pool(), id.identifier());
 					type = compileContext.errorType();
 				}
 			}

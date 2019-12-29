@@ -19,7 +19,7 @@ class OverloadOperation {
 	private boolean _done;
 	private boolean _hadConstructors;
 	private ref<Node> _node;
-	private ref<CompileString> _name;
+	private substring _name;
 	private Operator _kind;
 	private ref<Overload> _overload;
 	private ref<NodeList> _arguments;
@@ -31,7 +31,7 @@ class OverloadOperation {
 										// means the various overloads are unordered
 										// with respect to one another.
 
-	public OverloadOperation(Operator kind, ref<Node> node, ref<CompileString> name, ref<NodeList> arguments, ref<CompileContext> compileContext) {
+	public OverloadOperation(Operator kind, ref<Node> node, substring name, ref<NodeList> arguments, ref<CompileContext> compileContext) {
 		_name = name;
 //		if (_name != null)
 //			printf("Overloading %s\n", _name.asString());
@@ -113,11 +113,11 @@ class OverloadOperation {
 		int count = oi.parameterCount();
 //		printf("%s parameter count = %d vs %d\n", oi.name().asString(), count, _argCount);
 		if (count == int.MIN_VALUE) {
-			_node.add(MessageId.NO_FUNCTION_TYPE, _compileContext.pool(), *_name);
+			_node.add(MessageId.NO_FUNCTION_TYPE, _compileContext.pool(), _name);
 			return _compileContext.errorType();
 		}
 		if (count == NOT_PARAMETERIZED_TYPE) {
-			_node.add(MessageId.NOT_PARAMETERIZED_TYPE, _compileContext.pool(), *_name);
+			_node.add(MessageId.NOT_PARAMETERIZED_TYPE, _compileContext.pool(), _name);
 			return _compileContext.errorType();
 		}
 		boolean hasEllipsis;
@@ -194,7 +194,7 @@ class OverloadOperation {
 		case	0:
 //			printf("_name = %p _arguments = %p _argCount = %d _hadConstructors %s\n", _name, _arguments, _argCount, _hadConstructors ? "true" : "false");
 			if (_name != null) {
-				_node.add(_anyPotentialOverloads ? MessageId.NO_MATCHING_OVERLOAD : MessageId.UNDEFINED, _compileContext.pool(), *_name);
+				_node.add(_anyPotentialOverloads ? MessageId.NO_MATCHING_OVERLOAD : MessageId.UNDEFINED, _compileContext.pool(), _name);
 //				_node.print(2);
 //				for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
 //					nl.node.print(6);
@@ -206,7 +206,7 @@ class OverloadOperation {
 
 		default:
 			if (_name != null)
-				_node.add(MessageId.AMBIGUOUS_OVERLOAD, _compileContext.pool(), *_name);
+				_node.add(MessageId.AMBIGUOUS_OVERLOAD, _compileContext.pool(), _name);
 			else
 				_node.add(MessageId.AMBIGUOUS_CONSTRUCTOR, _compileContext.pool());
 		}

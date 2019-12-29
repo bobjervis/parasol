@@ -37,7 +37,7 @@ ref<Node> reduce(Operator op, ref<SyntaxTree> tree, ref<Node> vectorExpression, 
 	ref<Variable> accumulator = compileContext.newVariable(vectorExpression.type.elementType());
 	ref<Variable> iterator = compileContext.newVariable(vectorExpression.type.indexType());
 	ref<Reference> def = tree.newReference(iterator, true, vectorExpression.location());
-	CompileString init("0");
+	substring init("0");
 	ref<Node> start = tree.newConstant(Operator.INTEGER, init, vectorExpression.location());
 	start = tree.newBinary(Operator.ASSIGN, def, start, vectorExpression.location());
 	// test should really be: lognest of contributing lvalues, so lvalues need to be calculated (if not
@@ -119,7 +119,7 @@ ref<Node> vectorize(ref<SyntaxTree> tree, ref<Node> vectorExpression, ref<Compil
 		return vectorizeAggregateAssignment(tree, b, compileContext);
 	ref<Variable> iterator = compileContext.newVariable(vectorExpression.type.indexType());
 	ref<Reference> def = tree.newReference(iterator, true, vectorExpression.location());
-	CompileString init("0");
+	substring init("0");
 	ref<Node> start = tree.newConstant(Operator.INTEGER, init, vectorExpression.location());
 	start = tree.newBinary(Operator.ASSIGN, def, start, vectorExpression.location());
 	// test should really be: lognest of contributing lvalues, so lvalues need to be calculated (if not
@@ -443,9 +443,9 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 				idx = tree.newConstant(lastIndexValue, val.location());
 				idx.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
 				idx = tree.newCast(indexType, idx);
-				CompileString set("set");
+				substring set("set");
 				ref<Node> arrayRef = lhs.clone(tree);
-				ref<Symbol> sym = vectorType.lookup(&set, compileContext);
+				ref<Symbol> sym = vectorType.lookup(set, compileContext);
 
 				if (sym == null || sym.class != Overload) {
 					vectorExpression.add(MessageId.UNDEFINED, compileContext.pool(), set);
@@ -460,11 +460,11 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 			}
 		} else {
 			for (ref<NodeList> nl = aggregate.arguments(); nl != null; nl = nl.next) {
-				CompileString append("append");
+				substring append("append");
 
 				ref<Node> arrayRef = lhs.clone(tree);
 
-				ref<Symbol> sym = vectorType.lookup(&append, compileContext);
+				ref<Symbol> sym = vectorType.lookup(append, compileContext);
 				if (sym == null || sym.class != Overload) {
 					vectorExpression.add(MessageId.UNDEFINED, compileContext.pool(), append);
 					return vectorExpression;
@@ -486,11 +486,11 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 		}
 	} else {
 		for (ref<NodeList> nl = aggregate.arguments(); nl != null; nl = nl.next) {
-			CompileString set("set");
+			substring set("set");
 
 			ref<Node> arrayRef = lhs.clone(tree);
 			
-			ref<Symbol> sym = vectorType.lookup(&set, compileContext);
+			ref<Symbol> sym = vectorType.lookup(set, compileContext);
 
 			if (sym == null || sym.class != Overload) {
 				vectorExpression.add(MessageId.UNDEFINED, compileContext.pool(), set);

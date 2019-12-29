@@ -33,7 +33,6 @@ import parasol:compiler.Class;
 import parasol:compiler.ClassScope;
 import parasol:compiler.ClassType;
 import parasol:compiler.CompileContext;
-import parasol:compiler.CompileString;
 import parasol:compiler.Constant;
 import parasol:compiler.DestructorList;
 import parasol:compiler.EnumInstanceType;
@@ -490,12 +489,12 @@ public class X86_64 extends X86_64AssignTemps {
 							binding.add(sectionType() == runtime.Target.X86_64_WIN ? MessageId.BAD_WINDOWS_BINDING : MessageId.BAD_LINUX_BINDING, compileContext.pool());
 							return null, false;
 						}
-						CompileString dllName = ref<Constant>(dll).value();
-						CompileString symbolName = ref<Constant>(symbol).value();
-						int dllNameOffset = _segments[Segments.BUILT_INS_TEXT].reserve(dllName.length + 1);
-						int symbolNameOffset = _segments[Segments.BUILT_INS_TEXT].reserve(symbolName.length + 1);
-						C.memcpy(_segments[Segments.BUILT_INS_TEXT].at(dllNameOffset), dllName.data, dllName.length);
-						C.memcpy(_segments[Segments.BUILT_INS_TEXT].at(symbolNameOffset), symbolName.data, symbolName.length);
+						substring dllName = ref<Constant>(dll).value();
+						substring symbolName = ref<Constant>(symbol).value();
+						int dllNameOffset = _segments[Segments.BUILT_INS_TEXT].reserve(dllName.length() + 1);
+						int symbolNameOffset = _segments[Segments.BUILT_INS_TEXT].reserve(symbolName.length() + 1);
+						C.memcpy(_segments[Segments.BUILT_INS_TEXT].at(dllNameOffset), dllName.c_str(), dllName.length());
+						C.memcpy(_segments[Segments.BUILT_INS_TEXT].at(symbolNameOffset), symbolName.c_str(), symbolName.length());
 						int offset = _segments[Segments.NATIVE_BINDINGS].reserve(NativeBinding.bytes);
 						_segments[Segments.NATIVE_BINDINGS].fixup(Segments.BUILT_INS_TEXT, offset, true);
 						_segments[Segments.NATIVE_BINDINGS].fixup(Segments.BUILT_INS_TEXT, offset + address.bytes, true);
@@ -509,7 +508,7 @@ public class X86_64 extends X86_64AssignTemps {
 						functionScope.nativeBinding = true;
 						return functionScope, true;
 					}
-					func.add(MessageId.UNDEFINED_BUILT_IN, compileContext.pool(), func.name().value());
+					func.add(MessageId.UNDEFINED_BUILT_IN, compileContext.pool(), func.name().identifier());
 					return null, false;
 				} else
 					return null, false;
@@ -591,7 +590,7 @@ public class X86_64 extends X86_64AssignTemps {
 						stringArray = parameterScope.define(Operator.PRIVATE, StorageClass.STATIC, null, nm, compileContext.arena().builtInType(TypeFamily.ADDRESS), null, compileContext.pool());
 						assignStaticRegion(stringArray, string.bytes, instances.length() * string.bytes);
 						for (int i = 0; i < instances.length(); i++) {
-							int offset = addStringLiteral((*instances)[i].name().asString());
+							int offset = addStringLiteral((*instances)[i].name());
 							fixup(FixupKind.ABSOLUTE64_STRING, stringArray, i * address.bytes, address(offset));
 						}
 					} else
@@ -656,7 +655,7 @@ public class X86_64 extends X86_64AssignTemps {
 				// All function/method body folding is done here:
 				
 				if (verbose()) {
-					printf("=====  folding %s:%s  =========\n", file.filename(), func.name() != null ? func.name().identifier().asString() : "<anonymous>");
+					printf("=====  folding %s:%s  =========\n", file.filename(), func.name() != null ? string(func.name().identifier()) : "<anonymous>");
 				}
 				node = ref<Block>(compileContext.fold(node, file));
 				allocateStackForLocalVariables(compileContext);
@@ -4462,8 +4461,7 @@ public class X86_64 extends X86_64AssignTemps {
 	private ref<ParameterScope> takeMethod(ref<CompileContext> compileContext) {
 		if (_takeMethod == null) {
 			ref<Type> m = compileContext.monitorClass();
-			CompileString cs("take");
-			ref<Symbol> take = m.scope().lookup(&cs, compileContext);
+			ref<Symbol> take = m.scope().lookup("take", compileContext);
 			if (take == null || take.class != Overload) {
 				printf("Could not find appropriate 'take' method.\n");
 				assert(false);
@@ -4485,8 +4483,7 @@ public class X86_64 extends X86_64AssignTemps {
 	private ref<ParameterScope> releaseMethod(ref<CompileContext> compileContext) {
 		if (_releaseMethod == null) {
 			ref<Type> m = compileContext.monitorClass();
-			CompileString cs("release");
-			ref<Symbol> release = m.scope().lookup(&cs, compileContext);
+			ref<Symbol> release = m.scope().lookup("release", compileContext);
 			if (release == null || release.class != Overload) {
 				printf("Could not find appropriate 'release' method.\n");
 				assert(false);

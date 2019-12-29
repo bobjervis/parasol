@@ -324,7 +324,7 @@ void indexTypesInClass(ref<Symbol> sym, string dirName) {
 		if (t.family() != TypeFamily.TEMPLATE)
 			return;
 	}
-	string name = sym.name().asString();
+	string name = sym.name();
 	string classFile = storage.constructPath(dirName, name, "html");
 	if (!storage.ensure(dirName)) {
 		printf("Could not ensure directory %s\n", dirName);
@@ -567,7 +567,7 @@ boolean generateClassPage(ref<Symbol> sym, string name, string dirName) {
 		}
 		for (i in *params) {
 			ref<Symbol> param = (*params)[i];
-			string pname = param.name().asString();
+			string pname = param.name();
 			if (param.type() == null)
 				classPage.printf("&lt;null&gt;&nbsp;%s", pname);
 			else
@@ -685,11 +685,11 @@ string qualifiedName(ref<Type> t) {
 	switch (definition.op()) {
 	case	CLASS:
 	case	MONITOR_CLASS:
-		s.append(ref<Class>(definition).name().value().asString());
+		s.append(ref<Class>(definition).name().identifier());
 		break;
 
 	case	TEMPLATE:
-		s.append(ref<Template>(definition).name().value().asString());
+		s.append(ref<Template>(definition).name().identifier());
 		break;
 
 	default:
@@ -794,7 +794,7 @@ void generateScopeContents(ref<Scope> scope, ref<Writer> output, string dirName,
 			ref<Symbol> sym = enumConstants[i];
 			output.printf("<tr class=\"%s\">\n", i % 2 == 0 ? "altColor" : "rowColor");
 			ref<Type> type = sym.type();
-			output.printf("<td class=\"linkcol\"><a href=\"#%s\"\">%s</a></td>\n", sym.name().asString(), sym.name().asString());
+			output.printf("<td class=\"linkcol\"><a href=\"#%s\"\">%s</a></td>\n", sym.name(), sym.name());
 			output.write("<td class=\"descriptioncol\">");
 			ref<Doclet> doclet = sym.doclet();
 			if (doclet != null)
@@ -839,7 +839,7 @@ void generateScopeContents(ref<Scope> scope, ref<Writer> output, string dirName,
 			ref<Type> type = sym.type();
 			output.printf("<td class=\"linkcol\">%s</td>\n", typeString(type, baseName));
 			output.write("<td class=\"descriptioncol\">");
-			output.printf("<a href=\"#%s\"><span class=code>%s</span></a><br>", sym.name().asString(), sym.name().asString());
+			output.printf("<a href=\"#%s\"><span class=code>%s</span></a><br>", sym.name(), sym.name());
 			ref<Doclet> doclet = sym.doclet();
 			if (doclet != null)
 				output.printf("\n%s", expandDocletString(doclet.summary, sym, baseName));
@@ -912,7 +912,7 @@ void generateScopeContents(ref<Scope> scope, ref<Writer> output, string dirName,
 		output.printf("<div class=block-header>%s Constants Detail</div>\n", enumLabel);
 		for (i in enumConstants) {
 			ref<Symbol> sym = enumConstants[i];
-			string name = sym.name().asString();
+			string name = sym.name();
 
 			output.printf("<a id=\"%s\"></a>\n", name);
 			output.printf("<div class=entity>%s</div>\n", name);
@@ -929,7 +929,7 @@ void generateScopeContents(ref<Scope> scope, ref<Writer> output, string dirName,
 		output.printf("<div class=block-header>%s Detail</div>\n", objectLabel);
 		for (i in objects) {
 			ref<Symbol> sym = objects[i];
-			string name = sym.name().asString();
+			string name = sym.name();
 
 			output.printf("<a id=\"%s\"></a>\n", name);
 			output.printf("<div class=entity>%s</div>\n", name);
@@ -1011,7 +1011,7 @@ void functionSummary(ref<Writer> output, ref<ref<OverloadInstance>[]> functions,
 			}
 		}
 		output.write("</td>\n<td>");
-		output.printf("<span class=code><a href=\"#%s\">%s</a>(", sym.name().asString(), sym.name().asString());
+		output.printf("<span class=code><a href=\"#%s\">%s</a>(", sym.name(), sym.name());
 		nl = ft.parameters();
 		ref<ParameterScope> scope = ft.functionScope();
 		ref<ref<Symbol>[]> parameters = scope.parameters();
@@ -1022,7 +1022,7 @@ void functionSummary(ref<Writer> output, ref<ref<OverloadInstance>[]> functions,
 			else
 				output.printf("%s", typeString(nl.node.type, baseName));
 			if (parameters != null && parameters.length() > j)
-				output.printf(" %s", (*parameters)[j].name().asString());
+				output.printf(" %s", (*parameters)[j].name());
 			else
 				output.write(" ???");
 			if (nl.next != null)
@@ -1050,7 +1050,7 @@ void functionDetail(ref<Writer> output, ref<ref<OverloadInstance>[]> functions, 
 		if (symType == null || symType.family() == TypeFamily.CLASS_DEFERRED) {
 			continue;
 		}
-		string name = sym.name().asString();
+		string name = sym.name();
 
 		output.printf("<a id=\"%s\"></a>\n", name);
 		output.printf("<div class=entity>%s</div>\n", name);
@@ -1114,7 +1114,7 @@ void functionDetail(ref<Writer> output, ref<ref<OverloadInstance>[]> functions, 
 				output.printf("%s...", typeString(nl.node.type.elementType(), baseName));
 			else
 				output.printf("%s", typeString(nl.node.type, baseName));
-			string pname = (*parameters)[j].name().asString();
+			string pname = (*parameters)[j].name();
 			if (parameters != null && parameters.length() > j)
 				output.printf("&nbsp;%s", pname);
 			else
@@ -1191,7 +1191,7 @@ void generateTypeSummaryEntry(ref<Writer> output, int i, ref<Symbol> sym, string
 		return;
 	output.printf("<tr class=\"%s\">\n", i % 2 == 0 ? "altColor" : "rowColor");
 
-	string name = sym.name().asString();
+	string name = sym.name();
 	ref<Type> t = sym.type();
 	output.printf("<td class=\"linkcol\">");
 	switch (t.family()) {
@@ -1215,7 +1215,7 @@ void generateClassSummaryEntry(ref<Writer> output, int i, ref<Symbol> sym, strin
 		return;
 	output.printf("<tr class=\"%s\">\n", i % 2 == 0 ? "altColor" : "rowColor");
 
-	string name = sym.name().asString();
+	string name = sym.name();
 	if (sym.definition() == scope.className()) {
 		if (!generateClassPage(sym, name, dirName))
 			return;
@@ -1363,7 +1363,7 @@ string transformLink(string linkTextIn, ref<Symbol> sym, string baseName) {
 					hasClasses = true;
 					path = storage.constructPath(path, "classes", null);
 				}
-				path = storage.constructPath(path, nm.name().asString(), null);
+				path = storage.constructPath(path, nm.name(), null);
 				scope = scopeFor(nm);
 				if (scope == null)
 					return caption;
@@ -1374,7 +1374,7 @@ string transformLink(string linkTextIn, ref<Symbol> sym, string baseName) {
 			if (nm.type() != null && nm.type().family() == TypeFamily.TYPEDEF) {
 				if (!hasClasses)
 					path = storage.constructPath(path, "classes", null);
-				path = storage.constructPath(path, nm.name().asString(), "html");
+				path = storage.constructPath(path, nm.name(), "html");
 				if (path == baseName)
 					return caption;
 				linkText = storage.makeCompactPath(path, baseName);
@@ -1416,7 +1416,7 @@ string transformLink(string linkTextIn, ref<Symbol> sym, string baseName) {
 				hasClasses = true;
 				path = storage.constructPath(path, "classes", null);
 			}
-			path = storage.constructPath(path, sym.name().asString(), null);
+			path = storage.constructPath(path, sym.name(), null);
 		}
 		for (int i = 0; i < components.length() - 1; i++) {
 			if (s.type().family() != TypeFamily.TYPEDEF)
@@ -1425,10 +1425,10 @@ string transformLink(string linkTextIn, ref<Symbol> sym, string baseName) {
 				hasClasses = true;
 				path = storage.constructPath(path, "classes", null);
 			}
-			path = storage.constructPath(path, s.name().asString(), null);
+			path = storage.constructPath(path, s.name(), null);
 			scope = scopeFor(s);
 			if (scope == null) {
-				printf("%s has no scope\n", s.name().asString());
+				printf("%s has no scope\n", s.name());
 				return caption;
 			}
 			s = scope.lookup(components[i + 1], null);
@@ -1438,7 +1438,7 @@ string transformLink(string linkTextIn, ref<Symbol> sym, string baseName) {
 		if (s.type() != null && s.type().family() == TypeFamily.TYPEDEF) {
 			if (!hasClasses)
 				path = storage.constructPath(path, "classes", null);
-			path = storage.constructPath(path, s.name().asString(), "html");
+			path = storage.constructPath(path, s.name(), "html");
 			if (path == baseName)
 				return caption;
 			linkText = storage.makeCompactPath(path, baseName);
@@ -1475,7 +1475,7 @@ string pathToMyParent(ref<Scope> scope) {
 }
 
 int compareSymbols(ref<Symbol> sym1, ref<Symbol> sym2) {
-	return sym1.name().compare(*sym2.name());
+	return sym1.name().compare(sym2.name());
 }
 
 int compareOverloadedSymbols(ref<OverloadInstance> sym1, ref<OverloadInstance> sym2) {
@@ -1567,7 +1567,7 @@ string typeString(ref<Type> type, string baseName) {
 			return null;
 		url = storage.makeCompactPath(classFile, baseName);
 		ref<TemplateType> template = ref<TemplateType>(type);
-		string s = "<a href=\"" + url + "\">" + template.definingSymbol().name().asString() + "</a>";
+		string s = "<a href=\"" + url + "\">" + template.definingSymbol().name() + "</a>";
 		s.append("&lt;");
 		ref<ParameterScope> p = ref<ParameterScope>(template.scope());
 		ref<ref<Symbol>[]> params = p.parameters();
@@ -1576,9 +1576,9 @@ string typeString(ref<Type> type, string baseName) {
 			if (i > 0)
 				s.append(", ");
 			if (sym.type() == null)
-				s.printf("&lt;null&gt; %s", sym.name().asString());
+				s.printf("&lt;null&gt; %s", sym.name());
 			else
-				s.printf("%s %s", typeString(sym.type(), baseName), sym.name().asString());
+				s.printf("%s %s", typeString(sym.type(), baseName), sym.name());
 		}
 		s.append("&gt;");
 		return s;
@@ -1592,7 +1592,7 @@ string typeString(ref<Type> type, string baseName) {
 			return null;
 		url = storage.makeCompactPath(classFile, baseName);
 		sym = ref<FlagsInstanceType>(type).symbol();
-		name = sym.name().asString();
+		name = sym.name();
 		s.printf("<a href=\"%s\">%s</a>", url, name);
 		return s;
 
@@ -1602,7 +1602,7 @@ string typeString(ref<Type> type, string baseName) {
 			return null;
 		url = storage.makeCompactPath(classFile, baseName);
 		ref<Symbol> sym = ref<EnumInstanceType>(type).typeSymbol();
-		string name = sym.name().asString();
+		string name = sym.name();
 		s.printf("<a href=\"%s\">%s</a>", url, name);
 		return s;
 
