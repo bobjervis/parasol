@@ -1049,10 +1049,18 @@ public class long {
 		return time.Duration(*this / 1000000000, *this % 1000000000);
 	}
 }
-
+/**
+ * An 8 bit unsigned integer
+ */
 public class byte {
+	/**
+	 * The minimum value of this integer
+	 */
 	@Constant
 	public static byte MIN_VALUE = 0;
+	/**
+	 * The maximum value of this integer
+	 */
 	@Constant
 	public static byte MAX_VALUE = 255;
 	
@@ -1248,18 +1256,45 @@ public class byte {
 			success = false;
 		return byte(value), success;
 	}
-
+	/**
+	 * Compare two byte values.
+	 *
+	 * @param other The other byte to compare.
+	 *
+	 * @return +1 if this int is greater than other, 0 if they are
+	 * equal, -1 if this int is less than the other.
+	 */
 	public int compare(byte other) {
 		return *this - other;
 	}
-
+	/**
+	 * Return whether this byte is a printable character
+	 *
+	 * @return true if the byte contains a printable ASCII character
+	 * (in the range from 0x20 to 0x7f inclusive).
+	 */
 	public boolean isPrintable() {
 		if (*this < 0x20)
 			return false;
 		else
 			return *this < 0x7f;
 	}
-	
+	/**
+	 * Return whether this byte is white space.
+	 *
+	 * For the purposes of this test, these are the ASCII white space characters:
+	 *
+	 * <ul>
+	 *    <li>tab, hex 0x08
+	 *    <li>newline, hex 0x0A
+	 *    <li>vertical tab, hex 0x0B
+	 *    <li>carriage return, hex 0x0D
+	 *    <li>space, hex 0x20
+	 * </ul>
+	 *
+	 * @return true if the byte contains an ASCII white space 
+	 * character, false otherwise.
+	 */
 	public boolean isSpace() {
 		switch (*this) {
 		case	' ':
@@ -1274,7 +1309,12 @@ public class byte {
 		}
 		return false;
 	}
-
+	/**
+	 * Return whether this byte is an alphanumeric character.
+	 *
+	 * @return true if this byte contains an ASCII letter or digit
+	 * character, false otherwise.
+	 */
 	public boolean isAlphanumeric() {
 		switch (*this) {
 		case '0':
@@ -1343,7 +1383,11 @@ public class byte {
 		}
 		return false;
 	}
-	
+	/**
+	 * Return whether this byte is a decimal digit.
+	 *
+	 * @return true if this byte contains a decimal digit character.
+	 */
 	public boolean isDigit() {
 		switch (*this) {
 		case '0':
@@ -1360,7 +1404,11 @@ public class byte {
 		}
 		return false;	
  	}
-	
+	/**
+	 * Return whether this byte is an octal digit.
+	 *
+	 * @return true if this byte contains an octal digit character.
+	 */
 	public boolean isOctalDigit() {
 		switch (*this) {
 		case '0':
@@ -1375,7 +1423,19 @@ public class byte {
 		}
 		return false;	
  	}
-	
+	/**
+	 * Return whether this byte is a hexadecimal digit.
+	 *
+	 * For this method, the hexadecimal digits are:
+	 *
+	 * <ul>
+	 *    <li>all lower-case letters, a - z
+	 *    <li>all upper-case letters, A - Z
+	 *    <li>all decimal digits, 0 - 9
+	 * </ul>
+	 * 
+	 * @return true if this byte contains a hexadecimal digit character.
+	 */
 	public boolean isHexDigit() {
 		switch (*this) {
 		case '0':
@@ -1404,7 +1464,11 @@ public class byte {
 		}
 		return false;	
  	}
-	
+	/**
+	 * Return whether this byte is an alphabetic character.
+	 *
+	 * @return true if the byte contains an ASCII alphabetic character.
+	 */
 	public boolean isAlpha() {
 		switch (*this) {
 		case 'A':
@@ -1463,7 +1527,12 @@ public class byte {
 		}
 		return false;
 	}
-	
+	/**
+	 * Return whether this byte is an upper-case letter
+	 *
+	 * @return true if this byte contains an ASCII upper-case letter character,
+	 * false otherwise..
+	 */
 	public boolean isUpperCase() {
 		switch (*this) {
 		case 'A':
@@ -1496,7 +1565,12 @@ public class byte {
 		}
 		return false;
 	}
-
+	/**
+	 * Return whether this byte is an lower-case letter
+	 *
+	 * @return true if this byte contains an ASCII lower-case letter character,
+	 * false otherwise..
+	 */
 	public boolean isLowerCase() {
 		switch (*this) {
 		case 'a':
@@ -1529,14 +1603,26 @@ public class byte {
 		}
 		return false;
 	}
-	
+	/**
+	 * Convert this byte from lower-case to upper-case.
+	 *
+	 * @return If this byte is an ASCII lower-case letter, the corresponding
+	 * upper-case letter ('a' -> 'A', 'b' -> 'B', etc.). Otherwise, return
+	 * the byte value unchanged.
+	 */
 	public byte toUpperCase() {
 		if ((*this).isLowerCase())
 			return byte(*this + ('A' - 'a'));
 		else
 			return *this;
 	}
-	
+	/**
+	 * Convert this byte from upper-case to lower-case.
+	 *
+	 * @return If this byte is an ASCII upper-case letter, the corresponding
+	 * lower-case letter ('A' -> 'a', 'B' -> 'b', etc.). Otherwise, return
+	 * the byte value unchanged.
+	 */
 	public byte toLowerCase() {
 		if ((*this).isUpperCase())
 			return byte(*this + ('a' - 'A'));

@@ -1364,6 +1364,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 					ref<Unary> u = ref<Unary>(args.node);
 					switch (u.type.family()) {
 					case STRING:
+					case STRING16:
 						assignRegisterTemp(u.operand(), getRegMask(secondRegisterArgument()), compileContext);
 						break;
 						
@@ -1371,6 +1372,15 @@ class X86_64AssignTemps extends X86_64AddressModes {
 						assignStackArgument(u.operand(), compileContext);
 						break;
 						
+					case SUBSTRING:
+					case SUBSTRING16:
+						if (u.operand().isLvalue())
+							assignLvalueTemps(u.operand(), compileContext);
+						else 
+							assignStackArgument(u.operand(), compileContext); 
+						u.register = byte(f().r.getreg(u, longMask(), longMask()));
+						break;
+
 					case CLASS:
 						if (u.type.indirectType(compileContext) == null) {
 							if (u.operand().isLvalue())
@@ -1380,6 +1390,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 							u.register = byte(f().r.getreg(u, longMask(), longMask()));
 							break;
 						}
+
 					default:
 						assignRegisterTemp(u.operand(), longMask(), compileContext);
 					}

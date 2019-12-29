@@ -4321,3 +4321,24 @@ private ref<Node> foldMultiValueReturn(ref<Node> left, ref<SyntaxTree> tree, ref
 		return left.fold(tree, false, compileContext);
 }
 
+public class Location {
+	public static Location OUT_OF_FILE(-1);
+
+	public int		offset;
+	
+	public Location() {
+	}
+	
+	public Location(int v) {
+		offset = v;
+	}
+
+	public int compare(Location loc) {
+		return offset - loc.offset;
+	}
+
+	public boolean isInFile() {
+		return offset != OUT_OF_FILE.offset;
+	}
+}
+

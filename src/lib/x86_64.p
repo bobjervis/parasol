@@ -3590,6 +3590,7 @@ public class X86_64 extends X86_64AssignTemps {
 				ref<Node> n = u.operand();
 				switch (n.type.family()) {
 				case	STRING:
+				case	STRING16:
 					generate(n, compileContext);
 					f().r.generateSpills(args.node, this);
 					inst(X86.LEA, firstRegisterArgument(), R.RSP, offset);
@@ -3603,6 +3604,11 @@ public class X86_64 extends X86_64AssignTemps {
 					instCall(_varCopyConstructor.parameterScope(), compileContext);
 					break;
 					
+				case	SUBSTRING:
+				case	SUBSTRING16:
+					generateValueToStack(u, offset, compileContext);
+					break;
+
 				case	CLASS:
 					if (n.type.indirectType(compileContext) == null) {
 						generateValueToStack(u, offset, compileContext);

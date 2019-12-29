@@ -212,6 +212,7 @@ run(filename: var_args_2.p)
 run(filename: string_methods.p)
 run(filename: string_compares.p)
 run(filename: string_switch_test.p)
+run(filename: substring_test.p)
 run(filename: ternary.p)
 run(filename: address_ops.p)
 run(filename: double_ops.p)
@@ -271,6 +272,9 @@ compile(filename: stray_token_enum.p, expect: fail)
 compile(){ "int(address) func; void(address) f = void(address)(func);" }
 
 compile() { "substring ss; int i; byte b = ss[i];" }
+
+// verify that '3.years()' is a method call on an integer argument
+compile() { "import parasol:time; time.Duration d = 3.years();" }
 
 compile() { "class a = int; a b; int c; b = c;" }
 
@@ -927,6 +931,10 @@ compile() { "interface A {} A src; int x(double z); x = int(double)(src);" }
 
 compile() { "string src; var x; x = src;" }
 compile() { "string16 src; var x; x = src;" }
+
+compile() { "void floofl(int x, substring... args) {} floofl(4, \"\");" }
+compile() { "enum E { A } E e; void f(int x, substring... args) {} f(4, string(e));" }
+compile() { "string s; void f(int x, substring... args) {} f(4, s);" }
 
 compile() { "string a = f(); string f() { return null; }" }
 compile() { "string a = f(); string16 f() { return null; }" }
