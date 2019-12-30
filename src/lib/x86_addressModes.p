@@ -374,10 +374,17 @@ class X86_64AddressModes extends X86_64Encoder {
 				ref<EllipsisArguments> ea = ref<EllipsisArguments>(arg);
 				for (ref<NodeList> args = ea.arguments(); args != null; args = args.next) {
 					ref<Unary> u = ref<Unary>(args.node);
-					if (u.type.family() == TypeFamily.CLASS && u.type.indirectType(compileContext) == null && u.operand().isLvalue())
-						tryMakeMode(u.operand(), MC_ADDRESS, 0, compileContext);
-					else 
-						markAddressModes(u.operand(), compileContext);
+
+					if (u.type.indirectType(compileContext) == null && u.operand().isLvalue()) {
+						switch (u.type.family()) {
+						case CLASS:
+						case SUBSTRING:
+						case SUBSTRING16:
+							tryMakeMode(u.operand(), MC_ADDRESS, 0, compileContext);
+							continue;
+						}
+					}
+					markAddressModes(u.operand(), compileContext);
 				}
 				break;
 				

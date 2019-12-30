@@ -2355,7 +2355,7 @@ public class X86_64 extends X86_64AssignTemps {
 				case	FLOAT_64:
 					generateLoad(X86.MOVSD, expression, compileContext);
 					break;
-					
+				
 				default:
 					generateLoad(X86.MOV, expression, compileContext);
 				}
@@ -2967,6 +2967,10 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 
 	private void generateLoad(X86 instruction, ref<Node> expression, ref<CompileContext> compileContext) {
+		if (expression.type.family() == TypeFamily.SUBSTRING) {
+			expression.print(0);
+			assert(false);
+		}
 		R reg = R(expression.register);
 		expression.register = 0;
 		inst(instruction, reg, expression, compileContext);
@@ -3146,6 +3150,7 @@ public class X86_64 extends X86_64AssignTemps {
 					assert(false);
 				}
 			}
+			f().r.generateSpills(b, this);
 			instCall(oi.parameterScope(), compileContext);
 			ref<Type> t = oi.parameterScope().type().returnType().node.type;
 			switch (t.family()) {

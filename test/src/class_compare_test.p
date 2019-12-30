@@ -362,4 +362,15 @@ d.n.x = -1;
 assert(!d.f(mx));
 
 
+Cint left() {
+	return Cint(5);
+}
+
+Cint right() {
+	return Cint(6);
+}
+
+assert(left() != right());
+
+
 

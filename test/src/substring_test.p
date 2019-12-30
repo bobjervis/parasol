@@ -23,6 +23,13 @@ void f(int key, substring... args) {
 		assert(s == "abc");
 		break;
 
+	case 2:
+		assert(args[0].length() == 5);
+		s = args[0];
+		assert(s.length() == 5);
+		assert(s == "defgh");
+		break;
+
 	default:
 		printf("Unexpected key: %d\n", key);
 		assert(false);
@@ -30,3 +37,19 @@ void f(int key, substring... args) {
 }
 
 f(1, "abc");
+string s = "defgh";
+string t = "ijkl";
+substring ss = s;
+ref<substring> ssp = &ss;
+f(2, *ssp);
+
+substring left() {
+	return s;
+}
+
+substring right() {
+	return t;
+}
+
+assert(left() != right());
+

@@ -859,12 +859,16 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				b.print(0);
 				assert(false);
 			}
+			f().r.getreg(b, RDImask, RDImask);
+			reserveReg(b, R.RDI, RDImask);
 			if (b.right().isLvalue())
 				assignLvalueTemps(b.right(), compileContext);
 			else {
 				b.print(0);
 				assert(false);
 			}
+//			f().r.getreg(b, RSImask, RSImask);
+//			reserveReg(b, R.RSI, RSImask);
 		} else {
 			if (b.right().isLvalue())
 				assignLvalueTemps(b.right(), compileContext);
@@ -872,13 +876,18 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				b.print(0);
 				assert(false);
 			}
+			f().r.getreg(b, RSImask, RSImask);
+			reserveReg(b, R.RSI, RSImask);
 			if (b.left().isLvalue())
 				assignLvalueTemps(b.left(), compileContext);
 			else {
 				b.print(0);
 				assert(false);
 			}
+//			f().r.getreg(b, RDImask, RDImask);
+//			reserveReg(b, R.RDI, RDImask);
 		}
+//		b.print(0);
 		b.left().register = byte(R.RDI);
 		b.right().register = byte(R.RSI);
 		f().r.cleanupTemps(b, depth);
