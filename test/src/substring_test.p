@@ -53,3 +53,34 @@ substring right() {
 
 assert(left() != right());
 
+class Y {
+	abstract substring id();
+}
+
+class X extends Y {
+	substring _x;
+
+	X(substring ss) {
+		_x = ss;
+	}
+
+	substring id() {
+		return _x;
+	}
+
+	ref<X> me() {
+		return this;
+	}
+}
+
+X x1("mn");
+X x2("opqrstu");
+ref<X> xp1 = &x1;
+ref<X> xp2 = &x2;
+
+if (xp1.id() != xp2.me().id())
+	;
+else
+	assert(false);
+
+

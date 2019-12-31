@@ -1043,6 +1043,7 @@ class X86_64Encoder extends Target {
 		case	SIGNED_32:
 		case	SIGNED_64:
 		case	STRING:
+		case	STRING16:
 		case	ENUM:
 		case	FLAGS:
 		case	ADDRESS:
@@ -1053,6 +1054,8 @@ class X86_64Encoder extends Target {
 		case	VOID:
 		case	FUNCTION:
 		case	INTERFACE:
+		case	SUBSTRING:				// These should only show up in compares
+		case	SUBSTRING16:			// These should only show up in compares
 			inst(X86.PUSH, TypeFamily.SIGNED_64, reg);
 			break;
 			
@@ -1065,7 +1068,7 @@ class X86_64Encoder extends Target {
 			inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, 8);
 			inst(X86.MOVSD, TypeFamily.SIGNED_64, R.RSP, 0, reg);
 			break;
-			
+		
 		default:
 			return false;
 		}
@@ -1081,6 +1084,7 @@ class X86_64Encoder extends Target {
 		case	SIGNED_32:
 		case	SIGNED_64:
 		case	STRING:
+		case	STRING16:
 		case	ENUM:
 		case	FLAGS:
 		case	ADDRESS:
@@ -1091,6 +1095,8 @@ class X86_64Encoder extends Target {
 		case	VOID:
 		case	FUNCTION:
 		case	INTERFACE:
+		case	SUBSTRING:				// These should only show up in compares
+		case	SUBSTRING16:			// These should only show up in compares
 			inst(X86.POP, TypeFamily.SIGNED_64, reg);
 			break;
 			

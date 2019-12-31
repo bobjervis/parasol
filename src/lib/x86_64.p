@@ -3117,6 +3117,7 @@ public class X86_64 extends X86_64AssignTemps {
 					R result = R(b.left().register);
 					b.left().register = 0;
 					inst(X86.LEA, result, b.left(), compileContext);
+					b.left().register = byte(result);
 				} else {
 					b.print(0);
 					assert(false);
@@ -3136,6 +3137,7 @@ public class X86_64 extends X86_64AssignTemps {
 					R result = R(b.right().register);
 					b.right().register = 0;
 					inst(X86.LEA, result, b.right(), compileContext);
+					b.right().register = byte(result);
 				} else {
 					b.print(0);
 					assert(false);

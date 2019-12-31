@@ -3022,7 +3022,9 @@ public class Ternary extends Node {
 		// a file.
 		if (importNode.right() == null)
 			return false;
-		if (_middle.identifier() != importNode.right().identifier())
+		ref<Node> n = importNode.right();
+		substring ss = _middle.identifier();
+		if (ss != n.identifier())
 			return false;
 		if (_middle.op() == Operator.IDENTIFIER)
 			return importNode.middle().op() == Operator.EMPTY;
