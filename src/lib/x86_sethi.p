@@ -294,6 +294,7 @@ private int regneeds(ref<Node> node, ref<CompileContext> compileContext, ref<Tar
 	case	SEQUENCE:
 	case	LEFT_COMMA:
 	case	TEMPLATE_INSTANCE:
+	case	VECTOR_OF:
 		return 0;
 		
 	case	INCREMENT_AFTER:

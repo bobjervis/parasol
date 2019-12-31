@@ -34,6 +34,8 @@ import parasol:text.string16;
 
 import parasol:log;
 
+//class Array = var[];
+
 private ref<log.Logger> logger = log.getLogger("parasol.json");
 /**
  * Parse a JSON string into Parasol objects.

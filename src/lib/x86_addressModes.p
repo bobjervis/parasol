@@ -349,6 +349,7 @@ class X86_64AddressModes extends X86_64Encoder {
 		case	ELLIPSIS_ARGUMENT:
 		case	LOAD:
 		case	STORE_V_TABLE:
+		case	VECTOR_OF:
 			u = ref<Unary>(node);
 			markAddressModes(u.operand(), compileContext);
 			break;

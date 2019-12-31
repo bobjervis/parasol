@@ -791,6 +791,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	NULL:
 		case	BYTES:
 		case	TEMPLATE_INSTANCE:
+		case	VECTOR_OF:
 		case	FLOATING_POINT:
 		case	FRAME_PTR:
 		case	STACK_PTR:
