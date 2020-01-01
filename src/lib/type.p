@@ -64,9 +64,9 @@ public enum TypeFamily {
 }
 
 public class BuiltInType extends Type {
-	private ref<ClassType> _classType;
+	private ref<Type> _classType;
 
-	BuiltInType(TypeFamily family, ref<ClassType> classType) {
+	BuiltInType(TypeFamily family, ref<Type> classType) {
 		super(family);
 		_classType = classType;
 //		print();
@@ -143,7 +143,7 @@ public class BuiltInType extends Type {
 			return super.widensTo(other, compileContext);
 	}
 
-	public ref<ClassType> classType() {
+	public ref<Type> classType() {
 		return _classType;
 	}
 
@@ -411,7 +411,6 @@ public class ClassType extends Type {
 	protected ref<Class> _definition;
 	protected boolean _isMonitor;
 	protected boolean _final;
-	private ref<OverloadInstance> _compareMethod;
 
 	protected ClassType(TypeFamily family, ref<Class> definition, boolean isFinal, ref<Scope> scope) {
 		super(family);
@@ -644,6 +643,7 @@ public class ClassType extends Type {
 
 	protected void doResolve(ref<CompileContext> compileContext) {
 		if (_definition != null) {
+			string s = _definition.name().identifier();
 //			_definition.assignImplementsClause(compileContext);
 			ref<Node> base = _definition.extendsClause();
 			if (base != null) {
@@ -679,6 +679,8 @@ public class ClassType extends Type {
 	protected void transferClass(ref<ClassType> copy, ref<Target> target) {
 		if (_extends != null) {
 			_extends.copyToImage(target);
+			// This is a dangerous calculation. If the layout of ClassType changes, the offset of the
+			// compiler's version of '_extends' may not be the target's version. Need to replace this.
 			target.fixupType(_ordinal + int(&ref<ClassType>(null)._extends), _extends);
 		}
 	}
@@ -771,75 +773,12 @@ public class ClassType extends Type {
 		return false;
 	}
 
-	public ref<OverloadInstance> getCompareMethod(ref<CompileContext> compileContext) {
-		if (_compareMethod != null)
-			return _compareMethod;
-		ref<Symbol> sym = _scope.lookup("compare", null);
-		if (sym == null)
-			return null;
-		if (sym.class != Overload)
-			return null;
-		ref<Overload> o = ref<Overload>(sym);
-		if (o.kind() != Operator.FUNCTION)
-			return null;
-		// ... etc.
-		for (i in *o.instances()) {
-			ref<OverloadInstance> oi = (*o.instances())[i];
-			if (oi.parameterCount() != 1)
-				continue;
-			ref<ParameterScope> scope = oi.parameterScope();
-			ref<Symbol> param = (*scope.parameters())[0];
-			ref<Type> t = param.type();
-			if (t.deferAnalysis())
-				continue;
-			if (t.family() != TypeFamily.REF)
-				continue;
-			if (this != t.indirectType(compileContext).classType())
-				continue;
-			ref<FunctionType> f = scope.type();
-			if (f.returnCount() != 1)
-				continue;
-			_compareMethod = oi;
-			// we have a compare method on T that takes a single ref<T> parameter and returns a single value, close enough.
-			return oi;
-		}	
-		return null;
-	}
-
 	ref<Type> getCompareReturnType(ref<CompileContext> compileContext) {
-		if (_compareMethod != null)
-			return _compareMethod.parameterScope().type().returnType().node.type;
-
-		ref<Symbol> sym = _scope.lookup("compare", compileContext);
-		if (sym == null)
+		ref<OverloadInstance> oi = compareMethod(compileContext);
+		if (oi != null)
+			return oi.parameterScope().type().returnType().node.type;
+		else
 			return null;
-		if (sym.class != Overload)
-			return null;
-		ref<Overload> o = ref<Overload>(sym);
-		if (o.kind() != Operator.FUNCTION)
-			return null;
-		// ... etc.
-		for (i in *o.instances()) {
-			ref<OverloadInstance> oi = (*o.instances())[i];
-			if (oi.parameterCount() != 1)
-				continue;
-			ref<ParameterScope> scope = oi.parameterScope();
-			ref<Symbol> param = (*scope.parameters())[0];
-			ref<Type> t = param.assignType(compileContext);
-			if (t.deferAnalysis())
-				return t;
-			if (t.family() != TypeFamily.REF)
-				continue;
-			if (this != t.indirectType(compileContext))
-				continue;
-			ref<FunctionType> f = scope.type();
-			if (f.returnCount() != 1)
-				continue;
-			_compareMethod = oi;
-			// we have a compare method on T that takes a single ref<T> parameter and returns a single value, close enough.
-			return f.returnType().node.type;
-		}	
-		return null;
 	}
 }
 
@@ -1767,6 +1706,7 @@ public class Type {
 	private TypeFamily _family;
 	private boolean _resolved;
 	private boolean _resolving;
+	private ref<OverloadInstance> _compareMethod;
 	public boolean busy;				// Used when checking for circular extends clauses.
 
 	protected int _ordinal;				// Assigned by type-refs: first one gets the 'real' value
@@ -1816,7 +1756,7 @@ public class Type {
 			return null;	
 	}
 	
-	public ref<ClassType> classType() {
+	public ref<Type> classType() {
 		assert(false);
 		return null;
 	}
@@ -1950,20 +1890,41 @@ public class Type {
 	}
 	
 	public ref<OverloadInstance> compareMethod(ref<CompileContext> compileContext) {
+		if (_compareMethod != null)
+			return _compareMethod;
 		ref<Symbol> sym = lookup("compare", compileContext);
 		if (sym != null && sym.class == Overload) {
 			ref<Overload> o = ref<Overload>(sym);
-			for (int i = 0; i < o.instances().length(); i++) {
+			if (o.kind() != Operator.FUNCTION)
+				return null;
+			for (i in *o.instances()) {
 				ref<OverloadInstance> oi = (*o.instances())[i];
-				oi.assignType(compileContext);
 				if (oi.parameterCount() != 1)
 					continue;
-				if ((*oi.parameterScope().parameters())[0].type() == this)
-					return oi;
+				oi.assignType(compileContext);
+				ref<ParameterScope> scope = oi.parameterScope();
+				ref<Symbol> param = (*scope.parameters())[0];
+				ref<Type> t = param.type();
+				if (t.deferAnalysis())
+					continue;
+				// You have to compare to T or ref<T> to be the 'compare' method of a type.
+				if (t.classType() != this) {
+					if (t.family() != TypeFamily.REF)
+						continue;
+					if (this != t.indirectType(compileContext).classType())
+						continue;
+				}
+				ref<FunctionType> f = scope.type();
+				if (f.returnCount() != 1)
+					continue;
+				_compareMethod = oi;
+				// we have a compare method on T that takes a single ref<T> parameter and returns a single value, close enough.
+				return oi;
 			}
 		}
 		return null;
 	}
+
 
 	public ref<OverloadInstance> stringConstantCompareMethod(ref<CompileContext> compileContext) {
 		ref<Symbol> sym = lookup("compare", compileContext);
@@ -2028,12 +1989,10 @@ public class Type {
 	 * @return true if other is a base class of this, false otherwise.
 	 */
 	public boolean isSubtype(ref<Type> other) {
-//		printf("this = %p (%p) other = %p (%p)\n", this, *ref<address>(this), other, *ref<address>(other));
-//		text.memDump(this, ClassType.bytes);
 		ref<Type> base = getSuper();
 		if (base == null)
 			return false;
-		else if (base.equals(other))
+		if (base.equals(other))
 			return true;
 		else
 			return base.isSubtype(other);

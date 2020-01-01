@@ -192,8 +192,7 @@ public class PlainSymbol extends Symbol {
 					}
 				}
 			}
-			ref<ClassType> t = ref<ClassType>(declaredType);
-			t.scope().print(indent + INDENT, printChildScopes);
+			declaredType.scope().print(indent + INDENT, printChildScopes);
 		} else {
 			if (definition() != null) {
 				definition().printBasic(indent + INDENT);
@@ -1080,17 +1079,15 @@ public class Symbol {
 	}
 
 	public ref<BuiltInType> bindBuiltInType(TypeFamily family, ref<CompileContext> compileContext) {
+		assignType(compileContext);
+		if (deferAnalysis())
+			return null;
 		if (_type.family() != TypeFamily.TYPEDEF) {
 			_definition.add(MessageId.NOT_A_TYPE, compileContext.pool());
 			return null;
 		}
 		ref<TypedefType> typedefType = ref<TypedefType>(_type);
-		ref<Type> t = typedefType.wrappedType();
-		if (t.family() != TypeFamily.CLASS) {
-			_definition.add(MessageId.CANNOT_CONVERT, compileContext.pool());
-			return null;
-		}
-		ref<BuiltInType> bt = compileContext.pool().newBuiltInType(family, ref<ClassType>(t));
+		ref<BuiltInType> bt = compileContext.pool().newBuiltInType(family, typedefType.wrappedType());
 		_type = compileContext.makeTypedef(bt);
 		return bt;
 	}

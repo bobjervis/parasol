@@ -391,39 +391,50 @@ public class Arena {
 			case	ENUM:
 				return _enumVector.createVectorInstance(element, index, compileContext);
 
-			case	CLASS:
-				if (index.compareMethod(compileContext) == null)
-					return null;
-				
-			case	STRING:
-				return _map.createVectorInstance(element, index, compileContext);
-			
-			case	UNSIGNED_8:
-			case	SIGNED_32:
-				break;
-			
 			default:
-				if (validMapIndex(index))
+				if (validMapIndex(index, compileContext))
 					return _map.createVectorInstance(element, index, compileContext);
 				else
 					return null;
+				
+			case	SIGNED_8:
+			case	UNSIGNED_8:
+			case	SIGNED_16:
+			case	UNSIGNED_16:
+			case	SIGNED_32:
+			case	UNSIGNED_32:
+			case	SIGNED_64:
+			case	UNSIGNED_64:
+				break;
 			}
 		}
 		return _vector.createVectorInstance(element, index, compileContext);
 	}
 
-	public boolean validMapIndex(ref<Type> index) {
+	public boolean validMapIndex(ref<Type> index, ref<CompileContext> compileContext) {
 		switch (index.family()) {
-		case	CLASS:
-			if (index.compareMethod(null) == null)
-				return false;
+		case	ENUM:
+		case	SIGNED_8:
+		case	UNSIGNED_8:
+		case	SIGNED_16:
+		case	UNSIGNED_16:
+		case	SIGNED_32:
+		case	UNSIGNED_32:
+		case	SIGNED_64:
+		case	UNSIGNED_64:
+			break;
 
+		default:
+			if (index.compareMethod(compileContext) == null)
+				break;
+			
+		case	STRING:
+		case	STRING16:
 		case	FLOAT_32:
 		case	FLOAT_64:
 		case	ADDRESS:
 		case	POINTER:
 		case	REF:
-		case	STRING:
 		case	INTERFACE:
 			return true;
 		}

@@ -1618,8 +1618,8 @@ string typeString(ref<Type> type, string baseName) {
 			return s;
 		} else {
 			// maps are a little more complicated. A map based on an integral type has to be declared as map<e, i>
-			// while a map of a non-integral type canbe written as e[i].
-			if (arena.validMapIndex(i))
+			// while a map of a non-integral type can be written as e[i].
+			if (arena.validMapIndex(i, null))
 				s.printf("%s[%s]", typeString(e, baseName), typeString(i, baseName));
 			else
 				s.printf("map&lt;%s, %s&gt;", typeString(e, baseName), typeString(i, baseName));

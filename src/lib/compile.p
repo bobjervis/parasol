@@ -1365,7 +1365,7 @@ public class MemoryPool extends memory.NoReleasePool {
 		return super new TemplateType(symbol, definition, definingFile, overload, templateScope, isMonitor);
 	}
 
-	public ref<BuiltInType> newBuiltInType(TypeFamily family, ref<ClassType> classType) {
+	public ref<BuiltInType> newBuiltInType(TypeFamily family, ref<Type> classType) {
 		return super new BuiltInType(family, classType);
 	}
 
