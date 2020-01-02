@@ -2368,7 +2368,7 @@ public class Loop extends Node {
 		ref<Node> init;
 		ref<Node> test;
 		ref<Node> increment;
-		if (_aggregate.type.family() == TypeFamily.STRING || _aggregate.type.isVector(compileContext)) {
+		if (_aggregate.type.isString() || _aggregate.type.isVector(compileContext)) {
 			ref<Identifier> id = _declarator.clone(tree);
 			ref<Node> zero = tree.newInternalLiteral(0, location());
 			zero.type = id.type;
@@ -2391,7 +2391,7 @@ public class Loop extends Node {
 			increment = tree.newUnary(Operator.INCREMENT_BEFORE, _declarator, location());
 			increment.type = _declarator.type;
 		} else {
-			ref<Type> iteratorClass = _aggregate.type.mapIterator(compileContext);
+			ref<Type> iteratorClass = _aggregate.type.classType().mapIterator(compileContext);
 			if (iteratorClass == null) {
 				printf("Not a well-formed aggregate: %s\n", _aggregate.type.signature());
 				print(0);
