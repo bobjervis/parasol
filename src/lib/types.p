@@ -189,34 +189,6 @@ public class ref<class T> extends address {
 public class pointer<class T> extends address {
 }
 
-public class Object {
-	private var[string] _members;
-	
-	public var get(string key) {
-		return _members[key];
-	}
-	
-	public void set(string key, var value) {
-		_members[key] = value;
-	}
-	
-	public void remove(string key) {
-		_members.remove(key);
-	}
-
-	public int size() {
-		return _members.size();
-	}
-	
-	public ref<var[string]> members() {
-		return &_members;
-	}
-
-	public boolean contains(string member) {
-		return _members.contains(member);
-	}
-}
-
 public class Queue<class T> {
 	@Constant
 	private static int MIN_CAPACITY = 16;

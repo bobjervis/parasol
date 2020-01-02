@@ -803,8 +803,15 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			
 		case	SUBSCRIPT:
 			b = ref<Binary>(node);
-			if (b.left().type.indirectType(compileContext) != null || 
-				b.left().type.isString()) {
+			switch (b.left().type.family()) {
+			case REF:
+			case POINTER:
+			case ADDRESS:
+			case STRING:
+			case STRING16:
+			case SUBSTRING:
+			case SUBSTRING16:
+			case TYPEDEF:
 				if (b.sethi < 0) {
 					assignRegisterTemp(b.left(), longMask(), compileContext);
 					assignRegisterTemp(b.right(), longMask(), compileContext);
@@ -814,7 +821,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				}
 				f().r.cleanupTemps(b, depth);
 				node.register = byte(f().r.getreg(node, requiredMask(node), regMask));
-			} else {
+				break;
+			default:
 				node.print(0);
 				assert(false);
 			}

@@ -106,17 +106,17 @@ private string prettyPrint(var object, int indent) {
 			nextIndent = indent + 4;
 			s += pad(indent);
 		}
-		ref<var[string]> members = ref<Object>(object).members();
 		boolean serializedMember;
-		for (var[string].iterator i = members.begin(); i.hasNext(); i.next()) {
+		ref<Object> obj = ref<Object>(object);
+		for (i in *obj) {
 			if (serializedMember) {
 				s.append(',');
 				if (indent >= 0)
 					s += pad(nextIndent);
 			} else if (indent >= 0)
 				s += "    ";
-			s.printf("\"%s\":", i.key().escapeJSON());
-			s.append(prettyPrint(i.get(), nextIndent));
+			s.printf("\"%s\":", i.escapeJSON());
+			s.append(prettyPrint((*obj)[i], nextIndent));
 			serializedMember = true;
 		}
 		if (serializedMember)
@@ -169,8 +169,8 @@ public void dispose(var object) {
 		ref<Object> o = ref<Object>(object);
 		if (o == null)
 			return;
-		for (i in (*o.members())) {
-			var x = (*o.members())[i];
+		for (i in *o) {
+			var x = (*o)[i];
 			dispose(x);
 		}
 		delete o;
@@ -221,9 +221,9 @@ public var clone(var object) {
 		if (o == null)
 			return o;
 		ref<Object> n = new Object();
-		for (i in (*o.members())) {
-			var x = (*o.members())[i];
-			n.set(i, clone(x));
+		for (i in *o) {
+			var x = (*o)[i];
+			(*n)[i] = clone(x);
 		}
 		return n;
 	} else if (object.class == ref<Array>) {
@@ -231,10 +231,8 @@ public var clone(var object) {
 		if (a == null)
 			return a;
 		ref<Array> n = new Array();
-		n.resize(a.length());
-		for (int i = 0; i < a.length(); i++) {
-			n.set(i, clone(a.get(i)));
-		}
+		for (i in *a)
+			n.push(clone((*a)[i]));
 		return n;
 	} else
 		return object;
