@@ -1013,6 +1013,7 @@ public class Binary extends Node {
 			break;
 			
 		case	SHAPE:
+		case	ARRAY_AGGREGATE:
 			if (shouldVectorize(_right)) {
 				print(0);
 				assert(false);

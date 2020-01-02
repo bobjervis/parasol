@@ -86,9 +86,14 @@
  *
  * <h4>Array and Object</h4>
  *
- * These classes are named to correspond to the equivalent Javascript types. They are 
- * like {@code vector} and {@code map} respectively, except that Array and Object are not
- * templates, but 
+ * These classes are named to correspond to the equivalent Javascript types. They are intended
+ * to help full-stack developers who have to work with exchanging JSON payloads with a browser.
+ *
+ * The Array type is just a synonym for {@code var[]}. You can therefore subscript an Array object,
+ * use it in a vectorized statement, or use it in a for-in statement.
+ *
+ * Similarly, Object is a synonym for {@code var[string]}. You can therefore use subscripting and
+ * the for-in statement with Object objects.
  */
 namespace parasol:types;
 
@@ -182,52 +187,6 @@ public class ref<class T> extends address {
  */
 @Pointer
 public class pointer<class T> extends address {
-}
-/**
- * The Array class is designed to mirror the JavaScript Array type.
- *
- * In parsed JSON, JSON arrays are represented as {@code ref&lt;Array&gt;} objects.
- *
- * If you assign an array aggregate to a var object, that aggregate will be converted
- * to an Array, with each aggregate array element corresponding to an element in the Array
- * object. If the initializers in an array aggregate are sparse, the Array will be large enough
- * to contain all of the aggregate's elements.
- */
-public class Array {
-	private var[] _elements;
-	
-	public var get(int i) {
-		return _elements[i];
-	}
-	
-	public void set(int i, var x) {
-		_elements[i] = x;
-	}
-
-	public void resize(int newLength) {
-		_elements.resize(newLength);
-	}
-	/**
- 	 * Push (i.e. append) an element onto the array.
-	 *
-	 * @param x The value to be pushed into the array.
-	 */
-	public void push(var x) {
-		_elements.append(x);
-	}
-	
-	public var pop() {
-		if (_elements.length() > 0) {
-			var x = _elements[_elements.length() - 1];
-			_elements.resize(_elements.length() - 1);
-			return x;
-		} else
-			return var();
-	}
-	
-	public int length() {
-		return _elements.length();
-	}
 }
 
 public class Object {

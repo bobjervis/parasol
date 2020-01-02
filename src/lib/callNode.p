@@ -1115,6 +1115,7 @@ public class Call extends ParameterBag {
 	public boolean canCoerce(ref<Type> newType, boolean explicitCast, ref<CompileContext> compileContext) {
 		switch (op()) {
 		case	ARRAY_AGGREGATE:
+			newType = newType.classType();
 			switch (newType.family()) {
 			case	VAR:
 				return true;
@@ -1161,7 +1162,7 @@ public class Call extends ParameterBag {
 
 			case REF:
 				if (newType.indirectType(compileContext) != 
-						compileContext.arena().builtInType(TypeFamily.ARRAY_AGGREGATE))
+						compileContext.arena().builtInType(TypeFamily.ARRAY_AGGREGATE).classType())
 					return false;
 					// it's a ref<Array>, convert accordingly
 				indexType = compileContext.arena().builtInType(TypeFamily.SIGNED_32);

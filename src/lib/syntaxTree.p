@@ -3562,6 +3562,7 @@ public class Node {
 			case	CLASS_VARIABLE:
 			case	VOID:
 			case	INTERFACE:
+			case	ARRAY_AGGREGATE:
 				break;
 
 			default:

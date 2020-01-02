@@ -46,7 +46,6 @@ import parasol:types.map;
 import parasol:exception.Exception;
 import parasol:stream.Reader;
 import parasol:stream.Writer;
-import parasol:types.Array;
 import parasol:types.Object;
 import parasol:thread.Monitor;
 
@@ -62,4 +61,7 @@ import parasol:types.`*Namespace*`;
 import parasol:types.`*deferred*`;
 import parasol:types.`*array*`;
 import parasol:types.`*object*`;
+
+public class Array = var[];
+
 

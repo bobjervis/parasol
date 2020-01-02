@@ -147,6 +147,15 @@ public class BuiltInType extends Type {
 		return _classType;
 	}
 
+	public ref<Type> elementType() {
+		return _classType.elementType();
+	}
+	
+	public ref<Type> indexType() {
+		return _classType.indexType();
+	}
+
+
 	public boolean equals(ref<Type> other) {
 		// A built in type is unique, so one is always equal to itself...
 		if (this == other)
