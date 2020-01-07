@@ -252,7 +252,15 @@ public class PlainSymbol extends Symbol {
 							_type = t.indexType();
 							break;
 
+						case OBJECT_AGGREGATE:
+							_type = compileContext.arena().builtInType(TypeFamily.STRING);
+							break;
+
 						case STRING:
+						case STRING16:
+						case SUBSTRING:
+						case SUBSTRING16:
+						case ARRAY_AGGREGATE:
 							_type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
 							break;
 

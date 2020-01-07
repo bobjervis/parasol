@@ -2267,9 +2267,11 @@ public class Binary extends Node {
 			}
 			if (_left.type == null)
 				print(0);
-			if (_left.type.family() == TypeFamily.TYPEDEF)
+			if (_left.type.family() == TypeFamily.TYPEDEF) {
 				arrayDeclaration(compileContext);
-			else if (_left.type.isPointer(compileContext)) {
+				break;
+			}
+			if (_left.type.isPointer(compileContext)) {
 				_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_64, false, compileContext);
 				type = _left.type.indirectType(compileContext);
 			} else if (_left.type.isVector(compileContext) || 

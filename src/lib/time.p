@@ -622,11 +622,60 @@ public class Instant {
 	}
 }
 /**
- * The Clock class defines a framework for using the underlying system high-precision timers.
+ * The Clock enum defines a framework for using the underlying system high-precision timers.
  *
  * Content TBD.
  */
-public class Clock {
+public enum Clock {
+	REALTIME(linux.CLOCK_REALTIME),
+	MONOTONIC(linux.CLOCK_MONOTONIC),
+	PROCESS_CPU(linux.CLOCK_PROCESS_CPUTIME_ID),
+	THREAD_CPU(linux.CLOCK_THREAD_CPUTIME_ID);
+;
+	private int _clockId;
+
+	Clock(int clockId) {
+		_clockId = clockId;
+	}
+
+	Instant get() {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+			switch (_clockId) {
+			case linux.CLOCK_REALTIME:
+				windows.SYSTEMTIME s;
+				windows.FILETIME f;
+		
+				windows.GetSystemTime(&s);
+				windows.SystemTimeToFileTime(&s, &f);
+				return Instant(f);
+			}
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+			linux.timespec t;
+			linux.clock_gettime(_clockId, &t);
+			return Instant(t);
+		}
+		return Instant(0, 0);
+	}
+
+	boolean set(Instant i) {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+			switch (_clockId) {
+			case linux.CLOCK_REALTIME:
+				windows.SYSTEMTIME s;
+				windows.FILETIME f;
+
+				long ticks = i.nanoseconds() / NANOS_PER_WIN_TICK + i.seconds() * WIN_TICKS_PER_SECOND;
+				*ref<long>(&f) = ticks + ERA_DIFF;		
+				windows.FileTimeToSystemTime(&f, &s);
+				return windows.SetSystemTime(&s) != 0;
+			}
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+			linux.timespec t;
+			if (linux.clock_settime(_clockId, &t) == 0)
+				return true;
+		}
+		return false;
+	}		
 }
 /**
  * The standard Western Calendar.

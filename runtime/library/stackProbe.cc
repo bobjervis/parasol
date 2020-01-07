@@ -55,7 +55,10 @@ void *framePointer() {
 
 byte *stackTop() {
 	ExecutionContext *context = threadContext.get();
-	return context->stackTop();
+	if (context != 0)
+		return context->stackTop();
+	else
+		return 0;
 }
 
 }

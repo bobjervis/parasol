@@ -31,6 +31,8 @@ import parasol:compiler.CPC_LETTER;
 
 import parasol:text.memDump;
 import parasol:text.string16;
+import parasol:compiler.Type;
+import parasol:compiler.ClassType;
 
 import parasol:log;
 
@@ -73,6 +75,7 @@ public string stringify(var object) {
 }
 
 private string prettyPrint(var object, int indent) {
+	assert(object != undefined);
 	if (object.class == long) {
 		string s;
 		

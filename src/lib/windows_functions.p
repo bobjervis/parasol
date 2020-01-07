@@ -85,8 +85,12 @@ public abstract HLOCAL LocalFree(HLOCAL hMem);
 
 @Windows("kernel32.dll", "GetSystemTime")
 public abstract void GetSystemTime(ref<SYSTEMTIME> lpSystemTime);
+@Windows("kernel32.dll", "SetSystemTime")
+public abstract BOOL SetSystemTime(ref<SYSTEMTIME> lpSystemTime);
 @Windows("kernel32.dll", "SystemTimeToFileTime")
 public abstract WINBOOL SystemTimeToFileTime(ref<SYSTEMTIME> lpSystemTime, ref<FILETIME> lpFileTome);
+@Windows("kernel32.dll", "FileTimeToSystemTime")
+public abstract WINBOOL FileTimeToSystemTime(ref<FILETIME> lpFileTome, ref<SYSTEMTIME> lpSystemTime);
 
 @Windows("kernel32.dll", "GetCurrentThreadId")
 public abstract DWORD GetCurrentThreadId();

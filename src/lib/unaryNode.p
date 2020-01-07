@@ -197,11 +197,14 @@ public class Unary extends Node {
 			switch (_operand.op()) {
 			case OBJECT_AGGREGATE:
 			case ARRAY_AGGREGATE:
-				_operand.type = type;
-				return _operand.fold(tree, false, compileContext);
-			}
-			if (_operand.type.extendsFormally(type, compileContext)) {
-				if (_operand.isLvalue()) {
+				if (type.family() != TypeFamily.VAR) {
+					_operand.type = type;
+					return _operand.fold(tree, false, compileContext);
+				}
+				break;
+
+			default:
+				if (_operand.isLvalue() && _operand.type.extendsFormally(type, compileContext)) {
 					_operand = _operand.fold(tree, false, compileContext);
 					_operand.type = type;
 					return _operand;
@@ -371,7 +374,9 @@ public class Unary extends Node {
 				case	ADDRESS:
 				case	INTERFACE:
 					return foldCastToConstructor(compileContext.arena().builtInType(TypeFamily.ADDRESS), tree, voidContext, compileContext);
-					
+
+				case	ARRAY_AGGREGATE:
+					_operand.type = compileContext.arena().createRef(_operand.type.classType(), compileContext);	
 				case	REF:
 				case	POINTER:
 					for (int i = 0; i < type.scope().constructors().length(); i++) {

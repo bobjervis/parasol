@@ -80,11 +80,7 @@ public class Target {
 	
 	public abstract boolean generateCode(ref<FileStat> mainFile, ref<CompileContext> compileContext);
 
-	public address, int allocateImageData(int size, int alignment) {
-		printf("allocateImageData(%d, %d)\n", size, alignment);
-		assert(false);
-		return null, 0;
-	}
+	public abstract address, int allocateImageData(int size, int alignment, ref<Type> type);
 
 	public void fixupType(int ordinal, ref<Type> type) {
 		assert(false);
@@ -344,4 +340,16 @@ public class Fixup<class T> {
 	public int location;					// The location within the host Segment of the fixup.
 	public boolean absolute;				// If true, this is an absolute, 64-bit reference;
 											//     if false, a relative, 32-bit reference.
+}
+
+public class OrdinalMap {
+	map<ref<Type>, int> _map;
+
+	public void set(int ordinal, ref<Type> type) {
+		_map[ordinal] = type;
+	}
+
+	public ref<Type> get(int ordinal) {
+		return _map[ordinal];
+	}
 }

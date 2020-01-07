@@ -23,6 +23,8 @@ import parasol:compiler.OverloadInstance;
 import parasol:compiler.ParameterScope;
 import parasol:compiler.Scope;
 import parasol:compiler.Symbol;
+import parasol:compiler.Type;
+import parasol:compiler.OrdinalMap;
 import parasol:runtime.SourceLocation;
 import native:C;
 
@@ -55,6 +57,7 @@ class Disassembler {
 	private pointer<SourceLocation> _sourceLocations;
 	private int _sourceLocationsCount;
 	private ref<ref<ClassScope>[]> _vtables;
+	private ref<OrdinalMap> _ordinalMap;
 	
 	Disassembler(ref<Arena> arena, long logical, int imageLength, pointer<byte> physical, ref<X86_64SectionHeader> pxiHeader) {
 		_arena = arena;
@@ -82,6 +85,10 @@ class Disassembler {
 		_functionMap = functionMap;
 	}
 	
+	void setOrdinalMap(ref<OrdinalMap> om) {
+		_ordinalMap = om;
+	}
+
 	void setSourceLocations(pointer<SourceLocation> sourceLocations, int sourceLocationsCount) {
 		_sourceLocations = sourceLocations;
 		_sourceLocationsCount = sourceLocationsCount;
@@ -1479,7 +1486,15 @@ class Disassembler {
 			pointer<string> ps = pointer<string>(&x);		// We want to make sure we don't call a destructor here
 			printf(" '%s'", *ps);
 		} else if (location >= _pxiHeader.typeDataOffset && location < _typeDataEndOffset) {
-			printf(" [ordinal %x]", location - _pxiHeader.typeDataOffset);
+			int ordinal = location - _pxiHeader.typeDataOffset;
+			if (_ordinalMap != null) {
+				ref<Type> t = _ordinalMap.get(ordinal);
+				if (t != null) {
+					printf(" [%s (ordinal %x)]", t.signature(), ordinal);
+					return;
+				}
+			}
+			printf(" [ordinal %x]", ordinal);
 		} else if (location >= _pxiHeader.vtablesOffset && location < _vtablesEndOffset) {
 			printf(" [vtable %x]", (location - _pxiHeader.vtablesOffset) / address.bytes);
 		} else if (location >= _staticDataStart && location < _staticDataEnd) {

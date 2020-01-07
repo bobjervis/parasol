@@ -281,9 +281,7 @@ public class Identifier extends Node {
 		} else
 			_symbol._doclet = enclosing.file().tree().getDoclet(this);
 	}
-/*
-	ref<Symbol> bind(ref<Scope> enclosing, ref<Type> type, ref<Node> initializer, ref<CompileContext> compileContext);
-*/
+
 	ref<Symbol> bindEnumInstance(ref<Scope> enclosing, ref<Type> type, ref<Node> initializer, ref<CompileContext> compileContext) {
 		_definition = true;
 		_symbol = enclosing.define(Operator.PUBLIC, StorageClass.ENUMERATION, compileContext.annotations, this, type, initializer, compileContext.pool());

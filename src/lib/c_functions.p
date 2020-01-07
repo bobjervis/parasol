@@ -185,11 +185,11 @@ public abstract address malloc(unsigned size);
 
 @Windows("msvcrt.dll", "memcpy")
 @Linux("libc.so.6", "memcpy")
-public abstract address memcpy(address destination, address source, int amount);
+public abstract address memcpy(address destination, address source, long amount);
 
 @Windows("msvcrt.dll", "memset")
 @Linux("libc.so.6", "memset")
-public abstract address memset(address destination, byte value, int amount);
+public abstract address memset(address destination, byte value, long amount);
 
 @Linux("libc.so.6", "mktime")
 public abstract time_t mktime(ref<tm> time);

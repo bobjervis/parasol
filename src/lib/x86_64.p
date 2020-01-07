@@ -959,7 +959,7 @@ public class X86_64 extends X86_64AssignTemps {
 			if (preserveRCX)
 				inst(X86.ADD, TypeFamily.ADDRESS, firstRegisterArgument(), address.bytes);
 			inst(X86.XOR, TypeFamily.UNSIGNED_16, secondRegisterArgument(), secondRegisterArgument());
-			inst(X86.MOV, TypeFamily.SIGNED_32, thirdRegisterArgument(), reserveSpace);
+			inst(X86.MOV, TypeFamily.SIGNED_64, thirdRegisterArgument(), reserveSpace);
 			instCall(_memset, compileContext);
 			if (preserveRCX)
 				inst(X86.POP, TypeFamily.SIGNED_64, firstRegisterArgument());
@@ -991,13 +991,13 @@ public class X86_64 extends X86_64AssignTemps {
 			if (scope.enclosing().variableStorage > firstMemberOffset) {
 				inst(X86.LEA, firstRegisterArgument(), thisRegister(), firstMemberOffset);
 				inst(X86.XOR, TypeFamily.UNSIGNED_16, secondRegisterArgument(), secondRegisterArgument());
-				inst(X86.MOV, TypeFamily.SIGNED_32, thirdRegisterArgument(), scope.enclosing().variableStorage - firstMemberOffset);
+				inst(X86.MOV, TypeFamily.SIGNED_64, thirdRegisterArgument(), scope.enclosing().variableStorage - firstMemberOffset);
 				instCall(_memset, compileContext);
 			}
 		} else {
 			inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), thisRegister());
 			inst(X86.XOR, TypeFamily.UNSIGNED_16, secondRegisterArgument(), secondRegisterArgument());
-			inst(X86.MOV, TypeFamily.SIGNED_32, thirdRegisterArgument(), scope.enclosing().variableStorage);
+			inst(X86.MOV, TypeFamily.SIGNED_64, thirdRegisterArgument(), scope.enclosing().variableStorage);
 			instCall(_memset, compileContext);
 		}
 		for (ref<Symbol>[Scope.SymbolKey].iterator i = scope.enclosing().symbols().begin(); i.hasNext(); i.next()) {
@@ -1536,7 +1536,7 @@ public class X86_64 extends X86_64AssignTemps {
 		case	CLASS_COPY:
 			b = ref<Binary>(node);
 			generateOperands(b, compileContext);
-			inst(X86.MOV, TypeFamily.SIGNED_32, thirdRegisterArgument(), b.type.size());
+			inst(X86.MOV, TypeFamily.SIGNED_64, thirdRegisterArgument(), b.type.size());
 			instCall(_memcpy, compileContext);
 			break;
 
@@ -2742,7 +2742,7 @@ public class X86_64 extends X86_64AssignTemps {
 		ref<Node> temp = ref<Binary>(value).right();
 		inst(X86.LEA, secondRegisterArgument(), temp, compileContext);
 		inst(X86.MOV, firstRegisterArgument(), R.RBP, f().outParameterOffset);
-		inst(X86.MOV, TypeFamily.SIGNED_32, thirdRegisterArgument(), funcType.returnSize(this, compileContext));
+		inst(X86.MOV, TypeFamily.SIGNED_64, thirdRegisterArgument(), funcType.returnSize(this, compileContext));
 		instCall(_memcpy, compileContext);
 	}
 	
@@ -2800,7 +2800,7 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.MOV, firstRegisterArgument(), R.RBP, f().outParameterOffset);
 			if (outOffset > 0)
 				inst(X86.ADD, TypeFamily.ADDRESS, firstRegisterArgument(), outOffset);
-			inst(X86.MOV, TypeFamily.SIGNED_32, thirdRegisterArgument(), value.type.size());
+			inst(X86.MOV, TypeFamily.SIGNED_64, thirdRegisterArgument(), value.type.size());
 			instCall(_memcpy, compileContext);
 		} else {
 			value.print(0);
@@ -3275,13 +3275,13 @@ public class X86_64 extends X86_64AssignTemps {
 				if (node.type.size() > address.bytes) {
 					inst(X86.ADD, TypeFamily.ADDRESS, firstRegisterArgument(), address.bytes);
 					inst(X86.XOR, TypeFamily.UNSIGNED_16, secondRegisterArgument(), secondRegisterArgument());
-					inst(X86.MOV, TypeFamily.SIGNED_32, thirdRegisterArgument(), node.type.size() - address.bytes);
+					inst(X86.MOV, TypeFamily.SIGNED_64, thirdRegisterArgument(), node.type.size() - address.bytes);
 					instCall(_memset, compileContext);
 				}
 			} else if (node.type.size() > 0) {
 				inst(X86.MOV, firstRegisterArgument(), u.operand(), compileContext);
 				inst(X86.XOR, TypeFamily.UNSIGNED_16, secondRegisterArgument(), secondRegisterArgument());
-				inst(X86.MOV, TypeFamily.SIGNED_32, thirdRegisterArgument(), node.type.size());
+				inst(X86.MOV, TypeFamily.SIGNED_64, thirdRegisterArgument(), node.type.size());
 				instCall(_memset, compileContext);
 			} else if (node.type.interfaceCount() > 0)
 				inst(X86.MOV, firstRegisterArgument(), u.operand(), compileContext);
@@ -3294,7 +3294,7 @@ public class X86_64 extends X86_64AssignTemps {
 			assignVoidContext(node, compileContext);
 			ref<Binary> b = ref<Binary>(node);
 			generateOperands(b, compileContext);
-			inst(X86.MOV, TypeFamily.SIGNED_32, thirdRegisterArgument(), b.type.size());
+			inst(X86.MOV, TypeFamily.SIGNED_64, thirdRegisterArgument(), b.type.size());
 			instCall(_memcpy, compileContext);
 			break;
 
@@ -4444,7 +4444,7 @@ public class X86_64 extends X86_64AssignTemps {
 				} else
 					inst(X86.LEA, firstRegisterArgument(), thisRegister(), address.bytes);
 				inst(X86.XOR, TypeFamily.UNSIGNED_16, secondRegisterArgument(), secondRegisterArgument());
-				inst(X86.MOV, TypeFamily.SIGNED_32, thirdRegisterArgument(), type.size() - address.bytes);
+				inst(X86.MOV, TypeFamily.SIGNED_64, thirdRegisterArgument(), type.size() - address.bytes);
 				instCall(_memset, compileContext);
 			}
 		} else if (type.size() > 0) {
@@ -4459,7 +4459,7 @@ public class X86_64 extends X86_64AssignTemps {
 				else
 					inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), thisRegister());
 				inst(X86.XOR, TypeFamily.UNSIGNED_16, secondRegisterArgument(), secondRegisterArgument());
-				inst(X86.MOV, TypeFamily.SIGNED_32, thirdRegisterArgument(), type.size());
+				inst(X86.MOV, TypeFamily.SIGNED_64, thirdRegisterArgument(), type.size());
 				instCall(_memset, compileContext);
 			}
 		}

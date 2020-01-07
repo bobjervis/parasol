@@ -1043,8 +1043,8 @@ public class map<class V, class K> {
 			if (hadToRehash())
 				e = findEntry(key);
 			_entriesCount++;
+			e.valid = true;
 		}
-		e.valid = true;
 		if (e.deleted) {
 			_deletedEntriesCount--;
 			e.deleted = false;

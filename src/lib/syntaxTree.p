@@ -2415,9 +2415,10 @@ public class Loop extends Node {
 
 			r = tree.newReference(iterator, false, location());
 			value = createMethodCall(r, "key", tree, compileContext);
-			value.type = _declarator.type;
-			value = tree.newBinary(Operator.ASSIGN_TEMP, _declarator, value, location());
-			value.type = _declarator.type;
+			ref<Identifier> id = _declarator.clone(tree);
+			value.type = id.type;
+			value = tree.newBinary(Operator.ASSIGN_TEMP, id, value, location());
+			value.type = id.type;
 			value = tree.newUnary(Operator.EXPRESSION, value, location());
 			value.type = increment.type;
 			ref<Block> b = tree.newBlock(Operator.BLOCK, false, location());
@@ -2464,7 +2465,7 @@ public class Loop extends Node {
 		type = compileContext.arena().builtInType(TypeFamily.VOID);
 		if (_aggregate.type.deferAnalysis())
 			type = _declarator.type = _aggregate.type;
-		else if (_aggregate.type.family() == TypeFamily.STRING)
+		else if (_aggregate.type.isString())
 			_declarator.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
 		else {
 //			print(0);

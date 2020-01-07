@@ -13,6 +13,8 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+import parasol:json;
+
 int[] a = [ 17, 2300, -45, 1007001 ];
 
 boolean case0, case1, case2, case3;
@@ -112,4 +114,64 @@ assert(case0);
 assert(case1);
 assert(case2);
 assert(case3);
+
+ref<Object> florp = {
+	a: 17,
+	b: "hello world",
+	c: [
+		23,
+		37.5,
+		null
+	]
+};
+
+boolean aSeen, bSeen, cSeen;
+
+for (i in *florp) {
+	switch (i) {
+	case "a":
+		if (aSeen) {
+			printf("Seen a twice\n");
+			assert(false);
+		}
+		var a = (*florp)[i];
+		assert(a.class == long);
+		aSeen = true;
+		break;
+
+	case "b":
+		if (bSeen) {
+			printf("Seen b twice\n");
+			assert(false);
+		}
+		var b = (*florp)[i];
+		assert(b.class == string);
+		bSeen = true;
+		break;
+
+	case "c":
+		if (cSeen) {
+			printf("Seen c twice\n");
+			assert(false);
+		}
+		var c = (*florp)[i];
+		assert(c.class == ref<Array>);
+		ref<Array> ca = ref<Array>(c);
+		assert((*ca)[0].class == long);
+		assert(long((*ca)[0]) == 23);
+		assert((*ca)[1].class == double);
+		assert(double((*ca)[1]) == 37.5);
+		assert((*ca)[2].class == address);
+		assert(address((*ca)[2]) == null);
+		cSeen = true;
+		break;
+
+	default:
+		printf("Unexpected property: %s\n", i);
+		assert(false);
+	}
+}
+assert(aSeen & bSeen & cSeen);
+
+
 

@@ -24,6 +24,8 @@ public:
 	ThreadContext() {
 #if defined(__WIN64)
 		_slot = TlsAlloc();
+#elif __linux__
+	_threadContextValue = 0;
 #endif
 	}
 

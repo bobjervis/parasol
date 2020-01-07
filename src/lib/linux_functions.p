@@ -61,8 +61,14 @@ public abstract int chdir(pointer<byte> path);
 @Linux("libc.so.6", "chmod")
 public abstract int chmod(pointer<byte> path, mode_t mode);
 
+@Linux("libc.so.6", "clock_getres")
+public abstract int clock_getres(int clock_id, ref<timespec> tp);
+
 @Linux("libc.so.6", "clock_gettime")
 public abstract int clock_gettime(int clock_id, ref<timespec> tp);
+
+@Linux("libc.so.6", "clock_settime")
+public abstract int clock_settime(int clock_id, ref<timespec> tp);
 
 @Windows("msvcrt.dll", "_close")
 @Linux("libc.so.6", "close")
@@ -1442,6 +1448,12 @@ public class passwd {
 
 @Constant
 public int CLOCK_REALTIME = 0;
+@Constant
+public int CLOCK_MONOTONIC = 1;
+@Constant
+public int CLOCK_PROCESS_CPUTIME_ID = 2;
+@Constant
+public int CLOCK_THREAD_CPUTIME_ID = 3;
 
 enum SysConf {
 	_SC_ARG_MAX,

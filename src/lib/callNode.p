@@ -433,6 +433,10 @@ public class Call extends ParameterBag {
 			break;
 			
 		case	ARRAY_AGGREGATE:
+			if (compileContext.target.verbose()) {
+				printf("--- fold: %s ---------\n", compileContext.current().sourceLocation(location()));
+				print(4);
+			}
 			// Is this a ref<Array> type ARRAY_AGGREGATE?
 			Interval[] intervals;
 			ref<Type> indexType, elementType;
@@ -514,6 +518,10 @@ public class Call extends ParameterBag {
 			break;
 			
 		case	OBJECT_AGGREGATE:
+			if (compileContext.target.verbose()) {
+				printf("--- fold: %s ---------\n", compileContext.current().sourceLocation(location()));
+				print(4);
+			}
 			ref<Variable> temp = compileContext.newVariable(type);
 			result = null;
 			if (type.family() == TypeFamily.REF) {
@@ -957,10 +965,14 @@ public class Call extends ParameterBag {
 //		printf("coerceAggregateType to %s\n", newType.signature());
 		ref<Type> indexType;
 		ref<Type> elementType;
-		if (newType.family() == TypeFamily.REF) {						// it's a ref<Array>, convert accordingly
+		switch (newType.family()) {
+		case REF:						// it's a ref<Array>, convert accordingly
+		case VAR:						// it's a var, it's going to be a ref<Array> on the way in.
 			indexType = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
 			elementType = compileContext.arena().builtInType(TypeFamily.VAR);
-		} else {
+			break;
+
+		default:
 			indexType = newType.indexType();
 			elementType = newType.elementType();
 		}
@@ -1242,7 +1254,13 @@ public class Call extends ParameterBag {
 	
 	public ref<Node> coerce(ref<SyntaxTree> tree, ref<Type> newType, boolean explicitCast, ref<CompileContext> compileContext) {
 		if (op() == Operator.ARRAY_AGGREGATE) {
-			type = newType;
+			ref<Type> tp = type;
+			coerceAggregateType(newType, compileContext);
+			if (newType.family() == TypeFamily.VAR) {
+				ref<Node> n = tree.newCast(newType, this);
+				type = tp;
+				return n;
+			}
 			return this;
 		}
 		return super.coerce(tree, newType, explicitCast, compileContext);

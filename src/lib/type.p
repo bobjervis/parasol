@@ -215,6 +215,14 @@ public class BuiltInType extends Type {
 		return _ordinal;
 	}
 	
+	public boolean isVector(ref<CompileContext> compileContext) {
+		return family() == TypeFamily.ARRAY_AGGREGATE;
+	}
+
+	public boolean isMap(ref<CompileContext> compileContext) {
+		return family() == TypeFamily.OBJECT_AGGREGATE;
+	}
+	
 	public boolean isLockable() {
 		return family() == TypeFamily.CLASS_DEFERRED;
 	}
@@ -688,7 +696,7 @@ public class ClassType extends Type {
 	protected void transferClass(ref<ClassType> copy, ref<Target> target) {
 		if (_extends != null) {
 			_extends.copyToImage(target);
-			// This is a dangerous calculation. If the layout of ClassType changes, the offset of the
+			// TODO: This is a dangerous calculation. If the layout of ClassType changes, the offset of the
 			// compiler's version of '_extends' may not be the target's version. Need to replace this.
 			target.fixupType(_ordinal + int(&ref<ClassType>(null)._extends), _extends);
 		}
@@ -843,7 +851,7 @@ public class EnumType extends ClassType {
 
 	public int copyToImage(ref<Target> target) {
 		if (_ordinal == 0) {
-			address a = allocateImageData(target, Type.bytes);
+			address a = allocateImageData(target, EnumType.bytes);
 			ref<Type> t = ref<Type>(a);
 //			*t = *this;
 //			*ref<long>(t) = 0;
@@ -958,7 +966,7 @@ public class EnumInstanceType extends Type {
 
 	public int copyToImage(ref<Target> target) {
 		if (_ordinal == 0) {
-			address a = allocateImageData(target, Type.bytes);
+			address a = allocateImageData(target, EnumInstanceType.bytes);
 			ref<Type> t = ref<Type>(a);
 //			*t = *this;
 //			*ref<long>(t) = 0;
@@ -1977,7 +1985,7 @@ public class Type {
 	
 	protected address allocateImageData(ref<Target> target, int size) {
 		address a;
-		(a, _ordinal) = target.allocateImageData(size, address.bytes);
+		(a, _ordinal) = target.allocateImageData(size, address.bytes, this);
 		return a;
 	}
 	
@@ -2052,6 +2060,7 @@ public class Type {
 	}
 	
 	public ref<Type> elementType() {
+		printf("elementType of %s\n", signature());
 		assert(false);
 		return null;
 	}

@@ -37,6 +37,7 @@ import parasol:compiler.MessageId;
 import parasol:compiler.Node;
 import parasol:compiler.NodeList;
 import parasol:compiler.Operator;
+import parasol:compiler.OrdinalMap;
 import parasol:compiler.OverloadInstance;
 import parasol:compiler.ParameterScope;
 import parasol:compiler.PlainSymbol;
@@ -180,6 +181,7 @@ class X86_64Encoder extends Target {
 	private byte[] _imageData;								// Used to persist the symbol table
 	private ref<Symbol>[][] _dataMap;
 	private ref<Scope>[] _functionMap;
+	private OrdinalMap _ordinalMap;
 	private ref<FunctionState> _f;
 	private byte[] _functionCode;
 	private ref<ClassScope>[] _vtables;
@@ -449,10 +451,12 @@ class X86_64Encoder extends Target {
 		}
 	}
 	
-	public address, int allocateImageData(int size, int alignment) {
+	public address, int allocateImageData(int size, int alignment, ref<Type> type) {
 		assert(alignment == 8);
 		int blockOffset = _imageData.length();
 		_imageData.resize(blockOffset + size);
+		if (type != null)
+			_ordinalMap.set(blockOffset, type);
 		return &_imageData[blockOffset], blockOffset + 1;
 	}
 
@@ -725,6 +729,7 @@ class X86_64Encoder extends Target {
 		Disassembler d(arena, 0, _staticMemoryLength, _staticMemory, &_pxiHeader);
 		d.setDataMap(&_dataMap[0][0], _dataMap[0].length());
 		d.setFunctionMap(&_functionMap);
+		d.setOrdinalMap(&_ordinalMap);
 		d.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
 		d.setVtablesClasses(&_vtables);
 		return d.disassemble();

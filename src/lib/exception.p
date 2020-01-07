@@ -193,7 +193,8 @@ public class Exception {
 				process.exit(1);
 			}
 		}
-		printf("\nFATAL: Could not find a stack handler for this address.\n");
+		printf("\nFATAL: Thread %s could not find a stack handler for this address.\n", thread.currentThread().name());
+		printf("Parasol code based at %p\n", runtime.lowCodeAddress());
 		_exceptionContext.print();
 		printf(textStackTrace());
 		process.exit(1);
@@ -834,12 +835,20 @@ private int pxiOffset(address a) {
 
 ref<ExceptionContext> createExceptionContext(address stackPointer) {
 	address top = runtime.stackTop();
-	
-	long stackSize = long(top) - long(stackPointer);
+
+	long stackSize;
+	if (top == null)
+		// This isn't a Parasol stack. There is no trace of Parasol on it. So, only trust the current
+		// page.
+		stackSize = ((long(stackPointer) + 8192) & ~long(0x1fff)) - long(stackPointer);
+	else
+		stackSize = long(top) - long(stackPointer);
+	if (stackSize > 32 * 1024)
+		stackSize = 32 * 1024;		// Limit dumps of really big stacks.
 	pointer<byte> mem = pointer<byte>(memory.alloc(stackSize + ExceptionContext.bytes));
 	ref<ExceptionContext> results = ref<ExceptionContext>(mem);
 	results.stackCopy = mem + ExceptionContext.bytes;
-	C.memcpy(results.stackCopy, stackPointer, int(stackSize));
+	C.memcpy(results.stackCopy, stackPointer, stackSize);
 	results.stackPointer = stackPointer;
 	results.stackBase = stackPointer;
 	results.stackSize = int(stackSize);
