@@ -51,6 +51,10 @@ Thread.init();
 private monitor class ActiveThreads {
 	ref<Thread>[] _activeThreads;
 
+	~ActiveThreads() {
+		Thread.destruct();
+	}
+
 	void enlist(ref<Thread> newThread) {
 		for (int i = 0; i < _activeThreads.length(); i++)
 			if (_activeThreads[i] == null) {
@@ -119,6 +123,8 @@ public void suspendAllOtherThreads() {
  */
 public class Thread {
 	public ref<Locale> locale;
+	public ref<runtime.Profiler> profiler;
+	public ref<runtime.Coverage> coverage;
 	private string _name;
 	private HANDLE _threadHandle;
 	private linux.pthread_t _threadId;
@@ -173,20 +179,25 @@ public class Thread {
 				CloseHandle(_threadHandle);
 		}
 	}
+
+	static ref<Thread> mainThread;
 	/*
 	 * Initialize a Thread object for the 'main' thread of the process.
 	 */
 	static void init() {
-		ref<Thread> t = new Thread();
-		t._name.printf("TID-%d", getCurrentThreadId());
+		mainThread = new Thread();
+		mainThread._name.printf("TID-%d", getCurrentThreadId());
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN)
-			t._threadHandle = INVALID_HANDLE_VALUE;
+			mainThread._threadHandle = INVALID_HANDLE_VALUE;
 		else if (runtime.compileTarget == runtime.Target.X86_64_LNX)
-			t._pid = linux.gettid();
-		parasolThread(t);
-//		printf("init of %s\n", t._name);
-		threads.enlist(t);
-//		printf("-\n");
+			mainThread._pid = linux.gettid();
+		runtime.setParasolThread(mainThread);
+		threads.enlist(mainThread);
+		mainThread.initializeInstrumentation();
+	}
+
+	static void destruct() {
+		mainThread.checkpointInstrumentation();
 	}
 	/**
 	 * Start a Thread running.
@@ -235,26 +246,16 @@ public class Thread {
 	 */
 	private static unsigned wrapperFunction(address wrapperParameter) {
 		ref<Thread> t = ref<Thread>(wrapperParameter);
-		enterThread(t._context, &t);
-		threads.enlist(t);
-		parasolThread(t);
 		t._pid = getCurrentThreadId();
 		nested(t);
-		threads.delist(t);
-		exitThread();
 		return 0;
 	}
 	
 	private static address linuxWrapperFunction(address wrapperParameter) {
 		ref<Thread> t = ref<Thread>(wrapperParameter);
 		t._pid = linux.gettid();
-		enterThread(t._context, &t);
-		threads.enlist(t);
-		parasolThread(t);
 		// All set up, now call the thread main function
 		nested(t);
-		threads.delist(t);
-		exitThread();
 		return null;
 	}
 	/**
@@ -262,6 +263,10 @@ public class Thread {
 	 * same function as above.
 	 */
 	private static void nested(ref<Thread> t) {
+		enterThread(t._context, &t);
+		threads.enlist(t);
+		runtime.setParasolThread(t);
+		t.initializeInstrumentation();
 		try {
 			t._function(t._parameter);
 		} catch (Exception e) {
@@ -269,6 +274,15 @@ public class Thread {
 			e.printStackTrace();
 			process.stdout.flush();
 		}
+		t.checkpointInstrumentation();
+		threads.delist(t);
+		exitThread();
+	}
+
+	private void initializeInstrumentation() {
+	}
+
+	private void checkpointInstrumentation() {
 	}
 	/**
 	 * Suspend this Thread.
@@ -1041,7 +1055,7 @@ public monitor class Future<class T> {
  * @return The Thread object of the currently running thread.
  */
 public ref<Thread> currentThread() {
-	return ref<Thread>(parasolThread(null));
+	return runtime.parasolThread();
 }
 /**
  * Pause the current Thread for some interval of time.
@@ -1091,12 +1105,6 @@ private abstract void enterThread(address newContext, address stackTop);
 @Linux("libparasol.so.1", "exitThread")
 @Windows("parasol.dll", "exitThread")
 private abstract void exitThread();
-/*
- * Declare to the C runtime code the location of the Parasol Thread object for this thread.
- */
-@Linux("libparasol.so.1", "parasolThread")
-@Windows("parasol.dll", "parasolThread")
-private abstract address parasolThread(address newThread);
 
 private class Monitor_Poly extends Monitor {
 	// This exists to trick the compiler into generating a table for this class.

@@ -36,7 +36,8 @@ public class Target {
 	
 	private ref<FileStat>[] _staticBlocks;
 	
-	public static ref<Target> generate(ref<Arena> arena, ref<FileStat> mainFile, boolean countCurrentObjects, ref<CompileContext> compileContext, boolean verbose) {
+	public static ref<Target> generate(ref<Arena> arena, ref<FileStat> mainFile, boolean countCurrentObjects, ref<CompileContext> compileContext,
+											boolean verbose, boolean leaksFlag, string profilePath, string coveragePath) {
 		ref<Target> target;
 		
 		// Magic: select target
@@ -49,11 +50,11 @@ public class Target {
 			printf("Targeting %s\n", string(selectedTarget));
 		switch (selectedTarget) {
 		case	X86_64_LNX:
-			target = new X86_64Lnx(arena, verbose);
+			target = new X86_64Lnx(arena, verbose, leaksFlag, profilePath, coveragePath);
 			break;
 
 		case	X86_64_WIN:
-			target = new X86_64Win(arena, verbose);
+			target = new X86_64Win(arena, verbose, leaksFlag, profilePath, coveragePath);
 			break;
 		}
 		target.populateTypeMap(compileContext);

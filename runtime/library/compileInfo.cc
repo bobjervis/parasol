@@ -40,31 +40,18 @@ byte *highCodeAddress() {
 	return context->highCodeAddress();
 }
 
-void *sourceLocations() {
+void *getRuntimeParameter(int i) {
 	ExecutionContext *context = threadContext.get();
-	return context->sourceLocations();
+	if (context == null)
+		return null;
+	else
+		return context->getRuntimeParameter(i);
 }
 
-int sourceLocationsCount() {
+void setRuntimeParameter(int i, void *newValue) {
 	ExecutionContext *context = threadContext.get();
-	return context->sourceLocationsCount();
-}
-
-void setSourceLocations(void *location, int count) {
-	ExecutionContext *context = threadContext.get();
-	context->setSourceLocations(location, count);
-}
-
-long long getRuntimeFlags() {
-	ExecutionContext *context = threadContext.get();
-	return context->runtimeFlags();
-}
-
-long long setRuntimeFlags(long long flags) {
-	ExecutionContext *context = threadContext.get();
-	long long x = context->runtimeFlags();
-	context->setRuntimeFlags(flags);
-	return x;
+	if (context != null)
+		context->setRuntimeParameter(i, newValue);
 }
 
 }

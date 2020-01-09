@@ -44,7 +44,6 @@ public:
 					"Parasol Runtime Version " RUNTIME_VERSION "\r"
 					"Copyright (c) " COPYRIGHT_STRING
 					);
-		leaksArgument = booleanArgument(0, "leaks", "Check for memory leaks.");
 		verboseArgument = booleanArgument('v', null,
 					"Enables verbose output.");
 		helpArgument('?', "help",
@@ -71,9 +70,6 @@ int main(int argc, char **argv) {
 	if (!parasolCommand.parse(argc, argv) ||
 		parasolCommand.finalArgc() == 0)
 		parasolCommand.help();
-	long long runtimeFlags = 0;
-	if (parasolCommand.leaksArgument->value())
-		runtimeFlags |= 1;
 	char **args = parasolCommand.finalArgv();
 	int returnValue;
 	pxi::Pxi* pxi = pxi::Pxi::load(args[0]);
@@ -81,7 +77,7 @@ int main(int argc, char **argv) {
 		printf("Failed to load %s\n", args[0]);
 		return 1;
 	}
-	if (pxi->run(args, &returnValue, runtimeFlags))
+	if (pxi->run(args, &returnValue))
 		return returnValue;
 	else {
 		printf("Unable to run pxi %s\n", args[0]);

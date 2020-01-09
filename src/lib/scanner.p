@@ -769,7 +769,6 @@ public class Scanner {
 						ungetc();
 						return t;
 					}
-					addCharacter(c);
 					// The complexity here is that t is Token.INTEGER. 
 					c = getc();
 					if (c == '.')
@@ -777,6 +776,7 @@ public class Scanner {
 					ungetc();
 					if (!byte(c).isDigit() && c != 'e' && c != 'E' && c != 'f' && c != 'F')
 						return Token.INTEGER_DOT;
+					addCharacter('.');
 					t = Token.FLOATING_POINT;
 					continue;
 				}

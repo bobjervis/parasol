@@ -97,7 +97,7 @@ int main(string[] args) {
 	if (!configureArena(&arena))
 		return 1;
 	string filename = finalArgs[0];
-	ref<Target> target = arena.compile(filename, false, false);
+	ref<Target> target = arena.compile(filename, false, false, false, null, null);
 	if (genHeaderCommand.symbolTableArgument.value)
 		arena.printSymbolTable();
 	if (genHeaderCommand.verboseArgument.value) {

@@ -296,6 +296,32 @@ time.Instant futureInstant(&futureDate, &time.UTC);
 
 assert(futureInstant.compare(&ifuture) == 0);
 
+time.Duration d = 4.days();
+
+assert(d.seconds() == 4 * 24 * 60 * 60);
+assert(d.nanoseconds() == 0);
+
+d = 33.milliseconds();
+
+assert(d.seconds() == 0);
+assert(d.nanoseconds() == 33000000);
+
+d = time.Clock.REALTIME.resolution();
+
+printf("Real-time clock resolution is %d.%9.9d.\n", d.seconds(), d.nanoseconds());
+
+d = time.Clock.MONOTONIC.resolution();
+
+printf("Monotonic clock resolution is %d.%9.9d.\n", d.seconds(), d.nanoseconds());
+
+d = time.Clock.PROCESS_CPU.resolution();
+
+printf("Process clock resolution is %d.%9.9d.\n", d.seconds(), d.nanoseconds());
+
+d = time.Clock.THREAD_CPU.resolution();
+
+printf("Thread clock resolution is %d.%9.9d.\n", d.seconds(), d.nanoseconds());
+
 
 
 

@@ -578,7 +578,7 @@ class CompileObject  extends script.Object {
 		if (showParseStageErrors && preCodeGenerationMessages > 0)
 			arena.printMessages();
 		boolean nodesOrdered = checkInOrder(f.tree().root(), _source);
-		ref<Target> target = arena.codegen(f, true, verboseFlag, &context);
+		ref<Target> target = arena.codegen(f, true, verboseFlag, false, null, null, &context);
 //		printf("after folding and codegen:\n");
 //		f.tree().root().print(0);
 
@@ -764,7 +764,7 @@ class RunObject extends script.Object {
 				return false;
 			}
 			ref<FileStat> f = new FileStat(_filename, false);
-			arena.compile(f, true, false);
+			arena.compile(f, true, false, false, null, null);
 			arena.print();
 			delete f;
 		}

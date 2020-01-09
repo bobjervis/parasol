@@ -54,7 +54,9 @@
  * independent of location. These assume the standard Western calendar, implemented
  * by the {@link ISO8601} Calendar object. 
  *
- * In the future, the {@link Clock} object will provide facilities for high-speed timers.
+ * The {@link Clock} object provides facilities for high-precision timers. Four clocks are
+ * provided, each supplying a different value which, depending on your needs and the available
+ * resolutions, gives you a number of useful measurements.
  */
 
 namespace parasol:time;
@@ -638,7 +640,7 @@ public enum Clock {
 		_clockId = clockId;
 	}
 
-	Instant get() {
+	public Instant get() {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			switch (_clockId) {
 			case linux.CLOCK_REALTIME:
@@ -657,7 +659,7 @@ public enum Clock {
 		return Instant(0, 0);
 	}
 
-	boolean set(Instant i) {
+	public boolean set(Instant i) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			switch (_clockId) {
 			case linux.CLOCK_REALTIME:
@@ -675,6 +677,20 @@ public enum Clock {
 				return true;
 		}
 		return false;
+	}
+
+	public Duration resolution() {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+			switch (_clockId) {
+			case linux.CLOCK_REALTIME:
+				return Duration(0, 1000000000 / 64);
+			}
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+			linux.timespec t;
+			linux.clock_getres(_clockId, &t);
+			return Duration(t.tv_sec, t.tv_nsec);
+		}
+		return Duration(0, 0);
 	}		
 }
 /**

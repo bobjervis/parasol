@@ -140,17 +140,19 @@ public class Arena {
 		return result;
 	}
 	
-	public ref<Target> compile(string filename, boolean countCurrentObjects, boolean verbose) {
+	public ref<Target> compile(string filename, boolean countCurrentObjects, boolean verbose, boolean leaksFlag,
+														string profilePath, string coveragePath) {
 		ref<FileStat> mainFile = new FileStat(filename, false);
-		return compile(mainFile, countCurrentObjects, verbose);
+		return compile(mainFile, countCurrentObjects, verbose, leaksFlag, profilePath, coveragePath);
 	}
 	
-	public ref<Target> compile(ref<FileStat> mainFile, boolean countCurrentObjects, boolean verbose) {
+	public ref<Target> compile(ref<FileStat> mainFile, boolean countCurrentObjects, boolean verbose, boolean leaksFlag,
+														string profilePath, string coveragePath) {
 		CompileContext context(this, _global, verbose);
 
 		if (!compileOnly(mainFile, verbose, &context))
 			return null;
-		return codegen(mainFile, countCurrentObjects, verbose, &context);
+		return codegen(mainFile, countCurrentObjects, verbose, leaksFlag, profilePath, coveragePath, &context);
 	}
 
 	public void compilePackage(boolean countCurrentObjects, boolean verbose) {
@@ -202,11 +204,14 @@ public class Arena {
 		return true;
 	}
 
-	public ref<Target> codegen(ref<FileStat> mainFile, boolean countCurrentObjects, boolean verbose, ref<CompileContext> compileContext) {
+	public ref<Target> codegen(ref<FileStat> mainFile, boolean countCurrentObjects,
+										boolean verbose, boolean leaksFlag, string profilePath, string coveragePath, 
+										ref<CompileContext> compileContext) {
 		if (verbose)
 			printf("Beginning code generation\n");
 		ref<Target> target;
-		target = Target.generate(this, mainFile, countCurrentObjects, compileContext, verbose);
+		target = Target.generate(this, mainFile, countCurrentObjects, compileContext,
+										verbose, leaksFlag, profilePath, coveragePath);
 		return target;
 	}
 	

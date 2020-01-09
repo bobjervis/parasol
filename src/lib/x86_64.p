@@ -109,8 +109,8 @@ byte PXI_FIXUP_MAX = 0x04;
 int PXI_FIXUP_SHIFT = 8;
 
 public class X86_64Lnx extends X86_64 {
-	public X86_64Lnx(ref<Arena> arena, boolean verbose) {
-		super(arena, verbose);
+	public X86_64Lnx(ref<Arena> arena, boolean verbose, boolean leaksFlag, string profilePath, string coveragePath) {
+		super(arena, verbose, leaksFlag, profilePath, coveragePath);
 	}
 	
 	static R[] fastArgs = [ R.RDI, R.RSI, R.RDX, R.RCX, R.R8, R.R9 ];
@@ -197,8 +197,8 @@ public class X86_64Lnx extends X86_64 {
 }
 
 public class X86_64Win extends X86_64 {
-	public X86_64Win(ref<Arena> arena, boolean verbose) {
-		super(arena, verbose);
+	public X86_64Win(ref<Arena> arena, boolean verbose, boolean leaksFlag, string profilePath, string coveragePath) {
+		super(arena, verbose, leaksFlag, profilePath, coveragePath);
 	}
 	
 	static R[] fastArgs = [ R.RCX, R.RDX, R.R8, R.R9 ];
@@ -292,11 +292,17 @@ public class X86_64 extends X86_64AssignTemps {
 	
 	public int maxTypeOrdinal;
 	private boolean _verbose;
+	private boolean _leaksFlag;
+	private string _profilePath;
+	private string _coveragePath;
 	private int _stackLocalVariables;
 
-	public X86_64(ref<Arena> arena, boolean verbose) {
+	public X86_64(ref<Arena> arena, boolean verbose, boolean leaksFlag, string profilePath, string coveragePath) {
 		_arena = arena;
 		_verbose = verbose;
+		_leaksFlag = leaksFlag;
+		_profilePath = profilePath;
+		_coveragePath = coveragePath;
 	}
 
 	public boolean verbose() {
@@ -344,6 +350,7 @@ public class X86_64 extends X86_64AssignTemps {
 		pointer<address> pa = pointer<address>(&_staticMemory[_pxiHeader.builtInOffset]);
 		pointer<runtime.SourceLocation> outerSource = runtime.sourceLocations();
 		int outerSourceCount = runtime.sourceLocationsCount();
+		boolean outerLeaksFlag = runtime.leaksFlag();
 		if (runtime.makeRegionExecutable(_staticMemory, _staticMemoryLength)) {
 			pointer<int> pxiFixups = pointer<int>(&_staticMemory[_pxiHeader.relocationOffset]);
 			pointer<long> vp;
@@ -388,7 +395,8 @@ public class X86_64 extends X86_64AssignTemps {
 				}
 			}
 			runtime.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
-			returnValue = runtime.eval(&_pxiHeader, _staticMemory, 0, &runArgs[0], runArgs.length());
+			runtime.setLeaksFlag(_leaksFlag);
+			returnValue = runtime.eval(&_pxiHeader, _staticMemory, &runArgs[0], runArgs.length());
 		} else {
 			pointer<byte> generatedCode = pointer<byte>(runtime.allocateRegion(_staticMemoryLength));
 			C.memcpy(generatedCode, _staticMemory, _staticMemoryLength);
@@ -432,13 +440,15 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			if (runtime.makeRegionExecutable(generatedCode, _staticMemoryLength)) {
 				runtime.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
-				returnValue = runtime.eval(&_pxiHeader, generatedCode, 0, &runArgs[0], runArgs.length());
+				runtime.setLeaksFlag(_leaksFlag);
+				returnValue = runtime.eval(&_pxiHeader, generatedCode, &runArgs[0], runArgs.length());
 			} else {
 				assert(false);
 				return 0, false;
 			}
 		}
 		runtime.setSourceLocations(outerSource, outerSourceCount);
+		runtime.setLeaksFlag(outerLeaksFlag);
 		if (exception.fetchExposedException() == null)
 			return returnValue, true;
 		else

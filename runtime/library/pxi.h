@@ -32,7 +32,7 @@ public:
 
 	static Pxi *create(const string &filename);
 
-	bool run(char **args, int *returnValue, long long runtimeFlags);
+	bool run(char **args, int *returnValue);
 
 private:
 	Pxi(const string &filename);
@@ -71,7 +71,7 @@ public:
 
 class Section {
 public:
-	virtual bool run(char **args, int *returnValue, long long runtimeFlags) = 0;
+	virtual bool run(char **args, int *returnValue) = 0;
 };
 
 bool registerSectionReader(SectionType sectionType, Section *(*sectionReader)(FILE *pxiFile, long long length));

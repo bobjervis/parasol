@@ -66,7 +66,7 @@ class ParasolCommand extends process.Command {
 		logImportsArgument = booleanArgument(0, "logImports",
 					"Log all import processing");
 		disassemblyArgument = booleanArgument(0, "asm",
-					"Display disassembly of bytecodes");
+					"Display disassembly of instructions and internal tables");
 		explicitArgument = stringArgument('X', "explicit",
 					"Sets the path of directories to search for imported symbols. " +
 					"Directories are separated by commas. " +
@@ -75,6 +75,15 @@ class ParasolCommand extends process.Command {
 		pxiArgument = stringArgument(0, "pxi",
 					"Writes compiled output to the given file. " + 
 					"Does not execute the program.");
+		leaksArgument = booleanArgument(0, "leaks",
+					"Use a leak-detecting heap for allocations. Produce a leak " +
+					"report when the process terminates.");
+		profileArgument = stringArgument('p', "profile",
+					"Produce a profile report, wriitng the profile data to the " +
+					"path provided as this argument value.");
+		coverageArgument = stringArgument(0, "cover",
+					"Produce a code coverage report, accumulating the data in a " +
+					"file at the path provided in the argument value.");
 		targetArgument = stringArgument(0, "target",
 					"Selects the target runtime for this execution. " +
 					"Default: " + pxi.sectionTypeName(runtime.Target(runtime.supportedTarget(0))));
@@ -94,6 +103,9 @@ class ParasolCommand extends process.Command {
 	ref<process.Argument<string>> pxiArgument;
 	ref<process.Argument<string>> targetArgument;
 	ref<process.Argument<string>> rootArgument;
+	ref<process.Argument<string>> profileArgument;
+	ref<process.Argument<string>> coverageArgument;
+	ref<process.Argument<boolean>> leaksArgument;
 	ref<process.Argument<boolean>> logImportsArgument;
 	ref<process.Argument<boolean>> symbolTableArgument;
 	ref<process.Argument<boolean>> compileOnlyArgument;
@@ -160,7 +172,11 @@ int runCommand() {
 	int returnValue;
 	boolean result;
 	
-	ref<Target> target = arena.compile(args[0], true, parasolCommand.verboseArgument.value);
+	ref<Target> target = arena.compile(args[0], true,
+								parasolCommand.verboseArgument.value,
+								parasolCommand.leaksArgument.value,
+								parasolCommand.profileArgument.value,
+								parasolCommand.coverageArgument.value);
 	if (parasolCommand.symbolTableArgument.value)
 		arena.printSymbolTable();
 	if (parasolCommand.verboseArgument.value) {
@@ -196,7 +212,7 @@ int compileCommand() {
 	if (!configureArena(&arena))
 		return 1;
 	string filename = parasolCommand.finalArgs()[0];
-	ref<Target> target = arena.compile(filename, false, parasolCommand.verboseArgument.value);
+	ref<Target> target = arena.compile(filename, false, parasolCommand.verboseArgument.value, false, null, null);
 	if (parasolCommand.symbolTableArgument.value)
 		arena.printSymbolTable();
 	if (!disassemble(&arena, target, filename))

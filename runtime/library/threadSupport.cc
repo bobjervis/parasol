@@ -46,87 +46,36 @@ void exitThread() {
 		delete context;
 	}
 }
-
-void *parasolThread(void *newThread) {
-	ExecutionContext *context = threadContext.get();
-	return context->parasolThread(newThread);
-}
-
-int eval(X86_64SectionHeader *header, byte *image, long long runtimeFlags, char **argv, int argc) {
-	ExecutionContext *outer = threadContext.get();
-	ExecutionContext context(header, image, runtimeFlags);
-
-	threadContext.set(&context);
-//	StackState outer = context->unloadFrame();
-	int (*start)(void *args) = (int (*)(void*))(image + header->entryPoint);
-	context.prepareArgs(argv, argc);
-	context.setSourceLocations(outer->sourceLocations(), outer->sourceLocationsCount());
-	int result = context.runNative(start);
-
-	// Transfer any uncaught exception to the outer context.
-
-	Exception *e = context.exception();
-	outer->exposeException(e);
-	threadContext.set(outer);
-//	context->reloadFrame(outer);
-	return result;
-}
-
-int evalNative(X86_64SectionHeader *header, byte *image, char **argv, int argc) {
-	ExecutionContext *outer = threadContext.get();
-	ExecutionContext context(header, image, 0);
-
-	threadContext.set(&context);
-//	StackState outer = context->unloadFrame();
-	int (*start)(void *args) = (int (*)(void*))(image + header->entryPoint);
-	context.prepareArgs(argv, argc);
-	context.setSourceLocations(outer->sourceLocations(), outer->sourceLocationsCount());
-	int result = context.runNative(start);
-
-	// Transfer any uncaught exception to the outer context.
-
-	Exception *e = context.exception();
-	outer->exposeException(e);
-	threadContext.set(outer);
-//	context->reloadFrame(outer);
-	return result;
-}
-
 /*
-struct SpawnPayload {
-	const char *buffer;
-	int length;
-	process::exception_t outcome;
-};
+ * THis is called from Parasol.
+ */
+int eval(X86_64SectionHeader *header, byte *image, char **argv, int argc) {
+	ExecutionContext *outer = threadContext.get();
+	ExecutionContext context(header, image, outer);
 
-static int processDebugSpawn(char *command, SpawnPayload *output, long long timeout) {
-	string out;
-	string cmd(command);
+	threadContext.set(&context);
+	int (*start)(void *args) = (int (*)(void*))(image + header->entryPoint);
+	context.prepareArgs(argv, argc);
+	int result = context.runNative(start);
 
-	int result = process::debugSpawn(cmd, &out, &output->outcome, (time_t)timeout);
-	char *capture = new char[out.size()];
-	output->buffer = capture;
-	output->length = out.size();
-	memcpy(capture, out.c_str(), out.size());
+	// Transfer any uncaught exception to the outer context.
+
+	Exception *e = context.exception();
+	outer->exposeException(e);
+	threadContext.set(outer);
 	return result;
 }
+/*
+ * THis is called just from the main C++ code.
+ */
+int evalNative(X86_64SectionHeader *header, byte *image, char **argv, int argc) {
+	ExecutionContext *context = new ExecutionContext(header, image, null);
 
-static int processDebugSpawnInteractive(char *command, SpawnPayload *output, string stdin, long long timeout) {
-	string out;
-	string cmd(command);
-
-	int result = process::debugSpawnInteractive(cmd, &out, &output->outcome, stdin, (time_t)timeout);
-	char *capture = new char[out.size()];
-	output->buffer = capture;
-	output->length = out.size();
-	memcpy(capture, out.c_str(), out.size());
-	return result;
+	threadContext.set(context);
+	int (*start)(void *args) = (int (*)(void*))(image + header->entryPoint);
+	context->prepareArgs(argv, argc);
+	return context->runNative(start);
 }
-
-static void disposeOfPayload(SpawnPayload *output) {
-	delete[] output->buffer;
-}
-*/
 
 }
 

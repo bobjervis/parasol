@@ -30,7 +30,6 @@ import parasol:compiler.codePointClass;
 import parasol:compiler.CPC_LETTER;
 
 import parasol:text.memDump;
-import parasol:text.string16;
 import parasol:compiler.Type;
 import parasol:compiler.ClassType;
 

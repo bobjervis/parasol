@@ -52,7 +52,7 @@ public:
 
 	virtual ~X86_64Section();
 
-	virtual bool run(char **args, int *returnValue, long long runtimeFlags);
+	virtual bool run(char **args, int *returnValue);
 
 	bool valid() {
 		return _image != null;

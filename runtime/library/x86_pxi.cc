@@ -103,8 +103,8 @@ int plunker(dl_phdr_info *info, size_t size, void * args) {
 	return 0;
 }
 
-bool X86_64Section::run(char **args, int *returnValue, long long runtimeFlags) {
-	ExecutionContext ec((X86_64SectionHeader*)&_header, _image, runtimeFlags);
+bool X86_64Section::run(char **args, int *returnValue) {
+	ExecutionContext ec((X86_64SectionHeader*)&_header, _image, null);
 
 	ec.enter();
 

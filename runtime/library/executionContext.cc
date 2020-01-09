@@ -32,25 +32,18 @@ void sigGeneralHandler(int signum, siginfo_t *info, void *uContext);
 void sigSegvHandler(int signum, siginfo_t *info, void *uContext);
 #endif
 
-ExecutionContext::ExecutionContext(X86_64SectionHeader *pxiHeader, void *image, long long runtimeFlags) {
-//	_length = 2 * sizeof (void*);
-//	_stack = (byte*)malloc(_length);
-//	_sp = _stack + _length;
+ExecutionContext::ExecutionContext(X86_64SectionHeader *pxiHeader, void *image, ExecutionContext *outer) {
 	_exception = null;
 	_stackTop = null;
-//	_active.code = null;
-//	_active.ip = 0;
-//	_lastIp = 0;
-//	_objects = null;
-//	_objectCount = 0;
 	_target = -1;
 	_pxiHeader = pxiHeader;
 	_image = image;
-	_hardwareExceptionHandler = null;
-	_sourceLocations = null;
-	_sourceLocationsCount = 0;
-	_runtimeFlags = runtimeFlags;
-	_parasolThread = null;
+	if (outer != null) {
+		_hardwareExceptionHandler = outer->_hardwareExceptionHandler;
+		for (int i = 0; i < outer->_runtimeParameters.size(); i++)
+			setRuntimeParameter(i, outer->getRuntimeParameter(i));
+	} else
+		_hardwareExceptionHandler = null;
 }
 
 void ExecutionContext::enter() {
@@ -58,17 +51,10 @@ void ExecutionContext::enter() {
 	threadContext.set(this);
 }
 
-void ExecutionContext::prepareArgs(char **argv, int argc){
+void ExecutionContext::prepareArgs(char **argv, int argc) {
 	_args.clear();
 	for (int i = 0; i < argc; i++)
 		_args.push_back(string(argv[i]));
-}
-
-void *ExecutionContext::parasolThread(void *newThread) {
-	void *oldThread = _parasolThread;
-	if (newThread != null)
-		_parasolThread = newThread;
-	return oldThread;
 }
 
 int ExecutionContext::runNative(int (*start)(void *args)) {
@@ -120,17 +106,10 @@ void ExecutionContext::callHardwareExceptionHandler(HardwareException *info) {
 	_hardwareExceptionHandler(info);
 }
 
-void ExecutionContext::setSourceLocations(void *location, int count) {
-	_sourceLocations = location;
-	_sourceLocationsCount = count;
-}
-
 ExecutionContext *ExecutionContext::clone() {
-	ExecutionContext *newContext = new ExecutionContext(_pxiHeader, _image, _runtimeFlags);
+	ExecutionContext *newContext = new ExecutionContext(_pxiHeader, _image, this);
 	newContext->_target = _target;
 	newContext->_hardwareExceptionHandler = _hardwareExceptionHandler;
-	newContext->_sourceLocations = _sourceLocations;
-	newContext->_sourceLocationsCount = _sourceLocationsCount;
 	return newContext;
 }
 

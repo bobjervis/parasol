@@ -2655,7 +2655,7 @@ scan(tokens: 1, value:"123.0e+34"){ 123.0e+34 }
 scan(tokens: 3){ e+34 }		// Not a number, identifier e, + and integer 34 tokens
 scan(tokens: 1, value:".123"){ .123 }
 scan(tokens: 1, value:".0"){ .0 }
-scan(tokens: 1, value:"0."){ 0. }
+scan(tokens: 1, value:"0"){ 0. }
 
 	// Various character tokens
 

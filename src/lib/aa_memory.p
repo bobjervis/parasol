@@ -28,8 +28,6 @@ import parasol:exception;
 import parasol:thread;
 import parasol:storage;
 
-private long LEAKS_FLAG = 0x1;
-
 /**
  * This implements the 'new' operator.
  *
@@ -65,7 +63,7 @@ private LeakHeap leakHeap;
 
 exception.registerHardwareExceptionHandler(exception.hardwareExceptionHandler);
 
-if ((runtime.getRuntimeFlags() & LEAKS_FLAG) != 0)
+if (runtime.leaksFlag())
 	currentHeap = &leakHeap;
 else
 	currentHeap = &heap;
@@ -73,7 +71,6 @@ else
  * Set up the process streams as soon as the heap is established.
  */
 storage.setProcessStreams();
-
 /**
  * Thrown when a memory allocator cannot satisfy a request.
  *

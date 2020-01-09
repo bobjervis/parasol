@@ -44,8 +44,8 @@ bool Pxi::read() {
 	return _section != null;
 }
 
-bool Pxi::run(char **args, int *returnValue, long long runtimeFlags) {
-	return _section->run(args, returnValue, runtimeFlags);
+bool Pxi::run(char **args, int *returnValue) {
+	return _section->run(args, returnValue);
 }
 
 class ReaderMap {

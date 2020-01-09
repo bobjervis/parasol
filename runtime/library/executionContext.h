@@ -43,7 +43,7 @@ class Type;
 class ExecutionContext {
 public:
 
-	ExecutionContext(X86_64SectionHeader *pxiHeader, void *image, long long runtimeFlags);
+	ExecutionContext(X86_64SectionHeader *pxiHeader, void *image, ExecutionContext *outer);
 
 	void enter();
 
@@ -65,8 +65,6 @@ public:
 		_stackTop = (byte*)p;
 	}
 
-	long long runtimeFlags() { return _runtimeFlags; }
-
 	void *exceptionsAddress();
 
 	int exceptionsCount();
@@ -87,21 +85,24 @@ public:
 
 	void callCatchHandler(Exception *exception, void *framePointer, int handler);
 
-	void *sourceLocations() {
-		return _sourceLocations;
-	}
-
-	int sourceLocationsCount() {
-		return _sourceLocationsCount;
-	}
-
 	ExecutionContext *clone();
 
-	void setSourceLocations(void *location, int count);
+	void *getRuntimeParameter(int i) {
+		if (i >= _runtimeParameters.size())
+			return null;
+		else
+			return _runtimeParameters[i];
+	}
 
-	void setRuntimeFlags(long long runtimeFlags) { _runtimeFlags = runtimeFlags; }
-
-	void *parasolThread(void *newThread);
+	void setRuntimeParameter(int i, void *newValue) {
+		if (i >= _runtimeParameters.size()) {
+			if (newValue != null)
+				_runtimeParameters.resize(i + 1);
+			else
+				return;
+		}
+		_runtimeParameters[i] = newValue;
+	}
 
 private:
 	int _target;
@@ -113,8 +114,8 @@ private:
 	void (*_hardwareExceptionHandler)(HardwareException *info);
 	void *_sourceLocations;
 	int _sourceLocationsCount;
-	long long _runtimeFlags;
 	void *_parasolThread;
+	vector<void*> _runtimeParameters;
 };
 
 extern "C" {

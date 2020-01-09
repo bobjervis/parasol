@@ -23,6 +23,7 @@ import native:linux;
 import native:windows;
 import parasol:compiler.FileStat;
 import parasol:compiler.Location;
+import parasol:thread.Thread;
 import parasol:x86_64.X86_64SectionHeader;
 
 /**
@@ -80,7 +81,7 @@ public enum Target {
 /** @ignore */
 @Linux("libparasol.so.1", "eval")
 @Windows("parasol.dll", "eval")
-public abstract int eval(ref<X86_64SectionHeader> header, address image, long runtimeFlags, pointer<pointer<byte>> args, int argsCount);
+public abstract int eval(ref<X86_64SectionHeader> header, address image, pointer<pointer<byte>> args, int argsCount);
 /** @ignore */
 @Linux("libparasol.so.1", "supportedTarget")
 @Windows("parasol.dll", "supportedTarget")
@@ -114,10 +115,6 @@ public abstract address returnAddress();
 @Linux("libparasol.so.1", "framePointer")
 @Windows("parasol.dll", "framePointer")
 public abstract address framePointer();
-/** @ignore */
-@Linux("libparasol.so.1", "getRuntimeFlags")
-@Windows("parasol.dll", "getRuntimeFlags")
-public abstract long getRuntimeFlags();
 /**
  * Allocate a large page-aligned region of storage, outside the Heap.
  *
@@ -178,18 +175,6 @@ public class SourceLocation {
 	public int				offset;			// Code location
 }
 /** @ignore */
-@Linux("libparasol.so.1", "setSourceLocations")
-@Windows("parasol.dll", "setSourceLocations")
-public abstract void setSourceLocations(address location, int count);
-/** @ignore */
-@Linux("libparasol.so.1", "sourceLocations")
-@Windows("parasol.dll", "sourceLocations")
-public abstract pointer<SourceLocation> sourceLocations();
-/** @ignore */
-@Linux("libparasol.so.1", "sourceLocationsCount")
-@Windows("parasol.dll", "sourceLocationsCount")
-public abstract int sourceLocationsCount();
-/** @ignore */
 public ref<SourceLocation> getSourceLocation(address ip, boolean locationIsExact) {
 	int lowCode = int(lowCodeAddress());
 	int offset = int(ip) - lowCode;
@@ -213,4 +198,77 @@ public ref<SourceLocation> getSourceLocation(address ip, boolean locationIsExact
 		}
 	}
 }
+/** @ignore */
+public ref<Thread> parasolThread() {
+	return ref<Thread>(getRuntimeParameter(PARASOL_THREAD));
+}
+/** @ignore */
+public void setParasolThread(ref<Thread> t) {
+	setRuntimeParameter(PARASOL_THREAD, t);
+}
+/** @ignore */
+public boolean leaksFlag() {
+	return boolean(getRuntimeParameter(LEAKS_FLAG));
+}
+/** @ignore */
+public void setLeaksFlag(boolean newValue) {
+	setRuntimeParameter(LEAKS_FLAG, address(newValue));
+}
+/** @ignore */
+public void setSourceLocations(pointer<SourceLocation> location, int count) {
+	setRuntimeParameter(SOURCE_LOCATIONS, location);
+	setRuntimeParameter(SOURCE_LOCATIONS_COUNT, address(count));
+}
+/** @ignore */
+public pointer<SourceLocation> sourceLocations() {
+	return pointer<SourceLocation>(getRuntimeParameter(SOURCE_LOCATIONS));
+}
+/** @ignore */
+public int sourceLocationsCount() {
+	return int(getRuntimeParameter(SOURCE_LOCATIONS_COUNT));
+}
+/** @ignore */
+@Const
+int PARASOL_THREAD = 0;
+/** @ignore */
+@Const
+int SOURCE_LOCATIONS = 1;
+/** @ignore */
+@Const
+int SOURCE_LOCATIONS_COUNT = 2;
+/** @ignore */
+@Const
+int LEAKS_FLAG = 3;
+/** @ignore */
+@Linux("libparasol.so.1", "getRuntimeParameter")
+@Windows("parasol.dll", "getRuntimeParameter")
+public abstract address getRuntimeParameter(int i);
+/** @ignore */
+@Linux("libparasol.so.1", "setRuntimeParameter")
+@Windows("parasol.dll", "setRuntimeParameter")
+public abstract void setRuntimeParameter(int i, address newValue);
+
+public class Profiler {
+	ref<ProfileTables> _tables;
+
+	public Profiler(ref<ProfileTables> tables) {
+		_tables = tables;
+	}
+}
+/** @ignore */
+public class ProfileTables {
+}
+
+public class Coverage {
+	ref<CoverageTables> _tables;
+
+	public Coverage(ref<CoverageTables> tables) {
+		_tables = tables;
+	}
+}
+/** @ignore */
+public class CoverageTables {
+}
+
+
 
