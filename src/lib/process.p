@@ -70,8 +70,10 @@ public int printf(string format, var... arguments) {
 C.atexit(flushBuffers);
 
 private void flushBuffers() {
-	stderr.flush();
-	stdout.flush();
+	if (stderr != null)
+		stderr.flush();
+	if (stdout != null)
+		stdout.flush();
 }
 
 public string binaryFilename() {

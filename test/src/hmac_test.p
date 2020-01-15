@@ -15,18 +15,36 @@
  */
 import parasol:crypto.SHA256;
 import parasol:crypto.HMAC_SHA256;
+
+import parasol:process;
+
+printf("Start of test\n");
+
+printf("SHA256 Test\n");
+process.stdout.flush();
+
 string digest = SHA256("abcdef");
 assert(digest == "\xbe\xf5\x7e\xc7\xf5\x3a\x6d\x40\xbe\xb6\x40\xa7\x80\xa6\x39\xc8\x3b\xc2\x9a\xc8\xa9\x81\x6f\x1f\xc6\xc5\xc6\xdc\xd9\x3c\x47\x21");
+
+printf("PASSED\n");
+printf("HMAC_SHA256 Test\n");
+process.stdout.flush();
+
 digest = HMAC_SHA256("", "");
-printf("case 0 HMAC_SHA256 = ");
+
+printf("case 0 HMAC_SHA256 = [%d] ", digest.length());
 for (int i = 0; i < digest.length(); i++)
 	printf("%2.2x", digest[i]);
 printf("\n");
+process.stdout.flush();
+
 digest = HMAC_SHA256("ABCD", "xyz");
-printf("case 1 HMAC_SHA256 = ");
+printf("case 1 HMAC_SHA256 = [%d] ", digest.length());
 for (int i = 0; i < digest.length(); i++)
 	printf("%2.2x", digest[i]);
 printf("\n");
+process.stdout.flush();
+
 assert(HMAC_SHA256("ABCD", "xyz") == 
 			"\xbe\x2c\xee\xc2\xe3\xf1\xe5\x9b\xb9\x46\xd5\xe9\x22\xbf\x8a\x79" + 
 			"\xc9\xdb\x25\xea\xd4\xf0\x58\x7e\xaf\x6f\xd5\xc4\x26\x78\xbb\x64");
@@ -39,4 +57,6 @@ assert(HMAC_SHA256("gwendolyn",
 assert(HMAC_SHA256("a123456789b123456789c123456789d123456789e123456789f123456789g123456789", "xyz") == 
 			"\x03\x1b\xbe\xd6\xbf\x35\xae\x1c\xc4\xc8\x47\x9f\x33\x54\x3b\x96" +
 			"\x7e\xa4\xf9\x9f\x9d\x4f\xca\x24\xad\x74\x35\x2c\xe5\x5c\x99\x01");
+
+printf("PASSED\n");
 

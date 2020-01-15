@@ -176,10 +176,12 @@ public class SourceLocation {
 }
 /** @ignore */
 public ref<SourceLocation> getSourceLocation(address ip, boolean locationIsExact) {
-	int lowCode = int(lowCodeAddress());
-	int offset = int(ip) - lowCode;
-	if (offset < 0)
+	pointer<byte> lowCode = pointer<byte>(lowCodeAddress());
+	if (pointer<byte>(ip) < lowCode ||
+		pointer<byte>(highCodeAddress()) <= pointer<byte>(ip))
 		return null;
+	int offset = int(ip) - int(lowCode);
+	
 	if (!locationIsExact)
 		offset--;
 	pointer<SourceLocation> psl = sourceLocations();

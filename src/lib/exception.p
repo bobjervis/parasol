@@ -32,6 +32,7 @@ import parasol:x86_64.ExceptionEntry;
 import parasol:memory;
 import parasol:process;
 import parasol:runtime;
+import parasol:storage;
 import parasol:thread;
 import native:windows;
 import native:linux;
@@ -196,7 +197,7 @@ public class Exception {
 		printf("\nFATAL: Thread %s could not find a stack handler for this address.\n", thread.currentThread().name());
 		printf("Parasol code based at %p\n", runtime.lowCodeAddress());
 		_exceptionContext.print();
-		printf(textStackTrace());
+		process.stdout.write(textStackTrace());
 		process.exit(1);
 	}
 
@@ -662,9 +663,16 @@ void throwException(ref<Exception> e, address frame, address stackPointer) {
  * @param e The uncaught exeption.  
  */
 void uncaughtException(ref<Exception> e) {
-	printf("\nUncaught exception!\n\n%s\n", e.message());
-	e.printStackTrace();
-	process.stdout.flush();
+	if (process.stdout == null) {
+		string s;
+		s.printf("\nUncaught exception!\n\n%s\n", e.message());
+		s += e.textStackTrace();
+		linux.write(1, &s[0], s.length());
+	} else {
+		printf("\nUncaught exception!\n\n%s\n", e.message());
+		e.printStackTrace();
+		process.stdout.flush();
+	}
 	exposeException(e);
 }
 /**
@@ -916,7 +924,7 @@ class ExceptionContext {
 	//	COPY_ADDRESS = STACK_ADDRESS - stackBase + stackCopy;
 	
 	address stackBase;			// The machine address of the hardware stack this copy was taken from
-	pointer<byte> stackCopy;		// The first byte of the copy
+	pointer<byte> stackCopy;	// The first byte of the copy
 	address memoryAddress;		// Valid only for access exceptions: memory location referenced
 	int exceptionType;			// Exception type
 	int exceptionFlags;			// Flags (dependent on type).
@@ -989,13 +997,15 @@ public class HardwareException {
  */
 public string formattedLocation(address ip, int offset, boolean locationIsExact) {
 	ref<runtime.SourceLocation> sl = runtime.getSourceLocation(ip, locationIsExact);
-	if (sl == null)
+	if (sl == null) {
 		return formattedExternalLocation(ip);
-	else {
+	} else {
 		string result;
 
 		ref<FileStat> file = sl.file;
-		result.printf("%s %d (@%x)", file.filename(), file.scanner().lineNumber(sl.location) + 1, offset);
+		result.printf("%s %d", storage.makeCompactPath(file.filename(), "foo"), file.scanner().lineNumber(sl.location) + 1);
+		if (offset != 0)
+			result.printf(" (%+d)");
 		return result;
 	}
 }

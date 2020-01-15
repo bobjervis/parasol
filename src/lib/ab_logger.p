@@ -49,11 +49,14 @@
 namespace parasol:log;
 
 import parasol:math;
+import parasol:memory;
 import parasol:process;
 import parasol:runtime;
+import parasol:text;
 import parasol:thread;
 import parasol:time;
 import parasol:types.Queue;
+import parasol:types.Set;
 import parasol:exception.IllegalArgumentException;
 
 // Message levels are positive to indicate an informative, but not alarming
@@ -98,9 +101,28 @@ public int INFO = 2;
 @Constant
 public int DEBUG = 1;
 
-Monitor globalState;
+monitor class GlobalState {
+	ref<Logger>[string] loggerMap;
 
-ref<Logger>[string] loggerMap;
+	~GlobalState() {
+		Set<ref<LogHandler>> lhSet;
+		for (s in loggerMap) {
+			ref<Logger> logger = loggerMap[s];
+			ref<LogHandler> lh = logger.destination();
+			if (lh != null)
+				lhSet.add(lh);
+			delete logger;
+		}
+		for (lh in lhSet) {
+			lh.close();
+			delete lh;
+		}
+	}
+}
+
+GlobalState globalState;
+
+
 /**
  * Get a named logger.
  *
@@ -150,6 +172,7 @@ public ref<Logger> getLogger(string path) {
 		return current.thisLogger;
 	}
 }
+
 /**
  * The default handler for the root logger.
  *
@@ -224,6 +247,10 @@ public monitor class Logger {
 	 */
 	public ref<Logger> parent() {
 		return _parent;
+	}
+
+	public ref<LogHandler> destination() {
+		return _destination;
 	}
 	/**
 	 * Set the destination {@link LogHandler}.
@@ -551,6 +578,10 @@ public monitor class Logger {
 class LogChain {
 	ref<Logger> thisLogger;
 	ref<LogChain>[string] children;
+
+	~LogChain() {
+		children.deleteAll();
+	}
 };
 /**
  * The structured message metadata associated with a log message.
@@ -596,6 +627,9 @@ public class LogEvent {
  */
 public class ConsoleLogHandler extends LogHandler {
 	ref<time.Formatter> _formatter;
+
+	~ConsoleLogHandler() {
+	}
 	/**
 	 * Prints the message data to the process' stdout stream.
 	 *
@@ -655,7 +689,7 @@ public class LogHandler extends LogHandlerVolatileData {
 		close();
 	}
 	/**
-	 * This method drains the current contents of the LogHandler and terminate the write thread.
+	 * This method drains the current contents of the LogHandler and terminates the write thread.
 	 *
 	 * Calling close while this LogHandler is attached as a destination of an active logger
 	 * can leave unprinted messages in the LogHandler's message queue. To avoid this, be sure to

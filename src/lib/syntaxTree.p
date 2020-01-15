@@ -84,6 +84,7 @@ public enum Operator {
 	INTERFACE_DECLARATION,
 	FLAGS_DECLARATION,
 	INITIALIZE,
+	INITIALIZE_WRAPPER,
 	ANNOTATED,
 	CLASS_COPY,
 	// Unary
@@ -766,18 +767,7 @@ public class Block extends Node {
 			for (ref<NodeList> nl = _statements;; nl = nl.next) {
 				nl.node = nl.node.fold(tree, true, compileContext);
 				if (nl.next == null) {
-					ref<Node>[] destructors;
-					for (;;) {
-						ref<Node> n = compileContext.popLiveSymbol(scope);
-						if (n == null)
-							break;
-						destructors.append(n);
-					}		
-					if (destructors.length() > 0) {
-						ref<NodeList> destructorList = tree.newNodeList(destructors);
-						ref<Node> n = tree.newDestructorList(destructorList, closeCurlyLocation);
-						nl.next = tree.newNodeList(n);
-					}
+					attachDestructors(tree, nl, scope, compileContext);
 					break;
 				}
 			}
@@ -786,7 +776,28 @@ public class Block extends Node {
 			compileContext.setCurrent(outer);
 		return this;
 	}
-	
+
+	public void attachDestructors(ref<SyntaxTree> tree, ref<NodeList> nl, ref<Scope> scope, ref<CompileContext> compileContext) {
+		for (;;) {
+			if (nl.next == null) {
+				ref<Node>[] destructors;
+				for (;;) {
+					ref<Node> n = compileContext.popLiveSymbol(scope);
+					if (n == null)
+						break;
+					destructors.append(n);
+				}		
+				if (destructors.length() > 0) {
+					ref<NodeList> destructorList = tree.newNodeList(destructors);
+					ref<Node> n = tree.newDestructorList(destructorList, closeCurlyLocation);
+					nl.next = tree.newNodeList(n);
+				}
+				return;
+			}
+			nl = nl.next;
+		}
+	}
+
 	public ref<Scope> enclosing() {
 		return scope;
 	}
@@ -1136,7 +1147,9 @@ public class Class extends Block {
 
 		super.assignTypes(compileContext);
 
-		if (op() != Operator.ENUM) {
+		if (op() == Operator.ENUM) {
+			type = ref<EnumScope>(scope).enumType;
+		} else {
 			for (ref<NodeList> nl = _implements; nl != null; nl = nl.next) {
 				ref<InterfaceType> tp = ref<InterfaceType>(nl.node.unwrapTypedef(Operator.INTERFACE, compileContext));
 				if (tp.deferAnalysis()) {
@@ -2399,6 +2412,7 @@ public class Loop extends Node {
 			}
 			ref<Variable> iterator = compileContext.newVariable(iteratorClass);
 			ref<Node> r = tree.newReference(iterator, true, location());
+			compileContext.markLiveSymbol(r);
 			ref<Node> value = createMethodCall(_aggregate, "begin", tree, compileContext);
 			value.type = iteratorClass;
 			init = tree.newBinary(Operator.INITIALIZE, r, value, location());
@@ -2416,6 +2430,7 @@ public class Loop extends Node {
 			r = tree.newReference(iterator, false, location());
 			value = createMethodCall(r, "key", tree, compileContext);
 			ref<Identifier> id = _declarator.clone(tree);
+			compileContext.markLiveSymbol(id);
 			value.type = id.type;
 			value = tree.newBinary(Operator.ASSIGN_TEMP, id, value, location());
 			value.type = id.type;
@@ -2423,7 +2438,9 @@ public class Loop extends Node {
 			value.type = increment.type;
 			ref<Block> b = tree.newBlock(Operator.BLOCK, false, location());
  			b.statement(tree.newNodeList(value));
-			b.statement(tree.newNodeList(_body));
+			ref<NodeList> nl = tree.newNodeList(_body);
+			b.statement(nl);
+			b.attachDestructors(tree, nl, scope, compileContext);
 			if (_body.class <= Block) {
 				ref<Block> inner = ref<Block>(_body);
 				b.closeCurlyLocation = inner.closeCurlyLocation;
@@ -3368,7 +3385,33 @@ public class Node {
 		else
 			return null;
 	}
-
+	/**
+	 * Determine whether control falls through this sequence of code.
+	 *
+	 * Typically asked of statements, most expressions fall through.
+	 * The exception to this tule is the 'exit' function that never returns.
+	 *
+	 * @return A Test result. One of the following:
+	 *
+	 *<ul>
+	 *    <li>{@code PASS_TEST}. Control will definitely reach the next statement
+	 *        after this one.
+	 *    <li>{@code FAIL_TEST}. Control will definitely not reach the next statement.
+	 *    <li>{@code INCONCLUSIVE_TEST}. Returned by FUNCTION, CLASS_DECLARATION and FLAGS_DECLARATION
+	 *        nodes. These nodes produce no in-line code, they are purely declarative.
+	 *        The goal is to treat each control-flow discrepancy as an isolated error.
+	 *        For example, if you wrote a return statement in the middle of a block, there
+	 *        should be an error issued at the first non-declarative statement after the
+	 *        return, if there are any. If only declarative statements follow the return,
+	 *        then no coding error has occurred. If executable statements do follow the return,
+	 *        then only the first such statement should be flagged as 'unreachable', but the
+	 *        analysis should behave as if control-flow can reach the bottom of the block and
+	 *        process any break or continue statements that appear in that erroneous section
+	 *        of code. The compiler can't know whether the return statement is there by accident
+	 *        or the extra statements are. 
+	 *    <li>{@code IGNORE_TEST}. THis is a defined case, but is not reurned by any node.
+	 *</ul>
+	 */
 	public Test fallsThrough() {
 		return Test.PASS_TEST;
 	}
@@ -3444,6 +3487,10 @@ public class Node {
 		print(0);
 		assert(false);
 		return 0;
+	}
+
+	public ref<Node> foldDeclarator(ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
+		return fold(tree, false, compileContext);
 	}
 
 	public ref<NodeList> treeToList(ref<NodeList> next, ref<SyntaxTree> tree) {
@@ -3526,6 +3573,10 @@ public class Node {
 
 	public boolean widensTo(ref<Type> other, ref<CompileContext> compileContext) {
 		assert(false);
+		return false;
+	}
+
+	public boolean namesSameObject(ref<Node> n) {
 		return false;
 	}
 
@@ -3893,6 +3944,7 @@ public class Node {
 		case	INCREMENT_BEFORE:
 		case	INDIRECT:
 		case	INITIALIZE:
+		case	INITIALIZE_WRAPPER:
 		case	INTEGER:
 		case	INTERNAL_LITERAL:
 		case	INTERFACE_DECLARATION:
@@ -4122,7 +4174,6 @@ MessageId[Operator] typeNotAllowed = [
 fill();
 
 private void fill() {
-//	text.memDump(&typeNotAllowed, typeNotAllowed.bytes);
 	typeNotAllowed.resize(Operator.MAX_OPERATOR);
 	for (int i = 0; i < int(Operator.MAX_OPERATOR); i++) {
 		if (typeNotAllowed[Operator(i)] == MessageId(0))

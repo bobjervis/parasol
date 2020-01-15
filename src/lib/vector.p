@@ -15,6 +15,8 @@
  */
 namespace parasol:types;
 
+import native:linux;
+import parasol:exception.BoundsException;
 import parasol:memory;
 
 import native:C;
@@ -464,21 +466,30 @@ public class vector<class E, class I> {
 	public void resize(I newLength) {
 		I newSize;
 		if (_data != null) {
-			if (int(_length) >= int(newLength)) {
-				for (int i = int(newLength); i < int(_length); i++)
-					_data[i].~();
+			// This is a special pathway for 'copy-on-resize' vectors.
+			if (_capacity == I(0)) {
+				_data = null;
+				_length = I(0);
 				if (int(newLength) == 0)
-					clear();
-				else
+					return;
+				newSize = reservedSize(newLength);
+			} else {
+				if (int(_length) >= int(newLength)) {
+					for (int i = int(newLength); i < int(_length); i++)
+						_data[i].~();
+					if (int(newLength) == 0)
+						clear();
+					else
+						_length = newLength;
+					return;
+				}
+				newSize = reservedSize(newLength);
+				if (_capacity == newSize) {
+					for (int i = int(_length); i < int(newLength); i++)
+						new (&_data[i]) E();
 					_length = newLength;
-				return;
-			}
-			newSize = reservedSize(newLength);
-			if (_capacity == newSize) {
-				for (int i = int(_length); i < int(newLength); i++)
-					new (&_data[i]) E();
-				_length = newLength;
-				return;
+					return;
+				}
 			}
 		} else {
 			_length = I(0);
@@ -488,8 +499,10 @@ public class vector<class E, class I> {
 		}
 		pointer<E> a = pointer<E>(memory.alloc(int(newSize) * E.bytes));
 		if (_data != null) {
-			for (I i = I(0); int(i) < int(_length); i = I(int(i) + 1))
+			for (I i = I(0); int(i) < int(_length); i = I(int(i) + 1)) {
 				a[int(i)] = _data[int(i)];
+				_data[int(i)].~();
+			}
 			memory.free(_data);
 		}
 		for (int i = int(_length); i < int(newLength); i++)
@@ -502,17 +515,26 @@ public class vector<class E, class I> {
 	public void resize(I newLength, ref<memory.Allocator> allocator) {
 		I newSize;
 		if (_data != null) {
-			if (int(_capacity) >= int(newLength)) {
+			// This is a special pathway for 'copy-on-resize' vectors.
+			if (_capacity == I(0)) {
+				_data = null;
+				_length = I(0);
 				if (int(newLength) == 0)
-					clear(allocator);
-				else
+					return;
+				newSize = reservedSize(newLength);
+			} else {
+				if (int(_capacity) >= int(newLength)) {
+					if (int(newLength) == 0)
+						clear(allocator);
+					else
+						_length = newLength;
+					return;
+				}
+				newSize = reservedSize(newLength);
+				if (_capacity == newSize) {
 					_length = newLength;
-				return;
-			}
-			newSize = reservedSize(newLength);
-			if (_capacity == newSize) {
-				_length = newLength;
-				return;
+					return;
+				}
 			}
 		} else {
 			if (int(newLength) == 0)
@@ -521,8 +543,10 @@ public class vector<class E, class I> {
 		}
 		pointer<E> a = pointer<E>(allocator.alloc(int(newSize) * E.bytes));
 		if (_data != null) {
-			for (I i = I(0); int(i) < int(_length); i = I(int(i) + 1))
+			for (I i = I(0); int(i) < int(_length); i = I(int(i) + 1)) {
 				a[int(i)] = _data[int(i)];
+				_data[int(i)].~();
+			}
 			allocator.free(_data);
 		}
 		_capacity = newSize;
@@ -543,6 +567,8 @@ public class vector<class E, class I> {
 	}
 	
 	public void set(I index, E value) {
+		if (unsigned(index) >= unsigned(_length))
+			throw BoundsException();
 		_data[int(index)] = value;
 	}
 	
@@ -859,6 +885,7 @@ public class map<class V, class K> {
 				e--;
 				if (!_entries[i].deleted)
 					_entries[i].value.~();
+				_entries[i].key.~();
 			}
 		}
 		memory.free(_entries);
@@ -876,6 +903,7 @@ public class map<class V, class K> {
 				e--;
 				if (!_entries[i].deleted)
 					_entries[i].value.~();
+				_entries[i].key.~();
 			}
 		}
 		allocator.free(_entries);

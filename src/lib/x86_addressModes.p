@@ -206,6 +206,7 @@ class X86_64AddressModes extends X86_64Encoder {
 		case	CHARACTER:
 		case	FLOATING_POINT:
 		case	INTERNAL_LITERAL:
+		case	DESTRUCTOR_LIST:
 			break;
 			
 		case	RIGHT_SHIFT:

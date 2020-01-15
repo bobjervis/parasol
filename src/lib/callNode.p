@@ -15,6 +15,9 @@
  */
 namespace parasol:compiler;
 
+import parasol:math;
+import parasol:process;
+
 public enum CallCategory {
 	ERROR,
 	COERCION,
@@ -310,33 +313,32 @@ public class Call extends ParameterBag {
 			if (_arguments != null) {
 				
 				// The goal of this patch of code is to deal with the possibility of needing to call a destructor.
-				// The way to achieve this is a reliable way is to generate a temp and call markLiveSymbol to get it
+				// The way to achieve this in a reliable way is to generate a temp and call markLiveSymbol to get it
 				// cleaned up.
 
 				for (ref<NodeList> args = _arguments; args != null; args = args.next) {
-					if (args.node.type.family() == TypeFamily.STRING && args.node.op() == Operator.CALL) {
-//						ref<FunctionType> functionType = ref<FunctionType>(_target.type);
-						ref<Type> t = args.node.type;
-						if (functionType.returnCount() == 1) {
-//							printf("===== call->call =====\n");
-//							print(0);
-//							printf("--\n");
-//							args.node.print(0);
-//							printf("----------------------\n");
-
-							ref<Variable> temp = compileContext.newVariable(t);
-							ref<Reference> r = tree.newReference(temp, true, location());
-							compileContext.markLiveSymbol(r);
-							ref<Node> call = tree.newBinary(Operator.STORE_TEMP, r, args.node, location());
-							call.type = t;
-							call = call.fold(tree, true, compileContext);
-							r = tree.newReference(temp, false, location());
-							ref<Node> seq = tree.newBinary(Operator.SEQUENCE, call, r, location());
-							seq.type = t;
-							args.node = seq;
-//							printf("After:\n");
-//							print(0);
-//							printf("======================\n");
+					switch (args.node.type.family()) {
+					case STRING:
+					case STRING16:
+						switch (args.node.op()) {
+						case CALL:
+							if (ref<Call>(args.node).target().type.family() != TypeFamily.FUNCTION)
+								break;
+							ref<FunctionType> argumentFunctionType = ref<FunctionType>(ref<Call>(args.node).target().type);
+							ref<Type> t = args.node.type;
+							args.node.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+							if (argumentFunctionType.returnCount() == 1) {
+								ref<Variable> temp = compileContext.newVariable(t);
+								ref<Reference> r = tree.newReference(temp, true, location());
+								compileContext.markLiveSymbol(r);
+								ref<Node> call = tree.newBinary(Operator.STORE_TEMP, r, args.node, location());
+								call.type = t;
+								call = call.fold(tree, true, compileContext);
+								r = tree.newReference(temp, false, location());
+								ref<Node> seq = tree.newBinary(Operator.SEQUENCE, call, r, location());
+								seq.type = t;
+								args.node = seq;
+							}
 						}
 					}
 				}
@@ -623,7 +625,32 @@ public class Call extends ParameterBag {
 		_target = placement;
 //		type = placement.type;
 	}
-	
+	/**
+	 * Sort the reigster arguments (if any) by sethi number.
+	 *
+	 * Of course, this assumes that a sethi number has been calculated already.
+	 */	
+	public void sortRegisterArguments() {
+		// If there are fewer than 2 arguments, don't bother to sort
+		if (_arguments == null || _arguments.next == null)
+			return;
+		ref<NodeList>[] args;
+
+		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
+			args.append(nl);
+		args.sort(sethiComparator, false);
+		_arguments = args[0];
+		for (i in args) {
+			if (i > 0)
+				args[i - 1].next = args[i];
+		}
+		args[args.length() - 1].next = null;
+	}
+
+	private static int sethiComparator(ref<NodeList> nl1, ref<NodeList> nl2) {
+		return math.abs(nl1.node.sethi) - math.abs(nl2.node.sethi);
+	}
+
 	private ref<Node> encapsulateCallInTemp(ref<Variable> temp, ref<SyntaxTree> tree) {
 		ref<Reference> r = tree.newReference(temp, false, location());
 		ref<Node> pair = tree.newBinary(Operator.SEQUENCE, this, r, location());
@@ -941,6 +968,19 @@ public class Call extends ParameterBag {
 		OverloadOperation operation(Operator.FUNCTION, this, null, _arguments, compileContext);
 		if (classType.deferAnalysis()) {
 			type = classType;
+			return;
+		}
+		// EnumInstanceTypes report the scope of the underlying class object, but a constructor
+		// for an EnumInstanceType should always default to a simple default constructor.
+		if (classType.family() == TypeFamily.ENUM) {
+			if (_arguments != null) {
+				add(MessageId.NO_MATCHING_CONSTRUCTOR, compileContext.pool());
+				type = compileContext.errorType();
+				return;
+			}
+			type = classType;
+			_overload = ref<EnumInstanceType>(classType).instanceConstructor();
+			_category = CallCategory.CONSTRUCTOR;
 			return;
 		}
 		type = operation.includeConstructors(classType, compileContext);
@@ -1872,6 +1912,8 @@ public class Return extends ParameterBag {
 //		ref<Node> output = this;
 		for (int i = 0; i < n; i++) {
 			ref<Node> n = compileContext.getLiveSymbol(i);
+			if (beingReturned(n))
+				continue;
 			// We know that 'live' symbols have a scope with a destructor
 			ref<NodeList> nl = tree.newNodeList(n);
 			nl.next = _liveSymbols;
@@ -1883,23 +1925,50 @@ public class Return extends ParameterBag {
 //			ref<Node> folded = c.fold(tree, true, compileContext);
 //			output = tree.newBinary(Operator.SEQUENCE, folded, output, location());
 		}
-		// Returning a string by value, we have to make a copy.
+		boolean multiReturn = (_arguments != null && _arguments.next != null);
+		// Returning a string by value, we may have to make a copy.
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 			if (nl.node.type == null || nl.node.deferAnalysis())
 				continue;
-			if ((nl.node.type.family() == TypeFamily.STRING && nl.node.op() != Operator.CALL) ||
-				nl.node.type.returnsViaOutParameter(compileContext)) {
-				// TODO: Add a check for the return value being one of the live symbols to be destroyed.
-				ref<Variable> temp = compileContext.newVariable(nl.node.type);
-				ref<Reference> r = tree.newReference(temp, true, nl.node.location());
-				ref<Node> defn = tree.newBinary(Operator.ASSIGN_TEMP, r, nl.node, nl.node.location());
-				defn.type = nl.node.type;
-				r = tree.newReference(temp, false, nl.node.location());
-				nl.node = tree.newBinary(Operator.SEQUENCE, defn.fold(tree, true, compileContext), r, nl.node.location());
-				nl.node.type = defn.type;
+			boolean skipLive;
+
+			if (!multiReturn) {
+				switch (nl.node.type.family()) {
+				case STRING:
+				case STRING16:
+//					return this;
+
+				case SHAPE:
+//					skipLive = true;
+					if (nl.node.op() == Operator.CALL)
+						return this;
+					break;
+
+				default:
+					if (!nl.node.type.returnsViaOutParameter(compileContext))
+						return this;
+				}
 			}
+			ref<Variable> temp = compileContext.newVariable(nl.node.type);
+			ref<Reference> r = tree.newReference(temp, true, nl.node.location());
+//			if (!skipLive)
+//				compileContext.markLiveSymbol(r);
+			ref<Node> defn = tree.newBinary(Operator.ASSIGN_TEMP, r, nl.node, nl.node.location());
+			defn.type = nl.node.type;
+			r = tree.newReference(temp, false, nl.node.location());
+			nl.node = tree.newBinary(Operator.SEQUENCE, defn.fold(tree, true, compileContext), r, nl.node.location());
+			nl.node.type = defn.type;
 		}
 		return this;
+	}
+
+	private boolean beingReturned(ref<Node> n) {
+		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
+			ref<Node> arg = simpleReturnVariable(nl.node);
+			if (arg != null && arg.namesSameObject(n))
+				return true;
+		}
+		return false;
 	}
 	
 	public ref<Return> clone(ref<SyntaxTree> tree) {
@@ -2034,11 +2103,23 @@ public class Return extends ParameterBag {
 			}
 		}
 	}
-	
+
 	public ref<NodeList> liveSymbols() {
 		return _liveSymbols;
 	}
 }
+
+ref<Node> simpleReturnVariable(ref<Node> argument) {
+	switch (argument.op()) {
+	case SEQUENCE:
+		return simpleReturnVariable(ref<Binary>(argument).right());
+
+	case VARIABLE:
+	case IDENTIFIER:
+		return argument;
+	}
+	return null;
+}		
 
 ref<Node>, int foldMultiReturn(ref<Node> leftHandle, ref<Node> destinations, ref<Variable> intermediate, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
 	ref<Node> result;
@@ -2084,4 +2165,3 @@ ref<Node>, int foldMultiReturn(ref<Node> leftHandle, ref<Node> destinations, ref
 	result.type = compileContext.arena().builtInType(TypeFamily.VOID);
 	return result, offset;
 }
-

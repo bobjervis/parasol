@@ -823,6 +823,8 @@ public class ParameterScope extends Scope {
 		FUNCTION,				// any ordinary constructor, destructor, method or function
 		TEMPLATE,				// any template
 		DEFAULT_CONSTRUCTOR,	// a default constructor (no source code) generated when needed
+		ENUM_INSTANCE_CONSTRUCTOR,
+								// a default constructor (no source code) generated when needed for an enum instance.
 		IMPLIED_DESTRUCTOR,		// an implied destructor (no source code) generated when needed
 		ENUM_TO_STRING,			// a generated enum-to-string coercion method
 		FLAGS_TO_STRING,		// a generate flags-to-string coercion method

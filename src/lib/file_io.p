@@ -37,7 +37,6 @@ import parasol:exception.IOException;
  * @ignore - do not document this function
  */
 public void setProcessStreams() {
-//	print("setProcessStreams\n");
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		process.stdin = new TextFileReader(0, true);
 		process.stdout = new TextFileWriter(1, true);
@@ -58,22 +57,7 @@ public void setProcessStreams() {
 		else
 			process.stderr = new FileWriter(2, true);
 	}
-//	print("Process streams set up\n");
 }
-/*
-void print(string format, var... args) {
-	string s;
-	s.printf(format, args);
-	linux.write(1, &s[0], s.length());
-}
- */
-class FileShutdown {
-	~FileShutdown() {
-		process.stdout.flush();
-	}
-}
-
-private FileShutdown f;
 /**
  * This class is available for operations on a file. If this class is
  * used to access devices, some file operations may not succeed.

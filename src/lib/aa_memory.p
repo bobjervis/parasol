@@ -22,12 +22,14 @@
 namespace parasol:memory;
 
 import native:C;
+import native:linux;
 import native:windows;
 import parasol:runtime;
 import parasol:exception;
+import parasol:process;
 import parasol:thread;
 import parasol:storage;
-
+import parasol:text;
 /**
  * This implements the 'new' operator.
  *
@@ -35,7 +37,6 @@ import parasol:storage;
  * Clever bit twiddlers will always find clever ways to pack objects into a single allocation.
  */
 public address alloc(long size) {
-//	print("alloc\n");
 	if (currentHeap != null)
 		return currentHeap.alloc(size);
 	else
@@ -52,14 +53,13 @@ public void free(address p) {
 	else
 		heap.free(p);
 }
-
 /*
  * On startup, initialize the heap for normal or leak-detection mode.
  */
 private ref<Allocator> currentHeap;
 
 private Heap heap;
-private LeakHeap leakHeap;
+private LeakHeap leakHeap(runtime.returnAddress());
 
 exception.registerHardwareExceptionHandler(exception.hardwareExceptionHandler);
 
@@ -144,6 +144,136 @@ public class Allocator {
 	 */
 	public abstract void free(address p);
 }
+
+public class GuardedHeap extends Allocator {
+	public void clear() {
+		
+	}
+
+	public address alloc(long n) {
+		address p = C.calloc(unsigned(n + 48), 1);
+		if (p != null) {
+			pointer<byte> pb = pointer<byte>(p);
+			pointer<int>(pb)[3] = int(n);
+			pb[0] = 0xa6;
+			pb[1] = 0x6a;
+			pb[2] = 0xa6;
+			pb[3] = 0x6a;
+			pb[4] = 0xa6;
+			pb[5] = 0x6a;
+			pb[6] = 0xa6;
+			pb[7] = 0x6a;
+			pb[8] = 0xa6;
+			pb[9] = 0x6a;
+			pb[10] = 0xa6;
+			pb[11] = 0x6a;
+			pb[16] = 0xa6;
+			pb[17] = 0x6a;
+			pb[18] = 0xa6;
+			pb[19] = 0x6a;
+			pb[20] = 0xa6;
+			pb[21] = 0x6a;
+			pb[22] = 0xa6;
+			pb[23] = 0x6a;
+			pb[24] = 0xa6;
+			pb[25] = 0x6a;
+			pb[26] = 0xa6;
+			pb[27] = 0x6a;
+			pb[28] = 0xa6;
+			pb[29] = 0x6a;
+			pb[30] = 0xa6;
+			pb[31] = 0x6a;
+			pb[n + 32] = 0xa6;
+			pb[n + 33] = 0x6a;
+			pb[n + 34] = 0xa6;
+			pb[n + 35] = 0x6a;
+			pb[n + 36] = 0xa6;
+			pb[n + 37] = 0x6a;
+			pb[n + 38] = 0xa6;
+			pb[n + 39] = 0x6a;
+			pb[n + 40] = 0xa6;
+			pb[n + 41] = 0x6a;
+			pb[n + 42] = 0xa6;
+			pb[n + 43] = 0x6a;
+			pb[n + 44] = 0xa6;
+			pb[n + 45] = 0x6a;
+			pb[n + 46] = 0xa6;
+			pb[n + 47] = 0x6a;
+			return pb + 32;
+		}
+		throw OutOfMemoryException(n);
+		return null;
+	}
+	
+	public void free(address p) {
+		if (p == null)
+			return;
+		pointer<byte> pb = pointer<byte>(p) - 32;
+		int n = pointer<int>(pb)[3];
+		if (pb[0] != 0xa6) fail(pb, n); 
+		if (pb[1] != 0x6a) fail(pb, n); 
+		if (pb[2] != 0xa6) fail(pb, n); 
+		if (pb[3] != 0x6a) fail(pb, n); 
+		if (pb[4] != 0xa6) fail(pb, n); 
+		if (pb[5] != 0x6a) fail(pb, n); 
+		if (pb[6] != 0xa6) fail(pb, n); 
+		if (pb[7] != 0x6a) fail(pb, n); 
+		if (pb[8] != 0xa6) fail(pb, n); 
+		if (pb[9] != 0x6a) fail(pb, n); 
+		if (pb[10] != 0xa6) fail(pb, n); 
+		if (pb[11] != 0x6a) fail(pb, n); 
+		if (pb[16] != 0xa6) fail(pb, n); 
+		if (pb[17] != 0x6a) fail(pb, n); 
+		if (pb[18] != 0xa6) fail(pb, n); 
+		if (pb[19] != 0x6a) fail(pb, n); 
+		if (pb[20] != 0xa6) fail(pb, n); 
+		if (pb[21] != 0x6a) fail(pb, n); 
+		if (pb[22] != 0xa6) fail(pb, n); 
+		if (pb[23] != 0x6a) fail(pb, n); 
+		if (pb[24] != 0xa6) fail(pb, n); 
+		if (pb[25] != 0x6a) fail(pb, n); 
+		if (pb[26] != 0xa6) fail(pb, n); 
+		if (pb[27] != 0x6a) fail(pb, n); 
+		if (pb[28] != 0xa6) fail(pb, n); 
+		if (pb[29] != 0x6a) fail(pb, n); 
+		if (pb[30] != 0xa6) fail(pb, n); 
+		if (pb[31] != 0x6a) fail(pb, n); 
+		if (pb[n + 32] != 0xa6) fail(pb, n); 
+		if (pb[n + 33] != 0x6a) fail(pb, n); 
+		if (pb[n + 34] != 0xa6) fail(pb, n); 
+		if (pb[n + 35] != 0x6a) fail(pb, n); 
+		if (pb[n + 36] != 0xa6) fail(pb, n); 
+		if (pb[n + 37] != 0x6a) fail(pb, n); 
+		if (pb[n + 38] != 0xa6) fail(pb, n); 
+		if (pb[n + 39] != 0x6a) fail(pb, n); 
+		if (pb[n + 40] != 0xa6) fail(pb, n); 
+		if (pb[n + 41] != 0x6a) fail(pb, n); 
+		if (pb[n + 42] != 0xa6) fail(pb, n); 
+		if (pb[n + 43] != 0x6a) fail(pb, n); 
+		if (pb[n + 44] != 0xa6) fail(pb, n); 
+		if (pb[n + 45] != 0x6a) fail(pb, n); 
+		if (pb[n + 46] != 0xa6) fail(pb, n); 
+		if (pb[n + 47] != 0x6a) fail(pb, n); 
+		C.free(pb);
+	}
+
+	private void fail(pointer<byte> pb, int n) {
+		currentHeap = &heap;
+		
+		printf("\n");
+		text.memDump(pb - 64, n + 48 + 64);
+		throw CorruptHeapException(this, pb + 16);
+	}
+}
+
+public void fail(pointer<byte> addr) {
+	currentHeap = &heap;
+	text.memDump(addr - 36, 0x40);
+	currentHeap = &guardedHeap;
+}
+
+GuardedHeap guardedHeap;
+
 /**
  * This is the main process Heap.
  *
@@ -185,8 +315,8 @@ public class LeakHeap extends Allocator {
 	private static int IN_USE_FLAG = 1;
 	
 	class BlockHeader {
-		long			blockSize;		// Always a multiple of 16, low order bit overloaded: if set, block is in use
-		pointer<int>	callStack;		// First int is the count of remaining frames, each frame is a code offset
+		long				blockSize;	// Always a multiple of 16, low order bit overloaded: if set, block is in use
+		pointer<address>	callStack;	// First address is the count of remaining frames, each frame is a code address
 	}
 	
 	class SectionHeader {
@@ -220,20 +350,36 @@ public class LeakHeap extends Allocator {
 	private boolean _busy;
 	private boolean _everUsed;
 	private Monitor _lock;
+	private address _staticScopeReturnAddress;
 
-	public LeakHeap() {
+	public LeakHeap(address staticScopeReturnAddress) {
+		_staticScopeReturnAddress = staticScopeReturnAddress;
 	}
 	
 	public ~LeakHeap() {
-		if (!_everUsed)
-			return;
-		currentHeap = &heap;		// heap is declared first, so it should still be alive when this destructor is called.
-		if (_sections == null) {
-			printf("No leaks!\n");
-			return;
+		process.stdout.flush();
+		delete process.stdout;
+		int errFd;
+		if (_everUsed && _sections != null)
+			errFd = linux.dup(2);
+		process.stdout = null;
+		delete process.stderr;
+		process.stderr = null;
+		delete process.stdin;
+		process.stdin = null;
+		if (_everUsed) {
+			currentHeap = &heap;		// heap is declared first, so it should still be alive when this destructor is called.
+			if (_sections != null) {
+				ref<Writer> w = storage.createTextFile("leaks.txt");
+				string s = "Leaks found!\n";
+				linux.write(errFd, &s[0], s.length());
+				linux.dup2(1, errFd);
+				analyze(w);
+				linux.close(errFd);
+				delete w;
+			}
 		}
-		printf("Leaks found!\n");
-		analyze();
+		thread.Thread.destruct();
 	}
 	
 	public void clear() {
@@ -252,8 +398,8 @@ public class LeakHeap extends Allocator {
 			pointer<address> rbp = getRBP(0);
 			address stackTop = runtime.stackTop();
 			int frames = stackFrames(long(rbp), long(stackTop));
-			long framesOffset = (BlockHeader.bytes + n + int.bytes - 1) & ~(int.bytes - 1);
-			n = (framesOffset + frames * int.bytes + int.bytes + BLOCK_ALIGNMENT - 1) & ~(BLOCK_ALIGNMENT - 1);
+			long framesOffset = (BlockHeader.bytes + n + address.bytes - 1) & ~(address.bytes - 1);
+			n = (framesOffset + frames * address.bytes + address.bytes + BLOCK_ALIGNMENT - 1) & ~(BLOCK_ALIGNMENT - 1);
 	//		printf("    padded n = %#x\n", n);
 	//		print();
 			pointer<BlockHeader> bh;
@@ -305,7 +451,7 @@ public class LeakHeap extends Allocator {
 							bh = pointer<BlockHeader>(fb);
 							// Note: this dups the exit code.
 							bh.blockSize = n + IN_USE_FLAG;
-							bh.callStack = pointer<int>(pointer<byte>(bh) + framesOffset);
+							bh.callStack = pointer<address>(pointer<byte>(bh) + framesOffset);
 							rememberStackFrames(bh.callStack, long(rbp), long(stackTop));
 							address x = bh + 1;
 	//						printf("    Free list: Found it! @%p\n", x);
@@ -330,7 +476,7 @@ public class LeakHeap extends Allocator {
 				nh.firstFreeBlock = _nextFreeBlock;
 			}
 			bh.blockSize = n + IN_USE_FLAG;
-			bh.callStack = pointer<int>(pointer<byte>(bh) + framesOffset);
+			bh.callStack = pointer<address>(pointer<byte>(bh) + framesOffset);
 			rememberStackFrames(bh.callStack, long(rbp), long(stackTop));
 			address x = bh + 1;
 	//		printf("    New Section: _sections = %p _nextFreeBlock = %p Found it! @%p\n", _sections, _nextFreeBlock, x);
@@ -375,23 +521,24 @@ public class LeakHeap extends Allocator {
 	
 	private static int stackFrames(long rbp, long stackTop) {
 		int frameCount = 0;
-		while (rbp < stackTop) {
+		long stackBottom = stackTop - 0x80000;
+		while (rbp > stackBottom && rbp < stackTop) {
 			rbp = *pointer<long>(rbp);
 			frameCount++;
 		}
 		return frameCount;
 	}
 
-	private static void rememberStackFrames(pointer<int> frames, long rbp, long stackTop) {
+	private static void rememberStackFrames(pointer<address> frames, long rbp, long stackTop) {
 		int frameCount = 0;
 		long baseCodeAddress = long(runtime.lowCodeAddress());
-		while (rbp < stackTop) {
-			long returnIp = (pointer<long>(rbp))[1];
-			rbp = *pointer<long>(rbp);
+		long stackBottom = stackTop - 0x80000;
+		while (rbp > stackBottom && rbp < stackTop) {
 			frameCount++;
-			frames[frameCount] = int(returnIp - baseCodeAddress);
+			frames[frameCount] = (pointer<address>(rbp))[1];
+			rbp = *pointer<long>(rbp);
 		}
-		frames[0] = frameCount;
+		frames[0] = address(frameCount);
 	}
 	
 	public void free(address p) {
@@ -491,12 +638,12 @@ public class LeakHeap extends Allocator {
 		ref<CallSite> next;
 		long totalBytes;
 		int hits;
-		int offset;
+		address ip;
 		
-		ref<CallSite> hit(int offset, long blockSize) {
+		ref<CallSite> hit(address ip, long blockSize) {
 			blockSize &= ~IN_USE_FLAG;
 			for (ref<CallSite> cs = callers; cs != null; cs = cs.next) {
-				if (cs.offset == offset) {
+				if (cs.ip == ip) {
 					cs.totalBytes += blockSize;
 					cs.hits++;
 					return cs;
@@ -505,25 +652,29 @@ public class LeakHeap extends Allocator {
 			ref<CallSite> cs = new CallSite;
 			cs.next = callers;
 			callers = cs;
-			cs.offset = offset;
+			cs.ip = ip;
 			cs.totalBytes += blockSize;
 			cs.hits++;
 			return cs;
 		}
 		
-		void print(int indent) {
-			printf("%*.*c%d (%dKB)", indent, indent, ' ', hits, (totalBytes + 512) / 1024);
+		void print(ref<Writer> output, int indent) {
+			output.printf("%*.*c%d (%dKB)", indent, indent, ' ', hits, (totalBytes + 512) / 1024);
+			output.flush();
 			ref<CallSite> cs = callers;
-			if (offset == -1)
-				printf(" Total\n");
+			if (ip == null)
+				output.printf(" Total\n");
 			else {
-				printf(" %s", exception.formattedLocation(null, offset, false));
+				long baseCodeAddress = long(runtime.lowCodeAddress());
+				if (ip != leakHeap._staticScopeReturnAddress)
+					output.printf(" %s", exception.formattedLocation(ip, 0, false));
 				while (cs != null && cs.next == null) {
 					// We have only one call site, so merge it with this one...
-					printf(" %s", exception.formattedLocation(null, cs.offset, false));
+					if (cs.ip != leakHeap._staticScopeReturnAddress)
+						output.printf(" %s", exception.formattedLocation(cs.ip, 0, false));
 					cs = cs.callers;
 				}
-				printf("\n");
+				output.printf("\n");
 			}
 			ref<CallSite>[] callersArray;
 			for (; cs != null; cs = cs.next)
@@ -542,16 +693,16 @@ public class LeakHeap extends Allocator {
 				}
 			}
 			for (int j = 0; j < callersArray.length(); j++)
-				callersArray[j].print(indent + 4);
+				callersArray[j].print(output, indent + 4);
 		}
 	}
 	
-	void analyze() {
+	void analyze(ref<Writer> output) {
 		long totalBlocks;
 		long totalBytes;
 		CallSite root;
 		
-		root.offset = -1;
+		root.ip = null;
 		boolean hasNextFreeBlock = false;
 		for (ref<SectionHeader> sh = _sections; sh != null; sh = sh.next) {
 			pointer<byte> lastUseful = pointer<byte>(sh) + (sh.sectionSize - SectionEndSentinel.bytes);
@@ -559,18 +710,20 @@ public class LeakHeap extends Allocator {
 					pointer<byte>(bh) < lastUseful; 
 					bh = ref<BlockHeader>(pointer<byte>(bh) + (bh.blockSize & ~IN_USE_FLAG))) {
 				if ((bh.blockSize & IN_USE_FLAG) != 0) {
-					pointer<int> callStack = bh.callStack;
-					int frames = *callStack;
+					pointer<address> callStack = bh.callStack;
+					int frames = int(*callStack);
 					callStack++;
 					ref<CallSite> cs = &root;
 					root.hits++;
 					root.totalBytes += pointer<byte>(bh.callStack) - pointer<byte>(bh);
-					for (int i = 0; i < frames; i++)
+					for (int i = 0; i < frames; i++) {
+//						printf("[%d] %x\n", i, callStack[i]);
 						cs = cs.hit(callStack[i], pointer<byte>(bh.callStack) - pointer<byte>(bh));
+					}
 				}
 			}
 		}
-		root.print(0);
+		root.print(output, 0);
 	}
 	
 	void print() {

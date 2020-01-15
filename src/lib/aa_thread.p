@@ -51,10 +51,6 @@ Thread.init();
 private monitor class ActiveThreads {
 	ref<Thread>[] _activeThreads;
 
-	~ActiveThreads() {
-		Thread.destruct();
-	}
-
 	void enlist(ref<Thread> newThread) {
 		for (int i = 0; i < _activeThreads.length(); i++)
 			if (_activeThreads[i] == null) {
@@ -191,13 +187,15 @@ public class Thread {
 			mainThread._threadHandle = INVALID_HANDLE_VALUE;
 		else if (runtime.compileTarget == runtime.Target.X86_64_LNX)
 			mainThread._pid = linux.gettid();
-		runtime.setParasolThread(mainThread);
 		threads.enlist(mainThread);
 		mainThread.initializeInstrumentation();
 	}
-
-	static void destruct() {
+	/** @ignore */
+	public static void destruct() {
 		mainThread.checkpointInstrumentation();
+//		threads.delist(mainThread);
+//		runtime.setParasolThread(null);
+//		delete mainThread;
 	}
 	/**
 	 * Start a Thread running.

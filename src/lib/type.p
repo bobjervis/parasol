@@ -873,6 +873,7 @@ public class EnumInstanceType extends Type {
 	private ref<EnumScope> _scope;
 
 	private ref<ParameterScope> _toStringMethod;
+	private ref<ParameterScope> _instanceConstructor;
 
 	protected EnumInstanceType(ref<EnumScope> scope) {
 		super(TypeFamily.ENUM);
@@ -893,6 +894,12 @@ public class EnumInstanceType extends Type {
 
 	public boolean hasDestructor() {
 		return false;						// The destructor in the _scope is not for us, so ignore it and always report false.
+	}
+
+	public ref<ParameterScope> instanceConstructor() {
+		if (_instanceConstructor == null)
+			_instanceConstructor = new ParameterScope(_scope, null, ParameterScope.Kind.ENUM_INSTANCE_CONSTRUCTOR);
+		return _instanceConstructor;
 	}
 
 	public int instanceCount() {

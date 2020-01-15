@@ -53,7 +53,7 @@
  *
  *<pre>{@code
  *        byte[] a;
- *        for (pointer<byte> p = &a[0]; p < &a[0] + a.length(); p++) ...
+ *        for (pointer\<byte\> p = &a[0]; p \< &a[0] + a.length(); p++) ...
  *}</pre>
  *
  * <h4>Vectors</h4>

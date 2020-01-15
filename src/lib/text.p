@@ -1316,9 +1316,9 @@ public class string extends String<byte> {
 					tokenStart = i + 1;
 				}
 			}
-			if (tokenStart > 0)
+			if (tokenStart > 0) {
 				output.append(string(pointer<byte>(&_contents.data) + tokenStart, _contents.length - tokenStart));
-			else
+			} else
 				output.append(*this);
 		} else
 			output.resize(1);
@@ -2263,6 +2263,7 @@ class String<class T> {
 	}
 	
 	public void resize(int newLength) {
+		assert(newLength >= 0);
 		long newSize = reservedSize(newLength);
 		if (_contents != null) {
 			if (_contents.length >= newLength) {
@@ -2286,7 +2287,6 @@ class String<class T> {
 		*(pointer<T>(&a.data) + newLength) = 0;
 		_contents = a;
 	}
-
 	/*
 	 *	unescapeParasol
 	 *

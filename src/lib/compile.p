@@ -43,6 +43,10 @@ public class CompileContext {
 												// that need destructor calls and locks that need unlocked.
 	private int _baseLiveSymbol;				// >= 0, index of first symbol live in this function.
 	private ref<Type> _monitorClass;
+	private ref<ParameterScope> _throwException;
+	private ref<ParameterScope> _dispatchException;
+	private ref<Type> _memoryAllocator;
+	private ref<Type> _compilerType;
 	private boolean _verbose;
 	
 	public class FlowContext {
@@ -1056,6 +1060,50 @@ public class CompileContext {
 		return n;
 	}
 	
+	public ref<ParameterScope> dispatchExceptionScope() {
+		if (_dispatchException == null) {
+			ref<Symbol> re = _arena.getSymbol("parasol", "exception.dispatchException", this);
+			if (re == null || re.class != Overload)
+				assert(false);
+			ref<Overload> o = ref<Overload>(re);
+			ref<Type> tp = (*o.instances())[0].assignType(this);
+			_dispatchException = ref<ParameterScope>(tp.scope());
+		}
+		return _dispatchException;
+	}
+
+	public ref<ParameterScope> throwExceptionScope() {
+		if (_throwException == null) {
+			ref<Symbol> re = _arena.getSymbol("parasol", "exception.throwException", this);
+			if (re == null || re.class != Overload)
+				assert(false);
+			ref<Overload> o = ref<Overload>(re);
+			ref<Type> tp = (*o.instances())[0].assignType(this);
+			_throwException = ref<ParameterScope>(tp.scope());
+		}
+		return _throwException;
+	}
+
+	public ref<Type> memoryAllocatorType() {
+		if (_memoryAllocator == null) {
+			ref<Symbol> sym = _arena.getSymbol("parasol", "memory.Allocator", this);
+			if (sym.assignType(this).family() != TypeFamily.TYPEDEF)
+				assert(false);
+			_memoryAllocator = ref<TypedefType>(sym.type()).wrappedType();
+		}
+		return _memoryAllocator;
+	}
+
+	public ref<Type> compilerTypeType() {
+		if (_compilerType == null) {
+			ref<Symbol> sym = _arena.getSymbol("parasol", "compiler.Type", this);
+			if (sym.assignType(this).family() != TypeFamily.TYPEDEF)
+				assert(false);
+			_compilerType = ref<TypedefType>(sym.type()).wrappedType();
+		}
+		return _compilerType;
+	}
+
 	public void markLiveSymbol(ref<Node> n) {
 		if (n == null || n.type == null)
 			return;

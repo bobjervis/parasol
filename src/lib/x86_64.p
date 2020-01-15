@@ -37,6 +37,7 @@ import parasol:compiler.Constant;
 import parasol:compiler.DestructorList;
 import parasol:compiler.EnumInstanceType;
 import parasol:compiler.EnumScope;
+import parasol:compiler.EnumType;
 import parasol:compiler.EllipsisArguments;
 import parasol:compiler.FileStat;
 import parasol:compiler.FlagsInstanceType;
@@ -69,6 +70,7 @@ import parasol:compiler.Selection;
 import parasol:compiler.StackArgumentAddress;
 import parasol:compiler.StorageClass;
 import parasol:compiler.Symbol;
+import parasol:compiler.SyntaxTree;
 import parasol:compiler.Target;
 import parasol:compiler.TemplateInstanceType;
 import parasol:compiler.Ternary;
@@ -557,6 +559,12 @@ public class X86_64 extends X86_64AssignTemps {
 						assert(false);
 					break;
 					
+				case	ENUM_INSTANCE_CONSTRUCTOR:
+					inst(X86.MOV, ref<EnumScope>(parameterScope.enclosing()).enumType.instanceFamily(),
+								firstRegisterArgument(), 0, 0);
+					inst(X86.RET);
+					break;
+
 				case	IMPLIED_DESTRUCTOR:
 					if (generateInterfaceDestructorThunk(parameterScope, compileContext))
 						break;
@@ -764,7 +772,7 @@ public class X86_64 extends X86_64AssignTemps {
 					compileContext.setCurrent(_arena.root());
 				for (ref<NodeList> nl = t.concreteDefinition().classDef.statements(); nl != null; nl = nl.next) {
 					allocateStackForLocalVariables(compileContext);
-					generateStaticInitializers(nl.node, compileContext);
+					foldAndGenerateStaticInitializers(file.tree(), nl.node, compileContext);
 				}
 			}
 			if (_arena.verbose)
@@ -805,9 +813,23 @@ public class X86_64 extends X86_64AssignTemps {
 			int liveVariables = compileContext.liveSymbolCount();
 			for (int i = liveVariables - 1; i >= 0; i--) {
 				ref<Node> id = compileContext.getLiveSymbol(i);
-//				id.print(0, false);
-				inst(X86.LEA, firstRegisterArgument(), id, compileContext);
-				instCall(id.type.scope().destructor(), compileContext);
+				switch (id.op()) {
+				case ENUM:
+					ref<EnumType> et = ref<EnumType>(id.type);
+					int instanceCount = et.instanceCount;
+					id = ref<Class>(id).className();
+					id.type = et;
+					for (int i = 0; i < et.instanceCount; i++) {
+						instLoadEnumAddress(firstRegisterArgument(), id, i);
+						instCall(et.scope().destructor(), compileContext);
+					}
+					break;
+
+				default:
+//					id.print(0, false);
+					inst(X86.LEA, firstRegisterArgument(), id, compileContext);
+					instCall(id.type.scope().destructor(), compileContext);
+				}
 			}
 			inst(X86.ADD, TypeFamily.ADDRESS, R.RSP, 8);
 			inst(X86.POP, TypeFamily.SIGNED_64, R.RAX);
@@ -895,18 +917,8 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 	
 	private void resolveDeferredTrys(boolean isFunction, ref<CompileContext> compileContext) {
-		ref<Symbol> re = compileContext.arena().getSymbol("parasol", "exception.dispatchException", compileContext);
-		if (re == null || re.class != Overload)
-			assert(false);
-		ref<Overload> o = ref<Overload>(re);
-		ref<Type> tp = (*o.instances())[0].assignType(compileContext);
-		ref<ParameterScope> dispatchException = ref<ParameterScope>(tp.scope());
-		re = compileContext.arena().getSymbol("parasol", "exception.throwException", compileContext);
-		if (re == null || re.class != Overload)
-			assert(false);
-		o = ref<Overload>(re);
-		tp = (*o.instances())[0].assignType(compileContext);
-		ref<ParameterScope> throwException = ref<ParameterScope>(tp.scope());
+		ref<ParameterScope> dispatchException = compileContext.dispatchExceptionScope();
+		ref<ParameterScope> throwException = compileContext.throwExceptionScope();
 		for (int i = f().knownDeferredTrys; i < _deferredTry.length(); i++) {
 			ref<DeferredTry> dt = &_deferredTry[i];
 			ref<CodeSegment> outer = pushExceptionHandler(dt.exceptionHandler);
@@ -2826,6 +2838,11 @@ public class X86_64 extends X86_64AssignTemps {
 		return instLoadFunctionAddress(R(int(node.register)), functionSym.parameterScope(), compileContext);
 	}
 
+	private void foldAndGenerateStaticInitializers(ref<SyntaxTree> tree, ref<Node> node, ref<CompileContext> compileContext) {
+		node = node.fold(tree, true, compileContext);
+		generateStaticInitializers(node, compileContext);
+	}
+
 	private void generateStaticInitializers(ref<Node> node, ref<CompileContext> compileContext) {
 		if (node.deferGeneration())
 			return;
@@ -2884,6 +2901,11 @@ public class X86_64 extends X86_64AssignTemps {
 				for (ref<NodeList> nl = classNode.statements(); nl != null; nl = nl.next)
 					generateStaticInitializers(nl.node, compileContext);
 			}
+			break;
+
+		case	INITIALIZE_WRAPPER:
+			b = ref<Binary>(node);
+			generateStaticInitializers(b.right(), compileContext);
 			break;
 
 		case	INITIALIZE:
@@ -3350,6 +3372,11 @@ public class X86_64 extends X86_64AssignTemps {
 //			printf("generateInitializers:\n");
 //			seq.print(4);
 			generate(seq, compileContext);
+			break;
+
+		case	INITIALIZE_WRAPPER:
+			seq = ref<Binary>(node);
+			generateInitializers(seq.right(), compileContext);
 			break;
 
 		case	INITIALIZE:
@@ -4742,9 +4769,13 @@ boolean isCompileTimeConstant(ref<Node> t) {
 }
 
 private TraverseAction collectStaticDestructors(ref<Node> n, address data) {
-	if (n.op() == Operator.DECLARATION) {
-		//n.print(0);
+	switch (n.op()) {
+	case DECLARATION:
 		compiler.markLiveSymbols(ref<Binary>(n).right(), StorageClass.STATIC, ref<CompileContext>(data));
+		break;
+
+	case ENUM:
+		compiler.markLiveSymbols(n, StorageClass.STATIC, ref<CompileContext>(data));
 	}
 	return TraverseAction.CONTINUE_TRAVERSAL;
 }

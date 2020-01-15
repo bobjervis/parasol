@@ -465,24 +465,20 @@ public class Unary extends Node {
 			break;
 
 		case	THROW:
-			ref<Symbol> re = compileContext.arena().getSymbol("parasol", "exception.throwException", compileContext);
-			if (re == null || re.class != Overload)
-				assert(false);
-			ref<Overload> o = ref<Overload>(re);
-			ref<OverloadInstance> te = (*o.instances())[0];
+			ref<ParameterScope> tes = compileContext.throwExceptionScope();
 			ref<Node> f = tree.newLeaf(Operator.FRAME_PTR, location());
 			ref<Node> s = tree.newLeaf(Operator.STACK_PTR, location());
 			ref<Node> x = tree.newLeaf(Operator.EMPTY, location());
 			f.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 			s.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
-			x.type = te.assignType(compileContext);
+			x.type = tes.type();
 			ref<Node> excep = _operand;
 			if (excep.type.indirectType(compileContext) == null) {
 				excep = tree.newUnary(Operator.ADDRESS, _operand, _operand.location());
 				excep.type = f.type;
 			}
 			ref<NodeList> args = tree.newNodeList(excep, f, s);
-			ref<Call> call = tree.newCall(te.parameterScope(), null, x, args, location(), compileContext);
+			ref<Call> call = tree.newCall(tes, null, x, args, location(), compileContext);
 			call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 			f = tree.newUnary(Operator.EXPRESSION, call, location());
 			f.type = call.type;

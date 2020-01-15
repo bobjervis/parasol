@@ -990,8 +990,7 @@ public string[], boolean expandWildCard(string pattern) {
 		return results, false;
 }
 /**
- * Compute a file path for a relative path that should not be found relative to the
- * current working directory, but relative to the directory of anotehr file.
+ * Resolve a path relative to the directory of a base file name.
  *
  * For example, if you have a relative path in an HTML link, it is found relative to
  * the directory containing the HTML file that contains the link.
@@ -1005,7 +1004,7 @@ public string[], boolean expandWildCard(string pattern) {
  */
 public string pathRelativeTo(string filename, string baseFilename) {
 	if (isRelativePath(filename))
-		return constructPath(directory(baseFilename), filename, null);
+		return constructPath(directory(baseFilename), filename);
 	else
 		return filename;
 }
@@ -1090,8 +1089,9 @@ public string makeCompactPath(string filename, string baseFilename) {
 				if (a2[j] == '/')
 					slashCount++;
 //			printf("slashCount %d\n", slashCount);
-			if (slashCount == 0)
+			if (slashCount == 0) {
 				return a1.substr(lastSlash + 1);
+			}
 			string result;
 			while (slashCount > 0) {
 				result.append("../");

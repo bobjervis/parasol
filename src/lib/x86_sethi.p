@@ -48,6 +48,7 @@ void sethiUllman(ref<Node> node, ref<CompileContext> compileContext, ref<Target>
 			if (s > c.sethi)
 				c.sethi = s;
 		}
+		c.sortRegisterArguments();
 		if (c.target() != null) {
 			sethiUllman(c.target(), compileContext, target);
 			if (c.target().sethi > c.sethi)
@@ -124,6 +125,10 @@ void sethiUllman(ref<Node> node, ref<CompileContext> compileContext, ref<Target>
 		sethiUllman(b.left(), compileContext, target);
 		sethiUllman(b.right(), compileContext, target);
 		b.sethi = CALL_REG_USE;
+		break;
+
+	case	DESTRUCTOR_LIST:
+		node.sethi = CALL_REG_USE;
 		break;
 
 	case	ASSIGN:
@@ -340,6 +345,7 @@ private int regneeds(ref<Node> node, ref<CompileContext> compileContext, ref<Tar
 		return 1;
 		
 	case	CLASS_COPY:
+	case	DESTRUCTOR_LIST:
 		return CALL_REG_USE;
 		
 	case	MULTIPLY:

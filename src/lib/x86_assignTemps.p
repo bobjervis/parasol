@@ -149,6 +149,10 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			assignLargeClass(ref<Binary>(node), compileContext);
 			break;
 
+		case	DESTRUCTOR_LIST:
+			f().r.clobberSomeRegisters(node, callMask());
+			break;
+
 		case	LEFT_SHIFT_ASSIGN:
 		case	RIGHT_SHIFT_ASSIGN:
 		case	UNSIGNED_RIGHT_SHIFT_ASSIGN:
@@ -526,6 +530,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 				break;
 			}
 			
+		case	ASSIGN_TEMP:
 		case	AND_ASSIGN:
 		case	OR_ASSIGN:
 		case	EXCLUSIVE_OR_ASSIGN:
