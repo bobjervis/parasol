@@ -141,11 +141,7 @@ public class Exception {
 			if (ignoreFrames > 0)
 				ignoreFrames--;
 			else {
-				string locationLabel;
-				if (relative >= staticMemoryLength || relative < 0)
-					locationLabel = formattedExternalLocation(ip);
-				else
-					locationLabel = formattedLocation(ip, relative, locationIsExact);
+				string locationLabel = formattedLocation(ip, relative, locationIsExact);
 				output.printf(" %2s %s\n", tag, locationLabel);
 				tag = "";
 			}
@@ -621,6 +617,14 @@ public class NullPointerException extends AccessException {
 		ref<NullPointerException> n = new NullPointerException(_exceptionContext);
 		return n;
 	}
+
+	public string message() {
+		if (_exceptionContext == null)
+			return "NullPointerException (not thrown)\n";
+		string output;
+		output.printf("NullPointerException: flags %d referencing %p", _exceptionContext.exceptionFlags, _exceptionContext.memoryAddress);
+		return output;
+	}
 }
 /**
  * This is a variation of AccessException caused by inappropriate permissions on the memory location in
@@ -670,6 +674,7 @@ void uncaughtException(ref<Exception> e) {
 		linux.write(1, &s[0], s.length());
 	} else {
 		printf("\nUncaught exception!\n\n%s\n", e.message());
+		e.exceptionContext().print();
 		e.printStackTrace();
 		process.stdout.flush();
 	}

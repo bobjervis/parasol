@@ -85,6 +85,7 @@ import parasol:compiler.Unary;
 import parasol:compiler.USE_COMPARE_METHOD;
 import parasol:compiler.Variable;
 import parasol:exception;
+import parasol:process;
 import parasol:pxi.Pxi;
 import parasol:runtime;
 import parasol:storage;
@@ -189,6 +190,11 @@ public class X86_64Lnx extends X86_64 {
 		return runtime.Target.X86_64_LNX;
 	}
 
+	public void writePxi(ref<Pxi> output) {
+		ref<X86_64LnxSection> s = new X86_64LnxSection(this);
+		output.declareSection(s);
+	}
+	
 	public int, boolean run(string[] args) {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			printf("Running Linux target in Windows\n");
@@ -263,6 +269,11 @@ public class X86_64Win extends X86_64 {
 		return runtime.Target.X86_64_WIN;
 	}
 
+	public void writePxi(ref<Pxi> output) {
+		ref<X86_64WinSection> s = new X86_64WinSection(this);
+		output.declareSection(s);
+	}
+	
 	public int, boolean run(string[] args) {
 		if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			printf("Running windows target in Linux\n");
@@ -339,10 +350,7 @@ public class X86_64 extends X86_64AssignTemps {
 		return super.generateCode(mainFile, compileContext);
 	}
 	
-	public void writePxi(ref<Pxi> output) {
-		ref<X86_64WinSection> s = new X86_64WinSection(this);
-		output.declareSection(s);
-	}
+	public abstract void writePxi(ref<Pxi> output);
 	
 	public int, boolean run(string[] args) {
 		pointer<byte>[] runArgs;
@@ -353,6 +361,7 @@ public class X86_64 extends X86_64AssignTemps {
 		pointer<runtime.SourceLocation> outerSource = runtime.sourceLocations();
 		int outerSourceCount = runtime.sourceLocationsCount();
 		boolean outerLeaksFlag = runtime.leaksFlag();
+		process.stdout.flush();
 		if (runtime.makeRegionExecutable(_staticMemory, _staticMemoryLength)) {
 			pointer<int> pxiFixups = pointer<int>(&_staticMemory[_pxiHeader.relocationOffset]);
 			pointer<long> vp;
@@ -967,24 +976,29 @@ public class X86_64 extends X86_64AssignTemps {
 		}
 	}
 	
-	private void reserveAutoMemory(boolean preserveRCX, ref<CompileContext> compileContext) {
+	private void reserveAutoMemory(boolean preserveFirstRegisterArgument, ref<CompileContext> compileContext) {
 		int zeroZone = f().autoSize - f().registerSaveSize;
 		f().autoSize += REGISTER_PARAMETER_STACK_AREA;
 		if ((f().autoSize & 15) != 0)
 			f().autoSize = (f().autoSize + 15) & ~15;
 		int reserveSpace = f().autoSize - f().registerSaveSize;
-		inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, reserveSpace);
-		if (zeroZone > 0) {
-			if (preserveRCX)
-				inst(X86.PUSH, TypeFamily.SIGNED_64, firstRegisterArgument());
-			inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), R.RSP);
-			if (preserveRCX)
-				inst(X86.ADD, TypeFamily.ADDRESS, firstRegisterArgument(), address.bytes);
-			inst(X86.XOR, TypeFamily.UNSIGNED_16, secondRegisterArgument(), secondRegisterArgument());
-			inst(X86.MOV, TypeFamily.SIGNED_64, thirdRegisterArgument(), reserveSpace);
-			instCall(_memset, compileContext);
-			if (preserveRCX)
-				inst(X86.POP, TypeFamily.SIGNED_64, firstRegisterArgument());
+		if (reserveSpace <= 0x30 && zeroZone > 0) {
+			for (int i = 0; i < reserveSpace; i += 8)
+				inst(X86.PUSH, 0);
+		} else {
+			inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, reserveSpace);
+			if (zeroZone > 0) {
+				if (preserveFirstRegisterArgument)
+					inst(X86.PUSH, TypeFamily.SIGNED_64, firstRegisterArgument());
+				inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), R.RSP);
+				if (preserveFirstRegisterArgument)
+					inst(X86.ADD, TypeFamily.ADDRESS, firstRegisterArgument(), address.bytes);
+				inst(X86.XOR, TypeFamily.UNSIGNED_16, secondRegisterArgument(), secondRegisterArgument());
+				inst(X86.MOV, TypeFamily.SIGNED_64, thirdRegisterArgument(), reserveSpace);
+				instCall(_memset, compileContext);
+				if (preserveFirstRegisterArgument)
+					inst(X86.POP, TypeFamily.SIGNED_64, firstRegisterArgument());
+			}
 		}
 	}
 
@@ -1009,18 +1023,43 @@ public class X86_64 extends X86_64AssignTemps {
 	
 	private void generateConstructorPreamble(ref<Block> constructorBody, ref<ParameterScope> scope, ref<CompileContext> compileContext) {
 		int firstMemberOffset = scope.enclosing().firstMemberOffset(compileContext);
-		if (firstMemberOffset > 0) {
-			if (scope.enclosing().variableStorage > firstMemberOffset) {
-				inst(X86.LEA, firstRegisterArgument(), thisRegister(), firstMemberOffset);
+		if (scope.enclosing().variableStorage > firstMemberOffset) {
+			int amount = scope.enclosing().variableStorage - firstMemberOffset;
+			if (amount <= 0x30) {
+				while (amount >= 8) {
+					inst(X86.MOV, TypeFamily.ADDRESS, thisRegister(), firstMemberOffset, 0);
+					amount -= 8;
+					firstMemberOffset += 8;
+				}
+				while (amount > 0) {
+					switch (amount) {
+					case 1:
+						inst(X86.MOV, TypeFamily.UNSIGNED_8, thisRegister(), firstMemberOffset, 0);
+						amount--;
+						break;
+						
+					case 2:
+					case 3:
+						inst(X86.MOV, TypeFamily.UNSIGNED_16, thisRegister(), firstMemberOffset, 0);
+						amount -= 2;
+						firstMemberOffset += 2;
+						break;
+						
+					default:
+						inst(X86.MOV, TypeFamily.UNSIGNED_32, thisRegister(), firstMemberOffset, 0);
+						amount -= 4;
+						firstMemberOffset += 4;
+					}
+				}
+			} else {
+				if (firstMemberOffset > 0)
+					inst(X86.LEA, firstRegisterArgument(), thisRegister(), firstMemberOffset);
+				else
+					inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), thisRegister());
 				inst(X86.XOR, TypeFamily.UNSIGNED_16, secondRegisterArgument(), secondRegisterArgument());
-				inst(X86.MOV, TypeFamily.SIGNED_64, thirdRegisterArgument(), scope.enclosing().variableStorage - firstMemberOffset);
+				inst(X86.MOV, TypeFamily.SIGNED_64, thirdRegisterArgument(), amount);
 				instCall(_memset, compileContext);
 			}
-		} else {
-			inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), thisRegister());
-			inst(X86.XOR, TypeFamily.UNSIGNED_16, secondRegisterArgument(), secondRegisterArgument());
-			inst(X86.MOV, TypeFamily.SIGNED_64, thirdRegisterArgument(), scope.enclosing().variableStorage);
-			instCall(_memset, compileContext);
 		}
 		for (ref<Symbol>[Scope.SymbolKey].iterator i = scope.enclosing().symbols().begin(); i.hasNext(); i.next()) {
 			ref<Symbol> sym = i.get();

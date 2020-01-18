@@ -44,6 +44,11 @@ Loader::Loader() {
 		int (*f)() = (int (*)())(0);
 		int x = f();
 	}
+	if (!pxi::registerSectionReader(ST_X86_64_LNX, x86_64Reader)) {
+		printf("Could not register x86_64SectionReader for ST_X86_64_LNX\n");
+		int (*f)() = (int (*)())(0);
+		int x = f();
+	}
 }
 
 Loader loader;

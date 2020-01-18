@@ -13,6 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+import parasol:compiler;
 import parasol:pxi;
 import parasol:storage;
 import parasol:process;
@@ -25,15 +26,19 @@ class DumpPxiCommand extends process.Command {
 		description("Produce a formatted dump of a pxi file.");
 		sectionArgument = stringArgument('s', "section",
 				"Include detailed dump of this section type.");
+		asmArgument = stringArgument('a', "asm",
+				"Include an assembly listing of the code in the dump of the named section type.");
 		helpArgument('?', "help", "Display this help.");
 	}
 	
 	ref<process.Argument<string>> sectionArgument;
+	ref<process.Argument<string>> asmArgument;
 }
 
 DumpPxiCommand command;
 
 runtime.Target verbose;
+runtime.Target assembly;
 
 int main(string[] args) {
 	if (!command.parse(args))
@@ -41,12 +46,21 @@ int main(string[] args) {
 	string[] files = command.finalArgs();
 	if (command.sectionArgument.set()) {
 		verbose = pxi.sectionType(command.sectionArgument.value);
-		if (verbose == null) {
+		if (verbose == runtime.Target.ERROR) {
 			printf("Invalid section type: %s\n", command.sectionArgument.value);
 			return 1;
 		}
 	}
+	if (command.asmArgument.set()) {
+		assembly = pxi.sectionType(command.asmArgument.value);
+		if (assembly == runtime.Target.ERROR) {
+			printf("Invalid section type for assembly: %s\n", command.asmArgument.value);
+			return 1;
+		}
+	}
 	boolean anyFailed = false;
+	pxi.registerSectionReader(runtime.Target.X86_64_LNX, x86_64NextReader);
+	pxi.registerSectionReader(runtime.Target.X86_64_WIN, x86_64NextReader);
 	for (int i = 0; i < files.length(); i++)
 		if (!dump(files[i]))
 			anyFailed = true;
@@ -74,13 +88,11 @@ boolean dump(string filename) {
 		string offset;
 		offset.printf("@%x", entry.offset);
 		printf("  %c %4s %16s %10s [%d bytes]\n", i == best ? '*' : ' ', label, type, offset, entry.length);
-		if (st == runtime.Target.X86_64_WIN)
-			pxi.registerSectionReader(runtime.Target.X86_64_WIN, x86_64NextReader);
-		else
-			continue;
-		ref<pxi.Section> s = p.readSection(i);
-		if (s == null)
-			printf("      <<- ERROR ->>\n");
+		if (verbose == st || assembly == st) {
+			ref<pxi.Section> s = p.readSection(i);
+			if (s == null)
+				printf("      <<- ERROR ->>\n");
+		}
 	}
 	p.close();
 	return true;
@@ -94,7 +106,27 @@ ref<pxi.Section> x86_64NextReader(storage.File pxiFile, long length) {
 		printf("          Could not read x86-64 section header\n");
 		return null;
 	}
-	x86_64.printHeader(&header, pxiFile.tell());
+	if (assembly != runtime.Target.ERROR) {
+		byte[] memory;
+
+		memory.resize(int(length - header.bytes));
+		long actual = pxiFile.read(&memory);
+		if (actual != memory.length()) {
+			printf("Could not read %d bytes from the indicated section\n", length);
+			return null;
+		}
+		compiler.Arena arena();
+		x86_64.Disassembler d(&arena, 0, int(actual), &memory[0], &header);
+//		d.setDataMap(&_dataMap[0][0], _dataMap[0].length());
+//		d.setFunctionMap(&_functionMap);
+//		d.setOrdinalMap(&_ordinalMap);
+//		d.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
+//		d.setVtablesClasses(&_vtables);
+		if (!d.disassemble()) {
+			printf("Disassembly FAILED\n");
+		}
+	} else if (verbose != runtime.Target.ERROR)
+		x86_64.printHeader(&header, pxiFile.tell());
 	return new PlaceHolder();
 }
 

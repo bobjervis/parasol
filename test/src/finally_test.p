@@ -73,3 +73,6 @@ tryFunc(true);
 assert(inCatch);
 assert(inFinally);
 assert(inFinallyAfterCatch);
+
+printf("PASSED\n");
+

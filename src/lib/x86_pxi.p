@@ -64,6 +64,23 @@ class X86_64WinSection extends pxi.Section {
 	}
 }
 
+class X86_64LnxSection extends pxi.Section {
+	private ref<X86_64> _target;
+	
+	public X86_64LnxSection(ref<X86_64> target) {
+		super(runtime.Target.X86_64_LNX);
+		_target = target;
+	}
+	
+	public long length() {
+		return _target.imageLength();
+	}
+	
+	public boolean write(storage.File pxiFile) {
+		return _target.writePxiFile(pxiFile);
+	}
+}
+
 public class X86_64SectionHeader {
 	public int entryPoint;			// Object id of the starting function to run in the image
 	public int builtInOffset;		// Offset in image of built-in table

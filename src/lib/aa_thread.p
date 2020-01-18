@@ -187,6 +187,7 @@ public class Thread {
 			mainThread._threadHandle = INVALID_HANDLE_VALUE;
 		else if (runtime.compileTarget == runtime.Target.X86_64_LNX)
 			mainThread._pid = linux.gettid();
+		runtime.setParasolThread(mainThread);
 		threads.enlist(mainThread);
 		mainThread.initializeInstrumentation();
 	}

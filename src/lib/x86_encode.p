@@ -2069,7 +2069,8 @@ class X86_64Encoder extends Target {
 
 		case	CALL:
 			switch (reg) {
-			case	RAX:
+			case RAX:
+			case RCX:
 				emit(0xff);
 				modRM(3, 2, rmValues[reg]);
 				return;

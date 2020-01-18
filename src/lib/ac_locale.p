@@ -58,22 +58,45 @@ private ref<log.Logger> logger = log.getLogger("parasol.international");
  * Language is an ISO 639 language code. Country is an ISO-3166-1 country/region identifier.
  * Codepage identifies a code page that determines the mapping of 8-bit text data to Unicode.
  *
+ * If the country is omitted, it is set to the value of the language.
+ *
+ * If the codepage is omitted it is treated as UTF-8.
+ *
  * Note that operating system-specific transformations are then applied to the string to
- * the native form of a locale name. For example, on Linux the language, country and codepage are
- * converted to lower-case and the dash (if present) is changed to an underbar.
+ * the native form of a locale name. For example, on Linux the language and codepage are
+ * converted to lower-case, the country to upper-case and the dash (if present) is changed to an underbar.
  */
 public ref<Locale> getLocale(string locale) {
 	if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		string localeName;
 
-		if (locale == "C" || locale == "POSIX")
+		if (locale == "C" || locale == "POSIX" || locale == "")
 			localeName = locale;
-		else
-			localeName = locale;//.toLowerCase();
+		else {
+			localeName = locale.toLowerCase();
 
-		int dashLoc = locale.indexOf('-');
-		if (dashLoc >= 0)
-			localeName[dashLoc] = '_';
+			int dashLoc = localeName.indexOf('-');
+			int dotLoc;
+			if (dashLoc >= 0) {
+				localeName[dashLoc] = '_';
+				dotLoc = localeName.indexOf('.', dashLoc);
+				if (dotLoc < 0) {
+					dotLoc = localeName.length();
+					localeName += ".utf8";
+				}
+				for (int i = dashLoc + 1; i < dotLoc; i++) {
+					localeName[i] = localeName[i].toUpperCase();
+				}
+			} else {
+				dotLoc = localeName.indexOf('.');
+				if (dotLoc < 0)
+					localeName = localeName + "_" + localeName.toUpperCase() + ".utf8";
+				else {
+					string language = localeName.substr(0, dotLoc);
+					localeName = language + "_" + language.toUpperCase() + localeName.substr(dotLoc);
+				}
+			}
+		}
 		linux.locale_t localeID = linux.newlocale(linux.LC_ALL_MASK, localeName.c_str(), null);
 		if (localeID != null)
 			return new LinuxLocale(localeID, localeName);
@@ -83,27 +106,37 @@ public ref<Locale> getLocale(string locale) {
 	} else if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		string localeName;
 
-		if (locale == "C")
+		if (locale == "C" || locale == "")
 			localeName = locale;
 		else
 			localeName = locale.toLowerCase();
 
-		int dashLoc = locale.indexOf('-');
+		int dashLoc = localeName.indexOf('-');
 		int dotLoc;
 		if (dashLoc >= 0) {
-			dotLoc = locale.indexOf('.', dashLoc);
+			dotLoc = localeName.indexOf('.', dashLoc);
 			if (dotLoc < 0)
-				dotLoc = locale.length();
+				dotLoc = localeName.length();
 			for (int i = dashLoc + 1; i < dotLoc; i++)
 				localeName[i] = localeName[i].toUpperCase();
-		} else
+		} else {
 			dotLoc = locale.indexOf('.');
+			if (dotLoc < 0)
+				localeName += "-" + localeName.toUpperCase();
+			else {
+				string language = localeName.substr(0, dotLoc);
+				localeName = language + "_" + language.toUpperCase() + localeName.substr(dotLoc);
+				dotLoc += language.length() + 1;
+			}
+		}
+/*
 		if (dotLoc >= 0) {
 			string codepage = locale.substr(dotLoc + 1);
-//			if (codepage == "utf8") {
-//				localeName = localeName.substr(0, dotLoc + 1) + "utf-8";
-//			}
+			if (codepage == "utf8") {
+				localeName = localeName.substr(0, dotLoc + 1) + "utf-8";
+			}
 		}
+ */
 		windows._locale_t localeID = windows._create_locale(C.LC_ALL, localeName.c_str());
 		if (localeID != null)
 			return new WindowsLocale(localeID, localeName);
@@ -335,7 +368,7 @@ public class DecimalStyle {
 	 */
 	public byte[] grouping;
 	/**
-	 * A string representin         g a locale's negative sign.
+	 * A string representing a locale's negative sign.
 	 */
 	public string negativeSign;
 	/**

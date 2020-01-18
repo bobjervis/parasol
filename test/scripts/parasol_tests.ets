@@ -117,6 +117,7 @@ run(filename: memory_test.p)
 
 // Locale tests
 
+run(filename: locale_test.p)
 run(filename: floatFormat_test.p)
 run(filename: paper_size_test.p)
 

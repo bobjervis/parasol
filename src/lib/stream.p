@@ -70,6 +70,7 @@ import parasol:exception.IllegalArgumentException;
 import parasol:exception.IllegalOperationException;
 
 import native:C;
+import native:linux;
 
 @Constant
 int MILLIS_PER_SECOND = 1000;

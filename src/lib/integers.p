@@ -1575,7 +1575,7 @@ public class byte {
 		switch (*this) {
 		case 'a':
 		case 'b':
-		case 'C':
+		case 'c':
 		case 'd':
 		case 'e':
 		case 'f':

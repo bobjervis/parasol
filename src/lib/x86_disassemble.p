@@ -28,7 +28,7 @@ import parasol:compiler.OrdinalMap;
 import parasol:runtime.SourceLocation;
 import native:C;
 
-class Disassembler {
+public class Disassembler {
 	private ref<Arena> _arena;
 	private long _logical;
 	private long _ip;
@@ -98,7 +98,7 @@ class Disassembler {
 		_vtables = vtables;
 	}
 	
-	boolean disassemble() {
+	public boolean disassemble() {
 		printHeader(_pxiHeader, -1);
 
 		if (_pxiHeader.exceptionsCount > 0) {
@@ -1509,6 +1509,8 @@ class Disassembler {
 	}
 
 	int findFunction(int location) {
+		if (_functionMap == null)
+			return -1;
 		pointer<ref<Scope>> functionMap = &(*_functionMap)[0];
 		int length = _functionMap.length();
 		int base = 0;

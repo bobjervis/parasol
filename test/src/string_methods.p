@@ -41,9 +41,13 @@ void constructorTests() {
 	
 	cp = &s[0];
 	s3 = string(cp, 2);
+	printf("s3:%s\n", s3);
 	assert(s3 == "ab");
 
 	string sneg(-3);
+	printf("sneg:");
+	printf(sneg);
+	printf("\n");
 	assert(sneg == "-3");
 }
 
