@@ -944,6 +944,7 @@ public class map<class V, class K> {
 				allocator delete e.value;
 				e.value.~();
 				e.deleted = true;
+				_deletedEntriesCount++;
 				return true;
 			}
 		}
@@ -960,6 +961,7 @@ public class map<class V, class K> {
 					delete _entries[i].value;
 					_entries[i].value.~();
 				}
+				_entries[i].key.~();
 			}
 		}
 		memory.free(_entries);
@@ -978,6 +980,7 @@ public class map<class V, class K> {
 					allocator delete _entries[i].value;
 					_entries[i].value.~();
 				}
+				_entries[i].key.~();
 			}
 		}
 		allocator.free(_entries);

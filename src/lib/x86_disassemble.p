@@ -108,19 +108,6 @@ public class Disassembler {
 				printf("    %8.8x  %8.8x\n", ee.location, ee.handler);
 			}
 		}
-		if (_pxiHeader.builtInCount > 0) {
-			printf("\n  Built-in method references:\n");
-			pointer<byte> pb = _physical + _pxiHeader.builtInsText;
-			
-			int addr = _pxiHeader.builtInOffset;
-			for (int i = 0; i < _pxiHeader.builtInCount; i++) {
-				pointer<int> pi = pointer<int>(_physical + addr);
-				string s(pb);
-				pb += s.length() + 1;
-				printf("    [%8.8x] %d \"%s\"\n", addr, *pi, s);
-				addr += address.bytes;
-			}
-		}
 		if (_pxiHeader.nativeBindingsCount > 0) {
 			printf("\n  Native Bindings:\n");
 			
@@ -164,12 +151,14 @@ public class Disassembler {
 				printf("\n");
 			}
 		}
+/*
 		if (_pxiHeader.relocationCount > 0) {
 			printf("PXI Fixups:\n");
 			pointer<int> f = pointer<int>(_physical + _pxiHeader.relocationOffset);
 			for (int i = 0; i < _pxiHeader.relocationCount; i++)
 				printf("    [%d] %#x\n", i, f[i]);
 		}
+ */
 		printf("\n");
 		_offset = 0;
 		_rex = 0;

@@ -192,7 +192,6 @@ public class Exception {
 		}
 		printf("\nFATAL: Thread %s could not find a stack handler for this address.\n", thread.currentThread().name());
 		printf("Parasol code based at %p\n", runtime.lowCodeAddress());
-		_exceptionContext.print();
 		process.stdout.write(textStackTrace());
 		process.exit(1);
 	}
@@ -1010,7 +1009,7 @@ public string formattedLocation(address ip, int offset, boolean locationIsExact)
 		ref<FileStat> file = sl.file;
 		result.printf("%s %d", storage.makeCompactPath(file.filename(), "foo"), file.scanner().lineNumber(sl.location) + 1);
 		if (offset != 0)
-			result.printf(" (%+d)");
+			result.printf(" (@%x)", offset);
 		return result;
 	}
 }

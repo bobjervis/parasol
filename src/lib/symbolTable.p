@@ -1438,12 +1438,27 @@ public class Scope {
 				
 			case	CLASS:
 				ref<Class> c = ref<Class>(_definition);
+				if (c.scope != null) {
+					ref<ClasslikeScope> cs = ref<ClasslikeScope>(c.scope);
+					assert(cs.class <= ClasslikeScope);
+					if (cs.classType != null)
+						return _enclosing.label() + "." + cs.classType.signature();
+				}
 				if (c.name() != null)
 					return _enclosing.label() + "." + c.name().identifier();
 				break;
 				
 			case	TEMPLATE:
 				ref<Template> t = ref<Template>(_definition);
+				if (t.classDef.scope != null) {
+					ref<ClasslikeScope> cs = ref<ClasslikeScope>(t.classDef.scope);
+					assert(cs.class <= ClasslikeScope);
+					printf("{<");
+					if (cs.classType != null)
+						printf("CT: '%s'", cs.classType.signature());
+					printf(">}");
+				} else
+					printf("{<??>}");
 				if (t.name() != null)
 					return _enclosing.label() + "." + t.name().identifier();
 				break;

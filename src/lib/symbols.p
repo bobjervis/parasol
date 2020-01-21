@@ -894,6 +894,7 @@ public class OverloadInstance extends Symbol {
 		}
 		ref<Template> definition = templateType.definition().cloneRaw();
 		ref<ClassScope> instanceBodyScope = compileContext.arena().createClassScope(instanceParametersScope, definition.classDef, definition.name());
+		definition.classDef.scope = instanceBodyScope;
 		compileContext.buildScopes();
 		ref<TemplateInstanceType> result = compileContext.newTemplateInstanceType(templateType, arguments, definition, templateType.definingFile(), instanceBodyScope, _instances);
 		instanceBodyScope.classType = result;

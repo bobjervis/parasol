@@ -63,10 +63,11 @@ private LeakHeap leakHeap(runtime.returnAddress());
 
 exception.registerHardwareExceptionHandler(exception.hardwareExceptionHandler);
 
+currentHeap = &heap;
+thread.Thread.init();
+
 if (runtime.leaksFlag())
 	currentHeap = &leakHeap;
-else
-	currentHeap = &heap;
 /*
  * Set up the process streams as soon as the heap is established.
  */
@@ -518,6 +519,9 @@ public class LeakHeap extends Allocator {
 		_sections = nh;
 		return nh;
 	}
+
+	private void freeSection(ref<SectionHeader> sh) {
+	}
 	
 	private static int stackFrames(long rbp, long stackTop) {
 		int frameCount = 0;
@@ -563,6 +567,8 @@ public class LeakHeap extends Allocator {
 						fb.previous = null;
 						fb.enclosing = sh;
 						sh.firstFreeBlock = fb;
+						if (!checkForEmptySection(sh))
+							throw CorruptHeapException(this, p);
 						currentHeap = &leakHeap;
 						return;
 					} else if (pointer<byte>(sh.firstFreeBlock) > pointer<byte>(fb)) {
@@ -580,6 +586,8 @@ public class LeakHeap extends Allocator {
 						fb.enclosing = sh;
 						fb.previous = null;
 						sh.firstFreeBlock = fb;
+						if (!checkForEmptySection(sh))
+							throw CorruptHeapException(this, p);
 						currentHeap = &leakHeap;
 						return;
 					}
@@ -593,6 +601,8 @@ public class LeakHeap extends Allocator {
 							}
 							fb.next = null;
 							fb.enclosing = sh;
+							if (!checkForEmptySection(sh))
+								throw CorruptHeapException(this, p);
 							currentHeap = &leakHeap;
 							return;
 						} else if (pointer<byte>(srchfb.next) > pointer<byte>(fb)) {
@@ -622,6 +632,8 @@ public class LeakHeap extends Allocator {
 								}
 							}
 							fb.enclosing = sh;
+							if (!checkForEmptySection(sh))
+								throw CorruptHeapException(this, p);
 							currentHeap = &leakHeap;
 							return;
 						}
@@ -633,6 +645,39 @@ public class LeakHeap extends Allocator {
 //		currentHeap = &leakHeap;
 	}
 	
+	private boolean checkForEmptySection(ref<SectionHeader> sh) {
+		ref<FreeBlock> fb = sh.firstFreeBlock;
+		// If there is a gap between the first free block and the secton header,
+		// that must be in-use data, so keep the section.
+		if (long(sh) + SectionHeader.bytes != long(fb))
+			return true;
+		// At least two free blocks means there's a gap between them, at least.
+		// That gap has got to be in-use, so keep the section.
+		if (fb.next != null)
+			return true;
+		// We have one free block, it begins right after the section header. If it does not end
+		// at the SectionEndSentinel, the gap is in use, so keep the section.
+		if (long(sh) + sh.sectionSize - SectionEndSentinel.bytes != long(fb) + fb.blockSize)
+			return true;
+
+		// We have an empty section, free it.
+
+		if (sh == _sections) {
+			_sections = sh.next;
+			freeSection(sh);
+			return true;
+		} else {
+			for (ref<SectionHeader> ssh = _sections; ssh != null; ssh = ssh.next) {
+				if (ssh.next == sh) {
+					ssh.next = sh.next;
+					freeSection(sh);
+					return true;
+				}
+			}
+			return false;
+		}
+	}
+
 	class CallSite {
 		ref<CallSite> callers;
 		ref<CallSite> next;
@@ -702,6 +747,13 @@ public class LeakHeap extends Allocator {
 		long totalBytes;
 		CallSite root;
 		
+/*
+		for (ref<SectionHeader> sh = _sections; sh != null; sh = sh.next) {
+			output.printf("Section %p[%x]\n", sh, sh.sectionSize);
+			for (ref<FreeBlock> fb = sh.firstFreeBlock; fb != null; fb = fb.next)
+				output.printf("    Free %p[%x] prev %p next %p\n", fb, fb.blockSize, fb.previous, fb.next);
+		}
+ */
 		root.ip = null;
 		boolean hasNextFreeBlock = false;
 		for (ref<SectionHeader> sh = _sections; sh != null; sh = sh.next) {

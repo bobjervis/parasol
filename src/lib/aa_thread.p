@@ -46,8 +46,6 @@ import parasol:process;
 import parasol:international.Locale;
 import parasol:time;
 
-Thread.init();
-
 private monitor class ActiveThreads {
 	ref<Thread>[] _activeThreads;
 
@@ -177,10 +175,10 @@ public class Thread {
 	}
 
 	static ref<Thread> mainThread;
-	/*
+	/** @ignore
 	 * Initialize a Thread object for the 'main' thread of the process.
 	 */
-	static void init() {
+	public static void init() {
 		mainThread = new Thread();
 		mainThread._name.printf("TID-%d", getCurrentThreadId());
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN)

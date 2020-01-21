@@ -54,7 +54,7 @@ public class Reference extends Node {
 		printf("\n");
 	}
 
-	public boolean namesSameObject(ref<Node> n) {
+	public boolean conforms(ref<Node> n) {
 		if (n.op() != Operator.VARIABLE)
 			return false;
 		return _variable == ref<Reference>(n)._variable;
@@ -216,12 +216,6 @@ public class Identifier extends Node {
 			return (_symbol.accessFlags() & Access.CONSTANT) != 0;
 	}
 	
-	public boolean namesSameObject(ref<Node> n) {
-		if (n.op() != Operator.IDENTIFIER)
-			return false;
-		return _symbol == ref<Identifier>(n)._symbol;
-	}
-
 	public void print(int indent) {
 		printBasic(indent);
 		printf(" %s S%p '%s'", _definition ? "def" : "", _symbol, _value);
@@ -258,7 +252,7 @@ public class Identifier extends Node {
 	}
 
 	public boolean conforms(ref<Node> other) {
-		if (other.op() != op())
+		if (other.op() != Operator.IDENTIFIER)
 			return false;
 		ref<Identifier> id = ref<Identifier>(other);
 		return _value == id._value;

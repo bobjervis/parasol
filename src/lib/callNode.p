@@ -561,11 +561,15 @@ public class Call extends ParameterBag {
 				ref<ParameterScope> constructor = type.defaultConstructor();
 				if (constructor != null) {
 					ref<Reference> r = tree.newReference(temp, true, location());
+					compileContext.markLiveSymbol(r);
 					ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
 					adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 					ref<Call> call = tree.newCall(constructor, CallCategory.CONSTRUCTOR, adr, null, location(), compileContext);
 					call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 					result = call.fold(tree, true, compileContext);
+				} else if (type.hasDestructor()) {
+					ref<Reference> r = tree.newReference(temp, true, location());
+					compileContext.markLiveSymbol(r);
 				}
 				for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 					ref<Binary> b = ref<Binary>(nl.node);		// We know this must be a LABEL node.
@@ -1560,7 +1564,11 @@ public class FunctionDeclaration extends ParameterBag {
 			for (ref<NodeList> nl = retType; nl != null; nl = nl.next) {
 				if (nl.node.deferAnalysis()) {
 					type = nl.node.type;
-					return;
+					continue;
+				}
+				if (!nl.node.type.canCopy(compileContext)) {
+					nl.node.add(MessageId.CANNOT_COPY_RETURN, compileContext.pool(), nl.node.type.signature());
+					type = nl.node.type = compileContext.errorType();
 				}
 			}
 			if (retType.next == null &&
@@ -1570,14 +1578,16 @@ public class FunctionDeclaration extends ParameterBag {
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 			if (nl.node.deferAnalysis()) {
 				type = nl.node.type;
-				return;
+				continue;
 			}
 			if (nl.node.type != null && nl.node.type.family() == TypeFamily.TYPEDEF) {
 				ref<Type> t = nl.node.type.wrappedType();
 				if (t.family() == TypeFamily.VOID) {
 					nl.node.add(MessageId.INVALID_VOID, compileContext.pool());
 					type = nl.node.type = compileContext.errorType();
-					return;
+				} else if (!t.canCopy(compileContext)) {
+					nl.node.add(MessageId.CANNOT_COPY_ARGUMENT, compileContext.pool(), t.signature());
+					type = nl.node.type = compileContext.errorType();
 				}
 			}
 		}
@@ -1909,11 +1919,16 @@ public class Return extends ParameterBag {
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
 			nl.node = nl.node.fold(tree, false, compileContext);
 		int n = compileContext.liveSymbolCount();
-//		ref<Node> output = this;
+		// Returning an object by value that has a destructor requires care. If the instance
+		// being returned is about to be destroyed, we can just do a quick bit-wise copy. Of course, there
+		// must be a copy constructor to do the return if there is a destructor.
+		ref<Node>[] referencedLvalues;
 		for (int i = 0; i < n; i++) {
 			ref<Node> n = compileContext.getLiveSymbol(i);
-			if (beingReturned(n))
+			if (beingReturned(n)) {
+				referencedLvalues.append(n);
 				continue;
+			}
 			// We know that 'live' symbols have a scope with a destructor
 			ref<NodeList> nl = tree.newNodeList(n);
 			nl.next = _liveSymbols;
@@ -1925,39 +1940,34 @@ public class Return extends ParameterBag {
 //			ref<Node> folded = c.fold(tree, true, compileContext);
 //			output = tree.newBinary(Operator.SEQUENCE, folded, output, location());
 		}
-		boolean multiReturn = (_arguments != null && _arguments.next != null);
-		// Returning a string by value, we may have to make a copy.
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 			if (nl.node.type == null || nl.node.deferAnalysis())
 				continue;
-			boolean skipLive;
 
-			if (!multiReturn) {
-				switch (nl.node.type.family()) {
-				case STRING:
-				case STRING16:
-//					return this;
-
-				case SHAPE:
-//					skipLive = true;
-					if (nl.node.op() == Operator.CALL)
-						return this;
-					break;
-
-				default:
-					if (!nl.node.type.returnsViaOutParameter(compileContext))
-						return this;
+			if (nl.node.type.hasDestructor()) {
+				boolean skipCopy;
+				ref<Node> arg = simpleReturnVariable(nl.node);
+				if (arg != null) {
+					for (i in referencedLvalues) {
+						if (referencedLvalues[i] == null)
+							continue;
+						if (nl.node.conforms(referencedLvalues[i])) {
+							referencedLvalues[i] = null;
+							skipCopy = true;
+							break;
+						}
+					}
+				}
+				if (!skipCopy) {
+					ref<Variable> temp = compileContext.newVariable(nl.node.type);
+					ref<Reference> r = tree.newReference(temp, true, nl.node.location());
+					ref<Node> defn = tree.newBinary(Operator.ASSIGN_TEMP, r, nl.node, nl.node.location());
+					defn.type = nl.node.type;
+					r = tree.newReference(temp, false, nl.node.location());
+					nl.node = tree.newBinary(Operator.SEQUENCE, defn.fold(tree, true, compileContext), r, nl.node.location());
+					nl.node.type = defn.type;
 				}
 			}
-			ref<Variable> temp = compileContext.newVariable(nl.node.type);
-			ref<Reference> r = tree.newReference(temp, true, nl.node.location());
-//			if (!skipLive)
-//				compileContext.markLiveSymbol(r);
-			ref<Node> defn = tree.newBinary(Operator.ASSIGN_TEMP, r, nl.node, nl.node.location());
-			defn.type = nl.node.type;
-			r = tree.newReference(temp, false, nl.node.location());
-			nl.node = tree.newBinary(Operator.SEQUENCE, defn.fold(tree, true, compileContext), r, nl.node.location());
-			nl.node.type = defn.type;
 		}
 		return this;
 	}
@@ -1965,7 +1975,7 @@ public class Return extends ParameterBag {
 	private boolean beingReturned(ref<Node> n) {
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 			ref<Node> arg = simpleReturnVariable(nl.node);
-			if (arg != null && arg.namesSameObject(n))
+			if (arg != null && arg.conforms(n))
 				return true;
 		}
 		return false;

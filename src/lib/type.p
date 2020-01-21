@@ -863,10 +863,6 @@ public class EnumType extends ClassType {
 
 	protected void doResolve(ref<CompileContext> compileContext) {
 	}
-
-	public string signature() {
-		return super.signature();
-	}
 }
 
 public class EnumInstanceType extends Type {
@@ -1605,10 +1601,6 @@ public class TemplateInstanceType extends ClassType {
 			sig.append(t.signature());
 		}
 		sig.append(">");
-		if (_extends != null) {
-			sig.append(" extends ");
-			sig.append(_extends.signature());
-		}
 		return sig;
 	}
 	
@@ -1831,7 +1823,7 @@ public class Type {
 				ref<OverloadInstance> oi = (*o.instances())[i];
 				if (oi.parameterCount() != 1)
 					continue;
-				if ((*oi.parameterScope().parameters())[0].type() == this)
+				if ((*oi.parameterScope().parameters())[0].assignType(compileContext) == this)
 					return oi;
 			}
 		}
@@ -1851,6 +1843,19 @@ public class Type {
 			}
 		}
 		return null;
+	}
+
+	public boolean canCopy(ref<CompileContext> compileContext) {
+//		if (hasConstructors()) {
+//			if (copyConstructor() != null)
+//				return true;
+//			else {
+//				printf("type %s has constructors, no copy constructor, default? %p assignment? %p\n", 
+//								signature(), defaultConstructor(), assignmentMethod(compileContext));
+//				return defaultConstructor() != null && assignmentMethod(compileContext) != null;
+//			}
+//		} else
+			return true;
 	}
 
 	public ref<ParameterScope> copyConstructor() {

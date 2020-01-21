@@ -16,6 +16,7 @@
 namespace parasol:compiler;
 
 import native:C;
+import parasol:storage;
 import parasol:text;
 
 public enum Operator {
@@ -423,6 +424,21 @@ public class SyntaxTree {
 
 	public ref<MemoryPool> pool() { 
 		return _pool; 
+	}
+
+	public ref<Scanner> scanner() {
+		return _scanner;
+	}
+
+	public string filename () {
+		return _filename;
+	}
+
+	public string sourceLine(Location location) {
+		if (_filename != null)
+			return storage.makeCompactPath(_filename, "foo") + " " + string(_scanner.lineNumber(location) + 1);
+		else
+			return "inline " + string(_scanner.lineNumber(location) + 1);
 	}
 }
 
@@ -2432,7 +2448,12 @@ public class Loop extends Node {
 			ref<Identifier> id = _declarator.clone(tree);
 			compileContext.markLiveSymbol(id);
 			value.type = id.type;
-			value = tree.newBinary(Operator.ASSIGN_TEMP, id, value, location());
+			Operator op;
+			if (id.type.isString())
+				op = Operator.STORE_TEMP;
+			else
+				op = Operator.ASSIGN;
+			value = tree.newBinary(op, id, value, location());
 			value.type = id.type;
 			value = tree.newUnary(Operator.EXPRESSION, value, location());
 			value.type = increment.type;
@@ -3576,10 +3597,6 @@ public class Node {
 		return false;
 	}
 
-	public boolean namesSameObject(ref<Node> n) {
-		return false;
-	}
-
 	public ref<Node> convertSmallIntegralTypes(ref<CompileContext> compileContext) {
 		if (!deferAnalysis()) {
 			ref<Type> t;
@@ -4273,6 +4290,7 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 	case	CALL_DESTRUCTOR:
 	case	IF:
 	case	ASSIGN_TEMP:
+	case	STORE_TEMP:
 	case	NEW:
 		break;
 		
