@@ -2760,6 +2760,7 @@ private ref<Node>, ref<Variable> foldStringAddition(ref<Node> leftHandle, ref<Va
 		} else {
 			variable = compileContext.newVariable(addNode.type);
 			ref<Reference> r = tree.newReference(variable, true, addNode.location());
+			compileContext.markLiveSymbol(r);
 			ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, addNode.location());
 			adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 			ref<OverloadInstance> constructor = addNode.type.initialConstructor();

@@ -780,6 +780,8 @@ public class Block extends Node {
 		if (scope != null)
 			outer = compileContext.setCurrent(scope);
 		if (_statements != null) {
+			if (scope != null && scope.inSwitch())
+				markSwitchLiveSymbols(scope, compileContext);
 			for (ref<NodeList> nl = _statements;; nl = nl.next) {
 				nl.node = nl.node.fold(tree, true, compileContext);
 				if (nl.next == null) {
@@ -2029,7 +2031,6 @@ public class Jump extends Node {
 				ref<Scope> first = _jumpFromScope;
 
 				int n = compileContext.liveSymbolCount();
-//				ref<Node> output = this;
 				ref<NodeList> lastNode = null;
 				for (int i = n - 1; i >= 0; i--) {
 					ref<Scope> s = compileContext.getLiveSymbolScope(i);
@@ -2058,8 +2059,7 @@ public class Jump extends Node {
 			}
 /*
 			if (_liveSymbols != null) {
-				ref<FileStat> file = compileContext.current().file();
-				printf("  %s %d\n", file.filename(), file.scanner().lineNumber(location()) + 1);
+				printf("  %s\n", _leavingScope.sourceLine(location()));
 				print(4);
 				printf("JumpFromScope:\n");
 				_jumpFromScope.print(4, false);
@@ -4386,6 +4386,20 @@ private ref<Node> foldMultiValueReturn(ref<Node> left, ref<SyntaxTree> tree, ref
 			return b;
 	} else
 		return left.fold(tree, false, compileContext);
+}
+
+private void markSwitchLiveSymbols(ref<Scope> scope, ref<CompileContext> compileContext) {
+	for (key in *scope.symbols()) {
+		ref<Symbol> sym = (*scope.symbols())[key];
+		if (sym.class != PlainSymbol)
+			continue;
+		if (sym.enclosing() != scope)
+			continue;
+		if (!sym.initializedWithConstructor()) {
+			if (sym.type().hasDestructor())
+				compileContext.markLiveSymbol(sym.definition());
+		}
+	}
 }
 
 public class Location {

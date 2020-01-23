@@ -318,6 +318,10 @@ public class X86_64 extends X86_64AssignTemps {
 		_coveragePath = coveragePath;
 	}
 
+	~X86_64() {
+		delete _unitScope;
+	}
+
 	public boolean verbose() {
 		return _verbose;
 	}

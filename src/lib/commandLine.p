@@ -28,6 +28,10 @@ public class Command {
 	ref<Argument<boolean>> _helpArgument;
 	ref<BaseArgument>[] _allArguments;
 
+	~Command() {
+		_allArguments.deleteAll();
+	}
+
 	public void finalArguments(int min, int max, string helpText) {
 		_finalMin = min;
 		_finalMax = max;

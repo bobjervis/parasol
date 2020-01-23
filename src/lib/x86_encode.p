@@ -213,6 +213,10 @@ class X86_64Encoder extends Target {
 		_segments[Segments.RELOCATIONS] = new Segment<Segments>(4);
 	}
 	
+	~X86_64Encoder() {
+		_segments.deleteAll();
+	}
+
 	boolean generateCode(ref<FileStat> mainFile, ref<CompileContext> compileContext) {
 		
 		// Initialize storage - somewhere along here needs to happen
@@ -421,17 +425,11 @@ class X86_64Encoder extends Target {
 		_dataMap[0].append(_dataMap[alignment]);
 		for (int i = 0; i < _dataMap[alignment].length(); i++) {
 			ref<Symbol> sym = _dataMap[alignment][i];
-			if (sym.isEnumClass()) {
-//				ref<PlainSymbol> s = ref<PlainSymbol>(sym);
-//				ref<EnumType> type = ref<EnumInstanceType>(symbol.type().wrappedType()).enumType();
-			} else if (sym.type().family() == TypeFamily.TYPEDEF) {
-				ref<Scope> s = sym.type().scope();
-				pointer<int> p = pointer<int>(&_code[sym.offset]);
-				for (ref<Symbol>[Scope.SymbolKey].iterator indicia = s.symbols().begin(); indicia.hasNext(); indicia.next()) {
-					ref<Symbol> instance = indicia.get();
-					p[instance.offset] = instance.offset;
-				}
-			} else if (sym.class == PlainSymbol) {
+			if (sym.isEnumClass())
+				continue;
+			if (sym.type().family() == TypeFamily.TYPEDEF)
+				continue;
+			if (sym.class == PlainSymbol) {
 				ref<PlainSymbol> ps = ref<PlainSymbol>(sym);
 				if (ps.accessFlags() & Access.COMPILE_TARGET) {
 					long x = long(sectionType());
@@ -3730,7 +3728,7 @@ class X86_64Encoder extends Target {
 			_continueLabel = continueLabel;
 			if (nodes != null) {
 				for (int i = 0; i < nodes.length(); i++) {
-					_caseLabels.append(target._storage new CodeSegment);
+					_caseLabels.append(target._storage new CodeSegment, &target._storage);
 					_nextCase++;
 				}
 			}

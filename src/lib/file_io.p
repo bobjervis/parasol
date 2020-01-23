@@ -36,12 +36,35 @@ import parasol:exception.IOException;
  *
  * @ignore - do not document this function
  */
-public void setProcessStreams() {
+public void setProcessStreams(boolean restore) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		process.stdin = new TextFileReader(0, true);
 		process.stdout = new TextFileWriter(1, true);
 		process.stderr = new TextFileWriter(2, true);
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		if (restore) {
+			int fd = linux.open("/dev/tty".c_str(), linux.O_RDONLY);
+			if (fd < 0) {
+				int fd = linux.creat("console.err".c_str(), 0666);
+				linux.write(fd, "Cannot open /dev/tty for reading\n".c_str(), 33);
+				linux.close(fd);
+			}				
+			linux.dup2(fd, 0);
+			linux.close(fd);
+			fd = linux.open("/dev/tty".c_str(), linux.O_WRONLY);
+			if (fd < 0) {
+				int fd = linux.creat("console.err".c_str(), 0666);
+				linux.write(fd, "Cannot open /dev/tty for writing\n".c_str(), 33);
+				linux.close(fd);
+			}				
+			if (linux.dup2(fd, 1) < 0) {
+				int fd = linux.creat("console.err".c_str(), 0666);
+				linux.write(fd, "Cannot dup2 /dev/tty for writing stdout\n".c_str(), 40);
+				linux.close(fd);
+			}
+			linux.dup2(fd, 2);
+			linux.close(fd);
+		}
 		if (linux.isatty(1) == 1) {
 			process.stdout = new LineWriter(1, true);
 			if (linux.isatty(0) == 1)
@@ -1157,6 +1180,7 @@ public class Directory {
 			memory.free(_data);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			linux.closedir(ref<linux.DIR>(_data));
+			delete _dirent;
 		}
 	}
 	/**

@@ -1196,10 +1196,13 @@ public class map<class V, class K> {
 			int e = _entriesCount;
 			_entriesCount = 0;
 			for (int i = 0; e > 0; i++) {
-				if (oldE[i].valid && !oldE[i].deleted) {
-					insert(oldE[i].key, oldE[i].value);
-					e--;
-					oldE[i].value.~();
+				if (oldE[i].valid) {
+					if (!oldE[i].deleted) {
+						insert(oldE[i].key, oldE[i].value);
+						e--;
+						oldE[i].value.~();
+					}
+					oldE[i].key.~();
 				}
 			}
 			setRehashThreshold();
@@ -1217,11 +1220,13 @@ public class map<class V, class K> {
 			int e = _entriesCount - _deletedEntriesCount;
 			_entriesCount = 0;
 			for (int i = 0; e > 0; i++) {
-//				printf("[%d/%d] %s %s\n", i, e, oldE[i].valid ? "valid" : "empty", oldE[i].deleted ? "deleted" : "");
-				if (oldE[i].valid && !oldE[i].deleted) {
-					insert(oldE[i].key, oldE[i].value);
-					e--;
-					oldE[i].value.~();
+				if (oldE[i].valid) {
+					if (!oldE[i].deleted) {
+						insert(oldE[i].key, oldE[i].value);
+						e--;
+						oldE[i].value.~();
+					}
+					oldE[i].key.~();
 				}
 			}
 			setRehashThreshold();

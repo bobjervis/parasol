@@ -18,9 +18,9 @@ namespace parasol:compiler;
 public class Namespace extends Symbol {
 	private ref<Scope> _symbols;
 	private string _dottedName;
-	private string _domain;
+	private substring _domain;
 
-	Namespace(string domain, ref<Node> namespaceNode, ref<Scope> enclosing, ref<Node> annotations, substring name, ref<Arena> arena, ref<MemoryPool> pool) {
+	Namespace(substring domain, ref<Node> namespaceNode, ref<Scope> enclosing, ref<Node> annotations, substring name, ref<Arena> arena, ref<MemoryPool> pool) {
 		super(Operator.PUBLIC, StorageClass.ENCLOSING, enclosing, annotations, pool, name, null);
 		_symbols = arena.createNamespaceScope(enclosing, this);
 		if (namespaceNode != null) {
@@ -296,7 +296,7 @@ public class PlainSymbol extends Symbol {
 	protected void validateAnnotations(ref<CompileContext> compileContext) {
 		if (annotations() == null)
 			return;
-		ref<Call> annotation = (*annotations())["Constant"];
+		ref<Call> annotation = (*annotations())[Annotations.CONSTANT];
 		if (annotation != null) {
 			// If this symbol has a Constant annotation, be sure to validate it.
 			if (annotation.argumentCount() > 0) {
@@ -342,7 +342,7 @@ public class PlainSymbol extends Symbol {
 			}
 			_accessFlags |= Access.CONSTANT;
 		}
-		annotation = (*annotations())["CompileTarget"];
+		annotation = (*annotations())[Annotations.COMPILE_TARGET];
 		if (annotation != null) {
 			if (annotation.argumentCount() > 0) {
 				definition().add(MessageId.ANNOTATION_TAKES_NO_ARGUMENTS, compileContext.pool());
@@ -910,7 +910,7 @@ public class Symbol {
 	protected substring _name;
 	protected ref<Type> _type;
 	protected ref<Scope> _enclosing;
-	private ref<ref<Call>[string]> _annotations;
+	private ref<Call>[Annotations] _annotations;
 	private ref<Node> _annotationNode;
 
 	ref<Doclet> _doclet;			// Doclet used for this symbol.
@@ -923,7 +923,7 @@ public class Symbol {
 	protected Symbol(Operator visibility, StorageClass storageClass, ref<Scope> enclosing, ref<Node> annotations, ref<MemoryPool> pool, substring name, ref<Node> definition) {
 		_visibility = visibility;
 		if (annotations != null) {
-			_annotations = pool new ref<Call>[string];
+			_annotations.resize(Annotations.MAX_ANNOTATION, pool);
 			populateAnnotations(annotations, pool);
 			_annotationNode = annotations;
 		}
@@ -940,10 +940,12 @@ public class Symbol {
 	public abstract void print(int indent, boolean printChildScopes);
 
 	protected void printAnnotations(int indent) {
-		if (_annotations != null) {
-			for (ref<Call>[string].iterator i = _annotations.begin(); i.hasNext(); i.next()) {
-				printf("%*.*c[Annotation %s]\n", indent, indent, ' ', i.key());
-				i.get().print(indent + INDENT);
+		if (_annotationNode != null) {
+			for (i in _annotations) {
+				if (_annotations[i] != null) {
+					printf("%*.*c[Annotation %s]\n", indent, indent, ' ', string(i));
+					_annotations[i].print(indent + INDENT);
+				}
 			}
 		}
 	}
@@ -978,22 +980,22 @@ public class Symbol {
 	}
 
 	public TypeFamily effectiveFamily() {
-		if (_annotations == null)
+		if (_annotationNode == null)
 			return TypeFamily.CLASS;
-		if ((*_annotations)["Shape"] != null)
+		if (_annotations[Annotations.SHAPE] != null)
 			return TypeFamily.SHAPE;
-		else if ((*_annotations)["Pointer"] != null)
+		else if (_annotations[Annotations.POINTER] != null)
 			return TypeFamily.POINTER;
-		else if ((*_annotations)["Ref"] != null)
+		else if (_annotations[Annotations.REF] != null)
 			return TypeFamily.REF;
 		else
 			return TypeFamily.CLASS;
 	}
 	
 	public ref<Call> getAnnotation(string name) {
-		if (_annotations == null)
+		if (_annotationNode == null)
 			return null;
-		return (*_annotations)[name];
+		return _annotations[Annotations.byName(name)];
 	}
 	
 	private void populateAnnotations(ref<Node> annotations, ref<MemoryPool> pool) {
@@ -1004,7 +1006,13 @@ public class Symbol {
 		} else {
 			ref<Call> b = ref<Call>(annotations);
 			ref<Identifier> id = ref<Identifier>(b.target());
-			_annotations.insert(id.identifier(), b, pool);
+			Annotations a = Annotations.byName(id.identifier());
+			if (a == Annotations.ERROR)
+				annotations.add(MessageId.UNRECOGNIZED_ANNOTATION, pool, id.identifier());
+			else if (_annotations[a] != null)
+				annotations.add(MessageId.DISALLOWED_ANNOTATION, pool, id.identifier());
+
+				_annotations[a] = b;
 		}
 	}
 
@@ -1111,9 +1119,9 @@ public class Symbol {
 	}
 
 	protected void validateAnnotations(ref<CompileContext> compileContext) {
-		if (_annotations == null)
+		if (_annotationNode == null)
 			return;
-		ref<Call> annotation = (*_annotations)["Constant"];
+		ref<Call> annotation = _annotations[Annotations.CONSTANT];
 		if (annotation != null)
 			_definition.add(MessageId.CONSTANT_NOT_ALLOWED, compileContext.pool());
 	}
@@ -1194,8 +1202,11 @@ public class Symbol {
 		return _visibility;
 	}
 
-	public ref<ref<Call>[string]> annotations() {
-		return _annotations;
+	public ref<ref<Call>[Annotations]> annotations() {
+		if (_annotationNode == null)
+			return null;
+		else
+			return &_annotations;
 	}
 	
 	public ref<Node> annotationNode() {

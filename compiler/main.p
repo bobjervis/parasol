@@ -135,6 +135,7 @@ int main(string[] args) {
 		result = compileCommand();
 		break;
 	}
+	delete parasolCommand;
 	return result;
 }
 

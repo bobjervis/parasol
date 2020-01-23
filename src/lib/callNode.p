@@ -983,7 +983,7 @@ public class Call extends ParameterBag {
 				return;
 			}
 			type = classType;
-			_overload = ref<EnumInstanceType>(classType).instanceConstructor();
+			_overload = ref<EnumInstanceType>(classType).instanceConstructor(compileContext.pool());
 			_category = CallCategory.CONSTRUCTOR;
 			return;
 		}
@@ -1951,7 +1951,7 @@ public class Return extends ParameterBag {
 					for (i in referencedLvalues) {
 						if (referencedLvalues[i] == null)
 							continue;
-						if (nl.node.conforms(referencedLvalues[i])) {
+						if (arg.conforms(referencedLvalues[i])) {
 							referencedLvalues[i] = null;
 							skipCopy = true;
 							break;

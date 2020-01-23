@@ -892,9 +892,9 @@ public class EnumInstanceType extends Type {
 		return false;						// The destructor in the _scope is not for us, so ignore it and always report false.
 	}
 
-	public ref<ParameterScope> instanceConstructor() {
+	public ref<ParameterScope> instanceConstructor(ref<MemoryPool> pool) {
 		if (_instanceConstructor == null)
-			_instanceConstructor = new ParameterScope(_scope, null, ParameterScope.Kind.ENUM_INSTANCE_CONSTRUCTOR);
+			_instanceConstructor = pool new ParameterScope(_scope, null, ParameterScope.Kind.ENUM_INSTANCE_CONSTRUCTOR);
 		return _instanceConstructor;
 	}
 

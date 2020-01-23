@@ -1778,6 +1778,12 @@ public class Scope {
 		return block.inSwitch();
 	}
 	
+	public string sourceLine() {
+		if (_definition == null)
+			return null;
+		return file().tree().sourceLine(_definition.location());
+	}
+
 	public boolean isMonitor() {
 		return false;
 	}

@@ -1237,7 +1237,7 @@ public class CompileContext {
 	}
 
 	public ref<Variable> newVariable(ref<Type> type) {
-		ref<Variable> v = new Variable;
+		ref<Variable> v = _pool new Variable;
 		v.type = type;
 		v.enclosing = _current;
 		_variables.append(v);
@@ -1245,7 +1245,7 @@ public class CompileContext {
 	}
 
 	public ref<Variable> newVariable(ref<NodeList> returns) {
-		ref<Variable> v = new Variable;
+		ref<Variable> v = _pool new Variable;
 		v.returns = returns;
 		v.enclosing = _current;
 		_variables.append(v);
@@ -1369,7 +1369,7 @@ public class MemoryPool extends memory.NoReleasePool {
 	
 	public ref<Namespace> newNamespace(string domain, ref<Node> namespaceNode, ref<Scope> enclosing, 
 									ref<Node> annotations, substring name, ref<Arena> arena) {
-		return super new Namespace(domain, namespaceNode, enclosing, annotations, name, arena, this);
+		return super new Namespace(newCompileString(domain), namespaceNode, enclosing, annotations, name, arena, this);
 	}
 
 	public ref<Commentary> newCommentary(ref<Commentary> next, MessageId messageId, string message) {

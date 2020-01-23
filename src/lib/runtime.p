@@ -230,16 +230,16 @@ public int sourceLocationsCount() {
 	return int(getRuntimeParameter(SOURCE_LOCATIONS_COUNT));
 }
 /** @ignore */
-@Const
+@Constant
 int PARASOL_THREAD = 0;
 /** @ignore */
-@Const
+@Constant
 int SOURCE_LOCATIONS = 1;
 /** @ignore */
-@Const
+@Constant
 int SOURCE_LOCATIONS_COUNT = 2;
 /** @ignore */
-@Const
+@Constant
 int LEAKS_FLAG = 3;
 /** @ignore */
 @Linux("libparasol.so.1", "getRuntimeParameter")

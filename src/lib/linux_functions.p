@@ -539,7 +539,7 @@ public class termios {
 	}
 }
 
-@constant
+@Constant
 public int L_ctermid = 9;
 
 /* c_oflag bits */
@@ -550,7 +550,7 @@ public int L_ctermid = 9;
 #define OCRNL   0000010
 #define ONOCR   0000020
 */
-@constant
+@Constant
 public unsigned ONLRET = 0000040;
 /*
 #define OFILL   0000100
@@ -808,8 +808,7 @@ public int O_NOATIME =   01000000;
 public int O_CLOEXEC =   02000000;
 
 @Constant
-public int _PC_NAME_MAX = 4;@Constant
-
+public int _PC_NAME_MAX = 4;
 
 @Constant
 public int PROT_READ = 0x01;
@@ -1125,17 +1124,17 @@ public int ETIMEDOUT = 110;	/* Connection timed out */
 #define EHWPOISON	133	/* Memory page has hardware error */
 */
 
-@constant
+@Constant
 public int WNOHANG         = 0x00000001;
-@constant
+@Constant
 public int WUNTRACED       = 0x00000002;
-@constant
+@Constant
 public int WSTOPPED        = 0x00000002;
-@constant
+@Constant
 public int WEXITED         = 0x00000004;
-@constant
+@Constant
 public int WCONTINUED      = 0x00000008;
-@constant
+@Constant
 public int WNOWAIT         = 0x01000000;      /* Don't reap, just poll status.  */
 
 

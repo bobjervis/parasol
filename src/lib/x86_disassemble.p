@@ -100,65 +100,6 @@ public class Disassembler {
 	
 	public boolean disassemble() {
 		printHeader(_pxiHeader, -1);
-
-		if (_pxiHeader.exceptionsCount > 0) {
-			printf("\nException Table:\n");
-			printf("    Location  Handler\n");
-			for (pointer<ExceptionEntry> ee = pointer<ExceptionEntry>(_physical + _pxiHeader.exceptionsOffset); ee < _exceptionsEndOffset; ee++) {
-				printf("    %8.8x  %8.8x\n", ee.location, ee.handler);
-			}
-		}
-		if (_pxiHeader.nativeBindingsCount > 0) {
-			printf("\n  Native Bindings:\n");
-			
-			int addr = _pxiHeader.nativeBindingsOffset;
-			pointer<NativeBinding> nb = pointer<NativeBinding>(_physical + addr);
-			
-			for (int i = 0; i < _pxiHeader.nativeBindingsCount; i++, nb++) {
-				string d(_physical + int(nb.dllName));
-				string s(_physical + int(nb.symbolName));
-				printf("    [%8.8x] %20s %s\n", addr, d, s);
-				addr += NativeBinding.bytes;
-			}
-		}
-		printf("\n    symbols for      %8x - %8x\n", _staticDataStart, _staticDataEnd);
-		for (int i = 0; i < _dataMapLength; i++) {
-			string prefix;
-			prefix.printf("[%d]", i);
-			printf("      %8s %8.8x %s\n", prefix, _dataMap[i].offset, _dataMap[i].name());
-		}
-		printf("\n    vtables\n");
-		pointer<address> vp = pointer<address>(_physical + _pxiHeader.vtablesOffset);
-		ref<ClassScope> scope = null;
-		int scopeIndex;
-		int vtableIndex = 0;
-		if (_vtables != null) {
-			scope = (*_vtables)[0];
-			ref<ref<OverloadInstance>[]> methods = scope.methods();
-			int methodIndex = 0;
-			for (int i = 0; i < _pxiHeader.vtableData; i++, methodIndex++) {
-				int vtableValue = i * address.bytes + 1;
-				if (vtableIndex < _vtables.length() && int(scope.vtable) == vtableValue) {
-					printf("\n      %s (%p) (pxi %x):\n", scope.classType.signature(), &vp[i], _pxiHeader.vtablesOffset + i * address.bytes);
-					vtableIndex++;
-					methods = scope.methods();
-					scope = (*_vtables)[vtableIndex];
-					methodIndex = 0;
-				}
-				printf("        %2d: %8x", i, vp[i]);
-				if (methodIndex >= FIRST_USER_METHOD && methodIndex - FIRST_USER_METHOD < methods.length())
-					printf(" %s", (*methods)[methodIndex - FIRST_USER_METHOD].name());
-				printf("\n");
-			}
-		}
-/*
-		if (_pxiHeader.relocationCount > 0) {
-			printf("PXI Fixups:\n");
-			pointer<int> f = pointer<int>(_physical + _pxiHeader.relocationOffset);
-			for (int i = 0; i < _pxiHeader.relocationCount; i++)
-				printf("    [%d] %#x\n", i, f[i]);
-		}
- */
 		printf("\n");
 		_offset = 0;
 		_rex = 0;
@@ -493,7 +434,64 @@ public class Disassembler {
 					printf("\n");
 				printf("\n");
 				printf("Code loaded at %p\n", _physical);
-//				assert(false);
+				if (_pxiHeader.exceptionsCount > 0) {
+					printf("\nException Table:\n");
+					printf("    Location  Handler\n");
+					for (pointer<ExceptionEntry> ee = pointer<ExceptionEntry>(_physical + _pxiHeader.exceptionsOffset); ee < _exceptionsEndOffset; ee++) {
+						printf("    %8.8x  %8.8x\n", ee.location, ee.handler);
+					}
+				}
+				if (_pxiHeader.nativeBindingsCount > 0) {
+					printf("\n  Native Bindings:\n");
+					
+					int addr = _pxiHeader.nativeBindingsOffset;
+					pointer<NativeBinding> nb = pointer<NativeBinding>(_physical + addr);
+					
+					for (int i = 0; i < _pxiHeader.nativeBindingsCount; i++, nb++) {
+						string d(_physical + int(nb.dllName));
+						string s(_physical + int(nb.symbolName));
+						printf("    [%8.8x] %20s %s\n", addr, d, s);
+						addr += NativeBinding.bytes;
+					}
+				}
+				printf("\n    symbols for      %8x - %8x\n", _staticDataStart, _staticDataEnd);
+				for (int i = 0; i < _dataMapLength; i++) {
+					string prefix;
+					prefix.printf("[%d]", i);
+					printf("      %8s %8.8x %s\n", prefix, _dataMap[i].offset, _dataMap[i].name());
+				}
+				printf("\n    vtables\n");
+				pointer<address> vp = pointer<address>(_physical + _pxiHeader.vtablesOffset);
+				ref<ClassScope> scope = null;
+				int scopeIndex;
+				int vtableIndex = 0;
+				if (_vtables != null) {
+					scope = (*_vtables)[0];
+					ref<ref<OverloadInstance>[]> methods = scope.methods();
+					int methodIndex = 0;
+					for (int i = 0; i < _pxiHeader.vtableData; i++, methodIndex++) {
+						int vtableValue = i * address.bytes + 1;
+						if (vtableIndex < _vtables.length() && int(scope.vtable) == vtableValue) {
+							printf("\n      %s (%p) (pxi %x):\n", scope.classType.signature(), &vp[i], _pxiHeader.vtablesOffset + i * address.bytes);
+							vtableIndex++;
+							methods = scope.methods();
+							scope = (*_vtables)[vtableIndex];
+							methodIndex = 0;
+						}
+						printf("        %2d: %8x", i, vp[i]);
+						if (methodIndex >= FIRST_USER_METHOD && methodIndex - FIRST_USER_METHOD < methods.length())
+							printf(" %s", (*methods)[methodIndex - FIRST_USER_METHOD].name());
+						printf("\n");
+					}
+				}
+/*
+				if (_pxiHeader.relocationCount > 0) {
+					printf("PXI Fixups:\n");
+					pointer<int> f = pointer<int>(_physical + _pxiHeader.relocationOffset);
+					for (int i = 0; i < _pxiHeader.relocationCount; i++)
+						printf("    [%d] %#x\n", i, f[i]);
+				}
+ */
 				return done;
 			}
 			if (done) {

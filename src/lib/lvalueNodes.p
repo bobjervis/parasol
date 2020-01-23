@@ -57,7 +57,7 @@ public class Reference extends Node {
 	public boolean conforms(ref<Node> n) {
 		if (n.op() != Operator.VARIABLE)
 			return false;
-		return _variable == ref<Reference>(n)._variable;
+		return _variable == ref<Reference>(n)._variable && _offset == ref<Reference>(n)._offset;
 	}
 
 	public ref<Variable> variable() {
