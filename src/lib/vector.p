@@ -281,7 +281,7 @@ public class vector<class E, class I> {
 		_length = I(0);
 		append(other);
 	}
-	
+
 	~vector() {
 		for (int i = 0; i < int(_length); i++)
 			_data[i].~();

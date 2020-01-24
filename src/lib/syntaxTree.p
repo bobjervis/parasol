@@ -782,11 +782,20 @@ public class Block extends Node {
 		if (_statements != null) {
 			if (scope != null && scope.inSwitch())
 				markSwitchLiveSymbols(scope, compileContext);
+			int liveCountAtStart = compileContext.liveSymbolCount();
 			for (ref<NodeList> nl = _statements;; nl = nl.next) {
 				nl.node = nl.node.fold(tree, true, compileContext);
 				if (nl.next == null) {
 					attachDestructors(tree, nl, scope, compileContext);
 					break;
+				} else if (scope != null && scope.inSwitch()) {
+					if (nl.node.fallsThrough() == Test.FAIL_TEST) {
+						while (liveCountAtStart < compileContext.liveSymbolCount()) {
+							ref<Node> n = compileContext.popLiveSymbol(scope);
+							assert(n != null);
+						}
+						assert(liveCountAtStart == compileContext.liveSymbolCount());
+					}
 				}
 			}
 		}
@@ -2114,6 +2123,10 @@ public class Jump extends Node {
 			return Test.PASS_TEST;
 		else
 			return Test.FAIL_TEST;
+	}
+
+	public Test fallsThrough() {
+		return Test.FAIL_TEST;
 	}
 	/**
 	 * The caller knows the scope we are about to jump to (either via a break or continue statement) and
@@ -4395,10 +4408,8 @@ private void markSwitchLiveSymbols(ref<Scope> scope, ref<CompileContext> compile
 			continue;
 		if (sym.enclosing() != scope)
 			continue;
-		if (!sym.initializedWithConstructor()) {
-			if (sym.type().hasDestructor())
-				compileContext.markLiveSymbol(sym.definition());
-		}
+		if (!sym.initializedWithConstructor())
+			compileContext.markLiveSymbol(sym.definition());
 	}
 }
 

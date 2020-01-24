@@ -3728,7 +3728,7 @@ class X86_64Encoder extends Target {
 			_continueLabel = continueLabel;
 			if (nodes != null) {
 				for (int i = 0; i < nodes.length(); i++) {
-					_caseLabels.append(target._storage new CodeSegment, &target._storage);
+					_caseLabels.append(target._storage new CodeSegment);
 					_nextCase++;
 				}
 			}

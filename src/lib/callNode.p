@@ -1916,6 +1916,7 @@ public class Return extends ParameterBag {
 			_arguments.node = ref<Call>(_arguments.node).foldMultiReturnOfMultiCall(tree, compileContext);
 			return this;
 		}
+		int beforeLive = compileContext.liveSymbolCount();
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
 			nl.node = nl.node.fold(tree, false, compileContext);
 		int n = compileContext.liveSymbolCount();
@@ -1968,6 +1969,9 @@ public class Return extends ParameterBag {
 					nl.node.type = defn.type;
 				}
 			}
+		}
+		while (compileContext.liveSymbolCount() > beforeLive) {
+			compileContext.popLiveTemp(beforeLive);
 		}
 		return this;
 	}
@@ -2141,15 +2145,15 @@ ref<Node>, int foldMultiReturn(ref<Node> leftHandle, ref<Node> destinations, ref
 		(lh, offset) = foldMultiReturn(leftHandle, b.left(), intermediate, tree, compileContext);
 		ref<Reference> r = tree.newReference(intermediate, offset, false, destinations.location());
 		r.type = b.right().type;
+		compileContext.markLiveSymbol(r);
 		ref<Node> assignment;
-		if (r.type.family() == TypeFamily.STRING) {
+		if (r.type.family() == TypeFamily.STRING ||
+			r.type.family() == TypeFamily.STRING16) {
 			ref<OverloadInstance> oi = getMethodSymbol(b.right(), "store", r.type, compileContext);
 			if (oi == null) {
 				destinations.type = compileContext.errorType();
 				return destinations, 0;
 			}
-			// This is the assignment method for this class!!!
-			// (all strings go through here).
 			ref<Selection> method = tree.newSelection(b.right(), oi, false, destinations.location());
 			method.type = oi.type();
 			ref<NodeList> args = tree.newNodeList(r);
@@ -2166,6 +2170,7 @@ ref<Node>, int foldMultiReturn(ref<Node> leftHandle, ref<Node> destinations, ref
 	} else {
 		ref<Reference> r = tree.newReference(intermediate, false, destinations.location());
 		r.type = destinations.type;
+		compileContext.markLiveSymbol(r);
 		ref<Node> assignment = tree.newBinary(Operator.ASSIGN, destinations, r, destinations.location());
 		assignment.type = r.type;
 		assignment = assignment.fold(tree, true, compileContext);
@@ -2175,3 +2180,23 @@ ref<Node>, int foldMultiReturn(ref<Node> leftHandle, ref<Node> destinations, ref
 	result.type = compileContext.arena().builtInType(TypeFamily.VOID);
 	return result, offset;
 }
+
+ref<Node> assignOne(ref<SyntaxTree> tree, ref<Node> dest, ref<Reference> r, ref<CompileContext> compileContext) {
+	if (r.type.family() == TypeFamily.STRING ||
+		r.type.family() == TypeFamily.STRING16) {
+		ref<OverloadInstance> oi = getMethodSymbol(dest, "store", r.type, compileContext);
+		if (oi == null)
+			return null;
+		ref<Selection> method = tree.newSelection(dest, oi, false, dest.location());
+		method.type = oi.type();
+		ref<NodeList> args = tree.newNodeList(r);
+		ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, dest.location(), compileContext);
+		call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+		return call.fold(tree, true, compileContext);
+	} else {
+		ref<Node> assignment = tree.newBinary(Operator.ASSIGN, dest, r, dest.location());
+		assignment.type = r.type;
+		return assignment.fold(tree, true, compileContext);
+	}
+}
+

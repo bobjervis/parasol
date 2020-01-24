@@ -69,7 +69,7 @@ thread.Thread.init();
 if (runtime.leaksFlag())
 	currentHeap = &leakHeap;
 /*
- * Set up the process streams as soon as the heap is established.
+ * Set up the process streams as soon as any special heap is established.
  */
 storage.setProcessStreams(false);
 /**
@@ -319,6 +319,13 @@ public class LeakHeap extends Allocator {
 			return ses == bh;
 		}
 
+		boolean contains(address p) {
+			if (pointer<byte>(this) > pointer<byte>(p))
+				return false;
+			else
+				return pointer<byte>(this) + sectionSize > pointer<byte>(p);
+		}
+
 		boolean print(ref<FreeBlock> nextFreeBlock) {
 			boolean hasNextFreeBlock;
 			printf("      Section @%p [%#x]", this, sectionSize);
@@ -415,7 +422,6 @@ public class LeakHeap extends Allocator {
 	}
 	
 	public ~LeakHeap() {
-		process.stdout.flush();
 		delete process.stderr;
 		process.stderr = null;
 		delete process.stdin;
@@ -442,103 +448,109 @@ public class LeakHeap extends Allocator {
 
 	public address alloc(long n) {
 		lock (_lock) {
-			if (_busy)
-				return heap.alloc(n);
-			_busy = true;
-			_everUsed = true;
-			currentHeap = &heap;
-	//		printf("LeakHeap.alloc(%#x bytes)\n", n);
-			long originalN = n;
-			pointer<address> rbp = getRBP(0);
-			address stackTop = runtime.stackTop();
-			int frames = stackFrames(long(rbp), long(stackTop));
-			long framesOffset = (BlockHeader.bytes + n + address.bytes - 1) & ~(address.bytes - 1);
-			n = (framesOffset + frames * address.bytes + address.bytes + BLOCK_ALIGNMENT - 1) & ~(BLOCK_ALIGNMENT - 1);
-	//		printf("    padded n = %#x\n", n);
-	//		print();
-			pointer<BlockHeader> bh;
-			// Allocate a block.
-			if (n > SECTION_DATA) {
-				pointer<SectionHeader> nh = allocateSection(n + SectionHeader.bytes);
-				if (nh == null)
-					throw OutOfMemoryException(originalN);
-				bh = pointer<BlockHeader>(nh + 1);
-			} else {
-				// if _nextFreeBlock is null, we have an empty free list and need to skip directly to allocating a new section.
-				ref<FreeBlock> fb = _nextFreeBlock;
-				if (fb != null) {
-					do {
-						if (fb.blockSize >= n) {
-							
-							// Should we consume the whole free block, or just split it?
-							if (fb.blockSize > n) {
-								// Split the block, move adjacent references to the new free block
-								ref<FreeBlock> nb = ref<FreeBlock>(long(fb) + n);
-								nb.blockSize = fb.blockSize - n;
-								nb.enclosing = fb.enclosing;
-								nb.next = fb.next;
-								if (nb.next != null)
-									nb.next.previous = nb;
-								nb.previous = fb.previous;
-								if (nb.previous != null)
-									nb.previous.next = nb;
-								else
-									nb.enclosing.firstFreeBlock = nb;
-								_nextFreeBlock = nb;
-								if (fb == fb.enclosing.firstFreeBlock)
-									fb.enclosing.firstFreeBlock = nb;
-	//							printf("        Trimmed free block @%p to %#x bytes\n", nb, nb.blockSize);
-							} else {
-								_nextFreeBlock = advance(fb);
-								if (_nextFreeBlock == fb)
-									_nextFreeBlock = null;
+			try {
+				if (_busy)
+					return heap.alloc(n);
+				_busy = true;
+				_everUsed = true;
+				currentHeap = &heap;
+		//		printf("LeakHeap.alloc(%#x bytes)\n", n);
+				long originalN = n;
+				pointer<address> rbp = getRBP(0);
+				address stackTop = runtime.stackTop();
+				int frames = stackFrames(long(rbp), long(stackTop));
+				long framesOffset = (BlockHeader.bytes + n + address.bytes - 1) & ~(address.bytes - 1);
+				n = (framesOffset + frames * address.bytes + address.bytes + BLOCK_ALIGNMENT - 1) & ~(BLOCK_ALIGNMENT - 1);
+		//		printf("    padded n = %#x\n", n);
+		//		print();
+				pointer<BlockHeader> bh;
+				// Allocate a block.
+				if (n > SECTION_DATA) {
+					pointer<SectionHeader> nh = allocateSection(n + SectionHeader.bytes);
+					if (nh == null)
+						throw OutOfMemoryException(originalN);
+					bh = pointer<BlockHeader>(nh + 1);
+				} else {
+					// if _nextFreeBlock is null, we have an empty free list and need to skip directly to allocating a new section.
+					ref<FreeBlock> fb = _nextFreeBlock;
+					if (fb != null) {
+						do {
+							if (fb.blockSize >= n) {
 								
-								// Remove the free block from the section chain.
-								if (fb.next != null)
-									fb.next.previous = fb.previous;
-								if (fb.previous != null)
-									fb.previous.next = fb.next;
-								else
-									fb.enclosing.firstFreeBlock = fb.next;
-	//							printf("        Removed free block @%p (%#x bytes)\n", fb, fb.blockSize);
+								// Should we consume the whole free block, or just split it?
+								if (fb.blockSize > n) {
+									// Split the block, move adjacent references to the new free block
+									ref<FreeBlock> nb = ref<FreeBlock>(long(fb) + n);
+									nb.blockSize = fb.blockSize - n;
+									nb.enclosing = fb.enclosing;
+									nb.next = fb.next;
+									if (nb.next != null)
+										nb.next.previous = nb;
+									nb.previous = fb.previous;
+									if (nb.previous != null)
+										nb.previous.next = nb;
+									else
+										nb.enclosing.firstFreeBlock = nb;
+									_nextFreeBlock = nb;
+									if (fb == fb.enclosing.firstFreeBlock)
+										fb.enclosing.firstFreeBlock = nb;
+		//							printf("        Trimmed free block @%p to %#x bytes\n", nb, nb.blockSize);
+								} else {
+									_nextFreeBlock = advance(fb);
+									if (_nextFreeBlock == fb)
+										_nextFreeBlock = null;
+									
+									// Remove the free block from the section chain.
+									if (fb.next != null)
+										fb.next.previous = fb.previous;
+									if (fb.previous != null)
+										fb.previous.next = fb.next;
+									else
+										fb.enclosing.firstFreeBlock = fb.next;
+		//							printf("        Removed free block @%p (%#x bytes)\n", fb, fb.blockSize);
+								}
+								bh = pointer<BlockHeader>(fb);
+								// Note: this dups the exit code.
+								bh.blockSize = n + IN_USE_FLAG;
+								bh.callStack = pointer<address>(pointer<byte>(bh) + framesOffset);
+								rememberStackFrames(bh.callStack, long(rbp), long(stackTop));
+								address x = bh + 1;
+		//						printf("    Free list: Found it! @%p\n", x);
+								currentHeap = &leakHeap;
+								_busy = false;
+								setMemory(bh + 1, 0, originalN);
+								return bh + 1;
 							}
-							bh = pointer<BlockHeader>(fb);
-							// Note: this dups the exit code.
-							bh.blockSize = n + IN_USE_FLAG;
-							bh.callStack = pointer<address>(pointer<byte>(bh) + framesOffset);
-							rememberStackFrames(bh.callStack, long(rbp), long(stackTop));
-							address x = bh + 1;
-	//						printf("    Free list: Found it! @%p\n", x);
-							currentHeap = &leakHeap;
-							_busy = false;
-							setMemory(bh + 1, 0, originalN);
-							return bh + 1;
-						}
-						fb = advance(fb);
-					} while (fb != _nextFreeBlock);
+							fb = advance(fb);
+						} while (fb != _nextFreeBlock);
+					}
+					pointer<SectionHeader> nh = allocateSection(SECTION_LENGTH);
+					if (nh == null)
+						throw OutOfMemoryException(originalN);
+					bh = pointer<BlockHeader>(nh + 1);
+					_nextFreeBlock = ref<FreeBlock>(long(bh) + n);
+					_nextFreeBlock.blockSize = SECTION_DATA - n - SectionEndSentinel.bytes;
+					_nextFreeBlock.enclosing = nh;
+					// This will simplify the end-of-section processing (?)
+					ref<SectionEndSentinel> ses = ref<SectionEndSentinel>(long(_nextFreeBlock) + _nextFreeBlock.blockSize);
+					ses.inUseMarker = IN_USE_FLAG; 
+					nh.firstFreeBlock = _nextFreeBlock;
 				}
-				pointer<SectionHeader> nh = allocateSection(SECTION_LENGTH);
-				if (nh == null)
-					throw OutOfMemoryException(originalN);
-				bh = pointer<BlockHeader>(nh + 1);
-				_nextFreeBlock = ref<FreeBlock>(long(bh) + n);
-				_nextFreeBlock.blockSize = SECTION_DATA - n - SectionEndSentinel.bytes;
-				_nextFreeBlock.enclosing = nh;
-				// This will simplify the end-of-section processing (?)
-				ref<SectionEndSentinel> ses = ref<SectionEndSentinel>(long(_nextFreeBlock) + _nextFreeBlock.blockSize);
-				ses.inUseMarker = IN_USE_FLAG; 
-				nh.firstFreeBlock = _nextFreeBlock;
+				bh.blockSize = n + IN_USE_FLAG;
+				bh.callStack = pointer<address>(pointer<byte>(bh) + framesOffset);
+				rememberStackFrames(bh.callStack, long(rbp), long(stackTop));
+				address x = bh + 1;
+		//		printf("    New Section: _sections = %p _nextFreeBlock = %p Found it! @%p\n", _sections, _nextFreeBlock, x);
+				currentHeap = &leakHeap;
+				_busy = false;
+				setMemory(bh + 1, 0, originalN);
+				return bh + 1;
+			} catch (Exception e) {
+				leakHeap.print();
+				throw e;
 			}
-			bh.blockSize = n + IN_USE_FLAG;
-			bh.callStack = pointer<address>(pointer<byte>(bh) + framesOffset);
-			rememberStackFrames(bh.callStack, long(rbp), long(stackTop));
-			address x = bh + 1;
-	//		printf("    New Section: _sections = %p _nextFreeBlock = %p Found it! @%p\n", _sections, _nextFreeBlock, x);
-			currentHeap = &leakHeap;
-			_busy = false;
-			setMemory(bh + 1, 0, originalN);
-			return bh + 1;
 		}
+		return null;
 	}
 
 	private ref<FreeBlock> advance(ref<FreeBlock> fb) {
@@ -576,8 +588,20 @@ public class LeakHeap extends Allocator {
 	private void freeSection(ref<SectionHeader> sh) {
 //		printf("freeSection %p\n", sh);
 //		sh.print(null);
+		if (sh.contains(_nextFreeBlock)) {
+			_nextFreeBlock = null;
+			for (ref<SectionHeader> s = _sections; s != null; s = s.next)
+				if (s.firstFreeBlock != null) {
+					_nextFreeBlock = s.firstFreeBlock;
+					break;
+				}
+		}
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+			C.free(sh);
+		}
 	}
-	
+
 	private static int stackFrames(long rbp, long stackTop) {
 		int frameCount = 0;
 		long stackBottom = stackTop - 0x80000;
@@ -603,6 +627,7 @@ public class LeakHeap extends Allocator {
 	public void free(address p) {
 		if (p == null)
 			return;
+
 		lock (_lock) {
 			currentHeap = &heap;
 	//		printf("LeakHeap.free(%p)\n", p);
@@ -697,7 +722,6 @@ public class LeakHeap extends Allocator {
 			}
 		}
 		throw CorruptHeapException(this, p);
-//		currentHeap = &leakHeap;
 	}
 	
 	private boolean checkForEmptySection(ref<SectionHeader> sh) {

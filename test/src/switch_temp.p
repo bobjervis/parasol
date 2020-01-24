@@ -13,8 +13,8 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-// This is a code gen bug caused when the temps created in the first call to f are not cleaned up right away,
-// nor are they cleaned up at the break (so that case 1 wouldn't blow up
+// This was a code gen bug caused when the temps created in the first call to f were not cleaned up right away,
+// nor were they cleaned up at the break (so that case 1 wouldn't blow up
 
 string[] a = [ "rtww", "xx", "w" ];
 
@@ -24,15 +24,13 @@ for (int i = 0; i < 2; i++) {
 		if (i > 0)
 			continue;
 		string g = "sxxrtww";
-		int b = f(a[0], a[1], a[2]);	// The declaration is important, it means the temps don't get destroyed. 
+		int b = f(a[0], a[1], a[2]);	// The declaration is important, it means the temps didn't get destroyed. 
 		break;
-
-		// There should be some logic to turn off the temps above, even with the bug present... another day...
 
 	case	1:
 		g = "xxaa";
 		f("rtww", string(g, 0, 2), "w"); 
-		break;			// On second iteration, temps generated for function arguments above will get double freed.
+		break;			// On second iteration, temps generated for function arguments above got double freed.
 	}
 }
 
@@ -42,3 +40,40 @@ int f(string x, string y, string z) {
 	assert(z == "w");
 	return 0;
 }
+
+boolean destructorCalled;
+
+class A {
+	int x;
+
+	A(int z) {
+		x = z;
+	}
+
+	~A() {
+		destructorCalled = true;
+	}
+}
+
+for (int i = 0; i < 3; i++) {
+	switch (i) {
+	case 0:
+		A a(45);
+
+		assert(a.x == 45);
+		assert(!destructorCalled);
+		break;
+
+	case 1:
+		assert(destructorCalled);
+		destructorCalled = false;
+		break;
+
+	case 2:
+		assert(!destructorCalled);
+	}
+}
+assert(!destructorCalled);
+printf("PASSED\n");
+
+

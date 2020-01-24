@@ -1107,8 +1107,6 @@ public class CompileContext {
 	public void markLiveSymbol(ref<Node> n) {
 		if (n == null || n.type == null)
 			return;
-//		printf("hasDestructor? %s\n", n.type.hasDestructor() ? "true" : "false");
-//		n.print(4);
 		if (n.type.hasDestructor()) {
 			_liveSymbols.push(n);
 			_liveSymbolScopes.push(_current);

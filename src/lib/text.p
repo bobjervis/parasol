@@ -1724,14 +1724,14 @@ public class string extends String<byte> {
 	 * otherwise.
 	 */
 	public string, boolean unescapeParasol() {
-		String<byte> result;
+		ref<allocation> result;
 		boolean success;
 
 		(result, success) = super.unescapeParasolT();
 		// This makes some big assumptions about the relationship between the base template class
 		// and the derived class, but if the language runtime can't know about the intricacies of
 		// its own implementation, who can?
-		return *ref<string>(&result), success;
+		return string(result), success;
 	}
 }
 /**
@@ -2309,15 +2309,15 @@ class String<class T> {
 	 *		false	If the sequence is not well-formed.
 	 *		string	The converted string (if the boolean is true).
 	 */
-	String<T>, boolean unescapeParasolT() {
+	ref<allocation>, boolean unescapeParasolT() {
 		String<T> output;
 		
 		if (length() == 0)
-			return *this, true;
+			return null, true;
 		for (int i = 0; i < _contents.length; i++) {
 			if (pointer<T>(&_contents.data)[i] == '\\') {
 				if (i == _contents.length - 1)
-					return output, false;
+					return output._contents, false;
 				else {
 					int v;
 					i++;
@@ -2333,14 +2333,14 @@ class String<class T> {
 					case 'U':
 						i++;;
 						if (i >= _contents.length)
-							return output, false;
+							return output._contents, false;
 						if (!pointer<T>(&_contents.data)[i].isHexDigit())
-							return output, false;
+							return output._contents, false;
 						v = 0;
 						do {
 							v <<= 4;
 							if (v > 0xff)
-								return output, false;
+								return output._contents, false;
 							if (pointer<T>(&_contents.data)[i].isDigit())
 								v += pointer<T>(&_contents.data)[i] - '0';
 							else
@@ -2358,14 +2358,14 @@ class String<class T> {
 					case 'X':
 						i++;;
 						if (i >= _contents.length)
-							return output, false;
+							return output._contents, false;
 						if (!pointer<T>(&_contents.data)[i].isHexDigit())
-							return output, false;
+							return output._contents, false;
 						v = 0;
 						do {
 							v <<= 4;
 							if (v > 0xff)
-								return output, false;
+								return output._contents, false;
 							if (pointer<T>(&_contents.data)[i].isDigit())
 								v += pointer<T>(&_contents.data)[i] - '0';
 							else
@@ -2391,7 +2391,7 @@ class String<class T> {
 						do {
 							v <<= 3;
 							if (v > 0xff)
-								return output, false;
+								return output._contents, false;
 							v += pointer<T>(&_contents.data)[i] - '0';
 							i++;
 						} while (i < _contents.length && pointer<T>(&_contents.data)[i].isOctalDigit());
@@ -2408,7 +2408,7 @@ class String<class T> {
 			} else
 				output.append(pointer<T>(&_contents.data)[i]);
 		}
-		return output, true;
+		return output._contents, true;
 	}
 }
 /**

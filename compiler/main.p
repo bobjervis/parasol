@@ -230,10 +230,12 @@ int compileCommand() {
 	boolean anyFailure = false;
 	ref<pxi.Pxi> output = pxi.Pxi.create(parasolCommand.pxiArgument.value);
 	target.writePxi(output);
+	delete target;
 	if (!output.write()) {
 		printf("Error writing to %s\n", parasolCommand.pxiArgument.value);
 		anyFailure = true;
 	}
+	delete output;
 	time.Time end = time.Time.now();
 	printf("Done in %d milliseconds\n", end.value() - start.value());
 	if (anyFailure)

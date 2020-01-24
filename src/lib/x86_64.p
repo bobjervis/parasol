@@ -89,6 +89,7 @@ import parasol:process;
 import parasol:pxi.Pxi;
 import parasol:runtime;
 import parasol:storage;
+import parasol:text;
 import native:C;
 
 /*
@@ -581,12 +582,14 @@ public class X86_64 extends X86_64AssignTemps {
 				case	IMPLIED_DESTRUCTOR:
 					if (generateInterfaceDestructorThunk(parameterScope, compileContext))
 						break;
+					inst(X86.ENTER, 0);
 					if (needsDestructorShutdown(parameterScope, compileContext)) { 
 						inst(X86.PUSH, TypeFamily.SIGNED_64, thisRegister());
 						inst(X86.MOV, TypeFamily.ADDRESS, thisRegister(), firstRegisterArgument());
 						generateDestructorShutdown(parameterScope, compileContext);
 						inst(X86.POP, TypeFamily.SIGNED_64, thisRegister());
 					}
+					inst(X86.LEAVE);
 					if (!generateReturn(parameterScope, compileContext))
 						assert(false);
 					break;
@@ -1126,7 +1129,7 @@ public class X86_64 extends X86_64AssignTemps {
 		n.traverse(Node.Traversal.IN_ORDER, collectStaticDestructors, compileContext);
 		generate(n, compileContext);
 	}
-	
+
 	private void generate(ref<Node> node, ref<CompileContext> compileContext) {
 		if (node.deferGeneration()) {
 			// Throw an exception
@@ -2794,7 +2797,10 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.MOV, firstRegisterArgument(), defn, compileContext);
 				instCall(releaseMethod(compileContext), compileContext);
 			} else {
+				byte reg = liveSymbols.node.register;
+				liveSymbols.node.register = 0;
 				inst(X86.LEA, firstRegisterArgument(), liveSymbols.node, compileContext);
+				liveSymbols.node.register = reg;
 				instCall(liveSymbols.node.type.scope().destructor(), compileContext);
 			}
 			liveSymbols = liveSymbols.next;

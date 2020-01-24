@@ -2953,8 +2953,10 @@ public void markLiveSymbols(ref<Node> declarator, StorageClass storageClass, ref
 		if (id.deferAnalysis())
 			break;
 		if (id.symbol().storageClass() == storageClass) {
-//			ref<Scope> scope = id.symbol().enclosing();
-			if (!id.symbol().enclosing().inSwitch())
+			if (id.symbol().enclosing().inSwitch()) {
+				if (id.symbol().initializedWithConstructor())
+					compileContext.markLiveSymbol(id);
+			} else
 				compileContext.markLiveSymbol(id);
 		}
 		break;

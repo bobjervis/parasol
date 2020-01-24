@@ -78,6 +78,7 @@ public class Pxi {
 	
 	~Pxi() {
 		_pxiFile.close();
+		_sections.deleteAll();
 	}
 	
 	public void declareSection(ref<Section> s) {

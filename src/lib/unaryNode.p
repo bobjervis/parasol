@@ -964,4 +964,12 @@ public class Unary extends Node {
 			assert(false);
 		}
 	}
+
+	public Test fallsThrough() {
+		if (op() == Operator.THROW)
+			return Test.FAIL_TEST;
+		else
+			return Test.PASS_TEST;
+	}
+
 }
