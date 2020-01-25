@@ -2145,7 +2145,6 @@ ref<Node>, int foldMultiReturn(ref<Node> leftHandle, ref<Node> destinations, ref
 		(lh, offset) = foldMultiReturn(leftHandle, b.left(), intermediate, tree, compileContext);
 		ref<Reference> r = tree.newReference(intermediate, offset, false, destinations.location());
 		r.type = b.right().type;
-		compileContext.markLiveSymbol(r);
 		ref<Node> assignment;
 		if (r.type.family() == TypeFamily.STRING ||
 			r.type.family() == TypeFamily.STRING16) {
@@ -2161,6 +2160,7 @@ ref<Node>, int foldMultiReturn(ref<Node> leftHandle, ref<Node> destinations, ref
 			call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 			assignment = call.fold(tree, true, compileContext);
 		} else {
+			compileContext.markLiveSymbol(r);
 			assignment = tree.newBinary(Operator.ASSIGN, b.right(), r, destinations.location());
 			assignment.type = r.type;
 			assignment = assignment.fold(tree, true, compileContext);
