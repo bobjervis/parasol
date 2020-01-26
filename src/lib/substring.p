@@ -328,6 +328,13 @@ public class substring {
 		throw IllegalOperationException("not yet implemented");
 		return 0;
 	}
+
+	pointer<byte> elementAddress(int i) {
+		if (_data != null)
+			return _data + i;
+		else
+			throw IllegalOperationException(string(i));
+	}
 	/**
 	 *
 	 * @exception IllegalOperationException Thrown always. This function is not yet implemented
@@ -1338,6 +1345,13 @@ public class substring16 {
 	public int compare(string other) {
 		return compare(string16(other));
 	}	
+
+	pointer<char> elementAddress(int i) {
+		if (_data != null)
+			return _data + i;
+		else
+			throw IllegalOperationException(string(i));
+	}
 	/**
 	 * Return whether this substirng is null.
 	 *

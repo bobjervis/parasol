@@ -494,7 +494,12 @@ public class Unary extends Node {
 			switch (_operand.op()) {
 			case SUBSCRIPT:
 				ref<Binary> b = ref<Binary>(_operand);
-				if (b.left().type.isVector(compileContext)) {
+				switch (b.left().type.family()) {
+				case STRING:
+				case STRING16:
+				case SUBSTRING:
+				case SUBSTRING16:
+				case SHAPE:
 					substring name("elementAddress");
 					
 					ref<Symbol> sym = b.left().type.lookup(name, compileContext);

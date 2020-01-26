@@ -17,7 +17,7 @@ namespace parasol:compiler;
 
 public class Namespace extends Symbol {
 	private ref<Scope> _symbols;
-	private string _dottedName;
+	private substring _dottedName;
 	private substring _domain;
 
 	Namespace(substring domain, ref<Node> namespaceNode, ref<Scope> enclosing, ref<Node> annotations, substring name, ref<Arena> arena, ref<MemoryPool> pool) {
@@ -25,8 +25,10 @@ public class Namespace extends Symbol {
 		_symbols = arena.createNamespaceScope(enclosing, this);
 		if (namespaceNode != null) {
 			boolean x;
-			
-			(_dottedName, x) = namespaceNode.dottedName();
+			string d;
+
+			(d, x) = namespaceNode.dottedName();
+			_dottedName = pool.newCompileString(d);
 		}
 		_domain = domain;
 	}

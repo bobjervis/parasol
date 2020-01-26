@@ -1488,6 +1488,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			break;
 			
 		case	SUBSCRIPT:
+		case	ADD:
 			b = ref<Binary>(node);
 			if (b.sethi < 0) {
 				assignRegisterTemp(b.left(), longMask(), compileContext);
@@ -1510,7 +1511,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			else
 				assignLvalueTemps(dot.left(), compileContext);
 			break;
-			
+
 		default:
 			node.print(0);
 			assert(false);

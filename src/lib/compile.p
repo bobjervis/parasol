@@ -1330,9 +1330,13 @@ public class MemoryPool extends memory.NoReleasePool {
 	}
 	
 	public substring newCompileString(string s) {
-		pointer<byte> data = pointer<byte>(alloc(s.length()));
-		C.memcpy(data, &s[0], s.length());
-		return substring(data, s.length());
+		if (s == null)
+			return substring(s);
+		else {
+			pointer<byte> data = pointer<byte>(alloc(s.length()));
+			C.memcpy(data, &s[0], s.length());
+			return substring(data, s.length());
+		}
 	}
 	
 	public substring newCompileString(substring s) {

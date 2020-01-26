@@ -3372,7 +3372,16 @@ class X86_64Encoder extends Target {
 				baseReg = rmValues[R(int(ptr.register))];
 			else if (ptr.deferGeneration())
 				baseReg = 0;
-			else {
+			else if (ptr.op() == Operator.ADD) {
+				b = ref<Binary>(ptr);
+				if (b.left().register != 0) {
+					baseReg = rmValues[R(int(b.left().register))];
+					allAdjust += int(b.right().foldInt(this, null));
+				} else {
+					baseReg = rmValues[R(int(b.right().register))];
+					allAdjust += int(b.left().foldInt(this, null));
+				}
+			} else {
 				printf("modRM(-, %d)\n", regOpcode);
 				addressMode.print(4);
 				assert(false);
@@ -3392,6 +3401,26 @@ class X86_64Encoder extends Target {
 			subscriptModRM(addressMode, regOpcode, 0);
 			break;
 			
+		case	ADD:
+			b = ref<Binary>(addressMode);
+			if (b.left().register != 0) {
+				baseReg = rmValues[R(int(b.left().register))];
+				allAdjust += int(b.right().foldInt(this, null));
+			} else {
+				baseReg = rmValues[R(int(b.right().register))];
+				allAdjust += int(b.left().foldInt(this, null));
+			}
+			if (allAdjust == 0) {
+				modRM(0, regOpcode, baseReg);
+			} else if (allAdjust >= -128 && allAdjust <= 127) {
+				modRM(1, regOpcode, baseReg);
+				emit(byte(allAdjust));
+			} else {
+				modRM(2, regOpcode, baseReg);
+				emitInt(allAdjust);
+			}
+			break;
+
 		case	STRING:
 			ref<Constant> c = ref<Constant>(addressMode);
 			string s(c.value());
@@ -3565,6 +3594,14 @@ class X86_64Encoder extends Target {
 				rex |= rexxValues[r2];
 				break;
 				
+			case	ADD:
+				b = ref<Binary>(addressMode);
+				if ((b.left().nodeFlags & ADDRESS_MODE) == 0)
+					emitRex(family, b.left(), regField, baseField);
+				else
+					emitRex(family, b.right(), regField, baseField);
+				break;
+
 			default:
 				printf("emitRex(-, %s, %s)\n", string(regField), string(baseField));
 				addressMode.print(4);

@@ -2191,6 +2191,13 @@ class String<class T> {
 			_contents = null;
 		}
 	}
+
+	public pointer<T> elementAddress(int i) {
+		if (_contents != null)
+			return pointer<T>(&_contents.data) + i;
+		else
+			throw IllegalOperationException(string(i));
+	}
 	/*
 	 *	escapeJSON
 	 *

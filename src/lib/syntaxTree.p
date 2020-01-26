@@ -1494,6 +1494,8 @@ public class Constant extends Node {
 			(x, status) = charValue();
 			if (status)
 				return x;
+			print(0);
+			assert(false);
 			nodeFlags |= BAD_CONSTANT;
 			add(MessageId.BAD_CHAR, compileContext.pool(), _value);
 			return 0;

@@ -751,37 +751,49 @@ public class Binary extends Node {
 					u.type = type;
 					return u;
 				}
-			} else if (_left.type.isVector(compileContext) ||
-					   _left.type.isMap(compileContext) ||
-					   _left.type.family() == TypeFamily.SUBSTRING ||
-					   _left.type.family() == TypeFamily.SUBSTRING16 ||
-					   _left.type.family() == TypeFamily.SHAPE) {
-				substring name("get");
-				
-				ref<Symbol> sym = _left.type.lookup(name, compileContext);
-				if (sym == null || sym.class != Overload) {
-					add(MessageId.UNDEFINED, compileContext.pool(), name);
-					break;
-				}
-				ref<Overload> o = ref<Overload>(sym);
-				ref<OverloadInstance> oi = (*o.instances())[0];
-				ref<Selection> method = tree.newSelection(_left, oi, false, location());
-				method.type = oi.type();
-				ref<NodeList> args = tree.newNodeList(_right);
-				ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
-				call.type = type;
-				return call.fold(tree, false, compileContext);
-/*
-			} else if (x.left().type.family() == TypeFamily.STRING) {
-				generate(x.left(), target, compileContext);
-				generate(x.right(), target, compileContext);
-				target.byteCode(ByteCodes.CHAR_AT);
-				target.popSp(address.bytes);
 			} else {
-				generateSubscript(x, target, compileContext);
-				if (!loadIndirect(x.type, target, compileContext))
-					target.unfinished(tree, "subscript", compileContext);
-*/
+				switch (_left.type.family()) {
+				case STRING:
+				case STRING16:
+				case OBJECT_AGGREGATE:
+				case ARRAY_AGGREGATE:
+					substring ename("elementAddress");
+					
+					ref<Symbol> sym = _left.type.lookup(ename, compileContext);
+					if (sym == null || sym.class != Overload) {
+						add(MessageId.UNDEFINED, compileContext.pool(), ename);
+						break;
+					}
+					ref<Overload> o = ref<Overload>(sym);
+					ref<OverloadInstance> oi = (*o.instances())[0];
+					ref<Selection> method = tree.newSelection(_left, oi, false, location());
+					method.type = oi.type();
+					ref<NodeList> args = tree.newNodeList(_right);
+					ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
+					call.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+					ref<Unary> u = tree.newUnary(Operator.INDIRECT, call.fold(tree, false, compileContext), location());
+					u.type = type;
+					return u;
+
+				case SUBSTRING:
+				case SUBSTRING16:
+				case SHAPE:
+					substring name("get");
+					
+					sym = _left.type.lookup(name, compileContext);
+					if (sym == null || sym.class != Overload) {
+						add(MessageId.UNDEFINED, compileContext.pool(), name);
+						break;
+					}
+					o = ref<Overload>(sym);
+					oi = (*o.instances())[0];
+					method = tree.newSelection(_left, oi, false, location());
+					method.type = oi.type();
+					args = tree.newNodeList(_right);
+					call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
+					call.type = type;
+					return call.fold(tree, false, compileContext);
+				}
 			}
 			break;
 
