@@ -935,7 +935,6 @@ public class Binary extends Node {
 					oi = type.assignmentMethod(compileContext);
 				if (oi != null) {
 					// This is the assignment method for this class!!!
-					// (all strings go through here).
 					ref<Selection> method = tree.newSelection(_left, oi, false, _left.location());
 					method.type = oi.type();
 					ref<NodeList> args = tree.newNodeList(_right);
@@ -950,7 +949,10 @@ public class Binary extends Node {
 				break;
 				
 			case	VAR:
-				oi = type.assignmentMethod(compileContext);
+				if (op() == Operator.ASSIGN_TEMP)
+					oi = type.tempAssignmentMethod(compileContext);
+				else
+					oi = type.assignmentMethod(compileContext);
 				if (oi != null) {
 					// This is the assignment method for this class!!!
 					ref<Node> load;
@@ -1300,6 +1302,7 @@ public class Binary extends Node {
 		ref<Node> store;
 		switch (_left.op()) {
 		case	IDENTIFIER:
+		case	VARIABLE:
 			return _left, _left.clone(tree);
 			
 		default:

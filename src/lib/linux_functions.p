@@ -243,6 +243,9 @@ public abstract void pthread_exit(address retval);
 @Linux("libpthread.so.0", "pthread_join")
 public abstract int pthread_join(pthread_t thread, ref<address> retval);
 
+@Linux("libpthread.so.0", "pthread_kill")
+public abstract int pthread_kill(pthread_t thread, int sig);
+
 @Linux("libpthread.so.0", "pthread_mutex_destroy")
 public abstract int pthread_mutex_destroy(ref<pthread_mutex_t> mutex);
 
@@ -958,11 +961,12 @@ public int	CLD_CONTINUED = 6;            /* Stopped child has continued.  */
 
 @Constant
 public int _NSIG = 65;	/* Biggest signal number + 1 */
-/*
-#define	EPERM		 1	/* Operation not permitted */
-#define	ENOENT		 2	/* No such file or directory */
-#define	ESRCH		 3	/* No such process */
- */
+@Constant
+public int EPERM = 1;	/* Operation not permitted */
+@Constant
+public int ENOENT = 2;	/* No such file or directory */
+@Constant 
+public int ESRCH = 3;	/* No such process */
 @Constant
 public int EINTR = 4;	/* Interrupted system call */
 @Constant
@@ -972,7 +976,10 @@ public int EIO = 5;		/* I/O error */
 #define	E2BIG		 7	/* Argument list too long */
 #define	ENOEXEC		 8	/* Exec format error */
 #define	EBADF		 9	/* Bad file number */
-#define	ECHILD		10	/* No child processes */
+*/
+@Constant
+public int ECHILD = 10;	/* No child processes */
+/*
 #define	EAGAIN		11	/* Try again */
 #define	ENOMEM		12	/* Out of memory */
 #define	EACCES		13	/* Permission denied */

@@ -1852,6 +1852,11 @@ public class string16 extends String<char> {
 		} else
 			throw IllegalArgumentException("buffer");
 	}
+
+	~string16() {
+		if (_contents != null)
+			delete _contents;
+	}
 	/**
 	 * Append a Unicode character.
 	 *

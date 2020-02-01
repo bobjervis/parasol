@@ -799,7 +799,7 @@ public class FileWriter extends Writer {
 			_file.dontCloseOnDestructor();
 	}
 
-	public void _write(byte c) {
+	protected void _write(byte c) {
 		_buffer[_fill] = c;
 		_fill++;
 		if (_fill >= BUFFER_SIZE)
@@ -862,7 +862,9 @@ public class FileWriter extends Writer {
 	 * In order for this to be safe, both the _write and flush methods need to be overridden.
 	 */
 	void clearBuffer() {
-		_buffer.clear();
+		lock (_lock) {
+			_buffer.clear();
+		}
 	}	
 }
 /**

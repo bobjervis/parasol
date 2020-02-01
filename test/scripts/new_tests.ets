@@ -1,4 +1,3 @@
-run(filename: switch_
 // A constructor inside a switch's block limits the allowed live range of a symbol (in this case s) to the same
 // set of cases as the constructor.
 compile(expact: fail) { "int a; switch (a) { case 1: string s(a); break; case 2: a = s[0]; }" }

@@ -68,6 +68,12 @@ thread.Thread.init();
 
 if (runtime.leaksFlag())
 	currentHeap = &leakHeap;
+/** @ignore 
+ * Called when the main thread hits an uncaught exception.
+ */
+public void resetHeap() {
+	currentHeap = &heap;
+}
 /*
  * Set up the process streams as soon as any special heap is established.
  */
@@ -100,20 +106,21 @@ public class OutOfMemoryException extends Exception {
  * Thrown when a memory allocator detects corrupted data structures or an invalid argument to free.
  */
 public class CorruptHeapException extends Exception {
+	address _freeArg;
+
 	public CorruptHeapException(ref<Allocator> heap, address freeArg) {
 		super(format(freeArg));
+		_freeArg = freeArg;
 	}
 
 	private static string format(address freeArg) {
-		printf("Trying to free at address %p\n", freeArg);
-		leakHeap.print();
 		string s;
 		s.printf("Corrupt Heap: %p", freeArg);
 		return s;
 	}
 
 	ref<CorruptHeapException> clone() {
-		ref<CorruptHeapException> n = new CorruptHeapException(null, null);
+		ref<CorruptHeapException> n = new CorruptHeapException(&leakHeap, _freeArg);
 		return n;
 	}
 }
@@ -294,7 +301,7 @@ public class Heap extends Allocator {
  */
 public class LeakHeap extends Allocator {
 	@Constant
-	private static int BLOCK_ALIGNMENT = 32;	// Allows for blocks to be used in MMX instructions, and avoids 
+	private static int BLOCK_ALIGNMENT = 16;	// Allows for blocks to be used in MMX instructions, and avoids 
 												// some fragmentation.
 	@Constant
 	private static long SECTION_LENGTH = 1 * 1024 * 1024;  // try one megabyte.
@@ -326,7 +333,78 @@ public class LeakHeap extends Allocator {
 				return pointer<byte>(this) + sectionSize > pointer<byte>(p);
 		}
 
-		boolean print(ref<FreeBlock> nextFreeBlock) {
+		boolean free(ref<LeakHeap> lh, ref<FreeBlock> fb) {
+//			printf("    Found section @%p\n", sh);
+			// The first special case is no free block in this section at all, then make this guy the free list.
+			if (firstFreeBlock == null) {
+				fb.next = null;
+				fb.previous = null;
+				firstFreeBlock = fb;
+				fb.enclosing = this;
+				return true;
+			} else if (pointer<byte>(firstFreeBlock) > pointer<byte>(fb)) {
+				if (long(fb) + fb.blockSize == long(firstFreeBlock)) {
+					if (lh._nextFreeBlock == firstFreeBlock)
+						lh._nextFreeBlock = fb;
+					fb.next = firstFreeBlock.next;
+					if (fb.next != null)
+						fb.next.previous = fb;
+					fb.blockSize += firstFreeBlock.blockSize;
+				} else {
+					fb.next = firstFreeBlock;
+					firstFreeBlock.previous = fb;
+				}
+				fb.previous = null;
+				firstFreeBlock = fb;
+				fb.enclosing = this;
+				return true;
+			}
+			for (ref<FreeBlock> srchfb = firstFreeBlock; ; srchfb = srchfb.next) {
+				if (srchfb.next == null) {
+					if (long(srchfb) + srchfb.blockSize == long(fb)) {
+						srchfb.blockSize += fb.blockSize;
+					} else {
+						srchfb.next = fb;
+						fb.previous = srchfb;
+					}
+					fb.next = null;
+					fb.enclosing = this;
+					return true;
+				} else if (pointer<byte>(srchfb.next) > pointer<byte>(fb)) {
+					if (long(srchfb) + srchfb.blockSize == long(fb)) {
+						srchfb.blockSize += fb.blockSize;
+						if (long(srchfb) + srchfb.blockSize == long(srchfb.next)) {
+							if (lh._nextFreeBlock == srchfb.next)
+								lh._nextFreeBlock = srchfb;
+							srchfb.blockSize += srchfb.next.blockSize;
+							srchfb.next = srchfb.next.next;
+							if (srchfb.next != null)
+								srchfb.next.previous = srchfb;
+						}
+					} else {
+						fb.next = srchfb.next;
+						srchfb.next = fb;
+						fb.previous = srchfb;
+						if (fb.next != null)
+							fb.next.previous = fb;
+						if (long(fb) + fb.blockSize == long(fb.next)) {
+							if (lh._nextFreeBlock == fb.next)
+								lh._nextFreeBlock = fb;
+							fb.blockSize += fb.next.blockSize;
+							fb.next = fb.next.next;
+							if (fb.next != null)
+								fb.next.previous = fb;
+						}
+					}
+					fb.enclosing = this;
+					return true;
+				}
+			}
+			printf("Block %p not in section.\n", fb);
+			return false;
+		}
+
+		boolean print(boolean showAllocated, ref<FreeBlock> nextFreeBlock) {
 			boolean hasNextFreeBlock;
 			printf("      Section @%p [%#x]", this, sectionSize);
 			if (firstFreeBlock == null) {
@@ -338,17 +416,17 @@ public class LeakHeap extends Allocator {
 			if (firstFreeBlock != null && 
 				(pointer<byte>(firstFreeBlock) < pointer<byte>(this) + SectionHeader.bytes || 
 				 pointer<byte>(firstFreeBlock) >= pointer<byte>(this) + SECTION_LENGTH || 
-				 (long(firstFreeBlock) & (BLOCK_ALIGNMENT - 1)) != 0x10)) {
+				 (long(firstFreeBlock) & (BLOCK_ALIGNMENT - 1)) != 0)) {
 				printf(" - Bad firstFreeBlock (%p)\n", firstFreeBlock);
 				return hasNextFreeBlock;
 			}
 			printf("\n");
 			
 			for (ref<FreeBlock> fb = firstFreeBlock; fb != null; fb = fb.next) {
-				bh = reportAllocatedBlocks(this, bh, fb);
+				bh = reportAllocatedBlocks(this, showAllocated, bh, fb);
 				if (fb == nextFreeBlock)
 					hasNextFreeBlock = true;
-				printf("     %s @%p [%#x] free", fb == _nextFreeBlock ? "->" : "  ", fb, fb.blockSize);
+				printf("     %s @%p [%#x] free", fb == nextFreeBlock ? "->" : "  ", fb, fb.blockSize);
 				if (fb.enclosing != this)
 					printf(" ** bad enclosing pointer (%p) **", fb.enclosing);
 				if (fb.previous != prev)
@@ -356,7 +434,7 @@ public class LeakHeap extends Allocator {
 				if (fb.next != null && 
 					(pointer<byte>(fb) >= pointer<byte>(fb.next) || 
 					 pointer<byte>(fb.next) >= pointer<byte>(this) + SECTION_LENGTH || 
-					 (long(fb.next) & (BLOCK_ALIGNMENT - 1)) != 0x10)) {
+					 (long(fb.next) & (BLOCK_ALIGNMENT - 1)) != 0)) {
 					printf(" ** bad next pointer (%p) **\n", fb.next);
 					break;
 				}
@@ -364,21 +442,23 @@ public class LeakHeap extends Allocator {
 				bh = ref<BlockHeader>(pointer<byte>(fb) + fb.blockSize);
 				prev = fb;
 			}
-			reportAllocatedBlocks(this, bh, ref<FreeBlock>(pointer<byte>(this) + sectionSize));
+			reportAllocatedBlocks(this, showAllocated, bh, ref<FreeBlock>(pointer<byte>(this) + sectionSize));
 			return hasNextFreeBlock;
 		}
 	}
 	
-	private static ref<BlockHeader> reportAllocatedBlocks(ref<SectionHeader> sh, ref<BlockHeader> bh, ref<FreeBlock> fb) {
+	private static ref<BlockHeader> reportAllocatedBlocks(ref<SectionHeader> sh, boolean show, ref<BlockHeader> bh, ref<FreeBlock> fb) {
 		int blocks = 0;
 		while (address(bh) != address(fb)) {
-			if ((bh.blockSize & IN_USE_FLAG) == 0) {
-				printf("            ** @%p [%#x] is not an allocated block **\n", bh, bh.blockSize);
-				break;
-			}
 			if (sh.isSectionEndSentinel(bh)) {
+				printf("               SES %p\n", bh);
 				if (bh.blockSize != IN_USE_FLAG)
 					printf("            ** <bad block length in SectionEndSentinel @%p [%#x]> **\n", bh, bh.blockSize);
+				break;
+			}
+			printf("               IN USE %p: [%x] %p", bh, bh.blockSize - 1, bh.callStack);
+			if ((bh.blockSize & IN_USE_FLAG) == 0) {
+				printf("            ** @%p [%#x] is not an allocated block **\n", bh, bh.blockSize);
 				break;
 			}
 			if (bh.blockSize < BLOCK_ALIGNMENT) {
@@ -390,6 +470,7 @@ public class LeakHeap extends Allocator {
 				printf("            ** <bad block list @%p> **\n", bh);
 				break;
 			}
+			printf("\n");
 			blocks++;
 		}
 		if (blocks > 0)
@@ -546,7 +627,7 @@ public class LeakHeap extends Allocator {
 				setMemory(bh + 1, 0, originalN);
 				return bh + 1;
 			} catch (Exception e) {
-				leakHeap.print();
+				leakHeap.print(false);
 				throw e;
 			}
 		}
@@ -630,97 +711,23 @@ public class LeakHeap extends Allocator {
 
 		lock (_lock) {
 			currentHeap = &heap;
-	//		printf("LeakHeap.free(%p)\n", p);
 			ref<FreeBlock> fb = ref<FreeBlock>(long(p) - BlockHeader.bytes);
-			if ((fb.blockSize & IN_USE_FLAG) == 0) {
-				throw CorruptHeapException(this, p);
-//				currentHeap = &leakHeap;
-//				return;
-			}
-			fb.blockSize -= IN_USE_FLAG;
-			for (ref<SectionHeader> sh = _sections; sh != null; sh = sh.next) {
-				if (pointer<byte>(fb) > pointer<byte>(sh) && pointer<byte>(fb) < pointer<byte>(sh) + sh.sectionSize) {
-	//				printf("    Found section @%p\n", sh);
-					// The first special case is no free block in this section at all, then make this guy the free list.
-					if (sh.firstFreeBlock == null) {
-						fb.next = null;
-						fb.previous = null;
-						fb.enclosing = sh;
-						sh.firstFreeBlock = fb;
-						if (!checkForEmptySection(sh))
-							throw CorruptHeapException(this, p);
-						currentHeap = &leakHeap;
-						return;
-					} else if (pointer<byte>(sh.firstFreeBlock) > pointer<byte>(fb)) {
-						if (long(fb) + fb.blockSize == long(sh.firstFreeBlock)) {
-							if (_nextFreeBlock == sh.firstFreeBlock)
-								_nextFreeBlock = fb;
-							fb.next = sh.firstFreeBlock.next;
-							if (fb.next != null)
-								fb.next.previous = fb;
-							fb.blockSize += sh.firstFreeBlock.blockSize;
-						} else {
-							fb.next = sh.firstFreeBlock;
-							sh.firstFreeBlock.previous = fb;
-						}
-						fb.enclosing = sh;
-						fb.previous = null;
-						sh.firstFreeBlock = fb;
-						if (!checkForEmptySection(sh))
-							throw CorruptHeapException(this, p);
-						currentHeap = &leakHeap;
-						return;
-					}
-					for (ref<FreeBlock> srchfb = sh.firstFreeBlock; ; srchfb = srchfb.next) {
-						if (srchfb.next == null) {
-							if (long(srchfb) + srchfb.blockSize == long(fb)) {
-								srchfb.blockSize += fb.blockSize;
-							} else {
-								srchfb.next = fb;
-								fb.previous = srchfb;
-							}
-							fb.next = null;
-							fb.enclosing = sh;
-							if (!checkForEmptySection(sh))
-								throw CorruptHeapException(this, p);
+			if ((fb.blockSize & IN_USE_FLAG) != 0) {
+				fb.blockSize -= IN_USE_FLAG;
+				for (ref<SectionHeader> sh = _sections; sh != null; sh = sh.next) {
+					if (pointer<byte>(fb) > pointer<byte>(sh) && pointer<byte>(fb) < pointer<byte>(sh) + sh.sectionSize) {
+						if (sh.free(this, fb) && 
+							checkForEmptySection(sh)) {
 							currentHeap = &leakHeap;
 							return;
-						} else if (pointer<byte>(srchfb.next) > pointer<byte>(fb)) {
-							if (long(srchfb) + srchfb.blockSize == long(fb)) {
-								srchfb.blockSize += fb.blockSize;
-								if (long(srchfb) + srchfb.blockSize == long(srchfb.next)) {
-									if (_nextFreeBlock == srchfb.next)
-										_nextFreeBlock = srchfb;
-									srchfb.blockSize += srchfb.next.blockSize;
-									srchfb.next = srchfb.next.next;
-									if (srchfb.next != null)
-										srchfb.next.previous = srchfb;
-								}
-							} else {
-								fb.next = srchfb.next;
-								srchfb.next = fb;
-								fb.previous = srchfb;
-								if (fb.next != null)
-									fb.next.previous = fb;
-								if (long(fb) + fb.blockSize == long(fb.next)) {
-									if (_nextFreeBlock == fb.next)
-										_nextFreeBlock = fb;
-									fb.blockSize += fb.next.blockSize;
-									fb.next = fb.next.next;
-									if (fb.next != null)
-										fb.next.previous = fb;
-								}
-							}
-							fb.enclosing = sh;
-							if (!checkForEmptySection(sh))
-								throw CorruptHeapException(this, p);
-							currentHeap = &leakHeap;
-							return;
-						}
+						} else
+							break;
 					}
 				}
-			}
+			} else
+				printf("%s Block %p not in use\n", thread.currentThread().name(), fb);
 		}
+		leakHeap.print(false);
 		throw CorruptHeapException(this, p);
 	}
 	
@@ -753,6 +760,7 @@ public class LeakHeap extends Allocator {
 					return true;
 				}
 			}
+			printf("Empty section %p not in list.\n", sh);
 			return false;
 		}
 	}
@@ -857,14 +865,14 @@ public class LeakHeap extends Allocator {
 		root.print(output, 0);
 	}
 	
-	void print() {
+	void print(boolean showAllocated) {
 		if (_sections == null) {
 			printf("      <empty>\n");
 			return;
 		}
 		boolean hasNextFreeBlock = false;
 		for (ref<SectionHeader> sh = _sections; sh != null; sh = sh.next) {
-			boolean hnfb = sh.print(_nextFreeBlock);
+			boolean hnfb = sh.print(showAllocated, _nextFreeBlock);
 			if (hnfb)
 				hasNextFreeBlock = hnfb;
 		}

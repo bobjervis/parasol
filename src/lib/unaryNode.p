@@ -578,6 +578,10 @@ public class Unary extends Node {
 				ref<NodeList> args = tree.newNodeList(_operand);
 				ref<Reference> r = tree.newReference(temp, true, location());
 				compileContext.markLiveSymbol(r);
+//				printf("@%s:\n", tree.sourceLine(_operand.location()));
+//				print(4);
+//				for (int i = 0; i < compileContext.liveSymbolCount(); i++)
+//					compileContext.getLiveSymbol(i).print(4);
 				ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
 				adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 				ref<Call> constructor = tree.newCall(oi.parameterScope(), CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);

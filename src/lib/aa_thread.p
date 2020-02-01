@@ -237,6 +237,15 @@ public class Thread {
 		} else
 			return false;
 	}
+
+	public boolean interrupt() {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+			int result = linux.pthread_kill(_threadId, linux.SIGTERM);
+			return result == 0;
+		}
+		return false;
+	}
 	/**
 	 * This is a wrapper function that sets up the environment, but for reasons that are not all that great,
 	 * the stack walker doesn't like to see the try/catch in the same method as the 'stackTop' variable, which is &t.
@@ -693,7 +702,7 @@ class Mutex {
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			int x = linux.pthread_mutex_unlock(&_linuxMutex);
 			if (x != 0)
-				printf("mutex_unlock returned %d\n", x);
+				printf("mutex_unlock returned %d (%s)\n", x, linux.strerror(x));
 			assert(x == 0);
 		}
 	}

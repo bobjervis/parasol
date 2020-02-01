@@ -136,7 +136,7 @@ void sigGeneralHandler(int signum, siginfo_t *info, void *uContext) {
 		he.exceptionInfo0 = 0;
 		context->callHardwareExceptionHandler(&he);
 		// Most exception handlers throw an exception and crash out elsewhere.
-		// But, the SIGTERM handler allows for a user-defined interruptr handler.
+		// But, the SIGTERM handler allows for a user-defined interrupt handler.
 		return;
 	}
 	printf("No hardware exception handler defined\n");

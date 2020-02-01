@@ -111,7 +111,7 @@ public int launch(string[] args) {
 	millis %= 1000;
 	seconds %= 60;
 	printf("\n       Elapsed time: %d:%d.%3.3d.\n", minutes, seconds, millis);
-	for (int i = 0; i < scripts.length(); i++)
+	for (i in scripts)
 		scripts[i].deleteAll();
 	scripts.deleteAll();
 	return result;
@@ -142,6 +142,7 @@ private ref<ref<script.Atom>[]> parseOne(string arg) {
 			return null;
 		ref<ref<script.Atom>[]> results = new ref<script.Atom>[];
 		flattenSet(results, atoms);
+		delete atoms;
 		return results;
 	} else {
 		ref<Reader> f = storage.openTextFile(arg);
@@ -165,8 +166,10 @@ private void flattenSet(ref<ref<script.Atom>[]> results, ref<ref<script.Atom>[]>
 				if (content.class == Vector) {
 					ref<script.Vector> v = ref<script.Vector>(content);
 					flattenSet(results, v.value());
+					v.value().clear();
 				}
 			}
+			delete conditional;
 		} else
 			results.append(atom);
 	}

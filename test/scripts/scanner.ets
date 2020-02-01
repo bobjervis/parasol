@@ -53,7 +53,7 @@ scan(tokens: 1, value:"123.0e+34"){ 123.0e+34 }
 scan(tokens: 3){ e+34 }		// Not a number, identifier e, + and integer 34 tokens
 scan(tokens: 1, value:".123"){ .123 }
 scan(tokens: 1, value:".0"){ .0 }
-scan(tokens: 1, value:"0."){ 0. }
+scan(tokens: 1, value:"0"){ 0. }
 
 	// Various character tokens
 
@@ -238,6 +238,7 @@ scan(expect:fail, character:128)
 scan(expect:fail, character:708)
 scan(expect:fail, character:1644)
 
+
 codePoint(value:03) { "\x03" }
 codePoint(value:20) { " " }
 codePoint(value:35) { "5" }
@@ -251,7 +252,4 @@ codePoint(value:7fffffff) { "\xff" }
 codePoint(value:7fffffff) { "\xaf" }
 codePoint(value:'7fffffff,7fffffff') { "\xf0\xf0" }
 codePoint(value:'7fffffff,40') { "\xf0\x40" }
-
-
-
 

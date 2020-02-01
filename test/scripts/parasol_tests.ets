@@ -3,13 +3,13 @@
 conditional(target: x86-64-win) {
     run(filename: win_ui_test.p)
 	compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows abstract void foo(); foo();" }
-	compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows("a") abstract void foo(); foo();" }
-	compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows("a", "b", "c") abstract void foo(); foo();" }
+	compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows(\"a\") abstract void foo(); foo();" }
+	compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows(\"a\", \"b\", \"c\") abstract void foo(); foo();" }
 }
 conditional(target: x86-64-lnx) {
 	compile(expect: fail, message: BAD_LINUX_BINDING) { "@Linux abstract void foo(); foo();" }
-	compile(expect: fail, message: BAD_LINUX_BINDING) { "@Linux("a") abstract void foo(); foo();" }
-	compile(expect: fail, message: BAD_LINUX_BINDING) { "@Linux("a", "b", "c") abstract void foo(); foo();" }
+	compile(expect: fail, message: BAD_LINUX_BINDING) { "@Linux(\"a\") abstract void foo(); foo();" }
+	compile(expect: fail, message: BAD_LINUX_BINDING) { "@Linux(\"a\", \"b\", \"c\") abstract void foo(); foo();" }
 }
 // Advanced library executions tests
 

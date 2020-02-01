@@ -9,6 +9,7 @@ statement() { "lock { a; a; }" }
 statement() { "lock (a) { }" }
 statement() { "lock (a) { b; }" }
 statement() { "lock (a) { b; b; }" }
+statement() { "void func() lock { }" }
 statement() { "int f(double d) lock (a) { b; b; }" }
 statement() { break; }
 statement() { case a: b; }
@@ -32,7 +33,7 @@ statement() { "for (;; c) d;" }
 statement() { "for (; b;) d;" }
 statement() { "for (a;;) d;" }
 statement() { "for (;;) d;" }
-statement() { "for (a in c) d;" }
+statement() { "for (a in b) c;" }
 statement() { "if (a) b;" }
 statement() { "if (a) b; else c;" }
 statement() { "if (a) b; else if (c) d;" }
@@ -69,6 +70,7 @@ statement() { "@c() interface q{}" }
 statement() { "@c() interface q extends a {}" }
 statement() { "@c(d) interface q{}" }
 statement() { "@c(d) interface q extends a {}" }
+statement() { "final class q{a;b;}" }
 statement() { "final class q{a;b;}" }
 statement() { "class q{a;b;}" }
 statement() { "class q extends a {}" }
@@ -124,8 +126,8 @@ statement(expect: fail, message: UNEXPECTED_RC) { "}" }
 statement(expect: recovered) { "lock { " }
 statement(expect: recovered) { "lock { a " }
 statement(expect: recovered) { "lock { a; " }
-statement(expect: recovered) { "lock ( " }
-statement(expect: recovered) { "lock (a " }
+statement(expect: fail, message: EXPECTING_TERM) { "lock ( " }
+statement(expect: fail, message: SYNTAX_ERROR) { "lock (a " }
 statement(expect: recovered) { "lock (a) " }
 statement(expect: recovered) { "lock (a) {" }
 statement(expect: recovered) { "lock (a) { b " }
@@ -230,22 +232,14 @@ statement(expect: fail) { "for (a;; d;" }
 statement(expect: fail) { "for (;;)" }
 statement(expect: fail, message: UNEXPECTED_EOF) { "for (;;) d" }
 statement(expect: fail) { "for (;) d;" }
-statement(expect: fail) { "for (a b" }
-statement(expect: fail) { "for (a in" }
 statement(expect: fail) { "for (a  b" }
-statement(expect: fail) { "for (a  b =" }
-statement(expect: fail) { "for (a  b = c" }
-statement(expect: fail) { "for (a  b = c; " }
-statement(expect: fail) { "for (a  b = c; d" }
-statement(expect: fail) { "for (a  b = c; d;" }
-statement(expect: fail) { "for (a  b = c; d; e" }
-statement(expect: fail) { "for (a  b = c; d; e) " }
-statement(expect: fail, message: UNEXPECTED_EOF) { "for (a  b = c; d; e) f" }
+statement(expect: fail) { "for (a in" }
 statement(expect: fail) { "for (a in c" }
 statement(expect: fail) { "for (a in c)" }
 statement(expect: fail, message: UNEXPECTED_EOF) { "for (a in c) d" }
 statement(expect: fail) { "for a in c) d;" }
 statement(expect: fail) { "for (a in c d;" }
+
 statement(expect: fail) { if }
 statement(expect: fail) { "if (" }
 statement(expect: fail) { "if (a" }
@@ -516,8 +510,8 @@ expression() { ~a }
 expression() { !a }
 expression() { &a }
 expression() { *a }
-expression() { +=a }
 expression() { ++a }
+expression() { +=a }
 expression() { --a }
 expression() { new a }
 expression() { delete a }
@@ -591,6 +585,10 @@ expression() { "function int (a b, c, d) {x;}" }
 expression() { "function int (@n a b) {x;}" }
 expression() { "function int (@n a) {a;}" }
 expression() { "function int (a b, @n c, d) {x;}" }
+expression() { "function int(a b) lock { }" }
+
+expression(expect: fail) { "function int(a b) lock " }
+expression(expect: fail) { "function int(a b) lock { " }
 
 expression(expect: fail) { ... }
 expression(expect: fail) { a. }

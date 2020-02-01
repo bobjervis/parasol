@@ -1,7 +1,22 @@
+
+// Platform specific tests
+conditional(target: x86-64-win) {
+    run(filename: win_ui_test.p)
+	compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows abstract void foo(); foo();" }
+	compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows(\"a\") abstract void foo(); foo();" }
+	compile(expect: fail, message: BAD_WINDOWS_BINDING) { "@Windows(\"a\", \"b\", \"c\") abstract void foo(); foo();" }
+}
+conditional(target: x86-64-lnx) {
+	compile(expect: fail, message: BAD_LINUX_BINDING) { "@Linux abstract void foo(); foo();" }
+	compile(expect: fail, message: BAD_LINUX_BINDING) { "@Linux(\"a\") abstract void foo(); foo();" }
+	compile(expect: fail, message: BAD_LINUX_BINDING) { "@Linux(\"a\", \"b\", \"c\") abstract void foo(); foo();" }
+}
+/*
 compile(filename: hello.p)
 compile(filename: void_return_pass.p)
 compile(filename: int_return_pass.p)
 
+compile(filename: undefined_parameter_test.p, expect: fail, message: UNDEFINED)
 compile(filename: syntax_error.p, expect: fail, message: DO_WHILE_NO_SEMI)
 compile(filename: undef_type.p, expect: fail, message: UNDEFINED)
 compile(filename: undef_init.p, expect: fail, message: UNDEFINED)
@@ -12,18 +27,72 @@ compile(filename: unit_return_fail2.p, expect: fail, message: RETURN_DISALLOWED)
 
 compile(filename: stray_token_enum.p, expect: fail)
 
+compile(){ "int(address) func; void(address) f = void(address)(func);" }
+
+compile() { "substring ss; int i; byte b = ss[i];" }
+
+// verify that '3.years()' is a method call on an integer argument
+compile() { "import parasol:time; time.Duration d = 3.years();" }
+
+compile() { "class a = int; a b; int c; b = c;" }
+
+// Complex extend-chains can introduce bogus constructor chains.
+compile(expect: fail) { "class A { A(int x) {} } class B extends A {} class C extends B { C() {} }" }
+
+// You should be able to override the root scope definition of vector with 'the same' type as an import.
+compile() { "import parasol:types.vector; vector<int, int> x; x.resize(3);" }
+
 compile(){"pointer<int> ip; var v = ip;" }
 
 compile(){"class Foo { public static Foo x(-1); Foo(int z){} }"}
 
 compile(){"long i; string formatted(i);"}
 
+// BinaryOperators is namespace-private, so this should fail
+compile(expect: fail) { "import parasol:compiler.BinaryOperators;" }
+
+// binaryOperators is private, so this should fail
+compile(expect: fail) { "import parasol:compiler.binaryOperators;" }
+
+// Some void declarations that are not valid.
+compile(expect: fail) { "int f(void) { return 0; }" }
+compile(expect: fail) { "abstract int f(void);" }
+compile(expect: fail) { "int g(int z, void foo) { return 0; }" }
+compile(expect: fail) { "void x;" }
+
+// Constructors in a derived class must call a base-class constructor if there is no base-class default constructor
+compile(expect: fail) { "class A { A(string b) {} } class B extends A { B() {} } ref<B> b = new B();" }
+
+compile() { "@Constant int x = 1 << 17;"  }
+compile() { "@Constant int x = 0x1000000 >> 17;"  }
+compile() { "@Constant int x = 0x1000000 >>> 17;"  }
+compile() { "class A { public int[] b; } A a = { b: [ 3, 0 ] };" }
+
+// This was an obscure bug in constructor 
+compile(expect: fail) { "import parasol:time; time.Instant i(4);"  }
+compile() { "import parasol:time.Time; Time t; var v; v = t;"  }
+compile() { "import parasol:time.Time; Time t; var v; t = Time(v);"  }
+
+// These were regressions that caused the compiler to crash
+compile(expect: fail, message: TYPE_MISMATCH) { "void f(){} boolean g() { if (f() == 0) return false; else return true; }" }
+compile(expect: fail, message: INCORRECT_RETURN_COUNT) { "boolean, boolean f() { return null, true, true; }" }
+
+// This is a regression where pointer<Foo> does not widen to ref<Foo> if Foo is a plain old class.
+compile() { "class Foo{} ref<Foo[]> x; ref<Foo> y = &(*x)[0];" }
+
 // This test checks a regression concering accepting ... arguments.
 compile() { "class Bar { void f(int... args) { } } ref<Bar> x; x.f(4);" }
 
-//compile(expect: fail) { "ref<int> x = = new int();" }
+compile(expect: fail) { "class A { public string a; string b; } class B extends A { A() {} } void f() { B b = { a: "a", b: "b" };}" }
+
+compile(expect: fail) { "ref<int> x = = new int();" }
+compile(expect: fail) { "ref<int> a = int new int;" }
+compile(expect: fail) { "class A { A(int b){} } ref<A> a = new A;" }
+
 compile(expect: fail, message: DUPLICATE) { "class Foo { private int f(int y) { return 0; } public int f(int z) { return z; } }" }
 compile(expect: fail) { "void f() { for (int i = 0; i < 5); i++) printf("hello"); }" }
+
+compile(expect: fail, message: UNDEFINED) { "class A{ X y;}" }	// Undefined member classes should not cause compiler crashes, just an error message
 
 // This tests a regression involving bad code generation and also the ordering of an in-order traversal of
 // the 'int a, b, c;' portion of the line.  The original failure involved not catching the missing parameter
@@ -34,7 +103,92 @@ compile(expect: fail, message: NO_MATCHING_OVERLOAD) { "void f(ref<int> y, int z
 compile() { "void f(int x(int z)){}" }
 compile() { "void f(int x(int z)){} f(g.h); class g { static int h(int y) { return 0;} }" }
 
+compile() { "ref<Object> o = { abc: \"def\" };" }
+compile() { "ref<Array> a = [ 1, 2, 3.5 ];" }
+compile() { "void f(ref<Array> a) {} f([ 1, 2, 3.5 ]);" }
+
+// enum class tests
+
+compile() { "enum A { B, C; int x; } int y = A.C.x;" }
+compile() { "enum Axy { B, C; Axy() {} } Axy a;" }
+compile(expect: fail) { "enum Axy { B, C; Axy(int n) {} } Axy a;" }
+compile() { "enum A { B, C; int f() { return 1; } } int y = A.C.f();" }
+compile() { "enum A { B(1), C(4); A(int z) {} }" }
+compile(expect: fail) { "enum A { B(\"a\"), C(4); A(int z) {} }" }
+
+// final tests
+
+compile() { "class A { final int f() { return 3; } }" }
+compile() { "class A { int f() { return 3; } } class B extends A { int f() { return -17; } }" }
+compile(expect: fail) { "class A { final int f() { return 3; } } class B extends A { int f() { return -17; } }" }
+compile(expect: fail) { "final class A { } class B extends A {}" }
+compile(expect: fail) { "final interface A {} interface B extends A {}" }
+compile(expect: fail) { "final enum A { C }" }
+compile(expect: fail) { "enum A { C } class B extends A {}" }
+compile(expect: fail) { "class A { final A() { } }" }
+compile(expect: fail) { "class A { final ~A() { } }" }
+compile(expect: fail) { "final int f() { return 3; }" }
+compile(expect: fail) { "int f() { final int g() { return 4; } return 3; }" }
+compile(expect: fail) { "final int x;" }
+compile(expect: fail) { "interface A { final int f(); }" }
+compile(expect: fail) { "interface A { abstract int f(); }" }
+compile() { "interface A { int f(); } interface B extends A { int f(); }" }
+
+// Interface tests
+
+compile() { "interface A {} class B implements A {} class C extends B {} ref<C> c; A a = c;" }
+compile() { "interface a {} class b implements a {} b x; a y = x;" }
+compile() { "interface a {} class b implements a {} ref<b> x; a y = x;" }
+compile() { "interface a {} class b implements a {} pointer<b> x; a y = x;" }
+compile() { "interface a {} a x; x = null;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "interface a {} class b implements a {} interface c {} b x; c y = x;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "interface a {} class b {} b x; a y = x;" }
+compile(expect: fail, message: LVALUE_REQUIRED) { "interface a {} class b implements a {} b x() { b z; return z;} a y = x();" }
+compile() { "interface a {} class b implements a {}" }
+compile() { "interface a {} interface b extends a {}" }
+compile() { "interface a {} interface b{} class c implements a, b {}" }
+compile() { "interface a { void f(); } class b implements a { void f() {} }" }
+compile() { "interface a { void f(); } class b implements a { void f() {} void g() {} }" }
+compile(expect: fail, message: CLASS_MISSING_METHOD_FROM_INTERFACE) { "interface a { void f(); } class b implements a {}" }
+compile(expect: fail, message: CLASS_MISSING_METHOD_FROM_INTERFACE) { "interface a { void f(); } class b implements a { int f(long y) { return 5; } }" }
+compile(expect: fail, message: CLASS_MISSING_METHOD_FROM_INTERFACE) { "interface a { void f(); int f(int y); } class b implements a { int f(long y) { return 5; } }" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "monitor class a { byte filler; } class b implements a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "int a; class b implements a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "void a() {} class b implements a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "class a {} class b implements a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "flags a {A} class b implements a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "enum a {A} class b implements a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "class b implements int {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "class b implements ref<char> {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "class b implements byte[] {}" } 
+compile(expect: fail, message: NOT_AN_INTERFACE) { "class b implements byte(int) {}" }
+compile(expect: fail) { "interface a { int x; }" }
+compile(expect: fail) { "interface a { private int f(); }" }
+compile(expect: fail) { "interface a { public int f(); }" }
+compile(expect: fail) { "interface a { protected int f(); }" }
+compile(expect: fail) { "interface a { abstract int f(); }" }
+compile(expect: fail) { "interface a { class b{} }" }
+compile(expect: fail) { "interface a { enum b{} }" }
+compile(expect: fail) { "interface a { flags b{} }" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "monitor class a { byte filler; } interface b extends a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "int a; interface b extends a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "void a() {} interface b extends a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "class a {} interface b extends a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "flags a {A} interface b extends a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "enum a {A} interface b extends a {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "interface b extends int {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "interface b extends ref<char> {}" }
+compile(expect: fail, message: NOT_AN_INTERFACE) { "interface b extends byte[] {}" } 
+compile(expect: fail, message: NOT_AN_INTERFACE) { "interface b extends byte(int) {}" }
+
 compile() { "class A { void f() { } } class B extends A { void g() { f(); } }" }
+
+compile(expect: fail, message: NOT_SIMPLE_VARIABLE) { "class X<class Y> {} class Y {} ref<X> x;" }
+
+// regression: mis-spelled static trips up later code.
+compile(expect: fail, message: SYNTAX_ERROR) { "class foo { public statc int, boolean parse(string text, int radix) { int value = 0; }}" }
+// regression: passing a subscripted expression with class type as a function parameter 
+compile() { "class Foo { int x; } pointer<Foo> y; int j; Foo z = f(y[j]); Foo f(Foo s) { return s; }" }
 
 compile(expect: fail) { "static int x;" }
 compile(expect: fail) { "class A { static A() { } } " }
@@ -58,6 +212,8 @@ compile(expect: fail, message: NOT_ENUM_INSTANCE) { "enum e { A, B, C }; e x; sw
 compile(expect: fail, message: ABSTRACT_INSTANCE_DISALLOWED) { 
 			"class Foo { abstract int f(); Foo() {} }; ref<Foo> a = new Foo();" 
 		}
+compile() { "void stat(int x) {} void foo(long x); foo = void(long)(stat);" }
+compile(expect: fail, message: INITIALIZER_BEYOND_RANGE) { "string[byte] f = [ 0xff: \"hello\" ];" }
 
 // The matrix of allowed operators for boolean operands:
 
@@ -74,6 +230,640 @@ compile() { "boolean a = true || true;" }
 compile() { "boolean a = !true;" }
 
 compile(expect: fail, message: BAD_MULTI_ASSIGN) { "int x,y; (x, y) = (1, 3);" }
+
+// Constant tests
+
+compile() { "@Constant int x = 4;" }
+compile(expect: fail) { "@Constant int x;" }
+compile(expect: fail) { "class A {} @Constant A x();" }
+compile(expect: fail) { "@Constant void folderol(int x) {}" }
+compile(expect: fail) { "@Constant int() x = f; int f() { return 0;}" }
+compile(expect: fail) { "@Constant int[] x = [ 1, 2, 3];" }
+compile() { "int a; @Constant int b = 7; a = b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b = a;" }
+compile() { "int a; @Constant int b = 7; a += b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b += a;" }
+compile() { "int a; @Constant int b = 7; a -= b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b -= a;" }
+compile() { "int a; @Constant int b = 7; a *= b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b *= a;" }
+compile() { "int a; @Constant int b = 7; a /= b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b /= a;" }
+compile() { "int a; @Constant int b = 7; a %= b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b %= a;" }
+compile() { "int a; @Constant int b = 7; a &= b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b &= a;" }
+compile() { "int a; @Constant int b = 7; a |= b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b |= a;" }
+compile() { "int a; @Constant int b = 7; a ^= b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b ^= a;" }
+compile() { "int a; @Constant int b = 7; a <<= b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b <<= a;" }
+compile() { "int a; @Constant int b = 7; a >>= b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b >>= a;" }
+compile() { "int a; @Constant int b = 7; a >>>= b;" }
+compile(expect: fail) { "int a; @Constant int b = 7; b >>>= a;" }
+// A set of definition flows.
+
+// From a formal perspective, all classes have one constructor. If none is explicitly declared, than an implied default
+// constructor is appointed. However, the compiler implementation special-cases this to provide better code generation.
+// As a result, we can make a class that only contains a built-in and know that it will not create a default constructor.
+compile() { "class A { int x; } A b(); a = b; A a; " }
+compile() { "class A { int x; } A b(); A a = b;" }
+compile() { "class A { int x; } A b(); A a; a = b;" }
+compile() { "class A { int x; } A b; a = b; A a;" }
+compile() { "class A { int x; } A b; A a = b;" }
+compile() { "class A { int x; } A b; A a; a = b;" }
+compile() { "class A { B x; } class B { int y; B() {} } A b(); a = b; A a; " }
+compile() { "class A { B x; } class B { int y; B() {} } A b(); A a = b;" }
+compile() { "class A { B x; } class B { int y; B() {} } A b(); A a; a = b;" }
+compile() { "class A { B x; } class B { int y; B() {} } A b; a = b; A a;" }
+compile() { "class A { B x; } class B { int y; B() {} } A b; A a = b;" }
+compile() { "class A { B x; } class B { int y; B() {} } A b; A a; a = b;" }
+compile() { "class A { int x; A() {} } A b(); a = b; A a; " }
+compile() { "class A { int x; A() {} } A b(); A a = b;" }
+compile() { "class A { int x; A() {} } A b(); A a; a = b;" }
+compile() { "class A { int x; A() {} } A b; a = b; A a;" }
+compile() { "class A { int x; A() {} } A b; A a = b;" }
+compile() { "class A { int x; A() {} } A b; A a; a = b;" }
+compile(expect: fail) { "class A { int x; A(int y) {} } A b;" }
+compile(expect: fail) { "class A { int x; A(int y) {} } A a(2); A b = a;" }
+compile(expect: fail) { "class A { int x; A(int y) {} } A a(2); a = b; A b(5);" }
+
+// Class compare methods
+
+compile(expect: fail) { "class C {  } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile(expect: fail) { "class C {  } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile(expect: fail) { "class C { } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile(expect: fail) { "class C { void() compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile(expect: fail) { "class C { address compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile() { "class C { double compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile() { "class C { float compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile() { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile(expect: fail) { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile(expect: fail) { "class C { long compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile() { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile(expect: fail) { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile(expect: fail) { "class C { int compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile() { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile(expect: fail) { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile(expect: fail) { "class C { short compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile() { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile() { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile(expect: fail) { "class C { unsigned compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile() { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile() { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile(expect: fail) { "class C { char compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile() { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile() { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile(expect: fail) { "class C { byte compare(ref<C> a) { return 0; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+compile() { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a == b; if (a == b) t = true; a == b;" }
+compile() { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a != b; if (a != b) t = true; a != b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a < b; if (a < b) t = true; a < b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a !< b; if (a !< b) t = true; a !< b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a > b; if (a > b) t = true; a > b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a !> b; if (a !> b) t = true; a !> b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a <= b; if (a <= b) t = true; a <= b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a !<= b; if (a !<= b) t = true; a !<= b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a >= b; if (a >= b) t = true; a >= b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a !>= b; if (a !>= b) t = true; a !>= b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a <> b; if (a <> b) t = true; a <> b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a !<> b; if (a !<> b) t = true; a !<> b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a <>= b; if (a <>= b) t = true; a <>= b;" }
+compile(expect: fail) { "class C { boolean compare(ref<C> a) { return true; } } C a, b; boolean t = a !<>= b; if (a !<>= b) t = true; a !<>= b;" }
+
+compile(expect: fail, message: NO_MATCHING_OVERLOAD) { "class A { private int method(int x) { return x; } } A a; int b = a.method(5);" }
+compile(expect: fail, message: NO_MATCHING_OVERLOAD) { "class A { protected int method(int x) { return x; } } A a; int b = a.method(5);" }
+
+// Casts
+
+// From byte
+
+compile() { "byte src; char x; x = src;" }
+compile() { "byte src; unsigned x; x = src;" }
+compile() { "byte src; short x; x = src;" }
+compile() { "byte src; int x; x = src;" }
+compile() { "byte src; long x; x = src;" }
+compile() { "byte src; float x; x = src;" }
+compile() { "byte src; double x; x = src;" }
+compile() { "byte src; var x; x = src;" }
+compile() { "byte src; address x; x = address(src);" }
+compile() { "char src; boolean x; x = boolean(src);" }
+compile() { "byte src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "byte src; flags Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "byte src; int x(double z); x = int(double)(src);" }
+compile() { "byte src; interface A {} A x; x = A(src);" }
+
+// From char
+
+compile() { "char src; byte x; x = byte(src);" }
+compile() { "char src; unsigned x; x = src;" }
+compile() { "char src; short x; x = short(src);" }
+compile() { "char src; int x; x = src;" }
+compile() { "char src; long x; x = src;" }
+compile() { "char src; float x; x = src;" }
+compile() { "char src; double x; x = src;" }
+compile() { "char src; var x; x = src;" }
+compile() { "char src; address x; x = address(src);" }
+compile() { "char src; boolean x; x = boolean(src);" }
+compile() { "char src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "char src; flags Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "char src; int x(double z); x = int(double)(src);" }
+compile() { "char src; interface A {} A x; x = A(src);" }
+
+// From unsigned
+
+compile() { "unsigned src; byte x; x = byte(src);" }
+compile() { "unsigned src; char x; x = char(src);" }
+compile() { "unsigned src; short x; x = short(src);" }
+compile() { "unsigned src; int x; x = int(src);" }
+compile() { "unsigned src; long x; x = src;" }
+compile() { "unsigned src; float x; x = src;" }
+compile() { "unsigned src; double x; x = src;" }
+compile() { "unsigned src; var x; x = src;" }
+compile() { "unsigned src; address x; x = address(src);" }
+compile() { "unsigned src; boolean x; x = boolean(src);" }
+compile() { "unsigned src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "unsigned src; flags Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "unsigned src; int x(double z); x = int(double)(src);" }
+compile() { "unsigned src; interface A {} A x; x = A(src);" }
+
+// From short
+
+compile() { "short src; byte x; x = byte(src);" }
+compile() { "short src; char x; x = char(src);" }
+compile() { "short src; unsigned x; x = unsigned(src);" }
+compile() { "short src; int x; x = src;" }
+compile() { "short src; long x; x = src;" }
+compile() { "short src; float x; x = src;" }
+compile() { "short src; double x; x = src;" }
+compile() { "short src; var x; x = src;" }
+compile() { "short src; address x; x = address(src);" }
+compile() { "short src; boolean x; x = boolean(src);" }
+compile() { "short src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "short src; flags Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "short src; int x(double z); x = int(double)(src);" }
+compile() { "short src; interface A {} A x; x = A(src);" }
+
+// From int
+
+compile() { "int src; byte x; x = byte(src);" }
+compile() { "int src; char x; x = char(src);" }
+compile() { "int src; unsigned x; x = unsigned(src);" }
+compile() { "int src; int x; x = src;" }
+compile() { "int src; long x; x = src;" }
+compile() { "int src; float x; x = src;" }
+compile() { "int src; double x; x = src;" }
+compile() { "int src; var x; x = src;" }
+compile() { "int src; address x; x = address(src);" }
+compile() { "int src; boolean x; x = boolean(src);" }
+compile() { "int src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "int src; flags Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "int src; int x(double z); x = int(double)(src);" }
+compile() { "int src; interface A {} A x; x = A(src);" }
+
+// From long
+
+compile() { "long src; byte x; x = byte(src);" }
+compile() { "long src; char x; x = char(src);" }
+compile() { "long src; unsigned x; x = unsigned(src);" }
+compile() { "long src; short x; x = short(src);" }
+compile() { "long src; int x; x = int(src);" }
+compile() { "long src; float x; x = src;" }
+compile() { "long src; double x; x = src;" }
+compile() { "long src; var x; x = src;" }
+compile() { "long src; address x; x = address(src);" }
+compile() { "long src; boolean x; x = boolean(src);" }
+compile() { "long src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "long src; flags Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "long src; int x(double z); x = int(double)(src);" }
+compile() { "long src; interface A {} A x; x = A(src);" }
+
+// From float
+
+compile() { "float src; byte x; x = byte(src);" }
+compile() { "float src; char x; x = char(src);" }
+compile() { "float src; unsigned x; x = unsigned(src);" }
+compile() { "float src; short x; x = short(src);" }
+compile() { "float src; int x; x = int(src);" }
+compile() { "float src; long x; x = long(src);" }
+compile() { "float src; double x; x = src;" }
+compile() { "float src; var x; x = src;" }
+compile() { "float src; address x; x = address(src);" }
+compile() { "float src; boolean x; x = boolean(src);" }
+compile() { "float src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "float src; flags Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "float src; int x(double z); x = int(double)(src);" }
+compile() { "float src; interface A {} A x; x = A(src);" }
+
+// From double
+
+compile() { "double src; byte x; x = byte(src);" }
+compile() { "double src; char x; x = char(src);" }
+compile() { "double src; unsigned x; x = unsigned(src);" }
+compile() { "double src; short x; x = short(src);" }
+compile() { "double src; int x; x = int(src);" }
+compile() { "double src; long x; x = long(src);" }
+compile() { "double src; float x; x = float(src);" }
+compile() { "double src; var x; x = src;" }
+compile() { "double src; address x; x = address(src);" }
+compile() { "double src; boolean x; x = boolean(src);" }
+compile() { "double src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "double src; flags Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "double src; int x(double z); x = int(double)(src);" }
+compile() { "double src; interface A {} A x; x = A(src);" }
+
+// From boolean
+
+compile() { "boolean src; byte x; x = byte(src);" }
+compile() { "boolean src; char x; x = char(src);" }
+compile() { "boolean src; unsigned x; x = unsigned(src);" }
+compile() { "boolean src; short x; x = short(src);" }
+compile() { "boolean src; int x; x = int(src);" }
+compile() { "boolean src; long x; x = long(src);" }
+compile() { "boolean src; float x; x = float(src);" }
+compile() { "boolean src; double x; x = double(src);" }
+compile() { "boolean src; var x; x = src;" }
+compile() { "boolean src; address x; x = address(src);" }
+compile() { "boolean src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "boolean src; flags Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "boolean src; int x(double z); x = int(double)(src);" }
+compile() { "boolean src; interface A {} A x; x = A(src);" }
+
+// From Foo
+
+compile() { "enum Foo { A, B }; Foo src; byte x; x = byte(src);" }
+compile() { "enum Foo { A, B }; Foo src; char x; x = char(src);" }
+compile() { "enum Foo { A, B }; Foo src; unsigned x; x = unsigned(src);" }
+compile() { "enum Foo { A, B }; Foo src; short x; x = short(src);" }
+compile() { "enum Foo { A, B }; Foo src; int x; x = int(src);" }
+compile() { "enum Foo { A, B }; Foo src; long x; x = long(src);" }
+//compile() { "enum Foo { A, B }; Foo src; float x; x = float(src);" }
+//compile() { "enum Foo { A, B }; Foo src; double x; x = double(src);" }
+//compile() { "enum Foo { A, B }; Foo src; var x; x = src;" }
+compile() { "enum Foo { A, B }; Foo src; address x; x = address(src);" }
+compile() { "enum Foo { A, B }; Foo src; boolean x; x = boolean(src);" }
+compile() { "enum Foo { A, B }; Foo src; flags Bar { A, B }; Bar x; x = Bar(src);" }
+compile() { "enum Foo { A, B }; Foo src; int x(double z); x = int(double)(src);" }
+compile() { "enum Foo { A, B }; Foo src; interface A {} A x; x = A(src);" }
+
+// From address
+
+compile() { "address src; byte x; x = byte(src);" }
+compile() { "address src; char x; x = char(src);" }
+compile() { "address src; unsigned x; x = unsigned(src);" }
+compile() { "address src; short x; x = short(src);" }
+compile() { "address src; int x; x = int(src);" }
+compile() { "address src; long x; x = long(src);" }
+compile() { "address src; float x; x = float(src);" }
+compile() { "address src; var x; x = src;" }
+compile() { "address src; double x; x = double(src);" }
+compile() { "address src; boolean x; x = boolean(src);" }
+compile() { "address src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "address src; flags Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "address src; int x(double z); x = int(double)(src);" }
+compile() { "address src; interface A {} A x; x = A(src);" }
+
+// From function int(double);
+
+compile() { "int src(double z); byte x; x = byte(src);" }
+compile() { "int src(double z); char x; x = char(src);" }
+compile() { "int src(double Z); unsigned x; x = unsigned(src);" }
+compile() { "int src(double z); short x; x = short(src);" }
+compile() { "int src(double z); int x; x = int(src);" }
+compile() { "int src(double z); long x; x = long(src);" }
+compile() { "int src(double z); float x; x = float(src);" }
+compile() { "int src(double z); double x; x = double(src);" }
+//compile() { "int src(double z); var x; x = src;" }
+compile() { "int src(double z); address x; x = address(src);" }
+compile() { "int src(double z); boolean x; x = boolean(src);" }
+compile() { "int src(double z); enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "int src(double z); flags Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "int src(double z); interface A {} A x; x = A(src);" }
+
+// From interface
+
+compile() { "interface A {} A src; byte x; x = byte(src);" }
+compile() { "interface A {} A src; char x; x = char(src);" }
+compile() { "interface A {} A src; unsigned x; x = unsigned(src);" }
+compile() { "interface A {} A src; short x; x = short(src);" }
+compile() { "interface A {} A src; int x; x = int(src);" }
+compile() { "interface A {} A src; long x; x = long(src);" }
+compile() { "interface A {} A src; float x; x = float(src);" }
+compile() { "interface A {} A src; double x; x = double(src);" }
+compile() { "interface A {} A src; var x; x = src;" }
+compile() { "interface A {} A src; address x; x = address(src);" }
+compile() { "interface A {} A src; boolean x; x = boolean(src);" }
+compile() { "interface A {} A src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "interface A {} A src; flags Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "interface A {} A src; int x(double z); x = int(double)(src);" }
+
+compile() { "string src; var x; x = src;" }
+compile() { "string16 src; var x; x = src;" }
+
+compile() { "void floofl(int x, substring... args) {} floofl(4, \"\");" }
+compile() { "enum E { A } E e; void f(int x, substring... args) {} f(4, string(e));" }
+compile() { "string s; void f(int x, substring... args) {} f(4, s);" }
+
+compile() { "string a = f(); string f() { return null; }" }
+compile() { "string a = f(); string16 f() { return null; }" }
+compile() { "string a = f(); substring f() { return null; }" }
+compile() { "string a = f(); substring16 f() { return null; }" }
+compile() { "string16 b; b = f(); string16 a = f(); string f() { return null; }" }
+compile() { "string16 a = f(); string16 f() { return null; }" }
+compile() { "string16 a = f(); substring f() { return null; }" }
+compile() { "string16 a = f(); substring16 f() { return null; }" }
+compile(expect: fail) { "substring a = f(); string f() { return null; }" }
+compile(expect: fail) { "substring a = f(); string16 f() { return null; }" }
+compile() { "substring a = f(); substring f() { return null; }" }
+compile(expect: fail) { "substring a = f(); substring16 f() { return null; }" }
+compile(expect: fail) { "substring16 a = f(); string f() { return null; }" }
+compile(expect: fail) { "substring16 a = f(); string16 f() { return null; }" }
+compile(expect: fail) { "substring16 a = f(); substring f() { return null; }" }
+compile() { "substring16 a = f(); substring16 f() { return null; }" }
+
+compile() { "string a, c; int b; a = b + c; a = c + b;" }
+
+compile() { "substring x; boolean bbq = x != null;" }
+compile() { "substring16 x; boolean bbq = x != null;" }
+
+compile() { "string a; string b; string16 c; a = b + c;" }
+compile() { "string a; string b; substring c; a = b + c;" }
+compile() { "string a; string b; substring16 c; a = b + c;" }
+compile() { "string a; string16 b; string c; a = b + c;" }
+compile() { "string a; string16 b; string16 c; a = b + c;" }
+compile() { "string a; string16 b; substring c; a = b + c;" }
+compile() { "string a; string16 b; substring16 c; a = b + c;" }
+compile() { "string a; substring b; string c; a = b + c;" }
+compile() { "string a; substring b; string16 c; a = b + c;" }
+compile() { "string a; substring b; substring c; a = b + c;" }
+compile() { "string a; substring b; substring16 c; a = b + c;" }
+compile() { "string a; substring16 b; string c; a = b + c;" }
+compile() { "string a; substring16 b; string16 c; a = b + c;" }
+compile() { "string a; substring16 b; substring c; a = b + c;" }
+compile() { "string a; substring16 b; substring16 c; a = b + c;" }
+compile() { "string16 a; string b; string c; a = b + c;" }
+compile() { "string16 a; string b; string16 c; a = b + c;" }
+compile() { "string16 a; string b; substring c; a = b + c;" }
+compile() { "string16 a; string b; substring16 c; a = b + c;" }
+compile() { "string16 a; string16 b; string c; a = b + c;" }
+compile() { "string16 a; string16 b; string16 c; a = b + c;" }
+compile() { "string16 a; string16 b; substring c; a = b + c;" }
+compile() { "string16 a; string16 b; substring16 c; a = b + c;" }
+compile() { "string16 a; substring b; string c; a = b + c;" }
+compile() { "string16 a; substring b; string16 c; a = b + c;" }
+compile() { "string16 a; substring b; substring c; a = b + c;" }
+compile() { "string16 a; substring b; substring16 c; a = b + c;" }
+compile() { "string16 a; substring16 b; string c; a = b + c;" }
+compile() { "string16 a; substring16 b; string16 c; a = b + c;" }
+compile() { "string16 a; substring16 b; substring c; a = b + c;" }
+compile() { "string16 a; substring16 b; substring16 c; a = b + c;" }
+
+compile() { "string a; string b; a += b;" }
+compile() { "string a; string16 b; a += b;" }
+compile() { "string a; substring b; a += b;" }
+compile() { "string a; substring16 b; a += b;" }
+compile() { "string16 a; string b; a += b;" }
+compile() { "string16 a; string16 b; a += b;" }
+compile() { "string16 a; substring b; a += b;" }
+compile() { "string16 a; substring16 b; a += b;" }
+compile(expect:fail) { "substring a; string b; a += b;" }
+compile(expect:fail) { "substring a; string16 b; a += b;" }
+compile(expect:fail) { "substring a; substring b; a += b;" }
+compile(expect:fail) { "substring a; substring16 b; a += b;" }
+compile(expect:fail) { "substring16 a; string b; a += b;" }
+compile(expect:fail) { "substring16 a; string16 b; a += b;" }
+compile(expect:fail) { "substring16 a; substring b; a += b;" }
+compile(expect:fail) { "substring16 a; substring16 b; a += b;" }
+
+// From string - coercions from string to non-string generally require a call to T.parse 
+
+compile(expect: fail) { "char x = char(\"abc\");" }
+compile(expect: fail) { "char x = char(\"abc\");" }
+compile(expect: fail) { "byte x = byte(\"abc\");" }
+compile(expect: fail) { "unsigned x = unsigned(\"abc\");" }
+compile(expect: fail) { "short x = short(\"abc\");" }
+compile(expect: fail) { "int x = int(\"abc\");" }
+compile(expect: fail) { "long x = long(\"abc\");" }
+compile(expect: fail) { "float x = float(\"abc\");" }
+compile(expect: fail) { "double x = double(\"abc\");" }
+compile(expect: fail) { "pointer<int> x = pointer<int>(\"abc\");" }
+compile(expect: fail) { "ref<int> x = ref<int>(\"abc\");" }
+compile(expect: fail) { "enum X { A, B, C} X x = X(\"abc\");" }
+compile(expect: fail) { "flags X { A, B, C} X x = X(\"abc\");" }
+compile(expect: fail) { "interface X { void f(expect: fail); } X x = X(\"abc\");" }
+compile(expect: fail) { "address x = address(\"abc\");" }
+compile(expect: fail) { "boolean x = boolean(\"abc\");" }
+compile(expect: fail) { "void(int) x = void(int)(\"abc\");" }
+
+// From string16 - coercions from string to non-string generally require a call to T.parse 
+
+compile(expect: fail) { "string16 src; byte x; x = byte(src);" }
+compile(expect: fail) { "string16 src; char x; x = char(src);" }
+compile(expect: fail) { "string16 src; unsigned x; x = unsigned(src);" }
+compile(expect: fail) { "string16 src; short x; x = short(src);" }
+compile(expect: fail) { "string16 src; int x; x = int(src);" }
+compile(expect: fail) { "string16 src; long x; x = long(src);" }
+compile(expect: fail) { "string16 src; float x; x = float(src);" }
+compile(expect: fail) { "string16 src; double x; x = double(src);" }
+compile(expect: fail) { "string16 src; boolean x; x = boolean(src);" }
+compile(expect: fail) { "string16 src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile(expect: fail) { "string16 src; flags Foo { A, B }; Foo x; x = Foo(src);" }
+compile(expect: fail) { "string16 src; int x(double z); x = int(double)(src);" }
+compile(expect: fail) { "string16 src; interface A {} A x; x = A(src);" }
+
+// From substring - coercions from string to non-string generally require a call to T.parse 
+
+compile(expect: fail) { "substring src; byte x; x = byte(src);" }
+compile(expect: fail) { "substring src; char x; x = char(src);" }
+compile(expect: fail) { "substring src; unsigned x; x = unsigned(src);" }
+compile(expect: fail) { "substring src; short x; x = short(src);" }
+compile(expect: fail) { "substring src; int x; x = int(src);" }
+compile(expect: fail) { "substring src; long x; x = long(src);" }
+compile(expect: fail) { "substring src; float x; x = float(src);" }
+compile() { "substring src; var x; x = src;" }
+compile(expect: fail) { "substring src; double x; x = double(src);" }
+compile(expect: fail) { "substring src; boolean x; x = boolean(src);" }
+compile(expect: fail) { "substring src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile(expect: fail) { "substring src; flags Foo { A, B }; Foo x; x = Foo(src);" }
+compile(expect: fail) { "substring src; int x(double z); x = int(double)(src);" }
+compile(expect: fail) { "substring src; interface A {} A x; x = A(src);" }
+
+// From substring16 - coercions from string to non-string generally require a call to T.parse 
+
+compile(expect: fail) { "substring16 src; byte x; x = byte(src);" }
+compile(expect: fail) { "substring16 src; char x; x = char(src);" }
+compile(expect: fail) { "substring16 src; unsigned x; x = unsigned(src);" }
+compile(expect: fail) { "substring16 src; short x; x = short(src);" }
+compile(expect: fail) { "substring16 src; int x; x = int(src);" }
+compile(expect: fail) { "substring16 src; long x; x = long(src);" }
+compile(expect: fail) { "substring16 src; float x; x = float(src);" }
+compile() { "substring16 src; var x; x = src;" }
+compile(expect: fail) { "substring16 src; double x; x = double(src);" }
+compile(expect: fail) { "substring16 src; boolean x; x = boolean(src);" }
+compile(expect: fail) { "substring16 src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile(expect: fail) { "substring16 src; flags Foo { A, B }; Foo x; x = Foo(src);" }
+compile(expect: fail) { "substring16 src; int x(double z); x = int(double)(src);" }
+compile(expect: fail) { "substring16 src; interface A {} A x; x = A(src);" }
+
+// String assignments
+
+compile() { "string16 x; boolean b = x != null;" }
+compile() { "string a; string b; a = b;" }
+compile() { "string a; string16 b; a = b;" }
+compile() { "string a; substring b; a = b;" }
+compile() { "string a; substring16 b; a = b;" }
+compile() { "string16 a; string b; a = b;" }
+compile() { "string16 a; string16 b; a = b;" }
+compile() { "string16 a; substring b; a = b;" }
+compile() { "string16 a; substring16 b; a = b;" }
+
+compile() { "substring a; string b; a = b;" }
+compile(expect: fail) { "substring a; string16 b; a = b;" }
+compile() { "substring a; substring b; a = b;" }
+compile(expect: fail) { "substring a; substring16 b; a = b;" }
+compile(expect: fail) { "substring16 a; string b; a = b;" }
+compile() { "substring16 a; string16 b; a = b;" }
+compile(expect: fail) { "substring16 a; substring b; a = b;" }
+compile() { "substring16 a; substring16 b; a = b;" }
+
+// String addition
+
+compile() { "string a; string b; string c; a = b + c;" }
+
+compile() { "string s; switch (s) { case \"abc\": break; }" }
+compile() { "string16 s; switch (s) { case \"abc\": break; }" }
+compile() { "substring s; switch (s) { case \"abc\": break; }" }
+compile() { "substring16 s; switch (s) { case \"abc\": break; }" }
 
 // Disallowed implicit casts.
 
@@ -93,6 +883,21 @@ compile(expect: fail) { "3 <<= 3;" }
 compile(expect: fail) { "3 >>= 3;" }
 compile(expect: fail) { "3 >>>= 3;" }
 
+compile() { "class A{} class B{} boolean a = A == B;" }
+compile() { "class A{} class B{} boolean a = A < B;" }
+compile() { "class A{} class B{} boolean a = A > B;" }
+compile() { "class A{} class B{} boolean a = A <= B;" }
+compile() { "class A{} class B{} boolean a = A >= B;" }
+compile() { "class A{} class B{} boolean a = A <> B;" }
+compile() { "class A{} class B{} boolean a = A <>= B;" }
+compile() { "class A{} class B{} boolean a = A != B;" }
+compile() { "class A{} class B{} boolean a = A !< B;" }
+compile() { "class A{} class B{} boolean a = A !> B;" }
+compile() { "class A{} class B{} boolean a = A !<= B;" }
+compile() { "class A{} class B{} boolean a = A !>= B;" }
+compile() { "class A{} class B{} boolean a = A !<> B;" }
+compile() { "class A{} class B{} boolean a = A !<>= B;" }
+
 compile() { "3 < 4 ? 5 : 6;" }
 
 compile() { "int f() { if (true) return 5; else return 3; }" }
@@ -106,8 +911,23 @@ compile(expect: fail, message: UNDEFINED) { "class X { X(int foo, int bar) {} } 
 compile(expect: fail) { "class A { private int x; }; void f(A a) { int b = a.x; }" }
 
 compile(expect: fail, message: ABSTRACT_INSTANCE_DISALLOWED) { "class A { public abstract void f(); } class B extends A { } B b;" }
+compile(expect: fail, message: ABSTRACT_INSTANCE_DISALLOWED) { "class A { public abstract void f(); } class B extends A { } void g() { B b; }" }
+
+compile(expect: fail, message: CIRCULAR_EXTENDS) { "class A extends A {}" }
+compile(expect: fail, message: CIRCULAR_EXTENDS) { "class B extends A{} class A extends B {}" }
+compile(expect: fail, message: CIRCULAR_EXTENDS) { "class B extends C{} class A extends B {} class C extends A {}" }
+compile(expect: fail, message: CIRCULAR_EXTENDS) { "class B extends C{} class A extends C {} class C extends A {}" }
+
+compile(expect: fail, message: MEMBER_REF_NOT_ALLOWED) { "class A { int b; static void f() { b = 3; } }" }
+compile(expect: fail, message: THIS_NOT_ALLOWED) { "class A { int b; static void f() { this.b = 3; } }" }
+
+compile() { "short x; switch (x) { case -1: break; }" }
+compile() { "class S = short; @Constant S x = S(-1);" }
 
 compile() { "class A { private byte z; int x; }; void f(A a) { int b = a.x; }" }
+compile(expect: fail, message: DISALLOWED_ANNOTATION) { "@Shape @Shape class foo {}" }
+compile(expect: fail, message: UNRECOGNIZED_ANNOTATION) { "@Sxp class foo {}" }
+
 compile(expect: fail, message: RETURN_VALUE_REQUIRED) { "int f() { int a; if (true) return 5; else a = 3; }" }
 compile(expect: fail, message: RETURN_VALUE_REQUIRED) { "int f() { int a; }" }
 compile(expect: fail, message: INVALID_MULTIPLY) { "boolean a = true * true;" }
@@ -146,12 +966,226 @@ compile(expect: fail, message: INVALID_UNARY_PLUS) { "boolean a; a = +a;" }
 compile(expect: fail, message: INVALID_BIT_COMPLEMENT) { "boolean a; a = ~a;" }
 compile(expect: fail, message: CANNOT_CONVERT) { "boolean a; a = &a;" }
 compile(expect: fail, message: INVALID_INDIRECT) { "boolean a; a = *a;" }
-compile(expect: fail, message: NOT_INTEGER) { "boolean a; a = --a;" }
-compile(expect: fail, message: NOT_INTEGER) { "boolean a; a = ++a;" }
-compile(expect: fail, message: NOT_INTEGER) { "boolean a; a = a--;" }
-compile(expect: fail, message: NOT_INTEGER) { "boolean a; a = a++;" }
+compile(expect: fail, message: NOT_NUMERIC) { "boolean a; a = --a;" }
+compile(expect: fail, message: NOT_NUMERIC) { "boolean a; a = ++a;" }
+compile(expect: fail, message: NOT_NUMERIC) { "boolean a; a = a--;" }
+compile(expect: fail, message: NOT_NUMERIC) { "boolean a; a = a++;" }
 
 compile(expect: fail) { "ref<int> x; if (x == 0) x = new int;" }
+
+
+// The matrix of allowed operators for pointer operands:
+
+compile(expect: fail, message: INVALID_AND) { "class C{} double b; pointer<C> a = b & 37;" }
+compile(expect: fail, message: TYPE_MISMATCH) { "class C{} pointer<C> b; pointer<C> a = b | 37;" }
+compile(expect: fail, message: TYPE_MISMATCH) { "class C{} pointer<C> b; pointer<C> a = b ^ 37;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "class C{} pointer<C> b; pointer<C> a; a &= 37;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "class C{} pointer<C> b; pointer<C> a; a |= 37;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "class C{} pointer<C> b; pointer<C> a; a ^= 37;" }
+compile(expect: fail, message: TYPE_MISMATCH) { "class C{} pointer<C> b; pointer<C> a = b * 37;" }
+compile(expect: fail, message: TYPE_MISMATCH) { "class C{} pointer<C> b; pointer<C> a = b / 37;" }
+compile(expect: fail, message: TYPE_MISMATCH) { "class C{} pointer<C> b; pointer<C> a = b % 37;" }
+compile() { "class C{ int m; } pointer<C> b, c; long i; c = b + i;" }
+compile() { "class C{ int m; } pointer<C> b, c; long i; c = b - i;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "class C{} pointer<C> b; pointer<C> a = b << 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "class C{} pointer<C> b; pointer<C> a = b >> 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "class C{} pointer<C> b; pointer<C> a = b >>> 5;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "class C{} pointer<C> b; pointer<C> a = 5 << b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "class C{} pointer<C> b; pointer<C> a = 5 >> b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "class C{} pointer<C> b; pointer<C> a = 5 >>> b;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "class C{} pointer<C> b; pointer<C> a; a *= 37;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "class C{} pointer<C> b; pointer<C> a; a /= 37;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "class C{} pointer<C> b; pointer<C> a; a %= 37;" }
+compile() { "class C{ int m; } pointer<C> b; long i; b += i;" }
+compile() { "class C{ int m; } pointer<C> b; long i; b -= i;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "class C{} pointer<C> b; pointer<C> a; a <<= 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "class C{} pointer<C> b; pointer<C> a; a >>= 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "class C{} pointer<C> b; pointer<C> a; a >>>= 5;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "class C{} pointer<C> b; int a; a <<= b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "class C{} pointer<C> b; int a; a >>= b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "class C{} pointer<C> b; int a; a >>>= b;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b == c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b != c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b < c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b > c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b <= c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b >= c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b <> c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b !< c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b !> c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b !<= c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b !>= c;" }
+compile() { "class C{} pointer<C> b, c; boolean a = b !<> c;" }
+compile(expect: fail, message: INVALID_NEGATE) { "class C{} pointer<C> a; a = -a;" }
+compile(expect: fail, message: INVALID_UNARY_PLUS) { "class C{} pointer<C> a; a = +a;" }
+compile(expect: fail, message: INVALID_BIT_COMPLEMENT) { "class C{} pointer<C> a; a = ~a;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "class C{} pointer<C> a; a = &a;" }
+compile() { "class C{int m;} pointer<C> a; C c = *a;" }
+compile() { "class C{} pointer<C> a; a = --a;" }
+compile() { "class C{} pointer<C> a; a = ++a;" }
+compile() { "class C{} pointer<C> a; a = a--;" }
+compile() { "class C{} pointer<C> a; a = a++;" }
+
+// The matrix of allowed operators for double operands:
+
+compile(expect: fail, message: INVALID_AND) { "double b; double a = b & 37;" }
+compile(expect: fail, message: INVALID_OR) { "double b; double a = b | 37;" }
+compile(expect: fail, message: INVALID_XOR) { "double b; double a = b ^ 37;" }
+compile(expect: fail, message: INVALID_AND) { "double b; double a; a &= 37;" }
+compile(expect: fail, message: INVALID_OR) { "double b; double a; a |= 37;" }
+compile(expect: fail, message: INVALID_XOR) { "double b; double a; a ^= 37;" }
+compile() { "double b; double a = b * 37;" }
+compile() { "double b; double a = b / 37;" }
+compile(expect: fail, message: INVALID_REMAINDER) { "double b; double a = b % 37;" }
+compile() { "double b; double a = b + 37;" }
+compile() { "double b; double a = b - 37;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "double b; double a = b << 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "double b; double a = b >> 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "double b; double a = b >>> 5;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "double b; double a = 5 << b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "double b; double a = 5 >> b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "double b; double a = 5 >>> b;" }
+compile() { "double b; double a; a *= 37;" }
+compile() { "double b; double a; a /= 37;" }
+compile(expect: fail, message: INVALID_REMAINDER) { "double b; double a; a %= 37;" }
+compile() { "double b; double a; a += 37;" }
+compile() { "double b; double a; a -= 37;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "double b; double a; a <<= 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "double b; double a; a >>= 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "double b; double a; a >>>= 5;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "double b; int a; a <<= b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "double b; int a; a >>= b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "double b; int a; a >>>= b;" }
+compile() { "double b; boolean a = b == 37;" }
+compile() { "double b; boolean a = b != 37;" }
+compile() { "double b; boolean a = b < 37;" }
+compile() { "double b; boolean a = b > 37;" }
+compile() { "double b; boolean a = b <= 37;" }
+compile() { "double b; boolean a = b >= 37;" }
+compile() { "double b; boolean a = b <> 37;" }
+compile() { "double b; boolean a = b <>= 37;" }
+compile() { "double b; boolean a = b !< 37;" }
+compile() { "double b; boolean a = b !> 37;" }
+compile() { "double b; boolean a = b !<= 37;" }
+compile() { "double b; boolean a = b !>= 37;" }
+compile() { "double b; boolean a = b !<> 37;" }
+compile() { "double b; boolean a = b !<>= 37;" }
+compile() { "double a; a = -a;" }
+compile() { "double a; a = +a;" }
+compile(expect: fail, message: INVALID_BIT_COMPLEMENT) { "double a; a = ~a;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "double a; a = &a;" }
+compile(expect: fail, message: INVALID_INDIRECT) { "double a; a = *a;" }
+compile() { "double a; a = --a;" }
+compile() { "double a; a = ++a;" }
+compile() { "double a; a = a--;" }
+compile() { "double a; a = a++;" }
+
+// The matrix of allowed operators for float operands:
+
+compile(expect: fail, message: INVALID_AND) { "float b; float a = b & 37;" }
+compile(expect: fail, message: INVALID_OR) { "float b; float a = b | 37;" }
+compile(expect: fail, message: INVALID_XOR) { "float b; float a = b ^ 37;" }
+compile(expect: fail, message: INVALID_AND) { "float b; float a; a &= 37;" }
+compile(expect: fail, message: INVALID_OR) { "float b; float a; a |= 37;" }
+compile(expect: fail, message: INVALID_XOR) { "float b; float a; a ^= 37;" }
+compile() { "float b; float a = b * 37;" }
+compile() { "float b; float a = b / 37;" }
+compile(expect: fail, message: INVALID_REMAINDER) { "float b; float a = b % 37;" }
+compile() { "float b; float a = b + 37;" }
+compile() { "float b; float a = b - 37;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "float b; float a = b << 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "float b; float a = b >> 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "float b; float a = b >>> 5;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "float b; float a = 5 << b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "float b; float a = 5 >> b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "float b; float a = 5 >>> b;" }
+compile() { "float b; float a; a *= 37;" }
+compile() { "float b; float a; a /= 37;" }
+compile(expect: fail, message: INVALID_REMAINDER) { "float b; float a; a %= 37;" }
+compile() { "float b; float a; a += 37;" }
+compile() { "float b; float a; a -= 37;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "float b; float a; a <<= 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "float b; float a; a >>= 5;" }
+compile(expect: fail, message: LEFT_NOT_INT) { "float b; float a; a >>>= 5;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "float b; int a; a <<= b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "float b; int a; a >>= b;" }
+compile(expect: fail, message: SHIFT_NOT_INT) { "float b; int a; a >>>= b;" }
+compile() { "float b; boolean a = b == 37;" }
+compile() { "float b; boolean a = b != 37;" }
+compile() { "float b; boolean a = b < 37;" }
+compile() { "float b; boolean a = b > 37;" }
+compile() { "float b; boolean a = b <= 37;" }
+compile() { "float b; boolean a = b >= 37;" }
+compile() { "float b; boolean a = b <> 37;" }
+compile() { "float b; boolean a = b !< 37;" }
+compile() { "float b; boolean a = b !> 37;" }
+compile() { "float b; boolean a = b !<= 37;" }
+compile() { "float b; boolean a = b !>= 37;" }
+compile() { "float b; boolean a = b !<> 37;" }
+compile() { "float a; a = -a;" }
+compile() { "float a; a = +a;" }
+compile(expect: fail, message: INVALID_BIT_COMPLEMENT) { "float a; a = ~a;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "float a; a = &a;" }
+compile(expect: fail, message: INVALID_INDIRECT) { "float a; a = *a;" }
+compile() { "float a; a = --a;" }
+compile() { "float a; a = ++a;" }
+compile() { "float a; a = a--;" }
+compile() { "float a; a = a++;" }
+
+// Flags tests
+
+compile() { "flags A { B, C, D } A x, y; x = y;" }
+compile() { "flags A { B, C, D } A x; x = 0;" }
+compile() { "flags A { B, C, D } A x; x = A.C|A.D;" }
+compile() { "flags A { B, C, D } A x; x = A.C&A.D;" }
+compile() { "flags A { B, C, D } A x; x = A.C^A.D;" }
+compile() { "flags A { B, C, D } A x; if (x & A.B) x = A.D;" }
+compile() { "flags A { B, C, D } A x; while (x & A.B) x = A.D;" }
+compile() { "flags A { B, C, D } A x; for (; x & A.B; ) x = A.D;" }
+compile() { "flags A { B, C, D } A x; do { x = A.C; } while (x & A.B);" }
+compile() { "flags A { B, C, D } A x; int y = (x & A.C) ? 3 : -1;" }
+compile(expect: fail) { "flags A { B, C, D } switch (x) { x = A.B; }" }
+compile(expect: fail) { "flags A { B, C, D } A x; flags B { B, C, D } B y; x = y;" }
+compile(expect: fail) { "flags A { B, C, D } A x; flags B { B, C, D } B y; if (x | y) y = B.B;" }
+compile(expect: fail) { "flags A { B, C, D } A x; flags B { B, C, D } B y; if (x & y) y = B.B;" }
+compile(expect: fail) { "flags A { B, C, D } A x; flags B { B, C, D } B y; if (x ^ y) y = B.B;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y, z; x = y + z;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y, z; x = y - z;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y, z; x = y * z;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y, z; x = y / z;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y, z; x = y % z;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; x = y << 2;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; x = y >> 3;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; x = y >>> 4;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y, z; x += z;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y, z; x -= z;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y, z; x *= z;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y, z; x /= z;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y, z; x %= z;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; x <<= 2;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; x >>= 3;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; x >>>= 4;" }
+//compile() { "flags A { B, C, D } A x, y; boolean z = x === y;" }
+compile() { "flags A { B, C, D } A x, y; boolean z = x == y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x < y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x > y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x <= y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x >= y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x <> y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x <>= y;" }
+//compile() { "flags A { B, C, D } A x, y; boolean z = x !== y;" }
+compile() { "flags A { B, C, D } A x, y; boolean z = x != y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x !< y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x !> y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x !<= y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x !>= y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x !<> y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; boolean z = x !<>= y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; x = !y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; x = -y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; x = +y;" }
+compile(expect: fail) { "flags A { B, C, D } A x, y; x = *y;" }
+compile() { "flags A { B, C, D } A x, y; x = ~y;" }
 
 // The matrix of allowed operators for unsigned operands:
 
@@ -285,6 +1319,54 @@ compile() { "int a; a = ++a;" }
 compile() { "int a; a = a--;" }
 compile() { "int a; a = a++;" }
 
+// Check that the int type properties are accessible.
+
+compile() { "int x; int y = x.MIN_VALUE;" }
+
+// The matrix of allowed operators for short operands:
+
+compile() { "short a = short(37 & 37);" }
+compile() { "short a = short(37 | 37);" }
+compile() { "short a = short(37 ^ 37);" }
+compile() { "short a; a &= 37;" }
+compile() { "short a; a |= 37;" }
+compile() { "short a; a ^= 37;" }
+compile() { "short a = short(37 * 37);" }
+compile() { "short a = short(37 / 37);" }
+compile() { "short a = short(37 % 37);" }
+compile() { "short a = short(37 + 37);" }
+compile() { "short a = short(37 - 37);" }
+compile() { "short a = short(37 << 5);" }
+compile() { "short a = short(37 >> 5);" }
+compile() { "short a = short(37 >>> 5);" }
+compile() { "short a; a *= 37;" }
+compile() { "short a; a /= 37;" }
+compile() { "short a; a %= 37;" }
+compile() { "short a; a += 37;" }
+compile() { "short a; a -= 37;" }
+compile() { "short a; a <<= 5;" }
+compile() { "short a; a >>= 5;" }
+compile() { "short a; a >>>= 5;" }
+compile() { "short b; boolean a = b == 37;" }
+compile() { "short b; boolean a = b != 37;" }
+compile() { "short b; boolean a = b < 37;" }
+compile() { "short b; boolean a = b > 37;" }
+compile() { "short b; boolean a = b <= 37;" }
+compile() { "short b; boolean a = b >= 37;" }
+compile() { "short b; boolean a = b <> 37;" }
+compile() { "short b; boolean a = b !< 37;" }
+compile() { "short b; boolean a = b !> 37;" }
+compile() { "short b; boolean a = b !<= 37;" }
+compile() { "short b; boolean a = b !>= 37;" }
+compile() { "short b; boolean a = b !<> 37;" }
+compile() { "short a; a = -a;" }
+compile() { "short a; a = +a;" }
+compile() { "short a; a = ~a;" }
+compile() { "short a; a = --a;" }
+compile() { "short a; a = ++a;" }
+compile() { "short a; a = a--;" }
+compile() { "short a; a = a++;" }
+
 // The matrix of allowed operators for char operands:
 
 compile() { "char b; char a = char(b & 37);" }
@@ -298,9 +1380,9 @@ compile() { "char b; char a = char(b / 37);" }
 compile() { "char b; char a = char(b % 37);" }
 compile() { "char b; char a = char(b + 37);" }
 compile() { "char b; char a = char(b - 37);" }
-compile() { "char b; char a = b << 5;" }
-compile() { "char b; char a = b >> 5;" }
-compile() { "char b; char a = b >>> 5;" }
+compile() { "char b; char a = char(b << 5);" }
+compile() { "char b; char a = char(b >> 5);" }
+compile() { "char b; char a = char(b >>> 5);" }
 compile() { "char b; char a; a *= 37;" }
 compile() { "char b; char a; a /= 37;" }
 compile() { "char b; char a; a %= 37;" }
@@ -342,9 +1424,9 @@ compile() { "byte b; byte a = byte(b / 37);" }
 compile() { "byte b; byte a = byte(b % 37);" }
 compile() { "byte b; byte a = byte(b + 37);" }
 compile() { "byte b; byte a = byte(b - 37);" }
-compile() { "byte b; byte a = b << 5;" }
-compile() { "byte b; byte a = b >> 5;" }
-compile() { "byte b; byte a = b >>> 5;" }
+compile() { "byte b; byte a = byte(b << 5);" }
+compile() { "byte b; byte a = byte(b >> 5);" }
+compile() { "byte b; byte a = byte(b >>> 5);" }
 compile() { "byte b; byte a; a *= 37;" }
 compile() { "byte b; byte a; a /= 37;" }
 compile() { "byte b; byte a; a %= 37;" }
@@ -373,6 +1455,9 @@ compile() { "byte a; a = ++a;" }
 compile() { "byte a; a = a--;" }
 compile() { "byte a; a = a++;" }
 
+compile(expect: fail, message: NOT_BOOLEAN) { "float a; a = !a;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "float a; a = &a;" }
+compile(expect: fail, message: INVALID_INDIRECT) { "float a; a = *a;" }
 compile(expect: fail, message: NOT_BOOLEAN) { "long a; a = !a;" }
 compile(expect: fail, message: CANNOT_CONVERT) { "long a; a = &a;" }
 compile(expect: fail, message: INVALID_INDIRECT) { "long a; a = *a;" }
@@ -395,7 +1480,7 @@ compile(expect: fail, message: INVALID_COMPARE) { "boolean a = 37 !<>= 37;" }
 compile(expect: fail, message: INVALID_COMPARE) { "unsigned b, c; boolean a = b <>= c;" }
 compile(expect: fail, message: INVALID_COMPARE) { "unsigned b, c; boolean a = b !<>= c;" }
 
-// The matrix of allowed operators for boolean operands:
+// The matrix of allowed operators for string operands:
 
 compile() { 'string a = "abc" + "abc";' }
 compile() { 'string a; a += "abc";' }
@@ -439,7 +1524,77 @@ compile(expect: fail, message: UNEXPECTED_RC) { "switch (5) { default: }" }
 
 compile() { "ref<int> x = new int;" }
 
+// super test
+
+compile(expect: fail){"class A{ A(int x) {} int f() { return 3; } } class B extends A { B() { super(2); f(); super(3); } }"}
+
+//compile() { "lock { }" }
+//compile() { "lock { int x; }" }
+//compile() { "void func() lock {}" }
+//compile() { "void func() lock { int x; }compile() { "monitor class M<class T> { T x; } M<int> a; lock(a) { x = 345678; }" }
+compile() { "monitor class M<class T> { T x; } monitor class N<class T> extends M<T> {}; N<int> a; lock(a) { x = 345678; }" }
+compile(expect: fail) { "monitor class M { int a; } class C extends M {} C x; x.a = 3;" }
+compile(expect: fail) { "monitor class M { int a; } class C extends M { void f() { a = 3; } }" }
+compile() { "monitor class M { } class C extends M { int a; } monitor class N extends C {} N x; x.a = 3;" }
+
+
+compile() { "Monitor a; lock(a) { }" }
+compile() { "Monitor a; lock(a) { notify(); }" }
+compile() { "Monitor a; lock(a) { notifyAll(); }" }
+compile() { "Monitor a; lock(a) { wait(); }" }
+compile() { "import parasol:time; Monitor a; lock(a) { wait(time.Duration(10)); }" }
+compile() { "lock(a) { } Monitor a;" }
+compile() { "monitor class M {} M a; lock(a) { }" }
+compile() { "monitor class M { int b; } M a; lock(a) { int c = b; }" }
+compile() { "M a; lock(a) { int c = b; } monitor class M { int b; }" }
+compile() { "monitor class M { int b() { return 0; } } M a; lock(a) { int c = b(); }" }
+compile() { "monitor class M { void b() { } } M a; a.b();" }
+compile() { "Monitor a; lock(a) { int x; }" }
+compile() { "Monitor a; void func() lock(a) {}" }
+compile() { "Monitor a; void func() lock(a) { int x; }" }
+
+compile(expect: fail) { "float a; lock(a) { }" }
+compile(expect: fail) { "float a; void func() lock(a) {}" }
+compile(expect: fail) { "monitor class M { int b; }; M a; int c = a.b;" }
+
+compile() { "monitor class M { int b; } monitor class N extends M { int d; }" }
+compile() { "monitor class M { int b; } class N extends M { int d; }" }
+compile(expect: fail) { "class M { int b; } monitor class N extends M { int d; }" }
+compile() { "monitor class M { int b; } class N extends M { int d; } monitor class P extends N { int e; }" }
+
+ 
+compile() { "ref<int> x = new (null) int;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "long x = new (null) int;" }
+compile(expect: fail, message: CANNOT_CONVERT) { "ref<int> x = new (false) int;" }
+compile() { "ref<int> x = new (null) int();" }
+compile(expect: fail, message: CANNOT_CONVERT) { "long x = new (null) int();" }
+compile(expect: fail, message: CANNOT_CONVERT) { "ref<int> x = new (false) int();" }
+
 compile() { "enum a { A, B, C }; a x = a.B;" }
+
+compile() { "int[] a = [ 1, 2, 3 ];" }
+compile() { "int[string] b = [ \"a\": 4, \"b\": 17, \"c\": -23, ];" }
+compile() { "enum E { A, B, C } string[E] x = [ B: \"abc\", \"def\" ];" }
+
+compile() { "int[] a; for (i in a) { ref<int> p = &i; }" }
+compile() { "byte[] a; for (i in a) { break; }"  }
+compile() { "byte[] a; for (i in a) { continue; }"  }
+compile() { "string n; for (i in n) { break; }" }
+
+compile(expect: fail) { "pointer<int> a; for (i in a) { ref<int> p = &i; }" }
+
+
+compile(expect: fail) { "class C { C(int x) {} } C x;" }
+
+compile() { "class C { int a, b, c; } C c = { a: 3, c: 7, b: -1 };" }
+
+compile(expect: fail) { "int[string] b = [ \"a\": 4, 22: 17, \"c\": -23, ];" }
+compile(expect: fail) { "enum E { A, B, C } string[E] x = [ B: \"abc\", \"def\", \"ghi\" ];" }
+compile(expect: fail) { "enum E { A, B, C } string[E] x = [ B: \"abc\", A: \"def\", \"ghi\" ];" }
+compile(expect: fail) { "enum E { A, B, C } string[E] x = [ D: \"abc\" ];" }
+compile(expect: fail) { "int[string] b = [ \"a\": 4, 17, \"c\": -23, ];" }
+compile(expect: fail) { "class C { int a, b, c; } C c = { 3, c: 7, b: -1 };" }
+compile(expect: fail) { "class C { int a, b, c; } C c = { \"wrong\": 3, c: 7, b: -1 };" }
 
 compile() { "class a { ~a() {} }" }
 
@@ -449,7 +1604,13 @@ compile() { "int, boolean f() { return 0, false; }" }
 
 compile(expect: fail) { "int, boolean f() { return false, 0; }" }
 
+compile(expect: fail) { "int, boolean f() { return 0, false; } int x; double y; (x, y) = f();" }
+compile(expect: fail, message: CANNOT_CONVERT) { "int, boolean a() { return b(); } int, char b() { return 2, 3; }" }
+compile(expect: fail, message: INCORRECT_RETURN_COUNT) { "int, boolean a() { return 2; }" }
+
 compile(expect: fail) { "void foo(foo bar);" }
 
 compile(expect: fail, message: DUPLICATE) { "int i, i;" }
 compile() { ";" }
+compile() { "int β; β = 56;" }
+*/

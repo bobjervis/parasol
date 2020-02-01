@@ -18,6 +18,7 @@
  */
 namespace parasol:process;
 
+import parasol:exception;
 import parasol:exception.IllegalOperationException;
 import parasol:log;
 import parasol:pxi;
@@ -745,6 +746,7 @@ public ref<string[string]> useParentEnvironment;
 private monitor class PendingChildren {
 	private ref<PendingChild>[] _children;
 	private ref<Thread> _waiter;
+	private boolean _shutdown;
 
 	void declareChild(linux.pid_t pid, void (int, address) handler, address arg) {
 		ref<PendingChild> pc = new PendingChild(pid, handler, arg);
@@ -755,9 +757,22 @@ private monitor class PendingChildren {
 		for (int i = 0; i < _children.length(); i++)
 			if (_children[i] == null) {
 				_children[i] = pc;
+				notify();
 				return;
 			}
 		_children.append(pc);
+		notify();
+	}
+
+	ref<Thread> declareShutdown() {
+		_shutdown = true;
+		notify();
+		return _waiter;
+	}
+
+	boolean waitForChild() {
+		wait();
+		return !_shutdown;
 	}
 
 	void cancelChild(linux.pid_t pid) {
@@ -788,18 +803,31 @@ private monitor class PendingChildren {
 
 private void childWaiter(address arg) {
 	if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-		for (;;) {
+		while (pendingChildren.waitForChild()) {
 			int exitStatus;
 			linux.pid_t pid = linux.waitpid(-1, &exitStatus, 0);
-			if (pid > 0) {
-//				logger.format(log.DEBUG, "waitpid %d with %d", pid, exitStatus);
+			if (pid > 0)
 				pendingChildren.reportChildStateChange(pid, exitStatus);
+			else if (pid < 0) {
+				if (linux.errno() == linux.ECHILD)
+					break;
 			}
 		}
 	}
 }
 
 private PendingChildren pendingChildren;
+private ShutdownSignaller shutdown;
+
+class ShutdownSignaller {
+	~ShutdownSignaller() {
+		ref<Thread> t = pendingChildren.declareShutdown();
+		if (t != null) {
+			t.join();
+			delete t;
+		}
+	}
+}
 
 private class PendingChild {
 	public linux.pid_t pid;

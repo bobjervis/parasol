@@ -1944,6 +1944,8 @@ public class Return extends ParameterBag {
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 			if (nl.node.type == null || nl.node.deferAnalysis())
 				continue;
+			if (nl.node.op() == Operator.CALL)
+				continue;
 
 			if (nl.node.type.hasDestructor()) {
 				boolean skipCopy;

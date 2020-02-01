@@ -54,6 +54,11 @@ public class Object extends Atom {
 		
 	}
 
+	~Object() {
+		_properties["parent"] = null;
+		_properties.deleteAll();
+	}
+
 //	public boolean isRunnable() {
 //		return true;
 //	}
@@ -158,8 +163,12 @@ public class Vector extends Atom {
 	private ref<Atom>[] _value;
 	
 	public Vector(ref<Atom>[] value) {
-		for (int i = 0; i < value.length(); i++)
+		for (i in value)
 			_value.append(value[i]);
+	}
+
+	~Vector() {
+		_value.deleteAll();
 	}
 
 	public string toSource() {
@@ -278,6 +287,10 @@ public class Parser {
 
 	private Parser(string source) {
 		_scanner = Scanner(source);
+	}
+
+	~Parser() {
+		delete log;
 	}
 
 	public ref<MessageLog> log;

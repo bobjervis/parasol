@@ -16,7 +16,7 @@
 namespace parasol:types;
 
 import native:C;
-
+import native:linux;
 /**
  * A variant with undefined value.
  *
@@ -29,8 +29,8 @@ public var undefined;
 /**
  * An object that can hold 'any' value.
  *
- * Substring and substring16 objects are converted to the correspond string or
- * string16 class.
+ * Substring and substring16 objects are converted to the corresponding string or
+ * string16 class.y
  *
  * Integer numeric objects are converted to long.
  *
@@ -62,22 +62,22 @@ public class var {
 	
 	public var(string other) {
 		_actualType = string;
-		*ref<string>(&_value) = other;
+		new (&_value) string(other);
 	}
 	
 	public var(string16 other) {
 		_actualType = string16;
-		*ref<string16>(&_value) = other;
+		new (&_value) string16(other);
 	}
 	
 	public var(substring other) {
 		_actualType = string;
-		*ref<string>(&_value) = string(other);
+		new (&_value) string(other);
 	}
 	
 	public var(substring16 other) {
 		_actualType = string16;
-		*ref<string16>(&_value) = string16(other);
+		new (&_value) string16(other);
 	}
 	
 	public var(long value) {
@@ -118,6 +118,13 @@ public class var {
 		_actualType = actualType;
 	}
 
+	~var() {
+//		if (this.class == string) {
+//			(*ref<string>(&_value)).~();
+//		else if (this.class == string16)
+//			(*ref<string16>(&_value)).~();
+	}
+
 	public address actualType() { 
 		return _actualType;
 	}
@@ -155,10 +162,25 @@ public class var {
 		}
 	}
 	
-	public void copy(var source) {
-//		_actualType = source._actualType;
-//		_value = source._value;
-		C.memcpy(this, &source, var.bytes);
+	void copy(var source) {
+//		this.~();
+		_actualType = *ref<address>(&source);
+//		if (source.class == string)
+//			new (&_value) string(*ref<string>(&source._value));
+//		else if (source.class == string16)
+//			new (&_value) string16(*ref<string16>(&source._value));
+//		else
+			_value = pointer<long>(&source)[1];
+	}
+
+	void copyTemp(var source) {
+		_actualType = *ref<address>(&source);
+//		if (source.class == string)
+//			new (&_value) string(*ref<string>(&source._value));
+//		else if (source.class == string16)
+//			new (&_value) string16(*ref<string16>(&source._value));
+//		else
+			_value = pointer<long>(&source)[1];
 	}
 	
 	var divide(var other) {

@@ -666,6 +666,7 @@ void throwException(ref<Exception> e, address frame, address stackPointer) {
  * @param e The uncaught exeption.  
  */
 void uncaughtException(ref<Exception> e) {
+	memory.resetHeap();
 	if (process.stdout == null) {
 		string s;
 		s.printf("\nUncaught exception!\n\n%s\n", e.message());
@@ -759,7 +760,7 @@ public void hardwareExceptionHandler(ref<HardwareException> info) {
  *
  *
  * The handler function is expected to return true if the process should ignore the interrupt
- * signal. If the function returns false, the interrupt wil generate an operating system specific 
+ * signal. If the function returns false, the interrupt will generate an operating system specific 
  * failure, which may be to throw a RunTimeException.
  *
  * If the desire is to have the process issue a successful completion, the interrupt handler

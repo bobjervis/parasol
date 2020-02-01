@@ -136,5 +136,5 @@ int main(string[] args) {
 			runetsCommand.rootDirArgument.value, runetsCommand.showParseStageErrorsArgument.value);
 //		initCommonTestObjects();
 	string[] s = runetsCommand.finalArgs();
-	return launch(runetsCommand.finalArgs());
+	return launch(s);
 }
