@@ -301,8 +301,9 @@ public class Heap extends Allocator {
  */
 public class LeakHeap extends Allocator {
 	@Constant
-	private static int BLOCK_ALIGNMENT = 16;	// Allows for blocks to be used in MMX instructions, and avoids 
-												// some fragmentation.
+	private static int BLOCK_ALIGNMENT = 16;	// Allows for blocks to be used in MMX instructions.
+	@Constant
+	private static int BLOCK_GRANULARITY = 32;	// Allows for blocks to avoid some fragmentation.
 	@Constant
 	private static long SECTION_LENGTH = 1 * 1024 * 1024;  // try one megabyte.
 	@Constant
@@ -461,7 +462,7 @@ public class LeakHeap extends Allocator {
 				printf("            ** @%p [%#x] is not an allocated block **\n", bh, bh.blockSize);
 				break;
 			}
-			if (bh.blockSize < BLOCK_ALIGNMENT) {
+			if (bh.blockSize < BLOCK_GRANULARITY) {
 				printf("            ** <bad block length @%p [%#x]> **\n", bh, bh.blockSize);
 				break;
 			}
@@ -541,7 +542,7 @@ public class LeakHeap extends Allocator {
 				address stackTop = runtime.stackTop();
 				int frames = stackFrames(long(rbp), long(stackTop));
 				long framesOffset = (BlockHeader.bytes + n + address.bytes - 1) & ~(address.bytes - 1);
-				n = (framesOffset + frames * address.bytes + address.bytes + BLOCK_ALIGNMENT - 1) & ~(BLOCK_ALIGNMENT - 1);
+				n = (framesOffset + frames * address.bytes + address.bytes + BLOCK_GRANULARITY - 1) & ~(BLOCK_GRANULARITY - 1);
 		//		printf("    padded n = %#x\n", n);
 		//		print();
 				pointer<BlockHeader> bh;

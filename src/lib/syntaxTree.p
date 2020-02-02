@@ -3813,7 +3813,7 @@ public class Node {
 
 	public void add(MessageId messageId, ref<MemoryPool> pool, substring... args) {
 		string message = formatMessage(messageId, args);
-		_commentary = pool.newCommentary(_commentary, messageId, message);
+		_commentary = pool.newCommentary(_commentary, messageId, pool.newCompileString(message));
 	}
 
 	public void getMessageList(ref<Message[]> output) {

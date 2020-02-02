@@ -181,9 +181,9 @@ public enum MessageId {
 public class Commentary {
 	MessageId _messageId;
 	ref<Commentary> _next;
-	string _message;
+	substring _message;
 
-	Commentary(ref<Commentary> next, MessageId messageId, string message) {
+	Commentary(ref<Commentary> next, MessageId messageId, substring message) {
 		_next = next;
 		_messageId = messageId;
 		_message = message;
@@ -204,7 +204,7 @@ public class Commentary {
 		return _next; 
 	}
 	
-	public string message() { 
+	public substring message() { 
 		return _message; 
 	}
 
