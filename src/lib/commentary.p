@@ -193,7 +193,7 @@ public class Commentary {
 		ref<Commentary> next;
 		if (_next != null)
 			next = _next.clone(pool);
-		return pool.newCommentary(next, _messageId, _message);		
+		return pool.newCommentary(next, _messageId, pool.newCompileString(_message));		
 	}
 	
 	public void print(int indent) {

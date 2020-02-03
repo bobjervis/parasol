@@ -97,11 +97,17 @@ public ref<Locale> getLocale(string locale) {
 				}
 			}
 		}
-		linux.locale_t localeID = linux.newlocale(linux.LC_ALL_MASK, localeName.c_str(), null);
-		if (localeID != null)
-			return new LinuxLocale(localeID, localeName);
-		else {
-			printf("newlocale of '%s' failed: %s\n", localeName, linux.strerror(linux.errno()));
+		lock (globalState) {
+			if (localeMap.contains(localeName))
+				return localeMap[localeName];
+			linux.locale_t localeID = linux.newlocale(linux.LC_ALL_MASK, localeName.c_str(), null);
+			if (localeID != null) {
+				ref<Locale> locale = new LinuxLocale(localeID, localeName);
+				remember(locale);
+				return locale;
+			} else {
+				printf("newlocale of '%s' failed: %s\n", localeName, linux.strerror(linux.errno()));
+			}
 		}
 	} else if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		string localeName;
@@ -129,20 +135,21 @@ public ref<Locale> getLocale(string locale) {
 				dotLoc += language.length() + 1;
 			}
 		}
-/*
-		if (dotLoc >= 0) {
-			string codepage = locale.substr(dotLoc + 1);
-			if (codepage == "utf8") {
-				localeName = localeName.substr(0, dotLoc + 1) + "utf-8";
+		lock (globalState) {
+			if (localeMap.contains(localeName))
+				return localeMap[localeName];
+			windows._locale_t localeID = windows._create_locale(C.LC_ALL, localeName.c_str());
+			if (localeID != null) {
+				ref<Locale> locale = new WindowsLocale(localeID, localeName);
+				globalState.remember(locale);
+				return locale;
+				printf("newlocale of '%s' failed: %s\n", localeName, linux.strerror(linux.errno()));
 			}
 		}
- */
-		windows._locale_t localeID = windows._create_locale(C.LC_ALL, localeName.c_str());
-		if (localeID != null)
-			return new WindowsLocale(localeID, localeName);
 	}
 	return null;
 }
+
 
 /**
  * This locale gives you the settings that the "C" locale uses.
@@ -195,10 +202,24 @@ public ref<Locale> myLocale() {
 		return defaultLocale();
 }
 
-Monitor globalState;
+monitor class GlobalState {
+	ref<Locale> cLocaleMemory;
+	ref<Locale> defaultLocaleMemory;
+	private ref<Locale>[] _locales;
+	ref<Locale>[string] localeMap;
 
-ref<Locale> cLocaleMemory;
-ref<Locale> defaultLocaleMemory;
+	~GlobalState() {
+		_locales.deleteAll();
+	}
+
+	void remember(ref<Locale> locale) {
+		_locales.append(locale);
+		localeMap[locale.name()] = locale;
+	}
+}
+
+GlobalState globalState;
+
 
 DecimalStyle defaultDecimalStyle = {
 	decimalSeparator: ".",
@@ -250,6 +271,11 @@ public monitor class Locale {
 		}
 //		printf("lang = %s country = %s encoding = %s", _language, _country, _encoding);
 	}
+
+	~Locale() {
+		delete _decimalStyle;
+	}	
+
 	/**
 	 * Fetch the decimal style parameters for this locale.
 	 *
@@ -270,6 +296,10 @@ public monitor class Locale {
 			_paperStyle = &A4Style;
 		return _paperStyle;
 	}
+
+	public string name() {
+		return _localeName;
+	}
 }
 /**
  * Because of the wildly differing capabilites of underlying operating systems,
@@ -282,13 +312,6 @@ class LinuxLocale extends Locale {
 		super(localeName);
 		_locale = locale;
 	}
-
-	~LinuxLocale() {
-		lock (*this) {
-			delete _decimalStyle;
-			delete _paperStyle;
-		}
-	}	
 
 	public ref<DecimalStyle> decimalStyle() {
 		lock (*this){

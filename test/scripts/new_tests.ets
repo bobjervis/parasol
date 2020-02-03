@@ -1,3 +1,6 @@
+compile(expect: fail) { "monitor class M { int b; }; M a; int c = a.b;" }
+compile(expect: fail) { "monitor class M { int b; }; class N extends M { ~N() { b = 3; } } N a;" }
+
 // A constructor inside a switch's block limits the allowed live range of a symbol (in this case s) to the same
 // set of cases as the constructor.
 compile(expact: fail) { "int a; switch (a) { case 1: string s(a); break; case 2: a = s[0]; }" }

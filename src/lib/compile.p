@@ -1374,7 +1374,7 @@ public class MemoryPool extends memory.NoReleasePool {
 		return super new Namespace(newCompileString(domain), namespaceNode, enclosing, annotations, name, arena, this);
 	}
 
-	public ref<Commentary> newCommentary(ref<Commentary> next, MessageId messageId, string message) {
+	public ref<Commentary> newCommentary(ref<Commentary> next, MessageId messageId, substring message) {
 		return super new Commentary(next, messageId, message);
 	}
 
