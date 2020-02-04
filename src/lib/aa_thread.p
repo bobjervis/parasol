@@ -180,7 +180,7 @@ public class Thread {
 	 */
 	public static void init() {
 		mainThread = new Thread();
-		mainThread._name.printf("TID-%d", getCurrentThreadId());
+		mainThread._name = "TID-" + getCurrentThreadId();
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN)
 			mainThread._threadHandle = INVALID_HANDLE_VALUE;
 		else if (runtime.compileTarget == runtime.Target.X86_64_LNX)

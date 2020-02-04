@@ -173,6 +173,10 @@ public class Call extends ParameterBag {
 			if (_folded)
 				return this;
 			_folded = true;
+			if (_category == CallCategory.COERCION) {
+				ref<Node> source = _arguments.node;
+				return tree.newCast(type, source).fold(tree, voidContext, compileContext);
+			}
 			for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
 				nl.node = nl.node.fold(tree, false, compileContext);
 			if (_target != null)
@@ -187,9 +191,8 @@ public class Call extends ParameterBag {
 				return this;
 				
 			case	COERCION:
-				ref<Node> source = _arguments.node;
-				return tree.newCast(type, source).fold(tree, voidContext, compileContext);
-				
+				break;
+
 			case	CONSTRUCTOR:
 				if (_overload == null) {
 					return this;
@@ -229,7 +232,8 @@ public class Call extends ParameterBag {
 				break;
 
 			case	METHOD_CALL:
-				if (_target.op() == Operator.DOT) {
+				switch (_target.op()) {
+				case DOT:
 					ref<Selection> dot = ref<Selection>(_target);
 					if (dot.indirect()) {
 						thisParameter = dot.left();
@@ -253,7 +257,17 @@ public class Call extends ParameterBag {
 							thisParameter = pair;
 						}
 					}
-				} else {
+					break;
+
+				case SUBSCRIPT:
+					ref<Binary> b = ref<Binary>(_target);
+					if (b.left().type.family() != TypeFamily.POINTER) {
+						_target = tree.newUnary(Operator.ADDRESS, _target, _target.location());
+						_target.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);					
+					}
+					break;
+
+				default:
 					thisParameter = tree.newLeaf(Operator.THIS, location());
 					thisParameter.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 				}
