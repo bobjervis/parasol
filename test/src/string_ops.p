@@ -19,6 +19,8 @@ int main(string[] args) {
 	stringParamTests();
 	resizeTests();
 	loopTests();
+	copyTests();
+
 	string a, b, c;
 	
 	a = "sample";
@@ -128,4 +130,23 @@ void loopTests() {
 	}
 	assert(reverse == "dcba");
 }
+
+void copyTests() {
+	address xx = &startingPoint;
+
+	string16 s = *ref<string16>(xx);
+
+	assert(*ref<long>(&s) != *ref<long>(&startingPoint));
+
+	string16 ruff(address yy) {
+		return *ref<string16>(yy);
+	}
+
+	string16 ss = ruff(xx);
+
+	assert(*ref<long>(&ss) != *ref<long>(&startingPoint));
+}
+
+string16 startingPoint = "abcd";
+
 

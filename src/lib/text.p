@@ -2047,6 +2047,14 @@ public class string16 extends String<char> {
 			}
 		}
 	}
+
+	void copyTemp(string16 other) {
+		_contents = null;
+		if (other._contents != null) {
+			resize(other._contents.length);
+			C.memcpy(&_contents.data, &other._contents.data, (other._contents.length + 1) * char.bytes);
+		}
+	}
 	/**
 	 * Escape possibly non-printable characters using JSON escape syntax.
 	 *
