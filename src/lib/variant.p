@@ -118,6 +118,16 @@ public class var {
 		_actualType = actualType;
 	}
 
+	private void stringEllip(long value) {
+		_actualType = string;
+		_value = value;
+	}
+
+	private void string16Ellip(long value) {
+		_actualType = string16;
+		_value = value;
+	}
+
 	~var() {
 //		if (this.class == string) {
 //			(*ref<string>(&_value)).~();

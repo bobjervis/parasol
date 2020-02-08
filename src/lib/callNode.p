@@ -177,6 +177,16 @@ public class Call extends ParameterBag {
 				ref<Node> source = _arguments.node;
 				return tree.newCast(type, source).fold(tree, voidContext, compileContext);
 			}
+			ref<NodeList> ellipArgs = getEllipsisArguments();
+			if (ellipArgs != null) {
+				// Cap each of the ellipsis arguments for subsequent processing (BEFORE folding because
+				// we want the ellipsis arguments to have the proper context when they get folded..
+				for (ref<NodeList> nl = ellipArgs; nl != null; nl = nl.next) {
+					ref<Type> t = nl.node.type;
+					nl.node = tree.newUnary(Operator.ELLIPSIS_ARGUMENT, nl.node, nl.node.location());
+					nl.node.type = t;
+				}
+			}
 			for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
 				nl.node = nl.node.fold(tree, false, compileContext);
 			if (_target != null)
@@ -385,13 +395,6 @@ public class Call extends ParameterBag {
 						}
 						args.next = _stackArguments;
 						_stackArguments = args;
-						if (ea != null) {
-							for (ref<NodeList> nl = ea.arguments(); nl != null; nl = nl.next) {
-								ref<Type> t = nl.node.type;
-								nl.node = tree.newUnary(Operator.ELLIPSIS_ARGUMENT, nl.node, nl.node.location());
-								nl.node.type = t;
-							}
-						}
 						break;
 					}
 					if (args == null)
@@ -618,6 +621,41 @@ public class Call extends ParameterBag {
 			assert(false);
 		}
 		return this;
+	}
+	/**
+	 * Get the first ellipsis argument, if any.
+	 *
+	 * @return null if this call has no ellipsis arguments or a non-null
+	 * NodeList reference of the first such argument.
+	 */
+	private ref<NodeList> getEllipsisArguments() {
+		ref<FunctionType> functionType;
+		switch (_category) {
+		case DECLARATOR:
+		case COERCION:
+		case DESTRUCTOR:
+			return null;
+
+		case CONSTRUCTOR:
+			if (_overload == null)
+				return null;
+			functionType = ref<FunctionType>(_overload.type());
+			break;
+
+		default:
+			functionType = ref<FunctionType>(_target.type);
+		}
+		if (functionType == null)
+			return null;
+		ref<NodeList> params = functionType.parameters();
+				
+		for (ref<NodeList> args = _arguments; params != null; args = args.next, params = params.next)
+			if (params.node.getProperEllipsis() != null) {
+				if (args != null && args.next == null && args.node.type.equals(params.node.type))
+					return null;
+				return args;
+			}
+		return null;
 	}
 
 	public long foldInt(ref<Target> target, ref<CompileContext> compileContext) {

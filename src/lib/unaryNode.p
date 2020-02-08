@@ -149,6 +149,10 @@ public class Unary extends Node {
 					_operand = tree.newUnary(Operator.ADDRESS, _operand, _operand.location());
 					_operand.type = type;
 					return this;
+				} else if (_operand.op() == Operator.SUBSCRIPT && _operand.type.family() == TypeFamily.VAR) {
+					ref<Type> type = compileContext.arena().createRef(_operand.type, compileContext);
+					_operand = tree.newUnary(Operator.ADDRESS, _operand, _operand.location());
+					_operand.type = type;					
 				}
 			}
 			break;
@@ -192,7 +196,14 @@ public class Unary extends Node {
 				}
 			}
 			break;
-			
+
+		case	ELLIPSIS_ARGUMENT:
+			if (_operand.op() == Operator.CAST && type.family() == TypeFamily.VAR)
+				_operand = ref<Unary>(_operand).foldCastToVar(true, tree, compileContext);
+			else
+				_operand = _operand.fold(tree, false, compileContext);
+			break;
+
 		case	CAST:
 			switch (_operand.op()) {
 			case OBJECT_AGGREGATE:
@@ -356,111 +367,7 @@ public class Unary extends Node {
 
 			case	VAR:
 				assert(type.scope() != null);
-				switch (_operand.type.family()) {
-				case	UNSIGNED_8:
-				case	UNSIGNED_16:
-				case	UNSIGNED_32:
-				case	UNSIGNED_64:
-				case	SIGNED_8:
-				case	SIGNED_16:
-				case	SIGNED_32:
-				case	SIGNED_64:
-					return foldCastToConstructor(compileContext.arena().builtInType(TypeFamily.SIGNED_64), tree, voidContext, compileContext);
-					
-				case	FLOAT_32:
-				case	FLOAT_64:
-					return foldCastToConstructor(compileContext.arena().builtInType(TypeFamily.FLOAT_64), tree, voidContext, compileContext);
-					
-				case	ADDRESS:
-				case	INTERFACE:
-					return foldCastToConstructor(compileContext.arena().builtInType(TypeFamily.ADDRESS), tree, voidContext, compileContext);
-
-				case	ARRAY_AGGREGATE:
-					_operand.type = compileContext.arena().createRef(_operand.type.classType(), compileContext);	
-				case	REF:
-				case	POINTER:
-					for (int i = 0; i < type.scope().constructors().length(); i++) {
-						ref<FunctionDeclaration> f = ref<FunctionDeclaration>((*type.scope().constructors())[i].definition());
-						ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
-						if (oi.parameterCount() != 2)
-							continue;
-						if ((*oi.parameterScope().parameters())[0].type().family() == TypeFamily.ADDRESS &&
-								(*oi.parameterScope().parameters())[1].type().family() == TypeFamily.SIGNED_64) {
-							ref<Variable> temp = compileContext.newVariable(type);
-							_operand = _operand.fold(tree, false, compileContext);
-							ref<Node> empty = tree.newLeaf(Operator.EMPTY, location());
-							empty.type = _operand.type;
-							ref<Node> typeOperand = tree.newUnary(Operator.CLASS_OF, empty, location());
-							// The type of the CLASS_OF operand is irrelevant.
-							typeOperand.type = compileContext.arena().builtInType(TypeFamily.VOID);
-							ref<NodeList> args = tree.newNodeList(typeOperand, _operand);
-							ref<Reference> r = tree.newReference(temp, true, location());
-							ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
-							adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
-							ref<Call> constructor = tree.newCall(oi.parameterScope(), CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
-							constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
-							if (voidContext)
-								return constructor.fold(tree, true, compileContext);
-							r = tree.newReference(temp, false, location());
-							ref<Binary> seq = tree.newBinary(Operator.SEQUENCE, constructor, r, location());
-							seq.type = type;
-							return seq.fold(tree, false, compileContext);
-						}
-					}
-
-				case	STRING:
-				case	STRING16:
-				case	SUBSTRING:
-				case	SUBSTRING16:
-				case	BOOLEAN:
-					return foldCastToConstructor(_operand.type, tree, voidContext, compileContext);
-					
-				case	ENUM:
-					print(0);
-					assert(false);
-
-				case	CLASS:
-					// TODO: Make this more friendly for cross-compilation scenarios
-					if (_operand.type.size() <= address.bytes) {
-						for (int i = 0; i < type.scope().constructors().length(); i++) {
-							ref<FunctionDeclaration> f = ref<FunctionDeclaration>((*type.scope().constructors())[i].definition());
-							ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
-							if (oi.parameterCount() != 3)
-								continue;
-							if ((*oi.parameterScope().parameters())[0].type().family() == TypeFamily.ADDRESS &&
-								(*oi.parameterScope().parameters())[1].type().family() == TypeFamily.ADDRESS &&
-								(*oi.parameterScope().parameters())[2].type().family() == TypeFamily.SIGNED_32) {
-								ref<Variable> temp = compileContext.newVariable(type);
-								_operand = _operand.fold(tree, false, compileContext);
-								ref<Node> empty = tree.newLeaf(Operator.EMPTY, location());
-								empty.type = _operand.type;
-								ref<Node> typeOperand = tree.newUnary(Operator.CLASS_OF, empty, location());
-								// The type of the CLASS_OF operand is irrelevant.
-								typeOperand.type = compileContext.arena().builtInType(TypeFamily.VOID);
-								ref<Node> opAdr = tree.newUnary(Operator.ADDRESS, _operand, location());
-								opAdr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
-								ref<Node> opLen = tree.newInternalLiteral(_operand.type.size(), location());
-								opLen.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
-								ref<NodeList> args = tree.newNodeList(typeOperand, opAdr, opLen);
-								ref<Reference> r = tree.newReference(temp, true, location());
-								ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
-								adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
-								ref<Call> constructor = tree.newCall(oi.parameterScope(), CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
-								constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
-								if (voidContext)
-									return constructor.fold(tree, true, compileContext);
-								r = tree.newReference(temp, false, location());
-								ref<Binary> seq = tree.newBinary(Operator.SEQUENCE, constructor, r, location());
-								seq.type = type;
-								return seq.fold(tree, false, compileContext);
-							}
-						}
-					}
-
-				default:
-					print(0);
-					assert(false);
-				}
+				return foldCastToVar(false, tree, compileContext);
 			}
 			break;
 
@@ -548,9 +455,149 @@ public class Unary extends Node {
 		return this;
 	}
 
+	private ref<Node> foldCastToVar(boolean ellipsisArgument, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
+		switch (_operand.type.family()) {
+		case	UNSIGNED_8:
+		case	UNSIGNED_16:
+		case	UNSIGNED_32:
+		case	UNSIGNED_64:
+		case	SIGNED_8:
+		case	SIGNED_16:
+		case	SIGNED_32:
+		case	SIGNED_64:
+			return foldCastToConstructor(compileContext.arena().builtInType(TypeFamily.SIGNED_64), tree, false, compileContext);
+					
+		case	BOOLEAN:
+			return foldCastToConstructor(compileContext.arena().builtInType(TypeFamily.BOOLEAN), tree, false, compileContext);
+					
+		case	FLOAT_32:
+		case	FLOAT_64:
+			return foldCastToConstructor(compileContext.arena().builtInType(TypeFamily.FLOAT_64), tree, false, compileContext);
+					
+		case	ADDRESS:
+		case	INTERFACE:
+			return foldCastToConstructor(compileContext.arena().builtInType(TypeFamily.ADDRESS), tree, false, compileContext);
+
+		case	ARRAY_AGGREGATE:
+			_operand.type = compileContext.arena().createRef(_operand.type.classType(), compileContext);	
+		case	REF:
+		case	POINTER:
+			for (int i = 0; i < type.scope().constructors().length(); i++) {
+				ref<FunctionDeclaration> f = ref<FunctionDeclaration>((*type.scope().constructors())[i].definition());
+				ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
+				if (oi.parameterCount() != 2)
+					continue;
+				if ((*oi.parameterScope().parameters())[0].type().family() == TypeFamily.ADDRESS &&
+						(*oi.parameterScope().parameters())[1].type().family() == TypeFamily.SIGNED_64) {
+					ref<Variable> temp = compileContext.newVariable(type);
+					_operand = _operand.fold(tree, false, compileContext);
+					ref<Node> empty = tree.newLeaf(Operator.EMPTY, location());
+					empty.type = _operand.type;
+					ref<Node> typeOperand = tree.newUnary(Operator.CLASS_OF, empty, location());
+					// The type of the CLASS_OF operand is irrelevant.
+					typeOperand.type = compileContext.arena().builtInType(TypeFamily.VOID);
+					ref<NodeList> args = tree.newNodeList(typeOperand, _operand);
+					ref<Reference> r = tree.newReference(temp, true, location());
+					ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
+					adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+					ref<Call> constructor = tree.newCall(oi.parameterScope(), CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
+					constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
+					r = tree.newReference(temp, false, location());
+					ref<Binary> seq = tree.newBinary(Operator.SEQUENCE, constructor, r, location());
+					seq.type = type;
+					return seq.fold(tree, false, compileContext);
+				}
+			}
+
+		case	STRING:
+		case	STRING16:
+/*
+			if (ellipsisArgument) {
+				substring ename;
+
+				if (_operand.type.family() == TypeFamily.STRING)
+					ename = "stringEllip";
+				else
+					ename = "string16Ellip";
+
+				ref<Symbol> sym = type.lookup(ename, compileContext);
+				if (sym == null || sym.class != Overload) {
+					add(MessageId.UNDEFINED, compileContext.pool(), ename);
+					break;
+				}
+				ref<Overload> o = ref<Overload>(sym);
+				ref<OverloadInstance> oi = (*o.instances())[0];
+				ref<Variable> temp = compileContext.newVariable(type);
+				_operand = _operand.fold(tree, false, compileContext);
+				ref<NodeList> args = tree.newNodeList(_operand);
+				ref<Reference> r = tree.newReference(temp, true, location());
+				ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
+				adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+				ref<Selection> method = tree.newSelection(adr, oi, false, location());
+				method.type = oi.type();
+				ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
+				call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+				r = tree.newReference(temp, false, location());
+				ref<Binary> seq = tree.newBinary(Operator.SEQUENCE, call, r, location());
+				seq.type = type;
+				return seq.fold(tree, false, compileContext);
+			}
+ */
+		case	SUBSTRING:
+		case	SUBSTRING16:
+			return foldCastToConstructor(_operand.type, tree, false, compileContext);
+					
+		case	CLASS:
+			// TODO: Make this more friendly for cross-compilation scenarios
+			if (_operand.type.size() <= address.bytes) {
+				for (int i = 0; i < type.scope().constructors().length(); i++) {
+					ref<FunctionDeclaration> f = ref<FunctionDeclaration>((*type.scope().constructors())[i].definition());
+					ref<OverloadInstance> oi = ref<OverloadInstance>(f.name().symbol());
+					if (oi.parameterCount() != 3)
+						continue;
+					if ((*oi.parameterScope().parameters())[0].type().family() == TypeFamily.ADDRESS &&
+						(*oi.parameterScope().parameters())[1].type().family() == TypeFamily.ADDRESS &&
+						(*oi.parameterScope().parameters())[2].type().family() == TypeFamily.SIGNED_32) {
+						ref<Variable> temp = compileContext.newVariable(type);
+						_operand = _operand.fold(tree, false, compileContext);
+						ref<Node> empty = tree.newLeaf(Operator.EMPTY, location());
+						empty.type = _operand.type;
+						ref<Node> typeOperand = tree.newUnary(Operator.CLASS_OF, empty, location());
+						// The type of the CLASS_OF operand is irrelevant.
+						typeOperand.type = compileContext.arena().builtInType(TypeFamily.VOID);
+						ref<Node> opAdr = tree.newUnary(Operator.ADDRESS, _operand, location());
+						opAdr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+						ref<Node> opLen = tree.newInternalLiteral(_operand.type.size(), location());
+						opLen.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+						ref<NodeList> args = tree.newNodeList(typeOperand, opAdr, opLen);
+						ref<Reference> r = tree.newReference(temp, true, location());
+						ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
+						adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+						ref<Call> constructor = tree.newCall(oi.parameterScope(), CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
+						constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
+						r = tree.newReference(temp, false, location());
+						ref<Binary> seq = tree.newBinary(Operator.SEQUENCE, constructor, r, location());
+						seq.type = type;
+						return seq.fold(tree, false, compileContext);
+					}
+				}
+			}
+
+		case	ENUM:
+		case	FLAGS:
+			add(MessageId.UNFINISHED_VAR_CAST, compileContext.pool(), _operand.type.signature());
+			break;
+
+		default:
+			print(0);
+			assert(false);
+		}
+		return this;
+	}
+
 	private ref<Node> foldCastToConstructor(ref<Type> argumentType, ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
-		// As a special case, let the constnat null cast to a constructor for any string type, but just
-		// make sure the constructor you pick is the 'string' constructor (they'll all have one and it's
+		// As a special case, let the constant null cast to a constructor for any string type, but just
+		// make sure the constructor you pick is the 'stringNN' constructor (they'll all have one and it's
 		// as efficient as any other.
 		switch (type.family()) {
 		case STRING:
