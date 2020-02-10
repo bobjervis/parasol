@@ -511,8 +511,8 @@ public class Unary extends Node {
 
 		case	STRING:
 		case	STRING16:
-/*
-			if (ellipsisArgument) {
+
+			if (ellipsisArgument && _operand.type.family() == TypeFamily.STRING16) {
 				substring ename;
 
 				if (_operand.type.family() == TypeFamily.STRING)
@@ -528,21 +528,23 @@ public class Unary extends Node {
 				ref<Overload> o = ref<Overload>(sym);
 				ref<OverloadInstance> oi = (*o.instances())[0];
 				ref<Variable> temp = compileContext.newVariable(type);
-				_operand = _operand.fold(tree, false, compileContext);
-				ref<NodeList> args = tree.newNodeList(_operand);
 				ref<Reference> r = tree.newReference(temp, true, location());
+				ref<Node> call = createMethodCall(r, ename, tree, compileContext, _operand);
+/*
+				ref<NodeList> args = tree.newNodeList(_operand);
 				ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
 				adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 				ref<Selection> method = tree.newSelection(adr, oi, false, location());
 				method.type = oi.type();
 				ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
 				call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+ */
 				r = tree.newReference(temp, false, location());
 				ref<Binary> seq = tree.newBinary(Operator.SEQUENCE, call, r, location());
 				seq.type = type;
 				return seq.fold(tree, false, compileContext);
 			}
- */
+
 		case	SUBSTRING:
 		case	SUBSTRING16:
 			return foldCastToConstructor(_operand.type, tree, false, compileContext);
