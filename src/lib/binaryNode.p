@@ -1849,7 +1849,7 @@ public class Binary extends Node {
 
 			case STRING16:
 			case SUBSTRING16:
-				stringAddition == TypeFamily.STRING16;
+				stringAddition = TypeFamily.STRING16;
 			}
 			if (stringAddition == TypeFamily.VOID) {
 				compileContext.assignTypes(_right);
@@ -2898,9 +2898,15 @@ boolean balancePair(ref<Node> parent, ref<ref<Node>> leftp, ref<ref<Node>> right
 			if (right.canCoerce(left.type, false, compileContext)) {
 				if (left.type.widensTo(right.type, compileContext)) {
 					if (right.type.widensTo(left.type, compileContext)) {
-						parent.add(MessageId.TYPE_MISMATCH, compileContext.pool());
-						parent.type = compileContext.errorType();
-						return false;
+						ref<Type> common = findCommonType(left.type, right.type);
+						if (common == null) {
+							parent.print(0);
+							parent.add(MessageId.TYPE_MISMATCH, compileContext.pool());
+							parent.type = compileContext.errorType();
+							return false;
+						}
+						*leftp = left.coerce(compileContext.tree(), common, false, compileContext);
+						*rightp = right.coerce(compileContext.tree(), common, false, compileContext);
 					} else
 						*rightp = right.coerce(compileContext.tree(), left.type, false, compileContext);
 				} else
@@ -2931,15 +2937,54 @@ boolean balancePair(ref<Node> parent, ref<ref<Node>> leftp, ref<ref<Node>> right
 	return true;
 }
 
-ref<Type> findCommonType(ref<Type> left, ref<Type> right, ref<CompileContext> compileContext) {
-	if (left.equals(right))
-		return left;
-	else if (left.widensTo(right, compileContext))
-		return right;
-	else if (right.widensTo(left, compileContext))
-		return left;
-	else
-		return left.greatestCommonBase(right);
+ref<Type> findCommonType(ref<Type> left, ref<Type> right) {
+	switch (left.family()) {
+	case STRING:
+		switch (right.family()) {
+		case STRING:
+		case STRING16:
+		case SUBSTRING16:
+			return left;
+
+		case SUBSTRING:
+			return right;
+		}
+		break;
+
+	case STRING16:
+		switch (right.family()) {
+		case STRING:
+		case STRING16:
+		case SUBSTRING:
+			return left;
+
+		case SUBSTRING16:
+			return right;
+		}
+		break;
+
+	case SUBSTRING:
+		switch (right.family()) {
+		case STRING:
+		case SUBSTRING:
+			return left;
+
+		case STRING16:
+			return right;
+		}
+		break;
+
+	case SUBSTRING16:
+		switch (right.family()) {
+		case STRING:
+			return right;
+
+		case STRING16:
+		case SUBSTRING16:
+			return left;
+		}
+	}
+	return null;
 }
 
 private Operator stripAssignment(Operator op) {

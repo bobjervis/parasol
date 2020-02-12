@@ -34,3 +34,71 @@ assert(s1_u != "");
 assert(s2_u != null);
 assert(s2_u == "");
 
+string16 insert = "<insert here>";
+
+string s;
+
+s.printf("some stuff goes here: %s\n", insert);
+
+printf("s='%s'\n", s);
+
+assert(s == "some stuff goes here: <insert here>\n");
+
+s.clear();
+
+s.printf("[[%s]]", string16("XX") + "->");
+
+printf("s='%s'\n", s);
+
+assert(s == "[[XX->]]");
+
+string16 func() {
+	return insert;
+}
+
+s.clear();
+
+s.printf("//%s//", func());
+
+printf("s=%s\n", s);
+
+assert(s == "//<insert here>//");
+// If calling the function frees its value, this could fail, corrupting the heap.
+assert(func() == "<insert here>");
+
+string str_1, str_2;
+string16 str16_1, str16_2;
+
+str_1 = "abc";
+str16_1 = "abc";
+substring sub_1(str_1);
+substring16 sub16_1(str16_1);
+str_2 = "def";
+str16_2 = "def";
+substring sub_2(str_2);
+substring16 sub16_2(str16_2);
+
+assert(str_1 < str_2);
+assert(str_1 < str16_2);
+assert(str_1 < sub_2);
+assert(str_1 < sub16_2);
+
+assert(str16_1 < str_2);
+assert(str16_1 < str16_2);
+assert(str16_1 < sub_2);
+assert(str16_1 < sub16_2);
+
+assert(sub_1 < str_2);
+assert(sub_1 < str16_2);
+assert(sub_1 < sub_2);
+//assert(sub_1 < sub16_2); - not an allowed confrontation, pick a type to use
+assert(sub_1 < string(sub16_2));
+assert(string16(sub_1) < sub16_2);
+
+assert(sub16_1 < str_2);
+assert(sub16_1 < str16_2);
+//assert(sub16_1 < sub_2); - not an allow confrontation, pick a type to use
+assert(sub16_1 < string16(sub_2));
+assert(string(sub16_1) < sub_2);
+assert(sub16_1 < sub16_2);
+
