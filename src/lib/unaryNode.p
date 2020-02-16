@@ -510,7 +510,8 @@ public class Unary extends Node {
 			}
 
 		case	STRING:
-		case	STRING16:			if (ellipsisArgument) {
+		case	STRING16:
+			if (ellipsisArgument) {
 				substring ename;
 
 				if (_operand.type.family() == TypeFamily.STRING)
