@@ -26,11 +26,6 @@
 #endif
 
 namespace parasol {
-#if __linux__
-void sigGeneralHandler(int signum, siginfo_t *info, void *uContext);
-
-void sigSegvHandler(int signum, siginfo_t *info, void *uContext);
-#endif
 
 ExecutionContext::ExecutionContext(X86_64SectionHeader *pxiHeader, void *image, ExecutionContext *outer) {
 	_exception = null;
@@ -39,11 +34,9 @@ ExecutionContext::ExecutionContext(X86_64SectionHeader *pxiHeader, void *image, 
 	_pxiHeader = pxiHeader;
 	_image = image;
 	if (outer != null) {
-		_hardwareExceptionHandler = outer->_hardwareExceptionHandler;
 		for (int i = 0; i < outer->_runtimeParameters.size(); i++)
 			setRuntimeParameter(i, outer->getRuntimeParameter(i));
-	} else
-		_hardwareExceptionHandler = null;
+	}
 }
 
 void ExecutionContext::enter() {
@@ -61,55 +54,17 @@ int ExecutionContext::runNative(int (*start)(void *args)) {
 	_target = NATIVE_64_TARGET;
 	byte *x;
 	_stackTop = (byte*) &x;
-#if defined(__WIN64)
-	PVOID handle = AddVectoredExceptionHandler(0, windowsExceptionHandler);
-#elif __linux__
-	struct sigaction oldSigIllAction;
-	struct sigaction oldSigSegvAction;
-	struct sigaction oldSigFpeAction;
-	struct sigaction oldSigQuitAction;
-	struct sigaction oldSigAbortAction;
-	struct sigaction oldSigTermAction;
-	struct sigaction newGeneralAction;
-	struct sigaction newSegvAction;
-
-	newGeneralAction.sa_sigaction = sigGeneralHandler;
-	newGeneralAction.sa_flags = SA_SIGINFO;
-	newSegvAction.sa_sigaction = sigSegvHandler;
-	newSegvAction.sa_flags = SA_SIGINFO;
-	sigaction(SIGILL, &newGeneralAction, &oldSigIllAction);
-	sigaction(SIGSEGV, &newSegvAction, &oldSigSegvAction);
-	sigaction(SIGFPE, &newGeneralAction, &oldSigFpeAction);
-	sigaction(SIGQUIT, &newGeneralAction, &oldSigQuitAction);
-	sigaction(SIGABRT, &newGeneralAction, &oldSigAbortAction);
-	sigaction(SIGTERM, &newGeneralAction, &oldSigTermAction);
-#endif
 	long long inlineParasolArray[2];		// Arguments are a string array.
 
 	inlineParasolArray[1] = (long long)&_args[0];
 	inlineParasolArray[0] = (((WORD)_args.size() << 32) | _args.size());
 	int result = start(inlineParasolArray);
-#if defined(__WIN64)
-	RemoveVectoredExceptionHandler(handle);
-#elif __linux__
-	sigaction(SIGILL, &oldSigIllAction, null);
-	sigaction(SIGSEGV, &oldSigSegvAction, null);
-	sigaction(SIGFPE, &oldSigFpeAction, null);
-	sigaction(SIGQUIT, &oldSigQuitAction, null);
-	sigaction(SIGABRT, &oldSigAbortAction, null);
-	sigaction(SIGTERM, &oldSigTermAction, null);
-#endif
 	return result;
-}
-
-void ExecutionContext::callHardwareExceptionHandler(HardwareException *info) {
-	_hardwareExceptionHandler(info);
 }
 
 ExecutionContext *ExecutionContext::clone() {
 	ExecutionContext *newContext = new ExecutionContext(_pxiHeader, _image, this);
 	newContext->_target = _target;
-	newContext->_hardwareExceptionHandler = _hardwareExceptionHandler;
 	return newContext;
 }
 
@@ -128,10 +83,6 @@ byte *ExecutionContext::highCodeAddress() {
 void ExecutionContext::callCatchHandler(Exception *exception, void *framePointer, int handler) {
 	void (*h)(Exception *exception) = (void(*)(Exception*))((byte*)_image + handler);
 	callAndSetFramePtr(framePointer, (void*) h, exception);
-}
-
-void ExecutionContext::registerHardwareExceptionHandler(void (*handler)(HardwareException *info)) {
-	_hardwareExceptionHandler = handler;
 }
 
 extern "C" {

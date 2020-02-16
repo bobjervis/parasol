@@ -38,7 +38,6 @@ import native:windows.INFINITE;
 import native:windows.GetLastError;
 import native:linux;
 import native:C;
-import parasol:exception.HardwareException;
 import parasol:exception.IllegalArgumentException;
 import parasol:exception.IllegalOperationException;
 import parasol:runtime;

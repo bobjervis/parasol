@@ -511,7 +511,6 @@ public class Unary extends Node {
 
 		case	STRING:
 		case	STRING16:
-
 			if (ellipsisArgument) {
 				substring ename;
 

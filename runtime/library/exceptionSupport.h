@@ -22,15 +22,6 @@ namespace parasol {
 
 class Exception;
 
-struct HardwareException {
-	void *codePointer;
-	void *framePointer;
-	void *stackPointer;
-	long long exceptionInfo0;
-	int exceptionInfo1;
-	int exceptionType;
-};
-
 struct StackFrame {
 	byte *fp;
 	byte *code;

@@ -961,6 +961,34 @@ public int	CLD_CONTINUED = 6;            /* Stopped child has continued.  */
 
 @Constant
 public int _NSIG = 65;	/* Biggest signal number + 1 */
+
+@Constant
+public int SI_USER = 0;
+@Constant
+public int SI_KERNEL = 0x80;
+@Constant
+public int SI_QUEUE = -1;
+@Constant
+public int SI_TIMER = -2;
+@Constant
+public int SI_MESGQ = -3;
+@Constant
+public int SI_ASYNCIO = -4;
+@Constant
+public int SI_SIGIO = -5;
+@Constant
+public int SI_TKILL = -6;
+@Constant
+public int SI_DETHREAD = -7;
+
+@Constant
+public int SEGV_MAPERR = 1;
+@Constant
+public int SEGV_ACCERR = 2;
+@Constant
+public int SEGV_BNDERR = 3;
+
+
 @Constant
 public int EPERM = 1;	/* Operation not permitted */
 @Constant
@@ -1283,7 +1311,7 @@ public class sigset_t {
 }
 
 public class struct_sigaction {
-	private address _handler;
+	private void(int, ref<siginfo_t>, ref<ucontext_t>) _handler;
 	public sigset_t sa_mask;
 	public int sa_flags;
 	public void() sa_restorer;
@@ -1292,16 +1320,16 @@ public class struct_sigaction {
 		return void(int)(_handler);
 	}
 	
-	public void(int, ref<siginfo_t>, address) sa_sigaction() {
-		return void(int, ref<siginfo_t>, address)(_handler); 
+	public void(int, ref<siginfo_t>, ref<ucontext_t>) sa_sigaction() {
+		return _handler; 
 	}
 
 	public void set_sa_handler(void handler(int x)) {
-		_handler = address(handler);
+		_handler = void(int, ref<siginfo_t>, ref<ucontext_t>)(handler);
 	}
 	
-	public void set_sa_sigaction(void handler(int x, ref<siginfo_t> info, address arg)) {
-		_handler = address(handler);
+	public void set_sa_sigaction(void handler(int x, ref<siginfo_t> info, ref<ucontext_t> arg)) {
+		_handler = handler;
 	}
 }
 /** 
@@ -1314,6 +1342,11 @@ public class siginfo_t {
 						   		   this signal, as defined in <errno.h>.  */
     public int si_code;			/* Signal code.  */
 	public int si_trapno;		/* Trap number. */
+
+	public address si_addr() {
+		ref<siginfo_t_sigfault> sp = ref<siginfo_t_sigfault>(pointer<siginfo_t>(this) + 1);
+		return sp.si_addr;
+	}
 }
 
 public class siginfo_t_kill extends siginfo_t {
@@ -1357,6 +1390,68 @@ public class siginfo_t_sigsys extends siginfo_t {
     public address _call_addr;	/* Calling user insn.  */
     public int _syscall;		/* Triggering system call number.  */
     public unsigned _arch;		/* AUDIT_ARCH_* of syscall.  */
+}
+// Note: This is for X86 64-bit ONLY
+public class ucontext_t {
+	public long uc_flags;
+	public ref<ucontext_t> uc_link;
+	public stack_t uc_stack;
+	public mcontext_t uc_mcontext;
+	public sigset_t uc_sigmask;
+	public libc_fpstate __fpregs_mem;
+}
+
+public class stack_t {
+	public address ss_sp;
+	public int ss_flags;
+	public size_t ss_size;
+}
+
+public class mcontext_t {
+	public gregset_t gregs;
+	public ref<libc_fpstate> fpregs;
+}
+
+public class gregset_t {
+	public long r8;
+	public long r9;
+	public long r10;
+	public long r11;
+	public long r12;
+	public long r13;
+	public long r14;
+	public long r15;
+	public long rdi;
+	public long rsi;
+	public long rbp;
+	public long rbx;
+	public long rdx;
+	public long rax;
+	public long rcx;
+	public long rsp;
+	public long rip;
+	public long efl;
+	public char cs;
+	public char gs;
+	public char fs;
+	char __pad0;
+	public long err;
+	public long trapno;
+	public long oldmask;
+	public long cr2;
+
+}
+
+public class libc_fpstate {
+	public char cwd;
+	public char swd;
+	public char ftw;
+	public char fop;
+	public address rip;
+	public address rdp;
+	public unsigned mxcsr;
+	public unsigned mxcr_mask;
+	// Note: additional fields follow, not currently used.
 }
 
 public class sigval_t = address;		// in C actually a union

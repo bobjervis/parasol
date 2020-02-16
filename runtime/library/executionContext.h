@@ -51,14 +51,6 @@ public:
 
 	int runNative(int (*start)(void *args));
 
-	void registerHardwareExceptionHandler(void (*handler)(HardwareException *exceptionContext));
-
-	bool hasHardwareExceptionHandler() {
-		return _hardwareExceptionHandler != null;
-	}
-
-	void callHardwareExceptionHandler(HardwareException *info);
-
 	byte *stackTop() { return _stackTop; }
 
 	void setStackTop(void *p) {
@@ -111,7 +103,6 @@ private:
 	X86_64SectionHeader *_pxiHeader;
 	void *_image;
 	vector<string> _args;
-	void (*_hardwareExceptionHandler)(HardwareException *info);
 	void *_sourceLocations;
 	int _sourceLocationsCount;
 	void *_parasolThread;

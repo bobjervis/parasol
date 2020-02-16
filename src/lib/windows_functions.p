@@ -37,6 +37,7 @@ public class HICON = address;
 public class HCURSOR = address;
 public class HBRUSH = address;
 public class HINSTANCE = address;
+public class PVOID = address;
 public class BOOL = int;
 public class WINBOOL = int;
 public class HLOCAL = address;
@@ -145,6 +146,10 @@ public BOOL ReleaseMutex(HANDLE hHandle) {
 	return ReleaseMutex(*ref<address>(&hHandle));
 }
 
+@Windows("kernel32.dll", "AddVectoredExceptionHandler")
+public abstract PVOID AddVectoredExceptionHandler(ULONG first, long (ref<EXCEPTION_POINTERS>) handler);
+@Windows("kernel32.dll", "RemoveVectoredExceptionHandler")
+public abstract ULONG RemoveVectoredExceptionHandler(PVOID handle);
 
 @Windows("kernel32.dll", "CreateFile")
 public abstract HANDLE CreateFile(pointer<byte> lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, ref<SECURITY_ATTRIBUTES> lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
@@ -166,6 +171,99 @@ public class OVERLAPPED {
 	long InternalHigh;
 	long Offset;			// Possibly also a poiner, depending on the usage
 	HANDLE hEvent;
+}
+
+public class EXCEPTION_POINTERS {
+	ref<EXCEPTION_RECORD> ExceptionRecord;
+	ref<CONTEXT>          ContextRecord;
+}
+
+public class EXCEPTION_RECORD {
+	DWORD                    ExceptionCode;
+	DWORD                    ExceptionFlags;
+	ref<EXCEPTION_RECORD>    ExceptionRecord;
+	PVOID                    ExceptionAddress;
+	DWORD                    NumberParameters;
+	address                  ExceptionInformation_0;
+	address                  ExceptionInformation_1;
+}
+
+public class CONTEXT {
+	long P1Home;
+	long P2Home;
+	long P3Home;
+	long P4Home;
+	long P5Home;
+	long P6Home;
+	DWORD   ContextFlags;
+	DWORD   MxCsr;
+	WORD    SegCs;
+	WORD    SegDs;
+	WORD    SegEs;
+	WORD    SegFs;
+	WORD    SegGs;
+	WORD    SegSs;
+	DWORD   EFlags;
+	long Dr0;
+	long Dr1;
+	long Dr2;
+	long Dr3;
+	long Dr6;
+	long Dr7;
+	long Rax;
+	long Rcx;
+	long Rdx;
+	long Rbx;
+	long Rsp;
+	long Rbp;
+	long Rsi;
+	long Rdi;
+	long R8;
+	long R9;
+	long R10;
+	long R11;
+	long R12;
+	long R13;
+	long R14;
+	long R15;
+	long Rip;
+/*
+	These areas are not currently used, so ignore them for now.
+
+  union {
+    XMM_SAVE_AREA32 FltSave;
+    NEON128         Q[16];
+    ULONGLONG       D[32];
+    struct {
+      M128A Header[2];
+      M128A Legacy[8];
+      M128A Xmm0;
+      M128A Xmm1;
+      M128A Xmm2;
+      M128A Xmm3;
+      M128A Xmm4;
+      M128A Xmm5;
+      M128A Xmm6;
+      M128A Xmm7;
+      M128A Xmm8;
+      M128A Xmm9;
+      M128A Xmm10;
+      M128A Xmm11;
+      M128A Xmm12;
+      M128A Xmm13;
+      M128A Xmm14;
+      M128A Xmm15;
+    } DUMMYSTRUCTNAME;
+    DWORD           S[32];
+  } DUMMYUNIONNAME;
+  M128A   VectorRegister[26];
+	long VectorControl;
+	long DebugControl;
+	long LastBranchToRip;
+	long LastBranchFromRip;
+	long LastExceptionToRip;
+	long LastExceptionFromRip;
+ */
 }
 
 public DWORD GENERIC_READ = 	0x80000000;

@@ -47,8 +47,161 @@ public void assert(boolean test) {
 		throw AssertionFailedException();
 }
 
-int EXCEPTION_ACCESS_VIOLATION	= int(0xc0000005);
-int EXCEPTION_IN_PAGE_ERROR		= int(0xc0000006);
+class GlobalState {
+	ref<OSExceptionHandling> _OSExceptionHandling;
+
+	GlobalState() {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+			_OSExceptionHandling = new WindowsExceptionHandling();
+		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+			_OSExceptionHandling = new LinuxExceptionHandling();
+		}
+	}
+
+	~GlobalState() {
+		delete _OSExceptionHandling;
+	}
+}
+
+GlobalState globalState;
+
+class OSExceptionHandling {
+}
+
+class WindowsExceptionHandling extends OSExceptionHandling {
+	address _handle;
+
+	WindowsExceptionHandling() {
+		_handle = windows.AddVectoredExceptionHandler(0, windowsExceptionHandler);
+	}
+
+	~WindowsExceptionHandling() {
+		windows.RemoveVectoredExceptionHandler(_handle);
+	}
+
+	static long windowsExceptionHandler(ref<windows.EXCEPTION_POINTERS> exceptionInfo) {
+		ref<ExceptionContext> context = createExceptionContext(address(exceptionInfo.ContextRecord.Rsp));
+		context.framePointer = address(exceptionInfo.ContextRecord.Rbp);
+		context.exceptionAddress = address(exceptionInfo.ContextRecord.Rip);
+		context.exceptionType = int(exceptionInfo.ExceptionRecord.ExceptionCode);
+		switch (exceptionInfo.ExceptionRecord.ExceptionCode) {
+		case 0xc0000374:
+			throw CorruptHeapException(context);
+
+		case 0xc00000fd:
+			throw StackOverflowException(context);
+
+		case 0xc0000005:
+		case 0xc0000006:
+			context.memoryAddress = address(exceptionInfo.ExceptionRecord.ExceptionInformation_1);
+			context.exceptionFlags = int(exceptionInfo.ExceptionRecord.ExceptionInformation_0);
+			if (context.memoryAddress == null)
+				throw NullPointerException(context);
+			else
+				throw AccessException(context);
+
+		case 0xc0000094:
+			throw DivideByZeroException(context);
+		}
+		printf("exception %x at %p\n", context.exceptionType, context.exceptionAddress);
+		printf("Unexpected exception type\n");
+		throw RuntimeException(context);
+	}
+}
+
+class LinuxExceptionHandling extends OSExceptionHandling {
+	private linux.struct_sigaction oldSigIllAction;
+	private linux.struct_sigaction oldSigSegvAction;
+	private linux.struct_sigaction oldSigFpeAction;
+	private linux.struct_sigaction oldSigQuitAction;
+	private linux.struct_sigaction oldSigAbortAction;
+	private linux.struct_sigaction oldSigTermAction;
+
+	LinuxExceptionHandling() {
+		linux.struct_sigaction newGeneralAction;
+		linux.struct_sigaction newSegvAction;
+
+		newGeneralAction.set_sa_sigaction(sigGeneralHandler);
+		newGeneralAction.sa_flags = linux.SA_SIGINFO;
+		newSegvAction.set_sa_sigaction(sigSegvHandler);
+		newSegvAction.sa_flags = linux.SA_SIGINFO;
+		linux.sigaction(linux.SIGILL, &newGeneralAction, &oldSigIllAction);
+		linux.sigaction(linux.SIGSEGV, &newSegvAction, &oldSigSegvAction);
+		linux.sigaction(linux.SIGFPE, &newGeneralAction, &oldSigFpeAction);
+		linux.sigaction(linux.SIGQUIT, &newGeneralAction, &oldSigQuitAction);
+		linux.sigaction(linux.SIGABRT, &newGeneralAction, &oldSigAbortAction);
+		linux.sigaction(linux.SIGTERM, &newGeneralAction, &oldSigTermAction);
+	}
+
+	~LinuxExceptionHandling() {
+		linux.sigaction(linux.SIGILL, &oldSigIllAction, null);
+		linux.sigaction(linux.SIGSEGV, &oldSigSegvAction, null);
+		linux.sigaction(linux.SIGFPE, &oldSigFpeAction, null);
+		linux.sigaction(linux.SIGQUIT, &oldSigQuitAction, null);
+		linux.sigaction(linux.SIGABRT, &oldSigAbortAction, null);
+		linux.sigaction(linux.SIGTERM, &oldSigTermAction, null);
+	}
+
+	static ref<ExceptionContext> fillExceptionInfo(ref<linux.siginfo_t> info, ref<linux.ucontext_t> uContext) {
+		ref<ExceptionContext> context = createExceptionContext(address(uContext.uc_mcontext.gregs.rsp));
+		context.exceptionAddress = address(uContext.uc_mcontext.gregs.rip);
+		context.framePointer = address(uContext.uc_mcontext.gregs.rbp);
+		context.exceptionType = (info.si_signo << 8) + info.si_code;
+		context.exceptionFlags = info.si_errno;
+		return context;
+	}
+	
+	static void sigGeneralHandler(int signum, ref<linux.siginfo_t> info, ref<linux.ucontext_t> uContext) {
+		ref<ExceptionContext> context = fillExceptionInfo(info, uContext);
+		switch (signum) {
+		case linux.SIGFPE:
+			throw DivideByZeroException(context);
+			
+		case linux.SIGILL:
+			throw IllegalInstructionException(context);
+
+		case linux.SIGABRT:
+			throw CRuntimeException(context);
+
+		case linux.SIGQUIT:
+			if (info.si_code == linux.SI_USER)
+				dumpAllThreads(context);
+			else
+				dumpMyThread(context);
+			thread.exit();
+
+		case linux.SIGTRAP:
+			throw CRuntimeException(context);
+
+		case linux.SIGTERM:
+			if (interruptResponse.interrupt())
+				return;
+		}
+		printf("Unexpected signal %d at %p\n", signum, context.exceptionAddress);
+		throw RuntimeException(context);
+	}
+	
+	static void sigSegvHandler(int signum, ref<linux.siginfo_t> info, ref<linux.ucontext_t> uContext) {
+		ref<ExceptionContext> context = fillExceptionInfo(info, uContext);
+		context.memoryAddress = address(info.si_addr());
+		switch (info.si_code) {
+		case linux.SI_KERNEL:
+		case linux.SEGV_MAPERR:
+			if (context.memoryAddress == null)
+				throw NullPointerException(context);
+			else
+				throw AccessException(context);	
+			
+		case linux.SEGV_ACCERR:
+			throw PermissionsException(context);
+
+		default:
+			printf("SIGSEGV at %p, unexpected exception code %x\n", context.exceptionAddress, info.si_code);
+			throw RuntimeException(context);
+		}
+	}
+}
+
 /**
  * This is the base class for all exceptions.
  *
@@ -681,77 +834,6 @@ void uncaughtException(ref<Exception> e) {
 	exposeException(e);
 }
 /**
- * The default hardware exception handler. This is registered early in the process start-up initialization.
- *
- * It can be replaced with a call to {@link setHardwareExceptionHandler}. You may use the address of this
- * function to restore the default handler if you have replaced it.
- *
- * This function will only throw an exception and will never return normally.
- *
- * @param info The {@link HardwareException} object containing the detailed information about the exception.
- */
-public void hardwareExceptionHandler(ref<HardwareException> info) {
-	ref<ExceptionContext> context = createExceptionContext(info.stackPointer);
-	context.framePointer = info.framePointer;
-	context.exceptionAddress = info.codePointer;
-	context.memoryAddress = address(info.exceptionInfo0);
-	context.exceptionFlags = info.exceptionInfo1;
-	context.exceptionType = info.exceptionType;
-	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-		if (info.exceptionType == 0xffffffffc0000374) {
-			throw CorruptHeapException(context);
-		} else if (info.exceptionType == 0xffffffffc00000fd) {
-			throw StackOverflowException(context);
-		} else if (info.exceptionType == 0xffffffffc0000005) {
-			if (context.memoryAddress == null)
-				throw NullPointerException(context);
-			else
-				throw AccessException(context);
-		} else if (info.exceptionType == int(0xc0000094))
-			throw DivideByZeroException(context);
-	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-		switch (info.exceptionType) {
-		case 0xb80:						// SIGSEGV + SI_KERNEL
-		case 0xb01:						// SIGSEGV + SEGV_MAPERR
-			if (context.memoryAddress == null)
-				throw NullPointerException(context);
-			else
-				throw AccessException(context);	
-			
-		case 0xb02:						// SIGSEGV + SEGV_ACCERR
-			throw PermissionsException(context);	
-			
-		case 0x801:						// SIGFPE + FPE_INTDIV
-			throw DivideByZeroException(context);
-			
-		case 0x402:						// SIGILL + ILL_ILLOPN
-			throw IllegalInstructionException(context);
-
-		case 0x6fa:						// SIGABRT + tkill
-			throw CRuntimeException(context);
-
-		case 0x300:						// SIGQUIT - dump all threads
-			dumpAllThreads(context);
-			thread.exit();
-
-		case 0x2fa:
-		case 0x3fa:						// SIGQUIT sent from inside the house - just dump me.
-			dumpMyThread(context);
-			thread.exit();
-
-		case 0x5fa:						// SIGTRAP + SI_TKILL = tkill system call.				
-			throw CRuntimeException(context);
-
-		case 0xf00:						// SIGTERM (simple kill command).
-			if (interruptResponse.interrupt())
-				return;
-		}
-	}
-	printf("exception %x at %p\n", info.exceptionType, info.codePointer);
-	printf("Unexpected exception type\n");
-	throw RuntimeException(context);
-}
-/**
  * Register an interrupt handler.
  *
  * An operating system generally has some mechanism for communicating asynchronous events to
@@ -876,19 +958,6 @@ ref<ExceptionContext> createExceptionContext(address stackPointer) {
 @Linux("libparasol.so.1", "exposeException")
 @Windows("parasol.dll", "exposeException")
 private abstract void exposeException(ref<Exception> e);
-/**
- * Sets the process's hardware exception handler to the argument value.
- *
- * Your process starts executing with {@link hardwareExceptionHandler} as this value. If you want to
- * handle these conditions in your own way, this can achieve that goal.
- *
- * This handler is called on the thread that triggered the hardware condition being reported.
- *
- * @param handler The new hardware exception handler.
- */
-@Linux("libparasol.so.1", "registerHardwareExceptionHandler")
-@Windows("parasol.dll", "registerHardwareExceptionHandler")
-public abstract void registerHardwareExceptionHandler(void handler(ref<HardwareException> info));
 /** @ignore
  * This function is a support routine the Parasol compiler uses when running a compiled image.
  *
@@ -961,21 +1030,6 @@ class ExceptionContext {
 		printf("    exception type             %x\n", unsigned(exceptionType));
 		printf("    exception flags            %x\n", unsigned(exceptionFlags));
 	}
-}
-/**
- * This information is passed to the registered hardware exception handler.
- *
- * The contents of {@link exceptionInfo0}, {@link exceptionInfo1} and {@link exceptionType}
- * are operating-system specific.
- */
-@Header
-public class HardwareException {
-	public address codePointer;
-	public address framePointer;
-	public address stackPointer;
-	public long exceptionInfo0;
-	public int exceptionInfo1;
-	public int exceptionType;
 }
 /**
  * Construct a string representing a machine location, including information about relative location

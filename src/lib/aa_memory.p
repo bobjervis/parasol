@@ -61,8 +61,6 @@ private ref<Allocator> currentHeap;
 private Heap heap;
 private LeakHeap leakHeap(runtime.returnAddress());
 
-exception.registerHardwareExceptionHandler(exception.hardwareExceptionHandler);
-
 currentHeap = &heap;
 thread.Thread.init();
 

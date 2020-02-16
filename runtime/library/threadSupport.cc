@@ -47,7 +47,7 @@ void exitThread() {
 	}
 }
 /*
- * THis is called from Parasol.
+ * This is called from Parasol.
  */
 int eval(X86_64SectionHeader *header, byte *image, char **argv, int argc) {
 	ExecutionContext *outer = threadContext.get();
@@ -66,7 +66,7 @@ int eval(X86_64SectionHeader *header, byte *image, char **argv, int argc) {
 	return result;
 }
 /*
- * THis is called just from the main C++ code.
+ * This is called just from the main C++ code.
  */
 int evalNative(X86_64SectionHeader *header, byte *image, char **argv, int argc) {
 	ExecutionContext *context = new ExecutionContext(header, image, null);

@@ -3729,46 +3729,51 @@ public class X86_64 extends X86_64AssignTemps {
 			assert(false);
 		}
 		ref<Node> node = ref<Unary>(ellipsisArgumentNode).operand();
+		storeValueInEllipsis(node, offset, R(ellipsisArgumentNode.register), compileContext);
+	}
+	
+	private void storeValueInEllipsis(ref<Node> node, int offset, R tempReg, ref<CompileContext> compileContext) {
 		int size = node.type.size();
 		switch (node.op()) {
 		case	INDIRECT:
 		case	IDENTIFIER:
+		case	VARIABLE:
 			generate(node, compileContext);
 			break;
 			
 		case	SEQUENCE:
 			ref<Binary> b = ref<Binary>(node);
 			generate(b.left(), compileContext);
-			generatePush(b.right(), compileContext);
+			storeValueInEllipsis(b.right(), offset, tempReg, compileContext);
 			return;
-			
+
 		default:
-			ellipsisArgumentNode.print(0);
+			node.print(0);
 			assert(false);
 		}
 		int objectOffset = 0;
 		for (; size >= long.bytes; objectOffset += long.bytes, size -= long.bytes) {
-			inst(X86.MOV, compileContext.arena().builtInType(TypeFamily.ADDRESS), R(ellipsisArgumentNode.register), node, objectOffset);
-			inst(X86.MOV, TypeFamily.ADDRESS, R.RSP, offset + objectOffset, R(ellipsisArgumentNode.register));
+			inst(X86.MOV, compileContext.arena().builtInType(TypeFamily.ADDRESS), tempReg, node, objectOffset);
+			inst(X86.MOV, TypeFamily.ADDRESS, R.RSP, offset + objectOffset, tempReg);
 		}
 		if (size >= int.bytes) {
-			inst(X86.MOV, compileContext.arena().builtInType(TypeFamily.SIGNED_32), R(ellipsisArgumentNode.register), node, objectOffset);
-			inst(X86.MOV, TypeFamily.SIGNED_32, R.RSP, offset + objectOffset, R(ellipsisArgumentNode.register));
+			inst(X86.MOV, compileContext.arena().builtInType(TypeFamily.SIGNED_32), tempReg, node, objectOffset);
+			inst(X86.MOV, TypeFamily.SIGNED_32, R.RSP, offset + objectOffset, tempReg);
 			size -= int.bytes;
 			objectOffset += int.bytes;
 		}
 		if (size >= short.bytes) {
-			inst(X86.MOV, compileContext.arena().builtInType(TypeFamily.SIGNED_16), R(ellipsisArgumentNode.register), node, objectOffset);
-			inst(X86.MOV, TypeFamily.SIGNED_16, R.RSP, offset + objectOffset, R(ellipsisArgumentNode.register));
+			inst(X86.MOV, compileContext.arena().builtInType(TypeFamily.SIGNED_16), tempReg, node, objectOffset);
+			inst(X86.MOV, TypeFamily.SIGNED_16, R.RSP, offset + objectOffset, tempReg);
 			size -= short.bytes;
 			objectOffset += short.bytes;
 		}
 		if (size > 0) {
-			inst(X86.MOV, compileContext.arena().builtInType(TypeFamily.UNSIGNED_8), R(ellipsisArgumentNode.register), node, offset);
-			inst(X86.MOV, TypeFamily.UNSIGNED_8, R.RSP, offset, R(ellipsisArgumentNode.register));
+			inst(X86.MOV, compileContext.arena().builtInType(TypeFamily.UNSIGNED_8), tempReg, node, offset);
+			inst(X86.MOV, TypeFamily.UNSIGNED_8, R.RSP, offset, tempReg);
 		}
 	}
-	
+
 	private void generatePush(ref<Node> node, ref<CompileContext> compileContext) {
 		int size = node.type.stackSize();
 		switch (node.op()) {
