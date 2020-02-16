@@ -13,6 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+printf("Start test\n");
 
 void f(int key, substring... args) {
 	switch (key) {
@@ -83,4 +84,5 @@ if (xp1.id() != xp2.me().id())
 else
 	assert(false);
 
+printf("PASSED\n");
 

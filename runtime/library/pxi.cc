@@ -15,7 +15,6 @@
  */
 #include "pxi.h"
 
-#include "common/file_system.h"
 #include "common/machine.h"
 #include "parasol_enums.h"
 
@@ -36,7 +35,7 @@ Pxi::Pxi(const string &filename) {
 }
 
 bool Pxi::read() {
-	FILE *pxiFile = fileSystem::openBinaryFile(_filename);
+	FILE *pxiFile = fopen(_filename.c_str(), "rb");
 	if (pxiFile == null)
 		return null;
 	_section = read(pxiFile);

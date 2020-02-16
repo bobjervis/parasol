@@ -50,11 +50,6 @@ Exception *fetchExposedException() {
 	return e;
 }
 
-void registerHardwareExceptionHandler(void (*handler)(HardwareException*)) {
-	ExecutionContext *context = threadContext.get();
-	context->registerHardwareExceptionHandler(handler);
-}
-
 void *formatMessage(unsigned NTStatusMessage) {
 #if defined(__WIN64)
    char *lpMessageBuffer;
@@ -88,76 +83,5 @@ void *formatMessage(unsigned NTStatusMessage) {
 }
 
 }
-
-#if defined(__WIN64)
-LONG CALLBACK windowsExceptionHandler(PEXCEPTION_POINTERS ExceptionInfo) {
-	ExecutionContext *context = threadContext.get();
-
-	if (context->hasHardwareExceptionHandler()) {
-		HardwareException info;
-
-		info.codePointer = (byte*)ExceptionInfo->ContextRecord->Rip;
-		info.framePointer = (byte*)ExceptionInfo->ContextRecord->Rbp;
-		info.stackPointer = (byte*)ExceptionInfo->ContextRecord->Rsp;
-		info.exceptionType = ExceptionInfo->ExceptionRecord->ExceptionCode;
-		switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
-		case EXCEPTION_ACCESS_VIOLATION:
-		case EXCEPTION_IN_PAGE_ERROR:
-			info.exceptionInfo0 = (long long)ExceptionInfo->ExceptionRecord->ExceptionInformation[1];
-			info.exceptionInfo1 = (int)ExceptionInfo->ExceptionRecord->ExceptionInformation[0];
-		}
-		context->callHardwareExceptionHandler(&info);
-		printf("Did not expect this to return\n");
-		exit(1);
-	}
-	printf("No hardware exception handler defined\n");
-	exit(1);
-	return 0;
-}
-
-// These are not really Parasol callable, so put them in C++ linkage.
-
-#elif __linux__
-static void fillExceptionInfo(HardwareException *he, siginfo_t *info, ucontext *uContext) {
-	he->codePointer = (byte*)uContext->uc_mcontext.gregs[REG_RIP];
-	he->framePointer = (byte*)uContext->uc_mcontext.gregs[REG_RBP];
-	he->stackPointer = (byte*)uContext->uc_mcontext.gregs[REG_RSP];
-	he->exceptionType = (info->si_signo << 8) + info->si_code;
-	he->exceptionInfo1 = info->si_errno;
-}
-
-void sigGeneralHandler(int signum, siginfo_t *info, void *uContext) {
-	ExecutionContext *context = threadContext.get();
-
-	if (context != null && context->hasHardwareExceptionHandler()) {
-		HardwareException he;
-
-		fillExceptionInfo(&he, info, (ucontext*)uContext);
-		he.exceptionInfo0 = 0;
-		context->callHardwareExceptionHandler(&he);
-		// Most exception handlers throw an exception and crash out elsewhere.
-		// But, the SIGTERM handler allows for a user-defined interrupt handler.
-		return;
-	}
-	printf("No hardware exception handler defined\n");
-	exit(1);
-}
-
-void sigSegvHandler(int signum, siginfo_t *info, void *uContext) {
-	ExecutionContext *context = threadContext.get();
-
-	if (context != null && context->hasHardwareExceptionHandler()) {
-		HardwareException he;
-
-		fillExceptionInfo(&he, info, (ucontext*)uContext);
-		he.exceptionInfo0 = (long long)info->si_addr;
-		context->callHardwareExceptionHandler(&he);
-		printf("Did not expect this to return\n");
-		exit(1);
-	}
-	printf("No hardware exception handler defined\n");
-	exit(1);
-}
-#endif
 
 }

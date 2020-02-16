@@ -23,8 +23,6 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <link.h>
-
-#include "common/file_system.h"
 #endif
 #include "x86_pxi.h"
 #include "library/threadSupport.h"
