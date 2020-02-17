@@ -17,9 +17,9 @@
 #define EXECUTION_CONTEXT_H
 
 #include "common/machine.h"
+#include "common/vector.h"
 #include "parasol_enums.h"
 #include "pxi.h"
-#include "x86_pxi.h"
 #include "exceptionSupport.h"
 
 namespace parasol {
@@ -43,7 +43,7 @@ class Type;
 class ExecutionContext {
 public:
 
-	ExecutionContext(X86_64SectionHeader *pxiHeader, void *image, ExecutionContext *outer);
+	ExecutionContext(pxi::X86_64SectionHeader *pxiHeader, void *image, ExecutionContext *outer);
 
 	void enter();
 
@@ -100,9 +100,10 @@ private:
 	int _target;
 	byte *_stackTop;
 	Exception *_exception;
-	X86_64SectionHeader *_pxiHeader;
+	pxi::X86_64SectionHeader *_pxiHeader;
 	void *_image;
-	vector<string> _args;
+	char **_argv;
+	int _argc;
 	void *_sourceLocations;
 	int _sourceLocationsCount;
 	void *_parasolThread;
@@ -111,7 +112,7 @@ private:
 
 extern "C" {
 
-int evalNative(X86_64SectionHeader *header, byte *image, char **argv, int argc);
+int evalNative(pxi::X86_64SectionHeader *header, byte *image, char **argv, int argc);
 
 void callAndSetFramePtr(void *newRbp, void *newRip, void *arg);
 

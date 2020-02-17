@@ -15,9 +15,8 @@
  */
 #ifndef PXI_H
 #define PXI_H
-#include <stdio.h>
-#include "common/string.h"
-#include "parasol_enums.h"
+#include"common/machine.h"
+#include <stddef.h>
 
 namespace pxi {
 
@@ -26,32 +25,10 @@ static const unsigned short CURRENT_VERSION = 1;
 
 class Section;
 
-class Pxi {
-public:
-	static Pxi *load(const string &filename);
-
-	static Pxi *create(const string &filename);
-
-	bool run(char **args, int *returnValue);
-
-private:
-	Pxi(const string &filename);
-
-	bool read();
-
-	Section *read(FILE *pxiFile);
-
-	Section* _section;
-	string _filename;
-};
+Section *load(const char *filename);
 
 class PxiHeader {
 public:
-	PxiHeader() {
-		magic = MAGIC_NUMBER;
-		version = CURRENT_VERSION;
-	}
-
 	unsigned magic;					// MAGIC_NUMBER
 	unsigned short version;			//
 	unsigned short sections;		// The number of sections in the section table following the header
@@ -69,12 +46,40 @@ public:
 	long long length;			// The length of the section, in bytes.
 };
 
-class Section {
+class X86_64SectionHeader {
 public:
-	virtual bool run(char **args, int *returnValue) = 0;
+	int entryPoint;			// Object id of the starting function to run in the image
+	int builtInOffset;		// Offset in image of built-in table
+	int builtInCount;		// Total number of built-ins
+	int vtablesOffset;		// Offset in image of vtables
+	int vtableData;			// Total number of vtable slots
+	int typeDataOffset;		// Offset in image of type data
+	int typeDataLength;		// Total number of bytes of type data
+	int stringsOffset;		// Offset in image of strings area
+	int stringsLength;		// Total number of bytes in strings area
+	int relocationOffset;	// Offset in image of relocations list
+	int relocationCount;	// Total number of relocations
+	int builtInsText;		// Offset in image of built-ins text
+	int exceptionsOffset;	// Offset in image of exception table
+	int exceptionsCount;	// Number of ExceptionEntry elements in the table
+	int nativeBindingsOffset;// Offset in image of native bindings
+	int nativeBindingsCount;// Number of native bindings
 };
 
-bool registerSectionReader(SectionType sectionType, Section *(*sectionReader)(FILE *pxiFile, long long length));
+class Section {
+public:
+	Section(X86_64SectionHeader &header, byte *image, size_t imageLength) {
+		this->header = header;
+		this->image = image;
+		this->imageLength = imageLength;
+	}
+
+	bool run(char **args, int *returnValue);
+
+	X86_64SectionHeader header;
+	byte *image;
+	size_t imageLength;
+};
 
 }
 #endif // PXI_H

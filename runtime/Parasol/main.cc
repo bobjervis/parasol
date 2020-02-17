@@ -40,12 +40,12 @@ int main(int argc, char **argv) {
 		printf("Use is: parasolrt <pxi-file> <program arguments>\n");
 		return 1;
 	}
-	pxi::Pxi* pxi = pxi::Pxi::load(argv[1]);
-	if (pxi == null) {
+	pxi::Section* section = pxi::load(argv[1]);
+	if (section == null) {
 		printf("Failed to load %s\n", argv[1]);
 		return 1;
 	}
-	if (pxi->run(argv, &returnValue))
+	if (section->run(argv, &returnValue))
 		return returnValue;
 	else {
 		printf("Unable to run pxi %s\n", argv[1]);

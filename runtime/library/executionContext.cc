@@ -15,19 +15,14 @@
  */
 #include "executionContext.h"
 #include "threadSupport.h"
+#include <string.h>
 #if defined(__WIN64)
 #include <windows.h>
-#elif __linux__
-//typedef unsigned long long SIZE_T;
-//typedef unsigned DWORD;
-//typedef int BOOL;
-#include <signal.h>
-
 #endif
 
 namespace parasol {
 
-ExecutionContext::ExecutionContext(X86_64SectionHeader *pxiHeader, void *image, ExecutionContext *outer) {
+ExecutionContext::ExecutionContext(pxi::X86_64SectionHeader *pxiHeader, void *image, ExecutionContext *outer) {
 	_exception = null;
 	_stackTop = null;
 	_target = -1;
@@ -45,19 +40,30 @@ void ExecutionContext::enter() {
 }
 
 void ExecutionContext::prepareArgs(char **argv, int argc) {
-	_args.clear();
-	for (int i = 0; i < argc; i++)
-		_args.push_back(string(argv[i]));
+	_argv = argv;
+	_argc = argc;
 }
+
+struct string {
+	int size;
+	char data[1];
+};
 
 int ExecutionContext::runNative(int (*start)(void *args)) {
 	_target = NATIVE_64_TARGET;
 	byte *x;
 	_stackTop = (byte*) &x;
 	long long inlineParasolArray[2];		// Arguments are a string array.
+	string **args = new string*[_argc];
+	for (int i = 0; i < _argc; i++) {
+		int len = strlen(_argv[i]);
+		args[i] = (string*)new char[sizeof(string) + len];
+		args[i]->size = strlen(_argv[i]);
+		strcpy(args[i]->data, _argv[i]);
+	}
 
-	inlineParasolArray[1] = (long long)&_args[0];
-	inlineParasolArray[0] = (((WORD)_args.size() << 32) | _args.size());
+	inlineParasolArray[1] = (long long)args;
+	inlineParasolArray[0] = _argc;
 	int result = start(inlineParasolArray);
 	return result;
 }
