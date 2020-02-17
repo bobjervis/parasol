@@ -13,12 +13,13 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-#include "../common/platform.h"
 #include "string.h"
 
 #include <ctype.h>
 #include <stdarg.h>
 #include <time.h>
+
+char string::dummy;
 
 string operator+ (const char* left, const string& right) {
 	string s(left);

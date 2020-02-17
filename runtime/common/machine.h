@@ -30,6 +30,7 @@ typedef unsigned char byte;
  *	an interactive window.  fatalMessage will still exit with a code
  *	of 1.  warningMessage will become a no-op.
  */
+/*
 void disableMessages();
 
 void fatalMessage(const string& s);
@@ -39,7 +40,7 @@ void warningMessage(const string& s);
 void debugPrint(const string& s);
 
 const float sqrt3 = float(sqrt(3.0));
-
+*/
 /*
  *	The appropriate way to test for equality is:
  *
@@ -55,6 +56,7 @@ const float sqrt3 = float(sqrt(3.0));
  *
  *		if (result >= EQUAL)
  */
+/*
 enum compareResult_t {
 	LESS = -1,
 	EQUAL = 0,
@@ -64,4 +66,5 @@ enum compareResult_t {
 typedef long long Milliseconds;
 
 Milliseconds millisecondMark();
+ */
 #endif  // COMMON_MACHINE_H

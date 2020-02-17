@@ -73,7 +73,7 @@ int evalNative(X86_64SectionHeader *header, byte *image, char **argv, int argc) 
 
 	threadContext.set(context);
 	int (*start)(void *args) = (int (*)(void*))(image + header->entryPoint);
-	context->prepareArgs(argv, argc);
+	context->prepareArgs(argv + 1, argc - 1);
 	return context->runNative(start);
 }
 

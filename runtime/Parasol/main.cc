@@ -13,13 +13,8 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-#include <limits.h>
-#include <stdarg.h>
 #include <stdio.h>
-#include <string.h>
 #include "library/pxi.h"
-#include "common/command_line.h"
-#include "common/platform.h"
 /*
  * Date and Copyright holder of this code base.
  */
@@ -32,31 +27,6 @@
  */
 #define RUNTIME_VERSION "1.0.0"
 
-class ParasolCommand : public commandLine::Command {
-public:
-	ParasolCommand() {
-		finalArguments(0, INT_MAX, "<filename> [arguments ...]");
-		description("The given filename is run as a pxi image. "
-					"Any command-line arguments appearing after are passed "
-					"to any main function in that file."
-					"\n"
-					"Parasol Runtime Version " RUNTIME_VERSION "\r"
-					"Copyright (c) " COPYRIGHT_STRING
-					);
-		verboseArgument = booleanArgument('v', null,
-					"Enables verbose output.");
-		helpArgument('?', "help",
-					"Displays this help.");
-	}
-
-	commandLine::Argument<bool> *verboseArgument;
-	commandLine::Argument<bool> *leaksArgument;
-};
-
-static ParasolCommand parasolCommand;
-
-static void parseCommandLine(int argc, char **argv);
-static int runCommand();
 /*
  * The C++ code of the Parasol runtime is primarily in a shared object, so that symbols can be looked up (a
  * requirement of the Parasol native binding machenaism..
@@ -65,21 +35,20 @@ static int runCommand();
  * and runs it.
  */
 int main(int argc, char **argv) {
-	platform::setup();
-	if (!parasolCommand.parse(argc, argv) ||
-		parasolCommand.finalArgc() == 0)
-		parasolCommand.help();
-	char **args = parasolCommand.finalArgv();
 	int returnValue;
-	pxi::Pxi* pxi = pxi::Pxi::load(args[0]);
-	if (pxi == null) {
-		printf("Failed to load %s\n", args[0]);
+	if (argc < 2) {
+		printf("Use is: parasolrt <pxi-file> <program arguments>\n");
 		return 1;
 	}
-	if (pxi->run(args, &returnValue))
+	pxi::Pxi* pxi = pxi::Pxi::load(argv[1]);
+	if (pxi == null) {
+		printf("Failed to load %s\n", argv[1]);
+		return 1;
+	}
+	if (pxi->run(argv, &returnValue))
 		return returnValue;
 	else {
-		printf("Unable to run pxi %s\n", args[0]);
+		printf("Unable to run pxi %s\n", argv[1]);
 		return 1;
 	}
 }
