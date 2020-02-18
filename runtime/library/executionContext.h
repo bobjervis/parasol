@@ -20,25 +20,26 @@
 #include "common/vector.h"
 #include "parasol_enums.h"
 #include "pxi.h"
-#include "exceptionSupport.h"
 
 namespace parasol {
 
-const int INDENT = 4;
-
-const int BYTE_CODE_TARGET = 1;
-const int NATIVE_64_TARGET = 2;
-
-typedef long long WORD;
-
-#define STACK_SLOT (sizeof (WORD))
-#define FRAME_SIZE (sizeof(WORD) + 2 * sizeof(void*))
-
-static const int STACK_SIZE = STACK_SLOT * 128 * 1024;
-
-class Code;
 class Exception;
-class Type;
+
+// Exception table consist of some number of these entries, sorted by ascending location value.
+// Any IP value between the location of one entry and the next is processed by the assicated handler.
+// A handler value of 0 indicates no handler exists.
+class ExceptionEntry {
+public:
+	int location;
+	int handler;
+};
+
+class ExceptionTable {
+public:
+	int length;
+	int capacity;
+	ExceptionEntry *entries;
+};
 
 class ExecutionContext {
 public:
@@ -97,7 +98,6 @@ public:
 	}
 
 private:
-	int _target;
 	byte *_stackTop;
 	Exception *_exception;
 	pxi::X86_64SectionHeader *_pxiHeader;
@@ -109,6 +109,47 @@ private:
 	void *_parasolThread;
 	vector<void*> _runtimeParameters;
 };
+
+class ThreadContext {
+public:
+	ThreadContext() {
+#if defined(__WIN64)
+		_slot = TlsAlloc();
+#elif __linux__
+		_threadContextValue = 0;
+#endif
+	}
+
+	bool set(ExecutionContext *value) {
+#if defined(__WIN64)
+		if (TlsSetValue(_slot, value))
+			return true;
+		else
+			return false;
+#elif __linux__
+		_threadContextValue = value;
+		return true;
+#endif
+	}
+
+	ExecutionContext *get() {
+#if defined(__WIN64)
+		return (ExecutionContext*)TlsGetValue(_slot);
+#elif __linux__
+		return _threadContextValue;
+#endif
+	}
+
+private:
+#if defined(__WIN64)
+	DWORD	_slot;
+#endif
+#if __linux__
+	static __thread ExecutionContext *_threadContextValue;
+#endif
+};
+
+extern ThreadContext threadContext;
 
 extern "C" {
 
