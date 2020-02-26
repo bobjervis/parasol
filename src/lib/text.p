@@ -488,16 +488,7 @@ public class string extends String<byte> {
 	}
 	
 	~string() {
-		if (_contents != null) {
-//			print("\"");
-//			print(*this);
-//			print("\"\n");
-//			if (!ignoring)
-//				deletedContents.append(_contents);
-//			else
-//				print("Delete\n");
-			memory.free(_contents);
-		}
+		memory.free(_contents);
 	}
 
 	private void appendDigits(long value) {

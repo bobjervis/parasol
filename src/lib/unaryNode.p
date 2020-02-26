@@ -518,22 +518,10 @@ public class Unary extends Node {
 					ename = "stringEllip";
 				else
 					ename = "string16Ellip";
-
-				ref<Symbol> sym = type.lookup(ename, compileContext);
-				if (sym == null || sym.class != Overload) {
-					add(MessageId.UNDEFINED, compileContext.pool(), ename);
-					break;
-				}
-				ref<Overload> o = ref<Overload>(sym);
-				ref<OverloadInstance> oi = (*o.instances())[0];
-				ref<Variable> temp = compileContext.newVariable(type);
-				ref<Reference> r = tree.newReference(temp, true, location());
+				ref<Reference> r = tree.newEllipsisReference(type, location());
 				ref<Node> call = createMethodCall(r, ename, tree, compileContext, _operand);
 				call.type = compileContext.arena().builtInType(TypeFamily.VOID);
-				r = tree.newReference(temp, false, location());
-				ref<Binary> seq = tree.newBinary(Operator.SEQUENCE, call, r, location());
-				seq.type = type;
-				return seq.fold(tree, false, compileContext);
+				return call.fold(tree, false, compileContext);
 			}
 
 		case	SUBSTRING:

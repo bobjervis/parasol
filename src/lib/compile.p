@@ -1108,11 +1108,35 @@ public class CompileContext {
 		if (n == null || n.type == null)
 			return;
 		if (n.type.hasDestructor()) {
+			if (n.op() == Operator.VARIABLE)
+				for (i in _liveSymbols)
+					assert(!n.conforms(_liveSymbols[i]));
 			_liveSymbols.push(n);
 			_liveSymbolScopes.push(_current);
 		}
 	}
-	
+	/**
+	 * Remove a live symbol.
+	 *
+	 * In a multi-return the logic will assign out each returned value. For
+	 * a string or string16 return value, the value is transferred without making a copy.
+	 * So the live symbol entry must be removed.
+	 *
+	 * Note that the use of this function relies on the fact that the parameter node
+	 * being 'removed' is a Reference and is unique to the current expression, no matter how
+	 * many nested live symbol contexts are currently in the stack.
+	 *
+	 * @param n The node (a Reference) that will not need to be destroyed.
+	 */
+	public void unmarkLiveSymbol(ref<Node> n) {
+		for (i in _liveSymbols) {
+			if (n.conforms(_liveSymbols[i])) {
+				_liveSymbols.remove(i);
+				_liveSymbolScopes.remove(i);
+			}
+		}
+	}
+
 	public void markActiveLock(ref<Node> n) {
 		if (n == null || n.type == null)
 			return;
@@ -1245,6 +1269,7 @@ public class CompileContext {
 	public ref<Variable> newVariable(ref<NodeList> returns) {
 		ref<Variable> v = _pool new Variable;
 		v.returns = returns;
+		v.type = returns.node.type;
 		v.enclosing = _current;
 		_variables.append(v);
 		return v;

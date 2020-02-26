@@ -340,6 +340,10 @@ class X86_64AddressModes extends X86_64Encoder {
 				markAddressModes(args.node, compileContext);
 			break;
 			
+		case	ELLIPSIS_DATA:
+			node.nodeFlags |= ADDRESS_MODE;
+			break;
+
 		case	STACK_ARGUMENT:
 			u = ref<Unary>(node);
 			markAddressModes(u.operand(), compileContext);
@@ -389,7 +393,7 @@ class X86_64AddressModes extends X86_64Encoder {
 					markAddressModes(u.operand(), compileContext);
 				}
 				break;
-				
+
 			case	STACK_ARGUMENT:
 				ref<Unary> u = ref<Unary>(arg);
 				markStackArgument(u.operand(), compileContext);
