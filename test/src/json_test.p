@@ -309,6 +309,7 @@ printf("Phase IV: arrays\n");
 assert(success);
 assert(value.class == ref<Array>);
 assert(ref<Array>(value).length() == 0);
+json.dispose(value);
 
 (value, success) = json.parse("[ 1, 2, 3, 4, 5 ]");
 assert(success);
@@ -324,6 +325,7 @@ assert(ref<Array>(value).get(3).class == double);
 assert(double(ref<Array>(value).get(3)) == 4);
 assert(ref<Array>(value).get(4).class == double);
 assert(double(ref<Array>(value).get(4)) == 5);
+json.dispose(value);
 
 (value, success) = json.parse("[ 1, 2, 3, 4, 5 ");
 assert(!success);
@@ -342,6 +344,7 @@ printf("Phase V: objects\n");
 assert(success);
 assert(value.class == ref<Object>);
 assert(ref<Object>(value).size() == 0);
+json.dispose(value);
 
 (value, success) = json.parse("{ \"a\":true, \"b\":56e4 }");
 assert(success);
@@ -351,6 +354,7 @@ assert(ref<Object>(value).get("a").class == boolean);
 assert(boolean(ref<Object>(value).get("a")) == true);
 assert(ref<Object>(value).get("b").class == double);
 assert(double(ref<Object>(value).get("b")) == 560000);
+json.dispose(value);
 
 (value, success) = json.parse("{ \"a\":true, \"b\":56e4");
 assert(!success);
@@ -375,3 +379,5 @@ assert(ref<Array>(b.get("c")).get(1).class == double);
 assert(double(ref<Array>(b.get("c")).get(1)) == 3);
 assert(ref<Array>(b.get("c")).get(2).class == string);
 assert(string(ref<Array>(b.get("c")).get(2)) == "s");
+json.dispose(value);
+

@@ -20,6 +20,7 @@ basicStringOps();
 conversions();
 subscripting();
 multiReturns();
+constructors();
 
 void basicIntegerArithmetic() {
 	var a = 1;
@@ -252,3 +253,13 @@ var, boolean test2() {
 	assert(x == 5);
 	return x, !y;
 }
+
+void constructors() {
+	long x = 7;
+	var source = &x;
+	var y;
+	new (&y) var(source);
+	ref<long> z = ref<long>(y);
+	assert(z == &x);
+}
+

@@ -1582,6 +1582,7 @@ public class X86_64 extends X86_64AssignTemps {
 		case	DECLARE_NAMESPACE:
 		case	IMPORT:
 		case	EMPTY:
+		case	ELLIPSIS_DATA:
 			break;
 			
 		case	FUNCTION:
@@ -3708,6 +3709,11 @@ public class X86_64 extends X86_64AssignTemps {
 					}
 					
 				default:
+					if (n.type.family() == TypeFamily.VOID) {
+						n.traverse(Node.Traversal.IN_ORDER, adjustEllipsisDataOffset, &offset);
+						generate(n, compileContext);
+						break;
+					}
 					generate(n, compileContext);
 					f().r.generateSpills(args.node, this);
 					if (n.register != 0)
@@ -3720,6 +3726,12 @@ public class X86_64 extends X86_64AssignTemps {
 		inst(X86.PUSH, TypeFamily.SIGNED_64, R.RSP);
 		inst(X86.MOV, TypeFamily.SIGNED_64, R.RAX, (long(vargCount) << 32) | vargCount);
 		inst(X86.PUSH, TypeFamily.SIGNED_64, R.RAX);
+	}
+
+	private static TraverseAction adjustEllipsisDataOffset(ref<Node> n, address arg) {
+		if (n.op() == Operator.ELLIPSIS_DATA)
+			ref<Reference>(n).setOffset(*ref<int>(arg));
+		return TraverseAction.CONTINUE_TRAVERSAL;
 	}
 
 	private void generateValueToStack(ref<Node> ellipsisArgumentNode, int offset, ref<CompileContext> compileContext) {

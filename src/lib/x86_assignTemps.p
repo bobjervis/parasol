@@ -1418,7 +1418,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 					f().r.cleanupTemps(u, depth);
 				}
 				break;
-				
+
 			case	STACK_ARGUMENT:
 				ref<Unary> u = ref<Unary>(arg);
 				assignStackArgument(u.operand(), compileContext);
@@ -1474,6 +1474,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	SUPER:
 		case	FRAME_PTR:
 		case	STACK_PTR:
+		case	ELLIPSIS_DATA:
 			break;
 			
 		case	SEQUENCE:

@@ -35,8 +35,6 @@ import parasol:compiler.ClassType;
 
 import parasol:log;
 
-//class Array = var[];
-
 private ref<log.Logger> logger = log.getLogger("parasol.json");
 /**
  * Parse a JSON string into Parasol objects.
@@ -260,7 +258,6 @@ class Parser {
 	
 	var parseValue() {
 		Token t = _scanner.next();
-		var v;
 		switch (t) {
 		case	LEFT_CURLY:
 			ref<Object> object = new Object();
@@ -272,24 +269,29 @@ class Parser {
 				t = _scanner.next();
 				if (t != Token.STRING) {
 					_error = true;
-					return object;
+					delete object;
+					return undefined;
 				}
 				string key = _scanner.stringValue();
 				t = _scanner.next();
 				if (t != Token.COLON) {
 					_error = true;
-					return object;
+					delete object;
+					return undefined;
 				}
 				var x = parseValue();
-				if (_error)
-					return object;
+				if (_error) {
+					delete object;
+					return undefined;
+				}
 				object.set(key, x);
 				t = _scanner.next();
 				if (t == Token.RIGHT_CURLY)
 					return object;
 				else if (t != Token.COMMA) {
 					_error = true;
-					return object;
+					delete object;
+					return undefined;
 				}
 			}
 
@@ -301,15 +303,18 @@ class Parser {
 			_scanner.pushBack(t);
 			for (;;) {
 				var x = parseValue();
-				if (_error)
-					return x;
+				if (_error) {
+					delete array;
+					return undefined;
+				}
 				array.push(x);
 				t = _scanner.next();
 				if (t == Token.RIGHT_SQUARE)
 					return array;
 				else if (t != Token.COMMA) {
 					_error = true;
-					return array;
+					delete array;
+					return undefined;
 				}
 			}
 		

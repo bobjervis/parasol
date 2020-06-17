@@ -1710,6 +1710,7 @@ public class Binary extends Node {
 				// It needs to be a proper constructor of the type.  So,
 				// processing this as a plain constructor will do everything
 				// necessary to bind the arguments to the correct constructor.
+				ref<Call>(_right).forceCallToConstructor();
 				compileContext.assignTypes(_right);
 				if (_right.deferAnalysis()) {
 					type = _right.type;
@@ -1762,6 +1763,7 @@ public class Binary extends Node {
 				// It needs to be a proper constructor of the type.  So,
 				// processing this as a plain constructor will do everything
 				// necessary to bind the arguments to the correct constructor.
+				ref<Call>(_right).forceCallToConstructor();
 				compileContext.assignTypes(_right);
 				if (_right.deferAnalysis()) {
 					type = _right.type;

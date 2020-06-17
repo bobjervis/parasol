@@ -38,9 +38,9 @@ import parasol:exception.IOException;
  */
 public void setProcessStreams(boolean restore) {
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-		process.stdin = new TextFileReader(0, true);
-		process.stdout = new TextFileWriter(1, true);
-		process.stderr = new TextFileWriter(2, true);
+		process.stdin = new TextFileReader(0, false);
+		process.stdout = new TextFileWriter(1, false);
+		process.stderr = new TextFileWriter(2, false);
 	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 		if (restore) {
 			int fd = linux.open("/dev/tty".c_str(), linux.O_RDONLY);
@@ -66,19 +66,19 @@ public void setProcessStreams(boolean restore) {
 			linux.close(fd);
 		}
 		if (linux.isatty(1) == 1) {
-			process.stdout = new LineWriter(1, true);
+			process.stdout = new LineWriter(1, false);
 			if (linux.isatty(0) == 1)
-				process.stdin = new StdinReader(0, true);
+				process.stdin = new StdinReader(0, false);
 			else
-				process.stdin = new FileReader(0, true);
+				process.stdin = new FileReader(0, false);
 		} else {
-			process.stdin = new FileReader(0, true);
-			process.stdout = new FileWriter(1, true);
+			process.stdin = new FileReader(0, false);
+			process.stdout = new FileWriter(1, false);
 		}
 		if (linux.isatty(2) == 1)
-			process.stderr = new ErrorWriter(2, true);
+			process.stderr = new ErrorWriter(2, false);
 		else
-			process.stderr = new FileWriter(2, true);
+			process.stderr = new FileWriter(2, false);
 	}
 }
 /**

@@ -3255,7 +3255,19 @@ class X86_64Encoder extends Target {
 		case	SUPER:
 			modRM(3, regOpcode, rmValues[thisRegister()]);
 			break;
-			
+
+		case	ELLIPSIS_DATA:
+			offset = ref<Reference>(addressMode).offset() + allAdjust;
+			if (offset >= -128 && offset <= 127) {
+				modRM(1, regOpcode, 4);
+				sib(0, 4, 4);
+				emit(byte(offset));
+			} else {
+				modRM(2, regOpcode, 4);
+				emitInt(offset);
+			}
+			break;
+
 		case	VARIABLE:
 			ref<Variable> v = ref<Reference>(addressMode).variable();
 			int offset = v.offset + ref<Reference>(addressMode).offset() + allAdjust;
@@ -3542,6 +3554,7 @@ class X86_64Encoder extends Target {
 			case	TEMPLATE_INSTANCE:
 			case	STRING:
 			case	FLOATING_POINT:
+			case	ELLIPSIS_DATA:
 				break;
 				
 			case	DOT:

@@ -157,6 +157,7 @@ public enum Operator {
 	IDENTIFIER,
 	// Reference
 	VARIABLE,
+	ELLIPSIS_DATA,
 	// Class
 	CLASS,
 	MONITOR_CLASS,
@@ -279,6 +280,10 @@ public class SyntaxTree {
 
 	public ref<Reference> newReference(ref<Variable> v, boolean definition, Location location) {
 		return _pool new Reference(v, 0, definition, location);
+	}
+	
+	public ref<Reference> newEllipsisReference(ref<Type> type, Location location) {
+		return _pool new Reference(type, location);
 	}
 	
 	public ref<Reference> newReference(ref<Variable> v, int offset, boolean definition, Location location) {
@@ -3375,7 +3380,7 @@ public class Node {
 		return this;
 	}
 	
-	enum Traversal {
+	public enum Traversal {
 		PRE_ORDER,
 		IN_ORDER,
 		POST_ORDER,
@@ -3848,6 +3853,7 @@ public class Node {
 		case	INDIRECT:
 		case	SUBSCRIPT:
 		case	VARIABLE:
+		case	ELLIPSIS_DATA:
 		case	THIS:
 		case	SUPER:
 			return true;
@@ -3865,6 +3871,7 @@ public class Node {
 		switch (_op) {
 		case	IDENTIFIER:
 		case	VARIABLE:
+		case	ELLIPSIS_DATA:
 		case	ARRAY_AGGREGATE:
 			return true;
 
@@ -3955,6 +3962,7 @@ public class Node {
 		case	DO_WHILE:
 		case	DOT:
 		case	ELLIPSIS:
+		case	ELLIPSIS_DATA:
 		case	EMPTY:
 		case	ENUM:
 		case	EQUALITY:
@@ -4328,7 +4336,7 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 			assert(b.right().op() == Operator.VARIABLE);
 			ref<Reference> r = ref<Reference>(b.right());
 			ref<Variable> v = r.variable();
-			return foldMultiReturn(b.left(), destinations, v, tree, compileContext);
+			return foldMultiReturn(b.left(), destinations, v, 0, tree, compileContext);
 		}
 		break;
 		

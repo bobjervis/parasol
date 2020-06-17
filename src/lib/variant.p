@@ -56,26 +56,43 @@ public class var {
 	}
 	
 	public var(var other) {
+		if (other.class == string) {
+//			stringsCons++;
+//			if (stringsCons == 1)
+//				assert(false);
+			new (&_value) string(string(other));
+		} else if (other.class == string16) {
+//			string16sCons++;
+			new (&_value) string16(string16(other));
+		} else
+			_value = long(other);
 		_actualType = *ref<address>(&other);
-		_value = long(other);
 	}
 	
 	public var(string other) {
+//		stringsCons++;
+//		if (stringsCons == 1)
+//			assert(false);
 		_actualType = string;
 		new (&_value) string(other);
 	}
 	
 	public var(string16 other) {
+//		string16sCons++;
 		_actualType = string16;
 		new (&_value) string16(other);
 	}
 	
 	public var(substring other) {
+//		stringsCons++;
+//		if (stringsCons == 1)
+//			assert(false);
 		_actualType = string;
 		new (&_value) string(other);
 	}
 	
 	public var(substring16 other) {
+//		string16sCons++;
 		_actualType = string16;
 		new (&_value) string16(other);
 	}
@@ -129,10 +146,12 @@ public class var {
 	}
 
 	~var() {
-//		if (this.class == string) {
-//			(*ref<string>(&_value)).~();
-//		else if (this.class == string16)
-//			(*ref<string16>(&_value)).~();
+		if (this.class == string) {
+//			stringsDes++;
+			(*ref<string>(&_value)).~();
+		} else if (this.class == string16)
+//			string16sDes++;
+			(*ref<string16>(&_value)).~();
 	}
 
 	public address actualType() { 
@@ -173,24 +192,12 @@ public class var {
 	}
 	
 	void copy(var source) {
-//		this.~();
-		_actualType = *ref<address>(&source);
-//		if (source.class == string)
-//			new (&_value) string(*ref<string>(&source._value));
-//		else if (source.class == string16)
-//			new (&_value) string16(*ref<string16>(&source._value));
-//		else
-			_value = pointer<long>(&source)[1];
+		(*this).~();
+		new (this) var(source);
 	}
 
 	void copyTemp(var source) {
-		_actualType = *ref<address>(&source);
-//		if (source.class == string)
-//			new (&_value) string(*ref<string>(&source._value));
-//		else if (source.class == string16)
-//			new (&_value) string16(*ref<string16>(&source._value));
-//		else
-			_value = pointer<long>(&source)[1];
+		new (this) var(source);
 	}
 	
 	var divide(var other) {
@@ -259,4 +266,18 @@ public class var {
 		return x;
 	}
 }
+/*
+int stringsCons, stringsDes, string16sCons, string16sDes;
 
+class GlobalState {
+	~GlobalState() {
+		snapVar();
+	}
+}
+
+private GlobalState globalState;
+
+public void snapVar() {
+	printf("string cons %d des %d string16 cons %d des %d\n", stringsCons, stringsDes, string16sCons, string16sDes);
+}
+*/

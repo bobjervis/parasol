@@ -195,21 +195,18 @@ public class Variable {
 	
 	public int stackSize() {
 		int sz;
-		if (type != null)
-			sz = type.stackSize();
-		else if (returns != null) {
+		if (returns != null) {
 			for (ref<NodeList> nl = returns; nl != null; nl = nl.next) {
 				int nlSize = nl.node.type.stackSize();
 				sz += nlSize;
 			}
-		}
+		} else if (type != null)
+			sz = type.stackSize();
 		return sz;
 	}
 	
 	public void print() {
-		if (type != null)
-			printf("Variable V%p %s [%d]\n", this, type.signature(), stackSize());
-		else if (returns != null) {
+		if (returns != null) {
 			printf("Variable V%p ", this);
 			for (ref<NodeList> nl = returns; nl != null; nl = nl.next) {
 				printf("%s", nl.node.type.signature());
@@ -217,7 +214,9 @@ public class Variable {
 					printf(", ");
 			}
 			printf(" [%d]\n", stackSize());
-		} else 
+		} else if (type != null)
+			printf("Variable V%p %s [%d]\n", this, type.signature(), stackSize());
+		else
 			printf("Variable V%p no type [%d]\n", this, stackSize());
 	}
 }

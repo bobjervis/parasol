@@ -299,15 +299,26 @@ public class Call extends ParameterBag {
 					outParameter = tree.newLeaf(Operator.MY_OUT_PARAMETER, location());
 					outParameter.type = functionType;
 				} else {
-					if (functionType != null && functionType.returnCount() > 1)
+					boolean makeLive;
+					if (functionType != null && functionType.returnCount() > 1) {
 						temp = compileContext.newVariable(functionType.returnType());
-					else if (type != null && type.returnsViaOutParameter(compileContext))
+						int offset;
+						for (ref<NodeList> nl = functionType.returnType(); nl != null; nl = nl.next) {
+							if (nl.node.type.hasDestructor()) {
+								ref<Reference> r = tree.newReference(temp, offset, true, nl.node.location());
+								compileContext.markLiveSymbol(r);
+							}
+							offset += nl.node.type.stackSize();
+						}
+					} else if (type != null && type.returnsViaOutParameter(compileContext)) {
 						temp = compileContext.newVariable(type);
-					else
+						makeLive = true;
+					} else
 						break;
 					outParameter = tree.newReference(temp, true, location());
+					if (makeLive)
+						compileContext.markLiveSymbol(outParameter);
 				}
-				compileContext.markLiveSymbol(outParameter);
 				if (!voidContext) {
 					nodeFlags |= PUSH_OUT_PARAMETER;
 					result = encapsulateCallInTemp(temp, tree);
@@ -844,6 +855,10 @@ public class Call extends ParameterBag {
 		return true;
 	}
 	
+	public void forceCallToConstructor() {
+		_category = CallCategory.CONSTRUCTOR;
+	}
+
 	private void assignTypes(ref<CompileContext> compileContext) {
 		switch (op()) {
 		case	ARRAY_AGGREGATE:
@@ -949,8 +964,9 @@ public class Call extends ParameterBag {
 					if (t.family() == TypeFamily.VOID)
 						break;
 				} else if (assignFunctionType(compileContext))
-					break;					
-				if (builtInCoercion(compileContext))
+					break;
+				// a new or placement new expression will set the category to CONSTRUCTOR				
+				if (_category != CallCategory.CONSTRUCTOR && builtInCoercion(compileContext))
 					_category = CallCategory.COERCION;
 				else {
 					assignConstructorCall(t, compileContext);
@@ -1998,7 +2014,6 @@ public class Return extends ParameterBag {
 				continue;
 			if (nl.node.op() == Operator.CALL)
 				continue;
-
 			if (nl.node.type.hasDestructor()) {
 				boolean skipCopy;
 				ref<Node> arg = simpleReturnVariable(nl.node);
@@ -2189,45 +2204,38 @@ ref<Node> simpleReturnVariable(ref<Node> argument) {
 	return null;
 }		
 
-ref<Node>, int foldMultiReturn(ref<Node> leftHandle, ref<Node> destinations, ref<Variable> intermediate, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
+ref<Node>, int foldMultiReturn(ref<Node> leftHandle, ref<Node> destinations, ref<Variable> intermediate, int offset, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
 	ref<Node> result;
-	int offset;
 	if (destinations.op() == Operator.SEQUENCE) {
 		ref<Binary> b = ref<Binary>(destinations);
 		ref<Node> lh;
 		
-		(lh, offset) = foldMultiReturn(leftHandle, b.left(), intermediate, tree, compileContext);
+		(lh, offset) = foldMultiReturn(leftHandle, b.left(), intermediate, offset, tree, compileContext);
+		(result, offset) = foldMultiReturn(lh, b.right(), intermediate, offset, tree, compileContext);
+	} else {
 		ref<Reference> r = tree.newReference(intermediate, offset, false, destinations.location());
-		r.type = b.right().type;
+		r.type = destinations.type;
 		ref<Node> assignment;
 		if (r.type.family() == TypeFamily.STRING ||
 			r.type.family() == TypeFamily.STRING16) {
-			ref<OverloadInstance> oi = getMethodSymbol(b.right(), "store", r.type, compileContext);
+			compileContext.unmarkLiveSymbol(r);
+			ref<OverloadInstance> oi = getMethodSymbol(destinations, "store", r.type, compileContext);
 			if (oi == null) {
 				destinations.type = compileContext.errorType();
 				return destinations, 0;
 			}
-			ref<Selection> method = tree.newSelection(b.right(), oi, false, destinations.location());
+			ref<Selection> method = tree.newSelection(destinations, oi, false, destinations.location());
 			method.type = oi.type();
 			ref<NodeList> args = tree.newNodeList(r);
 			ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, destinations.location(), compileContext);
 			call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 			assignment = call.fold(tree, true, compileContext);
 		} else {
-			compileContext.markLiveSymbol(r);
-			assignment = tree.newBinary(Operator.ASSIGN, b.right(), r, destinations.location());
+//			compileContext.markLiveSymbol(r);
+			assignment = tree.newBinary(Operator.ASSIGN, destinations, r, destinations.location());
 			assignment.type = r.type;
 			assignment = assignment.fold(tree, true, compileContext);
 		}
-		offset += b.right().type.stackSize();
-		result = tree.newBinary(Operator.SEQUENCE, lh, assignment, destinations.location());
-	} else {
-		ref<Reference> r = tree.newReference(intermediate, false, destinations.location());
-		r.type = destinations.type;
-		compileContext.markLiveSymbol(r);
-		ref<Node> assignment = tree.newBinary(Operator.ASSIGN, destinations, r, destinations.location());
-		assignment.type = r.type;
-		assignment = assignment.fold(tree, true, compileContext);
 		result = tree.newBinary(Operator.SEQUENCE, leftHandle, assignment, destinations.location());
 		offset = destinations.type.stackSize();
 	}

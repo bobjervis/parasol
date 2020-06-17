@@ -30,6 +30,15 @@ public class Reference extends Node {
 		_offset = offset;
 	}
 
+	Reference(ref<Type> type, Location location) {
+		super(Operator.ELLIPSIS_DATA, location);
+		this.type = type;
+	}
+
+	public void setOffset(int offset) {
+		_offset = offset;
+	}
+
 	public boolean traverse(Traversal t, TraverseAction func(ref<Node> n, address data), address data) {
 		return func(this, data) != TraverseAction.ABORT_TRAVERSAL;
 	}
