@@ -238,6 +238,10 @@ public class Decoder {
 			result++;
 		}
 	}
+
+	public boolean resetReader() {
+		_reader.reset();
+	}
 }
 /**
  * This class defines the framework for converting text stored in strings to some specific
