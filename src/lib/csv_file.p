@@ -97,7 +97,7 @@ public class CsvFile {
 		if (reader == null)
 			return false;
 		boolean result;
-		ref<text.Decoder> decoder = new text.UTFf8Decoder(reader);
+		ref<text.Decoder> decoder = new text.UTF8Decoder(reader);
 		result = load(decoder);
 		delete decoder;
 		delete reader;
@@ -109,7 +109,7 @@ public class CsvFile {
 
 	public boolean load(ref<text.Decoder> decoder) {
 		if (separator != null) {
-			text.Utf8Decoder d(separator);
+			text.UTF8Decoder d(&separator[0], separator.length());
 
 			for (;;) {
 				int c = d.decodeNext();
@@ -120,8 +120,9 @@ public class CsvFile {
 			}
 		} else
 			_separator.append(',');
+//		printf("separator '%s' %d tokens\n", separator, _separator.length());
 		if (quote != null) {
-			text.Utf8Decoder d(quote);
+			text.UTF8Decoder d(&quote[0], quote.length());
 
 			for (;;) {
 				int c = d.decodeNext();
@@ -132,6 +133,7 @@ public class CsvFile {
 			}
 		} else
 			_quote.append('"');
+//		printf("quote '%s' %d tokens\n", quote, _quote.length());
 		if (includesHeader) {
 			if (!parseLine(-1, decoder, &_header))
 				return false;
@@ -142,19 +144,21 @@ public class CsvFile {
 				if (!_headerMap.contains(_header[i]))
 					_headerMap[_header[i]] = i;
 		}
+//		printf("header map %d items\n", _headerMap.size());
 		int record = 0;
 		for (;;) {
 			_records.resize(record + 1);
-			if (!parseLine(record, decoder, &_records[record]))
+			if (!parseLine(record, decoder, &_records[record])) {
+				_records.resize(record);
 				break;
-
+			}
 			if (_records[record].length() > 0)
 				record++;
 		}
 		return true;
 	}
 
-	private boolean parseLine(int record, ref<text.Decoder> decoder, ref<string[]> record) {
+	private boolean parseLine(int record, ref<text.Decoder> decoder, ref<string[]> parsed) {
 		enum ParseState {
 			START_OF_FIELD,
 			IN_FIELD,
@@ -171,6 +175,12 @@ public class CsvFile {
 		string value = "";
 		for (;;) {
 			int c = decoder.decodeNext();
+/*
+			printf("field = %d c = %d", field, c);
+			if (c >= 0)
+				printf(" (%c)", c);
+			printf("\n");
+ */
 			if (c < 0) {
 				switch (state) {
 				case START_OF_FIELD:
@@ -181,7 +191,7 @@ public class CsvFile {
 				default:
 					if (trimFields)
 						value = value.trim();
-					record.append(value);
+					parsed.append(value);
 				}
 				return true;
 			}
@@ -201,7 +211,7 @@ public class CsvFile {
 				default:
 					if (trimFields)
 						value = value.trim();
-					record.append(value);
+					parsed.append(value);
 					return true;
 				}
 				continue;
@@ -226,33 +236,34 @@ public class CsvFile {
 							switch (state) {
 							case START_OF_FIELD:
 								state = ParseState.IN_QUOTES;
-								quoIdx = 0;
 								break;
 
 							case IN_QUOTES:
 								state = ParseState.AFTER_QUOTES;
-								quoIdx = 0;
 								break;
 
 							default:
 								throw IllegalOperationException("record " + record + " field " + field);
 							}
+							quoIdx = 0;
+							break;
 						}
 					} else {
 						// We have a miss. Now resync and prepare to try again
 						if (quoIdx > 0) {
 							int newQuoIdx = -1;
-							for (int k = 1; k < quoIdex; k++) {
+							for (int k = 1; k < quoIdx; k++) {
 								boolean success = true;
-								for (int i = 0; i < quoIdex - k; i++)
+								for (int i = 0; i < quoIdx - k; i++)
 									if (_quote[i] != _quote[i + k]) {
 										success = false;
 										break;
 									}
 								if (success) {
-									newQuoIdx = quoIdex - k;
+									newQuoIdx = quoIdx - k;
 									break;
 								}
+							}
 							if (newQuoIdx > 0)
 								quoIdx = newQuoIdx;
 							else
@@ -271,7 +282,8 @@ public class CsvFile {
 								value.resize(sepStart);
 								if (trimFields)
 									value = value.trim();
-								record.append(value);
+								parsed.append(value);
+								value = "";
 								sepIdx = 0;
 								quoIdx = 0;
 								field++;
@@ -282,17 +294,18 @@ public class CsvFile {
 							// We have a miss. Now resync and prepare to try again
 							if (sepIdx > 0) {
 								int newSepIdx = -1;
-								for (int k = 1; k < sepIdex; k++) {
+								for (int k = 1; k < sepIdx; k++) {
 									boolean success = true;
-									for (int i = 0; i < sepIdex - k; i++)
+									for (int i = 0; i < sepIdx - k; i++)
 										if (_separator[i] != _separator[i + k]) {
 											success = false;
 											break;
 										}
 									if (success) {
-										newSepIdx = sepIdex - k;
+										newSepIdx = sepIdx - k;
 										break;
 									}
+								}
 								if (newSepIdx > 0)
 									sepIdx = newSepIdx;
 								else
@@ -306,6 +319,27 @@ public class CsvFile {
 		}
 		return true;
 	}
+
+	public double, boolean fetchDouble(int record, int field) {
+		string s = fetch(record, field);
+		return double.parse(s);
+	}
+
+	public double, boolean fetchDouble(int record, string field) {
+		string s = fetch(record, field);
+		return double.parse(s);
+	}
+
+	public long, boolean fetchLong(int record, int field) {
+		string s = fetch(record, field);
+		return long.parse(s);
+	}
+
+	public long, boolean fetchLong(int record, string field) {
+		string s = fetch(record, field);
+		return long.parse(s);
+	}
+
 	/**
 	 * Fetch a field from the CSV file.
 	 *
@@ -356,7 +390,7 @@ public class CsvFile {
 	 * Fetch the field count of the indicated record.
 	 */
 	public int fieldCount(int record) {
-		if (_record < 0 || record >= _records.length())
+		if (record < 0 || record >= _records.length())
 			throw BoundsException("record " + record);
 		return _records[record].length();
 	}
@@ -364,7 +398,7 @@ public class CsvFile {
 	 * Check whether a record contains a named field
 	 */
 	public boolean contains(int record, string field) {
-		if (_record < 0 || record >= _records.length())
+		if (record < 0 || record >= _records.length())
 			throw BoundsException("record " + record);
 		if (!_headerMap.contains(field))
 			throw BoundsException("record " + record + " field " + field);

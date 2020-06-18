@@ -22,14 +22,26 @@ string source = "0,1\n\"abcdef\",34,Hello\n";
 
 text.UTF8Decoder decoder(&source[0], source.length());
 
+printf("Loading\n");
+
 assert(file.load(&decoder));
 
+printf("Loaded\n");
+
+printf("record count %d\n", file.recordCount());
 assert(file.recordCount() == 2);
+printf("record 0 field count %d\n", file.fieldCount(0));
 assert(file.fieldCount(0) == 2);
+printf("record 0 field 0: '%s'\n", file.fetch(0, 0));
 assert(file.fetch(0, 0) == "0");
+printf("record 0 field 1: '%s'\n", file.fetch(0, 1));
 assert(file.fetch(0, 1) == "1");
 assert(file.fieldCount(1) == 3);
-assert(file.fetch(1, 0) == "abcdef0");
+printf("record 1 field count %d\n", file.fieldCount(1));
+printf("record 1 field 0: '%s'\n", file.fetch(1, 0));
+assert(file.fetch(1, 0) == "abcdef");
+printf("record 1 field 1: '%s'\n", file.fetch(1, 1));
 assert(file.fetch(1, 1) == "34");
+printf("record 1 field 2: '%s'\n", file.fetch(1, 2));
 assert(file.fetch(1, 2) == "Hello");
 

@@ -239,7 +239,7 @@ public class Decoder {
 		}
 	}
 
-	public boolean resetReader() {
+	public void resetReader() {
 		_reader.reset();
 	}
 }
