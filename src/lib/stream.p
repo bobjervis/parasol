@@ -1217,6 +1217,8 @@ public class Writer {
 								nextArgument++;
 								if (!precisionSpecified)
 									precision = 6;
+								if (value !<>= 0.0) {
+								}
 								int decimalPoint;
 								int sign;
 								string sep;
@@ -1261,17 +1263,28 @@ public class Writer {
 							case	'f':
 								value = double(arguments[nextArgument]);
 								nextArgument++;
-								if (!precisionSpecified)
-									precision = 6;
 								if (locale == null)
 									locale = international.myLocale();
-								sep = locale.decimalStyle().decimalSeparator;
-								result = C.fcvt(value, precision, &decimalPoint, &sign);
-								actualLength = decimalPoint + precision;
-								if (precision > 0)
-									actualLength += sep.length();
-								if (sign != 0 || alwaysIncludeSign || leadingSpaceForPositive)
-									actualLength++;
+								if (value !<>= 0.0) {
+									static string nanString = "NaN";
+									sign = 0;
+									result = &nanString[0];
+									actualLength = 3;
+									decimalPoint = 3;
+									alwaysIncludeSign = false;
+									leadingSpaceForPositive = false;
+									precision = 0;
+								} else {
+									if (!precisionSpecified)
+										precision = 6;
+									sep = locale.decimalStyle().decimalSeparator;
+									result = C.fcvt(value, precision, &decimalPoint, &sign);
+									actualLength = decimalPoint + precision;
+									if (precision > 0)
+										actualLength += sep.length();
+									if (sign != 0 || alwaysIncludeSign || leadingSpaceForPositive)
+										actualLength++;
+								}
 								if (!leftJustified) {
 									while (actualLength < width) {
 										_write(' ');

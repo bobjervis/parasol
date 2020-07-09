@@ -386,6 +386,14 @@ public class CsvFile {
 	public int recordCount() {
 		return _records.length();
 	}
+
+	public int fieldNames() {
+		return _header.length();
+	}
+
+	public string fieldName(int i) {
+		return _header[i];
+	}
 	/**
 	 * Fetch the field count of the indicated record.
 	 */
