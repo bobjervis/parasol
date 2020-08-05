@@ -32,3 +32,13 @@ double x = math.sqrt(4);
 printf("Done calling sqrt\n");
 
 assert(x == 2);
+
+double[] ax = [ 1, 2, 3, 4 ];
+double[] ay = [ 1, 2, 3, 4 ];
+
+double c = math.correlate(ax, ay);
+
+printf("correlation = %g\n", c);
+
+printf("diff with 1 = %g\n", c - 1);
+assert(math.abs(c - 1) < 1e-15);

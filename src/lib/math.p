@@ -42,6 +42,21 @@ public long abs(long x) {
 		return x;
 }
 /**
+ * Calculate the absolute value of x.
+ *
+ * @return The value |x|.
+ */
+@Linux("libm.so.6", "fabsf")
+public abstract float abs(float x);
+/**
+ * Calculate the absolute value of x.
+ *
+ * @return The value |x|.
+ */
+@Linux("libm.so.6", "fabs")
+public abstract double abs(double x);
+
+/**
  * Calculate the smaller of x and y.
  *
  * @return The value x if x < y, otherwise y.
@@ -1113,3 +1128,37 @@ public abstract double max(double x, double y);
  */
 @Linux("libm.so.6", "fma")
 public abstract double fma(double x, double y, double z);
+/**
+ * Calculate the Pearson's Correlation Coefficient for two arrays of the same length.
+ *
+ * @param x The first array of values
+ * @param y The second array of values
+ * @return The correlation coefficient of the two arrays or NaN if the two arrays are
+ * not of the same length. 
+ */
+public double correlate(double[] x, double[] y) {
+	if (x.length() != y.length())
+		return double.NaN;
+	double xBar, yBar;
+
+	for (i in x) {
+		xBar += x[i];
+		yBar += y[i];
+	}
+	xBar = xBar / x.length();
+	yBar = yBar / y.length();
+
+	double num, xSq, ySq;
+	for (i in x) {
+		double xDiff, yDiff;
+
+		xDiff = x[i] - xBar;
+		yDiff = y[i] - yBar;
+		num += xDiff * yDiff;
+		xSq += xDiff * xDiff;
+		ySq += yDiff * yDiff;
+	}
+
+	return num / (sqrt(xSq) * sqrt(ySq));
+}
+
