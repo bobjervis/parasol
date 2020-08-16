@@ -18,6 +18,7 @@
  */
 namespace parasol:math;
 
+import parasol:exception.IllegalArgumentException;
 import native:C;
 /**
  * Calculate the absolute value of x.
@@ -1161,4 +1162,24 @@ public double correlate(double[] x, double[] y) {
 
 	return num / (sqrt(xSq) * sqrt(ySq));
 }
+/**
+ * Calculate the Euclidean distance between two points
+ *
+ * @param x A vector of coordinate values defining a point.
+ * @param y Another vector of coordinates in the same space.
+ * @return The distance between the two points.
+ *
+ * @exception IllegalArgumentException Thrown if either vector is empty or the 
+ * two vectors are not of the same length.
+ */
+public double distance(double[] x, double[] y) {
+	double cum;
 
+	if (x.length() == 0 || x.length() != y.length())
+		throw IllegalArgumentException(x.length() + ":" + y.length());
+	for (i in x) {
+		double diff = x[i] - y[i];
+		cum += diff * diff;
+	}
+	return sqrt(cum);
+}

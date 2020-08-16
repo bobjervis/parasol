@@ -1279,7 +1279,10 @@ public class Writer {
 										precision = 6;
 									sep = locale.decimalStyle().decimalSeparator;
 									result = C.fcvt(value, precision, &decimalPoint, &sign);
-									actualLength = decimalPoint + precision;
+									if (decimalPoint >= 0)
+										actualLength = decimalPoint + precision;
+									else
+										actualLength = precision;
 									if (precision > 0)
 										actualLength += sep.length();
 									if (sign != 0 || alwaysIncludeSign || leadingSpaceForPositive)
