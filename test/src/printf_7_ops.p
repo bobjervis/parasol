@@ -51,3 +51,19 @@ sgBigG.printf("%G", 1683490358.535);
 printf("sgBigG='%s'\n", sgBigG);
 
 assert(sgBigG == "1.68349E+09");
+
+string poof, poofc;
+
+poofc.printf("%6.2f", 0.14);
+
+printf("poofc = '%s'\n", poofc);
+
+assert(poofc == "   .14");
+
+poof.printf("%6.2f", 0.04);
+
+printf("poof = '%s'\n", poof);
+
+assert(poof == "   .04");
+
+

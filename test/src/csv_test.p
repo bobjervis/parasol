@@ -18,7 +18,7 @@ import parasol:text;
 
 storage.CsvFile file;
 
-string source = "0,1\n\"abcdef\",34,Hello\n";
+string source = "0,1\n\"abcdef\",34.5,Hello\n";
 
 text.UTF8Decoder decoder(&source[0], source.length());
 
@@ -41,7 +41,9 @@ printf("record 1 field count %d\n", file.fieldCount(1));
 printf("record 1 field 0: '%s'\n", file.fetch(1, 0));
 assert(file.fetch(1, 0) == "abcdef");
 printf("record 1 field 1: '%s'\n", file.fetch(1, 1));
-assert(file.fetch(1, 1) == "34");
+assert(file.fetch(1, 1) == "34.5");
+printf("record 1 field 1: %g\n", file.fetchDouble(1, 1));
+assert(file.fetchDouble(1, 1) == 34.5);
 printf("record 1 field 2: '%s'\n", file.fetch(1, 2));
 assert(file.fetch(1, 2) == "Hello");
 
