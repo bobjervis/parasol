@@ -105,6 +105,7 @@ enum X86 {
 	OR,
 	POP,
 	PUSH,
+	PXOR,
 	RET,
 	SAL,
 	SAR,
@@ -1602,6 +1603,22 @@ class X86_64Encoder extends Target {
 		}
 	}
 	
+	void inst(X86 instruction, R dest, R src) {
+		switch (instruction) {
+		case	PXOR:
+			emit(0x66);
+			emitRex(TypeFamily.SIGNED_32, null, dest, src);
+			emit(0x0f);
+			emit(0xef);
+			modRM(3, rmValues[dest], rmValues[src]);
+			return;
+
+		default:
+			printf("%s, %s, %s\n", string(instruction), string(dest), string(src));
+			assert(false);
+		}
+	}
+
 	void inst(X86 instruction, TypeFamily family, R dest, R src) {
 		switch (instruction) {
 		case	SAL:

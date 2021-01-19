@@ -106,10 +106,22 @@ int main(string[] args) {
 	d = 5.0;
 	
 	assert(d * 2.5 == 12.5);
-	
+
+	printf("Test complex double operands\n");
+	// The calls to toDouble force some pushing and popping of values to the stack.
+	// Passing the result through func forces the divide instruction to swap the floating point arguments.
+	double x = func((toDouble(7) - toDouble(3)) / toDouble(2));
+
+	assert(x == 2);
+
+
 	return 0;
 }
 
 double func(double p) {
 	return p;
+}
+
+double toDouble(int x) {
+	return x;
 }

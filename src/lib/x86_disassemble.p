@@ -743,6 +743,14 @@ public class Disassembler {
 			disassembleGvEvWiden(0, true);
 			break;
 			
+		case	0xef:
+			instructionOpcode("pxor");
+			if (_operandSize)
+				disassembleGfEf(true, true);
+			else
+				disassembleGfEf(false, false);
+			break;
+			
 		default:
 			printf("0x0F escape Byte: '%#x'", int(next));
 			if (_operandSize)

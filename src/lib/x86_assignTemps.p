@@ -479,7 +479,18 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	MULTIPLY_ASSIGN:
 			b = ref<Binary>(node);
 			f().r.getreg(b, RAXmask, RAXmask);
-			if	(b.sethi < 0) {
+			if (node.type.isFloat()) {
+				if (b.sethi < 0) {
+					assignLvalueTemps(b.left(), compileContext);
+					assignRegisterTemp(b.right(), requiredMask(b), compileContext);
+				} else {
+					assignRegisterTemp(b.right(), requiredMask(b), compileContext);
+					assignLvalueTemps(b.left(), compileContext);
+				}
+				node.register = byte(f().r.latestResult(b.right()));
+				f().r.cleanupTemps(b, depth);
+				break;
+			} else if (b.sethi < 0) {
 				assignLvalueTemps(b.left(), compileContext);
 				assignRegisterTemp(b.right(), requiredMask(node) & ~RAXmask, compileContext);
 			} else {

@@ -488,8 +488,18 @@ class RegisterState {
 				break;
 				
 			case	XCHG:
-				target.inst(X86.XCHG, TypeFamily.ADDRESS, R(int(_spills.affected.register)), R(int(_spills.other.register)));
 				byte reg = _spills.affected.register;
+				switch (_spills.affected.type.family()) {
+				case	FLOAT_32:
+				case	FLOAT_64:
+					target.inst(X86.PXOR, _spills.newRegister, R(reg));
+					target.inst(X86.PXOR, R(reg), _spills.newRegister);
+					target.inst(X86.PXOR, _spills.newRegister, R(reg));
+					break;
+					
+				default:
+					target.inst(X86.XCHG, TypeFamily.ADDRESS, R(int(_spills.newRegister)), R(reg));
+				}
 				_spills.affected.register = _spills.other.register;
 				_spills.other.register = reg;
 				break;

@@ -15,7 +15,9 @@
  */
 import parasol:time.Time;
 
+printf("Basic Integer Arithmetic\n");
 basicIntegerArithmetic();
+printf("Basic String Operations\n");
 basicStringOps();
 conversions();
 subscripting();
@@ -30,6 +32,7 @@ void basicIntegerArithmetic() {
 
 	// All of these expressions should be true (given the above)
 
+	printf("Integer compares\n");
 	assert(a == a);
 	assert(a > b);
 	assert(b <= a);
@@ -44,14 +47,17 @@ void basicIntegerArithmetic() {
 	assert(d !> 20);
 	assert(b !>= 4);
 	assert(a !<= 0);
-	
+
+	printf("Binary integer operators\n");	
 	assert((a | b) == 1);
 	assert((b | a) == 1);
 	assert((a ^ b) == 1);
 	assert((b ^ a) == 1);
 	assert((a & c) == 1);
 	assert(a * c == 35);
+	printf("div %d\n", a / c);
 	assert(a / c == 0);
+	printf("div %d\n", c / d);
 	assert(c / d == 2);
 	assert(c % d == 1);
 	assert(a + d == 18);
@@ -63,6 +69,7 @@ void basicIntegerArithmetic() {
 
 	// Assigning a value should make the result variable equal to the source
 
+	printf("Checking assignment\n");
 	assert(d != a);
 	assert(d <> a);
 	d = a;
@@ -71,6 +78,7 @@ void basicIntegerArithmetic() {
 
 	// Or'ing in 1 should make the result the same
 
+	printf("Assignment operators\n");
 	d = 17;
 	d |= a;
 	assert(d == 17);
