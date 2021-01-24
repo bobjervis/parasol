@@ -2237,7 +2237,7 @@ ref<Node>, int foldMultiReturn(ref<Node> leftHandle, ref<Node> destinations, ref
 			assignment = assignment.fold(tree, true, compileContext);
 		}
 		result = tree.newBinary(Operator.SEQUENCE, leftHandle, assignment, destinations.location());
-		offset = destinations.type.stackSize();
+		offset += destinations.type.stackSize();
 	}
 	result.type = compileContext.arena().builtInType(TypeFamily.VOID);
 	return result, offset;
