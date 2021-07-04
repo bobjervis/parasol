@@ -29,6 +29,9 @@ public class Command {
 	ref<BaseArgument>[] _allArguments;
 
 	~Command() {
+		for (a in _allArguments)
+			if (_allArguments[a].argumentClass() == ArgumentClass.STRING)
+				ref<Argument<string>>(_allArguments[a]).value = null;
 		_allArguments.deleteAll();
 	}
 

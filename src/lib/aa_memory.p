@@ -314,6 +314,9 @@ public class LeakHeap extends Allocator {
 		pointer<address>	callStack;	// First address is the count of remaining frames, each frame is a code address
 	}
 	
+	private long _allocations;
+	private long _frees;
+
 	class SectionHeader {
 		long			sectionSize;
 		ref<SectionHeader> next;
@@ -508,9 +511,10 @@ public class LeakHeap extends Allocator {
 		process.stdin = null;
 		delete process.stdout;
 		process.stdout = null;
+		currentHeap = &heap;		// heap is declared first, so it should still be alive when this destructor is called.
 		if (_everUsed) {
-			currentHeap = &heap;		// heap is declared first, so it should still be alive when this destructor is called.
 			storage.setProcessStreams(true);
+			printf("%,d allocations, %,d frees\n", _allocations, _frees);
 			if (_sections != null) {
 				printf("Leaks found!\n");
 				ref<Writer> w = storage.createTextFile("leaks.txt");
@@ -528,6 +532,7 @@ public class LeakHeap extends Allocator {
 
 	public address alloc(long n) {
 		lock (_lock) {
+			_allocations++;
 			try {
 				if (_busy)
 					return heap.alloc(n);
@@ -709,6 +714,7 @@ public class LeakHeap extends Allocator {
 			return;
 
 		lock (_lock) {
+			_frees++;
 			currentHeap = &heap;
 			ref<FreeBlock> fb = ref<FreeBlock>(long(p) - BlockHeader.bytes);
 			if ((fb.blockSize & IN_USE_FLAG) != 0) {

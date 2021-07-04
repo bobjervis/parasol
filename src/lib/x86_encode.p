@@ -770,13 +770,7 @@ class X86_64Encoder extends Target {
 	}
 
 	protected void showCS() {
-		if (_f.emitting == null) {
-			printf("----\nNo segment active last = %p\n", _f.last);
-			_f.last.print(this);
-		} else {
-			printf("----\nTrailing block:\n");
-			_f.emitting.print(this);
-		}
+		_f.showCS(this);
 		printf("Code offset = %x\n", _functionCode.length());
 	}
 
@@ -784,71 +778,15 @@ class X86_64Encoder extends Target {
 //		showCS();
 		closeCodeSegment(CC.NOP, null);
 		
-		int length = optimizeJumps(_f.first);
+		int length = _f.optimizeJumps(this);
 		int allocation = (length + address.bytes - 1) & ~(address.bytes - 1);
 		int offset = _code.length();
 		_code.resize(offset + allocation);
 		for (int i = length; i < allocation; i++)
 			_code[offset + i] = 0x37;						// Make it an AAA instruction to fill space.
 		
-		int nextCopy = offset;
 		int firstExceptionEntry = _segments[Segments.EXCEPTION_TABLE].length();
-		for (ref<CodeSegment> cs = _f.first; cs != null; cs = cs.next) {
-			for (int i = 0; i < cs.sourceLocations.length(); i++)
-				cs.sourceLocations[i].offset += nextCopy;
-			_sourceLocations.append(cs.sourceLocations);
-			emitExceptionEntry(nextCopy, cs.exceptionHandler);
-			C.memcpy(&_code[nextCopy], &_functionCode[cs.codeOffset], cs.length);
-			while (cs.fixups != null) {
-				ref<Fixup> fx = cs.fixups;
-				cs.fixups = fx.next;
-				fx.next = _fixups;
-				_fixups = fx;
-				if (fx.locationSymbol == null)
-					fx.location += nextCopy;
-			}
-			nextCopy += cs.length;
-			switch (cs.continuation) {
-			case	JO:				// Jump on overflow
-			case	JNO:			// Jump not overflow
-			case	JB:				// Jump below (unsigned <)
-			case	JNB:			// Jump not below (unsigned >=)
-			case	JE:				// Jump equal / zero
-			case	JNE:			// Jump not equal / zero
-			case	JNA:			// Jump not above (unsigned <=)
-			case	JA:				// Jump above (unsigned >)
-			case	JS:				// Jump on sign
-			case	JNS:			// Jump on no sign
-			case	JP:				// Jump parity even
-			case	JNP:			// Jump parity odd
-			case	JL:				// Jump less (sign <)
-			case	JGE:			// Jump greater or equal (signed >=)
-			case	JLE:			// Jump less or equal (signed <=)
-			case	JG:				// Jump greater (signed >)
-				if (cs.jumpDistance == JumpDistance.SHORT) {
-					_code[nextCopy++] = byte(0x70 + int(cs.continuation) - 1);
-					_code[nextCopy] = byte(offset + cs.jumpTarget.segmentOffset - (nextCopy + 1));
-					nextCopy++;
-				} else {
-					_code[nextCopy++] = 0x0f;
-					_code[nextCopy++] = byte(0x80 + int(cs.continuation) - 1);
-					*ref<int>(&_code[nextCopy]) = offset + cs.jumpTarget.segmentOffset - (nextCopy + int.bytes);
-					nextCopy += int.bytes;
-				}
-				break;
-				
-			case	JMP:
-				if (cs.jumpDistance == JumpDistance.SHORT) {
-					_code[nextCopy++] = 0xeb;
-					_code[nextCopy] = byte(offset + cs.jumpTarget.segmentOffset - (nextCopy + 1));
-					nextCopy++;
-				} else {
-					_code[nextCopy++] = 0xe9;
-					*ref<int>(&_code[nextCopy]) = offset + cs.jumpTarget.segmentOffset - (nextCopy + int.bytes);
-					nextCopy += int.bytes;
-				}
-			}
-		}
+		_f.packCode(offset, this);
 		pointer<ExceptionEntry> ee = pointer<ExceptionEntry>(_segments[Segments.EXCEPTION_TABLE].at(firstExceptionEntry));
 		for (int i = firstExceptionEntry; i < _segments[Segments.EXCEPTION_TABLE].length(); i += ExceptionEntry.bytes, ee++) {
 			int hi = i / ExceptionEntry.bytes;
@@ -860,14 +798,20 @@ class X86_64Encoder extends Target {
 	}
 
 	public abstract void generateFunctionCore(ref<Scope> scope, ref<CompileContext> compileContext);
-	
+	/**
+	 * Code generation proceeds by maintaining a stack of in-progress functions. The _f member of
+	 * the X86Encoder points to the top of the stack. Each FUnctionState object is allocated on the
+	 * stack. There is no need for an explicit chain of pointers to deeper FunctionState objects.
+	 * The code that pushes a new FunctionState instance must do it's work and then pop the _f
+	 * member back to it's prior value before returning.
+	 *
+	 * All other code that needs to update the state of the current function being generated can
+	 * use an expression of the form _f.XXX.
+	 */
 	class FunctionState {
 //		public long allocatedRegisters;
 		public int autoSize;
 		public int firstCode;
-		public ref<CodeSegment> first;
-		public ref<CodeSegment> last;
-		public ref<CodeSegment> emitting;
 		public ref<CodeSegment> currentHandler;
 		public long avail;
 		public long freeRegisters;
@@ -882,8 +826,197 @@ class X86_64Encoder extends Target {
 		public int registerSaveSize;
 		public int knownDeferredTrys;
 		public int stackAdjustment;
-	}
 
+		private ref<CodeSegment> _first;
+		private ref<CodeSegment> _last;
+		private ref<CodeSegment> _emitting;
+
+		void ensureCodeSegment(ref<X86_64Encoder> encoder) {
+			if (_emitting == null) {
+				ref<CodeSegment> cs = encoder._storage new CodeSegment();
+				cs.start(encoder);
+			}
+		}
+	
+		void start(ref<CodeSegment> cs, ref<X86_64Encoder> encoder) {
+			closeCodeSegment(CC.NOP, null, encoder);
+			cs.codeOffset = encoder._functionCode.length();
+			cs.prev = _last;
+			if (_last == null)
+				_first = cs;
+			else
+				_last.next = cs;
+			_last = cs;
+			_emitting = cs;
+	//			printf("Starting code segment\n");
+	//			print(target);
+		}
+		
+		void closeCodeSegment(CC continuation, ref<CodeSegment> jumpTarget, ref<X86_64Encoder> encoder) {
+			if (_emitting == null) {
+				if (continuation == CC.NOP)
+					return;
+				ref<CodeSegment> cs = encoder._storage new CodeSegment;
+				cs.start(encoder);
+			}
+			_emitting.length = encoder._functionCode.length() - _emitting.codeOffset; 
+			_emitting.continuation = continuation;
+			_emitting.jumpTarget = jumpTarget;
+			_emitting = null;
+		}
+		
+		void insertPreamble(ref<X86_64Encoder> encoder) {
+			ref<CodeSegment> cs = encoder._storage new CodeSegment;
+			cs.next = _first;
+			cs.codeOffset = encoder._functionCode.length();
+			if (_first != null)
+				_first.prev = cs;
+			else
+				_last = cs;
+			_first = cs;
+			_emitting = cs;
+		}
+
+		void emitSourceLocation(ref<FileStat> file, Location location, ref<X86_64Encoder> encoder) {
+			ensureCodeSegment(encoder);
+	
+			runtime.SourceLocation loc = {
+				file: file,
+				location: location,
+				offset: encoder._functionCode.length() - _emitting.codeOffset
+			};
+
+			_emitting.sourceLocations.append(loc, &encoder._storage);
+		}
+	
+		void showCS(ref<X86_64Encoder> encoder) {
+			if (_emitting == null) {
+				printf("----\nNo segment active last = %p\n", _last);
+				_last.print(encoder);
+			} else {
+				printf("----\nTrailing block:\n");
+				_emitting.print(encoder);
+			}
+		}
+
+		void fixup(FixupKind kind, address value, ref<X86_64Encoder> encoder) {
+			 fixup(kind, null, encoder._functionCode.length() - _emitting.codeOffset, value, encoder);
+		}
+	
+		void fixup(FixupKind kind, ref<Symbol> locationSymbol, int location, address value, ref<X86_64Encoder> encoder) {
+			 ref<Fixup> f = encoder._storage new Fixup();
+			 f.kind = kind;
+			 f.locationSymbol = locationSymbol; 
+			 f.location = location;
+			 f.value = value;
+			 f.next = _emitting.fixups;
+			 _emitting.fixups = f;
+		}
+
+		int optimizeJumps(ref<X86_64Encoder> encoder) {
+			int i = 1;
+			for (ref<CodeSegment> cs = _first; cs != null; cs = cs.next) {
+				cs.ordinal = i++;
+				
+				// Do some validation to ensure that the up-stream code did its job correctly
+				if (cs.continuation == null) {
+					for (ref<CodeSegment> cs = _first; cs != null; cs = cs.next)
+						cs.print(encoder);
+					assert(false);
+				}
+			}
+	
+			int size;
+			boolean changed;
+			do {
+				changed = false;
+				size = 0;
+				for (ref<CodeSegment> cs = _first; cs != null; cs = cs.next) {
+					cs.segmentOffset = size;
+					if (cs.continuation != CC.NOP) {
+						if (cs.jumpDistance == JumpDistance.UNKNOWN) {
+							if (cs.jumpTarget.ordinal < cs.ordinal) {
+			
+							} else {
+								
+							}
+						}
+						size += cs.jumpDistance == JumpDistance.SHORT ? minCCSize[cs.continuation] :
+								maxCCSize[cs.continuation];
+					}
+					size += cs.length;
+				}		
+			} while (changed);
+	//		printf("After:\n");
+	//		for (ref<CodeSegment> cs = _f.first; cs != null; cs = cs.next)
+	//			cs.print(this);
+	
+			return size;
+		}
+		
+		void packCode(int offset, ref<X86_64Encoder> encoder) {
+			int nextCopy = offset;
+			for (ref<CodeSegment> cs = _first; cs != null; cs = cs.next) {
+				for (int i = 0; i < cs.sourceLocations.length(); i++)
+					cs.sourceLocations[i].offset += nextCopy;
+				encoder._sourceLocations.append(cs.sourceLocations);
+				encoder.emitExceptionEntry(nextCopy, cs.exceptionHandler);
+				C.memcpy(&encoder._code[nextCopy], &encoder._functionCode[cs.codeOffset], cs.length);
+				while (cs.fixups != null) {
+					ref<Fixup> fx = cs.fixups;
+					cs.fixups = fx.next;
+					fx.next = encoder._fixups;
+					encoder._fixups = fx;
+					if (fx.locationSymbol == null)
+						fx.location += nextCopy;
+				}
+				nextCopy += cs.length;
+				switch (cs.continuation) {
+				case	JO:				// Jump on overflow
+				case	JNO:			// Jump not overflow
+				case	JB:				// Jump below (unsigned <)
+				case	JNB:			// Jump not below (unsigned >=)
+				case	JE:				// Jump equal / zero
+				case	JNE:			// Jump not equal / zero
+				case	JNA:			// Jump not above (unsigned <=)
+				case	JA:				// Jump above (unsigned >)
+				case	JS:				// Jump on sign
+				case	JNS:			// Jump on no sign
+				case	JP:				// Jump parity even
+				case	JNP:			// Jump parity odd
+				case	JL:				// Jump less (sign <)
+				case	JGE:			// Jump greater or equal (signed >=)
+				case	JLE:			// Jump less or equal (signed <=)
+				case	JG:				// Jump greater (signed >)
+					if (cs.jumpDistance == JumpDistance.SHORT) {
+						encoder._code[nextCopy++] = byte(0x70 + int(cs.continuation) - 1);
+						encoder._code[nextCopy] = byte(offset + cs.jumpTarget.segmentOffset - (nextCopy + 1));
+						nextCopy++;
+					} else {
+						encoder._code[nextCopy++] = 0x0f;
+						encoder._code[nextCopy++] = byte(0x80 + int(cs.continuation) - 1);
+						*ref<int>(&encoder._code[nextCopy]) = offset + cs.jumpTarget.segmentOffset - (nextCopy + int.bytes);
+						nextCopy += int.bytes;
+					}
+					break;
+					
+				case	JMP:
+					if (cs.jumpDistance == JumpDistance.SHORT) {
+						encoder._code[nextCopy++] = 0xeb;
+						encoder._code[nextCopy] = byte(offset + cs.jumpTarget.segmentOffset - (nextCopy + 1));
+						nextCopy++;
+					} else {
+						encoder._code[nextCopy++] = 0xe9;
+						*ref<int>(&encoder._code[nextCopy]) = offset + cs.jumpTarget.segmentOffset - (nextCopy + int.bytes);
+						nextCopy += int.bytes;
+					}
+				}
+			}
+		}
+	}
+	/**
+	 * 
+	 */
 	class CodeSegment {
 		public ref<CodeSegment> prev;
 		public ref<CodeSegment> next;
@@ -904,17 +1037,7 @@ class X86_64Encoder extends Target {
 		}
 
 		void start(ref<X86_64Encoder> encoder) {
-			encoder.closeCodeSegment(CC.NOP, null);
-			codeOffset = encoder._functionCode.length();
-			prev = encoder._f.last;
-			if (encoder._f.last == null)
-				encoder._f.first = this;
-			else
-				encoder._f.last.next = this;
-			encoder._f.last = this;
-			encoder._f.emitting = this;
-	//			printf("Starting code segment\n");
-	//			print(target);
+			encoder._f.start(this, encoder);
 			exceptionHandler = encoder._f.currentHandler;
 		}
 		
@@ -3673,7 +3796,7 @@ class X86_64Encoder extends Target {
 	}
 	
 	private void emit(byte b) {
-		ensureCodeSegment();
+		_f.ensureCodeSegment(this);
 		_functionCode.append(b);
 	}
 	
@@ -3703,14 +3826,7 @@ class X86_64Encoder extends Target {
 	}
 	
 	void emitSourceLocation(ref<FileStat> file, Location location) {
-		ensureCodeSegment();
-
-		runtime.SourceLocation loc;
-		
-		loc.file = file;;
-		loc.location = location;
-		loc.offset = _functionCode.length() - _f.emitting.codeOffset;
-		_f.emitting.sourceLocations.append(loc, &_storage);
+		_f.emitSourceLocation(file, location, this);
 	}
 	
 	protected boolean inlineEllipsisArguments(ref<NodeList> args, ref<NodeList> params) {
@@ -3732,54 +3848,6 @@ class X86_64Encoder extends Target {
 		return !args.node.type.equals(params.node.type);
 	}
 
-	void ensureCodeSegment() {
-		if (_f.emitting == null) {
-			ref<CodeSegment> cs = _storage new CodeSegment();
-			cs.start(this);
-		}
-	}
-	
-	private int optimizeJumps(ref<CodeSegment> code) {
-		int i = 1;
-		for (ref<CodeSegment> cs = _f.first; cs != null; cs = cs.next) {
-			cs.ordinal = i++;
-			
-			// Do some validation to ensure that the up-stream code did its job correctly
-			if (cs.continuation == null) {
-				for (ref<CodeSegment> cs = _f.first; cs != null; cs = cs.next)
-					cs.print(this);
-				assert(false);
-			}
-		}
-
-		int size;
-		boolean changed;
-		do {
-			changed = false;
-			size = 0;
-			for (ref<CodeSegment> cs = _f.first; cs != null; cs = cs.next) {
-				cs.segmentOffset = size;
-				if (cs.continuation != CC.NOP) {
-					if (cs.jumpDistance == JumpDistance.UNKNOWN) {
-						if (cs.jumpTarget.ordinal < cs.ordinal) {
-		
-						} else {
-							
-						}
-					}
-					size += cs.jumpDistance == JumpDistance.SHORT ? minCCSize[cs.continuation] :
-							maxCCSize[cs.continuation];
-				}
-				size += cs.length;
-			}		
-		} while (changed);
-//		printf("After:\n");
-//		for (ref<CodeSegment> cs = _f.first; cs != null; cs = cs.next)
-//			cs.print(this);
-
-		return size;
-	}
-	
 	class JumpContext {
 		private ref<CodeSegment>[] _caseLabels;
 		private int _nextCase;
@@ -3854,42 +3922,19 @@ class X86_64Encoder extends Target {
 	}
 
 	void closeCodeSegment(CC continuation, ref<CodeSegment> jumpTarget) {
-		if (_f.emitting == null) {
-			if (continuation == CC.NOP)
-				return;
-			ref<CodeSegment> cs = _storage new CodeSegment;
-			cs.start(this);
-		}
-		_f.emitting.length = _functionCode.length() - _f.emitting.codeOffset; 
-		_f.emitting.continuation = continuation;
-		_f.emitting.jumpTarget = jumpTarget;
-		_f.emitting = null;
+		_f.closeCodeSegment(continuation, jumpTarget, this);
 	}
 	
 	void insertPreamble() {
-		ref<CodeSegment> cs = _storage new CodeSegment;
-		cs.next = _f.first;
-		cs.codeOffset = _functionCode.length();
-		if (_f.first != null)
-			_f.first.prev = cs;
-		else
-			_f.last = cs;
-		_f.first = cs;
-		_f.emitting = cs;
+		_f.insertPreamble(this);
 	}
 
 	private void fixup(FixupKind kind, address value) {
-		 fixup(kind, null, _functionCode.length() - _f.emitting.codeOffset, value);
+		 _f.fixup(kind, value, this);
 	}
 	
 	protected void fixup(FixupKind kind, ref<Symbol> locationSymbol, int location, address value) {
-		 ref<Fixup> f = _storage new Fixup();
-		 f.kind = kind;
-		 f.locationSymbol = locationSymbol; 
-		 f.location = location;
-		 f.value = value;
-		 f.next = _f.emitting.fixups;
-		 _f.emitting.fixups = f;
+		_f.fixup(kind, locationSymbol, location, value, this);
 	}
 	
 	protected void staticFixup(FixupKind kind, ref<Symbol> locationSymbol, int location, address value) {

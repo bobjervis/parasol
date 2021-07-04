@@ -222,7 +222,21 @@ void conversions() {
 	Time tx = Time(vt);
 
 	assert(tx.value() == 17);
+
+	string str = "abc";
+	substring ss = str;
+
+	var ssv = ss;
+
+	printf("ss = '%s'\n", ss);
+	printf("ssf = '%s'\n", ssf(&str, ss));
+	printf("ssv = '%s'\n", ssv);
 }
+
+substring ssf(address a, substring ss) {
+	return ss;
+}
+
 
 boolean isBytePointer(var v) {
 	return v.class == pointer<byte>;

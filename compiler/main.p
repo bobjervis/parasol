@@ -188,17 +188,15 @@ int runCommand() {
 	if (arena.countMessages() > 0) {
 		printf("%s failed to compile\n", args[0]);
 		arena.printMessages();
-		return 1;
-	}
-	if (!disassemble(&arena, target, args[0]))
-		return 1;
-	if (!parasolCommand.compileOnlyArgument.value) {
+		returnValue = 1;
+	} else if (!disassemble(&arena, target, args[0]))
+		returnValue = 1;
+	else if (!parasolCommand.compileOnlyArgument.value) {
 		(returnValue, result) = target.run(args);
 		if (!result) {
-			if (returnValue == -1) {
-			} else
+			if (returnValue != -1)
 				printf("%s failed!\n", args[0]);
-			return 1;
+			returnValue = 1;
 		}
 	}
 	delete target;
