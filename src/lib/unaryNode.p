@@ -523,9 +523,26 @@ public class Unary extends Node {
 				call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 				return call.fold(tree, false, compileContext);
 			}
+			return foldCastToConstructor(_operand.type, tree, false, compileContext);
 
 		case	SUBSTRING:
 		case	SUBSTRING16:
+			if (ellipsisArgument) {
+				substring ename;
+
+				ref<Node> cast;
+				if (_operand.type.family() == TypeFamily.SUBSTRING) {
+					ename = "stringEllip";
+					cast = tree.newCast(compileContext.arena().builtInType(TypeFamily.STRING), _operand);
+				} else {
+					ename = "string16Ellip";
+					cast = tree.newCast(compileContext.arena().builtInType(TypeFamily.STRING16), _operand);
+				}
+				ref<Reference> r = tree.newEllipsisReference(type, location());
+				ref<Node> call = createMethodCall(r, ename, tree, compileContext, cast);
+				call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+				return call.fold(tree, false, compileContext);
+			}
 			return foldCastToConstructor(_operand.type, tree, false, compileContext);
 					
 		case	CLASS:

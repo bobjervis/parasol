@@ -328,6 +328,11 @@ public class LeakHeap extends Allocator {
 			return ses == bh;
 		}
 
+		void createSectionEndSentinel() {
+			ref<SectionEndSentinel> ses = ref<SectionEndSentinel>(pointer<byte>(this) + (sectionSize - SectionEndSentinel.bytes));
+			ses.inUseMarker = IN_USE_FLAG + SectionEndSentinel.bytes; 
+		}
+
 		boolean contains(address p) {
 			if (pointer<byte>(this) > pointer<byte>(p))
 				return false;
@@ -337,13 +342,17 @@ public class LeakHeap extends Allocator {
 
 		boolean free(ref<LeakHeap> lh, ref<FreeBlock> fb) {
 //			printf("    Found section @%p\n", sh);
+			if (!validateAllocationChain(fb, true)) {
+				fb.blockSize += IN_USE_FLAG;
+				return false;
+			}
 			// The first special case is no free block in this section at all, then make this guy the free list.
 			if (firstFreeBlock == null) {
 				fb.next = null;
 				fb.previous = null;
 				firstFreeBlock = fb;
 				fb.enclosing = this;
-				return true;
+				return validateAllocationChain(fb, false);
 			} else if (pointer<byte>(firstFreeBlock) > pointer<byte>(fb)) {
 				if (long(fb) + fb.blockSize == long(firstFreeBlock)) {
 					if (lh._nextFreeBlock == firstFreeBlock)
@@ -359,7 +368,7 @@ public class LeakHeap extends Allocator {
 				fb.previous = null;
 				firstFreeBlock = fb;
 				fb.enclosing = this;
-				return true;
+				return validateAllocationChain(fb, false);
 			}
 			for (ref<FreeBlock> srchfb = firstFreeBlock; ; srchfb = srchfb.next) {
 				if (srchfb.next == null) {
@@ -371,7 +380,7 @@ public class LeakHeap extends Allocator {
 					}
 					fb.next = null;
 					fb.enclosing = this;
-					return true;
+					return validateAllocationChain(fb, false);
 				} else if (pointer<byte>(srchfb.next) > pointer<byte>(fb)) {
 					if (long(srchfb) + srchfb.blockSize == long(fb)) {
 						srchfb.blockSize += fb.blockSize;
@@ -399,11 +408,49 @@ public class LeakHeap extends Allocator {
 						}
 					}
 					fb.enclosing = this;
-					return true;
+					return validateAllocationChain(fb, false);
 				}
 			}
 			printf("Block %p not in section.\n", fb);
 			return false;
+		}
+
+		boolean validateAllocationChain(ref<FreeBlock> fb, boolean preCheck) {
+			pointer<BlockHeader> endOfSection = pointer<BlockHeader>(long(this) + sectionSize);
+			pointer<BlockHeader> startOfSection = pointer<BlockHeader>(pointer<SectionHeader>(this) + 1);
+			boolean foundFreeBlock = !preCheck;		// The freed block should still be in the block list during pre-check,
+													// but after the free list has been re-assembled, the freed block may
+													// no lonfer exist.
+
+			address lastFreeBlock;
+			address nextBlock;
+			for(ref<BlockHeader> bh = startOfSection; pointer<BlockHeader>(bh) < endOfSection; 
+								bh = ref<BlockHeader>(nextBlock)) {
+				if (bh == address(fb) && preCheck) {
+					// This guy is the block to be freed. It's IN_USE_FLAG has been cleared already, but it won't be in
+					// the free list yet.
+					foundFreeBlock = true;
+					lastFreeBlock = null;
+				} else if ((bh.blockSize & ~IN_USE_FLAG) != 0) {
+					lastFreeBlock = null;
+				} else {
+					if (lastFreeBlock != null) {
+						printf("free(%p) %s: Two consecutive free blocks @ %p / %p\n", fb, preCheck ? "pre-check" : "post-check", lastFreeBlock, bh);
+						return false;
+					}
+					lastFreeBlock = bh;
+				}
+				nextBlock = address(long(bh) + (bh.blockSize & ~IN_USE_FLAG));
+				if (pointer<BlockHeader>(nextBlock) > endOfSection || pointer<BlockHeader>(nextBlock) < pointer<BlockHeader>(bh) + 1) {
+					printf("free(%p) %s: Block %p has out of range size\n", fb, preCheck ? "pre-check" : "post-check", bh);
+					return false;
+				}
+			}
+			if (!foundFreeBlock) {
+				printf("free(%p) %s: Block to be freed does not exist in block list.\n", fb, preCheck ? "pre-check" : "post-check", fb);
+				return false;
+			}
+			return true;
 		}
 
 		boolean print(boolean showAllocated, ref<FreeBlock> nextFreeBlock) {
@@ -454,7 +501,7 @@ public class LeakHeap extends Allocator {
 		while (address(bh) != address(fb)) {
 			if (sh.isSectionEndSentinel(bh)) {
 				printf("               SES %p\n", bh);
-				if (bh.blockSize != IN_USE_FLAG)
+				if (bh.blockSize != (IN_USE_FLAG + SectionEndSentinel.bytes))
 					printf("            ** <bad block length in SectionEndSentinel @%p [%#x]> **\n", bh, bh.blockSize);
 				break;
 			}
@@ -514,7 +561,18 @@ public class LeakHeap extends Allocator {
 		currentHeap = &heap;		// heap is declared first, so it should still be alive when this destructor is called.
 		if (_everUsed) {
 			storage.setProcessStreams(true);
-			printf("%,d allocations, %,d frees\n", _allocations, _frees);
+			printf("%,17d allocations\n%,17d frees\n", _allocations, _frees);
+			if (_allocations > _frees)
+				printf("%,17d leaked memory blocks\n", _allocations - _frees);
+			else if (_frees > _allocations)
+				printf("%,17d excess freed memory blocks\n", _frees - _allocations);
+			else {
+				for (ref<SectionHeader> sh = _sections; sh != null; sh = sh.next) {
+					printf("Section %p[%x]\n", sh, sh.sectionSize);
+					for (ref<FreeBlock> fb = sh.firstFreeBlock; fb != null; fb = fb.next)
+						printf("    Free %p[%x] prev %p next %p\n", fb, fb.blockSize, fb.previous, fb.next);
+				}
+			}
 			if (_sections != null) {
 				printf("Leaks found!\n");
 				ref<Writer> w = storage.createTextFile("leaks.txt");
@@ -551,10 +609,11 @@ public class LeakHeap extends Allocator {
 				pointer<BlockHeader> bh;
 				// Allocate a block.
 				if (n > SECTION_DATA) {
-					pointer<SectionHeader> nh = allocateSection(n + SectionHeader.bytes);
+					pointer<SectionHeader> nh = allocateSection(n + SectionHeader.bytes + SectionEndSentinel.bytes);
 					if (nh == null)
 						throw OutOfMemoryException(originalN);
 					bh = pointer<BlockHeader>(nh + 1);
+					nh.createSectionEndSentinel();
 				} else {
 					// if _nextFreeBlock is null, we have an empty free list and need to skip directly to allocating a new section.
 					ref<FreeBlock> fb = _nextFreeBlock;
@@ -563,7 +622,7 @@ public class LeakHeap extends Allocator {
 							if (fb.blockSize >= n) {
 								
 								// Should we consume the whole free block, or just split it?
-								if (fb.blockSize > n) {
+								if (fb.blockSize >= n + BLOCK_GRANULARITY) {
 									// Split the block, move adjacent references to the new free block
 									ref<FreeBlock> nb = ref<FreeBlock>(long(fb) + n);
 									nb.blockSize = fb.blockSize - n;
@@ -579,6 +638,7 @@ public class LeakHeap extends Allocator {
 									_nextFreeBlock = nb;
 									if (fb == fb.enclosing.firstFreeBlock)
 										fb.enclosing.firstFreeBlock = nb;
+									fb.blockSize = n;
 		//							printf("        Trimmed free block @%p to %#x bytes\n", nb, nb.blockSize);
 								} else {
 									_nextFreeBlock = advance(fb);
@@ -596,7 +656,7 @@ public class LeakHeap extends Allocator {
 								}
 								bh = pointer<BlockHeader>(fb);
 								// Note: this dups the exit code.
-								bh.blockSize = n + IN_USE_FLAG;
+								bh.blockSize += IN_USE_FLAG;
 								bh.callStack = pointer<address>(pointer<byte>(bh) + framesOffset);
 								rememberStackFrames(bh.callStack, long(rbp), long(stackTop));
 								address x = bh + 1;
@@ -617,8 +677,7 @@ public class LeakHeap extends Allocator {
 					_nextFreeBlock.blockSize = SECTION_DATA - n - SectionEndSentinel.bytes;
 					_nextFreeBlock.enclosing = nh;
 					// This will simplify the end-of-section processing (?)
-					ref<SectionEndSentinel> ses = ref<SectionEndSentinel>(long(_nextFreeBlock) + _nextFreeBlock.blockSize);
-					ses.inUseMarker = IN_USE_FLAG; 
+					nh.createSectionEndSentinel();
 					nh.firstFreeBlock = _nextFreeBlock;
 				}
 				bh.blockSize = n + IN_USE_FLAG;
@@ -664,7 +723,7 @@ public class LeakHeap extends Allocator {
 		}
 		if (nh == null)
 			return nh;
-		nh.sectionSize = SECTION_LENGTH;
+		nh.sectionSize = sectionLength;
 		nh.next = _sections;
 		_sections = nh;
 		return nh;
@@ -735,7 +794,9 @@ public class LeakHeap extends Allocator {
 		leakHeap.print(false);
 		throw CorruptHeapException(this, p);
 	}
-	
+	/**
+	 * @return true if the heap is contains the given SectionHeader, false if not.
+	 */
 	private boolean checkForEmptySection(ref<SectionHeader> sh) {
 		ref<FreeBlock> fb = sh.firstFreeBlock;
 		// If there is a gap between the first free block and the secton header,
