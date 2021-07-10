@@ -733,6 +733,8 @@ void generateScopeContents(ref<Scope> scope, ref<Writer> output, string dirName,
 			case ENUM:
 				if (hasConstants)
 					enumConstants.append(sym);
+				else
+					objects.append(sym);
 				break;
 
 			case TYPEDEF:
