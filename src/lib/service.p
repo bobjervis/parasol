@@ -91,3 +91,7 @@ public class NoState {
 public class NoHighAvailability {
 }
 
+public class HACluster {
+}
+
+
