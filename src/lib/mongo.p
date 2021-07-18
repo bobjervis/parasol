@@ -58,7 +58,11 @@ public class MongoDB {
 		return new Client(_clientPool, client);
 	}
 }
-
+/**
+ * Represents a mongoc client object. It is specifically designed to work within
+ * a threaded environment. Note that this object must be deleted before the
+ * MongoDB object that created it.
+ */
 public class Client {
 	private ref<mongoc_client_pool_t> _pool;
 	private ref<mongoc_client_t> _client;
@@ -100,7 +104,11 @@ public class Database {
 		mongoc_database_destroy(_database);
 	}
 }
-
+/**
+ * This represents the mongoc collection object.
+ *
+ * Note that this object must be deleted before the Client object that created it.
+ */
 public class Collection {
 	private ref<mongoc_collection_t> _collection;
 
@@ -110,6 +118,146 @@ public class Collection {
 
 	~Collection() {
 		mongoc_collection_destroy(_collection);
+	}
+	/**
+	 * This inserts one document into the collection.
+	 *
+	 * @param document The Bson encoded document to be inserted.
+	 * valid and causes the reply data to be discarded.
+	 * @return true if the operation succeeded, false otherwise.
+	 * @return the failing domain if the operation failed.
+	 * @return the failure code if the operation failed.
+	 * @return a text message describing the error if the operation failed.
+	 */
+	public boolean, unsigned, unsigned, string insert(ref<Bson> document) {
+		bson_error_t error;
+
+		boolean result = mongoc_collection_insert(_collection, MONGOC_INSERT_NONE, document, null, &error);
+		return result, error.domain, error.code, string(pointer<byte>(&error.x2));
+	}
+	/**
+	 * Find one or more documents in a collection.
+	 *
+	 * @param query The query to execute
+	 * @param fields A list of fields
+	 * @return A non-null cursor if the operation succeeded, null otherwise. The cursor may have an empty 
+	 * document set, depending on the query.
+	 * @return the failing domain if the operation failed.
+	 * @return the failure code if the operation failed.
+	 * @return a text message describing the error if the operation failed.
+	 */
+	public ref<Cursor>, unsigned, unsigned, string find(ref<Bson> query, ref<Bson> fields) {
+		ref<mongoc_cursor_t> cursor = mongoc_collection_find(_collection, 0, 0, 0, 0, query, fields, null);
+		bson_error_t error;
+		if (mongoc_cursor_error_document(cursor, &error, null)) {
+			return null, error.domain, error.code, null;
+		} else
+			return new Cursor(cursor), 0, 0, null;
+	}
+	/**
+	 * @return true if the operation succeeded, false otherwise.
+	 * @return the failing domain if the operation failed.
+	 * @return the failure code if the operation failed.
+	 * @return a text message describing the error if the operation failed.
+	 */
+	public boolean, unsigned, unsigned, string drop() {
+		bson_error_t error;
+
+		boolean result = mongoc_collection_drop(_collection, &error);
+		return result, error.domain, error.code, string(pointer<byte>(&error.x2));				
+	}
+}
+
+public class Cursor {
+	ref<mongoc_cursor_t> _cursor;
+
+	Cursor(ref<mongoc_cursor_t> cursor) {
+		_cursor = cursor;
+	}
+}
+/**
+ * This is the equivalent of the mondoc driver bson_t class.
+ *
+ * It is a binary representation of mongo's extended JSON data format.
+ *
+ * The goal of this class is to provide a relatively thin wrapper for the
+ * mongoc driver bson_t object, while providing a more Parasol-friendly
+ * interface.
+ */
+public class Bson {
+	/**
+	 * This method creates a new, empty Bson document.
+	 *
+	 * @return A reference to the new Bson object.
+	 */
+	public static ref<Bson> create() {
+		return bson_new();
+	}
+	/**
+	 * This method disposes of a Bson document.
+	 */
+	public static void dispose(ref<Bson> bson) {
+		bson_destroy(bson);
+	}
+	/**
+	 * This appends a new field with a string value to the given document.
+	 *
+	 * @param key The key of the new field.
+	 * @param value The value of the new field.
+	 * @return true if the operation succeeded, false otherwise.
+	 */
+	public boolean append(string key, string value) {
+		return bson_append_utf8(this, key.c_str(), key.length(), value.c_str(), value.length());
+	}
+	/**
+	 * This appends a new field with a boolean value to the given document.
+	 *
+	 * @param key The key of the new field.
+	 * @param value The value of the new field.
+	 * @return true if the operation succeeded, false otherwise.
+	 */
+	public boolean append(string key, boolean value) {
+		return bson_append_bool(this, key.c_str(), key.length(), value);
+	}
+	/**
+	 * This appends a new field with a long value to the given document.
+	 *
+	 * @param key The key of the new field.
+	 * @param value The value of the new field.
+	 * @return true if the operation succeeded, false otherwise.
+	 */
+	public boolean append(string key, long value) {
+		return bson_append_int64(this, key.c_str(), key.length(), value);
+	}
+	/**
+	 * This appends a new field with a double value to the given document.
+	 *
+	 * @param key The key of the new field.
+	 * @param value The value of the new field.
+	 * @return true if the operation succeeded, false otherwise.
+	 */
+	public boolean append(string key, double value) {
+		return bson_append_double(this, key.c_str(), key.length(), value);
+	}
+	/**
+	 * This appends a new field with a Bson document value to the given document.
+	 *
+	 * @param key The key of the new field.
+	 * @param value The value of the new field.
+	 * @return true if the operation succeeded, false otherwise.
+	 */
+	public boolean append(string key, ref<Bson> value) {
+		return bson_append_document(this, key.c_str(), key.length(), value);
+	}
+	/**
+	 * This appends a new field with a Bson document value to the given document.
+	 *
+	 * @param key The key of the new field.
+	 * @param value The value of the new field.
+	 * @return true if the operation succeeded, false otherwise.
+	 */
+	public boolean appendArray(string key, ref<Bson> value) {
+		return bson_append_array(this, key.c_str(), key.length(), value);
 	}
 }
 
@@ -153,38 +301,151 @@ abstract void mongoc_database_destroy(ref<mongoc_database_t> database);
 abstract ref<mongoc_collection_t> mongoc_client_get_collection(ref<mongoc_client_t> client, pointer<byte> databaseName, pointer<byte> collectionName);
 @Linux("libmongoc-1.0.so.0", "mongoc_collection_destroy")
 abstract void mongoc_collection_destroy(ref<mongoc_collection_t> collection);
+@Linux("libmongoc-1.0.so.0", "mongoc_collection_insert")
+abstract boolean mongoc_collection_insert(ref<mongoc_collection_t> collection, unsigned flag, ref<Bson> document, ref<mongoc_write_concern_t> writeConcern, ref<bson_error_t> error);
+@Linux("libmongoc-1.0.so.0", "mongoc_collection_find")
+abstract ref<mongoc_cursor_t> mongoc_collection_find (ref<mongoc_collection_t> collection, mongoc_query_flags_t flag, unsigned skip,
+                        									unsigned limit, unsigned batch_size, ref<Bson> query,
+                        									ref<Bson> fields, ref<mongoc_read_prefs_t> read_prefs);
+@Linux("libmongoc-1.0.so.0", "mongoc_collection_drop")
+abstract boolean mongoc_collection_drop(ref<mongoc_collection_t> collection, ref<bson_error_t> error);
 
-class mongoc_client_pool_t {
+@Linux("libmongoc-1.0.so.0", "mongoc_cursor_error_document")
+abstract boolean mongoc_cursor_error_document (ref<mongoc_cursor_t> cursor, ref<bson_error_t> error, ref<ref<Bson>> reply);
+
+@Linux("libmongoc-1.0.so.0", "bson_new")
+abstract ref<Bson> bson_new();
+@Linux("libmongoc-1.0.so.0", "bson_destroy")
+abstract void bson_destroy(ref<Bson> bson);
+@Linux("libmongoc-1.0.so.0", "bson_append_bool")
+abstract boolean bson_append_bool(ref<Bson> bson, pointer<byte> key, int keyLength, boolean value);
+@Linux("libmongoc-1.0.so.0", "bson_append_utf8")
+abstract boolean bson_append_utf8(ref<Bson> bson, pointer<byte> key, int keyLength, pointer<byte> value, int valueLength);
+@Linux("libmongoc-1.0.so.0", "bson_append_int64")
+abstract boolean bson_append_int64(ref<Bson> bson, pointer<byte> key, int keyLength, long value);
+@Linux("libmongoc-1.0.so.0", "bson_append_double")
+abstract boolean bson_append_double(ref<Bson> bson, pointer<byte> key, int keyLength, double value);
+@Linux("libmongoc-1.0.so.0", "bson_append_document")
+abstract boolean bson_append_document(ref<Bson> bson, pointer<byte> key, int keyLength, ref<Bson> value);
+@Linux("libmongoc-1.0.so.0", "bson_append_array")
+abstract boolean bson_append_array(ref<Bson> bson, pointer<byte> key, int keyLength, ref<Bson> value);
+
+class bson_error_t {
+	unsigned domain;
+	unsigned code;
+	long x2;
+	long x3;
+	long x4;
+	long x5;
+	long x6;
+	long x7;
+	long x8;
+	long x9;
+	long x10;
+	long x11;
+	long x12;
+	long x13;
+	long x14;
+	long x15;
+	long x16;
+	long x17;
+	long x18;
+	long x19;
+	long x20;
+	long x21;
+	long x22;
+	long x23;
+	long x24;
+	long x25;
+	long x26;
+	long x27;
+	long x28;
+	long x29;
+	long x30;
+	long x31;
+	long x32;
+	long x33;
+	long x34;
+	long x35;
+	long x36;
+	long x37;
+	long x38;
+	long x39;
+	long x40;
+	long x41;
+	long x42;
+	long x43;
+	long x44;
+	long x45;
+	long x46;
+	long x47;
+	long x48;
+	long x49;
+	long x50;
+	long x51;
+	long x52;
+	long x53;
+	long x54;
+	long x55;
+	long x56;
+	long x57;
+	long x58;
+	long x59;
+	long x60;
+	long x61;
+	long x62;
+	long x63;
+	long x64;
 }
 
-class mongoc_uri_t {
+
+class mongoc_client_pool_t { }
+class mongoc_uri_t { }
+class mongoc_client_t { }
+class mongoc_database_t { }
+class mongoc_collection_t { }
+class mongoc_cursor_t { }
+class mongoc_read_prefs_t { }
+
+flags mongoc_query_flags_t {
+   MONGOC_QUERY_TAILABLE_CURSOR,
+   MONGOC_QUERY_SLAVE_OK,
+   MONGOC_QUERY_OPLOG_REPLAY,
+   MONGOC_QUERY_NO_CURSOR_TIMEOUT,
+   MONGOC_QUERY_AWAIT_DATA,
+   MONGOC_QUERY_EXHAUST,
+   MONGOC_QUERY_PARTIAL,
 }
 
-class mongoc_client_t {
+class bson_t {
+	unsigned `flags`;
+	unsigned len;
+	long pad2;
+	long pad3;
+	long pad4;
+	long pad5;
+	long pad6;
+	long pad7;
+	long pad8;
+	long pad9;
+	long pad10;
+	long pad11;
+	long pad12;
+	long pad13;
+	long pad14;
+	long pad15;
+	long pad16;
 }
 
-class mongoc_database_t {
-}
+class mongoc_write_concern_t { }
 
-class mongoc_collection_t {
-}
+public unsigned MONGOC_INSERT_NONE = 0;
+public unsigned MONGOC_INSERT_CONTINUE_ON_ERROR = unsigned(1 << 0);
+public unsigned MONGOC_INSERT_NO_VALIDATE = unsigned(1 << 31);
 
-class MsgHeader {
-	int messageLength;
-	int requestID;
-	int responseTo;
-	int opCode;
-}
+public int MONGOC_WRITE_CONCERN_W_UNACKNOWLEDGED = 0;
+public int MONGOC_WRITE_CONCERN_W_ERRORS_IGNORED = -1; /* deprecated */
+public int MONGOC_WRITE_CONCERN_W_DEFAULT = -2;
+public int MONGOC_WRITE_CONCERN_W_MAJORITY = -3;
+public int MONGOC_WRITE_CONCERN_W_TAG = -4;
 
-char DEFAULT_PORT = 27017;
-
-int OP_REPLY = 1;			// Reply to a client request. responseTo is set.
-int OP_UPDATE = 2001;		// Update document.
-int OP_INSERT = 2002;		// Insert new document.
-int RESERVED = 2003;		// Formerly used for OP_GET_BY_OID.
-int OP_QUERY = 2004;		// Query a collection.
-int OP_GET_MORE = 2005;		// Get more data from a query. See Cursors.
-int OP_DELETE = 2006;		// Delete documents.
-int OP_KILL_CURSORS = 2007;	// Notify database that the client has finished with the cursor.
-int OP_COMPRESSED = 2012;	// Wraps other opcodes using compression
-int OP_MSG = 2013;			// Send a message using the format introduced in MongoDB 3.6.

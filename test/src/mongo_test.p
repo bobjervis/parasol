@@ -14,6 +14,7 @@
    limitations under the License.
  */
 import mongodb.com:mongo;
+import mongodb.com:mongo.Bson;
 
 ref<mongo.MongoDB> db = mongo.MongoDB.connect("mongodb://localhost/?appname=mongo_test");
 
@@ -29,13 +30,65 @@ assert(d != null);
 
 delete d;
 
-ref<mongo.Collection> coll = c.getCollection("alys-server", "coll");
+ref<mongo.Collection> coll = c.getCollection("alys-server", "state");
 
 assert(coll != null);
+
+ref<Bson> query = Bson.create();
+
+query.append("_id", "master");
+
+ref<Bson> fields = Bson.create();
+
+fields.append("field1", true);
+
+boolean result;
+unsigned domain;
+unsigned code;
+string message;
+
+ref<mongo.Cursor> cursor;
+(cursor, domain, code, message) = coll.find(query, fields);
+
+if (cursor == null) {
+	ref<Bson> document = Bson.create();
+
+	document.append("_id", "master");
+	document.append("field1", "stuff");
+
+	(result, domain, code, message) = coll.insert(document);
+
+	assert(result);
+
+	Bson.dispose(document);
+} else
+	delete cursor;
+
+(result, domain, code, message) = coll.drop();
+/*
+if (!result)
+	showError(domain, code, message);
+
+assert(result);
+ */
+ref<Bson> document = Bson.create();
+
+document.append("_id", "master");
+document.append("field1", "stuff");
+
+(result, domain, code, message) = coll.insert(document);
+
+assert(result);
+
+Bson.dispose(document);
 
 delete coll;
 
 delete c;
 
 delete db;
+
+void showError(unsigned domain, unsigned code, string message) {
+	printf("Mongo error detected: domain %d code %d: %s\n", domain, code, message);
+}
 
