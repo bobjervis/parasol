@@ -16,7 +16,7 @@
 /**
  * Provides a structured interface to MongoDB.
  */
-namespace mongodb.com:mongo;
+namespace mongodb.org:mongo;
 
 import parasol:net;
 /**

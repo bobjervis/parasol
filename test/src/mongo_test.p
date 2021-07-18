@@ -13,8 +13,8 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import mongodb.com:mongo;
-import mongodb.com:mongo.Bson;
+import mongodb.org:mongo;
+import mongodb.org:mongo.Bson;
 
 ref<mongo.MongoDB> db = mongo.MongoDB.connect("mongodb://localhost/?appname=mongo_test");
 
