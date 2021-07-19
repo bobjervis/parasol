@@ -18,6 +18,7 @@
  */
 namespace mongodb.org:mongo;
 
+import parasol.json;
 import parasol:net;
 /**
  * Represents a connection to an external MongoDB server or cluster.
@@ -146,8 +147,27 @@ public class Collection {
 	 * @return the failure code if the operation failed.
 	 * @return a text message describing the error if the operation failed.
 	 */
-	public ref<Cursor>, unsigned, unsigned, string find(ref<Bson> query, ref<Bson> fields) {
-		ref<mongoc_cursor_t> cursor = mongoc_collection_find(_collection, 0, 0, 0, 0, query, fields, null);
+	public ref<Cursor>, unsigned, unsigned, string find(int skip, int limit, int batchSize, ref<Bson> query, ref<Bson> fields) {
+		ref<mongoc_cursor_t> cursor = mongoc_collection_find(_collection, 0, skip, limit, batchSize, query, fields, null);
+		bson_error_t error;
+		if (mongoc_cursor_error_document(cursor, &error, null)) {
+			return null, error.domain, error.code, null;
+		} else
+			return new Cursor(cursor), 0, 0, null;
+	}
+	/**
+	 * Find one or more documents in a collection.
+	 *
+	 * @param query The query to execute
+	 * @param fields A list of fields
+	 * @return A non-null cursor if the operation succeeded, null otherwise. The cursor may have an empty 
+	 * document set, depending on the query.
+	 * @return the failing domain if the operation failed.
+	 * @return the failure code if the operation failed.
+	 * @return a text message describing the error if the operation failed.
+	 */
+	public ref<Cursor>, unsigned, unsigned, string find(ref<Bson> query, ref<Bson> opts) {
+		ref<mongoc_cursor_t> cursor = mongoc_collection_find_with_opts(_collection, query, opts, null);
 		bson_error_t error;
 		if (mongoc_cursor_error_document(cursor, &error, null)) {
 			return null, error.domain, error.code, null;
@@ -164,7 +184,7 @@ public class Collection {
 		bson_error_t error;
 
 		boolean result = mongoc_collection_drop(_collection, &error);
-		return result, error.domain, error.code, string(pointer<byte>(&error.x2));				
+		return result, error.domain, error.code, string(pointer<byte>(&error.x2));			      
 	}
 }
 
@@ -192,6 +212,111 @@ public class Bson {
 	 */
 	public static ref<Bson> create() {
 		return bson_new();
+	}
+	/**
+	 * This method creates a new Bson document that is a converted copy of the 
+	 * Object passed.
+	 *
+	 * The argument is not modified.
+	 *
+	 * @param parsedJson A reference to an Object that is compatible with a
+	 * parsed JSON string.
+	 * @return A reference to the created BSON document, or null if any field
+	 * could not be converted.
+	 */
+	public static ref<Bson> create(ref<Object> parsedJson) {
+		ref<Bson> b = bson_new();
+		for (key in parsedJson) {
+			var value = (*parsedJson)[key];
+			if (!appendTo(b, key, value)) {
+				dispose(b);
+				return null;
+			}
+		}
+		return b;
+	}
+	/**
+	 * This method creates a new Bson document that is a converted copy of the 
+	 * Array passed.
+	 *
+	 * The argument is not modified.
+	 *
+	 * @param array A reference to an Array that is compatible with a
+	 * parsed JSON string.
+	 * @return A reference to the created BSON document, or null if any field
+	 * could not be converted.
+	 */
+	public static ref<Bson> create(ref<Array> array) {
+		ref<Bson> a = Bson.create();
+		for (i in *array) {
+			var value = (*array)[i];
+			if (!appendTo(a, string(i), value)) {
+				dispose(a);
+				return null;
+			}
+		}
+		return a;
+	}
+	/**
+	 * This method creates a new Bson document that is a converted copy of the 
+	 * Object passed.
+	 *
+	 * The argument is freed using json.dispose.
+	 *
+	 * @param parsedJson A reference to an Object that is compatible with a
+	 * parsed JSON string.
+	 * @return A reference to the created BSON document, or null if any field
+	 * could not be converted.
+	 */
+	public static ref<Bson> consume(ref<Object> parsedJson) {
+		ref<Bson> b = create(parsedJson);
+		json.dispose(parsedJson);
+		return b;
+	}
+	/**
+	 * This method creates a new Bson document that is a converted copy of the 
+	 * Array passed.
+	 *
+	 * The argument is freed using json.dispose.
+	 *
+	 * @param array A reference to an Array that is compatible with a
+	 * parsed JSON string.
+	 * @return A reference to the created BSON document, or null if any field
+	 * could not be converted.
+	 */
+	public static ref<Bson> consume(ref<Array> array) {
+		ref<Bson> a = create(array);
+		json.dispose(array);
+		return a;
+	}
+
+	private static boolean appendTo(ref<Bson> output, string key, var value) {
+		if (value.class == ref<Object>) {
+			ref<Bson> f = create(ref<Object>(value));
+			if (f == null)
+				return false;
+			if (output.append(key, f))
+				return true;
+			dispose(f);
+			return false;
+		} else if (value.class == string)
+			return output.append(key, string(value));
+		else if (value.class == long)
+			return output.append(key, long(value)); 
+		else if (value.class == boolean)
+			return output.append(key, boolean(value));
+		else if (value.class == double)
+			return output.append(key, double(value));
+		else if (value.class == ref<Array>) {
+			ref<Bson> a = create(ref<Array>(value));
+			if (a == null)
+				return false;
+			if (output.appendArray(key, a))
+				return true;
+			dispose(a);
+			return false;
+		} else
+			return false;
 	}
 	/**
 	 * This method disposes of a Bson document.
@@ -259,6 +384,26 @@ public class Bson {
 	public boolean appendArray(string key, ref<Bson> value) {
 		return bson_append_array(this, key.c_str(), key.length(), value);
 	}
+
+
+	public boolean append(ref<Object> parsedJson) {
+		for (key in parsedJson) {
+			if (value.class == ref<Object>) {
+				ref<Bson> f = create();
+				f.append(ref<Object>(value));
+				append(key, f);
+			} else if (value.class == string)
+				append(key, string(value));
+			else if (value.class == long)
+				append(key, long(value)); 
+			else if (value.class == boolean)
+				append(key, boolean(value));
+			else if (value.class == double)
+				append(key, double(value));
+			else if (value.class == ref<Array>)
+				appendArray(key, codeArray(ref<Array>(value)));
+		}
+	}
 }
 
 class StaticInit {
@@ -304,9 +449,12 @@ abstract void mongoc_collection_destroy(ref<mongoc_collection_t> collection);
 @Linux("libmongoc-1.0.so.0", "mongoc_collection_insert")
 abstract boolean mongoc_collection_insert(ref<mongoc_collection_t> collection, unsigned flag, ref<Bson> document, ref<mongoc_write_concern_t> writeConcern, ref<bson_error_t> error);
 @Linux("libmongoc-1.0.so.0", "mongoc_collection_find")
-abstract ref<mongoc_cursor_t> mongoc_collection_find (ref<mongoc_collection_t> collection, mongoc_query_flags_t flag, unsigned skip,
-                        									unsigned limit, unsigned batch_size, ref<Bson> query,
-                        									ref<Bson> fields, ref<mongoc_read_prefs_t> read_prefs);
+abstract ref<mongoc_cursor_t> mongoc_collection_find(ref<mongoc_collection_t> collection, mongoc_query_flags_t flag, unsigned skip,
+												unsigned limit, unsigned batch_size, ref<Bson> query,
+												ref<Bson> fields, ref<mongoc_read_prefs_t> read_prefs);
+@Linux("libmongoc-1.0.so.0", "mongoc_collection_find_with_opts")
+abstract ref<mongoc_cursor_t> mongoc_collection_find_with_opts(ref<mongoc_collection_t> collection, ref<Bson> filter,
+												ref<Bson> opts, ref<mongoc_read_prefs_t> read_prefs);
 @Linux("libmongoc-1.0.so.0", "mongoc_collection_drop")
 abstract boolean mongoc_collection_drop(ref<mongoc_collection_t> collection, ref<bson_error_t> error);
 
@@ -437,6 +585,40 @@ class bson_t {
 	long pad16;
 }
 
+enum bcon_type_t {
+   BCON_TYPE_UTF8,
+   BCON_TYPE_DOUBLE,
+   BCON_TYPE_DOCUMENT,
+   BCON_TYPE_ARRAY,
+   BCON_TYPE_BIN,
+   BCON_TYPE_UNDEFINED,
+   BCON_TYPE_OID,
+   BCON_TYPE_BOOL,
+   BCON_TYPE_DATE_TIME,
+   BCON_TYPE_NULL,
+   BCON_TYPE_REGEX,
+   BCON_TYPE_DBPOINTER,
+   BCON_TYPE_CODE,
+   BCON_TYPE_SYMBOL,
+   BCON_TYPE_CODEWSCOPE,
+   BCON_TYPE_INT32,
+   BCON_TYPE_TIMESTAMP,
+   BCON_TYPE_INT64,
+   BCON_TYPE_DECIMAL128,
+   BCON_TYPE_MAXKEY,
+   BCON_TYPE_MINKEY,
+   BCON_TYPE_BCON,
+   BCON_TYPE_ARRAY_START,
+   BCON_TYPE_ARRAY_END,
+   BCON_TYPE_DOC_START,
+   BCON_TYPE_DOC_END,
+   BCON_TYPE_END,
+   BCON_TYPE_RAW,
+   BCON_TYPE_SKIP,
+   BCON_TYPE_ITER,
+   BCON_TYPE_ERROR,
+};
+
 class mongoc_write_concern_t { }
 
 public unsigned MONGOC_INSERT_NONE = 0;
@@ -448,4 +630,5 @@ public int MONGOC_WRITE_CONCERN_W_ERRORS_IGNORED = -1; /* deprecated */
 public int MONGOC_WRITE_CONCERN_W_DEFAULT = -2;
 public int MONGOC_WRITE_CONCERN_W_MAJORITY = -3;
 public int MONGOC_WRITE_CONCERN_W_TAG = -4;
+
 

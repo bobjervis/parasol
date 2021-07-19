@@ -48,7 +48,7 @@ unsigned code;
 string message;
 
 ref<mongo.Cursor> cursor;
-(cursor, domain, code, message) = coll.find(query, fields);
+(cursor, domain, code, message) = coll.find(0, 0, 0, query, fields);
 
 if (cursor == null) {
 	ref<Bson> document = Bson.create();
