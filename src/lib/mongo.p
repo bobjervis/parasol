@@ -18,7 +18,7 @@
  */
 namespace mongodb.org:mongo;
 
-import parasol.json;
+import parasol:json;
 import parasol:net;
 /**
  * Represents a connection to an external MongoDB server or cluster.
@@ -147,7 +147,7 @@ public class Collection {
 	 * @return the failure code if the operation failed.
 	 * @return a text message describing the error if the operation failed.
 	 */
-	public ref<Cursor>, unsigned, unsigned, string find(int skip, int limit, int batchSize, ref<Bson> query, ref<Bson> fields) {
+	public ref<Cursor>, unsigned, unsigned, string find(unsigned skip, unsigned limit, unsigned batchSize, ref<Bson> query, ref<Bson> fields) {
 		ref<mongoc_cursor_t> cursor = mongoc_collection_find(_collection, 0, skip, limit, batchSize, query, fields, null);
 		bson_error_t error;
 		if (mongoc_cursor_error_document(cursor, &error, null)) {
@@ -226,7 +226,7 @@ public class Bson {
 	 */
 	public static ref<Bson> create(ref<Object> parsedJson) {
 		ref<Bson> b = bson_new();
-		for (key in parsedJson) {
+		for (key in (*parsedJson)) {
 			var value = (*parsedJson)[key];
 			if (!appendTo(b, key, value)) {
 				dispose(b);
@@ -384,25 +384,42 @@ public class Bson {
 	public boolean appendArray(string key, ref<Bson> value) {
 		return bson_append_array(this, key.c_str(), key.length(), value);
 	}
-
+	/**
+	 * This appends the contents of the Object as if it had been constructed
+	 * from parsing JSON text.
+	 *
+	 * @param parsedJson The Object whose contents should be copied to this
+	 * BSON document.
+	 * @return true if all the contents were copied, false if any contents 
+	 * did not get copied.
+	 */
 
 	public boolean append(ref<Object> parsedJson) {
-		for (key in parsedJson) {
+		boolean failed;
+		for (key in (*parsedJson)) {
+			var value = (*parsedJson)[key];
 			if (value.class == ref<Object>) {
-				ref<Bson> f = create();
-				f.append(ref<Object>(value));
-				append(key, f);
-			} else if (value.class == string)
-				append(key, string(value));
-			else if (value.class == long)
-				append(key, long(value)); 
-			else if (value.class == boolean)
-				append(key, boolean(value));
-			else if (value.class == double)
-				append(key, double(value));
-			else if (value.class == ref<Array>)
-				appendArray(key, codeArray(ref<Array>(value)));
+				ref<Bson> f = create(ref<Object>(value));
+				if (!append(key, f))
+					failed = true;
+			} else if (value.class == string) {
+				if (!append(key, string(value)))
+					failed = true;
+			} else if (value.class == long) {
+				if (!append(key, long(value)))
+					failed = true;
+			} else if (value.class == boolean) {
+				if (!append(key, boolean(value)))
+					failed = true;
+			} else if (value.class == double) {
+				if (!append(key, double(value)))
+					failed = true;
+			} else if (value.class == ref<Array>) {
+				if (!appendArray(key, create(ref<Array>(value))))
+					failed = true;
+			}
 		}
+		return !failed;
 	}
 }
 

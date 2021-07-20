@@ -91,4 +91,14 @@ delete db;
 void showError(unsigned domain, unsigned code, string message) {
 	printf("Mongo error detected: domain %d code %d: %s\n", domain, code, message);
 }
+// Test out the logic for complex aggregate initializers in in-line code.
+
+ref<Bson> opts = Bson.consume({
+	limit: 1,
+	sort: {
+		_id: -1
+	}
+});
+
+Bson.dispose(opts);
 

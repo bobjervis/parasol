@@ -478,6 +478,7 @@ public class Unary extends Node {
 		case	INTERFACE:
 			return foldCastToConstructor(compileContext.arena().builtInType(TypeFamily.ADDRESS), tree, false, compileContext);
 
+		case	OBJECT_AGGREGATE:
 		case	ARRAY_AGGREGATE:
 			_operand.type = compileContext.arena().createRef(_operand.type.classType(), compileContext);	
 		case	REF:
