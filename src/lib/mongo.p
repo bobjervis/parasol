@@ -20,6 +20,8 @@ namespace mongodb.org:mongo;
 
 import parasol:json;
 import parasol:net;
+import parasol:time;
+import native:C;
 /**
  * Represents a connection to an external MongoDB server or cluster.
  *
@@ -134,7 +136,7 @@ public class Collection {
 		bson_error_t error;
 
 		boolean result = mongoc_collection_insert(_collection, MONGOC_INSERT_NONE, document, null, &error);
-		return result, error.domain, error.code, string(pointer<byte>(&error.x2));
+		return result, error.domain, error.code, error.message();
 	}
 	/**
 	 * Find one or more documents in a collection.
@@ -151,7 +153,7 @@ public class Collection {
 		ref<mongoc_cursor_t> cursor = mongoc_collection_find(_collection, 0, skip, limit, batchSize, query, fields, null);
 		bson_error_t error;
 		if (mongoc_cursor_error_document(cursor, &error, null)) {
-			return null, error.domain, error.code, null;
+			return null, error.domain, error.code, error.message();
 		} else
 			return new Cursor(cursor), 0, 0, null;
 	}
@@ -170,7 +172,7 @@ public class Collection {
 		ref<mongoc_cursor_t> cursor = mongoc_collection_find_with_opts(_collection, query, opts, null);
 		bson_error_t error;
 		if (mongoc_cursor_error_document(cursor, &error, null)) {
-			return null, error.domain, error.code, null;
+			return null, error.domain, error.code, error.message();
 		} else
 			return new Cursor(cursor), 0, 0, null;
 	}
@@ -184,15 +186,31 @@ public class Collection {
 		bson_error_t error;
 
 		boolean result = mongoc_collection_drop(_collection, &error);
-		return result, error.domain, error.code, string(pointer<byte>(&error.x2));			      
+		return result, error.domain, error.code, error.message();			      
 	}
 }
 
 public class Cursor {
-	ref<mongoc_cursor_t> _cursor;
+	private ref<mongoc_cursor_t> _cursor;
 
 	Cursor(ref<mongoc_cursor_t> cursor) {
 		_cursor = cursor;
+	}
+
+	~Cursor() {
+		mongoc_cursor_destroy(_cursor);
+	}
+
+	public ref<Bson>, unsigned, unsigned, string next() {
+		ref<Bson> document;
+		if (mongoc_cursor_next(_cursor, &document))
+			return document, 0, 0, null;
+		else {
+			bson_error_t error;
+
+			mongoc_cursor_error(_cursor, &error);
+			return null, error.domain, error.code, error.message();
+		}
 	}
 }
 /**
@@ -393,7 +411,6 @@ public class Bson {
 	 * @return true if all the contents were copied, false if any contents 
 	 * did not get copied.
 	 */
-
 	public boolean append(ref<Object> parsedJson) {
 		boolean failed;
 		for (key in (*parsedJson)) {
@@ -420,6 +437,31 @@ public class Bson {
 			}
 		}
 		return !failed;
+	}
+	/**
+	 * Append a Time object to a Bson document.
+	 *
+	 * @param key The key of the new field.
+	 * @param value The value of the new field.
+	 * @return true if the operation succeeded, false otherwise.
+	 */
+	public boolean appendDateTime(string key, time.Time value) {
+		return bson_append_date_time(this, key.c_str(), key.length(), value.value());
+	}
+	/**
+	 * Return this Bson document as a json string.
+	 *
+	 * @return The string representation of this Bson document as JSON.
+	 */
+	public string asJson() {
+		string s;
+		pointer<byte> cp;
+		C.size_t length;
+
+		cp = bson_as_canonical_extended_json(this, &length);
+		s = string(cp, int(length));
+		bson_free(cp);
+		return s;
 	}
 }
 
@@ -475,8 +517,14 @@ abstract ref<mongoc_cursor_t> mongoc_collection_find_with_opts(ref<mongoc_collec
 @Linux("libmongoc-1.0.so.0", "mongoc_collection_drop")
 abstract boolean mongoc_collection_drop(ref<mongoc_collection_t> collection, ref<bson_error_t> error);
 
+@Linux("libmongoc-1.0.so.0", "mongoc_cursor_next")
+abstract boolean mongoc_cursor_next(ref<mongoc_cursor_t> cursor, ref<ref<Bson>> document);
 @Linux("libmongoc-1.0.so.0", "mongoc_cursor_error_document")
-abstract boolean mongoc_cursor_error_document (ref<mongoc_cursor_t> cursor, ref<bson_error_t> error, ref<ref<Bson>> reply);
+abstract boolean mongoc_cursor_error_document(ref<mongoc_cursor_t> cursor, ref<bson_error_t> error, ref<ref<Bson>> reply);
+@Linux("libmongoc-1.0.so.0", "mongoc_cursor_error")
+abstract boolean mongoc_cursor_error(ref<mongoc_cursor_t> cursor, ref<bson_error_t> error);
+@Linux("libmongoc-1.0.so.0", "mongoc_cursor_destroy")
+abstract void mongoc_cursor_destroy(ref<mongoc_cursor_t> cursor);
 
 @Linux("libmongoc-1.0.so.0", "bson_new")
 abstract ref<Bson> bson_new();
@@ -494,10 +542,21 @@ abstract boolean bson_append_double(ref<Bson> bson, pointer<byte> key, int keyLe
 abstract boolean bson_append_document(ref<Bson> bson, pointer<byte> key, int keyLength, ref<Bson> value);
 @Linux("libmongoc-1.0.so.0", "bson_append_array")
 abstract boolean bson_append_array(ref<Bson> bson, pointer<byte> key, int keyLength, ref<Bson> value);
+@Linux("libmongoc-1.0.so.0", "bson_append_date_time")
+abstract boolean bson_append_date_time(ref<Bson> bson, pointer<byte> key, int keyLength, long milliseconds);
+@Linux("libmongoc-1.0.so.0", "bson_as_canonical_extended_json")
+abstract pointer<byte> bson_as_canonical_extended_json(ref<Bson> bson, ref<C.size_t> lengthp);
+@Linux("libmongoc-1.0.so.0", "bson_free")
+abstract void bson_free(address memory);
 
 class bson_error_t {
 	unsigned domain;
 	unsigned code;
+
+	string message() {
+		return string(pointer<byte>(&x2));
+	}
+
 	long x2;
 	long x3;
 	long x4;

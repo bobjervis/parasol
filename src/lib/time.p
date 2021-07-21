@@ -121,6 +121,14 @@ public class Time {
 		_value = t._value;
 	}
 	/**
+	 * Construct a Time from a C time_t
+	 *
+	 * @param t the time in seconds.
+	 */
+	public Time(C.time_t t) {
+		_value = t * 1000;
+	}
+	/**
 	 * Constract a Time from an Instant.
 	 *
 	 * If the point in time represented by the Instant is beyond the
@@ -191,6 +199,14 @@ public class Time {
 	 */
 	public long value() {
 		return _value;
+	}
+	/**
+	 * Fetch the time value as a C time_t object;
+	 *
+	 * @return a C.time_t containing the current time (in seconds).
+	 */
+	public C.time_t cTime() {
+		return _value / 1000;
 	}
 	/**
 	 * Return the current time as a Time object.
