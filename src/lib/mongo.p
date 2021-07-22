@@ -18,6 +18,7 @@
  */
 namespace mongodb.org:mongo;
 
+import parasol:exception.IllegalOperationException;
 import parasol:json;
 import parasol:net;
 import parasol:time;
@@ -463,6 +464,94 @@ public class Bson {
 		bson_free(cp);
 		return s;
 	}
+	/**
+	 * Iterates over a Bson document. Permits decoding and validation of contents
+	 */
+	public class iterator {
+		bson_iter_t _iter;
+		/**
+		 * Initialize the iterator to work on the given Bson object.
+		 *
+		 * @param bson A reference to a Bson object returned by mongo.
+		 */
+		public iterator(ref<Bson> bson) {
+			bson_iter_init(&_iter, bson);
+		}
+		/**
+		 * Scans the Bson for a field with the given key.
+		 *
+		 * On success, the field with that key becomes the current field.
+		 *
+		 * @param key A string identifying the field to locate.
+		 *
+		 * @return true if the field with the identified key is present in the
+		 * document, false if not. 
+		 */
+		public boolean find(string key) {
+			return bson_iter_find(&_iter, key.c_str());
+		}
+		/**
+		 * Advances to the next field in the document.
+		 *
+		 * On success, the next field in the document becomes the current field.
+		 *
+		 * @return true if there is another field in the document,
+		 * false otherwise.
+		 */
+		public boolean next() {
+			return bson_iter_next(&_iter);
+		}
+		/**
+		 * @return The key for the current field in the iterator.
+		 */
+		public string key() {
+			return string(bson_iter_key(&_iter));
+		}
+		/**
+		 * If the current field has numeric type, the value is converted to long
+		 * and returned.
+		 *
+		 * @exception IllegalOperationException is thrown if the field type is not
+		 * numeric.
+		 *
+		 * @return The long value of the field.
+		 */
+		public long getLong() {
+			switch (bson_iter_type(&_iter)) {
+			case DOUBLE:
+				return long(bson_iter_double(&_iter));
+
+			case INT32:
+				return bson_iter_int32(&_iter);
+
+			case INT64:
+				return bson_iter_int64(&_iter);
+			}
+			throw IllegalOperationException("getLong found " + string(bson_iter_type(&_iter)));
+		}
+		/**
+		 * If the current field has numeric type, the value is converted to double
+		 * and returned.
+		 *
+		 * @exception IllegalOperationException is thrown if the field type is not
+		 * numeric.
+		 *
+		 * @return The double value of the field.
+		 */
+		public double getDouble() {
+			switch (bson_iter_type(&_iter)) {
+			case DOUBLE:
+				return bson_iter_double(&_iter);
+
+			case INT32:
+				return bson_iter_int32(&_iter);
+
+			case INT64:
+				return bson_iter_int64(&_iter);
+			}
+			throw IllegalOperationException("getDouble found " + string(bson_iter_type(&_iter)));
+		}
+	}
 }
 
 class StaticInit {
@@ -548,6 +637,45 @@ abstract boolean bson_append_date_time(ref<Bson> bson, pointer<byte> key, int ke
 abstract pointer<byte> bson_as_canonical_extended_json(ref<Bson> bson, ref<C.size_t> lengthp);
 @Linux("libmongoc-1.0.so.0", "bson_free")
 abstract void bson_free(address memory);
+@Linux("libmongoc-1.0.so.0", "bson_iter_init")
+abstract void bson_iter_init(ref<bson_iter_t> iter, ref<Bson> bson);
+@Linux("libmongoc-1.0.so.0", "bson_iter_find")
+abstract boolean bson_iter_find(ref<bson_iter_t> iter, pointer<byte> key);
+@Linux("libmongoc-1.0.so.0", "bson_iter_next")
+abstract boolean bson_iter_next(ref<bson_iter_t> iter);
+@Linux("libmongoc-1.0.so.0", "bson_iter_key")
+abstract pointer<byte> bson_iter_key(ref<bson_iter_t> iter);
+@Linux("libmongoc-1.0.so.0", "bson_iter_type")
+abstract bson_type_t bson_iter_type(ref<bson_iter_t> iter);
+@Linux("libmongoc-1.0.so.0", "bson_iter_double")
+abstract long bson_iter_double(ref<bson_iter_t> iter);
+@Linux("libmongoc-1.0.so.0", "bson_iter_int32")
+abstract long bson_iter_int32(ref<bson_iter_t> iter);
+@Linux("libmongoc-1.0.so.0", "bson_iter_int64")
+abstract long bson_iter_int64(ref<bson_iter_t> iter);
+
+class bson_value_t {
+	bson_type_t value_type;
+	int pad;
+	long value_1;
+	long value_2;
+	long value_3;
+}
+
+class bson_iter_t {
+   pointer<byte> raw; /* The raw buffer being iterated. */
+   unsigned len;       /* The length of raw. */
+   unsigned off;       /* The offset within the buffer. */
+   unsigned type;      /* The offset of the type byte. */
+   unsigned key;       /* The offset of the key byte. */
+   unsigned d1;        /* The offset of the first data byte. */
+   unsigned d2;        /* The offset of the second data byte. */
+   unsigned d3;        /* The offset of the third data byte. */
+   unsigned d4;        /* The offset of the fourth data byte. */
+   unsigned next_off;  /* The offset of the next field. */
+   unsigned err_off;   /* The offset of the error. */
+   bson_value_t value; /* Internal value for various state. */
+}
 
 class bson_error_t {
 	unsigned domain;
@@ -661,39 +789,28 @@ class bson_t {
 	long pad16;
 }
 
-enum bcon_type_t {
-   BCON_TYPE_UTF8,
-   BCON_TYPE_DOUBLE,
-   BCON_TYPE_DOCUMENT,
-   BCON_TYPE_ARRAY,
-   BCON_TYPE_BIN,
-   BCON_TYPE_UNDEFINED,
-   BCON_TYPE_OID,
-   BCON_TYPE_BOOL,
-   BCON_TYPE_DATE_TIME,
-   BCON_TYPE_NULL,
-   BCON_TYPE_REGEX,
-   BCON_TYPE_DBPOINTER,
-   BCON_TYPE_CODE,
-   BCON_TYPE_SYMBOL,
-   BCON_TYPE_CODEWSCOPE,
-   BCON_TYPE_INT32,
-   BCON_TYPE_TIMESTAMP,
-   BCON_TYPE_INT64,
-   BCON_TYPE_DECIMAL128,
-   BCON_TYPE_MAXKEY,
-   BCON_TYPE_MINKEY,
-   BCON_TYPE_BCON,
-   BCON_TYPE_ARRAY_START,
-   BCON_TYPE_ARRAY_END,
-   BCON_TYPE_DOC_START,
-   BCON_TYPE_DOC_END,
-   BCON_TYPE_END,
-   BCON_TYPE_RAW,
-   BCON_TYPE_SKIP,
-   BCON_TYPE_ITER,
-   BCON_TYPE_ERROR,
-};
+enum bson_type_t {
+   EOD,
+   DOUBLE,
+   UTF8,
+   DOCUMENT,
+   ARRAY,
+   BINARY,
+   UNDEFINED,
+   OID,
+   BOOL,
+   DATE_TIME,
+   NULL,
+   REGEX,
+   DBPOINTER,
+   CODE,
+   SYMBOL,
+   CODEWSCOPE,
+   INT32,
+   TIMESTAMP,
+   INT64,
+   DECIMAL128
+}
 
 class mongoc_write_concern_t { }
 
