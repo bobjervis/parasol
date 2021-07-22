@@ -848,11 +848,13 @@ public boolean copyDirectoryTree(string source, string destination, boolean tryA
 			} else if (isSymLink(filepath)) {
 				string target = readSymLink(filepath);
 				if (target == null) {
+					delete dir;
 					if (!tryAllFiles)
 						deleteDirectoryTree(destination);
 					return false;
 				}
 				if (!createSymLink(target, destFilename)) {
+					delete dir;
 					if (!tryAllFiles)
 						deleteDirectoryTree(destination);
 					return false;
