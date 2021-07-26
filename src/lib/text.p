@@ -1379,7 +1379,7 @@ public class string extends String<byte> {
 	 * store
 	 * 
 	 * This is only in generated code in those circumstances where a string returned from a function can short-
-	 * circuit a copy and a delete by just taing the live string value returned from the function and calling this
+	 * circuit a copy and a delete by just taking the live string value returned from the function and calling this
 	 * method to use that live value.
 	 */
 	void store(ref<allocation> other) {
@@ -1388,6 +1388,23 @@ public class string extends String<byte> {
 //		print("after store: ");
 //		print(*this);
 //		print("\n");
+	}
+	/**
+	 * store_nv
+	 * 
+	 * This is only in generated code in those circumstances where a string returned from a function can short-
+	 * circuit a copy and a delete by just taking the live string value returned from the function and calling this
+	 * method to use that live value.
+	 *
+	 * This is used in non-void contexts where the value will be needed for further computations.
+	 */
+	string store_nv(ref<allocation> other) {
+		copy(null);			// First, just remove whatever data we have in the string
+		_contents = other;	// Then. store the new data - note that other == null is the right value for a null string.
+//		print("after store: ");
+//		print(*this);
+//		print("\n");
+		return *this;
 	}
 	/**
 	 * storeTemp
@@ -1403,6 +1420,24 @@ public class string extends String<byte> {
 //		print("after store: ");
 //		print(*this);
 //		print("\n");
+	}
+	/**
+	 * storeTemp_nv
+	 * 
+	 * This is only in generated code in those circumstances where a string returned from a function can short-
+	 * circuit a copy and a delete by just taing the live string value returned from the function and calling this
+	 * method to use that live value.
+	 * 
+	 * Note that this assumes the memory being assigned-to is not constructed.
+	 *
+	 * This is used in non-void contexts where the value will be needed for further computations.
+	 */
+	string storeTemp_nv(ref<allocation> other) {
+		_contents = other;	// Then. store the new data - note that other == null is the right value for a null string.
+//		print("after store: ");
+//		print(*this);
+//		print("\n");
+		return *this;
 	}
 	/**
 	 * Identify a sub-string of this string.	
@@ -2082,6 +2117,23 @@ public class string16 extends String<char> {
 //		print("\n");
 	}
 	/**
+	 * store_nv
+	 * 
+	 * This is only in generated code in those circumstances where a string returned from a function can short-
+	 * circuit a copy and a delete by just taing the live string value returned from the function and calling this
+	 * method to use that live value.
+	 *
+	 * This is used in non-void contexts where the value will be needed for further computations.
+	 */
+	string16 store_nv(ref<allocation> other) {
+		copy(null);			// First, just remove whatever data we have in the string
+		_contents = other;	// Then. store the new data - note that other == null is the right value for a null string.
+//		print("after store: ");
+//		print(*this);
+//		print("\n");
+		return *this;
+	}
+	/**
 	 * storeTemp
 	 * 
 	 * This is only in generated code in those circumstances where a string returned from a function can short-
@@ -2095,6 +2147,24 @@ public class string16 extends String<char> {
 //		print("after store: ");
 //		print(*this);
 //		print("\n");
+	}
+	/**
+	 * storeTemp_nv
+	 * 
+	 * This is only in generated code in those circumstances where a string returned from a function can short-
+	 * circuit a copy and a delete by just taing the live string value returned from the function and calling this
+	 * method to use that live value.
+	 * 
+	 * Note that this assumes the memory being assigned-to is not constructed.
+	 *
+	 * This is used in non-void contexts where the value will be needed for further computations.
+	 */
+	string16 storeTemp_nv(ref<allocation> other) {
+		_contents = other;	// Then. store the new data - note that other == null is the right value for a null string.
+//		print("after store: ");
+//		print(*this);
+//		print("\n");
+		return *this;
 	}
 	/**
 	 * Identify a sub-string of this string.	

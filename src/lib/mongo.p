@@ -189,6 +189,23 @@ public class Collection {
 		boolean result = mongoc_collection_drop(_collection, &error);
 		return result, error.domain, error.code, error.message();			      
 	}
+	/**
+	 * @param newDB The new database name for this collection.
+	 * @param newName The new name for this collection.
+	 * @param dropTargetBeforeRename true if you want any existing collection
+	 * with the new name to be overwritten by the rename, false if you want the
+	 * rename to fail..
+	 * @return true if the operation succeeded, false otherwise.
+	 * @return the failing domain if the operation failed.
+	 * @return the failure code if the operation failed.
+	 * @return a text message describing the error if the operation failed.
+	 */
+	public boolean, unsigned, unsigned, string rename(string newDb, string newName, boolean dropTargetBeforeRename) {
+		bson_error_t error;
+
+		boolean result = mongoc_collection_rename(_collection, newDb.c_str(), newName.c_str(), dropTargetBeforeRename, &error);
+		return result, error.domain, error.code, error.message();			      
+	}
 }
 
 public class Cursor {
@@ -449,6 +466,20 @@ public class Bson {
 	public boolean appendDateTime(string key, time.Time value) {
 		return bson_append_date_time(this, key.c_str(), key.length(), value.value());
 	}
+
+	public ref<Object> asObject() {
+		iterator iter(this);
+
+		ref<Object> o = new Object();
+		while (iter.next()) {
+			switch (iter.type()) {
+			default:
+				printf("Type: %s\n", string(iter.type()));
+				assert(false);
+			}
+		}
+		return o;
+	}
 	/**
 	 * Return this Bson document as a json string.
 	 *
@@ -551,6 +582,11 @@ public class Bson {
 			}
 			throw IllegalOperationException("getDouble found " + string(bson_iter_type(&_iter)));
 		}
+
+		BsonType type() {
+			return bson_iter_type(&_iter);
+		}
+		
 	}
 }
 
@@ -605,6 +641,8 @@ abstract ref<mongoc_cursor_t> mongoc_collection_find_with_opts(ref<mongoc_collec
 												ref<Bson> opts, ref<mongoc_read_prefs_t> read_prefs);
 @Linux("libmongoc-1.0.so.0", "mongoc_collection_drop")
 abstract boolean mongoc_collection_drop(ref<mongoc_collection_t> collection, ref<bson_error_t> error);
+@Linux("libmongoc-1.0.so.0", "mongoc_collection_rename")
+abstract boolean mongoc_collection_rename(ref<mongoc_collection_t> collection, pointer<byte> newDB, pointer<byte> newName, boolean dropTargetBeforeRename, ref<bson_error_t> error);
 
 @Linux("libmongoc-1.0.so.0", "mongoc_cursor_next")
 abstract boolean mongoc_cursor_next(ref<mongoc_cursor_t> cursor, ref<ref<Bson>> document);
@@ -789,7 +827,7 @@ class bson_t {
 	long pad16;
 }
 
-enum bson_type_t {
+public enum BsonType {
    EOD,
    DOUBLE,
    UTF8,

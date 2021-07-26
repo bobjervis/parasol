@@ -79,6 +79,9 @@ void compareTests() {
 	assert("axx" !< s);
 	assert("abx" <> s);
 	assert("abc" !<> s);
+
+	string t;
+	assert((t = func()) == "return-value");
 }
 
 void destructorTests() {

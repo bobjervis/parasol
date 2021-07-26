@@ -902,12 +902,31 @@ public class Binary extends Node {
 			case	STRING:
 				if (_right.op() == Operator.CALL && ref<Call>(_right).category() != CallCategory.CONSTRUCTOR) {
 					ref<OverloadInstance> oi;
-					if (op() == Operator.ASSIGN_TEMP)
+					ref<Type> storeType;
+					if (op() == Operator.ASSIGN_TEMP) {
 						oi = type.tempAssignmentMethod(compileContext);
-					else if (op() == Operator.STORE_TEMP)
-						oi = getMethodSymbol(_right, "storeTemp", type, compileContext);
-					else
-						oi = getMethodSymbol(_right, "store", type, compileContext);
+						storeType = compileContext.arena().builtInType(TypeFamily.VOID);
+					} else if (op() == Operator.STORE_TEMP) {
+						string methodName;
+						if (voidContext) {
+							methodName = "storeTemp";
+							storeType = compileContext.arena().builtInType(TypeFamily.VOID);
+						} else {
+							methodName = "storeTemp_nv";
+							storeType = type;
+						}
+						oi = getMethodSymbol(_right, methodName, type, compileContext);
+					} else {
+						string methodName;
+						if (voidContext) {
+							methodName = "store";
+							storeType = compileContext.arena().builtInType(TypeFamily.VOID);
+						} else {
+							methodName = "store_nv";
+							storeType = type;
+						}
+						oi = getMethodSymbol(_right, methodName, type, compileContext);
+					}
 					if (oi == null) {
 						type = compileContext.errorType();
 						return this;
@@ -920,7 +939,7 @@ public class Binary extends Node {
 					nestedCall.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 					ref<NodeList> args = tree.newNodeList(nestedCall);
 					ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
-					call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+					call.type = storeType;
 					return call.fold(tree, voidContext, compileContext);
 				}
 

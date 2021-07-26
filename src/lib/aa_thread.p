@@ -236,7 +236,14 @@ public class Thread {
 		} else
 			return false;
 	}
-
+	/**
+	 * Sends an interrupt signal to this thread.
+	 *
+	 * Currently only Linux threads may be interrupted. If the thread is waiting in an
+	 * interruptable system call, the call with return a characteristic error. 
+	 *
+	 * @return true if the interrupt signal was successfully raised, false otherwise.
+	 */
 	public boolean interrupt() {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
