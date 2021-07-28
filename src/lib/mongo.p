@@ -473,8 +473,20 @@ public class Bson {
 		ref<Object> o = new Object();
 		while (iter.next()) {
 			switch (iter.type()) {
+			case INT64:
+				o.set(iter.key(), iter.getLong());
+				break;
+
+			case UTF8:
+				o.set(iter.key(), iter.getString());
+				break;
+
+			case DATE_TIME:
+				o.set(iter.key(), iter.getTime());
+				break;
+
 			default:
-				printf("Type: %s\n", string(iter.type()));
+				printf("%s Type: %s\n", iter.key(), string(iter.type()));
 				assert(false);
 			}
 		}
@@ -582,6 +594,39 @@ public class Bson {
 			}
 			throw IllegalOperationException("getDouble found " + string(bson_iter_type(&_iter)));
 		}
+		/**
+		 * If the current field has UTF8 type, the value is converted to string
+		 * and returned.
+		 *
+		 * @exception IllegalOperationException is thrown if the field type is not
+		 * UTF8.
+		 *
+		 * @return The string value of the field.
+		 */
+		public string getString() {
+			if (bson_iter_type(&_iter) == BsonType.UTF8) {
+				pointer<byte> str;
+				unsigned length;
+
+				str = bson_iter_utf8(&_iter, &length);
+				return string(str, int(length));
+			}
+			throw IllegalOperationException("getString found " + string(bson_iter_type(&_iter)));
+		}
+		/**
+		 * If the current field has DATE_TIME type, the value is converted to Time
+		 * and returned.
+		 *
+		 * @exception IllegalOperationException is thrown if the field type is not
+		 * DATE_TIME.
+		 *
+		 * @return The Time value of the field.
+		 */
+		public time.Time getTime() {
+			if (bson_iter_type(&_iter) == BsonType.DATE_TIME)
+				return time.Time(bson_iter_date_time(&_iter));
+			throw IllegalOperationException("getTime found " + string(bson_iter_type(&_iter)));
+		}
 
 		BsonType type() {
 			return bson_iter_type(&_iter);
@@ -684,16 +729,20 @@ abstract boolean bson_iter_next(ref<bson_iter_t> iter);
 @Linux("libmongoc-1.0.so.0", "bson_iter_key")
 abstract pointer<byte> bson_iter_key(ref<bson_iter_t> iter);
 @Linux("libmongoc-1.0.so.0", "bson_iter_type")
-abstract bson_type_t bson_iter_type(ref<bson_iter_t> iter);
+abstract BsonType bson_iter_type(ref<bson_iter_t> iter);
 @Linux("libmongoc-1.0.so.0", "bson_iter_double")
 abstract long bson_iter_double(ref<bson_iter_t> iter);
 @Linux("libmongoc-1.0.so.0", "bson_iter_int32")
 abstract long bson_iter_int32(ref<bson_iter_t> iter);
 @Linux("libmongoc-1.0.so.0", "bson_iter_int64")
 abstract long bson_iter_int64(ref<bson_iter_t> iter);
+@Linux("libmongoc-1.0.so.0", "bson_iter_utf8")
+abstract pointer<byte> bson_iter_utf8(ref<bson_iter_t> iter, ref<unsigned> length);
+@Linux("libmongoc-1.0.so.0", "bson_iter_date_time")
+abstract long bson_iter_date_time(ref<bson_iter_t> iter);
 
 class bson_value_t {
-	bson_type_t value_type;
+	BsonType value_type;
 	int pad;
 	long value_1;
 	long value_2;

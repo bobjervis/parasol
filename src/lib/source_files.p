@@ -338,12 +338,14 @@ public class FileStat {
 	private void registerNamespace() {
 		for (ref<NodeList> nl = _tree.root().statements(); nl != null; nl = nl.next) {
 			if (nl.node.op() == Operator.DECLARE_NAMESPACE) {
-				ref<Unary> u = ref<Unary>(nl.node);
-				boolean x;
-
-				_namespaceNode = ref<Ternary>(u.operand());
-				(_domain, x) = _namespaceNode.left().dottedName();
-				break;
+				if (_namespaceNode == null) {
+					ref<Unary> u = ref<Unary>(nl.node);
+					boolean x;
+	
+					_namespaceNode = ref<Ternary>(u.operand());
+					(_domain, x) = _namespaceNode.left().dottedName();
+				} else
+					nl.node.add(MessageId.NON_UNIQUE_NAMESPACE, _tree.pool());
 			}
 		}
 	}

@@ -442,6 +442,7 @@ compile(expect: fail, message: NOT_CONSTANT) { "int x; switch(0) { case x: break
 compile() { "switch(0) { case -1: break; }" }
 
 compile(expect: fail, message:INVALID_IMPORT) { "namespace x:y; import x:y;" }
+compile(expect: fail, message:NON_UNIQUE_NAMESPACE) { "namespace x:y; namespace z:w;" }
 
 compile() { "string[] ss; ss[4] = \"abc\";" }
 compile() { "string[] ss, tt; ss = tt;" }

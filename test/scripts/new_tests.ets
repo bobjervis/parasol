@@ -1,1 +1,2 @@
-run(filename: csv_test.p)
+compile(expect: fail, message:NON_UNIQUE_NAMESPACE) { "namespace x:y; namespace z:w;" }
+
