@@ -161,6 +161,7 @@ public enum MessageId {
 	UNFINISHED_FIXED_ARRAY					("Unfinished: fixed length array"),
 	UNFINISHED_CONSTRUCTION					("Unfinished: constructor initializer"),
 	UNFINISHED_LOCK							("Unfinished: lock statement without monitor"),
+	UNFINISHED_VAR_CALL						("Unfinished: method call on var object"),
 	UNFINISHED_VAR_CAST						("Unfinished: conversion to var from %1"),
 
 	MAX_MESSAGE;

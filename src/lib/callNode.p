@@ -1028,6 +1028,11 @@ public class Call extends ParameterBag {
 			type = _target.type;
 			return false;
 		}
+		if (_target.type.family() == TypeFamily.VAR) {
+			type = compileContext.errorType();
+			_target.add(MessageId.UNFINISHED_VAR_CALL, compileContext.pool());
+			return false;
+		}
 		return true;
 	}
 
