@@ -34,3 +34,9 @@ void func2(int x, int... y) {
 void func3(int x, int... y) {
 	func2(x, y);
 }
+
+string s;
+
+s.printf("%s %s %s %s %s %s %s %s %s %s", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j");
+
+assert(s == "a b c d e f g h i j");

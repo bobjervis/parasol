@@ -3404,6 +3404,7 @@ class X86_64Encoder extends Target {
 				emit(byte(offset));
 			} else {
 				modRM(2, regOpcode, 4);
+				sib(0, 4, 4);
 				emitInt(offset);
 			}
 			break;

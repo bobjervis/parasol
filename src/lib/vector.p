@@ -576,6 +576,12 @@ public class vector<class E, class I> {
 		_data[int(index) % int(_length)] = value;
 	}
 
+	public void setExpand(I index, E value) {
+		if (unsigned(index) >= unsigned(_length))
+			resize(index + 1);
+		_data[int(index)] = value;
+	}
+
 	public pointer<E> elementAddress(I index) {
 		return _data + int(index);
 	}

@@ -466,31 +466,52 @@ public class Bson {
 	public boolean appendDateTime(string key, time.Time value) {
 		return bson_append_date_time(this, key.c_str(), key.length(), value.value());
 	}
-
+	/**
+	 * Convert the Bson document to an Object.
+	 *
+	 * Note that a Mongo database can include field types that are not recognized
+	 * by an Object as JSON.
+	 *
+	 * @return An Object containing the same JSON data as the source.
+	 *
+	 * @exception IllegalOperationException is thrown if a field type is not
+	 * a valid JSON data type.
+	 */
 	public ref<Object> asObject() {
 		iterator iter(this);
-
 		ref<Object> o = new Object();
-		while (iter.next()) {
-			switch (iter.type()) {
-			case INT64:
-				o.set(iter.key(), iter.getLong());
-				break;
 
-			case UTF8:
-				o.set(iter.key(), iter.getString());
-				break;
-
-			case DATE_TIME:
-				o.set(iter.key(), iter.getTime());
-				break;
-
-			default:
-				printf("%s Type: %s\n", iter.key(), string(iter.type()));
-				assert(false);
-			}
-		}
+		while (iter.next())
+			o.set(iter.key(), iter.getField());
 		return o;
+	}
+	/**
+	 * Convert the Bson document to an Array.
+	 *
+	 * Note that a Mongo database can include field types that are not recognized
+	 * by an Object as JSON.
+	 *
+	 * This code assumes that the field keys are a compact set of integers.
+	 *
+	 * @return An Array containing the same JSON data as the source.
+	 *
+	 * @exception IllegalOperationException is thrown if a field type is not
+	 * a valid JSON data type, or if any key is not a valid integer.
+	 */
+	public ref<Array> asArray() {
+		iterator iter(this);
+		ref<Array> a = new Array();
+
+		while (iter.next()) {
+			int key;
+			boolean success;
+
+			(key, success) = int.parse(iter.key());
+			if (!success)
+				throw IllegalOperationException("Key not integral");
+			a.setExpand(key, iter.getField());
+		}
+		return a;
 	}
 	/**
 	 * Return this Bson document as a json string.
@@ -519,6 +540,15 @@ public class Bson {
 		 */
 		public iterator(ref<Bson> bson) {
 			bson_iter_init(&_iter, bson);
+		}
+		/** Initialize a sub-iterator over the current ARRAY or DOCUMENT
+		 * field of the parent iterator.
+		 *
+		 * @param parent An existing iterator currently positioned at an ARRAY or DOCUMENT
+		 * field.
+		 */
+		public iterator(ref<iterator> parent) {
+			bson_iter_recurse(&parent._iter, &_iter);
 		}
 		/**
 		 * Scans the Bson for a field with the given key.
@@ -627,6 +657,100 @@ public class Bson {
 				return time.Time(bson_iter_date_time(&_iter));
 			throw IllegalOperationException("getTime found " + string(bson_iter_type(&_iter)));
 		}
+		/**
+		 * If the current field has DOCUMENT type, the value is converted to Bson
+		 * and returned.
+		 *
+		 * @exception IllegalOperationException is thrown if the field type is not
+		 * DOCUMENT.
+		 *
+		 * @return The Time value of the field.
+		 */
+		public ref<Bson> getDocument() {
+			if (bson_iter_type(&_iter) == BsonType.DOCUMENT) {
+				unsigned length;
+				pointer<byte> docp;
+
+				bson_iter_document(&_iter, &length, &docp);
+				return bson_new_from_data(docp, length);
+			}
+			throw IllegalOperationException("getDocument found " + string(bson_iter_type(&_iter)));
+		}
+		/**
+		 * If the current field has ARRAY type, the value is converted to Bson
+		 * and returned.
+		 *
+		 * @exception IllegalOperationException is thrown if the field type is not
+		 * ARRAY.
+		 *
+		 * @return The Time value of the field.
+		 */
+		public ref<Bson> getArray() {
+			if (bson_iter_type(&_iter) == BsonType.ARRAY) {
+				unsigned length;
+				pointer<byte> docp;
+
+				bson_iter_array(&_iter, &length, &docp);
+				return bson_new_from_data(docp, length);
+			}
+			throw IllegalOperationException("getDocument found " + string(bson_iter_type(&_iter)));
+		}
+
+		var getField() {
+			var x;
+
+			switch (type()) {
+			case DOUBLE:
+				x = getDouble();
+				break;
+
+			case INT32:
+			case INT64:
+				x = getLong();
+				break;
+
+			case UTF8:
+				x = getString();
+				break;
+
+			case DATE_TIME:
+				x = getTime();
+				break;
+
+			case DOCUMENT:
+				ref<Object> o = new Object();
+				{
+					iterator sub(this);
+	
+					while (sub.next())
+						o.set(sub.key(), sub.getField());
+				}
+				x = o;
+				break;
+
+			case ARRAY:
+				ref<Array> a = new Array();
+				{
+					iterator sub(this);
+	
+					while (sub.next()) {
+						int key;
+						boolean success;
+			
+						(key, success) = int.parse(sub.key());
+						if (!success)
+							throw IllegalOperationException("Key not integral");
+						a.setExpand(key, sub.getField());
+					}
+				}
+				x = a;
+				break;
+
+			default:
+				throw IllegalOperationException("Type: " + string(type()));
+			}
+			return x;
+		}
 
 		BsonType type() {
 			return bson_iter_type(&_iter);
@@ -700,6 +824,8 @@ abstract void mongoc_cursor_destroy(ref<mongoc_cursor_t> cursor);
 
 @Linux("libmongoc-1.0.so.0", "bson_new")
 abstract ref<Bson> bson_new();
+@Linux("libmongoc-1.0.so.0", "bson_new_from_data")
+abstract ref<Bson> bson_new_from_data(pointer<byte> data, C.size_t length);
 @Linux("libmongoc-1.0.so.0", "bson_destroy")
 abstract void bson_destroy(ref<Bson> bson);
 @Linux("libmongoc-1.0.so.0", "bson_append_bool")
@@ -740,6 +866,12 @@ abstract long bson_iter_int64(ref<bson_iter_t> iter);
 abstract pointer<byte> bson_iter_utf8(ref<bson_iter_t> iter, ref<unsigned> length);
 @Linux("libmongoc-1.0.so.0", "bson_iter_date_time")
 abstract long bson_iter_date_time(ref<bson_iter_t> iter);
+@Linux("libmongoc-1.0.so.0", "bson_iter_document")
+abstract void bson_iter_document(ref<bson_iter_t> iter, ref<unsigned> length, ref<pointer<byte>> documentp);
+@Linux("libmongoc-1.0.so.0", "bson_iter_array")
+abstract void bson_iter_array(ref<bson_iter_t> iter, ref<unsigned> length, ref<pointer<byte>> arrayp);
+@Linux("libmongoc-1.0.so.0", "bson_iter_recurse")
+abstract boolean bson_iter_recurse(ref<bson_iter_t> iter, ref<bson_iter_t> child);
 
 class bson_value_t {
 	BsonType value_type;
