@@ -127,7 +127,7 @@ public class address {
  * perform boolean arithmetic when needed. Both operands of the binary operators are
  * evaluated, including side-effects.
  *
- * The most common combination can be expressed as the short-cut operators and-andd ({@code &&})
+ * The most common combination can be expressed as the short-cut operators and-and ({@code &&})
  * and or-or ({@code ||}). These carry out the appropriate boolean operations, but unlike 
  * the above binary operators, these will only evaluate and apply the side-effects of
  * the left-hand operand and if that operand's value determines the result, the right-hand
@@ -137,16 +137,6 @@ public class address {
  */
 public class boolean {
 }
-/**
- * A pseudo-class that serves a primarily syntactic function.
- *
- * This can only appear as the single return type of a function. In that one instance,
- * the type 'void' is re-interpreted to mean that the function returns no value at all.
- *
- * The identifier 'void' can be used at runtime to refer to the void class itself, although
- * what purpose that could serve is unclear.
- */
-public class void {}
 
 public class ClassInfo {}
 public class `*Namespace*` {}

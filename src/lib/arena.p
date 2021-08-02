@@ -377,6 +377,7 @@ public class Arena {
 				_builtInType[builtInMap[i].family] = compileContext.pool().newBuiltInType(builtInMap[i].family, ref<ClassType>(null));
 			}
 		}
+		_builtInType[TypeFamily.VOID] = compileContext.pool().newBuiltInType(TypeFamily.VOID, ref<ClassType>(null));
 		return allDefined;
 	}
 
@@ -705,7 +706,6 @@ builtInMap.append(BuiltInMap(TypeFamily.UNSIGNED_16, "char"));
 builtInMap.append(BuiltInMap(TypeFamily.UNSIGNED_32, "unsigned"));
 builtInMap.append(BuiltInMap(TypeFamily.FLOAT_32, "float"));
 builtInMap.append(BuiltInMap(TypeFamily.FLOAT_64, "double"));
-builtInMap.append(BuiltInMap(TypeFamily.VOID, "void"));
 builtInMap.append(BuiltInMap(TypeFamily.VAR, "var"));
 builtInMap.append(BuiltInMap(TypeFamily.STRING, "string"));
 builtInMap.append(BuiltInMap(TypeFamily.STRING16, "string16"));

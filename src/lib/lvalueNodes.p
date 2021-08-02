@@ -737,6 +737,8 @@ public class Selection extends Node {
 	}
  
 	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+		if (deferGeneration())
+			return this;
 		if (voidContext)
 			return _left.fold(tree, true, compileContext);
 		if (_symbol != null) {

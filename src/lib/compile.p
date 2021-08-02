@@ -438,6 +438,7 @@ public class CompileContext {
 		case	UNWRAP_TYPEDEF:
 		case	VECTOR_OF:
 		case	WHILE:
+		case	VOID:
 			break;
 
 		case	STATIC:
@@ -934,7 +935,9 @@ public class CompileContext {
 			case STRING16:
 			case SUBSTRING:
 			case SUBSTRING16:
-				if (b.left().op() != Operator.STRING) {
+				if (b.left().op() == Operator.STRING) 
+					b.left().type = switchType;
+				else {
 					b.left().add(MessageId.STRING_LITERAL_EXPECTED, _pool);
 					b.left().type = errorType();
 				}
@@ -1075,11 +1078,11 @@ public class CompileContext {
 	public ref<ParameterScope> throwExceptionScope() {
 		if (_throwException == null) {
 			ref<Symbol> re = _arena.getSymbol("parasol", "exception.throwException", this);
-			if (re == null || re.class != Overload)
-				assert(false);
-			ref<Overload> o = ref<Overload>(re);
-			ref<Type> tp = (*o.instances())[0].assignType(this);
-			_throwException = ref<ParameterScope>(tp.scope());
+			if (re != null && re.class == Overload) {
+				ref<Overload> o = ref<Overload>(re);
+				ref<Type> tp = (*o.instances())[0].assignType(this);
+				_throwException = ref<ParameterScope>(tp.scope());
+			}
 		}
 		return _throwException;
 	}

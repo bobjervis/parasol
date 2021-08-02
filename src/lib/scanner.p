@@ -146,6 +146,7 @@ public enum Token {
 	THROW,
 	TRUE,
 	TRY,
+	VOID,
 	WHILE,
 
 	// Pseudo-tokens not actually returned by a Scanner
@@ -1548,5 +1549,6 @@ Token[string] keywords = [
 	"throw":		Token.THROW,
 	"true": 		Token.TRUE,
 	"try": 			Token.TRY,
+	"void":			Token.VOID,
 	"while":		Token.WHILE,
 ];

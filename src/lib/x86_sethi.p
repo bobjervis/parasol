@@ -38,6 +38,8 @@ import parasol:math;
 private int CALL_REG_USE = 7;
 
 void sethiUllman(ref<Node> node, ref<CompileContext> compileContext, ref<Target> target) {
+	if (node.deferGeneration())
+		return;
 	switch (node.op()) {
 	case	CALL:
 		ref<Call> c = ref<Call>(node);
@@ -269,6 +271,8 @@ void sethiUllman(ref<Node> node, ref<CompileContext> compileContext, ref<Target>
 	objects have also been fully generated.
  */
 private int regneeds(ref<Node> node, ref<CompileContext> compileContext, ref<Target> target) {
+	if (node.deferGeneration())
+		return 0;
 	switch (node.op()) {
 	case	CALL:
 	case	NEW:

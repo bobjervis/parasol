@@ -644,6 +644,20 @@ public class Bson {
 			throw IllegalOperationException("getString found " + string(bson_iter_type(&_iter)));
 		}
 		/**
+		 * If the current field has BOOL type, the value is converted to boolean
+		 * and returned.
+		 *
+		 * @exception IllegalOperationException is thrown if the field type is not
+		 * BOOL.
+		 *
+		 * @return The string value of the field.
+		 */
+		public boolean getBoolean() {
+			if (bson_iter_type(&_iter) == BsonType.BOOL)
+				return bson_iter_bool(&_iter);
+			throw IllegalOperationException("getBoolean found " + string(bson_iter_type(&_iter)));
+		}
+		/**
 		 * If the current field has DATE_TIME type, the value is converted to Time
 		 * and returned.
 		 *
@@ -707,6 +721,10 @@ public class Bson {
 			case INT32:
 			case INT64:
 				x = getLong();
+				break;
+
+			case BOOL:
+				x = getBoolean();
 				break;
 
 			case UTF8:
@@ -858,6 +876,8 @@ abstract pointer<byte> bson_iter_key(ref<bson_iter_t> iter);
 abstract BsonType bson_iter_type(ref<bson_iter_t> iter);
 @Linux("libmongoc-1.0.so.0", "bson_iter_double")
 abstract long bson_iter_double(ref<bson_iter_t> iter);
+@Linux("libmongoc-1.0.so.0", "bson_iter_bool")
+abstract boolean bson_iter_bool(ref<bson_iter_t> iter);
 @Linux("libmongoc-1.0.so.0", "bson_iter_int32")
 abstract long bson_iter_int32(ref<bson_iter_t> iter);
 @Linux("libmongoc-1.0.so.0", "bson_iter_int64")

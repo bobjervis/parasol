@@ -127,6 +127,10 @@ public class Binary extends Node {
 	}
 
 	public ref<Node> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+		if (compileContext.verbose()) {
+			printf("-----  fold %s context %s ---------\n", voidContext ? "void" : "value", compileContext.current().sourceLocation(location()));
+			print(4);
+		}
 		if (deferGeneration())
 			return this;
 		if (voidContext) {
@@ -206,7 +210,6 @@ public class Binary extends Node {
 		case	CLASS_DECLARATION:
 		case	INTERFACE_DECLARATION:
 		case	SWITCH:
-		case	CASE:
 		case	LEFT_SHIFT:
 		case	BIND:
 		case	DELETE:
@@ -238,7 +241,16 @@ public class Binary extends Node {
 				return this;
 			}
 			break;
-			
+
+		// A CASE statement can arrive here in situations where the compiler is trying to recover
+		// from other errors, such as syntax errors in a method declaration. The type of a CASE expression
+		// is assigned during assignControlFlow and that doesn't visit every possible combination of
+		// questionable code.
+		case	CASE:
+			if (_left.type == null)
+				_left.type = compileContext.errorType();
+			break;
+
 		case	LOGICAL_AND:
 		case	LOGICAL_OR:
 			_right = _right.foldConditional(tree, compileContext);
@@ -1363,7 +1375,7 @@ public class Binary extends Node {
 			ref<Symbol> sym = subscript.left().type.lookup(name, compileContext);
 			if (sym == null || sym.class != Overload) {
 				subscript.add(MessageId.UNDEFINED, compileContext.pool(), name);
-				return this;
+				return null;
 			}
 			ref<Overload> over = ref<Overload>(sym);
 			ref<OverloadInstance> oi = (*over.instances())[0];

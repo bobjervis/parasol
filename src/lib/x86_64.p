@@ -569,8 +569,7 @@ public class X86_64 extends X86_64AssignTemps {
 					inst(X86.MOV, TypeFamily.ADDRESS, thisRegister(), firstRegisterArgument());
 					generateConstructorPreamble(null, parameterScope, compileContext);
 					inst(X86.POP, TypeFamily.SIGNED_64, thisRegister());
-					if (!generateReturn(parameterScope, compileContext))
-						assert(false);
+					generateReturn(parameterScope, compileContext);
 					break;
 					
 				case	ENUM_INSTANCE_CONSTRUCTOR:
@@ -590,8 +589,7 @@ public class X86_64 extends X86_64AssignTemps {
 						inst(X86.POP, TypeFamily.SIGNED_64, thisRegister());
 					}
 					inst(X86.LEAVE);
-					if (!generateReturn(parameterScope, compileContext))
-						assert(false);
+					generateReturn(parameterScope, compileContext);
 					break;
 					
 				case	ENUM_TO_STRING:
@@ -631,8 +629,7 @@ public class X86_64 extends X86_64AssignTemps {
 						stringArray = parameterScope.lookup("*", compileContext);
 					inst(X86.LEA, R.RAX, stringArray);
 					inst(X86.MOV, R.RAX, indexRegister, R.RAX);
-					if (!generateReturn(parameterScope, compileContext))
-						assert(false);
+					generateReturn(parameterScope, compileContext);
 					break;
 					
 				case	THUNK:
@@ -733,15 +730,17 @@ public class X86_64 extends X86_64AssignTemps {
 			if (parameterScope.enclosing().isMonitor() && func.functionCategory() != FunctionDeclaration.Category.CONSTRUCTOR &&
 				parameterScope.hasThis()) {
 				inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), thisRegister());
-				instCall(takeMethod(compileContext), compileContext);
-			}
-			closeCodeSegment(CC.NOP, null);
-			if (node.fallsThrough() == Test.PASS_TEST) {
-				if (!generateReturn(parameterScope, compileContext)) {
-					node.print(0);
-					assert(false);
+				ref<ParameterScope> takeScope = takeMethod(compileContext);
+				if (takeScope != null)
+					instCall(takeScope, compileContext);
+				else {
+					substring name("Monitor.take");
+					func.add(MessageId.UNDEFINED, compileContext.pool(), name);
 				}
 			}
+			closeCodeSegment(CC.NOP, null);
+			if (node.fallsThrough() == Test.PASS_TEST)
+				generateReturn(parameterScope, compileContext);
 			resolveDeferredTrys(true, compileContext);
 		} else {
 			inst(X86.PUSH, TypeFamily.SIGNED_64, R.RBX);
@@ -859,20 +858,24 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.POP, TypeFamily.SIGNED_64, R.RSI);
 			inst(X86.POP, TypeFamily.SIGNED_64, R.RBX);
 			inst(X86.LEAVE);
-			if (!generateReturn(scope, compileContext))
-				unfinished(node, "generateReturn failed - default end-of-static block", compileContext);
+			generateReturn(scope, compileContext);
 			pushExceptionHandler(null);
 			handler.start(this);
 			inst(X86.LEA, R.RSP, R.RBP, -(f().autoSize + 8 * address.bytes));
 			ref<Symbol> re;
 			ref<Overload> o;
 			re = compileContext.arena().getSymbol("parasol", "exception.uncaughtException", compileContext);
-			if (re == null || re.class != Overload)
-				assert(false);
-			o = ref<Overload>(re);
-			ref<Type> tp = (*o.instances())[0].assignType(compileContext);
-			ref<ParameterScope> uncaughtException = ref<ParameterScope>(tp.scope());
-			instCall(uncaughtException, compileContext);
+			if (re == null || re.class != Overload) {
+				substring name("uncaughtException");
+				node.add(MessageId.UNDEFINED, compileContext.pool(), name);
+			} else {
+				o = ref<Overload>(re);
+				ref<Type> tp = (*o.instances())[0].assignType(compileContext);
+				if (!tp.deferAnalysis()) {
+					ref<ParameterScope> uncaughtException = ref<ParameterScope>(tp.scope());
+					instCall(uncaughtException, compileContext);
+				}
+			}
 			int reserveSpace = f().autoSize - f().registerSaveSize;
 			inst(X86.LEA, R.RSP, R.RBP, -reserveSpace); 
 			inst(X86.POP, TypeFamily.SIGNED_64, firstRegisterArgument());
@@ -884,8 +887,7 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.POP, TypeFamily.SIGNED_64, R.RSI);
 			inst(X86.POP, TypeFamily.SIGNED_64, R.RBX);
 			inst(X86.LEAVE);
-			if (!generateReturn(scope, compileContext))
-				unfinished(node, "generateReturn failed - default end-of-static block", compileContext);
+			generateReturn(scope, compileContext);
 			closeCodeSegment(CC.NOP, null);
 			resolveDeferredTrys(false, compileContext);
 		}
@@ -977,7 +979,8 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			inst(X86.MOV, TypeFamily.ADDRESS, secondRegisterArgument(), R.RBP);
 			inst(X86.MOV, TypeFamily.ADDRESS, thirdRegisterArgument(), R.RSP);
-			instCall(throwException, compileContext);
+			if (throwException != null)
+				instCall(throwException, compileContext);
 
 			pushExceptionHandler(outer);
 		}
@@ -1144,7 +1147,8 @@ public class X86_64 extends X86_64AssignTemps {
 		case	LOCK:
 			ref<Lock> k = ref<Lock>(node);
 			generateDefaultConstructors(k.scope, compileContext);
-			generate(k.takeCall(), compileContext);
+			if (k.takeCall() != null)
+				generate(k.takeCall(), compileContext);
 			generateTryBody(null, k, k.body(), compileContext);
 			generate(k.releaseCallInLine(), compileContext);
 			break;
@@ -1556,8 +1560,7 @@ public class X86_64 extends X86_64AssignTemps {
 					generateLiveSymbolDestructors(retn.liveSymbols(), compileContext);
 			}
 				
-			if (!generateReturn(f().current, compileContext))
-				unfinished(retn, "failed return generation", compileContext);
+			generateReturn(f().current, compileContext);
 			break;
 			
 		case	TRY:
@@ -2274,7 +2277,12 @@ public class X86_64 extends X86_64AssignTemps {
 				generate(b.right(), compileContext);
 				f().r.generateSpills(node, this);
 			}
-			instCall(_free, compileContext);
+			if (_free != null)
+				instCall(_free, compileContext);
+			else {
+				substring name("memory.free");
+				node.add(MessageId.UNDEFINED, compileContext.pool(), name);
+			}
 			break;
 			
 		case	STORE_V_TABLE:
@@ -3681,6 +3689,8 @@ public class X86_64 extends X86_64AssignTemps {
 				ref<Unary> u = ref<Unary>(args.node);
 				// u is the ELLIPSIS_ARGUMENT
 				ref<Node> n = u.operand();
+				if (n.deferGeneration())
+					break;
 				switch (n.type.family()) {
 				case	STRING:
 				case	STRING16:
@@ -4309,7 +4319,7 @@ public class X86_64 extends X86_64AssignTemps {
 		return scope;
 	}
 	
-	private boolean generateReturn(ref<Scope> scope, ref<CompileContext> compileContext) {
+	private void generateReturn(ref<Scope> scope, ref<CompileContext> compileContext) {
 		if (scope.definition() == null || scope.definition().op() != Operator.FUNCTION)			// in-line code
 			inst(X86.RET);
 		else {							// a function body
@@ -4317,7 +4327,7 @@ public class X86_64 extends X86_64AssignTemps {
 			ref<FunctionType> functionType = ref<FunctionType>(func.type);
 			if (functionType == null) {
 				unfinished(func, "generateReturn functionType == null", compileContext);
-				return true;
+				return;
 			}
 			ref<ParameterScope> parameterScope = ref<ParameterScope>(scope);
 			if (parameterScope.enclosing().isMonitor() && func.functionCategory() != FunctionDeclaration.Category.CONSTRUCTOR &&
@@ -4329,7 +4339,13 @@ public class X86_64 extends X86_64AssignTemps {
 					pushRegister(functionType.returnValueType().family(), 
 							functionType.returnValueType().isFloat() ? R.XMM0 : R.RAX);
 				inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), thisRegister());
-				instCall(releaseMethod(compileContext), compileContext);
+				ref<ParameterScope> releaseScope = releaseMethod(compileContext);
+				if (releaseScope == null) {
+					substring name("Monitor.release");
+					func.add(MessageId.UNDEFINED, compileContext.pool(), name);
+					return;
+				}
+				instCall(releaseScope, compileContext);
 				if (returnRegisterBusy)
 					popRegister(functionType.returnValueType().family(), 
 							functionType.returnValueType().isFloat() ? R.XMM0 : R.RAX);
@@ -4339,7 +4355,6 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.LEAVE);
 			inst(X86.RET, parameterScope.variableStorage);
 		}
-		return true;
 	}
 
 	private void storeVtable(ref<Type> t, ref<CompileContext> compileContext) {
@@ -4370,10 +4385,10 @@ public class X86_64 extends X86_64AssignTemps {
 		ref<Overload> o = ref<Overload>(re);
 		_alloc = ref<ParameterScope>((*o.instances())[0].type().scope());
 		re = _arena.getSymbol("parasol", "memory.free", compileContext);
-		if (re == null || re.class != Overload)
-			assert(false);
-		 o = ref<Overload>(re);
-		_free = ref<ParameterScope>((*o.instances())[0].type().scope());
+		if (re != null && re.class == Overload) {
+			 o = ref<Overload>(re);
+			_free = ref<ParameterScope>((*o.instances())[0].type().scope());
+		}
 		re = _arena.getSymbol("native", "C.memset", compileContext);
 		if (re == null || re.class != Overload)
 			assert(false);
@@ -4572,19 +4587,13 @@ public class X86_64 extends X86_64AssignTemps {
 		if (_takeMethod == null) {
 			ref<Type> m = compileContext.monitorClass();
 			ref<Symbol> take = m.scope().lookup("take", compileContext);
-			if (take == null || take.class != Overload) {
-				printf("Could not find appropriate 'take' method.\n");
-				assert(false);
-			}
+			if (take == null || take.class != Overload)
+				return null;
 			ref<Overload> o = ref<Overload>(take);
-			if (o.instances().length() != 1) {
-				printf("Could not find appropriate 'take' method.\n");
-				assert(false);
-			}
-			if ((*o.instances())[0].parameterCount() != 0) {
-				printf("Could not find appropriate 'take' method.\n");
-				assert(false);
-			}
+			if (o.instances().length() != 1)
+				return null;
+			if ((*o.instances())[0].parameterCount() != 0)
+				return null;
 			_takeMethod = (*o.instances())[0].parameterScope();
 		}
 		return _takeMethod;
@@ -4594,19 +4603,11 @@ public class X86_64 extends X86_64AssignTemps {
 		if (_releaseMethod == null) {
 			ref<Type> m = compileContext.monitorClass();
 			ref<Symbol> release = m.scope().lookup("release", compileContext);
-			if (release == null || release.class != Overload) {
-				printf("Could not find appropriate 'release' method.\n");
-				assert(false);
-			}
+			if (release == null || release.class != Overload)
+				return null;
 			ref<Overload> o = ref<Overload>(release);
-			if (o.instances().length() != 1) {
-				printf("Could not find appropriate 'release' method.\n");
-				assert(false);
-			}
-			if ((*o.instances())[0].parameterCount() != 0) {
-				printf("Could not find appropriate 'release' method.\n");
-				assert(false);
-			}
+			if (o.instances().length() != 1 || (*o.instances())[0].parameterCount() != 0)
+				return null;
 			_releaseMethod = (*o.instances())[0].parameterScope();
 		}
 		return _releaseMethod;

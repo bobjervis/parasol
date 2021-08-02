@@ -352,6 +352,12 @@ public class Unary extends Node {
 						ref<Node> opLen = tree.newInternalLiteral(type.size(), location());
 						opLen.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
 						ref<Node> call = createMethodCall(_operand, "classValue", tree, compileContext, adr, opLen);
+						if (call == null) {
+							substring name("classValue");
+							add(MessageId.UNDEFINED, compileContext.pool(), name);
+							type = compileContext.errorType();
+							return this;
+						}
 						call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 						r = tree.newReference(temp, false, location());
 						ref<Binary> seq = tree.newBinary(Operator.SEQUENCE, call, r, location());
@@ -373,6 +379,12 @@ public class Unary extends Node {
 
 		case	THROW:
 			ref<ParameterScope> tes = compileContext.throwExceptionScope();
+			if (tes == null) {
+				substring name("throwException");
+
+				add(MessageId.UNDEFINED, compileContext.pool(), name);
+				return this;
+			}
 			ref<Node> f = tree.newLeaf(Operator.FRAME_PTR, location());
 			ref<Node> s = tree.newLeaf(Operator.STACK_PTR, location());
 			ref<Node> x = tree.newLeaf(Operator.EMPTY, location());
@@ -521,6 +533,10 @@ public class Unary extends Node {
 					ename = "string16Ellip";
 				ref<Reference> r = tree.newEllipsisReference(type, location());
 				ref<Node> call = createMethodCall(r, ename, tree, compileContext, _operand);
+				if (call == null) {
+					type = compileContext.errorType();
+					return this;
+				}
 				call.type = compileContext.arena().builtInType(TypeFamily.VOID);
 				return call.fold(tree, false, compileContext);
 			}

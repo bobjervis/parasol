@@ -142,6 +142,7 @@ public enum Operator {
 	TRUE,
 	FALSE,
 	NULL,
+	VOID,
 	CLASS_TYPE,
 	ENUM_TYPE,
 	VACATE_ARGUMENT_REGISTERS,
@@ -551,6 +552,8 @@ public class Lock extends Node {
 			if (takeCall == null) {
 				if (scope != null)
 					compileContext.setCurrent(outer);
+				substring name("Monitor.take");
+				add(MessageId.UNDEFINED, compileContext.pool(), name);
 				return this;
 			}
 			ref<Node> seq = tree.newBinary(Operator.SEQUENCE, defn, takeCall, expression.location());
@@ -2184,6 +2187,7 @@ class Leaf extends Node {
 		case	THIS:
 		case	SUPER:
 		case	NULL:
+		case	VOID:
 		case	FRAME_PTR:
 		case	STACK_PTR:
 			break;
@@ -2235,6 +2239,14 @@ class Leaf extends Node {
 		return super.canCoerce(newType, explicitCast, compileContext);
 	}
  
+	public void assignOverload(ref<NodeList> arguments, Operator kind, ref<CompileContext> compileContext) {
+		if (op() == Operator.VOID) {
+			type = compileContext.arena().builtInType(TypeFamily.VOID);
+			type = compileContext.pool().newTypedefType(TypeFamily.TYPEDEF, type);
+		} else
+			super.assignOverload(arguments, kind, compileContext);
+	}
+
 	private void assignTypes(ref<CompileContext> compileContext) {
 		ref<ClasslikeScope> classScope;
 		ref<Type> t;
@@ -2251,6 +2263,11 @@ class Leaf extends Node {
 		case	FALSE:
 		case	TRUE:
 			type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+			break;
+
+		case	VOID:
+			add(MessageId.INVALID_VOID, compileContext.pool());
+			type = compileContext.errorType();
 			break;
 
 		case	CLASS_TYPE:
@@ -2460,6 +2477,11 @@ public class Loop extends Node {
 			test = test.fold(tree, false, compileContext);
 			r = tree.newReference(iterator, false, location());
 			increment = createMethodCall(r, "next", tree, compileContext);
+			if (increment == null) {
+				type = compileContext.errorType();
+				return this;
+			}
+
 			increment.type = compileContext.arena().builtInType(TypeFamily.VOID);
 			increment = increment.fold(tree, true, compileContext);
 
@@ -3504,7 +3526,8 @@ public class Node {
 		ref<Symbol> sym = objType.lookup(functionName, compileContext);
 		if (sym == null || sym.class != Overload) {
 			add(MessageId.UNDEFINED, compileContext.pool(), functionName);
-			return this;
+			type = compileContext.errorType();
+			return null;
 		}
 		ref<OverloadInstance> oi = (*ref<Overload>(sym).instances())[0];
 		ref<Selection> method = tree.newSelection(object, oi, false, location());
@@ -4048,6 +4071,7 @@ public class Node {
 		case	UNWRAP_TYPEDEF:
 		case	VARIABLE:
 		case	VECTOR_OF:
+		case	VOID:
 		case	WHILE:
 			break;
 			
@@ -4163,8 +4187,12 @@ public class NodeList {
 	}
 	
 	void print(int indent) {
-		for (ref<NodeList> nl = this; nl != null; nl = nl.next)
-			nl.node.print(indent);
+		for (ref<NodeList> nl = this; nl != null; nl = nl.next) {
+			if (nl.node != null)
+				nl.node.print(indent);
+			else
+				printf("nl = %p node = null\n", nl);
+		}
 	}
 }
 

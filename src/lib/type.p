@@ -37,7 +37,6 @@ public enum TypeFamily {
 	SUBSTRING16,
 	VAR,
 	ADDRESS,
-	VOID,
 	ERROR,
 	EXCEPTION,
 	CLASS_VARIABLE,
@@ -45,6 +44,7 @@ public enum TypeFamily {
 	NAMESPACE,
 	ARRAY_AGGREGATE,
 	OBJECT_AGGREGATE,
+	VOID,
 	BUILTIN_TYPES,
 	
 	CLASS,

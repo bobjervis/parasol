@@ -1381,6 +1381,10 @@ public class Parser {
 			x = _tree.newLeaf(Operator.NULL, location);
 			break;
 
+		case	VOID:
+			x = _tree.newLeaf(Operator.VOID, location);
+			break;
+
 		case	LEFT_PARENTHESIS:
 			x = parseExpression(0);
 			if (x.op() == Operator.SYNTAX_ERROR)

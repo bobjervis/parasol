@@ -83,7 +83,7 @@ public enum MessageId {
 	INVALID_SUPER							("'super' call not allowed here"),
 	INVALID_SWITCH							("Invalid type in switch expression"),
 	INVALID_UNARY_PLUS						("Invalid type for unary plus"),
-	INVALID_VOID							("Invalid use of void type"),
+	INVALID_VOID							("Invalid use of void keyword"),
 	INVALID_XOR								("Invalid type for bitwise exclusive-or"),
 	LABEL_MISSING							("Label missing"),
 	LABEL_REQUIRED							("Initializer expression must have a label"),

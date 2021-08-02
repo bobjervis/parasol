@@ -654,18 +654,20 @@ public class Call extends ParameterBag {
 			break;
 
 		default:
+			if (_target.deferGeneration())
+				return null;
 			functionType = ref<FunctionType>(_target.type);
 		}
 		if (functionType == null)
 			return null;
 		ref<NodeList> params = functionType.parameters();
-				
-		for (ref<NodeList> args = _arguments; params != null; args = args.next, params = params.next)
+		for (ref<NodeList> args = _arguments; params != null; args = args.next, params = params.next) {
 			if (params.node.getProperEllipsis() != null) {
 				if (args != null && args.next == null && args.node.type.equals(params.node.type))
 					return null;
 				return args;
 			}
+		}
 		return null;
 	}
 
@@ -823,9 +825,13 @@ public class Call extends ParameterBag {
 	}
 	
 	private boolean assignFunctionType(ref<CompileContext> compileContext) {
-		if (_target.type.family() != TypeFamily.TYPEDEF)
+		ref<Type> t;
+		if (_target.op() == Operator.VOID)
+			t = null;
+		else if (_target.type.family() == TypeFamily.TYPEDEF)
+			t = _target.unwrapTypedef(Operator.CLASS, compileContext);
+		else
 			return false;
-		ref<Type> t = _target.unwrapTypedef(Operator.CLASS, compileContext);
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 			if (nl.node.op() == Operator.BIND)
 				continue;
@@ -842,7 +848,7 @@ public class Call extends ParameterBag {
 				nl.node.type = nl.node.unwrapTypedef(Operator.CLASS, compileContext);
 		}
 		ref<NodeList> returnType;
-		if (t.family() != TypeFamily.VOID) {
+		if (t != null) {
 			ref<Node> n = compileContext.current().file().tree().newLeaf(Operator.EMPTY, _target.location());
 			n.type = t;
 			returnType = compileContext.current().file().tree().newNodeList(n);
@@ -952,6 +958,9 @@ public class Call extends ParameterBag {
 				}
 				assignConstructorCall(t, compileContext);
 				break;
+			} else if (_target.op() == Operator.VOID) {
+				assignFunctionType(compileContext);
+				break;
 			}
 			switch (_target.type.family()) {
 			case	VAR:
@@ -960,10 +969,7 @@ public class Call extends ParameterBag {
 
 			case	TYPEDEF:
 				ref<Type> t = _target.unwrapTypedef(Operator.CLASS, compileContext);
-				if (_arguments == null) {
-					if (t.family() == TypeFamily.VOID)
-						break;
-				} else if (assignFunctionType(compileContext))
+				if (_arguments != null && assignFunctionType(compileContext))
 					break;
 				// a new or placement new expression will set the category to CONSTRUCTOR				
 				if (_category != CallCategory.CONSTRUCTOR && builtInCoercion(compileContext))
@@ -1438,8 +1444,10 @@ public class FunctionDeclaration extends ParameterBag {
 		_functionCategory = functionCategory;
 		if (returnType != null) {
 			_returnType = returnType.treeToList(null, tree);
-			for (ref<NodeList> nl = _returnType; nl != null; nl = nl.next)
-				nl.node = tree.newUnary(Operator.UNWRAP_TYPEDEF, nl.node, nl.node.location());
+			if (returnType.op() != Operator.VOID) {
+				for (ref<NodeList> nl = _returnType; nl != null; nl = nl.next)
+					nl.node = tree.newUnary(Operator.UNWRAP_TYPEDEF, nl.node, nl.node.location());
+			}
 		}
 		_name = name;
 	}
@@ -1632,21 +1640,23 @@ public class FunctionDeclaration extends ParameterBag {
 			compileContext.assignTypes(nl.node);
 		ref<NodeList> retType = _returnType;
 		if (retType != null) {
-			for (ref<NodeList> nl = retType; nl != null; nl = nl.next)
-				compileContext.assignTypes(nl.node);
-			for (ref<NodeList> nl = retType; nl != null; nl = nl.next) {
-				if (nl.node.deferAnalysis()) {
-					type = nl.node.type;
-					continue;
-				}
-				if (!nl.node.type.canCopy(compileContext)) {
-					nl.node.add(MessageId.CANNOT_COPY_RETURN, compileContext.pool(), nl.node.type.signature());
-					type = nl.node.type = compileContext.errorType();
+			if (retType.next == null &&
+				retType.node.op() == Operator.VOID)
+				retType = null;
+			else {
+				for (ref<NodeList> nl = retType; nl != null; nl = nl.next)
+					compileContext.assignTypes(nl.node);
+				for (ref<NodeList> nl = retType; nl != null; nl = nl.next) {
+					if (nl.node.deferAnalysis()) {
+						type = nl.node.type;
+						continue;
+					}
+					if (!nl.node.type.canCopy(compileContext)) {
+						nl.node.add(MessageId.CANNOT_COPY_RETURN, compileContext.pool(), nl.node.type.signature());
+						type = nl.node.type = compileContext.errorType();
+					}
 				}
 			}
-			if (retType.next == null &&
-				retType.node.type.family() == TypeFamily.VOID)
-				retType = null;
 		}
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 			if (nl.node.deferAnalysis()) {

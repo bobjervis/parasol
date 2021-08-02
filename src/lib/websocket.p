@@ -252,7 +252,16 @@ private monitor class WebSocketVolatileData {
 private void readWrapper(address arg) {
 	ref<WebSocket> socket = ref<WebSocket>(arg);
 //		printf("%s %p reader thread starting readMessages...\n", currentThread().name(), arg);
-	boolean sawClose = socket.reader().readMessages();
+	boolean sawClose;
+
+	for (;;) {
+		try {
+			sawClose = socket.reader().readMessages();
+			break;
+		} catch (Exception e) {
+			logger.error("Unexpected exception reading WebSocket message: %s\n%s", e.message(), e.textStackTrace());
+		}
+	}
 //	logger.format(log.DEBUG, "%s.readWrapper sawClose %s", socket.server() ? "server" : "client", sawClose ? "true" : "false");
 	if (sawClose && !socket.sentClose())
 		socket.shutDown(WebSocket.CLOSE_NORMAL, "normal close");

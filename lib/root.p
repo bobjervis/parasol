@@ -38,7 +38,6 @@ import parasol:text.substring16;
 import parasol:types.var;
 import parasol:types.address;
 import parasol:types.boolean;
-import parasol:types.void;
 import parasol:types.ref;
 import parasol:types.pointer;
 import parasol:types.vector;
