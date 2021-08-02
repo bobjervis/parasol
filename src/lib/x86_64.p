@@ -29,7 +29,7 @@ import parasol:compiler.Binary;
 import parasol:compiler.Block;
 import parasol:compiler.Call;
 import parasol:compiler.CallCategory;
-import parasol:compiler.Class;
+import parasol:compiler.ClassDeclarator;
 import parasol:compiler.ClassScope;
 import parasol:compiler.ClassType;
 import parasol:compiler.CompileContext;
@@ -832,7 +832,7 @@ public class X86_64 extends X86_64AssignTemps {
 				case ENUM:
 					ref<EnumType> et = ref<EnumType>(id.type);
 					int instanceCount = et.instanceCount;
-					id = ref<Class>(id).className();
+					id = ref<ClassDeclarator>(id).className();
 					id.type = et;
 					for (int i = 0; i < et.instanceCount; i++) {
 						instLoadEnumAddress(firstRegisterArgument(), id, i);
@@ -2935,7 +2935,7 @@ public class X86_64 extends X86_64AssignTemps {
 				break;
 
 		case	ENUM:
-			ref<Class> classNode = ref<Class>(node);
+			ref<ClassDeclarator> classNode = ref<ClassDeclarator>(node);
 			if (node.op() == Operator.ENUM) {
 				ref<EnumScope> escope = ref<EnumScope>(classNode.scope);
 				if (escope.enumType.hasConstructors()) {
@@ -2954,7 +2954,7 @@ public class X86_64 extends X86_64AssignTemps {
 				break;
 
 			case	CLASS:
-				classNode = ref<Class>(b.right());
+				classNode = ref<ClassDeclarator>(b.right());
 			
 				for (ref<NodeList> nl = classNode.statements(); nl != null; nl = nl.next)
 					generateStaticInitializers(nl.node, compileContext);

@@ -1301,11 +1301,11 @@ public class Scope {
 				break;
 				
 			case	CLASS:
-				if (_definition.class != Class) {
+				if (_definition.class != ClassDeclarator) {
 					printf(" Not a Class %p", _definition);
 					break;
 				}
-				ref<Class> c = ref<Class>(_definition);
+				ref<ClassDeclarator> c = ref<ClassDeclarator>(_definition);
 				if (c.name() != null) {
 //					printf(" c.name %p\n", c.name());
 //					c.name().print(4);
@@ -1437,7 +1437,7 @@ public class Scope {
 				break;
 				
 			case	CLASS:
-				ref<Class> c = ref<Class>(_definition);
+				ref<ClassDeclarator> c = ref<ClassDeclarator>(_definition);
 				if (c.scope != null) {
 					ref<ClasslikeScope> cs = ref<ClasslikeScope>(c.scope);
 					assert(cs.class <= ClasslikeScope);

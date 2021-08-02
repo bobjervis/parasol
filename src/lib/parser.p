@@ -20,7 +20,7 @@ import parasol:process;
 public class Parser {
 	private ref<SyntaxTree> _tree;
 	private ref<Scanner> _scanner;
-	private ref<Class> _enclosing;
+	private ref<ClassDeclarator> _enclosing;
 
 	public Parser(ref<SyntaxTree> tree, ref<Scanner> scanner) {
 		_tree = tree;
@@ -1065,7 +1065,7 @@ public class Parser {
 		ref<Node> e = parseEnumInstanceList();
 
 		t = _scanner.next();
-		ref<Class> body = _tree.newClass(Operator.ENUM, identifier, e, enumLoc);
+		ref<ClassDeclarator> body = _tree.newClassDeclarator(Operator.ENUM, identifier, e, enumLoc);
 		if (t == Token.RIGHT_CURLY)
 			return body;
 		else if (t != Token.SEMI_COLON) {
@@ -1075,7 +1075,7 @@ public class Parser {
 				body.statement(_tree.newNodeList(err));
 			}
 		}
-		ref<Class> oldEnclosing = pushEnclosing(body);
+		ref<ClassDeclarator> oldEnclosing = pushEnclosing(body);
 		parseBlock(body);
 		pushEnclosing(oldEnclosing);
 		return body;
@@ -1818,7 +1818,7 @@ public class Parser {
 	private ref<Node> parseClass(ClassContext context, ref<Identifier> name, Location location) {
 		ref<Node> extendsClause = null;
 		ref<Node> implementsClause = null;
-		ref<Class> classDef;
+		ref<ClassDeclarator> classDef;
 		ref<Template> templateDef = null;
 
 		Token t = _scanner.next();
@@ -1836,7 +1836,7 @@ public class Parser {
 				return extendsClause;
 			t = _scanner.next();
 		}
-		classDef = _tree.newClass(context == ClassContext.MONITOR ? Operator.MONITOR_CLASS : Operator.CLASS, name, extendsClause, location);
+		classDef = _tree.newClassDeclarator(context == ClassContext.MONITOR ? Operator.MONITOR_CLASS : Operator.CLASS, name, extendsClause, location);
 		if (context != ClassContext.INTERFACE && t == Token.IMPLEMENTS) {
 			do {
 				implementsClause = parseExpression(1);
@@ -1850,7 +1850,7 @@ public class Parser {
 			_scanner.pushBack(t);
 			return resync(MessageId.SYNTAX_ERROR);
 		}
-		ref<Class> oldEnclosing = pushEnclosing(classDef);
+		ref<ClassDeclarator> oldEnclosing = pushEnclosing(classDef);
 		if (context != ClassContext.INTERFACE)
 			parseBlock(classDef);
 		else
@@ -1891,8 +1891,8 @@ public class Parser {
 		return result;
 	}
 
-	private ref<Class> pushEnclosing(ref<Class> enclosing) {
-		ref<Class> c = _enclosing;
+	private ref<ClassDeclarator> pushEnclosing(ref<ClassDeclarator> enclosing) {
+		ref<ClassDeclarator> c = _enclosing;
 		_enclosing = enclosing;
 		return c;
 	}

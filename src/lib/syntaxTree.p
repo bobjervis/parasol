@@ -159,7 +159,7 @@ public enum Operator {
 	// Reference
 	VARIABLE,
 	ELLIPSIS_DATA,
-	// Class
+	// ClassDeclarator
 	CLASS,
 	MONITOR_CLASS,
 	INTERFACE,
@@ -271,8 +271,8 @@ public class SyntaxTree {
 		return _pool new Block(op, inSwitch, location);
 	}
 
-	public ref<Class> newClass(Operator op, ref<Identifier> name, ref<Node> extendsClause, Location location) {
-		return _pool new Class(op, name, extendsClause, location);
+	public ref<ClassDeclarator> newClassDeclarator(Operator op, ref<Identifier> name, ref<Node> extendsClause, Location location) {
+		return _pool new ClassDeclarator(op, name, extendsClause, location);
 	}
 
 	public ref<Template> newTemplate(ref<Identifier> name, Location location) {
@@ -940,7 +940,7 @@ private Test blockFallsThrough(ref<NodeList> nl) {
 		return t;
 }
 
-public class Class extends Block {
+public class ClassDeclarator extends Block {
 	/**
 	 * For 
 	 */
@@ -951,7 +951,7 @@ public class Class extends Block {
 	private ref<NodeList> _last;
 	private TypeFamily _effectiveFamily;		// Set by annotations (@Shape, @Ref, @Pointer)
 	
-	Class(Operator op, ref<Identifier> name, ref<Node> extendsClause, Location location) {
+	ClassDeclarator(Operator op, ref<Identifier> name, ref<Node> extendsClause, Location location) {
 		super(op, false, location);
 		_name = name;
 		_extends = extendsClause;
@@ -1034,26 +1034,26 @@ public class Class extends Block {
 		return true;
 	}
 
-	public ref<Class> clone(ref<SyntaxTree> tree) {
+	public ref<ClassDeclarator> clone(ref<SyntaxTree> tree) {
 		ref<Identifier> name = _name != null ? _name.clone(tree) : null;
 		ref<Node> extendsClause = _extends != null ? _extends.clone(tree) : null;
-		ref<Class> result = tree.newClass(op(), name, extendsClause, location());
+		ref<ClassDeclarator> result = tree.newClassDeclarator(op(), name, extendsClause, location());
 		if (statements() != null)
 			result.statement(statements().clone(tree));
 		result.scope = scope;
-		return ref<Class>(result.finishClone(this, tree.pool()));
+		return ref<ClassDeclarator>(result.finishClone(this, tree.pool()));
 	}
 
-	public ref<Class> cloneRaw(ref<SyntaxTree> tree) {
+	public ref<ClassDeclarator> cloneRaw(ref<SyntaxTree> tree) {
 		ref<Identifier> name = _name != null ? _name.cloneRaw(tree) : null;
 		ref<Node> extendsClause = _extends != null ? _extends.cloneRaw(tree) : null;
-		ref<Class> result = tree.newClass(op(), name, extendsClause, location());
+		ref<ClassDeclarator> result = tree.newClassDeclarator(op(), name, extendsClause, location());
 		if (statements() != null)
 			result.statement(statements().cloneRaw(tree));
 		return result;
 	}
 
-	public ref<Class> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
+	public ref<ClassDeclarator> fold(ref<SyntaxTree> tree, boolean voidContext, ref<CompileContext> compileContext) {
 		if (deferAnalysis())
 			return this;
 		if (op() == Operator.ENUM) {
@@ -2737,7 +2737,7 @@ public class Template extends Node {
 	private ref<NodeList> _last;
 
 	public boolean isMonitor;
-	public ref<Class> classDef;
+	public ref<ClassDeclarator> classDef;
 
 	Template(ref<Identifier> name, ref<SyntaxTree> tree, Location location) {
 		super(Operator.TEMPLATE, location);

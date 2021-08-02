@@ -18,7 +18,7 @@ import parasol:process;
 import parasol:runtime;
 import parasol:compiler.Arena;
 import parasol:compiler.BuiltInType;
-import parasol:compiler.Class;
+import parasol:compiler.ClassDeclarator;
 import parasol:compiler.CompileContext;
 import parasol:compiler.Doclet;
 import parasol:compiler.EnumInstanceType;
@@ -685,7 +685,7 @@ string qualifiedName(ref<Type> t) {
 	switch (definition.op()) {
 	case	CLASS:
 	case	MONITOR_CLASS:
-		s.append(ref<Class>(definition).name().identifier());
+		s.append(ref<ClassDeclarator>(definition).name().identifier());
 		break;
 
 	case	TEMPLATE:

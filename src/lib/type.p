@@ -16,51 +16,67 @@
 namespace parasol:compiler;
 
 public enum TypeFamily {
+	// BuiltInType - all of the following can appear as the family of a built-in
+	// type. Each of them is a singleton type.
+
 	// numeric types
 	
 	SIGNED_8,
-	SIGNED_16,
-	SIGNED_32,
-	SIGNED_64,
-	UNSIGNED_8,
-	UNSIGNED_16,
-	UNSIGNED_32,
+	SIGNED_16,				// class short
+	SIGNED_32,				// class int
+	SIGNED_64,				// class long
+	UNSIGNED_8,				// class byte
+	UNSIGNED_16,			// class char
+	UNSIGNED_32,			// class unsigned
 	UNSIGNED_64,
-	FLOAT_32,
-	FLOAT_64,
-	
-	BOOLEAN,
-	
+	FLOAT_32,				// class float
+	FLOAT_64,				// class double
+
+	// various formats of string
+
 	STRING,
 	STRING16,
 	SUBSTRING,
 	SUBSTRING16,
+
+	// Other kinds of runtime object.
+	
+	BOOLEAN,
 	VAR,
 	ADDRESS,
-	ERROR,
 	EXCEPTION,
-	CLASS_VARIABLE,
-	CLASS_DEFERRED,
-	NAMESPACE,
-	ARRAY_AGGREGATE,
-	OBJECT_AGGREGATE,
-	VOID,
-	BUILTIN_TYPES,
+	CLASS_VARIABLE,			// An object of type 'class'. It should be a synonym for ref<ClassType>
+
+	// pseudo-types - these things are not classes. There can be no instances of them.
+
+	NAMESPACE,				// A namespace reference has this type no object can have this type.
+	ARRAY_AGGREGATE,		// only occurs on an array aggregate during type analysis.
+	OBJECT_AGGREGATE,		// only occurs on an object aggregate during type analysis.
+	VOID,					// only occurs on a function return type during the initial phase of type analysis.
+	ERROR,					// marks a node that is in error.
+	CLASS_DEFERRED,			// only occurs within a template definition.
+
+	BUILTIN_TYPES,			// spacer to mark the extent of 'built-in' types. No Type object will have this family
 	
-	CLASS,
+	CLASS,					// Each class declaration creates a ClassType with this family.
 	INTERFACE,
 	BOUND_INTERFACE,
 	ENUM,
 	FLAGS,
-	TYPEDEF,
 	FUNCTION,
 	SHAPE,
 	REF,
 	POINTER,
-	TEMPLATE,
 	TEMPLATE_INSTANCE,
-	MAX_TYPES
-//	MIN_TYPE = SIGNED_8
+
+	// pseudo-types 
+
+	TEMPLATE,				// A template definition. No object will have this Type.
+	TYPEDEF,				// This is a marker for a compile-time class expression  and
+							// contains a reference to the underlying class type (or to CLASS_DEFERRED
+							// within a template definition.
+
+	MAX_TYPES				// marker for the end of types. No Type object will have this family.
 }
 
 public class BuiltInType extends Type {
@@ -69,8 +85,6 @@ public class BuiltInType extends Type {
 	BuiltInType(TypeFamily family, ref<Type> classType) {
 		super(family);
 		_classType = classType;
-//		print();
-//		printf("\n");
 	}
 
 	public void print() {
@@ -384,7 +398,7 @@ widens[TypeFamily.CLASS_VARIABLE][TypeFamily.CLASS_VARIABLE] = true;
 widens[TypeFamily.CLASS_DEFERRED][TypeFamily.CLASS_DEFERRED] = true;
 
 public class InterfaceType extends ClassType {
-	InterfaceType(ref<Class> definition, boolean isFinal, ref<Scope> scope) {
+	InterfaceType(ref<ClassDeclarator> definition, boolean isFinal, ref<Scope> scope) {
 		super(TypeFamily.INTERFACE, definition, isFinal, scope);
 	}
 	
@@ -425,11 +439,11 @@ public class ClassType extends Type {
 	protected ref<Scope> _scope;
 	protected ref<Type> _extends;
 	protected ref<InterfaceType>[] _implements;
-	protected ref<Class> _definition;
+	protected ref<ClassDeclarator> _definition;
 	protected boolean _isMonitor;
 	protected boolean _final;
 
-	protected ClassType(TypeFamily family, ref<Class> definition, boolean isFinal, ref<Scope> scope) {
+	protected ClassType(TypeFamily family, ref<ClassDeclarator> definition, boolean isFinal, ref<Scope> scope) {
 		super(family);
 		_definition = definition;
 		_scope = scope;
@@ -437,7 +451,7 @@ public class ClassType extends Type {
 		_final = isFinal;
 	}
 
-	ClassType(ref<Class> definition, boolean isFinal, ref<Scope> scope) {
+	ClassType(ref<ClassDeclarator> definition, boolean isFinal, ref<Scope> scope) {
 		super(TypeFamily.CLASS);
 		_definition = definition;
 		_scope = scope;
@@ -635,7 +649,7 @@ public class ClassType extends Type {
 		return _scope.hasVtable(compileContext);
 	}
 
-	public ref<Class> definition() {
+	public ref<ClassDeclarator> definition() {
 		return _definition;
 	}
 
@@ -803,7 +817,7 @@ public class EnumType extends ClassType {
 	public int instanceCount;
 	private ref<Symbol> _symbol;
 
-	EnumType(ref<Symbol> symbol, ref<Class> definition, ref<EnumScope> scope) {
+	EnumType(ref<Symbol> symbol, ref<ClassDeclarator> definition, ref<EnumScope> scope) {
 		super(TypeFamily.CLASS, definition, false, scope);
 		_symbol = symbol;
 	}

@@ -317,7 +317,7 @@ public class Identifier extends Node {
 		return _symbol;
 	}
 
-	ref<ClassScope> bindClassName(ref<Scope> enclosing, ref<Class> body, ref<CompileContext> compileContext) {
+	ref<ClassScope> bindClassName(ref<Scope> enclosing, ref<ClassDeclarator> body, ref<CompileContext> compileContext) {
 		_definition = true;
 		_symbol = enclosing.define(compileContext.visibility, StorageClass.STATIC, compileContext.annotations, this, body, body, compileContext.pool());
 		if (_symbol != null) {
@@ -343,7 +343,7 @@ public class Identifier extends Node {
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
 	}
 
-	boolean bindEnumName(ref<Scope> enclosing, ref<Class> body, ref<CompileContext> compileContext) {
+	boolean bindEnumName(ref<Scope> enclosing, ref<ClassDeclarator> body, ref<CompileContext> compileContext) {
 		_definition = true;
 		_symbol = enclosing.define(compileContext.visibility, StorageClass.STATIC, compileContext.annotations, this, body, body, compileContext.pool());
 		if (_symbol != null) {

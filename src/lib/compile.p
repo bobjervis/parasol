@@ -197,7 +197,7 @@ public class CompileContext {
 			if (s.definition() != null) {
 				label = string(s.definition().op());
 				if (s.definition().op() == Operator.CLASS) {
-					ref<Class> c = ref<Class>(s.definition());
+					ref<ClassDeclarator> c = ref<ClassDeclarator>(s.definition());
 					if (c.name() != null) {
 						label.printf(" %s", c.name().identifier().asString());
 					}
@@ -515,7 +515,7 @@ public class CompileContext {
 			return TraverseAction.SKIP_CHILDREN;
 	
 		case	ENUM:
-			c = ref<Class>(n);
+			c = ref<ClassDeclarator>(n);
 			id = c.className();
 			ref<EnumScope> enumScope = createEnumScope(c, id);
 			c.scope = enumScope;
@@ -534,7 +534,7 @@ public class CompileContext {
 
 		case	CLASS:
 		case	MONITOR_CLASS:
-			ref<Class> c = ref<Class>(n);
+			ref<ClassDeclarator> c = ref<ClassDeclarator>(n);
 			ref<ClassScope> classScope = createClassScope(n, null);
 			c.scope = classScope;
 			classScope.classType = _pool.newClassType(c, isFinal, classScope);
@@ -548,7 +548,7 @@ public class CompileContext {
 				boolean isMonitor = t.classDef.op() == Operator.MONITOR_CLASS;
 				id.bindTemplateOverload(visibility, isStatic, isFinal, annotations, _current, t, isMonitor, this);
 			} else {
-				ref<Class> c = ref<Class>(b.right());
+				ref<ClassDeclarator> c = ref<ClassDeclarator>(b.right());
 				ref<ClassScope> classScope = createClassScope(c, id);
 				c.scope = classScope;
 				classScope.classType = _pool.newClassType(c, isFinal, classScope);
@@ -560,7 +560,7 @@ public class CompileContext {
 			b = ref<Binary>(n);
 			id = ref<Identifier>(b.left());
 			assert(b.right().op() == Operator.CLASS);
-			c = ref<Class>(b.right());
+			c = ref<ClassDeclarator>(b.right());
 			classScope = createClassScope(c, id);
 			c.scope = classScope;
 			classScope.classType = _pool.newInterfaceType(c, isFinal, classScope);
@@ -1410,7 +1410,7 @@ public class MemoryPool extends memory.NoReleasePool {
 		return super new Type(family);
 	}
 
-	public ref<ClassType> newClassType(ref<Class> definition, boolean isFinal, ref<Scope> scope) {
+	public ref<ClassType> newClassType(ref<ClassDeclarator> definition, boolean isFinal, ref<Scope> scope) {
 		return super new ClassType(definition, isFinal, scope);
 	}
 
@@ -1418,11 +1418,11 @@ public class MemoryPool extends memory.NoReleasePool {
 		return super new ClassType(effectiveFamily, base, scope);
 	}
 
-	public ref<InterfaceType> newInterfaceType(ref<Class> definition, boolean isFinal, ref<Scope> scope) {
+	public ref<InterfaceType> newInterfaceType(ref<ClassDeclarator> definition, boolean isFinal, ref<Scope> scope) {
 		return super new InterfaceType(definition, isFinal, scope);
 	}
 
-	public ref<EnumType> newEnumType(ref<Symbol> symbol, ref<Class> definition, ref<EnumScope> scope) {
+	public ref<EnumType> newEnumType(ref<Symbol> symbol, ref<ClassDeclarator> definition, ref<EnumScope> scope) {
 		return super new EnumType(symbol, definition, scope);
 	}
 
