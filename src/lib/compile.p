@@ -1430,8 +1430,8 @@ public class MemoryPool extends memory.NoReleasePool {
 		return super new EnumInstanceType(scope);
 	}
 
-	public ref<FlagsType> newFlagsType(ref<Block> definition, ref<Scope> scope, ref<Type> wrappedType) {
-		return super new FlagsType(definition, scope, wrappedType);
+	public ref<FlagsType> newFlagsType(ref<Block> definition, ref<Scope> scope, ref<FlagsInstanceType> flagsInstanceType) {
+		return super new FlagsType(definition, scope, flagsInstanceType);
 	}
 
 	public ref<FlagsInstanceType> newFlagsInstanceType(ref<Symbol> symbol, ref<Scope> scope, ref<ClassType> instanceClass) {

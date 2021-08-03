@@ -59,15 +59,18 @@ public enum TypeFamily {
 	BUILTIN_TYPES,			// spacer to mark the extent of 'built-in' types. No Type object will have this family
 	
 	CLASS,					// Each class declaration creates a ClassType with this family.
-	INTERFACE,
-	BOUND_INTERFACE,
-	ENUM,
-	FLAGS,
-	FUNCTION,
-	SHAPE,
-	REF,
-	POINTER,
-	TEMPLATE_INSTANCE,
+	INTERFACE,				// Each interface declaration creates an InterfaceType with this family.
+	ENUM,					// The type of an enum instance. The enum class (if any) is actually given CLASS family.
+	FLAGS,					// The type of a flags instance. The flags type is given TYPEDEF family.
+	FUNCTION,				// Any function.
+
+	// class synonyms - each of these sub-families are understood to be some kind of class.
+
+	SHAPE,					// Any instance of a vector<E, K> or map<E, K>. This will appear as the family of a
+							// template instance class of a template delcared with @Shape annotation.
+	REF,					// Any instance of ref<T>. This will appear as the family of such an instance.
+	POINTER,				// Any instance of pointer<T>. This will appear as the family of such an instance.
+	TEMPLATE_INSTANCE,		// Any instance class of an ordinary template.
 
 	// pseudo-types 
 
@@ -998,13 +1001,21 @@ public class EnumInstanceType extends Type {
 	}
 	
 }
-
+/**
+ * The type of a Flags declaration.
+ *
+ * This uses a trick to make the type analysis a little easier. Where enums use
+ * a simple TypedefType to wrap the instance type, because the EnumType has to be
+ * the description of the members and methods of the enum (if any), flags don't have
+ * that capability, so this small extension of the TypedefType can serve as the
+ * type of the flags declaration itself.
+ */
 class FlagsType extends TypedefType {
 	private ref<Block> _definition;
 	private ref<Scope> _scope;
 
-	FlagsType(ref<Block> definition, ref<Scope> scope, ref<Type> wrappedType) {
-		super(TypeFamily.TYPEDEF, wrappedType);
+	FlagsType(ref<Block> definition, ref<Scope> scope, ref<Type> flagsInstanceType) {
+		super(TypeFamily.TYPEDEF, flagsInstanceType);
 		_definition = definition;
 		_scope = scope;
 	}

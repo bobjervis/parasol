@@ -362,8 +362,8 @@ public class Identifier extends Node {
 		if (_symbol != null) {
 			_symbol._doclet = enclosing.file().tree().getDoclet(this);
 			ref<ClassType> c = compileContext.pool().newClassType(TypeFamily.CLASS, ref<Type>(null), flagsScope);
-			ref<Type> t = compileContext.pool().newFlagsInstanceType(_symbol, flagsScope, c);
-			flagsScope.flagsType = compileContext.pool().newFlagsType(body, flagsScope, t);
+			ref<FlagsInstanceType> fit = compileContext.pool().newFlagsInstanceType(_symbol, flagsScope, c);
+			flagsScope.flagsType = compileContext.pool().newFlagsType(body, flagsScope, fit);
 			_symbol.bindType(flagsScope.flagsType, compileContext);
 			_symbol._doclet = enclosing.file().tree().getDoclet(this);
 		} else
@@ -433,7 +433,6 @@ public class Identifier extends Node {
 				return _symbol;
 			}
 		}
-		printf(" -> null\n");
 		type = compileContext.errorType();
 		add(MessageId.UNDEFINED, compileContext.pool(), _value);
 		return null;
