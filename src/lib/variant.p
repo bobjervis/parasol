@@ -15,6 +15,8 @@
  */
 namespace parasol:types;
 
+import parasol:compiler.Type;
+import parasol:exception.IllegalOperationException;
 import native:C;
 import native:linux;
 /**
@@ -49,7 +51,7 @@ public var undefined;
  */
 public class var {
 //	private class _actualType;
-	private address _actualType;
+	private ref<Type> _actualType;
 	private long _value;
 	
 	public var() {
@@ -65,8 +67,8 @@ public class var {
 //			string16sCons++;
 			new (&_value) string16(string16(other));
 		} else
-			_value = long(other);
-		_actualType = *ref<address>(&other);
+			_value = pointer<long>(&other)[1];
+		_actualType = *ref<ref<Type>>(&other);
 	}
 	
 	public var(string other) {
@@ -127,12 +129,12 @@ public class var {
 	 */
 	private var(address actualType, long value) {
 		_value = value;
-		_actualType = actualType;
+		_actualType = ref<Type>(actualType);
 	}
 
 	private var(address actualType, address opAdr, int opLen) {
 		C.memcpy(&_value, opAdr, opLen);
-		_actualType = actualType;
+		_actualType = ref<Type>(actualType);
 	}
 
 	private void stringEllip(long value) {
@@ -169,7 +171,7 @@ public class var {
 	}
 
 	var and(var other) {
-		long x = _value & long(other);
+		long x = long(*this) & long(other);
 		return x;
 	}
 
@@ -206,25 +208,134 @@ public class var {
 	}
 	
 	var exclusiveOr(var other) {
-		long x = _value ^ long(other);
+		long x = long(*this) ^ long(other);
 		return x;
 	}
 
 	string stringValue() {
-		return *ref<string>(&_value);
+		if (_actualType != null) {
+			switch (_actualType.family()) {
+			case STRING:
+				return *ref<string>(&_value);
+
+			case STRING16:
+				return *ref<string16>(&_value);
+
+			case SIGNED_64:
+				return string(_value);
+
+			case FLOAT_64:
+				return string(*ref<double>(&_value));
+
+			case BOOLEAN:
+				return string(*ref<boolean>(&_value));
+
+			case REF:
+			case POINTER:
+			case ADDRESS:
+				string s;
+				s.printf("%p", _value);
+				return s;
+			}
+		}
+		throw IllegalOperationException("Not convertable to string16");
 	}
 	
 	string16 string16Value() {
-		return *ref<string16>(&_value);
+		if (_actualType != null) {
+			switch (_actualType.family()) {
+			case STRING:
+				return *ref<string>(&_value);
+
+			case STRING16:
+				return *ref<string16>(&_value);
+
+			case SIGNED_64:
+				return string16(_value);
+
+			case FLOAT_64:
+				return string16(*ref<double>(&_value));
+
+			case BOOLEAN:
+				return string16(*ref<boolean>(&_value));
+
+			case REF:
+			case POINTER:
+			case ADDRESS:
+				string s;
+				s.printf("%p", _value);
+				return s;
+			}
+		}
+		throw IllegalOperationException("Not convertable to string16");
 	}
 	
 	long integerValue() {
-		// TODO: Validate type and convert when necessary
-		return _value;
+		if (_actualType != null) {
+			switch (_actualType.family()) {
+			case STRING:
+				boolean success;
+				long value;
+
+				(value, success) = long.parse(*ref<string>(&_value));
+				if (success)
+					return value;
+				throw IllegalOperationException("Not an integer");
+
+			case STRING16:
+				(value, success) = long.parse(*ref<string16>(&_value));
+				if (success)
+					return value;
+				throw IllegalOperationException("Not an integer");
+
+			case SIGNED_64:
+			case REF:
+			case POINTER:
+			case ADDRESS:
+				return _value;
+
+			case FLOAT_64:
+				return long(*ref<double>(&_value));
+
+			case BOOLEAN:
+				return long(*ref<boolean>(&_value));
+			}
+		}
+		throw IllegalOperationException("Not convertable to long");
 	}
 
 	double floatValue() {
-		return *ref<double>(&_value);
+		if (_actualType != null) {
+			switch (_actualType.family()) {
+			case STRING:
+				boolean success;
+				double value;
+
+				(value, success) = double.parse(*ref<string>(&_value));
+				if (success)
+					return value;
+				throw IllegalOperationException("Not a number");
+
+			case STRING16:
+				(value, success) = double.parse(*ref<string16>(&_value));
+				if (success)
+					return value;
+				throw IllegalOperationException("Not a number");
+
+			case SIGNED_64:
+			case REF:
+			case POINTER:
+			case ADDRESS:
+				return _value;
+
+			case FLOAT_64:
+				return *ref<double>(&_value);
+
+			case BOOLEAN:
+				return double(*ref<boolean>(&_value));
+			}
+		}
+		throw IllegalOperationException("Not convertable to double");
 	}
 	
 	void classValue(address out, int len) {

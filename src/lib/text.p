@@ -1878,6 +1878,51 @@ public class string16 extends String<char> {
 		} else
 			throw IllegalArgumentException("buffer");
 	}
+	/**
+	 * A constructor converting from a signed integer
+	 *
+	 * This constructs a string consisting of decimal digits possibly
+	 * preceded by a locale-specific negative sign character.
+	 *
+	 * @param value The integral value to convert.
+	 */	
+	public string16(long value) {
+		string s(value);
+		String16Writer w(this);
+		UTF16Encoder u16(&w);
+
+		u16.encode(s);
+	}
+	/**
+	 * A constructor converting from a boolean
+	 *
+	 * This constructs a string consisting of either {@code true} or
+	 * {@code false}.
+	 *
+	 * @value The boolean value to convert.
+	 */	
+	public string16(boolean value) {
+		if (value)
+			append("true");
+		else
+			append("false");
+	}
+	/**
+	 * A constructor converting from a floatng-point double
+	 *
+	 * This constructs a string using the %g format from {@link parasol:stream.Writer.printf printf}..
+	 *
+	 * @value The double value to convert.
+	 */	
+	public string16(double value) {
+		string s;
+
+		s.printf("%g", value);
+		String16Writer w(this);
+		UTF16Encoder u16(&w);
+
+		u16.encode(s);
+	}
 
 	~string16() {
 		if (_contents != null)
