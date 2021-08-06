@@ -875,7 +875,7 @@ abstract pointer<byte> bson_iter_key(ref<bson_iter_t> iter);
 @Linux("libmongoc-1.0.so.0", "bson_iter_type")
 abstract BsonType bson_iter_type(ref<bson_iter_t> iter);
 @Linux("libmongoc-1.0.so.0", "bson_iter_double")
-abstract long bson_iter_double(ref<bson_iter_t> iter);
+abstract double bson_iter_double(ref<bson_iter_t> iter);
 @Linux("libmongoc-1.0.so.0", "bson_iter_bool")
 abstract boolean bson_iter_bool(ref<bson_iter_t> iter);
 @Linux("libmongoc-1.0.so.0", "bson_iter_int32")
