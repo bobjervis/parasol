@@ -464,7 +464,7 @@ public class Bson {
 	 * @return true if the operation succeeded, false otherwise.
 	 */
 	public boolean appendDateTime(string key, time.Time value) {
-		return bson_append_date_time(this, key.c_str(), key.length(), value.value());
+		return bson_append_date_time(this, key.c_str(), key.length(), value.milliseconds());
 	}
 	/**
 	 * Convert the Bson document to an Object.
