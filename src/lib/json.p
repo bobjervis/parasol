@@ -153,7 +153,9 @@ private string prettyPrint(var object, int indent) {
 }
 
 private string pad(int n) {
-	string s = "\n";
+	string s;
+	if (n >= 0)
+		s = "\n";
 	for (int i = 0; i < n; i++)
 		s += " ";
 	return s;
