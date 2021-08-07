@@ -878,6 +878,11 @@ public class map<class V, class K> {
 	public map() {
 	}
 	
+	public map(map<V, K> other) {
+		for (iterator i = other.begin(); i.hasNext(); i.next())
+			set(i.key(), i.get());
+	}
+
 	~map() {
 		clear();
 	}

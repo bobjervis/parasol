@@ -235,7 +235,7 @@ int compileCommand() {
 	}
 	delete output;
 	time.Time end = time.Time.now();
-	printf("Done in %d milliseconds\n", end.value() - start.value());
+	printf("Done in %d milliseconds\n", end.milliseconds() - start.milliseconds());
 	if (anyFailure)
 		return 1;
 	else

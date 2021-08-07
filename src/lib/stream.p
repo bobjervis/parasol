@@ -1579,7 +1579,7 @@ public class Writer {
 									break;
 
 								case	'Q':
-									buffer.printf("%d", t.value());
+									buffer.printf("%d", t.milliseconds());
 									break;
 
 								case	'r':
@@ -1588,7 +1588,7 @@ public class Writer {
 									break;
 
 								case	's':
-									buffer.printf("%d", t.value() / MILLIS_PER_SECOND);
+									buffer.printf("%d", t.milliseconds() / MILLIS_PER_SECOND);
 									break;
 
 								case	'S':

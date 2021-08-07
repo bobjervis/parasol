@@ -107,7 +107,7 @@ public class Time {
 	/**
 	 * A constructor from a long integer.
 	 *
-	 * @param The time in the UNIX era, in milliseconds.
+	 * @param value The time in the UNIX era, in milliseconds.
 	 */
 	public Time(long value) {
 		_value = value;
@@ -197,7 +197,7 @@ public class Time {
 	 *
 	 * @return A long integer value that corresponds to the UNIX era time in milliseconds.
 	 */
-	public long value() {
+	public long milliseconds() {
 		return _value;
 	}
 	/**

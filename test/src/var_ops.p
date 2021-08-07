@@ -221,7 +221,7 @@ void conversions() {
 
 	Time tx = Time(vt);
 
-	assert(tx.value() == 17);
+	assert(tx.milliseconds() == 17);
 
 	string str = "abc";
 	substring ss = str;

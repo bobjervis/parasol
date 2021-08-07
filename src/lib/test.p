@@ -105,7 +105,7 @@ public int launch(string[] args) {
 		}
 	}
 	time.Time end = time.Time.now();
-	long millis = end.value() - start.value();
+	long millis = end.milliseconds() - start.milliseconds();
 	long seconds = millis / 1000;
 	long minutes = seconds / 60;
 	millis %= 1000;
