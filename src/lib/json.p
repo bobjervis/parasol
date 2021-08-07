@@ -38,6 +38,11 @@ import parasol:log;
 private ref<log.Logger> logger = log.getLogger("parasol.json");
 /**
  * Parse a JSON string into Parasol objects.
+ *
+ * Note: Parasol's implementation of JSON distinguishes numbers that can be represented as long
+ * from other numbers that must be represented approximately by a double. In 
+ * parsing, values are stored as long if they can be successfully parsed as a long, otherwise
+ * they are stpred as a double.
  */
 public var, boolean parse(string text) {
 	Parser parser(text);
@@ -52,6 +57,9 @@ public var, boolean parse(string text) {
  * into the text to produce a readable sring with white space indentation for each object and array and
  * newlines separating fields.
  *
+ * See {@link stringify} for situations where the contents of some {@link var} objects can produce non-
+ * conforming JSON output text.
+ *
  * @param object The JSON object to be converted.
  *
  * @return The JSON text.
@@ -60,9 +68,13 @@ public string prettyPrint(var object) {
 	return prettyPrint(object, 0);
 }
 /**
- * Convert an Object containing JSON -compatible data to a JSON formatted string. No white space is inserted
+ * Convert an Object containing JSON-compatible data to a JSON formatted string. No white space is inserted
  * into the text to minimize the size of the text payload.
  *
+ * Note that the value {@link undefined} will be stringified to that string, even though it is not part of the
+ * json standard. Similarly, small class objects, such as {@link time.Time}, are reported as the string 'object (schema unknown)'. 
+ * JSON text that was parsed using {@link parse} will produce correct JSON output from this function.
+ * 
  * @param object The JSON object to be converted.
  *
  * @return The JSON text.
@@ -72,7 +84,8 @@ public string stringify(var object) {
 }
 
 private string prettyPrint(var object, int indent) {
-	assert(object != undefined);
+	if (object == undefined)
+		return "undefined";
 	if (object.class == long) {
 		string s;
 		
@@ -322,7 +335,7 @@ class Parser {
 		
 		case	NUMBER:
 			return _scanner.numberValue();
-		
+
 		case	STRING:
 			return _scanner.stringValue();
 		
@@ -671,8 +684,15 @@ class Scanner {
 	/*
 	 * Only valid if the last returned token was NUMBER
 	 */
-	public double numberValue() {
-		return double.parse(_value);
+	public var numberValue() {
+		boolean success;
+		long v;
+
+		(v, success) = long.parse(_value);
+		if (success)
+			return v;
+		else
+			return double.parse(_value);
 	}
 	
 	public int location() { 

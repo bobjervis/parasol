@@ -41,12 +41,12 @@ assert(!success);
 printf("Phase II: numbers\n");
 (value, success) = json.parse("0");
 assert(success);
-assert(value.class == double);
+assert(value.class == long);
 assert(double(value) == 0);
 
 (value, success) = json.parse("-0");
 assert(success);
-assert(value.class == double);
+assert(value.class == long);
 assert(double(value) == 0);
 
 (value, success) = json.parse("01");
@@ -54,8 +54,8 @@ assert(!success);
 
 (value, success) = json.parse("13572068000");
 assert(success);
-assert(value.class == double);
-assert(double(value) == 13572068000);
+assert(value.class == long);
+assert(long(value) == 13572068000);
 
 (value, success) = json.parse("0.456");
 assert(success);
@@ -148,8 +148,8 @@ assert(double(value) == 1000);
 
 (value, success) = json.parse("-13572068000");
 assert(success);
-assert(value.class == double);
-assert(double(value) == -13572068000);
+assert(value.class == long);
+assert(long(value) == -13572068000);
 
 (value, success) = json.parse("-0.456");
 assert(success);
@@ -315,16 +315,16 @@ json.dispose(value);
 assert(success);
 assert(value.class == ref<Array>);
 assert(ref<Array>(value).length() == 5);
-assert(ref<Array>(value).get(0).class == double);
-assert(double(ref<Array>(value).get(0)) == 1);
-assert(ref<Array>(value).get(1).class == double);
-assert(double(ref<Array>(value).get(1)) == 2);
-assert(ref<Array>(value).get(2).class == double);
-assert(double(ref<Array>(value).get(2)) == 3);
-assert(ref<Array>(value).get(3).class == double);
-assert(double(ref<Array>(value).get(3)) == 4);
-assert(ref<Array>(value).get(4).class == double);
-assert(double(ref<Array>(value).get(4)) == 5);
+assert(ref<Array>(value).get(0).class == long);
+assert(long(ref<Array>(value).get(0)) == 1);
+assert(ref<Array>(value).get(1).class == long);
+assert(long(ref<Array>(value).get(1)) == 2);
+assert(ref<Array>(value).get(2).class == long);
+assert(long(ref<Array>(value).get(2)) == 3);
+assert(ref<Array>(value).get(3).class == long);
+assert(long(ref<Array>(value).get(3)) == 4);
+assert(ref<Array>(value).get(4).class == long);
+assert(long(ref<Array>(value).get(4)) == 5);
 json.dispose(value);
 
 (value, success) = json.parse("[ 1, 2, 3, 4, 5 ");
@@ -373,10 +373,10 @@ ref<Object> b = ref<Object>(ref<Object>(value).get("b"));
 assert(b.size() == 1);
 assert(b.get("c").class == ref<Array>);
 assert(ref<Array>(b.get("c")).length() == 3);
-assert(ref<Array>(b.get("c")).get(0).class == double);
-assert(double(ref<Array>(b.get("c")).get(0)) == 2);
-assert(ref<Array>(b.get("c")).get(1).class == double);
-assert(double(ref<Array>(b.get("c")).get(1)) == 3);
+assert(ref<Array>(b.get("c")).get(0).class == long);
+assert(long(ref<Array>(b.get("c")).get(0)) == 2);
+assert(ref<Array>(b.get("c")).get(1).class == long);
+assert(long(ref<Array>(b.get("c")).get(1)) == 3);
 assert(ref<Array>(b.get("c")).get(2).class == string);
 assert(string(ref<Array>(b.get("c")).get(2)) == "s");
 json.dispose(value);
