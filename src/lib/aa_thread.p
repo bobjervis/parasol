@@ -737,6 +737,7 @@ private monitor class ThreadPoolData<class T> {
 	ref<WorkItem<T>> _first;
 	ref<WorkItem<T>> _last;
 	boolean _shutdownRequested;
+	int _waitingOnIdle;
 }
 /**
  * A pool of threads available to share work.
@@ -755,6 +756,7 @@ private monitor class ThreadPoolData<class T> {
  */
 public class ThreadPool<class T> extends ThreadPoolData<T> {
 	ref<Thread>[] _threads;
+	Monitor _idleSignal;
 	int _idle;
 	/**
 	 * Construct a pool of N threads.
@@ -785,10 +787,24 @@ public class ThreadPool<class T> extends ThreadPoolData<T> {
 			_shutdownRequested = true;
 			notifyAll();
 		}
-//		for (i in _threads)
-		for (int i = 0; i < _threads.length(); i++)
+		for (i in _threads)
 			_threads[i].join();
-		_threads.clear();
+		_threads.deleteAll();
+	}
+	/**
+	 * Wait for all running threads and pending work items to finish.
+	 *
+	 * Note: if other threads are adding work to the pool, this method may never return.
+	 * Also, if other threads could be submitting work, the pool may not be idle by the time 
+	 * this thread returns.
+	 */
+	public void waitForIdle() {
+		lock (*this) {
+			if (_threads.length() == _idle)
+				return;
+			_waitingOnIdle++;
+		}
+		_idleSignal.wait();
 	}
 	/**
 	 * Execute some work and create a {@link Future} to track completion
@@ -922,6 +938,15 @@ public class ThreadPool<class T> extends ThreadPoolData<T> {
 			if (_shutdownRequested)
 				return false;
 			_idle++;
+			// If the pool is idle,
+			if (_threads.length() == _idle) {
+				if (_first == null) {
+					while (_waitingOnIdle > 0) {
+						_idleSignal.notify();
+						_waitingOnIdle--;
+					}
+				}
+			}
 			wait();
 			_idle--;
 			if (_shutdownRequested)		// Note: _first will be null

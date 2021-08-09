@@ -43,7 +43,30 @@ import native:linux;
 import parasol:net;
 
 private ref<log.Logger> logger = log.getLogger("parasol.http.server");
+/*
+private monitor class HttpServerVolatileData {
+	protected boolean _publicSocketStopped;
+	protected boolean _secureSocketStopped;
 
+	void stopListening() {
+		_publicSocketStopped = true;
+		_secureSocketStopped = true;
+	}
+
+	void startListening() {
+		_publicSocketStopped = false;
+		_secureSocketStopped = false;
+	}
+
+	boolean publicSocketStopped() {
+		return _publicSocketStopped;
+	}
+
+	boolean secureSocketStopped() {
+		return _secureSocketStopped;
+	}
+}
+ */
 /**
  * This class implements an HTTP server. It implements HTTP version 1.1 for an Origin Server only. Hooks are defined to allow for
  * future expansion.
@@ -82,8 +105,12 @@ private ref<log.Logger> logger = log.getLogger("parasol.http.server");
  * "/" service if no other path does match.
  *
  * @threading
- * These calls are not thread safe, so calling any of these methods on a server that has been started will
+ * Most calls are not thread safe, so calling any of these methods on a server that has been started will
  * produce unpredictable results.
+ *
+ * The exceptios are {@link stop} and {@link wait} that can be called while the server is running. Note that
+ * calling {@link start} on a different thread from {@link stop} or {@link wait} could result in unpredictable
+ * behavior. 
  */
 public class HttpServer {
 	/**
@@ -152,6 +179,8 @@ public class HttpServer {
 	/**
 	 * Enables requests on the http protocol.
 	 *
+	 * This takes effect the next time the server is started.
+	 *
 	 * @return the prior http status, true if it was enabled, false if not.
 	 */
 	public boolean enableHttp() {
@@ -162,6 +191,8 @@ public class HttpServer {
 	/**
 	 * Disables requests on the http protocol.
 	 *
+	 * This takes effect the next time the server is started.
+	 *
 	 * @return the prior http status, true if it was enabled, false if not.
 	 */
 	public boolean disableHttp() {
@@ -171,6 +202,8 @@ public class HttpServer {
 	}
 	/**
 	 * Sets the enabled status for requests on the http protocol.
+	 *
+	 * This takes effect the next time the server is started.
 	 *
 	 * @param newState true to enable http, false to disable.
 	 *
@@ -184,6 +217,8 @@ public class HttpServer {
 	/**
 	 * Enables requests on the https protocol.
 	 *
+	 * This takes effect the next time the server is started.
+	 *
 	 * @return the prior https status, true if it was enabled, false if not.
 	 */
 	public boolean enableHttps() {
@@ -194,6 +229,8 @@ public class HttpServer {
 	/**
 	 * Disables requests on the https protocol.
 	 *
+	 * This takes effect the next time the server is started.
+	 *
 	 * @return the prior https status, true if it was enabled, false if not.
 	 */
 	public boolean disableHttps() {
@@ -203,6 +240,8 @@ public class HttpServer {
 	}
 	/**
 	 * Sets the enabled status for requests on the https protocol.
+	 *
+	 * This takes effect the next time the server is started.
 	 *
 	 * @param newState true to enable https, false to disable.
 	 *
@@ -232,6 +271,8 @@ public class HttpServer {
 	/**
 	 * Set the value of the http protocol port.
 	 *
+	 * This takes effect the next time the server is started.
+	 *
 	 * @param port The port value to use when enabling the http service.
 	 */
 	public void setHttpPort(char port) {
@@ -239,6 +280,8 @@ public class HttpServer {
 	}
 	/**
 	 * Set the value of the https protocol port.
+	 *
+	 * This takes effect the next time the server is started.
 	 *
 	 * @param port The port value to use when enabling the https service.
 	 */
@@ -416,7 +459,7 @@ public class HttpServer {
 	private static void startHttpEntry(address param) {
 		ref<HttpServer> server = ref<HttpServer>(param);
 //		printf("Starting http on port %d\n", server._httpPort);
-			server.acceptLoop(server._publicSocket);
+		server.acceptLoop(server._publicSocket);
 	}
 
 	private static void startHttpsEntry(address param) {
@@ -425,16 +468,44 @@ public class HttpServer {
 		server.acceptLoop(server._secureSocket);
 	}
 	/**
+	 * Stop listening on any open ports.
+	 *
+	 * Any running threads will soon terminate.
+	 *
+	 * Active requests will complete.
+	 */
+	public void stop() {
+		if (_publicSocket != null)
+			_publicSocket.close();
+		if (_secureSocket != null)
+			_secureSocket.close();
+	}
+	/**
 	 * Wait for the server to shut down.
 	 *
 	 * The calling thread will block until all enabled
 	 * protocol threads have terminated.
 	 */
 	public void wait() {
-		if (_httpThread != null)
+		if (_httpThread != null) {
 			_httpThread.join();
-		if (_httpsThread != null)
+			delete _httpThread;
+			_httpThread = null;
+		}
+		if (_publicSocket != null) {
+			delete _publicSocket;
+			_publicSocket = null;
+		}
+		if (_httpsThread != null) {
 			_httpsThread.join();
+			delete _httpsThread;
+			_httpsThread = null;
+		}
+		if (_secureSocket != null) {
+			delete _secureSocket;
+			_secureSocket = null;
+		}
+		_requestThreads.waitForIdle();
 	}
 
 	void acceptLoop(ref<Socket> socket) {

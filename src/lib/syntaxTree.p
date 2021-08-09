@@ -2539,12 +2539,15 @@ public class Loop extends Node {
 		return false;
 	}
 	
-	void assignTypes(ref<CompileContext> compileContext) {
-//		compileContext.assignTypes(_declarator);
+	void assignDeclarationTypes(ref<CompileContext> compileContext) {
 		compileContext.assignTypes(_aggregate);
-		type = compileContext.arena().builtInType(TypeFamily.VOID);
+		assignDeclaratorType(compileContext);
+	}
+
+	private void assignDeclaratorType(ref<CompileContext> compileContext) {
+		compileContext.assignTypes(_aggregate);
 		if (_aggregate.type.deferAnalysis())
-			type = _declarator.type = _aggregate.type;
+			_declarator.type = _aggregate.type;
 		else if (_aggregate.type.isString())
 			_declarator.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
 		else {
@@ -2552,8 +2555,17 @@ public class Loop extends Node {
 			_declarator.type = _aggregate.type.indexType();
 			if (_declarator.type == null) {
 				_aggregate.add(MessageId.NOT_A_SHAPE, compileContext.pool());
-				type = _declarator.type = compileContext.errorType();
+				_declarator.type = compileContext.errorType();
 			}
+		}
+	}
+	
+	void assignTypes(ref<CompileContext> compileContext) {
+		type = compileContext.arena().builtInType(TypeFamily.VOID);
+		if (_declarator.type == null) {
+			assignDeclaratorType(compileContext);
+			if (_declarator.type.deferAnalysis())
+				type = _declarator.type;
 		}
 		ref<Scope> outer = compileContext.setCurrent(scope);
 		compileContext.assignTypes(_body);
