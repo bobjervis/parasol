@@ -107,6 +107,13 @@ public int SOCK_RDM = 4;
 public int SOCK_SEQPACKET = 5;
 
 @Constant
+public int SHUT_RD = 0;
+@Constant
+public int SHUT_WR = 1;
+@Constant
+public int SHUT_RDWR = 2;
+
+@Constant
 public int IPPROTO_IP = 0;
 @Constant
 public int IPPROTO_HOPOPTS = 0;
@@ -301,6 +308,9 @@ public abstract char ntohs(char u16);
 @Windows("ws2_32.dll", "setsockopt")
 @Linux("libc.so.6", "setsockopt")
 public abstract int setsockopt(int socketfd, int level, int optname, address optval, int optlen);
+
+@Linux("libc.so.6", "shutdown")
+public abstract int shutdown(int socketfd, int how);
 
 @Windows("ws2_32.dll", "socket")
 @Linux("libc.so.6", "socket")

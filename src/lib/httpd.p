@@ -485,6 +485,9 @@ public class HttpServer {
 	 *
 	 * The calling thread will block until all enabled
 	 * protocol threads have terminated.
+	 *
+	 * Calling {@link stop} before calling this method should make
+	 * this method terminate when any on-going http requests have completed.
 	 */
 	public void wait() {
 		if (_httpThread != null) {

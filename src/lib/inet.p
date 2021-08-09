@@ -310,9 +310,12 @@ public class Socket {
 	protected abstract ref<Connection> createConnection(int fd, ref<net.sockaddr_in> address, int addressLength);
 	/**
 	 * Close a socket.
+	 *
+	 * Note that on Linux this will cause any pendin operations on other threads to fail.
 	 */
 	public void close() {
-		net.closesocket(_socketfd);
+		net.shutdown(_socketfd, net.SHUT_RDWR);
+//		net.closesocket(_socketfd);
 		_socketfd = -1;
 	}
 	/**
@@ -364,7 +367,7 @@ public class Socket {
 		sock_addr.sin_addr.s_addr = ip;
 		int result = net.connect(_socketfd, &sock_addr, sock_addr.bytes);
 		if (result != 0) {
-			logger.debug("net.connect failed: %d\n", result);
+			logger.debug("net.connect failed: %s", linux.strerror(linux.errno()));
 			return null, ip;
 		}
 		ref<Connection> connection = createConnection(_socketfd, &sock_addr, sock_addr.bytes);
