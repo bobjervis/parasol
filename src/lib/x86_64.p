@@ -2697,6 +2697,15 @@ public class X86_64 extends X86_64AssignTemps {
 			if (node.type.family() == TypeFamily.FUNCTION &&
 				generateFunctionAddress(node, compileContext))
 				break;
+			// THis seems like a terrible hack, but the name of a class is an IDENTIFIER
+			// but we really want the address of the class.
+			if (node.type.family() == TypeFamily.TYPEDEF) {	
+				dest = R(node.register);
+				node.register = 0;
+				inst(X86.LEA, dest, node, compileContext);
+				node.register = byte(int(dest));
+				break;
+			}
 
 		case	VARIABLE:
 		case	THIS:
@@ -2712,10 +2721,6 @@ public class X86_64 extends X86_64AssignTemps {
 			dest = R(node.register);
 			node.register = 0;
 			switch (node.type.family()) {
-			case	TYPEDEF:
-				inst(X86.LEA, dest, node, compileContext);
-				break;
-
 			case	FLOAT_32:
 				inst(X86.MOVSS, dest, node, compileContext);
 				break;

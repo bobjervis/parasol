@@ -2311,6 +2311,7 @@ class X86_64Encoder extends Target {
 			case	FUNCTION:
 			case	CLASS_VARIABLE:
 			case	INTERFACE:
+			case	TYPEDEF:
 				emitRex(impl(left.type), left, right, R.NO_REG);
 				emit(byte(opcodes[instruction] + 0x01));
 				modRM(left, rmValues[right], 0, 0);
