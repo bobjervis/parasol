@@ -436,6 +436,10 @@ public class InterfaceType extends ClassType {
 	boolean canCheckPartialOrder(ref<CompileContext> compileContext) {
 		return false;
 	}
+
+	public boolean returnsViaOutParameter(ref<CompileContext> compileContext) {
+		return false;
+	}
 }
 
 public class ClassType extends Type {

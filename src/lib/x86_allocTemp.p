@@ -454,7 +454,8 @@ class RegisterState {
 				case	POINTER:
 				case	CLASS:
 				case	BOOLEAN:
-				case FLAGS:
+				case	FLAGS:
+				case	INTERFACE:
 					target.inst(X86.MOV, impl(_spills.affected.type), _spills.newRegister, R(int(_spills.affected.register)));
 					break;
 					

@@ -2051,6 +2051,7 @@ class X86_64Encoder extends Target {
 			case	FUNCTION:
 			case	VAR:
 			case	TYPEDEF:
+			case	INTERFACE:
 				emitRex(family, null, dest, src);
 				emit(byte(opcodes[instruction] + 0x03));
 				modRM(3, rmValues[dest], rmValues[src]);
@@ -2105,6 +2106,7 @@ class X86_64Encoder extends Target {
 			case	FUNCTION:
 			case	VAR:
 			case	TYPEDEF:
+			case	INTERFACE:
 				emitRex(family, null, dest, src);
 				emit(byte(opcodes[instruction] + 0x03));
 				modRM(3, rmValues[dest], rmValues[src]);
