@@ -54,7 +54,7 @@ import native:C;
  * An argument consisting of two dashes alone ({@code\--}) denotes the end of options. Otherwise,
  * the first argument that does not begin with a dash ends the interpretation of options.
  *
- * Most options may only appear once. However, a command can specify that ann option may appear
+ * Most options may only appear once. However, a command can specify that an option may appear
  * more than once by declaring it as a multi-string option.
  *
  * <h3>Sub-commands.</h3>
@@ -121,7 +121,11 @@ public class Command {
 	 * In general, the command line has options (starting with a dash)
 	 * followed by zero or more arguments that are processed by the command.
 	 *
-	 * A command can define 
+	 * A command can define sub-commands. The first argument after the initial options
+	 * is the name of the sub-command. Following the sub-command name are sub-command
+	 * specific options and the arguments to that sub-command.
+	 * 
+	 * The command object contains the specification for that sub-command.
 	 */
 	public void subCommand(string name, ref<Command> command) {
 		if (name == null) {
