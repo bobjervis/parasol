@@ -15,9 +15,72 @@
  */
 namespace parasol:process;
 
+import parasol:exception.IllegalArgumentException;
+import parasol:exception.IllegalOperationException;
 import native:C;
-
+/**
+ * Provide command-line parsing.
+ *
+ * Currently, the Parasol command-line parsing logic follows UNIX/Linux
+ * conventions. Support for Windows-conforming command parsing is not
+ * supported.
+ *
+ * The supported command-line syntax is based on the POSIX standard for
+ * command-line arguments. Check <a href="http://www.eg.bucknell.edu/~mead/Java-tutorial/essential/attributes/_posix.html">here</a>
+ * for a description of the syntax.
+ *
+ * The general form of a UNIX/Linux command line is as follows:
+ *
+ * <pre>
+ *            <i><b>command-name</b> options arguments</i>
+ * </pre>
+ *
+ * The <b><i>command-name</i></b> is parsed by the operating system's command processor
+ * and it cannot be readily determined, especially the way Parasol programs are launched.
+ *
+ * Options can be defined with either or both of two forms: short and long.
+ *
+ * The short form of an option uses a single alphanumeric character, case-sensitive and
+ * is preceded by a single dash, as in {@code -c -l -r}. Non-boolean options take arguments.
+ * These must follow the option letter with optional white-space between, as in {@code -o <i>argument</i>}
+ * or {@code -o<i>argument</i>}.
+ *
+ * Boolean short form arguments can be combined, thus {@code -c -l -r} and {@code -clr} are equivalent.
+ *
+ * The long form of an option starts with two dashes and is followed by a string of alphanumric
+ * and dash characters. Non-boolean options use an equal sign and no white space to denote the
+ * argument, as in {@code --port=5004}.
+ *
+ * An argument consisting of two dashes alone ({@code\--}) denotes the end of options. Otherwise,
+ * the first argument that does not begin with a dash ends the interpretation of options.
+ *
+ * Most options may only appear once. However, a command can specify that ann option may appear
+ * more than once by declaring it as a multi-string option.
+ *
+ * <h3>Sub-commands.</h3>
+ *
+ * More complex commands, such as git, use a scheme of sub-commands.
+ *
+ * <pre>
+ *            <i><b>command-name</b> options sub-command sub-command-options arguments</i>
+ * </pre>
+ *
+ * In this scheme, the first argument after the options is the sub-command. This starts a new
+ * list of options specific to that sub-command.
+ *
+ * <h3>Use of {@code run} versus {@code parse}</h3>
+ *
+ * The {@link run} method interprets the command-line options and if the command-line is well-formed, calls the {@link main} method
+ * with the final arguments to the command (after all options and any sub-commands). If the command-line is not well formed, the {@link run}
+ * method calls the {@link help} method and terminates the program.
+ *
+ * The {@link parse} method is available to process simple commands or provide more control over the program's behavior. The parse
+ * method allow you to decide how to respond to parsing errors. You can inspect the completed Command object to identify the selected
+ * sub-command and obtain the final argument list.
+ */
 public class Command {
+	ref<Command> _baseCommand;
+	string _commandName;
 	ref<BaseArgument>[string] _shortOptions;
 	ref<BaseArgument>[string] _longOptions;
 	int _finalMin;
@@ -27,12 +90,20 @@ public class Command {
 	string[] _finalArgs;
 	ref<Argument<boolean>> _helpArgument;
 	ref<BaseArgument>[] _allArguments;
+	ref<Command>[string] _subCommands;
+	ref<Command> _defaultSubCommand;
+
+	ref<Command> _selectedSubCommand;
 
 	~Command() {
 		for (a in _allArguments)
 			if (_allArguments[a].argumentClass() == ArgumentClass.STRING)
 				ref<Argument<string>>(_allArguments[a]).value = null;
 		_allArguments.deleteAll();
+	}
+
+	public void commandName(string name) {
+		_commandName = name;
 	}
 
 	public void finalArguments(int min, int max, string helpText) {
@@ -43,6 +114,27 @@ public class Command {
 
 	public void description(string helpText) {
 		_description = helpText;
+	}
+	/**
+	 * Define a sub-command of this command.
+	 *
+	 * In general, the command line has options (starting with a dash)
+	 * followed by zero or more arguments that are processed by the command.
+	 *
+	 * A command can define 
+	 */
+	public void subCommand(string name, ref<Command> command) {
+		if (name == null) {
+			if (_defaultSubCommand != null)
+				throw IllegalArgumentException("duplicate default subCommand");
+			_defaultSubCommand = command;
+		} else {
+			if (_subCommands.contains(name))
+				throw IllegalArgumentException("duplicate subCommand: " + name);
+			_subCommands[name] = command;
+			command.commandName(name);
+			command._baseCommand = this;
+		}
 	}
 
 	public ref<Argument<int>> integerArgument(string longOption, string helpText) {
@@ -100,6 +192,23 @@ public class Command {
 			return true;
 		} else
 			return false;
+	}
+
+	public int run(string[] args) {
+		if (!parse(args))
+			help();
+		return runParsed();
+	}
+
+	public int main(string[] args) {
+		throw IllegalOperationException("did not override main");
+	}
+
+	private int runParsed() {
+		if (_selectedSubCommand != null)
+			return _selectedSubCommand.runParsed();
+		else
+			return main(_finalArgs);
 	}
 
 	public boolean parse(string[] args) {
@@ -174,6 +283,22 @@ public class Command {
 			} else
 				break;
 		}
+		if (_subCommands.size() > 0 || _defaultSubCommand != null) {
+			if (i >= args.length())
+				return false;
+			ref<Command> c = _subCommands[args[i]];
+			if (c == null)
+				c = _defaultSubCommand;
+			if (c == null)
+				return false;
+			_selectedSubCommand = c;
+			_finalArgs.slice(args, i + 1, args.length());
+			if (!c.parse(_finalArgs))
+				return false;
+			if (_helpArgument != null && _helpArgument.value)
+				help();
+			return true;
+		}
 //		_finalArgs = args[i..args.length()];
 		_finalArgs.slice(args, i, args.length());
 		if (_helpArgument != null && _helpArgument.value)
@@ -185,56 +310,93 @@ public class Command {
 		return _finalArgs; 
 	}
 
+	public ref<Command> selectedSubCommand() {
+		return _selectedSubCommand;
+	}
+
 	public void help() {		// Does not return
 //		CONSOLE_SCREEN_BUFFER_INFO screenBuffer;
 
 		int lineLength = 80;
-		int indent = 22;
 /*
 		if (GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &screenBuffer)) {
 			lineLength = screenBuffer.dwSize.X - 1;
-			if (lineLength < 60)
-				indent = lineLength / 3;
 		}
  */
  		printf("Use is: ");
- 		string prototype = binaryFilename();
+		helpDetails(lineLength, 0, 8, 8);
+		exit(1);
+	}
+
+	private string prototype() {
+ 		string prototype = _commandName != null ? _commandName : binaryFilename();
  		
 		if (_allArguments.length() > 0)
 			prototype.append(" [options]");
+		if (_subCommands.size() > 0 || _defaultSubCommand != null)
+			prototype.append(" <sub-command>");
 		if (_finalArgumentsHelpText != null) {
 			prototype.append(" ");
 			prototype.append(_finalArgumentsHelpText);
 		}
-		wrapTo(8, 8, lineLength, prototype);
+		return prototype;
+	}
+
+	private static int commandComparator(ref<Command> left, ref<Command> right) {
+		return left._commandName.compare(right._commandName);
+	}
+
+	private void helpDetails(int lineLength, int inset, int alreadyPrinted, int prototypeIndent) {
+		wrapTo(alreadyPrinted, prototypeIndent, lineLength, prototype());
+
+		int indent = 22;
+		if (lineLength < 60)
+			indent = lineLength / 3;
+		indent += inset;
 		if (_allArguments.length() > 0) {
-			printf("\nOptions:\n");
+			printf("\n");
+			wrapTo(0, inset, lineLength, "Options:");
 			// TODO: Fix this somehow - sort doesn't like this array.
-//			_allArguments.sort();
+			_allArguments.sort(BaseArgument.comparator, true);
 			for (int i = 0; i < _allArguments.length(); i++) {
-				printf("    ");
+				string option;
+
 				if (_allArguments[i].shortOption() != 0)
-					printf("-%c", _allArguments[i].shortOption());
+					option.printf("-%c", _allArguments[i].shortOption());
 				else
-					printf("  ");
-				printf("  ");
-				int alreadyPrinted;
+					option.printf("  ");
+				option.printf("  ");
 				if (_allArguments[i].longOption() != null) {
-					printf("--%s", _allArguments[i].longOption());
-					alreadyPrinted = 10 + _allArguments[i].longOption().length();
-				} else
-					alreadyPrinted = 8;
-				if (alreadyPrinted >= indent) {
+					option.printf("--%s", _allArguments[i].longOption());
+				}
+				printf("%*.*c%s", inset + 4, inset + 4, ' ', option);
+				int alreadyPrinted = inset + 4 + option.length();
+				if (option.length() + inset + 5 >= indent) {
 					printf("\n");
 					alreadyPrinted = 0;
 				}
 				wrapTo(alreadyPrinted, indent, lineLength, _allArguments[i].helpText());
 			}
-			printf("\n");
 		}
-		if (_description != null)
-			wrapTo(0, 0, lineLength, _description);
-		exit(1);
+		if (_description != null) {
+			printf("\n");
+			wrapTo(0, inset, lineLength, _description);
+		}
+		if (_subCommands.size() > 0) {
+			ref<Command>[] list;
+
+			for (name  in _subCommands)
+				list.append(_subCommands[name]);
+			list.sort(commandComparator, true);
+
+			printf("\n");
+			wrapTo(0, inset, lineLength, "Sub-commands:");
+			for (i in list) {
+				printf("\n");
+				list[i].helpDetails(lineLength, inset + 6, 0, inset + 3);
+			}
+		}
+
 	}
 
 	private boolean defineOption(char shortOption, string longOption, ref<BaseArgument> arg) {
@@ -282,16 +444,16 @@ class BaseArgument {
 		_helpText = helpText;
 	}
 
-	public int compare(ref<BaseArgument> other)  {
-		if (_longOption != null) {
-			if (other._longOption == null)
+	public static int comparator(ref<BaseArgument> left, ref<BaseArgument> right)  {
+		if (left._longOption != null) {
+			if (right._longOption == null)
 				return 1;
-			int result = _longOption.compare(other._longOption);
+			int result = left._longOption.compare(right._longOption);
 			if (result != 0)
 				return result;
-		} else if (other._longOption != null)
+		} else if (right._longOption != null)
 			return -1;
-		return other._shortOption - _shortOption;
+		return right._shortOption - left._shortOption;
 	}
 
 	public ArgumentClass argumentClass() { 

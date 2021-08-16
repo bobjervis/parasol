@@ -38,6 +38,7 @@ string COPYRIGHT_STRING = "2015 Robert Jervis";
  */
 class ParasolCommand extends process.Command {
 	public ParasolCommand() {
+		commandName("pc");
 		finalArguments(0, int.MAX_VALUE, "<filename> [arguments ...]");
 		description("The given filename is run as a Parasol program. " +
 					"Any command-line arguments appearing after are passed " +

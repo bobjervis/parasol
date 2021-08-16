@@ -671,7 +671,7 @@ public class vector<class E, class I> {
 		int lNum;
 
 		for	(;;) {
-			if (nElem <= 2){
+			if (nElem <= 2) {
 				if (nElem == 2 &&
 					pivot[0].compare(pivot[1]) * descendingAdjust > 0)
 					exchange(pivot, pivot + 1);
