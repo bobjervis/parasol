@@ -663,7 +663,7 @@ public class WebSocket extends WebSocketVolatileData {
 //		}
 	}
 	/**
-	 * A server class this method on the web socket to register a client
+	 * A server calls this method on the web socket to register a client
 	 * disconnect event handler.
 	 *
 	 * @threading This method is not thread-safe. It is recommended that this method

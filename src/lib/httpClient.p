@@ -440,7 +440,52 @@ public class URIError extends Exception {
 		super(message);
 	}
 }
-
+/**
+ * Reports the either success or a reason for failure.
+ */
+public enum ConnectStatus {
+	/**
+	 * Connection succeeded.
+	 */
+	OK,
+	/**
+	 * Connection failed, you provided a web socket URL, but no protocol.
+	 */
+	NO_PROTOCOL,
+	/**
+	 * Connection failed, you provided a web socket URL, but did not use GET.
+	 */
+	WS_NOT_GET,
+	/**
+	 * Connection failed, you provided a web socket protocol, but not a web socket URL.
+	 */
+	WS_PROTOCOL_NOT_ALLOWED,
+	/**
+	 * Connection failed, you could not obtain a socket.
+	 */
+	NO_SOCKET,
+	/**
+	 * Connection failed, call to socket connect failed.
+	 */
+	CONNECT_FAILED,
+	/**
+	 * Connection failed, you asked for a secure connection, but the handshake failed.
+	 */
+	SSL_HANDSHAKE_FAILED,
+	/**
+	 * Connection failed, the response header was not formatted correctly.
+	 */
+	MALFORMED_RESPONSE,
+	/**
+	 * Connection failed, you provided a web socket URL, but the server would not 
+	 * give you a web socket connection.
+	 */
+	WEB_SOCKET_REFUSED,
+	/**
+	 * Connection failed, the web socket accept header did not match the expected value.
+	 */
+	WEB_SOCKET_ACCEPT_MISMATCH
+}
 /**
  * Initiates a simple HTTP request or opens a Web Socket.
  *
@@ -643,7 +688,7 @@ public class HttpClient {
 	 * or if the combination of constructor used and URL protocol are not compatible
 	 * with the GET method, the returned ip value is 0.
 	 */
-	public boolean, unsigned get() {
+	public ConnectStatus, unsigned get() {
 		return startRequest("GET", null);
 	}
 	/**
@@ -659,7 +704,7 @@ public class HttpClient {
 	 * or if the combination of constructor used and URL protocol are not compatible
 	 * with the POST method, the returned ip value is 0.
 	 */
-	public boolean, unsigned post(string body) {
+	public ConnectStatus, unsigned post(string body) {
 		text.StringReader reader(&body);
 		return post(&reader);
 	}
@@ -679,7 +724,7 @@ public class HttpClient {
 	 * @exception IllegalOperationException thrown if the body Reader object returns false
 	 * for {@link Reader.hasLength}.
 	 */
-	public boolean, unsigned post(ref<Reader> body) {
+	public ConnectStatus, unsigned post(ref<Reader> body) {
 		return startRequest("POST", body);
 	}
 	/**
@@ -695,7 +740,7 @@ public class HttpClient {
 	 * or if the combination of constructor used and URL protocol are not compatible
 	 * with the POST method, the returned ip value is 0.
 	 */
-	public boolean, unsigned put(string body) {
+	public ConnectStatus, unsigned put(string body) {
 		text.StringReader reader(&body);
 		return post(&reader);
 	}
@@ -715,37 +760,37 @@ public class HttpClient {
 	 * @exception IllegalOperationException thrown if the body Reader object returns false
 	 * for {@link Reader.hasLength}.
 	 */
-	public boolean, unsigned put(ref<Reader> body) {
+	public ConnectStatus, unsigned put(ref<Reader> body) {
 		return startRequest("PUT", body);
 	}
 
-	private boolean, unsigned startRequest(string method, ref<Reader> body) {
+	private ConnectStatus, unsigned startRequest(string method, ref<Reader> body) {
 		net.Encryption encryption;
 		switch (_uri.scheme) {
 		case "ws":
 			if (_webSocketProtocol == null) {
 				printf("No Web Socket protocol defined.\n");
-				return false, 0;
+				return ConnectStatus.NO_PROTOCOL, 0;
 			}
 			if (method != "GET")
-				return false, 0;
+				return ConnectStatus.WS_NOT_GET, 0;
 			encryption = net.Encryption.NONE;
 			break;
 
 		case "wss":
 			if (_webSocketProtocol == null) {
 				printf("No Web Socket protocol defined.\n");
-				return false, 0;
+				return ConnectStatus.NO_PROTOCOL, 0;
 			}
 			if (method != "GET")
-				return false, 0;
+				return ConnectStatus.WS_NOT_GET, 0;
 			encryption = net.Encryption.SSLv23;
 			break;
 
 		case "https":
 			if (_webSocketProtocol != null) {
 				printf("Web Socket protocol defined - not a web socket URL.\n");
-				return false, 0;
+				return ConnectStatus.WS_PROTOCOL_NOT_ALLOWED, 0;
 			}
 			encryption = net.Encryption.SSLv23;
 			break;
@@ -753,25 +798,25 @@ public class HttpClient {
 		default:
 			if (_webSocketProtocol != null) {
 				printf("Web Socket protocol defined - not a web socket URL.\n");
-				return false, 0;
+				return ConnectStatus.WS_PROTOCOL_NOT_ALLOWED, 0;
 			}
 			encryption = net.Encryption.NONE;
 		}
 
 		ref<net.Socket> socket = net.Socket.create(encryption, _cipherList, null, null, null);
 		if (socket == null)
-			return false, 0;
+			return ConnectStatus.NO_SOCKET, 0;
 		ref<net.Connection> connection;
 		unsigned ip;
 		(connection, ip) = socket.connect(_uri.host, _uri.port);
 		if (connection == null) {
 			delete socket;
-			return false, ip;
+			return ConnectStatus.CONNECT_FAILED, ip;
 		}
 		if (!connection.initiateSecurityHandshake()) {
 			delete connection;
 			delete socket;
-			return false, ip;
+			return ConnectStatus.SSL_HANDSHAKE_FAILED, ip;
 		}
 		boolean expectWebSocket;
 		// Delete any connection object left over from a previous request.
@@ -839,23 +884,23 @@ public class HttpClient {
 		_response = new HttpParsedResponse();
 		if (!parser.parseResponse(_response)) {
 			printf("Malformed response\n");
-			return false, ip;
+			return ConnectStatus.MALFORMED_RESPONSE, ip;
 		}
 		if (expectWebSocket) {
 			if (_response.code != "101") {
 				printf("Expecting a Web Socket, not a 101 response.\n");
 				_response.print();
-				return false, ip;
+				return ConnectStatus.WEB_SOCKET_REFUSED, ip;
 			}
 			string webSocketAccept = computeWebSocketAccept(webSocketKey);
 			if (_response.headers["sec-websocket-accept"] != webSocketAccept) {
 				printf("Web Socket Accept does not match Web Socket Key\n");
-				return false, ip;
+				return ConnectStatus.WEB_SOCKET_ACCEPT_MISMATCH, ip;
 			}
 			_webSocket = new WebSocket(_connection, false);
 			_connection = null;					// The web socket takes possession of the connection object.
 		}
-		return true, ip;
+		return ConnectStatus.OK, ip;
 	}
 	/**
 	 * Obtain the underlying network Connection object after a request has been
