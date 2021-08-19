@@ -3278,7 +3278,7 @@ public class X86_64 extends X86_64AssignTemps {
 	private void generateCompareInst(ref<Binary> b, ref<CompileContext> compileContext) {
 		switch (b.left().type.family()) {
 		case	ERROR:
-			// This hsould generate a runtime exception here
+			// TODO This should generate a runtime exception here
 			break;
 
 		case	FLAGS:

@@ -1095,6 +1095,10 @@ class X86_64Encoder extends Target {
 			inst(instruction, family, left, ref<Binary>(right).right(), compileContext);
 			return;
 		}
+		if (left.op() == Operator.SEQUENCE) {
+			inst(instruction, family, ref<Binary>(left).right(), right, compileContext);
+			return;
+		}
 		if ((left.nodeFlags & ADDRESS_MODE) != 0) {
 			if (right.register != 0)
 				inst(instruction, left, R(int(right.register)), compileContext);

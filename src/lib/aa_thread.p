@@ -335,7 +335,7 @@ public class Thread {
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			int result = linux.pthread_join(_threadId, null);
 			if (result != 0) {
-				printf("%s pthread_join %s: %d\n", currentThread().name(), _name, result);
+				printf("%s pthread_join %s: %d (%s)\n", currentThread().name(), _name, result, linux.strerror(result));
 				assert(false);
 			}
 		}
