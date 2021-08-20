@@ -22,7 +22,7 @@ class BDiffCommand extends process.Command {
 	public BDiffCommand() {
 		finalArguments(2, 2, "<file1> <file2>");
 		description("Compares two binary files.");
-		helpArgument('?', "help", "Display this help.");
+		helpOption('?', "help", "Display this help.");
 	}
 }
 
@@ -31,7 +31,7 @@ BDiffCommand command;
 int main(string[] args) {
 	if (!command.parse(args))
 		command.help();
-	string[] files = command.finalArgs();
+	string[] files = command.finalArguments();
 	ref<Reader> left = storage.openBinaryFile(files[0]);
 	ref<Reader> right = storage.openBinaryFile(files[1]);
 	

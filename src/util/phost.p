@@ -31,10 +31,10 @@ class PHostCommand extends process.Command {
 					"\n" +
 					"The site is hosted unencrypted, so take care in exposing " +
 					"content on the URL to unintended audiences.");
-		portArgument = integerArgument('p', "port", "The ssl port this server will use (default 443).");
+		portOption = integerOption('p', "port", "The ssl port this server will use (default 443).");
 	}
 
-	ref<process.Argument<int>> portArgument;
+	ref<process.Option<int>> portOption;
 
 }
 
@@ -46,10 +46,10 @@ int main(string[] args) {
 		phostCommand.help();
 	char port = 80;
 
-	if (phostCommand.portArgument.set())
-		port = char(phostCommand.portArgument.value);
+	if (phostCommand.portOption.set())
+		port = char(phostCommand.portOption.value);
 
-	string[] params = phostCommand.finalArgs();
+	string[] params = phostCommand.finalArguments();
 	server.setHttpPort(port);
 	server.disableHttps();
 	printf("Hosting %s on port %d\n", params[0], port);

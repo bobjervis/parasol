@@ -81,25 +81,25 @@ import native:C;
 public class Command {
 	ref<Command> _baseCommand;
 	string _commandName;
-	ref<BaseArgument>[string] _shortOptions;
-	ref<BaseArgument>[string] _longOptions;
+	ref<BaseOption>[string] _shortOptions;
+	ref<BaseOption>[string] _longOptions;
 	int _finalMin;
 	int _finalMax;
 	string _finalArgumentsHelpText;
 	string _description;
-	string[] _finalArgs;
-	ref<Argument<boolean>> _helpArgument;
-	ref<BaseArgument>[] _allArguments;
+	string[] _finalArguments;
+	ref<Option<boolean>> _helpOption;
+	ref<BaseOption>[] _allOptions;
 	ref<Command>[string] _subCommands;
 	ref<Command> _defaultSubCommand;
 
 	ref<Command> _selectedSubCommand;
 
 	~Command() {
-		for (a in _allArguments)
-			if (_allArguments[a].argumentClass() == ArgumentClass.STRING)
-				ref<Argument<string>>(_allArguments[a]).value = null;
-		_allArguments.deleteAll();
+		for (a in _allOptions)
+			if (_allOptions[a].optionClass() == OptionClass.STRING)
+				ref<Option<string>>(_allOptions[a]).value = null;
+		_allOptions.deleteAll();
 	}
 
 	public void commandName(string name) {
@@ -141,12 +141,12 @@ public class Command {
 		}
 	}
 
-	public ref<Argument<int>> integerArgument(string longOption, string helpText) {
-		return integerArgument(0, longOption, helpText);
+	public ref<Option<int>> integerOption(string longOption, string helpText) {
+		return integerOption(0, longOption, helpText);
 	}
 	
-	public ref<Argument<int>> integerArgument(char shortOption, string longOption, string helpText) {
-		ref<Argument<int>> arg = new Argument<int>(ArgumentClass.INTEGER, shortOption, longOption, helpText);
+	public ref<Option<int>> integerOption(char shortOption, string longOption, string helpText) {
+		ref<Option<int>> arg = new Option<int>(OptionClass.INTEGER, shortOption, longOption, helpText);
 		if (defineOption(shortOption, longOption, arg))
 			return arg;
 		else {
@@ -155,12 +155,12 @@ public class Command {
 		}
 	}
 	
-	public ref<Argument<string>> stringArgument(string longOption, string helpText) {
-		return stringArgument(0, longOption, helpText);
+	public ref<Option<string>> stringOption(string longOption, string helpText) {
+		return stringOption(0, longOption, helpText);
 	}
 	
-	public ref<Argument<string>> stringArgument(char shortOption, string longOption, string helpText) {
-		ref<Argument<string>> arg = new Argument<string>(ArgumentClass.STRING, shortOption, longOption, helpText);
+	public ref<Option<string>> stringOption(char shortOption, string longOption, string helpText) {
+		ref<Option<string>> arg = new Option<string>(OptionClass.STRING, shortOption, longOption, helpText);
 		if (defineOption(shortOption, longOption, arg))
 			return arg;
 		else {
@@ -169,12 +169,12 @@ public class Command {
 		}
 	}
 
-	public ref<Argument<boolean>> booleanArgument(string longOption, string helpText) {
-		return booleanArgument(0, longOption, helpText);
+	public ref<Option<boolean>> booleanOption(string longOption, string helpText) {
+		return booleanOption(0, longOption, helpText);
 	}
 	
-	public ref<Argument<boolean>> booleanArgument(char shortOption, string longOption, string helpText) {
-		ref<Argument<boolean>> arg = new Argument<boolean>(ArgumentClass.BOOLEAN, shortOption, longOption, helpText);
+	public ref<Option<boolean>> booleanOption(char shortOption, string longOption, string helpText) {
+		ref<Option<boolean>> arg = new Option<boolean>(OptionClass.BOOLEAN, shortOption, longOption, helpText);
 		if (defineOption(shortOption, longOption, arg))
 			return arg;
 		else {
@@ -183,16 +183,16 @@ public class Command {
 		}
 	}
 
-	public boolean helpArgument(string longOption, string helpText) {
-		return helpArgument(0, longOption, helpText);
+	public boolean helpOption(string longOption, string helpText) {
+		return helpOption(0, longOption, helpText);
 	}
 
-	public boolean helpArgument(char shortOption, string longOption, string helpText) {
-		if (_helpArgument != null)
+	public boolean helpOption(char shortOption, string longOption, string helpText) {
+		if (_helpOption != null)
 			return false;
-		ref<Argument<boolean>> arg = new Argument<boolean>(ArgumentClass.HELP, shortOption, longOption, helpText);
+		ref<Option<boolean>> arg = new Option<boolean>(OptionClass.HELP, shortOption, longOption, helpText);
 		if (defineOption(shortOption, longOption, arg)) {
-			_helpArgument = arg;
+			_helpOption = arg;
 			return true;
 		} else
 			return false;
@@ -212,7 +212,7 @@ public class Command {
 		if (_selectedSubCommand != null)
 			return _selectedSubCommand.runParsed();
 		else
-			return main(_finalArgs);
+			return main(_finalArguments);
 	}
 
 	public boolean parse(string[] args) {
@@ -234,28 +234,28 @@ public class Command {
 						value = args[i].substr(equals + 1);
 					} else
 						key = args[i].substr(2);
-					ref<BaseArgument> b = _longOptions[key];
+					ref<BaseOption> b = _longOptions[key];
 					if (b == null) {
 						printf("Unknown argument: %s\n", key);
 						return false;
 					}
 					if (!b.setValue(value)) {
-						printf("Argument format incorrect: %s\n", args[i]);
+						printf("Option format incorrect: %s\n", args[i]);
 						return false;
 					}
 				} else if (args[i].length() > 1) {
 					// -xyz short option, might be -x val
-					pointer<byte> argument = &args[i][1];
-					while (*argument != 0) {
+					pointer<byte> option = &args[i][1];
+					while (*option != 0) {
 						string key;
-						key.append(argument, 1);
-						argument++;
-						ref<BaseArgument> b = _shortOptions[key];
+						key.append(option, 1);
+						option++;
+						ref<BaseOption> b = _shortOptions[key];
 						if (b == null) {
-							printf("Unknown argument: %s\n", key);
+							printf("Unknown option: %s\n", key);
 							return false;
 						}
-						switch (b.argumentClass()) {
+						switch (b.optionClass()) {
 						case BOOLEAN:
 						case HELP:
 							b.setValue("true");
@@ -266,18 +266,18 @@ public class Command {
 							string value;
 							int lastI = i;
 
-							if (*argument != 0) {
-								value = string(argument);
-								argument = &""[0];
+							if (*option != 0) {
+								value = string(option);
+								option = &""[0];
 							} else if (i < args.length() - 1) {
 								value = string(args[i + 1]);
 								lastI = i + 1;
 							} else {
-								printf("Argument %s requires a value\n", key);
+								printf("Option %s requires a value\n", key);
 								return false;
 							}
 							if (!b.setValue(value)) {
-								printf("Argument format incorrect: %s %s\n", args[i]);
+								printf("Option format incorrect: %s %s\n", args[i]);
 								return false;
 							}
 							i = lastI;
@@ -296,22 +296,22 @@ public class Command {
 			if (c == null)
 				return false;
 			_selectedSubCommand = c;
-			_finalArgs.slice(args, i + 1, args.length());
-			if (!c.parse(_finalArgs))
+			_finalArguments.slice(args, i + 1, args.length());
+			if (!c.parse(_finalArguments))
 				return false;
-			if (_helpArgument != null && _helpArgument.value)
+			if (_helpOption != null && _helpOption.value)
 				help();
 			return true;
 		}
-//		_finalArgs = args[i..args.length()];
-		_finalArgs.slice(args, i, args.length());
-		if (_helpArgument != null && _helpArgument.value)
+//		_finalArguments = args[i..args.length()];
+		_finalArguments.slice(args, i, args.length());
+		if (_helpOption != null && _helpOption.value)
 			help();
-		return _finalArgs.length() >= _finalMin && _finalArgs.length() <= _finalMax;
+		return _finalArguments.length() >= _finalMin && _finalArguments.length() <= _finalMax;
 	}
 
-	public string[] finalArgs() { 
-		return _finalArgs; 
+	public string[] finalArguments() { 
+		return _finalArguments; 
 	}
 
 	public ref<Command> selectedSubCommand() {
@@ -335,7 +335,7 @@ public class Command {
 	private string prototype() {
  		string prototype = _commandName != null ? _commandName : binaryFilename();
  		
-		if (_allArguments.length() > 0)
+		if (_allOptions.length() > 0)
 			prototype.append(" [options]");
 		if (_subCommands.size() > 0 || _defaultSubCommand != null)
 			prototype.append(" <sub-command>");
@@ -357,21 +357,21 @@ public class Command {
 		if (lineLength < 60)
 			indent = lineLength / 3;
 		indent += inset;
-		if (_allArguments.length() > 0) {
+		if (_allOptions.length() > 0) {
 			printf("\n");
 			wrapTo(0, inset, lineLength, "Options:");
 			// TODO: Fix this somehow - sort doesn't like this array.
-			_allArguments.sort(BaseArgument.comparator, true);
-			for (int i = 0; i < _allArguments.length(); i++) {
+			_allOptions.sort(BaseOption.comparator, true);
+			for (int i = 0; i < _allOptions.length(); i++) {
 				string option;
 
-				if (_allArguments[i].shortOption() != 0)
-					option.printf("-%c", _allArguments[i].shortOption());
+				if (_allOptions[i].shortOption() != 0)
+					option.printf("-%c", _allOptions[i].shortOption());
 				else
 					option.printf("  ");
 				option.printf("  ");
-				if (_allArguments[i].longOption() != null) {
-					option.printf("--%s", _allArguments[i].longOption());
+				if (_allOptions[i].longOption() != null) {
+					option.printf("--%s", _allOptions[i].longOption());
 				}
 				printf("%*.*c%s", inset + 4, inset + 4, ' ', option);
 				int alreadyPrinted = inset + 4 + option.length();
@@ -379,7 +379,7 @@ public class Command {
 					printf("\n");
 					alreadyPrinted = 0;
 				}
-				wrapTo(alreadyPrinted, indent, lineLength, _allArguments[i].helpText());
+				wrapTo(alreadyPrinted, indent, lineLength, _allOptions[i].helpText());
 			}
 		}
 		if (_description != null) {
@@ -403,8 +403,8 @@ public class Command {
 
 	}
 
-	private boolean defineOption(char shortOption, string longOption, ref<BaseArgument> arg) {
-		_allArguments.append(arg);
+	private boolean defineOption(char shortOption, string longOption, ref<BaseOption> arg) {
+		_allOptions.append(arg);
 		if (shortOption != 0) {
 			string s;
 			s.append(shortOption);
@@ -424,31 +424,31 @@ public class Command {
 
 };
 
-public class Argument<class T> extends BaseArgument {
+public class Option<class T> extends BaseOption {
 	public T value;
 	
-	public Argument(ArgumentClass argumentClass, char shortOption, string longOption, string helpText) {
-		super(argumentClass, shortOption, longOption, helpText);
+	public Option(OptionClass optionClass, char shortOption, string longOption, string helpText) {
+		super(optionClass, shortOption, longOption, helpText);
 		C.memset(pointer<byte>(&value), 0, value.bytes);
 	}
 
 };
 
-class BaseArgument {
-	private ArgumentClass _argumentClass;
+class BaseOption {
+	private OptionClass _optionClass;
 	private string _helpText;
 	private char _shortOption;
 	private string _longOption;
 	private boolean _set;
 
-	public BaseArgument(ArgumentClass argumentClass, char shortOption, string longOption, string helpText) {
-		_argumentClass = argumentClass;
+	public BaseOption(OptionClass optionClass, char shortOption, string longOption, string helpText) {
+		_optionClass = optionClass;
 		_shortOption = shortOption;
 		_longOption = longOption;
 		_helpText = helpText;
 	}
 
-	public static int comparator(ref<BaseArgument> left, ref<BaseArgument> right)  {
+	public static int comparator(ref<BaseOption> left, ref<BaseOption> right)  {
 		if (left._longOption != null) {
 			if (right._longOption == null)
 				return 1;
@@ -460,8 +460,8 @@ class BaseArgument {
 		return right._shortOption - left._shortOption;
 	}
 
-	public ArgumentClass argumentClass() { 
-		return _argumentClass; 
+	public OptionClass optionClass() { 
+		return _optionClass; 
 	}
 
 	public string helpText() { 
@@ -481,13 +481,13 @@ class BaseArgument {
 	}
 
 	boolean setValue(string value) {
-		switch (_argumentClass) {
+		switch (_optionClass) {
 		case	STRING:
-			ref<Argument<string>>(this).value = value;
+			ref<Option<string>>(this).value = value;
 			break;
 			
 		case	INTEGER:
-			ref<Argument<int>> iarg = ref<Argument<int>>(this);
+			ref<Option<int>> iarg = ref<Option<int>>(this);
 			int v;
 			boolean success;
 			
@@ -501,7 +501,7 @@ class BaseArgument {
 			
 		case	BOOLEAN:
 		case	HELP:
-			ref<Argument<boolean>> arg = ref<Argument<boolean>>(this);
+			ref<Option<boolean>> arg = ref<Option<boolean>>(this);
 			if (value == "false")
 				arg.value = false;
 			else
@@ -514,7 +514,7 @@ class BaseArgument {
 
 };
 
-enum ArgumentClass {
+enum OptionClass {
 	STRING,
 	BOOLEAN,
 	INTEGER,

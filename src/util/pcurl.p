@@ -34,13 +34,13 @@ class PcURLCommand extends process.Command {
 					"\n" +
 					"Copyright (c) " + COPYRIGHT_STRING
 					);
-		verboseArgument = booleanArgument('v', null,
+		verboseOption = booleanOption('v', null,
 					"Enables verbose output.");
-		helpArgument('?', "help",
+		helpOption('?', "help",
 					"Displays this help.");
 	}
 
-	ref<process.Argument<boolean>> verboseArgument;
+	ref<process.Option<boolean>> verboseOption;
 }
 
 PcURLCommand command;
@@ -51,7 +51,7 @@ int main(string[] args) {
 	
 	if (!command.parse(args))
 		command.help();
-	urls = command.finalArgs();
+	urls = command.finalArguments();
 	if (urls.length() <= 0)
 		command.help();
 	for (int i = 0; i < urls.length(); i++) {

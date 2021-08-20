@@ -48,34 +48,34 @@ class GenHeaderCommand extends process.Command {
 					"Parasol Runtime Version " + runtime.RUNTIME_VERSION + "\r" +
 					"Copyright (c) " + COPYRIGHT_STRING
 					);
-		importPathArgument = stringArgument('I', "importPath", 
+		importPathOption = stringOption('I', "importPath", 
 					"Sets the path of directories like the --explicit option, " +
 					"but the directories ^/lib and ^/alys/lib' are appended to " +
 					"those specified with this option.");
-		verboseArgument = booleanArgument('v', null,
+		verboseOption = booleanOption('v', null,
 					"Enables verbose output.");
-		symbolTableArgument = booleanArgument(0, "syms",
+		symbolTableOption = booleanOption(0, "syms",
 					"Print the symbol table.");
-		logImportsArgument = booleanArgument(0, "logImports",
+		logImportsOption = booleanOption(0, "logImports",
 					"Log all import processing");
-		explicitArgument = stringArgument('X', "explicit",
+		explicitOption = stringOption('X', "explicit",
 					"Sets the path of directories to search for imported symbols. " +
 					"Directories are separated by commas. " +
 					"The special directory ^ can be used to signify the Parasol " +
 					"install directory. ");
-		helpArgument('?', "help",
+		helpOption('?', "help",
 					"Displays this help.");
 	}
 
-	ref<process.Argument<string>> importPathArgument;
-	ref<process.Argument<boolean>> verboseArgument;
-	ref<process.Argument<string>> explicitArgument;
-	ref<process.Argument<boolean>> logImportsArgument;
-	ref<process.Argument<boolean>> symbolTableArgument;
+	ref<process.Option<string>> importPathOption;
+	ref<process.Option<boolean>> verboseOption;
+	ref<process.Option<string>> explicitOption;
+	ref<process.Option<boolean>> logImportsOption;
+	ref<process.Option<boolean>> symbolTableOption;
 }
 
 private ref<GenHeaderCommand> genHeaderCommand;
-private string[] finalArgs;
+private string[] finalArguments;
 
 int main(string[] args) {
 	int result = 1;
@@ -83,24 +83,24 @@ int main(string[] args) {
 	genHeaderCommand = new GenHeaderCommand();
 	if (!genHeaderCommand.parse(args))
 		genHeaderCommand.help();
-	if (genHeaderCommand.importPathArgument.set() &&
-		genHeaderCommand.explicitArgument.set()) {
+	if (genHeaderCommand.importPathOption.set() &&
+		genHeaderCommand.explicitOption.set()) {
 		printf("Cannot set both --explicit and --importPath arguments.\n");
 		genHeaderCommand.help();
 	}
-	finalArgs = genHeaderCommand.finalArgs();
-	if (finalArgs.length() != 2)
+	finalArguments = genHeaderCommand.finalArguments();
+	if (finalArguments.length() != 2)
 		genHeaderCommand.help();
-	printf("Creating header %s\n", finalArgs[1]);
+	printf("Creating header %s\n", finalArguments[1]);
 	Arena arena;
 
 	if (!configureArena(&arena))
 		return 1;
-	string filename = finalArgs[0];
+	string filename = finalArguments[0];
 	ref<Target> target = arena.compile(filename, false, false, false, null, null);
-	if (genHeaderCommand.symbolTableArgument.value)
+	if (genHeaderCommand.symbolTableOption.value)
 		arena.printSymbolTable();
-	if (genHeaderCommand.verboseArgument.value) {
+	if (genHeaderCommand.verboseOption.value) {
 		arena.print();
 		target.print();
 	}
@@ -109,9 +109,9 @@ int main(string[] args) {
 		arena.printMessages();
 		return 1;
 	}
-	ref<Writer> header = storage.createTextFile(finalArgs[1]);
+	ref<Writer> header = storage.createTextFile(finalArguments[1]);
 	if (header == null) {
-		printf("Could not create file %s\n", finalArgs[1]);
+		printf("Could not create file %s\n", finalArguments[1]);
 		return 1;
 	}
 	header.write("/*\n");
@@ -121,7 +121,7 @@ int main(string[] args) {
 	header.write("#define PARASOL_HEADER_H\n");
 	if (!arena.writeHeader(header)) {
 		delete header;
-		printf("Failed to write header %s\n", finalArgs[1]);
+		printf("Failed to write header %s\n", finalArguments[1]);
 		return 0;
 	} else {
 		header.write("#endif // PARASOL_HEADER_H\n");
@@ -131,17 +131,17 @@ int main(string[] args) {
 }
 
 boolean configureArena(ref<Arena> arena) {
-	if (genHeaderCommand.explicitArgument.set())
-		arena.setImportPath(genHeaderCommand.explicitArgument.value);
-	else if (genHeaderCommand.importPathArgument.set())
-		arena.setImportPath(genHeaderCommand.importPathArgument.value + ",^/src/lib,^/alys/lib");
-	arena.logImports = genHeaderCommand.logImportsArgument.value;
-	arena.verbose = genHeaderCommand.verboseArgument.value;
+	if (genHeaderCommand.explicitOption.set())
+		arena.setImportPath(genHeaderCommand.explicitOption.value);
+	else if (genHeaderCommand.importPathOption.set())
+		arena.setImportPath(genHeaderCommand.importPathOption.value + ",^/src/lib,^/alys/lib");
+	arena.logImports = genHeaderCommand.logImportsOption.value;
+	arena.verbose = genHeaderCommand.verboseOption.value;
 	if (arena.load()) 
 		return true;
 	else {
 		arena.printMessages();
-		if (genHeaderCommand.verboseArgument.value)
+		if (genHeaderCommand.verboseOption.value)
 			arena.print();
 		printf("Failed to load arena\n");
 		return false;

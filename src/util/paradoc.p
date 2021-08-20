@@ -67,43 +67,43 @@ class ParadocCommand extends process.Command {
 					"Parasol Runtime Version " + runtime.RUNTIME_VERSION + "\r" +
 					"Copyright (c) " + COPYRIGHT_STRING
 					);
-		importPathArgument = stringArgument('I', "importPath", 
+		importPathOption = stringOption('I', "importPath", 
 					"Sets the path of directories like the --explicit option, " +
 					"but the directory ^/src/lib is appended to " +
 					"those specified with this option.");
-		verboseArgument = booleanArgument('v', null,
+		verboseOption = booleanOption('v', null,
 					"Enables verbose output.");
-		symbolTableArgument = booleanArgument(0, "syms",
+		symbolTableOption = booleanOption(0, "syms",
 					"Print the symbol table.");
-		logImportsArgument = booleanArgument(0, "logImports",
+		logImportsOption = booleanOption(0, "logImports",
 					"Log all import processing");
-		explicitArgument = stringArgument('X', "explicit",
+		explicitOption = stringOption('X', "explicit",
 					"Sets the path of directories to search for imported symbols. " +
 					"Directories are separated by commas. " +
 					"The special directory ^ can be used to signify the Parasol " +
 					"install directory. ");
-		rootArgument = stringArgument(0, "root",
+		rootOption = stringOption(0, "root",
 					"Designates a specific directory to treat as the 'root' of the install tree. " +
 					"The default is the parent directory of the runtime binary program.");
-		templateDirectoryArgument = stringArgument('t', "template",
+		templateDirectoryOption = stringOption('t', "template",
 					"Designates a directory to treat as the source for a set of template files. " +
 					"These templates fill in details of the generated HTML and can be customized " +
 					"without modifying the program code.");
-		helpArgument('?', "help",
+		helpOption('?', "help",
 					"Displays this help.");
 	}
 
-	ref<process.Argument<string>> importPathArgument;
-	ref<process.Argument<boolean>> verboseArgument;
-	ref<process.Argument<string>> explicitArgument;
-	ref<process.Argument<string>> rootArgument;
-	ref<process.Argument<boolean>> logImportsArgument;
-	ref<process.Argument<boolean>> symbolTableArgument;
-	ref<process.Argument<string>> templateDirectoryArgument;
+	ref<process.Option<string>> importPathOption;
+	ref<process.Option<boolean>> verboseOption;
+	ref<process.Option<string>> explicitOption;
+	ref<process.Option<string>> rootOption;
+	ref<process.Option<boolean>> logImportsOption;
+	ref<process.Option<boolean>> symbolTableOption;
+	ref<process.Option<string>> templateDirectoryOption;
 }
 
 private ref<ParadocCommand> paradocCommand;
-private string[] finalArgs;
+private string[] finalArguments;
 string outputFolder;
 ref<ImportDirectory>[] libraries;
 
@@ -121,7 +121,7 @@ Arena arena;
 int main(string[] args) {
 	process.stdout.flush();
 	parseCommandLine(args);
-	outputFolder = finalArgs[0];
+	outputFolder = finalArguments[0];
 
 	if (storage.exists(outputFolder)) {
 //		printf("Output directory '%s' exists, cannot over-write.\n", outputFolder);
@@ -132,18 +132,18 @@ int main(string[] args) {
 //	printf("Configuring\n");
 	if (!configureArena(&arena))
 		return 1;
-	CompileContext context(&arena, arena.global(), paradocCommand.verboseArgument.value);
+	CompileContext context(&arena, arena.global(), paradocCommand.verboseOption.value);
 
-	for (int i = 1; i < finalArgs.length(); i++)
+	for (int i = 1; i < finalArguments.length(); i++)
 		libraries.append(arena.compilePackage(i - 1, &context));
 //	printf("Starting!\n");
 	arena.finishCompilePackages(&context);
 
 	// We are now done with compiling, time to analyze the results
 
-	if (paradocCommand.symbolTableArgument.value)
+	if (paradocCommand.symbolTableOption.value)
 		arena.printSymbolTable();
-	if (paradocCommand.verboseArgument.value)
+	if (paradocCommand.verboseOption.value)
 		arena.print();
 	boolean anyFailure = false;
 	if (arena.countMessages() > 0) {
@@ -160,8 +160,8 @@ int main(string[] args) {
 		printf("Writing to %s\n", outputFolder);
 		if (storage.ensure(outputFolder)) {
 			string dir;
-			if (paradocCommand.templateDirectoryArgument.set())
-				dir = paradocCommand.templateDirectoryArgument.value;
+			if (paradocCommand.templateDirectoryOption.set())
+				dir = paradocCommand.templateDirectoryOption.value;
 			else {
 				string bin = process.binaryFilename();
 				
@@ -196,50 +196,50 @@ void parseCommandLine(string[] args) {
 	paradocCommand = new ParadocCommand();
 	if (!paradocCommand.parse(args))
 		paradocCommand.help();
-	if (paradocCommand.importPathArgument.set() &&
-		paradocCommand.explicitArgument.set()) {
+	if (paradocCommand.importPathOption.set() &&
+		paradocCommand.explicitOption.set()) {
 		printf("Cannot set both --explicit and --importPath arguments.\n");
 		paradocCommand.help();
 	}
-	finalArgs = paradocCommand.finalArgs();
+	finalArguments = paradocCommand.finalArguments();
 }
 
 boolean configureArena(ref<Arena> arena) {
 	arena.paradoc = true;
-	arena.logImports = paradocCommand.logImportsArgument.value;
-	if (paradocCommand.rootArgument.set())
-		arena.setRootFolder(paradocCommand.rootArgument.value);
+	arena.logImports = paradocCommand.logImportsOption.value;
+	if (paradocCommand.rootOption.set())
+		arena.setRootFolder(paradocCommand.rootOption.value);
 	string importPath;
 
-	for (int i = 1; i < finalArgs.length(); i++) {
+	for (int i = 1; i < finalArguments.length(); i++) {
 		if (i > 1)
 			importPath.append(',');
-		importPath.append(finalArgs[i]);
+		importPath.append(finalArguments[i]);
 	}
-	if (paradocCommand.explicitArgument.set()) {
-		if (paradocCommand.explicitArgument.value.length() > 0) {
-			if (finalArgs.length() > 1)
+	if (paradocCommand.explicitOption.set()) {
+		if (paradocCommand.explicitOption.value.length() > 0) {
+			if (finalArguments.length() > 1)
 				importPath.append(',');
-			importPath.append(paradocCommand.explicitArgument.value);
+			importPath.append(paradocCommand.explicitOption.value);
 		}
-	} else if (paradocCommand.importPathArgument.set()) {
-		if (finalArgs.length() > 1)
+	} else if (paradocCommand.importPathOption.set()) {
+		if (finalArguments.length() > 1)
 			importPath.append(',');
-		importPath.append(paradocCommand.importPathArgument.value + ",^/src/lib");
+		importPath.append(paradocCommand.importPathOption.value + ",^/src/lib");
 	} else {
-		if (finalArgs.length() > 1)
+		if (finalArguments.length() > 1)
 			importPath.append(',');
 		importPath.append("^/src/lib");
 	}
 	arena.setImportPath(importPath);
-	arena.verbose = paradocCommand.verboseArgument.value;
+	arena.verbose = paradocCommand.verboseOption.value;
 	if (arena.logImports)
 		printf("Running with import path: %s\n", arena.importPath());
 	if (arena.load())
 		return true;
 	else {
 		arena.printMessages();
-		if (paradocCommand.verboseArgument.value)
+		if (paradocCommand.verboseOption.value)
 			arena.print();
 		printf("Failed to load arena\n");
 		return false;

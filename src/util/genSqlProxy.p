@@ -43,21 +43,20 @@ class SQLProxyCommand extends process.Command {
 					"This information is used to generate a Parasol static method that will " +
 					" execute the stored procedure."
 					);
-		classNameArgument = stringArgument('c', "class", "Names the generated class in the output. (Default is " + DEFAULT_CLASS_NAME + ")");
-		namespaceArgument = stringArgument('n', "namespace", "If present, the file is generated in the given namespace.");
-		verboseArgument = booleanArgument('v', null,
+		classNameOption = stringOption('c', "class", "Names the generated class in the output. (Default is " + DEFAULT_CLASS_NAME + ")");
+		namespaceOption = stringOption('n', "namespace", "If present, the file is generated in the given namespace.");
+		verboseOption = booleanOption('v', null,
 					"Enables verbose output.");
-		helpArgument('?', "help",
+		helpOption('?', "help",
 					"Displays this help.");
 	}
 
-	ref<process.Argument<string>> classNameArgument;
-	ref<process.Argument<string>> namespaceArgument;
-	ref<process.Argument<boolean>> verboseArgument;
+	ref<process.Option<string>> classNameOption;
+	ref<process.Option<string>> namespaceOption;
+	ref<process.Option<boolean>> verboseOption;
 }
 
 SQLProxyCommand sqlProxyCommand();
-private string[] finalArgs;
 boolean errorsFound;
 ref<Writer> output;
 ref<Procedure>[] procedures;
@@ -67,7 +66,7 @@ int main(string[] args) {
 	
 	if (!sqlProxyCommand.parse(args))
 		sqlProxyCommand.help();
-	string[] a = sqlProxyCommand.finalArgs();
+	string[] a = sqlProxyCommand.finalArguments();
 	Scanner s(a[0]);
 	if (!s.opened()) {
 		printf("Could not open '%s'\n", a[0]);
@@ -115,11 +114,11 @@ int main(string[] args) {
 		return 1;
 	}
 	output.write("/* GENERATED CODE - DO NOT MODIFY */\n");
-	if (sqlProxyCommand.namespaceArgument.set())
-		output.printf("namespace %s;\n", sqlProxyCommand.namespaceArgument.value);
+	if (sqlProxyCommand.namespaceOption.set())
+		output.printf("namespace %s;\n", sqlProxyCommand.namespaceOption.value);
 	string className;
-	if (sqlProxyCommand.classNameArgument.set())
-		className = sqlProxyCommand.classNameArgument.value;
+	if (sqlProxyCommand.classNameOption.set())
+		className = sqlProxyCommand.classNameOption.value;
 	else
 		className = DEFAULT_CLASS_NAME;
 	output.write("import parasol:sql;\n");

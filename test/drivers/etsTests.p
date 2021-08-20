@@ -50,77 +50,77 @@ class TestCommand extends process.Command {
 					"Parasol Runtime Version " + runtime.RUNTIME_VERSION + "\r" +
 					"Copyright (c) " + COPYRIGHT_STRING
 					);
-		rootDirArgument = stringArgument('r', "root",
+		rootDirOption = stringOption('r', "root",
 					"Set's the root of the test tree to this directory.");
-		importPathArgument = stringArgument('I', "importPath", 
+		importPathOption = stringOption('I', "importPath", 
 					"Sets the path of directories like the --explicit option, " +
 					"but the directory ^/src/lib are appended to " +
 					"those specified with this option.");
-		verboseArgument = booleanArgument('v', null,
+		verboseOption = booleanOption('v', null,
 					"Enables verbose output.");
-		showParseStageErrorsArgument = booleanArgument('p', "parseErrors",
+		showParseStageErrorsOption = booleanOption('p', "parseErrors",
 					"Show errors know at the end of the parse stage. " +
 					"Showing these messages still lets an expected failure test pass.");
-		symbolTableArgument = booleanArgument(0, "syms",
+		symbolTableOption = booleanOption(0, "syms",
 					"Print the symbol table.");
-		logImportsArgument = booleanArgument(0, "logImports",
+		logImportsOption = booleanOption(0, "logImports",
 					"Log all import processing");
-		traceArgument = booleanArgument(0, "trace",
+		traceOption = booleanOption(0, "trace",
 					"Trace execution of each test.");
-		explicitArgument = stringArgument('X', "explicit",
+		explicitOption = stringOption('X', "explicit",
 					"Sets the path of directories to search for imported symbols. " +
 					"Directories are separated by commas. " +
 					"The special directory ^ can be used to signify the Parasol " +
 					"install directory. ");
-		headerArgument = stringArgument('H', "header",
+		headerOption = stringOption('H', "header",
 					"Writes any declaration marked with a @Header annotation as a " + 
 					"C declaration. " + 
 					"The named output file will be overwritten if it already exists.");
-		testPxiArgument = stringArgument(0, "testpxi",
+		testPxiOption = stringOption(0, "testpxi",
 					"Uses this pxi file with run tests.");
-		targetArgument = stringArgument(0, "target",
+		targetOption = stringOption(0, "target",
 					"Selects the target runtime for this execution. " +
 					"Default: " + pxi.sectionTypeName(runtime.Target(runtime.supportedTarget(0))));
-		compileFromSourceArgument = booleanArgument('s', "compileFromSource",
+		compileFromSourceOption = booleanOption('s', "compileFromSource",
 					"In --test mode, any 'run' tests are run with 'compiler/main.p' included.");
-		helpArgument('?', "help",
+		helpOption('?', "help",
 					"Displays this help.");
 	}
 
-	ref<process.Argument<string>> rootDirArgument;
-	ref<process.Argument<string>> importPathArgument;
-	ref<process.Argument<boolean>> verboseArgument;
-	ref<process.Argument<boolean>> traceArgument;
-	ref<process.Argument<string>> explicitArgument;
-	ref<process.Argument<string>> headerArgument;
-	ref<process.Argument<string>> targetArgument;
-	ref<process.Argument<string>> testPxiArgument;
-	ref<process.Argument<boolean>> logImportsArgument;
-	ref<process.Argument<boolean>> symbolTableArgument;
-	ref<process.Argument<boolean>> compileFromSourceArgument;
-	ref<process.Argument<boolean>> showParseStageErrorsArgument;
+	ref<process.Option<string>> rootDirOption;
+	ref<process.Option<string>> importPathOption;
+	ref<process.Option<boolean>> verboseOption;
+	ref<process.Option<boolean>> traceOption;
+	ref<process.Option<string>> explicitOption;
+	ref<process.Option<string>> headerOption;
+	ref<process.Option<string>> targetOption;
+	ref<process.Option<string>> testPxiOption;
+	ref<process.Option<boolean>> logImportsOption;
+	ref<process.Option<boolean>> symbolTableOption;
+	ref<process.Option<boolean>> compileFromSourceOption;
+	ref<process.Option<boolean>> showParseStageErrorsOption;
 }
 
 int main(string[] args) {
 	TestCommand runetsCommand;
 	if (!runetsCommand.parse(args))
 		runetsCommand.help();
-	if (runetsCommand.importPathArgument.set() &&
-		runetsCommand.explicitArgument.set()) {
+	if (runetsCommand.importPathOption.set() &&
+		runetsCommand.explicitOption.set()) {
 		printf("Cannot set both --explicit and --importPath arguments.\n");
 		runetsCommand.help();
 	}
-	if (runetsCommand.targetArgument.set()) {
-		if (pxi.sectionType(runetsCommand.targetArgument.value) == null) {
-			printf("Invalid value for target argument: %s\n", runetsCommand.targetArgument.value);
+	if (runetsCommand.targetOption.set()) {
+		if (pxi.sectionType(runetsCommand.targetOption.value) == null) {
+			printf("Invalid value for target argument: %s\n", runetsCommand.targetOption.value);
 			runetsCommand.help();
 		}
 	}
 	script.setCommandPrefix(storage.absolutePath(process.binaryFilename()) + " --test");
-	listAllTests = runetsCommand.traceArgument.value;
+	listAllTests = runetsCommand.traceOption.value;
 	string pxiName;
-	if (runetsCommand.testPxiArgument.set())
-		pxiName = runetsCommand.testPxiArgument.value;
+	if (runetsCommand.testPxiOption.set())
+		pxiName = runetsCommand.testPxiOption.value;
 	else {
 		string binDir = storage.directory(process.binaryFilename());
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN)
@@ -128,13 +128,13 @@ int main(string[] args) {
 		else
 			pxiName = storage.constructPath(binDir, "x86-64-lnx.pxi");
 	}
-	initTestObjects(process.binaryFilename(), pxiName, runetsCommand.verboseArgument.value, 
-			runetsCommand.compileFromSourceArgument.value,
-			runetsCommand.symbolTableArgument.value,
-			runetsCommand.targetArgument.value,
-			runetsCommand.importPathArgument.value,
-			runetsCommand.rootDirArgument.value, runetsCommand.showParseStageErrorsArgument.value);
+	initTestObjects(process.binaryFilename(), pxiName, runetsCommand.verboseOption.value, 
+			runetsCommand.compileFromSourceOption.value,
+			runetsCommand.symbolTableOption.value,
+			runetsCommand.targetOption.value,
+			runetsCommand.importPathOption.value,
+			runetsCommand.rootDirOption.value, runetsCommand.showParseStageErrorsOption.value);
 //		initCommonTestObjects();
-	string[] s = runetsCommand.finalArgs();
+	string[] s = runetsCommand.finalArguments();
 	return launch(s);
 }

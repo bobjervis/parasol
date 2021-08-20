@@ -38,17 +38,17 @@ class UCDParserCommand extends process.Command {
 					"\n" +
 					"Copyright (c) " + COPYRIGHT_STRING
 					);
-		verboseArgument = booleanArgument('v', null,
+		verboseOption = booleanOption('v', null,
 					"Enables verbose output.");
-		helpArgument('?', "help",
+		helpOption('?', "help",
 					"Displays this help.");
 	}
 
-	ref<process.Argument<boolean>> verboseArgument;
+	ref<process.Option<boolean>> verboseOption;
 }
 
 private UCDParserCommand ucdParserCommand;
-private string[] finalArgs;
+private string[] finalArguments;
 
 enum Treatment {
 	DECIMAL_0,
@@ -78,12 +78,12 @@ int main(string[] args) {
 	
 	if (!ucdParserCommand.parse(args))
 		ucdParserCommand.help();
-	finalArgs = ucdParserCommand.finalArgs();
-	if (finalArgs.length() != 2)
+	finalArguments = ucdParserCommand.finalArguments();
+	if (finalArguments.length() != 2)
 		ucdParserCommand.help();
-	printf("Creating classifiers in %s\n", finalArgs[1]);
+	printf("Creating classifiers in %s\n", finalArguments[1]);
 
-	string unicodeData_txt = finalArgs[0];
+	string unicodeData_txt = finalArguments[0];
 	
 	ref<Reader> ucd = storage.openTextFile(unicodeData_txt);
 	if (ucd == null) {
@@ -141,7 +141,7 @@ int main(string[] args) {
 		printf("Code points are not in ascending order.\n");
 		return 1;
 	}
-	if (ucdParserCommand.verboseArgument.value) {
+	if (ucdParserCommand.verboseOption.value) {
 		for (int i = 0; i < intervals.length(); i++)
 			printf("%8x-%x %s\n", intervals[i].first, intervals[i].last, string(intervals[i].treatment));
 	}
@@ -166,9 +166,9 @@ int main(string[] args) {
 
 	printf("Total Intervals - %d Total Letters %d Total White Space %d Total Decimals %d\n", intervals.length(),
 			totalLetters, totalWhiteSpace, totalDecimals);
-	ref<Writer> classifier = storage.createTextFile(finalArgs[1]);
+	ref<Writer> classifier = storage.createTextFile(finalArguments[1]);
 	if (classifier == null) {
-		printf("Could not create file %s\n", finalArgs[1]);
+		printf("Could not create file %s\n", finalArguments[1]);
 		return 1;
 	}
 	classifier.write("/*\n");
@@ -176,7 +176,7 @@ int main(string[] args) {
 	classifier.write(" */\n");
 	if (!writeClassifier(classifier)) {
 		delete classifier;
-		printf("Failed to write classifier %s\n", finalArgs[1]);
+		printf("Failed to write classifier %s\n", finalArguments[1]);
 		return 1;
 	} else {
 		delete classifier;

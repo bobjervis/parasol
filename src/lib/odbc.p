@@ -506,9 +506,9 @@ public class Statement {
 		SQLLEN actual;
 		SQLRETURN ret;
 		ret = SQLGetData(_statement, SQLUSMALLINT(column), SQL_C_CHAR, &s[0], s.length(), &actual);
-//		printf("getString %d ret = %d (%s)\n", column, ret, string(fromSQLRETURN(ret)));
+		printf("getString %d ret = %d (%s)\n", column, ret, string(fromSQLRETURN(ret)));
 		if (SQL_SUCCEEDED(ret)) {
-//			printf("actual = %d s = '%s'\n", actual, s);
+			printf("actual = %d s = '%s'\n", actual, s);
 			if (actual == -1)
 				s = null;
 			else

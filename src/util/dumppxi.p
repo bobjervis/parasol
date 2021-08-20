@@ -24,15 +24,15 @@ class DumpPxiCommand extends process.Command {
 	public DumpPxiCommand() {
 		finalArguments(1, int.MAX_VALUE, "<file> ...");
 		description("Produce a formatted dump of a pxi file.");
-		sectionArgument = stringArgument('s', "section",
+		sectionOption = stringOption('s', "section",
 				"Include detailed dump of this section type.");
-		asmArgument = stringArgument('a', "asm",
+		asmOption = stringOption('a', "asm",
 				"Include an assembly listing of the code in the dump of the named section type.");
-		helpArgument('?', "help", "Display this help.");
+		helpOption('?', "help", "Display this help.");
 	}
 	
-	ref<process.Argument<string>> sectionArgument;
-	ref<process.Argument<string>> asmArgument;
+	ref<process.Option<string>> sectionOption;
+	ref<process.Option<string>> asmOption;
 }
 
 DumpPxiCommand command;
@@ -43,18 +43,18 @@ runtime.Target assembly;
 int main(string[] args) {
 	if (!command.parse(args))
 		command.help();
-	string[] files = command.finalArgs();
-	if (command.sectionArgument.set()) {
-		verbose = pxi.sectionType(command.sectionArgument.value);
+	string[] files = command.finalArguments();
+	if (command.sectionOption.set()) {
+		verbose = pxi.sectionType(command.sectionOption.value);
 		if (verbose == runtime.Target.ERROR) {
-			printf("Invalid section type: %s\n", command.sectionArgument.value);
+			printf("Invalid section type: %s\n", command.sectionOption.value);
 			return 1;
 		}
 	}
-	if (command.asmArgument.set()) {
-		assembly = pxi.sectionType(command.asmArgument.value);
+	if (command.asmOption.set()) {
+		assembly = pxi.sectionType(command.asmOption.value);
 		if (assembly == runtime.Target.ERROR) {
-			printf("Invalid section type for assembly: %s\n", command.asmArgument.value);
+			printf("Invalid section type for assembly: %s\n", command.asmOption.value);
 			return 1;
 		}
 	}

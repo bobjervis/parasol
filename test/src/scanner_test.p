@@ -35,17 +35,17 @@ class TestCommand extends process.Command {
 					"Refer to the Parasol language reference manual for details on " +
 					"permitted syntax."
 					);
-		seedArgument = stringArgument(0, "seed", "Sets the seed for the random number generator.");
-		skipShuffleArgument = booleanArgument(0, "skipShuffle", "Does not shuffle the tokens before the " +
+		seedOption = stringOption(0, "seed", "Sets the seed for the random number generator.");
+		skipShuffleOption = booleanOption(0, "skipShuffle", "Does not shuffle the tokens before the " +
 					"second pass.");
-		verboseArgument = booleanArgument('v', null, "Displays all matched tokens.");
-		helpArgument('?', "help",
+		verboseOption = booleanOption('v', null, "Displays all matched tokens.");
+		helpOption('?', "help",
 					"Displays this help.");
 	}
 
-	ref<process.Argument<string>> seedArgument;
-	ref<process.Argument<boolean>> skipShuffleArgument;
-	ref<process.Argument<boolean>> verboseArgument;
+	ref<process.Option<string>> seedOption;
+	ref<process.Option<boolean>> skipShuffleOption;
+	ref<process.Option<boolean>> verboseOption;
 }
 
 int seed = 1;
@@ -56,16 +56,16 @@ int main(string[] args) {
 	printf("Scanner location calibration test\n");
 	if (!scannerTestCommand.parse(args))
 		scannerTestCommand.help();
-	if (scannerTestCommand.seedArgument.set()) {
+	if (scannerTestCommand.seedOption.set()) {
 		boolean success;
-		(seed, success) = int.parse(scannerTestCommand.seedArgument.value);
+		(seed, success) = int.parse(scannerTestCommand.seedOption.value);
 		if (!success) {
-			printf("Unable to parse seed '%s'\n", scannerTestCommand.seedArgument.value);
+			printf("Unable to parse seed '%s'\n", scannerTestCommand.seedOption.value);
 			scannerTestCommand.help();
 		}
 	}
 	r.set(seed);
-	string[] files = scannerTestCommand.finalArgs();
+	string[] files = scannerTestCommand.finalArguments();
 	boolean anyFailed = false;
 	for (int i = 0; i < files.length(); i++) {
 		if (!scan(files[i]))
@@ -135,7 +135,7 @@ boolean scan(string filename) {
 	}
 //	dumpTokens(&tokens, scanner);
 	ref<Scanner> nscanner = Scanner.create(fs);
-	if (!scannerTestCommand.skipShuffleArgument.value)
+	if (!scannerTestCommand.skipShuffleOption.value)
 		shuffle(&tokens);
 //	printf("---\nAfter shuffle:\n\n");
 //	dumpTokens(&tokens, scanner);
@@ -170,7 +170,7 @@ boolean scan(string filename) {
 			printf("[%4d] Token %s reports different location: %d(%d) : %d(%d)\n", i, string(t), scanner.lineNumber(tokens[i].location) + 1, tokens[i].location.offset, scanner.lineNumber(nscanner.location()) + 1, nscanner.location().offset);
 			return false;
 		}
-		if (scannerTestCommand.verboseArgument.value) {
+		if (scannerTestCommand.verboseOption.value) {
 			switch (t) {
 			case IDENTIFIER:
 			case INTEGER:

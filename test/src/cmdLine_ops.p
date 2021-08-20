@@ -16,17 +16,17 @@
 import parasol:process;
 
 class TestCommand extends process.Command {
-	ref<process.Argument<string>> aStringArgument;
-	ref<process.Argument<boolean>> aBooleanArgument;
+	ref<process.Option<string>> aStringOption;
+	ref<process.Option<boolean>> aBooleanOption;
 
 	public TestCommand() {
 		finalArguments(1, 2, "parameter [ TEST-STRING-2 ]");
 		description("Test the command-line parsing library.");
-		aStringArgument = stringArgument('S', "aString", 
+		aStringOption = stringOption('S', "aString", 
 					"Sets a string argument.");
-		aBooleanArgument = booleanArgument('B', "aBoolean",
+		aBooleanOption = booleanOption('B', "aBoolean",
 					"Sets a boolean argument.");
-		helpArgument('?', "help", "Displays this help.");
+		helpOption('?', "help", "Displays this help.");
 	}
 
 }
@@ -39,23 +39,23 @@ int main(string[] args) {
 		return 7;
 	}
 	printf("Arguments parse succeeded\n");
-	string[] params = testCommand.finalArgs();
+	string[] params = testCommand.finalArguments();
 	pointer<long> xp = pointer<long>(&params);
 	if (params.length() == 2) {
 		if (params[1] != "TEST-STRING-2")
 			return 2;
 	}
-	if (testCommand.aBooleanArgument.value) {
-		if (testCommand.aStringArgument.set()) {
-			if (testCommand.aStringArgument.value != params[0])
+	if (testCommand.aBooleanOption.value) {
+		if (testCommand.aStringOption.set()) {
+			if (testCommand.aStringOption.value != params[0])
 				return 3;
 		} else {
 			if ("boolean-true-no-string-disallowed" == params[0])
 				return 5;
 		}
 	} else {
-		if (testCommand.aStringArgument.set()) {
-			if (testCommand.aStringArgument.value == params[0])
+		if (testCommand.aStringOption.set()) {
+			if (testCommand.aStringOption.value == params[0])
 				return 4;
 		} else {
 			if ("boolean-false-no-string-disallowed" == params[0])

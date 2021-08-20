@@ -27,7 +27,7 @@ class TestCommand extends process.Command {
 		description("This is a test program that illustrates how the Parasol " +
 					"command-line processing class operates.");
 		finalArguments(1, int.MAX_VALUE, "[ <arguments ]");
-		helpArgument('?', "help",
+		helpOption('?', "help",
 				"Displays this help.");
 
 		subCommand("sub1", &sub1);
@@ -43,10 +43,10 @@ class Sub1Command extends process.Command {
 	Sub1Command() {
 		description("Tests that we can distinguish one sub-command from another.");
 		finalArguments(0, 0, "");
-		setter = booleanArgument('s', "setter", "A boolean flag to detect");
+		setter = booleanOption('s', "setter", "A boolean flag to detect");
 	}
 
-	ref<process.Argument<boolean>> setter;
+	ref<process.Option<boolean>> setter;
 
 	public int main(string[] args) {
 		assert(setter.set());
@@ -58,10 +58,10 @@ class Sub2Command extends process.Command {
 	Sub2Command() {
 		description("Tests that we can distinguish one sub-command from another.");
 		finalArguments(0, 0, "");
-		getter = booleanArgument('g', "getter", "A boolean flag to detect");
+		getter = booleanOption('g', "getter", "A boolean flag to detect");
 	}
 
-	ref<process.Argument<boolean>> getter;
+	ref<process.Option<boolean>> getter;
 
 	public int main(string[] args) {
 		assert(getter.set());

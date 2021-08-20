@@ -56,64 +56,64 @@ class ParasolCommand extends process.Command {
 					"Parasol Runtime Version " + runtime.RUNTIME_VERSION + "\r" +
 					"Copyright (c) " + COPYRIGHT_STRING
 					);
-		importPathArgument = stringArgument('I', "importPath", 
+		importPathOption = stringOption('I', "importPath", 
 					"Sets the path of directories like the --explicit option, " +
 					"but the directory ^/src/lib is appended to " +
 					"those specified with this option.");
-		verboseArgument = booleanArgument('v', null,
+		verboseOption = booleanOption('v', null,
 					"Enables verbose output.");
-		symbolTableArgument = booleanArgument(0, "syms",
+		symbolTableOption = booleanOption(0, "syms",
 					"Print the symbol table.");
-		logImportsArgument = booleanArgument(0, "logImports",
+		logImportsOption = booleanOption(0, "logImports",
 					"Log all import processing");
-		disassemblyArgument = booleanArgument(0, "asm",
+		disassemblyOption = booleanOption(0, "asm",
 					"Display disassembly of instructions and internal tables");
-		explicitArgument = stringArgument('X', "explicit",
+		explicitOption = stringOption('X', "explicit",
 					"Sets the path of directories to search for imported symbols. " +
 					"Directories are separated by commas. " +
 					"The special directory ^ can be used to signify the Parasol " +
 					"install directory. ");
-		pxiArgument = stringArgument(0, "pxi",
+		pxiOption = stringOption(0, "pxi",
 					"Writes compiled output to the given file. " + 
 					"Does not execute the program.");
-		leaksArgument = booleanArgument(0, "leaks",
+		leaksOption = booleanOption(0, "leaks",
 					"Use a leak-detecting heap for allocations. Produce a leak " +
 					"report when the process terminates.");
-		profileArgument = stringArgument('p', "profile",
+		profileOption = stringOption('p', "profile",
 					"Produce a profile report, wriitng the profile data to the " +
 					"path provided as this argument value.");
-		coverageArgument = stringArgument(0, "cover",
+		coverageOption = stringOption(0, "cover",
 					"Produce a code coverage report, accumulating the data in a " +
 					"file at the path provided in the argument value.");
-		targetArgument = stringArgument(0, "target",
+		targetOption = stringOption(0, "target",
 					"Selects the target runtime for this execution. " +
 					"Default: " + pxi.sectionTypeName(runtime.Target(runtime.supportedTarget(0))));
-		rootArgument = stringArgument(0, "root",
+		rootOption = stringOption(0, "root",
 					"Designates a specific directory to treat as the 'root' of the install tree. " +
 					"The default is the parent directory of the runtime binary program.");
-		compileOnlyArgument = booleanArgument('c', "compile",
+		compileOnlyOption = booleanOption('c', "compile",
 					"Only compile the application, do not run it.");
-		helpArgument('?', "help",
+		helpOption('?', "help",
 					"Displays this help.");
 	}
 
-	ref<process.Argument<string>> importPathArgument;
-	ref<process.Argument<boolean>> verboseArgument;
-	ref<process.Argument<boolean>> disassemblyArgument;
-	ref<process.Argument<string>> explicitArgument;
-	ref<process.Argument<string>> pxiArgument;
-	ref<process.Argument<string>> targetArgument;
-	ref<process.Argument<string>> rootArgument;
-	ref<process.Argument<string>> profileArgument;
-	ref<process.Argument<string>> coverageArgument;
-	ref<process.Argument<boolean>> leaksArgument;
-	ref<process.Argument<boolean>> logImportsArgument;
-	ref<process.Argument<boolean>> symbolTableArgument;
-	ref<process.Argument<boolean>> compileOnlyArgument;
+	ref<process.Option<string>> importPathOption;
+	ref<process.Option<boolean>> verboseOption;
+	ref<process.Option<boolean>> disassemblyOption;
+	ref<process.Option<string>> explicitOption;
+	ref<process.Option<string>> pxiOption;
+	ref<process.Option<string>> targetOption;
+	ref<process.Option<string>> rootOption;
+	ref<process.Option<string>> profileOption;
+	ref<process.Option<string>> coverageOption;
+	ref<process.Option<boolean>> leaksOption;
+	ref<process.Option<boolean>> logImportsOption;
+	ref<process.Option<boolean>> symbolTableOption;
+	ref<process.Option<boolean>> compileOnlyOption;
 }
 
 private ref<ParasolCommand> parasolCommand;
-private string[] finalArgs;
+private string[] finalArguments;
 
 enum CommandLineVariant {
 	INTERACTIVE,
@@ -144,21 +144,21 @@ CommandLineVariant parseCommandLine(string[] args) {
 	parasolCommand = new ParasolCommand();
 	if (!parasolCommand.parse(args))
 		parasolCommand.help();
-	if (parasolCommand.importPathArgument.set() &&
-		parasolCommand.explicitArgument.set()) {
+	if (parasolCommand.importPathOption.set() &&
+		parasolCommand.explicitOption.set()) {
 		printf("Cannot set both --explicit and --importPath arguments.\n");
 		parasolCommand.help();
 	}
-	if (parasolCommand.targetArgument.set()) {
-		if (pxi.sectionType(parasolCommand.targetArgument.value) == null) {
-			printf("Invalid value for target argument: %s\n", parasolCommand.targetArgument.value);
+	if (parasolCommand.targetOption.set()) {
+		if (pxi.sectionType(parasolCommand.targetOption.value) == null) {
+			printf("Invalid value for target argument: %s\n", parasolCommand.targetOption.value);
 			parasolCommand.help();
 		}
 	}
-	finalArgs = parasolCommand.finalArgs();
-	if (finalArgs.length() == 0)
+	finalArguments = parasolCommand.finalArguments();
+	if (finalArguments.length() == 0)
 		return CommandLineVariant.INTERACTIVE;
-	else if (parasolCommand.pxiArgument.set())
+	else if (parasolCommand.pxiOption.set())
 		return CommandLineVariant.COMPILE;
 	else
 		return CommandLineVariant.COMMAND;
@@ -169,19 +169,19 @@ int runCommand() {
 
 	if (!configureArena(&arena))
 		return 1;
-	string[] args = parasolCommand.finalArgs();
+	string[] args = parasolCommand.finalArguments();
 
 	int returnValue;
 	boolean result;
 	
 	ref<Target> target = arena.compile(args[0], true,
-								parasolCommand.verboseArgument.value,
-								parasolCommand.leaksArgument.value,
-								parasolCommand.profileArgument.value,
-								parasolCommand.coverageArgument.value);
-	if (parasolCommand.symbolTableArgument.value)
+								parasolCommand.verboseOption.value,
+								parasolCommand.leaksOption.value,
+								parasolCommand.profileOption.value,
+								parasolCommand.coverageOption.value);
+	if (parasolCommand.symbolTableOption.value)
 		arena.printSymbolTable();
-	if (parasolCommand.verboseArgument.value) {
+	if (parasolCommand.verboseOption.value) {
 		arena.print();
 		if (target != null)
 			target.print();
@@ -192,7 +192,7 @@ int runCommand() {
 		returnValue = 1;
 	} else if (!disassemble(&arena, target, args[0]))
 		returnValue = 1;
-	else if (!parasolCommand.compileOnlyArgument.value) {
+	else if (!parasolCommand.compileOnlyOption.value) {
 		(returnValue, result) = target.run(args);
 		if (!result) {
 			if (returnValue != -1)
@@ -207,17 +207,17 @@ int runCommand() {
 int compileCommand() {
 	Arena arena;
 
-	printf("Compiling to %s\n", parasolCommand.pxiArgument.value);
+	printf("Compiling to %s\n", parasolCommand.pxiOption.value);
 	time.Time start = time.Time.now();
 	if (!configureArena(&arena))
 		return 1;
-	string filename = parasolCommand.finalArgs()[0];
-	ref<Target> target = arena.compile(filename, false, parasolCommand.verboseArgument.value, false, null, null);
-	if (parasolCommand.symbolTableArgument.value)
+	string filename = parasolCommand.finalArguments()[0];
+	ref<Target> target = arena.compile(filename, false, parasolCommand.verboseOption.value, false, null, null);
+	if (parasolCommand.symbolTableOption.value)
 		arena.printSymbolTable();
 	if (!disassemble(&arena, target, filename))
 		return 1;
-	if (parasolCommand.verboseArgument.value) {
+	if (parasolCommand.verboseOption.value) {
 		arena.print();
 		target.print();
 	}
@@ -227,11 +227,11 @@ int compileCommand() {
 		return 1;
 	}
 	boolean anyFailure = false;
-	ref<pxi.Pxi> output = pxi.Pxi.create(parasolCommand.pxiArgument.value);
+	ref<pxi.Pxi> output = pxi.Pxi.create(parasolCommand.pxiOption.value);
 	target.writePxi(output);
 	delete target;
 	if (!output.write()) {
-		printf("Error writing to %s\n", parasolCommand.pxiArgument.value);
+		printf("Error writing to %s\n", parasolCommand.pxiOption.value);
 		anyFailure = true;
 	}
 	delete output;
@@ -244,23 +244,23 @@ int compileCommand() {
 }
 
 boolean configureArena(ref<Arena> arena) {
-	arena.logImports = parasolCommand.logImportsArgument.value;
-	if (parasolCommand.rootArgument.set())
-		arena.setRootFolder(parasolCommand.rootArgument.value);
-	if (parasolCommand.explicitArgument.set())
-		arena.setImportPath(parasolCommand.explicitArgument.value);
-	else if (parasolCommand.importPathArgument.set())
-		arena.setImportPath(parasolCommand.importPathArgument.value + ",^/src/lib");
-	arena.verbose = parasolCommand.verboseArgument.value;
+	arena.logImports = parasolCommand.logImportsOption.value;
+	if (parasolCommand.rootOption.set())
+		arena.setRootFolder(parasolCommand.rootOption.value);
+	if (parasolCommand.explicitOption.set())
+		arena.setImportPath(parasolCommand.explicitOption.value);
+	else if (parasolCommand.importPathOption.set())
+		arena.setImportPath(parasolCommand.importPathOption.value + ",^/src/lib");
+	arena.verbose = parasolCommand.verboseOption.value;
 	if (arena.logImports)
 		printf("Running with import path: %s\n", arena.importPath());
-	if (parasolCommand.targetArgument.set())
-		arena.preferredTarget = pxi.sectionType(parasolCommand.targetArgument.value);
+	if (parasolCommand.targetOption.set())
+		arena.preferredTarget = pxi.sectionType(parasolCommand.targetOption.value);
 	if (arena.load()) 
 		return true;
 	else {
 		arena.printMessages();
-		if (parasolCommand.verboseArgument.value)
+		if (parasolCommand.verboseOption.value)
 			arena.print();
 		printf("Failed to load arena\n");
 		return false;
@@ -268,7 +268,7 @@ boolean configureArena(ref<Arena> arena) {
 }
 
 private boolean disassemble(ref<Arena> arena, ref<Target> target, string filename) {
-	if (!parasolCommand.disassemblyArgument.value)
+	if (!parasolCommand.disassemblyOption.value)
 		return true;
 	if (target.disassemble(arena))
 		return true;
