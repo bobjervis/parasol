@@ -371,7 +371,7 @@ public class WebSocket extends WebSocketVolatileData {
 	~WebSocket() {
 		ref<Thread> readerThread = stopReading();
 		
-		if (readerThread != null) {
+		if (readerThread != null && !_server) {
 //			logger.debug("about to join...\n");
 			readerThread.join();
 		}
@@ -610,7 +610,7 @@ public class WebSocket extends WebSocketVolatileData {
 					logger.error("_incomingLength = %d\n", _incomingLength);
 					linux.perror(null);
 				}
-				logger.debug("CLOSE_BAD_DATA - recv failed");
+//				logger.debug("CLOSE_BAD_DATA - recv failed");
 				shutDown(CLOSE_BAD_DATA, "recv failed");
 				return -1;
 			}

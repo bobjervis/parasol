@@ -291,7 +291,8 @@ public class Socket {
 		int acceptfd = net.accept(_socketfd, &a, &addrlen);
 		if (acceptfd < 0) {
 			string buffer = linux.strerror(linux.errno());
-			logger.debug("accept on port %d failed %s", _port, buffer);
+			if (linux.errno() != linux.EINVAL)
+				logger.debug("accept on port %d failed %s", _port, buffer);
 			net.closesocket(_socketfd);
 			return null;
 		}
