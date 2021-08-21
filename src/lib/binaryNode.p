@@ -912,7 +912,7 @@ public class Binary extends Node {
 				
 			case	STRING16:
 			case	STRING:
-				if (_right.op() == Operator.CALL && ref<Call>(_right).category() != CallCategory.CONSTRUCTOR) {
+				if (_right.op() == Operator.CALL && ref<Call>(_right).category() != CallCategory.CONSTRUCTOR && !_right.multiReturnCall()) {
 					ref<OverloadInstance> oi;
 					ref<Type> storeType;
 					if (op() == Operator.ASSIGN_TEMP) {

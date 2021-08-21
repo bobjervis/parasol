@@ -17,6 +17,7 @@ int main(string[] args) {
 	compareTests();
 	destructorTests();
 	stringParamTests();
+	stringReturnTests();
 	resizeTests();
 	loopTests();
 	copyTests();
@@ -99,6 +100,32 @@ void destructorTests() {
 void stringParamTests() {
 	string a = "abc";
 	assert(f(a) == 'c');
+}
+
+void stringReturnTests() {
+	string a;
+	int b;
+
+	(a, b) = multiReturn();
+
+	assert(a == "abc");
+	assert(b == 7);
+
+	string c = multiReturn();
+
+	assert(c == "abc"); 
+
+	string d;
+
+	d = multiReturn();
+
+	printf("d length = %d\n", d.length());
+	assert(d == "abc"); 
+}
+
+string, int multiReturn() {
+	string s = "abc";
+	return s, 7;
 }
 
 byte f(string d) {

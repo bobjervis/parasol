@@ -3730,6 +3730,10 @@ public class Node {
 			return returnType.next;
 		}
 	}
+
+	public boolean multiReturnCall() {
+		return false;
+	}
 	
 	public boolean canCoerce(ref<Type> newType, boolean explicitCast, ref<CompileContext> compileContext) {
 		if (type == null)

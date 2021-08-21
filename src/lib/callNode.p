@@ -633,6 +633,20 @@ public class Call extends ParameterBag {
 		}
 		return this;
 	}
+
+	public boolean multiReturnCall() {
+		if (deferGeneration())
+			return false;
+		if (op() != Operator.CALL)
+			return false;
+		switch (_category) {
+		case FUNCTION_CALL:
+		case METHOD_CALL:
+			ref<FunctionType> functionType = ref<FunctionType>(_target.type);
+			return functionType != null && functionType.returnCount() > 1;
+		}
+		return false;
+	}
 	/**
 	 * Get the first ellipsis argument, if any.
 	 *
