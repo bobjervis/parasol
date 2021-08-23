@@ -188,19 +188,9 @@ public class Identifier extends Node {
 				}
 			}
 			if (type != null && type.class == EnumType) {
-				ref<Node> n = tree.newIdentifier(ref<EnumType>(type).symbol(), location());
-				n.type = compileContext.arena().builtInType(TypeFamily.UNSIGNED_8);
-				n = tree.newUnary(Operator.ADDRESS_OF_ENUM, n, location());
-				n.type = compileContext.arena().createPointer(type, compileContext);
-				ref<Node> r = tree.newUnary(Operator.CAST, this, location());
-				r.type = compileContext.arena().builtInType(TypeFamily.SIGNED_64);
-				r = tree.newBinary(Operator.ADD, n, r, location());
-				r.type = n.type;
-				r = tree.newUnary(Operator.INDIRECT, r, location());
-				r.type = type;
+				ref<EnumType> etype = ref<EnumType>(type);
 				type = _symbol.type();
-				r = r.fold(tree, false, compileContext);
-				return r;
+				return makeAddressOfEnumClass(false, this, etype, tree, compileContext);
 			}
 		}
 		return this;
@@ -519,6 +509,23 @@ public class Identifier extends Node {
 	}
 }
 
+private ref<Node> makeAddressOfEnumClass(boolean implicitIndirect, ref<Node> enumInstance, ref<EnumType> type, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
+	ref<Node> n = tree.newIdentifier(type.symbol(), enumInstance.location());
+	n.type = compileContext.arena().builtInType(TypeFamily.UNSIGNED_8);
+	n = tree.newUnary(Operator.ADDRESS_OF_ENUM, n, enumInstance.location());
+	n.type = compileContext.arena().createPointer(type, compileContext);
+	ref<Node> r = tree.newUnary(Operator.CAST, enumInstance, enumInstance.location());
+	r.type = compileContext.arena().builtInType(TypeFamily.SIGNED_64);
+	r = tree.newBinary(Operator.ADD, n, r, enumInstance.location());
+	r.type = n.type;
+	if (!implicitIndirect) {
+		r = tree.newUnary(Operator.INDIRECT, r, enumInstance.location());
+		r.type = type;
+	}
+	r = r.fold(tree, false, compileContext);
+	return r;
+}
+
 public class Selection extends Node {
 	private ref<Node> _left;
 	private substring _name;
@@ -755,16 +762,14 @@ public class Selection extends Node {
 				}
 			}
 		}
-		if (_left.type == null)
-			print(0);
-		if (_left.type.class == EnumInstanceType)
-			_left.type = ref<EnumInstanceType>(_left.type).enumType();
-		switch (_left.op()) {
-		case SUBSCRIPT:
-			ref<Node> element = ref<Binary>(_left).subscriptModify(tree, compileContext);
-			if (element != null)
-				_left = element;
-			break;
+		if (_left.type.class != EnumInstanceType) {
+			switch (_left.op()) {
+			case SUBSCRIPT:
+				ref<Node> element = ref<Binary>(_left).subscriptModify(tree, compileContext);
+				if (element != null)
+					_left = element;
+				break;
+			}
 		}
 		_left = _left.fold(tree, false, compileContext);
 		// Flatten an INDIRECT node to simplify code gen later.
@@ -772,6 +777,11 @@ public class Selection extends Node {
 			ref<Unary> u = ref<Unary>(_left);
 			_left = u.operand();
 			_indirect = true;
+		}
+		if (_left.type.class == EnumInstanceType) {
+			ref<EnumInstanceType> instance = ref<EnumInstanceType>(_left.type);
+			_indirect = true;
+			_left = makeAddressOfEnumClass(true, _left, instance.enumType(), tree, compileContext);
 		}
 		return this;
 	}

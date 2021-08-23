@@ -849,7 +849,7 @@ public monitor class Rendezvous {
 	 */
 	public byte[] replyMessage;
 	/**
-	 * An indicator of a successfully posted reposne-half message.
+	 * An indicator of a successfully posted response-half message.
 	 *
 	 * If the value is true, {@link postResult} was called. If the value is false, the Web Socket
 	 * was closed before the response-half message was received.

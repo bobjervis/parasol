@@ -73,3 +73,24 @@ string, boolean sb(int x) {
 		return "def", false;
 }
 
+class Returner {
+	long x;
+	long y;
+}
+
+Returner f_out(int x) {
+	Returner r;
+
+	r.x = x + 7;
+	r.y = x + x;
+	return r;
+}
+
+Returner n = f_out(26);
+
+printf("n = { x: %d, y: %d }\n", n.x, n.y);
+
+assert(n.x == 33);
+assert(n.y == 52);
+	
+

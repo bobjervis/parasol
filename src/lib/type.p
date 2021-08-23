@@ -1003,7 +1003,6 @@ public class EnumInstanceType extends Type {
 	public string signature() {
 		return "[" + _scope.enumType.signature() + "]";
 	}
-	
 }
 /**
  * The type of a Flags declaration.

@@ -64,3 +64,13 @@ f();
 
 destructorsAllowed = true;				// Relying on the fact that static lifetimes of boolean's last to process
 										// termination.
+
+A[] array;
+
+array.append(A.B);
+array.append(A.D);
+
+int x = 0;
+
+assert(!array[x].isHappy());
+assert(array[x + 1].isHappy());
