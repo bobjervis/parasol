@@ -719,7 +719,7 @@ public class Process extends ProcessVolatileData {
 	 * Process exit information.
 	 *
 	 * This method cannot be directly called, but sub-classes of Process can override the definition
-	 * And provide special processing.
+	 * and provide special processing.
 	 *
 	 * Failing to call the {@code super.processExitInfo} will fail to notify any threads waiting for
 	 * the child process to exit, nor will future calls to {@link waitForExit} return.
