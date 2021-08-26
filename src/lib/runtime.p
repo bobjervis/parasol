@@ -23,6 +23,7 @@ import native:linux;
 import native:windows;
 import parasol:compiler.FileStat;
 import parasol:compiler.Location;
+import parasol:exception;
 import parasol:thread.Thread;
 import parasol:x86_64.X86_64SectionHeader;
 
@@ -270,6 +271,29 @@ public class Coverage {
 }
 /** @ignore */
 public class CoverageTables {
+}
+/**
+ * Return a text stack trace for the code location of the call to this function.
+ *
+ * @return The stack trace of the current running thread.
+ */
+public string stackTrace() {
+	string output;
+	int lowCode = int(lowCodeAddress());
+	address ip = returnAddress();
+	address frame = framePointer();
+	address top = stackTop();
+	while (frame != null) {
+		if (long(frame) > long(top))
+			break;		
+		int relative = int(ip) - lowCode;
+		string locationLabel = exception.formattedLocation(ip, relative, false);
+		output.printf("%s\n", locationLabel);
+		pointer<address> lastFrame = pointer<address>(frame);
+		frame = lastFrame[0];
+		ip = lastFrame[1];
+	}
+	return output;
 }
 
 
