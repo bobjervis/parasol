@@ -15,6 +15,7 @@
  */
 import parasol:process;
 import parasol:http;
+import parasol:net;
 
 /*
  * Date and Copyright holder of this code base.
@@ -54,10 +55,55 @@ int main(string[] args) {
 	urls = command.finalArguments();
 	if (urls.length() <= 0)
 		command.help();
+	int exitCode;
 	for (int i = 0; i < urls.length(); i++) {
 		http.HttpClient client(urls[i]);
 
-		client.get();
+		http.ConnectStatus result = client.get();
+		if (result == http.ConnectStatus.OK) {
+			ref<http.HttpParsedResponse> resp = client.response();
+			if (resp == null) {
+				printf("malformed or missing HTTP response header for url '%s'\n", urls[i]);
+				exitCode = 1;
+			} else {
+				if (command.verboseOption.set())
+					printf("HTTP Response %s to '%s'\n", resp.code, urls[i]);
+				else if (resp.code != "200") {
+					printf("ERROR: HTTP Response %s to '%s'\n", resp.code, urls[i]);
+					exitCode = 1;
+				} else {
+					string contentLength = resp.headers["content-length"];
+					if (contentLength != null) {
+						int len = int.parse(contentLength);
+						ref<net.Connection> conn = client.connection();
+	
+						if (conn == null) {
+							printf("No connection object for '%s'\n", urls[i]);
+							exitCode = 1;
+						} else {
+							byte[] buffer;
+							int accumulated;
+	
+							buffer.resize(len);
+
+							while (accumulated < len) {
+								int actual = conn.read(&buffer[accumulated], buffer.length() - accumulated);
+
+								accumulated += actual;
+							}
+							process.stdout.write(&buffer[0], accumulated);
+						}
+					} else {
+						printf("Unknown content-length for '%s'\n", urls[i]);
+						exitCode = 1;
+					}
+
+				}
+			}
+		} else {
+			printf("GET of '%s' failed: %s\n", urls[i], string(result));
+			exitCode = 1;
+		}
 	}
-	return 0;
+	return exitCode;
 }
