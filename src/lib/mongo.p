@@ -261,6 +261,8 @@ public class Bson {
 	 * could not be converted.
 	 */
 	public static ref<Bson> create(ref<Object> parsedJson) {
+		if (parsedJson == null)
+			return null;
 		ref<Bson> b = bson_new();
 		for (key in (*parsedJson)) {
 			var value = (*parsedJson)[key];
@@ -283,6 +285,8 @@ public class Bson {
 	 * could not be converted.
 	 */
 	public static ref<Bson> create(ref<Array> array) {
+		if (array == null)
+			return null;
 		ref<Bson> a = Bson.create();
 		for (i in *array) {
 			var value = (*array)[i];
@@ -328,6 +332,8 @@ public class Bson {
 
 	private static boolean appendTo(ref<Bson> output, string key, var value) {
 		if (value.class == ref<Object>) {
+			if (ref<Object>(value) == null)
+				return output.appendNull(key);
 			ref<Bson> f = create(ref<Object>(value));
 			if (f == null)
 				return false;
@@ -344,6 +350,8 @@ public class Bson {
 		else if (value.class == double)
 			return output.append(key, double(value));
 		else if (value.class == ref<Array>) {
+			if (ref<Array>(value) == null)
+				return output.appendNull(key);
 			ref<Bson> a = create(ref<Array>(value));
 			if (a == null)
 				return false;
@@ -419,6 +427,10 @@ public class Bson {
 	 */
 	public boolean appendArray(string key, ref<Bson> value) {
 		return bson_append_array(this, key.c_str(), key.length(), value);
+	}
+
+	public boolean appendNull(string key) {
+		return bson_append_null(this, key.c_str(), key.length());
 	}
 	/**
 	 * This appends the contents of the Object as if it had been constructed
@@ -735,6 +747,10 @@ public class Bson {
 				x = getTime();
 				break;
 
+			case NULL:
+				x = null;
+				break;
+
 			case DOCUMENT:
 				ref<Object> o = new Object();
 				{
@@ -860,6 +876,8 @@ abstract boolean bson_append_document(ref<Bson> bson, pointer<byte> key, int key
 abstract boolean bson_append_array(ref<Bson> bson, pointer<byte> key, int keyLength, ref<Bson> value);
 @Linux("libmongoc-1.0.so.0", "bson_append_date_time")
 abstract boolean bson_append_date_time(ref<Bson> bson, pointer<byte> key, int keyLength, long milliseconds);
+@Linux("libmongoc-1.0.so.0", "bson_append_null")
+abstract boolean bson_append_null(ref<Bson> bson, pointer<byte> key, int keyLength);
 @Linux("libmongoc-1.0.so.0", "bson_as_canonical_extended_json")
 abstract pointer<byte> bson_as_canonical_extended_json(ref<Bson> bson, ref<C.size_t> lengthp);
 @Linux("libmongoc-1.0.so.0", "bson_free")

@@ -1984,9 +1984,7 @@ class StaticContentService extends HttpService {
 				f.seek(0, Seek.END);
 				long size = f.tell(); 
 				f.seek(0, Seek.START);
-				string s;
-				s.printf("%d", size);
-				response.header("Content-Length", s);
+				response.header("Content-Length", string(size));
 				response.endOfHeaders();
 //				printf("Reading %d bytes from file %s\n", size, filename);
 				byte[] buffer;
