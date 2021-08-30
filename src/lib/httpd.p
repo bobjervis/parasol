@@ -1978,7 +1978,14 @@ class StaticContentService extends HttpService {
 			filename = constructPath(_filename, request.serviceResource, null);
 		else
 			filename = _filename;
-		if (exists(filename) && !isDirectory(filename)) {
+		if (exists(filename)) {
+			if (isDirectory(filename)) {
+				filename += "/index.html";
+				if (!exists(filename) || isDirectory(filename)) {
+					response.error(404);
+					return false;
+				}
+			}
 			File f;
 			if (f.open(filename)) {
 				response.ok();
