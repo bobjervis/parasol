@@ -472,14 +472,14 @@ public class File {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD result;
 			if (windows.WriteFile(windows.HANDLE(_fd), &buffer[0], windows.DWORD(buffer.length()), &result, null) == 0)
-				throw IOException();
+				throw IOException(string(_fd));
 			return int(result);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			long result = linux.write(int(_fd), &buffer[0], buffer.length());
 			if (result >= 0)
 				return int(result);
 			else
-				throw IOException();
+				throw IOException(string(_fd) + ": " + linux.strerror(linux.errno()));
 		}
 		throw IllegalOperationException("write");
 		return -1; // TODO: fix when compiler handles throw statements orrectly
@@ -501,14 +501,14 @@ public class File {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD result;
 			if (windows.WriteFile(windows.HANDLE(_fd), &buffer[0], windows.DWORD(buffer.length()), &result, null) == 0)
-				throw IOException();
+				throw IOException(string(_fd));
 			return int(result);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			long result = linux.write(int(_fd), &buffer[0], buffer.length());
 			if (result >= 0)
 				return int(result);
 			else
-				throw IOException();
+				throw IOException(string(_fd) + ": " + linux.strerror(linux.errno()));
 		}
 		throw IllegalOperationException("write");
 		return -1; // TODO: fix when compiler handles throw statements orrectly
@@ -532,14 +532,14 @@ public class File {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD result;
 			if (windows.WriteFile(windows.HANDLE(_fd), buffer, windows.DWORD(length), &result, null) == 0)
-				throw IOException();
+				throw IOException(string(_fd));
 			return long(result);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			long result = linux.write(int(_fd), buffer, length);
 			if (result >= 0)
 				return result;
 			else
-				throw IOException();
+				throw IOException(string(_fd) + ": " + linux.strerror(linux.errno()));
 		}
 		throw IllegalOperationException("write");
 		return -1; // TODO: fix when compiler handles throw statements orrectly
@@ -577,14 +577,14 @@ public class File {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD result;
 			if (windows.ReadFile(windows.HANDLE(_fd), &(*buffer)[0], windows.DWORD(buffer.length()), &result, null) == 0)
-				throw IOException();
+				throw IOException(string(_fd));
 			return int(result);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			long result = linux.read(int(_fd), &(*buffer)[0], buffer.length());
 			if (result >= 0)
 				return int(result);
 			else
-				throw IOException();
+				throw IOException(string(_fd) + ": " + linux.strerror(linux.errno()));
 		}
 		throw IllegalOperationException("read");
 		return -1; // TODO: fix when compiler handles throw statements orrectly
@@ -608,14 +608,14 @@ public class File {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			windows.DWORD result;
 			if (windows.ReadFile(windows.HANDLE(_fd), buffer, windows.DWORD(length), &result, null) == 0)
-				return -1;
+				throw IOException(string(_fd));
 			return int(result);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
 			long result = linux.read(int(_fd), buffer, length);
 			if (result >= 0)
 				return result;
 			else
-				throw IOException();
+				throw IOException(string(_fd) + ": " + linux.strerror(linux.errno()));
 		}
 		throw IllegalOperationException("read");
 		return -1; // TODO: fix when compiler handles throw statements orrectly

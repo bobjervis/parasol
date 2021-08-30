@@ -32,6 +32,7 @@ import parasol:storage.openBinaryFile;
 import parasol:storage.Seek;
 import parasol:storage.constructPath;
 import parasol:storage.exists;
+import parasol:storage.isDirectory;
 import parasol:thread.Thread;
 import parasol:thread.ThreadPool;
 import parasol:thread.currentThread;
@@ -1977,7 +1978,7 @@ class StaticContentService extends HttpService {
 			filename = constructPath(_filename, request.serviceResource, null);
 		else
 			filename = _filename;
-		if (exists(filename)) {
+		if (exists(filename) && !isDirectory(filename)) {
 			File f;
 			if (f.open(filename)) {
 				response.ok();
