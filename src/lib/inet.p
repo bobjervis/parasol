@@ -684,7 +684,7 @@ public class Connection {
 	 * line is read.
 	 *
 	 * @return All lines of text including the last, blank, line. If the last text is
-	 * not a blank line, thenend-of-file was read.
+	 * not a blank line, then end-of-file was read.
 	 */
 	public string readHttpMessage() {
 		string message;

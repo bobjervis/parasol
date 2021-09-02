@@ -57,11 +57,11 @@ int main(string[] args) {
 		command.help();
 	int exitCode;
 	for (int i = 0; i < urls.length(); i++) {
-		http.HttpClient client(urls[i]);
+		http.Client client(urls[i]);
 
 		http.ConnectStatus result = client.get();
 		if (result == http.ConnectStatus.OK) {
-			ref<http.HttpParsedResponse> resp = client.response();
+			ref<http.ParsedResponse> resp = client.response();
 			if (resp == null) {
 				printf("malformed or missing HTTP response header for url '%s'\n", urls[i]);
 				exitCode = 1;

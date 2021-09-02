@@ -39,16 +39,16 @@ private monitor class WebSocketServiceData {
 /**
  * A service class that accepts web socket requests.
  *
- * When this object is passed to an HttpServer object then HTTP GET requests to the service
+ * When this object is passed to a Server object then HTTP GET requests to the service
  * URL will call this object to validate and complete the connection.
  *
  * During server configuration, one or more calls to {@link webSocketProtocol} should be made
  * to define the set of protocols recognized by the service.
  *
  * This class should not need to be extended to provide addtional validation. The {@link WebSocketFactory.start} abstract
- * method has access to the same HttpRequest data and can validate for a specific protocol.
+ * method has access to the same Request data and can validate for a specific protocol.
  */
-public class WebSocketService extends HttpService {
+public class WebSocketService extends Service {
 	private WebSocketServiceData _webSockets;
 	/**
 	 * Define a protocol for this web socket url.
@@ -75,15 +75,15 @@ public class WebSocketService extends HttpService {
 	/**
 	 * Process an HTTP request to validate that it is a valid web socket request.
 	 *
-	 * @param request the {@link HttpRequest} object containing the parsed HTTP request
+	 * @param request the {@link Request} object containing the parsed HTTP request
 	 * data.
-	 * @param respose The {@link HttpResponse} object used to compose and send the
+	 * @param respose The {@link Response} object used to compose and send the
 	 * response to the request.
 	 *
 	 * @return true if the request successfully made a WebSocket object, false otherwise.
 	 */
-	public boolean processRequest(ref<HttpRequest> request, ref<HttpResponse> response) {
-		if (request.method != HttpRequest.Method.GET) {
+	public boolean processRequest(ref<Request> request, ref<Response> response) {
+		if (request.method != Request.Method.GET) {
 			response.error(400);				// you gotta use GET
 			return false;
 		}
@@ -117,7 +117,7 @@ public class WebSocketService extends HttpService {
  * method is called to complete the response.
  */
 public class WebSocketFactory {
-	boolean processConnection(string protocol, ref<HttpRequest> request, ref<HttpResponse> response) {
+	boolean processConnection(string protocol, ref<Request> request, ref<Response> response) {
 		string key = request.headers["sec-websocket-key"];
 		if (key == null) {
 			response.error(400);
@@ -149,7 +149,7 @@ public class WebSocketFactory {
 	 * @return true if the request is acceptable and the connection should be confirmed as a valid Web Socket.
 	 * false if the connection should be refused.
 	 */
-	public abstract boolean start(ref<HttpRequest> request, ref<HttpResponse> response);
+	public abstract boolean start(ref<Request> request, ref<Response> response);
 }
 
 string computeWebSocketKey(int byteCount) {

@@ -45,7 +45,7 @@ import parasol:net;
 
 private ref<log.Logger> logger = log.getLogger("parasol.http.server");
 /*
-private monitor class HttpServerVolatileData {
+private monitor class ServerVolatileData {
 	protected boolean _publicSocketStopped;
 	protected boolean _secureSocketStopped;
 
@@ -77,7 +77,7 @@ private monitor class HttpServerVolatileData {
  *
  * <b>Handling URL's</b>
  *
- * The HttpServer allows a user to describe the space of acceptable URL's and map them onto either static content
+ * The Server allows a user to describe the space of acceptable URL's and map them onto either static content
  * located in the local file system, or to dynamic services that will process URL's in code.
  *
  * Before starting the server, the initialization code will need to make one call for each distinct subset of
@@ -113,7 +113,7 @@ private monitor class HttpServerVolatileData {
  * calling {@link start} on a different thread from {@link stop} or {@link wait} could result in unpredictable
  * behavior. 
  */
-public class HttpServer {
+public class Server {
 	/**
 	 * The List of ciphers to use in https protocol handshakes.
 	 *
@@ -163,7 +163,7 @@ public class HttpServer {
 	 * Create an HTTP Origin server. By default, both the http (port 80) and https (port 443)
 	 * services are enabled.
 	 */
-	public HttpServer() {
+	public Server() {
 		_publicServiceEnabled = true;
 		_httpPort = 80;
 		_secureServiceEnabled = true;
@@ -172,7 +172,7 @@ public class HttpServer {
 		_requestThreads = new ThreadPool<int>(4);
 	}
 
-	~HttpServer() {
+	~Server() {
 		wait();
 		delete _publicSocket;
 		delete _secureSocket;
@@ -295,7 +295,7 @@ public class HttpServer {
 	 *
 	 * This content is available on either the http or https protocols.
 	 *
-	 * @param absPath A prefix of a URL. See the documentation under {@link HttpServer}
+	 * @param absPath A prefix of a URL. See the documentation under {@link Server}
 	 * for a detailed explanation of how absPath values are compared against an incoming URL.
 	 * @param filename The local file system path of the static content to serve up.
 	 *
@@ -304,7 +304,7 @@ public class HttpServer {
 	 * produce unpredictable results.
 	 */
 	public void staticContent(string absPath, string filename) {
-		ref<HttpService> handler = new StaticContentService(filename);
+		ref<Service> handler = new StaticContentService(filename);
 		post(PathHandler(absPath, handler, ServiceClass.ANY_SECURITY_LEVEL));
 	}
 	/**
@@ -313,7 +313,7 @@ public class HttpServer {
 	 *
 	 * This content is only available on the https protocol.
 	 *
-	 * @param absPath A prefix of a URL. See the documentation under {@link HttpServer}
+	 * @param absPath A prefix of a URL. See the documentation under {@link Server}
 	 * for a detailed explanation of how absPath values are compared against an incoming URL.
 	 * @param filename The local file system path of the static content to serve up.
 	 *
@@ -322,7 +322,7 @@ public class HttpServer {
 	 * produce unpredictable results.
 	 */
 	public void httpsStaticContent(string absPath, string filename) {
-		ref<HttpService> handler = new StaticContentService(filename);
+		ref<Service> handler = new StaticContentService(filename);
 		post(PathHandler(absPath, handler, ServiceClass.SECURED_ONLY));
 	}
 	/**
@@ -331,7 +331,7 @@ public class HttpServer {
 	 *
 	 * This content is only available on the http protocol.
 	 *
-	 * @param absPath A prefix of a URL. See the documentation under {@link HttpServer}
+	 * @param absPath A prefix of a URL. See the documentation under {@link Server}
 	 * for a detailed explanation of how absPath values are compared against an incoming URL.
 	 * @param filename The local file system path of the static content to serve up.
 	 *
@@ -340,7 +340,7 @@ public class HttpServer {
 	 * produce unpredictable results.
 	 */
 	public void httpStaticContent(string absPath, string filename) {
-		ref<HttpService> handler = new StaticContentService(filename);
+		ref<Service> handler = new StaticContentService(filename);
 		post(PathHandler(absPath, handler, ServiceClass.UNSECURED_ONLY));
 	}
 	/**
@@ -348,16 +348,16 @@ public class HttpServer {
 	 *
 	 * This service is available on the http or https protocols.
 	 *
-	 * @param absPath A prefix of a URL. See the documentation under {@link HttpServer}
+	 * @param absPath A prefix of a URL. See the documentation under {@link Server}
 	 * for a detailed explanation of how absPath values are compared against an incoming URL.
-	 * @param handler An instance of a class derived from HttpService that will process any matching
+	 * @param handler An instance of a class derived from Service that will process any matching
 	 * requests.
 	 *
 	 * @threading
 	 * This method is not thread safe. Calling this method on a server that has been started will
 	 * produce unpredictable results.
 	 */
-	public void service(string absPath, ref<HttpService> handler) {
+	public void service(string absPath, ref<Service> handler) {
 		post(PathHandler(absPath, handler, ServiceClass.ANY_SECURITY_LEVEL));
 	}
 	/**
@@ -365,16 +365,16 @@ public class HttpServer {
 	 *
 	 * This service is only available on the https protocol.
 	 *
-	 * @param absPath A prefix of a URL. See the documentation under {@link HttpServer}
+	 * @param absPath A prefix of a URL. See the documentation under {@link Server}
 	 * for a detailed explanation of how absPath values are compared against an incoming URL.
-	 * @param handler An instance of a class derived from HttpService that will process any matching
+	 * @param handler An instance of a class derived from Service that will process any matching
 	 * requests.
 	 *
 	 * @threading
 	 * This method is not thread safe. Calling this method on a server that has been started will
 	 * produce unpredictable results.
 	 */
-	public void httpsService(string absPath, ref<HttpService> handler) {
+	public void httpsService(string absPath, ref<Service> handler) {
 		post(PathHandler(absPath, handler, ServiceClass.SECURED_ONLY));
 	}
 	/**
@@ -382,16 +382,16 @@ public class HttpServer {
 	 *
 	 * This service is only available on the http protocol.
 	 *
-	 * @param absPath A prefix of a URL. See the documentation under {@link HttpServer}
+	 * @param absPath A prefix of a URL. See the documentation under {@link Server}
 	 * for a detailed explanation of how absPath values are compared against an incoming URL.
-	 * @param handler An instance of a class derived from HttpService that will process any matching
+	 * @param handler An instance of a class derived from Service that will process any matching
 	 * requests.
 	 *
 	 * @threading
 	 * This method is not thread safe. Calling this method on a server that has been started will
 	 * produce unpredictable results.
 	 */
-	public void httpService(string absPath, ref<HttpService> handler) {
+	public void httpService(string absPath, ref<Service> handler) {
 		post(PathHandler(absPath, handler, ServiceClass.UNSECURED_ONLY));
 	}
 
@@ -458,13 +458,13 @@ public class HttpServer {
 	}
 
 	private static void startHttpEntry(address param) {
-		ref<HttpServer> server = ref<HttpServer>(param);
+		ref<Server> server = ref<Server>(param);
 //		printf("Starting http on port %d\n", server._httpPort);
 		server.acceptLoop(server._publicSocket);
 	}
 
 	private static void startHttpsEntry(address param) {
-		ref<HttpServer> server = ref<HttpServer>(param);
+		ref<Server> server = ref<Server>(param);
 //		printf("Starting https on port %d\n", server._httpsPort);
 		server.acceptLoop(server._secureSocket);
 	}
@@ -523,7 +523,7 @@ public class HttpServer {
 		}
 	}
 
-	boolean dispatch(ref<HttpRequest> request, ref<HttpResponse> response, boolean secured) {
+	boolean dispatch(ref<Request> request, ref<Response> response, boolean secured) {
 		try {
 			for (int i = 0; i < _handlers.length(); i++) {
 				if (_handlers[i].absPath == "/") {
@@ -573,12 +573,12 @@ private enum ServiceClass {
 
 private class PathHandler {
 	string absPath;
-	ref<HttpService> handler;
+	ref<Service> handler;
 	ServiceClass serviceClass;
 
 	PathHandler() {}
 	
-	PathHandler(string absPath, ref<HttpService> handler, ServiceClass serviceClass) {
+	PathHandler(string absPath, ref<Service> handler, ServiceClass serviceClass) {
 		this.absPath = absPath;
 		this.handler = handler;
 		this.serviceClass = serviceClass;
@@ -586,13 +586,13 @@ private class PathHandler {
 }
 
 private class HttpContext {
-	public ref<HttpServer> server;
+	public ref<Server> server;
 	public ref<net.Connection> connection;
 //	public int requestFd;
 //	public sockaddr_in sourceAddress;
 //	public int addressLength;
 
-	public HttpContext(ref<HttpServer> server, ref<net.Connection> connection) {
+	public HttpContext(ref<Server> server, ref<net.Connection> connection) {
 		this.server = server;
 		this.connection = connection;
 //		this.requestFd = requestFd;
@@ -606,11 +606,11 @@ private void processHttpRequest(address ctx) {
 	if (!context.connection.acceptSecurityHandshake()) {
 		return;
 	}
-	HttpRequest request(context.connection);
+	Request request(context.connection);
 	HttpParser parser(context.connection);
-	HttpResponse response(context.connection);
+	Response response(context.connection);
 	if (parser.parseRequest(&request)) {
-		if (request.method == HttpRequest.Method.NO_CONTENTS)
+		if (request.method == Request.Method.NO_CONTENTS)
 			response.error(400);
 		else if (context.server.dispatch(&request, &response, context.connection.secured())) {
 			delete context;
@@ -625,13 +625,13 @@ private void processHttpRequest(address ctx) {
 	delete context;
 }
 /**
- * The base class used for all services defined on {@link HttpServer}.
+ * The base class used for all services defined on {@link Server}.
  *
  * This is an abstract class, so you must define a sub-class to provide the desired functionality.
  */
-public class HttpService {
+public class Service {
 	/**
-	 * This method is called from the HttpServer whenever a URL request arrives that matches this service's
+	 * This method is called from the Server whenever a URL request arrives that matches this service's
 	 * absPath prefix, provided during server initializaton.
 	 *
 	 * @param request The parsed HTTP request. The service can inspect that various fields, headers and
@@ -642,17 +642,17 @@ public class HttpService {
 	 * should be closed. For example, a WebSocketFactory will hold the connection open indefinitely after
 	 * the inital request is done. For simple HTTP requests the return value should be false.
 	 */
-	public abstract boolean processRequest(ref<HttpRequest> request, ref<HttpResponse> response);
+	public abstract boolean processRequest(ref<Request> request, ref<Response> response);
 }
 /**
- * The parsed HTTP request being processed by an HttpServer.
+ * The parsed HTTP request being processed by an Server.
  *
  */
-public class HttpRequest {
+public class Request {
 	/**
 	 * The method of the request.
 	 *
-	 * This field will never be set to {@link Method.NO_CONTENTS} in a call to {@link HttpService.processRequest}.
+	 * This field will never be set to {@link Method.NO_CONTENTS} in a call to {@link Service.processRequest}.
 	 *
 	 * The field will have the value {@link Method.CUSTOM} if the supplied method does not match any of the
 	 * pre-defined HTTP method strings exactly. The matching is case-sensitive. Use the methodString parameter 
@@ -696,7 +696,7 @@ public class HttpRequest {
 	private string[string] _parameters;			// These will be the parsed query parameters.
 	private ref<net.Connection> _connection;
 	/**
-	 * The set of values returned in the method field of the HttpRequest class.
+	 * The set of values returned in the method field of the Request class.
 	 */
 	public enum Method {
 		NO_CONTENTS,							// Not actually part of HTTP. Indicates empty HTTP payload.
@@ -711,13 +711,13 @@ public class HttpRequest {
 		CUSTOM
 	}
 	/**
-	 * To construct an HttpRequest, you must supply a live {@link parasol:net.Connection} object. All
+	 * To construct an Request, you must supply a live {@link parasol:net.Connection} object. All
 	 * fields can then be intiialized the user code.
 	 *
 	 * This constructor is primarily useful to either test a service or spoof a request in a call to the
 	 * service's processRequest method.
 	 */
-	public HttpRequest(ref<net.Connection> connection) {
+	public Request(ref<net.Connection> connection) {
 		_connection = connection;
 	}
 	/**
@@ -844,7 +844,7 @@ public class HttpRequest {
 /**
  * This class is used to store the parsed fields of an HTTP response in an HTTP client.
  */
-public class HttpParsedResponse {
+public class ParsedResponse {
 	/**
 	 * The value of the HTTP version string passed in the response.
 	 */
@@ -872,7 +872,7 @@ public class HttpParsedResponse {
 	 * This function is supplied as a debugging aid.
 	 */
 	public void print() {
-		process.printf("HttpResponse\n");
+		process.printf("Response\n");
 		process.printf("  HTTP Version     %s\n", httpVersion);
 		process.printf("  Code             %s\n", code);
 		process.printf("  Reason           %s\n", reason);
@@ -917,16 +917,16 @@ public class HttpParsedResponse {
  * {@link write} or {@link putc}, you do not need to call {@linnk endOfHeaders}. Those functions wil
  * call {@link endOfHeaders} thenselves on the first call in a response.
  */
-public class HttpResponse {
+public class Response {
 	private ref<net.Connection> _connection;
 	private boolean _statusWritten;
 	private boolean _headersEnded;
 
-	HttpResponse() {
+	Response() {
 		_connection = null;
 	}
 	
-	HttpResponse(ref<net.Connection> connection) {
+	Response(ref<net.Connection> connection) {
 		_connection = connection;
 	}
 	
@@ -1545,7 +1545,7 @@ class HttpParser {
 	HttpToken _previousToken;
 	string _tokenValue;
 	ref<Connection> _connection;
-	ref<HttpRequest> _request;
+	ref<Request> _request;
 
 	enum HttpToken {
 		END_OF_MESSAGE,
@@ -1577,7 +1577,7 @@ class HttpParser {
 		_connection = connection;
 	}
 	
-	boolean parseRequest(ref<HttpRequest> request) {
+	boolean parseRequest(ref<Request> request) {
 		_request = request;
 		HttpToken t = token();
 		if (t == HttpToken.END_OF_MESSAGE)
@@ -1589,39 +1589,39 @@ class HttpParser {
 		_request.methodString = _tokenValue;
 		switch (_tokenValue) {
 		case "OPTIONS":
-			_request.method = HttpRequest.Method.OPTIONS;
+			_request.method = Request.Method.OPTIONS;
 			break;
 
 		case "GET":
-			_request.method = HttpRequest.Method.GET;
+			_request.method = Request.Method.GET;
 			break;
 
 		case "HEAD":
-			_request.method = HttpRequest.Method.HEAD;
+			_request.method = Request.Method.HEAD;
 			break;
 
 		case "POST":
-			_request.method = HttpRequest.Method.POST;
+			_request.method = Request.Method.POST;
 			break;
 
 		case "PUT":
-			_request.method = HttpRequest.Method.PUT;
+			_request.method = Request.Method.PUT;
 			break;
 
 		case "DELETE":
-			_request.method = HttpRequest.Method.DELETE;
+			_request.method = Request.Method.DELETE;
 			break;
 
 		case "TRACE":
-			_request.method = HttpRequest.Method.TRACE;
+			_request.method = Request.Method.TRACE;
 			break;
 
 		case "CONNECT":
-			_request.method = HttpRequest.Method.CONNECT;
+			_request.method = Request.Method.CONNECT;
 			break;
 
 		default:
-			_request.method = HttpRequest.Method.CUSTOM;
+			_request.method = Request.Method.CUSTOM;
 		}
 		if (token() != HttpToken.SP)
 			return false;
@@ -1717,7 +1717,7 @@ class HttpParser {
 		}
 	}
 
-	public boolean parseResponse(ref<HttpParsedResponse> response) {
+	public boolean parseResponse(ref<ParsedResponse> response) {
 		HttpToken t = token();
 		while (t == HttpToken.CRLF)
 			t = token();
@@ -1958,18 +1958,18 @@ class HttpParser {
 	}
 }
 /**
- * This is the implementation class for hosting static content through an {@link HttpServer}.
+ * This is the implementation class for hosting static content through an {@link Server}.
  */
-class StaticContentService extends HttpService {
+class StaticContentService extends Service {
 	private string _filename;
 	
 	StaticContentService(string filename) {
 		_filename = filename;
 	}
 
-	public boolean processRequest(ref<HttpRequest> request, ref<HttpResponse> response) {
+	public boolean processRequest(ref<Request> request, ref<Response> response) {
 //		logger.debug( "Static Content! fetching %s / %s", _filename, request.serviceResource);
-		if (request.method != HttpRequest.Method.GET) {
+		if (request.method != Request.Method.GET) {
 			response.error(501);
 			return false;
 		}

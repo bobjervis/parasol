@@ -491,16 +491,16 @@ public enum ConnectStatus {
  *
  * This class will accept either http, https, ws or wss URL's. If the ws or
  * wss protocols successfully connect, you can obtain the WebSocket created as a result of the
- * http request from the HttpClient using the {@link parasol:http.HttpClient.webSocket webSocket} method.
+ * http request from the Client using the {@link parasol:http.Client.webSocket webSocket} method.
  *
  * You can repeat the same URL request again with this object, but the only change you can make
  * that would alter the request itself is you can add another header with {@link setHeader} or
  * change the cipher list using {@link setCipherList}.
  */
-public class HttpClient {
+public class Client {
 	private ref<net.Connection> _connection;
 	private ref<WebSocket> _webSocket;
-	private ref<HttpParsedResponse> _response;
+	private ref<ParsedResponse> _response;
 
 	private Uri _uri;			// required for proper connection
 	private unsigned _resolvedIP;
@@ -524,7 +524,7 @@ public class HttpClient {
 	 *
 	 * @param uri The parsed Uri object to use for the HTTP request.
 	 */
-	public HttpClient(ref<Uri> uri) {
+	public Client(ref<Uri> uri) {
 		_uri = *uri;
 		userAgent = "Parasol/0.1.0";
 		if (_headers["host"] == null)
@@ -537,7 +537,7 @@ public class HttpClient {
 	 *
 	 * @param url The url to use for the HTTP request.
 	 */
-	public HttpClient(string url) {
+	public Client(string url) {
 		_uri.parse(url);
 		userAgent = "Parasol/0.1.0";
 		if (_headers["host"] == null)
@@ -554,7 +554,7 @@ public class HttpClient {
 	 * @param webSocketProtocol A protocol string that describes how
 	 * you expect to use the Web Socket
 	 */
-	public HttpClient(string url, string webSocketProtocol) {
+	public Client(string url, string webSocketProtocol) {
 		_uri.parse(url);
 		userAgent = "Parasol/0.1.0";
 		_webSocketProtocol = webSocketProtocol;
@@ -562,7 +562,7 @@ public class HttpClient {
 			_headers["host"] = _uri.host + ":" + string(_uri.port);
 	}
 
-	~HttpClient() {
+	~Client() {
 		reset();
 	}
 	/**
@@ -587,7 +587,7 @@ public class HttpClient {
 	 *
 	 * Call this method before any request initiation methods (like {@link get} or {@link post}).
 	 *
-	 * The HttpClient code will automatically include the following headers
+	 * The Client code will automatically include the following headers
 	 *
 	 * <table>
 	 * <tr>
@@ -881,7 +881,7 @@ public class HttpClient {
 		_connection.flush();
 //		printf("HTTP request sent...\n");
 		HttpParser parser(_connection);
-		_response = new HttpParsedResponse();
+		_response = new ParsedResponse();
 		if (!parser.parseResponse(_response)) {
 			printf("Malformed response\n");
 			return ConnectStatus.MALFORMED_RESPONSE, ip;
@@ -1055,7 +1055,7 @@ public class HttpClient {
  	 *
 	 * @return The value of the HTTPResponse, if any.
 	 */
-	public ref<HttpParsedResponse> response() {
+	public ref<ParsedResponse> response() {
 		return _response;
 	}
 }

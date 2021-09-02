@@ -39,7 +39,7 @@ class PHostCommand extends process.Command {
 }
 
 PHostCommand phostCommand;
-http.HttpServer server;
+http.Server server;
 
 int main(string[] args) {
 	if (!phostCommand.parse(args))
