@@ -440,6 +440,15 @@ public class InterfaceType extends ClassType {
 	public boolean returnsViaOutParameter(ref<CompileContext> compileContext) {
 		return false;
 	}
+
+	public void makeRPCSymbols(ref<CompileContext> compileContext) {
+		ref<Overload> o = scope().defineOverload("proxy", Operator.FUNCTION, compileContext);
+		if (o != null) {
+			ref<ParameterScope> funcScope = compileContext.createParameterScope(null, ParameterScope.Kind.FUNCTION);
+			ref<ProxyOverload> proxy = compileContext.pool().newProxyOverload(this, o, funcScope);
+			o.addSpecialInstance(proxy, compileContext);
+		}
+	}
 }
 
 public class ClassType extends Type {

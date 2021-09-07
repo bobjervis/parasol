@@ -290,9 +290,9 @@ public class Socket {
 		// TODO: Develop a test framework that allows us to test this scenario.
 		int acceptfd = net.accept(_socketfd, &a, &addrlen);
 		if (acceptfd < 0) {
-			string buffer = linux.strerror(linux.errno());
-			if (linux.errno() != linux.EINVAL)
-				logger.debug("accept on port %d failed %s", _port, buffer);
+			if (linux.errno() != linux.EINVAL &&
+				linux.errno() != linux.EBADF)
+				logger.debug("accept on port %d failed %s", _port, linux.strerror(linux.errno()));
 			net.closesocket(_socketfd);
 			return null;
 		}

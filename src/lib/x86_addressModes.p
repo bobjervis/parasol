@@ -664,6 +664,9 @@ class X86_64AddressModes extends X86_64Encoder {
 			markConditionalAddressModes(u.operand(), compileContext);
 			break;
 			
+		case	AND:
+		case	OR:
+		case	EXCLUSIVE_OR:
 		case	LEFT_COMMA:
 		case	CALL:
 		case	EQUALITY:

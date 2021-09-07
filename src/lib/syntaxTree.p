@@ -1218,6 +1218,8 @@ public class ClassDeclarator extends Block {
 						}
 						for (int i = 0; i < o.instances().length(); i++) {
 							ref<OverloadInstance> oi = (*o.instances())[i];
+							if (oi.storageClass() == StorageClass.STATIC)
+								continue;
 							oi.assignType(compileContext);
 							// oi is the interface method, classFunctions are the class' methods of the same name
 							if (!classMethods.doesImplement(oi))
@@ -1226,6 +1228,8 @@ public class ClassDeclarator extends Block {
 					} else {
 						for (int i = 0; i < o.instances().length(); i++) {
 							ref<OverloadInstance> oi = (*o.instances())[i];
+							if (oi.storageClass() == StorageClass.STATIC)
+								continue;
 	//						printf("nm = {%x:%x} '%s'\n", nm.identifier().data, nm.identifier().length, (*nm.identifier()).asString());
 	//						printf("oi = {%x:%x} '%s'\n", oi.name().data, nm.identifier().length, (*oi.name()).asString());
 							add(MessageId.CLASS_MISSING_METHOD_FROM_INTERFACE, compileContext.pool(), oi.name(), identifier);

@@ -18,7 +18,7 @@ import parasol:http;
 
 http.Uri uri;
 
-assert(uri.parse("abc:"));
+assert(uri.parseURI("abc:"));
 assert(uri.parsed);
 assert(uri.scheme == "abc");
 assert(uri.userinfo == null);
@@ -48,7 +48,7 @@ assert(uri.query == null);
 assert(uri.fragment == null);
 assert(uri.path == null);
 
-assert(uri.parseRFC3986("abc:"));
+assert(uri.parseURI("abc:"));
 assert(uri.parsed);
 assert(uri.scheme == "abc");
 assert(uri.userinfo == null);
@@ -59,7 +59,7 @@ assert(uri.query == null);
 assert(uri.fragment == null);
 assert(uri.path == "");
 
-assert(uri.parse("abc"));
+assert(uri.parseRelativeReference("abc"));
 assert(uri.parsed);
 assert(uri.scheme == null);
 assert(uri.userinfo == null);
@@ -70,19 +70,8 @@ assert(uri.query == null);
 assert(uri.fragment == null);
 assert(uri.path == "abc");
 
-assert(!uri.parseRFC3986("abc"));
+assert(!uri.parseURI("abc"));
 assert(!uri.parsed);
 
-assert(uri.parse(":"));
-assert(uri.parsed);
-assert(uri.scheme == "");
-assert(uri.userinfo == null);
-assert(uri.host == null);
-assert(uri.portDefaulted);
-assert(uri.port == 0);
-assert(uri.query == null);
-assert(uri.fragment == null);
-assert(uri.path == "");
-
-assert(!uri.parseRFC3986(":"));
+assert(!uri.parseURI(":"));
 assert(!uri.parsed);

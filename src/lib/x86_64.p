@@ -3159,7 +3159,15 @@ public class X86_64 extends X86_64AssignTemps {
 			ref<Unary> u = ref<Unary>(node);
 			generateConditional(u.operand(), falseSegment, trueSegment, compileContext);
 			return;
-			
+
+		case	AND:
+		case	OR:
+		case	EXCLUSIVE_OR:
+			generate(node, compileContext);
+			b = ref<Binary>(node);
+			generateConditionalJump(Operator.NOT_EQUAL, b.left().type, trueSegment, falseSegment, compileContext);
+			break;
+
 		case	CALL:
 			generate(node, compileContext);
 			inst(X86.CMP, node, 0, compileContext);

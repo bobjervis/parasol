@@ -103,6 +103,7 @@ public enum MessageId {
 	NO_MATCHING_OVERLOAD_IN_CLASS			("No overloaded definition matched %1 in class %2"),
 	NO_NAMESPACE_DEFINED					("No namespace defined"),
 	NO_PARAMS_IN_DESTRUCTOR					("No parameters may be defined for a destructor"),
+	NO_RPC_CLIENT							("Could not find parasol:rpc.Client as a template"),
 	NON_UNIQUE_NAMESPACE					("More than one namespace statement in the unit"),
 	NOT_A_FUNCTION							("Expecting a function"),
 	NOT_A_SHAPE								("Expecting a shape type"),

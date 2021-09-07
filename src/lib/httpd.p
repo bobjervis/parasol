@@ -24,6 +24,7 @@
  */
 namespace parasol:http;
 
+import parasol:exception.IllegalArgumentException;
 import parasol:exception.IllegalOperationException;
 import parasol:log;
 import parasol:process;
@@ -1204,9 +1205,132 @@ public class Response {
 	}
 }
 /**
+ * These specify the specific sub-set of RFC3986 should be applied when parsing a URI.
+ */
+private enum UriVariant {
+	/**
+	 * The URI should be parsed using the full URI syntax. Note that a scheme must be present
+	 * to match this variant.
+	 */
+	URI,
+	/**
+	 * A scheme may not be included in the URI. The resulting Uri object must be combined
+	 * with a base URI in order to form a complete URI.
+	 */
+	RELATIVE_REF,
+	/**
+	 * The URI should be parsed with a scheme present, but no fragment part.
+	 */
+	ABSOLUTE
+}
+
+private flags UriCharacterClasses {
+	SCHEME,					// valid in a scheme
+	USERINFO,				// valid in userinfo
+	HOST,					// valid in a host
+	PATH,					// valid in a path
+	QUERY,					// valid in a query
+	FRAGMENT				// valid in a fragment
+}
+
+UriCharacterClasses[] uriClasses = [
+	'a': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'b': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'c': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'd': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'e': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'f': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'g': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'h': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'i': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'j': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'k': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'l': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'm': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'n': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'o': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'p': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'q': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'r': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	's': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	't': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'u': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'v': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'w': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'x': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'y': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'z': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'A': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'B': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'C': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'D': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'E': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'F': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'G': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'H': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'I': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'J': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'K': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'L': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'M': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'N': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'O': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'P': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'Q': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'R': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'S': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'T': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'U': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'V': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'W': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'X': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'Y': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'Z': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'0': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'1': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'2': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'3': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'4': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'5': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'6': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'7': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'8': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'9': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+
+	'+': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'-': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'.': UriCharacterClasses.SCHEME|UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'~': UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'_': UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'%': UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'!': UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'$': UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'&': UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'\'':UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'(': UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	')': UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'*': UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	',': UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	';': UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'=': UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'@': UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	':': UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'/': UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'?': UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+];
+
+/**
  * This class is used to convert between a string and a parsed URI.
  *
  * This implements the syntax described in RFC 3986.
+ *
+ * The {@link parsed} field can be used to detect whether a prior attempt
+ * to parse a stirng into this object succeeded.
+ *
+ * You may fill the field of the Uri object directly without using a parse
+ * method. For such a URi, it is considered a relative reference is the {@link scheme}
+ * is null. It is considered an absolute URI if the scheme is not null and the fragment
+ * is null.
  */
 public class Uri {
 	/**
@@ -1304,7 +1428,117 @@ public class Uri {
 	 */
 	public boolean parsed;
 	/**
-	 * Parses a URI applying the precise rules of RFC 2986.
+	 * Parses a URI applying the precise rules of RFC 3986.
+	 *
+	 * On a successful parse, the public members of the structure will be initialized with
+	 * the values of the various fields in the URI.
+	 *
+	 * If the uri parameter cotanis a relative reference, the baseUri parameter is used to
+	 * resolve a full target URI.
+	 *
+	 * @param baseUri If the uri string is a relative reference, use this URI to resolve
+	 * a target URI.
+	 * @param uri A string containing a URI.
+	 *
+	 * @return true if the string contains a valid RFC3986 URI that could be resolved to
+	 * a target URI, false otherwise.
+	 *
+	 * @exception IllegalArgumentException thrown if the baseUri contains a relative reference
+	 * (i.e. has a null scheme).
+	 */
+	public boolean parseURI(ref<Uri> baseUri, string uri) {
+		if (baseUri.scheme == null)
+			throw IllegalArgumentException("base URI has no scheme");
+		if (parse(uri, UriVariant.RELATIVE_REF)) {
+			scheme = baseUri.scheme;
+			if (host != null) {
+				removeDottedSegments();
+			} else {
+				userinfo = baseUri.userinfo;
+				host = baseUri.host;
+				port = baseUri.port;
+				portDefaulted = baseUri.portDefaulted;
+
+				if (path == "") {
+					path = baseUri.path;
+					if (query == null)
+						query = baseUri.query;
+				} else {
+					if (!path.startsWith("/")) {
+						if (baseUri.host != null && baseUri.path == "")
+							path = "/" + path;
+						else
+							path = merge(baseUri.path, path);
+					}
+					removeDottedSegments();
+	            }
+			}
+		} else if (parse(uri, UriVariant.URI)) {
+			removeDottedSegments();
+		} else
+			return false;
+		return true;
+	}
+
+	private string merge(string basePath, string referencePath) {
+		int slashIdx = basePath.lastIndexOf('/');
+
+		if (slashIdx < 0)
+			return referencePath;
+		else
+			return basePath.substr(0, slashIdx + 1) + referencePath;
+	}
+
+	private void removeDottedSegments() {
+		int[] slashes;
+		string output = "";
+
+		substring input = path;
+		while (input.length() > 0) {
+			if (input.startsWith("../"))
+				input = input.substr(3);
+			else if (input.startsWith("./"))
+				input = input.substr(2);
+			else {
+				if (input == "/.") {
+					output += "/";
+					break;
+				}
+				if (input.startsWith("/./")) {
+					input = input.substr(2);
+					continue;
+				}
+				if (input == "/..") {
+					if (slashes.length() > 0)
+						output.resize(slashes.pop() + 1);
+					else
+						output = "/";
+					break;
+				}
+				if (input.startsWith("/../")) {
+					if (slashes.length() > 0)
+						output.resize(slashes.pop());
+					else
+						output = "";
+					input = input.substr(3);
+					continue;
+				}
+				if (input == "." || input == "..")
+					break;
+				int slashIdx = input.indexOf('/', 1);
+				if (slashIdx < 0)
+					slashIdx = input.length();
+				int nextPossibleSlash = output.length();
+				output += input.substr(0, slashIdx);
+				if (input[0] == '/')
+					slashes.push(nextPossibleSlash);
+				input = input.substr(slashIdx);
+			}
+		}
+		path = output;
+	}
+	/**
+	 * Parses a URI applying the precise rules of RFC 3986.
 	 *
 	 * On a successful parse, the public members of the structure will be initialized with
 	 * the values of the various fields in the URI.
@@ -1313,50 +1547,93 @@ public class Uri {
 	 *
 	 * @return true if the string contains a valid RFC3986 URI, false otherwise.
 	 */
-	public boolean parseRFC3986(string uri) {
-		return parse(uri, true);
+	public boolean parseURI(string uri) {
+		return parse(uri, UriVariant.URI);
 	}
 	/**
-	 * Parses a URI with a few rules relaxed to permit additional strings to be parsed
+	 * Parses an absolute URI applying the precise rules of RFC 3986.
 	 *
-	 * @param uri A string containing a URI
+	 * On a successful parse, the public members of the structure will be initialized with
+	 * the values of the various fields in the URI.
+	 *
+	 * @param uri A string containing an absolute URI
+	 *
+	 * @return true if the string contains a valid RFC3986 URI, false otherwise.
+	 */
+	public boolean parseAbsoluteURI(string uri) {
+		return parse(uri, UriVariant.ABSOLUTE);
+	}
+	/**
+	 * Parses a relative-reference URI applying the precise rules of RFC 3986.
+	 *
+	 * @param uri A string containing a relative-reference URI
 	 *
 	 * @return true if the string contains a valid URI using relaxed rules from RFC3986, false otherwise.
 	 */
-	public boolean parse(string uri) {
-		return parse(uri, false);
+	public boolean parseRelativeReference(string uri) {
+		return parse(uri, UriVariant.RELATIVE_REF);
 	}
 	/**
 	 * Parse a URI.
 	 *
 	 * @param uri A string containing a URI
-	 * @param strict true if the URI should be parsed as if calling {@link parseRFC3986}, or false
-	 * if the URI should be parsed as if callid {@link parse}.
+	 * @param variant The specific variant being parsed.
 	 *
-	 * @return true if the string contains a valid URI using the rules selected by {@link strict}, false otherwise.
+	 * @return true if the string contains a valid URI using the rules selected by {@link variant}, false otherwise.
 	 */
-	public boolean parse(string uri, boolean strict) {
+	private boolean parse(string uri, UriVariant variant) {
 		reset();
+
+		
 		int colonIdx = uri.indexOf(':');
+		int slashIdx = uri.indexOf('/');
+		int quesIdx = uri.indexOf('?');
+		int fragIdx = uri.indexOf('#');
+
+		// A hash before any other major delimiter negates them for being delimiters.
+
+		if (fragIdx >= 0) {
+			if (colonIdx > fragIdx)
+				colonIdx = -1;
+			if (quesIdx > fragIdx)
+				quesIdx = -1;
+			if (slashIdx > fragIdx)
+				slashIdx = -1;
+		}
+
+		// A question mark before anything but a fragment index negates them for being delimiters
+
+		if (quesIdx >= 0) {
+			if (colonIdx > quesIdx)
+				colonIdx = -1;
+			if (slashIdx > fragIdx)
+				slashIdx = -1;
+		}
+
+		// A slash before a colon makes the colon NOT be a scheme delimiter.
+
+		if (slashIdx >= 0 && colonIdx > slashIdx)
+			colonIdx = -1;
+
+
 		if (colonIdx < 0) {
-			if (strict)
+			if (variant != UriVariant.RELATIVE_REF)
 				return false;
 		} else if (colonIdx == 0) {
-			if (strict)
-				return false;
-			scheme = "";
-		} else
+			return false;
+		} else {
 			scheme = uri.substr(0, colonIdx);
+			if (!validate(scheme, UriCharacterClasses.SCHEME) || !scheme[0].isAlpha())
+				return false;
+		}
 
 		if (colonIdx + 1 >= uri.length()) {
 			path = "";
 			return parsed = true;			// This is scheme:
 		}
 
-		int slashIdx = uri.indexOf('/', colonIdx + 1);
-
 		int pathIdx;
-		if (slashIdx > 0) {
+		if (slashIdx >= 0) {
 			if (slashIdx == colonIdx + 1) {
 				if (slashIdx + 1 >= uri.length()) {
 					// This is: scheme:/
@@ -1373,6 +1650,8 @@ public class Uri {
 					int atIdx = uri.indexOf('@', authIdx);
 					if (atIdx > 0 && atIdx < pathIdx) {
 						userinfo = uri.substr(authIdx, atIdx);
+						if (!validate(userinfo, UriCharacterClasses.USERINFO))
+							return false;
 						authIdx = atIdx + 1;
 					}
 					int portIdx = uri.indexOf(':', authIdx);
@@ -1391,41 +1670,52 @@ public class Uri {
 						portIdx = pathIdx;
 					}
 					host = uri.substr(authIdx, portIdx);
-				}
-			} else {
-				// This is scheme:something-containing-a-slash
-				pathIdx = colonIdx + 1;
-				if (strict) {
-					if (pathIdx < uri.length())
+					if (!validate(userinfo, UriCharacterClasses.USERINFO))
 						return false;
 				}
+			} else {
+				// This is scheme:something-containing-a-slash (but not immediately after the colon)
+				pathIdx = colonIdx + 1;
 			}
 		} else {
 			// This is scheme:something-not-containing-a-slash
 			pathIdx = colonIdx + 1;
-			if (strict) {
-				if (pathIdx < uri.length())
-					return false;
-			}
 		}
 
-		int fragIdx = uri.indexOf('#', pathIdx);
-		if (fragIdx > 0)
+		if (fragIdx > 0) {
+			if (variant == UriVariant.ABSOLUTE)
+				return false;
 			fragment = uri.substr(fragIdx + 1);
-		else
+			if (!validate(fragment, UriCharacterClasses.FRAGMENT))
+				return false;
+		} else
 			fragIdx = uri.length();
 
-		int quesIdx = uri.indexOf('?', pathIdx);
-		if (quesIdx > 0)
+		if (quesIdx > 0) {
 			query = uri.substr(quesIdx + 1, fragIdx);
-		else
+			if (!validate(query, UriCharacterClasses.QUERY))
+				return false;
+		} else
 			quesIdx = fragIdx;
 
-		if (pathIdx < quesIdx)
+		if (pathIdx < quesIdx) {
 			path = uri.substr(pathIdx, quesIdx);
-		else
-			path = "/";
+			if (!validate(path, UriCharacterClasses.PATH))
+				return false;
+		} else
+			path = "";
 		return parsed = true;
+	}
+
+	private boolean validate(string s, UriCharacterClasses mask) {
+		for (i in s) {
+			byte b = s[i];
+			if (b >= uriClasses.length())
+				return false;
+			if (!(mask & uriClasses[b]))
+				return false;
+		}
+		return true;
 	}
 	/**
 	 * Clear the parsed field of this object.

@@ -563,7 +563,9 @@ public class CompileContext {
 			c = ref<ClassDeclarator>(b.right());
 			classScope = createClassScope(c, id);
 			c.scope = classScope;
-			classScope.classType = _pool.newInterfaceType(c, isFinal, classScope);
+			ref<InterfaceType> iface = _pool.newInterfaceType(c, isFinal, classScope);
+			classScope.classType = iface;
+			iface.makeRPCSymbols(this);
 			id.bindClassName(_current, c, this);
 			return TraverseAction.SKIP_CHILDREN;
 			
@@ -1397,6 +1399,10 @@ public class MemoryPool extends memory.NoReleasePool {
 		return super new DelegateOverload(overloadSym, delegate, this);
 	}
 	
+	public ref<ProxyOverload> newProxyOverload(ref<InterfaceType> interfaceType, ref<Overload> overload, ref<ParameterScope> functionScope) {
+		return super new ProxyOverload(interfaceType, overload, this, functionScope);
+	}
+
 	public ref<Namespace> newNamespace(string domain, ref<Node> namespaceNode, ref<Scope> enclosing, 
 									ref<Node> annotations, substring name, ref<Arena> arena) {
 		return super new Namespace(newCompileString(domain), namespaceNode, enclosing, annotations, name, arena, this);

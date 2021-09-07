@@ -97,6 +97,8 @@ class OverloadOperation {
 		for (int i = 0; i < o.instances().length(); i++) {
 			ref<OverloadInstance> oi = (*o.instances())[i];
 			_anyPotentialOverloads = true;
+//			printf("Potential overload: ");
+//			oi.print(0, false);
 			if (!oi.isVisibleIn(lexicalScope, _compileContext))
 				continue;
 			ref<Type> t = includeOverload(oi);

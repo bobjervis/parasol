@@ -72,32 +72,31 @@ int main(string[] args) {
 					printf("ERROR: HTTP Response %s to '%s'\n", resp.code, urls[i]);
 					exitCode = 1;
 				} else {
-					string contentLength = resp.headers["content-length"];
-					if (contentLength != null) {
-						int len = int.parse(contentLength);
-						ref<net.Connection> conn = client.connection();
-	
-						if (conn == null) {
-							printf("No connection object for '%s'\n", urls[i]);
-							exitCode = 1;
-						} else {
-							byte[] buffer;
-							int accumulated;
-	
-							buffer.resize(len);
+					int contentLength;
+					string content;
 
-							while (accumulated < len) {
-								int actual = conn.read(&buffer[accumulated], buffer.length() - accumulated);
-
-								accumulated += actual;
-							}
-							process.stdout.write(&buffer[0], accumulated);
+					(content, contentLength) = client.readContent();
+					if (content != null) {
+						process.stdout.write(content);
+						if (content.length() != contentLength) {
+							printf("\n*** Content returned from server for url '%s' has been truncated.\n", urls[i]);
+							exitCode = 1; 
 						}
 					} else {
-						printf("Unknown content-length for '%s'\n", urls[i]);
+						switch (contentLength) {
+						case -1:
+							printf("No content-length header in response to url '%s'.\n", urls[i]);
+							break;
+
+						case -2:
+							printf("The content-length header was malformed in response to url '%s': %s\n", urls[i], resp.headers["content-length"]);
+							break;
+
+						default:
+							printf("No connection available after response from url '%s'\n", urls[i]);
+						}
 						exitCode = 1;
 					}
-
 				}
 			}
 		} else {

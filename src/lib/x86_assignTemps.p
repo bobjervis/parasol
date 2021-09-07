@@ -287,6 +287,13 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			}
 			break;
 
+		case	AND:
+		case	OR:
+		case	EXCLUSIVE_OR:
+			b = ref<Binary>(node);
+			assignBinaryOperands(b, longMask(), requiredMask(b), compileContext);
+			break;
+
 		case	LEFT_COMMA:
 			b = ref<Binary>(node);
 			assignRegisterTemp(b.left(), longMask(), compileContext);

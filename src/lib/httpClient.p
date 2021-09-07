@@ -498,6 +498,9 @@ public enum ConnectStatus {
  * change the cipher list using {@link setCipherList}.
  */
 public class Client {
+//	@Constant
+	private static string USER_AGENT = "Parasol/0.1.0";
+
 	private ref<net.Connection> _connection;
 	private ref<WebSocket> _webSocket;
 	private ref<ParsedResponse> _response;
@@ -526,9 +529,8 @@ public class Client {
 	 */
 	public Client(ref<Uri> uri) {
 		_uri = *uri;
-		userAgent = "Parasol/0.1.0";
-		if (_headers["host"] == null)
-			_headers["host"] = _uri.authority();
+		userAgent = USER_AGENT;
+		_headers["host"] = _uri.authority();
 	}
 	/**
 	 * Create a client for a simple HTTP request.
@@ -538,10 +540,9 @@ public class Client {
 	 * @param url The url to use for the HTTP request.
 	 */
 	public Client(string url) {
-		_uri.parse(url);
-		userAgent = "Parasol/0.1.0";
-		if (_headers["host"] == null)
-			_headers["host"] = _uri.authority();
+		_uri.parseURI(url);
+		userAgent = USER_AGENT;
+		_headers["host"] = _uri.authority();
 	}
 	/**
 	 * Create a client for a Web Socket request.
@@ -555,11 +556,10 @@ public class Client {
 	 * you expect to use the Web Socket
 	 */
 	public Client(string url, string webSocketProtocol) {
-		_uri.parse(url);
-		userAgent = "Parasol/0.1.0";
+		_uri.parseURI(url);
+		userAgent = USER_AGENT;
 		_webSocketProtocol = webSocketProtocol;
-		if (_headers["host"] == null)
-			_headers["host"] = _uri.host + ":" + string(_uri.port);
+		_headers["host"] = _uri.host + ":" + string(_uri.port);
 	}
 
 	~Client() {
@@ -683,7 +683,20 @@ public class Client {
 	/**
 	 * Issue a GET request.
 	 *
-	 * @return true if the request succeeded, false otherwise.
+	 * Note that a ConnectStatus of either {@link ConnectStatus.WEB_SOCKET_REFUSED} or
+	 * {@link ConnectStatus.WEB_SOCKET_ACCEPT_MISMATCH} are returned with a properly
+	 * formatted response. All other failing ConnectStatus values leave the response
+	 * null.
+	 *
+	 * Even if the CoonectStatus is OK, you must still examine the {@link ParsedResponse.code}
+	 * field returned by calling the {@link response} method. Only if the code is 200
+	 * can you assume that your request actually succeeded. There are even circumstances where
+	 * a server transmits their own error pages that set the code to 200 while not giving
+	 * up the desired information.
+	 * 
+	 * @return The connection status of the request. A value of {@link ConnectStatus.OK}
+	 * indicates the request produced a valid response. All other values indicate some sort
+	 * of error occurred.
 	 * @return The IPv4 ip address of the host. If the hostname failed to resolve
 	 * or if the combination of constructor used and URL protocol are not compatible
 	 * with the GET method, the returned ip value is 0.
@@ -697,9 +710,17 @@ public class Client {
 	 * If the request is successful, the content of the response object may still indicate
 	 * problems. Check the code, and if you expect a body, check that the body is present.
 	 *
+	 * Even if the CoonectStatus is OK, you must still examine the {@link ParsedResponse.code}
+	 * field returned by calling the {@link response} method. Only if the code is 200
+	 * can you assume that your request actually succeeded. There are even circumstances where
+	 * a server transmits their own error pages that set the code to 200 while not giving
+	 * up the desired information.
+	 *
 	 * @param body The body to accompany the request headers.
 	 *
-	 * @return true if the request succeeded, false otherwise.
+	 * @return The connection status of the request. A value of {@link ConnectStatus.OK}
+	 * indicates the request produced a valid response. All other values indicate some sort
+	 * of error occurred.
 	 * @return The IPv4 ip address of the host. If the hostname failed to resolve
 	 * or if the combination of constructor used and URL protocol are not compatible
 	 * with the POST method, the returned ip value is 0.
@@ -714,9 +735,17 @@ public class Client {
 	 * If the request is successful, the content of the response object may still indicate
 	 * problems. Check the code, and if you expect a body, check that the body is present.
 	 *
+	 * Even if the CoonectStatus is OK, you must still examine the {@link ParsedResponse.code}
+	 * field returned by calling the {@link response} method. Only if the code is 200
+	 * can you assume that your request actually succeeded. There are even circumstances where
+	 * a server transmits their own error pages that set the code to 200 while not giving
+	 * up the desired information.
+	 *
 	 * @param body A Reader containing the body to accompany the request headers.
 	 *
-	 * @return true if the request succeeded, false otherwise.
+	 * @return The connection status of the request. A value of {@link ConnectStatus.OK}
+	 * indicates the request produced a valid response. All other values indicate some sort
+	 * of error occurred.
 	 * @return The IPv4 ip address of the host. If the hostname failed to resolve
 	 * or if the combination of constructor used and URL protocol are not compatible
 	 * with the POST method, the returned ip value is 0.
@@ -733,16 +762,24 @@ public class Client {
 	 * If the request is successful, the content of the response object may still indicate
 	 * problems. Check the code, and if you expect a body, check that the body is present.
 	 *
+	 * Even if the CoonectStatus is OK, you must still examine the {@link ParsedResponse.code}
+	 * field returned by calling the {@link response} method. Only if the code is 200
+	 * can you assume that your request actually succeeded. There are even circumstances where
+	 * a server transmits their own error pages that set the code to 200 while not giving
+	 * up the desired information.
+	 *
 	 * @param body The body to accompany the request headers.
 	 *
-	 * @return true if the request succeeded, false otherwise.
+	 * @return The connection status of the request. A value of {@link ConnectStatus.OK}
+	 * indicates the request produced a valid response. All other values indicate some sort
+	 * of error occurred.
 	 * @return The IPv4 ip address of the host. If the hostname failed to resolve
 	 * or if the combination of constructor used and URL protocol are not compatible
 	 * with the POST method, the returned ip value is 0.
 	 */
 	public ConnectStatus, unsigned put(string body) {
 		text.StringReader reader(&body);
-		return post(&reader);
+		return put(&reader);
 	}
 	/**
 	 * Issue a PUT request.
@@ -750,9 +787,17 @@ public class Client {
 	 * If the request is successful, the content of the response object may still indicate
 	 * problems. Check the code, and if you expect a body, check that the body is present.
 	 *
+	 * Even if the CoonectStatus is OK, you must still examine the {@link ParsedResponse.code}
+	 * field returned by calling the {@link response} method. Only if the code is 200
+	 * can you assume that your request actually succeeded. There are even circumstances where
+	 * a server transmits their own error pages that set the code to 200 while not giving
+	 * up the desired information.
+	 *
 	 * @param body A Reader containing the body to accompany the request headers.
 	 *
-	 * @return true if the request succeeded, false otherwise.
+	 * @return The connection status of the request. A value of {@link ConnectStatus.OK}
+	 * indicates the request produced a valid response. All other values indicate some sort
+	 * of error occurred.
 	 * @return The IPv4 ip address of the host. If the hostname failed to resolve
 	 * or if the combination of constructor used and URL protocol are not compatible
 	 * with the POST method, the returned ip value is 0.
@@ -1053,9 +1098,51 @@ public class Client {
 	 * A request that produces a response of say 404 will have a reponse object, so
 	 * be sure to examine the response code before taking any further action.
  	 *
-	 * @return The value of the HTTPResponse, if any.
+	 * @return The value of the response, if any.
 	 */
 	public ref<ParsedResponse> response() {
 		return _response;
+	}
+	/**
+	 * Read the contents, if any, in the response.
+	 *
+	 * @return The content, as a string. Note that binary data can be transmitted from some servers,
+	 * so whether the returned value is valid UTF-8 text depends on the request and the server. If
+	 * the connection read fewer bytes than the header specified, the string is truncated to the amount
+	 * of data actually returned. If there is no content-length header, or its value is malformed, or
+	 * there is no open connection to the server, null is returned.
+	 * @return The specified content-length header value, if present and well-formed. If the 
+	 * content-length header is missing, the value -1 is returned. If the content-length header is present
+	 * but malformed, the return value is -2.
+	 */
+	public string, int readContent() {
+		string contentLength = _headers["content-length"];
+		if (contentLength == null)
+			return null, -1;
+		string reply;
+		int cl;
+		boolean success;
+
+		(cl, success) = int.parse(contentLength);
+		if (success) {
+			if (cl < 0)
+				return null, -2;
+			int specifiedContentLength = cl;
+			if (_connection == null)
+				return null, specifiedContentLength;
+			// Allow for the full content length header value.
+			reply.resize(cl);
+			pointer<byte> buffer = &reply[0];
+			while (cl > 0) {
+				int actual = _connection.read(buffer, cl);
+				if (actual == 0)
+					break;
+				buffer += actual;
+				cl -= actual;
+			}
+			reply.resize(specifiedContentLength - cl);
+			return reply, specifiedContentLength;
+		} else
+			return null, -2;
 	}
 }

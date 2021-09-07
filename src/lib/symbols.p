@@ -457,6 +457,10 @@ public class Overload extends Symbol {
 		return sym;
 	}
 
+	public void addSpecialInstance(ref<OverloadInstance> symbol, ref<CompileContext> compileContext) {
+		_instances.append(symbol, compileContext.pool());
+	}
+
 	public void checkForDuplicateMethods(ref<CompileContext> compileContext) {
 		for (int i = 0; i < _instances.length(); i++) {
 			for (int j = i + 1; j < _instances.length(); j++) {
@@ -551,6 +555,56 @@ public class DelegateOverload extends OverloadInstance {
 	}
 }
 
+public class ProxyOverload extends OverloadInstance {
+	ref<InterfaceType> _interfaceType;
+
+	ProxyOverload(ref<InterfaceType> interfaceType, ref<Overload> overload, ref<MemoryPool> pool, ref<ParameterScope> parameterScope) {
+		super(overload, Operator.PUBLIC, true, false, overload.enclosing(), null, pool, overload.name(), null, parameterScope);
+		_interfaceType = interfaceType;
+	}
+
+	public ref<Type> assignThisType(ref<CompileContext> compileContext) {
+		if (_type == null) {
+//			printf(" --- assignThisType ---\n");
+			ref<Node> n = compileContext.tree().newLeaf(Operator.THIS, _interfaceType.definition().location());
+			n.type = _interfaceType;
+			ref<NodeList> returns = compileContext.tree().newNodeList(n);
+			ref<Symbol> sym = compileContext.arena().getSymbol("parasol", "rpc.Client", compileContext);
+			if (sym == null) {
+				// This can be silent. Something else has to invoke rpc.Client
+				return _type = compileContext.errorType();
+			}
+			ref<TemplateInstanceType> rpcClient = getRpcClient(sym, compileContext);			
+			if (rpcClient == null) {
+				_interfaceType.definition().add(MessageId.NO_RPC_CLIENT, compileContext.pool());
+				// THis can be silent. Something else has to invoke rpc.Client
+				return _type = compileContext.errorType();
+			}
+			n = compileContext.tree().newLeaf(Operator.THIS, _interfaceType.definition().location());
+			n.type = compileContext.arena().createRef(rpcClient, compileContext);
+			ref<NodeList> parameters = compileContext.tree().newNodeList(n);
+			_type = compileContext.pool().newFunctionType(returns, parameters, parameterScope());
+			print(0, false);
+		}
+		return _type;
+	}
+
+	private ref<TemplateInstanceType> getRpcClient(ref<Symbol> sym, ref<CompileContext> compileContext) {
+		if (sym.class != Overload)
+			return null;
+		ref<Overload> o = ref<Overload>(sym);
+		ref<OverloadInstance> rpcClient = (*o.instances())[0];
+		rpcClient.assignType(compileContext);
+		var[] args;
+		args.push(_interfaceType);
+		return rpcClient.instantiateTemplate(args, compileContext);
+	}
+
+	public void printSimple() {
+		printf("%s ProxyOverload %p %s %s @%d %s\n", _name, this, string(visibility()), string(storageClass()), offset, _type.signature());
+	}
+}
+
 public class OverloadInstance extends Symbol {
 	private boolean _overridden;
 	private boolean _final;
@@ -558,7 +612,8 @@ public class OverloadInstance extends Symbol {
 	private ref<TemplateInstanceType> _instances;	// For template's, the actual instances of those
 	private ref<Overload> _overload;
 
-	OverloadInstance(ref<Overload> overload, Operator visibility, boolean isStatic, boolean isFinal, ref<Scope> enclosing, ref<Node> annotations, ref<MemoryPool> pool, substring name, ref<Node> source, ref<ParameterScope> parameterScope) {
+	OverloadInstance(ref<Overload> overload, Operator visibility, boolean isStatic, boolean isFinal, ref<Scope> enclosing, 
+							ref<Node> annotations, ref<MemoryPool> pool, substring name, ref<Node> source, ref<ParameterScope> parameterScope) {
 		super(visibility, isStatic ? StorageClass.STATIC : StorageClass.ENCLOSING, enclosing, annotations, pool, name, source);
 		_overload = overload;
 		_parameterScope = parameterScope;
@@ -568,7 +623,7 @@ public class OverloadInstance extends Symbol {
 	public void print(int indent, boolean printChildScopes) {
 		printf("%*.*c", indent, indent, ' ');
 		printSimple();
-		Operator kind = Operator.FUNCTION;
+		Operator kind;
 		if (_overload != null)
 			kind = _overload.kind();
 		else
@@ -643,6 +698,10 @@ public class OverloadInstance extends Symbol {
 	
 	public ref<Overload> overload() {
 		return _overload;
+	}
+
+	public ref<TemplateInstanceType> instances() {
+		return _instances;
 	}
 
 	public int parameterCount() {
@@ -848,7 +907,7 @@ public class OverloadInstance extends Symbol {
 		if (_type.family() != TypeFamily.FUNCTION)
 			return true;
 		ref<FunctionType> ft = ref<FunctionType>(_type);
-		if (ft.scope().definition().op() != Operator.FUNCTION)
+		if (ft.scope().definition() == null || ft.scope().definition().op() != Operator.FUNCTION)
 			return true;
 		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(ft.scope().definition());
 		if (func.functionCategory() != FunctionDeclaration.Category.ABSTRACT)
@@ -868,7 +927,7 @@ public class OverloadInstance extends Symbol {
 		return _final;
 	}
 
-	private ref<Type> instantiateTemplate(var[] arguments, ref<CompileContext> compileContext) {
+	protected ref<TemplateInstanceType> instantiateTemplate(var[] arguments, ref<CompileContext> compileContext) {
 		for (ref<TemplateInstanceType> t = _instances; t != null; t = t.next()) {
 			if (t.match(arguments))
 				return t;
