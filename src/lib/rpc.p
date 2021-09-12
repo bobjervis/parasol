@@ -22,12 +22,31 @@ import parasol:log;
 import parasol:net;
 
 private ref<log.Logger> logger = log.getLogger("parasol.rpc");
+
+class ClientBase {
+	protected ref<http.Client> _client;
+
+	string call(string serializedArguments) {
+		http.ConnectStatus status = _client.post(serializedArguments);
+		if (status != http.ConnectStatus.OK)
+			throw IOException(string(status));
+		string reply;
+		int contentLength;
+
+		(reply, contentLength) = _client.readContent();
+		if (reply == null || reply.length() < contentLength)
+			throw IOException("Content missing or malformed");
+
+		// Shut her down and await the next call.
+		_client.reset();
+		return reply;
+	}
+}
 /**
  * A client application wanting to use HTTP/HTTPS to carry an RPC call to a server
  * should use this class to do so.
  */
-public class Client<class PROXY> {
-	private ref<http.Client> _client;
+public class Client<class PROXY> extends ClientBase {
 	/**
 	 * Create a client for a simple HTTP request.
 	 *
@@ -66,21 +85,34 @@ public class Client<class PROXY> {
 	public PROXY proxy() {
 		return PROXY.proxy(this);
 	}
+}
 
-	private string call(string serializedArguments) {
-		http.ConnectStatus status = _client.post(serializedArguments);
-		if (status != http.ConnectStatus.OK)
-			throw IOException(string(status));
-		string reply;
-		int contentLength;
+void marshalInt(ref<string> output, ref<int> object) {
+	int value = *object;
+	if (value >= -128 && value <= 127) {
+		(*output).append('1');
+		(*output) += substring(pointer<byte>(&value), 1);
+	} else if (value >= -32768 && value <= 32767) {
+		(*output).append('S');
+		(*output) += substring(pointer<byte>(&value), 2);
+	} else {
+		(*output).append('i');
+		(*output) += substring(pointer<byte>(&value), 4);
+	}
+}
+/**
+ * This is the base class for all proxy classes. Each distinct interface
+ * that is declared will create a proxy class with this as it's base class.
+ *
+ * Only internally generated code will ever reference this base class.
+ */
+class ClientProxy {
+	// It doesn't matter what parameter we use for Client, no external
+	// code will touch it.
+	private ref<Client<int>> _client;
 
-		(reply, contentLength) = _client.readContent();
-		if (reply == null || reply.length() < contentLength)
-			throw IOException("Content missing or malformed");
-
-		// Shut her down and await the next call.
-		_client.reset();
-		return reply;
+	ClientProxy(ref<Client<int>> client) {
+		_client = client;
 	}
 }
 /*
@@ -144,14 +176,53 @@ public class Service<class I> extends http.Service {
 	}
 
 	public boolean processRequest(ref<http.Request> request, ref<http.Response> response) {
-		//
+		if (request.method != http.Request.Method.POST) {
+			response.error(405);
+			return false;
+		}
+		logger.info("rpc.Service: %s", request.toString());
+		StubParams params;
+		string content = request.readContent();
+
+		int index = content.indexOf(';');
+		if (index < 0) {
+			response.error(400);
+			return false;
+		}
+		params.methodID = substring(&content[0], index);
+		params.arguments = substring(content, index + 1);
+/*		boolean releasedCaller;
+		// If the selected method returns void, go ahead and respond as if the call works.
+		if (I.stub(&params, false) != null) {
+			response.ok();
+			response.header("Content-Length", "0");
+			response.endOfHeaders();
+			response.respond();
+			releasedCaller = true;
+		}
+ */
+		string returns = I.stub(&params);
+//		if (releasedCaller)
+//			return false;
+		// There should be returns for this method, check and respond accordingly.
+		if (returns == null)
+			response.error(500);
+		else {
+			response.ok();
+			response.header("Content-Length", string(returns.length()));
+			response.endOfHeaders();
+			response.write(returns);
+		}
 		return false;
 	}
 }
-
-public class Stub<class I> {
+/*
+ * By being a unique class that no user code could involve in an interface, this
+ * gurantees that the stub method doesn't collide
+ */
+class StubParams {
+	substring methodID;
+	substring arguments;
 }
 
-public class Proxy<class I> {
-}
 

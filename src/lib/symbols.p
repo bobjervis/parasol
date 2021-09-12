@@ -555,6 +555,33 @@ public class DelegateOverload extends OverloadInstance {
 	}
 }
 
+public class StubOverload extends OverloadInstance {
+	ref<InterfaceType> _interfaceType;
+
+	StubOverload(ref<InterfaceType> interfaceType, ref<Overload> overload, ref<MemoryPool> pool, ref<ParameterScope> parameterScope) {
+		super(overload, Operator.PUBLIC, true, false, overload.enclosing(), null, pool, overload.name(), null, parameterScope);
+		_interfaceType = interfaceType;
+	}
+
+	public ref<Type> assignThisType(ref<CompileContext> compileContext) {
+		if (_type == null) {
+			ref<ClassType> rpcStubParams = compileContext.getClassType("rpc.StubParams");
+			if (rpcStubParams != null) {
+				Location loc = _interfaceType.definition().location();
+				ref<Node> n = compileContext.tree().newLeaf(Operator.THIS, loc);
+				n.type = compileContext.arena().builtInType(TypeFamily.STRING);
+				ref<NodeList> returns = compileContext.tree().newNodeList(n);
+				n = compileContext.tree().newLeaf(Operator.THIS, loc);
+				n.type = compileContext.arena().createRef(rpcStubParams, compileContext);
+				ref<NodeList> parameters = compileContext.tree().newNodeList(n);
+				_type = compileContext.pool().newFunctionType(returns, parameters, parameterScope());
+			} else
+				_type = compileContext.errorType();
+		}
+		return _type;
+	}
+}
+
 public class ProxyOverload extends OverloadInstance {
 	ref<InterfaceType> _interfaceType;
 
@@ -565,26 +592,63 @@ public class ProxyOverload extends OverloadInstance {
 
 	public ref<Type> assignThisType(ref<CompileContext> compileContext) {
 		if (_type == null) {
-//			printf(" --- assignThisType ---\n");
-			ref<Node> n = compileContext.tree().newLeaf(Operator.THIS, _interfaceType.definition().location());
-			n.type = _interfaceType;
-			ref<NodeList> returns = compileContext.tree().newNodeList(n);
 			ref<Symbol> sym = compileContext.arena().getSymbol("parasol", "rpc.Client", compileContext);
-			if (sym == null) {
-				// This can be silent. Something else has to invoke rpc.Client
+			if (sym != null) {
+	//			printf(" --- assignThisType(%s) ---\n", _interfaceType.signature());
+				Location loc = _interfaceType.definition().location();
+				ref<Node> n = compileContext.tree().newLeaf(Operator.THIS, loc);
+				n.type = _interfaceType;
+				ref<NodeList> returns = compileContext.tree().newNodeList(n);
+				ref<TemplateInstanceType> rpcClient = getRpcClient(sym, compileContext);			
+				if (rpcClient == null) {
+					_interfaceType.definition().add(MessageId.NO_RPC_CLIENT, compileContext.pool());
+					// THis can be silent. Something else has to invoke rpc.Client
+					return _type = compileContext.errorType();
+				}
+				ref<Type> clientProxy = compileContext.getClassType("rpc.ClientProxy");
+				n = compileContext.tree().newLeaf(Operator.THIS, loc);
+				n.type = compileContext.arena().createRef(rpcClient, compileContext);
+				ref<NodeList> parameters = compileContext.tree().newNodeList(n);
+				_type = compileContext.pool().newFunctionType(returns, parameters, parameterScope());
+				ref<Node> argName = compileContext.tree().newIdentifier("a", loc);
+				parameterScope().define(Operator.NAMESPACE, StorageClass.ENCLOSING, null, argName, n.type, compileContext.pool());
+				ref<Scope> scope = compileContext.arena().createScope(parameterScope(), null, StorageClass.AUTO);
+				ref<ClassScope> classScope = compileContext.arena().createClassScope(scope, null, null);
+				classScope.classType = compileContext.pool().newClassType(clientProxy, true, classScope);
+				classScope.classType.implement(_interfaceType);
+				scope = _interfaceType.scope();
+				ref<ref<Symbol>[Scope.SymbolKey]> syms = scope.symbols();
+				for (key in *syms) {
+					ref<Symbol> sym = (*syms)[key];
+					if (sym.class != Overload)
+						continue;
+					ref<Overload> o = ref<Overload>(sym);
+					ref<ref<OverloadInstance>[]> instances = o.instances();
+					for (i in *instances) {
+						ref<OverloadInstance> oi = (*instances)[i];
+						if (oi.storageClass() == StorageClass.STATIC)
+							continue;
+						ref<Type> tp = oi.assignType(compileContext);
+						if (tp.deferAnalysis())
+							continue;		
+						ref<ProxyMethodScope> functionScope = compileContext.createProxyMethodScope();
+						ref<Overload> o = classScope.defineOverload(oi.name(), Operator.FUNCTION, compileContext);
+						ref<OverloadInstance> impl = compileContext.pool().newOverloadInstance(o, false, oi.name(), tp, functionScope);
+						functionScope.method = impl;
+						o.addSpecialInstance(impl, compileContext);
+						// Add the parameters to the PROXY_METHOD scope:
+						ref<ParameterScope> psIface = oi.parameterScope();
+						ref<ref<Symbol>[]> syms = psIface.parameters();
+						for (i in *syms) {
+							ref<Symbol> sym = (*syms)[i];
+							if (sym.class != PlainSymbol)
+								continue;
+							functionScope.define(Operator.NAMESPACE, StorageClass.PARAMETER, null, sym.definition(), sym.type(), compileContext.pool());
+						}
+					}
+				}
+			} else
 				return _type = compileContext.errorType();
-			}
-			ref<TemplateInstanceType> rpcClient = getRpcClient(sym, compileContext);			
-			if (rpcClient == null) {
-				_interfaceType.definition().add(MessageId.NO_RPC_CLIENT, compileContext.pool());
-				// THis can be silent. Something else has to invoke rpc.Client
-				return _type = compileContext.errorType();
-			}
-			n = compileContext.tree().newLeaf(Operator.THIS, _interfaceType.definition().location());
-			n.type = compileContext.arena().createRef(rpcClient, compileContext);
-			ref<NodeList> parameters = compileContext.tree().newNodeList(n);
-			_type = compileContext.pool().newFunctionType(returns, parameters, parameterScope());
-			print(0, false);
 		}
 		return _type;
 	}
@@ -618,6 +682,14 @@ public class OverloadInstance extends Symbol {
 		_overload = overload;
 		_parameterScope = parameterScope;
 		_final = isFinal;
+	}
+
+	OverloadInstance(ref<Overload> overload, boolean isFinal, ref<MemoryPool> pool, substring name, ref<Type> type, ref<ParameterScope> parameterScope) {
+		super(Operator.PUBLIC, StorageClass.MEMBER, overload.enclosing(), null, pool, name, null);
+		_overload = overload;
+		_parameterScope = parameterScope;
+		_final = isFinal;
+		_type = type;
 	}
 
 	public void print(int indent, boolean printChildScopes) {
@@ -714,18 +786,22 @@ public class OverloadInstance extends Symbol {
 		while (arguments != null) {
 			ref<PlainSymbol> ps = ref<PlainSymbol>((*_parameterScope.parameters())[parameter]);
 			ref<Node> typeDeclarator = ps.typeDeclarator();
-			compileContext.assignTypes(_parameterScope, typeDeclarator);
-			if (typeDeclarator.deferAnalysis())
-				return Callable.DEFER;
 			ref<Type> t;
-			if (typeDeclarator.type == null)
-				typeDeclarator.print(0);
-			if (typeDeclarator.type.family() == TypeFamily.FUNCTION)
-				t = typeDeclarator.type;
-			else
-				t = typeDeclarator.unwrapTypedef(Operator.CLASS, compileContext);
-			if (typeDeclarator.deferAnalysis())
-				return Callable.DEFER;
+			if (typeDeclarator == null)
+				t = ps.type();
+			else {
+				compileContext.assignTypes(_parameterScope, typeDeclarator);
+				if (typeDeclarator.deferAnalysis())
+					return Callable.DEFER;
+				if (typeDeclarator.type == null)
+					typeDeclarator.print(0);
+				if (typeDeclarator.type.family() == TypeFamily.FUNCTION)
+					t = typeDeclarator.type;
+				else
+					t = typeDeclarator.unwrapTypedef(Operator.CLASS, compileContext);
+				if (typeDeclarator.deferAnalysis())
+					return Callable.DEFER;
+			}
 			if (parameter == _parameterScope.parameters().length() - 1 && hasEllipsis) {
 				// in this case t is a vector type
 				// Check for the special case that the argument has type t
@@ -751,6 +827,11 @@ public class OverloadInstance extends Symbol {
 		// the call includes zero ellipsis arguments.
 		return Callable.YES;
 	}
+
+	public string rpcMethod() {
+		return name() + "-" + type().signature();
+	}
+
 	/**
 	 * Evaluate which of a pair of methods are a 'better fit' to the
 	 * given argument list.

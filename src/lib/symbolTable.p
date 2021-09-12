@@ -15,6 +15,7 @@
  */
 namespace parasol:compiler;
 
+import parasol:runtime;
 import parasol:storage.File;
 
 public enum StorageClass {
@@ -391,12 +392,14 @@ class ClasslikeScope extends Scope {
 				}
 			}
 			int maxMatchableMethod = _methods.length();
-			for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
-				ref<Symbol> sym = i.get();
+			for (i in _symbols) {
+				ref<Symbol> sym = _symbols[i];
 				if (sym.class == Overload) {
 					ref<Overload> o = ref<Overload>(sym);
 					for (int i = 0; i < o.instances().length(); i++) {
 						ref<OverloadInstance> oi = (*o.instances())[i];
+						if (oi.storageClass() == StorageClass.STATIC)
+							continue;
 //						printf("methods in map: %d\n", _methods.length());
 						oi.assignType(compileContext);
 						int index = matchingMethod(oi, maxMatchableMethod);
@@ -431,8 +434,8 @@ class ClasslikeScope extends Scope {
 						}
 					}
 				}
-				assert(definition() != null);
-				compileContext.assignTypes(this, definition());
+				if (definition() != null)
+					compileContext.assignTypes(this, definition());
 				// Now build out the InterfaceImplementationScope objects (for their vtables).
 				ref<ref<InterfaceType>[]> interfaces;
 				if (classType != null)
@@ -575,6 +578,8 @@ class ClasslikeScope extends Scope {
 	}
 	
 	void printDetails() {
+		if (!_methodsBuilt)
+			printf(" methods NOT built");
 		if (classType != null)
 			printf(" classType %s", classType.signature());
 	}
@@ -645,6 +650,7 @@ public class InterfaceImplementationScope extends ClassScope {
 	 * produce the machine code for each thunk.
 	 */
 	public void makeThunks(ref<CompileContext> compileContext) {
+//		printf("makeThunks for %s implements %s (%d methods, starting with %d thunks)\n", _implementingClass.signature(), _interface.signature(), _methods.length(), _thunks.length());
 		for (int i = _thunks.length(); i < _methods.length(); i++)
 			_thunks.append(compileContext.arena().createThunkScope(this, _methods[i].parameterScope(), false));
 	}
@@ -777,6 +783,14 @@ class FlagsScope extends ClasslikeScope {
 		return -1;
 	}
 }
+
+public class ProxyMethodScope extends ParameterScope {
+	public ref<OverloadInstance> method;
+
+	public ProxyMethodScope(ref<Scope> enclosing) {
+		super(enclosing, null, Kind.PROXY_METHOD);
+	}
+}
 /*
  * ParameterScope - a.k.a functionScope
  * 
@@ -829,6 +843,8 @@ public class ParameterScope extends Scope {
 		ENUM_TO_STRING,			// a generated enum-to-string coercion method
 		FLAGS_TO_STRING,		// a generate flags-to-string coercion method
 		THUNK,					// This is a thunk. 
+		PROXY_CLIENT,			// Proxy -> rpc.Client
+		PROXY_METHOD,			// Proxy method (class implements interface being proxied).
 	}
 	private Kind _kind;
 	private ref<Symbol>[] _parameters;
@@ -849,6 +865,13 @@ public class ParameterScope extends Scope {
 			_parameters.append(sym);
 		if (declaration != null && declaration.getProperEllipsis() != null)
 			_hasEllipsis = true;
+		return sym;
+	}
+
+	public ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> name, ref<Type> type, ref<MemoryPool> memoryPool) {
+		ref<Symbol> sym = super.define(visibility, storageClass, annotations, name, type, null, memoryPool);
+		if (sym != null)
+			_parameters.append(sym);
 		return sym;
 	}
 
@@ -891,8 +914,9 @@ public class ParameterScope extends Scope {
 	public boolean hasThis() {
 		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(definition());
 		
-		if (func == null)		// a generated default constructor has no 'definition'
-			return true;		// but it does have 'this'
+		if (func == null) {		// a generated default constructor has no 'definition'
+			return _kind != Kind.PROXY_CLIENT;		// but it does have 'this'
+		}
 		if (func.op() == Operator.UNIT)
 			return false;
 		if (func.name() != null && func.name().symbol() != null)
@@ -1279,7 +1303,7 @@ public class Scope {
 		}
 	}
 
-	void print(int indent, boolean printChildren) {
+	public void print(int indent, boolean printChildren) {
 		if (int(_storageClass) < 0)
 			printf("%*.*cScope %p[%d] storageClass <%d>", indent, indent, ' ', this, variableStorage, int(_storageClass));
 		else
@@ -1747,6 +1771,10 @@ public class Scope {
 			inner = inner._enclosing;
 		}
 		return false;
+	}
+
+	public ref<ref<Scope>[]> enclosed() {
+		return &_enclosed;
 	}
 	/**
 	 * Check whether this scope is a base scope of the derived scope.

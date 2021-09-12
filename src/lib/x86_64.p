@@ -62,6 +62,7 @@ import parasol:compiler.Overload;
 import parasol:compiler.OverloadInstance;
 import parasol:compiler.ParameterScope;
 import parasol:compiler.PlainSymbol;
+import parasol:compiler.ProxyMethodScope;
 import parasol:compiler.PUSH_OUT_PARAMETER;
 import parasol:compiler.Reference;
 import parasol:compiler.Return;
@@ -89,6 +90,7 @@ import parasol:process;
 import parasol:pxi.Pxi;
 import parasol:runtime;
 import parasol:storage;
+import parasol:stream;
 import parasol:text;
 import native:C;
 
@@ -297,6 +299,8 @@ public class X86_64 extends X86_64AssignTemps {
 	private ref<ParameterScope> _takeMethod;
 	private ref<ParameterScope> _releaseMethod;
 	
+	private ref<ParameterScope>[TypeFamily] _marshallerFunctions;
+	private ref<ParameterScope> _rpcClientCall;
 	private ref<Symbol> _floatSignMask;
 	private ref<Symbol> _floatOne;
 	private ref<Symbol> _floatZero;
@@ -317,6 +321,7 @@ public class X86_64 extends X86_64AssignTemps {
 		_leaksFlag = leaksFlag;
 		_profilePath = profilePath;
 		_coveragePath = coveragePath;
+		_marshallerFunctions.resize(TypeFamily.MAX_TYPES);
 	}
 
 	~X86_64() {
@@ -655,6 +660,79 @@ public class X86_64 extends X86_64AssignTemps {
 					}
 					break;
 					
+				case PROXY_CLIENT:
+					ref<Scope> autoWrapper = (*parameterScope.enclosed())[0];
+					ref<Scope> pc = (*autoWrapper.enclosed())[0];
+					assert(pc.class == ClassScope);
+					ref<ClassScope> proxyClass = ref<ClassScope>(pc); 
+					inst(X86.PUSH, TypeFamily.ADDRESS, firstRegisterArgument());
+					inst(X86.MOV, TypeFamily.SIGNED_64, firstRegisterArgument(), proxyClass.classType.size());
+					instCall(_alloc, compileContext);
+					inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), R.RAX);
+					storeITables(proxyClass.classType, 0, compileContext);
+					inst(X86.POP, TypeFamily.ADDRESS, secondRegisterArgument());
+					inst(X86.PUSH, TypeFamily.ADDRESS, firstRegisterArgument());
+					instCall((*proxyClass.base(compileContext).constructors())[0], compileContext);
+					inst(X86.POP, TypeFamily.ADDRESS, R.RAX);
+					inst(X86.ADD, TypeFamily.SIGNED_64, R.RAX, 8);			// convert to the interface-thunk vtable location.
+					generateReturn(parameterScope, compileContext);
+					break;
+
+				case PROXY_METHOD:
+					inst(X86.ENTER, 0);
+					inst(X86.PUSH, TypeFamily.ADDRESS, thisRegister());
+					inst(X86.MOV, TypeFamily.ADDRESS, thisRegister(), firstRegisterArgument());
+					ref<OverloadInstance> method = ref<ProxyMethodScope>(parameterScope).method;
+					ref<ref<Symbol>[]> parameters = parameterScope.parameters();
+					int regIndex;
+					ref<NodeList> paramNodes = ref<FunctionType>(method.type()).parameters();
+					for (i in *parameters) {
+						ref<Symbol> param = (*parameters)[i];
+						ref<Type> t = param.type();
+						byte value = paramNodes.node.register;
+						if (value > 0) {
+							inst(X86.PUSH, TypeFamily.SIGNED_64, R(value));
+							regIndex++;
+							param.offset = -(regIndex * address.bytes + address.bytes);
+						}
+						paramNodes = paramNodes.next;
+					}
+					// we will need a string to hold the marshalled parameters.
+					// RSI+ maybe some stack, -> rest of parameters, plus possible out parameter pointer.
+					inst(X86.PUSH, 0);			// reserve the location for the string accumulator. the stack
+					int stringOffset = -(regIndex * address.bytes + 2 * address.bytes);
+					if (sectionType() == runtime.Target.X86_64_LNX && (stringOffset & ~0xf) == 0)
+						inst(X86.PUSH, 0);			// paragraph align the stack
+
+					// 1. marshal the method id (method + func type sig)
+					inst(X86.LEA, firstRegisterArgument(), R.RBP, stringOffset);
+					instString(X86.LEA, secondRegisterArgument(), rpcEscape(method.rpcMethod()) + ";");
+					ref<Type> str = compileContext.arena().builtInType(TypeFamily.STRING);
+					instCall(str.copyConstructor(), compileContext);
+
+					// 2. marshal parameters from where they landed to the out string.
+					for (i in *parameters) {
+						ref<Symbol> param = (*parameters)[i];
+						ref<Type> t = param.type();
+
+						inst(X86.LEA, firstRegisterArgument(), R.RBP, stringOffset);
+						inst(X86.LEA, secondRegisterArgument(), R.RBP, param.offset);
+						instCall(marshaller(t, compileContext), compileContext);
+					}
+					// 3. call base class 'call' method
+					inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), thisRegister());
+					inst(X86.MOV, TypeFamily.SIGNED_64, firstRegisterArgument(), firstRegisterArgument(), 0);
+					inst(X86.MOV, TypeFamily.SIGNED_64, secondRegisterArgument(), R.RBP, stringOffset);
+					instCall(rpcClientCall(compileContext), compileContext);
+					// 4. marshal return expressions from 'call' return value to outputs.
+					// 5. return. 
+					inst(X86.MOV, TypeFamily.SIGNED_64, R.RAX, R.RBP, stringOffset);
+					inst(X86.LEA, R.RSP, R.RBP, -8);		// off the register vars.
+					inst(X86.POP, TypeFamily.ADDRESS, thisRegister());
+					inst(X86.LEAVE);
+					generateReturn(parameterScope, compileContext);
+					break;
+
 				default:
 					assert(false);
 				}
@@ -894,6 +972,89 @@ public class X86_64 extends X86_64AssignTemps {
 		_deferredTry.resize(f().knownDeferredTrys);
 	}
 
+	private ref<ParameterScope> marshaller(ref<Type> type, ref<CompileContext> compileContext) {
+		ref<ParameterScope> s = _marshallerFunctions[type.family()];
+		if (s == null) {
+			string name = type.family().marshaller();
+			if (name == null)
+				return null;
+			ref<Symbol> sym = compileContext.arena().getSymbol("parasol", name, compileContext);
+			if (sym == null)
+				printf("Could not find parasol:%s\n", name);
+			if (sym.class != Overload) {
+				printf("marshaller for %s not an overloaded symbol\n", name);
+				return null;
+			}
+			ref<Overload> o = ref<Overload>(sym);
+			ref<Type> tp = (*o.instances())[0].assignType(compileContext);
+			if (tp.deferAnalysis()) {
+				printf("marshaller %s not well-formed\n", name);
+				return null;
+			}
+			s = ref<ParameterScope>(tp.scope());
+			_marshallerFunctions[type.family()] = s;
+		}
+		return s;
+	}
+
+	private ref<ParameterScope> rpcClientCall(ref<CompileContext> compileContext) {
+		if (_rpcClientCall == null) {
+			ref<Symbol> clientBase = compileContext.arena().getSymbol("parasol", "rpc.ClientBase", compileContext);
+			if (clientBase == null) {
+				printf("Could not find parasol:rpc.ClientBase\n");
+				return null;
+			}
+			if (clientBase.class != PlainSymbol) {
+				printf("rpc.ClientBase is not a plain symbol\n");
+				return null;
+			}
+			ref<PlainSymbol> ps = ref<PlainSymbol>(clientBase);
+			ref<Type> tp = ps.assignType(compileContext);
+			ref<Symbol> call = tp.wrappedType().scope().lookup("call", compileContext);
+			if (call == null) {
+				printf("Could not find rpc.ClientBase.call\n");
+				return null;
+			}
+			if (call.class != Overload) {
+				printf("rpc.ClientBase.call is not an overloaded symbol\n");
+				return null;
+			}
+			ref<Overload> o = ref<Overload>(call);
+			tp = (*o.instances())[0].assignType(compileContext);
+			if (tp.deferAnalysis()) {
+				printf("rpc.ClientBase.call not well-formed\n");
+				return null;
+			}
+			_rpcClientCall = ref<ParameterScope>(tp.scope());
+		}
+		return _rpcClientCall;
+	}
+
+	private string rpcEscape(string value) {
+		string output;
+		stream.BufferReader r(value.c_str(), value.length());
+		text.UTF8Decoder ud(&r);
+
+		for (;;) {
+			int c = ud.decodeNext();
+			if (c == stream.EOF)
+				break;
+			switch (c) {
+			case ';':
+				output += "\\:";
+				break;
+
+			case'\\':
+				output += "\\\\";
+				break;
+
+			default:
+				output.append(c);
+			}
+		}
+		return output;
+	}
+				
 	private void generateDestructorShutdown(ref<ParameterScope> parameterScope, ref<CompileContext> compileContext) {
 		ref<ClassScope> classScope = ref<ClassScope>(parameterScope.enclosing());
 		assert(classScope.storageClass() == StorageClass.MEMBER);

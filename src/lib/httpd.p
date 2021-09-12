@@ -34,6 +34,7 @@ import parasol:storage.Seek;
 import parasol:storage.constructPath;
 import parasol:storage.exists;
 import parasol:storage.isDirectory;
+import parasol:thread;
 import parasol:thread.Thread;
 import parasol:thread.ThreadPool;
 import parasol:thread.currentThread;
@@ -801,6 +802,38 @@ public class Request {
 		return _parameters[name];
 	}
 	/**
+	 * Read the contents, if any, in the request.
+	 *
+	 * @return The content, as a string. Note that binary data can be transmitted from some servers,
+	 * so whether the returned value is valid UTF-8 text depends on the request and the server. If
+	 * the connection read fewer bytes than the header specified, the string is truncated to the amount
+	 * of data actually returned. If there is no content-length header, or its value is malformed, or
+	 * there is no open connection to the server, null is returned.
+	 * @return The specified content-length header value, if present and well-formed. If the 
+	 * content-length is missing or malformed, the value -1 is returned.
+	 */
+	public string, int readContent() {
+		int cl = int(contentLength());
+		if (cl <= 0)
+			return null, -1;
+		int specifiedContentLength = cl;
+		if (_connection == null)
+			return null, specifiedContentLength;
+		// Allow for the full content length header value.
+		string content;
+		content.resize(cl);
+		pointer<byte> buffer = &content[0];
+		while (cl > 0) {
+			int ch = _connection.read();
+			if (ch < 0)
+				break;
+			*buffer++ = byte(ch);
+			cl--;
+		}
+		content.resize(specifiedContentLength - cl);
+		return content, specifiedContentLength;
+	}
+	/**
 	 * Fetch the Connection object of the request.
 	 *
 	 * The Connection will generally still be open, allowing the service to respond to the reuqest.
@@ -838,7 +871,6 @@ public class Request {
 		for (string[string].iterator i = headers.begin(); i.hasNext(); i.next()) {
 			result.printf("  %-20s %s\n", i.key(), i.get());
 		}
-		result.printf("body size: %d\n", contentLength());
 		return result;
 	}
 }
@@ -1776,7 +1808,7 @@ public class Uri {
 				result += userinfo + "@";
 			result += host;
 			if (!portDefaulted)
-				result += string(port);
+				result += ":" + string(port);
 		} else
 			result = "";
 		result += path;

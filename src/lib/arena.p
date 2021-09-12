@@ -238,10 +238,8 @@ public class Arena {
 	 */
 	public ref<Symbol> getSymbol(string domain, string path, ref<CompileContext> compileContext) {
 		ref<Scope> s = _domains.get(domain);
-		if (s == null) {
-			printf("Failed to find domain for '%s'\n", domain);
+		if (s == null)
 			return null;
-		}
 		string[] components = path.split('.');
 		ref<Symbol> found = null;
 		for (int i = 0; ; i++) {
@@ -487,6 +485,12 @@ public class Arena {
 
 	public ref<ParameterScope> createParameterScope(ref<Scope> enclosing, ref<Node> definition, ParameterScope.Kind kind) {
 		ref<ParameterScope> s = new ParameterScope(enclosing, definition, kind);
+		_scopes.append(s);
+		return s;
+	}
+
+	public ref<ProxyMethodScope> createProxyMethodScope(ref<Scope> enclosing) {
+		ref<ProxyMethodScope> s = new ProxyMethodScope(enclosing);
 		_scopes.append(s);
 		return s;
 	}

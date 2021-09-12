@@ -658,6 +658,10 @@ public class CompileContext {
 		return _arena.createParameterScope(_current, n, kind);
 	}
 
+	ref<ProxyMethodScope> createProxyMethodScope() {
+		return _arena.createProxyMethodScope(_current);
+	}
+
 	public ref<ClassScope> createClassScope(ref<Node> n, ref<Identifier> className) {
 		return _arena.createClassScope(_current, n, className);
 	}
@@ -741,7 +745,7 @@ public class CompileContext {
 			sym.offset = offset;
 		}
 	}
-	
+
 	public void assignTypes() {
 		for (int i = 0; i < _arena.scopes().length(); i++) {
 			_current = (*_arena.scopes())[i];
@@ -1109,6 +1113,19 @@ public class CompileContext {
 		return _compilerType;
 	}
 
+	public ref<ClassType> getClassType(string symbol) {
+		ref<Symbol> sym = _arena.getSymbol("parasol", symbol, this);
+		if (sym == null || sym.class != PlainSymbol)
+			return null;
+		ref<PlainSymbol> ps = ref<PlainSymbol>(sym);
+		ref<Type> t = ps.assignType(this).wrappedType();
+		if (t.class == ClassType)
+			return ref<ClassType>(t);
+		else
+			return null;
+	}
+
+
 	public void markLiveSymbol(ref<Node> n) {
 		if (n == null || n.type == null)
 			return;
@@ -1395,12 +1412,20 @@ public class MemoryPool extends memory.NoReleasePool {
 		return super new OverloadInstance(overload, visibility, isStatic, isFinal, enclosing, annotations, this, name, source, functionScope);
 	}
 
+	public ref<OverloadInstance> newOverloadInstance(ref<Overload> overload, boolean isFinal, substring name, ref<Type> type, ref<ParameterScope> functionScope) {
+		return super new OverloadInstance(overload, isFinal, this, name, type, functionScope);
+	}
+
 	public ref<OverloadInstance> newDelegateOverload(ref<Overload> overloadSym, ref<OverloadInstance> delegate) {
 		return super new DelegateOverload(overloadSym, delegate, this);
 	}
 	
 	public ref<ProxyOverload> newProxyOverload(ref<InterfaceType> interfaceType, ref<Overload> overload, ref<ParameterScope> functionScope) {
 		return super new ProxyOverload(interfaceType, overload, this, functionScope);
+	}
+
+	public ref<StubOverload> newStubOverload(ref<InterfaceType> interfaceType, ref<Overload> overload, ref<ParameterScope> functionScope) {
+		return super new StubOverload(interfaceType, overload, this, functionScope);
 	}
 
 	public ref<Namespace> newNamespace(string domain, ref<Node> namespaceNode, ref<Scope> enclosing, 
@@ -1418,6 +1443,10 @@ public class MemoryPool extends memory.NoReleasePool {
 
 	public ref<ClassType> newClassType(ref<ClassDeclarator> definition, boolean isFinal, ref<Scope> scope) {
 		return super new ClassType(definition, isFinal, scope);
+	}
+
+	public ref<ClassType> newClassType(ref<Type> base, boolean isFinal, ref<Scope> scope) {
+		return super new ClassType(base, isFinal, scope);
 	}
 
 	public ref<ClassType> newClassType(TypeFamily effectiveFamily, ref<Type> base, ref<Scope> scope) {

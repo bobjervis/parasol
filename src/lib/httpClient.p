@@ -842,6 +842,7 @@ public class Client {
 
 		default:
 			if (_webSocketProtocol != null) {
+				printf("%p: url = %s protocol = '%s'\n", this, _uri.toString(), _webSocketProtocol);
 				printf("Web Socket protocol defined - not a web socket URL.\n");
 				return ConnectStatus.WS_PROTOCOL_NOT_ALLOWED, 0;
 			}
@@ -1134,11 +1135,11 @@ public class Client {
 			reply.resize(cl);
 			pointer<byte> buffer = &reply[0];
 			while (cl > 0) {
-				int actual = _connection.read(buffer, cl);
-				if (actual == 0)
+				int ch = _connection.read();
+				if (ch < 0)
 					break;
-				buffer += actual;
-				cl -= actual;
+				*buffer++ = byte(ch);
+				cl--;
 			}
 			reply.resize(specifiedContentLength - cl);
 			return reply, specifiedContentLength;

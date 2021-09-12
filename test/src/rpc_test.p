@@ -16,9 +16,11 @@
 
 import native:linux;
 import parasol:http;
+import parasol:log;
 import parasol:net;
 import parasol:process;
 import parasol:rpc;
+import parasol:thread;
 
 linux.pid_t childProcessID;
 http.Server server;
@@ -29,62 +31,43 @@ server.httpService("/http", &httpExchange);
 server.disableHttps();
 server.setHttpPort(port);		// if port == 0, a random port number will be assigned.
 
-server.start(net.ServerScope.LOCALHOST);
+server.start();
 
 port = server.httpPort();
+
+HttpExchange httpExchange;
 
 interface Test {
 	boolean simple(int argument);
 }
 
-int main(string[] args) {
-	childProcessID = linux.fork();
-	int result;
+{							// Test 1: Simple HTTP request and response
+	string url = "http://192.168.1.2:" + port + "/http";
+	rpc.Client<Test> client(url);
 
-	if (childProcessID == 0) {		// This is the child process.
-		server.stop();
-		{							// Test 1: Simple HTTP request and response
-			rpc.Client<Test> client("http://localhost:" + port + "/http");
+	// Manufacture the proxy object.
 
-			// Manufacture the proxy object.
+	Test t = client.proxy();
 
-			Test t = client.proxy();
+	boolean result = t.simple(6);
+	assert(result);
+	result = t.simple(12);
+	assert(!result);
 
-			boolean result = t.simple(6);
-			assert(result);
-			result = t.simple(12);
-			assert(!result);
+	// When done, delete the proxy.
 
-			// When done, delete the proxy.
-
-			delete t;
-		}
-/*
-		{
-			http.Client client("http://localhost:" + port + "/ws");
-			assert(client.get() == http.ConnectStatus.OK);
-			ref<http.WebSocket> webSocket = client.webSocket();
-			assert(webSocket != null);
-			rpc.Reader<WSUpstream, WSDownstream> reader(webSocket);
-		}
- */
-		process.exit(0);
-	} else {						// This is the parent process.
-	
-		int exitStatus;
-	
-		linux.waitpid(childProcessID, &exitStatus, 0);
-	
-		if (exitStatus != 0) {
-			printf("Child process ended with exit code %d\n", exitStatus);
-			result = 1;
-		}
-	}
-	server.stop();
-	if (result != 0)
-		printf("*** FAIL ***\n");
-	return result;
+	delete t;
 }
+/*
+{
+	http.Client client("http://localhost:" + port + "/ws");
+	assert(client.get() == http.ConnectStatus.OK);
+	ref<http.WebSocket> webSocket = client.webSocket();
+	assert(webSocket != null);
+	rpc.Reader<WSUpstream, WSDownstream> reader(webSocket);
+}
+ */
+server.stop();
 
 class HttpExchange extends rpc.Service<Test> implements Test {
 	HttpExchange() {
@@ -95,6 +78,4 @@ class HttpExchange extends rpc.Service<Test> implements Test {
 		return argument < 10;
 	}	
 }
-
-HttpExchange httpExchange;
 

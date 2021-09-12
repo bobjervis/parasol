@@ -21,27 +21,27 @@ public enum TypeFamily {
 
 	// numeric types
 	
-	SIGNED_8,
-	SIGNED_16,				// class short
-	SIGNED_32,				// class int
-	SIGNED_64,				// class long
-	UNSIGNED_8,				// class byte
-	UNSIGNED_16,			// class char
-	UNSIGNED_32,			// class unsigned
-	UNSIGNED_64,
-	FLOAT_32,				// class float
-	FLOAT_64,				// class double
+	SIGNED_8("rpc.marshalSigned8", "rpc.unmarshalSigned8"),
+	SIGNED_16("rpc.marshalShort", "rpc.unmarshalShort"),				// class short
+	SIGNED_32("rpc.marshalInt", "rpc.unmarshalInt"),				// class int
+	SIGNED_64("rpc.marshalong", "rpc.unmarshalong"),				// class long
+	UNSIGNED_8("rpc.marshalByte", "rpc.unmarshalByte"),				// class byte
+	UNSIGNED_16("rpc.marshalChar", "rpc.unmarshalChar"),				// class char
+	UNSIGNED_32("rpc.marshalUnsigned", "rpc.unmarshalUnsigned"),			// class unsigned
+	UNSIGNED_64("rpc.marshalUnsigned64", "rpc.unmarshalUnsigned64"),
+	FLOAT_32("rpc.marshalFloat", "rpc.unmarshalFloat"),				// class float
+	FLOAT_64("rpc.marshalDouble", "rpc.unmarshalDouble"),				// class double
 
 	// various formats of string
 
-	STRING,
-	STRING16,
-	SUBSTRING,
-	SUBSTRING16,
+	STRING("rpc.marshalString", "rpc.unmarshalString"),
+	STRING16("rpc.marshalString16", "rpc.unmarshalString16"),
+	SUBSTRING("rpc.marshalSubstring", "rpc.unmarshalSubstring"),
+	SUBSTRING16("rpc.marshalSubstring16", "rpc.unmarshalSubstring16"),
 
 	// Other kinds of runtime object.
 	
-	BOOLEAN,
+	BOOLEAN("rpc.marshalBoolean", "rpc.unmarshalBoolean"),
 	VAR,
 	ADDRESS,
 	EXCEPTION,
@@ -67,7 +67,7 @@ public enum TypeFamily {
 	// class synonyms - each of these sub-families are understood to be some kind of class.
 
 	SHAPE,					// Any instance of a vector<E, K> or map<E, K>. This will appear as the family of a
-							// template instance class of a template delcared with @Shape annotation.
+							// template instance class of a template declared with @Shape annotation.
 	REF,					// Any instance of ref<T>. This will appear as the family of such an instance.
 	POINTER,				// Any instance of pointer<T>. This will appear as the family of such an instance.
 	TEMPLATE_INSTANCE,		// Any instance class of an ordinary template.
@@ -80,6 +80,24 @@ public enum TypeFamily {
 							// within a template definition.
 
 	MAX_TYPES				// marker for the end of types. No Type object will have this family.
+	;
+	private string _marshaller;
+	private string _unmarshaller;
+
+	TypeFamily() { }
+
+	TypeFamily(string marshaller, string unmarshaller) {
+		_marshaller = marshaller;
+		_unmarshaller = unmarshaller;
+	}
+
+	public string marshaller() {
+		return _marshaller;
+	}
+
+	public string unmarshaller() {
+		return _unmarshaller;
+	}
 }
 
 public class BuiltInType extends Type {
@@ -444,9 +462,15 @@ public class InterfaceType extends ClassType {
 	public void makeRPCSymbols(ref<CompileContext> compileContext) {
 		ref<Overload> o = scope().defineOverload("proxy", Operator.FUNCTION, compileContext);
 		if (o != null) {
-			ref<ParameterScope> funcScope = compileContext.createParameterScope(null, ParameterScope.Kind.FUNCTION);
+			ref<ParameterScope> funcScope = compileContext.createParameterScope(null, ParameterScope.Kind.PROXY_CLIENT);
 			ref<ProxyOverload> proxy = compileContext.pool().newProxyOverload(this, o, funcScope);
 			o.addSpecialInstance(proxy, compileContext);
+		}
+		o = scope().defineOverload("stub", Operator.FUNCTION, compileContext);
+		if (o != null) {
+			ref<ParameterScope> funcScope = compileContext.createParameterScope(null, ParameterScope.Kind.FUNCTION);
+			ref<StubOverload> stub = compileContext.pool().newStubOverload(this, o, funcScope);
+			o.addSpecialInstance(stub, compileContext);
 		}
 	}
 }
@@ -472,6 +496,13 @@ public class ClassType extends Type {
 		_definition = definition;
 		_scope = scope;
 		_isMonitor = definition.op() == Operator.MONITOR_CLASS;
+		_final = isFinal;
+	}
+
+	ClassType(ref<Type> base, boolean isFinal, ref<Scope> scope) {
+		super(TypeFamily.CLASS);
+		_scope = scope;
+		_extends = base;
 		_final = isFinal;
 	}
 
@@ -676,7 +707,7 @@ public class ClassType extends Type {
 			else
 				return _definition.name().identifier();
 		} else
-			return super.signature();
+			return "<anonymous class>";
 	}
 	
 	protected boolean sameAs(ref<Type> other) {

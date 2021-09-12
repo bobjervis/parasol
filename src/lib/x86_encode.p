@@ -1601,6 +1601,18 @@ class X86_64Encoder extends Target {
 			}
 			break;
 			
+		case	MOV:
+			emitRex(family, null, dest, reg);
+			emit(byte(opcodes[instruction] + 0x03));
+			if (offset >= -128 || offset <= 127) {
+				modRM(1, rmValues[dest], rmValues[reg]);
+				emit(byte(offset));
+			} else {
+				modRM(2, rmValues[dest], rmValues[reg]);
+				emitInt(offset);
+			}
+			break;
+
 		default:
 			printf("%s, %s, %s, %s, %d\n", string(instruction), string(family), string(dest), string(reg), offset);
 			assert(false);
@@ -2702,6 +2714,15 @@ class X86_64Encoder extends Target {
 		else
 			symbol = n.symbol();
 		enumAddressModRM(symbol, rmValues[reg], 0, n.type != null ? offset * n.type.size() : 0);
+	}
+
+	void instString(X86 instruction, R left, string literal) {
+		int offset = addStringLiteral(literal);
+		emitRex(TypeFamily.SIGNED_64, null, left, R.NO_REG);
+		emit(0x8d);
+		modRM(0, rmValues[left], 5);
+		fixup(FixupKind.RELATIVE32_STRING, address(offset));
+		emitInt(0);
 	}
 
 	void inst(X86 instruction, R left, ref<Node> right, int immediate) {

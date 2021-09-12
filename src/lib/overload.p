@@ -113,7 +113,7 @@ class OverloadOperation {
 		if (oi.deferAnalysis())
 			return oi.type();
 		int count = oi.parameterCount();
-//		printf("%s parameter count = %d vs %d\n", oi.name().asString(), count, _argCount);
+//		printf("%s parameter count = %d vs %d\n", oi.name(), count, _argCount);
 		if (count == int.MIN_VALUE) {
 			_node.add(MessageId.NO_FUNCTION_TYPE, _compileContext.pool(), _name);
 			return _compileContext.errorType();
