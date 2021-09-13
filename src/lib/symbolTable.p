@@ -784,6 +784,14 @@ class FlagsScope extends ClasslikeScope {
 	}
 }
 
+public class StubScope extends ParameterScope {
+	public ref<StubOverload> stub;
+
+	public StubScope(ref<Scope> enclosing, ref<FunctionDeclaration> fd) {
+		super(enclosing, fd, Kind.STUB_FUNCTION);
+	}
+}
+
 public class ProxyMethodScope extends ParameterScope {
 	public ref<OverloadInstance> method;
 
@@ -845,6 +853,7 @@ public class ParameterScope extends Scope {
 		THUNK,					// This is a thunk. 
 		PROXY_CLIENT,			// Proxy -> rpc.Client
 		PROXY_METHOD,			// Proxy method (class implements interface being proxied).
+		STUB_FUNCTION,			// Stub method (class stubs from a transport to an object implementing the interface being stubbed).
 	}
 	private Kind _kind;
 	private ref<Symbol>[] _parameters;

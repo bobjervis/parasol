@@ -75,6 +75,7 @@ class HttpExchange extends rpc.Service<Test> implements Test {
 	}
 
 	boolean simple(int argument) {
+		printf("In server simple\n");
 		return argument < 10;
 	}	
 }

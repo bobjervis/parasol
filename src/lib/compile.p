@@ -662,6 +662,10 @@ public class CompileContext {
 		return _arena.createProxyMethodScope(_current);
 	}
 
+	ref<StubScope> createStubScope(ref<FunctionDeclaration> fd) {
+		return _arena.createStubScope(_current, fd);
+	}
+
 	public ref<ClassScope> createClassScope(ref<Node> n, ref<Identifier> className) {
 		return _arena.createClassScope(_current, n, className);
 	}

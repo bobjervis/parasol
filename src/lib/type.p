@@ -468,7 +468,12 @@ public class InterfaceType extends ClassType {
 		}
 		o = scope().defineOverload("stub", Operator.FUNCTION, compileContext);
 		if (o != null) {
-			ref<ParameterScope> funcScope = compileContext.createParameterScope(null, ParameterScope.Kind.FUNCTION);
+			ref<Node> returnType = compileContext.tree().newIdentifier("string", definition().location());
+			ref<Identifier> name = compileContext.tree().newIdentifier("stub", definition().location());
+			ref<NodeList> arguments;
+			ref<FunctionDeclaration> fd = compileContext.tree().newFunctionDeclaration(FunctionDeclaration.Category.NORMAL, returnType, name, arguments, 
+												definition().location());
+			ref<ParameterScope> funcScope = compileContext.createStubScope(fd);
 			ref<StubOverload> stub = compileContext.pool().newStubOverload(this, o, funcScope);
 			o.addSpecialInstance(stub, compileContext);
 		}

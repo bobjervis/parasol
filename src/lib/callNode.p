@@ -17,6 +17,7 @@ namespace parasol:compiler;
 
 import parasol:math;
 import parasol:process;
+import parasol:runtime;
 
 public enum CallCategory {
 	ERROR,
@@ -1043,15 +1044,17 @@ public class Call extends ParameterBag {
 	private boolean assignSub(Operator kind, ref<CompileContext> compileContext) {
 		if (!assignArguments(LabelStatus.NO_LABELS, compileContext))
 			return false;
-		_target.assignOverload(_arguments, kind, compileContext);
-		if (_target.deferAnalysis()) {
-			type = _target.type;
-			return false;
-		}
-		if (_target.type.family() == TypeFamily.VAR) {
-			type = compileContext.errorType();
-			_target.add(MessageId.UNFINISHED_VAR_CALL, compileContext.pool());
-			return false;
+		if (_overload == null) {
+			_target.assignOverload(_arguments, kind, compileContext);
+			if (_target.deferAnalysis()) {
+				type = _target.type;
+				return false;
+			}
+			if (_target.type.family() == TypeFamily.VAR) {
+				type = compileContext.errorType();
+				_target.add(MessageId.UNFINISHED_VAR_CALL, compileContext.pool());
+				return false;
+			}
 		}
 		return true;
 	}

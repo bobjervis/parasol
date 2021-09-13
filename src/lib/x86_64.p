@@ -70,6 +70,7 @@ import parasol:compiler.Scope;
 import parasol:compiler.Selection;
 import parasol:compiler.StackArgumentAddress;
 import parasol:compiler.StorageClass;
+import parasol:compiler.StubScope;
 import parasol:compiler.Symbol;
 import parasol:compiler.SyntaxTree;
 import parasol:compiler.Target;
@@ -299,7 +300,6 @@ public class X86_64 extends X86_64AssignTemps {
 	private ref<ParameterScope> _takeMethod;
 	private ref<ParameterScope> _releaseMethod;
 	
-	private ref<ParameterScope>[TypeFamily] _marshallerFunctions;
 	private ref<ParameterScope> _rpcClientCall;
 	private ref<Symbol> _floatSignMask;
 	private ref<Symbol> _floatOne;
@@ -321,7 +321,6 @@ public class X86_64 extends X86_64AssignTemps {
 		_leaksFlag = leaksFlag;
 		_profilePath = profilePath;
 		_coveragePath = coveragePath;
-		_marshallerFunctions.resize(TypeFamily.MAX_TYPES);
 	}
 
 	~X86_64() {
@@ -547,7 +546,7 @@ public class X86_64 extends X86_64AssignTemps {
 				functionScope.value = address(-1);
 				functionScope.value = address(1 + generateFunction(functionScope, compileContext));
 			}
-			if (func.name() != null)
+			if (func.name() != null && func.name().symbol() != null)
 				func.name().symbol().value = functionScope.value;
 			return functionScope, false;
 		}
@@ -565,189 +564,26 @@ public class X86_64 extends X86_64AssignTemps {
 		ref<Block> node;
 		if (scope.class <= ParameterScope) {
 			ref<ParameterScope> parameterScope = ref<ParameterScope>(scope);
+			int initialVariableCount = compileContext.variableCount();
 
 			ref<FunctionDeclaration> func = ref<FunctionDeclaration>(scope.definition());
-			if (func == null) {
-				switch (parameterScope.kind()) {
-				case	DEFAULT_CONSTRUCTOR:
-					inst(X86.PUSH, TypeFamily.SIGNED_64, thisRegister());
-					inst(X86.MOV, TypeFamily.ADDRESS, thisRegister(), firstRegisterArgument());
-					generateConstructorPreamble(null, parameterScope, compileContext);
-					inst(X86.POP, TypeFamily.SIGNED_64, thisRegister());
-					generateReturn(parameterScope, compileContext);
-					break;
-					
-				case	ENUM_INSTANCE_CONSTRUCTOR:
-					inst(X86.MOV, ref<EnumScope>(parameterScope.enclosing()).enumType.instanceFamily(),
-								firstRegisterArgument(), 0, 0);
-					inst(X86.RET);
-					break;
-
-				case	IMPLIED_DESTRUCTOR:
-					if (generateInterfaceDestructorThunk(parameterScope, compileContext))
-						break;
-					inst(X86.ENTER, 0);
-					if (needsDestructorShutdown(parameterScope, compileContext)) { 
-						inst(X86.PUSH, TypeFamily.SIGNED_64, thisRegister());
-						inst(X86.MOV, TypeFamily.ADDRESS, thisRegister(), firstRegisterArgument());
-						generateDestructorShutdown(parameterScope, compileContext);
-						inst(X86.POP, TypeFamily.SIGNED_64, thisRegister());
-					}
-					inst(X86.LEAVE);
-					generateReturn(parameterScope, compileContext);
-					break;
-					
-				case	ENUM_TO_STRING:
-					ref<EnumScope> enclosing = ref<EnumScope>(scope.enclosing());
-					
-					ref<ref<Symbol>[]> instances = enclosing.instances();
-					R indexRegister = firstRegisterArgument();
-					switch (enclosing.enumType.instanceFamily()) {
-					case UNSIGNED_8:
-						if ((getRegMask(firstRegisterArgument()) & byteMask) != 0) {
-							indexRegister = R.RDX;
-							inst(X86.MOVZX_8, TypeFamily.UNSIGNED_32, indexRegister, firstRegisterArgument());
-						}
-						inst(X86.MOVZX_8, TypeFamily.UNSIGNED_64, indexRegister, indexRegister);
-						inst(X86.SAL, TypeFamily.SIGNED_64, indexRegister, 3);
-						break;
-						
-					case UNSIGNED_16:
-						inst(X86.MOVZX, TypeFamily.UNSIGNED_64, indexRegister, indexRegister);
-						inst(X86.SAL, TypeFamily.SIGNED_64, indexRegister, 3);
-						break;
-						
-					case UNSIGNED_32:
-						inst(X86.SAL, TypeFamily.SIGNED_64, indexRegister, 32);
-						inst(X86.SAR, TypeFamily.UNSIGNED_64, indexRegister, 29);
-					}
-					ref<Symbol> stringArray;
-					if (parameterScope.symbolCount() == 0) {
-						string nm = "*";
-						stringArray = parameterScope.define(Operator.PRIVATE, StorageClass.STATIC, null, nm, compileContext.arena().builtInType(TypeFamily.ADDRESS), null, compileContext.pool());
-						assignStaticRegion(stringArray, string.bytes, instances.length() * string.bytes);
-						for (int i = 0; i < instances.length(); i++) {
-							int offset = addStringLiteral((*instances)[i].name());
-							fixup(FixupKind.ABSOLUTE64_STRING, stringArray, i * address.bytes, address(offset));
-						}
-					} else
-						stringArray = parameterScope.lookup("*", compileContext);
-					inst(X86.LEA, R.RAX, stringArray);
-					inst(X86.MOV, R.RAX, indexRegister, R.RAX);
-					generateReturn(parameterScope, compileContext);
-					break;
-					
-				case	THUNK:
-					ref<ThunkScope> thunk = ref<ThunkScope>(parameterScope);
-					if (thunk.isDestructor()) {
-						if (thunk.func() == null) {
-							inst(X86.LEA, R.RAX, R.RDI, -thunk.thunkOffset());
-						} else {
-							if (thunk.thunkOffset() > 0)
-								inst(X86.SUB, TypeFamily.ADDRESS, firstRegisterArgument(), thunk.thunkOffset());
-							inst(X86.PUSH, TypeFamily.ADDRESS, R.RDI);
-							instCall(thunk.func(), compileContext);
-							inst(X86.POP, TypeFamily.ADDRESS, R.RAX);
-						}
-						inst(X86.RET);
-					} else {
-						if (thunk.func() == null)
-							inst(X86.RET);
-						else {
-							inst(X86.SUB, TypeFamily.ADDRESS, firstRegisterArgument(), thunk.thunkOffset());
-							instJump(thunk.func(), compileContext);
-						}
-					}
-					break;
-					
-				case PROXY_CLIENT:
-					ref<Scope> autoWrapper = (*parameterScope.enclosed())[0];
-					ref<Scope> pc = (*autoWrapper.enclosed())[0];
-					assert(pc.class == ClassScope);
-					ref<ClassScope> proxyClass = ref<ClassScope>(pc); 
-					inst(X86.PUSH, TypeFamily.ADDRESS, firstRegisterArgument());
-					inst(X86.MOV, TypeFamily.SIGNED_64, firstRegisterArgument(), proxyClass.classType.size());
-					instCall(_alloc, compileContext);
-					inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), R.RAX);
-					storeITables(proxyClass.classType, 0, compileContext);
-					inst(X86.POP, TypeFamily.ADDRESS, secondRegisterArgument());
-					inst(X86.PUSH, TypeFamily.ADDRESS, firstRegisterArgument());
-					instCall((*proxyClass.base(compileContext).constructors())[0], compileContext);
-					inst(X86.POP, TypeFamily.ADDRESS, R.RAX);
-					inst(X86.ADD, TypeFamily.SIGNED_64, R.RAX, 8);			// convert to the interface-thunk vtable location.
-					generateReturn(parameterScope, compileContext);
-					break;
-
-				case PROXY_METHOD:
-					inst(X86.ENTER, 0);
-					inst(X86.PUSH, TypeFamily.ADDRESS, thisRegister());
-					inst(X86.MOV, TypeFamily.ADDRESS, thisRegister(), firstRegisterArgument());
-					ref<OverloadInstance> method = ref<ProxyMethodScope>(parameterScope).method;
-					ref<ref<Symbol>[]> parameters = parameterScope.parameters();
-					int regIndex;
-					ref<NodeList> paramNodes = ref<FunctionType>(method.type()).parameters();
-					for (i in *parameters) {
-						ref<Symbol> param = (*parameters)[i];
-						ref<Type> t = param.type();
-						byte value = paramNodes.node.register;
-						if (value > 0) {
-							inst(X86.PUSH, TypeFamily.SIGNED_64, R(value));
-							regIndex++;
-							param.offset = -(regIndex * address.bytes + address.bytes);
-						}
-						paramNodes = paramNodes.next;
-					}
-					// we will need a string to hold the marshalled parameters.
-					// RSI+ maybe some stack, -> rest of parameters, plus possible out parameter pointer.
-					inst(X86.PUSH, 0);			// reserve the location for the string accumulator. the stack
-					int stringOffset = -(regIndex * address.bytes + 2 * address.bytes);
-					if (sectionType() == runtime.Target.X86_64_LNX && (stringOffset & ~0xf) == 0)
-						inst(X86.PUSH, 0);			// paragraph align the stack
-
-					// 1. marshal the method id (method + func type sig)
-					inst(X86.LEA, firstRegisterArgument(), R.RBP, stringOffset);
-					instString(X86.LEA, secondRegisterArgument(), rpcEscape(method.rpcMethod()) + ";");
-					ref<Type> str = compileContext.arena().builtInType(TypeFamily.STRING);
-					instCall(str.copyConstructor(), compileContext);
-
-					// 2. marshal parameters from where they landed to the out string.
-					for (i in *parameters) {
-						ref<Symbol> param = (*parameters)[i];
-						ref<Type> t = param.type();
-
-						inst(X86.LEA, firstRegisterArgument(), R.RBP, stringOffset);
-						inst(X86.LEA, secondRegisterArgument(), R.RBP, param.offset);
-						instCall(marshaller(t, compileContext), compileContext);
-					}
-					// 3. call base class 'call' method
-					inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), thisRegister());
-					inst(X86.MOV, TypeFamily.SIGNED_64, firstRegisterArgument(), firstRegisterArgument(), 0);
-					inst(X86.MOV, TypeFamily.SIGNED_64, secondRegisterArgument(), R.RBP, stringOffset);
-					instCall(rpcClientCall(compileContext), compileContext);
-					// 4. marshal return expressions from 'call' return value to outputs.
-					// 5. return. 
-					inst(X86.MOV, TypeFamily.SIGNED_64, R.RAX, R.RBP, stringOffset);
-					inst(X86.LEA, R.RSP, R.RBP, -8);		// off the register vars.
-					inst(X86.POP, TypeFamily.ADDRESS, thisRegister());
-					inst(X86.LEAVE);
-					generateReturn(parameterScope, compileContext);
-					break;
-
-				default:
-					assert(false);
-				}
-				return;
-			}
+			if (func == null || func.body == null) {
+				node = generateSpecialFunctions(parameterScope, compileContext);
+				if (node == null)
+					return;
+				compileContext.assignTypes(parameterScope, node);
+				compileContext.assignControlFlow(node, parameterScope);
+				node.print(0);
+			} else
+				node = func.body;
 			if (parameterScope.type() == null) {
 				// TODO add throw
 				return;
 			}
-			node = func.body;
 			if (node == null) {
 				func.print(0);
 				assert(false);
 			} else {
-				int initialVariableCount = compileContext.variableCount();
 				ref<FileStat> file = scope.file();
 				
 				// For template functions, this assigns any missing types info:
@@ -972,29 +808,179 @@ public class X86_64 extends X86_64AssignTemps {
 		_deferredTry.resize(f().knownDeferredTrys);
 	}
 
-	private ref<ParameterScope> marshaller(ref<Type> type, ref<CompileContext> compileContext) {
-		ref<ParameterScope> s = _marshallerFunctions[type.family()];
-		if (s == null) {
-			string name = type.family().marshaller();
-			if (name == null)
-				return null;
-			ref<Symbol> sym = compileContext.arena().getSymbol("parasol", name, compileContext);
-			if (sym == null)
-				printf("Could not find parasol:%s\n", name);
-			if (sym.class != Overload) {
-				printf("marshaller for %s not an overloaded symbol\n", name);
-				return null;
+	private ref<Block> generateSpecialFunctions(ref<ParameterScope> parameterScope, ref<CompileContext> compileContext) {
+		switch (parameterScope.kind()) {
+		case	DEFAULT_CONSTRUCTOR:
+			inst(X86.PUSH, TypeFamily.SIGNED_64, thisRegister());
+			inst(X86.MOV, TypeFamily.ADDRESS, thisRegister(), firstRegisterArgument());
+			generateConstructorPreamble(null, parameterScope, compileContext);
+			inst(X86.POP, TypeFamily.SIGNED_64, thisRegister());
+			generateReturn(parameterScope, compileContext);
+			break;
+			
+		case	ENUM_INSTANCE_CONSTRUCTOR:
+			inst(X86.MOV, ref<EnumScope>(parameterScope.enclosing()).enumType.instanceFamily(),
+						firstRegisterArgument(), 0, 0);
+			inst(X86.RET);
+			break;
+
+		case	IMPLIED_DESTRUCTOR:
+			if (generateInterfaceDestructorThunk(parameterScope, compileContext))
+				break;
+			inst(X86.ENTER, 0);
+			if (needsDestructorShutdown(parameterScope, compileContext)) { 
+				inst(X86.PUSH, TypeFamily.SIGNED_64, thisRegister());
+				inst(X86.MOV, TypeFamily.ADDRESS, thisRegister(), firstRegisterArgument());
+				generateDestructorShutdown(parameterScope, compileContext);
+				inst(X86.POP, TypeFamily.SIGNED_64, thisRegister());
 			}
-			ref<Overload> o = ref<Overload>(sym);
-			ref<Type> tp = (*o.instances())[0].assignType(compileContext);
-			if (tp.deferAnalysis()) {
-				printf("marshaller %s not well-formed\n", name);
-				return null;
+			inst(X86.LEAVE);
+			generateReturn(parameterScope, compileContext);
+			break;
+			
+		case	ENUM_TO_STRING:
+			ref<EnumScope> enclosing = ref<EnumScope>(parameterScope.enclosing());
+			
+			ref<ref<Symbol>[]> instances = enclosing.instances();
+			R indexRegister = firstRegisterArgument();
+			switch (enclosing.enumType.instanceFamily()) {
+			case UNSIGNED_8:
+				if ((getRegMask(firstRegisterArgument()) & byteMask) != 0) {
+					indexRegister = R.RDX;
+					inst(X86.MOVZX_8, TypeFamily.UNSIGNED_32, indexRegister, firstRegisterArgument());
+				}
+				inst(X86.MOVZX_8, TypeFamily.UNSIGNED_64, indexRegister, indexRegister);
+				inst(X86.SAL, TypeFamily.SIGNED_64, indexRegister, 3);
+				break;
+				
+			case UNSIGNED_16:
+				inst(X86.MOVZX, TypeFamily.UNSIGNED_64, indexRegister, indexRegister);
+				inst(X86.SAL, TypeFamily.SIGNED_64, indexRegister, 3);
+				break;
+				
+			case UNSIGNED_32:
+				inst(X86.SAL, TypeFamily.SIGNED_64, indexRegister, 32);
+				inst(X86.SAR, TypeFamily.UNSIGNED_64, indexRegister, 29);
 			}
-			s = ref<ParameterScope>(tp.scope());
-			_marshallerFunctions[type.family()] = s;
+			ref<Symbol> stringArray;
+			if (parameterScope.symbolCount() == 0) {
+				string nm = "*";
+				stringArray = parameterScope.define(Operator.PRIVATE, StorageClass.STATIC, null, nm, compileContext.arena().builtInType(TypeFamily.ADDRESS), null, compileContext.pool());
+				assignStaticRegion(stringArray, string.bytes, instances.length() * string.bytes);
+				for (int i = 0; i < instances.length(); i++) {
+					int offset = addStringLiteral((*instances)[i].name());
+					fixup(FixupKind.ABSOLUTE64_STRING, stringArray, i * address.bytes, address(offset));
+				}
+			} else
+				stringArray = parameterScope.lookup("*", compileContext);
+			inst(X86.LEA, R.RAX, stringArray);
+			inst(X86.MOV, R.RAX, indexRegister, R.RAX);
+			generateReturn(parameterScope, compileContext);
+			break;
+			
+		case	THUNK:
+			ref<ThunkScope> thunk = ref<ThunkScope>(parameterScope);
+			if (thunk.isDestructor()) {
+				if (thunk.func() == null) {
+					inst(X86.LEA, R.RAX, R.RDI, -thunk.thunkOffset());
+				} else {
+					if (thunk.thunkOffset() > 0)
+						inst(X86.SUB, TypeFamily.ADDRESS, firstRegisterArgument(), thunk.thunkOffset());
+					inst(X86.PUSH, TypeFamily.ADDRESS, R.RDI);
+					instCall(thunk.func(), compileContext);
+					inst(X86.POP, TypeFamily.ADDRESS, R.RAX);
+				}
+				inst(X86.RET);
+			} else {
+				if (thunk.func() == null)
+					inst(X86.RET);
+				else {
+					inst(X86.SUB, TypeFamily.ADDRESS, firstRegisterArgument(), thunk.thunkOffset());
+					instJump(thunk.func(), compileContext);
+				}
+			}
+			break;
+			
+		case PROXY_CLIENT:
+			ref<Scope> autoWrapper = (*parameterScope.enclosed())[0];
+			ref<Scope> pc = (*autoWrapper.enclosed())[0];
+			assert(pc.class == ClassScope);
+			ref<ClassScope> proxyClass = ref<ClassScope>(pc); 
+			inst(X86.PUSH, TypeFamily.ADDRESS, firstRegisterArgument());
+			inst(X86.MOV, TypeFamily.SIGNED_64, firstRegisterArgument(), proxyClass.classType.size());
+			instCall(_alloc, compileContext);
+			inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), R.RAX);
+			storeITables(proxyClass.classType, 0, compileContext);
+			inst(X86.POP, TypeFamily.ADDRESS, secondRegisterArgument());
+			inst(X86.PUSH, TypeFamily.ADDRESS, firstRegisterArgument());
+			instCall((*proxyClass.base(compileContext).constructors())[0], compileContext);
+			inst(X86.POP, TypeFamily.ADDRESS, R.RAX);
+			inst(X86.ADD, TypeFamily.SIGNED_64, R.RAX, 8);			// convert to the interface-thunk vtable location.
+			generateReturn(parameterScope, compileContext);
+			break;
+
+		case PROXY_METHOD:
+			inst(X86.ENTER, 0);
+			inst(X86.PUSH, TypeFamily.ADDRESS, thisRegister());
+			inst(X86.MOV, TypeFamily.ADDRESS, thisRegister(), firstRegisterArgument());
+			ref<OverloadInstance> method = ref<ProxyMethodScope>(parameterScope).method;
+			ref<ref<Symbol>[]> parameters = parameterScope.parameters();
+			int regIndex;
+			ref<NodeList> paramNodes = ref<FunctionType>(method.type()).parameters();
+			for (i in *parameters) {
+				ref<Symbol> param = (*parameters)[i];
+				ref<Type> t = param.type();
+				byte value = paramNodes.node.register;
+				if (value > 0) {
+					inst(X86.PUSH, TypeFamily.SIGNED_64, R(value));
+					regIndex++;
+					param.offset = -(regIndex * address.bytes + address.bytes);
+				}
+				paramNodes = paramNodes.next;
+			}
+			// we will need a string to hold the marshalled parameters.
+			// RSI+ maybe some stack, -> rest of parameters, plus possible out parameter pointer.
+			inst(X86.PUSH, 0);			// reserve the location for the string accumulator. the stack
+			int stringOffset = -(regIndex * address.bytes + 2 * address.bytes);
+			if (sectionType() == runtime.Target.X86_64_LNX && (stringOffset & ~0xf) == 0)
+				inst(X86.PUSH, 0);			// paragraph align the stack
+
+			// 1. marshal the method id (method + func type sig)
+			inst(X86.LEA, firstRegisterArgument(), R.RBP, stringOffset);
+			instString(X86.LEA, secondRegisterArgument(), compiler.rpcEscape(method.rpcMethod()) + ";");
+			ref<Type> str = compileContext.arena().builtInType(TypeFamily.STRING);
+			instCall(str.copyConstructor(), compileContext);
+
+			// 2. marshal parameters from where they landed to the out string.
+			for (i in *parameters) {
+				ref<Symbol> param = (*parameters)[i];
+				ref<Type> t = param.type();
+
+				inst(X86.LEA, firstRegisterArgument(), R.RBP, stringOffset);
+				inst(X86.LEA, secondRegisterArgument(), R.RBP, param.offset);
+				instCall(marshaller(t, compileContext), compileContext);
+			}
+			// 3. call base class 'call' method
+			inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), thisRegister());
+			inst(X86.MOV, TypeFamily.SIGNED_64, firstRegisterArgument(), firstRegisterArgument(), 0);
+			inst(X86.MOV, TypeFamily.SIGNED_64, secondRegisterArgument(), R.RBP, stringOffset);
+			instCall(rpcClientCall(compileContext), compileContext);
+			// 4. marshal return expressions from 'call' return value to outputs.
+			// 5. return. 
+			inst(X86.MOV, TypeFamily.SIGNED_64, R.RAX, R.RBP, stringOffset);
+			inst(X86.LEA, R.RSP, R.RBP, -8);		// off the register vars.
+			inst(X86.POP, TypeFamily.ADDRESS, thisRegister());
+			inst(X86.LEAVE);
+			generateReturn(parameterScope, compileContext);
+			break;
+
+		case STUB_FUNCTION:
+			return ref<StubScope>(parameterScope).stub.constructStubFunction(this, compileContext);
+
+		default:
+			assert(false);
 		}
-		return s;
+		return null;
 	}
 
 	private ref<ParameterScope> rpcClientCall(ref<CompileContext> compileContext) {
@@ -1030,31 +1016,6 @@ public class X86_64 extends X86_64AssignTemps {
 		return _rpcClientCall;
 	}
 
-	private string rpcEscape(string value) {
-		string output;
-		stream.BufferReader r(value.c_str(), value.length());
-		text.UTF8Decoder ud(&r);
-
-		for (;;) {
-			int c = ud.decodeNext();
-			if (c == stream.EOF)
-				break;
-			switch (c) {
-			case ';':
-				output += "\\:";
-				break;
-
-			case'\\':
-				output += "\\\\";
-				break;
-
-			default:
-				output.append(c);
-			}
-		}
-		return output;
-	}
-				
 	private void generateDestructorShutdown(ref<ParameterScope> parameterScope, ref<CompileContext> compileContext) {
 		ref<ClassScope> classScope = ref<ClassScope>(parameterScope.enclosing());
 		assert(classScope.storageClass() == StorageClass.MEMBER);

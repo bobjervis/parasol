@@ -460,24 +460,14 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 			}
 		} else {
 			for (ref<NodeList> nl = aggregate.arguments(); nl != null; nl = nl.next) {
-				substring append("append");
-
 				ref<Node> arrayRef = lhs.clone(tree);
-
-				ref<Symbol> sym = vectorType.lookup(append, compileContext);
-				if (sym == null || sym.class != Overload) {
-					vectorExpression.add(MessageId.UNDEFINED, compileContext.pool(), append);
-					return vectorExpression;
-				}
-				ref<OverloadInstance> oi = (*ref<Overload>(sym).instances())[0];
-				ref<Selection> method = tree.newSelection(arrayRef, oi, false, arrayRef.location());
-				method.type = oi.type();
+				ref<Selection> method = tree.newSelection(arrayRef, "append", arrayRef.location());
 				if (nl.node.op() == Operator.LABEL) {
 					vectorExpression.print(0);
 					assert(false);
 				}
 				ref<NodeList> args = tree.newNodeList(nl.node);
-				ref<Node> next = tree.newCall(oi.parameterScope(), null,  method, args, nl.node.location(), compileContext);
+				ref<Node> next = tree.newCall(Operator.CALL, method, args, nl.node.location());
 				if (result == null)
 					result = next;
 				else

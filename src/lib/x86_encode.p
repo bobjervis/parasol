@@ -46,6 +46,7 @@ import parasol:compiler.Scope;
 import parasol:compiler.Segment;
 import parasol:compiler.Selection;
 import parasol:compiler.StorageClass;
+import parasol:compiler.StubScope;
 import parasol:compiler.Symbol;
 import parasol:compiler.Target;
 import parasol:compiler.Ternary;
@@ -892,7 +893,8 @@ class X86_64Encoder extends Target {
 		void showCS(ref<X86_64Encoder> encoder) {
 			if (_emitting == null) {
 				printf("----\nNo segment active last = %p\n", _last);
-				_last.print(encoder);
+				if (_last != null)
+					_last.print(encoder);
 			} else {
 				printf("----\nTrailing block:\n");
 				_emitting.print(encoder);

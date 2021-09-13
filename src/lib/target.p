@@ -35,7 +35,14 @@ public class Target {
 	private ref<Type> _classType;
 	
 	private ref<FileStat>[] _staticBlocks;
+	private ref<ParameterScope>[TypeFamily] _marshallerFunctions;
+	private ref<ParameterScope>[TypeFamily] _unmarshallerFunctions;
 	
+	public Target() {
+		_marshallerFunctions.resize(TypeFamily.MAX_TYPES);
+		_unmarshallerFunctions.resize(TypeFamily.MAX_TYPES);
+	}
+
 	public static ref<Target> generate(ref<Arena> arena, ref<FileStat> mainFile, boolean countCurrentObjects, ref<CompileContext> compileContext,
 											boolean verbose, boolean leaksFlag, string profilePath, string coveragePath) {
 		ref<Target> target;
@@ -162,7 +169,56 @@ public class Target {
 	
 	public void print() {
 	}
-	
+
+	public ref<ParameterScope> marshaller(ref<Type> type, ref<CompileContext> compileContext) {
+		ref<ParameterScope> s = _marshallerFunctions[type.family()];
+		if (s == null) {
+			string name = type.family().marshaller();
+			if (name == null)
+				return null;
+			ref<Symbol> sym = compileContext.arena().getSymbol("parasol", name, compileContext);
+			if (sym == null)
+				printf("Could not find parasol:%s\n", name);
+			if (sym.class != Overload) {
+				printf("marshaller for %s not an overloaded symbol\n", name);
+				return null;
+			}
+			ref<Overload> o = ref<Overload>(sym);
+			ref<Type> tp = (*o.instances())[0].assignType(compileContext);
+			if (tp.deferAnalysis()) {
+				printf("marshaller %s not well-formed\n", name);
+				return null;
+			}
+			s = ref<ParameterScope>(tp.scope());
+			_marshallerFunctions[type.family()] = s;
+		}
+		return s;
+	}
+
+	public ref<ParameterScope> unmarshaller(ref<Type> type, ref<CompileContext> compileContext) {
+		ref<ParameterScope> s = _unmarshallerFunctions[type.family()];
+		if (s == null) {
+			string name = type.family().unmarshaller();
+			if (name == null)
+				return null;
+			ref<Symbol> sym = compileContext.arena().getSymbol("parasol", name, compileContext);
+			if (sym == null)
+				printf("Could not find parasol:%s\n", name);
+			if (sym.class != Overload) {
+				printf("marshaller for %s not an overloaded symbol\n", name);
+				return null;
+			}
+			ref<Overload> o = ref<Overload>(sym);
+			ref<Type> tp = (*o.instances())[0].assignType(compileContext);
+			if (tp.deferAnalysis()) {
+				printf("marshaller %s not well-formed\n", name);
+				return null;
+			}
+			s = ref<ParameterScope>(tp.scope());
+			_unmarshallerFunctions[type.family()] = s;
+		}
+		return s;
+	}
 }
 
 public class GatherCasesClosure {

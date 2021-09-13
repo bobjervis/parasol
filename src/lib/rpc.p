@@ -15,11 +15,13 @@
  */
 namespace parasol:rpc;
 
+import parasol:exception.IllegalArgumentException;
 import parasol:exception.IllegalOperationException;
 import parasol:exception.IOException;
 import parasol:http;
 import parasol:log;
 import parasol:net;
+import parasol:stream;
 
 private ref<log.Logger> logger = log.getLogger("parasol.rpc");
 
@@ -99,6 +101,27 @@ void marshalInt(ref<string> output, ref<int> object) {
 		(*output).append('i');
 		(*output) += substring(pointer<byte>(&value), 4);
 	}
+}
+
+int unmarshalInt(ref<stream.Reader> value) {
+	int ch = value.read();
+	switch (ch) {
+	case '1':
+		return value.read();
+
+	case 'S':
+		ch = value.read();
+		return ch + (value.read() << 8);
+
+	case 'i':
+		ch = value.read();
+		int c2 = value.read();
+		int c3 = value.read();
+		return ch + (c2 << 8) + (c3 << 16) + (value.read() << 24);
+	}
+	string s;
+	s.printf("Unexpected prefix: %c", ch);
+	throw IllegalArgumentException(s);
 }
 /**
  * This is the base class for all proxy classes. Each distinct interface
@@ -190,7 +213,8 @@ public class Service<class I> extends http.Service {
 			return false;
 		}
 		params.methodID = substring(&content[0], index);
-		params.arguments = substring(content, index + 1);
+		stream.BufferReader r(&content[index + 1], content.length() - (index + 1));
+		params.arguments = &r;
 /*		boolean releasedCaller;
 		// If the selected method returns void, go ahead and respond as if the call works.
 		if (I.stub(&params, false) != null) {
@@ -201,7 +225,8 @@ public class Service<class I> extends http.Service {
 			releasedCaller = true;
 		}
  */
-		string returns = I.stub(&params);
+		logger.info("params={methodID: \"%s\", arguments: \"%s\" }", params.methodID, hexify(string(content, index + 1)));
+		string returns = I.stub(_object, &params);
 //		if (releasedCaller)
 //			return false;
 		// There should be returns for this method, check and respond accordingly.
@@ -216,13 +241,22 @@ public class Service<class I> extends http.Service {
 		return false;
 	}
 }
+
+string hexify(string argument) {
+	string output;
+
+	for (i in argument)
+		output.printf("%2.2x", argument[i]);
+	return output;
+}
+
 /*
  * By being a unique class that no user code could involve in an interface, this
  * gurantees that the stub method doesn't collide
  */
 class StubParams {
 	substring methodID;
-	substring arguments;
+	ref<stream.Reader> arguments;
 }
 
 
