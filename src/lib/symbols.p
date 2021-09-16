@@ -568,179 +568,27 @@ public class StubOverload extends OverloadInstance {
 
 	public ref<Type> assignThisType(ref<CompileContext> compileContext) {
 		if (_type == null) {
+			Location loc = _interfaceType.definition().location();
+			ref<SyntaxTree> tree = compileContext.tree();
+			ref<Node> n = tree.newLeaf(Operator.THIS, loc);
+			n.type = compileContext.arena().builtInType(TypeFamily.STRING);
+			ref<NodeList> returns = tree.newNodeList(n);
 			ref<ClassType> rpcStubParams = compileContext.getClassType("rpc.StubParams");
-			if (rpcStubParams != null) {
-				Location loc = _interfaceType.definition().location();
-				ref<Node> n = compileContext.tree().newLeaf(Operator.THIS, loc);
-				n.type = compileContext.arena().builtInType(TypeFamily.STRING);
-				ref<NodeList> returns = compileContext.tree().newNodeList(n);
-				n = compileContext.tree().newIdentifier("object", loc);
-				n.type = _interfaceType;
-				ref<Node> argName = compileContext.tree().newIdentifier("params", loc);
-				argName.type = compileContext.arena().createRef(rpcStubParams, compileContext);
-				ref<NodeList> parameters = compileContext.tree().newNodeList(n, argName);
-				_type = compileContext.pool().newFunctionType(returns, parameters, parameterScope());
-				parameterScope().define(Operator.NAMESPACE, StorageClass.ENCLOSING, null, n, n.type, compileContext.pool());
-				parameterScope().define(Operator.NAMESPACE, StorageClass.ENCLOSING, null, argName, argName.type, compileContext.pool());
-				ref<StubScope>(parameterScope()).stub = this;
-			} else
-				_type = compileContext.errorType();
+			ref<FunctionDeclaration> fd = ref<FunctionDeclaration>(parameterScope().definition());
+			ref<NodeList> parameters = fd.arguments();
+			parameters.node.type = _interfaceType;
+			parameters.next.node.type = compileContext.arena().createRef(rpcStubParams, compileContext);
+			_type = compileContext.pool().newFunctionType(returns, parameters, parameterScope());
+			boolean saveStatic = compileContext.isStatic;
+			compileContext.isStatic = false;
+			ref<Identifier>(parameters.node).bind(parameterScope(), null, null, compileContext);
+			ref<Identifier>(parameters.next.node).bind(parameterScope(), null, null, compileContext);
+			compileContext.isStatic = saveStatic;
+			fd.type = _type;
 		}
 		return _type;
 	}
-
-	public ref<Block> constructStubFunction(ref<Target> target, ref<CompileContext> compileContext) {
-		Location loc = _interfaceType.definition().location();
-		ref<SyntaxTree> tree = compileContext.tree();
-/*
-		interface I {
-
-			public static string stub(I object, ref<rpc.StubParams> params) {
- */
-		ref<Block> block = tree.newBlock(Operator.BLOCK, false, loc);
-		ref<Scope> outerBlock = compileContext.arena().createScope(parameterScope(), block, StorageClass.AUTO);
-		block.scope = outerBlock;
-/*
-				string output;
- */
-		ref<Variable> output = compileContext.newVariable(compileContext.arena().builtInType(TypeFamily.STRING));
-/*
-				try {
-					switch (params.methodID) {
- */
-		ref<Node> params = tree.newIdentifier("params", loc);
-		ref<Node> methodID = tree.newSelection(params, "methodID", loc);
-		ref<Block> switchBody = tree.newBlock(Operator.BLOCK, true, loc);
-/*
-					case methodID:
- */
-		ref<Scope> scope = _interfaceType.scope();
-		ref<ref<Symbol>[Scope.SymbolKey]> syms = scope.symbols();
-		for (key in *syms) {
-			ref<Symbol> sym = (*syms)[key];
-			if (sym.class != Overload)
-				continue;
-			ref<Overload> o = ref<Overload>(sym);
-			ref<ref<OverloadInstance>[]> instances = o.instances();
-			for (i in *instances) {
-				ref<OverloadInstance> oi = (*instances)[i];
-				if (oi.storageClass() == StorageClass.STATIC)
-					continue;
-				ref<Type> tp = oi.assignType(compileContext);
-				if (tp.deferAnalysis())
-					continue;
-				string methodID = rpcEscape(oi.rpcMethod());
-
-				ref<Node> thisMethodID = tree.newConstant(Operator.STRING, methodID, loc);
-				ref<Node> thisCase = tree.newBinary(Operator.CASE, thisMethodID, tree.newLeaf(Operator.EMPTY, loc), loc);
-				switchBody.statement(tree.newNodeList(thisCase));
-
-/*
-   					for each method parameter:
- */
-				ref<ParameterScope> psIface = oi.parameterScope();
-				ref<ref<Symbol>[]> syms = psIface.parameters();
-				ref<Reference>[] args;
-				for (i in *syms) {
-					ref<Symbol> sym = (*syms)[i];
-					if (sym.class != PlainSymbol)
-						continue;
-/*
-						T x = rpc.unmarshalT(params.arguments);
-						...
- */
-					ref<Node> n = tree.newIdentifier("params", loc);
-					n = tree.newSelection(n, "arguments", loc);
-					ref<ParameterScope> unm = target.unmarshaller(sym.type(), compileContext);
-					ref<Node> method = tree.newIdentifier(ref<FunctionDeclaration>(unm.definition()).name().symbol(), loc);
-					method.type = unm.type();
-					method.print(0);
-					ref<Node> call = tree.newCall(unm, CallCategory.FUNCTION_CALL, method, tree.newNodeList(n), loc, compileContext);
-					n = tree.newUnary(Operator.EXPRESSION, call, loc);
-					switchBody.statement(tree.newNodeList(n));
-				}
-/*
-						(r, ...) = object.method(x, ...);
-						rpc.marshalT(&output, &r);
- */
-/*
-			for (i in *parameters) {
-				ref<Symbol> param = (*parameters)[i];
-				ref<Type> t = param.type();
-
-				n = tree.newCall(marshaller(t, compileContext), CallCategory.FUNCTION_CALL, t, a, loc, compileContext);
-			}
- */
-			}
-		}
-
-/*	
-					default:
-						return null;
- */
-		n = tree.newLeaf(Operator.NULL, loc);
-		n.type = output.type;
-		ref<Node> retnNull = tree.newReturn(tree.newNodeList(n), loc);
-		ref<Node> defaultCase = tree.newUnary(Operator.DEFAULT, retnNull, loc);
-		switchBody.statement(tree.newNodeList(defaultCase));
-/*
-					}
- */
-
-		ref<Node> tryBody = tree.newBinary(Operator.SWITCH, methodID, switchBody, loc);
-
-/*
-				} catch (Exception e) {
- */
-
-		ref<Node> typeExpr = tree.newIdentifier("Exception", loc);
-//		typeExpr.type = compileContext.arena().builtInType(TypeFamily.EXCEPTION);
-		ref<Identifier> name = tree.newIdentifier("e", loc);
-		ref<Node> n = tree.newLeaf(Operator.NULL, loc);
-		n.type = output.type;
-		ref<Node> clause = tree.newReturn(tree.newNodeList(n), loc);
-		ref<Ternary> catchClause = tree.newTernary(Operator.CATCH, typeExpr, name, clause, loc);
-		ref<Scope> s = compileContext.arena().createScope(outerBlock, catchClause, StorageClass.AUTO);
-		name.bind(s, typeExpr, null, compileContext);
-/*
-					return null;
-				}
- */
-		block.statement(tree.newNodeList(tree.newTry(tryBody, null, tree.newNodeList(catchClause), loc)));
-/*				
-				return output;
-			}
- */
-		n = tree.newReference(output, false, loc);
-		block.statement(tree.newNodeList(tree.newReturn(tree.newNodeList(n), loc)));
-		return block;
-	}
 }
-
-public string rpcEscape(string value) {
-	string output;
-	stream.BufferReader r(value.c_str(), value.length());
-	text.UTF8Decoder ud(&r);
-
-	for (;;) {
-		int c = ud.decodeNext();
-		if (c == stream.EOF)
-			break;
-		switch (c) {
-		case ';':
-			output += "\\:";
-			break;
-
-		case'\\':
-			output += "\\\\";
-			break;
-
-		default:
-			output.append(c);
-		}
-	}
-	return output;
-}			
 
 public class ProxyOverload extends OverloadInstance {
 	ref<InterfaceType> _interfaceType;
@@ -1233,6 +1081,8 @@ public class Symbol {
 		_enclosing = enclosing;
 		_name = name;
 		_definition = definition;
+		if (_definition != null)
+			_type = _definition.type;
 	}
 
 	public void printSimple() {

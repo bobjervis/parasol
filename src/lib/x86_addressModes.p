@@ -692,6 +692,7 @@ class X86_64AddressModes extends X86_64Encoder {
 			markConditionalAddressModes(b.right(), compileContext);
 			break;			
 
+		case	INDIRECT:
 		case	DOT:
 			tryMakeMode(node, MC_FULL, nClass, compileContext);
 		case	IDENTIFIER:

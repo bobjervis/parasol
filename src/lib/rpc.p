@@ -32,6 +32,7 @@ class ClientBase {
 		http.ConnectStatus status = _client.post(serializedArguments);
 		if (status != http.ConnectStatus.OK)
 			throw IOException(string(status));
+
 		string reply;
 		int contentLength;
 
@@ -87,6 +88,24 @@ public class Client<class PROXY> extends ClientBase {
 	public PROXY proxy() {
 		return PROXY.proxy(this);
 	}
+}
+
+void marshalBoolean(ref<string> output, ref<boolean> object) {
+	(*output).append(*object ? 't' : 'f');
+}
+
+boolean unmarshalBoolean(ref<stream.Reader> value) {
+	int ch = value.read();
+	switch (ch) {
+	case 't':
+		return true;
+
+	case 'f':
+		return false;
+	}
+	string s;
+	s.printf("Unexpected byte: %c", ch);
+	throw IllegalArgumentException(s);
 }
 
 void marshalInt(ref<string> output, ref<int> object) {
@@ -203,7 +222,6 @@ public class Service<class I> extends http.Service {
 			response.error(405);
 			return false;
 		}
-		logger.info("rpc.Service: %s", request.toString());
 		StubParams params;
 		string content = request.readContent();
 
@@ -225,7 +243,6 @@ public class Service<class I> extends http.Service {
 			releasedCaller = true;
 		}
  */
-		logger.info("params={methodID: \"%s\", arguments: \"%s\" }", params.methodID, hexify(string(content, index + 1)));
 		string returns = I.stub(_object, &params);
 //		if (releasedCaller)
 //			return false;

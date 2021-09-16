@@ -273,11 +273,15 @@ class ClasslikeScope extends Scope {
 	
 	public boolean createPossibleImpliedDestructor(ref<CompileContext> compileContext) {
 		if (needsImpliedDestructor(compileContext)) {
-			ref<ParameterScope> functionScope = compileContext.arena().createParameterScope(this, null, ParameterScope.Kind.IMPLIED_DESTRUCTOR);
-			defineDestructor(functionScope, compileContext.pool());
+			createImpliedDestructor(compileContext);
 			return true;
 		} else
 			return false;
+	}
+	
+	public void createImpliedDestructor(ref<CompileContext> compileContext) {
+		ref<ParameterScope> functionScope = compileContext.arena().createParameterScope(this, null, ParameterScope.Kind.IMPLIED_DESTRUCTOR);
+		defineDestructor(functionScope, compileContext.pool());
 	}
 	/**
 	 * TODO: This decision function is not quite complete. If there is a class hierarchy in which any sub-class has an
@@ -288,6 +292,8 @@ class ClasslikeScope extends Scope {
 	 */
 	private boolean needsImpliedDestructor(ref<CompileContext> compileContext) {
 		if (destructor() == null) {
+//			if (classType != null && classType.interfaces() != null)
+//				return true;
 			if (hasVtable(compileContext))
 				return true;
 			for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
@@ -437,9 +443,7 @@ class ClasslikeScope extends Scope {
 				if (definition() != null)
 					compileContext.assignTypes(this, definition());
 				// Now build out the InterfaceImplementationScope objects (for their vtables).
-				ref<ref<InterfaceType>[]> interfaces;
-				if (classType != null)
-					interfaces = classType.interfaces();
+				ref<ref<InterfaceType>[]> interfaces = classType.interfaces();
 				if (interfaces != null) {
 					for (int i = 0; i < interfaces.length(); i++) {
 						ref<InterfaceType> iface = (*interfaces)[i];
@@ -447,6 +451,8 @@ class ClasslikeScope extends Scope {
 						for (int j = 0; ; j++) {
 							if (j >= _interfaces.length()) {
 								ref<InterfaceImplementationScope> impl = compileContext.arena().createInterfaceImplementationScope(iface, classType, _reservedInterfaceSlots);
+								if (destructor() == null)
+									createImpliedDestructor(compileContext);
 								impl.defineDestructor(compileContext.arena().createThunkScope(impl, destructor(), true), compileContext.pool());
 								_reservedInterfaceSlots++;
 								impl.makeThunks(compileContext);
@@ -518,7 +524,7 @@ class ClasslikeScope extends Scope {
 	public boolean hasVtable(ref<CompileContext> compileContext) {
 		if (vtable != null)
 			return true;
-		ref<Type> base = getSuper();
+		ref<Type> base = assignSuper(compileContext);
 		if (base != null &&
 			base.hasVtable(compileContext))
 			return true;
@@ -781,14 +787,6 @@ class FlagsScope extends ClasslikeScope {
 			if (_instances[i] == enumInstance)
 				return i;
 		return -1;
-	}
-}
-
-public class StubScope extends ParameterScope {
-	public ref<StubOverload> stub;
-
-	public StubScope(ref<Scope> enclosing, ref<FunctionDeclaration> fd) {
-		super(enclosing, fd, Kind.STUB_FUNCTION);
 	}
 }
 

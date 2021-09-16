@@ -46,7 +46,6 @@ import parasol:compiler.Scope;
 import parasol:compiler.Segment;
 import parasol:compiler.Selection;
 import parasol:compiler.StorageClass;
-import parasol:compiler.StubScope;
 import parasol:compiler.Symbol;
 import parasol:compiler.Target;
 import parasol:compiler.Ternary;
@@ -1338,6 +1337,7 @@ class X86_64Encoder extends Target {
 				emit(0x66);
 
 			case	UNSIGNED_32:
+			case	UNSIGNED_64:
 			case	SIGNED_32:
 			case	SIGNED_64:
 				emitRex(family, null, R.NO_REG, dest);

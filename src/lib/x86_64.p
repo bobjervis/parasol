@@ -70,7 +70,6 @@ import parasol:compiler.Scope;
 import parasol:compiler.Selection;
 import parasol:compiler.StackArgumentAddress;
 import parasol:compiler.StorageClass;
-import parasol:compiler.StubScope;
 import parasol:compiler.Symbol;
 import parasol:compiler.SyntaxTree;
 import parasol:compiler.Target;
@@ -573,7 +572,6 @@ public class X86_64 extends X86_64AssignTemps {
 					return;
 				compileContext.assignTypes(parameterScope, node);
 				compileContext.assignControlFlow(node, parameterScope);
-				node.print(0);
 			} else
 				node = func.body;
 			if (parameterScope.type() == null) {
@@ -924,8 +922,18 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.PUSH, TypeFamily.ADDRESS, thisRegister());
 			inst(X86.MOV, TypeFamily.ADDRESS, thisRegister(), firstRegisterArgument());
 			ref<OverloadInstance> method = ref<ProxyMethodScope>(parameterScope).method;
-			ref<ref<Symbol>[]> parameters = parameterScope.parameters();
+			ref<FunctionType> ft = ref<FunctionType>(method.type());
+			ref<NodeList> returns = ft.returnType();
+			boolean hasOutParameters;
 			int regIndex;
+			if (returns != null) {
+				if (returns.node.type.returnsViaOutParameter(compileContext) || returns.next != null) {
+					hasOutParameters = true;
+					regIndex++;
+					inst(X86.PUSH, TypeFamily.ADDRESS, secondRegisterArgument());
+				}
+			}
+			ref<ref<Symbol>[]> parameters = parameterScope.parameters();
 			ref<NodeList> paramNodes = ref<FunctionType>(method.type()).parameters();
 			for (i in *parameters) {
 				ref<Symbol> param = (*parameters)[i];
@@ -947,11 +955,11 @@ public class X86_64 extends X86_64AssignTemps {
 
 			// 1. marshal the method id (method + func type sig)
 			inst(X86.LEA, firstRegisterArgument(), R.RBP, stringOffset);
-			instString(X86.LEA, secondRegisterArgument(), compiler.rpcEscape(method.rpcMethod()) + ";");
+			instString(X86.LEA, secondRegisterArgument(), rpcEscape(method.rpcMethod()) + ";");
 			ref<Type> str = compileContext.arena().builtInType(TypeFamily.STRING);
 			instCall(str.copyConstructor(), compileContext);
 
-			// 2. marshal parameters from where they landed to the out string.
+			// 2. marshal parameters from where they landed to the marshalled parameters string.
 			for (i in *parameters) {
 				ref<Symbol> param = (*parameters)[i];
 				ref<Type> t = param.type();
@@ -966,18 +974,212 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.MOV, TypeFamily.SIGNED_64, secondRegisterArgument(), R.RBP, stringOffset);
 			instCall(rpcClientCall(compileContext), compileContext);
 			// 4. marshal return expressions from 'call' return value to outputs.
+			if (returns != null) {
+				// RAX contains the string object.
+				inst(X86.MOV, TypeFamily.UNSIGNED_32, R.RDX, R.RAX, 0);
+				inst(X86.SAL, TypeFamily.UNSIGNED_64, R.RDX, 32);
+				inst(X86.SHR, TypeFamily.UNSIGNED_64, R.RDX, 32);
+				inst(X86.PUSH, TypeFamily.SIGNED_64, R.RDX);
+				inst(X86.ADD, TypeFamily.ADDRESS, R.RAX, 4);
+				inst(X86.PUSH, TypeFamily.SIGNED_64, R.RAX);
+				inst(X86.PUSH, 0);
+				ref<ClassType> ct = compileContext.getClassType("stream.BufferReader");
+				instLoadVtable(R.RAX, ref<ClassScope>(ct.scope()));
+				inst(X86.PUSH, TypeFamily.SIGNED_64, R.RAX);
+								// RSP now points to a constructed BufferReader
+				inst(X86.MOV, TypeFamily.ADDRESS, R.RDI, R.RSP);
+				if (hasOutParameters) {
+					printf("out-parameter proxies not yet supported.\n");
+					assert(false);				// Not yet implemented.
+					while (returns != null) {
+						returns = returns.next;
+					}
+				} else
+					instCall(unmarshaller(returns.node.type, compileContext), compileContext);	// this function's return register is where we want the return value to be.
+			}
 			// 5. return. 
-			inst(X86.MOV, TypeFamily.SIGNED_64, R.RAX, R.RBP, stringOffset);
 			inst(X86.LEA, R.RSP, R.RBP, -8);		// off the register vars.
 			inst(X86.POP, TypeFamily.ADDRESS, thisRegister());
 			inst(X86.LEAVE);
 			generateReturn(parameterScope, compileContext);
 			break;
 
-		case STUB_FUNCTION:
-			return ref<StubScope>(parameterScope).stub.constructStubFunction(this, compileContext);
+		case STUB_FUNCTION: {
+			ref<FunctionDeclaration> fd = ref<FunctionDeclaration>(parameterScope.definition());
+			ref<InterfaceType> interfaceType = ref<InterfaceType>(fd.arguments().node.type);
+			Location loc = parameterScope.definition().location();
+			ref<SyntaxTree> tree = compileContext.tree();
+			ref<FunctionType>(fd.type).assignRegisterArguments(compileContext);
+/*
+				interface I
+
+				public static string stub(I object, ref<rpc.StubParams> params) {
+ */
+			ref<Block> block = tree.newBlock(Operator.BLOCK, false, loc);
+			ref<Scope> outerBlock = compileContext.arena().createScope(parameterScope, block, StorageClass.AUTO);
+			block.scope = outerBlock;
+/*
+					string output;
+ */
+			ref<Variable> output = compileContext.newVariable(compileContext.arena().builtInType(TypeFamily.STRING));
+/*
+				try {
+					switch (params.methodID) {
+ */
+			ref<Node> params = tree.newIdentifier("params", loc);
+			ref<Node> methodID = tree.newSelection(params, "methodID", loc);
+			ref<Block> switchBody = tree.newBlock(Operator.BLOCK, true, loc);
+/*
+					case methodID:
+ */
+			ref<Scope> scope = interfaceType.scope();
+			ref<ref<Symbol>[Scope.SymbolKey]> syms = scope.symbols();
+			for (key in *syms) {
+				ref<Symbol> sym = (*syms)[key];
+				if (sym.class != Overload)
+					continue;
+				ref<Overload> o = ref<Overload>(sym);
+				ref<ref<OverloadInstance>[]> instances = o.instances();
+				for (i in *instances) {
+					ref<OverloadInstance> oi = (*instances)[i];
+					if (oi.storageClass() == StorageClass.STATIC)
+						continue;
+					ref<Type> tp = oi.assignType(compileContext);
+					if (tp.deferAnalysis())
+						continue;
+					string methodID = rpcEscape(oi.rpcMethod());
+
+					ref<Node> thisMethodID = tree.newConstant(Operator.STRING, methodID, loc);
+					ref<Node> thisCase = tree.newBinary(Operator.CASE, thisMethodID, tree.newLeaf(Operator.EMPTY, loc), loc);
+					switchBody.statement(tree.newNodeList(thisCase));
+
+					ref<Node> params = tree.newIdentifier("params", loc);
+					ref<Node> methodIDx = tree.newSelection(params, "methodID", loc);
+					ref<Node> clearer = tree.newSelection(methodIDx, "clear", loc);
+					ref<Node> marker = tree.newCall(Operator.CALL, clearer, null, loc);
+//					switchBody.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, marker, loc)));
+
+/*
+	   					for each method parameter:
+ */
+					ref<ParameterScope> psIface = oi.parameterScope();
+					ref<ref<Symbol>[]> syms = psIface.parameters();
+					ref<Variable>[] args;
+					ref<Node>[] argRefs;
+					for (i in *syms) {
+						ref<Symbol> sym = (*syms)[i];
+						if (sym.class != PlainSymbol)
+							continue;
+/*
+							T x = rpc.unmarshalT(params.arguments);
+ */
+						ref<Node> n = tree.newIdentifier("params", loc);
+						n = tree.newSelection(n, "arguments", loc);
+						ref<ParameterScope> unm = unmarshaller(sym.type(), compileContext);
+						ref<Node> method = tree.newIdentifier(ref<FunctionDeclaration>(unm.definition()).name().symbol(), loc);
+						method.type = unm.type();
+						ref<Node> call = tree.newCall(unm, CallCategory.FUNCTION_CALL, method, tree.newNodeList(n), loc, compileContext);
+						ref<Variable> v = compileContext.newVariable(sym.type());
+						args.append(v);
+						ref<Reference> r = tree.newReference(v, 0, true, loc);
+						n = tree.newBinary(Operator.ASSIGN, r, call, loc);
+						n = tree.newUnary(Operator.EXPRESSION, n, loc);
+						switchBody.statement(tree.newNodeList(n));
+						r = tree.newReference(v, 0, false, loc);
+						argRefs.append(r);
+					}
+/*
+							(r, ...) = object.method(x, ...);
+ */
+					ref<NodeList> methodArgs = tree.newNodeList(argRefs);
+					ref<Node> o = tree.newIdentifier((*parameterScope.parameters())[0], loc);
+					o.type = interfaceType;
+					ref<Node> sel = tree.newSelection(o, oi, true, loc);
+					ref<Node> methodCall = tree.newCall(psIface, CallCategory.METHOD_CALL, sel, methodArgs, loc, compileContext);
+					ref<FunctionType> ft = psIface.type();
+					ref<NodeList> returnType = ft.returnType();
+					ref<Node> returns;
+					ref<Variable>[] returnVars;
+					ref<Reference>[] returnExprs;
+					while (returnType != null) {
+						ref<Type> t = returnType.node.type;
+						ref<Variable> v = compileContext.newVariable(t);
+						returnVars.append(v);
+						ref<Reference> r = tree.newReference(v, 0, true, loc);
+						if (returns == null)
+							returns = r;
+						else
+							returns = tree.newBinary(Operator.SEQUENCE, returns, r, loc);
+						r = tree.newReference(v, 0, false, loc);
+						returnExprs.append(r);
+						returnType = returnType.next;
+					}
+					if (returns != null)
+						methodCall = tree.newBinary(Operator.ASSIGN, returns, methodCall, loc);
+					switchBody.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, methodCall, loc)));
+/*
+							rpc.marshalT(&output, &r);
+ */
+					for (i in returnExprs) {
+						ref<ParameterScope> marsh = marshaller(returnExprs[i].type, compileContext);
+						ref<Node> method = tree.newIdentifier(ref<FunctionDeclaration>(marsh.definition()).name().symbol(), loc);
+						method.type = marsh.type();
+						ref<Reference> outputRef = tree.newReference(output, 0, false, loc);
+						ref<Node> adr1 = tree.newUnary(Operator.ADDRESS, outputRef, loc);
+						ref<Node> adr2 = tree.newUnary(Operator.ADDRESS, returnExprs[i], loc);
+						ref<Node> call = tree.newCall(marsh, CallCategory.FUNCTION_CALL, method, tree.newNodeList(adr1, adr2), loc, compileContext); 
+						switchBody.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, call, loc)));
+					}
+
+					ref<Node> brk = tree.newJump(Operator.BREAK, loc);
+					switchBody.statement(tree.newNodeList(brk));
+				}
+			}
+
+/*	
+						default:
+							return null;
+ */
+			n = tree.newLeaf(Operator.NULL, loc);
+			n.type = output.type;
+			ref<Node> retnNull = tree.newReturn(tree.newNodeList(n), loc);
+			ref<Node> defaultCase = tree.newUnary(Operator.DEFAULT, retnNull, loc);
+			switchBody.statement(tree.newNodeList(defaultCase));
+/*
+						}
+ */
+
+			ref<Node> tryBody = tree.newBinary(Operator.SWITCH, methodID, switchBody, loc);
+
+/*
+					} catch (Exception e) {
+ */
+
+			ref<Node> typeExpr = tree.newIdentifier("Exception", loc);
+			ref<Identifier> name = tree.newIdentifier("e", loc);
+			ref<Node> n = tree.newLeaf(Operator.NULL, loc);
+			n.type = output.type;
+			ref<Node> clause = tree.newReturn(tree.newNodeList(n), loc);
+			ref<Ternary> catchClause = tree.newTernary(Operator.CATCH, typeExpr, name, clause, loc);
+			ref<Scope> s = compileContext.arena().createScope(outerBlock, catchClause, StorageClass.AUTO);
+			name.bind(s, typeExpr, null, compileContext);
+/*
+						return null;
+					}
+ */
+			block.statement(tree.newNodeList(tree.newTry(tryBody, null, tree.newNodeList(catchClause), loc)));
+/*				
+					return output;
+				}
+ */
+			n = tree.newReference(output, false, loc);
+			block.statement(tree.newNodeList(tree.newReturn(tree.newNodeList(n), loc)));
+			return block;
+			}
 
 		default:
+			printf("special kind %s\n", string(parameterScope.kind()));
+			parameterScope.print(0, false);
 			assert(false);
 		}
 		return null;
@@ -3305,6 +3507,14 @@ public class X86_64 extends X86_64AssignTemps {
 			generateConditionalJump(Operator.NOT_EQUAL, b.right().type, trueSegment, falseSegment, compileContext);
 			break;
 			
+		case	INDIRECT:
+			u = ref<Unary>(node);
+			generate(u.operand(), compileContext);
+			f().r.generateSpills(b, this);
+			inst(X86.CMP, node, 0, compileContext);
+			closeCodeSegment(CC.JE, falseSegment);
+			break;
+
 		case	DOT:
 			ref<Selection> dot = ref<Selection>(node);
 			generate(dot.left(), compileContext);
@@ -3723,7 +3933,7 @@ public class X86_64 extends X86_64AssignTemps {
 		}
 
 		if (call.arguments() != null) {
-			// Now the stack arguments.  They're pretty easy
+			// Now the register arguments.  They're pretty easy
 			for (ref<NodeList> args = call.arguments(); args != null; args = args.next)
 				generate(args.node, compileContext);
 		}
@@ -4139,8 +4349,8 @@ public class X86_64 extends X86_64AssignTemps {
 			case	INTERFACE:
 				if ((n.nodeFlags & ADDRESS_MODE) != 0 || result.register != n.register)
 					inst(X86.MOV, TypeFamily.UNSIGNED_32, result, n, compileContext);
-				inst(X86.SAL, TypeFamily.UNSIGNED_32, R(result.register), 32);
-				inst(X86.SHR, TypeFamily.UNSIGNED_32, R(result.register), 32);
+				inst(X86.SAL, TypeFamily.UNSIGNED_64, R(result.register), 32);
+				inst(X86.SHR, TypeFamily.UNSIGNED_64, R(result.register), 32);
 				return;
 				
 			case	FLOAT_32:
@@ -4998,3 +5208,29 @@ TypeFamily impl(ref<Type> t) {
 	}
 	return t.family();
 }
+
+string rpcEscape(string value) {
+	string output;
+	stream.BufferReader r(value.c_str(), value.length());
+	text.UTF8Decoder ud(&r);
+
+	for (;;) {
+		int c = ud.decodeNext();
+		if (c == stream.EOF)
+			break;
+		switch (c) {
+		case ';':
+			output += "\\:";
+			break;
+
+		case'\\':
+			output += "\\\\";
+			break;
+
+		default:
+			output.append(c);
+		}
+	}
+	return output;
+}			
+

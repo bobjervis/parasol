@@ -460,22 +460,32 @@ public class InterfaceType extends ClassType {
 	}
 
 	public void makeRPCSymbols(ref<CompileContext> compileContext) {
-		ref<Overload> o = scope().defineOverload("proxy", Operator.FUNCTION, compileContext);
-		if (o != null) {
-			ref<ParameterScope> funcScope = compileContext.createParameterScope(null, ParameterScope.Kind.PROXY_CLIENT);
-			ref<ProxyOverload> proxy = compileContext.pool().newProxyOverload(this, o, funcScope);
-			o.addSpecialInstance(proxy, compileContext);
-		}
-		o = scope().defineOverload("stub", Operator.FUNCTION, compileContext);
-		if (o != null) {
-			ref<Node> returnType = compileContext.tree().newIdentifier("string", definition().location());
-			ref<Identifier> name = compileContext.tree().newIdentifier("stub", definition().location());
-			ref<NodeList> arguments;
-			ref<FunctionDeclaration> fd = compileContext.tree().newFunctionDeclaration(FunctionDeclaration.Category.NORMAL, returnType, name, arguments, 
-												definition().location());
-			ref<ParameterScope> funcScope = compileContext.createStubScope(fd);
-			ref<StubOverload> stub = compileContext.pool().newStubOverload(this, o, funcScope);
-			o.addSpecialInstance(stub, compileContext);
+		ref<ClassType> rpcStubParams = compileContext.getClassType("rpc.StubParams");
+		if (rpcStubParams != null) {
+			ref<Overload> o = scope().defineOverload("proxy", Operator.FUNCTION, compileContext);
+			if (o != null) {
+				ref<ParameterScope> funcScope = compileContext.createParameterScope(null, ParameterScope.Kind.PROXY_CLIENT);
+				ref<ProxyOverload> proxy = compileContext.pool().newProxyOverload(this, o, funcScope);
+				o.addSpecialInstance(proxy, compileContext);
+			}
+			o = scope().defineOverload("stub", Operator.FUNCTION, compileContext);
+			if (o != null) {
+				Location loc = _definition.location();
+				ref<SyntaxTree> tree = compileContext.tree();
+				ref<Node> n = tree.newLeaf(Operator.THIS, loc);
+				n.type = compileContext.getClassType("text.string");
+				ref<Identifier> object = tree.newIdentifier("object", loc);
+				object.type = this;
+				ref<Identifier> argName = tree.newIdentifier("params", loc);
+				argName.type = this;
+				ref<NodeList> parameters = tree.newNodeList(object, argName);
+				ref<Identifier> name = tree.newIdentifier("stub", definition().location());
+				ref<FunctionDeclaration> fd = tree.newFunctionDeclaration(FunctionDeclaration.Category.NORMAL, n, name, parameters, 
+													definition().location());
+				ref<ParameterScope> funcScope = compileContext.createParameterScope(fd, ParameterScope.Kind.STUB_FUNCTION);
+				ref<StubOverload> stub = compileContext.pool().newStubOverload(this, o, funcScope);
+				o.addSpecialInstance(stub, compileContext);
+			}
 		}
 	}
 }

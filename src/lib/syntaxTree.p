@@ -4206,7 +4206,7 @@ public class NodeList {
 		}
 	}
 	
-	void print(int indent) {
+	public void print(int indent) {
 		for (ref<NodeList> nl = this; nl != null; nl = nl.next) {
 			if (nl.node != null)
 				nl.node.print(indent);

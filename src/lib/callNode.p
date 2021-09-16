@@ -1055,7 +1055,8 @@ public class Call extends ParameterBag {
 				_target.add(MessageId.UNFINISHED_VAR_CALL, compileContext.pool());
 				return false;
 			}
-		}
+		} else
+			_target.type = _overload.type();
 		return true;
 	}
 

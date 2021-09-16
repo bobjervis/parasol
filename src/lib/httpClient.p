@@ -1117,7 +1117,7 @@ public class Client {
 	 * but malformed, the return value is -2.
 	 */
 	public string, int readContent() {
-		string contentLength = _headers["content-length"];
+		string contentLength = _response.headers["content-length"];
 		if (contentLength == null)
 			return null, -1;
 		string reply;
@@ -1129,6 +1129,8 @@ public class Client {
 			if (cl < 0)
 				return null, -2;
 			int specifiedContentLength = cl;
+			if (specifiedContentLength == 0)
+				return "", 0;
 			if (_connection == null)
 				return null, specifiedContentLength;
 			// Allow for the full content length header value.

@@ -495,12 +495,6 @@ public class Arena {
 		return s;
 	}
 
-	public ref<StubScope> createStubScope(ref<Scope> enclosing, ref<FunctionDeclaration> fd) {
-		ref<StubScope> s = new StubScope(enclosing, fd);
-		_scopes.append(s);
-		return s;
-	}
-
 	public ref<ClassScope> createClassScope(ref<Scope> enclosing, ref<Node> definition, ref<Identifier> className) {
 		ref<ClassScope> s = new ClassScope(enclosing, definition, className);
 		_scopes.append(s);

@@ -160,7 +160,7 @@ public class string extends String<byte> {
 				throw IllegalArgumentException("startOffset");
 			resize(source.length() - startOffset);
 			C.memcpy(&_contents.data, pointer<byte>(&source._contents.data) + startOffset, _contents.length);
-			pointer<byte>(&source._contents.data)[_contents.length] = 0;
+			pointer<byte>(&_contents.data)[_contents.length] = 0;
 		} else
 			throw IllegalArgumentException("source");
 	}
@@ -190,14 +190,15 @@ public class string extends String<byte> {
 				throw IllegalArgumentException("startOffset");
 			resize(endOffset - startOffset);
 			C.memcpy(&_contents.data, pointer<byte>(&source._contents.data) + startOffset, endOffset - startOffset);
-			pointer<byte>(&source._contents.data)[_contents.length] = 0;
+			pointer<byte>(&_contents.data)[_contents.length] = 0;
 		} else
 			throw IllegalArgumentException("source");
 	}
 	/**
 	 * A constructor from a substring object.
 	 *
-	 * If the source string is null, the constructed string will be 
+	 * If the source string is null, the constructed string will be null as ell.
+	 *
 	 * @param source The source string to copy.
 	 */
 	public string(substring source) {

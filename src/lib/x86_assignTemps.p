@@ -318,7 +318,13 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			ref<Unary> u = ref<Unary>(node);
 			assignConditionCode(u.operand(), compileContext);
 			break;
-			
+
+		case	INDIRECT:
+			u = ref<Unary>(node);
+			assignRegisterTemp(u.operand(), longMask(), compileContext);
+			f().r.cleanupTemps(node, depth);
+			break;
+
 		case	DOT:
 			ref<Selection> dot = ref<Selection>(node);
 			assignLvalueTemps(dot, compileContext);
