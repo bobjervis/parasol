@@ -613,9 +613,10 @@ public class ProxyOverload extends OverloadInstance {
 					// THis can be silent. Something else has to invoke rpc.Client
 					return _type = compileContext.errorType();
 				}
+				ref<Type> clientTransport = compileContext.getClassType("rpc.ClientTransport");
 				ref<Type> clientProxy = compileContext.getClassType("rpc.ClientProxy");
 				n = compileContext.tree().newLeaf(Operator.THIS, loc);
-				n.type = compileContext.arena().createRef(rpcClient, compileContext);
+				n.type = compileContext.arena().createRef(clientTransport, compileContext);
 				ref<NodeList> parameters = compileContext.tree().newNodeList(n);
 				_type = compileContext.pool().newFunctionType(returns, parameters, parameterScope());
 				ref<Node> argName = compileContext.tree().newIdentifier("a", loc);

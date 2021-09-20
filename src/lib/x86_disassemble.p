@@ -1491,7 +1491,7 @@ public class Disassembler {
 			}
 			printf(" [ordinal %x]", ordinal);
 		} else if (location >= _pxiHeader.vtablesOffset && location < _vtablesEndOffset) {
-			printf(" [vtable %x]", (location - _pxiHeader.vtablesOffset) / address.bytes);
+			printf(" [vtable %d]", (location - _pxiHeader.vtablesOffset) / address.bytes);
 		} else if (location >= _staticDataStart && location < _staticDataEnd) {
 			// It's somewhere in static data.
 			int index = findSymbol(location);
@@ -1880,41 +1880,4 @@ public void printHeader(ref<X86_64SectionHeader> header, long fileOffset) {
  * TODO: Fix this
  */
 public void printHeader(ref<X86_64SectionHeader> header, long fileOffset) {
-	printf("\n");
-	if (fileOffset >= 0)
-		printf("        image offset         %8x\n", fileOffset);
-	printf("        entryPoint           %8x\n", header.entryPoint);
-	printf("        builtInOffset        %8x", header.builtInOffset);
-	if (fileOffset >= 0)
-		printf(" (file offset %x)", header.builtInOffset + fileOffset);
-	printf("\n");
-	printf("        builtInCount         %8d.\n", header.builtInCount);
-	printf("        vtablesOffset        %8x", header.vtablesOffset);
-	if (fileOffset >= 0)
-		printf(" (file offset %x)", header.vtablesOffset + fileOffset);
-	printf("\n");
-	printf("        vtableData           %8x\n", header.vtableData);
-	printf("        typeDataOffset       %8x", header.typeDataOffset);
-	if (fileOffset >= 0)
-		printf(" (file offset %x)", header.typeDataOffset + fileOffset);
-	printf("\n");
-	printf("        typeDataLength       %8x\n", header.typeDataLength);
-	printf("        stringsOffset        %8x", header.stringsOffset);
-	if (fileOffset >= 0)
-		printf(" (file offset %x)", header.stringsOffset + fileOffset);
-	printf("\n");
-	printf("        stringsLength        %8x\n", header.stringsLength);
-	printf("        relocationOffset     %8x", header.relocationOffset);
-	if (fileOffset >= 0)
-		printf(" (file offset %x)", header.relocationOffset + fileOffset);
-	printf("\n");
-	printf("        relocationCount      %8d.\n", header.relocationCount);
-	printf("        builtInsText         %8x", header.builtInsText);
-	if (fileOffset >= 0)
-		printf(" (file offset %x)", header.builtInsText + fileOffset);
-	printf("\n");
-	printf("        exceptionsOffset     %8x", header.exceptionsOffset);
-	if (fileOffset >= 0)
-		printf(" (file offset %x)", header.exceptionsOffset + fileOffset);
-	printf("\n");
 }

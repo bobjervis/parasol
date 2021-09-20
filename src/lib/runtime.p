@@ -283,15 +283,17 @@ public string stackTrace() {
 	address ip = returnAddress();
 	address frame = framePointer();
 	address top = stackTop();
+	if (long(frame) > long(top))
+		return output;		
 	while (frame != null) {
+		pointer<address> lastFrame = pointer<address>(frame);
+		frame = lastFrame[0];
 		if (long(frame) > long(top))
 			break;		
+		ip = lastFrame[1];
 		int relative = int(ip) - lowCode;
 		string locationLabel = exception.formattedLocation(ip, relative, false);
 		output.printf("%s\n", locationLabel);
-		pointer<address> lastFrame = pointer<address>(frame);
-		frame = lastFrame[0];
-		ip = lastFrame[1];
 	}
 	return output;
 }

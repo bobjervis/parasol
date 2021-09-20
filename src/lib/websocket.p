@@ -25,6 +25,7 @@ import parasol:log;
 import parasol:net.base64encode;
 import parasol:net.Connection;
 import parasol:random;
+import parasol:runtime;
 import parasol:text;
 import parasol:thread;
 import parasol:thread.Thread;
@@ -251,7 +252,7 @@ private monitor class WebSocketVolatileData {
 
 private void readWrapper(address arg) {
 	ref<WebSocket> socket = ref<WebSocket>(arg);
-//		printf("%s %p reader thread starting readMessages...\n", currentThread().name(), arg);
+
 	boolean sawClose;
 
 	for (;;) {
@@ -603,13 +604,10 @@ public class WebSocket extends WebSocketVolatileData {
 	
 	private int getc() {
 		if (_incomingCursor >= _incomingLength) {
-//			printf("About to read from connection %p\n", _connection);
 			_incomingLength = _connection.read(&_incomingData[0], _incomingData.length());
 			if (_incomingLength <= 0) {
-				if (_incomingLength < 0) {
-					logger.error("_incomingLength = %d\n", _incomingLength);
-					linux.perror(null);
-				}
+				if (_incomingLength < 0)
+					logger.error("connection read failed: %s", linux.strerror(linux.errno()));
 //				logger.debug("CLOSE_BAD_DATA - recv failed");
 				shutDown(CLOSE_BAD_DATA, "recv failed");
 				return -1;
@@ -621,7 +619,7 @@ public class WebSocket extends WebSocketVolatileData {
 	/**
 	 * Write a string message.
 	 *
-	 * This is equavalent to calling the two-argument {@link write} method
+	 * This is equivalent to calling the two-argument {@link write} method
 	 * with an opcode of {@link OP_STRING}.
 	 *
 	 * @threading This method is thread-safe.
@@ -1032,7 +1030,6 @@ monitor class MessageWriter {
 		}
 		if (op.webSocket == null || op.webSocket.enqueueWrite()) {
 			_q.enqueue(op);
-//			printf("%s %p notify...\n", currentThread().name(), this);
 			notify();
 		} else
 			delete op;

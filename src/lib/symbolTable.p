@@ -344,9 +344,9 @@ class ClasslikeScope extends Scope {
 			super.assignStorage(target, offset, interfaceArea, compileContext);
 			int thunkOffset = interfaceOffset(compileContext);
 			for (int i = 0; i < _interfaces.length(); i++) {
-				if (_interfaces[i].baseInterface() != null)
+				if (_interfaces[i].baseInterface() != null) {
 					_interfaces[i].thunkOffset = _interfaces[i].baseInterface().thunkOffset;
-				else {
+				} else {
 					_interfaces[i].thunkOffset = thunkOffset;
 					thunkOffset += 8;
 				}
@@ -1017,7 +1017,7 @@ public class ParameterScope extends Scope {
 	}
 
 	void verifyBaseClassConstructorChain(ref<CompileContext> compileContext) {
-		// No definition probably is indicative of another error, so forge tchecking.
+		// No definition probably is indicative of another error, so forget checking.
 		if (_definition == null)
 			return;
 		if (_definition.op() != Operator.FUNCTION)
@@ -1059,6 +1059,10 @@ public class ThunkScope extends ParameterScope {
 			return ref<InterfaceImplementationScope>(enclosing()).implementingClass().destructor();
 		else
 			return _function;
+	}
+
+	public ref<InterfaceImplementationScope> iface() {
+		return ref<InterfaceImplementationScope>(enclosing());
 	}
 
 	public int thunkOffset() {

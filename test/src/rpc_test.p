@@ -22,27 +22,75 @@ import parasol:process;
 import parasol:rpc;
 import parasol:thread;
 
+
+private ref<log.Logger> logger = log.getLogger("parasol.rpc_test");
+
 linux.pid_t childProcessID;
 http.Server server;
 char port;
 
-server.httpService("/http", &httpExchange);
-//server.httpService("/ws", &fullDuplex);
 server.disableHttps();
 server.setHttpPort(port);		// if port == 0, a random port number will be assigned.
 
-server.start();
+server.start(net.ServerScope.LOCALHOST);
 
 port = server.httpPort();
 
 HttpExchange httpExchange;
+http.WebSocketService fullDuplex;
+fullDuplex.webSocketProtocol("Test", new ServerWorkFactory());
+
+server.httpService("/http", &httpExchange);
+server.httpService("/ws", &fullDuplex);
 
 interface Test {
 	boolean simple(int argument);
 }
 
+interface WSUpstream {
+	boolean upload(int x);
+}
+
+class ServerWorkFactory extends rpc.WebSocketFactory<WSUpstream, WSDownstream> {
+	public boolean notifyCreation(ref<rpc.WebSocket<WSUpstream, WSDownstream>> socket) {
+		ref<ServerWork> s = new ServerWork();
+		s.down = socket.configure(s);
+		return true;
+	}
+}
+
+class ServerWork implements WSUpstream {
+	WSDownstream down;
+
+	ServerWork() {
+	}
+
+	boolean upload(int x) {
+		logger.debug("upload(%d)", x);
+		down.download(x + 1);
+		if (x > 10)
+			return false;
+		return true;
+	}
+}
+
+interface WSDownstream {
+	boolean download(int x);
+}
+
+class ClientWork implements WSDownstream {
+	static int testMessageCount;
+	static int[] values = [ 4, 1601, 1000001 ];
+
+	boolean download(int x) {
+		assert(x == values[testMessageCount]);
+		testMessageCount++;
+		return true;
+	}
+}
+
 {							// Test 1: Simple HTTP request and response
-	string url = "http://192.168.1.2:" + port + "/http";
+	string url = "http://localhost:" + port + "/http";
 	rpc.Client<Test> client(url);
 
 	// Manufacture the proxy object.
@@ -58,15 +106,23 @@ interface Test {
 
 	delete t;
 }
-/*
+
 {
-	http.Client client("http://localhost:" + port + "/ws");
-	assert(client.get() == http.ConnectStatus.OK);
-	ref<http.WebSocket> webSocket = client.webSocket();
-	assert(webSocket != null);
-	rpc.Reader<WSUpstream, WSDownstream> reader(webSocket);
+	ClientWork down;
+
+	rpc.Client<WSUpstream, WSDownstream> client("ws://localhost:" + port + "/ws", "Test");
+	assert(client.connect());
+	WSUpstream up = client.socket().configure(down);
+
+	logger.debug("Start calling up");
+	assert(up.upload(3));
+	assert(!up.upload(1600));
+	assert(!up.upload(1000000));
+
+	printf("message count %d\n", down.testMessageCount);
+	assert(down.testMessageCount == 3);
 }
- */
+
 server.stop();
 
 class HttpExchange extends rpc.Service<Test> implements Test {
@@ -75,7 +131,7 @@ class HttpExchange extends rpc.Service<Test> implements Test {
 	}
 
 	boolean simple(int argument) {
-		printf("In server simple\n");
+		logger.debug("In server simple");
 		return argument < 10;
 	}	
 }

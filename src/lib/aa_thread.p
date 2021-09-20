@@ -689,7 +689,7 @@ class Mutex {
 //			print(s);
 			int x = linux.pthread_mutex_lock(&_linuxMutex);
 			if (x != 0) {
-				printf("mutex_lock returned %d at %p\n", x, runtime.returnAddress());
+				printf("mutex_lock returned %s\n%s", linux.strerror(x), runtime.stackTrace());
 				linux._exit(1);
 			}
 		}

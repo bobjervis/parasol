@@ -35,6 +35,7 @@ public class CompileContext {
 	private ref<Arena> _arena;
 	private ref<Scope> _current;
 	private int _importedScopes;
+	private int _mappedScopes;
 	private ref<Variable>[] _variables;
 	private ref<PlainSymbol>[] _staticSymbols;	// Populated when assigning storage
 	private ref<Node>[] _liveSymbols;			// Populated during fold actions with the set of live symbols that
@@ -143,12 +144,7 @@ public class CompileContext {
 //		printf("before assignTypes\n");
 		assignTypes();
 //		printf("after assignTypes\n");
-		for (int i = 0; i < _arena.scopes().length(); i++) {
-			ref<Scope> scope = (*_arena.scopes())[i];
-			scope.checkForDuplicateMethods(this);
-			scope.assignMethodMaps(this);
-			scope.createPossibleDefaultConstructor(this);
-		}
+		assignMethodMaps();
 		for (;;) {
 			boolean modified;
 			for (int i = 0; i < _arena.scopes().length(); i++)
@@ -176,6 +172,16 @@ public class CompileContext {
 				s.definition().traverse(Node.Traversal.PRE_ORDER, defineImports, this);
 		}
 //		printf("Lookups done\n");
+	}
+
+	public void assignMethodMaps() {
+		for (int i = _mappedScopes; i < _arena.scopes().length(); i++) {
+			ref<Scope> scope = (*_arena.scopes())[i];
+			scope.checkForDuplicateMethods(this);
+			scope.assignMethodMaps(this);
+			scope.createPossibleDefaultConstructor(this);
+		}
+		_mappedScopes = _arena.scopes().length();
 	}
 
 	private static TraverseAction defineImports(ref<Node> n, address data) {
@@ -208,12 +214,17 @@ public class CompileContext {
  */
  	 	 	clearDeclarationModifiers();
 			if (s.definition() != null &&
-				s.storageClass() != StorageClass.TEMPLATE_INSTANCE)
+				s.storageClass() != StorageClass.TEMPLATE_INSTANCE) {
 				buildUnderScope(s);
+			}
 		}
 		annotations = null;
 	}
 	
+	public void exemptScopes() {
+		_arena.builtScopes = _arena.scopes().length();
+	}
+
 	private void buildUnderScope(ref<Scope> s) {
 		ref<Node> definition = s.definition();
 		ref<Scope> outer = _current;

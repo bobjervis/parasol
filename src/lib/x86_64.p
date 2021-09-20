@@ -337,18 +337,7 @@ public class X86_64 extends X86_64AssignTemps {
 		_unitScope = new Scope(_arena.root(), unit, compileContext.blockStorageClass(), unit.className());
 		maxTypeOrdinal = 1;
 		// This may have to be postponed until we get some data on register usage.
-		for (int i = 0; i < _arena.scopes().length(); i++) {
-			ref<Scope> scope = (*_arena.scopes())[i];
-			switch (scope.storageClass()) {
-			case	TEMPLATE:
-			case	AUTO:
-			case	PARAMETER:
-				break;
-				
-			default:
-				scope.assignVariableStorage(this, compileContext);
-			}
-		}
+		assignStorageToScopes(0, compileContext);
 		for (int i = 0; i < compileContext.staticSymbols().length(); i++) {
 			ref<PlainSymbol> symbol = (*compileContext.staticSymbols())[i];
 			assignStaticSymbolStorage(symbol, compileContext);
@@ -358,6 +347,21 @@ public class X86_64 extends X86_64AssignTemps {
 		return super.generateCode(mainFile, compileContext);
 	}
 	
+	void assignStorageToScopes(int firstScope, ref<CompileContext> compileContext) {
+		for (int i = 0; i < _arena.scopes().length(); i++) {
+			ref<Scope> scope = (*_arena.scopes())[i];
+			switch (scope.storageClass()) {
+			case	TEMPLATE:
+			case	AUTO:
+			case	PARAMETER:
+				break;
+
+			default:
+				scope.assignVariableStorage(this, compileContext);
+			}
+		}
+	}
+
 	public abstract void writePxi(ref<Pxi> output);
 	
 	public int, boolean run(string[] args) {
@@ -584,15 +588,20 @@ public class X86_64 extends X86_64AssignTemps {
 			} else {
 				ref<FileStat> file = scope.file();
 				
-				// For template functions, this assigns any missing types info:
+				// For template functions, this assigns any missing types info.
+				// Templates defer type assignment because unreferenced functions of a template are allowed to contain
+				// type errors. So this clause will only apply types to template functions.
 				
 				if (node.type == null) {
+					int startAt = _arena.scopes().length();
 					compileContext.assignTypes(parameterScope, node);
 					if (node.type == null) {
 						parameterScope.printStatus();
 						node.print(0);
 						assert(false);
 					}
+					compileContext.assignControlFlow(node, parameterScope);
+					assignStorageToScopes(startAt, compileContext);
 				}
 				
 				// All function/method body folding is done here:
@@ -878,6 +887,7 @@ public class X86_64 extends X86_64AssignTemps {
 			
 		case	THUNK:
 			ref<ThunkScope> thunk = ref<ThunkScope>(parameterScope);
+			thunk.iface().implementingClass().assignSize(this, compileContext);;
 			if (thunk.isDestructor()) {
 				if (thunk.func() == null) {
 					inst(X86.LEA, R.RAX, R.RDI, -thunk.thunkOffset());
@@ -972,7 +982,8 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), thisRegister());
 			inst(X86.MOV, TypeFamily.SIGNED_64, firstRegisterArgument(), firstRegisterArgument(), 0);
 			inst(X86.MOV, TypeFamily.SIGNED_64, secondRegisterArgument(), R.RBP, stringOffset);
-			instCall(rpcClientCall(compileContext), compileContext);
+			inst(X86.MOV, TypeFamily.ADDRESS, R.RAX, firstRegisterArgument(), 0);
+			inst(X86.CALL, TypeFamily.ADDRESS, firstRegisterArgument(), 16);
 			// 4. marshal return expressions from 'call' return value to outputs.
 			if (returns != null) {
 				// RAX contains the string object.
@@ -1005,6 +1016,7 @@ public class X86_64 extends X86_64AssignTemps {
 			break;
 
 		case STUB_FUNCTION: {
+			compileContext.buildScopes();
 			ref<FunctionDeclaration> fd = ref<FunctionDeclaration>(parameterScope.definition());
 			ref<InterfaceType> interfaceType = ref<InterfaceType>(fd.arguments().node.type);
 			Location loc = parameterScope.definition().location();
@@ -1052,13 +1064,13 @@ public class X86_64 extends X86_64AssignTemps {
 					ref<Node> thisMethodID = tree.newConstant(Operator.STRING, methodID, loc);
 					ref<Node> thisCase = tree.newBinary(Operator.CASE, thisMethodID, tree.newLeaf(Operator.EMPTY, loc), loc);
 					switchBody.statement(tree.newNodeList(thisCase));
-
+/*
 					ref<Node> params = tree.newIdentifier("params", loc);
 					ref<Node> methodIDx = tree.newSelection(params, "methodID", loc);
 					ref<Node> clearer = tree.newSelection(methodIDx, "clear", loc);
 					ref<Node> marker = tree.newCall(Operator.CALL, clearer, null, loc);
-//					switchBody.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, marker, loc)));
-
+					switchBody.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, marker, loc)));
+*/
 /*
 	   					for each method parameter:
  */
@@ -1174,6 +1186,7 @@ public class X86_64 extends X86_64AssignTemps {
  */
 			n = tree.newReference(output, false, loc);
 			block.statement(tree.newNodeList(tree.newReturn(tree.newNodeList(n), loc)));
+			compileContext.exemptScopes();
 			return block;
 			}
 
@@ -1447,7 +1460,9 @@ public class X86_64 extends X86_64AssignTemps {
 		
 		// Here is where all static initializers are folded:
 
+		int startAt = _arena.scopes().length();
 		ref<Node> n = compileContext.fold(file.tree().root(), file);
+		assignStorageToScopes(startAt, compileContext);
 		allocateStackForLocalVariables(compileContext);
 		if (file.fileScope() != null)
 			compileContext.setCurrent(file.fileScope());
