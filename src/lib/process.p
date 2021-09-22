@@ -905,6 +905,8 @@ public int, string, exception_t execute(time.Duration timeout, string... args) {
 			t.start(drain, &d);
 			pendingChildren.declareChild(pid, executeDone, &timer);
 			int exitStatus = timer.waitForChild(timeout);
+			if (timer.timedOut())
+				linux.kill(pid, linux.SIGKILL);
 			t.join();
 			delete t;
 			linux.close(pipefd[0]);

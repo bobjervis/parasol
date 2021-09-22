@@ -158,18 +158,25 @@ public class Client<class UPSTREAM, class DOWNSTREAM> extends http.Client {
 		delete _socket;
 	}
 
-	public boolean connect() {
-		if (get() != http.ConnectStatus.OK)
-			return false;
+	public http.ConnectStatus, unsigned connect() {
+		http.ConnectStatus status;
+		unsigned ip;
+
+		(status, ip) = get();
+		if (status != http.ConnectStatus.OK)
+			return status, ip;
 		ref<http.WebSocket> ws = webSocket();
 		if (ws == null)
-			return false;
+			return http.ConnectStatus.WEB_SOCKET_REFUSED, ip;
 		_socket = new WebSocket<UPSTREAM, DOWNSTREAM>(ws);
-		return true;
+		return http.ConnectStatus.OK, ip;
 	}
 
 	public ref<WebSocket<UPSTREAM, DOWNSTREAM>> socket() {
 		return _socket;
+	}
+
+	public void waitForDisconnect() {
 	}
 }
 /**

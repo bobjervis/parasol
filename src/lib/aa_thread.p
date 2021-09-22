@@ -966,7 +966,13 @@ public class ThreadPool<class T> extends ThreadPoolData<T> {
 			}
 		} else {
 			void(address) f = void(address)(wi.valueGenerator);
-			f(wi.parameter);
+			try {
+				f(wi.parameter);
+			} catch (Exception e) {
+				printf("Failed ThreadPool void work item: Uncaught exception! %s\n%s", 
+								e.message(), e.textStackTrace());
+				process.stdout.flush();
+			}
 		}
 		delete wi;
 		return true;

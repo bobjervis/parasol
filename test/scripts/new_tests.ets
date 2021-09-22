@@ -1,1 +1,1 @@
-run(filename: rpc_test.p)
+run(filename: marshaller_test.p)

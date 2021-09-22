@@ -14,7 +14,6 @@
    limitations under the License.
  */
 
-import native:linux;
 import parasol:http;
 import parasol:log;
 import parasol:net;
@@ -25,7 +24,6 @@ import parasol:thread;
 
 private ref<log.Logger> logger = log.getLogger("parasol.rpc_test");
 
-linux.pid_t childProcessID;
 http.Server server;
 char port;
 
@@ -111,7 +109,7 @@ class ClientWork implements WSDownstream {
 	ClientWork down;
 
 	rpc.Client<WSUpstream, WSDownstream> client("ws://localhost:" + port + "/ws", "Test");
-	assert(client.connect());
+	assert(client.connect() == http.ConnectStatus.OK);
 	WSUpstream up = client.socket().configure(down);
 
 	logger.debug("Start calling up");

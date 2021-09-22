@@ -1087,17 +1087,26 @@ public class X86_64 extends X86_64AssignTemps {
  */
 						ref<Node> n = tree.newIdentifier("params", loc);
 						n = tree.newSelection(n, "arguments", loc);
-						ref<ParameterScope> unm = unmarshaller(sym.type(), compileContext);
-						ref<Node> method = tree.newIdentifier(ref<FunctionDeclaration>(unm.definition()).name().symbol(), loc);
-						method.type = unm.type();
-						ref<Node> call = tree.newCall(unm, CallCategory.FUNCTION_CALL, method, tree.newNodeList(n), loc, compileContext);
 						ref<Variable> v = compileContext.newVariable(sym.type());
-						args.append(v);
-						ref<Reference> r = tree.newReference(v, 0, true, loc);
-						n = tree.newBinary(Operator.ASSIGN, r, call, loc);
-						n = tree.newUnary(Operator.EXPRESSION, n, loc);
-						switchBody.statement(tree.newNodeList(n));
-						r = tree.newReference(v, 0, false, loc);
+						switch (sym.type().family()) {
+						case SHAPE:
+							ref<Type> elementType = sym.type().elementType();
+							ref<Type> indexType = sym.type().indexType();
+							printf("Unmarshalling shape %s by %s\n", elementType.signature(), indexType.signature());
+							break;
+
+						default:
+							ref<ParameterScope> unm = unmarshaller(sym.type(), compileContext);
+							ref<Node> method = tree.newIdentifier(ref<FunctionDeclaration>(unm.definition()).name().symbol(), loc);
+							method.type = unm.type();
+							ref<Node> call = tree.newCall(unm, CallCategory.FUNCTION_CALL, method, tree.newNodeList(n), loc, compileContext);
+							args.append(v);
+							r = tree.newReference(v, 0, true, loc);
+							n = tree.newBinary(Operator.ASSIGN, r, call, loc);
+							n = tree.newUnary(Operator.EXPRESSION, n, loc);
+							switchBody.statement(tree.newNodeList(n));
+						}
+						ref<Reference> r = tree.newReference(v, 0, false, loc);
 						argRefs.append(r);
 					}
 /*

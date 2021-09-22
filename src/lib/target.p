@@ -174,8 +174,10 @@ public class Target {
 		ref<ParameterScope> s = _marshallerFunctions[type.family()];
 		if (s == null) {
 			string name = type.family().marshaller();
-			if (name == null)
+			if (name == null) {
+				printf("no marshaller for %s\n", type.signature());
 				return null;
+			}
 			ref<Symbol> sym = compileContext.arena().getSymbol("parasol", name, compileContext);
 			if (sym == null)
 				printf("Could not find parasol:%s\n", name);
@@ -199,8 +201,10 @@ public class Target {
 		ref<ParameterScope> s = _unmarshallerFunctions[type.family()];
 		if (s == null) {
 			string name = type.family().unmarshaller();
-			if (name == null)
+			if (name == null) {
+				printf("no unmarshaller for %s\n", type.signature());
 				return null;
+			}
 			ref<Symbol> sym = compileContext.arena().getSymbol("parasol", name, compileContext);
 			if (sym == null)
 				printf("Could not find parasol:%s\n", name);

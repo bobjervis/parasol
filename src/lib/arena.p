@@ -198,6 +198,7 @@ public class Arena {
 			return false;
 		
 		_main = mainFile.fileScope();
+		compileContext.checkForRPCs();
 		if (verbose)
 			printf("Initial compilation phases completed.\n");
 		compileContext.compileFile();

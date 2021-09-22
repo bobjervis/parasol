@@ -48,6 +48,7 @@ public class CompileContext {
 	private ref<ParameterScope> _dispatchException;
 	private ref<Type> _memoryAllocator;
 	private ref<Type> _compilerType;
+	private ref<InterfaceType>[] _interfaces;
 	private boolean _verbose;
 	
 	public class FlowContext {
@@ -576,7 +577,7 @@ public class CompileContext {
 			c.scope = classScope;
 			ref<InterfaceType> iface = _pool.newInterfaceType(c, isFinal, classScope);
 			classScope.classType = iface;
-			iface.makeRPCSymbols(this);
+			_interfaces.append(iface);
 			id.bindClassName(_current, c, this);
 			return TraverseAction.SKIP_CHILDREN;
 			
@@ -659,6 +660,17 @@ public class CompileContext {
 		}
 		
 		return TraverseAction.CONTINUE_TRAVERSAL;
+	}
+
+	public void checkForRPCs() {
+		if (_arena.getSymbol("parasol", "rpc", this) != null) {
+			for (i in _interfaces) {
+				ref<InterfaceType> iface = _interfaces[i];
+				_current = iface.scope();
+				iface.makeRPCSymbols(this);
+			}
+		}
+		_interfaces.clear();
 	}
 
 	public ref<Scope> createScope(ref<Node> n, StorageClass storageClass) {
