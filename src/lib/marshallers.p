@@ -18,6 +18,10 @@ namespace parasol:rpc;
 import parasol:exception.IllegalArgumentException;
 import parasol:stream;
 
+import parasol:log;
+import parasol:thread;
+ref<log.Logger> logger = log.getLogger("stuff");
+
 void marshalBoolean(ref<string> output, ref<boolean> object) {
 	(*output).append(*object ? 't' : 'f');
 }
@@ -33,6 +37,32 @@ boolean unmarshalBoolean(ref<stream.Reader> value) {
 	}
 	string s;
 	s.printf("Unexpected byte: %c", ch);
+	throw IllegalArgumentException(s);
+}
+
+void marshalShort(ref<string> output, ref<short> object) {
+	short value = *object;
+	if (value >= -128 && value <= 127) {
+		(*output).append('1');
+		(*output) += substring(pointer<byte>(&value), 1);
+	} else {
+		(*output).append('S');
+		(*output) += substring(pointer<byte>(&value), 2);
+	}
+}
+
+short unmarshalShort(ref<stream.Reader> value) {
+	int ch = value.read();
+	switch (ch) {
+	case '1':
+		return short(short(value.read() << 8) >> 8);
+
+	case 'S':
+		ch = value.read();
+		return short(ch + (value.read() << 8));
+	}
+	string s;
+	s.printf("Unexpected prefix: %c", ch);
 	throw IllegalArgumentException(s);
 }
 
@@ -54,11 +84,11 @@ int unmarshalInt(ref<stream.Reader> value) {
 	int ch = value.read();
 	switch (ch) {
 	case '1':
-		return value.read();
+		return (value.read() << 24) >> 24;
 
 	case 'S':
 		ch = value.read();
-		return ch + (value.read() << 8);
+		return ((ch + (value.read() << 8)) << 16) >> 16;
 
 	case 'i':
 		ch = value.read();
@@ -92,17 +122,17 @@ long unmarshalLong(ref<stream.Reader> value) {
 	int ch = value.read();
 	switch (ch) {
 	case '1':
-		return value.read();
+		return (value.read() << 56) >> 56;
 
 	case 'S':
 		ch = value.read();
-		return ch + (value.read() << 8);
+		return ((ch + (value.read() << 8)) << 48) >> 48;
 
 	case 'i':
 		ch = value.read();
 		int c2 = value.read();
 		int c3 = value.read();
-		return ch + long(c2 << 8) + (c3 << 16) + (value.read() << 24);
+		return ((ch + long(c2 << 8) + (c3 << 16) + (value.read() << 24)) << 32) >> 32;
 
 	case 'L':
 		ch = value.read();
@@ -112,7 +142,41 @@ long unmarshalLong(ref<stream.Reader> value) {
 		int c5 = value.read();
 		int c6 = value.read();
 		int c7 = value.read();
-		return ch + (c2 << 8) + (c3 << 16) + (c4 << 24) + (long(c5) << 32) + (long(c6) << 40) + (long(c7) << 48) + (long(value.read()) << 56);
+		return ch + (c2 << 8) + (c3 << 16) + (long(c4) << 24) + (long(c5) << 32) + (long(c6) << 40) + (long(c7) << 48) + (long(value.read()) << 56);
+	}
+	string s;
+	s.printf("Unexpected prefix: %c", ch);
+	throw IllegalArgumentException(s);
+}
+
+void marshalByte(ref<string> output, ref<byte> object) {
+	(*output).append(*object);
+}
+
+byte unmarshalByte(ref<stream.Reader> value) {
+	return byte(value.read());
+}
+
+void marshalChar(ref<string> output, ref<char> object) {
+	char value = *object;
+	if (value <= byte.MAX_VALUE) {
+		(*output).append('b');
+		(*output) += substring(pointer<byte>(&value), 1);
+	} else {
+		(*output).append('c');
+		(*output) += substring(pointer<byte>(&value), 2);
+	}
+}
+
+char unmarshalChar(ref<stream.Reader> value) {
+	int ch = value.read();
+	switch (ch) {
+	case 'b':
+		return char(value.read());
+
+	case 'c':
+		ch = value.read();
+		return char(ch + (value.read() << 8));
 	}
 	string s;
 	s.printf("Unexpected prefix: %c", ch);
@@ -154,9 +218,8 @@ unsigned unmarshalUnsigned(ref<stream.Reader> value) {
 	throw IllegalArgumentException(s);
 }
 
-
 void marshalString(ref<string> output, ref<string> object) {
-	if (object == null)
+	if (*object == null)
 		(*output).append('N');
 	else if (object.length() == 0)
 		(*output).append('Z');

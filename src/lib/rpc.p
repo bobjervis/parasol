@@ -394,11 +394,11 @@ public class Service<class I> extends http.Service {
 
 	public boolean processRequest(ref<http.Request> request, ref<http.Response> response) {
 		if (request.method != http.Request.Method.POST) {
+			logger.debug("Not a post!");
 			response.error(405);
 			return false;
 		}
 		string content = request.readContent();
-
 		int index = content.indexOf(';');
 		if (index < 0) {
 			response.error(400);
@@ -409,7 +409,6 @@ public class Service<class I> extends http.Service {
 		params.methodID = substring(&content[0], index);
 		stream.BufferReader r(&content[index + 1], content.length() - (index + 1));
 		params.arguments = &r;
-
 		// If the selected method returns void, go ahead and respond as if the call works.
 		if (_processor.callingVoidMethod(&params)) {
 			response.ok();
