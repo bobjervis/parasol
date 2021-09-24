@@ -1640,6 +1640,10 @@ public class FunctionDeclaration extends ParameterBag {
 	public ref<Identifier> name() {
 		return _name;
 	}
+
+	public ref<NodeList> returnType() {
+		return _returnType;
+	}
 /*
 	ref<NodeList> returnType() { return _returnType; }
 

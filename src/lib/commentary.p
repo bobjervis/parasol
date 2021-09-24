@@ -137,6 +137,7 @@ public enum MessageId {
 	THIS_NOT_ALLOWED						("Use of 'this' not allowed"),
 	TOO_MANY_RETURN_ASSIGNMENTS				("Too many return assignments"),
 	TYPE_ALREADY_DEFINED					("Type already defined"),
+	TYPE_DISALLOWED_IN_RPC					("Type disallowed in RPC"),
 	TYPE_MISMATCH							("Types do not convert to a common type"),
 	UNDEFINED								("Undefined identifier '%1'"),
 	UNDEFINED_BUILT_IN						("Undefined built in name '%1'"),

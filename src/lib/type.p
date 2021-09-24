@@ -91,6 +91,10 @@ public enum TypeFamily {
 		_unmarshaller = unmarshaller;
 	}
 
+	public boolean allowedInRPCs() {
+		return _marshaller != null;
+	}
+
 	public string marshaller() {
 		return _marshaller;
 	}
@@ -2137,6 +2141,16 @@ public class Type {
 	 */
 	public int interfaceOffset(int implementsIndex, ref<CompileContext> compileContext) {
 		return -1;
+	}
+
+	public boolean allowedInRPCs(ref<CompileContext> compileContext) {
+		if (returnsViaOutParameter(compileContext))
+			return false;
+		switch (_family) {
+		case SHAPE:
+			break;
+		}
+		return _family.allowedInRPCs();
 	}
 	/**
 	 * Return the indirect type pointed to by a ref/pointer type.

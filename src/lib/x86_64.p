@@ -63,6 +63,7 @@ import parasol:compiler.OverloadInstance;
 import parasol:compiler.ParameterScope;
 import parasol:compiler.PlainSymbol;
 import parasol:compiler.ProxyMethodScope;
+import parasol:compiler.ProxyOverload;
 import parasol:compiler.PUSH_OUT_PARAMETER;
 import parasol:compiler.Reference;
 import parasol:compiler.Return;
@@ -928,10 +929,14 @@ public class X86_64 extends X86_64AssignTemps {
 			break;
 
 		case PROXY_METHOD:
+			ref<OverloadInstance> method = ref<ProxyMethodScope>(parameterScope).method;
+			if (!method.enclosing().enclosing().enclosing().enclosing().interfaceUsedInRPC(compileContext)) {
+				generateReturn(parameterScope, compileContext);
+				break;
+			}
 			inst(X86.ENTER, 0);
 			inst(X86.PUSH, TypeFamily.ADDRESS, thisRegister());
 			inst(X86.MOV, TypeFamily.ADDRESS, thisRegister(), firstRegisterArgument());
-			ref<OverloadInstance> method = ref<ProxyMethodScope>(parameterScope).method;
 			ref<FunctionType> ft = ref<FunctionType>(method.type());
 			ref<NodeList> returns = ft.returnType();
 			boolean hasOutParameters;
@@ -1019,6 +1024,10 @@ public class X86_64 extends X86_64AssignTemps {
 			compileContext.buildScopes();
 			ref<FunctionDeclaration> fd = ref<FunctionDeclaration>(parameterScope.definition());
 			ref<InterfaceType> interfaceType = ref<InterfaceType>(fd.arguments().node.type);
+			if (!interfaceType.scope().interfaceUsedInRPC(compileContext)) {
+				generateReturn(parameterScope, compileContext);
+				break;
+			}
 			Location loc = parameterScope.definition().location();
 			ref<SyntaxTree> tree = compileContext.tree();
 			ref<FunctionType>(fd.type).assignRegisterArguments(compileContext);

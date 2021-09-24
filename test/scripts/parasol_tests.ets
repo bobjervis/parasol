@@ -17,6 +17,7 @@ run(filename: compile_target_test.p)
 //run(filename: httpd_test.p)
 run(filename: dotted_ip_test.p)
 run(filename: rpc_test.p)
+run(filename: marshaller_test.p)
 run(filename: uri_code_test.p)
 run(filename: uri_parse_test.p)
 run(filename: hmac_test.p)
@@ -274,6 +275,25 @@ compile(filename: unit_return_fail.p, expect: fail, message: RETURN_DISALLOWED)
 compile(filename: unit_return_fail2.p, expect: fail, message: RETURN_DISALLOWED)
 
 compile(filename: stray_token_enum.p, expect: fail)
+
+compile(expect: fail, message: TYPE_DISALLOWED_IN_RPC) { "import parasol:rpc; rpc.Client<A>(\"x\"); interface A { void f(ref<byte> s); }" }
+compile(expect: fail, message: TYPE_DISALLOWED_IN_RPC) { "import parasol:rpc; rpc.Client<A>(\"x\"); interface A { void f(pointer<byte> s); }" }
+compile(expect: fail, message: TYPE_DISALLOWED_IN_RPC) { "import parasol:rpc; rpc.Client<A>(\"x\"); interface A { void f(address s); }" }
+compile(expect: fail, message: TYPE_DISALLOWED_IN_RPC) { "import parasol:rpc; rpc.Client<A>(\"x\"); interface A { void f(var s); }" }
+compile(expect: fail, message: TYPE_DISALLOWED_IN_RPC) { "import parasol:rpc; rpc.Client<A>(\"x\"); interface A { void f(A s); }" }
+compile(expect: fail, message: TYPE_DISALLOWED_IN_RPC) { "import parasol:rpc; rpc.Client<A>(\"x\"); interface A { void f(void(int) s); }" }
+// TODO: expose this when parameters of type 'class' are allowed.
+//compile(expect: fail, message: TYPE_DISALLOWED_IN_RPC) { "import parasol:rpc; rpc.Client<A>(\"x\"); interface A { void f(class s); }" }
+compile(expect: fail, message: TYPE_DISALLOWED_IN_RPC) { "import parasol:rpc; rpc.Client<A>(\"x\"); interface A { void f(Exception s); }" }
+
+// The following are disallowed, but should they be?
+
+compile(expect: fail, message: TYPE_DISALLOWED_IN_RPC) { "import parasol:rpc; rpc.Client<A>(\"x\"); interface A { void f(B s); } enum B { C, D }" }
+compile(expect: fail, message: TYPE_DISALLOWED_IN_RPC) { "import parasol:rpc; rpc.Client<A>(\"x\"); interface A { void f(B s); } flags B { C, D }" }
+compile(expect: fail, message: TYPE_DISALLOWED_IN_RPC) { "import parasol:rpc; rpc.Client<A>(\"x\"); interface A { void f(B s); } class B { int x; }" }
+compile(expect: fail, message: TYPE_DISALLOWED_IN_RPC) { "import parasol:rpc; rpc.Client<A>(\"x\"); interface A { void f(B<int> s); } class B<class C> { C x; }" }
+compile(expect: fail, message: TYPE_DISALLOWED_IN_RPC) { "import parasol:rpc; rpc.Client<A>(\"x\"); interface A { void f(byte[] s); }" }
+compile(expect: fail, message: TYPE_DISALLOWED_IN_RPC) { "import parasol:rpc; rpc.Client<A>(\"x\"); interface A { void f(byte[string] s); }" }
 
 compile(){ "int(address) func; void(address) f = void(address)(func);" }
 

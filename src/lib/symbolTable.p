@@ -574,7 +574,34 @@ class ClasslikeScope extends Scope {
 	public boolean isInterface() {
 		return classType != null && classType.class == InterfaceType;
 	}
-	
+
+	public boolean interfaceUsedInRPC(ref<CompileContext> compileContext) {
+		boolean result = true;
+		if (isInterface()) {
+			for (i in _methods) {
+				ref<OverloadInstance> oi = _methods[i];
+				ref<FunctionType> ft = ref<FunctionType>(oi.assignType(compileContext));
+				for (ref<NodeList> nl = ft.parameters(); nl != null; nl = nl.next) {
+					if (nl.node.type == null)
+						continue;
+					if (nl.node.type.allowedInRPCs(compileContext))
+						continue;
+					nl.node.add(MessageId.TYPE_DISALLOWED_IN_RPC, compileContext.pool());
+					result = false;
+				}
+				for (ref<NodeList> nl = ft.returnType(); nl != null; nl = nl.next) {
+					if (nl.node.type == null)
+						continue;
+					if (nl.node.type.allowedInRPCs(compileContext))
+						continue;
+					nl.node.add(MessageId.TYPE_DISALLOWED_IN_RPC, compileContext.pool());
+					result = false;
+				}
+			}
+		}
+		return result;
+	}
+
 	public int interfaceCount() {
 		return _interfaces.length();
 	}
@@ -1830,7 +1857,15 @@ public class Scope {
 	public boolean isInterface() {
 		return false;
 	}
-	
+	/**
+	 * @return true if the interface, which is being used in an RPC, is allowed (marshalling
+	 * logic exists for all types used by the interface methods). Returns false if the interface
+	 * cannot appear in an RPC.
+	 */
+	public boolean interfaceUsedInRPC(ref<CompileContext> compileContext) {
+		return true;
+	}
+
 	public ref<FunctionDeclaration> enclosingFunction() {
 		for (ref<Scope>  s = this; s != null; s = s._enclosing) {
 			if (s._definition != null &&
