@@ -927,22 +927,19 @@ public class Client {
 		_connection.flush();
 //		printf("HTTP request sent...\n");
 		HttpParser parser(_connection);
+		delete _response;
 		_response = new ParsedResponse();
 		if (!parser.parseResponse(_response)) {
-			printf("Malformed response\n");
+			delete _response;
+			_response = null;
 			return ConnectStatus.MALFORMED_RESPONSE, ip;
 		}
 		if (expectWebSocket) {
-			if (_response.code != "101") {
-				printf("Expecting a Web Socket, not a 101 response.\n");
-				_response.print();
+			if (_response.code != "101")
 				return ConnectStatus.WEB_SOCKET_REFUSED, ip;
-			}
 			string webSocketAccept = computeWebSocketAccept(webSocketKey);
-			if (_response.headers["sec-websocket-accept"] != webSocketAccept) {
-				printf("Web Socket Accept does not match Web Socket Key\n");
+			if (_response.headers["sec-websocket-accept"] != webSocketAccept)
 				return ConnectStatus.WEB_SOCKET_ACCEPT_MISMATCH, ip;
-			}
 			_webSocket = new WebSocket(_connection, false);
 			_connection = null;					// The web socket takes possession of the connection object.
 		}

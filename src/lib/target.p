@@ -111,7 +111,8 @@ public class Target {
 	/**
 	 * hiddenParams: Either 0, 1 or 2 depending on the presence of 'this' and/or an out parameter
 	 */
-	public void assignRegisterArguments(int hiddenParams, ref<NodeList> params, ref<CompileContext> compileContext) {
+	public void assignRegisterArguments(int hiddenParams, pointer<ref<Type>> parameters, int parameterCount, 
+										pointer<byte> registerArray, ref<CompileContext> compileContext) {
 	}
 	
 	public abstract void assignStorageToObject(ref<Symbol> symbol, ref<Scope> scope, int offset, ref<CompileContext> compileContext);
@@ -248,18 +249,17 @@ private TraverseAction gatherCasesFunc(ref<Node> n, address data) {
 }
 
 public class Variable {
-	public ref<Scope> 	enclosing;			// 
-	public ref<Type>	type;				// If not null, the 'type' of the variable
-	public ref<NodeList> returns;			// If not null, the returns list from the function type this represents
-	public int			offset;
+	public ref<Scope> enclosing;			// 
+	public ref<Type> type;					// If not null, the 'type' of the variable
+	public pointer<ref<Type>> returns;		// If not null, the returns list from the function type this represents
+	public int returnCount;					// The count of type in the returns list.
+	public int offset;
 	
 	public int stackSize() {
 		int sz;
 		if (returns != null) {
-			for (ref<NodeList> nl = returns; nl != null; nl = nl.next) {
-				int nlSize = nl.node.type.stackSize();
-				sz += nlSize;
-			}
+			for (int i = 0; i < returnCount; i++)
+				sz += returns[i].stackSize();
 		} else if (type != null)
 			sz = type.stackSize();
 		return sz;
@@ -268,9 +268,9 @@ public class Variable {
 	public void print() {
 		if (returns != null) {
 			printf("Variable V%p ", this);
-			for (ref<NodeList> nl = returns; nl != null; nl = nl.next) {
-				printf("%s", nl.node.type.signature());
-				if (nl.next != null)
+			for (int i = 0; i < returnCount; i++) {
+				printf("%s", returns[i].signature());
+				if (i < returnCount - 1)
 					printf(", ");
 			}
 			printf(" [%d]\n", stackSize());

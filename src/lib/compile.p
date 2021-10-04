@@ -396,6 +396,7 @@ public class CompileContext {
 		case	INDIRECT:
 		case	INITIALIZE:
 		case	INTEGER:
+		case	INTERNAL_LITERAL:
 		case	LABEL:
 		case	LEFT_SHIFT:
 		case	LEFT_SHIFT_ASSIGN:
@@ -450,6 +451,8 @@ public class CompileContext {
 		case	UNWRAP_TYPEDEF:
 		case	VECTOR_OF:
 		case	WHILE:
+		case	VACATE_ARGUMENT_REGISTERS:
+		case	VARIABLE:
 		case	VOID:
 			break;
 
@@ -615,7 +618,7 @@ public class CompileContext {
 						break;
 					}
 					_current.defineConstructor(functionScope, _pool);
-					f.name().bindConstructor(visibility, _current, functionScope, this);
+					functionScope.symbol = f.name().bindConstructor(visibility, _current, functionScope, this);
 					break;
 
 				case	DESTRUCTOR:
@@ -629,7 +632,7 @@ public class CompileContext {
 						f.type = errorType();
 						break;
 					}
-					if (_current.defineDestructor(functionScope, _pool))
+					if (_current.defineDestructor(f, functionScope, _pool))
 						f.name().bindDestructor(visibility, _current, functionScope, this);
 					else
 						f.name().add(MessageId.DUPLICATE_DESTRUCTOR, _pool);
@@ -638,12 +641,15 @@ public class CompileContext {
 				case	NORMAL:
 					if (f.body == null)
 						f.name().bind(_current, f, null, this);
-					else
+					else {
 						f.name().bindFunctionOverload(visibility, isStatic, isFinal, annotations, _current, functionScope, this);
+						functionScope.symbol = ref<OverloadInstance>(f.name().symbol());
+					}
 					break;
 
 				case	ABSTRACT:
 					f.name().bindFunctionOverload(visibility, isStatic, isFinal, annotations, _current, functionScope, this);
+					functionScope.symbol = ref<OverloadInstance>(f.name().symbol());
 					break;
 
 				default:
@@ -681,8 +687,8 @@ public class CompileContext {
 		return _arena.createParameterScope(_current, n, kind);
 	}
 
-	ref<ProxyMethodScope> createProxyMethodScope() {
-		return _arena.createProxyMethodScope(_current);
+	ref<ProxyMethodScope> createProxyMethodScope(ref<Scope> enclosing) {
+		return _arena.createProxyMethodScope(enclosing);
 	}
 
 	public ref<ClassScope> createClassScope(ref<Node> n, ref<Identifier> className) {
@@ -802,6 +808,8 @@ public class CompileContext {
 				if (_current.definition() != null && 
 					_current.definition().op() == Operator.FUNCTION) {
 					ref<FunctionDeclaration> func = ref<FunctionDeclaration>(_current.definition());
+					if (func.type == null)
+						assignTypeToNode(func);
 					if ((func.referenced || !_current.isTemplateFunction()) && func.body != null && func.body.type == null) {
 						modified = true;
 						assignTypes(func.body);
@@ -1311,10 +1319,11 @@ public class CompileContext {
 		return v;
 	}
 
-	public ref<Variable> newVariable(ref<NodeList> returns) {
+	public ref<Variable> newVariable(pointer<ref<Type>> returns, int returnCount) {
 		ref<Variable> v = _pool new Variable;
 		v.returns = returns;
-		v.type = returns.node.type;
+		v.returnCount = returnCount;
+		v.type = returns[0];
 		v.enclosing = _current;
 		_variables.append(v);
 		return v;
@@ -1513,7 +1522,30 @@ public class MemoryPool extends memory.NoReleasePool {
 		return super new TemplateInstanceType(templateType, args, concreteDefinition, definingFile, scope, next, this);
 	}
 
-	public ref<FunctionType> newFunctionType(ref<NodeList> returnType, ref<NodeList> parameters, ref<Scope> functionScope) {
-		return super new FunctionType(returnType, parameters, functionScope);
+	public ref<FunctionType> newFunctionType(ref<Type>[] returnTypes, ref<ParameterScope> functionScope) {
+		ref<ref<Symbol>[]> parameters = functionScope.parameters();
+		int types = returnTypes.length() + parameters.length();
+		pointer<ref<Type>> t = pointer<ref<Type>>(alloc(types * Type.bytes + (*parameters).length()));
+		for (i in returnTypes)
+			t[i] = returnTypes[i];
+		pointer<ref<Type>> tPtr = t + returnTypes.length();
+		for (i in *parameters) {
+			ref<Symbol> sym = (*parameters)[i];
+			tPtr[i] = sym.type();
+		}
+		return super new FunctionType(t, returnTypes.length(), functionScope);
+	}
+	/**
+	 * This is a function type as one might encounter with a function object declaration. 
+	 */
+	public ref<FunctionType> newFunctionType(ref<Type>[] returnTypes, ref<Type>[] parameterTypes, boolean hasEllipsis) {
+		int types = returnTypes.length() + parameterTypes.length();
+		pointer<ref<Type>> t = pointer<ref<Type>>(alloc(types * Type.bytes + parameterTypes.length()));
+		for (i in returnTypes)
+			t[i] = returnTypes[i];
+		pointer<ref<Type>> tPtr = t + returnTypes.length();
+		for (i in parameterTypes)
+			tPtr[i] = parameterTypes[i];
+		return super new FunctionType(t, returnTypes.length(), parameterTypes.length(), hasEllipsis);
 	}
 }

@@ -26,12 +26,12 @@ import parasol:compiler.Call;
 import parasol:compiler.CallCategory;
 import parasol:compiler.CompileContext;
 import parasol:compiler.EllipsisArguments;
-import parasol:compiler.FunctionDeclaration;
 import parasol:compiler.FunctionType;
 import parasol:compiler.Node;
 import parasol:compiler.NodeList;
 import parasol:compiler.Operator;
 import parasol:compiler.OverloadInstance;
+import parasol:compiler.ParameterScope;
 import parasol:compiler.PUSH_OUT_PARAMETER;
 import parasol:compiler.Return;
 import parasol:compiler.Scope;
@@ -1262,12 +1262,12 @@ class X86_64AssignTemps extends X86_64AddressModes {
 	}
 	
 	void assignSingleReturn(ref<Return> retn, ref<Node> value, ref<CompileContext> compileContext) {
-		ref<FunctionDeclaration> enclosing = f().current.enclosingFunction();
-		ref<FunctionType> functionType = ref<FunctionType>(enclosing.type);
-		ref<NodeList> returnType = functionType.returnType();
+		ref<ParameterScope> enclosing = f().current.enclosingFunction();
+		ref<FunctionType> functionType = enclosing.type;
+		pointer<ref<Type>> returnTypes = functionType.returnTypes();
 		int depth = tempStackDepth();
-		if (returnType.next != null ||
-			returnType.node.type.returnsViaOutParameter(compileContext)) {
+		if (functionType.returnCount() > 1 ||
+			returnTypes[0].returnsViaOutParameter(compileContext)) {
 			if (value.op() == Operator.SEQUENCE) {
 				ref<Binary> b = ref<Binary>(value);
 				assignVoidContext(b.left(), compileContext);
@@ -1304,9 +1304,6 @@ class X86_64AssignTemps extends X86_64AddressModes {
  			assignMultiReturn(retn, b.right(), compileContext);
 			return;
 		}
-		ref<FunctionDeclaration> enclosing = f().current.enclosingFunction();
-		ref<FunctionType> functionType = ref<FunctionType>(enclosing.type);
-		ref<NodeList> returnType = functionType.returnType();
 		int depth = tempStackDepth();
 		if (requiredMask(value) != 0) 
 			assignRegisterTemp(value, requiredMask(value), compileContext); 

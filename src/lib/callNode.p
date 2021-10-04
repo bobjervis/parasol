@@ -210,11 +210,11 @@ public class Call extends ParameterBag {
 					print(0);
 					assert(false);
 				}
-				if (_overload.type() != null && _overload.type().deferAnalysis()) {
-					type = _overload.type();
+				if (_overload.type != null && _overload.type.deferAnalysis()) {
+					type = _overload.type;
 					return this;
 				}
-				functionType = ref<FunctionType>(_overload.type());
+				functionType = ref<FunctionType>(_overload.type);
 				if (voidContext) {
 					thisParameter = _target;
 					// we see INDIRECT nodes here for enum constructors.
@@ -302,14 +302,16 @@ public class Call extends ParameterBag {
 				} else {
 					boolean makeLive;
 					if (functionType != null && functionType.returnCount() > 1) {
-						temp = compileContext.newVariable(functionType.returnType());
+						pointer<ref<Type>> t = functionType.returnTypes();
+						temp = compileContext.newVariable(t, functionType.returnCount());
 						int offset;
-						for (ref<NodeList> nl = functionType.returnType(); nl != null; nl = nl.next) {
-							if (nl.node.type.hasDestructor()) {
-								ref<Reference> r = tree.newReference(temp, offset, true, nl.node.location());
+						for (int i = 0; i < functionType.returnCount(); i++) {
+							ref<Type> tp = t[i];
+							if (tp.hasDestructor()) {
+								ref<Reference> r = tree.newReference(temp, offset, true, location());
 								compileContext.markLiveSymbol(r);
 							}
-							offset += nl.node.type.stackSize();
+							offset += tp.stackSize();
 						}
 					} else if (type != null && type.returnsViaOutParameter(compileContext)) {
 						temp = compileContext.newVariable(type);
@@ -383,26 +385,32 @@ public class Call extends ParameterBag {
 					print(0);
 				}
 				functionType.assignRegisterArguments(compileContext);
-				ref<NodeList> params = functionType.parameters();
-				
+				pointer<ref<Type>> params = functionType.parameters();
+				int paramsCount = functionType.parameterCount();
+				int ellipsisArgument;
+				if (functionType.hasEllipsis())
+					ellipsisArgument = paramsCount - 1;
+				else
+					ellipsisArgument = -1;
 				ref<NodeList> registerArguments;
 				ref<NodeList> lastRegisterArgument;
 				
 				// TODO: Ensure plain stack arguments are in 'correct' order.
 				ref<NodeList> argsNext = null;
-				for (ref<NodeList> args = _arguments; params != null; args = argsNext, params = params.next) {
-					if (params.node.getProperEllipsis() != null) {
+				ref<NodeList> args = _arguments;
+				for (int i = 0; i < paramsCount; args = argsNext, params++, i++) {
+					if (i == ellipsisArgument) {
 						ref<EllipsisArguments> ea = null;			// TODO: Remove this initializer to test implied re-initialization.
 						if (args == null) {
 							ea = tree.newEllipsisArguments(null, location());
-							ea.type = params.node.type.elementType();
+							ea.type = (*params).elementType();
 							args = tree.newNodeList(ea);
-						} else if (args.next == null && args.node.type.equals(params.node.type)) {
+						} else if (args.next == null && args.node.type.equals(*params)) {
 							args.node = tree.newUnary(Operator.STACK_ARGUMENT, args.node, args.node.location());
-							args.node.type = params.node.type;
+							args.node.type = *params;
 						} else {
 							ea = tree.newEllipsisArguments(args, location());
-							ea.type = params.node.type.elementType();
+							ea.type = (*params).elementType();
 							args = tree.newNodeList(ea);
 						}
 						args.next = _stackArguments;
@@ -414,14 +422,15 @@ public class Call extends ParameterBag {
 					argsNext = args.next;
 					
 					// Thread each argument onto the appropriate list: stack or register
-					if (params.node.register == 0) {
+					byte r = functionType.parameterRegister(i);
+					if (r == 0) {
 						ref<Type> t = args.node.type;
 						args.node = tree.newUnary(Operator.STACK_ARGUMENT, args.node, args.node.location());
 						args.node.type = t;
 						args.next = _stackArguments;
 						_stackArguments = args;
 					} else {
-						args.node.register = params.node.register;
+						args.node.register = r;
 						if (lastRegisterArgument != null)
 							lastRegisterArgument.next = args;
 						else
@@ -665,7 +674,7 @@ public class Call extends ParameterBag {
 		case CONSTRUCTOR:
 			if (_overload == null)
 				return null;
-			functionType = ref<FunctionType>(_overload.type());
+			functionType = ref<FunctionType>(_overload.type);
 			break;
 
 		default:
@@ -675,12 +684,17 @@ public class Call extends ParameterBag {
 		}
 		if (functionType == null)
 			return null;
-		ref<NodeList> params = functionType.parameters();
-		for (ref<NodeList> args = _arguments; params != null; args = args.next, params = params.next) {
-			if (params.node.getProperEllipsis() != null) {
-				if (args != null && args.next == null && args.node.type.equals(params.node.type))
-					return null;
-				return args;
+		int parameterCount = functionType.parameterCount();
+		if (functionType.hasEllipsis()) {
+			ref<NodeList> args = _arguments;
+			int ellipsisArgument = parameterCount - 1;
+
+			for (int i = 0; i < parameterCount; args = args.next, i++) {
+				if (i == ellipsisArgument) {
+					if (args != null && args.next == null && args.node.type.equals(functionType.parameters()[i]))
+						return null;
+					return args;
+				}
 			}
 		}
 		return null;
@@ -840,36 +854,58 @@ public class Call extends ParameterBag {
 	}
 	
 	private boolean assignFunctionType(ref<CompileContext> compileContext) {
-		ref<Type> t;
-		if (_target.op() == Operator.VOID)
-			t = null;
-		else if (_target.type.family() == TypeFamily.TYPEDEF)
-			t = _target.unwrapTypedef(Operator.CLASS, compileContext);
-		else
-			return false;
+		ref<Type>[] returnTypes;
+
+		switch (_target.op()) {
+		case VOID:
+			break;
+
+		case SEQUENCE:
+			if (!gatherReturnTypes(true, &returnTypes, _target))
+				return false;
+			break;
+			
+		default:
+			if (!gatherReturnTypes(false, &returnTypes, _target))
+				return false;
+
+			boolean gatherReturnTypes(boolean leftSide, ref<ref<Type>[]> returnTypes, ref<Node> n) {
+				if (leftSide && n.op() == Operator.SEQUENCE) {
+					ref<Binary> b = ref<Binary>(n);
+					if (!gatherReturnTypes(true, returnTypes, b.left()))
+						return false;
+					if (!gatherReturnTypes(false, returnTypes, b.right()))
+						return false;
+				} else if (_target.type.family() == TypeFamily.TYPEDEF)
+					returnTypes.append(_target.unwrapTypedef(Operator.CLASS, compileContext));
+				else
+					return false;
+				return true;
+			}
+		}
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 			if (nl.node.op() == Operator.BIND)
 				continue;
 			if (nl.node.type.family() != TypeFamily.TYPEDEF)
 				return false;
 		}
-		// This is a good function type declaration, clean it up. 
+		ref<Type>[] parameterTypes;
+		boolean hasEllipsis;
+		// This is a 'good' function type declaration, clean it up. 
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 			if (nl.node.op() == Operator.BIND) {
 				ref<Identifier> id = ref<Identifier>(ref<Binary>(nl.node).right());
 				nl.node.add(MessageId.INVALID_BINDING, compileContext.pool(), id.identifier());
 				type = compileContext.errorType();
-			} else
+			} else {
 				nl.node.type = nl.node.unwrapTypedef(Operator.CLASS, compileContext);
-		}
-		ref<NodeList> returnType;
-		if (t != null) {
-			ref<Node> n = compileContext.current().file().tree().newLeaf(Operator.EMPTY, _target.location());
-			n.type = t;
-			returnType = compileContext.current().file().tree().newNodeList(n);
+				parameterTypes.append(nl.node.type);
+				if (nl.next == null)
+					hasEllipsis = nl.node.getProperEllipsis() != null;
+			}
 		}
 		if (type == null) {
-			type = compileContext.pool().newFunctionType(returnType, _arguments, null);
+			type = compileContext.pool().newFunctionType(returnTypes, parameterTypes, hasEllipsis);
 			type = compileContext.pool().newTypedefType(TypeFamily.TYPEDEF, type);
 		}
 		_category = CallCategory.DECLARATOR;
@@ -1014,8 +1050,9 @@ public class Call extends ParameterBag {
 				}
 				ref<FunctionType> ft = ref<FunctionType>(_target.type);
 				// Verify that this corresponds to a function overload
-				for (ref<NodeList> nl = ft.returnType(); nl != null; nl = nl.next) {
-					if (nl.node.type.family() == TypeFamily.CLASS_VARIABLE) {
+				pointer<ref<Type>> returns = ft.returnTypes();
+				for (int i = 0; i < ft.returnCount(); i++) {
+					if (returns[i].family() == TypeFamily.CLASS_VARIABLE) {
 						type = compileContext.arena().builtInType(TypeFamily.CLASS_DEFERRED);
 						return;
 					}
@@ -1056,7 +1093,7 @@ public class Call extends ParameterBag {
 				return false;
 			}
 		} else
-			_target.type = _overload.type();
+			_target.type = _overload.type;
 		return true;
 	}
 
@@ -1096,7 +1133,7 @@ public class Call extends ParameterBag {
 			type = classType;
 			if (oi != null) {
 				_overload = ref<OverloadInstance>(oi).parameterScope();
-				convertArguments(_overload.type(), compileContext);
+				convertArguments(_overload.type, compileContext);
 			}
 			_category = CallCategory.CONSTRUCTOR;
 		}
@@ -1158,33 +1195,38 @@ public class Call extends ParameterBag {
 
 	void convertArguments(ref<FunctionType> funcType, ref<CompileContext> compileContext) {
 		boolean processingEllipsis = false;
-		ref<NodeList> param = funcType.parameters();
+		pointer<ref<Type>> param = funcType.parameters();
+		int paramCount = funcType.parameterCount();
 		ref<NodeList> arguments = _arguments;
-		while (arguments != null) {
-			if (param.node.deferAnalysis())
+		int ellipsisArgument;
+		if (funcType.hasEllipsis())
+			ellipsisArgument = paramCount - 1;
+		else
+			ellipsisArgument = -1;
+		for (int i = 0; arguments != null; arguments = arguments.next) {
+			if (param[i].deferAnalysis())
 				return;
-			ref<Type> t = param.node.type;
-			ref<Unary> ellipsis = param.node.getProperEllipsis();
-			if (ellipsis != null) {
+			ref<Type> t = param[i];
+			if (i == ellipsisArgument) {
 				// in this case t is a vector type
 				// Check for the special case that the argument has type t
-				if (!processingEllipsis && 
-					arguments.node.type.equals(t))
+				if (arguments.node.type.equals(t))
 					return;
+				// If there are more arguments, then this parameter must be an ellipsis parameter
 				// okay, we need to actually check the element type
 				t = t.elementType();
+				do {
+					arguments.node = arguments.node.coerce(compileContext.tree(), t, false, compileContext);
+					arguments = arguments.next;
+				} while (arguments != null);
+				return;
 			}
 			if (compileContext.verbose()) {
 				printf("Coerce to %s\n", t.signature());
 				arguments.node.print(4);
 			}
 			arguments.node = arguments.node.coerce(compileContext.tree(), t, false, compileContext);
-			if (ellipsis != null)
-				// If there are more arguments, then this parameter must be an ellipsis parameter
-				processingEllipsis = true;
-			else
-				param = param.next;
-			arguments = arguments.next;
+			i++;
 		}
 	}
 
@@ -1411,8 +1453,9 @@ public class Call extends ParameterBag {
 		return _target;
 	}
  
-	public ref<NodeList> getParameterList() {
-		return ref<FunctionType>(_target.type).parameters();
+	public pointer<ref<Type>>, int getParameterList() {
+		ref<FunctionType> ft = ref<FunctionType>(_target.type);
+		return ft.parameters(), ft.parameterCount();
 	}
 
 	public ref<NodeList> stackArguments() {
@@ -1660,26 +1703,29 @@ public class FunctionDeclaration extends ParameterBag {
 	public void assignTypes(ref<CompileContext> compileContext) {
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
 			compileContext.assignTypes(nl.node);
-		ref<NodeList> retType = _returnType;
-		if (retType != null) {
-			if (retType.next == null &&
-				retType.node.op() == Operator.VOID)
-				retType = null;
-			else {
-				for (ref<NodeList> nl = retType; nl != null; nl = nl.next)
+		ref<Type>[] retType;
+		if (_returnType != null) {
+			if (_returnType.next != null ||
+				_returnType.node.op() != Operator.VOID) {
+				for (ref<NodeList> nl = _returnType; nl != null; nl = nl.next)
 					compileContext.assignTypes(nl.node);
-				for (ref<NodeList> nl = retType; nl != null; nl = nl.next) {
+				for (ref<NodeList> nl = _returnType; nl != null; nl = nl.next) {
 					if (nl.node.deferAnalysis()) {
 						type = nl.node.type;
+						retType.append(nl.node.type);
 						continue;
 					}
-					if (!nl.node.type.canCopy(compileContext)) {
+					if (nl.node.type.canCopy(compileContext))
+						retType.append(nl.node.type);
+					else {
 						nl.node.add(MessageId.CANNOT_COPY_RETURN, compileContext.pool(), nl.node.type.signature());
 						type = nl.node.type = compileContext.errorType();
 					}
 				}
 			}
 		}
+		ref<Type>[] params;
+		boolean hasEllipsis;
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 			if (nl.node.deferAnalysis()) {
 				type = nl.node.type;
@@ -1687,24 +1733,31 @@ public class FunctionDeclaration extends ParameterBag {
 			}
 			if (nl.node.type != null && nl.node.type.family() == TypeFamily.TYPEDEF) {
 				ref<Type> t = nl.node.type.wrappedType();
-				if (t.family() == TypeFamily.VOID) {
-					nl.node.add(MessageId.INVALID_VOID, compileContext.pool());
-					type = nl.node.type = compileContext.errorType();
-				} else if (!t.canCopy(compileContext)) {
+				if (!t.canCopy(compileContext)) {
 					nl.node.add(MessageId.CANNOT_COPY_ARGUMENT, compileContext.pool(), t.signature());
 					type = nl.node.type = compileContext.errorType();
 				}
 			}
+			params.append(nl.node.type);
+			if (nl.next == null)
+				hasEllipsis = nl.node.getProperEllipsis() != null;
 		}
-		if (deferAnalysis())
-			return;
-		type = compileContext.pool().newFunctionType(retType, _arguments, definesScope() ? compileContext.current() : null);
+		ref<ParameterScope> scope;
+		if (definesScope()) {
+			scope = ref<ParameterScope>(compileContext.current());
+			ref<ref<Symbol>[]> parameters = scope.parameters();
+			for (i in *parameters) {
+				(*parameters)[i].assignType(compileContext);
+			}
+			type = compileContext.pool().newFunctionType(retType, scope);
+		} else
+			type = compileContext.pool().newFunctionType(retType, params, hasEllipsis);
 		if (_name != null && _name.symbol() != null) {
 			_name.type = type;
 		}
 		if (body == null)
 			return;
-		if (retType == null)
+		if (retType.length() == 0)
 			return;
 		Test t = body.fallsThrough();
 		if (t == Test.PASS_TEST) {
@@ -2133,7 +2186,7 @@ public class Return extends ParameterBag {
 	}
  
 	private void assignTypes(ref<CompileContext> compileContext) {
-		ref<FunctionDeclaration> func = compileContext.current().enclosingFunction();
+		ref<ParameterScope> func = compileContext.current().enclosingFunction();
 		if (func == null) {
 			add(MessageId.RETURN_DISALLOWED, compileContext.pool());
 			type = compileContext.errorType();
@@ -2148,26 +2201,25 @@ public class Return extends ParameterBag {
 					return;
 				}
 		}
-		if (func.type == null)
-			compileContext.assignTypeToNode(func);
-		if (func.deferAnalysis()) {
-			type = func.type;
-			return;
-		}
-		ref<FunctionType> functionType = ref<FunctionType>(func.type);
+		ref<FunctionType> functionType = func.type;
 		if (functionType == null) {
 			add(MessageId.NOT_A_TYPE, compileContext.pool());
 			type = compileContext.errorType();
 			return;
 		}
-		ref<NodeList> returnType = functionType.returnType();
+		type = functionType;
+		if (type.deferAnalysis())
+			return;
+
+		pointer<ref<Type>> returnTypes = functionType.returnTypes();
+		int count = functionType.returnCount();
 		type = compileContext.arena().builtInType(TypeFamily.VOID);
 		if (_arguments != null) {
-			if (returnType == null) {
+			if (count <= 0) {
 				add(MessageId.RETURN_VALUE_DISALLOWED, compileContext.pool());
 				type = compileContext.errorType();
 			} else {
-				if (_arguments.next == null && returnType.next != null) {
+				if (_arguments.next == null && count > 1) {
 					// This is a special case that can only be valid if the one argument is a call to a function returning the same set of types.
 					if (_arguments.node.op() == Operator.CALL) {
 						ref<Call> call = ref<Call>(_arguments.node);
@@ -2175,18 +2227,15 @@ public class Return extends ParameterBag {
 							ref<Type> tt = call.target().type;
 							if (tt.family() == TypeFamily.FUNCTION) {
 								ref<FunctionType> ft = ref<FunctionType>(tt);
-								
-								ref<NodeList> rtCall = ft.returnType();
-								for (ref<NodeList> rt = returnType; rt != null; rt = rt.next, rtCall = rtCall.next) {
-									if (rtCall == null || !rtCall.node.type.equals(rt.node.type)) {
-										_arguments.node.add(MessageId.CANNOT_CONVERT, compileContext.pool());
-										type = compileContext.errorType();
-										return;
+								if (ft.returnCount() == count) {
+									pointer<ref<Type>> rtCall = ft.returnTypes();
+									for (int i = 0; i < count; i++) {
+										if (!rtCall[i].equals(returnTypes[i])) {
+											_arguments.node.add(MessageId.CANNOT_CONVERT, compileContext.pool());
+											type = compileContext.errorType();
+											return;
+										}
 									}
-								}
-								if (rtCall != null) {
-									_arguments.node.add(MessageId.CANNOT_CONVERT, compileContext.pool());
-									type = compileContext.errorType();
 								}
 								_arguments.node.type = type;		// Make the called function a 'void' function for now.
 								type = ft;
@@ -2196,31 +2245,32 @@ public class Return extends ParameterBag {
 						}
 					}
 				}
-				ref<NodeList> rt = returnType;
-				for (ref<NodeList> arg = _arguments; arg != null; arg = arg.next, rt = rt.next)
-					if (rt == null) {
+				int i = 0;
+				for (ref<NodeList> arg = _arguments; arg != null; arg = arg.next, i++)
+					if (i >= count) {
 						arg.node.add(MessageId.INCORRECT_RETURN_COUNT, compileContext.pool());
 						type = compileContext.errorType();
 						break;
 					}
-				if (rt != null) {
+				if (i < count) {
 					_arguments.node.add(MessageId.INCORRECT_RETURN_COUNT, compileContext.pool());
 					type = compileContext.errorType();
 				}
-				type = returnType.node.type;
-				for (ref<NodeList> arg = _arguments; arg != null && returnType != null; arg = arg.next, returnType = returnType.next)
-					arg.node = arg.node.coerce(compileContext.tree(), returnType.node.type, false, compileContext);
+				type = returnTypes[0];
+				i = 0;
+				for (ref<NodeList> arg = _arguments; i < count && arg != null; arg = arg.next, i++) {
+					if (returnTypes[i].deferAnalysis())
+						continue;
+					arg.node = arg.node.coerce(compileContext.tree(), returnTypes[i], false, compileContext);
+				}
 				for (ref<NodeList> arg = _arguments; arg != null; arg = arg.next) {
-					if (arg.node.deferAnalysis()) {
+					if (arg.node.deferAnalysis())
 						return;
-					}
 				}
 			}
-		} else {
-			if (returnType != null) {
-				add(MessageId.RETURN_VALUE_REQUIRED, compileContext.pool());
-				type = compileContext.errorType();
-			}
+		} else if (count > 0) {
+			add(MessageId.RETURN_VALUE_REQUIRED, compileContext.pool());
+			type = compileContext.errorType();
 		}
 	}
 

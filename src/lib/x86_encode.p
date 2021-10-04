@@ -220,8 +220,10 @@ class X86_64Encoder extends Target {
 
 	boolean generateCode(ref<FileStat> mainFile, ref<CompileContext> compileContext) {
 		
-		// Initialize storage - somewhere along here needs to happen
-		// 
+		// Dtorage has been allocated in the derived class for all static objects.
+		// Now we need to generate the executable code for the static initializers,
+		// along with the call to main (if any).
+
 		_pxiHeader.entryPoint = generateFunction(mainFile.fileScope(), compileContext);
 
 		// Now generate some more functions that might have been missed during the static code generation.
@@ -494,23 +496,24 @@ class X86_64Encoder extends Target {
 		if (scope.hasThis()) {
 			regStackOffset -= address.bytes;
 		}
+
 		if (scope.hasOutParameter(compileContext)) {
 			regStackOffset -= address.bytes;
 			_f.outParameterOffset = regStackOffset;
 		}
 		scope.variableStorage = 0;
-		ref<FunctionType> fType = scope.type();
+		ref<FunctionType> fType = scope.type;
 		if (fType != null) {
 			fType.assignRegisterArguments(compileContext);
-			ref<NodeList> params = fType.parameters();
-			for (int i = 0; i < scope.parameters().length(); i++, params = params.next) {
+			pointer<ref<Type>> params = fType.parameters();
+			for (int i = 0; i < scope.parameters().length(); i++) {
 				ref<Symbol> sym = (*scope.parameters())[i];
 				
 				if (sym.deferAnalysis()) {
 					sym.offset = 0;
 					continue;
 				}
-				if (params.node.register == 0) {
+				if (fType.parameterRegister(i) == 0) {
 					// It's a stack argument
 					sym.offset = FIRST_STACK_PARAM_OFFSET + scope.variableStorage;
 					scope.variableStorage += sym.type().stackSize();
@@ -757,11 +760,10 @@ class X86_64Encoder extends Target {
 		ref<FunctionState> savedState = _f;
 
 		_f = &f;
-		if (scope.class == ParameterScope) {
+		if (scope.class <= ParameterScope) {
 			ref<ParameterScope> parameterScope = ref<ParameterScope>(scope);
 			markRegisterParameters(parameterScope, compileContext);
 		}
-		f.autoSize = scope.autoStorage(this, _f.registerSaveSize, compileContext);
 		generateFunctionCore(scope, compileContext);
 		int offset = packFunction();
 		_f = savedState;
@@ -798,6 +800,11 @@ class X86_64Encoder extends Target {
 	}
 
 	public abstract void generateFunctionCore(ref<Scope> scope, ref<CompileContext> compileContext);
+
+	void reserveAutoStorage(ref<Scope> scope, ref<CompileContext> compileContext) {
+		_f.autoSize = scope.autoStorage(this, _f.registerSaveSize, compileContext);
+	}
+
 	/**
 	 * Code generation proceeds by maintaining a stack of in-progress functions. The _f member of
 	 * the X86Encoder points to the top of the stack. Each FUnctionState object is allocated on the

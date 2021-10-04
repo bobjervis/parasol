@@ -778,7 +778,7 @@ void generateScopeContents(ref<Scope> scope, ref<Writer> output, string dirName,
 
 	for (i in *constructorScopes) {
 		ref<ParameterScope> ps = (*constructorScopes)[i];
-		ref<OverloadInstance> sym = ps.symbol();
+		ref<OverloadInstance> sym = ps.symbol;
 		if (sym != null && (sym.visibility() == Operator.PUBLIC || sym.visibility() == Operator.PROTECTED))
 			constructors.append(sym);
 	}
@@ -997,39 +997,37 @@ void functionSummary(ref<Writer> output, ref<ref<OverloadInstance>[]> functions,
 				break;
 			}
 		} else {
-			nl = ft.returnType();
-			if (nl == null)
+			pointer<ref<Type>> tp = ft.returnTypes();
+			if (tp == null)
 				output.write("void");
 			else {
-				while (nl != null) {
-					if (nl.node == null || nl.node.type == null)
-						output.printf("&lt;null&gt;");
-					else
-						output.printf("%s", typeString(nl.node.type, baseName));
+				for (int i = 0; i < ft.returnCount(); i++) {
+					output.printf("%s", typeString(tp[i], baseName));
 					if (nl.next != null)
 						output.write(", ");
-					nl = nl.next;
 				}
 			}
 		}
 		output.write("</td>\n<td>");
 		output.printf("<span class=code><a href=\"#%s\">%s</a>(", sym.name(), sym.name());
-		nl = ft.parameters();
+		pointer<ref<Type>> tp = ft.parameters();
 		ref<ParameterScope> scope = ft.functionScope();
 		ref<ref<Symbol>[]> parameters = scope.parameters();
 		int j = 0;
-		while (nl != null) {
-			if (nl.node.getProperEllipsis() != null)
-				output.printf("%s...", typeString(nl.node.type.elementType(), baseName));
+		int ellipsisArgument = -1;
+		if (ft.hasEllipsis())
+			ellipsisArgument = ft.parameterCount() - 1;
+		for (int i = 0; i < ft.parameterCount(); i++) {
+			if (i == ellipsisArgument)
+				output.printf("%s...", typeString(tp[i].elementType(), baseName));
 			else
-				output.printf("%s", typeString(nl.node.type, baseName));
+				output.printf("%s", typeString(tp[i], baseName));
 			if (parameters != null && parameters.length() > j)
 				output.printf(" %s", (*parameters)[j].name());
 			else
 				output.write(" ???");
-			if (nl.next != null)
+			if (i < ft.parameterCount() - 1)
 				output.write(", ");
-			nl = nl.next;
 			j++;
 		}
 		output.write(")</span>");
@@ -1076,15 +1074,15 @@ void functionDetail(ref<Writer> output, ref<ref<OverloadInstance>[]> functions, 
 		ref<NodeList> nl;
 		ref<FunctionType> ft = ref<FunctionType>(sym.type());
 		if (!asConstructors) {
-			nl = ft.returnType();
-			if (nl == null)
+			pointer<ref<Type>> tp = ft.returnTypes();
+			int rCount = ft.returnCount();
+			if (rCount == 0)
 				output.write("void");
 			else {
-				while (nl != null) {
-					output.printf("%s", typeString(nl.node.type, baseName));
-					if (nl.next != null)
+				for (int i = 0; i < rCount; i++) {
+					output.printf("%s", typeString(tp[i], baseName));
+					if (i < rCount - 1)
 						output.write(",&nbsp;");
-					nl = nl.next;
 				}
 			}
 			output.write("&nbsp;");
@@ -1092,7 +1090,7 @@ void functionDetail(ref<Writer> output, ref<ref<OverloadInstance>[]> functions, 
 		output.printf("%s(", name);
 		output.write("</td>\n<td>");
 
-		nl = ft.parameters();
+		pointer<ref<Type>> tp = ft.parameters();
 		ref<ParameterScope> scope = ft.functionScope();
 		ref<ref<Symbol>[]> parameters = scope.parameters();
 		int j = 0;
@@ -1109,29 +1107,30 @@ void functionDetail(ref<Writer> output, ref<ref<OverloadInstance>[]> functions, 
 					paramMap[pname] = value;
 			}
 		}
-		if (nl == null)
+		int pCount = ft.parameterCount();
+		if (pCount == 0)
 			output.write(")</td>\n");
-		while (nl != null) {
-			if (nl.node.getProperEllipsis() != null)
-				output.printf("%s...", typeString(nl.node.type.elementType(), baseName));
+		int ellipsisArgument = -1;
+		if (ft.hasEllipsis())
+			ellipsisArgument = pCount - 1;
+		for (int i = 0; i < pCount; i++) {
+			if (i == ellipsisArgument)
+				output.printf("%s...", typeString(tp[i].elementType(), baseName));
 			else
-				output.printf("%s", typeString(nl.node.type, baseName));
+				output.printf("%s", typeString(tp[i], baseName));
 			string pname = (*parameters)[j].name();
 			if (parameters != null && parameters.length() > j)
 				output.printf("&nbsp;%s", pname);
 			else
 				output.write("&nbsp;???");
-			if (nl.next != null)
-				output.write(",");
-			nl = nl.next;
-			if (nl != null)
-				output.write("</td>\n");
+			if (i < pCount - 1)
+				output.write(",</td>\n");
 			else
 				output.write(")</td>\n");
 			string comment = paramMap[pname];
 			if (comment != null)
 				output.printf("<td><div class=param-text>%s</div></td>\n", expandDocletString(comment, sym, baseName));
-			if (nl != null)
+			if (i < pCount - 1)
 				output.write("</tr>\n<tr>\n<td></td><td>");
 			j++;
 		}
@@ -1141,18 +1140,18 @@ void functionDetail(ref<Writer> output, ref<ref<OverloadInstance>[]> functions, 
 			if (doclet.deprecated != null)
 				output.printf("<div class=deprecated-outline><div class=deprecated-caption>Deprecated</div><div class=deprecated>%s</div></div>\n", expandDocletString(doclet.deprecated, sym, baseName));
 			output.printf("\n<div class=func-text>%s</div>", expandDocletString(doclet.text, sym, baseName));
-			nl = ft.returnType();
-			if (doclet.returns.length() > 0 && nl != null) {
+			tp = ft.returnTypes();
+			int rCount = ft.returnCount();
+			if (doclet.returns.length() > 0 && rCount > 0) {
 				output.write("\n<div class=func-return-caption>Returns:</div>");
 				if (doclet.returns.length() == 1) {
 					output.printf("\n<div class=func-return>%s</div>", expandDocletString(doclet.returns[0], sym, baseName));
 				} else {
 					output.printf("\n<ol class=func-return>\n");
 					for (i in doclet.returns) {
-						if (nl == null)
+						if (i >= rCount)
 							break;
-						string ts = typeString(nl.node.type, baseName);
-						nl = nl.next;
+						string ts = typeString(tp[i], baseName);
 						output.printf("<li class=func-return>(<span class=code>%s</span>) %s</li>\n", ts, expandDocletString(doclet.returns[i], sym, baseName));
 					}
 					output.printf("</ol>\n");
@@ -1530,32 +1529,31 @@ string typeString(ref<Type> type, string baseName) {
 		ref<FunctionType> ft = ref<FunctionType>(type);
 		string f;
 
-		ref<NodeList> nl = ft.returnType();
-		if (nl == null)
+		pointer<ref<Type>> tp = ft.returnTypes();
+		int rCount = ft.returnCount();
+		if (rCount == 0)
 			f.append("void");
 		else {
-			f.append(typeString(nl.node.type, baseName));
-			nl = nl.next;
-			while (nl != null) {
-				f.append(", ");
-				f.append(typeString(nl.node.type, baseName));
-				nl = nl.next;
+			for (int i = 0; i < rCount; i++) {
+				f.append(typeString(tp[i], baseName));
+				if (i < rCount - 1)
+					f.append(", ");
 			}
 		}
 		f.append(" (");
-		nl = ft.parameters();
-		if (nl != null) {
-			f.append(typeString(nl.node.type, baseName));
-			nl = nl.next;
-			while (nl != null) {
+		tp = ft.parameters();
+		int pCount = ft.parameterCount();
+		int ellipsisArgument = -1;
+		if (ft.hasEllipsis())
+			ellipsisArgument = pCount - 1;
+		for (int i = 0; i < pCount; i++) {
+			if (i == ellipsisArgument) {
+				f.append(typeString(tp[i].elementType(), baseName));
+				f.append("...");
+			} else
+				f.append(typeString(tp[i], baseName));
+			if (i < pCount - 1)
 				f.append(", ");
-				if (nl.node.getProperEllipsis() != null) {
-					f.append(typeString(nl.node.type.elementType(), baseName));
-					f.append("...");
-				} else
-					f.append(typeString(nl.node.type, baseName));
-				nl = nl.next;
-			}
 		}			
 		f.append(")");
 		return f;

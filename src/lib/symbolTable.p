@@ -186,7 +186,7 @@ class ClasslikeScope extends Scope {
 		} else {
 			ref<ref<ParameterScope>[]> c = constructors();
 			for (i in *c) {
-				ref<OverloadInstance> sym = (*c)[i].symbol();
+				ref<OverloadInstance> sym = (*c)[i].symbol;
 				if (sym != null)
 					sym.assignType(compileContext);
 			}
@@ -281,7 +281,7 @@ class ClasslikeScope extends Scope {
 	
 	public void createImpliedDestructor(ref<CompileContext> compileContext) {
 		ref<ParameterScope> functionScope = compileContext.arena().createParameterScope(this, null, ParameterScope.Kind.IMPLIED_DESTRUCTOR);
-		defineDestructor(functionScope, compileContext.pool());
+		defineDestructor(null, functionScope, compileContext.pool());
 	}
 	/**
 	 * TODO: This decision function is not quite complete. If there is a class hierarchy in which any sub-class has an
@@ -432,7 +432,9 @@ class ClasslikeScope extends Scope {
 							ref<InterfaceImplementationScope> iface = (*interfaces)[i];
 							if (iface.implementingClass().destructor() != classType.destructor()) {
 								iface = compileContext.arena().createInterfaceImplementationScope(iface.iface(), classType, iface, 0);
-								iface.defineDestructor(compileContext.arena().createThunkScope(iface, destructor(), true), compileContext.pool());
+								if (destructor() == null)
+									createImpliedDestructor(compileContext);
+								iface.defineDestructor(null, compileContext.arena().createThunkScope(iface, destructor(), true), compileContext.pool());
 							} else
 								iface = mergeNovelImplementationMethods(iface, compileContext);
 							iface.makeThunks(compileContext);
@@ -453,7 +455,7 @@ class ClasslikeScope extends Scope {
 								ref<InterfaceImplementationScope> impl = compileContext.arena().createInterfaceImplementationScope(iface, classType, _reservedInterfaceSlots);
 								if (destructor() == null)
 									createImpliedDestructor(compileContext);
-								impl.defineDestructor(compileContext.arena().createThunkScope(impl, destructor(), true), compileContext.pool());
+								impl.defineDestructor(null, compileContext.arena().createThunkScope(impl, destructor(), true), compileContext.pool());
 								_reservedInterfaceSlots++;
 								impl.makeThunks(compileContext);
 								_interfaces.append(impl);
@@ -479,7 +481,7 @@ class ClasslikeScope extends Scope {
 					if (_methods[k].overrides((*methods)[j])) {
 						// Bingo, we need a new interface implementation for this particular class, and we need to populate it.
 						ref<InterfaceImplementationScope> impl = compileContext.arena().createInterfaceImplementationScope(ifaceDefinition, classType, iface, j);
-						impl.defineDestructor(compileContext.arena().createThunkScope(impl, destructor(), true), compileContext.pool());
+						impl.defineDestructor(null, compileContext.arena().createThunkScope(impl, destructor(), true), compileContext.pool());
 						return impl;
 					}
 				}
@@ -581,20 +583,8 @@ class ClasslikeScope extends Scope {
 			for (i in _methods) {
 				ref<OverloadInstance> oi = _methods[i];
 				ref<FunctionType> ft = ref<FunctionType>(oi.assignType(compileContext));
-				for (ref<NodeList> nl = ft.parameters(); nl != null; nl = nl.next) {
-					if (nl.node.type == null)
-						continue;
-					if (nl.node.type.allowedInRPCs(compileContext))
-						continue;
-					nl.node.add(MessageId.TYPE_DISALLOWED_IN_RPC, compileContext.pool());
-					result = false;
-				}
-				for (ref<NodeList> nl = ft.returnType(); nl != null; nl = nl.next) {
-					if (nl.node.type == null)
-						continue;
-					if (nl.node.type.allowedInRPCs(compileContext))
-						continue;
-					nl.node.add(MessageId.TYPE_DISALLOWED_IN_RPC, compileContext.pool());
+				if (!ft.canBeRPCMethod(compileContext)) {
+					oi.definition().add(MessageId.TYPE_DISALLOWED_IN_RPC, compileContext.pool(), ft.signature());
 					result = false;
 				}
 			}
@@ -883,7 +873,10 @@ public class ParameterScope extends Scope {
 	private Kind _kind;
 	private ref<Symbol>[] _parameters;
 	private boolean _hasEllipsis;
-		
+	private FunctionDeclaration.Category _category;
+
+	public ref<OverloadInstance> symbol;
+	public ref<FunctionType> type;	
 	public address value;				// scratch area for use by code generators
 	public boolean nativeBinding;		// true if this is an nativebinding-annotated external function
 	
@@ -891,6 +884,12 @@ public class ParameterScope extends Scope {
 		super(enclosing, definition, 
 				kind == Kind.TEMPLATE ? StorageClass.TEMPLATE : StorageClass.PARAMETER, null);
 		_kind = kind;
+		if (definition != null) {
+			if (definition.op() != Operator.UNIT) {
+				ref<FunctionDeclaration> func = ref<FunctionDeclaration>(definition);
+				_category = func.functionCategory();
+			}
+		}
 	}
 
 	public ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> definition, ref<Node> declaration, ref<Node> initializer, ref<MemoryPool> memoryPool) {
@@ -914,14 +913,19 @@ public class ParameterScope extends Scope {
 	}
 
 	public int parameterCount() {
-		if (_hasEllipsis)
-			return -_parameters.length();
-		else
-			return _parameters.length();
+		return _parameters.length();
 	}
 
 	public int functionAddress() {
 		return int(value) - 1;
+	}
+
+	public FunctionDeclaration.Category functionCategory() {
+		return _category;
+	}
+
+	public ref<ParameterScope> enclosingFunction() {
+		return this;
 	}
 
 	public string label() {
@@ -946,70 +950,28 @@ public class ParameterScope extends Scope {
 	}
 	
 	public boolean hasThis() {
-		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(definition());
-		
-		if (func == null) {		// a generated default constructor has no 'definition'
-			return _kind != Kind.PROXY_CLIENT;		// but it does have 'this'
-		}
-		if (func.op() == Operator.UNIT)
-			return false;
-		if (func.name() != null && func.name().symbol() != null)
-			return func.name().symbol().storageClass() == StorageClass.MEMBER;
+		if (symbol == null)
+			return _kind != Kind.PROXY_CLIENT;
 		else
-			return false;
+			return symbol.storageClass() == StorageClass.MEMBER;
 	}
 	
 	public boolean isDestructor() {
 		if (_kind == Kind.IMPLIED_DESTRUCTOR)
 			return true;
-		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(definition());
-		
-		if (func == null)		// a generated default constructor has no 'definition'
-			return false;		// but it does have 'this'
 		else
-			return func.functionCategory() == FunctionDeclaration.Category.DESTRUCTOR;
+			return _category == FunctionDeclaration.Category.DESTRUCTOR;
 	}
 
-	public ref<FunctionType> type() {
-		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(definition());
-		if (func == null || func.type.family() != TypeFamily.FUNCTION)		// a generated default constructor has no 'definition'
-			return null;													// and no type and an error has errorType.
-		return ref<FunctionType>(func.type);
-		
-	}
-	
-	public ref<OverloadInstance> symbol() {
-		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(definition());
-		if (func == null)		// a generated default constructor has no 'definition'
-			return null;		// and no type.
-		if (func.deferAnalysis())
-			return null;
-		return ref<OverloadInstance>(func.name().symbol());
-	}
-	
 	public boolean hasOutParameter(ref<CompileContext> compileContext) {
-		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(definition());
-		if (func == null)		// a generate default constructor has no 'definition'
-			return false;		// and no out parameter.
-		if (func.deferAnalysis())
+		if (type == null)
 			return false;
-		ref<Type> fType;
-		if (func.type == null)
-			compileContext.assignTypeToNode(func);
-		if (func.type.family() == TypeFamily.TYPEDEF) {
-			assert(false);
-			ref<TypedefType> tp = ref<TypedefType>(func.type);
-			fType = tp.wrappedType();
-		} else
-			fType = func.type;
-		ref<FunctionType> functionType = ref<FunctionType>(fType);
-		ref<NodeList> returnType = functionType.returnType();
-		if (returnType == null)
+		if (type.returnCount() == 0)
 			return false;
-		if (returnType.next != null)
+		if (type.returnCount() > 1)
 			return true;
 		else
-			return returnType.node.type.returnsViaOutParameter(compileContext);
+			return type.returnValueType().returnsViaOutParameter(compileContext);
 	}
 	
 	public boolean usesVTable(ref<CompileContext> compileContext) {
@@ -1017,13 +979,14 @@ public class ParameterScope extends Scope {
 			// There is no definition, but the vtable will have a slot for virtual destructors.
 			return enclosing().hasVtable(compileContext);
 		}
-		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(definition());
-		if (func == null)		// a generated default constructor has no 'definition'
-			return false;		// and no VTable.
 		if (enclosing().isInterface())
 			return true;
+		if (definition() == null)		// a generated default constructor has no 'definition'
+			return false;				// and no VTable.
+		if (symbol == null)
+			return false;
 		enclosing().assignMethodMaps(compileContext);
-		return ref<OverloadInstance>(func.name().symbol()).overridden();
+		return symbol.overridden();
 	}
 	
 	public boolean equals(ref<ParameterScope> other, ref<CompileContext> compileContext) {
@@ -1109,11 +1072,11 @@ public class ThunkScope extends ParameterScope {
 	}
 
 	public ref<FunctionType> type() {
-		return _function.type();
+		return _function.type;
 	}
 	
 	public ref<OverloadInstance> symbol() {
-		return _function.symbol();
+		return _function.symbol;
 	}
 	
 	public boolean hasOutParameter(ref<CompileContext> compileContext) {
@@ -1125,7 +1088,7 @@ public class ThunkScope extends ParameterScope {
 	}
 
 	void printDetails() {
-		printf(" ThunkScope -> %p\n", _function);
+		printf(" ThunkScope -> %p%s\n", _function, _isDestructor ? " destructor" : "");
 	}
 }
 
@@ -1601,11 +1564,10 @@ public class Scope {
 		_constructors.append(constructor);
 	}
 
-	public boolean defineDestructor(ref<ParameterScope> destructor, ref<MemoryPool> memoryPool) {
+	public boolean defineDestructor(ref<FunctionDeclaration> functionDeclaration, ref<ParameterScope> destructor, ref<MemoryPool> memoryPool) {
 		if (_destructor != null) {
-			ref<FunctionDeclaration> func = ref<FunctionDeclaration>(_destructor.definition());
-			if (func.name().commentary() == null)
-				func.name().add(MessageId.DUPLICATE_DESTRUCTOR, memoryPool);
+			if (functionDeclaration.name().commentary() == null)
+				functionDeclaration.name().add(MessageId.DUPLICATE_DESTRUCTOR, memoryPool);
 			return false;
 		}
 		_destructor = destructor;
@@ -1866,13 +1828,11 @@ public class Scope {
 		return true;
 	}
 
-	public ref<FunctionDeclaration> enclosingFunction() {
-		for (ref<Scope>  s = this; s != null; s = s._enclosing) {
-			if (s._definition != null &&
-				s._definition.op() == Operator.FUNCTION)
-				return ref<FunctionDeclaration>(s._definition);
-		}
-		return null;
+	public ref<ParameterScope> enclosingFunction() {
+		if (_enclosing != null)
+			return _enclosing.enclosingFunction();
+		else
+			return null;
 	}
 
 	public boolean isStaticFunction() {
@@ -2016,7 +1976,7 @@ public class Scope {
 			return null;
 		return scope.classType;
 	}
-	
+
 	public ref<ClasslikeScope> enclosingClassScope() {
 		ref<Scope> scope = this;
 		while (scope != null && scope.storageClass() != StorageClass.MEMBER)
@@ -2036,8 +1996,7 @@ public class Scope {
 			// We are somehow nested directly under the classScope
 			if (scope == classScope)
 				return false;
-
-			if (scope.class == ParameterScope)
+			if (scope.class <= ParameterScope)
 				return !scope.isStaticFunction();
 			scope = scope.enclosing();
 		}

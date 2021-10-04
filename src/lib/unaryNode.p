@@ -390,7 +390,7 @@ public class Unary extends Node {
 			ref<Node> x = tree.newLeaf(Operator.EMPTY, location());
 			f.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
 			s.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
-			x.type = tes.type();
+			x.type = tes.type;
 			ref<Node> excep = _operand;
 			if (excep.type.indirectType(compileContext) == null) {
 				excep = tree.newUnary(Operator.ADDRESS, _operand, _operand.location());

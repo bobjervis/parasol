@@ -293,7 +293,6 @@ compile(expect: fail, message: TYPE_DISALLOWED_IN_RPC) { "import parasol:rpc; rp
 compile(expect: fail, message: TYPE_DISALLOWED_IN_RPC) { "import parasol:rpc; rpc.Client<A>(\"x\"); interface A { void f(B s); } class B { int x; }" }
 compile(expect: fail, message: TYPE_DISALLOWED_IN_RPC) { "import parasol:rpc; rpc.Client<A>(\"x\"); interface A { void f(B<int> s); } class B<class C> { C x; }" }
 compile(expect: fail, message: TYPE_DISALLOWED_IN_RPC) { "import parasol:rpc; rpc.Client<A>(\"x\"); interface A { void f(byte[] s); }" }
-compile(expect: fail, message: TYPE_DISALLOWED_IN_RPC) { "import parasol:rpc; rpc.Client<A>(\"x\"); interface A { void f(byte[string] s); }" }
 
 compile(){ "int(address) func; void(address) f = void(address)(func);" }
 

@@ -922,6 +922,12 @@ public class map<class V, class K> {
 		_rehashThreshold = 0;
 	}
 
+	public void copy(map<V, K> other) {
+		clear();
+		for (iterator i = other.begin(); i.hasNext(); i.next())
+			set(i.key(), i.get());
+	}
+
 	public int size() {
 		return _entriesCount - _deletedEntriesCount;
 	}

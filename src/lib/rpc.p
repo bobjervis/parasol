@@ -22,13 +22,13 @@ import parasol:http;
 import parasol:log;
 import parasol:net;
 import parasol:runtime;
-import parasol:stream;
 import parasol:text;
 import parasol:thread;
 
 private ref<log.Logger> logger = log.getLogger("parasol.rpc");
 
 public class ClientTransport {
+
 	public abstract string call(string serializedArguments);
 }
 
@@ -186,7 +186,7 @@ public class Client<class UPSTREAM, class DOWNSTREAM> extends http.Client {
  * Only internally generated code will ever reference this base class.
  */
 class ClientProxy {
-	private ref<ClientTransport> _transport;
+	protected ref<ClientTransport> _transport;
 
 	ClientProxy(ref<ClientTransport> transport) {
 		_transport = transport;
@@ -375,8 +375,8 @@ class WebSocketReader<class PROXY, class STUB> extends AbstractWebSocketReader {
 		}
 		StubParams params;
 		params.methodID = substring(&cp.message[index + 1], methodEnd - (index + 1));
-		stream.BufferReader r(&cp.message[methodEnd + 1], cp.message.length() - (methodEnd + 1));
-		params.arguments = &r;
+		pointer<byte> pb = &cp.message[methodEnd + 1];
+		params.arguments = &pb;
 		string returns = _processor.process(&params);
 		string reply;
 		reply.printf("R%s%s", substring(&cp.message[1], index), returns);
@@ -407,8 +407,8 @@ public class Service<class I> extends http.Service {
 		boolean releasedCaller;
 		StubParams params;
 		params.methodID = substring(&content[0], index);
-		stream.BufferReader r(&content[index + 1], content.length() - (index + 1));
-		params.arguments = &r;
+		pointer<byte> pb = &content[index + 1];
+		params.arguments = &pb;
 		// If the selected method returns void, go ahead and respond as if the call works.
 		if (_processor.callingVoidMethod(&params)) {
 			response.ok();
@@ -470,7 +470,7 @@ string hexify(string argument) {
  */
 class StubParams {
 	substring methodID;
-	ref<stream.Reader> arguments;
+	ref<pointer<byte>> arguments;
 }
 
 

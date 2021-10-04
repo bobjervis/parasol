@@ -71,6 +71,7 @@ import parasol:compiler.Scope;
 import parasol:compiler.Selection;
 import parasol:compiler.StackArgumentAddress;
 import parasol:compiler.StorageClass;
+import parasol:compiler.StubOverload;
 import parasol:compiler.Symbol;
 import parasol:compiler.SyntaxTree;
 import parasol:compiler.Target;
@@ -139,30 +140,31 @@ public class X86_64Lnx extends X86_64 {
 		return 0;
 	}
 
-	public void assignRegisterArguments(int hiddenParams, ref<NodeList> params, ref<CompileContext> compileContext) {
+	public void assignRegisterArguments(int hiddenParams, pointer<ref<Type>> parameters, int parameterCount, 
+										pointer<byte> registerArray, ref<CompileContext> compileContext) {
 		int registerArgumentIndex = hiddenParams;
 		int floatRegisterArgumentIndex = 0;
-		for (; params != null; params = params.next) {
-			if (params.node.type.passesViaStack(compileContext))
+		for (int i = 0; i < parameterCount; i++) {
+			if (parameters[i].passesViaStack(compileContext))
 				continue;
 			
 			byte nextReg;
-			switch (params.node.type.family()) {
+			switch (parameters[i].family()) {
 			case	FLOAT_32:
 			case	FLOAT_64:
-				nextReg = registerValue(floatRegisterArgumentIndex, params.node.type.family());
+				nextReg = registerValue(floatRegisterArgumentIndex, parameters[i].family());
 				if (nextReg > 0)
 					floatRegisterArgumentIndex++;
 				break;
 				
 			default:
-				nextReg = registerValue(registerArgumentIndex, params.node.type.family());
+				nextReg = registerValue(registerArgumentIndex, parameters[i].family());
 				if (nextReg > 0)
 					registerArgumentIndex++;
 			}
 			
 			if (nextReg > 0)
-				params.node.register = nextReg;
+				registerArray[i] = nextReg;
 		}
 	}
 
@@ -233,13 +235,14 @@ public class X86_64Win extends X86_64 {
 			return 0;
 	}
 
-	public void assignRegisterArguments(int hiddenParams, ref<NodeList> params, ref<CompileContext> compileContext) {
+	public void assignRegisterArguments(int hiddenParams, pointer<ref<Type>> parameters, int parameterCount, 
+										pointer<byte> registerArray, ref<CompileContext> compileContext) {
 		int registerArgumentIndex = hiddenParams;
-		for (; params != null; params = params.next) {
-			byte nextReg = registerValue(registerArgumentIndex, params.node.type.family());
+		for (int i = 0; i < parameterCount; i++) {
+			byte nextReg = registerValue(registerArgumentIndex, parameters[i].family());
 			
-			if (nextReg > 0 && !params.node.type.passesViaStack(compileContext)) {
-				params.node.register = nextReg;
+			if (nextReg > 0 && !parameters[i].passesViaStack(compileContext)) {
+				registerArray[i] = nextReg;
 				registerArgumentIndex++;
 			}
 		}
@@ -349,7 +352,7 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 	
 	void assignStorageToScopes(int firstScope, ref<CompileContext> compileContext) {
-		for (int i = 0; i < _arena.scopes().length(); i++) {
+		for (int i = firstScope; i < _arena.scopes().length(); i++) {
 			ref<Scope> scope = (*_arena.scopes())[i];
 			switch (scope.storageClass()) {
 			case	TEMPLATE:
@@ -577,12 +580,17 @@ public class X86_64 extends X86_64AssignTemps {
 					return;
 				compileContext.assignTypes(parameterScope, node);
 				compileContext.assignControlFlow(node, parameterScope);
+				if (verbose()) {
+					printf("==== Special function %s\n", string(parameterScope.kind()));
+					node.print(0);
+				}
 			} else
 				node = func.body;
-			if (parameterScope.type() == null) {
+			if (parameterScope.type == null) {
 				// TODO add throw
 				return;
 			}
+			reserveAutoStorage(parameterScope, compileContext);
 			if (node == null) {
 				func.print(0);
 				assert(false);
@@ -608,12 +616,12 @@ public class X86_64 extends X86_64AssignTemps {
 				// All function/method body folding is done here:
 				
 				if (verbose()) {
-					printf("=====  folding %s:%s  =========\n", file.filename(), func.name() != null ? string(func.name().identifier()) : "<anonymous>");
+					printf("=====  folding %s:%s  =========\n", file.filename(), func != null && func.name() != null ? string(func.name().identifier()) : "<anonymous>");
 				}
 				node = ref<Block>(compileContext.fold(node, file));
 				allocateStackForLocalVariables(compileContext);
 				
-				if (func.functionCategory() == FunctionDeclaration.Category.CONSTRUCTOR)
+				if (parameterScope.functionCategory() == FunctionDeclaration.Category.CONSTRUCTOR)
 					generateConstructorPreamble(node, parameterScope, compileContext);
 	
 				ref<Scope> outer = compileContext.setCurrent(scope);
@@ -621,7 +629,7 @@ public class X86_64 extends X86_64AssignTemps {
 				compileContext.setCurrent(outer);
 				compileContext.resetVariables(initialVariableCount);
 				_stackLocalVariables = initialVariableCount;
-				if (func.functionCategory() == FunctionDeclaration.Category.DESTRUCTOR)
+				if (parameterScope.functionCategory() == FunctionDeclaration.Category.DESTRUCTOR)
 					generateDestructorShutdown(parameterScope, compileContext);
 			}
 			closeCodeSegment(CC.NOP, null);
@@ -638,10 +646,13 @@ public class X86_64 extends X86_64AssignTemps {
 			if (parameterScope.hasOutParameter(compileContext)) {
 				inst(X86.PUSH, TypeFamily.SIGNED_64, R(registerValue(registerArgs, TypeFamily.ADDRESS)));
 			}
-			for (ref<NodeList> params = parameterScope.type().parameters(); params != null; params = params.next) {
-				byte value = params.node.register;
+			ref<FunctionType> tp = parameterScope.type;
+			pointer<ref<Type>> params = tp.parameters();
+			int pCount = tp.parameterCount();
+			for (int i = 0; i < pCount; i++) {
+				byte value = tp.parameterRegister(i);
 				if (value > 0) {
-					if (params.node.type.isFloat()) {
+					if (params[i].isFloat()) {
 						inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, 8);
 						inst(X86.MOVSD, TypeFamily.SIGNED_64, R.RSP, 0, R(value));
 					} else
@@ -649,7 +660,7 @@ public class X86_64 extends X86_64AssignTemps {
 				}
 			}
 			reserveAutoMemory(false, compileContext);
-			if (parameterScope.enclosing().isMonitor() && func.functionCategory() != FunctionDeclaration.Category.CONSTRUCTOR &&
+			if (parameterScope.enclosing().isMonitor() && parameterScope.functionCategory() != FunctionDeclaration.Category.CONSTRUCTOR &&
 				parameterScope.hasThis()) {
 				inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), thisRegister());
 				ref<ParameterScope> takeScope = takeMethod(compileContext);
@@ -665,6 +676,7 @@ public class X86_64 extends X86_64AssignTemps {
 				generateReturn(parameterScope, compileContext);
 			resolveDeferredTrys(true, compileContext);
 		} else {
+			reserveAutoStorage(scope, compileContext);
 			inst(X86.PUSH, TypeFamily.SIGNED_64, R.RBX);
 			inst(X86.PUSH, TypeFamily.SIGNED_64, R.RSI);
 			inst(X86.PUSH, TypeFamily.SIGNED_64, R.RDI);
@@ -780,7 +792,7 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.POP, TypeFamily.SIGNED_64, R.RSI);
 			inst(X86.POP, TypeFamily.SIGNED_64, R.RBX);
 			inst(X86.LEAVE);
-			generateReturn(scope, compileContext);
+			inst(X86.RET);
 			pushExceptionHandler(null);
 			handler.start(this);
 			inst(X86.LEA, R.RSP, R.RBP, -(f().autoSize + 8 * address.bytes));
@@ -809,7 +821,7 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.POP, TypeFamily.SIGNED_64, R.RSI);
 			inst(X86.POP, TypeFamily.SIGNED_64, R.RBX);
 			inst(X86.LEAVE);
-			generateReturn(scope, compileContext);
+			inst(X86.RET);
 			closeCodeSegment(CC.NOP, null);
 			resolveDeferredTrys(false, compileContext);
 		}
@@ -823,7 +835,7 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.MOV, TypeFamily.ADDRESS, thisRegister(), firstRegisterArgument());
 			generateConstructorPreamble(null, parameterScope, compileContext);
 			inst(X86.POP, TypeFamily.SIGNED_64, thisRegister());
-			generateReturn(parameterScope, compileContext);
+			inst(X86.RET);
 			break;
 			
 		case	ENUM_INSTANCE_CONSTRUCTOR:
@@ -843,7 +855,7 @@ public class X86_64 extends X86_64AssignTemps {
 				inst(X86.POP, TypeFamily.SIGNED_64, thisRegister());
 			}
 			inst(X86.LEAVE);
-			generateReturn(parameterScope, compileContext);
+			inst(X86.RET);
 			break;
 			
 		case	ENUM_TO_STRING:
@@ -883,7 +895,7 @@ public class X86_64 extends X86_64AssignTemps {
 				stringArray = parameterScope.lookup("*", compileContext);
 			inst(X86.LEA, R.RAX, stringArray);
 			inst(X86.MOV, R.RAX, indexRegister, R.RAX);
-			generateReturn(parameterScope, compileContext);
+			inst(X86.RET);
 			break;
 			
 		case	THUNK:
@@ -925,112 +937,109 @@ public class X86_64 extends X86_64AssignTemps {
 			instCall((*proxyClass.base(compileContext).constructors())[0], compileContext);
 			inst(X86.POP, TypeFamily.ADDRESS, R.RAX);
 			inst(X86.ADD, TypeFamily.SIGNED_64, R.RAX, 8);			// convert to the interface-thunk vtable location.
-			generateReturn(parameterScope, compileContext);
+			inst(X86.RET);
 			break;
 
-		case PROXY_METHOD:
+		case PROXY_METHOD: {
 			ref<OverloadInstance> method = ref<ProxyMethodScope>(parameterScope).method;
-			if (!method.enclosing().enclosing().enclosing().enclosing().interfaceUsedInRPC(compileContext)) {
+			ref<Scope> ifaceScope = method.enclosing().enclosing().enclosing().enclosing();
+			if (!ifaceScope.interfaceUsedInRPC(compileContext)) {
 				generateReturn(parameterScope, compileContext);
 				break;
 			}
-			inst(X86.ENTER, 0);
-			inst(X86.PUSH, TypeFamily.ADDRESS, thisRegister());
-			inst(X86.MOV, TypeFamily.ADDRESS, thisRegister(), firstRegisterArgument());
+			compileContext.buildScopes();
+			ref<SyntaxTree> tree = compileContext.tree();
+			Location loc = ifaceScope.definition().location();
+			ref<Block> block = tree.newBlock(Operator.BLOCK, false, loc);
+			ref<Scope> outerBlock = compileContext.arena().createScope(parameterScope, block, StorageClass.AUTO);
+			block.scope = outerBlock;
+
 			ref<FunctionType> ft = ref<FunctionType>(method.type());
-			ref<NodeList> returns = ft.returnType();
-			boolean hasOutParameters;
-			int regIndex;
-			if (returns != null) {
-				if (returns.node.type.returnsViaOutParameter(compileContext) || returns.next != null) {
-					hasOutParameters = true;
-					regIndex++;
-					inst(X86.PUSH, TypeFamily.ADDRESS, secondRegisterArgument());
-				}
-			}
+			ft.assignRegisterArguments(compileContext);
 			ref<ref<Symbol>[]> parameters = parameterScope.parameters();
-			ref<NodeList> paramNodes = ref<FunctionType>(method.type()).parameters();
-			for (i in *parameters) {
-				ref<Symbol> param = (*parameters)[i];
-				ref<Type> t = param.type();
-				byte value = paramNodes.node.register;
-				if (value > 0) {
-					inst(X86.PUSH, TypeFamily.SIGNED_64, R(value));
-					regIndex++;
-					param.offset = -(regIndex * address.bytes + address.bytes);
-				}
-				paramNodes = paramNodes.next;
-			}
+
 			// we will need a string to hold the marshalled parameters.
-			// RSI+ maybe some stack, -> rest of parameters, plus possible out parameter pointer.
-			inst(X86.PUSH, 0);			// reserve the location for the string accumulator. the stack
-			int stringOffset = -(regIndex * address.bytes + 2 * address.bytes);
-			if (sectionType() == runtime.Target.X86_64_LNX && (stringOffset & ~0xf) == 0)
-				inst(X86.PUSH, 0);			// paragraph align the stack
+
+			ref<Variable> serializedArguments = compileContext.newVariable(compileContext.arena().builtInType(TypeFamily.STRING));
 
 			// 1. marshal the method id (method + func type sig)
-			inst(X86.LEA, firstRegisterArgument(), R.RBP, stringOffset);
-			instString(X86.LEA, secondRegisterArgument(), rpcEscape(method.rpcMethod()) + ";");
-			ref<Type> str = compileContext.arena().builtInType(TypeFamily.STRING);
-			instCall(str.copyConstructor(), compileContext);
+
+			ref<Node> methodID = tree.newConstant(Operator.STRING, rpcEscape(method.rpcMethod()) + ";", loc);
+			ref<Reference> r = tree.newReference(serializedArguments, 0, true, loc);
+			ref<Node> asg = tree.newBinary(Operator.ASSIGN, r, methodID, loc);
+			ref<Node> x = tree.newUnary(Operator.EXPRESSION, asg, loc);
+			block.statement(tree.newNodeList(x));
 
 			// 2. marshal parameters from where they landed to the marshalled parameters string.
+
 			for (i in *parameters) {
 				ref<Symbol> param = (*parameters)[i];
-				ref<Type> t = param.type();
+				ref<Node> p = tree.newIdentifier(param, loc);
+				p.type = param.type();
+				marshal(p, serializedArguments, block, tree, loc, compileContext);
+			}
 
-				inst(X86.LEA, firstRegisterArgument(), R.RBP, stringOffset);
-				inst(X86.LEA, secondRegisterArgument(), R.RBP, param.offset);
-				instCall(marshaller(t, compileContext), compileContext);
-			}
 			// 3. call base class 'call' method
-			inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), thisRegister());
-			inst(X86.MOV, TypeFamily.SIGNED_64, firstRegisterArgument(), firstRegisterArgument(), 0);
-			inst(X86.MOV, TypeFamily.SIGNED_64, secondRegisterArgument(), R.RBP, stringOffset);
-			inst(X86.MOV, TypeFamily.ADDRESS, R.RAX, firstRegisterArgument(), 0);
-			inst(X86.CALL, TypeFamily.ADDRESS, firstRegisterArgument(), 16);
-			// 4. marshal return expressions from 'call' return value to outputs.
-			if (returns != null) {
-				// RAX contains the string object.
-				inst(X86.MOV, TypeFamily.UNSIGNED_32, R.RDX, R.RAX, 0);
-				inst(X86.SAL, TypeFamily.UNSIGNED_64, R.RDX, 32);
-				inst(X86.SHR, TypeFamily.UNSIGNED_64, R.RDX, 32);
-				inst(X86.PUSH, TypeFamily.SIGNED_64, R.RDX);
-				inst(X86.ADD, TypeFamily.ADDRESS, R.RAX, 4);
-				inst(X86.PUSH, TypeFamily.SIGNED_64, R.RAX);
-				inst(X86.PUSH, 0);
-				ref<ClassType> ct = compileContext.getClassType("stream.BufferReader");
-				instLoadVtable(R.RAX, ref<ClassScope>(ct.scope()));
-				inst(X86.PUSH, TypeFamily.SIGNED_64, R.RAX);
-								// RSP now points to a constructed BufferReader
-				inst(X86.MOV, TypeFamily.ADDRESS, R.RDI, R.RSP);
-				if (hasOutParameters) {
-					printf("out-parameter proxies not yet supported.\n");
-					assert(false);				// Not yet implemented.
-					while (returns != null) {
-						returns = returns.next;
-					}
-				} else
-					instCall(unmarshaller(returns.node.type, compileContext), compileContext);	// this function's return register is where we want the return value to be.
+
+			r = tree.newReference(serializedArguments, 0, false, loc);
+			ref<Node> me = tree.newLeaf(Operator.THIS, loc);
+			ref<Node> transport = tree.newSelection(me, "_transport", loc);
+			ref<Node> callMethod = tree.newSelection(transport, "call", loc);
+			ref<Node> call = tree.newCall(Operator.CALL, callMethod, tree.newNodeList(r), loc);
+			int rCount = ft.returnCount();
+			if (rCount == 0) {
+				x = tree.newUnary(Operator.EXPRESSION, call, loc);
+				block.statement(tree.newNodeList(x));
+			} else {
+				ref<Variable> serializedReturns = compileContext.newVariable(compileContext.arena().builtInType(TypeFamily.STRING));
+				r = tree.newReference(serializedReturns, 0, true, loc);
+				asg = tree.newBinary(Operator.ASSIGN, r, call, loc);
+				x = tree.newUnary(Operator.EXPRESSION, asg, loc);
+				block.statement(tree.newNodeList(x));
+				ref<Type> t = compileContext.arena().createPointer(compileContext.arena().builtInType(TypeFamily.UNSIGNED_8), compileContext);
+				ref<Variable> marshalledData = compileContext.newVariable(t);
+				ref<Node> mdr = tree.newReference(marshalledData, 0, true, loc);
+				r = tree.newReference(serializedReturns, 0, false, loc);
+				ref<Node> zero = tree.newInternalLiteral(0, loc);
+				ref<Node> n = tree.newBinary(Operator.SUBSCRIPT, r, zero, loc);
+				n = tree.newUnary(Operator.ADDRESS, n, loc);
+				asg = tree.newBinary(Operator.ASSIGN, mdr, n, loc);
+				x = tree.newUnary(Operator.EXPRESSION, asg, loc);
+				block.statement(tree.newNodeList(x));
+
+				// 4. unmarshal return expressions from 'call' return value to outputs.
+
+				ref<Node>[] returnExprs;
+
+				pointer<ref<Type>> returns = ft.returnTypes();
+				for (int i = 0; i < rCount; i++) {
+					ref<Variable> v = compileContext.newVariable(returns[i]);
+					returnExprs.append(tree.newReference(v, 0, false, loc));
+					ref<Reference> sr = tree.newReference(marshalledData, 0, false, loc);
+					ref<Node> adrSR = tree.newUnary(Operator.ADDRESS, sr, loc);
+					unmarshal(v, adrSR, block, tree, loc, compileContext);
+				}
+
+				// 5. return. 
+
+				x = tree.newReturn(tree.newNodeList(returnExprs), loc);
+				block.statement(tree.newNodeList(x));
 			}
-			// 5. return. 
-			inst(X86.LEA, R.RSP, R.RBP, -8);		// off the register vars.
-			inst(X86.POP, TypeFamily.ADDRESS, thisRegister());
-			inst(X86.LEAVE);
-			generateReturn(parameterScope, compileContext);
-			break;
+			compileContext.exemptScopes();
+			return block;
+			}
 
 		case STUB_FUNCTION: {
 			compileContext.buildScopes();
-			ref<FunctionDeclaration> fd = ref<FunctionDeclaration>(parameterScope.definition());
-			ref<InterfaceType> interfaceType = ref<InterfaceType>(fd.arguments().node.type);
+			ref<StubOverload> stub = ref<StubOverload>(parameterScope.symbol);
+			ref<InterfaceType> interfaceType = stub.interfaceType();
 			if (!interfaceType.scope().interfaceUsedInRPC(compileContext)) {
 				generateReturn(parameterScope, compileContext);
 				break;
 			}
-			Location loc = parameterScope.definition().location();
+			Location loc = interfaceType.definition().location();
 			ref<SyntaxTree> tree = compileContext.tree();
-			ref<FunctionType>(fd.type).assignRegisterArguments(compileContext);
+			ref<FunctionType>(stub.type()).assignRegisterArguments(compileContext);
 /*
 				interface I
 
@@ -1074,18 +1083,10 @@ public class X86_64 extends X86_64AssignTemps {
 					ref<Node> thisCase = tree.newBinary(Operator.CASE, thisMethodID, tree.newLeaf(Operator.EMPTY, loc), loc);
 					switchBody.statement(tree.newNodeList(thisCase));
 /*
-					ref<Node> params = tree.newIdentifier("params", loc);
-					ref<Node> methodIDx = tree.newSelection(params, "methodID", loc);
-					ref<Node> clearer = tree.newSelection(methodIDx, "clear", loc);
-					ref<Node> marker = tree.newCall(Operator.CALL, clearer, null, loc);
-					switchBody.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, marker, loc)));
-*/
-/*
 	   					for each method parameter:
  */
 					ref<ParameterScope> psIface = oi.parameterScope();
 					ref<ref<Symbol>[]> syms = psIface.parameters();
-					ref<Variable>[] args;
 					ref<Node>[] argRefs;
 					for (i in *syms) {
 						ref<Symbol> sym = (*syms)[i];
@@ -1096,25 +1097,9 @@ public class X86_64 extends X86_64AssignTemps {
  */
 						ref<Node> n = tree.newIdentifier("params", loc);
 						n = tree.newSelection(n, "arguments", loc);
-						ref<Variable> v = compileContext.newVariable(sym.type());
-						switch (sym.type().family()) {
-						case SHAPE:
-							ref<Type> elementType = sym.type().elementType();
-							ref<Type> indexType = sym.type().indexType();
-							printf("Unmarshalling shape %s by %s\n", elementType.signature(), indexType.signature());
-							break;
-
-						default:
-							ref<ParameterScope> unm = unmarshaller(sym.type(), compileContext);
-							ref<Node> method = tree.newIdentifier(ref<FunctionDeclaration>(unm.definition()).name().symbol(), loc);
-							method.type = unm.type();
-							ref<Node> call = tree.newCall(unm, CallCategory.FUNCTION_CALL, method, tree.newNodeList(n), loc, compileContext);
-							args.append(v);
-							r = tree.newReference(v, 0, true, loc);
-							n = tree.newBinary(Operator.ASSIGN, r, call, loc);
-							n = tree.newUnary(Operator.EXPRESSION, n, loc);
-							switchBody.statement(tree.newNodeList(n));
-						}
+						ref<Type> t = sym.type();
+						ref<Variable> v = compileContext.newVariable(t);
+						unmarshal(v, n, switchBody, tree, loc, compileContext);
 						ref<Reference> r = tree.newReference(v, 0, false, loc);
 						argRefs.append(r);
 					}
@@ -1126,13 +1111,13 @@ public class X86_64 extends X86_64AssignTemps {
 					o.type = interfaceType;
 					ref<Node> sel = tree.newSelection(o, oi, true, loc);
 					ref<Node> methodCall = tree.newCall(psIface, CallCategory.METHOD_CALL, sel, methodArgs, loc, compileContext);
-					ref<FunctionType> ft = psIface.type();
-					ref<NodeList> returnType = ft.returnType();
+					ref<FunctionType> ft = psIface.type;
+					pointer<ref<Type>> returnTypes = ft.returnTypes();
+					int rCount = ft.returnCount();
 					ref<Node> returns;
 					ref<Variable>[] returnVars;
-					ref<Reference>[] returnExprs;
-					while (returnType != null) {
-						ref<Type> t = returnType.node.type;
+					for (int i = 0; i < rCount; i++) {
+						ref<Type> t = returnTypes[i];
 						ref<Variable> v = compileContext.newVariable(t);
 						returnVars.append(v);
 						ref<Reference> r = tree.newReference(v, 0, true, loc);
@@ -1141,8 +1126,6 @@ public class X86_64 extends X86_64AssignTemps {
 						else
 							returns = tree.newBinary(Operator.SEQUENCE, returns, r, loc);
 						r = tree.newReference(v, 0, false, loc);
-						returnExprs.append(r);
-						returnType = returnType.next;
 					}
 					if (returns != null)
 						methodCall = tree.newBinary(Operator.ASSIGN, returns, methodCall, loc);
@@ -1150,16 +1133,8 @@ public class X86_64 extends X86_64AssignTemps {
 /*
 							rpc.marshalT(&output, &r);
  */
-					for (i in returnExprs) {
-						ref<ParameterScope> marsh = marshaller(returnExprs[i].type, compileContext);
-						ref<Node> method = tree.newIdentifier(ref<FunctionDeclaration>(marsh.definition()).name().symbol(), loc);
-						method.type = marsh.type();
-						ref<Reference> outputRef = tree.newReference(output, 0, false, loc);
-						ref<Node> adr1 = tree.newUnary(Operator.ADDRESS, outputRef, loc);
-						ref<Node> adr2 = tree.newUnary(Operator.ADDRESS, returnExprs[i], loc);
-						ref<Node> call = tree.newCall(marsh, CallCategory.FUNCTION_CALL, method, tree.newNodeList(adr1, adr2), loc, compileContext); 
-						switchBody.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, call, loc)));
-					}
+					for (i in returnVars)
+						marshal(tree.newReference(returnVars[i], 0, false, loc), output, switchBody, tree, loc, compileContext);
 
 					ref<Node> brk = tree.newJump(Operator.BREAK, loc);
 					switchBody.statement(tree.newNodeList(brk));
@@ -1214,6 +1189,120 @@ public class X86_64 extends X86_64AssignTemps {
 			assert(false);
 		}
 		return null;
+	}
+
+	private void marshal(ref<Node> value, ref<Variable> output, ref<Block> block, ref<SyntaxTree> tree, Location loc, ref<CompileContext> compileContext) {
+		ref<Type> t = value.type;
+		switch (t.family()) {
+		case SHAPE:
+			ref<Type> elementType = t.elementType();
+			ref<Type> indexType = t.indexType();
+			if (t.isMap(compileContext)) {
+
+				// for (i in value) {
+
+				ref<Identifier> i = tree.newIdentifier("__i", loc);
+				ref<Loop> loop = tree.newLoop(loc);
+				loop.scope = compileContext.arena().createScope(block.scope, loop, StorageClass.AUTO);
+				ref<Block> body = tree.newBlock(Operator.BLOCK, false, loc);
+				loop.attachParts(i, value.clone(tree), body);
+				i.bind(loop.scope, loop, null, compileContext);
+
+				//	  marshal i
+
+				ref<Node> index = tree.newIdentifier(i.symbol(), loc);
+				index.type = indexType;
+				marshal(index, output, body, tree, loc, compileContext);
+
+				//	  marshal value[i]
+
+				i = tree.newIdentifier(i.symbol(), loc);
+				i.type = indexType;
+				ref<Node> n = tree.newBinary(Operator.SUBSCRIPT, value, i, loc);
+				n.type = elementType;
+				marshal(n, output, body, tree, loc, compileContext);
+
+				// }
+				block.statement(tree.newNodeList(loop));
+
+				// marshal end-of-list ('!')
+
+				ref<Node> append = tree.newSelection(tree.newReference(output, 0, false, loc), "append", loc);
+				ref<Node> terminator = tree.newConstant(Operator.CHARACTER, "!", loc);
+				ref<Node> call = tree.newCall(Operator.CALL, append, tree.newNodeList(terminator), loc);
+				block.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, call, loc)));
+			}
+			break;
+
+		default:
+			ref<ParameterScope> marsh = marshaller(value.type, compileContext);
+			ref<Node> method = tree.newIdentifier(ref<FunctionDeclaration>(marsh.definition()).name().symbol(), loc);
+			method.type = marsh.type;
+			ref<Reference> outputRef = tree.newReference(output, 0, false, loc);
+			ref<Node> adr1 = tree.newUnary(Operator.ADDRESS, outputRef, loc);
+			ref<Node> adr2 = tree.newUnary(Operator.ADDRESS, value, loc);
+			ref<Node> call = tree.newCall(marsh, CallCategory.FUNCTION_CALL, method, tree.newNodeList(adr1, adr2), loc, compileContext); 
+			block.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, call, loc)));
+		}
+	}
+ 
+	private void unmarshal(ref<Variable> v, ref<Node> serialized, ref<Block> block, ref<SyntaxTree> tree, Location loc, ref<CompileContext> compileContext) {
+		ref<Type> t = v.type;
+		switch (t.family()) {
+		case SHAPE:
+			ref<Type> elementType = t.elementType();
+			ref<Type> indexType = t.indexType();
+			if (t.isMap(compileContext)) {
+
+				// while (**serialized != '!') {
+
+				ref<Node> s = serialized.clone(tree);
+				ref<Node> u = tree.newUnary(Operator.INDIRECT, s, loc);
+				u = tree.newUnary(Operator.INDIRECT, u, loc);
+				ref<Node> terminator = tree.newConstant(Operator.CHARACTER, "!", loc);
+				ref<Node> cmp = tree.newBinary(Operator.NOT_EQUAL, u, terminator, loc);
+				ref<Block> body = tree.newBlock(Operator.BLOCK, false, loc);
+				ref<Node> loop = tree.newBinary(Operator.WHILE, cmp, body, loc);
+
+				//     unmarshal i
+
+				ref<Variable> i = compileContext.newVariable(indexType);
+				unmarshal(i, serialized.clone(tree), body, tree, loc, compileContext);
+
+				//     unmarshal e
+
+				ref<Variable> e = compileContext.newVariable(elementType);
+				unmarshal(e, serialized.clone(tree), body, tree, loc, compileContext);
+
+				//     v[i] = e
+
+				ref<Node> er = tree.newReference(e, 0, false, loc);
+				ref<Node> ir = tree.newReference(i, 0, false, loc);
+				ref<Node> vr = tree.newReference(v, 0, false, loc);
+				ref<Node> sub = tree.newBinary(Operator.SUBSCRIPT, vr, ir, loc);
+				ref<Node> asg = tree.newBinary(Operator.ASSIGN, sub, er, loc);
+				body.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, asg, loc)));
+				// }
+				block.statement(tree.newNodeList(loop));
+
+				// (*serialized)++;
+
+				u = tree.newUnary(Operator.INDIRECT, serialized, loc);
+				u = tree.newUnary(Operator.INCREMENT_AFTER, u, loc);
+				block.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, u, loc)));
+			}
+			break;
+
+		default:
+			ref<ParameterScope> unm = unmarshaller(t, compileContext);
+			ref<Node> method = tree.newIdentifier(ref<FunctionDeclaration>(unm.definition()).name().symbol(), loc);
+			method.type = unm.type;
+			ref<Node> call = tree.newCall(unm, CallCategory.FUNCTION_CALL, method, tree.newNodeList(serialized), loc, compileContext);
+			ref<Reference> r = tree.newReference(v, 0, true, loc);
+			ref<Node> n = tree.newBinary(Operator.ASSIGN, r, call, loc);
+			n = tree.newUnary(Operator.EXPRESSION, n, loc);
+			block.statement(tree.newNodeList(n));
+		}
 	}
 
 	private ref<ParameterScope> rpcClientCall(ref<CompileContext> compileContext) {
@@ -1372,13 +1461,13 @@ public class X86_64 extends X86_64AssignTemps {
 //		if (_stackLocalVariables < v.length())
 //			printf("-- Scope %p\n", f().current);
 		for (int i = _stackLocalVariables; i < v.length(); i++) {
-			ref<Variable> var = (*v)[i];
-			int sz = var.stackSize();
+			ref<Variable> va = (*v)[i];
+			int sz = va.stackSize();
 //			if (var.returns != null)
 //				var.print();
 //			assert(sz > 0);
 			f().autoSize += sz;
-			var.offset = -f().autoSize;
+			va.offset = -f().autoSize;
 //			printf("Var [%d] %p offset %d\n", i, var, var.offset);
 		}
 //		if (_stackLocalVariables < v.length())
@@ -1863,15 +1952,16 @@ public class X86_64 extends X86_64AssignTemps {
 						sethiUllman(nl.node, compileContext, this);
 					}
 					if (arguments.next == null) {
-						ref<FunctionDeclaration> enclosing = f().current.enclosingFunction();
-						ref<FunctionType> functionType = ref<FunctionType>(enclosing.type);
-						ref<NodeList> returnType = functionType.returnType();
-						if (returnType.next != null && containsNestedMultiReturn(arguments.node))
+						ref<ParameterScope> enclosing = f().current.enclosingFunction();
+						ref<FunctionType> functionType = enclosing.type;
+						pointer<ref<Type>> returnTypes = functionType.returnTypes();
+						int rCount = functionType.returnCount();
+						if (rCount > 1 && containsNestedMultiReturn(arguments.node))
 							generateNestedMultiReturn(functionType, arguments.node, compileContext);
 						else {
 							assignSingleReturn(retn, arguments.node, compileContext);
-							if (returnType.next != null || 
-								returnType.node.type.returnsViaOutParameter(compileContext))
+							if (rCount > 1 || 
+								returnTypes[0].returnsViaOutParameter(compileContext))
 								generateOutParameter(arguments.node, 0, compileContext);
 							else
 								generate(arguments.node, compileContext);
@@ -3622,7 +3712,7 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			f().r.generateSpills(b, this);
 			instCall(oi.parameterScope(), compileContext);
-			ref<Type> t = oi.parameterScope().type().returnType().node.type;
+			ref<Type> t = oi.parameterScope().type.returnValueType();
 			switch (t.family()) {
 			case	BOOLEAN:
 				inst(X86.XOR, TypeFamily.BOOLEAN, R.RAX, 1);
@@ -4006,7 +4096,7 @@ public class X86_64 extends X86_64AssignTemps {
 		case	METHOD_CALL:
 			if (isVirtualCall(call, compileContext)) {
 				inst(X86.MOV, R.RAX, firstRegisterArgument(), 0);
-				inst(X86.CALL, TypeFamily.ADDRESS, R.RAX, overload.symbol().offset * address.bytes);
+				inst(X86.CALL, TypeFamily.ADDRESS, R.RAX, overload.symbol.offset * address.bytes);
 				break;
 			}
 			
@@ -4698,41 +4788,33 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 	
 	private void generateReturn(ref<Scope> scope, ref<CompileContext> compileContext) {
-		if (scope.definition() == null || scope.definition().op() != Operator.FUNCTION)			// in-line code
-			inst(X86.RET);
-		else {							// a function body
-			ref<FunctionDeclaration> func = ref<FunctionDeclaration>(scope.definition());
-			ref<FunctionType> functionType = ref<FunctionType>(func.type);
-			if (functionType == null) {
-				unfinished(func, "generateReturn functionType == null", compileContext);
-				return;
-			}
+		if (scope.class <= ParameterScope) {	// all 'normal' functions
 			ref<ParameterScope> parameterScope = ref<ParameterScope>(scope);
-			if (parameterScope.enclosing().isMonitor() && func.functionCategory() != FunctionDeclaration.Category.CONSTRUCTOR &&
-				parameterScope.hasThis()) {
-				boolean returnRegisterBusy = functionType.returnCount() == 1 && 
-						!functionType.returnValueType().returnsViaOutParameter(compileContext);
-
-				if (returnRegisterBusy)
-					pushRegister(functionType.returnValueType().family(), 
-							functionType.returnValueType().isFloat() ? R.XMM0 : R.RAX);
-				inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), thisRegister());
-				ref<ParameterScope> releaseScope = releaseMethod(compileContext);
-				if (releaseScope == null) {
-					substring name("Monitor.release");
-					func.add(MessageId.UNDEFINED, compileContext.pool(), name);
-					return;
+			ref<FunctionType> functionType = ref<FunctionType>(parameterScope.type);
+			if (functionType != null) {
+				if (parameterScope.enclosing().isMonitor() && parameterScope.functionCategory() != FunctionDeclaration.Category.CONSTRUCTOR &&
+					parameterScope.hasThis()) {
+					boolean returnRegisterBusy = functionType.returnCount() == 1 && 
+							!functionType.returnValueType().returnsViaOutParameter(compileContext);
+	
+					if (returnRegisterBusy)
+						pushRegister(functionType.returnValueType().family(), 
+								functionType.returnValueType().isFloat() ? R.XMM0 : R.RAX);
+					inst(X86.MOV, TypeFamily.ADDRESS, firstRegisterArgument(), thisRegister());
+					ref<ParameterScope> releaseScope = releaseMethod(compileContext);
+					assert(releaseScope != null);
+					instCall(releaseScope, compileContext);
+					if (returnRegisterBusy)
+						popRegister(functionType.returnValueType().family(), 
+								functionType.returnValueType().isFloat() ? R.XMM0 : R.RAX);
 				}
-				instCall(releaseScope, compileContext);
-				if (returnRegisterBusy)
-					popRegister(functionType.returnValueType().family(), 
-							functionType.returnValueType().isFloat() ? R.XMM0 : R.RAX);
+				if (parameterScope.hasThis())
+					inst(X86.MOV, thisRegister(), R.RBP, -address.bytes);
 			}
-			if (parameterScope.hasThis())
-				inst(X86.MOV, thisRegister(), R.RBP, -address.bytes);
 			inst(X86.LEAVE);
 			inst(X86.RET, parameterScope.variableStorage);
-		}
+		} else	// static initializers + in-line code
+			inst(X86.RET);
 	}
 
 	private void storeVtable(ref<Type> t, ref<CompileContext> compileContext) {

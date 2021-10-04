@@ -453,7 +453,7 @@ public class Arena {
 			return compileContext.errorType();
 	}
 
-	ref<Type> createPointer(ref<Type> target, ref<CompileContext> compileContext) {
+	public ref<Type> createPointer(ref<Type> target, ref<CompileContext> compileContext) {
 		if (_pointer != null)
 			return _pointer.createAddressInstance(target, compileContext);
 		else

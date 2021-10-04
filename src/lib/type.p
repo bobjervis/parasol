@@ -472,6 +472,7 @@ public class InterfaceType extends ClassType {
 		}
 		o = scope().defineOverload("stub", Operator.FUNCTION, compileContext);
 		if (o != null) {
+/*
 			Location loc = _definition.location();
 			ref<SyntaxTree> tree = compileContext.tree();
 			ref<Node> n = tree.newLeaf(Operator.THIS, loc);
@@ -484,8 +485,10 @@ public class InterfaceType extends ClassType {
 			ref<Identifier> name = tree.newIdentifier("stub", definition().location());
 			ref<FunctionDeclaration> fd = tree.newFunctionDeclaration(FunctionDeclaration.Category.NORMAL, n, name, parameters, 
 												definition().location());
-			ref<ParameterScope> funcScope = compileContext.createParameterScope(fd, ParameterScope.Kind.STUB_FUNCTION);
+ */
+			ref<ParameterScope> funcScope = compileContext.createParameterScope(null, ParameterScope.Kind.STUB_FUNCTION);
 			ref<StubOverload> stub = compileContext.pool().newStubOverload(this, o, funcScope);
+			funcScope.symbol = stub;
 			o.addSpecialInstance(stub, compileContext);
 		}
 	}
@@ -870,7 +873,7 @@ public class ClassType extends Type {
 	ref<Type> getCompareReturnType(ref<CompileContext> compileContext) {
 		ref<OverloadInstance> oi = compareMethod(compileContext);
 		if (oi != null)
-			return oi.parameterScope().type().returnType().node.type;
+			return oi.parameterScope().type.returnValueType();
 		else
 			return null;
 	}
@@ -1186,37 +1189,47 @@ public class FlagsInstanceType extends Type {
 }
 
 public class FunctionType extends Type {
-	private ref<NodeList> _returnType;
-	private ref<NodeList> _parameters;
+	private pointer<ref<Type>> _t;
+	private int _returnTypes;
+	private int _parameters;
+	private boolean _hasEllipsis;
 	private ref<ParameterScope> _functionScope;
 	private boolean _registerArgumentsAssigned;
 	
-	FunctionType(ref<NodeList> returnType, ref<NodeList> parameters, ref<Scope> functionScope) {
+	FunctionType(pointer<ref<Type>> t, int returnTypes, ref<Scope> functionScope) {
 		super(TypeFamily.FUNCTION);
-		_returnType = returnType;
-		_parameters = parameters;
+		_t = t;
+		_returnTypes = returnTypes;
 		_functionScope = ref<ParameterScope>(functionScope);
+		_parameters = _functionScope.parameters().length();
+		_hasEllipsis = _functionScope.hasEllipsis();
+		_functionScope.type = this;
+		int max = _returnTypes + _parameters;
+		for (int i = 0; i < max; i++)
+			assert(_t[i] != null);
+	}
+
+	FunctionType(pointer<ref<Type>> t, int returnTypes, int parameterTypes, boolean hasEllipsis) {
+		super(TypeFamily.FUNCTION);
+		_t = t;
+		_returnTypes = returnTypes;
+		_parameters = parameterTypes;
+		_hasEllipsis = hasEllipsis;
+		int max = _returnTypes + _parameters;
+		for (int i = 0; i < max; i++)
+			assert(_t[i] != null);
 	}
 
 	public int parameterCount() {
-		if (_functionScope != null) {
-			if (_functionScope.hasEllipsis())
-				return -_functionScope.parameters().length();
-			else
-				return _functionScope.parameters().length();
-		} else {
-			int count = 0;
-			for (ref<NodeList> nl = _parameters; nl != null; nl = nl.next)
-				count++;
-			return count;
-		}
+		return _parameters;
+	}
+
+	public boolean hasEllipsis() {
+		return _hasEllipsis;
 	}
 
 	public int returnCount() {
-		int i = 0;
-		for (ref<NodeList> nl = _returnType; nl != null; nl = nl.next)
-			i++;
-		return i;
+		return _returnTypes;
 	}
 	
 	public boolean widensTo(ref<Type> other, ref<CompileContext> compileContext) {
@@ -1240,14 +1253,21 @@ public class FunctionType extends Type {
 			if (_functionScope.hasOutParameter(compileContext))
 				hiddenParams++;
 		}
-		compileContext.target.assignRegisterArguments(hiddenParams, _parameters, compileContext);
+		pointer<byte> registerArray = pointer<byte>(_t + _returnTypes + _parameters);
+		compileContext.target.assignRegisterArguments(hiddenParams, _t + _returnTypes, _parameters, registerArray, compileContext);
+	}
+
+	public byte parameterRegister(int i) {
+		assert(i >= 0 && i < _parameters);
+		pointer<byte> registerArray = pointer<byte>(_t + _returnTypes + _parameters);
+		return registerArray[i];
 	}
 	
 	public int fixedArgsSize(ref<Target> target, ref<CompileContext> compileContext) {
 		int size = 0;
 
-		for (int i = 0; i < _functionScope.parameters().length(); i++) {
-			ref<Type> t = (*_functionScope.parameters())[i].type();
+		for (int i = 0; i < _parameters; i++) {
+			ref<Type> t = _t[_returnTypes + i];
 			t.assignSize(target, compileContext);
 			size += t.stackSize();
 		}
@@ -1255,12 +1275,13 @@ public class FunctionType extends Type {
 	}
 
 	public int returnSize(ref<Target> target, ref<CompileContext> compileContext) {
-		if (_returnType == null)
+		if (_returnTypes == 0)
 			return 0;
 		int returnBytes = 0;
-		for (ref<NodeList> nl = _returnType; nl != null; nl = nl.next) {
-			nl.node.type.assignSize(target, compileContext);
-			returnBytes += nl.node.type.stackSize();
+		for (int i = 0; i < _returnTypes; i++) {
+			ref<Type> t = _t[i];
+			_t[i].assignSize(target, compileContext);
+			returnBytes += _t[i].stackSize();
 		}
 		return returnBytes;
 	}
@@ -1269,77 +1290,74 @@ public class FunctionType extends Type {
 		return _functionScope;
 	}
 	
-	public ref<NodeList> parameters() {
-		return _parameters;
+	public pointer<ref<Type>> parameters() {
+		return _t + _returnTypes;
 	}
 
-	public ref<NodeList> returnType() {
-		return _returnType;
+	public pointer<ref<Type>> returnTypes() {
+		return _t;
 	}
 
 	public ref<Type> returnValueType() {	// type of this function call when used in an expression
-		if (_returnType == null)
+		if (_returnTypes == 0)
 			return null;
 		else
-			return _returnType.node.type;
+			return _t[0];
 	}
 	
+	public boolean canBeRPCMethod(ref<CompileContext> compileContext) {
+		int max = _returnTypes + _parameters;
+		for (int i = 0; i < max; i++)
+			if (!_t[i].allowedInRPCs(compileContext))
+				return false;
+		return true;
+	}
+
 	protected boolean sameAs(ref<Type> other) {
-		ref<NodeList> nlThis;
-		ref<NodeList> nlOther;
 		ref<FunctionType> otherFunction = ref<FunctionType>(other);
 
-		for (nlThis = _returnType, nlOther = otherFunction._returnType; ; nlThis = nlThis.next, nlOther = nlOther.next) {
-			if (nlThis == null) {
-				if (nlOther != null)
-					return false;
-				else
-					break;
-			} else if (nlOther == null)
+		if (_hasEllipsis != otherFunction._hasEllipsis)
+			return false;
+		if (_returnTypes != otherFunction._returnTypes)
+			return false;
+		if (_parameters != otherFunction._parameters)
+			return false;
+		int max = _returnTypes + _parameters;
+		for (int i = 0; i < max; i++)
+			if (!_t[i].equals(otherFunction._t[i]))
 				return false;
-			
-			if (!nlThis.node.type.equals(nlOther.node.type))
-				return false;
-		}
-		return sameParameters(otherFunction);
+		return true;
 	}
 
 	public boolean canOverride(ref<Type> other, ref<CompileContext> compileContext) {
-		ref<NodeList> nlThis;
-		ref<NodeList> nlOther;
 		ref<FunctionType> otherFunction = ref<FunctionType>(other);
 
-		for (nlThis = _returnType, nlOther = otherFunction._returnType; ; nlThis = nlThis.next, nlOther = nlOther.next) {
-			if (nlThis == null) {
-				if (nlOther != null)
-					return false;
-				else
-					break;
-			} else if (nlOther == null)
-				return false;
-			if (!nlThis.node.type.equals(nlOther.node.type)) {
-				// A pointer return type can point to 
-				if (nlThis.node.type.indirectType(compileContext) != null &&
-					nlOther.node.type.indirectType(compileContext) != null &&
-					nlThis.node.type.widensTo(nlOther.node.type, compileContext))
-					continue;
+		if (_hasEllipsis != otherFunction._hasEllipsis)
+			return false;
+		if (_returnTypes != otherFunction._returnTypes)
+			return false;
+		if (_parameters != otherFunction._parameters)
+			return false;
+		pointer<ref<Type>> t = _t;
+		pointer<ref<Type>> otherT = otherFunction._t;
+		int max = _returnTypes + _parameters;
+		for (int i = 0; i < max; i++) {
+			if (!t[i].equals(otherT[i])) {
+				if (i < _returnTypes) {
+					// A pointer return type can point to a narrower type than the base method
+					if (t[i].indirectType(compileContext) != null &&
+						otherT[i].indirectType(compileContext) != null &&
+						t[i].widensTo(otherT[i], compileContext))
+						continue;
+				} else {
+					// A pointer parameter type can point to a wider type than the base method
+					if (t[i].indirectType(compileContext) != null &&
+						otherT[i].indirectType(compileContext) != null &&
+						otherT[i].widensTo(t[i], compileContext))
+						continue;
+				}
 				return false;
 			}
-		}
-		return sameParameters(otherFunction);
-	}
-
-	private boolean sameParameters(ref<FunctionType> other) {
-		ref<NodeList> nlThis;
-		ref<NodeList> nlOther;
-
-		for (nlThis = _parameters, nlOther = other._parameters; ; nlThis = nlThis.next, nlOther = nlOther.next) {
-			if (nlThis == null) {
-				return nlOther == null;
-			} else if (nlOther == null)
-				return false;
-			if (!nlThis.node.type.equals(nlOther.node.type))
-				return false;
 		}
 		return true;
 	}
@@ -1354,41 +1372,43 @@ public class FunctionType extends Type {
 	}
 
 	public void print() {
-		printf("%s %d <- %d", string(family()), returnCount(), parameterCount());
+		printf("%s %d <- %d%s", string(family()), _returnTypes, _parameters);
 	}
 
 	public string signature() {
 		string sig;
 		// First, format the return type(s).
-		if (_returnType == null)
-			sig = "<void>";
-		else if (_returnType.next == null)
-			sig = _returnType.node.type.signature();
+		if (_returnTypes == 0)
+			sig = "void";
+		else if (_returnTypes == 1)
+			sig = _t[0].signature();
 		else {
 			sig = "(";
-			for (ref<NodeList> nl = _returnType; nl != null; nl = nl.next) {
-				sig.append(nl.node.type.signature());
-				if (nl.next != null)
+			for (int i = 0; i < _returnTypes; i++) {
+				sig.append(_t[i].signature());
+				if (i < _returnTypes - 1)
 					sig.append(',');
 				else
 					sig.append(')');
 			}
 		}
 		sig.append('(');
-		if (_parameters == null)
+		if (_parameters == 0)
 			sig.append(')');
 		else {
-			for (ref<NodeList> nl = _parameters; nl != null; nl = nl.next) {
-				if (nl.node == null)
-					sig.append("<node:null>");
-				else if (nl.node.type == null)
+			int max = _returnTypes + _parameters;
+			for (int i = _returnTypes; i < max; i++) {
+				if (_t[i] == null)
 					sig.append("<null>");
 				else
-					sig.append(nl.node.type.signature());
-				if (nl.next != null)
+					sig.append(_t[i].signature());
+				if (i < max - 1)
 					sig.append(',');
-				else
+				else {
+					if (_hasEllipsis)
+						sig.append("...");
 					sig.append(')');
+				}
 			}
 		}
 		return sig;
@@ -2027,8 +2047,7 @@ public class Type {
 					if (this != t.indirectType(compileContext).classType())
 						continue;
 				}
-				ref<FunctionType> f = scope.type();
-				if (f.returnCount() != 1)
+				if (scope.type.returnCount() != 1)
 					continue;
 				_compareMethod = oi;
 				// we have a compare method on T that takes a single ref<T> parameter and returns a single value, close enough.
@@ -2144,12 +2163,18 @@ public class Type {
 	}
 
 	public boolean allowedInRPCs(ref<CompileContext> compileContext) {
-		if (returnsViaOutParameter(compileContext))
-			return false;
 		switch (_family) {
 		case SHAPE:
+			if (isMap(compileContext)) {
+				if (!elementType().allowedInRPCs(compileContext))
+					return false;
+				else
+					return indexType().allowedInRPCs(compileContext);
+			}
 			break;
 		}
+		if (returnsViaOutParameter(compileContext))
+			return false;
 		return _family.allowedInRPCs();
 	}
 	/**

@@ -568,25 +568,25 @@ public class StubOverload extends OverloadInstance {
 
 	public ref<Type> assignThisType(ref<CompileContext> compileContext) {
 		if (_type == null) {
-			Location loc = _interfaceType.definition().location();
-			ref<SyntaxTree> tree = compileContext.tree();
-			ref<Node> n = tree.newLeaf(Operator.THIS, loc);
-			n.type = compileContext.arena().builtInType(TypeFamily.STRING);
-			ref<NodeList> returns = tree.newNodeList(n);
+			ref<Type>[] returns = [ compileContext.arena().builtInType(TypeFamily.STRING) ];
 			ref<ClassType> rpcStubParams = compileContext.getClassType("rpc.StubParams");
-			ref<FunctionDeclaration> fd = ref<FunctionDeclaration>(parameterScope().definition());
-			ref<NodeList> parameters = fd.arguments();
-			parameters.node.type = _interfaceType;
-			parameters.next.node.type = compileContext.arena().createRef(rpcStubParams, compileContext);
-			_type = compileContext.pool().newFunctionType(returns, parameters, parameterScope());
-			boolean saveStatic = compileContext.isStatic;
-			compileContext.isStatic = false;
-			ref<Identifier>(parameters.node).bind(parameterScope(), null, null, compileContext);
-			ref<Identifier>(parameters.next.node).bind(parameterScope(), null, null, compileContext);
-			compileContext.isStatic = saveStatic;
-			fd.type = _type;
+			ref<Type>[] parameters = [ _interfaceType, compileContext.arena().createRef(rpcStubParams, compileContext) ];
+
+			ref<ParameterScope> scope = parameterScope();
+			_type = scope.type = compileContext.pool().newFunctionType(returns, parameters, false);
+
+			ref<SyntaxTree> tree = compileContext.tree();
+			Location loc = _interfaceType.definition().location();
+			ref<Node> n = tree.newIdentifier("object", loc);
+			scope.define(Operator.PUBLIC, StorageClass.PARAMETER, null, n, parameters[0], compileContext.pool());
+			n = tree.newIdentifier("params", loc);
+			scope.define(Operator.PUBLIC, StorageClass.PARAMETER, null, n, parameters[1], compileContext.pool());
 		}
 		return _type;
+	}
+
+	public ref<InterfaceType> interfaceType() {
+		return _interfaceType;
 	}
 }
 
@@ -604,23 +604,22 @@ public class ProxyOverload extends OverloadInstance {
 			if (sym != null) {
 	//			printf(" --- assignThisType(%s) ---\n", _interfaceType.signature());
 				Location loc = _interfaceType.definition().location();
-				ref<Node> n = compileContext.tree().newLeaf(Operator.THIS, loc);
-				n.type = _interfaceType;
-				ref<NodeList> returns = compileContext.tree().newNodeList(n);
+				ref<SyntaxTree> tree = compileContext.tree();
+
+				ref<Type>[] returns = [ _interfaceType ];
+
 				ref<TemplateInstanceType> rpcClient = getRpcClient(sym, compileContext);			
 				if (rpcClient == null) {
 					_interfaceType.definition().add(MessageId.NO_RPC_CLIENT, compileContext.pool());
-					// THis can be silent. Something else has to invoke rpc.Client
+					// This can be silent. Something else has to invoke rpc.Client
 					return _type = compileContext.errorType();
 				}
 				ref<Type> clientTransport = compileContext.getClassType("rpc.ClientTransport");
 				ref<Type> clientProxy = compileContext.getClassType("rpc.ClientProxy");
-				n = compileContext.tree().newLeaf(Operator.THIS, loc);
-				n.type = compileContext.arena().createRef(clientTransport, compileContext);
-				ref<NodeList> parameters = compileContext.tree().newNodeList(n);
-				_type = compileContext.pool().newFunctionType(returns, parameters, parameterScope());
-				ref<Node> argName = compileContext.tree().newIdentifier("a", loc);
-				parameterScope().define(Operator.NAMESPACE, StorageClass.ENCLOSING, null, argName, n.type, compileContext.pool());
+				ref<Type> tp = compileContext.arena().createRef(clientTransport, compileContext);
+				ref<Node> argName = tree.newIdentifier("a", loc);
+				parameterScope().define(Operator.NAMESPACE, StorageClass.ENCLOSING, null, argName, tp, compileContext.pool());
+				_type = compileContext.pool().newFunctionType(returns, parameterScope());
 				ref<Scope> scope = compileContext.arena().createScope(parameterScope(), null, StorageClass.AUTO);
 				ref<ClassScope> classScope = compileContext.arena().createClassScope(scope, null, null);
 				classScope.classType = compileContext.pool().newClassType(clientProxy, true, classScope);
@@ -639,21 +638,23 @@ public class ProxyOverload extends OverloadInstance {
 							continue;
 						ref<Type> tp = oi.assignType(compileContext);
 						if (tp.deferAnalysis())
-							continue;		
-						ref<ProxyMethodScope> functionScope = compileContext.createProxyMethodScope();
+							continue;
+
+						// Add the parameters to the PROXY_METHOD scope:
+						ref<ref<Symbol>[]> params = oi.parameterScope().parameters();
+						ref<ProxyMethodScope> functionScope = compileContext.createProxyMethodScope(classScope);
+						assert(tp.family() == TypeFamily.FUNCTION);
+						functionScope.type = ref<FunctionType>(tp);
+						for (i in *params) {
+							ref<Symbol> param = (*params)[i];
+							if (param.class != PlainSymbol)
+								continue;
+							functionScope.define(Operator.NAMESPACE, StorageClass.PARAMETER, null, param.definition(), param.type(), compileContext.pool());
+						}
 						ref<Overload> o = classScope.defineOverload(oi.name(), Operator.FUNCTION, compileContext);
 						ref<OverloadInstance> impl = compileContext.pool().newOverloadInstance(o, false, oi.name(), tp, functionScope);
 						functionScope.method = impl;
 						o.addSpecialInstance(impl, compileContext);
-						// Add the parameters to the PROXY_METHOD scope:
-						ref<ParameterScope> psIface = oi.parameterScope();
-						ref<ref<Symbol>[]> syms = psIface.parameters();
-						for (i in *syms) {
-							ref<Symbol> sym = (*syms)[i];
-							if (sym.class != PlainSymbol)
-								continue;
-							functionScope.define(Operator.NAMESPACE, StorageClass.PARAMETER, null, sym.definition(), sym.type(), compileContext.pool());
-						}
 					}
 				}
 			} else
@@ -789,7 +790,11 @@ public class OverloadInstance extends Symbol {
 		return _parameterScope.parameterCount();
 	}
 
-	public Callable callableWith(ref<NodeList> arguments, boolean hasEllipsis, ref<CompileContext> compileContext) {
+	public boolean hasEllipsis() {
+		return _parameterScope.hasEllipsis();
+	}
+
+	public Callable callableWith(ref<NodeList> arguments, ref<CompileContext> compileContext) {
 		int parameter = 0;
 		boolean processingEllipsis = false;
 		while (arguments != null) {
@@ -811,7 +816,7 @@ public class OverloadInstance extends Symbol {
 				if (typeDeclarator.deferAnalysis())
 					return Callable.DEFER;
 			}
-			if (parameter == _parameterScope.parameters().length() - 1 && hasEllipsis) {
+			if (parameter == _parameterScope.parameters().length() - 1 && _parameterScope.hasEllipsis()) {
 				// in this case t is a vector type
 				// Check for the special case that the argument has type t
 				if (!processingEllipsis && 
@@ -1213,7 +1218,7 @@ public class Symbol {
 	 *	a parameter using vectorization is treated for matching purposes as less
 	 *	good a fit than any binding that involves only conversion of arguments.
 	 */
-	public Callable callableWith(ref<NodeList> arguments, boolean hasEllipsis, ref<CompileContext> compileContext) {
+	public Callable callableWith(ref<NodeList> arguments, ref<CompileContext> compileContext) {
 		assert(false);
 		return Callable.NO;
 	}

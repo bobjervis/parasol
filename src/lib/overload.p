@@ -122,18 +122,15 @@ class OverloadOperation {
 			_node.add(MessageId.NOT_PARAMETERIZED_TYPE, _compileContext.pool(), _name);
 			return _compileContext.errorType();
 		}
-		boolean hasEllipsis;
-		if (count < 0) {
-			if (_argCount < -count - 1) 
+		if (oi.hasEllipsis()) {
+			if (_argCount < count - 1) 
 				return null;
-			hasEllipsis = true;
 		} else {
 			if (_argCount != count)
 				return null;
-			hasEllipsis = false;
 		}
 		// Does this overload apply to the argument list at all?
-		Callable c = oi.callableWith(_arguments, hasEllipsis, _compileContext);
+		Callable c = oi.callableWith(_arguments, _compileContext);
 		if (c == Callable.DEFER)
 			return _compileContext.arena().builtInType(TypeFamily.CLASS_DEFERRED);
 

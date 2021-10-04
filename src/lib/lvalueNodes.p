@@ -391,10 +391,11 @@ public class Identifier extends Node {
 			add(MessageId.OVERLOAD_DISALLOWED, compileContext.pool(), _value);
 	}
 
-	void bindConstructor(Operator visibility, ref<Scope> enclosing, ref<ParameterScope> funcScope, ref<CompileContext> compileContext) {
+	ref<OverloadInstance> bindConstructor(Operator visibility, ref<Scope> enclosing, ref<ParameterScope> funcScope, ref<CompileContext> compileContext) {
 		_definition = true;
 		_symbol = compileContext.pool().newOverloadInstance(null, visibility, false, false, enclosing, compileContext.annotations, _value, funcScope.definition(), funcScope);
 		_symbol._doclet = enclosing.file().tree().getDoclet(this);
+		return ref<OverloadInstance>(_symbol);
 	}
 
 	void bindDestructor(Operator visibility, ref<Scope> enclosing, ref<ParameterScope> funcScope, ref<CompileContext> compileContext) {

@@ -2116,7 +2116,7 @@ public class Binary extends Node {
 				} else {
 					ref<Call> call = ref<Call>(_right);
 					ref<FunctionType> funcType = ref<FunctionType>(call.target().type);
-					_left.assignMultiReturn(funcType.returnType(), compileContext);
+					_left.assignMultiReturn(true, funcType.returnTypes(), funcType.returnCount(), compileContext);
 					if (_left.deferAnalysis())
 						type = _left.type;
 					else

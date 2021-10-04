@@ -3701,37 +3701,29 @@ public class Node {
 		return this;
 	}
 
-	public ref<NodeList> assignMultiReturn(ref<NodeList> returnType, ref<CompileContext> compileContext) {
-		if (_op == Operator.SEQUENCE) {
+	public int assignMultiReturn(boolean leftSide, pointer<ref<Type>> returnTypes, int count, ref<CompileContext> compileContext) {
+		if (leftSide && _op == Operator.SEQUENCE) {
 			ref<Binary> b = ref<Binary>(this);
-			ref<NodeList> nl = b.left().assignMultiReturn(returnType, compileContext);
-			if (b.left().deferAnalysis()) {
-				type = b.left().type;
-				return null;
-			}
-			if (nl == null) {
-				add(MessageId.TOO_MANY_RETURN_ASSIGNMENTS, compileContext.pool());
+			int index = b.left().assignMultiReturn(true, returnTypes, count, compileContext);
+			if (index >= count) {
+				b.right().add(MessageId.TOO_MANY_RETURN_ASSIGNMENTS, compileContext.pool());
 				type = compileContext.errorType();
-				return null;
-			}
-			b.right().assignMultiReturn(nl, compileContext);
-			if (b.right().deferAnalysis()) {
+			} else {
+				b.right().assignMultiReturn(false, returnTypes + index, 1, compileContext);
 				type = b.right().type;
-				return null;
 			}
-			return nl.next;
+			if (b.left().deferAnalysis())
+				type = b.left().type;
+			return index + 1;
 		} else {
 			if (!isLvalue()) {
 				add(MessageId.LVALUE_REQUIRED, compileContext.pool());
 				type = compileContext.errorType();
-				return null;
-			}
-			if (!returnType.node.type.equals(type)) {
+			} else if (!returnTypes[0].equals(type)) {
 				add(MessageId.CANNOT_CONVERT, compileContext.pool());
 				type = compileContext.errorType();
-				return null;
 			}
-			return returnType.next;
+			return 1;
 		}
 	}
 
