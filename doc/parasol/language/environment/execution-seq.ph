@@ -1,5 +1,5 @@
 
-<h2>{@level 2} EXECUTION SEQUENCE</h2>
+<h2>{@level 2 EXECUTION SEQUENCE}</h2>
 A Parasol program begins execution with all functions and static and constant objects in existence.
 A single process is created that begins executing the program.
 It does so by calling each entry function in turn.

@@ -118,7 +118,7 @@ public class Reader {
 	 *
 	 * @return The next byte in the input stream. On end-of-file, the method returns {@link EOF}.
 	 *
-	 * @exception {@link parasol:exception.IOException} Thrown if any error condition was encountered reading from the stream.
+	 * @exception parasol:exception.IOException Thrown if any error condition was encountered reading from the stream.
 	 */
 	public int read() {
 		return _read();

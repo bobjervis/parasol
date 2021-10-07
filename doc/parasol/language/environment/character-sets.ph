@@ -1,4 +1,4 @@
-<h2>{@level 2} CHARACTER SETS</h2>
+<h2>{@level 2 CHARACTER SETS}</h2>
 
 Two sets of characters and their associated collating sequences shall be defined:
 the set in which source files are written, and the target character set interpreted in the execution environment.
@@ -13,33 +13,32 @@ values provided that such an implementation defines the equivalencies.
 <p>
 Both the source and execution character sets shall have at least the following members: the 26 upper-case letters of the English alphabet
 <p>
-<pre>
+{@code
 	A	B	C	D	E	F	G	H	I	J	K
 	L	M	N	O	P	Q	R	S	T	U	V
 	W	X	Y	Z
-</pre>
+}
 <p>
 the 26 lower-case letters of the English alphabet
 <p>
-<pre>
+{@code
  	a	b	c	d	e	f	g	h	i	j	k
 	l	m	n	o	p	q	r	s	t	u	v
 	w	x	y	z
-</pre>
-<p>
+}
 the 10 decimal digits
 <p>
-<pre>
+{@code
  	0	1	2	3	4	5	6	7	8	9
-</pre>
+}
 <p>
 the following 30 graphic characters
 <p>
-<pre>
+{@code
  	!	"	#	$	%	&amp;	'	(	)	*	+
 	,	-	.	/	:	;	&lt;	=	&gt;	?	[
-	\	]	^	_	{	|	}	~
-</pre>
+	\	]	^	_	{	|	&rbrace;	~
+}
 <p>
 the space character, and control characters representing horizontal tab, vertical tab and form-feed.  
 <p>
@@ -52,7 +51,7 @@ In numeric constants, the decimal value of decimal digits is that specified in t
 <p>
 In addition to the above characters, the source character set shall have
 <ul>
-	<li>any characters of the Unicode character set with a General Category of Letter (L, LC, Lu, Ll, Lt, Lm, Lo);
+	<li>any characters of the Unicode character set with a General Category of Letter (L, Lc, Lu, Ll, Lt, Lm, Lo);
 	<li>any characters of the Unicode character set with a General Category of Decimal_Number (Nd);
 	<li>any characters of the Unicode character set with a General Category of White Space (Zs);
 </ul>

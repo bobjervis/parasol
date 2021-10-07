@@ -34,6 +34,7 @@ import parasol:storage.Seek;
 import parasol:storage.constructPath;
 import parasol:storage.exists;
 import parasol:storage.isDirectory;
+import parasol:storage.pathRelativeTo;
 import parasol:thread;
 import parasol:thread.Thread;
 import parasol:thread.ThreadPool;
@@ -423,6 +424,11 @@ public class Server {
 	 * @param scope The scope of the socket connection(s) to use.
 	 */
 	public boolean start(ServerScope scope) {
+		if (scope == ServerScope.INTERNET) {
+			_hostname = net.dottedIP(net.hostIPv4());
+		} else {
+			_hostname = "localhost";
+		}
 		if (_publicServiceEnabled) {
 			_publicSocket = bindSocket(scope, _httpPort, Encryption.NONE);
 			if (_publicSocket == null)
@@ -565,6 +571,10 @@ public class Server {
 //		printf("done.\n");
 		return false;
 	}
+
+	public string hostname() {
+		return _hostname;
+	}
 }
 
 private enum ServiceClass {
@@ -608,7 +618,7 @@ private void processHttpRequest(address ctx) {
 	if (!context.connection.acceptSecurityHandshake()) {
 		return;
 	}
-	Request request(context.connection);
+	Request request(context.server, context.connection);
 	HttpParser parser(context.connection);
 	Response response(context.connection);
 	if (parser.parseRequest(&request)) {
@@ -697,6 +707,7 @@ public class Request {
 	
 	private string[string] _parameters;			// These will be the parsed query parameters.
 	private ref<net.Connection> _connection;
+	private ref<Server> _server;
 	/**
 	 * The set of values returned in the method field of the Request class.
 	 */
@@ -719,7 +730,8 @@ public class Request {
 	 * This constructor is primarily useful to either test a service or spoof a request in a call to the
 	 * service's processRequest method.
 	 */
-	public Request(ref<net.Connection> connection) {
+	public Request(ref<Server> server, ref<net.Connection> connection) {
+		_server = server;
 		_connection = connection;
 	}
 	/**
@@ -843,6 +855,10 @@ public class Request {
 	public ref<net.Connection> connection() {
 		return _connection;
 	}
+
+	public string hostname() {
+		return _server.hostname();
+	}
 	/**
 	 * A debugging method to print the result of the {@link toString} method onto the process' stdout stream.
 	 */
@@ -860,6 +876,7 @@ public class Request {
 		string result;
 
 		unsigned ip = sourceIP();
+		result.printf("Server hostname  %s\n", hostname());
 		result.printf("Source family %d %s:%d\n", sourceFamily(), net.dottedIP(ip), sourcePort());
 		result.printf("Method           %s(%s)\n", string(method), methodString);
 		result.printf("Url              %s\n", url);
@@ -1106,7 +1123,7 @@ public class Response {
 	 *
 	 * <ul>
 	 *		<li>300 <b>Multiple Choices</b>: Not widely used, the response should contain
-	 *		multiple alternate representations with corresponding URI's. THere is no
+	 *		multiple alternate representations with corresponding URI's. There is no
 	 *		standard for specifying the choises. The uri argument, if supplied, expresses
 	 *		the preferred destination of the server.
 	 *		<li>301 <b>Moved Permanently</b>: The requested URI has been permanently moved to 
@@ -2314,6 +2331,8 @@ class StaticContentService extends Service {
 				f.seek(0, Seek.END);
 				long size = f.tell(); 
 				f.seek(0, Seek.START);
+				if (filename.endsWith(".html"))
+					response.header("Content-Type", "text/html; charset=utf-8");
 				response.header("Content-Length", string(size));
 				response.endOfHeaders();
 //				printf("Reading %d bytes from file %s\n", size, filename);

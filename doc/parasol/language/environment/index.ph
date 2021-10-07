@@ -1,11 +1,13 @@
 
-<h1>{@level 1} ENVIRONMENT</h1>
+<h1>{@level 1 ENVIRONMENT}</h1>
 
-{@topic definitions}
-{@topic scope.ph}
-{@topic translation-env.ph}
-{@topic translation-seq.ph}
-{@topic execution-env.ph}
-{@topic execution-seq.ph}
-{@topic character-sets.ph}
+<ul class=sec-map>
+	<li>{@topic definitions/index.ph}
+	<li>{@topic scope.ph}
+	<li>{@topic translation-env.ph}
+	<li>{@topic translation-seq.ph}
+	<li>{@topic execution-env.ph}
+	<li>{@topic execution-seq.ph}
+	<li>{@topic character-sets.ph}
+</ul>
 

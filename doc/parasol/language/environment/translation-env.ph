@@ -1,5 +1,5 @@
 
-<h2>{@level 2} TRANSLATION ENVIRONMENT</h2>
+<h2>{@level 2 TRANSLATION ENVIRONMENT}</h2>
 A Parasol program operates within a computing environment called its arena.
 It is built as a collection of units injected over time into the arena.
 A unit corresponds to one source file or string value.
