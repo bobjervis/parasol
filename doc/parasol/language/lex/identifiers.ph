@@ -19,47 +19,47 @@ An un-escaped newline character may not appear within an escaped identifier.
 
 The following identifiers are treated as keywords and may not appear as normal identifiers unless they are escaped (using grave accents):
 <ul>
-	<li>abstract
-	<li>break
-	<li>bytes
-	<li>case
-	<li>catch
-	<li>class
-	<li>continue
-	<li>default
-	<li>delete
-	<li>do
-	<li>else
-	<li>enum
-	<li>extends
-	<li>false
-	<li>final
-	<li>finally
-	<li>flags
-	<li>for
-	<li>function
-	<li>if
-	<li>implements
-	<li>import
-	<li>in
-	<li>interface
-	<li>lock
-	<li>monitor
-	<li>namespace
-	<li>new
-	<li>null
-	<li>private
-	<li>protected
-	<li>public
-	<li>return
-	<li>self
-	<li>static
-	<li>super
-	<li>switch
-	<li>this
-	<li>throw
-	<li>true
-	<li>try
-	<li>void
-	<li>while
+	<li><span class=code>abstract</span>
+	<li><span class=code>break</span>
+	<li><span class=code>bytes</span>
+	<li><span class=code>case</span>
+	<li><span class=code>catch</span>
+	<li><span class=code>class</span>
+	<li><span class=code>continue</span>
+	<li><span class=code>default</span>
+	<li><span class=code>delete</span>
+	<li><span class=code>do</span>
+	<li><span class=code>else</span>
+	<li><span class=code>enum</span>
+	<li><span class=code>extends</span>
+	<li><span class=code>false</span>
+	<li><span class=code>final</span>
+	<li><span class=code>finally</span>
+	<li><span class=code>flags</span>
+	<li><span class=code>for</span>
+	<li><span class=code>function</span>
+	<li><span class=code>if</span>
+	<li><span class=code>implements</span>
+	<li><span class=code>import</span>
+	<li><span class=code>in</span>
+	<li><span class=code>interface</span>
+	<li><span class=code>lock</span>
+	<li><span class=code>monitor</span>
+	<li><span class=code>namespace</span>
+	<li><span class=code>new</span>
+	<li><span class=code>null</span>
+	<li><span class=code>private</span>
+	<li><span class=code>protected</span>
+	<li><span class=code>public</span>
+	<li><span class=code>return</span>
+	<li><span class=code>self</span>
+	<li><span class=code>static</span>
+	<li><span class=code>super</span>
+	<li><span class=code>switch</span>
+	<li><span class=code>this</span>
+	<li><span class=code>throw</span>
+	<li><span class=code>true</span>
+	<li><span class=code>try</span>
+	<li><span class=code>void</span>
+	<li><span class=code>while</span>
 </ul>

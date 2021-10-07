@@ -527,6 +527,9 @@ class Content {
 	boolean writePhFile() {
 		ref<Writer> w = storage.createTextFile(targetPath);
 
+		insertTemplate1(w, targetPath);
+//		w.printf("<title>%s</title>\n", corpusTitle);
+		w.write("</head>\n<body>\n");
 		boolean success = true;
 		for (i in spans) {
 			if (spans[i].content != null)
@@ -534,6 +537,7 @@ class Content {
 			else
 				success = false;
 		}
+		w.write("</body>\n");
 		delete w;
 		return success;
 	}

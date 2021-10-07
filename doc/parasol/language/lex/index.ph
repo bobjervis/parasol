@@ -2,6 +2,7 @@
 
 <ul>
 	<li>{@topic identifiers.ph}
+	<li>{@topic annotations.ph}
 <p>
 Parasol programs consist of a set of one or more text source files, one of which is designated as the 'main file'.
 Each source file consists of a stream of <i>tokens</i> identified by a single forward pass over the source text possibly separated by runs of white space.
@@ -19,13 +20,6 @@ The goal is to provide non-English speaking programmers with facilities that mak
 Within the constraints of the character set that it supports, a Parasol compiler must allow combinations that would be confusing to a human reader (such as mixing ASCII digits with Thai digits in the same numeric constant).
 Digits from any valid code point range can be used in Parasol decimal fractions, even though the decimal point (.), exponent (e or E) and exponent sign (+ or -) are restricted to the ASCII characters.
 <p>
-## Annotations
-
-An unescaped identifier preceded by an at-sign (@) is an annotation.
-
-For example:
-
-`@Constant`
 
 ## Special Tokens
 
