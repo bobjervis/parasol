@@ -266,7 +266,7 @@ boolean processContentDirectory(string contentDirectory, string templateDirector
 
 
 	ref<Content> targetFile = getTargetFile(null, null);
-	if (targetFile != null)	// we have an index.html, at least. Start lacing things up.
+	if (targetFile != null)	// we have an index.ph, at least. Start lacing things up.
 		thread(targetFile);
 
 	byte[] numberingStyles;
@@ -277,6 +277,8 @@ boolean processContentDirectory(string contentDirectory, string templateDirector
 	int[] levelCounts;		// each element contains the last value assigned for that level.
 	int previousLevel;		// the number of the previous level tag to be processed.
 	for (i in topicHolders) {
+//		printf("[%d] %s\n", i, topicHolders[i].path);
+
 		ref<Content> c = topicHolders[i];
 
 		for (j in c.levels) {
@@ -317,17 +319,8 @@ boolean processContentDirectory(string contentDirectory, string templateDirector
 	}
 	for (i in topicHolders) {
 		ref<Content> c = topicHolders[i];
-		for (j in c.topics) {
-			ref<MacroSpan> t = c.topics[j];
-
-			string href = t.argument(0);
-			if (href.endsWith(".ph"))
-				href = href.substr(0, href.length() - 3) + ".html";
-			if (t.target != null)
-				t.content = "<a href=\"" + href + "\">" + t.target.content + "</a>";
-			else
-				t.content = "<a href=\"" + href + "\">" + href + "</a>";
-		}
+		for (j in c.topics)
+			c.topics[j].setTopicGroup();
 	}
 
 /*
@@ -596,6 +589,8 @@ class MacroSpan extends Span {
 	private ref<Content> _enclosing;
 	private string[] _arguments;
 	ref<MacroSpan> target;				// for TOPIC verbs, this is the first LEVEL verb under that topic.
+	private byte _level;
+	private int _index;
 
 	boolean parse(ref<Content> file) {
 		_enclosing = file;
@@ -654,12 +649,20 @@ class MacroSpan extends Span {
 
 			case TOPIC:
 				string target = storage.constructPath(file.sourceDirectory(), _arguments[0]);
+				_index = file.topics.length();
 				file.topics.append(this);
 				break;
 
 			case LEVEL:
 				if (file.topLevel == null)
 					file.topLevel = this;
+				boolean success;
+				(_level, success) = byte.parse(_arguments[0]);
+				if (!success) {
+					printf("Level %s is not valid in file %s\n", _arguments[0], file.path);
+					return false;
+				}
+				_index = file.levels.length();
 				file.levels.append(this);
 				break;
 
@@ -669,7 +672,7 @@ class MacroSpan extends Span {
 
 			case ANCHOR:
 				if (anchors.contains(_arguments[0])) {
-					printf("Anchor %s in %s duplicates an anchor in %s\n", _arguments[0], file.path, anchors[_arguments[0]]);
+					printf("Anchor %s in %s duplicates an anchor in %s\n", _arguments[0], file.path, anchors[_arguments[0]].path);
 					return false;
 				}
 				anchors[_arguments[0]] = file;
@@ -685,6 +688,55 @@ class MacroSpan extends Span {
 			return false;
 		}
 		return true;
+	}
+	/**
+	 * Construct the final content string for a 'topic' macro. The target, if not null, is a level
+	 * macro that satisfies the requirements of being the first level macro in the file named in the topic macro.
+	 */
+	void setTopicGroup() {
+		if (target != null)
+			content = target.levelGroup(_enclosing);
+		else {
+			string href = _enclosing.path;
+			href = href.substr(0, href.length() - 3) + ".html";
+			content = "<a href=\"" + href + "\">" + href + "</a>";		
+		}
+	}
+
+	private string levelGroup(ref<Content> base) {
+		string href = storage.makeCompactPath(_enclosing.path, base.path);
+		if (href.endsWith(".ph"))
+			href = href.substr(0, href.length() - 3) + ".html";
+		string output = "<a href=\"" + href + "\">" + content + "</a>";
+
+		string group;
+		boolean finished;
+		int startAt = _index + 1;
+		int i;
+		while (topicHolders[i] != _enclosing)
+			i++;
+		do {
+			ref<Content> c = topicHolders[i];
+			for (int j = startAt; j < c.levels.length(); j++) {
+				ref<MacroSpan> l = c.levels[j];
+
+				if (l._level <= _level) {
+					finished = true;
+					break;
+				}
+				// ignore any levels deeper than one more than the target
+				if (l._level > _level + 1)
+					continue;
+				string tg = l.levelGroup(base);
+				if (tg != null)
+					group.append("<li>" + tg);
+			}
+			i++;
+			startAt = 0;
+		} while (!finished && i < topicHolders.length());
+		if (group.length() > 0)
+			output += "<ul>\n" + group + "</ul>\n";
+		return output;
 	}
 
 	void done() {
@@ -713,6 +765,7 @@ class MacroSpan extends Span {
 	}
 }
 
+	
 int endOfToken(substring s) {
 	for (int i = 0; i < s.length(); i++)
 		if (s[i] == ' ' ||

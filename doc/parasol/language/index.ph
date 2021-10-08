@@ -28,7 +28,6 @@ In fact, the choice of 'var' as a dynamically typed 'variant' type mimics Javasc
 While compiling to a binary image is possible with Parasol (for maximum launch speed with large applications) 
 the eventual goal is to devise techniques to allow run-time 'eval' as a feature.
 <ul>
-	<li><a href="https://github.com/bobjervis/parasol/wiki/Lexical-Conventions">Lexical Conventions</a>
 	<li><a href="https://github.com/bobjervis/parasol/wiki/Parasol-Grammar">Grammar</a>
 	<li><a href="https://github.com/bobjervis/parasol/wiki/Parasol-Semantics">Semantics</a>
 </ul>
