@@ -7,6 +7,8 @@
 	<li>{@topic numbers.ph}
 	<li>{@topic text-literals.ph}
 	<li>{@topic white-space.ph}
+</ul>
+
 <p>
 Parasol programs consist of a set of one or more text source files, one of which is designated as the 'main file'.
 Each source file consists of a stream of <i>tokens</i> identified by a single forward pass over the source text possibly separated by runs of white space.
@@ -23,5 +25,4 @@ Currently the Parasol compiler is targeting the Unicode 8.0 version of the speci
 The goal is to provide non-English speaking programmers with facilities that make their own source code more readable to them.
 Within the constraints of the character set that it supports, a Parasol compiler must allow combinations that would be confusing to a human reader (such as mixing ASCII digits with Thai digits in the same numeric constant).
 Digits from any valid code point range can be used in Parasol decimal fractions, even though the decimal point (.), exponent (e or E) and exponent sign (+ or -) are restricted to the ASCII characters.
-<p>
 

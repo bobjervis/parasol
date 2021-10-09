@@ -1,5 +1,5 @@
 
-<h2>{@level 2 TRANSLATION SEQUENCE}</h2>
+<h2>{@level 2 Ttranslation Sequence}</h2>
 Translation of a Parasol program is described below as if the entire program were built from scratch.
 A development environment may in fact maintain internal state information to limit 
 the amount of compilation that in fact does take place after changes are made to an already built project.

@@ -1,5 +1,5 @@
 
-<h2>{@level 2 TERMS, DEFINITIONS, AND SYMBOLS}</h2>
+<h2>{@level 2 Terms, Definitions and Symbols}</h2>
 For the purposes of this reference, the following definitions apply.
 Other terms are defined where they appear in italic text or on the left side of a syntax rule.
 Terms explicitly defined in this document do not refer implicitly to similar terms defined elsewhere.

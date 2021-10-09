@@ -98,6 +98,45 @@ div.descriptioncol {
 	padding-bottom: 2mm;
 }
 
+table.grammar {
+	border-width: 1px;
+	border-style: solid;
+	border-color: #E6E6E6;
+	border-collapse: collapse;
+	margin-left: 4mm;
+	margin-right: 4mm;
+	margin-bottom: 4mm;
+	background-color: #D7FFFF;
+}
+
+table.grammar thead {
+	color: #C0C0C0;
+	background-color: #C0FFFF;
+	margin-bottom: 2mm;
+}
+
+table.grammer tr {
+	font-family: "Courier New", monospace;
+}
+
+table.grammar thead td.lhs {
+	width: 2cm;
+}
+
+table.grammar i {
+	font-style: italic;
+	font-family: "Times New Roman", serif;
+}
+
+table.grammar b {
+	font-family: "Courier New", monospace;
+}
+
+tr.production td {
+	padding-top: 2mm;
+}
+
+
 table.template-params {
 	border-spacing: 0px;
 	font: bold 16pt Arial;

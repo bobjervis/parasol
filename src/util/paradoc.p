@@ -553,6 +553,9 @@ enum Verb {
 	DOC_LINK(2),
 	ANCHOR(1),
 	CODE(0),
+	GRAMMAR(0),
+	PRODUCTION(2),
+	END_GRAMMAR(0),
 	PROCESSED(0)		// The verb of any completely processed macro is changed to this one, which simply does no further work.
 	;
 	private int _arguments;
@@ -576,6 +579,9 @@ verbs["link"] = Verb.LINK;
 verbs["doc-link"] = Verb.DOC_LINK;
 verbs["anchor"] = Verb.ANCHOR;
 verbs["code"] = Verb.CODE;
+verbs["grammar"] = Verb.GRAMMAR;
+verbs["production"] = Verb.PRODUCTION;
+verbs["end-grammar"] = Verb.END_GRAMMAR;
 
 string[string] formattingOptions;
 
@@ -681,6 +687,21 @@ class MacroSpan extends Span {
 
 			case LINK:
 				file.links.append(this);
+				break;
+
+			case GRAMMAR:
+				content = "<table class=grammar><thead><td class=lhs></td><td>Production</td></thead>\n";
+				break;
+
+			case PRODUCTION:
+				if (_arguments[0] != "|")
+					content = "<tr class=production><td><i>" + _arguments[0] + "</i>:</td><td><span style=\"font-family:monospace;\">&nbsp;&nbsp;</span>" + _arguments[1] + "</td><tr>\n";
+				else
+					content = "<tr><td></td><td><span style=\"font-family:monospace;\">| </span>" + _arguments[1] + "</td><tr>\n";
+				break;
+
+			case END_GRAMMAR:
+				content = "</table>\n";
 				break;
 			}
 		} else {

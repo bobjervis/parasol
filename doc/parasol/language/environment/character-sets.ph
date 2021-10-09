@@ -1,4 +1,4 @@
-<h2>{@level 2 CHARACTER SETS}</h2>
+<h2>{@level 2 Character Sets}</h2>
 
 Two sets of characters and their associated collating sequences shall be defined:
 the set in which source files are written, and the target character set interpreted in the execution environment.

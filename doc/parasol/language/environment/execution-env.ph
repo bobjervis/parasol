@@ -1,5 +1,5 @@
 
-<h2>{@level 2 EXECUTION ENVIRONMENT}</h2>
+<h2>{@level 2 Execution Environment}</h2>
 A Parasol program initially consists of a set of objects and functions.
 The program is started with a single process running in its arena.
 Additional processes can be created in the arena and managed during the execution of the program.
