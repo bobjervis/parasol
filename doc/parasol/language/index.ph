@@ -6,6 +6,7 @@
 	<li>{@topic environment/index.ph}
 	<li>{@topic lex/index.ph}
 	<li>{@topic grammar/index.ph}
+	<li>{@topic semantics/index.ph}
 </ul>
 
 <p>
