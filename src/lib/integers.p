@@ -50,7 +50,7 @@ public class short {
 	/**
 	 * Parse a short integer from a string.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more decimal digits. The value may
 	 * have any number of leading zero digits.
 	 *
@@ -71,7 +71,7 @@ public class short {
 	/**
 	 * Parse a short integer from a string, using a specified radix.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more digits. The value may
 	 * have any number of leading zero digits. If the radix is greater
 	 * than 10, letters from a to z (upper or lower case) represent the
@@ -98,7 +98,7 @@ public class short {
 	/**
 	 * Parse a short integer from a string.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more decimal digits. The value may
 	 * have any number of leading zero digits.
 	 *
@@ -119,7 +119,7 @@ public class short {
 	/**
 	 * Parse a short integer from a string, using a specified radix.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more digits. The value may
 	 * have any number of leading zero digits. If the radix is greater
 	 * than 10, letters from a to z (upper or lower case) represent the
@@ -146,7 +146,7 @@ public class short {
 	/**
 	 * Parse a short integer from a string.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more decimal digits. The value may
 	 * have any number of leading zero digits.
 	 *
@@ -167,7 +167,7 @@ public class short {
 	/**
 	 * Parse a short integer from a string, using a specified radix.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more digits. The value may
 	 * have any number of leading zero digits. If the radix is greater
 	 * than 10, letters from a to z (upper or lower case) represent the
@@ -194,7 +194,7 @@ public class short {
 	/**
 	 * Parse a short integer from a string.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more decimal digits. The value may
 	 * have any number of leading zero digits.
 	 *
@@ -215,7 +215,7 @@ public class short {
 	/**
 	 * Parse a short integer from a string, using a specified radix.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more digits. The value may
 	 * have any number of leading zero digits. If the radix is greater
 	 * than 10, letters from a to z (upper or lower case) represent the
@@ -274,7 +274,7 @@ public class int {
 	/**
 	 * Parse an integer from a string.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more decimal digits. The value may
 	 * have any number of leading zero digits.
 	 *
@@ -295,7 +295,7 @@ public class int {
 	/**
 	 * Parse an integer from a string, using a specified radix.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more digits. The value may
 	 * have any number of leading zero digits. If the radix is greater
 	 * than 10, letters from a to z (upper or lower case) represent the
@@ -322,7 +322,7 @@ public class int {
 	/**
 	 * Parse an integer from a string.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more decimal digits. The value may
 	 * have any number of leading zero digits.
 	 *
@@ -343,7 +343,7 @@ public class int {
 	/**
 	 * Parse an integer from a string, using a specified radix.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more digits. The value may
 	 * have any number of leading zero digits. If the radix is greater
 	 * than 10, letters from a to z (upper or lower case) represent the
@@ -370,7 +370,7 @@ public class int {
 	/**
 	 * Parse an integer from a string.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more decimal digits. The value may
 	 * have any number of leading zero digits.
 	 *
@@ -391,7 +391,7 @@ public class int {
 	/**
 	 * Parse an integer from a string, using a specified radix.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more digits. The value may
 	 * have any number of leading zero digits. If the radix is greater
 	 * than 10, letters from a to z (upper or lower case) represent the
@@ -418,7 +418,7 @@ public class int {
 	/**
 	 * Parse an integer from a string.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more decimal digits. The value may
 	 * have any number of leading zero digits.
 	 *
@@ -439,7 +439,7 @@ public class int {
 	/**
 	 * Parse an integer from a string, using a specified radix.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more digits. The value may
 	 * have any number of leading zero digits. If the radix is greater
 	 * than 10, letters from a to z (upper or lower case) represent the
@@ -701,7 +701,7 @@ public class long {
 	/**
 	 * Parse a long integer from a string.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more decimal digits. The value may
 	 * have any number of leading zero digits.
 	 *
@@ -717,7 +717,7 @@ public class long {
 	/**
 	 * Parse a long integer from a string, using a specified radix.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more digits. The value may
 	 * have any number of leading zero digits. If the radix is greater
 	 * than 10, letters from a to z (upper or lower case) represent the
@@ -739,7 +739,7 @@ public class long {
 	/**
 	 * Parse a long integer from a string.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more decimal digits. The value may
 	 * have any number of leading zero digits.
 	 *
@@ -755,7 +755,7 @@ public class long {
 	/**
 	 * Parse a long integer from a string, using a specified radix.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more digits. The value may
 	 * have any number of leading zero digits. If the radix is greater
 	 * than 10, letters from a to z (upper or lower case) represent the
@@ -777,7 +777,7 @@ public class long {
 	/**
 	 * Parse a long integer from a string.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more decimal digits. The value may
 	 * have any number of leading zero digits.
 	 *
@@ -793,7 +793,7 @@ public class long {
 	/**
 	 * Parse a long integer from a string, using a specified radix.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more digits. The value may
 	 * have any number of leading zero digits. If the radix is greater
 	 * than 10, letters from a to z (upper or lower case) represent the
@@ -815,7 +815,7 @@ public class long {
 	/**
 	 * Parse a long integer from a string.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more decimal digits. The value may
 	 * have any number of leading zero digits.
 	 *
@@ -831,7 +831,7 @@ public class long {
 	/**
 	 * Parse a long integer from a string, using a specified radix.
 	 *
-	 * The text string can contain an optiona leading negative
+	 * The text string can contain an optional leading negative
 	 * sign (-) followed by one or more digits. The value may
 	 * have any number of leading zero digits. If the radix is greater
 	 * than 10, letters from a to z (upper or lower case) represent the
@@ -1067,8 +1067,7 @@ public class byte {
 	/**
 	 * Parse an unsigned integer from a string.
 	 *
-	 * The text string can contain an optiona leading negative
-	 * sign (-) followed by one or more decimal digits. The value may
+	 * The text string can contain one or more decimal digits. The value may
 	 * have any number of leading zero digits.
 	 *
 	 * @param text The string to parse.
@@ -1088,8 +1087,7 @@ public class byte {
 	/**
 	 * Parse an unsigned integer from a string, using a specified radix.
 	 *
-	 * The text string can contain an optiona leading negative
-	 * sign (-) followed by one or more digits. The value may
+	 * The text string can contain one or more digits. The value may
 	 * have any number of leading zero digits. If the radix is greater
 	 * than 10, letters from a to z (upper or lower case) represent the
  	 * digits from 10 through 35.
@@ -1115,8 +1113,7 @@ public class byte {
 	/**
 	 * Parse an unsigned integer from a string.
 	 *
-	 * The text string can contain an optiona leading negative
-	 * sign (-) followed by one or more decimal digits. The value may
+	 * The text string can contain one or more decimal digits. The value may
 	 * have any number of leading zero digits.
 	 *
 	 * @param text The string to parse.
@@ -1136,8 +1133,7 @@ public class byte {
 	/**
 	 * Parse an unsigned integer from a string, using a specified radix.
 	 *
-	 * The text string can contain an optiona leading negative
-	 * sign (-) followed by one or more digits. The value may
+	 * The text string can contain one or more digits. The value may
 	 * have any number of leading zero digits. If the radix is greater
 	 * than 10, letters from a to z (upper or lower case) represent the
  	 * digits from 10 through 35.
@@ -1163,8 +1159,7 @@ public class byte {
 	/**
 	 * Parse an unsigned integer from a string.
 	 *
-	 * The text string can contain an optiona leading negative
-	 * sign (-) followed by one or more decimal digits. The value may
+	 * The text string can contain one or more decimal digits. The value may
 	 * have any number of leading zero digits.
 	 *
 	 * @param text The string to parse.
@@ -1184,8 +1179,7 @@ public class byte {
 	/**
 	 * Parse an unsigned integer from a string, using a specified radix.
 	 *
-	 * The text string can contain an optiona leading negative
-	 * sign (-) followed by one or more digits. The value may
+	 * The text string can contain an one or more digits. The value may
 	 * have any number of leading zero digits. If the radix is greater
 	 * than 10, letters from a to z (upper or lower case) represent the
  	 * digits from 10 through 35.
@@ -1211,8 +1205,7 @@ public class byte {
 	/**
 	 * Parse an unsigned integer from a string.
 	 *
-	 * The text string can contain an optiona leading negative
-	 * sign (-) followed by one or more decimal digits. The value may
+	 * The text string can contain one or more decimal digits. The value may
 	 * have any number of leading zero digits.
 	 *
 	 * @param text The string to parse.
@@ -1232,8 +1225,7 @@ public class byte {
 	/**
 	 * Parse an unsigned integer from a string, using a specified radix.
 	 *
-	 * The text string can contain an optiona leading negative
-	 * sign (-) followed by one or more digits. The value may
+	 * The text string can contain one or more digits. The value may
 	 * have any number of leading zero digits. If the radix is greater
 	 * than 10, letters from a to z (upper or lower case) represent the
  	 * digits from 10 through 35.

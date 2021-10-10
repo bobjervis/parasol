@@ -50,7 +50,7 @@ interface WSUpstream {
 }
 
 class ServerWorkFactory extends rpc.WebSocketFactory<WSUpstream, WSDownstream> {
-	public boolean notifyCreation(ref<rpc.WebSocket<WSUpstream, WSDownstream>> socket) {
+	public boolean notifyCreation(ref<http.Request> request, ref<rpc.WebSocket<WSUpstream, WSDownstream>> socket) {
 		ref<ServerWork> s = new ServerWork();
 		s.down = socket.configure(s);
 		return true;

@@ -49,7 +49,6 @@ Interested developers are invited to participate.
 	<li><a href="https://github.com/bobjervis/parasol/wiki/Installation-and-Setup>Installation and Setup</a>
 	<li><a href="https://github.com/bobjervis/parasol/wiki/Building-and-Testing">Building and Testing</a>
 	<li><a href="https://github.com/bobjervis/parasol/wiki/Project-Diary">Project Diary</a>
-	<li><a href="https://github.com/bobjervis/parasol/wiki/API-Documentation">API Documentation</a>
 </ul>
 
 

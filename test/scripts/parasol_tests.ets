@@ -410,7 +410,6 @@ compile() { "interface a {} class b implements a {} pointer<b> x; a y = x;" }
 compile() { "interface a {} a x; x = null;" }
 compile(expect: fail, message: CANNOT_CONVERT) { "interface a {} class b implements a {} interface c {} b x; c y = x;" }
 compile(expect: fail, message: CANNOT_CONVERT) { "interface a {} class b {} b x; a y = x;" }
-compile(expect: fail, message: LVALUE_REQUIRED) { "interface a {} class b implements a {} b x() { b z; return z;} a y = x();" }
 compile() { "interface a {} class b implements a {}" }
 compile() { "interface a {} interface b extends a {}" }
 compile() { "interface a {} interface b{} class c implements a, b {}" }

@@ -201,7 +201,7 @@ public class WebSocketFactory<class UPSTREAM, class DOWNSTREAM> extends http.Web
 			return false;
 		ref<http.WebSocket> ws = new http.WebSocket(response.connection(), true);
 		ref<WebSocket<UPSTREAM, DOWNSTREAM>> s = new WebSocket<UPSTREAM, DOWNSTREAM>(ws);
-		if (!notifyCreation(s)) {
+		if (!notifyCreation(request, s)) {
 			delete s;
 			return false;
 		}
@@ -212,7 +212,7 @@ public class WebSocketFactory<class UPSTREAM, class DOWNSTREAM> extends http.Web
 		return true;
 	}
 
-	public boolean notifyCreation(ref<WebSocket<UPSTREAM, DOWNSTREAM>> socket) {
+	public boolean notifyCreation(ref<http.Request> request, ref<WebSocket<UPSTREAM, DOWNSTREAM>> socket) {
 		return true;
 	}
 }
@@ -268,6 +268,8 @@ public class WebSocket<class UPSTREAM, class DOWNSTREAM> {
 
 	public DOWNSTREAM configure(UPSTREAM stub) {
 		DOWNSTREAM proxy = DOWNSTREAM.proxy(&_transport);
+		_upstreamObject = stub;
+		_downstreamProxy = proxy;
 		_transport.reader = new WebSocketReader<DOWNSTREAM, UPSTREAM>(&_transport, proxy, stub);
 		_transport.socket.startReader(_transport.reader);
 		return proxy;
@@ -275,6 +277,10 @@ public class WebSocket<class UPSTREAM, class DOWNSTREAM> {
 
 	void postReturns(string key, byte[] body) {
 		_transport.postReturns(key, body);
+	}
+
+	public ref<http.WebSocket> socket() {
+		return _transport.socket;
 	}
 }
 

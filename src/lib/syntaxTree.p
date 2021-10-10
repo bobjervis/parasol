@@ -16,6 +16,7 @@
 namespace parasol:compiler;
 
 import native:C;
+import parasol:runtime;
 import parasol:storage;
 import parasol:text;
 
@@ -3734,14 +3735,7 @@ public class Node {
 	public boolean canCoerce(ref<Type> newType, boolean explicitCast, ref<CompileContext> compileContext) {
 		if (type == null)
 			print(0);
-		if (!type.widensTo(newType, compileContext))
-			return false;
-		if (newType.family() == TypeFamily.INTERFACE && !isLvalue()) {
-			add(MessageId.LVALUE_REQUIRED, compileContext.pool());
-			type = compileContext.errorType();
-			return false;
-		}
-		return true;
+		return type.widensTo(newType, compileContext);
 	}
 
 	public ref<Node> coerce(ref<SyntaxTree> tree, TypeFamily newType, boolean explicitCast, ref<CompileContext> compileContext) {
