@@ -154,10 +154,6 @@ public class Client<class UPSTREAM, class DOWNSTREAM> extends http.Client {
 		super(url, protocol);
 	}
 
-	~Client() {
-		delete _socket;
-	}
-
 	public http.ConnectStatus, unsigned connect() {
 		http.ConnectStatus status;
 		unsigned ip;
@@ -172,11 +168,26 @@ public class Client<class UPSTREAM, class DOWNSTREAM> extends http.Client {
 		return http.ConnectStatus.OK, ip;
 	}
 
-	public ref<WebSocket<UPSTREAM, DOWNSTREAM>> socket() {
-		return _socket;
+	/**
+	 * A caller calls this method on the web socket to register a client
+	 * disconnect event handler.
+	 *
+	 * @threading This method is not thread-safe. It is recommended that this method
+	 * is called before calling {@link readWholeMessage}, since a client-disconnect can be
+	 * triggered when that method reads from the connection.
+	 *
+	 * @param func The function to call when the client disconnect event occurs.
+	 * It takes the param value as its first argument and a boolean indicating
+	 * whether the disconnect was a normal close (true) or an error (false).
+	 * @param param The value to pass to the function when it is called.
+	 */
+	public void onzDisconnect(void (address, boolean) func, address param) {
+
+//		_socket.
 	}
 
-	public void waitForDisconnect() {
+	public ref<WebSocket<UPSTREAM, DOWNSTREAM>> socket() {
+		return _socket;
 	}
 }
 /**
@@ -217,18 +228,87 @@ public class WebSocketFactory<class UPSTREAM, class DOWNSTREAM> extends http.Web
 	}
 }
 
-public class WebSocket<class UPSTREAM, class DOWNSTREAM> {
+monitor class WebSocketVolatileData {
+	private void (address, boolean) _disconnectFunction;
+	private address _disconnectParameter;
+	private boolean _disconnected;
+	/**
+	 * A caller calls this method on the web socket to register a client
+	 * disconnect event handler.
+	 *
+	 * @threading This method is not thread-safe. It is recommended that this method
+	 * is called before calling {@link readWholeMessage}, since a client-disconnect can be
+	 * triggered when that method reads from the connection.
+	 *
+	 * @param func The function to call when the client disconnect event occurs.
+	 * It takes the param value as its first argument and a boolean indicating
+	 * whether the disconnect was a normal close (true) or an error (false).
+	 * @param param The value to pass to the function when it is called.
+	 */
+	public void onDisconnect(void (address, boolean) func, address param) {
+		_disconnectFunction = func;
+		_disconnectParameter = param;
+	}
+
+	void fireOnDisconnect(boolean normalClose) {
+		if (_disconnectFunction != null)
+			_disconnectFunction(_disconnectParameter, normalClose);
+		_disconnected = true;
+		notifyAll();
+	}
+
+	public void waitForDisconnect() {
+		if (!_disconnected)
+			wait();
+	}
+}
+
+public class WebSocket<class UPSTREAM, class DOWNSTREAM> extends WebSocketVolatileData {
 	private WebSocketTransport _transport;
 	DOWNSTREAM _downstreamProxy;
+	UPSTREAM _upstreamProxy;
 	UPSTREAM _upstreamObject;
 
 	public WebSocket(ref<http.WebSocket> socket) {
 		_transport.socket = socket;
-		socket.onClientDisconnect(clientDisconnect, this);
+		socket.onDisconnect(disconnectWrapper, this);
 	}
 
 	~WebSocket() {
+		printf("In destructor 1\n");
 		delete _transport.reader;
+		printf("In destructor 2\n");
+		delete _transport.socket;
+		printf("In destructor 3\n");
+		// Only one of these will be non-null 
+		delete _downstreamProxy;
+		printf("In destructor 4\n");
+		delete _upstreamProxy;
+		printf("In destructor 5\n");
+	}
+	/**
+	 * Write a shutdown message.
+	 *
+	 * A single-frame message with an {@link OP_CLOSE} opcode is sent. The cause and reason values
+	 * are formatted according to the WebSocket protocol.
+	 *
+	 * @threading This method is thread-safe.
+	 *
+	 * @param cause The cause of the shutdown. Possible values include {@link CLOSE_NORMAL}, {@link CLOSE_GOING_AWAY},
+	 * {@link CLOSE_PROTOCOL_ERROR} or {@link CLOSE_BAD_DATA}.
+	 * @param reason A reason string that provides additional details about the cause.
+	 */
+	public void shutDown(short cause, string reason) {
+		_transport.socket.shutDown(cause, reason);
+	}
+
+	private static void disconnectWrapper(address arg, boolean normalClose) {
+		ref<WebSocket<UPSTREAM, DOWNSTREAM>>(arg).disconnect(normalClose);
+	}
+
+	void disconnect(boolean normalClose) {
+		fireOnDisconnect(normalClose);
+//		delete this;
 	}
 	/**
 	 * If this WebSocket was created by the HTTP server, return the downstream
@@ -250,10 +330,15 @@ public class WebSocket<class UPSTREAM, class DOWNSTREAM> {
 	public UPSTREAM upstreamObject() {
 		return _upstreamObject;
 	}
-
-	private static void clientDisconnect(address arg, boolean normalClose) {
-		ref<WebSocket<UPSTREAM, DOWNSTREAM>> socket = ref<WebSocket<UPSTREAM, DOWNSTREAM>>(arg);
-		delete socket;
+	/**
+	 * If this WebSocket was created by the HTTP client, return the upstream
+	 * proxy object for the new WebSocket.
+	 *
+	 * @return If this WebSocket was created by the client, a non-null proxy
+	 * object that is connected to the upstream end of the connection.
+	 */
+	public UPSTREAM upstreamProxy() {
+		return _upstreamProxy;
 	}
 	/**
 	 * This is called by the connecting client/server to implement the communicatins pathways between
@@ -261,6 +346,7 @@ public class WebSocket<class UPSTREAM, class DOWNSTREAM> {
 	 */
 	public UPSTREAM configure(DOWNSTREAM stub) {
 		UPSTREAM proxy = UPSTREAM.proxy(&_transport);
+		_upstreamProxy = proxy;
 		_transport.reader = new WebSocketReader<UPSTREAM, DOWNSTREAM>(&_transport, proxy, stub);
 		_transport.socket.startReader(_transport.reader);
 		return proxy;

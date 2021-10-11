@@ -789,7 +789,7 @@ public class LeakHeap extends Allocator {
 					}
 				}
 			} else
-				printf("%s Block %p not in use\n", thread.currentThread().name(), fb);
+				printf("%s Block %p not in use\n%s", thread.currentThread().name(), fb, runtime.stackTrace());
 		}
 		leakHeap.print(false);
 		throw CorruptHeapException(this, p);

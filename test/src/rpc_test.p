@@ -19,6 +19,7 @@ import parasol:log;
 import parasol:net;
 import parasol:process;
 import parasol:rpc;
+import parasol:runtime;
 import parasol:thread;
 
 
@@ -52,16 +53,17 @@ interface WSUpstream {
 class ServerWorkFactory extends rpc.WebSocketFactory<WSUpstream, WSDownstream> {
 	public boolean notifyCreation(ref<http.Request> request, ref<rpc.WebSocket<WSUpstream, WSDownstream>> socket) {
 		ref<ServerWork> s = new ServerWork();
+		socket.onDisconnect(ServerWork.disconnectWrapper, s);
 		s.down = socket.configure(s);
 		return true;
 	}
 }
 
+boolean upstreamDisconnect;
+boolean downstreamDisconnect;
+
 class ServerWork implements WSUpstream {
 	WSDownstream down;
-
-	ServerWork() {
-	}
 
 	boolean upload(int x) {
 		logger.debug("upload(%d)", x);
@@ -70,6 +72,16 @@ class ServerWork implements WSUpstream {
 			return false;
 		return true;
 	}
+
+	static void disconnectWrapper(address arg, boolean normalClose) {
+		ref<ServerWork>(arg).disconnect(normalClose);
+	}
+
+	void disconnect(boolean normalClose) {
+		logger.debug("upstream disconnect");
+		upstreamDisconnect = true;
+		delete this;
+	}
 }
 
 interface WSDownstream {
@@ -77,13 +89,27 @@ interface WSDownstream {
 }
 
 class ClientWork implements WSDownstream {
+	ref<rpc.Client<WSUpstream, WSDownstream>> _client;
 	static int testMessageCount;
 	static int[] values = [ 4, 1601, 1000001 ];
+
+	ClientWork(ref<rpc.Client<WSUpstream, WSDownstream>> client) {
+		_client = client;
+	}
 
 	boolean download(int x) {
 		assert(x == values[testMessageCount]);
 		testMessageCount++;
 		return true;
+	}
+
+	static void disconnectWrapper(address arg, boolean normalClose) {
+		ref<ClientWork>(arg).disconnect(normalClose);
+	}
+
+	void disconnect(boolean normalClose) {
+		logger.debug("downstream disconnect\n");
+		downstreamDisconnect = true;
 	}
 }
 
@@ -106,11 +132,13 @@ class ClientWork implements WSDownstream {
 }
 
 {
-	ClientWork down;
-
 	rpc.Client<WSUpstream, WSDownstream> client("ws://localhost:" + port + "/ws", "Test");
+	ClientWork down(&client);
+
 	assert(client.connect() == http.ConnectStatus.OK);
-	WSUpstream up = client.socket().configure(down);
+	ref<rpc.WebSocket<WSUpstream, WSDownstream>> socket = client.socket();
+	socket.onDisconnect(ClientWork.disconnectWrapper, &down);
+	WSUpstream up = socket.configure(down);
 
 	logger.debug("Start calling up");
 	assert(up.upload(3));
@@ -119,9 +147,12 @@ class ClientWork implements WSDownstream {
 
 	printf("message count %d\n", down.testMessageCount);
 	assert(down.testMessageCount == 3);
+	socket.shutDown(http.WebSocket.CLOSE_NORMAL, "");
+	socket.waitForDisconnect();
 }
-
+assert(downstreamDisconnect);
 server.stop();
+assert(upstreamDisconnect);
 
 class HttpExchange extends rpc.Service<Test> implements Test {
 	HttpExchange() {

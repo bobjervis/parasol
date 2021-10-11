@@ -269,8 +269,8 @@ private void readWrapper(address arg) {
 //	else
 //		logger.format(log.ERROR, "Abnormal close on WebSocket %d", socket.connection().requestFd());
 	socket.discardReader();
-	if (socket.server())
-		socket.clientDisconnected(sawClose);
+//	if (socket.server())
+	socket.disconnect(sawClose);
 }
 /**
  * An object that implements the Web Socket message frame protocol once an HTTP message has determined
@@ -279,6 +279,17 @@ private void readWrapper(address arg) {
  * Note that the same object is used for either the client or server side of the connection. Since the Web
  * Socket protocol is symmetric and once the connection has been established, subsequent message transmission
  * and reception is the same regardless of role.
+ *
+ * Shutting down a conversation with a web socket requires a handshake. Whichever end of the conversation
+ * that wants to discontinue the connection may call the {@link shutDown} method to inform the other end
+ * of the connection. The shutDown includes a cause number and a reason string.
+ *
+ * Calling shutDown starts the process, but because of the need for handshake, there is an event generated
+ * from the web socket when the shutDown sequence had been completed and the local data structures can be
+ * taken apart.
+ *
+ * This is the disconnect event. Calling code can register an {@link onDisconnect} handler function which will
+ * be called. Once called, the webSocket is ready to complete it's cleanup.
  */
 public class WebSocket extends WebSocketVolatileData {
 	/**
@@ -372,7 +383,7 @@ public class WebSocket extends WebSocketVolatileData {
 	~WebSocket() {
 		ref<Thread> readerThread = stopReading();
 		
-		if (readerThread != null && !_server) {
+		if (readerThread != null) {
 //			logger.debug("about to join...\n");
 			readerThread.join();
 		}
@@ -673,7 +684,7 @@ public class WebSocket extends WebSocketVolatileData {
 	 * whether the disconnect was a normal close (true) or an error (false).
 	 * @param param The value to pass to the function when it is called.
 	 */
-	public void onClientDisconnect(void (address, boolean) func, address param) {
+	public void onDisconnect(void (address, boolean) func, address param) {
 		_disconnectFunction = func;
 		_disconnectParameter = param;
 	}
@@ -684,8 +695,7 @@ public class WebSocket extends WebSocketVolatileData {
 	 * @param normalClose true if the client disconnected with a normal close, false
 	 * if there was an error.
 	 */
-	void clientDisconnected(boolean normalClose) {
-//		logger.debug("clientDisconnected");
+	void disconnect(boolean normalClose) {
 		if (_disconnectFunction != null)
 			_disconnectFunction(_disconnectParameter, normalClose);
 	}
