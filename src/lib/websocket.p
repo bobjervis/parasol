@@ -908,10 +908,14 @@ public monitor class Rendezvous {
 	 * There is a race, since the threads that might call this method are usually not the methods that would
 	 * call {@link postResult} or {@link abandon}, there is a race between potential calls and there is no
 	 * guarantee that this method will, in fact, remove the pending object before another thread posts results for it. 
+	 *
+	 * @return true if the call actually cancelled the call before results came in, false if there was no
+	 * Rendezvous with the given key under management.
 	 */
-	public void cancel() {
+	public boolean cancel() {
 		ref<Rendezvous> r = _proxy.extractRendezvous(_key);
 		delete r;
+		return r != null;
 	}
 }
 /**

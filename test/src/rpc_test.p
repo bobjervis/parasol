@@ -13,7 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-
+import parasol:exception.IOException;
 import parasol:http;
 import parasol:log;
 import parasol:net;
@@ -48,11 +48,12 @@ interface Test {
 
 interface WSUpstream {
 	boolean upload(int x);
+	boolean hang();				// intentionally pauses indefinitely.
 }
 
 class ServerWorkFactory extends rpc.WebSocketFactory<WSUpstream, WSDownstream> {
 	public boolean notifyCreation(ref<http.Request> request, ref<rpc.WebSocket<WSUpstream, WSDownstream>> socket) {
-		ref<ServerWork> s = new ServerWork();
+		ref<ServerWork> s = new ServerWork(socket);
 		socket.onDisconnect(ServerWork.disconnectWrapper, s);
 		s.down = socket.configure(s);
 		return true;
@@ -64,12 +65,26 @@ boolean downstreamDisconnect;
 
 class ServerWork implements WSUpstream {
 	WSDownstream down;
+	ref<rpc.WebSocket<WSUpstream, WSDownstream>> socket;
+
+	ServerWork(ref<rpc.WebSocket<WSUpstream, WSDownstream>> socket) {
+		this.socket = socket;
+	}
 
 	boolean upload(int x) {
 		logger.debug("upload(%d)", x);
 		down.download(x + 1);
 		if (x > 10)
 			return false;
+		return true;
+	}
+
+	boolean hang() {
+		Monitor m;
+
+		// Start a socket shutdown, then wait for nothing.
+		socket.shutDown(555, "just because");
+		m.wait();
 		return true;
 	}
 
@@ -131,7 +146,7 @@ class ClientWork implements WSDownstream {
 	delete t;
 }
 
-{
+{	// first, a 'correct' session, with completed messages and a graceful shutdown.
 	rpc.Client<WSUpstream, WSDownstream> client("ws://localhost:" + port + "/ws", "Test");
 	ClientWork down(&client);
 
@@ -153,6 +168,32 @@ class ClientWork implements WSDownstream {
 assert(downstreamDisconnect);
 server.stop();
 assert(upstreamDisconnect);
+server.start(net.ServerScope.LOCALHOST);
+
+port = server.httpPort();
+
+{	// now, a session where the client issues a 'long duration' call.
+	rpc.Client<WSUpstream, WSDownstream> client("ws://localhost:" + port + "/ws", "Test");
+	ClientWork down(&client);
+
+	http.ConnectStatus status = client.connect();
+	printf("status = %s\n", string(status));
+	assert(status == http.ConnectStatus.OK);
+	ref<rpc.WebSocket<WSUpstream, WSDownstream>> socket = client.socket();
+	// At this point the rpc.Client could be destructed, 
+	WSUpstream up = socket.configure(down);
+
+	try {
+		up.hang();
+		printf("Hang returned? Not supposed to be possible.\n");
+		assert(false);
+	} catch (IOException e) {
+		assert(e.message() == "Connection closed before reply");
+	}
+	printf("PASS: Dropped connection caused RPC caller to receive an Exception.\n");
+}
+
+server.stop();
 
 class HttpExchange extends rpc.Service<Test> implements Test {
 	HttpExchange() {

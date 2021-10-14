@@ -138,6 +138,20 @@ class DeferredTry {
 	public ref<Lock> lockStatement;
 	public ref<X86_64Encoder.CodeSegment> join;
 	public ref<X86_64Encoder.CodeSegment> exceptionHandler;
+
+	void print() {
+		if (tryStatement != null) {
+			printf("tryStatement:\n");
+			tryStatement.print(4);
+		}
+		if (lockStatement != null) {
+			printf("lockStatment:\n");
+			lockStatement.print(4);
+		}
+		printf("primaryHandler %p join %p exceptionHandler %p\n", primaryHandler, join, exceptionHandler);
+//		if (primaryHandler != null) {
+			
+	}
 }
 
 private int FIRST_STACK_PARAM_OFFSET = 16;

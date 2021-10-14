@@ -496,6 +496,8 @@ public enum ConnectStatus {
  * You can repeat the same URL request again with this object, but the only change you can make
  * that would alter the request itself is you can add another header with {@link setHeader} or
  * change the cipher list using {@link setCipherList}.
+ *
+ * Once you have established a web socket connection, you can delete the http.Client.
  */
 public class Client {
 //	@Constant

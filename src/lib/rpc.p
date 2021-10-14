@@ -74,6 +74,7 @@ class WebSocketTransport extends ClientTransport {
 		socket.write(http.WebSocket.OP_BINARY, s);
 		s = null;
 
+		boolean shouldThrow;
 		lock (*r) {
 			wait();
 
@@ -81,9 +82,12 @@ class WebSocketTransport extends ClientTransport {
 				s.resize(replyMessage.length());
 				for (int i = 0; i < s.length(); i++)
 					s[i] = replyMessage[i];
-			}
+			} else
+				shouldThrow = true;
 		}
 		delete r;
+		if (shouldThrow)
+			throw IOException("Connection closed before reply");
 		return s;
 	}
 
@@ -139,7 +143,11 @@ public class Client<class PROXY> extends HttpTransport {
 		return PROXY.proxy(this);
 	}
 }
-
+/**
+ * The web socket-based rpc.Client object is instantiated once for each distinct http request 
+ * 
+ *
+ */
 public class Client<class UPSTREAM, class DOWNSTREAM> extends http.Client {
 	ref<WebSocket<UPSTREAM, DOWNSTREAM>> _socket;
 	/**
@@ -161,29 +169,14 @@ public class Client<class UPSTREAM, class DOWNSTREAM> extends http.Client {
 		(status, ip) = get();
 		if (status != http.ConnectStatus.OK)
 			return status, ip;
+		// Take ownership of any web socket object the underlying
+		// http.Client created for you.
 		ref<http.WebSocket> ws = webSocket();
 		if (ws == null)
 			return http.ConnectStatus.WEB_SOCKET_REFUSED, ip;
+		// 
 		_socket = new WebSocket<UPSTREAM, DOWNSTREAM>(ws);
 		return http.ConnectStatus.OK, ip;
-	}
-
-	/**
-	 * A caller calls this method on the web socket to register a client
-	 * disconnect event handler.
-	 *
-	 * @threading This method is not thread-safe. It is recommended that this method
-	 * is called before calling {@link readWholeMessage}, since a client-disconnect can be
-	 * triggered when that method reads from the connection.
-	 *
-	 * @param func The function to call when the client disconnect event occurs.
-	 * It takes the param value as its first argument and a boolean indicating
-	 * whether the disconnect was a normal close (true) or an error (false).
-	 * @param param The value to pass to the function when it is called.
-	 */
-	public void onzDisconnect(void (address, boolean) func, address param) {
-
-//		_socket.
 	}
 
 	public ref<WebSocket<UPSTREAM, DOWNSTREAM>> socket() {
@@ -439,8 +432,14 @@ class WebSocketReader<class PROXY, class STUB> extends AbstractWebSocketReader {
 				default:
 					logger.error("Received unknown message direction: %c (%x)", message[0], message[0]);
 				}
-			} else
+			} else {
+				// After we have received all responses and the socket has shut down, we need to clear all the calling
+				// threads waiting for responses.
+				ref<http.Rendezvous>[] pending = _transport.manager.extractAllRendezvous();
+				for (int i = 0; i < pending.length(); i++)
+					pending[i].abandon();
 				return sawClose;
+			}
 		}
 	}
 

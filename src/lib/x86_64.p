@@ -1388,7 +1388,7 @@ public class X86_64 extends X86_64AssignTemps {
 			int adjust = -f().autoSize;
 			if (!isFunction)
 				adjust -= 8 * address.bytes;
-			// An exception handler enters with RBP correct and th first regsiter argument pointing to the
+			// An exception handler enters with RBP correct and the first register argument pointing to the
 			// exception itself.
 			// First we have to chop the stack, so we can proceed to dispatch to one of a set of catch
 			// clauses. The clauses were sorted during the fold phase to put the most specific Exception
@@ -1401,6 +1401,9 @@ public class X86_64 extends X86_64AssignTemps {
 				for (nl = nl.next; nl != null; nl = nl.next) {
 					ref<CodeSegment> nextCheck = _storage new CodeSegment;
 					ref<Binary> b = ref<Binary>(nl.node);
+					// There was some sort of problem with the catch clause, TODO: generate a throw
+					if (b.deferAnalysis())
+						continue;
 					ref<Type> t = ref<TypedefType>(b.left().type).wrappedType();	// Get the catch Exception class
 					instLoadType(secondRegisterArgument(), t);	// target type
 					inst(X86.MOV, firstRegisterArgument(), temp, compileContext);
