@@ -118,6 +118,8 @@ class ClasslikeScope extends Scope {
 	protected ref<Symbol>[] _members;
 	private boolean _methodsBuilt;
 	private boolean _defaultConstructorChecked;
+	private boolean _interfaceMethodsChecked;
+	private boolean _interfaceAllowedInRPC;
 	
 	public address vtable;				// scratch area for code generators.
 
@@ -578,8 +580,11 @@ class ClasslikeScope extends Scope {
 	}
 
 	public boolean interfaceUsedInRPC(ref<CompileContext> compileContext) {
+		if (_interfaceMethodsChecked)
+			return _interfaceAllowedInRPC;
 		boolean result = true;
 		if (isInterface()) {
+			_interfaceMethodsChecked = true;
 			for (i in _methods) {
 				ref<OverloadInstance> oi = _methods[i];
 				ref<FunctionType> ft = ref<FunctionType>(oi.assignType(compileContext));
@@ -589,6 +594,7 @@ class ClasslikeScope extends Scope {
 				}
 			}
 		}
+		_interfaceAllowedInRPC = result;
 		return result;
 	}
 
