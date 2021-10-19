@@ -580,22 +580,21 @@ class ClasslikeScope extends Scope {
 	}
 
 	public boolean interfaceUsedInRPC(ref<CompileContext> compileContext) {
-		if (_interfaceMethodsChecked)
-			return _interfaceAllowedInRPC;
-		boolean result = true;
-		if (isInterface()) {
+		if (!_interfaceMethodsChecked) {
 			_interfaceMethodsChecked = true;
-			for (i in _methods) {
-				ref<OverloadInstance> oi = _methods[i];
-				ref<FunctionType> ft = ref<FunctionType>(oi.assignType(compileContext));
-				if (!ft.canBeRPCMethod(compileContext)) {
-					oi.definition().add(MessageId.TYPE_DISALLOWED_IN_RPC, compileContext.pool(), ft.signature());
-					result = false;
+			_interfaceAllowedInRPC = true;
+			if (isInterface()) {
+				for (i in _methods) {
+					ref<OverloadInstance> oi = _methods[i];
+					ref<FunctionType> ft = ref<FunctionType>(oi.assignType(compileContext));
+					if (!ft.canBeRPCMethod(compileContext)) {
+						oi.definition().add(MessageId.TYPE_DISALLOWED_IN_RPC, compileContext.pool(), ft.signature());
+						_interfaceAllowedInRPC = false;
+					}
 				}
 			}
 		}
-		_interfaceAllowedInRPC = result;
-		return result;
+		return _interfaceAllowedInRPC;
 	}
 
 	public int interfaceCount() {
@@ -782,8 +781,8 @@ class FlagsScope extends ClasslikeScope {
 	
 	private ref<Symbol>[] _instances;
 	
-	public FlagsScope(ref<Scope> enclosing, ref<Block> definition, ref<Identifier> enumName) {
-		super(enclosing, definition, StorageClass.STATIC, enumName);
+	public FlagsScope(ref<Scope> enclosing, ref<Block> definition, ref<Identifier> flagsName) {
+		super(enclosing, definition, StorageClass.STATIC, flagsName);
 	}
 
 	ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> source, ref<Type> type, ref<Node> initializer, ref<MemoryPool> memoryPool) {
@@ -797,17 +796,17 @@ class FlagsScope extends ClasslikeScope {
 		return &_instances;
 	}
 	/*
-	 * Given a symbol, return the index of the symbol within this enumscope. THis allows us to properly
+	 * Given a symbol, return the index of the symbol within this FlagsScope. This allows us to properly
 	 * validate aggregate initializers by calculating the numeric index of that element (in a labeled
 	 * initializer).
 	 * 
 	 * RETURN:
-	 *   >= 0	The index of the given enumInstance symbol.
-	 *   -1		The enumInstance argument was not a member of this EnumScope.
+	 *   >= 0	The index of the given flagsInstance symbol.
+	 *   -1		The flagsInstance argument was not a member of this FlagsScope.
 	 */
-	public int indexOf(ref<Symbol> enumInstance) {
+	public int indexOf(ref<Symbol> flagsInstance) {
 		for (int i = 0; i < _instances.length(); i++)
-			if (_instances[i] == enumInstance)
+			if (_instances[i] == flagsInstance)
 				return i;
 		return -1;
 	}
@@ -870,6 +869,7 @@ public class ParameterScope extends Scope {
 								// a default constructor (no source code) generated when needed for an enum instance.
 		IMPLIED_DESTRUCTOR,		// an implied destructor (no source code) generated when needed
 		ENUM_TO_STRING,			// a generated enum-to-string coercion method
+		ENUM_FROM_STRING,		// a generated enum-from-string coercion method
 		FLAGS_TO_STRING,		// a generate flags-to-string coercion method
 		THUNK,					// This is a thunk. 
 		PROXY_CLIENT,			// Proxy -> rpc.Client
@@ -1037,6 +1037,10 @@ public class ParameterScope extends Scope {
 		}
 		if (base.defaultConstructor() == null && base.requiresConstruction(compileContext))
 			_definition.add(MessageId.NO_DEFAULT_CONSTRUCTOR, compileContext.pool());
+	}
+
+	void printDetails() {
+		printf(" kind %s category %s\n", string(_kind), string(_category));
 	}
 }
 

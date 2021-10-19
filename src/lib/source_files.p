@@ -155,8 +155,10 @@ public class ImportDirectory {
 			for (int j = 0; j < instances.length(); j++) {
 				ref<TemplateInstanceType> instance = instances[j];
 				if (instance.definingFile() == _files[i]) {
-					if (instance.concreteDefinition().countMessages() > 0)
+					if (instance.concreteDefinition().countMessages() > 0) {
+						printf("Messages for %s:\n", instance.signature());
 						dumpMessages(_files[i], instance.concreteDefinition());
+					}
 				}
 			}
 		}
@@ -172,15 +174,10 @@ public class ImportDirectory {
 			for (j in instances) {
 				ref<TemplateInstanceType> instance = instances[j];
 				if (instance.definingFile() == _files[i]) {
-					if (instance.concreteDefinition().countMessages() > 0)
+					if (instance.concreteDefinition().countMessages() > 0) {
+						callback(null, ref<Node>(instance), null, arg); 
 						allNodes(_files[i], instance.concreteDefinition(), callback, arg);
-				}
-			}
-			for (j in instances) {
-				ref<TemplateInstanceType> instance = instances[j];
-				if (instance.definingFile() == _files[i]) {
-					if (instance.concreteDefinition().countMessages() > 0)
-						allNodes(_files[i], instance.concreteDefinition(), callback, arg);
+					}
 				}
 			}
 		}			

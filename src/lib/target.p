@@ -152,6 +152,10 @@ public class Target {
 		return null;
 	}
 	
+	public ref<ParameterScope> generateEnumFromStringMethod(ref<EnumInstanceType> type, ref<CompileContext> compileContext) {
+		return null;
+	}
+	
 	public ref<ParameterScope> generateFlagsToStringMethod(ref<FlagsInstanceType> type, ref<CompileContext> compileContext) {
 		return null;
 	}

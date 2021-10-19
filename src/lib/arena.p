@@ -162,8 +162,7 @@ public class Arena {
 		// _importPath[0] is the ImportDirectory we need to pull in.
 
 		_importPath[0].compilePackage(&context);
-		if (createBuiltIns(&context))
-			context.compileFile();
+		compileCommonPath(verbose, &context);
 	}
 
 	public ref<ImportDirectory> compilePackage(int index, ref<CompileContext> compileContext) {
@@ -194,10 +193,14 @@ public class Arena {
 			mainFile.buildScopes(null, compileContext);
 		if (verbose)
 			printf("Top level scopes constructed\n");
+		_main = mainFile.fileScope();
+		return compileCommonPath(verbose, compileContext);
+	}
+
+	boolean compileCommonPath(boolean verbose, ref<CompileContext> compileContext) {
 		if (!createBuiltIns(compileContext))
 			return false;
 		
-		_main = mainFile.fileScope();
 		compileContext.checkForRPCs();
 		if (verbose)
 			printf("Initial compilation phases completed.\n");

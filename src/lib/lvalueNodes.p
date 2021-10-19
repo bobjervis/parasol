@@ -355,7 +355,6 @@ public class Identifier extends Node {
 			ref<FlagsInstanceType> fit = compileContext.pool().newFlagsInstanceType(_symbol, flagsScope, c);
 			flagsScope.flagsType = compileContext.pool().newFlagsType(body, flagsScope, fit);
 			_symbol.bindType(flagsScope.flagsType, compileContext);
-			_symbol._doclet = enclosing.file().tree().getDoclet(this);
 		} else
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
 	}

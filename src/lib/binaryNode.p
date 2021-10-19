@@ -3152,7 +3152,7 @@ private boolean isCompileTarget(ref<Node> n, ref<Node> constant) {
 }
 
 private boolean matchesCompileTarget(Operator op, ref<Node> constant, ref<Target> target) {
-	int constantIndex = constant.symbol().offset;
+	int constantIndex = int(constant.symbol().offset);
 	int targetIndex = int(target.sectionType());
 	
 	switch (op) {

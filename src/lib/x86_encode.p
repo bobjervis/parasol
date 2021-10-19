@@ -356,7 +356,7 @@ class X86_64Encoder extends Target {
 				break;
 				
 			case	ABSOLUTE64_STRING:				// Fixup value is an int offset into the string pool
-				int location = f.locationSymbol.offset + f.location;
+				int location = int(f.locationSymbol.offset) + f.location;
 				*ref<int>(&_code[location]) = _pxiHeader.stringsOffset + int(f.value);
 				definePxiFixup(location);
 				break;
@@ -377,7 +377,7 @@ class X86_64Encoder extends Target {
 				break;
 				
 			case	INT_CONSTANT:
-				location = f.locationSymbol.offset + f.location;
+				location = int(f.locationSymbol.offset) + f.location;
 				C.memcpy(&_code[location], &f.value, f.locationSymbol.type().size());
 				break;
 				
@@ -450,14 +450,14 @@ class X86_64Encoder extends Target {
 				ref<PlainSymbol> ps = ref<PlainSymbol>(sym);
 				if (ps.accessFlags() & Access.COMPILE_TARGET) {
 					long x = long(sectionType());
-					address p = &_code[sym.offset];
+					address p = &_code[int(sym.offset)];
 					C.memcpy(p, &x, sym.type().size());
 				} else if (ps.initializer() != null) {
 					switch (ps.initializer().op()) {
 					case	INTEGER:
 						ref<Constant> c = ref<Constant>(ps.initializer());
 						long x = c.intValue();
-						address p = &_code[sym.offset];
+						address p = &_code[int(sym.offset)];
 						C.memcpy(p, &x, sym.type().size());
 						break;
 					}
@@ -3231,7 +3231,7 @@ class X86_64Encoder extends Target {
 			case	AUTO:
 			case	PARAMETER:
 				emit(0xff);
-				offset += sym.offset;
+				offset += int(sym.offset);
 				if (offset >= -128 && offset <= 127) {
 					modRM(1, 6, 5);
 					emit(byte(offset));
@@ -3248,7 +3248,7 @@ class X86_64Encoder extends Target {
 				break;
  */
 			case	MEMBER:
-				offset += sym.offset;
+				offset += int(sym.offset);
 				if (node.op() == Operator.DOT && !ref<Selection>(node).indirect()) {
 					ref<Selection> dot = ref<Selection>(node);
 					instPush(dot.left(), offset);
@@ -3486,12 +3486,12 @@ class X86_64Encoder extends Target {
 				
 			case	ENUMERATION:
 				ref<EnumInstanceType> eit = ref<EnumInstanceType>(sym.type());
-				enumAddressModRM(eit.typeSymbol(), regOpcode, ipAdjust, allAdjust + sym.offset * eit.enumType().size());
+				enumAddressModRM(eit.typeSymbol(), regOpcode, ipAdjust, allAdjust + int(sym.offset) * eit.enumType().size());
 				break;
 				
 			case	AUTO:
 			case	PARAMETER:
-				int offset = sym.offset + allAdjust;
+				int offset = int(sym.offset) + allAdjust;
 				if (offset >= -128 && offset <= 127) {
 					modRM(1, regOpcode, 5);
 					emit(byte(offset));
@@ -3516,12 +3516,12 @@ class X86_64Encoder extends Target {
 					if (object.op() == Operator.THIS || object.op() == Operator.SUPER)
 						baseReg = rmValues[thisRegister()];
 					else if ((object.nodeFlags & ADDRESS_MODE) != 0) {
-						modRM(object, regOpcode, ipAdjust, sym.offset + allAdjust);
+						modRM(object, regOpcode, ipAdjust, int(sym.offset) + allAdjust);
 						return;
 					} else
 						baseReg = rmValues[R(int(object.register))];
 				}
-				allAdjust += sym.offset;
+				allAdjust += int(sym.offset);
 				if (allAdjust >= -128 && allAdjust <= 127) {
 					modRM(1, regOpcode, baseReg);
 					emit(byte(allAdjust));

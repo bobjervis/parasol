@@ -48,6 +48,52 @@ unsigned[] echoUns = [ 0, 31, 801, 1546002994, unsigned.MAX_VALUE ];
 
 string[] echoStrings = [ null, "", "abc", "usdggbafgao[gpoasg[poi5420q0 abop eopw	f kopk opwkckqw pwopkfkopqwe " ];
 
+flags F8 {
+	 F1,  F2,  F3,  F4,  F5,  F6,  F7,  F8
+}
+
+flags F16 {
+	 F1,  F2,  F3,  F4,  F5,  F6,  F7,  F8,
+	 F9, F10, F11, F12, F13, F14, F15, F16
+}
+
+flags F32 {
+	 F1,  F2,  F3,  F4,  F5,  F6,  F7,  F8,
+	 F9, F10, F11, F12, F13, F14, F15, F16,
+	F17, F18, F19, F20, F21, F22, F23, F24,
+	F25, F26, F27, F28, F29, F30, F31, F32
+}
+
+flags F64 {
+	 F1,  F2,  F3,  F4,  F5,  F6,  F7,  F8,
+	 F9, F10, F11, F12, F13, F14, F15, F16,
+	F17, F18, F19, F20, F21, F22, F23, F24,
+	F25, F26, F27, F28, F29, F30, F31, F32,
+	F33, F34, F35, F36, F37, F38, F39, F40,
+	F41, F42, F43, F44, F45, F46, F47, F48,
+	F49, F50, F51, F52, F53, F54, F55, F56,
+	F57, F58, F59, F60, F61, F62, F63, F64
+}
+
+F8[] echoF8 = [ F8.F1, F8.F4|F8.F7, F8.F8, F8.F1|F8.F2|F8.F3|F8.F4|F8.F5|F8.F6|F8.F7|F8.F8 ];
+F16[] echoF16 = [ F16.F1, F16.F4|F16.F7, F16.F8, F16.F1|F16.F2|F16.F3|F16.F4|F16.F5|F16.F6|F16.F7|F16.F8,
+					F16.F16, F16.F1|F16.F2|F16.F3|F16.F4|F16.F5|F16.F6|F16.F7|F16.F8|F16.F9|F16.F10|F16.F11|F16.F12|F16.F13|F16.F14|F16.F15|F16.F16 ];
+F32[] echoF32 = [ F32.F1, F32.F4|F32.F7, F32.F16, F32.F1|F32.F2|F32.F3|F32.F4|F32.F5|F32.F6|F32.F7|F32.F8,
+					F32.F32, F32.F1|F32.F2|F32.F3|F32.F4|F32.F5|F32.F6|F32.F7|F32.F8|F32.F9|F32.F10|F32.F11|F32.F12|F32.F13|F32.F14|F32.F15|F32.F16,
+					F32.F1|F32.F8|F32.F9|F32.F16|F32.F17|F32.F32 ];
+F64[] echoF64 = [ F64.F1, F64.F4|F64.F7, F64.F16, F64.F1|F64.F2|F64.F3|F64.F4|F64.F5|F64.F6|F64.F7|F64.F8,
+					F64.F32, F64.F1|F64.F2|F64.F3|F64.F4|F64.F5|F64.F6|F64.F7|F64.F8|F64.F9|F64.F10|F64.F11|F64.F12|F64.F13|F64.F14|F64.F15|F64.F16,
+					F64.F1|F64.F8|F64.F9|F64.F16|F64.F17|F64.F32, F64.F64,
+					F64.F1|F64.F8|F64.F8|F64.F16|F64.F17|F64.F32|F64.F33|F64.F40|F64.F41|F64.F48|F64.F49|F64.F64 ];
+
+enum EchoEnum {
+	E_FIRST,
+	E_OTHER,
+	E_LAST
+}
+
+EchoEnum[] echoEnum = [ EchoEnum.E_OTHER, EchoEnum.E_LAST, EchoEnum.E_FIRST ];
+
 printf("Starting test sequences\n");
 {							// Test 1: Simple HTTP request and response
 	string url = "http://localhost:" + port + "/http";
@@ -128,6 +174,69 @@ printf("Starting test sequences\n");
 //	assert(b["i"] == "jkl");
 	printf(" ok\n");
 
+	for (i in echoF8) {
+		printf("F8 echo(%x, %d)", long(echoF8[i]), i);
+		process.stdout.flush();
+		F8 value = t.echo(echoF8[i], i);
+		assert(value == echoF8[i]);
+		printf(" ok\n");
+	}
+	for (i in echoF16) {
+		printf("F16 echo(%x, %d)", long(echoF16[i]), i);
+		process.stdout.flush();
+		F16 value = t.echo(echoF16[i], i);
+		assert(value == echoF16[i]);
+		printf(" ok\n");
+	}
+	for (i in echoF32) {
+		printf("F32 echo(%x, %d)", long(echoF32[i]), i);
+		process.stdout.flush();
+		F32 value = t.echo(echoF32[i], i);
+		assert(value == echoF32[i]);
+		printf(" ok\n");
+	}
+	for (i in echoF64) {
+		printf("F64 echo(%x, %d)", long(echoF64[i]), i);
+		process.stdout.flush();
+		F64 value = t.echo(echoF64[i], i);
+		assert(value == echoF64[i]);
+		printf(" ok\n");
+	}
+	for (i in echoEnum) {
+		printf("EchoEnum echo(%s, %d)", string(echoEnum[i]), i);
+		process.stdout.flush();
+		EchoEnum value = t.echo(echoEnum[i], i);
+		assert(value == echoEnum[i]);
+		printf(" ok\n");
+	}
+
+	string[] vec = [ "abc", "def", "ghi" ];
+
+	printf("string[] echo(vec)");
+	process.stdout.flush();
+	string[] vr = t.echo(vec);
+
+	assert(vr.length() == 3);
+	assert(vr[0] == "abc");
+	assert(vr[1] == "def");
+	assert(vr[2] == "ghi");
+
+	printf(" ok\n");
+
+	int[] vec2 = [ 12, 453675, 33645747, 132 ];
+
+	printf("int[] echo(vec2)");
+	process.stdout.flush();
+	int[] vr2 = t.echo(vec2);
+
+	assert(vr2.length() == 4);
+	assert(vr2[0] == 12);
+	assert(vr2[1] == 453675);
+	assert(vr2[2] == 33645747);
+	assert(vr2[3] == 132);
+
+	printf(" ok\n");
+
 	// When done, delete the proxy.
 
 	delete t;
@@ -143,6 +252,13 @@ interface Test {
 	unsigned echo(unsigned x, int index);
 	string echo(string x, int index);
 	boolean echo(string[string] x);
+	F8 echo(F8 x, int index);
+	F16 echo(F16 x, int index);
+	F32 echo(F32 x, int index);
+	F64 echo(F64 x, int index);
+	EchoEnum echo(EchoEnum x, int index);
+	string[] echo(string[] x);
+	int[] echo(int[] x);
 }
 
 server.stop();
@@ -199,5 +315,47 @@ class HttpExchange extends rpc.Service<Test> implements Test {
 		assert(argument["e"] == "fgh");
 		assert(argument["i"] == "jkl");
 		return true;
+	}
+
+	F8 echo(F8 argument, int index) {
+		assert(argument == echoF8[index]);
+		return argument;
+	}
+
+	F16 echo(F16 argument, int index) {
+		assert(argument == echoF16[index]);
+		return argument;
+	}
+
+	F32 echo(F32 argument, int index) {
+		assert(argument == echoF32[index]);
+		return argument;
+	}
+
+	F64 echo(F64 argument, int index) {
+		assert(argument == echoF64[index]);
+		return argument;
+	}
+
+	EchoEnum echo(EchoEnum argument, int index) {
+		assert(argument == echoEnum[index]);
+		return argument;
+	}
+
+	string[] echo(string[] argument) {
+		assert(argument.length() == 3);
+		assert(argument[0] == "abc");
+		assert(argument[1] == "def");
+		assert(argument[2] == "ghi");
+		return argument;
+	}
+
+	int[] echo(int[] argument) {
+		assert(argument.length() == 4);
+		assert(argument[0] == 12);
+		assert(argument[1] == 453675);
+		assert(argument[2] == 33645747);
+		assert(argument[3] == 132);
+		return argument;
 	}
 }

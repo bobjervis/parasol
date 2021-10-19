@@ -537,8 +537,6 @@ class CallProcessor<class I> {
 	}
 
 	public string process(ref<StubParams> params) {
-		ref<pointer<long>> ifacePtr = ref<pointer<long>>(_object);
-		pointer<long> vtable = *ifacePtr;
 		return I.stub(_object, params);
 	}
 

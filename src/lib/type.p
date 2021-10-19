@@ -91,7 +91,7 @@ public enum TypeFamily {
 		_unmarshaller = unmarshaller;
 	}
 
-	public boolean allowedInRPCs() {
+	public boolean hasMarshaller() {
 		return _marshaller != null;
 	}
 
@@ -472,20 +472,6 @@ public class InterfaceType extends ClassType {
 		}
 		o = scope().defineOverload("stub", Operator.FUNCTION, compileContext);
 		if (o != null) {
-/*
-			Location loc = _definition.location();
-			ref<SyntaxTree> tree = compileContext.tree();
-			ref<Node> n = tree.newLeaf(Operator.THIS, loc);
-			n.type = compileContext.getClassType("text.string");
-			ref<Identifier> object = tree.newIdentifier("object", loc);
-			object.type = this;
-			ref<Identifier> argName = tree.newIdentifier("params", loc);
-			argName.type = this;
-			ref<NodeList> parameters = tree.newNodeList(object, argName);
-			ref<Identifier> name = tree.newIdentifier("stub", definition().location());
-			ref<FunctionDeclaration> fd = tree.newFunctionDeclaration(FunctionDeclaration.Category.NORMAL, n, name, parameters, 
-												definition().location());
- */
 			ref<ParameterScope> funcScope = compileContext.createParameterScope(null, ParameterScope.Kind.STUB_FUNCTION);
 			ref<StubOverload> stub = compileContext.pool().newStubOverload(this, o, funcScope);
 			funcScope.symbol = stub;
@@ -949,6 +935,7 @@ public class EnumInstanceType extends Type {
 	private ref<EnumScope> _scope;
 
 	private ref<ParameterScope> _toStringMethod;
+	private ref<ParameterScope> _fromStringMethod;
 	private ref<ParameterScope> _instanceConstructor;
 
 	protected EnumInstanceType(ref<EnumScope> scope) {
@@ -1013,6 +1000,12 @@ public class EnumInstanceType extends Type {
 		return _toStringMethod;
 	}
 
+	public ref<ParameterScope> fromStringMethod(ref<Target> target, ref<CompileContext> compileContext) {
+		if (_fromStringMethod == null)
+			_fromStringMethod = target.generateEnumFromStringMethod(this, compileContext);
+		return _fromStringMethod;
+	}
+
 	public int size() {
 		long numberOfEnums = _scope.enumType.instanceCount;
 		
@@ -1060,7 +1053,7 @@ public class EnumInstanceType extends Type {
 	}
 
 	public string signature() {
-		return "[" + _scope.enumType.signature() + "]";
+		return _scope.enumType.signature();
 	}
 }
 /**
@@ -1107,12 +1100,12 @@ class FlagsType extends TypedefType {
 
 public class FlagsInstanceType extends Type {
 	private ref<Symbol> _symbol;
-	private ref<Scope> _scope;
+	private ref<FlagsScope> _scope;
 	private ref<ClassType> _instanceClass;
 	
 	private ref<ParameterScope> _toStringMethod;
 
-	protected FlagsInstanceType(ref<Symbol> symbol, ref<Scope> scope, ref<ClassType> instanceClass) {
+	FlagsInstanceType(ref<Symbol> symbol, ref<FlagsScope> scope, ref<ClassType> instanceClass) {
 		super(TypeFamily.FLAGS);
 		_symbol = symbol;
 		_scope = scope;
@@ -1123,8 +1116,21 @@ public class FlagsInstanceType extends Type {
 		printf("%s %p", string(family()), _instanceClass);
 	}
 
-	public ref<Scope> scope() {
+	public ref<FlagsScope> scope() {
 		return _scope;
+	}
+
+	public TypeFamily instanceFamily() {
+		int numberOfFlags = _scope.symbols().size();
+
+		if (numberOfFlags <= 8)
+			return TypeFamily.UNSIGNED_8;
+		else if (numberOfFlags <= 16)
+			return TypeFamily.UNSIGNED_16;
+		else if (numberOfFlags <= 32)
+			return TypeFamily.UNSIGNED_32;
+		else
+			return TypeFamily.SIGNED_64;		// don't have an unsigned 64 marshaller. use the signed one.
 	}
 
 	public int size() {
@@ -1185,6 +1191,10 @@ public class FlagsInstanceType extends Type {
 
 	boolean canCheckEquality(ref<CompileContext> compileContext) {
 		return true;
+	}
+
+	public string signature() {
+		return _scope.className().identifier();
 	}
 }
 
@@ -2165,17 +2175,21 @@ public class Type {
 	public boolean allowedInRPCs(ref<CompileContext> compileContext) {
 		switch (_family) {
 		case SHAPE:
-			if (isMap(compileContext)) {
-				if (!elementType().allowedInRPCs(compileContext))
-					return false;
-				else
-					return indexType().allowedInRPCs(compileContext);
-			}
+			if (isMap(compileContext) || isVector(compileContext))
+				return elementType().allowedInRPCs(compileContext) &&
+						indexType().allowedInRPCs(compileContext);
 			break;
+
+		case ENUM:
+		case FLAGS:
+			return true;
+
+		default:
+			if (_family.hasMarshaller())
+				break;
+			printf("Not allowed: %s %s\n", signature(), string(_family));
 		}
-		if (returnsViaOutParameter(compileContext))
-			return false;
-		return _family.allowedInRPCs();
+		return _family.hasMarshaller();
 	}
 	/**
 	 * Return the indirect type pointed to by a ref/pointer type.

@@ -884,8 +884,7 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			ref<Symbol> stringArray;
 			if (parameterScope.symbolCount() == 0) {
-				string nm = "*";
-				stringArray = parameterScope.define(Operator.PRIVATE, StorageClass.STATIC, null, nm, compileContext.arena().builtInType(TypeFamily.ADDRESS), null, compileContext.pool());
+				stringArray = parameterScope.define(Operator.PRIVATE, StorageClass.STATIC, null, "*", compileContext.arena().builtInType(TypeFamily.ADDRESS), null, compileContext.pool());
 				assignStaticRegion(stringArray, string.bytes, instances.length() * string.bytes);
 				for (int i = 0; i < instances.length(); i++) {
 					int offset = addStringLiteral((*instances)[i].name());
@@ -897,7 +896,43 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.MOV, R.RAX, indexRegister, R.RAX);
 			inst(X86.RET);
 			break;
-			
+
+		case	ENUM_FROM_STRING: {
+			enclosing = ref<EnumScope>(parameterScope.enclosing());
+			instances = enclosing.instances();
+			compileContext.buildScopes();
+			parameterScope.type.assignRegisterArguments(compileContext);
+			ref<SyntaxTree> tree = compileContext.tree();
+			Location loc = enclosing.definition().location();
+			ref<Block> block = tree.newBlock(Operator.BLOCK, false, loc);
+			ref<Scope> outerBlock = compileContext.arena().createScope(parameterScope, block, StorageClass.AUTO);
+			block.scope = outerBlock;
+
+				// switch (arg) {
+
+			ref<Node> params = tree.newIdentifier("arg", loc);
+			ref<Block> switchBody = tree.newBlock(Operator.BLOCK, true, loc);
+			ref<Node> switchStmt = tree.newBinary(Operator.SWITCH, params, switchBody, loc);
+			block.statement(tree.newNodeList(switchStmt));
+			ref<Type> str = compileContext.arena().builtInType(TypeFamily.STRING);
+			for (i in *instances) {
+				ref<Symbol> sym = (*instances)[i];
+				ref<Node> label = tree.newConstant(Operator.STRING, sym.name(), loc);
+				label.type = str;
+				ref<Node> value = tree.newInternalLiteral(sym.offset, loc);
+				value.type = enclosing.enumType;
+				ref<Node> switchCase = tree.newBinary(Operator.CASE, label, tree.newReturn(tree.newNodeList(value), loc), loc);
+				switchBody.statement(tree.newNodeList(switchCase));
+			}
+			ref<Node> value = tree.newInternalLiteral(0, loc);
+			value.type = enclosing.enumType;
+			ref<Node> x = tree.newReturn(tree.newNodeList(value), loc);
+			block.statement(tree.newNodeList(x));
+
+			compileContext.exemptScopes();
+			return block;
+			}
+
 		case	THUNK:
 			ref<ThunkScope> thunk = ref<ThunkScope>(parameterScope);
 			thunk.iface().implementingClass().assignSize(this, compileContext);;
@@ -1059,6 +1094,8 @@ public class X86_64 extends X86_64AssignTemps {
 			ref<Node> params = tree.newIdentifier("params", loc);
 			ref<Node> methodID = tree.newSelection(params, "methodID", loc);
 			ref<Block> switchBody = tree.newBlock(Operator.BLOCK, true, loc);
+			ref<Scope> swScope = compileContext.arena().createScope(outerBlock, switchBody, StorageClass.AUTO);
+			switchBody.scope = swScope;
 /*
 					case methodID:
  */
@@ -1231,11 +1268,66 @@ public class X86_64 extends X86_64AssignTemps {
 				ref<Node> terminator = tree.newConstant(Operator.CHARACTER, "!", loc);
 				ref<Node> call = tree.newCall(Operator.CALL, append, tree.newNodeList(terminator), loc);
 				block.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, call, loc)));
+			} else if (t.isVector(compileContext)) {
+
+				// marshal length
+
+				ref<Variable> len = compileContext.newVariable(indexType);
+				ref<Node> sel = tree.newSelection(value.clone(tree), "length", loc);
+				ref<Node> call = tree.newCall(Operator.CALL, sel, null, loc);
+				ref<Node> r = tree.newReference(len, true, loc);
+				ref<Node> asg = tree.newBinary(Operator.ASSIGN, r, call, loc);
+				block.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, asg, loc)));
+
+				marshal(tree.newReference(len, false, loc), output, block, tree, loc, compileContext);
+
+				// for (i in value) {
+
+				ref<Identifier> i = tree.newIdentifier("__i", loc);
+				ref<Loop> loop = tree.newLoop(loc);
+				loop.scope = compileContext.arena().createScope(block.scope, loop, StorageClass.AUTO);
+				ref<Block> body = tree.newBlock(Operator.BLOCK, false, loc);
+				loop.attachParts(i, value.clone(tree), body);
+				i.bind(loop.scope, loop, null, compileContext);
+
+				//	  marshal value[i]
+
+				i = tree.newIdentifier(i.symbol(), loc);
+				i.type = indexType;
+				ref<Node> n = tree.newBinary(Operator.SUBSCRIPT, value, i, loc);
+				n.type = elementType;
+				marshal(n, output, body, tree, loc, compileContext);
+
+				// }
+				block.statement(tree.newNodeList(loop));
 			}
 			break;
 
+		case ENUM: {
+			ref<EnumInstanceType> eit = ref<EnumInstanceType>(t);
+
+			ref<ParameterScope> toStringMethod = eit.toStringMethod(this, compileContext);
+			ref<NodeList> args = tree.newNodeList(value);
+			ref<Node> name = tree.newLeaf(Operator.THIS, loc);
+			ref<Type> s = compileContext.arena().builtInType(TypeFamily.STRING);
+			ref<Node> call = tree.newCall(toStringMethod, CallCategory.FUNCTION_CALL, name, args, loc, compileContext);
+			ref<Variable> i = compileContext.newVariable(s);
+			ref<Node> asg = tree.newBinary(Operator.ASSIGN, tree.newReference(i, true, loc), call, loc);
+			block.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, asg, loc)));
+			marshal(tree.newReference(i, false, loc), output, block, tree, loc, compileContext);
+
+			}
+			break;
+
+		case FLAGS:
+			ref<FlagsInstanceType> fit = ref<FlagsInstanceType>(t);
+			value.type = compileContext.arena().builtInType(fit.instanceFamily());
+			// Fall into general case, with an updated type to force an integral serialization.
+
 		default:
 			ref<ParameterScope> marsh = marshaller(value.type, compileContext);
+			if (marsh == null)
+				break;
 			ref<Node> method = tree.newIdentifier(ref<FunctionDeclaration>(marsh.definition()).name().symbol(), loc);
 			method.type = marsh.type;
 			ref<Reference> outputRef = tree.newReference(output, 0, false, loc);
@@ -1290,15 +1382,79 @@ public class X86_64 extends X86_64AssignTemps {
 				u = tree.newUnary(Operator.INDIRECT, serialized, loc);
 				u = tree.newUnary(Operator.INCREMENT_AFTER, u, loc);
 				block.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, u, loc)));
+			} else if (t.isVector(compileContext)) {
+
+				// unmarshal length
+
+				ref<Variable> len = compileContext.newVariable(indexType);
+				unmarshal(len, serialized.clone(tree), block, tree, loc, compileContext);
+
+				// v.resize(len);
+
+				ref<Node> lenRef = tree.newReference(len, false, loc);
+				ref<Node> vRef = tree.newReference(v, false, loc);
+				ref<Node> sel = tree.newSelection(vRef, "resize", loc);
+				ref<Node> call = tree.newCall(Operator.CALL, sel, tree.newNodeList(lenRef), loc);
+				block.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, call, loc)));
+
+				// for (i in v) {
+
+				ref<Identifier> i = tree.newIdentifier("__i", loc);
+				ref<Loop> loop = tree.newLoop(loc);
+				loop.scope = compileContext.arena().createScope(block.scope, loop, StorageClass.AUTO);
+				ref<Block> body = tree.newBlock(Operator.BLOCK, false, loc);
+				loop.attachParts(i, tree.newReference(v, false, loc), body);
+				i.bind(loop.scope, loop, null, compileContext);
+
+				//	  unmarshal v[i]
+
+				ref<Variable> temp = compileContext.newVariable(elementType);
+				unmarshal(temp, serialized.clone(tree), body, tree, loc, compileContext);
+				i = tree.newIdentifier(i.symbol(), loc);
+				i.type = indexType;
+				ref<Node> n = tree.newBinary(Operator.SUBSCRIPT, tree.newReference(v, false, loc), i, loc);
+				n.type = elementType;
+				ref<Node> asg = tree.newBinary(Operator.ASSIGN, n, tree.newReference(temp, true, loc), loc);
+				body.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, asg, loc)));
+
+				// }
+				block.statement(tree.newNodeList(loop));
 			}
 			break;
 
+		case ENUM: {
+			ref<EnumInstanceType> eit = ref<EnumInstanceType>(t);
+
+			ref<Type> s = compileContext.arena().builtInType(TypeFamily.STRING);
+			ref<Variable> i = compileContext.newVariable(s);
+			unmarshal(i, serialized.clone(tree), block, tree, loc, compileContext);
+			ref<ParameterScope> fromStringMethod = eit.fromStringMethod(this, compileContext);
+			ref<Node> r = tree.newReference(i, false, loc);
+			ref<NodeList> args = tree.newNodeList(r);
+			ref<Node> name = tree.newLeaf(Operator.THIS, loc);
+			ref<Node> call = tree.newCall(fromStringMethod, CallCategory.FUNCTION_CALL, name, args, loc, compileContext);
+			call.type = eit;
+			ref<Node> vr = tree.newReference(v, 0, false, loc);
+			ref<Node> asg = tree.newBinary(Operator.ASSIGN, vr, call, loc);
+			block.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, asg, loc)));
+
+			}
+			break;
+
+		case FLAGS:
+			ref<FlagsInstanceType> fit = ref<FlagsInstanceType>(t);
+			t = compileContext.arena().builtInType(fit.instanceFamily());
+			// Fall into general case, with an updated type to force an integral serialization.
+
 		default:
 			ref<ParameterScope> unm = unmarshaller(t, compileContext);
+			if (unm == null)
+				break;
 			ref<Node> method = tree.newIdentifier(ref<FunctionDeclaration>(unm.definition()).name().symbol(), loc);
 			method.type = unm.type;
 			ref<Node> call = tree.newCall(unm, CallCategory.FUNCTION_CALL, method, tree.newNodeList(serialized), loc, compileContext);
 			ref<Reference> r = tree.newReference(v, 0, true, loc);
+			r.type = t;														// for the case of a FLAGS object pretending to be integral.
 			ref<Node> n = tree.newBinary(Operator.ASSIGN, r, call, loc);
 			n = tree.newUnary(Operator.EXPRESSION, n, loc);
 			block.statement(tree.newNodeList(n));
@@ -1344,7 +1500,7 @@ public class X86_64 extends X86_64AssignTemps {
 		for (int i = 0; i < classScope.members().length(); i++) {
 			ref<Symbol> sym = (*classScope.members())[i];
 			if (sym.storageClass() == StorageClass.MEMBER && sym.type().hasDestructor()) {
-				inst(X86.LEA, firstRegisterArgument(), thisRegister(), sym.offset);
+				inst(X86.LEA, firstRegisterArgument(), thisRegister(), int(sym.offset));
 				instCall(sym.type().scope().destructor(), compileContext);
 			}
 		}
@@ -1524,16 +1680,16 @@ public class X86_64 extends X86_64AssignTemps {
 				continue;
 			ref<ParameterScope> defaultConstructor = sym.type().defaultConstructor();
 			if (!sym.type().isInterface() && sym.type().hasVtable(compileContext)) {
-				inst(X86.LEA, firstRegisterArgument(), thisRegister(), sym.offset);
+				inst(X86.LEA, firstRegisterArgument(), thisRegister(), int(sym.offset));
 				storeVtable(sym.type(), compileContext);
 				if (defaultConstructor != null)
 					instCall(defaultConstructor, compileContext);
 			} else if (defaultConstructor != null) {
-				inst(X86.LEA, firstRegisterArgument(), thisRegister(), sym.offset);
+				inst(X86.LEA, firstRegisterArgument(), thisRegister(), int(sym.offset));
 				instCall(defaultConstructor, compileContext);
 			} else if (sym.type().interfaceCount() > 0)
-				inst(X86.LEA, firstRegisterArgument(), thisRegister(), sym.offset);
-			storeITables(sym.type(), sym.offset, compileContext);
+				inst(X86.LEA, firstRegisterArgument(), thisRegister(), int(sym.offset));
+			storeITables(sym.type(), int(sym.offset), compileContext);
 		}
 		if (constructorBody != null) {
 			// if there is no super. or self. calls at the head of the node, we need to generate one
@@ -3488,7 +3644,7 @@ public class X86_64 extends X86_64AssignTemps {
 			emitSourceLocation(compileContext.current().file(), n.location());
 			ref<ParameterScope> constructor = n.type.defaultConstructor();
 			if (constructor != null) {
-				instLoadEnumAddress(firstRegisterArgument(), n, n.symbol().offset);
+				instLoadEnumAddress(firstRegisterArgument(), n, int(n.symbol().offset));
 				instCall(constructor, compileContext);
 			}
 			break;
@@ -4104,25 +4260,26 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			
 		case	FUNCTION_CALL:
-			ref<Node> func = call.target();
-			assert(func != null);
-			if (func.type.family() == TypeFamily.VAR) {
-				if (func.op() == Operator.DOT) {
-					ref<Selection> f = ref<Selection>(func);
-					ref<Node> left = f.left();
-					if (left.type.family() == TypeFamily.VAR) {
-						call.print(4);
-						assert(false);
-						return;
-					}
-				}
-				call.print(4);
-				assert(false);
-			}
 			if (overload != null)
 				instCall(overload, compileContext);
-			else
+			else {
+				ref<Node> func = call.target();
+				assert(func != null);
+				if (func.type.family() == TypeFamily.VAR) {
+					if (func.op() == Operator.DOT) {
+						ref<Selection> f = ref<Selection>(func);
+						ref<Node> left = f.left();
+						if (left.type.family() == TypeFamily.VAR) {
+							call.print(4);
+							assert(false);
+							return;
+						}
+					}
+					call.print(4);
+					assert(false);
+				}
 				inst(X86.CALL, func);
+			}
 			break;
 			
 		default:
@@ -4782,6 +4939,25 @@ public class X86_64 extends X86_64AssignTemps {
 
 	public ref<ParameterScope> generateEnumToStringMethod(ref<EnumInstanceType> type, ref<CompileContext> compileContext) {
 		ref<ParameterScope> scope = compileContext.arena().createParameterScope(type.scope(), null, ParameterScope.Kind.ENUM_TO_STRING);
+		ref<Type>[] returns;
+		ref<Type>[] params;
+		ref<Type> s = compileContext.arena().builtInType(TypeFamily.STRING);
+		returns.append(s);
+		params.append(type);
+		scope.type = compileContext.pool().newFunctionType(returns, params, false);
+		return scope;
+	}
+	
+	public ref<ParameterScope> generateEnumFromStringMethod(ref<EnumInstanceType> type, ref<CompileContext> compileContext) {
+		ref<ParameterScope> scope = compileContext.arena().createParameterScope(type.scope(), null, ParameterScope.Kind.ENUM_FROM_STRING);
+		ref<Type>[] returns;
+		ref<Type>[] params;
+		ref<Type> s = compileContext.arena().builtInType(TypeFamily.STRING);
+		ref<Node> ident = compileContext.tree().newIdentifier("arg", type.scope().definition().location());
+		scope.define(Operator.PUBLIC, StorageClass.PARAMETER, ref<Node>(null), ident, s, compileContext.pool());
+		returns.append(type);
+		params.append(s);
+		scope.type = compileContext.pool().newFunctionType(returns, params, false);
 		return scope;
 	}
 	

@@ -214,6 +214,10 @@ public class Unary extends Node {
 				}
 				break;
 
+			case INTERNAL_LITERAL:
+				_operand.type = type;
+				return _operand;
+
 			default:
 				if (_operand.isLvalue() && _operand.type.extendsFormally(type, compileContext)) {
 					_operand = _operand.fold(tree, false, compileContext);
@@ -600,6 +604,7 @@ public class Unary extends Node {
 
 		case	ENUM:
 		case	FLAGS:
+		case	SHAPE:
 			add(MessageId.UNFINISHED_VAR_CAST, compileContext.pool(), _operand.type.signature());
 			break;
 

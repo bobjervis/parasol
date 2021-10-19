@@ -769,7 +769,7 @@ public class CompileContext {
 		case	IDENTIFIER:
 			ref<Identifier> id = ref<Identifier>(n);
 			ref<FlagsScope> scope = ref<FlagsScope>(_current);
-			int offset = 1 << scope.symbols().size();
+			long offset = long(1) << scope.symbols().size();
 			ref<Symbol> sym = id.bindFlagsInstance(_current, scope.flagsType.wrappedType(), this);
 			sym.offset = offset;
 		}
@@ -1501,7 +1501,7 @@ public class MemoryPool extends memory.NoReleasePool {
 		return super new FlagsType(definition, scope, flagsInstanceType);
 	}
 
-	public ref<FlagsInstanceType> newFlagsInstanceType(ref<Symbol> symbol, ref<Scope> scope, ref<ClassType> instanceClass) {
+	public ref<FlagsInstanceType> newFlagsInstanceType(ref<Symbol> symbol, ref<FlagsScope> scope, ref<ClassType> instanceClass) {
 		return super new FlagsInstanceType(symbol, scope, instanceClass);
 	}
 

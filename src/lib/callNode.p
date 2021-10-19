@@ -284,17 +284,18 @@ public class Call extends ParameterBag {
 				}
 				
 			default:
-				if (_overload == null)
+				if (_overload == null) {
 					functionObject = _target;
-				// All other calls can rely on the LHS expression type to be the correct function,
-				// but for LHS expressions that are function objects (i.e. function pointers), there is
-				// no overloaded symbol, so we can't use that..
-				if (_target.type.deferAnalysis()) {
-					type = _target.type;
-					return this;
-				}
-				functionType = ref<FunctionType>(_target.type);
-
+					// All other calls can rely on the LHS expression type to be the correct function,
+					// but for LHS expressions that are function objects (i.e. function pointers), there is
+					// no overloaded symbol, so we can't use that.
+					if (_target == null && _target.type.deferAnalysis()) {
+						type = _target.type;
+						return this;
+					}
+					functionType = ref<FunctionType>(_target.type);
+				} else
+					functionType = _overload.type;
 				ref<Variable> temp;
 				if (multiReturnOfMultiCall) {
 					outParameter = tree.newLeaf(Operator.MY_OUT_PARAMETER, location());
@@ -1013,6 +1014,8 @@ public class Call extends ParameterBag {
 				assignFunctionType(compileContext);
 				break;
 			}
+			if (_target.type == null)
+				print(0);
 			switch (_target.type.family()) {
 			case	VAR:
 				type = _target.type;
