@@ -43,21 +43,6 @@ public long abs(long x) {
 		return x;
 }
 /**
- * Calculate the absolute value of x.
- *
- * @return The value |x|.
- */
-@Linux("libm.so.6", "fabsf")
-public abstract float abs(float x);
-/**
- * Calculate the absolute value of x.
- *
- * @return The value |x|.
- */
-@Linux("libm.so.6", "fabs")
-public abstract double abs(double x);
-
-/**
  * Calculate the smaller of x and y.
  *
  * @return The value x if x < y, otherwise y.

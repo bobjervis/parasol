@@ -1106,6 +1106,8 @@ public class CompileContext {
 			if (re == null || re.class != Overload)
 				assert(false);
 			ref<Overload> o = ref<Overload>(re);
+			if ((*o.instances()).length() == 0)
+				assert(false);
 			ref<Type> tp = (*o.instances())[0].assignType(this);
 			_dispatchException = ref<ParameterScope>(tp.scope());
 		}
@@ -1305,7 +1307,7 @@ public class CompileContext {
 		_flowContext = _flowContext.next();
 	}
 
-	public ref<TemplateInstanceType> newTemplateInstanceType(ref<TemplateType> templateType, var[] args, ref<Template> concreteDefinition, ref<FileStat> definingFile, ref<Scope> scope, ref<TemplateInstanceType> next) {
+	public ref<TemplateInstanceType> newTemplateInstanceType(ref<TemplateType> templateType, var[] args, ref<Template> concreteDefinition, ref<FileStat> definingFile, ref<ClassScope> scope, ref<TemplateInstanceType> next) {
 		ref<TemplateInstanceType> t = _pool.newTemplateInstanceType(templateType, args, concreteDefinition, definingFile, scope, next);
 		_arena.declare(t);
 		return t;
@@ -1473,19 +1475,19 @@ public class MemoryPool extends memory.NoReleasePool {
 		return super new Type(family);
 	}
 
-	public ref<ClassType> newClassType(ref<ClassDeclarator> definition, boolean isFinal, ref<Scope> scope) {
+	public ref<ClassType> newClassType(ref<ClassDeclarator> definition, boolean isFinal, ref<ClassScope> scope) {
 		return super new ClassType(definition, isFinal, scope);
 	}
 
-	public ref<ClassType> newClassType(ref<Type> base, boolean isFinal, ref<Scope> scope) {
+	public ref<ClassType> newClassType(ref<Type> base, boolean isFinal, ref<ClassScope> scope) {
 		return super new ClassType(base, isFinal, scope);
 	}
 
-	public ref<ClassType> newClassType(TypeFamily effectiveFamily, ref<Type> base, ref<Scope> scope) {
+	public ref<ClassType> newClassType(TypeFamily effectiveFamily, ref<Type> base, ref<ClassScope> scope) {
 		return super new ClassType(effectiveFamily, base, scope);
 	}
 
-	public ref<InterfaceType> newInterfaceType(ref<ClassDeclarator> definition, boolean isFinal, ref<Scope> scope) {
+	public ref<InterfaceType> newInterfaceType(ref<ClassDeclarator> definition, boolean isFinal, ref<ClassScope> scope) {
 		return super new InterfaceType(definition, isFinal, scope);
 	}
 
@@ -1518,7 +1520,7 @@ public class MemoryPool extends memory.NoReleasePool {
 		return super new TypedefType(family, wrappedType);
 	}
 
-	public ref<TemplateInstanceType> newTemplateInstanceType(ref<TemplateType> templateType, var[] args, ref<Template> concreteDefinition, ref<FileStat> definingFile, ref<Scope> scope, ref<TemplateInstanceType> next) {
+	public ref<TemplateInstanceType> newTemplateInstanceType(ref<TemplateType> templateType, var[] args, ref<Template> concreteDefinition, ref<FileStat> definingFile, ref<ClassScope> scope, ref<TemplateInstanceType> next) {
 		return super new TemplateInstanceType(templateType, args, concreteDefinition, definingFile, scope, next, this);
 	}
 

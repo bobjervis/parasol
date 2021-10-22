@@ -331,14 +331,13 @@ public class BuiltInType extends Type {
 		}
 		return false;
 	}
-
 }
 
 boolean[TypeFamily][TypeFamily] widens;
 
 widens.resize(TypeFamily.BUILTIN_TYPES);
 fill();
-void fill() {
+private void fill() {
 	for (int i = 0; i < int(TypeFamily.BUILTIN_TYPES); i++)
 		widens[TypeFamily(i)].resize(TypeFamily.BUILTIN_TYPES);
 }
@@ -423,7 +422,7 @@ widens[TypeFamily.CLASS_VARIABLE][TypeFamily.CLASS_VARIABLE] = true;
 widens[TypeFamily.CLASS_DEFERRED][TypeFamily.CLASS_DEFERRED] = true;
 
 public class InterfaceType extends ClassType {
-	InterfaceType(ref<ClassDeclarator> definition, boolean isFinal, ref<Scope> scope) {
+	InterfaceType(ref<ClassDeclarator> definition, boolean isFinal, ref<ClassScope> scope) {
 		super(TypeFamily.INTERFACE, definition, isFinal, scope);
 	}
 	
@@ -481,14 +480,14 @@ public class InterfaceType extends ClassType {
 }
 
 public class ClassType extends Type {
-	protected ref<Scope> _scope;
+	protected ref<ClassScope> _scope;
 	protected ref<Type> _extends;
 	protected ref<InterfaceType>[] _implements;
 	protected ref<ClassDeclarator> _definition;
 	protected boolean _isMonitor;
 	protected boolean _final;
 
-	protected ClassType(TypeFamily family, ref<ClassDeclarator> definition, boolean isFinal, ref<Scope> scope) {
+	protected ClassType(TypeFamily family, ref<ClassDeclarator> definition, boolean isFinal, ref<ClassScope> scope) {
 		super(family);
 		_definition = definition;
 		_scope = scope;
@@ -496,7 +495,7 @@ public class ClassType extends Type {
 		_final = isFinal;
 	}
 
-	ClassType(ref<ClassDeclarator> definition, boolean isFinal, ref<Scope> scope) {
+	ClassType(ref<ClassDeclarator> definition, boolean isFinal, ref<ClassScope> scope) {
 		super(TypeFamily.CLASS);
 		_definition = definition;
 		_scope = scope;
@@ -504,14 +503,14 @@ public class ClassType extends Type {
 		_final = isFinal;
 	}
 
-	ClassType(ref<Type> base, boolean isFinal, ref<Scope> scope) {
+	ClassType(ref<Type> base, boolean isFinal, ref<ClassScope> scope) {
 		super(TypeFamily.CLASS);
 		_scope = scope;
 		_extends = base;
 		_final = isFinal;
 	}
 
-	ClassType(TypeFamily effectiveFamily, ref<Type> base, ref<Scope> scope) {
+	ClassType(TypeFamily effectiveFamily, ref<Type> base, ref<ClassScope> scope) {
 		super(effectiveFamily);
 		_scope = scope;
 		_extends = base;
@@ -1541,7 +1540,7 @@ public class TemplateInstanceType extends ClassType {
 	private var[] _arguments;
 	private ref<TemplateType> _templateType;
 
-	TemplateInstanceType(ref<TemplateType> templateType, var[] args, ref<Template> concreteDefinition, ref<FileStat> definingFile, ref<Scope> scope, ref<TemplateInstanceType> next, ref<MemoryPool> pool) {
+	TemplateInstanceType(ref<TemplateType> templateType, var[] args, ref<Template> concreteDefinition, ref<FileStat> definingFile, ref<ClassScope> scope, ref<TemplateInstanceType> next, ref<MemoryPool> pool) {
 		super(templateType.definingSymbol().effectiveFamily(), ref<Type>(null), scope);
 		for (int i = 0; i < args.length(); i++)
 			_arguments.append(args[i], pool);
@@ -2184,10 +2183,14 @@ public class Type {
 		case FLAGS:
 			return true;
 
+		case CLASS:
+		case TEMPLATE_INSTANCE:
+			break;
+
 		default:
 			if (_family.hasMarshaller())
 				break;
-			printf("Not allowed: %s %s\n", signature(), string(_family));
+//			printf("Not allowed: %s %s\n", signature(), string(_family));
 		}
 		return _family.hasMarshaller();
 	}

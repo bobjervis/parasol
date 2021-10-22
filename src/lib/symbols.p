@@ -19,7 +19,7 @@ import parasol:stream;
 import parasol:text;
 
 public class Namespace extends Symbol {
-	private ref<Scope> _symbols;
+	private ref<ClassScope> _symbols;
 	private substring _dottedName;
 	private substring _domain;
 
@@ -235,6 +235,10 @@ public class PlainSymbol extends Symbol {
 					_type = compileContext.arena().builtInType(TypeFamily.CLASS_VARIABLE);
 			} else {
 				compileContext.assignDeclarationTypes(enclosing(), _typeDeclarator);
+				if (_typeDeclarator.deferAnalysis()) {
+					_type = _typeDeclarator.type;
+					return _type;
+				}
 				switch (_typeDeclarator.op()) {
 				case CLASS_DECLARATION:
 				case ENUM:
@@ -468,8 +472,8 @@ public class Overload extends Symbol {
 		for (int i = 0; i < _instances.length(); i++) {
 			for (int j = i + 1; j < _instances.length(); j++) {
 				if (_instances[i].parameterScope().equals(_instances[j].parameterScope(), compileContext)) {
-					_instances[i].definition().add(MessageId.DUPLICATE, compileContext.pool(), _name);
-					_instances[j].definition().add(MessageId.DUPLICATE, compileContext.pool(), _name);
+					_instances[i].definition().addUnique(MessageId.DUPLICATE, compileContext.pool(), _name);
+					_instances[j].definition().addUnique(MessageId.DUPLICATE, compileContext.pool(), _name);
 				}
 			}
 		}
@@ -484,11 +488,23 @@ public class Overload extends Symbol {
 	}
 	
 	public void merge(ref<Overload> unitDeclarations, ref<CompileContext> compileContext) {
-		for (int i = 0; i < unitDeclarations._instances.length(); i++) {
+		for (i in unitDeclarations._instances) {
 			ref<OverloadInstance> s = unitDeclarations._instances[i];
-//			TODO: Uncommenting these next lines causes an exception. Also, this code should check for duplicates.
-//			if (s.visibility() == Operator.PRIVATE)
-//				continue;
+			if (s.visibility() == Operator.PRIVATE)
+				continue;
+/*
+			boolean sawDuplicate;
+			for (j in _instances) {
+				ref<OverloadInstance> existing = _instances[j];
+				if (s.parameterScope().equals(existing.parameterScope(), compileContext)) {
+					s.definition().addUnique(MessageId.DUPLICATE, compileContext.pool(), s.name());
+					existing.definition().addUnique(MessageId.DUPLICATE, compileContext.pool(), existing.name());
+					sawDuplicate = true;
+					break;
+				}
+			}
+			if (!sawDuplicate)
+ */
 			_instances.append(s, compileContext.pool());
 		}
 	}
@@ -720,7 +736,10 @@ public class OverloadInstance extends Symbol {
 			if (_type != null && _type.family() == TypeFamily.TYPEDEF && printChildScopes) {
 				ref<TypedefType> tt = ref<TypedefType>(_type);
 				ref<TemplateType> templateType = ref<TemplateType>(tt.wrappedType());
-				templateType.scope().print(indent + INDENT, printChildScopes);
+//				if (templateType.scope() != null)
+					templateType.scope().print(indent + INDENT, printChildScopes);
+//				else
+//					printf("%*.*cnull scope\n", indent + INDENT, indent + INDENT);
 			}
 			for (ref<TemplateInstanceType> ti = _instances; ti != null; ti = ti.next()) {
 				printf("%*.*c", indent + INDENT, indent + INDENT, ' ');

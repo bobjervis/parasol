@@ -1875,9 +1875,3 @@ public void printHeader(ref<X86_64SectionHeader> header, long fileOffset) {
 	printf("\n");
 	printf("        exceptionsCount      %8d.\n", header.exceptionsCount);
 }
-/**
- * This is a bug: There should not be duplicate functions in a single scope.
- * TODO: Fix this
- */
-public void printHeader(ref<X86_64SectionHeader> header, long fileOffset) {
-}

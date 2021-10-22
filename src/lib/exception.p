@@ -904,7 +904,7 @@ InterruptResponse interruptResponse;
  * 	
  * RETURNS	true if the exception should be handled, false if it should not
  */
-private boolean dispatchException(ref<Exception> e, ref<Type> t, ref<Exception> destination, int size) {
+boolean dispatchException(ref<Exception> e, ref<Type> t, ref<Exception> destination, int size) {
 	ref<Type> actual = **ref<ref<ref<Type>>>(e);
 
 //	printf("dispatchException %p actual %p t %p equals %s isSubtype %s\n", e, actual, t, actual.equals(t) ? "true" : "false", actual.isSubtype(t) ? "true" : "false");

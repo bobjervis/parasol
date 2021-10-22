@@ -776,7 +776,7 @@ public class EnumScope extends ClassScope {
 	}
 }
 
-class FlagsScope extends ClasslikeScope {
+class FlagsScope extends ClassScope {
 	public ref<FlagsType> flagsType;
 	
 	private ref<Symbol>[] _instances;
@@ -891,9 +891,13 @@ public class ParameterScope extends Scope {
 				kind == Kind.TEMPLATE ? StorageClass.TEMPLATE : StorageClass.PARAMETER, null);
 		_kind = kind;
 		if (definition != null) {
-			if (definition.op() != Operator.UNIT) {
+			if (definition.op() == Operator.FUNCTION) {
 				ref<FunctionDeclaration> func = ref<FunctionDeclaration>(definition);
 				_category = func.functionCategory();
+				if (int(_category) > 6) {
+					printf("=== category %d %s ===\n%s", int(_category), enclosing.sourceLocation(func.location()), runtime.stackTrace());
+					func.print(4);
+				}
 			}
 		}
 	}
@@ -1129,16 +1133,15 @@ class UnitScope extends Scope {
 
 	public void mergeIntoNamespace(ref<Namespace> nm, ref<CompileContext> compileContext) {
 		ref<Scope> namespaceScope = nm.symbols();
-		for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
-			ref<Symbol> sym = i.get();
+		for (i in _symbols) {
+			ref<Symbol> sym = _symbols[i];
 			if (sym.visibility() == Operator.PRIVATE)
 				continue;
 			if (sym.class == PlainSymbol) {
 				ref<Symbol> n = namespaceScope.lookup(sym.name(), compileContext);
 				if (n != null) {
-					if (n.definition().countMessages() == 0)
-						n.definition().add(MessageId.DUPLICATE, compileContext.pool(), n.name());
-					sym.definition().add(MessageId.DUPLICATE, compileContext.pool(), sym.name());
+					n.definition().addUnique(MessageId.DUPLICATE, compileContext.pool(), n.name());
+					sym.definition().addUnique(MessageId.DUPLICATE, compileContext.pool(), sym.name());
 				} else
 					namespaceScope.put(sym, compileContext.pool());
 			} else if (sym.class == Overload) {
@@ -1152,8 +1155,7 @@ class UnitScope extends Scope {
 					ref<Overload> no = ref<Overload>(n);
 					no.merge(o, compileContext);
 				} else {
-					if (n.definition().countMessages() == 0)
-						n.definition().add(MessageId.DUPLICATE, compileContext.pool(), n.name());
+					n.definition().addUnique(MessageId.DUPLICATE, compileContext.pool(), n.name());
 					o.markAsDuplicates(compileContext.pool());
 				}
 			}
@@ -1179,7 +1181,7 @@ class UnitScope extends Scope {
 	}
 }
 
-public class NamespaceScope extends Scope {
+public class NamespaceScope extends ClassScope {
 	private ref<Namespace> _namespaceSymbol;
 
 	public NamespaceScope(ref<Scope> enclosing, ref<Namespace> namespaceSymbol) {

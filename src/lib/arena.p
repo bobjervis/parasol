@@ -476,7 +476,7 @@ public class Arena {
 	}
 
 	public ref<NamespaceScope> createNamespaceScope(ref<Scope> enclosing, ref<Namespace> namespaceSymbol) {
-		ref<NamespaceScope>  s = new NamespaceScope(enclosing, namespaceSymbol);
+		ref<NamespaceScope> s = new NamespaceScope(enclosing, namespaceSymbol);
 		_scopes.append(s);
 		return s;
 	}

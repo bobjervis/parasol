@@ -422,7 +422,7 @@ public class Command {
 		return true;
 	}
 
-};
+}
 
 public class Option<class T> extends BaseOption {
 	public T value;
@@ -432,7 +432,7 @@ public class Option<class T> extends BaseOption {
 		C.memset(pointer<byte>(&value), 0, value.bytes);
 	}
 
-};
+}
 
 class BaseOption {
 	private OptionClass _optionClass;
@@ -512,14 +512,14 @@ class BaseOption {
 		return true;
 	}
 
-};
+}
 
 enum OptionClass {
 	STRING,
 	BOOLEAN,
 	INTEGER,
 	HELP
-};
+}
 
 private void newLine(int indent, int newLineCount) {
 	for (int i = 0; i < newLineCount; i++)

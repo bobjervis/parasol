@@ -106,25 +106,25 @@ public abstract address _beginthread(void startAddress(address p), unsigned stac
 public abstract address _beginthreadex(address security, unsigned stackSize, unsigned startAddress(address p), address arglist, unsigned initflag, ref<unsigned> thrdaddr);
 
 @Windows("kernel32.dll", "CloseHandle")
-private abstract BOOL CloseHandle(address hHandle);
+private abstract BOOL CloseHandle_internal(address hHandle);
 // This is a hack to get around a parameter passing mismatch. Parasol wants to pass all class objects on the stack, but HANDLE is really passed in a register.
 public BOOL CloseHandle(HANDLE hHandle) {
-	return CloseHandle(*ref<address>(&hHandle));
+	return CloseHandle_internal(*ref<address>(&hHandle));
 }
 
 @Windows("kernel32.dll", "WaitForSingleObject")
-private abstract DWORD WaitForSingleObject(address hHandle, DWORD dwMilliseconds);
+private abstract DWORD WaitForSingleObject_internal(address hHandle, DWORD dwMilliseconds);
 // This is a hack to get around a parameter passing mismatch. Parasol wants to pass all class objects on the stack, but HANDLE is really passed in a register.
 public DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds) {
-	return WaitForSingleObject(*ref<address>(&hHandle), dwMilliseconds);
+	return WaitForSingleObject_internal(*ref<address>(&hHandle), dwMilliseconds);
 }
 @Windows("kernel32.dll", "CreateSemaphoreA")
 public abstract address CreateSemaphore(address lpSemaphoreAttributes, int lInitialCount, int lMaximumCount, ref<byte> name);
 @Windows("kernel32.dll", "ReleaseSemaphore")
-private abstract BOOL ReleaseSemaphore(address hHandle, int lReleaseCount, ref<int> lpPreviousCount);
+private abstract BOOL ReleaseSemaphore_internal(address hHandle, int lReleaseCount, ref<int> lpPreviousCount);
 //This is a hack to get around a parameter passing mismatch. Parasol wants to pass all class objects on the stack, but HANDLE is really passed in a register.
 public BOOL ReleaseSemaphore(HANDLE hHandle, int lReleaseCount, ref<int> lpPreviousCount) {
-	return ReleaseSemaphore(*ref<address>(&hHandle), lReleaseCount, lpPreviousCount);
+	return ReleaseSemaphore_internal(*ref<address>(&hHandle), lReleaseCount, lpPreviousCount);
 }
 
 @Windows("kernel32.dll", "CreateDirectory")
@@ -140,10 +140,11 @@ public abstract BOOL MoveFile(pointer<byte> lpExistingFilename, pointer<byte> lp
 @Windows("kernel32.dll", "CreateMutexA")
 public abstract address CreateMutex(address lpMutexAttributes, BOOL bInitialOwner, pointer<byte> lpName);
 @Windows("kernel32.dll", "ReleaseMutex")
-private abstract BOOL ReleaseMutex(address hHandle);
+private abstract BOOL ReleaseMutex_internal(address hHandle);
 //This is a hack to get around a parameter passing mismatch. Parasol wants to pass all class objects on the stack, but HANDLE is really passed in a register.
+// TODO: Check that this is still necessary
 public BOOL ReleaseMutex(HANDLE hHandle) {
-	return ReleaseMutex(*ref<address>(&hHandle));
+	return ReleaseMutex_internal(*ref<address>(&hHandle));
 }
 
 @Windows("kernel32.dll", "AddVectoredExceptionHandler")

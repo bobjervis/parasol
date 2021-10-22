@@ -1981,7 +1981,7 @@ class Import extends Node {
 	/*
 	 * In order to properly handle cyclic imports (A imports B while B imports A), we have to do import
 	 * processing in two stages. First, we have to process the import far enough to trigger the load of
-	 * the imported namespace. Later, we will look up the symbol.
+	 * the imported namespaces. Later, we will look up the symbol.
 	 */
 	public void prepareImport(ref<CompileContext> compileContext) {
 		string domain;
