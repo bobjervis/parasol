@@ -20,6 +20,7 @@ import parasol:process;
 import parasol:rpc;
 import parasol:runtime;
 import parasol:text;
+import parasol:time;
 import parasol:thread;
 
 private ref<log.Logger> logger = log.getLogger("parasol.marshaller_test");
@@ -93,6 +94,8 @@ enum EchoEnum {
 }
 
 EchoEnum[] echoEnum = [ EchoEnum.E_OTHER, EchoEnum.E_LAST, EchoEnum.E_FIRST ];
+
+time.Duration[] echoDur = [ 4.minutes(), 2.seconds(), 1.year(), time.Duration(543, 143754987), 3.weeks() ];
 
 printf("Starting test sequences\n");
 {							// Test 1: Simple HTTP request and response
@@ -237,6 +240,15 @@ printf("Starting test sequences\n");
 
 	printf(" ok\n");
 
+	for (i in echoDur) {
+		printf("time.Duration echo({%d:%9.9d}, %d)", echoDur[i].seconds(), echoDur[i].nanoseconds(), i);
+		process.stdout.flush();
+		time.Duration d = t.echo(echoDur[i], i);
+		assert(d.seconds() == echoDur[i].seconds());
+		assert(d.nanoseconds() == echoDur[i].nanoseconds());
+		printf(" ok\n");
+	}
+
 	// When done, delete the proxy.
 
 	delete t;
@@ -259,6 +271,7 @@ interface Test {
 	EchoEnum echo(EchoEnum x, int index);
 	string[] echo(string[] x);
 	int[] echo(int[] x);
+	time.Duration echo(time.Duration x, int index);
 }
 
 server.stop();
@@ -274,7 +287,6 @@ class HttpExchange extends rpc.Service<Test> implements Test {
 	}
 
 	short echo(short argument, int index) {
-//		logger.debug("in echo(%d, %d) testing against %d", argument, index, echoShorts[index]);
 		assert(argument == echoShorts[index]);
 		return argument;
 	}
@@ -358,4 +370,11 @@ class HttpExchange extends rpc.Service<Test> implements Test {
 		assert(argument[3] == 132);
 		return argument;
 	}
+
+	time.Duration echo(time.Duration argument, int index) {
+		assert(argument.seconds() == echoDur[index].seconds());
+		assert(argument.nanoseconds() == echoDur[index].nanoseconds());
+		return argument;
+	}
+
 }

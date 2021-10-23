@@ -1052,7 +1052,7 @@ public class X86_64 extends X86_64AssignTemps {
 					returnExprs.append(tree.newReference(v, 0, false, loc));
 					ref<Reference> sr = tree.newReference(marshalledData, 0, false, loc);
 					ref<Node> adrSR = tree.newUnary(Operator.ADDRESS, sr, loc);
-					unmarshal(v, adrSR, block, tree, loc, compileContext);
+					unmarshal(v, 0, returns[i], adrSR, block, tree, loc, compileContext);
 				}
 
 				// 5. return. 
@@ -1136,7 +1136,7 @@ public class X86_64 extends X86_64AssignTemps {
 						n = tree.newSelection(n, "arguments", loc);
 						ref<Type> t = sym.type();
 						ref<Variable> v = compileContext.newVariable(t);
-						unmarshal(v, n, switchBody, tree, loc, compileContext);
+						unmarshal(v, 0, t, n, switchBody, tree, loc, compileContext);
 						ref<Reference> r = tree.newReference(v, 0, false, loc);
 						argRefs.append(r);
 					}
@@ -1268,6 +1268,7 @@ public class X86_64 extends X86_64AssignTemps {
 				ref<Node> terminator = tree.newConstant(Operator.CHARACTER, "!", loc);
 				ref<Node> call = tree.newCall(Operator.CALL, append, tree.newNodeList(terminator), loc);
 				block.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, call, loc)));
+				break;
 			} else if (t.isVector(compileContext)) {
 
 				// marshal length
@@ -1300,6 +1301,21 @@ public class X86_64 extends X86_64AssignTemps {
 
 				// }
 				block.statement(tree.newNodeList(loop));
+				break;
+			}
+		case CLASS:
+		case TEMPLATE_INSTANCE:
+			ref<ref<Symbol>[]> psym = ref<ClassScope>(t.scope()).members();
+			for (i in *psym) {
+				ref<Symbol> sym = (*psym)[i];
+				if (sym.storageClass() == StorageClass.STATIC)
+					continue;
+				ref<Type> tp = sym.type();
+				if (tp.deferAnalysis())
+					continue;
+				ref<Node> n = tree.newSelection(value.clone(tree), sym, false, loc);
+				n.type = tp;
+				marshal(n, output, block, tree, loc, compileContext); 
 			}
 			break;
 
@@ -1338,8 +1354,7 @@ public class X86_64 extends X86_64AssignTemps {
 		}
 	}
  
-	private void unmarshal(ref<Variable> v, ref<Node> serialized, ref<Block> block, ref<SyntaxTree> tree, Location loc, ref<CompileContext> compileContext) {
-		ref<Type> t = v.type;
+	private void unmarshal(ref<Variable> v, long offset, ref<Type> t, ref<Node> serialized, ref<Block> block, ref<SyntaxTree> tree, Location loc, ref<CompileContext> compileContext) {
 		switch (t.family()) {
 		case SHAPE:
 			ref<Type> elementType = t.elementType();
@@ -1359,18 +1374,19 @@ public class X86_64 extends X86_64AssignTemps {
 				//     unmarshal i
 
 				ref<Variable> i = compileContext.newVariable(indexType);
-				unmarshal(i, serialized.clone(tree), body, tree, loc, compileContext);
+				unmarshal(i, 0, indexType, serialized.clone(tree), body, tree, loc, compileContext);
 
 				//     unmarshal e
 
 				ref<Variable> e = compileContext.newVariable(elementType);
-				unmarshal(e, serialized.clone(tree), body, tree, loc, compileContext);
+				unmarshal(e, 0, elementType, serialized.clone(tree), body, tree, loc, compileContext);
 
 				//     v[i] = e
 
 				ref<Node> er = tree.newReference(e, 0, false, loc);
 				ref<Node> ir = tree.newReference(i, 0, false, loc);
 				ref<Node> vr = tree.newReference(v, 0, false, loc);
+				vr.type = t;
 				ref<Node> sub = tree.newBinary(Operator.SUBSCRIPT, vr, ir, loc);
 				ref<Node> asg = tree.newBinary(Operator.ASSIGN, sub, er, loc);
 				body.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, asg, loc)));
@@ -1382,12 +1398,13 @@ public class X86_64 extends X86_64AssignTemps {
 				u = tree.newUnary(Operator.INDIRECT, serialized, loc);
 				u = tree.newUnary(Operator.INCREMENT_AFTER, u, loc);
 				block.statement(tree.newNodeList(tree.newUnary(Operator.EXPRESSION, u, loc)));
+				break;
 			} else if (t.isVector(compileContext)) {
 
 				// unmarshal length
 
 				ref<Variable> len = compileContext.newVariable(indexType);
-				unmarshal(len, serialized.clone(tree), block, tree, loc, compileContext);
+				unmarshal(len, 0, indexType, serialized.clone(tree), block, tree, loc, compileContext);
 
 				// v.resize(len);
 
@@ -1409,7 +1426,7 @@ public class X86_64 extends X86_64AssignTemps {
 				//	  unmarshal v[i]
 
 				ref<Variable> temp = compileContext.newVariable(elementType);
-				unmarshal(temp, serialized.clone(tree), body, tree, loc, compileContext);
+				unmarshal(temp, 0, elementType, serialized.clone(tree), body, tree, loc, compileContext);
 				i = tree.newIdentifier(i.symbol(), loc);
 				i.type = indexType;
 				ref<Node> n = tree.newBinary(Operator.SUBSCRIPT, tree.newReference(v, false, loc), i, loc);
@@ -1419,6 +1436,19 @@ public class X86_64 extends X86_64AssignTemps {
 
 				// }
 				block.statement(tree.newNodeList(loop));
+				break;
+			}
+		case CLASS:
+		case TEMPLATE_INSTANCE:
+			ref<ref<Symbol>[]> psym = ref<ClassScope>(t.scope()).members();
+			for (i in *psym) {
+				ref<Symbol> sym = (*psym)[i];
+				if (sym.storageClass() == StorageClass.STATIC)
+					continue;
+				ref<Type> tp = sym.type();
+				if (tp.deferAnalysis())
+					continue;
+				unmarshal(v, sym.offset, tp, serialized.clone(tree), block, tree, loc, compileContext); 
 			}
 			break;
 
@@ -1427,7 +1457,7 @@ public class X86_64 extends X86_64AssignTemps {
 
 			ref<Type> s = compileContext.arena().builtInType(TypeFamily.STRING);
 			ref<Variable> i = compileContext.newVariable(s);
-			unmarshal(i, serialized.clone(tree), block, tree, loc, compileContext);
+			unmarshal(i, 0, s, serialized.clone(tree), block, tree, loc, compileContext);
 			ref<ParameterScope> fromStringMethod = eit.fromStringMethod(this, compileContext);
 			ref<Node> r = tree.newReference(i, false, loc);
 			ref<NodeList> args = tree.newNodeList(r);
@@ -1453,7 +1483,7 @@ public class X86_64 extends X86_64AssignTemps {
 			ref<Node> method = tree.newIdentifier(ref<FunctionDeclaration>(unm.definition()).name().symbol(), loc);
 			method.type = unm.type;
 			ref<Node> call = tree.newCall(unm, CallCategory.FUNCTION_CALL, method, tree.newNodeList(serialized), loc, compileContext);
-			ref<Reference> r = tree.newReference(v, 0, true, loc);
+			ref<Reference> r = tree.newReference(v, int(offset), true, loc);
 			r.type = t;														// for the case of a FLAGS object pretending to be integral.
 			ref<Node> n = tree.newBinary(Operator.ASSIGN, r, call, loc);
 			n = tree.newUnary(Operator.EXPRESSION, n, loc);

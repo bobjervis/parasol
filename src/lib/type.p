@@ -516,6 +516,31 @@ public class ClassType extends Type {
 		_extends = base;
 	}
 
+	public boolean allowedInRPCs(ref<CompileContext> compileContext) {
+		switch (family()) {
+		case SHAPE:
+			if (isMap(compileContext) || isVector(compileContext))
+				return elementType().allowedInRPCs(compileContext) &&
+						indexType().allowedInRPCs(compileContext);
+
+		case CLASS:
+		case TEMPLATE_INSTANCE:
+			ref<ref<Symbol>[]> psym = _scope.members();
+			for (i in *psym) {
+				ref<Symbol> sym = (*psym)[i];
+				if (sym.storageClass() == StorageClass.STATIC)
+					continue;
+				ref<Type> tp = sym.assignType(compileContext);
+				if (tp.deferAnalysis())
+					continue;
+				if (!tp.allowedInRPCs(compileContext))
+					return false;
+			}
+			return true;
+		}
+		return false;
+	}
+
 	public void print() {
 		pointer<address> pa = pointer<address>(this);
 		printf("%s%s%s(%p) %p scope %p", _final ? "final " : "", _isMonitor? "monitor " : "", string(family()), pa[1], _definition, _scope);
@@ -2173,19 +2198,9 @@ public class Type {
 
 	public boolean allowedInRPCs(ref<CompileContext> compileContext) {
 		switch (_family) {
-		case SHAPE:
-			if (isMap(compileContext) || isVector(compileContext))
-				return elementType().allowedInRPCs(compileContext) &&
-						indexType().allowedInRPCs(compileContext);
-			break;
-
 		case ENUM:
 		case FLAGS:
 			return true;
-
-		case CLASS:
-		case TEMPLATE_INSTANCE:
-			break;
 
 		default:
 			if (_family.hasMarshaller())
