@@ -105,18 +105,8 @@ monitor class GlobalState {
 	ref<Logger>[string] loggerMap;
 
 	~GlobalState() {
-		Set<ref<LogHandler>> lhSet;
-		for (s in loggerMap) {
-			ref<Logger> logger = loggerMap[s];
-			ref<LogHandler> lh = logger.destination();
-			if (lh != null)
-				lhSet.add(lh);
-			delete logger;
-		}
-		for (lh in lhSet) {
-			lh.close();
-			delete lh;
-		}
+		for (s in loggerMap)
+			delete loggerMap[s];
 	}
 }
 
@@ -153,23 +143,20 @@ public ref<Logger> getLogger(string path) {
 		result = loggerMap[path];
 		if (result != null)
 			return result;
-		ref<LogChain> current = &chainRoot;
+		ref<Logger> current = &rootLogger;
+		string newPath = parts[0];
 		for (i in parts) {
-			ref<LogChain> child = current.children[parts[i]];
-			if (child == null) {
-				child = new LogChain;
-				child.thisLogger = new Logger(current.thisLogger, null);
-				string newPath = parts[0];
-				for (int j = 1; j <= i; j++) {
-					newPath.append('.');
-					newPath.append(parts[j]);
-				}
-				loggerMap[newPath] = child.thisLogger;
-				current.children[parts[i]] = child;
-			}
+			if (i > 0)
+				newPath += "." + parts[i];
+
+			ref<Logger> child;
+			boolean createdChild;
+			(child, createdChild) = current.getChild(parts[i], newPath);
+			if (createdChild)
+				loggerMap[newPath] = child;
 			current = child;
 		}
-		return current.thisLogger;
+		return current;
 	}
 }
 
@@ -181,10 +168,7 @@ public ref<Logger> getLogger(string path) {
  * {@link LogHandler} object starts its own write thread.
  */
 public ConsoleLogHandler defaultHandler;
-Logger rootLogger(null, &defaultHandler);
-LogChain chainRoot = {
-	thisLogger: &rootLogger
-};
+Logger rootLogger(null, &defaultHandler, null);
 /**
  * If you want to use the logger infrastructure across a linux fork, you will need to make this call. It will
  * reset the logger thread states as appropriate for the child to begin logging again. Any log statements made in
@@ -209,14 +193,20 @@ public void resetChildProcess() {
  * larger in magnitude than the message's importance level.
  */
 public monitor class Logger {
+	private string _path;
 	private int _level;
 	private ref<Logger> _parent;
 	private ref<LogHandler> _destination;
 
-	Logger(ref<Logger> parent, ref<LogHandler> destination) {
+	private boolean _propagateEvents;
+	private ref<Logger>[string] _children;
+
+	Logger(ref<Logger> parent, ref<LogHandler> destination, string path) {
 		_parent = parent;
 		_destination = destination;
+		_path = path;
 		_level = 1;
+		_propagateEvents = true;
 	}
 	/**
 	 * Sets the message importance level for the given logger. All messages that reach this logger are checked
@@ -270,6 +260,26 @@ public monitor class Logger {
 		ref<LogHandler> result = _destination;
 		_destination = newHandler;
 		return result;
+	}
+	/**
+	 * Instruct the Logger to not only process any sufficiently important
+	 * message in any defined LogHandler, but also hand the log event off
+	 * to the parent logger for further processing.
+	 */
+	public boolean propagateEvents(boolean newValue) {
+		boolean oldValue = _propagateEvents;
+		_propagateEvents = newValue;
+		return oldValue;
+	}
+
+	public int, ref<LogHandler>, boolean configure(int level, ref<LogHandler> newHandler, boolean propagateEvents) {
+		int oldLevel = _level;
+		ref<LogHandler> oldHandler = _destination;
+		boolean oldEcho = _propagateEvents;
+		setLevel(level);
+		_destination = newHandler;
+		_propagateEvents = propagateEvents;
+		return oldLevel, oldHandler, oldEcho;
 	}
 	/**
 	 * Print a formatted messages with importance {@link INFO}.
@@ -532,10 +542,24 @@ public monitor class Logger {
 			lock (*context) {
 				if (_destination != null)
 					_destination.enqueue(&logEvent);
-				context = _parent;
+				if (_propagateEvents)
+					context = _parent;
+				else
+					context = null;
 			}
 		} while (context != null);
 	}
+
+	ref<Logger>, boolean getChild(string name, string newPath) {
+		ref<Logger> child = _children[name];
+		if (child == null) {
+			child = new Logger(this, null, newPath);
+			_children[name] = child;
+			return child, true;
+		} else
+			return child, false;
+	}
+
 	/**
 	 * Wait until all downstream log handlers have written their queues.
 	 *
@@ -574,15 +598,6 @@ public monitor class Logger {
 		} while (context != null);
 	}
 }
-
-class LogChain {
-	ref<Logger> thisLogger;
-	ref<LogChain>[string] children;
-
-	~LogChain() {
-		children.deleteAll();
-	}
-};
 /**
  * The structured message metadata associated with a log message.
  */
@@ -753,12 +768,10 @@ public class LogHandler extends LogHandlerVolatileData {
 		case -5:
 			return "FATAL";
 		}
-		string s;
 		if (level >= 0)
-			s.printf("NOTICE %d", level);
+			return "NOTICE_" + level;
 		else
-			s.printf("CAUTION %d", level);
-		return s;
+			return "CAUTION_" + level;
 	}
 }
 /**

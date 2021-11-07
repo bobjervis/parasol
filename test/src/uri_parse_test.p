@@ -59,6 +59,29 @@ assert(uri.query == null);
 assert(uri.fragment == null);
 assert(uri.path == "");
 
+assert(uri.parseURI("abc://1.2.3.4:1235/"));
+assert(uri.parsed);
+assert(uri.scheme == "abc");
+assert(uri.userinfo == null);
+assert(uri.host == "1.2.3.4");
+assert(!uri.portDefaulted);
+assert(uri.port == 1235);
+assert(uri.query == null);
+assert(uri.fragment == null);
+assert(uri.path == "/");
+
+assert(uri.parseURI("https://192.168.1.2:5013/secure/src_server_ready?A=p8ROxQ9jims/XYq8SMmahQNBKN0w5HdWtGlkdznixZ9tpHRiR5ZSaA=="));
+assert(uri.parsed);
+assert(uri.scheme == "https");
+assert(uri.userinfo == null);
+assert(uri.host == "192.168.1.2");
+assert(!uri.portDefaulted);
+assert(uri.port == 5013);
+assert(uri.query == "A=p8ROxQ9jims/XYq8SMmahQNBKN0w5HdWtGlkdznixZ9tpHRiR5ZSaA==");
+assert(uri.fragment == null);
+assert(uri.path == "/secure/src_server_ready");
+assert(uri.toString() == "https://192.168.1.2:5013/secure/src_server_ready?A=p8ROxQ9jims/XYq8SMmahQNBKN0w5HdWtGlkdznixZ9tpHRiR5ZSaA==");
+
 assert(uri.parseRelativeReference("abc"));
 assert(uri.parsed);
 assert(uri.scheme == null);

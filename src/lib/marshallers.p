@@ -21,7 +21,7 @@ import parasol:text;
 
 import parasol:log;
 import parasol:thread;
-ref<log.Logger> logger = log.getLogger("stuff");
+ref<log.Logger> logger = log.getLogger("rpc");
 
 void marshalBoolean(ref<string> output, ref<boolean> object) {
 	(*output).append(*object ? 't' : 'f');

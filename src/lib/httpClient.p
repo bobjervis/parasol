@@ -512,6 +512,7 @@ public class Client {
 	private string _webSocketProtocol;
 	private string[string] _headers;
 	private string[string] _queryParameters;
+	private ref<log.Logger> _logger;
 
 	private string _cipherList;
 	/**
@@ -566,6 +567,15 @@ public class Client {
 
 	~Client() {
 		reset();
+	}
+	/**
+	 * Specify that you want logging done to the indicated logger path.
+	 */
+	public void logTo(string loggerPath) {
+		if (loggerPath == null)
+			_logger = null;
+		else
+			_logger = log.getLogger(loggerPath);
 	}
 	/**
 	 * This method resets the client after a request has been issued.
@@ -816,27 +826,36 @@ public class Client {
 		switch (_uri.scheme) {
 		case "ws":
 			if (_webSocketProtocol == null) {
-				printf("No Web Socket protocol defined.\n");
+				if (_logger != null)
+					logRecord(ConnectStatus.NO_PROTOCOL, null);
 				return ConnectStatus.NO_PROTOCOL, 0;
 			}
-			if (method != "GET")
+			if (method != "GET") {
+				if (_logger != null)
+					logRecord(ConnectStatus.WS_NOT_GET, null);
 				return ConnectStatus.WS_NOT_GET, 0;
+			}
 			encryption = net.Encryption.NONE;
 			break;
 
 		case "wss":
 			if (_webSocketProtocol == null) {
-				printf("No Web Socket protocol defined.\n");
+				if (_logger != null)
+					logRecord(ConnectStatus.NO_PROTOCOL, null);
 				return ConnectStatus.NO_PROTOCOL, 0;
 			}
-			if (method != "GET")
+			if (method != "GET") {
+				if (_logger != null)
+					logRecord(ConnectStatus.WS_NOT_GET, null);
 				return ConnectStatus.WS_NOT_GET, 0;
+			}
 			encryption = net.Encryption.SSLv23;
 			break;
 
 		case "https":
 			if (_webSocketProtocol != null) {
-				printf("Web Socket protocol defined - not a web socket URL.\n");
+				if (_logger != null)
+					logRecord(ConnectStatus.WS_PROTOCOL_NOT_ALLOWED, null);
 				return ConnectStatus.WS_PROTOCOL_NOT_ALLOWED, 0;
 			}
 			encryption = net.Encryption.SSLv23;
@@ -844,26 +863,33 @@ public class Client {
 
 		default:
 			if (_webSocketProtocol != null) {
-				printf("%p: url = %s protocol = '%s'\n", this, _uri.toString(), _webSocketProtocol);
-				printf("Web Socket protocol defined - not a web socket URL.\n");
+				if (_logger != null)
+					logRecord(ConnectStatus.WS_PROTOCOL_NOT_ALLOWED, null);
 				return ConnectStatus.WS_PROTOCOL_NOT_ALLOWED, 0;
 			}
 			encryption = net.Encryption.NONE;
 		}
 
 		ref<net.Socket> socket = net.Socket.create(encryption, _cipherList, null, null, null);
-		if (socket == null)
+		if (socket == null) {
+			if (_logger != null)
+				logRecord(ConnectStatus.NO_SOCKET, null);
 			return ConnectStatus.NO_SOCKET, 0;
+		}
 		ref<net.Connection> connection;
 		unsigned ip;
 		(connection, ip) = socket.connect(_uri.host, _uri.port);
 		if (connection == null) {
 			delete socket;
+			if (_logger != null)
+				logRecord(ConnectStatus.CONNECT_FAILED, null);
 			return ConnectStatus.CONNECT_FAILED, ip;
 		}
 		if (!connection.initiateSecurityHandshake()) {
 			delete connection;
 			delete socket;
+			if (_logger != null)
+				logRecord(ConnectStatus.SSL_HANDSHAKE_FAILED, null);
 			return ConnectStatus.SSL_HANDSHAKE_FAILED, ip;
 		}
 		boolean expectWebSocket;
@@ -932,19 +958,29 @@ public class Client {
 		delete _response;
 		_response = new ParsedResponse();
 		if (!parser.parseResponse(_response)) {
+			if (_logger != null)
+				logRecord(ConnectStatus.MALFORMED_RESPONSE, _response);
 			delete _response;
 			_response = null;
 			return ConnectStatus.MALFORMED_RESPONSE, ip;
 		}
 		if (expectWebSocket) {
-			if (_response.code != "101")
+			if (_response.code != "101") {
+				if (_logger != null)
+					logRecord(ConnectStatus.WEB_SOCKET_REFUSED, _response);
 				return ConnectStatus.WEB_SOCKET_REFUSED, ip;
+			}
 			string webSocketAccept = computeWebSocketAccept(webSocketKey);
-			if (_response.headers["sec-websocket-accept"] != webSocketAccept)
+			if (_response.headers["sec-websocket-accept"] != webSocketAccept) {
+				if (_logger != null)
+					logRecord(ConnectStatus.WEB_SOCKET_ACCEPT_MISMATCH, _response);
 				return ConnectStatus.WEB_SOCKET_ACCEPT_MISMATCH, ip;
+			}
 			_webSocket = new WebSocket(_connection, false);
 			_connection = null;					// The web socket takes possession of the connection object.
 		}
+		if (_logger != null)
+			logRecord(ConnectStatus.OK, _response);
 		return ConnectStatus.OK, ip;
 	}
 	/**
@@ -1087,6 +1123,44 @@ public class Client {
 		for (string[string].iterator i = _headers.begin(); i.hasNext(); i.next()) {
 			printf("    %-20s %s\n", i.key(), i.get());
 		}
+	}
+	/**
+	 * This method returns the log record string that would be generated based on the current
+	 * seetings of the Client.
+	 *
+	 * The format of the record string is JSON, as in:
+	 *
+	 *<pre>{@code
+	 *    &lbrace;
+	 *        "URI":"<i>The URI of this Client object</i>",
+	 *        "headers":&lbrace;
+	 *            "<i>lowercase name of the header</i>":"<i>The value of the header</i>",
+	 *            ...
+	 *        &rbrace;
+	 *    &rbrace;
+	 *</pre>}
+	 *
+	 * @return A JSON string containing the URI and headers as an object.
+	 */
+	public void logRecord(ConnectStatus status, ref<ParsedResponse> response) {
+		string record = "{";
+		record.printf("\"URI\":\"%s\",\"headers\":{", _uri.toString().escapeJSON());
+		boolean firstTime = true;
+		for (key in _headers) {
+			if (firstTime)
+				firstTime = false;
+			else
+				record += ",";
+			record.printf("\"%s\":\"%s\"", key.escapeJSON(), _headers[key].escapeJSON());
+		}
+		record.printf("},\"status\":\"%s\"", string(status));
+		if (response != null)
+			record.printf(",\"response\":%s", response.logRecord());
+		record += "}";
+		if (status == ConnectStatus.OK)
+			_logger.info(record);
+		else
+			_logger.error(record);
 	}
 	/**
 	 * Obtain the response to the request.

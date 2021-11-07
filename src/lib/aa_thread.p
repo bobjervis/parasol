@@ -608,6 +608,31 @@ public class Monitor {
 	}
 }
 
+public monitor class RefCounted {
+	private int _refCount;
+
+	public void refer() {
+		_refCount++;
+//		printf("%p.refer() -> %d\n%s", this, _refCount, runtime.stackTrace());
+	}
+	/**
+	 * This method may delete the object being called, so never count on the object being
+	 * alive after a call to release.
+	 */
+	public void release() {
+		_refCount--;
+//		printf("%p.release() -> %d\n%s", this, _refCount, runtime.stackTrace());
+		if (_refCount < 0)
+			deleteMe();
+	}
+
+	public int references() {
+		return _refCount + 1;
+	}
+
+	protected abstract void deleteMe();
+}
+
 class Mutex {
 	private int _level;
 	private HANDLE _mutex;

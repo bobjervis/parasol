@@ -21,9 +21,25 @@ import parasol:process;
 import parasol:rpc;
 import parasol:runtime;
 import parasol:thread;
-
+import parasol:time;
 
 private ref<log.Logger> logger = log.getLogger("parasol.rpc_test");
+
+time.Formatter formatter("yyyy/MM/dd HH:mm:ss.SSS");
+
+class TestLogHandler extends log.LogHandler {
+	public void processEvent(ref<log.LogEvent> logEvent) {
+		time.Date d(logEvent.when, &time.UTC);
+		string logTime = formatter.format(&d);				// Note: if the format includes locale-specific stuff,
+															// like a named time zone or month, we would have to add
+															// some arguments to the format call.
+		printf("%s %s %s\n", logTime, label(logEvent.level), logEvent.msg);
+		process.stdout.flush();
+	}
+}
+
+TestLogHandler tlh;
+log.getLogger("http.client").configure(log.INFO, &tlh, false);
 
 http.Server server;
 char port;
@@ -54,8 +70,7 @@ interface WSUpstream {
 class ServerWorkFactory extends rpc.WebSocketFactory<WSUpstream, WSDownstream> {
 	public boolean notifyCreation(ref<http.Request> request, ref<rpc.WebSocket<WSUpstream, WSDownstream>> socket) {
 		ref<ServerWork> s = new ServerWork(socket);
-		socket.onDisconnect(ServerWork.disconnectWrapper, s);
-		s.down = socket.configure(s);
+		s.down = socket.configure(s, ServerWork.disconnectWrapper, s);
 		return true;
 	}
 }
@@ -94,8 +109,8 @@ class ServerWork implements WSUpstream {
 
 	void disconnect(boolean normalClose) {
 		logger.debug("upstream disconnect");
+		delete down;
 		upstreamDisconnect = true;
-		delete this;
 	}
 }
 
@@ -131,6 +146,7 @@ class ClientWork implements WSDownstream {
 {							// Test 1: Simple HTTP request and response
 	string url = "http://localhost:" + port + "/http";
 	rpc.Client<Test> client(url);
+	client.logTo("http.client");
 
 	// Manufacture the proxy object.
 
@@ -152,8 +168,7 @@ class ClientWork implements WSDownstream {
 
 	assert(client.connect() == http.ConnectStatus.OK);
 	ref<rpc.WebSocket<WSUpstream, WSDownstream>> socket = client.socket();
-	socket.onDisconnect(ClientWork.disconnectWrapper, &down);
-	WSUpstream up = socket.configure(down);
+	WSUpstream up = socket.configure(down, ClientWork.disconnectWrapper, &down);
 
 	logger.debug("Start calling up");
 	assert(up.upload(3));
@@ -162,8 +177,12 @@ class ClientWork implements WSDownstream {
 
 	printf("message count %d\n", down.testMessageCount);
 	assert(down.testMessageCount == 3);
+
+	// The normal shutdown sequence
+
 	socket.shutDown(http.WebSocket.CLOSE_NORMAL, "");
 	socket.waitForDisconnect();
+	delete up;											// Delete the proxy, just like the HTTP case.
 }
 assert(downstreamDisconnect);
 server.stop();
@@ -181,7 +200,7 @@ port = server.httpPort();
 	assert(status == http.ConnectStatus.OK);
 	ref<rpc.WebSocket<WSUpstream, WSDownstream>> socket = client.socket();
 	// At this point the rpc.Client could be destructed, 
-	WSUpstream up = socket.configure(down);
+	WSUpstream up = socket.configure(down, null, null);
 
 	try {
 		up.hang();
@@ -190,6 +209,7 @@ port = server.httpPort();
 	} catch (IOException e) {
 		assert(e.message() == "Connection closed before reply");
 	}
+	delete up;
 	printf("PASS: Dropped connection caused RPC caller to receive an Exception.\n");
 }
 

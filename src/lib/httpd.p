@@ -932,6 +932,26 @@ public class ParsedResponse {
 			process.printf("    %-20s %s\n", i.key(), i.get());
 		}
 	}
+	/**
+	 * Format a JSON oobject describing the response.
+	 */
+	public string logRecord() {
+		string output = "{\"version\":";
+
+		output.printf("\"%s\",\"code\":\"%s\",\"reason\":\"%s\"", httpVersion.escapeJSON(), code.escapeJSON(), reason.escapeJSON());		
+		if (headers.size() > 0)
+			output.printf(",\"headers\":{");
+		boolean firstTime = true;
+		for (key in headers) {
+			if (firstTime)
+				firstTime = false;
+			else
+				output += ",";
+			output.printf("\"%s\":\"%s\"", key, headers[key]);
+		}
+		output += "}}";
+		return output;
+	}
 }
 /**
  * This class is used to generate the response to an HTTP request inside an
@@ -1364,7 +1384,7 @@ UriCharacterClasses[] uriClasses = [
 	'=': UriCharacterClasses.USERINFO|UriCharacterClasses.HOST|UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
 	'@': UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
 	':': UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
-	'/': UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
+	'/': UriCharacterClasses.PATH|UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
 	'?': UriCharacterClasses.QUERY|UriCharacterClasses.FRAGMENT,
 ];
 
@@ -1482,7 +1502,7 @@ public class Uri {
 	 * On a successful parse, the public members of the structure will be initialized with
 	 * the values of the various fields in the URI.
 	 *
-	 * If the uri parameter cotanis a relative reference, the baseUri parameter is used to
+	 * If the uri parameter cotains a relative reference, the baseUri parameter is used to
 	 * resolve a full target URI.
 	 *
 	 * @param baseUri If the uri string is a relative reference, use this URI to resolve
@@ -1655,7 +1675,7 @@ public class Uri {
 		if (quesIdx >= 0) {
 			if (colonIdx > quesIdx)
 				colonIdx = -1;
-			if (slashIdx > fragIdx)
+			if (slashIdx > quesIdx)
 				slashIdx = -1;
 		}
 
@@ -1663,7 +1683,6 @@ public class Uri {
 
 		if (slashIdx >= 0 && colonIdx > slashIdx)
 			colonIdx = -1;
-
 
 		if (colonIdx < 0) {
 			if (variant != UriVariant.RELATIVE_REF)
@@ -1709,7 +1728,7 @@ public class Uri {
 						(port, success) = char.parse(uri.substr(portIdx + 1, pathIdx));
 						if (!success || port == 0)
 							// This will leave the URI unparsed
-							return false;				
+							return false;
 						portDefaulted = false;
 					} else {
 						port = defaultPort[scheme];
@@ -1719,7 +1738,7 @@ public class Uri {
 						portIdx = pathIdx;
 					}
 					host = uri.substr(authIdx, portIdx);
-					if (!validate(userinfo, UriCharacterClasses.USERINFO))
+					if (!validate(host, UriCharacterClasses.HOST))
 						return false;
 				}
 			} else {

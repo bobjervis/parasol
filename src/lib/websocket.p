@@ -203,7 +203,7 @@ private monitor class WebSocketVolatileData {
 			//	   there is no need for any further message exchange, except an OP_CLOSE from us.
 			//	   The catch with this case is that any number of issues could drop the connection and
 			//	   cause the reader thread to stop the moment the _reader test is applied. Thus, any effort
-			//	   to transmit an OP_CLOSE control frame will be pointless. Tht's fortunately the key
+			//	   to transmit an OP_CLOSE control frame will be pointless. That's fortunately the key
 			//	   phrase: pointless, not harmful.
 			
 			if (_reader != null) {

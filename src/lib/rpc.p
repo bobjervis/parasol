@@ -60,8 +60,11 @@ class WebSocketTransport extends ClientTransport {
 	ref<AbstractWebSocketReader> reader;
 	http.RendezvousManager manager;
 	int serial;
+	ref<thread.RefCounted> rpcWebSocket;
 
-	WebSocketTransport() {}
+	void initialize(ref<thread.RefCounted> rpcWebSocket) {
+		this.rpcWebSocket = rpcWebSocket;
+	}
 
 	string call(string serializedArguments) {
 		string s;
@@ -71,6 +74,8 @@ class WebSocketTransport extends ClientTransport {
 		if (r == null)
 			return null;
 		s.append(serializedArguments);
+		rpcWebSocket.refer();
+//		logger.memDump(log.DEBUG, "rpc.ws.call", &s[0], s.length(), 0);
 		socket.write(http.WebSocket.OP_BINARY, s);
 		s = null;
 
@@ -86,12 +91,14 @@ class WebSocketTransport extends ClientTransport {
 				shouldThrow = true;
 		}
 		delete r;
+		rpcWebSocket.release();
 		if (shouldThrow)
 			throw IOException("Connection closed before reply");
 		return s;
 	}
 
 	void postReturns(string key, byte[] body) {
+//		logger.memDump(log.DEBUG, "rpc.ws.return " + key, &body[0], body.length(), 0);
 		ref<http.Rendezvous> r = manager.extractRendezvous(key);
 		if (r != null)
 			r.postResult(body);
@@ -128,6 +135,11 @@ public class Client<class PROXY> extends HttpTransport {
 	~Client() {
 		delete _client;
 	}
+
+	public void logTo(string path) {
+		_client.logTo(path);
+	}
+
 	/**
 		Code should look like:
 
@@ -221,7 +233,7 @@ public class WebSocketFactory<class UPSTREAM, class DOWNSTREAM> extends http.Web
 	}
 }
 
-monitor class WebSocketVolatileData {
+monitor class WebSocketVolatileData extends thread.RefCounted {
 	private void (address, boolean) _disconnectFunction;
 	private address _disconnectParameter;
 	private boolean _disconnected;
@@ -263,21 +275,22 @@ public class WebSocket<class UPSTREAM, class DOWNSTREAM> extends WebSocketVolati
 	UPSTREAM _upstreamObject;
 
 	public WebSocket(ref<http.WebSocket> socket) {
+		_transport.initialize(this);
 		_transport.socket = socket;
 		socket.onDisconnect(disconnectWrapper, this);
 	}
 
 	~WebSocket() {
-		printf("In destructor 1\n");
 		delete _transport.reader;
-		printf("In destructor 2\n");
 		delete _transport.socket;
-		printf("In destructor 3\n");
-		// Only one of these will be non-null 
-		delete _downstreamProxy;
-		printf("In destructor 4\n");
-		delete _upstreamProxy;
-		printf("In destructor 5\n");
+		delete _upstreamObject;
+	}
+	/*
+	 * This is called from RefCounted.release when the final release
+	 * call occurs. It is declared protected to hide it from calling-code.
+	 */
+	protected void deleteMe() {
+		delete this;
 	}
 	/**
 	 * Write a shutdown message.
@@ -301,7 +314,6 @@ public class WebSocket<class UPSTREAM, class DOWNSTREAM> extends WebSocketVolati
 
 	void disconnect(boolean normalClose) {
 		fireOnDisconnect(normalClose);
-//		delete this;
 	}
 	/**
 	 * If this WebSocket was created by the HTTP server, return the downstream
@@ -337,20 +349,24 @@ public class WebSocket<class UPSTREAM, class DOWNSTREAM> extends WebSocketVolati
 	 * This is called by the connecting client/server to implement the communicatins pathways between
 	 * the upstrema and downstream objects with the web socket between them.
 	 */
-	public UPSTREAM configure(DOWNSTREAM stub) {
+	public UPSTREAM configure(DOWNSTREAM stub, void (address, boolean) func, address param) {
 		UPSTREAM proxy = UPSTREAM.proxy(&_transport);
 		_upstreamProxy = proxy;
 		_transport.reader = new WebSocketReader<UPSTREAM, DOWNSTREAM>(&_transport, proxy, stub);
 		_transport.socket.startReader(_transport.reader);
+		if (func != null)
+			onDisconnect(func, param);
 		return proxy;
 	}
 
-	public DOWNSTREAM configure(UPSTREAM stub) {
+	public DOWNSTREAM configure(UPSTREAM stub, void (address, boolean) func, address param) {
 		DOWNSTREAM proxy = DOWNSTREAM.proxy(&_transport);
 		_upstreamObject = stub;
 		_downstreamProxy = proxy;
 		_transport.reader = new WebSocketReader<DOWNSTREAM, UPSTREAM>(&_transport, proxy, stub);
 		_transport.socket.startReader(_transport.reader);
+		if (func != null)
+			onDisconnect(func, param);
 		return proxy;
 	}
 
@@ -382,7 +398,6 @@ class WebSocketReader<class PROXY, class STUB> extends AbstractWebSocketReader {
 
 	~WebSocketReader() {
 		_callerThreads.shutdown();
-		delete _proxy;
 		delete _callerThreads;
 	}
 
@@ -399,6 +414,7 @@ class WebSocketReader<class PROXY, class STUB> extends AbstractWebSocketReader {
 	 * The body of C messages must be passed to the stub
 	 */
 	public boolean readMessages() {
+		_transport.rpcWebSocket.refer();
 //		logger.debug("%p in %s readMessages, socket %p connection %p", this, _transport.socket.server() ? "server" : "client", _transport.socket, _transport.socket.connection());
 		for (;;) {
 			byte[] message;
@@ -414,6 +430,7 @@ class WebSocketReader<class PROXY, class STUB> extends AbstractWebSocketReader {
 					ref<CallParameters> cp = new CallParameters;
 					cp.message = message;
 					cp.reader = this;
+					_transport.rpcWebSocket.refer();
 					_callerThreads.execute(callStubWrapper, cp);
 					break;
 
@@ -438,6 +455,7 @@ class WebSocketReader<class PROXY, class STUB> extends AbstractWebSocketReader {
 				ref<http.Rendezvous>[] pending = _transport.manager.extractAllRendezvous();
 				for (int i = 0; i < pending.length(); i++)
 					pending[i].abandon();
+				_transport.rpcWebSocket.release();
 				return sawClose;
 			}
 		}
@@ -472,6 +490,7 @@ class WebSocketReader<class PROXY, class STUB> extends AbstractWebSocketReader {
 		string reply;
 		reply.printf("R%s%s", substring(&cp.message[1], index), returns);
 		_transport.socket.write(reply);
+		_transport.rpcWebSocket.release();
 		delete cp;
 	}
 }
