@@ -518,12 +518,16 @@ public class Monitor {
 	 * return from their wait call.
 	 *
 	 * If no threads are currently waiting, this method has no effect.
+	 *
+	 * The number of threads that were actually awakened.
 	 */
-	public void notifyAll() {
+	public int notifyAll() {
+		int awakened;
 		_mutex.take();
 		if (!_initialized)
 			initialize();
 		if (_waiting > 0) {
+			awakened = _waiting;
 			if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 				ReleaseSemaphore(_semaphore, _waiting, null);
 				_waiting = 0;
@@ -535,6 +539,7 @@ public class Monitor {
 			}
 		}
 		_mutex.release();
+		return awakened;
 	}
 	/**
 	 * The current thread waits.
@@ -570,11 +575,14 @@ public class Monitor {
 	 * whether the conditions of the wait were satisfied by some other means.
 	 *
 	 * @param timeout The amount of time to wait.
+	 *
+ 	 * @return true if a notify call caused the wait to return, false if a timeout
+	 * occurred.
 	 */
-	public void wait(time.Duration timeout) {
+	public boolean wait(time.Duration timeout) {
 		if (timeout.isInfinite()) {
 			wait();
-			return;
+			return true;
 		}
 		_mutex.take();
 		if (!_initialized)
@@ -602,9 +610,14 @@ public class Monitor {
 				expirationTime.tv_sec++;
 				expirationTime.tv_nsec -= 1000000000;
 			}
-			linux.sem_timedwait(&_linuxSemaphore, &expirationTime);
+			int outcome = linux.sem_timedwait(&_linuxSemaphore, &expirationTime);
+			if (outcome < 0 && linux.errno() == linux.ETIMEDOUT) {
+				_mutex.takeAfterWait(level - 1);
+				return false;
+			}
 		}
 		_mutex.takeAfterWait(level - 1);
+		return true;
 	}
 }
 

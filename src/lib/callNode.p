@@ -725,7 +725,7 @@ public class Call extends ParameterBag {
 //		type = placement.type;
 	}
 	/**
-	 * Sort the reigster arguments (if any) by sethi number.
+	 * Sort the register arguments (if any) by sethi number.
 	 *
 	 * Of course, this assumes that a sethi number has been calculated already.
 	 */	

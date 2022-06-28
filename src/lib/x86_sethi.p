@@ -23,6 +23,7 @@ namespace parasol:x86_64;
 import parasol:compiler.Binary;
 import parasol:compiler.Call;
 import parasol:compiler.CompileContext;
+import parasol:compiler.EllipsisArguments;
 import parasol:compiler.Node;
 import parasol:compiler.NodeList;
 import parasol:compiler.Operator;
@@ -55,6 +56,11 @@ void sethiUllman(ref<Node> node, ref<CompileContext> compileContext, ref<Target>
 			sethiUllman(c.target(), compileContext, target);
 			if (c.target().sethi > c.sethi)
 				c.sethi = c.target().sethi;
+		}
+		for (ref<NodeList> nl = c.stackArguments(); nl != null; nl = nl.next) {
+			sethiUllman(nl.node, compileContext, target);
+			if (nl.node.sethi > c.sethi)
+				c.sethi = nl.node.sethi;
 		}
 		break;
 		
@@ -249,10 +255,28 @@ void sethiUllman(ref<Node> node, ref<CompileContext> compileContext, ref<Target>
 	case	FRAME_PTR:
 	case	STACK_PTR:
 	case	MY_OUT_PARAMETER:
+	case	VACATE_ARGUMENT_REGISTERS:
+	case    ELLIPSIS_DATA:
 		node.sethi = 0;
 		break;
 		
 	case	FOR:
+		break;
+	
+	case ELLIPSIS_ARGUMENTS:
+		ref<EllipsisArguments> ea = ref<EllipsisArguments>(node);
+		for (ref<NodeList> nl = ea.arguments(); nl != null; nl = nl.next) {
+			sethiUllman(nl.node, compileContext, target);
+			if (nl.node.sethi > ea.sethi)
+				ea.sethi = nl.node.sethi;
+		}
+		break;
+
+	case ELLIPSIS_ARGUMENT:
+	case STACK_ARGUMENT:
+		u = ref<Unary>(node);
+		sethiUllman(u.operand(), compileContext, target);
+		u.sethi = u.operand().sethi;
 		break;
 		
 	default:

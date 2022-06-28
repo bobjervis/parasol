@@ -67,6 +67,7 @@ import native:linux;
 import parasol:runtime;
 import parasol:international;
 import parasol:exception.IllegalArgumentException;
+import parasol:exception.IllegalOperationException;
 
 @Constant
 private long ERA_DIFF = 0x019DB1DED53E8000;
@@ -234,6 +235,22 @@ public class Time {
 		}
 	}
 	/**
+	 * Return the amount of time elapsed between two Times.
+	 *
+	 * If the end time precedes the start time, the elapsed time will
+	 * be negative.
+	 *
+	 * @param start The starting time of the interval being measured.
+	 * @param end The ending time of the interval being measured.
+	 *
+	 * @return The duration of the time interval between the two
+	 * instants.
+	 */
+	public static Duration elapsed(Time start, Time end) {
+		long diff = end._value - start._value;
+		return diff.milliseconds();
+	}
+	/**
 	 * Add a Duration to the current time.
 	 *
 	 * @param d The Duration to add to this time.
@@ -279,17 +296,28 @@ public class Duration {
 	/**
 	 * Construct a time with seconds and nanoseconds.
 	 *
+	 * A special case value of zero seconds and a nanosecodns value of long.MAX_VALUE is
+	 * treated as <i>infinity</i>. It will compare equal to Duration.infinite.
+
 	 * @param seconds The number of seconds in the duration.
-	 * @param nanseconds The number of nanoseconds, between 0 and 999,999,999 inclusive.
+	 * @param nanoseconds The number of nanoseconds, between -999,999,999 and 999,999,999 inclusive.
+	 * If the nanoseconds are negative, The seconds will be reduced by one and the nanoseconds
+	 * adjusted to a positive value such that the resulting duration is the same.
 	 *
-	 * @exception IllegalArgumentException Thrown is the nanoseconds are out of range.
+	 * @exception IllegalArgumentException Thrown if the nanoseconds are out of range.
 	 */
 	public Duration(long seconds, long nanoseconds) {
-		if (nanoseconds < 0 || nanoseconds >= 1000000000) {
-			// Alow the special case of 'infinite'
-			if (seconds != 0 || nanoseconds != long.MAX_VALUE)
+		if (nanoseconds == long.MAX_VALUE) {
+			if (seconds != 0)
 				throw IllegalArgumentException("Nanoseconds out of range");
-		}
+		} else if (nanoseconds <= -1000000000)
+			throw IllegalArgumentException("Nanoseconds out of range");
+		else if (nanoseconds < 0) {
+			seconds--;
+			nanoseconds += 1000000000;
+		} else if (nanoseconds >= 1000000000)
+			throw IllegalArgumentException("Nanoseconds out of range");
+
 		_seconds = seconds;
 		_nanoseconds = nanoseconds;
 	}
@@ -306,6 +334,14 @@ public class Duration {
 	 * This value describes an infinite duration.
 	 */
 	public static Duration infinite(0, long.MAX_VALUE);
+	/**
+	 * Resets a Duration to zero time (zero seconds and
+	 * zero nanoseconds).
+	 */
+	public void clear() {
+		_seconds = 0;
+		_nanoseconds = 0;
+	}
 	/**
 	 * Add one or more Duration's together.
 	 *
@@ -596,6 +632,22 @@ public class Instant {
 		} else {
 			return Instant(0, 0);
 		}
+	}
+	/**
+	 * Return the amount of time elapsed between two Instants.
+	 *
+	 * If the end time precedes the start time, the elapsed time will
+	 * be negative.
+	 *
+	 * @param start The starting time of the interval being measured.
+	 * @param end The ending time of the interval being measured.
+	 *
+	 * @return The duration of the time interval between the two
+	 * instants.
+	 */
+	public static Duration elapsed(Instant start, Instant end) {
+		return Duration(end._seconds - start._seconds, 
+						end._nanos - start._nanos);
 	}
 	/**
 	 * Add a Duration to the current time.
@@ -1738,3 +1790,50 @@ public class Formatter {
  * A Formatter initialized to handle an RFC 1123 date/time value.
  */
 public Formatter RFC_1123_DATE_TIME("EEE, d MMM yyyy HH:mm:ss zzz");
+
+public class Timer {
+	Duration _elapsed;
+	Instant _start;
+	boolean _running;
+
+	public Timer() {
+	}
+
+	public Timer(ref<Timer> t) {
+		_elapsed = t._elapsed;
+		_start = t._start;
+		_running = t._running;
+	}
+
+	public void start() {
+		if (_running)
+			throw IllegalOperationException("already running");
+		_elapsed.clear();
+		_start = Instant.now();
+		_running = true;
+	}
+
+	public void stop() {
+		if (!_running)
+			throw IllegalOperationException("not running");
+		Instant end = Instant.now();
+		Duration d = Instant.elapsed(_start, end);
+		_running = false;
+		_elapsed = _elapsed.plus(d);
+	}
+
+	public boolean running() {
+		return _running;
+	}
+
+	public void resume() {
+		if (_running)
+			throw IllegalOperationException("already running");
+		_start = Instant.now();
+		_running = true;
+	}
+	
+	public Duration elapsed() {
+		return _elapsed;
+	}
+}
