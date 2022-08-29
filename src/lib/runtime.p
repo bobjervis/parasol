@@ -26,6 +26,7 @@ import parasol:compiler.Location;
 import parasol:exception;
 import parasol:thread.Thread;
 import parasol:x86_64.X86_64SectionHeader;
+import parasol:memory;
 
 /**
  * The Parasol Runtime version string.
@@ -210,11 +211,11 @@ public void setParasolThread(ref<Thread> t) {
 	setRuntimeParameter(PARASOL_THREAD, t);
 }
 /** @ignore */
-public boolean leaksFlag() {
-	return boolean(getRuntimeParameter(LEAKS_FLAG));
+public memory.StartingMemoryHeap startingMemoryHeap() {
+	return memory.StartingMemoryHeap(getRuntimeParameter(LEAKS_FLAG));
 }
 /** @ignore */
-public void setLeaksFlag(boolean newValue) {
+public void setStartingMemoryHeap(memory.StartingMemoryHeap newValue) {
 	setRuntimeParameter(LEAKS_FLAG, address(newValue));
 }
 /** @ignore */

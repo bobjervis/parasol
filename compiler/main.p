@@ -16,6 +16,7 @@
 import parasol:storage;
 import parasol:process;
 import parasol:runtime;
+import parasol:memory;
 import parasol:pxi;
 import parasol:compiler.Arena;
 import parasol:compiler.Target;
@@ -76,9 +77,6 @@ class ParasolCommand extends process.Command {
 		pxiOption = stringOption(0, "pxi",
 					"Writes compiled output to the given file. " + 
 					"Does not execute the program.");
-		leaksOption = booleanOption(0, "leaks",
-					"Use a leak-detecting heap for allocations. Produce a leak " +
-					"report when the process terminates.");
 		profileOption = stringOption('p', "profile",
 					"Produce a profile report, wriitng the profile data to the " +
 					"path provided as this argument value.");
@@ -93,6 +91,15 @@ class ParasolCommand extends process.Command {
 					"The default is the parent directory of the runtime binary program.");
 		compileOnlyOption = booleanOption('c', "compile",
 					"Only compile the application, do not run it.");
+		heapOption = stringOption(0, "heap",
+					"Use a production heap ('prod'), a leak-detecting heap ('leaks') or a " +
+					"guarded heap ('guard'). Defaults to 'prod'. " +
+					"The leaks heap option writes a leaks report to leaks.txt when the process terminates " +
+					"normally. " +
+					"The guarded heap writes sentinel bytes before and after each allocation region of memory and checks " +
+					"their value when the block is deleted, or when the program terminates normally. " +
+					"If teh guarded heap detects that these guard areas have been modified, it throws a " +
+					"CorruptHeapException.");
 		helpOption('?', "help",
 					"Displays this help.");
 	}
@@ -106,10 +113,12 @@ class ParasolCommand extends process.Command {
 	ref<process.Option<string>> rootOption;
 	ref<process.Option<string>> profileOption;
 	ref<process.Option<string>> coverageOption;
-	ref<process.Option<boolean>> leaksOption;
+	ref<process.Option<string>> heapOption;
 	ref<process.Option<boolean>> logImportsOption;
 	ref<process.Option<boolean>> symbolTableOption;
 	ref<process.Option<boolean>> compileOnlyOption;
+	memory.StartingMemoryHeap heap;
+
 }
 
 private ref<ParasolCommand> parasolCommand;
@@ -141,6 +150,12 @@ int main(string[] args) {
 }
 
 CommandLineVariant parseCommandLine(string[] args) {
+	string[memory.StartingMemoryHeap] heapOptionValues = [
+		"prod",
+		"leaks",
+		"guard"
+	];
+
 	parasolCommand = new ParasolCommand();
 	if (!parasolCommand.parse(args))
 		parasolCommand.help();
@@ -149,6 +164,19 @@ CommandLineVariant parseCommandLine(string[] args) {
 		printf("Cannot set both --explicit and --importPath arguments.\n");
 		parasolCommand.help();
 	}
+	if (parasolCommand.heapOption.set()) {
+		boolean foundIt;
+		for (i in heapOptionValues)
+			if (heapOptionValues[i] == parasolCommand.heapOption.value) {
+				foundIt = true;
+				parasolCommand.heap = i;
+			}
+		if (!foundIt) {
+			printf("Heap option has an invalid value: '%s'\n", parasolCommand.heapOption.value);
+			parasolCommand.help();
+		}
+	}
+
 	if (parasolCommand.targetOption.set()) {
 		if (pxi.sectionType(parasolCommand.targetOption.value) == null) {
 			printf("Invalid value for target argument: %s\n", parasolCommand.targetOption.value);
@@ -173,10 +201,10 @@ int runCommand() {
 
 	int returnValue;
 	boolean result;
-	
-	ref<Target> target = arena.compile(args[0], true,
+
+	ref<Target> target = arena.compile(args[0],
 								parasolCommand.verboseOption.value,
-								parasolCommand.leaksOption.value,
+								parasolCommand.heap,
 								parasolCommand.profileOption.value,
 								parasolCommand.coverageOption.value);
 	if (parasolCommand.symbolTableOption.value)
@@ -212,7 +240,7 @@ int compileCommand() {
 	if (!configureArena(&arena))
 		return 1;
 	string filename = parasolCommand.finalArguments()[0];
-	ref<Target> target = arena.compile(filename, false, parasolCommand.verboseOption.value, false, null, null);
+	ref<Target> target = arena.compile(filename, parasolCommand.verboseOption.value, ParasolCommand.heap, null, null);
 	if (parasolCommand.symbolTableOption.value)
 		arena.printSymbolTable();
 	if (!disassemble(&arena, target, filename))

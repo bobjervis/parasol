@@ -88,6 +88,7 @@ import parasol:compiler.Unary;
 import parasol:compiler.USE_COMPARE_METHOD;
 import parasol:compiler.Variable;
 import parasol:exception;
+import parasol:memory;
 import parasol:process;
 import parasol:pxi.Pxi;
 import parasol:runtime;
@@ -117,8 +118,8 @@ byte PXI_FIXUP_MAX = 0x04;
 int PXI_FIXUP_SHIFT = 8;
 
 public class X86_64Lnx extends X86_64 {
-	public X86_64Lnx(ref<Arena> arena, boolean verbose, boolean leaksFlag, string profilePath, string coveragePath) {
-		super(arena, verbose, leaksFlag, profilePath, coveragePath);
+	public X86_64Lnx(ref<Arena> arena) {
+		super(arena);
 	}
 	
 	static R[] fastArgs = [ R.RDI, R.RSI, R.RDX, R.RCX, R.R8, R.R9 ];
@@ -211,8 +212,8 @@ public class X86_64Lnx extends X86_64 {
 }
 
 public class X86_64Win extends X86_64 {
-	public X86_64Win(ref<Arena> arena, boolean verbose, boolean leaksFlag, string profilePath, string coveragePath) {
-		super(arena, verbose, leaksFlag, profilePath, coveragePath);
+	public X86_64Win(ref<Arena> arena) {
+		super(arena);
 	}
 	
 	static R[] fastArgs = [ R.RCX, R.RDX, R.R8, R.R9 ];
@@ -312,26 +313,15 @@ public class X86_64 extends X86_64AssignTemps {
 	private ref<Symbol> _doubleZero;
 	
 	public int maxTypeOrdinal;
-	private boolean _verbose;
-	private boolean _leaksFlag;
-	private string _profilePath;
-	private string _coveragePath;
 	private int _stackLocalVariables;
+	private memory.StartingMemoryHeap _startingMemoryHeap;
 
-	public X86_64(ref<Arena> arena, boolean verbose, boolean leaksFlag, string profilePath, string coveragePath) {
+	public X86_64(ref<Arena> arena) {
 		_arena = arena;
-		_verbose = verbose;
-		_leaksFlag = leaksFlag;
-		_profilePath = profilePath;
-		_coveragePath = coveragePath;
 	}
 
 	~X86_64() {
 		delete _unitScope;
-	}
-
-	public boolean verbose() {
-		return _verbose;
 	}
 
 	boolean generateCode(ref<FileStat> mainFile, ref<CompileContext> compileContext) {
@@ -346,7 +336,7 @@ public class X86_64 extends X86_64AssignTemps {
 			ref<PlainSymbol> symbol = (*compileContext.staticSymbols())[i];
 			assignStaticSymbolStorage(symbol, compileContext);
 		}
-		if (_verbose)
+		if (compileContext.verbose())
 			printf("Variable storage assigned\n");
 		return super.generateCode(mainFile, compileContext);
 	}
@@ -376,7 +366,7 @@ public class X86_64 extends X86_64AssignTemps {
 		pointer<address> pa = pointer<address>(&_staticMemory[_pxiHeader.builtInOffset]);
 		pointer<runtime.SourceLocation> outerSource = runtime.sourceLocations();
 		int outerSourceCount = runtime.sourceLocationsCount();
-		boolean outerLeaksFlag = runtime.leaksFlag();
+		memory.StartingMemoryHeap outerHeap = runtime.startingMemoryHeap();
 		process.stdout.flush();
 		if (runtime.makeRegionExecutable(_staticMemory, _staticMemoryLength)) {
 			pointer<int> pxiFixups = pointer<int>(&_staticMemory[_pxiHeader.relocationOffset]);
@@ -422,7 +412,7 @@ public class X86_64 extends X86_64AssignTemps {
 				}
 			}
 			runtime.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
-			runtime.setLeaksFlag(_leaksFlag);
+			runtime.setStartingMemoryHeap(_startingMemoryHeap);
 			returnValue = runtime.eval(&_pxiHeader, _staticMemory, &runArgs[0], runArgs.length());
 		} else {
 			pointer<byte> generatedCode = pointer<byte>(runtime.allocateRegion(_staticMemoryLength));
@@ -467,7 +457,7 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			if (runtime.makeRegionExecutable(generatedCode, _staticMemoryLength)) {
 				runtime.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
-				runtime.setLeaksFlag(_leaksFlag);
+				runtime.setStartingMemoryHeap(_startingMemoryHeap);
 				returnValue = runtime.eval(&_pxiHeader, generatedCode, &runArgs[0], runArgs.length());
 			} else {
 				assert(false);
@@ -475,7 +465,7 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 		}
 		runtime.setSourceLocations(outerSource, outerSourceCount);
-		runtime.setLeaksFlag(outerLeaksFlag);
+		runtime.setStartingMemoryHeap(outerHeap);
 		if (exception.fetchExposedException() == null)
 			return returnValue, true;
 		else

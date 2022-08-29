@@ -20,7 +20,7 @@ import parasol:memory;
 
 int INDENT = 4;
 
-public class CompileContext {
+public class CompileContext extends CodegenContext {
 	public Operator visibility;
 	public boolean isStatic;
 	public boolean isFinal;
@@ -49,7 +49,6 @@ public class CompileContext {
 	private ref<Type> _memoryAllocator;
 	private ref<Type> _compilerType;
 	private ref<InterfaceType>[] _interfaces;
-	private boolean _verbose;
 	
 	public class FlowContext {
 		private ref<FlowContext> _next;
@@ -131,10 +130,10 @@ public class CompileContext {
 		}
 	}
 
-	CompileContext(ref<Arena> arena, ref<MemoryPool> pool, boolean verbose) {
+	CompileContext(ref<Arena> arena, ref<MemoryPool> pool, boolean verbose, memory.StartingMemoryHeap memoryHeap, string profilePath, string coveragePath) {
+		super(verbose, memoryHeap, profilePath, coveragePath);
 		_arena = arena;
 		_pool = pool;
-		_verbose = verbose;
 		clearDeclarationModifiers();
 	}
 	/*
@@ -873,7 +872,7 @@ public class CompileContext {
 
 	public void assignTypeToNode(ref<Node> n) {
 		if (n.type == null) {
-			if (_verbose) {
+			if (verbose()) {
 				printf("-----  assignTypes %s ---------\n", _current != null ? _current.sourceLocation(n.location()) : "<null>");
 			}
 			n.assignTypes(this);
@@ -883,7 +882,7 @@ public class CompileContext {
 				n.print(0);
 				assert(false);
 			}
-			if (_verbose) {
+			if (verbose()) {
 				n.print(4);
 				printf("=====  assignTypes %s =========\n", _current != null ? _current.sourceLocation(n.location()) : "<null>");
 			}
@@ -1394,10 +1393,6 @@ public class CompileContext {
 	
 	public ref<SyntaxTree> tree() {
 		return _current.file().tree();
-	}
-
-	boolean verbose() {
-		return _verbose;
 	}
 }
 

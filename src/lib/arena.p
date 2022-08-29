@@ -26,6 +26,7 @@
  */
 namespace parasol:compiler;
 
+import parasol:memory;
 import parasol:storage;
 import parasol:process;
 import parasol:runtime;
@@ -140,29 +141,29 @@ public class Arena {
 		return result;
 	}
 	
-	public ref<Target> compile(string filename, boolean countCurrentObjects, boolean verbose, boolean leaksFlag,
+	public ref<Target> compile(string filename, boolean verbose, memory.StartingMemoryHeap heap,
 														string profilePath, string coveragePath) {
 		ref<FileStat> mainFile = new FileStat(filename, false);
-		return compile(mainFile, countCurrentObjects, verbose, leaksFlag, profilePath, coveragePath);
+		return compile(mainFile, verbose, heap, profilePath, coveragePath);
 	}
 	
-	public ref<Target> compile(ref<FileStat> mainFile, boolean countCurrentObjects, boolean verbose, boolean leaksFlag,
+	public ref<Target> compile(ref<FileStat> mainFile, boolean verbose, memory.StartingMemoryHeap heap,
 														string profilePath, string coveragePath) {
-		CompileContext context(this, _global, verbose);
+		CompileContext context(this, _global, verbose, heap, profilePath, coveragePath);
 
 		if (!compileOnly(mainFile, verbose, &context))
 			return null;
-		return codegen(mainFile, countCurrentObjects, verbose, leaksFlag, profilePath, coveragePath, &context);
+		return codegen(mainFile, &context);
 	}
 
 	public void compilePackage(boolean countCurrentObjects, boolean verbose) {
-		CompileContext context(this, _global, verbose);
+		CompileContext context(this, _global, verbose, memory.StartingMemoryHeap.PRODUCTION_HEAP, null, null);
 
 		// 'import' all the namespaces in the primary import directory (the package directory).
 		// _importPath[0] is the ImportDirectory we need to pull in.
 
 		_importPath[0].compilePackage(&context);
-		compileCommonPath(verbose, &context);
+		compileCommonPath(&context);
 	}
 
 	public ref<ImportDirectory> compilePackage(int index, ref<CompileContext> compileContext) {
@@ -194,28 +195,25 @@ public class Arena {
 		if (verbose)
 			printf("Top level scopes constructed\n");
 		_main = mainFile.fileScope();
-		return compileCommonPath(verbose, compileContext);
+		return compileCommonPath(compileContext);
 	}
 
-	boolean compileCommonPath(boolean verbose, ref<CompileContext> compileContext) {
+	boolean compileCommonPath(ref<CompileContext> compileContext) {
 		if (!createBuiltIns(compileContext))
 			return false;
 		
 		compileContext.checkForRPCs();
-		if (verbose)
+		if (compileContext.verbose())
 			printf("Initial compilation phases completed.\n");
 		compileContext.compileFile();
 		return true;
 	}
 
-	public ref<Target> codegen(ref<FileStat> mainFile, boolean countCurrentObjects,
-										boolean verbose, boolean leaksFlag, string profilePath, string coveragePath, 
-										ref<CompileContext> compileContext) {
+	public ref<Target> codegen(ref<FileStat> mainFile, ref<CompileContext> compileContext) {
 		if (verbose)
 			printf("Beginning code generation\n");
 		ref<Target> target;
-		target = Target.generate(this, mainFile, countCurrentObjects, compileContext,
-										verbose, leaksFlag, profilePath, coveragePath);
+		target = Target.generate(this, mainFile, compileContext);
 		return target;
 	}
 	
@@ -301,7 +299,7 @@ public class Arena {
 
 	public boolean load() {
 		string rootFile = storage.constructPath(_rootFolder + "/lib", "root", "p");
-		CompileContext rootLoader(this, _global, false);
+		CompileContext rootLoader(this, _global, false, memory.StartingMemoryHeap.PRODUCTION_HEAP, null, null);
 		ref<FileStat> f = new FileStat(rootFile, true);
 		f.parseFile(&rootLoader);
 		_specialFiles.setFile(f);

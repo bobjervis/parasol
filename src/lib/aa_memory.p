@@ -61,11 +61,27 @@ private ref<Allocator> currentHeap;
 private Heap heap;
 private LeakHeap leakHeap(runtime.returnAddress());
 
+public enum StartingMemoryHeap {
+	PRODUCTION_HEAP,
+	LEAKS_HEAP,
+	GUARDED_HEAP
+}
+
 currentHeap = &heap;
 thread.Thread.init();
 
-if (runtime.leaksFlag())
+switch (runtime.startingMemoryHeap()) {
+case PRODUCTION_HEAP:
+	break;
+
+case LEAKS_HEAP:
 	currentHeap = &leakHeap;
+	break;
+
+case GUARDED_HEAP:
+	currentHeap = &guardedHeap;
+	break;
+}
 /** @ignore 
  * Called when the main thread hits an uncaught exception.
  */

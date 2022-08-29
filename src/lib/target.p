@@ -19,8 +19,40 @@ import parasol:x86_64.X86_64Lnx;
 import parasol:x86_64.X86_64Win;
 import parasol:pxi.Pxi;
 import parasol:runtime;
+import parasol:memory;
 
 import native:C;
+
+public class CodegenContext {
+	private boolean _verbose;
+	private memory.StartingMemoryHeap _startingMemoryHeap;
+	private string _profilePath;
+	private string _coveragePath;
+
+	CodegenContext(boolean verbose, memory.StartingMemoryHeap startingMemoryHeap, string profilePath, string coveragePath) {
+		_verbose = verbose;
+		_startingMemoryHeap = startingMemoryHeap;
+		_profilePath = profilePath;
+		_coveragePath = coveragePath;
+	}
+
+	public boolean verbose() {
+		return _verbose;
+	}
+
+	memory.StartingMemoryHeap startingMemoryHeap() {
+		return _startingMemoryHeap;
+	}
+
+	string profilePath() {
+		return _profilePath;
+	}
+
+	string coveragePath() {
+		return _coveragePath;
+	}
+}
+
 /**
  * Class target defines the framework for Parasol compiler code generators.
  * 
@@ -43,8 +75,7 @@ public class Target {
 		_unmarshallerFunctions.resize(TypeFamily.MAX_TYPES);
 	}
 
-	public static ref<Target> generate(ref<Arena> arena, ref<FileStat> mainFile, boolean countCurrentObjects, ref<CompileContext> compileContext,
-											boolean verbose, boolean leaksFlag, string profilePath, string coveragePath) {
+	public static ref<Target> generate(ref<Arena> arena, ref<FileStat> mainFile, ref<CompileContext> compileContext) {
 		ref<Target> target;
 		
 		// Magic: select target
@@ -53,15 +84,15 @@ public class Target {
 			selectedTarget = arena.preferredTarget;
 		else
 			selectedTarget = runtime.Target(runtime.supportedTarget(0));
-		if (verbose)
+		if (compileContext.verbose())
 			printf("Targeting %s\n", string(selectedTarget));
 		switch (selectedTarget) {
 		case	X86_64_LNX:
-			target = new X86_64Lnx(arena, verbose, leaksFlag, profilePath, coveragePath);
+			target = new X86_64Lnx(arena);
 			break;
 
 		case	X86_64_WIN:
-			target = new X86_64Win(arena, verbose, leaksFlag, profilePath, coveragePath);
+			target = new X86_64Win(arena);
 			break;
 		}
 		target.populateTypeMap(compileContext);
