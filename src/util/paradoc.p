@@ -13,6 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+import parasol:memory;
 import parasol:storage;
 import parasol:process;
 import parasol:runtime;
@@ -133,7 +134,7 @@ int main(string[] args) {
 //	printf("Configuring\n");
 	if (!configureArena(&arena))
 		return 1;
-	CompileContext context(&arena, arena.global(), paradoc.verboseOption.value);
+	CompileContext context(&arena, arena.global(), paradoc.verboseOption.value, memory.StartingMemoryHeap.PRODUCTION_HEAP, null, null);
 
 	for (int i = 1; i < finalArguments.length(); i++)
 		libraries.append(arena.compilePackage(i - 1, &context));

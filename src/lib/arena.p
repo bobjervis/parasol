@@ -141,12 +141,20 @@ public class Arena {
 		return result;
 	}
 	
+	public ref<Target> compile(string filename, boolean verbose) {
+		return compile(filename, verbose, memory.StartingMemoryHeap.PRODUCTION_HEAP, null, null);
+	}
+
 	public ref<Target> compile(string filename, boolean verbose, memory.StartingMemoryHeap heap,
 														string profilePath, string coveragePath) {
 		ref<FileStat> mainFile = new FileStat(filename, false);
 		return compile(mainFile, verbose, heap, profilePath, coveragePath);
 	}
 	
+	public ref<Target> compile(ref<FileStat> mainFile, boolean verbose) {
+		return compile(mainFile, verbose, memory.StartingMemoryHeap.PRODUCTION_HEAP, null, null);
+	}
+
 	public ref<Target> compile(ref<FileStat> mainFile, boolean verbose, memory.StartingMemoryHeap heap,
 														string profilePath, string coveragePath) {
 		CompileContext context(this, _global, verbose, heap, profilePath, coveragePath);

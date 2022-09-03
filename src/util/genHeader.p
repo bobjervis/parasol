@@ -13,6 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+import parasol:memory;
 import parasol:script;
 import parasol:storage;
 import parasol:process;
@@ -97,7 +98,7 @@ int main(string[] args) {
 	if (!configureArena(&arena))
 		return 1;
 	string filename = finalArguments[0];
-	ref<Target> target = arena.compile(filename, false, false, false, null, null);
+	ref<Target> target = arena.compile(filename, false);
 	if (genHeaderCommand.symbolTableOption.value)
 		arena.printSymbolTable();
 	if (genHeaderCommand.verboseOption.value) {

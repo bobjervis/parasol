@@ -19,6 +19,7 @@
  */
 namespace parasol:compiler.test;
 
+import parasol:memory;
 import parasol:process;
 import parasol:runtime;
 import parasol:script;
@@ -560,7 +561,7 @@ class CompileObject  extends script.Object {
 			printf("Failed to load arena\n");
 			return false;
 		}
-		CompileContext context(&arena, arena.global(), verboseFlag);
+		CompileContext context(&arena, arena.global(), verboseFlag, memory.StartingMemoryHeap.PRODUCTION_HEAP, null, null);
 
 		ref<FileStat> f;
 		if (_filename.length() > 0) {
@@ -578,7 +579,7 @@ class CompileObject  extends script.Object {
 		if (showParseStageErrors && preCodeGenerationMessages > 0)
 			arena.printMessages();
 		boolean nodesOrdered = checkInOrder(f.tree().root(), _source);
-		ref<Target> target = arena.codegen(f, true, verboseFlag, false, null, null, &context);
+		ref<Target> target = arena.codegen(f, &context);
 //		printf("after folding and codegen:\n");
 //		f.tree().root().print(0);
 
@@ -764,7 +765,7 @@ class RunObject extends script.Object {
 				return false;
 			}
 			ref<FileStat> f = new FileStat(_filename, false);
-			arena.compile(f, true, false, false, null, null);
+			arena.compile(f, true);
 			arena.print();
 			delete f;
 		}
