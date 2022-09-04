@@ -92,6 +92,9 @@ public void resetHeap() {
  * Set up the process streams as soon as any special heap is established.
  */
 storage.setProcessStreams(false);
+
+if (currentHeap != &heap)
+	printf("Using %s\n", string(runtime.startingMemoryHeap()));
 /**
  * Thrown when a memory allocator cannot satisfy a request.
  *
@@ -220,34 +223,34 @@ public class GuardedHeap extends Allocator {
 			return;
 		pointer<byte> pb = pointer<byte>(p) - 32;
 		int n = pointer<int>(pb)[3];
-		if (pb[0] != 0xa6) fail(pb, n); 
-		if (pb[1] != 0x6a) fail(pb, n); 
-		if (pb[2] != 0xa6) fail(pb, n); 
-		if (pb[3] != 0x6a) fail(pb, n); 
-		if (pb[4] != 0xa6) fail(pb, n); 
-		if (pb[5] != 0x6a) fail(pb, n); 
-		if (pb[6] != 0xa6) fail(pb, n); 
-		if (pb[7] != 0x6a) fail(pb, n); 
-		if (pb[8] != 0xa6) fail(pb, n); 
-		if (pb[9] != 0x6a) fail(pb, n); 
-		if (pb[10] != 0xa6) fail(pb, n); 
-		if (pb[11] != 0x6a) fail(pb, n); 
-		if (pb[16] != 0xa6) fail(pb, n); 
-		if (pb[17] != 0x6a) fail(pb, n); 
-		if (pb[18] != 0xa6) fail(pb, n); 
-		if (pb[19] != 0x6a) fail(pb, n); 
-		if (pb[20] != 0xa6) fail(pb, n); 
-		if (pb[21] != 0x6a) fail(pb, n); 
-		if (pb[22] != 0xa6) fail(pb, n); 
-		if (pb[23] != 0x6a) fail(pb, n); 
-		if (pb[24] != 0xa6) fail(pb, n); 
-		if (pb[25] != 0x6a) fail(pb, n); 
-		if (pb[26] != 0xa6) fail(pb, n); 
-		if (pb[27] != 0x6a) fail(pb, n); 
-		if (pb[28] != 0xa6) fail(pb, n); 
-		if (pb[29] != 0x6a) fail(pb, n); 
-		if (pb[30] != 0xa6) fail(pb, n); 
-		if (pb[31] != 0x6a) fail(pb, n); 
+		if (pb[0] != 0x6a) fail(pb, n); 
+		if (pb[1] != 0xa6) fail(pb, n); 
+		if (pb[2] != 0x6a) fail(pb, n); 
+		if (pb[3] != 0xa6) fail(pb, n); 
+		if (pb[4] != 0x6a) fail(pb, n); 
+		if (pb[5] != 0xa6) fail(pb, n); 
+		if (pb[6] != 0x6a) fail(pb, n); 
+		if (pb[7] != 0xa6) fail(pb, n); 
+		if (pb[8] != 0x6a) fail(pb, n); 
+		if (pb[9] != 0xa6) fail(pb, n); 
+		if (pb[10] != 0x6a) fail(pb, n); 
+		if (pb[11] != 0xa6) fail(pb, n); 
+		if (pb[16] != 0x6a) fail(pb, n); 
+		if (pb[17] != 0xa6) fail(pb, n); 
+		if (pb[18] != 0x6a) fail(pb, n); 
+		if (pb[19] != 0xa6) fail(pb, n); 
+		if (pb[20] != 0x6a) fail(pb, n); 
+		if (pb[21] != 0xa6) fail(pb, n); 
+		if (pb[22] != 0x6a) fail(pb, n); 
+		if (pb[23] != 0xa6) fail(pb, n); 
+		if (pb[24] != 0x6a) fail(pb, n); 
+		if (pb[25] != 0xa6) fail(pb, n); 
+		if (pb[26] != 0x6a) fail(pb, n); 
+		if (pb[27] != 0xa6) fail(pb, n); 
+		if (pb[28] != 0x6a) fail(pb, n); 
+		if (pb[29] != 0xa6) fail(pb, n); 
+		if (pb[30] != 0x6a) fail(pb, n); 
+		if (pb[31] != 0xa6) fail(pb, n); 
 		if (pb[n + 32] != 0xa6) fail(pb, n); 
 		if (pb[n + 33] != 0x6a) fail(pb, n); 
 		if (pb[n + 34] != 0xa6) fail(pb, n); 
@@ -272,7 +275,7 @@ public class GuardedHeap extends Allocator {
 		
 		printf("\n");
 		text.memDump(pb - 64, n + 48 + 64);
-		throw CorruptHeapException(this, pb + 16);
+		throw CorruptHeapException(this, pb + 32);
 	}
 }
 

@@ -326,6 +326,7 @@ public class X86_64 extends X86_64AssignTemps {
 
 	boolean generateCode(ref<FileStat> mainFile, ref<CompileContext> compileContext) {
 		cacheCodegenObjects(compileContext);
+		_startingMemoryHeap = compileContext.startingMemoryHeap();
 		ref<Block> unit = mainFile.tree().root();
 //		printf("unit = %p\n", unit);
 		_unitScope = new Scope(_arena.root(), unit, compileContext.blockStorageClass(), unit.className());

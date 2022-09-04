@@ -40,7 +40,7 @@ public class CodegenContext {
 		return _verbose;
 	}
 
-	memory.StartingMemoryHeap startingMemoryHeap() {
+	public memory.StartingMemoryHeap startingMemoryHeap() {
 		return _startingMemoryHeap;
 	}
 

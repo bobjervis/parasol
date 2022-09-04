@@ -31,7 +31,7 @@ import parasol:http;
  * This class is defined as a monitor class to facilitate coordination
  * among service request threads.
  */
-public monitor class WebService<class C, class M, class L, class S, class H> {
+public monitor class WebService<class Configuration, class Monitoring, class Logging, class State, class HighAvailability> {
 	/**
 	 * Construct the server.
 	 *
