@@ -61,24 +61,24 @@ private ref<Allocator> currentHeap;
 private Heap heap;
 private LeakHeap leakHeap(runtime.returnAddress());
 
-public enum StartingMemoryHeap {
-	PRODUCTION_HEAP,
-	LEAKS_HEAP,
-	GUARDED_HEAP
+public enum StartingHeap {
+	PRODUCTION,
+	DETECT_LEAKS,
+	GUARD
 }
 
 currentHeap = &heap;
 thread.Thread.init();
 
-switch (runtime.startingMemoryHeap()) {
-case PRODUCTION_HEAP:
+switch (runtime.startingHeap()) {
+case PRODUCTION:
 	break;
 
-case LEAKS_HEAP:
+case DETECT_LEAKS:
 	currentHeap = &leakHeap;
 	break;
 
-case GUARDED_HEAP:
+case GUARD:
 	currentHeap = &guardedHeap;
 	break;
 }
@@ -94,7 +94,7 @@ public void resetHeap() {
 storage.setProcessStreams(false);
 
 if (currentHeap != &heap)
-	printf("Using %s\n", string(runtime.startingMemoryHeap()));
+	printf("Using %s\n", string(runtime.startingHeap()));
 /**
  * Thrown when a memory allocator cannot satisfy a request.
  *

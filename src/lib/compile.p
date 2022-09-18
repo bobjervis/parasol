@@ -130,7 +130,7 @@ public class CompileContext extends CodegenContext {
 		}
 	}
 
-	CompileContext(ref<Arena> arena, ref<MemoryPool> pool, boolean verbose, memory.StartingMemoryHeap memoryHeap, string profilePath, string coveragePath) {
+	CompileContext(ref<Arena> arena, ref<MemoryPool> pool, boolean verbose, memory.StartingHeap memoryHeap, string profilePath, string coveragePath) {
 		super(verbose, memoryHeap, profilePath, coveragePath);
 		_arena = arena;
 		_pool = pool;

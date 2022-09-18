@@ -134,7 +134,7 @@ int main(string[] args) {
 //	printf("Configuring\n");
 	if (!configureArena(&arena))
 		return 1;
-	CompileContext context(&arena, arena.global(), paradoc.verboseOption.value, memory.StartingMemoryHeap.PRODUCTION_HEAP, null, null);
+	CompileContext context(&arena, arena.global(), paradoc.verboseOption.value, memory.StartingHeap.PRODUCTION, null, null);
 
 	for (int i = 1; i < finalArguments.length(); i++)
 		libraries.append(arena.compilePackage(i - 1, &context));

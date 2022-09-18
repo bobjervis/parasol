@@ -142,20 +142,20 @@ public class Arena {
 	}
 	
 	public ref<Target> compile(string filename, boolean verbose) {
-		return compile(filename, verbose, memory.StartingMemoryHeap.PRODUCTION_HEAP, null, null);
+		return compile(filename, verbose, memory.StartingHeap.PRODUCTION, null, null);
 	}
 
-	public ref<Target> compile(string filename, boolean verbose, memory.StartingMemoryHeap heap,
+	public ref<Target> compile(string filename, boolean verbose, memory.StartingHeap heap,
 														string profilePath, string coveragePath) {
 		ref<FileStat> mainFile = new FileStat(filename, false);
 		return compile(mainFile, verbose, heap, profilePath, coveragePath);
 	}
 	
 	public ref<Target> compile(ref<FileStat> mainFile, boolean verbose) {
-		return compile(mainFile, verbose, memory.StartingMemoryHeap.PRODUCTION_HEAP, null, null);
+		return compile(mainFile, verbose, memory.StartingHeap.PRODUCTION, null, null);
 	}
 
-	public ref<Target> compile(ref<FileStat> mainFile, boolean verbose, memory.StartingMemoryHeap heap,
+	public ref<Target> compile(ref<FileStat> mainFile, boolean verbose, memory.StartingHeap heap,
 														string profilePath, string coveragePath) {
 		CompileContext context(this, _global, verbose, heap, profilePath, coveragePath);
 
@@ -165,7 +165,7 @@ public class Arena {
 	}
 
 	public void compilePackage(boolean countCurrentObjects, boolean verbose) {
-		CompileContext context(this, _global, verbose, memory.StartingMemoryHeap.PRODUCTION_HEAP, null, null);
+		CompileContext context(this, _global, verbose, memory.StartingHeap.PRODUCTION, null, null);
 
 		// 'import' all the namespaces in the primary import directory (the package directory).
 		// _importPath[0] is the ImportDirectory we need to pull in.
@@ -307,7 +307,7 @@ public class Arena {
 
 	public boolean load() {
 		string rootFile = storage.constructPath(_rootFolder + "/lib", "root", "p");
-		CompileContext rootLoader(this, _global, false, memory.StartingMemoryHeap.PRODUCTION_HEAP, null, null);
+		CompileContext rootLoader(this, _global, false, memory.StartingHeap.PRODUCTION, null, null);
 		ref<FileStat> f = new FileStat(rootFile, true);
 		f.parseFile(&rootLoader);
 		_specialFiles.setFile(f);

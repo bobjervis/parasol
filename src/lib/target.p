@@ -25,13 +25,13 @@ import native:C;
 
 public class CodegenContext {
 	private boolean _verbose;
-	private memory.StartingMemoryHeap _startingMemoryHeap;
+	private memory.StartingHeap _startingHeap;
 	private string _profilePath;
 	private string _coveragePath;
 
-	CodegenContext(boolean verbose, memory.StartingMemoryHeap startingMemoryHeap, string profilePath, string coveragePath) {
+	CodegenContext(boolean verbose, memory.StartingHeap startingHeap, string profilePath, string coveragePath) {
 		_verbose = verbose;
-		_startingMemoryHeap = startingMemoryHeap;
+		_startingHeap = startingHeap;
 		_profilePath = profilePath;
 		_coveragePath = coveragePath;
 	}
@@ -40,8 +40,8 @@ public class CodegenContext {
 		return _verbose;
 	}
 
-	public memory.StartingMemoryHeap startingMemoryHeap() {
-		return _startingMemoryHeap;
+	public memory.StartingHeap startingHeap() {
+		return _startingHeap;
 	}
 
 	string profilePath() {

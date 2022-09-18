@@ -314,7 +314,7 @@ public class X86_64 extends X86_64AssignTemps {
 	
 	public int maxTypeOrdinal;
 	private int _stackLocalVariables;
-	private memory.StartingMemoryHeap _startingMemoryHeap;
+	private memory.StartingHeap _startingHeap;
 
 	public X86_64(ref<Arena> arena) {
 		_arena = arena;
@@ -326,7 +326,7 @@ public class X86_64 extends X86_64AssignTemps {
 
 	boolean generateCode(ref<FileStat> mainFile, ref<CompileContext> compileContext) {
 		cacheCodegenObjects(compileContext);
-		_startingMemoryHeap = compileContext.startingMemoryHeap();
+		_startingHeap = compileContext.startingHeap();
 		ref<Block> unit = mainFile.tree().root();
 //		printf("unit = %p\n", unit);
 		_unitScope = new Scope(_arena.root(), unit, compileContext.blockStorageClass(), unit.className());
@@ -367,7 +367,7 @@ public class X86_64 extends X86_64AssignTemps {
 		pointer<address> pa = pointer<address>(&_staticMemory[_pxiHeader.builtInOffset]);
 		pointer<runtime.SourceLocation> outerSource = runtime.sourceLocations();
 		int outerSourceCount = runtime.sourceLocationsCount();
-		memory.StartingMemoryHeap outerHeap = runtime.startingMemoryHeap();
+		memory.StartingHeap outerHeap = runtime.startingHeap();
 		process.stdout.flush();
 		if (runtime.makeRegionExecutable(_staticMemory, _staticMemoryLength)) {
 			pointer<int> pxiFixups = pointer<int>(&_staticMemory[_pxiHeader.relocationOffset]);
@@ -413,7 +413,7 @@ public class X86_64 extends X86_64AssignTemps {
 				}
 			}
 			runtime.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
-			runtime.setStartingMemoryHeap(_startingMemoryHeap);
+			runtime.setStartingHeap(_startingHeap);
 			returnValue = runtime.eval(&_pxiHeader, _staticMemory, &runArgs[0], runArgs.length());
 		} else {
 			pointer<byte> generatedCode = pointer<byte>(runtime.allocateRegion(_staticMemoryLength));
@@ -458,7 +458,7 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			if (runtime.makeRegionExecutable(generatedCode, _staticMemoryLength)) {
 				runtime.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
-				runtime.setStartingMemoryHeap(_startingMemoryHeap);
+				runtime.setStartingHeap(_startingHeap);
 				returnValue = runtime.eval(&_pxiHeader, generatedCode, &runArgs[0], runArgs.length());
 			} else {
 				assert(false);
@@ -466,7 +466,7 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 		}
 		runtime.setSourceLocations(outerSource, outerSourceCount);
-		runtime.setStartingMemoryHeap(outerHeap);
+		runtime.setStartingHeap(outerHeap);
 		if (exception.fetchExposedException() == null)
 			return returnValue, true;
 		else

@@ -211,11 +211,11 @@ public void setParasolThread(ref<Thread> t) {
 	setRuntimeParameter(PARASOL_THREAD, t);
 }
 /** @ignore */
-public memory.StartingMemoryHeap startingMemoryHeap() {
-	return memory.StartingMemoryHeap(getRuntimeParameter(LEAKS_FLAG));
+public memory.StartingHeap startingHeap() {
+	return memory.StartingHeap(getRuntimeParameter(LEAKS_FLAG));
 }
 /** @ignore */
-public void setStartingMemoryHeap(memory.StartingMemoryHeap newValue) {
+public void setStartingHeap(memory.StartingHeap newValue) {
 	setRuntimeParameter(LEAKS_FLAG, address(newValue));
 }
 /** @ignore */

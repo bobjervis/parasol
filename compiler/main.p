@@ -117,7 +117,7 @@ class ParasolCommand extends process.Command {
 	ref<process.Option<boolean>> logImportsOption;
 	ref<process.Option<boolean>> symbolTableOption;
 	ref<process.Option<boolean>> compileOnlyOption;
-	memory.StartingMemoryHeap heap;
+	memory.StartingHeap heap;
 
 }
 
@@ -150,7 +150,7 @@ int main(string[] args) {
 }
 
 CommandLineVariant parseCommandLine(string[] args) {
-	string[memory.StartingMemoryHeap] heapOptionValues = [
+	string[memory.StartingHeap] heapOptionValues = [
 		"prod",
 		"leaks",
 		"guard"

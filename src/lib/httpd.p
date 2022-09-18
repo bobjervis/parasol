@@ -2316,7 +2316,7 @@ class HttpParser {
 	}
 }
 /**
- * This is the implementation class for hosting static content through an {@link Server}.
+ * This is the implementation class for hosting static content through a {@link Server}.
  */
 class StaticContentService extends Service {
 	private string _filename;
