@@ -1772,11 +1772,14 @@ public class X86_64 extends X86_64AssignTemps {
 		switch (node.op()) {
 		case	LOCK:
 			ref<Lock> k = ref<Lock>(node);
+			ref<Node> releaseCall = k.releaseCallInLine();
+			if (releaseCall == null)
+				return;
 			generateDefaultConstructors(k.scope, compileContext);
 			if (k.takeCall() != null)
 				generate(k.takeCall(), compileContext);
 			generateTryBody(null, k, k.body(), compileContext);
-			generate(k.releaseCallInLine(), compileContext);
+			generate(releaseCall, compileContext);
 			break;
 
 		case	BLOCK:
