@@ -16,7 +16,7 @@
 RUNTIME_OBJECTS = build/o/executionContext.o build/o/pxi.o
 MAIN_OBJECT = build/o/main.o
 
-CFLAGS = -std=c++11 -O3 -I src/runtime -fPIC
+CFLAGS = -std=c++11 -O3 -I src/C++ -fPIC
 
 all: build/libparasol.so.1 build/parasolrt 
 
@@ -27,7 +27,7 @@ build/libparasol.so.1: build/prep $(RUNTIME_OBJECTS)
 	$(CXX) $(CFLAGS) -shared -o $@ $(RUNTIME_OBJECTS) -lpthread -ldl
 	ln -sfT libparasol.so.1 build/libparasol.so
 
-$(RUNTIME_OBJECTS) $(MAIN_OBJECT): build/o/%.o : src/runtime/%.cc
+$(RUNTIME_OBJECTS) $(MAIN_OBJECT): build/o/%.o : src/C++/%.cc
 	$(CXX) $(CFLAGS) -c $< $(LIB_PATH) $(LIBS) -o $@
 
 build/prep:
