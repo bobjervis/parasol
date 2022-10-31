@@ -16,8 +16,8 @@
 #ifndef EXECUTION_CONTEXT_H
 #define EXECUTION_CONTEXT_H
 
-#include "common/machine.h"
-#include "common/vector.h"
+#include "machine.h"
+#include "vector.h"
 #include "parasol_enums.h"
 #include "pxi.h"
 

@@ -15,7 +15,7 @@
  */
 #ifndef PXI_H
 #define PXI_H
-#include"common/machine.h"
+#include"machine.h"
 #include <stddef.h>
 
 namespace pxi {

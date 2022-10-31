@@ -14,7 +14,7 @@
    limitations under the License.
  */
 #include <stdio.h>
-#include "library/pxi.h"
+#include "pxi.h"
 /*
  * Date and Copyright holder of this code base.
  */

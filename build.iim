@@ -16,15 +16,13 @@ target(os: linux, cpu: x86-64) {
 			file(name: genhdr, src: bin)
 			link(name: libparasol.so, target: libparasol.so.1)
 			elf(name: libparasol.so.1, target: build/libparasol.so.1, makefile: src/runtime/makefile) {
-				file(name: *.h, src: src/runtime/common)
-				file(name: *.cc, src: src/runtime/common)
-				file(name: *.h, src: src/runtime/library)
-				file(name: *.cc, src: src/runtime/library)
+				file(name: *.h, src: src/runtime)
+				file(name: executionContext.cc, src: src/runtime)
+				file(name: pxi.cc, src: src/runtime)
 			}
 			elf(name: parasolrt, target: build/parasolrt, makefile: src/runtime/makefile) {
-				file(name: *.cc, src: src/runtime/Parasol)
-				file(name: *.h, src: src/runtime/common)
-				file(name: *.h, src: src/runtime/library)
+				file(name: main.cc, src: src/runtime)
+				file(name: *.h, src: src/runtime)
 			}
 			file(name: paradoc, src: bin)
 			file(name: pc, src: bin)

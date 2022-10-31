@@ -15,7 +15,7 @@
  */
 #include "pxi.h"
 
-#include "common/machine.h"
+#include "machine.h"
 #include "parasol_enums.h"
 #include "executionContext.h"
 #include <stdio.h>
