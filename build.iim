@@ -28,12 +28,9 @@ target(os: linux, cpu: x86-64) {
 			file(name: pc, src: bin)
 			file(name: runets, src: bin)
 			file(name: unit, src: bin)
-			pxi(name: x86-64-lnx.pxi, main: compiler/main.p, target: x86-64-lnx) {
+			pxi(name: x86-64-lnx.pxi, main: src/pc/main.p, target: x86-64-lnx) {
 				file(name: *.p, src: src/lib)
 			}
-		}
-		folder(name: compiler) {
-			file(name: main.p, src: compiler)
 		}
 		folder(name: lib) {
 			file(name: root.p, src: lib)
@@ -41,6 +38,9 @@ target(os: linux, cpu: x86-64) {
 		folder(name: src) {
 			folder(name: lib) {
 				file(name: *, src: src/lib)
+			}
+			folder(name: pc) {
+				file(name: *, src: src/pc)
 			}
 			folder(name: util) {
 				file(name: *, src: src/util)
@@ -117,12 +117,9 @@ target(os: windows, cpu: x86-64) {
 			file(name: pc.bat, src: bin)
 			file(name: runets.bat, src: bin)
 			file(name: unit.bat, src: bin)
-			pxi(name: x86-64-win.pxi, main: compiler/main.p. target: x86-64-win) {
+			pxi(name: x86-64-win.pxi, main: src/pc/main.p. target: x86-64-win) {
 				file(name: *.p, src: src/lib)
 			}
-		}
-		folder(name: compiler) {
-			file(name: main.p, src: compiler)
 		}
 		folder(name: lib) {
 			file(name: root.p, src: lib)
@@ -130,6 +127,9 @@ target(os: windows, cpu: x86-64) {
 		folder(name: src) {
 			folder(name: lib) {
 				file(name: *, src: src/lib)
+			}
+			folder(name: src/pc) {
+				file(name: main.p, src: compiler)
 			}
 			folder(name: util) {
 				file(name: *, src: src/util)

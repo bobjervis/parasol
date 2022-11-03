@@ -704,7 +704,7 @@ class RunObject extends script.Object {
 		args.append(pxiFile);
 		if (compileFromSourceArgument) {
 			string rootDir = storage.directory(storage.directory(parasolCommand));
-			args.append(storage.constructPath(rootDir, "compiler/main.p"));
+			args.append(storage.constructPath(rootDir, "src/pc/main.p"));
 		}
 		if (targetArgument != null)
 			args.append("--target=" + targetArgument);

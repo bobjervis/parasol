@@ -17,7 +17,7 @@ All of these objects are created by the compiler in the course of translating a 
 	generated to implement the runtime feature.
 	<li>Symbols. These objects are inferred from the nodes created by the parser and assigned to 
 	scopes.
-	There are two main categories of symbols, plain and overloaded.
+	There are two main categories of symbols: plain and overloaded.
 	A plain symbol's name is defined exactly once in it's scope.
 	Such a symbol will typically be used to represent some specific object.
 	Overloaded symbols may appear with the same name any number of times. These are either functions or templates.
