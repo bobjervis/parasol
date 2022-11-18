@@ -3,7 +3,7 @@ command(name: dumppxi, main: src/util/dumppxi.p)
 command(name: genHeader, main: src/util/genHeader.p)
 command(name: genSqlProxy, main: src/util/genSqlProxy.p)
 command(name: hex, main: src/util/hex.p)
-command(name: paradoc, main: src/util/paradoc.p)
+command(name: paradoc, main: src/paradoc/paradoc.p)
 command(name: pcurl, main: src/util/pcurl.p)
 command(name: ucdParser, main: src/util/ucdParser.p)
 command(name: phost, main: src/util/phost.p)
@@ -39,8 +39,14 @@ target(os: linux, cpu: x86-64) {
 			folder(name: lib) {
 				file(name: *, src: src/lib)
 			}
+			folder(name: paradoc) {
+				file(name: *.p, src: src/paradoc)
+			}
 			folder(name: pc) {
 				file(name: *, src: src/pc)
+			}
+			folder(name: pcontext) {
+				file(name: *, src: src/pcontext)
 			}
 			folder(name: util) {
 				file(name: *, src: src/util)
@@ -128,8 +134,14 @@ target(os: windows, cpu: x86-64) {
 			folder(name: lib) {
 				file(name: *, src: src/lib)
 			}
-			folder(name: src/pc) {
-				file(name: main.p, src: compiler)
+			folder(name: paradoc) {
+				file(name: *, src: src/paradoc)
+			}
+			folder(name: pc) {
+				file(name: *, src: src/pc)
+			}
+			folder(name: root) {
+				file(name: *, src:src/root)
 			}
 			folder(name: util) {
 				file(name: *, src: src/util)

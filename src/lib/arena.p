@@ -26,6 +26,7 @@
  */
 namespace parasol:compiler;
 
+import parasol:context;
 import parasol:memory;
 import parasol:storage;
 import parasol:process;
@@ -37,9 +38,13 @@ public class Arena {
 	private string _rootFolder;
 	private ref<Scope> _root;
 	private ref<Scope> _main;
+
 	private ref<SourceCache> _sourceCache;
 	private ref<ImportDirectory>[] _importPath;
 	private ref<ImportDirectory> _specialFiles;			// A pseudo-import directory for the files explicitly loaded (root + main)
+
+	private ref<context.Context> _activeContext;
+
 	private ref<Scope>[string] _domains;
 	private ref<Scope>[] _scopes;
 	private ref<Namespace> _anonymous;
@@ -57,6 +62,7 @@ public class Arena {
 	boolean _deleteSourceCache;
 	boolean verbose;
 	boolean logImports;
+	boolean useContexts;
 	/**
 	 * This is set during configuration to true in order to decorate the parse trees with
 	 * references to doclets (and of course to parse those doclets).
@@ -84,13 +90,17 @@ public class Arena {
 	}
 
 	private void init() {
-		setImportPath("^/src/lib");
 		_global = new MemoryPool();
 		_builtInType.resize(TypeFamily.BUILTIN_TYPES);
 		_builtInType[TypeFamily.ERROR] = _global.newBuiltInType(TypeFamily.ERROR, null);
 		if (_rootFolder == null)
 			_rootFolder = storage.directory(storage.directory(process.binaryFilename()));
-		_specialFiles = new ImportDirectory("");
+		if (process.environment.get("PARASOL_CONTEXT") != null)
+			_activeContext = context.getActiveContext();
+		else {
+			setImportPath("^/src/lib");
+			_specialFiles = new ImportDirectory("");
+		}
 	}
 	
 	~Arena() {

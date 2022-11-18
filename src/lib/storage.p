@@ -688,8 +688,8 @@ public string homeDirectory() {
  *
  * @param path A file system path of a directory that exists or willl be created
  *
- * @return true if the directory did exist or could be created. False if the directory did not exist and either it or some
- * directory in the path could not be created.
+ * @return true if the directory did exist or was successfully created. False if the directory did not exist and either it or some
+ * directory in the path could not be read or created.
  */
 public boolean ensure(string path) {
 	if (isDirectory(path))

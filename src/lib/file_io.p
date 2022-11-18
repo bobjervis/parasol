@@ -1192,8 +1192,8 @@ public class Directory {
 	 * pattern, false if not, or if the directory is not readable.
 	 */
 	public boolean first() {
-		string s = _directory + "\\" + _wildcard;
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+			string s = _directory + "\\" + _wildcard;
 			_handle = HANDLE(windows.FindFirstFile(s.c_str(), ref<windows.WIN32_FIND_DATA>(_data)));
 			return _handle != windows.INVALID_HANDLE_VALUE;
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {

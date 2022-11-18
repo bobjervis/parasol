@@ -779,6 +779,14 @@ public class Request {
 			return value;
 	}
 	/**
+	 * This method reports whether the request arrived through https, or http.
+	 *
+	 * @return true if the connection is using https, false if using http.
+	 */
+	public boolean secured() {
+		return _connection.secured();
+	}
+	/**
 	 * Fetches a query parameter by name.
 	 *
 	 * Parameter names are case sensitive.
@@ -2338,11 +2346,17 @@ class StaticContentService extends Service {
 			filename = _filename;
 		if (exists(filename)) {
 			if (isDirectory(filename)) {
-				filename += "/index.html";
-				if (!exists(filename) || isDirectory(filename)) {
+				string f = constructPath(filename, "index.html");
+				if (!exists(f) || isDirectory(f)) {
 					response.error(404);
 					return false;
 				}
+				if (!filename.endsWith("/")) {
+					response.redirect(302, "http" + (request.secured() ? "s" : "") + "://" + request.hostname() + 
+									request.url + "/");
+					return false;
+				} 
+				filename = f;
 			}
 			File f;
 			if (f.open(filename)) {

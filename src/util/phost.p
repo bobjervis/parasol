@@ -31,11 +31,13 @@ class PHostCommand extends process.Command {
 					"\n" +
 					"The site is hosted unencrypted, so take care in exposing " +
 					"content on the URL to unintended audiences.");
-		portOption = integerOption('p', "port", "The ssl port this server will use (default 443).");
+		portOption = integerOption('p', "port", "The (unsecured) port this server will use (default 80).");
+		localhostOption = booleanOption('l', "localhost", "Host the content using localhost, rather than the machines IP address.");
 	}
 
 	ref<process.Option<int>> portOption;
-
+	
+	ref<process.Option<boolean>> localhostOption;
 }
 
 PHostCommand phostCommand;
@@ -55,7 +57,7 @@ int main(string[] args) {
 	printf("Hosting %s on port %d\n", params[0], port);
 	server.staticContent("/", params[0]);
 
-	server.start(net.ServerScope.INTERNET);
+	server.start(phostCommand.localhostOption.set() ? net.ServerScope.LOCALHOST : net.ServerScope.INTERNET);
 	server.wait();
 
 	return 0;

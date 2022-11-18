@@ -55,7 +55,7 @@ string COPYRIGHT_STRING = "2018 Robert Jervis";
 
 class Paradoc extends process.Command {
 	public Paradoc() {
-		finalArguments(2, int.MAX_VALUE, "<output-directory> <input-directory> ...");
+		finalArguments(1, int.MAX_VALUE, "<output-directory> <input-directory> ...");
 		description("The given input directories are analyzed as a set of Parasol libraries. " +
 					"\n" +
 					"Refer to the Parasol language reference manual for details on " +
@@ -68,21 +68,12 @@ class Paradoc extends process.Command {
 					"Parasol Runtime Version " + runtime.RUNTIME_VERSION + "\r" +
 					"Copyright (c) " + COPYRIGHT_STRING
 					);
-		importPathOption = stringOption('I', "importPath", 
-					"Sets the path of directories like the --explicit option, " +
-					"but the directory ^/src/lib is appended to " +
-					"those specified with this option.");
 		verboseOption = booleanOption('v', null,
 					"Enables verbose output.");
 		symbolTableOption = booleanOption(0, "syms",
 					"Print the symbol table.");
 		logImportsOption = booleanOption(0, "logImports",
 					"Log all import processing");
-		explicitOption = stringOption('X', "explicit",
-					"Sets the path of directories to search for imported symbols. " +
-					"Directories are separated by commas. " +
-					"The special directory ^ can be used to signify the Parasol " +
-					"install directory. ");
 		rootOption = stringOption(0, "root",
 					"Designates a specific directory to treat as the 'root' of the install tree. " +
 					"The default is the parent directory of the runtime binary program.");
@@ -100,9 +91,7 @@ class Paradoc extends process.Command {
 					"Displays this help.");
 	}
 
-	ref<process.Option<string>> importPathOption;
 	ref<process.Option<boolean>> verboseOption;
-	ref<process.Option<string>> explicitOption;
 	ref<process.Option<string>> rootOption;
 	ref<process.Option<boolean>> logImportsOption;
 	ref<process.Option<boolean>> symbolTableOption;
@@ -138,6 +127,7 @@ int main(string[] args) {
 
 	for (int i = 1; i < finalArguments.length(); i++)
 		libraries.append(arena.compilePackage(i - 1, &context));
+	libraries.append(arena.compilePackage(finalArguments.length() - 1, &context));
 //	printf("Starting!\n");
 	arena.finishCompilePackages(&context);
 
@@ -835,11 +825,6 @@ void parseCommandLine(string[] args) {
 	paradoc = new Paradoc();
 	if (!paradoc.parse(args))
 		paradoc.help();
-	if (paradoc.importPathOption.set() &&
-		paradoc.explicitOption.set()) {
-		printf("Cannot set both --explicit and --importPath arguments.\n");
-		paradoc.help();
-	}
 	finalArguments = paradoc.finalArguments();
 }
 
@@ -855,21 +840,9 @@ boolean configureArena(ref<Arena> arena) {
 			importPath.append(',');
 		importPath.append(finalArguments[i]);
 	}
-	if (paradoc.explicitOption.set()) {
-		if (paradoc.explicitOption.value.length() > 0) {
-			if (finalArguments.length() > 1)
-				importPath.append(',');
-			importPath.append(paradoc.explicitOption.value);
-		}
-	} else if (paradoc.importPathOption.set()) {
-		if (finalArguments.length() > 1)
-			importPath.append(',');
-		importPath.append(paradoc.importPathOption.value + ",^/src/lib");
-	} else {
-		if (finalArguments.length() > 1)
-			importPath.append(',');
-		importPath.append("^/src/lib");
-	}
+	if (finalArguments.length() > 1)
+		importPath.append(',');
+	importPath.append(arena.rootFolder() + "/src/lib");
 	arena.setImportPath(importPath);
 	arena.verbose = paradoc.verboseOption.value;
 	if (arena.logImports)
@@ -1029,6 +1002,10 @@ boolean generateNamespaceDocumentation() {
 	}
 	string overviewPage = storage.constructPath(outputFolder, "index", "html");
 	ref<Writer> overview = storage.createTextFile(overviewPage);
+	if (overview == null) {
+		printf("Unable to create file '%s'\n", overviewPage);
+		return false;
+	}
 
 	insertTemplate1(overview, overviewPage);
 
