@@ -38,6 +38,7 @@ import native:windows.INFINITE;
 import native:windows.GetLastError;
 import native:linux;
 import native:C;
+import parasol:exception;
 import parasol:exception.IllegalArgumentException;
 import parasol:exception.IllegalOperationException;
 import parasol:runtime;
@@ -111,6 +112,20 @@ public ref<Thread>[] getActiveThreads() {
 public void suspendAllOtherThreads() {
 	threads.suspendAllOtherThreads();
 }
+/**
+ * Report the number of CPU cores aivable for computation.
+ *
+ * @return The number of active cores. Must be a value greater than 0.
+ */
+public int cpuCount() {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN)
+		return 1;
+	else if (runtime.compileTarget == runtime.Target.X86_64_LNX)
+		return linux.sysconf(linux.SysConf._SC_NPROCESSORS_ONLN);
+	else
+		return 1;
+}
+
 /**
  * This class holds per-thread data.
  */
@@ -221,7 +236,7 @@ public class Thread {
 		_parameter = parameter;
 		_context = dupExecutionContext();
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-			address x = _beginthreadex(null, 0, wrapperFunction, this, 0, null);
+			address x = _beginthreadex(null, 0, windowsWrapperFunction, this, 0, null);
 			_threadHandle = *ref<HANDLE>(&x);
 			if (_threadHandle == INVALID_HANDLE_VALUE)
 				func = null;
@@ -256,7 +271,7 @@ public class Thread {
 	 * This is a wrapper function that sets up the environment, but for reasons that are not all that great,
 	 * the stack walker doesn't like to see the try/catch in the same method as the 'stackTop' variable, which is &t.
 	 */
-	private static unsigned wrapperFunction(address wrapperParameter) {
+	private static unsigned windowsWrapperFunction(address wrapperParameter) {
 		ref<Thread> t = ref<Thread>(wrapperParameter);
 		t._pid = getCurrentThreadId();
 		nested(t);
@@ -275,16 +290,14 @@ public class Thread {
 	 * same function as above.
 	 */
 	private static void nested(ref<Thread> t) {
-		enterThread(t._context, &t);
+		enterThread(t._context, pointer<byte>(&t) + 32);
 		threads.enlist(t);
 		runtime.setParasolThread(t);
 		t.initializeInstrumentation();
 		try {
 			t._function(t._parameter);
 		} catch (Exception e) {
-			printf("\nUncaught exception! (thread %s)\n\n%s\n", t._name, e.message());
-			e.printStackTrace();
-			process.stdout.flush();
+			exception.uncaughtException(&e);
 		}
 		t.checkpointInstrumentation();
 		threads.delist(t);
@@ -1026,13 +1039,33 @@ public class ThreadPool<class T> extends ThreadPoolData<T> {
  * the Future could have been cancelled, successful or might have produced an uncaught
  * exception. Methods can be used to interrogate those attributes.
  *
- * The general pattern for using Future's is to ubmit a set of work items to a thread pool,
- * collecting the Future's in an array. When all owrk-items are submitted, you can then
+ * The general pattern for using Future's is to submit a set of work items to a thread pool,
+ * collecting the Future's in an array. When all work-items are submitted, you can then
  * iterate over the Future's, either just calling {@link wait} on each one, or by calling
  * one of the methods that fetches a value that is computed as a result of the work being
  * done. Those that are already finished by the time you call one of these methods won't wait
  * but will immediately return with whatever value you care about, while those that are not
  * finished will wait until the work item is finished.
+ *
+ * The thread pool infrastructure automatically handles the behavior around posting results
+ * to the future when the work item function returns.
+ *
+ * If you want to use custom code to mainpulate a Future, you can do so, but you will have to
+ * arrange for the calls to post to the Future when the work item in question is done. Note that
+ * while the thread pool logic will indicate whether an uncaught exception was thrown by a
+ * worker thread, that entry point is unavailable, since you would have to supply your own exception
+ * handler for custom logic and can use alternative pathways to convey that an exception caused the
+ * Future to fail.
+ *
+ * Cancelling a custom Future object will cause it to register as cancelled, no matter how much work
+ * has been done on it's behalf.
+ *
+ * The effect of a call to cancel is limited. The thread pool worker will check whether the Future has
+ * been cancelled before calling the work item function. After the worker starts running the function,
+ * future calls to cancel will have no effect. If you created the Future, calling cancel will
+ * wake up any threads waiting on the Future. You may call cancel more than once and each call will 
+ * wake any waiting threads. If you post to the Future and subsequent cancel will have no
+ * effect.
  *
  * @threading All methods on this object are thread-safe.
  */
@@ -1092,12 +1125,23 @@ public monitor class Future<class T> {
 			wait();
 		return _cancelled;
 	}
-	
-	void post(T value) {
+	/**
+	 * Post a value to a Future.
+	 *
+	 * @param value The value for any future call to the {@link get} method
+	 * to return.
+	 *
+	 * @return true if the Future has not been cancelled or posted before this
+	 * call, false if either happened.
+	 */
+	public boolean post(T value) {
+		if (_cancelled || _posted)
+			return false;
 		_value = value;
 		_posted = true;
 		_calculating = false;
 		notifyAll();
+		return true;
 	}
 	
 	void postFailure(ref<Exception> e) {

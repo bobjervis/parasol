@@ -18,7 +18,6 @@ import parasol:storage;
 import parasol:process;
 import parasol:runtime;
 import parasol:pxi;
-import parasol:compiler.Arena;
 import parasol:compiler.Target;
 import parasol:compiler.test.initTestObjects;
 import parasol:test.launch;

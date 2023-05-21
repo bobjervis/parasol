@@ -13,21 +13,20 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+import parasol:compiler;
+import parasol:context;
 import parasol:memory;
 import parasol:storage;
 import parasol:process;
 import parasol:runtime;
-import parasol:compiler.Arena;
 import parasol:compiler.BuiltInType;
 import parasol:compiler.ClassDeclarator;
 import parasol:compiler.CompileContext;
 import parasol:compiler.Doclet;
 import parasol:compiler.EnumInstanceType;
-import parasol:compiler.FileStat;
 import parasol:compiler.FlagsInstanceType;
 import parasol:compiler.FunctionType;
 import parasol:compiler.Identifier;
-import parasol:compiler.ImportDirectory;
 import parasol:compiler.InterfaceType;
 import parasol:compiler.Namespace;
 import parasol:compiler.Node;
@@ -102,7 +101,6 @@ class Paradoc extends process.Command {
 private ref<Paradoc> paradoc;
 private string[] finalArguments;
 string outputFolder;
-ref<ImportDirectory>[] libraries;
 
 string corpusTitle = "Parasol Documentation";
 
@@ -113,7 +111,8 @@ string stylesheetPath;
 
 map<string, long> classFiles;
 
-Arena arena;
+runtime.Arena arena;
+ref<CompileContext> compileContext;
 
 int main(string[] args) {
 	process.stdout.flush();
@@ -121,15 +120,22 @@ int main(string[] args) {
 	outputFolder = finalArguments[0];
 
 //	printf("Configuring\n");
-	if (!configureArena(&arena))
+	configureArena();
 		return 1;
-	CompileContext context(&arena, arena.global(), paradoc.verboseOption.value, memory.StartingHeap.PRODUCTION, null, null);
+	compileContext = new CompileContext(&arena, paradoc.verboseOption.value, paradoc.logImportsOption.value);
+	if (!compileContext.loadRoot(false))
+		return 1;
+	ref<context.Context> activeContext = arena.activeContext();
 
-	for (int i = 1; i < finalArguments.length(); i++)
-		libraries.append(arena.compilePackage(i - 1, &context));
-	libraries.append(arena.compilePackage(finalArguments.length() - 1, &context));
-//	printf("Starting!\n");
-	arena.finishCompilePackages(&context);
+	string[] unitFilenames;
+	for (int i = 1; i < finalArguments.length(); i++) {
+		ref<context.Package> package = activeContext.getPackage(finalArguments[i]);
+		if (package != null) {
+			unitFilenames.append(package.getUnitFilenames());
+		} else
+			printf("Could not find package %s\n", finalArguments[i]);
+	}
+	compileContext.compilePackage(unitFilenames, "none");
 
 	// We are now done with compiling, time to analyze the results
 
@@ -828,34 +834,9 @@ void parseCommandLine(string[] args) {
 	finalArguments = paradoc.finalArguments();
 }
 
-boolean configureArena(ref<Arena> arena) {
+void configureArena() {
 	arena.paradoc = true;
-	arena.logImports = paradoc.logImportsOption.value;
-	if (paradoc.rootOption.set())
-		arena.setRootFolder(paradoc.rootOption.value);
-	string importPath;
-
-	for (int i = 1; i < finalArguments.length(); i++) {
-		if (i > 1)
-			importPath.append(',');
-		importPath.append(finalArguments[i]);
-	}
-	if (finalArguments.length() > 1)
-		importPath.append(',');
-	importPath.append(arena.rootFolder() + "/src/lib");
-	arena.setImportPath(importPath);
 	arena.verbose = paradoc.verboseOption.value;
-	if (arena.logImports)
-		printf("Running with import path: %s\n", arena.importPath());
-	if (arena.load())
-		return true;
-	else {
-		arena.printMessages();
-		if (paradoc.verboseOption.value)
-			arena.print();
-		printf("Failed to load arena\n");
-		return false;
-	}
 }
 
 class Names {
@@ -872,28 +853,26 @@ ref<Namespace>[string] nameMap;
 Names[] names;
 
 boolean collectNamespacesToDocument() {
-	for (i in libraries) {
-		int fileCount = libraries[i].fileCount();
-		for (int j = 0; j < fileCount; j++) {
-			ref<FileStat> f = libraries[i].file(j);
-			if (f.hasNamespace()) {
-				string nameSpace = f.getNamespaceString();
-				ref<Namespace> nm;
-				boolean alreadyExists;
+	ref<compiler.Unit>[] units = arena.units();
+	for (i in units) {
+		ref<compiler.Unit> f = units[i];
+		if (f.hasNamespace()) {
+			string nameSpace = f.getNamespaceString();
+			ref<Namespace> nm;
+			boolean alreadyExists;
 
-				nm = nameMap[nameSpace];
-				if (nm != null)
-					alreadyExists = true;
-				else {
-					nm = f.namespaceSymbol();
-					nameMap[nameSpace] = nm;
-					ref<Doclet> doclet = nm.doclet();
-					if (doclet == null || !doclet.ignore) {
-						Names item;
-						item.name = nameSpace;
-						item.symbol = nm;
-						names.append(item);
-					}
+			nm = nameMap[nameSpace];
+			if (nm != null)
+				alreadyExists = true;
+			else {
+				nm = f.namespaceSymbol();
+				nameMap[nameSpace] = nm;
+				ref<Doclet> doclet = nm.doclet();
+				if (doclet == null || !doclet.ignore) {
+					Names item;
+					item.name = nameSpace;
+					item.symbol = nm;
+					names.append(item);
 				}
 			}
 		}
@@ -997,9 +976,6 @@ void indexTypesInScope(ref<Scope> symbols, string dirName, string baseName) {
 }
 
 boolean generateNamespaceDocumentation() {
-	for (i in libraries) {
-		printf("[%d] Library %s\n", i, libraries[i].directoryName());
-	}
 	string overviewPage = storage.constructPath(outputFolder, "index", "html");
 	ref<Writer> overview = storage.createTextFile(overviewPage);
 	if (overview == null) {
@@ -1948,7 +1924,7 @@ string transformLink(string linkTextIn, ref<Symbol> sym, string baseName) {
 	string path;
 	if (idx >= 0) {
 		string domain = linkText.substr(0, idx);
-		ref<Scope> scope = arena.getDomain(domain);
+		ref<Scope> scope = compileContext.forest().getDomain(domain);
 		if (scope == null)
 			return caption;
 		path = linkText.substr(idx + 1);
@@ -2225,9 +2201,9 @@ string typeString(ref<Type> type, string baseName) {
 	case	SHAPE:
 		ref<Type> e = type.elementType();
 		ref<Type> i = type.indexType();
-		if (arena.isVector(type)) {
+		if (compileContext.isVector(type)) {
 			s = typeString(e, baseName);
-			if (i != arena.builtInType(TypeFamily.SIGNED_32))
+			if (i != compileContext.builtInType(TypeFamily.SIGNED_32))
 				s.printf("[%s]", typeString(i, baseName));
 			else
 				s.append("[]");
@@ -2235,7 +2211,7 @@ string typeString(ref<Type> type, string baseName) {
 		} else {
 			// maps are a little more complicated. A map based on an integral type has to be declared as map<e, i>
 			// while a map of a non-integral type can be written as e[i].
-			if (arena.validMapIndex(i, null))
+			if (compileContext.validMapIndex(i))
 				s.printf("%s[%s]", typeString(e, baseName), typeString(i, baseName));
 			else
 				s.printf("map&lt;%s, %s&gt;", typeString(e, baseName), typeString(i, baseName));

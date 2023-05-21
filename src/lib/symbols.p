@@ -15,6 +15,7 @@
  */
 namespace parasol:compiler;
 
+import parasol:runtime;
 import parasol:stream;
 import parasol:text;
 
@@ -22,10 +23,14 @@ public class Namespace extends Symbol {
 	private ref<ClassScope> _symbols;
 	private substring _dottedName;
 	private substring _domain;
+	private ref<Unit>[] _units;				// Units that have been defined for this Arena's namespaces, excluding imports.
 
-	Namespace(substring domain, ref<Node> namespaceNode, ref<Scope> enclosing, ref<Node> annotations, substring name, ref<Arena> arena, ref<MemoryPool> pool) {
+	Namespace(substring domain, ref<Node> namespaceNode, ref<Scope> enclosing, ref<Node> annotations, substring name, ref<runtime.Arena> arena, ref<MemoryPool> pool) {
 		super(Operator.PUBLIC, StorageClass.ENCLOSING, enclosing, annotations, pool, name, null);
-		_symbols = arena.createNamespaceScope(enclosing, this);
+		if (arena != null)
+			_symbols = arena.createNamespaceScope(enclosing, this);
+		else
+			_symbols = pool new NamespaceScope(enclosing, this);
 		if (namespaceNode != null) {
 			boolean x;
 			string d;
@@ -48,21 +53,23 @@ public class Namespace extends Symbol {
 			_type.print();
 		}
 		printf("\n");
+		for (i in _units)
+			printf("%*.*c%s\n", indent + 8, indent + 8, ' ', _units[i].filename());
 		_symbols.print(indent + INDENT, false);
 		printf("\n");
 		printAnnotations(indent + INDENT);
 	}
 
 	public ref<Type> assignThisType(ref<CompileContext> compileContext) {
-		ref<Type> base = compileContext.arena().builtInType(TypeFamily.NAMESPACE);
+		ref<Type> base = compileContext.builtInType(TypeFamily.NAMESPACE);
 		_type = compileContext.pool().newClassType(TypeFamily.CLASS, base, _symbols);
 		return _type;
 	}
 
-	ref<Symbol> findImport(ref<Ternary> namespaceNode, ref<CompileContext> compileContext) {
+	public ref<Symbol> findImport(ref<Ternary> namespaceNode, ref<CompileContext> compileContext) {
 		ref<Identifier> id = ref<Identifier>(namespaceNode.right());
 		if (namespaceNode.middle().op() == Operator.EMPTY) {
-			if (name() != null && name() == id.identifier())
+			if (_name != null && _name == id.identifier())
 				return this;
 			else
 				return null;
@@ -92,6 +99,18 @@ public class Namespace extends Symbol {
 			return true;
 		}
 		return _dottedName[newName.length()] == '.';
+	}
+
+	public void includeUnit(ref<Unit> unit) {
+		_units.append(unit);
+	}
+
+	public ref<ref<Unit>[]> includedUnits() {
+		return &_units;
+	}
+
+	public int includedUnitCount() {
+		return _units.length();
 	}
 
 	public ref<Scope> symbols() {
@@ -232,7 +251,7 @@ public class PlainSymbol extends Symbol {
 						_type = compileContext.errorType();
 					}
 				} else
-					_type = compileContext.arena().builtInType(TypeFamily.CLASS_VARIABLE);
+					_type = compileContext.builtInType(TypeFamily.CLASS_VARIABLE);
 			} else {
 				compileContext.assignDeclarationTypes(enclosing(), _typeDeclarator);
 				if (_typeDeclarator.deferAnalysis()) {
@@ -262,7 +281,7 @@ public class PlainSymbol extends Symbol {
 							break;
 
 						case OBJECT_AGGREGATE:
-							_type = compileContext.arena().builtInType(TypeFamily.STRING);
+							_type = compileContext.builtInType(TypeFamily.STRING);
 							break;
 
 						case STRING:
@@ -270,7 +289,7 @@ public class PlainSymbol extends Symbol {
 						case SUBSTRING:
 						case SUBSTRING16:
 						case ARRAY_AGGREGATE:
-							_type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+							_type = compileContext.builtInType(TypeFamily.SIGNED_32);
 							break;
 
 						default:	// Any error message is being assigned elsewhere
@@ -284,7 +303,7 @@ public class PlainSymbol extends Symbol {
 					if (_type.family() == TypeFamily.VOID)
 						_type = compileContext.errorType();
 					if (_enclosing.storageClass() == StorageClass.TEMPLATE && _type.family() == TypeFamily.CLASS_VARIABLE)
-						_type = compileContext.arena().builtInType(TypeFamily.CLASS_DEFERRED);
+						_type = compileContext.builtInType(TypeFamily.CLASS_DEFERRED);
 				}
 			}
 		}
@@ -298,7 +317,7 @@ public class PlainSymbol extends Symbol {
 	 * the expression here, then later code generation would choke if there were any embedded COERCION calls, for example.
 	 */
 	public ref<Node> foldInitializer(ref<CompileContext> compileContext) {
-		_initializer = compileContext.fold(_initializer.clone(_enclosing.file().tree()), _enclosing.file());
+		_initializer = compileContext.fold(_initializer.clone(_enclosing.unit().tree()), _enclosing.unit());
 		return _initializer;
 	}
 
@@ -584,9 +603,9 @@ public class StubOverload extends OverloadInstance {
 
 	public ref<Type> assignThisType(ref<CompileContext> compileContext) {
 		if (_type == null) {
-			ref<Type>[] returns = [ compileContext.arena().builtInType(TypeFamily.STRING) ];
+			ref<Type>[] returns = [ compileContext.builtInType(TypeFamily.STRING) ];
 			ref<ClassType> rpcStubParams = compileContext.getClassType("rpc.StubParams");
-			ref<Type>[] parameters = [ _interfaceType, compileContext.arena().createRef(rpcStubParams, compileContext) ];
+			ref<Type>[] parameters = [ _interfaceType, compileContext.newRef(rpcStubParams) ];
 
 			ref<ParameterScope> scope = parameterScope();
 			_type = scope.type = compileContext.pool().newFunctionType(returns, parameters, false);
@@ -616,7 +635,7 @@ public class ProxyOverload extends OverloadInstance {
 
 	public ref<Type> assignThisType(ref<CompileContext> compileContext) {
 		if (_type == null) {
-			ref<Symbol> sym = compileContext.arena().getSymbol("parasol", "rpc.Client", compileContext);
+			ref<Symbol> sym = compileContext.forest().getSymbol("parasol", "rpc.Client", compileContext);
 			if (sym != null) {
 	//			printf(" --- assignThisType(%s) ---\n", _interfaceType.signature());
 				Location loc = _interfaceType.definition().location();
@@ -632,7 +651,7 @@ public class ProxyOverload extends OverloadInstance {
 				}
 				ref<Type> clientTransport = compileContext.getClassType("rpc.ClientTransport");
 				ref<Type> clientProxy = compileContext.getClassType("rpc.ClientProxy");
-				ref<Type> tp = compileContext.arena().createRef(clientTransport, compileContext);
+				ref<Type> tp = compileContext.newRef(clientTransport);
 				ref<Node> argName = tree.newIdentifier("a", loc);
 				parameterScope().define(Operator.NAMESPACE, StorageClass.ENCLOSING, null, argName, tp, compileContext.pool());
 				_type = compileContext.pool().newFunctionType(returns, parameterScope());
@@ -1281,7 +1300,8 @@ public class Symbol {
 			return null;
 		}
 		ref<TypedefType> typedefType = ref<TypedefType>(_type);
-		ref<BuiltInType> bt = compileContext.pool().newBuiltInType(family, typedefType.wrappedType());
+		ref<BuiltInType> bt = compileContext.builtInType(family);
+		bt.setClassType(typedefType.wrappedType());
 		_type = compileContext.makeTypedef(bt);
 		return bt;
 	}

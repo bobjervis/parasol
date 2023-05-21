@@ -300,7 +300,7 @@ public class Process extends ProcessVolatileData {
 			ref<linux.passwd> out;
 
 			byte[] buffer;
-			buffer.resize(linux.sysconf(int(linux.SysConf._SC_GETPW_R_SIZE_MAX)));
+			buffer.resize(linux.sysconf(linux.SysConf._SC_GETPW_R_SIZE_MAX));
 			int result = linux.getpwnam_r(username.c_str(), &pwd, &buffer[0], buffer.length(), &out);
 			if (out == null) {
 				if (result == 0)
@@ -1029,7 +1029,10 @@ public class Environment {
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
 			assert(false);
 		} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-			linux.setenv(key.c_str(), value.c_str(), 1) == 0;
+			if (value != null)
+				return linux.setenv(key.c_str(), value.c_str(), 1) == 0;
+			else
+				return linux.unsetenv(key.c_str()) == 0;
 		} else
 			assert(false);
 		return false;

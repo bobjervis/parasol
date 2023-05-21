@@ -25,9 +25,8 @@
  */
 namespace parasol:exception;
 
-import parasol:compiler.BuiltInType;
-import parasol:compiler.FileStat;
-import parasol:compiler.Type;
+import parasol:compiler;
+import parasol:context;
 import parasol:x86_64.ExceptionEntry;
 import parasol:memory;
 import parasol:process;
@@ -329,19 +328,26 @@ public class Exception {
 			frame = pointer<address>(stackPointer) + -2;
 			useRealStack = true;
 		}
+		pointer<ExceptionEntry> ee = pointer<ExceptionEntry>(exceptionsAddress());
+		pointer<ExceptionEntry> eeFirst = ee;
+		int count = exceptionsCount();
+		pointer<byte> lowCode = runtime.lowCodeAddress();
 		for (;;) {
+//			printf("  frame = %p \n", frame);
 			ref<ExceptionEntry> ee;
 			address ip;
 			(ee, frame, ip) = nextFrame(frame, useRealStack, comparator);
+//			printf("  -> frame %p ip %p (%x) ee = [%d]\n", frame, ip, pointer<byte>(ip) - lowCode, ee != null ? pointer<ExceptionEntry>(ee) - eeFirst : -1);
 			if (frame == null)
 				break;
-			comparator = comparatorReturnAddress;
 
 			if (ee != null) {
 				_exceptionContext.lastCrawledFramePointer = frame;
+//				printf("Calling handler: %x\n", ee.handler);
 				callCatchHandler(this, frame, ee.handler);
 				process.exit(1);
 			}
+			comparator = comparatorReturnAddress;
 		}
 		printf("\nFATAL: Thread %s could not find a stack handler for this address.\n", thread.currentThread().name());
 		printf("Parasol code based at %p\n", runtime.lowCodeAddress());
@@ -362,6 +368,7 @@ public class Exception {
 			printf("No exceptions table for this image.\n");
 			process.exit(1);
 		}
+//		printf("ee = %p count = %d\n", ee, count);
 
 		if (lastFrame == null) {
 			frame = pointer<address>(_exceptionContext.framePointer);
@@ -407,7 +414,7 @@ public class Exception {
 			int location = int(ip - lowCode);
 //			printf("%x Checking location %x", frame, location);
 			address result = bsearch(&location, ee, count, ExceptionEntry.bytes, comparator);
-//			printf(" -> found %p", result);
+//			printf(" -> found %p\n", result);
 			if (result != null) {
 				ref<ExceptionEntry> ee = ref<ExceptionEntry>(result);
 
@@ -818,15 +825,16 @@ void throwException(ref<Exception> e, address frame, address stackPointer) {
  * 
  * @param e The uncaught exeption.  
  */
-void uncaughtException(ref<Exception> e) {
+public void uncaughtException(ref<Exception> e) {
 	memory.resetHeap();
+	int id = thread.currentThread().id();
 	if (process.stdout == null) {
 		string s;
-		s.printf("\nUncaught exception!\n\n%s\n", e.message());
+		s.printf("\nUncaught exception in thread %d!\n\n%s\n", id, e.message());
 		s += e.textStackTrace();
 		linux.write(1, &s[0], s.length());
 	} else {
-		printf("\nUncaught exception!\n\n%s\n", e.message());
+		printf("\nUncaught exception in thread %d!\n\n%s\n", id, e.message());
 		e.exceptionContext().print();
 		e.printStackTrace();
 		process.stdout.flush();
@@ -904,8 +912,8 @@ InterruptResponse interruptResponse;
  * 	
  * RETURNS	true if the exception should be handled, false if it should not
  */
-boolean dispatchException(ref<Exception> e, ref<Type> t, ref<Exception> destination, int size) {
-	ref<Type> actual = **ref<ref<ref<Type>>>(e);
+boolean dispatchException(ref<Exception> e, ref<compiler.Type> t, ref<Exception> destination, int size) {
+	ref<compiler.Type> actual = **ref<ref<ref<compiler.Type>>>(e);
 
 //	printf("dispatchException %p actual %p t %p equals %s isSubtype %s\n", e, actual, t, actual.equals(t) ? "true" : "false", actual.isSubtype(t) ? "true" : "false");
 //		printf("actual class %x t class %x\n", pxiOffset(**ref<ref<address>>(actual)), pxiOffset(**ref<ref<address>>(t)));
@@ -1061,14 +1069,30 @@ public string formattedLocation(address ip, int offset, boolean locationIsExact)
 	} else {
 		string result;
 
-		ref<FileStat> file = sl.file;
+		//ref<FileStat> file = ref<FileStat>(sl.file);
+		ref<compiler.Unit> file = sl.file;
 		result.printf("%s %d", storage.makeCompactPath(file.filename(), "foo"), file.scanner().lineNumber(sl.location) + 1);
 		if (offset != 0)
 			result.printf(" (@%x)", offset);
 		return result;
 	}
 }
-
+/*
+class FileStat {
+	string  filename;
+	boolean _parsed;
+	boolean _rootFile;
+    string _domain;
+    address _namespaceSymbol;
+    address _namespaceNode;
+    address _fileScope;
+    address _tree;
+    boolean _scopesBuilt;
+    boolean _staticsInitialized;
+    string _source;
+    ref<compiler.Scanner> scanner;
+}
+ */
 private string formattedExternalLocation(address ip) {
 	string result;
 	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {

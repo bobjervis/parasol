@@ -15,6 +15,7 @@
  */
 namespace parasol:compiler;
 
+import parasol:context;
 import parasol:runtime;
 import parasol:storage.File;
 
@@ -95,7 +96,7 @@ public class LockScope extends Scope {
 //			printf("Looking for %s in %s found %p\n", name.asString(), _monitor.type.signature(), sym);
 			if (sym == null) {
 				if (_monitor.type.baseChainDeferAnalysis())
-					return definePlaceholderDelegate(name, compileContext.arena().builtInType(TypeFamily.CLASS_DEFERRED), compileContext.pool());
+					return definePlaceholderDelegate(name, compileContext.builtInType(TypeFamily.CLASS_DEFERRED), compileContext.pool());
 				else
 					return null;
 			}
@@ -1107,22 +1108,22 @@ public class ThunkScope extends ParameterScope {
 }
 
 class RootScope extends Scope {
-	private ref<FileStat> _file;
+	private ref<Unit> _file;
 
-	public RootScope(ref<FileStat> file, ref<Node> definition) {
+	public RootScope(ref<Unit> file, ref<Node> definition) {
 		super(null, definition, StorageClass.STATIC, null);
 		_file = file;
 	}
 
-	public ref<FileStat> file() {
+	public ref<Unit> unit() {
 		return _file;
 	}
 }
 
 class UnitScope extends Scope {
-	private ref<FileStat> _file;
+	private ref<Unit> _file;
 	
-	public UnitScope(ref<Scope> rootScope, ref<FileStat> file, ref<Node> definition) {
+	public UnitScope(ref<Scope> rootScope, ref<Unit> file, ref<Node> definition) {
 		super(rootScope, definition, StorageClass.STATIC, null);
 		_file = file;
 	}
@@ -1176,7 +1177,7 @@ class UnitScope extends Scope {
 		return this;
 	}
 
-	public ref<FileStat> file() {
+	public ref<Unit> unit() {
 		return _file;
 	}
 }
@@ -1187,6 +1188,21 @@ public class NamespaceScope extends ClassScope {
 	public NamespaceScope(ref<Scope> enclosing, ref<Namespace> namespaceSymbol) {
 		super(enclosing, null, StorageClass.STATIC, null);
 		_namespaceSymbol = namespaceSymbol;
+	}
+
+	public boolean hasIncludedUnits() {
+		if (_namespaceSymbol.includedUnitCount() > 0)
+			return true;
+		ref<ref<Scope>[]> nms = enclosed();
+		for (i in *nms) {
+			ref<Scope> nm_candidate = (*nms)[i];
+			if (nm_candidate.class != NamespaceScope)
+				continue;
+			ref<NamespaceScope> nm = ref<NamespaceScope>(nm_candidate);
+			if (nm.hasIncludedUnits())
+				return true;
+		}
+		return false;
 	}
 
 	public ref<Namespace> getNamespace() {
@@ -1270,7 +1286,7 @@ public class Scope {
 		return false;
 	}
 		
-	boolean writeHeader(ref<Writer> header) {
+	public boolean writeHeader(ref<Writer> header) {
 		for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
 			ref<Symbol> sym = i.get();
 			if (sym.deferAnalysis())
@@ -1317,6 +1333,10 @@ public class Scope {
 	}
 
 	public void print(int indent, boolean printChildren) {
+		if (this == null) {
+			printf("%*.*cScope <null>\n", indent, indent, ' ');
+			return;
+		}
 		if (int(_storageClass) < 0)
 			printf("%*.*cScope %p[%d] storageClass <%d>", indent, indent, ' ', this, variableStorage, int(_storageClass));
 		else
@@ -1422,6 +1442,8 @@ public class Scope {
 					default:
 						printf("%*.*c  {Orphan}:\n", indent, indent, ' ');
 					}
+					if (_enclosed[i].enclosing() != this)
+						printf("%*.*c  {enclosing wrong: %p}:\n", indent, indent, ' ', _enclosed[i].enclosing());
 					_enclosed[i].print(indent + INDENT, printChildren);
 				}
 			}
@@ -1435,7 +1457,7 @@ public class Scope {
 	public void printStatus() {
 		printf("%p %s %s", this, string(_storageClass), isTemplateFunction() ? "template function " : "");
 		if (_definition != null) {
-			ref<FileStat> fs = file();
+			ref<Unit> fs = unit();
 			printf("%s %d: ", fs.filename(), fs.scanner().lineNumber(_definition.location()) + 1);
 			
 			printf("%s %s", string(_definition.op()), _definition.assignTypesBoundary() ? "type boundary " : "");
@@ -1456,8 +1478,11 @@ public class Scope {
 	
 	public string sourceLocation(Location loc) {
 		string result;
-		ref<FileStat> fs = file();
-		result.printf("%s %d: ", fs.filename(), fs.scanner().lineNumber(loc) + 1);
+		ref<Unit> fs = unit();
+		if (fs != null)
+			result.printf("%s %d: ", fs.filename(), fs.scanner().lineNumber(loc) + 1);
+		else
+			result.printf("<no-file> @%d: ", loc.offset);
 		return result;
 	}
 	
@@ -1505,7 +1530,7 @@ public class Scope {
 		if (nm != null)
 			return nm.dottedName();
 		else
-			return "[" + file().filename() + "]";
+			return "[" + unit().filename() + "]";
 	}
 
 	boolean defineImport(ref<Identifier> id, ref<Symbol> definition, ref<MemoryPool> memoryPool) {
@@ -1587,14 +1612,18 @@ public class Scope {
 	}
 
 	public ref<Namespace> defineNamespace(string domain, ref<Node> namespaceNode, substring name, ref<CompileContext> compileContext) {
-		ref<Symbol> sym = lookup(name, compileContext);
+		return defineNamespace(domain, namespaceNode, name,compileContext.pool(), compileContext.arena(), compileContext.annotations);
+	}
+
+	public ref<Namespace> defineNamespace(string domain, ref<Node> namespaceNode, substring name, ref<MemoryPool> pool, ref<runtime.Arena> arena, ref<Node> annotations) {
+		ref<Symbol> sym = lookup(name, null);
 		if (sym != null) {
 			if (sym.class == Namespace)
 				return ref<Namespace>(sym);
 			else
 				return null;
 		}
-		ref<Namespace> nm = compileContext.pool().newNamespace(domain, namespaceNode, this, compileContext.annotations, name, compileContext.arena()); 
+		ref<Namespace> nm = pool.newNamespace(domain, namespaceNode, this, annotations, name, arena); 
 		SymbolKey key(name);
 		_symbols.insert(key, nm);
 		return nm;
@@ -1821,7 +1850,7 @@ public class Scope {
 	public string sourceLine() {
 		if (_definition == null)
 			return null;
-		return file().tree().sourceLine(_definition.location());
+		return unit().tree().sourceLine(_definition.location());
 	}
 
 	public boolean isMonitor() {
@@ -2028,9 +2057,10 @@ public class Scope {
 			return null;
 	}
 
-	public ref<FileStat> file() {
+	public ref<Unit> unit() {
+//		printf("      -> scope %p\n", _enclosing);
 		if (_enclosing != null)
-			return _enclosing.file();
+			return _enclosing.unit();
 		else
 			return null;
 	}

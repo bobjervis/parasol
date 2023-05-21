@@ -483,6 +483,8 @@ class BaseOption {
 	boolean setValue(string value) {
 		switch (_optionClass) {
 		case	STRING:
+			if (value == null)
+				return false;
 			ref<Option<string>>(this).value = value;
 			break;
 			

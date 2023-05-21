@@ -15,17 +15,26 @@
  */
 namespace parasol:context;
 
+import parasol:compiler;
 import parasol:exception.IllegalArgumentException;
 import parasol:exception.IllegalOperationException;
 import parasol:process;
 import parasol:storage;
+import parasol:time;
+
+string PACKAGE_MANIFEST = ":manifest:";
 
 monitor class ContextLock {
 	ref<Context>[string] _contexts;
 	string _contextDirectory;
+	ref<TemporaryContext> _tempContext;		// For runs where PARASOL_CONTEXT_FILE is defined.
 
 	~ContextLock() {
+		if (_contexts.contains("default"))
+			_contexts["default"].selfDestruct();
+		_contexts.remove("default");
 		_contexts.deleteAll();
+		delete _tempContext;
 	}
 
 	void populateContexts() {
@@ -56,6 +65,31 @@ monitor class ContextLock {
 		} else
 			_contexts["default"] = new Context("default");
 	}
+	/*
+	 * A private entry point used to initialize the 'PARASOL_CONTEXT_FILE 'active context'.
+	 *
+	 * The file format provides the necessary information 
+	 */
+	ref<Context> loadTemporaryContext(string filename) {
+		if (_tempContext == null) {
+//			printf("Loading TemporaryContext file %s\n", filename);
+			ref<Context> base = getShellActiveContext();
+			_tempContext = new TemporaryContext(base);
+	
+			ref<Reader> file = storage.openTextFile(filename);
+			if (file != null && _tempContext.loadFromReader(file, filename))
+				delete file;
+			else {
+				printf("Could not load file %s\n", filename);
+				delete file;
+				delete _tempContext;
+				_tempContext = null;
+				return null;
+			}
+		}
+		return _tempContext;
+	}
+
 }
 
 ContextLock contextLock;
@@ -72,27 +106,57 @@ ContextLock contextLock;
  *     <li>a set of active versions when more than one version of a given package is available,
  *     <li>a set of build configuration parameters.
  * </ul>
+ *
+ * 
  */
 public class Context {
 	private string _name;
 	private string _database;
+	private ref<Package>[string] _packages;
+	private ref<Package> _core;
+	/**
+	 * Strictly for extensions
+	 */
+	Context() {
+	}
 
 	Context(string name) {
-		_name = name;
+		init(name);
 	}
 
 	Context(string name, string path) {
-		_name = name;
 		_database = path;
+		init(name);
 	}
 /*
 	Context(string name, http.Uri url) {
 	}
  */
+	private void init(string name) {
+		_name = name;
+		string core = "core:parasollanguage.org";
+		string path = storage.readSymLink("/usr/parasol/latest");
+		_core = new CorePackage(core, path);
+		_packages[core] = _core;
+	}
+	/**
+	 * The destructor for a Context. Calling delete on a context that is named 'default' is
+	 * not allowed.
+	 *
+	 * @exception IllegalOperationException Thrown when trying to delete the default context.
+	 */
 	~Context() {
 		lock(contextLock) {
+			if (_name == "default")
+				throw IllegalOperationException("Attempt to delete 'default' context");
 			_contexts.remove(_name);
 		}
+		_packages.deleteAll();
+	}
+
+	void selfDestruct() {
+		_name = null;
+		delete this;
 	}
 /*
 	public static ref<Context> createFromURL(string name, string url) {
@@ -100,6 +164,29 @@ public class Context {
 		}
 	}
  */
+	/**
+	 * Retrieve the named package from this context.
+	 */
+	public ref<Package> getPackage(string name) {
+		ref<Package> p = _packages[name];
+		if (p != null)
+			return p;
+		if (!validatePackageName(name))
+			return null;
+		// If the default context has never been modified, it won't have a directory
+		// in the user's context list, so there won't be a defined _database field.
+		if (_database != null) {
+			string packageDir = storage.constructPath(_database, "pkg/" + name);
+			if (!storage.isDirectory(packageDir))
+				return null;
+			p = new Package(name, packageDir);
+		}
+		return null;
+	}
+
+	public boolean definePackage(ref<Package> p) {
+		return false;
+	}
 
 	public int compare(ref<Context> other) {
 		return this._name.compare(other._name);
@@ -107,6 +194,12 @@ public class Context {
 
 	public string name() {
 		return _name;
+	}
+
+	public void printSymbolTable() {
+	}
+
+	public void print() {
 	}
 }
 /**
@@ -163,7 +256,9 @@ public ref<Context> create(string name) {
 		// If the disk exists or is otherwise un-creatable, we can't create the context
 		if (!storage.makeDirectory(contextDb, false))
 			return null;
-		return _contexts[name] = new Context(name, contextDb);
+		ref<Context> ctx = new Context(name, contextDb);
+		_contexts[name] = ctx;
+		return ctx;
 	}
 }
 /**
@@ -176,17 +271,112 @@ public ref<Context> create(string name) {
  */
 public ref<Context> get(string name) {
 	lock (contextLock) {
-		return _contexts[name];
+		ref<Context> result = _contexts[name];
+		if (result == null && name == "default") {
+			result = new Context(name);
+			_contexts[name] = result;
+		}
+		return result;
 	}
 }
 /**
+ * Return the current active context. If the environment varialbe PARASOL_CONTEXT
+ * is defined, that is the name to use, otherwise use 'default' and return any context at that name.
+ *
+ * If the environment variable PARASOL_CONTEXT_FILE is defined, this Parasol process is typically running
+ * under a development environment and must use a temporarily created 'context' to resolve any 
+ * references to packages that are part of that build. The context is described in the file whose
+ * path is given in the value of the variable.
+ *
+ * @return The currently active context, or null if either PARASOL_CONTEXT or PARASOL_CONTEXT_FILE do not name a valid context.
  */
 public ref<Context> getActiveContext() {
+	string devFile = process.environment.get("PARASOL_CONTEXT_FILE");
+	if (devFile != null)
+		return contextLock.loadTemporaryContext(devFile);
+	else
+		return getShellActiveContext();
+}
+
+private ref<Context> getShellActiveContext() {
 	string name = process.environment.get("PARASOL_CONTEXT");
 	if (name == null)
 		name = "default";
-	return get(name);
+	ref<Context> ctx = get(name);
+
+	return ctx;
 }
+
+public class TemporaryContext extends Context {
+	ref<Context> _base;
+	ref<Package>[string] _packages;
+
+	public TemporaryContext(ref<Context> base) {
+		_base = base;
+	}
+
+	~TemporaryContext() {
+		_packages.deleteAll();
+	}
+
+	boolean loadFromReader(ref<Reader> file, string filename) {
+		boolean success = true;
+		for(int lineno = 1;; lineno++) {
+			string line;
+
+			line = file.readLine();
+			if (line == null)
+				break;
+			if (line.length() == 0)
+				continue;
+			switch (line[0]) {
+			case 'P':
+				int idx = line.indexOf('@');
+				if (idx > 2) {
+					substring packageName = line.substr(1, idx);
+					substring directory = line.substr(idx + 1);
+					ref<Package> p = new Package(packageName, directory);
+					definePackage(p);
+				} else {
+					printf("File %s Line %d: Malformed record '%s'\n", filename, lineno, line);
+					success = false;
+				}
+				break;
+
+			default:
+				printf("File %s Line %d: Unknown record '%s'\n", filename, lineno, line);
+				success = false;
+			}
+		}
+		return success;
+	}
+
+	public boolean writeContextData(ref<Writer> output) {
+		for (name in _packages) {
+			ref<Package> p = _packages[name];
+			output.printf("P%s@%s\n", p.name(), storage.absolutePath(p.directory()));
+		}
+		return true;
+	}
+
+	public boolean definePackage(ref<Package> p) {
+		if (_packages.contains(p.name()))
+			return false;
+		_packages[p.name()] = p;
+		return true;
+	}
+
+	public ref<Package> getPackage(string name) {
+//		printf("pseudo getting %s\n", name);
+		ref<Package> p = _packages[name];
+		if (p != null) {
+//			printf("Found it !\n");
+			return p;
+		} else
+			return _base.getPackage(name);
+	}
+}
+
 /**
  */
 public ref<Context>[] listAll() {
@@ -225,6 +415,37 @@ public boolean validateContextName(string name) {
 		return false;
 	
 }
+/**
+ * Validate a package name.
+ *
+ * A valid package name consists of a case-insensitive string which has exactly one colon character 
+ * with characters on either side. The characters following the colon must be a syntactically correct
+ * domain name that does not end with a period.
+ *
+ * @return true if the name is a valid package name, false otherwise
+ * @return If this is a valid package name, the index of the colon character.
+ */
+public boolean, int validatePackageName(string name) {
+	int colonIndex = name.indexOf(':');
+	if (colonIndex <= 0 || colonIndex == name.length() - 1) {
+		return false, -1;
+	}
+	substring domain = name.substr(colonIndex + 1);
+	if (!domain[0].isAlpha()) {
+		return false, -1;
+	}
+	if (domain[domain.length() - 1] == '-') {
+		return false, -1;
+	}
+	for (int i = 1; i < domain.length(); i++) {
+		if (domain[i] == '-' || domain[i] == '.')
+			continue;
+		if (!domain[i].isAlphanumeric()) {
+			return false, -1;
+		}
+	}
+	return true, colonIndex;
+}
 
 private string ensureContextHome() {
 	string contextHome = getContextHome();
@@ -243,220 +464,116 @@ private string getContextHome() {
 		throw IllegalOperationException("No home directory for user");
 	return storage.constructPath(home, ".parasol/contexts");
 }
+
+//@Constant
+public string PARASOL_CORE_PACKAGE_NAME = "core:parasollanguage.org";
+
 /**
+ * This class describes an installed package. It is built from the information stored in the context database.
  */
-public class Unit {
-	private string	_filename;
-	private boolean _parsed;
-	private boolean _rootFile;
-/*
-	private string _domain;
-	private ref<Namespace> _namespaceSymbol;
-	private ref<Ternary> _namespaceNode;
-	private ref<UnitScope> _fileScope;
-	private ref<SyntaxTree> _tree;
-	private boolean _scopesBuilt;
-	private boolean _staticsInitialized;
-	private string _source;
-	private ref<Scanner> _scanner;
-*/
-	public Unit(string f, boolean rootFile) {
-		_filename = f;
-		_rootFile = rootFile;
-	}
+public class Package {
+	private string _name;
+	private string _directory;
+	private compiler.DomainForest _forest;
 
-	public Unit() {
+	Package(string name, string directory) {
+		_name = name;
+		_directory = directory;
 	}
-/*
-	~Unit() {
-		delete _tree;
-		delete _scanner;
+	/**
+	 * Return the directory containing the package files.
+	 *
+	 * @return The directory of the package files.
+	 */
+	public string directory() {
+		return _directory;
 	}
-	
-	public void prepareForNewCompile() {
-		delete _scanner;
-		delete _tree;
-		_tree = null;
-		_scanner = null;
-		_parsed = false;
-		_scopesBuilt = false;
-		_staticsInitialized = false;
-		_namespaceNode = null;
-		_domain = null;
-	}
-	
-	public ref<Scanner> scanner() {
-		if (_scanner == null)
-			_scanner = Scanner.create(this);
-		return _scanner;
-	}
-	
-	public ref<Scanner> paradocScanner() {
-		if (_scanner == null)
-			_scanner = Scanner.createParadoc(this);
-		return _scanner;
-	}
-	
-	public ref<Scanner> newScanner() {
-		return Scanner.create(this);
-	}
-
-	public boolean setSource(string source) {
-		if (_filename != null)
-			return false;
-		_source = source;
-		return true;
-	}
-	
-	public void completeNamespace(ref<CompileContext> compileContext) {
-		compileContext.arena().conjureNamespace(_domain, _namespaceNode, compileContext);
-	}
-
-	public boolean parseFile(ref<CompileContext> compileContext) {
-		if (_parsed)
-			return false;
-		_parsed = true;
-		compileContext.definingFile = this;
-		_tree = new SyntaxTree();
-		_tree.parse(this, compileContext);
-		registerNamespace();
+	/**
+	 * Open the package and preapre for it being analyzed.
+	 *
+	 * @return true if the package iis healthy and ready to be used.
+	 * Returns false if the package cannot be used. This could indicate the
+	 * package is corrupted in some way or some other reason. For the
+	 * PseudoPackage class defined in pbuild, a false value indicates the
+	 * package was being rebuilt as part of the build, so any products 
+	 * will be unable to build.
+	 */
+	public boolean open() {
 		return true;
 	}
 
-	public void noNamespaceError(ref<CompileContext> compileContext) {
-		_tree.root().add(MessageId.NO_NAMESPACE_DEFINED, compileContext.pool());
-	}
+	/**
+	 * Retrieve a complete list of units in the package.
+	 */
+	public string[], boolean getUnitFilenames() {
+		string[] a;
 
-	private void registerNamespace() {
-		for (ref<NodeList> nl = _tree.root().statements(); nl != null; nl = nl.next) {
-			if (nl.node.op() == Operator.DECLARE_NAMESPACE) {
-				if (_namespaceNode == null) {
-					ref<Unary> u = ref<Unary>(nl.node);
-					boolean x;
-	
-					_namespaceNode = ref<Ternary>(u.operand());
-					(_domain, x) = _namespaceNode.left().dottedName();
-				} else
-					nl.node.add(MessageId.NON_UNIQUE_NAMESPACE, _tree.pool());
-			}
-		}
+		return a, false;
 	}
-
-	public boolean matches(string domain, ref<Ternary> importNode) {
-		if (_namespaceNode == null)
-			return false;
-		if (_domain != domain)
-			return false;
-		return _namespaceNode.namespaceConforms(importNode);
-	}
-
-	public boolean buildScopes(string domain, ref<CompileContext> compileContext) {
-		if (_scopesBuilt)
-			return false;
-		_scopesBuilt = true;
-		_fileScope = compileContext.arena().createUnitScope(compileContext.arena().root(), _tree.root(), this);
-		_tree.root().scope = _fileScope;
-		compileContext.buildScopes();
-		ref<Scope> domainScope = compileContext.arena().createDomain(domain);
-		if (_namespaceNode != null) {
-			_namespaceSymbol = _namespaceNode.middle().makeNamespaces(domainScope, domain, compileContext);
-			ref<Doclet> doclet = _tree.getDoclet(_namespaceNode);
-			if (doclet != null) {
-				if (_namespaceSymbol._doclet == null)
-					_namespaceSymbol._doclet = doclet;
-				else
-					_namespaceNode.add(MessageId.REDUNDANT_DOCLET, compileContext.pool());
-			}
-			_fileScope.mergeIntoNamespace(_namespaceSymbol, compileContext);
-		} else
-			_namespaceSymbol = compileContext.arena().anonymous();
-
-		return true;
-	}
-
-	boolean collectStaticInitializers(ref<Target> target) {
-		if (_staticsInitialized)
-			return false;
-		if (!_scopesBuilt && !_rootFile)
-			return false;
-		target.declareStaticBlock(this);
-		_staticsInitialized = true;
-		return true;
-	}
- 
-	void clearStaticInitializers() {
-		_staticsInitialized = false;
-	}
- 
-	public string getNamespaceString() {
-		if (_namespaceNode != null) {
-			string name;
-			boolean x;
-			
-			(name, x) = _namespaceNode.middle().dottedName();
-			return _domain + ":" + name;
-		} else
-			return "<anonymous>";
-	}
-
-	public ref<SyntaxTree> swapTree(ref<SyntaxTree> replacement) {
-		ref<SyntaxTree> original = _tree;
-		_tree = replacement;
-		return original;
+	/**
+	 * Retrieve a list of units that are members of the namespace referenced by the 
+	 * function argument.
+	 *
+	 * @param namespaceNode A compiler namespace parse tree node containing the namespace
+	 * that must be fetched.
+	 *
+	 * @return A list of zero of more filenames where the units assigned to that namespace
+	 * can be found. If the length of the array is zero, this package does not contain
+	 * any units in that namespace.
+	 */
+	public string[], boolean getNamespaceUnits(ref<compiler.Ternary> namespaceNode, ref<compiler.CompileContext> compileContext) {
+		return _forest.getNamespaceUnits(this, namespaceNode, compileContext);
 	}
 	
-	public ref<SyntaxTree> tree() {
-		return _tree; 
+	public boolean inputsNewer(time.Instant timeStamp) {
+		time.Instant modified;
+		boolean success;
+
+		(modified, success) = lastModified();
+		if (!success)
+			return false;			// The package is corrupted, force a recompile, which might fix it.
+		return modified.compare(&timeStamp) > 0;
 	}
 
-	public ref<Namespace> namespaceSymbol() {
-		return _namespaceSymbol;
+	public time.Instant, boolean lastModified() {
+		string manifest = storage.constructPath(_directory, PACKAGE_MANIFEST);
+		time.Instant accessed, modified, created;
+		boolean success;
+
+		(accessed, modified, created, success) = storage.fileTimes(manifest);
+		return modified, success;
 	}
 
-	public boolean hasNamespace() { 
-		return _namespaceNode != null; 
+	public string name() {
+		return _name;
 	}
 
-	public string domain() {
-		return _domain;
+	public string[] initFirst() {
+		return _forest.initFirst();
 	}
 
-	public boolean parsed() {
-		return _parsed;
+	public string[] initLast() {
+		return _forest.initLast();
 	}
-	
-	public string filename() {
-		if (_filename == null)
-			return "<inline>";
-		else
-			return _filename; 
-	}
-	
-	public string source() {
-		return _source;
-	}
-	
-	public ref<UnitScope> fileScope() {
-		return _fileScope;
-	}
-	
-	public boolean scopesBuilt() {
-		return _scopesBuilt;
-	}
-
-	public void dumpMessage(ref<Node> node, ref<Commentary> comment) {
-		if (!node.location().isInFile()) {
-			printf("%s :", filename()); 
-			printf(" %s\n", comment.message());
-		} else {
-			int lineNumber = _scanner.lineNumber(node.location());
-			if (lineNumber >= 0)
-				printf("%s %d: %s\n", filename(), lineNumber + 1, comment.message());
-			else
-				printf("%s [byte %d]: %s\n", filename(), node.location().offset, comment.message());
-		}
-	}
-*/
 }
+/**
+ * The CorePackage is a sub-class designed to use the installed Parasol runtimes
+ * at /usr/parasol. Each directory there is either a numbered version, beginning with a
+ * letter v prefix, or the sym-link file named latest, which should be pointing at
+ * one of the other version directories.
+ */
+class CorePackage extends Package {
+	CorePackage(string name, string directory) {
+		super(name, directory);
 
-
+		storage.Directory d("/usr/parasol");
+		if (d.first()) {
+			do {
+				string filename = d.filename();
+				if (filename[0] != 'v')
+					continue;
+				substring version = filename.substr(1);
+			} while (d.next());
+		}
+	}
+}

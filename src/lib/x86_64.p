@@ -24,7 +24,6 @@ import native:linux;
 
 import parasol:compiler;
 import parasol:compiler.Access;
-import parasol:compiler.Arena;
 import parasol:compiler.Binary;
 import parasol:compiler.Block;
 import parasol:compiler.Call;
@@ -39,7 +38,6 @@ import parasol:compiler.EnumInstanceType;
 import parasol:compiler.EnumScope;
 import parasol:compiler.EnumType;
 import parasol:compiler.EllipsisArguments;
-import parasol:compiler.FileStat;
 import parasol:compiler.FlagsInstanceType;
 import parasol:compiler.For;
 import parasol:compiler.FunctionDeclaration;
@@ -85,8 +83,10 @@ import parasol:compiler.Type;
 import parasol:compiler.TypedefType;
 import parasol:compiler.TypeFamily;
 import parasol:compiler.Unary;
+import parasol:compiler.Unit;
 import parasol:compiler.USE_COMPARE_METHOD;
 import parasol:compiler.Variable;
+import parasol:context;
 import parasol:exception;
 import parasol:memory;
 import parasol:process;
@@ -118,7 +118,7 @@ byte PXI_FIXUP_MAX = 0x04;
 int PXI_FIXUP_SHIFT = 8;
 
 public class X86_64Lnx extends X86_64 {
-	public X86_64Lnx(ref<Arena> arena) {
+	public X86_64Lnx(ref<runtime.Arena> arena) {
 		super(arena);
 	}
 	
@@ -212,7 +212,7 @@ public class X86_64Lnx extends X86_64 {
 }
 
 public class X86_64Win extends X86_64 {
-	public X86_64Win(ref<Arena> arena) {
+	public X86_64Win(ref<runtime.Arena> arena) {
 		super(arena);
 	}
 	
@@ -292,7 +292,7 @@ public class X86_64Win extends X86_64 {
 }
 
 public class X86_64 extends X86_64AssignTemps {
-	private ref<Scope> _unitScope;
+//	private ref<Scope> _unitScope;
 	private ref<ParameterScope> _alloc;						// Symbol for alloc function.
 	private ref<ParameterScope> _free;						// Symbol for free function.
 	private ref<OverloadInstance> _stringAppendString;		// string.append(string)
@@ -316,23 +316,26 @@ public class X86_64 extends X86_64AssignTemps {
 	private int _stackLocalVariables;
 	private memory.StartingHeap _startingHeap;
 
-	public X86_64(ref<Arena> arena) {
+	public X86_64(ref<runtime.Arena> arena) {
 		_arena = arena;
 	}
 
 	~X86_64() {
-		delete _unitScope;
+//		delete _unitScope;
 	}
 
-	boolean generateCode(ref<FileStat> mainFile, ref<CompileContext> compileContext) {
+	boolean generateCode(ref<compiler.Unit> mainFile, ref<CompileContext> compileContext) {
 		cacheCodegenObjects(compileContext);
 		_startingHeap = compileContext.startingHeap();
-		ref<Block> unit = mainFile.tree().root();
-//		printf("unit = %p\n", unit);
-		_unitScope = new Scope(_arena.root(), unit, compileContext.blockStorageClass(), unit.className());
+//		if (mainFile == null) {
+//			printf("We are about to die...\n");
+//		}
+//		ref<Block> unit = mainFile.tree().root();
+//		_unitScope = new Scope(_arena.root(), unit, compileContext.blockStorageClass(), unit.className());
 		maxTypeOrdinal = 1;
 		// This may have to be postponed until we get some data on register usage.
 		assignStorageToScopes(0, compileContext);
+//		printf("Storage assigned to scopes\n");
 		for (int i = 0; i < compileContext.staticSymbols().length(); i++) {
 			ref<PlainSymbol> symbol = (*compileContext.staticSymbols())[i];
 			assignStaticSymbolStorage(symbol, compileContext);
@@ -586,7 +589,7 @@ public class X86_64 extends X86_64AssignTemps {
 				func.print(0);
 				assert(false);
 			} else {
-				ref<FileStat> file = scope.file();
+				ref<compiler.Unit> file = scope.unit();
 				
 				// For template functions, this assigns any missing types info.
 				// Templates defer type assignment because unreferenced functions of a template are allowed to contain
@@ -626,7 +629,7 @@ public class X86_64 extends X86_64AssignTemps {
 			closeCodeSegment(CC.NOP, null);
 			insertPreamble();
 			if (node != null)
-				emitSourceLocation(parameterScope.file(), node.location());
+				emitSourceLocation(parameterScope.unit(), node.location());
 			inst(X86.ENTER, 0);
 			int registerArgs = 0;
 			if (parameterScope.hasThis()) {
@@ -678,15 +681,28 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.PUSH, TypeFamily.SIGNED_64, firstRegisterArgument());
 			ref<CodeSegment> handler = _storage new CodeSegment;
 			pushExceptionHandler(handler);
-			_arena.clearStaticInitializers();
+			ref<Unit>[] units = _arena.units();
+
+			for (i in units)
+				units[i].clearStaticInitializers();
+
+			// Now reorder the units according to the directives in the package manifest(s)
+			compileContext.sortUnitInitializationOrder(&units);
+
+			boolean result;
+
 			// Now we have to generate the various static blocks for included units.
-			while (_arena.collectStaticInitializers(this))
-				;
+			do {
+				result = false;
+				for (i in units)
+					result |= units[i].collectStaticInitializers(this);
+			} while (result);
+
 			ref<Scope> globalFrame = _arena.createScope(null, null, StorageClass.AUTO);
 			for (int i = 0; i < staticBlocks().length(); i++) {
-				ref<FileStat> file = (*staticBlocks())[i];
-				if (file.fileScope() != null)
-					globalFrame.collectAutoScopesUnderUnitScope(file.fileScope());
+				ref<compiler.Unit> file = (*staticBlocks())[i];
+				if (file.scope() != null)
+					globalFrame.collectAutoScopesUnderUnitScope(file.scope());
 			}
 			f().autoSize = globalFrame.autoStorage(this, 0, compileContext);
 			if (_arena.verbose)
@@ -694,8 +710,8 @@ public class X86_64 extends X86_64AssignTemps {
 //			printf("staticBlocks %d\n", staticBlocks().length());
 			int initialVariableCount = compileContext.variableCount();
 			for (int i = 0; i < staticBlocks().length(); i++) {
-				ref<FileStat> file = (*staticBlocks())[i];
-				if (file != scope.file()) {
+				ref<compiler.Unit> file = (*staticBlocks())[i];
+				if (file != scope.unit()) {
 					if (_arena.verbose)
 						printf("   %s\n", file.filename());
 					generateStaticBlock(file, compileContext);
@@ -703,26 +719,26 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			for (int i = 0; i < _arena.types().length(); i++) {
 				ref<TemplateInstanceType> t = (*_arena.types())[i];
-				ref<FileStat> file = t.definingFile();
+				ref<compiler.Unit> file = t.definingFile();
 				if (_arena.verbose)
 					printf("   Template in %s\n", file.filename());
-				if (file.fileScope() != null)
-					compileContext.setCurrent(file.fileScope());
+				if (file.scope() != null)
+					compileContext.setCurrent(file.scope());
 				else
-					compileContext.setCurrent(_arena.root());
+					compileContext.setCurrent(compileContext.root());
 				for (ref<NodeList> nl = t.concreteDefinition().classDef.statements(); nl != null; nl = nl.next) {
 					allocateStackForLocalVariables(compileContext);
 					foldAndGenerateStaticInitializers(file.tree(), nl.node, compileContext);
 				}
 			}
 			if (_arena.verbose)
-				printf("   %s\n", scope.file().filename());
-			generateStaticBlock(scope.file(), compileContext);
+				printf("   %s\n", scope.unit().filename());
+			generateStaticBlock(scope.unit(), compileContext);
 			node = ref<Block>(scope.definition());
 			ref<Symbol> main = scope.lookup("main", compileContext);
 			Location loc;
-			loc.offset = int(storage.size(scope.file().filename()));
-			emitSourceLocation(scope.file(), loc);
+			loc.offset = int(storage.size(scope.unit().filename()));
+			emitSourceLocation(scope.unit(), loc);
 			if (main != null &&
 				main.class == Overload) {
 				ref<Overload> m = ref<Overload>(main);
@@ -789,7 +805,7 @@ public class X86_64 extends X86_64AssignTemps {
 			inst(X86.LEA, R.RSP, R.RBP, -(f().autoSize + 8 * address.bytes));
 			ref<Symbol> re;
 			ref<Overload> o;
-			re = compileContext.arena().getSymbol("parasol", "exception.uncaughtException", compileContext);
+			re = compileContext.forest().getSymbol("parasol", "exception.uncaughtException", compileContext);
 			if (re == null || re.class != Overload) {
 				substring name("uncaughtException");
 				node.add(MessageId.UNDEFINED, compileContext.pool(), name);
@@ -875,7 +891,7 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 			ref<Symbol> stringArray;
 			if (parameterScope.symbolCount() == 0) {
-				stringArray = parameterScope.define(Operator.PRIVATE, StorageClass.STATIC, null, "*", compileContext.arena().builtInType(TypeFamily.ADDRESS), null, compileContext.pool());
+				stringArray = parameterScope.define(Operator.PRIVATE, StorageClass.STATIC, null, "*", compileContext.builtInType(TypeFamily.ADDRESS), null, compileContext.pool());
 				assignStaticRegion(stringArray, string.bytes, instances.length() * string.bytes);
 				for (int i = 0; i < instances.length(); i++) {
 					int offset = addStringLiteral((*instances)[i].name());
@@ -905,7 +921,7 @@ public class X86_64 extends X86_64AssignTemps {
 			ref<Block> switchBody = tree.newBlock(Operator.BLOCK, true, loc);
 			ref<Node> switchStmt = tree.newBinary(Operator.SWITCH, params, switchBody, loc);
 			block.statement(tree.newNodeList(switchStmt));
-			ref<Type> str = compileContext.arena().builtInType(TypeFamily.STRING);
+			ref<Type> str = compileContext.builtInType(TypeFamily.STRING);
 			for (i in *instances) {
 				ref<Symbol> sym = (*instances)[i];
 				ref<Node> label = tree.newConstant(Operator.STRING, sym.name(), loc);
@@ -986,7 +1002,7 @@ public class X86_64 extends X86_64AssignTemps {
 
 			// we will need a string to hold the marshalled parameters.
 
-			ref<Variable> serializedArguments = compileContext.newVariable(compileContext.arena().builtInType(TypeFamily.STRING));
+			ref<Variable> serializedArguments = compileContext.newVariable(compileContext.builtInType(TypeFamily.STRING));
 
 			// 1. marshal the method id (method + func type sig)
 
@@ -1017,12 +1033,12 @@ public class X86_64 extends X86_64AssignTemps {
 				x = tree.newUnary(Operator.EXPRESSION, call, loc);
 				block.statement(tree.newNodeList(x));
 			} else {
-				ref<Variable> serializedReturns = compileContext.newVariable(compileContext.arena().builtInType(TypeFamily.STRING));
+				ref<Variable> serializedReturns = compileContext.newVariable(compileContext.builtInType(TypeFamily.STRING));
 				r = tree.newReference(serializedReturns, 0, true, loc);
 				asg = tree.newBinary(Operator.ASSIGN, r, call, loc);
 				x = tree.newUnary(Operator.EXPRESSION, asg, loc);
 				block.statement(tree.newNodeList(x));
-				ref<Type> t = compileContext.arena().createPointer(compileContext.arena().builtInType(TypeFamily.UNSIGNED_8), compileContext);
+				ref<Type> t = compileContext.newPointer(compileContext.builtInType(TypeFamily.UNSIGNED_8));
 				ref<Variable> marshalledData = compileContext.newVariable(t);
 				ref<Node> mdr = tree.newReference(marshalledData, 0, true, loc);
 				r = tree.newReference(serializedReturns, 0, false, loc);
@@ -1077,7 +1093,7 @@ public class X86_64 extends X86_64AssignTemps {
 /*
 					string output;
  */
-			ref<Variable> output = compileContext.newVariable(compileContext.arena().builtInType(TypeFamily.STRING));
+			ref<Variable> output = compileContext.newVariable(compileContext.builtInType(TypeFamily.STRING));
 /*
 				try {
 					switch (params.methodID) {
@@ -1316,7 +1332,7 @@ public class X86_64 extends X86_64AssignTemps {
 			ref<ParameterScope> toStringMethod = eit.toStringMethod(this, compileContext);
 			ref<NodeList> args = tree.newNodeList(value);
 			ref<Node> name = tree.newLeaf(Operator.THIS, loc);
-			ref<Type> s = compileContext.arena().builtInType(TypeFamily.STRING);
+			ref<Type> s = compileContext.builtInType(TypeFamily.STRING);
 			ref<Node> call = tree.newCall(toStringMethod, CallCategory.FUNCTION_CALL, name, args, loc, compileContext);
 			ref<Variable> i = compileContext.newVariable(s);
 			ref<Node> asg = tree.newBinary(Operator.ASSIGN, tree.newReference(i, true, loc), call, loc);
@@ -1328,7 +1344,7 @@ public class X86_64 extends X86_64AssignTemps {
 
 		case FLAGS:
 			ref<FlagsInstanceType> fit = ref<FlagsInstanceType>(t);
-			value.type = compileContext.arena().builtInType(fit.instanceFamily());
+			value.type = compileContext.builtInType(fit.instanceFamily());
 			// Fall into general case, with an updated type to force an integral serialization.
 
 		default:
@@ -1446,7 +1462,7 @@ public class X86_64 extends X86_64AssignTemps {
 		case ENUM: {
 			ref<EnumInstanceType> eit = ref<EnumInstanceType>(t);
 
-			ref<Type> s = compileContext.arena().builtInType(TypeFamily.STRING);
+			ref<Type> s = compileContext.builtInType(TypeFamily.STRING);
 			ref<Variable> i = compileContext.newVariable(s);
 			unmarshal(i, 0, s, serialized.clone(tree), block, tree, loc, compileContext);
 			ref<ParameterScope> fromStringMethod = eit.fromStringMethod(this, compileContext);
@@ -1464,7 +1480,7 @@ public class X86_64 extends X86_64AssignTemps {
 
 		case FLAGS:
 			ref<FlagsInstanceType> fit = ref<FlagsInstanceType>(t);
-			t = compileContext.arena().builtInType(fit.instanceFamily());
+			t = compileContext.builtInType(fit.instanceFamily());
 			// Fall into general case, with an updated type to force an integral serialization.
 
 		default:
@@ -1484,7 +1500,7 @@ public class X86_64 extends X86_64AssignTemps {
 
 	private ref<ParameterScope> rpcClientCall(ref<CompileContext> compileContext) {
 		if (_rpcClientCall == null) {
-			ref<Symbol> clientBase = compileContext.arena().getSymbol("parasol", "rpc.ClientBase", compileContext);
+			ref<Symbol> clientBase = compileContext.forest().getSymbol("parasol", "rpc.ClientBase", compileContext);
 			if (clientBase == null) {
 				printf("Could not find parasol:rpc.ClientBase\n");
 				return null;
@@ -1743,7 +1759,7 @@ public class X86_64 extends X86_64AssignTemps {
 		}
 	}
 	
-	private void generateStaticBlock(ref<FileStat> file, ref<CompileContext> compileContext) {
+	private void generateStaticBlock(ref<compiler.Unit> file, ref<CompileContext> compileContext) {
 		
 		// Here is where all static initializers are folded:
 
@@ -1751,10 +1767,10 @@ public class X86_64 extends X86_64AssignTemps {
 		ref<Node> n = compileContext.fold(file.tree().root(), file);
 		assignStorageToScopes(startAt, compileContext);
 		allocateStackForLocalVariables(compileContext);
-		if (file.fileScope() != null)
-			compileContext.setCurrent(file.fileScope());
+		if (file.scope() != null)
+			compileContext.setCurrent(file.scope());
 		else
-			compileContext.setCurrent(_arena.root());
+			compileContext.setCurrent(compileContext.root());
 		n.traverse(Node.Traversal.IN_ORDER, collectStaticDestructors, compileContext);
 		generate(n, compileContext);
 	}
@@ -1795,7 +1811,7 @@ public class X86_64 extends X86_64AssignTemps {
 			ref<Binary> b = ref<Binary>(node);
 //			printf("Declaration...\n");
 //			node.print(0);
-			emitSourceLocation(compileContext.current().file(), node.location());
+			emitSourceLocation(compileContext.current().unit(), node.location());
 			generateInitializers(b.right(), compileContext);
 			break;
 
@@ -1915,7 +1931,7 @@ public class X86_64 extends X86_64AssignTemps {
 			markConditionalAddressModes(cond.left(), compileContext);
 			sethiUllman(cond.left(), compileContext, this);
 			assignConditionCode(cond.left(), compileContext);
-			emitSourceLocation(compileContext.current().file(), node.location());
+			emitSourceLocation(compileContext.current().unit(), node.location());
 			generateConditional(cond.left(), trueSegment, falseSegment, compileContext);
 			trueSegment.start(this);
 			generate(cond.middle(), compileContext);
@@ -2030,7 +2046,7 @@ public class X86_64 extends X86_64AssignTemps {
 			gatherCases(b.right(), &closure);
 			assert(b.right().op() == Operator.BLOCK);
 			block = ref<Block>(b.right());
-			emitSourceLocation(compileContext.current().file(), node.location());
+			emitSourceLocation(compileContext.current().unit(), node.location());
 			generateDefaultConstructors(block.scope, compileContext);
 			JumpContext switchContext(b, join, defaultSegment, &closure.nodes, this, jumpContext());
 			markAddressModes(b.left(), compileContext);
@@ -2106,20 +2122,20 @@ public class X86_64 extends X86_64AssignTemps {
 			break;
 			
 		case	BREAK:
-			emitSourceLocation(compileContext.current().file(), node.location());
+			emitSourceLocation(compileContext.current().unit(), node.location());
 			generateLiveSymbolDestructors(ref<Jump>(node).liveSymbols(), compileContext);
 			closeCodeSegment(CC.JMP, jumpContext().breakLabel());
 			break;
 			
 		case	CONTINUE:
-			emitSourceLocation(compileContext.current().file(), node.location());
+			emitSourceLocation(compileContext.current().unit(), node.location());
 			generateLiveSymbolDestructors(ref<Jump>(node).liveSymbols(), compileContext);
 			closeCodeSegment(CC.JMP, jumpContext().continueLabel());
 			break;
 			
 		case	RETURN:
 			ref<Return> retn = ref<Return>(node);
-			emitSourceLocation(compileContext.current().file(), node.location());
+			emitSourceLocation(compileContext.current().unit(), node.location());
 			if (retn.multiReturnOfMultiCall()) {
 				ref<Node> call = retn.arguments().node;
 				markAddressModes(call, compileContext);
@@ -3559,7 +3575,7 @@ public class X86_64 extends X86_64AssignTemps {
 			
 		case	DECLARATION:
 			ref<Binary> b = ref<Binary>(node);
-			emitSourceLocation(compileContext.current().file(), node.location());
+			emitSourceLocation(compileContext.current().unit(), node.location());
 			generateStaticInitializers(b.right(), compileContext);
 			break;
 
@@ -3665,7 +3681,7 @@ public class X86_64 extends X86_64AssignTemps {
 			if (n.type == null)
 				break;
 
-			emitSourceLocation(compileContext.current().file(), n.location());
+			emitSourceLocation(compileContext.current().unit(), n.location());
 			ref<ParameterScope> constructor = n.type.defaultConstructor();
 			if (constructor != null) {
 				instLoadEnumAddress(firstRegisterArgument(), n, int(n.symbol().offset));
@@ -3674,7 +3690,7 @@ public class X86_64 extends X86_64AssignTemps {
 			break;
 
 		case CALL:
-			emitSourceLocation(compileContext.current().file(), n.location());
+			emitSourceLocation(compileContext.current().unit(), n.location());
 			generateInitializers(n, compileContext);
 			break;
 		}
@@ -4191,7 +4207,7 @@ public class X86_64 extends X86_64AssignTemps {
 			// TODO: make this generate a runtime exception
 			return;
 		}
-		emitSourceLocation(compileContext.current().file(), node.location());
+		emitSourceLocation(compileContext.current().unit(), node.location());
 		if (verbose()) {
 //			node.print(4);
 			printf("-----  markAddressModes  ---------\n");
@@ -4427,23 +4443,23 @@ public class X86_64 extends X86_64AssignTemps {
 		}
 		int objectOffset = 0;
 		for (; size >= long.bytes; objectOffset += long.bytes, size -= long.bytes) {
-			inst(X86.MOV, compileContext.arena().builtInType(TypeFamily.ADDRESS), tempReg, node, objectOffset);
+			inst(X86.MOV, compileContext.builtInType(TypeFamily.ADDRESS), tempReg, node, objectOffset);
 			inst(X86.MOV, TypeFamily.ADDRESS, R.RSP, offset + objectOffset, tempReg);
 		}
 		if (size >= int.bytes) {
-			inst(X86.MOV, compileContext.arena().builtInType(TypeFamily.SIGNED_32), tempReg, node, objectOffset);
+			inst(X86.MOV, compileContext.builtInType(TypeFamily.SIGNED_32), tempReg, node, objectOffset);
 			inst(X86.MOV, TypeFamily.SIGNED_32, R.RSP, offset + objectOffset, tempReg);
 			size -= int.bytes;
 			objectOffset += int.bytes;
 		}
 		if (size >= short.bytes) {
-			inst(X86.MOV, compileContext.arena().builtInType(TypeFamily.SIGNED_16), tempReg, node, objectOffset);
+			inst(X86.MOV, compileContext.builtInType(TypeFamily.SIGNED_16), tempReg, node, objectOffset);
 			inst(X86.MOV, TypeFamily.SIGNED_16, R.RSP, offset + objectOffset, tempReg);
 			size -= short.bytes;
 			objectOffset += short.bytes;
 		}
 		if (size > 0) {
-			inst(X86.MOV, compileContext.arena().builtInType(TypeFamily.UNSIGNED_8), tempReg, node, offset);
+			inst(X86.MOV, compileContext.builtInType(TypeFamily.UNSIGNED_8), tempReg, node, offset);
 			inst(X86.MOV, TypeFamily.UNSIGNED_8, R.RSP, offset, tempReg);
 		}
 	}
@@ -4736,7 +4752,7 @@ public class X86_64 extends X86_64AssignTemps {
 /*
 			case	VAR:
 				target.byteCode(ByteCodes.CVTIL);
-				ref<Type> t = target.arena().builtInType(TypeFamily.SIGNED_64);
+				ref<Type> t = target.builtInType(TypeFamily.SIGNED_64);
 				if (target.unit() != null) {
 					ref<TypeRef> tr = target.unit().newTypeRef(t, target.arena().stringType().enclosing());
 					target.byteCode(ByteCodes.LDSA);
@@ -4965,7 +4981,7 @@ public class X86_64 extends X86_64AssignTemps {
 		ref<ParameterScope> scope = compileContext.arena().createParameterScope(type.scope(), null, ParameterScope.Kind.ENUM_TO_STRING);
 		ref<Type>[] returns;
 		ref<Type>[] params;
-		ref<Type> s = compileContext.arena().builtInType(TypeFamily.STRING);
+		ref<Type> s = compileContext.builtInType(TypeFamily.STRING);
 		returns.append(s);
 		params.append(type);
 		scope.type = compileContext.pool().newFunctionType(returns, params, false);
@@ -4976,7 +4992,7 @@ public class X86_64 extends X86_64AssignTemps {
 		ref<ParameterScope> scope = compileContext.arena().createParameterScope(type.scope(), null, ParameterScope.Kind.ENUM_FROM_STRING);
 		ref<Type>[] returns;
 		ref<Type>[] params;
-		ref<Type> s = compileContext.arena().builtInType(TypeFamily.STRING);
+		ref<Type> s = compileContext.builtInType(TypeFamily.STRING);
 		ref<Node> ident = compileContext.tree().newIdentifier("arg", type.scope().definition().location());
 		scope.define(Operator.PUBLIC, StorageClass.PARAMETER, ref<Node>(null), ident, s, compileContext.pool());
 		returns.append(type);
@@ -5042,27 +5058,27 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 
 	private void cacheCodegenObjects(ref<CompileContext> compileContext) {
-		ref<Symbol> re = _arena.getSymbol("parasol", "memory.alloc", compileContext);
+		ref<Symbol> re = compileContext.forest().getSymbol("parasol", "memory.alloc", compileContext);
 		if (re == null || re.class != Overload)
 			assert(false);
 		ref<Overload> o = ref<Overload>(re);
 		_alloc = ref<ParameterScope>((*o.instances())[0].type().scope());
-		re = _arena.getSymbol("parasol", "memory.free", compileContext);
+		re = compileContext.forest().getSymbol("parasol", "memory.free", compileContext);
 		if (re != null && re.class == Overload) {
 			 o = ref<Overload>(re);
 			_free = ref<ParameterScope>((*o.instances())[0].type().scope());
 		}
-		re = _arena.getSymbol("native", "C.memset", compileContext);
+		re = compileContext.forest().getSymbol("native", "C.memset", compileContext);
 		if (re == null || re.class != Overload)
 			assert(false);
 		 o = ref<Overload>(re);
 		_memset = ref<ParameterScope>((*o.instances())[0].type().scope());
-		re = _arena.getSymbol("native", "C.memcpy", compileContext);
+		re = compileContext.forest().getSymbol("native", "C.memcpy", compileContext);
 		if (re == null || re.class != Overload)
 			assert(false);
 		 o = ref<Overload>(re);
 		_memcpy = ref<ParameterScope>((*o.instances())[0].type().scope());
-		ref<Type> stringType = _arena.builtInType(TypeFamily.STRING);
+		ref<Type> stringType = compileContext.builtInType(TypeFamily.STRING);
 		if (stringType != null && stringType.scope() != null) {
 			for (int i = 0; i < stringType.scope().constructors().length(); i++) {
 				ref<Scope> scope = (*stringType.scope().constructors())[i];
@@ -5101,7 +5117,7 @@ public class X86_64 extends X86_64AssignTemps {
 				}
 			}
 		}
-		ref<Type> varType = _arena.builtInType(TypeFamily.VAR);
+		ref<Type> varType = compileContext.builtInType(TypeFamily.VAR);
 		for (int i = 0; i < varType.scope().constructors().length(); i++) {
 			ref<Scope> scope = (*varType.scope().constructors())[i];
 			ref<FunctionDeclaration> func = ref<FunctionDeclaration>(scope.definition());
@@ -5118,7 +5134,7 @@ public class X86_64 extends X86_64AssignTemps {
 				break;
 			}
 		}
-		ref<Type> floatType = _arena.builtInType(TypeFamily.FLOAT_32);
+		ref<Type> floatType = compileContext.builtInType(TypeFamily.FLOAT_32);
 		ref<Symbol> signMask = floatType.scope().lookup("SIGN_MASK", compileContext);
 		if (signMask != null)
 			_floatSignMask = signMask;
@@ -5128,7 +5144,7 @@ public class X86_64 extends X86_64AssignTemps {
 		ref<Symbol> zero = floatType.scope().lookup("ZERO", compileContext);
 		if (zero != null)
 			_floatZero = zero;
-		ref<Type> doubleType = _arena.builtInType(TypeFamily.FLOAT_64);
+		ref<Type> doubleType = compileContext.builtInType(TypeFamily.FLOAT_64);
 		signMask = doubleType.scope().lookup("SIGN_MASK", compileContext);
 		if (signMask != null)
 			_doubleSignMask = signMask;

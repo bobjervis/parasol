@@ -25,6 +25,7 @@ import parasol:process;
 import parasol:stream.EOF;
 import parasol:text.UTF8Encoder;
 import parasol:text.StringWriter;
+import parasol:time;
 import parasol:exception.IllegalOperationException;
 import parasol:exception.IOException;
 /**
@@ -1113,11 +1114,68 @@ public ref<FileWriter> createBinaryFile(string filename) {
 		return null;
 }
 /**
+ * Create and open for writing a temporary file.
+ *
+ * Once created, the file will remain in existence until temporary storage is cleared, usually at the next system reboot.
+ *
+ * The caller may use the return Writer object to add contents to the file. Deleting the Writer object will close the file.
+ * This Writer writes text data.
+ *
+ * @param template A valid filename string ending in XXXXXX. These X's will be replaced
+ * in the actual filename by unique characters.
+ *
+ * @return The actual filename.
+ *
+ * @return A text Writer object opened to the file.
+ */
+public string, ref<FileWriter> createTempFile(string template) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		string result = "/tmp/" + template;
+		int fd = linux.mkstemp(&result[0]);
+
+		if (fd < 0)
+			return result, null;
+		else
+			return result, new FileWriter(fd, true);
+	}
+	return null, null;
+}
+/**
+ * Create and open for writing a temporary binary file.
+ *
+ * Once created, the file will remain in existence until temporary storage is cleared, usually at the next system reboot.
+ *
+ * The caller may use the return Writer object to add contents to the file. Deleting the Writer object will close the file.
+ * This Writer writes binary data.
+ *
+ * @param template A valid filename string ending in XXXXXX. These X's will be replaced
+ * in the actual filename by unique characters.
+ *
+ * @return The actual filename.
+ *
+ * @return A binary Writer object opened to the file.
+ */
+public string, ref<FileWriter> createBinaryTempFile(string template) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		string result = "/tmp/" + template;
+		int fd = linux.mkstemp(&result[0]);
+
+		if (fd < 0)
+			return result, null;
+		else
+			return result, new BinaryFileWriter(fd, true);
+	}
+	return null, null;
+}
+
+/**
  * The Directory class is used to scan the contents of a directory using a wildcard pattern.
  *
  * The pattern must conform to the rules of the native operating system.
  *
- * TODO: For Linux, the wildcard string is ignored and effectively is treated as '*'. THis
+ * TODO: For Linux, the wildcard string is ignored and effectively is treated as '*'. This
  * needs to be fixed.
  *
  * The calling pattern is:

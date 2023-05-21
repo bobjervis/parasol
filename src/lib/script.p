@@ -21,7 +21,7 @@ namespace parasol:script;
 import parasol:storage;
 
 private string commandPrefix;
-private ref<Object>()[string] factories;
+private ref<Object>(int)[string] factories;
 
 public void setCommandPrefix(string command) {
 	commandPrefix = command;
@@ -31,7 +31,7 @@ public void init() {
 	objectFactory("script", ScriptObject.factory);
 }
 
-public void objectFactory(string tag, ref<Object> factory()) {
+public void objectFactory(string tag, ref<Object>(int) factory) {
 	factories[tag] = factory;
 }
 
@@ -50,8 +50,8 @@ public class Null extends Atom {
 public class Object extends Atom {
 	ref<Atom>[string]	_properties;
 
-	public Object() {
-		
+	public Object(int offset) {
+		super(offset);
 	}
 
 	~Object() {
@@ -126,7 +126,8 @@ public class Object extends Atom {
 public class String extends Atom {
 	private string _content;
 	
-	public String(string s) {
+	public String(int offset, string s) {
+		super(offset);
 		_content = s;
 	}
 
@@ -146,7 +147,8 @@ public class String extends Atom {
 public class TextRun extends Atom {
 	private string _content;
 
-	public TextRun(pointer<byte> text, long length) {
+	public TextRun(int offset, pointer<byte> text, long length) {
+		super(offset);
 		_content = string(text, int(length));
 	}
 
@@ -162,7 +164,8 @@ public class TextRun extends Atom {
 public class Vector extends Atom {
 	private ref<Atom>[] _value;
 	
-	public Vector(ref<Atom>[] value) {
+	public Vector(int offset, ref<Atom>[] value) {
+		super(offset);
 		for (i in value)
 			_value.append(value[i]);
 	}
@@ -195,6 +198,15 @@ public class Vector extends Atom {
 		return _value[i];
 	}
 
+	public boolean put(int i, ref<Atom> value) {
+		if (i < 0 || i >= _value.length()) {
+			assert(false);
+			return false;
+		}
+		_value[i] = value;
+		return true;
+	}
+
 	public int length() {
 		return _value.length();
 	}
@@ -205,6 +217,16 @@ public class Vector extends Atom {
 }
 
 public class Atom {
+	private int _offset;
+
+	Atom(int offset) {
+		_offset = offset;
+	}
+
+	public int offset() {
+		return _offset;
+	}
+
 	public boolean validate(ref<Parser> parser) {
 		return true;
 	}
@@ -231,9 +253,28 @@ public class Atom {
 		return null;
 	}
 
+	public boolean put(int i, ref<Atom> value) {
+		assert(false);
+		return false;
+	}
+
 	public int length() {
 		assert(false);
 		return 0;
+	}
+	/**
+	 * This method is defined on all atoms. If the atom is placed inside
+	 * a 'dir' element for a script parsed for the 'test' namespace, one
+	 * of the test objects may need this context information.
+	 *
+	 * Any relative path names used inside an atom should be relative to
+	 * this path (if the defaultPath is also relative, then the result is 
+	 * relative to the current working directory when the script is parsed).
+	 *
+	 * @param defaultPath The path for which all relative paths in atoms
+	 * should be determined.
+	 */
+	public void insertDefaultPath(string defaultPath) {
 	}
 
 	public abstract string toSource();
@@ -242,11 +283,13 @@ public class Atom {
 }
 
 class ScriptObject extends Object {
-	public static ref<Object> factory() {
-		return new ScriptObject();
+	public static ref<Object> factory(int offset) {
+		return new ScriptObject(offset);
 	}
 
-	private ScriptObject() {}
+	private ScriptObject(int offset) {
+		super(offset);
+	}
 /*
 
 	virtual bool validate(Parser* parser) {
@@ -337,6 +380,7 @@ public:
 
 	private void parseGroup(ref<Object> parent, Token terminator) {
 		pointer<byte> run = null;
+		int runLocation = 0;
 		pointer<byte> endOfRun;
 		for (;;) {
 			Token t = _scanner.next();
@@ -348,22 +392,23 @@ public:
 					log.error(_scanner.location(), "Unexpected end of file");
 				}
 				if (run != null)
-					_atoms.append(new TextRun(run, endOfRun - run));
+					_atoms.append(new TextRun(runLocation, run, endOfRun - run));
 				return;
 
 			case IDENTIFIER:
 				{
 					pointer<byte> start = _scanner.tokenText();
 					int length = _scanner.tokenSize();
+					int location = _scanner.location();
 
 					t = _scanner.next();
 					if (t == Token.LEFT_PARENTHESIS) {
 						// We have an object constructor, so flush any prior run
 						if (run != null) {
-							_atoms.append(new TextRun(run, endOfRun - run));
+							_atoms.append(new TextRun(runLocation, run, endOfRun - run));
 							run = null;
 						}
-						parseObject(parent, start, length);
+						parseObject(parent, start, length, location);
 					} else {
 						_scanner.backup();
 						if (run == null)
@@ -375,7 +420,7 @@ public:
 
 			case STRING_LITERAL:
 				if (run != null) {
-					_atoms.append(new TextRun(run, endOfRun - run));
+					_atoms.append(new TextRun(runLocation, run, endOfRun - run));
 					run = null;
 				}
 				_atoms.append(stringToken());
@@ -385,8 +430,10 @@ public:
 				if (terminator == Token.RIGHT_PARENTHESIS ||
 					terminator == Token.COMMA) {
 					_scanner.backup();
-					if (run != null)
-						_atoms.append(new TextRun(run, endOfRun - run));
+					if (run != null) {
+						_atoms.append(new TextRun(runLocation, run, endOfRun - run));
+						run = null;
+					}
 					return;
 				}
 				log.error(_scanner.location(), "Unexpected right parenthesis");
@@ -399,38 +446,44 @@ public:
 					_errorsFound = true;
 					_scanner.backup();
 				}
-				if (run != null)
-					_atoms.append(new TextRun(run, endOfRun - run));
+				if (run != null) {
+					_atoms.append(new TextRun(runLocation, run, endOfRun - run));
+					run = null;
+				}
 				return;
 
 			case	COMMA:
 				if (terminator == Token.COMMA) {
 					_scanner.backup();
-					if (run != null)
-						_atoms.append(new TextRun(run, endOfRun - run));
+					if (run != null) {
+						_atoms.append(new TextRun(runLocation, run, endOfRun - run));
+						run = null;
+					}
 					return;
 				}
 
 			default:
-				if (run == null)
+				if (run == null) {
 					run = _scanner.tokenText();
+					runLocation = _scanner.location();
+				}
 				endOfRun = _scanner.tokenText() + _scanner.tokenSize();
 			}
 		}
 	}
 
-	void parseObject(ref<Object> parent, pointer<byte> tagStart, int tagLength) {
+	void parseObject(ref<Object> parent, pointer<byte> tagStart, int tagLength, int location) {
 		ref<Object> object;
 		string tag(tagStart, tagLength);
-		ref<Object>() factory = factories[tag];
+		ref<Object>(int) factory = factories[tag];
 		if (factory == null)
-			object = new Object();
+			object = new Object(location);
 		else
-			object = factory();
-		object.put("tag", new String(tag));
+			object = factory(location);
+		object.put("tag", new String(location, tag));
 		if (parent != null)
 			object.put("parent", parent);
-		int location = _scanner.location();
+		location = _scanner.location();
 		for (;;) {
 			Token t = _scanner.next();
 			if (t == Token.RIGHT_PARENTHESIS)
@@ -451,6 +504,7 @@ public:
 				ref<Atom>[] value;
 				ref<ref<Atom>[]> outer = _atoms;
 				_atoms = &value;
+				int valueLoc = _scanner.location();
 				parseGroup(null, Token.COMMA);
 				_atoms = outer;
 				if (value.length() == 0)
@@ -458,7 +512,7 @@ public:
 				else if (value.length() == 1)
 					object.put(attribute, value[0]);
 				else
-					object.put(attribute, new Vector(value));
+					object.put(attribute, new Vector(valueLoc, value));
 			} else if (!resync(Token.COMMA))
 					return;
 			t = _scanner.next();
@@ -478,7 +532,7 @@ public:
 			ref<ref<Atom>[]> save = _atoms;
 			_atoms = new ref<Atom>[];
 			parseGroup(object, Token.RIGHT_CURLY);
-			object.put("content", new Vector(*_atoms));
+			object.put("content", new Vector(_scanner.location(), *_atoms));
 			delete _atoms;
 			_atoms = save;
 		} else
@@ -491,6 +545,10 @@ public:
 		}
 	}
 
+	public int lineNumber(int location) {
+		return _scanner.lineNumber(location);
+	}
+
 	public boolean resync(Token t) {
 		// Just do no resync for now.
 		return false;
@@ -501,7 +559,7 @@ public:
 		string content;
 		boolean result;
 		(content, result) = s.unescapeParasol();
-		return new String(content);
+		return new String(_scanner.location(), content);
 	}
 	
 }
@@ -788,8 +846,10 @@ class ScannerMessageLog extends MessageLog {
 	public ScannerMessageLog() {
 	}
 
-	public void error(int offset, string msg) {
-		printf("%s %d : %s\n", filename(), lineNumber(offset), msg);
+	public void error(int offset, string msg, var... args) {
+		printf("%s %d : ", filename(), lineNumber(offset));
+		printf(msg, args);
+		printf("\n");
 	}
 }
 
@@ -836,7 +896,7 @@ public:
 		error(_baseLocation, msg); 
 	}
 
-	public abstract void error(int loc, string msg);
+	public abstract void error(int loc, string msg, var... args);
 /*
 	void error(int offset, const string& msg) { error(_baseLocation + offset, msg); }
 

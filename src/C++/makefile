@@ -18,9 +18,9 @@ MAIN_OBJECT = build/o/main.o
 
 CFLAGS = -std=c++11 -O3 -I src/C++ -fPIC
 
-all: build/libparasol.so.1 build/parasolrt 
+all: build/parasolrt 
 
-build/parasolrt: build/prep $(MAIN_OBJECT)
+build/parasolrt: build/prep $(MAIN_OBJECT) build/libparasol.so.1
 	$(CXX) $(CFLAGS) -Lbuild -o build/parasolrt $(MAIN_OBJECT) -lpthread -ldl -lparasol
 
 build/libparasol.so.1: build/prep $(RUNTIME_OBJECTS)

@@ -145,12 +145,12 @@ public class Unary extends Node {
 		case	CLASS_OF:
 			if (_operand.type.indirectType(compileContext) == null) {
 				if (_operand.type.hasVtable(compileContext)) {
-					ref<Type> type = compileContext.arena().createRef(_operand.type, compileContext);
+					ref<Type> type = compileContext.newRef(_operand.type);
 					_operand = tree.newUnary(Operator.ADDRESS, _operand, _operand.location());
 					_operand.type = type;
 					return this;
 				} else if (_operand.op() == Operator.SUBSCRIPT && _operand.type.family() == TypeFamily.VAR) {
-					ref<Type> type = compileContext.arena().createRef(_operand.type, compileContext);
+					ref<Type> type = compileContext.newRef(_operand.type);
 					_operand = tree.newUnary(Operator.ADDRESS, _operand, _operand.location());
 					_operand.type = type;					
 				}
@@ -313,7 +313,7 @@ public class Unary extends Node {
 				switch (_operand.type.family()) {
 				case	VAR:
 					ref<Node> call = createMethodCall(_operand, "floatValue", tree, compileContext);
-					call.type = compileContext.arena().builtInType(TypeFamily.FLOAT_64);
+					call.type = compileContext.builtInType(TypeFamily.FLOAT_64);
 					_operand = call.fold(tree, false, compileContext);
 				}
 				break;
@@ -339,7 +339,7 @@ public class Unary extends Node {
 			case	INTERFACE:
 				if (_operand.op() != Operator.NULL && _operand.type.indirectType(compileContext) == null) {
 					ref<Node> adr = tree.newUnary(Operator.ADDRESS, _operand.fold(tree, false, compileContext), _operand.location());
-					adr.type = compileContext.arena().createRef(_operand.type, compileContext);
+					adr.type = compileContext.newRef(_operand.type);
 					_operand = adr;
 					return this;
 				}
@@ -352,9 +352,9 @@ public class Unary extends Node {
 						ref<Variable> temp = compileContext.newVariable(type);
 						ref<Reference> r = tree.newReference(temp, true, location());
 						ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
-						adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+						adr.type = compileContext.builtInType(TypeFamily.ADDRESS);
 						ref<Node> opLen = tree.newInternalLiteral(type.size(), location());
-						opLen.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+						opLen.type = compileContext.builtInType(TypeFamily.SIGNED_32);
 						ref<Node> call = createMethodCall(_operand, "classValue", tree, compileContext, adr, opLen);
 						if (call == null) {
 							substring name("classValue");
@@ -362,7 +362,7 @@ public class Unary extends Node {
 							type = compileContext.errorType();
 							return this;
 						}
-						call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+						call.type = compileContext.builtInType(TypeFamily.VOID);
 						r = tree.newReference(temp, false, location());
 						ref<Binary> seq = tree.newBinary(Operator.SEQUENCE, call, r, location());
 						seq.type = type;
@@ -392,8 +392,8 @@ public class Unary extends Node {
 			ref<Node> f = tree.newLeaf(Operator.FRAME_PTR, location());
 			ref<Node> s = tree.newLeaf(Operator.STACK_PTR, location());
 			ref<Node> x = tree.newLeaf(Operator.EMPTY, location());
-			f.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
-			s.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+			f.type = compileContext.builtInType(TypeFamily.ADDRESS);
+			s.type = compileContext.builtInType(TypeFamily.ADDRESS);
 			x.type = tes.type;
 			ref<Node> excep = _operand;
 			if (excep.type.indirectType(compileContext) == null) {
@@ -402,14 +402,14 @@ public class Unary extends Node {
 			}
 			ref<NodeList> args = tree.newNodeList(excep, f, s);
 			ref<Call> call = tree.newCall(tes, null, x, args, location(), compileContext);
-			call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+			call.type = compileContext.builtInType(TypeFamily.VOID);
 			f = tree.newUnary(Operator.EXPRESSION, call, location());
 			f.type = call.type;
 			return f.fold(tree, voidContext, compileContext);
 
 		case	CALL_DESTRUCTOR:
 			_operand = tree.newUnary(Operator.ADDRESS, _operand.fold(tree, false, compileContext), location());
-			_operand.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+			_operand.type = compileContext.builtInType(TypeFamily.ADDRESS);
 			return this;
 			
 		case	ADDRESS_OF_ENUM:
@@ -481,22 +481,22 @@ public class Unary extends Node {
 		case	SIGNED_16:
 		case	SIGNED_32:
 		case	SIGNED_64:
-			return foldCastToConstructor(compileContext.arena().builtInType(TypeFamily.SIGNED_64), tree, false, compileContext);
+			return foldCastToConstructor(compileContext.builtInType(TypeFamily.SIGNED_64), tree, false, compileContext);
 					
 		case	BOOLEAN:
-			return foldCastToConstructor(compileContext.arena().builtInType(TypeFamily.BOOLEAN), tree, false, compileContext);
+			return foldCastToConstructor(compileContext.builtInType(TypeFamily.BOOLEAN), tree, false, compileContext);
 					
 		case	FLOAT_32:
 		case	FLOAT_64:
-			return foldCastToConstructor(compileContext.arena().builtInType(TypeFamily.FLOAT_64), tree, false, compileContext);
+			return foldCastToConstructor(compileContext.builtInType(TypeFamily.FLOAT_64), tree, false, compileContext);
 					
 		case	ADDRESS:
 		case	INTERFACE:
-			return foldCastToConstructor(compileContext.arena().builtInType(TypeFamily.ADDRESS), tree, false, compileContext);
+			return foldCastToConstructor(compileContext.builtInType(TypeFamily.ADDRESS), tree, false, compileContext);
 
 		case	OBJECT_AGGREGATE:
 		case	ARRAY_AGGREGATE:
-			_operand.type = compileContext.arena().createRef(_operand.type.classType(), compileContext);	
+			_operand.type = compileContext.newRef(_operand.type.classType());	
 		case	REF:
 		case	POINTER:
 			for (int i = 0; i < type.scope().constructors().length(); i++) {
@@ -512,13 +512,13 @@ public class Unary extends Node {
 					empty.type = _operand.type;
 					ref<Node> typeOperand = tree.newUnary(Operator.CLASS_OF, empty, location());
 					// The type of the CLASS_OF operand is irrelevant.
-					typeOperand.type = compileContext.arena().builtInType(TypeFamily.VOID);
+					typeOperand.type = compileContext.builtInType(TypeFamily.VOID);
 					ref<NodeList> args = tree.newNodeList(typeOperand, _operand);
 					ref<Reference> r = tree.newReference(temp, true, location());
 					ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
-					adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+					adr.type = compileContext.builtInType(TypeFamily.ADDRESS);
 					ref<Call> constructor = tree.newCall(oi.parameterScope(), CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
-					constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
+					constructor.type = compileContext.builtInType(TypeFamily.VOID);
 					r = tree.newReference(temp, false, location());
 					ref<Binary> seq = tree.newBinary(Operator.SEQUENCE, constructor, r, location());
 					seq.type = type;
@@ -541,7 +541,7 @@ public class Unary extends Node {
 					type = compileContext.errorType();
 					return this;
 				}
-				call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+				call.type = compileContext.builtInType(TypeFamily.VOID);
 				return call.fold(tree, false, compileContext);
 			}
 			return foldCastToConstructor(_operand.type, tree, false, compileContext);
@@ -554,14 +554,14 @@ public class Unary extends Node {
 				ref<Node> cast;
 				if (_operand.type.family() == TypeFamily.SUBSTRING) {
 					ename = "stringEllip";
-					cast = tree.newCast(compileContext.arena().builtInType(TypeFamily.STRING), _operand);
+					cast = tree.newCast(compileContext.builtInType(TypeFamily.STRING), _operand);
 				} else {
 					ename = "string16Ellip";
-					cast = tree.newCast(compileContext.arena().builtInType(TypeFamily.STRING16), _operand);
+					cast = tree.newCast(compileContext.builtInType(TypeFamily.STRING16), _operand);
 				}
 				ref<Reference> r = tree.newEllipsisReference(type, location());
 				ref<Node> call = createMethodCall(r, ename, tree, compileContext, cast);
-				call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+				call.type = compileContext.builtInType(TypeFamily.VOID);
 				return call.fold(tree, false, compileContext);
 			}
 			return foldCastToConstructor(_operand.type, tree, false, compileContext);
@@ -583,17 +583,17 @@ public class Unary extends Node {
 						empty.type = _operand.type;
 						ref<Node> typeOperand = tree.newUnary(Operator.CLASS_OF, empty, location());
 						// The type of the CLASS_OF operand is irrelevant.
-						typeOperand.type = compileContext.arena().builtInType(TypeFamily.VOID);
+						typeOperand.type = compileContext.builtInType(TypeFamily.VOID);
 						ref<Node> opAdr = tree.newUnary(Operator.ADDRESS, _operand, location());
-						opAdr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+						opAdr.type = compileContext.builtInType(TypeFamily.ADDRESS);
 						ref<Node> opLen = tree.newInternalLiteral(_operand.type.size(), location());
-						opLen.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+						opLen.type = compileContext.builtInType(TypeFamily.SIGNED_32);
 						ref<NodeList> args = tree.newNodeList(typeOperand, opAdr, opLen);
 						ref<Reference> r = tree.newReference(temp, true, location());
 						ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
-						adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+						adr.type = compileContext.builtInType(TypeFamily.ADDRESS);
 						ref<Call> constructor = tree.newCall(oi.parameterScope(), CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
-						constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
+						constructor.type = compileContext.builtInType(TypeFamily.VOID);
 						r = tree.newReference(temp, false, location());
 						ref<Binary> seq = tree.newBinary(Operator.SEQUENCE, constructor, r, location());
 						seq.type = type;
@@ -623,13 +623,13 @@ public class Unary extends Node {
 		case STRING:
 		case SUBSTRING:
 			if (_operand.op() == Operator.NULL)
-				_operand.type = argumentType = compileContext.arena().builtInType(TypeFamily.STRING);
+				_operand.type = argumentType = compileContext.builtInType(TypeFamily.STRING);
 			break;
 
 		case STRING16:
 		case SUBSTRING16:
 			if (_operand.op() == Operator.NULL)
-				_operand.type = argumentType = compileContext.arena().builtInType(TypeFamily.STRING16);
+				_operand.type = argumentType = compileContext.builtInType(TypeFamily.STRING16);
 		}
 
 		for (int i = 0; i < type.scope().constructors().length(); i++) {
@@ -650,9 +650,9 @@ public class Unary extends Node {
 //				for (int i = 0; i < compileContext.liveSymbolCount(); i++)
 //					compileContext.getLiveSymbol(i).print(4);
 				ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
-				adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+				adr.type = compileContext.builtInType(TypeFamily.ADDRESS);
 				ref<Call> constructor = tree.newCall(oi.parameterScope(), CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
-				constructor.type = compileContext.arena().builtInType(TypeFamily.VOID);
+				constructor.type = compileContext.builtInType(TypeFamily.VOID);
 				if (voidContext)
 					return constructor.fold(tree, true, compileContext);
 				r = tree.newReference(temp, false, location());
@@ -790,7 +790,7 @@ public class Unary extends Node {
 		case	DEFAULT:
 		case	EXPRESSION:
 			compileContext.assignTypes(_operand);
-			type = compileContext.arena().builtInType(TypeFamily.VOID);
+			type = compileContext.builtInType(TypeFamily.VOID);
 			break;
 
 		case	ADDRESS:
@@ -803,9 +803,9 @@ public class Unary extends Node {
 				add(MessageId.NOT_ADDRESSABLE, compileContext.pool());
 				type = compileContext.errorType();
 			} else if (_operand.op() == Operator.SUBSCRIPT)
-				type = compileContext.arena().createPointer(_operand.type, compileContext);
+				type = compileContext.newPointer(_operand.type);
 			else
-				type = compileContext.arena().createRef(_operand.type, compileContext);
+				type = compileContext.newRef(_operand.type);
 			break;
 
 		case	DECLARE_NAMESPACE:
@@ -915,7 +915,7 @@ public class Unary extends Node {
 				type = compileContext.errorType();
 			} else {
 				if (_operand.type == _operand.type.scalarType(compileContext))
-					type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+					type = compileContext.builtInType(TypeFamily.BOOLEAN);
 				else
 					type = _operand.type;
 			}
@@ -927,7 +927,7 @@ public class Unary extends Node {
 				type = _operand.type;
 				return;
 			}
-			ref<Type> vectorType = compileContext.arena().buildVectorType(_operand.unwrapTypedef(Operator.CLASS, compileContext), null, compileContext);
+			ref<Type> vectorType = compileContext.newVectorType(_operand.unwrapTypedef(Operator.CLASS, compileContext), null);
 			type = compileContext.makeTypedef(vectorType);
 			break;
 		}
@@ -938,7 +938,7 @@ public class Unary extends Node {
 				type = _operand.type;
 				break;
 			}
-			ref<Type> vectorType = compileContext.arena().buildVectorType(_operand.unwrapTypedef(Operator.CLASS, compileContext), null, compileContext);
+			ref<Type> vectorType = compileContext.newVectorType(_operand.unwrapTypedef(Operator.CLASS, compileContext), null);
 			type = compileContext.makeTypedef(vectorType);
 			break;
 
@@ -980,7 +980,7 @@ public class Unary extends Node {
 				type = _operand.type;
 				break;
 			}
-			type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+			type = compileContext.builtInType(TypeFamily.SIGNED_32);
 			break;
 
 		case	CALL_DESTRUCTOR:
@@ -989,7 +989,7 @@ public class Unary extends Node {
 				type = _operand.type;
 				break;
 			}
-			type = compileContext.arena().builtInType(TypeFamily.VOID);
+			type = compileContext.builtInType(TypeFamily.VOID);
 			break;
 
 		case	CLASS_OF:
@@ -1006,7 +1006,7 @@ public class Unary extends Node {
 			case	VAR:
 			case	STRING:
 			case	ADDRESS:
-				type = compileContext.arena().builtInType(TypeFamily.CLASS_VARIABLE);
+				type = compileContext.builtInType(TypeFamily.CLASS_VARIABLE);
 				break;
 
 			default:
@@ -1025,10 +1025,10 @@ public class Unary extends Node {
 			type = _operand.type;
 			if (_operand.deferAnalysis())
 				break;
-			if (!_operand.canCoerce(compileContext.arena().builtInType(TypeFamily.EXCEPTION), false, compileContext)) {
+			if (!_operand.canCoerce(compileContext.builtInType(TypeFamily.EXCEPTION), false, compileContext)) {
 				ref<Type> t = _operand.type.indirectType(compileContext); 
 				if (t == null || 
-					!t.widensTo(compileContext.arena().builtInType(TypeFamily.EXCEPTION), compileContext)) {
+					!t.widensTo(compileContext.builtInType(TypeFamily.EXCEPTION), compileContext)) {
 					add(MessageId.NOT_AN_EXCEPTION, compileContext.pool());
 					type = compileContext.errorType();
 				}

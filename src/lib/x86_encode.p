@@ -18,7 +18,6 @@ namespace parasol:x86_64;
 import native:C;
 
 import parasol:compiler.Access;
-import parasol:compiler.Arena;
 import parasol:compiler.Binary;
 import parasol:compiler.Block;
 import parasol:compiler.ClassScope;
@@ -26,7 +25,6 @@ import parasol:compiler.CompileContext;
 import parasol:compiler.Constant;
 import parasol:compiler.EnumInstanceType;
 import parasol:compiler.EnumType;
-import parasol:compiler.FileStat;
 import parasol:compiler.FIRST_USER_METHOD;
 import parasol:compiler.FlagsInstanceType;
 import parasol:compiler.FunctionType;
@@ -55,7 +53,9 @@ import parasol:compiler.Type;
 import parasol:compiler.TypedefType;
 import parasol:compiler.TypeFamily;
 import parasol:compiler.Unary;
+import parasol:compiler.Unit;
 import parasol:compiler.Variable;
+import parasol:context;
 import parasol:storage;
 import parasol:math.abs;
 import parasol:memory;
@@ -232,21 +232,25 @@ class X86_64Encoder extends Target {
 		_segments.deleteAll();
 	}
 
-	boolean generateCode(ref<FileStat> mainFile, ref<CompileContext> compileContext) {
+	boolean generateCode(ref<Unit> mainFile, ref<CompileContext> compileContext) {
 		
-		// Dtorage has been allocated in the derived class for all static objects.
-		// Now we need to generate the executable code for the static initializers,
-		// along with the call to main (if any).
-
-		_pxiHeader.entryPoint = generateFunction(mainFile.fileScope(), compileContext);
-
-		// Now generate some more functions that might have been missed during the static code generation.
-		prepareVTables(compileContext);
-		
-		if (_code.length() == 0) {
-			mainFile.tree().root().add(MessageId.NO_CODE, compileContext.pool());
-			return false;
+		if (mainFile != null) {
+			// Storage has been allocated in the derived class for all static objects.
+			// Now we need to generate the executable code for the static initializers,
+			// along with the call to main (if any).
+	
+			_pxiHeader.entryPoint = generateFunction(mainFile.scope(), compileContext);
+	
+			// Now generate some more functions that might have been missed during the static code generation.
+			prepareVTables(compileContext);
+			
+			if (_code.length() == 0) {
+				mainFile.tree().root().add(MessageId.NO_CODE, compileContext.pool());
+				return false;
+			}
+		} else {
 		}
+
 		appendExceptionEntry(int.MAX_VALUE, null);
 		
 		_pxiHeader.typeDataOffset = _code.length();
@@ -741,7 +745,7 @@ class X86_64Encoder extends Target {
 		symbol.offset = ref<Segment<Segments>>(symbol.segment).reserve(size);
 	}
 
-	public boolean disassemble(ref<Arena> arena) {
+	public boolean disassemble(ref<runtime.Arena> arena) {
 		Disassembler d(arena, 0, _staticMemoryLength, _staticMemory, &_pxiHeader);
 		d.setDataMap(&_dataMap[0][0], _dataMap[0].length());
 		d.setFunctionMap(&_functionMap);
@@ -898,7 +902,7 @@ class X86_64Encoder extends Target {
 			_emitting = cs;
 		}
 
-		void emitSourceLocation(ref<FileStat> file, Location location, ref<X86_64Encoder> encoder) {
+		void emitSourceLocation(ref<Unit> file, Location location, ref<X86_64Encoder> encoder) {
 			ensureCodeSegment(encoder);
 	
 			runtime.SourceLocation loc = {
@@ -1126,7 +1130,7 @@ class X86_64Encoder extends Target {
 				inst(instruction, left, R(int(right.register)), compileContext);
 			else if (right.isConstant()) {
 				ref<Constant> c = ref<Constant>(right);
-				if (c.representedBy(compileContext.arena().builtInType(TypeFamily.SIGNED_32)))
+				if (c.representedBy(compileContext.builtInType(TypeFamily.SIGNED_32)))
 					inst(instruction, left, int(c.intValue()), compileContext);
 				else {
 					printf("%s - -\n", string(instruction));
@@ -3877,7 +3881,7 @@ class X86_64Encoder extends Target {
 		return _t.stackDepth();
 	}
 	
-	void emitSourceLocation(ref<FileStat> file, Location location) {
+	void emitSourceLocation(ref<Unit> file, Location location) {
 		_f.emitSourceLocation(file, location, this);
 	}
 	

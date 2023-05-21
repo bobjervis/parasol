@@ -49,6 +49,7 @@ public enum MessageId {
 	DUPLICATE								("Duplicate definition of '%1'"),
 	DUPLICATE_DESTRUCTOR					("More than one destructor in a class"),
 	DUPLICATE_INDEX							("Duplicate index in initializer"),
+	DUPLICATE_INIT_ENTRY					("File duplicated in init tag list"),
 	EXPECTING_TERM							("Expecting a term of an expression"),
 	EXPECTING_RC							("Expecting a right curly brace"),
 	EXPECTING_RS							("Expecting a right square brace"),

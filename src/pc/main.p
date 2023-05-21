@@ -13,14 +13,14 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+import parasol:compiler;
 import parasol:storage;
 import parasol:process;
 import parasol:runtime;
 import parasol:memory;
 import parasol:pxi;
-import parasol:compiler.Arena;
-import parasol:compiler.Target;
 import parasol:time;
+import native:linux;
 
 /*
  * Date and Copyright holder of this code base.
@@ -40,7 +40,7 @@ string COPYRIGHT_STRING = "2015 Robert Jervis";
 class ParasolCommand extends process.Command {
 	public ParasolCommand() {
 		commandName("pc");
-		finalArguments(0, int.MAX_VALUE, "<filename> [arguments ...]");
+		finalArguments(1, int.MAX_VALUE, "<filename> [arguments ...]");
 		description("The given filename is run as a Parasol program. " +
 					"Any command-line arguments appearing after are passed " +
 					"to any main function in that file." +
@@ -57,23 +57,17 @@ class ParasolCommand extends process.Command {
 					"Parasol Runtime Version " + runtime.RUNTIME_VERSION + "\r" +
 					"Copyright (c) " + COPYRIGHT_STRING
 					);
-		importPathOption = stringOption('I', "importPath", 
-					"Sets the path of directories like the --explicit option, " +
-					"but the directory ^/src/lib is appended to " +
-					"those specified with this option.");
+		contextOption = stringOption(0, "context",
+					"Defines a Parasol context to use in the compile and execution of the application. " +
+					"This overrides the value of the PARASOL_CONTEXT environment variable.");
 		verboseOption = booleanOption('v', null,
 					"Enables verbose output.");
 		symbolTableOption = booleanOption(0, "syms",
 					"Print the symbol table.");
 		logImportsOption = booleanOption(0, "logImports",
-					"Log all import processing");
+					"Log all import processing.");
 		disassemblyOption = booleanOption(0, "asm",
-					"Display disassembly of instructions and internal tables");
-		explicitOption = stringOption('X', "explicit",
-					"Sets the path of directories to search for imported symbols. " +
-					"Directories are separated by commas. " +
-					"The special directory ^ can be used to signify the Parasol " +
-					"install directory. ");
+					"Display disassembly of instructions and internal tables.");
 		pxiOption = stringOption(0, "pxi",
 					"Writes compiled output to the given file. " + 
 					"Does not execute the program.");
@@ -104,10 +98,9 @@ class ParasolCommand extends process.Command {
 					"Displays this help.");
 	}
 
-	ref<process.Option<string>> importPathOption;
+	ref<process.Option<string>> contextOption;
 	ref<process.Option<boolean>> verboseOption;
 	ref<process.Option<boolean>> disassemblyOption;
-	ref<process.Option<string>> explicitOption;
 	ref<process.Option<string>> pxiOption;
 	ref<process.Option<string>> targetOption;
 	ref<process.Option<string>> rootOption;
@@ -124,52 +117,31 @@ class ParasolCommand extends process.Command {
 private ref<ParasolCommand> parasolCommand;
 private string[] finalArguments;
 
-enum CommandLineVariant {
-	INTERACTIVE,
-	COMMAND,
-	COMPILE
-}
-
 int main(string[] args) {
-	int result = 1;
-	switch (parseCommandLine(args)) {
-	case	INTERACTIVE:
-		printf("Conversational mode is unfinished.\n");
-		break;
-
-	case	COMMAND:
-		result = runCommand();
-		break;
-
-	case	COMPILE:
-		result = compileCommand();
-		break;
-	}
+	int result;
+	parseCommandLine(args);
+	result = runCommand();
 	delete parasolCommand;
 	return result;
 }
 
-CommandLineVariant parseCommandLine(string[] args) {
+void parseCommandLine(string[] args) {
 	string[memory.StartingHeap] heapOptionValues = [
 		"prod",
 		"leaks",
 		"guard"
 	];
-
+	
 	parasolCommand = new ParasolCommand();
 	if (!parasolCommand.parse(args))
 		parasolCommand.help();
-	if (parasolCommand.importPathOption.set() &&
-		parasolCommand.explicitOption.set()) {
-		printf("Cannot set both --explicit and --importPath arguments.\n");
-		parasolCommand.help();
-	}
 	if (parasolCommand.heapOption.set()) {
 		boolean foundIt;
 		for (i in heapOptionValues)
 			if (heapOptionValues[i] == parasolCommand.heapOption.value) {
 				foundIt = true;
 				parasolCommand.heap = i;
+				break;
 			}
 		if (!foundIt) {
 			printf("Heap option has an invalid value: '%s'\n", parasolCommand.heapOption.value);
@@ -184,29 +156,34 @@ CommandLineVariant parseCommandLine(string[] args) {
 		}
 	}
 	finalArguments = parasolCommand.finalArguments();
-	if (finalArguments.length() == 0)
-		return CommandLineVariant.INTERACTIVE;
-	else if (parasolCommand.pxiOption.set())
-		return CommandLineVariant.COMPILE;
-	else
-		return CommandLineVariant.COMMAND;
 }
 
 int runCommand() {
-	Arena arena;
+	runtime.Arena arena;
 
-	if (!configureArena(&arena))
-		return 1;
-	string[] args = parasolCommand.finalArguments();
+	configureArena(&arena);
 
 	int returnValue;
 	boolean result;
 
-	ref<Target> target = arena.compile(args[0],
-								parasolCommand.verboseOption.value,
-								parasolCommand.heap,
-								parasolCommand.profileOption.value,
-								parasolCommand.coverageOption.value);
+	if (parasolCommand.pxiOption.set())
+		printf("Compiling to %s\n", parasolCommand.pxiOption.value);
+
+	time.Time start = time.Time.now();
+
+	compiler.CompileContext compileContext(&arena,
+									null,
+									parasolCommand.verboseOption.value,
+									parasolCommand.heap,
+									parasolCommand.profileOption.value,
+									parasolCommand.coverageOption.value,
+									parasolCommand.logImportsOption.value);
+
+	if (!compileContext.loadRoot(false))
+		return 1;
+
+	string[] args = parasolCommand.finalArguments();
+	ref<compiler.Target> target = compileContext.compile(args[0]);
 	if (parasolCommand.symbolTableOption.value)
 		arena.printSymbolTable();
 	if (parasolCommand.verboseOption.value) {
@@ -218,9 +195,21 @@ int runCommand() {
 		printf("%s failed to compile\n", args[0]);
 		arena.printMessages();
 		returnValue = 1;
-	} else if (!disassemble(&arena, target, args[0]))
+	} else if (target == null)
 		returnValue = 1;
-	else if (!parasolCommand.compileOnlyOption.value) {
+	else if (!disassemble(&arena, target, args[0]))
+		returnValue = 1;
+	else if (parasolCommand.pxiOption.set()) {
+		ref<pxi.Pxi> output = pxi.Pxi.create(parasolCommand.pxiOption.value);
+		target.writePxi(output);
+		if (!output.write()) {
+			printf("Error writing to %s\n", parasolCommand.pxiOption.value);
+			returnValue = 1;
+		}
+		delete output;
+		time.Time end = time.Time.now();
+		printf("Done in %d milliseconds\n", end.milliseconds() - start.milliseconds());
+	} else if (!parasolCommand.compileOnlyOption.value) {
 		(returnValue, result) = target.run(args);
 		if (!result) {
 			if (returnValue != -1)
@@ -232,70 +221,15 @@ int runCommand() {
 	return returnValue;
 }
 
-int compileCommand() {
-	Arena arena;
-
-	printf("Compiling to %s\n", parasolCommand.pxiOption.value);
-	time.Time start = time.Time.now();
-	if (!configureArena(&arena))
-		return 1;
-	string filename = parasolCommand.finalArguments()[0];
-	ref<Target> target = arena.compile(filename, parasolCommand.verboseOption.value, ParasolCommand.heap, null, null);
-	if (parasolCommand.symbolTableOption.value)
-		arena.printSymbolTable();
-	if (!disassemble(&arena, target, filename))
-		return 1;
-	if (parasolCommand.verboseOption.value) {
-		arena.print();
-		target.print();
-	}
-	if (arena.countMessages() > 0) {
-		printf("%s failed to compile\n", filename);
-		arena.printMessages();
-		return 1;
-	}
-	boolean anyFailure = false;
-	ref<pxi.Pxi> output = pxi.Pxi.create(parasolCommand.pxiOption.value);
-	target.writePxi(output);
-	delete target;
-	if (!output.write()) {
-		printf("Error writing to %s\n", parasolCommand.pxiOption.value);
-		anyFailure = true;
-	}
-	delete output;
-	time.Time end = time.Time.now();
-	printf("Done in %d milliseconds\n", end.milliseconds() - start.milliseconds());
-	if (anyFailure)
-		return 1;
-	else
-		return 0;
-}
-
-boolean configureArena(ref<Arena> arena) {
-	arena.logImports = parasolCommand.logImportsOption.value;
-	if (parasolCommand.rootOption.set())
-		arena.setRootFolder(parasolCommand.rootOption.value);
-	if (parasolCommand.explicitOption.set())
-		arena.setImportPath(parasolCommand.explicitOption.value);
-	else if (parasolCommand.importPathOption.set())
-		arena.setImportPath(parasolCommand.importPathOption.value + ",^/src/lib");
+void configureArena(ref<runtime.Arena> arena) {
 	arena.verbose = parasolCommand.verboseOption.value;
-	if (arena.logImports)
-		printf("Running with import path: %s\n", arena.importPath());
+	if (parasolCommand.logImportsOption.value)
+		printf("Running with context: %s\n", arena.activeContext().name());
 	if (parasolCommand.targetOption.set())
 		arena.preferredTarget = pxi.sectionType(parasolCommand.targetOption.value);
-	if (arena.load()) 
-		return true;
-	else {
-		arena.printMessages();
-		if (parasolCommand.verboseOption.value)
-			arena.print();
-		printf("Failed to load arena\n");
-		return false;
-	}
 }
 
-private boolean disassemble(ref<Arena> arena, ref<Target> target, string filename) {
+private boolean disassemble(ref<runtime.Arena> arena, ref<compiler.Target> target, string filename) {
 	if (!parasolCommand.disassemblyOption.value)
 		return true;
 	if (target.disassemble(arena))

@@ -4,6 +4,8 @@ command(name: genHeader, main: src/util/genHeader.p)
 command(name: genSqlProxy, main: src/util/genSqlProxy.p)
 command(name: hex, main: src/util/hex.p)
 command(name: paradoc, main: src/paradoc/paradoc.p)
+command(name: pbuild, main: src/pbuild/main.p)
+command(name: pcontext, main: src/pcontext/main.p)
 command(name: pcurl, main: src/util/pcurl.p)
 command(name: ucdParser, main: src/util/ucdParser.p)
 command(name: phost, main: src/util/phost.p)
@@ -25,31 +27,39 @@ target(os: linux, cpu: x86-64) {
 				file(name: *.h, src: src/C++)
 			}
 			file(name: paradoc, src: bin)
+			file(name: pbuild, src: bin)
 			file(name: pc, src: bin)
+			file(name: pcontext, src:bin)
 			file(name: runets, src: bin)
 			file(name: unit, src: bin)
 			pxi(name: x86-64-lnx.pxi, main: src/pc/main.p, target: x86-64-lnx) {
 				file(name: *.p, src: src/lib)
 			}
 		}
-		folder(name: lib) {
-			file(name: root.p, src: lib)
-		}
 		folder(name: src) {
 			folder(name: lib) {
-				file(name: *, src: src/lib)
+				file(name: *.p, src: src/lib)
 			}
 			folder(name: paradoc) {
 				file(name: *.p, src: src/paradoc)
 			}
+			folder(name: pbuild) {
+				file(name: *.p, src: src/pbuild)
+				folder(name: lib) {
+					file(name: *.p, src: src/pbuild/lib)
+				}
+			}
 			folder(name: pc) {
-				file(name: *, src: src/pc)
+				file(name: *.p, src: src/pc)
 			}
 			folder(name: pcontext) {
-				file(name: *, src: src/pcontext)
+				file(name: *.p, src: src/pcontext)
+			}
+			folder(name: root) {
+				file(name: root.p, src: lib)
 			}
 			folder(name: util) {
-				file(name: *, src: src/util)
+				file(name: *.p, src: src/util)
 			}
 		}
 	}
@@ -127,24 +137,30 @@ target(os: windows, cpu: x86-64) {
 				file(name: *.p, src: src/lib)
 			}
 		}
-		folder(name: lib) {
-			file(name: root.p, src: lib)
-		}
 		folder(name: src) {
 			folder(name: lib) {
-				file(name: *, src: src/lib)
+				file(name: *.p, src: src/lib)
 			}
 			folder(name: paradoc) {
-				file(name: *, src: src/paradoc)
+				file(name: *.p, src: src/paradoc)
+			}
+			folder(name: pbuild) {
+				file(name: *.p, src: src/pbuild)
+				folder(name: lib) {
+					file(name: *.p, src: src/pbuild/lib)
+				}
 			}
 			folder(name: pc) {
-				file(name: *, src: src/pc)
+				file(name: *.p, src: src/pc)
+			}
+			folder(name: pcontext) {
+				file(name: *.p, src: src/pcontext)
 			}
 			folder(name: root) {
-				file(name: *, src:src/root)
+				file(name: root.p, src: lib)
 			}
 			folder(name: util) {
-				file(name: *, src: src/util)
+				file(name: *.p, src: src/util)
 			}
 		}
 	}

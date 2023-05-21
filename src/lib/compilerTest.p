@@ -19,6 +19,7 @@
  */
 namespace parasol:compiler.test;
 
+import parasol:context;
 import parasol:memory;
 import parasol:process;
 import parasol:runtime;
@@ -28,12 +29,9 @@ import parasol:storage;
 import parasol:text;
 import parasol:time;
 import parasol:pxi;
-import parasol:compiler.Arena;
 import parasol:compiler.Block;
 import parasol:compiler.CompileContext;
 import parasol:compiler.containsErrors;
-import parasol:compiler.FileStat;
-import parasol:compiler.ImportDirectory;
 import parasol:compiler.Location;
 import parasol:compiler.MemoryPool;
 import parasol:compiler.Message;
@@ -43,20 +41,19 @@ import parasol:compiler.Operator;
 import parasol:compiler.Parser;
 import parasol:compiler.Scanner;
 import parasol:compiler.Scope;
-import parasol:compiler.SourceCache;
 import parasol:compiler.StorageClass;
 import parasol:compiler.StringScanner;
 import parasol:compiler.SyntaxTree;
 import parasol:compiler.Target;
 import parasol:compiler.Token;
 import parasol:compiler.TraverseAction;
+import parasol:compiler.Unit;
 
 private boolean verboseFlag;
 private boolean compileFromSourceArgument;
 private boolean printSymbolTable;
 private boolean showParseStageErrors;
 private string rootFolder;
-private string srcFolder;
 private string parasolCommand;
 private string pxiFile;
 private string targetArgument;
@@ -70,7 +67,6 @@ public void initTestObjects(string argv0, string argv1, boolean verbose,
 		rootFolder = rootDir;
 	else
 		rootFolder = storage.directory(storage.directory(process.binaryFilename()));
-	srcFolder = rootFolder + "/test/src";
 	parasolCommand = argv0;
 	pxiFile = argv1;
 	targetArgument = target;
@@ -90,8 +86,8 @@ class CodePointObject extends script.Object {
 	private boolean _expectSuccess;
 	private int[] _expectedValue;
 
-	public static ref<script.Object> factory() {
-		return new CodePointObject();
+	public static ref<script.Object> factory(int offset) {
+		return new CodePointObject(offset);
 	}
 
 	public boolean isRunnable() {
@@ -110,7 +106,7 @@ class CodePointObject extends script.Object {
 			else if (a.toString() == "success")
 				_expectSuccess = true;
 			else {
-				printf("Unexpected value for 'expect' attribute: '%s'\n", a.toString());
+				parser.log.error(offset(), "Unexpected value for 'expect' attribute: '%s'\n", a.toString());
 				return false;
 			}
 		} else
@@ -122,7 +118,7 @@ class CodePointObject extends script.Object {
 			int xValue;
 			(xValue, success) = int.parse(codes[i], 16);
 			if (!success) {
-				printf("value attribute '%s' is not an integer in '%s'\n", codes[i], a.toString());
+				parser.log.error(offset(), "value attribute '%s' is not an integer in '%s'\n", codes[i], a.toString());
 				return false;
 			}
 			_expectedValue.append(xValue);
@@ -164,8 +160,8 @@ class CodePointObject extends script.Object {
 		return success;
 	}
 
-	private CodePointObject() {
-		
+	private CodePointObject(int offset) {
+		super(offset);
 	}
 
 	void dump(ref<Node> expression) {
@@ -188,8 +184,8 @@ class ScanObject extends script.Object {
 	private ref<script.Atom> _keyword;
 	private ref<script.Atom> _value;
 
-	public static ref<script.Object> factory() {
-		return new ScanObject();
+	public static ref<script.Object> factory(int offset) {
+		return new ScanObject(offset);
 	}
 
 	public boolean isRunnable() {
@@ -312,7 +308,8 @@ class ScanObject extends script.Object {
 		return false;
 	}
 	
-	private ScanObject() {
+	private ScanObject(int offset) {
+		super(offset);
 	}
 
 	void dump() {
@@ -334,8 +331,8 @@ class ExpressionObject extends script.Object {
 	private string _source;
 	private boolean _expectSuccess;
 
-	public static ref<script.Object> factory() {
-		return new ExpressionObject();
+	public static ref<script.Object> factory(int offset) {
+		return new ExpressionObject(offset);
 	}
 
 	public boolean isRunnable() {
@@ -363,7 +360,7 @@ class ExpressionObject extends script.Object {
 	}
 
 	public boolean run() {
-		ref<FileStat> f = new FileStat();
+		ref<Unit> f = new Unit();
 		f.setSource(_source);
 		ref<Scanner> scanner = f.scanner();
 		ref<SyntaxTree> tree = new SyntaxTree();
@@ -397,8 +394,8 @@ class ExpressionObject extends script.Object {
 		return false;
 	}
 
-	private ExpressionObject() {
-		
+	private ExpressionObject(int offset) {
+		super(offset);
 	}
 
 	void dump(ref<Node> expression) {
@@ -425,8 +422,8 @@ class StatementObject extends script.Object {
 	private string _source;
 	private Expect _expect;
 	
-	public static ref<script.Object> factory() {
-		return new StatementObject();
+	public static ref<script.Object> factory(int offset) {
+		return new StatementObject(offset);
 	}
 
 	public boolean isRunnable() {
@@ -458,7 +455,7 @@ class StatementObject extends script.Object {
 	}
 
 	public boolean run() {
-		ref<FileStat> f = new FileStat();
+		ref<Unit> f = new Unit();
 		f.setSource(_source);
 		ref<Scanner> scanner = f.scanner();
 		ref<SyntaxTree> tree = new SyntaxTree();
@@ -494,7 +491,8 @@ class StatementObject extends script.Object {
 		return false;
 	}
 
-	private StatementObject() {
+	private StatementObject(int offset) {
+		super(offset);
 	}
 
 	private void dump(ref<Node> expression) {
@@ -516,8 +514,8 @@ class CompileObject  extends script.Object {
 	private string _source;
 	private Expect _expect;
 
-	public static ref<script.Object> factory() {
-		return new CompileObject();
+	public static ref<script.Object> factory(int offset) {
+		return new CompileObject(offset);
 	}
 
 	public boolean isRunnable() {
@@ -527,7 +525,7 @@ class CompileObject  extends script.Object {
 	public boolean validate(ref<script.Parser> parser) {
 		ref<script.Atom> a = get("filename");
 		if (a != null)
-			_filename = storage.constructPath(srcFolder, a.toString(), "");
+			_filename = a.toString();
 		else {
 			a = get("content");
 			if (a == null)
@@ -549,37 +547,39 @@ class CompileObject  extends script.Object {
 		return true;
 	}
 
+	public void insertDefaultPath(string defaultPath) {
+		if (_filename != null)
+			_filename = storage.constructPath(storage.constructPath(rootFolder, defaultPath), _filename);
+	}
+
 	public boolean run() {
-		Arena arena;
+		runtime.Arena arena;
 		boolean loadFailed = false;
 
 		if (targetArgument != null)
 			arena.preferredTarget = pxi.sectionType(targetArgument);
-		if (!arena.load()) {
+
+		CompileContext compileContext(&arena, verboseFlag, false);
+
+		if (!compileContext.loadRoot(false)) {
 			arena.printMessages();
 			arena.print();
 			printf("Failed to load arena\n");
 			return false;
 		}
-		CompileContext context(&arena, arena.global(), verboseFlag, memory.StartingHeap.PRODUCTION, null, null);
 
-		ref<FileStat> f;
+		ref<Unit> f;
 		if (_filename.length() > 0) {
-			f = new FileStat(_filename, false);
+			f = new Unit(_filename, "");
 		} else {
-			f = new FileStat();
+			f = new Unit();
 			f.setSource(_source);
 		}
-		
-		// Note: arena.compile takes ownership of f.
-		arena.compileOnly(f, verboseFlag, &context);
-//		printf("After parse and type analysis:\n");
-//		f.tree().root().print(0);
-		int preCodeGenerationMessages = arena.countMessages();
-		if (showParseStageErrors && preCodeGenerationMessages > 0)
-			arena.printMessages();
-		boolean nodesOrdered = checkInOrder(f.tree().root(), _source);
-		ref<Target> target = arena.codegen(f, &context);
+		boolean nodesOrdered;
+		ref<Target> target;
+
+		(target, nodesOrdered) = compileContext.compile(f, checkInOrder);
+
 //		printf("after folding and codegen:\n");
 //		f.tree().root().print(0);
 
@@ -587,10 +587,8 @@ class CompileObject  extends script.Object {
 			arena.printSymbolTable();
 
 		Expect outcome;
-		
-		int postCodeGenerationMessages = arena.countMessages() - preCodeGenerationMessages;
-
-		if (preCodeGenerationMessages > 0 || postCodeGenerationMessages > 0)
+		int messageCount = arena.countMessages();
+		if (target == null || messageCount > 0)
 			outcome = Expect.FAIL;
 		else
 			outcome = Expect.SUCCESS;
@@ -602,7 +600,7 @@ class CompileObject  extends script.Object {
 			!checkMessages(f.tree().root(), get("message")) ||
 			_expect != outcome) {
 			printf("\n  Expecting %s got %s\n", string(_expect), string(outcome));
-			printf("      Messages flagged before code generation %d\n      Messages flagged after code generation %d\n", preCodeGenerationMessages, postCodeGenerationMessages);
+			printf("      Messages flagged %d\n", messageCount);
 			if (verboseFlag)
 				f.tree().root().print(0);
 			arena.printMessages();
@@ -612,7 +610,8 @@ class CompileObject  extends script.Object {
 		return result;
 	}
 
-	private CompileObject() {
+	private CompileObject(int offset) {
+		super(offset);
 	}
 }
 
@@ -620,18 +619,18 @@ class RunObject extends script.Object {
 	private string _filename;
 	private Expect _expect;
 	private int _exitCode;
-	private string _importPath;
 	private string _arguments;
 	private string _output;
 	private boolean _checkOutput;
 	private int _timeout;
 
-	private RunObject() {
+	private RunObject(int offset) {
+		super(offset);
 		_timeout = 120;
 	}
 	
-	public static ref<script.Object> factory() {
-		return new RunObject();
+	public static ref<script.Object> factory(int offset) {
+		return new RunObject(offset);
 	}
 
 	public boolean isRunnable() { 
@@ -642,7 +641,7 @@ class RunObject extends script.Object {
 		ref<script.Atom> a = get("filename");
 		if (a == null)
 			return false;
-		_filename = storage.constructPath(srcFolder, a.toString(), "");
+		_filename = a.toString();
 		a = get("expect");
 		if (a != null) {
 			if (a.toString() == "fail")
@@ -665,9 +664,6 @@ class RunObject extends script.Object {
 			}
 		} else
 			_exitCode = 0;
-		a = get("importPath");
-		if (a != null)
-			_importPath = a.toString();
 		a = get("timeout");
 		if (a != null) {
 			boolean result;
@@ -697,6 +693,11 @@ class RunObject extends script.Object {
 		return true;
 	}
 
+	public void insertDefaultPath(string defaultPath) {
+		if (_filename != null)
+			_filename = storage.constructPath(storage.constructPath(rootFolder, defaultPath), _filename);
+	}
+
 	public boolean run() {
 		string[] args;
 
@@ -708,13 +709,6 @@ class RunObject extends script.Object {
 		}
 		if (targetArgument != null)
 			args.append("--target=" + targetArgument);
-		if (_importPath.length() > 0) {
-			args.append("-I");
-			args.append(_importPath);
-		} else if (importPathArgument.length() > 0) {
-			args.append("-I");
-			args.append(importPathArgument);
-		}
 		if (verboseFlag)
 			args.append("-v");
 		args.append(_filename);
@@ -756,16 +750,17 @@ class RunObject extends script.Object {
 		else if (result != _exitCode)
 			printf("    Unexpected exit code %d\n", result);
 		if (verboseFlag) {
-			Arena arena;
-			arena.setImportPath(_importPath + ",^/src/lib,^/alys/lib");
-			if (!arena.load()) {
+			runtime.Arena arena;
+
+			CompileContext compileContext(&arena, verboseFlag, false);
+			if (!compileContext.loadRoot(false)) {
 				arena.printMessages();
 				arena.print();
 				printf("Failed to load arena\n");
 				return false;
 			}
-			ref<FileStat> f = new FileStat(_filename, false);
-			arena.compile(f, true);
+			ref<Unit> f = new Unit(_filename, "");
+			compileContext.compile(f, null);
 			arena.print();
 			delete f;
 		}
@@ -840,7 +835,7 @@ static TraverseAction dumpCursor(ref<Node> n, address data) {
 			column++;
 		}
 	}
-	printf("^\n");
+	printf("^ %p\n", n);
 //	printf("%s\n", operatorMap.name[n.op()]);
 	return TraverseAction.CONTINUE_TRAVERSAL;
 }

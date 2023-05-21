@@ -57,8 +57,6 @@ import parasol:types.undefined;
 import parasol:types.ClassInfo;
 import parasol:types.`*Namespace*`;
 import parasol:types.`*deferred*`;
-import parasol:types.`*array*`;
-import parasol:types.`*object*`;
 
 public class Array = var[];
 public class Object = var[string];

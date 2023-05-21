@@ -15,6 +15,7 @@
  */
 namespace parasol:compiler;
 
+import parasol:context;
 import parasol:storage;
 import parasol:text;
 import parasol:stream.EOF;
@@ -158,7 +159,7 @@ public enum Token {
 class FileScanner extends Scanner {
 	private ref<storage.FileReader> _file;
 	
-	public FileScanner(ref<FileStat> fileInfo) {
+	public FileScanner(ref<Unit> fileInfo) {
 		super(0, fileInfo);
 		_file = storage.openBinaryFile(fileInfo.filename());
 	}
@@ -218,7 +219,7 @@ public class Scanner {
 	private Token _pushback;
 	private Location[] _lines;
 	private string _value;
-	private ref<FileStat> _file;
+	private ref<Unit> _file;
 	private boolean _utfError;
 	private int _baseLineNumber;		// Line number of first character in scanner input.
 	private boolean _paradoc;			// Parse paradoc doclet's and make them available to the parser.
@@ -250,13 +251,13 @@ public class Scanner {
 	 */
 	private int _cursor;
 	
-	public static ref<Scanner> createParadoc(ref<FileStat> file) {
+	public static ref<Scanner> createParadoc(ref<Unit> file) {
 		ref<Scanner> scanner = new FileScanner(file);
 		scanner._paradoc = true;
 		return scanner;
 	}
 
-	public static ref<Scanner> create(ref<FileStat> file) {
+	public static ref<Scanner> create(ref<Unit> file) {
 		ref<Scanner> scanner;
 		if (file.source() != null)
 			scanner = new StringScanner(file.source(), 0, "<inline>");
@@ -265,7 +266,7 @@ public class Scanner {
 		return scanner;
 	}
 	
-	protected Scanner(int baseLineNumber, ref<FileStat> file) {
+	protected Scanner(int baseLineNumber, ref<Unit> file) {
 		_pushback = Token.EMPTY;
 		_lastByte = -1;
 		_baseLineNumber = baseLineNumber;

@@ -2302,7 +2302,10 @@ class String<class T> {
 	}
 	
 	public pointer<T> c_str() {
-		return pointer<T>(&_contents.data);
+		if (_contents != null)
+			return pointer<T>(&_contents.data);
+		else
+			return null;
 	}
 
 	public void clear() {

@@ -37,7 +37,7 @@ public int launch(string[] args) {
 	init();
 	for (int i = 0; i < args.length(); i++) {
 		filenames.append(args[i]);
-		printf("    Parsing %s\n", args[i]);
+//		printf("    Parsing %s\n", args[i]);
 		ref<ref<script.Atom>[]> atoms = parseOne(args[i]);
 		if (atoms != null)
 			scripts.append(atoms);
@@ -52,7 +52,7 @@ public int launch(string[] args) {
 		int totalRuns = 0;
 		int failedRuns = 0;
 		for (int i = 0; i < scripts.length(); i++) {
-			printf("Running script %s\n", filenames[i].c_str());
+//			printf("Running script %s\n", filenames[i].c_str());
 			for (int j = 0; j < scripts[i].length(); j++) {
 				ref<script.Atom> a = (*scripts[i])[j];
 				totalAtoms++;
@@ -111,8 +111,6 @@ public int launch(string[] args) {
 	millis %= 1000;
 	seconds %= 60;
 	printf("\n       Elapsed time: %d:%d.%3.3d.\n", minutes, seconds, millis);
-	for (i in scripts)
-		scripts[i].deleteAll();
 	scripts.deleteAll();
 	return result;
 }
@@ -125,6 +123,7 @@ private void init() {
 	script.objectFactory("perf", PerfObject.factory);
 */
 	script.objectFactory("conditional", ConditionalObject.factory);
+	script.objectFactory("dir", DirObject.factory);
 }
 
 private ref<ref<script.Atom>[]> parseOne(string arg) {
@@ -141,7 +140,7 @@ private ref<ref<script.Atom>[]> parseOne(string arg) {
 		if (atoms == null)
 			return null;
 		ref<ref<script.Atom>[]> results = new ref<script.Atom>[];
-		flattenSet(results, atoms);
+		flattenSet(results, atoms, null);
 		delete atoms;
 		return results;
 	} else {
@@ -156,7 +155,7 @@ private ref<ref<script.Atom>[]> parseOne(string arg) {
 	}
 }
 
-private void flattenSet(ref<ref<script.Atom>[]> results, ref<ref<script.Atom>[]> source) {
+private void flattenSet(ref<ref<script.Atom>[]> results, ref<ref<script.Atom>[]> source, string defaultPath) {
 	for (int i = 0; i < source.length(); i++) {
 		ref<script.Atom> atom = (*source)[i];
 		if (atom.class == ConditionalObject) {
@@ -165,21 +164,41 @@ private void flattenSet(ref<ref<script.Atom>[]> results, ref<ref<script.Atom>[]>
 				ref<script.Atom> content = conditional.get("content");
 				if (content.class == Vector) {
 					ref<script.Vector> v = ref<script.Vector>(content);
-					flattenSet(results, v.value());
+					flattenSet(results, v.value(), defaultPath);
 					v.value().clear();
 				}
 			}
 			delete conditional;
-		} else
+		} else if (atom.class == DirObject) {
+			ref<DirObject> dir = ref<DirObject>(atom);
+			ref<script.Atom> a = dir.get("path");
+			string addition = a.toString();
+			ref<script.Atom> content = dir.get("content");
+			if (content.class == Vector) {
+				string path;
+				if (defaultPath == null)
+					path = addition;
+				else
+					path = storage.constructPath(defaultPath, addition);
+				ref<script.Vector> v = ref<script.Vector>(content);
+				flattenSet(results, v.value(), path);
+			}
+		} else {
+			atom.insertDefaultPath(defaultPath);
 			results.append(atom);
+		}
 	}
 }
 
 class ConditionalObject extends script.Object {
 	private boolean _isEnabled;
 	
-	public static ref<script.Object> factory() {
-		return new ConditionalObject();
+	private ConditionalObject(int offset) {
+		super(offset);
+	}
+
+	public static ref<script.Object> factory(int offset) {
+		return new ConditionalObject(offset);
 	}
 
 	public boolean validate(ref<script.Parser> parser) {
@@ -199,3 +218,24 @@ class ConditionalObject extends script.Object {
 		return _isEnabled;
 	} 
 }
+
+class DirObject extends script.Object {
+	private DirObject(int offset) {
+		super(offset);
+	}
+
+	public static ref<script.Object> factory(int offset) {
+		return new DirObject(offset);
+	}
+
+	public boolean validate(ref<script.Parser> parser) {
+		ref<script.Atom> a = get("path");
+		if (a == null) {
+			parser.log.error(parser.log.lineNumber(offset()), "'path' is a required attribute of the dir element\n");
+			return false;
+		}
+		return true;
+	}
+}
+
+

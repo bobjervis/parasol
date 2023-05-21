@@ -626,6 +626,22 @@ public string readSymLink(string path) {
 	return null;
 }
 /**
+ * Get the process' current working directory.
+ *
+ * @return The path of the current working directory.
+ */
+public string currentWorkingDirectory() {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		pointer<byte> cwd = linux.getcwd(null, 0);
+		string buffer(cwd);
+		C.free(cwd);
+		return buffer;
+	}
+	return null;
+}
+
+/**
  * Create a directory.
  *
  * The resulting directory will not be readable, writable or searchable by another user.
@@ -700,8 +716,19 @@ public boolean ensure(string path) {
 //		printf("could not ensure %s\n", dir);
 		return false;
 	}
-	// The final component of the path is not a directory, but the rest of the path checks out, so try and create the path as a directory.
-	return makeDirectory(path);
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		return CreateDirectory(path.c_str(), null) != 0;
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		linux.mode_t mode = 0770;
+		
+		if (linux.mkdir(path.c_str(), mode) == 0)
+			return true;
+		if (linux.errno() == linux.EEXIST &&
+			isDirectory(path))
+			return true;
+		return false;
+	} else
+		return false;
 }
 /**
  * Link a name to a file.

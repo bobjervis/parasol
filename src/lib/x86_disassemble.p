@@ -15,9 +15,7 @@
  */
 namespace parasol:x86_64;
 
-import parasol:compiler.Arena;
 import parasol:compiler.ClassScope;
-import parasol:compiler.FileStat;
 import parasol:compiler.FIRST_USER_METHOD;
 import parasol:compiler.OverloadInstance;
 import parasol:compiler.ParameterScope;
@@ -25,6 +23,9 @@ import parasol:compiler.Scope;
 import parasol:compiler.Symbol;
 import parasol:compiler.Type;
 import parasol:compiler.OrdinalMap;
+import parasol:compiler.Unit;
+import parasol:context;
+import parasol:runtime.Arena;
 import parasol:runtime.SourceLocation;
 import native:C;
 
@@ -784,7 +785,7 @@ public class Disassembler {
 		boolean printedSource;
 		while (_sourceIndex < _sourceLocationsCount) {
 			if (_sourceLocations[_sourceIndex].offset <= loc) {
-				ref<FileStat> file = _sourceLocations[_sourceIndex].file;
+				ref<Unit> file = _sourceLocations[_sourceIndex].file;
 				if (!printedSource)
 					printf("\n");
 				printf("  %s %d\n", file.filename(), file.scanner().lineNumber(_sourceLocations[_sourceIndex].location) + 1);

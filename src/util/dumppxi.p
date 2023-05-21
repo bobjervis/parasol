@@ -13,7 +13,6 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import parasol:compiler;
 import parasol:pxi;
 import parasol:storage;
 import parasol:process;
@@ -115,7 +114,7 @@ ref<pxi.Section> x86_64NextReader(storage.File pxiFile, long length) {
 			printf("Could not read %d bytes from the indicated section\n", length);
 			return null;
 		}
-		compiler.Arena arena();
+		runtime.Arena arena();
 		x86_64.Disassembler d(&arena, 0, int(actual), &memory[0], &header);
 //		d.setDataMap(&_dataMap[0][0], _dataMap[0].length());
 //		d.setFunctionMap(&_functionMap);

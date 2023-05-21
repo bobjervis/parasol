@@ -340,7 +340,7 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 	}
 	ref<Node> result = null;
 	if (!lhs.isSimpleLvalue()) {
-		ref<Type> refVector = compileContext.arena().createRef(vectorType, compileContext);
+		ref<Type> refVector = compileContext.newRef(vectorType);
 
 		ref<Variable> lhv = compileContext.newVariable(refVector);
 		ref<Reference> def = tree.newReference(lhv, true, lhs.location());
@@ -385,7 +385,7 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 			// If we have labels, pre-allocate all the elements as empty.
 			
 			ref<Node> arg = tree.newConstant(maxIndexValue + 1, aggregate.location());
-			arg.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+			arg.type = compileContext.builtInType(TypeFamily.SIGNED_32);
 			arg = tree.newCast(indexType, arg);
 			ref<ParameterScope> constructor = null;
 			for (int i = 0; i < vectorType.scope().constructors().length(); i++) {
@@ -407,7 +407,7 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 				else
 					adr = tree.newUnary(Operator.ADDRESS, lhs, lhs.location());
 				result = tree.newCall(constructor, CallCategory.CONSTRUCTOR, adr, args, aggregate.location(), compileContext);
-				result.type = compileContext.arena().builtInType(TypeFamily.VOID);
+				result.type = compileContext.builtInType(TypeFamily.VOID);
 			} else {
 				// This should generate a runtime exception, because this was likely due to a catastrophic compile error somewhere
 				result = tree.newLeaf(Operator.SYNTAX_ERROR, vectorExpression.location());
@@ -441,7 +441,7 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 					val = nl.node;
 				}
 				idx = tree.newConstant(lastIndexValue, val.location());
-				idx.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+				idx.type = compileContext.builtInType(TypeFamily.SIGNED_32);
 				idx = tree.newCast(indexType, idx);
 				substring set("set");
 				ref<Node> arrayRef = lhs.clone(tree);

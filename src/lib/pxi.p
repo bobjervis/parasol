@@ -88,8 +88,10 @@ public class Pxi {
 	public boolean write() {
 		storage.File f;
 
-		if (!f.create(_filename))
+		if (!f.create(_filename)) {
+			printf("            FAIL: Could not create '%s'\n", _filename);
 			return false;
+		}
 		PxiHeader header;
 		header.sections = char(_sections.length());
 		if (f.write(&header, header.bytes) < 0)

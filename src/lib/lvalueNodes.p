@@ -264,7 +264,6 @@ public class Identifier extends Node {
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
 			return null;
 		}
-		nm.assignType(compileContext);
 		_symbol = nm;
 		return nm;
 	}
@@ -284,7 +283,7 @@ public class Identifier extends Node {
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
 			type = compileContext.errorType();
 		} else
-			_symbol._doclet = enclosing.file().tree().getDoclet(this);
+			_symbol._doclet = enclosing.unit().tree().getDoclet(this);
 	}
 
 	ref<Symbol> bindEnumInstance(ref<Scope> enclosing, ref<Type> type, ref<Node> initializer, ref<CompileContext> compileContext) {
@@ -293,7 +292,7 @@ public class Identifier extends Node {
 		if (_symbol == null)
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
 		else
-			_symbol._doclet = enclosing.file().tree().getDoclet(this);
+			_symbol._doclet = enclosing.unit().tree().getDoclet(this);
 		return _symbol;
 	}
 
@@ -303,7 +302,7 @@ public class Identifier extends Node {
 		if (_symbol == null)
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
 		else
-			_symbol._doclet = enclosing.file().tree().getDoclet(this);
+			_symbol._doclet = enclosing.unit().tree().getDoclet(this);
 		return _symbol;
 	}
 
@@ -314,7 +313,7 @@ public class Identifier extends Node {
 			ref<ClassScope> classScope = ref<ClassScope>(body.scope);
 			ref<Type> t = compileContext.makeTypedef(classScope.classType);
 			_symbol.bindType(t, compileContext);
-			_symbol._doclet = enclosing.file().tree().getDoclet(this);
+			_symbol._doclet = enclosing.unit().tree().getDoclet(this);
 			return classScope;
 		} else {
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
@@ -326,7 +325,7 @@ public class Identifier extends Node {
 		_definition = true;
 		_symbol = enclosing.defineSimpleMonitor(compileContext.visibility, StorageClass.STATIC, compileContext.annotations, this, compileContext.monitorClass(), compileContext.pool());
 		if (_symbol != null) {
-			_symbol._doclet = enclosing.file().tree().getDoclet(this);
+			_symbol._doclet = enclosing.unit().tree().getDoclet(this);
 			ref<Type> t = compileContext.makeTypedef(compileContext.monitorClass());
 			_symbol.bindType(t, compileContext);
 		} else
@@ -337,7 +336,7 @@ public class Identifier extends Node {
 		_definition = true;
 		_symbol = enclosing.define(compileContext.visibility, StorageClass.STATIC, compileContext.annotations, this, body, body, compileContext.pool());
 		if (_symbol != null) {
-			_symbol._doclet = enclosing.file().tree().getDoclet(this);
+			_symbol._doclet = enclosing.unit().tree().getDoclet(this);
 			return true;
 		} else {
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
@@ -350,7 +349,7 @@ public class Identifier extends Node {
 		ref<FlagsScope> flagsScope = compileContext.createFlagsScope(body, this);
 		_symbol = enclosing.define(compileContext.visibility, StorageClass.STATIC, compileContext.annotations, this, body, body, compileContext.pool());
 		if (_symbol != null) {
-			_symbol._doclet = enclosing.file().tree().getDoclet(this);
+			_symbol._doclet = enclosing.unit().tree().getDoclet(this);
 			ref<ClassType> c = compileContext.pool().newClassType(TypeFamily.CLASS, ref<Type>(null), flagsScope);
 			ref<FlagsInstanceType> fit = compileContext.pool().newFlagsInstanceType(_symbol, flagsScope, c);
 			flagsScope.flagsType = compileContext.pool().newFlagsType(body, flagsScope, fit);
@@ -370,7 +369,7 @@ public class Identifier extends Node {
 				if (isFinal)
 					add(MessageId.UNEXPECTED_FINAL, compileContext.pool());
 			}
-			_symbol._doclet = enclosing.file().tree().getDoclet(this);
+			_symbol._doclet = enclosing.unit().tree().getDoclet(this);
 		} else
 			add(MessageId.OVERLOAD_DISALLOWED, compileContext.pool(), _value);
 	}
@@ -383,8 +382,8 @@ public class Identifier extends Node {
 			_symbol = o.addInstance(visibility, isStatic, isFinal, annotations, this, templateScope, compileContext);
 			if (_symbol == null)
 				return;
-			_symbol._doclet = enclosing.file().tree().getDoclet(this);
-			ref<Type> t = compileContext.makeTypedef(compileContext.pool().newTemplateType(_symbol, templateDef, templateScope.file(), o, templateScope, isMonitor));
+			_symbol._doclet = enclosing.unit().tree().getDoclet(this);
+			ref<Type> t = compileContext.makeTypedef(compileContext.pool().newTemplateType(_symbol, templateDef, templateScope.unit(), o, templateScope, isMonitor));
 			_symbol.bindType(t, compileContext);
 		} else
 			add(MessageId.OVERLOAD_DISALLOWED, compileContext.pool(), _value);
@@ -393,7 +392,7 @@ public class Identifier extends Node {
 	ref<OverloadInstance> bindConstructor(Operator visibility, ref<Scope> enclosing, ref<ParameterScope> funcScope, ref<CompileContext> compileContext) {
 		_definition = true;
 		_symbol = compileContext.pool().newOverloadInstance(null, visibility, false, false, enclosing, compileContext.annotations, _value, funcScope.definition(), funcScope);
-		_symbol._doclet = enclosing.file().tree().getDoclet(this);
+		_symbol._doclet = enclosing.unit().tree().getDoclet(this);
 		return ref<OverloadInstance>(_symbol);
 	}
 
@@ -438,7 +437,7 @@ public class Identifier extends Node {
 				add(MessageId.STATIC_DISALLOWED, compileContext.pool());
 				type = compileContext.errorType();
 			} else
-				type = compileContext.arena().builtInType(TypeFamily.VOID);
+				type = compileContext.builtInType(TypeFamily.VOID);
 			return;
 		}
 		for (ref<Scope> s = compileContext.current(); s != null; s = s.enclosing()) {
@@ -511,11 +510,11 @@ public class Identifier extends Node {
 
 private ref<Node> makeAddressOfEnumClass(boolean implicitIndirect, ref<Node> enumInstance, ref<EnumType> type, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
 	ref<Node> n = tree.newIdentifier(type.symbol(), enumInstance.location());
-	n.type = compileContext.arena().builtInType(TypeFamily.UNSIGNED_8);
+	n.type = compileContext.builtInType(TypeFamily.UNSIGNED_8);
 	n = tree.newUnary(Operator.ADDRESS_OF_ENUM, n, enumInstance.location());
-	n.type = compileContext.arena().createPointer(type, compileContext);
+	n.type = compileContext.newPointer(type);
 	ref<Node> r = tree.newUnary(Operator.CAST, enumInstance, enumInstance.location());
-	r.type = compileContext.arena().builtInType(TypeFamily.SIGNED_64);
+	r.type = compileContext.builtInType(TypeFamily.SIGNED_64);
 	r = tree.newBinary(Operator.ADD, n, r, enumInstance.location());
 	r.type = n.type;
 	if (!implicitIndirect) {
@@ -723,7 +722,7 @@ public class Selection extends Node {
 	public ref<Namespace> getNamespace(ref<Scope> domainScope, ref<CompileContext> compileContext) {
 		ref<Namespace> outer = _left.getNamespace(domainScope, compileContext);
 		if (outer != null) {
-			ref<Symbol> sym = outer.symbols().lookup(identifier(), compileContext);
+			ref<Symbol> sym = outer.symbols().lookup(_name, compileContext);
 			if (sym != null && sym.class == Namespace)
 				return ref<Namespace>(sym);
 		}

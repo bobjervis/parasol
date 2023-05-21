@@ -225,9 +225,9 @@ public class Call extends ParameterBag {
 					thisParameter = tree.newReference(temp, true, location());
 					compileContext.markLiveSymbol(thisParameter);
 					thisParameter = tree.newUnary(Operator.ADDRESS, thisParameter, location());
-					thisParameter.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+					thisParameter.type = compileContext.builtInType(TypeFamily.ADDRESS);
 //					ref<Node> n = tree.newStackArgumentAddress(0, location());
-//					n.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+//					n.type = compileContext.builtInType(TypeFamily.ADDRESS);
 //					thisParameter = n;
 					nodeFlags |= PUSH_OUT_PARAMETER;
 					result = encapsulateCallInTemp(temp, tree);
@@ -251,7 +251,7 @@ public class Call extends ParameterBag {
 					} else {
 						if (dot.left().isLvalue()) {
 							thisParameter = tree.newUnary(Operator.ADDRESS, dot.left(), dot.left().location());
-							thisParameter.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+							thisParameter.type = compileContext.builtInType(TypeFamily.ADDRESS);
 						} else {
 							ref<Variable> temp = compileContext.newVariable(dot.left().type);
 							ref<Reference> r = tree.newReference(temp, true, dot.left().location());
@@ -260,7 +260,7 @@ public class Call extends ParameterBag {
 							defn.type = dot.left().type;
 							r = tree.newReference(temp, false, dot.left().location());
 							ref<Unary> adr = tree.newUnary(Operator.ADDRESS, r, dot.left().location());
-							adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+							adr.type = compileContext.builtInType(TypeFamily.ADDRESS);
 							ref<Node> pair = tree.newBinary(Operator.SEQUENCE, defn.fold(tree, true, compileContext), adr, dot.left().location());
 							pair.type = defn.type;
 							_target = tree.newSelection(pair, dot.symbol(), false, dot.location());
@@ -274,13 +274,13 @@ public class Call extends ParameterBag {
 					ref<Binary> b = ref<Binary>(_target);
 					if (b.left().type.family() != TypeFamily.POINTER) {
 						_target = tree.newUnary(Operator.ADDRESS, _target, _target.location());
-						_target.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);					
+						_target.type = compileContext.builtInType(TypeFamily.ADDRESS);					
 					}
 					break;
 
 				default:
 					thisParameter = tree.newLeaf(Operator.THIS, location());
-					thisParameter.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+					thisParameter.type = compileContext.builtInType(TypeFamily.ADDRESS);
 				}
 				
 			default:
@@ -345,7 +345,7 @@ public class Call extends ParameterBag {
 				else {
 					outParameter = tree.newUnary(Operator.ADDRESS, outParameter, outParameter.location());
 					outParameter.register = compileContext.target.registerValue(registerArgumentIndex, TypeFamily.ADDRESS);
-					outParameter.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+					outParameter.type = compileContext.builtInType(TypeFamily.ADDRESS);
 				}
 			}
 			
@@ -365,7 +365,7 @@ public class Call extends ParameterBag {
 								break;
 							ref<FunctionType> argumentFunctionType = ref<FunctionType>(ref<Call>(args.node).target().type);
 							ref<Type> t = args.node.type;
-							args.node.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+							args.node.type = compileContext.builtInType(TypeFamily.ADDRESS);
 							if (argumentFunctionType.returnCount() == 1) {
 								ref<Variable> temp = compileContext.newVariable(t);
 								ref<Reference> r = tree.newReference(temp, true, location());
@@ -460,7 +460,7 @@ public class Call extends ParameterBag {
 			}
 			
 			ref<Leaf> n = tree.newLeaf(Operator.VACATE_ARGUMENT_REGISTERS, location());
-			n.type = compileContext.arena().builtInType(TypeFamily.VOID);;
+			n.type = compileContext.builtInType(TypeFamily.VOID);;
 			ref<NodeList> nl = tree.newNodeList(n);
 			nl.next = _stackArguments;
 			_stackArguments = nl;
@@ -483,8 +483,8 @@ public class Call extends ParameterBag {
 			ref<Type> indexType, elementType;
 
 			if (type.family() == TypeFamily.REF) {						// it's a ref<Array>, convert accordingly
-				indexType = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
-				elementType = compileContext.arena().builtInType(TypeFamily.VAR);
+				indexType = compileContext.builtInType(TypeFamily.SIGNED_32);
+				elementType = compileContext.builtInType(TypeFamily.VAR);
 			} else {
 				indexType = type.indexType();
 				elementType = type.elementType();
@@ -521,7 +521,7 @@ public class Call extends ParameterBag {
 			if (type.family() == TypeFamily.REF) {
 				ref<Variable> temp = compileContext.newVariable(type);
 				ref<Reference> r = tree.newReference(temp, true, location());
-				ref<Node> o = tree.newIdentifier(compileContext.arena().arrayClass(), location());
+				ref<Node> o = tree.newIdentifier(compileContext.arrayClass(), location());
 				o.type = o.symbol().assignType(compileContext);
 				ref<Node> newObject = tree.newBinary(Operator.NEW, tree.newLeaf(Operator.EMPTY, location()),
 								o, location());
@@ -535,7 +535,7 @@ public class Call extends ParameterBag {
 					ref<Selection> method = tree.newSelection(r, pushMethod, true, location());
 					method.type = pushMethod.type();
 					ref<Call> call = tree.newCall(pushMethod.parameterScope(), CallCategory.METHOD_CALL, method, tree.newNodeList(nl.node), location(), compileContext);
-					call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+					call.type = compileContext.builtInType(TypeFamily.VOID);
 					result = tree.newBinary(Operator.SEQUENCE, result, call, location());
 					result.type = call.type;
 				}
@@ -567,7 +567,7 @@ public class Call extends ParameterBag {
 			result = null;
 			if (type.family() == TypeFamily.REF) {
 				ref<Reference> r = tree.newReference(temp, true, location());
-				ref<Node> o = tree.newIdentifier(compileContext.arena().objectClass(), location());
+				ref<Node> o = tree.newIdentifier(compileContext.objectClass(), location());
 				o.type = o.symbol().assignType(compileContext);
 				ref<Node> newObject = tree.newBinary(Operator.NEW, tree.newLeaf(Operator.EMPTY, location()),
 								o, location());
@@ -582,10 +582,10 @@ public class Call extends ParameterBag {
 					ref<Selection> method = tree.newSelection(r, setMethod, true, location());
 					method.type = setMethod.type();
 					ref<Node> label = tree.newConstant(Operator.STRING, ref<Identifier>(b.left()).identifier(), location());
-					label.type = compileContext.arena().builtInType(TypeFamily.STRING);
-					ref<Node> value = b.right().coerce(tree, compileContext.arena().builtInType(TypeFamily.VAR), false, compileContext);
+					label.type = compileContext.builtInType(TypeFamily.STRING);
+					ref<Node> value = b.right().coerce(tree, compileContext.builtInType(TypeFamily.VAR), false, compileContext);
 					ref<Call> call = tree.newCall(setMethod.parameterScope(), CallCategory.METHOD_CALL, method, tree.newNodeList(label, value), location(), compileContext);
-					call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+					call.type = compileContext.builtInType(TypeFamily.VOID);
 					result = tree.newBinary(Operator.SEQUENCE, result, call, location());
 					result.type = call.type;
 				}
@@ -602,9 +602,9 @@ public class Call extends ParameterBag {
 					ref<Reference> r = tree.newReference(temp, true, location());
 					compileContext.markLiveSymbol(r);
 					ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
-					adr.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+					adr.type = compileContext.builtInType(TypeFamily.ADDRESS);
 					ref<Call> call = tree.newCall(constructor, CallCategory.CONSTRUCTOR, adr, null, location(), compileContext);
-					call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+					call.type = compileContext.builtInType(TypeFamily.VOID);
 					result = call.fold(tree, true, compileContext);
 				} else if (type.hasDestructor()) {
 					ref<Reference> r = tree.newReference(temp, true, location());
@@ -921,20 +921,20 @@ public class Call extends ParameterBag {
 		switch (op()) {
 		case	ARRAY_AGGREGATE:
 			if (assignArguments(LabelStatus.OPTIONAL_LABELS, compileContext))
-				type = compileContext.arena().builtInType(TypeFamily.ARRAY_AGGREGATE);
+				type = compileContext.builtInType(TypeFamily.ARRAY_AGGREGATE);
 			else
 				type = compileContext.errorType();
 			break;
 			
 		case	OBJECT_AGGREGATE:
 			if (assignArguments(LabelStatus.REQUIRED_LABELS, compileContext))
-				type = compileContext.arena().builtInType(TypeFamily.OBJECT_AGGREGATE);
+				type = compileContext.builtInType(TypeFamily.OBJECT_AGGREGATE);
 			else
 				type = compileContext.errorType();
 			break;
 			
 		case	ANNOTATION:
-			type = compileContext.arena().builtInType(TypeFamily.VOID);
+			type = compileContext.builtInType(TypeFamily.VOID);
 			break;
 
 		case	TEMPLATE_INSTANCE:
@@ -1056,13 +1056,13 @@ public class Call extends ParameterBag {
 				pointer<ref<Type>> returns = ft.returnTypes();
 				for (int i = 0; i < ft.returnCount(); i++) {
 					if (returns[i].family() == TypeFamily.CLASS_VARIABLE) {
-						type = compileContext.arena().builtInType(TypeFamily.CLASS_DEFERRED);
+						type = compileContext.builtInType(TypeFamily.CLASS_DEFERRED);
 						return;
 					}
 				}
 				type = ft.returnValueType();
 				if (type == null)
-					type = compileContext.arena().builtInType(TypeFamily.VOID);
+					type = compileContext.builtInType(TypeFamily.VOID);
 				break;
 
 			default:
@@ -1149,8 +1149,8 @@ public class Call extends ParameterBag {
 		switch (newType.family()) {
 		case REF:						// it's a ref<Array>, convert accordingly
 		case VAR:						// it's a var, it's going to be a ref<Array> on the way in.
-			indexType = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
-			elementType = compileContext.arena().builtInType(TypeFamily.VAR);
+			indexType = compileContext.builtInType(TypeFamily.SIGNED_32);
+			elementType = compileContext.builtInType(TypeFamily.VAR);
 			break;
 
 		default:
@@ -1207,7 +1207,7 @@ public class Call extends ParameterBag {
 		else
 			ellipsisArgument = -1;
 		for (int i = 0; arguments != null; arguments = arguments.next) {
-			if (param[i].deferAnalysis())
+			if (param[i] == null || param[i].deferAnalysis())
 				return;
 			ref<Type> t = param[i];
 			if (i == ellipsisArgument) {
@@ -1359,12 +1359,17 @@ public class Call extends ParameterBag {
 				return true;
 
 			case REF:
+//				printf("canCoerce ARRAY_AGGREGATE: %s -> %s? %s\n", 
+//					compileContext.builtInType(TypeFamily.ARRAY_AGGREGATE).signature(),
+//					newType.indirectType(compileContext).signature(),
+//					string(newType.indirectType(compileContext) == 
+//						compileContext.builtInType(TypeFamily.ARRAY_AGGREGATE)));
 				if (newType.indirectType(compileContext) != 
-						compileContext.arena().builtInType(TypeFamily.ARRAY_AGGREGATE).classType())
+						compileContext.builtInType(TypeFamily.ARRAY_AGGREGATE))
 					return false;
 					// it's a ref<Array>, convert accordingly
-				indexType = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
-				elementType = compileContext.arena().builtInType(TypeFamily.VAR);
+				indexType = compileContext.builtInType(TypeFamily.SIGNED_32);
+				elementType = compileContext.builtInType(TypeFamily.VAR);
 				for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 					if (nl.node.op() == Operator.LABEL) {
 						ref<Binary> b = ref<Binary>(nl.node);
@@ -1765,7 +1770,7 @@ public class FunctionDeclaration extends ParameterBag {
 		Test t = body.fallsThrough();
 		if (t == Test.PASS_TEST) {
 			ref<Block> b = ref<Block>(body);
-			body.endOfBlockStatement(body.scope.file().tree()).add(MessageId.RETURN_VALUE_REQUIRED, compileContext.pool());
+			body.endOfBlockStatement(body.scope.unit().tree()).add(MessageId.RETURN_VALUE_REQUIRED, compileContext.pool());
 		}
 	}
 	
@@ -2096,9 +2101,9 @@ public class Return extends ParameterBag {
 			nl.next = _liveSymbols;
 			_liveSymbols = nl;
 //			ref<Node> thisParameter = tree.newUnary(Operator.ADDRESS, id, id.location());
-//			thisParameter.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+//			thisParameter.type = compileContext.builtInType(TypeFamily.ADDRESS);
 //			ref<Call> c = tree.newCall(destructor, CallCategory.DESTRUCTOR, thisParameter, null, location(), compileContext);
-//			c.type = compileContext.arena().builtInType(TypeFamily.VOID);
+//			c.type = compileContext.builtInType(TypeFamily.VOID);
 //			ref<Node> folded = c.fold(tree, true, compileContext);
 //			output = tree.newBinary(Operator.SEQUENCE, folded, output, location());
 		}
@@ -2216,7 +2221,7 @@ public class Return extends ParameterBag {
 
 		pointer<ref<Type>> returnTypes = functionType.returnTypes();
 		int count = functionType.returnCount();
-		type = compileContext.arena().builtInType(TypeFamily.VOID);
+		type = compileContext.builtInType(TypeFamily.VOID);
 		if (_arguments != null) {
 			if (count <= 0) {
 				add(MessageId.RETURN_VALUE_DISALLOWED, compileContext.pool());
@@ -2318,7 +2323,7 @@ ref<Node>, int foldMultiReturn(ref<Node> leftHandle, ref<Node> destinations, ref
 			method.type = oi.type();
 			ref<NodeList> args = tree.newNodeList(r);
 			ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, destinations.location(), compileContext);
-			call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+			call.type = compileContext.builtInType(TypeFamily.VOID);
 			assignment = call.fold(tree, true, compileContext);
 		} else {
 //			compileContext.markLiveSymbol(r);
@@ -2329,7 +2334,7 @@ ref<Node>, int foldMultiReturn(ref<Node> leftHandle, ref<Node> destinations, ref
 		result = tree.newBinary(Operator.SEQUENCE, leftHandle, assignment, destinations.location());
 		offset += destinations.type.stackSize();
 	}
-	result.type = compileContext.arena().builtInType(TypeFamily.VOID);
+	result.type = compileContext.builtInType(TypeFamily.VOID);
 	return result, offset;
 }
 
@@ -2343,7 +2348,7 @@ ref<Node> assignOne(ref<SyntaxTree> tree, ref<Node> dest, ref<Reference> r, ref<
 		method.type = oi.type();
 		ref<NodeList> args = tree.newNodeList(r);
 		ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, dest.location(), compileContext);
-		call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+		call.type = compileContext.builtInType(TypeFamily.VOID);
 		return call.fold(tree, true, compileContext);
 	} else {
 		ref<Node> assignment = tree.newBinary(Operator.ASSIGN, dest, r, dest.location());

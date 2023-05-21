@@ -16,6 +16,7 @@
 namespace parasol:compiler;
 
 import native:C;
+import parasol:context;
 import parasol:runtime;
 import parasol:storage;
 import parasol:text;
@@ -246,7 +247,7 @@ public class SyntaxTree {
 		return copy;
 	}
 	
-	void parse(ref<FileStat> file, ref<CompileContext> compileContext) {
+	public void parse(ref<Unit> file, ref<CompileContext> compileContext) {
 		_filename = file.filename();
 		ref<Scanner> scanner;
 		if (compileContext.arena().paradoc)
@@ -540,7 +541,7 @@ public class Lock extends Node {
 				return this;
 			}
 			ref<Node> monitorName = expression.operand();
-			ref<Variable> temp = compileContext.newVariable(compileContext.arena().builtInType(TypeFamily.ADDRESS));
+			ref<Variable> temp = compileContext.newVariable(compileContext.builtInType(TypeFamily.ADDRESS));
 			ref<LockScope> lockScope = ref<LockScope>(scope);
 			lockScope.lockTemp = temp;
 			ref<Node> defn = tree.newReference(temp, true, expression.location());
@@ -559,7 +560,7 @@ public class Lock extends Node {
 			}
 			ref<Node> seq = tree.newBinary(Operator.SEQUENCE, defn, takeCall, expression.location());
 			_takeCall = tree.newUnary(Operator.EXPRESSION, seq, seq.location());
-			_takeCall.type = compileContext.arena().builtInType(TypeFamily.VOID);
+			_takeCall.type = compileContext.builtInType(TypeFamily.VOID);
 
 			compileContext.markActiveLock(this);
 			
@@ -581,7 +582,7 @@ public class Lock extends Node {
 		ref<Node> rc = callMonitorMethod(errorMarker, monitorType, temp, methodName, tree, compileContext);
 		if (rc != null) {
 			rc = tree.newUnary(Operator.EXPRESSION, rc, rc.location());
-			rc.type = compileContext.arena().builtInType(TypeFamily.VOID);
+			rc.type = compileContext.builtInType(TypeFamily.VOID);
 		}
 		return rc;
 	}
@@ -596,7 +597,7 @@ public class Lock extends Node {
 			defn = tree.newReference(temp, false, location());
 		else {
 			defn = tree.newLeaf(Operator.THIS, location());
-			defn.type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+			defn.type = compileContext.builtInType(TypeFamily.ADDRESS);
 		}
 		ref<OverloadInstance> oi = getMethodSymbol(errorMarker, methodName, monitorType, compileContext);
 		if (oi == null)
@@ -606,7 +607,7 @@ public class Lock extends Node {
 		ref<Selection> method = tree.newSelection(defn, oi, true, location());
 		method.type = oi.type();
 		ref<Call> call = tree.newCall(oi.parameterScope(), null, method, null, location(), compileContext);
-		call.type = compileContext.arena().builtInType(TypeFamily.VOID);
+		call.type = compileContext.builtInType(TypeFamily.VOID);
 		return call.fold(tree, true, compileContext);
 	}
 	
@@ -649,7 +650,7 @@ public class Lock extends Node {
 			outer = compileContext.setCurrent(scope);
 		}
 		compileContext.assignTypes(_body);
-		type = compileContext.arena().builtInType(TypeFamily.VOID);
+		type = compileContext.builtInType(TypeFamily.VOID);
 		if (_lockReference.op() == Operator.EMPTY) {
 			add(MessageId.UNFINISHED_LOCK, compileContext.pool());
 			type = compileContext.errorType();
@@ -915,7 +916,7 @@ public class Block extends Node {
 		}
 		for (ref<NodeList> nl = _statements; nl != null; nl = nl.next)
 			compileContext.assignTypes(nl.node);
-		type = compileContext.arena().builtInType(TypeFamily.VOID);
+		type = compileContext.builtInType(TypeFamily.VOID);
 		if (scope != null)
 			scope.checkDefaultConstructorCalls(compileContext);
 		if (outer != null)
@@ -1413,9 +1414,9 @@ public class InternalLiteral extends Node {
 	}
  
 	private void assignTypes(ref<CompileContext> compileContext) {
-		type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+		type = compileContext.builtInType(TypeFamily.SIGNED_32);
 		if (!representedBy(type)) 
-			type = compileContext.arena().builtInType(TypeFamily.SIGNED_64);
+			type = compileContext.builtInType(TypeFamily.SIGNED_64);
 	}
 }
 
@@ -1657,25 +1658,25 @@ public class Constant extends Node {
 	private void assignTypes(ref<CompileContext> compileContext) {
 		switch (op()) {
 		case	STRING:
-			type = compileContext.arena().builtInType(TypeFamily.STRING);
+			type = compileContext.builtInType(TypeFamily.STRING);
 			break;
 
 		case	CHARACTER:
-			type = compileContext.arena().builtInType(TypeFamily.UNSIGNED_16);
+			type = compileContext.builtInType(TypeFamily.UNSIGNED_16);
 			break;
 
 		case	INTEGER:
-			type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+			type = compileContext.builtInType(TypeFamily.SIGNED_32);
 			if (!representedBy(type)) 
-				type = compileContext.arena().builtInType(TypeFamily.SIGNED_64);
+				type = compileContext.builtInType(TypeFamily.SIGNED_64);
 			break;
 			
 		case	FLOATING_POINT:
 			pointer<byte> pb = _value.c_str();
 			if (_value.length() > 0 && pb[_value.length() - 1].toLowerCase() == 'f')
-				type = compileContext.arena().builtInType(TypeFamily.FLOAT_32);
+				type = compileContext.builtInType(TypeFamily.FLOAT_32);
 			else
-				type = compileContext.arena().builtInType(TypeFamily.FLOAT_64);
+				type = compileContext.builtInType(TypeFamily.FLOAT_64);
 		}
 	}
 }
@@ -1780,7 +1781,7 @@ public class For extends Node {
 					ref<Node> right = tree.newConstant(0, location());
 					right.type = _test.type;
 					ref<Node> op = tree.newBinary(Operator.NOT_EQUAL, _test, right, location());
-					op.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+					op.type = compileContext.builtInType(TypeFamily.BOOLEAN);
 					_test = op;
 				}
 			}
@@ -1872,7 +1873,7 @@ public class For extends Node {
 			}
 			compileContext.assignTypes(_increment);
 			compileContext.assignTypes(_body);
-			type = compileContext.arena().builtInType(TypeFamily.VOID);
+			type = compileContext.builtInType(TypeFamily.VOID);
 			if (op() == Operator.SCOPED_FOR)
 				compileContext.setCurrent(outer);
 			break;
@@ -1984,25 +1985,15 @@ class Import extends Node {
 	 * the imported namespaces. Later, we will look up the symbol.
 	 */
 	public void prepareImport(ref<CompileContext> compileContext) {
-		string domain;
-		boolean result;
-		
-		(domain, result) = _namespaceNode.left().dottedName();
-		ref<Symbol> symbol = compileContext.arena().getImport(true, domain, _namespaceNode, compileContext);
-		if (symbol == null)
-			compileContext.arena().conjureNamespace(domain, _namespaceNode, compileContext);
+		compileContext.populateNamespace(_namespaceNode);
 		_enclosingScope = compileContext.current();
 	}
 
 	public void lookupImport(ref<CompileContext> compileContext) {
 		if (!_importResolved) {
 			ref<Identifier> localName;
-			string domain;
-			boolean result;
-			
-			(domain, result) = _namespaceNode.left().dottedName();
 
-			ref<Symbol> symbol = compileContext.arena().getImport(true, domain, _namespaceNode, compileContext);
+			ref<Symbol> symbol = compileContext.forest().getImport(_namespaceNode, compileContext);
 			if (symbol != null) {
 				if (_localIdentifier != null)
 					localName = _localIdentifier;
@@ -2029,7 +2020,7 @@ class Import extends Node {
 	}
 	
 	private void assignTypes(ref<CompileContext> compileContext) {
-		type = compileContext.arena().builtInType(TypeFamily.VOID);
+		type = compileContext.builtInType(TypeFamily.VOID);
 	}
 }
 
@@ -2128,7 +2119,7 @@ public class Jump extends Node {
 		switch (op()) {
 		case	BREAK:
 		case	CONTINUE:
-			type = compileContext.arena().builtInType(TypeFamily.VOID);
+			type = compileContext.builtInType(TypeFamily.VOID);
 			break;
 		}
 	}
@@ -2246,7 +2237,7 @@ class Leaf extends Node {
  
 	public void assignOverload(ref<NodeList> arguments, Operator kind, ref<CompileContext> compileContext) {
 		if (op() == Operator.VOID) {
-			type = compileContext.arena().builtInType(TypeFamily.VOID);
+			type = compileContext.builtInType(TypeFamily.VOID);
 			type = compileContext.pool().newTypedefType(TypeFamily.TYPEDEF, type);
 		} else
 			super.assignOverload(arguments, kind, compileContext);
@@ -2258,16 +2249,16 @@ class Leaf extends Node {
 		ref<Scope> scope;
 		switch (op()) {
 		case	EMPTY:
-			type = compileContext.arena().builtInType(TypeFamily.VOID);
+			type = compileContext.builtInType(TypeFamily.VOID);
 			break;
 
 		case	NULL:
-			type = compileContext.arena().builtInType(TypeFamily.ADDRESS);
+			type = compileContext.builtInType(TypeFamily.ADDRESS);
 			break;
 
 		case	FALSE:
 		case	TRUE:
-			type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+			type = compileContext.builtInType(TypeFamily.BOOLEAN);
 			break;
 
 		case	VOID:
@@ -2276,7 +2267,7 @@ class Leaf extends Node {
 			break;
 
 		case	CLASS_TYPE:
-			type = compileContext.makeTypedef(compileContext.arena().builtInType(TypeFamily.CLASS_VARIABLE));
+			type = compileContext.makeTypedef(compileContext.builtInType(TypeFamily.CLASS_VARIABLE));
 			break;
 
 		case	THIS:
@@ -2286,7 +2277,7 @@ class Leaf extends Node {
 					type = compileContext.errorType();
 				else {
 					t = compileContext.convertToAnyBuiltIn(classScope.classType);
-					type = compileContext.arena().createRef(t, compileContext);
+					type = compileContext.newRef(t);
 				}
 			} else {
 				add(MessageId.THIS_NOT_ALLOWED, compileContext.pool());
@@ -2314,7 +2305,7 @@ class Leaf extends Node {
 				break;
 			}
 			t = compileContext.convertToAnyBuiltIn(t);
-			type = compileContext.arena().createRef(t, compileContext);
+			type = compileContext.newRef(t);
 			break;
 		}
 	}
@@ -2458,7 +2449,7 @@ public class Loop extends Node {
 			id = _declarator.clone(tree);
 			r = tree.newReference(len, false, location());
 			test = tree.newBinary(Operator.LESS, id, r, location());
-			test.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+			test.type = compileContext.builtInType(TypeFamily.BOOLEAN);
 			increment = tree.newUnary(Operator.INCREMENT_BEFORE, _declarator, location());
 			increment.type = _declarator.type;
 		} else {
@@ -2478,7 +2469,7 @@ public class Loop extends Node {
 			init = init.fold(tree, true, compileContext);
 			r = tree.newReference(iterator, false, location());
 			test = createMethodCall(r, "hasNext", tree, compileContext);
-			test.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+			test.type = compileContext.builtInType(TypeFamily.BOOLEAN);
 			test = test.fold(tree, false, compileContext);
 			r = tree.newReference(iterator, false, location());
 			increment = createMethodCall(r, "next", tree, compileContext);
@@ -2487,7 +2478,7 @@ public class Loop extends Node {
 				return this;
 			}
 
-			increment.type = compileContext.arena().builtInType(TypeFamily.VOID);
+			increment.type = compileContext.builtInType(TypeFamily.VOID);
 			increment = increment.fold(tree, true, compileContext);
 
 			r = tree.newReference(iterator, false, location());
@@ -2554,7 +2545,7 @@ public class Loop extends Node {
 		if (_aggregate.type.deferAnalysis())
 			_declarator.type = _aggregate.type;
 		else if (_aggregate.type.isString())
-			_declarator.type = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+			_declarator.type = compileContext.builtInType(TypeFamily.SIGNED_32);
 		else {
 //			print(0);
 			_declarator.type = _aggregate.type.indexType();
@@ -2566,7 +2557,7 @@ public class Loop extends Node {
 	}
 	
 	void assignTypes(ref<CompileContext> compileContext) {
-		type = compileContext.arena().builtInType(TypeFamily.VOID);
+		type = compileContext.builtInType(TypeFamily.VOID);
 		if (_declarator.type == null) {
 			assignDeclaratorType(compileContext);
 			if (_declarator.type.deferAnalysis())
@@ -2901,7 +2892,7 @@ public class Template extends Node {
 				type = nl.node.type;
 				return;
 			}
-		type = compileContext.arena().builtInType(TypeFamily.VOID);
+		type = compileContext.builtInType(TypeFamily.VOID);
 	}
 }
 
@@ -3054,7 +3045,7 @@ public class Ternary extends Node {
 				ref<Node> right = tree.newConstant(0, location());
 				right.type = _left.type;
 				ref<Node> op = tree.newBinary(Operator.NOT_EQUAL, _left, right, location());
-				op.type = compileContext.arena().builtInType(TypeFamily.BOOLEAN);
+				op.type = compileContext.builtInType(TypeFamily.BOOLEAN);
 				_left = op;
 			}
 			break;
@@ -3196,11 +3187,11 @@ public class Ternary extends Node {
 				type = compileContext.errorType();
 				break;
 			}
-			type = compileContext.arena().builtInType(TypeFamily.VOID);
+			type = compileContext.builtInType(TypeFamily.VOID);
 			break;
 
 		case	NAMESPACE:
-			type = compileContext.arena().builtInType(TypeFamily.VOID);
+			type = compileContext.builtInType(TypeFamily.VOID);
 			break;
 			
 		case	CATCH:
@@ -3210,7 +3201,7 @@ public class Ternary extends Node {
 				break;
 			}
 			compileContext.assignTypes(_right);
-			type = compileContext.arena().builtInType(TypeFamily.VOID);
+			type = compileContext.builtInType(TypeFamily.VOID);
 			break;
 			
 		default:
@@ -3297,7 +3288,7 @@ public class Try extends Node {
 	}
 
 	void assignTypes(ref<CompileContext> compileContext) {
-		type = compileContext.arena().builtInType(TypeFamily.VOID);
+		type = compileContext.builtInType(TypeFamily.VOID);
 		compileContext.assignTypes(_body);
 		if (_finally != null)
 			compileContext.assignTypes(_finally);
@@ -3348,7 +3339,7 @@ public class Try extends Node {
 			for (ref<NodeList> nl = _catchList; nl != null; nl = nl.next, i++)
 				nl.node = catches[i];
 		}
-		ref<Variable> temp = compileContext.newVariable(compileContext.arena().builtInType(TypeFamily.ADDRESS));
+		ref<Variable> temp = compileContext.newVariable(compileContext.builtInType(TypeFamily.ADDRESS));
 		ref<Reference> r = tree.newReference(temp, true, _body.location());
 		ref<NodeList> extra = tree.newNodeList(r);
 		extra.next = _catchList;
@@ -3632,7 +3623,7 @@ public class Node {
 			if (context != Operator.INTERFACE || tp.wrappedType().family() == TypeFamily.INTERFACE)
 				return tp.wrappedType();
 		} else if (type.family() == TypeFamily.CLASS_VARIABLE) {
-			return compileContext.arena().builtInType(TypeFamily.CLASS_DEFERRED);
+			return compileContext.builtInType(TypeFamily.CLASS_DEFERRED);
 		}
 		switch (context) {
 		case CLASS:
@@ -3665,7 +3656,7 @@ public class Node {
 			case	SIGNED_8:
 			case	UNSIGNED_16:
 			case	SIGNED_16:
-				t = compileContext.arena().builtInType(TypeFamily.SIGNED_32);
+				t = compileContext.builtInType(TypeFamily.SIGNED_32);
 				return coerce(compileContext.tree(), t, false, compileContext);
 
 			case	VAR:
@@ -3739,7 +3730,7 @@ public class Node {
 	}
 
 	public ref<Node> coerce(ref<SyntaxTree> tree, TypeFamily newType, boolean explicitCast, ref<CompileContext> compileContext) {
-		return coerce(tree, compileContext.arena().builtInType(newType), explicitCast, compileContext);
+		return coerce(tree, compileContext.builtInType(newType), explicitCast, compileContext);
 	}
 
 	public ref<Node> coerce(ref<SyntaxTree> tree, ref<Type> newType, boolean explicitCast, ref<CompileContext> compileContext) {
@@ -3757,7 +3748,7 @@ public class Node {
 	}
 
 	public ref<Node> coerceStringAdditionOperand(ref<SyntaxTree> tree, TypeFamily newType, boolean explicitCast, ref<CompileContext> compileContext) {
-		ref<Type> coercedType = compileContext.arena().builtInType(newType);
+		ref<Type> coercedType = compileContext.builtInType(newType);
 		if (type.equals(coercedType))
 			return this;
 		ref<Type> intermediateType;
@@ -3768,11 +3759,11 @@ public class Node {
 		case UNSIGNED_8:
 		case UNSIGNED_16:
 		case UNSIGNED_32:
-			intermediateType = compileContext.arena().builtInType(TypeFamily.SIGNED_64);
+			intermediateType = compileContext.builtInType(TypeFamily.SIGNED_64);
 			break;
 
 		case FLOAT_32:
-			intermediateType = compileContext.arena().builtInType(TypeFamily.FLOAT_64);
+			intermediateType = compileContext.builtInType(TypeFamily.FLOAT_64);
 			break;
 
 		case BOOLEAN:
@@ -3807,7 +3798,7 @@ public class Node {
 		while (compileContext.liveSymbolCount() > liveCount) {
 			ref<Node> n = compileContext.popLiveTemp(liveCount);
 			if (n == null) {
-				ref<FileStat> file = compileContext.current().file();
+				ref<Unit> file = compileContext.current().unit();
 				printf("Expression has live symbols: %s %d\n", file.filename(), file.scanner().lineNumber(location()) + 1);
 				print(4);
 				printf("Suspect live symbol:\n");
@@ -3823,7 +3814,7 @@ public class Node {
 			
 		}
 		ref<Node> d = tree.newDestructorList(liveSymbols, location());
-		d.type = compileContext.arena().builtInType(TypeFamily.VOID);
+		d.type = compileContext.builtInType(TypeFamily.VOID);
 		return d;
 	}
 
@@ -3936,6 +3927,7 @@ public class Node {
 			printf(" nodeFlags %x", int(nodeFlags));
 		if (sethi != 0)
 			printf(" sethi %d", sethi);
+		printf(" loc %d", _location.offset);
 		assert(indent < 1000);
 	}
 
@@ -4392,7 +4384,7 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 	case	IDENTIFIER:
 	case	STRING:
 		expression = tree.newLeaf(Operator.EMPTY, expression.location());
-		expression.type = compileContext.arena().builtInType(TypeFamily.VOID);
+		expression.type = compileContext.builtInType(TypeFamily.VOID);
 		return expression;
 		
 	case	DOT:

@@ -15,11 +15,12 @@
  */
 namespace parasol:compiler;
 
-import parasol:x86_64.X86_64Lnx;
-import parasol:x86_64.X86_64Win;
+import parasol:context;
 import parasol:pxi.Pxi;
 import parasol:runtime;
 import parasol:memory;
+import parasol:x86_64.X86_64Lnx;
+import parasol:x86_64.X86_64Win;
 
 import native:C;
 
@@ -61,12 +62,12 @@ public class CodegenContext {
  * a single Parasol compiler to be used as a cross-compiler to other environments.
  */
 public class Target {
-	protected ref<Arena> _arena;
+	protected ref<runtime.Arena> _arena;
 
 	private ref<Type> _builtInType;
 	private ref<Type> _classType;
 	
-	private ref<FileStat>[] _staticBlocks;
+	private ref<Unit>[] _staticBlocks;
 	private ref<ParameterScope>[TypeFamily] _marshallerFunctions;
 	private ref<ParameterScope>[TypeFamily] _unmarshallerFunctions;
 	
@@ -75,24 +76,24 @@ public class Target {
 		_unmarshallerFunctions.resize(TypeFamily.MAX_TYPES);
 	}
 
-	public static ref<Target> generate(ref<Arena> arena, ref<FileStat> mainFile, ref<CompileContext> compileContext) {
+	public static ref<Target> generate(ref<Unit> mainFile, ref<CompileContext> compileContext) {
 		ref<Target> target;
 		
 		// Magic: select target
 		runtime.Target selectedTarget;
-		if (arena.preferredTarget != null)
-			selectedTarget = arena.preferredTarget;
+		if (compileContext.arena().preferredTarget != null)
+			selectedTarget = compileContext.arena().preferredTarget;
 		else
 			selectedTarget = runtime.Target(runtime.supportedTarget(0));
 		if (compileContext.verbose())
 			printf("Targeting %s\n", string(selectedTarget));
 		switch (selectedTarget) {
 		case	X86_64_LNX:
-			target = new X86_64Lnx(arena);
+			target = new X86_64Lnx(compileContext.arena());
 			break;
 
 		case	X86_64_WIN:
-			target = new X86_64Win(arena);
+			target = new X86_64Win(compileContext.arena());
 			break;
 		}
 		target.populateTypeMap(compileContext);
@@ -104,20 +105,20 @@ public class Target {
 	}
 	
 	private void populateTypeMap(ref<CompileContext> compileContext) {
-		ref<Symbol> re = _arena.getSymbol("parasol", "compiler.BuiltInType", compileContext);
+		ref<Symbol> re = compileContext.forest().getSymbol("parasol", "compiler.BuiltInType", compileContext);
 		if (re.type().family() != TypeFamily.TYPEDEF)
 			assert(false);
 		ref<TypedefType> t = ref<TypedefType>(re.type());
 		_builtInType = t.wrappedType();
 		
-		re = _arena.getSymbol("parasol", "compiler.ClassType", compileContext);
+		re = compileContext.forest().getSymbol("parasol", "compiler.ClassType", compileContext);
 		if (re.type().family() != TypeFamily.TYPEDEF)
 			assert(false);
 		t = ref<TypedefType>(re.type());
 		_classType = t.wrappedType();
 	}
 	
-	public abstract boolean generateCode(ref<FileStat> mainFile, ref<CompileContext> compileContext);
+	public abstract boolean generateCode(ref<Unit> mainFile, ref<CompileContext> compileContext);
 
 	public abstract address, int allocateImageData(int size, int alignment, ref<Type> type);
 
@@ -148,11 +149,11 @@ public class Target {
 	
 	public abstract void assignStorageToObject(ref<Symbol> symbol, ref<Scope> scope, int offset, ref<CompileContext> compileContext);
 
-	public void declareStaticBlock(ref<FileStat> file) {
+	public void declareStaticBlock(ref<Unit> file) {
 		_staticBlocks.append(file);
 	}
 
-	public ref<ref<FileStat>[]> staticBlocks() {
+	public ref<ref<Unit>[]> staticBlocks() {
 		return &_staticBlocks;
 	}
 
@@ -171,7 +172,7 @@ public class Target {
 	/*
 	 * Write a disassembly of the target to the console.
 	 */
-	public boolean disassemble(ref<Arena> arena) {
+	public boolean disassemble(ref<runtime.Arena> arena) {
 		return false;
 	}
 	
@@ -214,7 +215,7 @@ public class Target {
 				printf("no marshaller for %s\n", type.signature());
 				return null;
 			}
-			ref<Symbol> sym = compileContext.arena().getSymbol("parasol", name, compileContext);
+			ref<Symbol> sym = compileContext.forest().getSymbol("parasol", name, compileContext);
 			if (sym == null)
 				printf("Could not find parasol:%s\n", name);
 			if (sym.class != Overload) {
@@ -241,7 +242,7 @@ public class Target {
 				printf("no unmarshaller for %s\n", type.signature());
 				return null;
 			}
-			ref<Symbol> sym = compileContext.arena().getSymbol("parasol", name, compileContext);
+			ref<Symbol> sym = compileContext.forest().getSymbol("parasol", name, compileContext);
 			if (sym == null)
 				printf("Could not find parasol:%s\n", name);
 			if (sym.class != Overload) {

@@ -21,8 +21,8 @@ namespace parasol:runtime;
 import native:C;
 import native:linux;
 import native:windows;
-import parasol:compiler.FileStat;
-import parasol:compiler.Location;
+import parasol:context;
+import parasol:compiler;
 import parasol:exception;
 import parasol:thread.Thread;
 import parasol:x86_64.X86_64SectionHeader;
@@ -129,9 +129,9 @@ public address allocateRegion(long length) {
 	if (compileTarget == Target.X86_64_WIN) {
 		v = windows.VirtualAlloc(null, length, windows.MEM_COMMIT|windows.MEM_RESERVE, windows.PAGE_READWRITE);
 	} else if (compileTarget == Target.X86_64_LNX) {
-		int pagesize = linux.sysconf(int(linux.SysConf._SC_PAGESIZE));
+		int pagesize = linux.sysconf(linux.SysConf._SC_PAGESIZE);
 		if (pagesize == -1) {
-			printf("sysconf failed\n");
+			printf("sysconf failed (%d)\n", int(linux.SysConf._SC_PAGESIZE));
 			assert(false);
 		}
 		return linux.aligned_alloc(pagesize, length);
@@ -172,9 +172,9 @@ public void freeRegion(address region, long length) {
 }
 /** @ignore */
 public class SourceLocation {
-	public ref<FileStat>	file;			// Source file containing this location
-	public Location			location;		// Source byte offset
-	public int				offset;			// Code location
+	public ref<compiler.Unit>	file;			// Source file containing this location
+	public compiler.Location	location;		// Source byte offset
+	public int					offset;			// Code location
 }
 /** @ignore */
 public ref<SourceLocation> getSourceLocation(address ip, boolean locationIsExact) {

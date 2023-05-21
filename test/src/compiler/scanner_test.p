@@ -16,7 +16,7 @@
 import parasol:process;
 import parasol:storage;
 import parasol:random.Random;
-import parasol:compiler.FileStat;
+import parasol:compiler.Unit;
 import parasol:compiler.Location;
 import parasol:compiler.Scanner;
 import parasol:compiler.Token;
@@ -95,7 +95,7 @@ boolean scan(string filename) {
 		return false;
 	}
 
-	ref<FileStat> fs = new FileStat(filename, false);
+	ref<Unit> fs = new Unit(filename, ".");
 	ref<Scanner> scanner = Scanner.create(fs);
 	if (!scanner.opened()) {
 		printf("Unable to open file %s\n", filename);

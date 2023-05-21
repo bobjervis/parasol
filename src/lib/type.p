@@ -15,6 +15,8 @@
  */
 namespace parasol:compiler;
 
+import parasol:context;
+
 public enum TypeFamily {
 	// BuiltInType - all of the following can appear as the family of a built-in
 	// type. Each of them is a singleton type.
@@ -107,8 +109,11 @@ public enum TypeFamily {
 public class BuiltInType extends Type {
 	private ref<Type> _classType;
 
-	BuiltInType(TypeFamily family, ref<Type> classType) {
+	BuiltInType(TypeFamily family) {
 		super(family);
+	}
+
+	void setClassType(ref<Type> classType) {
 		_classType = classType;
 	}
 
@@ -1269,7 +1274,7 @@ public class FunctionType extends Type {
 	public boolean widensTo(ref<Type> other, ref<CompileContext> compileContext) {
 		if (this == other)
 			return true;
-		if (other == compileContext.arena().builtInType(TypeFamily.VAR))
+		if (other == compileContext.builtInType(TypeFamily.VAR))
 			return false;								// TODO: Fix the code gen for this.
 		if (other.family() != TypeFamily.FUNCTION)
 			return false;
@@ -1455,14 +1460,14 @@ public class FunctionType extends Type {
 
 public class TemplateType extends Type {
 	private ref<Template> _definition;
-	private ref<FileStat> _definingFile;
+	private ref<Unit> _definingFile;
 	private ref<Overload> _overload;
 	private ref<ParameterScope> _templateScope;
 	private ref<Type> _extends;
 	private ref<Symbol> _definingSymbol;
 	private boolean _isMonitor;
 
-	TemplateType(ref<Symbol> symbol, ref<Template> definition, ref<FileStat>  definingFile, ref<Overload> overload, ref<ParameterScope> templateScope, boolean isMonitor) {
+	TemplateType(ref<Symbol> symbol, ref<Template> definition, ref<Unit>  definingFile, ref<Overload> overload, ref<ParameterScope> templateScope, boolean isMonitor) {
 		super(TypeFamily.TEMPLATE);
 		_definingSymbol = symbol;
 		_definition = definition;
@@ -1495,7 +1500,7 @@ public class TemplateType extends Type {
 		return _extends;
 	}
 
-	public ref<FileStat> definingFile() {
+	public ref<Unit> definingFile() {
 		return _definingFile;
 	}
 
@@ -1561,11 +1566,11 @@ public class TemplateType extends Type {
 public class TemplateInstanceType extends ClassType {
 	private ref<TemplateInstanceType> _next;
 	private ref<Template> _concreteDefinition;
-	private ref<FileStat> _definingFile;
+	private ref<Unit> _definingFile;
 	private var[] _arguments;
 	private ref<TemplateType> _templateType;
 
-	TemplateInstanceType(ref<TemplateType> templateType, var[] args, ref<Template> concreteDefinition, ref<FileStat> definingFile, ref<ClassScope> scope, ref<TemplateInstanceType> next, ref<MemoryPool> pool) {
+	TemplateInstanceType(ref<TemplateType> templateType, var[] args, ref<Template> concreteDefinition, ref<Unit> definingFile, ref<ClassScope> scope, ref<TemplateInstanceType> next, ref<MemoryPool> pool) {
 		super(templateType.definingSymbol().effectiveFamily(), ref<Type>(null), scope);
 		for (int i = 0; i < args.length(); i++)
 			_arguments.append(args[i], pool);
@@ -1577,7 +1582,7 @@ public class TemplateInstanceType extends ClassType {
 	}
 
 	public ref<Type> indirectType(ref<CompileContext> compileContext) {
-		if (!_templateType.extendsFormally(compileContext.arena().builtInType(TypeFamily.ADDRESS), compileContext))
+		if (!_templateType.extendsFormally(compileContext.builtInType(TypeFamily.ADDRESS), compileContext))
 			return null;
 		if (_arguments.length() != 1)
 			return null;
@@ -1603,25 +1608,25 @@ public class TemplateInstanceType extends ClassType {
 	}
 
 	public boolean isPointer(ref<CompileContext> compileContext) {
-		if (!_templateType.extendsFormally(compileContext.arena().builtInType(TypeFamily.ADDRESS), compileContext))
+		if (!_templateType.extendsFormally(compileContext.builtInType(TypeFamily.ADDRESS), compileContext))
 			return false;
 		if (_arguments.length() != 1)
 			return false;
-		ref<TypedefType> tt = ref<TypedefType>(compileContext.arena().pointerTemplate().type());
+		ref<TypedefType> tt = ref<TypedefType>(compileContext.pointerTemplate().type());
 		return tt.wrappedType() == _templateType;
 	}
 
 	public boolean isVector(ref<CompileContext> compileContext) {
 		if (_arguments.length() != 2)
 			return false;
-		ref<TypedefType> tt = ref<TypedefType>(compileContext.arena().vectorTemplate().type());
+		ref<TypedefType> tt = ref<TypedefType>(compileContext.vectorTemplate().type());
 		return tt.wrappedType() == _templateType;
 	}
 
 	public boolean isMap(ref<CompileContext> compileContext) {
 		if (_arguments.length() != 2)
 			return false;
-		ref<TypedefType> tt = ref<TypedefType>(compileContext.arena().mapTemplate().type());
+		ref<TypedefType> tt = ref<TypedefType>(compileContext.mapTemplate().type());
 		return tt.wrappedType() == _templateType;
 	}
 
@@ -1750,7 +1755,7 @@ public class TemplateInstanceType extends ClassType {
 		return _concreteDefinition; 
 	}
 
-	public ref<FileStat> definingFile() { 
+	public ref<Unit> definingFile() { 
 		return _definingFile; 
 	}
 
@@ -2102,7 +2107,7 @@ public class Type {
 				if (oi.parameterCount() != 1)
 					continue;
 				if ((*oi.parameterScope().parameters())[0].type() == 
-							compileContext.arena().builtInType(TypeFamily.STRING))
+							compileContext.builtInType(TypeFamily.STRING))
 					return oi;
 			}
 		}
@@ -2466,7 +2471,7 @@ public class Type {
 	public boolean widensTo(ref<Type> other, ref<CompileContext> compileContext) {
 		if (this == other)
 			return true;
-		if (other == compileContext.arena().builtInType(TypeFamily.VAR)){
+		if (other == compileContext.builtInType(TypeFamily.VAR)){
 			return true;
 		}
 		if (extendsFormally(other, compileContext))
