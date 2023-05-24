@@ -146,6 +146,7 @@ public class Context {
 	 * @exception IllegalOperationException Thrown when trying to delete the default context.
 	 */
 	~Context() {
+//		printf("~Context() %p\n", this);
 		lock(contextLock) {
 			if (_name == "default")
 				throw IllegalOperationException("Attempt to delete 'default' context");
@@ -316,6 +317,7 @@ public class TemporaryContext extends Context {
 	}
 
 	~TemporaryContext() {
+//		printf("~TemporaryContext() %p\n", this);
 		_packages.deleteAll();
 	}
 
@@ -479,6 +481,10 @@ public class Package {
 	Package(string name, string directory) {
 		_name = name;
 		_directory = directory;
+	}
+
+	~Package() {
+//		printf("~Package() %p\n", this);
 	}
 	/**
 	 * Return the directory containing the package files.

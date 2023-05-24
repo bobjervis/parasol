@@ -2106,6 +2106,12 @@ public class DomainForest extends VolatileDomainForest {
 	private ref<Scope>[string] _domains;
 	private string[] _initFirst;
 	private string[] _initLast;
+	private ref<Unit>[] _units;
+
+	~DomainForest() {
+//		printf("~DomainForest() %p\n", this);
+		_units.deleteAll();
+	}
 
 	public ref<Scope> createDomain(string domain, ref<CompileContext> compileContext) {
 		ref<Scope> s = _domains[domain];
@@ -2231,7 +2237,9 @@ public class DomainForest extends VolatileDomainForest {
 	
 				case 'U':
 					string unitFilename = storage.constructPath(package.directory(), line.substr(1));
-					nm.includeUnit(new Unit(unitFilename, package.directory()));
+					ref<Unit> u = new Unit(unitFilename, package.directory());
+					_units.append(u);
+					nm.includeUnit(u);
 					break;
 	
 				case 'X':

@@ -84,18 +84,18 @@ public class Namespace extends Symbol {
 
 	boolean includes(ref<Ternary> namespaceNode) {
 		ref<Node> name = namespaceNode.middle();
-		printf("          dotted name = %s\n", _dottedName);
+//		printf("          dotted name = %s\n", _dottedName);
 		string newName;
 		boolean x;
 		if (name.op() == Operator.EMPTY)
 			(newName, x) = namespaceNode.right().dottedName();
 		else
 			(newName, x) = name.dottedName();
-		printf("          namespaceNode middle name = %s\n", newName);
+//		printf("          namespaceNode middle name = %s\n", newName);
 		if (!_dottedName.startsWith(newName))
 			return false;
 		if (_dottedName.length() == newName.length()) {
-			printf("          lengths match\n");
+//			printf("          lengths match\n");
 			return true;
 		}
 		return _dottedName[newName.length()] == '.';

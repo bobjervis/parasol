@@ -2,7 +2,7 @@
 
 BIN=$(dirname "`readlink -f \"$0\"`")
 
-VERSION=0.2.0
+VERSION=0.3.0
 
 mkdir -p /usr/parasol/v$VERSION
 cp -r $BIN/bin $BIN/src $BIN/template /usr/parasol/v$VERSION

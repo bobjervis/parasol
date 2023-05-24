@@ -114,14 +114,13 @@ class ParasolCommand extends process.Command {
 
 }
 
-private ref<ParasolCommand> parasolCommand;
+private ParasolCommand parasolCommand;
 private string[] finalArguments;
 
 int main(string[] args) {
 	int result;
 	parseCommandLine(args);
 	result = runCommand();
-	delete parasolCommand;
 	return result;
 }
 
@@ -132,7 +131,6 @@ void parseCommandLine(string[] args) {
 		"guard"
 	];
 	
-	parasolCommand = new ParasolCommand();
 	if (!parasolCommand.parse(args))
 		parasolCommand.help();
 	if (parasolCommand.heapOption.set()) {

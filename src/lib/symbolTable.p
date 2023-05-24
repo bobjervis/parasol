@@ -1190,6 +1190,10 @@ public class NamespaceScope extends ClassScope {
 		_namespaceSymbol = namespaceSymbol;
 	}
 
+	~NamespaceScope() {
+//		printf("~NamespaceScope() %p %s\n", this, _namespaceSymbol.fullNamespace());
+	}
+
 	public boolean hasIncludedUnits() {
 		if (_namespaceSymbol.includedUnitCount() > 0)
 			return true;
@@ -1612,19 +1616,21 @@ public class Scope {
 	}
 
 	public ref<Namespace> defineNamespace(string domain, ref<Node> namespaceNode, substring name, ref<CompileContext> compileContext) {
-		return defineNamespace(domain, namespaceNode, name,compileContext.pool(), compileContext.arena(), compileContext.annotations);
+		return defineNamespace(domain, namespaceNode, name, compileContext.pool(), compileContext.arena(), compileContext.annotations);
 	}
 
 	public ref<Namespace> defineNamespace(string domain, ref<Node> namespaceNode, substring name, ref<MemoryPool> pool, ref<runtime.Arena> arena, ref<Node> annotations) {
 		ref<Symbol> sym = lookup(name, null);
 		if (sym != null) {
-			if (sym.class == Namespace)
+			if (sym.class == Namespace) {
+//				printf("already defined %s %s %p parent %p\n", ref<Namespace>(sym).fullNamespace(), name, ref<Namespace>(sym).symbols(), this);
 				return ref<Namespace>(sym);
-			else
+			} else
 				return null;
 		}
 		ref<Namespace> nm = pool.newNamespace(domain, namespaceNode, this, annotations, name, arena); 
 		SymbolKey key(name);
+//		printf("insert %s %s %p parent %p\n", nm.fullNamespace(), name, nm.symbols(), this);
 		_symbols.insert(key, nm);
 		return nm;
 	}
