@@ -51,11 +51,8 @@ target(os: linux, cpu: x86-64) {
 			}
 			pxi(name: x86-64-lnx.pxi, main: src/pc/main.p, target: x86-64-lnx)
 		}
+		include(type: package, name: core:parasollanguage.org)
 		folder(name: src) {
-			folder(name: lib) {
-				file(name: *.p, src: src/lib)
-				file(name: root.p, src: lib)
-			}
 			folder(name: paradoc) {
 				file(name: *.p, src: src/paradoc)
 			}
@@ -74,6 +71,9 @@ target(os: linux, cpu: x86-64) {
 			folder(name: util) {
 				file(name: *.p, src: src/util)
 			}
+		}
+		folder(name: template) {
+			file(name: *, src: template)
 		}
 	}
 
@@ -150,10 +150,8 @@ target(os: windows, cpu: x86-64) {
 				file(name: *.p, src: src/lib)
 			}
 		}
+		include(type: package, name: core:parasollanguage.org)
 		folder(name: src) {
-			folder(name: lib) {
-				file(name: *.p, src: src/lib)
-			}
 			folder(name: paradoc) {
 				file(name: *.p, src: src/paradoc)
 			}

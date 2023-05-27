@@ -72,8 +72,8 @@ public class Arena {
 	
 	~Arena() {
 		_units.deleteAll();
-		for (i in _scopes)
-			printf("delete scope %p\n", _scopes[i]);
+//		for (i in _scopes)
+//			printf("delete scope %p\n", _scopes[i]);
 		_scopes.deleteAll();
 	}
 

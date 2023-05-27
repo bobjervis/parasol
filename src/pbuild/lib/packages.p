@@ -38,12 +38,15 @@ class Product extends Folder {
 		super(buildFile, enclosing, object);
 	}
 
-	boolean defineContext(ref<Coordinator> coordinator, string buildDir, string outputDir) {
-		findProducts(&_includedProducts);
+	boolean defineContext(ref<BuildFile> buildFile, ref<Coordinator> coordinator, string buildDir, string outputDir) {
+		findProducts(buildFile, &_includedProducts);
 		_coordinator = coordinator;
 		_buildDir = buildDir;
 		_outputDir = outputDir;
 		return true;
+	}
+
+	void resolveNames(ref<BuildFile> buildFile) {
 	}
 
 	boolean build() {
@@ -82,6 +85,10 @@ class Product extends Folder {
 			return "pass";
 		else
 			return "FAIL";
+	}
+
+	public boolean showOutcome() {
+		return true;
 	}
 }
 
@@ -149,8 +156,8 @@ public class Package extends Product {
 		return true;
 	}
 
-	boolean defineContext(ref<Coordinator> coordinator, string buildDir, string outputDir) {
-		super.defineContext(coordinator, buildDir, outputDir);
+	boolean defineContext(ref<BuildFile> buildFile, ref<Coordinator> coordinator, string buildDir, string outputDir) {
+		super.defineContext(buildFile, coordinator, buildDir, outputDir);
 		_packageDir = storage.constructPath(outputDir, _name + ".tmp");
 		if (storage.exists(_packageDir)) {
 			if (!storage.deleteDirectoryTree(_packageDir)) {
@@ -226,6 +233,7 @@ public class Package extends Product {
 				_includedProducts.append(pkg);
 			}
 		}
+		discoverExtraIncludedProducts(this);
 		boolean success = true;
 		for (i in _includedProducts) {
 			if (!_includedProducts[i].future().get()) {
@@ -1114,4 +1122,74 @@ class Exe extends MakeProduct {
 		return s;
 	}
 }
+
+class IncludePackage extends Product {
+	private string _name;
+	private ref<Package> _package;
+	private ref<script.Object> _object;
+
+	public IncludePackage(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object, string name) {
+		super(buildFile, enclosing, object);
+		_name = name;
+		_object = object;
+	}
+
+	void resolveNames(ref<BuildFile> buildFile) {
+		for (i in buildFile.products) {
+			ref<Product> p = buildFile.products[i];
+			if (p.class == Package && p.name() == _name) {
+				_package = ref<Package>(p);
+				_object = null;
+				
+				return;
+			}
+		}
+		buildFile.error(_object, "    FAIL: Coud not find package for name %s\n", _name);
+	}
+
+	void discoverExtraIncludedProducts(ref<Product> includer) {
+		if (_package != null)
+			includer._includedProducts.append(_package);
+	}
+
+	public boolean build() {
+		if (_package == null)
+			return false;
+		if (!_package.future().get())
+			return false;
+/*
+		if (!storage.ensure(path())) {
+			printf("        FAIL: Could not ensure %s\n", path());
+			return false;
+		}
+ */
+		if (!storage.ensure(storage.directory(path()))) {
+			printf("        FAIL: Could not ensure %s\n", storage.directory(path()));
+			return false;
+		}
+		if (!storage.copyDirectoryTree(_package.path(), path(), false)) {
+			printf("        FAIL: Could not copy %s to %s\n", _package.path(), path());
+			return false;
+		}
+		return true;
+	}
+
+	public boolean inputsNewer(time.Instant timeStamp) {
+		if (_package != null)
+			return _package.inputsNewer(timeStamp);
+		else
+			return true;
+	}
+
+	public string toString() {
+		string s;
+		s.printf("include %s", _name);
+		return s;
+	}
+
+	public boolean showOutcome() {
+		return false;
+	}
+}
+
 

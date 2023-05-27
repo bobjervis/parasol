@@ -4,11 +4,28 @@ BIN=$(dirname "`readlink -f \"$0\"`")
 
 VERSION=0.3.0
 
-mkdir -p /usr/parasol/v$VERSION
-cp -r $BIN/bin $BIN/src $BIN/template /usr/parasol/v$VERSION
-cp $BIN/lib/root.p /usr/parasol/v$VERSION/src/root
+INSTALL=/usr/parasol/v$VERSION
+
+if [ "x--reinstanll" == "x$1" ] || [ "x-r" == "x$1" ]; then
+	echo Removing existing version $VERSION installed image.
+	sudo rm -rf $INSTALL
+	echo Version $VERSION removed
+fi
+
+if [ -d /usr/parasol/v$VERSION ]; then
+	echo Version $VERSION is already installed. If you want to
+	echo re-install, re-run this command with --reinstall or -r option.
+	exit 1
+fi
+
+echo Building install package
+cd $BIN
+bin/pbuild
+
+mkdir -p $INSTALL
+cp -r $BIN/build/install\:parasollanguage.org/* $INSTALL
 rm /usr/parasol/latest
-ln -s /usr/parasol/v$VERSION /usr/parasol/latest
+ln -s $INSTALL /usr/parasol/latest
 
 if [ -d /usr/local/bin ]; then
     ln -s /usr/parasol/latest/bin/pbuild /usr/local/bin/pbuild
@@ -16,4 +33,8 @@ if [ -d /usr/local/bin ]; then
     ln -s /usr/parasol/latest/bin/pcontext /usr/local/bin/pcontext
     ln -s /usr/parasol/latest/bin/paradoc /usr/local/bin/paradoc
 fi
+
+echo Version $VERSION installed as latest
+echo SUCCESS
+exit 0
 

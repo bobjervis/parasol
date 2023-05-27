@@ -104,13 +104,54 @@ class Folder extends Component {
 		return false;
 	}
 
-	void findProducts(ref<ref<Product>[]> collection) {
+	ref<Product> include(ref<BuildFile> buildFile, ref<script.Object> object) {
+		ref<script.Atom> a = object.get("name");
+		string name;
+		ref<Product> product;
+		if (a != null) {
+			name = a.toString();
+			if (!context.validatePackageName(name)) {
+				buildFile.error(object, "Attribute 'package' must be a valid package name");
+				return null;
+			}
+		} else
+			buildFile.error(object, "Must include a product name in an include tag");
+		a = object.get("type");
+		string type;
+		if (a != null) {
+			type = a.toString();
+			switch (type) {
+			case	"package":
+				product = new IncludePackage(buildFile, this, object, name);
+				add(product);
+				break;
+
+			default:
+				buildFile.error(object,"Unknown type: %s", type);
+			}
+		} else {
+			buildFile.error(object,"Must include a product type in an include tag");
+		}
+		return product;
+	}
+
+	void discoverExtraIncludedProducts(ref<Product> includer) {
+		for (i in _components) {
+			ref<Component> c = _components[i];
+			if (c.class == Folder || c.class <= Product)
+				ref<Folder>(c).discoverExtraIncludedProducts(includer);
+		}
+	}
+
+	void findProducts(ref<BuildFile> buildFile, ref<ref<Product>[]> collection) {
 		for (i in _components) {
 			ref<Component> c = _components[i];
 			if (c.class == Folder)
-				ref<Folder>(c).findProducts(collection);
-			else if (c.class <= Product)
+				ref<Folder>(c).findProducts(buildFile, collection);
+			else if (c.class <= Product) {
+				ref<Product>(c).resolveNames(buildFile);
 				collection.append(ref<Product>(c));
+			}
 		}
 	}
 

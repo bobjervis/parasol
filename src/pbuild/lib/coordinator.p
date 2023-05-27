@@ -219,7 +219,7 @@ public class Coordinator extends CoordinatorVolatileData {
 		string absBuildDir = storage.absolutePath(buildDir);
 
 		for (i in bf.products)
-			if (!bf.products[i].defineContext(this, absBuildDir, outputDir)) {
+			if (!bf.products[i].defineContext(bf, this, absBuildDir, outputDir)) {
 				delete bf;
 				return false;
 			}
@@ -347,7 +347,8 @@ public class Coordinator extends CoordinatorVolatileData {
 		} else {
 			printf("  Outcome    Product\n");
 			for (i in _products)
-				printf("    %s   %s\n", _products[i].outcome(), _products[i].name());
+				if (_products[i].showOutcome())
+					printf("    %s   %s\n", _products[i].outcome(), _products[i].name());
 			printf("FAIL: Build contained failures.\n");
 		}
 		return success ? 0 : 1;

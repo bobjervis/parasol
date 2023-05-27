@@ -241,6 +241,18 @@ public class BuildFile {
 					_detectedErrors = true;
 				break;
 	
+			case "include":
+				if (enclosing == null)
+					error(object, "An include reference must be in a package");
+				else {
+					ref<Product> p = enclosing.include(this, object);
+					if (p != null)
+						products.append(p);
+					else
+						_detectedErrors = true;
+				}
+				break;
+			
 			default:
 				error(object, "Unknown tag '%s'", object.get("tag").toString());
 			}

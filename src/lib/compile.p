@@ -2133,7 +2133,6 @@ public class DomainForest extends VolatileDomainForest {
 			_anonymous = _pool.newNamespace(null, null, null, null, null, compileContext.arena());
 		return _anonymous;
 	}
-
 	/**
 	 * Retrieve a list of units that are members of the namespace referenced by the 
 	 * function argument.
