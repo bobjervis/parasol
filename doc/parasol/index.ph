@@ -6,6 +6,7 @@
 	<li>{@topic reflection/index.ph}
 	<li>{@topic language/index.ph}
 	<li>{@paradoc runtime Parasol Runtime}
+	<li>{@topic implementation/index.ph}
 </ul>
 
 <h2>Overview</h2>

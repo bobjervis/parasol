@@ -336,7 +336,7 @@ public class Command {
  		string prototype = _commandName != null ? _commandName : binaryFilename();
  		
 		if (_allOptions.length() > 0)
-			prototype.append(" [options]");
+			prototype.append(" [options...]");
 		if (_subCommands.size() > 0 || _defaultSubCommand != null)
 			prototype.append(" <sub-command>");
 		if (_finalArgumentsHelpText != null) {

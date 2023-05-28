@@ -45,12 +45,6 @@ class ParasolCommand extends process.Command {
 					"Any command-line arguments appearing after are passed " +
 					"to any main function in that file." +
 					"\n" +
-					"If no arguments are given at all, or if the filename is a single " +
-					"dash (-), statements are read from standard input. " +
-					"If the standard-input stream is connected to a terminal, the " +
-					"engine enters conversational mode, writing prompts to " +
-					"the standard-output." +
-					"\n" +
 					"Refer to the Parasol language reference manual for details on " +
 					"permitted syntax." +
 					"\n" +
@@ -90,9 +84,9 @@ class ParasolCommand extends process.Command {
 					"guarded heap ('guard'). Defaults to 'prod'. " +
 					"The leaks heap option writes a leaks report to leaks.txt when the process terminates " +
 					"normally. " +
-					"The guarded heap writes sentinel bytes before and after each allocation region of memory and checks " +
+					"The guarded heap writes sentinel bytes before and after each allocated region of memory and checks " +
 					"their value when the block is deleted, or when the program terminates normally. " +
-					"If teh guarded heap detects that these guard areas have been modified, it throws a " +
+					"If the guarded heap detects that these guard areas have been modified, it throws a " +
 					"CorruptHeapException.");
 		helpOption('?', "help",
 					"Displays this help.");

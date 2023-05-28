@@ -19,19 +19,17 @@ if [ -d /usr/parasol/v$VERSION ]; then
 fi
 
 echo Building install package
-cd $BIN
-bin/pbuild
-
-mkdir -p $INSTALL
-cp -r $BIN/build/install\:parasollanguage.org/* $INSTALL
-rm /usr/parasol/latest
-ln -s $INSTALL /usr/parasol/latest
+set -e
+sudo mkdir -p $INSTALL
+sudo cp -r $BIN/install-linux/* $INSTALL
+sudo rm /usr/parasol/latest
+sudo ln -s $INSTALL /usr/parasol/latest
 
 if [ -d /usr/local/bin ]; then
-    ln -s /usr/parasol/latest/bin/pbuild /usr/local/bin/pbuild
-    ln -s /usr/parasol/latest/bin/pc /usr/local/bin/pc
-    ln -s /usr/parasol/latest/bin/pcontext /usr/local/bin/pcontext
-    ln -s /usr/parasol/latest/bin/paradoc /usr/local/bin/paradoc
+    sudo ln -s /usr/parasol/latest/bin/pbuild /usr/local/bin/pbuild
+    sudo ln -s /usr/parasol/latest/bin/pc /usr/local/bin/pc
+    sudo ln -s /usr/parasol/latest/bin/pcontext /usr/local/bin/pcontext
+    sudo ln -s /usr/parasol/latest/bin/paradoc /usr/local/bin/paradoc
 fi
 
 echo Version $VERSION installed as latest
