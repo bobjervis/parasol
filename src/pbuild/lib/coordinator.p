@@ -335,6 +335,7 @@ public class Coordinator extends CoordinatorVolatileData {
 			if (success) {
 				for (i in _onPassScripts) {
 					ref<process.Process> p = new process.Process();
+					printf("%s\n", _onPassScripts[i]);
 					if (!p.execute(_onPassDirs[i], "/bin/bash", process.useParentEnvironment, "-cev", _onPassScripts[i])) {
 						printf("    FAIL: on_pass script failed\n");
 						success = false;
