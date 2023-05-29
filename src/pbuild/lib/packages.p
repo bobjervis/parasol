@@ -1124,20 +1124,21 @@ class Exe extends MakeProduct {
 }
 
 class IncludePackage extends Product {
-	private string _name;
+	private string _src;
 	private ref<Package> _package;
 	private ref<script.Object> _object;
 
-	public IncludePackage(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object, string name) {
+	public IncludePackage(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object, string name, string src) {
 		super(buildFile, enclosing, object);
 		_name = name;
+		_src = src;
 		_object = object;
 	}
 
 	void resolveNames(ref<BuildFile> buildFile) {
 		for (i in buildFile.products) {
 			ref<Product> p = buildFile.products[i];
-			if (p.class == Package && p.name() == _name) {
+			if (p.class == Package && p.name() == _src) {
 				_package = ref<Package>(p);
 				_object = null;
 				

@@ -51,7 +51,7 @@ target(os: linux, cpu: x86-64) {
 			}
 			pxi(name: x86-64-lnx.pxi, main: src/pc/main.p, target: x86-64-lnx)
 		}
-		include(type: package, name: core:parasollanguage.org)
+		include(name: runtime, type: package, src: core:parasollanguage.org)
 		folder(name: src) {
 			folder(name: paradoc) {
 				file(name: *.p, src: src/paradoc)

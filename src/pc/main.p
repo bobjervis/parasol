@@ -21,11 +21,6 @@ import parasol:memory;
 import parasol:pxi;
 import parasol:time;
 import native:linux;
-
-/*
- * Date and Copyright holder of this code base.
- */
-string COPYRIGHT_STRING = "2015 Robert Jervis";
 /*
  *	Parasol engine architecture:
  *
@@ -40,7 +35,7 @@ string COPYRIGHT_STRING = "2015 Robert Jervis";
 class ParasolCommand extends process.Command {
 	public ParasolCommand() {
 		commandName("pc");
-		finalArguments(1, int.MAX_VALUE, "<filename> [arguments ...]");
+		finalArguments(0, int.MAX_VALUE, "<filename> [arguments ...]");
 		description("The given filename is run as a Parasol program. " +
 					"Any command-line arguments appearing after are passed " +
 					"to any main function in that file." +
@@ -48,8 +43,8 @@ class ParasolCommand extends process.Command {
 					"Refer to the Parasol language reference manual for details on " +
 					"permitted syntax." +
 					"\n" +
-					"Parasol Runtime Version " + runtime.RUNTIME_VERSION + "\r" +
-					"Copyright (c) " + COPYRIGHT_STRING
+					"Parasol Runtime Version " + runtime.RUNTIME_VERSION + "\n" +
+					"Copyright (c) 2015 Robert Jervis"
 					);
 		contextOption = stringOption(0, "context",
 					"Defines a Parasol context to use in the compile and execution of the application. " +
@@ -88,6 +83,7 @@ class ParasolCommand extends process.Command {
 					"their value when the block is deleted, or when the program terminates normally. " +
 					"If the guarded heap detects that these guard areas have been modified, it throws a " +
 					"CorruptHeapException.");
+		versionOption = booleanOption(0, "version", "Displays the compiler version.");
 		helpOption('?', "help",
 					"Displays this help.");
 	}
@@ -104,6 +100,7 @@ class ParasolCommand extends process.Command {
 	ref<process.Option<boolean>> logImportsOption;
 	ref<process.Option<boolean>> symbolTableOption;
 	ref<process.Option<boolean>> compileOnlyOption;
+	ref<process.Option<boolean>> versionOption;
 	memory.StartingHeap heap;
 
 }
@@ -127,6 +124,15 @@ void parseCommandLine(string[] args) {
 	
 	if (!parasolCommand.parse(args))
 		parasolCommand.help();
+	if (parasolCommand.versionOption.set()) {
+		printf("%s\n", runtime.RUNTIME_VERSION);
+		process.exit(0);
+	}
+	finalArguments = parasolCommand.finalArguments();
+	if (finalArguments.length() == 0) {
+		printf("Must include a filename for the main file of the program\n");
+		parasolCommand.help();
+	}
 	if (parasolCommand.heapOption.set()) {
 		boolean foundIt;
 		for (i in heapOptionValues)
@@ -147,7 +153,6 @@ void parseCommandLine(string[] args) {
 			parasolCommand.help();
 		}
 	}
-	finalArguments = parasolCommand.finalArguments();
 }
 
 int runCommand() {

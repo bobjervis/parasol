@@ -135,8 +135,11 @@ public class Context {
 	private void init(string name) {
 		_name = name;
 		string core = "core:parasollanguage.org";
-		string path = storage.readSymLink("/usr/parasol/latest");
-		_core = new CorePackage(core, path);
+
+		string exePath = process.binaryFilename();
+		string installDir = storage.directory(storage.directory(exePath));
+		string corePath = storage.constructPath(installDir, "runtime");
+		_core = new CorePackage(core, corePath);
 		_packages[core] = _core;
 	}
 	/**
@@ -571,15 +574,5 @@ public class Package {
 class CorePackage extends Package {
 	CorePackage(string name, string directory) {
 		super(name, directory);
-
-		storage.Directory d("/usr/parasol");
-		if (d.first()) {
-			do {
-				string filename = d.filename();
-				if (filename[0] != 'v')
-					continue;
-				substring version = filename.substr(1);
-			} while (d.next());
-		}
 	}
 }

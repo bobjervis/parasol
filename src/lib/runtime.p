@@ -40,7 +40,7 @@ import parasol:memory;
  *
  * Note: Major Release == 0 means this is 'unreleased' and any public API can change at any moment.
  */
-public string RUNTIME_VERSION = "0.1.0";
+public string RUNTIME_VERSION = "0.3.0";
 
 /**
  * This is a special variable used to control compile-time conditional compilation.

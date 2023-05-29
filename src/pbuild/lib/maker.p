@@ -107,22 +107,32 @@ class Folder extends Component {
 	ref<Product> include(ref<BuildFile> buildFile, ref<script.Object> object) {
 		ref<script.Atom> a = object.get("name");
 		string name;
+		string src;
 		ref<Product> product;
 		if (a != null) {
 			name = a.toString();
-			if (!context.validatePackageName(name)) {
-				buildFile.error(object, "Attribute 'package' must be a valid package name");
-				return null;
-			}
-		} else
-			buildFile.error(object, "Must include a product name in an include tag");
+		} else {
+			buildFile.error(object, "Must include a name for the object in an include tag");
+			return null;
+		}
+		a = object.get("src");
+		if (a != null)
+			src = a.toString();
+		else {
+			buildFile.error(object, "must include a src attribute for the product in an include tag");
+			return null;
+		}
 		a = object.get("type");
 		string type;
 		if (a != null) {
 			type = a.toString();
 			switch (type) {
 			case	"package":
-				product = new IncludePackage(buildFile, this, object, name);
+				if (!context.validatePackageName(src)) {
+					buildFile.error(object, "Attribute 'src' must be a valid package name");
+					return null;
+				}
+				product = new IncludePackage(buildFile, this, object, name, src);
 				add(product);
 				break;
 

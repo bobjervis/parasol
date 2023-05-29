@@ -203,7 +203,6 @@ public class CompileContext extends CodegenContext {
 			printf("core package won't open\n");
 			return false;
 		}
-
 		string rootFile = storage.constructPath(corePackage.directory(), "root.p");
 		ref<Unit> f = _arena.defineUnit(rootFile, "");
 		f.parse(this);

@@ -56,6 +56,7 @@ Use is:
 						<p>
 						Default: {@code X86_64_LNX}
 					</td></tr>
+<tr><td></td><td>--version</td><td>Displays the compiler version.</td></tr>
 </table>
 <p>
 The given filename is run as a Parasol program. Any command-line arguments
