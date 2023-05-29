@@ -35,6 +35,8 @@ import parasol:exception.IllegalOperationException;
 private ref<log.Logger> logger = log.getLogger("parasol.net");
 
 private byte[] localhost = [ 127, 0, 0, 1 ];
+
+public unsigned LOCALHOST_IP = 0x0100007f; // 127.0.0.1
 /**
  * The scope of the port bound to a socket server.
  */
@@ -99,13 +101,11 @@ public unsigned hostIPv4() {
 	}
 	int i = 1;
 	for (ref<linux.ifaddrs> ifa = ifAddresses; ; ifa = ifa.ifa_next, i++) {
-		if (ifa == null) {
-			printf("No identifiable IPv4 address to use\n");
-			return 0;
-		}
+		if (ifa == null)
+			return LOCALHOST_IP;
 		if (ifa.ifa_addr.sa_family == net.AF_INET) {
-			pointer<byte> ipa = pointer<byte>(&(ref<net.sockaddr_in>(ifa.ifa_addr).sin_addr));
-			if (ipa[0] == 127 && ipa[1] == 0 && ipa[2] == 0 && ipa[3] == 1)
+			ref<unsigned> ipa = ref<unsigned>(&(ref<net.sockaddr_in>(ifa.ifa_addr).sin_addr));
+			if (*ipa == LOCALHOST_IP)
 				continue;
 			return *ref<unsigned>(ipa);
 		}

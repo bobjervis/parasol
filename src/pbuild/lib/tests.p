@@ -26,6 +26,7 @@ public class Suite {
 	private ref<Suite>[] _included;		// The included suites
 	private ref<Test>[] _myTests;		// The tests declared in this suite
 	private string _onPassScript;
+	private string _afterPassScript;
 	private boolean _composing;
 	private boolean _composed;
 	private boolean _trace;
@@ -87,6 +88,16 @@ public class Suite {
 				_onPassScript = a.toString();
 			break;
 
+		case "after_pass":
+			if (_afterPassScript != null) {
+				buildFile.error(def, "More than one after_pass script in suite '%s'", _suite);
+				return;
+			}
+			a = def.get("content");
+			if (a != null)
+				_afterPassScript = a.toString();
+			break;
+			
 		default:
 			buildFile.error(def, "Unexpected tag '%s'\n", def.get("tag").toString());
 		}
@@ -133,13 +144,20 @@ public class Suite {
 
 		harvestTests(this, buildFile);
 
-		for (i in _included)
+		for (i in _included) {
 			if (_included[i]._onPassScript != null) {
 				if (_onPassScript != null)
 					_onPassScript = _included[i]._onPassScript + "\n" + _onPassScript;
 				else
 					_onPassScript = _included[i]._onPassScript;
 			}
+			if (_included[i]._afterPassScript != null) {
+				if (_afterPassScript != null)
+					_afterPassScript = _included[i]._afterPassScript + "\n" + _afterPassScript;
+				else
+					_afterPassScript = _included[i]._afterPassScript;
+			}
+		}
 
 		_composing = false;
 		_composed = true;
@@ -164,6 +182,10 @@ public class Suite {
 
 	public string onPassScript() {
 		return _onPassScript;
+	}
+
+	public string afterPassScript() {
+		return _afterPassScript;
 	}
 
 	public ref<Test>[] tests() {

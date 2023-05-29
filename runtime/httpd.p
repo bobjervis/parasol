@@ -627,13 +627,13 @@ private void processHttpRequest(address ctx) {
 		else if (context.server.dispatch(&request, &response, context.connection.secured())) {
 			delete context;
 			return;				// if dispatch returns true, we want to keep the connection open (for at least a while).
-		}
+		} else
+			response.close();
 	} else {
 		logger.debug( "Could not parse request from %s", net.dottedIP(context.connection.sourceIPv4()));
 //		request.print();
 		response.error(400);
 	}
-	response.close();
 	delete context;
 }
 /**

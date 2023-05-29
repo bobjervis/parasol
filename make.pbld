@@ -27,8 +27,6 @@ package(name: core:parasollanguage.org, preserveAnonymousUnits: true) {
 }
 
 target(os: linux, cpu: x86-64) {
-
-
 	package(name: install:parasollanguage.org, manifest: false) {
 		folder(name: bin) {
 			file(name: dumppxi, src: bin)
@@ -83,29 +81,15 @@ target(os: linux, cpu: x86-64) {
 		"	set +v
 			(cd build/install\:parasollanguage.org ; tar -cf ../../install-lnx-64.tar.gz * ; )
 			cp build/core\:parasollanguage.org/\:manifest\: runtime
-			if ! diff -q build/install\:parasollanguage.org/bin/x86-64-lnx.pxi bin/x86-64-lnx.pxi
-			then
-				echo replacing bin/x86-64-lnx.pxi
-			    cp build/install\:parasollanguage.org/bin/x86-64-lnx.pxi bin/x86-64-lnx.pxi
-			else
-				echo skipping x86-64-lnx.pxi
-			fi
-			if ! diff -q build/parasolrt bin/parasolrt
-			then
-				echo replacing bin/parasolrt
-			    cp build/parasolrt bin/parasolrt
-			else
-				echo skipping parasolrt
-			fi
-			if ! diff -q build/libparasol.so.1 bin/libparasol.so.1
-			then
-				echo replacing bin/libparasol.so.1
-			    cp build/libparasol.so.1 bin/libparasol.so.1
-				ln -sfT libparasol.so.1 bin/libparasol.so
-			else
-				echo skipping libparasol.so.1
-			fi
+			cp build/x86-64-lnx.pxi bin/x86-64-lnx.pxi
+			ln -sfT libparasol.so.1 bin/libparasol.so
 		"	
+		}
+		// These have to be run as an exec because these files are running pbuild (like all
+		// Parasol applications).
+		after_pass() {
+			cp build/libparasol.so.1 bin/libparasol.so.1
+			cp build/parasolrt bin/parasolrt
 		}
 	}
 
@@ -117,8 +101,12 @@ target(os: linux, cpu: x86-64) {
 			cp build/x86-64-lnx.pxi bin/x86-64-lnx.pxi
 			ln -sfT libparasol.so.1 bin/libparasol.so
 		"
-//			cp build/libparasol.so.1 bin/libparasol.so.1
-//			cp build/parasolrt bin/parasolrt
+		}
+		// These have to be run as an exec because these files are running pbuild (like all
+		// Parasol applications).
+		after_pass() {
+			cp build/libparasol.so.1 bin/libparasol.so.1
+			cp build/parasolrt bin/parasolrt
 		}
 	}
 }

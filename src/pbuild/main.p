@@ -127,5 +127,7 @@ public int main(string[] args) {
 		printf("FAIL: Errors encountered trying to find and parse build scripts.\n");
 		pbuildCommand.help();
 	}
+	// Note: if the build files contain any 'after_pass' scripts, those will be exec'ed
+	// from inside this function, and it will not return.
 	return coordinator.run();
 }

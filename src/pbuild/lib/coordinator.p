@@ -24,6 +24,7 @@ import parasol:storage;
 import parasol:text.memDump;
 import parasol:thread;
 import parasol:types.Set;
+import native:linux;
 
 string MAKE_FILE = "make.pbld";
 
@@ -61,6 +62,7 @@ public class Coordinator extends CoordinatorVolatileData {
 	private ref<Test>[] _tests;
 	private string[] _onPassScripts;
 	private string[] _onPassDirs;
+	private string _afterPassScript;
 	private static Monitor _lock;
 	private static ref<thread.ThreadPool<boolean>> _workers;
 	private Set<string> _uniqueTests;
@@ -173,6 +175,8 @@ public class Coordinator extends CoordinatorVolatileData {
 				printf("  TEST %s\n", _tests[i].toString());
 			for (i in _onPassScripts)
 				printf("  PASS SCRIPT @ %s\n", _onPassDirs[i]);
+			if (_afterPassScript != null)
+				printf("  AFTER_PASS %s\n", _afterPassScript);
 		}
 
 		return true;
@@ -238,6 +242,9 @@ public class Coordinator extends CoordinatorVolatileData {
 				string onPassScript = t.onPassScript();
 				if (onPassScript != null)
 					addOnPassScript(buildDir, onPassScript);
+				string afterPassScript = t.afterPassScript();
+				if (afterPassScript != null)
+					addAfterPassScript(buildDir, afterPassScript);
 			}
 		}
 
@@ -263,6 +270,10 @@ public class Coordinator extends CoordinatorVolatileData {
 	public void addOnPassScript(string testDir, string script) {
 		_onPassScripts.append(script);
 		_onPassDirs.append(testDir);
+	}
+
+	public void addAfterPassScript(string testDir, string script) {
+		_afterPassScript.printf("( cd %s\n %s\n )\n", testDir, script);
 	}
 
 	public int run() {
@@ -352,6 +363,26 @@ public class Coordinator extends CoordinatorVolatileData {
 					printf("    %s   %s\n", _products[i].outcome(), _products[i].name());
 			printf("FAIL: Build contained failures.\n");
 		}
+		if (success) {
+			if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+				pointer<byte>[] args;
+				string s1 = "/bin/basj";
+				string s2 = "-cev";
+				args.append(s1.c_str());
+				args.append(s2.c_str());
+				string s = singleLine(_afterPassScript);
+				args.append(s.c_str());
+				args.append(null);
+				linux.execv("/bin/bash".c_str(), &args[0]);
+				// If the previous function returns, something went terribly wrong
+				printf("execv of bash failed. errno is %s\n", linux.strerror(linux.errno()));
+				success = false;
+			} else {
+				printf("FAIL: build scripts contain after_pass scripts - unsupported on this platform.\n");
+				success = false;
+			}
+		}
+
 		return success ? 0 : 1;
 	}
 
@@ -371,6 +402,18 @@ public class Coordinator extends CoordinatorVolatileData {
 		}
 //		printf("    Build %s success? %s\n", product.toString(), string(success));
 		product.future().post(success);
+	}
+
+	private static string singleLine(string s) {
+		string output;
+
+		for (i in s) {
+			if (s[i] == '\n')
+				output += " ; ";
+			else
+				output.append(s[i]);
+		}
+		return output;
 	}
 
 	public void declareFailure() {
