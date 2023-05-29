@@ -2,11 +2,13 @@
 
 BIN=$(dirname "`readlink -f \"$0\"`")
 
-VERSION=0.3.0
+VERSION=`$BIN/bin/pc --version`
 
 INSTALL=/usr/parasol/v$VERSION
 
-if [ "x--reinstanll" == "x$1" ] || [ "x-r" == "x$1" ]; then
+echo installing $BIN to $INSTALL
+
+if [ "x--reinstall" == "x$1" ] || [ "x-r" == "x$1" ]; then
 	echo Removing existing version $VERSION installed image.
 	sudo rm -rf $INSTALL
 	echo Version $VERSION removed
@@ -18,18 +20,27 @@ if [ -d /usr/parasol/v$VERSION ]; then
 	exit 1
 fi
 
-echo Building install package
+echo Extracting install package
 set -e
 sudo mkdir -p $INSTALL
-sudo cp -r $BIN/install-linux/* $INSTALL
+sudo bash -c "( cd $INSTALL; tar xf $BIN/install-lnx-64.tar.gz )"
 sudo rm /usr/parasol/latest
 sudo ln -s $INSTALL /usr/parasol/latest
 
 if [ -d /usr/local/bin ]; then
-    sudo ln -s /usr/parasol/latest/bin/pbuild /usr/local/bin/pbuild
-    sudo ln -s /usr/parasol/latest/bin/pc /usr/local/bin/pc
-    sudo ln -s /usr/parasol/latest/bin/pcontext /usr/local/bin/pcontext
-    sudo ln -s /usr/parasol/latest/bin/paradoc /usr/local/bin/paradoc
+	echo Defining common commands in /usr/local/bin '(if needed)'
+	if [ ! -e /usr/local/bin/pbuild ]; then
+	    sudo ln -s /usr/parasol/latest/bin/pbuild /usr/local/bin/pbuild
+	fi
+	if [ ! -e /usr/local/bin/pbuild ]; then
+	    sudo ln -s /usr/parasol/latest/bin/pc /usr/local/bin/pc
+	fi
+	if [ ! -e /usr/local/bin/pbuild ]; then
+	    sudo ln -s /usr/parasol/latest/bin/pcontext /usr/local/bin/pcontext
+	fi
+	if [ ! -e /usr/local/bin/pbuild ]; then
+	    sudo ln -s /usr/parasol/latest/bin/paradoc /usr/local/bin/paradoc
+	fi
 fi
 
 echo Version $VERSION installed as latest
