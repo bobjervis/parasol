@@ -14,8 +14,7 @@
    limitations under the License.
  */
 package(name: core:parasollanguage.org, preserveAnonymousUnits: true) {
-	file(name: *.p, src: src/lib)
-	file(name: root.p, src: lib)
+	file(name: *.p, src: runtime)
 	init(placement: first){
 		aa_memory.p
 		aa_thread.p
