@@ -24,6 +24,13 @@ echo Extracting install package
 set -e
 sudo mkdir -p $INSTALL
 sudo bash -c "( cd $INSTALL; tar xf $BIN/install-lnx-64.tar.gz )"
+sudo chmod +r -R $INSTALL
+sudo chmod +rx -R $INSTALL/bin
+sudo chmod +rx -R $INSTALL/template
+sudo chmod +rx -R $INSTALL/src
+sudo chmod +rx -R $INSTALL/src/*
+sudo chmod +rx -R $INSTALL/runtime
+
 sudo rm /usr/parasol/latest
 sudo ln -s $INSTALL /usr/parasol/latest
 
