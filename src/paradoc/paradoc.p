@@ -115,13 +115,11 @@ runtime.Arena arena;
 ref<CompileContext> compileContext;
 
 int main(string[] args) {
-	process.stdout.flush();
 	parseCommandLine(args);
 	outputFolder = finalArguments[0];
 
 //	printf("Configuring\n");
 	configureArena();
-		return 1;
 	compileContext = new CompileContext(&arena, paradoc.verboseOption.value, paradoc.logImportsOption.value);
 	if (!compileContext.loadRoot(false))
 		return 1;
@@ -567,18 +565,17 @@ enum Verb {
 }
 
 Verb[string] verbs;
-verbs["code"] = Verb.CODE;
-verbs["option"] = Verb.OPTION;
-verbs["paradoc"] = Verb.PARADOC;
-verbs["topic"] = Verb.TOPIC;
-verbs["level"] = Verb.LEVEL;
-verbs["link"] = Verb.LINK;
-verbs["doc-link"] = Verb.DOC_LINK;
 verbs["anchor"] = Verb.ANCHOR;
 verbs["code"] = Verb.CODE;
-verbs["grammar"] = Verb.GRAMMAR;
-verbs["production"] = Verb.PRODUCTION;
+verbs["doc-link"] = Verb.DOC_LINK;
 verbs["end-grammar"] = Verb.END_GRAMMAR;
+verbs["grammar"] = Verb.GRAMMAR;
+verbs["level"] = Verb.LEVEL;
+verbs["link"] = Verb.LINK;
+verbs["option"] = Verb.OPTION;
+verbs["paradoc"] = Verb.PARADOC;
+verbs["production"] = Verb.PRODUCTION;
+verbs["topic"] = Verb.TOPIC;
 
 string[string] formattingOptions;
 

@@ -1070,8 +1070,8 @@ public string formattedLocation(address ip, int offset, boolean locationIsExact)
 		string result;
 
 		//ref<FileStat> file = ref<FileStat>(sl.file);
-		ref<compiler.Unit> file = sl.file;
-		result.printf("%s %d", storage.makeCompactPath(file.filename(), "foo"), file.scanner().lineNumber(sl.location) + 1);
+		ref<runtime.SourceFile> file = sl.file;
+		result.printf("%s %d", storage.makeCompactPath(file.filename(), "foo"), file.lineNumber(sl.location) + 1);
 		if (offset != 0)
 			result.printf(" (@%x)", offset);
 		return result;

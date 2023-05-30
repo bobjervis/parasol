@@ -25,8 +25,8 @@ import parasol:compiler.Type;
 import parasol:compiler.OrdinalMap;
 import parasol:compiler.Unit;
 import parasol:context;
+import parasol:runtime;
 import parasol:runtime.Arena;
-import parasol:runtime.SourceLocation;
 import native:C;
 
 public class Disassembler {
@@ -55,7 +55,7 @@ public class Disassembler {
 	private pointer<ref<Symbol>> _dataMap;
 	private ref<ref<Scope>[]> _functionMap;
 	private int _dataMapLength;
-	private pointer<SourceLocation> _sourceLocations;
+	private pointer<runtime.SourceLocation> _sourceLocations;
 	private int _sourceLocationsCount;
 	private ref<ref<ClassScope>[]> _vtables;
 	private ref<OrdinalMap> _ordinalMap;
@@ -90,7 +90,7 @@ public class Disassembler {
 		_ordinalMap = om;
 	}
 
-	void setSourceLocations(pointer<SourceLocation> sourceLocations, int sourceLocationsCount) {
+	void setSourceLocations(pointer<runtime.SourceLocation> sourceLocations, int sourceLocationsCount) {
 		_sourceLocations = sourceLocations;
 		_sourceLocationsCount = sourceLocationsCount;
 	}
@@ -785,10 +785,10 @@ public class Disassembler {
 		boolean printedSource;
 		while (_sourceIndex < _sourceLocationsCount) {
 			if (_sourceLocations[_sourceIndex].offset <= loc) {
-				ref<Unit> file = _sourceLocations[_sourceIndex].file;
+				ref<runtime.SourceFile> file = _sourceLocations[_sourceIndex].file;
 				if (!printedSource)
 					printf("\n");
-				printf("  %s %d\n", file.filename(), file.scanner().lineNumber(_sourceLocations[_sourceIndex].location) + 1);
+				printf("  %s %d\n", file.filename(), file.lineNumber(_sourceLocations[_sourceIndex].location) + 1);
 				if (!printedSource)
 					printf("\n");
 				printedSource = true;

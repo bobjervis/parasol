@@ -8,7 +8,7 @@ Parasol is compiled and run by entering shell commands.
 Use is:
 
 {@code
-    <b>pc</b> [ <i>options</i> ... ] <filename> [ <i>arguments</i> ... ]
+    <b>pc</b> [ <i>options</i> ... ] <i>filename</i> [ <i>arguments</i> ... ]
 }
 
 <h4>Options:</h4>
@@ -42,7 +42,7 @@ Use is:
 	</td></tr>
 <tr><td>-?</td><td>--help</td><td>Displays a siplified version of this 
 						documentataion.</td></tr>
-<tr><td></td><td>--logImports</td><td>Log all import processing.</td></tr>
+<tr><td></td><td><pre>--logImports</pre></td><td>Log all import processing.</td></tr>
 <tr><td>-p</td><td>--profile</td><td>Produce a profile report, wriitng the profile data to the
 						path provided as this argument value.</td></tr>
 <tr><td></td><td>--pxi</td><td>Writes compiled output to the given file. Does not execute

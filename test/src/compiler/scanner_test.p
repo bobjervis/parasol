@@ -128,7 +128,7 @@ boolean scan(string filename) {
 		case ANNOTATION:
 			printf("'%s' ", ti.value);
 		}
-		printf("@ %d(%d)\n", scanner.lineNumber(ti.location) + 1, ti.location.offset);
+		printf("@ %d(%d)\n", fs.lineNumber(ti.location) + 1, ti.location.offset);
 		tokens.append(ti);
 		// TODO: The following line is hacky, hacky, hacky - should not be needed.
 		C.memset(&ti, 0, ti.bytes);
@@ -150,7 +150,9 @@ boolean scan(string filename) {
 			endloc = reference.length();
 		string quot = reference.substr(loc, endloc);
 		if (t != tokens[i].token) {
-			printf("[%4d] Tokens (%s:%s) {%s} do not match at reported line(location) %d(%d)\n", i, string(tokens[i].token), string(t), quot, scanner.lineNumber(tokens[i].location) + 1, tokens[i].location.offset);
+			printf("[%4d] Tokens (%s:%s) {%s} do not match at reported line(location) %d(%d)\n", i, 
+						string(tokens[i].token), string(t), quot, fs.lineNumber(tokens[i].location) + 1, 
+						tokens[i].location.offset);
 			return false;
 		}
 		switch (t) {
@@ -162,12 +164,15 @@ boolean scan(string filename) {
 		case ANNOTATION:
 			string s = nscanner.value();
 			if (tokens[i].value != s) {
-				printf("[%4d] Token %s does not match value: %s:%s {%s} %d(%d)\n", i, string(t), tokens[i].value, s, quot, scanner.lineNumber(tokens[i].location) + 1, tokens[i].location.offset);
+				printf("[%4d] Token %s does not match value: %s:%s {%s} %d(%d)\n", i, string(t), 
+						tokens[i].value, s, quot, fs.lineNumber(tokens[i].location) + 1, tokens[i].location.offset);
 				return false;
 			}
 		}
 		if (tokens[i].location.offset != nscanner.location().offset) {
-			printf("[%4d] Token %s reports different location: %d(%d) : %d(%d)\n", i, string(t), scanner.lineNumber(tokens[i].location) + 1, tokens[i].location.offset, scanner.lineNumber(nscanner.location()) + 1, nscanner.location().offset);
+			printf("[%4d] Token %s reports different location: %d(%d) : %d(%d)\n", i, string(t), 
+				fs.lineNumber(tokens[i].location) + 1, tokens[i].location.offset, 
+				fs.lineNumber(nscanner.location()) + 1, nscanner.location().offset);
 			return false;
 		}
 		if (scannerTestCommand.verboseOption.value) {
@@ -178,11 +183,11 @@ boolean scan(string filename) {
 			case CHARACTER:
 			case STRING:
 			case ANNOTATION:
-				printf("[%4d] %s '%s' %d(%d)\n", i, string(t), tokens[i].value, scanner.lineNumber(nscanner.location()) + 1, nscanner.location().offset);
+				printf("[%4d] %s '%s' %d(%d)\n", i, string(t), tokens[i].value, fs.lineNumber(nscanner.location()) + 1, nscanner.location().offset);
 				break;
 				
 			default:
-				printf("[%4d] %s %d(%d)\n", i, string(t), scanner.lineNumber(nscanner.location()) + 1, nscanner.location().offset);
+				printf("[%4d] %s %d(%d)\n", i, string(t), fs.lineNumber(nscanner.location()) + 1, nscanner.location().offset);
 			}
 		}
 	}
@@ -206,7 +211,7 @@ void dumpTokens(ref<TokenInfo[]> tokens, ref<Scanner> scanner) {
 		case ANNOTATION:
 			printf("'%s' ", (*tokens)[i].value);
 		}
-		printf("@ %d(%d)\n", scanner.lineNumber((*tokens)[i].location) + 1, (*tokens)[i].location.offset);
+		printf("@ %d(%d)\n", scanner.file().lineNumber((*tokens)[i].location) + 1, (*tokens)[i].location.offset);
 	}	
 }
 

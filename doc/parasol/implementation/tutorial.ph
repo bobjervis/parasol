@@ -1,7 +1,7 @@
 
 <h2>{@level 0 GETTING STARTED}</h2>
 
-<h3> Hello World
+<h3> Hello World </h3>
 
 All happy programming language tutorials start the same way, with a program to print the phrase 'Hello World'.
 While trivial, it also illustrates the level of effort you will need to do the minimum work in Parasol and you 
@@ -30,9 +30,9 @@ That's it.
 A Parasol program has one <i>main file</i> that is designated on the command-line.
 That file contains at least one statement, but can contain as much code as you like.
 <p>
-A number of symbols, like {@code printf}, are defined for all Parasol source files.
-They provide a number of primitive data types, like {@code int} for a 32-bit integer 
-and a small number of functions like {@code printf}.
+A number of symbols, like <span class=code>printf</span>, are defined for all Parasol source files.
+They provide a number of primitive data types, like <span class=code>int</span> for a 32-bit integer 
+and a small number of functions like <span class=code>printf</span>.
 
 <h3>Accessing Library Code and System Resources</h3>
 
@@ -64,17 +64,17 @@ The string you assign cannot be anything.
 It must be consistent with the domain name syntax of DNS.
 <p>
 The path of a Parasol namespace is a set of one or more identifiers separated by periods.
-Most namespaces use a single identifier, but a hieraarchy is formed when mulitple 
+Most namespaces use a single identifier, but a hierarchy is formed when mulitple 
 identifiers are used in a path.
 <p>
-For example, the Parasol runtime contains both a {@code math} and a {@code math.regression} namespace.
-The {@code math.regression} namespace contains a symbol, {@code LinearRegression}.
+For example, the Parasol runtime contains both a <span class=code>math</span> and a 
+<span class=code>math.regression</span> namespace.
+The <span class=code>math.regression</span> namespace contains a symbol, <span class=code>LinearRegression</span>.
 Thus, depending on which symbol exactly you import, you may refer to the same symbol as:
 
-{@code
-    math.regression.LinearRegression
-	regression.LinearRegression
-	LinearRegression
+{@code     math.regression.LinearRegression
+    regression.LinearRegression
+    LinearRegression
 }
 
 There are several special reserved namespaces. 
@@ -85,10 +85,10 @@ The following namespace domains are currently used in some Parasl language names
 	<tr><th>Name</th><th>Description</th></tr>
 	<tr><td>{@code native}</td><td>
 			Namespaces in this domain describe non-Parasol libraries
-			that are fundamental to the opeeration of the Parasol
+			that are fundamental to the operation of the Parasol
 			language runtime.
-			They may be portable libraries, such as the {@code native:C} namespace,
-			or non-portable libraries, such as the {@code native:linux} namespace.
+			They may be portable libraries, such as the <span class=code>native:C</span> namespace,
+			or non-portable libraries, such as the <span class=code>native:linux</span> namespace.
 			<p>
 			Some Parasol implementations may exclude any or all native namespaces.
 			In principle, on a system that has no C compiler, it may be possible to 
@@ -103,8 +103,8 @@ The following namespace domains are currently used in some Parasl language names
 
 <h4>Imports</h4>
 
-C++ and C use the {@code extern} declaration to name a symbol that is defined elsewhere.
+C++ and C use the <span class=code>extern</span> declaration to name a symbol that is defined elsewhere.
 Parasol, Java, Python and Go use import to do the same thing.
-Each language imposes 
+Each language imposes slightly different syntax and rules for these statements. 
 
 

@@ -431,7 +431,7 @@ public class Package extends Product {
 			if (node.location().isInFile()) {
 				ref<compiler.Scanner> scanner = file.scanner();
 				// The old scanner (which is already closed, so it cannot be used to re-scan tokens) has line number info.
-				int lineNumber = scanner.lineNumber(node.location());
+				int lineNumber = file.lineNumber(node.location());
 
 				byte commentClass = 'g';
 				scanner = file.newScanner();

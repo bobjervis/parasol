@@ -21,8 +21,8 @@ namespace parasol:runtime;
 import native:C;
 import native:linux;
 import native:windows;
-import parasol:context;
 import parasol:compiler;
+import parasol:context;
 import parasol:exception;
 import parasol:thread.Thread;
 import parasol:x86_64.X86_64SectionHeader;
@@ -40,7 +40,7 @@ import parasol:memory;
  *
  * Note: Major Release == 0 means this is 'unreleased' and any public API can change at any moment.
  */
-public string RUNTIME_VERSION = "0.3.0";
+public string RUNTIME_VERSION = "0.4.0";
 
 /**
  * This is a special variable used to control compile-time conditional compilation.
@@ -172,10 +172,61 @@ public void freeRegion(address region, long length) {
 }
 /** @ignore */
 public class SourceLocation {
-	public ref<compiler.Unit>	file;			// Source file containing this location
+	public ref<SourceFile>		file;			// Source file containing this location
 	public compiler.Location	location;		// Source byte offset
 	public int					offset;			// Code location
 }
+
+public class SourceFile {
+	private string _filename;
+	private compiler.Location[] _lines;
+	private int _baseLineNumber;				// Line number of first character in scanner input.
+
+	public SourceFile(string filename) {
+		_filename = filename;
+	}
+
+	public SourceFile(string filename, int baseLineNumber) {
+		_filename = filename;
+		_baseLineNumber = baseLineNumber;
+	}
+
+	public string filename() {
+		return _filename;
+	}
+
+	public void append(compiler.Location location) {
+		_lines.append(location);
+	}
+
+	public int lineNumber(compiler.Location location) {
+		int x = _lines.binarySearchClosestGreater(location);
+		return _baseLineNumber + x;
+	}
+}
+	
+public class SourceOffset {
+	public static SourceOffset OUT_OF_FILE(-1);
+
+	public int		offset;
+	
+	public SourceOffset() {
+	}
+	
+	public SourceOffset(int v) {
+		offset = v;
+	}
+
+	public int compare(SourceOffset loc) {
+		return offset - loc.offset;
+	}
+
+	public boolean isInFile() {
+		return offset != OUT_OF_FILE.offset;
+	}
+}
+
+
 /** @ignore */
 public ref<SourceLocation> getSourceLocation(address ip, boolean locationIsExact) {
 	pointer<byte> lowCode = pointer<byte>(lowCodeAddress());

@@ -1462,7 +1462,7 @@ public class Scope {
 		printf("%p %s %s", this, string(_storageClass), isTemplateFunction() ? "template function " : "");
 		if (_definition != null) {
 			ref<Unit> fs = unit();
-			printf("%s %d: ", fs.filename(), fs.scanner().lineNumber(_definition.location()) + 1);
+			printf("%s %d: ", fs.filename(), fs.lineNumber(_definition.location()) + 1);
 			
 			printf("%s %s", string(_definition.op()), _definition.assignTypesBoundary() ? "type boundary " : "");
 			if (_definition.op() == Operator.FUNCTION) {
@@ -1484,7 +1484,7 @@ public class Scope {
 		string result;
 		ref<Unit> fs = unit();
 		if (fs != null)
-			result.printf("%s %d: ", fs.filename(), fs.scanner().lineNumber(loc) + 1);
+			result.printf("%s %d: ", fs.filename(), fs.lineNumber(loc) + 1);
 		else
 			result.printf("<no-file> @%d: ", loc.offset);
 		return result;

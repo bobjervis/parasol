@@ -1,6 +1,6 @@
 dir(path: test/src) {
 	dir(path: compiler) {
-		run(filename: scanner_test.p, arguments: src/lib/x86_64.p)
+		run(filename: scanner_test.p, arguments: runtime/x86_64.p)
 	}
 	dir(path: http) {
 		run(filename: base64test.p)
@@ -105,7 +105,7 @@ dir(path: test/src) {
 		run(filename: static_members.p)
 		run(filename: static_method_call.p)
 		run(filename: string_switch_test.p)
-		run(filename: string16_test_1.p, arguments: src/lib/x86_64.p)
+		run(filename: string16_test_1.p, arguments: runtime/x86_64.p)
 		run(filename: string16_test_1.p, arguments: test/scripts/parasol_tests.ets)
 		run(filename: string16_test_2.p)
 		run(filename: super_call.p)

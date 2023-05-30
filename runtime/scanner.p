@@ -151,7 +151,6 @@ public enum Token {
 	WHILE,
 
 	// Pseudo-tokens not actually returned by a Scanner
-
 	EMPTY,
 	MAX_TOKEN //= EMPTY
 }
@@ -217,11 +216,9 @@ public class StringScanner extends Scanner {
 
 public class Scanner {
 	private Token _pushback;
-	private Location[] _lines;
 	private string _value;
 	private ref<Unit> _file;
 	private boolean _utfError;
-	private int _baseLineNumber;		// Line number of first character in scanner input.
 	private boolean _paradoc;			// Parse paradoc doclet's and make them available to the parser.
 	private ref<Doclet> _doclet;		// The last successfully parsed doclet during a scan.
 	/*
@@ -269,8 +266,10 @@ public class Scanner {
 	protected Scanner(int baseLineNumber, ref<Unit> file) {
 		_pushback = Token.EMPTY;
 		_lastByte = -1;
-		_baseLineNumber = baseLineNumber;
-		_file = file;
+		if (file == null)
+			_file = new Unit("<inline>", baseLineNumber);
+		else
+			_file = file;
 	}
 
 	public boolean opened() {
@@ -315,7 +314,7 @@ public class Scanner {
 				continue;
 
 			case	'\n':
-				_lines.append(_location);
+				_file.append(_location);
 				continue;
 
 			case	0x0b:
@@ -521,7 +520,7 @@ public class Scanner {
 					for (;;) {
 						c = getc();
 						if (c == '\n') {
-							_lines.append(_location);
+							_file.append(_location);
 							break;
 						}
 						if (c == -1)
@@ -573,7 +572,7 @@ public class Scanner {
 							} else
 								ungetc();
 						} else if (c == '\n')
-							_lines.append(cursor());
+							_file.append(cursor());
 					}
 					continue;
 				}
@@ -962,7 +961,7 @@ public class Scanner {
 					break;
 
 				case	'\n':
-					_lines.append(_location);
+					_file.append(_location);
 					break;
 
 				default:
@@ -1002,7 +1001,7 @@ public class Scanner {
 			c = getc();
 		}
 		if (c == '\n') {
-			_lines.append(location);
+			_file.append(location);
 			c = getc();
 		}
 		ungetc();
@@ -1045,7 +1044,7 @@ public class Scanner {
 				continue;
 
 			case '\n':
-				_lines.append(location);
+				_file.append(location);
 				break;
 
 			case '\\':
@@ -1134,7 +1133,7 @@ public class Scanner {
 						else if (c == '\n') {
 							atStartOfLine = true;
 							encoder.encode(c);
-							_lines.append(location);
+							_file.append(location);
 							continue;
 						} else if (atStartOfLine) {
 							if (c == ' ' || c == '\t')
@@ -1291,6 +1290,10 @@ public class Scanner {
 		_pushback = t;
 	}
 	
+	public ref<Unit> file() {
+		return _file;
+	}
+
 	public substring value() {
 		return _value;
 	}
@@ -1301,11 +1304,6 @@ public class Scanner {
 
 	public Location location() { 
 		return _location; 
-	}
-
-	public int lineNumber(Location location) {
-		int x = _lines.binarySearchClosestGreater(location);
-		return _baseLineNumber + x;
 	}
 	/*
 	 * Get the next Unicode code point from the input.

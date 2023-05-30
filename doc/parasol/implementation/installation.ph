@@ -54,6 +54,6 @@ different place.
 </pre>
 
 <p>
-The script may prompt you for your root password to accomplish the install using {@code sudo), if you 
+The script may prompt you for your root password to accomplish the install using {@code sudo}, if you 
 haven't entered it recently.
 

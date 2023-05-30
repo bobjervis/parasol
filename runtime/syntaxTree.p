@@ -444,9 +444,9 @@ public class SyntaxTree {
 
 	public string sourceLine(Location location) {
 		if (_filename != null)
-			return storage.makeCompactPath(_filename, "foo") + " " + string(_scanner.lineNumber(location) + 1);
+			return storage.makeCompactPath(_filename, "foo") + " " + string(_scanner.file().lineNumber(location) + 1);
 		else
-			return "inline " + string(_scanner.lineNumber(location) + 1);
+			return "inline " + string(_scanner.file().lineNumber(location) + 1);
 	}
 }
 
@@ -3799,7 +3799,7 @@ public class Node {
 			ref<Node> n = compileContext.popLiveTemp(liveCount);
 			if (n == null) {
 				ref<Unit> file = compileContext.current().unit();
-				printf("Expression has live symbols: %s %d\n", file.filename(), file.scanner().lineNumber(location()) + 1);
+				printf("Expression has live symbols: %s %d\n", file.filename(), file.lineNumber(location()) + 1);
 				print(4);
 				printf("Suspect live symbol:\n");
 				compileContext.getLiveSymbol(compileContext.liveSymbolCount() - 1).print(4);

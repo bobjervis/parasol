@@ -2425,8 +2425,7 @@ public class DomainForest extends VolatileDomainForest {
 
 /**
  */
-public class Unit {
-	private string	_filename;
+public class Unit extends runtime.SourceFile {
 	private int _prefixLength;			// The portion of the filename that contains the package directory (including the trailing slash)
 	private boolean _parsed;
 	private boolean _imported;
@@ -2442,17 +2441,22 @@ public class Unit {
 	private ref<Scanner> _scanner;
 
 	public Unit(string f, string packageDir) {
-		_filename = f;
+		super(f);
 		_prefixLength = packageDir.length() + 1;
 	}
 
 	public Unit(string f, string packageDir, boolean imported) {
-		_filename = f;
+		super(f);
 		_prefixLength = packageDir.length() + 1;
 		_imported = imported;
 	}
 
 	public Unit() {
+		super(null);
+	}
+
+	public Unit(string name, int baseLineNumber) {
+		super(name, baseLineNumber);
 	}
 
 	~Unit() {
@@ -2489,7 +2493,7 @@ public class Unit {
 	}
 
 	public boolean setSource(string source) {
-		if (_filename != null)
+		if (filename() != null)
 			return false;
 		_source = source;
 		return true;
@@ -2613,15 +2617,11 @@ public class Unit {
 		return _parsed;
 	}
 
-	public string filename() {
-		return _filename; 
-	}
-
 	public string packageFilename() {
-		if (_filename == null)
+		if (filename() == null)
 			return null;
 		else
-			return _filename.substr(_prefixLength);
+			return filename().substr(_prefixLength);
 	}
 
 	public string source() {
@@ -2672,7 +2672,7 @@ public class Unit {
 			printf("%s :", filename()); 
 			printf(" %s\n", comment.message());
 		} else {
-			int lineNumber = _scanner.lineNumber(node.location());
+			int lineNumber = super.lineNumber(node.location());
 			if (lineNumber >= 0)
 				printf("%s %d: %s\n", filename(), lineNumber + 1, comment.message());
 			else
@@ -2695,7 +2695,7 @@ public class Unit {
 	}
 
 	public void print() {
-		printf("%s %s\n", _parsed ? "parsed" : "      ", _filename);
+		printf("%s %s\n", _parsed ? "parsed" : "      ", filename());
 	}
 }
 
