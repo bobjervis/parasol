@@ -15,11 +15,13 @@
  */
 namespace parasol:compiler;
 
+import parasol:runtime;
+
 public class Binary extends Node {
 	private ref<Node> _left;
 	private ref<Node> _right;
 
-	Binary(Operator op, ref<Node> left, ref<Node> right, Location location) {
+	Binary(Operator op, ref<Node> left, ref<Node> right, runtime.SourceOffset location) {
 		super(op, location);
 		_left = left;
 		_right = right;

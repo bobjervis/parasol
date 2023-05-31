@@ -29,7 +29,6 @@ import parasol:compiler.FIRST_USER_METHOD;
 import parasol:compiler.FlagsInstanceType;
 import parasol:compiler.FunctionType;
 import parasol:compiler.InterfaceImplementationScope;
-import parasol:compiler.Location;
 import parasol:compiler.Lock;
 import parasol:compiler.MessageId;
 import parasol:compiler.Node;
@@ -902,7 +901,7 @@ class X86_64Encoder extends Target {
 			_emitting = cs;
 		}
 
-		void emitSourceLocation(ref<Unit> file, Location location, ref<X86_64Encoder> encoder) {
+		void emitSourceLocation(ref<Unit> file, runtime.SourceOffset location, ref<X86_64Encoder> encoder) {
 			ensureCodeSegment(encoder);
 	
 			runtime.SourceLocation loc = {
@@ -3881,7 +3880,7 @@ class X86_64Encoder extends Target {
 		return _t.stackDepth();
 	}
 	
-	void emitSourceLocation(ref<Unit> file, Location location) {
+	void emitSourceLocation(ref<Unit> file, runtime.SourceOffset location) {
 		_f.emitSourceLocation(file, location, this);
 	}
 	

@@ -15,6 +15,7 @@
  */
 namespace parasol:compiler;
 
+import parasol:runtime;
 import native:C;
 
 public class Reference extends Node {
@@ -22,7 +23,7 @@ public class Reference extends Node {
 	private boolean _definition;
 	private int _offset;
 	
-	Reference(ref<Variable> v, int offset, boolean definition, Location location) {
+	Reference(ref<Variable> v, int offset, boolean definition, runtime.SourceOffset location) {
 		super(Operator.VARIABLE, location);
 		type = v.type;
 		_variable = v;
@@ -30,7 +31,7 @@ public class Reference extends Node {
 		_offset = offset;
 	}
 
-	Reference(ref<Type> type, Location location) {
+	Reference(ref<Type> type, runtime.SourceOffset location) {
 		super(Operator.ELLIPSIS_DATA, location);
 		this.type = type;
 	}
@@ -87,12 +88,12 @@ public class Identifier extends Node {
 	private boolean _definition;
 	private ref<Symbol> _symbol;
 
-	Identifier(substring value, Location location) {
+	Identifier(substring value, runtime.SourceOffset location) {
 		super(Operator.IDENTIFIER, location);
 		_value = value;
 	}
 
-	Identifier(ref<Symbol> symbol, Location location) {
+	Identifier(ref<Symbol> symbol, runtime.SourceOffset location) {
 		super(Operator.IDENTIFIER, location);
 		_symbol = symbol;
 	}
@@ -531,13 +532,13 @@ public class Selection extends Node {
 	private ref<Symbol> _symbol;
 	private boolean _indirect;
 
-	Selection(ref<Node> left, substring name, Location location) {
+	Selection(ref<Node> left, substring name, runtime.SourceOffset location) {
 		super(Operator.DOT, location);
 		_left = left;
 		_name = name;
 	}
 
-	Selection(ref<Node> left, ref<Symbol> symbol, boolean indirect, Location location) {
+	Selection(ref<Node> left, ref<Symbol> symbol, boolean indirect, runtime.SourceOffset location) {
 		super(Operator.DOT, location);
 		_left = left;
 		_symbol = symbol;

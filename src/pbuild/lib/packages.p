@@ -437,7 +437,7 @@ public class Package extends Product {
 				scanner = file.newScanner();
 				scanner.seek(node.location());
 				scanner.next();
-				compiler.Location endLoc = scanner.cursor();
+				runtime.SourceOffset endLoc = scanner.cursor();
 				delete scanner;
 				printf("={<%c%d %d %d %d %s>}=: %s\n", commentClass, lineNumber + 1, 
 								node.location().offset,

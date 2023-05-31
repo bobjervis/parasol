@@ -16,6 +16,7 @@
 namespace parasol:compiler;
 
 import parasol:context;
+import parasol:runtime;
 import parasol:storage;
 import parasol:text;
 import parasol:stream.EOF;
@@ -177,7 +178,7 @@ class FileScanner extends Scanner {
 			return -1;
 	}
 
-	public void seek(Location location) {
+	public void seek(runtime.SourceOffset location) {
 		_file.seek(location.offset, storage.Seek.START);
 		super.seek(location);
 	}
@@ -208,7 +209,7 @@ public class StringScanner extends Scanner {
 			return -1;
 	}
 
-	public void seek(Location location) {
+	public void seek(runtime.SourceOffset location) {
 		_cursor = location.offset;
 		super.seek(location);
 	}
@@ -224,7 +225,7 @@ public class Scanner {
 	/*
 	 * Location of the last token read.
 	 */
-	private Location _location;
+	private runtime.SourceOffset _location;
 	/*
 	 * _lastChar is the last Unicode code point value returned by getc
 	 */
@@ -347,7 +348,7 @@ public class Scanner {
 				return Token.ERROR;
 
 			case	' ':
-				Location spLoc = _location;
+				runtime.SourceOffset spLoc = _location;
 				_location = cursor();
 				c = getc();
 				if (c == '<') {
@@ -990,7 +991,7 @@ public class Scanner {
 		boolean inineTag;
 		text.StringWriter sw(&_doclet.text);
 		text.UTF8Encoder encoder(&sw);
-		Location location = cursor();
+		runtime.SourceOffset location = cursor();
 		int c = getc();
 		while (c == ' ' || c == '\t') {
 			location = cursor();
@@ -1279,7 +1280,7 @@ public class Scanner {
 		return d;
 	}
 
-	public void seek(Location location) {
+	public void seek(runtime.SourceOffset location) {
 		_pushback = Token.EMPTY;
 		_lastByte = -1;
 		_lastChar = 0;
@@ -1302,7 +1303,7 @@ public class Scanner {
 		return _location.offset;
 	}
 
-	public Location location() { 
+	public runtime.SourceOffset location() { 
 		return _location; 
 	}
 	/*
@@ -1361,8 +1362,8 @@ public class Scanner {
 	 * This function returns the current 'cursor' location of the
 	 * Scanner.  This value is the offset of the next byte to be read
 	 */
-	public Location cursor() {
-		return Location(_cursor);
+	public runtime.SourceOffset cursor() {
+		return runtime.SourceOffset(_cursor);
 	}
 
 	int getMoreBytes(int valueSoFar, int extraBytes) {

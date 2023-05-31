@@ -32,7 +32,6 @@ import parasol:pxi;
 import parasol:compiler.Block;
 import parasol:compiler.CompileContext;
 import parasol:compiler.containsErrors;
-import parasol:compiler.Location;
 import parasol:compiler.MemoryPool;
 import parasol:compiler.Message;
 import parasol:compiler.MessageId;
@@ -769,7 +768,7 @@ class RunObject extends script.Object {
 }
 
 boolean checkInOrder(ref<Node> n, string source) {
-	Location loc;
+	runtime.SourceOffset loc;
 	boolean success = true;
 
 	loc.offset = 0;
@@ -797,7 +796,7 @@ TraverseAction checkAscending(ref<Node> n, address data) {
 	if (n.op() == Operator.CAST)
 		return TraverseAction.CONTINUE_TRAVERSAL;
 		
-	ref<Location> locp = ref<Location>(data);
+	ref<runtime.SourceOffset> locp = ref<runtime.SourceOffset>(data);
 
 	if (locp.offset > n.location().offset) {
 		return TraverseAction.ABORT_TRAVERSAL;
@@ -810,7 +809,7 @@ static TraverseAction checkDescending(ref<Node> n, address data) {
 	if (n.op() == Operator.CAST)
 		return TraverseAction.CONTINUE_TRAVERSAL;
 
-	ref<Location> locp = ref<Location>(data);
+	ref<runtime.SourceOffset> locp = ref<runtime.SourceOffset>(data);
 
 	if (locp.offset < n.location().offset) {
 		return TraverseAction.ABORT_TRAVERSAL;

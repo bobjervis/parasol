@@ -611,7 +611,7 @@ public class StubOverload extends OverloadInstance {
 			_type = scope.type = compileContext.pool().newFunctionType(returns, parameters, false);
 
 			ref<SyntaxTree> tree = compileContext.tree();
-			Location loc = _interfaceType.definition().location();
+			runtime.SourceOffset loc = _interfaceType.definition().location();
 			ref<Node> n = tree.newIdentifier("object", loc);
 			scope.define(Operator.PUBLIC, StorageClass.PARAMETER, null, n, parameters[0], compileContext.pool());
 			n = tree.newIdentifier("params", loc);
@@ -638,7 +638,7 @@ public class ProxyOverload extends OverloadInstance {
 			ref<Symbol> sym = compileContext.forest().getSymbol("parasol", "rpc.Client", compileContext);
 			if (sym != null) {
 	//			printf(" --- assignThisType(%s) ---\n", _interfaceType.signature());
-				Location loc = _interfaceType.definition().location();
+				runtime.SourceOffset loc = _interfaceType.definition().location();
 				ref<SyntaxTree> tree = compileContext.tree();
 
 				ref<Type>[] returns = [ _interfaceType ];

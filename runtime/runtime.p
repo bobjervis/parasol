@@ -21,7 +21,6 @@ namespace parasol:runtime;
 import native:C;
 import native:linux;
 import native:windows;
-import parasol:compiler;
 import parasol:context;
 import parasol:exception;
 import parasol:thread.Thread;
@@ -173,13 +172,13 @@ public void freeRegion(address region, long length) {
 /** @ignore */
 public class SourceLocation {
 	public ref<SourceFile>		file;			// Source file containing this location
-	public compiler.Location	location;		// Source byte offset
+	public SourceOffset			location;		// Source byte offset
 	public int					offset;			// Code location
 }
 
 public class SourceFile {
 	private string _filename;
-	private compiler.Location[] _lines;
+	private SourceOffset[] _lines;
 	private int _baseLineNumber;				// Line number of first character in scanner input.
 
 	public SourceFile(string filename) {
@@ -195,11 +194,11 @@ public class SourceFile {
 		return _filename;
 	}
 
-	public void append(compiler.Location location) {
+	public void append(SourceOffset location) {
 		_lines.append(location);
 	}
 
-	public int lineNumber(compiler.Location location) {
+	public int lineNumber(SourceOffset location) {
 		int x = _lines.binarySearchClosestGreater(location);
 		return _baseLineNumber + x;
 	}

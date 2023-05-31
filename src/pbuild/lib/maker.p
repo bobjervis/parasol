@@ -17,7 +17,6 @@ namespace parasol:pbuild;
 
 import parasol:compiler;
 import parasol:compiler.Commentary;
-import parasol:compiler.Location;
 import parasol:compiler.Node;
 import parasol:compiler.Scanner;
 import parasol:compiler.Target;

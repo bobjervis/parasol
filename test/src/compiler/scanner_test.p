@@ -14,10 +14,10 @@
    limitations under the License.
  */
 import parasol:process;
+import parasol:runtime;
 import parasol:storage;
 import parasol:random.Random;
 import parasol:compiler.Unit;
-import parasol:compiler.Location;
 import parasol:compiler.Scanner;
 import parasol:compiler.Token;
 import native:C;
@@ -79,7 +79,7 @@ int main(string[] args) {
 
 class TokenInfo {
 	public Token token;
-	public Location location;
+	public runtime.SourceOffset location;
 	public string value;
 }
 

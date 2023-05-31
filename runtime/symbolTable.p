@@ -1480,7 +1480,7 @@ public class Scope {
 		printf("\n");
 	}
 	
-	public string sourceLocation(Location loc) {
+	public string sourceLocation(runtime.SourceOffset loc) {
 		string result;
 		ref<Unit> fs = unit();
 		if (fs != null)
