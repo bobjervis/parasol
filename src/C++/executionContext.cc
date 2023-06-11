@@ -15,19 +15,23 @@
  */
 #include "executionContext.h"
 #include <string.h>
+#include <stdlib.h>
 #if defined(__WIN64)
 #include <windows.h>
 #endif
 
 namespace parasol {
 
-ExecutionContext::ExecutionContext(pxi::X86_64SectionHeader *pxiHeader, void *image, ExecutionContext *outer) {
+ExecutionContext::ExecutionContext(pxi::X86_64SectionHeader *pxiHeader, void *image, 
+								   ExecutionContext *outer) {
 	_exception = null;
 	_stackTop = null;
 	_pxiHeader = pxiHeader;
 	_image = image;
+	_runtimeParameters = (void**)calloc(ALLOC_INCREMENT, sizeof (void*));
+	_runtimeParametersCount = ALLOC_INCREMENT;
 	if (outer != null) {
-		for (int i = 0; i < outer->_runtimeParameters.size(); i++)
+		for (int i = 0; i < outer->_runtimeParametersCount; i++)
 			setRuntimeParameter(i, outer->getRuntimeParameter(i));
 	}
 }

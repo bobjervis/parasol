@@ -75,6 +75,12 @@ public enum Target {
 	 */
 	X86_64_WIN,	
 	/**
+	 * This is an Intel x64-64 machine instruction set running the Linux operating system.
+	 * The section includes source locations maps (used in stack traces and useful for a
+	 * debugger
+	 */
+	X86_64_LNX_SRC,
+	/**
 	 * This is not an actual target, but one greater than the maximum valid target value.
 	 */
 	MAX_TARGET
@@ -169,7 +175,27 @@ public void freeRegion(address region, long length) {
 		C.free(region);
 	}
 }
-/** @ignore */
+/**
+ * SourceMap - in a pxi x86-64 section, source locations appear at the end of the section,
+ * After relocations
+ * 
+ * SourceMaps come into existence two ways:
+ * <ul>
+ *    <li> Through the compiler running and building out the data structures as a side-effect
+ *         of code generation.
+ *    <li> From being loaded out of a PXI file image.
+ * </ul>
+ *
+ * 
+ */
+public class SourceMap {
+	public int locationCount;
+	public pointer<int> codeAddress;
+	public pointer<int> fileIndex;
+	public pointer<int> fileOffset;
+}
+
+
 public class SourceLocation {
 	public ref<SourceFile>		file;			// Source file containing this location
 	public SourceOffset			location;		// Source byte offset
@@ -227,14 +253,14 @@ public class SourceOffset {
 
 
 /** @ignore */
-public ref<SourceLocation> getSourceLocation(address ip, boolean locationIsExact) {
+public ref<SourceLocation> getSourceLocation(address ip, boolean isReturnAddress) {
 	pointer<byte> lowCode = pointer<byte>(lowCodeAddress());
 	if (pointer<byte>(ip) < lowCode ||
 		pointer<byte>(highCodeAddress()) <= pointer<byte>(ip))
 		return null;
 	int offset = int(ip) - int(lowCode);
 	
-	if (!locationIsExact)
+	if (!isReturnAddress)
 		offset--;
 	pointer<SourceLocation> psl = sourceLocations();
 	int interval = sourceLocationsCount();
@@ -281,6 +307,14 @@ public pointer<SourceLocation> sourceLocations() {
 public int sourceLocationsCount() {
 	return int(getRuntimeParameter(SOURCE_LOCATIONS_COUNT));
 }
+
+public void setSectionType() {
+	if (compileTarget == Target.X86_64_WIN) {
+		setRuntimeParameter(SECTION_TYPE, address(Target.X86_64_WIN));
+	} else if (compileTarget == Target.X86_64_LNX) {
+		setRuntimeParameter(SECTION_TYPE, address(Target.X86_64_LNX_SRC));
+	}
+}
 /** @ignore */
 @Constant
 int PARASOL_THREAD = 0;
@@ -293,6 +327,9 @@ int SOURCE_LOCATIONS_COUNT = 2;
 /** @ignore */
 @Constant
 int LEAKS_FLAG = 3;
+/** @ignore */
+@Constant
+int SECTION_TYPE = 4;
 /** @ignore */
 @Linux("libparasol.so.1", "getRuntimeParameter")
 @Windows("parasol.dll", "getRuntimeParameter")

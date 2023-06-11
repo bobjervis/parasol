@@ -19,6 +19,7 @@ import parasol:context;
 import parasol:pxi.Pxi;
 import parasol:runtime;
 import parasol:memory;
+import parasol:text;
 import parasol:x86_64.X86_64Lnx;
 import parasol:x86_64.X86_64Win;
 
@@ -89,6 +90,7 @@ public class Target {
 			printf("Targeting %s\n", string(selectedTarget));
 		switch (selectedTarget) {
 		case	X86_64_LNX:
+		case	X86_64_LNX_SRC:
 			target = new X86_64Lnx(compileContext.arena());
 			break;
 
@@ -336,7 +338,29 @@ public class Segment<class T> {
 	Segment() {
 		
 	}
-
+	/**
+	 * Create a fixup from a location in this segment to another location.
+	 *
+	 * A fixup is a reference in one part of the compiled image that refers
+	 * to a location elsewhere in the image.
+	 * At the time the reference is generated, the location that will 
+	 * eventually referred to is only known relative to it's segment.
+	 *
+	 * Absolute references are 8 byte pointer values. Since an image is restricted
+	 * to 2 GB in size, only the low-order 4 bytes of the address are manipulated
+	 * In the generated image. The loader must add the base address of the image to
+	 * each fixup (which will have to set a value for the entire 8-byte pointer.
+	 *
+	 * A relative reference is an address mode in a machine instruction in
+	 * the CODE segment of the image, and so may not be aligned. The code here
+	 * does rely on the compiler running on a system that supports misaligned
+	 * integer accesses.
+	 *
+	 * @param segment The identity of the target segment of the fixup
+	 * location.
+	 * @param location The location in this segment to be fixed up.
+	 * @param absolute If true, the 
+	 */
 	public void fixup(T segment, int location, boolean absolute) {
 		Fixup<T> f;
 		
@@ -365,20 +389,49 @@ public class Segment<class T> {
 				*fixupTarget -= _offset + f.location + int.bytes;
 		}
 	}
-	
+	/**
+	 * Get a pointer to a byte in this segment.
+	 * This arises when the code generator needs to write some
+	 * data into the segment.
+	 *
+	 * The lifetime of the returned pointer is until the next 
+	 * call to {@link reserve} or {@link align}.
+	 *
+	 * @param location The segment-relative location of the byte.
+	 *
+	 * @return A pointer to the indicated byte.
+ 	 */
 	public pointer<byte> at(int location) {
 		return &_content[location];
 	}
-	
+	/**
+	 * Reserve sufficient number of bytes to make the length
+	 * of the segment a multiple of the alignment value set in
+	 * the constructor.
+	 *
+	 * If the block needs to be aligned, fill with the fill byte.
+	 *
+	 * @return The new length of the segment.
+	 */
 	public int align() {
 		return reserve(0);
 	}
-	
+	/**
+	 * Reserve a specific amount of memory in the segment, properly
+	 * aligned.
+	 * If the block needs to be aligned, fill with the fill byte.
+	 *
+	 * @param memory The amount of memory to reserve (after aligning the
+	 * length of the segment).
+	 *
+	 * @return The offset of the newly reserved memory block.
+	 */
 	public int reserve(int memory) {
 		return reserve(memory, _alignment);
 	}
 	/*
-	 * Reserve memory, using a specific alignment. If the block needs to be aligned, fill with the fill byte.
+	 * Reserve memory, using a specific alignment.
+	 * If the block needs to be aligned, fill with the fill byte.
 	 * 
 	 * @param alignment Must be a power of two.
 	 */
@@ -396,7 +449,20 @@ public class Segment<class T> {
 		_content.resize(value + memory);
 		return value;
 	}
-	
+	/**
+	 * Append a properly aligned block of data values to the segment.
+	 *
+	 * First, a properly aligned memory block of the specified length
+	 * is allocated.
+	 * If the block needs to be aligned, fill with the fill byte.
+	 *
+	 * Second, The passed data is copied to the newly allocated block.
+	 *
+	 * @param data The address of the data to be copied.
+	 * @param length The amount of data to be copied.
+	 *
+	 * @return The offset in the segment where the data was copied.
+	 */
 	public int append(address data, int length) {
 		int location = reserve(length);
 		C.memcpy(&_content[location], data, length);

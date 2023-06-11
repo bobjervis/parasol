@@ -366,7 +366,6 @@ public class X86_64 extends X86_64AssignTemps {
 		for (int i = 1; i < args.length(); i++)
 			runArgs.append(args[i].c_str());
 		int returnValue;
-		pointer<address> pa = pointer<address>(&_staticMemory[_pxiHeader.builtInOffset]);
 		pointer<runtime.SourceLocation> outerSource = runtime.sourceLocations();
 		int outerSourceCount = runtime.sourceLocationsCount();
 		memory.StartingHeap outerHeap = runtime.startingHeap();
@@ -404,7 +403,8 @@ public class X86_64 extends X86_64AssignTemps {
 						printf("Unable to locate shared object %s (%s)\n", soName, linux.dlerror());
 						assert(false);
 					} else
-						nativeBindings[i].functionAddress = linux.dlsym(handle, nativeBindings[i].symbolName);
+						nativeBindings[i].functionAddress = linux.dlsym(handle, 
+												nativeBindings[i].symbolName);
 //					linux.dlclose(handle);
 				}
 				if (nativeBindings[i].functionAddress == null) {
@@ -415,6 +415,7 @@ public class X86_64 extends X86_64AssignTemps {
 				}
 			}
 			runtime.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
+			runtime.setSectionType();
 			runtime.setStartingHeap(_startingHeap);
 			returnValue = runtime.eval(&_pxiHeader, _staticMemory, &runArgs[0], runArgs.length());
 		} else {
@@ -497,6 +498,7 @@ public class X86_64 extends X86_64AssignTemps {
 					ref<Call> binding;
 					switch (sectionType()) {
 					case X86_64_LNX:
+					case X86_64_LNX_SRC:
 						binding = fsym.getAnnotation("Linux");
 						break;
 						
@@ -528,6 +530,7 @@ public class X86_64 extends X86_64AssignTemps {
 						int offset = _segments[Segments.NATIVE_BINDINGS].reserve(NativeBinding.bytes);
 						_segments[Segments.NATIVE_BINDINGS].fixup(Segments.BUILT_INS_TEXT, offset, true);
 						_segments[Segments.NATIVE_BINDINGS].fixup(Segments.BUILT_INS_TEXT, offset + address.bytes, true);
+
 						C.memcpy(_segments[Segments.NATIVE_BINDINGS].at(offset), &dllNameOffset, int.bytes);
 						C.memcpy(_segments[Segments.NATIVE_BINDINGS].at(offset + address.bytes), &symbolNameOffset, int.bytes);
 						address v = address(long(offset + 2 * address.bytes));
@@ -2240,11 +2243,11 @@ public class X86_64 extends X86_64AssignTemps {
 				if (func.name() == null) {
 					ref<ParameterScope> functionScope = _arena.createParameterScope(compileContext.current(), func, ParameterScope.Kind.FUNCTION);
 					ref<ParameterScope> funcScope;
-					boolean isBuiltIn;
+					boolean isNativeBinding;
 										
-					(funcScope, isBuiltIn) = getFunctionAddress(functionScope, compileContext);
-					if (isBuiltIn)
-						instBuiltIn(X86.MOV, R(func.register), functionScope);
+					(funcScope, isNativeBinding) = getFunctionAddress(functionScope, compileContext);
+					if (isNativeBinding)
+						instNativeBinding(X86.MOV, R(func.register), functionScope);
 					else
 						instFunc(X86.MOV, R(func.register), functionScope);
 				}

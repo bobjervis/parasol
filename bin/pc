@@ -7,7 +7,7 @@ if [ "x$LD_LIBRARY_PATH" == "x" ]
 then
 	export LD_LIBRARY_PATH=$PARASOL_HOME/bin
 else
-	export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PARASOL_HOME/bin
+	export LD_LIBRARY_PATH=$PARASOL_HOME/bin:$LD_LIBRARY_PATH
 fi
 
 exec "$PARASOL_HOME/bin/parasolrt" "$PARASOL_HOME/bin/x86-64-lnx.pxi" "$@"

@@ -16,8 +16,9 @@
 #ifndef EXECUTION_CONTEXT_H
 #define EXECUTION_CONTEXT_H
 
+#include <stdio.h>
+#include <stdlib.h>
 #include "machine.h"
-#include "vector.h"
 #include "parasol_enums.h"
 #include "pxi.h"
 
@@ -40,6 +41,8 @@ public:
 	int capacity;
 	ExceptionEntry *entries;
 };
+
+#define ALLOC_INCREMENT 5
 
 class ExecutionContext {
 public:
@@ -81,20 +84,32 @@ public:
 	ExecutionContext *clone();
 
 	void *getRuntimeParameter(int i) {
-		if (i >= _runtimeParameters.size())
+		if (i >= _runtimeParametersCount)
 			return null;
-		else
+		else {
+//			printf("ExecutionContext::getRuntimeParameter(%d) = %p\n", i, _runtimeParameters[i]);
+//			printf("read [3] = %p\n", _runtimeParameters[3]);
 			return _runtimeParameters[i];
+		}
 	}
 
 	void setRuntimeParameter(int i, void *newValue) {
-		if (i >= _runtimeParameters.size()) {
-			if (newValue != null)
-				_runtimeParameters.resize(i + 1);
-			else
+//		printf("before [3] = %p\n", _runtimeParameters[3]);
+		if (i >= _runtimeParametersCount) {
+			if (newValue != null) {
+				int size = i + ALLOC_INCREMENT;
+				size -= size % ALLOC_INCREMENT;			// truncate to nearest multiple of ALLOC_INCREMENT
+				void** p = (void**)calloc(size, sizeof (void*));
+				memcpy(p, _runtimeParameters, _runtimeParametersCount * sizeof (void*));
+				free(_runtimeParameters);
+				_runtimeParameters = p;
+				_runtimeParametersCount = size;
+			} else
 				return;
 		}
+//		printf("ExecutionContext::setRuntimeParameter(%d, %p)\n", i, newValue);
 		_runtimeParameters[i] = newValue;
+//		printf("after [3] = %p\n", _runtimeParameters[3]);
 	}
 
 private:
@@ -107,7 +122,8 @@ private:
 	void *_sourceLocations;
 	int _sourceLocationsCount;
 	void *_parasolThread;
-	vector<void*> _runtimeParameters;
+	void** _runtimeParameters;
+	int _runtimeParametersCount;
 };
 
 class ThreadContext {
@@ -157,7 +173,13 @@ int evalNative(pxi::X86_64SectionHeader *header, byte *image, char **argv, int a
 
 void callAndSetFramePtr(void *newRbp, void *newRip, void *arg);
 
+void *getRuntimeParameter(int i);
+
+void setRuntimeParameter(int i, void *newValue);
+
 }
+
+#define RP_SECTION_TYPE 4
 
 }
 

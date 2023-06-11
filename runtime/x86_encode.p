@@ -158,8 +158,6 @@ private int FIRST_STACK_PARAM_OFFSET = 16;
 enum Segments {
 	CODE,
 	EXCEPTION_TABLE,
-	SOURCE_LOCATIONS,
-	BUILT_INS,
 	NATIVE_BINDINGS,
 	VTABLES,
 	TYPES,
@@ -172,6 +170,7 @@ enum Segments {
 
 	BUILT_INS_TEXT,
 	RELOCATIONS,
+	SOURCE_LOCATIONS,
 	MAXIMUM
 }
 
@@ -211,8 +210,6 @@ class X86_64Encoder extends Target {
 		_segments.resize(Segments.MAXIMUM);
 		_segments[Segments.CODE] = new Segment<Segments>(8, 0x37);
 		_segments[Segments.EXCEPTION_TABLE] = new Segment<Segments>(8);
-		_segments[Segments.SOURCE_LOCATIONS] = new Segment<Segments>(8);
-		_segments[Segments.BUILT_INS] = new Segment<Segments>(8);
 		_segments[Segments.NATIVE_BINDINGS] = new Segment<Segments>(8);
 		_segments[Segments.VTABLES] = new Segment<Segments>(8);
 		_segments[Segments.TYPES] = new Segment<Segments>(8);
@@ -225,6 +222,7 @@ class X86_64Encoder extends Target {
 
 		_segments[Segments.BUILT_INS_TEXT] = new Segment<Segments>(1);
 		_segments[Segments.RELOCATIONS] = new Segment<Segments>(4);
+		_segments[Segments.SOURCE_LOCATIONS] = new Segment<Segments>(4);
 	}
 	
 	~X86_64Encoder() {
@@ -295,16 +293,14 @@ class X86_64Encoder extends Target {
 		relocateStaticData(2);
 		relocateStaticData(1);
 		
-		_pxiHeader.builtInOffset = _segments[Segments.BUILT_INS].offset();
-		_pxiHeader.builtInCount = _segments[Segments.BUILT_INS].length() / long.bytes;
-		_pxiHeader.builtInsText += _segments[Segments.BUILT_INS_TEXT].offset();
+		_pxiHeader.builtInsText = _segments[Segments.BUILT_INS_TEXT].offset();
 		_pxiHeader.stringsOffset = _segments[Segments.STRINGS].offset();
 		_pxiHeader.stringsLength = _segments[Segments.STRINGS].length();
 		_pxiHeader.vtablesOffset = _segments[Segments.VTABLES].offset();
-				
+
 		for (ref<Fixup> f = _fixups; f != null; f = f.next) {
 			switch (f.kind) {
-			case	RELATIVE32_CODE:				// Fixup value is a ref<Scope>
+			case	RELATIVE32_CODE:				// Fixup value is a ref<ParameterScope>
 				ref<ParameterScope> functionScope = ref<ParameterScope>(f.value);
 				int target = int(functionScope.value) - 1;
 				*ref<int>(&_code[f.location]) = int(target) - (f.location + int.bytes);
@@ -350,7 +346,8 @@ class X86_64Encoder extends Target {
 				printf("    @%x ABSOLUTE64_JUMP %p\n", f.location, f.value);
 				break;
 				
-			case	ABSOLUTE64_CODE:				// Fixup value is a ref<Scope>
+			case	ABSOLUTE64_CODE:				// Fixup value is a ref<ParameterScope>
+				// Generated from an inline function - not yet supported
 				printf("    @%x ABSOLUTE64_CODE %p\n", f.location, f.value);
 				break;
 				
@@ -396,13 +393,15 @@ class X86_64Encoder extends Target {
 				assert(false);
 			}
 		}
+		ref<Segment<Segments>> s = _segments[Segments.RELOCATIONS];
+		_segments[Segments.SOURCE_LOCATIONS].link(s.offset() + s.length());
 		for (int i = int(Segments.RELOCATIONS); i < int(Segments.MAXIMUM); i++) {
 			Segments segment = Segments(i);
 			
 			_code.resize(_segments[segment].offset());
 			_code.append(*_segments[segment].content());
 		}
-		
+
 		_pxiHeader.relocationOffset = _segments[Segments.RELOCATIONS].offset();
 		_pxiHeader.relocationCount = _segments[Segments.RELOCATIONS].length() / int.bytes;
 		_pxiHeader.exceptionsOffset = _segments[Segments.EXCEPTION_TABLE].offset();
@@ -982,7 +981,7 @@ class X86_64Encoder extends Target {
 		void packCode(int offset, ref<X86_64Encoder> encoder) {
 			int nextCopy = offset;
 			for (ref<CodeSegment> cs = _first; cs != null; cs = cs.next) {
-				for (int i = 0; i < cs.sourceLocations.length(); i++)
+				for (i in cs.sourceLocations)
 					cs.sourceLocations[i].offset += nextCopy;
 				encoder._sourceLocations.append(cs.sourceLocations);
 				encoder.emitExceptionEntry(nextCopy, cs.exceptionHandler);
@@ -3111,12 +3110,12 @@ class X86_64Encoder extends Target {
 	
 	boolean instCall(ref<ParameterScope> functionScope, ref<CompileContext> compileContext) {
 		ref<ParameterScope> func;
-		boolean isBuiltIn;
+		boolean isNativeBinding;
 		
-		(func, isBuiltIn) = getFunctionAddress(functionScope, compileContext);
+		(func, isNativeBinding) = getFunctionAddress(functionScope, compileContext);
 		if (func == null)
 			return false;
-		if (isBuiltIn) {
+		if (isNativeBinding) {
 			if (sectionType() == runtime.Target.X86_64_WIN)
 				inst(X86.SUB, TypeFamily.ADDRESS, R.RSP, 16);
 			emit(0xff);
@@ -3135,12 +3134,12 @@ class X86_64Encoder extends Target {
 	
 	boolean instJump(ref<ParameterScope> functionScope, ref<CompileContext> compileContext) {
 		ref<ParameterScope> func;
-		boolean isBuiltIn;
+		boolean isNativeBinding;
 		
-		(func, isBuiltIn) = getFunctionAddress(functionScope, compileContext);
+		(func, isNativeBinding) = getFunctionAddress(functionScope, compileContext);
 		if (func == null)
 			return false;
-		if (isBuiltIn) {
+		if (isNativeBinding) {
 			printf("Can't jump to a built-in\n");
 			assert(false);
 		} else {
@@ -3153,13 +3152,13 @@ class X86_64Encoder extends Target {
 	
 	boolean instLoadFunctionAddress(R dest, ref<ParameterScope> functionScope, ref<CompileContext> compileContext) {
 		ref<ParameterScope> func;
-		boolean isBuiltIn;
+		boolean isNativeBinding;
 		
-		(func, isBuiltIn) = getFunctionAddress(functionScope, compileContext);
+		(func, isNativeBinding) = getFunctionAddress(functionScope, compileContext);
 		if (func == null)
 			return false;
 		emit(byte(REX_W | rexValues[dest]));
-		if (isBuiltIn) {
+		if (isNativeBinding) {
 			// MOV
 			emit(0x8b);
 			modRM(0, rmValues[dest], 5);
@@ -3189,7 +3188,7 @@ class X86_64Encoder extends Target {
 		}
 	}
 	
-	void instBuiltIn(X86 instruction, R dest, ref<ParameterScope> functionScope) {
+	void instNativeBinding(X86 instruction, R dest, ref<ParameterScope> functionScope) {
 		switch (instruction) {
 		case	MOV:			
 			emit(byte(REX_W | rexValues[dest]));

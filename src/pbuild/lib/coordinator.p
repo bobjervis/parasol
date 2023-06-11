@@ -365,18 +365,20 @@ public class Coordinator extends CoordinatorVolatileData {
 		}
 		if (success) {
 			if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-				pointer<byte>[] args;
-				string s1 = "/bin/basj";
-				string s2 = "-cev";
-				args.append(s1.c_str());
-				args.append(s2.c_str());
-				string s = singleLine(_afterPassScript);
-				args.append(s.c_str());
-				args.append(null);
-				linux.execv("/bin/bash".c_str(), &args[0]);
-				// If the previous function returns, something went terribly wrong
-				printf("execv of bash failed. errno is %s\n", linux.strerror(linux.errno()));
-				success = false;
+				if (_afterPassScript != null) {
+					pointer<byte>[] args;
+					string s1 = "/bin/bash";
+					string s2 = "-cev";
+					args.append(s1.c_str());
+					args.append(s2.c_str());
+					string s = singleLine(_afterPassScript);
+					args.append(s.c_str());
+					args.append(null);
+					linux.execv("/bin/bash".c_str(), &args[0]);
+					// If the previous function returns, something went terribly wrong
+					printf("execv of bash failed. errno is %s\n", linux.strerror(linux.errno()));
+					success = false;
+				}
 			} else {
 				printf("FAIL: build scripts contain after_pass scripts - unsupported on this platform.\n");
 				success = false;

@@ -58,8 +58,14 @@ Section *load(const char *filename) {
 			printf("Could not read section table of pxi file %s\n", filename);
 			return null;
 		}
-		if (entry.sectionType == ST_X86_64_WIN ||
-			entry.sectionType == ST_X86_64_LNX) {
+		if 
+#if defined(__WIN64)
+			(entry.sectionType == ST_X86_64_WIN)
+#elif __linux__
+			(entry.sectionType == ST_X86_64_LNX ||
+			 entry.sectionType == ST_X86_64_LNX_SRC)
+#endif
+		{
 			if (fseek(pxiFile, (int)entry.offset, SEEK_SET) != 0) {
 				printf("Could not seek to section %d @ %lld\n", i, entry.offset);
 				return null;
@@ -70,6 +76,7 @@ Section *load(const char *filename) {
 				printf("Reader failed for section %d of %s\n", i, filename);
 				return null;
 			}
+			parasol::setRuntimeParameter(RP_SECTION_TYPE, (void*)(long)entry.sectionType);
 			return section;
 		}
 	}

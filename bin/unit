@@ -5,4 +5,4 @@ export PARASOL_HOME=`readlink -f "$PARASOL_BIN"`
 
 FILENAME=$1
 shift
-"$PARASOL_HOME/bin/pc" "$PARASOL_HOME/src/pc/main.p" "$@" "$PARASOL_HOME/test/src/$FILENAME.p"
+exec "$PARASOL_HOME/bin/pc" "$PARASOL_HOME/src/pc/main.p" "$@" "$PARASOL_HOME/test/src/$FILENAME.p"

@@ -51,7 +51,6 @@ public class Disassembler {
 	private boolean _repne;
 	private boolean _repe;
 	private int _sourceIndex;
-	private int _builtInsFinalOffset;
 	private pointer<ref<Symbol>> _dataMap;
 	private ref<ref<Scope>[]> _functionMap;
 	private int _dataMapLength;
@@ -67,7 +66,6 @@ public class Disassembler {
 		_physical = physical;
 		_length = pxiHeader.typeDataOffset;
 		_pxiHeader = pxiHeader; 
-		_builtInsFinalOffset = _pxiHeader.builtInOffset + _pxiHeader.builtInCount * address.bytes; 
 		_stringsEndOffset = _pxiHeader.stringsOffset + _pxiHeader.stringsLength;
 		_typeDataEndOffset = _pxiHeader.typeDataOffset + _pxiHeader.typeDataLength;
 		_vtablesEndOffset = _pxiHeader.vtablesOffset + _pxiHeader.vtableData * address.bytes;
@@ -1475,8 +1473,6 @@ public class Disassembler {
 						printf("+%d", location - (int(funcScope.value) - 1));
 				}
 			}
-		} else if (location >= _pxiHeader.builtInOffset && location < _builtInsFinalOffset) {
-			printf(" &%s", builtInAt((location - _pxiHeader.builtInOffset) / address.bytes));
 		} else if (location >= _pxiHeader.stringsOffset && location < _stringsEndOffset) {
 			address x = &_physical[int(location - _logical)];
 			pointer<string> ps = pointer<string>(&x);		// We want to make sure we don't call a destructor here
@@ -1836,11 +1832,6 @@ public void printHeader(ref<X86_64SectionHeader> header, long fileOffset) {
 	if (fileOffset >= 0)
 		printf("        image offset         %8x\n", fileOffset);
 	printf("        entryPoint           %8x\n", header.entryPoint);
-	printf("        builtInOffset        %8x", header.builtInOffset);
-	if (fileOffset >= 0)
-		printf(" (file offset %x)", header.builtInOffset + fileOffset);
-	printf("\n");
-	printf("        builtInCount         %8d.\n", header.builtInCount);
 	printf("        vtablesOffset        %8x", header.vtablesOffset);
 	if (fileOffset >= 0)
 		printf(" (file offset %x)", header.vtablesOffset + fileOffset);

@@ -29,22 +29,11 @@ public class ExceptionEntry {
  * 
  * 		Section Header
  * 		
- * 		Logical Offset 0:
- * 			X86-64 machine code (function/method coies)
- * 			Built-in Table
- * 			VTables
- * 			Qword-aligned static data
- * 			Types
- * 			Strings
- * 			Dword-align static data
- * 			Word-aligned static data
- * 			Byte-aligned static data
- * 			Native Bindings
- * 			Relocations
- * 			Exception Table
- * 			Built-ins Text
- *		Optional:
- * 			Source Locations
+ * 		Image Offset 0:
+ *			The image is laid out in sections, according to the
+ *			values in the Segments enum (in x86_encode.p). The
+ *			encoder writes them to the named segments and the final stage
+ *			of code generation concatenates them into the completed image.
  */
 
 class X86_64WinSection extends pxi.Section {
@@ -68,7 +57,7 @@ class X86_64LnxSection extends pxi.Section {
 	private ref<X86_64> _target;
 	
 	public X86_64LnxSection(ref<X86_64> target) {
-		super(runtime.Target.X86_64_LNX);
+		super(runtime.Target.X86_64_LNX_SRC);
 		_target = target;
 	}
 	
@@ -98,5 +87,48 @@ public class X86_64SectionHeader {
 	public int exceptionsCount;		// Number of ExceptionEntry elements in the table
 	public int nativeBindingsOffset;// Offset in image of native bindings
 	public int nativeBindingsCount;	// Number of native bindings
+}
+/**
+	This describes the source locations information as it is encoded in the image.
+
+	A compile will prepare this data and inject it into the image. The location of the
+	source map is found by computing the following:
+
+<pre>
+			{@code imageAddress + relocationOffset + int.bytes * relocationCount }
+</pre>
+
+	As noted in the comments inside the class itself, the rest of the data appears 
+	in the image after this object. each span<T, LEN> descrIbes an array of LEN instaances
+    of type T, suitably aligned for type T. This is equivalent to a C array T[LEN].
+
+	(Note the template {@code span<class T, long LEN>} is not currently supported.
+<pre>
+            Code Locations
+
+    span<int, codeLocationsCount> codeAddress;
+    span<int, codeLocationsCount> fileIndex;
+    span<int, codeLocationsCount> fileOffset;
+
+            Source Files
+
+    span<int, sourceFileCount> filename;        // filename is the image offset of the
+                                                // string literal containing the name
+    span<int, sourceFileCount> firstLineNumber; // The index into the lineNumbers and
+                                                // lineFileOffsets arrays.
+    span<int, sourceFileCount> linesCount;
+    span<int, sourceFileCount> baseLineNumber;  // usually 1 for a normal file, but
+                                                // any value that is relevant to the
+                                                // context from which the source came
+            Source Line Numbers
+
+    span<int, lineNumberCount> lineNumbers;     // All the line numbers across all files
+	span<int, lineNumberCount> lineFileOffsets;
+</pre>
+ */
+public class X86_64_SourceMap {
+	public int codeLocationsCount;
+	public int sourceFileCount;
+	public int lineNumberCount;
 }
 

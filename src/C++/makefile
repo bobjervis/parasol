@@ -27,7 +27,7 @@ build/libparasol.so.1: build/prep $(RUNTIME_OBJECTS)
 	$(CXX) $(CFLAGS) -shared -o $@ $(RUNTIME_OBJECTS) -lpthread -ldl
 	ln -sfT libparasol.so.1 build/libparasol.so
 
-$(RUNTIME_OBJECTS) $(MAIN_OBJECT): build/o/%.o : src/C++/%.cc
+$(RUNTIME_OBJECTS) $(MAIN_OBJECT): build/o/%.o : src/C++/%.cc src/C++/executionContext.h
 	$(CXX) $(CFLAGS) -c $< $(LIB_PATH) $(LIBS) -o $@
 
 build/prep:
