@@ -27,11 +27,14 @@ class DumpPxiCommand extends process.Command {
 				"Include detailed dump of this section type.");
 		asmOption = stringOption('a', "asm",
 				"Include an assembly listing of the code in the dump of the named section type.");
+		relocationsOption = booleanOption('r', "reloc",
+				"when -s or -a are also present, include the relocations in the output for the section");
 		helpOption('?', "help", "Display this help.");
 	}
 	
 	ref<process.Option<string>> sectionOption;
 	ref<process.Option<string>> asmOption;
+	ref<process.Option<boolean>> relocationsOption;
 }
 
 DumpPxiCommand command;
@@ -59,6 +62,7 @@ int main(string[] args) {
 	}
 	boolean anyFailed = false;
 	pxi.registerSectionReader(runtime.Target.X86_64_LNX, x86_64NextReader);
+	pxi.registerSectionReader(runtime.Target.X86_64_LNX_SRC, x86_64NextReader);
 	pxi.registerSectionReader(runtime.Target.X86_64_WIN, x86_64NextReader);
 	for (int i = 0; i < files.length(); i++)
 		if (!dump(files[i]))
@@ -87,7 +91,7 @@ boolean dump(string filename) {
 		string offset;
 		offset.printf("@%x", entry.offset);
 		printf("  %c %4s %16s %10s [%d bytes]\n", i == best ? '*' : ' ', label, type, offset, entry.length);
-		if (verbose == st || assembly == st) {
+		if (verbose == st || assembly == st || (command.relocationsOption.set() && st == runtime.Target.X86_64_LNX_SRC)) {
 			ref<pxi.Section> s = p.readSection(i);
 			if (s == null)
 				printf("      <<- ERROR ->>\n");
@@ -105,15 +109,18 @@ ref<pxi.Section> x86_64NextReader(storage.File pxiFile, long length) {
 		printf("          Could not read x86-64 section header\n");
 		return null;
 	}
-	if (assembly != runtime.Target.ERROR) {
-		byte[] memory;
+	long imageOffset = pxiFile.tell();
+	byte[] memory;
 
-		memory.resize(int(length - header.bytes));
-		long actual = pxiFile.read(&memory);
-		if (actual != memory.length()) {
-			printf("Could not read %d bytes from the indicated section\n", length);
+	memory.resize(int(length - header.bytes));
+	long actual = pxiFile.read(&memory);
+	if (actual != memory.length()) {
+		printf("Could not read %d bytes from the indicated section\n", length);
+		return null;
+	}
+	if (assembly != runtime.Target.ERROR) {
+		if (actual != memory.length())
 			return null;
-		}
 		runtime.Arena arena();
 		x86_64.Disassembler d(&arena, 0, int(actual), &memory[0], &header);
 //		d.setDataMap(&_dataMap[0][0], _dataMap[0].length());
@@ -125,7 +132,17 @@ ref<pxi.Section> x86_64NextReader(storage.File pxiFile, long length) {
 			printf("Disassembly FAILED\n");
 		}
 	} else if (verbose != runtime.Target.ERROR)
-		x86_64.printHeader(&header, pxiFile.tell());
+		x86_64.printHeader(&header, imageOffset);
+	if (command.relocationsOption.set()) {
+		if (actual != memory.length())
+			return null;
+		if (header.relocationCount > 0) {
+			printf("\nPXI Fixups:\n");
+			pointer<int> f = pointer<int>(&memory[0] + header.relocationOffset);
+			for (int i = 0; i < header.relocationCount; i++)
+				printf("    [%d] %#x\n", i, f[i]);
+		}
+	}
 	return new PlaceHolder();
 }
 

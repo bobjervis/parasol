@@ -528,8 +528,10 @@ public class X86_64 extends X86_64AssignTemps {
 						C.memcpy(_segments[Segments.BUILT_INS_TEXT].at(dllNameOffset), dllName.c_str(), dllName.length());
 						C.memcpy(_segments[Segments.BUILT_INS_TEXT].at(symbolNameOffset), symbolName.c_str(), symbolName.length());
 						int offset = _segments[Segments.NATIVE_BINDINGS].reserve(NativeBinding.bytes);
-						_segments[Segments.NATIVE_BINDINGS].fixup(Segments.BUILT_INS_TEXT, offset, true);
-						_segments[Segments.NATIVE_BINDINGS].fixup(Segments.BUILT_INS_TEXT, offset + address.bytes, true);
+						_segments[Segments.NATIVE_BINDINGS].fixup(offset, Segments.BUILT_INS_TEXT, true);
+						_segments[Segments.NATIVE_BINDINGS].fixup(offset + address.bytes, Segments.BUILT_INS_TEXT, true);
+						definePxiFixup(Segments.NATIVE_BINDINGS, offset);
+						definePxiFixup(Segments.NATIVE_BINDINGS, offset + address.bytes);
 
 						C.memcpy(_segments[Segments.NATIVE_BINDINGS].at(offset), &dllNameOffset, int.bytes);
 						C.memcpy(_segments[Segments.NATIVE_BINDINGS].at(offset + address.bytes), &symbolNameOffset, int.bytes);

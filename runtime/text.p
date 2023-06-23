@@ -980,6 +980,7 @@ public class string extends String<byte> {
 		pointer<byte> cp = pointer<byte>(&_contents.data);
 		for (int i = 0; i < _contents.length; i++) {
 			switch (cp[i]) {
+			case	':':	output.append("\\:");	break;
 			case	'\\':	output.append("\\\\");	break;
 			case	'\'':	output.append("\\'");	break;
 			case	'"':	output.append("\\\"");	break;

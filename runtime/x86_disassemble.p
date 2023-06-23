@@ -40,6 +40,7 @@ public class Disassembler {
 	private int _vtablesEndOffset;
 	private int _staticDataStart;
 	private int _staticDataEnd;
+	private int _nativeBindingsEnd;
 	private pointer<ExceptionEntry> _exceptionsEndOffset;
 	private int _imageLength;
 	private ref<X86_64SectionHeader> _pxiHeader;
@@ -71,8 +72,9 @@ public class Disassembler {
 		_vtablesEndOffset = _pxiHeader.vtablesOffset + _pxiHeader.vtableData * address.bytes;
 		_exceptionsEndOffset = pointer<ExceptionEntry>(_physical + _pxiHeader.exceptionsOffset + _pxiHeader.exceptionsCount * ExceptionEntry.bytes);
 		_ip = _pxiHeader.entryPoint;
-		_staticDataStart = _pxiHeader.typeDataOffset + _pxiHeader.typeDataLength;
+		_staticDataStart = _vtablesEndOffset;
 		_staticDataEnd = _pxiHeader.builtInsText;
+		_nativeBindingsEnd = _pxiHeader.nativeBindingsOffset + _pxiHeader.nativeBindingsCount * NativeBinding.bytes;
 	}
 	
 	void setDataMap(pointer<ref<Symbol>> dataMap, int dataMapLength) {
@@ -1473,6 +1475,19 @@ public class Disassembler {
 						printf("+%d", location - (int(funcScope.value) - 1));
 				}
 			}
+		} else if (location >= _pxiHeader.nativeBindingsOffset && location < _nativeBindingsEnd) {
+			pointer<NativeBinding> nb = pointer<NativeBinding>(_physical + _pxiHeader.nativeBindingsOffset);
+			int entryOffset = location - _pxiHeader.nativeBindingsOffset;
+			int i = entryOffset / NativeBinding.bytes;
+			string d(_physical + int(nb[i].dllName));
+			string s(_physical + int(nb[i].symbolName));
+
+			int remainder = entryOffset % NativeBinding.bytes;
+
+			if (remainder == 16)
+				printf(" -> %s %s", d, s);
+			else
+				printf(" [%s %s]+%d", d, s, remainder);
 		} else if (location >= _pxiHeader.stringsOffset && location < _stringsEndOffset) {
 			address x = &_physical[int(location - _logical)];
 			pointer<string> ps = pointer<string>(&x);		// We want to make sure we don't call a destructor here

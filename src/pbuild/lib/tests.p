@@ -236,7 +236,7 @@ public class EtsTest extends Test {
 			binaryDirectory = storage.constructPath(installPackage.path(), "bin");
 		else
 			binaryDirectory = storage.directory(process.binaryFilename());
-		pcCommand = storage.constructPath(storage.absolutePath(binaryDirectory), "pc");
+		pcCommand = storage.constructPath(binaryDirectory, "pc");
 		string[] args;
 		args.append("test/drivers/etsTests.p");
 		if (installPackage != null)
@@ -245,10 +245,10 @@ public class EtsTest extends Test {
 			args.append("--trace");
 		args.append("--root=.");
 		args.append(_filename);
-//		printf("working dir %s cmd %s ", workingDirectory, pcCommand);
-//		for (i in args)
-//			printf("'%s' ", args[i]);
-//		printf("\n");
+		printf("    working dir %s\n    %s ", workingDirectory, pcCommand);
+		for (i in args)
+			printf("'%s' ", args[i]);
+		printf("\n");
 		boolean success;
 		int exitStatus;
 

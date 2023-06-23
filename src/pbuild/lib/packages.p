@@ -110,9 +110,9 @@ public class Package extends Product {
 		super(buildFile, enclosing, object);
 		if (enclosing != null && this.class != Pxi)
 			buildFile.error(object, "Packages cannot be nested inside other components");
-		if (_name != null) {
-			if (this.class == Package && !context.validatePackageName(_name))
-				buildFile.error(a, "Package name '%s' is malformed", _name);;
+		if (name() != null) {
+			if (this.class == Package && !context.validatePackageName(name()))
+				buildFile.error(a, "Package name '%s' is malformed", name());;
 		} else
 			buildFile.error(object, "Package must have a name");
 		ref<script.Atom> a = object.get("preserveAnonymousUnits");
@@ -147,18 +147,18 @@ public class Package extends Product {
 			buildFile.error(object, "Attribute 'package' must be a valid package name");
 			return false;
 		}
-		if (name == _name) {
+		if (name == this.name()) {
 			buildFile.error(object, "A package cannot use itself");
 			return false;
 		}
 		_usedPackageNames.append(name);
-//		printf("%s using %s\n", _name, name);
+//		printf("%s using %s\n", this.name(), name);
 		return true;
 	}
 
 	boolean defineContext(ref<BuildFile> buildFile, ref<Coordinator> coordinator, string buildDir, string outputDir) {
 		super.defineContext(buildFile, coordinator, buildDir, outputDir);
-		_packageDir = storage.constructPath(outputDir, _name + ".tmp");
+		_packageDir = storage.constructPath(outputDir, filename() + ".tmp");
 		if (storage.exists(_packageDir)) {
 			if (!storage.deleteDirectoryTree(_packageDir)) {
 				printf("\n        FAIL: Could not remove existing temporary %s\n", _packageDir);
@@ -204,8 +204,8 @@ public class Package extends Product {
 			return false;
 //		printf("        %s compileSkipped? %s\n", _name, _compileSkipped);
 		if (_compileSkipped) {
-			printf("        %s - up to date\n", _name);
-			_packageDir = storage.constructPath(outputDir(), _name);
+			printf("        %s - up to date\n", name());
+			_packageDir = storage.constructPath(outputDir(), filename());
 		} else {
 			if (!deployPackage())
 				return false;
@@ -214,7 +214,7 @@ public class Package extends Product {
 		}
 		_buildSuccessful = true;
 		if (!_compileSkipped)
-			printf("        %s - built\n", _name);
+			printf("        %s - built\n", name());
 		return true;
 	}
 
@@ -223,7 +223,7 @@ public class Package extends Product {
 //			printf("    %d Looking for %s -> %s\n", thread.currentThread().id(), _name, _usedPackageNames[i]);
 			ref<context.Package> p = coordinator().activeContext().getPackage(_usedPackageNames[i]);
 			if (p == null) {
-				printf("        FAIL: Unknown reference '%s' in package '%s'\n", _usedPackageNames[i], _name);
+				printf("        FAIL: Unknown reference '%s' in package '%s'\n", _usedPackageNames[i], name());
 				return false, true;
 			}
 			_usedPackages.append(p);
@@ -274,7 +274,7 @@ public class Package extends Product {
 		string tmpDir = _packageDir;
 		if (_generateManifest && !_compileContext.forest().generateManifest(storage.constructPath(tmpDir, context.PACKAGE_MANIFEST), _initFirst, _initLast)) 
 			return false;
-		_packageDir = storage.constructPath(outputDir(), _name);
+		_packageDir = storage.constructPath(outputDir(), filename());
 		if (storage.exists(_packageDir)) {
 			if (!storage.deleteDirectoryTree(_packageDir)) {
 				printf("        FAIL: Could not remove old %s\n", _packageDir);
@@ -319,7 +319,7 @@ public class Package extends Product {
 		configureArena();
 
 //		printf("loadRoot for %s\n", _name);
-		if (!_compileContext.loadRoot(_name == context.PARASOL_CORE_PACKAGE_NAME, _usedPackages)) {
+		if (!_compileContext.loadRoot(name() == context.PARASOL_CORE_PACKAGE_NAME, _usedPackages)) {
 			printf("        FAIL: Unable to load root scope\n");
 			closeCompiler();
 			return false;
@@ -401,7 +401,7 @@ public class Package extends Product {
 	}
 
 	protected string sentinelFileName() {
-		return storage.constructPath(outputDir(), _name + ".ok");
+		return storage.constructPath(outputDir(), name() + ".ok");
 	}
 
 	protected boolean printMessages() {
@@ -417,7 +417,7 @@ public class Package extends Product {
 	}
 
 	protected void failMessage() {
-		printf("        FAIL: %s failed to compile\n", _name);
+		printf("        FAIL: %s failed to compile\n", name());
 	}	
 
 	private static void extractMessagesWrapper(ref<compiler.Unit> file, ref<compiler.Node> node, ref<compiler.Commentary> comment, address arg) {
@@ -459,11 +459,11 @@ public class Package extends Product {
 	}
 
 	public string productPath() {
-		return storage.constructPath(outputDir(), _name);
+		return storage.constructPath(outputDir(), filename());
 	}
 
 	public string productName() {
-		return _name;
+		return name();
 	}
 
 	public boolean generateManifest() {
@@ -506,7 +506,7 @@ public class Package extends Product {
 	}
 
 	public string toString() {
-		return "package " + _name;
+		return "package " + name();
 	}
 }
 
@@ -566,7 +566,7 @@ class Application extends Package {
 		if (!shouldCompile()) {
 			_buildSuccessful = true;
 			_compileSkipped = true;
-			printf("        %s - up to date\n", _name);
+			printf("        %s - up to date\n", name());
 			return true;
 		}
 		ref<compiler.Target> t;
@@ -695,7 +695,7 @@ class Application extends Package {
 		time.Instant accessed, modified, created;
 		boolean success;
 
-		string packageDir = storage.constructPath(outputDir(), _name);
+		string packageDir = storage.constructPath(outputDir(), filename());
 		string runScript = storage.constructPath(packageDir, "run");
 
 		(accessed, modified, created, success) = storage.fileTimes(runScript);
@@ -756,7 +756,7 @@ class Application extends Package {
 	}
 
 	public string toString() {
-		return "application " + _name;
+		return "application " + name();
 	}
 
 }
@@ -776,7 +776,7 @@ class Binary extends Application {
 		if (!shouldCompile()) {
 			_buildSuccessful = true;
 			_compileSkipped = true;
-			printf("        %s - up to date\n", _name);
+			printf("        %s - up to date\n", name());
 			return true;
 		}
 		ref<compiler.Target> t;
@@ -827,7 +827,7 @@ class Binary extends Application {
 		}
 		_buildSuccessful = true;
 		if (deployPackage()) {
-			printf("        %s - built\n", _name);
+			printf("        %s - built\n", name());
 			return true;
 		} else
 			return false;
@@ -854,7 +854,7 @@ class Binary extends Application {
 	}
 
 	public string toString() {
-		return "binary " + _name;
+		return "binary " + name();
 	}
 }
 
@@ -865,7 +865,7 @@ class Command extends Application {
 
 	public boolean build() {
 		if (!shouldCompile()) {
-			printf("        %s - up to date\n", _name);
+			printf("        %s - up to date\n", name());
 			_compileSkipped = true;
 			return true;
 		}
@@ -875,7 +875,7 @@ class Command extends Application {
 		(t, success) = compile();
 		delete t;
 		if (success && writeSentinelFile()) {
-			printf("        %s - built\n", _name);
+			printf("        %s - built\n", name());
 			return true;
 		}
 		return false;
@@ -896,7 +896,7 @@ class Command extends Application {
 				return false;
 		} else {
 			if (coordinator().reportOutOfDate())
-				printf("            %s - never built, building\n", _name);
+				printf("            %s - never built, building\n", name());
 			return true;
 		}
 	}
@@ -906,7 +906,7 @@ class Command extends Application {
 	}	
 
 	public string toString() {
-		return "command " + _name;
+		return "command " + name();
 	}
 
 	public boolean shouldExport() {
@@ -929,7 +929,7 @@ class Pxi extends Application {
 		if (!shouldCompile()) {
 			_buildSuccessful = true;
 			_compileSkipped = true;
-			printf("        %s - up to date\n", _name);
+			printf("        %s - up to date\n", name());
 			return true;
 		}
 		if (!openCompiler())
@@ -942,7 +942,7 @@ class Pxi extends Application {
 
 		closeCompiler();
 		if (!_compileSkipped)
-			printf("        %s - built\n", _name);
+			printf("        %s - built\n", name());
 		return success;
 	}
 
@@ -961,7 +961,7 @@ class Pxi extends Application {
 				return target, false;
 			}
 		}
-		string pxiFile = storage.constructPath(outputDir(), _name);//path();
+		string pxiFile = storage.constructPath(outputDir(), filename());//path();
 		ref<pxi.Pxi> output = pxi.Pxi.create(pxiFile);
 		target.writePxi(output);
 		if (!output.write()) {
@@ -974,7 +974,7 @@ class Pxi extends Application {
 	public boolean shouldCompile() {
 		time.Instant accessed, modified, created;
 		boolean success;
-		string target = storage.constructPath(outputDir(), _name);
+		string target = storage.constructPath(outputDir(), filename());
 
 		(accessed, modified, created, success) = storage.fileTimes(target);
 		if (success) {
@@ -991,7 +991,7 @@ class Pxi extends Application {
 
 	public boolean copy() {
 		string destination = path();
-		string target = storage.constructPath(outputDir(), _name);
+		string target = storage.constructPath(outputDir(), filename());
 		if (!storage.copyFile(target, destination)) {
 			printf("    FAIL: Could not copy %s to %s\n", target, destination);
 			return false;
@@ -1001,7 +1001,7 @@ class Pxi extends Application {
 
 	public string toString() {
 		string s;
-		s.printf("pxi %s", _name);
+		s.printf("pxi %s", name());
 		return s;
 	}
 
@@ -1011,9 +1011,9 @@ class Pxi extends Application {
 
 	public string path() {
 		if (_enclosing != null)
-			return storage.constructPath(_enclosing.path(), _name);
+			return storage.constructPath(_enclosing.path(), filename());
 		else
-			return _name;
+			return filename();
 	}
 }
 
@@ -1048,7 +1048,7 @@ class MakeProduct extends Product {
 		if (success) {
 			if (!inputsNewer(modified)) {
 				_compileSkipped = true;
-				printf("        %s - up to date\n", _name);
+				printf("        %s - up to date\n", name());
 				return true;
 			}
 		} else {
@@ -1056,12 +1056,12 @@ class MakeProduct extends Product {
 			if (success) {
 				if (!inputsNewer(modified)) {
 					_compileSkipped = true;
-					printf("        %s - up to date\n", _name);
+					printf("        %s - up to date\n", name());
 					return true;
 				}
 			} else {
 				if (coordinator().reportOutOfDate())
-					printf("        %s - never built, building\n", _name);
+					printf("        %s - never built, building\n", name());
 			}
 		}
 		process.stdout.flush();
@@ -1073,13 +1073,13 @@ class MakeProduct extends Product {
 			delete p;
 		}
 		if (success)
-			printf("        %s - built\n", _name);
+			printf("        %s - built\n", name());
 		return success;
 	}
 
 	public boolean copy() {
 		string destination = path();
-		string target = storage.constructPath(outputDir(), _name);
+		string target = storage.constructPath(outputDir(), filename());
 		if (!storage.copyFile(target, destination)) {
 			printf("    FAIL: Could not copy %s to %s\n", target, destination);
 			return false;
@@ -1098,7 +1098,7 @@ class Elf extends MakeProduct {
 
 	public string toString() {
 		string s;
-		s.printf("elf %s", _name);
+		s.printf("elf %s", name());
 		return s;
 	}
 }
@@ -1130,7 +1130,7 @@ class IncludePackage extends Product {
 
 	public IncludePackage(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object, string name, string src) {
 		super(buildFile, enclosing, object);
-		_name = name;
+		assert(this.name() == name);
 		_src = src;
 		_object = object;
 	}
@@ -1145,7 +1145,7 @@ class IncludePackage extends Product {
 				return;
 			}
 		}
-		buildFile.error(_object, "    FAIL: Coud not find package for name %s\n", _name);
+		buildFile.error(_object, "    FAIL: Coud not find package for name %s\n", name());
 	}
 
 	void discoverExtraIncludedProducts(ref<Product> includer) {
@@ -1184,7 +1184,7 @@ class IncludePackage extends Product {
 
 	public string toString() {
 		string s;
-		s.printf("include %s", _name);
+		s.printf("include %s", name());
 		return s;
 	}
 

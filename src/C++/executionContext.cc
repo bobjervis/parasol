@@ -81,7 +81,7 @@ int ExecutionContext::exceptionsCount() {
 }
 
 byte *ExecutionContext::highCodeAddress() {
-	return (byte*)_image + _pxiHeader->builtInOffset;
+	return (byte*)_image + _pxiHeader->typeDataOffset;
 }
 
 void ExecutionContext::callCatchHandler(Exception *exception, void *framePointer, int handler) {

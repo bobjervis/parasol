@@ -337,7 +337,8 @@ public class Exception {
 			ref<ExceptionEntry> ee;
 			address ip;
 			(ee, frame, ip) = nextFrame(frame, useRealStack, comparator);
-//			printf("  -> frame %p ip %p (%x) ee = [%d]\n", frame, ip, pointer<byte>(ip) - lowCode, ee != null ? pointer<ExceptionEntry>(ee) - eeFirst : -1);
+//			printf("  -> frame %p ip %p (%x) ee = [%d]\n", frame, ip, pointer<byte>(ip) - lowCode, 
+//											ee != null ? pointer<ExceptionEntry>(ee) - eeFirst : -1);
 			if (frame == null)
 				break;
 
@@ -410,11 +411,12 @@ public class Exception {
 			}
 		}
 
+//		printf("lowCode = %p highCode = %p\n", lowCode, highCode);
 		if (ip >= lowCode && ip < highCode) {
 			int location = int(ip - lowCode);
 //			printf("%x Checking location %x", frame, location);
 			address result = bsearch(&location, ee, count, ExceptionEntry.bytes, comparator);
-//			printf(" -> found %p\n", result);
+//			printf(" -> found %d\n", pointer<ExceptionEntry>(result) - ee);
 			if (result != null) {
 				ref<ExceptionEntry> ee = ref<ExceptionEntry>(result);
 

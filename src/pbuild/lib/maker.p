@@ -67,7 +67,7 @@ enum Placement {
 
 class Folder extends Component {
 	protected string _contents;
-	protected string _name;
+	private string _name;
 	protected ref<Component>[] _components;
 
 	Folder(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object) {
@@ -199,17 +199,35 @@ class Folder extends Component {
 	}
 
 	public string path() {
+		string name = canonicalize(_name);
 		if (_enclosing != null)
-			return _enclosing.path() + "/" + _name;
+			return storage.constructPath(_enclosing.path(), name);
 		else
-			return _name;
+			return name;
 	}
 
 	public string productPath() {
+		string name = canonicalize(_name);
 		if (_enclosing != null)
-			return _enclosing.productPath() + "/" + _name;
+			return storage.constructPath(_enclosing.productPath(), name);
 		else
-			return _name;
+			return name;
+	}
+
+	public string filename() {
+		return canonicalize(_name);
+	}
+
+	private static string canonicalize(string name) {
+		string n = name;
+		int i = -1;
+		for (;;) {
+			i = n.indexOf(':', i + 1);
+			if (i < 0)
+				break;
+			n[i] = '_';
+		}
+		return n;
 	}
 
 	public ref<Package> package() {

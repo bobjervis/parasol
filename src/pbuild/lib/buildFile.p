@@ -266,7 +266,7 @@ public class BuildFile {
 
 	void error(ref<script.Atom> a, string msg, var... args) {
 		_detectedErrors = true;
-		_parser.log.error(a.offset(), msg, args);
+		_parser.log.error(a != null ? a.offset() : 0, msg, args);
 	}
 }
 

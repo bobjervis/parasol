@@ -132,10 +132,6 @@ public class Target {
 		assert(false);
 	}
 	
-	public void definePxiFixup(int location) {
-		assert(false);
-	}
-	
 	public void markRegisterParameters(ref<ParameterScope> scope, ref<CompileContext> compileContext) {
 	}
 	
@@ -356,16 +352,16 @@ public class Segment<class T> {
 	 * does rely on the compiler running on a system that supports misaligned
 	 * integer accesses.
 	 *
+	 * @param location The location in this segment to be fixed up.
 	 * @param segment The identity of the target segment of the fixup
 	 * location.
-	 * @param location The location in this segment to be fixed up.
 	 * @param absolute If true, the 
 	 */
-	public void fixup(T segment, int location, boolean absolute) {
+	public void fixup(int location, T segment, boolean absolute) {
 		Fixup<T> f;
 		
-		f.segment = segment;
 		f.location = location;
+		f.segment = segment;
 		f.absolute = absolute;
 		_fixups.append(f);
 	}
@@ -383,9 +379,7 @@ public class Segment<class T> {
 			ref<Fixup<T>> f = &_fixups[i];
 			pointer<int> fixupTarget = pointer<int>(at(f.location));
 			*fixupTarget += (*segments)[f.segment].offset();
-			if (f.absolute)
-				target.definePxiFixup(_offset + f.location);
-			else
+			if (!f.absolute)
 				*fixupTarget -= _offset + f.location + int.bytes;
 		}
 	}

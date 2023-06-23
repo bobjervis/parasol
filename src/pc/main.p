@@ -111,7 +111,8 @@ private string[] finalArguments;
 int main(string[] args) {
 	int result;
 	parseCommandLine(args);
-	result = runCommand();
+	if (!parasolCommand.coverageOption.set())
+		result = runCommand();
 	return result;
 }
 

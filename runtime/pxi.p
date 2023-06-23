@@ -250,7 +250,7 @@ public string sectionTypeName(runtime.Target st) {
 }
 
 private runtime.Target[string] sectionTypes = [
-	"x86-64-lnx":	runtime.Target.X86_64_LNX,
+	"x86-64-lnx":	runtime.Target.X86_64_LNX_SRC,
 	"x86-64-win":	runtime.Target.X86_64_WIN,
 ];
 

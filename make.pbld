@@ -79,8 +79,8 @@ target(os: linux, cpu: x86-64) {
 	
 		on_pass() {
 		"	set +v
-			(cd build/install\:parasollanguage.org ; tar -cf ../../install-lnx-64.tar.gz * ; )
-			cp build/core\:parasollanguage.org/\:manifest\: runtime
+			(cd build/install_parasollanguage.org ; tar -cf ../../install-lnx-64.tar.gz * ; )
+			cp build/core_parasollanguage.org/\:manifest\: runtime
 			cp build/x86-64-lnx.pxi bin/x86-64-lnx.pxi
 			ln -sfT libparasol.so.1 bin/libparasol.so
 		"	
@@ -96,8 +96,8 @@ target(os: linux, cpu: x86-64) {
 	tests(suite: freshen) {
 		on_pass() {
 		"	set +v
-			(cd build/install\:parasollanguage.org ; tar -cf ../../install-lnx-64.tar.gz * ; )
-			cp build/core\:parasollanguage.org/\:manifest\: runtime
+			(cd build/install_parasollanguage.org ; tar -cf ../../install-lnx-64.tar.gz * ; )
+			cp build/core_parasollanguage.org/\:manifest\: runtime
 			cp build/x86-64-lnx.pxi bin/x86-64-lnx.pxi
 			ln -sfT libparasol.so.1 bin/libparasol.so
 		"
@@ -112,7 +112,7 @@ target(os: linux, cpu: x86-64) {
 }
 
 target(os: windows, cpu: x86-64) {
-	package(name: install:parasollanguage.org, manifest: false) {
+	package(name: install_parasollanguage.org, manifest: false) {
 		folder(name: bin) {
 			file(name: genhdr.bat, src: bin)
 			exe(name: parasol.exe) {

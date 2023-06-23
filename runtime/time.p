@@ -68,6 +68,7 @@ import parasol:runtime;
 import parasol:international;
 import parasol:exception.IllegalArgumentException;
 import parasol:exception.IllegalOperationException;
+import parasol:process;
 
 @Constant
 private long ERA_DIFF = 0x019DB1DED53E8000;
@@ -495,6 +496,8 @@ public class Duration {
 			return _nanoseconds;
 	}
 }
+
+
 /**
  * This class represents a point in time with high precision and range.
  *
@@ -691,6 +694,8 @@ public class Instant {
 		_nanos %= NANOS_PER_SECOND;
 	}
 }
+
+
 /**
  * The Clock enum defines a framework for using the underlying system high-precision timers.
  *
@@ -761,6 +766,7 @@ public enum Clock {
 		return Duration(0, 0);
 	}		
 }
+
 /**
  * The standard Western Calendar.
  *
@@ -830,6 +836,7 @@ class LocalTimeZone extends TimeZone {
 	}
 */
 }
+
 
 class ProlepticGregorianTimeZone extends TimeZone {
 	ProlepticGregorianTimeZone() {
@@ -1837,3 +1844,4 @@ public class Timer {
 		return _elapsed;
 	}
 }
+
