@@ -272,7 +272,8 @@ int eval(pxi::X86_64SectionHeader *header, byte *image, char **argv, int argc) {
  * This is called just from the main C++ code.
  */
 int evalNative(pxi::X86_64SectionHeader *header, byte *image, char **argv, int argc) {
-	ExecutionContext *context = new ExecutionContext(header, image, null);
+	ExecutionContext *outer = threadContext.get();
+	ExecutionContext *context = new ExecutionContext(header, image, outer);
 
 	threadContext.set(context);
 	int (*start)(void *args) = (int (*)(void*))(image + header->entryPoint);

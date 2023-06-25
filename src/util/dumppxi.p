@@ -103,7 +103,7 @@ boolean dump(string filename) {
 
 
 ref<pxi.Section> x86_64NextReader(storage.File pxiFile, long length) {
-	x86_64.X86_64SectionHeader header;
+	pxi.X86_64SectionHeader header;
 	
 	if (pxiFile.read(&header, header.bytes) != header.bytes) {
 		printf("          Could not read x86-64 section header\n");

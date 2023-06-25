@@ -42,7 +42,7 @@ public:
 	ExceptionEntry *entries;
 };
 
-#define ALLOC_INCREMENT 5
+#define ALLOC_INCREMENT 8
 
 class ExecutionContext {
 public:
@@ -180,6 +180,9 @@ void setRuntimeParameter(int i, void *newValue);
 }
 
 #define RP_SECTION_TYPE 4
+#define RP_PXI_HEADER	5
+#define RP_IMAGE		6
+#define RP_IMAGE_LENGTH	7
 
 }
 

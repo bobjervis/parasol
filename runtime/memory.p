@@ -777,7 +777,7 @@ public class LeakHeap extends Allocator {
 
 	private static void rememberStackFrames(pointer<address> frames, long rbp, long stackTop) {
 		int frameCount = 0;
-		long baseCodeAddress = long(runtime.lowCodeAddress());
+		long baseCodeAddress = long(runtime.image.codeAddress());
 		long stackBottom = stackTop - 0x80000;
 		while (rbp > stackBottom && rbp < stackTop) {
 			frameCount++;
@@ -882,7 +882,7 @@ public class LeakHeap extends Allocator {
 			if (ip == null)
 				output.printf(" Total\n");
 			else {
-				long baseCodeAddress = long(runtime.lowCodeAddress());
+				long baseCodeAddress = long(runtime.image.codeAddress());
 				if (ip != leakHeap._staticScopeReturnAddress)
 					output.printf(" %s", exception.formattedLocation(ip, 0, false));
 				while (cs != null && cs.next == null) {

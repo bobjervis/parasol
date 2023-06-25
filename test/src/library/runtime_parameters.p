@@ -17,9 +17,17 @@ namespace parasol:runtime;
 
 import parasol:memory;
 import parasol:pxi;
+import parasol:x86_64;
 
 printf("SOURCE_LOCATIONS       %d: %p\n", SOURCE_LOCATIONS, getRuntimeParameter(SOURCE_LOCATIONS));
 printf("SOURCE_LOCATIONS_COUNT %d: %d\n", SOURCE_LOCATIONS_COUNT, int(getRuntimeParameter(SOURCE_LOCATIONS_COUNT)));
 printf("LEAKS_FLAG             %d: %s\n", LEAKS_FLAG, string(memory.StartingHeap(getRuntimeParameter(LEAKS_FLAG))));
 printf("SECTION_TYPE           %d: %s\n", SECTION_TYPE, string(Target(int(getRuntimeParameter(SECTION_TYPE)))));
+printf("PXI_HEADER             %d: %p\n", PXI_HEADER, getRuntimeParameter(PXI_HEADER));
+
+x86_64.printHeader(pxiHeader(), -1);
+printf("\n");
+
+printf("IMAGE                  %d: %p\n", IMAGE, getRuntimeParameter(IMAGE));
+printf("IMAGE_LENGTH           %d: %x\n", IMAGE_LENGTH, int(getRuntimeParameter(IMAGE_LENGTH)));
 

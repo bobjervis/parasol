@@ -13,66 +13,19 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-namespace parasol:x86_64;
+namespace parasol:pxi;
 
 import parasol:storage;
 import parasol:runtime;
-import parasol:pxi;
 
-public class ExceptionEntry {
+public class X86_64ExceptionEntry {
 	public int location;
 	public int handler;
 }
 
-/*
- * The X86_64 image section is laid out as follows:
- * 
- * 		Section Header
- * 		
- * 		Image Offset 0:
- *			The image is laid out in sections, according to the
- *			values in the Segments enum (in x86_encode.p). The
- *			encoder writes them to the named segments and the final stage
- *			of code generation concatenates them into the completed image.
- */
-
-class X86_64WinSection extends pxi.Section {
-	private ref<X86_64> _target;
-	
-	public X86_64WinSection(ref<X86_64> target) {
-		super(runtime.Target.X86_64_WIN);
-		_target = target;
-	}
-	
-	public long length() {
-		return _target.imageLength();
-	}
-	
-	public boolean write(storage.File pxiFile) {
-		return _target.writePxiFile(pxiFile);
-	}
-}
-
-class X86_64LnxSection extends pxi.Section {
-	private ref<X86_64> _target;
-	
-	public X86_64LnxSection(ref<X86_64> target) {
-		super(runtime.Target.X86_64_LNX_SRC);
-		_target = target;
-	}
-	
-	public long length() {
-		return _target.imageLength();
-	}
-	
-	public boolean write(storage.File pxiFile) {
-		return _target.writePxiFile(pxiFile);
-	}
-}
-
 public class X86_64SectionHeader {
 	public int entryPoint;			// Object id of the starting function to run in the image
-	public int builtInOffset;		// Offset in image of built-in table
+	public int sourceMapOffset;		// Offset in image of the source map
 	public int builtInCount;		// Total number of built-ins
 	public int vtablesOffset;		// Offset in image of vtables
 	public int vtableData;			// Total number of vtable slots
@@ -84,7 +37,7 @@ public class X86_64SectionHeader {
 	public int relocationCount;		// Total number of relocations
 	public int builtInsText;		// Offset in image of built-ins text
 	public int exceptionsOffset;	// Offset in image of exception table
-	public int exceptionsCount;		// Number of ExceptionEntry elements in the table
+	public int exceptionsCount;		// Number of X86_64ExceptionEntry elements in the table
 	public int nativeBindingsOffset;// Offset in image of native bindings
 	public int nativeBindingsCount;	// Number of native bindings
 }
@@ -126,7 +79,7 @@ public class X86_64SectionHeader {
 	span<int, lineNumberCount> lineFileOffsets;
 </pre>
  */
-public class X86_64_SourceMap {
+public class X86_64SourceMap {
 	public int codeLocationsCount;
 	public int sourceFileCount;
 	public int lineNumberCount;

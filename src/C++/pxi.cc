@@ -33,7 +33,8 @@
 
 namespace pxi {
 
-static Section *x86_64Reader(FILE *pxiFile, long long length);
+static Section *x86_64Reader(Target sectionType, FILE *pxiFile, long long length);
+
 
 Section *load(const char *filename) {
 	FILE *pxiFile = fopen(filename, "rb");
@@ -70,13 +71,12 @@ Section *load(const char *filename) {
 				printf("Could not seek to section %d @ %lld\n", i, entry.offset);
 				return null;
 			}
-			Section *section = x86_64Reader(pxiFile, entry.length);
+			Section *section = x86_64Reader((Target)entry.sectionType, pxiFile, entry.length);
 			fclose(pxiFile);
 			if (section == null) {
 				printf("Reader failed for section %d of %s\n", i, filename);
 				return null;
 			}
-			parasol::setRuntimeParameter(RP_SECTION_TYPE, (void*)(long)entry.sectionType);
 			return section;
 		}
 	}
@@ -84,7 +84,7 @@ Section *load(const char *filename) {
 	return null;
 }
 
-static Section *x86_64Reader(FILE *pxiFile, long long length) {
+static Section *x86_64Reader(Target sectionType, FILE *pxiFile, long long length) {
 	X86_64SectionHeader header;
 
 	if (fread(&header, 1, sizeof header, pxiFile) != sizeof header) {
@@ -115,7 +115,7 @@ static Section *x86_64Reader(FILE *pxiFile, long long length) {
 		printf("Could not allocate image area\n");
 		return null;
 	}
-	return new Section(header, image, imageLength);
+	return new Section(sectionType, header, image, imageLength);
 }
 
 class NativeBinding {
@@ -125,10 +125,21 @@ public:
 	void *address;
 };
 
+Section::Section(Target sectionType, X86_64SectionHeader &header, byte *image, size_t imageLength) {
+	this->sectionType = sectionType;
+	this->header = header;
+	this->image = image;
+	this->imageLength = imageLength;
+}
+
 bool Section::run(char **args, int *returnValue) {
 	parasol::ExecutionContext ec(&header, image, null);
 
 	ec.enter();
+	parasol::setRuntimeParameter(RP_SECTION_TYPE, (void*)(long)sectionType);
+	parasol::setRuntimeParameter(RP_PXI_HEADER, (void*)&header);
+	parasol::setRuntimeParameter(RP_IMAGE, image);
+	parasol::setRuntimeParameter(RP_IMAGE_LENGTH, (void*)(long)imageLength);
 
 	int argc = 0;
 	for (int i = 1; args[i] != null; i++)

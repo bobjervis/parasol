@@ -27,9 +27,9 @@ namespace parasol:exception;
 
 import parasol:compiler;
 import parasol:context;
-import parasol:x86_64.ExceptionEntry;
 import parasol:memory;
 import parasol:process;
+import parasol:pxi;
 import parasol:runtime;
 import parasol:storage;
 import parasol:thread;
@@ -276,13 +276,13 @@ public class Exception {
 		address stackHigh = pointer<byte>(_exceptionContext.stackPointer) + _exceptionContext.stackSize;
 		address ip = _exceptionContext.exceptionAddress;
 		string tag = "->";
-		int lowCode = int(runtime.lowCodeAddress());
-		int staticMemoryLength = int(runtime.highCodeAddress()) - lowCode;
+		int lowCode = int(runtime.image.codeAddress());
+		int staticMemoryLength = int(runtime.image.highCodeAddress()) - lowCode;
 		int ignoreFrames = ignoreTopFrames();
 		pointer<address> frame;
 		int(address, address) comparator = comparatorCurrentIp;
 		for (;;) {
-			ref<ExceptionEntry> ee;
+			ref<pxi.X86_64ExceptionEntry> ee;
 			address ip;
 			(ee, frame, ip) = nextFrame(frame, false, comparator);
 			if (frame == null)
@@ -328,17 +328,17 @@ public class Exception {
 			frame = pointer<address>(stackPointer) + -2;
 			useRealStack = true;
 		}
-		pointer<ExceptionEntry> ee = pointer<ExceptionEntry>(exceptionsAddress());
-		pointer<ExceptionEntry> eeFirst = ee;
+		pointer<pxi.X86_64ExceptionEntry> ee = pointer<pxi.X86_64ExceptionEntry>(exceptionsAddress());
+		pointer<pxi.X86_64ExceptionEntry> eeFirst = ee;
 		int count = exceptionsCount();
-		pointer<byte> lowCode = runtime.lowCodeAddress();
+		pointer<byte> lowCode = runtime.image.codeAddress();
 		for (;;) {
 //			printf("  frame = %p \n", frame);
-			ref<ExceptionEntry> ee;
+			ref<pxi.X86_64ExceptionEntry> ee;
 			address ip;
 			(ee, frame, ip) = nextFrame(frame, useRealStack, comparator);
 //			printf("  -> frame %p ip %p (%x) ee = [%d]\n", frame, ip, pointer<byte>(ip) - lowCode, 
-//											ee != null ? pointer<ExceptionEntry>(ee) - eeFirst : -1);
+//											ee != null ? pointer<pxi.X86_64ExceptionEntry>(ee) - eeFirst : -1);
 			if (frame == null)
 				break;
 
@@ -351,19 +351,19 @@ public class Exception {
 			comparator = comparatorReturnAddress;
 		}
 		printf("\nFATAL: Thread %s could not find a stack handler for this address.\n", thread.currentThread().name());
-		printf("Parasol code based at %p\n", runtime.lowCodeAddress());
+		printf("Parasol code based at %p\n", runtime.image.codeAddress());
 		process.stdout.write(textStackTrace());
 		process.exit(1);
 	}
 
-	private ref<ExceptionEntry>, pointer<address>, address nextFrame(pointer<address> lastFrame, boolean useRealStack, int comparator(address ip, address elem)) {
+	private ref<pxi.X86_64ExceptionEntry>, pointer<address>, address nextFrame(pointer<address> lastFrame, boolean useRealStack, int comparator(address ip, address elem)) {
 //		printf("nextFrame(%p, %s)\n", lastFrame, comparator == comparatorCurrentIp ? "current ip" : "return address");
 		pointer<address> frame;
 		pointer<byte> ip;
 
-		pointer<byte> lowCode = runtime.lowCodeAddress();
-		pointer<byte> highCode = runtime.highCodeAddress();
-		pointer<ExceptionEntry> ee = pointer<ExceptionEntry>(exceptionsAddress());
+		pointer<byte> lowCode = runtime.image.codeAddress();
+		pointer<byte> highCode = runtime.image.highCodeAddress();
+		pointer<pxi.X86_64ExceptionEntry> ee = pointer<pxi.X86_64ExceptionEntry>(exceptionsAddress());
 		int count = exceptionsCount();
 		if (count == 0) {
 			printf("No exceptions table for this image.\n");
@@ -415,10 +415,10 @@ public class Exception {
 		if (ip >= lowCode && ip < highCode) {
 			int location = int(ip - lowCode);
 //			printf("%x Checking location %x", frame, location);
-			address result = bsearch(&location, ee, count, ExceptionEntry.bytes, comparator);
-//			printf(" -> found %d\n", pointer<ExceptionEntry>(result) - ee);
+			address result = bsearch(&location, ee, count, pxi.X86_64ExceptionEntry.bytes, comparator);
+//			printf(" -> found %d\n", pointer<pxi.X86_64ExceptionEntry>(result) - ee);
 			if (result != null) {
-				ref<ExceptionEntry> ee = ref<ExceptionEntry>(result);
+				ref<pxi.X86_64ExceptionEntry> ee = ref<pxi.X86_64ExceptionEntry>(result);
 
 //				printf("(handler %x)\n", ee.handler);
 
@@ -443,14 +443,14 @@ public class Exception {
 	 */
 	private int countStackFrames(pointer<address> frame) {
 		pointer<address> oldRbp;
-		pointer<ExceptionEntry> ee = pointer<ExceptionEntry>(exceptionsAddress());
+		pointer<pxi.X86_64ExceptionEntry> ee = pointer<pxi.X86_64ExceptionEntry>(exceptionsAddress());
 		int count = exceptionsCount();
 		if (count == 0) {
 			printf("No exceptions table for this image.\n");
 			process.exit(1);
 		}
-		pointer<byte> lowCode = runtime.lowCodeAddress();
-		pointer<byte> highCode = runtime.highCodeAddress();
+		pointer<byte> lowCode = runtime.image.codeAddress();
+		pointer<byte> highCode = runtime.image.highCodeAddress();
 		int(address, address) comparator = comparatorCurrentIp;
 		address stackTop = address(long(_exceptionContext.stackBase) + _exceptionContext.stackSize);
 		pointer<address> plausibleEnd = pointer<address>(stackTop) + -2;
@@ -495,7 +495,7 @@ private address bsearch(address key, address tableAddress, int tableSize, int ro
 
 private int comparatorCurrentIp(address ip, address elem) {
 	int location = *ref<int>(ip);
-	pointer<ExceptionEntry> ee = pointer<ExceptionEntry>(elem);
+	pointer<pxi.X86_64ExceptionEntry> ee = pointer<pxi.X86_64ExceptionEntry>(elem);
 
 	if (location < ee[0].location)
 		return -1;
@@ -507,7 +507,7 @@ private int comparatorCurrentIp(address ip, address elem) {
 
 private int comparatorReturnAddress(address ip, address elem) {
 	int location = *ref<int>(ip);
-	pointer<ExceptionEntry> ee = pointer<ExceptionEntry>(elem);
+	pointer<pxi.X86_64ExceptionEntry> ee = pointer<pxi.X86_64ExceptionEntry>(elem);
 
 	if (location <= ee[0].location)
 		return -1;
@@ -934,7 +934,7 @@ boolean dispatchException(ref<Exception> e, ref<compiler.Type> t, ref<Exception>
 }
 
 private int pxiOffset(address a) {
-	return int(a) - int(runtime.lowCodeAddress());
+	return int(a) - int(runtime.image.codeAddress());
 	
 }
 
@@ -1065,15 +1065,14 @@ class ExceptionContext {
  * along with the image-relative offset of the machine code.
  */
 public string formattedLocation(address ip, int offset, boolean locationIsExact) {
-	ref<runtime.SourceLocation> sl = runtime.getSourceLocation(ip, locationIsExact);
-	if (sl == null) {
+	string filename;
+	int lineNumber;
+	(filename, lineNumber) = runtime.image.getSourceLocation(ip, locationIsExact);
+	if (filename == null) {
 		return formattedExternalLocation(ip);
 	} else {
 		string result;
-
-		//ref<FileStat> file = ref<FileStat>(sl.file);
-		ref<runtime.SourceFile> file = sl.file;
-		result.printf("%s %d", storage.makeCompactPath(file.filename(), "foo"), file.lineNumber(sl.location) + 1);
+		result.printf("%s %d", filename, lineNumber);
 		if (offset != 0)
 			result.printf(" (@%x)", offset);
 		return result;

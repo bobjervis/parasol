@@ -25,6 +25,7 @@ import parasol:compiler.Type;
 import parasol:compiler.OrdinalMap;
 import parasol:compiler.Unit;
 import parasol:context;
+import parasol:pxi;
 import parasol:runtime;
 import parasol:runtime.Arena;
 import native:C;
@@ -41,9 +42,9 @@ public class Disassembler {
 	private int _staticDataStart;
 	private int _staticDataEnd;
 	private int _nativeBindingsEnd;
-	private pointer<ExceptionEntry> _exceptionsEndOffset;
+	private pointer<pxi.X86_64ExceptionEntry> _exceptionsEndOffset;
 	private int _imageLength;
-	private ref<X86_64SectionHeader> _pxiHeader;
+	private ref<pxi.X86_64SectionHeader> _pxiHeader;
 	private int _offset;
 	
 	// Instruction prefixes.
@@ -60,7 +61,7 @@ public class Disassembler {
 	private ref<ref<ClassScope>[]> _vtables;
 	private ref<OrdinalMap> _ordinalMap;
 	
-	Disassembler(ref<Arena> arena, long logical, int imageLength, pointer<byte> physical, ref<X86_64SectionHeader> pxiHeader) {
+	Disassembler(ref<Arena> arena, long logical, int imageLength, pointer<byte> physical, ref<pxi.X86_64SectionHeader> pxiHeader) {
 		_arena = arena;
 		_logical = logical;
 		_imageLength = imageLength;
@@ -70,7 +71,8 @@ public class Disassembler {
 		_stringsEndOffset = _pxiHeader.stringsOffset + _pxiHeader.stringsLength;
 		_typeDataEndOffset = _pxiHeader.typeDataOffset + _pxiHeader.typeDataLength;
 		_vtablesEndOffset = _pxiHeader.vtablesOffset + _pxiHeader.vtableData * address.bytes;
-		_exceptionsEndOffset = pointer<ExceptionEntry>(_physical + _pxiHeader.exceptionsOffset + _pxiHeader.exceptionsCount * ExceptionEntry.bytes);
+		_exceptionsEndOffset = pointer<pxi.X86_64ExceptionEntry>(_physical + 
+					_pxiHeader.exceptionsOffset + _pxiHeader.exceptionsCount * pxi.X86_64ExceptionEntry.bytes);
 		_ip = _pxiHeader.entryPoint;
 		_staticDataStart = _vtablesEndOffset;
 		_staticDataEnd = _pxiHeader.builtInsText;
@@ -438,7 +440,7 @@ public class Disassembler {
 				if (_pxiHeader.exceptionsCount > 0) {
 					printf("\nException Table:\n");
 					printf("    Location  Handler\n");
-					for (pointer<ExceptionEntry> ee = pointer<ExceptionEntry>(_physical + _pxiHeader.exceptionsOffset); ee < _exceptionsEndOffset; ee++) {
+					for (pointer<pxi.X86_64ExceptionEntry> ee = pointer<pxi.X86_64ExceptionEntry>(_physical + _pxiHeader.exceptionsOffset); ee < _exceptionsEndOffset; ee++) {
 						printf("    %8.8x  %8.8x\n", ee.location, ee.handler);
 					}
 				}
@@ -1842,7 +1844,7 @@ escape0Fmnemonics[0x8d] = "jge";
 escape0Fmnemonics[0x8e] = "jle";
 escape0Fmnemonics[0x8f] = "jg";
 
-public void printHeader(ref<X86_64SectionHeader> header, long fileOffset) {
+public void printHeader(ref<pxi.X86_64SectionHeader> header, long fileOffset) {
 	printf("\n");
 	if (fileOffset >= 0)
 		printf("        image offset         %8x\n", fileOffset);
@@ -1881,4 +1883,8 @@ public void printHeader(ref<X86_64SectionHeader> header, long fileOffset) {
 		printf(" (file offset %x)", header.exceptionsOffset + fileOffset);
 	printf("\n");
 	printf("        exceptionsCount      %8d.\n", header.exceptionsCount);
+	printf("        sourceMapOffset      %8x", header.sourceMapOffset);
+	if (fileOffset >= 0)
+		printf(" (file offset %x)", header.sourceMapOffset + fileOffset);
+	printf("\n");
 }

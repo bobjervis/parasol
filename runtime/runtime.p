@@ -24,8 +24,9 @@ import native:windows;
 import parasol:context;
 import parasol:exception;
 import parasol:thread.Thread;
-import parasol:x86_64.X86_64SectionHeader;
+import parasol:pxi.X86_64SectionHeader;
 import parasol:memory;
+import parasol:storage;
 
 /**
  * The Parasol Runtime version string.
@@ -39,7 +40,7 @@ import parasol:memory;
  *
  * Note: Major Release == 0 means this is 'unreleased' and any public API can change at any moment.
  */
-public string RUNTIME_VERSION = "0.4.1";
+public string RUNTIME_VERSION = "0.4.2";
 
 /**
  * This is a special variable used to control compile-time conditional compilation.
@@ -93,14 +94,6 @@ public abstract int eval(ref<X86_64SectionHeader> header, address image, pointer
 @Linux("libparasol.so.1", "supportedTarget")
 @Windows("parasol.dll", "supportedTarget")
 public abstract int supportedTarget(int index);
-/** @ignore */
-@Linux("libparasol.so.1", "lowCodeAddress")
-@Windows("parasol.dll", "lowCodeAddress")
-public abstract pointer<byte> lowCodeAddress();
-/** @ignore */
-@Linux("libparasol.so.1", "highCodeAddress")
-@Windows("parasol.dll", "highCodeAddress")
-public abstract pointer<byte> highCodeAddress();
 /** @ignore */
 @Linux("libparasol.so.1", "stackTop")
 @Windows("parasol.dll", "stackTop")
@@ -176,6 +169,13 @@ public void freeRegion(address region, long length) {
 	}
 }
 /**
+ * The Image object describes essential onformation about the image that is currently running.
+ * As a PXI file is loaded or a Parasol compiler instance runs a just-compiled image, the
+ * new image runs with its own copy of static data, so the Image object is created new.
+ *
+ * The image object is initially unset, as it is primarily used to provide source location
+ * information for stack traces.
+ *
  * SourceMap - in a pxi x86-64 section, source locations appear at the end of the section,
  * After relocations
  * 
@@ -188,13 +188,64 @@ public void freeRegion(address region, long length) {
  *
  * 
  */
+public class Image {
+	private ref<X86_64SectionHeader> _pxiHeader;
+	private pointer<byte> _image;
+	private int _imageLength;
+
+	Image() {
+		_pxiHeader = pxiHeader();
+		_image = pointer<byte>(imageAddress());
+		_imageLength = imageLength();
+	}
+	/** @ignore */
+	public string, int getSourceLocation(address ip, boolean isReturnAddress) {
+		if (pointer<byte>(ip) < _image ||
+			highCodeAddress() <= pointer<byte>(ip))
+			return null, -1;
+		int offset = int(ip) - int(_image);
+		
+		if (!isReturnAddress)
+			offset--;
+		pointer<SourceLocation> psl = sourceLocations();
+		int interval = sourceLocationsCount();
+		for (;;) {
+			if (interval <= 0)
+				return null, -1;
+			int middle = interval / 2;
+			if (psl[middle].offset > offset)
+				interval = middle;
+			else if (middle == interval - 1 || psl[middle + 1].offset > offset) {
+				ref<SourceFile> file = psl[middle].file;
+				// The makeCompactPath resolves the path relative to the current directory.
+				// 'foo' in this case simply represents a file in the current working directory 
+				// and need not exist. It is not checked against the file system.
+				string filename = storage.makeCompactPath(file.filename(), "foo");
+				return filename, file.lineNumber(psl[middle].location) + 1;
+			} else {
+				psl = &psl[middle + 1];
+				interval = interval - middle - 1;
+			}
+		}
+	}
+
+	public pointer<byte> codeAddress() {
+		return _image;
+	}
+
+	public pointer<byte> highCodeAddress() {
+		return _image + _pxiHeader.typeDataOffset;
+	}
+}
+
+public Image image;
+
 public class SourceMap {
 	public int locationCount;
 	public pointer<int> codeAddress;
 	public pointer<int> fileIndex;
 	public pointer<int> fileOffset;
 }
-
 
 public class SourceLocation {
 	public ref<SourceFile>		file;			// Source file containing this location
@@ -207,8 +258,12 @@ public class SourceFile {
 	private SourceOffset[] _lines;
 	private int _baseLineNumber;				// Line number of first character in scanner input.
 
+	public int sourceFileIndex;					// Set during code generation to indicate that a source
+												// file entry has been allocated in the image
+
 	public SourceFile(string filename) {
 		_filename = filename;
+		sourceFileIndex = -1;
 	}
 
 	public SourceFile(string filename, int baseLineNumber) {
@@ -250,34 +305,6 @@ public class SourceOffset {
 		return offset != OUT_OF_FILE.offset;
 	}
 }
-
-
-/** @ignore */
-public ref<SourceLocation> getSourceLocation(address ip, boolean isReturnAddress) {
-	pointer<byte> lowCode = pointer<byte>(lowCodeAddress());
-	if (pointer<byte>(ip) < lowCode ||
-		pointer<byte>(highCodeAddress()) <= pointer<byte>(ip))
-		return null;
-	int offset = int(ip) - int(lowCode);
-	
-	if (!isReturnAddress)
-		offset--;
-	pointer<SourceLocation> psl = sourceLocations();
-	int interval = sourceLocationsCount();
-	for (;;) {
-		if (interval <= 0)
-			return null;
-		int middle = interval / 2;
-		if (psl[middle].offset > offset)
-			interval = middle;
-		else if (middle == interval - 1 || psl[middle + 1].offset > offset) {
-			return psl + middle;
-		} else {
-			psl = &psl[middle + 1];
-			interval = interval - middle - 1;
-		}
-	}
-}
 /** @ignore */
 public ref<Thread> parasolThread() {
 	return ref<Thread>(getRuntimeParameter(PARASOL_THREAD));
@@ -307,7 +334,7 @@ public pointer<SourceLocation> sourceLocations() {
 public int sourceLocationsCount() {
 	return int(getRuntimeParameter(SOURCE_LOCATIONS_COUNT));
 }
-
+/** ignore */
 public void setSectionType() {
 	if (compileTarget == Target.X86_64_WIN) {
 		setRuntimeParameter(SECTION_TYPE, address(Target.X86_64_WIN));
@@ -315,6 +342,38 @@ public void setSectionType() {
 		setRuntimeParameter(SECTION_TYPE, address(Target.X86_64_LNX_SRC));
 	}
 }
+/** ignore */
+public ref<X86_64SectionHeader> pxiHeader() {
+	return ref<X86_64SectionHeader>(getRuntimeParameter(PXI_HEADER));
+}
+/** ignore */
+public void setPxiHeader(ref<X86_64SectionHeader> newHeader) {
+	setRuntimeParameter(PXI_HEADER, newHeader);
+}
+/** ignore */
+public address imageAddress() {
+	return getRuntimeParameter(IMAGE);
+}
+/** ignore */
+public void setImageAddress(address newImage) {
+	setRuntimeParameter(IMAGE, newImage);
+}
+/** ignore */
+public int imageLength() {
+	return int(getRuntimeParameter(IMAGE_LENGTH));
+}
+/** ignore */
+public void setImageLength(int newLength) {
+	setRuntimeParameter(IMAGE_LENGTH, address(long(newLength)));
+}
+/*	Runtime Parameters
+ *
+ *	These are context parameters passed from the enclosing environment, either
+ *	the Parasol compiler or the binary executable that has loaded a PXI file.
+ *
+ *	Each parameter is an 'address' which can be treated as a simple integer or e
+ *	
+ */
 /** @ignore */
 @Constant
 int PARASOL_THREAD = 0;
@@ -330,6 +389,15 @@ int LEAKS_FLAG = 3;
 /** @ignore */
 @Constant
 int SECTION_TYPE = 4;
+/** @ignore */
+@Constant
+int PXI_HEADER = 5;
+/** @ignore */
+@Constant
+int IMAGE = 6;
+/** @ignore */
+@Constant
+int IMAGE_LENGTH = 7;
 /** @ignore */
 @Linux("libparasol.so.1", "getRuntimeParameter")
 @Windows("parasol.dll", "getRuntimeParameter")
@@ -367,7 +435,7 @@ public class CoverageTables {
  */
 public string stackTrace() {
 	string output;
-	int lowCode = int(lowCodeAddress());
+	int lowCode = int(image.codeAddress());
 	address ip = returnAddress();
 	address frame = framePointer();
 	address top = stackTop();

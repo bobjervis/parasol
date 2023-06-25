@@ -58,7 +58,7 @@ import parasol:context;
 import parasol:storage;
 import parasol:math.abs;
 import parasol:memory;
-import parasol:pxi.Pxi;
+import parasol:pxi;
 import parasol:runtime;
 import parasol:text;
 /*
@@ -155,6 +155,52 @@ class DeferredTry {
 
 private int FIRST_STACK_PARAM_OFFSET = 16;
 
+/*
+ * The X86_64 image section is laid out as follows:
+ * 
+ * 		Section Header
+ * 		
+ * 		Image Offset 0:
+ *			The image is laid out in sections, according to the
+ *			values in the Segments enum (in x86_encode.p). The
+ *			encoder writes them to the named segments and the final stage
+ *			of code generation concatenates them into the completed image.
+ */
+
+class X86_64WinSection extends pxi.Section {
+	private ref<X86_64> _target;
+	
+	public X86_64WinSection(ref<X86_64> target) {
+		super(runtime.Target.X86_64_WIN);
+		_target = target;
+	}
+	
+	public long length() {
+		return _target.imageLength();
+	}
+	
+	public boolean write(storage.File pxiFile) {
+		return _target.writePxiFile(pxiFile);
+	}
+}
+
+class X86_64LnxSection extends pxi.Section {
+	private ref<X86_64> _target;
+	
+	public X86_64LnxSection(ref<X86_64> target) {
+		super(runtime.Target.X86_64_LNX_SRC);
+		_target = target;
+	}
+	
+	public long length() {
+		return _target.imageLength();
+	}
+	
+	public boolean write(storage.File pxiFile) {
+		return _target.writePxiFile(pxiFile);
+	}
+}
+
 enum Segments {
 	CODE,
 	TYPE_DATA,
@@ -170,6 +216,9 @@ enum Segments {
 
 	BUILT_INS_TEXT,
 	SOURCE_LOCATIONS,
+	SOURCE_FILE_INDICES,
+	SOURCE_FILE_OFFSETS,
+	SOURCE_FILE_NAMES,
 	RELOCATIONS,
 	MAXIMUM,
 	ALLOCATED
@@ -182,11 +231,12 @@ class NativeBinding {
 }
 
 class X86_64Encoder extends Target {
-	protected X86_64SectionHeader _pxiHeader;
+	protected pxi.X86_64SectionHeader _pxiHeader;
 	protected memory.NoReleasePool _storage;
 	protected pointer<byte> _staticMemory;
 	protected int _staticMemoryLength;
 	protected runtime.SourceLocation[] _sourceLocations;
+	protected int[ref<Unit>] _sourceFileMap;
 	protected DeferredTry[] _deferredTry;
 	protected ref<Segment<Segments>>[Segments] _segments;
 	protected ref<Symbol>[] _nativeBindingSymbols;
@@ -221,6 +271,9 @@ class X86_64Encoder extends Target {
 
 		_segments[Segments.BUILT_INS_TEXT] = new Segment<Segments>(1);
 		_segments[Segments.SOURCE_LOCATIONS] = new Segment<Segments>(4);
+		_segments[Segments.SOURCE_FILE_INDICES] = new Segment<Segments>(4);
+		_segments[Segments.SOURCE_FILE_OFFSETS] = new Segment<Segments>(4);
+		_segments[Segments.SOURCE_FILE_NAMES] = new Segment<Segments>(4);
 		_segments[Segments.RELOCATIONS] = new Segment<Segments>(4);
 		_segments[Segments.MAXIMUM] = new Segment<Segments>(1);
 	}
@@ -230,7 +283,7 @@ class X86_64Encoder extends Target {
 	}
 
 	boolean generateCode(ref<Unit> mainFile, ref<CompileContext> compileContext) {
-		
+		_segments[Segments.SOURCE_LOCATIONS].reserve(pxi.X86_64SourceMap.bytes);
 		if (mainFile != null) {
 			// Storage has been allocated in the derived class for all static objects.
 			// Now we need to generate the executable code for the static initializers,
@@ -246,6 +299,16 @@ class X86_64Encoder extends Target {
 				return false;
 			}
 		} else {
+		}
+
+		ref<pxi.X86_64SourceMap> smap = ref<pxi.X86_64SourceMap>(_segments[Segments.SOURCE_LOCATIONS].at(0));
+		smap.codeLocationsCount = _sourceLocations.length();
+
+		for (i in _sourceLocations) {
+			ref<runtime.SourceLocation> sl = &_sourceLocations[i];
+			_segments[Segments.SOURCE_LOCATIONS].append(&sl.location.offset, int.bytes);
+			_segments[Segments.SOURCE_FILE_INDICES].append(&sl.file.sourceFileIndex, int.bytes);
+			_segments[Segments.SOURCE_FILE_OFFSETS].append(&sl.offset, int.bytes);
 		}
 
 		appendExceptionEntry(int.MAX_VALUE, null);
@@ -390,6 +453,7 @@ class X86_64Encoder extends Target {
 		relocateStaticData(2);
 		relocateStaticData(1);
 		
+		_pxiHeader.sourceMapOffset = _segments[Segments.SOURCE_LOCATIONS].offset();
 		_pxiHeader.typeDataOffset = _segments[Segments.TYPE_DATA].offset();
 		_pxiHeader.typeDataLength = _segments[Segments.TYPE_DATA].length();
 		_pxiHeader.stringsOffset = _segments[Segments.STRINGS].offset();
@@ -399,7 +463,7 @@ class X86_64Encoder extends Target {
 		_pxiHeader.relocationOffset = _segments[Segments.RELOCATIONS].offset();
 		_pxiHeader.relocationCount = _segments[Segments.RELOCATIONS].length() / int.bytes;
 		_pxiHeader.exceptionsOffset = _segments[Segments.EXCEPTION_TABLE].offset();
-		_pxiHeader.exceptionsCount = _segments[Segments.EXCEPTION_TABLE].length() / ExceptionEntry.bytes;
+		_pxiHeader.exceptionsCount = _segments[Segments.EXCEPTION_TABLE].length() / pxi.X86_64ExceptionEntry.bytes;
 		_pxiHeader.builtInsText = _segments[Segments.BUILT_INS_TEXT].offset();
 		_pxiHeader.vtablesOffset = _segments[Segments.VTABLES].offset();
 
@@ -846,14 +910,26 @@ class X86_64Encoder extends Target {
 		int offset = _segments[Segments.CODE].reserve(length);
 		int firstExceptionEntry = _segments[Segments.EXCEPTION_TABLE].length();
 		_f.packCode(offset, this);
-		pointer<ExceptionEntry> ee = pointer<ExceptionEntry>(_segments[Segments.EXCEPTION_TABLE].at(firstExceptionEntry));
-		for (int i = firstExceptionEntry; i < _segments[Segments.EXCEPTION_TABLE].length(); i += ExceptionEntry.bytes, ee++) {
-			int hi = i / ExceptionEntry.bytes;
+		pointer<pxi.X86_64ExceptionEntry> ee = pointer<pxi.X86_64ExceptionEntry>(_segments[Segments.EXCEPTION_TABLE].at(firstExceptionEntry));
+		for (int i = firstExceptionEntry; i < _segments[Segments.EXCEPTION_TABLE].length(); i += pxi.X86_64ExceptionEntry.bytes, ee++) {
+			int hi = i / pxi.X86_64ExceptionEntry.bytes;
 			if (_exceptionHandlers[hi] != null)
 				ee.handler = offset + _exceptionHandlers[hi].segmentOffset;
 		}
 		_functionCode.resize(_f.firstCode);
 		return offset;
+	}
+
+	void emitSourceFile(ref<Unit> file) {
+		if (file.sourceFileIndex == 0) {
+			int segOffset = _segments[Segments.SOURCE_FILE_NAMES].length();
+			file.sourceFileIndex = segOffset / int.bytes + 1;
+			string filename = file.filename();
+			int filenameOffset = _segments[Segments.BUILT_INS_TEXT].reserve(filename.length() + 1);
+			C.memcpy(_segments[Segments.BUILT_INS_TEXT].at(filenameOffset), filename.c_str(), filename.length());
+			_segments[Segments.SOURCE_FILE_NAMES].append(&filenameOffset, int.bytes);
+			_segments[Segments.SOURCE_FILE_NAMES].fixup(segOffset, Segments.BUILT_INS_TEXT, true);
+		}
 	}
 
 	public abstract void generateFunctionCore(ref<Scope> scope, ref<CompileContext> compileContext);
@@ -943,7 +1019,8 @@ class X86_64Encoder extends Target {
 
 		void emitSourceLocation(ref<Unit> file, runtime.SourceOffset location, ref<X86_64Encoder> encoder) {
 			ensureCodeSegment(encoder);
-	
+			encoder.emitSourceFile(file);
+
 			runtime.SourceLocation loc = {
 				file: file,
 				location: location,
@@ -1026,6 +1103,7 @@ class X86_64Encoder extends Target {
 			for (ref<CodeSegment> cs = _first; cs != null; cs = cs.next) {
 				for (i in cs.sourceLocations)
 					cs.sourceLocations[i].offset += nextCopy;
+
 				encoder._sourceLocations.append(cs.sourceLocations);
 				encoder.emitExceptionEntry(nextCopy, cs.exceptionHandler);
 				C.memcpy(&code[nextCopy], &encoder._functionCode[cs.codeOffset], cs.length);
@@ -1147,7 +1225,7 @@ class X86_64Encoder extends Target {
 	}
 	
 	private void appendExceptionEntry(int location, ref<CodeSegment> handler) {
-		ExceptionEntry ee;
+		pxi.X86_64ExceptionEntry ee;
 		
 		ee.location = location;
 		ee.handler = 0;
@@ -4062,7 +4140,7 @@ class X86_64Encoder extends Target {
 	}
 
 	public int imageLength() {
-		return X86_64SectionHeader.bytes + _staticMemoryLength;
+		return pxi.X86_64SectionHeader.bytes + _staticMemoryLength;
 	}
 	
 	public boolean writePxiFile(storage.File pxiFile) {
@@ -4073,7 +4151,7 @@ class X86_64Encoder extends Target {
 		return true;
 	}
 	
-	public ref<X86_64SectionHeader> pxiHeader() {
+	public ref<pxi.X86_64SectionHeader> pxiHeader() {
 		return &_pxiHeader;
 	}
 

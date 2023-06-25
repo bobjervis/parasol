@@ -89,7 +89,7 @@ import parasol:context;
 import parasol:exception;
 import parasol:memory;
 import parasol:process;
-import parasol:pxi.Pxi;
+import parasol:pxi;
 import parasol:runtime;
 import parasol:storage;
 import parasol:stream;
@@ -196,7 +196,8 @@ public class X86_64Lnx extends X86_64 {
 		return runtime.Target.X86_64_LNX;
 	}
 
-	public void writePxi(ref<Pxi> output) {
+	public void writePxi(ref<pxi.
+Pxi> output) {
 		ref<X86_64LnxSection> s = new X86_64LnxSection(this);
 		output.declareSection(s);
 	}
@@ -276,7 +277,7 @@ public class X86_64Win extends X86_64 {
 		return runtime.Target.X86_64_WIN;
 	}
 
-	public void writePxi(ref<Pxi> output) {
+	public void writePxi(ref<pxi.Pxi> output) {
 		ref<X86_64WinSection> s = new X86_64WinSection(this);
 		output.declareSection(s);
 	}
@@ -359,117 +360,89 @@ public class X86_64 extends X86_64AssignTemps {
 		}
 	}
 
-	public abstract void writePxi(ref<Pxi> output);
+	public abstract void writePxi(ref<pxi.Pxi> output);
 	
 	public int, boolean run(string[] args) {
 		pointer<byte>[] runArgs;
 		for (int i = 1; i < args.length(); i++)
 			runArgs.append(args[i].c_str());
 		int returnValue;
-		pointer<runtime.SourceLocation> outerSource = runtime.sourceLocations();
-		int outerSourceCount = runtime.sourceLocationsCount();
-		memory.StartingHeap outerHeap = runtime.startingHeap();
 		process.stdout.flush();
-		if (runtime.makeRegionExecutable(_staticMemory, _staticMemoryLength)) {
-			pointer<int> pxiFixups = pointer<int>(&_staticMemory[_pxiHeader.relocationOffset]);
-			pointer<long> vp;
-			for (int i = 0; i < _pxiHeader.relocationCount; i++) {
-				vp = pointer<long>(_staticMemory + pxiFixups[i]);
-				*vp += long(address(_staticMemory));
-			}
-			vp = pointer<long>(_staticMemory + _pxiHeader.vtablesOffset);
-			for (int i = 0; i < _pxiHeader.vtableData; i++, vp++)
-				*vp += long(address(_staticMemory));
-			pointer<NativeBinding> nativeBindings = pointer<NativeBinding>(_staticMemory + _pxiHeader.nativeBindingsOffset);
-			for (int i = 0; i < _pxiHeader.nativeBindingsCount; i++) {
-				if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-					windows.HMODULE dll = windows.GetModuleHandle(nativeBindings[i].dllName);
-					if (dll == null) {
-						dll = windows.LoadLibrary(nativeBindings[i].dllName);
-						if (dll == null) {
-							string d(nativeBindings[i].dllName);
-							printf("Unable to locate DLL %s\n", d);
-							assert(false);
-						}
-					}
-					nativeBindings[i].functionAddress = windows.GetProcAddress(dll, nativeBindings[i].symbolName);
-				} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-					string soName(nativeBindings[i].dllName);
-					if (soName == "libparasol.so.1") {
-						soName = "libparasol.so";
-					}
-					address handle = linux.dlopen(soName.c_str(), linux.RTLD_LAZY);
-					if (handle == null) {
-						printf("Unable to locate shared object %s (%s)\n", soName, linux.dlerror());
-						assert(false);
-					} else
-						nativeBindings[i].functionAddress = linux.dlsym(handle, 
-												nativeBindings[i].symbolName);
-//					linux.dlclose(handle);
-				}
-				if (nativeBindings[i].functionAddress == null) {
-					string d(nativeBindings[i].dllName);
-					string s(nativeBindings[i].symbolName);
-					printf("Unable to locate symbol %s in %s\n", s, d);
-					assert(false);
-				}
-			}
-			runtime.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
-			runtime.setSectionType();
-			runtime.setStartingHeap(_startingHeap);
-			returnValue = runtime.eval(&_pxiHeader, _staticMemory, &runArgs[0], runArgs.length());
-		} else {
+		pointer<byte> generatedCode;
+		if (runtime.makeRegionExecutable(_staticMemory, _staticMemoryLength))
+			generatedCode = _staticMemory;
+		else {
 			pointer<byte> generatedCode = pointer<byte>(runtime.allocateRegion(_staticMemoryLength));
 			C.memcpy(generatedCode, _staticMemory, _staticMemoryLength);
-			pointer<int> pxiFixups = pointer<int>(&generatedCode[_pxiHeader.relocationOffset]);
-			pointer<long> vp;
-			for (int i = 0; i < _pxiHeader.relocationCount; i++) {
-				vp = pointer<long>(generatedCode + pxiFixups[i]);
-				*vp += long(address(generatedCode));
-			}
-			vp = pointer<long>(generatedCode + _pxiHeader.vtablesOffset);
-			for (int i = 0; i < _pxiHeader.vtableData; i++, vp++)
-				*vp += long(address(generatedCode));
-			pointer<NativeBinding> nativeBindings = pointer<NativeBinding>(generatedCode + _pxiHeader.nativeBindingsOffset);
-			for (int i = 0; i < _pxiHeader.nativeBindingsCount; i++) {
-				if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-					windows.HMODULE dll = windows.GetModuleHandle(nativeBindings[i].dllName);
-					if (dll == null) {
-						dll = windows.LoadLibrary(nativeBindings[i].dllName);
-						if (dll == null) {
-							string d(nativeBindings[i].dllName);
-							printf("Unable to locate DLL %s\n", d);
-							assert(false);
-						}
-					}
-					nativeBindings[i].functionAddress = windows.GetProcAddress(dll, nativeBindings[i].symbolName);
-				} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-					address handle = linux.dlopen(nativeBindings[i].dllName, linux.RTLD_LAZY);
-					if (handle == null) {
-						printf("Unable to locate shared object %s (%s)\n", nativeBindings[i].dllName, linux.dlerror());
-						assert(false);
-					} else
-						nativeBindings[i].functionAddress = linux.dlsym(handle, nativeBindings[i].symbolName);
-					linux.dlclose(handle);
-				}
-				if (nativeBindings[i].functionAddress == null) {
-					string d(nativeBindings[i].dllName);
-					string s(nativeBindings[i].symbolName);
-					printf("Unable to locate symbol %s in %s\n", s, d);
-					assert(false);
-				}
-			}
-			if (runtime.makeRegionExecutable(generatedCode, _staticMemoryLength)) {
-				runtime.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
-				runtime.setStartingHeap(_startingHeap);
-				returnValue = runtime.eval(&_pxiHeader, generatedCode, &runArgs[0], runArgs.length());
-			} else {
+			if (!runtime.makeRegionExecutable(generatedCode, _staticMemoryLength)) {
 				assert(false);
 				return 0, false;
 			}
 		}
+		pointer<int> pxiFixups = pointer<int>(&generatedCode[_pxiHeader.relocationOffset]);
+		pointer<long> vp;
+		for (int i = 0; i < _pxiHeader.relocationCount; i++) {
+			vp = pointer<long>(generatedCode + pxiFixups[i]);
+			*vp += long(address(generatedCode));
+		}
+		vp = pointer<long>(_staticMemory + _pxiHeader.vtablesOffset);
+		for (int i = 0; i < _pxiHeader.vtableData; i++, vp++)
+			*vp += long(address(_staticMemory));
+		pointer<NativeBinding> nativeBindings = pointer<NativeBinding>(_staticMemory + _pxiHeader.nativeBindingsOffset);
+		for (int i = 0; i < _pxiHeader.nativeBindingsCount; i++) {
+			if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+				windows.HMODULE dll = windows.GetModuleHandle(nativeBindings[i].dllName);
+				if (dll == null) {
+					dll = windows.LoadLibrary(nativeBindings[i].dllName);
+					if (dll == null) {
+						string d(nativeBindings[i].dllName);
+						printf("Unable to locate DLL %s\n", d);
+						assert(false);
+					}
+				}
+				nativeBindings[i].functionAddress = windows.GetProcAddress(dll, nativeBindings[i].symbolName);
+			} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+				string soName(nativeBindings[i].dllName);
+				if (soName == "libparasol.so.1") {
+					soName = "libparasol.so";
+				}
+				address handle = linux.dlopen(soName.c_str(), linux.RTLD_LAZY);
+				if (handle == null) {
+					printf("Unable to locate shared object %s (%s)\n", soName, linux.dlerror());
+					assert(false);
+				} else
+					nativeBindings[i].functionAddress = linux.dlsym(handle, 
+											nativeBindings[i].symbolName);
+//					linux.dlclose(handle);
+			}
+			if (nativeBindings[i].functionAddress == null) {
+				string d(nativeBindings[i].dllName);
+				string s(nativeBindings[i].symbolName);
+				printf("Unable to locate symbol %s in %s\n", s, d);
+				assert(false);
+			}
+		}
+
+		pointer<runtime.SourceLocation> outerSource = runtime.sourceLocations();
+		int outerSourceCount = runtime.sourceLocationsCount();
+		memory.StartingHeap outerHeap = runtime.startingHeap();
+		ref<pxi.X86_64SectionHeader> outerPxiHeader = runtime.pxiHeader();
+		address outerImage = runtime.imageAddress();
+		int outerImageLength = runtime.imageLength();
+		runtime.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
+		runtime.setSectionType();
+		runtime.setStartingHeap(_startingHeap);
+		runtime.setPxiHeader(&_pxiHeader);
+		runtime.setImageAddress(_staticMemory);
+		runtime.setImageLength(_staticMemoryLength);
+
+		returnValue = runtime.eval(&_pxiHeader, _staticMemory, &runArgs[0], runArgs.length());
+
 		runtime.setSourceLocations(outerSource, outerSourceCount);
 		runtime.setStartingHeap(outerHeap);
+		runtime.setPxiHeader(outerPxiHeader);
+		runtime.setImageAddress(outerImage);
+		runtime.setImageLength(outerImageLength);
 		if (exception.fetchExposedException() == null)
 			return returnValue, true;
 		else

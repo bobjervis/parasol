@@ -16,6 +16,7 @@
 #ifndef PXI_H
 #define PXI_H
 #include"machine.h"
+#include"parasol_enums.h"
 #include <stddef.h>
 
 namespace pxi {
@@ -38,12 +39,12 @@ class SectionEntry {
 public:
 	unsigned char sectionType;		// A section type describing the data in the section.
 private:
-	unsigned char _1;		// must be zero
-	short _2;		// must be zero
-	int _3;			// must be zero
+	unsigned char _1;				// must be zero
+	short _2;						// must be zero
+	int _3;							// must be zero
 public:
-	long long offset;			// The offset of the section in the file, in bytes.
-	long long length;			// The length of the section, in bytes.
+	long long offset;				// The offset of the section in the file, in bytes.
+	long long length;				// The length of the section, in bytes.
 };
 
 class X86_64SectionHeader {
@@ -68,14 +69,11 @@ public:
 
 class Section {
 public:
-	Section(X86_64SectionHeader &header, byte *image, size_t imageLength) {
-		this->header = header;
-		this->image = image;
-		this->imageLength = imageLength;
-	}
+	Section(Target sectionType, X86_64SectionHeader &header, byte *image, size_t imageLength);
 
 	bool run(char **args, int *returnValue);
 
+	Target sectionType;
 	X86_64SectionHeader header;
 	byte *image;
 	size_t imageLength;
