@@ -108,7 +108,7 @@ class ServerWork implements WSUpstream {
 	}
 
 	void disconnect(boolean normalClose) {
-		logger.debug("upstream disconnect");
+		logger.debug("upstream disconnect, normal close? %s", string(normalClose));
 		delete down;
 		upstreamDisconnect = true;
 	}
@@ -138,7 +138,7 @@ class ClientWork implements WSDownstream {
 	}
 
 	void disconnect(boolean normalClose) {
-		logger.debug("downstream disconnect\n");
+		logger.debug("downstream disconnect");
 		downstreamDisconnect = true;
 	}
 }

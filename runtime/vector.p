@@ -282,10 +282,17 @@ public class vector<class E, class I> {
 		append(other);
 	}
 
+	public vector(pointer<E> data, I length) {
+		_capacity = I(0);
+		_length = length;
+		_data = data;
+	}
+		
 	~vector() {
 		for (int i = 0; i < int(_length); i++)
 			_data[i].~();
-		memory.free(_data);
+		if (_capacity != I(0))
+			memory.free(_data);
 	}
 	
 	public void append(vector<E, I> other) {
@@ -314,7 +321,36 @@ public class vector<class E, class I> {
 //		print("resize done\n");
 		_data[int(_length) - 1] = other;
 	}
+	/*
+	 *	binarySearch
+	 *
+	 *	This function does a binary search on an already sorted array.
+	 *	The key class must define a compare method that returns < 0
+	 *	if the key is less than its argument, > 0 if it is greater and
+	 *	0 if they are equal.
+	 *
+	 *	RETURNS:
+	 *		N < size	If element N is compares equal to the key.
+	 *		-1			If there are no elements, or no elements match the key.
+	 */
+	public I binarySearch(E key) {
+		int min = 0;
+		int max = int(_length) - 1;
+		int mid = -1;
+		int relation = -1;
 
+		while (min <= max) {
+			mid = (max + min) / 2;
+			relation = key.compare(_data[I(mid)]);
+			if (relation == 0)
+				return I(mid);
+			if (relation < 0)
+				max = mid - 1;
+			else
+				min = mid + 1;
+		}
+		return -1;
+	}
 	/*
 	 *	binarySearchClosestGreater
 	 *
@@ -346,6 +382,38 @@ public class vector<class E, class I> {
 		}
 		if (relation > 0)
 			mid++;
+		return I(mid);
+	}
+	/*
+	 *	binarySearchClosestNotGreater
+	 *
+	 *	This function does a binary search on an already sorted array.
+	 *	The key class must define a compare method that returns < 0
+	 *	if the key is less than its argument, > 0 if it is greater and
+	 *	0 if they are equal.
+	 *
+	 *	RETURNS:
+	 *		N < size	If element N is the largest not greater than the key.
+	 *		-1			If there are no elements, or all elements are greater than the key.
+	 */
+	public I binarySearchClosestNotGreater(E key) {
+		int min = 0;
+		int max = int(_length) - 1;
+		int mid = -1;
+		int relation = -1;
+
+		while (min <= max) {
+			mid = (max + min) / 2;
+			relation = key.compare(_data[I(mid)]);
+			if (relation == 0)
+				return I(mid);
+			if (relation < 0)
+				max = mid - 1;
+			else
+				min = mid + 1;
+		}
+		if (relation < 0)
+			mid--;
 		return I(mid);
 	}
 
@@ -503,7 +571,8 @@ public class vector<class E, class I> {
 				a[int(i)] = _data[int(i)];
 				_data[int(i)].~();
 			}
-			memory.free(_data);
+			if (_capacity != I(0))
+				memory.free(_data);
 		}
 		for (int i = int(_length); i < int(newLength); i++)
 			new (&a[i]) E();
@@ -547,7 +616,8 @@ public class vector<class E, class I> {
 				a[int(i)] = _data[int(i)];
 				_data[int(i)].~();
 			}
-			allocator.free(_data);
+			if (_capacity != I(0))
+				allocator.free(_data);
 		}
 		_capacity = newSize;
 		_data = a;

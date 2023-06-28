@@ -75,8 +75,7 @@ public class X86_64SectionHeader {
                                                 // context from which the source came
             Source Line Numbers
 
-    span<int, lineNumberCount> lineNumbers;     // All the line numbers across all files
-	span<int, lineNumberCount> lineFileOffsets;
+	span<int, lineNumberCount> lineFileOffsets; // All the line numbers across all files
 </pre>
  */
 public class X86_64SourceMap {

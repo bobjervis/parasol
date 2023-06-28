@@ -219,6 +219,10 @@ enum Segments {
 	SOURCE_FILE_INDICES,
 	SOURCE_FILE_OFFSETS,
 	SOURCE_FILE_NAMES,
+	SOURCE_FILE_LINE_INDICES,
+	SOURCE_FILE_LINE_COUNTS,
+	SOURCE_FILE_BASE_LINES,
+	LINE_FILE_OFFSETS,
 	RELOCATIONS,
 	MAXIMUM,
 	ALLOCATED
@@ -274,6 +278,10 @@ class X86_64Encoder extends Target {
 		_segments[Segments.SOURCE_FILE_INDICES] = new Segment<Segments>(4);
 		_segments[Segments.SOURCE_FILE_OFFSETS] = new Segment<Segments>(4);
 		_segments[Segments.SOURCE_FILE_NAMES] = new Segment<Segments>(4);
+		_segments[Segments.SOURCE_FILE_LINE_INDICES] = new Segment<Segments>(4);
+		_segments[Segments.SOURCE_FILE_LINE_COUNTS] = new Segment<Segments>(4);
+		_segments[Segments.SOURCE_FILE_BASE_LINES] = new Segment<Segments>(4);
+		_segments[Segments.LINE_FILE_OFFSETS] = new Segment<Segments>(4);
 		_segments[Segments.RELOCATIONS] = new Segment<Segments>(4);
 		_segments[Segments.MAXIMUM] = new Segment<Segments>(1);
 	}
@@ -303,12 +311,13 @@ class X86_64Encoder extends Target {
 
 		ref<pxi.X86_64SourceMap> smap = ref<pxi.X86_64SourceMap>(_segments[Segments.SOURCE_LOCATIONS].at(0));
 		smap.codeLocationsCount = _sourceLocations.length();
+		smap.sourceFileCount = _segments[Segments.SOURCE_FILE_NAMES].length() / int.bytes;
 
 		for (i in _sourceLocations) {
 			ref<runtime.SourceLocation> sl = &_sourceLocations[i];
-			_segments[Segments.SOURCE_LOCATIONS].append(&sl.location.offset, int.bytes);
+			_segments[Segments.SOURCE_LOCATIONS].append(&sl.offset, int.bytes);
 			_segments[Segments.SOURCE_FILE_INDICES].append(&sl.file.sourceFileIndex, int.bytes);
-			_segments[Segments.SOURCE_FILE_OFFSETS].append(&sl.offset, int.bytes);
+			_segments[Segments.SOURCE_FILE_OFFSETS].append(&sl.location.offset, int.bytes);
 		}
 
 		appendExceptionEntry(int.MAX_VALUE, null);
@@ -921,14 +930,23 @@ class X86_64Encoder extends Target {
 	}
 
 	void emitSourceFile(ref<Unit> file) {
-		if (file.sourceFileIndex == 0) {
+		if (file.sourceFileIndex == -1) {
 			int segOffset = _segments[Segments.SOURCE_FILE_NAMES].length();
+//			printf("file %s -> %d.\n", file.filename(), segOffset);
 			file.sourceFileIndex = segOffset / int.bytes + 1;
 			string filename = file.filename();
 			int filenameOffset = _segments[Segments.BUILT_INS_TEXT].reserve(filename.length() + 1);
 			C.memcpy(_segments[Segments.BUILT_INS_TEXT].at(filenameOffset), filename.c_str(), filename.length());
 			_segments[Segments.SOURCE_FILE_NAMES].append(&filenameOffset, int.bytes);
 			_segments[Segments.SOURCE_FILE_NAMES].fixup(segOffset, Segments.BUILT_INS_TEXT, true);
+			ref<runtime.SourceOffset[]> lines = file.lines();
+			int lineIndex = _segments[Segments.LINE_FILE_OFFSETS].length();
+			_segments[Segments.SOURCE_FILE_LINE_INDICES].append(&lineIndex, int.bytes);
+			int lineCount = lines.length();
+			_segments[Segments.SOURCE_FILE_LINE_COUNTS].append(&lineCount, int.bytes);
+			int baseLineNumber = file.baseLineNumber();
+			_segments[Segments.SOURCE_FILE_BASE_LINES].append(&baseLineNumber, int.bytes);
+			_segments[Segments.LINE_FILE_OFFSETS].append(&(*lines)[0], lines.length() * int.bytes);
 		}
 	}
 

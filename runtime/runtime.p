@@ -24,7 +24,7 @@ import native:windows;
 import parasol:context;
 import parasol:exception;
 import parasol:thread.Thread;
-import parasol:pxi.X86_64SectionHeader;
+import parasol:pxi;
 import parasol:memory;
 import parasol:storage;
 
@@ -89,7 +89,7 @@ public enum Target {
 /** @ignore */
 @Linux("libparasol.so.1", "eval")
 @Windows("parasol.dll", "eval")
-public abstract int eval(ref<X86_64SectionHeader> header, address image, pointer<pointer<byte>> args, int argsCount);
+public abstract int eval(ref<pxi.X86_64SectionHeader> header, address image, pointer<pointer<byte>> args, int argsCount);
 /** @ignore */
 @Linux("libparasol.so.1", "supportedTarget")
 @Windows("parasol.dll", "supportedTarget")
@@ -189,9 +189,18 @@ public void freeRegion(address region, long length) {
  * 
  */
 public class Image {
-	private ref<X86_64SectionHeader> _pxiHeader;
+	private ref<pxi.X86_64SectionHeader> _pxiHeader;
 	private pointer<byte> _image;
 	private int _imageLength;
+	private ref<pxi.X86_64SourceMap> _sourceMap;
+	private pointer<int> _codeAddresses;
+	private pointer<int> _fileIndices;
+	private pointer<int> _fileOffsets;
+	private pointer<int> _filenames;
+	private pointer<int> _firstLineNumbers;
+	private pointer<int> _linesCounts;
+	private pointer<int> _baseLineNumbers;
+	private pointer<int> _lineFileOffsets;
 
 	Image() {
 		_pxiHeader = pxiHeader();
@@ -203,10 +212,59 @@ public class Image {
 		if (pointer<byte>(ip) < _image ||
 			highCodeAddress() <= pointer<byte>(ip))
 			return null, -1;
+		if (_sourceMap == null) {
+			_sourceMap = ref<pxi.X86_64SourceMap>(_image + _pxiHeader.sourceMapOffset);
+			_codeAddresses = pointer<int>(_image + _pxiHeader.sourceMapOffset + 
+														pxi.X86_64SourceMap.bytes);
+			_fileIndices = _codeAddresses + _sourceMap.codeLocationsCount;
+			_fileOffsets = _fileIndices + _sourceMap.codeLocationsCount;
+			_filenames = _fileOffsets + _sourceMap.codeLocationsCount;
+//			for (int i = 0; i < _sourceMap.codeLocationsCount; i++) {
+//				printf("[%5d] %8x f %3d. %6d.\n", i, _codeAddresses[i], _fileIndices[i], _fileOffsets[i]);
+//			}
+//			for (int i = 0; i < _sourceMap.sourceFileCount; i++) {
+//				printf("[%3d] ", i);
+//				pointer<byte> filename = _image + _filenames[i];
+//				printf("%s\n", filename);
+//			}
+			_firstLineNumbers = _filenames + _sourceMap.sourceFileCount;
+			_linesCounts = _firstLineNumbers + _sourceMap.sourceFileCount;
+			_baseLineNumbers = _linesCounts + _sourceMap.sourceFileCount;
+			_lineFileOffsets = _baseLineNumbers + _sourceMap.sourceFileCount;
+		}
+
 		int offset = int(ip) - int(_image);
-		
+		// This avoids the problem that a call instruction pushes the next instruction address
+		// as the return address, which may be the start of another source line. A call
+		// instruction is also guarantte to be more than 1 byte long. So, unless the return
+		// addresses are being spoofed in some way, this should produce clean stack traces.
 		if (!isReturnAddress)
 			offset--;
+		
+		int[] lookup(_codeAddresses, _sourceMap.codeLocationsCount);
+			
+		int index = lookup.binarySearchClosestNotGreater(offset);
+//		printf("offset = %x index = %d\n", offset, index);
+//		printf("bucket offset %x\n", _codeAddresses[index]);
+//		printf("  next offset %x\n", _codeAddresses[index + 1]);
+
+		int fileIndex = _fileIndices[index] - 1;
+		if (fileIndex < 0)
+			return null, -1;
+		int fileOffset = _fileOffsets[index];
+		string filename = string(_image + _filenames[fileIndex]);
+
+//		printf("File %d. %s offset %d\n", fileIndex, filename, fileOffset);
+
+		int lineEntryOffset = _firstLineNumbers[fileIndex];
+
+		int[] lookupLine(pointer<int>(pointer<byte>(_lineFileOffsets) + lineEntryOffset),
+							_linesCounts[fileIndex]);
+ 
+		int lineNumber = lookupLine.binarySearchClosestGreater(fileOffset) + 1 + _baseLineNumbers[fileIndex];
+//		printf("lineNumber = %d base line number %d\n", lineNumber, _baseLineNumbers[fileIndex]);
+		return filename, lineNumber;
+/*
 		pointer<SourceLocation> psl = sourceLocations();
 		int interval = sourceLocationsCount();
 		for (;;) {
@@ -227,12 +285,13 @@ public class Image {
 				interval = interval - middle - 1;
 			}
 		}
+ */
 	}
-
+	/** @ignore */
 	public pointer<byte> codeAddress() {
 		return _image;
 	}
-
+	/** @ignore */
 	public pointer<byte> highCodeAddress() {
 		return _image + _pxiHeader.typeDataOffset;
 	}
@@ -282,6 +341,14 @@ public class SourceFile {
 	public int lineNumber(SourceOffset location) {
 		int x = _lines.binarySearchClosestGreater(location);
 		return _baseLineNumber + x;
+	}
+
+	public ref<SourceOffset[]> lines() {
+		return &_lines;
+	}
+
+	public int baseLineNumber() {
+		return _baseLineNumber;
 	}
 }
 	
@@ -343,11 +410,11 @@ public void setSectionType() {
 	}
 }
 /** ignore */
-public ref<X86_64SectionHeader> pxiHeader() {
-	return ref<X86_64SectionHeader>(getRuntimeParameter(PXI_HEADER));
+public ref<pxi.X86_64SectionHeader> pxiHeader() {
+	return ref<pxi.X86_64SectionHeader>(getRuntimeParameter(PXI_HEADER));
 }
 /** ignore */
-public void setPxiHeader(ref<X86_64SectionHeader> newHeader) {
+public void setPxiHeader(ref<pxi.X86_64SectionHeader> newHeader) {
 	setRuntimeParameter(PXI_HEADER, newHeader);
 }
 /** ignore */

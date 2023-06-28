@@ -17,9 +17,9 @@ package(name: core:parasollanguage.org, preserveAnonymousUnits: true) {
 	file(name: *.p, src: runtime)
 	init(placement: first){
 		memory.p
-		aa_thread.p
+		thread.p
 		logger.p
-		ac_locale.p
+		locale.p
 	}
 	init(placement: last) {
 		
