@@ -212,7 +212,8 @@ private monitor class WebSocketVolatileData {
 				_sentClose = true;
 			}
 
-//			printf("about to join...\n");
+			// We're passing the thread out so that the caller can join it. If we did it here, we'd be 
+			// holding a lock that one of the background threads might need to briefly take.
 			_readerThread = null;
 		}
 		return t;
@@ -271,6 +272,20 @@ private void readWrapper(address arg) {
 	socket.discardReader();
 //	if (socket.server())
 	socket.disconnect(sawClose);
+}
+/**
+ * A Client can choose to implement the DisconnectListener interface.
+ * Doing so will enable the 'disconnect' notification event. This event
+ * is fired when the underlying WebSocket disconnects.
+ */
+public interface DisconnectListener {
+	/**
+	 * This method notifies the object that a cdisconnect has just occurred.
+	 *
+	 * @param normalClose true, if the disconnect sequence was correct for
+	 * the Web Socket protocol and false otherwise.
+	 */
+	void disconnect(boolean normalClose);
 }
 /**
  * An object that implements the Web Socket message frame protocol once an HTTP message has determined
@@ -355,8 +370,7 @@ public class WebSocket extends WebSocketVolatileData {
 	private byte[] _incomingData;		// A buffer of data being read from the websocket.
 	private int _incomingLength;		// The number of bytes in the buffer.
 	private int _incomingCursor;		// The index of the next byte to be read from the buffer.
-	private void (address, boolean) _disconnectFunction;
-	private address _disconnectParameter;
+	private DisconnectListener _disconnectListener;
 	/**
 	 * Constructor.
 	 *
@@ -684,9 +698,8 @@ public class WebSocket extends WebSocketVolatileData {
 	 * whether the disconnect was a normal close (true) or an error (false).
 	 * @param param The value to pass to the function when it is called.
 	 */
-	public void onDisconnect(void (address, boolean) func, address param) {
-		_disconnectFunction = func;
-		_disconnectParameter = param;
+	public void onDisconnect(DisconnectListener disconnectListener) {
+		_disconnectListener = disconnectListener;
 	}
 	/**
 	 * This method is called on the server side of a WebSocket to let the server
@@ -696,8 +709,8 @@ public class WebSocket extends WebSocketVolatileData {
 	 * if there was an error.
 	 */
 	void disconnect(boolean normalClose) {
-		if (_disconnectFunction != null)
-			_disconnectFunction(_disconnectParameter, normalClose);
+		if (_disconnectListener != null)
+			_disconnectListener.disconnect(normalClose);
 	}
 	/**
 	 * send

@@ -1047,6 +1047,12 @@ public class Binary extends Node {
 		if (_right.op() == Operator.CALL) {
 			ref<Call> constructor = ref<Call>(_right);
 			if (constructor.category() == CallCategory.CONSTRUCTOR) {
+				// This is the case of a constructor for a class that has no
+				// constructors declared.
+				if (constructor.overload() == null) {
+					_right = tree.newLeaf(Operator.EMPTY, _right.location());
+					return this;
+				}
 				ref<Node> adr = tree.newUnary(Operator.ADDRESS, _left, _left.location());
 				adr.type = compileContext.builtInType(TypeFamily.ADDRESS);
 				constructor.setConstructorMemory(adr, tree);

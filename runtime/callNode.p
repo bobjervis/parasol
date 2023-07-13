@@ -206,9 +206,14 @@ public class Call extends ParameterBag {
 
 			case	CONSTRUCTOR:
 				if (_overload == null) {
+					// This is the case of a constructor with no arguments on an object
+					// declaration for a type that has no constructor at all. (if such a
+					// declaration had been given for a class that has only-non default
+					// constructors, that would be flagged as an error and would not get
+					// here.
+
+					// Just leave it alone.
 					return this;
-					print(0);
-					assert(false);
 				}
 				if (_overload.type != null && _overload.type.deferAnalysis()) {
 					type = _overload.type;

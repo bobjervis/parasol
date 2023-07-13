@@ -55,6 +55,10 @@ void f(CTest x) {
 	x.bar();
 }
 
+CTest static_obj();
+
+assert(static_obj.foo() == "");
+
 f(CTest());
 
 ref<CTest> xt;

@@ -76,8 +76,8 @@ public class SocketException extends exception.Exception {
 		super();
 	}
 
-	public SocketException(string message) {
-		super(message);
+	public SocketException(string message, var... parameters) {
+		super(message, parameters);
 	}
 
 	ref<SocketException> clone() {

@@ -849,24 +849,7 @@ public class Parser {
 			case	LEFT_PARENTHESIS:
 				if (!parseParameterList(Token.RIGHT_PARENTHESIS, &parameters))
 					return parameters.node;
-				if (parameters.hasBindings()) {
-					func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.NORMAL, type, id, parameters, loc);
-					t = _scanner.next();
-					if (t == Token.LOCK) {
-						ref<Node> n = parseLockStatement();
-						if (n.op() == Operator.SYNTAX_ERROR)
-							return n;
-						func.body = _tree.newBlock(Operator.BLOCK, false, n.location());
-						func.body.statement(_tree.newNodeList(n));						
-					} else if (t == Token.LEFT_CURLY) {
-						func.body = _tree.newBlock(Operator.BLOCK, false, _scanner.location());
-						parseBlock(func.body);
-					} else if (t != Token.SEMI_COLON) {
-						_scanner.pushBack(t);
-						return resync(MessageId.SYNTAX_ERROR);
-					}
-					return func;
-				} else if (parameters == null) {
+				if (parameters == null) {
 					t = _scanner.next();
 					if (t == Token.LOCK) {
 						func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.NORMAL, type, id, parameters, loc);
@@ -888,6 +871,23 @@ public class Parser {
 					ref<Call> initializer = _tree.newCall(Operator.CALL, null, null, loc);
 					x = _tree.newBinary(Operator.INITIALIZE, id, initializer, loc);
 					return _tree.newDeclaration(type, x, location);
+				} else if (parameters.hasBindings()) {
+					func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.NORMAL, type, id, parameters, loc);
+					t = _scanner.next();
+					if (t == Token.LOCK) {
+						ref<Node> n = parseLockStatement();
+						if (n.op() == Operator.SYNTAX_ERROR)
+							return n;
+						func.body = _tree.newBlock(Operator.BLOCK, false, n.location());
+						func.body.statement(_tree.newNodeList(n));						
+					} else if (t == Token.LEFT_CURLY) {
+						func.body = _tree.newBlock(Operator.BLOCK, false, _scanner.location());
+						parseBlock(func.body);
+					} else if (t != Token.SEMI_COLON) {
+						_scanner.pushBack(t);
+						return resync(MessageId.SYNTAX_ERROR);
+					}
+					return func;
 				} else {
 					t = _scanner.next();
 					if (t == Token.SEMI_COLON) {

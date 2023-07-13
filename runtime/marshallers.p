@@ -16,11 +16,11 @@
 namespace parasol:rpc;
 
 import parasol:exception.IllegalArgumentException;
+import parasol:log;
 import parasol:stream;
 import parasol:text;
-
-import parasol:log;
 import parasol:thread;
+
 ref<log.Logger> logger = log.getLogger("rpc");
 
 void marshalBoolean(ref<string> output, ref<boolean> object) {

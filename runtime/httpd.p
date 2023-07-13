@@ -422,6 +422,7 @@ public class Server {
 	 * The server will be started with provided scope.
 	 *
 	 * @param scope The scope of the socket connection(s) to use.
+	 *
 	 */
 	public boolean start(ServerScope scope) {
 		if (scope == ServerScope.INTERNET) {
@@ -431,8 +432,6 @@ public class Server {
 		}
 		if (_publicServiceEnabled) {
 			_publicSocket = bindSocket(scope, _httpPort, Encryption.NONE);
-			if (_publicSocket == null)
-				return false;
 			if (_httpPort == 0)
 				_httpPort = _publicSocket.port();
 			_httpThread = new Thread();
@@ -440,8 +439,6 @@ public class Server {
 		}
 		if (_secureServiceEnabled) {
 			_secureSocket = bindSocket(scope, _httpsPort, Encryption.SSLv23);
-			if (_secureSocket == null)
-				return false;
 			if (_httpsPort == 0)
 				_httpsPort = _secureSocket.port();
 			_httpsThread = new Thread();
@@ -455,12 +452,15 @@ public class Server {
 		if (socket.bind(port, scope)) {
 			if (!socket.listen()) {
 				logger.debug("listen failed\n");
+				char actualPort = socket.port();
 				delete socket;
-				return null;
+				throw net.SocketException("Socket.listen failed for http%s port %d", 
+								encryption == Encryption.NONE ? "" : "s", actualPort);
 			}
 		} else {
 			delete socket;
-			return null;
+			throw net.SocketException("Socket.bind failed for http%s port %d", 
+								encryption == Encryption.NONE ? "" : "s", port);
 		}
 		return socket;
 	}

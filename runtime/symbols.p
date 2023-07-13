@@ -457,8 +457,11 @@ public class PlainSymbol extends Symbol {
 			_initializer.op() == Operator.CALL) {
 			if (_initializer.deferAnalysis())
 				return true;
-			if (ref<Call>(_initializer).category() == CallCategory.CONSTRUCTOR)
-				return true;
+			if (ref<Call>(_initializer).category() == CallCategory.CONSTRUCTOR) {
+				// If the class has no declared constructors, then this symbol is not
+				// really initialized with a constructor, just the syntax.
+				return _type.hasConstructors();
+			}
 		}
 		return false;
 	}
@@ -810,7 +813,8 @@ public class OverloadInstance extends Symbol {
 	}
 
 	public void markAsReferenced(ref<CompileContext> compileContext) {
-		if (_parameterScope.definition().op() == Operator.FUNCTION) {
+		if (_parameterScope.definition() != null &&
+			_parameterScope.definition().op() == Operator.FUNCTION) {
 			ref<FunctionDeclaration> func = ref<FunctionDeclaration>(_parameterScope.definition());
 			func.referenced = true;
 		}

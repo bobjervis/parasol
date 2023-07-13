@@ -1579,7 +1579,7 @@ public class CompileContext extends CodegenContext {
 	public void markLiveSymbol(ref<Node> n) {
 		if (n == null || n.type == null)
 			return;
-		if (n.type.hasDestructor()) {
+		if (!n.type.isInterface() && n.type.hasDestructor()) {
 			if (n.op() == Operator.VARIABLE)
 				for (i in _liveSymbols)
 					assert(!n.conforms(_liveSymbols[i]));
@@ -2703,6 +2703,9 @@ public class Unit extends runtime.SourceFile {
 	}
 
 	public void printSymbolTable() {
+		printf("Unit %s\n", filename());
+		if (_scope != null)
+			_scope.print(INDENT, true);
 	}
 
 	public void print() {

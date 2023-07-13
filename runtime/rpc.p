@@ -28,7 +28,6 @@ import parasol:thread;
 private ref<log.Logger> logger = log.getLogger("parasol.rpc");
 
 public class ClientTransport {
-
 	public abstract string call(string serializedArguments);
 }
 
@@ -68,7 +67,6 @@ class WebSocketTransport extends ClientTransport {
 
 	string call(string serializedArguments) {
 		string s;
-
 		s.printf("C%d;", manager.getNextMessageID());
 		ref<http.Rendezvous> r = manager.createRendezvous(s);
 		if (r == null)
@@ -161,7 +159,10 @@ public class Client<class PROXY> extends HttpTransport {
  *
  */
 public class Client<class UPSTREAM, class DOWNSTREAM> extends http.Client {
-	ref<WebSocket<UPSTREAM, DOWNSTREAM>> _socket;
+	ref<WebSocket<DOWNSTREAM, UPSTREAM>> _socket;
+	UPSTREAM _upstreamProxy;
+	DOWNSTREAM _downstreamObject;
+	http.DisconnectListener _disconnectListener;
 	/**
 	 * Create a client for a web socket request.
 	 *
@@ -170,8 +171,19 @@ public class Client<class UPSTREAM, class DOWNSTREAM> extends http.Client {
 	 * @param url The url to use for the HTTP request.
 	 * @param protocol The web socket protocol to submit to the server.
 	 */
-	public Client(string url, string protocol) {
+	public Client(string url, string protocol, DOWNSTREAM object) {
 		super(url, protocol);
+		_downstreamObject = object;
+	}
+
+	public ~Client() {
+		delete _socket;
+	}
+
+	public void onDisconnect(http.DisconnectListener disconnectListener) {
+		_disconnectListener = disconnectListener;
+		if (_socket != null)
+			_socket.onDisconnect(_disconnectListener);
 	}
 
 	public http.ConnectStatus, unsigned connect() {
@@ -187,12 +199,37 @@ public class Client<class UPSTREAM, class DOWNSTREAM> extends http.Client {
 		if (ws == null)
 			return http.ConnectStatus.WEB_SOCKET_REFUSED, ip;
 		// 
-		_socket = new WebSocket<UPSTREAM, DOWNSTREAM>(ws);
+		_socket = new WebSocket<DOWNSTREAM, UPSTREAM>(ws, _downstreamObject);
+		_socket.onDisconnect(_disconnectListener);
+		_socket.startReader();
 		return http.ConnectStatus.OK, ip;
 	}
 
-	public ref<WebSocket<UPSTREAM, DOWNSTREAM>> socket() {
-		return _socket;
+	public UPSTREAM proxy() {
+		if (_socket != null)
+			return _socket.proxy();
+		else
+			return null;
+	}
+
+	public void shutdown() {
+		shutDown(http.WebSocket.CLOSE_NORMAL, "");
+	}
+	/**
+	 * Write a shutdown message.
+	 *
+	 * A single-frame message with an {@link OP_CLOSE} opcode is sent. The cause and reason values
+	 * are formatted according to the WebSocket protocol.
+	 *
+	 * @threading This method is thread-safe.
+	 *
+	 * @param cause The cause of the shutdown. Possible values include {@link CLOSE_NORMAL}, {@link CLOSE_GOING_AWAY},
+	 * {@link CLOSE_PROTOCOL_ERROR} or {@link CLOSE_BAD_DATA}.
+	 * @param reason A reason string that provides additional details about the cause.
+	 */
+	public void shutDown(short cause, string reason) {
+		_socket.shutDown(cause, reason);
+		_socket.waitForDisconnect();
 	}
 }
 /**
@@ -216,11 +253,12 @@ public class WebSocketFactory<class UPSTREAM, class DOWNSTREAM> extends http.Web
 		if (!prefilter(request, response))
 			return false;
 		ref<http.WebSocket> ws = new http.WebSocket(response.connection(), true);
-		ref<WebSocket<UPSTREAM, DOWNSTREAM>> s = new WebSocket<UPSTREAM, DOWNSTREAM>(ws);
+		ref<WebSocket<UPSTREAM, DOWNSTREAM>> s = new WebSocket<UPSTREAM, DOWNSTREAM>(ws, null);
 		if (!notifyCreation(request, s)) {
 			delete s;
 			return false;
 		}
+		s.startReader();
 		return true;
 	}
 
@@ -233,9 +271,8 @@ public class WebSocketFactory<class UPSTREAM, class DOWNSTREAM> extends http.Web
 	}
 }
 
-monitor class WebSocketVolatileData extends thread.RefCounted {
-	private void (address, boolean) _disconnectFunction;
-	private address _disconnectParameter;
+monitor class WebSocketVolatileData extends thread.RefCounted implements http.DisconnectListener {
+	http.DisconnectListener _disconnectListener;
 	private boolean _disconnected;
 	/**
 	 * A caller calls this method on the web socket to register a client
@@ -245,21 +282,22 @@ monitor class WebSocketVolatileData extends thread.RefCounted {
 	 * is called before calling {@link readWholeMessage}, since a client-disconnect can be
 	 * triggered when that method reads from the connection.
 	 *
-	 * @param func The function to call when the client disconnect event occurs.
+	 * @param disconnectListener The interface to call when the client disconnect event occurs.
 	 * It takes the param value as its first argument and a boolean indicating
 	 * whether the disconnect was a normal close (true) or an error (false).
 	 * @param param The value to pass to the function when it is called.
 	 */
-	public void onDisconnect(void (address, boolean) func, address param) {
-		_disconnectFunction = func;
-		_disconnectParameter = param;
+	public void onDisconnect(http.DisconnectListener disconnectListener) {
+		_disconnectListener = disconnectListener;
 	}
 
-	void fireOnDisconnect(boolean normalClose) {
-		if (_disconnectFunction != null)
-			_disconnectFunction(_disconnectParameter, normalClose);
-		_disconnected = true;
-		notifyAll();
+	void disconnect(boolean normalClose) {
+		if (!_disconnected) {
+			if (_disconnectListener != null)
+				_disconnectListener.disconnect(normalClose);
+			_disconnected = true;
+			notifyAll();
+		}
 	}
 
 	public void waitForDisconnect() {
@@ -268,22 +306,23 @@ monitor class WebSocketVolatileData extends thread.RefCounted {
 	}
 }
 
-public class WebSocket<class UPSTREAM, class DOWNSTREAM> extends WebSocketVolatileData {
+public class WebSocket<class OBJECT, class PROXY> extends WebSocketVolatileData {
 	private WebSocketTransport _transport;
-	DOWNSTREAM _downstreamProxy;
-	UPSTREAM _upstreamProxy;
-	UPSTREAM _upstreamObject;
+	PROXY _downstreamProxy;
+	OBJECT _upstreamObject;
 
-	public WebSocket(ref<http.WebSocket> socket) {
+	public WebSocket(ref<http.WebSocket> socket, OBJECT object) {
 		_transport.initialize(this);
 		_transport.socket = socket;
-		socket.onDisconnect(disconnectWrapper, this);
+		socket.onDisconnect(this);
+		_upstreamObject = object;
+		_downstreamProxy = PROXY.proxy(&_transport);
 	}
 
 	~WebSocket() {
 		delete _transport.reader;
 		delete _transport.socket;
-		delete _upstreamObject;
+		delete _downstreamProxy;
 	}
 	/*
 	 * This is called from RefCounted.release when the final release
@@ -291,6 +330,23 @@ public class WebSocket<class UPSTREAM, class DOWNSTREAM> extends WebSocketVolati
 	 */
 	protected void deleteMe() {
 		delete this;
+	}
+	/**
+	 * Set the upstream object handling remote calls into this local object.
+	 *
+	 * @param object An interface object that will handle incoming calls to
+	 * the OBJECT interface.
+	 *
+	 * @threading This method is not thread safe. Call it only during the
+	 * {@link notifyCreation} call in the {@link WebSocketFactory}.
+	 */
+	public void setObject(OBJECT object) {
+		_upstreamObject = object;
+	}
+
+	void startReader() {
+		_transport.reader = new WebSocketReader<OBJECT, PROXY>(&_transport, _upstreamObject, _downstreamProxy);
+		_transport.socket.startReader(_transport.reader);
 	}
 	/**
 	 * Write a shutdown message.
@@ -307,14 +363,6 @@ public class WebSocket<class UPSTREAM, class DOWNSTREAM> extends WebSocketVolati
 	public void shutDown(short cause, string reason) {
 		_transport.socket.shutDown(cause, reason);
 	}
-
-	private static void disconnectWrapper(address arg, boolean normalClose) {
-		ref<WebSocket<UPSTREAM, DOWNSTREAM>>(arg).disconnect(normalClose);
-	}
-
-	void disconnect(boolean normalClose) {
-		fireOnDisconnect(normalClose);
-	}
 	/**
 	 * If this WebSocket was created by the HTTP server, return the downstream
 	 * proxy object for the new WebSocket.
@@ -322,7 +370,7 @@ public class WebSocket<class UPSTREAM, class DOWNSTREAM> extends WebSocketVolati
 	 * @return If this WebSocket was created by the server, a non-null proxy
 	 * object that is connected to the downstream end of the connection.
 	 */
-	public DOWNSTREAM downstreamProxy() {
+	public PROXY proxy() {
 		return _downstreamProxy;
 	}
 	/**
@@ -332,42 +380,8 @@ public class WebSocket<class UPSTREAM, class DOWNSTREAM> extends WebSocketVolati
 	 * @return If this WebSocket was created by the server, a non-null
 	 * object that is connected to the upstream end of the connection.
 	 */
-	public UPSTREAM upstreamObject() {
+	public OBJECT object() {
 		return _upstreamObject;
-	}
-	/**
-	 * If this WebSocket was created by the HTTP client, return the upstream
-	 * proxy object for the new WebSocket.
-	 *
-	 * @return If this WebSocket was created by the client, a non-null proxy
-	 * object that is connected to the upstream end of the connection.
-	 */
-	public UPSTREAM upstreamProxy() {
-		return _upstreamProxy;
-	}
-	/**
-	 * This is called by the connecting client/server to implement the communicatins pathways between
-	 * the upstrema and downstream objects with the web socket between them.
-	 */
-	public UPSTREAM configure(DOWNSTREAM stub, void (address, boolean) func, address param) {
-		UPSTREAM proxy = UPSTREAM.proxy(&_transport);
-		_upstreamProxy = proxy;
-		_transport.reader = new WebSocketReader<UPSTREAM, DOWNSTREAM>(&_transport, proxy, stub);
-		_transport.socket.startReader(_transport.reader);
-		if (func != null)
-			onDisconnect(func, param);
-		return proxy;
-	}
-
-	public DOWNSTREAM configure(UPSTREAM stub, void (address, boolean) func, address param) {
-		DOWNSTREAM proxy = DOWNSTREAM.proxy(&_transport);
-		_upstreamObject = stub;
-		_downstreamProxy = proxy;
-		_transport.reader = new WebSocketReader<DOWNSTREAM, UPSTREAM>(&_transport, proxy, stub);
-		_transport.socket.startReader(_transport.reader);
-		if (func != null)
-			onDisconnect(func, param);
-		return proxy;
 	}
 
 	void postReturns(string key, byte[] body) {
@@ -383,14 +397,14 @@ class AbstractWebSocketReader implements http.WebSocketReader {
 	public abstract boolean readMessages();
 }
 
-class WebSocketReader<class PROXY, class STUB> extends AbstractWebSocketReader {
-	private CallProcessor<STUB> _processor;
+class WebSocketReader<class OBJECT, class PROXY> extends AbstractWebSocketReader {
+	private CallProcessor<OBJECT> _processor;
 	private ref<WebSocketTransport> _transport;
 	private PROXY _proxy;
 	private ref<thread.ThreadPool<int>> _callerThreads;
 
-	WebSocketReader(ref<WebSocketTransport> transport, PROXY proxy, STUB stub) {
-		_processor.initialize(stub);
+	WebSocketReader(ref<WebSocketTransport> transport, OBJECT object, PROXY proxy) {
+		_processor = CallProcessor<OBJECT>(object);
 		_transport = transport;
 		_proxy = proxy;
 		_callerThreads = new thread.ThreadPool<int>(4);
@@ -431,6 +445,8 @@ class WebSocketReader<class PROXY, class STUB> extends AbstractWebSocketReader {
 					cp.message = message;
 					cp.reader = this;
 					_transport.rpcWebSocket.refer();
+					// _callerThreads is the pool that makes the actual call, so that
+					// this thread can see if another call is coming in right behind this one.
 					_callerThreads.execute(callStubWrapper, cp);
 					break;
 
@@ -463,7 +479,7 @@ class WebSocketReader<class PROXY, class STUB> extends AbstractWebSocketReader {
 
 	private class CallParameters {
 		byte[] message;
-		ref<WebSocketReader<PROXY, STUB>> reader;
+		ref<WebSocketReader<OBJECT, PROXY>> reader;
 	}
 
 	private static void callStubWrapper(address arg) {
@@ -486,7 +502,7 @@ class WebSocketReader<class PROXY, class STUB> extends AbstractWebSocketReader {
 		params.methodID = substring(&cp.message[index + 1], methodEnd - (index + 1));
 		pointer<byte> pb = &cp.message[methodEnd + 1];
 		params.arguments = &pb;
-		string returns = _processor.process(&params);
+		string returns = _processor.call(&params);
 		string reply;
 		reply.printf("R%s%s", substring(&cp.message[1], index), returns);
 		_transport.socket.write(reply);
@@ -499,7 +515,7 @@ public class Service<class I> extends http.Service {
 	private CallProcessor<I> _processor;
 
 	public Service(I object) {
-		_processor.initialize(object);
+		_processor = CallProcessor<I>(object);
 	}
 
 	public boolean processRequest(ref<http.Request> request, ref<http.Response> response) {
@@ -528,7 +544,7 @@ public class Service<class I> extends http.Service {
 			releasedCaller = true;
 		}
 		// Now do the call locally
-		string returns = _processor.process(&params);
+		string returns = _processor.call(&params);
 		if (releasedCaller)
 			return false;
 		// There should be returns for this method, check and respond accordingly.
@@ -543,19 +559,35 @@ public class Service<class I> extends http.Service {
 		return false;
 	}
 }
-
+/**
+ * The CallProcessor class does the actual deserialization-call-deserialization sequence.
+ * It's only internal state is the identity of the interface object to be called. Each
+ * interface has it's own method table informing the 'stub' method for that interface on what
+ * the arguments and return types are. The stub method does all the heavy lifting.
+ */
 class CallProcessor<class I> {
 	private I _object;
 
-	public void initialize(I object) {
+	CallProcessor() {}
+	/**
+	 * The main thing is to stash away the object interface pointer.
+	 *
+	 * @oaram object The interface object pointer to be called when
+	 * this class tries to.
+	 */
+	CallProcessor(I object) {
 		_object = object;
 	}
-
+	/**
+	 * For now this is always false, meaning no special quick-return
+	 * for void methods. Everything waits until the function returns.
+	 */
 	public boolean callingVoidMethod(ref<StubParams> params) {
 		return false;
 	}
-
-	public string process(ref<StubParams> params) {
+	/**
+	 */
+	public string call(ref<StubParams> params) {
 		return I.stub(_object, params);
 	}
 

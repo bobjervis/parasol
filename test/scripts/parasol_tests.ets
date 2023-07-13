@@ -33,6 +33,7 @@ dir(path: test/src) {
 		run(filename: class_aggregate.p)
 		run(filename: class_call_as_argument.p)
 		run(filename: class_compare_test.p)
+		run(filename: class_cons.p)
 		run(filename: class_meta_ops.p)
 		run(filename: class_name_test.p)
 		run(filename: class_nested_vtable.p)

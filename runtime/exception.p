@@ -225,10 +225,15 @@ public class Exception {
 	/**
 	 * Constructs a new Exception with message text.
 	 *
-	 * @param message The text of the message to be printed.
+	 * The message is formatted using a string.printf using the
+	 * format and parameters supplied in the constructor.
+	 *
+	 * @param format a printf-style format for The text of the 
+	 * message to be printed.
+	 * @param parameters any parameters needed for the message.
 	 */
-	public Exception(string message) {
-		_message = message;
+	public Exception(string format, var... parameters) {
+		_message.printf(format, parameters);
 	}
 	
 	Exception(ref<ExceptionContext> exceptionContext) {

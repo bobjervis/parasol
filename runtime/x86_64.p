@@ -4087,6 +4087,12 @@ public class X86_64 extends X86_64AssignTemps {
 				unfinished(node, "initialize type == null", compileContext);
 				break;
 			}
+			seq = ref<Binary>(node);
+			if (seq.right().op() == Operator.EMPTY) {
+				// This is a constructor initializer with no arguments
+				// in a class that had no constructors. Just do nothing here.
+				break;
+			}
 //			printf("Initialize:\n");
 //			node.print(4);
 //			print("!!--\n");
@@ -4097,7 +4103,6 @@ public class X86_64 extends X86_64AssignTemps {
 //			node.print(4);
 //			print("<<--\n");
 			assignVoidContext(node, compileContext);
-			seq = ref<Binary>(node);
 			if (seq.right().op() == Operator.CALL) {
 				ref<Call> call = ref<Call>(seq.right());
 //				printf("RHS...\n");
@@ -4245,6 +4250,7 @@ public class X86_64 extends X86_64AssignTemps {
 		case	CONSTRUCTOR:
 			if (overload == null)
 				return;
+
 			if (call.target() == null || call.target().op() != Operator.SUPER) {
 				if (call.type.hasVtable(compileContext))
 					storeVtable(call.type, compileContext);

@@ -68,9 +68,11 @@ interface WSUpstream {
 }
 
 class ServerWorkFactory extends rpc.WebSocketFactory<WSUpstream, WSDownstream> {
-	public boolean notifyCreation(ref<http.Request> request, ref<rpc.WebSocket<WSUpstream, WSDownstream>> socket) {
+	public boolean notifyCreation(ref<http.Request> request, 
+								  ref<rpc.WebSocket<WSUpstream, WSDownstream>> socket) {
 		ref<ServerWork> s = new ServerWork(socket);
-		s.down = socket.configure(s, ServerWork.disconnectWrapper, s);
+		socket.setObject(s);
+		socket.onDisconnect(s);
 		return true;
 	}
 }
@@ -78,8 +80,7 @@ class ServerWorkFactory extends rpc.WebSocketFactory<WSUpstream, WSDownstream> {
 boolean upstreamDisconnect;
 boolean downstreamDisconnect;
 
-class ServerWork implements WSUpstream {
-	WSDownstream down;
+class ServerWork implements WSUpstream, http.DisconnectListener {
 	ref<rpc.WebSocket<WSUpstream, WSDownstream>> socket;
 
 	ServerWork(ref<rpc.WebSocket<WSUpstream, WSDownstream>> socket) {
@@ -88,7 +89,8 @@ class ServerWork implements WSUpstream {
 
 	boolean upload(int x) {
 		logger.debug("upload(%d)", x);
-		down.download(x + 1);
+		socket.proxy().download(x + 1);
+		thread.sleep(1);
 		if (x > 10)
 			return false;
 		return true;
@@ -103,13 +105,8 @@ class ServerWork implements WSUpstream {
 		return true;
 	}
 
-	static void disconnectWrapper(address arg, boolean normalClose) {
-		ref<ServerWork>(arg).disconnect(normalClose);
-	}
-
 	void disconnect(boolean normalClose) {
 		logger.debug("upstream disconnect, normal close? %s", string(normalClose));
-		delete down;
 		upstreamDisconnect = true;
 	}
 }
@@ -118,23 +115,16 @@ interface WSDownstream {
 	boolean download(int x);
 }
 
-class ClientWork implements WSDownstream {
-	ref<rpc.Client<WSUpstream, WSDownstream>> _client;
+class ClientWork implements WSDownstream, http.DisconnectListener {
 	static int testMessageCount;
 	static int[] values = [ 4, 1601, 1000001 ];
 
-	ClientWork(ref<rpc.Client<WSUpstream, WSDownstream>> client) {
-		_client = client;
-	}
-
 	boolean download(int x) {
+		logger.debug("download(%d)", x);
 		assert(x == values[testMessageCount]);
 		testMessageCount++;
+		logger.debug("Download returning");
 		return true;
-	}
-
-	static void disconnectWrapper(address arg, boolean normalClose) {
-		ref<ClientWork>(arg).disconnect(normalClose);
 	}
 
 	void disconnect(boolean normalClose) {
@@ -163,44 +153,40 @@ class ClientWork implements WSDownstream {
 }
 
 {	// first, a 'correct' session, with completed messages and a graceful shutdown.
-	rpc.Client<WSUpstream, WSDownstream> client("ws://localhost:" + port + "/ws", "Test");
-	ClientWork down(&client);
-
+	ClientWork down();
+	rpc.Client<WSUpstream, WSDownstream> client("ws://localhost:" + port + "/ws", "Test", down);
+	client.onDisconnect(down);
 	assert(client.connect() == http.ConnectStatus.OK);
-	ref<rpc.WebSocket<WSUpstream, WSDownstream>> socket = client.socket();
-	WSUpstream up = socket.configure(down, ClientWork.disconnectWrapper, &down);
+	WSUpstream up = client.proxy();
 
 	logger.debug("Start calling up");
 	assert(up.upload(3));
 	assert(!up.upload(1600));
 	assert(!up.upload(1000000));
 
-	printf("message count %d\n", down.testMessageCount);
+	logger.debug("message count %d", down.testMessageCount);
 	assert(down.testMessageCount == 3);
 
 	// The normal shutdown sequence
 
-	socket.shutDown(http.WebSocket.CLOSE_NORMAL, "");
-	socket.waitForDisconnect();
-	delete up;											// Delete the proxy, just like the HTTP case.
+	client.shutdown();
 }
 assert(downstreamDisconnect);
 server.stop();
 assert(upstreamDisconnect);
+logger.debug("First web socket test complete");
 server.start(net.ServerScope.LOCALHOST);
 
 port = server.httpPort();
 
 {	// now, a session where the client issues a 'long duration' call.
-	rpc.Client<WSUpstream, WSDownstream> client("ws://localhost:" + port + "/ws", "Test");
-	ClientWork down(&client);
-
+	ClientWork down();
+	rpc.Client<WSUpstream, WSDownstream> client("ws://localhost:" + port + "/ws", "Test", down);
+	client.onDisconnect(down);
 	http.ConnectStatus status = client.connect();
-	printf("status = %s\n", string(status));
+	logger.debug("status = %s", string(status));
 	assert(status == http.ConnectStatus.OK);
-	ref<rpc.WebSocket<WSUpstream, WSDownstream>> socket = client.socket();
-	// At this point the rpc.Client could be destructed, 
-	WSUpstream up = socket.configure(down, null, null);
+	WSUpstream up = client.proxy();
 
 	try {
 		up.hang();
@@ -209,11 +195,11 @@ port = server.httpPort();
 	} catch (IOException e) {
 		assert(e.message() == "Connection closed before reply");
 	}
-	delete up;
 	printf("PASS: Dropped connection caused RPC caller to receive an Exception.\n");
 }
 
 server.stop();
+logger.debug("Second web  socket test complete");
 
 class HttpExchange extends rpc.Service<Test> implements Test {
 	HttpExchange() {
@@ -226,3 +212,4 @@ class HttpExchange extends rpc.Service<Test> implements Test {
 	}	
 }
 
+logger.debug("SUCCESS!!!");

@@ -72,6 +72,8 @@ public class Target {
 	private ref<ParameterScope>[TypeFamily] _marshallerFunctions;
 	private ref<ParameterScope>[TypeFamily] _unmarshallerFunctions;
 	
+	private boolean _verbose;
+
 	public Target() {
 		_marshallerFunctions.resize(TypeFamily.MAX_TYPES);
 		_unmarshallerFunctions.resize(TypeFamily.MAX_TYPES);
@@ -98,6 +100,7 @@ public class Target {
 			target = new X86_64Win(compileContext.arena());
 			break;
 		}
+		target._verbose = compileContext.verbose();
 		target.populateTypeMap(compileContext);
 		compileContext.target = target;
 		if (target.generateCode(mainFile, compileContext))
@@ -156,7 +159,7 @@ public class Target {
 	}
 
 	public boolean verbose() {
-		return false;
+		return _verbose;
 	}
 	/*
 	 * 'Run' the target by executing it's static block and main methods.
