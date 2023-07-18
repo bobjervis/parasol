@@ -29,7 +29,7 @@ If false, then any else statement that is supplied is performed instead.
 {@production | <b>default :</b> <i>statement</i>  }
 {@end-grammar}
 
-A switch statement evaluates the control expression which must have integral or enum type.
+A switch statement evaluates the control expression which must have integral, string or enum type.
 The statement following the controlling expression generally includes one or more case and default statements.
 <p>
 When evaluated, control transfers to the case statement whose expression value matches that of the switch.

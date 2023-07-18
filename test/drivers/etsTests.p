@@ -123,9 +123,9 @@ int main(string[] args) {
 	else {
 		string binDir = storage.directory(process.binaryFilename());
 		if (runtime.compileTarget == runtime.Target.X86_64_WIN)
-			pxiName = storage.constructPath(binDir, "x86-64-win.pxi");
+			pxiName = storage.path(binDir, "x86-64-win.pxi");
 		else
-			pxiName = storage.constructPath(binDir, "x86-64-lnx.pxi");
+			pxiName = storage.path(binDir, "x86-64-lnx.pxi");
 	}
 	initTestObjects(process.binaryFilename(), pxiName, runetsCommand.verboseOption.value, 
 			runetsCommand.compileFromSourceOption.value,

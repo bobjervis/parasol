@@ -1,6 +1,7 @@
 <h1>{@level 1 GRAMMAR}</h1>
 
 <ul>
+	<li>{@topic notation.ph}
 	<li>{@topic file-structure.ph}
 	<li>{@topic statements.ph}
 	<li>{@topic control-flow.ph}

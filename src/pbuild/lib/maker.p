@@ -201,7 +201,7 @@ class Folder extends Component {
 	public string path() {
 		string name = canonicalize(_name);
 		if (_enclosing != null)
-			return storage.constructPath(_enclosing.path(), name);
+			return storage.path(_enclosing.path(), name);
 		else
 			return name;
 	}
@@ -209,7 +209,7 @@ class Folder extends Component {
 	public string productPath() {
 		string name = canonicalize(_name);
 		if (_enclosing != null)
-			return storage.constructPath(_enclosing.productPath(), name);
+			return storage.path(_enclosing.productPath(), name);
 		else
 			return name;
 	}
@@ -315,7 +315,7 @@ class File extends Component {
 	}
 
 	public boolean inputsNewer(time.Instant timeStamp) {
-		string src = storage.constructPath(_enclosing.buildDir(), _src);
+		string src = storage.path(_enclosing.buildDir(), _src);
 		boolean success = checkSrc(src, false);
 //		time.Date d(timeStamp, &time.UTC);
 //		string dt = d.format("MM/dd/yyyy HH:mm:ss.SSS");
@@ -329,7 +329,7 @@ class File extends Component {
 		for (i in _modified) {
 			if (_modified[i].compare(&timeStamp) > 0) {
 				if (_enclosing.coordinator().reportOutOfDate()) {
-					string srcFile = storage.constructPath(src, _names[i]);
+					string srcFile = storage.path(src, _names[i]);
 					printf("            %s out of date, building\n", srcFile);
 				}
 				return true;
@@ -339,14 +339,14 @@ class File extends Component {
 	}
 
 	public boolean copy() {
-		string src = storage.constructPath(_enclosing.buildDir(), _src);
+		string src = storage.path(_enclosing.buildDir(), _src);
 		if (!checkSrc(src, true))
 			return false;
 		string packageDir = _enclosing.path();
 //		printf("Copy %s/%s -> %s\n", src, _name, packageDir);
 		for (int i = 0; i < _names.length(); i++) {
-			string srcFile = storage.constructPath(src, _names[i]);
-			string dstFile = storage.constructPath(packageDir, _names[i]);
+			string srcFile = storage.path(src, _names[i]);
+			string dstFile = storage.path(packageDir, _names[i]);
 			if (!storage.copyFile(srcFile, dstFile)) {
 				printf("        FAIL: Copy %s to %s\n", srcFile, dstFile);
 				return false;
@@ -358,14 +358,14 @@ class File extends Component {
 	}
 
 	public boolean getUnitFilenames(ref<string[]> unitFilenames) {
-		string src = storage.constructPath(_enclosing.buildDir(), _src);
+		string src = storage.path(_enclosing.buildDir(), _src);
 		if (!checkSrc(src, true))
 			return false;
 //		printf("%s:\n", toString());
 		string directory = _enclosing.path();
 		for (i in _names) {
 //			printf("    [%d] %s/%s\n", i, directory, _names[i]);
-			unitFilenames.append(storage.constructPath(directory, _names[i]));
+			unitFilenames.append(storage.path(directory, _names[i]));
 		}
 		return true;
 	}
@@ -385,7 +385,7 @@ class File extends Component {
 					printf("        FAIL: Source %s is not a directory\n", src);
 				return _srcCheckSucceeded = false;
 			}
-			string path = storage.constructPath(src, _name);
+			string path = storage.path(src, _name);
 			string[] matching;
 			boolean success;
 			(matching, success) = storage.expandWildCard(path);
@@ -399,7 +399,7 @@ class File extends Component {
 			for (int i = 0; i < matching.length(); i++)
 				_names.append(matching[i].substr(prefix));
 			for (i in _names) {
-				string srcFile = storage.constructPath(src, _names[i]);
+				string srcFile = storage.path(src, _names[i]);
 				time.Instant accessed, modified, created;
 				boolean success;
 	
@@ -471,12 +471,12 @@ class Link extends Component {
 	}
 
 	public boolean inputsNewer(time.Instant timeStamp) {
-		string linkFile = storage.constructPath(_enclosing.productPath(), _name);
+		string linkFile = storage.path(_enclosing.productPath(), _name);
 		return !storage.exists(linkFile);
 	}
 
 	public boolean copy() {
-		string linkFile = storage.constructPath(_enclosing.path(), _name);
+		string linkFile = storage.path(_enclosing.path(), _name);
 //		printf("Link %s <- %s\n", _target, linkFile);
 		if (!storage.createSymLink(_target, linkFile)) {
 			printf("        FAIL: Link %s to %s\n", _target, linkFile);

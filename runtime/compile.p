@@ -214,7 +214,7 @@ public class CompileContext extends CodegenContext {
 			printf("core package won't open\n");
 			return false;
 		}
-		string rootFile = storage.constructPath(corePackage.directory(), "root.p");
+		string rootFile = storage.path(corePackage.directory(), "root.p");
 		ref<Unit> f = _arena.defineUnit(rootFile, "");
 		f.parse(this);
 		ref<Block> treeRoot = f.tree().root();
@@ -385,7 +385,7 @@ public class CompileContext extends CodegenContext {
 			string directory = _packages[i].directory();
 			for (j in units) {
 //				printf("        %s / %s\n", directory, units[j]);
-				string filename = storage.constructPath(directory, units[j]);
+				string filename = storage.path(directory, units[j]);
 				ref<Unit> unit = _arena.defineImportedUnit(filename, directory);
 				// The unit name has already been seen, and parsed. Ignore this instance.
 				if (unit.parsed())
@@ -2218,7 +2218,7 @@ public class DomainForest extends VolatileDomainForest {
 		}
 
 		boolean success;
-		string manifestFile = storage.constructPath(package.directory(), context.PACKAGE_MANIFEST);
+		string manifestFile = storage.path(package.directory(), context.PACKAGE_MANIFEST);
 		ref<Reader> r = storage.openTextFile(manifestFile);
 		if (r != null) {
 			ref<SyntaxTree> tree = new SyntaxTree();
@@ -2245,7 +2245,7 @@ public class DomainForest extends VolatileDomainForest {
 					break;
 	
 				case 'U':
-					string unitFilename = storage.constructPath(package.directory(), line.substr(1));
+					string unitFilename = storage.path(package.directory(), line.substr(1));
 					ref<Unit> u = new Unit(unitFilename, package.directory());
 					_units.append(u);
 					nm.includeUnit(u);
@@ -2257,12 +2257,12 @@ public class DomainForest extends VolatileDomainForest {
 					break;
 
 				case 'F':
-					unitFilename = storage.constructPath(package.directory(), line.substr(1));
+					unitFilename = storage.path(package.directory(), line.substr(1));
 					_initFirst.append(unitFilename);
 					break;
 
 				case 'L':
-					unitFilename = storage.constructPath(package.directory(), line.substr(1));
+					unitFilename = storage.path(package.directory(), line.substr(1));
 					_initLast.append(unitFilename);
 					break;
 

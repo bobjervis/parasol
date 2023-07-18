@@ -89,7 +89,7 @@ public class Coordinator extends CoordinatorVolatileData {
 		else
 			_buildDir = buildDir;
 		if (buildFile == null) {
-			_buildFile = storage.constructPath(_buildDir, MAKE_FILE);
+			_buildFile = storage.path(_buildDir, MAKE_FILE);
 			if (!storage.exists(_buildFile))
 				_buildFile = null;
 		} else
@@ -99,7 +99,7 @@ public class Coordinator extends CoordinatorVolatileData {
 		else
 			_buildThreads = buildThreads;
 		if (outputDir == null && _buildFile != null)
-			_outputDir = storage.constructPath(_buildDir, "build");
+			_outputDir = storage.path(_buildDir, "build");
 		else
 			_outputDir = outputDir;
 		if (targetOS == null)
@@ -191,7 +191,7 @@ public class Coordinator extends CoordinatorVolatileData {
 				string filepath = d.path();
 				string filename = d.filename();
 				if (filename == MAKE_FILE) {
-					string outputDir = storage.constructPath(dir, "build");
+					string outputDir = storage.path(dir, "build");
 					if (!parseBuildFile(filepath, dir, outputDir))
 						success = false;
 					delete d;

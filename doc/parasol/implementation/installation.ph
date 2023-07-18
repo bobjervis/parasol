@@ -50,7 +50,7 @@ different place.
 <To install, run the following command:
 
 <pre>
-    {@code <i>repository-path</i>/install.sh
+    {@code <i>repository-path</i>/install.sh}
 </pre>
 
 <p>

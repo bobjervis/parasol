@@ -233,10 +233,10 @@ public class EtsTest extends Test {
 		string binaryDirectory;
 		string pcCommand;
 		if (installPackage != null)
-			binaryDirectory = storage.constructPath(installPackage.path(), "bin");
+			binaryDirectory = storage.path(installPackage.path(), "bin");
 		else
 			binaryDirectory = storage.directory(process.binaryFilename());
-		pcCommand = storage.constructPath(binaryDirectory, "pc");
+		pcCommand = storage.path(binaryDirectory, "pc");
 		string[] args;
 		args.append("test/drivers/etsTests.p");
 		if (installPackage != null)

@@ -548,7 +548,7 @@ class CompileObject  extends script.Object {
 
 	public void insertDefaultPath(string defaultPath) {
 		if (_filename != null)
-			_filename = storage.constructPath(storage.constructPath(rootFolder, defaultPath), _filename);
+			_filename = storage.path(storage.path(rootFolder, defaultPath), _filename);
 	}
 
 	public boolean run() {
@@ -694,7 +694,7 @@ class RunObject extends script.Object {
 
 	public void insertDefaultPath(string defaultPath) {
 		if (_filename != null)
-			_filename = storage.constructPath(storage.constructPath(rootFolder, defaultPath), _filename);
+			_filename = storage.path(storage.path(rootFolder, defaultPath), _filename);
 	}
 
 	public boolean run() {
@@ -704,7 +704,7 @@ class RunObject extends script.Object {
 		args.append(pxiFile);
 		if (compileFromSourceArgument) {
 			string rootDir = storage.directory(storage.directory(parasolCommand));
-			args.append(storage.constructPath(rootDir, "src/pc/main.p"));
+			args.append(storage.path(rootDir, "src/pc/main.p"));
 		}
 		if (targetArgument != null)
 			args.append("--target=" + targetArgument);

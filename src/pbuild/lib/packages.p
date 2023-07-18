@@ -158,7 +158,7 @@ public class Package extends Product {
 
 	boolean defineContext(ref<BuildFile> buildFile, ref<Coordinator> coordinator, string buildDir, string outputDir) {
 		super.defineContext(buildFile, coordinator, buildDir, outputDir);
-		_packageDir = storage.constructPath(outputDir, filename() + ".tmp");
+		_packageDir = storage.path(outputDir, filename() + ".tmp");
 		if (storage.exists(_packageDir)) {
 			if (!storage.deleteDirectoryTree(_packageDir)) {
 				printf("\n        FAIL: Could not remove existing temporary %s\n", _packageDir);
@@ -205,7 +205,7 @@ public class Package extends Product {
 //		printf("        %s compileSkipped? %s\n", _name, _compileSkipped);
 		if (_compileSkipped) {
 			printf("        %s - up to date\n", name());
-			_packageDir = storage.constructPath(outputDir(), filename());
+			_packageDir = storage.path(outputDir(), filename());
 		} else {
 			if (!deployPackage())
 				return false;
@@ -272,9 +272,9 @@ public class Package extends Product {
 
 	protected boolean deployPackage() {
 		string tmpDir = _packageDir;
-		if (_generateManifest && !_compileContext.forest().generateManifest(storage.constructPath(tmpDir, context.PACKAGE_MANIFEST), _initFirst, _initLast)) 
+		if (_generateManifest && !_compileContext.forest().generateManifest(storage.path(tmpDir, context.PACKAGE_MANIFEST), _initFirst, _initLast)) 
 			return false;
-		_packageDir = storage.constructPath(outputDir(), filename());
+		_packageDir = storage.path(outputDir(), filename());
 		if (storage.exists(_packageDir)) {
 			if (!storage.deleteDirectoryTree(_packageDir)) {
 				printf("        FAIL: Could not remove old %s\n", _packageDir);
@@ -401,7 +401,7 @@ public class Package extends Product {
 	}
 
 	protected string sentinelFileName() {
-		return storage.constructPath(outputDir(), name() + ".ok");
+		return storage.path(outputDir(), name() + ".ok");
 	}
 
 	protected boolean printMessages() {
@@ -459,7 +459,7 @@ public class Package extends Product {
 	}
 
 	public string productPath() {
-		return storage.constructPath(outputDir(), filename());
+		return storage.path(outputDir(), filename());
 	}
 
 	public string productName() {
@@ -480,7 +480,7 @@ public class Package extends Product {
 
 	public string importPath() {
 		if (_contents != null)
-			return storage.constructPath(buildDir(), _contents);
+			return storage.path(buildDir(), _contents);
 		else
 			return path();
 	}
@@ -579,9 +579,9 @@ class Application extends Package {
 			printf("        FAIL: Could not create package directory '%s'\n", _packageDir);
 			return false;
 		}
-		string mainFile = storage.constructPath(buildDir(), _main);
+		string mainFile = storage.path(buildDir(), _main);
 		string mainScript = storage.filename(_main);
-		string mainDest = storage.constructPath(_packageDir, mainScript);
+		string mainDest = storage.path(_packageDir, mainScript);
 		printf("mainDest = '%s'\n", mainDest);
 		if (!storage.copyFile(mainFile, mainDest)) {
 			printf("        FAIL: Could not copy main file from %s\n", mainFile);
@@ -589,7 +589,7 @@ class Application extends Package {
 		}
 
 		ref<compiler.Unit>[] units = _arena.units();
-		string libDir = storage.constructPath(_packageDir, "lib");
+		string libDir = storage.path(_packageDir, "lib");
 		for (int i = 2; i < units.length(); i++) {
 			printf("        [%d] %s\n", i, units[i].filename());
 			string source = units[i].filename();
@@ -601,7 +601,7 @@ class Application extends Package {
 			else
 				extension = filename.substr(extLoc);
 			string basename = filename.substr(0, extLoc);
-			string stem = storage.constructPath(libDir, basename);
+			string stem = storage.path(libDir, basename);
 			for (int iteration = 0; ; iteration++) {
 				string dest = composeNameVariant(stem, extension, iteration);
 				if (storage.exists(dest))
@@ -646,16 +646,16 @@ class Application extends Package {
 		// copy all compiled units to subdirectory. Need to figure out how to express this...
 		assert(false);
 
-		string mainFile = storage.constructPath(buildDir(), _main);
+		string mainFile = storage.path(buildDir(), _main);
 		string mainScript = storage.filename(_main);
-		string mainDest = storage.constructPath(_packageDir, mainScript);
+		string mainDest = storage.path(_packageDir, mainScript);
 		if (!storage.copyFile(mainFile, mainDest)) {
 			printf("        FAIL: Could not copy main file from %s\n", mainFile);
 			return false;
 		}
 
 		// write launch script
-		string runScript = storage.constructPath(_packageDir, "run");
+		string runScript = storage.path(_packageDir, "run");
 		ref<Writer> w = storage.createTextFile(runScript);
 		if (w == null) {
 			printf("        FAIL: Could not create run script\n");
@@ -695,8 +695,8 @@ class Application extends Package {
 		time.Instant accessed, modified, created;
 		boolean success;
 
-		string packageDir = storage.constructPath(outputDir(), filename());
-		string runScript = storage.constructPath(packageDir, "run");
+		string packageDir = storage.path(outputDir(), filename());
+		string runScript = storage.path(packageDir, "run");
 
 		(accessed, modified, created, success) = storage.fileTimes(runScript);
 
@@ -715,7 +715,7 @@ class Application extends Package {
 		time.Instant accessed, modified, created;
 		boolean success;
 
-		string mainFile = storage.constructPath(buildDir(), _main, null);
+		string mainFile = storage.path(buildDir(), _main, null);
 
 		(accessed, modified, created, success) = storage.fileTimes(mainFile);
 
@@ -739,7 +739,7 @@ class Application extends Package {
 			return null, false;
 
 
-		string mainFile = storage.constructPath(buildDir(), _main);
+		string mainFile = storage.path(buildDir(), _main);
 		ref<compiler.Target> target = _compileContext.compile(mainFile);
 		if (coordinator().generateSymbolTables())
 			_arena.printSymbolTable();
@@ -786,27 +786,27 @@ class Binary extends Application {
 			return false;
 
 		string parasolRoot = installPackage.path();
-		string binDir = storage.constructPath(parasolRoot, "bin", null);
-		string rtFile = storage.constructPath(binDir, "parasolrt", null);
-		string destFile = storage.constructPath(_packageDir, "parasolrt", null);
+		string binDir = storage.path(parasolRoot, "bin");
+		string rtFile = storage.path(binDir, "parasolrt");
+		string destFile = storage.path(_packageDir, "parasolrt");
 		if (!storage.copyFile(rtFile, destFile)) {
 			printf("        FAIL: Could not copy parasolrt from %s\n", parasolRoot);
 			return false;
 		}
-		string soFile = storage.constructPath(binDir, "libparasol.so.1");
-		destFile = storage.constructPath(_packageDir, "libparasol.so.1");
+		string soFile = storage.path(binDir, "libparasol.so.1");
+		destFile = storage.path(_packageDir, "libparasol.so.1");
 		if (!storage.copyFile(soFile, destFile)) {
 			printf("        FAIL: Could not copy libparasol.so.1 from %s\n", parasolRoot);
 			return false;
 		}
-		soFile = storage.constructPath(_packageDir, "libparasol.so");
+		soFile = storage.path(_packageDir, "libparasol.so");
 		if (!storage.createSymLink("libparasol.so.1", soFile)) {
 			printf("        FAIL: Could not link libparasol.so in %s\n", _packageDir);
 			return false;
 		}
 
 		// write launch script
-		string runScript = storage.constructPath(_packageDir, "run", null);
+		string runScript = storage.path(_packageDir, "run", null);
 		ref<Writer> w = storage.createTextFile(runScript);
 		if (w == null) {
 			printf("        FAIL: Could not create run script\n");
@@ -843,7 +843,7 @@ class Binary extends Application {
 			printf("        FAIL: Could not ensure %s\n", path());
 			return target, false;
 		}
-		string pxiFile = storage.constructPath(_packageDir, "application.pxi");
+		string pxiFile = storage.path(_packageDir, "application.pxi");
 		ref<pxi.Pxi> output = pxi.Pxi.create(pxiFile);
 		target.writePxi(output);
 		if (!output.write()) {
@@ -948,7 +948,7 @@ class Pxi extends Application {
 
 	public ref<compiler.Target>, boolean compile() {
 
-		string mainFile = storage.constructPath(buildDir(), _main);
+		string mainFile = storage.path(buildDir(), _main);
 		ref<compiler.Target> target = _compileContext.compile(mainFile);
 		if (coordinator().generateSymbolTables())
 			_arena.printSymbolTable();
@@ -961,7 +961,7 @@ class Pxi extends Application {
 				return target, false;
 			}
 		}
-		string pxiFile = storage.constructPath(outputDir(), filename());//path();
+		string pxiFile = storage.path(outputDir(), filename());//path();
 		ref<pxi.Pxi> output = pxi.Pxi.create(pxiFile);
 		target.writePxi(output);
 		if (!output.write()) {
@@ -974,7 +974,7 @@ class Pxi extends Application {
 	public boolean shouldCompile() {
 		time.Instant accessed, modified, created;
 		boolean success;
-		string target = storage.constructPath(outputDir(), filename());
+		string target = storage.path(outputDir(), filename());
 
 		(accessed, modified, created, success) = storage.fileTimes(target);
 		if (success) {
@@ -991,7 +991,7 @@ class Pxi extends Application {
 
 	public boolean copy() {
 		string destination = path();
-		string target = storage.constructPath(outputDir(), filename());
+		string target = storage.path(outputDir(), filename());
 		if (!storage.copyFile(target, destination)) {
 			printf("    FAIL: Could not copy %s to %s\n", target, destination);
 			return false;
@@ -1011,7 +1011,7 @@ class Pxi extends Application {
 
 	public string path() {
 		if (_enclosing != null)
-			return storage.constructPath(_enclosing.path(), filename());
+			return storage.path(_enclosing.path(), filename());
 		else
 			return filename();
 	}
@@ -1039,7 +1039,7 @@ class MakeProduct extends Product {
 	}
 
 	public boolean build() {
-		string target = storage.constructPath(buildDir(), _target);
+		string target = storage.path(buildDir(), _target);
 		string product = path();
 		time.Instant accessed, modified, created;
 		boolean success;
@@ -1079,7 +1079,7 @@ class MakeProduct extends Product {
 
 	public boolean copy() {
 		string destination = path();
-		string target = storage.constructPath(outputDir(), filename());
+		string target = storage.path(outputDir(), filename());
 		if (!storage.copyFile(target, destination)) {
 			printf("    FAIL: Could not copy %s to %s\n", target, destination);
 			return false;

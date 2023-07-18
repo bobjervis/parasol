@@ -264,28 +264,6 @@ public class Image {
 		int lineNumber = lookupLine.binarySearchClosestGreater(fileOffset) + 1 + _baseLineNumbers[fileIndex];
 //		printf("lineNumber = %d base line number %d\n", lineNumber, _baseLineNumbers[fileIndex]);
 		return filename, lineNumber;
-/*
-		pointer<SourceLocation> psl = sourceLocations();
-		int interval = sourceLocationsCount();
-		for (;;) {
-			if (interval <= 0)
-				return null, -1;
-			int middle = interval / 2;
-			if (psl[middle].offset > offset)
-				interval = middle;
-			else if (middle == interval - 1 || psl[middle + 1].offset > offset) {
-				ref<SourceFile> file = psl[middle].file;
-				// The makeCompactPath resolves the path relative to the current directory.
-				// 'foo' in this case simply represents a file in the current working directory 
-				// and need not exist. It is not checked against the file system.
-				string filename = storage.makeCompactPath(file.filename(), "foo");
-				return filename, file.lineNumber(psl[middle].location) + 1;
-			} else {
-				psl = &psl[middle + 1];
-				interval = interval - middle - 1;
-			}
-		}
- */
 	}
 	/** @ignore */
 	public pointer<byte> codeAddress() {
@@ -295,16 +273,13 @@ public class Image {
 	public pointer<byte> highCodeAddress() {
 		return _image + _pxiHeader.typeDataOffset;
 	}
+
+	public address entryPoint() {
+		return _image + _pxiHeader.entryPoint;
+	}
 }
 
 public Image image;
-
-public class SourceMap {
-	public int locationCount;
-	public pointer<int> codeAddress;
-	public pointer<int> fileIndex;
-	public pointer<int> fileOffset;
-}
 
 public class SourceLocation {
 	public ref<SourceFile>		file;			// Source file containing this location
@@ -401,7 +376,7 @@ public pointer<SourceLocation> sourceLocations() {
 public int sourceLocationsCount() {
 	return int(getRuntimeParameter(SOURCE_LOCATIONS_COUNT));
 }
-/** ignore */
+/** @ignore */
 public void setSectionType() {
 	if (compileTarget == Target.X86_64_WIN) {
 		setRuntimeParameter(SECTION_TYPE, address(Target.X86_64_WIN));
@@ -409,27 +384,27 @@ public void setSectionType() {
 		setRuntimeParameter(SECTION_TYPE, address(Target.X86_64_LNX_SRC));
 	}
 }
-/** ignore */
+/** @ignore */
 public ref<pxi.X86_64SectionHeader> pxiHeader() {
 	return ref<pxi.X86_64SectionHeader>(getRuntimeParameter(PXI_HEADER));
 }
-/** ignore */
+/** @ignore */
 public void setPxiHeader(ref<pxi.X86_64SectionHeader> newHeader) {
 	setRuntimeParameter(PXI_HEADER, newHeader);
 }
-/** ignore */
+/** @ignore */
 public address imageAddress() {
 	return getRuntimeParameter(IMAGE);
 }
-/** ignore */
+/** @ignore */
 public void setImageAddress(address newImage) {
 	setRuntimeParameter(IMAGE, newImage);
 }
-/** ignore */
+/** @ignore */
 public int imageLength() {
 	return int(getRuntimeParameter(IMAGE_LENGTH));
 }
-/** ignore */
+/** @ignore */
 public void setImageLength(int newLength) {
 	setRuntimeParameter(IMAGE_LENGTH, address(long(newLength)));
 }
@@ -469,7 +444,8 @@ int IMAGE_LENGTH = 7;
 @Linux("libparasol.so.1", "getRuntimeParameter")
 @Windows("parasol.dll", "getRuntimeParameter")
 public abstract address getRuntimeParameter(int i);
-/** @ignore */
+/**
+ @ignore */
 @Linux("libparasol.so.1", "setRuntimeParameter")
 @Windows("parasol.dll", "setRuntimeParameter")
 public abstract void setRuntimeParameter(int i, address newValue);
@@ -501,6 +477,21 @@ public class CoverageTables {
  * @return The stack trace of the current running thread.
  */
 public string stackTrace() {
+	return stackTrace(0);
+}
+/**
+ * Return a text stack trace for the code location of the call to this function.
+ *
+ *
+ * @param skipFrames Skip that many frames when generating the stack trace. If
+ * the value is zero, all frames, starting with the caller, are included. A value
+ * of 1 will exclude the caller's frame, a value of 2 will exclude the caller and 
+ * the caller's caller. If the skip value is larger than the number of frames in
+ * the stack, the returned trace is the empty string.
+ *
+ * @return The stack trace of the current running thread.
+ */
+public string stackTrace(int skipFrames) {
 	string output;
 	int lowCode = int(image.codeAddress());
 	address ip = returnAddress();
@@ -516,7 +507,10 @@ public string stackTrace() {
 		ip = lastFrame[1];
 		int relative = int(ip) - lowCode;
 		string locationLabel = exception.formattedLocation(ip, relative, false);
-		output.printf("%s\n", locationLabel);
+		if (skipFrames <= 0)
+			output.printf("%s\n", locationLabel);
+		else
+			skipFrames--;
 	}
 	return output;
 }

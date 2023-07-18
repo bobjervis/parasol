@@ -179,7 +179,7 @@ private void flattenSet(ref<ref<script.Atom>[]> results, ref<ref<script.Atom>[]>
 				if (defaultPath == null)
 					path = addition;
 				else
-					path = storage.constructPath(defaultPath, addition);
+					path = storage.path(defaultPath, addition);
 				ref<script.Vector> v = ref<script.Vector>(content);
 				flattenSet(results, v.value(), path);
 			}

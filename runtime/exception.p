@@ -280,6 +280,25 @@ public class Exception {
 //		printf("    failure address %p\n", _exceptionContext.exceptionAddress);
 		address stackHigh = pointer<byte>(_exceptionContext.stackPointer) + _exceptionContext.stackSize;
 		address ip = _exceptionContext.exceptionAddress;
+		pointer<byte> ip_ptr = pointer<byte>(ip);
+		// If the exception address is not in Parasol code, then start by printing all possible
+		// Parasol code addresses found on thes tack, in case the C stack doesn't work out
+		if (ip_ptr < runtime.image.codeAddress() || ip_ptr >= runtime.image.highCodeAddress()) {
+			output.printf("Exception address is outside Parasol code space, dumping Parasol code addresses found on the stack:\n\n");
+			int relativeSp = 0;
+			for (pointer<pointer<byte>> sp = pointer<pointer<byte>>(_exceptionContext.stackPointer);
+							sp < pointer<pointer<byte>>(stackHigh) + -2; sp++, relativeSp += address.bytes) {
+				pointer<byte> possible_ip = pointer<byte>(_exceptionContext.slot(sp));
+				if (possible_ip >= runtime.image.codeAddress() && possible_ip < runtime.image.highCodeAddress()) {
+					int relative = int(possible_ip) - int(runtime.image.codeAddress());
+					if (possible_ip == runtime.image.entryPoint())
+						break;
+					string locationLabel = formattedLocation(possible_ip, relative, false);
+					output.printf("     sp+0x%x: %s\n", relativeSp, locationLabel);
+				}
+			}
+			output.printf("\n");
+		}
 		string tag = "->";
 		int lowCode = int(runtime.image.codeAddress());
 		int staticMemoryLength = int(runtime.image.highCodeAddress()) - lowCode;
@@ -302,6 +321,7 @@ public class Exception {
 				output.printf(" %2s %s\n", tag, locationLabel);
 				tag = "";
 			}
+			locationIsExact = false;
 		}
 		return output;
 	}

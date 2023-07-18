@@ -52,6 +52,9 @@ target(os: linux, cpu: x86-64) {
 		folder(name: src) {
 			folder(name: paradoc) {
 				file(name: *.p, src: src/paradoc)
+				folder(name: lib) {
+					file(name: *.p, src: src/paradoc/lib)
+				}
 			}
 			folder(name: pbuild) {
 				file(name: *.p, src: src/pbuild)

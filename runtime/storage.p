@@ -96,8 +96,8 @@ public string absolutePath(string filepath) {
 			string cwd(cwdbuf);
 			C.free(cwdbuf);
 			string[] components;
-			string path = constructPath(cwd, filepath);
-			components = path.split('/');
+			string p = path(cwd, filepath);
+			components = p.split('/');
 			return composeAbsolutePath(components);
 		} else
 			return null;
@@ -292,8 +292,8 @@ public string filename(string filename) {
  *
  * @return The resulting file path. 
  */
-public string constructPath(string directory, string filename) {
-	return constructPath(directory, filename, null);
+public string path(string directory, string filename) {
+	return path(directory, filename, null);
 }
 /**
  * Construct a path from a directory, baseName and extension.
@@ -311,7 +311,7 @@ public string constructPath(string directory, string filename) {
  * @return The constructed path name. Only one path separator character appears between
  * the directory and baseName parts of the path.
  */
-public string constructPath(string directory, string baseName, string extension) {
+public string path(string directory, string baseName, string extension) {
 	string base;
 	if (directory.length() > 0) {
 		byte c = directory[directory.length() - 1];
@@ -864,7 +864,7 @@ public boolean copyDirectoryTree(string source, string destination, boolean tryA
 			if (dir.filename() == "." || dir.filename() == "..")
 				continue;
 			string filepath = dir.path();
-			string destFilename = constructPath(destination, dir.filename());
+			string destFilename = path(destination, dir.filename());
 			if (isDirectory(filepath)) {
 				if (!copyDirectoryTree(filepath, destFilename, tryAllFiles)) {
 					delete dir;
@@ -1033,7 +1033,7 @@ public string[], boolean expandWildCard(string pattern) {
  */
 public string pathRelativeTo(string filename, string baseFilename) {
 	if (isRelativePath(filename))
-		return constructPath(directory(baseFilename), filename);
+		return path(directory(baseFilename), filename);
 	else
 		return filename;
 }

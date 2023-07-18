@@ -28,13 +28,7 @@ import parasol:exception.IllegalArgumentException;
 import parasol:exception.IllegalOperationException;
 import parasol:log;
 import parasol:process;
-import parasol:storage.File;
-import parasol:storage.openBinaryFile;
-import parasol:storage.Seek;
-import parasol:storage.constructPath;
-import parasol:storage.exists;
-import parasol:storage.isDirectory;
-import parasol:storage.pathRelativeTo;
+import parasol:storage;
 import parasol:thread;
 import parasol:thread.Thread;
 import parasol:thread.ThreadPool;
@@ -2341,13 +2335,13 @@ class StaticContentService extends Service {
 		}
 		string filename;
 		if (request.serviceResource != null)
-			filename = constructPath(_filename, request.serviceResource, null);
+			filename = storage.path(_filename, request.serviceResource, null);
 		else
 			filename = _filename;
-		if (exists(filename)) {
-			if (isDirectory(filename)) {
-				string f = constructPath(filename, "index.html");
-				if (!exists(f) || isDirectory(f)) {
+		if (storage.exists(filename)) {
+			if (storage.isDirectory(filename)) {
+				string f = storage.path(filename, "index.html");
+				if (!storage.exists(f) || storage.isDirectory(f)) {
 					response.error(404);
 					return false;
 				}
@@ -2358,12 +2352,10 @@ class StaticContentService extends Service {
 				} 
 				filename = f;
 			}
-			File f;
+			storage.File f;
 			if (f.open(filename)) {
 				response.ok();
-				f.seek(0, Seek.END);
-				long size = f.tell(); 
-				f.seek(0, Seek.START);
+				long size = f.size(); 
 				if (filename.endsWith(".html"))
 					response.header("Content-Type", "text/html; charset=utf-8");
 				response.header("Content-Length", string(size));

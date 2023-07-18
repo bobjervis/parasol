@@ -138,7 +138,7 @@ public class Context {
 
 		string exePath = process.binaryFilename();
 		string installDir = storage.directory(storage.directory(exePath));
-		string corePath = storage.constructPath(installDir, "runtime");
+		string corePath = storage.path(installDir, "runtime");
 		_core = new CorePackage(core, corePath);
 		_packages[core] = _core;
 	}
@@ -180,7 +180,7 @@ public class Context {
 		// If the default context has never been modified, it won't have a directory
 		// in the user's context list, so there won't be a defined _database field.
 		if (_database != null) {
-			string packageDir = storage.constructPath(_database, "pkg/" + name);
+			string packageDir = storage.path(_database, "pkg/" + name);
 			if (!storage.isDirectory(packageDir))
 				return null;
 			p = new Package(name, packageDir);
@@ -230,7 +230,7 @@ public ref<Context> createFromDirectory(string name, string path) {
 		string contextHome = ensureContextHome();
 		if (contextHome == null)
 			return null;
-		string contextDb = storage.constructPath(contextHome, name);
+		string contextDb = storage.path(contextHome, name);
 		// If the disk exists or is otherwise un-creatable, we can't create the context
 		if (!storage.createSymLink(path, contextDb))
 			return null;
@@ -256,7 +256,7 @@ public ref<Context> create(string name) {
 		string contextHome = ensureContextHome();
 		if (contextHome == null)
 			return null;
-		string contextDb = storage.constructPath(contextHome, name);
+		string contextDb = storage.path(contextHome, name);
 		// If the disk exists or is otherwise un-creatable, we can't create the context
 		if (!storage.makeDirectory(contextDb, false))
 			return null;
@@ -467,7 +467,7 @@ private string getContextHome() {
 
 	if (home == null)
 		throw IllegalOperationException("No home directory for user");
-	return storage.constructPath(home, ".parasol/contexts");
+	return storage.path(home, ".parasol/contexts");
 }
 
 //@Constant
@@ -545,7 +545,7 @@ public class Package {
 	}
 
 	public time.Instant, boolean lastModified() {
-		string manifest = storage.constructPath(_directory, PACKAGE_MANIFEST);
+		string manifest = storage.path(_directory, PACKAGE_MANIFEST);
 		time.Instant accessed, modified, created;
 		boolean success;
 
