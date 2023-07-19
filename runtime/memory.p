@@ -299,7 +299,7 @@ public class Heap extends Allocator {
 	}
 
 	public address alloc(long n) {
-		address p = C.calloc(unsigned(n), 1);
+		address p = C.calloc(n, 1);
 		if (p != null)
 			return p;
 		throw OutOfMemoryException(n);
