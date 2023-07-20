@@ -71,7 +71,7 @@ class Section {
 public:
 	Section(Target sectionType, X86_64SectionHeader &header, byte *image, size_t imageLength);
 
-	bool run(char **args, int *returnValue);
+	bool run(char **args, int *returnValue, int heap_value);
 
 	Target sectionType;
 	X86_64SectionHeader header;

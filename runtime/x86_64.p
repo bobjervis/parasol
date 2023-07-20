@@ -423,13 +423,10 @@ public class X86_64 extends X86_64AssignTemps {
 			}
 		}
 
-		pointer<runtime.SourceLocation> outerSource = runtime.sourceLocations();
-		int outerSourceCount = runtime.sourceLocationsCount();
 		memory.StartingHeap outerHeap = runtime.startingHeap();
 		ref<pxi.X86_64SectionHeader> outerPxiHeader = runtime.pxiHeader();
 		address outerImage = runtime.imageAddress();
 		int outerImageLength = runtime.imageLength();
-		runtime.setSourceLocations(&_sourceLocations[0], _sourceLocations.length());
 		runtime.setSectionType();
 		runtime.setStartingHeap(_startingHeap);
 		runtime.setPxiHeader(&_pxiHeader);
@@ -438,7 +435,6 @@ public class X86_64 extends X86_64AssignTemps {
 
 		returnValue = runtime.eval(&_pxiHeader, _staticMemory, &runArgs[0], runArgs.length());
 
-		runtime.setSourceLocations(outerSource, outerSourceCount);
 		runtime.setStartingHeap(outerHeap);
 		runtime.setPxiHeader(outerPxiHeader);
 		runtime.setImageAddress(outerImage);

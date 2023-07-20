@@ -169,22 +169,13 @@ public void freeRegion(address region, long length) {
 	}
 }
 /**
- * The Image object describes essential onformation about the image that is currently running.
+ * The Image object describes essential information about the image that is currently running.
  * As a PXI file is loaded or a Parasol compiler instance runs a just-compiled image, the
  * new image runs with its own copy of static data, so the Image object is created new.
  *
- * The image object is initially unset, as it is primarily used to provide source location
- * information for stack traces.
- *
- * SourceMap - in a pxi x86-64 section, source locations appear at the end of the section,
- * After relocations
- * 
- * SourceMaps come into existence two ways:
- * <ul>
- *    <li> Through the compiler running and building out the data structures as a side-effect
- *         of code generation.
- *    <li> From being loaded out of a PXI file image.
- * </ul>
+ * The image object is initially constructed by extracting information from the runtme parameters
+ * passed into the running instance. These parameters are set by the parasolrt execuable when
+ * launching a compiled image, or set by the Parasol compiler when running a new image.
  *
  * 
  */
@@ -278,7 +269,14 @@ public class Image {
 		return _image + _pxiHeader.entryPoint;
 	}
 }
-
+/**
+ * The image object describes various aspects of the currently running Parasol instance.
+ *
+ * Note that the pc command line runs a compiled parasol instance of the command-line compiler.
+ * When that compiler runs the compiled program, it does so by creating a new Parasol instance
+ * in memory. This object describes information about the compiled image, the code, static data and
+ * various meta-data stored in the image.
+ */
 public Image image;
 
 public class SourceLocation {
@@ -364,19 +362,6 @@ public void setStartingHeap(memory.StartingHeap newValue) {
 	setRuntimeParameter(LEAKS_FLAG, address(newValue));
 }
 /** @ignore */
-public void setSourceLocations(pointer<SourceLocation> location, int count) {
-	setRuntimeParameter(SOURCE_LOCATIONS, location);
-	setRuntimeParameter(SOURCE_LOCATIONS_COUNT, address(count));
-}
-/** @ignore */
-public pointer<SourceLocation> sourceLocations() {
-	return pointer<SourceLocation>(getRuntimeParameter(SOURCE_LOCATIONS));
-}
-/** @ignore */
-public int sourceLocationsCount() {
-	return int(getRuntimeParameter(SOURCE_LOCATIONS_COUNT));
-}
-/** @ignore */
 public void setSectionType() {
 	if (compileTarget == Target.X86_64_WIN) {
 		setRuntimeParameter(SECTION_TYPE, address(Target.X86_64_WIN));
@@ -419,12 +404,6 @@ public void setImageLength(int newLength) {
 /** @ignore */
 @Constant
 int PARASOL_THREAD = 0;
-/** @ignore */
-@Constant
-int SOURCE_LOCATIONS = 1;
-/** @ignore */
-@Constant
-int SOURCE_LOCATIONS_COUNT = 2;
 /** @ignore */
 @Constant
 int LEAKS_FLAG = 3;

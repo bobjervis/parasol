@@ -179,6 +179,7 @@ void setRuntimeParameter(int i, void *newValue);
 
 }
 
+#define RP_HEAP         3
 #define RP_SECTION_TYPE 4
 #define RP_PXI_HEADER	5
 #define RP_IMAGE		6

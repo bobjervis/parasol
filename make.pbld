@@ -46,6 +46,14 @@ target(os: linux, cpu: x86-64) {
 				file(name: main.cc, src: src/C++)
 				file(name: *.h, src: src/C++)
 			}
+			elf(name: parasolrt_leaks, target: build/parasolrt_leaks, makefile: src/C++/makefile) {
+				file(name: main.cc, src: src/C++)
+				file(name: *.h, src: src/C++)
+			}
+			elf(name: parasolrt_guard, target: build/parasolrt_guard, makefile: src/C++/makefile) {
+				file(name: main.cc, src: src/C++)
+				file(name: *.h, src: src/C++)
+			}
 			pxi(name: x86-64-lnx.pxi, main: src/pc/main.p, target: x86-64-lnx)
 		}
 		include(name: runtime, type: package, src: core:parasollanguage.org)
@@ -92,7 +100,7 @@ target(os: linux, cpu: x86-64) {
 		// Parasol applications).
 		after_pass() {
 			cp build/libparasol.so.1 bin/libparasol.so.1
-			cp build/parasolrt bin/parasolrt
+			cp build/parasolrt* bin
 		}
 	}
 

@@ -15,13 +15,21 @@
 
 RUNTIME_OBJECTS = build/o/executionContext.o build/o/pxi.o
 MAIN_OBJECT = build/o/main.o
+GUARD_OBJECT = build/o/main_guard.o
+LEAKS_OBJECT = build/o/main_leaks.o
 
 CFLAGS = -std=c++11 -O3 -I src/C++ -fPIC
 
 all: build/parasolrt 
 
 build/parasolrt: build/prep $(MAIN_OBJECT) build/libparasol.so.1
-	$(CXX) $(CFLAGS) -Lbuild -o build/parasolrt $(MAIN_OBJECT) -lpthread -ldl -lparasol
+	$(CXX) $(CFLAGS) -Lbuild -o $@ $(MAIN_OBJECT) -lpthread -ldl -lparasol
+
+build/parasolrt_guard: build/prep $(GUARD_OBJECT) build/libparasol.so.1
+	$(CXX) $(CFLAGS) -Lbuild -o $@ $(GUARD_OBJECT) -lpthread -ldl -lparasol
+
+build/parasolrt_leaks: build/prep $(LEAKS_OBJECT) build/libparasol.so.1
+	$(CXX) $(CFLAGS) -Lbuild -o $@ $(LEAKS_OBJECT) -lpthread -ldl -lparasol
 
 build/libparasol.so.1: build/prep $(RUNTIME_OBJECTS)
 	$(CXX) $(CFLAGS) -shared -o $@ $(RUNTIME_OBJECTS) -lpthread -ldl
@@ -33,6 +41,12 @@ $(RUNTIME_OBJECTS) $(MAIN_OBJECT): build/o/%.o : src/C++/%.cc src/C++/executionC
 build/prep:
 	mkdir -p build/o
 	touch build/prep 
+
+$(GUARD_OBJECT): src/C++/main.cc
+	$(CXX) $(CFLAGS) -o $@ -DPARASOLRT_HEAP=2 -c $<
+
+$(LEAKS_OBJECT): src/C++/main.cc
+	$(CXX) $(CFLAGS) -o $@ -DPARASOLRT_HEAP=1 -c $<
 
 clean:
 	- rm build/o/*.o

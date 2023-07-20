@@ -45,7 +45,12 @@ int main(int argc, char **argv) {
 		printf("Failed to load %s\n", argv[1]);
 		return 1;
 	}
-	if (section->run(argv, &returnValue))
+#ifdef PARASOLRT_HEAP
+	int heapValue = PARASOLRT_HEAP;
+#else
+	int heapValue = 0;
+#endif
+	if (section->run(argv, &returnValue, heapValue))
 		return returnValue;
 	else {
 		printf("Unable to run pxi %s\n", argv[1]);

@@ -132,7 +132,7 @@ Section::Section(Target sectionType, X86_64SectionHeader &header, byte *image, s
 	this->imageLength = imageLength;
 }
 
-bool Section::run(char **args, int *returnValue) {
+bool Section::run(char **args, int *returnValue, int heap_value) {
 	parasol::ExecutionContext ec(&header, image, null);
 
 	ec.enter();
@@ -140,6 +140,7 @@ bool Section::run(char **args, int *returnValue) {
 	parasol::setRuntimeParameter(RP_PXI_HEADER, (void*)&header);
 	parasol::setRuntimeParameter(RP_IMAGE, image);
 	parasol::setRuntimeParameter(RP_IMAGE_LENGTH, (void*)(long)imageLength);
+	parasol::setRuntimeParameter(RP_HEAP, (void*)heap_value);
 
 	int argc = 0;
 	for (int i = 1; args[i] != null; i++)
