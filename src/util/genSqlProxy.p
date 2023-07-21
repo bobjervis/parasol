@@ -15,11 +15,11 @@
  */
 import parasol:storage;
 import parasol:process;
-import parasol:compiler;
 import parasol:sql;
 import parasol:stream.EOF;
 import parasol:text.UTF8Decoder;
 import parasol:text.StringReader;
+import parasol:unicode;
 
 string DEFAULT_CLASS_NAME = "SQLDataBase";
 /*
@@ -581,7 +581,7 @@ long intValue(string value) {
 	UTF8Decoder ud(&r);
 	
 	int c = ud.decodeNext();
-	if (compiler.codePointClass(c) == 0) {
+	if (unicode.codePointClass(c) == 0) {
 		c = ud.decodeNext();
 		if (c < 0)
 			return 0;			// the constant is just a '0' (or alternate decimal zero)
@@ -591,21 +591,21 @@ long intValue(string value) {
 				c = ud.decodeNext();
 				if (c < 0)
 					break;
-				if (compiler.codePointClass(c) == compiler.CPC_LETTER)
+				if (unicode.codePointClass(c) == unicode.CPC_LETTER)
 					digit = 10 + byte(c).toLowerCase() - 'a';
 				else
-					digit = compiler.codePointClass(c);
+					digit = unicode.codePointClass(c);
 				v = v * 16 + digit;
 			}
 		} else {
 			do {
-				v = v * 8 + compiler.codePointClass(c);
+				v = v * 8 + unicode.codePointClass(c);
 				c = ud.decodeNext();
 			} while (c >= 0);
 		}
 	} else {
 		do {
-			v = v * 10 + compiler.codePointClass(c);
+			v = v * 10 + unicode.codePointClass(c);
 			c = ud.decodeNext();
 		} while (c >= 0);
 	}
@@ -974,13 +974,13 @@ class Scanner {
 				// are valid identifier characters.
 
 			default:
-				int cpc = compiler.codePointClass(c);
-				if (cpc == compiler.CPC_WHITE_SPACE)
+				int cpc = unicode.codePointClass(c);
+				if (cpc == unicode.CPC_WHITE_SPACE)
 					continue;
-				else if (cpc == compiler.CPC_ERROR) {
+				else if (cpc == unicode.CPC_ERROR) {
 					startValue(c);
 					return Token.ERROR;
-				} else if (cpc == compiler.CPC_LETTER)
+				} else if (cpc == unicode.CPC_LETTER)
 					return identifier(c);
 				else
 					return number(c);
@@ -998,8 +998,8 @@ class Scanner {
 				addCharacter(c);
 				continue;
 			}
-			int cpc = compiler.codePointClass(c);
-			if (cpc == compiler.CPC_ERROR || cpc == compiler.CPC_WHITE_SPACE) {
+			int cpc = unicode.codePointClass(c);
+			if (cpc == unicode.CPC_ERROR || cpc == unicode.CPC_WHITE_SPACE) {
 				ungetc();
 				break;
 			} else
@@ -1024,17 +1024,17 @@ class Scanner {
 				addCharacter(c);
 				c = getc();
 				ungetc();
-				if (compiler.codePointClass(c) == compiler.CPC_ERROR || compiler.codePointClass(c) == compiler.CPC_WHITE_SPACE)
+				if (unicode.codePointClass(c) == unicode.CPC_ERROR || unicode.codePointClass(c) == unicode.CPC_WHITE_SPACE)
 					return Token.ERROR;
-				else if (compiler.codePointClass(c) == compiler.CPC_LETTER && (c > 127 || !byte(c).isHexDigit()))
+				else if (unicode.codePointClass(c) == unicode.CPC_LETTER && (c > 127 || !byte(c).isHexDigit()))
 					return Token.ERROR;
 			} else
 				ungetc();
 		}
 		for (;;) {
 			c = getc();
-			int cpc = compiler.codePointClass(c);
-			if (cpc == compiler.CPC_ERROR) {
+			int cpc = unicode.codePointClass(c);
+			if (cpc == unicode.CPC_ERROR) {
 				if (c == '.') {
 					if (t == Token.FLOATING_POINT || hexConstant) {
 						ungetc();
@@ -1046,10 +1046,10 @@ class Scanner {
 				}
 				ungetc();
 				return t;
-			} else if (cpc == compiler.CPC_WHITE_SPACE) {
+			} else if (cpc == unicode.CPC_WHITE_SPACE) {
 				ungetc();
 				return t;
-			} else if (cpc == compiler.CPC_LETTER) {
+			} else if (cpc == unicode.CPC_LETTER) {
 				switch (c) {
 				case	'a':
 				case	'b':
@@ -1077,8 +1077,8 @@ class Scanner {
 							c = getc();
 						}
 						ungetc();
-						int cpc = compiler.codePointClass(c);
-						if (cpc == compiler.CPC_ERROR || cpc == compiler.CPC_WHITE_SPACE || cpc == compiler.CPC_LETTER)
+						int cpc = unicode.codePointClass(c);
+						if (cpc == unicode.CPC_ERROR || cpc == unicode.CPC_WHITE_SPACE || cpc == unicode.CPC_LETTER)
 							return Token.ERROR;
 					}
 					break;

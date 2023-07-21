@@ -1,7 +1,7 @@
 /*
  * Generated file - DO NOT MODIFY
  */
-namespace parasol:compiler;
+namespace parasol:unicode;
 
 // 0-9 = digit value, 254 = white space, 255 = letter, -1 = unclassified
 @Constant

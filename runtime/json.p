@@ -26,12 +26,10 @@
  */
 namespace parasol:json;
 
-import parasol:compiler.codePointClass;
-import parasol:compiler.CPC_LETTER;
+import parasol:unicode.codePointClass;
+import parasol:unicode.CPC_LETTER;
 
 import parasol:text.memDump;
-import parasol:compiler.Type;
-import parasol:compiler.ClassType;
 
 import parasol:log;
 

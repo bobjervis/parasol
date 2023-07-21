@@ -211,7 +211,7 @@ void recordCodePoint(string generalCategory, int codePoint, ref<Interval> x) {
 }
 
 boolean writeClassifier(ref<Writer> classifier) {
-	classifier.write("namespace parasol:compiler;\n\n");
+	classifier.write("namespace parasol:unicode;\n\n");
 	classifier.write("// 0-9 = digit value, 254 = white space, 255 = letter, -1 = unclassified\n");
 	classifier.write("@Constant\n");
 	classifier.write("public int CPC_ERROR = -1;\n");

@@ -15,8 +15,7 @@
  */
 namespace parasol:storage;
 
-import parasol:compiler;					// TODO: Move Unicode code point class logic into it's own
-											// namespace.
+import parasol:unicode;
 import parasol:exception.BoundsException;
 import parasol:exception.IllegalOperationException;
 import parasol:text;
@@ -216,10 +215,10 @@ public class CsvFile {
 				}
 				continue;
 			}
-			int cpc = compiler.codePointClass(c);
+			int cpc = unicode.codePointClass(c);
 			switch (state) {
 			case START_OF_FIELD:
-				if (trimFields && cpc == compiler.CPC_WHITE_SPACE)
+				if (trimFields && cpc == unicode.CPC_WHITE_SPACE)
 					break;
 
 			default:

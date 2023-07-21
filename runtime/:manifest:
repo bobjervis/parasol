@@ -32,7 +32,6 @@ UsyntaxTree.p
 Utarget.p
 Utype.p
 UunaryNode.p
-UunicodeIntervals.p
 Uvectorize.p
 Ntest
 UcompilerTest.p
@@ -135,6 +134,9 @@ Utest.p
 X
 Ntime
 Utime.p
+X
+Nunicode
+UunicodeIntervals.p
 X
 Nx86_64
 Ux86_64.p

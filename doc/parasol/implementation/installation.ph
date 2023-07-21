@@ -45,17 +45,12 @@ The installation script assumes you have a <span class=code>/usr/local/bin</span
 If not you will have to select another of the <span class=code>PATH</span> directories you have available and
 modify the installation script to refer to that directory instead.
 <p>
-The script also assume that <span class=code>/usr/parasol</span> is not being used on your computer for other purposes.
+The script also assumes that <span class=code>/usr/parasol</span> is not being used on your computer for other purposes.
 If you cannot install Parasol there, you will have ot edit the install script to place the public copy in a 
 different place.
 <p>
 To install, run the following command:
-
-<pre>
-    {@code <i>repository-path</i>/install.sh}
-</pre>
-
-<p>
-The script may prompt you for your root password to accomplish the install using {@code sudo}, if you 
-haven't entered it recently.
+<pre>{@code      <i>repository-path</i>/install.sh}</pre>
+The script may prompt you for your root password to accomplish the install using <span class=code>sudo</span>, 
+if you haven't entered the password recently.
 

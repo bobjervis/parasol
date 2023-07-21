@@ -20,6 +20,7 @@ import parasol:context;
 import parasol:runtime;
 import parasol:storage;
 import parasol:text;
+import parasol:unicode;
 
 public enum Operator {
 	// SyntaxError
@@ -1613,7 +1614,7 @@ public class Constant extends Node {
 		text.UTF8Decoder ur(&r);
 		
 		int c = ur.decodeNext();
-		if (codePointClass(c) == 0) {
+		if (unicode.codePointClass(c) == 0) {
 			c = ur.decodeNext();
 			if (c < 0)
 				return 0;			// the constant is just a '0' (or alternate decimal zero)
@@ -1623,21 +1624,21 @@ public class Constant extends Node {
 					c = ur.decodeNext();
 					if (c < 0)
 						break;
-					if (codePointClass(c) == CPC_LETTER)
+					if (unicode.codePointClass(c) == unicode.CPC_LETTER)
 						digit = 10 + byte(c).toLowerCase() - 'a';
 					else
-						digit = codePointClass(c);
+						digit = unicode.codePointClass(c);
 					v = v * 16 + digit;
 				}
 			} else {
 				do {
-					v = v * 8 + codePointClass(c);
+					v = v * 8 + unicode.codePointClass(c);
 					c = ur.decodeNext();
 				} while (c >= 0);
 			}
 		} else {
 			do {
-				v = v * 10 + codePointClass(c);
+				v = v * 10 + unicode.codePointClass(c);
 				c = ur.decodeNext();
 			} while (c >= 0);
 		}

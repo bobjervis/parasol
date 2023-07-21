@@ -7,10 +7,11 @@ All happy programming language tutorials start the same way, with a program to p
 While trivial, it also illustrates the level of effort you will need to do the minimum work in Parasol and you 
 should be able to build upon that example.
 <p>
-In the case of Parasol you need to create a text file named {@code hello.p} containing the following code:
+In the case of Parasol you need to create a text file named <span class=code>hello.p</span> containing the 
+following code:
 
 <pre>
-    printf("hello, world\b");
+    printf("hello, world\n");
 </pre>
 
 Then run the following command in a shell terminal:
