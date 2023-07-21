@@ -27,13 +27,13 @@ command in a Linux shell terminal window:
 }
 
 <p>
-This command will create a new directory named <span class=code>parasol</spen> in the current working directory.
+This command will create a new directory named <span class=code>parasol</span> in the current working directory.
 Consult the <span class=code>git</span> command help for options to customize your download point.
 
 You may use the git repository you just cloned to run the compiler.
-See the instructions under the {@link tutorial.ph} section for more information.
+See the instructions under the {@link tutorial tutorial.ph} section for more information.
 <p>
-You should add <span class=code><i>repository-path</i>/bin</span> to your <spam class=code>PATH</span> variable 
+You should add <span class=code><i>repository-path</i>/bin</span> to your <span class=code>PATH</span> variable 
 in your <span class=code>.bashrc</span> file.
 Otherwise, you will need to specify the path to the command you wish to run.
 
@@ -45,10 +45,11 @@ The installation script assumes you have a <span class=code>/usr/local/bin</span
 If not you will have to select another of the <span class=code>PATH</span> directories you have available and
 modify the installation script to refer to that directory instead.
 <p>
-The script also assume that {@code /usr/parasol} is not being used on your computer for other purposes.
+The script also assume that <span class=code>/usr/parasol</span> is not being used on your computer for other purposes.
 If you cannot install Parasol there, you will have ot edit the install script to place the public copy in a 
 different place.
-<To install, run the following command:
+<p>
+To install, run the following command:
 
 <pre>
     {@code <i>repository-path</i>/install.sh}
