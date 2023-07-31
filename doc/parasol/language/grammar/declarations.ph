@@ -23,7 +23,8 @@
 {@production | <b>protected</b> }
 {@end-grammar}
 
-If a visibility specifier appears at the beginning of a declaration, then all identifiers defined by that declaration share that visibility.
+If a visibility specifier appears at the beginning of a declaration, then all identifiers defined by that declaration
+share that visibility.
 
 <h3>{@level 3 Object Declarations}</h3>
 

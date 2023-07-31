@@ -41,9 +41,9 @@ import parasol:compiler.Symbol;
 import parasol:compiler.Ternary;
 import parasol:compiler.Type;
 import parasol:compiler.TypedefType;
-import parasol:compiler.TypeFamily;
 import parasol:compiler.Unary;
 import parasol:compiler.USE_COMPARE_METHOD;
+import parasol:runtime;
 
 class X86_64AssignTemps extends X86_64AddressModes {
 	void assignVoidContext(ref<Node> node, ref<CompileContext> compileContext) {
@@ -86,7 +86,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			else
 				switchMask = longMask();
 			assignRegisterTemp(b.left(), switchMask, compileContext);		// Take the result in any register available.
-			if (b.left().type.family() == TypeFamily.ENUM) {
+			if (b.left().type.family() == runtime.TypeFamily.ENUM) {
 				int i = int(f().r.getreg(node, longMask(), longMask()));
 				node.register = byte(i);
 			}
@@ -179,7 +179,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 		case	AND_ASSIGN:
 		case	EXCLUSIVE_OR_ASSIGN:
 			b = ref<Binary>(node);
-			if (b.type.family() == TypeFamily.STRING) {
+			if (b.type.family() == runtime.TypeFamily.STRING) {
 				if (b.sethi < 0) {
 					assignLvalueTemps(b.left(), compileContext);
 					assignRegisterTemp(b.right(), RSImask, compileContext);
@@ -549,7 +549,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			}
 
 		case	ASSIGN:
-			if (node.type.family() == TypeFamily.CLASS && node.type.indirectType(compileContext) == null) {
+			if (node.type.family() == runtime.TypeFamily.CLASS && node.type.indirectType(compileContext) == null) {
 				assignLargeClass(ref<Binary>(node), compileContext);
 				break;
 			}
@@ -947,7 +947,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 	private void assignCastNode(ref<Node> result, ref<Node> operand, long regMask, ref<CompileContext> compileContext) {
 		ref<Type> existingType = operand.type;
 		ref<Type> newType = result.type;
-		if (existingType.family() == TypeFamily.ENUM && newType.family() == TypeFamily.STRING) {
+		if (existingType.family() == runtime.TypeFamily.ENUM && newType.family() == runtime.TypeFamily.STRING) {
 			// We can't use the assignCast method because this is a method call, so the output
 			// register is fixed
 			int depth = tempStackDepth();
@@ -1163,7 +1163,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			// A general class coercion from another class type.
 			if (existingType.size() == newType.size())
 				return;
-			if (newType.family() == TypeFamily.INTERFACE) {
+			if (newType.family() == runtime.TypeFamily.INTERFACE) {
 				int depth = tempStackDepth();
 				assignLvalueTemps(operand, compileContext);
 				R reg = f().r.getreg(result, longMask(), longMask());
@@ -1356,7 +1356,7 @@ class X86_64AssignTemps extends X86_64AddressModes {
 			printf("After arguments cleanup:\n");
 			f().r.print();
 		}
-		if (call.type.family() == TypeFamily.VOID || (call.nodeFlags & PUSH_OUT_PARAMETER) != 0)
+		if (call.type.family() == runtime.TypeFamily.VOID || (call.nodeFlags & PUSH_OUT_PARAMETER) != 0)
 			call.register = byte(R.NO_REG);
 		else if (call.type.isFloat()) {
 			f().r.getreg(call, xmm0mask, xmm0mask);
@@ -1549,6 +1549,8 @@ class X86_64AssignTemps extends X86_64AddressModes {
 	}
 	
 	private long requiredMask(ref<Node> node) {
+		if (node.type == null)
+			node.print(0);
 		switch (node.type.family()) {
 		case SIGNED_8:
 		case UNSIGNED_8:

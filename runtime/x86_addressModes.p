@@ -39,9 +39,9 @@ import parasol:compiler.Symbol;
 import parasol:compiler.Target;
 import parasol:compiler.Ternary;
 import parasol:compiler.Type;
-import parasol:compiler.TypeFamily;
 import parasol:compiler.Unary;
 import parasol:compiler.USE_COMPARE_METHOD;
+import parasol:runtime;
 
 int MC_REG = 1;
 int MC_CONST = 2;
@@ -176,9 +176,9 @@ class X86_64AddressModes extends X86_64Encoder {
 			if (b.left().type.isFloat()) {
 				markAddressModes(b.left(), compileContext);
 				modeComplexity = MC_ADDRESS|MC_REG;
-			} else if (b.left().type.family() == TypeFamily.TYPEDEF) {
+			} else if (b.left().type.family() == runtime.TypeFamily.TYPEDEF) {
 				markAddressModes(b.left(), compileContext);
-				if (b.right().type.family() == TypeFamily.TYPEDEF) {
+				if (b.right().type.family() == runtime.TypeFamily.TYPEDEF) {
 					markAddressModes(b.right(), compileContext);
 					break;
 				} else
@@ -435,7 +435,7 @@ class X86_64AddressModes extends X86_64Encoder {
 	void markCast(ref<Node> dest, ref<Node> operand, ref<CompileContext> compileContext) {
 		ref<Type> existingType = operand.type;
 		ref<Type> newType = dest.type;
-		if (existingType.family() == TypeFamily.ENUM && newType.family() == TypeFamily.STRING) {
+		if (existingType.family() == runtime.TypeFamily.ENUM && newType.family() == runtime.TypeFamily.STRING) {
 			markAddressModes(operand, compileContext);
 			return;
 		}
@@ -615,7 +615,7 @@ class X86_64AddressModes extends X86_64Encoder {
 			// A general class coercion from another class type.
 			if (existingType.size() == newType.size())
 				return;
-			if (newType.family() == TypeFamily.INTERFACE) {
+			if (newType.family() == runtime.TypeFamily.INTERFACE) {
 				markAddressModes(operand, compileContext);
 				return;
 			}

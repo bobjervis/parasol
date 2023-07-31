@@ -218,7 +218,7 @@ void indexTypesInClass(ref<compiler.Symbol> sym, string dirName) {
 		return;
 	if (sym.definition() != scope.className()) {
 		ref<compiler.Type> t = typeFor(sym);
-		if (t.family() != compiler.TypeFamily.TEMPLATE)
+		if (t.family() != runtime.TypeFamily.TEMPLATE)
 			return;
 	}
 	string name = sym.name();
@@ -291,7 +291,7 @@ ref<compiler.Scope> scopeFor(ref<compiler.Symbol> sym) {
 	ref<compiler.Type> t = sym.type();
 	if (t == null)
 		return null;
-	if (t.family() == compiler.TypeFamily.TYPEDEF)
+	if (t.family() == runtime.TypeFamily.TYPEDEF)
 		t = ref<compiler.TypedefType>(t).wrappedType();
 	return t.scope();
 }

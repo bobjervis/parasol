@@ -17,6 +17,7 @@ namespace parasol:x86_64;
 
 import native:C;
 
+import parasol:compiler;
 import parasol:compiler.Access;
 import parasol:compiler.Binary;
 import parasol:compiler.Block;
@@ -50,7 +51,6 @@ import parasol:compiler.ThunkScope;
 import parasol:compiler.Try;
 import parasol:compiler.Type;
 import parasol:compiler.TypedefType;
-import parasol:compiler.TypeFamily;
 import parasol:compiler.Unary;
 import parasol:compiler.Unit;
 import parasol:compiler.Variable;
@@ -242,7 +242,7 @@ class X86_64Encoder extends Target {
 	protected runtime.SourceLocation[] _sourceLocations;
 	protected int[ref<Unit>] _sourceFileMap;
 	protected DeferredTry[] _deferredTry;
-	protected ref<Segment<Segments>>[Segments] _segments;
+	protected ref<Segment>[Segments] _segments;
 	protected ref<Symbol>[] _nativeBindingSymbols;
 	
 	private ref<CodeSegment>[] _exceptionHandlers;
@@ -261,29 +261,29 @@ class X86_64Encoder extends Target {
 	protected X86_64Encoder() {
 		_dataMap.resize(9);
 		_segments.resize(Segments.ALLOCATED);
-		_segments[Segments.CODE] = new Segment<Segments>(8, 0x37);
-		_segments[Segments.TYPE_DATA] = new Segment<Segments>(8);
-		_segments[Segments.EXCEPTION_TABLE] = new Segment<Segments>(8);
-		_segments[Segments.NATIVE_BINDINGS] = new Segment<Segments>(8);
-		_segments[Segments.VTABLES] = new Segment<Segments>(8);
+		_segments[Segments.CODE] = new Segment(8, 0x37);
+		_segments[Segments.TYPE_DATA] = new Segment(8);
+		_segments[Segments.EXCEPTION_TABLE] = new Segment(8);
+		_segments[Segments.NATIVE_BINDINGS] = new Segment(8);
+		_segments[Segments.VTABLES] = new Segment(8);
 
-		_segments[Segments.DATA_8] = new Segment<Segments>(8);
-		_segments[Segments.STRINGS] = new Segment<Segments>(4);
-		_segments[Segments.DATA_4] = new Segment<Segments>(4);
-		_segments[Segments.DATA_2] = new Segment<Segments>(2);
-		_segments[Segments.DATA_1] = new Segment<Segments>(1);
+		_segments[Segments.DATA_8] = new Segment(8);
+		_segments[Segments.STRINGS] = new Segment(4);
+		_segments[Segments.DATA_4] = new Segment(4);
+		_segments[Segments.DATA_2] = new Segment(2);
+		_segments[Segments.DATA_1] = new Segment(1);
 
-		_segments[Segments.BUILT_INS_TEXT] = new Segment<Segments>(1);
-		_segments[Segments.SOURCE_LOCATIONS] = new Segment<Segments>(4);
-		_segments[Segments.SOURCE_FILE_INDICES] = new Segment<Segments>(4);
-		_segments[Segments.SOURCE_FILE_OFFSETS] = new Segment<Segments>(4);
-		_segments[Segments.SOURCE_FILE_NAMES] = new Segment<Segments>(4);
-		_segments[Segments.SOURCE_FILE_LINE_INDICES] = new Segment<Segments>(4);
-		_segments[Segments.SOURCE_FILE_LINE_COUNTS] = new Segment<Segments>(4);
-		_segments[Segments.SOURCE_FILE_BASE_LINES] = new Segment<Segments>(4);
-		_segments[Segments.LINE_FILE_OFFSETS] = new Segment<Segments>(4);
-		_segments[Segments.RELOCATIONS] = new Segment<Segments>(4);
-		_segments[Segments.MAXIMUM] = new Segment<Segments>(1);
+		_segments[Segments.BUILT_INS_TEXT] = new Segment(1);
+		_segments[Segments.SOURCE_LOCATIONS] = new Segment(4);
+		_segments[Segments.SOURCE_FILE_INDICES] = new Segment(4);
+		_segments[Segments.SOURCE_FILE_OFFSETS] = new Segment(4);
+		_segments[Segments.SOURCE_FILE_NAMES] = new Segment(4);
+		_segments[Segments.SOURCE_FILE_LINE_INDICES] = new Segment(4);
+		_segments[Segments.SOURCE_FILE_LINE_COUNTS] = new Segment(4);
+		_segments[Segments.SOURCE_FILE_BASE_LINES] = new Segment(4);
+		_segments[Segments.LINE_FILE_OFFSETS] = new Segment(4);
+		_segments[Segments.RELOCATIONS] = new Segment(4);
+		_segments[Segments.MAXIMUM] = new Segment(1);
 	}
 	
 	~X86_64Encoder() {
@@ -326,7 +326,7 @@ class X86_64Encoder extends Target {
 
 		// First transform fixups from code-generated to segmented
 
-		ref<Segment<Segments>> codeSeg = _segments[Segments.CODE];
+		ref<Segment> codeSeg = _segments[Segments.CODE];
 		pointer<byte> code = codeSeg.at(0);
 		for (ref<Fixup> f = _fixups; f != null; f = f.next) {
 			switch (f.kind) {
@@ -353,7 +353,7 @@ class X86_64Encoder extends Target {
 			case	RELATIVE32_FPDATA:				// Fixup value is a ref<Constant>
 				ref<Constant> con = ref<Constant>(f.value);
 //				Segments targetSegment;
-				if (con.type.family() == TypeFamily.FLOAT_32) {
+				if (con.type.family() == runtime.TypeFamily.FLOAT_32) {
 //					targetSegment = Segments.DATA_4;
 					codeFixup(f.location, Segments.DATA_4, con.offset);
 				} else {
@@ -402,22 +402,11 @@ class X86_64Encoder extends Target {
 			case	ABSOLUTE64_STRING:				// Fixup value is an int offset into the string pool
 //				printf("@ %x v %x ", f.location, f.value);
 //				f.locationSymbol.print(0, false);
-				ref<Segment<Segments>> s = _segments[Segments.DATA_8];
+				ref<Segment> s = _segments[Segments.DATA_8];
 				int location = int(f.locationSymbol.offset) + f.location;
 				*ref<int>(s.at(location)) = int(f.value);
-				s.fixup(location, Segments.STRINGS, true);
+				s.fixup(location, byte(Segments.STRINGS), true);
 				definePxiFixup(Segments.DATA_8, location);
-				break;
-
-			case	ABSOLUTE64_VTABLE:				// Fixup value is a ref<Type>
-				ref<Type> type = ref<Type>(f.value);
-//				location = _pxiHeader.typeDataOffset + f.location;
-				scope = ref<ClassScope>(type.scope());
-				s = _segments[Segments.TYPE_DATA];
-				*ref<int>(s.at(f.location)) = int(scope.vtable) - 1;
-				_segments[Segments.TYPE_DATA].fixup(f.location, Segments.VTABLES, true);
-//				*ref<int>(&code[location]) = _pxiHeader.vtablesOffset + int(scope.vtable) - 1;
-				definePxiFixup(Segments.TYPE_DATA, f.location);
 				break;
 
 			case	INT_CONSTANT:					// fixup value is the intereger constant
@@ -452,7 +441,7 @@ class X86_64Encoder extends Target {
 		for (int i = 0; i <= int(Segments.MAXIMUM); i++) {
 			Segments segment = Segments(i);
 			
-			_segments[segment].resolveFixups(this, &_segments);
+			_segments[segment].resolveFixups(this, &_segments[Segments(0)]);
 		}
 
 		// these calls will change the offset recorded in a static symbol from segment-relative
@@ -487,26 +476,26 @@ class X86_64Encoder extends Target {
 
 		_staticMemory = pointer<byte>(runtime.allocateRegion(_staticMemoryLength));
 		for (int i = 0; i < int(Segments.MAXIMUM); i++) {
-			ref<Segment<Segments>> s = _segments[Segments(i)];
+			ref<Segment> s = _segments[Segments(i)];
 			C.memcpy(_staticMemory + s.offset(), s.at(0), s.length());
 		}
 		return true;
 	}
 
 	private void codeFixup(int location, Segments segment, int contents) {
-		ref<Segment<Segments>> s = _segments[Segments.CODE];
+		ref<Segment> s = _segments[Segments.CODE];
 		*ref<int>(s.at(location)) += contents;
-		s.fixup(location, segment, false);
+		s.fixup(location, byte(segment), false);
 	}
 
 	protected void definePxiFixup(Segments segment, int location) {
-		ref<Segment<Segments>> s = _segments[Segments.RELOCATIONS];
+		ref<Segment> s = _segments[Segments.RELOCATIONS];
 		int offset = s.reserve(location.bytes);
 		*ref<int>(s.at(offset)) = location;
-		s.fixup(offset, segment, true);
+		s.fixup(offset, byte(segment), true);
 	}
 	
-	private ref<Segment<Segments>> segmentOf(ref<Symbol> sym) {
+	private ref<Segment> segmentOf(ref<Symbol> sym) {
 		return _segments[staticDataSegment(sym.type().alignment())];
 	}
 
@@ -532,7 +521,7 @@ class X86_64Encoder extends Target {
 	}
 
 	private void relocateStaticData(int alignment) {
-		ref<Segment<Segments>> s;
+		ref<Segment> s;
 		switch (alignment) {
 		case 8:
 			s = _segments[Segments.DATA_8];
@@ -555,7 +544,7 @@ class X86_64Encoder extends Target {
 		for (i in _dataMap[alignment]) {
 			ref<Symbol> sym = _dataMap[alignment][i];
 			if (!sym.isEnumClass() &&
-				sym.type().family() != TypeFamily.TYPEDEF &&
+				sym.type().family() != runtime.TypeFamily.TYPEDEF &&
 				sym.class == PlainSymbol) {
 				ref<PlainSymbol> ps = ref<PlainSymbol>(sym);
 				if (ps.accessFlags() & Access.COMPILE_TARGET) {
@@ -577,30 +566,52 @@ class X86_64Encoder extends Target {
 		}
 	}
 	
-	public address, int allocateImageData(int size, int alignment, ref<Type> type) {
-		assert(alignment == 8);
-		ref<Segment<Segments>> s = _segments[Segments.TYPE_DATA];
-		int offset = s.reserve(size, alignment);
-		if (type != null)
-			_ordinalMap.set(offset, type);
-		return s.at(offset), offset + 1;
+	public int copyClassToImage(ref<Type> type, int baseOrdinal, runtime.TypeFamily family) {
+		ref<Segment> s = _segments[Segments.TYPE_DATA];
+		int size = runtime.Class.bytes;
+		int offset = s.reserve(size, 8);
+		*ref<long>(s.at(offset)) = runtime.Class.MAGIC;
+		int baseOffset = offset + runtime.Class.BASE_OFFSET;
+		if (baseOrdinal != 0) {
+			baseOrdinal--;
+			*ref<int>(s.at(baseOffset)) = baseOrdinal;
+			s.fixup(baseOffset, byte(Segments.TYPE_DATA), true);
+			definePxiFixup(Segments.TYPE_DATA, baseOffset);
+		}
+		int familyOffset = offset + runtime.Class.FAMILY_OFFSET;
+		*ref<runtime.TypeFamily>(s.at(familyOffset)) = family;
+//		printf("{ magic: %x base %x: %x family %x: %d }\n", offset, baseOffset, baseOrdinal, familyOffset, int(family));
+//		copyFields(template, offset);
+		_ordinalMap.set(offset, type);
+		return offset + 1;
 	}
 
-	public void fixupType(int ordinal, ref<Type> type) {
-		if (type != null) {
-			int location = ordinal - 1;
-			ref<Segment<Segments>> s = _segments[Segments.TYPE_DATA];
-			*ref<int>(s.at(location)) = type.copyToImage(this) - 1;
-			s.fixup(location, Segments.TYPE_DATA, true);
-			definePxiFixup(Segments.TYPE_DATA, location);
+/**
+	public int copyInterfaceToImage(ref<Type> type, ref<runtime.Interface> template) {
+		ref<Segment> s = _segments[Segments.TYPE_DATA];
+		int size = template.bytes;
+		int offset = s.reserve(size, 8);
+		copyFields(template, offset);
+		int offset = copyClassToImage(type, template);
+		_ordinalMap.set(offset, type);
+		return offset + 1;
+	}
+ */
+/*
+	private void copyFields(ref<runtime.Class> template, int offset) {
+		ref<Segment> s = _segments[Segments.TYPE_DATA];
+		pointer<long> slots = pointer<long>(s.at(offset
+));
+		int ordinal = compiler.getOrdinal(template.base());
+		*slots = ordinal;
+//		ordinal = addStringLiteral(template.
+		slots += template.bytes / address.bytes;		// skip to the intefaces array
+		for (int i = 0; i < template.interfaceCount(); i++) {
+			ordinal = compiler.getOrdinal(template.getInterface(i));
+			slots[i] = ordinal;
 		}
 	}
-
-	public void fixupVtable(int ordinal, ref<Type> type) {
-		ref<ClassScope> classScope = ref<ClassScope>(type.scope());
-		staticFixup(FixupKind.ABSOLUTE64_VTABLE, null, ordinal - 1, type);
-	}
-
+*/
 	public void markRegisterParameters(ref<ParameterScope> scope, ref<CompileContext> compileContext) {
 		// Stack will look like:
 		//
@@ -674,7 +685,7 @@ class X86_64Encoder extends Target {
 			ref<ClassScope> scope = _vtables[i];
 			// This relies on the copyToImage function being idempotent, in that the return value
 			// that we ignore for now will be the same in populateVTables, but will have all side-
-			// effects like genrating the Type objects into the image done now.
+			// effects like genrating the runtime.Class objects into the image done now.
 			scope.classType.copyToImage(this);
 			// This relies on the side-effects of arranging that the function in question eventually gets generated.
 			if (scope.destructor() != null)
@@ -859,7 +870,7 @@ class X86_64Encoder extends Target {
 			assert(false);
 		}
 		_dataMap[alignment].append(symbol);
-		symbol.offset = ref<Segment<Segments>>(symbol.segment).reserve(size);
+		symbol.offset = ref<Segment>(symbol.segment).reserve(size);
 	}
 
 	public boolean disassemble(ref<runtime.Arena> arena) {
@@ -938,7 +949,7 @@ class X86_64Encoder extends Target {
 			int filenameOffset = _segments[Segments.BUILT_INS_TEXT].reserve(filename.length() + 1);
 			C.memcpy(_segments[Segments.BUILT_INS_TEXT].at(filenameOffset), filename.c_str(), filename.length());
 			_segments[Segments.SOURCE_FILE_NAMES].append(&filenameOffset, int.bytes);
-			_segments[Segments.SOURCE_FILE_NAMES].fixup(segOffset, Segments.BUILT_INS_TEXT, true);
+			_segments[Segments.SOURCE_FILE_NAMES].fixup(segOffset, byte(Segments.BUILT_INS_TEXT), true);
 			ref<runtime.SourceOffset[]> lines = file.lines();
 			int lineIndex = _segments[Segments.LINE_FILE_OFFSETS].length();
 			_segments[Segments.SOURCE_FILE_LINE_INDICES].append(&lineIndex, int.bytes);
@@ -1116,7 +1127,7 @@ class X86_64Encoder extends Target {
 		
 		void packCode(int offset, ref<X86_64Encoder> encoder) {
 			int nextCopy = offset;
-			ref<Segment<Segments>> seg = encoder._segments[Segments.CODE];
+			ref<Segment> seg = encoder._segments[Segments.CODE];
 			pointer<byte> code = seg.at(0);
 			for (ref<CodeSegment> cs = _first; cs != null; cs = cs.next) {
 				for (i in cs.sourceLocations)
@@ -1251,7 +1262,7 @@ class X86_64Encoder extends Target {
 		_exceptionHandlers.append(handler);
 	}
 
-	void inst(X86 instruction, TypeFamily family, ref<Node> left, ref<Node> right, ref<CompileContext> compileContext) {
+	void inst(X86 instruction, runtime.TypeFamily family, ref<Node> left, ref<Node> right, ref<CompileContext> compileContext) {
 		if (left.deferGeneration() || right.deferGeneration())
 			return;
 		if (right.op() == Operator.SEQUENCE) {
@@ -1267,7 +1278,7 @@ class X86_64Encoder extends Target {
 				inst(instruction, left, R(int(right.register)), compileContext);
 			else if (right.isConstant()) {
 				ref<Constant> c = ref<Constant>(right);
-				if (c.representedBy(compileContext.builtInType(TypeFamily.SIGNED_32)))
+				if (c.representedBy(compileContext.builtInType(runtime.TypeFamily.SIGNED_32)))
 					inst(instruction, left, int(c.intValue()), compileContext);
 				else {
 					printf("%s - -\n", string(instruction));
@@ -1285,20 +1296,20 @@ class X86_64Encoder extends Target {
 			R dest = R(left.register);
 			if (right.register != 0) {
 				R src = R(right.register);
-				if (family == TypeFamily.FLAGS) {
-					assert(left.type.family() == TypeFamily.FLAGS);
+				if (family == runtime.TypeFamily.FLAGS) {
+					assert(left.type.family() == runtime.TypeFamily.FLAGS);
 					switch (left.type.size()) {
 					case 1:
 					case 2:
-						family = TypeFamily.SIGNED_16;
+						family = runtime.TypeFamily.SIGNED_16;
 						break;
 						
 					case 4:
-						family = TypeFamily.SIGNED_32;
+						family = runtime.TypeFamily.SIGNED_32;
 						break;
 						
 					case 8:
-						family = TypeFamily.SIGNED_64;
+						family = runtime.TypeFamily.SIGNED_64;
 						break;
 					}
 				}
@@ -1328,7 +1339,7 @@ class X86_64Encoder extends Target {
 		}
 	}
 	
-	boolean pushRegister(TypeFamily family, R reg) {
+	boolean pushRegister(runtime.TypeFamily family, R reg) {
 		switch (family) {
 		case	UNSIGNED_8:
 		case	UNSIGNED_16:
@@ -1350,17 +1361,17 @@ class X86_64Encoder extends Target {
 		case	INTERFACE:
 		case	SUBSTRING:				// These should only show up in compares
 		case	SUBSTRING16:			// These should only show up in compares
-			inst(X86.PUSH, TypeFamily.SIGNED_64, reg);
+			inst(X86.PUSH, runtime.TypeFamily.SIGNED_64, reg);
 			break;
 			
 		case	FLOAT_32:
-			inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, 8);
-			inst(X86.MOVSS, TypeFamily.SIGNED_32, R.RSP, 0, reg);
+			inst(X86.SUB, runtime.TypeFamily.SIGNED_64, R.RSP, 8);
+			inst(X86.MOVSS, runtime.TypeFamily.SIGNED_32, R.RSP, 0, reg);
 			break;
 			
 		case	FLOAT_64:
-			inst(X86.SUB, TypeFamily.SIGNED_64, R.RSP, 8);
-			inst(X86.MOVSD, TypeFamily.SIGNED_64, R.RSP, 0, reg);
+			inst(X86.SUB, runtime.TypeFamily.SIGNED_64, R.RSP, 8);
+			inst(X86.MOVSD, runtime.TypeFamily.SIGNED_64, R.RSP, 0, reg);
 			break;
 		
 		default:
@@ -1369,7 +1380,7 @@ class X86_64Encoder extends Target {
 		return true;
 	}
 	
-	boolean popRegister(TypeFamily family, R reg) {
+	boolean popRegister(runtime.TypeFamily family, R reg) {
 		switch (family) {
 		case	UNSIGNED_8:
 		case	UNSIGNED_16:
@@ -1391,17 +1402,17 @@ class X86_64Encoder extends Target {
 		case	INTERFACE:
 		case	SUBSTRING:				// These should only show up in compares
 		case	SUBSTRING16:			// These should only show up in compares
-			inst(X86.POP, TypeFamily.SIGNED_64, reg);
+			inst(X86.POP, runtime.TypeFamily.SIGNED_64, reg);
 			break;
 			
 		case	FLOAT_32:
-			inst(X86.MOVSS, TypeFamily.SIGNED_32, reg, R.RSP, 0);
-			inst(X86.ADD, TypeFamily.SIGNED_64, R.RSP, 8);
+			inst(X86.MOVSS, runtime.TypeFamily.SIGNED_32, reg, R.RSP, 0);
+			inst(X86.ADD, runtime.TypeFamily.SIGNED_64, R.RSP, 8);
 			break;
 			
 		case	FLOAT_64:
-			inst(X86.MOVSD, TypeFamily.SIGNED_64, reg, R.RSP, 0);
-			inst(X86.ADD, TypeFamily.SIGNED_64, R.RSP, 8);
+			inst(X86.MOVSD, runtime.TypeFamily.SIGNED_64, reg, R.RSP, 0);
+			inst(X86.ADD, runtime.TypeFamily.SIGNED_64, R.RSP, 8);
 			break;
 			
 		default:
@@ -1411,7 +1422,7 @@ class X86_64Encoder extends Target {
 	}
 	/*
 	 */
-	void inst(X86 instruction, TypeFamily family, R dest, long operand) {
+	void inst(X86 instruction, runtime.TypeFamily family, R dest, long operand) {
 		if (dest == R.NO_REG) {
 			printf("%s NO_REG %d\n", string(instruction), operand);
 			assert(false);
@@ -1524,7 +1535,7 @@ class X86_64Encoder extends Target {
 					emit(byte(operand));
 					return;
 				}
-				family = TypeFamily.UNSIGNED_16;
+				family = runtime.TypeFamily.UNSIGNED_16;
 
 			case	UNSIGNED_16:
 			case	SIGNED_16:
@@ -1614,7 +1625,7 @@ class X86_64Encoder extends Target {
 			break;
 			
 		case	LEA:
-			emitRex(TypeFamily.SIGNED_64, right, left, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_64, right, left, R.NO_REG);
 			emit(0x8d);
 			ref<Type> t = right.type;
 			right.type = type;
@@ -1632,7 +1643,7 @@ class X86_64Encoder extends Target {
 	void inst(X86 instruction, R baseReg, int offset) {
 		switch (instruction) {
 		case	PUSH:
-			emitRex(TypeFamily.VOID, null, R.NO_REG, baseReg);
+			emitRex(runtime.TypeFamily.VOID, null, R.NO_REG, baseReg);
 			emit(0xff);
 			if (offset == 0)
 				modRM(0, 6, rmValues[baseReg]);
@@ -1646,7 +1657,7 @@ class X86_64Encoder extends Target {
 			return;
 			
 		case	SAR:
-			emitRex(TypeFamily.SIGNED_64, null, R.NO_REG, baseReg);
+			emitRex(runtime.TypeFamily.SIGNED_64, null, R.NO_REG, baseReg);
 			emit(0xd1);
 			modRM(3, 7, rmValues[baseReg]);
 			return;
@@ -1658,7 +1669,7 @@ class X86_64Encoder extends Target {
 	void inst(X86 instruction, R dest, R reg, int offset) {
 		switch (instruction) {
 		case	MOV:
-			emitRex(TypeFamily.SIGNED_64, null, dest, reg);
+			emitRex(runtime.TypeFamily.SIGNED_64, null, dest, reg);
 			emit(byte(opcodes[instruction] + 0x03));
 			if (offset >= -128 && offset <= 127) {
 				modRM(1, rmValues[dest], rmValues[reg]);
@@ -1670,7 +1681,7 @@ class X86_64Encoder extends Target {
 			break;
 			
 		case	LEA:
-			emitRex(TypeFamily.SIGNED_64, null, dest, reg);
+			emitRex(runtime.TypeFamily.SIGNED_64, null, dest, reg);
 			emit(0x8d);
 			if (reg == R.RSP) {
 				if (offset >= -128 && offset <= 127) {
@@ -1702,14 +1713,14 @@ class X86_64Encoder extends Target {
 	void inst(X86 instruction, R dest, R reg, R index) {
 		switch (instruction) {
 		case	MOV:
-			emitRex(TypeFamily.SIGNED_64, null, dest, reg);
+			emitRex(runtime.TypeFamily.SIGNED_64, null, dest, reg);
 			emit(byte(opcodes[instruction] + 0x03));
 			modRM(0, rmValues[dest], 4);
 			sib(0, rmValues[reg], rmValues[index]);
 			break;
 			
 		case	LEA:
-			emitRex(TypeFamily.SIGNED_64, null, dest, reg);
+			emitRex(runtime.TypeFamily.SIGNED_64, null, dest, reg);
 			emit(0x8d);
 			modRM(0, rmValues[dest], 4);
 			sib(0, rmValues[reg], rmValues[index]);
@@ -1721,11 +1732,11 @@ class X86_64Encoder extends Target {
 		}
 	}
 	
-	void inst(X86 instruction, TypeFamily family, R dest, R reg, int offset) {
+	void inst(X86 instruction, runtime.TypeFamily family, R dest, R reg, int offset) {
 		switch (instruction) {
 		case	MOVSD:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, R.NO_REG);
 			emit(0x0f);
 			emit(0x10);
 			if (reg == R.RSP) {
@@ -1746,7 +1757,7 @@ class X86_64Encoder extends Target {
 			
 		case	MOVSS:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, R.NO_REG);
 			emit(0x0f);
 			emit(0x10);
 			if (reg == R.RSP) {
@@ -1783,11 +1794,11 @@ class X86_64Encoder extends Target {
 		}
 	}
 
-	void inst(X86 instruction, TypeFamily family, R dest, int offset, R reg) {
+	void inst(X86 instruction, runtime.TypeFamily family, R dest, int offset, R reg) {
 		switch (instruction) {
 		case	MOVSD:
 			emit(0xf2);
-			emitRex(TypeFamily.FLOAT_64, null, reg, R.NO_REG);
+			emitRex(runtime.TypeFamily.FLOAT_64, null, reg, R.NO_REG);
 			emit(0x0f);
 			emit(0x11);
 			if (dest == R.RSP) {
@@ -1813,7 +1824,7 @@ class X86_64Encoder extends Target {
 			
 		case	MOVSS:
 			emit(0xf3);
-			emitRex(TypeFamily.FLOAT_64, null, reg, R.NO_REG);
+			emitRex(runtime.TypeFamily.FLOAT_64, null, reg, R.NO_REG);
 			emit(0x0f);
 			emit(0x11);
 			if (dest == R.RSP) {
@@ -1910,7 +1921,7 @@ class X86_64Encoder extends Target {
 		switch (instruction) {
 		case	PXOR:
 			emit(0x66);
-			emitRex(TypeFamily.SIGNED_32, null, dest, src);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0xef);
 			modRM(3, rmValues[dest], rmValues[src]);
@@ -1922,7 +1933,7 @@ class X86_64Encoder extends Target {
 		}
 	}
 
-	void inst(X86 instruction, TypeFamily family, R dest, R src) {
+	void inst(X86 instruction, runtime.TypeFamily family, R dest, R src) {
 		switch (instruction) {
 		case	SAL:
 			switch (family) {
@@ -1992,7 +2003,7 @@ class X86_64Encoder extends Target {
 		case	UCOMISD:
 			emit(0x66);
 		case	UCOMISS:
-			emitRex(TypeFamily.SIGNED_32, null, dest, src);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x2e);
 			modRM(3, rmValues[dest], rmValues[src]);
@@ -2000,7 +2011,7 @@ class X86_64Encoder extends Target {
 			
 		case	CVTSS2SD:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, null, dest, src);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x5a);
 			modRM(3, rmValues[dest], rmValues[src]);
@@ -2008,7 +2019,7 @@ class X86_64Encoder extends Target {
 
 		case	CVTSD2SS:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, null, dest, src);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x5a);
 			modRM(3, rmValues[dest], rmValues[src]);
@@ -2016,7 +2027,7 @@ class X86_64Encoder extends Target {
 
 		case	CVTSS2SI:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_64, null, dest, src);
+			emitRex(runtime.TypeFamily.SIGNED_64, null, dest, src);
 			emit(0x0f);
 			emit(0x2d);
 			modRM(3, rmValues[dest], rmValues[src]);
@@ -2024,7 +2035,7 @@ class X86_64Encoder extends Target {
 			
 		case	CVTTSS2SI:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_64, null, dest, src);
+			emitRex(runtime.TypeFamily.SIGNED_64, null, dest, src);
 			emit(0x0f);
 			emit(0x2c);
 			modRM(3, rmValues[dest], rmValues[src]);
@@ -2032,7 +2043,7 @@ class X86_64Encoder extends Target {
 			
 		case	CVTSD2SI:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_64, null, dest, src);
+			emitRex(runtime.TypeFamily.SIGNED_64, null, dest, src);
 			emit(0x0f);
 			emit(0x2d);
 			modRM(3, rmValues[dest], rmValues[src]);
@@ -2040,7 +2051,7 @@ class X86_64Encoder extends Target {
 			
 		case	CVTTSD2SI:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_64, null, dest, src);
+			emitRex(runtime.TypeFamily.SIGNED_64, null, dest, src);
 			emit(0x0f);
 			emit(0x2c);
 			modRM(3, rmValues[dest], rmValues[src]);
@@ -2064,7 +2075,7 @@ class X86_64Encoder extends Target {
 			
 		case	ADDSS:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, null, dest, src);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x58);
 			modRM(3, rmValues[dest], rmValues[src]);
@@ -2072,7 +2083,7 @@ class X86_64Encoder extends Target {
 			
 		case	ADDSD:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, null, dest, src);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x58);
 			modRM(3, rmValues[dest], rmValues[src]);
@@ -2080,7 +2091,7 @@ class X86_64Encoder extends Target {
 			
 		case	SUBSS:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, null, dest, src);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x5c);
 			modRM(3, rmValues[dest], rmValues[src]);
@@ -2088,7 +2099,7 @@ class X86_64Encoder extends Target {
 			
 		case	SUBSD:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, null, dest, src);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x5c);
 			modRM(3, rmValues[dest], rmValues[src]);
@@ -2096,7 +2107,7 @@ class X86_64Encoder extends Target {
 			
 		case	MULSS:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, null, dest, src);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x59);
 			modRM(3, rmValues[dest], rmValues[src]);
@@ -2104,7 +2115,7 @@ class X86_64Encoder extends Target {
 			
 		case	MULSD:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, null, dest, src);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x59);
 			modRM(3, rmValues[dest], rmValues[src]);
@@ -2112,7 +2123,7 @@ class X86_64Encoder extends Target {
 			
 		case	DIVSS:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, null, dest, src);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x5e);
 			modRM(3, rmValues[dest], rmValues[src]);
@@ -2120,7 +2131,7 @@ class X86_64Encoder extends Target {
 			
 		case	DIVSD:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, null, dest, src);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x5e);
 			modRM(3, rmValues[dest], rmValues[src]);
@@ -2129,7 +2140,7 @@ class X86_64Encoder extends Target {
 		case	XORPD:
 			emit(0x66);
 		case	XORPS:
-			emitRex(TypeFamily.SIGNED_32, null, dest, src);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, src);
 			emit(0x0f);
 			emit(0x57);
 			modRM(3, rmValues[dest], rmValues[src]);
@@ -2137,7 +2148,7 @@ class X86_64Encoder extends Target {
 			
 		case	MOVSS:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, src, dest);
 			emit(0x0f);
 			emit(0x11);
 			modRM(3, rmValues[src], rmValues[dest]);
@@ -2145,14 +2156,14 @@ class X86_64Encoder extends Target {
 			
 		case	MOVSD:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, src, dest);
 			emit(0x0f);
 			emit(0x11);
 			modRM(3, rmValues[src], rmValues[dest]);
 			return;
 			
 		case	MOVSXD:
-			emitRex(TypeFamily.SIGNED_64, null, src, dest);
+			emitRex(runtime.TypeFamily.SIGNED_64, null, src, dest);
 			emit(0x63);
 			modRM(3, rmValues[src], rmValues[dest]);
 			return;
@@ -2172,14 +2183,14 @@ class X86_64Encoder extends Target {
 			return;
 			
 		case	MOVSX:
-			emitRex(TypeFamily.SIGNED_32, null, src, dest);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, src, dest);
 			emit(0x0f);
 			emit(0xbf);
 			modRM(3, rmValues[src], rmValues[dest]);
 			return;
 
 		case	MOVSX_REX_W:
-			emitRex(TypeFamily.SIGNED_64, null, src, dest);
+			emitRex(runtime.TypeFamily.SIGNED_64, null, src, dest);
 			emit(0x0f);
 			emit(0xbf);
 			modRM(3, rmValues[src], rmValues[dest]);
@@ -2361,7 +2372,7 @@ class X86_64Encoder extends Target {
 		}
 	}
 	
-	void inst(X86 instruction, TypeFamily family, R reg) {
+	void inst(X86 instruction, runtime.TypeFamily family, R reg) {
 		switch (instruction) {
 		case	CWD:
 			switch (family) {
@@ -2398,12 +2409,12 @@ class X86_64Encoder extends Target {
 			break;
 			
 		case	PUSH:
-			emitRex(TypeFamily.SIGNED_32, null, R.NO_REG, reg);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, R.NO_REG, reg);
 			emit(byte(0x50 + rmValues[reg]));
 			return;
 			
 		case	POP:
-			emitRex(TypeFamily.SIGNED_32, null, R.NO_REG, reg);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, R.NO_REG, reg);
 			emit(byte(0x58 + rmValues[reg]));
 			return;
 		}
@@ -2502,26 +2513,26 @@ class X86_64Encoder extends Target {
 			case	CLASS:
 				switch (left.type.size()) {
 				case	1:
-					emitRex(TypeFamily.SIGNED_8, left, right, R.NO_REG);
+					emitRex(runtime.TypeFamily.SIGNED_8, left, right, R.NO_REG);
 					emit(opcodes[instruction]);
 					modRM(left, rmValues[right], 0, 0);
 					break;
 					
 				case	2:
 					emit(0x66);
-					emitRex(TypeFamily.SIGNED_16, left, right, R.NO_REG);
+					emitRex(runtime.TypeFamily.SIGNED_16, left, right, R.NO_REG);
 					emit(byte(opcodes[instruction] + 0x01));
 					modRM(left, rmValues[right], 0, 0);
 					break;
 					
 				case	4:
-					emitRex(TypeFamily.SIGNED_32, left, right, R.NO_REG);
+					emitRex(runtime.TypeFamily.SIGNED_32, left, right, R.NO_REG);
 					emit(byte(opcodes[instruction] + 0x01));
 					modRM(left, rmValues[right], 0, 0);
 					break;
 					
 				case	8:
-					emitRex(TypeFamily.SIGNED_64, left, right, R.NO_REG);
+					emitRex(runtime.TypeFamily.SIGNED_64, left, right, R.NO_REG);
 					emit(byte(opcodes[instruction] + 0x01));
 					modRM(left, rmValues[right], 0, 0);
 					break;
@@ -2550,7 +2561,7 @@ class X86_64Encoder extends Target {
 	void inst(X86 instruction, R left, ref<Symbol> right, ref<CompileContext> compileContext) {
 		switch (instruction) {
 		case	LEA:
-			emitRex(TypeFamily.SIGNED_64, null, left, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_64, null, left, R.NO_REG);
 			emit(0x8d);
 			modRM(right, rmValues[left], 0, 0);
 			break;
@@ -2567,7 +2578,7 @@ class X86_64Encoder extends Target {
 			return;
 		switch (instruction) {
 		case	LEA:
-			emitRex(TypeFamily.SIGNED_64, right, left, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_64, right, left, R.NO_REG);
 			emit(0x8d);
 			modRM(right, rmValues[left], 0, 0);
 			break;
@@ -2580,28 +2591,28 @@ class X86_64Encoder extends Target {
 			break;
 			
 		case	MOVSX:
-			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, right, left, R.NO_REG);
 			emit(0x0f);
 			emit(0xbf);
 			modRM(right, rmValues[left], 0, 0);
 			break;
 			
 		case	MOVSX_REX_W:
-			emitRex(TypeFamily.SIGNED_64, right, left, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_64, right, left, R.NO_REG);
 			emit(0x0f);
 			emit(0xbf);
 			modRM(right, rmValues[left], 0, 0);
 			break;
 			
 		case	MOVSXD:
-			emitRex(TypeFamily.SIGNED_64, right, left, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_64, right, left, R.NO_REG);
 			emit(0x63);
 			modRM(right, rmValues[left], 0, 0);
 			break;
 			
 		case	MOVSS:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, right, left, R.NO_REG);
 			emit(0x0f);
 			emit(0x10);
 			modRM(right, rmValues[left], 0, 0);
@@ -2609,7 +2620,7 @@ class X86_64Encoder extends Target {
 			
 		case	MOVSD:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, right, left, R.NO_REG);
 			emit(0x0f);
 			emit(0x10);
 			modRM(right, rmValues[left], 0, 0);
@@ -2617,7 +2628,7 @@ class X86_64Encoder extends Target {
 			
 		case	ADDSS:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, right, left, R.NO_REG);
 			emit(0x0f);
 			emit(0x58);
 			modRM(right, rmValues[left], 0, 0);
@@ -2625,7 +2636,7 @@ class X86_64Encoder extends Target {
 			
 		case	ADDSD:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, right, left, R.NO_REG);
 			emit(0x0f);
 			emit(0x58);
 			modRM(right, rmValues[left], 0, 0);
@@ -2633,7 +2644,7 @@ class X86_64Encoder extends Target {
 			
 		case	SUBSS:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, right, left, R.NO_REG);
 			emit(0x0f);
 			emit(0x5c);
 			modRM(right, rmValues[left], 0, 0);
@@ -2641,7 +2652,7 @@ class X86_64Encoder extends Target {
 			
 		case	SUBSD:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, right, left, R.NO_REG);
 			emit(0x0f);
 			emit(0x5c);
 			modRM(right, rmValues[left], 0, 0);
@@ -2649,7 +2660,7 @@ class X86_64Encoder extends Target {
 			
 		case	MULSS:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, right, left, R.NO_REG);
 			emit(0x0f);
 			emit(0x59);
 			modRM(right, rmValues[left], 0, 0);
@@ -2657,7 +2668,7 @@ class X86_64Encoder extends Target {
 			
 		case	MULSD:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, right, left, R.NO_REG);
 			emit(0x0f);
 			emit(0x59);
 			modRM(right, rmValues[left], 0, 0);
@@ -2665,7 +2676,7 @@ class X86_64Encoder extends Target {
 			
 		case	DIVSS:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, right, left, R.NO_REG);
 			emit(0x0f);
 			emit(0x5e);
 			modRM(right, rmValues[left], 0, 0);
@@ -2673,7 +2684,7 @@ class X86_64Encoder extends Target {
 			
 		case	DIVSD:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, right, left, R.NO_REG);
 			emit(0x0f);
 			emit(0x5e);
 			modRM(right, rmValues[left], 0, 0);
@@ -2681,7 +2692,7 @@ class X86_64Encoder extends Target {
 
 		case	CVTSS2SD:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, right, left, R.NO_REG);
 			emit(0x0f);
 			emit(0x5a);
 			modRM(right, rmValues[left], 0, 0);
@@ -2689,7 +2700,7 @@ class X86_64Encoder extends Target {
 
 		case	CVTSD2SS:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, right, left, R.NO_REG);
 			emit(0x0f);
 			emit(0x5a);
 			modRM(right, rmValues[left], 0, 0);
@@ -2698,7 +2709,7 @@ class X86_64Encoder extends Target {
 		case	UCOMISD:
 			emit(0x66);
 		case	UCOMISS:
-			emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, right, left, R.NO_REG);
 			emit(0x0f);
 			emit(0x2e);
 			modRM(right, rmValues[left], 0, 0);
@@ -2747,26 +2758,26 @@ class X86_64Encoder extends Target {
 			case	CLASS:
 				switch (right.type.size()) {
 				case	1:
-					emitRex(TypeFamily.SIGNED_8, right, left, R.NO_REG);
+					emitRex(runtime.TypeFamily.SIGNED_8, right, left, R.NO_REG);
 					emit(byte(opcodes[instruction] + 0x02));
 					modRM(right, rmValues[left], 0, 0);
 					break;
 
 				case	2:
 					emit(0x66);
-					emitRex(TypeFamily.SIGNED_16, right, left, R.NO_REG);
+					emitRex(runtime.TypeFamily.SIGNED_16, right, left, R.NO_REG);
 					emit(byte(opcodes[instruction] + 0x03));
 					modRM(right, rmValues[left], 0, 0);
 					break;
 					
 				case	4:
-					emitRex(TypeFamily.SIGNED_32, right, left, R.NO_REG);
+					emitRex(runtime.TypeFamily.SIGNED_32, right, left, R.NO_REG);
 					emit(byte(opcodes[instruction] + 0x03));
 					modRM(right, rmValues[left], 0, 0);
 					break;
 					
 				case	8:
-					emitRex(TypeFamily.SIGNED_64, right, left, R.NO_REG);
+					emitRex(runtime.TypeFamily.SIGNED_64, right, left, R.NO_REG);
 					emit(byte(opcodes[instruction] + 0x03));
 					modRM(right, rmValues[left], 0, 0);
 					break;
@@ -2792,7 +2803,7 @@ class X86_64Encoder extends Target {
 			switch (right.type.family()) {
 			case	BOOLEAN:
 			case	UNSIGNED_8:
-				emitRex(TypeFamily.SIGNED_8, right, left, R.NO_REG);
+				emitRex(runtime.TypeFamily.SIGNED_8, right, left, R.NO_REG);
 				emit(0xf6);
 				modRM(right, group3opcodes[instruction], 0, 0);
 				break;
@@ -2870,7 +2881,7 @@ class X86_64Encoder extends Target {
 	
 	void instLoadEnumAddress(R reg, ref<Node> n, int offset) {
 		// Generate an LEA reg,n
-		emitRex(TypeFamily.SIGNED_64, n, reg, R.NO_REG);
+		emitRex(runtime.TypeFamily.SIGNED_64, n, reg, R.NO_REG);
 		emit(0x8d);
 		ref<Symbol> symbol;
 		if (n.type.class == EnumType)
@@ -2882,7 +2893,7 @@ class X86_64Encoder extends Target {
 
 	void instString(X86 instruction, R left, string literal) {
 		int offset = addStringLiteral(literal);
-		emitRex(TypeFamily.SIGNED_64, null, left, R.NO_REG);
+		emitRex(runtime.TypeFamily.SIGNED_64, null, left, R.NO_REG);
 		emit(0x8d);
 		modRM(0, rmValues[left], 5);
 		fixup(FixupKind.RELATIVE32_STRING, address(offset));
@@ -3154,7 +3165,7 @@ class X86_64Encoder extends Target {
 		}
 	}
 
-	void inst(X86 instruction, TypeFamily family, R base, int offset, int immediate) {
+	void inst(X86 instruction, runtime.TypeFamily family, R base, int offset, int immediate) {
 		switch (instruction) {
 		case	MOV:
 			switch (family) {
@@ -3256,13 +3267,13 @@ class X86_64Encoder extends Target {
 			return false;
 		if (isNativeBinding) {
 			if (sectionType() == runtime.Target.X86_64_WIN)
-				inst(X86.SUB, TypeFamily.ADDRESS, R.RSP, 16);
+				inst(X86.SUB, runtime.TypeFamily.ADDRESS, R.RSP, 16);
 			emit(0xff);
 			modRM(0, 2, 5);
 			fixup(FixupKind.NATIVE32, functionScope.value);
 			emitInt(0);
 			if (sectionType() == runtime.Target.X86_64_WIN)
-				inst(X86.ADD, TypeFamily.ADDRESS, R.RSP, 16);
+				inst(X86.ADD, runtime.TypeFamily.ADDRESS, R.RSP, 16);
 		} else {
 			emit(0xe8);
 			fixup(FixupKind.RELATIVE32_CODE, func);
@@ -3344,12 +3355,12 @@ class X86_64Encoder extends Target {
 	
 	void instPush(ref<Node> node, int offset) {
 		if (node.register != 0) {
-			inst(X86.PUSH, TypeFamily.ADDRESS, R(int(node.register)));
+			inst(X86.PUSH, runtime.TypeFamily.ADDRESS, R(int(node.register)));
 			return;
 		}
 		switch (node.op()) {
 		case	SUBSCRIPT:
-			emitRex(TypeFamily.SIGNED_32, node, R.NO_REG, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, node, R.NO_REG, R.NO_REG);
 			emit(0xff);
 			subscriptModRM(node, 6, offset);
 			break;
@@ -3385,7 +3396,7 @@ class X86_64Encoder extends Target {
 			case	ENUMERATION:
 				ref<EnumInstanceType> t = ref<EnumInstanceType>(node.type);
 				loadEnumType(R.RAX, t.symbol(), 0);
-				inst(X86.PUSH, TypeFamily.ADDRESS, R.RAX);
+				inst(X86.PUSH, runtime.TypeFamily.ADDRESS, R.RAX);
 				break;
  */
 			case	MEMBER:
@@ -3460,61 +3471,61 @@ class X86_64Encoder extends Target {
 	public void inst(X86 instruction, R dest, ref<Symbol> constant) {
 		switch (instruction) {
 		case	MOV:
-			emitRex(TypeFamily.SIGNED_64, null, dest, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_64, null, dest, R.NO_REG);
 			emit(byte(opcodes[instruction] + 0x03));
 			break;
 			
 		case	LEA:
-			emitRex(TypeFamily.SIGNED_64, null, dest, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_64, null, dest, R.NO_REG);
 			emit(0x8d);
 			break;
 			
 		case	XORPD:
 			emit(0x66);
 		case	XORPS:
-			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, R.NO_REG);
 			emit(0x0f);
 			emit(0x57);
 			break;
 			
 		case	MOVSS:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, R.NO_REG);
 			emit(0x0f);
 			emit(0x10);
 			break;
 			
 		case	MOVSD:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, R.NO_REG);
 			emit(0x0f);
 			emit(0x10);
 			break;
 			
 		case	ADDSD:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, R.NO_REG);
 			emit(0x0f);
 			emit(0x58);
 			break;
 			
 		case	ADDSS:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, R.NO_REG);
 			emit(0x0f);
 			emit(0x58);
 			break;
 			
 		case	SUBSD:
 			emit(0xf2);
-			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, R.NO_REG);
 			emit(0x0f);
 			emit(0x5c);
 			break;
 			
 		case	SUBSS:
 			emit(0xf3);
-			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, R.NO_REG);
 			emit(0x0f);
 			emit(0x5c);
 			break;
@@ -3524,7 +3535,7 @@ class X86_64Encoder extends Target {
 		case UCOMISS:
 			emit(0x0f);
 			emit(0x2e);
-			emitRex(TypeFamily.SIGNED_32, null, dest, R.NO_REG);
+			emitRex(runtime.TypeFamily.SIGNED_32, null, dest, R.NO_REG);
 			break;
 
 		default:
@@ -3683,7 +3694,7 @@ class X86_64Encoder extends Target {
 			modRM(0, regOpcode, 5);
 			pointer<byte> endPtr;
 			ref<Constant> con = ref<Constant>(addressMode);
-			if (con.type.family() == TypeFamily.FLOAT_32) {
+			if (con.type.family() == runtime.TypeFamily.FLOAT_32) {
 				string s(con.value().c_str(), con.value().length() - 1); // omit the trailing f
 				double x = C.strtod(s.c_str(), &endPtr);
 				assert(endPtr == s.c_str() + s.length());
@@ -3812,7 +3823,7 @@ class X86_64Encoder extends Target {
 	
 	private void modRM(ref<Symbol> sym, int regOpcode, int ipAdjust, int allAdjust) {
 		modRM(0, regOpcode, 5);
-		if (sym.type().family() == TypeFamily.TYPEDEF) {
+		if (sym.type().family() == runtime.TypeFamily.TYPEDEF) {
 			ref<TypedefType> tt = ref<TypedefType>(sym.type());
 			ref<Type> t = tt.wrappedType();
 			fixup(FixupKind.RELATIVE32_TYPE, t);
@@ -3832,7 +3843,7 @@ class X86_64Encoder extends Target {
 	private void subscriptModRM(ref<Node> addressMode, int regOpcode, int offset) {
 		ref<Binary> b = ref<Binary>(addressMode);
 		int mod = 0;
-		if (b.left().type.family() == TypeFamily.STRING)
+		if (b.left().type.family() == runtime.TypeFamily.STRING)
 			offset += 4;
 		if (offset != 0) {
 			if (offset >= -128 || offset <= 127)
@@ -3868,7 +3879,7 @@ class X86_64Encoder extends Target {
 	/*
 	 * Calculate the necessary REX bits for this addressmode.
 	 */
-	private void emitRex(TypeFamily family, ref<Node> addressMode, R regField, R baseField) {
+	private void emitRex(runtime.TypeFamily family, ref<Node> addressMode, R regField, R baseField) {
 		byte rex = 0;
 		if (addressMode == null)
 			rex |= rexbValues[baseField];
@@ -4210,7 +4221,6 @@ enum FixupKind {
 	ABSOLUTE64_CODE,				// Fixup value is a ref<Scope>
 	ABSOLUTE64_DATA,				// Fixup value is a ref<Symbol>
 	ABSOLUTE64_STRING,				// Fixup value is a an int offset into the string pool
-	ABSOLUTE64_VTABLE,				// Fixup value is a ref<ClassScope>
 	INT_CONSTANT,					// Fixup value is the value of the constant
 	NATIVE32,						// Fixup value is NativeBindings index
 }
@@ -4235,7 +4245,6 @@ class Fixup {
 		case	ABSOLUTE64_CODE:				// Fixup value is a ref<Scope>
 		case	ABSOLUTE64_DATA:				// Fixup value is a ref<Symbol>
 		case	ABSOLUTE64_STRING:				// Fixup value is a ref<Symbol>
-		case	ABSOLUTE64_VTABLE:				// Fixup value is a ref<Type>
 		case	INT_CONSTANT:
 		case	NATIVE32:						// Fixup value is nativeBindings index
 			printf("    @%x %s %p\n", location, string(kind), value);

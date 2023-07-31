@@ -351,7 +351,7 @@ public class Identifier extends Node {
 		_symbol = enclosing.define(compileContext.visibility, StorageClass.STATIC, compileContext.annotations, this, body, body, compileContext.pool());
 		if (_symbol != null) {
 			_symbol._doclet = enclosing.unit().tree().getDoclet(this);
-			ref<ClassType> c = compileContext.pool().newClassType(TypeFamily.CLASS, ref<Type>(null), flagsScope);
+			ref<ClassType> c = compileContext.pool().newClassType(runtime.TypeFamily.CLASS, ref<Type>(null), flagsScope);
 			ref<FlagsInstanceType> fit = compileContext.pool().newFlagsInstanceType(_symbol, flagsScope, c);
 			flagsScope.flagsType = compileContext.pool().newFlagsType(body, flagsScope, fit);
 			_symbol.bindType(flagsScope.flagsType, compileContext);
@@ -438,7 +438,7 @@ public class Identifier extends Node {
 				add(MessageId.STATIC_DISALLOWED, compileContext.pool());
 				type = compileContext.errorType();
 			} else
-				type = compileContext.builtInType(TypeFamily.VOID);
+				type = compileContext.builtInType(runtime.TypeFamily.VOID);
 			return;
 		}
 		for (ref<Scope> s = compileContext.current(); s != null; s = s.enclosing()) {
@@ -479,7 +479,7 @@ public class Identifier extends Node {
 								break;
 							}
 						case LOCK:
-							if (_symbol.class == OverloadInstance && type.family() == TypeFamily.FUNCTION) {
+							if (_symbol.class == OverloadInstance && type.family() == runtime.TypeFamily.FUNCTION) {
 								add(MessageId.METHOD_MUST_BE_STATIC, compileContext.pool(), _value);
 								type = compileContext.errorType();
 							}
@@ -511,11 +511,11 @@ public class Identifier extends Node {
 
 private ref<Node> makeAddressOfEnumClass(boolean implicitIndirect, ref<Node> enumInstance, ref<EnumType> type, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
 	ref<Node> n = tree.newIdentifier(type.symbol(), enumInstance.location());
-	n.type = compileContext.builtInType(TypeFamily.UNSIGNED_8);
+	n.type = compileContext.builtInType(runtime.TypeFamily.UNSIGNED_8);
 	n = tree.newUnary(Operator.ADDRESS_OF_ENUM, n, enumInstance.location());
 	n.type = compileContext.newPointer(type);
 	ref<Node> r = tree.newUnary(Operator.CAST, enumInstance, enumInstance.location());
-	r.type = compileContext.builtInType(TypeFamily.SIGNED_64);
+	r.type = compileContext.builtInType(runtime.TypeFamily.SIGNED_64);
 	r = tree.newBinary(Operator.ADD, n, r, enumInstance.location());
 	r.type = n.type;
 	if (!implicitIndirect) {
@@ -666,7 +666,7 @@ public class Selection extends Node {
 					_symbol.markAsReferenced(compileContext);
 				if (deferAnalysis())
 					return;
-				if (_left.type.family() == TypeFamily.INTERFACE)
+				if (_left.type.family() == runtime.TypeFamily.INTERFACE)
 					_indirect = true;
 				return;
 			}
@@ -881,7 +881,7 @@ public class Selection extends Node {
 			type = compileContext.errorType();
 		else if (sym.storageClass() == StorageClass.MEMBER ||
 			sym.storageClass() == StorageClass.LOCK) {
-			if (sym.class == OverloadInstance && type.family() == TypeFamily.FUNCTION) {
+			if (sym.class == OverloadInstance && type.family() == runtime.TypeFamily.FUNCTION) {
 				add(MessageId.METHOD_MUST_BE_STATIC, compileContext.pool(), _name);
 				type = compileContext.errorType();
 			}

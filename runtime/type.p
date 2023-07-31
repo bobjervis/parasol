@@ -16,100 +16,12 @@
 namespace parasol:compiler;
 
 import parasol:context;
-
-public enum TypeFamily {
-	// BuiltInType - all of the following can appear as the family of a built-in
-	// type. Each of them is a singleton type.
-
-	// numeric types
-	
-	SIGNED_8("rpc.marshalSigned8", "rpc.unmarshalSigned8"),
-	SIGNED_16("rpc.marshalShort", "rpc.unmarshalShort"),				// class short
-	SIGNED_32("rpc.marshalInt", "rpc.unmarshalInt"),				// class int
-	SIGNED_64("rpc.marshalLong", "rpc.unmarshalLong"),				// class long
-	UNSIGNED_8("rpc.marshalByte", "rpc.unmarshalByte"),				// class byte
-	UNSIGNED_16("rpc.marshalChar", "rpc.unmarshalChar"),				// class char
-	UNSIGNED_32("rpc.marshalUnsigned", "rpc.unmarshalUnsigned"),			// class unsigned
-	UNSIGNED_64("rpc.marshalUnsigned64", "rpc.unmarshalUnsigned64"),
-	FLOAT_32("rpc.marshalFloat", "rpc.unmarshalFloat"),				// class float
-	FLOAT_64("rpc.marshalDouble", "rpc.unmarshalDouble"),				// class double
-
-	// various formats of string
-
-	STRING("rpc.marshalString", "rpc.unmarshalString"),
-	STRING16("rpc.marshalString16", "rpc.unmarshalString16"),
-	SUBSTRING("rpc.marshalSubstring", "rpc.unmarshalSubstring"),
-	SUBSTRING16("rpc.marshalSubstring16", "rpc.unmarshalSubstring16"),
-
-	// Other kinds of runtime object.
-	
-	BOOLEAN("rpc.marshalBoolean", "rpc.unmarshalBoolean"),
-	VAR,
-	ADDRESS,
-	EXCEPTION,
-	CLASS_VARIABLE,			// An object of type 'class'. It should be a synonym for ref<ClassType>
-
-	// pseudo-types - these things are not classes. There can be no instances of them.
-
-	NAMESPACE,				// A namespace reference has this type no object can have this type.
-	ARRAY_AGGREGATE,		// only occurs on an array aggregate during type analysis.
-	OBJECT_AGGREGATE,		// only occurs on an object aggregate during type analysis.
-	VOID,					// only occurs on a function return type during the initial phase of type analysis.
-	ERROR,					// marks a node that is in error.
-	CLASS_DEFERRED,			// only occurs within a template definition.
-
-	BUILTIN_TYPES,			// spacer to mark the extent of 'built-in' types. No Type object will have this family
-	
-	CLASS,					// Each class declaration creates a ClassType with this family.
-	INTERFACE,				// Each interface declaration creates an InterfaceType with this family.
-	ENUM,					// The type of an enum instance. The enum class (if any) is actually given CLASS family.
-	FLAGS,					// The type of a flags instance. The flags type is given TYPEDEF family.
-	FUNCTION,				// Any function.
-
-	// class synonyms - each of these sub-families are understood to be some kind of class.
-
-	SHAPE,					// Any instance of a vector<E, K> or map<E, K>. This will appear as the family of a
-							// template instance class of a template declared with @Shape annotation.
-	REF,					// Any instance of ref<T>. This will appear as the family of such an instance.
-	POINTER,				// Any instance of pointer<T>. This will appear as the family of such an instance.
-	TEMPLATE_INSTANCE,		// Any instance class of an ordinary template.
-
-	// pseudo-types 
-
-	TEMPLATE,				// A template definition. No object will have this Type.
-	TYPEDEF,				// This is a marker for a compile-time class expression  and
-							// contains a reference to the underlying class type (or to CLASS_DEFERRED
-							// within a template definition.
-
-	MAX_TYPES				// marker for the end of types. No Type object will have this family.
-	;
-	private string _marshaller;
-	private string _unmarshaller;
-
-	TypeFamily() { }
-
-	TypeFamily(string marshaller, string unmarshaller) {
-		_marshaller = marshaller;
-		_unmarshaller = unmarshaller;
-	}
-
-	public boolean hasMarshaller() {
-		return _marshaller != null;
-	}
-
-	public string marshaller() {
-		return _marshaller;
-	}
-
-	public string unmarshaller() {
-		return _unmarshaller;
-	}
-}
+import parasol:runtime;
 
 public class BuiltInType extends Type {
 	private ref<Type> _classType;
 
-	BuiltInType(TypeFamily family) {
+	BuiltInType(runtime.TypeFamily family) {
 		super(family);
 	}
 
@@ -205,7 +117,7 @@ public class BuiltInType extends Type {
 		if (this == other)
 			return true;
 		// CLASS_VARIABLE has one special case: these match TYPEDEF
-		if (family() == TypeFamily.CLASS_VARIABLE && other.family() == TypeFamily.TYPEDEF)
+		if (family() == runtime.TypeFamily.CLASS_VARIABLE && other.family() == runtime.TypeFamily.TYPEDEF)
 			return true;
 		// or as a special case, ERROR type has no underlying class, so it can only
 		// equal itself.
@@ -244,31 +156,27 @@ public class BuiltInType extends Type {
 		}
 		return false;
 	}
-	
-	public int copyToImage(ref<Target> target) {
-		if (_ordinal == 0) {
-			address a = allocateImageData(target, BuiltInType.bytes);
-			ref<BuiltInType> copy = ref<BuiltInType>(a);
-			transferBase(copy);
-			target.fixupVtable(_ordinal, target.builtInType());
-			if (_classType != null) {
-				_classType.copyToImage(target);
-				target.fixupType(_ordinal + int(&ref<BuiltInType>(null)._classType), _classType);
-			}
-		}
+	/**
+	 * The runtime type of a built-in type is the underlying classtype of the built-in.
+	 * We may want to treat built-in types inside the compiler like they are magic, but
+	 * The runtime info has to show the class as the actual type of the object.
+	 */
+	public int copyToImage(ref<Target> target, runtime.TypeFamily preferredFamily) {
+		if (_ordinal == 0 && _classType != null)
+			_ordinal = _classType.copyToImage(target, family());
 		return _ordinal;
 	}
 	
 	public boolean isVector(ref<CompileContext> compileContext) {
-		return family() == TypeFamily.ARRAY_AGGREGATE;
+		return family() == runtime.TypeFamily.ARRAY_AGGREGATE;
 	}
 
 	public boolean isMap(ref<CompileContext> compileContext) {
-		return family() == TypeFamily.OBJECT_AGGREGATE;
+		return family() == runtime.TypeFamily.OBJECT_AGGREGATE;
 	}
 	
 	public boolean isLockable() {
-		return family() == TypeFamily.CLASS_DEFERRED;
+		return family() == runtime.TypeFamily.CLASS_DEFERRED;
 	}
 
 	public string signature() {
@@ -338,97 +246,97 @@ public class BuiltInType extends Type {
 	}
 }
 
-boolean[TypeFamily][TypeFamily] widens;
+boolean[runtime.TypeFamily][runtime.TypeFamily] widens;
 
-widens.resize(TypeFamily.BUILTIN_TYPES);
+widens.resize(runtime.TypeFamily.BUILTIN_TYPES);
 fill();
 private void fill() {
-	for (int i = 0; i < int(TypeFamily.BUILTIN_TYPES); i++)
-		widens[TypeFamily(i)].resize(TypeFamily.BUILTIN_TYPES);
+	for (int i = 0; i < int(runtime.TypeFamily.BUILTIN_TYPES); i++)
+		widens[runtime.TypeFamily(i)].resize(runtime.TypeFamily.BUILTIN_TYPES);
 }
-widens[TypeFamily.SIGNED_8][TypeFamily.SIGNED_8] = true;
-widens[TypeFamily.SIGNED_8][TypeFamily.SIGNED_16] = true;
-widens[TypeFamily.SIGNED_8][TypeFamily.SIGNED_32] = true;
-widens[TypeFamily.SIGNED_8][TypeFamily.SIGNED_64] = true;
-widens[TypeFamily.SIGNED_8][TypeFamily.FLOAT_32] = true;
-widens[TypeFamily.SIGNED_8][TypeFamily.FLOAT_64] = true;
-widens[TypeFamily.SIGNED_8][TypeFamily.VAR] = true;
-widens[TypeFamily.SIGNED_16][TypeFamily.SIGNED_16] = true;
-widens[TypeFamily.SIGNED_16][TypeFamily.SIGNED_32] = true;
-widens[TypeFamily.SIGNED_16][TypeFamily.SIGNED_64] = true;
-widens[TypeFamily.SIGNED_16][TypeFamily.FLOAT_32] = true;
-widens[TypeFamily.SIGNED_16][TypeFamily.FLOAT_64] = true;
-widens[TypeFamily.SIGNED_16][TypeFamily.VAR] = true;
-widens[TypeFamily.SIGNED_32][TypeFamily.SIGNED_32] = true;
-widens[TypeFamily.SIGNED_32][TypeFamily.SIGNED_64] = true;
-widens[TypeFamily.SIGNED_32][TypeFamily.FLOAT_32] = true;
-widens[TypeFamily.SIGNED_32][TypeFamily.FLOAT_64] = true;
-widens[TypeFamily.SIGNED_32][TypeFamily.VAR] = true;
-widens[TypeFamily.SIGNED_64][TypeFamily.SIGNED_64] = true;
-widens[TypeFamily.SIGNED_64][TypeFamily.FLOAT_32] = true;
-widens[TypeFamily.SIGNED_64][TypeFamily.FLOAT_64] = true;
-widens[TypeFamily.SIGNED_64][TypeFamily.VAR] = true;
-widens[TypeFamily.UNSIGNED_8][TypeFamily.SIGNED_16] = true;
-widens[TypeFamily.UNSIGNED_8][TypeFamily.SIGNED_32] = true;
-widens[TypeFamily.UNSIGNED_8][TypeFamily.SIGNED_64] = true;
-widens[TypeFamily.UNSIGNED_8][TypeFamily.UNSIGNED_8] = true;
-widens[TypeFamily.UNSIGNED_8][TypeFamily.UNSIGNED_16] = true;
-widens[TypeFamily.UNSIGNED_8][TypeFamily.UNSIGNED_32] = true;
-widens[TypeFamily.UNSIGNED_8][TypeFamily.UNSIGNED_64] = true;
-widens[TypeFamily.UNSIGNED_8][TypeFamily.FLOAT_32] = true;
-widens[TypeFamily.UNSIGNED_8][TypeFamily.FLOAT_64] = true;
-widens[TypeFamily.UNSIGNED_8][TypeFamily.VAR] = true;
-widens[TypeFamily.UNSIGNED_16][TypeFamily.SIGNED_32] = true;
-widens[TypeFamily.UNSIGNED_16][TypeFamily.SIGNED_64] = true;
-widens[TypeFamily.UNSIGNED_16][TypeFamily.UNSIGNED_16] = true;
-widens[TypeFamily.UNSIGNED_16][TypeFamily.UNSIGNED_32] = true;
-widens[TypeFamily.UNSIGNED_16][TypeFamily.UNSIGNED_64] = true;
-widens[TypeFamily.UNSIGNED_16][TypeFamily.FLOAT_32] = true;
-widens[TypeFamily.UNSIGNED_16][TypeFamily.FLOAT_64] = true;
-widens[TypeFamily.UNSIGNED_16][TypeFamily.VAR] = true;
-widens[TypeFamily.UNSIGNED_32][TypeFamily.SIGNED_64] = true;
-widens[TypeFamily.UNSIGNED_32][TypeFamily.UNSIGNED_32] = true;
-widens[TypeFamily.UNSIGNED_32][TypeFamily.UNSIGNED_64] = true;
-widens[TypeFamily.UNSIGNED_32][TypeFamily.FLOAT_32] = true;
-widens[TypeFamily.UNSIGNED_32][TypeFamily.FLOAT_64] = true;
-widens[TypeFamily.UNSIGNED_32][TypeFamily.VAR] = true;
-widens[TypeFamily.UNSIGNED_64][TypeFamily.UNSIGNED_64] = true;
-widens[TypeFamily.UNSIGNED_64][TypeFamily.FLOAT_32] = true;
-widens[TypeFamily.UNSIGNED_64][TypeFamily.FLOAT_64] = true;
-widens[TypeFamily.UNSIGNED_64][TypeFamily.VAR] = true;
-widens[TypeFamily.FLOAT_32][TypeFamily.FLOAT_32] = true;
-widens[TypeFamily.FLOAT_32][TypeFamily.FLOAT_64] = true;
-widens[TypeFamily.FLOAT_32][TypeFamily.VAR] = true;
-widens[TypeFamily.FLOAT_64][TypeFamily.FLOAT_64] = true;
-widens[TypeFamily.FLOAT_64][TypeFamily.VAR] = true;
-widens[TypeFamily.BOOLEAN][TypeFamily.BOOLEAN] = true;
-widens[TypeFamily.BOOLEAN][TypeFamily.VAR] = true;
-widens[TypeFamily.STRING][TypeFamily.STRING] = true;
-widens[TypeFamily.STRING][TypeFamily.STRING16] = true;
-widens[TypeFamily.STRING][TypeFamily.SUBSTRING] = true;
-widens[TypeFamily.STRING][TypeFamily.VAR] = true;
-widens[TypeFamily.STRING16][TypeFamily.STRING] = true;
-widens[TypeFamily.STRING16][TypeFamily.STRING16] = true;
-widens[TypeFamily.STRING16][TypeFamily.SUBSTRING16] = true;
-widens[TypeFamily.STRING16][TypeFamily.VAR] = true;
-widens[TypeFamily.SUBSTRING][TypeFamily.STRING] = true;
-widens[TypeFamily.SUBSTRING][TypeFamily.STRING16] = true;
-widens[TypeFamily.SUBSTRING][TypeFamily.SUBSTRING] = true;
-widens[TypeFamily.SUBSTRING][TypeFamily.VAR] = true;
-widens[TypeFamily.SUBSTRING16][TypeFamily.STRING] = true;
-widens[TypeFamily.SUBSTRING16][TypeFamily.STRING16] = true;
-widens[TypeFamily.SUBSTRING16][TypeFamily.SUBSTRING16] = true;
-widens[TypeFamily.SUBSTRING16][TypeFamily.VAR] = true;
-widens[TypeFamily.VAR][TypeFamily.VAR] = true;
-widens[TypeFamily.EXCEPTION][TypeFamily.EXCEPTION] = true;
-widens[TypeFamily.ADDRESS][TypeFamily.VAR] = true;
-widens[TypeFamily.ADDRESS][TypeFamily.ADDRESS] = true;
-widens[TypeFamily.CLASS_VARIABLE][TypeFamily.CLASS_VARIABLE] = true;
-widens[TypeFamily.CLASS_DEFERRED][TypeFamily.CLASS_DEFERRED] = true;
+widens[runtime.TypeFamily.SIGNED_8][runtime.TypeFamily.SIGNED_8] = true;
+widens[runtime.TypeFamily.SIGNED_8][runtime.TypeFamily.SIGNED_16] = true;
+widens[runtime.TypeFamily.SIGNED_8][runtime.TypeFamily.SIGNED_32] = true;
+widens[runtime.TypeFamily.SIGNED_8][runtime.TypeFamily.SIGNED_64] = true;
+widens[runtime.TypeFamily.SIGNED_8][runtime.TypeFamily.FLOAT_32] = true;
+widens[runtime.TypeFamily.SIGNED_8][runtime.TypeFamily.FLOAT_64] = true;
+widens[runtime.TypeFamily.SIGNED_8][runtime.TypeFamily.VAR] = true;
+widens[runtime.TypeFamily.SIGNED_16][runtime.TypeFamily.SIGNED_16] = true;
+widens[runtime.TypeFamily.SIGNED_16][runtime.TypeFamily.SIGNED_32] = true;
+widens[runtime.TypeFamily.SIGNED_16][runtime.TypeFamily.SIGNED_64] = true;
+widens[runtime.TypeFamily.SIGNED_16][runtime.TypeFamily.FLOAT_32] = true;
+widens[runtime.TypeFamily.SIGNED_16][runtime.TypeFamily.FLOAT_64] = true;
+widens[runtime.TypeFamily.SIGNED_16][runtime.TypeFamily.VAR] = true;
+widens[runtime.TypeFamily.SIGNED_32][runtime.TypeFamily.SIGNED_32] = true;
+widens[runtime.TypeFamily.SIGNED_32][runtime.TypeFamily.SIGNED_64] = true;
+widens[runtime.TypeFamily.SIGNED_32][runtime.TypeFamily.FLOAT_32] = true;
+widens[runtime.TypeFamily.SIGNED_32][runtime.TypeFamily.FLOAT_64] = true;
+widens[runtime.TypeFamily.SIGNED_32][runtime.TypeFamily.VAR] = true;
+widens[runtime.TypeFamily.SIGNED_64][runtime.TypeFamily.SIGNED_64] = true;
+widens[runtime.TypeFamily.SIGNED_64][runtime.TypeFamily.FLOAT_32] = true;
+widens[runtime.TypeFamily.SIGNED_64][runtime.TypeFamily.FLOAT_64] = true;
+widens[runtime.TypeFamily.SIGNED_64][runtime.TypeFamily.VAR] = true;
+widens[runtime.TypeFamily.UNSIGNED_8][runtime.TypeFamily.SIGNED_16] = true;
+widens[runtime.TypeFamily.UNSIGNED_8][runtime.TypeFamily.SIGNED_32] = true;
+widens[runtime.TypeFamily.UNSIGNED_8][runtime.TypeFamily.SIGNED_64] = true;
+widens[runtime.TypeFamily.UNSIGNED_8][runtime.TypeFamily.UNSIGNED_8] = true;
+widens[runtime.TypeFamily.UNSIGNED_8][runtime.TypeFamily.UNSIGNED_16] = true;
+widens[runtime.TypeFamily.UNSIGNED_8][runtime.TypeFamily.UNSIGNED_32] = true;
+widens[runtime.TypeFamily.UNSIGNED_8][runtime.TypeFamily.UNSIGNED_64] = true;
+widens[runtime.TypeFamily.UNSIGNED_8][runtime.TypeFamily.FLOAT_32] = true;
+widens[runtime.TypeFamily.UNSIGNED_8][runtime.TypeFamily.FLOAT_64] = true;
+widens[runtime.TypeFamily.UNSIGNED_8][runtime.TypeFamily.VAR] = true;
+widens[runtime.TypeFamily.UNSIGNED_16][runtime.TypeFamily.SIGNED_32] = true;
+widens[runtime.TypeFamily.UNSIGNED_16][runtime.TypeFamily.SIGNED_64] = true;
+widens[runtime.TypeFamily.UNSIGNED_16][runtime.TypeFamily.UNSIGNED_16] = true;
+widens[runtime.TypeFamily.UNSIGNED_16][runtime.TypeFamily.UNSIGNED_32] = true;
+widens[runtime.TypeFamily.UNSIGNED_16][runtime.TypeFamily.UNSIGNED_64] = true;
+widens[runtime.TypeFamily.UNSIGNED_16][runtime.TypeFamily.FLOAT_32] = true;
+widens[runtime.TypeFamily.UNSIGNED_16][runtime.TypeFamily.FLOAT_64] = true;
+widens[runtime.TypeFamily.UNSIGNED_16][runtime.TypeFamily.VAR] = true;
+widens[runtime.TypeFamily.UNSIGNED_32][runtime.TypeFamily.SIGNED_64] = true;
+widens[runtime.TypeFamily.UNSIGNED_32][runtime.TypeFamily.UNSIGNED_32] = true;
+widens[runtime.TypeFamily.UNSIGNED_32][runtime.TypeFamily.UNSIGNED_64] = true;
+widens[runtime.TypeFamily.UNSIGNED_32][runtime.TypeFamily.FLOAT_32] = true;
+widens[runtime.TypeFamily.UNSIGNED_32][runtime.TypeFamily.FLOAT_64] = true;
+widens[runtime.TypeFamily.UNSIGNED_32][runtime.TypeFamily.VAR] = true;
+widens[runtime.TypeFamily.UNSIGNED_64][runtime.TypeFamily.UNSIGNED_64] = true;
+widens[runtime.TypeFamily.UNSIGNED_64][runtime.TypeFamily.FLOAT_32] = true;
+widens[runtime.TypeFamily.UNSIGNED_64][runtime.TypeFamily.FLOAT_64] = true;
+widens[runtime.TypeFamily.UNSIGNED_64][runtime.TypeFamily.VAR] = true;
+widens[runtime.TypeFamily.FLOAT_32][runtime.TypeFamily.FLOAT_32] = true;
+widens[runtime.TypeFamily.FLOAT_32][runtime.TypeFamily.FLOAT_64] = true;
+widens[runtime.TypeFamily.FLOAT_32][runtime.TypeFamily.VAR] = true;
+widens[runtime.TypeFamily.FLOAT_64][runtime.TypeFamily.FLOAT_64] = true;
+widens[runtime.TypeFamily.FLOAT_64][runtime.TypeFamily.VAR] = true;
+widens[runtime.TypeFamily.BOOLEAN][runtime.TypeFamily.BOOLEAN] = true;
+widens[runtime.TypeFamily.BOOLEAN][runtime.TypeFamily.VAR] = true;
+widens[runtime.TypeFamily.STRING][runtime.TypeFamily.STRING] = true;
+widens[runtime.TypeFamily.STRING][runtime.TypeFamily.STRING16] = true;
+widens[runtime.TypeFamily.STRING][runtime.TypeFamily.SUBSTRING] = true;
+widens[runtime.TypeFamily.STRING][runtime.TypeFamily.VAR] = true;
+widens[runtime.TypeFamily.STRING16][runtime.TypeFamily.STRING] = true;
+widens[runtime.TypeFamily.STRING16][runtime.TypeFamily.STRING16] = true;
+widens[runtime.TypeFamily.STRING16][runtime.TypeFamily.SUBSTRING16] = true;
+widens[runtime.TypeFamily.STRING16][runtime.TypeFamily.VAR] = true;
+widens[runtime.TypeFamily.SUBSTRING][runtime.TypeFamily.STRING] = true;
+widens[runtime.TypeFamily.SUBSTRING][runtime.TypeFamily.STRING16] = true;
+widens[runtime.TypeFamily.SUBSTRING][runtime.TypeFamily.SUBSTRING] = true;
+widens[runtime.TypeFamily.SUBSTRING][runtime.TypeFamily.VAR] = true;
+widens[runtime.TypeFamily.SUBSTRING16][runtime.TypeFamily.STRING] = true;
+widens[runtime.TypeFamily.SUBSTRING16][runtime.TypeFamily.STRING16] = true;
+widens[runtime.TypeFamily.SUBSTRING16][runtime.TypeFamily.SUBSTRING16] = true;
+widens[runtime.TypeFamily.SUBSTRING16][runtime.TypeFamily.VAR] = true;
+widens[runtime.TypeFamily.VAR][runtime.TypeFamily.VAR] = true;
+widens[runtime.TypeFamily.EXCEPTION][runtime.TypeFamily.EXCEPTION] = true;
+widens[runtime.TypeFamily.ADDRESS][runtime.TypeFamily.VAR] = true;
+widens[runtime.TypeFamily.ADDRESS][runtime.TypeFamily.ADDRESS] = true;
+widens[runtime.TypeFamily.CLASS_VARIABLE][runtime.TypeFamily.CLASS_VARIABLE] = true;
+widens[runtime.TypeFamily.CLASS_DEFERRED][runtime.TypeFamily.CLASS_DEFERRED] = true;
 
 public class InterfaceType extends ClassType {
 	InterfaceType(ref<ClassDeclarator> definition, boolean isFinal, ref<ClassScope> scope) {
-		super(TypeFamily.INTERFACE, definition, isFinal, scope);
+		super(runtime.TypeFamily.INTERFACE, definition, isFinal, scope);
 	}
 	
 	public boolean isConcrete(ref<CompileContext> compileContext) {
@@ -492,7 +400,7 @@ public class ClassType extends Type {
 	protected boolean _isMonitor;
 	protected boolean _final;
 
-	protected ClassType(TypeFamily family, ref<ClassDeclarator> definition, boolean isFinal, ref<ClassScope> scope) {
+	protected ClassType(runtime.TypeFamily family, ref<ClassDeclarator> definition, boolean isFinal, ref<ClassScope> scope) {
 		super(family);
 		_definition = definition;
 		_scope = scope;
@@ -501,7 +409,7 @@ public class ClassType extends Type {
 	}
 
 	ClassType(ref<ClassDeclarator> definition, boolean isFinal, ref<ClassScope> scope) {
-		super(TypeFamily.CLASS);
+		super(runtime.TypeFamily.CLASS);
 		_definition = definition;
 		_scope = scope;
 		_isMonitor = definition.op() == Operator.MONITOR_CLASS;
@@ -509,13 +417,13 @@ public class ClassType extends Type {
 	}
 
 	ClassType(ref<Type> base, boolean isFinal, ref<ClassScope> scope) {
-		super(TypeFamily.CLASS);
+		super(runtime.TypeFamily.CLASS);
 		_scope = scope;
 		_extends = base;
 		_final = isFinal;
 	}
 
-	ClassType(TypeFamily effectiveFamily, ref<Type> base, ref<ClassScope> scope) {
+	ClassType(runtime.TypeFamily effectiveFamily, ref<Type> base, ref<ClassScope> scope) {
 		super(effectiveFamily);
 		_scope = scope;
 		_extends = base;
@@ -763,8 +671,8 @@ public class ClassType extends Type {
 				if (base.deferAnalysis())
 					_extends = base.type;
 				else {
-					_extends = base.unwrapTypedef(family() == TypeFamily.INTERFACE ? Operator.INTERFACE : Operator.CLASS, compileContext);
-					if (_extends.family() == TypeFamily.ENUM)
+					_extends = base.unwrapTypedef(family() == runtime.TypeFamily.INTERFACE ? Operator.INTERFACE : Operator.CLASS, compileContext);
+					if (_extends.family() == runtime.TypeFamily.ENUM)
 						base.add(MessageId.CANNOT_EXTEND_ENUM, compileContext.pool());
 					else if (_extends.isFinal()) {
 						_definition.add(isInterface() ? MessageId.FINAL_BASE_INTERFACE : 
@@ -777,28 +685,23 @@ public class ClassType extends Type {
 		}
 	}
 
-	public int copyToImage(ref<Target> target) {
+	public int copyToImage(ref<Target> target, runtime.TypeFamily preferredFamily) {
 		if (_ordinal == 0) {
-			address a = allocateImageData(target, ClassType.bytes);
-			ref<ClassType> copy = ref<ClassType>(a);
-			transferBase(copy);
-			transferClass(copy, target);
-			target.fixupVtable(_ordinal, target.classType());
+			int baseOrdinal;
+
+			if (_extends != null)
+				baseOrdinal = _extends.copyToImage(target, runtime.TypeFamily.VOID);
+			_ordinal = target.copyClassToImage(this, 
+											   baseOrdinal,
+											   preferredFamily == runtime.TypeFamily.VOID ? family() : 
+														preferredFamily);
+//			printf("copyToImage %s: -> %d\n", signature(), _ordinal);
 		}
 		return _ordinal;
 	}
 	
-	protected void transferClass(ref<ClassType> copy, ref<Target> target) {
-		if (_extends != null) {
-			_extends.copyToImage(target);
-			// TODO: This is a dangerous calculation. If the layout of ClassType changes, the offset of the
-			// compiler's version of '_extends' may not be the target's version. Need to replace this.
-			target.fixupType(_ordinal + int(&ref<ClassType>(null)._extends), _extends);
-		}
-	}
-
 	public boolean widensTo(ref<Type> other, ref<CompileContext> compileContext) {
-		if (other.family() == TypeFamily.INTERFACE) {
+		if (other.family() == runtime.TypeFamily.INTERFACE) {
 			ref<Type> t = this;
 			do {
 				t = t.assignSuper(compileContext); 
@@ -899,7 +802,7 @@ public class EnumType extends ClassType {
 	private ref<Symbol> _symbol;
 
 	EnumType(ref<Symbol> symbol, ref<ClassDeclarator> definition, ref<EnumScope> scope) {
-		super(TypeFamily.CLASS, definition, false, scope);
+		super(runtime.TypeFamily.CLASS, definition, false, scope);
 		_symbol = symbol;
 	}
 
@@ -935,18 +838,19 @@ public class EnumType extends ClassType {
 		return _symbol;
 	}
 
-	public TypeFamily instanceFamily() {
+	public runtime.TypeFamily instanceFamily() {
 		if (instanceCount <= 256)
-			return TypeFamily.UNSIGNED_8;
+			return runtime.TypeFamily.UNSIGNED_8;
 		else if (instanceCount <= 65536)
-			return TypeFamily.UNSIGNED_16;
+			return runtime.TypeFamily.UNSIGNED_16;
 		else
-			return TypeFamily.UNSIGNED_32;
+			return runtime.TypeFamily.UNSIGNED_32;
 	}
 
-	public int copyToImage(ref<Target> target) {
+	public int copyToImage(ref<Target> target, runtime.TypeFamily preferredFamily) {
 		if (_ordinal == 0) {
-			address a = allocateImageData(target, EnumType.bytes);
+			assert(false);
+			address a = null;//allocateImageData(target, EnumType.bytes);
 			ref<Type> t = ref<Type>(a);
 //			*t = *this;
 //			*ref<long>(t) = 0;
@@ -968,7 +872,7 @@ public class EnumInstanceType extends Type {
 	private ref<ParameterScope> _instanceConstructor;
 
 	protected EnumInstanceType(ref<EnumScope> scope) {
-		super(TypeFamily.ENUM);
+		super(runtime.TypeFamily.ENUM);
 		_scope = scope;
 	}
 
@@ -1069,9 +973,10 @@ public class EnumInstanceType extends Type {
 		return true;
 	}
 
-	public int copyToImage(ref<Target> target) {
+	public int copyToImage(ref<Target> target, runtime.TypeFamily preferredFamily) {
 		if (_ordinal == 0) {
-			address a = allocateImageData(target, EnumInstanceType.bytes);
+			assert(false);
+			address a = null;//allocateImageData(target, EnumInstanceType.bytes);
 			ref<Type> t = ref<Type>(a);
 //			*t = *this;
 //			*ref<long>(t) = 0;
@@ -1099,7 +1004,7 @@ class FlagsType extends TypedefType {
 	private ref<Scope> _scope;
 
 	FlagsType(ref<Block> definition, ref<Scope> scope, ref<Type> flagsInstanceType) {
-		super(TypeFamily.TYPEDEF, flagsInstanceType);
+		super(runtime.TypeFamily.TYPEDEF, flagsInstanceType);
 		_definition = definition;
 		_scope = scope;
 	}
@@ -1135,7 +1040,7 @@ public class FlagsInstanceType extends Type {
 	private ref<ParameterScope> _toStringMethod;
 
 	FlagsInstanceType(ref<Symbol> symbol, ref<FlagsScope> scope, ref<ClassType> instanceClass) {
-		super(TypeFamily.FLAGS);
+		super(runtime.TypeFamily.FLAGS);
 		_symbol = symbol;
 		_scope = scope;
 		_instanceClass = instanceClass;
@@ -1149,17 +1054,17 @@ public class FlagsInstanceType extends Type {
 		return _scope;
 	}
 
-	public TypeFamily instanceFamily() {
+	public runtime.TypeFamily instanceFamily() {
 		int numberOfFlags = _scope.symbols().size();
 
 		if (numberOfFlags <= 8)
-			return TypeFamily.UNSIGNED_8;
+			return runtime.TypeFamily.UNSIGNED_8;
 		else if (numberOfFlags <= 16)
-			return TypeFamily.UNSIGNED_16;
+			return runtime.TypeFamily.UNSIGNED_16;
 		else if (numberOfFlags <= 32)
-			return TypeFamily.UNSIGNED_32;
+			return runtime.TypeFamily.UNSIGNED_32;
 		else
-			return TypeFamily.SIGNED_64;		// don't have an unsigned 64 marshaller. use the signed one.
+			return runtime.TypeFamily.SIGNED_64;		// don't have an unsigned 64 marshaller. use the signed one.
 	}
 
 	public int size() {
@@ -1189,7 +1094,7 @@ public class FlagsInstanceType extends Type {
 	}
 	
 	public boolean widensTo(ref<Type> other, ref<CompileContext> compileContext) {
-		if (other.family() == TypeFamily.BOOLEAN)
+		if (other.family() == runtime.TypeFamily.BOOLEAN)
 			return true;
 		else
 			return super.widensTo(other, compileContext);
@@ -1236,7 +1141,7 @@ public class FunctionType extends Type {
 	private boolean _registerArgumentsAssigned;
 	
 	FunctionType(pointer<ref<Type>> t, int returnTypes, ref<Scope> functionScope) {
-		super(TypeFamily.FUNCTION);
+		super(runtime.TypeFamily.FUNCTION);
 		_t = t;
 		_returnTypes = returnTypes;
 		_functionScope = ref<ParameterScope>(functionScope);
@@ -1249,7 +1154,7 @@ public class FunctionType extends Type {
 	}
 
 	FunctionType(pointer<ref<Type>> t, int returnTypes, int parameterTypes, boolean hasEllipsis) {
-		super(TypeFamily.FUNCTION);
+		super(runtime.TypeFamily.FUNCTION);
 		_t = t;
 		_returnTypes = returnTypes;
 		_parameters = parameterTypes;
@@ -1274,9 +1179,9 @@ public class FunctionType extends Type {
 	public boolean widensTo(ref<Type> other, ref<CompileContext> compileContext) {
 		if (this == other)
 			return true;
-		if (other == compileContext.builtInType(TypeFamily.VAR))
+		if (other == compileContext.builtInType(runtime.TypeFamily.VAR))
 			return false;								// TODO: Fix the code gen for this.
-		if (other.family() != TypeFamily.FUNCTION)
+		if (other.family() != runtime.TypeFamily.FUNCTION)
 			return false;
 		return equals(other);
 	}
@@ -1468,7 +1373,7 @@ public class TemplateType extends Type {
 	private boolean _isMonitor;
 
 	TemplateType(ref<Symbol> symbol, ref<Template> definition, ref<Unit>  definingFile, ref<Overload> overload, ref<ParameterScope> templateScope, boolean isMonitor) {
-		super(TypeFamily.TEMPLATE);
+		super(runtime.TypeFamily.TEMPLATE);
 		_definingSymbol = symbol;
 		_definition = definition;
 		_definingFile = definingFile;
@@ -1582,7 +1487,7 @@ public class TemplateInstanceType extends ClassType {
 	}
 
 	public ref<Type> indirectType(ref<CompileContext> compileContext) {
-		if (!_templateType.extendsFormally(compileContext.builtInType(TypeFamily.ADDRESS), compileContext))
+		if (!_templateType.extendsFormally(compileContext.builtInType(runtime.TypeFamily.ADDRESS), compileContext))
 			return null;
 		if (_arguments.length() != 1)
 			return null;
@@ -1601,14 +1506,14 @@ public class TemplateInstanceType extends ClassType {
 	public ref<Type> indexType() {
 		if (_arguments.length() > 1)
 			return ref<Type>(_arguments[1]);
-		else if (_arguments.length() == 1 && family() == TypeFamily.SHAPE)
+		else if (_arguments.length() == 1 && family() == runtime.TypeFamily.SHAPE)
 			return ref<Type>(_arguments[0]);
 		else
 			return null;
 	}
 
 	public boolean isPointer(ref<CompileContext> compileContext) {
-		if (!_templateType.extendsFormally(compileContext.builtInType(TypeFamily.ADDRESS), compileContext))
+		if (!_templateType.extendsFormally(compileContext.builtInType(runtime.TypeFamily.ADDRESS), compileContext))
 			return false;
 		if (_arguments.length() != 1)
 			return false;
@@ -1642,7 +1547,7 @@ public class TemplateInstanceType extends ClassType {
 		}
 		ref<PlainSymbol> ps = ref<PlainSymbol>(sym);
 		ref<Type> tp = ps.assignType(compileContext);
-		if (tp.family() != TypeFamily.TYPEDEF) {
+		if (tp.family() != runtime.TypeFamily.TYPEDEF) {
 			printf("iterator is not a type: %s\n", tp.signature());
 			return null;
 		}
@@ -1651,7 +1556,7 @@ public class TemplateInstanceType extends ClassType {
 			printf("Cannot unwrap iterator type: %s\n", ps.type().signature());
 			return null;
 		}
-		if (tp.family() != TypeFamily.CLASS) {
+		if (tp.family() != runtime.TypeFamily.CLASS) {
 			printf("iterator's type is not a CLASS: %s\n", tp.signature());
 			return null;
 		}
@@ -1699,21 +1604,10 @@ public class TemplateInstanceType extends ClassType {
 		return true;
 	}
 
-	public int copyToImage(ref<Target> target) {
+	public int copyToImage(ref<Target> target, runtime.TypeFamily preferredFamily) {
 		if (_ordinal == 0) {
-			address a = allocateImageData(target, TemplateInstanceType.bytes);
-			ref<TemplateInstanceType> t = ref<TemplateInstanceType>(a);
-			transferBase(t);
-			transferClass(t, target);
-			target.fixupVtable(_ordinal, target.classType());
-//			*t = *this;
-//			*ref<long>(t) = 0;
-//			t._concreteDefinition = null;
-//			t._definingFile = null;
-//			t._next = null;
-//			memset(&t._arguments, 0, t._arguments.bytes);
-//			t._arguments.clear();
-//			t._templateType = null;
+			super.copyToImage(target, preferredFamily == runtime.TypeFamily.VOID ? family() : preferredFamily);
+			// Add specific stuff to the package
 		}
 		return _ordinal;
 	}
@@ -1775,7 +1669,7 @@ public class TemplateInstanceType extends ClassType {
 public class TypedefType extends Type {
 	private ref<Type> _wrappedType;
 
-	protected TypedefType(TypeFamily family, ref<Type> wrappedType) {
+	protected TypedefType(runtime.TypeFamily family, ref<Type> wrappedType) {
 		super(family);
 		_wrappedType = wrappedType;
 	}
@@ -1806,8 +1700,8 @@ public class TypedefType extends Type {
 	}
 
 	public boolean extendsFormally(ref<Type> other, ref<CompileContext> compileContext) {
-		if (other.family() == TypeFamily.TYPEDEF ||
-			other.family() == TypeFamily.CLASS_VARIABLE)
+		if (other.family() == runtime.TypeFamily.TYPEDEF ||
+			other.family() == runtime.TypeFamily.CLASS_VARIABLE)
 			return true;
 		else
 			return false;
@@ -1830,12 +1724,12 @@ public class TypedefType extends Type {
 	 * applied to the same template declaration. For non-Template's this is false.
 	 */
 	public boolean canOverride(ref<Type> other, ref<CompileContext> compileContext) {
-		if (other.family() != TypeFamily.TYPEDEF)
+		if (other.family() != runtime.TypeFamily.TYPEDEF)
 			return false;
-		if (_wrappedType.family() != TypeFamily.TEMPLATE)
+		if (_wrappedType.family() != runtime.TypeFamily.TEMPLATE)
 			return false;
 		ref<TypedefType> tt = ref<TypedefType>(other);
-		if (tt._wrappedType.family() != TypeFamily.TEMPLATE)
+		if (tt._wrappedType.family() != runtime.TypeFamily.TEMPLATE)
 			return false;
 		return _wrappedType.canOverride(tt._wrappedType, compileContext);
 	}
@@ -1862,7 +1756,7 @@ public CompareMethodCategory compareMethodCategory(ref<Type> type, ref<CompileCo
 }
 	
 public class Type {
-	private TypeFamily _family;
+	private runtime.TypeFamily _family;
 	private boolean _resolved;
 	private boolean _resolving;
 	private ref<OverloadInstance> _compareMethod;
@@ -1870,10 +1764,10 @@ public class Type {
 
 	protected int _ordinal;				// Assigned by type-refs: first one gets the 'real' value
 	
-	Type(TypeFamily family) {
+	Type(runtime.TypeFamily family) {
 		_family = family;
 		if (this.class != BuiltInType)
-			assert(family != TypeFamily.ERROR);
+			assert(family != runtime.TypeFamily.ERROR);
 	}
 
 	public void print() {
@@ -1890,11 +1784,11 @@ public class Type {
 		return string(_family);
 	}
 	
-	public TypeFamily scalarFamily(ref<CompileContext> compileContext) {
-		if (_family == TypeFamily.SHAPE) {
+	public runtime.TypeFamily scalarFamily(ref<CompileContext> compileContext) {
+		if (_family == runtime.TypeFamily.SHAPE) {
 			ref<Type> t = elementType();
 			if (t == null)
-				return TypeFamily.ERROR;
+				return runtime.TypeFamily.ERROR;
 			else
 				return t.family();
 		} else
@@ -1902,14 +1796,14 @@ public class Type {
 	}
 	
 	public ref<Type> scalarType(ref<CompileContext> compileContext) {
-		if (_family == TypeFamily.SHAPE)
+		if (_family == runtime.TypeFamily.SHAPE)
 			return elementType();
 		else
 			return this;	
 	}
 	
 	public ref<Type> shapeType() {
-		if (_family == TypeFamily.SHAPE)
+		if (_family == runtime.TypeFamily.SHAPE)
 			return this;
 		else
 			return null;	
@@ -2081,7 +1975,7 @@ public class Type {
 					continue;
 				// You have to compare to T or ref<T> to be the 'compare' method of a type.
 				if (t.classType() != this) {
-					if (t.family() != TypeFamily.REF)
+					if (t.family() != runtime.TypeFamily.REF)
 						continue;
 					if (this != t.indirectType(compileContext).classType())
 						continue;
@@ -2089,7 +1983,7 @@ public class Type {
 				if (scope.type.returnCount() != 1)
 					continue;
 				_compareMethod = oi;
-				// we have a compare method on T that takes a single ref<T> parameter and returns a single value, close enough.
+				// we have a compare method on T that takes a single T or ref<T> parameter and returns a single value, close enough.
 				return oi;
 			}
 		}
@@ -2107,7 +2001,7 @@ public class Type {
 				if (oi.parameterCount() != 1)
 					continue;
 				if ((*oi.parameterScope().parameters())[0].type() == 
-							compileContext.builtInType(TypeFamily.STRING))
+							compileContext.builtInType(runtime.TypeFamily.STRING))
 					return oi;
 			}
 		}
@@ -2120,10 +2014,15 @@ public class Type {
 		return _ordinal;
 	}
 	
+
 	public int copyToImage(ref<Target> target) {
+		return copyToImage(target, runtime.TypeFamily.VOID);
+	}
+
+	public int copyToImage(ref<Target> target, runtime.TypeFamily preferredFamily) {
 		if (_ordinal == 0) {
-			address a = allocateImageData(target, Type.bytes);
-			ref<Type> t = ref<Type>(a);
+//			address a = allocateImageData(target, Type.bytes);
+//			ref<Type> t = ref<Type>(a);
 //			*t = *this;
 //			*ref<long>(t) = 0;
 		}
@@ -2136,13 +2035,15 @@ public class Type {
 		copy._family = _family;
 		copy._resolved = _resolved;
 	}
-	
-	protected address allocateImageData(ref<Target> target, int size) {
-		address a;
-		(a, _ordinal) = target.allocateImageData(size, address.bytes, this);
-		return a;
+/*	
+	protected void copyClassToImage(ref<Target> target, ref<runtime.Class> template) {
+		_ordinal = target.copyClassToImage(this, template);
 	}
 	
+	protected void copyInterfaceToImage(ref<Target> target, ref<runtime.Interface> template) {
+		_ordinal = target.copyInterfaceToImage(this, template);
+	}
+ */
 	public boolean equals(ref<Type> other) {
 		if (this == other)
 			return true;
@@ -2397,7 +2298,7 @@ public class Type {
 			return false;
 
 		default:
-			return !derivesFrom(TypeFamily.NAMESPACE);
+			return !derivesFrom(runtime.TypeFamily.NAMESPACE);
 		}
 		return false;
 	}
@@ -2420,7 +2321,7 @@ public class Type {
 		if (_resolving) {
 			printf("resolve error %s\n", signature());
 			assert(false);
-			_family = TypeFamily.ERROR;
+			_family = runtime.TypeFamily.ERROR;
 		} else {
 			_resolving = true;
 			doResolve(compileContext);
@@ -2471,7 +2372,7 @@ public class Type {
 	public boolean widensTo(ref<Type> other, ref<CompileContext> compileContext) {
 		if (this == other)
 			return true;
-		if (other == compileContext.builtInType(TypeFamily.VAR)){
+		if (other == compileContext.builtInType(runtime.TypeFamily.VAR)){
 			return true;
 		}
 		if (extendsFormally(other, compileContext))
@@ -2481,8 +2382,8 @@ public class Type {
 			ref<Type> otherInd = other.indirectType(compileContext);
 			if (otherInd == null)
 				return false;
-			if (family() != TypeFamily.POINTER &&
-				other.family() == TypeFamily.POINTER)
+			if (family() != runtime.TypeFamily.POINTER &&
+				other.family() == runtime.TypeFamily.POINTER)
 				return false;
 			if (ind == otherInd)
 				return true;
@@ -2492,7 +2393,7 @@ public class Type {
 	}
 
 	public boolean builtInCoercionFrom(ref<Node> n, ref<CompileContext> compileContext) {
-		if (_family == TypeFamily.VAR)
+		if (_family == runtime.TypeFamily.VAR)
 			return true;
 		if (n.op() == Operator.OBJECT_AGGREGATE)
 			return true;
@@ -2505,7 +2406,7 @@ public class Type {
 			case	STRING:
 			case	STRING16:
 				ref<Type> object = n.type.indirectType(compileContext);
-				if (object != null && object.family() == TypeFamily.UNSIGNED_8)
+				if (object != null && object.family() == runtime.TypeFamily.UNSIGNED_8)
 					return false;									// This is a string/string16 constructor
 				else
 					return true;
@@ -2577,7 +2478,7 @@ public class Type {
 			break;
 
 		case	CLASS:
-			if (_family == TypeFamily.INTERFACE)
+			if (_family == runtime.TypeFamily.INTERFACE)
 				return true;
 			break;
 
@@ -2610,7 +2511,7 @@ public class Type {
 		return false;
 	}
 
-	public boolean derivesFrom(TypeFamily family) {
+	public boolean derivesFrom(runtime.TypeFamily family) {
 		if (_family == family)
 			return true;
 		ref<Type> sup = getSuper();
@@ -2633,11 +2534,11 @@ public class Type {
 	}
 
 	public boolean isBuiltIn() {
-		return int(_family) < int(TypeFamily.BUILTIN_TYPES);
+		return int(_family) < int(runtime.TypeFamily.BUILTIN_TYPES);
 	}
 
 	public boolean isException() {
-		if (_family == TypeFamily.EXCEPTION)
+		if (_family == runtime.TypeFamily.EXCEPTION)
 			return true;
 		ref<Type> sup = getSuper();
 		if (sup == null)
@@ -2683,7 +2584,7 @@ public class Type {
 	}
 	
 	public boolean deferAnalysis() {
-		return _family == TypeFamily.ERROR || _family == TypeFamily.CLASS_DEFERRED;
+		return _family == runtime.TypeFamily.ERROR || _family == runtime.TypeFamily.CLASS_DEFERRED;
 	}
 
 	public boolean baseChainDeferAnalysis() {
@@ -2696,7 +2597,7 @@ public class Type {
 			return false;
 	}
 
-	public TypeFamily family() {
+	public runtime.TypeFamily family() {
 		return _family;
 	}
 
@@ -2705,13 +2606,31 @@ public class Type {
 	}
 
 	protected boolean sameAs(ref<Type> other) {
-		// TypeFamily.ERROR is a unique type, so it is unclear
+		// runtime.TypeFamily.ERROR is a unique type, so it is unclear
 		// how we could get here, but they should not be 'the same'
 		return false;
 	}
 }
+/*
+public class ClassTemplate {
+	runtime.Class template;
+	int ordinal;
+}
 
-int[TypeFamily] familySize = [
+public class InterfaceTemplate {
+	runtime.Interface template;
+	int ordinal;
+}
+
+public int getOrdinal(ref<runtime.Class> template) {
+	return *ref<int>(pointer<runtime.Class>(template) + 1);
+}
+
+public int getOrdinal(ref<runtime.Interface> template) {
+	return *ref<int>(pointer<runtime.Interface>(template) + 1);
+}
+ */
+int[runtime.TypeFamily] familySize = [
 	SIGNED_8:			 1,
 	SIGNED_16:			 2,
 	SIGNED_32:			 4,
@@ -2751,7 +2670,7 @@ int[TypeFamily] familySize = [
 	CLASS_DEFERRED: 	-1,
 ];
 
-int[TypeFamily] familyAlignment = [
+int[runtime.TypeFamily] familyAlignment = [
 	ADDRESS:			 8,
 	
 	SIGNED_8:			 1,
@@ -2792,7 +2711,7 @@ int[TypeFamily] familyAlignment = [
 	CLASS_DEFERRED: 	-1,
 ];
 
-string[TypeFamily] builtinName = [
+string[runtime.TypeFamily] builtinName = [
   	SIGNED_8:			"Signed<8>",
   	SIGNED_16:			"short",
   	SIGNED_32:			"int",
@@ -2813,7 +2732,7 @@ string[TypeFamily] builtinName = [
   	VOID: 				"void",
   	ERROR: 				"<error>",
 	EXCEPTION:			"Exception",
-	CLASS_VARIABLE:		"class",
+	CLASS_VARIABLE:		"ref<runtime.Class>",
 	CLASS_DEFERRED:		"<deferred class>",
 	NAMESPACE:			"namespace",
 	ARRAY_AGGREGATE:	"Array",

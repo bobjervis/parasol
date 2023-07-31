@@ -15,6 +15,8 @@
  */
 namespace parasol:compiler;
 
+import parasol:runtime;
+
 boolean shouldVectorize(ref<Node> node) {
 	if (node.isLvalue())
 		return false;
@@ -27,7 +29,7 @@ boolean shouldVectorize(ref<Node> node) {
 		return shouldVectorize(b.right());
 
 	case	ARRAY_AGGREGATE:
-		if (node.type != null && node.type.family() == TypeFamily.REF)
+		if (node.type != null && node.type.family() == runtime.TypeFamily.REF)
 			return false;							// This is a ref<Array> initializer
 	}
 	return true;
@@ -270,7 +272,7 @@ private class ExtractLvaluesClosure {
 }
 
 TraverseAction extractLvalues(ref<Node> n, address data) {
-	if (n.type.family() != TypeFamily.SHAPE)
+	if (n.type.family() != runtime.TypeFamily.SHAPE)
 		return TraverseAction.SKIP_CHILDREN;
 	if (n.isLvalue() || n.op() == Operator.ARRAY_AGGREGATE) {
 		ref<ExtractLvaluesClosure> closure = ref<ExtractLvaluesClosure>(data);
@@ -385,7 +387,7 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 			// If we have labels, pre-allocate all the elements as empty.
 			
 			ref<Node> arg = tree.newConstant(maxIndexValue + 1, aggregate.location());
-			arg.type = compileContext.builtInType(TypeFamily.SIGNED_32);
+			arg.type = compileContext.builtInType(runtime.TypeFamily.SIGNED_32);
 			arg = tree.newCast(indexType, arg);
 			ref<ParameterScope> constructor = null;
 			for (int i = 0; i < vectorType.scope().constructors().length(); i++) {
@@ -407,7 +409,7 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 				else
 					adr = tree.newUnary(Operator.ADDRESS, lhs, lhs.location());
 				result = tree.newCall(constructor, CallCategory.CONSTRUCTOR, adr, args, aggregate.location(), compileContext);
-				result.type = compileContext.builtInType(TypeFamily.VOID);
+				result.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 			} else {
 				// This should generate a runtime exception, because this was likely due to a catastrophic compile error somewhere
 				result = tree.newLeaf(Operator.SYNTAX_ERROR, vectorExpression.location());
@@ -441,7 +443,7 @@ private ref<Node> vectorizeAggregateAssignment(ref<SyntaxTree> tree, ref<Binary>
 					val = nl.node;
 				}
 				idx = tree.newConstant(lastIndexValue, val.location());
-				idx.type = compileContext.builtInType(TypeFamily.SIGNED_32);
+				idx.type = compileContext.builtInType(runtime.TypeFamily.SIGNED_32);
 				idx = tree.newCast(indexType, idx);
 				substring set("set");
 				ref<Node> arrayRef = lhs.clone(tree);

@@ -16,6 +16,7 @@
 namespace parasol:paradoc;
 
 import parasol:compiler;
+import parasol:runtime;
 import parasol:storage;
 
 string expandDocletString(string text, ref<compiler.Symbol> sym, string baseName) {
@@ -131,7 +132,7 @@ string transformLink(string linkTextIn, ref<compiler.Symbol> sym, string baseNam
 		} else {
 			boolean hasClasses;
 			for (; i < components.length() - 1; i++) {
-				if (nm.type().family() != compiler.TypeFamily.TYPEDEF)
+				if (nm.type().family() != runtime.TypeFamily.TYPEDEF)
 					return caption;
 				if (!hasClasses) {
 					hasClasses = true;
@@ -145,7 +146,7 @@ string transformLink(string linkTextIn, ref<compiler.Symbol> sym, string baseNam
 				if (nm == null)
 					return caption;
 			}
-			if (nm.type() != null && nm.type().family() == compiler.TypeFamily.TYPEDEF) {
+			if (nm.type() != null && nm.type().family() == runtime.TypeFamily.TYPEDEF) {
 				if (!hasClasses)
 					path = storage.path(path, "classes", null);
 				path = storage.path(path, nm.name(), "html");
@@ -196,7 +197,7 @@ string transformLink(string linkTextIn, ref<compiler.Symbol> sym, string baseNam
 			path = storage.path(path, sym.name(), null);
 		}
 		for (int i = 0; i < components.length() - 1; i++) {
-			if (s.type().family() != compiler.TypeFamily.TYPEDEF)
+			if (s.type().family() != runtime.TypeFamily.TYPEDEF)
 				return caption;
 			if (!hasClasses) {
 				hasClasses = true;
@@ -212,7 +213,7 @@ string transformLink(string linkTextIn, ref<compiler.Symbol> sym, string baseNam
 			if (s == null)
 				return caption;
 		}
-		if (s.type() != null && s.type().family() == compiler.TypeFamily.TYPEDEF) {
+		if (s.type() != null && s.type().family() == runtime.TypeFamily.TYPEDEF) {
 			if (!hasClasses)
 				path = storage.path(path, "classes", null);
 			path = storage.path(path, s.name(), "html");

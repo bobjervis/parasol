@@ -151,7 +151,7 @@ public class Binary extends Node {
 		}
 		if (type == null)
 			print(0);
-		if (type.family() == TypeFamily.SHAPE) {
+		if (type.family() == runtime.TypeFamily.SHAPE) {
 			switch (op()) {
 			case	DECLARATION:
 				markLiveSymbols(_right, StorageClass.AUTO, compileContext);
@@ -230,14 +230,14 @@ public class Binary extends Node {
 					call = call.fold(tree, true, compileContext);
 					r = tree.newReference(temp, false, location());
 					ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
-					adr.type = compileContext.builtInType(TypeFamily.ADDRESS);
+					adr.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 					ref<Node> seq = tree.newBinary(Operator.SEQUENCE, call, adr, location());
 					seq.type = type;
 					_left = seq;
 				} else {
 					_left = _left.fold(tree, false, compileContext);
 					_left = tree.newUnary(Operator.ADDRESS, _left, location());
-					_left.type = compileContext.builtInType(TypeFamily.ADDRESS);
+					_left.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 				}
 				_right = _right.fold(tree, true, compileContext);
 				return this;
@@ -256,19 +256,19 @@ public class Binary extends Node {
 		case	LOGICAL_AND:
 		case	LOGICAL_OR:
 			_right = _right.foldConditional(tree, compileContext);
-			if (_right.type.family() == TypeFamily.FLAGS) {
+			if (_right.type.family() == runtime.TypeFamily.FLAGS) {
 				ref<Node> right = tree.newConstant(0, location());
 				right.type = _right.type;
 				ref<Node> op = tree.newBinary(Operator.NOT_EQUAL, _right, right, location());
-				op.type = compileContext.builtInType(TypeFamily.BOOLEAN);
+				op.type = compileContext.builtInType(runtime.TypeFamily.BOOLEAN);
 				_right = op;
 			}
 			_left = _left.foldConditional(tree, compileContext);
-			if (_left.type.family() == TypeFamily.FLAGS) {
+			if (_left.type.family() == runtime.TypeFamily.FLAGS) {
 				ref<Node> right = tree.newConstant(0, location());
 				right.type = _left.type;
 				ref<Node> op = tree.newBinary(Operator.NOT_EQUAL, _left, right, location());
-				op.type = compileContext.builtInType(TypeFamily.BOOLEAN);
+				op.type = compileContext.builtInType(runtime.TypeFamily.BOOLEAN);
 				_left = op;
 			}
 			return this;
@@ -276,11 +276,11 @@ public class Binary extends Node {
 		case	WHILE:
 			_right = _right.fold(tree, true, compileContext);
 			_left = _left.foldConditional(tree, compileContext);
-			if (_left.type.family() == TypeFamily.FLAGS) {
+			if (_left.type.family() == runtime.TypeFamily.FLAGS) {
 				ref<Node> right = tree.newConstant(0, location());
 				right.type = _left.type;
 				ref<Node> op = tree.newBinary(Operator.NOT_EQUAL, _left, right, location());
-				op.type = compileContext.builtInType(TypeFamily.BOOLEAN);
+				op.type = compileContext.builtInType(runtime.TypeFamily.BOOLEAN);
 				_left = op;
 			}
 			return this;
@@ -288,11 +288,11 @@ public class Binary extends Node {
 		case	DO_WHILE:
 			_left = _left.fold(tree, true, compileContext);
 			_right = _right.foldConditional(tree, compileContext);
-			if (_right.type.family() == TypeFamily.FLAGS) {
+			if (_right.type.family() == runtime.TypeFamily.FLAGS) {
 				ref<Node> right = tree.newConstant(0, location());
 				right.type = _right.type;
 				ref<Node> op = tree.newBinary(Operator.NOT_EQUAL, _right, right, location());
-				op.type = compileContext.builtInType(TypeFamily.BOOLEAN);
+				op.type = compileContext.builtInType(runtime.TypeFamily.BOOLEAN);
 				_right = op;
 			}
 			return this;
@@ -311,7 +311,7 @@ public class Binary extends Node {
 		case	LEFT_SHIFT_ASSIGN:
 		case	RIGHT_SHIFT_ASSIGN:
 		case	UNSIGNED_RIGHT_SHIFT_ASSIGN:
-			if (type.family() == TypeFamily.VAR)
+			if (type.family() == runtime.TypeFamily.VAR)
 				return processAssignmentOp(tree, voidContext, compileContext);
 			if (_left.op() == Operator.SUBSCRIPT) {
 				ref<Node> element = ref<Binary>(_left).subscriptModify(tree, compileContext);
@@ -321,7 +321,7 @@ public class Binary extends Node {
 			break;
 
 		case	LEFT_SHIFT:
-			if (type.family() == TypeFamily.VAR) {
+			if (type.family() == runtime.TypeFamily.VAR) {
 				ref<Node> call = createMethodCall(_left, "leftShift", tree, compileContext, _right);
 				call.type = type;
 				return call.fold(tree, voidContext, compileContext);
@@ -329,7 +329,7 @@ public class Binary extends Node {
 			break;
 
 		case	RIGHT_SHIFT:
-			if (type.family() == TypeFamily.VAR) {
+			if (type.family() == runtime.TypeFamily.VAR) {
 				ref<Node> call = createMethodCall(_left.fold(tree, false, compileContext), "rightShift", tree, compileContext, _right.fold(tree, false, compileContext));
 				call.type = type;
 				return call.fold(tree, voidContext, compileContext);
@@ -337,7 +337,7 @@ public class Binary extends Node {
 			break;
 
 		case	UNSIGNED_RIGHT_SHIFT:
-			if (type.family() == TypeFamily.VAR) {
+			if (type.family() == runtime.TypeFamily.VAR) {
 				ref<Node> call = createMethodCall(_left.fold(tree, false, compileContext), "unsignedRightShift", tree, compileContext, _right.fold(tree, false, compileContext));
 				call.type = type;
 				return call.fold(tree, voidContext, compileContext);
@@ -345,7 +345,7 @@ public class Binary extends Node {
 			break;
 
 		case	AND:
-			if (type.family() == TypeFamily.VAR) {
+			if (type.family() == runtime.TypeFamily.VAR) {
 				ref<Node> call = createMethodCall(_left.fold(tree, false, compileContext), "and", tree, compileContext, _right.fold(tree, false, compileContext));
 				call.type = type;
 				return call.fold(tree, voidContext, compileContext);
@@ -353,7 +353,7 @@ public class Binary extends Node {
 			break;
 
 		case	DIVIDE:
-			if (type.family() == TypeFamily.VAR) {
+			if (type.family() == runtime.TypeFamily.VAR) {
 				ref<Node> call = createMethodCall(_left.fold(tree, false, compileContext), "divide", tree, compileContext, _right.fold(tree, false, compileContext));
 				call.type = type;
 				return call.fold(tree, voidContext, compileContext);
@@ -361,7 +361,7 @@ public class Binary extends Node {
 			break;
 
 		case	REMAINDER:
-			if (type.family() == TypeFamily.VAR) {
+			if (type.family() == runtime.TypeFamily.VAR) {
 				ref<Node> call = createMethodCall(_left.fold(tree, false, compileContext), "remainder", tree, compileContext, _right.fold(tree, false, compileContext));
 				call.type = type;
 				return call.fold(tree, voidContext, compileContext);
@@ -369,7 +369,7 @@ public class Binary extends Node {
 			break;
 
 		case	EXCLUSIVE_OR:
-			if (type.family() == TypeFamily.VAR) {
+			if (type.family() == runtime.TypeFamily.VAR) {
 				ref<Node> call = createMethodCall(_left.fold(tree, false, compileContext), "exclusiveOr", tree, compileContext, _right.fold(tree, false, compileContext));
 				call.type = type;
 				return call.fold(tree, voidContext, compileContext);
@@ -377,7 +377,7 @@ public class Binary extends Node {
 			break;
 
 		case	OR:
-			if (type.family() == TypeFamily.VAR) {
+			if (type.family() == runtime.TypeFamily.VAR) {
 				ref<Node> call = createMethodCall(_left.fold(tree, false, compileContext), "or", tree, compileContext, _right.fold(tree, false, compileContext));
 				call.type = type;
 				return call.fold(tree, voidContext, compileContext);
@@ -418,7 +418,7 @@ public class Binary extends Node {
 				r = tree.newReference(temp, false, location());
 				constructor.setConstructorMemory(r, tree);
 				ref<Node> seq = tree.newBinary(Operator.SEQUENCE, defn, constructor, location());
-				seq.type = compileContext.builtInType(TypeFamily.VOID);
+				seq.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 				r = tree.newReference(temp, false, location());
 				seq = tree.newBinary(Operator.SEQUENCE, seq, r, location());
 				seq.type = type;
@@ -440,7 +440,7 @@ public class Binary extends Node {
 				ref<Node> basis = tree.newLeaf(Operator.EMPTY, location());
 				basis.type = type.indirectType(compileContext);
 				ref<Node> arg = tree.newUnary(Operator.BYTES, basis, location());
-				arg.type = compileContext.builtInType(TypeFamily.SIGNED_64);
+				arg.type = compileContext.builtInType(runtime.TypeFamily.SIGNED_64);
 				ref<Node> allocator = _left;
 				ref<Type> allocatorType = _left.type.indirectType(compileContext);
 				if (allocatorType != null) {
@@ -457,7 +457,7 @@ public class Binary extends Node {
 				ref<Call> constructor = ref<Call>(_right);
 				if (allocation == this) {
 					_right = tree.newLeaf(Operator.EMPTY, location());
-					_right.type = compileContext.builtInType(TypeFamily.VOID);
+					_right.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 				}
 				if (constructor.overload() == null) {
 					if (defaultConstructor != null) // This must have been a late-created constructor.
@@ -472,7 +472,7 @@ public class Binary extends Node {
 				r = tree.newReference(temp, false, location());
 				constructor.setConstructorMemory(r, tree);
 				ref<Node> seq = tree.newBinary(Operator.SEQUENCE, defn, constructor.fold(tree, true, compileContext), location());
-				seq.type = compileContext.builtInType(TypeFamily.VOID);
+				seq.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 				if (voidContext)
 					return seq;
 				r = tree.newReference(temp, false, location());
@@ -482,7 +482,7 @@ public class Binary extends Node {
 			} else {
 				if (allocation == this) {
 					_right = tree.newLeaf(Operator.EMPTY, location());
-					_right.type = compileContext.builtInType(TypeFamily.VOID);
+					_right.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 				}
 				if (defaultConstructor != null) // This must have been a late-created constructor.
 					return foldDefaultConstructor(defaultConstructor, allocation, tree, voidContext, compileContext);
@@ -511,7 +511,7 @@ public class Binary extends Node {
 				completion = call.fold(tree, true, compileContext);
 			}
 			ref<Type> objType = value.type.indirectType(compileContext);
-			if (value.type.family() == TypeFamily.INTERFACE)
+			if (value.type.family() == runtime.TypeFamily.INTERFACE)
 				objType = value.type;
 			else
 				objType = value.type.indirectType(compileContext);
@@ -525,7 +525,7 @@ public class Binary extends Node {
 				ref<Node> con = tree.newConstant(0, location());
 				con.type = value.type;
 				ref<Node> compare = tree.newBinary(Operator.NOT_EQUAL, value, con, location());
-				compare.type = compileContext.builtInType(TypeFamily.BOOLEAN);
+				compare.type = compileContext.builtInType(runtime.TypeFamily.BOOLEAN);
 				ref<Node> nullPath = tree.newLeaf(Operator.EMPTY, location());
 				nullPath.type = call.type;
 				completion = tree.newTernary(Operator.CONDITIONAL, compare, completion, nullPath, location());
@@ -538,7 +538,7 @@ public class Binary extends Node {
 			return completion;
 			
 		case	MULTIPLY:
-			if (type.family() == TypeFamily.VAR) {
+			if (type.family() == runtime.TypeFamily.VAR) {
 				ref<Node> call = createMethodCall(_left.fold(tree, false, compileContext), "multiply", tree, compileContext, _right.fold(tree, false, compileContext));
 				call.type = type;
 				return call.fold(tree, voidContext, compileContext);
@@ -555,21 +555,21 @@ public class Binary extends Node {
 			if (isCompileTarget(_left, _right)) {
 				if (matchesCompileTarget(op(), _right, compileContext.target)) {
 					ref<Node> x = tree.newLeaf(Operator.TRUE, location());
-					x.type = compileContext.builtInType(TypeFamily.BOOLEAN);
+					x.type = compileContext.builtInType(runtime.TypeFamily.BOOLEAN);
 					return x;
 				} else {
 					ref<Node> x = tree.newLeaf(Operator.FALSE, location());
-					x.type = compileContext.builtInType(TypeFamily.BOOLEAN);
+					x.type = compileContext.builtInType(runtime.TypeFamily.BOOLEAN);
 					return x;
 				}
 			} else if (isCompileTarget(_right, _left)) {
 				if (matchesCompileTarget(op(), _left, compileContext.target)) {
 					ref<Node> x = tree.newLeaf(Operator.TRUE, location());
-					x.type = compileContext.builtInType(TypeFamily.BOOLEAN);
+					x.type = compileContext.builtInType(runtime.TypeFamily.BOOLEAN);
 					return x;
 				} else {
 					ref<Node> x = tree.newLeaf(Operator.FALSE, location());
-					x.type = compileContext.builtInType(TypeFamily.BOOLEAN);
+					x.type = compileContext.builtInType(runtime.TypeFamily.BOOLEAN);
 					return x;
 				}
 				break;
@@ -593,9 +593,9 @@ public class Binary extends Node {
 			switch (_left.type.family()) {
 			case	TYPEDEF:
 			case	CLASS_VARIABLE:
-				ref<Type> t = compileContext.compilerTypeType();
-				ref<OverloadInstance> isSubtypeMethod = getOverloadInstance(t, "isSubtype", compileContext);
-				if (isSubtypeMethod == null)
+				ref<Type> t = compileContext.runtimeClassType();
+				ref<OverloadInstance> compareMethod = getOverloadInstance(t, "compare", compileContext);
+				if (compareMethod == null)
 					return this;
 				switch (op()) {
 				case	EQUALITY:
@@ -603,112 +603,26 @@ public class Binary extends Node {
 					break;
 					
 				case	LESS:
-					ref<Selection> method = tree.newSelection(_left, isSubtypeMethod, true, location());
-					method.type = isSubtypeMethod.type();
-					call = tree.newCall(isSubtypeMethod.parameterScope(), CallCategory.METHOD_CALL, method, tree.newNodeList(_right), location(), compileContext);
-					call.type = compileContext.builtInType(TypeFamily.BOOLEAN);
-					return call.fold(tree, voidContext, compileContext);
-					
 				case	GREATER:
-					method = tree.newSelection(_right, isSubtypeMethod, true, location());
-					method.type = isSubtypeMethod.type();
-					call = tree.newCall(isSubtypeMethod.parameterScope(), CallCategory.METHOD_CALL, method, tree.newNodeList(_left), location(), compileContext);
-					call.type = compileContext.builtInType(TypeFamily.BOOLEAN);
-					return call.fold(tree, voidContext, compileContext);
-					
 				case	LESS_EQUAL:
-					ref<Node> defnRight;
-					ref<Node> valueRight;
-					(defnRight, valueRight) = cloneDefnValue(tree, _right, compileContext);
-					ref<Node> defnLeft;
-					ref<Node> valueLeft;
-					(defnLeft, valueLeft) = cloneDefnValue(tree, _left, compileContext);
-					ref<Node> equalsTest = tree.newBinary(Operator.EQUALITY, valueLeft, valueRight, location());
-					equalsTest.type = type;
-					ref<Node> lessTest = tree.newBinary(Operator.LESS, valueLeft.clone(tree), valueRight.clone(tree), location());
-					lessTest.type = type;
-					ref<Node> orTogether = tree.newBinary(Operator.LOGICAL_OR, equalsTest, lessTest, location());
-					orTogether.type = type;
-					return sequenceNodes(tree, defnLeft, defnRight, orTogether).fold(tree, voidContext, compileContext);
-					
 				case	GREATER_EQUAL:
-					(defnRight, valueRight) = cloneDefnValue(tree, _right, compileContext);
-					(defnLeft, valueLeft) = cloneDefnValue(tree, _left, compileContext);
-					equalsTest = tree.newBinary(Operator.EQUALITY, valueLeft, valueRight, location());
-					equalsTest.type = type;
-					lessTest = tree.newBinary(Operator.LESS, valueRight.clone(tree), valueLeft.clone(tree), location());
-					lessTest.type = type;
-					orTogether = tree.newBinary(Operator.LOGICAL_OR, equalsTest, lessTest, location());
-					orTogether.type = type;
-					return sequenceNodes(tree, defnLeft, defnRight, orTogether).fold(tree, voidContext, compileContext);
-					
 				case	LESS_GREATER:
-					(defnRight, valueRight) = cloneDefnValue(tree, _right, compileContext);
-					(defnLeft, valueLeft) = cloneDefnValue(tree, _left, compileContext);
-					equalsTest = tree.newBinary(Operator.LESS, valueLeft, valueRight, location());
-					equalsTest.type = type;
-					lessTest = tree.newBinary(Operator.LESS, valueRight.clone(tree), valueLeft.clone(tree), location());
-					lessTest.type = type;
-					orTogether = tree.newBinary(Operator.LOGICAL_OR, equalsTest, lessTest, location());
-					orTogether.type = type;
-					return sequenceNodes(tree, defnLeft, defnRight, orTogether).fold(tree, voidContext, compileContext);
-					
 				case	LESS_GREATER_EQUAL:
-					(defnRight, valueRight) = cloneDefnValue(tree, _right, compileContext);
-					(defnLeft, valueLeft) = cloneDefnValue(tree, _left, compileContext);
-					equalsTest = tree.newBinary(Operator.EQUALITY, valueLeft, valueRight, location());
-					equalsTest.type = type;
-					lessTest = tree.newBinary(Operator.LESS, valueLeft.clone(tree), valueRight.clone(tree), location());
-					lessTest.type = type;
-					orTogether = tree.newBinary(Operator.LOGICAL_OR, equalsTest, lessTest, location());
-					orTogether.type = type;
-					lessTest = tree.newBinary(Operator.LESS, valueRight.clone(tree), valueLeft.clone(tree), location());
-					lessTest.type = type;
-					orTogether = tree.newBinary(Operator.LOGICAL_OR, orTogether, lessTest, location());
-					orTogether.type = type;
-					return sequenceNodes(tree, defnLeft, defnRight, orTogether).fold(tree, voidContext, compileContext);
-					
 				case	NOT_LESS:
-					lessTest = tree.newBinary(Operator.LESS, _left, _right, location());
-					lessTest.type = type;
-					orTogether = tree.newUnary(Operator.NOT, lessTest, location());
-					orTogether.type = type;
-					return orTogether.fold(tree, voidContext, compileContext);
-					
 				case	NOT_GREATER:
-					lessTest = tree.newBinary(Operator.GREATER, _left, _right, location());
-					lessTest.type = type;
-					orTogether = tree.newUnary(Operator.NOT, lessTest, location());
-					orTogether.type = type;
-					return orTogether.fold(tree, voidContext, compileContext);
-					
 				case	NOT_LESS_EQUAL:
-					lessTest = tree.newBinary(Operator.LESS_EQUAL, _left, _right, location());
-					lessTest.type = type;
-					orTogether = tree.newUnary(Operator.NOT, lessTest, location());
-					orTogether.type = type;
-					return orTogether.fold(tree, voidContext, compileContext);
-					
 				case	NOT_GREATER_EQUAL:
-					lessTest = tree.newBinary(Operator.GREATER_EQUAL, _left, _right, location());
-					lessTest.type = type;
-					orTogether = tree.newUnary(Operator.NOT, lessTest, location());
-					orTogether.type = type;
-					return orTogether.fold(tree, voidContext, compileContext);
-					
 				case	NOT_LESS_GREATER:
-					lessTest = tree.newBinary(Operator.LESS_GREATER, _left, _right, location());
-					lessTest.type = type;
-					orTogether = tree.newUnary(Operator.NOT, lessTest, location());
-					orTogether.type = type;
-					return orTogether.fold(tree, voidContext, compileContext);
-					
 				case	NOT_LESS_GREATER_EQUAL:
-					lessTest = tree.newBinary(Operator.LESS_GREATER_EQUAL, _left, _right, location());
-					lessTest.type = type;
-					orTogether = tree.newUnary(Operator.NOT, lessTest, location());
-					orTogether.type = type;
-					return orTogether.fold(tree, voidContext, compileContext);
+					ref<Selection> method = tree.newSelection(_left, compareMethod, true, location());
+					method.type = compareMethod.type();
+					call = tree.newCall(compareMethod.parameterScope(), CallCategory.METHOD_CALL, method, 
+														tree.newNodeList(_right), location(), compileContext);
+					call.type = compileContext.builtInType(runtime.TypeFamily.FLOAT_32);
+					_left = call.fold(tree, voidContext, compileContext);
+					_right = tree.newConstant(Operator.FLOATING_POINT, "0.0", location());
+					_right.type = call.type;
+					return this;
 					
 				default:
 					print(0);
@@ -726,7 +640,7 @@ public class Binary extends Node {
 					x.type = _left.type;
 					ref<Node> y = tree.newReference(temp, false, location());
 					ref<Node> call = createMethodCall(y, "compare", tree, compileContext, _right);
-					call.type = compileContext.builtInType(TypeFamily.SIGNED_32);
+					call.type = compileContext.builtInType(runtime.TypeFamily.SIGNED_32);
 					_left = tree.newBinary(Operator.SEQUENCE, x, call, location());
 					_left.type = call.type;
 					_left = _left.fold(tree, false, compileContext);
@@ -737,7 +651,7 @@ public class Binary extends Node {
 
 			case	VAR:
 				ref<Node> call = createMethodCall(_left, "compare", tree, compileContext, _right);
-				call.type = compileContext.builtInType(TypeFamily.SIGNED_32);
+				call.type = compileContext.builtInType(runtime.TypeFamily.SIGNED_32);
 				_left = call.fold(tree, voidContext, compileContext);
 				_right = tree.newConstant(0, location());
 				_right.type = _left.type;
@@ -760,7 +674,7 @@ public class Binary extends Node {
 					b.type = _right.type;
 					c.type = _right.type;
 					b = tree.newBinary(Operator.ADD, _left.fold(tree, false, compileContext), b, location());
-					b.type = compileContext.builtInType(TypeFamily.ADDRESS);
+					b.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 					ref<Unary> u = tree.newUnary(Operator.INDIRECT, b, location());
 					u.type = type;
 					return u;
@@ -784,7 +698,7 @@ public class Binary extends Node {
 					method.type = oi.type();
 					ref<NodeList> args = tree.newNodeList(_right);
 					ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
-					call.type = compileContext.builtInType(TypeFamily.ADDRESS);
+					call.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 					ref<Unary> u = tree.newUnary(Operator.INDIRECT, call.fold(tree, false, compileContext), location());
 					u.type = type;
 					return u;
@@ -919,12 +833,12 @@ public class Binary extends Node {
 					ref<Type> storeType;
 					if (op() == Operator.ASSIGN_TEMP) {
 						oi = type.tempAssignmentMethod(compileContext);
-						storeType = compileContext.builtInType(TypeFamily.VOID);
+						storeType = compileContext.builtInType(runtime.TypeFamily.VOID);
 					} else if (op() == Operator.STORE_TEMP) {
 						string methodName;
 						if (voidContext) {
 							methodName = "storeTemp";
-							storeType = compileContext.builtInType(TypeFamily.VOID);
+							storeType = compileContext.builtInType(runtime.TypeFamily.VOID);
 						} else {
 							methodName = "storeTemp_nv";
 							storeType = type;
@@ -934,7 +848,7 @@ public class Binary extends Node {
 						string methodName;
 						if (voidContext) {
 							methodName = "store";
-							storeType = compileContext.builtInType(TypeFamily.VOID);
+							storeType = compileContext.builtInType(runtime.TypeFamily.VOID);
 						} else {
 							methodName = "store_nv";
 							storeType = type;
@@ -950,7 +864,7 @@ public class Binary extends Node {
 					ref<Selection> method = tree.newSelection(_left, oi, false, _left.location());
 					method.type = oi.type();
 					ref<Node> nestedCall = _right.fold(tree, false, compileContext);
-					nestedCall.type = compileContext.builtInType(TypeFamily.ADDRESS);
+					nestedCall.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 					ref<NodeList> args = tree.newNodeList(nestedCall);
 					ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
 					call.type = storeType;
@@ -972,7 +886,7 @@ public class Binary extends Node {
 					method.type = oi.type();
 					ref<NodeList> args = tree.newNodeList(_right);
 					ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
-					call.type = compileContext.builtInType(TypeFamily.VOID);
+					call.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 					return call.fold(tree, voidContext, compileContext);
 				} else {
 					ref<Node> result = foldClassCopy(tree, false, compileContext);
@@ -995,7 +909,7 @@ public class Binary extends Node {
 					method.type = oi.type();
 					ref<NodeList> args = tree.newNodeList(_right);
 					ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
-					call.type = compileContext.builtInType(TypeFamily.VOID);
+					call.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 					if (voidContext)
 						return call.fold(tree, voidContext, compileContext);
 					else {
@@ -1054,7 +968,7 @@ public class Binary extends Node {
 					return this;
 				}
 				ref<Node> adr = tree.newUnary(Operator.ADDRESS, _left, _left.location());
-				adr.type = compileContext.builtInType(TypeFamily.ADDRESS);
+				adr.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 				constructor.setConstructorMemory(adr, tree);
 				return constructor.fold(tree, true, compileContext);
 			}
@@ -1090,10 +1004,10 @@ public class Binary extends Node {
 			ref<ParameterScope> copyConstructor = type.copyConstructor();
 			if (copyConstructor != null) {
 				ref<Node> adr = tree.newUnary(Operator.ADDRESS, _left, location());
-				adr.type = compileContext.builtInType(TypeFamily.ADDRESS);
+				adr.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 				ref<NodeList> args = tree.newNodeList(_right);
 				ref<Call> constructor = tree.newCall(copyConstructor, CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
-				constructor.type = compileContext.builtInType(TypeFamily.VOID);
+				constructor.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 				return constructor.fold(tree, true, compileContext);
 			} else {
 				ref<Node> result = foldClassCopy(tree, true, compileContext);
@@ -1113,19 +1027,19 @@ public class Binary extends Node {
 				}
 				ref<Selection> method = tree.newSelection(_left, oi, false, _left.location());
 				method.type = oi.type();
-				_right.type = compileContext.builtInType(TypeFamily.ADDRESS);
+				_right.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 				ref<NodeList> args = tree.newNodeList(_right);
 				ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
-				call.type = compileContext.builtInType(TypeFamily.VOID);
+				call.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 				return call.fold(tree, true, compileContext);
 			}
 			copyConstructor = type.copyConstructor();
 			if (copyConstructor != null) {
 				ref<Node> adr = tree.newUnary(Operator.ADDRESS, _left, location());
-				adr.type = compileContext.builtInType(TypeFamily.ADDRESS);
+				adr.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 				ref<NodeList> args = tree.newNodeList(_right);
 				ref<Call> constructor = tree.newCall(copyConstructor, CallCategory.CONSTRUCTOR, adr, args, location(), compileContext);
-				constructor.type = compileContext.builtInType(TypeFamily.VOID);
+				constructor.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 				return constructor.fold(tree, true, compileContext);
 			} else {
 				ref<Node> result = foldClassCopy(tree, true, compileContext);
@@ -1183,10 +1097,10 @@ public class Binary extends Node {
 		constructor = constructor.fold(tree, true, compileContext);
 		if (storeVtable != null) {
 			constructor = tree.newBinary(Operator.SEQUENCE, storeVtable, constructor, location());
-			constructor.type = compileContext.builtInType(TypeFamily.VOID);
+			constructor.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 		}
 		ref<Node> seq = tree.newBinary(Operator.SEQUENCE, defn, constructor, location());
-		seq.type = compileContext.builtInType(TypeFamily.VOID);
+		seq.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 		if (voidContext)
 			return seq;
 		r = tree.newReference(temp, false, location());
@@ -1206,7 +1120,7 @@ public class Binary extends Node {
 			ref<Node> constructor = tree.newUnary(Operator.STORE_V_TABLE, r, location());
 			constructor.type = objType;
 			ref<Node> seq = tree.newBinary(Operator.SEQUENCE, defn, constructor, location());
-			seq.type = compileContext.builtInType(TypeFamily.VOID);
+			seq.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 			if (voidContext)
 				return seq;
 			r = tree.newReference(temp, false, location());
@@ -1229,7 +1143,7 @@ public class Binary extends Node {
 			ref<Node> constructor = tree.newUnary(Operator.STORE_V_TABLE, r, location());
 			constructor.type = objType;
 			ref<Node> seq = tree.newBinary(Operator.SEQUENCE, defn, constructor, location());
-			seq.type = compileContext.builtInType(TypeFamily.VOID);
+			seq.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 			if (voidContext)
 				return seq;
 			r = tree.newReference(temp, false, location());
@@ -1252,11 +1166,11 @@ public class Binary extends Node {
 
 		if (hasAssignmentMethods) {
 			ref<Node> left = tree.newUnary(Operator.ADDRESS, _left.fold(tree, false, compileContext), location());
-			left.type = compileContext.builtInType(TypeFamily.ADDRESS);
+			left.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 			_right = _right.fold(tree, false, compileContext);
 			if (_right.op() != Operator.CLASS_COPY) {
 				_right = tree.newUnary(Operator.ADDRESS, _right, location());
-				_right.type = compileContext.builtInType(TypeFamily.ADDRESS);
+				_right.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 			}
 			ref<Variable> dest = compileContext.newVariable(left.type);
 			ref<Variable> src = compileContext.newVariable(left.type);
@@ -1313,11 +1227,11 @@ public class Binary extends Node {
 				return null;
 			}
 			ref<Node> n = tree.newUnary(Operator.ADDRESS, _left.fold(tree, false, compileContext), location());
-			n.type = compileContext.builtInType(TypeFamily.ADDRESS);
+			n.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 			_right = _right.fold(tree, false, compileContext);
 			if (_right.op() != Operator.CLASS_COPY) {
 				_right = tree.newUnary(Operator.ADDRESS, _right, location());
-				_right.type = compileContext.builtInType(TypeFamily.ADDRESS);
+				_right.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 			}
 			ref<Binary> copy = tree.newBinary(Operator.CLASS_COPY, n, _right, location());
 			copy.type = type;
@@ -1346,7 +1260,7 @@ public class Binary extends Node {
 			
 		default:
 			ref<Node> addr = tree.newUnary(Operator.ADDRESS, _left, location());
-			addr.type = compileContext.builtInType(TypeFamily.ADDRESS);
+			addr.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 			ref<Variable> temp = compileContext.newVariable(addr.type);
 			ref<Reference> r = tree.newReference(temp, true, location());
 			ref<Node> asgTemp = tree.newBinary(Operator.ASSIGN, r, addr, location());
@@ -1369,7 +1283,7 @@ public class Binary extends Node {
 			c.type = _right.type;
 			_right = b;
 		}
-		type = compileContext.builtInType(TypeFamily.ADDRESS);
+		type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 		_right = tree.newCast(type, _right);
 	}
 	
@@ -1377,7 +1291,7 @@ public class Binary extends Node {
 		ref<Binary> subscript = ref<Binary>(_left);
 		if (subscript.left().type.isVector(compileContext) ||
 			subscript.left().type.isMap(compileContext) ||
-			subscript.left().type.family() == TypeFamily.SHAPE) {
+			subscript.left().type.family() == runtime.TypeFamily.SHAPE) {
 			substring name("set");
 			
 			ref<Symbol> sym = subscript.left().type.lookup(name, compileContext);
@@ -1391,7 +1305,7 @@ public class Binary extends Node {
 			method.type = oi.type();
 			ref<NodeList> args = tree.newNodeList(subscript.right(), _right);
 			ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
-			call.type = compileContext.builtInType(TypeFamily.VOID);
+			call.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 			return call;
 		} else
 			return null;
@@ -1400,7 +1314,7 @@ public class Binary extends Node {
 	ref<Node> subscriptModify(ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
 		if (_left.type.isVector(compileContext) ||
 			_left.type.isMap(compileContext) ||
-			_left.type.family() == TypeFamily.SHAPE) {
+			_left.type.family() == runtime.TypeFamily.SHAPE) {
 			substring name("elementAddress");
 			
 			ref<Symbol> sym = _left.type.lookup(name, compileContext);
@@ -1414,7 +1328,7 @@ public class Binary extends Node {
 			method.type = oi.type();
 			ref<NodeList> args = tree.newNodeList(_right);
 			ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, location(), compileContext);
-			call.type = compileContext.builtInType(TypeFamily.ADDRESS);
+			call.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 			ref<Node> indirect = tree.newUnary(Operator.INDIRECT, call, location());
 			indirect.type = type;
 			return indirect;
@@ -1518,7 +1432,7 @@ public class Binary extends Node {
 	public void assignClassVariable(ref<CompileContext> compileContext) {
 		assert(op() == Operator.INITIALIZE);
 		compileContext.assignTypes(_right);
-		if (_right.type.family() != TypeFamily.TYPEDEF) {
+		if (_right.type.family() != runtime.TypeFamily.TYPEDEF) {
 			_right.add(MessageId.NOT_A_TYPE, compileContext.pool());
 			type = compileContext.errorType();
 			return;
@@ -1532,7 +1446,7 @@ public class Binary extends Node {
 		case	SEQUENCE:
 			_left.markupDeclarator(t, true, compileContext);
 			_right.markupDeclarator(t, true, compileContext);
-			type = compileContext.builtInType(TypeFamily.VOID);
+			type = compileContext.builtInType(runtime.TypeFamily.VOID);
 			break;
 
 		case	INITIALIZE:
@@ -1588,7 +1502,7 @@ public class Binary extends Node {
 			}
 			switch (_left.type.family()) {
 			case SUBSTRING:
-				if (_right.type.family() == TypeFamily.STRING) {
+				if (_right.type.family() == runtime.TypeFamily.STRING) {
 					if (!_right.isLvalue()) {
 						_right.add(MessageId.LVALUE_REQUIRED, compileContext.pool());
 						type = compileContext.errorType();
@@ -1598,7 +1512,7 @@ public class Binary extends Node {
 				break;
 
 			case SUBSTRING16:
-				if (_right.type.family() == TypeFamily.STRING16) {
+				if (_right.type.family() == runtime.TypeFamily.STRING16) {
 					if (!_right.isLvalue()) {
 						_right.add(MessageId.LVALUE_REQUIRED, compileContext.pool());
 						type = compileContext.errorType();
@@ -1646,7 +1560,7 @@ public class Binary extends Node {
 			}
 			if (_left.type == null)
 				print(0);
-			if (_left.type.family() == TypeFamily.TYPEDEF)
+			if (_left.type.family() == runtime.TypeFamily.TYPEDEF)
 				arrayDeclaration(compileContext);
 			else {
 				_left.add(MessageId.NOT_A_TYPE, compileContext.pool());
@@ -1663,7 +1577,7 @@ public class Binary extends Node {
 		if (_right.type.isIntegral()) {
 			add(MessageId.UNFINISHED_FIXED_ARRAY, compileContext.pool());
 			type = compileContext.errorType();
-		} else if (_right.type.family() == TypeFamily.TYPEDEF) {
+		} else if (_right.type.family() == runtime.TypeFamily.TYPEDEF) {
 			ref<Type> keyType = _right.unwrapTypedef(Operator.CLASS, compileContext);
 			ref<Type> vectorType = compileContext.newVectorType(_left.unwrapTypedef(Operator.CLASS, compileContext), keyType);
 			if (vectorType == null) { // Not an allowed combination.
@@ -1690,7 +1604,7 @@ public class Binary extends Node {
 		case	CLASS_DECLARATION:
 		case	FLAGS_DECLARATION:
 			compileContext.assignTypes(_right);
-			type = compileContext.builtInType(TypeFamily.VOID);
+			type = compileContext.builtInType(runtime.TypeFamily.VOID);
 			break;
 
 		case	DECLARATION:
@@ -1701,7 +1615,7 @@ public class Binary extends Node {
 				break;
 				
 			case EMPTY:	// A class alias
-				type = compileContext.builtInType(TypeFamily.CLASS_VARIABLE);
+				type = compileContext.builtInType(runtime.TypeFamily.CLASS_VARIABLE);
 				_right.assignClassVariable(compileContext);
 				break;
 				
@@ -1709,11 +1623,11 @@ public class Binary extends Node {
 				type = _left.unwrapTypedef(Operator.CLASS, compileContext);
 				if (deferAnalysis())
 					break;
-				if (type.family() == TypeFamily.TEMPLATE) {
+				if (type.family() == runtime.TypeFamily.TEMPLATE) {
 					_left.add(MessageId.TEMPLATE_NAME_DISALLOWED, compileContext.pool());
 					type = compileContext.errorType();
 					break;
-				} else if (type.family() == TypeFamily.VOID) {
+				} else if (type.family() == runtime.TypeFamily.VOID) {
 					_left.add(MessageId.INVALID_VOID, compileContext.pool());
 					type = compileContext.errorType();
 					break;
@@ -1767,7 +1681,7 @@ public class Binary extends Node {
 					break;
 				}
 			}
-			if (!_left.canCoerce(compileContext.builtInType(TypeFamily.ADDRESS), false, compileContext)) { 
+			if (!_left.canCoerce(compileContext.builtInType(runtime.TypeFamily.ADDRESS), false, compileContext)) { 
 				_left.add(MessageId.CANNOT_CONVERT, compileContext.pool());
 				_left.type = compileContext.errorType();
 				type = _left.type;
@@ -1850,10 +1764,10 @@ public class Binary extends Node {
 				type = _right.type;
 				break;
 			}
-			if (_right.type.family() == TypeFamily.INTERFACE)
-				type = compileContext.builtInType(TypeFamily.VOID);
-			else if (_right.canCoerce(compileContext.builtInType(TypeFamily.ADDRESS), false, compileContext)) 
-				type = compileContext.builtInType(TypeFamily.VOID);
+			if (_right.type.family() == runtime.TypeFamily.INTERFACE)
+				type = compileContext.builtInType(runtime.TypeFamily.VOID);
+			else if (_right.canCoerce(compileContext.builtInType(runtime.TypeFamily.ADDRESS), false, compileContext)) 
+				type = compileContext.builtInType(runtime.TypeFamily.VOID);
 			else {
 				_right.add(MessageId.CANNOT_CONVERT, compileContext.pool());
 				_right.type = compileContext.errorType();
@@ -1867,7 +1781,7 @@ public class Binary extends Node {
 				type = _left.type;
 				break;
 			}
-			TypeFamily stringAddition = TypeFamily.VOID;
+			runtime.TypeFamily stringAddition = runtime.TypeFamily.VOID;
 			switch (_left.type.family()) {
 			case POINTER:
 				compileContext.assignTypes(_right);
@@ -1875,7 +1789,7 @@ public class Binary extends Node {
 					type = _right.type;
 					break;
 				}
-				_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_64, false, compileContext);
+				_right = _right.coerce(compileContext.tree(), runtime.TypeFamily.SIGNED_64, false, compileContext);
 				if (_right.deferAnalysis()) {
 					type = _right.type;
 					break;
@@ -1885,14 +1799,14 @@ public class Binary extends Node {
 
 			case STRING:
 			case SUBSTRING:
-				stringAddition = TypeFamily.STRING;
+				stringAddition = runtime.TypeFamily.STRING;
 				break;
 
 			case STRING16:
 			case SUBSTRING16:
-				stringAddition = TypeFamily.STRING16;
+				stringAddition = runtime.TypeFamily.STRING16;
 			}
-			if (stringAddition == TypeFamily.VOID) {
+			if (stringAddition == runtime.TypeFamily.VOID) {
 				compileContext.assignTypes(_right);
 				if (_right.deferAnalysis()) {
 					type = _right.type;
@@ -1901,16 +1815,16 @@ public class Binary extends Node {
 				switch (_right.type.family()) {
 				case STRING:
 				case SUBSTRING:
-					stringAddition = TypeFamily.STRING;
+					stringAddition = runtime.TypeFamily.STRING;
 					break;
 
 				case STRING16:
 				case SUBSTRING16:
-					stringAddition = TypeFamily.STRING16;
+					stringAddition = runtime.TypeFamily.STRING16;
 				}
 			}
 			// Process string addition here.
-			if (stringAddition != TypeFamily.VOID) {
+			if (stringAddition != runtime.TypeFamily.VOID) {
 				compileContext.assignTypes(_right);
 				if (_right.deferAnalysis()) {
 					type = _right.type;
@@ -1966,8 +1880,8 @@ public class Binary extends Node {
 				type = compileContext.errorType();
 				break;
 			}
-			if (_left.type.family() == TypeFamily.STRING ||
-				_left.type.family() == TypeFamily.STRING16) {
+			if (_left.type.family() == runtime.TypeFamily.STRING ||
+				_left.type.family() == runtime.TypeFamily.STRING16) {
 				switch (_right.type.family()) {
 				case	STRING:
 				case	STRING16:
@@ -2005,7 +1919,7 @@ public class Binary extends Node {
 			}
 
 			if (_left.type.isPointer(compileContext)) {
-				_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_64, false, compileContext);
+				_right = _right.coerce(compileContext.tree(), runtime.TypeFamily.SIGNED_64, false, compileContext);
 				if (_right.deferAnalysis()) {
 					type = _right.type;
 					break;
@@ -2128,7 +2042,7 @@ public class Binary extends Node {
 					if (_left.deferAnalysis())
 						type = _left.type;
 					else
-						type = compileContext.builtInType(TypeFamily.VOID);
+						type = compileContext.builtInType(runtime.TypeFamily.VOID);
 				}
 			} else {
 				if (!_left.isLvalue()) {
@@ -2204,7 +2118,7 @@ public class Binary extends Node {
 			case	VAR:
 			case	CLASS_VARIABLE:
 			case	TYPEDEF:
-				type = compileContext.builtInType(TypeFamily.BOOLEAN);
+				type = compileContext.builtInType(runtime.TypeFamily.BOOLEAN);
 				break;
 
 			default:
@@ -2233,7 +2147,7 @@ public class Binary extends Node {
 					if (_left.type.class <= ClassType)
 						nodeFlags |= USE_COMPARE_METHOD;
 				}
-				type = compileContext.builtInType(TypeFamily.BOOLEAN);
+				type = compileContext.builtInType(runtime.TypeFamily.BOOLEAN);
 			} else {
 				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
@@ -2267,7 +2181,7 @@ public class Binary extends Node {
 					if (_left.type.class <= ClassType)
 						nodeFlags |= USE_COMPARE_METHOD;
 				}
-				type = compileContext.builtInType(TypeFamily.BOOLEAN);
+				type = compileContext.builtInType(runtime.TypeFamily.BOOLEAN);
 			} else {
 				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
@@ -2288,7 +2202,7 @@ public class Binary extends Node {
 					if (_left.type.class <= ClassType)
 						nodeFlags |= USE_COMPARE_METHOD;
 				}
-				type = compileContext.builtInType(TypeFamily.BOOLEAN);
+				type = compileContext.builtInType(runtime.TypeFamily.BOOLEAN);
 			} else {
 				add(typeNotAllowed[op()], compileContext.pool());
 				type = compileContext.errorType();
@@ -2297,7 +2211,7 @@ public class Binary extends Node {
 
 		case	BIND:
 			type = _left.unwrapTypedef(Operator.CLASS, compileContext);
-			if (type.family() == TypeFamily.VOID) {
+			if (type.family() == runtime.TypeFamily.VOID) {
 				_left.add(MessageId.INVALID_VOID, compileContext.pool());
 				type = compileContext.errorType();
 			}
@@ -2322,16 +2236,16 @@ public class Binary extends Node {
 			}
 			if (_left.type == null)
 				print(0);
-			if (_left.type.family() == TypeFamily.TYPEDEF) {
+			if (_left.type.family() == runtime.TypeFamily.TYPEDEF) {
 				arrayDeclaration(compileContext);
 				break;
 			}
 			if (_left.type.isPointer(compileContext)) {
-				_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_64, false, compileContext);
+				_right = _right.coerce(compileContext.tree(), runtime.TypeFamily.SIGNED_64, false, compileContext);
 				type = _left.type.indirectType(compileContext);
 			} else if (_left.type.isVector(compileContext) || 
 					   _left.type.isMap(compileContext) ||
-					   _left.type.family() == TypeFamily.SHAPE) {
+					   _left.type.family() == runtime.TypeFamily.SHAPE) {
 				_right = _right.coerce(compileContext.tree(), _left.type.indexType(), false, compileContext);
 				if (_right.deferAnalysis()) {
 					type = _right.type;
@@ -2339,12 +2253,12 @@ public class Binary extends Node {
 				}
 				type = _left.type.elementType();
 			} else if (_left.type.isString()) {
-				_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_32, false, compileContext);
-				TypeFamily elementFamily = TypeFamily.UNSIGNED_8;
+				_right = _right.coerce(compileContext.tree(), runtime.TypeFamily.SIGNED_32, false, compileContext);
+				runtime.TypeFamily elementFamily = runtime.TypeFamily.UNSIGNED_8;
 				switch (_left.type.family()) {
 				case STRING16:
 				case SUBSTRING16:
-					elementFamily = TypeFamily.UNSIGNED_16;
+					elementFamily = runtime.TypeFamily.UNSIGNED_16;
 				}
 				type = compileContext.builtInType(elementFamily);
 			} else {
@@ -2364,8 +2278,8 @@ public class Binary extends Node {
 				type = _right.type;
 				break;
 			}
-			if (_left.type.scalarFamily(compileContext) == TypeFamily.POINTER && _right.type.scalarType(compileContext).isIntegral()) {
-				_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_64, false, compileContext);
+			if (_left.type.scalarFamily(compileContext) == runtime.TypeFamily.POINTER && _right.type.scalarType(compileContext).isIntegral()) {
+				_right = _right.coerce(compileContext.tree(), runtime.TypeFamily.SIGNED_64, false, compileContext);
 				if (_right.deferAnalysis()) {
 					type = _right.type;
 					break;
@@ -2385,7 +2299,7 @@ public class Binary extends Node {
 				break;
 
 			case	POINTER:
-				type = compileContext.builtInType(TypeFamily.SIGNED_64);
+				type = compileContext.builtInType(runtime.TypeFamily.SIGNED_64);
 				break;
 
 			default:
@@ -2406,7 +2320,7 @@ public class Binary extends Node {
 					type = _right.type;
 					break;
 				}
-				_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_64, false, compileContext);
+				_right = _right.coerce(compileContext.tree(), runtime.TypeFamily.SIGNED_64, false, compileContext);
 				if (_right.deferAnalysis()) {
 					type = _right.type;
 					break;
@@ -2526,11 +2440,11 @@ public class Binary extends Node {
 				type = _right.type;
 				return;
 			}
-			if ((_left.type.family() == TypeFamily.BOOLEAN ||
-				 _left.type.family() == TypeFamily.FLAGS) &&
-				(_right.type.family() == TypeFamily.BOOLEAN ||
-				 _right.type.family() == TypeFamily.FLAGS))
-				type = compileContext.builtInType(TypeFamily.BOOLEAN);
+			if ((_left.type.family() == runtime.TypeFamily.BOOLEAN ||
+				 _left.type.family() == runtime.TypeFamily.FLAGS) &&
+				(_right.type.family() == runtime.TypeFamily.BOOLEAN ||
+				 _right.type.family() == runtime.TypeFamily.FLAGS))
+				type = compileContext.builtInType(runtime.TypeFamily.BOOLEAN);
 			else {
 				add(MessageId.NOT_BOOLEAN, compileContext.pool());
 				type = compileContext.errorType();
@@ -2560,12 +2474,12 @@ public class Binary extends Node {
 				}
 			}
 			compileContext.assignTypes(_right);
-			type = compileContext.builtInType(TypeFamily.VOID);
+			type = compileContext.builtInType(runtime.TypeFamily.VOID);
 			break;
 
 		case	CASE:
 			compileContext.assignTypes(_right);
-			type = compileContext.builtInType(TypeFamily.VOID);
+			type = compileContext.builtInType(runtime.TypeFamily.VOID);
 			break;
 
 		case	DO_WHILE:
@@ -2579,12 +2493,12 @@ public class Binary extends Node {
 				type = _right.type;
 				return;
 			}
-			if (_right.type.family() != TypeFamily.BOOLEAN &&
-				_right.type.family() != TypeFamily.FLAGS) {
+			if (_right.type.family() != runtime.TypeFamily.BOOLEAN &&
+				_right.type.family() != runtime.TypeFamily.FLAGS) {
 				_right.add(MessageId.NOT_BOOLEAN, compileContext.pool());
 				type = compileContext.errorType();
 			}
-			type = compileContext.builtInType(TypeFamily.VOID);
+			type = compileContext.builtInType(runtime.TypeFamily.VOID);
 			break;
 
 		case	WHILE:
@@ -2598,12 +2512,12 @@ public class Binary extends Node {
 				type = _right.type;
 				return;
 			}
-			if (_left.type.family() != TypeFamily.BOOLEAN &&
-				_left.type.family() != TypeFamily.FLAGS) {
+			if (_left.type.family() != runtime.TypeFamily.BOOLEAN &&
+				_left.type.family() != runtime.TypeFamily.FLAGS) {
 				_left.add(MessageId.NOT_BOOLEAN, compileContext.pool());
 				type = compileContext.errorType();
 			}
-			type = compileContext.builtInType(TypeFamily.VOID);
+			type = compileContext.builtInType(runtime.TypeFamily.VOID);
 			break;
 		}
 	}
@@ -2618,7 +2532,7 @@ public class Binary extends Node {
 			case UNSIGNED_8:
 			case SIGNED_16:
 			case UNSIGNED_16:
-				switchType = compileContext.builtInType(TypeFamily.SIGNED_32);
+				switchType = compileContext.builtInType(runtime.TypeFamily.SIGNED_32);
 			}
 			if (_left.canCoerce(switchType, false, compileContext))
 				_left = tree.newCast(switchType, _left);
@@ -2682,7 +2596,7 @@ public class Binary extends Node {
 		}
 		switch (_left.type.family()) {
 		case	VAR:
-			_right = _right.coerce(compileContext.tree(), TypeFamily.VAR, false, compileContext);
+			_right = _right.coerce(compileContext.tree(), runtime.TypeFamily.VAR, false, compileContext);
 			if (_right.deferAnalysis()) {
 				type = _right.type;
 				return false;
@@ -2708,7 +2622,7 @@ public class Binary extends Node {
 		case	UNSIGNED_8:
 		case	UNSIGNED_16:
 		case	UNSIGNED_32:
-			_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_32, false, compileContext);
+			_right = _right.coerce(compileContext.tree(), runtime.TypeFamily.SIGNED_32, false, compileContext);
 			break;
 
 		case	SIGNED_16:
@@ -2738,7 +2652,7 @@ public class Binary extends Node {
 		}
 		switch (_left.type.scalarFamily(compileContext)) {
 		case	VAR:
-			_right = _right.coerce(compileContext.tree(), TypeFamily.VAR, false, compileContext);
+			_right = _right.coerce(compileContext.tree(), runtime.TypeFamily.VAR, false, compileContext);
 			if (_right.deferAnalysis()) {
 				type = _right.type;
 				return false;
@@ -2748,7 +2662,7 @@ public class Binary extends Node {
 		case	UNSIGNED_8:
 		case	UNSIGNED_16:
 		case	SIGNED_16:
-			_left = _left.coerce(compileContext.tree(), TypeFamily.SIGNED_32, false, compileContext);
+			_left = _left.coerce(compileContext.tree(), runtime.TypeFamily.SIGNED_32, false, compileContext);
 			if (_left.deferAnalysis()) {
 				type = _left.type;
 				return false;
@@ -2769,11 +2683,11 @@ public class Binary extends Node {
 		switch (_right.type.scalarFamily(compileContext)) {
 		case	UNSIGNED_8:
 		case	UNSIGNED_16:
-			_right = _right.coerce(compileContext.tree(), TypeFamily.SIGNED_32, false, compileContext);
+			_right = _right.coerce(compileContext.tree(), runtime.TypeFamily.SIGNED_32, false, compileContext);
 			break;
 
 		case	VAR:
-			_left = _left.coerce(compileContext.tree(), TypeFamily.VAR, false, compileContext);
+			_left = _left.coerce(compileContext.tree(), runtime.TypeFamily.VAR, false, compileContext);
 			if (_left.deferAnalysis()) {
 				type = _left.type;
 				return false;
@@ -2811,19 +2725,19 @@ private ref<Node>, ref<Variable> foldStringAddition(ref<Node> leftHandle, ref<Va
 			ref<Reference> r = tree.newReference(variable, false, addNode.location());				
 			ref<Node> appender = appendString(r, addNode, tree, compileContext);
 			ref<Node> seq = tree.newBinary(Operator.SEQUENCE, leftHandle, appender, addNode.location());
-			seq.type = compileContext.builtInType(TypeFamily.VOID);
+			seq.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 			return seq, variable;
 		} else {
 			variable = compileContext.newVariable(addNode.type);
 			ref<Reference> r = tree.newReference(variable, true, addNode.location());
 			compileContext.markLiveSymbol(r);
 			ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, addNode.location());
-			adr.type = compileContext.builtInType(TypeFamily.ADDRESS);
+			adr.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 			ref<OverloadInstance> constructor = addNode.type.initialConstructor();
 			assert(constructor != null);
 			ref<NodeList> args = tree.newNodeList(addNode);
 			ref<Call> call = tree.newCall(constructor.parameterScope(), CallCategory.CONSTRUCTOR, adr, args, addNode.location(), compileContext);
-			call.type = compileContext.builtInType(TypeFamily.VOID);
+			call.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 			return call, variable;
 		}
 	}
@@ -2926,7 +2840,7 @@ private ref<Node> appendString(ref<Node> destination, ref<Node> value, ref<Synta
 	method.type = oi.type();
 	ref<NodeList> args = tree.newNodeList(value);
 	ref<Call> call = tree.newCall(scope, null, method, args, value.location(), compileContext);
-	call.type = compileContext.builtInType(TypeFamily.VOID);
+	call.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 	return call.fold(tree, true, compileContext);
 }
 
@@ -2971,7 +2885,7 @@ boolean balancePair(ref<Node> parent, ref<ref<Node>> leftp, ref<ref<Node>> right
 			}
 		}
 	}
-	if ((*rightp).type.family() == TypeFamily.SHAPE)
+	if ((*rightp).type.family() == runtime.TypeFamily.SHAPE)
 		parent.type = (*rightp).type;
 	else
 		parent.type = (*leftp).type;

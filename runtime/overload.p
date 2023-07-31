@@ -15,6 +15,8 @@
  */
 namespace parasol:compiler;
 
+import parasol:runtime;
+
 class OverloadOperation {
 	private boolean _done;
 	private boolean _hadConstructors;
@@ -132,7 +134,7 @@ class OverloadOperation {
 		// Does this overload apply to the argument list at all?
 		Callable c = oi.callableWith(_arguments, _compileContext);
 		if (c == Callable.DEFER)
-			return _compileContext.builtInType(TypeFamily.CLASS_DEFERRED);
+			return _compileContext.builtInType(runtime.TypeFamily.CLASS_DEFERRED);
 
 		if (c == Callable.YES) {
 			// Check against the best array.  If this is better than
@@ -198,7 +200,7 @@ class OverloadOperation {
 //				for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next)
 //					nl.node.print(6);
 			} else if (_arguments == null && !_hadConstructors)
-				return _compileContext.builtInType(TypeFamily.VOID), null;
+				return _compileContext.builtInType(runtime.TypeFamily.VOID), null;
 			else
 				_node.add(MessageId.NO_MATCHING_CONSTRUCTOR, _compileContext.pool());
 			break;

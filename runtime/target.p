@@ -69,14 +69,14 @@ public class Target {
 	private ref<Type> _classType;
 	
 	private ref<Unit>[] _staticBlocks;
-	private ref<ParameterScope>[TypeFamily] _marshallerFunctions;
-	private ref<ParameterScope>[TypeFamily] _unmarshallerFunctions;
+	private ref<ParameterScope>[runtime.TypeFamily] _marshallerFunctions;
+	private ref<ParameterScope>[runtime.TypeFamily] _unmarshallerFunctions;
 	
 	private boolean _verbose;
 
 	public Target() {
-		_marshallerFunctions.resize(TypeFamily.MAX_TYPES);
-		_unmarshallerFunctions.resize(TypeFamily.MAX_TYPES);
+		_marshallerFunctions.resize(runtime.TypeFamily.MAX_TYPES);
+		_unmarshallerFunctions.resize(runtime.TypeFamily.MAX_TYPES);
 	}
 
 	public static ref<Target> generate(ref<Unit> mainFile, ref<CompileContext> compileContext) {
@@ -111,13 +111,13 @@ public class Target {
 	
 	private void populateTypeMap(ref<CompileContext> compileContext) {
 		ref<Symbol> re = compileContext.forest().getSymbol("parasol", "compiler.BuiltInType", compileContext);
-		if (re.type().family() != TypeFamily.TYPEDEF)
+		if (re.type().family() != runtime.TypeFamily.TYPEDEF)
 			assert(false);
 		ref<TypedefType> t = ref<TypedefType>(re.type());
 		_builtInType = t.wrappedType();
 		
 		re = compileContext.forest().getSymbol("parasol", "compiler.ClassType", compileContext);
-		if (re.type().family() != TypeFamily.TYPEDEF)
+		if (re.type().family() != runtime.TypeFamily.TYPEDEF)
 			assert(false);
 		t = ref<TypedefType>(re.type());
 		_classType = t.wrappedType();
@@ -125,7 +125,11 @@ public class Target {
 	
 	public abstract boolean generateCode(ref<Unit> mainFile, ref<CompileContext> compileContext);
 
-	public abstract address, int allocateImageData(int size, int alignment, ref<Type> type);
+	public abstract int copyClassToImage(ref<Type> type, 
+										 int baseOrdinal,
+										 runtime.TypeFamily family);
+
+//	public abstract int copyInterfaceToImage(ref<Type> type, ref<runtime.Interface> template);
 
 	public void fixupType(int ordinal, ref<Type> type) {
 		assert(false);
@@ -138,7 +142,7 @@ public class Target {
 	public void markRegisterParameters(ref<ParameterScope> scope, ref<CompileContext> compileContext) {
 	}
 	
-	public byte registerValue(int registerArgumentIndex, TypeFamily family) {
+	public byte registerValue(int registerArgumentIndex, runtime.TypeFamily family) {
 		return 0;
 	}
 	/**
@@ -318,9 +322,9 @@ public class Variable {
 	}
 }
 
-public class Segment<class T> {
+public class Segment {
 	byte[]	_content;
-	Fixup<T>[]	_fixups;
+	Fixup[]	_fixups;
 	int _alignment;
 	int _offset;							// Offset of this Segment in the final image (only valid after linking).
 	byte _fill;
@@ -360,8 +364,8 @@ public class Segment<class T> {
 	 * location.
 	 * @param absolute If true, the 
 	 */
-	public void fixup(int location, T segment, boolean absolute) {
-		Fixup<T> f;
+	public void fixup(int location, byte segment, boolean absolute) {
+		Fixup f;
 		
 		f.location = location;
 		f.segment = segment;
@@ -377,11 +381,11 @@ public class Segment<class T> {
 		return result;
 	}
 	
-	public void resolveFixups(ref<Target> target, ref<ref<Segment<T>>[T]> segments) {
+	public void resolveFixups(ref<Target> target, pointer<ref<Segment>> segments) {
 		for (int i = 0; i < _fixups.length(); i++) {
-			ref<Fixup<T>> f = &_fixups[i];
+			ref<Fixup> f = &_fixups[i];
 			pointer<int> fixupTarget = pointer<int>(at(f.location));
-			*fixupTarget += (*segments)[f.segment].offset();
+			*fixupTarget += segments[f.segment].offset();
 			if (!f.absolute)
 				*fixupTarget -= _offset + f.location + int.bytes;
 		}
@@ -494,18 +498,22 @@ public class Segment<class T> {
  * Note that the memory at the location is an 8-byte address, containing a 32-bit offset into the referenced segment OR
  * a 4-byte offset, containing a 32-offset into the referenced segment.
  */
-public class Fixup<class T> {
-	public T segment;						// The Segment of the object being referenced.
+public class Fixup {
+	public byte segment;						// The Segment of the object being referenced.
 	public int location;					// The location within the host Segment of the fixup.
 	public boolean absolute;				// If true, this is an absolute, 64-bit reference;
 											//     if false, a relative, 32-bit reference.
 }
-
+/**
+ * The compiler builds template objects in the compiler.Type objects for each class that needs one.
+ * When these objects are copied into the image, this map let's the compiler obtain the Type object
+ * for a known template.
+ */
 public class OrdinalMap {
 	map<ref<Type>, int> _map;
 
-	public void set(int ordinal, ref<Type> type) {
-		_map[ordinal] = type;
+	public void set(int ordinal, ref<Type> t) {
+		_map[ordinal] = t;
 	}
 
 	public ref<Type> get(int ordinal) {

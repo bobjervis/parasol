@@ -52,12 +52,6 @@ import parasol:process.printf;
 
 import parasol:types.undefined;
 
-// Eventually, we need another way to get these 'built ins' plumbed through.
-
-import parasol:types.ClassInfo;
-import parasol:types.`*Namespace*`;
-import parasol:types.`*deferred*`;
-
 public class Array = var[];
 public class Object = var[string];
 

@@ -16,6 +16,7 @@
 namespace parasol:compiler;
 
 import parasol:runtime;
+import parasol:runtime.TypeFamily;
 import parasol:stream;
 import parasol:text;
 
@@ -721,7 +722,7 @@ public class OverloadInstance extends Symbol {
 	private boolean _overridden;
 	private boolean _final;
 	private ref<ParameterScope> _parameterScope;
-	private ref<TemplateInstanceType> _instances;	// For template's, the actual instances of those
+	private ref<TemplateInstanceType> _instances;	// For template's, the actual instances of those (a linked list)
 	private ref<Overload> _overload;
 
 	OverloadInstance(ref<Overload> overload, Operator visibility, boolean isStatic, boolean isFinal, ref<Scope> enclosing, 

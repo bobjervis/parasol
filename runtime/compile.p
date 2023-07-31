@@ -31,6 +31,7 @@ import parasol:context;
 import parasol:exception.IllegalOperationException;
 import parasol:memory;
 import parasol:runtime;
+import parasol:runtime.TypeFamily;
 import parasol:storage;
 import parasol:text;
 import parasol:thread;
@@ -250,7 +251,7 @@ public class CompileContext extends CodegenContext {
 		if (verbose()) {
 			printf("compiling:\n");
 			for (i in unitFilenames)
-				printf("[%3i] %s\n", i, unitFilenames[i]);
+				printf("[%3d] %s\n", i, unitFilenames[i]);
 		}
 		boolean success = parseUnits(unitFilenames, "");
 		// How do we force filename to be included, even if it has no namespace
@@ -485,7 +486,15 @@ public class CompileContext extends CodegenContext {
 		}
 		return allDefined;
 	}
-
+/*
+	public boolean bindBuiltInClassType() {
+		ref<TemplateInstanceType> t = _ref.instances();
+		while (t != null) {
+			if (t.isRefRuntimeClass()) {
+				
+			}
+	}
+ */
 	private void missingRootSymbol(string name) {
 		_root.definition().add(MessageId.UNDEFINED_BUILT_IN, _pool, name);
 	}
@@ -1458,11 +1467,11 @@ public class CompileContext extends CodegenContext {
 		return _memoryAllocator;
 	}
 
-	public ref<Type> compilerTypeType() {
+	public ref<Type> runtimeClassType() {
 		if (_compilerType == null) {
-			ref<Symbol> sym = _forest.getSymbol("parasol", "compiler.Type", this);
+			ref<Symbol> sym = _forest.getSymbol("parasol", "runtime.Class", this);
 			if (sym == null) {
-				printf("    FAIL: Could not obtain symbol for compiler.Type\n");
+				printf("    FAIL: Could not obtain symbol for runtime.Class\n");
 				_forest.printSymbolTable();
 				assert(false);
 			}
@@ -2762,12 +2771,9 @@ builtInMap.append(BuiltInMap(TypeFamily.STRING16, "string16"));
 builtInMap.append(BuiltInMap(TypeFamily.SUBSTRING, "substring"));
 builtInMap.append(BuiltInMap(TypeFamily.SUBSTRING16, "substring16"));
 builtInMap.append(BuiltInMap(TypeFamily.BOOLEAN, "boolean"));
-builtInMap.append(BuiltInMap(TypeFamily.CLASS_VARIABLE, "ClassInfo"));
-builtInMap.append(BuiltInMap(TypeFamily.CLASS_DEFERRED, "*deferred*"));
 builtInMap.append(BuiltInMap(TypeFamily.ARRAY_AGGREGATE, "Array"));
 builtInMap.append(BuiltInMap(TypeFamily.OBJECT_AGGREGATE, "Object"));
 builtInMap.append(BuiltInMap(TypeFamily.ADDRESS, "address"));
 builtInMap.append(BuiltInMap(TypeFamily.EXCEPTION, "Exception"));
-builtInMap.append(BuiltInMap(TypeFamily.NAMESPACE, "*Namespace*"));
 
 

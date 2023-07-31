@@ -16,6 +16,7 @@
 namespace parasol:paradoc;
 
 import parasol:compiler;
+import parasol:runtime;
 import parasol:storage;
 
 map<string, long> classFiles;
@@ -64,10 +65,10 @@ void generateScopeContents(ref<compiler.Scope> scope, ref<Writer> output, string
 					break;
 				if (type.isException())
 					exceptions.append(sym);
-				else if (type.family() == compiler.TypeFamily.ENUM ||
-						 type.family() == compiler.TypeFamily.FLAGS)
+				else if (type.family() == runtime.TypeFamily.ENUM ||
+						 type.family() == runtime.TypeFamily.FLAGS)
 					enums.append(sym);
-				else if (type.family() == compiler.TypeFamily.INTERFACE)
+				else if (type.family() == runtime.TypeFamily.INTERFACE)
 					interfaces.append(sym);
 				else
 					classes.append(sym);
@@ -306,7 +307,7 @@ void generateClassSummaryEntry(ref<Writer> output, int i, ref<compiler.Symbol> s
 			return;
 	}
 	output.printf("<td class=\"linkcol\">");
-	if (sym.definition() != scope.className() && t.family() != compiler.TypeFamily.TEMPLATE)
+	if (sym.definition() != scope.className() && t.family() != runtime.TypeFamily.TEMPLATE)
 		output.printf("%s = ", name);
 	if (sym.type() == null)
 		output.printf("&lt;null&gt;</td>\n");
@@ -325,7 +326,7 @@ ref<compiler.Type> typeFor(ref<compiler.Symbol> sym) {
 	ref<compiler.Type> t = sym.type();
 	if (t == null)
 		return null;
-	if (t.family() == compiler.TypeFamily.TYPEDEF)
+	if (t.family() == runtime.TypeFamily.TYPEDEF)
 		t = ref<compiler.TypedefType>(t).wrappedType();
 	return t;
 }
@@ -348,7 +349,7 @@ void functionSummary(ref<Writer> output, ref<ref<compiler.OverloadInstance>[]> f
 		ref<compiler.OverloadInstance> sym = (*functions)[i];
 //		sym.printSimple();
 		ref<compiler.Type> symType = sym.type();
-		if (symType == null || symType.family() == compiler.TypeFamily.CLASS_DEFERRED) {
+		if (symType == null || symType.family() == runtime.TypeFamily.CLASS_DEFERRED) {
 			continue;
 		}
 		ref<compiler.FunctionType> ft = ref<compiler.FunctionType>(sym.type());
@@ -415,7 +416,7 @@ void functionDetail(ref<Writer> output, ref<ref<compiler.OverloadInstance>[]> fu
 	for (i in *functions) {
 		ref<compiler.OverloadInstance> sym = (*functions)[i];
 		ref<compiler.Type> symType = sym.type();
-		if (symType == null || symType.family() == compiler.TypeFamily.CLASS_DEFERRED) {
+		if (symType == null || symType.family() == runtime.TypeFamily.CLASS_DEFERRED) {
 			continue;
 		}
 		string name = sym.name();
@@ -682,7 +683,7 @@ string typeString(ref<compiler.Type> type, string baseName) {
 		ref<compiler.Type> i = type.indexType();
 		if (compileContext.isVector(type)) {
 			s = typeString(e, baseName);
-			if (i != compileContext.builtInType(compiler.TypeFamily.SIGNED_32))
+			if (i != compileContext.builtInType(runtime.TypeFamily.SIGNED_32))
 				s.printf("[%s]", typeString(i, baseName));
 			else
 				s.append("[]");

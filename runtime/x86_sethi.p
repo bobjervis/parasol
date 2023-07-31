@@ -32,7 +32,6 @@ import parasol:compiler.StorageClass;
 import parasol:compiler.Symbol;
 import parasol:compiler.Target;
 import parasol:compiler.Ternary;
-import parasol:compiler.TypeFamily;
 import parasol:compiler.Unary;
 import parasol:math;
 

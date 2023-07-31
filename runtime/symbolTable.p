@@ -90,13 +90,13 @@ public class LockScope extends Scope {
 		if (sym != null)
 			return sym;
 		if (_monitor != null) {
-			if (_monitor.type == null || _monitor.type.family() == TypeFamily.ERROR)
+			if (_monitor.type == null || _monitor.type.family() == runtime.TypeFamily.ERROR)
 				return null;
 			sym = _monitor.type.lookup(name, compileContext);
 //			printf("Looking for %s in %s found %p\n", name.asString(), _monitor.type.signature(), sym);
 			if (sym == null) {
 				if (_monitor.type.baseChainDeferAnalysis())
-					return definePlaceholderDelegate(name, compileContext.builtInType(TypeFamily.CLASS_DEFERRED), compileContext.pool());
+					return definePlaceholderDelegate(name, compileContext.builtInType(runtime.TypeFamily.CLASS_DEFERRED), compileContext.pool());
 				else
 					return null;
 			}
@@ -1311,10 +1311,10 @@ public class Scope {
 				prefix = str.value();
 			}
 			ref<Type> t = sym.type();
-			if (t.family() == TypeFamily.TYPEDEF) {
+			if (t.family() == runtime.TypeFamily.TYPEDEF) {
 				ref<TypedefType> tt = ref<TypedefType>(t);
 				t = tt.wrappedType();
-				if (t.family() == TypeFamily.ENUM) {
+				if (t.family() == runtime.TypeFamily.ENUM) {
 					header.printf("enum %s {\n", sym.name());
 					ref<EnumScope> s = ref<EnumScope>(t.scope());
 					for (int i = 0; i < s.instances().length(); i++) {
@@ -1925,9 +1925,9 @@ public class Scope {
 				ref<Type> type = sym.type();
 				if (type == null)
 					continue;
-				if (type.family() == TypeFamily.TYPEDEF)
+				if (type.family() == runtime.TypeFamily.TYPEDEF)
 					continue;
-				if (type.derivesFrom(TypeFamily.NAMESPACE))
+				if (type.derivesFrom(runtime.TypeFamily.NAMESPACE))
 					continue;
 				int alignment = type.alignment();
 				if (alignment > max)

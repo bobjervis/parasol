@@ -44,7 +44,6 @@ import parasol:compiler.Template;
 import parasol:compiler.TemplateType;
 import parasol:compiler.TemplateInstanceType;
 import parasol:compiler.TypedefType;
-import parasol:compiler.TypeFamily;
 import parasol:time;
 
 /*

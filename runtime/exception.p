@@ -25,7 +25,6 @@
  */
 namespace parasol:exception;
 
-import parasol:compiler;
 import parasol:context;
 import parasol:memory;
 import parasol:process;
@@ -939,8 +938,8 @@ InterruptResponse interruptResponse;
  * 	
  * RETURNS	true if the exception should be handled, false if it should not
  */
-boolean dispatchException(ref<Exception> e, ref<compiler.Type> t, ref<Exception> destination, int size) {
-	ref<compiler.Type> actual = **ref<ref<ref<compiler.Type>>>(e);
+boolean dispatchException(ref<Exception> e, ref<runtime.Class> c, ref<Exception> destination, int size) {
+	ref<runtime.Class> actual = **ref<ref<ref<runtime.Class>>>(e);
 
 //	printf("dispatchException %p actual %p t %p equals %s isSubtype %s\n", e, actual, t, actual.equals(t) ? "true" : "false", actual.isSubtype(t) ? "true" : "false");
 //		printf("actual class %x t class %x\n", pxiOffset(**ref<ref<address>>(actual)), pxiOffset(**ref<ref<address>>(t)));
@@ -951,7 +950,7 @@ boolean dispatchException(ref<Exception> e, ref<compiler.Type> t, ref<Exception>
 //		printf("t._classType = %x\n", pxiOffset(ref<BuiltInType>(t).classType()));
 //		printf("t._classType vatble %x\n", pxiOffset(*ref<address>(ref<BuiltInType>(t).classType())));
 //	}
-	if (actual.equals(t) || actual.isSubtype(t)) {
+	if (*actual <= *c) {
 		C.memcpy(destination, e, size);
 		return true;
 	} else

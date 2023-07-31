@@ -184,7 +184,7 @@ public class GuardedHeap extends Allocator {
 	}
 
 	public address alloc(long n) {
-		address p = C.calloc(unsigned(n + 48), 1);
+		address p = C.calloc(n + 48, 1);
 		if (p != null) {
 			pointer<unsigned> pi = pointer<unsigned>(p);
 			pi[0] = 0xa66aa66a;

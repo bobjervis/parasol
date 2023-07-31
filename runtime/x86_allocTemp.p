@@ -19,7 +19,7 @@ namespace parasol:x86_64;
  * spills as necessary.
  */
 import parasol:compiler.Node;
-import parasol:compiler.TypeFamily;
+import parasol:runtime;
 
 /*
  * X86-64 Register mnemonics.
@@ -499,7 +499,7 @@ class RegisterState {
 					break;
 					
 				default:
-					target.inst(X86.XCHG, TypeFamily.ADDRESS, R(int(_spills.newRegister)), R(reg));
+					target.inst(X86.XCHG, runtime.TypeFamily.ADDRESS, R(int(_spills.newRegister)), R(reg));
 				}
 				_spills.affected.register = _spills.other.register;
 				_spills.other.register = reg;

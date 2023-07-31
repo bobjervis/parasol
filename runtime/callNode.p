@@ -230,9 +230,9 @@ public class Call extends ParameterBag {
 					thisParameter = tree.newReference(temp, true, location());
 					compileContext.markLiveSymbol(thisParameter);
 					thisParameter = tree.newUnary(Operator.ADDRESS, thisParameter, location());
-					thisParameter.type = compileContext.builtInType(TypeFamily.ADDRESS);
+					thisParameter.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 //					ref<Node> n = tree.newStackArgumentAddress(0, location());
-//					n.type = compileContext.builtInType(TypeFamily.ADDRESS);
+//					n.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 //					thisParameter = n;
 					nodeFlags |= PUSH_OUT_PARAMETER;
 					result = encapsulateCallInTemp(temp, tree);
@@ -256,7 +256,7 @@ public class Call extends ParameterBag {
 					} else {
 						if (dot.left().isLvalue()) {
 							thisParameter = tree.newUnary(Operator.ADDRESS, dot.left(), dot.left().location());
-							thisParameter.type = compileContext.builtInType(TypeFamily.ADDRESS);
+							thisParameter.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 						} else {
 							ref<Variable> temp = compileContext.newVariable(dot.left().type);
 							ref<Reference> r = tree.newReference(temp, true, dot.left().location());
@@ -265,7 +265,7 @@ public class Call extends ParameterBag {
 							defn.type = dot.left().type;
 							r = tree.newReference(temp, false, dot.left().location());
 							ref<Unary> adr = tree.newUnary(Operator.ADDRESS, r, dot.left().location());
-							adr.type = compileContext.builtInType(TypeFamily.ADDRESS);
+							adr.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 							ref<Node> pair = tree.newBinary(Operator.SEQUENCE, defn.fold(tree, true, compileContext), adr, dot.left().location());
 							pair.type = defn.type;
 							_target = tree.newSelection(pair, dot.symbol(), false, dot.location());
@@ -277,15 +277,15 @@ public class Call extends ParameterBag {
 
 				case SUBSCRIPT:
 					ref<Binary> b = ref<Binary>(_target);
-					if (b.left().type.family() != TypeFamily.POINTER) {
+					if (b.left().type.family() != runtime.TypeFamily.POINTER) {
 						_target = tree.newUnary(Operator.ADDRESS, _target, _target.location());
-						_target.type = compileContext.builtInType(TypeFamily.ADDRESS);					
+						_target.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);					
 					}
 					break;
 
 				default:
 					thisParameter = tree.newLeaf(Operator.THIS, location());
-					thisParameter.type = compileContext.builtInType(TypeFamily.ADDRESS);
+					thisParameter.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 				}
 				
 			default:
@@ -336,7 +336,7 @@ public class Call extends ParameterBag {
 			// Now promote the 'hidden' parameters, so code gen is simpler.
 			int registerArgumentIndex = 0;
 			if (thisParameter != null) {
-				thisParameter.register = compileContext.target.registerValue(registerArgumentIndex, TypeFamily.ADDRESS);
+				thisParameter.register = compileContext.target.registerValue(registerArgumentIndex, runtime.TypeFamily.ADDRESS);
 				if (thisParameter.register == 0) {
 					printf("---\n");
 					print(0);
@@ -346,11 +346,11 @@ public class Call extends ParameterBag {
 			}
 			if (outParameter != null) {
 				if (multiReturnOfMultiCall)
-					outParameter.register = compileContext.target.registerValue(registerArgumentIndex, TypeFamily.ADDRESS);
+					outParameter.register = compileContext.target.registerValue(registerArgumentIndex, runtime.TypeFamily.ADDRESS);
 				else {
 					outParameter = tree.newUnary(Operator.ADDRESS, outParameter, outParameter.location());
-					outParameter.register = compileContext.target.registerValue(registerArgumentIndex, TypeFamily.ADDRESS);
-					outParameter.type = compileContext.builtInType(TypeFamily.ADDRESS);
+					outParameter.register = compileContext.target.registerValue(registerArgumentIndex, runtime.TypeFamily.ADDRESS);
+					outParameter.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 				}
 			}
 			
@@ -366,11 +366,11 @@ public class Call extends ParameterBag {
 					case STRING16:
 						switch (args.node.op()) {
 						case CALL:
-							if (ref<Call>(args.node).target().type.family() != TypeFamily.FUNCTION)
+							if (ref<Call>(args.node).target().type.family() != runtime.TypeFamily.FUNCTION)
 								break;
 							ref<FunctionType> argumentFunctionType = ref<FunctionType>(ref<Call>(args.node).target().type);
 							ref<Type> t = args.node.type;
-							args.node.type = compileContext.builtInType(TypeFamily.ADDRESS);
+							args.node.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 							if (argumentFunctionType.returnCount() == 1) {
 								ref<Variable> temp = compileContext.newVariable(t);
 								ref<Reference> r = tree.newReference(temp, true, location());
@@ -465,7 +465,7 @@ public class Call extends ParameterBag {
 			}
 			
 			ref<Leaf> n = tree.newLeaf(Operator.VACATE_ARGUMENT_REGISTERS, location());
-			n.type = compileContext.builtInType(TypeFamily.VOID);;
+			n.type = compileContext.builtInType(runtime.TypeFamily.VOID);;
 			ref<NodeList> nl = tree.newNodeList(n);
 			nl.next = _stackArguments;
 			_stackArguments = nl;
@@ -487,21 +487,21 @@ public class Call extends ParameterBag {
 			Interval[] intervals;
 			ref<Type> indexType, elementType;
 
-			if (type.family() == TypeFamily.REF) {						// it's a ref<Array>, convert accordingly
-				indexType = compileContext.builtInType(TypeFamily.SIGNED_32);
-				elementType = compileContext.builtInType(TypeFamily.VAR);
+			if (type.family() == runtime.TypeFamily.REF) {						// it's a ref<Array>, convert accordingly
+				indexType = compileContext.builtInType(runtime.TypeFamily.SIGNED_32);
+				elementType = compileContext.builtInType(runtime.TypeFamily.VAR);
 			} else {
 				indexType = type.indexType();
 				elementType = type.elementType();
 			}
 			for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 				nl.node = nl.node.fold(tree, false, compileContext);
-				if (indexType.family() == TypeFamily.STRING)
+				if (indexType.family() == runtime.TypeFamily.STRING)
 					continue;
 				if (nl.node.op() == Operator.LABEL) {
 					ref<Binary> b = ref<Binary>(nl.node);
 					long v = b.left().foldInt(compileContext.target, compileContext);
-					InternalLiteral il(indexType.family() == TypeFamily.ENUM ? v : v + 1, runtime.SourceOffset());
+					InternalLiteral il(indexType.family() == runtime.TypeFamily.ENUM ? v : v + 1, runtime.SourceOffset());
 					if (v < 0 || !il.representedBy(indexType)) {
 						b.left().add(MessageId.INITIALIZER_BEYOND_RANGE, compileContext.pool());
 						type = compileContext.errorType();
@@ -515,7 +515,7 @@ public class Call extends ParameterBag {
 					} else {
 						ref<Interval> i = &intervals[intervals.length() - 1];
 						i.end++;
-						InternalLiteral il(indexType.family() == TypeFamily.ENUM ? i.end : i.end + 1, runtime.SourceOffset());
+						InternalLiteral il(indexType.family() == runtime.TypeFamily.ENUM ? i.end : i.end + 1, runtime.SourceOffset());
 						if (i.end < 0 || !il.representedBy(indexType)) {
 							nl.node.add(MessageId.INITIALIZER_BEYOND_RANGE, compileContext.pool());
 							type = nl.node.type = compileContext.errorType();
@@ -523,7 +523,7 @@ public class Call extends ParameterBag {
 					}
 				}
 			}
-			if (type.family() == TypeFamily.REF) {
+			if (type.family() == runtime.TypeFamily.REF) {
 				ref<Variable> temp = compileContext.newVariable(type);
 				ref<Reference> r = tree.newReference(temp, true, location());
 				ref<Node> o = tree.newIdentifier(compileContext.arrayClass(), location());
@@ -540,7 +540,7 @@ public class Call extends ParameterBag {
 					ref<Selection> method = tree.newSelection(r, pushMethod, true, location());
 					method.type = pushMethod.type();
 					ref<Call> call = tree.newCall(pushMethod.parameterScope(), CallCategory.METHOD_CALL, method, tree.newNodeList(nl.node), location(), compileContext);
-					call.type = compileContext.builtInType(TypeFamily.VOID);
+					call.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 					result = tree.newBinary(Operator.SEQUENCE, result, call, location());
 					result.type = call.type;
 				}
@@ -570,7 +570,7 @@ public class Call extends ParameterBag {
 			}
 			ref<Variable> temp = compileContext.newVariable(type);
 			result = null;
-			if (type.family() == TypeFamily.REF) {
+			if (type.family() == runtime.TypeFamily.REF) {
 				ref<Reference> r = tree.newReference(temp, true, location());
 				ref<Node> o = tree.newIdentifier(compileContext.objectClass(), location());
 				o.type = o.symbol().assignType(compileContext);
@@ -587,10 +587,10 @@ public class Call extends ParameterBag {
 					ref<Selection> method = tree.newSelection(r, setMethod, true, location());
 					method.type = setMethod.type();
 					ref<Node> label = tree.newConstant(Operator.STRING, ref<Identifier>(b.left()).identifier(), location());
-					label.type = compileContext.builtInType(TypeFamily.STRING);
-					ref<Node> value = b.right().coerce(tree, compileContext.builtInType(TypeFamily.VAR), false, compileContext);
+					label.type = compileContext.builtInType(runtime.TypeFamily.STRING);
+					ref<Node> value = b.right().coerce(tree, compileContext.builtInType(runtime.TypeFamily.VAR), false, compileContext);
 					ref<Call> call = tree.newCall(setMethod.parameterScope(), CallCategory.METHOD_CALL, method, tree.newNodeList(label, value), location(), compileContext);
-					call.type = compileContext.builtInType(TypeFamily.VOID);
+					call.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 					result = tree.newBinary(Operator.SEQUENCE, result, call, location());
 					result.type = call.type;
 				}
@@ -607,9 +607,9 @@ public class Call extends ParameterBag {
 					ref<Reference> r = tree.newReference(temp, true, location());
 					compileContext.markLiveSymbol(r);
 					ref<Node> adr = tree.newUnary(Operator.ADDRESS, r, location());
-					adr.type = compileContext.builtInType(TypeFamily.ADDRESS);
+					adr.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 					ref<Call> call = tree.newCall(constructor, CallCategory.CONSTRUCTOR, adr, null, location(), compileContext);
-					call.type = compileContext.builtInType(TypeFamily.VOID);
+					call.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 					result = call.fold(tree, true, compileContext);
 				} else if (type.hasDestructor()) {
 					ref<Reference> r = tree.newReference(temp, true, location());
@@ -882,7 +882,7 @@ public class Call extends ParameterBag {
 						return false;
 					if (!gatherReturnTypes(false, returnTypes, b.right()))
 						return false;
-				} else if (_target.type.family() == TypeFamily.TYPEDEF)
+				} else if (_target.type.family() == runtime.TypeFamily.TYPEDEF)
 					returnTypes.append(_target.unwrapTypedef(Operator.CLASS, compileContext));
 				else
 					return false;
@@ -892,7 +892,7 @@ public class Call extends ParameterBag {
 		for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 			if (nl.node.op() == Operator.BIND)
 				continue;
-			if (nl.node.type.family() != TypeFamily.TYPEDEF)
+			if (nl.node.type.family() != runtime.TypeFamily.TYPEDEF)
 				return false;
 		}
 		ref<Type>[] parameterTypes;
@@ -912,7 +912,7 @@ public class Call extends ParameterBag {
 		}
 		if (type == null) {
 			type = compileContext.pool().newFunctionType(returnTypes, parameterTypes, hasEllipsis);
-			type = compileContext.pool().newTypedefType(TypeFamily.TYPEDEF, type);
+			type = compileContext.pool().newTypedefType(runtime.TypeFamily.TYPEDEF, type);
 		}
 		_category = CallCategory.DECLARATOR;
 		return true;
@@ -926,28 +926,28 @@ public class Call extends ParameterBag {
 		switch (op()) {
 		case	ARRAY_AGGREGATE:
 			if (assignArguments(LabelStatus.OPTIONAL_LABELS, compileContext))
-				type = compileContext.builtInType(TypeFamily.ARRAY_AGGREGATE);
+				type = compileContext.builtInType(runtime.TypeFamily.ARRAY_AGGREGATE);
 			else
 				type = compileContext.errorType();
 			break;
 			
 		case	OBJECT_AGGREGATE:
 			if (assignArguments(LabelStatus.REQUIRED_LABELS, compileContext))
-				type = compileContext.builtInType(TypeFamily.OBJECT_AGGREGATE);
+				type = compileContext.builtInType(runtime.TypeFamily.OBJECT_AGGREGATE);
 			else
 				type = compileContext.errorType();
 			break;
 			
 		case	ANNOTATION:
-			type = compileContext.builtInType(TypeFamily.VOID);
+			type = compileContext.builtInType(runtime.TypeFamily.VOID);
 			break;
 
 		case	TEMPLATE_INSTANCE:
 			if (!assignSub(Operator.TEMPLATE, compileContext))
 				break;
-			if (_target.type.family() == TypeFamily.TYPEDEF) {
+			if (_target.type.family() == runtime.TypeFamily.TYPEDEF) {
 				ref<TypedefType> t = ref<TypedefType>(_target.type);
-				if (t.wrappedType().family() == TypeFamily.TEMPLATE) {
+				if (t.wrappedType().family() == runtime.TypeFamily.TEMPLATE) {
 					ref<OverloadInstance> oi = ref<OverloadInstance>(_target.symbol());
 					ref<Type> instanceType = oi.instantiateTemplate(this, compileContext);
 					type = compileContext.makeTypedef(instanceType);
@@ -1060,14 +1060,14 @@ public class Call extends ParameterBag {
 				// Verify that this corresponds to a function overload
 				pointer<ref<Type>> returns = ft.returnTypes();
 				for (int i = 0; i < ft.returnCount(); i++) {
-					if (returns[i].family() == TypeFamily.CLASS_VARIABLE) {
-						type = compileContext.builtInType(TypeFamily.CLASS_DEFERRED);
+					if (returns[i].family() == runtime.TypeFamily.CLASS_VARIABLE) {
+						type = compileContext.builtInType(runtime.TypeFamily.CLASS_DEFERRED);
 						return;
 					}
 				}
 				type = ft.returnValueType();
 				if (type == null)
-					type = compileContext.builtInType(TypeFamily.VOID);
+					type = compileContext.builtInType(runtime.TypeFamily.VOID);
 				break;
 
 			default:
@@ -1095,7 +1095,7 @@ public class Call extends ParameterBag {
 				type = _target.type;
 				return false;
 			}
-			if (_target.type.family() == TypeFamily.VAR) {
+			if (_target.type.family() == runtime.TypeFamily.VAR) {
 				type = compileContext.errorType();
 				_target.add(MessageId.UNFINISHED_VAR_CALL, compileContext.pool());
 				return false;
@@ -1118,7 +1118,7 @@ public class Call extends ParameterBag {
 		}
 		// EnumInstanceTypes report the scope of the underlying class object, but a constructor
 		// for an EnumInstanceType should always default to a simple default constructor.
-		if (classType.family() == TypeFamily.ENUM) {
+		if (classType.family() == runtime.TypeFamily.ENUM) {
 			if (_arguments != null) {
 				add(MessageId.NO_MATCHING_CONSTRUCTOR, compileContext.pool());
 				type = compileContext.errorType();
@@ -1154,8 +1154,8 @@ public class Call extends ParameterBag {
 		switch (newType.family()) {
 		case REF:						// it's a ref<Array>, convert accordingly
 		case VAR:						// it's a var, it's going to be a ref<Array> on the way in.
-			indexType = compileContext.builtInType(TypeFamily.SIGNED_32);
-			elementType = compileContext.builtInType(TypeFamily.VAR);
+			indexType = compileContext.builtInType(runtime.TypeFamily.SIGNED_32);
+			elementType = compileContext.builtInType(runtime.TypeFamily.VAR);
 			break;
 
 		default:
@@ -1167,7 +1167,7 @@ public class Call extends ParameterBag {
 			if (nl.node.op() == Operator.LABEL) {
 				ref<Binary> b = ref<Binary>(nl.node);
 				ref<Node> lbl;
-				if (indexType.family() == TypeFamily.ENUM) {
+				if (indexType.family() == runtime.TypeFamily.ENUM) {
 					ref<Identifier> id = ref<Identifier>(b.left());
 					id.resolveAsEnum(ref<EnumInstanceType>(indexType), compileContext);
 					lbl = b.left();
@@ -1330,7 +1330,7 @@ public class Call extends ParameterBag {
 				for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 					if (nl.node.op() == Operator.LABEL) {
 						ref<Binary> b = ref<Binary>(nl.node);
-						if (indexType.family() == TypeFamily.ENUM) {
+						if (indexType.family() == runtime.TypeFamily.ENUM) {
 							if (b.left().op() != Operator.IDENTIFIER)
 								return false;
 							if (!ref<EnumInstanceType>(indexType).hasInstance(ref<Identifier>(b.left())))
@@ -1365,16 +1365,16 @@ public class Call extends ParameterBag {
 
 			case REF:
 //				printf("canCoerce ARRAY_AGGREGATE: %s -> %s? %s\n", 
-//					compileContext.builtInType(TypeFamily.ARRAY_AGGREGATE).signature(),
+//					compileContext.builtInType(runtime.TypeFamily.ARRAY_AGGREGATE).signature(),
 //					newType.indirectType(compileContext).signature(),
 //					string(newType.indirectType(compileContext) == 
-//						compileContext.builtInType(TypeFamily.ARRAY_AGGREGATE)));
+//						compileContext.builtInType(runtime.TypeFamily.ARRAY_AGGREGATE)));
 				if (newType.indirectType(compileContext) != 
-						compileContext.builtInType(TypeFamily.ARRAY_AGGREGATE))
+						compileContext.builtInType(runtime.TypeFamily.ARRAY_AGGREGATE))
 					return false;
 					// it's a ref<Array>, convert accordingly
-				indexType = compileContext.builtInType(TypeFamily.SIGNED_32);
-				elementType = compileContext.builtInType(TypeFamily.VAR);
+				indexType = compileContext.builtInType(runtime.TypeFamily.SIGNED_32);
+				elementType = compileContext.builtInType(runtime.TypeFamily.VAR);
 				for (ref<NodeList> nl = _arguments; nl != null; nl = nl.next) {
 					if (nl.node.op() == Operator.LABEL) {
 						ref<Binary> b = ref<Binary>(nl.node);
@@ -1452,7 +1452,7 @@ public class Call extends ParameterBag {
 		if (op() == Operator.ARRAY_AGGREGATE) {
 			ref<Type> tp = type;
 			coerceAggregateType(newType, compileContext);
-			if (newType.family() == TypeFamily.VAR) {
+			if (newType.family() == runtime.TypeFamily.VAR) {
 				ref<Node> n = tree.newCast(newType, this);
 				type = tp;
 				return n;
@@ -1745,7 +1745,7 @@ public class FunctionDeclaration extends ParameterBag {
 				type = nl.node.type;
 				continue;
 			}
-			if (nl.node.type != null && nl.node.type.family() == TypeFamily.TYPEDEF) {
+			if (nl.node.type != null && nl.node.type.family() == runtime.TypeFamily.TYPEDEF) {
 				ref<Type> t = nl.node.type.wrappedType();
 				if (!t.canCopy(compileContext)) {
 					nl.node.add(MessageId.CANNOT_COPY_ARGUMENT, compileContext.pool(), t.signature());
@@ -2107,9 +2107,9 @@ public class Return extends ParameterBag {
 			nl.next = _liveSymbols;
 			_liveSymbols = nl;
 //			ref<Node> thisParameter = tree.newUnary(Operator.ADDRESS, id, id.location());
-//			thisParameter.type = compileContext.builtInType(TypeFamily.ADDRESS);
+//			thisParameter.type = compileContext.builtInType(runtime.TypeFamily.ADDRESS);
 //			ref<Call> c = tree.newCall(destructor, CallCategory.DESTRUCTOR, thisParameter, null, location(), compileContext);
-//			c.type = compileContext.builtInType(TypeFamily.VOID);
+//			c.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 //			ref<Node> folded = c.fold(tree, true, compileContext);
 //			output = tree.newBinary(Operator.SEQUENCE, folded, output, location());
 		}
@@ -2227,7 +2227,7 @@ public class Return extends ParameterBag {
 
 		pointer<ref<Type>> returnTypes = functionType.returnTypes();
 		int count = functionType.returnCount();
-		type = compileContext.builtInType(TypeFamily.VOID);
+		type = compileContext.builtInType(runtime.TypeFamily.VOID);
 		if (_arguments != null) {
 			if (count <= 0) {
 				add(MessageId.RETURN_VALUE_DISALLOWED, compileContext.pool());
@@ -2239,7 +2239,7 @@ public class Return extends ParameterBag {
 						ref<Call> call = ref<Call>(_arguments.node);
 						if (call.category() != CallCategory.COERCION) {
 							ref<Type> tt = call.target().type;
-							if (tt.family() == TypeFamily.FUNCTION) {
+							if (tt.family() == runtime.TypeFamily.FUNCTION) {
 								ref<FunctionType> ft = ref<FunctionType>(tt);
 								if (ft.returnCount() == count) {
 									pointer<ref<Type>> rtCall = ft.returnTypes();
@@ -2317,8 +2317,8 @@ ref<Node>, int foldMultiReturn(ref<Node> leftHandle, ref<Node> destinations, ref
 		ref<Reference> r = tree.newReference(intermediate, offset, false, destinations.location());
 		r.type = destinations.type;
 		ref<Node> assignment;
-		if (r.type.family() == TypeFamily.STRING ||
-			r.type.family() == TypeFamily.STRING16) {
+		if (r.type.family() == runtime.TypeFamily.STRING ||
+			r.type.family() == runtime.TypeFamily.STRING16) {
 			compileContext.unmarkLiveSymbol(r);
 			ref<OverloadInstance> oi = getMethodSymbol(destinations, "store", r.type, compileContext);
 			if (oi == null) {
@@ -2329,7 +2329,7 @@ ref<Node>, int foldMultiReturn(ref<Node> leftHandle, ref<Node> destinations, ref
 			method.type = oi.type();
 			ref<NodeList> args = tree.newNodeList(r);
 			ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, destinations.location(), compileContext);
-			call.type = compileContext.builtInType(TypeFamily.VOID);
+			call.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 			assignment = call.fold(tree, true, compileContext);
 		} else {
 //			compileContext.markLiveSymbol(r);
@@ -2340,13 +2340,13 @@ ref<Node>, int foldMultiReturn(ref<Node> leftHandle, ref<Node> destinations, ref
 		result = tree.newBinary(Operator.SEQUENCE, leftHandle, assignment, destinations.location());
 		offset += destinations.type.stackSize();
 	}
-	result.type = compileContext.builtInType(TypeFamily.VOID);
+	result.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 	return result, offset;
 }
 
 ref<Node> assignOne(ref<SyntaxTree> tree, ref<Node> dest, ref<Reference> r, ref<CompileContext> compileContext) {
-	if (r.type.family() == TypeFamily.STRING ||
-		r.type.family() == TypeFamily.STRING16) {
+	if (r.type.family() == runtime.TypeFamily.STRING ||
+		r.type.family() == runtime.TypeFamily.STRING16) {
 		ref<OverloadInstance> oi = getMethodSymbol(dest, "store", r.type, compileContext);
 		if (oi == null)
 			return null;
@@ -2354,7 +2354,7 @@ ref<Node> assignOne(ref<SyntaxTree> tree, ref<Node> dest, ref<Reference> r, ref<
 		method.type = oi.type();
 		ref<NodeList> args = tree.newNodeList(r);
 		ref<Call> call = tree.newCall(oi.parameterScope(), null, method, args, dest.location(), compileContext);
-		call.type = compileContext.builtInType(TypeFamily.VOID);
+		call.type = compileContext.builtInType(runtime.TypeFamily.VOID);
 		return call.fold(tree, true, compileContext);
 	} else {
 		ref<Node> assignment = tree.newBinary(Operator.ASSIGN, dest, r, dest.location());

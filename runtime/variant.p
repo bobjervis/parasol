@@ -15,7 +15,7 @@
  */
 namespace parasol:types;
 
-import parasol:compiler.Type;
+import parasol:runtime;
 import parasol:exception.IllegalOperationException;
 import native:C;
 import native:linux;
@@ -51,7 +51,7 @@ public var undefined;
  */
 public class var {
 //	private class _actualType;
-	private ref<Type> _actualType;
+	private ref<runtime.Class> _actualType;
 	private long _value;
 	
 	public var() {
@@ -68,7 +68,7 @@ public class var {
 			new (&_value) string16(string16(other));
 		} else
 			_value = pointer<long>(&other)[1];
-		_actualType = *ref<ref<Type>>(&other);
+		_actualType = *ref<ref<runtime.Class>>(&other);
 	}
 	
 	public var(string other) {
@@ -129,12 +129,12 @@ public class var {
 	 */
 	private var(address actualType, long value) {
 		_value = value;
-		_actualType = ref<Type>(actualType);
+		_actualType = ref<runtime.Class>(actualType);
 	}
 
 	private var(address actualType, address opAdr, int opLen) {
 		C.memcpy(&_value, opAdr, opLen);
-		_actualType = ref<Type>(actualType);
+		_actualType = ref<runtime.Class>(actualType);
 	}
 
 	private void stringEllip(long value) {
@@ -238,6 +238,7 @@ public class var {
 				return s;
 			}
 		}
+									
 		throw IllegalOperationException("Not convertable to string16");
 	}
 	
