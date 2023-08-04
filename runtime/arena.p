@@ -13,24 +13,24 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-namespace parasol:runtime;
+namespace parasol:compiler;
 
-import parasol:compiler;
 import parasol:context;
 import parasol:memory;
+import parasol:runtime;
 import parasol:storage;
 import parasol:process;
 
 public class Arena {
-	private ref<compiler.Scope> _main;
+	private ref<Scope> _main;
 
-	private ref<compiler.Unit>[] _units;
-	private ref<compiler.Unit>[string] _unitNames;
+	private ref<Unit>[] _units;
+	private ref<Unit>[string] _unitNames;
 
 	private ref<context.Context> _activeContext;
 
-	private ref<compiler.Scope>[] _scopes;
-	private ref<compiler.TemplateInstanceType>[]	_types;
+	private ref<Scope>[] _scopes;
+	private ref<TemplateInstanceType>[]	_types;
 
 
 	int builtScopes;
@@ -43,7 +43,7 @@ public class Arena {
 	 */
 	public boolean paradoc;
 
-	Target preferredTarget;
+	runtime.Target preferredTarget;
 
 	public Arena() {
 		init();
@@ -66,92 +66,92 @@ public class Arena {
 		_scopes.deleteAll();
 	}
 
-	public ref<compiler.Scope> createScope(ref<compiler.Scope> enclosing, ref<compiler.Node> definition, compiler.StorageClass storageClass) {
-		ref<compiler.Scope> s = new compiler.Scope(enclosing, definition, storageClass, null);
+	public ref<Scope> createScope(ref<Scope> enclosing, ref<Node> definition, StorageClass storageClass) {
+		ref<Scope> s = new Scope(enclosing, definition, storageClass, null);
 		_scopes.append(s);
 		return s;
 	}
 
-	public ref<compiler.UnitScope> createUnitScope(ref<compiler.Scope> rootScope, ref<compiler.Node> definition, ref<compiler.Unit> file) {
-		ref<compiler.UnitScope>  s = new compiler.UnitScope(rootScope, file, definition);
+	public ref<UnitScope> createUnitScope(ref<Scope> rootScope, ref<Node> definition, ref<Unit> file) {
+		ref<UnitScope>  s = new UnitScope(rootScope, file, definition);
 		_scopes.append(s);
 		return s;
 	}
 
-	public ref<compiler.NamespaceScope> createNamespaceScope(ref<compiler.Scope> enclosing, ref<compiler.Namespace> namespaceSymbol) {
-		ref<compiler.NamespaceScope> s = new compiler.NamespaceScope(enclosing, namespaceSymbol);
+	public ref<NamespaceScope> createNamespaceScope(ref<Scope> enclosing, ref<Namespace> namespaceSymbol) {
+		ref<NamespaceScope> s = new NamespaceScope(enclosing, namespaceSymbol);
 		_scopes.append(s);
 		return s;
 	}
 
-	public ref<compiler.Scope> createRootScope(ref<compiler.Node> definition, ref<compiler.Unit> file) {
-		ref<compiler.Scope>  s = new compiler.RootScope(file, definition);
+	public ref<Scope> createRootScope(ref<Node> definition, ref<Unit> file) {
+		ref<Scope>  s = new RootScope(file, definition);
 		_scopes.append(s);
 		return s;
 	}
 
-	public ref<compiler.ParameterScope> createParameterScope(ref<compiler.Scope> enclosing, ref<compiler.Node> definition, compiler.ParameterScope.Kind kind) {
-		ref<compiler.ParameterScope> s = new compiler.ParameterScope(enclosing, definition, kind);
+	public ref<ParameterScope> createParameterScope(ref<Scope> enclosing, ref<Node> definition, ParameterScope.Kind kind) {
+		ref<ParameterScope> s = new ParameterScope(enclosing, definition, kind);
 		_scopes.append(s);
 		return s;
 	}
 
-	public ref<compiler.ProxyMethodScope> createProxyMethodScope(ref<compiler.Scope> enclosing) {
-		ref<compiler.ProxyMethodScope> s = new compiler.ProxyMethodScope(enclosing);
+	public ref<ProxyMethodScope> createProxyMethodScope(ref<Scope> enclosing) {
+		ref<ProxyMethodScope> s = new ProxyMethodScope(enclosing);
 		_scopes.append(s);
 		return s;
 	}
 
-	public ref<compiler.ClassScope> createClassScope(ref<compiler.Scope> enclosing, ref<compiler.Node> definition, ref<compiler.Identifier> className) {
-		ref<compiler.ClassScope> s = new compiler.ClassScope(enclosing, definition, className);
+	public ref<ClassScope> createClassScope(ref<Scope> enclosing, ref<Node> definition, ref<Identifier> className) {
+		ref<ClassScope> s = new ClassScope(enclosing, definition, className);
 		_scopes.append(s);
 		return s;
 	}
 
-	public ref<compiler.InterfaceImplementationScope> createInterfaceImplementationScope(ref<compiler.InterfaceType> definedInterface, ref<compiler.ClassType> implementingClass, int itableSlot) {
-		ref<compiler.InterfaceImplementationScope> s = new compiler.InterfaceImplementationScope(definedInterface, implementingClass, itableSlot);
+	public ref<InterfaceImplementationScope> createInterfaceImplementationScope(ref<InterfaceType> definedInterface, ref<ClassType> implementingClass, int itableSlot) {
+		ref<InterfaceImplementationScope> s = new InterfaceImplementationScope(definedInterface, implementingClass, itableSlot);
 		_scopes.append(s);
 		return s;
 	}
 	
-	public ref<compiler.InterfaceImplementationScope> createInterfaceImplementationScope(ref<compiler.InterfaceType> definedInterface, ref<compiler.ClassType> implementingClass, ref<compiler.InterfaceImplementationScope> baseInterface, int firstNewMethod) {
-		ref<compiler.InterfaceImplementationScope> s = new compiler.InterfaceImplementationScope(definedInterface, implementingClass, baseInterface, firstNewMethod);
+	public ref<InterfaceImplementationScope> createInterfaceImplementationScope(ref<InterfaceType> definedInterface, ref<ClassType> implementingClass, ref<InterfaceImplementationScope> baseInterface, int firstNewMethod) {
+		ref<InterfaceImplementationScope> s = new InterfaceImplementationScope(definedInterface, implementingClass, baseInterface, firstNewMethod);
 		_scopes.append(s);
 		return s;
 	}
 	
-	public ref<compiler.ThunkScope> createThunkScope(ref<compiler.InterfaceImplementationScope> enclosing, ref<compiler.ParameterScope> func, boolean isDestructor) {
-		ref<compiler.ThunkScope> s = new compiler.ThunkScope(enclosing, func, isDestructor);
+	public ref<ThunkScope> createThunkScope(ref<InterfaceImplementationScope> enclosing, ref<ParameterScope> func, boolean isDestructor) {
+		ref<ThunkScope> s = new ThunkScope(enclosing, func, isDestructor);
 		_scopes.append(s);
 		return s;
 	}
 
-	public ref<compiler.EnumScope> createEnumScope(ref<compiler.Scope> enclosing, ref<compiler.Block> definition, ref<compiler.Identifier> className) {
-		ref<compiler.EnumScope> s = new compiler.EnumScope(enclosing, definition, className);
+	public ref<EnumScope> createEnumScope(ref<Scope> enclosing, ref<Block> definition, ref<Identifier> className) {
+		ref<EnumScope> s = new EnumScope(enclosing, definition, className);
 		_scopes.append(s);
 		return s;
 	}
 
-	public ref<compiler.FlagsScope> createFlagsScope(ref<compiler.Scope> enclosing, ref<compiler.Block> definition, ref<compiler.Identifier> className) {
-		ref<compiler.FlagsScope> s = new compiler.FlagsScope(enclosing, definition, className);
+	public ref<FlagsScope> createFlagsScope(ref<Scope> enclosing, ref<Block> definition, ref<Identifier> className) {
+		ref<FlagsScope> s = new FlagsScope(enclosing, definition, className);
 		_scopes.append(s);
 		return s;
 	}
 
-	public ref<compiler.LockScope> createLockScope(ref<compiler.Scope> enclosing, ref<compiler.Lock> definition) {
-		ref<compiler.LockScope> s = new compiler.LockScope(enclosing, definition);
+	public ref<LockScope> createLockScope(ref<Scope> enclosing, ref<Lock> definition) {
+		ref<LockScope> s = new LockScope(enclosing, definition);
 		_scopes.append(s);
 		return s;
 	}
 
-	public ref<compiler.MonitorScope> createMonitorScope(ref<compiler.Scope> enclosing, 
-							ref<compiler.Node> definition, ref<compiler.Identifier> className) {
-		ref<compiler.MonitorScope> s = new compiler.MonitorScope(enclosing, definition, className);
+	public ref<MonitorScope> createMonitorScope(ref<Scope> enclosing, 
+							ref<Node> definition, ref<Identifier> className) {
+		ref<MonitorScope> s = new MonitorScope(enclosing, definition, className);
 		_scopes.append(s);
 		return s;
 	}
 
-	public void declare(ref<compiler.TemplateInstanceType> t) {
+	public void declare(ref<TemplateInstanceType> t) {
 		_types.append(t);
 	}
 
@@ -169,7 +169,7 @@ public class Arena {
 			_units[i].printMessages(_types);
 	}
 
-	public void allNodes(void(ref<compiler.Unit>, ref<compiler.Node>, ref<compiler.Commentary>, address) callback, address arg) {
+	public void allNodes(void(ref<Unit>, ref<Node>, ref<Commentary>, address) callback, address arg) {
 		for (i in _units)
 			_units[i].allNodes(_types, callback, arg);
 	}
@@ -179,9 +179,9 @@ public class Arena {
 			_units[i].printSymbolTable();
 		printf("\nMain scope:\n");
 		if (_main != null)
-			_main.print(compiler.INDENT, true);
+			_main.print(INDENT, true);
 //		printf("\nRoot scope:\n");
-//		_root.print(compiler.INDENT, true);
+//		_root.print(INDENT, true);
 		_activeContext.printSymbolTable();
 	}
 	
@@ -192,15 +192,15 @@ public class Arena {
 		_activeContext.print();
 	}
 	
-//	public ref<compiler.Scope> root() { 
+//	public ref<Scope> root() { 
 //		return _root; 
 //	}
 
-	public ref<ref<compiler.Scope>[]> scopes() { 
+	public ref<ref<Scope>[]> scopes() { 
 		return &_scopes;
 	}
 
-	public ref<ref<compiler.TemplateInstanceType>[]> types() { 
+	public ref<ref<TemplateInstanceType>[]> types() { 
 		return &_types; 
 	}
 
@@ -210,21 +210,21 @@ public class Arena {
 	/**
 	 * @ignore
 	 */
-	public ref<compiler.Unit> defineUnit(string name, string packageDir) {
-		ref<compiler.Unit> u = _unitNames[name];
+	public ref<Unit> defineUnit(string name, string packageDir) {
+		ref<Unit> u = _unitNames[name];
 		if (u != null)
 			return u;
-		u = new compiler.Unit(name, packageDir);
+		u = new Unit(name, packageDir);
 		_units.append(u);
 		_unitNames[name] = u;
 		return u;
 	}
 
-	public ref<compiler.Unit> defineImportedUnit(string name, string packageDir) {
-		ref<compiler.Unit> u = _unitNames[name];
+	public ref<Unit> defineImportedUnit(string name, string packageDir) {
+		ref<Unit> u = _unitNames[name];
 		if (u != null)
 			return u;
-		u = new compiler.Unit(name, packageDir, true);
+		u = new Unit(name, packageDir, true);
 		_units.append(u);
 		_unitNames[name] = u;
 		return u;
@@ -232,10 +232,10 @@ public class Arena {
 	/**
 	 * @ignore
 	 */
-	public boolean defineUnit(ref<compiler.Unit> unit) {
+	public boolean defineUnit(ref<Unit> unit) {
 		string name = unit.filename();
 		if (name != null) {
-			ref<compiler.Unit> u = _unitNames[name];
+			ref<Unit> u = _unitNames[name];
 			if (u != null)
 				return false;
 			_unitNames[name] = unit;
@@ -246,7 +246,7 @@ public class Arena {
 	/**
 	 * @ignore
 	 */
-	public ref<compiler.Unit> getUnit(int i) {
+	public ref<Unit> getUnit(int i) {
 		if (i >= 0 &&
 			i < _units.length())
 			return _units[i];
@@ -254,7 +254,7 @@ public class Arena {
 			return null;
 	}
 
-	public ref<compiler.Unit>[] units() {
+	public ref<Unit>[] units() {
 		return _units;
 	}
 }

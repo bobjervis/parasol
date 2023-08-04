@@ -60,6 +60,8 @@ public class PseudoPackage extends Package {
 			boolean success = _buildPackage.future().get();
 			if (!success)
 				return false;
+			setDirectory(_buildPackage.packageDir());
+			assert(loadManifest());
 			_open = true;
 		}
 		return true;
@@ -75,17 +77,21 @@ public class PseudoPackage extends Package {
 	 * can be found. If the length of the array is zero, this package does not contain
 	 * any units in that namespace.
 	 */
-	public string[] getNamespaceUnits(ref<compiler.Ternary> namespaceNode) {
+	public string[] getNamespaceUnits(string domain, string... namespaces) {
 		string[] a;
 
 		if (!_open) {
 			boolean success = _buildPackage.future().get();
 			if (!success)
 				return a;
+			setDirectory(_buildPackage.packageDir());
+			assert(loadManifest());
 			_open = true;
 		}
 
-		return _buildPackage.getNamespaceUnits(namespaceNode);
+		assert(namespaces.length() > 0);
+//		printf("PseudoContext.getnamespaceUnits %s:%s...(%d)\n", domain, namespaces[0], namespaces.length());
+		return super.getNamespaceUnits(domain, namespaces);
 	}
 
 	public boolean inputsNewer(time.Instant timeStamp) {

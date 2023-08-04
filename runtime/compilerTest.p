@@ -29,6 +29,7 @@ import parasol:storage;
 import parasol:text;
 import parasol:time;
 import parasol:pxi;
+import parasol:compiler;
 import parasol:compiler.Block;
 import parasol:compiler.CompileContext;
 import parasol:compiler.containsErrors;
@@ -552,7 +553,7 @@ class CompileObject  extends script.Object {
 	}
 
 	public boolean run() {
-		runtime.Arena arena;
+		compiler.Arena arena;
 		boolean loadFailed = false;
 
 		if (targetArgument != null)
@@ -749,7 +750,7 @@ class RunObject extends script.Object {
 		else if (result != _exitCode)
 			printf("    Unexpected exit code %d\n", result);
 		if (verboseFlag) {
-			runtime.Arena arena;
+			compiler.Arena arena;
 
 			CompileContext compileContext(&arena, verboseFlag, false);
 			if (!compileContext.loadRoot(false)) {

@@ -26,7 +26,8 @@ public class Namespace extends Symbol {
 	private substring _domain;
 	private ref<Unit>[] _units;				// Units that have been defined for this Arena's namespaces, excluding imports.
 
-	Namespace(substring domain, ref<Node> namespaceNode, ref<Scope> enclosing, ref<Node> annotations, substring name, ref<runtime.Arena> arena, ref<MemoryPool> pool) {
+	Namespace(substring domain, ref<Node> namespaceNode, ref<Scope> enclosing, 
+				ref<Node> annotations, substring name, ref<Arena> arena, ref<MemoryPool> pool) {
 		super(Operator.PUBLIC, StorageClass.ENCLOSING, enclosing, annotations, pool, name, null);
 		if (arena != null)
 			_symbols = arena.createNamespaceScope(enclosing, this);

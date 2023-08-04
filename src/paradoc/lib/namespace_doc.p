@@ -23,7 +23,7 @@ import parasol:storage;
 
 string corpusTitle = "Parasol Documentation";
 
-runtime.Arena arena;
+compiler.Arena arena;
 ref<compiler.CompileContext> compileContext;
 
 class Names {
@@ -48,14 +48,18 @@ public boolean configureArena(string[] finalArguments) {
 	ref<context.Context> activeContext = arena.activeContext();
 
 	string[] unitFilenames;
+	boolean isCorePackage;
+
 	for (int i = 1; i < finalArguments.length(); i++) {
 		ref<context.Package> package = activeContext.getPackage(finalArguments[i]);
 		if (package != null) {
 			unitFilenames.append(package.getUnitFilenames());
+			if (package.name() == context.PARASOL_CORE_PACKAGE_NAME)
+				isCorePackage = true;
 		} else
 			printf("Could not find package %s\n", finalArguments[i]);
 	}
-	compileContext.compilePackage(unitFilenames, "none");
+	compileContext.compilePackage(isCorePackage, unitFilenames, "none");
 
 	// We are now done with compiling, time to analyze the results
 

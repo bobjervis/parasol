@@ -15,6 +15,7 @@
  */
 namespace parasol:x86_64;
 
+import parasol:compiler;
 import parasol:compiler.ClassScope;
 import parasol:compiler.FIRST_USER_METHOD;
 import parasol:compiler.OverloadInstance;
@@ -27,11 +28,10 @@ import parasol:compiler.Unit;
 import parasol:context;
 import parasol:pxi;
 import parasol:runtime;
-import parasol:runtime.Arena;
 import native:C;
 
 public class Disassembler {
-	private ref<Arena> _arena;
+	private ref<compiler.Arena> _arena;
 	private long _logical;
 	private long _ip;
 	private pointer<byte> _physical;
@@ -61,7 +61,7 @@ public class Disassembler {
 	private ref<ref<ClassScope>[]> _vtables;
 	private ref<OrdinalMap> _ordinalMap;
 	
-	Disassembler(ref<Arena> arena, long logical, int imageLength, pointer<byte> physical, ref<pxi.X86_64SectionHeader> pxiHeader) {
+	Disassembler(ref<compiler.Arena> arena, long logical, int imageLength, pointer<byte> physical, ref<pxi.X86_64SectionHeader> pxiHeader) {
 		_arena = arena;
 		_logical = logical;
 		_imageLength = imageLength;

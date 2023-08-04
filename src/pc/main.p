@@ -157,7 +157,7 @@ void parseCommandLine(string[] args) {
 }
 
 int runCommand() {
-	runtime.Arena arena;
+	compiler.Arena arena;
 
 	configureArena(&arena);
 
@@ -219,7 +219,7 @@ int runCommand() {
 	return returnValue;
 }
 
-void configureArena(ref<runtime.Arena> arena) {
+void configureArena(ref<compiler.Arena> arena) {
 	arena.verbose = parasolCommand.verboseOption.value;
 	if (parasolCommand.logImportsOption.value)
 		printf("Running with context: %s\n", arena.activeContext().name());
@@ -227,7 +227,7 @@ void configureArena(ref<runtime.Arena> arena) {
 		arena.preferredTarget = pxi.sectionType(parasolCommand.targetOption.value);
 }
 
-private boolean disassemble(ref<runtime.Arena> arena, ref<compiler.Target> target, string filename) {
+private boolean disassemble(ref<compiler.Arena> arena, ref<compiler.Target> target, string filename) {
 	if (!parasolCommand.disassemblyOption.value)
 		return true;
 	if (target.disassemble(arena))

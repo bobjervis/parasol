@@ -473,13 +473,26 @@ private string getContextHome() {
 //@Constant
 public string PARASOL_CORE_PACKAGE_NAME = "core:parasollanguage.org";
 
+private monitor class VolatilePackage {
+	enum ManifestState {
+		NOT_LOADED,
+		LOADING,
+		LOADED,
+		FAILED
+	}
+
+	protected ManifestState _manifestState;
+}
+
 /**
  * This class describes an installed package. It is built from the information stored in the context database.
  */
-public class Package {
+public class Package extends VolatilePackage {
 	private string _name;
 	private string _directory;
-	private compiler.DomainForest _forest;
+	private ref<Namespace>[string] _domains;
+	private string[] _initFirst;
+	private string[] _initLast;
 
 	Package(string name, string directory) {
 		_name = name;
@@ -487,7 +500,7 @@ public class Package {
 	}
 
 	~Package() {
-//		printf("~Package() %p\n", this);
+		_domains.deleteAll();
 	}
 	/**
 	 * Return the directory containing the package files.
@@ -496,6 +509,10 @@ public class Package {
 	 */
 	public string directory() {
 		return _directory;
+	}
+	/** {@ignore} */
+	void setDirectory(string directory) {
+		_directory = directory;
 	}
 	/**
 	 * Open the package and preapre for it being analyzed.
@@ -510,30 +527,154 @@ public class Package {
 	public boolean open() {
 		return true;
 	}
-
 	/**
 	 * Retrieve a complete list of units in the package.
 	 */
 	public string[], boolean getUnitFilenames() {
 		string[] a;
 
+		for (d in _domains)
+			_domains[d].getUnitFilenames(&a);
 		return a, false;
 	}
 	/**
 	 * Retrieve a list of units that are members of the namespace referenced by the 
 	 * function argument.
 	 *
-	 * @param namespaceNode A compiler namespace parse tree node containing the namespace
-	 * that must be fetched.
+	 * @param domain The domain string of the namespace.
+	 * @param namespaces A vector of name components. Each element is one of the
+	 * identifier strings in the namespace. Note that this is typically derived from an
+	 * import statement, so there may be names of symbols on the end of the list here.
+	 * We will want to use the last name that matches, as long as there's one namespace
+	 * that does match.
 	 *
 	 * @return A list of zero of more filenames where the units assigned to that namespace
 	 * can be found. If the length of the array is zero, this package does not contain
 	 * any units in that namespace.
 	 */
-	public string[], boolean getNamespaceUnits(ref<compiler.Ternary> namespaceNode, ref<compiler.CompileContext> compileContext) {
-		return _forest.getNamespaceUnits(this, namespaceNode, compileContext);
+	public string[] getNamespaceUnits(string domain, string... namespaces) {
+		string[] a;
+
+		if (loadManifest()) {
+			ref<Namespace> nm = _domains.get(domain);
+			if (nm != null) {
+				for (i in namespaces) {
+					ref<Namespace> next = nm.get(namespaces[i]);
+					if (next == null) {
+						if (i == 0)
+							return a;			// If this package has no matching
+												// namespaces, report no units.
+						break;
+					}
+					nm = next;
+				}
+				return nm.units();
+			}
+		}
+		return a;
 	}
 	
+	boolean loadManifest() {
+		lock (*this) {
+			switch (_manifestState) {
+			case NOT_LOADED:
+				_manifestState = ManifestState.LOADING;
+				break;
+
+			case LOADING:
+				wait();
+				if (_manifestState == ManifestState.FAILED)
+					return false;
+
+			case LOADED:
+				return true;
+
+			case FAILED:
+				return false;
+			}
+		}
+
+		boolean success;
+		string manifestFile = storage.path(_directory, PACKAGE_MANIFEST);
+		ref<Reader> r = storage.openTextFile(manifestFile);
+		if (r != null) {
+			string domain;
+			ref<Namespace> currentScope;
+			ref<Namespace> nm;
+			success = true;
+			for (;;) {
+				string line = r.readLine();
+				if (line == null)
+					break;
+				if (line.length() == 0)
+					continue;
+//				printf("Line = '%s' currentScope = %p nm = %p\n", line, currentScope, nm);
+				switch (line[0]) {
+				case 'D':
+					domain = line.substr(1);
+					currentScope = createDomain(domain);
+					break;
+	
+				case 'N':
+					(currentScope, success) = currentScope.addNamespace(line.substr(1));
+					break;
+	
+				case 'U':
+					string unitFilename = storage.path(_directory, line.substr(1));
+					currentScope.addUnit(unitFilename);
+					break;
+	
+				case 'X':
+					currentScope = currentScope.parent();
+					break;
+
+				case 'F':
+					unitFilename = storage.path(_directory, line.substr(1));
+					_initFirst.append(unitFilename);
+					break;
+
+				case 'L':
+					unitFilename = storage.path(_directory, line.substr(1));
+					_initLast.append(unitFilename);
+					break;
+
+				default:
+					printf("        FAILED: unexpected content in manifest for package %s: %s\n", 
+												_name, manifestFile);
+					success = false;
+				}
+				if (!success)
+					break;
+			}
+			delete r;
+		} else
+			printf("        FAILED: to open manifest for package %s: %s\n", _name, manifestFile);
+		lock (*this) {
+			if (success) {
+				_manifestState = ManifestState.LOADED;
+				notifyAll();
+				return true;
+			} else {
+				_manifestState = ManifestState.FAILED;
+				// Purge all the failed data before we unleash any waiting threads.
+				_initFirst.clear();
+				_initLast.clear();
+				_domains.deleteAll();
+				notifyAll();
+				return false;
+			}
+		}
+	}
+	
+	public ref<Namespace> createDomain(string domain) {
+		ref<Namespace> d = _domains[domain];
+		if (d == null) {
+			d = new Namespace(null, domain);
+			_domains[domain] = d;
+		}
+		return d;
+	}
+
 	public boolean inputsNewer(time.Instant timeStamp) {
 		time.Instant modified;
 		boolean success;
@@ -558,11 +699,26 @@ public class Package {
 	}
 
 	public string[] initFirst() {
-		return _forest.initFirst();
+		return _initFirst;
 	}
 
 	public string[] initLast() {
-		return _forest.initLast();
+		return _initLast;
+	}
+
+	void print() {
+		lock (*this) {
+			for (d in _domains) {
+				printf("Domain %s:\n", d);
+				_domains[d].print(4);
+			}
+			if (_initFirst.length() > 0) {
+				printf("init first: ");
+				for (i in _initFirst)
+					printf(" %s", _initFirst[i]);
+				printf("\n");
+			}
+		}
 	}
 }
 /**
@@ -574,5 +730,67 @@ public class Package {
 class CorePackage extends Package {
 	CorePackage(string name, string directory) {
 		super(name, directory);
+	}
+}
+
+class Namespace {
+	private string _name;
+	private ref<Namespace> _parent;
+	private ref<Namespace>[string] _nameMap;
+	private string[] _units;
+
+	Namespace(ref<Namespace> parent, string name) {
+		_parent = parent;
+		_name = name;
+	}
+
+	~Namespace() {
+		_nameMap.deleteAll();
+	}
+
+	public ref<Namespace>, boolean addNamespace(string name) {
+		if (_nameMap[name] != null)
+			return this, false;
+		ref<Namespace> n = new Namespace(this, name);
+		_nameMap[name] = n;
+		return n, true;
+	}
+
+	public void addUnit(string filename) {
+		_units.append(filename);
+	}
+
+	public ref<Namespace> get(string name) {
+		return _nameMap[name];
+	}
+
+	public string[] units() {
+		return _units;
+	}
+
+	public void getUnitFilenames(ref<string[]> output) {
+		for (n in _nameMap)
+			_nameMap[n].getUnitFilenames(output);
+		output.append(_units);
+	}
+
+	public ref<Namespace> parent() {
+		return _parent;
+	}
+
+	void print(int indent) {
+		boolean printedSomething;
+		for (i in _units) {
+			printf("%*.*c  %s\n", indent, indent, ' ', _units[i]);
+			printedSomething = true;
+		}
+		for (n in _nameMap) {
+			ref<Namespace> nm = _nameMap[n];
+			printf("%*.*c%s%s:\n", indent, indent, ' ', n, n != nm._name ? "(" + nm._name + ")" : "");
+			_nameMap[n].print(indent + 4);
+			printedSomething = true;
+		}
+		if (!printedSomething)
+			printf("%*.*cNamespace/domain %s is empty\n", indent, indent, ' ', _name);
 	}
 }

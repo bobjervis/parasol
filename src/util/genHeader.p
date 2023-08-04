@@ -81,7 +81,7 @@ int main(string[] args) {
 	if (finalArguments.length() != 2)
 		genHeaderCommand.help();
 	printf("Creating header %s\n", finalArguments[1]);
-	runtime.Arena arena;
+	compiler.Arena arena;
 
 	arena.verbose = genHeaderCommand.verboseOption.value;
 

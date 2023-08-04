@@ -678,9 +678,6 @@ class X86_64Encoder extends Target {
 	 * 
 	 */
 	private void prepareVTables(ref<CompileContext> compileContext) {
-		// TODO: make this work better.
-		buildVtable(ref<ClassScope>(classType().scope()), compileContext);
-		buildVtable(ref<ClassScope>(builtInType().scope()), compileContext);
 		for (int i = 0; i < _vtables.length(); i++) {
 			ref<ClassScope> scope = _vtables[i];
 			// This relies on the copyToImage function being idempotent, in that the return value
@@ -873,7 +870,7 @@ class X86_64Encoder extends Target {
 		symbol.offset = ref<Segment>(symbol.segment).reserve(size);
 	}
 
-	public boolean disassemble(ref<runtime.Arena> arena) {
+	public boolean disassemble(ref<compiler.Arena> arena) {
 		Disassembler d(arena, 0, _staticMemoryLength, _staticMemory, &_pxiHeader);
 		d.setDataMap(&_dataMap[0][0], _dataMap[0].length());
 		d.setFunctionMap(&_functionMap);

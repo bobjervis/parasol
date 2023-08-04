@@ -53,7 +53,7 @@ public class CompileContext extends CodegenContext {
 	private boolean _forestIsCreated;
 	private ref<FlowContext> _flowContext;
 	private ref<MemoryPool> _pool;
-	private ref<runtime.Arena> _arena;
+	private ref<Arena> _arena;
 	private ref<Scope> _current;
 	private boolean _logImports;
 	private int _importedScopes;
@@ -163,12 +163,12 @@ public class CompileContext extends CodegenContext {
 		}
 	}
 
-	CompileContext(ref<runtime.Arena> arena, boolean verbose, boolean logImports) {
+	CompileContext(ref<Arena> arena, boolean verbose, boolean logImports) {
 		super(verbose, memory.StartingHeap.PRODUCTION, null, null);
 		init(arena, null, logImports);
 	}
 
-	CompileContext(ref<runtime.Arena> arena, ref<thread.ThreadPool<boolean>> workers, boolean verbose, memory.StartingHeap memoryHeap, string profilePath, string coveragePath, boolean logImports) {
+	CompileContext(ref<Arena> arena, ref<thread.ThreadPool<boolean>> workers, boolean verbose, memory.StartingHeap memoryHeap, string profilePath, string coveragePath, boolean logImports) {
 		super(verbose, memoryHeap, profilePath, coveragePath);
 		init(arena, workers, logImports);
 	}
@@ -180,7 +180,7 @@ public class CompileContext extends CodegenContext {
 		clearDeclarationModifiers();
 	}
 
-	private void init(ref<runtime.Arena> arena, ref<thread.ThreadPool<boolean>> workers, boolean logImports) {
+	private void init(ref<Arena> arena, ref<thread.ThreadPool<boolean>> workers, boolean logImports) {
 		_logImports = logImports;
 		_arena = arena;
 		clearDeclarationModifiers();
@@ -235,7 +235,7 @@ public class CompileContext extends CodegenContext {
 
 	public ref<Target> compile(string filename) {
 		if (verbose())
-			printf("compile(%s)\n", filename);
+			printf("Thread %s compile(%s)\n", thread.currentThread().name(), filename);
 
 		if (!storage.exists(filename)) {
 			printf("File '%s' does not exist\n", filename);
@@ -267,7 +267,7 @@ public class CompileContext extends CodegenContext {
 		_main = mainFile.scope();
  */
 		if (success)
-			return finishCompile(mainFile, null);
+			return finishCompile(false, mainFile, null);
 		else
 			return null;
 	}
@@ -288,14 +288,14 @@ public class CompileContext extends CodegenContext {
 		}
 		definingFile = outer;
 		if (success)
-			return finishCompile(source, checkInOrder);
+			return finishCompile(false, source, checkInOrder);
 		else
 			return null, true;
 	}
 
-	public ref<Target> compilePackage(string[] unitFilenames, string packageDir) {
+	public ref<Target> compilePackage(boolean isCorePackage, string[] unitFilenames, string packageDir) {
 		if (parseUnits(unitFilenames, packageDir))
-			return finishCompile(null, null);
+			return finishCompile(isCorePackage, null, null);
 		else
 			return null;
 	}
@@ -343,9 +343,21 @@ public class CompileContext extends CodegenContext {
 		return success;
 	}
 	
-	public ref<Target>, boolean finishCompile(ref<Unit> mainUnit, boolean(ref<Node>, string) checkInOrder) {
+	ref<Target>, boolean finishCompile(boolean isCorePackage,
+									   ref<Unit> mainUnit, 
+									   boolean(ref<Node>, string) checkInOrder) {
 //		printf("finishCompile\n");
 		buildScopes();
+
+		if (!isCorePackage) {
+			// Make sure that these core namespaces are imported, because they will be needed
+			// at least somewhere in the compiled code. And, if there are no explicit imports of
+			// these namespaces in the files being compiled, they could be skipped.
+			populateCoreNamespace("parasol", "memory");
+			populateCoreNamespace("native", "C");
+			populateCoreNamespace("parasol", "runtime");
+		}
+		
 		resolveImports();
 		if (!bindBuiltInSymbols())
 			return null, true;
@@ -378,16 +390,29 @@ public class CompileContext extends CodegenContext {
 			printf("Beginning code generation\n");
 		return Target.generate(mainUnit, this), nodesOrdered;
 	}
-	
+
+	public void populateCoreNamespace(string domain, string namespaceName) {
+		ref<context.Context> activeContext = _arena.activeContext();
+		ref<context.Package> corePackage = activeContext.getPackage(context.PARASOL_CORE_PACKAGE_NAME);
+		populateFromPackage(corePackage, domain, namespaceName);
+	}
+
 	public boolean populateNamespace(ref<Ternary> namespaceNode) {
 		boolean success = true;
 		for (i in _packages) {
-			string[] units = _packages[i].getNamespaceUnits(namespaceNode, this);
+			string domain;
+
+			(domain, success) = namespaceNode.left().dottedName();
+			if (!success)
+				break;
+			string[] names;
+			namespaceNode.getNamespaces(&names);
+			string[] units = populateFromPackage(_packages[i], domain, names);
 			string directory = _packages[i].directory();
 			for (j in units) {
 //				printf("        %s / %s\n", directory, units[j]);
 				string filename = storage.path(directory, units[j]);
-				ref<Unit> unit = _arena.defineImportedUnit(filename, directory);
+				ref<Unit> unit = _arena.defineImportedUnit(units[j], directory);
 				// The unit name has already been seen, and parsed. Ignore this instance.
 				if (unit.parsed())
 					continue;
@@ -404,6 +429,13 @@ public class CompileContext extends CodegenContext {
 			}
 		}
 		return success;
+	}
+
+	private string[] populateFromPackage(ref<context.Package> pkg, string domain, string... names) {
+		string[] units = pkg.getNamespaceUnits(domain, names);
+		for (j in units)
+			_arena.defineImportedUnit(units[j], pkg.directory());
+		return units;
 	}
 
 	public void resolveImports() {
@@ -1667,7 +1699,7 @@ public class CompileContext extends CodegenContext {
 		return t;
 	}
 	
-	public ref<runtime.Arena> arena() { 
+	public ref<Arena> arena() { 
 		return _arena; 
 	}
 
@@ -2015,7 +2047,7 @@ public class MemoryPool extends memory.NoReleasePool {
 	}
 
 	public ref<Namespace> newNamespace(string domain, ref<Node> namespaceNode, ref<Scope> enclosing, 
-									ref<Node> annotations, substring name, ref<runtime.Arena> arena) {
+									ref<Node> annotations, substring name, ref<Arena> arena) {
 		return super new Namespace(newCompileString(domain), namespaceNode, enclosing, annotations, name, arena, this);
 	}
 
@@ -2151,153 +2183,6 @@ public class DomainForest extends VolatileDomainForest {
 		if (_anonymous == null)
 			_anonymous = _pool.newNamespace(null, null, null, null, null, compileContext.arena());
 		return _anonymous;
-	}
-	/**
-	 * Retrieve a list of units that are members of the namespace referenced by the 
-	 * function argument.
-	 *
-	 * @param namespaceNode A compiler namespace parse tree node containing the namespace
-	 * that must be fetched.
-	 *
-	 * @return A list of zero of more filenames where the units assigned to that namespace
-	 * can be found. If the length of the array is zero, this package does not contain
-	 * any units in that namespace.
-	 */
-	public string[], boolean getNamespaceUnits(ref<context.Package> package, ref<Ternary> namespaceNode, ref<CompileContext> compileContext) {
-		string[] a;
-
-		if (!loadManifest(package, compileContext))
-			return a, false;
-
-		string domain;
-		boolean result;
-		
-		(domain, result) = namespaceNode.left().dottedName();
-//		string name;
-			
-//		if (namespaceNode.middle().op() == Operator.EMPTY)
-//			(name, result) = namespaceNode.right().dottedName();
-//		else
-//			(name, result) = namespaceNode.middle().dottedName();
-		ref<Scope> s = _domains.get(domain);
-		if (s != null) {
-//			printf("name %s:%s\n", domain, name);
-			ref<Namespace> nm;
-			ref<ref<Unit>[]> units;
-			if (namespaceNode.middle().op() == Operator.EMPTY) {
-				nm = namespaceNode.right().getNamespace(s, compileContext);
-//				printf("    middle empty %p\n", nm);
-			} else {
-				nm = namespaceNode.middle().getNamespace(s, compileContext);
-				if (nm != null) {
-					ref<Symbol> sym = nm.findImport(namespaceNode, compileContext);
-					if (sym != null && sym.class <= Namespace)
-						nm = ref<Namespace>(sym);
-				}
-//				printf("    middle occupied %p\n", nm);
-			}
-			if (nm != null) {
-//				nm.print(4, false);
-				units = nm.includedUnits();
-				for (i in *units)
-					a.append((*units)[i].packageFilename());
-			}
-		}
-		return a, true;
-	}
-	
-	public boolean loadManifest(ref<context.Package> package, ref<CompileContext> compileContext) {
-		lock (*this) {
-			switch (_manifestState) {
-			case NOT_LOADED:
-				_manifestState = ManifestState.LOADING;
-				break;
-
-			case LOADING:
-				wait();
-				if (_manifestState == ManifestState.FAILED)
-					return false;
-
-			case LOADED:
-				return true;
-
-			case FAILED:
-				return false;
-			}
-		}
-
-		boolean success;
-		string manifestFile = storage.path(package.directory(), context.PACKAGE_MANIFEST);
-		ref<Reader> r = storage.openTextFile(manifestFile);
-		if (r != null) {
-			ref<SyntaxTree> tree = new SyntaxTree();
-			string domain;
-			ref<Scope> currentScope;
-			ref<Namespace> nm;
-			success = true;
-			for (;;) {
-				string line = r.readLine();
-				if (line == null)
-					break;
-				if (line.length() == 0)
-					continue;
-//				printf("Line = '%s' currentScope = %p nm = %p\n", line, currentScope, nm);
-				switch (line[0]) {
-				case 'D':
-					domain = line.substr(1);
-					currentScope = createDomain(domain, compileContext);
-					break;
-	
-				case 'N':
-					nm = currentScope.defineNamespace(domain, null, _pool.newCompileString(line.substr(1)), &_pool, null, null);
-					currentScope = nm.symbols();
-					break;
-	
-				case 'U':
-					string unitFilename = storage.path(package.directory(), line.substr(1));
-					ref<Unit> u = new Unit(unitFilename, package.directory());
-					_units.append(u);
-					nm.includeUnit(u);
-					break;
-	
-				case 'X':
-					currentScope = currentScope.enclosing();
-					nm = currentScope.getNamespace();
-					break;
-
-				case 'F':
-					unitFilename = storage.path(package.directory(), line.substr(1));
-					_initFirst.append(unitFilename);
-					break;
-
-				case 'L':
-					unitFilename = storage.path(package.directory(), line.substr(1));
-					_initLast.append(unitFilename);
-					break;
-
-				default:
-					printf("        FAILED: unexpected content in manifest for package %s: %s\n", package.name(), manifestFile);
-					success = false;
-				}
-			}
-			delete r;
-		} else
-			printf("        FAILED: to open manifest for package %s: %s\n", package.name(), manifestFile);
-		lock (*this) {
-			if (success) {
-				_manifestState = ManifestState.LOADED;
-				notifyAll();
-//				for (domain in _domains) {
-//					printf("Domain %s\n", domain);
-//					_domains[domain].print(4, true);
-//				}
-				return true;
-			} else {
-				_manifestState = ManifestState.FAILED;
-				notifyAll();
-				return false;
-			}
-		}
 	}
 	/**
 	 * Get a domain Scope from a provided name.

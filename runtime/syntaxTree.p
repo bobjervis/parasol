@@ -3121,6 +3121,21 @@ public class Ternary extends Node {
 		return sel.left().conforms(importNode.middle());
 	}
 
+	public void getNamespaces(ref<string[]> names) {
+		if (_middle.op() != Operator.EMPTY)
+			buildNamesList(_middle, names);
+		if (_right.op() == Operator.IDENTIFIER)
+			names.append(_right.identifier());
+	}
+
+	private static void buildNamesList(ref<Node> n, ref<string[]> names) {
+		if (n.op() == Operator.DOT) {
+			ref<Selection> s = ref<Selection>(n);
+			buildNamesList(s.left(), names);
+		}
+		names.append(n.identifier());
+	}
+
 	public void print(int indent) {
 		_left.print(indent + INDENT);
 		printBasic(indent);

@@ -132,22 +132,6 @@ public class Class extends CommonFields {
 	 * comparison operators.
 	 */
 	public float compare(ref<Class> other) {
-		// This is transtion code. It should be removed when no longer needed.
-		if (_magic == MAGIC) {
-			assert(other._magic == MAGIC);
-		} else {
-			assert(other._magic != MAGIC);
-			if (this == other)
-				return 0.0f;
-			ref<compiler.Type> t1 = ref<compiler.Type>(this);
-			ref<compiler.Type> t2 = ref<compiler.Type>(other);
-			if (t1.isSubtype(t2))
-				return -1.0f;
-			else if (t2.isSubtype(t1))
-				return 1.0f;
-			else
-				return float.NaN;
-		}
 		if (this == other)
 			return 0.0f;
 		else if (this.doesExtend(other))
@@ -199,9 +183,6 @@ public class Class extends CommonFields {
 	}
 
 	public TypeFamily family() {
-		// This is transtion code. It should be removed when no longer needed.
-		if (_magic != MAGIC)
-			return ref<compiler.Type>(this).family();
 		return _family;
 	}
 

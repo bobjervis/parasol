@@ -1619,7 +1619,8 @@ public class Scope {
 		return defineNamespace(domain, namespaceNode, name, compileContext.pool(), compileContext.arena(), compileContext.annotations);
 	}
 
-	public ref<Namespace> defineNamespace(string domain, ref<Node> namespaceNode, substring name, ref<MemoryPool> pool, ref<runtime.Arena> arena, ref<Node> annotations) {
+	public ref<Namespace> defineNamespace(string domain, ref<Node> namespaceNode, substring name,
+										  ref<MemoryPool> pool, ref<Arena> arena, ref<Node> annotations) {
 		ref<Symbol> sym = lookup(name, null);
 		if (sym != null) {
 			if (sym.class == Namespace) {

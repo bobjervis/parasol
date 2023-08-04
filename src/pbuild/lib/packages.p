@@ -95,7 +95,7 @@ class Product extends Folder {
 public class Package extends Product {
 	protected ref<context.Package> _package;
 	protected ref<compiler.CompileContext> _compileContext;
-	protected ref<runtime.Arena> _arena;
+	protected ref<compiler.Arena> _arena;
 
 	protected boolean _buildSuccessful;
 	protected string _packageDir;
@@ -342,7 +342,7 @@ public class Package extends Product {
 		string[] unitFilenames;
 		getUnitFilenames(&unitFilenames);
 //		printf("    %d found %d unit filenames\n", thread.currentThread().id(), unitFilenames.length());
-		target = _compileContext.compilePackage(unitFilenames, _packageDir);
+		target = _compileContext.compilePackage(this == corePackage, unitFilenames, _packageDir);
 		
 		if (coordinator().generateSymbolTables())
 			_arena.printSymbolTable();
@@ -368,22 +368,6 @@ public class Package extends Product {
 			printf("        FAIL: Could not create sentinel file '%s'\n", sentinelFile);
 			return false;
 		}
-	}
-	/**
-	 * Retrieve a list of units that are members of the namespace referenced by the 
-	 * function argument. This will only be called after the build has successfully
-	 * completed.
-	 *
-	 * @param namespaceNode A compiler namespace parse tree node containing the namespace
-	 * that must be fetched.
-	 *
-	 * @return A list of zero of more filenames where the units assigned to that namespace
-	 * can be found. If the length of the array is zero, this package does not contain
-	 * any units in that namespace.
-	 */
-	public string[] getNamespaceUnits(ref<compiler.Ternary> namespaceNode) {
-//		printf("(%s).getNamespaceUnits(%s)\n", _name, namespaceOf(namespaceNode));
-		return _package.getNamespaceUnits(namespaceNode, _compileContext);
 	}
 
 	private string namespaceOf(ref<compiler.Ternary> namespaceNode) {
@@ -486,7 +470,7 @@ public class Package extends Product {
 	}
 
 	void configureArena() {
-		_arena = new runtime.Arena(coordinator().activeContext());
+		_arena = new compiler.Arena(coordinator().activeContext());
 
 
 //		printf("Arena configured for %s coordinator = %p\n", _name, coordinator());

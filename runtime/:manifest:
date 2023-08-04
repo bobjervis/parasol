@@ -18,6 +18,7 @@ X
 Dparasol
 Ncompiler
 Uannotations.p
+Uarena.p
 UbinaryNode.p
 UcallNode.p
 Ucommentary.p
@@ -36,11 +37,6 @@ Uvectorize.p
 Ntest
 UcompilerTest.p
 X
-X
-Nruntime
-Uarena.p
-Urtti.p
-Uruntime.p
 X
 Nprocess
 UcommandLine.p
@@ -117,6 +113,10 @@ Ux86_pxi.p
 X
 Nrandom
 Urandom.p
+X
+Nruntime
+Urtti.p
+Uruntime.p
 X
 Nscript
 Uscript.p

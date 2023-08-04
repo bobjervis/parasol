@@ -63,10 +63,10 @@ public class CodegenContext {
  * a single Parasol compiler to be used as a cross-compiler to other environments.
  */
 public class Target {
-	protected ref<runtime.Arena> _arena;
+	protected ref<Arena> _arena;
 
-	private ref<Type> _builtInType;
-	private ref<Type> _classType;
+//	private ref<Type> _builtInType;
+//	private ref<Type> _classType;
 	
 	private ref<Unit>[] _staticBlocks;
 	private ref<ParameterScope>[runtime.TypeFamily] _marshallerFunctions;
@@ -101,26 +101,12 @@ public class Target {
 			break;
 		}
 		target._verbose = compileContext.verbose();
-		target.populateTypeMap(compileContext);
+//		target.populateTypeMap(compileContext);
 		compileContext.target = target;
 		if (target.generateCode(mainFile, compileContext))
 			return target;
 		else
 			return null;
-	}
-	
-	private void populateTypeMap(ref<CompileContext> compileContext) {
-		ref<Symbol> re = compileContext.forest().getSymbol("parasol", "compiler.BuiltInType", compileContext);
-		if (re.type().family() != runtime.TypeFamily.TYPEDEF)
-			assert(false);
-		ref<TypedefType> t = ref<TypedefType>(re.type());
-		_builtInType = t.wrappedType();
-		
-		re = compileContext.forest().getSymbol("parasol", "compiler.ClassType", compileContext);
-		if (re.type().family() != runtime.TypeFamily.TYPEDEF)
-			assert(false);
-		t = ref<TypedefType>(re.type());
-		_classType = t.wrappedType();
 	}
 	
 	public abstract boolean generateCode(ref<Unit> mainFile, ref<CompileContext> compileContext);
@@ -177,7 +163,7 @@ public class Target {
 	/*
 	 * Write a disassembly of the target to the console.
 	 */
-	public boolean disassemble(ref<runtime.Arena> arena) {
+	public boolean disassemble(ref<Arena> arena) {
 		return false;
 	}
 	
@@ -200,15 +186,7 @@ public class Target {
 	public void unfinished(ref<Node> n, string explanation, ref<CompileContext> compileContext) {
 		n.add(MessageId.UNFINISHED_GENERATE, compileContext.pool(), " "/*n.class.name()*/, string(n.op()), explanation);
 	}
-	
-	public ref<Type> builtInType() {
-		return _builtInType;
-	}
-	
-	public ref<Type> classType() {
-		return _classType;
-	}
-	
+
 	public void print() {
 	}
 

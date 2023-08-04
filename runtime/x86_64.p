@@ -116,7 +116,7 @@ byte PXI_FIXUP_MAX = 0x04;
 int PXI_FIXUP_SHIFT = 8;
 
 public class X86_64Lnx extends X86_64 {
-	public X86_64Lnx(ref<runtime.Arena> arena) {
+	public X86_64Lnx(ref<compiler.Arena> arena) {
 		super(arena);
 	}
 	
@@ -211,7 +211,7 @@ Pxi> output) {
 }
 
 public class X86_64Win extends X86_64 {
-	public X86_64Win(ref<runtime.Arena> arena) {
+	public X86_64Win(ref<compiler.Arena> arena) {
 		super(arena);
 	}
 	
@@ -315,7 +315,7 @@ public class X86_64 extends X86_64AssignTemps {
 	private int _stackLocalVariables;
 	private memory.StartingHeap _startingHeap;
 
-	public X86_64(ref<runtime.Arena> arena) {
+	public X86_64(ref<compiler.Arena> arena) {
 		_arena = arena;
 	}
 
