@@ -39,10 +39,10 @@ ref<compiler.Namespace>[string] nameMap;
 
 Names[] names;
 
-public boolean configureArena(string[] finalArguments) {
+public boolean compilePackages(string[] finalArguments) {
 	arena.paradoc = true;
-	arena.verbose = verboseOption.value;
-	compileContext = new compiler.CompileContext(&arena, verboseOption.value, logImportsOption.value);
+	arena.verbose = false;
+	compileContext = new compiler.CompileContext(&arena, false, logImportsOption.value);
 	if (!compileContext.loadRoot(false))
 		return false;
 	ref<context.Context> activeContext = arena.activeContext();
@@ -50,23 +50,37 @@ public boolean configureArena(string[] finalArguments) {
 	string[] unitFilenames;
 	boolean isCorePackage;
 
+	boolean allGood = true;
 	for (int i = 1; i < finalArguments.length(); i++) {
 		ref<context.Package> package = activeContext.getPackage(finalArguments[i]);
 		if (package != null) {
+			boolean success;
+			string[] units;
+
+			(units, success) = package.getUnitFilenames();
+			if (!success) {
+				allGood = false;
+				printf("Could not load unitS from package %s\n", finalArguments[i]);
+			}
 			unitFilenames.append(package.getUnitFilenames());
 			if (package.name() == context.PARASOL_CORE_PACKAGE_NAME)
 				isCorePackage = true;
 		} else
 			printf("Could not find package %s\n", finalArguments[i]);
 	}
+	if (!allGood)
+		return false;
 	compileContext.compilePackage(isCorePackage, unitFilenames, "none");
 
 	// We are now done with compiling, time to analyze the results
 
+	if (verboseOption.set()) {
+		printf("Compiled %d units!\n", unitFilenames.length());
+		for (i in unitFilenames)
+			printf("[%3d] %s\n", i, unitFilenames[i]);
+	}
 	if (symbolTableOption.value)
 		arena.printSymbolTable();
-	if (verboseOption.value)
-		arena.print();
 	if (arena.countMessages() > 0) {
 		printf("Failed to compile\n");
 		arena.printMessages();
@@ -92,6 +106,8 @@ public boolean collectNamespacesToDocument() {
 				nameMap[nameSpace] = nm;
 				ref<compiler.Doclet> doclet = nm.doclet();
 				if (doclet == null || !doclet.ignore) {
+					if (verboseOption.set())
+						printf(" - Defining namespace %s\n", nameSpace);
 					Names item;
 					item.name = nameSpace;
 					item.symbol = nm;
@@ -159,14 +175,14 @@ public boolean generateNamespaceDocumentation() {
 }
 
 void indexTypesFromNamespace(string name, ref<compiler.Namespace> nm, string dirName) {
-	string overviewPage = storage.path(dirName, "namespace-summary", "html");
+	string overviewPage = storage.path(dirName, "namespace-summary.html");
 //	printf("Creating %s\n", dirName);
 	if (!storage.ensure(dirName)) {
 		printf("Could not create directory '%s'\n", dirName);
 		process.exit(1);
 	}
 
-	string classesDir = storage.path(dirName, "classes", null);
+	string classesDir = storage.path(dirName, "classes");
 
 	indexTypesInScope(nm.symbols(), classesDir, overviewPage);
 }
@@ -279,7 +295,7 @@ void generateNamespaceSummary(string name, ref<compiler.Namespace> nm) {
 }
 
 string namespaceFile(ref<compiler.Namespace> nm) {
-	return storage.path(namespaceDir(nm), "namespace-summary", "html");
+	return storage.path(namespaceDir(nm), "namespace-summary.html");
 }
 
 string namespaceDir(ref<compiler.Namespace> nm) {
@@ -299,6 +315,8 @@ ref<compiler.Scope> scopeFor(ref<compiler.Symbol> sym) {
 		t = ref<compiler.TypedefType>(t).wrappedType();
 	return t.scope();
 }
+
+
 /*
  * sym is a symbol, possibly a namespace, class, function  or object.
  */

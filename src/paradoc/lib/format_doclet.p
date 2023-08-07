@@ -94,6 +94,8 @@ string expandDocletString(string text, ref<compiler.Symbol> sym, string baseName
  *		<i>symbol</i>
  */
 string transformLink(string linkTextIn, ref<compiler.Symbol> sym, string baseName) {
+	printf("transformLink('%s', ..., %s)\n", linkTextIn, baseName);
+	sym.print(0, false);
 	string linkText = linkTextIn.trim();
 	int idx = linkText.indexOf(' ');
 	string caption;
@@ -162,56 +164,56 @@ string transformLink(string linkTextIn, ref<compiler.Symbol> sym, string baseNam
 			}	
 		}
 	} else {
-		ref<compiler.Namespace> nm;
-		boolean hasClasses;
-		if (sym.class == compiler.Namespace) {
-			nm = ref<compiler.Namespace>(sym);
-			path = storage.path(outputFolder, nm.domain() + "_" + nm.dottedName(), null);
-		} else {
-			nm = sym.enclosingNamespace();
-			path = pathToMyParent(sym);
-			if (sym.enclosing() != sym.enclosingUnit())
-				hasClasses = true;
-		}
 		string[] components = linkText.split('.');
 		ref<compiler.Scope> scope = scopeFor(sym);
-		ref<compiler.Symbol> s = scope.lookup(components[0], null);
-		if (s == null) {
-			if (sym == nm)
-				return caption;					// If we didn't find a symbol by looking in the namespace,
-												// it's undefined, there's nowhere else to go.
-			scope = sym.enclosing();
-			if (scope == sym.enclosingUnit()) {
-				if (nm.type() == null)
-					return "*** Broken link " + linkText + " ***";
-				scope = nm.type().scope();
-			}
-			s = scope.lookup(components[0], null);
-			if (s == null)
-				return caption;
-		} else {
-			if (!hasClasses) {
-				hasClasses = true;
-				path = storage.path(path, "classes", null);
-			}
-			path = storage.path(path, sym.name(), null);
-		}
-		for (int i = 0; i < components.length() - 1; i++) {
-			if (s.type().family() != runtime.TypeFamily.TYPEDEF)
-				return caption;
-			if (!hasClasses) {
-				hasClasses = true;
-				path = storage.path(path, "classes", null);
-			}
-			path = storage.path(path, s.name(), null);
-			scope = scopeFor(s);
+		ref<compiler.Symbol> s;
+		for (i in components) {
 			if (scope == null) {
-				printf("%s has no scope\n", s.name());
-				return caption;
+				printf("Link to %s in generated file %s is undefined.\n", linkText, baseName);
+				return caption;			// If we didn't find a symbol by looking in the lexical scopes,
+										// it's undefined, there's nowhere else to go.
 			}
-			s = scope.lookup(components[i + 1], null);
-			if (s == null)
-				return caption;
+			do {
+				s = scope.lookup(components[i], null);
+				if (s != null)
+					break;
+				scope = scope.enclosing();
+			} while (scope != null);
+			if (s == null) {
+				printf("Link to %s in generated file %s is undefined.\n", linkText, baseName);
+				return caption;			// If we didn't find a symbol by looking in the lexical scopes,
+										// it's undefined, there's nowhere else to go.
+			}
+			if (i == components.length() - 1)
+				break;
+			scope = scopeFor(s);
+		}
+		scope.print(0, false);
+		string path = linkTo(s);
+		linkText = storage.makeCompactPath(path, baseName);
+		printf("'%s' = makeCompactPath('%s', '%s')\n", linkText, path, baseName);
+	}
+/*
+				if (s.type().family() != runtime.TypeFamily.TYPEDEF)
+					return caption;
+				if (!hasClasses) {
+					hasClasses = true;
+					path = storage.path(path, "classes");
+				}
+				path = storage.path(path, s.name());
+				scope = scopeFor(s);
+				if (scope == null) {
+					printf("%s has no scope\n", s.name());
+					return caption;
+				}
+				s = scope.lookup(components[i + 1], null);
+				if (s == null)
+					return caption;
+			}
+			if (!hasClasses) {
+				hasClasses = true;
+				path = storage.path(path, "classes");
+			}
 		}
 		if (s.type() != null && s.type().family() == runtime.TypeFamily.TYPEDEF) {
 			if (!hasClasses)
@@ -228,6 +230,7 @@ string transformLink(string linkTextIn, ref<compiler.Symbol> sym, string baseNam
 				linkText = storage.makeCompactPath(path, baseName) + "#" + components[components.length() - 1];
 		}
 	}
+ */
 	return "<a href=\"" + linkText + "\">" + caption + "</a>";
 }
 

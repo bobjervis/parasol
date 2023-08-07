@@ -1107,33 +1107,31 @@ public string makeCompactPath(string filename, string baseFilename) {
 	int firstSlash = -1;
 	int lastSlash = -1;
 	for (i = 0; i < span; i++) {
-		if (a1[i] != a2[i]) {
-			if (firstSlash == lastSlash)
-				break;
-
-				// There is a common directory prefix!
-
-			int slashCount = 0;
-			for (int j = i + 1; j < a2.length(); j++)
-				if (a2[j] == '/')
-					slashCount++;
-//			printf("slashCount %d\n", slashCount);
-			if (slashCount == 0) {
-				return a1.substr(lastSlash + 1);
-			}
-			string result;
-			while (slashCount > 0) {
-				result.append("../");
-				slashCount--;
-			}
-			return result + a1.substr(lastSlash + 1);
-		}
+		if (a1[i] != a2[i])
+			break;
 		if (a1[i] == '/') {
 			lastSlash = i;
 			if (firstSlash < 0)
 				firstSlash = i;
 		}
 	}
-	return a1;
+	if (firstSlash == lastSlash)
+		return a1;
+
+		// There is a common directory prefix!
+
+	int slashCount = 0;
+	for (int j = i + 1; j < a2.length(); j++)
+		if (a2[j] == '/')
+			slashCount++;
+//	printf("slashCount %d\n", slashCount);
+	if (slashCount == 0)
+		return a1.substr(lastSlash + 1);
+	string result;
+	while (slashCount > 0) {
+		result.append("../");
+		slashCount--;
+	}
+	return result + a1.substr(lastSlash + 1);
 }
 

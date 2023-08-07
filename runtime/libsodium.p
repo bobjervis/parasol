@@ -13,6 +13,10 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * libsodium.org offers a very good open source crypto package. The existing bindings barely
+ * touch the surface of what this package contains.
+ */
 namespace libsodium.org:crypto;
 
 // Scrypt interface

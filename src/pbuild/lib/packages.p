@@ -39,6 +39,7 @@ class Product extends Folder {
 	}
 
 	boolean defineContext(ref<BuildFile> buildFile, ref<Coordinator> coordinator, string buildDir, string outputDir) {
+		printf("Product.defineContext %s %s\n", name(), thread.currentThread().name());
 		findProducts(buildFile, &_includedProducts);
 		_coordinator = coordinator;
 		_buildDir = buildDir;
@@ -157,6 +158,7 @@ public class Package extends Product {
 	}
 
 	boolean defineContext(ref<BuildFile> buildFile, ref<Coordinator> coordinator, string buildDir, string outputDir) {
+		printf("Package.defineContext %s\n", thread.currentThread().name());
 		super.defineContext(buildFile, coordinator, buildDir, outputDir);
 		_packageDir = storage.path(outputDir, filename() + ".tmp");
 		if (storage.exists(_packageDir)) {

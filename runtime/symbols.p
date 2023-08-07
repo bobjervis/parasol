@@ -57,8 +57,10 @@ public class Namespace extends Symbol {
 		printf("\n");
 		for (i in _units)
 			printf("%*.*c%s\n", indent + 8, indent + 8, ' ', _units[i].filename());
-		_symbols.print(indent + INDENT, false);
-		printf("\n");
+		if (printChildScopes) {
+			_symbols.print(indent + INDENT, false);
+			printf("\n");
+		}
 		printAnnotations(indent + INDENT);
 	}
 
@@ -1046,7 +1048,7 @@ public class OverloadInstance extends Symbol {
 		if (_type.family() != TypeFamily.FUNCTION)
 			return true;
 		ref<FunctionType> ft = ref<FunctionType>(_type);
-		if (ft.scope().definition() == null || ft.scope().definition().op() != Operator.FUNCTION)
+		if (ft.scope() == null || ft.scope().definition() == null || ft.scope().definition().op() != Operator.FUNCTION)
 			return true;
 		ref<FunctionDeclaration> func = ref<FunctionDeclaration>(ft.scope().definition());
 		if (func.functionCategory() != FunctionDeclaration.Category.ABSTRACT)

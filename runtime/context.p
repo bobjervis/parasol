@@ -533,8 +533,11 @@ public class Package extends VolatilePackage {
 	public string[], boolean getUnitFilenames() {
 		string[] a;
 
-		for (d in _domains)
-			_domains[d].getUnitFilenames(&a);
+		if (loadManifest()) {
+			for (d in _domains)
+				_domains[d].getUnitFilenames(&a);
+			return a, true;
+		}
 		return a, false;
 	}
 	/**

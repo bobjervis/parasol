@@ -7,7 +7,15 @@ Documentation can be obtained by cloning the repository to a Linux directory, th
 bin/paradoc -c doc/parasol ~/paradoc
 ```
 
-Thus will generate a set of HTML pages under a (presumably new) directory named `paradoc` in your home directory. You can, of course, substitute any other directory name you wish, but if you name an existing directory the `paradoc` utility will over-write those contents, effectively deleting them and replacing them with the HTML files.
+Thus will generate a set of HTML pages under a new directory named `paradoc` in your home directory. 
+You can, of course, substitute any other directory name you wish, but if you name an existing directory,
+the command will fail.
+
+You can use the `-f` option to force delete any existing directory.
+
+```bash
+bin/paradoc -c doc/parasol -f ~/paradoc
+```
 
 You may then run the following command:
 
@@ -27,7 +35,10 @@ http://localhost
 Which will bring up the top-level page of the documentation suite, which is quite patchy, although the runtime documentation is 
 fairly complete.
 
-Because port 80 requires root permissions to open, you must run this command under `sudo`. If you are already hosting another server on that port or you don't want to use `sudo`, you can add a `--port=<number>` option to the command line. For example, if you want to use port 8080, use this:
+Because port 80 requires root permissions to open, you must run this command under `sudo`. 
+If you are already hosting another server on that port or you don't want to use `sudo`, 
+you can add a `--port=<number>` option to the command line. 
+For example, if you want to use port 8080, use this:
 
 ```bash
 bin/phost --port=8080 --localhost ~/paradoc &

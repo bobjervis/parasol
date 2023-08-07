@@ -19,31 +19,6 @@ import parasol:storage;
 import parasol:paradoc;
 import parasol:process;
 import parasol:runtime;
-import parasol:compiler.BuiltInType;
-import parasol:compiler.ClassDeclarator;
-import parasol:compiler.CompileContext;
-import parasol:compiler.Doclet;
-import parasol:compiler.EnumInstanceType;
-import parasol:compiler.FlagsInstanceType;
-import parasol:compiler.FunctionType;
-import parasol:compiler.Identifier;
-import parasol:compiler.InterfaceType;
-import parasol:compiler.Namespace;
-import parasol:compiler.Node;
-import parasol:compiler.NodeList;
-import parasol:compiler.Operator;
-import parasol:compiler.Overload;
-import parasol:compiler.OverloadInstance;
-import parasol:compiler.ParameterScope;
-import parasol:compiler.PlainSymbol;
-import parasol:compiler.Scope;
-import parasol:compiler.StorageClass;
-import parasol:compiler.Symbol;
-import parasol:compiler.Type;
-import parasol:compiler.Template;
-import parasol:compiler.TemplateType;
-import parasol:compiler.TemplateInstanceType;
-import parasol:compiler.TypedefType;
 import parasol:time;
 
 /*
@@ -68,10 +43,15 @@ class Paradoc extends process.Command {
 					);
 		paradoc.verboseOption = booleanOption('v', null,
 					"Enables verbose output.");
+		paradoc.forceOption = booleanOption('f', "force",
+					"If the output directory already exiists, delete it. Default behavior: " +
+					"do not modify outputs, fail the command.");
+		paradoc.validateOnlyOption = booleanOption('n', null,
+					"Compile inputs and report errors, but don't write any content.");
 		paradoc.symbolTableOption = booleanOption(0, "syms",
 					"Print the symbol table.");
 		paradoc.logImportsOption = booleanOption(0, "logImports",
-					"Log all import processing");
+					"Log all import processing.");
 		paradoc.templateDirectoryOption = stringOption('t', "template",
 					"Designates a directory to treat as the source for a set of template files. " +
 					"These templates fill in details of the generated HTML and can be customized " +
@@ -87,45 +67,38 @@ class Paradoc extends process.Command {
 	}
 }
 
-private ref<Paradoc> paradocCmd;
+private Paradoc paradocCmd;
 private string[] finalArguments;
 
 int main(string[] args) {
-	parseCommandLine(args);
+	if (!paradocCmd.parse(args))
+		paradocCmd.help();
 
-//	printf("Configuring\n");
-	boolean anyFailure = !paradoc.configureArena(finalArguments);
-	printf("configureArena anyFailure=%s\n", string(anyFailure));
-//	printf("Done!\n");
+	finalArguments = paradocCmd.finalArguments();
+
+	boolean anyFailure = !paradoc.compilePackages(finalArguments);
 	if (paradoc.prepareOutputs(finalArguments[0])) {
 		// Also do internal processing of the symbol table.
-
 		anyFailure |= !paradoc.collectNamespacesToDocument();
-	printf("collectNamespacesToDocument anyFailure=%s\n", string(anyFailure));
 
 		// If we ar e using a content directory, start from it.
 
-		if (paradoc.contentDirectoryOption.set())
+		if (paradoc.contentDirectoryOption.set()) {
 			anyFailure |= !paradoc.processContentDirectory();
-	printf("processContentDirectory anyFailure=%s\n", string(anyFailure));
+			anyFailure |= !paradoc.writeContentDirectory();
+		}
 
 		anyFailure |= !paradoc.generateNamespaceDocumentation();
-	printf("generateNamespaceDocumentation anyFailure=%s\n", string(anyFailure));
 	} else {
 		printf("Could not create the output folder\n");
 		anyFailure = true;
 	}
-	printf("anyFailure=%s\n", string(anyFailure));
-	if (anyFailure)
+	if (anyFailure) {
+		printf("FAILED\n");
 		return 1;
-	else
+	} else {
+		printf("SUCCESS!\n");
 		return 0;
-}
-
-void parseCommandLine(string[] args) {
-	paradocCmd = new Paradoc();
-	if (!paradocCmd.parse(args))
-		paradocCmd.help();
-	finalArguments = paradocCmd.finalArguments();
+	}
 }
 

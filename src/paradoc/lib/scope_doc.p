@@ -381,7 +381,10 @@ void functionSummary(ref<Writer> output, ref<ref<compiler.OverloadInstance>[]> f
 		output.printf("<span class=code><a href=\"#%s\">%s</a>(", sym.name(), sym.name());
 		pointer<ref<compiler.Type>> tp = ft.parameters();
 		ref<compiler.ParameterScope> scope = ft.functionScope();
-		ref<ref<compiler.Symbol>[]> parameters = scope.parameters();
+		
+		ref<ref<compiler.Symbol>[]> parameters;
+		if (scope != null)
+			parameters = scope.parameters();
 		int j = 0;
 		int ellipsisArgument = -1;
 		if (ft.hasEllipsis())
@@ -461,7 +464,9 @@ void functionDetail(ref<Writer> output, ref<ref<compiler.OverloadInstance>[]> fu
 
 		pointer<ref<compiler.Type>> tp = ft.parameters();
 		ref<compiler.ParameterScope> scope = ft.functionScope();
-		ref<ref<compiler.Symbol>[]> parameters = scope.parameters();
+		ref<ref<compiler.Symbol>[]> parameters;
+		if (scope != null)
+			parameters = scope.parameters();
 		int j = 0;
 		ref<compiler.Doclet> doclet = sym.doclet();
 		string[string] paramMap;
@@ -487,10 +492,11 @@ void functionDetail(ref<Writer> output, ref<ref<compiler.OverloadInstance>[]> fu
 				output.printf("%s...", typeString(tp[i].elementType(), baseName));
 			else
 				output.printf("%s", typeString(tp[i], baseName));
-			string pname = (*parameters)[j].name();
-			if (parameters != null && parameters.length() > j)
+			string pname;
+			if (parameters != null && parameters.length() > j) {
+				pname = (*parameters)[j].name();
 				output.printf("&nbsp;%s", pname);
-			else
+			} else
 				output.write("&nbsp;???");
 			if (i < pCount - 1)
 				output.write(",</td>\n");

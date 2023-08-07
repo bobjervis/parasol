@@ -16,7 +16,7 @@ Any extended Unicode decimal digit character is allowed and is interpreted accor
 <p>
 Examples:
 <pre>
-    67
+	67
 	3
 	425364756750204
 	1000000000
@@ -31,7 +31,7 @@ can be any Unicode version 8.0 decimal digit and is interpreted according to the
 <p>
 Examples:
 <pre>
-    0x0F
+	0x0F
 	0Xffa1
 	0x0
 </pre>
@@ -45,7 +45,7 @@ and is interpreted according to the value assigned it in the Unicode version 8.0
 <p>
 Examples:
 <pre>
-    045
+	045
 	077
 </pre>
 
@@ -61,7 +61,7 @@ assigned it in the Unicode version 8.0 specification.
 <p>
 Examples:
 <pre>
-    0.0
+	0.0
 	7.
 	.123
 	12.5f

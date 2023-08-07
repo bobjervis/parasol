@@ -235,6 +235,7 @@ class MacroSpan extends Span {
 
 			case PARADOC:
 				outputFolder = storage.path(file.targetDirectory(), _arguments[0]);
+				printf("paradoc output folder is '%s'\n", outputFolder);
 				content = "<a href=\"" + _arguments[0] + "/index.html\">" + _arguments[1] + "</a>";
 				break;
 
@@ -394,7 +395,8 @@ void collectContentInventory(string baseDirectory, string directory) {
 					c.targetPath = storage.path(outputFolder, c.path.substr(baseDirectory.length() + 1), null);
 				} else if (c.path.endsWith(".ph")) {
 					c.type = ContentType.PH_FILE;
-					c.targetPath = storage.path(outputFolder, c.path.substr(baseDirectory.length() + 1, c.path.length() - 2) + "html", null);
+					c.targetPath = storage.path(outputFolder, 
+												c.path.substr(baseDirectory.length() + 1, c.path.length() - 2) + "html");
 				} else {
 					c.type = ContentType.FILE;
 					c.targetPath = storage.path(outputFolder, c.path.substr(baseDirectory.length() + 1), null);
@@ -426,53 +428,25 @@ public boolean processContentDirectory() {
 	content.append(&c);
 	collectContentInventory(contentDirectory, contentDirectory);
 
-	// Okay, start building the destination directory
-
+	// Okay, start parsing the .ph files
 
 	boolean success = true;
 	for (i in content) {
 		ref<Content> c = content[i];
 
 		fileMap[c.path] = c;
-		switch (c.type) {
-		case DIRECTORY:
-			if (storage.ensure(c.targetPath))
-				printf("%s %s - created directory\n", c.targetPath, string(c.type));
-			else
-				success = false;
-			break;
-
-		case FILE:
-			if (storage.copyFile(c.path, c.targetPath))
-				printf("%s %s - created file\n", c.targetPath, string(c.type));
-			else
-				success = false;
-			break;
-
-		case PH_FILE:
+		if (c.type == ContentType.PH_FILE) {
 			if (!c.processPhFile())
 				success = false;
 		}
 	}
 
-	// We've parsed in all the .ph files. Now we have to process the macros.
-
-	if (verboseOption.set()) {
-		for (i in content) {
-			ref<Content> c = content[i];
-			string caption;
-	
-			caption.printf("[%d]", i);
-			printf("%7s %20s %s\n", caption, string(c.type), c.path);
-		}
-	}
-
 	// First, thread the topics and levels so that we know how to number them.
-
 
 	ref<Content> targetFile = getTargetFile(null, null);
 	if (targetFile != null)	// we have an index.ph, at least. Start lacing things up.
 		thread(targetFile);
+
 
 	byte[] numberingStyles;
 	string[] numberingInterstitials;
@@ -528,36 +502,47 @@ public boolean processContentDirectory() {
 			c.topics[j].setTopicGroup();
 	}
 
-/*
+	return success;
+}
 
-	for (i in content) {
-		ref<Content> c = content[i];
+public boolean writeContentDirectory() {
+	if (validateOnlyOption.set())
+		return true;
 
-		for (j in c.topics) {
-			ref<MacroSpan> m = c.topics[j];
+	// We've parsed in all the .ph files. Now we have to process the macros.
 
-			ref<Content> targetFile = getTargetFile(c, m.argument(0));
-			if (targetFile == null)
-				continue;
-			if (targetFile.levels.length() == 0) {
-				printf("No level defined in target file %s for topic %s in %s\n", targetFile.path, m.argument(0), c.path);
-				success = false;
-				continue;
-			}
-			ref<MacroSpan> l = targetFile.levels[0];
-			
-		}		
+	if (verboseOption.set()) {
+		for (i in content) {
+			ref<Content> c = content[i];
+			string caption;
+	
+			caption.printf("[%d]", i);
+			printf("%7s %20s %s\n", caption, string(c.type), c.path);
+		}
+		for (i in formattingOptions)
+			printf("[%s] = '%s'\n", i, formattingOptions[i]);
 	}
-*/
-	for (i in formattingOptions)
-		printf("[%s] = '%s'\n", i, formattingOptions[i]);
 
-	// Now write the processed PH files
-
+	boolean success = true;
 	for (i in content) {
 		ref<Content> c = content[i];
 
-		if (c.type == ContentType.PH_FILE) {
+		switch (c.type) {
+		case DIRECTORY:
+			if (storage.ensure(c.targetPath))
+				printf("%s %s - created directory\n", c.targetPath, string(c.type));
+			else
+				success = false;
+			break;
+
+		case FILE:
+			if (storage.copyFile(c.path, c.targetPath))
+				printf("%s %s - created file\n", c.targetPath, string(c.type));
+			else
+				success = false;
+			break;
+
+		case PH_FILE:
 			if (c.writePhFile())
 				printf("%s %s - created\n", c.targetPath, string(c.type));
 			else
@@ -581,13 +566,15 @@ void thread(ref<Content> file) {
 	} else if (file.levels.length() > 0)
 		topicHolders.append(file);
 }
-
+/**
+ * @param source 
+ */
 ref<Content> getTargetFile(ref<Content> source, string reference) {
 	string target;
 	ref<Content> targetFile;
 
 	if (source != null) {
-		target = storage.path(source.sourceDirectory(), reference, null);
+		target = storage.path(source.sourceDirectory(), reference);
 		targetFile = fileMap[target];
 		if (targetFile == null) {
 			printf("Could not find target file for topic %s in file %s\n", reference, source.path);
