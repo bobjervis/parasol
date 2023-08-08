@@ -781,7 +781,7 @@ public class Connection {
 	 */
 	public abstract void close();
 	/**
-	 * Text whether this connection is encrypted.
+	 * Test whether this connection is encrypted.
 	 *
 	 * @return true if the connection is secured (i.e. encrypted), false if not encrypted.
 	 */

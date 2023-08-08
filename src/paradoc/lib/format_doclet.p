@@ -94,8 +94,8 @@ string expandDocletString(string text, ref<compiler.Symbol> sym, string baseName
  *		<i>symbol</i>
  */
 string transformLink(string linkTextIn, ref<compiler.Symbol> sym, string baseName) {
-	printf("transformLink('%s', ..., %s)\n", linkTextIn, baseName);
-	sym.print(0, false);
+//	printf("transformLink('%s', ..., %s)\n", linkTextIn, baseName);
+//	sym.print(0, false);
 	string linkText = linkTextIn.trim();
 	int idx = linkText.indexOf(' ');
 	string caption;
@@ -105,94 +105,52 @@ string transformLink(string linkTextIn, ref<compiler.Symbol> sym, string baseNam
 	} else
 		caption = linkText;
 	idx = linkText.indexOf(':');
-	string path;
+	string[] components;
+	ref<compiler.Scope> scope;
 	if (idx >= 0) {
 		string domain = linkText.substr(0, idx);
-		ref<compiler.Scope> scope = compileContext.forest().getDomain(domain);
-		if (scope == null)
-			return caption;
-		path = linkText.substr(idx + 1);
-		string[] components = path.split('.');
-		string directory = domain + "_";
-		ref<compiler.Symbol> nm;
-		int i;
-		for (i = 0; i < components.length(); i++) {
-			nm = scope.lookup(components[i], null);
-			if (nm == null)
-				return caption;
-			if (nm.class != compiler.Namespace)
-				break;
-			scope = ref<compiler.Namespace>(nm).symbols();
-			if (i > 0)
-				directory += ".";
-			directory += components[i];
+		scope = compileContext.forest().getDomain(domain);
+		if (scope == null) {
+			printf("Link to %s in generated file %s is undefined.\n", linkText, baseName);
+			return caption;			// If we didn't find a symbol by looking in the lexical scopes,
+									// it's undefined, there's nowhere else to go.
 		}
-		path = storage.path(outputFolder, directory, null);
-		if (i >= components.length()) {
-			path = storage.path(path, "namespace-summary", "html");
-			linkText = storage.makeCompactPath(path, baseName);
-		} else {
-			boolean hasClasses;
-			for (; i < components.length() - 1; i++) {
-				if (nm.type().family() != runtime.TypeFamily.TYPEDEF)
-					return caption;
-				if (!hasClasses) {
-					hasClasses = true;
-					path = storage.path(path, "classes", null);
-				}
-				path = storage.path(path, nm.name(), null);
-				scope = scopeFor(nm);
-				if (scope == null)
-					return caption;
-				nm = scope.lookup(components[i + 1], null);
-				if (nm == null)
-					return caption;
-			}
-			if (nm.type() != null && nm.type().family() == runtime.TypeFamily.TYPEDEF) {
-				if (!hasClasses)
-					path = storage.path(path, "classes", null);
-				path = storage.path(path, nm.name(), "html");
-				if (path == baseName)
-					return caption;
-				linkText = storage.makeCompactPath(path, baseName);
-			} else {
-				path += ".html";
-				if (path == baseName)
-					linkText = "#" + components[i];
-				else
-					linkText = storage.makeCompactPath(path, baseName) + "#" + components[i];
-			}	
-		}
+		components = linkText.substr(idx + 1).split('.');
 	} else {
-		string[] components = linkText.split('.');
-		ref<compiler.Scope> scope = scopeFor(sym);
-		ref<compiler.Symbol> s;
-		for (i in components) {
-			if (scope == null) {
-				printf("Link to %s in generated file %s is undefined.\n", linkText, baseName);
-				return caption;			// If we didn't find a symbol by looking in the lexical scopes,
-										// it's undefined, there's nowhere else to go.
-			}
-			do {
-				s = scope.lookup(components[i], null);
-				if (s != null)
-					break;
-				scope = scope.enclosing();
-			} while (scope != null);
-			if (s == null) {
-				printf("Link to %s in generated file %s is undefined.\n", linkText, baseName);
-				return caption;			// If we didn't find a symbol by looking in the lexical scopes,
-										// it's undefined, there's nowhere else to go.
-			}
-			if (i == components.length() - 1)
-				break;
-			scope = scopeFor(s);
-		}
-		scope.print(0, false);
-		string path = linkTo(s);
-		linkText = storage.makeCompactPath(path, baseName);
-		printf("'%s' = makeCompactPath('%s', '%s')\n", linkText, path, baseName);
+		components = linkText.split('.');
+		scope = scopeFor(sym);
 	}
+	ref<compiler.Symbol> s;
+	for (i in components) {
+		if (scope == null) {
+			printf("Link to %s in generated file %s is undefined.\n", linkText, baseName);
+			return caption;			// If we didn't find a symbol by looking in the lexical scopes,
+									// it's undefined, there's nowhere else to go.
+		}
+		do {
+			s = scope.lookup(components[i], null);
+			if (s != null)
+				break;
+			scope = scope.enclosing();
+		} while (scope != null);
+		if (s == null) {
+			printf("Link to %s in generated file %s is undefined.\n", linkText, baseName);
+			return caption;			// If we didn't find a symbol by looking in the lexical scopes,
+									// it's undefined, there's nowhere else to go.
+		}
+		if (i == components.length() - 1)
+			break;
+		scope = scopeFor(s);
+	}
+	string path = linkTo(s);
+	if (path == null) {
+		printf("Link to %s in generated file %s is undefined.\n", linkTextIn.trim(), baseName.substr(suffix));
+		return caption;
+	}
+	linkText = storage.makeCompactPath(path, baseName);
+	int suffix = outputFolder.length() + 1;
+	if (verboseOption.set())
+		printf("File %3$s links to %2$s as %1$s\n", linkText, path.substr(suffix), baseName.substr(suffix));
 /*
 				if (s.type().family() != runtime.TypeFamily.TYPEDEF)
 					return caption;

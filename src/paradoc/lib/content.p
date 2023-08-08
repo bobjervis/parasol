@@ -235,7 +235,8 @@ class MacroSpan extends Span {
 
 			case PARADOC:
 				outputFolder = storage.path(file.targetDirectory(), _arguments[0]);
-				printf("paradoc output folder is '%s'\n", outputFolder);
+				if (verboseOption.set())
+					printf("Generated API Output %s\n", outputFolder);
 				content = "<a href=\"" + _arguments[0] + "/index.html\">" + _arguments[1] + "</a>";
 				break;
 
@@ -529,23 +530,26 @@ public boolean writeContentDirectory() {
 
 		switch (c.type) {
 		case DIRECTORY:
-			if (storage.ensure(c.targetPath))
-				printf("%s %s - created directory\n", c.targetPath, string(c.type));
-			else
+			if (storage.ensure(c.targetPath)) {
+				if (verboseOption.set())
+					printf("%s %s - created directory\n", c.targetPath, string(c.type));
+			} else
 				success = false;
 			break;
 
 		case FILE:
-			if (storage.copyFile(c.path, c.targetPath))
-				printf("%s %s - created file\n", c.targetPath, string(c.type));
-			else
+			if (storage.copyFile(c.path, c.targetPath)) {
+				if (verboseOption.set())
+					printf("%s %s - created file\n", c.targetPath, string(c.type));
+			} else
 				success = false;
 			break;
 
 		case PH_FILE:
-			if (c.writePhFile())
-				printf("%s %s - created\n", c.targetPath, string(c.type));
-			else
+			if (c.writePhFile()) {
+				if (verboseOption.set())
+					printf("%s %s - created\n", c.targetPath, string(c.type));
+			} else
 				success = false;
 		}
 	}

@@ -17,7 +17,7 @@
  * The openssl.org SSL sockets library.
  *
  * This is the SSL implementation used in a variety of Linux https implementations,
- * including the Parasol {@link http.HttpServer} and {@link http.HttpClient}.
+ * including the Parasol {@link parasol:http.HttpServer} and {@link parasol:http.HttpClient}.
  *
  * Please refer to the documentation at <a href="https://www.openssl.org/docs/">https://www.openssl.org/docs/</a> for information
  * on how to use this library. While this binding has been used and tested in the Parasol

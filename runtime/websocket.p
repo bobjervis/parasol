@@ -934,12 +934,16 @@ public monitor class Rendezvous {
 /**
  * Base class useful for implementing synchronous send-reply message pairs.
  *
- * This is a support class that can be used to build a synchronous call-response message pair. These give you the
- * functionality of an RPC. The typical approach would be to implement your proxy class by extending {@code RendezvousManager}
- * and implementing {@link WebSocketReader}. The messages on the web socket need to be defined so that a call-response
- * pair have a key string that uniquely identifies the pair. The derived class implements the marshalling logic to generate
+ * This is a support class that can be used to build a synchronous call-response message pair. 
+ * These give you the functionality of an RPC. 
+ * The typical approach would be to implement your proxy class by extending {@code RendezvousManager}
+ * and implementing {@link WebSocketReader}.
+ * The messages on the web socket need to be defined so that a call-response pair have a key
+ * string that uniquely identifies the pair. 
+ * The derived class implements the marshalling logic to generate
  * a message that contains the key string plus the set of marshalled RPC parameters. This code will call 
- * {@link createRendesvous} to create a {@link Rendezvous} object. The send-side thread then calls the {@link Monitor.wait}
+ * {@link createRendesvous} to create a {@link Rendezvous} object.
+ * The send-side thread then calls the {@link Monitor.wait}
  * method of the {@link Rendezvous} object to wait for the response message. If the Web Socket is closed, then all pending
  * {@link Rendezvous} objects will be notified in order to release the waiting threads.
  *

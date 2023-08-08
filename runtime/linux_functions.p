@@ -25,7 +25,7 @@
  *
  * Another difference is that in C, the global variable errno looks like a normal variable. It is, in fact,
  * some under-the-covers magic that actually uses a function (since each thread gets its own copy of errno).
- * In Parasol, you must use the {@link errno} function to read the current value and the {@link set_errorno}
+ * In Parasol, you must use the {@link errno} function to read the current value and the {@link set_errno}
  * function to change the value.
  */
 namespace native:linux;

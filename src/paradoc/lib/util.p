@@ -49,7 +49,8 @@ public boolean prepareOutputs(string o) {
 				return false;
 			}
 		}
-		printf("Writing to %s\n", outputFolder);
+		if (verboseOption.set())
+			printf("Writing to %s\n", outputFolder);
 		if (!storage.ensure(outputFolder))
 			return false;
 	}
@@ -173,7 +174,7 @@ string linkTo(ref<compiler.Symbol> sym) {
 	for (ref<compiler.Scope> scope = sym.enclosing(); scope != null; scope = scope.enclosing()) {
 		if (scope.class <= compiler.ClassScope) {
 			ref<compiler.ClassScope> cs = ref<compiler.ClassScope>(scope);
-			if (cs.classType.definition() == null)
+			if (cs.classType == null || cs.classType.definition() == null)
 				continue;
 			ref<compiler.ClassDeclarator> cd = cs.classType.definition();
 			if (cd.name() == null)
@@ -185,15 +186,14 @@ string linkTo(ref<compiler.Symbol> sym) {
 		}
 	}
 
-	if (classChain != null)
-		path = storage.path(storage.path(path, "classes"), classChain);
-	else
-		path = storage.path(path, "namespace-summary");
 //	assert(sym.type() != null);
+	if (sym.type() == null)
+		return null;
 	switch (sym.type().family()) {
 	case BOOLEAN:
 	case SIGNED_16:
 	case SIGNED_32:
+	case SIGNED_64:
 	case UNSIGNED_8:
 	case STRING:
 	case VAR:
@@ -201,9 +201,17 @@ string linkTo(ref<compiler.Symbol> sym) {
 	case REF:
 	case FUNCTION:
 	case ENUM:
-		return path + ".html#" + sym.name();
+		if (classChain != null)
+			path = storage.path(storage.path(path, "classes"), classChain + ".html");
+		else
+			path = storage.path(path, "namespace-summary.html");
+		return path + "#" + sym.name();
 
 	case TYPEDEF:
+		if (classChain != null)
+			path = storage.path(storage.path(path, "classes"), classChain + "." + sym.name() + ".html");
+		else
+			path = storage.path(storage.path(path, "classes"), sym.name() + ".html");
 		return path;
 
 	default:
