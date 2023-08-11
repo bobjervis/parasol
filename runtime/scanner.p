@@ -531,13 +531,14 @@ public class Scanner {
 					continue;
 				} else if (c == '*') {
 					if (_paradoc) {
+						runtime.SourceOffset location = cursor();
 						c = getc();
 						if (c == '*') {
 							c = getc();
 							if (c == '/')
 								continue;			// This was a /**/ empty comment, not a Doclet.
 							ungetc();
-							if (!parseDoclet()) {
+							if (!parseDoclet(location)) {
 								// Set up a 'value' that will indicate
 								// the context of the error.
 								startValue('/');
@@ -546,7 +547,8 @@ public class Scanner {
 								return Token.ERROR;
 							}
 							continue;
-						}
+						} else
+							ungetc();
 					}
 					// Block comments nest, this tracks the nesting depth
 					int depth = 0;
@@ -982,9 +984,10 @@ public class Scanner {
 		}
 	}
 
-	private boolean parseDoclet() {
+	private boolean parseDoclet(runtime.SourceOffset location) {
 		delete _doclet;
 		_doclet = new Doclet();
+		_doclet.unit = _file;
 		// Block comments nest, this tracks the nesting depth
 		int depth = 0;
 		boolean atStartOfLine = true;
@@ -993,7 +996,8 @@ public class Scanner {
 		boolean inineTag;
 		text.StringWriter sw(&_doclet.text);
 		text.UTF8Encoder encoder(&sw);
-		runtime.SourceOffset location = cursor();
+		runtime.SourceOffset tagLocation;
+		_doclet.location = location;
 		int c = getc();
 		while (c == ' ' || c == '\t') {
 			location = cursor();
@@ -1078,6 +1082,7 @@ public class Scanner {
 				break;
 
 			case '{':
+				tagLocation = location;
 				if (paragraphBreak) {
 					encoder.encode("<p>");
 					paragraphBreak = false;
@@ -1114,6 +1119,10 @@ public class Scanner {
 					}
 					encoder.encode('{');
 					encoder.encode(c);
+					if (c == 'l' || c == 'p') {
+						encoder.encode(string(tagLocation.offset));
+						encoder.encode(';');
+					}
 					for (;;) {
 						location = cursor();
 						c = getc();
@@ -1507,6 +1516,14 @@ public class Doclet {
 	 * The contents of the {@code @threading} tagged section.
 	 */
 	public string threading;
+	/**
+	 * The Unit containing the Doclet
+	 */
+	public ref<Unit> unit;
+	/**
+	 * The offset in the unit of the Doclet
+	 */
+	public runtime.SourceOffset location;
 }
 
 Token[string] keywords = [

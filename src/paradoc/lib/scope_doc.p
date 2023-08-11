@@ -123,7 +123,7 @@ void generateScopeContents(ref<compiler.Scope> scope, ref<Writer> output, string
 			output.write("<td class=\"descriptioncol\">");
 			ref<compiler.Doclet> doclet = sym.doclet();
 			if (doclet != null)
-				output.write(expandDocletString(doclet.summary, sym, baseName));
+				output.write(expandDocletString(doclet, doclet.summary, sym, baseName));
 			output.write("</td>\n");
 			output.write("</tr>\n");
 		}
@@ -167,7 +167,7 @@ void generateScopeContents(ref<compiler.Scope> scope, ref<Writer> output, string
 			output.printf("<a href=\"#%s\"><span class=code>%s</span></a><br>", sym.name(), sym.name());
 			ref<compiler.Doclet> doclet = sym.doclet();
 			if (doclet != null)
-				output.printf("\n%s", expandDocletString(doclet.summary, sym, baseName));
+				output.printf("\n%s", expandDocletString(doclet, doclet.summary, sym, baseName));
 			output.write("</td>\n");
 			output.write("</tr>\n");
 		}
@@ -244,7 +244,7 @@ void generateScopeContents(ref<compiler.Scope> scope, ref<Writer> output, string
 			output.printf("<div class=declaration>public static final %s %s <span class=\"enum-value\">(%d)</span></div>\n", typeString(sym.type(), baseName), name, sym.offset);
 			ref<compiler.Doclet> doclet = sym.doclet();
 			if (doclet != null)
-				output.printf("\n<div class=enum-description>%s</div>", expandDocletString(doclet.text, sym, baseName));
+				output.printf("\n<div class=enum-description>%s</div>", expandDocletString(doclet, doclet.text, sym, baseName));
 		}
 		output.printf("</div>\n");
 	}
@@ -275,7 +275,7 @@ void generateScopeContents(ref<compiler.Scope> scope, ref<Writer> output, string
 			output.printf("%s %s</div>\n", typeString(type, baseName), name);
 			ref<compiler.Doclet> doclet = sym.doclet();
 			if (doclet != null)
-				output.printf("\n<div class=enum-description>%s</div>", expandDocletString(doclet.text, sym, baseName));
+				output.printf("\n<div class=enum-description>%s</div>", expandDocletString(doclet, doclet.text, sym, baseName));
 		}
 		output.printf("</div>\n");
 	}
@@ -317,7 +317,7 @@ void generateClassSummaryEntry(ref<Writer> output, int i, ref<compiler.Symbol> s
 	output.write("<td class=\"descriptioncol\">");
 	ref<compiler.Doclet> doclet = sym.doclet();
 	if (doclet != null)
-		output.write(expandDocletString(doclet.summary, sym, baseName));
+		output.write(expandDocletString(doclet, doclet.summary, sym, baseName));
 	output.write("</td>\n");
 	output.write("</tr>\n");
 }
@@ -405,7 +405,7 @@ void functionSummary(ref<Writer> output, ref<ref<compiler.OverloadInstance>[]> f
 		output.write(")</span>");
 		ref<compiler.Doclet> doclet = sym.doclet();
 		if (doclet != null)
-			output.printf("\n<div class=descriptioncol>%s</div>", expandDocletString(doclet.summary, sym, baseName));
+			output.printf("\n<div class=descriptioncol>%s</div>", expandDocletString(doclet, doclet.summary, sym, baseName));
 		output.write("</td>\n");
 		output.write("</tr>\n");
 	}
@@ -504,7 +504,7 @@ void functionDetail(ref<Writer> output, ref<ref<compiler.OverloadInstance>[]> fu
 				output.write(")</td>\n");
 			string comment = paramMap[pname];
 			if (comment != null)
-				output.printf("<td><div class=param-text>%s</div></td>\n", expandDocletString(comment, sym, baseName));
+				output.printf("<td><div class=param-text>%s</div></td>\n", expandDocletString(doclet, comment, sym, baseName));
 			if (i < pCount - 1)
 				output.write("</tr>\n<tr>\n<td></td><td>");
 			j++;
@@ -513,21 +513,23 @@ void functionDetail(ref<Writer> output, ref<ref<compiler.OverloadInstance>[]> fu
 		if (doclet != null) {
 			output.write("\n<div class=func-description>\n");
 			if (doclet.deprecated != null)
-				output.printf("<div class=deprecated-outline><div class=deprecated-caption>Deprecated</div><div class=deprecated>%s</div></div>\n", expandDocletString(doclet.deprecated, sym, baseName));
-			output.printf("\n<div class=func-text>%s</div>", expandDocletString(doclet.text, sym, baseName));
+				output.printf("<div class=deprecated-outline><div class=deprecated-caption>Deprecated</div><div class=deprecated>%s</div></div>\n",
+										expandDocletString(doclet, doclet.deprecated, sym, baseName));
+			output.printf("\n<div class=func-text>%s</div>", expandDocletString(doclet, doclet.text, sym, baseName));
 			tp = ft.returnTypes();
 			int rCount = ft.returnCount();
 			if (doclet.returns.length() > 0 && rCount > 0) {
 				output.write("\n<div class=func-return-caption>Returns:</div>");
 				if (doclet.returns.length() == 1) {
-					output.printf("\n<div class=func-return>%s</div>", expandDocletString(doclet.returns[0], sym, baseName));
+					output.printf("\n<div class=func-return>%s</div>", expandDocletString(doclet, doclet.returns[0], sym, baseName));
 				} else {
 					output.printf("\n<ol class=func-return>\n");
 					for (i in doclet.returns) {
 						if (i >= rCount)
 							break;
 						string ts = typeString(tp[i], baseName);
-						output.printf("<li class=func-return>(<span class=code>%s</span>) %s</li>\n", ts, expandDocletString(doclet.returns[i], sym, baseName));
+						output.printf("<li class=func-return>(<span class=code>%s</span>) %s</li>\n", ts,
+										expandDocletString(doclet, doclet.returns[i], sym, baseName));
 					}
 					output.printf("</ol>\n");
 				}
@@ -545,16 +547,19 @@ void functionDetail(ref<Writer> output, ref<ref<compiler.OverloadInstance>[]> fu
 						ename = doclet.exceptions[i].substr(0, idx);
 						value = doclet.exceptions[i].substr(idx + 1).trim();
 					}
-					output.printf("<td><td>%s</td><td>%s</td></tr>\n", ename, expandDocletString(value, sym, baseName));
+					output.printf("<td><td>%s</td><td>%s</td></tr>\n", ename, expandDocletString(doclet, value, sym, baseName));
 				}
 				output.write("</table>\n");
 			}
 			if (doclet.threading != null)
-				output.printf("<div class=threading-caption>Threading</div><div class=threading>%s</div>\n", expandDocletString(doclet.threading, sym, baseName));
+				output.printf("<div class=threading-caption>Threading</div><div class=threading>%s</div>\n", 
+										expandDocletString(doclet, doclet.threading, sym, baseName));
 			if (doclet.since != null)
-				output.printf("<div class=since-caption>Since</div><div class=since>%s</div>\n", expandDocletString(doclet.since, sym, baseName));
+				output.printf("<div class=since-caption>Since</div><div class=since>%s</div>\n", 
+										expandDocletString(doclet, doclet.since, sym, baseName));
 			if (doclet.see != null)
-				output.printf("<div class=see-caption>See Also</div><div class=see>%s</div>\n", expandDocletString(doclet.see, sym, baseName));
+				output.printf("<div class=see-caption>See Also</div><div class=see>%s</div>\n", 
+										expandDocletString(doclet, doclet.see, sym, baseName));
 			output.write("</div>\n");
 		}
 	}

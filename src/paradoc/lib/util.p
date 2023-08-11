@@ -157,10 +157,17 @@ int compareSymbols(ref<compiler.Symbol> sym1, ref<compiler.Symbol> sym2) {
 }
 
 string linkTo(ref<compiler.Symbol> sym) {
+	ref<compiler.Namespace> nm;
+	if (sym.class == compiler.Namespace) {
+		nm = ref<compiler.Namespace>(sym);
+		string nameSpace = nm.domain() + "_" + nm.dottedName();
+		path = storage.path(outputFolder, nameSpace);
+		return storage.path(path, "namespace-summary.html");
+	}
 	ref<compiler.Scope> enclosing = sym.enclosing();
 	string path = outputFolder;
 
-	ref<compiler.Namespace> nm = enclosing.getNamespace();
+	nm = enclosing.getNamespace();
 	string nameSpace = nm.domain() + "_" + nm.dottedName();
 	path = storage.path(outputFolder, nameSpace);
 	if (sym.class == compiler.Overload) {

@@ -160,7 +160,7 @@ public boolean generateNamespaceDocumentation() {
 		ref<compiler.Symbol> sym = names[i].symbol;
 		ref<compiler.Doclet> doclet = sym.doclet();
 		if (doclet != null)
-			overview.write(expandDocletString(doclet.summary, sym, overviewPage));
+			overview.write(expandDocletString(doclet, doclet.summary, sym, overviewPage));
 		overview.write("</td>\n");
 		overview.write("</tr>\n");
 		generateNamespaceSummary(names[i].name, names[i].symbol);
@@ -274,16 +274,22 @@ void generateNamespaceSummary(string name, ref<compiler.Namespace> nm) {
 	ref<compiler.Doclet> doclet = nm.doclet();
 	if (doclet != null) {
 		if (doclet.author != null)
-			overview.printf("<div class=author><span class=author-caption>Author: </span>%s</div>\n", expandDocletString(doclet.author, nm, overviewPage));
+			overview.printf("<div class=author><span class=author-caption>Author: </span>%s</div>\n",
+										expandDocletString(doclet, doclet.author, nm, overviewPage));
 		if (doclet.deprecated != null)
-			overview.printf("<div class=deprecated-outline><div class=deprecated-caption>Deprecated</div><div class=deprecated>%s</div></div>\n", expandDocletString(doclet.deprecated, nm, overviewPage));
-		overview.printf("<div class=namespace-text>%s</div>\n", expandDocletString(doclet.text, nm, overviewPage));
+			overview.printf("<div class=deprecated-outline><div class=deprecated-caption>Deprecated</div><div class=deprecated>%s</div></div>\n",
+										expandDocletString(doclet, doclet.deprecated, nm, overviewPage));
+		overview.printf("<div class=namespace-text>%s</div>\n",
+										expandDocletString(doclet, doclet.text, nm, overviewPage));
 		if (doclet.threading != null)
-			overview.printf("<div class=threading-caption>Threading</div><div class=threading>%s</div>\n", expandDocletString(doclet.threading, nm, overviewPage));
+			overview.printf("<div class=threading-caption>Threading</div><div class=threading>%s</div>\n",
+										expandDocletString(doclet, doclet.threading, nm, overviewPage));
 		if (doclet.since != null)
-			overview.printf("<div class=since-caption>Since</div><div class=since>%s</div>\n", expandDocletString(doclet.since, nm, overviewPage));
+			overview.printf("<div class=since-caption>Since</div><div class=since>%s</div>\n",
+										expandDocletString(doclet, doclet.since, nm, overviewPage));
 		if (doclet.see != null)
-			overview.printf("<div class=see-caption>See Also</div><div class=see>%s</div>\n", expandDocletString(doclet.see, nm, overviewPage));
+			overview.printf("<div class=see-caption>See Also</div><div class=see>%s</div>\n",
+										expandDocletString(doclet, doclet.see, nm, overviewPage));
 	}
 
 	string classesDir = storage.path(dirName, "classes", null);

@@ -19,12 +19,15 @@ import parasol:compiler;
 import parasol:runtime;
 import parasol:storage;
 
-string expandDocletString(string text, ref<compiler.Symbol> sym, string baseName) {
+string expandDocletString(ref<compiler.Doclet> doclet, string text, ref<compiler.Symbol> sym, string baseName) {
 	string result = "";
 	string linkText;
+	string offsetText;
 	boolean inlineTag;
+	boolean inOffset;
 	boolean closeA;
 	boolean closeSpan;
+	int offset;
 
 	for (int i = 0; i < text.length(); i++) {
 		if (text[i] == '{') {
@@ -40,24 +43,27 @@ string expandDocletString(string text, ref<compiler.Symbol> sym, string baseName
 			case 'c':
 				result.append("<span class=code>");
 				inlineTag = false;
+				inOffset = false;
 				closeSpan = true;
 				break;
 
 			case 'l':
 				result.append("<span class=code>");
 				inlineTag = true;
+				inOffset = true;
 				closeSpan = true;
 				closeA = true;
 				break;
 
 			case 'p':
 				inlineTag = true;
+				inOffset = true;
 				closeA = true;
 				break;
 
 			case '}':
 				if (closeA) {
-					result.append(transformLink(linkText, sym, baseName));
+					result.append(transformLink(doclet, offset, linkText, sym, baseName));
 					closeA = false;
 				}
 				if (closeSpan) {
@@ -66,6 +72,15 @@ string expandDocletString(string text, ref<compiler.Symbol> sym, string baseName
 				}
 				linkText = null;
 				inlineTag = false;
+				inOffset = false;
+			}
+		} else if (inOffset) {
+			if (text[i] != ';')
+				offsetText.append(text[i]);
+			else {
+				inOffset = false;
+				offset = int.parse(offsetText);
+				offsetText = null;
 			}
 		} else if (inlineTag)
 			linkText.append(text[i]);
@@ -73,7 +88,7 @@ string expandDocletString(string text, ref<compiler.Symbol> sym, string baseName
 			result.append(text[i]);
 	}
 	if (closeA) {
-		result.append(transformLink(linkText, sym, baseName));
+		result.append(transformLink(doclet, offset, linkText, sym, baseName));
 		result.append("</a>");
 	}
 	if (closeSpan)
@@ -93,7 +108,7 @@ string expandDocletString(string text, ref<compiler.Symbol> sym, string baseName
  * or
  *		<i>symbol</i>
  */
-string transformLink(string linkTextIn, ref<compiler.Symbol> sym, string baseName) {
+string transformLink(ref<compiler.Doclet> doclet, int location, string linkTextIn, ref<compiler.Symbol> sym, string baseName) {
 //	printf("transformLink('%s', ..., %s)\n", linkTextIn, baseName);
 //	sym.print(0, false);
 	string linkText = linkTextIn.trim();
@@ -111,7 +126,8 @@ string transformLink(string linkTextIn, ref<compiler.Symbol> sym, string baseNam
 		string domain = linkText.substr(0, idx);
 		scope = compileContext.forest().getDomain(domain);
 		if (scope == null) {
-			printf("Link to %s in generated file %s is undefined.\n", linkText, baseName);
+			printLinkError(doclet, location, linkTextIn.trim());
+//			printf("Link to %s in generated file %s is undefined.\n", linkText, baseName);
 			return caption;			// If we didn't find a symbol by looking in the lexical scopes,
 									// it's undefined, there's nowhere else to go.
 		}
@@ -123,18 +139,20 @@ string transformLink(string linkTextIn, ref<compiler.Symbol> sym, string baseNam
 	ref<compiler.Symbol> s;
 	for (i in components) {
 		if (scope == null) {
-			printf("Link to %s in generated file %s is undefined.\n", linkText, baseName);
+			printLinkError(doclet, location, linkTextIn.trim());
+//			printf("Link to %s in generated file %s is undefined.\n", linkText, baseName);
 			return caption;			// If we didn't find a symbol by looking in the lexical scopes,
 									// it's undefined, there's nowhere else to go.
 		}
 		do {
 			s = scope.lookup(components[i], null);
-			if (s != null)
+			if (s != null || i > 0 || idx >= 0)
 				break;
 			scope = scope.enclosing();
 		} while (scope != null);
 		if (s == null) {
-			printf("Link to %s in generated file %s is undefined.\n", linkText, baseName);
+			printLinkError(doclet, location, linkTextIn.trim());
+//			printf("Link to %s in generated file %s is undefined.\n", linkText, baseName);
 			return caption;			// If we didn't find a symbol by looking in the lexical scopes,
 									// it's undefined, there's nowhere else to go.
 		}
@@ -144,7 +162,8 @@ string transformLink(string linkTextIn, ref<compiler.Symbol> sym, string baseNam
 	}
 	string path = linkTo(s);
 	if (path == null) {
-		printf("Link to %s in generated file %s is undefined.\n", linkTextIn.trim(), baseName.substr(suffix));
+		printLinkError(doclet, location, linkTextIn.trim());
+//		printf("Link to %s in generated file %s is undefined.\n", linkTextIn.trim(), baseName.substr(suffix));
 		return caption;
 	}
 	linkText = storage.makeCompactPath(path, baseName);
@@ -190,5 +209,14 @@ string transformLink(string linkTextIn, ref<compiler.Symbol> sym, string baseNam
 	}
  */
 	return "<a href=\"" + linkText + "\">" + caption + "</a>";
+}
+
+private void printLinkError(ref<compiler.Doclet> doclet, int location, string linkText) {
+	runtime.SourceOffset loc(location);
+	int lineNumber = doclet.unit.lineNumber(loc);
+	if (lineNumber >= 0)
+		printf("%s %d: Link '%s' is undefined\n", doclet.unit.filename(), lineNumber + 1, linkText);
+	else
+		printf("%s [byte %d]: Link '%s' is undefined\n", doclet.unit.filename(), loc.offset, linkText);
 }
 

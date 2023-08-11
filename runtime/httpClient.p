@@ -683,7 +683,7 @@ public class Client {
 	 * If you supply multiple values for the same key using this method, only the last supplied
 	 * value is retained.
 	 *
-	 * Both the key and value strings of a query parameter are encoded using {@link encodeUriComponent}
+	 * Both the key and value strings of a query parameter are encoded using {@link encodeURIComponent}
 	 * function.
 	 *
 	 * @param key The key of the query parameter.

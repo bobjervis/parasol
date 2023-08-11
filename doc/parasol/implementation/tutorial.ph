@@ -53,8 +53,8 @@ into large applications.
 This allows developers to leverage others' work and build more powerful applications, 
 while limiting complexity.
 <p>
-Most modern languages incorporate some similar concept. C++ uses namespaces, Java uses packages,
-Python uses modules and Go uses packages.
+Most modern languages incorporate some similar concept. C++ uses namespaces, Java and Go use packages
+and Python uses modules.
 <p>
 Any Parasol source file that is not a main-file for an application must be assigned to one namespace.
 Each namespace is identified by a compound string.
@@ -63,6 +63,7 @@ It consists of a <i>domain</i> and a <i>path</i>, separated by a colon character
 The domain is a string that is intended to be an Internet Domain Name System name.
 The string you assign cannot be anything. 
 It must be consistent with the domain name syntax of DNS.
+This use has been successful in helping 
 <p>
 The path of a Parasol namespace is a set of one or more identifiers separated by periods.
 Most namespaces use a single identifier, but a hierarchy is formed when mulitple 

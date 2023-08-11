@@ -100,7 +100,7 @@ boolean generateClassPage(ref<compiler.Symbol> sym, string name, string dirName)
 				classPage.write("&gt;</td>\n");
 			string comment = paramMap[pname];
 			if (comment != null)
-				classPage.printf("<td><div class=param-text>%s</div></td>\n", expandDocletString(comment, sym, classFile));
+				classPage.printf("<td><div class=param-text>%s</div></td>\n", expandDocletString(doclet, comment, sym, classFile));
 			if (i < params.length() - 1)
 				classPage.write("</tr>\n<tr>\n<td></td><td>");
 		}
@@ -118,16 +118,22 @@ boolean generateClassPage(ref<compiler.Symbol> sym, string name, string dirName)
 	}
 	if (doclet != null) {
 		if (doclet.author != null)
-			classPage.printf("<div class=author><span class=author-caption>Author: </span>%s</div>\n", expandDocletString(doclet.author, sym, classFile));
+			classPage.printf("<div class=author><span class=author-caption>Author: </span>%s</div>\n",
+									expandDocletString(doclet, doclet.author, sym, classFile));
 		if (doclet.deprecated != null)
-			classPage.printf("<div class=deprecated-outline><div class=deprecated-caption>Deprecated</div><div class=deprecated>%s</div></div>\n", expandDocletString(doclet.deprecated, sym, classFile));
-		classPage.printf("<div class=class-text>%s</div>\n", expandDocletString(doclet.text, sym, classFile));
+			classPage.printf("<div class=deprecated-outline><div class=deprecated-caption>Deprecated</div><div class=deprecated>%s</div></div>\n",
+									expandDocletString(doclet, doclet.deprecated, sym, classFile));
+		classPage.printf("<div class=class-text>%s</div>\n", 
+									expandDocletString(doclet, doclet.text, sym, classFile));
 		if (doclet.threading != null)
-			classPage.printf("<div class=threading-caption>Threading</div><div class=threading>%s</div>\n", expandDocletString(doclet.threading, sym, classFile));
+			classPage.printf("<div class=threading-caption>Threading</div><div class=threading>%s</div>\n", 
+									expandDocletString(doclet, doclet.threading, sym, classFile));
 		if (doclet.since != null)
-			classPage.printf("<div class=since-caption>Since</div><div class=since>%s</div>\n", expandDocletString(doclet.since, sym, classFile));
+			classPage.printf("<div class=since-caption>Since</div><div class=since>%s</div>\n", 
+									expandDocletString(doclet, doclet.since, sym, classFile));
 		if (doclet.see != null)
-			classPage.printf("<div class=see-caption>See Also</div><div class=see>%s</div>\n", expandDocletString(doclet.see, sym, classFile));
+			classPage.printf("<div class=see-caption>See Also</div><div class=see>%s</div>\n", 
+									expandDocletString(doclet, doclet.see, sym, classFile));
 	}
 
 	string subDir = storage.path(dirName, name, null);
