@@ -52,7 +52,7 @@ import parasol:process.printf;
 
 import parasol:types.undefined;
 
-public class Array = var[];
-public class Object = var[string];
+import parasol:types.Array;
+import parasol:types.Object;
 
 

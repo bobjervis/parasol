@@ -576,7 +576,7 @@ public class substring {
 	/**
 	 * Calculate a 32-bit hash of the string value.
 	 *
-	 * This hash is used in arrays indexed by string type as well as in {@link parasol:types.map map}
+	 * This hash is used in arrays indexed by string type as well as in {@link map}
 	 * objects whose key type is string.
 	 *
 	 * @return A pseudo-random value derived from the contents of the string.

@@ -234,9 +234,11 @@ class MacroSpan extends Span {
 				break;
 
 			case PARADOC:
-				outputFolder = storage.path(file.targetDirectory(), _arguments[0]);
-				if (verboseOption.set())
-					printf("Generated API Output %s\n", outputFolder);
+				if (!validateOnlyOption.set()) {
+					outputFolder = storage.path(file.targetDirectory(), _arguments[0]);
+					if (verboseOption.set())
+						printf("Generated API Output %s\n", outputFolder);
+				}
 				content = "<a href=\"" + _arguments[0] + "/index.html\">" + _arguments[1] + "</a>";
 				break;
 

@@ -96,12 +96,9 @@ public boolean collectNamespacesToDocument() {
 		if (f.hasNamespace()) {
 			string nameSpace = f.getNamespaceString();
 			ref<compiler.Namespace> nm;
-			boolean alreadyExists;
 
 			nm = nameMap[nameSpace];
-			if (nm != null)
-				alreadyExists = true;
-			else {
+			if (nm == null) {
 				nm = f.namespaceSymbol();
 				nameMap[nameSpace] = nm;
 				ref<compiler.Doclet> doclet = nm.doclet();
@@ -130,7 +127,16 @@ public boolean generateNamespaceDocumentation() {
 		indexTypesFromNamespace(names[i].name, names[i].symbol, nmPath);
 	}
 	string overviewPage = storage.path(outputFolder, "index.html");
-	ref<Writer> overview = storage.createTextFile(overviewPage);
+	ref<Writer> overview;
+	if (validateOnlyOption.set())
+		overview = storage.createTextFile("/dev/null");
+	else {
+		if (!storage.ensure(outputFolder)) {
+			printf("Could not ensure directory %s\n", outputFolder);
+			return false;
+		}
+		overview = storage.createTextFile(overviewPage);
+	}
 	if (overview == null) {
 		printf("Unable to create file '%s'\n", overviewPage);
 		return false;
@@ -176,11 +182,6 @@ public boolean generateNamespaceDocumentation() {
 
 void indexTypesFromNamespace(string name, ref<compiler.Namespace> nm, string dirName) {
 	string overviewPage = storage.path(dirName, "namespace-summary.html");
-//	printf("Creating %s\n", dirName);
-	if (!storage.ensure(dirName)) {
-		printf("Could not create directory '%s'\n", dirName);
-		process.exit(1);
-	}
 
 	string classesDir = storage.path(dirName, "classes");
 
@@ -243,11 +244,6 @@ void indexTypesInClass(ref<compiler.Symbol> sym, string dirName) {
 	}
 	string name = sym.name();
 	string classFile = storage.path(dirName, name, "html");
-	if (!storage.ensure(dirName)) {
-		printf("Could not ensure directory %s\n", dirName);
-		process.exit(1);
-	}
-
 	if (classFiles[long(scope)] == null)
 		classFiles[long(scope)] = classFile;
 
@@ -257,14 +253,18 @@ void indexTypesInClass(ref<compiler.Symbol> sym, string dirName) {
 }
 
 void generateNamespaceSummary(string name, ref<compiler.Namespace> nm) {
-	string dirName = namespaceDir(nm);
-	if (!storage.ensure(dirName)) {
-		printf("Could not create directory '%s'\n", dirName);
-		process.exit(1);
-	}
+	ref<Writer> overview;
 	string overviewPage = namespaceFile(nm);
-	ref<Writer> overview = storage.createTextFile(overviewPage);
-
+	string dirName = namespaceDir(nm);
+	if (validateOnlyOption.set())
+		overview = storage.createTextFile("/dev/null");
+	else {
+		if (!storage.ensure(dirName)) {
+			printf("Could not create directory '%s'\n", dirName);
+			process.exit(1);
+		}
+		overview = storage.createTextFile(overviewPage);
+	}
 	insertTemplate1(overview, overviewPage);
 
 	overview.printf("<title>%s</title>\n", name);
@@ -314,12 +314,59 @@ string namespaceDir(ref<compiler.Namespace> nm) {
 }
 
 ref<compiler.Scope> scopeFor(ref<compiler.Symbol> sym) {
+//		if (s := sym as compiler.Namespace)
+//			scope = s.symbols();
+//		switch (s := sym) {
+//		case compiler.Namespace:
+//			scope = s.symbols();
+//			break;
+//		default:
+//			...
+//		}
+	if (sym.class == compiler.Namespace)
+		return ref<compiler.Namespace>(sym).symbols();
+	else if (sym.class == compiler.Overload) {
+		ref<compiler.Overload> o = ref<compiler.Overload>(sym);
+		ref<ref<compiler.OverloadInstance>[]> instances = o.instances();
+		if (instances.length() == 0)
+			return null;
+		if (instances.length() > 1)
+			return null;
+		sym = (*instances)[0];
+	}
 	ref<compiler.Type> t = sym.type();
 	if (t == null)
 		return null;
-	if (t.family() == runtime.TypeFamily.TYPEDEF)
+	switch (t.family()) {
+	case SIGNED_32:
+	case UNSIGNED_16:
+	case BOOLEAN:
+	case REF:
+	case ENUM:
+	case FLAGS:
+	case FUNCTION:
+	case SHAPE:
+	case CLASS:
+		return sym.enclosing();
+
+	case TYPEDEF:
 		t = ref<compiler.TypedefType>(t).wrappedType();
-	return t.scope();
+		ref<compiler.Scope> scope = t.scope();
+		switch (t.family()) {
+		case TEMPLATE:
+			ref<ref<compiler.Scope>[]> enclosed = scope.enclosed();
+			if (enclosed.length() == 0)
+				return null;
+			return (*enclosed)[0];	
+		}
+		return scope;
+
+	default:
+		printf("family = %s\n", string(t.family()));
+		sym.print(0, false);
+		assert(false);
+	}
+	return null;
 }
 
 

@@ -1144,7 +1144,7 @@ class UnitScope extends Scope {
 					n.definition().addUnique(MessageId.DUPLICATE, compileContext.pool(), n.name());
 					sym.definition().addUnique(MessageId.DUPLICATE, compileContext.pool(), sym.name());
 				} else
-					namespaceScope.put(sym, compileContext.pool());
+					namespaceScope.put(sym);
 			} else if (sym.class == Overload) {
 				ref<Overload> o = ref<Overload>(sym);
 
@@ -1938,7 +1938,7 @@ public class Scope {
 		return max;
 	}
 
-	public void put(ref<Symbol> sym, ref<MemoryPool> memoryPool) {
+	public void put(ref<Symbol> sym) {
 		SymbolKey key(sym.name());
 		_symbols.insert(key, sym);
 	}

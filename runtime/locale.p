@@ -20,7 +20,7 @@
  * Most functions, such as printf, are sensitive to this locale. You don't have to do anything to get
  * formatting functions to use the correct decimal point, locale time formats and so on.
  *
- * Each thread also can have a locale specific to it by setting the locale member of the {@link Thread} object.
+ * Each thread also can have a locale specific to it by setting the locale member of the {@link thread.Thread} object.
  * For example, to set the current threads locale to German, the following code can be used:
  *
  * <pre>{@code

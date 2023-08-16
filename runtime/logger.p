@@ -288,7 +288,7 @@ public monitor class Logger {
 	 *
 	 *<pre>{@code format(INFO, format, arguments)}
 	 *</pre>
-	 * @param format A format string. See {@link stream.Writer.printf} for details.
+	 * @param format A format string. See {@link parasol:stream.Writer.printf} for details.
 	 * @param arguments The argument list corresponding to the format string.
 	 *
 	 * @threading This method is thread-safe.
@@ -308,7 +308,7 @@ public monitor class Logger {
 	 *
 	 *<pre>{@code format(DEBUG, format, arguments)}
 	 *</pre>
-	 * @param format A format string. See {@link stream.Writer.printf} for details.
+	 * @param format A format string. See {@link parasol:stream.Writer.printf} for details.
 	 * @param arguments The argument list corresponding to the format string.
 	 *
 	 * @threading This method is thread-safe.
@@ -328,7 +328,7 @@ public monitor class Logger {
 	 *
 	 *<pre>{@code format(WARN, format, arguments)}
 	 *</pre>
-	 * @param format A format string. See {@link stream.Writer.printf} for details.
+	 * @param format A format string. See {@link parasol:stream.Writer.printf} for details.
 	 * @param arguments The argument list corresponding to the format string.
 	 *
 	 * @threading This method is thread-safe.
@@ -348,7 +348,7 @@ public monitor class Logger {
 	 *
 	 *<pre>{@code format(ERROR, format, arguments)}
 	 *</pre>
-	 * @param format A format string. See {@link stream.Writer.printf} for details.
+	 * @param format A format string. See {@link parasol:stream.Writer.printf} for details.
 	 * @param arguments The argument list corresponding to the format string.
 	 *
 	 * @threading This method is thread-safe.
@@ -368,7 +368,7 @@ public monitor class Logger {
 	 *
 	 *<pre>{@code format(FATAL, format, arguments)}
 	 *</pre>
-	 * @param format A format string. See {@link stream.Writer.printf} for details.
+	 * @param format A format string. See {@link parasol:stream.Writer.printf} for details.
 	 * @param arguments The argument list corresponding to the format string.
 	 *
 	 * @threading This method is thread-safe.
@@ -417,7 +417,7 @@ public monitor class Logger {
 	 * log(level, msg);}
 	 *</pre>
 	 * @param level The importance level of the message.
-	 * @param format A format string. See {@link stream.Writer.printf} for details.
+	 * @param format A format string. See {@link parasol:stream.Writer.printf} for details.
 	 * @param arguments The argument list corresponding to the format string.
 	 *
 	 * @threading This method is thread-safe.

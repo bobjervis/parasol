@@ -114,14 +114,16 @@ string transformLink(ref<compiler.Doclet> doclet, int location, string linkTextI
 	string linkText = linkTextIn.trim();
 	int idx = linkText.indexOf(' ');
 	string caption;
+	string[] components;
+	ref<compiler.Scope> scope;
+	ref<compiler.Scope> original;
+
 	if (idx >= 0) {
 		caption = linkText.substr(idx + 1).trim();
 		linkText.resize(idx);
 	} else
 		caption = linkText;
 	idx = linkText.indexOf(':');
-	string[] components;
-	ref<compiler.Scope> scope;
 	if (idx >= 0) {
 		string domain = linkText.substr(0, idx);
 		scope = compileContext.forest().getDomain(domain);
@@ -135,6 +137,7 @@ string transformLink(ref<compiler.Doclet> doclet, int location, string linkTextI
 	} else {
 		components = linkText.split('.');
 		scope = scopeFor(sym);
+		original = scope;
 	}
 	ref<compiler.Symbol> s;
 	for (i in components) {
@@ -144,14 +147,18 @@ string transformLink(ref<compiler.Doclet> doclet, int location, string linkTextI
 			return caption;			// If we didn't find a symbol by looking in the lexical scopes,
 									// it's undefined, there's nowhere else to go.
 		}
-		do {
-			s = scope.lookup(components[i], null);
-			if (s != null || i > 0 || idx >= 0)
-				break;
-			scope = scope.enclosing();
-		} while (scope != null);
+		s = compiler.lexicalLookup(scope, components[i], null);
 		if (s == null) {
+//			printf("[%d] %s\n", i, components[i]);
+//			sym.print(0, false);
+//			scope.print(0, false);
+//			ref<ref<compiler.Scope>[]> enclosed = scope.enclosed();
+//			printf("enclosed %d\n", enclosed.length());
+//			if (enclosed.length() > 0)
+//				(*enclosed)[0].print(0, false);
 			printLinkError(doclet, location, linkTextIn.trim());
+//			sym.print(0, false);
+//			original.print(0, false);
 //			printf("Link to %s in generated file %s is undefined.\n", linkText, baseName);
 			return caption;			// If we didn't find a symbol by looking in the lexical scopes,
 									// it's undefined, there's nowhere else to go.
@@ -159,55 +166,18 @@ string transformLink(ref<compiler.Doclet> doclet, int location, string linkTextI
 		if (i == components.length() - 1)
 			break;
 		scope = scopeFor(s);
+//		if (scope == null)
+//			s.print(0, false);
 	}
 	string path = linkTo(s);
 	if (path == null) {
 		printLinkError(doclet, location, linkTextIn.trim());
-//		printf("Link to %s in generated file %s is undefined.\n", linkTextIn.trim(), baseName.substr(suffix));
 		return caption;
 	}
 	linkText = storage.makeCompactPath(path, baseName);
-	int suffix = outputFolder.length() + 1;
+	int suffix = outputFolder.length();
 	if (verboseOption.set())
 		printf("File %3$s links to %2$s as %1$s\n", linkText, path.substr(suffix), baseName.substr(suffix));
-/*
-				if (s.type().family() != runtime.TypeFamily.TYPEDEF)
-					return caption;
-				if (!hasClasses) {
-					hasClasses = true;
-					path = storage.path(path, "classes");
-				}
-				path = storage.path(path, s.name());
-				scope = scopeFor(s);
-				if (scope == null) {
-					printf("%s has no scope\n", s.name());
-					return caption;
-				}
-				s = scope.lookup(components[i + 1], null);
-				if (s == null)
-					return caption;
-			}
-			if (!hasClasses) {
-				hasClasses = true;
-				path = storage.path(path, "classes");
-			}
-		}
-		if (s.type() != null && s.type().family() == runtime.TypeFamily.TYPEDEF) {
-			if (!hasClasses)
-				path = storage.path(path, "classes", null);
-			path = storage.path(path, s.name(), "html");
-			if (path == baseName)
-				return caption;
-			linkText = storage.makeCompactPath(path, baseName);
-		} else {
-			path += ".html";
-			if (path == baseName)
-				linkText = "#" + components[components.length() - 1];
-			else
-				linkText = storage.makeCompactPath(path, baseName) + "#" + components[components.length() - 1];
-		}
-	}
- */
 	return "<a href=\"" + linkText + "\">" + caption + "</a>";
 }
 

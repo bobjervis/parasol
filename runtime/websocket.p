@@ -862,7 +862,7 @@ public monitor class Rendezvous {
 	/**
 	 * The message body of the reply-half of a message pair.
 	 *
-	 * This is a copy of the text passed in the called to {@link postReply}. Note that if the 
+	 * This is a copy of the text passed in the call to {@link postResult}. Note that if the 
 	 * object is notified due to the Web socket being closed before receipt of a response-message,
 	 * this member will be an empty array.
 	 *
@@ -942,7 +942,7 @@ public monitor class Rendezvous {
  * string that uniquely identifies the pair. 
  * The derived class implements the marshalling logic to generate
  * a message that contains the key string plus the set of marshalled RPC parameters. This code will call 
- * {@link createRendesvous} to create a {@link Rendezvous} object.
+ * {@link createRendezvous} to create a {@link Rendezvous} object.
  * The send-side thread then calls the {@link Monitor.wait}
  * method of the {@link Rendezvous} object to wait for the response message. If the Web Socket is closed, then all pending
  * {@link Rendezvous} objects will be notified in order to release the waiting threads.
@@ -1016,7 +1016,7 @@ public monitor class RendezvousManager {
 	 *
 	 * After this call is completed, all {@link Rendezvous} objects are gone and the manager object is empty.
 	 *
-	 * Calling this method also sets the shutdown flag, so future calls to {@link createRendezvoous} fail.
+	 * Calling this method also sets the shutdown flag, so future calls to {@link createRendezvous} fail.
 	 */
 	public ref<Rendezvous>[] extractAllRendezvous() {
 		_shuttingDown = true;

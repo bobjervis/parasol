@@ -138,11 +138,8 @@ public class address {
 public class boolean {
 }
 
-public class ClassInfo {}
-public class `*Namespace*` {}
-public class `*deferred*`{}
-public class `*array*`{}
-public class `*object*`{}
+public class Array = var[];
+public class Object = var[string];
 /**
  * A reference to an object.
  *

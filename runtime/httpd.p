@@ -1019,7 +1019,7 @@ public class Response {
 	 * Calling this method before calling {@link endOfHeaders} will close the
 	 * headers section.
 	 *
-	 * @param format A valid printf format string. See the description at {@link parasol:stream:Writer.printf}
+	 * @param format A valid printf format string. See the description at {@link parasol:stream.Writer.printf}
 	 * for details concerning the contents of a format string.
 	 * @param arguments Zero or more arguments. The number and type of arguments is determined by the 
 	 * contents of the format string.
@@ -1264,7 +1264,7 @@ public class Response {
 	 * Flush your buffered response text to the connection.
 	 *
 	 * Under most circumstances, you will not need to call this method
-	 * explicitly. Returning from your {@link processRequest} method
+	 * explicitly. Returning from your {@link Service.processRequest processRequest} method
 	 * will call this method for you.
 	 *
 	 * If you are using '100 Conitnue' to delay transmission of the message
@@ -1495,7 +1495,7 @@ public class Uri {
 	 * A success indicator for the last call to parse.
 	 *
 	 * This field is set to true if the last call to {@link parse} succeeded and no call to
-	 * {@link reset) has been made or the field otherwise modified.
+	 * {@link reset} has been made or the field otherwise modified.
 	 */
 	public boolean parsed;
 	/**

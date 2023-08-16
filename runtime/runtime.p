@@ -159,7 +159,7 @@ public boolean makeRegionExecutable(address location, long length) {
  * Free a region allocated via {@link allocateRegion}
  *
  * @param region The address of a region returned from a prior call to {@link allocateRegion}.
- * @param length The length supplied with the original call to {@link allocateRegion).
+ * @param length The length supplied with the original call to {@link allocateRegion}.
  */
 public void freeRegion(address region, long length) {
 	if (compileTarget == Target.X86_64_WIN) {

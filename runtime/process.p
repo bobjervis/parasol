@@ -691,7 +691,7 @@ public class Process extends ProcessVolatileData {
 	 * Retrieve the file descriptor for the child process\' output.
 	 *
 	 * This call will only return a valid file descriptor if either {@link collectOutput} or
-	 * {@link runInteractively) were called before calling spawn.
+	 * {@link runInteractive} were called before calling spawn.
 	 *
 	 * @return The file descriptor, or -1 if no special standard output handling was specified.
 	 */
@@ -704,9 +704,9 @@ public class Process extends ProcessVolatileData {
 	/**
 	 * Retrieve the operating system user id of the child process.
 	 *
-	 * This call will only return a non-zero value if a call was first placed to {@link username}.
+	 * This call will only return a non-zero value if a call was first placed to {@link user}.
 	 *
- 	 * @return A non-zero user id if one was defined, or zero if no valid call to {@link username} was made.
+ 	 * @return A non-zero user id if one was defined, or zero if no valid call to {@link user} was made.
 	 */
 	public linux.uid_t uid() {
 		return _user;

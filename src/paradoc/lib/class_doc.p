@@ -26,11 +26,16 @@ boolean generateClassPage(ref<compiler.Symbol> sym, string name, string dirName)
 		return false;
 	}
 	string classFile = storage.path(dirName, name, "html");
-	if (!storage.ensure(dirName)) {
-		printf("Could not ensure directory %s\n", dirName);
-		process.exit(1);
+	ref<Writer> classPage;
+	if (validateOnlyOption.set())
+		classPage = storage.createTextFile("/dev/null");
+	else {
+		if (!storage.ensure(dirName)) {
+			printf("Could not ensure directory %s\n", dirName);
+			process.exit(1);
+		}
+		classPage = storage.createTextFile(classFile);
 	}
-	ref<Writer> classPage = storage.createTextFile(classFile);
 	if (classPage == null) {
 		printf("Could not create class file %s\n", classFile);
 		process.exit(1);
@@ -136,7 +141,7 @@ boolean generateClassPage(ref<compiler.Symbol> sym, string name, string dirName)
 									expandDocletString(doclet, doclet.see, sym, classFile));
 	}
 
-	string subDir = storage.path(dirName, name, null);
+	string subDir = storage.path(dirName, name);
 
 	generateScopeContents(scope, classPage, subDir, classFile, "Member", "Method", enumLabel, isInterface, hasConstants);
 

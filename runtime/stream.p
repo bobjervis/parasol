@@ -127,7 +127,7 @@ public class Reader {
 	 * Restore the last byte read.
 	 *
 	 * This method will adjust the position of the input stream to just before the last byte read.
-	 * If the stream is at the initial position or has just been positioned using a {@link seek}
+	 * If the stream is at the initial position or has just been positioned using, for example, a {@link parasol:storage.FileReader.seek}
 	 * method, this call has no effect.
 	 *
 	 * One byte of pushback is supported by all Readers. Each Reader class should document what

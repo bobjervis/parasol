@@ -1423,8 +1423,9 @@ public class Formatter {
 	 */
 	public ref<international.Locale> locale;
 	/**
-	 * If not null, the Calendar to use in formatting. If
-	 * null, the {@link ISO8601} Calendar is used.
+	 * If not null, the Calendar to use in formatting.
+	 *
+	 * If null, the {@link ISO8601} Calendar is used.
 	 */
 	public ref<Calendar> calendar;
 

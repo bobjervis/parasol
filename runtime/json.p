@@ -70,7 +70,7 @@ public string prettyPrint(var object) {
  * into the text to minimize the size of the text payload.
  *
  * Note that the value {@link undefined} will be stringified to that string, even though it is not part of the
- * json standard. Similarly, small class objects, such as {@link time.Time}, are reported as the string 'object (schema unknown)'. 
+ * json standard. Similarly, small class objects, such as {@link parasol:time.Time}, are reported as the string 'object (schema unknown)'. 
  * JSON text that was parsed using {@link parse} will produce correct JSON output from this function.
  * 
  * @param object The JSON object to be converted.
@@ -210,10 +210,10 @@ public void dispose(var object) {
  *  <li> A string. Any string.
  *  <li> A boolean. Any boolean value.
  *  <li> Null. The value null.
- *  <li> A reference to a {@link parasol:types.Array Array} object. As long as every element in the Array is also
+ *  <li> A reference to a {@link Array} object. As long as every element in the Array is also
  *       valid JSON data and the Array does not recursively contain a reference to itself, then the Array object
  *       is valid. 
- *  <li> A reference to a {@link Parasol:type.Object Object} object. As long as every member of the Object is also
+ *  <li> A reference to a {@link Object} object. As long as every member of the Object is also
  *       valid JSON data and the Object does not recursively contain a reference to itself, then the Object
  *       object is valid.
  *</ul>

@@ -1001,7 +1001,7 @@ public class string extends String<byte> {
 	/**
 	 * Calculate a 32-bit hash of the string value.
 	 *
-	 * This hash is used in arrays indexed by string type as well as in {@link parasol:types.map map}
+	 * This hash is used in arrays indexed by string type as well as in {@link map}
 	 * objects whose key type is string.
 	 *
 	 * @return A pseudo-random value derived from the contents of the string.
@@ -1934,7 +1934,7 @@ public class string16 extends String<char> {
 	 * Append a Unicode character.
 	 *
 	 * If the argument value is not a valid Unicode code point, the 
-	 * {@link REPLACEMENT_CHARACTER) is stored instead.
+	 * {@link REPLACEMENT_CHARACTER} is stored instead.
 	 *
 	 * @param ch The character to append.
 	 */

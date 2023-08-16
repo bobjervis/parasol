@@ -441,62 +441,52 @@ public class Identifier extends Node {
 				type = compileContext.builtInType(runtime.TypeFamily.VOID);
 			return;
 		}
-		for (ref<Scope> s = compileContext.current(); s != null; s = s.enclosing()) {
-			ref<Scope> available = s;
-			do {
-				_symbol = available.lookup(_value, compileContext);
-				if (_symbol != null) {
-					// For non-lexical scopes (i.e. base classes), do not include private
-					// variables.
-					if (available != s && _symbol.visibility() == Operator.PRIVATE) {
-						_symbol = null;
-						break;
-					}
-					if (_symbol.class == Overload) {
-						ref<Overload> o = ref<Overload>(_symbol);
-						if (o.instances().length() == 1) {
-							if (o.kind() == Operator.TEMPLATE) {
-								add(MessageId.NOT_SIMPLE_VARIABLE, compileContext.pool(), _value);
-								type = compileContext.errorType();
-								return;
-							}
-							_symbol = (*o.instances())[0];
-						} else {
-							add(MessageId.AMBIGUOUS_REFERENCE, compileContext.pool());
-							type = compileContext.errorType();
-							return;
-						}
-					}
-					type = _symbol.assignType(compileContext);
-					if (type == null)
+		ref<Scope> available;
+
+		(_symbol, available) = lexicalLookup(compileContext.current(), _value, compileContext);
+		if (_symbol != null) {
+			if (_symbol.class == Overload) {
+				ref<Overload> o = ref<Overload>(_symbol);
+				if (o.instances().length() == 1) {
+					if (o.kind() == Operator.TEMPLATE) {
+						add(MessageId.NOT_SIMPLE_VARIABLE, compileContext.pool(), _value);
 						type = compileContext.errorType();
-					else {
-						switch (_symbol.storageClass()) {
-						case MEMBER:
-							if (!compileContext.current().contextAllowsReferenceToThis()) {
-								add(MessageId.MEMBER_REF_NOT_ALLOWED, compileContext.pool(), _value);
-								type = compileContext.errorType();
-								break;
-							}
-						case LOCK:
-							if (_symbol.class == OverloadInstance && type.family() == runtime.TypeFamily.FUNCTION) {
-								add(MessageId.METHOD_MUST_BE_STATIC, compileContext.pool(), _value);
-								type = compileContext.errorType();
-							}
-						}
+						return;
 					}
-					if (available.isMonitor()) {
-						if (!compileContext.current().enclosingClassScope().isMonitor() && _symbol.isMutable()) {
-							add(MessageId.BAD_MONITOR_REF_IDENTIFIER, compileContext.pool(), _value);
-							type = compileContext.errorType();
-							return;
-						}
-					}
-					_symbol.markAsReferenced(compileContext);
+					_symbol = (*o.instances())[0];
+				} else {
+					add(MessageId.AMBIGUOUS_REFERENCE, compileContext.pool());
+					type = compileContext.errorType();
 					return;
 				}
-				available = available.base(compileContext);
-			} while (available != null);
+			}
+			type = _symbol.assignType(compileContext);
+			if (type == null)
+				type = compileContext.errorType();
+			else {
+				switch (_symbol.storageClass()) {
+				case MEMBER:
+					if (!compileContext.current().contextAllowsReferenceToThis()) {
+						add(MessageId.MEMBER_REF_NOT_ALLOWED, compileContext.pool(), _value);
+						type = compileContext.errorType();
+						break;
+					}
+				case LOCK:
+					if (_symbol.class == OverloadInstance && type.family() == runtime.TypeFamily.FUNCTION) {
+						add(MessageId.METHOD_MUST_BE_STATIC, compileContext.pool(), _value);
+						type = compileContext.errorType();
+					}
+				}
+			}
+			if (available.isMonitor()) {
+				if (!compileContext.current().enclosingClassScope().isMonitor() && _symbol.isMutable()) {
+					add(MessageId.BAD_MONITOR_REF_IDENTIFIER, compileContext.pool(), _value);
+					type = compileContext.errorType();
+					return;
+				}
+			}
+			_symbol.markAsReferenced(compileContext);
+			return;
 		}
 		type = compileContext.errorType();
 		add(MessageId.UNDEFINED, compileContext.pool(), _value);
@@ -507,6 +497,35 @@ public class Identifier extends Node {
 		if (_symbol != null)
 			_symbol.markAsReferenced(compileContext);
 	}
+}
+
+public ref<Symbol>, ref<Scope> lexicalLookup(ref<Scope> enclosing, substring value, ref<CompileContext> compileContext) {
+	for (ref<Scope> s = enclosing; s != null; s = s.enclosing()) {
+		ref<Symbol> symbol;
+		ref<Scope> available;
+
+		(symbol, available) = selectionLookup(s, value, compileContext);
+		if (symbol != null)
+			return symbol, available;
+	}
+	return null, null;
+}
+
+public ref<Symbol>, ref<Scope> selectionLookup(ref<Scope> scope, substring value, ref<CompileContext> compileContext) {
+	ref<Symbol> symbol;
+	ref<Scope> available = scope;
+	do {
+		symbol = available.lookup(value, compileContext);
+		if (symbol != null) {
+			// For non-lexical scopes (i.e. base classes), do not include private
+			// variables.
+			if (available != scope && symbol.visibility() == Operator.PRIVATE)
+				break;
+			return symbol, available;
+		}
+		available = available.base(compileContext);
+	} while (available != null);
+	return null, null;
 }
 
 private ref<Node> makeAddressOfEnumClass(boolean implicitIndirect, ref<Node> enumInstance, ref<EnumType> type, ref<SyntaxTree> tree, ref<CompileContext> compileContext) {

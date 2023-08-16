@@ -168,6 +168,8 @@ string linkTo(ref<compiler.Symbol> sym) {
 	string path = outputFolder;
 
 	nm = enclosing.getNamespace();
+	if (nm == null)
+		sym.print(0, false);
 	string nameSpace = nm.domain() + "_" + nm.dottedName();
 	path = storage.path(outputFolder, nameSpace);
 	if (sym.class == compiler.Overload) {
@@ -208,6 +210,7 @@ string linkTo(ref<compiler.Symbol> sym) {
 	case REF:
 	case FUNCTION:
 	case ENUM:
+	case FLAGS:
 		if (classChain != null)
 			path = storage.path(storage.path(path, "classes"), classChain + ".html");
 		else

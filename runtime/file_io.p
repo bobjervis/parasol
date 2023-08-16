@@ -216,7 +216,7 @@ public class File {
 	 *
 	 * @param filename The path of the file to open.
 	 *
-	 * @param access AccessFlags describing the intended operations. The {@link AccessFlags.EXECUTE EXECUTE}
+	 * @param access AccessFlags describing the intended operations. The {@link AccessFlags.EXECUTE}
 	 * flag is ignored.
 	 *
 	 * @return true if the file was successfully opened, false otherwise.
@@ -341,7 +341,7 @@ public class File {
 	 *
 	 * @param filename A path to an existing file to be appended to.
 	 *
-	 * @param access AccessFlags describing the intended operations. The {@link AccessFlags.EXECUTE EXECUTE}
+	 * @param access AccessFlags describing the intended operations. The {@link AccessFlags.EXECUTE}
 	 * flag is ignored.
 	 *
 	 * @return true if the open operation succeeded, false otherwise.

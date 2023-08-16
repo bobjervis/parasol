@@ -218,13 +218,13 @@ public class Client<class UPSTREAM, class DOWNSTREAM> extends http.Client {
 	/**
 	 * Write a shutdown message.
 	 *
-	 * A single-frame message with an {@link OP_CLOSE} opcode is sent. The cause and reason values
+	 * A single-frame message with an {@link http.WebSocket.OP_CLOSE} opcode is sent. The cause and reason values
 	 * are formatted according to the WebSocket protocol.
 	 *
 	 * @threading This method is thread-safe.
 	 *
-	 * @param cause The cause of the shutdown. Possible values include {@link CLOSE_NORMAL}, {@link CLOSE_GOING_AWAY},
-	 * {@link CLOSE_PROTOCOL_ERROR} or {@link CLOSE_BAD_DATA}.
+	 * @param cause The cause of the shutdown. Possible values include {@link http.WebSocket.CLOSE_NORMAL}, {@link http.WebSocket.CLOSE_GOING_AWAY},
+	 * {@link http.WebSocket.CLOSE_PROTOCOL_ERROR} or {@link http.WebSocket.CLOSE_BAD_DATA}.
 	 * @param reason A reason string that provides additional details about the cause.
 	 */
 	public void shutDown(short cause, string reason) {
@@ -338,7 +338,7 @@ public class WebSocket<class OBJECT, class PROXY> extends WebSocketVolatileData 
 	 * the OBJECT interface.
 	 *
 	 * @threading This method is not thread safe. Call it only during the
-	 * {@link notifyCreation} call in the {@link WebSocketFactory}.
+	 * {@link WebSocketFactory.notifyCreation notifyCreation} call in the {@link WebSocketFactory}.
 	 */
 	public void setObject(OBJECT object) {
 		_upstreamObject = object;
@@ -351,13 +351,13 @@ public class WebSocket<class OBJECT, class PROXY> extends WebSocketVolatileData 
 	/**
 	 * Write a shutdown message.
 	 *
-	 * A single-frame message with an {@link OP_CLOSE} opcode is sent. The cause and reason values
+	 * A single-frame message with an {@link http.WebSocket.OP_CLOSE} opcode is sent. The cause and reason values
 	 * are formatted according to the WebSocket protocol.
 	 *
 	 * @threading This method is thread-safe.
 	 *
-	 * @param cause The cause of the shutdown. Possible values include {@link CLOSE_NORMAL}, {@link CLOSE_GOING_AWAY},
-	 * {@link CLOSE_PROTOCOL_ERROR} or {@link CLOSE_BAD_DATA}.
+	 * @param cause The cause of the shutdown. Possible values include {@link http.WebSocket.CLOSE_NORMAL}, {@link http.WebSocket.CLOSE_GOING_AWAY},
+	 * {@link http.WebSocket.CLOSE_PROTOCOL_ERROR} or {@link http.WebSocket.CLOSE_BAD_DATA}.
 	 * @param reason A reason string that provides additional details about the cause.
 	 */
 	public void shutDown(short cause, string reason) {
