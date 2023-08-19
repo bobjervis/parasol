@@ -953,6 +953,14 @@ public class CompileContext extends CodegenContext {
 			id.bindFlagsName(_current, ref<Block>(b.right()), this);
 			return TraverseAction.SKIP_CHILDREN;
 			
+		case	DEF_ASSIGN:
+			b = ref<Binary>(n);
+			if (b.left().op() == Operator.IDENTIFIER) {
+				ref<Identifier> id = ref<Identifier>(b.left());
+				id.bind(_current, null, b.right(), this);
+			}
+			break;
+			
 		case	DECLARATION:
 			b = ref<Binary>(n);
 			bindDeclarators(b.left(), b.right());

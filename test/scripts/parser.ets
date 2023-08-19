@@ -528,6 +528,7 @@ expression(expect: fail, message: EXPECTING_TERM) { >>a }
 expression(expect: fail, message: EXPECTING_TERM) { >>>a }
 expression(expect: fail, message: EXPECTING_TERM) { ..a }
 expression(expect: fail, message: EXPECTING_TERM) { =a }
+expression(expect: fail, message: EXPECTING_TERM) { :=a }
 expression(expect: fail, message: EXPECTING_TERM) { -=a }
 expression(expect: fail, message: EXPECTING_TERM) { *=a }
 expression(expect: fail, message: EXPECTING_TERM) { /=a }
@@ -641,6 +642,7 @@ expression(expect: fail, message: EXPECTING_TERM) { a >> }
 expression(expect: fail, message: EXPECTING_TERM) { a >>> }
 expression(expect: fail, message: EXPECTING_TERM) { a.. }
 expression(expect: fail, message: EXPECTING_TERM) { a= }
+expression(expect: fail, message: EXPECTING_TERM) { a:= }
 expression(expect: fail, message: EXPECTING_TERM) { a+= }
 expression(expect: fail, message: EXPECTING_TERM) { a-= }
 expression(expect: fail, message: EXPECTING_TERM) { a*= }
@@ -693,6 +695,7 @@ expression() { a >> b }
 expression() { a >>> b }
 expression() { a .. b }
 expression() { a = b }
+expression() { a := b }
 expression() { a += b }
 expression() { a -= b }
 expression() { a *= b }

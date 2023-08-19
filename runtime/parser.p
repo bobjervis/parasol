@@ -1933,6 +1933,7 @@ class BinaryOperators {
 
 		precedence++;
 
+		define(Operator.DEF_ASSIGN, Token.CO_EQ, precedence);
 		define(Operator.ASSIGN, Token.EQUALS, precedence);
 		define(Operator.DIVIDE_ASSIGN, Token.SLASH_EQ, precedence);
 		define(Operator.REMAINDER_ASSIGN, Token.PERCENT_EQ, precedence);

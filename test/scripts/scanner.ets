@@ -121,6 +121,7 @@ scan(tokens: 1){ ^ }
 scan(tokens: 1){ | }
 scan(tokens: 1){ ! }
 scan(tokens: 1){ = }
+scan(tokens: 1){ := }
 scan(tokens: 1){ ? }
 scan(tokens: 1){ ~ }
 scan(tokens: 1){ /= }

@@ -279,7 +279,10 @@ public class Identifier extends Node {
 
 	public void bind(ref<Scope> enclosing, ref<Node> typeExpression, ref<Node> initializer, ref<CompileContext> compileContext) {
 		_definition = true;
-		_symbol = enclosing.define(compileContext.visibility, compileContext.isStatic ? StorageClass.STATIC : StorageClass.ENCLOSING, compileContext.annotations, this, typeExpression, initializer, compileContext.pool());
+		_symbol = enclosing.define(compileContext.visibility, 
+								   compileContext.isStatic ? StorageClass.STATIC : StorageClass.ENCLOSING,
+								   compileContext.annotations, this, typeExpression, initializer, 
+								   compileContext.pool());
 		if (_symbol == null) {
 			add(MessageId.DUPLICATE, compileContext.pool(), _value);
 			type = compileContext.errorType();
@@ -434,7 +437,9 @@ public class Identifier extends Node {
 
 	private void assignTypes(ref<CompileContext> compileContext) {
 		if (_definition) {
-			if (_symbol != null && _symbol.declaredStorageClass() == StorageClass.STATIC && _symbol.enclosing().storageClass() == StorageClass.STATIC) {
+			if (_symbol != null &&
+				_symbol.declaredStorageClass() == StorageClass.STATIC &&
+				_symbol.enclosing().storageClass() == StorageClass.STATIC) {
 				add(MessageId.STATIC_DISALLOWED, compileContext.pool());
 				type = compileContext.errorType();
 			} else

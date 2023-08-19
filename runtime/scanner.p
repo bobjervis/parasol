@@ -73,6 +73,7 @@ public enum Token {
 
 	ELLIPSIS,
 	DOT_DOT,
+	CO_EQ,						// :=
 	SLASH_EQ,
 	PERCENT_EQ,
 	ASTERISK_EQ,
@@ -599,6 +600,10 @@ public class Scanner {
 				return identifier(c);
 				
 			case	':':
+				c = getc();
+				if (c == '=')
+					return Token.CO_EQ;
+				ungetc();
 				return Token.COLON;
 
 			case	';':

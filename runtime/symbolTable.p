@@ -44,27 +44,6 @@ int NOT_PARAMETERIZED_TYPE = -1000000;
 
 public int FIRST_USER_METHOD = 2;
 
-public class ClassScope extends ClasslikeScope {
-	public ClassScope(ref<Scope> enclosing, ref<Node> definition, ref<Identifier> className) {
-		super(enclosing, definition, className);
-	}
-
-	protected ClassScope(ref<Scope> enclosing, ref<Node> definition, StorageClass storageClass, ref<Identifier> className) {
-		super(enclosing, definition, storageClass, className);
-	}
-
-	protected void visitAll(ref<Target> target, int offset, ref<CompileContext> compileContext) {
-		for (int i = 0; i < _members.length(); i++) {
-			ref<Symbol> sym = _members[i];
-			target.assignStorageToObject(sym, this, offset, compileContext);
-		}
-	}
-
-	public boolean isMonitor() {
-		return _definition != null && _definition.op() == Operator.MONITOR_CLASS;
-	}
-}
-
 class MonitorScope extends ClassScope {
 	public MonitorScope(ref<Scope> enclosing, ref<Node> definition, ref<Identifier> className) {
 		super(enclosing, definition, className);
@@ -110,7 +89,7 @@ public class LockScope extends Scope {
 	}
 }
 
-class ClasslikeScope extends Scope {
+public class ClassScope extends Scope {
 	public ref<ClassType> classType;
 	
 	private ref<OverloadInstance>[] _methods;
@@ -124,12 +103,23 @@ class ClasslikeScope extends Scope {
 	
 	public address vtable;				// scratch area for code generators.
 
-	public ClasslikeScope(ref<Scope> enclosing, ref<Node> definition, ref<Identifier> className) {
+	public ClassScope(ref<Scope> enclosing, ref<Node> definition, ref<Identifier> className) {
 		super(enclosing, definition, StorageClass.MEMBER, className);
 	}
 
-	ClasslikeScope(ref<Scope> enclosing, ref<Node> definition, StorageClass storageClass, ref<Identifier> className) {
+	protected ClassScope(ref<Scope> enclosing, ref<Node> definition, StorageClass storageClass, ref<Identifier> className) {
 		super(enclosing, definition, storageClass, className);
+	}
+
+	protected void visitAll(ref<Target> target, int offset, ref<CompileContext> compileContext) {
+		for (int i = 0; i < _members.length(); i++) {
+			ref<Symbol> sym = _members[i];
+			target.assignStorageToObject(sym, this, offset, compileContext);
+		}
+	}
+
+	public boolean isMonitor() {
+		return _definition != null && _definition.op() == Operator.MONITOR_CLASS;
 	}
 
 	public ref<Scope> base(ref<CompileContext> compileContext) {
@@ -353,6 +343,10 @@ class ClasslikeScope extends Scope {
 					_interfaces[i].thunkOffset = thunkOffset;
 					thunkOffset += 8;
 				}
+			}
+			if (variableStorage == 0) {
+				if (this.class == ClassScope)
+					variableStorage = 1;
 			}
 		}
 	}
@@ -903,7 +897,9 @@ public class ParameterScope extends Scope {
 		}
 	}
 
-	public ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> definition, ref<Node> declaration, ref<Node> initializer, ref<MemoryPool> memoryPool) {
+	public ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations,
+							  ref<Node> definition, ref<Node> declaration, ref<Node> initializer, 
+							  ref<MemoryPool> memoryPool) {
 		ref<Symbol> sym = super.define(visibility, storageClass, annotations, definition, declaration, initializer, memoryPool);
 		if (sym != null)
 			_parameters.append(sym);
@@ -912,7 +908,8 @@ public class ParameterScope extends Scope {
 		return sym;
 	}
 
-	public ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> name, ref<Type> type, ref<MemoryPool> memoryPool) {
+	public ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations,
+							  ref<Node> name, ref<Type> type, ref<MemoryPool> memoryPool) {
 		ref<Symbol> sym = super.define(visibility, storageClass, annotations, name, type, null, memoryPool);
 		if (sym != null)
 			_parameters.append(sym);
@@ -1392,45 +1389,43 @@ public class Scope {
 		}
 		printDetails();
 		printf(":\n");
-		for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
-			ref<Symbol> sym = i.get();
-			if (sym.enclosing() == this)
-				i.get().print(indent + INDENT, printChildren);
-			else
-				printf("%*.*c    %s (imported)\n", indent, indent, ' ', sym.name());
-		}
-		for (int i = 0; i < _constructors.length(); i++) {
-			printf("%*.*c  {Constructor} %p\n", indent, indent, ' ', _constructors[i].definition());
-			if (printChildren)
-				_constructors[i].print(indent + INDENT, printChildren);
-		}
-		if (_destructor != null ) {
-			printf("%*.*c  {Destructor} %p\n", indent, indent, ' ', _destructor.definition());
-			if (printChildren)
-				_destructor.print(indent + INDENT, printChildren);
-		}
-		if (_storageClass == StorageClass.MEMBER) {
-			if (this.class == ClassScope) {
-				ref<ClassScope> c = ref<ClassScope>(this);
-				ref<ref<InterfaceImplementationScope>[]> interfaceImplementations = c.interfaces();
-				for (int i = 0; i < interfaceImplementations.length(); i++) {
-					ref<InterfaceImplementationScope> iit = (*interfaceImplementations)[i];
-					printf("%*.*c  (Interface) %s\n", indent, indent, ' ', iit.iface().signature());
-					for (int j = 0; j < iit.methods().length(); j++) {
-						(*iit.methods())[j].print(indent + INDENT, false);
-					}
-				}
-				printf("%*.*c  (Methods)\n", indent, indent, ' ');
-				for (int i = 0; i < c.methods().length(); i++) {
-					if ((*c.methods())[i] != null)
-						(*c.methods())[i].print(indent + INDENT, false);
-					else
-						printf("%*.*c    <null>\n", indent, indent, ' ');
-				}
-			} else
-				printf("%*.*c  <not a ClassScope>\n", indent, indent, ' ');
-		}
 		if (printChildren) {
+			for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
+				ref<Symbol> sym = i.get();
+				if (sym.enclosing() == this)
+					i.get().print(indent + INDENT, printChildren);
+				else
+					printf("%*.*c    %s (imported)\n", indent, indent, ' ', sym.name());
+			}
+			for (int i = 0; i < _constructors.length(); i++) {
+				printf("%*.*c  {Constructor} %p\n", indent, indent, ' ', _constructors[i].definition());
+				_constructors[i].print(indent + INDENT, printChildren);
+			}
+			if (_destructor != null ) {
+				printf("%*.*c  {Destructor} %p\n", indent, indent, ' ', _destructor.definition());
+				_destructor.print(indent + INDENT, printChildren);
+			}
+			if (_storageClass == StorageClass.MEMBER) {
+				if (this.class == ClassScope) {
+					ref<ClassScope> c = ref<ClassScope>(this);
+					ref<ref<InterfaceImplementationScope>[]> interfaceImplementations = c.interfaces();
+					for (int i = 0; i < interfaceImplementations.length(); i++) {
+						ref<InterfaceImplementationScope> iit = (*interfaceImplementations)[i];
+						printf("%*.*c  (Interface) %s\n", indent, indent, ' ', iit.iface().signature());
+						for (int j = 0; j < iit.methods().length(); j++) {
+							(*iit.methods())[j].print(indent + INDENT, false);
+						}
+					}
+					printf("%*.*c  (Methods)\n", indent, indent, ' ');
+					for (int i = 0; i < c.methods().length(); i++) {
+						if ((*c.methods())[i] != null)
+							(*c.methods())[i].print(indent + INDENT, false);
+						else
+							printf("%*.*c    <null>\n", indent, indent, ' ');
+					}
+				} else
+					printf("%*.*c  <not a ClassScope>\n", indent, indent, ' ');
+			}
 			for (int i = 0; i < _enclosed.length(); i++) {
 				if (!_enclosed[i].printed()) {
 					switch (_enclosed[i].storageClass()) {
@@ -1505,8 +1500,8 @@ public class Scope {
 			case	CLASS:
 				ref<ClassDeclarator> c = ref<ClassDeclarator>(_definition);
 				if (c.scope != null) {
-					ref<ClasslikeScope> cs = ref<ClasslikeScope>(c.scope);
-					assert(cs.class <= ClasslikeScope);
+					ref<ClassScope> cs = ref<ClassScope>(c.scope);
+					assert(cs.class <= ClassScope);
 					if (cs.classType != null)
 						return _enclosing.label() + "." + cs.classType.signature();
 				}
@@ -1517,8 +1512,8 @@ public class Scope {
 			case	TEMPLATE:
 				ref<Template> t = ref<Template>(_definition);
 				if (t.classDef.scope != null) {
-					ref<ClasslikeScope> cs = ref<ClasslikeScope>(t.classDef.scope);
-					assert(cs.class <= ClasslikeScope);
+					ref<ClassScope> cs = ref<ClassScope>(t.classDef.scope);
+					assert(cs.class <= ClassScope);
 					printf("{<");
 					if (cs.classType != null)
 						printf("CT: '%s'", cs.classType.signature());
@@ -1545,18 +1540,22 @@ public class Scope {
 		return true;
 	}
 
-	ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> source, ref<Node> declaration, ref<Node> initializer, ref<MemoryPool> memoryPool) {
+	ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> source, 
+					   ref<Node> declaration, ref<Node> initializer, ref<MemoryPool> memoryPool) {
 		SymbolKey key(source.identifier());
 		if (_symbols.contains(key))
 			return null;
 	//	printf("Define %s\n", source.identifier().asString());
-		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations, source.identifier(), source, declaration, initializer);
+		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations,
+													 source.identifier(), source, declaration, initializer);
 		_symbols.insert(key, sym);
 		return sym;
 	}
 
-	public ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, ref<Node> source, ref<Type> type, ref<Node> initializer, ref<MemoryPool> memoryPool) {
-		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations, source.identifier(), source, type, initializer);
+	public ref<Symbol> define(Operator visibility, StorageClass storageClass, ref<Node> annotations, 
+							  ref<Node> source, ref<Type> type, ref<Node> initializer, ref<MemoryPool> memoryPool) {
+		ref<Symbol> sym  = memoryPool.newPlainSymbol(visibility, storageClass, this, annotations,
+													 source.identifier(), source, type, initializer);
 		SymbolKey key(source.identifier());
 		if (_symbols.contains(key))
 			return null;
@@ -2019,21 +2018,21 @@ public class Scope {
 	}
 	
 	public ref<Type> enclosingClassType() {
-		ref<ClasslikeScope> scope = enclosingClassScope();
+		ref<ClassScope> scope = enclosingClassScope();
 		if (scope == null)
 			return null;
 		return scope.classType;
 	}
 
-	public ref<ClasslikeScope> enclosingClassScope() {
+	public ref<ClassScope> enclosingClassScope() {
 		ref<Scope> scope = this;
 		while (scope != null && scope.storageClass() != StorageClass.MEMBER)
 			scope = scope.enclosing();
-		return ref<ClasslikeScope>(scope);
+		return ref<ClassScope>(scope);
 	}
 	
 	public boolean contextAllowsReferenceToThis() {
-		ref<ClasslikeScope> classScope = enclosingClassScope();
+		ref<ClassScope> classScope = enclosingClassScope();
 		if (classScope == null)
 			return false;
 
@@ -2185,7 +2184,7 @@ public class Scope {
 	
 	protected void assignStorage(ref<Target> target, int offset, int interfaceArea, ref<CompileContext> compileContext) {
 		if (variableStorage == -1) {
-			int interfaceOffset = 0;
+			int interfaceOffset;
 			ref<Type> base = assignSuper(compileContext);
 			if (base != null) {
 				base.assignSize(target, compileContext);
@@ -2193,19 +2192,16 @@ public class Scope {
 			} else
 				interfaceOffset = offset;
 			variableStorage = interfaceOffset + interfaceArea;
-//			printf("Before assignStorage:\n");
-//			print(0, false);
+//			The following method updates variableStorage with the size of the members
 			visitAll(target, offset, compileContext);
-//			printf("After assignStorage:\n");
-//			print(0, false);
 			int alignment = maximumAlignment();
 			variableStorage = (variableStorage + alignment - 1) & ~(alignment - 1);
 		}
 	}
 
 	protected void visitAll(ref<Target> target, int offset, ref<CompileContext> compileContext) {
-		for (ref<Symbol>[SymbolKey].iterator i = _symbols.begin(); i.hasNext(); i.next()) {
-			ref<Symbol> sym = i.get();
+		for (i in _symbols) {
+			ref<Symbol> sym = _symbols[i];
 			target.assignStorageToObject(sym, this, offset, compileContext);
 		}
 	}

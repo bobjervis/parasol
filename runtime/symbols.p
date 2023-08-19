@@ -243,7 +243,10 @@ public class PlainSymbol extends Symbol {
 	public ref<Type> assignThisType(ref<CompileContext> compileContext) {
 		if (_type == null) {
 			ref<Scope> current = compileContext.current();
-			if (_typeDeclarator.op() == Operator.EMPTY) {
+			if (_typeDeclarator == null) {
+				compileContext.assignTypes(enclosing(), _initializer);
+				_type = _initializer.type;
+			} else if (_typeDeclarator.op() == Operator.EMPTY) {
 				if (_initializer != null) {
 					compileContext.assignTypes(enclosing(), _initializer);
 					if (_initializer.deferAnalysis())
@@ -1395,7 +1398,7 @@ public class Symbol {
 		return _enclosing.enclosingUnit();
 	}
 
-	public ref<ClasslikeScope> enclosingClassScope() {
+	public ref<ClassScope> enclosingClassScope() {
 		return _enclosing.enclosingClassScope();
 	}
 

@@ -165,6 +165,11 @@ public class Binary extends Node {
 			case	SEQUENCE:
 			case	LABEL:
 				break;
+
+			case	DEF_ASSIGN:
+				_right = _right.fold(tree, false, compileContext);
+				_left.type = type;
+				break;
 				
 			case	INITIALIZE:
 				voidContext = true;
@@ -217,6 +222,13 @@ public class Binary extends Node {
 		case	DELETE:
 		case	LABEL:
 			break;
+
+		case	DEF_ASSIGN:
+			_right = _right.fold(tree, false, compileContext);
+			_left.type = type;
+			ref<Node> assignment = tree.newBinary(Operator.ASSIGN, _left, _right, location());
+			assignment.type = type;
+			return assignment;
 
 		case	SWITCH:
 			if (_left.type.isString()) {
@@ -2014,6 +2026,15 @@ public class Binary extends Node {
 			}
 			break;
 
+		case	DEF_ASSIGN:
+			compileContext.assignTypes(_right);
+			compileContext.assignTypes(_left);
+			if (_left.deferAnalysis())
+				type = _left.type;
+			else
+				type = _right.type;
+			break;
+
 		case	ASSIGN:
 			compileContext.assignTypes(_left);
 			compileContext.assignTypes(_right);
@@ -2051,9 +2072,10 @@ public class Binary extends Node {
 					break;
 				}
 				coerceRight(_left.type, false, compileContext);
-				if (_right.type != null)
+				if (_right.type != null) {
+					
 					type = _right.type;
-				else {
+				} else {
 					add(MessageId.INTERNAL_ERROR, compileContext.pool());
 					type = compileContext.errorType();
 				}

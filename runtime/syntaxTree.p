@@ -28,7 +28,7 @@ public enum Operator {
 	// Binary
 	SUBSCRIPT,
 	SEQUENCE,
-	LEFT_COMMA,			// like SEQUENCE, but with the left operand supplyng the result. Evalute left, then right always.
+	LEFT_COMMA,			// like SEQUENCE, but with the left operand supplyng the result. Evaluate left, then right always.
 	DIVIDE,
 	REMAINDER,
 	MULTIPLY,
@@ -40,6 +40,7 @@ public enum Operator {
 	STORE_TEMP,
 	ASSIGN_TEMP,		// Handles the special case of assignment to a string temp 
 	ASSIGN,
+	DEF_ASSIGN,			// Implements the := operator.
 	DIVIDE_ASSIGN,
 	REMAINDER_ASSIGN,
 	MULTIPLY_ASSIGN,
@@ -2246,7 +2247,7 @@ class Leaf extends Node {
 	}
 
 	private void assignTypes(ref<CompileContext> compileContext) {
-		ref<ClasslikeScope> classScope;
+		ref<ClassScope> classScope;
 		ref<Type> t;
 		ref<Scope> scope;
 		switch (op()) {
@@ -3992,6 +3993,7 @@ public class Node {
 		case	DECLARE_NAMESPACE:
 		case	DECREMENT_AFTER:
 		case	DECREMENT_BEFORE:
+		case	DEF_ASSIGN:
 		case	DEFAULT:
 		case	DELETE:
 		case	DESTRUCTOR_LIST:
@@ -4335,6 +4337,7 @@ ref<Node> foldVoidContext(ref<Node> expression, ref<SyntaxTree> tree, ref<Compil
 		return expression;
 	switch (expression.op()) {
 	case	CALL:
+	case	DEF_ASSIGN:
 	case	AND_ASSIGN:
 	case	OR_ASSIGN:
 	case	EXCLUSIVE_OR_ASSIGN:
