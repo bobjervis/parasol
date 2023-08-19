@@ -2029,7 +2029,10 @@ public class Binary extends Node {
 		case	DEF_ASSIGN:
 			compileContext.assignTypes(_right);
 			compileContext.assignTypes(_left);
-			if (_left.deferAnalysis())
+			if (_left.op() != Operator.IDENTIFIER) {
+				_left.add(MessageId.ID_REQUIRED, compileContext.pool());
+				type = compileContext.errorType();
+			} else if (_left.deferAnalysis())
 				type = _left.type;
 			else
 				type = _right.type;
