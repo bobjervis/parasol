@@ -37,7 +37,159 @@ class Names {
 
 ref<compiler.Namespace>[string] nameMap;
 
-Names[] names;
+class CodeOverviewPage extends Page {
+	Names[] names;
+
+	CodeOverviewPage(string path) {
+		super(null, path);
+	}
+
+	string toString() {
+		return "<Overview> -> " + targetPath();
+	}
+
+	void define(string nameSpace, ref<compiler.Namespace> nm) {
+		Names n = { name: nameSpace, symbol: nm };
+		names.append(n);
+	}
+
+	void instantiateNamespaces() {
+		names.sort();
+		for (ni in names) {
+			ref<Names> n = &names[ni];
+			string nameSpace = n.name;
+			for (i in nameSpace)
+				if (nameSpace[i] == ':') {
+					nameSpace[i] = '_';
+					break;
+				}
+			namespaceFolder := storage.path(codeOutputFolder, nameSpace);
+
+			defineOutputDirectory(namespaceFolder);
+			namespaceSummary := new NamespaceSummaryPage(storage.path(namespaceFolder, "namespace-summary.html"), n.symbol);
+			namespaceSummary.add();
+			classesDir := storage.path(namespaceFolder, "classes");
+			indexClassesInScope(n.symbol.symbols(), classesDir);
+		}
+	}
+
+	boolean write() {
+		if (verboseOption.set()) {
+			string caption;
+			caption.printf("[%d]", index());
+			printf("%7s Overview Page %s\n", caption, targetPath());
+		}
+		overviewPage := targetPath();
+		overview := storage.createTextFile(overviewPage);
+		if (overview == null) {
+			printf("Unable to create file '%s'\n", overviewPage);
+			return false;
+		}
+		insertTemplate1(overview, overviewPage);
+	
+		overview.printf("<title>%s</title>\n", corpusTitle);
+		overview.write("<body>\n");
+		overview.write("<table class=\"overviewSummary\">\n");
+		overview.write("<caption><span>Namespaces</span><span class=\"tabEnd\">&nbsp;</span></caption>\n");
+		overview.write("<tr>\n");
+		overview.write("<th class=\"linkcol\">Namespace</th>\n");
+		overview.write("<th class=\"descriptioncol\">Description</th>\n");
+		overview.write("</tr>\n");
+		overview.write("<tbody>\n");
+		for (i in names) {
+	//		printf("[%d] %s\n", i, names[i].name);
+	
+			string dirName = names[i].name;
+			for (int i = 0; i < dirName.length(); i++)
+				if (dirName[i] == ':')
+					dirName[i] = '_';
+	
+			overview.printf("<tr class=\"%s\">\n", i % 2 == 0 ? "altColor" : "rowColor");
+			overview.printf("<td class=\"linkcol\"><a href=\"%s/namespace-summary.html\">%s</a></td>\n", dirName, names[i].name);
+			overview.write("<td class=\"descriptioncol\">");
+			ref<compiler.Symbol> sym = names[i].symbol;
+			ref<compiler.Doclet> doclet = sym.doclet();
+			if (doclet != null)
+				overview.write(expandDocletString(doclet, doclet.summary, sym, overviewPage));
+			overview.write("</td>\n");
+			overview.write("</tr>\n");
+			generateNamespaceSummary(names[i].name, names[i].symbol);
+		}
+		overview.write("</tbody>\n");
+		overview.write("</table>\n");
+	
+		insertTemplate2(overview);
+	
+		delete overview;
+		return true;
+	}
+}
+
+class NamespaceSummaryPage extends Page {
+	ref<compiler.Namespace> _nameSpace;
+
+	NamespaceSummaryPage(string path, ref<compiler.Namespace> nm) {
+		super(null, path);
+		_nameSpace = nm;
+	}
+
+	string toString() {
+		return "<Namespace> " + namespaceFile(_nameSpace) + " -> " + targetPath();
+	}
+
+	boolean write() {
+		if (verboseOption.set()) {
+			string caption;
+			caption.printf("[%d]", index());
+			printf("%7s Namespace Summary Page %s\n", caption, targetPath());
+		}
+		ref<Writer> overview;
+		string summaryPage = namespaceFile(_nameSpace);
+		string dirName = namespaceDir(_nameSpace);
+
+		overview = storage.createTextFile(summaryPage);
+		if (overview == null) {
+			printf("Could not create output file %s\n", summaryPage);
+			return false;
+		}
+		insertTemplate1(overview, summaryPage);
+	
+		string name = _nameSpace.fullNamespace();
+		overview.printf("<title>%s</title>\n", name);
+		overview.write("<body>\n");
+		//insertNavbar(overview);
+		overview.printf("<div class=namespace-title>Namespace %s</div>\n", name);
+	
+		ref<compiler.Doclet> doclet = _nameSpace.doclet();
+		if (doclet != null) {
+			if (doclet.author != null)
+				overview.printf("<div class=author><span class=author-caption>Author: </span>%s</div>\n",
+											expandDocletString(doclet, doclet.author, _nameSpace, summaryPage));
+			if (doclet.deprecated != null)
+				overview.printf("<div class=deprecated-outline><div class=deprecated-caption>Deprecated</div><div class=deprecated>%s</div></div>\n",
+											expandDocletString(doclet, doclet.deprecated, _nameSpace, summaryPage));
+			overview.printf("<div class=namespace-text>%s</div>\n",
+											expandDocletString(doclet, doclet.text, _nameSpace, summaryPage));
+			if (doclet.threading != null)
+				overview.printf("<div class=threading-caption>Threading</div><div class=threading>%s</div>\n",
+											expandDocletString(doclet, doclet.threading, _nameSpace, summaryPage));
+			if (doclet.since != null)
+				overview.printf("<div class=since-caption>Since</div><div class=since>%s</div>\n",
+											expandDocletString(doclet, doclet.since, _nameSpace, summaryPage));
+			if (doclet.see != null)
+				overview.printf("<div class=see-caption>See Also</div><div class=see>%s</div>\n",
+											expandDocletString(doclet, doclet.see, _nameSpace, summaryPage));
+		}
+	
+		string classesDir = storage.path(dirName, "classes", null);
+	
+		generateScopeContents(_nameSpace.symbols(), overview, classesDir, summaryPage, 
+									"Object", "Function", "INTERNAL ERROR", false, false);
+	
+		delete overview;
+		return true;
+	}
+}
 
 public boolean compilePackages(string[] finalArguments) {
 	arena.paradoc = true;
@@ -90,6 +242,14 @@ public boolean compilePackages(string[] finalArguments) {
 }
 
 public boolean collectNamespacesToDocument() {
+	if (codeOutputFolder == null) {
+		printf("No destination defined for generated pages\n");
+		return false;
+	}
+
+	overviewPage := new CodeOverviewPage(storage.path(codeOutputFolder, "index.html"));
+	overviewPage.add();
+
 	ref<compiler.Unit>[] units = arena.units();
 	for (i in units) {
 		ref<compiler.Unit> f = units[i];
@@ -98,98 +258,24 @@ public boolean collectNamespacesToDocument() {
 			ref<compiler.Namespace> nm;
 
 			nm = nameMap[nameSpace];
-			if (nm == null) {
-				nm = f.namespaceSymbol();
-				nameMap[nameSpace] = nm;
-				ref<compiler.Doclet> doclet = nm.doclet();
-				if (doclet == null || !doclet.ignore) {
-					if (verboseOption.set())
-						printf(" - Defining namespace %s\n", nameSpace);
-					Names item;
-					item.name = nameSpace;
-					item.symbol = nm;
-					names.append(item);
-				}
+			if (nm != null)
+				continue;
+			nm = f.namespaceSymbol();
+			nameMap[nameSpace] = nm;
+			ref<compiler.Doclet> doclet = nm.doclet();
+			if (doclet == null || !doclet.ignore) {
+				if (verboseOption.set())
+					printf("         - Defining namespace %s\n", nameSpace);
+				overviewPage.define(nameSpace, nm);
 			}
 		}
 	}
-	names.sort();
+	overviewPage.instantiateNamespaces();
 	return true;
 }
 
-public boolean generateNamespaceDocumentation() {
-	for (i in names) {
-		string dirName = names[i].name;
-		for (int i = 0; i < dirName.length(); i++)
-			if (dirName[i] == ':')
-				dirName[i] = '_';
-		string nmPath = storage.path(outputFolder, dirName);
-		indexTypesFromNamespace(names[i].name, names[i].symbol, nmPath);
-	}
-	string overviewPage = storage.path(outputFolder, "index.html");
-	ref<Writer> overview;
-	if (validateOnlyOption.set())
-		overview = storage.createTextFile("/dev/null");
-	else {
-		if (!storage.ensure(outputFolder)) {
-			printf("Could not ensure directory %s\n", outputFolder);
-			return false;
-		}
-		overview = storage.createTextFile(overviewPage);
-	}
-	if (overview == null) {
-		printf("Unable to create file '%s'\n", overviewPage);
-		return false;
-	}
-	insertTemplate1(overview, overviewPage);
-
-	overview.printf("<title>%s</title>\n", corpusTitle);
-	overview.write("<body>\n");
-	overview.write("<table class=\"overviewSummary\">\n");
-	overview.write("<caption><span>Namespaces</span><span class=\"tabEnd\">&nbsp;</span></caption>\n");
-	overview.write("<tr>\n");
-	overview.write("<th class=\"linkcol\">Namespace</th>\n");
-	overview.write("<th class=\"descriptioncol\">Description</th>\n");
-	overview.write("</tr>\n");
-	overview.write("<tbody>\n");
-	for (i in names) {
-//		printf("[%d] %s\n", i, names[i].name);
-
-		string dirName = names[i].name;
-		for (int i = 0; i < dirName.length(); i++)
-			if (dirName[i] == ':')
-				dirName[i] = '_';
-
-		overview.printf("<tr class=\"%s\">\n", i % 2 == 0 ? "altColor" : "rowColor");
-		overview.printf("<td class=\"linkcol\"><a href=\"%s/namespace-summary.html\">%s</a></td>\n", dirName, names[i].name);
-		overview.write("<td class=\"descriptioncol\">");
-		ref<compiler.Symbol> sym = names[i].symbol;
-		ref<compiler.Doclet> doclet = sym.doclet();
-		if (doclet != null)
-			overview.write(expandDocletString(doclet, doclet.summary, sym, overviewPage));
-		overview.write("</td>\n");
-		overview.write("</tr>\n");
-		generateNamespaceSummary(names[i].name, names[i].symbol);
-	}
-	overview.write("</tbody>\n");
-	overview.write("</table>\n");
-
-	insertTemplate2(overview);
-
-	delete overview;
-	return true;
-}
-
-void indexTypesFromNamespace(string name, ref<compiler.Namespace> nm, string dirName) {
-	string overviewPage = storage.path(dirName, "namespace-summary.html");
-
-	string classesDir = storage.path(dirName, "classes");
-
-	indexTypesInScope(nm.symbols(), classesDir, overviewPage);
-}
-
-void indexTypesInScope(ref<compiler.Scope> symbols, string dirName, string baseName) {
-	ref<ref<compiler.Symbol>[compiler.Scope.SymbolKey]> symMap = symbols.symbols();
+void indexClassesInScope(ref<compiler.Scope> symbols, string dirName) {
+	symMap := symbols.symbols();
 
 	ref<compiler.Symbol>[] classes;
 
@@ -226,11 +312,19 @@ void indexTypesInScope(ref<compiler.Scope> symbols, string dirName, string baseN
 
 	}
 
-	for (i in classes) {
-		ref<compiler.Symbol> sym = classes[i];
-
-		indexTypesInClass(sym, dirName);
+	if (classes.length() > 0) {
+		defineOutputDirectory(dirName);
+		classes.sort(compareSymbols, true);
+		for (i in classes) {
+			ref<compiler.Symbol> sym = classes[i];
+	
+			indexTypesInClass(sym, dirName);
+		}
 	}
+}
+
+private int compareSymbols(ref<compiler.Symbol> left, ref<compiler.Symbol> right) {
+	return left.compare(right);
 }
 
 void indexTypesInClass(ref<compiler.Symbol> sym, string dirName) {
@@ -247,9 +341,10 @@ void indexTypesInClass(ref<compiler.Symbol> sym, string dirName) {
 	if (classFiles[long(scope)] == null)
 		classFiles[long(scope)] = classFile;
 
-	string subDir = storage.path(dirName, name, null);
+	(new ClassPage(sym, classFile)).add();
+	string subDir = storage.path(dirName, name);
 
-	indexTypesInScope(scope, subDir, classFile);
+	indexClassesInScope(scope, subDir);
 }
 
 void generateNamespaceSummary(string name, ref<compiler.Namespace> nm) {
@@ -269,6 +364,7 @@ void generateNamespaceSummary(string name, ref<compiler.Namespace> nm) {
 
 	overview.printf("<title>%s</title>\n", name);
 	overview.write("<body>\n");
+	//insertNavbar(overview);
 	overview.printf("<div class=namespace-title>Namespace %s</div>\n", name);
 
 	ref<compiler.Doclet> doclet = nm.doclet();
@@ -310,7 +406,7 @@ string namespaceDir(ref<compiler.Namespace> nm) {
 	for (int i = 0; i < dirName.length(); i++)
 		if (dirName[i] == ':')
 			dirName[i] = '_';
-	return storage.path(outputFolder, dirName, null);
+	return storage.path(codeOutputFolder, dirName, null);
 }
 
 ref<compiler.Scope> scopeFor(ref<compiler.Symbol> sym) {
@@ -380,7 +476,7 @@ string pathToMyParent(ref<compiler.Symbol> sym) {
 string pathToMyParent(ref<compiler.Scope> scope) {
 	if (scope == scope.enclosingUnit()) {
 		ref<compiler.Namespace> nm = scope.getNamespace();
-		return storage.path(outputFolder, nm.domain() + "_" + nm.dottedName());
+		return storage.path(codeOutputFolder, nm.domain() + "_" + nm.dottedName());
 	}
 	ref<compiler.Type> type = scope.enclosingClassType();
 	if (type == null)

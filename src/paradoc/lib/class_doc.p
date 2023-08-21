@@ -19,134 +19,143 @@ import parasol:compiler;
 import parasol:process;
 import parasol:storage;
 
-boolean generateClassPage(ref<compiler.Symbol> sym, string name, string dirName) {
-	ref<compiler.Scope> scope = scopeFor(sym);
-	if (scope == null) {
-		printf("No type or scope for %s / %s\n", dirName, name);
-		return false;
+class ClassPage extends Page {
+	ref<compiler.Symbol> _symbol;
+
+	ClassPage(ref<compiler.Symbol> sym, string path) {
+		super(null, path);
+		_symbol = sym;
 	}
-	string classFile = storage.path(dirName, name, "html");
-	ref<Writer> classPage;
-	if (validateOnlyOption.set())
-		classPage = storage.createTextFile("/dev/null");
-	else {
-		if (!storage.ensure(dirName)) {
-			printf("Could not ensure directory %s\n", dirName);
+
+	string toString() {
+		return "<Symbol> " + _symbol.name() + " -> " + targetPath();
+	}
+
+	boolean write() {
+		if (verboseOption.set()) {
+			string caption;
+			caption.printf("[%d]", index());
+			printf("%7s Class Page %s\n", caption, targetPath());
+		}
+		ref<compiler.Scope> scope = scopeFor(_symbol);
+		if (scope == null) {
+			printf("No type or scope for %s\n", targetPath());
+			return false;
+		}
+		classPage := storage.createTextFile(targetPath());
+		if (classPage == null) {
+			printf("Could not create class file %s\n", targetPath());
 			process.exit(1);
 		}
-		classPage = storage.createTextFile(classFile);
-	}
-	if (classPage == null) {
-		printf("Could not create class file %s\n", classFile);
-		process.exit(1);
-	}
-
-	insertTemplate1(classPage, classFile);
-
-	classPage.printf("<title>%s</title>\n", name);
-	classPage.write("<body>\n");
-
-	ref<compiler.Namespace> nm = sym.enclosingNamespace();
-
-	classPage.printf("<div class=namespace-info><b>Namespace</b> %s</div>\n", namespaceReference(nm));
-	ref<compiler.Type> t = typeFor(sym);
-	boolean isInterface;
-	boolean hasConstants;
-	string enumLabel;
-	ref<compiler.Doclet> doclet = sym.doclet();
-	switch (t.family()) {
-	case	INTERFACE:
-		classPage.printf("<div class=class-title>Interface %s</div>", name);
-		isInterface = true;
-		enumLabel = "INTERNAL ERROR";
-		break;
-
-	case	FLAGS:
-		hasConstants = true;
-		classPage.printf("<div class=class-title>Flags %s</div>", name);
-		enumLabel = "Flags";
-		break;
-
-	case	ENUM:
-		hasConstants = true;
-		classPage.printf("<div class=class-title>Enum %s</div>", name);
-		enumLabel = "Enum";
-		break;
-
-	case	TEMPLATE:
-		classPage.printf("<table class=template-params>\n");
-		classPage.printf("<tr>\n");
-		classPage.printf("<td>%sClass&nbsp;%s&lt;</td>\n<td>", t.isConcrete(null) ? "" : "Abstract&nbsp;", name);
-		ref<compiler.ParameterScope> p = ref<compiler.ParameterScope>(scope);
-		assert(t.class == compiler.TemplateType);
-		ref<ref<compiler.Symbol>[]> params = p.parameters();
-		string[string] paramMap;
-		if (doclet != null) {
-			for (i in doclet.params) {
-				int idx = doclet.params[i].indexOf(' ');
-				if (idx < 0)
-					continue;
-				string pname = doclet.params[i].substr(0, idx);
-				string value = doclet.params[i].substr(idx + 1).trim();
-				if (value.length() > 0)
-					paramMap[pname] = value;
+	
+		insertTemplate1(classPage, targetPath());
+	
+		classPage.printf("<title>%s</title>\n", _symbol.name());
+		classPage.write("<body>\n");
+	
+		ref<compiler.Namespace> nm = _symbol.enclosingNamespace();
+	
+		classPage.printf("<div class=namespace-info><b>Namespace</b> %s</div>\n", namespaceReference(nm));
+		ref<compiler.Type> t = typeFor(_symbol);
+		boolean isInterface;
+		boolean hasConstants;
+		string enumLabel;
+		ref<compiler.Doclet> doclet = _symbol.doclet();
+		switch (t.family()) {
+		case	INTERFACE:
+			classPage.printf("<div class=class-title>Interface %s</div>", _symbol.name());
+			isInterface = true;
+			enumLabel = "INTERNAL ERROR";
+			break;
+	
+		case	FLAGS:
+			hasConstants = true;
+			classPage.printf("<div class=class-title>Flags %s</div>", _symbol.name());
+			enumLabel = "Flags";
+			break;
+	
+		case	ENUM:
+			hasConstants = true;
+			classPage.printf("<div class=class-title>Enum %s</div>", _symbol.name());
+			enumLabel = "Enum";
+			break;
+	
+		case	TEMPLATE:
+			classPage.printf("<table class=template-params>\n");
+			classPage.printf("<tr>\n");
+			classPage.printf("<td>%sClass&nbsp;%s&lt;</td>\n<td>", t.isConcrete(null) ? "" : "Abstract&nbsp;", _symbol.name());
+			ref<compiler.ParameterScope> p = ref<compiler.ParameterScope>(scope);
+			assert(t.class == compiler.TemplateType);
+			ref<ref<compiler.Symbol>[]> params = p.parameters();
+			string[string] paramMap;
+			if (doclet != null) {
+				for (i in doclet.params) {
+					int idx = doclet.params[i].indexOf(' ');
+					if (idx < 0)
+						continue;
+					string pname = doclet.params[i].substr(0, idx);
+					string value = doclet.params[i].substr(idx + 1).trim();
+					if (value.length() > 0)
+						paramMap[pname] = value;
+				}
 			}
+			for (i in *params) {
+				ref<compiler.Symbol> param = (*params)[i];
+				string pname = param.name();
+				if (param.type() == null)
+					classPage.printf("&lt;null&gt;&nbsp;%s", pname);
+				else
+					classPage.printf("%s&nbsp;%s", typeString(param.type(), targetPath()), pname);
+				if (i < params.length() - 1)
+					classPage.write(",</td>\n");
+				else
+					classPage.write("&gt;</td>\n");
+				string comment = paramMap[pname];
+				if (comment != null)
+					classPage.printf("<td><div class=param-text>%s</div></td>\n", 
+										expandDocletString(doclet, comment, _symbol, targetPath()));
+				if (i < params.length() - 1)
+					classPage.write("</tr>\n<tr>\n<td></td><td>");
+			}
+			classPage.write("</tr>\n</table>\n");
+			generateClassInfo(t, classPage, targetPath());
+			ref<compiler.TemplateType> template = ref<compiler.TemplateType>(t);
+			ref<compiler.Template> temp = template.definition();
+			scope = temp.classDef.scope;
+			break;
+	
+		default:
+			classPage.printf("<div class=class-title>%sClass %s", t.isConcrete(null) ? "" : "Abstract ", _symbol.name());
+			classPage.printf("</div>\n");
+			generateClassInfo(t, classPage, targetPath());
 		}
-		for (i in *params) {
-			ref<compiler.Symbol> param = (*params)[i];
-			string pname = param.name();
-			if (param.type() == null)
-				classPage.printf("&lt;null&gt;&nbsp;%s", pname);
-			else
-				classPage.printf("%s&nbsp;%s", typeString(param.type(), classFile), pname);
-			if (i < params.length() - 1)
-				classPage.write(",</td>\n");
-			else
-				classPage.write("&gt;</td>\n");
-			string comment = paramMap[pname];
-			if (comment != null)
-				classPage.printf("<td><div class=param-text>%s</div></td>\n", expandDocletString(doclet, comment, sym, classFile));
-			if (i < params.length() - 1)
-				classPage.write("</tr>\n<tr>\n<td></td><td>");
+		if (doclet != null) {
+			if (doclet.author != null)
+				classPage.printf("<div class=author><span class=author-caption>Author: </span>%s</div>\n",
+										expandDocletString(doclet, doclet.author, _symbol, targetPath()));
+			if (doclet.deprecated != null)
+				classPage.printf("<div class=deprecated-outline><div class=deprecated-caption>Deprecated</div><div class=deprecated>%s</div></div>\n",
+										expandDocletString(doclet, doclet.deprecated, _symbol, targetPath()));
+			classPage.printf("<div class=class-text>%s</div>\n", 
+										expandDocletString(doclet, doclet.text, _symbol, targetPath()));
+			if (doclet.threading != null)
+				classPage.printf("<div class=threading-caption>Threading</div><div class=threading>%s</div>\n", 
+										expandDocletString(doclet, doclet.threading, _symbol, targetPath()));
+			if (doclet.since != null)
+				classPage.printf("<div class=since-caption>Since</div><div class=since>%s</div>\n", 
+										expandDocletString(doclet, doclet.since, _symbol, targetPath()));
+			if (doclet.see != null)
+				classPage.printf("<div class=see-caption>See Also</div><div class=see>%s</div>\n", 
+										expandDocletString(doclet, doclet.see, _symbol, targetPath()));
 		}
-		classPage.write("</tr>\n</table>\n");
-		generateClassInfo(t, classPage, classFile);
-		ref<compiler.TemplateType> template = ref<compiler.TemplateType>(t);
-		ref<compiler.Template> temp = template.definition();
-		scope = temp.classDef.scope;
-		break;
-
-	default:
-		classPage.printf("<div class=class-title>%sClass %s", t.isConcrete(null) ? "" : "Abstract ", name);
-		classPage.printf("</div>\n");
-		generateClassInfo(t, classPage, classFile);
+	
+		string subDir = storage.path(storage.directory(targetPath()), _symbol.name());
+	
+		generateScopeContents(scope, classPage, subDir, targetPath(), "Member", "Method", enumLabel, isInterface, hasConstants);
+	
+		delete classPage;
+		return true;
 	}
-	if (doclet != null) {
-		if (doclet.author != null)
-			classPage.printf("<div class=author><span class=author-caption>Author: </span>%s</div>\n",
-									expandDocletString(doclet, doclet.author, sym, classFile));
-		if (doclet.deprecated != null)
-			classPage.printf("<div class=deprecated-outline><div class=deprecated-caption>Deprecated</div><div class=deprecated>%s</div></div>\n",
-									expandDocletString(doclet, doclet.deprecated, sym, classFile));
-		classPage.printf("<div class=class-text>%s</div>\n", 
-									expandDocletString(doclet, doclet.text, sym, classFile));
-		if (doclet.threading != null)
-			classPage.printf("<div class=threading-caption>Threading</div><div class=threading>%s</div>\n", 
-									expandDocletString(doclet, doclet.threading, sym, classFile));
-		if (doclet.since != null)
-			classPage.printf("<div class=since-caption>Since</div><div class=since>%s</div>\n", 
-									expandDocletString(doclet, doclet.since, sym, classFile));
-		if (doclet.see != null)
-			classPage.printf("<div class=see-caption>See Also</div><div class=see>%s</div>\n", 
-									expandDocletString(doclet, doclet.see, sym, classFile));
-	}
-
-	string subDir = storage.path(dirName, name);
-
-	generateScopeContents(scope, classPage, subDir, classFile, "Member", "Method", enumLabel, isInterface, hasConstants);
-
-	delete classPage;
-	return true;
 }
 
 void generateClassInfo(ref<compiler.Type> t, ref<Writer> classPage, string classFile) {

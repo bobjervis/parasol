@@ -78,17 +78,15 @@ int main(string[] args) {
 
 	boolean anyFailure = !paradoc.compilePackages(finalArguments);
 	if (paradoc.prepareOutputs(finalArguments[0])) {
-		// Also do internal processing of the symbol table.
-		anyFailure |= !paradoc.collectNamespacesToDocument();
 
-		// If we ar e using a content directory, start from it.
+		// If we are using a content directory, start from it.
 
-		if (paradoc.contentDirectoryOption.set()) {
+		if (paradoc.contentDirectoryOption.set())
 			anyFailure |= !paradoc.processContentDirectory();
-			anyFailure |= !paradoc.writeContentDirectory();
-		}
+		else
+			anyFailure |= !paradoc.collectNamespacesToDocument();
 
-		anyFailure |= !paradoc.generateNamespaceDocumentation();
+		anyFailure |= !paradoc.generatePages();
 	} else {
 		printf("Could not create the output folder\n");
 		anyFailure = true;

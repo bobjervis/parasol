@@ -723,11 +723,8 @@ public class Call extends ParameterBag {
 	}
 
 	public void setConstructorMemory(ref<Node> placement, ref<SyntaxTree> tree) {
-		if (_category != CallCategory.CONSTRUCTOR)
-			print(0);
-		assert(_category == CallCategory.CONSTRUCTOR);
-		_target = placement;
-//		type = placement.type;
+		if (_category == CallCategory.CONSTRUCTOR)
+			_target = placement;
 	}
 	/**
 	 * Sort the register arguments (if any) by sethi number.

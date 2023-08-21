@@ -1,3 +1,3 @@
-compile(expect: fail, message: ID_REQUIRED) { "(7 + 13.0) := 3.0f;" }
+compile(expect: fail, message: NOT_A_TYPE) { "class C { int a; C(int x){} void f() {} } void g() { new C(5).f(); }" }
 
 

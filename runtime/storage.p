@@ -299,7 +299,7 @@ public string path(string directory, string filename) {
  * Construct a path from a directory, baseName and extension.
  *
  * If the baseName already has an extension, that extension is replaced with the extension
- * string. Otherwise, the the extension is appended to the baseName with a period.
+ * string. Otherwise, the extension is appended to the baseName with a period.
  *
  * If the baseName had an extension that extension is ignored and replaced with the new extension.
  *

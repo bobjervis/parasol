@@ -1,6 +1,6 @@
 <h2>{@level 2 Expressions}</h2>
 
-For an explanation of how types are assigned to expressions, see {@link Types-in-Expressions Type in Expressions}.
+For an explanation of how types are assigned to expressions, see {@doc-link Types-in-Expressions Type in Expressions}.
 
 <h3>{@level 3 Binary Operations}</h3>
 

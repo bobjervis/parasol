@@ -294,18 +294,18 @@ void generateClassSummaryEntry(ref<Writer> output, int i, ref<compiler.Symbol> s
 	output.printf("<tr class=\"%s\">\n", i % 2 == 0 ? "altColor" : "rowColor");
 
 	string name = sym.name();
-	if (sym.definition() == scope.className()) {
-		if (!generateClassPage(sym, name, dirName))
-			return;
-	}
+//	if (sym.definition() == scope.className()) {
+//		if (!generateClassPage(sym, name, dirName))
+//			return;
+//	}
 	ref<compiler.Type> t = typeFor(sym);
-	switch (t.family()) {
-	case	TEMPLATE:
-	case	ENUM:
-	case	FLAGS:
-		if (!generateClassPage(sym, name, dirName))
-			return;
-	}
+//	switch (t.family()) {
+//	case	TEMPLATE:
+//	case	ENUM:
+//	case	FLAGS:
+//		if (!generateClassPage(sym, name, dirName))
+//			return;
+//	}
 	output.printf("<td class=\"linkcol\">");
 	if (sym.definition() != scope.className() && t.family() != runtime.TypeFamily.TEMPLATE)
 		output.printf("%s = ", name);

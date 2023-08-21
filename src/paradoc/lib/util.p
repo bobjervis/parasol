@@ -25,7 +25,8 @@ ref<process.Option<boolean>> forceOption;
 ref<process.Option<boolean>> validateOnlyOption;
 ref<process.Option<boolean>> logImportsOption;
 ref<process.Option<boolean>> symbolTableOption;
-public string outputFolder;								// Folder to contain the auto-generated output (not any .ph file content).
+public string codeOutputFolder;					// Folder to contain the auto-generated output (not any .ph file content).
+public string contentOutputFolder;
 
 string templateFolder;
 string template1file;
@@ -37,11 +38,11 @@ public boolean prepareOutputs(string o) {
 	if (validateOnlyOption.set())
 		printf("*** No output will be written ***\n");
 	else {
-		outputFolder = o;
-		if (storage.exists(outputFolder)) {
+		codeOutputFolder = o;
+		if (storage.exists(codeOutputFolder)) {
 			if (forceOption.set()) {
-				if (!storage.deleteDirectoryTree(outputFolder)) {
-					printf("Failed to clean up old output folder '%s'\n", outputFolder);
+				if (!storage.deleteDirectoryTree(codeOutputFolder)) {
+					printf("Failed to clean up old output folder '%s'\n", codeOutputFolder);
 					return false;
 				}
 			} else {
@@ -50,12 +51,20 @@ public boolean prepareOutputs(string o) {
 			}
 		}
 		if (verboseOption.set())
-			printf("Writing to %s\n", outputFolder);
-		if (!storage.ensure(outputFolder))
+			printf("Writing to %s\n", codeOutputFolder);
+		if (!storage.ensure(codeOutputFolder))
 			return false;
+		if (contentDirectoryOption.set()) {
+			contentOutputFolder = codeOutputFolder;
+			codeOutputFolder = null;
+		}
 	}
+	if (contentDirectoryOption.set())
+		defineOutputDirectory(contentOutputFolder);
+	else
+		defineOutputDirectory(codeOutputFolder);
 
-		// First set up source file paths.
+		// set up source file paths.
 
 	string dir;
 
@@ -67,13 +76,14 @@ public boolean prepareOutputs(string o) {
 		dir = storage.path(storage.directory(bin), "../template");
 	}
 	string cssFile = storage.path(dir, "stylesheet.css");
-	string newCss = storage.path(outputFolder, "stylesheet.css");
-	if (!validateOnlyOption.set() && !storage.copyFile(cssFile, newCss))
-		printf("Could not copy CSS file from %s to %s\n", cssFile, newCss);
+	if (contentDirectoryOption.set())
+		stylesheetPath = storage.path(contentOutputFolder, "stylesheet.css");
+	else
+		stylesheetPath = storage.path(codeOutputFolder, "stylesheet.css");
+	(new Content(ContentType.FILE, cssFile, stylesheetPath)).add();
 	template1file = storage.path(dir, "template1.html");
 	template1bFile = storage.path(dir, "template1b.html");
 	template2file = storage.path(dir, "template2.html");
-	stylesheetPath = storage.path(outputFolder, "stylesheet.css");
 	templateFolder = dir;
 	return true;
 }
@@ -161,17 +171,17 @@ string linkTo(ref<compiler.Symbol> sym) {
 	if (sym.class == compiler.Namespace) {
 		nm = ref<compiler.Namespace>(sym);
 		string nameSpace = nm.domain() + "_" + nm.dottedName();
-		path = storage.path(outputFolder, nameSpace);
+		path = storage.path(codeOutputFolder, nameSpace);
 		return storage.path(path, "namespace-summary.html");
 	}
 	ref<compiler.Scope> enclosing = sym.enclosing();
-	string path = outputFolder;
+	string path = codeOutputFolder;
 
 	nm = enclosing.getNamespace();
 	if (nm == null)
 		sym.print(0, false);
 	string nameSpace = nm.domain() + "_" + nm.dottedName();
-	path = storage.path(outputFolder, nameSpace);
+	path = storage.path(codeOutputFolder, nameSpace);
 	if (sym.class == compiler.Overload) {
 		ref<compiler.Overload> ov = ref<compiler.Overload>(sym);
 		ref<ref<compiler.OverloadInstance>[]> inst = ov.instances();

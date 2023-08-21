@@ -175,9 +175,10 @@ string transformLink(ref<compiler.Doclet> doclet, int location, string linkTextI
 		return caption;
 	}
 	linkText = storage.makeCompactPath(path, baseName);
-	int suffix = outputFolder.length();
-	if (verboseOption.set())
+	if (verboseOption.set()) {
+		int suffix = contentOutputFolder.length();
 		printf("File %3$s links to %2$s as %1$s\n", linkText, path.substr(suffix), baseName.substr(suffix));
+	}
 	return "<a href=\"" + linkText + "\">" + caption + "</a>";
 }
 

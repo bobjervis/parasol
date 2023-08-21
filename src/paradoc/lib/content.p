@@ -23,13 +23,13 @@ public ref<process.Option<string>> contentDirectoryOption;
 enum ContentType {
 	FILE,
 	DIRECTORY,
-	PH_FILE
+	PH_FILE,
+	INDEX_FILE,
+	PARADOC
 }
 
-class Content {
+class Content extends Page {
 	ContentType type;
-	string path;
-	string targetPath;
 	ref<Span>[] spans;
 	ref<Span> open;
 	ref<MacroSpan> topLevel;
@@ -38,22 +38,54 @@ class Content {
 	ref<MacroSpan>[] docLinks;
 	ref<MacroSpan>[] levels;
 
+	Content(ContentType type, string path, string targetPath) {
+		super(path, targetPath);
+		this.type = type;
+	}
+
+	string toString() {
+		switch (type) {
+		case DIRECTORY:
+			return "<" + string(type) + "> " + targetPath();
+		}
+		return "<" + string(type) + "> " + path() + " -> " + targetPath();
+	}
+
 	string sourceDirectory() {
 		if (type == ContentType.DIRECTORY)
-			return path;
+			return path();
 		else
-			return storage.directory(path);
+			return storage.directory(path());
 	}
 
 	string targetDirectory() {
 		if (type == ContentType.DIRECTORY)
-			return targetPath;
+			return targetPath();
 		else
-			return storage.directory(targetPath);
+			return storage.directory(targetPath());
+	}
+
+	boolean process() {
+		if (verboseOption.set())
+			printf("    Processing contents of %s -> %s %s\n", path(), targetPath(), string(type));
+		add();
+		boolean success = true;
+		switch (type) {
+		case DIRECTORY:
+			if (!collectContentInventory(path(), targetPath()))
+				success = false;
+			break;
+
+		case PH_FILE:
+		case INDEX_FILE:
+			if (!processPhFile())
+				success = false;
+		}
+		return success;
 	}
 
 	boolean processPhFile() {
-		ref<Reader> r = storage.openTextFile(path);
+		ref<Reader> r = storage.openTextFile(path());
 		if (r == null)
 			return false;
 		boolean success = true;
@@ -105,10 +137,50 @@ class Content {
 		}
 	}
 
-	boolean writePhFile() {
-		ref<Writer> w = storage.createTextFile(targetPath);
+	boolean write() {
+		if (verboseOption.set()) {
+			string caption;
+			static boolean firstTime = true;
 
-		insertTemplate1(w, targetPath);
+			if (firstTime) {
+				for (i in formattingOptions)
+					printf("[%s] = '%s'\n", i, formattingOptions[i]);
+				firstTime = false;
+			}
+			caption.printf("[%d]", index());
+			printf("%7s %20s %s\n", caption, string(type), targetPath());
+		}
+		switch (type) {
+		case DIRECTORY:
+			if (storage.ensure(targetPath())) {
+				if (verboseOption.set())
+					printf("%s %s - created directory\n", targetPath(), string(type));
+				return true;
+			}
+			break;
+
+		case FILE:
+			if (storage.copyFile(path(), targetPath())) {
+				if (verboseOption.set())
+					printf("%s %s - created file\n", targetPath(), string(type));
+				return true;
+			}
+			break;
+
+		case INDEX_FILE:
+		case PH_FILE:
+			if (writePhFile()) {
+				if (verboseOption.set())
+					printf("%s %s - created\n", targetPath(), string(type));
+			}
+		}
+		return false;
+	}
+
+	boolean writePhFile() {
+		ref<Writer> w = storage.createTextFile(targetPath());
+
+		insertTemplate1(w, targetPath());
 //		w.printf("<title>%s</title>\n", corpusTitle);
 		w.write("</head>\n<body>\n");
 		boolean success = true;
@@ -204,7 +276,7 @@ class MacroSpan extends Span {
 			while (argumentCount > 1) {
 				index = endOfToken(arguments);
 				if (index < 0) {
-					printf("Expecting %d arguments with verb %s in %s\n", _verb.arguments(), verb, file.path);
+					printf("Expecting %d arguments with verb %s in %s\n", _verb.arguments(), verb, file.path());
 					return false;
 				}
 				_arguments.append(arguments.substr(0, index));
@@ -214,7 +286,7 @@ class MacroSpan extends Span {
 			if (argumentCount > 0)
 				_arguments.append(arguments);
 			if (verboseOption.set()) {
-				printf("Processing verb %s(", string(_verb));
+				printf("        Processing verb %s(", string(_verb));
 				for (i in _arguments) {
 					if (i > 0)
 						printf(",'%s'", _arguments[i]);
@@ -234,16 +306,20 @@ class MacroSpan extends Span {
 				break;
 
 			case PARADOC:
-				if (!validateOnlyOption.set()) {
-					outputFolder = storage.path(file.targetDirectory(), _arguments[0]);
-					if (verboseOption.set())
-						printf("Generated API Output %s\n", outputFolder);
-				}
+				codeOutputFolder = storage.path(file.targetDirectory(), _arguments[0]);
+				if (verboseOption.set())
+					printf("            Generated API Output %s\n", codeOutputFolder);
+				file.topics.append(this);
+				defineOutputDirectory(codeOutputFolder);
+				collectNamespacesToDocument();
 				content = "<a href=\"" + _arguments[0] + "/index.html\">" + _arguments[1] + "</a>";
 				break;
 
 			case TOPIC:
 				string target = storage.path(file.sourceDirectory(), _arguments[0]);
+				printf("topic target = '%s'\n", target);
+
+				string targetPath = storage.path(contentOutputFolder, target);
 				_index = file.topics.length();
 				file.topics.append(this);
 				break;
@@ -254,7 +330,7 @@ class MacroSpan extends Span {
 				boolean success;
 				(_level, success) = byte.parse(_arguments[0]);
 				if (!success) {
-					printf("Level %s is not valid in file %s\n", _arguments[0], file.path);
+					printf("Level %s is not valid in file %s\n", _arguments[0], file.path());
 					return false;
 				}
 				_index = file.levels.length();
@@ -267,7 +343,8 @@ class MacroSpan extends Span {
 
 			case ANCHOR:
 				if (anchors.contains(_arguments[0])) {
-					printf("Anchor %s in %s duplicates an anchor in %s\n", _arguments[0], file.path, anchors[_arguments[0]].path);
+					printf("Anchor %s in %s duplicates an anchor in %s\n", _arguments[0], file.path(), 
+									anchors[_arguments[0]].path());
 					return false;
 				}
 				anchors[_arguments[0]] = file;
@@ -294,7 +371,7 @@ class MacroSpan extends Span {
 				break;
 			}
 		} else {
-			printf("Unknown verb %s in %s: {@%s}\n", verb, file.path, content);
+			printf("Unknown verb %s in %s: {@%s}\n", verb, file.path(), content);
 			return false;
 		}
 		return true;
@@ -304,17 +381,28 @@ class MacroSpan extends Span {
 	 * macro that satisfies the requirements of being the first level macro in the file named in the topic macro.
 	 */
 	void setTopicGroup() {
-		if (target != null)
+		if (verboseOption.set()) {
+			printf("            %s setTopicGroup %s %s -> %s", string(_verb), _arguments[0], _enclosing.path(), _enclosing.targetPath());
+			if (target != null)
+				printf(" target %s", target._enclosing.toString());
+			printf("\n");
+		}
+		if (_verb == Verb.PARADOC) {
+			g := storage.path(_enclosing.targetDirectory(), _arguments[0]);
+			idx := storage.path(g, "index.html");
+			idx = storage.makeCompactPath(idx, _enclosing.targetPath());
+			content = "<a href=\"" + idx + "\">" + _arguments[1] + "</a>";
+		} else if (target != null)
 			content = target.levelGroup(_enclosing);
 		else {
-			string href = _enclosing.path;
+			string href = _enclosing.path();
 			href = href.substr(0, href.length() - 3) + ".html";
-			content = "<a href=\"" + href + "\">" + href + "</a>";		
+			content = "<a href=\"" + href + "\">" + href + "</a>";
 		}
 	}
 
 	private string levelGroup(ref<Content> base) {
-		string href = storage.makeCompactPath(_enclosing.path, base.path);
+		string href = storage.makeCompactPath(_enclosing.path(), base.path());
 		if (href.endsWith(".ph"))
 			href = href.substr(0, href.length() - 3) + ".html";
 		string output = "<a href=\"" + href + "\">" + content + "</a>";
@@ -361,8 +449,12 @@ class MacroSpan extends Span {
 		return _arguments[i];
 	}
 
+	Verb verb() {
+		return _verb;
+	}
+
 	void print() {
-		printf("File %s %s(", _enclosing.path, string(_verb));
+		printf("File %s %s(", _enclosing.path(), string(_verb));
 		for (i in _arguments) {
 			if (i > 0)
 				printf(",");
@@ -375,45 +467,8 @@ class MacroSpan extends Span {
 	}
 }
 
-ref<Content>[] content;
-ref<Content>[string] fileMap;
 ref<Content>[] topicHolders;
 ref<Content>[string] anchors;
-
-void collectContentInventory(string baseDirectory, string directory) {
-	ref<storage.Directory> d = new storage.Directory(directory);
-	if (d.first()) {
-		do {
-			ref<Content> c = new Content;
-
-			c.path = d.path();
-			switch (d.filename()) {
-			case ".":
-			case "..":
-				break;
-
-			default:
-				if (storage.isDirectory(c.path)) {
-					c.type = ContentType.DIRECTORY;
-					c.targetPath = storage.path(outputFolder, c.path.substr(baseDirectory.length() + 1), null);
-				} else if (c.path.endsWith(".ph")) {
-					c.type = ContentType.PH_FILE;
-					c.targetPath = storage.path(outputFolder, 
-												c.path.substr(baseDirectory.length() + 1, c.path.length() - 2) + "html");
-				} else {
-					c.type = ContentType.FILE;
-					c.targetPath = storage.path(outputFolder, c.path.substr(baseDirectory.length() + 1), null);
-				}
-				content.append(c);
-				if (verboseOption.set())
-					printf("%s %s %s\n", c.path, c.targetPath, string(c.type));
-				if (c.type == ContentType.DIRECTORY)
-					collectContentInventory(baseDirectory, c.path);
-			}
-		} while (d.next());
-	}
-	delete d;
-}
 
 public boolean processContentDirectory() {
 	string contentDirectory = contentDirectoryOption.value;
@@ -425,31 +480,43 @@ public boolean processContentDirectory() {
 		printf("Content directory '%s' is not a directory.\n", contentDirectory);
 		return false;
 	}
-	Content c;
-	c.type = ContentType.DIRECTORY;
-	c.path = contentDirectory;
-	content.append(&c);
-	collectContentInventory(contentDirectory, contentDirectory);
+	ref<Content> c = new Content(ContentType.DIRECTORY, contentDirectory, contentOutputFolder);
 
-	// Okay, start parsing the .ph files
+	// Okay, start by collecting the files and sub-directories of the contentDirectory
 
-	boolean success = true;
-	for (i in content) {
-		ref<Content> c = content[i];
+	boolean success = c.process();
 
-		fileMap[c.path] = c;
-		if (c.type == ContentType.PH_FILE) {
-			if (!c.processPhFile())
-				success = false;
+	if (verboseOption.set()) {
+		if (anchors.size() > 0)
+			printf("Defined anchors:\n");
+		for (i in anchors)
+			printf("    [%s] -> %s\n", i, anchors[i].targetPath());
+		if (pages.length() > 0)
+			printf("Pages:\n");
+		for (i in pages) {
+			p := pages[i];
+			if (p.path() != null)
+				printf("    [%d] %s -> %s\n", i, p.path(), p.targetPath());
+			else
+				printf("    [%d]     %s\n", i, p.targetPath());
 		}
 	}
 
-	// First, thread the topics and levels so that we know how to number them.
 
-	ref<Content> targetFile = getTargetFile(null, null);
-	if (targetFile != null)	// we have an index.ph, at least. Start lacing things up.
-		thread(targetFile);
+	// Now, thread the topics and levels so that we know how to number them.
 
+	if (pages.length() > 1) {		// There was a file in the content directory.
+		for (i in pages) {
+			p := pages[i];
+			if (p.class != Content)
+				continue;
+			c := ref<Content>(p);
+			if (c.type == ContentType.INDEX_FILE) {	// we have an index.ph, at least. Start lacing things up.
+				thread(c);
+				break;
+			}			
+		}
+	}
 
 	byte[] numberingStyles;
 	string[] numberingInterstitials;
@@ -470,11 +537,11 @@ public boolean processContentDirectory() {
 			boolean b;
 			(level, b) = int.parse(l.argument(0));
 			if (!b) {
-				printf("Level %s is not an integer in file %s\n", l.argument(0), c.path);
+				printf("Level %s is not an integer in file %s\n", l.argument(0), c.path());
 				success = false;
 			}
 			if (level < 0 || level > numberingStyles.length()) {
-				printf("level %d in file %s is out of range (0-%d)\n", level, c.path, numberingStyles.length());
+				printf("level %d in file %s is out of range (0-%d)\n", level, c.path(), numberingStyles.length());
 				success = false;
 			} else if (level > 0) {
 				if (levelCounts.length() < level)
@@ -508,55 +575,60 @@ public boolean processContentDirectory() {
 	return success;
 }
 
-public boolean writeContentDirectory() {
-	if (validateOnlyOption.set())
-		return true;
+boolean collectContentInventory(string sourcePath, string targetDirectory) {
+	ref<Content>[] files;
+	ref<Content> index;
 
-	// We've parsed in all the .ph files. Now we have to process the macros.
+	storage.Directory d(sourcePath);
+	if (d.first()) {
+		do {
+			ref<Content> c;
+			string filename = d.filename();
 
-	if (verboseOption.set()) {
-		for (i in content) {
-			ref<Content> c = content[i];
-			string caption;
-	
-			caption.printf("[%d]", i);
-			printf("%7s %20s %s\n", caption, string(c.type), c.path);
-		}
-		for (i in formattingOptions)
-			printf("[%s] = '%s'\n", i, formattingOptions[i]);
+			switch (filename) {
+			case ".":
+			case "..":
+				break;
+
+			default:
+				string path = d.path();
+				if (storage.isDirectory(path))
+					c = new Content(ContentType.DIRECTORY, path, 
+									storage.path(targetDirectory, filename));
+				else if (filename.endsWith(".ph")) {
+					ContentType type;
+					if (filename == "index.ph")
+						type = ContentType.INDEX_FILE;
+					else
+						type = ContentType.PH_FILE;
+					c = new Content(type, path, 
+									storage.path(targetDirectory, filename, "html"));
+				} else
+					c = new Content(ContentType.FILE, path, 
+									storage.path(targetDirectory, filename));
+				
+				if (c.type == ContentType.INDEX_FILE)
+					index = c;
+				else
+					files.append(c);
+			}
+		} while (d.next());
 	}
-
 	boolean success = true;
-	for (i in content) {
-		ref<Content> c = content[i];
 
-		switch (c.type) {
-		case DIRECTORY:
-			if (storage.ensure(c.targetPath)) {
-				if (verboseOption.set())
-					printf("%s %s - created directory\n", c.targetPath, string(c.type));
-			} else
-				success = false;
-			break;
+	// This ordering assures that any index.ph file in a directory immediately follows the directory page.
 
-		case FILE:
-			if (storage.copyFile(c.path, c.targetPath)) {
-				if (verboseOption.set())
-					printf("%s %s - created file\n", c.targetPath, string(c.type));
-			} else
-				success = false;
-			break;
+	if (index != null && !index.process())
+		success = false;
 
-		case PH_FILE:
-			if (c.writePhFile()) {
-				if (verboseOption.set())
-					printf("%s %s - created\n", c.targetPath, string(c.type));
-			} else
-				success = false;
-		}
-	}
+	// The order of the rest is unimportant.
+
+	for (i in files)
+		if (!files[i].process())
+			success = false;
 	return success;
 }
+
 
 void thread(ref<Content> file) {
 	if (file.topics.length() > 0) {
@@ -564,10 +636,20 @@ void thread(ref<Content> file) {
 		for (i in file.topics) {
 			ref<MacroSpan> t = file.topics[i];
 
-			ref<Content> f = getTargetFile(file, t.argument(0));
-			if (f.levels.length() > 0)
-				t.target = f.levels[0];
-			thread(f); 
+			if (t.verb() == Verb.PARADOC) {
+				c := new Content(ContentType.PARADOC, null, codeOutputFolder);
+				topicHolders.append(c);
+			} else {
+
+				ref<Page> p = getTargetFile(file, t.argument(0));
+				
+				if (p != null && p.class == Content) {
+					f := ref<Content>(p);
+					if (f.levels.length() > 0)
+						t.target = f.levels[0];
+					thread(f); 
+				}
+			}
 		}
 	} else if (file.levels.length() > 0)
 		topicHolders.append(file);
@@ -575,27 +657,23 @@ void thread(ref<Content> file) {
 /**
  * @param source 
  */
-ref<Content> getTargetFile(ref<Content> source, string reference) {
+ref<Page> getTargetFile(ref<Content> source, string reference) {
 	string target;
-	ref<Content> targetFile;
+	ref<Page> targetFile;
 
-	if (source != null) {
-		target = storage.path(source.sourceDirectory(), reference);
-		targetFile = fileMap[target];
+	target = storage.path(source.targetDirectory(), reference);
+	if (target.endsWith(".ph"))
+		target = target.substr(0, target.length() - 3) + ".html";
+	targetFile = pageMap[target];
+	if (targetFile == null) {
+		printf("Could not find target file for topic %s in file %s\n", reference, source.path());
+		return null;
+	}
+	if (storage.isDirectory(targetFile.path())) {
+		target = storage.path(targetFile.path(), "index.ph");
+		targetFile = pageMap[target];
 		if (targetFile == null) {
-			printf("Could not find target file for topic %s in file %s\n", reference, source.path);
-			return null;
-		}
-	} else
-		targetFile = content[0];
-	if (targetFile.type == ContentType.DIRECTORY) {
-		target = storage.path(targetFile.path, "index.ph", null);
-		targetFile = fileMap[target];
-		if (targetFile == null) {
-			if (source != null)
-				printf("No index.ph for target directory %s in file %s\n", reference, source.path);
-			else
-				printf("No index.ph for content directory %s\n", content[0].path);
+			printf("No index.ph for target directory %s in file %s\n", reference, source.path());
 			return null;
 		}
 	}
