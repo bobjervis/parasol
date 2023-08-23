@@ -180,9 +180,8 @@ class Content extends Page {
 	boolean writePhFile() {
 		ref<Writer> w = storage.createTextFile(targetPath());
 
-		insertTemplate1(w, targetPath());
+		insertTemplate1(w, this);
 //		w.printf("<title>%s</title>\n", corpusTitle);
-		w.write("</head>\n<body>\n");
 		boolean success = true;
 		for (i in spans) {
 			if (spans[i].content != null)
@@ -190,7 +189,7 @@ class Content extends Page {
 			else
 				success = false;
 		}
-		w.write("</body>\n");
+		insertTemplate2(w, this);
 		delete w;
 		return success;
 	}

@@ -43,13 +43,5 @@ The bindings for Linux are more complete, including the entire Linux C math libr
 The <span class=code>paradoc</span> application has been written to generate a set of HTML pages (including this one) from the inline documentation of the API's.
 <p>
 Interested developers are invited to participate.
-</ul>
-	<li><a href="https://github.com/bobjervis/parasol/wiki/Project-Roadmap">Project Roadmap</a>
-	<li><a href="https://github.com/bobjervis/parasol/wiki/The-Linux-64-Bit-Implementation">The Linux 64-Bit Implementation</a>
-	<li><a href="https://github.com/bobjervis/parasol/wiki/The-Windows-64-Bit-Implementation">The Windows 64-Bit Implementation</a>
-	<li><a href="https://github.com/bobjervis/parasol/wiki/Installation-and-Setup>Installation and Setup</a>
-	<li><a href="https://github.com/bobjervis/parasol/wiki/Building-and-Testing">Building and Testing</a>
-	<li><a href="https://github.com/bobjervis/parasol/wiki/Project-Diary">Project Diary</a>
-</ul>
 
 

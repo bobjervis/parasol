@@ -18,6 +18,32 @@ a[name]:hover {
     color:#353833;
 }
 
+body {
+	padding-top: 30px;
+	padding-bottom: 30px;
+}
+
+div.header {
+	width: 100%;
+	position: fixed;
+	top: 0;
+    background-color: #FCCC3A;
+	z-index: 5;
+	padding: 5px;
+}
+
+div.nav-home, div.nav-prev, div.nav-next, div.nav-up {
+	display: inline-block;
+	border-style: outset;
+	background-color: #FAB12E;
+	padding-left: 5px;
+	padding-right: 5px;
+}
+
+div.viewport {
+	overflow: auto;
+}
+
 .code {
 	font-family: "Courier New", monospace;
 }

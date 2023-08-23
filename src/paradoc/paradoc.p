@@ -62,6 +62,10 @@ class Paradoc extends process.Command {
 					"this option. " +
 					"Each file with a .ph extension is processed by paradoc and replaced by a file " +
 					"with the same name, but with a .html extension.");
+		paradoc.homeCaptionOption = stringOption('h', "home",
+					"Provides the caption string that will appear in the 'home' button of " +
+					"the navigation bar on every page. " +
+					"Default: No home buffon will appear in the navigation bar");
 		helpOption('?', "help",
 					"Displays this help.");
 	}

@@ -21,8 +21,6 @@ import parasol:process;
 import parasol:runtime;
 import parasol:storage;
 
-string corpusTitle = "Parasol Documentation";
-
 compiler.Arena arena;
 ref<compiler.CompileContext> compileContext;
 
@@ -85,10 +83,8 @@ class CodeOverviewPage extends Page {
 			printf("Unable to create file '%s'\n", overviewPage);
 			return false;
 		}
-		insertTemplate1(overview, overviewPage);
+		insertTemplate1(overview, this);
 	
-		overview.printf("<title>%s</title>\n", corpusTitle);
-		overview.write("<body>\n");
 		overview.write("<table class=\"overviewSummary\">\n");
 		overview.write("<caption><span>Namespaces</span><span class=\"tabEnd\">&nbsp;</span></caption>\n");
 		overview.write("<tr>\n");
@@ -113,12 +109,11 @@ class CodeOverviewPage extends Page {
 				overview.write(expandDocletString(doclet, doclet.summary, sym, overviewPage));
 			overview.write("</td>\n");
 			overview.write("</tr>\n");
-			generateNamespaceSummary(names[i].name, names[i].symbol);
 		}
 		overview.write("</tbody>\n");
 		overview.write("</table>\n");
 	
-		insertTemplate2(overview);
+		insertTemplate2(overview, this);
 	
 		delete overview;
 		return true;
@@ -137,6 +132,10 @@ class NamespaceSummaryPage extends Page {
 		return "<Namespace> " + namespaceFile(_nameSpace) + " -> " + targetPath();
 	}
 
+	string caption() {
+		return _nameSpace.fullNamespace();
+	}
+
 	boolean write() {
 		if (verboseOption.set()) {
 			string caption;
@@ -152,13 +151,10 @@ class NamespaceSummaryPage extends Page {
 			printf("Could not create output file %s\n", summaryPage);
 			return false;
 		}
-		insertTemplate1(overview, summaryPage);
+		insertTemplate1(overview, this);
 	
-		string name = _nameSpace.fullNamespace();
-		overview.printf("<title>%s</title>\n", name);
-		overview.write("<body>\n");
 		//insertNavbar(overview);
-		overview.printf("<div class=namespace-title>Namespace %s</div>\n", name);
+		overview.printf("<div class=namespace-title>Namespace %s</div>\n", caption());
 	
 		ref<compiler.Doclet> doclet = _nameSpace.doclet();
 		if (doclet != null) {
@@ -186,6 +182,7 @@ class NamespaceSummaryPage extends Page {
 		generateScopeContents(_nameSpace.symbols(), overview, classesDir, summaryPage, 
 									"Object", "Function", "INTERNAL ERROR", false, false);
 	
+		insertTemplate2(overview, this);
 		delete overview;
 		return true;
 	}
@@ -345,55 +342,6 @@ void indexTypesInClass(ref<compiler.Symbol> sym, string dirName) {
 	string subDir = storage.path(dirName, name);
 
 	indexClassesInScope(scope, subDir);
-}
-
-void generateNamespaceSummary(string name, ref<compiler.Namespace> nm) {
-	ref<Writer> overview;
-	string overviewPage = namespaceFile(nm);
-	string dirName = namespaceDir(nm);
-	if (validateOnlyOption.set())
-		overview = storage.createTextFile("/dev/null");
-	else {
-		if (!storage.ensure(dirName)) {
-			printf("Could not create directory '%s'\n", dirName);
-			process.exit(1);
-		}
-		overview = storage.createTextFile(overviewPage);
-	}
-	insertTemplate1(overview, overviewPage);
-
-	overview.printf("<title>%s</title>\n", name);
-	overview.write("<body>\n");
-	//insertNavbar(overview);
-	overview.printf("<div class=namespace-title>Namespace %s</div>\n", name);
-
-	ref<compiler.Doclet> doclet = nm.doclet();
-	if (doclet != null) {
-		if (doclet.author != null)
-			overview.printf("<div class=author><span class=author-caption>Author: </span>%s</div>\n",
-										expandDocletString(doclet, doclet.author, nm, overviewPage));
-		if (doclet.deprecated != null)
-			overview.printf("<div class=deprecated-outline><div class=deprecated-caption>Deprecated</div><div class=deprecated>%s</div></div>\n",
-										expandDocletString(doclet, doclet.deprecated, nm, overviewPage));
-		overview.printf("<div class=namespace-text>%s</div>\n",
-										expandDocletString(doclet, doclet.text, nm, overviewPage));
-		if (doclet.threading != null)
-			overview.printf("<div class=threading-caption>Threading</div><div class=threading>%s</div>\n",
-										expandDocletString(doclet, doclet.threading, nm, overviewPage));
-		if (doclet.since != null)
-			overview.printf("<div class=since-caption>Since</div><div class=since>%s</div>\n",
-										expandDocletString(doclet, doclet.since, nm, overviewPage));
-		if (doclet.see != null)
-			overview.printf("<div class=see-caption>See Also</div><div class=see>%s</div>\n",
-										expandDocletString(doclet, doclet.see, nm, overviewPage));
-	}
-
-	string classesDir = storage.path(dirName, "classes", null);
-
-	generateScopeContents(nm.symbols(), overview, classesDir, overviewPage, 
-								"Object", "Function", "INTERNAL ERROR", false, false);
-
-	delete overview;
 }
 
 string namespaceFile(ref<compiler.Namespace> nm) {

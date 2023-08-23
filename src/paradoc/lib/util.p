@@ -20,6 +20,7 @@ import parasol:process;
 import parasol:storage;
 
 ref<process.Option<string>> templateDirectoryOption;
+ref<process.Option<string>> homeCaptionOption;
 ref<process.Option<boolean>> verboseOption;
 ref<process.Option<boolean>> forceOption;
 ref<process.Option<boolean>> validateOnlyOption;
@@ -123,39 +124,6 @@ int endOfToken(substring s) {
 			s[i] == '\n')
 			return i;
 	return -1;
-}
-
-public void insertTemplate1(ref<Writer> output, string myPath) {
-	ref<Reader> template1 = storage.openTextFile(template1file);
-
-	if (template1 != null) {
-		string tempData = template1.readAll();
-
-		delete template1;
-
-		for (int i = 0; i < tempData.length(); i++) {
-			if (tempData[i] == '$') {
-				string path = storage.makeCompactPath(stylesheetPath, myPath);
-				output.write(path);
-			} else
-				output.write(tempData[i]);
-		}
-	} else {
-		printf("Could not read template1.html file from %s\n", template1file);
-	}
-}
-
-public void insertTemplate2(ref<Writer> output) {
-	ref<Reader> template2 = storage.openTextFile(template2file);
-
-	if (template2 != null) {
-		string tempData = template2.readAll();
-
-		delete template2;
-
-		output.write(tempData);
-	} else
-		printf("Could not read template2.html file from %s\n", template2file);
 }
 
 int compareOverloadedSymbols(ref<compiler.OverloadInstance> sym1, ref<compiler.OverloadInstance> sym2) {

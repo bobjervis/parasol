@@ -1,5 +1,5 @@
 
-<h2>{@level 2 Scopr}</h2>
+<h2>{@level 2 Scope}</h2>
 This reference specifies the form and establishes the interpretation of programs written in the Parasol programming language.
 It specifies
 <ul>

@@ -140,7 +140,7 @@ For an explanation of how types are assigned to expressions, see {@doc-link Type
 {@production | <b>\t</b> }
 {@production | <b>\v</b> }
 {@production | <b>\\</b> }
-{@production | <b>\0</b> <i>octal</i> }
+{@production | <b>\0</b> [ <i>octal</i> ] ... }
 {@production | <b>\x</b> <i>hex_digit</i> [ <i>hex_digit</i> ] ... }
 {@production | <b>\X</b> <i>hex_digit</i> [ <i>hex_digit</i> ] ... }
 {@production | <b>\u</b> <i>hex_digit</i> [ <i>hex_digit</i> ] ... }

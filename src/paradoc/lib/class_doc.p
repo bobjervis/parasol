@@ -48,10 +48,9 @@ class ClassPage extends Page {
 			process.exit(1);
 		}
 	
-		insertTemplate1(classPage, targetPath());
+		insertTemplate1(classPage, this);
 	
 		classPage.printf("<title>%s</title>\n", _symbol.name());
-		classPage.write("<body>\n");
 	
 		ref<compiler.Namespace> nm = _symbol.enclosingNamespace();
 	
@@ -152,7 +151,9 @@ class ClassPage extends Page {
 		string subDir = storage.path(storage.directory(targetPath()), _symbol.name());
 	
 		generateScopeContents(scope, classPage, subDir, targetPath(), "Member", "Method", enumLabel, isInterface, hasConstants);
-	
+
+		insertTemplate2(classPage, this);
+
 		delete classPage;
 		return true;
 	}

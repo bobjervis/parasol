@@ -15,6 +15,9 @@
  */
 namespace parasol:paradoc;
 
+import parasol:storage;
+import parasol:stream;
+
 ref<Page>[] pages;
 ref<Page>[string] pageMap;
 
@@ -56,6 +59,34 @@ class Page {
 		return _index;
 	}
 
+	boolean hasPrevious() {
+		return false;
+	}
+
+	boolean hasNext() {
+		return false;
+	}
+
+	boolean hasUp() {
+		return false;
+	}
+
+	string caption() {
+		return null;
+	}
+
+	ref<Page> previous() {
+		return null;
+	}
+
+	ref<Page> up() {
+		return null;
+	}
+
+	ref<Page> next() {
+		return null;
+	}
+
 	abstract boolean write();
 
 	abstract string toString();
@@ -74,5 +105,73 @@ public boolean generatePages() {
 			success = false;
 	return success;
 }
+
+public void insertTemplate1(ref<Writer> output, ref<Page> page) {
+	ref<Reader> template1 = storage.openTextFile(template1file);
+
+	if (template1 != null)
+		insertTemplate(template1, output, page);
+	else
+		printf("Could not read template1.html file from %s\n", template1file);
+}
+
+public void insertTemplate2(ref<Writer> output, ref<Page> page) {
+	ref<Reader> template2 = storage.openTextFile(template2file);
+
+	if (template2 != null)
+		insertTemplate(template2, output, page);
+	else
+		printf("Could not read template2.html file from %s\n", template2file);
+}
+
+private void insertTemplate(ref<Reader> reader, ref<Writer> writer, ref<Page> page) {
+	for (;;) {
+		int c;
+
+		c = reader.read();
+		if (c == stream.EOF)
+			break;
+		switch (c) {
+		case '$':
+			string path = storage.makeCompactPath(stylesheetPath, page.targetPath());
+			writer.write(path);
+			break;
+
+		case '@':
+			if (homeCaptionOption.set()) {
+				homeUrl := storage.makeCompactPath(contentOutputFolder, page.targetPath());
+				homeCaption := homeCaptionOption.value;
+				writer.printf("<div class=nav-home><a href=\"%s\">Go to %s</a></div>", homeUrl, homeCaption);
+			}
+			if (page.hasPrevious()) {
+				prevUrl := storage.makeCompactPath(page.previous().targetPath(), page.targetPath());
+				prevCaption := page.previous().caption();
+				writer.printf("<div class=nav-prev><a href=\"%s\">Previous Page %s</a></div>", prevUrl, prevCaption);
+			}
+			if (page.hasUp()) {
+				upUrl := storage.makeCompactPath(page.up().targetPath(), page.targetPath());
+				upCaption := page.up().caption();
+				writer.printf("<div class=nav-up><a href=\"%s\">Enclosing Topic %s</a></div>", upUrl, upCaption);
+			}
+			if (page.hasNext()) {
+				nextUrl := storage.makeCompactPath(page.next().targetPath(), page.targetPath());
+				nextCaption := page.next().caption();
+				writer.printf("<div class=nav-next><a href=\"%s\">Next Page %s</a></div>", nextUrl, nextCaption);
+			}
+			break;
+
+		case '^':
+			if (page.caption() != null)
+				writer.printf("<title>%s</title>", page.caption());
+			break;
+
+		default:
+			writer.write(byte(c));
+		}
+	}
+	delete reader;
+}
+
+
 
 
