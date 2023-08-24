@@ -31,6 +31,10 @@ class ClassPage extends Page {
 		return "<Symbol> " + _symbol.name() + " -> " + targetPath();
 	}
 
+	string caption() {
+		return _symbol.name();
+	}
+
 	boolean write() {
 		if (verboseOption.set()) {
 			string caption;

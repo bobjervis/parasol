@@ -174,7 +174,7 @@ public void freeRegion(address region, long length) {
  * new image runs with its own copy of static data, so the Image object is created new.
  *
  * The image object is initially constructed by extracting information from the runtme parameters
- * passed into the running instance. These parameters are set by the parasolrt execuable when
+ * passed into the running instance. These parameters are set by the parasolrt executable when
  * launching a compiled image, or set by the Parasol compiler when running a new image.
  *
  * 

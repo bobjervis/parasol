@@ -23,6 +23,7 @@ import parasol:storage;
 
 compiler.Arena arena;
 ref<compiler.CompileContext> compileContext;
+ref<CodeOverviewPage> codeOverviewPage;
 
 class Names {
 	string name;
@@ -40,6 +41,7 @@ class CodeOverviewPage extends Page {
 
 	CodeOverviewPage(string path) {
 		super(null, path);
+		codeOverviewPage = this;
 	}
 
 	string toString() {
@@ -66,9 +68,14 @@ class CodeOverviewPage extends Page {
 			defineOutputDirectory(namespaceFolder);
 			namespaceSummary := new NamespaceSummaryPage(storage.path(namespaceFolder, "namespace-summary.html"), n.symbol);
 			namespaceSummary.add();
+			this.childPage(namespaceSummary);
 			classesDir := storage.path(namespaceFolder, "classes");
-			indexClassesInScope(n.symbol.symbols(), classesDir);
+			indexClassesInScope(namespaceSummary, n.symbol.symbols(), classesDir);
 		}
+	}
+
+	string caption() {
+		return "Code Overview Page";
 	}
 
 	boolean write() {
@@ -271,7 +278,7 @@ public boolean collectNamespacesToDocument() {
 	return true;
 }
 
-void indexClassesInScope(ref<compiler.Scope> symbols, string dirName) {
+void indexClassesInScope(ref<Page> parent, ref<compiler.Scope> symbols, string dirName) {
 	symMap := symbols.symbols();
 
 	ref<compiler.Symbol>[] classes;
@@ -315,7 +322,7 @@ void indexClassesInScope(ref<compiler.Scope> symbols, string dirName) {
 		for (i in classes) {
 			ref<compiler.Symbol> sym = classes[i];
 	
-			indexTypesInClass(sym, dirName);
+			indexTypesInClass(parent, sym, dirName);
 		}
 	}
 }
@@ -324,7 +331,7 @@ private int compareSymbols(ref<compiler.Symbol> left, ref<compiler.Symbol> right
 	return left.compare(right);
 }
 
-void indexTypesInClass(ref<compiler.Symbol> sym, string dirName) {
+void indexTypesInClass(ref<Page> parent, ref<compiler.Symbol> sym, string dirName) {
 	ref<compiler.Scope> scope = scopeFor(sym);
 	if (scope == null)
 		return;
@@ -338,10 +345,12 @@ void indexTypesInClass(ref<compiler.Symbol> sym, string dirName) {
 	if (classFiles[long(scope)] == null)
 		classFiles[long(scope)] = classFile;
 
-	(new ClassPage(sym, classFile)).add();
+	c := new ClassPage(sym, classFile);
+	c.add();
+	parent.childPage(c);
 	string subDir = storage.path(dirName, name);
 
-	indexClassesInScope(scope, subDir);
+	indexClassesInScope(c, scope, subDir);
 }
 
 string namespaceFile(ref<compiler.Namespace> nm) {

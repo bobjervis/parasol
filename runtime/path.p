@@ -13,13 +13,6 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-/**
- * Provides facilities for manipulation of file paths, as well as various file system
- * operations, such as copying, renaming or deleting files and directories.
- *
- * The purpose of these functions is to provide a portable means to manage the local
- * file system for a running process. 
- */
 namespace parasol:storage;
 
 import parasol:math;

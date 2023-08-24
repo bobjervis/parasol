@@ -7,6 +7,11 @@ For an explanation of how types are assigned to expressions, see {@doc-link Type
 {@grammar}
 {@production expression <i>assignment</i> }
 {@production | <i>expression</i> <b>,</b> <i>assignment</i> }
+{@end-grammar}
+
+<h4>{@level 4 Assignment}</h4>
+
+{@grammar}
 {@production assignment <i>conditional</i> }
 {@production | <i>assignment</i> <b>=</b> <i>assignment</i> }
 {@production | <i>assignment</i> <b>:=</b> <i>assignment</i> }
@@ -14,13 +19,30 @@ For an explanation of how types are assigned to expressions, see {@doc-link Type
 {@production | <i>assignment</i> <b>-=</b> <i>assignment</i> }
 {@production | <i>assignment</i> <b>*=</b> <i>assignment</i> }
 {@production | <i>assignment</i> <b>/=</b> <i>assignment</i> }
-{@production | <i>assignment</i> <b>%=</b>  <i>assignment</i> }
+{@production | <i>assignment</i> <b>%=</b> <i>assignment</i> }
 {@production | <i>assignment</i> <b>&=</b> <i>assignment</i> }
 {@production | <i>assignment</i> <b>^=</b> <i>assignment</i> }
 {@production | <i>assignment</i> <b>|=</b> <i>assignment</i> }
 {@production | <i>assignment</i> <b>&lt;&lt;=</b> <i>assignment</i> }
 {@production | <i>assignment</i> <b>&gt;&gt;=</b> <i>assignment</i> }
 {@production | <i>assignment</i> <b>&gt;&gt;&gt;=</b> <i>assignment</i> }
+{@end-grammar}
+
+The left operand of an assignment operator shall be a {@doc-link mod-lvalue modifiable lvalue}.
+
+<h5>{@level 5 Defining Assignment}</h5>
+
+The defining assignment operator (<span class=code>:=</span>) combines the declaration of the
+left operand with assigning the value of the right operand to the left.
+
+The left operand of a defining assignment shall be an identifier and shall be a definition.
+
+The type of the left operand shall be declared to be the type of the right operand.
+
+
+
+
+{@grammar}
 {@production conditional <i>binary</i> }
 {@production | <i>binary</i> <b>?</b> <i>expression</i> <b>:</b> <i>conditional</i> }
 {@production binary <i>unary</i> }

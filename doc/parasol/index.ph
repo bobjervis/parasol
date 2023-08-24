@@ -1,5 +1,5 @@
 
-<h1>The Parasol Language</h1>
+<h1>{@level 0 The Parasol Language}</h1>
 
 
 <ul class=sec-map>

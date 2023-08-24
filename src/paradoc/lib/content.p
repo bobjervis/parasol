@@ -65,6 +65,24 @@ class Content extends Page {
 			return storage.directory(targetPath());
 	}
 
+	string caption() {
+		if (levels.length() > 0)
+			return levels[0].content;
+		else
+			return storage.filename(targetPath());
+	}
+
+	void setPageSequence() {
+		if (type == ContentType.PARADOC) {
+			for (i in pages) {
+				p := pages[i];
+				if (p.class != Content)
+					p.setPageSequence();
+			}
+		} else
+			super.setPageSequence();
+	}
+
 	boolean process() {
 		if (verboseOption.set())
 			printf("    Processing contents of %s -> %s %s\n", path(), targetPath(), string(type));
@@ -316,7 +334,6 @@ class MacroSpan extends Span {
 
 			case TOPIC:
 				string target = storage.path(file.sourceDirectory(), _arguments[0]);
-				printf("topic target = '%s'\n", target);
 
 				string targetPath = storage.path(contentOutputFolder, target);
 				_index = file.topics.length();
@@ -391,9 +408,9 @@ class MacroSpan extends Span {
 			idx := storage.path(g, "index.html");
 			idx = storage.makeCompactPath(idx, _enclosing.targetPath());
 			content = "<a href=\"" + idx + "\">" + _arguments[1] + "</a>";
-		} else if (target != null)
+		} else if (target != null) {
 			content = target.levelGroup(_enclosing);
-		else {
+		} else {
 			string href = _enclosing.path();
 			href = href.substr(0, href.length() - 3) + ".html";
 			content = "<a href=\"" + href + "\">" + href + "</a>";
@@ -570,6 +587,9 @@ public boolean processContentDirectory() {
 		for (j in c.topics)
 			c.topics[j].setTopicGroup();
 	}
+	if (verboseOption.set())
+		printf("Pages in Topic Order:\n");
+	topicHolders[0].setPageSequence();
 
 	return success;
 }
@@ -638,11 +658,13 @@ void thread(ref<Content> file) {
 			if (t.verb() == Verb.PARADOC) {
 				c := new Content(ContentType.PARADOC, null, codeOutputFolder);
 				topicHolders.append(c);
+				file.childPage(codeOverviewPage);
 			} else {
 
 				ref<Page> p = getTargetFile(file, t.argument(0));
 				
 				if (p != null && p.class == Content) {
+					file.childPage(p);
 					f := ref<Content>(p);
 					if (f.levels.length() > 0)
 						t.target = f.levels[0];

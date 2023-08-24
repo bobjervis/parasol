@@ -125,7 +125,7 @@ public class Class extends CommonFields {
 	 * <ul>
 	 *		<li> 0.0 - The two classes are equal
 	 *      <li> &lt; 0.0 - This class is a strict sub-type of the other class
-	 *      <li> &gt; 0.0 - This class is a struct super-type of the other class
+	 *      <li> &gt; 0.0 - This class is a strict super-type of the other class
 	 *      <li> NaN = The two classes are unrelated.
 	 * </ul>
 	 * Note that this method allows compariison of types using any of the Parasol

@@ -20,12 +20,16 @@ import parasol:stream;
 
 ref<Page>[] pages;
 ref<Page>[string] pageMap;
+ref<Page>[] pageSequence;
 
 class Page {
 	private int _index;
 	private string _path;
 	private string _targetPath;
 	private ref<Page> _parent;
+	private ref<Page>[] _children;
+	private boolean _isTopic;
+	private int _topicOrderIndex;
 
 	Page(string path, string targetPath) {
 		_path = path;
@@ -44,7 +48,22 @@ class Page {
 		}
 	}
 	
+	void childPage(ref<Page> child) {
+		child._parent = this;
+		_children.append(child);
+	}
+
 	void insertNavBar(ref<Writer> writer) {
+	}
+
+	void setPageSequence() {
+		_topicOrderIndex = pageSequence.length();
+		_isTopic = true;
+		if (verboseOption.set())
+			printf("    [%d] %s\n", _topicOrderIndex, _targetPath);
+		pageSequence.append(this);
+		for (i in _children)
+			_children[i].setPageSequence();
 	}
 
 	string path() {
@@ -60,15 +79,15 @@ class Page {
 	}
 
 	boolean hasPrevious() {
-		return false;
+		return _topicOrderIndex > 0;
 	}
 
 	boolean hasNext() {
-		return false;
+		return _isTopic && _topicOrderIndex < pageSequence.length() - 1;
 	}
 
 	boolean hasUp() {
-		return false;
+		return _parent != null;
 	}
 
 	string caption() {
@@ -76,15 +95,21 @@ class Page {
 	}
 
 	ref<Page> previous() {
-		return null;
+		if (_topicOrderIndex > 0)
+			return pageSequence[_topicOrderIndex - 1];
+		else
+			return null;
 	}
 
 	ref<Page> up() {
-		return null;
+		return _parent;
 	}
 
 	ref<Page> next() {
-		return null;
+		if (_isTopic && _topicOrderIndex < pageSequence.length() - 1)
+			return pageSequence[_topicOrderIndex + 1];
+		else
+			return null;
 	}
 
 	abstract boolean write();
