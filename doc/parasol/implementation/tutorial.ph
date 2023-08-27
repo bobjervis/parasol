@@ -64,7 +64,8 @@ It consists of a <i>domain</i> and a <i>path</i>, separated by a colon character
 The domain is a string that is intended to be an Internet Domain Name System name.
 The string you assign cannot be anything. 
 It must be consistent with the domain name syntax of DNS.
-This use has been successful in helping 
+This use has been successful in helping Java developers create libraries with little fear of
+accidentally naming something the same.
 <p>
 The path of a Parasol namespace is a set of one or more identifiers separated by periods.
 Most namespaces use a single identifier, but a hierarchy is formed when mulitple 
@@ -86,7 +87,7 @@ The following namespace domains are currently used in some Parasol language name
 
 <table>
 	<tr><th>Name</th><th>Description</th></tr>
-	<tr><td>{@code native}</td><td>
+	<tr><td><span class=code>code native</span></td><td>
 			Namespaces in this domain describe non-Parasol libraries
 			that are fundamental to the operation of the Parasol
 			language runtime.
@@ -95,11 +96,11 @@ The following namespace domains are currently used in some Parasol language name
 			<p>
 			Some Parasol implementations may exclude any or all native namespaces.
 			In principle, on a system that has no C compiler, it may be possible to 
-			implement a Parasol runtmie on top of another set of facilities entirely
-			that collectively support the other Parasol namespace.
+			implement a Parasol runtime on top of another set of facilities entirely
+			that collectively support the non-native Parasol namespaces.
 		</td></tr>
-	<tr><td>{@code parasol}</td><td>
-			Namepsaces in this domain describe parts of the Parasol runtime and 
+	<tr><td><span class=code>parasol</span></td><td>
+			Namespaces in this domain describe parts of the Parasol runtime and 
 			should be generally available on any Parasol implementation.
 		</td></tr>
 </table>
