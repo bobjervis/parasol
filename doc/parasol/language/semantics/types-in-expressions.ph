@@ -1,4 +1,4 @@
-<h1>{@level 1 Types in Expressions}</h1>
+<h2>{@level 2 Types in Expressions}</h2>
 {@anchor Types-in-Expressions}
 
 Binary operators obey precedence that is not expressed in the above grammar.

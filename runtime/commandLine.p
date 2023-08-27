@@ -22,7 +22,7 @@ import native:C;
  * Provide command-line parsing.
  *
  * Currently, the Parasol command-line parsing logic follows UNIX/Linux
- * conventions. Support for Windows-conforming command parsing is not
+ * conventions. Windows-conforming command parsing is not
  * supported.
  *
  * The supported command-line syntax is based on the POSIX standard for

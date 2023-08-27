@@ -1,7 +1,7 @@
 
-<h2>{@level 0 INSTALLATION}</h2>
+<h2>{@level 2 Installation}</h2>
 
-<h3>License</h2>
+<h3>{@level 3 License}</h3>
 
 Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this product except in compliance with the License.
@@ -18,7 +18,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
    See the License for the specific language governing permissions and
    limitations under the License.
 
-<h3>Download</h3>
+<h3>{@level 3 Download}</h3>
 The Parasol language reference implementation may be installed from github by entering the following
 command in a Linux shell terminal window:
 
@@ -31,13 +31,13 @@ This command will create a new directory named <span class=code>parasol</span> i
 Consult the <span class=code>git</span> command help for options to customize your download point.
 
 You may use the git repository you just cloned to run the compiler.
-See the instructions under the {@link tutorial tutorial.ph} section for more information.
+See the instructions under the {@doc-link tutorial tutorial.ph} section for more information.
 <p>
 You should add <span class=code><i>repository-path</i>/bin</span> to your <span class=code>PATH</span> variable 
 in your <span class=code>.bashrc</span> file.
 Otherwise, you will need to specify the path to the command you wish to run.
 
-<h3>Installation</h3>
+<h3>{@level 3 Installation}</h3>
 
 If you prefer, you may install a binary installation of the compiler that is a subset of the git repository.
 <p>

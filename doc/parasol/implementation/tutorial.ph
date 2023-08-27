@@ -1,7 +1,8 @@
 
-<h2>{@level 0 GETTING STARTED}</h2>
+<h2>{@level 2 Getting Started}</h2>
+{@anchor tutorial}
 
-<h3> Hello World </h3>
+<h3>{@level 3 Hello World}</h3>
 
 All happy programming language tutorials start the same way, with a program to print the phrase 'Hello World'.
 While trivial, it also illustrates the level of effort you will need to do the minimum work in Parasol and you 
@@ -35,7 +36,7 @@ A number of symbols, like <span class=code>printf</span>, are defined for all Pa
 They provide a number of primitive data types, like <span class=code>int</span> for a 32-bit integer 
 and a small number of functions like <span class=code>printf</span>.
 
-<h3>Accessing Library Code and System Resources</h3>
+<h3>{@level 3 Accessing Library Code and System Resources}</h3>
 
 You will quickly realize that the built-in symbols give you access to very little 
 of the machine resources that you will probably want to manipulate, like files, internet
@@ -44,7 +45,7 @@ In addition, you might want to use third-party libraries written in Parasol.
 <p>
 For those resources, you will need to import symbols.
 
-<h4>Namespaces</h4>
+<h4>{@level 4 Namespaces}</h4>
 
 Namespaces group symbols to manage the problem of naming things. 
 Modern software development requires that we incorporate dozens of libraries of code
@@ -81,7 +82,7 @@ Thus, depending on which symbol exactly you import, you may refer to the same sy
 
 There are several special reserved namespaces. 
 All namespaces in which the domain is a single identifier are reserved to the Parasol language itself.
-The following namespace domains are currently used in some Parasl language namespace:
+The following namespace domains are currently used in some Parasol language namespace:
 
 <table>
 	<tr><th>Name</th><th>Description</th></tr>
@@ -103,7 +104,7 @@ The following namespace domains are currently used in some Parasl language names
 		</td></tr>
 </table>
 
-<h4>Imports</h4>
+<h4>{@level 4 Imports}</h4>
 
 C++ and C use the <span class=code>extern</span> declaration to name a symbol that is defined elsewhere.
 Parasol, Java, Python and Go use import to do the same thing.

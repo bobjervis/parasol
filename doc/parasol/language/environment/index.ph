@@ -11,3 +11,7 @@
 	<li>{@topic character-sets.ph}
 </ul>
 
+This section describes the requirements of a Parasol language implementation and how elements 
+of that running program are expected to behave.
+
+

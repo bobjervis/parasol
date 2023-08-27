@@ -1,5 +1,4 @@
 <h2>{@level 2 Annotations}</h2>
-
 An unescaped identifier preceded by an at-sign (@) is an annotation.
 <p>
 Annotations are used to modify the meaning of statements the annotations are part of.

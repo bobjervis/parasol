@@ -1,11 +1,13 @@
 
-<h2>{@level 0 OPERATION}</h2>
+<h2>{@level 2 Operation}</h2>
 
 Parasol is compiled and run by entering shell commands.
 
-<h3>pc</h3>
+<h3>{@level 3 pc}</h3>
 
-Use is:
+The Parasol compiler.
+
+<h4>Use is:</h4>
 
 {@code
     <b>pc</b> [ <i>options</i> ... ] <i>filename</i> [ <i>arguments</i> ... ]
@@ -18,7 +20,7 @@ Use is:
 <tr><td>-c</td><td>--compile</td><td>Only compile the application, do not run it.</td></tr>
 <tr><td></td><td>--context</td><td>Defines a Parasol context to use in the compile and
                       execution of the application. This overrides the value of
-                      the {@code PARASOL_CONTEXT} environment variable.</td></tr>
+                      the <span class=code>PARASOL_CONTEXT</span> environment variable.</td></tr>
 <tr><td></td><td>--cover</td><td>Produce a code coverage report, accumulating the data in a
                       file at the path provided in the argument value.</td></tr>
 <tr><td></td><td>--heap</td><td>Select one of the following heaps:
@@ -35,15 +37,15 @@ Use is:
 						their value when the block is deleted, or when the program 
 						terminates normally. If the guarded heap detects that these 
 						guard areas have been modified, it throws a 
-						{@code CorruptHeapException}.
+						<span class=code>CorruptHeapException</span>.
 				</td></tr>
 		</table>
-		Default: {@code prod}
+		Default: <span class=code>prod</span>
 	</td></tr>
-<tr><td>-?</td><td>--help</td><td>Displays a siplified version of this 
+<tr><td>-?</td><td>--help</td><td>Displays a simplified version of this 
 						documentataion.</td></tr>
-<tr><td></td><td><pre>--logImports</pre></td><td>Log all import processing.</td></tr>
-<tr><td>-p</td><td>--profile</td><td>Produce a profile report, wriitng the profile data to the
+<tr><td></td><td><nobr>--logImports<nobr></td><td>Log all import processing.</td></tr>
+<tr><td>-p</td><td>--profile</td><td>Produce a profile report, writing the profile data to the
 						path provided as this argument value.</td></tr>
 <tr><td></td><td>--pxi</td><td>Writes compiled output to the given file. Does not execute
 						the program.</td></tr>
@@ -53,8 +55,8 @@ Use is:
 					</td></tr>
 <tr><td></td><td>--syms</td><td>Print the symbol table.</td></tr>
 <tr><td></td><td>--target</td><td>Selects the target runtime for this execution.
-						<p>
-						Default: {@code X86_64_LNX}
+						<br>
+						Default: <span class=code>X86_64_LNX</span>
 					</td></tr>
 <tr><td></td><td>--version</td><td>Displays the compiler version.</td></tr>
 </table>
@@ -62,6 +64,126 @@ Use is:
 The given filename is run as a Parasol program. Any command-line arguments
 appearing after are passed to any main function in that file.
 
-<h3>pbuild</h3>
-<h3>pcontext</h3>
-<h3>paradoc</h3>
+<h3>{@level 3 pbuild}</h3>
+
+The Parasol build utility.
+
+<h4>Use is:</h4>
+
+{@code
+    <b>pbuild</b> [ <i>options</i> ... ] [ <i>products</i> ... ]
+}
+
+<h4>Options:</h4>
+
+<table>
+<tr><td>-v</td><td></td><td>Enables verbose output.</td></tr>
+<tr><td></td><td>--asm</td><td>Display disassembly of bytecodes.</td></tr>
+<tr><td></td><td>--cpu</td><td>
+                 	Selects the target processor for this execution.
+					<br>
+                    Default: <span class=code>x86-64</span>
+</td></tr>
+<tr><td>-d</td><td>--dir</td><td>
+					Designates the root directory for the build source tree.
+					<br>
+                    Default: <span class=code>.</span>
+</td></tr>
+<tr><td>-f</td><td>--file</td><td>
+        Designates the path for the build file. If this option is
+                      provided, only this one build script will be loaded and
+                      executed.
+					<br>
+					Default: Apply the search algorithm described below.
+</td></tr>
+<tr><td>-?</td><td>--help</td><td>Displays a simplified form of this help.</td></tr>
+<tr><td></td><td><nobr>--logImports</nobr></td><td>Log all import processing.</td></tr>
+<tr><td></td><td>--os</td><td>
+                  Selects the target operating system for this execution.
+					<br>
+                      Default: <span class=code>linux</span>
+</td></tr>
+<tr><td>-o</td><td>--out</td><td>
+         Designates the output directory where all build products and intermediate files will be
+                      stored.
+					<br>
+					  Default: <span class=code>build</span>
+</td></tr>
+<tr><td>-r</td><td>--report</td><td>Reports which file caused a given product to be rebuilt.</td></tr>
+<tr><td></td><td>--syms</td><td>Print the symbol table.</td></tr>
+<tr><td></td><td>--tests</td><td>Run the indicated test suite(s) after successful
+                      completion of the build.</td></tr>
+<tr><td>-t</td><td>--threads</td><td>
+     Declares the number of threads to be used in the build.
+					<br>
+                      Default: number of cpus on machine.
+</td></tr>
+<tr><td></td><td>--trace</td><td>Trace the execution of each test.</td></tr>
+<tr><td></td><td>--ui</td><td>
+                  Display error messages with mark up suitable for a UI.
+<p>
+                      The argument string is the filename prefix that identifies
+                      files being compiled (versus reference libraries not in
+                      the editor) ?
+</td></tr>
+</table>
+
+This program builds a Parasol application according to the rules in build files.
+<p>
+With no file option specified, the builder will search the current directory and
+then recursively in sub-directories until at least one build file named
+<span class=code>make.pbld</span> is found. At each sub-directory, if a 
+<span class=code>make.pbld</span> file is found
+there, the search stops and that build file is included in the build and no
+directories underneath that one are searched.If multiple build files are found
+in separate branches of the directory hierarchy, all will be included in the
+build.
+<p>
+Thus, by arranging a collection of related projects under a single root, one can
+orchestrate a build across all included build files. While making the builder do
+more work, if there are changes in multiple sub-projects, or dependencies across
+projects, this build will properly handle them.
+<p>
+If no products are given as arguments, then all products enabled in the build
+scripts will be built. If one or more products are given as arguments, then only
+those products plus any products the named ones are dependent on will be built.
+
+<h3>{@level 3 pcontext}</h3>
+<h3>{@level 3 paradoc}</h3>
+
+<h4>Use is:</h4>
+
+{@code
+    <b>paradoc</b> [ <i>options</i> ... ] <i>output-directory package-name</i> ...
+}
+
+<h4>Options:</h4>
+
+<table>
+<tr><td>-v</td><td></td><td>Enables verbose output.</td></tr>
+<tr><td>-c</td><td>--content</td><td>
+     Designates that the output directory named in the command
+                      line is to be constructed by copying recursively the
+                      contents of the directory named by this option. Each file
+                      with a .ph extension is processed by paradoc and replaced
+                      by a file with the same name, but with a .html extension.
+</td></tr>
+<tr><td>-?</td><td>--help</td><td>Displays a simplified version of this help.</td></tr>
+<tr><td></td><td><nobr>--logImports</nobr></td><td>Log all import processing</td></tr>
+<tr><td></td><td>--syms</td><td>Print the symbol table.</td></tr>
+<tr><td>-t</td><td>--template</td><td>
+    Designates a directory to treat as the source for a set of
+                      template files. These templates fill in details of the
+                      generated HTML and can be customized without modifying the
+                      program code.</td></tr>
+</table>
+
+The given input directories are analyzed as a set of Parasol libraries.
+<p>
+Refer to the Parasol language reference manual for details on permitted syntax.
+<p>
+The inline documentation (paradoc) in the namespaces referenced by the sources
+in the given input directories are written as HTML pages to the output
+directory.
+
+

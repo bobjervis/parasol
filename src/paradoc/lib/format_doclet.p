@@ -134,6 +134,9 @@ string transformLink(ref<compiler.Doclet> doclet, int location, string linkTextI
 									// it's undefined, there's nowhere else to go.
 		}
 		components = linkText.substr(idx + 1).split('.');
+	} else if (sym == null) {
+		printLinkError(doclet, location, linkTextIn.trim());
+		return caption;
 	} else {
 		components = linkText.split('.');
 		scope = scopeFor(sym);
@@ -184,7 +187,12 @@ string transformLink(ref<compiler.Doclet> doclet, int location, string linkTextI
 
 private void printLinkError(ref<compiler.Doclet> doclet, int location, string linkText) {
 	runtime.SourceOffset loc(location);
-	int lineNumber = doclet.unit.lineNumber(loc);
+	if (doclet == null) {
+		printf("Link '%s' is undefined\n", linkText);
+		return;
+	}
+	int lineNumber;
+		lineNumber = doclet.unit.lineNumber(loc);
 	if (lineNumber >= 0)
 		printf("%s %d: Link '%s' is undefined\n", doclet.unit.filename(), lineNumber + 1, linkText);
 	else

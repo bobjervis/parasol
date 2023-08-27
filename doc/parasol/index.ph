@@ -1,12 +1,10 @@
+{@option numbering 1.1.1.1.1}
 
 <h1>{@level 0 The Parasol Language}</h1>
-
 
 <ul class=sec-map>
 	<li>{@topic language/index.ph}
 	<li>{@paradoc runtime Parasol Runtime}
-	<li>{@topic implementation/index.ph}
-	<li>{@topic reflection/index.ph}
 </ul>
 
 <h2>Overview</h2>

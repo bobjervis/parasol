@@ -52,7 +52,7 @@ class PBuildCommand extends process.Command {
 		buildFileOption = stringOption('f', "file",
 					"Designates the path for the build file. " +
 					"If this option is provided, only this one build script will be loaded and executed. " +
-					"Default: Apply the search algorithm described above.");
+					"Default: Apply the search algorithm described below.");
 		buildThreadsOption = integerOption('t', "threads",
 					"Declares the number of threads to be used in the build. " +
 					"Default: number of cpus on machine.");

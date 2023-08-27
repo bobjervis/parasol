@@ -2,58 +2,23 @@
 <h2>{@level 2 Execution Sequence}</h2>
 A Parasol program begins execution with all functions and static and constant objects in existence.
 A single process is created that begins executing the program.
-It does so by calling each entry function in turn.
 <p>
-Entry functions within a single unit are executed in the same order as they appear within the unit.
-All entry functions of one unit are executed after all the entry functions of all subordinate units.
-When a new process within the same program is spawned, the entry functions are not executed again.
-If all of the entry functions return, then the function exit is called with an argument of 0.
+All static initialization code is executed in sequence.
+The static initializers within a unit are executed together.
+The static initializers across units are executed in a partially determined order.
+Units in a package will execute after all units in packages that are used by it.
 <p>
-When the last process in a program calls exit, that process calls each of the cleanup functions.
-Within a unit, cleanup functions are called in the reverse order in which they appear.
-All cleanup functions of a unit are called before any cleanup functions in any subordinate units.
+After all static initializers have completed, if there is a function named main in the main unit of the
+program, that fuction is called.
+It is passed the list of command-line arguments according to conventions established by the tools used to
+launch the program.
 <p>
-If entry and cleanup functions exist within a single unit, then each cleanup function will be executed only if any preceding entry function has returned.
-If a cleanup function occurs before any entry functions in a unit, it will be executed only if all entry functions in subordinate units have returned. 
+If at any point during the execution of the static initializers or any main function, the 
+{@link parasol:process.exit process exit} is called, 
+any unexecuted static initializers will be skipped along with any unexecuted portions of any main function 
+in the program.
 <p>
-The cleanup functions are called with a single argument that is the exit status passed to the exit function.
-The return value of a cleanup function becomes the new exit status and is passed to the next cleanup function.
-In this way, cleanup functions can examine the exit status and modify their behavior accordingly.
-The exit status returned to the operating system is the exit status returned by the last cleanup function.
+After all static initializers have finished, and any main function has completed, or after process exit has
+been called, for any static objects that have been constructed and have destructors call those destructors 
+in the reverse of the order in which they were constructed.
 <p>
-A user program must contain at least one entry function.
-<p>
-If two units do not subordinate one another, the relative order of execution of entry and cleanup functions in those units is unspecified.
-<p>
-<b>Example:</b>
-<p>
-Note: This example uses obsolete syntax.
-This should be reviewed and almost certainly corrected.
-Do not use this material.
-
-<pre>
-  	i:  	int = 0;
-   	a:  	entry () =
-          	{
-          	i = 1;
-          	}
- 
-  	b:  	cleanup (exitcode: int) int =
-          	{
-          	return exitcode - 1;
-          	}
- 
-  	c:  	entry () =
-          	{
-          	exit(i);
-          	}
- 
-  	d:  	cleanup (int) int =
-          	{
-          	return 2;
-          	}
-</pre>
-In this example, function a is executed first, then function c.
-Since it calls exit, function d is never called, but function b is.
-Therefore, the value passed to b is 1 (the value of i set in a).
-The exit code is then changed to 0.

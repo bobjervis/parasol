@@ -5,5 +5,8 @@
 	<li>{@topic types-in-expressions.ph}
     <li>{@topic compare.ph}
 	<li>{@topic monitors.ph}
+	<li>{@topic rpcs.ph}
+	<li>{@topic reflection/index.ph}
+	<li>{@topic calling-c.ph}
 </ul>
 

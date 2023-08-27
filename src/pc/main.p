@@ -61,7 +61,7 @@ class ParasolCommand extends process.Command {
 					"Writes compiled output to the given file. " + 
 					"Does not execute the program.");
 		profileOption = stringOption('p', "profile",
-					"Produce a profile report, wriitng the profile data to the " +
+					"Produce a profile report, writing the profile data to the " +
 					"path provided as this argument value.");
 		coverageOption = stringOption(0, "cover",
 					"Produce a code coverage report, accumulating the data in a " +

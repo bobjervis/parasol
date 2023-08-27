@@ -14,10 +14,12 @@
 The statements of Parasol correspond closely to those of C++, Java and related languages.
 
 <h3>{@level 3 Annotations}</h3>
+{@anchor Annotated}
 
 {@grammar}
 {@production annotation_list ( <b>@</b> <i>identifier</i> [ <b>(</b> <i>expression</i> <b>)</b> ] ) ...}
 {@end-grammar}
+
 
 Annotations may be placed at the beginning of some statements.
 <p>

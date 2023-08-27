@@ -198,7 +198,21 @@ public class Image {
 		_image = pointer<byte>(imageAddress());
 		_imageLength = imageLength();
 	}
-	/** @ignore */
+	/** 
+ 	 * Return the source filename and line number corresponding to the machine address passed
+	 * to this function.
+	 *
+	 * @param ip The instruction pointer to be found in the image's source information.
+	 *
+	 * @param isReturnAddress If true, the ip parameter is the stored return address. Source line
+	 * information should account for this detail since in some cases, the return address of a
+	 * function call may actually point at the source line after the call itself.
+	 *
+	 * @return The source filename at the indicated location, or null if the code address is not
+	 * in Parasol code.
+	 * @return The line number pf the indicated location, or -1 if the code location is not in
+	 * Parasol code.
+	 */
 	public string, int getSourceLocation(address ip, boolean isReturnAddress) {
 		if (pointer<byte>(ip) < _image ||
 			highCodeAddress() <= pointer<byte>(ip))
@@ -227,7 +241,7 @@ public class Image {
 		int offset = int(ip) - int(_image);
 		// This avoids the problem that a call instruction pushes the next instruction address
 		// as the return address, which may be the start of another source line. A call
-		// instruction is also guarantte to be more than 1 byte long. So, unless the return
+		// instruction is also guaranteed to be more than 1 byte long. So, unless the return
 		// addresses are being spoofed in some way, this should produce clean stack traces.
 		if (!isReturnAddress)
 			offset--;

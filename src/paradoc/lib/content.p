@@ -67,7 +67,7 @@ class Content extends Page {
 
 	string caption() {
 		if (levels.length() > 0)
-			return levels[0].content;
+			return levels[0].sectionTitle;
 		else
 			return storage.filename(targetPath());
 	}
@@ -196,6 +196,10 @@ class Content extends Page {
 	}
 
 	boolean writePhFile() {
+		for (i in docLinks) {
+			dl := docLinks[i];
+			dl.processDocLink(this);
+		}
 		ref<Writer> w = storage.createTextFile(targetPath());
 
 		insertTemplate1(w, this);
@@ -271,6 +275,8 @@ class MacroSpan extends Span {
 	ref<MacroSpan> target;				// for TOPIC verbs, this is the first LEVEL verb under that topic.
 	private byte _level;
 	private int _index;
+	string sectionNumber;				// for LEVEL verbs
+	string sectionTitle;				// for LEVEL verbs
 
 	boolean parse(ref<Content> file) {
 		_enclosing = file;
@@ -369,6 +375,7 @@ class MacroSpan extends Span {
 
 			case LINK:
 				file.links.append(this);
+				content = transformLink(null, 0, _arguments[0] + " " + _arguments[1], null, file.targetPath());
 				break;
 
 			case GRAMMAR:
@@ -391,6 +398,26 @@ class MacroSpan extends Span {
 			return false;
 		}
 		return true;
+	}
+
+	string linkText(ref<Content> base) {
+		string href = storage.makeCompactPath(_enclosing.path(), base.path());
+		if (href.endsWith(".ph"))
+			href = href.substr(0, href.length() - 3) + ".html";
+		if (this != _enclosing.levels[0] && sectionNumber != null)
+			href += "#" + sectionNumber;
+		return "<a href=\"" + href + "\">" + sectionTitle + "</a>";
+	}
+
+	void processDocLink(ref<Content> file) {
+		c := anchors[_arguments[0]];
+		string linkText;
+		if (c == null) {
+			printf("doc-link to unknown anchor in %s: {@%s}\n", file.path(), content);
+			return;
+		}
+		linkText = storage.makeCompactPath(c.targetPath(), file.targetPath());
+		content = "<a href=\"" + linkText + "\">" + _arguments[1] + "</a>";
 	}
 	/**
 	 * Construct the final content string for a 'topic' macro. The target, if not null, is a level
@@ -418,10 +445,7 @@ class MacroSpan extends Span {
 	}
 
 	private string levelGroup(ref<Content> base) {
-		string href = storage.makeCompactPath(_enclosing.path(), base.path());
-		if (href.endsWith(".ph"))
-			href = href.substr(0, href.length() - 3) + ".html";
-		string output = "<a href=\"" + href + "\">" + content + "</a>";
+		string output = linkText(base);
 
 		string group;
 		boolean finished;
@@ -567,17 +591,19 @@ public boolean processContentDirectory() {
 					levelCounts[i] = 0;
 				string newContent;
 				for (int i = 0; i < level; i++) {
-					newContent += numberingInterstitials[i];
+					l.sectionNumber += numberingInterstitials[i];
 					switch (numberingStyles[i]) {
 					case '1':
-						newContent += string(levelCounts[i]);
+						l.sectionNumber += string(levelCounts[i]);
 						break;
 					}
 				}
-				newContent += numberingInterstitials[numberingInterstitials.length() - 1] + " " + l.argument(1);
-				l.content = newContent;
+				l.sectionNumber += numberingInterstitials[numberingInterstitials.length() - 1];
+				l.sectionTitle = l.sectionNumber + " " + l.argument(1);
+				l.content = "<a id=" + l.sectionNumber + "></a>" + l.sectionTitle;
 			} else {
 				l.content = l.argument(1);
+				l.sectionTitle = l.content;
 			}
 			l.done();
 		}
@@ -685,9 +711,10 @@ ref<Page> getTargetFile(ref<Content> source, string reference) {
 	target = storage.path(source.targetDirectory(), reference);
 	if (target.endsWith(".ph"))
 		target = target.substr(0, target.length() - 3) + ".html";
+	target = storage.absolutePath(target);
 	targetFile = pageMap[target];
 	if (targetFile == null) {
-		printf("Could not find target file for topic %s in file %s\n", reference, source.path());
+		printf("Could not find target file (%s) for topic %s in file %s\n", target, reference, source.path());
 		return null;
 	}
 	if (storage.isDirectory(targetFile.path())) {

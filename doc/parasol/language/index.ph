@@ -1,8 +1,7 @@
-{@option numbering 1.1.1.1.1}
-
 <h1>{@level 0 Parasol Language Reference}</h1>
 
 <ul class=sec-map>
+	<li>{@topic ../implementation/index.ph}
 	<li>{@topic environment/index.ph}
 	<li>{@topic lex/index.ph}
 	<li>{@topic grammar/index.ph}
@@ -31,7 +30,4 @@ In this respect, Parasol is more like scripting languages like Javascript, even 
 In fact, the choice of 'var' as a dynamically typed 'variant' type mimics Javascript's declaration syntax for variables.
 While compiling to a binary image is possible with Parasol (for maximum launch speed with large applications) 
 the eventual goal is to devise techniques to allow run-time 'eval' as a feature.
-<ul>
-	<li><a href="https://github.com/bobjervis/parasol/wiki/Parasol-Semantics">Semantics</a>
-</ul>
 
