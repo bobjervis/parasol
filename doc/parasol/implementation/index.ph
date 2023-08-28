@@ -4,6 +4,7 @@
 	<li>{@topic installation.ph}
 	<li>{@topic tutorial.ph}
 	<li>{@topic operation.ph}
+	<li>{@topic annotations.ph}
 </ul>
 
 The Parasol language has a referrence implementation currently supported on Linux 64-bit Intel processors.

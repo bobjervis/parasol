@@ -40,22 +40,8 @@ may be used as angle-brackets enclosing the arguments of a template class.
 In order for these tokens to be interpreted as operators, they must appear with white space immediately preceding them.
 If no white space precedes these tokens, they are assumed to be angle brackets enclosing template parameters.
 <p>
-Unlike C++ or Java, for example, Parasol has no restrictions on declaration order, cannot determine whether a given identifier 
-is a type name at parse time, and so cannot in all cases disambiguate between comparison operators and template expressions.
-<p>
-The increment (++) or decrement (--) operators may appear as either prefix or suffix operators.
-In contexts where two expressions may appear adjacent, increment or decrement operators must be 
-preceded by white space to be treated as prefix operators for the second expression.
-If no white space appears before the operators and they could be suffix operators,
- they will be treated that way even if the resulting parsed expressions have some semantic error.
-<p>
-Even though increment and decrement are not currently supported there, 
-Parasol defines a declaration as a type-valued expression followed by a set of declarators with no intervening token.
-So, formally speaking white space could alter the parsing choice in a declaration, 
-but since the increment and decrement operators cannot appear in a type-valued expression currently, this is a somewhat moot restriction.
-However, it is still open whether Parasol will use the APL vector-value syntax of a simple 
-sequence of expressions or whether it will use the C++ and Java conventions of using commas to separate the individual elements of a vector.
-Also, if Parasol is extended to support run-time dynamic typing (so that the type expression 
-in a declaration does not have to be a compile-time constant), 
-then there may be some obscure reason to include increment or decrement operators in the type expression.
+Unlike C++ or Java, for example, Parasol has no restrictions on declaration order, cannot determine 
+whether a given identifier 
+is a type name at parse time, and so cannot in all cases disambiguate between comparison operators and 
+template expressions (in the absence of the implemented white-space rule).
 

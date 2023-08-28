@@ -3,7 +3,7 @@
 A Parasol program begins execution with all functions and static and constant objects in existence.
 A single process is created that begins executing the program.
 <p>
-All static initialization code is executed in sequence.
+All {@doc-link static-initializers static initialization code} is executed in sequence.
 The static initializers within a unit are executed together.
 The static initializers across units are executed in a partially determined order.
 Units in a package will execute after all units in packages that are used by it.

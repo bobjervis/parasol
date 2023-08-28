@@ -11,7 +11,25 @@
 {@production | <i>namespace_statement</i>}
 {@end-grammar}
 
-The statements of Parasol correspond closely to those of C++, Java and related languages.
+{@anchor exec-stmt}<i>Executable</i> statements are statements that produce code that carries out computations 
+and possibly modifies the state of the running program.
+
+The following are executable statements:
+
+<ul>
+    <li><i>expression_statement</i>
+	<li><i>control_flow_statement</i>
+</ul>
+
+The following are never executable:
+
+<ul>
+    <li><i>empty_statement</i>
+	<li><i>import</i>
+	<li><i>namespace_statement</i>
+</ul>
+
+A <i>block</i> is executable if it contains any executable statements.
 
 <h3>{@level 3 Annotations}</h3>
 {@anchor Annotated}
@@ -21,12 +39,14 @@ The statements of Parasol correspond closely to those of C++, Java and related l
 {@end-grammar}
 
 
-Annotations may be placed at the beginning of some statements.
+Annotations may be placed at the beginning of any statement.
 <p>
-Note that the full role of annotations is not very extensively thought out.
-At present, the notion is that you can annotate statements that define an identifier and the annotations apply to the defined object.
-<p>
-Whether annotations will be extended to be allowed on non-definition statements is an open question.
+The meaning of annotations are unspecified and any environment that implements one or more annotations
+shall accept any annotations present in a program, even if they do not conform to annotations implemented
+in that environment.
+
+Refer to the documentation for the {@doc-link ref-annotations annotations} defined by the reference
+implementation for more details.
 
 <h3>{@level 3 Empty Statement}</h3>
 

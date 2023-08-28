@@ -3,7 +3,6 @@
 {@grammar}
 {@production declaration [ <i>visibility</i> ] <i>entity_declaration</i>}
 {@production entity_declaration [ <b>static</b> ] <i>object_declaration</i>  }
-{@production | [ <b>static</b> ] <i>monitor_declaration</i>  }
 {@production | [ <i>qualifiers</i> ... ] <i>class_declaration</i> }  
 {@production | [ <i>qualifiers</i> ... ] <i>enum_declaration</i>  }
 {@production | <i>flags_declararion</i>  }
@@ -14,6 +13,16 @@
 {@production qualifiers <b>final</b>}
 {@production | <b>static</b>}
 {@end-grammar}
+
+A <i>declaration</i> is executable if it contains an initializer other than a simple identifier, or an initializer
+with a simple identifier declared with a type that has a default constructor. 
+
+Any static object declaration that is executable may appear in a block or function. Such executable statements
+will be part of the {@doc-link static-initializers static intitializers} for the enclosing unit.
+
+A <i>declaration</i> of a class, an enum type, a flags type, any function, constructor or destructor is not
+an executable statement.
+
 
 <h3>{@level 3 Visibility}</h3>
 
