@@ -41,8 +41,8 @@ If no default case exists and the control expression value does not match any ca
 
 {@grammar}
 {@production looping_statement <i>while_statement</i>  }
-{@production | <b>do</b> <i>statement</i> <b>while (</b> <i>expression</i> <b>) ;</b>  }
-{@production | <b>for (</b> [ <i>expression</i> ] <b>;</b> [ <i>expression</i> ] <b>;</b> [ <i>expression</i> ] <b>)</b> <i>statement</i>  }
+{@production | <i>do_statement</i>  }
+{@production | <i>simple_for_statement</i>  }
 {@production | <b>for (</b> <i>identifier</i> <b>in</b> <i>expression</i> <b>)</b> <i>statement</i>  }
 {@production | <b>for (</b> <i>expression identifier</i> <b>=</b> <i>expression</i> <b>;</b> [ <i>expression</i> ] <b>;</b> [ <i>expression</i> ] <b>)</b> <i>statement</i>  }
 {@end-grammar}
@@ -55,10 +55,34 @@ If no default case exists and the control expression value does not match any ca
 
 The expression of a while statement shall have boolean type. The expression is evaluated  
 at the beginning of each loop. If the expression value is true, then the statement is executed.
-Once complete, the loop resumes at the top, re-evaluating the expression until it evaluates to false,
-or until a break statement is executed somewhere inside the statement that is the body of the loop.
+Once complete, the loop resumes at the top, re-evaluating the expression until it evaluates to false.
 
 <h4>{@level 4 Do-while Loops}</h4>
+
+{@grammar}
+{@production do_statement <b>do</b> <i>statement</i> <b>while (</b> <i>expression</i> <b>) ;</b>  }
+{@end-grammar}
+
+The expression of a do-while statement shall have boolean type.
+The body statement of the do-while loop is executed.
+Once complete the expression is evaluated and if it's value is true control returns 
+to the body of the loop.
+
+<h4>{@level 4 Simple For Loops}</h4>
+
+{@grammar}
+{@production simple_for_statement <b>for (</b> [ <i>expression</i> ] <b>;</b> [ <i>expression</i> ] <b>;</b> [ <i>expression</i> ] <b>)</b> <i>statement</i>  }
+{@end-grammar}
+
+The simple for loop consists of up to three expressions and a statement as the loop body.
+The first expression, if present, is evaluated once before any other part of the statement.
+The first expression is in a void context.
+
+{@grammar}
+{@production | <b>for (</b> [ <i>expression</i> ] <b>;</b> [ <i>expression</i> ] <b>;</b> [ <i>expression</i> ] <b>)</b> <i>statement</i>  }
+{@production | <b>for (</b> <i>identifier</i> <b>in</b> <i>expression</i> <b>)</b> <i>statement</i>  }
+{@production | <b>for (</b> <i>expression identifier</i> <b>=</b> <i>expression</i> <b>;</b> [ <i>expression</i> ] <b>;</b> [ <i>expression</i> ] <b>)</b> <i>statement</i>  }
+{@end-grammar}
 
 A <b>for</b> statement using the <b>in</b> syntax variation declares a variable with the name <i>identifier</i>
 in a special scope that encloses the for statement, just like the multi-part for statement that has a 

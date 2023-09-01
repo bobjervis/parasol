@@ -126,12 +126,15 @@ Each instance of a flags class contains enough bits to hold all the defined flag
 {@production | <b>;</b>}
 {@end-grammar}
 
-A function declaration defines the name of a function and provides the specification of the return values, if any, 
-the parameters for that function as well as the function implementation.
+A function declaration defines the name of a function and provides the specification of the 
+return values, if any, the parameters for that function as well as the function implementation.
 <p>
-Note that if a function declaration has a semi-colon instead of a block as the function body, that declaration is a function object.
-Unlike a function supplied with a block body at compile time, a function object can be modified at runtime.
-When a function object is called, the function whose value was most recently assigned to the object is called.
+Note that if a function declaration has a semi-colon instead of a block as the function body, that 
+declaration is a function object.
+Unlike a function supplied with a block body at compile time, a function object can be modified 
+at runtime.
+When a function object is called, the function whose value was most recently assigned to the 
+object is called.
 <p>
 Only the last parameter in a parameter list may include an ellipsis (<b>...</b>). That parameter is defined as a <i>variable argument list</i> parameter.
 The type of the parameter is a vector of the type declared in the expression preceding the ellipsis.

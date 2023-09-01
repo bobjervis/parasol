@@ -1,6 +1,16 @@
 <h2>{@level 2 Types in Expressions}</h2>
 {@anchor Types-in-Expressions}
 
+<h3>{@level 3 Void Contexts}</h3>
+
+{@anchor void-context}
+A <i>void context</i> is a place in the grammar where an expression appears that is not
+evaluated to produce a specific value.
+For example, the expression in an {@doc-link expr-stmt expression statement} is a void
+context.
+<p>
+In a void context, the expression can have any type or can have void type.
+
 Binary operators obey precedence that is not expressed in the above grammar.
 The following table includes each binary operator.
 Operators that appear in the same row have the same precedence.
