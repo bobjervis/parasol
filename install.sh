@@ -39,6 +39,9 @@ sudo ln -s $INSTALL /usr/parasol/latest
 if [ -d /usr/local/bin ]; then
 	echo Defining common commands in /usr/local/bin '(if needed)'
 	if [ ! -e /usr/local/bin/pbuild ]; then
+	    sudo ln -s /usr/parasol/latest/bin/parasolrt /usr/local/bin/parasolrt
+	fi
+	if [ ! -e /usr/local/bin/pbuild ]; then
 	    sudo ln -s /usr/parasol/latest/bin/pbuild /usr/local/bin/pbuild
 	fi
 	if [ ! -e /usr/local/bin/pbuild ]; then
