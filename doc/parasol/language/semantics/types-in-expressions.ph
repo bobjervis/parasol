@@ -11,6 +11,19 @@ context.
 <p>
 In a void context, the expression can have any type or can have void type.
 
+<h3>{@level 3 Shapes}</h3>
+
+{@anchor shape}
+A <i>shaped class</i> describes some form of data collection rather than a scalar object.
+The shaped classes are {@link parasol:types.string string} and the related string classes, 
+{@link parasol:types.vector vector&lt;E, I&gt;},
+and {@link parasol:types:map map&lt;V, K&gt;}.
+
+<p>
+
+
+<h3>{@level 3 Type of binary expressions}</h3>
+
 Binary operators obey precedence that is not expressed in the above grammar.
 The following table includes each binary operator.
 Operators that appear in the same row have the same precedence.

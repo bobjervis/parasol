@@ -257,7 +257,7 @@ private runtime.Target[string] sectionTypes = [
 
 private class ReaderMap {
 	public runtime.Target sectionType;
-	public ref<Section> sectionReader(storage.File pxiFile, long length);
+	public ref<Section>(storage.File, long) sectionReader;
 	
 //	ref<Section> sectionReader(file.File pxiFile, long length) {
 //		return sectionReader(pxiFile, length);

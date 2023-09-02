@@ -28,7 +28,6 @@ class B {
 
 boolean didIt = false;
 A b(2);
-A c(int x);
 assert(didIt);
 
 didIt = false;

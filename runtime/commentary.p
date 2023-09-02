@@ -57,6 +57,7 @@ public enum MessageId {
 	FILE_NOT_READ							("File could not be read"),
 	FINAL_BASE_CLASS						("Cannot extend from final base class"),
 	FINAL_BASE_INTERFACE					("Cannot extend from final base interface"),
+	FUNCTION_MISSING_BODY					("Function missing a function body"),
 	ID_REQUIRED								("Definition requires a simple identifier"),
 	INITIALIZER_BEYOND_RANGE				("Initializer out of index range"),
 	INITIALIZER_MUST_BE_CONSTANT			("Initializer with @Constant must be compile-time constant expression"),

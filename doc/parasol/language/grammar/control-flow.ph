@@ -40,11 +40,11 @@ If no default case exists and the control expression value does not match any ca
 <h3>{@level 3 Looping Statements}</h3>
 
 {@grammar}
-{@production looping_statement <i>while_statement</i>  }
-{@production | <i>do_statement</i>  }
-{@production | <i>simple_for_statement</i>  }
-{@production | <b>for (</b> <i>identifier</i> <b>in</b> <i>expression</i> <b>)</b> <i>statement</i>  }
-{@production | <b>for (</b> <i>expression identifier</i> <b>=</b> <i>expression</i> <b>;</b> [ <i>expression</i> ] <b>;</b> [ <i>expression</i> ] <b>)</b> <i>statement</i>  }
+{@production looping_statement <i>while_statement</i> }
+{@production | <i>do_statement</i> }
+{@production | <i>simple_for_statement</i> }
+{@production | <i>scoped_for_statement</i> }
+{@production | <i>for_in_statement</i> }
 {@end-grammar}
 
 <h4>{@level 4 While Loops}</h4>
@@ -75,19 +75,67 @@ to the body of the loop.
 {@end-grammar}
 
 The simple for loop consists of up to three expressions and a statement as the loop body.
-The first expression, if present, is evaluated once before any other part of the statement.
-The first expression is in a void context.
+
+<ul>
+	<li> The first expression, if present, is evaluated once before any other part of the statement.
+		The first expression is evaluated in a {@doc-link void-context void context}.
+	<li> The second expression, if present, shall have boolean type.
+		The second expression, if present, is evaluated immediately after the first expression, and then again at the
+		beginning of each iteration.
+		If the value is true, control transfers to the statement that is the body of the loop.
+		If the value is false, control transfers to the next statement after this one.
+		<br>
+		If the second expression is absent, the loop is unconditionally executed on each iteration.
+	<li> The third expression, if present, is evaluated after the body of the loop.
+		The third expression is evaluated in a {@doc-link void-context void context}.
+	<li> If control reaches this point in the loop, control transfers back to the top.
+</ul>
+
+This form of for-loop does not introduce a new lexical scope. If the expressions of a simple for loop 
+contain {@doc-link def-assign defining assigment} operations, the scope of these declarations are the scope
+enclosing the for statement.
+
+<h4>{@level 4 Scoped For Loops}</h4>
 
 {@grammar}
-{@production | <b>for (</b> [ <i>expression</i> ] <b>;</b> [ <i>expression</i> ] <b>;</b> [ <i>expression</i> ] <b>)</b> <i>statement</i>  }
-{@production | <b>for (</b> <i>identifier</i> <b>in</b> <i>expression</i> <b>)</b> <i>statement</i>  }
-{@production | <b>for (</b> <i>expression identifier</i> <b>=</b> <i>expression</i> <b>;</b> [ <i>expression</i> ] <b>;</b> [ <i>expression</i> ] <b>)</b> <i>statement</i>  }
+{@production scoped_for_statement <b>for (</b> <i>object_declaration</i> [ <i>expression</i> ] <b>;</b> [ <i>expression</i> ] <b>)</b> <i>statement</i>  }
 {@end-grammar}
 
-A <b>for</b> statement using the <b>in</b> syntax variation declares a variable with the name <i>identifier</i>
-in a special scope that encloses the for statement, just like the multi-part for statement that has a 
-declaration as its first part.
+The scoped for statement has an object declaration, an optional test expression, an optional increment expression
+and a statement as the loop body.
+
+<ul>
+	<li> If the object declaration has an initializer or constructor call, that is evaluated once before any other 
+		part of the statement.
+	<li> The second expression, if present, shall have boolean type.
+		The second expression, if present, is evaluated immediately after the object declaration, and then again at the
+		beginning of each iteration.
+		If the value is true, control transfers to the statement that is the body of the loop.
+		If the value is false, control transfers to the next statement after this one.
+		<br>
+		If the second expression is absent, the loop is unconditionally executed on each iteration.
+	<li> The third expression, if present, is evaluated after the body of the loop.
+		The third expression is evaluated in a {@doc-link void-context void context}.
+	<li> If control reaches this point in the loop, control transfers back to the top.
+</ul>
+
+This form of for-loop introduces a new lexical scope. Any identifiers declared in the object declaration
+of the loop, or if any expressions outside the loop body contain {@doc-link def-assign defining assigment} operations,
+the scope of these declarations extends through the scoped for statement itself.
+
+<h4>{@level 4 For-in Loops}</h4>
+
+{@grammar}
+{@production for_in_statement <b>for (</b> <i>identifier</i> <b>in</b> <i>expression</i> <b>)</b> <i>statement</i>  }
+{@end-grammar}
+
+The for-in statement includes an identifier, an expression and a statement as the loop body.
 <p>
+The identifier is a definition.
+It's type is the element type of the expression's type.
+<p>
+The expression shall have {@doc-link shape shaped class}.
+
 The expression in a <b>for</b>-<b>in</b> statement names a shape object, either a vector or map.
 The statement iterates over all elements of the shaped object.
 In each iteration, the variable named in the statement is assigned the index of the next element in the object.

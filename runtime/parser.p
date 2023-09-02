@@ -868,6 +868,42 @@ public class Parser {
 						_scanner.pushBack(t);
 						return resync(MessageId.SYNTAX_ERROR);
 					} 
+					//
+					// If the 'type' expression is the keyword 'void' the only possible meaning
+					// of this declaration token sequence is as an improper function declaration.
+					// if could have several possible interpretations. For example, this code
+					// was added in response to a poor error message when this was compiled:
+					//
+					//       void f(int, long);
+					//
+					// This was entered as a test of whether it was an acceptable way to declare
+					// a function pointer (it isn't).
+					// The correct way to do that is:
+					//
+					//		void(int, long) f;
+					//
+					// The declaration has parsed as:
+					//
+					//		VOID function-name LP parameter-list RP SM
+					//
+					// This could also just be missing the 'abstract' keyword, or also
+					// that the semi-colon is a mistaken substitution or insertion error and
+					// a function body was intended to follow.
+					// 
+					// The special-purpose parse tree comes pre-tagged with a syntax error,
+					// opting to point out the need for a function body. Of course, if we are
+					// willing to accept this here as valid syntax and then detect the error 
+					// after we could see that the example given above, of an incorrectly formaatted
+					// function pointer, perhaps we could produce an even better error message
+					// specifically saying that the object name needs to come after the argument list.
+					//
+					if (type.op() == Operator.VOID) {
+						func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.NORMAL,
+															type, id, parameters, loc);
+						func.body = _tree.newBlock(Operator.BLOCK, false, _scanner.location());
+						func.add(MessageId.FUNCTION_MISSING_BODY, _tree.pool());
+						return func;
+					}
 					ref<Call> initializer = _tree.newCall(Operator.CALL, null, null, loc);
 					x = _tree.newBinary(Operator.INITIALIZE, id, initializer, loc);
 					return _tree.newDeclaration(type, x, location);
@@ -883,14 +919,22 @@ public class Parser {
 					} else if (t == Token.LEFT_CURLY) {
 						func.body = _tree.newBlock(Operator.BLOCK, false, _scanner.location());
 						parseBlock(func.body);
-					} else if (t != Token.SEMI_COLON) {
+					} else {
 						_scanner.pushBack(t);
-						return resync(MessageId.SYNTAX_ERROR);
+						return resync(MessageId.FUNCTION_MISSING_BODY);
 					}
 					return func;
 				} else {
 					t = _scanner.next();
 					if (t == Token.SEMI_COLON) {
+						// See comment above
+						if (type.op() == Operator.VOID) {
+							func = _tree.newFunctionDeclaration(FunctionDeclaration.Category.NORMAL,
+																type, id, parameters, loc);
+							func.body = _tree.newBlock(Operator.BLOCK, false, _scanner.location());
+							func.add(MessageId.FUNCTION_MISSING_BODY, _tree.pool());
+							return func;
+						}
 						ref<Call> initializer = _tree.newCall(Operator.CALL, null, parameters, loc);
 						x = _tree.newBinary(Operator.INITIALIZE, id, initializer, loc);
 						return _tree.newDeclaration(type, x, location);

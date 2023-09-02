@@ -479,8 +479,14 @@ compile(expect: fail, message: NOT_ENUM_INSTANCE) { "enum e { A, B, C }; e x; sw
 compile(expect: fail, message: ABSTRACT_INSTANCE_DISALLOWED) { 
 			"class Foo { abstract int f(); Foo() {} }; ref<Foo> a = new Foo();" 
 		}
-compile() { "void stat(int x) {} void foo(long x); foo = void(long)(stat);" }
+compile() { "void stat(int x) {} void(long) foo; foo = void(long)(stat);" }
 compile(expect: fail, message: INITIALIZER_BEYOND_RANGE) { "string[byte] f = [ 0xff: \"hello\" ];" }
+
+compile(expect: fail, message: NOT_A_TYPE) { "class C { int a; C(int x){} void f() {} } void g() { new C(5).f(); }" }
+compile(expect: fail, message: FUNCTION_MISSING_BODY) { "void f(int, long);" }
+compile(expect: fail, message: FUNCTION_MISSING_BODY) { "int f(int i, long j); int a(int i, long j) { return i; } f = a;" }
+compile() { "void(int, long) f;" }
+compile() { "flags F { A, B, C } F f; boolean x = f & F.B;" }
 
 // The matrix of allowed operators for boolean operands:
 
@@ -747,7 +753,7 @@ compile() { "byte src; address x; x = address(src);" }
 compile() { "char src; boolean x; x = boolean(src);" }
 compile() { "byte src; enum Foo { A, B }; Foo x; x = Foo(src);" }
 compile() { "byte src; flags Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "byte src; int x(double z); x = int(double)(src);" }
+compile() { "byte src; int(double) x; x = int(double)(src);" }
 compile() { "byte src; interface A {} A x; x = A(src);" }
 
 // From char
@@ -764,7 +770,7 @@ compile() { "char src; address x; x = address(src);" }
 compile() { "char src; boolean x; x = boolean(src);" }
 compile() { "char src; enum Foo { A, B }; Foo x; x = Foo(src);" }
 compile() { "char src; flags Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "char src; int x(double z); x = int(double)(src);" }
+compile() { "char src; int(double) x; x = int(double)(src);" }
 compile() { "char src; interface A {} A x; x = A(src);" }
 
 // From unsigned
@@ -781,7 +787,7 @@ compile() { "unsigned src; address x; x = address(src);" }
 compile() { "unsigned src; boolean x; x = boolean(src);" }
 compile() { "unsigned src; enum Foo { A, B }; Foo x; x = Foo(src);" }
 compile() { "unsigned src; flags Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "unsigned src; int x(double z); x = int(double)(src);" }
+compile() { "unsigned src; int(double) x; x = int(double)(src);" }
 compile() { "unsigned src; interface A {} A x; x = A(src);" }
 
 // From short
@@ -798,7 +804,7 @@ compile() { "short src; address x; x = address(src);" }
 compile() { "short src; boolean x; x = boolean(src);" }
 compile() { "short src; enum Foo { A, B }; Foo x; x = Foo(src);" }
 compile() { "short src; flags Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "short src; int x(double z); x = int(double)(src);" }
+compile() { "short src; int(double) x; x = int(double)(src);" }
 compile() { "short src; interface A {} A x; x = A(src);" }
 
 // From int
@@ -815,7 +821,7 @@ compile() { "int src; address x; x = address(src);" }
 compile() { "int src; boolean x; x = boolean(src);" }
 compile() { "int src; enum Foo { A, B }; Foo x; x = Foo(src);" }
 compile() { "int src; flags Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "int src; int x(double z); x = int(double)(src);" }
+compile() { "int src; int(double) x; x = int(double)(src);" }
 compile() { "int src; interface A {} A x; x = A(src);" }
 
 // From long
@@ -832,7 +838,7 @@ compile() { "long src; address x; x = address(src);" }
 compile() { "long src; boolean x; x = boolean(src);" }
 compile() { "long src; enum Foo { A, B }; Foo x; x = Foo(src);" }
 compile() { "long src; flags Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "long src; int x(double z); x = int(double)(src);" }
+compile() { "long src; int(double) x; x = int(double)(src);" }
 compile() { "long src; interface A {} A x; x = A(src);" }
 
 // From float
@@ -849,7 +855,7 @@ compile() { "float src; address x; x = address(src);" }
 compile() { "float src; boolean x; x = boolean(src);" }
 compile() { "float src; enum Foo { A, B }; Foo x; x = Foo(src);" }
 compile() { "float src; flags Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "float src; int x(double z); x = int(double)(src);" }
+compile() { "float src; int(double) x; x = int(double)(src);" }
 compile() { "float src; interface A {} A x; x = A(src);" }
 
 // From double
@@ -866,7 +872,7 @@ compile() { "double src; address x; x = address(src);" }
 compile() { "double src; boolean x; x = boolean(src);" }
 compile() { "double src; enum Foo { A, B }; Foo x; x = Foo(src);" }
 compile() { "double src; flags Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "double src; int x(double z); x = int(double)(src);" }
+compile() { "double src; int(double) x; x = int(double)(src);" }
 compile() { "double src; interface A {} A x; x = A(src);" }
 
 // From boolean
@@ -883,7 +889,7 @@ compile() { "boolean src; var x; x = src;" }
 compile() { "boolean src; address x; x = address(src);" }
 compile() { "boolean src; enum Foo { A, B }; Foo x; x = Foo(src);" }
 compile() { "boolean src; flags Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "boolean src; int x(double z); x = int(double)(src);" }
+compile() { "boolean src; int(double) x; x = int(double)(src);" }
 compile() { "boolean src; interface A {} A x; x = A(src);" }
 
 // From Foo
@@ -900,7 +906,7 @@ compile() { "enum Foo { A, B }; Foo src; long x; x = long(src);" }
 compile() { "enum Foo { A, B }; Foo src; address x; x = address(src);" }
 compile() { "enum Foo { A, B }; Foo src; boolean x; x = boolean(src);" }
 compile() { "enum Foo { A, B }; Foo src; flags Bar { A, B }; Bar x; x = Bar(src);" }
-compile() { "enum Foo { A, B }; Foo src; int x(double z); x = int(double)(src);" }
+compile() { "enum Foo { A, B }; Foo src; int(double) x; x = int(double)(src);" }
 compile() { "enum Foo { A, B }; Foo src; interface A {} A x; x = A(src);" }
 
 // From address
@@ -917,25 +923,25 @@ compile() { "address src; double x; x = double(src);" }
 compile() { "address src; boolean x; x = boolean(src);" }
 compile() { "address src; enum Foo { A, B }; Foo x; x = Foo(src);" }
 compile() { "address src; flags Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "address src; int x(double z); x = int(double)(src);" }
+compile() { "address src; int(double) x; x = int(double)(src);" }
 compile() { "address src; interface A {} A x; x = A(src);" }
 
 // From function int(double);
 
-compile() { "int src(double z); byte x; x = byte(src);" }
-compile() { "int src(double z); char x; x = char(src);" }
-compile() { "int src(double Z); unsigned x; x = unsigned(src);" }
-compile() { "int src(double z); short x; x = short(src);" }
-compile() { "int src(double z); int x; x = int(src);" }
-compile() { "int src(double z); long x; x = long(src);" }
-compile() { "int src(double z); float x; x = float(src);" }
-compile() { "int src(double z); double x; x = double(src);" }
-//compile() { "int src(double z); var x; x = src;" }
-compile() { "int src(double z); address x; x = address(src);" }
-compile() { "int src(double z); boolean x; x = boolean(src);" }
-compile() { "int src(double z); enum Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "int src(double z); flags Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "int src(double z); interface A {} A x; x = A(src);" }
+compile() { "int(double) src; byte x; x = byte(src);" }
+compile() { "int(double) src; char x; x = char(src);" }
+compile() { "int(double) src; unsigned x; x = unsigned(src);" }
+compile() { "int(double) src; short x; x = short(src);" }
+compile() { "int(double) src; int x; x = int(src);" }
+compile() { "int(double) src; long x; x = long(src);" }
+compile() { "int(double) src; float x; x = float(src);" }
+compile() { "int(double) src; double x; x = double(src);" }
+//compile() { "int(double) src; var x; x = src;" }
+compile() { "int(double) src; address x; x = address(src);" }
+compile() { "int(double) src; boolean x; x = boolean(src);" }
+compile() { "int(double) src; enum Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "int(double) src; flags Foo { A, B }; Foo x; x = Foo(src);" }
+compile() { "int(double) src; interface A {} A x; x = A(src);" }
 
 // From interface
 
@@ -952,7 +958,7 @@ compile() { "interface A {} A src; address x; x = address(src);" }
 compile() { "interface A {} A src; boolean x; x = boolean(src);" }
 compile() { "interface A {} A src; enum Foo { A, B }; Foo x; x = Foo(src);" }
 compile() { "interface A {} A src; flags Foo { A, B }; Foo x; x = Foo(src);" }
-compile() { "interface A {} A src; int x(double z); x = int(double)(src);" }
+compile() { "interface A {} A src; int(double) x; x = int(double)(src);" }
 
 compile() { "string src; var x; x = src;" }
 compile() { "string16 src; var x; x = src;" }
@@ -1065,7 +1071,7 @@ compile(expect: fail) { "string16 src; double x; x = double(src);" }
 compile(expect: fail) { "string16 src; boolean x; x = boolean(src);" }
 compile(expect: fail) { "string16 src; enum Foo { A, B }; Foo x; x = Foo(src);" }
 compile(expect: fail) { "string16 src; flags Foo { A, B }; Foo x; x = Foo(src);" }
-compile(expect: fail) { "string16 src; int x(double z); x = int(double)(src);" }
+compile(expect: fail) { "string16 src; int(double) x; x = int(double)(src);" }
 compile(expect: fail) { "string16 src; interface A {} A x; x = A(src);" }
 
 // From substring - coercions from string to non-string generally require a call to T.parse 
@@ -1082,7 +1088,7 @@ compile(expect: fail) { "substring src; double x; x = double(src);" }
 compile(expect: fail) { "substring src; boolean x; x = boolean(src);" }
 compile(expect: fail) { "substring src; enum Foo { A, B }; Foo x; x = Foo(src);" }
 compile(expect: fail) { "substring src; flags Foo { A, B }; Foo x; x = Foo(src);" }
-compile(expect: fail) { "substring src; int x(double z); x = int(double)(src);" }
+compile(expect: fail) { "substring src; int(double) x; x = int(double)(src);" }
 compile(expect: fail) { "substring src; interface A {} A x; x = A(src);" }
 
 // From substring16 - coercions from string to non-string generally require a call to T.parse 
@@ -1099,7 +1105,7 @@ compile(expect: fail) { "substring16 src; double x; x = double(src);" }
 compile(expect: fail) { "substring16 src; boolean x; x = boolean(src);" }
 compile(expect: fail) { "substring16 src; enum Foo { A, B }; Foo x; x = Foo(src);" }
 compile(expect: fail) { "substring16 src; flags Foo { A, B }; Foo x; x = Foo(src);" }
-compile(expect: fail) { "substring16 src; int x(double z); x = int(double)(src);" }
+compile(expect: fail) { "substring16 src; int(double) x; x = int(double)(src);" }
 compile(expect: fail) { "substring16 src; interface A {} A x; x = A(src);" }
 
 // String assignments
