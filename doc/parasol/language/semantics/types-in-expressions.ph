@@ -15,9 +15,9 @@ In a void context, the expression can have any type or can have void type.
 
 {@anchor shape}
 A <i>shaped class</i> describes some form of data collection rather than a scalar object.
-The shaped classes are {@link parasol:types.string string} and the related string classes, 
+The shaped classes are {@link parasol:text.string string} and the related string classes, 
 {@link parasol:types.vector vector&lt;E, I&gt;},
-and {@link parasol:types:map map&lt;V, K&gt;}.
+and {@link parasol:types.map map&lt;V, K&gt;}.
 
 <p>
 
