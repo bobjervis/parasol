@@ -3,6 +3,7 @@
 <ul class=sec-map>
 	<li>{@topic ../implementation/index.ph}
 	<li>{@topic environment/index.ph}
+	<li>{@topic concepts/index.ph}
 	<li>{@topic lex/index.ph}
 	<li>{@topic grammar/index.ph}
 	<li>{@topic semantics/index.ph}

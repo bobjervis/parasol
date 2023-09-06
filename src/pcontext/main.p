@@ -14,6 +14,7 @@
    limitations under the License.
  */
 import parasol:context;
+import parasol:json;
 import parasol:process;
 import parasol:storage;
 
@@ -26,7 +27,7 @@ PContextCommand pcontextCommand;
 class PContextCommand extends process.Command {
 	PContextCommand() {
 		commandName("pcontext");
-		description("This is command inspects or updates the user's Parasol language." + 
+		description("This command manages the user's Parasol language " + 
 					"contexts. " +
 					"It performs many different functions." +
 					"");
@@ -36,10 +37,12 @@ class PContextCommand extends process.Command {
 
 		subCommand("create", &create);
 		subCommand("ls", &ls);
+		subCommand("install", &install);
 	}
 
 	Create create;
 	Ls ls;
+	Install install;
 }
 
 class Create extends process.Command {
@@ -59,37 +62,37 @@ class Create extends process.Command {
 	public int main(string[] args) {
 		if (!context.validateContextName(args[0])) {
 			printf("The first argument must be a validly formatted context name, found '%s'\n", args[0]);
-			return 0;
+			return 1;
 		}
 		if (context.get(args[0]) != null) {
 			printf("Context '%s' already exists\n", args[0]);
-			return 0;
+			return 1;
 		}
 		if (args.length() == 1) {
 			ref<context.Context> ctx = context.create(args[0]);
 			if (ctx == null) {
 				printf("Could not create context '%s'\n", args[0]);
-				return 0;
+				return 1;
 			}
 		} else {	// args.length() == 2
 			// If the directory does not exist, make it.
 			if (!storage.exists(args[1])) {
 				if (!storage.makeDirectory(args[1], false)) {
 					printf("Cannot make the database directory '%s', aborting.\n", args[1]);
-					return 0;
+					return 1;
 				}
 			} else if (!storage.isDirectory(args[1]) ||
 					   !(storage.getUserAccess(args[1]) & storage.AccessFlags.WRITE)) {
 				printf("The second argument, if it names and existing file, must name a writable directory, '%s' does not.\n", args[1]);
-				return 0;
+				return 1;
 			}
 			ref<context.Context> ctx = context.createFromDirectory(args[0], args[1]);
 			if (ctx == null) {
 				printf("Could not create context '%s' from directory '%s'\n", args[0], args[1]);
-				return 0;
+				return 1;
 			}
 		}
-		return 1;
+		return 0;
 	}
 }
 
@@ -107,7 +110,99 @@ class Ls extends process.Command {
 			printf("%s\n", contexts[i].name());
 		}
 
-		return 1;
+		return 0;
 	}
 }
 
+class Install extends process.Command {
+	Install() {
+		finalArguments(1, 1, "<directory>");
+		description("Install a package into a context. " + 
+					"The named directory must contain a Parasol package. " +
+					"");
+		contextOption = stringOption('c', "context", "If present, install the package to this context.");
+	}
+
+	ref<process.Option<string>> contextOption;
+
+	public int main(string[] args) {
+		ref<context.Context> installLocation;
+		string installPackage;
+		if (contextOption.set()) {
+			installPackage = contextOption.value;
+			if (!context.validateContextName(installPackage)) {
+				printf("The context option must be a validly formatted context name, found '%s'\n", 
+							installPackage);
+				return 1;
+			}
+			installLocation = context.get(installPackage);
+		} else {
+			installLocation = context.getActiveContext();
+			installPackage = process.environment.get("PARASOL_CONTEXT");
+			if (installPackage == null) {
+				printf("No active context to install to\n");
+				return 1;
+			}
+		}
+		if (installLocation == null) {
+			printf("No context named %s\n", installPackage);
+			return 1;
+		}
+		if (!storage.isDirectory(args[0])) {
+			printf("Package path '%s' is not a directory.\n", args[0]);
+			return 1;
+		}
+		metadataSlug := storage.path(args[0], "package.json");
+		if (!storage.exists(metadataSlug) || storage.isDirectory(metadataSlug)) {
+			printf("Package does not a contain a normal file named 'package.json'.\n");
+			return 1;
+		}
+		reader := storage.openTextFile(metadataSlug);
+		if (reader == null) {
+			printf("Could not open the 'package.json' file in the package directory.\n");
+			return 1;
+		}
+		contents := reader.readAll();
+		delete reader;
+
+		var jsonBlob;
+		boolean success;
+		(jsonBlob, success) = json.parse(contents);
+		if (!success) {
+			printf("The 'package.json' file does not contain valid JSON.\n");
+			return 1;
+		}
+		if (jsonBlob.class != ref<Object>) {
+			printf("The 'package.json' file does not contain a JSON Object.\n");
+			return 1;
+		}
+		object := ref<Object>(jsonBlob);
+		name := getStringField(object, "name");
+		if (name == null)
+			return 1;
+		version := getStringField(object, "version");
+		if (version == null)
+			return 1;
+		pkg := installLocation.getPackage(name);
+		if (pkg != null) {
+			printf("The package already exists.\n");
+		} else {
+			printf("This is a new package.\n");
+		}
+		printf("Installing package %s version %s to context %s\n", name, version, installLocation.name());
+		return 0;
+	}
+
+	static string getStringField(ref<Object> object, string field) {
+		if (!object.contains(field)) {
+			printf("The 'package.json' object does not contain a field named '%s'.\n", field);
+			return null;
+		}
+		var nameV = object.get(field);
+		if (nameV.class != string) {
+			printf("The 'package.json' %s field is not a string.\n", field);
+			return null;
+		}
+		return string(nameV);
+	}
+}

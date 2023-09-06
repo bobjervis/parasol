@@ -125,6 +125,7 @@ A package has an object in JSON format as it's metadata.
 The various fields are optional and their description is given below:
 
 <ul>
+	<li><b>"name"</b> - A string value. The name of the package.
 	<li><b>"version"</b> - A string value. This should be a Parasol version string. It is assigned
 							by the builder based on command-line options and configuration parameters.
 	<li><b>"built_by"</b> - A string value. This is a Parasol version string. It is assigned by the

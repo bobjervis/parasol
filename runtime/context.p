@@ -275,6 +275,7 @@ public ref<Context> create(string name) {
  */
 public ref<Context> get(string name) {
 	lock (contextLock) {
+		populateContexts();
 		ref<Context> result = _contexts[name];
 		if (result == null && name == "default") {
 			result = new Context(name);
@@ -383,6 +384,7 @@ public class TemporaryContext extends Context {
 }
 
 /**
+ * Return a list of available contexts.
  */
 public ref<Context>[] listAll() {
 	ref<Context>[] results;
@@ -467,7 +469,7 @@ private string getContextHome() {
 
 	if (home == null)
 		throw IllegalOperationException("No home directory for user");
-	return storage.path(home, ".parasol/contexts");
+	return storage.path(storage.path(home, ".parasol"), "contexts");
 }
 
 //@Constant

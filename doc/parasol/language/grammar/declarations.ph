@@ -6,7 +6,7 @@
 {@production | [ <i>qualifiers</i> ... ] <i>class_declaration</i> }  
 {@production | [ <i>qualifiers</i> ... ] <i>enum_declaration</i>  }
 {@production | <i>flags_declararion</i>  }
-{@production | [ <b>static</b> ] <i>function_declaration</i>  }
+{@production | [ <b>static</b> ] <i>function_definition</i>  }
 {@production | <i>abstract_function_declaration</i>  }
 {@production | <i>constructor</i>  }
 {@production | <i>destructor</i>  }
@@ -37,6 +37,7 @@ share that visibility.
 
 <h3>{@level 3 Object Declarations}</h3>
 
+{@anchor obj-decl}
 {@grammar}
 {@production object_declaration <i>expression initializer</i> [ <b>,</b> <i>initializer</i> ] ... <b>;</b> }
 {@production initializer <i>identifier</i>}
@@ -52,6 +53,7 @@ An object declaration of an identifier with an argument list is an invocation of
 
 <h3>{@level 3 Classes}</h3>
 
+{@anchor class-decl}
 {@grammar}
 {@production class_declaration <i>class_core_declaration</i> }
 {@production class_core_declaration <b>class</b> <i>identifier class_body</i> }
@@ -93,19 +95,23 @@ In addition, there are methods on the monitor object itself that can be used to 
 
 <h3>{@level 3 Enums}</h3>
 
+{@anchor enum-decl}
 {@grammar}
 {@production enum_declaration <b>enum</b> <i>identifier</i> <b>&lbrace;</b> <i>enum_body</i> <b>&rbrace;</b> }
-{@production enum_body <i>enum</i> [ <b>,</b> <i>enum</i> ] ... [ <b>,</b> ] [ <b>;</b> [ statement ] ... ]}
-{@production enum <i>identifier</i> [ <i>parameter_list</i> ]}
+{@production enum_body <i>enum_instance</i> [ <b>,</b> <i>enum_instance</i> ] ... [ <b>,</b> ] [ <b>;</b> [ statement ] ... ]}
+{@anchor enum-inst}
+{@production enum_instance <i>identifier</i> [ <i>parameter_list</i> ]}
 {@end-grammar}
 			
-An enum declaration defines the identifier of an enum class.
+An enumeration declaration defines an enumeration class.
 If an enumeration declaration includes statements after the list of enumerated values, those statements define the members and methods of the enum class.
 
 <h3>{@level 3 Flags}</h3>
 
+{@anchor flags-decl}
 {@grammar}
 {@production flags_declaration <b>flags</b> <i>identifier</i> [ <i>base</i> ] <b>&lbrace;</b> [ <i>flag</i> [ <b>,</b> <i>flag</i> ] ... ] [ <b>,</b> ] <b>&rbrace;</b> }
+{@anchor flags-inst}
 {@production flag <i>identifier</i>}
 {@end-grammar}
 
@@ -116,11 +122,14 @@ Each instance of a flags class contains enough bits to hold all the defined flag
 
 <h3>{@level 3 Function Definitions}</h3>
 
+{@anchor func-def}
 {@grammar}
-{@production function_declaration <i>return_list name parameter_list function_body</i>}
+{@production function_definition <i>return_list function_name parameter_list function_body</i>}
 {@production return_list <b>void</b>}
 {@production | <i>expression</i> [ <b>,</b> <i>expression</i> ] ...}
+{@production function_name <i>identifier</i>}
 {@production parameter_list <b>(</b> [ <i>parameter</i> [ <b>,</b> <i>parameter</i> ] ... ] <b>)</b> }
+{@anchor func-param}
 {@production parameter <i>expression</i> [ <b>...</b> ] <i>identifier</i> }
 {@production function_body <i>block</i> }
 {@production | <b>;</b>}
@@ -162,6 +171,16 @@ each of which can be coerced to the element type of the variable argument list p
 
 By including the keyword <b>abstract</b> in a function declaration makes an abstract function declaration.
 In this form, there is no function body provided.
+<p>
+An abstract function declaration does not define a function.
+An abstract function declaration in a class body constrains the enclosing class and all classes that extend
+it.
+In order to instantiate a class with an abstract function declaration in any of its base classes shall
+contain a valid function definition that matches the type of the declared abstract function.
+<p>
+An abstract function declaration at unit scope is implementation defined.
+In the reference implementation, abstract function declarations at unit scope, combined with
+appropriate annotations, denotes a native C function.
 
 <h4>{@level 4 Constructors}</h4>
 

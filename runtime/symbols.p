@@ -201,7 +201,10 @@ public class PlainSymbol extends Symbol {
 		if (_accessFlags)
 			printf(" _accessFlags=%x", long(_accessFlags));
 		printf("\n");
-		if (_initializer != null && _initializer.op() == Operator.CLASS && _type != null && _type.family() == TypeFamily.TYPEDEF) {
+		if (_initializer != null &&
+			_initializer.op() == Operator.CLASS &&
+			_type != null &&
+			_type.family() == TypeFamily.TYPEDEF) {
 			ref<TypedefType> tt = ref<TypedefType>(_type);
 			ref<Type> declaredType = tt.wrappedType();
 			if (declaredType.class == BuiltInType)
@@ -1355,6 +1358,10 @@ public class Symbol {
 		return _definition;
 	}
 	
+	public ref<Node> initializer() {
+		return null;
+	}
+
 	public Access accessFlags() {
 		return Access.CONSTRUCTED;
 	}

@@ -32,6 +32,7 @@ The left operand of an assignment operator shall be a {@doc-link mod-lvalue modi
 
 <h5>{@level 5 Defining Assignment}</h5>
 
+{@anchor def-asg}
 The defining assignment operator (<span class=code>:=</span>) combines the declaration of the
 left operand with assigning the value of the right operand to the left.
 

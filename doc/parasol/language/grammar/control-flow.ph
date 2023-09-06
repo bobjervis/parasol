@@ -125,6 +125,7 @@ the scope of these declarations extends through the scoped for statement itself.
 
 <h4>{@level 4 For-in Loops}</h4>
 
+{@anchor for-in}
 {@grammar}
 {@production for_in_statement <b>for (</b> <i>identifier</i> <b>in</b> <i>expression</i> <b>)</b> <i>statement</i>  }
 {@end-grammar}
@@ -142,6 +143,7 @@ In each iteration, the variable named in the statement is assigned the index of 
 
 <h3>{@level 3 Try Statements}</h3>
 
+{@anchor try-stmt}
 {@grammar}
 {@production try_statement <b>try</b> <i>statement</i> [ <i>catch_clause</i> ] ... [ <b>finally</b> <i>statement</i> ] }
 {@production catch_clause ( <b>catch (</b> <i>expression</i> <i>identifier</i> <b>)</b> <i>statement</i> ) ... }

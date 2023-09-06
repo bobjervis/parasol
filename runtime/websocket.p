@@ -280,7 +280,7 @@ private void readWrapper(address arg) {
  */
 public interface DisconnectListener {
 	/**
-	 * This method notifies the object that a cdisconnect has just occurred.
+	 * This method notifies the object that a disconnect has just occurred.
 	 *
 	 * @param normalClose true, if the disconnect sequence was correct for
 	 * the Web Socket protocol and false otherwise.

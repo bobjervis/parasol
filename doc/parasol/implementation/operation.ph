@@ -149,6 +149,64 @@ scripts will be built. If one or more products are given as arguments, then only
 those products plus any products the named ones are dependent on will be built.
 
 <h3>{@level 3 pcontext}</h3>
+
+<h4>Use is:</h4>
+
+{@code
+    <b>pcontext</b> [ <i>options</i> ... ] <i>sub-command</i> [ <i> arguments </i> ]
+}
+
+
+<h4>Options:</h4>
+
+<table>
+<tr><td>-?</td><td>--help</td><td>Displays this help.</td><tr>
+</table>
+
+This command manages the user's Parasol language.contexts. It
+performs many different functions.
+<p>
+
+<h4>Sub-commands:</h4>
+
+{@code
+      <b>pcontext create</b> <i>context-name</i> ( <i>path</i> | <i>url</i> )
+}
+<div class=sub-command>
+	
+	<p>
+      Create or define a new context. If no path or url are given, then a new
+      context database is created. If a path to an existing, readable directory
+      is supplied, it must be a context database, or a copy of one. The named
+      directory will be used to hold any newly installed packages or other
+      updated information. If a path to a directory that can be created is
+      given, but does not exist, the directory is created.
+</div>
+
+{@code
+      <b>pcontext install</b> [ <i>options</i> ... ] <i>directory</i>
+}
+<div class=sub-command>
+	
+	<h4>Options:</h4>
+
+	<table>
+	<tr><td>-c</td><td>--context</td><td>If present, install the package to this context.</td><tr>
+	</table>
+
+      Install a package into a context. The named directory must contain a
+      Parasol package.
+</div>
+
+{@code
+      <b>pcontext ls</b>
+}
+<div class=sub-command>
+	
+	<p>
+      List all contexts.
+</div>
+
 <h3>{@level 3 paradoc}</h3>
 
 <h4>Use is:</h4>

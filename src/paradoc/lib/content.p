@@ -435,6 +435,7 @@ class MacroSpan extends Span {
 			idx := storage.path(g, "index.html");
 			idx = storage.makeCompactPath(idx, _enclosing.targetPath());
 			content = "<a href=\"" + idx + "\">" + _arguments[1] + "</a>";
+			content += codeOverviewPage.levelGroup(_enclosing);
 		} else if (target != null) {
 			content = target.levelGroup(_enclosing);
 		} else {
@@ -467,7 +468,7 @@ class MacroSpan extends Span {
 					continue;
 				string tg = l.levelGroup(base);
 				if (tg != null)
-					group.append("<li>" + tg);
+					group.append("<li>" + tg + "\n");
 			}
 			i++;
 			startAt = 0;

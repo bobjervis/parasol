@@ -27,10 +27,128 @@ ref<CodeOverviewPage> codeOverviewPage;
 
 class Names {
 	string name;
-	ref<compiler.Namespace> symbol;
+	ref<compiler.Namespace> symbol;		// Only for namespace
+	ref<compiler.Scope> scope;			// for nexted classes
+	ref<compiler.Symbol>[] classes;
+	ref<Names>[] children;
 
 	public int compare(Names other) {
 		return name.compare(other.name);
+	}
+
+	void indexClassesInScope(ref<Page> parent, ref<compiler.Scope> symbols, string dirName) {
+		symMap := symbols.symbols();
+	
+		for (i in *symMap) {
+			ref<compiler.Symbol> sym = (*symMap)[i];
+	
+			if (sym.class == compiler.PlainSymbol) {
+				if (sym.visibility() != compiler.Operator.PUBLIC)
+					continue;
+				if (sym.doclet() != null && sym.doclet().ignore)
+					continue;
+				ref<compiler.Type> type = sym.type();
+				switch (type.family()) {
+				case CLASS:
+				case INTERFACE:
+				case TYPEDEF:
+					classes.append(sym);
+					break;
+				}
+			} else if (sym.class == compiler.Overload) {
+				ref<compiler.Overload> o = ref<compiler.Overload>(sym);
+				ref<ref<compiler.OverloadInstance>[]> instances = o.instances();
+				for (j in *instances) {
+					ref<compiler.OverloadInstance> oi = (*instances)[j];
+	
+					if (oi.visibility() != compiler.Operator.PUBLIC)
+						continue;
+					if (oi.doclet() != null && oi.doclet().ignore)
+						continue;
+					if (o.kind() != compiler.Operator.FUNCTION)
+						classes.append(oi);
+				}
+			}
+	
+		}
+	
+		if (classes.length() > 0) {
+			defineOutputDirectory(dirName);
+			classes.sort(compareSymbols, true);
+			for (i in classes) {
+				ref<compiler.Symbol> sym = classes[i];
+		
+				n := indexTypesInClass(parent, sym, dirName);
+				children.append(n);
+			}
+		}
+	}
+
+	ref<Names> indexTypesInClass(ref<Page> parent, ref<compiler.Symbol> sym, string dirName) {
+		ref<compiler.Scope> scope = scopeFor(sym);
+		if (scope == null)
+			return null;
+		if (sym.definition() != scope.className()) {
+			ref<compiler.Type> t = typeFor(sym);
+			if (t.family() != runtime.TypeFamily.TEMPLATE)
+				return null;
+		}
+		string name = sym.name();
+		string classFile = storage.path(dirName, name, "html");
+		if (classFiles[long(scope)] == null)
+			classFiles[long(scope)] = classFile;
+	
+		c := new ClassPage(sym, classFile);
+		c.add();
+		parent.childPage(c);
+
+		string subDir = storage.path(dirName, name);
+
+		n := new Names;
+		n.scope = scope;
+		n.indexClassesInScope(c, scope, subDir);
+		return n;
+	}
+
+	string levelGroup(string dirName) {
+		string output = "<ul>\n";
+		for (j in classes) {
+			sym := classes[j];
+			if (sym.initializer() != null &&
+				sym.initializer().op() != compiler.Operator.CLASS)
+				continue;
+			output.printf("<li><a href=\"%s/classes/%s.html\">%2$s</a>\n", dirName, sym.name());
+			child := children[j];
+			if (child != null) {
+				subDir := storage.path(storage.path(dirName, "classes"), sym.name());
+				output += child.nestedClassGroup(subDir);
+			}
+		}
+		if (output.length() == 5)
+			return "";
+		output += "</ul>\n";
+		return output;
+	}
+
+	string nestedClassGroup(string dirName) {
+		string output = "<ul>\n";
+		for (j in classes) {
+			sym := classes[j];
+			if (sym.initializer() != null &&
+				sym.initializer().op() != compiler.Operator.CLASS)
+				continue;
+			if (sym.type() == null ||
+				sym.type().family() != runtime.TypeFamily.TYPEDEF)
+				continue;
+			output.printf("<li><a href=\"%s/%s.html\">%2$s</a>\n", dirName, sym.name());
+			child := children[j];
+			if (child != null)
+				output += child.nestedClassGroup(storage.path(dirName, sym.name()));
+		}
+		if (output.length() == 5)	// The inner loop didn't add anything.
+			return "";
+		output += "</ul>\n";
+		return output;
 	}
 }
 
@@ -70,7 +188,7 @@ class CodeOverviewPage extends Page {
 			namespaceSummary.add();
 			this.childPage(namespaceSummary);
 			classesDir := storage.path(namespaceFolder, "classes");
-			indexClassesInScope(namespaceSummary, n.symbol.symbols(), classesDir);
+			n.indexClassesInScope(namespaceSummary, n.symbol.symbols(), classesDir);
 		}
 	}
 
@@ -124,6 +242,24 @@ class CodeOverviewPage extends Page {
 	
 		delete overview;
 		return true;
+	}
+
+	string levelGroup(ref<Content> enclosing) {
+		string output = "<ul>\n";
+
+		codeOutputPrefix := storage.makeCompactPath(codeOutputFolder, enclosing.targetPath());
+		// These are the actual namespaces
+		for (i in names) {
+			ref<Names> n = &names[i];
+			string dirName = codeOutputPrefix + "/" + n.name;
+			for (int i = codeOutputPrefix.length() + 1; i < dirName.length(); i++)
+				if (dirName[i] == ':')
+					dirName[i] = '_';
+			output.printf("<li><a href=\"%s/namespace-summary.html\">%s</a>\n", dirName, n.name);
+			// Start with the classes directly under the namespace, then on to the nested classes.
+			output += n.levelGroup(dirName);
+		}
+		return output + "</ul>\n";
 	}
 }
 
@@ -278,79 +414,8 @@ public boolean collectNamespacesToDocument() {
 	return true;
 }
 
-void indexClassesInScope(ref<Page> parent, ref<compiler.Scope> symbols, string dirName) {
-	symMap := symbols.symbols();
-
-	ref<compiler.Symbol>[] classes;
-
-	for (i in *symMap) {
-		ref<compiler.Symbol> sym = (*symMap)[i];
-
-		if (sym.class == compiler.PlainSymbol) {
-			if (sym.visibility() != compiler.Operator.PUBLIC)
-				continue;
-			if (sym.doclet() != null && sym.doclet().ignore)
-				continue;
-			ref<compiler.Type> type = sym.type();
-			switch (type.family()) {
-			case CLASS:
-			case INTERFACE:
-			case TYPEDEF:
-				classes.append(sym);
-				break;
-			}
-		} else if (sym.class == compiler.Overload) {
-			ref<compiler.Overload> o = ref<compiler.Overload>(sym);
-			ref<ref<compiler.OverloadInstance>[]> instances = o.instances();
-			for (j in *instances) {
-				ref<compiler.OverloadInstance> oi = (*instances)[j];
-
-				if (oi.visibility() != compiler.Operator.PUBLIC)
-					continue;
-				if (oi.doclet() != null && oi.doclet().ignore)
-					continue;
-				if (o.kind() != compiler.Operator.FUNCTION)
-					classes.append(oi);
-			}
-		}
-
-	}
-
-	if (classes.length() > 0) {
-		defineOutputDirectory(dirName);
-		classes.sort(compareSymbols, true);
-		for (i in classes) {
-			ref<compiler.Symbol> sym = classes[i];
-	
-			indexTypesInClass(parent, sym, dirName);
-		}
-	}
-}
-
 private int compareSymbols(ref<compiler.Symbol> left, ref<compiler.Symbol> right) {
 	return left.compare(right);
-}
-
-void indexTypesInClass(ref<Page> parent, ref<compiler.Symbol> sym, string dirName) {
-	ref<compiler.Scope> scope = scopeFor(sym);
-	if (scope == null)
-		return;
-	if (sym.definition() != scope.className()) {
-		ref<compiler.Type> t = typeFor(sym);
-		if (t.family() != runtime.TypeFamily.TEMPLATE)
-			return;
-	}
-	string name = sym.name();
-	string classFile = storage.path(dirName, name, "html");
-	if (classFiles[long(scope)] == null)
-		classFiles[long(scope)] = classFile;
-
-	c := new ClassPage(sym, classFile);
-	c.add();
-	parent.childPage(c);
-	string subDir = storage.path(dirName, name);
-
-	indexClassesInScope(c, scope, subDir);
 }
 
 string namespaceFile(ref<compiler.Namespace> nm) {
@@ -363,7 +428,7 @@ string namespaceDir(ref<compiler.Namespace> nm) {
 	for (int i = 0; i < dirName.length(); i++)
 		if (dirName[i] == ':')
 			dirName[i] = '_';
-	return storage.path(codeOutputFolder, dirName, null);
+	return storage.path(codeOutputFolder, dirName);
 }
 
 ref<compiler.Scope> scopeFor(ref<compiler.Symbol> sym) {

@@ -193,13 +193,6 @@ public class BuildFile {
 
 			case "application":
 				if (enclosing != null)
-					error(object, "An application cannot be defined inside another component");
-				ref<Application> app = new Application(this, null, object);
-				products.append(app);
-				break;
-
-			case "binary":
-				if (enclosing != null)
 					error(object, "A binary cannot be defined inside another component");
 				ref<Binary> b = new Binary(this, object);
 				products.append(b);

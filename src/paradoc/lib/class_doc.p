@@ -57,8 +57,12 @@ class ClassPage extends Page {
 		classPage.printf("<title>%s</title>\n", _symbol.name());
 	
 		ref<compiler.Namespace> nm = _symbol.enclosingNamespace();
+
+		nsUrl := storage.makeCompactPath(up().targetPath(), targetPath());
+
 	
-		classPage.printf("<div class=namespace-info><b>Namespace</b> %s</div>\n", namespaceReference(nm));
+		classPage.printf("<div class=namespace-info><b>Namespace</b> <a href=\"%s\">%s</a></div>\n", 
+							nsUrl, nm.fullNamespace());
 		ref<compiler.Type> t = typeFor(_symbol);
 		boolean isInterface;
 		boolean hasConstants;
@@ -179,13 +183,6 @@ void generateClassInfo(ref<compiler.Type> t, ref<Writer> classPage, string class
 		}
 		classPage.write("</div>\n");
 	}
-}
-
-string namespaceReference(ref<compiler.Namespace> nm) {
-	string path = namespaceFile(nm);
-	string s;
-	s.printf("<a href=\"%s\">%s</a>", path, nm.fullNamespace());
-	return s;
 }
 
 int generateBaseClassName(ref<Writer> output, ref<compiler.Type> t, string baseName, boolean includeLink) {

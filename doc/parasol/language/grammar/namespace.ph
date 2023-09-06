@@ -1,5 +1,6 @@
 <h2>{@level 2 Namespaces}</h2>
 
+{@anchor namespace-decl}
 {@grammar}
 {@production namespace_statement <b>namespace</b> <i>namespace</i> <b>;</b>  }
 {@production import <b>import</b> [ <i>identifier</i> <b>=</b> ] <i>qualified_reference</i> <b>;</b> }

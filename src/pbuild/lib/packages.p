@@ -24,6 +24,7 @@ import parasol:script;
 import parasol:storage;
 import parasol:thread;
 import parasol:time;
+import native:linux;
 
 class Product extends Folder {
 	private string _buildDir;
@@ -771,12 +772,19 @@ class Binary extends Application {
 		if (!success)
 			return false;
 
-		string parasolRoot = installPackage.path();
-		string binDir = storage.path(parasolRoot, "bin");
+		string parasolRoot, binDir;
+		if (installPackage != null) {
+			parasolRoot = installPackage.path();
+			binDir = storage.path(parasolRoot, "bin");
+		} else {
+			binFile := process.binaryFilename();
+			binDir = storage.directory(binFile);
+			parasolRoot = storage.directory(binDir);
+		}
 		string rtFile = storage.path(binDir, "parasolrt");
 		string destFile = storage.path(_packageDir, "parasolrt");
 		if (!storage.copyFile(rtFile, destFile)) {
-			printf("        FAIL: Could not copy parasolrt from %s\n", parasolRoot);
+			printf("        FAIL: Could not copy parasolrt from %s: %s\n", parasolRoot, linux.strerror(linux.errno()));
 			return false;
 		}
 		string soFile = storage.path(binDir, "libparasol.so.1");
