@@ -59,6 +59,7 @@ public class Coordinator extends CoordinatorVolatileData {
 	private ref<Package>[string] _packageMap;		// maps package name to Package, all the packages discovered that will be built
 	private ref<context.PseudoContext> _pseudoContext;
 	private ref<Product>[] _products;
+	private string[] _commandLineProducts;
 	private ref<Test>[] _tests;
 	private string[] _onPassScripts;
 	private string[] _onPassDirs;
@@ -79,7 +80,8 @@ public class Coordinator extends CoordinatorVolatileData {
 					   boolean reportOutOfDate,
 					   boolean verbose,
 					   boolean trace,
-					   boolean logImports) {
+					   boolean logImports,
+					   string[] components) {
 		lock(_lock) {
 			if (_workers == null)
 				_workers = new thread.ThreadPool<boolean>(buildThreads);
@@ -125,6 +127,7 @@ public class Coordinator extends CoordinatorVolatileData {
 		_verbose = verbose;
 		_trace = trace;
 		_logImports = logImports;
+		_commandLineProducts = components;
 		_pseudoContext = new context.PseudoContext(context.getActiveContext());
 	}
 
@@ -280,6 +283,69 @@ public class Coordinator extends CoordinatorVolatileData {
 		lock(*this) {
 			_overallSuccess = true;
 		}
+		boolean success = true;
+		if (_commandLineProducts.length() > 0) {
+			boolean[] selected;
+			selected.resize(_products.length());
+			for (i in _commandLineProducts) {
+				boolean found;
+				for (j in _products) {
+					if (_products[j].name() == _commandLineProducts[i]) {
+						found = true;
+						selected[j] = true;
+						break;
+					}
+				}
+				if (!found) {
+					printf("    Unknown product: %s\n", _commandLineProducts[i]);
+					success = false;
+				}
+			}
+			if (!success) {
+				printf("FAILED!\n");
+				return 1;
+			}
+			boolean changed;
+			boolean[] checked;
+			checked.resize(_products.length());
+			do {
+				changed = false;
+				for (i in selected) {
+					if (!selected[i])
+						continue;
+					if (checked[i])
+						continue;
+					checked[i] = true;
+					changed = true;
+					included := _products[i].includedProducts();
+					for (j in included) {
+						k := _products.find(included[j]);
+						if (k < _products.length()) {
+							selected[k] = true;
+						}
+					}
+				}
+			} while (changed);
+	
+			ref<Product>[] selectedProducts;
+			for (i in selected) {
+				if (!selected[i])
+					continue;
+				selectedProducts.append(_products[i]);
+				_products[i] = null;
+			}
+			for (i in _products) {
+				if (_products[i] != null)
+					delete _products[i];
+			}
+			_products = selectedProducts;
+		}
+		if (_commandLineProducts.length() == 0)
+			printf("Building all %d products.\n", _products.length());
+		else if (_commandLineProducts.length() == 1)
+			printf("Building %s.\n", _commandLineProducts[0]);
+		else
+			printf("Building %d selected products.\n", _commandLineProducts.length());
 		for (i in _products) {
 			ref<Product> product = _products[i];
 			if (product.class == Package) {
@@ -296,21 +362,11 @@ public class Coordinator extends CoordinatorVolatileData {
 				}
 			}
 		}
-		if (corePackage != null)
-			printf("    Building %s\n", context.PARASOL_CORE_PACKAGE_NAME);
-		if (installPackage != null)
-			printf("    Building %s\n", PARASOL_INSTALL_PACKAGE_NAME);
 
-		for (i in _products) {
-			ref<thread.Thread> t = new thread.Thread();
-			_threads.append(t);
-			t.start(productBuilder, _products[i]);
-		}
-		for (i in _threads)
-			_threads[i].join();
-//		printf("Threads joined\n");
-		_threads.deleteAll();
-		boolean success;
+		for (i in _products)
+			_products[i].scheduleBuild();
+		for (i in _products)
+			_products[i].waitForBuild();
 		lock (*this) {
 			success = _overallSuccess;
 		}
@@ -386,24 +442,6 @@ public class Coordinator extends CoordinatorVolatileData {
 		}
 
 		return success ? 0 : 1;
-	}
-
-	private static void productBuilder(address arg) {
-		ref<Product> product = ref<Product>(arg);
-//		printf("    %d Starting build of %s\n", thread.currentThread().id(), product.toString());
-		boolean success;
-		try {
-			success = product.build();
-		} catch (Exception e) {
-			exception.uncaughtException(&e);
-			printf("\n");			
-		}
-		if (!success) {
-			product.coordinator().declareFailure();
-			printf("    FAIL: product %s build failed\n", product.toString());
-		}
-//		printf("    Build %s success? %s\n", product.toString(), string(success));
-		product.future().post(success);
 	}
 
 	private static string singleLine(string s) {

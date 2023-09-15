@@ -893,6 +893,44 @@ public class ThreadPool<class T> extends ThreadPoolData<T> {
 		return future;
 	}
 	/**
+	 * Execute some work and use an existing {@link Future} to track completion
+	 * of the work.
+	 *
+	 * If the pool is being shut down, no work item is queued.
+	 *
+	 * @param future A user-supplied future. This allows the caller to control
+	 * when the futures are allocated, just in case you want the individual work items
+	 * in a set to refer to each other and create a dependency web.
+	 *
+	 * @param f A function to call to perform the work.
+	 *
+	 * @param parameter A value to be passed to the function when the work
+	 * gets performed.
+	 *
+	 * @return A reference to a Future that was allocated to track the work.
+	 * If the pool is being shut down null is returned.
+	 */
+	public ref<Future<T>> execute(ref<Future<T>> future, T f(address p), address parameter) {
+		ref<WorkItem<T>> wi = new WorkItem<T>;
+		wi.result = future;
+		wi.valueGenerator = f;
+		wi.parameter = parameter;
+		lock (*this) {
+			if (_shutdownRequested) {
+				delete wi;
+				delete future;
+				return null;
+			}
+			if (_first == null)
+				_first = wi;
+			else
+				_last.next = wi;
+			_last = wi;
+			notify();
+		}
+		return future;
+	}
+	/**
 	 * Execute some work.
 	 *
 	 * If the pool is being shut down, no work item is queued.
@@ -1172,6 +1210,21 @@ public monitor class Future<class T> {
 			notifyAll();
 		}
 		return _cancelled;
+	}
+	/**
+	 * Reset a future. After an event sequence has possibly triggered this future,
+	 * but now the caller knows that there are no current dependencies on it, then
+	 * a call to reset it's status so that it is now un-posted.
+	 *
+	 * It can then be recycled and used in another thread.
+	 */
+	public void reset() {
+		notifyAll();			// Just in case anything is still waiting.
+		_calculating = false;
+		_posted = false;
+		_cancelled = false;
+		delete _uncaught;
+		_uncaught = null;
 	}
 }
 /**

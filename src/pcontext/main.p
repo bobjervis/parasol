@@ -105,9 +105,10 @@ class Ls extends process.Command {
 
 	public int main(string[] args) {
 		ref<context.Context>[] contexts = context.listAll();
+		active := context.getActiveContext();
 
 		for (i in contexts) {
-			printf("%s\n", contexts[i].name());
+			printf("%s %s\n", active == contexts[i] ? "*" : " ", contexts[i].name());
 		}
 
 		return 0;
@@ -127,25 +128,21 @@ class Install extends process.Command {
 
 	public int main(string[] args) {
 		ref<context.Context> installLocation;
-		string installPackage;
+		string installContext;
 		if (contextOption.set()) {
-			installPackage = contextOption.value;
-			if (!context.validateContextName(installPackage)) {
+			installContext = contextOption.value;
+			if (!context.validateContextName(installContext)) {
 				printf("The context option must be a validly formatted context name, found '%s'\n", 
-							installPackage);
+							installContext);
 				return 1;
 			}
-			installLocation = context.get(installPackage);
+			installLocation = context.get(installContext);
 		} else {
 			installLocation = context.getActiveContext();
-			installPackage = process.environment.get("PARASOL_CONTEXT");
-			if (installPackage == null) {
-				printf("No active context to install to\n");
-				return 1;
-			}
+			installContext = installLocation.name();
 		}
 		if (installLocation == null) {
-			printf("No context named %s\n", installPackage);
+			printf("No context named %s\n", installContext);
 			return 1;
 		}
 		if (!storage.isDirectory(args[0])) {

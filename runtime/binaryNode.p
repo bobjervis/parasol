@@ -161,16 +161,12 @@ public class Binary extends Node {
 				_right = _right.foldDeclarator(tree, compileContext);
 				return this;
 				
+			case	DEF_ASSIGN:
 			case	SUBSCRIPT:
 			case	SEQUENCE:
 			case	LABEL:
 				break;
 
-			case	DEF_ASSIGN:
-				_right = _right.fold(tree, false, compileContext);
-				_left.type = type;
-				break;
-				
 			case	INITIALIZE:
 				voidContext = true;
 			case	ASSIGN:
@@ -222,13 +218,6 @@ public class Binary extends Node {
 		case	DELETE:
 		case	LABEL:
 			break;
-
-		case	DEF_ASSIGN:
-			_right = _right.fold(tree, false, compileContext);
-			_left.type = type;
-			ref<Node> assignment = tree.newBinary(Operator.ASSIGN, _left, _right, location());
-			assignment.type = type;
-			return assignment;
 
 		case	SWITCH:
 			if (_left.type.isString()) {
@@ -801,6 +790,12 @@ public class Binary extends Node {
 			}
 			break;
 			
+		case	DEF_ASSIGN:
+			_left.type = type;
+			ref<Node> assignment = tree.newBinary(Operator.ASSIGN, _left, _right, location());
+			assignment.type = type;
+			return assignment.fold(tree, voidContext, compileContext);
+
 		case	STORE_TEMP:
 		case	ASSIGN_TEMP:
 		case	ASSIGN:

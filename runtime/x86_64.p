@@ -2002,6 +2002,7 @@ public class X86_64 extends X86_64AssignTemps {
 			generate(b.left(), compileContext);
 			popJumpContext();
 			trueSegment.start(this);
+			emitSourceLocation(compileContext.current().unit(), b.right().location());
 			markAddressModes(b.right(), compileContext);
 			sethiUllman(b.right(), compileContext, this);
 			assignConditionCode(b.right(), compileContext);

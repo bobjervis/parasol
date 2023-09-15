@@ -71,7 +71,7 @@ class PBuildCommand extends process.Command {
 		symbolTableOption = booleanOption(0, "syms",
 					"Print the symbol table.");
 		disassemblyOption = booleanOption(0, "asm",
-					"Display disassembly of bytecodes");
+					"Display disassembly of generated code");
 		uiReadyOption = stringOption(0, "ui",
 					"Display error messages with mark up suitable for the UI. The argument string is the filename prefix that identifies files being compiled (versus reference libraries not in the editor)");
 		targetOSOption = stringOption(0, "os",
@@ -122,7 +122,8 @@ public int main(string[] args) {
 							pbuildCommand.reportOutOfDateOption.set(),
 							pbuildCommand.verboseOption.set(),
 							pbuildCommand.traceOption.set(),
-							pbuildCommand.logImportsOption.set());
+							pbuildCommand.logImportsOption.set(),
+							pbuildCommand.finalArguments());
 	if (!coordinator.validate()) {
 		printf("FAIL: Errors encountered trying to find and parse build scripts.\n");
 		pbuildCommand.help();

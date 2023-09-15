@@ -17,11 +17,13 @@ namespace parasol:pbuild;
 
 import parasol:compiler;
 import parasol:context;
+import parasol:exception;
 import parasol:process;
 import parasol:pxi;
 import parasol:runtime;
 import parasol:script;
 import parasol:storage;
+import parasol:text;
 import parasol:thread;
 import parasol:time;
 import native:linux;
@@ -51,6 +53,32 @@ class Product extends Folder {
 	void resolveNames(ref<BuildFile> buildFile) {
 	}
 
+	void scheduleBuild() {
+		_coordinator.workers().execute(&_future, productBuilder, this);
+	}
+
+	void waitForBuild() {
+		boolean buildSuccess = _future.get();
+		boolean success = _future.success();
+		
+		if (!success || !buildSuccess) {
+			_coordinator.declareFailure();
+			printf("    FAIL: product %s build failed\n", toString());
+		}
+		e := _future.uncaught();
+		if (e != null) {
+			exception.uncaughtException(e);
+			printf("\n");
+		}
+
+	}
+
+	private static boolean productBuilder(address arg) {
+		ref<Product> product = ref<Product>(arg);
+//		printf("    %d Starting build of %s\n", thread.currentThread().id(), product.toString());
+		return product.build();
+	}
+
 	boolean build() {
 		printf("Unimplemented build: %s\n", toString());
 		return false;
@@ -72,6 +100,10 @@ class Product extends Folder {
 		return &_future;
 	}
 
+	public ref<Product>[] includedProducts() {
+		return _includedProducts;
+	}
+
 	void post(boolean outcome) {
 		_future.post(outcome);
 	}
@@ -83,7 +115,7 @@ class Product extends Folder {
 			return "skip";
 		else if (_componentFailures)
 			return "    ";
-		else if (_future.get())
+		else if (_future.get() && _future.success())
 			return "pass";
 		else
 			return "FAIL";
@@ -297,21 +329,19 @@ public class Package extends Product {
 
 		string sentinelFile = sentinelFileName();
 
-//		printf("        sentinel file %s\n", sentinelFile);
 		(accessed, modified, created, success) = storage.fileTimes(sentinelFile);
 
-		if (success) {
-			if (corePackage != null && corePackage != this && corePackage.inputsNewer(modified))
-				return true;
+		if (success)
 			return inputsNewer(modified);
-		} else
-			return true;
+		else
+			return true;		// sentinel file doesn't exist, maybe we never built this guy but we gotta build it now
 	}
 
 	public boolean inputsNewer(time.Instant timeStamp) {
 		if (super.inputsNewer(timeStamp))
 			return true;
-//		printf("        %s super inputsNewer false\n", _name);
+		if (corePackage != null && corePackage != this && corePackage.inputsNewer(timeStamp))
+			return true;
 		for (i in _usedPackages)
 			if (_usedPackages[i].inputsNewer(timeStamp))
 				return true;
@@ -515,11 +545,10 @@ class Application extends Package {
 		if (a != null)
 			_main = a.toString();
 		else
-			buildFile.error(object, "'main' attribute reuired for command");
+			buildFile.error(object, "'main' attribute required for command");
 		a = object.get("role");
 		if (a != null) {
-			if (this.class != Application &&
-				this.class != Binary) {
+			if (this.class != Binary) {
 				buildFile.error(a, "A 'role' attribute is not allowed");
 				return;
 			}
@@ -543,161 +572,6 @@ class Application extends Package {
 			_role = Role.UTILITY;
 	}
 
-	public boolean build() {
-		boolean success, returnNow;
-
-		(success, returnNow) = buildComponents();
-		
-		if (returnNow)
-			return success;
-		if (!shouldCompile()) {
-			_buildSuccessful = true;
-			_compileSkipped = true;
-			printf("        %s - up to date\n", name());
-			return true;
-		}
-		ref<compiler.Target> t;
-		(t, success) = compile();
-		delete t;
-		if (!success)
-			return false;
-
-		if (!storage.ensure(_packageDir)) {
-			printf("        FAIL: Could not create package directory '%s'\n", _packageDir);
-			return false;
-		}
-		string mainFile = storage.path(buildDir(), _main);
-		string mainScript = storage.filename(_main);
-		string mainDest = storage.path(_packageDir, mainScript);
-		printf("mainDest = '%s'\n", mainDest);
-		if (!storage.copyFile(mainFile, mainDest)) {
-			printf("        FAIL: Could not copy main file from %s\n", mainFile);
-			return false;
-		}
-
-		ref<compiler.Unit>[] units = _arena.units();
-		string libDir = storage.path(_packageDir, "lib");
-		for (int i = 2; i < units.length(); i++) {
-			printf("        [%d] %s\n", i, units[i].filename());
-			string source = units[i].filename();
-			string filename = storage.filename(source);
-			int extLoc = filename.lastIndexOf('.');
-			string extension;
-			if (extLoc < 0)
-				extension = "";
-			else
-				extension = filename.substr(extLoc);
-			string basename = filename.substr(0, extLoc);
-			string stem = storage.path(libDir, basename);
-			for (int iteration = 0; ; iteration++) {
-				string dest = composeNameVariant(stem, extension, iteration);
-				if (storage.exists(dest))
-					continue;
-				if (!storage.copyFile(source, dest)) {
-					printf("        FAIL: Could not copy '%s' to '%s'\n", source, dest);
-					return false;
-				}
-			}
-		}
-
-		printf("Implemented build: %s\n", toString());
-		
-		return false;
-	}
-
-	private static string composeNameVariant(string stem, string extension, int iteration) {
-		if (iteration == 0)
-			return stem + extension;
-		else {
-			// Can't printf directly into stem because string parameters can't be modified without catastrophe.
-			string s = stem;
-			s.printf(" (%d)%s", iteration, extension);
-			return s;
-		}
-	}
-
-	public boolean run() {
-		if (!buildTmpPackage(true))
-			return false;
-		ref<context.Package> p = coordinator().activeContext().getPackage(context.PARASOL_CORE_PACKAGE_NAME);
-		if (p == null) {
-			printf("        FAIL: Could not find package '" + context.PARASOL_CORE_PACKAGE_NAME + "'\n");
-			return false;
-		}
-		string parasolDir = _packageDir + "/parasol";
-		if (!storage.copyDirectoryTree(p.directory(), parasolDir, false)) {
-			printf("        FAIL: Could not copy package from %s\n", p.directory());
-			return false;
-		}
-
-		// copy all compiled units to subdirectory. Need to figure out how to express this...
-		assert(false);
-
-		string mainFile = storage.path(buildDir(), _main);
-		string mainScript = storage.filename(_main);
-		string mainDest = storage.path(_packageDir, mainScript);
-		if (!storage.copyFile(mainFile, mainDest)) {
-			printf("        FAIL: Could not copy main file from %s\n", mainFile);
-			return false;
-		}
-
-		// write launch script
-		string runScript = storage.path(_packageDir, "run");
-		ref<Writer> w = storage.createTextFile(runScript);
-		if (w == null) {
-			printf("        FAIL: Could not create run script\n");
-			return false;
-		}
-		w.printf("pbuild_root=$(dirname \"`readlink -f \\\"$0\\\"`\")\n");
-		w.printf("exec \"$pbuild_root/parasol/bin/pc\" ");
-
-		w.printf("\"$pbuild_root/%s\" \"$@\"\n", storage.filename(_main));
-		delete w;
-		if (!storage.setExecutable(runScript, true)) {
-			printf("        FAIL: Could not make run script executable\n");
-			return false;
-		}
-
-		// write asm script
-		string asmScript = _packageDir;
-		asmScript.append("/asm");
-		w = storage.createTextFile(asmScript);
-		if (w == null) {
-			printf("        FAIL: Could not create asm script\n");
-			return false;
-		}
-		w.printf("pbuild_root=$(dirname \"`readlink -f \\\"$0\\\"`\")\n");
-		w.printf("exec \"$pbuild_root/parasol/bin/pc\" --asm -c \"$pbuild_root/%s\" \"$@\"\n", mainScript);
-		delete w;
-		if (!storage.setExecutable(asmScript, true)) {
-			printf("        FAIL: Could not make run script executable\n");
-			return false;
-		}
-
-		_buildSuccessful = true;
-		return deployPackage();
-	}
-
-	public boolean shouldCompile() {
-		time.Instant accessed, modified, created;
-		boolean success;
-
-		string packageDir = storage.path(outputDir(), filename());
-		string runScript = storage.path(packageDir, "run");
-
-		(accessed, modified, created, success) = storage.fileTimes(runScript);
-
-		if (success) {
-			if (corePackage != null && corePackage.inputsNewer(modified))
-				return true;
-			return inputsNewer(modified);
-		} else {
-			if (coordinator().reportOutOfDate())
-				printf("            %s - never built, building\n", runScript);
-			return true;
-		}
-	}
-
 	public boolean inputsNewer(time.Instant timeStamp) {
 		time.Instant accessed, modified, created;
 		boolean success;
@@ -718,34 +592,56 @@ class Application extends Package {
 			return true;
 		}
 
-		return super.inputsNewer(timeStamp);
-	}
+		string dir = storage.directory(mainFile);
 
-	public ref<compiler.Target>, boolean compile() {
-		if (!openCompiler())
-			return null, false;
-
-
-		string mainFile = storage.path(buildDir(), _main);
-		ref<compiler.Target> target = _compileContext.compile(mainFile);
-		if (coordinator().generateSymbolTables())
-			_arena.printSymbolTable();
-		if (coordinator().verbose())
-			_arena.print();
-		if (!printMessages())
-			return target, false;
-		if (coordinator().generateDisassembly()) {
-			if (!target.disassemble(_arena)) {
-				return target, false;
-			}
+		storage.Directory d(dir);
+		if (d.first()) {
+			do {
+				file := d.filename();
+				if (file == "." || file == "..")
+					continue;
+				path := d.path();
+				if (storage.isDirectory(path)) {
+					if (checkSubDirectory(this, timeStamp, path))
+						return true;
+				}
+			} while (d.next());
 		}
-		return target, true;
-	}
+		return super.inputsNewer(timeStamp);
 
-	public string toString() {
-		return "application " + name();
-	}
+		boolean checkSubDirectory(ref<Application> app, time.Instant timeStamp, string dirPath) {
+			storage.Directory d(dirPath);
+			if (d.first()) {
+				do {
+					file := d.filename();
+					if (file == "." || file == "..")
+						continue;
+					path := d.path();
+					if (file.endsWith(".p")) {
+						time.Instant accessed, modified, created;
+						boolean success;
 
+						(accessed, modified, created, success) = storage.fileTimes(path);
+						if (!success) {			// That's odd, should rebuild to see what happens
+							if (app.coordinator().reportOutOfDate())
+								printf(" - %s doesn't exist, building", path);
+							return true;
+						}
+						if (modified.compare(&timeStamp) > 0) {
+							if (app.coordinator().reportOutOfDate())
+								printf(" - %s out of date, building", path);
+							return true;
+						}
+					}
+					if (storage.isDirectory(path)) {
+						if (checkSubDirectory(app, timeStamp, path))
+							return true;
+					}
+				} while (d.next());
+			}
+			return false;
+		}
+	}
 }
 
 class Binary extends Application {
@@ -812,7 +708,6 @@ class Binary extends Application {
 		w.printf("else\n");
 		w.printf("export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$pbuild_root\n");
 		w.printf("fi\n");
-		w.printf("echo $LD_LIBRARY_PATH\n");
 		w.printf("exec \"$pbuild_root/parasolrt\" \"$pbuild_root/application.pxi\" $@\n");
 		delete w;
 		if (!storage.setExecutable(runScript, true)) {
@@ -848,7 +743,7 @@ class Binary extends Application {
 	}
 
 	public string toString() {
-		return "binary " + name();
+		return "application " + name();
 	}
 }
 
@@ -893,6 +788,25 @@ class Command extends Application {
 				printf("            %s - never built, building\n", name());
 			return true;
 		}
+	}
+
+	public ref<compiler.Target>, boolean compile() {
+		if (!openCompiler())
+			return null, false;
+		string mainFile = storage.path(buildDir(), _main);
+		ref<compiler.Target> target = _compileContext.compile(mainFile);
+		if (coordinator().generateSymbolTables())
+			_arena.printSymbolTable();
+		if (coordinator().verbose())
+			_arena.print();
+		if (!printMessages())
+			return target, false;
+		if (coordinator().generateDisassembly()) {
+			if (!target.disassemble(_arena)) {
+				return target, false;
+			}
+		}
+		return target, true;
 	}
 
 	protected void failMessage() {
@@ -941,7 +855,6 @@ class Pxi extends Application {
 	}
 
 	public ref<compiler.Target>, boolean compile() {
-
 		string mainFile = storage.path(buildDir(), _main);
 		ref<compiler.Target> target = _compileContext.compile(mainFile);
 		if (coordinator().generateSymbolTables())
@@ -971,11 +884,9 @@ class Pxi extends Application {
 		string target = storage.path(outputDir(), filename());
 
 		(accessed, modified, created, success) = storage.fileTimes(target);
-		if (success) {
-			if (corePackage != null && corePackage != this && corePackage.inputsNewer(modified))
-				return true;
+		if (success)
 			return inputsNewer(modified);
-		} else {
+		else {
 			if (coordinator().reportOutOfDate())
 				printf("            %s - never built, building\n", path());
 			return true;
@@ -997,10 +908,6 @@ class Pxi extends Application {
 		string s;
 		s.printf("pxi %s", name());
 		return s;
-	}
-
-	public boolean inputsNewer(time.Instant timeStamp) {
-		return false;
 	}
 
 	public string path() {
