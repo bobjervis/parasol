@@ -98,7 +98,8 @@ public class Disassembler {
 	}
 	
 	void setVtablesClasses(ref<ref<ClassScope>[]> vtables) {
-		_vtables = vtables;
+		if (_pxiHeader.vtableData > 0)
+			_vtables = vtables;
 	}
 	
 	public boolean disassemble() {
@@ -475,7 +476,8 @@ public class Disassembler {
 					for (int i = 0; i < _pxiHeader.vtableData; i++, methodIndex++) {
 						int vtableValue = i * address.bytes + 1;
 						if (vtableIndex < _vtables.length() && int(scope.vtable) == vtableValue) {
-							printf("\n      %s (%p) (pxi %x):\n", scope.classType.signature(), &vp[i], _pxiHeader.vtablesOffset + i * address.bytes);
+							printf("\n      %s (%p) (pxi %x):\n", scope.classType.signature(), &vp[i], 
+																_pxiHeader.vtablesOffset + i * address.bytes);
 							vtableIndex++;
 							methods = scope.methods();
 							scope = (*_vtables)[vtableIndex];

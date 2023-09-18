@@ -29,6 +29,9 @@ private ref<log.Logger> logger = log.getLogger("parasol.rpc");
 
 public class ClientTransport {
 	public abstract string call(string serializedArguments);
+
+	void dispose() {
+	}
 }
 
 class HttpTransport extends ClientTransport {
@@ -59,9 +62,20 @@ class WebSocketTransport extends ClientTransport {
 	ref<AbstractWebSocketReader> reader;
 	http.RendezvousManager manager;
 	int serial;
-	ref<thread.RefCounted> rpcWebSocket;
+	ref<WebSocketVolatileData> rpcWebSocket;
 
-	void initialize(ref<thread.RefCounted> rpcWebSocket) {
+	void dispose() {
+		if (rpcWebSocket != null) {
+			rpcWebSocket.shutdown();
+			rpcWebSocket.waitForDisconnect();
+			printf("feeling better\n");
+			ws := rpcWebSocket;
+			rpcWebSocket = null;
+			ws.release();
+		}
+	}
+
+	void initialize(ref<WebSocketVolatileData> rpcWebSocket) {
 		this.rpcWebSocket = rpcWebSocket;
 	}
 
@@ -154,9 +168,55 @@ public class Client<class PROXY> extends HttpTransport {
 	}
 }
 /**
+ * This is a default interface you can use for an rpc end point that accepts no method calls.
+ *
+ * This is of almost no value to am HTTP rpc, since there is only one interface to implement,
+ * you will almost always want some method calls to be made.
+ *
+ * For a WebSocket protocol where you have two interfaces, either one can be NoMethods, depending
+ * on your needs.
+ */
+public interface NoMethods {
+}
+/**
+ * A value you can pass to any rpc parameter that expects an object that implements the 
+ * {@link NoMethods} interface.
+ */
+public NoMethods noMethods = null;
+/**
  * The web socket-based rpc.Client object is instantiated once for each distinct http request 
  * 
+ * After you connect and obtain the downstream proxy object, you can discard the Client object.
+ * You must remember to delete the proxy object when you're done with it.
  *
+ * In general, the sequence of calls to properly initialize an RPC proxy is as follows:
+ *
+ * <ol>
+ *     <li>Create the Client, giving it a url, WebSocket protocol matching the server and a
+ *	       downstream object to implements the client side of the API.
+ *		   If there are no methods on the downstream interface, you may pass {@link noMethods} as the
+ *		   downstream interface pointer.
+ *	   <li>Optionally, call the onDisconnect() method.
+ *		   If you don't set the onDisconnect handler, you will only discover that the server
+ *		   side has initiated a disconnect by having a call to the downstream proxy throw
+ *		   an exception.
+ *		   Even if you establish a disconnect handler, there is a race between any local calls 
+ *		   through the proxy and a call to the disconnectHandler.
+ *	   <li>Call the proxy method to obtain the upstream proxy. 
+ *		   Each successful call to the proxy method will establish a new connection.
+ *		   The underlying WebSocket is held open until you delete the proxy object.
+ * </ol>
+ *
+ * You can choose to retain the Client object for multiple connections.
+ * You can even call proxy a second time while the first WebSocket is still open.
+ *
+ * The only way to initiate a shutdown of the WebSocket for a given connection is to delete
+ * the proxy object.
+ *
+ * If you want to know the IP address of the server, you can explicitly call the connect()
+ * method before calling proxy().
+ * Calling the connect() method twice without calling proxy() in between will automatically
+ * close the first connection.
  */
 public class Client<class UPSTREAM, class DOWNSTREAM> extends http.Client {
 	ref<WebSocket<DOWNSTREAM, UPSTREAM>> _socket;
@@ -170,6 +230,8 @@ public class Client<class UPSTREAM, class DOWNSTREAM> extends http.Client {
 	 *
 	 * @param url The url to use for the HTTP request.
 	 * @param protocol The web socket protocol to submit to the server.
+	 * @param object An object that implements the downstream interface. If you don't want to
+	 * implement any downstream methods, pass the Client.noDownstream object.
 	 */
 	public Client(string url, string protocol, DOWNSTREAM object) {
 		super(url, protocol);
@@ -179,57 +241,62 @@ public class Client<class UPSTREAM, class DOWNSTREAM> extends http.Client {
 	public ~Client() {
 		delete _socket;
 	}
-
+	/**
+	 */
 	public void onDisconnect(http.DisconnectListener disconnectListener) {
 		_disconnectListener = disconnectListener;
 		if (_socket != null)
 			_socket.onDisconnect(_disconnectListener);
 	}
-
+	/**
+	 * For clients that want information about the remote server.
+	 *
+	 * Normally, you wouldn't issue this step, you would just call
+	 * proxy() to connect for you.
+	 *
+	 * @return The connection status of your call.
+	 * @return The IPv4 address of the remote server.
+	 */
 	public http.ConnectStatus, unsigned connect() {
 		http.ConnectStatus status;
 		unsigned ip;
-
 		(status, ip) = get();
 		if (status != http.ConnectStatus.OK)
 			return status, ip;
 		// Take ownership of any web socket object the underlying
 		// http.Client created for you.
-		ref<http.WebSocket> ws = webSocket();
+		ws := webSocket();
 		if (ws == null)
 			return http.ConnectStatus.WEB_SOCKET_REFUSED, ip;
-		// 
+
+		// If there's any socket object still hanging around from a previous connect() call,
+		// delete it now.
+
+		delete _socket;
+
 		_socket = new WebSocket<DOWNSTREAM, UPSTREAM>(ws, _downstreamObject);
 		_socket.onDisconnect(_disconnectListener);
 		_socket.startReader();
 		return http.ConnectStatus.OK, ip;
 	}
-
-	public UPSTREAM proxy() {
-		if (_socket != null)
-			return _socket.proxy();
-		else
-			return null;
-	}
-
-	public void shutdown() {
-		shutDown(http.WebSocket.CLOSE_NORMAL, "");
-	}
 	/**
-	 * Write a shutdown message.
+	 * Fetch the client proxy object.
 	 *
-	 * A single-frame message with an {@link http.WebSocket.OP_CLOSE} opcode is sent. The cause and reason values
-	 * are formatted according to the WebSocket protocol.
+	 * You may call this once per connection. The returned object is self-contained.
 	 *
-	 * @threading This method is thread-safe.
-	 *
-	 * @param cause The cause of the shutdown. Possible values include {@link http.WebSocket.CLOSE_NORMAL}, {@link http.WebSocket.CLOSE_GOING_AWAY},
-	 * {@link http.WebSocket.CLOSE_PROTOCOL_ERROR} or {@link http.WebSocket.CLOSE_BAD_DATA}.
-	 * @param reason A reason string that provides additional details about the cause.
+	 * @return The proxy object for the upstream interfacce.
+	 * If you have not gotten a successful connect() method call before calling proxy()
+	 * this method returns a null.
+	 * If you have already called this method once after a successful connect() call,
+	 * the method will return a null until you make another successful connect() call.
 	 */
-	public void shutDown(short cause, string reason) {
-		_socket.shutDown(cause, reason);
-		_socket.waitForDisconnect();
+	public UPSTREAM proxy() {
+		if (_socket == null && connect() != http.ConnectStatus.OK)
+			return null;
+		result := _socket.proxy();
+		// This ensures that once you have the proxy, the client object can go away without killing the proxy.
+		_socket = null;
+		return result;
 	}
 }
 /**
@@ -243,6 +310,10 @@ class ClientProxy {
 
 	ClientProxy(ref<ClientTransport> transport) {
 		_transport = transport;
+	}
+
+	~ClientProxy() {
+		_transport.dispose();
 	}
 }
 
@@ -304,6 +375,10 @@ monitor class WebSocketVolatileData extends thread.RefCounted implements http.Di
 		if (!_disconnected)
 			wait();
 	}
+
+	public void shutdown() {
+	}
+
 }
 
 public class WebSocket<class OBJECT, class PROXY> extends WebSocketVolatileData {
@@ -322,7 +397,7 @@ public class WebSocket<class OBJECT, class PROXY> extends WebSocketVolatileData 
 	~WebSocket() {
 		delete _transport.reader;
 		delete _transport.socket;
-		delete _downstreamProxy;
+//		delete _downstreamProxy;
 	}
 	/*
 	 * This is called from RefCounted.release when the final release
@@ -347,6 +422,10 @@ public class WebSocket<class OBJECT, class PROXY> extends WebSocketVolatileData 
 	void startReader() {
 		_transport.reader = new WebSocketReader<OBJECT, PROXY>(&_transport, _upstreamObject, _downstreamProxy);
 		_transport.socket.startReader(_transport.reader);
+	}
+
+	public void shutdown() {
+		shutDown(http.WebSocket.CLOSE_NORMAL, "");
 	}
 	/**
 	 * Write a shutdown message.

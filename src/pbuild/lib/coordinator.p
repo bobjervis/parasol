@@ -168,8 +168,84 @@ public class Coordinator extends CoordinatorVolatileData {
 			return false;
 		}
 
-		if (_products.length() == 0)
-			printf("No build files found - nothing to do.\n");
+		if (_products.length() == 0) {
+			printf("    FAIL: No build files found - nothing to do.\n");
+			return false;
+		}
+
+		boolean success = true;
+		if (_commandLineProducts.length() > 0) {
+			boolean[] selected;
+			selected.resize(_products.length());
+			for (i in _commandLineProducts) {
+				boolean found;
+				for (j in _products) {
+					if (_products[j].name() == _commandLineProducts[i]) {
+						found = true;
+						selected[j] = true;
+						break;
+					}
+				}
+				if (!found) {
+					printf("    Unknown product: %s\n", _commandLineProducts[i]);
+					success = false;
+				}
+			}
+			if (!success) {
+				printf("FAILED!\n");
+				return false;
+			}
+			boolean changed;
+			boolean[] checked;
+			checked.resize(_products.length());
+			do {
+				changed = false;
+				for (i in selected) {
+					if (!selected[i])
+						continue;
+					if (checked[i])
+						continue;
+					checked[i] = true;
+					changed = true;
+					included := _products[i].includedProducts();
+					for (j in included) {
+						k := _products.find(included[j]);
+						if (k < _products.length()) {
+							selected[k] = true;
+						}
+					}
+				}
+			} while (changed);
+	
+			ref<Product>[] selectedProducts;
+			for (i in selected) {
+				if (!selected[i])
+					continue;
+				selectedProducts.append(_products[i]);
+				_products[i] = null;
+			}
+			for (i in _products) {
+				if (_products[i] != null)
+					delete _products[i];
+			}
+			_products = selectedProducts;
+		}
+
+		if (_generateDisassembly) {
+			boolean disassemblyPossible;
+			for (i in _products) {
+				p := _products[i];
+				if (p.class <= Application) {
+					disassemblyPossible = true;
+					break;
+				}
+			}
+			if (!disassemblyPossible) {
+				printf("    FAIL: None of the selected products can produce a meaningful dis-assembly\n");
+				return false;
+			}
+		}
+
 
 		if (_verbose) {
 			for (i in _products)
@@ -284,62 +360,6 @@ public class Coordinator extends CoordinatorVolatileData {
 			_overallSuccess = true;
 		}
 		boolean success = true;
-		if (_commandLineProducts.length() > 0) {
-			boolean[] selected;
-			selected.resize(_products.length());
-			for (i in _commandLineProducts) {
-				boolean found;
-				for (j in _products) {
-					if (_products[j].name() == _commandLineProducts[i]) {
-						found = true;
-						selected[j] = true;
-						break;
-					}
-				}
-				if (!found) {
-					printf("    Unknown product: %s\n", _commandLineProducts[i]);
-					success = false;
-				}
-			}
-			if (!success) {
-				printf("FAILED!\n");
-				return 1;
-			}
-			boolean changed;
-			boolean[] checked;
-			checked.resize(_products.length());
-			do {
-				changed = false;
-				for (i in selected) {
-					if (!selected[i])
-						continue;
-					if (checked[i])
-						continue;
-					checked[i] = true;
-					changed = true;
-					included := _products[i].includedProducts();
-					for (j in included) {
-						k := _products.find(included[j]);
-						if (k < _products.length()) {
-							selected[k] = true;
-						}
-					}
-				}
-			} while (changed);
-	
-			ref<Product>[] selectedProducts;
-			for (i in selected) {
-				if (!selected[i])
-					continue;
-				selectedProducts.append(_products[i]);
-				_products[i] = null;
-			}
-			for (i in _products) {
-				if (_products[i] != null)
-					delete _products[i];
-			}
-			_products = selectedProducts;
-		}
 		if (_commandLineProducts.length() == 0)
 			printf("Building all %d products.\n", _products.length());
 		else if (_commandLineProducts.length() == 1)

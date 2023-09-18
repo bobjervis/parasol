@@ -381,6 +381,11 @@ public class Package extends Product {
 			_arena.printSymbolTable();
 		if (coordinator().verbose())
 			_arena.print();
+		if (coordinator().generateDisassembly()) {
+			if (!target.disassemble(_arena)) {
+				return target, false;
+			}
+		}
 		if (!printMessages()) {
 			delete target;
 			return null, false;
@@ -519,7 +524,9 @@ public class Package extends Product {
 				break;
 			}
 		}
-		_compileContext = new compiler.CompileContext(_arena, coordinator().verbose(), coordinator().logImports());
+		_compileContext = new compiler.CompileContext(_arena, 
+													  coordinator().verbose(),
+													  coordinator().logImports());
 	}
 
 	public string toString() {
@@ -723,11 +730,21 @@ class Binary extends Application {
 	}
 
 	public ref<compiler.Target>, boolean compile() {
-		ref<compiler.Target> target;
-		boolean success;
-		(target, success) = super.compile();
-		if (!success)
+		if (!openCompiler())
+			return null, false;			
+		string mainFile = storage.path(buildDir(), _main);
+		ref<compiler.Target> target = _compileContext.compile(mainFile);
+		if (coordinator().generateSymbolTables())
+			_arena.printSymbolTable();
+		if (coordinator().verbose())
+			_arena.print();
+		if (!printMessages())
 			return target, false;
+		if (coordinator().generateDisassembly()) {
+			if (!target.disassemble(_arena)) {
+				return target, false;
+			}
+		}
 		if (!storage.ensure(path())) {
 			printf("        FAIL: Could not ensure %s\n", path());
 			return target, false;
@@ -774,6 +791,8 @@ class Command extends Application {
 		time.Instant accessed, modified, created;
 		boolean success;
 
+		if (coordinator().generateDisassembly())
+			return true;
 		(accessed, modified, created, success) = storage.fileTimes(sentinelFileName());
 
 		if (success) {
@@ -879,6 +898,9 @@ class Pxi extends Application {
 	}
 
 	public boolean shouldCompile() {
+		if (coordinator().generateDisassembly())
+			return true;
+
 		time.Instant accessed, modified, created;
 		boolean success;
 		string target = storage.path(outputDir(), filename());

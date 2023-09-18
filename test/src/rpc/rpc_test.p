@@ -167,9 +167,7 @@ class ClientWork implements WSDownstream, http.DisconnectListener {
 	logger.debug("message count %d", down.testMessageCount);
 	assert(down.testMessageCount == 3);
 
-	// The normal shutdown sequence
-
-	client.shutdown();
+	delete up;
 }
 assert(downstreamDisconnect);
 server.stop();
