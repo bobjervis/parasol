@@ -330,7 +330,7 @@ class File extends Component {
 			if (_modified[i].compare(&timeStamp) > 0) {
 				if (_enclosing.coordinator().reportOutOfDate()) {
 					string srcFile = storage.path(src, _names[i]);
-					printf("            %s out of date, building\n", srcFile);
+					printf("            %s out of date, building\n", herePath(srcFile));
 				}
 				return true;
 			}

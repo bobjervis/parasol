@@ -333,8 +333,11 @@ public class Package extends Product {
 
 		if (success)
 			return inputsNewer(modified);
-		else
+		else {
+			if (coordinator().reportOutOfDate())
+				printf("            %s hasn't been built, building\n", toString());
 			return true;		// sentinel file doesn't exist, maybe we never built this guy but we gotta build it now
+		}
 	}
 
 	public boolean inputsNewer(time.Instant timeStamp) {
@@ -589,13 +592,13 @@ class Application extends Package {
 
 		if (!success) {
 			if (coordinator().reportOutOfDate())
-				printf(" - %s doesn't exist, building", mainFile);
+				printf("            %s doesn't exist, building\n", herePath(mainFile));
 			return true;
 		}
 
 		if (modified.compare(&timeStamp) > 0) {
 			if (coordinator().reportOutOfDate())
-				printf(" - %s out of date, building", mainFile);
+				printf("            %s out of date, building\n", herePath(mainFile));
 			return true;
 		}
 
@@ -629,14 +632,14 @@ class Application extends Package {
 						boolean success;
 
 						(accessed, modified, created, success) = storage.fileTimes(path);
-						if (!success) {			// That's odd, should rebuild to see what happens
+						if (!success) {			// That's odd - directry scan found it, but fileTimes missed it, should rebuild to see what happens
 							if (app.coordinator().reportOutOfDate())
-								printf(" - %s doesn't exist, building", path);
+								printf("            %s doesn't exist, building\n", herePath(path));
 							return true;
 						}
 						if (modified.compare(&timeStamp) > 0) {
 							if (app.coordinator().reportOutOfDate())
-								printf(" - %s out of date, building", path);
+								printf("            %s out of date, building\n", herePath(path));
 							return true;
 						}
 					}
@@ -722,7 +725,7 @@ class Binary extends Application {
 			return false;
 		}
 		_buildSuccessful = true;
-		if (deployPackage()) {
+		if (deployPackage() && writeSentinelFile()) {
 			printf("        %s - built\n", name());
 			return true;
 		} else
@@ -749,6 +752,8 @@ class Binary extends Application {
 			printf("        FAIL: Could not ensure %s\n", path());
 			return target, false;
 		}
+		if (target == null)
+			return target, false;
 		string pxiFile = storage.path(_packageDir, "application.pxi");
 		ref<pxi.Pxi> output = pxi.Pxi.create(pxiFile);
 		target.writePxi(output);
@@ -757,6 +762,12 @@ class Binary extends Application {
 			return target, false;
 		}
 		return target, true;
+	}
+
+	public boolean shouldCompile() {
+		if (coordinator().generateDisassembly())
+			return true;
+		return super.shouldCompile();
 	}
 
 	public string toString() {
@@ -910,7 +921,7 @@ class Pxi extends Application {
 			return inputsNewer(modified);
 		else {
 			if (coordinator().reportOutOfDate())
-				printf("            %s - never built, building\n", path());
+				printf("            %s - never built, building\n", filename());
 			return true;
 		}
 		return true;
@@ -1116,4 +1127,6 @@ class IncludePackage extends Product {
 	}
 }
 
-
+string herePath(string path) {
+	return storage.makeCompactPath(path, storage.path(storage.currentWorkingDirectory(), "xxx"));
+}

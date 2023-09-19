@@ -68,7 +68,6 @@ class WebSocketTransport extends ClientTransport {
 		if (rpcWebSocket != null) {
 			rpcWebSocket.shutdown();
 			rpcWebSocket.waitForDisconnect();
-			printf("feeling better\n");
 			ws := rpcWebSocket;
 			rpcWebSocket = null;
 			ws.release();
