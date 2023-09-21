@@ -64,13 +64,18 @@ class WebSocketTransport extends ClientTransport {
 	int serial;
 	ref<WebSocketVolatileData> rpcWebSocket;
 
+	~WebSocketTransport() {
+		delete reader;
+		delete socket;
+	}
+
 	void dispose() {
 		if (rpcWebSocket != null) {
 			rpcWebSocket.shutdown();
 			rpcWebSocket.waitForDisconnect();
 			ws := rpcWebSocket;
 			rpcWebSocket = null;
-			ws.release();
+			ws.unrefer();			// This WebSocketTransport is embedded as a member of rpcWebSocket.
 		}
 	}
 
@@ -102,7 +107,7 @@ class WebSocketTransport extends ClientTransport {
 				shouldThrow = true;
 		}
 		delete r;
-		rpcWebSocket.release();
+		rpcWebSocket.unrefer();
 		if (shouldThrow)
 			throw IOException("Connection closed before reply");
 		return s;
@@ -392,19 +397,6 @@ public class WebSocket<class OBJECT, class PROXY> extends WebSocketVolatileData 
 		_upstreamObject = object;
 		_downstreamProxy = PROXY.proxy(&_transport);
 	}
-
-	~WebSocket() {
-		delete _transport.reader;
-		delete _transport.socket;
-//		delete _downstreamProxy;
-	}
-	/*
-	 * This is called from RefCounted.release when the final release
-	 * call occurs. It is declared protected to hide it from calling-code.
-	 */
-	protected void deleteMe() {
-		delete this;
-	}
 	/**
 	 * Set the upstream object handling remote calls into this local object.
 	 *
@@ -549,7 +541,7 @@ class WebSocketReader<class OBJECT, class PROXY> extends AbstractWebSocketReader
 				ref<http.Rendezvous>[] pending = _transport.manager.extractAllRendezvous();
 				for (int i = 0; i < pending.length(); i++)
 					pending[i].abandon();
-				_transport.rpcWebSocket.release();
+				_transport.rpcWebSocket.unrefer();
 				return sawClose;
 			}
 		}
@@ -584,7 +576,7 @@ class WebSocketReader<class OBJECT, class PROXY> extends AbstractWebSocketReader
 		string reply;
 		reply.printf("R%s%s", substring(&cp.message[1], index), returns);
 		_transport.socket.write(reply);
-		_transport.rpcWebSocket.release();
+		_transport.rpcWebSocket.unrefer();
 		delete cp;
 	}
 }
@@ -681,7 +673,6 @@ string hexify(string argument) {
 		output.printf("%2.2x", argument[i]);
 	return output;
 }
-
 /*
  * By being a unique class that no user code could involve in an interface, this
  * gurantees that the stub method doesn't collide

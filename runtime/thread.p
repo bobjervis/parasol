@@ -633,32 +633,118 @@ public class Monitor {
 		return true;
 	}
 }
+// This illustrates some of the weakness of the current concept of a 'monitor class'.
+// I'd like to be able to 'rope-off' a set of members and/or methods such that they
+// behave like they're in a monitor class, but let other members and methods live a
+// looser existence. I want to control when a lock on the 'this' object is taken
+// and somtimes release it like in the case of 'unrefer' below.
+private monitor class RefCountedBase {
+}
 
-public monitor class RefCounted {
+public class RefCounted extends RefCountedBase {
 	private int _refCount;
 
 	public void refer() {
-		_refCount++;
+		lock(*this) {
+			_refCount++;
+		}
 //		printf("%p.refer() -> %d\n%s", this, _refCount, runtime.stackTrace());
 	}
 	/**
 	 * This method may delete the object being called, so never count on the object being
 	 * alive after a call to release.
 	 */
-	public void release() {
-		_refCount--;
-//		printf("%p.release() -> %d\n%s", this, _refCount, runtime.stackTrace());
-		if (_refCount < 0)
-			deleteMe();
+	public void unrefer() {
+		boolean timeToDelete;
+
+		lock (*this) {
+			_refCount--;
+//			printf("%p.release() -> %d\n%s", this, _refCount, runtime.stackTrace());
+			if (_refCount < 0)
+				timeToDelete = true;
+		}
+		if (timeToDelete)
+			delete this;
 	}
 
 	public int references() {
-		return _refCount + 1;
+		lock (*this) {
+			return _refCount + 1;
+		}
+	}
+}
+/*
+I'd like to write (this is also safer as _refCount is trule protected:
+public monitor class RefCounted {
+	monitor {
+		private int _refCount;
+	
+		public void refer() {
+			_refCount++;
+		}
+
+		public int references() {
+			return _refCount + 1;
+		}
 	}
 
-	protected abstract void deleteMe();
+	public void unrefer() {
+		boolean timeToDelete;
+
+		lock (*this) {
+			_refCount--;
+			if (_refCount < 0)
+				timeToDelete = true;
+		}
+		if (timeToDelete)
+			delete this;
+	}
 }
 
+declaring a monitor class, say C, actually introduces an intermediate base class under the declared class (above, for example).
+
+private class __anonymous__ (( extends whatever the declared class does )) {
+	private Monitor __monitor__;
+
+	public void notify() {
+		__monitor__.notify();
+	}
+
+	public int notifyAll() {
+		return __monitor__.notifyAll();
+	}
+
+	public void wait() {
+		__monitor__.wait();
+	}
+
+	public boolean wait(Duration timeout) {
+		return __monitor__.wait(timeout);
+	}
+
+	public boolean isLocked() {
+		return __monitor__.isLocked();
+	}
+}
+
+class C extends __anonymous__ implements <whatever> {
+}
+
+each further derived monitor class refers to the same anonymous base class to find __monitor__ so a
+lock (this) becomes a lock(__monitor__).
+
+Unfortunately, this __nonymous__ base class isn't unique since a monitor class that dervies from a fully 
+unmonitored stack would need a specialized anonymous class as in:
+
+class BaseMost {
+}
+
+monitor class Derived extends BaseMost {
+}
+
+Here, the notify, etc methods would have to mask any defined in the BaseMost class, but otherwise allow
+visible members from BaseMost to be accessed through anywhere in Derived and any other classes that extend it.
+ */
 class Mutex {
 	private int _level;
 	private HANDLE _mutex;
