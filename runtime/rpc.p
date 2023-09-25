@@ -174,7 +174,7 @@ public class Client<class PROXY> extends HttpTransport {
 /**
  * This is a default interface you can use for an rpc end point that accepts no method calls.
  *
- * This is of almost no value to am HTTP rpc, since there is only one interface to implement,
+ * This is of almost no value to an HTTP rpc, since there is only one interface to implement,
  * you will almost always want some method calls to be made.
  *
  * For a WebSocket protocol where you have two interfaces, either one can be NoMethods, depending

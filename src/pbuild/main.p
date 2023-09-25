@@ -13,6 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+import parasol:compiler;
 import parasol:process;
 import parasol:pbuild.Coordinator;
 import parasol:pbuild.thisOS;
@@ -44,7 +45,10 @@ class PBuildCommand extends process.Command {
 					"If no products are given as arguments, then all products enabled in " +
 					"the build scripts will be built. " +
 					"If one or more products are given as arguments, then only those products " +
-					"plus any products the named ones are dependent one will be built."
+					"plus any products the named ones are dependent one will be built." +
+					"\n" +
+					"Parasol Compiler Version " + compiler.version() + "\n" +
+					"Copyright (c) 2015 Robert Jervis"
 					);
 		buildDirOption = stringOption('d', "dir",
 					"Designates the root directory for the build source tree. " +

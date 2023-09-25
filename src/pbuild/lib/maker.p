@@ -99,7 +99,7 @@ class Folder extends Component {
 	}
 
 	boolean use(ref<BuildFile> buildFile, ref<script.Object> object) {
-		buildFile.error(object, "A use reference must be in a package");
+		buildFile.error(object, "A use reference must be in a parasol product");
 		return false;
 	}
 

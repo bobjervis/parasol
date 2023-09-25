@@ -27,21 +27,6 @@ import parasol:thread.Thread;
 import parasol:pxi;
 import parasol:memory;
 import parasol:storage;
-
-/**
- * The Parasol Runtime version string.
- *
- *{@code &lt;Major Release&gt;.&lt;Minor Release&gt;.&lt;Fix Release&gt;}
- *
- * Major Release: Incremented when a breaking change is released
- * Minor Feature Release: Incremented when significant new features
- * are released.
- * Fix Release: Incremented when bug fixes are released.
- *
- * Note: Major Release == 0 means this is 'unreleased' and any public API can change at any moment.
- */
-public string RUNTIME_VERSION = "0.6.0";
-
 /**
  * This is a special variable used to control compile-time conditional compilation.
  *

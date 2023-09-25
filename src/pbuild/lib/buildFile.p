@@ -28,12 +28,15 @@ public class BuildFile {
 	private void (string, string, var...) _errorMessage;
 	private ref<script.Parser> _parser;
 	private boolean _detectedErrors;
+	private ref<Coordinator> _coordinator;
 
-	BuildFile(string buildFile, void (string, string, var...) errorMessage, string targetOS, string targetCPU) {
+	BuildFile(string buildFile, void (string, string, var...) errorMessage, string targetOS, string targetCPU, 
+			  ref<Coordinator> coordinator) {
 		_buildFile = buildFile;
 		_targetOS = targetOS;
 		_targetCPU = targetCPU;
 		_errorMessage = errorMessage;
+		_coordinator = coordinator;
 	}
 
 	~BuildFile() {
@@ -41,9 +44,10 @@ public class BuildFile {
 		delete _parser;
 	}
 
-	public static ref<BuildFile> parse(string buildFile, string content, void (string, string, var...) errorMessage, string targetOS, string targetCPU) {
+	public static ref<BuildFile> parse(string buildFile, string content, void (string, string, var...) errorMessage, 
+									   string targetOS, string targetCPU, ref<Coordinator> coordinator) {
 		boolean success = true;
-		ref<BuildFile> bf = new BuildFile(buildFile, errorMessage, targetOS, targetCPU);
+		ref<BuildFile> bf = new BuildFile(buildFile, errorMessage, targetOS, targetCPU, coordinator);
 
 		if (content != null)
 			bf._parser = script.Parser.loadFromString(buildFile, content);
@@ -260,6 +264,10 @@ public class BuildFile {
 	void error(ref<script.Atom> a, string msg, var... args) {
 		_detectedErrors = true;
 		_parser.log.error(a != null ? a.offset() : 0, msg, args);
+	}
+
+	ref<Coordinator> coordinator() {
+		return _coordinator;
 	}
 }
 

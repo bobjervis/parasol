@@ -189,6 +189,7 @@ string linkTo(ref<compiler.Symbol> sym) {
 	case FUNCTION:
 	case ENUM:
 	case FLAGS:
+	case INTERFACE:
 		if (classChain != null)
 			path = storage.path(storage.path(path, "classes"), classChain + ".html");
 		else

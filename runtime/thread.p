@@ -674,7 +674,7 @@ public class RefCounted extends RefCountedBase {
 	}
 }
 /*
-I'd like to write (this is also safer as _refCount is trule protected:
+I'd like to write (this is also safer as _refCount is truly protected):
 public monitor class RefCounted {
 	monitor {
 		private int _refCount;

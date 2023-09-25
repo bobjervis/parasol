@@ -46,7 +46,7 @@ class GenHeaderCommand extends process.Command {
 					"Refer to the Parasol language reference manual for details on " +
 					"permitted syntax." +
 					"\n" +
-					"Parasol Runtime Version " + runtime.RUNTIME_VERSION + "\r" +
+					"Parasol Compiler Version " + compiler.version() + "\r" +
 					"Copyright (c) " + COPYRIGHT_STRING
 					);
 		contextOption = stringOption(0, "context",

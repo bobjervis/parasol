@@ -18,11 +18,13 @@ namespace parasol:context;
 import parasol:compiler;
 import parasol:exception.IllegalArgumentException;
 import parasol:exception.IllegalOperationException;
+import parasol:json;
 import parasol:process;
 import parasol:storage;
 import parasol:time;
 
 string PACKAGE_MANIFEST = ":manifest:";
+public string PACKAGE_METADATA = "package.json";
 
 monitor class ContextLock {
 	ref<Context>[string] _contexts;
@@ -56,10 +58,10 @@ monitor class ContextLock {
 						if (validateContextName(contextName) &&
 							storage.isDirectory(path))
 							_contexts[contextName] = new Context(contextName, path);
-						if (!_contexts.contains("default"))
-							_contexts["default"] = new Context("default");
         		    } while (d.next());
 		        } 
+				if (!_contexts.contains("default"))
+					_contexts["default"] = new Context("default", storage.path(_contextDirectory, "default"));
 			} else
 				throw IllegalOperationException("Parasol language context database is corrupted");
 		} else
@@ -139,7 +141,7 @@ public class Context {
 		string exePath = process.binaryFilename();
 		string installDir = storage.directory(storage.directory(exePath));
 		string corePath = storage.path(installDir, "runtime");
-		_core = new CorePackage(core, corePath);
+		_core = new CorePackage(this, core, corePath);
 		_packages[core] = _core;
 	}
 	/**
@@ -169,7 +171,7 @@ public class Context {
 	}
  */
 	/**
-	 * Retrieve the named package from this context.
+	 * Retrieve the highest version of the named package from this context.
 	 */
 	public ref<Package> getPackage(string name) {
 		ref<Package> p = _packages[name];
@@ -180,16 +182,51 @@ public class Context {
 		// If the default context has never been modified, it won't have a directory
 		// in the user's context list, so there won't be a defined _database field.
 		if (_database != null) {
-			string packageDir = storage.path(_database, "pkg/" + name);
+			string packageDir = storage.path(storage.path(_database, "pkg"), name);
 			if (!storage.isDirectory(packageDir))
 				return null;
-			p = new Package(name, packageDir);
+			versionList := versions(packageDir);
+			if (versionList.length() == 0)
+				return null;
+			versionDir := storage.path(packageDir, "v" + highestVersion(versionList));
+			p = new Package(this, name, versionDir);
+			_packages[name] = p;
+			return p;
+		}
+		return null;
+	}
+	/**
+	 * Retrieve a specific version of the named package from this context.
+	 */
+	public ref<Package> getPackage(string name, string version) {
+		ref<Package> p = _packages[name];
+		if (p != null)
+			return p;
+		if (!validatePackageName(name))
+			return null;
+		// If the default context has never been modified, it won't have a directory
+		// in the user's context list, so there won't be a defined _database field.
+		if (_database != null) {
+			string packageDir = storage.path(storage.path(_database, "pkg"), name);
+			versionDir := storage.path(packageDir, "v" + version);
+			if (!storage.isDirectory(versionDir))
+				return null;
+			p = new Package(this, name, versionDir);
 		}
 		return null;
 	}
 
 	public boolean definePackage(ref<Package> p) {
-		return false;
+		assert(_database != null);
+		string packageDir = storage.path(storage.path(_database, "pkg"), p.name());
+		versionDir := storage.path(packageDir, "v" + p.version());
+		printf("_database = %s versionDir = %s\n", _database, versionDir);
+		if (storage.exists(versionDir))
+			return false;
+		if (!storage.ensure(packageDir))
+			return false;
+		printf("Copying %s -> %s\n", p.directory(), versionDir);
+		return storage.copyDirectoryTree(p.directory(), versionDir, false);
 	}
 
 	public int compare(ref<Context> other) {
@@ -205,6 +242,75 @@ public class Context {
 
 	public void print() {
 	}
+}
+
+string highestVersion(string[] versionList) {
+	unsigned[] highest;
+	string highestVer;
+	for (i in versionList) {
+		s := versionList[i];
+		components := s.split('.');
+		unsigned[] ver;
+
+		for (j in components) {
+			unsigned x = unsigned.parse(components[j]);
+			ver.append(x);
+		}
+		if (highest.length() >= ver.length()) {
+			for (j in ver) {
+				if (highest[j] < ver[j]) {
+					highest = ver;
+					highestVer = s;
+					break;
+				} else if (highest[j] > ver[j])
+					break;
+			}
+		} else {
+			boolean allEqual = true;
+			for (j in highest) {
+				if (highest[j] < ver[j]) {
+					allEqual = true;
+					break;
+				} else if (highest[j] > ver[j]) {
+					allEqual = false;
+					break;
+				}
+			}
+			if (allEqual) {
+				highest = ver;
+				highestVer = s;
+			}
+		}
+	}
+	return highestVer;
+}
+
+string[] versions(string packageDir) {
+	storage.Directory d(packageDir);
+	string[] results;
+
+	if (d.first()) {
+		do {
+			name := d.filename();
+			if (name[0] == 'v') {
+				substring ss = name.substr(1);
+				components := ss.split('.');
+				boolean valid = true;
+				for (j in components) {
+					unsigned x;
+					boolean success;
+		
+					(x, valid) = unsigned.parse(components[j]);
+					if (!valid)
+						break;
+				}
+				if (!valid)
+					continue;
+				results.append(ss);
+			}
+		} while (d.next());
+	}
+	return results;
 }
 /**
  * Create a new context from a directory.
@@ -276,12 +382,7 @@ public ref<Context> create(string name) {
 public ref<Context> get(string name) {
 	lock (contextLock) {
 		populateContexts();
-		ref<Context> result = _contexts[name];
-		if (result == null && name == "default") {
-			result = new Context(name);
-			_contexts[name] = result;
-		}
-		return result;
+		return _contexts[name];
 	}
 }
 /**
@@ -341,7 +442,7 @@ public class TemporaryContext extends Context {
 				if (idx > 2) {
 					substring packageName = line.substr(1, idx);
 					substring directory = line.substr(idx + 1);
-					ref<Package> p = new Package(packageName, directory);
+					ref<Package> p = new Package(this, packageName, directory);
 					definePackage(p);
 				} else {
 					printf("File %s Line %d: Malformed record '%s'\n", filename, lineno, line);
@@ -459,7 +560,7 @@ private string ensureContextHome() {
 	if (storage.ensure(contextHome))
 		return contextHome;
 	else {
-		printf("Could not create the user context database, check our permissions for '%s'\n", contextHome);
+		printf("Could not create the user context database, check permissions for '%s'\n", contextHome);
 		return null;
 	}
 }
@@ -476,27 +577,38 @@ private string getContextHome() {
 public string PARASOL_CORE_PACKAGE_NAME = "core:parasollanguage.org";
 
 private monitor class VolatilePackage {
-	enum ManifestState {
+	enum LoadState {
 		NOT_LOADED,
 		LOADING,
 		LOADED,
 		FAILED
 	}
 
-	protected ManifestState _manifestState;
+	protected LoadState _manifestState;
+	protected LoadState _metadataState;
 }
 
 /**
  * This class describes an installed package. It is built from the information stored in the context database.
  */
 public class Package extends VolatilePackage {
+	private ref<Context> _owner;
 	private string _name;
+	private string _version;
 	private string _directory;
 	private ref<Namespace>[string] _domains;
 	private string[] _initFirst;
 	private string[] _initLast;
+	private Use[] _usedPackages;
 
-	Package(string name, string directory) {
+	class Use {
+		string name;
+		string builtWith;
+		ref<Package> package;
+	}
+
+	Package(ref<Context> owner, string name, string directory) {
+		_owner = owner;
 		_name = name;
 		_directory = directory;
 	}
@@ -583,12 +695,14 @@ public class Package extends VolatilePackage {
 		lock (*this) {
 			switch (_manifestState) {
 			case NOT_LOADED:
-				_manifestState = ManifestState.LOADING;
+				_manifestState = LoadState.LOADING;
 				break;
 
 			case LOADING:
-				wait();
-				if (_manifestState == ManifestState.FAILED)
+				do
+					wait();
+				while (_manifestState == LoadState.LOADING);
+				if (_manifestState == LoadState.FAILED)
 					return false;
 
 			case LOADED:
@@ -656,11 +770,11 @@ public class Package extends VolatilePackage {
 			printf("        FAILED: to open manifest for package %s: %s\n", _name, manifestFile);
 		lock (*this) {
 			if (success) {
-				_manifestState = ManifestState.LOADED;
+				_manifestState = LoadState.LOADED;
 				notifyAll();
 				return true;
 			} else {
-				_manifestState = ManifestState.FAILED;
+				_manifestState = LoadState.FAILED;
 				// Purge all the failed data before we unleash any waiting threads.
 				_initFirst.clear();
 				_initLast.clear();
@@ -698,9 +812,186 @@ public class Package extends VolatilePackage {
 		(accessed, modified, created, success) = storage.fileTimes(manifest);
 		return modified, success;
 	}
-
+	/**
+	 * The name of the package.
+	 *
+	 * @return The package name, and identifier followed by a colon followed by a validly formatted DNS name string.
+	 */
 	public string name() {
 		return _name;
+	}
+	/**
+ 	 * The version of the package.
+	 *
+	 * @return The package version string, or null if the package metadata was malformed.
+	 *
+	 * @exception IllegalOperationException Thrown on the first reference to metadata if the package
+	 * metadata was either malformed or missing entirely.
+	 */
+	public string version() {
+		loadMetadata();
+		return _version;
+	}
+	/**
+	 * The list of packages used by this one.
+	 *
+	 * @return An array of Package's that were used by this package, or an empty array if
+	 * the package metadata was either malformed or missing entirely.
+	 * If the array is not empty, but any of the entries are not defined in the current context,
+	 * the return value for that entry will be null.
+	 *
+	 * @return true if all of the used packages do exist in this package's context.
+	 */
+	public ref<Package>[string], boolean usedPackages() {
+		loadMetadata();
+		ref<Package>[string] results;
+		boolean success = true;
+		lock (*this) {
+			for (i in _usedPackages) {
+				u := &_usedPackages[i];
+				if (u.package == null) {
+					u.package = _owner.getPackage(u.name);
+					if (u.package == null)
+						success = false;
+				}
+				results[u.name] = u.package;
+			}
+		}
+		return results, success;
+	}
+
+	void loadMetadata() {
+		lock (*this) {
+			switch (_metadataState) {
+			case NOT_LOADED:
+				_metadataState = LoadState.LOADING;
+				break;
+
+			case LOADING:
+				do
+					wait();
+				while (_metadataState == LoadState.LOADING);
+
+			case LOADED:
+			case FAILED:
+				return;
+			}
+		}
+		message := parseMetadata();
+
+		lock (*this) {
+			if (message == null)
+				_metadataState = LoadState.LOADED;
+			else {
+				_usedPackages.clear();
+				_version = null;
+				_metadataState = LoadState.FAILED;
+			}
+			notifyAll();
+		}
+
+		if (message != null)
+			throw IllegalOperationException(_name + ": " + message);
+	}
+
+	string parseMetadata() {
+		metadataFile := storage.path(_directory, PACKAGE_METADATA);
+		reader := storage.openTextFile(metadataFile);
+		if (reader == null)
+			return "Metadata file missing";
+		var jsonData;
+		boolean success;
+
+		(jsonData, success) = json.parse(reader.readAll());
+		delete reader;
+
+		if (!success)
+			return "Metadata file does not conntain valid JSON";
+		message := extractMetadata(jsonData);
+		json.dispose(jsonData);
+		return message;
+	}
+
+	string extractMetadata(var jsonData) {
+		if (jsonData.class != ref<Object>)
+			return "Metadata file does not contain a JSON object";
+		o := ref<Object>(jsonData);
+		nm := o.get("name");
+		if (nm.class != string || (_name != null && string(nm) != _name))
+			return "Metadata package name does not match expected name";
+		if (_name == null)
+			_name = string(nm);
+		ver := o.get("version");
+		if (ver.class != string)
+			return "Metadata package version is not a string";
+		_version = string(ver);
+		uses := o.get("uses");
+		if (uses.class != ref<Array>)
+			return "Metadata list of used packages is not a JSON array";
+		u := ref<Array>(uses);
+		_usedPackages.resize(u.length());
+		for (i in _usedPackages) {
+			use := &_usedPackages[i];
+			a := (*u)[i];
+			if (a.class != ref<Object>)
+				return "Uses entry " + i + " is not a JSON object";
+			obj := ref<Object>(a);
+			nm = obj.get("name");
+			if (nm.class != string)
+				return "Uses entry " + i + " name is not a string";
+			use.name = string(nm);
+			ver = obj.get("built_with");
+			if (ver.class != string)
+				return "Uses entry " + i + " built_with is not a string";
+			use.builtWith = string(ver);
+			allow := obj.get("allow_versions");
+			if (allow.class != ref<Array>)
+				return "Uses entry " + i + " allow_versions is not a JSON array";
+			disallow := obj.get("disallow_versions");
+			if (disallow.class != ref<Array>)
+				return "Uses entry " + i + " disallow_versions is not a JSON array";
+		}
+		return null;
+	}
+
+	public boolean writeMetadata(string metadataFile) {
+		writer := storage.createTextFile(metadataFile);
+		if (writer == null) {
+			printf("        FAIL: Could not create '%s'\n", metadataFile);
+			return false;
+		}
+
+		writer.printf("{\"name\":\"%s\",\"version\":\"%s\",\"built_by\":\"%s\",\"uses\":[\n",
+					  name(), "0.0.0", compiler.version());
+		for (i in _usedPackages) {
+			p := _usedPackages[i];
+			if (i > 0)
+				writer.printf(",");
+			writer.printf("{\"name\":\"%s\",\"built_with\":\"%s\",\"allow_versions\":[", p.name, p.builtWith);
+			writer.printf("],\"disallow_versions\":[");
+			writer.printf("]}");
+		}
+		writer.printf("]}\n");
+		delete writer;
+		return true;
+	}
+
+	public void setMetadata(string newVersion, ref<Package>[] used) {
+		lock (*this) {
+			_version = newVersion;
+			_usedPackages.resize(used.length());
+			for (i in used) {
+				p := used[i];
+				u := &_usedPackages[i];
+				u.name = p.name();
+				u.builtWith = p.version();
+				u.package = p;
+			}
+			if (version != null)
+				_metadataState = LoadState.LOADED;
+			else
+				_metadataState = LoadState.NOT_LOADED;
+		}
 	}
 
 	public string[] initFirst() {
@@ -733,8 +1024,8 @@ public class Package extends VolatilePackage {
  * one of the other version directories.
  */
 class CorePackage extends Package {
-	CorePackage(string name, string directory) {
-		super(name, directory);
+	CorePackage(ref<Context> owner, string name, string directory) {
+		super(owner, name, directory);
 	}
 }
 

@@ -85,6 +85,8 @@ void generateScopeContents(ref<compiler.Scope> scope, ref<Writer> output, string
 
 				if (oi.doclet() != null && oi.doclet().ignore)
 					continue;
+				if (oi.class == compiler.ProxyOverload || oi.class == compiler.StubOverload)
+					continue;
 				if (!isInterface && oi.visibility() != compiler.Operator.PUBLIC && oi.visibility() != compiler.Operator.PROTECTED)
 					continue;
 				if (o.kind() == compiler.Operator.FUNCTION)

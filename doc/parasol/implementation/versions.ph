@@ -2,7 +2,7 @@
 
 Authors want to support the software they publish.
 Users ask questions, report bugs and request features.
-Authors response often include software updates.
+Authors responses often include software updates.
 <p>
 The Parasol reference implementation includes tools intended to assist an
 author in building and identifying their updates, and also assist users in finding those updates.
@@ -34,7 +34,9 @@ third is the <i>fix version</i>.
 <p>
 Two versions can be compared.
 If major versions differ, the string with the higher major version is largest.
-Otherwise, if minro versions differ, the string with the higher minor version is largest.
+Otherwise, if minor versions differ, the string with the higher minor version is largest.
+Otherwise, if fix versions differ, the string with the high fix version is largest.
+Otherwise, the two strings are identical.
 <p>
 For unpublished software, the convention is to use the number 0 as the major version. 
 Also for unpublished software there is no expectation that two different versions are in any way compatible.
@@ -45,7 +47,15 @@ Version numbers can be skipped, but if any new version is released if the major 
 pre-existing version, the new version must have a larger fix version.
 Also, if only the major version is the same as a previously released version, the minor version number 
 should be larger than any that have been previously released for that major version.
-
+<p>
+An author may choose to maintain a single stream of releases, where only the most recent release
+will ever be updated.
+In serving a larger audience, however, an author may choose to issue multiple update streams.
+In this policy, a new minor release may be issued for each major release in existence.
+In addition, an author may choose to support updates to minor releases.
+In that case, not only may one issue new minor versions of any existing major release, they may 
+choose to issue fix releases for any existing minor release.
+<p>
 For example the following release sequence conforms to these version numbering rules:
 
 {@code
@@ -119,6 +129,43 @@ In principle, there is no particular format to that string.
 However, certain facilities of the Parasol tool suite can provide more functionality if
 a specific format is used.
 
+<h4>{@level 4 Version Compatibility}</h4>
+
+Software library interfaces can change both in ways that preserve the behavior of existing code and
+in ways that can break existing code.
+Users of a library want to preserve their current investment as much as possible, so they much prefer compatible changes.
+At the least they want some assurances that when they adopt an upgrade few if any problems will surface.
+There are many reasons why there are situations where a compatible solution so impairs the future maintainability
+of a package that the author accepts breaking changes as necessary.
+In particular, as technology changes and expands, interfaces become too complicated and need to be simplified to remain
+useful.
+<p>
+To assist both authors in identifying changes and users in deciding when to adopt an update that might contain changes,
+the following guidelines are recommended.
+There cannot be hard and fast rules, since a bug fix may change the behavior of a program that accidentally appeared
+to work, and with the bug fixed now appears to misbehave.
+As a result, an author must exercise judgement and recognize that once software gets used, that software can be used
+for decades.
+<p>
+The worst kind of change is a silently breaking change. 
+That is, the change does not cause a program to fail to compile, nor will it fail immediately once the change is 
+deployed for testing or live operation, but will simply make the program's behavior change
+in unpredictable ways.
+The change could manifest in ways that are difficult to detect and fix.
+When contemplating a change an author must pay special attention to changes that would work in this way.
+Silent breaking changes should be avoided.
+<p>
+Whether a change is silent or causes existing code to fail to compile, an author should mark a release containing such 
+changes by changing the major version number.
+A user of a library should expect that they will have to modify their code to conform to new interface specifications
+when upgraing to a new major version.
+Even so, an author should always do their best to inform their users when making breaking changes.
+<p>
+Parasol permits many ways that new features can be added to a library without modifying the behavior of existing
+code.
+For example, new symbols of almost any kind can be added to a namespace without having any affect on existing code.
+
+
 <h3>{@level 3 Package Metadata}</h3>
 A package has an object in JSON format as it's metadata.
 
@@ -132,7 +179,7 @@ The various fields are optional and their description is given below:
 							Parasol builder.
 	<li><b>"uses"</b> - A list. Each element of the list is a JSON object as follows:
 		<ul>
-			<li><b>"name"</b> - A string value. The package name of a package that musst be included
+			<li><b>"name"</b> - A string value. The package name of a package that must be included
 							in an application that uses this one.
 			<li><b>"built_with"</b> - A string value. This is any version string defined for the named
 							package. When this package was built, it was compiled with this particular

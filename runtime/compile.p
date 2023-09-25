@@ -30,6 +30,7 @@ import native:C;
 import parasol:context;
 import parasol:exception.IllegalOperationException;
 import parasol:memory;
+import parasol:process;
 import parasol:runtime;
 import parasol:runtime.TypeFamily;
 import parasol:storage;
@@ -37,6 +38,22 @@ import parasol:text;
 import parasol:thread;
 
 int INDENT = 4;
+
+private string __version__;
+
+public string version() {
+	if (__version__ == null) {
+		parasolHome := process.environment.get("PARASOL_HOME");
+		versionFile := storage.path(parasolHome, "compiler.version");
+		reader := storage.openTextFile(versionFile);
+		if (reader != null) {
+			__version__ = reader.readAll().trim();
+			delete reader;
+		} else
+			__version__ = "<unknown>";
+	}
+	return __version__;
+}
 
 public class CompileContext extends CodegenContext {
 	public Operator visibility;

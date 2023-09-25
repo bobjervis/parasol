@@ -465,6 +465,7 @@ ref<compiler.Scope> scopeFor(ref<compiler.Symbol> sym) {
 	case FUNCTION:
 	case SHAPE:
 	case CLASS:
+	case INTERFACE:
 		return sym.enclosing();
 
 	case TYPEDEF:

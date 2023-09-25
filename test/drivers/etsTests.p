@@ -13,15 +13,14 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+import parasol:compiler;
+import parasol:compiler.test.initTestObjects;
 import parasol:script;
 import parasol:storage;
 import parasol:process;
 import parasol:runtime;
 import parasol:pxi;
-import parasol:compiler.Target;
-import parasol:compiler.test.initTestObjects;
-import parasol:test.launch;
-import parasol:test.listAllTests;
+import parasol:test;
 import parasol:time;
 /*
  * Date and Copyright holder of this code base.
@@ -46,7 +45,7 @@ class TestCommand extends process.Command {
 					"Refer to the Parasol language reference manual for details on " +
 					"permitted syntax." +
 					"\n" +
-					"Parasol Runtime Version " + runtime.RUNTIME_VERSION + "\r" +
+					"Parasol Compiler Version " + compiler.version() + "\r" +
 					"Copyright (c) " + COPYRIGHT_STRING
 					);
 		rootDirOption = stringOption('r', "root",
@@ -116,7 +115,7 @@ int main(string[] args) {
 		}
 	}
 	script.setCommandPrefix(storage.absolutePath(process.binaryFilename()) + " --test");
-	listAllTests = runetsCommand.traceOption.value;
+	test.listAllTests = runetsCommand.traceOption.value;
 	string pxiName;
 	if (runetsCommand.testPxiOption.set())
 		pxiName = runetsCommand.testPxiOption.value;
@@ -135,5 +134,5 @@ int main(string[] args) {
 			runetsCommand.rootDirOption.value, runetsCommand.showParseStageErrorsOption.value);
 //		initCommonTestObjects();
 	string[] s = runetsCommand.finalArguments();
-	return launch(s);
+	return test.launch(s);
 }

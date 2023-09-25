@@ -38,7 +38,7 @@ class Paradoc extends process.Command {
 					"in the given input directories are " +
 					"written as HTML pages to the output directory." +
 					"\n" +
-					"Parasol Runtime Version " + runtime.RUNTIME_VERSION + "\r" +
+					"Parasol Runtime Version " + compiler.version() + "\r" +
 					"Copyright (c) " + COPYRIGHT_STRING
 					);
 		paradoc.verboseOption = booleanOption('v', null,

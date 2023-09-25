@@ -50,8 +50,8 @@ public class PseudoPackage extends Package {
 	private boolean _open;
 	private ref<pbuild.Package> _buildPackage;
 
-	public PseudoPackage(ref<pbuild.Package> buildPackage) {
-		super(buildPackage.name(), null);
+	public PseudoPackage(ref<Context> owner, ref<pbuild.Package> buildPackage) {
+		super(owner, buildPackage.name(), null);
 		_buildPackage = buildPackage;
 	}
 

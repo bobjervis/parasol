@@ -43,7 +43,7 @@ class ParasolCommand extends process.Command {
 					"Refer to the Parasol language reference manual for details on " +
 					"permitted syntax." +
 					"\n" +
-					"Parasol Runtime Version " + runtime.RUNTIME_VERSION + "\n" +
+					"Parasol Compiler Version " + compiler.version() + "\n" +
 					"Copyright (c) 2015 Robert Jervis"
 					);
 		contextOption = stringOption(0, "context",
@@ -126,7 +126,7 @@ void parseCommandLine(string[] args) {
 	if (!parasolCommand.parse(args))
 		parasolCommand.help();
 	if (parasolCommand.versionOption.set()) {
-		printf("%s\n", runtime.RUNTIME_VERSION);
+		printf("%s\n", compiler.version());
 		process.exit(0);
 	}
 	finalArguments = parasolCommand.finalArguments();

@@ -293,7 +293,7 @@ public class Coordinator extends CoordinatorVolatileData {
 	}
 
 	private boolean parseBuildFile(string buildFile, string buildDir, string outputDir) {
-		ref<BuildFile> bf = BuildFile.parse(buildFile, null, errorMessage, _targetOS, _targetCPU);
+		ref<BuildFile> bf = BuildFile.parse(buildFile, null, errorMessage, _targetOS, _targetCPU, this);
 
 		if (bf == null)
 			return false;

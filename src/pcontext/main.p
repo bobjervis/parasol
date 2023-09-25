@@ -149,44 +149,27 @@ class Install extends process.Command {
 			printf("Package path '%s' is not a directory.\n", args[0]);
 			return 1;
 		}
-		metadataSlug := storage.path(args[0], "package.json");
-		if (!storage.exists(metadataSlug) || storage.isDirectory(metadataSlug)) {
-			printf("Package does not a contain a normal file named 'package.json'.\n");
+		p := new context.Package(null, null, args[0]);
+		try {
+			v := p.version();
+		} catch (Exception e) {
+			printf("Exception trying to read package metadata: " + e.message());
 			return 1;
 		}
-		reader := storage.openTextFile(metadataSlug);
-		if (reader == null) {
-			printf("Could not open the 'package.json' file in the package directory.\n");
-			return 1;
-		}
-		contents := reader.readAll();
-		delete reader;
+		printf("Trying to install package name %s version %s\n", p.name(), p.version());
 
-		var jsonBlob;
-		boolean success;
-		(jsonBlob, success) = json.parse(contents);
-		if (!success) {
-			printf("The 'package.json' file does not contain valid JSON.\n");
-			return 1;
-		}
-		if (jsonBlob.class != ref<Object>) {
-			printf("The 'package.json' file does not contain a JSON Object.\n");
-			return 1;
-		}
-		object := ref<Object>(jsonBlob);
-		name := getStringField(object, "name");
-		if (name == null)
-			return 1;
-		version := getStringField(object, "version");
-		if (version == null)
-			return 1;
-		pkg := installLocation.getPackage(name);
+		pkg := installLocation.getPackage(p.name());
 		if (pkg != null) {
-			printf("The package already exists.\n");
+			printf("The package already exists, (version %s)\n", pkg.version());
 		} else {
 			printf("This is a new package.\n");
 		}
-		printf("Installing package %s version %s to context %s\n", name, version, installLocation.name());
+		printf("Installing package %s version %s to context %s\n", p.name(), p.version(), installContext);
+		if (!installLocation.definePackage(p)) {
+			printf("Could not complete the installation\n");
+			return 1;
+		}
+		printf("SUCCESS!\n");
 		return 0;
 	}
 

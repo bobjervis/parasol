@@ -26,6 +26,7 @@ import parasol:storage;
 import parasol:text;
 import parasol:thread;
 import parasol:time;
+import parasol:types.Set;
 import native:linux;
 
 class Product extends Folder {
@@ -124,50 +125,24 @@ class Product extends Folder {
 	public boolean showOutcome() {
 		return true;
 	}
+
+	protected string sentinelFileName() {
+		return null;
+	}
 }
 
-public class Package extends Product {
-	protected ref<context.Package> _package;
+public class ParasolProduct extends Product {
+	protected string _parasolProductDir;
+	protected string[] _usedPackageNames;
+	protected ref<context.Package>[] _usedPackages;
 	protected ref<compiler.CompileContext> _compileContext;
 	protected ref<compiler.Arena> _arena;
-
 	protected boolean _buildSuccessful;
-	protected string _packageDir;
-	protected boolean _preserveAnonymousUnits;
-	protected boolean _generateManifest;
-	protected string[] _usedPackageNames;
-	protected string[] _initFirst;
-	protected string[] _initLast;
-	protected ref<context.Package>[] _usedPackages;
 
-	public Package(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object) {
+	public ParasolProduct(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object) {
 		super(buildFile, enclosing, object);
-		if (enclosing != null && this.class != Pxi)
-			buildFile.error(object, "Packages cannot be nested inside other components");
-		if (name() != null) {
-			if (this.class == Package && !context.validatePackageName(name()))
-				buildFile.error(a, "Package name '%s' is malformed", name());;
-		} else
-			buildFile.error(object, "Package must have a name");
-		ref<script.Atom> a = object.get("preserveAnonymousUnits");
-		if (a != null) {
-			string value = a.toString();
-			if (value == "true")
-				_preserveAnonymousUnits = true;
-			else if (value != "false")
-				buildFile.error(a, "Attribute 'preserveAnonymousUnits' must be true or false");
-		}
-		a = object.get("manifest");
-		if (a != null) {
-			string value = a.toString();
-			if (value == "true")
-				_generateManifest = true;
-			else if (value != "false")
-				buildFile.error(a, "Attribute 'manifest' must be true or false");
-		} else
-			_generateManifest = true;
-		if (this.class == Package)
-			_package = new context.PseudoPackage(this);
+		if (name() == null)
+			buildFile.error(object, toString() + " must have a name");
 	}
 
 	boolean use(ref<BuildFile> buildFile, ref<script.Object> object) {
@@ -193,14 +168,244 @@ public class Package extends Product {
 	boolean defineContext(ref<BuildFile> buildFile, ref<Coordinator> coordinator, string buildDir, string outputDir) {
 //		printf("Package.defineContext %s\n", thread.currentThread().name());
 		super.defineContext(buildFile, coordinator, buildDir, outputDir);
-		_packageDir = storage.path(outputDir, filename() + ".tmp");
-		if (storage.exists(_packageDir)) {
-			if (!storage.deleteDirectoryTree(_packageDir)) {
-				printf("\n        FAIL: Could not remove existing temporary %s\n", _packageDir);
+		_parasolProductDir = storage.path(outputDir, filename() + ".tmp");
+		if (storage.exists(_parasolProductDir)) {
+			if (!storage.deleteDirectoryTree(_parasolProductDir)) {
+				printf("\n        FAIL: Could not remove existing temporary %s\n", _parasolProductDir);
 				return false;
 			}
 		}
 		return true;
+	}
+
+	protected boolean, boolean buildComponents() {
+		if (corePackage != null && corePackage != this)
+			_includedProducts.append(corePackage);
+		for (i in _usedPackageNames) {
+//			printf("    %d Looking for %s -> %s\n", thread.currentThread().id(), _name, _usedPackageNames[i]);
+			ref<context.Package> p = coordinator().activeContext().getPackage(_usedPackageNames[i]);
+			if (p == null) {
+				printf("        FAIL: Unknown reference '%s' in package '%s'\n", _usedPackageNames[i], name());
+				return false, true;
+			}
+			_usedPackages.append(p);
+			if (p.class == context.PseudoPackage) {
+//				printf("Verified that %s -> %s in the same build\n", _name, _usedPackageNames[i]);
+				ref<Package> pkg = ref<context.PseudoPackage>(p).buildPackage();
+				_includedProducts.append(pkg);
+			}
+		}
+		discoverExtraIncludedProducts(this);
+		boolean success = true;
+		for (i in _includedProducts) {
+			if (!_includedProducts[i].future().get()) {
+//				printf("    %s failed, aborting %s\n", _includedProducts[i].name(), _name);
+				success = false;
+			}
+		}
+		if (!success) {
+			_componentFailures = true;
+			coordinator().declareFailure();
+			// This will abort, but suppress the normal 'build failed' message for a package.
+			return true, true;
+		}
+		return true, false;
+	}
+
+	public boolean shouldCompile() {
+		time.Instant accessed, modified, created;
+		boolean success;
+
+		(accessed, modified, created, success) = storage.fileTimes(sentinelFileName());
+
+		if (success) {
+			for (i in _includedProducts) {
+				time.Instant iModified;
+
+				(accessed, iModified, created, success) = storage.fileTimes(_includedProducts[i].sentinelFileName());
+
+				if (iModified > modified)
+					return true;
+			}
+			return inputsNewer(modified);
+		} else {
+			if (coordinator().reportOutOfDate())
+				printf("            %s hasn't been built, building\n", toString());
+			return true;		// sentinel file doesn't exist, maybe we never built this guy but we gotta build it now
+		}
+	}
+
+	public boolean openCompiler() {
+		_arena = new compiler.Arena(coordinator().activeContext());
+
+
+//		printf("Arena configured for %s coordinator = %p\n", _name, coordinator());
+		_arena.verbose = coordinator().verbose();
+		if (coordinator().targetOS() != thisOS() || coordinator().targetCPU() != thisCPU()) {
+			switch (coordinator().targetOS()) {
+			case "linux":
+				_arena.preferredTarget = pxi.sectionType("x86-64-lnx");
+				break;
+
+			case "windows":
+				_arena.preferredTarget = pxi.sectionType("x86-64-win");
+				break;
+			}
+		}
+		_compileContext = new compiler.CompileContext(_arena, 
+													  coordinator().verbose(),
+													  coordinator().logImports());
+
+		ref<context.Package>[] compileUsing;
+
+		Set<string> knownNames;
+
+		// first de-dup the used package list.
+		for (i in _usedPackages) {
+			p := _usedPackages[i];
+			if (knownNames.contains(p.name()))
+				continue;
+			compileUsing.append(p);
+			knownNames.add(p.name());
+		}
+		// now form the closure over those packages.
+		for (i in compileUsing) {
+			p := compileUsing[i];
+			used := p.usedPackages();
+			for (j in used) {
+				u := used[j];
+				if (knownNames.contains(u.name()))
+					continue;
+				compileUsing.append(u);
+				knownNames.add(u.name());
+			}
+		}
+//		printf("loadRoot for %s\n", _name);
+		if (!_compileContext.loadRoot(name() == context.PARASOL_CORE_PACKAGE_NAME, compileUsing)) {
+			printf("        FAIL: Unable to load root scope\n");
+			closeCompiler();
+			return false;
+		}
+		return true;
+	}
+
+	protected boolean printMessages() {
+		if (_arena.countMessages() > 0) {
+			if (coordinator().uiPrefix() != null) {
+				_arena.allNodes(extractMessagesWrapper, this);
+			} else
+				_arena.printMessages();
+			failMessage();
+			return false;
+		}
+		return true;
+	}
+
+	private static void extractMessagesWrapper(ref<compiler.Unit> file, ref<compiler.Node> node, ref<compiler.Commentary> comment, address arg) {
+		ref<ParasolProduct>(arg).extractMessage(file, node, comment);
+	}
+
+	private void extractMessage(ref<compiler.Unit> file, ref<compiler.Node> node, ref<compiler.Commentary> comment) {
+		string filename = file.filename();
+		if (filename.startsWith(coordinator().uiPrefix())) {
+			filename = filename.substr(coordinator().uiPrefix().length() - 1);
+			if (node.location().isInFile()) {
+				ref<compiler.Scanner> scanner = file.scanner();
+				// The old scanner (which is already closed, so it cannot be used to re-scan tokens) has line number info.
+				int lineNumber = file.lineNumber(node.location());
+
+				byte commentClass = 'g';
+				scanner = file.newScanner();
+				scanner.seek(node.location());
+				scanner.next();
+				runtime.SourceOffset endLoc = scanner.cursor();
+				delete scanner;
+				printf("={<%c%d %d %d %d %s>}=: %s\n", commentClass, lineNumber + 1, 
+								node.location().offset,
+								node.location().offset,
+								endLoc.offset,
+								filename, comment.message());
+			} else
+				printf("%s : %s\n", filename, comment.message());
+		} else
+			file.dumpMessage(node, comment);
+	}
+
+	protected void failMessage() {
+		printf("        FAIL: %s failed to compile\n", name());
+	}	
+
+	public void closeCompiler() {
+		delete _compileContext;
+		delete _arena;
+		_compileContext = null;
+		_arena = null;
+	}
+
+	protected boolean deployProduct() {
+		string tmpDir = _parasolProductDir;
+		_parasolProductDir = storage.path(outputDir(), filename());
+		if (storage.exists(_parasolProductDir)) {
+			if (!storage.deleteDirectoryTree(_parasolProductDir)) {
+				printf("        FAIL: Could not remove old %s\n", _parasolProductDir);
+				return false;
+			}
+		}
+		if (!storage.rename(tmpDir, _parasolProductDir)) {
+			printf("        FAIL: Could not rename %s to %s\n", tmpDir, _parasolProductDir);
+			return false;
+		}
+		return true;
+	}
+
+	protected boolean writeSentinelFile() {
+		string sentinelFile = sentinelFileName();
+
+		storage.File f;
+
+		if (f.create(sentinelFile)) {				// This should update the modification time
+			f.close();
+			return true;
+		} else {
+			printf("        FAIL: Could not create sentinel file '%s'\n", sentinelFile);
+			return false;
+		}
+	}
+
+	protected string sentinelFileName() {
+		return storage.path(outputDir(), name() + ".ok");
+	}
+}
+
+public class Package extends ParasolProduct {
+	protected ref<context.Package> _package;
+
+	protected boolean _preserveAnonymousUnits;
+	protected boolean _generateManifest;
+	protected string[] _initFirst;
+	protected string[] _initLast;
+
+	public Package(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object) {
+		super(buildFile, enclosing, object);
+
+		ref<script.Atom> a;
+
+		if (enclosing != null)
+			buildFile.error(object, "Packages cannot be nested inside other components");
+		if (name() != null) {
+			if (!context.validatePackageName(name()))
+				buildFile.error(a, "Package name '%s' is malformed", name());;
+		}
+		a = object.get("manifest");
+		if (a != null) {
+			string value = a.toString();
+			if (value == "true")
+				_generateManifest = true;
+			else if (value != "false")
+				buildFile.error(a, "Attribute 'manifest' must be true or false");
+		} else
+			_generateManifest = true;
+		_package = new context.PseudoPackage(buildFile.coordinator().activeContext(), this);
 	}
 
 	void defineStaticInitializer(Placement placement, ref<BuildFile> buildFile, ref<script.Object> object) {
@@ -240,9 +445,9 @@ public class Package extends Product {
 //		printf("        %s compileSkipped? %s\n", _name, _compileSkipped);
 		if (_compileSkipped) {
 			printf("        %s - up to date\n", name());
-			_packageDir = storage.path(outputDir(), filename());
+			_parasolProductDir = storage.path(outputDir(), filename());
 		} else {
-			if (!deployPackage())
+			if (!deployProduct())
 				return false;
 			if (!writeSentinelFile())
 				return false;
@@ -251,38 +456,6 @@ public class Package extends Product {
 		if (!_compileSkipped)
 			printf("        %s - built\n", name());
 		return true;
-	}
-
-	protected boolean, boolean buildComponents() {
-		for (i in _usedPackageNames) {
-//			printf("    %d Looking for %s -> %s\n", thread.currentThread().id(), _name, _usedPackageNames[i]);
-			ref<context.Package> p = coordinator().activeContext().getPackage(_usedPackageNames[i]);
-			if (p == null) {
-				printf("        FAIL: Unknown reference '%s' in package '%s'\n", _usedPackageNames[i], name());
-				return false, true;
-			}
-			_usedPackages.append(p);
-			if (p.class == context.PseudoPackage) {
-//				printf("Verified that %s -> %s in the same build\n", _name, _usedPackageNames[i]);
-				ref<Package> pkg = ref<context.PseudoPackage>(p).buildPackage();
-				_includedProducts.append(pkg);
-			}
-		}
-		discoverExtraIncludedProducts(this);
-		boolean success = true;
-		for (i in _includedProducts) {
-			if (!_includedProducts[i].future().get()) {
-//				printf("    %s failed, aborting %s\n", _includedProducts[i].name(), _name);
-				success = false;
-			}
-		}
-		if (!success) {
-			_componentFailures = true;
-			coordinator().declareFailure();
-			// This will abort, but suppress the normal 'build failed' message for a package.
-			return true, true;
-		}
-		return true, false;
 	}
 
 	protected boolean buildTmpPackage(boolean copyContents) {
@@ -300,44 +473,16 @@ public class Package extends Product {
 			ref<compiler.Target> t;
 			(t, success) = compile();
 			delete t;
-			return success;
+			if (!success)
+				return false;
+			if (!_compileContext.forest().generateManifest(storage.path(_parasolProductDir, context.PACKAGE_MANIFEST), 
+																				_initFirst, _initLast)) 
+				return false;
+			metadataFile := storage.path(_parasolProductDir, context.PACKAGE_METADATA);
+			_package.setMetadata("0.0.0", _usedPackages);
+			return _package.writeMetadata(metadataFile);
 		} else
 			return true;
-	}
-
-	protected boolean deployPackage() {
-		string tmpDir = _packageDir;
-		if (_generateManifest && !_compileContext.forest().generateManifest(storage.path(tmpDir, context.PACKAGE_MANIFEST), _initFirst, _initLast)) 
-			return false;
-		_packageDir = storage.path(outputDir(), filename());
-		if (storage.exists(_packageDir)) {
-			if (!storage.deleteDirectoryTree(_packageDir)) {
-				printf("        FAIL: Could not remove old %s\n", _packageDir);
-				return false;
-			}
-		}
-		if (!storage.rename(tmpDir, _packageDir)) {
-			printf("        FAIL: Could not rename %s to %s\n", tmpDir, _packageDir);
-			return false;
-		}
-		return true;
-	}
-
-	public boolean shouldCompile() {
-		time.Instant accessed, modified, created;
-		boolean success;
-
-		string sentinelFile = sentinelFileName();
-
-		(accessed, modified, created, success) = storage.fileTimes(sentinelFile);
-
-		if (success)
-			return inputsNewer(modified);
-		else {
-			if (coordinator().reportOutOfDate())
-				printf("            %s hasn't been built, building\n", toString());
-			return true;		// sentinel file doesn't exist, maybe we never built this guy but we gotta build it now
-		}
 	}
 
 	public boolean inputsNewer(time.Instant timeStamp) {
@@ -351,25 +496,6 @@ public class Package extends Product {
 		return false;
 	}
 
-	public boolean openCompiler() {
-		configureArena();
-
-//		printf("loadRoot for %s\n", _name);
-		if (!_compileContext.loadRoot(name() == context.PARASOL_CORE_PACKAGE_NAME, _usedPackages)) {
-			printf("        FAIL: Unable to load root scope\n");
-			closeCompiler();
-			return false;
-		}
-		return true;
-	}
-
-	public void closeCompiler() {
-		delete _compileContext;
-		delete _arena;
-		_compileContext = null;
-		_arena = null;
-	}
-
 	public ref<compiler.Target>, boolean compile() {
 		if (!openCompiler())
 			return null, false;			
@@ -378,7 +504,7 @@ public class Package extends Product {
 		string[] unitFilenames;
 		getUnitFilenames(&unitFilenames);
 //		printf("    %d found %d unit filenames\n", thread.currentThread().id(), unitFilenames.length());
-		target = _compileContext.compilePackage(this == corePackage, unitFilenames, _packageDir);
+		target = _compileContext.compilePackage(this == corePackage, unitFilenames, _parasolProductDir);
 		
 		if (coordinator().generateSymbolTables())
 			_arena.printSymbolTable();
@@ -397,20 +523,6 @@ public class Package extends Product {
 		return target, true;
 	}
 
-	protected boolean writeSentinelFile() {
-		string sentinelFile = sentinelFileName();
-
-		storage.File f;
-
-		if (f.create(sentinelFile)) {				// This should update the modification time
-			f.close();
-			return true;
-		} else {
-			printf("        FAIL: Could not create sentinel file '%s'\n", sentinelFile);
-			return false;
-		}
-	}
-
 	private string namespaceOf(ref<compiler.Ternary> namespaceNode) {
 		string domain;
 		boolean result;
@@ -425,58 +537,8 @@ public class Package extends Product {
 		return domain + ":" + name;
 	}
 
-	protected string sentinelFileName() {
-		return storage.path(outputDir(), name() + ".ok");
-	}
-
-	protected boolean printMessages() {
-		if (_arena.countMessages() > 0) {
-			if (coordinator().uiPrefix() != null) {
-				_arena.allNodes(extractMessagesWrapper, this);
-			} else
-				_arena.printMessages();
-			failMessage();
-			return false;
-		}
-		return true;
-	}
-
-	protected void failMessage() {
-		printf("        FAIL: %s failed to compile\n", name());
-	}	
-
-	private static void extractMessagesWrapper(ref<compiler.Unit> file, ref<compiler.Node> node, ref<compiler.Commentary> comment, address arg) {
-		ref<Package>(arg).extractMessage(file, node, comment);
-	}
-
-	private void extractMessage(ref<compiler.Unit> file, ref<compiler.Node> node, ref<compiler.Commentary> comment) {
-		string filename = file.filename();
-		if (filename.startsWith(coordinator().uiPrefix())) {
-			filename = filename.substr(coordinator().uiPrefix().length() - 1);
-			if (node.location().isInFile()) {
-				ref<compiler.Scanner> scanner = file.scanner();
-				// The old scanner (which is already closed, so it cannot be used to re-scan tokens) has line number info.
-				int lineNumber = file.lineNumber(node.location());
-
-				byte commentClass = 'g';
-				scanner = file.newScanner();
-				scanner.seek(node.location());
-				scanner.next();
-				runtime.SourceOffset endLoc = scanner.cursor();
-				delete scanner;
-				printf("={<%c%d %d %d %d %s>}=: %s\n", commentClass, lineNumber + 1, 
-								node.location().offset,
-								node.location().offset,
-								endLoc.offset,
-								filename, comment.message());
-			} else
-				printf("%s : %s\n", filename, comment.message());
-		} else
-			file.dumpMessage(node, comment);
-	}
-
 	public string path() {
-		return _packageDir;
+		return _parasolProductDir;
 	}
 
 	public boolean shouldExport() {
@@ -496,7 +558,7 @@ public class Package extends Product {
 	}
 
 	public string packageDir() {
-		return _packageDir;
+		return _parasolProductDir;
 	}
 
 	public ref<context.Package> ctxPackage() {
@@ -510,34 +572,12 @@ public class Package extends Product {
 			return path();
 	}
 
-	void configureArena() {
-		_arena = new compiler.Arena(coordinator().activeContext());
-
-
-//		printf("Arena configured for %s coordinator = %p\n", _name, coordinator());
-		_arena.verbose = coordinator().verbose();
-		if (coordinator().targetOS() != thisOS() || coordinator().targetCPU() != thisCPU()) {
-			switch (coordinator().targetOS()) {
-			case "linux":
-				_arena.preferredTarget = pxi.sectionType("x86-64-lnx");
-				break;
-
-			case "windows":
-				_arena.preferredTarget = pxi.sectionType("x86-64-win");
-				break;
-			}
-		}
-		_compileContext = new compiler.CompileContext(_arena, 
-													  coordinator().verbose(),
-													  coordinator().logImports());
-	}
-
 	public string toString() {
 		return "package " + name();
 	}
 }
 
-class Application extends Package {
+class Application extends ParasolProduct {
 	protected string _main;
 	private Role _role;
 
@@ -550,7 +590,6 @@ class Application extends Package {
 
 	Application(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object) {
 		super(buildFile, enclosing, object);
-		_generateManifest = false;
 		ref<script.Atom> a = object.get("main");
 		if (a != null)
 			_main = a.toString();
@@ -680,6 +719,10 @@ class Binary extends Application {
 
 		string parasolRoot, binDir;
 		if (installPackage != null) {
+			if (!installPackage.future().get()) {
+				_componentFailures = true;
+				return false;
+			}
 			parasolRoot = installPackage.path();
 			binDir = storage.path(parasolRoot, "bin");
 		} else {
@@ -688,25 +731,25 @@ class Binary extends Application {
 			parasolRoot = storage.directory(binDir);
 		}
 		string rtFile = storage.path(binDir, "parasolrt");
-		string destFile = storage.path(_packageDir, "parasolrt");
+		string destFile = storage.path(_parasolProductDir, "parasolrt");
 		if (!storage.copyFile(rtFile, destFile)) {
 			printf("        FAIL: Could not copy parasolrt from %s: %s\n", parasolRoot, linux.strerror(linux.errno()));
 			return false;
 		}
 		string soFile = storage.path(binDir, "libparasol.so.1");
-		destFile = storage.path(_packageDir, "libparasol.so.1");
+		destFile = storage.path(_parasolProductDir, "libparasol.so.1");
 		if (!storage.copyFile(soFile, destFile)) {
 			printf("        FAIL: Could not copy libparasol.so.1 from %s\n", parasolRoot);
 			return false;
 		}
-		soFile = storage.path(_packageDir, "libparasol.so");
+		soFile = storage.path(_parasolProductDir, "libparasol.so");
 		if (!storage.createSymLink("libparasol.so.1", soFile)) {
-			printf("        FAIL: Could not link libparasol.so in %s\n", _packageDir);
+			printf("        FAIL: Could not link libparasol.so in %s\n", _parasolProductDir);
 			return false;
 		}
 
 		// write launch script
-		string runScript = storage.path(_packageDir, "run", null);
+		string runScript = storage.path(_parasolProductDir, "run", null);
 		ref<Writer> w = storage.createTextFile(runScript);
 		if (w == null) {
 			printf("        FAIL: Could not create run script\n");
@@ -725,7 +768,7 @@ class Binary extends Application {
 			return false;
 		}
 		_buildSuccessful = true;
-		if (deployPackage() && writeSentinelFile()) {
+		if (deployProduct() && writeSentinelFile()) {
 			printf("        %s - built\n", name());
 			return true;
 		} else
@@ -748,13 +791,13 @@ class Binary extends Application {
 				return target, false;
 			}
 		}
-		if (!storage.ensure(path())) {
-			printf("        FAIL: Could not ensure %s\n", path());
+		if (!storage.ensure(_parasolProductDir)) {
+			printf("        FAIL: Could not ensure %s\n", _parasolProductDir);
 			return target, false;
 		}
 		if (target == null)
 			return target, false;
-		string pxiFile = storage.path(_packageDir, "application.pxi");
+		string pxiFile = storage.path(_parasolProductDir, "application.pxi");
 		ref<pxi.Pxi> output = pxi.Pxi.create(pxiFile);
 		target.writePxi(output);
 		if (!output.write()) {
@@ -781,13 +824,18 @@ class Command extends Application {
 	}
 
 	public boolean build() {
+		boolean success, returnNow;
+
+		(success, returnNow) = buildComponents();
+		
+		if (returnNow)
+			return success;
 		if (!shouldCompile()) {
 			printf("        %s - up to date\n", name());
 			_compileSkipped = true;
 			return true;
 		}
 		ref<compiler.Target> t;
-		boolean success;
 //		printf("        Calling compile for %s\n", toString());
 		(t, success) = compile();
 		delete t;
@@ -799,25 +847,9 @@ class Command extends Application {
 	}
 
 	public boolean shouldCompile() {
-		time.Instant accessed, modified, created;
-		boolean success;
-
 		if (coordinator().generateDisassembly())
 			return true;
-		(accessed, modified, created, success) = storage.fileTimes(sentinelFileName());
-
-		if (success) {
-			if (inputsNewer(modified))
-				return true;
-			if (corePackage != null)
-				return corePackage.inputsNewer(modified);
-			else
-				return false;
-		} else {
-			if (coordinator().reportOutOfDate())
-				printf("            %s - never built, building\n", name());
-			return true;
-		}
+		return super.shouldCompile();
 	}
 
 	public ref<compiler.Target>, boolean compile() {
@@ -911,20 +943,11 @@ class Pxi extends Application {
 	public boolean shouldCompile() {
 		if (coordinator().generateDisassembly())
 			return true;
+		return super.shouldCompile();
+	}
 
-		time.Instant accessed, modified, created;
-		boolean success;
-		string target = storage.path(outputDir(), filename());
-
-		(accessed, modified, created, success) = storage.fileTimes(target);
-		if (success)
-			return inputsNewer(modified);
-		else {
-			if (coordinator().reportOutOfDate())
-				printf("            %s - never built, building\n", filename());
-			return true;
-		}
-		return true;
+	protected string sentinelFileName() {
+		return filename();
 	}
 
 	public boolean copy() {
