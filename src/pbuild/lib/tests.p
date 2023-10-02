@@ -66,7 +66,7 @@ public class Suite {
 		}
 		ref<script.Object> def = ref<script.Object>(a);
 		switch (def.get("tag").toString()) {
-		case "include":
+		case "execute":
 			ref<script.Atom> a = def.get("suite");
 			if (a != null)
 				_includes.append(a.toString());

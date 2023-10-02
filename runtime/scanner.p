@@ -1097,7 +1097,7 @@ public class Scanner {
 					string tag;
 					for (;;) {
 						c = getc();
-						if (byte(c).isAlpha())
+						if (byte(c).isAlpha() || c == '-')
 							tag.append(byte(c));
 						else {
 							ungetc();
@@ -1112,9 +1112,9 @@ public class Scanner {
 					case "link":
 						c = 'l';
 						break;
-	
-					case "linkplain":
-						c = 'p';
+		
+					case "doc-link":
+						c = 'd';
 						break;
 		
 					default:
@@ -1124,7 +1124,7 @@ public class Scanner {
 					}
 					encoder.encode('{');
 					encoder.encode(c);
-					if (c == 'l' || c == 'p') {
+					if (c == 'l' || c == 'd') {
 						encoder.encode(string(tagLocation.offset));
 						encoder.encode(';');
 					}
@@ -1458,7 +1458,6 @@ public class Scanner {
  *     <li>{@code {{} - The original text string had a left-curly brace in it.
  *     <li>{@code {c} - This is the replacement of the string {@code {\@code} in the original text.
  *     <li>{@code {l} - This is the replacement of the string {@code {\@link} in the original text.
- *     <li>{@code {p} - This is the replacement of the string {@code {\@linkplain} in the original text.
  *     <li>{@code {\}} - This is the replacement of the closing {@code \}} in an inline tag in the original text.
  * </ul>
  *

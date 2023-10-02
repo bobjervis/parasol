@@ -17,6 +17,7 @@ import parasol:context;
 import parasol:json;
 import parasol:process;
 import parasol:storage;
+import parasol:time;
 
 public int main(string[] args) {
 	return pcontextCommand.run(args);
@@ -101,18 +102,56 @@ class Ls extends process.Command {
 		finalArguments(0, 0, "");
 		description("List all contexts." + 
 					"");
+
+		packagesOption = booleanOption('p', "packages", "If precent, includes the packages under each context.");
+		fullOption = booleanOption('v', "versions", "If present, includes all versions of each package under each context.");
 	}
+
+	ref<process.Option<boolean>> packagesOption;
+	ref<process.Option<boolean>> fullOption;
 
 	public int main(string[] args) {
 		ref<context.Context>[] contexts = context.listAll();
 		active := context.getActiveContext();
 
 		for (i in contexts) {
-			printf("%s %s\n", active == contexts[i] ? "*" : " ", contexts[i].name());
+			c := contexts[i];
+			printf("%s %s\n", active == c ? "*" : " ", c.name());
+			if (packagesOption.set() || fullOption.set()) {
+				names := c.getPackageNames();
+				names.sort(stringCompare, true);
+				for (i in names) {
+					name := names[i];
+					printf("    %s\n", name);
+					if (fullOption.set()) {
+						versions := c.getPackageVersions(name);
+						versions.sort(context.versionCompare, false);
+						for (j in versions) {
+							p := c.getPackage(name, versions[j]);
+							time.Instant accessed, modified, created;
+							boolean success;
+				
+							(accessed, modified, created, success) = storage.fileTimes(p.directory());
+
+							if (success) {
+								time.Date d(modified);
+								time.Formatter f("yyyy MMM dd, HH:mm:ss");
+
+								printf("        %s  - %s\n", versions[j], f.format(&d));
+							} else
+								printf("        %s  - ???\n", versions[j]);
+						}
+					}
+				}
+			}
 		}
 
 		return 0;
 	}
+}
+
+int stringCompare(string left, string right) {
+	return left.compare(right);
 }
 
 class Install extends process.Command {

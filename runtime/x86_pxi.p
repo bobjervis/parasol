@@ -26,7 +26,7 @@ public class X86_64ExceptionEntry {
 public class X86_64SectionHeader {
 	public int entryPoint;			// Object id of the starting function to run in the image
 	public int sourceMapOffset;		// Offset in image of the source map
-	public int builtInCount;		// Total number of built-ins
+	public int versionOffset;		// Offset in image of the image version
 	public int vtablesOffset;		// Offset in image of vtables
 	public int vtableData;			// Total number of vtable slots
 	public int typeDataOffset;		// Offset in image of type data 

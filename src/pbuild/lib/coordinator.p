@@ -30,7 +30,7 @@ string MAKE_FILE = "make.pbld";
 
 string PARASOL_INSTALL_PACKAGE_NAME = "install:parasollanguage.org";
 
-ref<Package> corePackage;					// If this maker is building the parasol runtime, be sure to use it
+public ref<Package> corePackage;					// If this maker is building the parasol runtime, be sure to use it
 											// in other builds as well.
 ref<Package> installPackage;				// If this maker is building the parasol compiler, be sure to use it
 											// in other builds as well.
@@ -353,6 +353,18 @@ public class Coordinator extends CoordinatorVolatileData {
 
 	public void addAfterPassScript(string testDir, string script) {
 		_afterPassScript.printf("( cd %s\n %s\n )\n", testDir, script);
+	}
+
+	public boolean applyManifest(string manifestFile) {
+		ManifestFile mf(manifestFile);
+
+		if (!mf.parse(errorMessage, this))
+			return false;
+		return mf.apply(this);
+	}
+
+	public boolean setPackageVersion(string packageName, string version) {
+		return false;
 	}
 
 	public int run() {

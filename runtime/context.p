@@ -22,6 +22,7 @@ import parasol:json;
 import parasol:process;
 import parasol:storage;
 import parasol:time;
+import parasol:types.Set;
 
 string PACKAGE_MANIFEST = ":manifest:";
 public string PACKAGE_METADATA = "package.json";
@@ -182,7 +183,7 @@ public class Context {
 		// If the default context has never been modified, it won't have a directory
 		// in the user's context list, so there won't be a defined _database field.
 		if (_database != null) {
-			string packageDir = storage.path(storage.path(_database, "pkg"), name);
+			string packageDir = storage.path(packagesDirectory(), name);
 			if (!storage.isDirectory(packageDir))
 				return null;
 			versionList := versions(packageDir);
@@ -207,25 +208,67 @@ public class Context {
 		// If the default context has never been modified, it won't have a directory
 		// in the user's context list, so there won't be a defined _database field.
 		if (_database != null) {
-			string packageDir = storage.path(storage.path(_database, "pkg"), name);
+			string packageDir = storage.path(packagesDirectory(), name);
 			versionDir := storage.path(packageDir, "v" + version);
 			if (!storage.isDirectory(versionDir))
 				return null;
 			p = new Package(this, name, versionDir);
+			_packages[name] = p;
+			return p;
 		}
 		return null;
+	}
+	/**
+	 * Return the list of all packages installed in this Context.
+	 *
+	 * @return an array of package names that are available in this context.
+	 */
+	public string[] getPackageNames() {
+		Set<string> alreadySeen;
+		string[] result;
+
+		for (key in _packages) {
+			result.append(key);
+			alreadySeen.add(key);
+		}
+		storage.Directory d(packagesDirectory());
+		if (d.first()) {
+			do {
+				filename := d.filename();
+				if (filename == "." ||
+					filename == "..")
+					continue;
+				if (alreadySeen.contains(filename))
+					continue;
+				alreadySeen.add(filename);
+				result.append(filename);
+			} while (d.next());
+		}
+		return result;
+	}
+
+	public string[] getPackageVersions(string name) {
+		Set<string> alreadySeen;
+		string[] result = versions(storage.path(packagesDirectory(), name));
+		for (i in result)
+			alreadySeen.add(result[i]);
+		if (_packages.contains(name)) {
+			p := _packages[name];
+			ver := p.version();
+			if (!alreadySeen.contains(ver))
+				result.append(ver);
+		}
+		return result;
 	}
 
 	public boolean definePackage(ref<Package> p) {
 		assert(_database != null);
-		string packageDir = storage.path(storage.path(_database, "pkg"), p.name());
+		string packageDir = storage.path(packagesDirectory(), p.name());
 		versionDir := storage.path(packageDir, "v" + p.version());
-		printf("_database = %s versionDir = %s\n", _database, versionDir);
 		if (storage.exists(versionDir))
 			return false;
 		if (!storage.ensure(packageDir))
 			return false;
-		printf("Copying %s -> %s\n", p.directory(), versionDir);
 		return storage.copyDirectoryTree(p.directory(), versionDir, false);
 	}
 
@@ -242,75 +285,10 @@ public class Context {
 
 	public void print() {
 	}
-}
 
-string highestVersion(string[] versionList) {
-	unsigned[] highest;
-	string highestVer;
-	for (i in versionList) {
-		s := versionList[i];
-		components := s.split('.');
-		unsigned[] ver;
-
-		for (j in components) {
-			unsigned x = unsigned.parse(components[j]);
-			ver.append(x);
-		}
-		if (highest.length() >= ver.length()) {
-			for (j in ver) {
-				if (highest[j] < ver[j]) {
-					highest = ver;
-					highestVer = s;
-					break;
-				} else if (highest[j] > ver[j])
-					break;
-			}
-		} else {
-			boolean allEqual = true;
-			for (j in highest) {
-				if (highest[j] < ver[j]) {
-					allEqual = true;
-					break;
-				} else if (highest[j] > ver[j]) {
-					allEqual = false;
-					break;
-				}
-			}
-			if (allEqual) {
-				highest = ver;
-				highestVer = s;
-			}
-		}
+	public string packagesDirectory() {
+		return storage.path(_database, "pkg");
 	}
-	return highestVer;
-}
-
-string[] versions(string packageDir) {
-	storage.Directory d(packageDir);
-	string[] results;
-
-	if (d.first()) {
-		do {
-			name := d.filename();
-			if (name[0] == 'v') {
-				substring ss = name.substr(1);
-				components := ss.split('.');
-				boolean valid = true;
-				for (j in components) {
-					unsigned x;
-					boolean success;
-		
-					(x, valid) = unsigned.parse(components[j]);
-					if (!valid)
-						break;
-				}
-				if (!valid)
-					continue;
-				results.append(ss);
-			}
-		} while (d.next());
-	}
-	return results;
 }
 /**
  * Create a new context from a directory.
@@ -906,7 +884,7 @@ public class Package extends VolatilePackage {
 		delete reader;
 
 		if (!success)
-			return "Metadata file does not conntain valid JSON";
+			return "Metadata file does not contain valid JSON";
 		message := extractMetadata(jsonData);
 		json.dispose(jsonData);
 		return message;

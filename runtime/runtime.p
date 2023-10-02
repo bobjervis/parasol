@@ -183,6 +183,18 @@ public class Image {
 		_image = pointer<byte>(imageAddress());
 		_imageLength = imageLength();
 	}
+	/**
+	 * Return the version of the image.
+	 *
+	 * @return The version string of the image, or null if no version information is available.
+	 */
+	string version() {
+		if (_pxiHeader.versionOffset > 0) {
+			v := _image + _pxiHeader.versionOffset;
+			return *ref<string>(&v);
+		} else
+			return null;
+	}
 	/** 
  	 * Return the source filename and line number corresponding to the machine address passed
 	 * to this function.

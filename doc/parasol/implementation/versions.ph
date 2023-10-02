@@ -8,6 +8,7 @@ The Parasol reference implementation includes tools intended to assist an
 author in building and identifying their updates, and also assist users in finding those updates.
 
 <h3>{@level 3 Parasol Version Strings}</h3>
+{@anchor version-string}
 
 A <i>Parasol version string</i> is used to identify versions of packages and applications created by the
 reference implementation.

@@ -255,8 +255,6 @@ class X86_64Encoder extends Target {
 	private ref<JumpContext> _jumpContext;
 	private TempStack _t;
 	private ref<Fixup> _fixups;
-	private int[] _builtIns;								// The set of built-ins referenced by this
-															// file.
 	
 	protected X86_64Encoder() {
 		_dataMap.resize(9);
@@ -4146,15 +4144,6 @@ class X86_64Encoder extends Target {
 		 f.value = value;
 		 f.next = _fixups;
 		 _fixups = f;
-	}
-	
-	private int assignBuiltInVector(int builtInId) {
-		int i;
-		for (i = 0; i < _builtIns.length(); i++)
-			if (_builtIns[i] == builtInId)
-				return i;
-		_builtIns.append(builtInId);
-		return i;
 	}
 	
 	protected byte[] functionCode() {

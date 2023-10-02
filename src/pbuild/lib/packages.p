@@ -138,11 +138,22 @@ public class ParasolProduct extends Product {
 	protected ref<compiler.CompileContext> _compileContext;
 	protected ref<compiler.Arena> _arena;
 	protected boolean _buildSuccessful;
+	protected string _version;
 
-	public ParasolProduct(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object) {
+	public ParasolProduct(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object, boolean versionAllowed) {
 		super(buildFile, enclosing, object);
 		if (name() == null)
 			buildFile.error(object, toString() + " must have a name");
+		a := object.get("version");
+		if (a != null) {
+			if (!versionAllowed)
+				buildFile.error(object, toString() + " shall not have a version");
+			else {
+				_version = a.toString();
+				if (!context.Version.isValidTemplate(_version))
+					buildFile.error(object, toString() + " version must be a valid version template");
+			}
+		}
 	}
 
 	boolean use(ref<BuildFile> buildFile, ref<script.Object> object) {
@@ -375,6 +386,7 @@ public class ParasolProduct extends Product {
 	protected string sentinelFileName() {
 		return storage.path(outputDir(), name() + ".ok");
 	}
+
 }
 
 public class Package extends ParasolProduct {
@@ -386,7 +398,7 @@ public class Package extends ParasolProduct {
 	protected string[] _initLast;
 
 	public Package(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object) {
-		super(buildFile, enclosing, object);
+		super(buildFile, enclosing, object, true);
 
 		ref<script.Atom> a;
 
@@ -479,7 +491,7 @@ public class Package extends ParasolProduct {
 																				_initFirst, _initLast)) 
 				return false;
 			metadataFile := storage.path(_parasolProductDir, context.PACKAGE_METADATA);
-			_package.setMetadata("0.0.0", _usedPackages);
+			_package.setMetadata(expandTemplate(_version), _usedPackages);
 			return _package.writeMetadata(metadataFile);
 		} else
 			return true;
@@ -588,8 +600,8 @@ class Application extends ParasolProduct {
 		TEST
 	}
 
-	Application(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object) {
-		super(buildFile, enclosing, object);
+	Application(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object, boolean versionAllowed) {
+		super(buildFile, enclosing, object, versionAllowed);
 		ref<script.Atom> a = object.get("main");
 		if (a != null)
 			_main = a.toString();
@@ -695,7 +707,7 @@ class Application extends ParasolProduct {
 
 class Binary extends Application {
 	Binary(ref<BuildFile> buildFile, ref<script.Object> object) {
-		super(buildFile, null, object);
+		super(buildFile, null, object, true);
 	}
 
 	public boolean build() {
@@ -820,7 +832,7 @@ class Binary extends Application {
 
 class Command extends Application {
 	Command(ref<BuildFile> buildFile, ref<script.Object> object) {
-		super(buildFile, null, object);
+		super(buildFile, null, object, false);
 	}
 
 	public boolean build() {
@@ -889,7 +901,7 @@ class Pxi extends Application {
 	private string _target;
 
 	Pxi(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object) {
-		super(buildFile, enclosing, object);
+		super(buildFile, enclosing, object, true);
 		ref<script.Atom> a = object.get("target");
 		if (a != null)
 			_target = a.toString();
@@ -1148,6 +1160,21 @@ class IncludePackage extends Product {
 	public boolean showOutcome() {
 		return false;
 	}
+}
+
+string expandTemplate(string template) {
+	string output;
+
+	for (i in template) {
+		c := template[i];
+		if (c == 'D') {
+			time.Formatter f("yyyyMMddHHmmss");
+			time.Date d(time.Instant.now());
+			return f.format(&d);
+		} else
+			output.append(c);
+	}
+	return output;
 }
 
 string herePath(string path) {

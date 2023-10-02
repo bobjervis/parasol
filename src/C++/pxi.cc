@@ -140,7 +140,7 @@ bool Section::run(char **args, int *returnValue, int heap_value) {
 	parasol::setRuntimeParameter(RP_PXI_HEADER, (void*)&header);
 	parasol::setRuntimeParameter(RP_IMAGE, image);
 	parasol::setRuntimeParameter(RP_IMAGE_LENGTH, (void*)(long)imageLength);
-	parasol::setRuntimeParameter(RP_HEAP, (void*)heap_value);
+	parasol::setRuntimeParameter(RP_HEAP, (void*)(long)heap_value);
 
 	int argc = 0;
 	for (int i = 1; args[i] != null; i++)

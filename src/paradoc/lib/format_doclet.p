@@ -26,6 +26,7 @@ string expandDocletString(ref<compiler.Doclet> doclet, string text, ref<compiler
 	boolean inlineTag;
 	boolean inOffset;
 	boolean closeA;
+	boolean closeDocA;
 	boolean closeSpan;
 	int offset;
 
@@ -55,16 +56,20 @@ string expandDocletString(ref<compiler.Doclet> doclet, string text, ref<compiler
 				closeA = true;
 				break;
 
-			case 'p':
+			case 'd':
 				inlineTag = true;
 				inOffset = true;
-				closeA = true;
+				closeDocA = true;
 				break;
 
 			case '}':
 				if (closeA) {
 					result.append(transformLink(doclet, offset, linkText, sym, baseName));
 					closeA = false;
+				}
+				if (closeDocA) {
+					result.append(transformDocLink(doclet, offset, linkText, baseName));
+					closeDocA = false;
 				}
 				if (closeSpan) {
 					closeSpan = false;
@@ -89,7 +94,9 @@ string expandDocletString(ref<compiler.Doclet> doclet, string text, ref<compiler
 	}
 	if (closeA) {
 		result.append(transformLink(doclet, offset, linkText, sym, baseName));
-		result.append("</a>");
+	}
+	if (closeDocA) {
+		result.append(transformDocLink(doclet, offset, linkText, baseName));
 	}
 	if (closeSpan)
 		result.append("</span>");
@@ -182,6 +189,30 @@ string transformLink(ref<compiler.Doclet> doclet, int location, string linkTextI
 		int suffix = contentOutputFolder.length();
 		printf("File %3$s links to %2$s as %1$s\n", linkText, path.substr(suffix), baseName.substr(suffix));
 	}
+	return "<a href=\"" + linkText + "\">" + caption + "</a>";
+}
+
+string transformDocLink(ref<compiler.Doclet> doclet, int location, string linkTextIn, string baseName) {
+//	printf("transformDocLink('%s', ..., %s)\n", linkTextIn, baseName);
+
+	string linkText = linkTextIn.trim();
+	int idx = linkText.indexOf(' ');
+	string caption;
+	string[] components;
+	ref<compiler.Scope> scope;
+	ref<compiler.Scope> original;
+
+	if (idx >= 0) {
+		caption = linkText.substr(idx + 1).trim();
+		linkText.resize(idx);
+	} else
+		caption = linkText;
+	c := anchors[linkText];
+	if (c == null) {
+		printLinkError(doclet, location, linkTextIn);
+		return caption;
+	}
+	linkText = storage.makeCompactPath(c.targetPath(), baseName);
 	return "<a href=\"" + linkText + "\">" + caption + "</a>";
 }
 

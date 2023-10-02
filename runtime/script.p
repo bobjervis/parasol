@@ -14,35 +14,65 @@
    limitations under the License.
  */
 /**
- * @ignore
+ * This namespace defines facilities to parse and process an ETS script.
+ *
+ * These script files are written in a {@doc-link ets-script markup syntax} similar in capability to
+ * XML, but using a syntax that is somewhat more concise and 'programmer friendly'.
+ *
+ * Parasol makes use of this syntax primarily in two places: build files for 
+ * building large Parasol libraries and applications, and in the Parasol language
+ * tests used to validate the Parasol compiler and runtime.
+ *
+ * How the elements of a script file are interpreted are entirely up to the application
+ * that processes the files.
+ * Typically applications will treat marked up text as declarative data, rather than
+ * a procedural programming language.
+ * The declared data may well inform an algorithm, such as the Parasol build
+ * process or the testing process.
+ *
+ * Using files written in the script syntax starts by calling the {@link Parser.load} method to
+ * construct a parser,
+ * then using it to construct a collection of Atom's that represent the structure of the
+ * script itself.
  */
 namespace parasol:script;
 
+import parasol:exception.IllegalArgumentException;
+
 import parasol:storage;
 
-private string commandPrefix;
 private ref<Object>(int)[string] factories;
-
-public void setCommandPrefix(string command) {
-	commandPrefix = command;
-}
-
-public void init() {
-	objectFactory("script", ScriptObject.factory);
-}
-
+/**
+ * Define an object factory.
+ *
+ * An application may define one or more <i>object factories</i> that provide
+ * application-specific information or processing specific to the object tag
+ * the factory accepts.
+ *
+ * When a block of text is parsed into a collection of Atoms, those elements
+ * that are tagged objects can be assigned special semantics that override the
+ * very generic behavior of the general Atoms.
+ *
+ * This method should be called before parsing any scripts that include objects
+ * that match this factory's tag.
+ *
+ * @param tag The tag string of the object this factory processes.
+ *
+ * @param factory A function that creates and returns an object that is
+ * derived from {@link Object}.
+ */
 public void objectFactory(string tag, ref<Object>(int) factory) {
 	factories[tag] = factory;
 }
 
 public class Null extends Atom {
 	public string toSource() {
-		assert(false);
+		throw IllegalArgumentException("No source for a Null atom");
 		return null;
 	}
 
 	public string toString() {
-		assert(false);
+		throw IllegalArgumentException("No translation to string for a Null atom");
 		return null;
 	}
 }
@@ -58,10 +88,6 @@ public class Object extends Atom {
 		_properties["parent"] = null;
 		_properties.deleteAll();
 	}
-
-//	public boolean isRunnable() {
-//		return true;
-//	}
 
 	public string toSource() {
 		string s;
@@ -101,17 +127,27 @@ public class Object extends Atom {
 	}
 
 	public string toString() {
-		assert(false);
+		throw IllegalArgumentException("No translation to string for an Object atom");
 		return null;
 	}
 
 	public ref<Atom> get(string name) {
 		return _properties.get(name);
 	}
-	/*
+	/**
 	 * put
 	 *
 	 * Put method defines the name to have the given value.
+	 *
+	 * @param name The name of the property to assign.
+	 * If the name is not currently defined, the name is added as
+ 	 * a new property of the object.
+	 *
+	 * @param value The value to be assigned to the property.
+	 *
+	 * @return true If the property did not exist and has been added,
+	 * false if the property existed.
+	 * Any existing value is deleted.
 	 */
 	public boolean put(string name, ref<Atom> value) {
 		ref<Atom> a = _properties.replace(name, value);
@@ -192,7 +228,7 @@ public class Vector extends Atom {
 
 	public ref<Atom> get(int i) {
 		if (i < 0 || i >= _value.length()) {
-			assert(false);
+			throw IllegalArgumentException("index out of range: " + i);
 			return null;
 		}
 		return _value[i];
@@ -200,7 +236,7 @@ public class Vector extends Atom {
 
 	public boolean put(int i, ref<Atom> value) {
 		if (i < 0 || i >= _value.length()) {
-			assert(false);
+			throw IllegalArgumentException("index out of range: " + i);
 			return false;
 		}
 		_value[i] = value;
@@ -244,22 +280,22 @@ public class Atom {
 	}
 
 	public boolean put(string name, ref<Atom> value) {
-		assert(false);
+		throw IllegalArgumentException("Cannot put a property value for this Atom");
 		return false;
 	}
 
 	public ref<Atom> get(int i) {
-		assert(false);
+		throw IllegalArgumentException("This atom does not support indexed access");
 		return null;
 	}
 
 	public boolean put(int i, ref<Atom> value) {
-		assert(false);
+		throw IllegalArgumentException("This atom does not support indexed access");
 		return false;
 	}
 
 	public int length() {
-		assert(false);
+		throw IllegalArgumentException("This atom has no length property");
 		return 0;
 	}
 	/**
@@ -276,50 +312,14 @@ public class Atom {
 	 */
 	public void insertDefaultPath(string defaultPath) {
 	}
-
+	/**
+	 * Return the source text for this Atom.
+	 *
+	 * @return A string representing a copy of the original source.
+	 */
 	public abstract string toSource();
 
 	public abstract string toString();
-}
-
-class ScriptObject extends Object {
-	public static ref<Object> factory(int offset) {
-		return new ScriptObject(offset);
-	}
-
-	private ScriptObject(int offset) {
-		super(offset);
-	}
-/*
-
-	virtual bool validate(Parser* parser) {
-		Atom* a = get("name");
-		if (a == null)
-			return false;
-		_path = fileSystem::pathRelativeTo(a.toString(), parser.filename());
-		return true;
-	}
-
-	virtual bool run() {
-		string command = commandPrefix;
-		command.append(' ');
-		command.append(_path);
-		string captureData;
-		process::exception_t exception;
-		int exitCode = process::debugSpawn(command, &captureData, &exception, 60);
-		string sExitCode(exitCode);
-		put("exit", new String(sExitCode));
-		put("output", new String(captureData));
-		int expectedExitCode = 0;
-		Atom* expect = get("expect");
-		if (expect != null)
-			expectedExitCode = expect.toString().toInt();
-		return exitCode == expectedExitCode;
-	}
-
-private:
-	string				_path;
-	*/
 }
 
 public class Parser {
@@ -337,13 +337,7 @@ public class Parser {
 	}
 
 	public ref<MessageLog> log;
-/*
-public:
 
-	Parser(display::TextBuffer* buffer);
-
-	~Parser();
-*/
 	public static ref<Parser> load(string filename) {
 		ref<Reader> f = storage.openTextFile(filename);
 		if (f == null)
@@ -388,7 +382,6 @@ public:
 			case END_OF_INPUT:
 				if (terminator != Token.END_OF_INPUT) {
 					_errorsFound = true;
-//					printf("terminator == %s\n", string(terminator));
 					log.error(_scanner.location(), "Unexpected end of file");
 				}
 				if (run != null)
@@ -593,13 +586,7 @@ private class Scanner {
 	public Scanner(string source) {
 		_text = source;
 	}
-/*
-public:
 
-	Scanner(display::TextBuffer* buffer);
-
-	~Scanner();
-*/
 	Token next() {
 		for (;;) {
 			_previous = _cursor;

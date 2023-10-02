@@ -114,7 +114,6 @@ int main(string[] args) {
 			runetsCommand.help();
 		}
 	}
-	script.setCommandPrefix(storage.absolutePath(process.binaryFilename()) + " --test");
 	test.listAllTests = runetsCommand.traceOption.value;
 	string pxiName;
 	if (runetsCommand.testPxiOption.set())

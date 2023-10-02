@@ -2,6 +2,11 @@ dir(path: test/src) {
 	dir(path: compiler) {
 		run(filename: scanner_test.p, arguments: runtime/x86_64.p)
 	}
+	dir(path: context) {
+		run(filename: test_1.p)
+		run(filename: test_2.p)
+		run(filename: test_template_1.p)
+	}
 	dir(path: http) {
 		run(filename: base64test.p)
 		//run(filename: httpd_test.p)

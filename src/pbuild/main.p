@@ -50,6 +50,9 @@ class PBuildCommand extends process.Command {
 					"Parasol Compiler Version " + compiler.version() + "\n" +
 					"Copyright (c) 2015 Robert Jervis"
 					);
+		buildManifestOption = stringOption('m', "manifest",
+					"Designates a file containing build manifest instructions that define " +
+					"which build products should be upgraded to new versions and how.");
 		buildDirOption = stringOption('d', "dir",
 					"Designates the root directory for the build source tree. " +
 					"Default: .");
@@ -90,6 +93,7 @@ class PBuildCommand extends process.Command {
 					"Displays this help.");
 	}
 
+	ref<process.Option<string>> buildManifestOption;
 	ref<process.Option<string>> buildDirOption;
 	ref<process.Option<string>> buildFileOption;
 	ref<process.Option<int>> buildThreadsOption;
@@ -131,6 +135,12 @@ public int main(string[] args) {
 	if (!coordinator.validate()) {
 		printf("FAIL: Errors encountered trying to find and parse build scripts.\n");
 		pbuildCommand.help();
+	}
+	if (pbuildCommand.buildManifestOption.set()) {
+		if (!coordinator.applyManifest(pbuildCommand.buildManifestOption.value)) {
+			printf("FAIL: Errors encountered trying to apply build manifest scripts.\n");
+			pbuildCommand.help();
+		}
 	}
 	// Note: if the build files contain any 'after_pass' scripts, those will be exec'ed
 	// from inside this function, and it will not return.

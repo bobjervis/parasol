@@ -133,7 +133,7 @@ ref<pxi.Section> x86_64NextReader(storage.File pxiFile, long length) {
 			printf("Disassembly FAILED\n");
 		}
 	} else if (verbose != runtime.Target.ERROR)
-		x86_64.printHeader(&header, imageOffset);
+		x86_64.printHeader(&header, imageOffset, &memory[0]);
 	if (command.relocationsOption.set()) {
 		if (actual != memory.length())
 			return null;

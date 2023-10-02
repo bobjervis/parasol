@@ -86,17 +86,19 @@ target(os: linux, cpu: x86-64) {
 	}
 
 	tests(suite: update_git) {
-		include(suite: full)
+		execute(suite: full)
 	
+		// These are run by the tests process
 		on_pass() {
 		"	set +v
 			(cd build/install_parasollanguage.org ; tar -cf ../../install-lnx-64.tar.gz * ; )
 			cp build/core_parasollanguage.org/\:manifest\: runtime
+			cp build/core_parasollanguage.org/package.json runtime
 			cp build/x86-64-lnx.pxi bin/x86-64-lnx.pxi
 			ln -sfT libparasol.so.1 bin/libparasol.so
 		"	
 		}
-		// These have to be run as an exec because these files are running pbuild (like all
+		// These have to be run as an exec because these files are running the parasolrt binary and libparasol.so.1 (like all
 		// Parasol applications).
 		after_pass() {
 			cp build/libparasol.so.1 bin/libparasol.so.1
@@ -109,6 +111,7 @@ target(os: linux, cpu: x86-64) {
 		"	set +v
 			(cd build/install_parasollanguage.org ; tar -cf ../../install-lnx-64.tar.gz * ; )
 			cp build/core_parasollanguage.org/\:manifest\: runtime
+			cp build/core_parasollanguage.org/package.json runtime
 			cp build/x86-64-lnx.pxi bin/x86-64-lnx.pxi
 			ln -sfT libparasol.so.1 bin/libparasol.so
 		"
@@ -161,7 +164,7 @@ target(os: windows, cpu: x86-64) {
 	}
 
 	tests(suite: update_git) {
-		include(suite: full)
+		execute(suite: full)
 	
 		on_pass() {
 			fc /b build\\x86-64-win.pxi bin\\x86-64-win.pxi
@@ -192,7 +195,7 @@ tests(suite: unit) {
 }
 
 tests(suite: full) {
-	include(suite: unit)
+	execute(suite: unit)
 
 	ets(name: test/scripts/parasol_tests.ets)
 }

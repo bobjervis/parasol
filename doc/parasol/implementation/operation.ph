@@ -91,13 +91,22 @@ The Parasol build utility.
 </td></tr>
 <tr><td>-f</td><td>--file</td><td>
         Designates the path for the build file. If this option is
-                      provided, only this one build script will be loaded and
-                      executed.
+                    provided, only this one build script will be loaded and
+                    executed.
 					<br>
 					Default: Apply the search algorithm described below.
 </td></tr>
 <tr><td>-?</td><td>--help</td><td>Displays a simplified form of this help.</td></tr>
 <tr><td></td><td><nobr>--logImports</nobr></td><td>Log all import processing.</td></tr>
+<tr><td>-m</td><td>--manifest</td><td>
+        Selects a manifest file that contains auxiliary information to
+					guide the build process. This file will typically contain
+					information that constrains what package versions can be built
+					in this run and which of the pacckages being compiled will be
+					installed.
+					<br>
+                      Default: <span class=code>linux</span>
+</td></tr>
 <tr><td></td><td>--os</td><td>
                   Selects the target operating system for this execution.
 					<br>
@@ -127,7 +136,7 @@ The Parasol build utility.
                       the editor) ?
 </td></tr>
 </table>
-
+<p>
 This program builds a Parasol application according to the rules in build files.
 <p>
 With no file option specified, the builder will search the current directory and
@@ -147,6 +156,15 @@ projects, this build will properly handle them.
 If no products are given as arguments, then all products enabled in the build
 scripts will be built. If one or more products are given as arguments, then only
 those products plus any products the named ones are dependent on will be built.
+
+<h4>{@level 4 Build Scripts}</h4>
+
+The text file that the Parasol <span class=code>pbuild</span> application uses to
+control a build is called a <i>build script</i> and is written using the {@doc-link ets-script ETS script syntax}.
+The following describes the tags that are supported by the pbuild tool.
+<p>
+
+For details about the tag set defined for <span class=code>pbuild</span> is described {@doc-link make-pbld here}.
 
 <h3>{@level 3 pcontext}</h3>
 
@@ -199,13 +217,20 @@ performs many different functions.
 </div>
 
 {@code
-      <b>pcontext ls</b>
+      <b>pcontext ls</b> [ <i>options</i> ... ]
 }
 <div class=sub-command>
 	
 	<p>
       List all contexts.
 </div>
+	
+	<h4>Options:</h4>
+
+	<table>
+	<tr><td>-p</td><td>--packages</td><td>If present, list the packages present in each context.</td><tr>
+	<tr><td>-v</td><td>--versions</td><td>If present, list the packages and their versions present in each context.</td><tr>
+	</table>
 
 <h3>{@level 3 paradoc}</h3>
 

@@ -103,7 +103,7 @@ public class Disassembler {
 	}
 	
 	public boolean disassemble() {
-		printHeader(_pxiHeader, -1);
+		printHeader(_pxiHeader, -1, _physical);
 		printf("\n");
 		_offset = 0;
 		_rex = 0;
@@ -1846,8 +1846,15 @@ escape0Fmnemonics[0x8d] = "jge";
 escape0Fmnemonics[0x8e] = "jle";
 escape0Fmnemonics[0x8f] = "jg";
 
-public void printHeader(ref<pxi.X86_64SectionHeader> header, long fileOffset) {
+public void printHeader(ref<pxi.X86_64SectionHeader> header, long fileOffset, pointer<byte> image) {
 	printf("\n");
+	if (image != null) {
+		if (header.versionOffset > 0) {
+			v := image + header.versionOffset;
+			printf("        version  %20s\n", *ref<string>(&v));
+		} else
+			printf("        version offset       %8x\n", header.versionOffset);
+	}
 	if (fileOffset >= 0)
 		printf("        image offset         %8x\n", fileOffset);
 	printf("        entryPoint           %8x\n", header.entryPoint);

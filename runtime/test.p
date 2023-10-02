@@ -33,7 +33,6 @@ public int launch(string[] args) {
 	string[] filenames;
 	time.Time start = time.Time.now();
 	
-	script.init();
 	init();
 	for (int i = 0; i < args.length(); i++) {
 		filenames.append(args[i]);
