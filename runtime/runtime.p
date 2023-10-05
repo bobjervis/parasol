@@ -188,10 +188,12 @@ public class Image {
 	 *
 	 * @return The version string of the image, or null if no version information is available.
 	 */
-	string version() {
+	public string version() {
 		if (_pxiHeader.versionOffset > 0) {
-			v := _image + _pxiHeader.versionOffset;
-			return *ref<string>(&v);
+			v := _image + _pxiHeader.versionOffset + int.bytes;
+			
+			return string(v);		// This will safely construct a string from the null terminated bytes
+									// at the versionOffset (plus the string literal length int).
 		} else
 			return null;
 	}

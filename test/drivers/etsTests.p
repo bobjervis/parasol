@@ -45,7 +45,6 @@ class TestCommand extends process.Command {
 					"Refer to the Parasol language reference manual for details on " +
 					"permitted syntax." +
 					"\n" +
-					"Parasol Compiler Version " + compiler.version() + "\r" +
 					"Copyright (c) " + COPYRIGHT_STRING
 					);
 		rootDirOption = stringOption('r', "root",

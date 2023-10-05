@@ -17,6 +17,7 @@ namespace parasol:process;
 
 import parasol:exception.IllegalArgumentException;
 import parasol:exception.IllegalOperationException;
+import parasol:runtime;
 import native:C;
 /**
  * Provide command-line parsing.
@@ -89,6 +90,7 @@ public class Command {
 	string _description;
 	string[] _finalArguments;
 	ref<Option<boolean>> _helpOption;
+	ref<Option<boolean>> _versionOption;
 	ref<BaseOption>[] _allOptions;
 	ref<Command>[string] _subCommands;
 	ref<Command> _defaultSubCommand;
@@ -181,6 +183,22 @@ public class Command {
 			delete arg;
 			return null;
 		}
+	}
+
+	public boolean versionOption(string longOption, string helpText) {
+		return versionOption(0, longOption, helpText);
+	}
+
+	public boolean versionOption(char shortOption, string longOption, string helpText) {
+		if (_versionOption != null)
+			return false;
+		arg := new Option<boolean>(OptionClass.BOOLEAN, shortOption, longOption, helpText);
+		if (defineOption(shortOption, longOption, arg)) {
+			_versionOption = arg;
+			return true;
+		} else
+			return false;
+		
 	}
 
 	public boolean helpOption(string longOption, string helpText) {
@@ -288,25 +306,33 @@ public class Command {
 				break;
 		}
 		if (_subCommands.size() > 0 || _defaultSubCommand != null) {
-			if (i >= args.length())
-				return false;
-			ref<Command> c = _subCommands[args[i]];
+			ref<Command> c;
+			if (i < args.length()) {
+				c = _subCommands[args[i]];
+				_finalArguments.slice(args, i + 1, args.length());
+			} else
+				_finalArguments.slice(args, i, args.length());
 			if (c == null)
 				c = _defaultSubCommand;
-			if (c == null)
-				return false;
-			_selectedSubCommand = c;
-			_finalArguments.slice(args, i + 1, args.length());
-			if (!c.parse(_finalArguments))
-				return false;
-			if (_helpOption != null && _helpOption.value)
-				help();
-			return true;
+			if (c != null) {
+				_selectedSubCommand = c;
+				if (_helpOption != null && c._helpOption == null)
+					c._helpOption = _helpOption;
+				if (_versionOption != null && c._versionOption == null)
+					c._versionOption = _versionOption;
+				if (!c.parse(_finalArguments))
+					return false;
+				return true;
+			}
 		}
 //		_finalArguments = args[i..args.length()];
 		_finalArguments.slice(args, i, args.length());
 		if (_helpOption != null && _helpOption.value)
 			help();
+		if (_versionOption != null && _versionOption.value) {
+			printf(runtime.image.version());
+			exit(0);
+		}
 		return _finalArguments.length() >= _finalMin && _finalArguments.length() <= _finalMax;
 	}
 

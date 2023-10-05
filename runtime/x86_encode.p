@@ -307,6 +307,9 @@ class X86_64Encoder extends Target {
 		} else {
 		}
 
+		if (compileContext.imageVersion != null)
+			_pxiHeader.versionOffset = addStringLiteral(compileContext.imageVersion);
+
 		ref<pxi.X86_64SourceMap> smap = ref<pxi.X86_64SourceMap>(_segments[Segments.SOURCE_LOCATIONS].at(0));
 		smap.codeLocationsCount = _sourceLocations.length();
 		smap.sourceFileCount = _segments[Segments.SOURCE_FILE_NAMES].length() / int.bytes;
@@ -449,6 +452,8 @@ class X86_64Encoder extends Target {
 		relocateStaticData(2);
 		relocateStaticData(1);
 		
+		if (compileContext.imageVersion != null)
+			_pxiHeader.versionOffset += _segments[Segments.STRINGS].offset();
 		_pxiHeader.sourceMapOffset = _segments[Segments.SOURCE_LOCATIONS].offset();
 		_pxiHeader.typeDataOffset = _segments[Segments.TYPE_DATA].offset();
 		_pxiHeader.typeDataLength = _segments[Segments.TYPE_DATA].length();

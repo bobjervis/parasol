@@ -15,11 +15,11 @@
  */
 namespace parasol:context;
 
-import parasol:compiler;
 import parasol:exception.IllegalArgumentException;
 import parasol:exception.IllegalOperationException;
 import parasol:json;
 import parasol:process;
+import parasol:runtime;
 import parasol:storage;
 import parasol:time;
 import parasol:types.Set;
@@ -940,7 +940,7 @@ public class Package extends VolatilePackage {
 		}
 
 		writer.printf("{\"name\":\"%s\",\"version\":\"%s\",\"built_by\":\"%s\",\"uses\":[\n",
-					  name(), "0.0.0", compiler.version());
+					  name(), _version != null ? _version : "0.0.0", runtime.image.version());
 		for (i in _usedPackages) {
 			p := _usedPackages[i];
 			if (i > 0)

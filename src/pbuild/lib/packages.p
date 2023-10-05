@@ -37,6 +37,7 @@ class Product extends Folder {
 	protected boolean _compileSkipped;
 	protected boolean _componentFailures;
 	protected ref<Product>[] _includedProducts;
+	protected string _version;
 
 	Product(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object) {
 		super(buildFile, enclosing, object);
@@ -72,6 +73,13 @@ class Product extends Folder {
 			printf("\n");
 		}
 
+	}
+
+	public boolean setVersion(string version) {
+		if (!context.Version.isValid(version))
+			return false;
+		_version = version;
+		return true;
 	}
 
 	private static boolean productBuilder(address arg) {
@@ -138,7 +146,6 @@ public class ParasolProduct extends Product {
 	protected ref<compiler.CompileContext> _compileContext;
 	protected ref<compiler.Arena> _arena;
 	protected boolean _buildSuccessful;
-	protected string _version;
 
 	public ParasolProduct(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object, boolean versionAllowed) {
 		super(buildFile, enclosing, object);
@@ -791,6 +798,7 @@ class Binary extends Application {
 		if (!openCompiler())
 			return null, false;			
 		string mainFile = storage.path(buildDir(), _main);
+		_compileContext.imageVersion = _version;
 		ref<compiler.Target> target = _compileContext.compile(mainFile);
 		if (coordinator().generateSymbolTables())
 			_arena.printSymbolTable();
@@ -930,6 +938,7 @@ class Pxi extends Application {
 
 	public ref<compiler.Target>, boolean compile() {
 		string mainFile = storage.path(buildDir(), _main);
+		_compileContext.imageVersion = _version;
 		ref<compiler.Target> target = _compileContext.compile(mainFile);
 		if (coordinator().generateSymbolTables())
 			_arena.printSymbolTable();

@@ -719,7 +719,7 @@ public class Writer {
 	 *					the pointer location up to the next null byte. The resulting string is then
 	 *					converted to a number of Unicode characters and then encoded in utf-8. If any 
 	 *					bytes of the CONSTRUCTED string are not valid utf-8 encoded characters,
-	 *					they are converted to Unicode substituTe characters.
+	 *					they are converted to Unicode substitute characters.
 	 *				</td></tr>
 	 *			</table>
 	 *			<p>

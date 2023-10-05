@@ -50,30 +50,35 @@ class ManifestFile {
 	}
 
 	boolean apply(ref<Coordinator> coordinator) {
-		boolean success = true;
 		for (i in _directives) {
 			d := _directives[i];
 
 			if (d.class == script.Object) {
 				object := ref<script.Object>(d);
+				a := object.get("name");
+				if (a == null) {
+					error(object, "Must provide a name attribute");
+					break;
+				}
+				v := object.get("version");
+				if (v == null) {
+					error(object, "Must provide a version attribute");
+					break;
+				}
 				switch (object.get("tag").toString()) {
 				case "package":
-					a := object.get("name");
-					if (a == null) {
-						error(object, "Must provide a name attribute");
-						break;
-					}
-					v := object.get("version");
-					if (v == null) {
-						error(object, "Must provide a version attribute");
-						break;
-					}
-					if (!coordinator.setPackageVersion(a.toString(), v.toString()))
-						error(object, "Could not set the package version");
+					if (!coordinator.setProductVersion(a.toString(), v.toString()))
+						_parser.log.error(object.offset(), "Could not set the package version of " + a.toString());
 					break;
 
 				case "pxi":
+					if (!coordinator.setProductVersion(a.toString(), v.toString()))
+						_parser.log.error(object.offset(), "Could not set the pxi version of " + a.toString());
+					break;
+
 				case "application":
+					if (!coordinator.setProductVersion(a.toString(), v.toString()))
+						_parser.log.error(object.offset(), "Could not set the application version of " + a.toString());
 					break;
 
 				default:
@@ -81,7 +86,7 @@ class ManifestFile {
 				}
 			}
 		}
-		return false;
+		return !_detectedErrors;
 	}
 
 	void error(ref<script.Atom> a, string msg, var... args) {

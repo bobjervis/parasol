@@ -39,22 +39,6 @@ import parasol:thread;
 
 int INDENT = 4;
 
-private string __version__;
-
-public string version() {
-	if (__version__ == null) {
-		parasolHome := process.environment.get("PARASOL_HOME");
-		versionFile := storage.path(parasolHome, "compiler.version");
-		reader := storage.openTextFile(versionFile);
-		if (reader != null) {
-			__version__ = reader.readAll().trim();
-			delete reader;
-		} else
-			__version__ = "<unknown>";
-	}
-	return __version__;
-}
-
 public class CompileContext extends CodegenContext {
 	public Operator visibility;
 	public boolean isStatic;
@@ -65,6 +49,7 @@ public class CompileContext extends CodegenContext {
 	public ref<PlainSymbol> compileTarget;		// Special 'compileTarget' variable that is used to
 												// implement conditional compilation
 
+	public string imageVersion;					// If not null, the image version string for any build of a pxi.
 	private ref<DomainForest> _forest;
 	private ref<Scope> _root;
 	private boolean _forestIsCreated;

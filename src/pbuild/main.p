@@ -13,11 +13,11 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-import parasol:compiler;
 import parasol:process;
 import parasol:pbuild.Coordinator;
 import parasol:pbuild.thisOS;
 import parasol:pbuild.thisCPU;
+import parasol:runtime;
 import parasol:thread;
 
 class PBuildCommand extends process.Command {
@@ -47,12 +47,12 @@ class PBuildCommand extends process.Command {
 					"If one or more products are given as arguments, then only those products " +
 					"plus any products the named ones are dependent one will be built." +
 					"\n" +
-					"Parasol Compiler Version " + compiler.version() + "\n" +
+					"Parasol Compiler Version " + runtime.image.version() + "\n" +
 					"Copyright (c) 2015 Robert Jervis"
 					);
-		buildManifestOption = stringOption('m', "manifest",
-					"Designates a file containing build manifest instructions that define " +
-					"which build products should be upgraded to new versions and how.");
+		installContextOption = stringOption('i', "install",
+					"rrrrrrrrrrrrrrrrrrrrrrrr677777777777777777777777777777777777777777777
+.");
 		buildDirOption = stringOption('d', "dir",
 					"Designates the root directory for the build source tree. " +
 					"Default: .");
@@ -93,7 +93,7 @@ class PBuildCommand extends process.Command {
 					"Displays this help.");
 	}
 
-	ref<process.Option<string>> buildManifestOption;
+	ref<process.Option<string>> installContextOption;
 	ref<process.Option<string>> buildDirOption;
 	ref<process.Option<string>> buildFileOption;
 	ref<process.Option<int>> buildThreadsOption;

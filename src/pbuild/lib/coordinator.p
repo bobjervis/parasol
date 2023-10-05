@@ -363,7 +363,12 @@ public class Coordinator extends CoordinatorVolatileData {
 		return mf.apply(this);
 	}
 
-	public boolean setPackageVersion(string packageName, string version) {
+	public boolean setProductVersion(string productName, string version) {
+		for (i in _products) {
+			product := _products[i];
+			if (product.name() == productName)
+				return product.setVersion(version);
+		}
 		return false;
 	}
 
