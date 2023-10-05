@@ -13,6 +13,31 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+/**
+ * A set of facilities to maintain a per-user set of installed Parasol libraries.
+ *
+ * The reference implementation build tools can both use and generate those libraries.
+ *
+ * Each user can define any number of named Parasol contexts. Even if a user doesn't take
+ * any special action, the tools behave as if there exists a context called 'default'
+ * that any of the build tools will use if the user doesn't otherwise designate.
+ *
+ * A user can set the Parasol context for a shell terminal session by executing the command:
+ *
+ * {@code    export PARASOL_CONTEXT=<i>context-name</i>}
+ *
+ * Whatever the name a user assigns, that will be the context in use for Parasol command
+ * line tools.
+ * 
+ * Versions of Parasol packages can be installed into these contexts and will be visible to
+ * any product build that uses the context.
+ *
+ * Most users will work within the default context and take no special action.
+ * Some users, however, will need to fix bugs in different versions of a library or may need
+ * to test do compatibility testing with new versions of 3rd party software, or upgrades to bew
+ * versions of the compiler.
+ * For them, this is a helpful mechanism.
+ */
 namespace parasol:context;
 
 import parasol:exception.IllegalArgumentException;
@@ -796,6 +821,8 @@ public class Package extends VolatilePackage {
 	 * @return The package name, and identifier followed by a colon followed by a validly formatted DNS name string.
 	 */
 	public string name() {
+		if (_name == null)
+			loadMetadata();
 		return _name;
 	}
 	/**

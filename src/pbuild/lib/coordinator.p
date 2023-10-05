@@ -46,6 +46,8 @@ public class Coordinator extends CoordinatorVolatileData {
 	private string _outputDir;
 	private string _targetOS;
 	private string _targetCPU;
+	private string _installContext;
+	private ref<context.Context> _installTarget;
 	private Set<string> _suites;
 	private Set<string> _definedSuites;
 	private string _uiPrefix;
@@ -75,6 +77,7 @@ public class Coordinator extends CoordinatorVolatileData {
 					   string targetOS, string targetCPU,
 					   string uiPrefix,
 					   string suites,
+					   string installContext,
 					   boolean generateSymbolTables,
 					   boolean generateDisassembly,
 					   boolean reportOutOfDate,
@@ -112,6 +115,7 @@ public class Coordinator extends CoordinatorVolatileData {
 			_targetCPU = thisCPU();
 		else
 			_targetCPU = targetCPU;
+		_installContext = installContext;
 		_uiPrefix = uiPrefix;
 		if (suites != null) {
 			string[] suiteNames = suites.split(',');
@@ -152,6 +156,15 @@ public class Coordinator extends CoordinatorVolatileData {
 		default:
 			printf("Unknown target CPU '%s'\n", _targetCPU);
 			return false;
+		}
+
+		if (_installContext != null) {
+			printf("Install context: %s\n", _installContext);
+			_installTarget = context.get(_installContext);
+			if (_installTarget == null) {
+				printf("    FAIL: Install context %s does not exist\n", _installContext);
+				return false;
+			}
 		}
 
 		if (_buildFile != null) {
@@ -445,6 +458,28 @@ public class Coordinator extends CoordinatorVolatileData {
 						success = false;
 					}
 					delete p;
+				}
+			}
+			if (_installTarget != null) {
+				printf("    Installing to context %s:\n", _installContext);
+				for (i in _products) {
+					p := _products[i];
+					if (p == corePackage)
+						continue;
+					if (p.class != Package)
+						continue;
+					bldPkg := ref<Package>(p);
+					if (!bldPkg.generateManifest())
+						continue;
+					pkg := new context.Package(null, null, bldPkg.path());
+					if (_installTarget.definePackage(pkg))
+						printf("        Installed package %s version %s\n", pkg.name(), pkg.version(),
+												 _installContext);
+					else {
+						printf("        FAIL: Could not install package %s version %s\n", pkg.name(), pkg.version(),
+												 _installContext);
+						success = false;
+					}
 				}
 			}
 			if (success)

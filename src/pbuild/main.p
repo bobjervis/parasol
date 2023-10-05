@@ -53,8 +53,9 @@ class PBuildCommand extends process.Command {
 		versionManifestOption = stringOption('m', "manifest",
 					"Designates a version manifest to be used to set version strings in the built products");
 		installContextOption = stringOption('i', "install",
-					"Designates a file containing build manifest instructions that define " +
-					"which build products should be upgraded to new versions and how.");
+					"Designates a Parasol context, into which the command-line arguments designating package " +
+					"products are to be installed" +
+					".");
 		buildDirOption = stringOption('d', "dir",
 					"Designates the root directory for the build source tree. " +
 					"Default: .");
@@ -129,6 +130,7 @@ public int main(string[] args) {
 							pbuildCommand.targetCPUOption.value,
 							pbuildCommand.uiReadyOption.value,
 							pbuildCommand.suitesOption.value,
+							pbuildCommand.installContextOption.value,
 							pbuildCommand.symbolTableOption.set(),
 							pbuildCommand.disassemblyOption.set(),
 							pbuildCommand.reportOutOfDateOption.set(),
@@ -143,12 +145,6 @@ public int main(string[] args) {
 	if (pbuildCommand.versionManifestOption.set()) {
 		if (!coordinator.applyManifest(pbuildCommand.versionManifestOption.value)) {
 			printf("FAIL: Errors encountered trying to apply version manifest scripts.\n");
-			pbuildCommand.help();
-		}
-	}
-	if (pbuildCommand.installContextOption.set()) {
-		if (!coordinator.applyManifest(pbuildCommand.installContextOption.value)) {
-			printf("FAIL: Errors encountered trying to apply build manifest scripts.\n");
 			pbuildCommand.help();
 		}
 	}
