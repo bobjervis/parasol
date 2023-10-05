@@ -330,7 +330,7 @@ public class Command {
 		if (_helpOption != null && _helpOption.value)
 			help();
 		if (_versionOption != null && _versionOption.value) {
-			printf(runtime.image.version());
+			printf("%s\n", runtime.image.version());
 			exit(0);
 		}
 		return _finalArguments.length() >= _finalMin && _finalArguments.length() <= _finalMax;

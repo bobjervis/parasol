@@ -50,9 +50,11 @@ class PBuildCommand extends process.Command {
 					"Parasol Compiler Version " + runtime.image.version() + "\n" +
 					"Copyright (c) 2015 Robert Jervis"
 					);
+		versionManifestOption = stringOption('m', "manifest",
+					"Designates a version manifest to be used to set version strings in the built products");
 		installContextOption = stringOption('i', "install",
-					"rrrrrrrrrrrrrrrrrrrrrrrr677777777777777777777777777777777777777777777
-.");
+					"Designates a file containing build manifest instructions that define " +
+					"which build products should be upgraded to new versions and how.");
 		buildDirOption = stringOption('d', "dir",
 					"Designates the root directory for the build source tree. " +
 					"Default: .");
@@ -91,9 +93,11 @@ class PBuildCommand extends process.Command {
 					"Run the indicated test suite(s) after successful completion of the build.");
 		helpOption('?', "help",
 					"Displays this help.");
+		versionOption("version", "Display the version of the pbuild app.");
 	}
 
 	ref<process.Option<string>> installContextOption;
+	ref<process.Option<string>> versionManifestOption;
 	ref<process.Option<string>> buildDirOption;
 	ref<process.Option<string>> buildFileOption;
 	ref<process.Option<int>> buildThreadsOption;
@@ -136,8 +140,14 @@ public int main(string[] args) {
 		printf("FAIL: Errors encountered trying to find and parse build scripts.\n");
 		pbuildCommand.help();
 	}
-	if (pbuildCommand.buildManifestOption.set()) {
-		if (!coordinator.applyManifest(pbuildCommand.buildManifestOption.value)) {
+	if (pbuildCommand.versionManifestOption.set()) {
+		if (!coordinator.applyManifest(pbuildCommand.versionManifestOption.value)) {
+			printf("FAIL: Errors encountered trying to apply version manifest scripts.\n");
+			pbuildCommand.help();
+		}
+	}
+	if (pbuildCommand.installContextOption.set()) {
+		if (!coordinator.applyManifest(pbuildCommand.installContextOption.value)) {
 			printf("FAIL: Errors encountered trying to apply build manifest scripts.\n");
 			pbuildCommand.help();
 		}
