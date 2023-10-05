@@ -13,6 +13,6 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
-package(name: core:parasollanguage.org, version: 0.8.1)
-pxi(name: x86-64-lnx.pxi, version: 0.8.1)
-pxi(name: x86-64-win.pxi, version: 0.8.1)
+package(name: core:parasollanguage.org, version: 0.8.2)
+pxi(name: x86-64-lnx.pxi, version: 0.8.2)
+pxi(name: x86-64-win.pxi, version: 0.8.2)

@@ -68,6 +68,8 @@ class Paradoc extends process.Command {
 					"Default: No home buffon will appear in the navigation bar");
 		helpOption('?', "help",
 					"Displays this help.");
+		versionOption("version",
+					"Display the version of the command.");
 	}
 }
 

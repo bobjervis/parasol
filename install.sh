@@ -33,8 +33,9 @@ sudo chmod +rx -R $INSTALL/runtime
 sudo rm /usr/parasol/latest
 sudo ln -s $INSTALL /usr/parasol/latest
 
-/usr/parasol/latest/bin/pc --pxi=/usr/parasol/latest/bin/pbuild.pxi $INSTALL/src/pbuild/main.p
-/usr/parasol/latest/bin/pc --pxi=/usr/parasol/latest/bin/dumppxi.pxi $INSTALL/src/util/dumppxi.p
+/usr/parasol/latest/bin/pc --pxi=/usr/parasol/latest/bin/pbuild.pxi:$VERSION $INSTALL/src/pbuild/main.p
+/usr/parasol/latest/bin/pc --pxi=/usr/parasol/latest/bin/paradoc.pxi:$VERSION $INSTALL/src/paradoc/paradoc.p
+/usr/parasol/latest/bin/pc --pxi=/usr/parasol/latest/bin/dumppxi.pxi:$VERSION $INSTALL/src/util/dumppxi.p
 
 if [ -d /usr/local/bin ]; then
 	echo Defining common commands in /usr/local/bin '(if needed)'

@@ -31,6 +31,7 @@ class DumpPxiCommand extends process.Command {
 		relocationsOption = booleanOption('r', "reloc",
 				"when -s or -a are also present, include the relocations in the output for the section");
 		helpOption('?', "help", "Display this help.");
+		versionOption("version", "Display the version of the command.");
 	}
 	
 	ref<process.Option<string>> sectionOption;

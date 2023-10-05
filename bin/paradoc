@@ -3,4 +3,16 @@
 PARASOL_BIN=$(dirname "`readlink -f \"$0\"`")/..
 export PARASOL_HOME=`readlink -f "$PARASOL_BIN"`
 
-exec "$PARASOL_HOME/bin/pc" "$PARASOL_HOME/src/paradoc/paradoc.p" "$@"
+if [ -e $PARASOL_HOME/bin/paradoc.pxi ]
+then
+	if [ "x$LD_LIBRARY_PATH" == "x" ]
+	then
+		export LD_LIBRARY_PATH=$PARASOL_HOME/bin
+	else
+		export LD_LIBRARY_PATH=$PARASOL_HOME/bin:$LD_LIBRARY_PATH
+	fi
+	
+	exec "$PARASOL_HOME/bin/parasolrt" "$PARASOL_HOME/bin/paradoc.pxi" "$@"
+else
+	exec "$PARASOL_HOME/bin/pc" "$PARASOL_HOME/src/paradoc/paradoc.p" "$@"
+fi

@@ -14,6 +14,7 @@
    limitations under the License.
  */
 import parasol:compiler;
+import parasol:context;
 import parasol:storage;
 import parasol:process;
 import parasol:runtime;
@@ -164,8 +165,24 @@ int runCommand() {
 	int returnValue;
 	boolean result;
 
-	if (parasolCommand.pxiOption.set())
-		printf("Compiling to %s\n", parasolCommand.pxiOption.value);
+	string pxiFile;
+	string pxiVersion;
+
+	if (parasolCommand.pxiOption.set()) {
+		idx := parasolCommand.pxiOption.value.lastIndexOf(':');
+		if (idx >= 0) {
+			pxiFile = parasolCommand.pxiOption.value.substr(0, idx);
+			pxiVersion = parasolCommand.pxiOption.value.substr(idx + 1);
+			if (!context.Version.isValid(pxiVersion)) {
+				printf("Cannot create pxi with a varion of '%s'\n", pxiVersion);
+				return 1;
+			}
+		} else {
+			pxiFile = parasolCommand.pxiOption.value;
+			pxiVersion = null;
+		}
+		printf("Compiling to %s\n", pxiFile);
+	}
 
 	time.Time start = time.Time.now();
 
@@ -177,6 +194,8 @@ int runCommand() {
 									parasolCommand.coverageOption.value,
 									parasolCommand.logImportsOption.value);
 
+	if (pxiVersion != null)
+		compileContext.imageVersion = pxiVersion;
 	if (!compileContext.loadRoot(false))
 		return 1;
 
@@ -198,10 +217,10 @@ int runCommand() {
 	else if (!disassemble(&arena, target, args[0]))
 		returnValue = 1;
 	else if (parasolCommand.pxiOption.set()) {
-		ref<pxi.Pxi> output = pxi.Pxi.create(parasolCommand.pxiOption.value);
+		ref<pxi.Pxi> output = pxi.Pxi.create(pxiFile);
 		target.writePxi(output);
 		if (!output.write()) {
-			printf("Error writing to %s\n", parasolCommand.pxiOption.value);
+			printf("Error writing to %s\n", pxiFile);
 			returnValue = 1;
 		}
 		delete output;
