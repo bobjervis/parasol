@@ -38,7 +38,7 @@ class PBuildCommand extends process.Command {
 					"\n" +
 					"Thus, by arranging a collection of related projects under a single " +
 					"root, one can orchestrate a build across all included build files. " +
-					"While making the maker do more work, if there are changes in multiple " +
+					"While making the builder do more work, if there are changes in multiple " +
 					"sub-projects, or dependencies across projects, this build will properly " +
 					"handle them." +
 					"\n" +

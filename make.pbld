@@ -13,6 +13,14 @@
    See the License for the specific language governing permissions and
    limitations under the License.
  */
+application(name: pbug, main: src/pbug/main.p) {
+	use(package: build:parasollanguage.org)
+}
+
+application(name: pbuild, main: src/pbuild/main.p) {
+	//use(package: build:parasollanguage.org)
+}
+
 package(name: core:parasollanguage.org, preserveAnonymousUnits: true) {
 	file(name: *.p, src: runtime)
 	init(placement: first){
@@ -24,6 +32,10 @@ package(name: core:parasollanguage.org, preserveAnonymousUnits: true) {
 	init(placement: last) {
 		
 	}
+}
+
+package(name: build:parasollanguage.org) {
+	file(name: *.p, src: src/pbuild/lib)
 }
 
 target(os: linux, cpu: x86-64) {
@@ -206,7 +218,6 @@ command(name: genHeader, main: src/util/genHeader.p)
 command(name: genSqlProxy, main: src/util/genSqlProxy.p)
 command(name: hex, main: src/util/hex.p)
 command(name: paradoc, main: src/paradoc/paradoc.p)
-command(name: pbuild, main: src/pbuild/main.p)
 command(name: pc, main: src/pc/main.p)
 command(name: pcontext, main: src/pcontext/main.p)
 command(name: pcurl, main: src/util/pcurl.p)

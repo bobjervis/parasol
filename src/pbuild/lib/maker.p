@@ -45,19 +45,41 @@ class Component {
 
 	public abstract void print(int indent);
 
-	public abstract boolean getUnitFilenames(ref<string[]> units);
+	public abstract boolean getUnitFilenames(string packageDirectory, ref<string[]> units);
 
 	protected void indent(int amount) {
 		if (amount > 0)
 			printf("%*c", amount, ' ');
 	}		
 
-	boolean copy() {
-		printf("Copy %s to %s\n", toString(), _enclosing.path());
+	boolean copy(string targetPath) {
+		printf("Copy %s to %s\n", toString(), targetPath);
 		return false;
 	}
 
-	abstract string toString();
+	public abstract string toString();
+
+	public string product() {
+		if (_enclosing != null)
+			return _enclosing.product();
+		else
+			return null;
+	}
+
+	public ref<ParasolProduct> parasolProduct() {
+		if (_enclosing != null)
+			return _enclosing.parasolProduct();
+		else
+			return null;
+	}
+
+	public void printEnclosing() {
+		for (ref<Component> c = this; c != null; c = c._enclosing) {
+			printf("%p ", c);
+			printf("%s -> ", c.toString());
+		}
+		printf("null\n");
+	}
 }
 
 enum Placement {
@@ -170,29 +192,30 @@ class Folder extends Component {
 				return true;
 		return false;
 	}
-
-	public boolean copyContents() {
-		return copy();
-	}
-
-	boolean copy() {
-		if (!storage.ensure(path())) {
-			printf("        FAIL: Could not ensure %s\n", path());
+	/**
+	 * Copy the contents of this folder object to the given targetPath directory.
+	 */
+	public boolean copyContents(string targetPath) {
+		if (!storage.ensure(targetPath)) {
+			printf("        FAIL: Could not ensure %s\n", targetPath);
 			return false;
 		}
 		for (int i = 0; i < _components.length(); i++) {
-			if (!_components[i].copy())
+			if (!_components[i].copy(targetPath))
 				return false;
 		}
-//		printf("Copy %s to %s\n", toString(), _enclosing.path());
 		return true;
 	}
 
-	public boolean getUnitFilenames(ref<string[]> units) {
+	boolean copy(string targetPath) {
+		return copyContents(storage.path(targetPath, canonicalize(_name)));
+	}
+
+	public boolean getUnitFilenames(string packageDirectory, ref<string[]> units) {
 		for (i in _components) {
 			ref<Component> component = _components[i];
 
-			if (!component.getUnitFilenames(units))
+			if (!component.getUnitFilenames(packageDirectory, units))
 				return false;
 		}
 		return true;
@@ -202,14 +225,6 @@ class Folder extends Component {
 		string name = canonicalize(_name);
 		if (_enclosing != null)
 			return storage.path(_enclosing.path(), name);
-		else
-			return name;
-	}
-
-	public string productPath() {
-		string name = canonicalize(_name);
-		if (_enclosing != null)
-			return storage.path(_enclosing.productPath(), name);
 		else
 			return name;
 	}
@@ -269,6 +284,26 @@ class Folder extends Component {
 	}
 }
 
+class BuildRoot extends Folder {
+	private string _outputDir;
+	private static script.Object emptyObject(0);
+
+	BuildRoot(string outputDir) {
+		super(null, null, &emptyObject);
+		_outputDir = outputDir;
+	}
+
+	public string path() {
+		return _outputDir;
+	}
+
+	public string toString() {
+		string s;
+		s.printf("build root %s", _outputDir);
+		return s;
+	}
+}
+
 enum Contents {
 	STATIC,
 	IMPORT
@@ -316,11 +351,12 @@ class File extends Component {
 
 	public boolean inputsNewer(time.Instant timeStamp) {
 		string src = storage.path(_enclosing.buildDir(), _src);
-		boolean success = checkSrc(src, false);
+		boolean success = checkSrc(src, _enclosing.coordinator().reportOutOfDate());
 //		time.Date d(timeStamp, &time.UTC);
 //		string dt = d.format("MM/dd/yyyy HH:mm:ss.SSS");
-		if (!success)
+		if (!success) {
 			return true;
+		}
 
 //		time.Date d(timeStamp);
 //		printf("\n%s/%s newer than %s?", src, _name, d.format("yyyy/MM/dd HH:mm:ss.SSSSSSSSS"));
@@ -330,7 +366,7 @@ class File extends Component {
 			if (_modified[i].compare(&timeStamp) > 0) {
 				if (_enclosing.coordinator().reportOutOfDate()) {
 					string srcFile = storage.path(src, _names[i]);
-					printf("            %s out of date, building\n", herePath(srcFile));
+					printf("            %s out of date in %s, building\n", herePath(srcFile), _enclosing.product());
 				}
 				return true;
 			}
@@ -338,15 +374,14 @@ class File extends Component {
 		return false;
 	}
 
-	public boolean copy() {
+	public boolean copy(string targetPath) {
 		string src = storage.path(_enclosing.buildDir(), _src);
 		if (!checkSrc(src, true))
 			return false;
-		string packageDir = _enclosing.path();
 //		printf("Copy %s/%s -> %s\n", src, _name, packageDir);
 		for (int i = 0; i < _names.length(); i++) {
 			string srcFile = storage.path(src, _names[i]);
-			string dstFile = storage.path(packageDir, _names[i]);
+			string dstFile = storage.path(targetPath, _names[i]);
 			if (!storage.copyFile(srcFile, dstFile)) {
 				printf("        FAIL: Copy %s to %s\n", srcFile, dstFile);
 				return false;
@@ -357,15 +392,14 @@ class File extends Component {
 		return true;
 	}
 
-	public boolean getUnitFilenames(ref<string[]> unitFilenames) {
+	public boolean getUnitFilenames(string packageDirectory, ref<string[]> unitFilenames) {
 		string src = storage.path(_enclosing.buildDir(), _src);
 		if (!checkSrc(src, true))
 			return false;
 //		printf("%s:\n", toString());
-		string directory = _enclosing.path();
 		for (i in _names) {
 //			printf("    [%d] %s/%s\n", i, directory, _names[i]);
-			unitFilenames.append(storage.path(directory, _names[i]));
+			unitFilenames.append(storage.path(packageDirectory, _names[i]));
 		}
 		return true;
 	}
@@ -471,12 +505,12 @@ class Link extends Component {
 	}
 
 	public boolean inputsNewer(time.Instant timeStamp) {
-		string linkFile = storage.path(_enclosing.productPath(), _name);
+		string linkFile = storage.path(_enclosing.path(), _name);
 		return !storage.exists(linkFile);
 	}
 
-	public boolean copy() {
-		string linkFile = storage.path(_enclosing.path(), _name);
+	public boolean copy(string targetPath) {
+		string linkFile = storage.path(targetPath, _name);
 //		printf("Link %s <- %s\n", _target, linkFile);
 		if (!storage.createSymLink(_target, linkFile)) {
 			printf("        FAIL: Link %s to %s\n", _target, linkFile);
@@ -485,7 +519,7 @@ class Link extends Component {
 		return true;
 	}
 
-	public boolean getUnitFilenames(ref<string[]> unitFilenames) {
+	public boolean getUnitFilenames(string packageDirectory, ref<string[]> unitFilenames) {
 		return true;
 	}
 

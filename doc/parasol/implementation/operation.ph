@@ -156,6 +156,64 @@ projects, this build will properly handle them.
 If no products are given as arguments, then all products enabled in the build
 scripts will be built. If one or more products are given as arguments, then only
 those products plus any products the named ones are dependent on will be built.
+<h4>{@level 4 Build Outputs}</h4>
+A <span class=code>make.pbld</span> file defines various products: packages, applications, commands,
+native windows or linux binaries and pxi files.
+Building these products will, the the exception of commands, generate output files.
+These outputs will be placed in an <i>output directory</i> determined by the structure of the 
+build directory and the command options present.
+<p>
+If an output directory option is present on the command line all outputs will appear somewhere under
+the named output directory.
+If a build file option is also present, then the outputs of that build file will be placed in the output directory.
+If no build file option is present, so that one or more build files are found by searching under the 
+build directory, then a sub-hierarchy of directories may be constructed under the named output directory
+to store the outputs of each discovered build file.
+The path of directories in the output hierarchy corresponds to the path of directories between the build directory and 
+the directory containing the build file.
+For example, let's consider the following build directory tree, where build files are located in each
+leaf directory of the tree:
+<ul>
+	<li>applications
+		<ul>
+			<li>appA
+			<li>appB
+			<li>appC
+		</ul>
+	<li>packages
+		<ul>
+			<li>pkgD
+			<li>pkgE
+		</ul>
+</ul>
+
+Suppose pbuild is run with this build directory tree and an output directory option naming an output path of PATH,
+then the outputs will be placed in a set of directory paths as above:
+<ul>
+	<li>PATH/applications/appA
+	<li>PATH/applications/appB
+	<li>PATH/applications/appC
+	<li>PATH/packages/pkgD
+	<li>PATH/packages/pkgE
+</ul>
+
+If any of the output paths do not exist when a build is run, they will be created.
+<p>
+If no output directory option is present, then the outputs from each build file
+will be placed in a directory labeled <span class=code>build</span> in the same directory as each build file itself.
+<p>
+
+The outputs of each kind of product is described in the following list:
+<ul>
+	<li><i>Applications</i>: An output directory with the name of the application, containing the following files:
+		<ul>
+			<li>
+		</ul>
+	<li><i>Packages</i>: An output directory with the name of the package, where the colon (:) is replaced with 
+		an underbar (_).
+		The directory contains a copy of the package source files, plus the package metadata.
+</ul>
+
 
 <h4>{@level 4 Build Scripts}</h4>
 

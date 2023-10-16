@@ -628,7 +628,7 @@ public class Package extends VolatilePackage {
 		return _directory;
 	}
 	/** {@ignore} */
-	void setDirectory(string directory) {
+	public void setDirectory(string directory) {
 		_directory = directory;
 	}
 	/**
@@ -903,7 +903,7 @@ public class Package extends VolatilePackage {
 		metadataFile := storage.path(_directory, PACKAGE_METADATA);
 		reader := storage.openTextFile(metadataFile);
 		if (reader == null)
-			return "Metadata file missing";
+			return "Metadata file " + metadataFile + " missing";
 		var jsonData;
 		boolean success;
 

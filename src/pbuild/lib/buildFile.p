@@ -29,6 +29,7 @@ public class BuildFile {
 	private ref<script.Parser> _parser;
 	private boolean _detectedErrors;
 	private ref<Coordinator> _coordinator;
+	private ref<BuildRoot> _buildRoot;
 
 	BuildFile(string buildFile, void (string, string, var...) errorMessage, string targetOS, string targetCPU, 
 			  ref<Coordinator> coordinator) {
@@ -42,10 +43,11 @@ public class BuildFile {
 	~BuildFile() {
 		tests.deleteAll();
 		delete _parser;
+//		delete _buildRoot;
 	}
 
 	public static ref<BuildFile> parse(string buildFile, string content, void (string, string, var...) errorMessage, 
-									   string targetOS, string targetCPU, ref<Coordinator> coordinator) {
+									   string targetOS, string targetCPU, ref<Coordinator> coordinator, string outputDir) {
 		boolean success = true;
 		ref<BuildFile> bf = new BuildFile(buildFile, errorMessage, targetOS, targetCPU, coordinator);
 
@@ -72,8 +74,9 @@ public class BuildFile {
 			return null;
 		}
 
+		bf._buildRoot = new BuildRoot(outputDir);
 		for (i in candidates)
-			bf.collectProducts(null, candidates[i]);
+			bf.collectProducts(bf._buildRoot, candidates[i]);
 
 		if (bf._detectedErrors)
 			success = false;
@@ -144,9 +147,9 @@ public class BuildFile {
 				break;
 
 			case "package":
-				if (enclosing != null)
+				if (enclosing != null && enclosing.class != BuildRoot)
 					error(object, "A package cannot be defined inside another component");
-				ref<Package> p = new Package(this, null, object);
+				ref<Package> p = new Package(this, enclosing, object);
 				products.append(p);
 				break;
 
@@ -189,16 +192,16 @@ public class BuildFile {
 				break;
 
 			case "command":
-				if (enclosing != null)
+				if (enclosing != null && enclosing.class != BuildRoot)
 					error(object, "A command cannot be defined inside another component");
-				ref<Command> c = new Command(this, object);
+				ref<Command> c = new Command(this, enclosing, object);
 				products.append(c);
 				break;
 
 			case "application":
-				if (enclosing != null)
-					error(object, "A binary cannot be defined inside another component");
-				ref<Binary> b = new Binary(this, object);
+				if (enclosing != null && enclosing.class != BuildRoot)
+					error(object, "An application cannot be defined inside another component");
+				ref<Application> b = new Application(this, enclosing, object);
 				products.append(b);
 				break;
 

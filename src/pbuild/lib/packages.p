@@ -140,7 +140,6 @@ class Product extends Folder {
 }
 
 public class ParasolProduct extends Product {
-	protected string _parasolProductDir;
 	protected string[] _usedPackageNames;
 	protected ref<context.Package>[] _usedPackages;
 	protected ref<compiler.CompileContext> _compileContext;
@@ -161,6 +160,10 @@ public class ParasolProduct extends Product {
 					buildFile.error(object, toString() + " version must be a valid version template");
 			}
 		}
+	}
+
+	public string product() {
+		return toString();
 	}
 
 	boolean use(ref<BuildFile> buildFile, ref<script.Object> object) {
@@ -186,10 +189,9 @@ public class ParasolProduct extends Product {
 	boolean defineContext(ref<BuildFile> buildFile, ref<Coordinator> coordinator, string buildDir, string outputDir) {
 //		printf("Package.defineContext %s\n", thread.currentThread().name());
 		super.defineContext(buildFile, coordinator, buildDir, outputDir);
-		_parasolProductDir = storage.path(outputDir, filename() + ".tmp");
-		if (storage.exists(_parasolProductDir)) {
-			if (!storage.deleteDirectoryTree(_parasolProductDir)) {
-				printf("\n        FAIL: Could not remove existing temporary %s\n", _parasolProductDir);
+		if (storage.exists(tmpPath())) {
+			if (!storage.deleteDirectoryTree(tmpPath())) {
+				printf("\n        FAIL: Could not remove existing temporary %s\n", tmpPath());
 				return false;
 			}
 		}
@@ -298,7 +300,6 @@ public class ParasolProduct extends Product {
 				knownNames.add(u.name());
 			}
 		}
-//		printf("loadRoot for %s\n", _name);
 		if (!_compileContext.loadRoot(name() == context.PARASOL_CORE_PACKAGE_NAME, compileUsing)) {
 			printf("        FAIL: Unable to load root scope\n");
 			closeCompiler();
@@ -361,16 +362,15 @@ public class ParasolProduct extends Product {
 	}
 
 	protected boolean deployProduct() {
-		string tmpDir = _parasolProductDir;
-		_parasolProductDir = storage.path(outputDir(), filename());
-		if (storage.exists(_parasolProductDir)) {
-			if (!storage.deleteDirectoryTree(_parasolProductDir)) {
-				printf("        FAIL: Could not remove old %s\n", _parasolProductDir);
+		if (storage.exists(targetPath())) {
+			if (!storage.deleteDirectoryTree(targetPath())) {
+				printf("        FAIL: Could not remove old %s\n", targetPath());
 				return false;
 			}
 		}
-		if (!storage.rename(tmpDir, _parasolProductDir)) {
-			printf("        FAIL: Could not rename %s to %s\n", tmpDir, _parasolProductDir);
+
+		if (!storage.rename(tmpPath(), targetPath())) {
+			printf("        FAIL: Could not rename %s to %s\n", tmpPath(), targetPath());
 			return false;
 		}
 		return true;
@@ -391,9 +391,20 @@ public class ParasolProduct extends Product {
 	}
 
 	protected string sentinelFileName() {
-		return storage.path(outputDir(), name() + ".ok");
+		return storage.path(outputDir(), filename() + ".ok");
 	}
 
+	public string tmpPath() {
+		return storage.path(outputDir(), filename() + ".tmp");
+	}
+
+	public string targetPath() {
+		return storage.path(outputDir(), filename());
+	}
+
+	public ref<ParasolProduct> parasolProduct() {
+		return this;
+	}
 }
 
 public class Package extends ParasolProduct {
@@ -409,7 +420,7 @@ public class Package extends ParasolProduct {
 
 		ref<script.Atom> a;
 
-		if (enclosing != null)
+		if (enclosing != null && enclosing.class != BuildRoot)
 			buildFile.error(object, "Packages cannot be nested inside other components");
 		if (name() != null) {
 			if (!context.validatePackageName(name()))
@@ -462,46 +473,47 @@ public class Package extends ParasolProduct {
 		if (!buildTmpPackage(true))
 			return false;
 //		printf("        %s compileSkipped? %s\n", _name, _compileSkipped);
-		if (_compileSkipped) {
+		if (_compileSkipped)
 			printf("        %s - up to date\n", name());
-			_parasolProductDir = storage.path(outputDir(), filename());
-		} else {
+		else {
 			if (!deployProduct())
 				return false;
+
 			if (!writeSentinelFile())
 				return false;
-		}
-		_buildSuccessful = true;
-		if (!_compileSkipped)
 			printf("        %s - built\n", name());
+		}
+
+		_package.setDirectory(targetPath());
+		_buildSuccessful = true;
 		return true;
 	}
 
 	protected boolean buildTmpPackage(boolean copyContents) {
 		boolean success;
-		if (!shouldCompile()) {
-			_buildSuccessful = true;
-			_compileSkipped = true;
-			return true;
-		}
-//		printf("Copy %s\n", _name);
-		if (copyContents && !this.copyContents())
-			return false;
-
-		if (_generateManifest) {
-			ref<compiler.Target> t;
-			(t, success) = compile();
-			delete t;
-			if (!success)
+		if (shouldCompile()) {
+			_package.setDirectory(tmpPath());
+	//		printf("Copy %s\n", _name);
+			if (copyContents && !this.copyContents(tmpPath()))
 				return false;
-			if (!_compileContext.forest().generateManifest(storage.path(_parasolProductDir, context.PACKAGE_MANIFEST), 
-																				_initFirst, _initLast)) 
-				return false;
-			metadataFile := storage.path(_parasolProductDir, context.PACKAGE_METADATA);
-			_package.setMetadata(expandTemplate(_version), _usedPackages);
-			return _package.writeMetadata(metadataFile);
+	
+			if (_generateManifest) {
+				ref<compiler.Target> t;
+				(t, success) = compile();
+				delete t;
+				if (!success)
+					return false;
+				if (!_compileContext.forest().generateManifest(storage.path(tmpPath(), context.PACKAGE_MANIFEST), 
+																					_initFirst, _initLast)) 
+					return false;
+				metadataFile := storage.path(tmpPath(), context.PACKAGE_METADATA);
+				_package.setMetadata(expandTemplate(_version), _usedPackages);
+				if (!_package.writeMetadata(metadataFile))
+					return false;
+			}
 		} else
-			return true;
+			_compileSkipped = true;
+		return true;
 	}
 
 	public boolean inputsNewer(time.Instant timeStamp) {
@@ -521,9 +533,9 @@ public class Package extends ParasolProduct {
 
 		ref<compiler.Target> target;
 		string[] unitFilenames;
-		getUnitFilenames(&unitFilenames);
+		getUnitFilenames(tmpPath(), &unitFilenames);
 //		printf("    %d found %d unit filenames\n", thread.currentThread().id(), unitFilenames.length());
-		target = _compileContext.compilePackage(this == corePackage, unitFilenames, _parasolProductDir);
+		target = _compileContext.compilePackage(this == corePackage, unitFilenames, tmpPath());
 		
 		if (coordinator().generateSymbolTables())
 			_arena.printSymbolTable();
@@ -556,16 +568,8 @@ public class Package extends ParasolProduct {
 		return domain + ":" + name;
 	}
 
-	public string path() {
-		return _parasolProductDir;
-	}
-
 	public boolean shouldExport() {
 		return true;
-	}
-
-	public string productPath() {
-		return storage.path(outputDir(), filename());
 	}
 
 	public string productName() {
@@ -574,10 +578,6 @@ public class Package extends ParasolProduct {
 
 	public boolean generateManifest() {
 		return _generateManifest;
-	}
-
-	public string packageDir() {
-		return _parasolProductDir;
 	}
 
 	public ref<context.Package> ctxPackage() {
@@ -596,7 +596,7 @@ public class Package extends ParasolProduct {
 	}
 }
 
-class Application extends ParasolProduct {
+class RunnableProduct extends ParasolProduct {
 	protected string _main;
 	private Role _role;
 
@@ -607,7 +607,7 @@ class Application extends ParasolProduct {
 		TEST
 	}
 
-	Application(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object, boolean versionAllowed) {
+	RunnableProduct(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object, boolean versionAllowed) {
 		super(buildFile, enclosing, object, versionAllowed);
 		ref<script.Atom> a = object.get("main");
 		if (a != null)
@@ -616,7 +616,7 @@ class Application extends ParasolProduct {
 			buildFile.error(object, "'main' attribute required for command");
 		a = object.get("role");
 		if (a != null) {
-			if (this.class != Binary) {
+			if (this.class != Application) {
 				buildFile.error(a, "A 'role' attribute is not allowed");
 				return;
 			}
@@ -650,13 +650,13 @@ class Application extends ParasolProduct {
 
 		if (!success) {
 			if (coordinator().reportOutOfDate())
-				printf("            %s doesn't exist, building\n", herePath(mainFile));
+				printf("            %s doesn't exist in %s, building\n", herePath(mainFile), product());
 			return true;
 		}
 
 		if (modified.compare(&timeStamp) > 0) {
 			if (coordinator().reportOutOfDate())
-				printf("            %s out of date, building\n", herePath(mainFile));
+				printf("            %s out of date in %s, building\n", herePath(mainFile), product());
 			return true;
 		}
 
@@ -677,7 +677,7 @@ class Application extends ParasolProduct {
 		}
 		return super.inputsNewer(timeStamp);
 
-		boolean checkSubDirectory(ref<Application> app, time.Instant timeStamp, string dirPath) {
+		boolean checkSubDirectory(ref<RunnableProduct> app, time.Instant timeStamp, string dirPath) {
 			storage.Directory d(dirPath);
 			if (d.first()) {
 				do {
@@ -692,12 +692,12 @@ class Application extends ParasolProduct {
 						(accessed, modified, created, success) = storage.fileTimes(path);
 						if (!success) {			// That's odd - directry scan found it, but fileTimes missed it, should rebuild to see what happens
 							if (app.coordinator().reportOutOfDate())
-								printf("            %s doesn't exist, building\n", herePath(path));
+								printf("            %s doesn't exist in %s, building\n", herePath(path), product());
 							return true;
 						}
 						if (modified.compare(&timeStamp) > 0) {
 							if (app.coordinator().reportOutOfDate())
-								printf("            %s out of date, building\n", herePath(path));
+								printf("            %s out of date in %s, building\n", herePath(path), product());
 							return true;
 						}
 					}
@@ -712,9 +712,9 @@ class Application extends ParasolProduct {
 	}
 }
 
-class Binary extends Application {
-	Binary(ref<BuildFile> buildFile, ref<script.Object> object) {
-		super(buildFile, null, object, true);
+class Application extends RunnableProduct {
+	Application(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object) {
+		super(buildFile, enclosing, object, true);
 	}
 
 	public boolean build() {
@@ -750,25 +750,25 @@ class Binary extends Application {
 			parasolRoot = storage.directory(binDir);
 		}
 		string rtFile = storage.path(binDir, "parasolrt");
-		string destFile = storage.path(_parasolProductDir, "parasolrt");
+		string destFile = storage.path(tmpPath(), "parasolrt");
 		if (!storage.copyFile(rtFile, destFile)) {
 			printf("        FAIL: Could not copy parasolrt from %s: %s\n", parasolRoot, linux.strerror(linux.errno()));
 			return false;
 		}
 		string soFile = storage.path(binDir, "libparasol.so.1");
-		destFile = storage.path(_parasolProductDir, "libparasol.so.1");
+		destFile = storage.path(tmpPath(), "libparasol.so.1");
 		if (!storage.copyFile(soFile, destFile)) {
 			printf("        FAIL: Could not copy libparasol.so.1 from %s\n", parasolRoot);
 			return false;
 		}
-		soFile = storage.path(_parasolProductDir, "libparasol.so");
+		soFile = storage.path(tmpPath(), "libparasol.so");
 		if (!storage.createSymLink("libparasol.so.1", soFile)) {
-			printf("        FAIL: Could not link libparasol.so in %s\n", _parasolProductDir);
+			printf("        FAIL: Could not link libparasol.so in %s\n", tmpPath());
 			return false;
 		}
 
 		// write launch script
-		string runScript = storage.path(_parasolProductDir, "run", null);
+		string runScript = storage.path(tmpPath(), "run", null);
 		ref<Writer> w = storage.createTextFile(runScript);
 		if (w == null) {
 			printf("        FAIL: Could not create run script\n");
@@ -811,13 +811,13 @@ class Binary extends Application {
 				return target, false;
 			}
 		}
-		if (!storage.ensure(_parasolProductDir)) {
-			printf("        FAIL: Could not ensure %s\n", _parasolProductDir);
+		if (!storage.ensure(tmpPath())) {
+			printf("        FAIL: Could not ensure %s\n", tmpPath());
 			return target, false;
 		}
 		if (target == null)
 			return target, false;
-		string pxiFile = storage.path(_parasolProductDir, "application.pxi");
+		string pxiFile = storage.path(tmpPath(), "application.pxi");
 		ref<pxi.Pxi> output = pxi.Pxi.create(pxiFile);
 		target.writePxi(output);
 		if (!output.write()) {
@@ -838,9 +838,9 @@ class Binary extends Application {
 	}
 }
 
-class Command extends Application {
-	Command(ref<BuildFile> buildFile, ref<script.Object> object) {
-		super(buildFile, null, object, false);
+class Command extends RunnableProduct {
+	Command(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object) {
+		super(buildFile, enclosing, object, false);
 	}
 
 	public boolean build() {
@@ -905,7 +905,7 @@ class Command extends Application {
 
 }
 
-class Pxi extends Application {
+class Pxi extends RunnableProduct {
 	private string _target;
 
 	Pxi(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object) {
@@ -931,7 +931,7 @@ class Pxi extends Application {
 		delete t;
 
 		closeCompiler();
-		if (!_compileSkipped)
+		if (!_compileSkipped && writeSentinelFile())
 			printf("        %s - built\n", name());
 		return success;
 	}
@@ -968,11 +968,15 @@ class Pxi extends Application {
 	}
 
 	protected string sentinelFileName() {
-		return filename();
+		return storage.path(outputDir(), filename());
 	}
 
-	public boolean copy() {
-		string destination = path();
+	protected boolean writeSentinelFile() {	
+		return true;
+	}
+
+	public boolean copy(string targetPath) {
+		string destination = storage.path(targetPath, filename());
 		string target = storage.path(outputDir(), filename());
 		if (!storage.copyFile(target, destination)) {
 			printf("    FAIL: Could not copy %s to %s\n", target, destination);
@@ -1055,8 +1059,8 @@ class MakeProduct extends Product {
 		return success;
 	}
 
-	public boolean copy() {
-		string destination = path();
+	public boolean copy(string targetPath) {
+		string destination = storage.path(targetPath, filename());
 		string target = storage.path(outputDir(), filename());
 		if (!storage.copyFile(target, destination)) {
 			printf("    FAIL: Could not copy %s to %s\n", target, destination);
@@ -1136,18 +1140,29 @@ class IncludePackage extends Product {
 			return false;
 		if (!_package.future().get())
 			return false;
+
+		string destination;
+
+		prod := parasolProduct();
+		if (prod == null)
+			destination = path();
+		else {
+			len := prod.targetPath().length();
+			string sub = path().substr(len);
+			destination = prod.tmpPath() + sub;
+		}
 /*
 		if (!storage.ensure(path())) {
 			printf("        FAIL: Could not ensure %s\n", path());
 			return false;
 		}
  */
-		if (!storage.ensure(storage.directory(path()))) {
-			printf("        FAIL: Could not ensure %s\n", storage.directory(path()));
+		if (!storage.ensure(storage.directory(destination))) {
+			printf("        FAIL: Could not ensure %s\n", storage.directory(destination));
 			return false;
 		}
-		if (!storage.copyDirectoryTree(_package.path(), path(), false)) {
-			printf("        FAIL: Could not copy %s to %s\n", _package.path(), path());
+		if (!storage.copyDirectoryTree(_package.path(), destination, false)) {
+			printf("        FAIL: Could not copy %s to %s\n", _package.path(), destination);
 			return false;
 		}
 		return true;
@@ -1189,3 +1204,15 @@ string expandTemplate(string template) {
 string herePath(string path) {
 	return storage.makeCompactPath(path, storage.path(storage.currentWorkingDirectory(), "xxx"));
 }
+
+void run(string... args) {
+	int exitCode;
+	string output;
+
+	(exitCode, output) = process.execute(time.Duration.infinite, args);
+	if (exitCode == 0)
+		printf("%s\n", output);
+	else
+		printf("%d *\n%s\n", exitCode, output);
+}
+

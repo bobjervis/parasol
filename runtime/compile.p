@@ -207,16 +207,14 @@ public class CompileContext extends CodegenContext {
 	}
 
 	public boolean loadRoot(boolean buildingCorePackage, ref<context.Package>... usedPackages) {
-//		printf("buildingCorePackage=%s\n", string(buildingCorePackage));
+//		printf("buildingCorePackage=%s\n", buildingCorePackage);
 		ref<context.Context> activeContext = _arena.activeContext();
 
 		ref<context.Package> corePackage = activeContext.getPackage(context.PARASOL_CORE_PACKAGE_NAME);
 		if (corePackage == null)
 			throw IllegalOperationException("No package '" + context.PARASOL_CORE_PACKAGE_NAME + "' defined");
-		if (!buildingCorePackage && !corePackage.open()) {
-			printf("core package won't open\n");
+		if (!buildingCorePackage && !corePackage.open())
 			return false;
-		}
 		string rootFile = storage.path(corePackage.directory(), "root.p");
 		ref<Unit> f = _arena.defineUnit(rootFile, "");
 		f.parse(this);

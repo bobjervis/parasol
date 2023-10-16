@@ -74,7 +74,8 @@ public class Coordinator extends CoordinatorVolatileData {
 					   string buildFile, 
 					   int buildThreads, 
 					   string outputDir, 
-					   string targetOS, string targetCPU,
+					   string targetOS, 
+					   string targetCPU,
 					   string uiPrefix,
 					   string suites,
 					   string installContext,
@@ -84,7 +85,7 @@ public class Coordinator extends CoordinatorVolatileData {
 					   boolean verbose,
 					   boolean trace,
 					   boolean logImports,
-					   string[] components) {
+					   string... components) {
 		lock(_lock) {
 			if (_workers == null)
 				_workers = new thread.ThreadPool<boolean>(buildThreads);
@@ -93,12 +94,7 @@ public class Coordinator extends CoordinatorVolatileData {
 			_buildDir = ".";
 		else
 			_buildDir = buildDir;
-		if (buildFile == null) {
-			_buildFile = storage.path(_buildDir, MAKE_FILE);
-			if (!storage.exists(_buildFile))
-				_buildFile = null;
-		} else
-			_buildFile = buildFile;
+		_buildFile = buildFile;
 		if (buildThreads == 0)
 			_buildThreads = thread.cpuCount();
 		else
@@ -170,7 +166,7 @@ public class Coordinator extends CoordinatorVolatileData {
 		if (_buildFile != null) {
 			if (!parseBuildFile(_buildFile, _buildDir, _outputDir))
 				return false;
-		} else if (!recurseThrough(_buildDir))
+		} else if (!recurseThrough(_buildDir, _outputDir))
 			return false;	
 
 		if (_suites.size() != _definedSuites.size()) {
@@ -248,7 +244,7 @@ public class Coordinator extends CoordinatorVolatileData {
 			boolean disassemblyPossible;
 			for (i in _products) {
 				p := _products[i];
-				if (p.class <= Application) {
+				if (p.class <= RunnableProduct) {
 					disassemblyPossible = true;
 					break;
 				}
@@ -274,7 +270,7 @@ public class Coordinator extends CoordinatorVolatileData {
 		return true;
 	}
 
-	private boolean recurseThrough(string dir) {
+	private boolean recurseThrough(string dir, string outputDir) {
 		ref<storage.Directory> d = new storage.Directory(dir);
 		boolean success = true;
 		string[] dirs;
@@ -283,8 +279,12 @@ public class Coordinator extends CoordinatorVolatileData {
 				string filepath = d.path();
 				string filename = d.filename();
 				if (filename == MAKE_FILE) {
-					string outputDir = storage.path(dir, "build");
-					if (!parseBuildFile(filepath, dir, outputDir))
+					string outDir;
+					if (outputDir == null)
+						outDir = storage.path(dir, "build");
+					else
+						outDir = storage.path(outputDir, dir);
+					if (!parseBuildFile(filepath, dir, outDir))
 						success = false;
 					delete d;
 					return success;
@@ -300,13 +300,13 @@ public class Coordinator extends CoordinatorVolatileData {
 		}
 		delete d;
 		for (i in dirs)
-			if (!recurseThrough(dirs[i]))
+			if (!recurseThrough(dirs[i], outputDir))
 				success = false;
 		return success;
 	}
 
 	private boolean parseBuildFile(string buildFile, string buildDir, string outputDir) {
-		ref<BuildFile> bf = BuildFile.parse(buildFile, null, errorMessage, _targetOS, _targetCPU, this);
+		ref<BuildFile> bf = BuildFile.parse(buildFile, null, errorMessage, _targetOS, _targetCPU, this, outputDir);
 
 		if (bf == null)
 			return false;
@@ -584,6 +584,16 @@ public class Coordinator extends CoordinatorVolatileData {
 
 	public boolean generateDisassembly() {
 		return _generateDisassembly;
+	}
+
+	public ref<Application> getApplication(string name) {
+		for (i in _products) {
+			p := _products[i];
+			printf("[%d] %s %s Application? %s\n", i, p.name(), p.toString(), p.class == Application);
+			if (p.name() == name && p.class == Application)
+				return ref<Application>(p);
+		}
+		return null;
 	}
 }
 

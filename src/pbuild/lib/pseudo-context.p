@@ -60,7 +60,7 @@ public class PseudoPackage extends Package {
 			boolean success = _buildPackage.future().get();
 			if (!success)
 				return false;
-			setDirectory(_buildPackage.packageDir());
+			setDirectory(_buildPackage.targetPath());
 			assert(loadManifest());
 			_open = true;
 		}
@@ -84,7 +84,6 @@ public class PseudoPackage extends Package {
 			boolean success = _buildPackage.future().get();
 			if (!success)
 				return a;
-			setDirectory(_buildPackage.packageDir());
 			assert(loadManifest());
 			_open = true;
 		}
@@ -96,10 +95,6 @@ public class PseudoPackage extends Package {
 
 	public boolean inputsNewer(time.Instant timeStamp) {
 		return _buildPackage.inputsNewer(timeStamp);
-	}
-
-	public string directory() {
-		return _buildPackage.path();
 	}
 
 	public ref<pbuild.Package> buildPackage() {
