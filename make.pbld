@@ -49,6 +49,7 @@ target(os: linux, cpu: x86-64) {
 				file(name: pxi.cc, src: src/C++)
 			}
 			file(name: paradoc, src: bin)
+			file(name: pbug, src: bin)
 			file(name: pbuild, src: bin)
 			file(name: pc, src: bin)
 			file(name: pcontext, src:bin)

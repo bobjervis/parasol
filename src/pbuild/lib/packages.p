@@ -916,6 +916,12 @@ class Pxi extends RunnableProduct {
 	}
 
 	boolean build() {
+		boolean success, returnNow;
+
+		(success, returnNow) = buildComponents();
+		
+		if (returnNow)
+			return success;
 		if (!shouldCompile()) {
 			_buildSuccessful = true;
 			_compileSkipped = true;
@@ -926,7 +932,7 @@ class Pxi extends RunnableProduct {
 			return false;
 
 		ref<compiler.Target> t;
-		boolean success;
+
 		(t, success) = compile();
 		delete t;
 

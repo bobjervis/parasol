@@ -33,26 +33,26 @@ sudo chmod +rx -R $INSTALL/runtime
 sudo rm /usr/parasol/latest
 sudo ln -s $INSTALL /usr/parasol/latest
 
-/usr/parasol/latest/bin/pc --pxi=/usr/parasol/latest/bin/pbuild.pxi:$VERSION $INSTALL/src/pbuild/main.p
-/usr/parasol/latest/bin/pc --pxi=/usr/parasol/latest/bin/paradoc.pxi:$VERSION $INSTALL/src/paradoc/paradoc.p
-/usr/parasol/latest/bin/pc --pxi=/usr/parasol/latest/bin/dumppxi.pxi:$VERSION $INSTALL/src/util/dumppxi.p
+$INSTALL/bin/pbuild -f $BIN/installer.pbld -m $BIN/version.pbld -o $BIN/inst_build
+sudo cp $BIN/inst_build/installer_parasollanguage.org/*.pxi $INSTALL/bin
+rm -rf $BIN/inst_build
 
 if [ -d /usr/local/bin ]; then
 	echo Defining common commands in /usr/local/bin '(if needed)'
 	if [ ! -e /usr/local/bin/pbuild ]; then
-	    sudo ln -s /usr/parasol/latest/bin/parasolrt /usr/local/bin/parasolrt
-	fi
-	if [ ! -e /usr/local/bin/pbuild ]; then
 	    sudo ln -s /usr/parasol/latest/bin/pbuild /usr/local/bin/pbuild
 	fi
-	if [ ! -e /usr/local/bin/pbuild ]; then
+	if [ ! -e /usr/local/bin/pc ]; then
 	    sudo ln -s /usr/parasol/latest/bin/pc /usr/local/bin/pc
 	fi
-	if [ ! -e /usr/local/bin/pbuild ]; then
+	if [ ! -e /usr/local/bin/pcontext ]; then
 	    sudo ln -s /usr/parasol/latest/bin/pcontext /usr/local/bin/pcontext
 	fi
-	if [ ! -e /usr/local/bin/pbuild ]; then
+	if [ ! -e /usr/local/bin/paradoc ]; then
 	    sudo ln -s /usr/parasol/latest/bin/paradoc /usr/local/bin/paradoc
+	fi
+	if [ ! -e /usr/local/bin/pbug ]; then
+	    sudo ln -s /usr/parasol/latest/bin/pbug /usr/local/bin/pbug
 	fi
 fi
 

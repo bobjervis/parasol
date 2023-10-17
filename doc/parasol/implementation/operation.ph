@@ -207,7 +207,11 @@ The outputs of each kind of product is described in the following list:
 <ul>
 	<li><i>Applications</i>: An output directory with the name of the application, containing the following files:
 		<ul>
-			<li>
+			<li>application.pxi - The compiled parasol code for this application.
+			<li>libparasol.so.1 - The compiled C++ code that forms the (very small) Parasol shared-object library.
+			<li>parasolrt - The compiled C++ launcher that loads and runs pxi files.
+			<li>run - An executable shell script that runs the program and can be invoked from an
+				working directory.
 		</ul>
 	<li><i>Packages</i>: An output directory with the name of the package, where the colon (:) is replaced with 
 		an underbar (_).

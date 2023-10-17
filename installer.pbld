@@ -1,0 +1,14 @@
+package(name: installer:parasollanguage.org, manifest: false) {
+	pxi(name: pbug.pxi, main: src/pbug/main.p, target: x86-64-lnx) {
+		use(package: build:parasollanguage.org)
+	}
+	pxi(name: pbuild.pxi, main: src/pbuild/main.p, target: x86-64-lnx)
+	pxi(name: paradoc.pxi, main: src/paradoc/paradoc.p, target: x86-64-lnx)
+	pxi(name: pcontext.pxi, main: src/pcontext/main.p, target: x86-64-lnx)
+}
+
+package(name: build:parasollanguage.org) {
+	file(name: *.p, src: src/pbuild/lib)
+}
+
+
