@@ -419,6 +419,7 @@ public class ClassType extends Type {
 	ClassType(ref<Type> base, boolean isFinal, ref<ClassScope> scope) {
 		super(runtime.TypeFamily.CLASS);
 		_scope = scope;
+
 		_extends = base;
 		_final = isFinal;
 	}
@@ -493,6 +494,10 @@ public class ClassType extends Type {
 				return true;
 		}
 		return false;
+	}
+
+	public void assignMethodMaps(ref<CompileContext> compileContext) {
+		_scope.assignMethodMaps(compileContext);
 	}
 	
 	public void assignSize(ref<Target> target, ref<CompileContext> compileContext) {
@@ -1815,6 +1820,9 @@ public class Type {
 	}
 
 	public void assignSize(ref<Target> target, ref<CompileContext> compileContext) {
+	}
+
+	public void assignMethodMaps(ref<CompileContext> compileContext) {
 	}
 
 	public void checkSize(ref<CompileContext> compileContext) {

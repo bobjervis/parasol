@@ -153,6 +153,7 @@ class ClientWork implements WSDownstream, http.DisconnectListener {
 }
 
 {	// first, a 'correct' session, with completed messages and a graceful shutdown.
+	// down implements the WSDownstream interface and also, by convention, implements the DisconnectListener.
 	ClientWork down();
 	rpc.Client<WSUpstream, WSDownstream> client("ws://localhost:" + port + "/ws", "Test", down);
 	client.onDisconnect(down);

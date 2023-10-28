@@ -778,11 +778,16 @@ public class OverloadInstance extends Symbol {
 				ti.print();
 				printf("\n");
 				if (printChildScopes) {
-					if (ti.scope().enclosing() != null)
+					if (ti.scope().enclosing() != null) {
+						printf("%*.*c", indent + INDENT, indent + INDENT, ' ');
+						printf("  Enclosing scope:\n");
 						ti.scope().enclosing().print(indent + INDENT + INDENT, true);
-					else
+					} else {
+						printf("%*.*c", indent + INDENT, indent + INDENT, ' ');
+						printf("  Enclosing scope is null, printing instance scope:\n");
 						ti.scope().print(indent + INDENT + INDENT, true);
-					ti.concreteDefinition().print(indent + INDENT + INDENT);
+					}
+//					ti.concreteDefinition().print(indent + INDENT + INDENT);
 				}
 			}
 			break;

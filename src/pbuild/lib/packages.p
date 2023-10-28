@@ -712,7 +712,7 @@ class RunnableProduct extends ParasolProduct {
 	}
 }
 
-class Application extends RunnableProduct {
+public class Application extends RunnableProduct {
 	Application(ref<BuildFile> buildFile, ref<Folder> enclosing, ref<script.Object> object) {
 		super(buildFile, enclosing, object, true);
 	}
@@ -831,6 +831,33 @@ class Application extends RunnableProduct {
 		if (coordinator().generateDisassembly())
 			return true;
 		return super.shouldCompile();
+	}
+	/**
+	 * Check whether the directory indicated by this object is well-formed..
+	 *
+	 * This is not called for a normal build, but is useful for a debugger that is being
+	 * directed to run this application.
+	 *
+	 * @return true if this directory contains the files necessary to run the application,
+	 * false otherwise.
+	 */
+	public boolean verify() {
+		return verify(targetPath());
+	}
+
+	public static boolean verify(string path) {
+		if (!storage.isDirectory(path))
+			return false;
+		pxi := storage.path(path, "application.pxi");
+		if (!storage.exists(pxi))
+			return false;
+		run := storage.path(path, "run");
+		if (!storage.isExecutable(run))
+			return false;
+		parasolrt := storage.path(path, "parasolrt");
+		if (!storage.isExecutable(parasolrt))
+			return false;
+		return true;
 	}
 
 	public string toString() {
@@ -1133,7 +1160,7 @@ class IncludePackage extends Product {
 				return;
 			}
 		}
-		buildFile.error(_object, "    FAIL: Coud not find package for name %s\n", name());
+		buildFile.error(_object, "    FAIL: Could not find package for name %s\n", name());
 	}
 
 	void discoverExtraIncludedProducts(ref<Product> includer) {

@@ -150,7 +150,7 @@ public class Binary extends Node {
 			}
 		}
 		if (type == null)
-			print(0);
+			return this;
 		if (type.family() == runtime.TypeFamily.SHAPE) {
 			switch (op()) {
 			case	DECLARATION:
@@ -1694,10 +1694,6 @@ public class Binary extends Node {
 				type = _left.type;
 				break;
 			}
-			if (!type.isConcrete(compileContext)) {
-				ref<OverloadInstance> oi = type.firstAbstractMethod(compileContext);
-				_right.add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool(), oi.name());
-			}
 			type = compileContext.newRef(type);
 			break;
 
@@ -1740,10 +1736,6 @@ public class Binary extends Node {
 					add(MessageId.NO_DEFAULT_CONSTRUCTOR, compileContext.pool());
 					break;
 				}
-			}
-			if (!type.isConcrete(compileContext)) {
-				ref<OverloadInstance> oi = type.firstAbstractMethod(compileContext);
-				_right.add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool(), oi.name());
 			}
 			type = compileContext.newRef(type);
 			break;

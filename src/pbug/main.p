@@ -14,6 +14,7 @@
    limitations under the License.
  */
 import parasol:process;
+import parasol:pbuild.Application;
 import parasol:pbuild.Coordinator;
 import parasol:pbuild.thisOS;
 import parasol:pbuild.thisCPU;
@@ -113,7 +114,10 @@ public int main(string[] args) {
 			printf("Application %s not found.\n", pbugCommand.applicationOption.value);
 			return 1;
 		}
-		printf("directory: %s\n", a.targetPath());
+		if (!a.verify()) {
+			printf("Application %s cannot be verified, cannot run it.\n", pbugCommand.applicationOption.value);
+			return 1;
+		}
 		exePath = a.targetPath();
 	} else if (arguments.length() == 0) {
 		printf("No application to run\n");
@@ -124,6 +128,10 @@ public int main(string[] args) {
 	}
 	if (storage.isDirectory(exePath)) {
 		printf("Launching application directory '%s'\n", exePath);
+		if (!Application.verify(exePath)) {
+			printf("Application directory %s cannot be verified, cannot run it.\n", exePath);
+			return 1;
+		}
 	} else if (!storage.exists(exePath)) {
 		printf("Launching parasol script '%s'\n", exePath);
 	}

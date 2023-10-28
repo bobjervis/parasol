@@ -48,6 +48,19 @@ public class BuildFile {
 
 	public static ref<BuildFile> parse(string buildFile, string content, void (string, string, var...) errorMessage, 
 									   string targetOS, string targetCPU, ref<Coordinator> coordinator, string outputDir) {
+		if (coordinator.verbose()) {
+			if (buildFile != null)
+				printf("Parse build file %s", buildFile);
+			else
+				printf("Parse content '%s'", content);
+			if (targetOS != null)
+				printf(" os %s", targetOS);
+			if (targetCPU != null)
+				printf(" cpu %s", targetCPU);
+			if (outputDir != null)
+				printf(" output %s", outputDir);
+			printf("\n");
+		}
 		boolean success = true;
 		ref<BuildFile> bf = new BuildFile(buildFile, errorMessage, targetOS, targetCPU, coordinator);
 
@@ -75,6 +88,7 @@ public class BuildFile {
 		}
 
 		bf._buildRoot = new BuildRoot(outputDir);
+
 		for (i in candidates)
 			bf.collectProducts(bf._buildRoot, candidates[i]);
 
@@ -133,7 +147,7 @@ public class BuildFile {
 				// target tag passed all tested criteria, so include it's contents
 				a = object.get("content");
 				if (a == null)
-					return;
+					break;
 				if (a.class != script.Vector)
 					collectProducts(enclosing, a);
 				else {

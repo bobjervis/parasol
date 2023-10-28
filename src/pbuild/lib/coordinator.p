@@ -314,11 +314,12 @@ public class Coordinator extends CoordinatorVolatileData {
 
 		string absBuildDir = storage.absolutePath(buildDir);
 
-		for (i in bf.products)
+		for (i in bf.products) {
 			if (!bf.products[i].defineContext(bf, this, absBuildDir, outputDir)) {
 				delete bf;
 				return false;
 			}
+		}
 
 		for (i in bf.tests) {
 			ref<Suite> t = bf.tests[i];

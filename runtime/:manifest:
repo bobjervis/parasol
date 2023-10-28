@@ -38,6 +38,9 @@ Ntest
 UcompilerTest.p
 X
 X
+Ndebug
+Udebug.p
+X
 Nprocess
 UcommandLine.p
 Uprocess.p

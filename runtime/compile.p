@@ -369,6 +369,7 @@ public class CompileContext extends CodegenContext {
 		assignTypes();
 //		printf("after assignTypes\n");
 		assignMethodMaps();
+		checkForAbstractInstantiations();
 		for (;;) {
 			boolean modified;
 			for (int i = 0; i < _arena.scopes().length(); i++)
@@ -539,6 +540,37 @@ public class CompileContext extends CodegenContext {
 			scope.createPossibleDefaultConstructor(this);
 		}
 		_mappedScopes = _arena.scopes().length();
+	}
+
+	public void checkForAbstractInstantiations() {
+		for (int i = 0; i < _arena.scopes().length(); i++) {
+			_current = (*_arena.scopes())[i];
+
+			if (_current.definition() == null)
+				continue;
+			if (_current.definition().op() == Operator.UNIT) {
+				_current.definition().traverse(Node.Traversal.POST_ORDER, checkForAbstractInstantiation, this);
+			}
+		}
+	}
+
+	private static TraverseAction checkForAbstractInstantiation(ref<Node> n, address data) {
+		compileContext := ref<CompileContext>(data);
+		switch (n.op()) {
+		case NEW:
+		case PLACEMENT_NEW:
+			b := ref<Binary>(n);
+			if (b.type == null)
+				break;
+			classType := b.type.indirectType(compileContext);
+			if (classType == null)
+				break;
+			if (!classType.isConcrete(compileContext)) {
+				ref<OverloadInstance> oi = classType.firstAbstractMethod(compileContext);
+				b.right().add(MessageId.ABSTRACT_INSTANCE_DISALLOWED, compileContext.pool(), oi.name());
+			}
+		}
+		return TraverseAction.CONTINUE_TRAVERSAL;
 	}
 
 	private static TraverseAction defineImports(ref<Node> n, address data) {

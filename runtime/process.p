@@ -572,6 +572,7 @@ public class Process extends ProcessVolatileData {
 						for (string[string].iterator i = environ.begin(); i.hasNext(); i.next())
 							environment.set(i.key(), i.get());
 					}
+					childStartupHook();
 					linux.execv(argv[0], argv);
 					linux._exit(-16);
 				} else {
@@ -734,6 +735,15 @@ public class Process extends ProcessVolatileData {
 			_exitStatus = exitCode;
 			notifyAll();
 		}
+	}
+	/**
+	 * Allow a sub-class of Process to define a startup method hook.
+	 *
+	 * By overriding this method, an application on Linux could use ptrace
+	 * to make the child process after a fork become a 'tracee'. Such applications
+	 * include a tracer or a debugger.
+	 */
+	void childStartupHook() {
 	}
 }
 /**

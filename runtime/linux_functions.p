@@ -273,6 +273,9 @@ public abstract pthread_t pthread_self();
 @Linux("libpthread.so.0", "pthread_sigmask")
 public abstract pthread_t pthread_sigmask(int how, ref<sigset_t> set, ref<sigset_t> oldset);
 
+@Linux("libc.so.6", "ptrace")
+public abstract int ptrace(int request, pid_t pid, address addr, address data);
+
 @Linux("libc.so.6", "ptsname_r")
 public abstract int ptsname_r(int fd, pointer<byte> buf, size_t buflen);
 
@@ -383,7 +386,7 @@ public abstract int statvfs(pointer<byte> path, ref<statvfsStruct> buf);
 /**
  * Fetch the error string that perror would print out for a given errno.
  *
- * @param errno The value of errno returned from some system call.
+ * @param errnum The value of errno returned from some system call.
  *
  * @return The appropriate error message for the given errno value, possibly in the current
  * locale. On success, the process errno is unchanged. If the errno string could not be
@@ -451,8 +454,8 @@ public abstract pid_t vfork();
 @Linux("libc.so.6", "wait")
 public abstract pid_t wait(ref<int> exitStatus);
 
-//@Linux("libc.so.6", "waitid")
-//public abstract int waitid()
+@Linux("libc.so.6", "waitid")
+public abstract int waitid(long idtype, long id, ref<siginfo_t> infop, int options);
 
 @Linux("libc.so.6", "waitpid")
 public abstract pid_t waitpid(pid_t pid, ref<int> exitStatus, int options);
@@ -511,6 +514,102 @@ public int errno() {
 public void set_errno(int value) {
 	*__errno_location() = value;
 }
+
+public int PTRACE_TRACEME   =          0;
+/*
+#define PTRACE_PEEKTEXT            1
+#define PTRACE_PEEKDATA            2
+#define PTRACE_PEEKUSR             3
+#define PTRACE_POKETEXT            4
+#define PTRACE_POKEDATA            5
+#define PTRACE_POKEUSR             6
+#define PTRACE_CONT                7
+#define PTRACE_KILL                8
+#define PTRACE_SINGLESTEP          9
+
+#define PTRACE_ATTACH             16
+#define PTRACE_DETACH             17
+
+#define PTRACE_SYSCALL            24
+
+/* 0x4200-0x4300 are reserved for architecture-independent additions.  */
+#define PTRACE_SETOPTIONS       0x4200
+#define PTRACE_GETEVENTMSG      0x4201
+#define PTRACE_GETSIGINFO       0x4202
+#define PTRACE_SETSIGINFO       0x4203
+
+
+/*
+ * Generic ptrace interface that exports the architecture specific regsets
+ * using the corresponding NT_* types (which are also used in the core dump).
+ * Please note that the NT_PRSTATUS note type in a core dump contains a full
+ * 'struct elf_prstatus'. But the user_regset for NT_PRSTATUS contains just the
+ * elf_gregset_t that is the pr_reg field of 'struct elf_prstatus'. For all the
+ * other user_regset flavors, the user_regset layout and the ELF core dump note
+ * payload are exactly the same layout.
+ *
+ * This interface usage is as follows:
+ *      struct iovec iov = { buf, len};
+ *
+ *      ret = ptrace(PTRACE_GETREGSET/PTRACE_SETREGSET, pid, NT_XXX_TYPE, &iov);
+ *
+ * On the successful completion, iov.len will be updated by the kernel,
+ * specifying how much the kernel has written/read to/from the user's iov.buf.
+ */
+#define PTRACE_GETREGSET        0x4204
+#define PTRACE_SETREGSET        0x4205
+
+#define PTRACE_SEIZE            0x4206
+#define PTRACE_INTERRUPT        0x4207
+#define PTRACE_LISTEN           0x4208
+
+#define PTRACE_PEEKSIGINFO      0x4209
+
+struct ptrace_peeksiginfo_args {
+        __u64 off;      /* from which siginfo to start */
+        __u32 flags;
+        __s32 nr;       /* how may siginfos to take */
+};
+
+#define PTRACE_GETSIGMASK       0x420a
+#define PTRACE_SETSIGMASK       0x420b
+
+#define PTRACE_SECCOMP_GET_FILTER       0x420c
+
+/* Read signals from a shared (process wide) queue */
+#define PTRACE_PEEKSIGINFO_SHARED       (1 << 0)
+
+/* Wait extended result codes for the above trace options.  */
+#define PTRACE_EVENT_FORK       1
+#define PTRACE_EVENT_VFORK      2
+#define PTRACE_EVENT_CLONE      3
+#define PTRACE_EVENT_EXEC       4
+#define PTRACE_EVENT_VFORK_DONE 5
+#define PTRACE_EVENT_EXIT       6
+#define PTRACE_EVENT_SECCOMP    7
+/* Extended result codes which enabled by means other than options.  */
+#define PTRACE_EVENT_STOP       128
+
+/* Options set using PTRACE_SETOPTIONS or using PTRACE_SEIZE @data param */
+#define PTRACE_O_TRACESYSGOOD   1
+#define PTRACE_O_TRACEFORK      (1 << PTRACE_EVENT_FORK)
+#define PTRACE_O_TRACEVFORK     (1 << PTRACE_EVENT_VFORK)
+#define PTRACE_O_TRACECLONE     (1 << PTRACE_EVENT_CLONE)
+#define PTRACE_O_TRACEEXEC      (1 << PTRACE_EVENT_EXEC)
+#define PTRACE_O_TRACEVFORKDONE (1 << PTRACE_EVENT_VFORK_DONE)
+#define PTRACE_O_TRACEEXIT      (1 << PTRACE_EVENT_EXIT)
+#define PTRACE_O_TRACESECCOMP   (1 << PTRACE_EVENT_SECCOMP)
+
+/* eventless options */
+#define PTRACE_O_EXITKILL               (1 << 20)
+#define PTRACE_O_SUSPEND_SECCOMP        (1 << 21)
+*/
+@Constant
+public int P_ALL = 0;
+@Constant
+public int P_PID = 1;
+@Constant
+public int P_PGID = 2;
 
 public class cc_t = byte;
 public class tcflag_t = unsigned;
@@ -610,29 +709,25 @@ public class Dl_info {
  * The Parasol equivalent of the C stat structure.
  */
 public class statStruct {
-    long st_dev;		/* Device.  */
-    long st_ino;		/* File serial number.	*/
-    long st_nlink;		/* Link count.  */
-    unsigned st_mode;		/* File mode.  */
-    unsigned st_uid;		/* User ID of the file's owner.	*/
-    unsigned st_gid;		/* Group ID of the file's group.*/
-    int __pad0;
-    long st_rdev;		/* Device number, if device.  */
-    long st_size;			/* Size of file, in bytes.  */
-    long st_blksize;	/* Optimal block size for I/O.  */
-    long st_blocks;		/* Number 512-byte blocks allocated. */
+    public long st_dev;		/* Device.  */
+    public long st_ino;		/* File serial number.	*/
+    public long st_nlink;		/* Link count.  */
+    public unsigned st_mode;		/* File mode.  */
+    public unsigned st_uid;		/* User ID of the file's owner.	*/
+    public unsigned st_gid;		/* Group ID of the file's group.*/
+    public int __pad0;
+    public long st_rdev;		/* Device number, if device.  */
+    public long st_size;			/* Size of file, in bytes.  */
+    public long st_blksize;	/* Optimal block size for I/O.  */
+    public long st_blocks;		/* Number 512-byte blocks allocated. */
     /* Nanosecond resolution timestamps are stored in a format
-       equivalent to 'struct timespec'.  This is the type used
-       whenever possible but the Unix namespace rules do not allow the
-       identifier 'timespec' to appear in the <sys/stat.h> header.
-       Therefore we have to handle the use of this header in strictly
-       standard-compliant sources special.  */
-    timespec st_atim;		/* Time of last access.  */
-    timespec st_mtim;		/* Time of last modification.  */
-    timespec st_ctim;		/* Time of last status change.  */
-    long __glibc_reserved0;
-    long __glibc_reserved1;
-    long __glibc_reserved2;
+       equivalent to 'struct timespec'. */
+    public timespec st_atim;		/* Time of last access.  */
+    public timespec st_mtim;		/* Time of last modification.  */
+    public timespec st_ctim;		/* Time of last status change.  */
+    public long __glibc_reserved0;
+    public long __glibc_reserved1;
+    public long __glibc_reserved2;
 }
 
 public class ifaddrs {

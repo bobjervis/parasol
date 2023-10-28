@@ -16,6 +16,7 @@
 namespace parasol:compiler;
 
 import parasol:context;
+import parasol:exception.IllegalOperationException;
 import parasol:runtime;
 import parasol:storage.File;
 
@@ -97,6 +98,7 @@ public class ClassScope extends Scope {
 	private int _reservedInterfaceSlots;
 	protected ref<Symbol>[] _members;
 	private boolean _methodsBuilt;
+	private boolean _methodsBuilding;
 	private boolean _defaultConstructorChecked;
 	private boolean _interfaceMethodsChecked;
 	private boolean _interfaceAllowedInRPC;
@@ -380,10 +382,20 @@ public class ClassScope extends Scope {
 	}
 
 	public void assignMethodMaps(ref<CompileContext> compileContext) {
+		// We've got to get this stuff cleaned up first, because these guys just might recursively call into
+		// this method again.
+		ref<Type> base = assignSuper(compileContext);
+		if (classType != null) {
+			if (definition() != null)
+				compileContext.assignTypes(this, definition());
+		}
+
 		// method map must be built out here
 		if (!_methodsBuilt) {
-			_methodsBuilt = true;
-			ref<Type> base = assignSuper(compileContext);
+			if (_methodsBuilding) {
+				throw IllegalOperationException((classType != null ? classType.signature() : "<null>") + " cycle in assignMethodMaps");
+			}
+			_methodsBuilding = true;
 			if (base != null) {
 				// Seed the method table with the base class method table.
 				ref<Scope> baseScope = base.scope();
@@ -439,8 +451,6 @@ public class ClassScope extends Scope {
 						}
 					}
 				}
-				if (definition() != null)
-					compileContext.assignTypes(this, definition());
 				// Now build out the InterfaceImplementationScope objects (for their vtables).
 				ref<ref<InterfaceType>[]> interfaces = classType.interfaces();
 				if (interfaces != null) {
@@ -464,6 +474,8 @@ public class ClassScope extends Scope {
 					}
 				}
 			}
+			_methodsBuilding = false;
+			_methodsBuilt = true;
 		}
 	}
 	
@@ -1042,7 +1054,7 @@ public class ParameterScope extends Scope {
 	}
 
 	void printDetails() {
-		printf(" kind %s category %s\n", string(_kind), string(_category));
+		printf(" kind %s category %s", string(_kind), string(_category));
 	}
 }
 
@@ -1100,7 +1112,7 @@ public class ThunkScope extends ParameterScope {
 	}
 
 	void printDetails() {
-		printf(" ThunkScope -> %p%s\n", _function, _isDestructor ? " destructor" : "");
+		printf(" ThunkScope -> %p%s", _function, _isDestructor ? " destructor" : "");
 	}
 }
 

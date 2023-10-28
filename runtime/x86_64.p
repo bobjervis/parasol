@@ -5017,6 +5017,7 @@ public class X86_64 extends X86_64AssignTemps {
 	}
 
 	private void storeVtable(ref<Type> t, ref<CompileContext> compileContext) {
+		t.assignMethodMaps(compileContext);
 		ref<ClassScope> classScope = ref<ClassScope>(t.scope());
 		buildVtable(classScope, compileContext);
 		instStoreVTable(firstRegisterArgument(), 0, R.RAX, classScope);
@@ -5194,7 +5195,6 @@ public class X86_64 extends X86_64AssignTemps {
 						break;
 						
 					case	CLASS:
-						
 						if (sym.type().hasVtable(compileContext)) {
 							inst(X86.LEA,firstRegisterArgument(),  sym.definition(), compileContext);
 							storeVtable(sym.type(), compileContext);

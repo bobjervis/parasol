@@ -133,6 +133,46 @@ public boolean setExecutable(string filename, boolean executable) {
 		return false;
 }
 /**
+ * Test whether the named file is executable (or not) for the owner.
+ *
+ * Executable means in this context a file that the host operating system considers executable.
+ * A host operating system will often have ways to execute a file that is not written in the native binary format.
+ * For example, on Windows certain file extensions indicate that a file is a command script.
+ * On UNIX and Linux systems, on the other hand, file system permissions are used to make that determination.
+ *
+ * This is not an exhaustive test.
+ * The contents of the file are not verified to determine that they are valid.
+ * It also only tests whether the file's owner can execute this file.
+ * For example, by convention on Linux, permissions bits follow the basic progression:
+ *
+ * {@code
+ *              user-bit >= group-bit >= other-users-bit
+ * }
+ *
+ * Thus, if the owner has execute permissions the file can be considered executable, but users other than
+ * the owner may still not have permissions to execute it.
+ * A file on Linux or UNIX could use unconventional settings to make a file executable to everyone but the owner, but
+ * that is almost never actually done.
+ *
+ * @param filename The file to test permissions for.
+ *
+ * @return true if the file exists, the path to it is searchable and it is executable by its owner, false otherwise.
+ */
+public boolean isExecutable(string filename) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		return false;
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		linux.statStruct s;
+		if (linux.stat(&filename[0], &s) != 0)
+			return false;
+		if ((s.st_mode & linux.S_IFDIR) != 0)
+			return false;							// A directory is NOT executable, since the 'execute' bits
+													// mean 'searchable' for directories.
+		return (s.st_mode & linux.S_IXUSR) != 0;
+	} else
+		return false;
+}
+/**
  * Make the named file read-only (or writable) for the owner.
  *
  * This function will succeed if the current user owns the file or has special permissions. For
