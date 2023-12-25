@@ -51,22 +51,22 @@ public enum Operator {
 	EXCLUSIVE_OR_ASSIGN,
 	ADD_REDUCE,
 	LABEL,
-	EQUALITY,
-	IDENTITY,
-	LESS,
-	GREATER,
-	LESS_EQUAL,
-	GREATER_EQUAL,
-	LESS_GREATER,
-	LESS_GREATER_EQUAL,
-	NOT_EQUAL,
-	NOT_IDENTITY,
-	NOT_LESS,
-	NOT_GREATER,
-	NOT_LESS_EQUAL,
-	NOT_GREATER_EQUAL,
-	NOT_LESS_GREATER,
-	NOT_LESS_GREATER_EQUAL,
+	EQUALITY(Operator.EQUALITY),
+	IDENTITY(Operator.IDENTITY),
+	LESS(Operator.GREATER),
+	GREATER(Operator.LESS),
+	LESS_EQUAL(Operator.GREATER_EQUAL),
+	GREATER_EQUAL(Operator.LESS_EQUAL),
+	LESS_GREATER(Operator.LESS_GREATER),
+	LESS_GREATER_EQUAL(Operator.LESS_GREATER_EQUAL),
+	NOT_EQUAL(Operator.NOT_EQUAL),
+	NOT_IDENTITY(Operator.NOT_IDENTITY),
+	NOT_LESS(Operator.NOT_GREATER),
+	NOT_GREATER(Operator.NOT_LESS),
+	NOT_LESS_EQUAL(Operator.NOT_GREATER_EQUAL),
+	NOT_GREATER_EQUAL(Operator.NOT_LESS_EQUAL),
+	NOT_LESS_GREATER(Operator.NOT_LESS_GREATER),
+	NOT_LESS_GREATER_EQUAL(Operator.NOT_LESS_GREATER_EQUAL),
 	LEFT_SHIFT,
 	RIGHT_SHIFT,
 	UNSIGNED_RIGHT_SHIFT,
@@ -203,6 +203,22 @@ public enum Operator {
 	// InternalLiteral
 	INTERNAL_LITERAL,
 	MAX_OPERATOR
+
+	;
+
+	private Operator _reversedCompare;
+
+	Operator() {
+	}
+
+	Operator(Operator reversedCompare) {
+		_reversedCompare = reversedCompare;
+	}
+
+	Operator reversedCompare() {
+		return _reversedCompare;
+	}
+	
 }
 
 public enum TraverseAction {
@@ -875,15 +891,16 @@ public class Block extends Node {
 				return Test.PASS_TEST;
 		return Test.FAIL_TEST;
 	}
-
+/*
 	public void printTerse(int indent) {
 		printBasic(indent);
 		if (_inSwitch)
 			printf(" in switch");
 		printf("\n");
-		_statements.node.print(indent + INDENT);
+		if (_statements != null)
+			_statements.node.print(indent + INDENT);
 	}
-
+ */
 	public void print(int indent) {
 		printBasic(indent);
 		if (_inSwitch)
@@ -1652,6 +1669,37 @@ public class Constant extends Node {
 		boolean status;
 		(output, status) = unescapeParasolCharacter(s);
 		return output, status;
+	}
+	/**
+	 * Return the numeric value of a floating point constant.
+	 *
+	 * This method does not check the operator or whether the node has
+	 * a floating-point type.
+	 *
+	 * If this constant has a type assigned and is a correct floating-point
+	 * literal (op() == Operator.FLOATING_POINT), the second return value will
+	 * generally be true.
+	 * If not, the second return value may be false. For example, valid integer
+	 * literals will convert to a floating point value, but character literals
+	 * may not. For example, a Unicode digit will convert, but not a letter.
+	 *
+	 * @return If a valid floating-point constant, the numeric value of it.
+	 * @return true if the token string successfully converted to floating point,
+	 * false otherwise.
+	 */
+	public double, boolean floatValue() {
+		if (type == null)
+			return double.NaN, false;
+		pointer<byte> endPtr;
+		if (type.family() == runtime.TypeFamily.FLOAT_32) {
+			string s(_value.c_str(), _value.length() - 1); // omit the trailing f
+			double x = C.strtod(s.c_str(), &endPtr);
+			return x, endPtr == s.c_str() + s.length();
+		} else {
+			string s = _value;
+			double x = C.strtod(s.c_str(), &endPtr);
+			return x, endPtr == s.c_str() + s.length();
+		}
 	}
 
 	public substring value() {
@@ -3879,6 +3927,21 @@ public class Node {
 		if (type == null)
 			return false;
 		return type.deferAnalysis();
+	}
+
+	public boolean isConstantLiteral() {
+		switch (_op) {
+		case CHARACTER:
+		case FALSE:
+		case FLOATING_POINT:
+		case INTEGER:
+		case INTERNAL_LITERAL:
+		case NULL:
+		case TRUE:
+		case STRING:
+			return true;
+		}
+		return false;
 	}
 
 	public boolean isLvalue() {

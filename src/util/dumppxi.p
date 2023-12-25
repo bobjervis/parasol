@@ -63,6 +63,7 @@ int main(string[] args) {
 		}
 	}
 	boolean anyFailed = false;
+	pxi.registerSectionReader(runtime.Target.X86_64_LNX_NEW, x86_64NextReader);
 	pxi.registerSectionReader(runtime.Target.X86_64_LNX, x86_64NextReader);
 	pxi.registerSectionReader(runtime.Target.X86_64_LNX_SRC, x86_64NextReader);
 	pxi.registerSectionReader(runtime.Target.X86_64_WIN, x86_64NextReader);
@@ -107,14 +108,15 @@ boolean dump(string filename) {
 ref<pxi.Section> x86_64NextReader(storage.File pxiFile, long length) {
 	pxi.X86_64SectionHeader header;
 	
+	long imageOffset = pxiFile.tell();
 	if (pxiFile.read(&header, header.bytes) != header.bytes) {
 		printf("          Could not read x86-64 section header\n");
 		return null;
 	}
-	long imageOffset = pxiFile.tell();
 	byte[] memory;
 
 	memory.resize(int(length - header.bytes));
+	pxiFile.seek(imageOffset, storage.Seek.START);
 	long actual = pxiFile.read(&memory);
 	if (actual != memory.length()) {
 		printf("Could not read %d bytes from the indicated section\n", length);
@@ -133,8 +135,10 @@ ref<pxi.Section> x86_64NextReader(storage.File pxiFile, long length) {
 		if (!d.disassemble()) {
 			printf("Disassembly FAILED\n");
 		}
-	} else if (verbose != runtime.Target.ERROR)
-		x86_64.printHeader(&header, imageOffset, &memory[0]);
+	} else if (verbose != runtime.Target.ERROR) {
+		runtime.Image image(0, &memory[0], int(length));
+		image.printHeader(imageOffset);
+	}
 	if (command.relocationsOption.set()) {
 		if (actual != memory.length())
 			return null;

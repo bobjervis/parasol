@@ -197,6 +197,21 @@ int main(string[] args) {
 	assert(int.MAX_VALUE == 0x7fffffff);
 	
 	assert(int.MIN_VALUE == (-1 << 31));
+
+	int i = 7; 
+
+	if (0 < i) ; else assert(false);
+	if (0 > i) assert(false);
+	if (0 <= i) ; else assert(false);
+	if (0 >= i) assert(false);
+	if (0 <> i) ; else assert(false);
+	if (0 != i) ; else assert(false);
+	if (0 !< i) assert(false);
+	if (0 !> i) ; else assert(false);
+	if (0 !<= i) assert(false);
+	if (0 !>= i) ; else assert(false);
+	if (0 !<> i) assert(false);
+
 	return 0;
 }
 

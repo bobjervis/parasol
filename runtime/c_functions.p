@@ -206,6 +206,10 @@ public abstract int sleep(unsigned seconds);
 @Linux("libc.so.6", "strchr")
 public abstract pointer<byte> strchr(pointer<byte> s, int c);
 
+@Windows("msvcrt.dll", "strcmp")
+@Linux("libc.so.6", "strcmp")
+public abstract int strcmp(pointer<byte> s1, pointer<byte> s2);
+
 @Windows("msvcrt.dll", "strcpy")
 @Linux("libc.so.6", "strcpy")
 public abstract pointer<byte> strcpy(pointer<byte> dest, pointer<byte> src);

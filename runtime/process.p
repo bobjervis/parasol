@@ -105,7 +105,7 @@ public enum exception_t {
 	/**
 	 * The process has hit a breakpoint.
 	 *
-	 * THis is only relevant to debugging scenarios, which are not currently supported.
+	 * This is only relevant to debugging scenarios, which are not currently supported.
 	 */
 	BREAKPOINT,
 	/**
@@ -249,7 +249,7 @@ public class Process extends ProcessVolatileData {
 			linux.close(_stdout);
 	}
 	/**
-	 * Set the spawn to use a pipe to collect output from stdout and stderr. THis also will redirect
+	 * Set the spawn to use a pipe to collect output from stdout and stderr. This also will redirect
 	 * standard input from /dev/null, which will cause the process to see an end-of-file on the first
 	 * read from stdin (if any).
 	 *
@@ -259,7 +259,7 @@ public class Process extends ProcessVolatileData {
 		_stdioHandling = StdioHandling.CAPTURE_OUTPUT;
 	}
 	/**
-	 * This method ssets the spawn mode to use setpgrp so that the child process is a new process group
+	 * This method sets the spawn mode to use setpgrp so that the child process is a new process group
 	 * leader.
 	 *
 	 * This is a UNIX and Linux feature. Calling this method on Windows has no effect.
@@ -284,7 +284,7 @@ public class Process extends ProcessVolatileData {
 		_stdioHandling = StdioHandling.INTERACTIVE;
 	}
 	/**
-	 * The the user name of the spawned process.
+	 * Set the user name of the spawned process.
 	 * 
 	 * On Linux, this call will succeed even if the current process is not privileged. However, the
 	 * subsequent spawn will fail.
@@ -318,8 +318,8 @@ public class Process extends ProcessVolatileData {
 	/**
 	 * Execute the given command with the given arguments.
 	 *
-	 * The command is executed in this processes current working directory and uses this processes
-	 * environment vairables.
+	 * The command is executed in this process' current working directory and uses this process'
+	 * environment variables.
 	 *
 	 * @param command The path to the command to execute.
 	 * @param args Zero or more string arguments to be passed to the command.
@@ -373,6 +373,57 @@ public class Process extends ProcessVolatileData {
 		} else
 			logger.debug("spawn failed");
 		return false, int.MIN_VALUE;
+	}
+	/**
+	 * Spawn a process using the given Parasol script and arguments.
+	 *
+	 * The method uses the same version of Parasol that is running the current process.
+	 *
+	 * @param workingDirectory If not null, the path to the working directory to run the command in.
+	 * Note that if the command path is relative, it will be found relative to the working directory
+	 * supplied.
+	 * @param script The path to the script to execute.
+	 * @param parasolLocation If not null, the path to the Parasol runtime to use when spawning the script.
+	 * @param environ A map of environment variables to add to the parent process\' environment, or null
+	 * to just use the parent\'s environment.
+	 * @param args Zero or more string arguments to be passed to the command.
+	 * 
+	 * @return true if the process spawned successfully.
+	 */
+	public boolean spawnParasolScript(string workingDirectory, string script, string parasolLocation,
+									  ref<string[string]> environ, string... args) {
+		string parasolrt;
+		string pc_pxi;
+		ref<string[string]> copy;
+		if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+			if (parasolLocation == null)
+				parasolLocation = "/usr/parasol/latest";
+			pc_pxi = parasolLocation + "/bin/x86-64-lnx.pxi";
+			parasolrt = parasolLocation + "/bin/parasolrt";
+			copy = new string[string];
+			if (environ != null) {
+				for (key in *environ)
+					(*copy)[key] = (*environ)[key];
+			}
+			dir := parasolLocation + "/bin";
+			if (copy.contains("LD_LIBRARY_PATH"))
+				(*copy)["LD_LIBRARY+PATH"] = dir + ":" + (*copy)["LD_LIBRARY_PATH"];
+			else
+				(*copy)["LD_LIBRARY_PATH"] = dir;
+			environ = copy;
+		} else if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+			pc_pxi = "x86-64-win.pxi";
+		}
+		if (!storage.exists(pc_pxi)) {
+			throw IllegalOperationException("Could not find " + pc_pxi);
+		}
+		string[] arguments;
+		arguments.append(pc_pxi);
+		arguments.append(script);
+		arguments.append(args);
+		success := spawn(workingDirectory, parasolrt, environ, arguments);
+		delete copy;
+		return success;
 	}
 	/**
 	 * Spawn a process using the given command and arguments.
@@ -586,7 +637,7 @@ public class Process extends ProcessVolatileData {
 						linux.close(pipeFd[1]);
 						break;
 					}
-					pendingChildren.declareChild(_pid, processExitInfoWrapper, this);
+					declareChild();
 					lock (*this) {
 						_running = true;
 					}
@@ -595,6 +646,10 @@ public class Process extends ProcessVolatileData {
 			return true;		// Only the parent process gets here.
 		}
 		return false;
+	}
+
+	protected void declareChild() {
+		pendingChildren.declareChild(_pid, processExitInfoWrapper, this);
 	}
 	/**
 	 * After a spawn, wait for the child process to exit.
@@ -743,7 +798,7 @@ public class Process extends ProcessVolatileData {
 	 * to make the child process after a fork become a 'tracee'. Such applications
 	 * include a tracer or a debugger.
 	 */
-	void childStartupHook() {
+	protected void childStartupHook() {
 	}
 }
 /**

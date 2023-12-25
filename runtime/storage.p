@@ -22,6 +22,7 @@
  */
 namespace parasol:storage;
 
+import parasol:exception.IllegalArgumentException;
 import parasol:runtime;
 import parasol:time;
 import native:C;
@@ -773,3 +774,75 @@ public boolean deleteDirectoryTree(string path) {
 	delete dir;
 	return deleteDirectory(path);
 }
+/**
+ * Memory-map a file.
+ *
+ * Map a file into memory, allowing a program to manipulate the
+ * contents of the file as if it were program memory.
+ *
+ * @param path The path of a file to be mapped.
+ *
+ * @param access The access rights to be given to the memory.
+ *
+ * @param offset The memory region begins at the specified offset in
+ * the file.
+ *
+ * @param length The desired length of the mapped region.
+ *
+ * @return The address of the memory area containing the file contents.
+ * If the file named by path does not exist or cannot be read, null is returned.
+ * If the host environment does not support memory mapped files, null is returned.
+ *
+ * @return The actual length of the memory area mapped.
+ * If the file named by path does not exist or cannot be mapped, -1 is returned.
+ * If the host environment does not support memory mapped files, {@link long.MIN_VALUE} is returned.
+ *
+ * @exception IllegalArgumentException Is thrown when
+ *  the offset and length define an interval that falls entirely outside
+ * the file contents when the call is made. 
+ */
+public address, long memoryMap(string path, AccessFlags access, long offset, long length) {
+	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+		return null, long.MIN_VALUE;
+	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+		File f;
+
+		if (!f.open(path))
+			return null, -1;
+		fileSize := f.size();
+		if (fileSize < offset || offset + length < 0) {
+			f.close();
+			throw IllegalArgumentException("Map window [" + offset + ":" + length + "] file [0:" + fileSize + "]");
+		}
+		// trim the mapping window to be no longer than the file.
+		if (offset + length > fileSize)
+			length = fileSize - offset;
+		int protections;
+
+		if (access & AccessFlags.READ)
+			protections |= linux.PROT_READ;
+		if (access & AccessFlags.WRITE)
+			protections |= linux.PROT_WRITE;
+		if (access & AccessFlags.EXECUTE)
+			protections |= linux.PROT_EXEC;
+		fileAddress := pointer<byte>(linux.mmap(null, length, protections, linux.MAP_SHARED, f.fd(), offset));
+		f.close();
+		if (fileAddress == null)
+			return null, -1;
+		else
+			return fileAddress, length;
+	} else
+		return null, long.MIN_VALUE;
+}
+/**
+ * Unmap a memory mapped file.
+ *
+ * @param location The address returned from the memoryMap call.
+ * @param length The length returned from the memoryMap call.
+ *
+ * @return true if the operation succeeded, false otherwise.
+ */
+public boolean unmap(address location, long length) {
+	return linux.munmap(location, length) == 0;
+}
+

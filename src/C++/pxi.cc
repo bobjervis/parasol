@@ -85,15 +85,8 @@ Section *load(const char *filename) {
 }
 
 static Section *x86_64Reader(Target sectionType, FILE *pxiFile, long long length) {
-	X86_64SectionHeader header;
-
-	if (fread(&header, 1, sizeof header, pxiFile) != sizeof header) {
-		printf("Could not read x86-64 section header\n");
-		return null;
-	}
-	size_t imageLength = (size_t)length - sizeof header;
 #if defined(__WIN64)
-	byte *image = (byte*)malloc(_imageLength);
+	byte *image = (byte*)malloc(length);
 #elif __linux__
     int pagesize = sysconf(_SC_PAGESIZE);
     if (pagesize == -1) {
@@ -104,10 +97,10 @@ static Section *x86_64Reader(Target sectionType, FILE *pxiFile, long long length
     /* Allocate a buffer aligned on a page boundary;
        initial protection is PROT_READ | PROT_WRITE */
 
-    byte *image = (byte*)aligned_alloc(pagesize, imageLength);
+    byte *image = (byte*)aligned_alloc(pagesize, length);
 #endif
 	if (image != null) {
-		if (fread(image, 1, imageLength, pxiFile) != imageLength) {
+		if (fread(image, 1, length, pxiFile) != length) {
 			printf("Could not read x86-64 image\n");
 			return null;
 		}
@@ -115,7 +108,7 @@ static Section *x86_64Reader(Target sectionType, FILE *pxiFile, long long length
 		printf("Could not allocate image area\n");
 		return null;
 	}
-	return new Section(sectionType, header, image, imageLength);
+	return new Section(sectionType, image, length);
 }
 
 class NativeBinding {
@@ -125,19 +118,25 @@ public:
 	void *address;
 };
 
-Section::Section(Target sectionType, X86_64SectionHeader &header, byte *image, size_t imageLength) {
+Section::Section(Target sectionType, byte *image, size_t imageLength) {
 	this->sectionType = sectionType;
-	this->header = header;
-	this->image = image;
-	this->imageLength = imageLength;
+	if (sectionType == ST_X86_64_LNX_SRC) { // Legacy file type - Header a separate piece before image.
+		this->header = (X86_64SectionHeader*)image;
+		this->image = image + sizeof (X86_64SectionHeader);
+		this->imageLength = imageLength - sizeof (X86_64SectionHeader);
+	} else { // ST_X86_64_LNX - Image contains header, rather than header before image.
+		this->header = (X86_64SectionHeader*)image;
+		this->image = image;
+		this->imageLength = imageLength;
+	}
 }
 
 bool Section::run(char **args, int *returnValue, int heap_value) {
-	parasol::ExecutionContext ec(&header, image, null);
+	parasol::ExecutionContext ec(header, image, null);
 
 	ec.enter();
 	parasol::setRuntimeParameter(RP_SECTION_TYPE, (void*)(long)sectionType);
-	parasol::setRuntimeParameter(RP_PXI_HEADER, (void*)&header);
+	parasol::setRuntimeParameter(RP_PXI_HEADER, (void*)header);
 	parasol::setRuntimeParameter(RP_IMAGE, image);
 	parasol::setRuntimeParameter(RP_IMAGE_LENGTH, (void*)(long)imageLength);
 	parasol::setRuntimeParameter(RP_HEAP, (void*)(long)heap_value);
@@ -146,15 +145,15 @@ bool Section::run(char **args, int *returnValue, int heap_value) {
 	for (int i = 1; args[i] != null; i++)
 		argc++;
 
-	int *pxiFixups = (int*)(image + header.relocationOffset);
-	for (int i = 0; i < header.relocationCount; i++) {
+	int *pxiFixups = (int*)(image + header->relocationOffset);
+	for (int i = 0; i < header->relocationCount; i++) {
 		int fx = pxiFixups[i];
 		long long *vp = (long long*)(image + pxiFixups[i]);
 		*vp += (long long)image;
 	}
 
-	NativeBinding *nativeBindings = (NativeBinding*)(image + header.nativeBindingsOffset);
-	for (int i = 0; i < header.nativeBindingsCount; i++) {
+	NativeBinding *nativeBindings = (NativeBinding*)(image + header->nativeBindingsOffset);
+	for (int i = 0; i < header->nativeBindingsCount; i++) {
 #if defined(__WIN64)
 		HMODULE dll = GetModuleHandle(nativeBindings[i].dllName);
 		if (dll == 0) {
@@ -199,10 +198,10 @@ bool Section::run(char **args, int *returnValue, int heap_value) {
 		printf("Could not protect %p [%lx] errno = %d (%s)\n", image, imageLength, errno, strerror(errno));
 	}
 #endif
-	long long *vp = (long long*)(image + header.vtablesOffset);
-	for (int i = 0; i < header.vtableData; i++, vp++)
+	long long *vp = (long long*)(image + header->vtablesOffset);
+	for (int i = 0; i < header->vtableData; i++, vp++)
 		*vp += (long long)image;
-	int value = parasol::evalNative(&header, image, args + 1, argc);
+	int value = parasol::evalNative(header, image, args + 1, argc);
 	*returnValue = value;
 	parasol::Exception *exception = ec.exception();
 	if (exception != null) {

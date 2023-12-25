@@ -135,6 +135,8 @@ class DeferredTry {
 	public ref<X86_64Encoder.CodeSegment> primaryHandler;
 	public ref<Try> tryStatement;
 	public ref<Lock> lockStatement;
+	public boolean useJumpContext;
+	public X86_64Encoder.JumpContext jumpContext;
 	public ref<X86_64Encoder.CodeSegment> join;
 	public ref<X86_64Encoder.CodeSegment> exceptionHandler;
 
@@ -188,7 +190,7 @@ class X86_64LnxSection extends pxi.Section {
 	private ref<X86_64> _target;
 	
 	public X86_64LnxSection(ref<X86_64> target) {
-		super(runtime.Target.X86_64_LNX_SRC);
+		super(runtime.Target.X86_64_LNX_NEW);
 		_target = target;
 	}
 	
@@ -289,6 +291,7 @@ class X86_64Encoder extends Target {
 	}
 
 	boolean generateCode(ref<Unit> mainFile, ref<CompileContext> compileContext) {
+		_segments[Segments.CODE].reserve(pxi.X86_64SectionHeader.bytes);
 		_segments[Segments.SOURCE_LOCATIONS].reserve(pxi.X86_64SourceMap.bytes);
 		if (mainFile != null) {
 			// Storage has been allocated in the derived class for all static objects.
@@ -478,6 +481,8 @@ class X86_64Encoder extends Target {
 		_staticMemoryLength = _segments[Segments.MAXIMUM].offset();
 
 		_staticMemory = pointer<byte>(runtime.allocateRegion(_staticMemoryLength));
+		imageCopy := ref<pxi.X86_64SectionHeader>(_segments[Segments.CODE].at(0));
+		*imageCopy = _pxiHeader;
 		for (int i = 0; i < int(Segments.MAXIMUM); i++) {
 			ref<Segment> s = _segments[Segments(i)];
 			C.memcpy(_staticMemory + s.offset(), s.at(0), s.length());
@@ -619,7 +624,7 @@ class X86_64Encoder extends Target {
 		// Stack will look like:
 		//
 		// 		  ... stack arguments
-		// TODO: Need to insert 32 byte register save area (for full Win64 ABI compatibility - not on Linux)
+		// 		  32 byte register save area (for full Win64 ABI compatibility - not on Linux)
 		// 		  Return Address
 		// RBP -> RBP (saved frame pointer)
 		// saved register parameters (for now, see above) as:
@@ -628,13 +633,14 @@ class X86_64Encoder extends Target {
 		// 		  RDX / XMM1 (as needed)
 		// 		  R8 / XMM2 (as needed)
 		// 		  R9 / XMM3 (as needed)
+		//		  local variables
+		//		  possible 8-byte padding to align stack on 16 byte boundary
+		//		  32-byte register save area (per Win64 ABI)
 		//    On Linux (non-floating and floating arguments can be intermixed, register are in order within each subset):
 		//		  RDI, RSI, RDX, RCX, R8, R9
 		//         XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7
 		// 		  local variables
 		//		  possible 8-byte padding to align stack on 16 byte boundary
-		//		  32-byte register save area (per Win64 ABI)
-		//		  TODO: Remove 32-byte register save area on Linux
 		//
 		int regStackOffset = 0;
 		if (scope.hasThis()) {
@@ -1740,7 +1746,7 @@ class X86_64Encoder extends Target {
 			emit(0x0f);
 			emit(0x10);
 			if (reg == R.RSP) {
-				if (offset >= -128 || offset <= 127) {
+				if (offset >= -128 && offset <= 127) {
 					modRM(1, rmValues[dest], 4);
 					sib(0, 4, 4);
 					emit(byte(offset));
@@ -1761,7 +1767,7 @@ class X86_64Encoder extends Target {
 			emit(0x0f);
 			emit(0x10);
 			if (reg == R.RSP) {
-				if (offset >= -128 || offset <= 127) {
+				if (offset >= -128 && offset <= 127) {
 					modRM(1, rmValues[dest], 4);
 					sib(0, 4, 4);
 					emit(byte(offset));
@@ -1779,7 +1785,7 @@ class X86_64Encoder extends Target {
 		case	MOV:
 			emitRex(family, null, dest, reg);
 			emit(byte(opcodes[instruction] + 0x03));
-			if (offset >= -128 || offset <= 127) {
+			if (offset >= -128 && offset <= 127) {
 				modRM(1, rmValues[dest], rmValues[reg]);
 				emit(byte(offset));
 			} else {
@@ -1802,7 +1808,7 @@ class X86_64Encoder extends Target {
 			emit(0x0f);
 			emit(0x11);
 			if (dest == R.RSP) {
-				if (offset >= -128 || offset <= 127) {
+				if (offset >= -128 && offset <= 127) {
 					modRM(1, rmValues[reg], 4);
 					sib(0, 4, 4);
 					emit(byte(offset));
@@ -1812,7 +1818,7 @@ class X86_64Encoder extends Target {
 					emitInt(offset);
 				}
 			} else {
-				if (offset >= -128 || offset <= 127) {
+				if (offset >= -128 && offset <= 127) {
 					modRM(1, rmValues[reg], rmValues[dest]);
 					emit(byte(offset));
 				} else {
@@ -1828,7 +1834,7 @@ class X86_64Encoder extends Target {
 			emit(0x0f);
 			emit(0x11);
 			if (dest == R.RSP) {
-				if (offset >= -128 || offset <= 127) {
+				if (offset >= -128 && offset <= 127) {
 					modRM(1, rmValues[reg], 4);
 					sib(0, 4, 4);
 					emit(byte(offset));
@@ -1838,7 +1844,7 @@ class X86_64Encoder extends Target {
 					emitInt(offset);
 				}
 			} else {
-				if (offset >= -128 || offset <= 127) {
+				if (offset >= -128 && offset <= 127) {
 					modRM(1, rmValues[reg], rmValues[dest]);
 					emit(byte(offset));
 				} else {
@@ -1855,7 +1861,7 @@ class X86_64Encoder extends Target {
 				switch (family) {
 				case	UNSIGNED_8:
 					emit(opcodes[instruction]);
-					if (offset >= -128 || offset <= 127) {
+					if (offset >= -128 && offset <= 127) {
 						modRM(1, rmValues[reg], 4);
 						sib(0, 4, 4);
 						emit(byte(offset));
@@ -1868,7 +1874,7 @@ class X86_64Encoder extends Target {
 					
 				case	SIGNED_32:
 					emit(byte(opcodes[instruction] + 0x01));
-					if (offset >= -128 || offset <= 127) {
+					if (offset >= -128 && offset <= 127) {
 						modRM(1, rmValues[reg], 4);
 						sib(0, 4, 4);
 						emit(byte(offset));
@@ -1883,7 +1889,7 @@ class X86_64Encoder extends Target {
 				case	POINTER:
 				case	ADDRESS:
 					emit(byte(opcodes[instruction] + 0x01));
-					if (offset >= -128 || offset <= 127) {
+					if (offset >= -128 && offset <= 127) {
 						modRM(1, rmValues[reg], 4);
 						sib(0, 4, 4);
 						emit(byte(offset));
@@ -1900,7 +1906,7 @@ class X86_64Encoder extends Target {
 				}
 			} else {
 				emit(byte(opcodes[instruction] + 0x01));
-				if (offset >= -128 || offset <= 127) {
+				if (offset >= -128 && offset <= 127) {
 					modRM(1, rmValues[reg], rmValues[dest]);
 					emit(byte(offset));
 				} else {
@@ -2953,7 +2959,7 @@ class X86_64Encoder extends Target {
 		switch (instruction) {
 		case	IMUL:
 			emitRex(left.type.family(), left, R(int(left.register)), R.NO_REG);
-			if (immediate >= -128 || immediate <= 127) {
+			if (immediate >= -128 && immediate <= 127) {
 				emit(0x6b);
 				modRM(left, rmValues[R(int(left.register))], byte.bytes, 0);
 				emit(byte(immediate));
@@ -3692,20 +3698,16 @@ class X86_64Encoder extends Target {
 			
 		case	FLOATING_POINT:
 			modRM(0, regOpcode, 5);
-			pointer<byte> endPtr;
+			double x;
+			boolean success;
 			ref<Constant> con = ref<Constant>(addressMode);
+			(x, success) = con.floatValue();
+			assert(success);
 			if (con.type.family() == runtime.TypeFamily.FLOAT_32) {
-				string s(con.value().c_str(), con.value().length() - 1); // omit the trailing f
-				double x = C.strtod(s.c_str(), &endPtr);
-				assert(endPtr == s.c_str() + s.length());
 				float y = float(x);
 				con.offset = _segments[Segments.DATA_4].append(&y, float.bytes);
-			} else {
-				string s = con.value();
-				double x = C.strtod(s.c_str(), &endPtr);
-				assert(endPtr == s.c_str() + s.length());
+			} else
 				con.offset = _segments[Segments.DATA_8].append(&x, double.bytes);
-			}
 			fixup(FixupKind.RELATIVE32_FPDATA, con);
 			emitInt(0);
 			break;
@@ -3846,7 +3848,7 @@ class X86_64Encoder extends Target {
 		if (b.left().type.family() == runtime.TypeFamily.STRING)
 			offset += 4;
 		if (offset != 0) {
-			if (offset >= -128 || offset <= 127)
+			if (offset >= -128 && offset <= 127)
 				mod = 1;
 			else
 				mod = 2;
@@ -4060,7 +4062,8 @@ class X86_64Encoder extends Target {
 		private ref<CodeSegment> _breakLabel;
 		private ref<CodeSegment> _continueLabel;
 
-		public JumpContext(ref<Node> controller, ref<CodeSegment> breakLabel, ref<CodeSegment> continueLabel, ref<ref<Node>[]> nodes, ref<X86_64> target, ref<JumpContext> next) {
+		public JumpContext(ref<Node> controller, ref<CodeSegment> breakLabel, ref<CodeSegment> continueLabel, 
+					       ref<ref<Node>[]> nodes, ref<X86_64> target, ref<JumpContext> next) {
 			_next = next;
 			_controller = controller;
 			_breakLabel = breakLabel;
@@ -4071,6 +4074,20 @@ class X86_64Encoder extends Target {
 					_nextCase++;
 				}
 			}
+		}
+
+		public JumpContext() {
+		}
+
+		public void copy(ref<JumpContext> source) {
+			_breakLabel = source._breakLabel;
+			_continueLabel = source._continueLabel;
+			_controller = source._controller;
+		}
+
+		void setAlternateNext(ref<JumpContext> alternateNext) {
+			assert(_next == null);
+			_next = alternateNext;
 		}
 
 		public ref<JumpContext> next() { 
@@ -4117,6 +4134,11 @@ class X86_64Encoder extends Target {
 		_jumpContext = context;
 	}
 	
+	void pushJumpContext(ref<JumpContext> context, ref<JumpContext> alternateNext) {
+		context.setAlternateNext(alternateNext);
+		_jumpContext = context;
+	}
+	
 	ref<JumpContext> jumpContext() {
 		return _jumpContext;
 	}
@@ -4160,15 +4182,11 @@ class X86_64Encoder extends Target {
 	}
 
 	public int imageLength() {
-		return pxi.X86_64SectionHeader.bytes + _staticMemoryLength;
+		return _staticMemoryLength;
 	}
 	
 	public boolean writePxiFile(storage.File pxiFile) {
-		if (pxiFile.write(&_pxiHeader, _pxiHeader.bytes) < 0)
-			return false;
-		if (pxiFile.write(_staticMemory, _staticMemoryLength) < 0)
-			return false;
-		return true;
+		return pxiFile.write(_staticMemory, _staticMemoryLength) == _staticMemoryLength;
 	}
 	
 	public ref<pxi.X86_64SectionHeader> pxiHeader() {

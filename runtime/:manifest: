@@ -4,6 +4,9 @@ Uc_functions.p
 X
 Nlinux
 Ulinux_functions.p
+Nelf
+Uelf.p
+X
 X
 Nnet
 Usockets.p
@@ -38,9 +41,6 @@ Ntest
 UcompilerTest.p
 X
 X
-Ndebug
-Udebug.p
-X
 Nprocess
 UcommandLine.p
 Uprocess.p
@@ -55,6 +55,9 @@ Ufile_io.p
 Uini_file.p
 Upath.p
 Ustorage.p
+X
+Ndebug
+Udebug.p
 X
 Ntext
 Udecoders.p

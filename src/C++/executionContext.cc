@@ -215,6 +215,12 @@ void *framePointer() {
 	return 0;
 }
 
+void *getFsSegment(void *offset) {
+	asm("mov %fs:(%rdi),%rax");
+	asm("ret");
+	return 0;
+}
+
 byte *stackTop() {
 	ExecutionContext *context = threadContext.get();
 	if (context != 0)

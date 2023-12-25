@@ -70,6 +70,7 @@ interface WSUpstream {
 class ServerWorkFactory extends rpc.WebSocketFactory<WSUpstream, WSDownstream> {
 	public boolean notifyCreation(ref<http.Request> request, 
 								  ref<rpc.WebSocket<WSUpstream, WSDownstream>> socket) {
+		printf("ServerWorkFactory\n");
 		ref<ServerWork> s = new ServerWork(socket);
 		socket.setObject(s);
 		socket.onDisconnect(s);
@@ -134,6 +135,7 @@ class ClientWork implements WSDownstream, http.DisconnectListener {
 }
 
 {							// Test 1: Simple HTTP request and response
+	printf("\n--------------- Test 1 ---------------\n\n");
 	string url = "http://localhost:" + port + "/http";
 	rpc.Client<Test> client(url);
 	client.logTo("http.client");
@@ -154,10 +156,13 @@ class ClientWork implements WSDownstream, http.DisconnectListener {
 
 {	// first, a 'correct' session, with completed messages and a graceful shutdown.
 	// down implements the WSDownstream interface and also, by convention, implements the DisconnectListener.
+	printf("\n--------------- Test 2 ---------------\n\n");
 	ClientWork down();
 	rpc.Client<WSUpstream, WSDownstream> client("ws://localhost:" + port + "/ws", "Test", down);
 	client.onDisconnect(down);
+	printf("Calling connect\n");
 	assert(client.connect() == http.ConnectStatus.OK);
+	printf("Connected\n");
 	WSUpstream up = client.proxy();
 
 	logger.debug("Start calling up");
@@ -179,6 +184,7 @@ server.start(net.ServerScope.LOCALHOST);
 port = server.httpPort();
 
 {	// now, a session where the client issues a 'long duration' call.
+	printf("\n--------------- Test 3 ---------------\n\n");
 	ClientWork down();
 	rpc.Client<WSUpstream, WSDownstream> client("ws://localhost:" + port + "/ws", "Test", down);
 	client.onDisconnect(down);

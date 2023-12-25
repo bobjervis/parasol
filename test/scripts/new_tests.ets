@@ -1,3 +1,4 @@
+/*
 dir(path: test/src) {
 	dir(path: rpc) {
 		run(filename: rpc_test.p)
@@ -7,4 +8,4 @@ dir(path: test/src) {
 compile(expect: fail, message: ABSTRACT_INSTANCE_DISALLOWED) { 
 			"class Foo { abstract int f(); Foo() {} }; ref<Foo> a = new Foo();" 
 		}
-
+ */

@@ -132,7 +132,7 @@ class ClassPage extends Page {
 			break;
 	
 		default:
-			classPage.printf("<div class=class-title>%sClass %s", t.isConcrete(null) ? "" : "Abstract ", _symbol.name());
+			classPage.printf("<div class=class-title>%sClass %s", t.isConcrete(compileContext) ? "" : "Abstract ", _symbol.name());
 			classPage.printf("</div>\n");
 			generateClassInfo(t, classPage, targetPath());
 		}

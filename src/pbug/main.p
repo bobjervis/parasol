@@ -21,6 +21,9 @@ import parasol:pbuild.thisCPU;
 import parasol:runtime;
 import parasol:storage;
 
+import parasollanguage.org:debug;
+import parasollanguage.org:cli;
+
 class PBugCommand extends process.Command {
 	public PBugCommand() {
 		finalArguments(0, int.MAX_VALUE, "[ directory | mainfile ] [ arguments ... ]");
@@ -29,7 +32,7 @@ class PBugCommand extends process.Command {
 					"\n" +
 					"If either the -a or --application options are included, the process to be debugged " +
 					"is found by searching the build scripts for a product by that name. " +
-					"In this way you don't have to find the executaable image and type its path to start an " +
+					"In this way you don't have to find the executable image and type its path to start an " +
 					"application under the debugger. " +
 					"\n" +
 					"Unless a -f or --file option is included as well, the debugger will search the current " +
@@ -69,11 +72,14 @@ class PBugCommand extends process.Command {
 					"Enables verbose output.");
 		helpOption('?', "help",
 					"Displays this help.");
-		versionOption("version", "Display the version of the pbuild app.");
+		parasolLocationOption = stringOption(0, "location", "The location of the Parasol runtime to use. " +
+					"This is useful when debugging a script rather than a compiled application.");
+		versionOption("version", "Display the version of the pbug app.");
 	}
 
 	ref<process.Option<string>> applicationOption;
 	ref<process.Option<string>> buildFileOption;
+	ref<process.Option<string>> parasolLocationOption;
 	ref<process.Option<int>> processOption;
 	ref<process.Option<boolean>> verboseOption;
 }
@@ -132,8 +138,14 @@ public int main(string[] args) {
 			printf("Application directory %s cannot be verified, cannot run it.\n", exePath);
 			return 1;
 		}
-	} else if (!storage.exists(exePath)) {
-		printf("Launching parasol script '%s'\n", exePath);
+		printf("Not yet supported\n");
+		return 1;
+	} else if (storage.exists(exePath))
+		debug.spawnParasolScript(pbugCommand.parasolLocationOption.value, exePath, arguments);
+	else {
+		printf("Not a valid script: %s\n", exePath);
+		return 1;
 	}
+	cli.consoleUI();
 	return 0;
 }

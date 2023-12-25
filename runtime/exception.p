@@ -274,12 +274,12 @@ public class Exception {
 		string output;
 		boolean locationIsExact = true;
 
-		if (_exceptionContext.exceptionType == 0)
-			locationIsExact = false;
 //		printf("    failure address %p\n", _exceptionContext.exceptionAddress);
 		address stackHigh = pointer<byte>(_exceptionContext.stackPointer) + _exceptionContext.stackSize;
 		address ip = _exceptionContext.exceptionAddress;
-		pointer<byte> ip_ptr = pointer<byte>(ip);
+		if (_exceptionContext.exceptionType == 0)
+			ip = pointer<byte>(ip) + -1;
+		ip_ptr := long(ip);
 		// If the exception address is not in Parasol code, then start by printing all possible
 		// Parasol code addresses found on thes tack, in case the C stack doesn't work out
 		if (ip_ptr < runtime.image.codeAddress() || ip_ptr >= runtime.image.highCodeAddress()) {
@@ -287,20 +287,20 @@ public class Exception {
 			int relativeSp = 0;
 			for (pointer<pointer<byte>> sp = pointer<pointer<byte>>(_exceptionContext.stackPointer);
 							sp < pointer<pointer<byte>>(stackHigh) + -2; sp++, relativeSp += address.bytes) {
-				pointer<byte> possible_ip = pointer<byte>(_exceptionContext.slot(sp));
+				possible_ip := long(_exceptionContext.slot(sp));
 				if (possible_ip >= runtime.image.codeAddress() && possible_ip < runtime.image.highCodeAddress()) {
 					int relative = int(possible_ip) - int(runtime.image.codeAddress());
 					if (possible_ip == runtime.image.entryPoint())
 						break;
-					string locationLabel = formattedLocation(possible_ip, relative, false);
+					string locationLabel = runtime.image.formattedLocation(long(possible_ip), relative);
 					output.printf("     sp+0x%x: %s\n", relativeSp, locationLabel);
 				}
 			}
 			output.printf("\n");
 		}
 		string tag = "->";
-		int lowCode = int(runtime.image.codeAddress());
-		int staticMemoryLength = int(runtime.image.highCodeAddress()) - lowCode;
+		long lowCode = runtime.image.codeAddress();
+		int staticMemoryLength = int(runtime.image.highCodeAddress() - lowCode);
 		int ignoreFrames = ignoreTopFrames();
 		pointer<address> frame;
 		int(address, address) comparator = comparatorCurrentIp;
@@ -312,15 +312,14 @@ public class Exception {
 				break;
 			comparator = comparatorReturnAddress;
 
-			int relative = int(ip) - lowCode;
+			relative := int(long(ip) - lowCode);
 			if (ignoreFrames > 0)
 				ignoreFrames--;
 			else {
-				string locationLabel = formattedLocation(ip, relative, locationIsExact);
+				string locationLabel = runtime.image.formattedLocation(long(ip) - 1, relative);
 				output.printf(" %2s %s\n", tag, locationLabel);
 				tag = "";
 			}
-			locationIsExact = false;
 		}
 		return output;
 	}
@@ -355,7 +354,6 @@ public class Exception {
 		pointer<pxi.X86_64ExceptionEntry> ee = pointer<pxi.X86_64ExceptionEntry>(exceptionsAddress());
 		pointer<pxi.X86_64ExceptionEntry> eeFirst = ee;
 		int count = exceptionsCount();
-		pointer<byte> lowCode = runtime.image.codeAddress();
 		for (;;) {
 //			printf("  frame = %p \n", frame);
 			ref<pxi.X86_64ExceptionEntry> ee;
@@ -385,8 +383,8 @@ public class Exception {
 		pointer<address> frame;
 		pointer<byte> ip;
 
-		pointer<byte> lowCode = runtime.image.codeAddress();
-		pointer<byte> highCode = runtime.image.highCodeAddress();
+		lowCode := pointer<byte>(runtime.image.codeAddress());
+		highCode := pointer<byte>(runtime.image.highCodeAddress());
 		pointer<pxi.X86_64ExceptionEntry> ee = pointer<pxi.X86_64ExceptionEntry>(exceptionsAddress());
 		int count = exceptionsCount();
 		if (count == 0) {
@@ -473,8 +471,8 @@ public class Exception {
 			printf("No exceptions table for this image.\n");
 			process.exit(1);
 		}
-		pointer<byte> lowCode = runtime.image.codeAddress();
-		pointer<byte> highCode = runtime.image.highCodeAddress();
+		lowCode := pointer<byte>(runtime.image.codeAddress());
+		highCode := pointer<byte>(runtime.image.highCodeAddress());
 		int(address, address) comparator = comparatorCurrentIp;
 		address stackTop = address(long(_exceptionContext.stackBase) + _exceptionContext.stackSize);
 		pointer<address> plausibleEnd = pointer<address>(stackTop) + -2;
@@ -1064,77 +1062,6 @@ class ExceptionContext {
 		printf("    exception type             %x\n", unsigned(exceptionType));
 		printf("    exception flags            %x\n", unsigned(exceptionFlags));
 	}
-}
-/**
- * Construct a string representing a machine location, including information about relative location
- * within a compiled image.
- *
- * @param ip The machine address to obtain a source location for.
- *
- * @param offset The offset into the Parasol code image where the symbol could be found. If
- * the value is negative, then only the ip is used and it is assumed to be outside Parasol code.
- *
- * @param locationIsExact true if this is the exact address you care about. For example, if
- * it is the return address from a function, it may be pointing to the next source line so
- * pass false to this parameter and the code will adjust to look for the location one byte before
- * the given address.
- *
- * @return The formatted string.
- *
- * If the location is outside a compiled Parasol image, a native operating system utility is used to obtain
- * as good a symbolic address as reasonably possible. If no good symbolic address is available, then the
- * hex address is formatted.
- *
- * If the location is inside a compile Parasol image, the Parasol source filename and line number is returned,
- * along with the image-relative offset of the machine code.
- */
-public string formattedLocation(address ip, int offset, boolean locationIsExact) {
-	string filename;
-	int lineNumber;
-	(filename, lineNumber) = runtime.image.getSourceLocation(ip, locationIsExact);
-	if (filename == null) {
-		return formattedExternalLocation(ip);
-	} else {
-		string result;
-		result.printf("%s %d", filename, lineNumber);
-		if (offset != 0)
-			result.printf(" (@%x)", offset);
-		return result;
-	}
-}
-/*
-class FileStat {
-	string  filename;
-	boolean _parsed;
-	boolean _rootFile;
-    string _domain;
-    address _namespaceSymbol;
-    address _namespaceNode;
-    address _fileScope;
-    address _tree;
-    boolean _scopesBuilt;
-    boolean _staticsInitialized;
-    string _source;
-    ref<compiler.Scanner> scanner;
-}
- */
-private string formattedExternalLocation(address ip) {
-	string result;
-	if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
-	} else if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
-		linux.Dl_info info;
-
-		if (ip != null && linux.dladdr(ip, &info) != 0) {
-			long symOffset = long(ip) - long(info.dli_saddr);
-			if (info.dli_sname == null)
-				result.printf("%s (@%p)", string(info.dli_fname), ip); 
-			else
-				result.printf("%s %s+0x%x (@%p)", string(info.dli_fname), string(info.dli_sname), symOffset, ip); 
-			return result;
-		}
-	}
-	result.printf("@%p", ip);
-	return result;
 }
 
 private Monitor serializeDumps;

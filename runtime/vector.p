@@ -244,6 +244,15 @@ private int hash(string a) {
 private int compare(string a, string b) {
 	return a.compare(b);
 }
+
+private int hash(long a) {
+	return int(a);
+}
+
+private int compare(long a, long b) {
+	return int(a - b);
+}
+
 /**
  * This is the template class that defines the type for arrays.
  *

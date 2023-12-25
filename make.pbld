@@ -214,6 +214,7 @@ tests(suite: full) {
 }
 
 command(name: bdiff, main: src/util/bdiff.p)
+command(name: dumpelf, main: src/util/dumpelf.p)
 command(name: dumppxi, main: src/util/dumppxi.p)
 command(name: genHeader, main: src/util/genHeader.p)
 command(name: genSqlProxy, main: src/util/genSqlProxy.p)

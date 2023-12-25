@@ -499,7 +499,6 @@ class WebSocketReader<class OBJECT, class PROXY> extends AbstractWebSocketReader
 	 */
 	public boolean readMessages() {
 		_transport.rpcWebSocket.refer();
-//		logger.debug("%p in %s readMessages, socket %p connection %p", this, _transport.socket.server() ? "server" : "client", _transport.socket, _transport.socket.connection());
 		for (;;) {
 			byte[] message;
 			boolean success;

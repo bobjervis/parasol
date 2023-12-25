@@ -213,7 +213,7 @@ public class Thread {
 	/**
 	 * Start a Thread running.
 	 *
-	 * @param func The function to call on start-up. The thread exists when this
+	 * @param func The function to call on start-up. The thread exits when this
 	 * function returns or calls {@link parasol:thread.exit}.
 	 *
 	 * @param parameter This value is passed to the functionon startup.

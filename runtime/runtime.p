@@ -27,10 +27,11 @@ import parasol:thread.Thread;
 import parasol:pxi;
 import parasol:memory;
 import parasol:storage;
+import parasol:thread;
 /**
  * This is a special variable used to control compile-time conditional compilation.
  *
- * For now, this is hacked in to the compiler optimization logic to coomunicate precisely which compile
+ * For now, this is hacked in to the compiler optimization logic to communicate precisely which compile
  * target was selected to build this runtime.
  */
 @CompileTarget
@@ -47,11 +48,11 @@ public enum Target {
 	/**
 	 * @ignore RESERVED - DO NOT USE
 	 */
-	NOT_USED_1,
+	X86_64_LNX_NEW,
 	/**
 	 * @ignore RESERVED - DO NOT USE
 	 */
-	NOT_USED_2,
+	NOT_USED_1,
 	/**
 	 * This is an Intel x64-64 machine instruction set running the Linux operating system.
 	 */
@@ -63,7 +64,7 @@ public enum Target {
 	/**
 	 * This is an Intel x64-64 machine instruction set running the Linux operating system.
 	 * The section includes source locations maps (used in stack traces and useful for a
-	 * debugger
+	 * debugger)
 	 */
 	X86_64_LNX_SRC,
 	/**
@@ -100,6 +101,17 @@ public abstract address returnAddress();
 @Linux("libparasol.so.1", "framePointer")
 @Windows("parasol.dll", "framePointer")
 public abstract address framePointer();
+/**
+ * This method returns a value accessible from the FS segment register.
+ *
+ * @param The offset from FS to retrieve. This value should be 8-byte aligned.
+ *
+ * @return The long value stored at that location.
+ */
+@Linux("libparasol.so.1", "getFsSegment")
+@Windows("parasol.dll", "getFsSegment")
+public abstract address getFsSegment(long offset);
+
 /**
  * Allocate a large page-aligned region of storage, outside the Heap.
  *
@@ -162,11 +174,16 @@ public void freeRegion(address region, long length) {
  * passed into the running instance. These parameters are set by the parasolrt executable when
  * launching a compiled image, or set by the Parasol compiler when running a new image.
  *
- * 
+ * Image objects are also created by dumppxi to hold an in-memory copy of a pxi file, and by pbug
+ * to make and examine a copy of the Parasol image being debugged.
+ *
+ * To support all these scenarios, the _image parameter is the pointer to the local, in-memory
+ * image, while _imageAddr is the file offset (for dumppxi)
  */
 public class Image {
 	private ref<pxi.X86_64SectionHeader> _pxiHeader;
 	private pointer<byte> _image;
+	private long _imageAddr;
 	private int _imageLength;
 	private ref<pxi.X86_64SourceMap> _sourceMap;
 	private pointer<int> _codeAddresses;
@@ -181,7 +198,15 @@ public class Image {
 	Image() {
 		_pxiHeader = pxiHeader();
 		_image = pointer<byte>(imageAddress());
+		_imageAddr = long(_image);
 		_imageLength = imageLength();
+	}
+
+	public Image(long imageAddr, address image, int length) {
+		_imageAddr = imageAddr;
+		_image = pointer<byte>(image);
+		_pxiHeader = ref<pxi.X86_64SectionHeader>(image);
+		_imageLength = length;
 	}
 	/**
 	 * Return the version of the image.
@@ -197,11 +222,70 @@ public class Image {
 		} else
 			return null;
 	}
+	/**
+	 * Construct a string representing a machine location, including information about relative location
+	 * within a compiled image.
+	 *
+	 * @param ip The machine address to obtain a source location for.
+	 *
+	 * @param offset The offset into the Parasol code image where the symbol could be found. If
+	 * the value is negative, then only the ip is used and it is assumed to be outside Parasol code.
+	 *
+	 * @param locationIsExact true if this is the exact address you care about. For example, if
+	 * it is the return address from a function, it may be pointing to the next source line so
+	 * pass false to this parameter and the code will adjust to look for the location one byte before
+	 * the given address.
+	 *
+	 * @return The formatted string.
+	 *
+	 * If the location is outside a compiled Parasol image, a native operating system utility is used to obtain
+	 * as good a symbolic address as reasonably possible. If no good symbolic address is available, then the
+	 * hex address is formatted.
+	 *
+	 * If the location is inside a compile Parasol image, the Parasol source filename and line number is returned,
+	 * along with the image-relative offset of the machine code.
+	 */
+	public string formattedLocation(long ip, int offset) {
+		string filename;
+		int lineNumber;
+		(filename, lineNumber) = getSourceLocation(ip);
+		if (filename == null) {
+			return formattedExternalLocation(ip);
+		} else {
+			string result;
+			result.printf("%s %d", filename, lineNumber);
+			if (offset != 0)
+				result.printf(" (@%x)", offset);
+			return result;
+		}
+	}
+
+	private static string formattedExternalLocation(long ip) {
+		string result;
+		if (compileTarget == Target.X86_64_WIN) {
+		} else if (compileTarget == Target.X86_64_LNX) {
+			linux.Dl_info info;
+	
+			if (ip != 0 && linux.dladdr(address(ip), &info) != 0) {
+				long symOffset = ip - long(info.dli_saddr);
+				if (info.dli_sname == null)
+					result.printf("%s (@%p)", string(info.dli_fname), ip); 
+				else
+					result.printf("%s %s+0x%x (@%p)", string(info.dli_fname), string(info.dli_sname), symOffset, ip); 
+				return result;
+			}
+		}
+		result.printf("@%x", ip);
+		return result;
+	}
+	
 	/** 
  	 * Return the source filename and line number corresponding to the machine address passed
 	 * to this function.
 	 *
 	 * @param ip The instruction pointer to be found in the image's source information.
+	 * Note that to request the source line of a return address, the value passed should be one
+	 * less than the return address.
 	 *
 	 * @param isReturnAddress If true, the ip parameter is the stored return address. Source line
 	 * information should account for this detail since in some cases, the return address of a
@@ -212,9 +296,9 @@ public class Image {
 	 * @return The line number pf the indicated location, or -1 if the code location is not in
 	 * Parasol code.
 	 */
-	public string, int getSourceLocation(address ip, boolean isReturnAddress) {
-		if (pointer<byte>(ip) < _image ||
-			highCodeAddress() <= pointer<byte>(ip))
+	public string, int getSourceLocation(long ip) {
+		if (ip < _imageAddr ||
+			highCodeAddress() <= ip)
 			return null, -1;
 		if (_sourceMap == null) {
 			_sourceMap = ref<pxi.X86_64SourceMap>(_image + _pxiHeader.sourceMapOffset);
@@ -237,13 +321,7 @@ public class Image {
 			_lineFileOffsets = _baseLineNumbers + _sourceMap.sourceFileCount;
 		}
 
-		int offset = int(ip) - int(_image);
-		// This avoids the problem that a call instruction pushes the next instruction address
-		// as the return address, which may be the start of another source line. A call
-		// instruction is also guaranteed to be more than 1 byte long. So, unless the return
-		// addresses are being spoofed in some way, this should produce clean stack traces.
-		if (!isReturnAddress)
-			offset--;
+		int offset = int(ip - _imageAddr);
 		
 		int[] lookup(_codeAddresses, _sourceMap.codeLocationsCount);
 			
@@ -258,28 +336,79 @@ public class Image {
 		int fileOffset = _fileOffsets[index];
 		string filename = string(_image + _filenames[fileIndex]);
 
+
 //		printf("File %d. %s offset %d\n", fileIndex, filename, fileOffset);
 
 		int lineEntryOffset = _firstLineNumbers[fileIndex];
 
 		int[] lookupLine(pointer<int>(pointer<byte>(_lineFileOffsets) + lineEntryOffset),
 							_linesCounts[fileIndex]);
- 
+ 		filename = storage.makeCompactPath(filename, "./xyz");
 		int lineNumber = lookupLine.binarySearchClosestGreater(fileOffset) + 1 + _baseLineNumbers[fileIndex];
 //		printf("lineNumber = %d base line number %d\n", lineNumber, _baseLineNumbers[fileIndex]);
 		return filename, lineNumber;
 	}
 	/** @ignore */
-	public pointer<byte> codeAddress() {
-		return _image;
+	public long codeAddress() {
+		return _imageAddr;
 	}
 	/** @ignore */
-	public pointer<byte> highCodeAddress() {
-		return _image + _pxiHeader.typeDataOffset;
+	public long highCodeAddress() {
+		return _imageAddr + _pxiHeader.typeDataOffset;
 	}
 
-	public address entryPoint() {
-		return _image + _pxiHeader.entryPoint;
+	public long entryPoint() {
+		return _imageAddr + _pxiHeader.entryPoint;
+	}
+
+	public void printHeader(long fileOffset) {
+		printf("\n");
+		if (_pxiHeader.versionOffset > 0 && _pxiHeader.versionOffset < _imageLength) {
+			v := _image + _pxiHeader.versionOffset;
+			printf("        version  %20s\n", string(v));
+		} else
+			printf("        version offset       %8x\n", _pxiHeader.versionOffset);
+		if (fileOffset >= 0)
+			printf("        image offset         %8x\n", fileOffset);
+		printf("        entryPoint           %8x\n", _pxiHeader.entryPoint);
+		printf("        vtablesOffset        %8x", _pxiHeader.vtablesOffset);
+		if (fileOffset >= 0)
+			printf(" (file offset %x)", _pxiHeader.vtablesOffset + fileOffset);
+		printf("\n");
+		printf("        vtableData           %8x\n", _pxiHeader.vtableData);
+		printf("        typeDataOffset       %8x", _pxiHeader.typeDataOffset);
+		if (fileOffset >= 0)
+			printf(" (file offset %x)", _pxiHeader.typeDataOffset + fileOffset);
+		printf("\n");
+		printf("        typeDataLength       %8x\n", _pxiHeader.typeDataLength);
+		printf("        stringsOffset        %8x", _pxiHeader.stringsOffset);
+		if (fileOffset >= 0)
+			printf(" (file offset %x)", _pxiHeader.stringsOffset + fileOffset);
+		printf("\n");
+		printf("        stringsLength        %8x\n", _pxiHeader.stringsLength);
+		printf("        nativeBindingsOffset %8x", _pxiHeader.nativeBindingsOffset);
+		if (fileOffset >= 0)
+			printf(" (file offset %x)", _pxiHeader.nativeBindingsOffset + fileOffset);
+		printf("\n");
+		printf("        nativeBindingsCount  %8d.\n", _pxiHeader.nativeBindingsCount);
+		printf("        relocationOffset     %8x", _pxiHeader.relocationOffset);
+		if (fileOffset >= 0)
+			printf(" (file offset %x)", _pxiHeader.relocationOffset + fileOffset);
+		printf("\n");
+		printf("        relocationCount      %8d.\n", _pxiHeader.relocationCount);
+		printf("        builtInsText         %8x", _pxiHeader.builtInsText);
+		if (fileOffset >= 0)
+			printf(" (file offset %x)", _pxiHeader.builtInsText + fileOffset);
+		printf("\n");
+		printf("        exceptionsOffset     %8x", _pxiHeader.exceptionsOffset);
+		if (fileOffset >= 0)
+			printf(" (file offset %x)", _pxiHeader.exceptionsOffset + fileOffset);
+		printf("\n");
+		printf("        exceptionsCount      %8d.\n", _pxiHeader.exceptionsCount);
+		printf("        sourceMapOffset      %8x", _pxiHeader.sourceMapOffset);
+		if (fileOffset >= 0)
+			printf(" (file offset %x)", _pxiHeader.sourceMapOffset + fileOffset);
+		printf("\n");
 	}
 }
 /**
@@ -291,6 +420,23 @@ public class Image {
  * various meta-data stored in the image.
  */
 public Image image;
+/**
+ * This is defined in C++ code and provides the necessary context information when starting up any
+ * Parasol thread.
+ */
+public class ExecutionContext {
+	public pointer<byte> _stackTop;
+	public ref<Exception> _exception;
+	public ref<pxi.X86_64SectionHeader> _pxiHeader;
+	public address _image;
+	public pointer<pointer<byte>> _argv;
+	public int _argc;
+	public address _sourceLocations;
+	public int _sourceLocationsCount;
+	public ref<thread.Thread> _parasolThread;
+	public pointer<address> _runtimeParameters;
+	public int _runtimeParametersCount;
+}
 
 public class SourceLocation {
 	public ref<SourceFile>		file;			// Source file containing this location
@@ -485,7 +631,7 @@ public string stackTrace() {
  */
 public string stackTrace(int skipFrames) {
 	string output;
-	int lowCode = int(image.codeAddress());
+	long lowCode = image.codeAddress();
 	address ip = returnAddress();
 	address frame = framePointer();
 	address top = stackTop();
@@ -497,14 +643,118 @@ public string stackTrace(int skipFrames) {
 		if (long(frame) > long(top))
 			break;		
 		ip = lastFrame[1];
-		int relative = int(ip) - lowCode;
-		string locationLabel = exception.formattedLocation(ip, relative, false);
+		int relative = int(long(ip) - lowCode);
+		string locationLabel = image.formattedLocation(long(ip) - 1, relative);
 		if (skipFrames <= 0)
 			output.printf("%s\n", locationLabel);
 		else
 			skipFrames--;
 	}
 	return output;
+}
+/**
+ * A Virtual Hardware Stack.
+ *
+ * This provides a common interface for code that wants to do stack traces and inspection of local
+ * variables.
+ *
+ * This is a base class. Specific implementations will implement the details of fetching data from the
+ * stack.
+ * {@link parasol:exception.ExceptionContext} provides an implementation for a snapshot of the stack where a Parasol Exception was
+ * thrown.
+ * {@link parasol:debug.DebugStack} provides an implementation suitable for a debugger.
+ *
+ * 
+ */
+public class VirtualStack {
+	protected long _stackBase;                                  // The base address (smallest accessible address)
+	protected int _stackSize;                                   // The length of the virtual stack
+
+	public VirtualStack(long base, int size) {
+		_stackBase = base;
+		_stackSize = size;
+	}
+
+	public VirtualStack() {
+	}
+
+	public boolean valid(address stackAddress) {
+		return valid(long(stackAddress));
+	}
+
+	public long base() {
+		return _stackBase;
+	}
+
+	public int size() {
+		return _stackSize;
+	}
+
+	public boolean valid(long stackAddress) {
+		return _stackBase <= stackAddress &&
+				stackAddress < _stackBase + _stackSize;
+	}
+
+	public long slot(address stackAddress) {
+		return slot(long(stackAddress));
+	}
+
+	public abstract long slot(long stackAddress);
+	/**
+	 * This method crawls the stack by one frame.
+	 *
+	 * This will typically start with the current value of rbp.
+	 * If this is a Parasol function, or many C functions, the rbp will be the function's frame pointer.
+	 * 
+	 * Each successive call should pass the previous returned frame value and so on until a null frame value is returned.
+	 *
+	 * @return The frame pointer value of the caller.
+	 * @return The return address in the caller of 
+	 */
+	public long, long nextFrame(long lastFrame) {
+		long stackTop = _stackBase + _stackSize;
+		long searchEnd = stackTop - 2 * address.bytes;
+		long frame;
+		long ip;
+		boolean ipValid;
+
+		if (lastFrame < _stackBase || lastFrame >= searchEnd)
+			lastFrame = _stackBase - 2 * address.bytes;
+		else {
+			frame = slot(lastFrame);
+			ip = slot(lastFrame + address.bytes);
+			ipValid = true;
+			if (frame >= lastFrame + 2 * address.bytes && frame < searchEnd)
+				return frame, ip;
+		}
+
+
+		// For whatever reason, the frame we are trying to use as the next place to start looking
+		// for a return address is no good, so guess by checking all possible values. As soon as we
+		// see a stack slot containing a possible next 
+		for (frame = lastFrame + 2 * address.bytes; ; frame += address.bytes) {
+			if (frame >= searchEnd) {
+				frame = 0;
+				break;
+			}
+			nextFrame := slot(frame);
+			if (nextFrame >= frame + 2 * address.bytes && nextFrame < searchEnd) {
+				if (!ipValid) {						// This is the case when you are starting the stack trace,
+													// So, rip for the top-of-stack is known from the thread registers.
+													// But that RBP is not a valid stack address for this thread.
+													// So, the slot we found is the first potential saved-rbp and our
+													// hope is that the ip is next. Actually, this code should search
+													// starting here - looking for a code address somewhere in the process.
+					ip = slot(frame + address.bytes);
+					frame = nextFrame;
+				}
+				break;
+			}
+		}
+
+		return frame, ip;
+	} 
+
 }
 
 

@@ -105,7 +105,25 @@ int main(string[] args) {
 	d = 5.0f;
 	
 	assert(d * 2.5f == 12.5f);
-	
+
+	float i = 7; 
+
+	if (0 < i) ; else assert(false);
+	if (0 > i) assert(false);
+	if (0 <= i) ; else assert(false);
+	if (0 >= i) assert(false);
+	if (0 <> i) ; else assert(false);
+	if (0 <>= i) ; else assert(false);
+	if (float.NaN <>= i) assert(false);
+	if (0 != i) ; else assert(false);
+	if (0 !< i) assert(false);
+	if (0 !> i) ; else assert(false);
+	if (0 !<= i) assert(false);
+	if (0 !>= i) ; else assert(false);
+	if (0 !<> i) assert(false);
+	if (0 !<>= i) assert(false);
+	if (float.NaN !<>= i) ; else assert(false);
+
 	return 0;
 }
 

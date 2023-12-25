@@ -103,9 +103,10 @@ public class Disassembler {
 	}
 	
 	public boolean disassemble() {
-		printHeader(_pxiHeader, -1, _physical);
+		runtime.Image image(long(_physical), _physical, _imageLength);
+		image.printHeader(-1);
 		printf("\n");
-		_offset = 0;
+		_offset = pxi.X86_64SectionHeader.bytes;
 		_rex = 0;
 		_operandSize = false;
 		_sourceIndex = 0;
@@ -1846,54 +1847,3 @@ escape0Fmnemonics[0x8d] = "jge";
 escape0Fmnemonics[0x8e] = "jle";
 escape0Fmnemonics[0x8f] = "jg";
 
-public void printHeader(ref<pxi.X86_64SectionHeader> header, long fileOffset, pointer<byte> image) {
-	printf("\n");
-	if (image != null) {
-		if (header.versionOffset > 0) {
-			v := image + header.versionOffset;
-			printf("        version  %20s\n", *ref<string>(&v));
-		} else
-			printf("        version offset       %8x\n", header.versionOffset);
-	}
-	if (fileOffset >= 0)
-		printf("        image offset         %8x\n", fileOffset);
-	printf("        entryPoint           %8x\n", header.entryPoint);
-	printf("        vtablesOffset        %8x", header.vtablesOffset);
-	if (fileOffset >= 0)
-		printf(" (file offset %x)", header.vtablesOffset + fileOffset);
-	printf("\n");
-	printf("        vtableData           %8x\n", header.vtableData);
-	printf("        typeDataOffset       %8x", header.typeDataOffset);
-	if (fileOffset >= 0)
-		printf(" (file offset %x)", header.typeDataOffset + fileOffset);
-	printf("\n");
-	printf("        typeDataLength       %8x\n", header.typeDataLength);
-	printf("        stringsOffset        %8x", header.stringsOffset);
-	if (fileOffset >= 0)
-		printf(" (file offset %x)", header.stringsOffset + fileOffset);
-	printf("\n");
-	printf("        stringsLength        %8x\n", header.stringsLength);
-	printf("        nativeBindingsOffset %8x", header.nativeBindingsOffset);
-	if (fileOffset >= 0)
-		printf(" (file offset %x)", header.nativeBindingsOffset + fileOffset);
-	printf("\n");
-	printf("        nativeBindingsCount  %8d.\n", header.nativeBindingsCount);
-	printf("        relocationOffset     %8x", header.relocationOffset);
-	if (fileOffset >= 0)
-		printf(" (file offset %x)", header.relocationOffset + fileOffset);
-	printf("\n");
-	printf("        relocationCount      %8d.\n", header.relocationCount);
-	printf("        builtInsText         %8x", header.builtInsText);
-	if (fileOffset >= 0)
-		printf(" (file offset %x)", header.builtInsText + fileOffset);
-	printf("\n");
-	printf("        exceptionsOffset     %8x", header.exceptionsOffset);
-	if (fileOffset >= 0)
-		printf(" (file offset %x)", header.exceptionsOffset + fileOffset);
-	printf("\n");
-	printf("        exceptionsCount      %8d.\n", header.exceptionsCount);
-	printf("        sourceMapOffset      %8x", header.sourceMapOffset);
-	if (fileOffset >= 0)
-		printf(" (file offset %x)", header.sourceMapOffset + fileOffset);
-	printf("\n");
-}

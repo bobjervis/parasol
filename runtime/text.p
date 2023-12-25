@@ -395,6 +395,23 @@ public class string extends String<byte> {
 		appendDigits(value);		
 	}
 	/**
+	 * A constructor consisting of repeated Unicode characters
+	 *
+	 * This constructs a string consisting of zero or more Unicode characters.
+	 * Depending on the value of the codepoint, the encoding will use UTF-8 and
+	 * so may consume several times the repeat count in bytes.
+	 *
+	 * @param codePoint The Unicode codepoint to be set
+	 * @param repeat The number of characters to appear.
+	 *
+	 * @exception IllegalArgumentException thrown if repeat is negative.
+	 */	
+	public string(int codepoint, int repeat) {
+		if (repeat < 0)
+			throw IllegalArgumentException("repeat count must be positive: " + repeat);
+		fill(codepoint, repeat);
+	}
+	/**
 	 * A constructor converting from a boolean
 	 *
 	 * This constructs a string consisting of either {@code true} or
@@ -990,6 +1007,26 @@ public class string extends String<byte> {
 		return output;
 	}
 
+	/**
+	 * Add repeated Unicode characters to a string
+	 *
+	 * This constructs a string consisting of zero or more Unicode characters.
+	 * Depending on the value of the codepoint, the encoding will use UTF-8 and
+	 * so may consume several times the repeat count in bytes.
+	 *
+	 * @param codePoint The Unicode codepoint to be set
+	 * @param repeat The number of characters to appear.
+	 *
+	 * @exception IllegalArgumentException thrown if repeat is negative.
+	 */	
+	public void fill(int codepoint, int repeat) {
+		if (repeat < 0)
+			throw IllegalArgumentException("repeat count must be positive: " + repeat);
+		StringWriter w(this);
+		UTF8Encoder ue(&w);
+		for (int i = 0; i < repeat; i++)
+			ue.encode(codepoint);
+	}
 
 //	public long fingerprint() {
 //		return 0;
@@ -1465,14 +1502,14 @@ public class string extends String<byte> {
 	 * character given by last.
 	 *
 	 * @exception IllegalArgumentException Thrown if the first is less than zero or
-	 * greater than the length of the string, if the last is less than the first or
+	 * greater than or equal to the length of the string, if the last is less than the first or
 	 * greater than the length of the string.
 	 */
 	public substring substr(int first, int last) {
 		if (first < 0 || first > length())
-			throw IllegalArgumentException("first " + first);
+			throw IllegalArgumentException("first " + first + " len " + length());
 		if (last < first || last > length())
-			throw IllegalArgumentException("last " + last);
+			throw IllegalArgumentException("first " + first + " last " + last + " len " + length());
 		return substring(pointer<byte>(&_contents.data) + first, last - first);
 	}
 	/**

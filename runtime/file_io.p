@@ -621,6 +621,18 @@ public class File {
 		throw IllegalOperationException("read");
 		return -1; // TODO: fix when compiler handles throw statements orrectly
 	}
+	/**
+	 * Fetch the underlying OS file descriptor.
+	 *
+	 * @return A simple integer file descriptor, or -1 if this method is not supported on the host operating system.
+	 */
+	public long fd() {
+		if (runtime.compileTarget == runtime.Target.X86_64_WIN ||
+			runtime.compileTarget == runtime.Target.X86_64_LNX)
+			return _fd;
+		else
+			return -1;
+	}
 }
 /**
  * File seek operations are relative to one of three places in the file.
@@ -676,7 +688,9 @@ public class FileReader extends Reader {
 	}
 
 	public string readAll() {
-		seek(0, Seek.END);					// seek the stream to flush the buffer.
+		status := seek(0, Seek.END);					// seek the stream to flush the buffer.
+		if (status < 0)
+			return super.readAll();
 		long pos = _file.tell();
 		_file.seek(0, Seek.START);
 		string data;

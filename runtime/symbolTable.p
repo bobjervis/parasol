@@ -89,7 +89,28 @@ public class LockScope extends Scope {
 		printf(" lockTemp %p", lockTemp);
 	}
 }
-
+/**
+ * The Scope for a class definition.
+ *
+ * The identifiers defined in this scope are the members and methods of the class.
+ *
+ * <h3>Memory Layout</h3>
+ *
+ * A Parasol class follows a simple layout scheme.
+ * The layout follows the example of C and C++ for now.
+ * In this scheme, the members are arranged in the order in which they appear in the source.
+ * If a member would be assigned a position inappropriate for its type (e.g. an unsigned member assigned to an odd position)
+ * sufficient bytes are inserted as padding to give it a properly aligned position.
+ *
+ * In the future, a more efficient layout will be used that groups members in descending alignment, so
+ * that padding is minimized.
+ * When that change is made, an annotation, @Layout, will be defined that can be applied to data structures defined by
+ * C or C++ libraries.
+ *
+ * <h4>Support for Polymorphism</h4>
+ *
+ * 
+ */
 public class ClassScope extends Scope {
 	public ref<ClassType> classType;
 	
@@ -320,39 +341,20 @@ public class ClassScope extends Scope {
 		} else
 			super.checkVariableStorage(compileContext);
 	}
-	
-	public void assignVariableStorage(ref<Target> target, ref<CompileContext> compileContext) {
-		if (storageClass() == StorageClass.MEMBER) {
-			if (enclosing() != null && enclosing().storageClass() == StorageClass.TEMPLATE)
-				return;
-			int baseOffset = 0;
-			if (hasVtable(compileContext))
-				baseOffset += address.bytes;
-			int interfaceArea = _reservedInterfaceSlots * address.bytes;
-			assignStorage(target, baseOffset, interfaceArea, compileContext);
-		} else
-			super.assignVariableStorage(target, compileContext);
-	}
 
-	protected void assignStorage(ref<Target> target, int offset, int interfaceArea, ref<CompileContext> compileContext) {
-		if (variableStorage == -1) {
-			super.assignStorage(target, offset, interfaceArea, compileContext);
-			int thunkOffset = interfaceOffset(compileContext);
-			for (int i = 0; i < _interfaces.length(); i++) {
-				if (_interfaces[i].baseInterface() != null) {
-					_interfaces[i].thunkOffset = _interfaces[i].baseInterface().thunkOffset;
-				} else {
-					_interfaces[i].thunkOffset = thunkOffset;
-					thunkOffset += 8;
-				}
-			}
-			if (variableStorage == 0) {
-				if (this.class == ClassScope)
-					variableStorage = 1;
+	protected void calculateThunkOffset(ref<CompileContext> compileContext) {
+		assignMethodMaps(compileContext);
+		int thunkOffset = interfaceOffset(compileContext);
+		for (int i = 0; i < _interfaces.length(); i++) {
+			if (_interfaces[i].baseInterface() != null) {
+				_interfaces[i].thunkOffset = _interfaces[i].baseInterface().thunkOffset;
+			} else {
+				_interfaces[i].thunkOffset = thunkOffset;
+				thunkOffset += 8;
 			}
 		}
 	}
-
+	
 	public int interfaceOffset(ref<CompileContext> compileContext) {
 		ref<Type> base = assignSuper(compileContext);
 		if (base != null)
@@ -431,6 +433,8 @@ public class ClassScope extends Scope {
 				}
 			}
 			if (classType != null) {
+				if (classType.signature().startsWith("WebSocketReader<"))
+					printf("assignMethodMaps %s has %d interfaces at start\n", classType.signature(), _interfaces.length());
 				// First, copy in the base-class interface implementations.
 				if (base != null) {
 					ref<Scope> baseScope = base.scope();
@@ -453,13 +457,16 @@ public class ClassScope extends Scope {
 				}
 				// Now build out the InterfaceImplementationScope objects (for their vtables).
 				ref<ref<InterfaceType>[]> interfaces = classType.interfaces();
+				if (classType != null && classType.signature().startsWith("WebSocketReader<"))
+					printf("assignMethodMaps %s has %d interfaces after processing base class\n", classType.signature(), _interfaces.length());
 				if (interfaces != null) {
 					for (int i = 0; i < interfaces.length(); i++) {
 						ref<InterfaceType> iface = (*interfaces)[i];
 						iface.scope().assignMethodMaps(compileContext);
 						for (int j = 0; ; j++) {
 							if (j >= _interfaces.length()) {
-								ref<InterfaceImplementationScope> impl = compileContext.arena().createInterfaceImplementationScope(iface, classType, _reservedInterfaceSlots);
+								impl := compileContext.arena().createInterfaceImplementationScope(iface, classType, 
+																			_reservedInterfaceSlots);
 								if (destructor() == null)
 									createImpliedDestructor(compileContext);
 								impl.defineDestructor(null, compileContext.arena().createThunkScope(impl, destructor(), true), compileContext.pool());
@@ -603,11 +610,19 @@ public class ClassScope extends Scope {
 		}
 		return _interfaceAllowedInRPC;
 	}
-
+	/**
+	 * This is the number of interfaces implemented by this class.
+	 */
 	public int interfaceCount() {
 		return _interfaces.length();
 	}
-	
+	/**
+	 * This is the number of interfaces implemented, excluding interfaces inherited from base classes.
+	 */
+	protected int reservedInterfaceSlots() {
+		return _reservedInterfaceSlots;
+	}
+
 	public ref<ref<InterfaceImplementationScope>[]> interfaces() {
 		return &_interfaces;
 	}
@@ -1735,13 +1750,119 @@ public class Scope {
 			checkStorage(compileContext);
 		}
 	}
-	
+	/**
+	 * Assign variable storage is called early in code generation to fix the layouts of classes,
+	 * local stack frames and static storage.
+	 *
+	 * This process will also trigger creation of vtables for classes and interfaces.
+	 *
+	 * Another side-effect of this process is to assign the size of each type.
+	 *
+	 * @param target The target object which is generating code for this compile.
+	 *
+	 * @param compileContext The active CompileContext for this compile.
+	 */
 	public void assignVariableStorage(ref<Target> target, ref<CompileContext> compileContext) {
-		assignStorage(target, 0, 0, compileContext);
+		int interfaceArea;
+		int baseOffset;
+/*
+		printf("assignVariableStorage - %p %s ", this, string(storageClass()));
+		switch (storageClass()) {
+		case	AUTO:					// auto scopes are allocated using autoStorage
+		case	PARAMETER:				// parameter scopes are laid out elsewhere
+			printf(" enc %p", _enclosing);
+			break;
+		}
+		if (definition() != null)
+			definition().printTerse(1);
+		else
+			printf(" %p\n", this);
+ */
+		switch (storageClass()) {
+		case	TEMPLATE:				// templates themselves have no storage
+		case	AUTO:					// auto scopes are allocated using autoStorage
+		case	PARAMETER:				// parameter scopes are laid out elsewhere
+			break;
+
+		case	MEMBER:
+			if (enclosing() != null && enclosing().storageClass() == StorageClass.TEMPLATE)
+				return;					// the ClassScope immediately under a TEMPLATE is part of that TEMPLATE
+			if (hasVtable(compileContext))
+				baseOffset += address.bytes;
+			interfaceArea = reservedInterfaceSlots() * address.bytes;
+
+		default:
+			assignStorage(target, baseOffset, interfaceArea, compileContext);
+		}
 		if (target.verbose()) {
 			printf("assignVariableStorage %s:\n", string(_storageClass));
 			print(4, false);
 		}
+	}
+
+	protected int reservedInterfaceSlots() {
+		return 0;
+	}
+	/**
+	 * Assign storage is called during code generation to assign memory to the various
+	 * classes and interfaces.
+	 *
+	 * This logic applies to all scopes.
+	 *
+	 * @param target The target doing the code generation. This object supplies the size and
+	 * alignment information for primitive types.
+	 * @param offset An indicator of an amount of memory to reserve in the class before any interface area.
+	 * @param interfaceArea The size of the interface area for this class.
+	 */
+	protected int assignStorage(ref<Target> target, int offset, int interfaceArea, ref<CompileContext> compileContext) {
+		if (variableStorage == -1) {
+			// base will be null for non-class objects and classes without an extends clause.
+			ref<Type> base = assignSuper(compileContext);
+			int interfaceOffset;
+			if (base != null) {
+				base.assignSize(target, compileContext);
+				interfaceOffset = base.size();
+			} else
+				interfaceOffset = offset;
+			variableStorage = interfaceOffset + interfaceArea;
+//			The following method updates variableStorage with the size of the members
+			visitAll(target, offset, compileContext);
+			int alignment = maximumAlignment();
+			variableStorage = (variableStorage + alignment - 1) & ~(alignment - 1);
+			if (variableStorage == 0) {
+				if (this.class == ClassScope)
+					variableStorage = 1;
+			}
+			calculateThunkOffset(compileContext);
+		}
+		return variableStorage;
+	}
+
+	protected void visitAll(ref<Target> target, int offset, ref<CompileContext> compileContext) {
+		for (i in _symbols) {
+			ref<Symbol> sym = _symbols[i];
+			target.assignStorageToObject(sym, this, offset, compileContext);
+		}
+	}
+
+	protected void calculateThunkOffset(ref<CompileContext> compileContext) {
+	}
+
+	public int autoStorage(ref<Target> target, int offset, ref<CompileContext> compileContext) {
+		if (_storageClass == StorageClass.AUTO) {
+			assignStorage(target, offset, 0, compileContext);
+			offset = variableStorage;
+		}
+		int maxStorage = offset;
+		for (int i = 0; i < _enclosed.length(); i++) {
+			if (_enclosed[i].storageClass() == StorageClass.AUTO ||
+				_enclosed[i].storageClass() == StorageClass.LOCK)  {
+				int thisStorage = _enclosed[i].autoStorage(target, offset, compileContext);
+				if (thisStorage > maxStorage)
+					maxStorage = thisStorage;
+			}
+		}
+		return maxStorage;
 	}
 	
 	public void checkForDuplicateMethods(ref<CompileContext> compileContext) {
@@ -1848,7 +1969,7 @@ public class Scope {
 	 * @param compileContext The context of the current compile. 
 	 *
 	 * @return true if this scope is the class scope of a base class of the class whose scope is in derived.
-	 * If derived is not a class scope, the method returns false.
+	 * If this or derived is not a class scope, the method returns false.
 	 */
 	public boolean isBaseScope(ref<Scope> derived, ref<CompileContext> compileContext) {
 		return false;
@@ -2192,46 +2313,5 @@ public class Scope {
 	
 	public int firstMemberOffset(ref<CompileContext> compileContext) {
 		return 0;
-	}
-	
-	protected void assignStorage(ref<Target> target, int offset, int interfaceArea, ref<CompileContext> compileContext) {
-		if (variableStorage == -1) {
-			int interfaceOffset;
-			ref<Type> base = assignSuper(compileContext);
-			if (base != null) {
-				base.assignSize(target, compileContext);
-				interfaceOffset = base.size();
-			} else
-				interfaceOffset = offset;
-			variableStorage = interfaceOffset + interfaceArea;
-//			The following method updates variableStorage with the size of the members
-			visitAll(target, offset, compileContext);
-			int alignment = maximumAlignment();
-			variableStorage = (variableStorage + alignment - 1) & ~(alignment - 1);
-		}
-	}
-
-	protected void visitAll(ref<Target> target, int offset, ref<CompileContext> compileContext) {
-		for (i in _symbols) {
-			ref<Symbol> sym = _symbols[i];
-			target.assignStorageToObject(sym, this, offset, compileContext);
-		}
-	}
-
-	public int autoStorage(ref<Target> target, int offset, ref<CompileContext> compileContext) {
-		if (_storageClass == StorageClass.AUTO) {
-			assignStorage(target, offset, 0, compileContext);
-			offset = variableStorage;
-		}
-		int maxStorage = offset;
-		for (int i = 0; i < _enclosed.length(); i++) {
-			if (_enclosed[i].storageClass() == StorageClass.AUTO ||
-				_enclosed[i].storageClass() == StorageClass.LOCK)  {
-				int thisStorage = _enclosed[i].autoStorage(target, offset, compileContext);
-				if (thisStorage > maxStorage)
-					maxStorage = thisStorage;
-			}
-		}
-		return maxStorage;
 	}
 }

@@ -855,12 +855,12 @@ public class LeakHeap extends Allocator {
 		ref<CallSite> next;
 		long totalBytes;
 		int hits;
-		address ip;
+		long ip;
 		
 		ref<CallSite> hit(address ip, long blockSize) {
 			blockSize &= ~IN_USE_FLAG;
 			for (ref<CallSite> cs = callers; cs != null; cs = cs.next) {
-				if (cs.ip == ip) {
+				if (cs.ip == long(ip)) {
 					cs.totalBytes += blockSize;
 					cs.hits++;
 					return cs;
@@ -869,7 +869,7 @@ public class LeakHeap extends Allocator {
 			ref<CallSite> cs = new CallSite;
 			cs.next = callers;
 			callers = cs;
-			cs.ip = ip;
+			cs.ip = long(ip);
 			cs.totalBytes += blockSize;
 			cs.hits++;
 			return cs;
@@ -879,16 +879,16 @@ public class LeakHeap extends Allocator {
 			output.printf("%*.*c%d (%dKB)", indent, indent, ' ', hits, (totalBytes + 512) / 1024);
 			output.flush();
 			ref<CallSite> cs = callers;
-			if (ip == null)
+			if (ip == 0)
 				output.printf(" Total\n");
 			else {
-				long baseCodeAddress = long(runtime.image.codeAddress());
-				if (ip != leakHeap._staticScopeReturnAddress)
-					output.printf(" %s", exception.formattedLocation(ip, 0, false));
+				long baseCodeAddress = runtime.image.codeAddress();
+				if (ip != long(leakHeap._staticScopeReturnAddress))
+					output.printf(" %s", runtime.image.formattedLocation(ip - 1, 0));
 				while (cs != null && cs.next == null) {
 					// We have only one call site, so merge it with this one...
-					if (cs.ip != leakHeap._staticScopeReturnAddress)
-						output.printf(" %s", exception.formattedLocation(cs.ip, 0, false));
+					if (cs.ip != long(leakHeap._staticScopeReturnAddress))
+						output.printf(" %s", runtime.image.formattedLocation(cs.ip - 1, 0));
 					cs = cs.callers;
 				}
 				output.printf("\n");
@@ -926,7 +926,7 @@ public class LeakHeap extends Allocator {
 				output.printf("    Free %p[%x] prev %p next %p\n", fb, fb.blockSize, fb.previous, fb.next);
 		}
  */
-		root.ip = null;
+		root.ip = 0;
 		boolean hasNextFreeBlock = false;
 		for (ref<SectionHeader> sh = _sections; sh != null; sh = sh.next) {
 			pointer<byte> lastUseful = pointer<byte>(sh) + (sh.sectionSize - SectionEndSentinel.bytes);

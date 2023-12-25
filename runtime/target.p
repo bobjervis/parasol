@@ -91,6 +91,7 @@ public class Target {
 		if (compileContext.verbose())
 			printf("Targeting %s\n", string(selectedTarget));
 		switch (selectedTarget) {
+		case	X86_64_LNX_NEW:
 		case	X86_64_LNX:
 		case	X86_64_LNX_SRC:
 			target = new X86_64Lnx(compileContext.arena());

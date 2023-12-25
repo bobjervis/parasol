@@ -5,9 +5,9 @@
 #define PARASOL_HEADER_H
 enum Target {
         ST_ERROR,
+        ST_X86_64_LNX,
         ST_NOT_USED_1,
         ST_NOT_USED_2,
-        ST_X86_64_LNX,
         ST_X86_64_WIN,
         ST_X86_64_LNX_SRC,
         ST_MAX_TARGET,

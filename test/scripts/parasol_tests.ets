@@ -269,6 +269,9 @@ dir(path: test/src) {
 		run(filename: rpc_test.p)
 		run(filename: rpc_test_2.p)
 	}
+	dir(path: text) {
+		run(filename: regex_test_1.p)
+	}
 	dir(path: thread) {
 		run(filename: threadpool_test.p)
 		run(filename: thread_test.p)
@@ -320,6 +323,7 @@ compile(){"pointer<int> ip; var v = ip;" }
 compile(){"class Foo { public static Foo x(-1); Foo(int z){} }"}
 
 compile(){"long i; string formatted(i);"}
+compile() {	"int i; if (0 >= i) i = 3;" }	// constant on lhs caused crash
 
 // BinaryOperators is namespace-private, so this should fail
 compile(expect: fail) { "import parasol:compiler.BinaryOperators;" }
@@ -1143,6 +1147,34 @@ compile() { "string s; switch (s) { case \"abc\": break; }" }
 compile() { "string16 s; switch (s) { case \"abc\": break; }" }
 compile() { "substring s; switch (s) { case \"abc\": break; }" }
 compile() { "substring16 s; switch (s) { case \"abc\": break; }" }
+
+// Comparisons with constant lhs were crashing the compiler
+
+compile() {	"int i; if (0 < i) i = 3;" }
+compile() {	"int i; if (0 > i) i = 3;" }
+compile() {	"int i; if (0 <= i) i = 3;" }
+compile() {	"int i; if (0 >= i) i = 3;" }
+compile() {	"int i; if (0 <> i) i = 3;" }
+compile() {	"int i; if (0 != i) i = 3;" }
+compile() {	"int i; if (0 !< i) i = 3;" }
+compile() {	"int i; if (0 !> i) i = 3;" }
+compile() {	"int i; if (0 !<= i) i = 3;" }
+compile() {	"int i; if (0 !>= i) i = 3;" }
+compile() {	"int i; if (0 !<> i) i = 3;" }
+
+compile() {	"float i; if (0 < i) i = 3;" }
+compile() {	"float i; if (0 > i) i = 3;" }
+compile() {	"float i; if (0 <= i) i = 3;" }
+compile() {	"float i; if (0 >= i) i = 3;" }
+compile() {	"float i; if (0 <> i) i = 3;" }
+compile() {	"float i; if (0 <>= i) i = 3;" }
+compile() {	"float i; if (0 != i) i = 3;" }
+compile() {	"float i; if (0 !< i) i = 3;" }
+compile() {	"float i; if (0 !> i) i = 3;" }
+compile() {	"float i; if (0 !<= i) i = 3;" }
+compile() {	"float i; if (0 !>= i) i = 3;" }
+compile() {	"float i; if (0 !<> i) i = 3;" }
+compile() {	"float i; if (0 !<>= i) i = 3;" }
 
 // Disallowed implicit casts.
 

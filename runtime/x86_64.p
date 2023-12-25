@@ -195,8 +195,7 @@ public class X86_64Lnx extends X86_64 {
 		return runtime.Target.X86_64_LNX;
 	}
 
-	public void writePxi(ref<pxi.
-Pxi> output) {
+	public void writePxi(ref<pxi.Pxi> output) {
 		ref<X86_64LnxSection> s = new X86_64LnxSection(this);
 		output.declareSection(s);
 	}
@@ -347,15 +346,7 @@ public class X86_64 extends X86_64AssignTemps {
 	void assignStorageToScopes(int firstScope, ref<CompileContext> compileContext) {
 		for (int i = firstScope; i < _arena.scopes().length(); i++) {
 			ref<Scope> scope = (*_arena.scopes())[i];
-			switch (scope.storageClass()) {
-			case	TEMPLATE:
-			case	AUTO:
-			case	PARAMETER:
-				break;
-
-			default:
-				scope.assignVariableStorage(this, compileContext);
-			}
+			scope.assignVariableStorage(this, compileContext);
 		}
 	}
 
@@ -367,22 +358,15 @@ public class X86_64 extends X86_64AssignTemps {
 			runArgs.append(args[i].c_str());
 		int returnValue;
 		process.stdout.flush();
-		pointer<byte> generatedCode;
-		if (runtime.makeRegionExecutable(_staticMemory, _staticMemoryLength))
-			generatedCode = _staticMemory;
-		else {
-			pointer<byte> generatedCode = pointer<byte>(runtime.allocateRegion(_staticMemoryLength));
-			C.memcpy(generatedCode, _staticMemory, _staticMemoryLength);
-			if (!runtime.makeRegionExecutable(generatedCode, _staticMemoryLength)) {
-				assert(false);
-				return 0, false;
-			}
+		if (!runtime.makeRegionExecutable(_staticMemory, _staticMemoryLength)) {
+			assert(false);
+			return 0, false;
 		}
-		pointer<int> pxiFixups = pointer<int>(&generatedCode[_pxiHeader.relocationOffset]);
+		pointer<int> pxiFixups = pointer<int>(&_staticMemory[_pxiHeader.relocationOffset]);
 		pointer<long> vp;
 		for (int i = 0; i < _pxiHeader.relocationCount; i++) {
-			vp = pointer<long>(generatedCode + pxiFixups[i]);
-			*vp += long(address(generatedCode));
+			vp = pointer<long>(_staticMemory + pxiFixups[i]);
+			*vp += long(address(_staticMemory));
 		}
 		vp = pointer<long>(_staticMemory + _pxiHeader.vtablesOffset);
 		for (int i = 0; i < _pxiHeader.vtableData; i++, vp++)
@@ -642,6 +626,7 @@ public class X86_64 extends X86_64AssignTemps {
 				generateReturn(parameterScope, compileContext);
 			resolveDeferredTrys(true, compileContext);
 		} else {
+			// This is the entry point for Parasol static initializers.
 			reserveAutoStorage(scope, compileContext);
 			inst(X86.PUSH, runtime.TypeFamily.SIGNED_64, R.RBX);
 			inst(X86.PUSH, runtime.TypeFamily.SIGNED_64, R.RSI);
@@ -921,7 +906,7 @@ public class X86_64 extends X86_64AssignTemps {
 				} else {
 					if (thunk.thunkOffset() > 0)
 						inst(X86.SUB, runtime.TypeFamily.ADDRESS, firstRegisterArgument(), thunk.thunkOffset());
-					inst(X86.PUSH, runtime.TypeFamily.ADDRESS, R.RDI);
+					inst(X86.PUSH, runtime.TypeFamily.ADDRESS, firstRegisterArgument());
 					instCall(thunk.func(), compileContext);
 					inst(X86.POP, runtime.TypeFamily.ADDRESS, R.RAX);
 				}
@@ -1549,6 +1534,8 @@ public class X86_64 extends X86_64AssignTemps {
 		ref<ParameterScope> throwException = compileContext.throwExceptionScope();
 		for (int i = f().knownDeferredTrys; i < _deferredTry.length(); i++) {
 			ref<DeferredTry> dt = &_deferredTry[i];
+			if (dt.useJumpContext)
+				pushJumpContext(&dt.jumpContext, jumpContext());
 			ref<CodeSegment> outer = pushExceptionHandler(dt.exceptionHandler);
 			dt.primaryHandler.start(this);
 			int adjust = -f().autoSize;
@@ -1596,6 +1583,8 @@ public class X86_64 extends X86_64AssignTemps {
 				instCall(throwException, compileContext);
 
 			pushExceptionHandler(outer);
+			if (dt.useJumpContext)
+				popJumpContext();
 		}
 	}
 	
@@ -2146,6 +2135,11 @@ public class X86_64 extends X86_64AssignTemps {
 							assignMultiReturn(retn, nl.node, compileContext);
 							generateOutParameter(nl.node, outOffset, compileContext);
 							outOffset += nl.node.type.stackSize();
+							if (outOffset < 0) {
+								printf("outOffset = %d\n", outOffset);
+								retn.print(4);
+							}
+							assert(outOffset >= 0);					
 						}
 					}
 					if (retn.liveSymbols() != null) {
@@ -3410,7 +3404,14 @@ public class X86_64 extends X86_64AssignTemps {
 				generate(tr.finallyClause().clone(compileContext.tree()), compileContext);
 			}
 		}
-		DeferredTry dt = { tryStatement: tr, lockStatement: lockStatement, primaryHandler: primaryHandler, join: join, exceptionHandler: outer };
+		DeferredTry dt = { tryStatement: tr, lockStatement: lockStatement, 
+							primaryHandler: primaryHandler, 
+							join: join, exceptionHandler: outer };
+		jc := jumpContext();
+		if (jc != null) {
+			dt.jumpContext.copy(jc);
+			dt.useJumpContext = true;
+		}
 		_deferredTry.append(dt);
 	}
 
@@ -3623,6 +3624,8 @@ public class X86_64 extends X86_64AssignTemps {
 		case	LOCK:
 		case	SYNTAX_ERROR:
 		case	CLASS_CLEAR:
+		case	BREAK:
+		case	DEFAULT:
 			break;
 			
 		case	SEQUENCE:

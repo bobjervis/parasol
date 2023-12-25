@@ -656,6 +656,27 @@ public class Binary extends Node {
 				_left = call.fold(tree, voidContext, compileContext);
 				_right = tree.newConstant(0, location());
 				_right.type = _left.type;
+				break;
+
+			case SIGNED_8:
+			case SIGNED_16:
+			case SIGNED_32:
+			case SIGNED_64:
+			case UNSIGNED_8:
+			case UNSIGNED_16:
+			case UNSIGNED_32:
+			case UNSIGNED_64:
+			case BOOLEAN:
+			case FLOAT_32:
+			case FLOAT_64:
+				if (_left.isConstantLiteral()) {
+					if (_right.isConstantLiteral())
+						return foldConstantCompare(tree, compileContext);
+					n := tree.newBinary(op().reversedCompare(), _right.fold(tree, false, compileContext), 
+										_left.fold(tree, false, compileContext), location());
+					n.type = type;
+					return n;
+				}
 			}
 			break;
 			
@@ -955,6 +976,92 @@ public class Binary extends Node {
 		return this;
 	}
 	
+	public ref<Node> foldConstantCompare(ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
+		long i, j;
+		boolean success;
+		switch (_left.op()) {
+		case FLOATING_POINT:
+			x := ref<Constant>(_left).floatValue();
+			y := ref<Constant>(_right).floatValue();
+			switch (op()) {
+			case	EQUALITY:					success = x == y; break;
+			case	NOT_EQUAL:					success = x != y; break;
+			case	LESS:						success = x < y; break;
+			case	LESS_EQUAL:					success = x <= y; break;
+			case	LESS_GREATER_EQUAL:			success = x <>= y; break;
+			case	NOT_LESS:					success = x !< y; break;
+			case	NOT_LESS_EQUAL:				success = x !<= y; break;
+			case	NOT_LESS_GREATER_EQUAL:		success = x !<>= y; break;
+			case	GREATER:					success = x > y; break;
+			case	GREATER_EQUAL:				success = x >= y; break;
+			case	NOT_GREATER:				success = x !> y; break;
+			case	NOT_GREATER_EQUAL:			success = x !>= y; break;
+			case	LESS_GREATER:				success = x <> y; break;
+			case	NOT_LESS_GREATER:			success = x !<> y; break;
+
+			default:
+				return this;
+			}
+			if (success)
+				n := tree.newLeaf(Operator.TRUE, location());
+			else
+				n = tree.newLeaf(Operator.FALSE, location());
+			n.type = compileContext.builtInType(runtime.TypeFamily.BOOLEAN);
+			return n;
+
+		case CHARACTER:
+			i = ref<Constant>(_left).charValue();
+			j = ref<Constant>(_right).charValue();
+			break;
+
+		case INTEGER:
+		case INTERNAL_LITERAL:
+			i = ref<Constant>(_left).intValue();
+			j = ref<Constant>(_right).intValue();
+			break;
+
+		case FALSE:
+			i = 0;
+			if (_right.op() == Operator.TRUE)
+				j = 1;
+			break;
+
+		case TRUE:
+			i = 1;
+			if (_right.op() == Operator.TRUE)
+				j = 1;
+			break;
+
+		default:
+			return this;
+		}
+		switch (op()) {
+		case	EQUALITY:
+		case	NOT_LESS_GREATER:			success = i == j; break;
+		case	NOT_EQUAL:
+		case	LESS_GREATER:				success = i != j; break;
+		case	LESS:
+		case	NOT_GREATER_EQUAL:			success = i < j; break;
+		case	LESS_EQUAL:
+		case	NOT_GREATER:				success = i <= j; break;
+		case	GREATER_EQUAL:
+		case	NOT_LESS:					success = i >= j; break;
+		case	GREATER:
+		case	NOT_LESS_EQUAL:				success = i > j; break;
+		case	LESS_GREATER_EQUAL:			success = true; break;
+		case	NOT_LESS_GREATER_EQUAL:		success = false; break;
+
+		default:
+			return this;
+		}
+		if (success)
+			n := tree.newLeaf(Operator.TRUE, location());
+		else
+			n = tree.newLeaf(Operator.FALSE, location());
+		n.type = compileContext.builtInType(runtime.TypeFamily.BOOLEAN);
+		return n;
+	}
+
 	public ref<Node> foldDeclarator(ref<SyntaxTree> tree, ref<CompileContext> compileContext) {
 		if (op() == Operator.SEQUENCE) {
 			_left = _left.foldDeclarator(tree, compileContext);

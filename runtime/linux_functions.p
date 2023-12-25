@@ -192,8 +192,14 @@ public abstract int mkdir(pointer<byte> path, mode_t mode);
 @Linux("libc.so.6", "mkstemp")
 public abstract int mkstemp(pointer<byte> template);
 
+@Linux("libc.so.6", "mmap")
+public abstract address mmap(address addr, long length, int prot, int mmap_flags, long fd, long offset);
+
 @Linux("libc.so.6", "mprotect")
 public abstract int mprotect(address addr, long length, int prot);
+
+@Linux("libc.so.6", "munmap")
+public abstract int munmap(address addr, long length);
 
 @Linux("libc.so.6", "nanosleep")
 public abstract int nanosleep(ref<timespec> req, ref<timespec> rem);
@@ -274,7 +280,7 @@ public abstract pthread_t pthread_self();
 public abstract pthread_t pthread_sigmask(int how, ref<sigset_t> set, ref<sigset_t> oldset);
 
 @Linux("libc.so.6", "ptrace")
-public abstract int ptrace(int request, pid_t pid, address addr, address data);
+public abstract long ptrace(long request, long pid, address addr, address data);
 
 @Linux("libc.so.6", "ptsname_r")
 public abstract int ptsname_r(int fd, pointer<byte> buf, size_t buflen);
@@ -515,28 +521,43 @@ public void set_errno(int value) {
 	*__errno_location() = value;
 }
 
-public int PTRACE_TRACEME   =          0;
-/*
-#define PTRACE_PEEKTEXT            1
-#define PTRACE_PEEKDATA            2
-#define PTRACE_PEEKUSR             3
-#define PTRACE_POKETEXT            4
-#define PTRACE_POKEDATA            5
-#define PTRACE_POKEUSR             6
-#define PTRACE_CONT                7
-#define PTRACE_KILL                8
-#define PTRACE_SINGLESTEP          9
-
-#define PTRACE_ATTACH             16
-#define PTRACE_DETACH             17
-
-#define PTRACE_SYSCALL            24
+@Constant
+public int PTRACE_TRACEME     =        0;
+@Constant
+public int PTRACE_PEEKTEXT    =        1;
+@Constant
+public int PTRACE_PEEKDATA    =        2;
+@Constant
+public int PTRACE_PEEKUSR     =        3;
+@Constant
+public int PTRACE_POKETEXT    =        4;
+@Constant
+public int PTRACE_POKEDATA    =        5;
+@Constant
+public int PTRACE_POKEUSR     =        6;
+@Constant
+public int PTRACE_CONT        =        7;
+@Constant
+public int PTRACE_KILL        =        8;
+@Constant
+public int PTRACE_SINGLESTEP  =        9;
+@Constant
+public int PTRACE_ATTACH      =       16;
+@Constant
+public int PTRACE_DETACH      =       17;
+@Constant
+public int PTRACE_SYSCALL     =       24;
 
 /* 0x4200-0x4300 are reserved for architecture-independent additions.  */
-#define PTRACE_SETOPTIONS       0x4200
-#define PTRACE_GETEVENTMSG      0x4201
-#define PTRACE_GETSIGINFO       0x4202
-#define PTRACE_SETSIGINFO       0x4203
+
+@Constant
+public int PTRACE_SETOPTIONS  =     0x4200;
+@Constant
+public int PTRACE_GETEVENTMSG =     0x4201;
+@Constant
+public int PTRACE_GETSIGINFO  =     0x4202;
+@Constant
+public int PTRACE_SETSIGINFO  =     0x4203;
 
 
 /*
@@ -556,7 +577,9 @@ public int PTRACE_TRACEME   =          0;
  * On the successful completion, iov.len will be updated by the kernel,
  * specifying how much the kernel has written/read to/from the user's iov.buf.
  */
-#define PTRACE_GETREGSET        0x4204
+@Constant
+public int PTRACE_GETREGSET   =     0x4204;
+/*
 #define PTRACE_SETREGSET        0x4205
 
 #define PTRACE_SEIZE            0x4206
@@ -582,34 +605,111 @@ struct ptrace_peeksiginfo_args {
 /* Wait extended result codes for the above trace options.  */
 #define PTRACE_EVENT_FORK       1
 #define PTRACE_EVENT_VFORK      2
-#define PTRACE_EVENT_CLONE      3
-#define PTRACE_EVENT_EXEC       4
+*/
+@Constant
+public int PTRACE_EVENT_CLONE   =   3;
+@Constant
+public int PTRACE_EVENT_EXEC    =   4;
+/*
 #define PTRACE_EVENT_VFORK_DONE 5
-#define PTRACE_EVENT_EXIT       6
+*/
+@Constant
+public int PTRACE_EVENT_EXIT    =   6;
+/*
 #define PTRACE_EVENT_SECCOMP    7
 /* Extended result codes which enabled by means other than options.  */
 #define PTRACE_EVENT_STOP       128
 
 /* Options set using PTRACE_SETOPTIONS or using PTRACE_SEIZE @data param */
-#define PTRACE_O_TRACESYSGOOD   1
+*/
+@Constant
+public int PTRACE_O_TRACESYSGOOD    = 1;
+/*
 #define PTRACE_O_TRACEFORK      (1 << PTRACE_EVENT_FORK)
 #define PTRACE_O_TRACEVFORK     (1 << PTRACE_EVENT_VFORK)
-#define PTRACE_O_TRACECLONE     (1 << PTRACE_EVENT_CLONE)
-#define PTRACE_O_TRACEEXEC      (1 << PTRACE_EVENT_EXEC)
-#define PTRACE_O_TRACEVFORKDONE (1 << PTRACE_EVENT_VFORK_DONE)
-#define PTRACE_O_TRACEEXIT      (1 << PTRACE_EVENT_EXIT)
-#define PTRACE_O_TRACESECCOMP   (1 << PTRACE_EVENT_SECCOMP)
-
-/* eventless options */
-#define PTRACE_O_EXITKILL               (1 << 20)
-#define PTRACE_O_SUSPEND_SECCOMP        (1 << 21)
 */
+@Constant
+public int PTRACE_O_TRACECLONE      = (1 << PTRACE_EVENT_CLONE);
+@Constant
+public int PTRACE_O_TRACEEXEC       = (1 << PTRACE_EVENT_EXEC);
+/*
+#define PTRACE_O_TRACEVFORKDONE (1 << PTRACE_EVENT_VFORK_DONE)
+*/
+@Constant
+public int PTRACE_O_TRACEEXIT       = (1 << PTRACE_EVENT_EXIT);
+/*
+#define PTRACE_O_TRACESECCOMP   (1 << PTRACE_EVENT_SECCOMP)
+*/
+/* eventless options */
+@Constant
+public int PTRACE_O_EXITKILL        = (1 << 20);
+@Constant
+public int PTRACE_O_SUSPEND_SECCOMP = (1 << 21);
+
+public class ptrace_syscall_info {
+	public byte op;
+	public unsigned arch;
+	public long instruction_pointer;
+	public long stack_pointer;
+}
+
+public class ptrace_syscall_entry_info extends ptrace_syscall_info {
+	long nr;			// system call number
+	// span<long, 6> args;
+	long args0;
+	long args1;
+	long args2;
+	long args3;
+	long args4;
+	long args5;
+}
+
+public class ptrace_syscall_exit_info extends ptrace_syscall_info {
+	long rval;
+	boolean is_error;	
+}
+
+public class ptrace_syscall_seccomp_info extends ptrace_syscall_entry_info {
+	unsigned ret_data;
+}
+
+@Constant
+public int WNOHANG         = 0x00000001;
+@Constant
+public int WUNTRACED       = 0x00000002;
+@Constant
+public int WSTOPPED        = WUNTRACED;
+@Constant
+public int WEXITED         = 0x00000004;
+@Constant
+public int WCONTINUED      = 0x00000008;
+@Constant
+public int WNOWAIT         = 0x01000000;      /* Don't reap, just poll status.  */
+
+@Constant
+public int __WNOTHREAD     = 0x20000000;      /* Don't wait on children of other threads in this group */
+@Constant
+public int __WALL          = 0x40000000;      /* Wait on all children, regardless of type */
+@Constant
+public int __WCLONE        = int(0x80000000); /* Wait only on non-SIGCHLD children */
+
+@Constant
+public int NT_PRSTATUS = 1;						// The integer register set for PTRACE_PEEK/POKEUSER
+@Constant
+public int NT_FPREGSET = 2;						// The floating point register set for PTRACE_PEEK/POKEUSER
+
+public class iovec {
+	public address iov_base;
+	public long iov_len;
+}
+
 @Constant
 public int P_ALL = 0;
 @Constant
 public int P_PID = 1;
 @Constant
 public int P_PGID = 2;
+
 
 public class cc_t = byte;
 public class tcflag_t = unsigned;
@@ -915,6 +1015,11 @@ public int O_CLOEXEC =   02000000;
 @Constant
 public int _PC_NAME_MAX = 4;
 
+/* Protections are chosen from these bits, OR'd together.  The
+   implementation does not necessarily support PROT_EXEC or PROT_WRITE
+   without PROT_READ.  The only guarantees are that no writing will be
+   allowed without PROT_WRITE and no access will be allowed for PROT_NONE. */
+
 @Constant
 public int PROT_READ = 0x01;
 @Constant
@@ -927,6 +1032,66 @@ public int PROT_NONE = 0x08;
 public int PROT_GROWSDOWN = 0x01000000;
 @Constant
 public int PROT_GROWSUP = 0x02000000;
+
+
+/* Sharing types (must choose one and only one of these).  */
+@Constant
+public int MAP_SHARED =     0x01;            /* Share changes.  */
+@Constant
+public int MAP_PRIVATE =    0x02;            /* Changes are private.  */
+@Constant
+public int MAP_TYPE =      0x0f;            /* Mask for type of mapping.  */
+
+/* Other flags.  */
+
+@Constant
+public int MAP_FIXED =      0x10;            /* Interpret addr exactly.  */
+@Constant
+public int MAP_FILE =      0;
+@Constant
+public int MAP_ANONYMOUS = 0x20;            /* Don't use a file.  */
+@Constant
+public int MAP_ANON =      MAP_ANONYMOUS;
+/* When MAP_HUGETLB is set bits [26:31] encode the log2 of the huge page size.  */
+@Constant
+public int MAP_HUGE_SHIFT = 26;
+@Constant
+public int MAP_HUGE_MASK = 0x3f;
+
+
+/* Flags to `msync'.  */
+/*
+#define MS_ASYNC        1               /* Sync memory asynchronously.  */
+#define MS_SYNC         4               /* Synchronous memory sync.  */
+#define MS_INVALIDATE   2               /* Invalidate the caches.  */
+
+/* Flags for `mremap'.  */
+#ifdef __USE_GNU
+# define MREMAP_MAYMOVE 1
+# define MREMAP_FIXED   2
+#endif
+
+/* Advice to `madvise'.  */
+#ifdef __USE_MISC
+# define MADV_NORMAL      0     /* No further special treatment.  */
+# define MADV_RANDOM      1     /* Expect random page references.  */
+# define MADV_SEQUENTIAL  2     /* Expect sequential page references.  */
+# define MADV_WILLNEED    3     /* Will need these pages.  */
+# define MADV_DONTNEED    4     /* Don't need these pages.  */
+# define MADV_REMOVE      9     /* Remove these pages and resources.  */
+# define MADV_DONTFORK    10    /* Do not inherit across fork.  */
+# define MADV_DOFORK      11    /* Do inherit across fork.  */
+# define MADV_MERGEABLE   12    /* KSM may merge identical pages.  */
+# define MADV_UNMERGEABLE 13    /* KSM may not merge identical pages.  */
+# define MADV_HUGEPAGE    14    /* Worth backing with hugepages.  */
+# define MADV_NOHUGEPAGE  15    /* Not worth backing with hugepages.  */
+# define MADV_DONTDUMP    16    /* Explicity exclude from the core dump,
+                                   overrides the coredump filter bits.  */
+# define MADV_DODUMP      17    /* Clear the MADV_DONTDUMP flag.  */
+# define MADV_HWPOISON    100   /* Poison a page for testing.  */
+#endif
+
+ */
 
 @Constant
 public int RTLD_LAZY = 0x00001;
@@ -1266,19 +1431,6 @@ public int ETIMEDOUT = 110;	/* Connection timed out */
 #define EHWPOISON	133	/* Memory page has hardware error */
 */
 
-@Constant
-public int WNOHANG         = 0x00000001;
-@Constant
-public int WUNTRACED       = 0x00000002;
-@Constant
-public int WSTOPPED        = 0x00000002;
-@Constant
-public int WEXITED         = 0x00000004;
-@Constant
-public int WCONTINUED      = 0x00000008;
-@Constant
-public int WNOWAIT         = 0x01000000;      /* Don't reap, just poll status.  */
-
 
 /* If WIFEXITED(STATUS), the low-order 8 bits of the status.  */
 public int WEXITSTATUS(int status) {
@@ -1448,56 +1600,106 @@ public class siginfo_t {
     public int si_errno;		/* If non-zero, an errno value associated with
 						   		   this signal, as defined in <errno.h>.  */
     public int si_code;			/* Signal code.  */
-	public int si_trapno;		/* Trap number. */
-
+	/**
+	 * The failing data address for a fault
+	 *
+	 * On Linux, this applies for SIGILL, SIGFPE, SIGSEGV
+	 */
 	public address si_addr() {
-		ref<siginfo_t_sigfault> sp = ref<siginfo_t_sigfault>(pointer<siginfo_t>(this) + 1);
+		sp := ref<siginfo_t_sigfault>(this);
 		return sp.si_addr;
 	}
+
+	long pad2;
+	long pad3;
+	long pad4;
+	long pad5;
+	long pad6;
+	long pad7;
+	long pad8;
+	long pad9;
+	long pad10;
+	long pad11;
+	long pad12;
+	long pad13;
+	long pad14;
+	long pad15;
 }
 
-public class siginfo_t_kill extends siginfo_t {
-    public pid_t si_pid;		/* Sending process ID.  */
-    public uid_t si_uid;		/* Real user ID of sending process.  */
+class siginfo_t_kill {
+    int si_signo;		/* Signal number.  */
+    int si_errno;		/* If non-zero, an errno value associated with
+						   		   this signal, as defined in <errno.h>.  */
+    int si_code;		/* Signal code.  */
+    pid_t si_pid;		/* Sending process ID.  */
+    uid_t si_uid;		/* Real user ID of sending process.  */
 }
 
-public class siginfo_t_timer extends siginfo_t {
-    public int si_tid;			/* Timer ID.  */
-    public int si_overrun;		/* Overrun count.  */
-    public sigval_t si_sigval;	/* Signal value.  */
+class siginfo_t_timer {
+    int si_signo;		/* Signal number.  */
+    int si_errno;		/* If non-zero, an errno value associated with
+						   		   this signal, as defined in <errno.h>.  */
+    int si_code;		/* Signal code.  */
+    int si_tid;			/* Timer ID.  */
+    int si_overrun;		/* Overrun count.  */
+    sigval_t si_sigval;	/* Signal value.  */
 }
 
-public class siginfo_t_rt extends siginfo_t {
-    public pid_t si_pid;		/* Sending process ID.  */
-    public uid_t si_uid;		/* Real user ID of sending process.  */
-    public sigval_t si_sigval;	/* Signal value.  */
+class siginfo_t_rt {
+    int si_signo;		/* Signal number.  */
+    int si_errno;		/* If non-zero, an errno value associated with
+						   		   this signal, as defined in <errno.h>.  */
+    int si_code;		/* Signal code.  */
+    pid_t si_pid;		/* Sending process ID.  */
+    uid_t si_uid;		/* Real user ID of sending process.  */
+    sigval_t si_sigval;	/* Signal value.  */
 }
 
-public class siginfo_t_sigchld extends siginfo_t {
-    public pid_t si_pid;		/* Which child.  */
-    public uid_t si_uid;		/* Real user ID of sending process.  */
-    public int si_status;		/* Exit value or signal.  */
-    public clock_t si_utime;
-    public clock_t si_stime;
+class siginfo_t_sigchld {
+    int si_signo;		/* Signal number.  */
+    int si_errno;		/* If non-zero, an errno value associated with
+						   		   this signal, as defined in <errno.h>.  */
+    int si_code;		/* Signal code.  */
+    pid_t si_pid;		/* Which child.  */
+    uid_t si_uid;		/* Real user ID of sending process.  */
+    int si_status;		/* Exit value or signal.  */
+    clock_t si_utime;
+    clock_t si_stime;
+}
+/**
+ * siginfo_t variant for SIGILL, SIGFPE, SIGSEGV, SIGBUS
+ */
+class siginfo_t_sigfault {
+    int si_signo;		/* Signal number.  */
+    int si_errno;		/* If non-zero, an errno value associated with
+						   		   this signal, as defined in <errno.h>.  */
+    int si_code;		/* Signal code.  */
+    address si_addr;	/* Faulting insn/memory ref.  */
+	int si_trapno;		/* Trap number. */
+    short si_addr_lsb;	/* Valid LSB of the reported address.  */
+    address si_addr_bnd_lower;
+    address si_addr_bnd_upper;
 }
 
-public class siginfo_t_sigfault extends siginfo_t {
-    public address si_addr;		/* Faulting insn/memory ref.  */
-    public short si_addr_lsb;	/* Valid LSB of the reported address.  */
-    public address si_addr_bnd_lower;
-    public address si_addr_bnd_upper;
+class siginfo_t_sigpoll {
+    int si_signo;		/* Signal number.  */
+    int si_errno;		/* If non-zero, an errno value associated with
+						   		   this signal, as defined in <errno.h>.  */
+    int si_code;		/* Signal code.  */
+    int si_band;		/* Band event for SIGPOLL.  */
+    int si_fd;
 }
 
-public class siginfo_t_sigpoll extends siginfo_t {
-    public int si_band;			/* Band event for SIGPOLL.  */
-    public int si_fd;
+class siginfo_t_sigsys {
+    int si_signo;		/* Signal number.  */
+    int si_errno;		/* If non-zero, an errno value associated with
+						   		   this signal, as defined in <errno.h>.  */
+    int si_code;		/* Signal code.  */
+    address _call_addr;	/* Calling user insn.  */
+    int _syscall;		/* Triggering system call number.  */
+    unsigned _arch;		/* AUDIT_ARCH_* of syscall.  */
 }
 
-public class siginfo_t_sigsys extends siginfo_t {
-    public address _call_addr;	/* Calling user insn.  */
-    public int _syscall;		/* Triggering system call number.  */
-    public unsigned _arch;		/* AUDIT_ARCH_* of syscall.  */
-}
 // Note: This is for X86 64-bit ONLY
 public class ucontext_t {
 	public long uc_flags;
@@ -1549,6 +1751,27 @@ public class gregset_t {
 
 }
 
+public class libc_fpxreg {
+	public short	significand0;
+	public short	significand1;
+	public short	significand2;
+	public short	significand3;
+	// public span<short, 4> significand;
+	public short	exponent;
+	public short	padding0;
+	public short	padding1;
+	public short	padding2;
+	// public span<short, 3> padding;
+}
+
+public class libc_xmmreg {
+	public unsigned element0;
+	public unsigned element1;
+	public unsigned element2;
+	public unsigned element3;
+	// public span<unsigned, 4> element;
+}
+
 public class libc_fpstate {
 	public char cwd;
 	public char swd;
@@ -1558,8 +1781,126 @@ public class libc_fpstate {
 	public address rdp;
 	public unsigned mxcsr;
 	public unsigned mxcr_mask;
-	// Note: additional fields follow, not currently used.
+	// Note: additional fields follow, not currently used:
+	// public span<unsigned, 32> st_space;
+	// public span<libc_xmmreg, 16> xmm_space;
+	// public span<unsigned, 24> padding;
 }
+
+/*
+ * Note on 64bit base and limit is ignored and you cannot set DS/ES/CS
+ * not to the default values if you still want to do syscalls. This
+ * call is more for 32bit mode therefore.
+ */
+public class user_desc {
+    public unsigned entry_number;
+    public unsigned base_addr;
+    public unsigned limit;
+	private unsigned __flags;
+
+    public unsigned seg_32bit() {
+		return __flags & 1;
+	}
+
+    public unsigned contents() {
+		return (__flags >> 1) & 3;
+	}
+
+    public unsigned read_exec_only() {
+		return (__flags >> 3) & 1;
+	}
+
+    public unsigned limit_in_pages() {
+		return (__flags >> 4) & 1;
+	}
+
+    public unsigned seg_not_present() {
+		return (__flags >> 5) & 1;
+	}
+
+    public unsigned useable() {
+		return (__flags >> 6) & 1;
+	}
+        /*
+         * Because this bit is not present in 32-bit user code, user
+         * programs can pass uninitialized values here.  Therefore, in
+         * any context in which a user_desc comes from a 32-bit program,
+         * the kernel must act as though lm == 0, regardless of the
+         * actual value.
+         */
+    public unsigned lm() {
+		return (__flags >> 7) & 1;
+	}
+}
+
+public class dtv_pointer {
+  public address val;                    /* Pointer to data, or TLS_DTV_UNALLOCATED.  */
+  public address to_free;                /* Unaligned pointer, for deallocation.  */
+}
+
+/* Type for the dtv.  */
+public class dtv_t {
+	private long _data;
+
+	public long counter() {
+		return _data;
+	}
+
+	public ref<dtv_pointer> pointer() {
+		return ref<dtv_pointer>(_data);
+	}
+}
+
+public class user {
+	public user_regs_struct			regs;
+	public int 						u_fpvalid;
+	public user_fpregs_struct		i387;
+	public long	 					u_tsize;
+	public long		 				u_dsize;
+	public long		 				u_ssize;
+	public long						start_code;
+	public long						start_stack;
+	public long						signal;
+	public int						reserved;
+	public ref<user_regs_struct>	u_ar0;
+	public ref<user_fpregs_struct>	u_fpstate;
+	public long						magic;
+	// more fields, not currently used.
+	// public span<byte, 32>	u_comm;
+	// public span<long, 8>	u_debugreg;
+}
+
+public class user_regs_struct {
+	public long r15;
+	public long r14;
+	public long r13;
+	public long r12;
+	public long rbp;
+	public long rbx;
+	public long r11;
+	public long r10;
+	public long r9;
+	public long r8;
+	public long rax;
+	public long rcx;
+	public long rdx;
+	public long rsi;
+	public long rdi;
+	public long orig_rax;
+	public long rip;
+	public long cs;
+	public long eflags;
+	public long rsp;
+	public long ss;
+	public long fs_base;
+	public long gs_base;
+	public long ds;
+	public long es;
+	public long fs;
+	public long gs;
+}
+
+public class user_fpregs_struct = libc_fpstate;
 
 public class sigval_t = address;		// in C actually a union
 public class clock_t = int;

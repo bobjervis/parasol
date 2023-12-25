@@ -64,6 +64,68 @@ The Parasol compiler.
 The given filename is run as a Parasol program. Any command-line arguments
 appearing after are passed to any main function in that file.
 
+<h3>{@level 3 pbug}</h3>
+
+The Parasol debugger.
+
+<h4>Use is:</h4>
+
+{@code
+	<b>pbug</b> [ <i>options</i> ... ] [ <i>program-path</i> ] [ <i>args</i> ... ]
+}
+
+<h4>Options:</h4>
+
+<table>
+<tr><td>-v</td><td></td><td>Enables verbose output.</td></tr>
+<tr><td>-a</td><td>--application</td><td>
+					Names an application product described in the build scripts.
+					The <span class=code>pbug</span> debugger uses the same algorithm for
+					locating build files as does <span class=code>pbuild</span>.
+</td></tr>
+<tr><td>-f</td><td>--file</td><td>
+        Designates the path for the build file. If this option is
+                    provided, only this one build script will be loaded and
+                    executed.
+					<br>
+					Default: Apply the search algorithm described below under <span class=code>pbuild</span>.
+</td></tr>
+<tr><td>-?</td><td>--help</td><td>Displays a simplified form of this help.</td></tr>
+<tr><td>-p</td><td>--process</td><td>
+		The id of a running process that is not already under the control of a debugger.
+</td></tr>
+<tr><td></td><td>--version</td><td>
+                  Display the version of the <span class=code>pbug</span> app.
+</td></tr>
+</table>
+<p>
+This program is a debug monitor that runs or attaches to a running process.
+<p>
+If either the -a or --application options are included, the process to be
+debugged is found by searching the build scripts for a product by that name. In
+this way you don't have to find the executable image and type its path to start
+an application under the debugger.
+<p>
+Unless a -f or --file option is included as well, the debugger will search the
+current directory and then recursively in sub-directories until at least one
+build file named 'make.pbld' is found. At each sub-directory, if a 'make.pbld'
+file is found there, the search stops and that build file is included in the
+build and no directories underneath that one are searched.If multiple build
+files are found in separate branches of the directory hierarchy, all will be
+included in the search.
+<p>
+Thus, by arranging a collection of related projects under a single root, one can
+locate a built application across all included build files.
+<p>
+If either a -p or --process option is included, then the designated process is
+attached. If this option is included, then no arguments should be supplied (they
+are embedded in the running process already).
+<p>
+If no overriding options are supplied, the first argument (the <i>program-path</i>) is either a directory
+containing a Parasol application or a mainfile Parasol source file. If a source
+file is named, the process to be debugged is launched under the debugger as if
+started by the pc command.
+
 <h3>{@level 3 pbuild}</h3>
 
 The Parasol build utility.

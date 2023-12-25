@@ -255,7 +255,6 @@ private void readWrapper(address arg) {
 	ref<WebSocket> socket = ref<WebSocket>(arg);
 
 	boolean sawClose;
-
 	for (;;) {
 		try {
 			sawClose = socket.reader().readMessages();
