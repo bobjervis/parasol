@@ -526,16 +526,15 @@ public class Tracer {
 		if (result == -1) {
 			err := linux.errno();
 			if (request == Ptrace.PEEKDATA ||
-				request == Ptrace.PEEKTEXT) {
-				if (err == 0)
-					return result;
-			}
+				request == Ptrace.PEEKTEXT)
+				return result;
 			if (err == linux.EPERM ||
 				err == linux.ESRCH)
 				logger.error("ptrace PTRACE_%s tid %d: %s", string(request), pid, linux.strerror(err));
 			else
-				throw exception.IllegalOperationException("The process/thread " + pid + " produced an unexpected error " +
-																err + " (" + linux.strerror(err) +")");
+				throw exception.IllegalOperationException("The process/thread " + pid + " " + string(request) + 
+															" produced an unexpected error " +
+															err + " (" + linux.strerror(err) +")");
 		}
 		return result;
 	}

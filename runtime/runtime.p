@@ -700,6 +700,313 @@ public class VirtualStack {
 	}
 
 	public abstract long slot(long stackAddress);
+
+	public abstract boolean isCode(long addr);
+
+	public abstract boolean isParasolCode(long addr);
+
+	public abstract string symbolAt(long addr, long adjustment);
+
+	public abstract int pid();
+
+	public abstract int tid();
+
+	enum SlotType {
+		VOIDED,
+		CODE,
+		PARASOL,
+		STACK_REF,
+		MAIN,
+		THREAD
+	}
+
+	class InterestingSlot {
+		SlotType type;
+		boolean confirmed;
+		long offset;			// offset from rsp where the interesting slot was found
+		long value;				// value at that slot
+		string symbol;			// any symbolic data about the slot
+
+		InterestingSlot(SlotType type, long offset, long value, string symbol) {
+			this.type = type;
+			this.offset = offset;
+			this.value = value;
+			this.symbol = symbol;
+		}
+
+		InterestingSlot() {}
+	}
+
+	InterestingSlot[] _returnAddresses;
+	/**
+	 * Analyze the stack to construct a set of stack frames, which can be subsequently read out.
+	 * 
+	 * Assume that the stack is at least word (8-byte) aligned. At any call to a function, the stack should be
+	 * paragraph (16-byte) aligned on Linux, because Linux code assumes it can use vector-processor instructions
+	 * that require it.
+	 *
+	 * This means that any function return address should be found in a word that has a final hex digit of 8.
+	 * In addition, that means that any saved Parasol frame pointer value will have an address with a final hex
+	 * digit of 0.
+	 *
+	 * A stack of Parasol frames will consist of a pair of PARASOL and STACK_REF frames in adjacent slots.
+	 * Such pairs will be separated by junk, but the next valid pair will have the STACK_REF point at the STACK_REF
+	 * of this pair.
+	 *
+	 * Figuring out which addresses on the stack are real return addresses and which are phantom's is hard, either random
+	 * function pointers or former return addresses tht have survived and been re-incorporated into a new stack frame.
+	 * If every stack frame in the stack is a Parasol function, the stack is relatively simple. Every return address
+	 * appear immediately after a saved frame pointer.
+	 *
+	 * The saved frame pointer values form a chain where one value contains the address of the next saved frame pointer.
+	 * And just above each such chain element lies the unambiguous return address.
+	 * Every Parasol code address not found just after an element of this chain is not a return address.
+	 * 
+	 * Complexities enter when a C code return address is encountered.
+	 * The C compiler treats rbp as a general purpose register and offers fewer clues to the structure present on the
+	 * stack.
+	 *
+	 * If assembly code is included in the stack, almost any arrangement of memory values could be encountered.
+	 * While some of the ways to obscure the meaning of a stack trace do happen, it is alright to get a wrong answer
+	 * in the face of a thoroughly confusing arrangement of values, this does not come up often in practice.
+	 * The effort used in this code is to reason from the available evidence and to include dubious values where
+	 * evidence is not conclusive, with appropriate labeling.
+	 *
+	 * The first reasoning works as follows: code is written either in Parasol or some unknown compiled language
+	 * with unknown conventions (other than the OS ABI, so function calls from Parasol do conform to the rules for
+	 * passing parameters in registers and to preserve register values.
+	 * Calls from one non-Parasol function to another could conform to any convention.
+	 *
+	 * The initial scan of the stack identifies Parasol code addresses, non-Parasol code addresses and stack slots
+	 * that contain stack addresses higher than the slot itself (these are potential saved stack frame values), along
+	 * with two special symbols: the Parasol 'runNative' C++ method that calls the image entry point and the linux
+	 * 'start_thread' function that calls (on a new thread) the function given as the starting point for the thread.
+	 * The first special symbol is labeled MAIN because it is normally the place where the main thread of a process
+	 * will start executing Parasol code.
+	 * The second special symbol is labeled THREAD because it is normally the place where spawned Thread's start
+	 * executing Parasol code.
+	 *
+	 * If the main thread does not have a MAIN symbol return address on its stack, this might be a C program with
+	 * no Parasol.
+	 * Currently, Parasol does not support operating as a library that gets called from a C main function,
+	 * so a process main thread without a MAIN symbol wil lprobably not contain any Parasol code at all.
+	 * 
+	 * In the case of the MAIN symbol, the very next slot in the candidates list should be a Parasol code address.
+	 * The address will be somewhere in the static initializers or the destructors,
+	 * depending on where the program is in it's execution.
+	 * Even if the static initializer called a C function directly, the return address would still be in Parasol
+	 * code somewhere.
+	 *
+	 * For a THREAD symbol, a non-Parasol library could spawn it's own threaads and they could never call into Parasol.
+	 * Therefore, the next candidate entry could be a non-Parasol return address or even a stack reference.
+	 * For Parasol programs that do not call on large 3rd-party libraries, most of the threads you will see will be
+	 * Parasol and the next canddiate entry will be in Parasol code.
+	 *
+	 * The Parasol return address indicates that you were in a Parasol function and are about to enter a new one.
+	 * If the candidate after it is a stack ref slot pointing to the address just below the MAIN or THREAD entry,
+	 * The function that just got called pushed the frame pointer there.
+	 * It could be a Parasol function.
+	 * If the next candidate is not such a stack ref, you just entered a C function in some shared object.
+	 *
+	 * Values on the stack can appear to be return addresses if they happen to fall into the address range of an executable
+	 * memory segment. One possibility is that what is stored in the stack is a function pointer. These can be distinguished
+	 * by examining the memory contents just before the address on the stack. If the bytes just before the address are
+	 * not part of a return instruction, then the address cannot be a return address. If the bytes happen to be a return
+	 * address, you can be somewhat confidant that the value is a return address.
+	 *
+	 * A return address can be found in any stack frame because not all memory slots are erased after returning from a
+	 * function. 
+	 * While interrupts might stomp on a particular return address, none may occur before another call extends the stack again.
+	 * In that case, if Parasol is called it will initialize memory, mostly to zero, very quickly - but not instantly.
+	 * If non-Parasol code is called there is no guarantee that a particular memory slot will be over-written at all.
+	 *
+	 * To authoritatively determine whether a given set of stack contents are a particular set of stack frames, you would need 
+	 * debugging information about the function that identifies the layout of the stack frame at each instruction.
+	 * If, as in Parasol, a specific frame pointer is maintained, you shouldn't need to know exactly how deep the stack is 
+	 * at each instruction, because in a stack crawl you will know the frame you came from and where RSP was at that frame.
+	 *
+	 * After the raw candidates list has been built since we don't have any information about the shape of the stack frame, 
+	 * there are only limited conditions that we can detect and correct.
+	 *
+	 * The cases (assuming a well-formed MAIN or THREAD address at the stack bottom):
+	 *	<ul>
+	 *		<li> Saw Parasol return address.
+	 *			<ul>
+	 *				<li> Pushed stack frame present.
+	 *					The language of the new function is unknown, but will be determined by further analysis.
+	 *					<ul>
+	 *						<li> If the language of the next return address candidate is Parasol, the language is Parasol.
+	 *							Action:
+	 *							Mark the caller as confirmed Parasol.
+	 *						<li> If the language of the next return address candidate is non-Parasol, the language is C.
+	 *							Action:
+	 *							Mark the caller as confirmed non-Parasol.
+	 *							In this case, any Parasol return addresses and stack refs can be discarded until you reach a
+	 *							non-Parasol code address.
+	 *							If none are found, the current RIP value identifies the function you are currently in.
+	 *					</ul>
+	 *
+	 *				<li> Pushed stack frame absent.
+	 *					The language is C or possibly Parasol.
+	 *					Action:
+	 *					In this case, any Parasol return addresses and stack refs can be discarded until you reach a
+	 *					non-Parasol code address.
+	 *					If none are found, the current RIP value identifies the function you are currently in.
+	 *			</ul>
+	 *
+	 *		<li> Saw non-Parasol return address.
+	 *			<ul>
+	 *				<li> Pushed stack frame present.
+	 *					The language of the new function is unknown, but will be determined by further analysis.
+	 *					<ul>
+	 *						<li> If the language of the next return address candidate is Parasol, the language is Parasol.
+	 *							Action:
+	 *							Mark the caller as confirmed Parasol.
+	 *						<li> If the language of the next return address candidate is non-Parasol, the language is C.
+	 *							Action:
+	 *							Mark the caller as confirmed non-Parasol.
+	 *							In this case, any Parasol return addresses and stack refs can be discarded until you reach a
+	 *							non-Parasol code address.
+	 *							If none are found, the current RIP value identifies the function you are currently in.
+	 *					</ul>
+	 *
+	 *				<li> Pushed stack frame absent.
+	 *					The language is C.
+	 *					Action:
+	 *					In this case, any Parasol return addresses and stack refs can be discarded until you reach a
+	 *					non-Parasol code address.
+	 *					If none are found, the current RIP value identifies the function you are currently in.
+	 *			</ul>
+	 *				
+	 */
+	public void analyzeStack(long rbp, long rip) {
+		InterestingSlot[] candidates;
+
+		for (long offset = _stackSize; offset > 0; ) {
+			offset -= address.bytes;
+			stackSlot := _stackBase + offset;
+			value := slot(stackSlot);
+			s := symbolAt(value - 1, 1);
+			x := candidates.length();
+			if (isParasolCode(value) && s != null)
+				candidates.append(InterestingSlot(SlotType.PARASOL, offset, value, s));
+			else if (isCode(value) && s != null) {
+				if (s.startsWith("libparasol.so.1 _ZN7parasol16ExecutionContext9runNativeEPFiPvE")) {
+					candidates.clear();
+					candidates.append(InterestingSlot(SlotType.MAIN, offset, value, null));
+				} else if (s.startsWith("libpthread-2.23.so start_thread")) {
+					candidates.clear();
+					candidates.append(InterestingSlot(SlotType.THREAD, offset, value, null));
+				} else if ((stackSlot & 0xf) == 8)
+					candidates.append(InterestingSlot(SlotType.CODE, offset, value, s));
+			} else if ((value & 0xf) == 0 && value >= stackSlot + 2 * address.bytes && value < _stackBase + _stackSize) {
+				if (candidates.length() == 1 && candidates[0].type == SlotType.MAIN)
+					continue;
+				candidates.append(InterestingSlot(SlotType.STACK_REF, offset, value, null));
+			}
+		}
+		// If the stack is empty - we having nothing to show.		
+		if (candidates.length() == 0)
+			return;
+/*
+		printf("before pruning:\n");
+		for (int i = candidates.length() - 1; i >= 0; i--) {
+			c := candidates[i];
+			printf("    [%2d] %-9s %16x %s (%x)\n", i, string(c.type), c.offset + _stackBase, c.symbol, c.value);
+		}
+*/
+		switch (candidates[0].type) {
+		case THREAD:
+//			printf("This is a Parasol-launched thread\n");
+			if (candidates.length() > 1 && candidates[1].type != SlotType.PARASOL)
+				printf("WARN: Unexpected non-Parasol slot candidate %s %s\n", string(candidates[1].type), candidates[1].symbol);
+			break;
+
+		case MAIN:
+//			printf("This is a Parasol-compiled main thread\n");
+			// Any stack refs COULD be present in the stack initializers' stack slots.
+			while (candidates.length() > 1 && candidates[1].type == SlotType.STACK_REF)
+				candidates.remove(1);
+			if (candidates.length() > 1 && candidates[1].type != SlotType.PARASOL && candidates[1].type != SlotType.CODE)
+				printf("WARN: Unexpected non-Parasol slot candidate %s %s\n", string(candidates[1].type), candidates[1].symbol);
+			break;
+
+		default:
+			printf("WARN: Unexpected starting point for an application %s %s\n", string(candidates[1].type), candidates[1].symbol);
+		}
+		boolean frameChainDetected;
+		long previousFrame;
+		for (i in candidates) {
+			c := &candidates[i];
+			switch (c.type) {
+			case MAIN:				// The first frame in a compiled-Parasol main thread is the static initializers.
+									// this can call any number of other Parasol or non-Parasol functions, but will often
+									// appear just below the main function of the application.
+			case THREAD:			// The first frame on a Parasol thread is a Parsol function in thread.p
+									// that calls 'nested', which in turn calls the user's starting function.
+				for (;;) {
+					if (candidates.length() < i + 3)
+						break;
+					if (c[1].type != SlotType.PARASOL ||
+						c[2].type != SlotType.STACK_REF ||
+						c[1].offset != c[2].offset + address.bytes ||
+						c[2].value + address.bytes != c.offset + _stackBase) {
+						printf("WARN: Unexpected stack top arrangement, removing possible phantom return addresses @%x", 
+									c[1].offset + _stackBase);
+						if (c[1].type == SlotType.PARASOL ||
+							c[1].type == SlotType.STACK_REF) {
+//							printf("removing %d\n", i + 1);
+							candidates.remove(i + 1);
+							continue;
+						}
+					}
+					frameChainDetected = true;
+					previousFrame = _stackBase + c.offset - address.bytes;
+					break;
+				}
+				break;
+
+			case PARASOL:
+				if (frameChainDetected) {
+					if (candidates.length() < i + 2)
+						break;
+					c.confirmed = true;
+					if (c[1].type == SlotType.STACK_REF &&
+						c[1].offset == c.offset - address.bytes &&
+						c[1].value == previousFrame)
+						previousFrame = c[1].offset + _stackBase;
+					else {
+						// Next frame is C code, not Parasol - and that code didn't use an ENTER instruction.
+//						printf("found malformed frame: offset %x : %x value %x : %x\n", c[1].offset, c.offset, c[1].value, previousFrame);
+						frameChainDetected = false;
+						for (int j = i + 1; j < candidates.length(); j++) {
+							cc := &candidates[j];
+							if (cc.type == SlotType.CODE)
+								break;
+							cc.type = SlotType.VOIDED;
+//							printf("voiding %d\n", j);
+						}
+					}
+				}
+//				printf("    %-9s %16x %s (%x)\n", string(c.type), c.offset + _stackBase, c.symbol, c.value);
+				break;
+
+			case CODE:
+//				printf("    %-9s %16x %s (%x)\n", string(c.type), c.offset + _stackBase, c.symbol, c.value);
+				frameChainDetected = false;
+			}
+		}
+//		printf("candidates %d\n", candidates.length());
+		for (int i = candidates.length() - 1; i >= 0; i--) {
+			c := candidates[i];
+			switch (c.type) {
+			case CODE:
+			case PARASOL:
+				printf("    %s (%x)\n", c.symbol, c.value);
+			}
+		}
+	}
+
 	/**
 	 * This method crawls the stack by one frame.
 	 *
@@ -709,9 +1016,9 @@ public class VirtualStack {
 	 * Each successive call should pass the previous returned frame value and so on until a null frame value is returned.
 	 *
 	 * @return The frame pointer value of the caller.
-	 * @return The return address in the caller of 
+	 * @return The return address in the caller.
 	 */
-	public long, long nextFrame(long lastFrame) {
+	public long, long nextFrame(long lastFrame, long lastIp) {
 		long stackTop = _stackBase + _stackSize;
 		long searchEnd = stackTop - 2 * address.bytes;
 		long frame;
@@ -731,7 +1038,8 @@ public class VirtualStack {
 
 		// For whatever reason, the frame we are trying to use as the next place to start looking
 		// for a return address is no good, so guess by checking all possible values. As soon as we
-		// see a stack slot containing a possible next 
+		// see a stack slot containing a possible next saved frame pointer, we try to resync and see if we have
+		// a resumed stack frame chain.
 		for (frame = lastFrame + 2 * address.bytes; ; frame += address.bytes) {
 			if (frame >= searchEnd) {
 				frame = 0;

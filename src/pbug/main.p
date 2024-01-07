@@ -138,8 +138,7 @@ public int main(string[] args) {
 			printf("Application directory %s cannot be verified, cannot run it.\n", exePath);
 			return 1;
 		}
-		printf("Not yet supported\n");
-		return 1;
+		debug.spawnApplication(pbugCommand.applicationOption.value, exePath, arguments);
 	} else if (storage.exists(exePath))
 		debug.spawnParasolScript(pbugCommand.parasolLocationOption.value, exePath, arguments);
 	else {

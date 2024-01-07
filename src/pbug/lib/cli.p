@@ -70,6 +70,21 @@ public void consoleUI() {
 					currentThread = debug.session.findThread(debug.session.getProcess(0).id());
 			}
 			switch (command) {
+			case "clear":
+				t = getThread(currentThread, words);
+				if (t == null)
+					break;
+				state = t.state();
+				switch (state) {
+				case STOPPED:
+					t.process().clearSignal(t);
+					break;
+
+				default:
+					printf("Cannot clear signal for thread %d now. %s\n", t.tid(), string(state));
+				}
+				break;
+
 			case "f":
 				if (words.length() == 0) {
 					printf("You must include a partial filename\n");
@@ -131,6 +146,14 @@ public void consoleUI() {
 				}
 				break;
 
+			case "ping":
+				t = getThread(currentThread, words);
+				if (t == null)
+					break;
+				if (!t.process().ping())
+					printf("Ping returned false\n");
+				break;
+
 			case "q":
 				for (int i = 0;; i++) {
 					p := debug.session.getProcess(i);
@@ -151,10 +174,10 @@ public void consoleUI() {
 					break;
 
 				case STOPPED:
-					debug.session.perform(new Run(t));
+				case EXIT_CALLED:
+					debug.session.perform(new RunThread(t));
 					break;
 
-				case EXIT_CALLED:
 				case EXITED:
 					printf("Thread %d has ended.\n", t.tid());
 					break;
@@ -162,6 +185,13 @@ public void consoleUI() {
 				default:
 					printf("ERROR: Unknown thread state: %x tid %d\n", int(state), t.tid());
 				}
+				break;
+
+			case "run":
+				t = getThread(currentThread, words);
+				if (t == null)
+					break;
+				debug.session.perform(new RunProcess(t.process()));
 				break;
 
 			case "regs":
@@ -178,6 +208,44 @@ public void consoleUI() {
 				default:
 					printf("Cannot fetch registers for thread %d now.\n", t.tid());
 				}
+				break;
+
+			case "s":
+				t = getThread(currentThread, words);
+				if (t == null)
+					break;
+				state = t.state();
+				switch (state) {
+				case RUNNING:
+					debug.session.perform(new StopThread(t));
+					break;
+
+				case STOPPED:
+					printf("Thread %d already stopped.\n", t.tid());
+					break;
+
+				case EXIT_CALLED:
+				case EXITED:
+					printf("Thread %d has ended.\n", t.tid());
+					break;
+
+				default:
+					printf("ERROR: Unknown thread state: %x tid %d\n", int(state), t.tid());
+				}
+				break;
+
+			case "stop":
+				t = getThread(currentThread, words);
+				if (t == null)
+					break;
+				debug.session.perform(new StopProcess(t.process()));
+				break;
+
+			case "t":
+				t = getThread(currentThread, words);
+				if (t == null)
+					break;
+				debug.session.perform(new StackTrace(t));
 				break;
 
 			case "?":
@@ -223,9 +291,14 @@ public void consoleUI() {
 				printf("       f <pattern> [ pid ]   display binary files that match the pattern\n");
 				printf("       m [ pid ]             display a memory map of a process\n");
 				printf("       p                     display the state of all threads being debugged\n");
+				printf("       ping                  test whether the current process is locked\n");
 				printf("       q                     exit the debugger\n");
-				printf("       r [ pid ]             run (pid specifies a stopped process)\n");
-				printf("       regs [ pid ]          print the registers for the current or specified process\n");
+				printf("       r [ tid ]             run (tid specifies a stopped thread)\n");
+				printf("       regs [ tid ]          print the registers for the current or specified thread\n");
+				printf("       run [ pid ]           run all stopped threads (pid specifies a stopped process)\n");
+				printf("       s [ tid ]             stop a running thread\n");
+				printf("       stop [ pid ]          stop all running threads in process pid\n");
+				printf("       t [ tid ]             stack trace for a stopped tid\n");
 				printf("       ?                     print debugger state\n");
 			}
 		}
@@ -276,7 +349,7 @@ class Notifier implements debug.Notifier {
 	}
 
 	void stopped(int pid, int tid, int stopSig) {
-		logger.info("    -> pid %d tid %d stopped, signal is %d", pid, tid,stopSig);
+		logger.info("    -> pid %d tid %d stopped, signal is %d", pid, tid, stopSig);
 	}
 
 	void exec(int pid) {
@@ -300,16 +373,75 @@ class Notifier implements debug.Notifier {
 	}
 }
 
-class Run extends debug.SessionWorkItem {
+class RunProcess extends debug.SessionWorkItem {
+	ref<debug.TracedProcess> _process;
+
+	RunProcess(ref<debug.TracedProcess> process) {
+		_process = process;
+	}
+
+	void run() {
+		if (!_process.runAllThreads())
+			printf("Process %d cannot be run.\n", _process.id());
+	}
+}
+
+class RunThread extends debug.SessionWorkItem {
 	ref<debug.ThreadInfo> _thread;
 
-	Run(ref<debug.ThreadInfo> t) {
+	RunThread(ref<debug.ThreadInfo> t) {
 		_thread = t;
 	}
 
 	void run() {
 		if (!_thread.run())
 			printf("Thread %d cannot be run.\n", _thread.tid());
+	}
+}
+
+class StopProcess extends debug.SessionWorkItem {
+	ref<debug.TracedProcess> _process;
+
+	StopProcess(ref<debug.TracedProcess> process) {
+		_process = process;
+	}
+
+	void run() {
+		_process.stopAllThreads(false);
+	}
+}
+
+class StopThread extends debug.SessionWorkItem {
+	ref<debug.ThreadInfo> _thread;
+
+	StopThread(ref<debug.ThreadInfo> t) {
+		_thread = t;
+	}
+
+	void run() {
+		if (!_thread.stop())
+			printf("Thread %d cannot be run.\n", _thread.tid());
+	}
+}
+
+class StackTrace extends debug.SessionWorkItem {
+	ref<debug.ThreadInfo> _thread;
+
+	StackTrace(ref<debug.ThreadInfo> t) {
+		_thread = t;
+	}
+
+	void run() {
+		switch (_thread.state()) {
+		case STOPPED:
+		case EXIT_CALLED:
+			break;
+
+		default:
+			printf("ERROR: Attempt to trace the stack %s in state %s\n", _thread.label(), string(_thread.state()));
+			return;
+		}
+		_thread.printStackTrace();
 	}
 }
 
@@ -321,7 +453,12 @@ class Registers extends debug.SessionWorkItem {
 	}
 
 	void run() {
-		if (!_thread.isStopped()) {
+		switch (_thread.state()) {
+		case STOPPED:
+		case EXIT_CALLED:
+			break;
+
+		default:
 			printf("ERROR: Attempt to print registers %s in state %s\n", _thread.label(), string(_thread.state()));
 			return;
 		}

@@ -425,6 +425,38 @@ public class Process extends ProcessVolatileData {
 		delete copy;
 		return success;
 	}
+
+	public boolean spawnApplication(string workingDirectory, string name, string applicationDirectory,
+									  ref<string[string]> environ, string... args) {
+		string parasolrt;
+		string pc_pxi;
+		ref<string[string]> copy;
+		if (runtime.compileTarget == runtime.Target.X86_64_LNX) {
+			pc_pxi = storage.path(applicationDirectory, "application.pxi");
+			parasolrt = storage.path(applicationDirectory, "parasolrt");
+			copy = new string[string];
+			if (environ != null) {
+				for (key in *environ)
+					(*copy)[key] = (*environ)[key];
+			}
+			if (copy.contains("LD_LIBRARY_PATH"))
+				(*copy)["LD_LIBRARY+PATH"] = applicationDirectory + ":" + (*copy)["LD_LIBRARY_PATH"];
+			else
+				(*copy)["LD_LIBRARY_PATH"] = applicationDirectory;
+			environ = copy;
+		} else if (runtime.compileTarget == runtime.Target.X86_64_WIN) {
+			pc_pxi = "x86-64-win.pxi";
+		}
+		if (!storage.exists(pc_pxi)) {
+			throw IllegalOperationException("Could not find " + pc_pxi);
+		}
+		string[] arguments;
+		arguments.append(pc_pxi);
+		arguments.append(args);
+		success := spawn(workingDirectory, parasolrt, environ, arguments);
+		delete copy;
+		return success;
+	}
 	/**
 	 * Spawn a process using the given command and arguments.
 	 *

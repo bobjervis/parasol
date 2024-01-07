@@ -433,8 +433,6 @@ public class ClassScope extends Scope {
 				}
 			}
 			if (classType != null) {
-				if (classType.signature().startsWith("WebSocketReader<"))
-					printf("assignMethodMaps %s has %d interfaces at start\n", classType.signature(), _interfaces.length());
 				// First, copy in the base-class interface implementations.
 				if (base != null) {
 					ref<Scope> baseScope = base.scope();
@@ -457,8 +455,6 @@ public class ClassScope extends Scope {
 				}
 				// Now build out the InterfaceImplementationScope objects (for their vtables).
 				ref<ref<InterfaceType>[]> interfaces = classType.interfaces();
-				if (classType != null && classType.signature().startsWith("WebSocketReader<"))
-					printf("assignMethodMaps %s has %d interfaces after processing base class\n", classType.signature(), _interfaces.length());
 				if (interfaces != null) {
 					for (int i = 0; i < interfaces.length(); i++) {
 						ref<InterfaceType> iface = (*interfaces)[i];

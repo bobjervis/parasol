@@ -29,6 +29,9 @@ public class MemoryMap {
 	ref<TracedProcess> _process;
 	ref<MemorySegment>[] _segments;
 	ref<File>[string] _files;
+	ref<runtime.Image>[] _images;
+	long _threadContextAddress;
+	boolean _threadContextResolved;
 
 	MemoryMap(ref<TracedProcess> p) {
 		_process = p;
@@ -95,7 +98,7 @@ public class MemoryMap {
 					f := mm._files[seg.filename];
 					f.addSegment(seg);
 					seg.file = f;
-				}		
+				}
 			}
 		}
 		delete r;
@@ -109,6 +112,224 @@ public class MemoryMap {
 				return segment;
 		}
 		return null;
+	}
+	/**
+	 * Find a symbol defined for the given machine address.
+	 *
+	 * There are three possible outcomes:
+	 *
+	 *	- An ELF symbol was found for the address parameter.
+	 *	- A Parasol source location was found for the address parameter.
+	 *	- No symbol was found for the address paramter.
+	 *
+	 * @return The Elf64_Sym, if any, for any symbol found.
+	 * @return If the first return value is not null, this is the ELF symbol name.
+	 * For C++ symbols, this is a mangled name.
+	 * If the first return value is null and this value is not null, it is a
+	 * Parasol source location.
+	 * If both the first and second return expressions are null, no symbols was found.
+	 * @return If a ELF symbol was location, this is the relative offset within that symbol of the address
+	 * parameter.
+	 * If a Parasol source location was found, the offset is always 0.
+	 * If neither was found, the value is an 'reason' for no symbol being found:
+	 *
+	 * </ul>
+	 *		<li>-1 The ELF file named in the memory segment has no symbols.
+	 *		<li>-2 The strings segment for the symbol table in the ELF file is invalid.
+	 *		This indicates a possibly corrupted ELF file.
+	 *		<li>-3 The link from the symbol table names a non-strings section header.
+	 *		This indicates a possibly corrupted ELF file.
+	 *		<li>-4 The offset of the symbol table's string section header is invalid.
+	 *		This indicates a possibly corrupted ELF file.
+	 *		<li>-5 The offset of the symbol table's section header is invalid.
+	 *		This indicates a possibly corrupted ELF file.
+	 *		<li>-6 None of the symbols defined in the ELF file's symbol table enclosed
+	 *		the given address.
+	 *		<li>-10 The address is not in mapped memory. No memory segment encloses this
+	 *		address.
+	 *		<li>-11 The memory map for this address does not name an ELF file.
+	 *		This is likely to be because the segment is in a memory-mapped data file.
+	 *		<li>-12 The address lies within an anonymous memory segment, like a thread stack,
+	 *		or the heap.
+	 *		<li>-13 The ELF file has no LOAD program table entries.
+	 *		This indicates a possibly corrupted ELF file.
+	 *		<li>-14 The Parasol image this address lies within could not be copied into 
+	 *		local memory.
+	 */
+	public ref<elf.Elf64_Sym>, string, long findSymbol(long addr, long adjustment) {
+//		logger.info("    _process.findSymbol(%x)", addr);
+		seg := findSegment(addr);
+		if (seg == null) {
+//			logger.info("    Target address is not in mapped memory (%p)", addr);
+			return null, null, -10;
+		}
+		if (seg.file != null) {
+			e := seg.file.reader();
+			if (e == null) {
+//				logger.info("    Target address %x is in a non-ELF file, %s. (%s)", addr, seg.filename, string(seg.file.type()));
+				return null, null, -11;
+			}
+			header := e.header();
+			success := false;
+			segAddress := seg.start;
+			for (int i = 0; i < header.e_phnum; i++) {
+				ph := e.programHeader(i);
+				if (ph.p_type == 1) {
+//					logger.info("    ph %d Elf vaddr is %p / target address %x", i, ph.p_vaddr, addr);
+					success = true;
+					baseAddress := segAddress - ph.p_vaddr;
+//					logger.info("    baseAddress of symbols %p Target address %x segment relative offset %x", baseAddress, addr, 
+//									addr - baseAddress);
+					dynsym := e.dynsym();
+					symtab := e.symtab();
+/*
+					if (symtab != null)
+						logger.info("    Binary %s has symbols in segment %d", seg.filename, symtab);
+					else if (dynsym != null)
+						logger.info("    Binary %s has only dynammic link symbols in segment %d", seg.filename, dynsym);
+					else
+						logger.info("    Binary %s has no symbol information at all", seg.filename);
+ */
+					ref<elf.Elf64_Sym> sym;
+					string name;
+					long offset;
+					(sym, name, offset) = e.findSymbol(addr - baseAddress);
+					if (name != null) {
+						s := storage.filename(seg.filename) + " " + name;
+						name = s;
+					} else {
+						name = storage.filename(seg.filename);
+						offset = addr - ph.p_vaddr;
+					}
+/*
+					if (sym != null)
+						logger.info("    Symbol found at %s+%d (%p)", name, offset, addr);
+					else
+						logger.info("    No symbol for address %p: cause %d", addr, offset);
+ */
+					return sym, name, offset + adjustment;
+				}
+			}
+//			logger.info("    File %s has no LOAD program header entries", seg.filename);
+			return null, null, -13;
+		} else if (seg.prot == Protections.ALL) {
+//			logger.info("    Target address %p is possibly in a Parasol image (image offset = %x)", addr, addr - seg.start);
+			image := seg.loadImage(_process.id());
+			if (image == null)
+				return null, null, -14;
+			string filename;
+			int lineno;
+			string result;
+
+			(filename, lineno) = image.getSourceLocation(addr);
+			if (filename == null)
+				result = null;
+			else
+				result.printf("%s %d", filename, lineno);
+			return null, result, 0;
+/*
+			addr = threadContextAddress();
+			if (addr != 0) {
+				long contents;
+				boolean success;
+				(contents, success) = controller.peek(id(), addr);
+				if (!success) {
+					logger.error("    Could not peek at address %p for tid %d", addr, id());
+					return null, null, -7;
+				}
+				logger.info("    contents = %p @ %p", contents, addr);
+				long offset;
+				(offset, success) = controller.peek(id(), addr + 8);
+				logger.info("    offset = %x", offset);
+/*
+				mm.print();
+				runtime.ExecutionContext ec;
+				if (!controller.copy(id(), contents, &ec, ec.bytes)) {
+					logger.error("    Could not copy data from pid %d @ %x [%x]", id(), contents, ec.bytes);
+					return null, null, -14;
+				}
+				logger.info("stack top      %x", ec._stackTop);
+				logger.info("exception      %x", ec._exception);
+				logger.info("pxi header     %x", ec._pxiHeader);
+				logger.info("image          %x", ec._image);
+				logger.info("argv           %x", ec._argv);
+				logger.info("argc           %d.", ec._argc);
+				logger.info("thread         %x", ec._parasolThread);
+				logger.info("runtime params %x", ec._runtimeParameters);
+				logger.info("params count   %d.", ec._runtimeParametersCount);
+*/
+				return null, null, -8;
+			}
+			logger.error("    libparasol.so is inconsistent, does not contains parasol::ThreadContext::threadContextValue");
+			return null, null, -9;
+ */
+		}
+//		logger.error("    Target address is in an anonymous page (%p)", addr);
+		return null, null, -12;
+	}
+
+	public long threadContextAddress() {
+		if (!_threadContextResolved) {
+			_threadContextResolved = true;
+			f := findFile("libparasol.so", 0);
+			if (f == null) {
+				logger.warn("    This is not a Parasol program - there is no libparasol.so present");
+				return 0;
+			}
+			e := f.reader();
+			logger.info("    reader %p type %s", e, string(f.type()));
+			sym := e.findSymbol("_ZN7parasol13ThreadContext19_threadContextValueE");
+			if (sym == null) {
+				logger.warn("    This is not a Parasol program - the libparasol.so does not have" +
+							" parasol::ThreadContext::threadContextValue");
+				return 0;
+			}
+			if ((sym.st_info & 0xf) != 6) {
+				logger.warn("    This is not a Parasol program - parasol::ThreadContext::threadContextValue is not TLS");
+				return 0;
+			}
+			if (sym.st_size != 8) {
+				logger.warn("    This is not a Parasol program - parasol::ThreadContext::threadContextValue is not a pointer");
+				return 0;
+			}
+			section := e.sectionHeader(sym.st_shndx);
+			if (section == null) {
+				logger.warn("    This is not a Parasol program - parasol::ThreadContext::threadContextValue has no section header");
+				return 0;
+			}
+			// sym_addr == file-relative offset of this memory location
+			//
+			sym_addr := sym.st_value + section.sh_addr;
+			logger.info("    parasol::ThreadContext::threadContextValue @ file address %p", sym_addr);
+			for (int i = 0; ; i++) {
+				ph := e.programHeader(i);
+				if (ph == null)
+					break;
+				logger.debug("    ph vaddr = %p symbol %p end = %p", ph.p_vaddr, sym_addr, 
+									ph.p_vaddr + ph.p_memsz);
+				if (ph.p_type == 1 && 
+					ph.p_vaddr <= sym_addr && sym_addr < ph.p_vaddr + ph.p_memsz &&
+					(ph.p_flags & 0x7) == 6) {
+					seg := f.segment(1);			// This should be the firsst 'data' segment, either a read-only
+													// or read-write segment. 
+					if (seg == null) {
+						logger.error("    libparasol.so should have more than 1 memory segment");
+						return 0;			
+					}
+					if (seg.prot == Protections.READ_ONLY ||
+						seg.prot == Protections.READ_WRITE) {
+						addr := seg.start + sym_addr - ph.p_vaddr;
+						logger.info("    parasol::ThreadContext::threadContextValue @ address %p", addr);
+						return addr;
+					} else {
+						logger.error("    libparasol.so should have a data segment second in the address space");
+						return 0;
+					}
+				}
+			}
+			logger.error("libparasol.so is inconsistent, no program header contains parasol::ThreadContext::threadContextValue");
+		}
+		return _threadContextAddress;
 	}
 
 	public void print() {
@@ -179,6 +400,7 @@ enum Protections {
 	READ_ONLY,
 	EXECUTE,
 	READ_WRITE,
+	READ_WRITE_SHARED,
 	ALL
 }
 
@@ -199,6 +421,7 @@ class MemorySegment {
 		case "r--p": this.prot = Protections.READ_ONLY; break;
 		case "r-xp": this.prot = Protections.EXECUTE; break;
 		case "rw-p": this.prot = Protections.READ_WRITE; break;
+		case "rw-s": this.prot = Protections.READ_WRITE_SHARED; break;
 		case "rwxp": this.prot = Protections.ALL; break;
 		default:
 			printf("Unexpected protections: %s\n", prot);
@@ -216,23 +439,23 @@ class MemorySegment {
 	}
 
 	public ref<runtime.Image> loadImage(int pid) {
-		if (_image != null)
-			return _image;
-		length := end - start;
-		_imageData = memory.alloc(length);
-		if (_imageData == null) {
-			logger.error("    No memory for image");
-			return null;
+		if (_image == null) {
+			length := end - start;
+			_imageData = memory.alloc(length);
+			if (_imageData == null) {
+				logger.error("    No memory for image");
+				return null;
+			}
+	//		logger.info("Copying from %p for %x bytes", start, length);
+			if (!controller.copy(pid, start, _imageData, int(length))) {
+				delete _imageData;
+				_imageData = null;
+				logger.error("    Couldn't copy image data @ %x from pid %d length %,d", pid, start, length);
+				return null;
+			}
+			_image = new runtime.Image(start, _imageData, int(length));
+	//		_image.printHeader(-1);
 		}
-//		logger.info("Copying from %p for %x bytes", start, length);
-		if (!controller.copy(pid, start, _imageData, int(length))) {
-			delete _imageData;
-			_imageData = null;
-			logger.error("    Couldn't copy image data from pid %d length %,d", pid, length);
-			return null;
-		}
-		_image = new runtime.Image(start, _imageData, int(length));
-//		_image.printHeader(-1);
 		return _image;
 	}
 
@@ -343,6 +566,48 @@ public class DebugStack extends runtime.VirtualStack {
 			return contents;
 		else
 			return 0;
+	}
+
+	public boolean isCode(long addr) {
+		mm := _thread.process().loadMemory();
+		seg := mm.findSegment(addr);
+		if (seg == null)
+			return false;
+		return seg.prot == Protections.EXECUTE || seg.prot == Protections.ALL;
+	}
+
+	public boolean isParasolCode(long addr) {
+		mm := _thread.process().loadMemory();
+		seg := mm.findSegment(addr);
+		if (seg == null)
+			return false;
+		return seg.prot == Protections.ALL;
+	}
+
+
+	public string symbolAt(long addr, long adjustment) {
+		mm := _thread.process().loadMemory();
+
+		ref<elf.Elf64_Sym> sym;
+		string name;
+		long offset;
+
+		(sym, name, offset) = mm.findSymbol(addr, adjustment);
+		if (name != null && offset != 0) {
+			if (offset < 0)
+				name.printf("-%x", -offset);
+			else
+				name.printf("+%x", offset);
+		}
+		return name;
+	}
+
+	public int pid() {
+		return _thread.process().id();
+	}
+
+	public int tid() {
+		return _thread.tid();
 	}
 }
 

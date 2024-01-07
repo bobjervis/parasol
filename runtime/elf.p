@@ -125,13 +125,21 @@ public class Reader {
 	 * Most of the negative return values indicates some detected level of corruption in the elf file.
 	 */
 	public ref<Elf64_Sym>, string, long findSymbol(long addr) {
-		if (_symtab != null)
-			symtab := _symtab;
-		else if (_dynsym != null)
-			symtab = _dynsym;
-		if (symtab == null)
-			return null, null, -1;
-		strings := sectionHeader(symtab.sh_link);
+		ref<Elf64_Sym> sym;
+		string name;
+		long offset;
+		if (_symtab != null) {
+			(sym, name, offset) = findIn(addr, _symtab);
+			if (name != null)
+				return sym, name, offset;
+		} 
+		if (_dynsym != null)
+			return findIn(addr, _dynsym);
+		return null, null, -6;
+	}
+
+	private ref<Elf64_Sym>, string, long findIn(long addr, ref<Elf64_Shdr> header) {
+		strings := sectionHeader(header.sh_link);
 		if (strings == null)
 			return null, null, -2;
 		if (strings.sh_type != 3)
@@ -139,12 +147,12 @@ public class Reader {
 		stringsBase := at(strings.sh_offset);
 		if (stringsBase == null)
 			return null, null, -4;
-		symbolCount := symtab.sh_size / symtab.sh_entsize;
-		symbolsBase := at(symtab.sh_offset);
+		symbolCount := header.sh_size / header.sh_entsize;
+		symbolsBase := at(header.sh_offset);
 		if (symbolsBase == null)
 			return null, null, -5;
 		for (int i = 1; i < symbolCount; i++) {
-			symbolAddr := symbolsBase + i * symtab.sh_entsize;
+			symbolAddr := symbolsBase + i * header.sh_entsize;
 			sym := ref<Elf64_Sym>(symbolAddr);
 			if (addr < sym.st_value)
 				continue;

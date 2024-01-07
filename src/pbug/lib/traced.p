@@ -39,6 +39,10 @@ public void spawnParasolScript(string parasolLocation, string exePath, string...
 	session.perform(new SpawnParasolScript(parasolLocation, exePath, arguments));
 }
 
+public void spawnApplication(string name, string exePath, string... arguments) {
+	session.perform(new SpawnApplication(name, exePath, arguments));
+}
+
 enum ProcessState {
 	RUNNING,			// All threads in the process are running.
 	STOPPED,			// The process is not running, all threads are stopped. The process data state can be inspected.
@@ -126,16 +130,19 @@ void eventsHandler(address unused) {
 		t := session.findThread(tid);
 		if (t != null)
 			p = t.process();
+		else
+			p = null;
 		switch (de) {
 		case EXIT:
 			if (p == null) {
 				logger.warn("Unexpected EXIT event: tid %d extra %d", tid, extra);
 				continue;
 			}
-			p.reportExit(extra);
-			n := session.notifier();
-			if (n != null)
-				n.exit(tid, extra);
+			if (p.reportExit(tid, extra)) {
+				n = session.notifier();
+				if (n != null)
+					n.exit(p.id(), extra);
+			}
 			break;
 
 		case STOPPED:
@@ -149,7 +156,7 @@ void eventsHandler(address unused) {
 				// The stop event requires diagnosis before another event-wait can be done
 //				pauseBeforeContinue = true;
 			case STOP:
-				n = session.notifier();
+				n := session.notifier();
 				if (n != null)
 					n.stopped(p.id(), tid, extra);
 				if (t != null)
@@ -180,14 +187,14 @@ void eventsHandler(address unused) {
 				continue;
 			}
 			p.reportSyscall(tid);
-			n = session.notifier();
+			n := session.notifier();
 			if (n != null)
 				n.afterExec(tid);
 			break;
 
 		case EXIT_CALLED:
 			if (p == null) {
-				logger.warn("Unexpected EXIT_CALLED event: pid %d extra %d", tid, extra);
+				logger.warn("Unexpected EXIT_CALLED event: no process tid %d extra %d", tid, extra);
 				continue;
 			}
 			p.reportExitCalled(tid);
@@ -223,8 +230,6 @@ class TracedProcess extends debug.Process {
 	ref<thread.Thread> _eventHandler;
 	ref<ElfFile>[string] _elfMap;
 	ref<MemoryMap> _memoryMap;
-	long _threadContextAddress;
-	boolean _threadContextResolved;
 
 	TracedProcess() {
 		_state = ProcessState.RUNNING;
@@ -240,13 +245,26 @@ class TracedProcess extends debug.Process {
 
 	map<ref<ThreadInfo>, int> _threads;
 
-	public void reportExit(int exitCode) lock (*this) {
-		_exitCode = exitCode;
-		_state = ProcessState.EXITED;		// 
+	public boolean ping() lock (*this) {
+		logger.info("Pong!");
+		return true;
+	}
+
+	public boolean reportExit(int tid, int exitCode) lock (*this) {
+		t := _threads[tid];
+		if (t == null) {
+			logger.error("EXIT event for unknown tid %d exit code %d", tid, exitCode);
+			return false;
+		}
+		t.reportExit(exitCode);
 		for (tid in _threads) {
 			t := _threads[tid];
-			t.reportExit(exitCode);
+			if (t.state() != ProcessState.EXITED)
+				return false;
 		}
+		_state = ProcessState.EXITED;
+		_exitCode = exitCode;
+		return true;
 	}
 
 	public StopAction reportStopped(int tid, int signal) lock (*this) {
@@ -259,6 +277,8 @@ class TracedProcess extends debug.Process {
 		} else {
 			switch (signal) {
 			case linux.SIGSEGV:
+			case linux.SIGPIPE:
+			case linux.SIGFPE:
 				session.perform(new HardFault(t));
 				return StopAction.PAUSE;
 			}
@@ -322,6 +342,11 @@ class TracedProcess extends debug.Process {
 		return tid;
 	}
 
+	public void clearSignal(ref<ThreadInfo> t) lock (*this) {
+		t.clearSignal();
+		_hardFault = false;
+	}
+
 	public boolean containsThread(int tid) lock (*this) {
 		return _threads.contains(tid);
 	}
@@ -351,18 +376,13 @@ class TracedProcess extends debug.Process {
 
 		_state = ProcessState.EXIT_CALLED;
 		t.reportExitCalled();
-		session.perform(new ExitCalled(this));
+		session.perform(new ExitCalled(t));
 	}
 
 	public void reportKilled(int signal) lock (*this) {
 		_state = ProcessState.EXITED;
 		_exitCode = -1;
 		_killSig = signal;
-	}
-
-	public void fetchExitCalledInfo() {
-		(_exitCode, _killSig) = controller.getExitInformation(id());
-		logger.info("   process %d exit called status %d termination signal %d", id(), _exitCode, _killSig);
 	}
 
 	public ref<MemoryMap> loadMemory() {
@@ -392,15 +412,17 @@ class TracedProcess extends debug.Process {
 	/**
 	 * Run all the threads in the process.
 	 */
-	public boolean run() lock (*this) {
-		if (_hardFault)
+	public boolean runAllThreads() lock (*this) {
+		if (_hardFault) {
+			printf("This process has experienced a hard fault and cannot be started until the fault has been cleared.\n");
 			return false;
+		}
 		success := true;
 		for (tid in _threads) {
 			t := _threads[tid];
 			if (t.state() == ProcessState.STOPPED) {
 				if (!t.run()) {
-					logger.error("Could not start thread %d in process %d", t.tid());
+					logger.error("Could not start thread %d in process %d", t.tid(), id());
 					success = false;
 				} else
 					_stale = true;
@@ -411,13 +433,17 @@ class TracedProcess extends debug.Process {
 
 	public void stopAllThreads(boolean hardFault) lock (*this) {
 		_hardFault = hardFault;
+		boolean anyRunning;
 		for (tid in _threads) {
 			t := _threads[tid];
 			if (t.state() == ProcessState.RUNNING) {
+				anyRunning = true;
 				if (!t.stop())
-					logger.error("Could not stop thread %d in process %d", t.tid());
+					logger.error("Could not stop thread %d in process %d", t.tid(), id());
 			}
 		}
+		if (!anyRunning)
+			logger.info("All threads are stopped in process %d", id());
 	}
 
 	public void clearHardFault() lock (*this) {
@@ -463,211 +489,6 @@ class TracedProcess extends debug.Process {
 		}
 		return stopSig;
 	}
-	/**
-	 * Find a symbol defined for the given machine address.
-	 *
-	 * There are three possible outcomes:
-	 *
-	 *	- An ELF symbol was found for the address parameter.
-	 *	- A Parasol source location was found for the address parameter.
-	 *	- No symbol was found for the address paramter.
-	 *
-	 * @return The Elf64_Sym, if any, for any symbol found.
-	 * @return If the first return value is not null, this is the ELF symbol name.
-	 * For C++ symbols, this is a mangled name.
-	 * If the first return value is null and this value is not null, it is a
-	 * Parasol source location.
-	 * If both the first and second return expressions are null, no symbols was found.
-	 * @return If a ELF symbol was location, this is the relative offset within that symbol of the address
-	 * parameter.
-	 * If a Parasol source location was found, the offset is always 0.
-	 * If neither was found, the value is an 'reason' for no symbol being found:
-	 *
-	 * </ul>
-	 *		<li>-1 The ELF file named in the memory segment has no symbols.
-	 *		<li>-2 The strings segment for the symbol table in the ELF file is invalid.
-	 *		This indicates a possibly corrupted ELF file.
-	 *		<li>-3 The link from the symbol table names a non-strings section header.
-	 *		This indicates a possibly corrupted ELF file.
-	 *		<li>-4 The offset of the symbol table's string section header is invalid.
-	 *		This indicates a possibly corrupted ELF file.
-	 *		<li>-5 The offset of the symbol table's section header is invalid.
-	 *		This indicates a possibly corrupted ELF file.
-	 *		<li>-6 None of the symbols defined in the ELF file's symbol table enclosed
-	 *		the given address.
-	 *		<li>-10 The address is not in mapped memory. No memory segment encloses this
-	 *		address.
-	 *		<li>-11 The memory map for this address does not name an ELF file.
-	 *		This is likely to be because the segment is in a memory-mapped data file.
-	 *		<li>-12 The address lies within an anonymous memory segment, like a thread stack,
-	 *		or the heap.
-	 *		<li>-13 The ELF file has no LOAD program table entries.
-	 *		This indicates a possibly corrupted ELF file.
-	 *		<li>-14 The Parasol image this address lies within could not be copied into 
-	 *		local memory.
-	 */
-	public ref<elf.Elf64_Sym>, string, long findSymbol(long addr) {
-//		logger.info("    _process.findSymbol(%x)", addr);
-		mm := loadMemory();
-		seg := mm.findSegment(addr);
-		if (seg == null) {
-//			logger.info("    Target address is not in mapped memory (%p)", addr);
-			return null, null, -10;
-		}
-		if (seg.file != null) {
-			e := seg.file.reader();
-			if (e == null) {
-//				logger.info("    Target address %x is in a non-ELF file, %s. (%s)", addr, seg.filename, string(seg.file.type()));
-				return null, null, -11;
-			}
-			header := e.header();
-			success := false;
-			baseAddress := seg.start;
-			for (int i = 0; i < header.e_phnum; i++) {
-				ph := e.programHeader(i);
-				if (ph.p_type == 1) {
-//					logger.info("    ph %d Elf vaddr is %p / target address %x", i, ph.p_vaddr, addr);
-					success = true;
-					baseAddress += ph.p_vaddr;
-//					logger.info("    baseAddress of symbols %p Target address %x segment relative offset %x", baseAddress, addr, 
-//									addr - baseAddress);
-					dynsym := e.dynsym();
-					symtab := e.symtab();
-/*
-					if (symtab != null)
-						logger.info("    Binary %s has symbols in segment %d", seg.filename, symtab);
-					else if (dynsym != null)
-						logger.info("    Binary %s has only dynammic link symbols in segment %d", seg.filename, dynsym);
-					else
-						logger.info("    Binary %s has no symbol information at all", seg.filename);
- */
-					ref<elf.Elf64_Sym> sym;
-					string name;
-					long offset;
-					(sym, name, offset) = e.findSymbol(addr - baseAddress);
-/*
-					if (sym != null)
-						logger.info("    Symbol found at %s+%d (%p)", name, offset, addr);
-					else
-						logger.info("    No symbol for address %p: cause %d", addr, offset);
- */
-					return sym, name, offset;
-				}
-			}
-//			logger.info("    File %s has no LOAD program header entries", seg.filename);
-			return null, null, -13;
-		} else if (seg.prot == Protections.ALL) {
-//			logger.info("    Target address %p is possibly in a Parasol image (image offset = %x)", addr, addr - seg.start);
-			image := seg.loadImage(id());
-			if (image == null)
-				return null, null, -14;
-			s := image.formattedLocation(addr, int(addr - seg.start));
-			return null, s, 0;
-/*
-			addr = threadContextAddress();
-			if (addr != 0) {
-				long contents;
-				boolean success;
-				(contents, success) = controller.peek(id(), addr);
-				if (!success) {
-					logger.error("    Could not peek at address %p for tid %d", addr, id());
-					return null, null, -7;
-				}
-				logger.info("    contents = %p @ %p", contents, addr);
-				long offset;
-				(offset, success) = controller.peek(id(), addr + 8);
-				logger.info("    offset = %x", offset);
-/*
-				mm.print();
-				runtime.ExecutionContext ec;
-				if (!controller.copy(id(), contents, &ec, ec.bytes)) {
-					logger.error("    Could not copy data from pid %d @ %x [%x]", id(), contents, ec.bytes);
-					return null, null, -14;
-				}
-				logger.info("stack top      %x", ec._stackTop);
-				logger.info("exception      %x", ec._exception);
-				logger.info("pxi header     %x", ec._pxiHeader);
-				logger.info("image          %x", ec._image);
-				logger.info("argv           %x", ec._argv);
-				logger.info("argc           %d.", ec._argc);
-				logger.info("thread         %x", ec._parasolThread);
-				logger.info("runtime params %x", ec._runtimeParameters);
-				logger.info("params count   %d.", ec._runtimeParametersCount);
-*/
-				return null, null, -8;
-			}
-			logger.error("    libparasol.so is inconsistent, does not contains parasol::ThreadContext::threadContextValue");
-			return null, null, -9;
- */
-		}
-//		logger.error("    Target address is in an anonymous page (%p)", addr);
-		return null, null, -12;
-	}
-
-	public long threadContextAddress() {
-		if (!_threadContextResolved) {
-			_threadContextResolved = true;
-			mm := loadMemory();
-			f := mm.findFile("libparasol.so", 0);
-			if (f == null) {
-				logger.warn("    This is not a Parasol program - there is no libparasol.so present");
-				return 0;
-			}
-			e := f.reader();
-			logger.info("    reader %p type %s", e, string(f.type()));
-			sym := e.findSymbol("_ZN7parasol13ThreadContext19_threadContextValueE");
-			if (sym == null) {
-				logger.warn("    This is not a Parasol program - the libparasol.so does not have" +
-							" parasol::ThreadContext::threadContextValue");
-				return 0;
-			}
-			if ((sym.st_info & 0xf) != 6) {
-				logger.warn("    This is not a Parasol program - parasol::ThreadContext::threadContextValue is not TLS");
-				return 0;
-			}
-			if (sym.st_size != 8) {
-				logger.warn("    This is not a Parasol program - parasol::ThreadContext::threadContextValue is not a pointer");
-				return 0;
-			}
-			section := e.sectionHeader(sym.st_shndx);
-			if (section == null) {
-				logger.warn("    This is not a Parasol program - parasol::ThreadContext::threadContextValue has no section header");
-				return 0;
-			}
-			// sym_addr == file-relative offset of this memory location
-			//
-			sym_addr := sym.st_value + section.sh_addr;
-			logger.info("    parasol::ThreadContext::threadContextValue @ file address %p", sym_addr);
-			for (int i = 0; ; i++) {
-				ph := e.programHeader(i);
-				if (ph == null)
-					break;
-				logger.debug("    ph vaddr = %p symbol %p end = %p", ph.p_vaddr, sym_addr, 
-									ph.p_vaddr + ph.p_memsz);
-				if (ph.p_type == 1 && 
-					ph.p_vaddr <= sym_addr && sym_addr < ph.p_vaddr + ph.p_memsz &&
-					(ph.p_flags & 0x7) == 6) {
-					seg := f.segment(1);			// This should be the firsst 'data' segment, either a read-only
-													// or read-write segment. 
-					if (seg == null) {
-						logger.error("    libparasol.so should have more than 1 memory segment");
-						return 0;			
-					}
-					if (seg.prot == Protections.READ_ONLY ||
-						seg.prot == Protections.READ_WRITE) {
-						addr := seg.start + sym_addr - ph.p_vaddr;
-						logger.info("    parasol::ThreadContext::threadContextValue @ address %p", addr);
-						return addr;
-					} else {
-						logger.error("    libparasol.so should have a data segment second in the address space");
-						return 0;
-					}
-				}
-			}
-			logger.error("libparasol.so is inconsistent, no program header contains parasol::ThreadContext::threadContextValue");
-		}
-		return _threadContextAddress;
-	}
 }
 
 public class ThreadInfo {
@@ -709,6 +530,11 @@ public class ThreadInfo {
 		_stopSig = 0;
 	}
 
+	public void fetchExitCalledInfo() {
+		(_exitCode, _stopSig) = controller.getExitInformation(_tid);
+		logger.info("   process %d exit called status %d termination signal %d", _process.id(), _exitCode, _stopSig);
+	}
+
 	boolean reportStopped(int signal) {
 		_state = ProcessState.STOPPED;
 		if (signal != linux.SIGSTOP)
@@ -728,6 +554,10 @@ public class ThreadInfo {
 		return false;
 	}
 
+	public void clearSignal() {
+		_stopSig = 0;
+	}
+
 	public boolean stop() {
 		switch (_state) {
 		case RUNNING:
@@ -740,10 +570,12 @@ public class ThreadInfo {
 	}
 
 	public boolean run() {
-		if (_state == ProcessState.STOPPED) {
+		if (_state == ProcessState.STOPPED ||
+			_state == ProcessState.EXIT_CALLED) {
 			if (controller.resume(_tid, _stopSig)) {
 				_state = ProcessState.RUNNING;
 				_stale = true;
+				_process._stale = true;
 //				logger.info("-->> pid %d tid %d STARTED", _process.id(), _tid);
 				return true;
 			}
@@ -760,39 +592,59 @@ public class ThreadInfo {
 		case linux.SIGSEGV:
 			logger.error("Segmentation Violation - Bad memory reference %p", siginfo.si_addr());
 			break;
+
+		case linux.SIGPIPE:
+			logger.error("Broken Pipe");
+			break;
+
+		case linux.SIGFPE:
+			logger.error("Floating Point Exception");
+			break;
 		}
+		printStackTrace();
+	}
+
+	public void printStackTrace() {
+		printf("Stack trace for thread %s\n", label());
 		regs := registers();
+		mm := process().loadMemory();
+
 		ref<elf.Elf64_Sym> sym;
 		string name;
 		long offset;
-		(sym, name, offset) = _process.findSymbol(regs.rip);
+		(sym, name, offset) = mm.findSymbol(regs.rip, 0);
 		if (name != null) {
 			if (offset != 0)
 				offStr := "+" + offset;
 			else
 				offStr = "";
-			logger.info("*-> %s%s", name, offStr);
+			printf("*-> %s%s\n", name, offStr);
 		} else
-			logger.warn(" -> %p rbp %p (no symbol cause %d)", regs.rip, regs.rbp, offset);
-		mm := process().loadMemory();
+			printf(" -> %p rbp %p (no symbol cause %d)\n", regs.rip, regs.rbp, offset);
 		sseg := mm.findSegment(regs.rsp);
 		if (sseg == null) {
 			logger.warn("This thread's rsp (%p) does not appear to be in live memory - no stack dump.", regs.rsp);
 			return;
 		}
 
+		if (name != null && name.startsWith("libpthread-2.23.so start_thread"))
+			return;
+
 		DebugStack ds(this);
 		long frame, ip;
 		long lastFrame = regs.rbp;
+		lastIp := regs.rip;
 
-		if (ds.nextFrame(regs.rbp) == 0) {
+		ds.analyzeStack(regs.rbp, regs.rip);
+/*
+		if (ds.nextFrame(regs.rbp, regs.rip) == 0) {
 			logger.info("        No valid frame pointer - likely C/C++ code running");
 		}
 		for (;;) {
-			(frame, ip) = ds.nextFrame(lastFrame);
+			(frame, ip) = ds.nextFrame(lastFrame, lastIp);
 			if (frame == 0)
 				break;
-			(sym, name, offset) = _process.findSymbol(ip - 1);		// the minus one picks up line numbers correctly.
+			(sym, name, offset) = mm.findSymbol(ip - 1);			// the minus one picks up line numbers correctly.
 																	// these are return addresses, and some lines end after
 																	// the call instruction, so would report a line below.
 																	// ip - 1 will always fall within whatever call instruction
@@ -803,13 +655,14 @@ public class ThreadInfo {
 					offStr := "+" + offset;
 				else
 					offStr = "";
-				logger.info("    %s%s", name, offStr);
+				printf("    %s%s\n", name, offStr);
 			} else if (offset != -12)
-				logger.warn("    %p rbp %p (no symbol cause %d)", ip, frame, offset);
+				printf("    %p rbp %p (no symbol cause %d)\n", ip, frame, offset);
 			else
-				logger.info("    %p rbp %p", ip, frame);
+				printf("    %p rbp %p\n", ip, frame);
 			lastFrame = frame;
 		}
+ */
 	}
 
 	public ref<linux.user_regs_struct> registers() {
@@ -851,6 +704,29 @@ public class ThreadInfo {
 
 	public int stopSig() {
 		return _stopSig;
+	}
+}
+
+class SpawnApplication extends SessionWorkItem {
+	string _name;
+	string _applicationDirectory;
+	string[] _args;
+
+	SpawnApplication(string name, string exePath, string... args) {
+		_name = name;
+		_applicationDirectory = exePath;
+		_args = args;
+	}
+
+	void run() {
+		p := new TracedProcess;
+		if (p.spawnApplication(null, _name, _applicationDirectory, process.useParentEnvironment, _args)) {
+			p.addThread(p.id());		// There's always one thread
+			session.attendTo(p);
+		} else {
+			logger.error("Could not spawn %s", _name);
+			delete p;
+		}
 	}
 }
 
@@ -984,14 +860,16 @@ class InitialExec extends SessionWorkItem {
 }
 
 class ExitCalled extends SessionWorkItem {
-	ref<TracedProcess> _child;
+	ref<ThreadInfo> _thread;
 
-	ExitCalled(ref<TracedProcess> p) {
-		_child = p;
+	ExitCalled(ref<ThreadInfo> t) {
+		_thread = t;
 	}
 	
 	void run() {
-		_child.fetchExitCalledInfo();
+		p := _thread.process();
+		_thread.fetchExitCalledInfo();
+		_thread.run();					// Clean itself up.
 	}
 }
 
